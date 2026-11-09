@@ -37,7 +37,8 @@ export interface BildirimTuruTanimi {
 // Birinci aşamanın dört olayı (221 a). Anahtar `<modül>.<olay>`; modül adı kaynak modüldür.
 export const BILDIRIM_TURLERI = {
   'satin-alma.talep-onay-bekliyor': {
-    baslik: 'Satın alma talebi onay bekliyor', onem: 'uyari', alanIslemler: ['satin-alma.onayla'], yol: '/satin-alma/onaylar', varsayilan: { mesaj: false, eposta: true },
+    // 2432: karar verilince (onay, ret, iptal ya da onaydan çıkış) satın alma kendi transaction'ında kapatır.
+    baslik: 'Satın alma talebi onay bekliyor', onem: 'uyari', sinif: 'gorev', alanIslemler: ['satin-alma.onayla'], yol: '/satin-alma/onaylar', varsayilan: { mesaj: false, eposta: true },
   },
   // TMI A2: onay ve ret, talebi açana ve talep edene gider (kayda bağlı kişi, alan işlemi yok); onaylayan kendisi almaz.
   'satin-alma.talep-onaylandi': {
@@ -46,6 +47,17 @@ export const BILDIRIM_TURLERI = {
   'satin-alma.talep-reddedildi': {
     baslik: 'Satın alma talebin reddedildi', onem: 'uyari', alanIslemler: [], yol: '/taleplerim', varsayilan: { mesaj: false, eposta: false },
   },
+  // 2432: satın alma hatırlatmaları. Satın almanın periyodik işi açar, koşul kalkınca kapatır (tek kayıt tek hatırlatma).
+  'satin-alma.hatirlatma-ihtiyac-yaklasiyor': { baslik: 'Talebin ihtiyaç tarihi yaklaşıyor', onem: 'uyari', sinif: 'hatirlatma', alanIslemler: ['satin-alma.yaz'], yol: '/satin-alma/talepler', varsayilan: { mesaj: false, eposta: false } },
+  'satin-alma.hatirlatma-taslak-bekliyor': { baslik: 'Talep taslakta bekliyor', onem: 'bilgi', sinif: 'hatirlatma', alanIslemler: ['satin-alma.yaz'], yol: '/satin-alma/talepler', varsayilan: { mesaj: false, eposta: false } },
+  'satin-alma.hatirlatma-teklif-cevapsiz': { baslik: 'Teklif isteği cevapsız', onem: 'bilgi', sinif: 'hatirlatma', alanIslemler: ['satin-alma.yaz'], yol: '/satin-alma/talepler', varsayilan: { mesaj: false, eposta: false } },
+  'satin-alma.hatirlatma-teklif-gecerlilik': { baslik: 'Teklifin geçerliliği bitiyor', onem: 'uyari', sinif: 'hatirlatma', alanIslemler: ['satin-alma.yaz'], yol: '/satin-alma/talepler', varsayilan: { mesaj: false, eposta: false } },
+  'satin-alma.hatirlatma-degerlendirme-bekliyor': { baslik: 'Talep değerlendirmede bekliyor', onem: 'bilgi', sinif: 'hatirlatma', alanIslemler: ['satin-alma.yaz'], yol: '/satin-alma/talepler', varsayilan: { mesaj: false, eposta: false } },
+  'satin-alma.hatirlatma-onay-bekliyor': { baslik: 'Talep onayda bekliyor', onem: 'uyari', sinif: 'hatirlatma', alanIslemler: ['satin-alma.onayla'], yol: '/satin-alma/onaylar', varsayilan: { mesaj: false, eposta: false } },
+  'satin-alma.hatirlatma-siparis-bekliyor': { baslik: 'Onaylanan talebe sipariş verilmedi', onem: 'uyari', sinif: 'hatirlatma', alanIslemler: ['satin-alma.yaz'], yol: '/satin-alma/talepler', varsayilan: { mesaj: false, eposta: false } },
+  'satin-alma.hatirlatma-teslim-yaklasiyor': { baslik: 'Siparişin teslimi yaklaşıyor', onem: 'bilgi', sinif: 'hatirlatma', alanIslemler: ['satin-alma.yaz'], yol: '/satin-alma/talepler', varsayilan: { mesaj: false, eposta: false } },
+  'satin-alma.hatirlatma-teslim-gecikti': { baslik: 'Siparişin teslimi gecikti', onem: 'uyari', sinif: 'hatirlatma', alanIslemler: ['satin-alma.yaz'], yol: '/satin-alma/talepler', varsayilan: { mesaj: false, eposta: true } },
+  'satin-alma.hatirlatma-teslim-gecikti-yonetici': { baslik: 'Siparişin teslimi gecikti (yönetici)', onem: 'uyari', sinif: 'hatirlatma', alanIslemler: ['satin-alma.ayar'], yol: '/satin-alma/talepler', varsayilan: { mesaj: false, eposta: true } },
   'malzemeler.kart-onay-bekliyor': { baslik: 'Malzeme kartı onay bekliyor', onem: 'uyari', sinif: 'gorev', alanIslemler: ['malzemeler.onayla'], yol: '/malzemeler', varsayilan: { mesaj: false, eposta: false } },
   'malzemeler.kart-reddedildi': { baslik: 'Malzeme kartın reddedildi', onem: 'uyari', alanIslemler: [], yol: '/malzemeler', varsayilan: { mesaj: false, eposta: false } },
   'siparisler.onay-bekliyor': {

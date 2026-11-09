@@ -73,7 +73,8 @@ function SayiSatiri({ ayar, mesgul, degistir }: { ayar: SayiAyari; mesgul: boole
           hata={'hata' in cozum ? cozum.hata : undefined}
           disabled={mesgul}
         />
-        <Dugme type="submit" tur="birincil" simge="check" disabled={mesgul || !degisti}>Kaydet</Dugme>
+        {/* Sayfada en çok bir birincil düğme kuralı (2155-9): sayı satırlarının Kaydet'i de metin satırları gibi çizgilidir. */}
+        <Dugme type="submit" tur="ikincil" simge="check" disabled={mesgul || !degisti}>Kaydet</Dugme>
       </form>
     </li>
   );

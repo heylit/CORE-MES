@@ -428,6 +428,19 @@ const backend: Backend = {
       return false;
     }
   },
+  async iptaliGeriAl(id, gerekce) {
+    const sun = talepSunucu.get(id);
+    if (sun === undefined) return null;
+    try {
+      const c = await uc.post('/satin-alma-talepleri/:id/iptali-geri-al', { parametre: { id }, govde: { gerekce, surum: sun.surum }, ...sure });
+      const t = talepEkrana(c.talep);
+      applyLocal('requests', id, t);
+      return { durum: t.status, turetildi: c.turetildi };
+    } catch (h) {
+      await hata(h);
+      return null;
+    }
+  },
   async teslimYontemi(id, teslimYontemi) {
     const sun = talepSunucu.get(id);
     if (sun === undefined) return false;

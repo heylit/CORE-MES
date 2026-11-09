@@ -13,7 +13,8 @@ test('SA-HESAP H5: talep durum geçişleri', () => {
   assert.equal(gecisVarMi('taslak', 'siparis_verildi'), false);
   assert.equal(gecisVarMi('onayda', 'siparis_verildi'), true);
   assert.equal(gecisVarMi('teslim_alindi', 'iptal'), false);
-  assert.equal(gecisVarMi('iptal', 'taslak'), true);
+  // 2413 a: iptalden dönüş genel kayıtla değil, İptali geri al komutuyladır.
+  assert.equal(gecisVarMi('iptal', 'taslak'), false);
 });
 
 test('SA-HESAP H5: sipariş yalnız son kaydı onay olan kararla verilir', () => {

@@ -1,5 +1,5 @@
 // Satın alma kuralları: saf fonksiyonlar ve sabitler; veritabanı ve saat yok.
-import { KUR_KILIDI, PARA_BIRIMLERI } from '#paylasilan/sozlesme/satin-alma.ts';
+import { KUR_KILIDI, ONCELIKLER, PARA_BIRIMLERI } from '#paylasilan/sozlesme/satin-alma.ts';
 import { ACIK_EMIR_DURUMLARI } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import type { KmTedarikciDurumu } from '#paylasilan/sozlesme/kalite-merkezi.ts';
 import type { FasonIsEmri } from '../uretim-emirleri/disari.ts';
@@ -78,6 +78,15 @@ export const ILETILER = {
   katalogYok: 'Katalog kalemi bulunamadı.',
   yetkiYok: 'Bu değişiklik için yetkiniz yok.',
   gecisYok: 'Talep bu durumdan istenen duruma geçemez.',
+  iptalDegil: 'Yalnız iptal edilmiş talebin iptali geri alınır.',
+  birlesmis: (no: string): string => `Bu talep ${no} talebine birleştirildi; değişiklik birleşik talepte yapılır.`,
+  birlesikSilinmez: 'Birleşik talep kaynakları ayrılmadan silinemez; önce kaynakları ayırın.',
+  kaynakKalemiSilinmez: 'Birleştirilen talebin kalemi birleşik talepten silinemez; kalemi ayırarak kaynağına döndürün.',
+  kalemsizGeriAlinmaz: 'Kalemsiz talebin iptali geri alınamaz.',
+  birlesikDegil: 'Bu talep birleşik talep değil.',
+  kaynakDegil: 'Seçilen talep bu birleşik talebin kaynağı değil.',
+  ayirmaTeklifli: 'Teklifi ya da kararı olan birleşik talep ayrılamaz.',
+  birlesmeKalemSiniri: 'Birleşik talep en çok 200 kalem taşır.',
   dortGoz: 'Kararı veren kişi o kararı onaylayamaz.',
   onayKademesi: 'Bu tutardaki kararı onaylama basamağınız yetmiyor.',
   rolsuzUstBasamak: 'Rolü boş basamak, rolü olan basamağın üstünde olamaz: üst basamağa da rol verin.',
@@ -156,18 +165,35 @@ export const ILETILER = {
   planIhtiyaciTekrar: 'Aynı malzeme plan ihtiyacı listesinde iki kez var.',
 } as const;
 
-// SAT-07: durum geçişleri. Aynı durumda kalmak her zaman serbest. Yanlış iptal elle önceki duruma çevrilir (SAT-68).
+// SAT-07: durum geçişleri. Aynı durumda kalmak her zaman serbest. Yalnız akışın ürettiği geçişler vardır (2413 a; SAT-68 daraltıldı):
+// teklif isteği ve teklif girişi, karar ve onaya gönderme, ret ve kararı kaldırma, sipariş, iptal. İptalden dönüş yalnız gerekçeli
+// "İptali geri al" komutuyladır (iptaliGeriAl); genel kayıt iptalden çıkamaz.
 // "Teslim alındı" istemciyle yazılmaz: stoktaki mal kabulden türetilir (SAT-38).
 // Teklif isteniyor -> onayda: ekran karar kaydedilince talebi bulunduğu açık durumdan onaya gönderir; geçiş olmasa karar kaybolurdu.
 export const GECISLER: Readonly<Record<TalepDurumu, readonly TalepDurumu[]>> = {
   taslak: ['teklif_isteniyor', 'degerlendirme', 'iptal'],
-  teklif_isteniyor: ['taslak', 'degerlendirme', 'onayda', 'iptal'],
-  degerlendirme: ['teklif_isteniyor', 'onayda', 'iptal'],
+  teklif_isteniyor: ['degerlendirme', 'onayda', 'iptal'],
+  degerlendirme: ['onayda', 'iptal'],
   onayda: ['degerlendirme', 'siparis_verildi', 'iptal'],
-  siparis_verildi: ['onayda', 'iptal'],
+  siparis_verildi: ['iptal'],
   teslim_alindi: [],
-  iptal: ['taslak', 'teklif_isteniyor', 'degerlendirme', 'onayda', 'siparis_verildi'],
+  iptal: [],
 };
+
+// 2413 a: iptalden önceki durum kayıtlı değilse (2413'ten önceki iptaller) veriden türetilir. Ret kararı silmez, talebi değerlendirmeye
+// döndürür: son onay kaydı ret olan karar değerlendirmeye, onay kaydı olmayan karar onaya döner.
+export function iptalOncesiTuret(t: Pick<Talep, 'karar' | 'onaylar' | 'teklifler' | 'teklifIstekleri'>): TalepDurumu {
+  if (t.karar !== null && t.karar.siparisler.length > 0) return 'siparis_verildi';
+  if (t.karar !== null) {
+    const son = t.onaylar.at(-1)?.sonuc;
+    return son === 'ret' ? 'degerlendirme' : 'onayda';
+  }
+  if (t.teklifler.length > 0) return 'degerlendirme';
+  if (t.teklifIstekleri.length > 0) return 'teklif_isteniyor';
+  return 'taslak';
+}
+export const iptalGeriAlmaHareketi = (iptalNedeni: string, gerekce: string, turetildi: boolean): string =>
+  `İptal geri alındı${iptalNedeni === '' ? '' : ` (iptal nedeni: ${iptalNedeni})`}${turetildi ? ', önceki durum veriden türetildi' : ''}: ${gerekce}`.slice(0, 1000);
 export const gecisVarMi = (eski: TalepDurumu, yeni: TalepDurumu): boolean => eski === yeni || GECISLER[eski].includes(yeni);
 
 // Karşılaştırma alan sırasından bağımsızdır: sunucunun kurduğu ile istemciden ayrıştırılan nesne aynı alanları başka sırada taşır.
@@ -329,14 +355,26 @@ export function dortGozSonucu(
 // ve fiyat taşıyabildiği için talep eden yalnız kendi yazdığı geçmişi görür; onayın sonucu görünür, notu görünmez.
 // 2429-ekran b (kullanıcı 09.11): 375'in tedarikçi kısmı kalktı. Tedarikçi bilgisi (teklif istenen firmalar, kalem bağındaki fason
 // firması, kararın seçtiği tedarikçiler) talep edene açıktır; teklif, fiyat ve karar (tutar, gerekçe, sabit kur) kapalı kalır.
-export function talepEdenGorunumu<T extends TalepYazimi>(t: T, kisiId: number): T {
-  const secilenIdler = t.karar === null ? [] : t.karar.mod === 'tek' ? [t.karar.teklifId] : t.karar.bolunme.map((b) => b.teklifId);
+// 2414 a (K3, K4): birleştirilmiş kaynak talepte kalemler birleşik talepten, kaynağın kalemleriyle süzülerek gelir; seçilen tedarikçiler
+// yalnız bu kalemleri kapsayan karar ve tekliflerdendir. Başka kaynağın kalemi ve talep edeni görünmez; birleşik talebin kaynak listesi düşer.
+export function talepEdenGorunumu<T extends TalepYazimi>(t: T, kisiId: number, birlesen?: Talep): T {
+  const kendi = birlesen === undefined ? null : new Set(birlesen.kaynaklar?.find((x) => x.talepId === t.id)?.kalemIdleri ?? []);
+  const kalemler = kendi === null ? t.kalemler : birlesen!.kalemler.filter((k) => kendi.has(k.id));
+  const teklifler = kendi === null ? t.teklifler : birlesen!.teklifler.filter((q) => q.fiyatlar.some((f) => kendi.has(f.kalemId)));
+  const karar = kendi === null ? t.karar : birlesen!.karar;
+  const secilenIdler = karar === null ? [] : karar.mod === 'tek' ? [karar.teklifId]
+    : karar.bolunme.filter((b) => kendi === null || kendi.has(b.kalemId)).map((b) => b.teklifId);
   const secilenTedarikciler = [...new Set(secilenIdler)].flatMap((id) => {
-    const q = t.teklifler.find((x) => x.id === id);
+    const q = teklifler.find((x) => x.id === id);
     return q === undefined ? [] : [{ firmaId: q.firmaId, ad: q.tedarikciAdi }];
   });
+  const { kaynaklar: _k, ...geri } = t as T & { kaynaklar?: unknown };
+  const baglar = (x: unknown) => ((x as { kalemBaglari?: { kalemId: string }[] }).kalemBaglari ?? []);
   return {
-    ...t,
+    ...(geri as T),
+    ...(kendi === null ? {} : {
+      kalemler, teklifIstekleri: birlesen!.teklifIstekleri, kalemBaglari: baglar(birlesen).filter((b) => kendi.has(b.kalemId)),
+    }),
     secilenTedarikciler,
     teklifler: [], senaryolar: [], karar: null,
     onaylar: t.onaylar.map((o) => ({ ...o, notlar: '' })),
@@ -841,7 +879,7 @@ export function talebim(t: Talep, baglar: ReadonlyMap<string, KalemBagi> = new M
   const bag = (id: string): KalemBagi => baglar.get(id) ?? { uygulanan: null, fasonAdim: null };
   return {
     id: t.id, no: t.no, baslik: t.baslik, durum: t.durum, ihtiyacTarihi: t.ihtiyacTarihi, olusturma: t.olusturma,
-    uretimEmriNo: t.uretimEmriNo,
+    uretimEmriNo: t.uretimEmriNo, birlesme: t.birlesme ?? null,
     kaynak: t.kalemler.some((k) => bag(k.id).fasonAdim !== null) ? 'fason' : 'elle',
     kalemler: t.kalemler.map((k) => ({ ad: k.ad, miktar: k.miktar, birim: k.birim, kartBekliyor: k.katalogId === null, ...bag(k.id) })),
   };
@@ -1078,4 +1116,183 @@ export function terminTakibi(g: TerminTakipGirdisi): TerminTakipSatiri[] {
   });
   return satirlar.sort((a, b) => Number(b.durum === 'gecikti') - Number(a.durum === 'gecikti')
     || (a.gerekenTarih ?? '9999-12-31').localeCompare(b.gerekenTarih ?? '9999-12-31') || a.ad.localeCompare(b.ad, 'tr') || a.anahtar.localeCompare(b.anahtar));
+}
+
+// 2432: hatırlatmalar. Tarih maddeleri takvim günü, bekleme maddeleri iş günü sayar. Her hatırlatmanın kaynak kimliği dönemi taşır
+// (ihtiyaç tarihi, durumun başladığı an, teklif, beklenen teslim): koşul kalkınca kapanır, yeni dönem yeni hatırlatma açar.
+export const HATIRLATMA_ADLARI = [
+  'ihtiyac-yaklasiyor', 'taslak-bekliyor', 'teklif-cevapsiz', 'teklif-gecerlilik', 'degerlendirme-bekliyor', 'onay-bekliyor',
+  'siparis-bekliyor', 'teslim-yaklasiyor', 'teslim-gecikti', 'teslim-gecikti-yonetici',
+] as const;
+export type HatirlatmaAdi = (typeof HATIRLATMA_ADLARI)[number];
+export type HatirlatmaTuru = `satin-alma.hatirlatma-${HatirlatmaAdi}`;
+// Boş değer o hatırlatmayı kapatır.
+export type HatirlatmaAyarlari = Readonly<Record<HatirlatmaAdi, number | null>>;
+// Kur kilidinin bitmesine bu kadar gün kala onaylı ama siparişsiz talep hatırlatılır (danışman maddesi 7).
+export const KUR_KILIDI_UYARI_GUNU = 2;
+
+export interface HatirlatmaTalebi {
+  talepId: string;
+  no: string;
+  durum: TalepDurumu;
+  ihtiyacTarihi: string | null;
+  // Durumun başladığı an (ISO) ve tesis günü.
+  durumAni: string;
+  durumGunu: string;
+  teklifIstegiVar: boolean;
+  kararVar: boolean;
+  kararOnayli: boolean;
+  sonOnay: { id: string; gun: string } | null;
+  // Kur kilidinin bittiği tesis günü; kilit yoksa null.
+  kurKilidiBitisi: string | null;
+  istekler: readonly { firmaId: number; tedarikci: string; gonderim: string; teklifVar: boolean }[];
+  teklifler: readonly { teklifId: string; tedarikci: string; gecerlilik: string | null }[];
+  // Yalnız açık (teslimi tamamlanmamış, kapatılmamış) siparişler.
+  siparisler: readonly { teklifId: string; siparisNo: string | null; beklenenTeslim: string | null }[];
+}
+
+export interface HatirlatmaOlayi {
+  tur: HatirlatmaTuru;
+  kaynakKimlik: string;
+  talepId: string;
+  baslik: string;
+  yol: '/satin-alma/talepler' | '/satin-alma/onaylar';
+}
+
+const gunSayisi = (tarih: string): number => Date.UTC(Number(tarih.slice(0, 4)), Number(tarih.slice(5, 7)) - 1, Number(tarih.slice(8, 10))) / GUN_MS;
+// b - a, takvim günü.
+export const gunFarki = (a: string, b: string): number => gunSayisi(b) - gunSayisi(a);
+// Başlangıç gününden sonra bugüne kadar (bugün dahil) geçen iş günleri.
+export function isGunuFarki(baslangic: string, bugun: string, isGunleri: ReadonlySet<string>): number {
+  let n = 0;
+  for (const g of isGunleri) if (g > baslangic && g <= bugun) n += 1;
+  return n;
+}
+
+const ACIK_SIPARIS_ONCESI: readonly TalepDurumu[] = ['taslak', 'teklif_isteniyor', 'degerlendirme', 'onayda'];
+
+export function hatirlatmalar(
+  talepler: readonly HatirlatmaTalebi[], ayar: HatirlatmaAyarlari, bugun: string, isGunleri: ReadonlySet<string>,
+): HatirlatmaOlayi[] {
+  const sonuc: HatirlatmaOlayi[] = [];
+  const ekle = (ad: HatirlatmaAdi, t: HatirlatmaTalebi, donem: string, baslik: string, yol: HatirlatmaOlayi['yol'] = '/satin-alma/talepler') => {
+    sonuc.push({ tur: `satin-alma.hatirlatma-${ad}`, kaynakKimlik: `${t.talepId}:${donem}`, talepId: t.talepId, baslik: `${t.no}: ${baslik}`, yol });
+  };
+  const bekledi = (t: HatirlatmaTalebi, n: number | null) => n !== null && isGunuFarki(t.durumGunu, bugun, isGunleri) >= n;
+  for (const t of talepler) {
+    const n = ayar['ihtiyac-yaklasiyor'];
+    if (n !== null && ACIK_SIPARIS_ONCESI.includes(t.durum) && t.ihtiyacTarihi !== null) {
+      const kalan = gunFarki(bugun, t.ihtiyacTarihi);
+      if (kalan <= n) ekle('ihtiyac-yaklasiyor', t, t.ihtiyacTarihi, kalan < 0 ? `ihtiyaç tarihi ${-kalan} gün geçti, sipariş yok` : `ihtiyaç tarihine ${kalan} gün kaldı, sipariş yok`);
+    }
+    if (t.durum === 'taslak' && !t.teklifIstegiVar && bekledi(t, ayar['taslak-bekliyor'])) ekle('taslak-bekliyor', t, t.durumAni, 'taslakta bekliyor, teklif istenmedi');
+    if (t.durum === 'teklif_isteniyor' || t.durum === 'degerlendirme') {
+      const ni = ayar['teklif-cevapsiz'];
+      if (ni !== null) {
+        for (const r of t.istekler) {
+          if (!r.teklifVar && isGunuFarki(r.gonderim, bugun, isGunleri) >= ni) ekle('teklif-cevapsiz', t, `${r.firmaId}:${r.gonderim}`, `${r.tedarikci} teklif vermedi`);
+        }
+      }
+      const ng = ayar['teklif-gecerlilik'];
+      if (ng !== null && !t.kararVar) {
+        for (const q of t.teklifler) {
+          if (q.gecerlilik === null) continue;
+          const kalan = gunFarki(bugun, q.gecerlilik);
+          if (kalan <= ng) ekle('teklif-gecerlilik', t, `${q.teklifId}:${q.gecerlilik}`, kalan < 0 ? `${q.tedarikci} teklifinin geçerliliği bitti, karar yok` : `${q.tedarikci} teklifinin geçerliliğine ${kalan} gün kaldı, karar yok`);
+        }
+      }
+    }
+    if (t.durum === 'degerlendirme' && bekledi(t, ayar['degerlendirme-bekliyor'])) ekle('degerlendirme-bekliyor', t, t.durumAni, 'değerlendirmede bekliyor');
+    if (t.durum === 'onayda' && !t.kararOnayli && bekledi(t, ayar['onay-bekliyor'])) ekle('onay-bekliyor', t, t.durumAni, 'onay bekliyor', '/satin-alma/onaylar');
+    const ns = ayar['siparis-bekliyor'];
+    if (ns !== null && t.durum === 'onayda' && t.kararOnayli && t.sonOnay !== null) {
+      const kilitKalan = t.kurKilidiBitisi === null ? null : gunFarki(bugun, t.kurKilidiBitisi);
+      if (gunFarki(t.sonOnay.gun, bugun) >= ns || (kilitKalan !== null && kilitKalan <= KUR_KILIDI_UYARI_GUNU)) {
+        ekle('siparis-bekliyor', t, t.sonOnay.id, kilitKalan !== null && kilitKalan <= KUR_KILIDI_UYARI_GUNU
+          ? `onaylandı, sipariş verilmedi; kur kilidi ${kilitKalan < 0 ? 'bitti' : `${kilitKalan} gün sonra bitiyor`}` : 'onaylandı, sipariş verilmedi');
+      }
+    }
+    if (t.durum !== 'siparis_verildi') continue;
+    for (const p of t.siparisler) {
+      if (p.beklenenTeslim === null) continue;
+      const kalan = gunFarki(bugun, p.beklenenTeslim);
+      const ad = p.siparisNo ?? 'sipariş';
+      const donem = `${p.teklifId}:${p.beklenenTeslim}`;
+      const ny = ayar['teslim-yaklasiyor'];
+      if (ny !== null && kalan >= 0 && kalan <= ny) ekle('teslim-yaklasiyor', t, donem, kalan === 0 ? `${ad} bugün teslim bekleniyor` : `${ad} teslimine ${kalan} gün kaldı`);
+      // 0 gecikmenin ilk günüdür: gecikme en az bir gündür.
+      const gecikme = -kalan;
+      for (const adi of ['teslim-gecikti', 'teslim-gecikti-yonetici'] as const) {
+        const ng = ayar[adi];
+        if (ng !== null && gecikme > 0 && gecikme >= ng) ekle(adi, t, donem, `${ad} teslimi ${gecikme} gün gecikti`);
+      }
+    }
+  }
+  return sonuc;
+}
+
+export const hatirlatmaAnahtari = (o: Pick<HatirlatmaOlayi, 'tur' | 'kaynakKimlik'>): string => `${o.tur}:${o.kaynakKimlik}`;
+
+// Açılacaklar: istenen ama tabloda hiç olmayanlar (kapanmış anahtar yeniden açılmaz). Kapanacaklar: açık ama artık istenmeyenler.
+export function hatirlatmaFarki(
+  istenen: readonly HatirlatmaOlayi[], kayitli: ReadonlySet<string>, acik: readonly { anahtar: string; tur: string }[],
+): { acilacak: HatirlatmaOlayi[]; kapanacak: { anahtar: string; tur: string; kaynakKimlik: string }[] } {
+  const istenenler = new Map(istenen.map((o) => [hatirlatmaAnahtari(o), o]));
+  return {
+    acilacak: [...istenenler].filter(([a]) => !kayitli.has(a)).map(([, o]) => o),
+    kapanacak: acik.filter((r) => !istenenler.has(r.anahtar)).map((r) => ({ ...r, kaynakKimlik: r.anahtar.slice(r.tur.length + 1) })),
+  };
+}
+
+// 2432 V1 geçici karşılığı (2452 vardiya takvimi gelene kadar): Pazartesi-Cuma, resmî tatiller hariç.
+export function haftaIciGunleri(baslangic: string, bitis: string, tatiller: ReadonlySet<string>): Set<string> {
+  const gunler = new Set<string>();
+  for (let g = gunSayisi(baslangic); g <= gunSayisi(bitis); g += 1) {
+    const d = new Date(g * GUN_MS);
+    const gun = d.toISOString().slice(0, 10);
+    if (d.getUTCDay() !== 0 && d.getUTCDay() !== 6 && !tatiller.has(gun)) gunler.add(gun);
+  }
+  return gunler;
+}
+
+// 2414 a, V2 a: birleştirilecek talep taslak ya da teklif isteniyor durumundadır; teklifi, teklif isteği, kararı yoktur, başka birleşmede
+// değildir, kendisi birleşik talep değildir ve kalemi vardır. Teklif satırı ve karar kalemi kalem anahtarına bağlı olduğu için taşınamaz.
+export function birlestirmeReddi(t: Pick<Talep, 'no' | 'durum' | 'teklifler' | 'teklifIstekleri' | 'karar' | 'kalemler' | 'birlesme' | 'kaynaklar'>): string | null {
+  if (t.birlesme != null) return ILETILER.birlesmis(t.birlesme.no);
+  if ((t.kaynaklar ?? []).length > 0) return `${t.no} birleşik talep; birleşik talep yeniden birleştirilmez.`;
+  if (t.durum !== 'taslak' && t.durum !== 'teklif_isteniyor') return `${t.no} taslak ya da teklif isteniyor durumunda değil; birleştirilemez.`;
+  if (t.teklifler.length > 0 || t.teklifIstekleri.length > 0 || t.karar !== null) return `${t.no} talebinin teklifi ya da kararı var; birleştirilemez.`;
+  if (t.kalemler.length === 0) return `${t.no} talebinin kalemi yok; birleştirilemez.`;
+  return null;
+}
+export const BIRLESIK_KALEM_SINIRI = 200;
+
+// 2414 a madde 4: birleşik talebin alanları kaynaklardan türetilir. İhtiyaç tarihi en erken, öncelik en yüksek olandır; birim boştur
+// (V4 a: harcama kalemin kaynak birimine yazılır). Üretim emri yalnız bütün kaynaklar aynı emre bağlıysa taşınır.
+export function birlesikTalep(id: string, kaynaklar: readonly Pick<Talep, 'no' | 'ihtiyacTarihi' | 'oncelik' | 'uretimEmriId'>[]): TalepYazimi {
+  const tarihler = kaynaklar.flatMap((t) => (t.ihtiyacTarihi === null ? [] : [t.ihtiyacTarihi])).sort();
+  const oncelik = ONCELIKLER[Math.max(...kaynaklar.map((t) => ONCELIKLER.indexOf(t.oncelik)))]!;
+  const emirler = new Set(kaynaklar.map((t) => t.uretimEmriId));
+  const baslik = `Birleşik talep: ${kaynaklar.map((t) => t.no).join(', ')}`;
+  return {
+    id, baslik: baslik.length > 160 ? `${baslik.slice(0, 159)}…` : baslik, birim: null, talepEdenKisiId: null, oncelik,
+    ihtiyacTarihi: tarihler[0] ?? null, notlar: '', durum: 'taslak', iptalNedeni: '',
+    uretimEmriId: emirler.size === 1 ? [...emirler][0]! : null, agirliklar: null,
+    kalemler: [], teklifIstekleri: [], teklifler: [], karar: null, onaylar: [], hareketler: [], senaryolar: [],
+  };
+}
+
+// Ayırma yalnız birleşik talepte ve teklif ve karar yokken (V2 a); verilen her talep bu birleşmenin kaynağıdır.
+export function ayirmaReddi(t: Pick<Talep, 'kaynaklar' | 'teklifler' | 'karar'>, talepIdleri: readonly string[] | undefined): string | null {
+  const kaynaklar = new Set((t.kaynaklar ?? []).map((x) => x.talepId));
+  if (kaynaklar.size === 0) return ILETILER.birlesikDegil;
+  if (t.teklifler.length > 0 || t.karar !== null) return ILETILER.ayirmaTeklifli;
+  if ((talepIdleri ?? []).some((id) => !kaynaklar.has(id))) return ILETILER.kaynakDegil;
+  return null;
+}
+
+// Birleşik talepte kaynaktan gelen kalem genel kayıtla silinmez; ayırmayla kaynağına döner.
+export function kaynakKalemiReddi(eski: Pick<Talep, 'kaynaklar'>, yeniKalemler: readonly { id: string }[]): string | null {
+  const kalan = new Set(yeniKalemler.map((k) => k.id));
+  return (eski.kaynaklar ?? []).some((x) => x.kalemIdleri.some((id) => !kalan.has(id))) ? ILETILER.kaynakKalemiSilinmez : null;
 }

@@ -1,11 +1,11 @@
 import { aylikFaizdenYillik, vadeIndirimCarpani } from "#paylasilan/sozlesme/finansman.ts";
 import { teklifMetniSatirlari } from "./kalem-bagi.ts";
 import type {
-  Award, AwardMode, Currency, MalzemeSecenegi, Material, SiparisFaturasi, Priority, PurchaseRequest, Quality, Quote, RequestItem, RequestStatus,
+  Award, AwardMode, Currency, MalzemeSecenegi, Material, SiparisFaturasi, Priority, PurchaseRequest, Quality, Quote, RequestItem,
   Settings, Supplier, Weights,
 } from "./tipler.ts";
 import { CURRENCIES as CURS } from "./tipler.ts";
-import { CRIT, DELIVERY, KART_SAYFASI, OPEN, COMMITTED, PRIO, QUALITY, STATUSES, UNITS, stLabel } from "./constants.ts";
+import { CRIT, DELIVERY, KART_SAYFASI, OPEN, COMMITTED, PRIO, QUALITY, UNITS, stLabel } from "./constants.ts";
 import {
   FIRMA_KARTLARI, S, V, backend, canWrite, persist, persistUndoable, saveMaterial, saveRequest, saveRequestUndoable, saveSupplier, settings, undoLast, UNDO,
   type Page, type ViewState,
@@ -836,7 +836,7 @@ function closeMenus(except?: Element | null): void {
 function reqAction(v: string, r: PurchaseRequest): void {
   if (!canWrite()) return;
   if (v === "edit") requestModal(r);
-  else if (v === "status") openModal(`<div class="mh"><h2>Durumu değiştir</h2></div><div class="mb"><p class="small muted">Normalde durum karar, onay ve sipariş adımlarıyla kendiliğinden ilerler. Elle değişiklik geçmişe kaydedilir.</p><select id="st-new">${STATUSES.map(s => `<option value="${s.k}" ${r.status === s.k ? "selected" : ""}>${s.l}</option>`).join("")}</select></div><div class="mf"><button class="btn primary" data-act="set-status">Kaydet</button><button class="btn ghost" data-act="close">Vazgeç</button></div>`, true);
+  else if (v === "uncancel") openModal(`<div class="mh"><h2>İptali geri al</h2></div><div class="mb"><p class="small muted">Talep iptal edilmeden önceki durumuna döner; sipariş onaylı karar ister, Logo'da iptal edilmiş sipariş geri gelmez. Geri alma geçmişe gerekçesiyle yazılır.</p><label class="f"><span>Gerekçe</span><input type="text" id="ucx-reason" maxlength="500" aria-describedby="ucx-hata" placeholder="Örn. ihtiyaç yeniden doğdu"></label><p class="small bad" id="ucx-hata" role="alert" hidden>Gerekçe yazın.</p></div><div class="mf"><button class="btn primary" data-act="uncancel-req">İptali geri al</button><button class="btn ghost" data-act="close">Vazgeç</button></div>`, true);
   else if (v === "cancel") openModal(`<div class="mh"><h2>Talebi iptal et</h2></div><div class="mb"><label class="f"><span>İptal nedeni</span><input type="text" id="cx-reason" placeholder="Örn. ihtiyaç ortadan kalktı, stoktan karşılandı"></label></div><div class="mf"><button class="btn bad" data-act="cancel-req">İptal et</button><button class="btn ghost" data-act="close">Vazgeç</button></div>`, true);
   else if (v === "delete") confirmModal(`${r.no} ${r.title} talebi ve tüm teklifleri silinecek; fiyat geçmişinden de çıkar. Kaydı hafızada tutmak için iptal etmeyi tercih edin.`, () => { persistUndoable("requests", r.id, null, `${r.no} silindi`, () => go("request", r.id)); go("requests"); });
 }
@@ -844,7 +844,7 @@ function reqAction(v: string, r: PurchaseRequest): void {
 const ACTIONS: Record<string, Action> = {
   "menu": el => { const list = el.nextElementSibling as HTMLElement | null; if (!list) return; const open = list.hidden; closeMenus(list); list.hidden = !open; el.setAttribute("aria-expanded", String(open)); if (open) (list.querySelector("button") as HTMLElement | null)?.focus(); },
   "req-edit": (_el, r) => { if (r) reqAction("edit", r); },
-  "req-status": (_el, r) => { if (r) reqAction("status", r); },
+  "req-uncancel": (_el, r) => { if (r) reqAction("uncancel", r); },
   "req-cancel": (_el, r) => { if (r) reqAction("cancel", r); },
   "req-delete": (_el, r) => { if (r) reqAction("delete", r); },
   "go": el => go(el.dataset.page as Page),
@@ -1524,7 +1524,20 @@ document.addEventListener("change", (e) => {
   const r = S.requests[V.id ?? ""], it = (r?.items || []).find(x => x.id === (e.target as FormEl).value);
   if (it) { $("#oc-qty").value = miktarIn(it.qty); $("#oc-unit").value = it.unit; }
 });
-ACTIONS["set-status"] = (_el, r) => { const v = $("#st-new").value as RequestStatus; if (r && v !== r.status) { const n = clone(r); n.status = v; saveRequest(n, `Durum elle değiştirildi: ${stLabel(r.status)} → ${stLabel(v)}`); } closeModal(); };
+ACTIONS["uncancel-req"] = (el, r) => {
+  if (!r) return;
+  const gerekce = $("#ucx-reason").value.trim();
+  const uyari = $("#ucx-hata");
+  if (!gerekce) { uyari.hidden = false; $("#ucx-reason").focus(); return; }
+  uyari.hidden = true;
+  (el as HTMLButtonElement).disabled = true;
+  void backend.iptaliGeriAl(r.id, gerekce).then(c => {
+    (el as HTMLButtonElement).disabled = false;
+    if (!c) return;
+    closeModal();
+    toast(c.turetildi ? `İptal geri alındı: ${stLabel(c.durum)}. Önceki durum kayıtlı değildi, veriden bulundu; kontrol edin.` : `İptal geri alındı: ${stLabel(c.durum)}`);
+  });
+};
 ACTIONS["cancel-req"] = (_el, r) => { if (!r) return; const n = clone(r); n.status = "cancelled"; n.cancelReason = $("#cx-reason").value.trim(); saveRequest(n, "Talep iptal edildi" + (n.cancelReason ? ": " + n.cancelReason : "")); closeModal(); };
 // açılır gelişmiş bölümlerin (ağırlıklar, ayrıntılı tablo) açık/kapalı durumu yeniden çizimde korunur
 document.addEventListener("toggle", (e) => {

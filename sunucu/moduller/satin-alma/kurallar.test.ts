@@ -4,7 +4,7 @@ import type { Talep, TalepYazimi } from '#paylasilan/sozlesme/satin-alma.ts';
 import {
   VARSAYILAN_ONAY_LIMITLERI, talebinAlimlari,
   FIYAT_IZI_SINIRI, GECISLER, ISLEM, degisiklikReddi, degisiklikTuru, dortGozSonucu, fazlaTeslim, finanstanEklenenKurlar, fiyatIzleri, kullanilanParaBirimleri, gecisVarMi, gkkKalitesi, gorunenDurum, izi,
-  ILETILER, askidakiTedarikciReddi, kaliteSiparisReddi, kartBirimiReddi, yeniSiparisFirmalari, gecikmeGunu, satinAlinabilirKartReddi, hizliBaslik, hizliKalemReddi, kararDegistiMi, kartsizSiparisReddi, talepKartiReddi, kararOnayliMi, talepFisiGiderMi, ondalikKiyas, ondalikTopla, siparisFaturaFirmasi, faturaEslesmeUyarilari, siparisReddi, terminsizSiparisReddi, terminDurumu, terminTakibi, type TerminKalemi, talepEdenGorunumu, tamGorurMu, teklifKuru, teslimDurumu,
+  ILETILER, askidakiTedarikciReddi, kaliteSiparisReddi, kartBirimiReddi, yeniSiparisFirmalari, gecikmeGunu, satinAlinabilirKartReddi, hizliBaslik, hizliKalemReddi, kararDegistiMi, kartsizSiparisReddi, talepKartiReddi, kararOnayliMi, talepFisiGiderMi, ondalikKiyas, ondalikTopla, siparisFaturaFirmasi, faturaEslesmeUyarilari, siparisReddi, terminsizSiparisReddi, terminDurumu, terminTakibi, type TerminKalemi, talepEdenGorunumu, birlesikTalep, tamGorurMu, teklifKuru, teslimDurumu,
 } from './kurallar.ts';
 import { birimFiyati, ondalikCarp, stokTutari, uygulananKgFiyati } from './kurallar.ts';
 import { agirlikliGecikme, fasonKalani, sonDonusGecikmesi } from './kurallar.ts';
@@ -61,13 +61,19 @@ test('SAT-38: teslim durumu stoktaki kabul miktarından; kalite GKK sonucundan; 
   assert.equal(ondalikKiyas('-1', '0'), -1);
 });
 
-test('SAT-07: geçişler; aynı durumda kalmak serbest; iptal önceki duruma döner (geri al)', () => {
+test('SAT-07 2413 a: yalnız akış geçişleri; aynı durumda kalmak serbest; iptalden genel kayıtla çıkılmaz', () => {
   assert.equal(gecisVarMi('taslak', 'onayda'), false);
   assert.equal(gecisVarMi('degerlendirme', 'onayda'), true);
   // S4 a: ekran kararı teklif isteniyor durumundaki talepte de onaya gönderir.
   assert.equal(gecisVarMi('teklif_isteniyor', 'onayda'), true);
   assert.equal(gecisVarMi('teslim_alindi', 'teslim_alindi'), true);
-  assert.equal(gecisVarMi('iptal', 'degerlendirme'), true);
+  assert.equal(gecisVarMi('iptal', 'degerlendirme'), false);
+  assert.equal(gecisVarMi('iptal', 'iptal'), true);
+  // 2413 a: yalnız "Durumu elle değiştir"in yaptığı dört geçiş kalktı.
+  for (const [a, b] of [['teklif_isteniyor', 'taslak'], ['degerlendirme', 'teklif_isteniyor'], ['siparis_verildi', 'onayda']] as const) assert.equal(gecisVarMi(a, b), false, `${a} -> ${b}`);
+  // Akışın geçişleri durur: teklif, karar, ret, sipariş, iptal.
+  for (const [a, b] of [['taslak', 'teklif_isteniyor'], ['taslak', 'degerlendirme'], ['teklif_isteniyor', 'degerlendirme'], ['onayda', 'degerlendirme'],
+    ['onayda', 'siparis_verildi'], ['siparis_verildi', 'iptal'], ['taslak', 'iptal']] as const) assert.equal(gecisVarMi(a, b), true, `${a} -> ${b}`);
   // Teslim alındı istemciyle yazılmaz (SAT-38).
   assert.equal(gecisVarMi('siparis_verildi', 'teslim_alindi'), false);
   assert.deepEqual(GECISLER.teslim_alindi, []);
@@ -610,4 +616,129 @@ test('2433: terminTakibi fason kalemi emriyle ayrı satırdır; hizmet kartı hi
     ['kalem:t1:f', 'fason', ['UE-1 · Op 30'], 'talep_yolda'], ['kalem:t1:h', 'hizmet', [], 'talep_yolda'], ['malzeme:5', 'malzeme', [], 'plan_istemiyor'],
   ]);
   assert.equal(satirlar.find((x) => x.anahtar === 'malzeme:5')?.elleTermin?.termin, '2026-11-30');
+});
+
+// 2432: hatırlatmalar.
+import { HATIRLATMA_ADLARI, type HatirlatmaAyarlari, type HatirlatmaTalebi, haftaIciGunleri, hatirlatmaFarki, hatirlatmalar, isGunuFarki } from './kurallar.ts';
+
+const H_AYAR: HatirlatmaAyarlari = {
+  'ihtiyac-yaklasiyor': 7, 'taslak-bekliyor': 2, 'teklif-cevapsiz': 3, 'teklif-gecerlilik': 3, 'degerlendirme-bekliyor': 3, 'onay-bekliyor': 2,
+  'siparis-bekliyor': 1, 'teslim-yaklasiyor': 3, 'teslim-gecikti': 0, 'teslim-gecikti-yonetici': 3,
+};
+const hTalep = (x: Partial<HatirlatmaTalebi>): HatirlatmaTalebi => ({
+  talepId: 't1', no: 'ST-1', durum: 'taslak', ihtiyacTarihi: null, durumAni: '2026-11-02T08:00:00.000Z', durumGunu: '2026-11-02',
+  teklifIstegiVar: false, kararVar: false, kararOnayli: false, sonOnay: null, kurKilidiBitisi: null, istekler: [], teklifler: [], siparisler: [], ...x,
+});
+// 2026-11-09 Pazartesi.
+const H_BUGUN = '2026-11-09';
+const H_ISGUNLERI = haftaIciGunleri('2026-10-01', H_BUGUN, new Set());
+const turler = (t: Partial<HatirlatmaTalebi>, ayar: HatirlatmaAyarlari = H_AYAR) => hatirlatmalar([hTalep(t)], ayar, H_BUGUN, H_ISGUNLERI).map((o) => o.tur.replace('satin-alma.hatirlatma-', ''));
+
+test('2432: iş günü Pazartesi-Cuma, tatil hariç; başlangıç günü sayılmaz, bugün sayılır', () => {
+  const g = haftaIciGunleri('2026-11-06', '2026-11-10', new Set(['2026-11-10']));
+  assert.deepEqual([...g], ['2026-11-06', '2026-11-09']);
+  assert.equal(isGunuFarki('2026-11-06', '2026-11-09', g), 1);
+  assert.equal(isGunuFarki('2026-11-02', H_BUGUN, H_ISGUNLERI), 5);
+});
+
+test('2432-2 a: ihtiyaç tarihine N gün ya da daha az kalan, sipariş öncesi talep; sipariş verilmişte yok', () => {
+  assert.deepEqual(turler({ ihtiyacTarihi: '2026-11-16', teklifIstegiVar: true }), ['ihtiyac-yaklasiyor']);
+  assert.deepEqual(turler({ ihtiyacTarihi: '2026-11-17', teklifIstegiVar: true }), []);
+  assert.deepEqual(turler({ ihtiyacTarihi: '2026-11-01', teklifIstegiVar: true }), ['ihtiyac-yaklasiyor']);
+  assert.deepEqual(turler({ ihtiyacTarihi: '2026-11-10', durum: 'siparis_verildi' }), []);
+  assert.deepEqual(turler({ ihtiyacTarihi: '2026-11-10', teklifIstegiVar: true }, { ...H_AYAR, 'ihtiyac-yaklasiyor': null }), []);
+});
+
+test('2432: bekleme maddeleri iş günü sayar; teklif istenmiş taslak taslak hatırlatması almaz', () => {
+  // Cuma başlayan taslak Pazartesi 1 iş günüdür: 2 iş günü dolmadı.
+  assert.deepEqual(turler({ durumGunu: '2026-11-06' }), []);
+  assert.deepEqual(turler({ durumGunu: '2026-11-05' }), ['taslak-bekliyor']);
+  assert.deepEqual(turler({ durumGunu: '2026-11-05', teklifIstegiVar: true }), []);
+  assert.deepEqual(turler({ durum: 'degerlendirme', durumGunu: '2026-11-04' }), ['degerlendirme-bekliyor']);
+  assert.deepEqual(turler({ durum: 'onayda', durumGunu: '2026-11-05', kararVar: true }), ['onay-bekliyor']);
+  assert.deepEqual(turler({ durum: 'onayda', durumGunu: '2026-11-05', kararVar: true, kararOnayli: true, sonOnay: { id: 'o1', gun: H_BUGUN } }), []);
+});
+
+test('2432: cevapsız teklif isteği firma başına; teklif gelen firma düşer. Geçerlilik yalnız karar yokken', () => {
+  const istekler = [
+    { firmaId: 1, tedarikci: 'A', gonderim: '2026-11-03', teklifVar: false },
+    { firmaId: 2, tedarikci: 'B', gonderim: '2026-11-03', teklifVar: true },
+    { firmaId: 3, tedarikci: 'C', gonderim: '2026-11-06', teklifVar: false },
+  ];
+  const o = hatirlatmalar([hTalep({ durum: 'teklif_isteniyor', durumGunu: H_BUGUN, teklifIstegiVar: true, istekler })], H_AYAR, H_BUGUN, H_ISGUNLERI);
+  assert.deepEqual(o.map((x) => x.kaynakKimlik), ['t1:1:2026-11-03']);
+  const teklifler = [{ teklifId: 'q1', tedarikci: 'A', gecerlilik: '2026-11-12' }, { teklifId: 'q2', tedarikci: 'B', gecerlilik: '2026-11-13' }];
+  assert.deepEqual(turler({ durum: 'degerlendirme', durumGunu: H_BUGUN, teklifler }), ['teklif-gecerlilik']);
+  assert.deepEqual(turler({ durum: 'degerlendirme', durumGunu: H_BUGUN, teklifler, kararVar: true }), []);
+});
+
+test('2432: onaylı siparişsiz talep N gün sonra ya da kur kilidinin bitmesine iki gün kala', () => {
+  const onayli = { durum: 'onayda' as const, durumGunu: H_BUGUN, kararVar: true, kararOnayli: true };
+  assert.deepEqual(turler({ ...onayli, sonOnay: { id: 'o1', gun: H_BUGUN } }), []);
+  assert.deepEqual(turler({ ...onayli, sonOnay: { id: 'o1', gun: '2026-11-08' } }), ['siparis-bekliyor']);
+  assert.deepEqual(turler({ ...onayli, sonOnay: { id: 'o1', gun: H_BUGUN }, kurKilidiBitisi: '2026-11-11' }), ['siparis-bekliyor']);
+  assert.deepEqual(turler({ ...onayli, sonOnay: { id: 'o1', gun: H_BUGUN }, kurKilidiBitisi: '2026-11-12' }), []);
+});
+
+test('2432: açık siparişte teslim yaklaşıyor, gecikti ve yöneticiye kademe; tarihsiz sipariş yok', () => {
+  const sp = (beklenenTeslim: string | null) => turler({ durum: 'siparis_verildi', siparisler: [{ teklifId: 'q1', siparisNo: 'SP-1', beklenenTeslim }] });
+  assert.deepEqual(sp('2026-11-12'), ['teslim-yaklasiyor']);
+  assert.deepEqual(sp('2026-11-09'), ['teslim-yaklasiyor']);
+  assert.deepEqual(sp('2026-11-13'), []);
+  assert.deepEqual(sp('2026-11-08'), ['teslim-gecikti']);
+  assert.deepEqual(sp('2026-11-06'), ['teslim-gecikti', 'teslim-gecikti-yonetici']);
+  assert.deepEqual(sp(null), []);
+});
+
+test('2432: her ayar boşken hiçbir hatırlatma yok', () => {
+  const kapali = Object.fromEntries(HATIRLATMA_ADLARI.map((a) => [a, null])) as HatirlatmaAyarlari;
+  assert.deepEqual(turler({ durumGunu: '2026-10-01', ihtiyacTarihi: H_BUGUN }, kapali), []);
+});
+
+test('2432: fark yalnız kayıtta olmayanı açar, koşulu kalkan açığı kapatır; kapanmış anahtar yeniden açılmaz', () => {
+  const istenen = hatirlatmalar([hTalep({ durumGunu: '2026-11-05' })], H_AYAR, H_BUGUN, H_ISGUNLERI);
+  const anahtar = `satin-alma.hatirlatma-taslak-bekliyor:t1:${hTalep({}).durumAni}`;
+  assert.deepEqual(hatirlatmaFarki(istenen, new Set(), []).acilacak.length, 1);
+  assert.deepEqual(hatirlatmaFarki(istenen, new Set([anahtar]), []).acilacak, []);
+  const f = hatirlatmaFarki([], new Set([anahtar]), [{ anahtar, tur: 'satin-alma.hatirlatma-taslak-bekliyor' }]);
+  assert.deepEqual(f.kapanacak, [{ anahtar, tur: 'satin-alma.hatirlatma-taslak-bekliyor', kaynakKimlik: `t1:${hTalep({}).durumAni}` }]);
+});
+
+// 2413 a: iptalden önceki durum kayıtlı değilse veriden türetilir.
+import { iptalGeriAlmaHareketi, iptalOncesiTuret } from './kurallar.ts';
+test('2413 a: iptal öncesi durum türetmesi; son onayı ret olan karar değerlendirmeye döner', () => {
+  const bos = { karar: null, onaylar: [], teklifler: [], teklifIstekleri: [] } as unknown as Parameters<typeof iptalOncesiTuret>[0];
+  const karar = { siparisler: [] } as unknown as NonNullable<Talep['karar']>;
+  assert.equal(iptalOncesiTuret(bos), 'taslak');
+  assert.equal(iptalOncesiTuret({ ...bos, teklifIstekleri: [{}] as never }), 'teklif_isteniyor');
+  assert.equal(iptalOncesiTuret({ ...bos, teklifIstekleri: [{}] as never, teklifler: [{}] as never }), 'degerlendirme');
+  assert.equal(iptalOncesiTuret({ ...bos, karar }), 'onayda');
+  assert.equal(iptalOncesiTuret({ ...bos, karar, onaylar: [{ sonuc: 'onay' }] as never }), 'onayda');
+  assert.equal(iptalOncesiTuret({ ...bos, karar, onaylar: [{ sonuc: 'onay' }, { sonuc: 'ret' }] as never }), 'degerlendirme');
+  assert.equal(iptalOncesiTuret({ ...bos, karar: { ...karar, siparisler: [{}] } as never, onaylar: [{ sonuc: 'onay' }] as never }), 'siparis_verildi');
+});
+test('2413 a: geri alma hareketi gerekçeyi, eski iptal nedenini ve türetmeyi yazar', () => {
+  assert.equal(iptalGeriAlmaHareketi('Yanlış talep', 'Yanlışlıkla iptal', false), 'İptal geri alındı (iptal nedeni: Yanlış talep): Yanlışlıkla iptal');
+  assert.equal(iptalGeriAlmaHareketi('', 'G', true), 'İptal geri alındı, önceki durum veriden türetildi: G');
+  assert.equal(iptalGeriAlmaHareketi('x'.repeat(2000), 'G', false).length, 1000);
+});
+
+test('2414 a K3 K4: kaynak talebin görünümü birleşik talepten yalnız kendi kalemleriyle süzülür; seçilen tedarikçi yalnız kendi kalemini kapsayandır; kaynak listesi düşer', () => {
+  const kalem = (id: string) => ({ id, katalogId: null, ad: 'Kalem ' + id, ozellik: '', miktar: '1', birim: 'adet', kategori: '' });
+  const q = (id: string, kalemId: string) => ({ id, tedarikciAdi: 'Firma ' + id, firmaId: 1, fiyatlar: [{ kalemId, birimFiyat: '5' }] }) as unknown as Talep['teklifler'][number];
+  const birlesen = { ...T, id: 'm', kalemler: [kalem('a1'), kalem('b1')], teklifler: [q('x', 'a1'), q('y', 'b1')],
+    kalemBaglari: [{ kalemId: 'b1', uygulanan: null, fason: null }],
+    karar: { mod: 'bolunmus', teklifId: null, bolunme: [{ kalemId: 'a1', teklifId: 'x' }, { kalemId: 'b1', teklifId: 'y' }], sabitKurlar: [] },
+    kaynaklar: [{ talepId: 'A', no: 'ST-A', talepEdenAdi: 'A kişisi', kalemIdleri: ['a1'], ihtiyacTarihi: null, birim: null },
+      { talepId: 'B', no: 'ST-B', talepEdenAdi: 'B kişisi', kalemIdleri: ['b1'], ihtiyacTarihi: null, birim: null }] } as unknown as Talep;
+  const kaynak = { ...T, id: 'A', kalemler: [], birlesme: { talepId: 'm', no: 'ST-M', durum: 'taslak' } } as unknown as Talep;
+  const g = talepEdenGorunumu(kaynak, 5, birlesen);
+  assert.deepEqual([g.kalemler.map((k) => k.id), g.secilenTedarikciler, g.kalemBaglari, g.karar, g.teklifler], [['a1'], [{ firmaId: 1, ad: 'Firma x' }], [], null, []]);
+  assert.equal('kaynaklar' in talepEdenGorunumu(birlesen, 5), false);
+  assert.deepEqual(birlesikTalep('n', [
+    { no: 'ST-1', ihtiyacTarihi: '2026-12-01', oncelik: 'dusuk', uretimEmriId: 3 }, { no: 'ST-2', ihtiyacTarihi: null, oncelik: 'acil', uretimEmriId: 4 },
+  ]).baslik, 'Birleşik talep: ST-1, ST-2');
+  const b = birlesikTalep('n', [{ no: 'ST-1', ihtiyacTarihi: '2026-12-01', oncelik: 'dusuk', uretimEmriId: 3 }, { no: 'ST-2', ihtiyacTarihi: '2026-11-01', oncelik: 'normal', uretimEmriId: 3 }]);
+  assert.deepEqual([b.ihtiyacTarihi, b.oncelik, b.uretimEmriId, b.birim, b.durum], ['2026-11-01', 'normal', 3, null, 'taslak']);
+  assert.equal(birlesikTalep('n', [{ no: 'ST-1', ihtiyacTarihi: null, oncelik: 'dusuk', uretimEmriId: 3 }, { no: 'ST-2', ihtiyacTarihi: null, oncelik: 'dusuk', uretimEmriId: 4 }]).uretimEmriId, null);
 });

@@ -194,6 +194,15 @@ const talepAlanlari = {
 export const talepGovdesi = z.object(talepAlanlari);
 export const talepKaydetGovdesi = z.object({ ...talepAlanlari, ...beklenenSurum });
 export const talepSilGovdesi = z.object(beklenenSurum);
+// 2413 a: elle durum değiştirme yalnız "İptali geri al"dır. Talep iptalden önceki durumuna döner; gerekçe zorunlu, talebin hareketine yazılır.
+// 2414 a: kimlik birleşik talebin, istemcide üretilir. Kaynaklar tekildir (K7).
+export const talepBirlestirGovdesi = z.object({
+  id: uuid,
+  talepIdleri: z.array(uuid).min(2, 'En az iki talep seçin.').max(20).refine((l) => new Set(l).size === l.length, 'Aynı talep iki kez seçilemez.'),
+});
+// Boş liste: bütün kaynaklar ayrılır.
+export const talepAyirGovdesi = z.object({ talepIdleri: z.array(uuid).min(1).max(20).optional(), ...beklenenSurum });
+export const iptaliGeriAlGovdesi = z.object({ gerekce: z.string().trim().min(1, 'Gerekçe zorunlu.').max(500), ...beklenenSurum });
 // Borç 36: siparişi verilmiş kalemin miktarı ya da birimi onay yetkilisince, gerekçeyle değişir; değişiklik talebin hareketine yazılır.
 export const siparisKalemiDegistirGovdesi = z.object({
   kalemId: uuid,
@@ -261,8 +270,18 @@ export const kalemBagiCikisSemasi = z.object({
   }).nullable(),
 });
 export type KalemBagiCikisi = z.output<typeof kalemBagiCikisSemasi>;
+// 2414 a: birleştirilmiş kaynak talep, birleşik talebi gösterir; birleşik talep kaynaklarını alt dal olarak taşır. Yalnız çıkışta.
+export const birlesmeSemasi = z.object({ talepId: uuid, no: z.string(), durum: z.enum(TALEP_DURUMLARI) });
+export const talepKaynagiSemasi = z.object({
+  talepId: uuid, no: z.string(), talepEdenAdi: z.string().nullable(), kalemIdleri: z.array(uuid), ihtiyacTarihi: z.string().nullable(),
+  // V4 a: kalemin harcaması bu birime yazılır; boşsa birleşik talebin birimine.
+  birim: z.string().nullable(),
+});
+export type TalepKaynagi = z.output<typeof talepKaynagiSemasi>;
 export const talepSemasi = z.object({
   ...talepAlanlari,
+  birlesme: birlesmeSemasi.nullable().optional(),
+  kaynaklar: z.array(talepKaynagiSemasi).optional(),
   kalemBaglari: z.array(kalemBagiCikisSemasi).optional(),
   // Yalnız talep edenin görünümünde (SAT-53 b): kararın seçtiği tedarikçiler; karar yoksa boş. Teklif ve fiyat taşımaz.
   secilenTedarikciler: z.array(z.object({ firmaId: z.number().int().nullable(), ad: z.string() })).optional(),
@@ -495,6 +514,7 @@ export const talebimSemasi = z.object({
   uretimEmriNo: z.string().nullable(),
   // 898 a: fason ön talepten açılan talep "fason", gerisi "elle". Kalemde uygulanan parça ("kod · ad") ve fason adım ("emir no · Op n").
   kaynak: z.enum(['elle', 'fason']),
+  birlesme: birlesmeSemasi.nullable().optional(),
   kalemler: z.array(z.object({
     ad: z.string(), miktar: z.string().nullable(), birim: z.string(), kartBekliyor: z.boolean(), uygulanan: z.string().nullable(), fasonAdim: z.string().nullable(),
   })),
@@ -603,6 +623,9 @@ export interface SatinAlmaUclari {
   'POST /satin-alma-on-talepleri/yoksay': { govde: z.input<typeof onTalepYoksayGovdesi>; cevap: { tamam: true } };
   'POST /satin-alma-on-talepleri/geri-al': { govde: z.input<typeof onTalepGeriAlGovdesi>; cevap: { tamam: true } };
   'POST /satin-alma-talepleri/:id/kaydet': { govde: z.input<typeof talepKaydetGovdesi>; cevap: Talep };
+  'POST /satin-alma-talepleri/:id/iptali-geri-al': { govde: z.input<typeof iptaliGeriAlGovdesi>; cevap: IptaliGeriAlCevabi };
+  'POST /satin-alma-talepleri/birlestir': { govde: z.input<typeof talepBirlestirGovdesi>; cevap: Talep };
+  'POST /satin-alma-talepleri/:id/ayir': { govde: z.input<typeof talepAyirGovdesi>; cevap: Talep };
   'POST /satin-alma-talepleri/:id/sil': { govde: z.input<typeof talepSilGovdesi>; cevap: { tamam: true } };
   'POST /satin-alma-talepleri/:id/siparis-kalemi-degistir': { govde: z.input<typeof siparisKalemiDegistirGovdesi>; cevap: Talep };
   'POST /satin-alma-talepleri/:id/siparis-kapat': { govde: z.input<typeof siparisKapatGovdesi>; cevap: Talep };
@@ -923,3 +946,10 @@ export type TedarikTermini = z.output<typeof tedarikTerminiSemasi>;
 export type TedarikTerminleriCevabi = z.output<typeof tedarikTerminleriCevabi>;
 export type TedarikTerminiKaydetYazimi = z.output<typeof tedarikTerminiKaydetGovdesi>;
 export type TedarikTerminiKaydetCevabi = z.output<typeof tedarikTerminiKaydetCevabi>;
+
+// 2413 a: iptalden önceki durum kayıtlı değilse (2413'ten önceki iptal) veriden türetilir; ekran bunu kullanıcıya söyler.
+export const iptaliGeriAlCevabi = z.object({ talep: talepSemasi, durum: z.enum(TALEP_DURUMLARI), turetildi: z.boolean() });
+export type IptaliGeriAlCevabi = z.infer<typeof iptaliGeriAlCevabi>;
+export type IptaliGeriAlYazimi = z.infer<typeof iptaliGeriAlGovdesi>;
+export type TalepBirlestirYazimi = z.output<typeof talepBirlestirGovdesi>;
+export type TalepAyirYazimi = z.output<typeof talepAyirGovdesi>;
