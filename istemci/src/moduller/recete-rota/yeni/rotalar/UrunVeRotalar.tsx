@@ -217,7 +217,7 @@ export function UrunVeRotalar(o: EkranOzellikleri) {
             <PatlamisRota revizyonId={yururlukteRevizyon} miktar={miktar} baz={kip === 'baz'} />
           ) : (
           <div className={`tc-rr1-body${adimPaneli && kokId && o.yetki.rotaYaz ? ' tc-rr1-adimli' : ''}${gorunum === 'tablo' ? ' tc-rr1-tbl' : ''}`}>
-            {adimPaneli && kokId && o.yetki.rotaYaz && <AdimPaneli r={r} ekle={panelEkle} yer={yerMetni} />}
+            {adimPaneli && kokId && o.yetki.rotaYaz && <AdimPaneli r={r} ekle={panelEkle} yer={yerMetni} urunId={yer?.urunId ?? null} />}
             {dugum ? (
               gorunum === 'tablo'
                 ? <AkisTablosu r={r} urunler={agac} miktar={miktar} cop={cop} />

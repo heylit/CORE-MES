@@ -127,7 +127,7 @@ function OpKutusu({ r, a, d, sonraki, secili, duzen, sahip, liste, i, onculler }
       onClick={() => { r.sec({ tur: 'adim', urunId: sahip.id, adimId: a.id, seq: a.seq, miktar }); }}
       aria-label={`OP ${String(statuNo(a))} ${op?.name ?? 'Operasyon seç'}`}
     >
-      <span className="tc-rr1-obar"><span className="tc-rr1-abbr">{op?.abbr ?? op?.code ?? '???'}</span><span className="tc-rr1-oseq">{statuNo(a)}</span></span>
+      <span className="tc-rr1-obar"><span className="tc-rr1-abbr">{op?.abbr ?? op?.code ?? '???'}</span><span className="tc-rr1-oseq" title={a.opNo === null ? 'Yeni adım; numarayı sistem kayıtta verir' : undefined}>{a.opNo ?? 'yeni'}</span></span>
       <b className="tc-rr1-oname">{op?.name ?? 'Operasyon seç'}</b>
       <span className="tc-rr1-ost">
         {fason ? `Dış üretim: ${fasonAdi(r.duzen.durum.fasonFirms, a.fasonId)}` : ist ? `${ist.code} ${ist.name}` : 'İstasyon seçilmedi'}

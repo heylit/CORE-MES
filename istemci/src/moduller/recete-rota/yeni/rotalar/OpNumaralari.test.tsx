@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { json, rrAc, sunucuKur, YONETICI } from '../test-ortak.tsx';
-import { rotadaOlmayanNumaralar, yeniAdimNumaralari, type OpNumaralari } from './opNumaralari.ts';
+import { eklenecekNumara, rotadaOlmayanNumaralar, yeniAdimNumaralari, type OpNumaralari } from './opNumaralari.ts';
 import type { Adim } from './kurallar.ts';
 import { adimOrnegi, revizyonOrnegi, rotaDurumu } from './test-veri.ts';
 
@@ -20,6 +20,8 @@ describe('OP numarası tahmini (RT-31, 2519 a)', () => {
     expect([...yeniAdimNumaralari(l, 40)]).toEqual([['n1', 40], ['n2', 50]]);
     expect([...yeniAdimNumaralari([adim('o90', 10, 90), adim('n1', 20, null)], 40)]).toEqual([['n1', 100]]);
     expect(yeniAdimNumaralari([adim('o10', 10, 10)], 20).size).toBe(0);
+    expect(eklenecekNumara(l, 40)).toBe(60);
+    expect(eklenecekNumara([adim('o10', 10, 10)], 40)).toBe(40);
   });
 
   it('rotada olmayan verilmiş numaralar listelenir; rotadakiler listelenmez', () => {
@@ -55,6 +57,7 @@ describe('Ekranda OP numarası (B-2482-R4)', () => {
     await within(bolge).findByRole('button', { name: 'OP 10 Tornalama' });
     fireEvent.click(within(bolge).getByRole('button', { name: 'Adım ekle' }));
     const palet = within(bolge).getByRole('complementary', { name: 'Operasyon paleti' });
+    expect(await within(palet).findByText('Yeni adım OP 40 alır; numarayı sistem verir.')).toBeTruthy();
     fireEvent.click(within(palet).getByRole('button', { name: /Tornalama/ }));
     const yeni = await waitFor(() => {
       const d = within(bolge).getAllByRole('button', { name: /Tornalama$/ }).filter((b) => b.getAttribute('aria-label') !== 'OP 10 Tornalama');
@@ -65,6 +68,7 @@ describe('Ekranda OP numarası (B-2482-R4)', () => {
     const panel = within(bolge).getByRole('complementary', { name: 'Düzenleme paneli' });
     expect(await within(panel).findByText('Numarayı sistem verir: sıradaki OP 40.')).toBeTruthy();
     expect(within(panel).getByText('T · yeni adım')).toBeTruthy();
+    expect(yeni.querySelector('.tc-rr1-oseq')?.textContent).toBe('yeni');
   });
 
   it('revizyon geçmişi rotada olmayan verilmiş numaraları ve sıradakini gösterir', async () => {
