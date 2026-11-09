@@ -139,7 +139,7 @@ export function sevkListesi(c: PlanlamaCalismasi): SevkListesi | null {
     const mk = metin(s.musteri);
     satirlar.push({
       id: s.id,
-      ad: metin(s.ad) ?? metin(s.urun),
+      ad: metin(s.ad) ?? urun.get(s.urun)?.ad ?? metin(s.urun),
       musteri: (mk && musteri.get(mk)) ?? mk ?? '—',
       adet: sayiMi(s.adet) ? s.adet : null,
       C: sayiMi(j.C) ? j.C : null,
@@ -300,7 +300,7 @@ export function sevkIsisi(l: readonly SevkSatiri[], taban: number, now: number):
     }
     if (x.termin !== null) hucreKoy(h, `g${String(kis(gunNo(x.termin)))}`, { bayrak: true, etiket: `termin ${gunYaz(taban, x.termin)}` });
     return {
-      k: x.id, ad: x.id, simge: 'truck', alt: `${x.musteri} · ${x.adet === null ? '—' : sayiYaz(x.adet)} adet`,
+      k: x.id, ad: x.id, simge: 'truck', alt: `${x.ad ?? '—'} · ${x.adet === null ? '—' : sayiYaz(x.adet)} adet${x.musteri === '—' ? '' : ` · ${x.musteri}`}`,
       ton: ev ? 'tamam' : gec ? (T >= 24 ? 'hata' : 'uyari') : 'tamam',
       gizli: !gec && !ev && x.termin !== null && x.termin - x.C >= GENIS_PAY, h, x, sevkGunu: ev,
     };

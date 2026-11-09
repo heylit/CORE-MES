@@ -54,7 +54,7 @@ function AyarFormu({ degerler, surumId }: { degerler: Ayarlar; surumId: number |
   });
   const gonder = (e: FormEvent) => { e.preventDefault(); yaz.mutate(); };
   return (
-    <form onSubmit={gonder} aria-label="Motor ayarlarını değiştir">
+    <form className="tc-form" onSubmit={gonder} aria-label="Motor ayarlarını değiştir">
       {ANAHTARLAR.map((k) => (
         <Secim key={k} etiket={AYAR_SECENEKLERI[k].baslik} ipucu={AYAR_SECENEKLERI[k].ipucu} value={String(f[k])}
           onChange={(e) => { const d = secimDegeri(k, e.target.value); if (d !== null) setF({ ...f, [k]: d }); }}
@@ -62,7 +62,7 @@ function AyarFormu({ degerler, surumId }: { degerler: Ayarlar; surumId: number |
       ))}
       <Girdi etiket={ACIL_PAY.baslik} ipucu={ACIL_PAY.ipucu} inputMode="decimal" value={pay} onChange={(e) => setPay(e.target.value)}
         hata={payOrani === null ? '0 ile 30 arasında bir sayı girin.' : undefined} />
-      <Dugme type="submit" simge="check" disabled={!degisti || payOrani === null} yukleniyor={yaz.isPending}>Kaydet</Dugme>
+      <div className="tc-form-tam"><Dugme type="submit" simge="check" disabled={!degisti || payOrani === null} yukleniyor={yaz.isPending}>Kaydet</Dugme></div>
     </form>
   );
 }

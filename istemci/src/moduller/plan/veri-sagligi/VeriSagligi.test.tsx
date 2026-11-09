@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render, screen } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { MemoryRouter } from 'react-router-dom';
 import type { VeriSagligiCevabi } from '#paylasilan/sozlesme/plan.ts';
 import { api } from '../../../ortak/veri/api.ts';
 import { durumu, ozet } from './kurallar.ts';
@@ -27,11 +28,16 @@ describe('veri sağlığı', () => {
   });
 
   it('ekran raporu okur, eksik konunun örneklerini ve kesilme uyarısını gösterir', async () => {
-    const get = vi.spyOn(api, 'get').mockResolvedValue(RAPOR);
-    render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}><VeriSagligi /></QueryClientProvider>);
+    const get = vi.spyOn(api, 'get').mockImplementation((yol: string) => Promise.resolve(yol === '/oturum' ? { kullanici: { islemler: ['sayfa.stok'] } } : RAPOR) as never);
+    render(<MemoryRouter><QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}><VeriSagligi /></QueryClientProvider></MemoryRouter>);
     expect(await screen.findByText('Kart 1', { exact: false })).toBeTruthy();
     expect(get).toHaveBeenCalledWith('/plan/veri-sagligi');
     expect(screen.getByRole('alert').textContent).toMatch(/kesildi/);
     expect(screen.getAllByText('Okunamadı').length).toBeGreaterThan(0);
+    // 2664: eksiğin düzeltildiği sayfaya bağlantı; sahibi belli olmayan konuda bağlantı yok.
+    expect((await screen.findByRole('link', { name: 'Stok Merkezi' })).getAttribute('href')).toBe('/stok');
+    // Sayfanın işlemi olmayana bağlantı yerine düz metin.
+    expect(screen.queryByRole('link', { name: 'Reçete ve Rota > Süreler' })).toBeNull();
+    expect(screen.getAllByText('Reçete ve Rota > Süreler').length).toBeGreaterThan(0);
   });
 });

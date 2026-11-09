@@ -268,3 +268,30 @@ Testler: plan-bedel 815 (iki test), kurallar 815, kablolama 815; istemci planlam
 
 ## Firmasız fason adım veri sağlığında (2681, 2682 a; 2026-11-09)
 - `veri-sagligi-kurallar.ts`: durum adımında `fason: true` ve `fasonId: null` olan adım (firma seçilmemiş fason) süre eksiği sayılmaz. Test `veri-sagligi.test.ts` "2681".
+## Departman saat maliyeti ucu (2618, 2602-a, 2603 a; 2026-11-09)
+- Yeni uç `GET /plan/grup-saat-maliyetleri` (finans.maliyet-oku): `{ ay, gruplar: [{ departmanNo, departmanAd, saatMaliyeti | null, kucuk }] }`.
+  Kaynak İK `grupSaatMaliyetleri` (2602-a); küçük grupta değer null (`kurallar.ts grupSaatEkrani`); kişi alanı, kişi sayısı ve saat yok.
+- Ay her zaman son tam aydır (2626 1/2 b; `kurallar.ts varsayilanMaliyetAyi`), seçilmez; kullanılan ay cevapta döner (Veri).
+- VARSAYIM: kişi sayısı cevaba girmez (sayı ile ortalama ay ay karşılaştırılınca tek kişinin değişimi görünür). Geri alma: ucuz, şemada tek alan.
+- Test: `grup-saat-maliyeti.test.ts` (PL-2618), `uc-yetkisi.test.ts` satırı.
+
+## Taslağın ek mesai tutarı (2653, 2644 b, 2657 a; 2026-11-09)
+- Yeni uç `GET /plan/mesai-maliyeti?taslak=<id>` (yalnız finans.maliyet-oku): `{ ay, toplam | null, bilinmeyen }`, şema `strict`; olmayan taslak 404.
+  Ek vardiyalar taslağın kayıtlı satırlarındandır (`plan_senaryo_ek_mesai`, saat yazıldığı andaki vardiya süresi); istemciden saat alınmaz.
+- Tutar istemcinin `mesaiTutari` kuralının kopyasıdır (`kurallar.ts mesaiTutari`), ortak örnek tablosuyla (M1-M10) sınanır; kural tek kaynak
+  değil (Mimar N1), paylaşılana alınması ayrı iş. Saat değeri: tezgâhın istasyonu -> ay sonunda geçerli kişi atamaları (yüzde ağırlıklı) ->
+  kişinin İK departmanı -> büyük departmanda İK ekran değeri, küçük departmanda İK küçük grup havuzu (IK-87). Bir kişinin değeri bilinmiyorsa
+  istasyonun değeri bilinmez; satır istemcideki gibi mesai ücreti yoluna düşer, o da yoksa satır bilinmiyor (`bilinmeyen: true`, sıfır sayılmaz).
+- Elle yedek (Maliyet notu): İK değeri olmayan satır, istemcideki gibi plan ayarındaki elle girilen mesai ücretine düşer; o satırın tutarı İK'dan
+  değil bu elle değerden gelir. Cevapta bunu gösteren işaret yok (isteğe bağlı, eklenmedi).
+- Bilinen satırların hepsine havuz girdiyse toplam null (Maliyet koşulu). Bu kural tek başına koruma değildir (Güvenlik): havuzlu satırın yanına
+  büyük grup satırı eklenince fark havuzu verir. Asıl koruma havuzun kendisidir (ay başına tek, en az 3 kişi, alt küme seçilemez; 2657 a). Ek mesaisi olmayan taslakta toplam 0 (gerçek sıfır, veri eksiği değil).
+- VARSAYIM (Maliyet N1): gün çarpanları, kişi başı ek, mesai ücreti ve vardiyasız gün çarpanı İK parametrelerinde yok; planlama sayfasının
+  gördüğü birleşmiş çalışmadan (sunucu okuyucusuyla) okunur, varsayılanlar istemcininkidir. Geri alma: `mesaiAyarlari` tek yer.
+- VARSAYIM (Maliyet N2): kesinleşmiş bordrolu ayda (2632 a) kişi değeri ödenmiş mesai primini içerir; üstüne gün çarpanı uygulanınca prim iki kez
+  sayılabilir. Sınır (Finans): fazla sayım en çok 0,5 x mesai payı; 225 normal ve 20 mesai saatinde
+  yaklaşık %4, mesaisiz ayda sıfır. Bu teslimde kapanmaz.
+- VARSAYIM: yetkinlik değil istasyon ataması kullanılır; atama kaydı boşsa satırlar bilinmiyor döner (ilk deneme sonrası ayrı kart). İstemciden
+  iki ayrılık bilinçlidir: istemci istasyonu bilinmeyen tezgâhta bütün personelin ortalamasına düşer, sunucu düşmez (değer başka gruba
+  aktarılmaz); istemci ufuk dışındaki günü vardiyasız sayar, sunucu günün hafta gününe bakar.
+- Test: `mesai-maliyeti.test.ts` (PL-2653), `uc-yetkisi.test.ts` satırı.

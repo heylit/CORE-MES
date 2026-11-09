@@ -22,12 +22,13 @@ export interface TalepSatiri {
   ihtiyacTarihi: string | null; notlar: string; durum: string; iptalNedeni: string;
   agirlikMaliyet: number | null; agirlikTermin: number | null; agirlikTedarikci: number | null; agirlikGaranti: number | null;
   teslimYontemi: 'firma_getirir' | 'biz_alacagiz' | null; uretimEmriId: number | null; surum: number; olusturma: string; guncelleme: string;
-  birlesenTalepId: string | null;
+  birlesenTalepId: string | null; projeId: number | null; idariTalepId: number | null;
 }
 const TALEP = `id, no, baslik, birim, talep_eden_kisi_id AS "talepEdenKisiId", acan_kisi_id AS "acanKisiId", oncelik,
   ihtiyac_tarihi AS "ihtiyacTarihi", notlar, durum, iptal_nedeni AS "iptalNedeni", agirlik_maliyet AS "agirlikMaliyet",
   agirlik_termin AS "agirlikTermin", agirlik_tedarikci AS "agirlikTedarikci", agirlik_garanti AS "agirlikGaranti", teslim_yontemi AS "teslimYontemi", uretim_emri_id AS "uretimEmriId", surum,
-  ${ISO('olusturma')} AS olusturma, ${ISO('guncelleme')} AS guncelleme, birlesen_talep_id AS "birlesenTalepId"`;
+  ${ISO('olusturma')} AS olusturma, ${ISO('guncelleme')} AS guncelleme, birlesen_talep_id AS "birlesenTalepId",
+  proje_id AS "projeId", idari_talep_id AS "idariTalepId"`;
 
 // kisiId verilirse yalnız o kişinin açtığı ya da adına açılan talepler.
 export function talepSatirlariOku(db: Db, kisiId: number | null, id: string | null = null): Promise<TalepSatiri[]> {
@@ -128,14 +129,16 @@ export async function altKayitlariOku(db: Db, idler: readonly string[]): Promise
 const anaDegerler = (t: TalepYazimi, talepEden: number) => [
   t.baslik, t.birim, talepEden, t.oncelik, t.ihtiyacTarihi, t.notlar, t.durum, t.iptalNedeni,
   t.agirliklar?.maliyet ?? null, t.agirliklar?.termin ?? null, t.agirliklar?.tedarikci ?? null, t.agirliklar?.garanti ?? null, t.uretimEmriId,
+  t.projeId ?? null,
 ];
 
-export async function talepEkle(db: Db, t: TalepYazimi, no: string, talepEden: number, acan: number): Promise<void> {
+// 2614 1/2 a: idari talep bağı yalnız açılışta yazılır; güncelleme yolu onu değiştirmez.
+export async function talepEkle(db: Db, t: TalepYazimi, no: string, talepEden: number, acan: number, idariTalepId: number | null = null): Promise<void> {
   await db.sorgu(
     `INSERT INTO satin_alma_talep (id, no, acan_kisi_id, baslik, birim, talep_eden_kisi_id, oncelik, ihtiyac_tarihi, notlar, durum,
-       iptal_nedeni, agirlik_maliyet, agirlik_termin, agirlik_tedarikci, agirlik_garanti, uretim_emri_id)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)`,
-    [t.id, no, acan, ...anaDegerler(t, talepEden)],
+       iptal_nedeni, agirlik_maliyet, agirlik_termin, agirlik_tedarikci, agirlik_garanti, uretim_emri_id, proje_id, idari_talep_id)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)`,
+    [t.id, no, acan, ...anaDegerler(t, talepEden), idariTalepId],
   );
   await talepEdenGecmisineEkle(db, t.id, [acan, talepEden]);
 }
@@ -155,7 +158,7 @@ export async function talepEdenGecmisi(db: Db, talepId: string): Promise<number[
 export async function talepGuncelle(db: Db, t: TalepYazimi, talepEden: number, surum: number): Promise<{ id: string } | null> {
   const satir = await db.tek<{ id: string }>(
     `UPDATE satin_alma_talep SET baslik = $3, birim = $4, talep_eden_kisi_id = $5, oncelik = $6, ihtiyac_tarihi = $7, notlar = $8, durum = $9,
-       iptal_nedeni = $10, agirlik_maliyet = $11, agirlik_termin = $12, agirlik_tedarikci = $13, agirlik_garanti = $14, uretim_emri_id = $15,
+       iptal_nedeni = $10, agirlik_maliyet = $11, agirlik_termin = $12, agirlik_tedarikci = $13, agirlik_garanti = $14, uretim_emri_id = $15, proje_id = $16,
        durum_zamani = CASE WHEN durum IS DISTINCT FROM $9 THEN now() ELSE durum_zamani END,
        iptal_oncesi_durum = CASE WHEN $9 <> 'iptal' THEN NULL WHEN durum <> 'iptal' THEN durum ELSE iptal_oncesi_durum END,
        surum = surum + 1, guncelleme = now()
@@ -164,6 +167,56 @@ export async function talepGuncelle(db: Db, t: TalepYazimi, talepEden: number, s
   );
   if (satir !== null) await talepEdenGecmisineEkle(db, t.id, [talepEden]);
   return satir;
+}
+
+// 2614 1/2 a: idari talepten açılmış satın alma talepleri (idari talep başına en çok bir).
+export function idariTalepSatinAlmalari(db: Db, idariIdler: readonly number[]): Promise<{ idariTalepId: number; talepId: string; no: string; durum: string }[]> {
+  return db.sorgu(
+    `SELECT idari_talep_id AS "idariTalepId", id AS "talepId", no, durum FROM satin_alma_talep WHERE idari_talep_id = ANY($1::int[])`,
+    [idariIdler],
+  );
+}
+
+// 2624 b: kalemin üretim emri. Birleşik talepte kaynaktan gelen kalem kaynağın emrine bağlı kalır (kaynak birleşmişken donmuştur);
+// talebin emri yalnız kaynaksız kaleme uygulanır. Mal kabul, proje ve emir tutarı ve genel gider oranı bu tek ifadeyi kullanır (Veri 3).
+// Sorguda t talep, kt kalemin kaynak talebi takma adıdır.
+export const KALEM_EMRI = 'COALESCE(kt.uretim_emri_id, t.uretim_emri_id)';
+
+// 2611 a, 2637 a, 2638: filtreye uyan siparişlerin bütün satırları (masraf payı siparişin bütün malına oranlanır). Satırın genel iskontolu
+// mal tutarı, sipariş miktarı, net teslimi, kartı (kalemin katalog kartı), fason bağı (sipariş satırının ya da kalemin iş emri), emri
+// (KALEM_EMRI, 2624) ve talebin projesi; masraf siparişin nakliyesi (hariçse) ve diğer masrafı. İptal talep gelmez; birleşmiş kaynağın
+// siparişi yoktur (siparişler birleşik taleptedir).
+export interface YolSatiri {
+  talepId: string; teklifId: string; paraBirimi: string; mal: string; miktar: string; teslim: string;
+  malzemeNo: number | null; fason: boolean; emirId: number | null; projeId: number | null; masraf: string;
+}
+// siparisler: Finans'ın belgesine bağlı sipariş; talep iptal olsa da fatura gerçektir, durum süzülmez.
+export interface YolFiltresi { projeIdler?: readonly number[]; emirIdler?: readonly number[]; siparisler?: readonly { talepId: string; teklifId: string }[] }
+const YOL_KAYNAGI = `FROM satin_alma_talep t
+       JOIN satin_alma_siparis_satiri s ON s.talep_id = t.id
+       JOIN satin_alma_talep_kalemi k ON k.talep_id = s.talep_id AND k.id = s.kalem_id
+       LEFT JOIN satin_alma_talep kt ON kt.id = k.kaynak_talep_id`;
+export function siparisYolSatirlari(db: Db, f: YolFiltresi): Promise<YolSatiri[]> {
+  return db.sorgu<YolSatiri>(
+    `WITH secilen AS (
+       SELECT DISTINCT s.talep_id, s.teklif_id ${YOL_KAYNAGI}
+        WHERE (t.durum <> 'iptal' AND (t.proje_id = ANY($1::int[]) OR ${KALEM_EMRI} = ANY($2::int[])))
+           OR (s.talep_id, s.teklif_id) IN (SELECT * FROM unnest($3::uuid[], $4::uuid[])))
+     SELECT s.talep_id AS "talepId", s.teklif_id AS "teklifId", q.para_birimi::text AS "paraBirimi",
+            (s.miktar * f.birim_fiyat * (1 - COALESCE(f.iskonto_yuzdesi, 0) / 100) * (1 - q.iskonto_yuzdesi / 100))::text AS mal,
+            s.miktar::text AS miktar,
+            coalesce((SELECT sum(x.miktar) FROM satin_alma_teslim x WHERE x.siparis_satiri_id = s.id), 0)::text AS teslim,
+            c.malzeme_no AS "malzemeNo", (s.is_emri_id IS NOT NULL OR k.is_emri_id IS NOT NULL) AS fason,
+            ${KALEM_EMRI} AS "emirId", t.proje_id AS "projeId",
+            (CASE WHEN q.nakliye_dahil THEN 0 ELSE q.nakliye END + q.diger_masraf)::text AS masraf
+       ${YOL_KAYNAGI}
+       JOIN secilen x ON x.talep_id = s.talep_id AND x.teklif_id = s.teklif_id
+       LEFT JOIN satin_alma_katalog c ON c.id = k.katalog_id
+       JOIN satin_alma_teklif q ON q.talep_id = s.talep_id AND q.id = s.teklif_id
+       JOIN satin_alma_teklif_satiri f ON f.talep_id = s.talep_id AND f.teklif_id = s.teklif_id AND f.kalem_id = s.kalem_id
+      ORDER BY s.talep_id, s.teklif_id, s.id`,
+    [f.projeIdler ?? [], f.emirIdler ?? [], (f.siparisler ?? []).map((x) => x.talepId), (f.siparisler ?? []).map((x) => x.teklifId)],
+  );
 }
 
 export function talepNolari(db: Db, idler: readonly string[]): Promise<{ id: string; no: string }[]> {
@@ -181,11 +234,13 @@ export async function birimVarMi(db: Db, ad: string): Promise<boolean> {
   return (await db.tek('SELECT 1 FROM satin_alma_birim WHERE ad = $1', [ad])) !== null;
 }
 
-// Stok mal kabulü: sipariş satırının talebindeki üretim emri; emre bağlı olmayan talebin satırı haritada yoktur.
+// Stok mal kabulü: sipariş satırının üretim emri (KALEM_EMRI); emre bağlı olmayan satır haritada yoktur.
 export async function siparisSatirlarininEmri(db: Db, idler: readonly number[]): Promise<{ id: number; uretimEmriId: number }[]> {
   return db.sorgu<{ id: number; uretimEmriId: number }>(
-    `SELECT s.id, t.uretim_emri_id AS "uretimEmriId" FROM satin_alma_siparis_satiri s JOIN satin_alma_talep t ON t.id = s.talep_id
-      WHERE s.id = ANY($1::int[]) AND t.uretim_emri_id IS NOT NULL`,
+    `SELECT s.id, ${KALEM_EMRI} AS "uretimEmriId" FROM satin_alma_siparis_satiri s JOIN satin_alma_talep t ON t.id = s.talep_id
+       JOIN satin_alma_talep_kalemi k ON k.talep_id = s.talep_id AND k.id = s.kalem_id
+       LEFT JOIN satin_alma_talep kt ON kt.id = k.kaynak_talep_id
+      WHERE s.id = ANY($1::int[]) AND ${KALEM_EMRI} IS NOT NULL`,
     [idler],
   );
 }

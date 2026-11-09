@@ -597,6 +597,8 @@ export function veriDenetimi(c: PlanlamaCalismasi, cx: Derleme): VeriBulgusu[] {
   if (eksik) bul('ayar', `${eksik} aile geçişinin ayar süresi matriste yok; tam ayar alınır.`);
   for (const [j, t] of Object.entries(malzemeHazir(cx))) if (!Number.isFinite(t)) bul('malzeme', `${j}: malzeme stok ve siparişle karşılanmıyor.`);
   for (const f of D.fasoncular ?? []) if (!f.cikisGunleri?.length) bul('fason', `${f.id}: çıkış günü yok.`);
+  // B-2483-16: kapasitesi girilmemiş fasoncu motorda sınırsız sayılır (eskiden 1); planlamacı bunu görmeli.
+  for (const f of D.fasoncular ?? []) if (f.kapasite == null || !Number.isFinite(Number(f.kapasite))) bul('fason', `${f.id}: kapasite girilmemiş; motor sınırsız sayıyor.`);
   for (const s of c.D.siparisler) {
     if (!c.D.urunler.some((u) => u.id === s.urun)) bul('tezgah', `${s.id}: ürün ${s.urun} tanımlı değil; sipariş planlanmaz.`);
     if (!s.termin) bul('amac', `${s.id}: termin yok; gecikmesi ölçülemez.`);

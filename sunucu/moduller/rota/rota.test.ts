@@ -177,7 +177,7 @@ describe('rotalar (gerçek PostgreSQL)', () => {
       await kisiEkle(ad, rol(rolAdi));
       c[ad] = await girisCerezi(ad);
     }
-    tipler = (await tamam<SeceneklerCevabi>(c.operator, 'GET', '/rota/secenekler')).operasyonTipleri;
+    tipler = (await tamam<SeceneklerCevabi>(c.kalite, 'GET', '/rota/secenekler')).operasyonTipleri;
     assert.ok(tipler.length > 0 && tipler.every((t) => t.grupAdi === OPERASYON_GRUP_ADLARI[t.grup]), 'tip listesi grubu ve grup adıyla gelir (#544)');
     const merkez = await tamam<{ id: number }>(c.yonetici, 'POST', '/is-merkezleri', { kod: 'RT-IM', ad: 'Deneme merkez', aciklama: null });
     istasyonA = (await tamam<{ id: number }>(c.yonetici, 'POST', '/istasyonlar', { kod: 'RT-A', ad: 'Deneme A', isMerkeziId: merkez.id })).id;
@@ -190,17 +190,19 @@ describe('rotalar (gerçek PostgreSQL)', () => {
 
   after(async () => { await ortam?.kaldir(); });
 
-  test('RT-22: okuma oturumla açılır; taslak açma ve kaydet yalnız rota.yaz ile (operatör, kalite, CAM reddedilir)', async () => {
+  test('RT-22: okuma rota okuyan rolle açılır (operatör okuyamaz, 2490 b); taslak açma ve kaydet yalnız rota.yaz ile (operatör, kalite, CAM reddedilir)', async () => {
     const urun = await mamulAc();
-    assert.equal((await istek(c.operator, 'GET', '/rota/urunler')).statusCode, 200);
+    assert.equal((await istek(c.kalite, 'GET', '/rota/urunler')).statusCode, 200);
+    assert.equal((await istek(c.operator, 'GET', '/rota/urunler')).statusCode, 403);
     for (const cerez of [c.operator, c.kalite, c.cam]) assert.equal((await taslakAc(urun, { tur: 'bos' }, cerez)).statusCode, 403);
     const ac = await taslakAc(urun);
     assert.equal(ac.statusCode, 200, ac.body);
     const { id } = ac.json<KomutCevabi>();
     assert.equal((await kaydet(id, 1, [yeniAdim()], c.cam)).statusCode, 403);
     assert.equal((await kaydet(id, 1, [yeniAdim()])).statusCode, 200);
-    assert.equal((await istek(c.operator, 'GET', `/rota/revizyonlar/${id}`)).statusCode, 200);
-    const liste = await tamam<RotaListesiCevabi>(c.operator, 'GET', '/rota/urunler');
+    assert.equal((await istek(c.kalite, 'GET', `/rota/revizyonlar/${id}`)).statusCode, 200);
+    assert.equal((await istek(c.operator, 'GET', `/rota/revizyonlar/${id}`)).statusCode, 403);
+    const liste = await tamam<RotaListesiCevabi>(c.kalite, 'GET', '/rota/urunler');
     assert.equal(liste.rotalar.find((r) => r.urun.id === urun)?.acik?.harf, 'A');
   });
 
@@ -343,7 +345,7 @@ describe('rotalar (gerçek PostgreSQL)', () => {
   });
 
   test('#698: standart rota varsayılan şablondur; şablon eklenir, düzenlenir, varsayılan yapılır, ondan taslak açılır; yazma rota.yaz ister', async () => {
-    const ilk = (await tamam<SablonlarCevabi>(c.operator, 'GET', '/rota/sablonlar')).sablonlar;
+    const ilk = (await tamam<SablonlarCevabi>(c.kalite, 'GET', '/rota/sablonlar')).sablonlar;
     const standart = ilk.find((x) => x.varsayilan);
     assert.equal(standart?.ad, 'Standart rota');
     assert.equal(standart?.adimlar.length, 11);
@@ -602,10 +604,10 @@ describe('rotalar (gerçek PostgreSQL)', () => {
     await kaydet(onayda.id, 1, [yeniAdim()]);
     assert.equal((await komut(onayda.id, 'onaya-gonder', { surum: 2 }, c.planlama)).statusCode, 200);
     await yururlugeAlinmisRota(await mamulAc(), [yeniAdim()]);
-    const liste = (await tamam<RotaListesiCevabi>(c.operator, 'GET', '/rota/urunler')).rotalar;
+    const liste = (await tamam<RotaListesiCevabi>(c.kalite, 'GET', '/rota/urunler')).rotalar;
     const beklenen = { acikRevizyon: liste.filter((r) => r.acik !== null).length, onayBekleyen: liste.filter((r) => r.acik?.durum === 'onay_bekliyor').length };
     assert.ok(beklenen.acikRevizyon >= 2 && beklenen.onayBekleyen >= 1 && liste.some((r) => r.acik === null));
-    assert.deepEqual(await tamam(c.operator, 'GET', '/rota/revizyon-ozeti'), beklenen);
+    assert.deepEqual(await tamam(c.kalite, 'GET', '/rota/revizyon-ozeti'), beklenen);
     assert.equal((await app.inject({ method: 'GET', url: '/api/rota/revizyon-ozeti' })).statusCode, 401);
   });
 
@@ -911,12 +913,12 @@ describe('rotalar (gerçek PostgreSQL)', () => {
     const hm = await hammaddeAc();
     await yururlugeAlinmisRota(alt, [yeniAdim({ bilesenler: [{ malzemeId: hm, miktar: 0.5, fireYuzde: 0 }] })]);
     const id = await yururlugeAlinmisRota(ust, [yeniAdim({ firePayiYuzde: 20, bilesenler: [{ malzemeId: alt, miktar: 2, fireYuzde: 10 }, { malzemeId: hm, miktar: 3, fireYuzde: 0 }] })]);
-    const ayrinti8 = await tamam<RevizyonAyrintisi>(c.operator, 'GET', `/rota/revizyonlar/${id}?miktar=8`);
+    const ayrinti8 = await tamam<RevizyonAyrintisi>(c.kalite, 'GET', `/rota/revizyonlar/${id}?miktar=8`);
     assert.equal(ayrinti8.miktar, '8');
     assert.equal(ayrinti8.adimlar[0]?.adimMiktari, '10');
     assert.deepEqual(ayrinti8.adimlar[0]?.bilesenler.map((b) => b.toplamMiktar), ['22', '30']);
     assert.equal(ayrinti8.ozet.toplamTeorikSureDk, '50');
-    const agac = await tamam<AgacCevabi>(c.operator, 'GET', `/rota/revizyonlar/${id}/agac?miktar=8`);
+    const agac = await tamam<AgacCevabi>(c.kalite, 'GET', `/rota/revizyonlar/${id}/agac?miktar=8`);
     assert.deepEqual(agac.dugumler.map((d) => [d.derinlik, d.ust, d.malzeme.id, d.toplamMiktar]), [
       [1, null, alt, '22'], [2, 0, hm, '11'], [1, null, hm, '30'],
     ]);
@@ -925,10 +927,10 @@ describe('rotalar (gerçek PostgreSQL)', () => {
     const disaridan = await vt().tx((db) => urunAgaci(db, ust, 8));
     assert.deepEqual(disaridan?.toplamlar, agac.toplamlar);
     // Malzemeler bölümü: hammadde iki rotada (alt ve üst) bileşendir.
-    const kul = await tamam<KullanimCevabi>(c.operator, 'GET', `/rota/malzeme-kullanimi?malzemeIdleri=${hm},${alt}`);
+    const kul = await tamam<KullanimCevabi>(c.kalite, 'GET', `/rota/malzeme-kullanimi?malzemeIdleri=${hm},${alt}`);
     assert.deepEqual(kul.kullanimlar.filter((k) => k.malzemeId === hm).map((k) => [k.urun.id, k.revizyon.harf, k.rol]).sort(), [[alt, 'A', 'bilesen'], [ust, 'A', 'bilesen']].sort());
     assert.deepEqual(kul.kullanimlar.filter((k) => k.malzemeId === alt).map((k) => k.urun.id), [ust]);
-    assert.equal((await istek(c.operator, 'GET', '/rota/malzeme-kullanimi?malzemeIdleri=abc')).statusCode, 400);
+    assert.equal((await istek(c.kalite, 'GET', '/rota/malzeme-kullanimi?malzemeIdleri=abc')).statusCode, 400);
   });
 
   test('RT-60, RT-61, RT-62, RT-63: CAM talimat yazar; sürüm artar, eski kalır; revizyon değişmez; adımı olmayan numaraya ve eski sürümle yazı reddedilir', async () => {
@@ -1119,7 +1121,7 @@ describe('rotalar (gerçek PostgreSQL)', () => {
     const iki = await istek(c.planlama, 'POST', yol, { kaynak: { tur: 'bos' } }, kimlik);
     assert.equal(bir.statusCode, 200, bir.body);
     assert.deepEqual(iki.json(), bir.json());
-    assert.equal((await tamam<{ revizyonlar: unknown[] }>(c.operator, 'GET', `/rota/urunler/${urun}`)).revizyonlar.length, 1);
+    assert.equal((await tamam<{ revizyonlar: unknown[] }>(c.kalite, 'GET', `/rota/urunler/${urun}`)).revizyonlar.length, 1);
   });
   test('RT-66, RT-68: yürürlükteki rota emre kopyalanır (her adım bir iş emri); taslak kopyalanmaz; yetkisiz rol reddedilir', async () => {
     const urun = await mamulAc();
@@ -1351,7 +1353,7 @@ describe('rotalar (gerçek PostgreSQL)', () => {
     assert.equal(k.statusCode, 200, k.body);
     const emir = k.json<{ uretimEmriId: number }>().uretimEmriId;
     const kunye = async (id: number) => (await tamam<{ revizyonlar: { id: number; harf: string; malzemeId: number; yururlukteId: number | null }[] }>(
-      c.operator, 'GET', `/rota/revizyon-kunyeleri?idler=${id}`)).revizyonlar;
+      c.kalite, 'GET', `/rota/revizyon-kunyeleri?idler=${id}`)).revizyonlar;
     const ilk = await kunye(a);
     assert.deepEqual(ilk.map((r) => [r.id, r.malzemeId, r.yururlukteId]), [[a, urun, a]]);
     const yol = `/rota/emirler/${emir}/yururlukteki-rotayi-uygula`;
@@ -1388,7 +1390,7 @@ describe('rotalar (gerçek PostgreSQL)', () => {
     const urun = await mamulAc();
     const eski = await yururlugeAlinmisRota(urun, [yeniAdim()]);
     const yeni = await yururlugeAlinmisRota(urun, [yeniAdim(), yeniAdim()]);
-    const revizyonDurumu = async (id: number) => (await tamam<{ revizyonlar: { id: number; durum: string }[] }>(c.operator, 'GET', `/rota/urunler/${urun}`))
+    const revizyonDurumu = async (id: number) => (await tamam<{ revizyonlar: { id: number; durum: string }[] }>(c.kalite, 'GET', `/rota/urunler/${urun}`))
       .revizyonlar.find((r) => r.id === id)?.durum;
     assert.equal(await revizyonDurumu(eski), 'onayli');
     assert.equal(await revizyonDurumu(yeni), 'yururlukte');
@@ -1441,20 +1443,20 @@ describe('rotalar (gerçek PostgreSQL)', () => {
     const taslak = await kartAc('mamul', 'taslak');
     const taslakAdi = `Deneme mamul ${String(sayac)}`;
     // Sayfa boyu sınırlıdır: kart adıyla aranır, testte açılan kart sayısı sonucu değiştirmez.
-    const aktifler = await tamam<{ satirlar: { id: number; tur: string; stokBirimi: string | null }[] }>(c.operator, 'GET', `/rota/malzeme-ara?tur=mamul,yarimamul&metin=${encodeURIComponent(mmAdi)}`);
+    const aktifler = await tamam<{ satirlar: { id: number; tur: string; stokBirimi: string | null }[] }>(c.kalite, 'GET', `/rota/malzeme-ara?tur=mamul,yarimamul&metin=${encodeURIComponent(mmAdi)}`);
     assert.ok(aktifler.satirlar.some((x) => x.id === mm));
     // Birim malzemelerin özetinden gelir (B5).
     assert.equal(aktifler.satirlar.find((x) => x.id === mm)?.stokBirimi, 'adet');
-    assert.equal((await tamam<{ satirlar: unknown[] }>(c.operator, 'GET', '/rota/malzeme-ara?tur=bilinmeyen')).satirlar.length, 0);
+    assert.equal((await tamam<{ satirlar: unknown[] }>(c.kalite, 'GET', '/rota/malzeme-ara?tur=bilinmeyen')).satirlar.length, 0);
     assert.ok(!aktifler.satirlar.some((x) => x.id === taslak));
     assert.ok(aktifler.satirlar.every((x) => x.tur === 'mamul' || x.tur === 'yarimamul'));
     // Sayfa boyu sınırlıdır; taslak kart adıyla aranır (testte açılan kart sayısı sonucu değiştirmez).
-    const hepsi = await tamam<{ satirlar: { id: number }[] }>(c.operator, 'GET', `/rota/malzeme-ara?hepsi=true&metin=${encodeURIComponent(taslakAdi)}`);
+    const hepsi = await tamam<{ satirlar: { id: number }[] }>(c.kalite, 'GET', `/rota/malzeme-ara?hepsi=true&metin=${encodeURIComponent(taslakAdi)}`);
     assert.ok(hepsi.satirlar.some((x) => x.id === taslak));
   });
 
   describe('süreler (teorik ayrım ve gerçekleşen süre)', () => {
-    const sureler = (rev: number, cerez = c.operator, ek = '') => tamam<SurelerCevabi>(cerez, 'GET', `/rota/revizyonlar/${rev}/sureler${ek}`);
+    const sureler = (rev: number, cerez = c.kalite, ek = '') => tamam<SurelerCevabi>(cerez, 'GET', `/rota/revizyonlar/${rev}/sureler${ek}`);
     const yaz = (adimId: number, govde: Record<string, unknown>, cerez = c.planlama, kimlik: string | null = randomUUID()) =>
       istek(cerez, 'POST', `/rota/adimlar/${adimId}/gerceklesen-sure`, { makineId: null, okunanId: null, ...govde }, kimlik);
 
@@ -1507,9 +1509,9 @@ describe('rotalar (gerçek PostgreSQL)', () => {
       // Makineye özgü ölçüm o makinenin ve makinesiz görünümde görünür; teorik değişmez.
       const m = await yaz(adim.adimId, { tur: 'hazirlik', sureDk: 40, makineId: makineA });
       assert.equal(m.statusCode, 200, m.body);
-      const makinede = (await sureler(rev, c.operator, `?makineId=${makineA}`)).adimlar[0]!;
+      const makinede = (await sureler(rev, c.kalite, `?makineId=${makineA}`)).adimlar[0]!;
       assert.deepEqual([makinede.olcum.hazirlik?.sureDk, makinede.olcum.hazirlik?.makineId, makinede.etkin.hazirlikDk], ['40', makineA, '30']);
-      assert.equal((await sureler(rev, c.operator, `?makineId=${makineB}`)).adimlar[0]?.olcum.hazirlik, null);
+      assert.equal((await sureler(rev, c.kalite, `?makineId=${makineB}`)).adimlar[0]?.olcum.hazirlik, null);
       const geri = await yaz(adim.adimId, { tur: 'islem', sureDk: null, okunanId: sonra.sonKayit.islem });
       assert.equal(geri.statusCode, 200, geri.body);
       assert.deepEqual([geri.json<SurelerCevabi>().adimlar[0]?.etkin.birimSureDk, geri.json<SurelerCevabi>().adimlar[0]?.olcum.islem], ['2.5', null]);
@@ -1601,11 +1603,11 @@ describe('rotalar (gerçek PostgreSQL)', () => {
         assert.deepEqual(satirlar.map((x) => [x.tur, x.makineId, Number(x.sureDk), x.kaynak, x.isEmriId, x.kisiId]), [
           ['hazirlik', makineA, 20, 'terminal', isEmriId, operatorId], ['islem', makineA, 3, 'terminal', isEmriId, operatorId],
         ]);
-        const makinede = (await sureler(rev, c.operator, `?makineId=${makineA}`)).adimlar[0]!;
+        const makinede = (await sureler(rev, c.kalite, `?makineId=${makineA}`)).adimlar[0]!;
         assert.deepEqual([makinede.olcum.islem?.sureDk, makinede.olcum.islem?.kaynak, makinede.olcum.islem?.isEmriId, makinede.olcum.islem?.makineId, makinede.olcum.hazirlik?.sureDk, makinede.olcum.degisim],
           ['3', 'terminal', isEmriId, makineA, '20', null]);
         assert.equal((await sureler(rev)).adimlar[0]?.olcum.islem?.sureDk, '3', 'makinesiz görünüm her makinenin ölçümünü gösterir');
-        assert.equal((await sureler(rev, c.operator, `?makineId=${makineB}`)).adimlar[0]?.olcum.islem, null);
+        assert.equal((await sureler(rev, c.kalite, `?makineId=${makineB}`)).adimlar[0]?.olcum.islem, null);
         assert.equal((await vt().tx((db) => adimEtkinSureleri(db, rev, makineA))).get(adim.opNo)?.birimSureDk, 2.5);
         await vt().tx((db) => emirBittiYansit(db, { uretimEmriId: emirId, saglamAdet: 10, kisiId: operatorId }));
         const adet = await vt().tx((db) => db.tek<{ n: number }>('SELECT count(*)::int AS n FROM rota_gerceklesen_sure WHERE malzeme_id = $1', [urun]));
@@ -1646,7 +1648,7 @@ describe('rotalar (gerçek PostgreSQL)', () => {
         assert.equal(onay.statusCode, 200, onay.body);
         assert.equal((await vt().tx((db) => adimEtkinSureleri(db, taslak.id))).get(adim.opNo)?.birimSureDk, 3);
         for (const ek of ['', `?makineId=${makineA}`]) {
-          const sonra = (await sureler(taslak.id, c.operator, ek)).adimlar[0]!;
+          const sonra = (await sureler(taslak.id, c.kalite, ek)).adimlar[0]!;
           assert.deepEqual([sonra.olcum.islem, sonra.olcum.hazirlik], [null, null], `yürürlükte ölçüm boşalır ${ek}`);
         }
         // Eski teorik eski revizyonda kalır.
@@ -1770,7 +1772,7 @@ describe('rotalar (gerçek PostgreSQL)', () => {
         })]);
         const adim = (await sureler(rev)).adimlar[0]!;
         await olculmusEmir(urun, rev, adim.opNo, makineA);
-        const once = (await sureler(rev, c.operator, `?makineId=${makineA}`)).adimlar[0]!;
+        const once = (await sureler(rev, c.kalite, `?makineId=${makineA}`)).adimlar[0]!;
         const k = await kabulEt(adim.adimId, { tur: 'islem', olcumId: once.olcum.islem!.id, makineId: makineA, okunanId: once.sonKayit.islem });
         assert.equal(k.statusCode, 200, k.body);
         const { taslak } = k.json<GerceklesenKabulCevabi>();
@@ -1778,7 +1780,7 @@ describe('rotalar (gerçek PostgreSQL)', () => {
         assert.deepEqual([ayr.adimlar[0]?.birimSureDk, ayr.adimlar[0]?.adaylar[0]?.birimSureDk, ayr.adimlar[0]?.adaylar[0]?.ayarSuresiDk], ['2.5000', '3.0000', '25.00']);
         const gonder = await komut(taslak.id, 'onaya-gonder', { surum: taslak.surum }, c.planlama);
         assert.equal((await komut(taslak.id, 'onayla', { surum: gonder.json<KomutCevabi>().surum, yururlugeAl: true }, c.mudur)).statusCode, 200);
-        const sonra = (await sureler(taslak.id, c.operator, `?makineId=${makineA}`)).adimlar[0]!;
+        const sonra = (await sureler(taslak.id, c.kalite, `?makineId=${makineA}`)).adimlar[0]!;
         assert.deepEqual([sonra.olcum.islem, sonra.olcum.hazirlik?.sureDk], [null, '20'], 'hazırlık kabul edilmedi, ölçümü kalır');
       });
 
