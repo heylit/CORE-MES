@@ -848,7 +848,8 @@ export async function adimTasinani(
 // Gelen parça öncülün çıktısıdır (statüsüz, bir adet) ya da öncülün taşıdığı malzemenin öncül statüsündeki hâli; adedi dal çarpanı oranıyla
 // (1360): adımın bir adedine öncülden oran kadar parça gelir.
 interface GelenParca { opNo: number; malzemeId: number; statuId: number | null; miktar: string; bolen?: number; oran?: GelenOrani }
-interface DalliTasima { kaynak: TasimaKaynagi; tasinan: ReceteGirdisi | null; gelenler: GelenParca[] }
+// kardesler: kaynak ilk iken aynı hammaddeyi ilk girdi olarak taşıyan öbür dal başları (2549 a, mahsup emir geneli birikimle).
+interface DalliTasima { kaynak: TasimaKaynagi; tasinan: ReceteGirdisi | null; gelenler: GelenParca[]; kardesler: { opNo: number; girdi: ReceteGirdisi }[] }
 export async function dalliTasima(
   db: Db, malzemeNo: number, bilgi: AdimBilgisi, uretimEmriId: number,
 ): Promise<DalliTasima | null> {
@@ -880,7 +881,13 @@ export async function dalliTasima(
   const adim = zincir.find((a) => a.opNo === bilgi.opNo) ?? {};
   const gelenler = (await Promise.all(oncul.map(parca))).filter((p): p is GelenParca => p !== null)
     .map((p) => ({ ...p, oran: gelenOrani(zincir.find((a) => a.opNo === p.opNo) ?? {}, adim) }));
-  return { kaynak, tasinan: await tasinanOf(bilgi.opNo), gelenler };
+  const ilkGirdi = kaynak.tur === 'ilk' ? kaynak.girdi : null;
+  const kardesler = ilkGirdi === null ? [] : zincir.flatMap((a) => {
+    if (a.opNo === bilgi.opNo) return [];
+    const k = tasimaKaynagi(zincir, a.opNo);
+    return k?.tur === 'ilk' && k.girdi !== null && k.girdi.malzemeNo === ilkGirdi.malzemeNo ? [{ opNo: a.opNo, girdi: k.girdi }] : [];
+  });
+  return { kaynak, tasinan: await tasinanOf(bilgi.opNo), gelenler, kardesler };
 }
 export async function adimPlaniKur(
   db: Db, uretimEmriId: number, malzemeNo: number, statuId: number | null, bilgi: AdimBilgisi, adet: bigint, onceki = 0n,
@@ -893,10 +900,17 @@ export async function adimPlaniKur(
     const plan = dalliAdimPlani({
       adet, sonAdim: bilgi.sonAdim, statuId, cikti, girdiler: bilgi.girdiler, tasinan, gelenler: dalli.gelenler, kaynak: dalli.kaynak.tur, onceki,
     });
-    // 2522 a: dallı adımda mahsup her taşınan malzemenin kendi birikimiyle (dalın ilk girdisi ya da öncülden gelen parça).
+    // 2522 a, 2549 a: dallı adımda mahsup her taşınan malzemenin emir geneli birikimiyle. Aynı hammadde başka dal başının da ilk girdisiyse
+    // onun sayılanı eklenir; birleşmeye aynı malzeme iki daldan gelirse ikisinin birikimi toplanır. İhtiyaç emir geneli olduğundan
+    // birikim de öyle olmalı; yoksa paralel dalda mahsup hiç tutmaz ve elle verilen iki kez düşer.
     const oncekiTasinanlar = new Map<number, bigint>();
-    if (dalli.kaynak.tur === 'ilk') oncekiTasinanlar.set(tasinan.malzemeNo, adetMiktari(onceki, tasinan.miktar, tasinan.bolen));
-    for (const p of dalli.gelenler) oncekiTasinanlar.set(p.malzemeId, birikimliMiktar(onceki, 0n, p.miktar, p.bolen, p.oran));
+    const ekle = (m: number, x: bigint) => { oncekiTasinanlar.set(m, (oncekiTasinanlar.get(m) ?? 0n) + x); };
+    if (dalli.kaynak.tur === 'ilk') {
+      ekle(tasinan.malzemeNo, adetMiktari(onceki, tasinan.miktar, tasinan.bolen));
+      const sayilan = await adimlarinSayilani(db, uretimEmriId, dalli.kardesler.map((k) => k.opNo));
+      for (const k of dalli.kardesler) ekle(k.girdi.malzemeNo, adetMiktari(sayilan.get(k.opNo) ?? 0n, k.girdi.miktar, k.girdi.bolen));
+    }
+    for (const p of dalli.gelenler) ekle(p.malzemeId, birikimliMiktar(onceki, 0n, p.miktar, p.bolen, p.oran));
     return { ...plan, oncekiTasinanlar };
   }
   const { oncekiOpNo, tasinan, cikti } = await adimTasinani(db, malzemeNo, bilgi, uretimEmriId);
@@ -924,6 +938,23 @@ async function oncekiSayilan(db: Db, uretimEmriId: number, isEmriId: number, aki
   const sonra = BigInt(toplam) * 1000n;
   const once = fark > 0n ? sonra - fark : sonra;
   return once > 0n ? once : 0n;
+}
+// 2549 a: emrin verilen adımlarının şimdiye kadar sağlam akışında sayılanı (binde, oncekiSayilan'ın toplamı), op no başına. Yalnız
+// kardeş dal başı olan dallı emirde okunur.
+async function adimlarinSayilani(db: Db, uretimEmriId: number, opNolari: readonly number[]): Promise<Map<number, bigint>> {
+  const sonuc = new Map<number, bigint>();
+  if (opNolari.length === 0) return sonuc;
+  const idler = (await emirlerinIsEmriIdleri(db, [uretimEmriId])).get(uretimEmriId) ?? [];
+  const oplar = new Map<number, number>();
+  for (const id of idler) { const o = await isEmriOzeti(db, id); if (o !== null && opNolari.includes(o.opNo)) oplar.set(id, o.opNo); }
+  if (oplar.size === 0) return sonuc;
+  const adetler = await aralikAdetleri(db, 'is_emri', [...oplar.keys()], '-infinity', 'infinity');
+  const kararlar = (await adimKararSayaclari(db, [uretimEmriId])).get(uretimEmriId) ?? [];
+  for (const [id, opNo] of oplar) {
+    const k = kararlar.find((x) => x.isEmriId === id);
+    sonuc.set(opNo, BigInt((adetler.get(id)?.saglam ?? 0) + (k?.kararBekliyor ?? 0) + (k?.red ?? 0)) * 1000n);
+  }
+  return sonuc;
 }
 
 // Döner: sayım cevabına giden uyarı (yoksa null); sayım hiçbir uyarıda durmaz.
@@ -1208,6 +1239,30 @@ async function tasinanMahsubuOku(db: Db, uretimEmriId: number, malzemeId: number
   const ihtiyac = ihtiyacToplami(((await emirMalzemeIhtiyaci(db, uretimEmriId)) ?? []).map((m) => ({ malzemeId: m.malzemeNo, brut: m.brut }))).get(malzemeId) ?? null;
   return tasinanMahsubu({ istenen, elle, oncekiTasinan, ihtiyac });
 }
+// 2549 a: taşınan sarfların mahsubu malzeme başına bir kez hesaplanır (sarf sırası). Birleşmeye aynı malzeme iki daldan geliyorsa mahsup,
+// çevirmesi elle verilen kadar eksik kalan dala (statüde emre ayrılanı istenenden az olana) önce verilir; kalan sırayla. Böylece hangi dal
+// sona sayıldıysa onun statüsü sıfırlanır, öbür statüde eksi ya da artık kalmaz. Tek sarflı malzemede önceki hesapla aynıdır.
+async function tasinanSarfMahsuplari(db: Db, uretimEmriId: number, plan: UretimAdimPlani): Promise<Map<number, bigint>> {
+  const sonuc = new Map<number, bigint>();
+  const gruplar = new Map<number, number[]>();
+  plan.sarflar.forEach((s, i) => { if (s.statuId !== null && s.tasinan === true) gruplar.set(s.malzemeId, [...(gruplar.get(s.malzemeId) ?? []), i]); });
+  for (const [malzemeId, siralar] of gruplar) {
+    const toplam = siralar.reduce((t, i) => t + plan.sarflar[i]!.miktar, 0n);
+    let kalan = await tasinanMahsubuOku(db, uretimEmriId, malzemeId, toplam, plan.oncekiTasinanlar);
+    if (kalan <= 0n) continue;
+    if (siralar.length === 1) { sonuc.set(siralar[0]!, kalan); continue; }
+    const eksikler = new Map<number, bigint>();
+    for (const i of siralar) {
+      const s = plan.sarflar[i]!;
+      const ayrilan = (await acikRezerveler(db, malzemeId, s.statuId)).get(uretimEmriId) ?? 0n;
+      eksikler.set(i, s.miktar > ayrilan ? s.miktar - ayrilan : 0n);
+    }
+    const ver = (i: number, ust: bigint) => { const m = ust < kalan ? ust : kalan; if (m > 0n) { sonuc.set(i, (sonuc.get(i) ?? 0n) + m); kalan -= m; } };
+    for (const i of siralar) ver(i, eksikler.get(i)!);
+    for (const i of siralar) ver(i, plan.sarflar[i]!.miktar - (sonuc.get(i) ?? 0n));
+  }
+  return sonuc;
+}
 // Artış: girdiler yalnız istasyondan emre sarf edilir, taşınan malzeme adımın statüsüne istasyonda çevrilir; çıktılı
 // ve son adımda çıktı (son adımda emrin ürünü) emir partisiyle istasyona girer. Yetmeyen girdi istasyonda eksiye düşülür (iş 558, 562 2 b).
 // Döner: konuma giren son hareket (çıktı girişi ya da statü çevirme); yalnız sarf varsa null.
@@ -1218,9 +1273,10 @@ export async function uretimAdiminiYaz(db: Db, y: UretimYazimi, plan: UretimAdim
   const sarfPayi: SarfPayi = new Map();
   const cevirmePayi: SarfPayi = new Map();
   const pay = (m: SarfPayi, partiId: number | null | typeof ISTISNA, miktar: bigint) => { m.set(partiId, (m.get(partiId) ?? 0n) + miktar); };
-  for (const s of plan.sarflar) {
+  const tasinanMahsuplari = await tasinanSarfMahsuplari(db, y.uretimEmriId, plan);
+  for (const [i, s] of plan.sarflar.entries()) {
     const istenen = s.statuId === null ? s.miktar - await elleSarfMahsubuOku(db, y.uretimEmriId, s.malzemeId, s.miktar)
-      : s.tasinan === true ? s.miktar - await tasinanMahsubuOku(db, y.uretimEmriId, s.malzemeId, s.miktar, plan.oncekiTasinanlar) : s.miktar;
+      : s.tasinan === true ? s.miktar - (tasinanMahsuplari.get(i) ?? 0n) : s.miktar;
     if (istenen <= 0n) continue;
     const hak = await kullanilabilirStatu(db, s.malzemeId, s.statuId, y.uretimEmriId, istenen);
     let dusulen = 0n;
