@@ -250,8 +250,22 @@ export type SiparisTakibiCevabi = z.output<typeof siparisTakibiCevabi>;
 // Kur kilidinin zamanı sunucunundur (1096 a); kilitsiz kararda (eski akış) boş.
 export const kararCikisSemasi = kararSemasi.extend({ siparisler: z.array(siparisCikisSemasi), kararVerenAdi: z.string().nullable() });
 
+// 2429: hizmet kaleminin bağları (uygulanan parça, fason adımı) yalnız çıkışta; kayıt gövdesi taşımaz, bağ hızlı açılışta yazılır.
+// Silinmiş kart ya da iş emri numarasıyla gelir (ad boş). Talep eden firmayı görmez (firma boş).
+export const kalemBagiCikisSemasi = z.object({
+  kalemId: uuid,
+  uygulanan: z.object({ no: z.number().int(), kod: z.string().nullable(), ad: z.string().nullable() }).nullable(),
+  fason: z.object({
+    isEmriId: z.number().int(), uretimEmriId: z.number().int().nullable(), emirNo: z.string().nullable(), opNo: z.number().int().nullable(),
+    adim: z.string().nullable(), firmaId: z.number().int().nullable(), firmaAdi: z.string().nullable(),
+  }).nullable(),
+});
+export type KalemBagiCikisi = z.output<typeof kalemBagiCikisSemasi>;
 export const talepSemasi = z.object({
   ...talepAlanlari,
+  kalemBaglari: z.array(kalemBagiCikisSemasi).optional(),
+  // Yalnız talep edenin görünümünde (SAT-53 b): kararın seçtiği tedarikçiler; karar yoksa boş. Teklif ve fiyat taşımaz.
+  secilenTedarikciler: z.array(z.object({ firmaId: z.number().int().nullable(), ad: z.string() })).optional(),
   karar: kararCikisSemasi.nullable(),
   teslimYontemi: z.enum(TESLIM_YONTEMLERI).nullable(),
   no: z.string(),

@@ -13,7 +13,7 @@ import { STOK_AYRI_GRUPLARI } from '#paylasilan/sozlesme/satin-alma.ts';
 import { randomUUID } from 'node:crypto';
 import type { TakvimKaydi } from '#paylasilan/sozlesme/takvim.ts';
 import { firmaAdlari, karneOlayiKaldir, karneOlayiYaz } from '../musteri-tedarikci/disari.ts';
-import type { TeslimDurumu } from '#paylasilan/sozlesme/satin-alma.ts';
+import type { KalemBagiCikisi, TeslimDurumu } from '#paylasilan/sozlesme/satin-alma.ts';
 import { numaraAl, sistemAyariOku } from '../ayarlar/disari.ts';
 import { kisiAdlari, kisiVarMi } from '../kisiler/disari.ts';
 import { alisBelgeleri, alisBelgesiEslesmeTutari, belgeSiparisBagla, kdvSecenekleri, kurCiftiGetir, kurCiftleri, oranlar, siparisOdemePlaniKaldir, siparisOdemePlaniYaz, siparisOtomatikPlaniVarMi, siparisPlanlari } from '../finans/disari.ts';
@@ -83,6 +83,7 @@ async function talepleriKur(db: Db, satirlar: s.TalepSatiri[]): Promise<Talep[]>
     };
   };
   const at = <T extends { talepId: string }>({ talepId: _t, ...r }: T) => r;
+  const baglar = await kalemBaglariKur(db, satirlar.map((t) => t.id));
   return satirlar.map((t) => {
     const k = a.kararlar.find((x) => x.talepId === t.id) ?? null;
     return {
@@ -96,6 +97,7 @@ async function talepleriKur(db: Db, satirlar: s.TalepSatiri[]): Promise<Talep[]>
       agirliklar: t.agirlikMaliyet === null ? null
         : { maliyet: t.agirlikMaliyet, termin: t.agirlikTermin ?? 0, tedarikci: t.agirlikTedarikci ?? 0, garanti: t.agirlikGaranti ?? 0 },
       kalemler: grup(a.kalemler, t.id).map((k) => ({ ...at(k), miktar: sade(k.miktar) })),
+      kalemBaglari: baglar.get(t.id) ?? [],
       teklifIstekleri: grup(a.istekler, t.id).map(at),
       teklifler: grup(a.teklifler, t.id).map((q) => ({
         ...at(q), kur: sade(q.kur), iskontoYuzdesi: sade(q.iskontoYuzdesi), nakliye: sade(q.nakliye), digerMasraf: sade(q.digerMasraf),
@@ -371,6 +373,33 @@ export async function taleplerim(db: Db, k: Kullanici, sinir: number): Promise<T
   const talepler = await talepleriKur(db, satirlar.slice(0, sinir));
   const baglar = await kalemBagGorunumu(db, talepler.map((t) => t.id));
   return { talepler: talepler.map((t) => talebim(t, baglar)), toplam: satirlar.length };
+}
+
+// 2429: talep ve açılış verisi kalem bağlarını taşır; adlar sahiplerinden (malzeme kartı, iş emri, firma). Okunamayan numarayla gelir.
+async function kalemBaglariKur(db: Db, talepIdleri: readonly string[]): Promise<Map<string, KalemBagiCikisi[]>> {
+  const satirlar = talepIdleri.length === 0 ? [] : await s.kalemBaglariOku(db, talepIdleri);
+  if (satirlar.length === 0) return new Map();
+  const kartlar = await malzemeOzetleri(db, satirlar.flatMap((r) => (r.uygulananMalzemeNo === null ? [] : [r.uygulananMalzemeNo])));
+  const isler = new Map<number, Awaited<ReturnType<typeof isEmriOzeti>>>();
+  for (const id of new Set(satirlar.flatMap((r) => (r.isEmriId === null ? [] : [r.isEmriId])))) isler.set(id, await isEmriOzeti(db, id));
+  const firmaId = (id: number) => { const k = isler.get(id)?.kaynak; return k?.tur === 'fason' ? k.id : null; };
+  const firmalar = await firmaOzetleri(db, [...new Set([...isler.keys()].flatMap((id) => { const f = firmaId(id); return f === null ? [] : [f]; }))]);
+  const m = new Map<string, KalemBagiCikisi[]>();
+  for (const r of satirlar) {
+    const kart = r.uygulananMalzemeNo === null ? undefined : kartlar.get(r.uygulananMalzemeNo);
+    const ie = r.isEmriId === null ? null : (isler.get(r.isEmriId) ?? null);
+    const f = r.isEmriId === null ? null : firmaId(r.isEmriId);
+    const bag: KalemBagiCikisi = {
+      kalemId: r.kalemId,
+      uygulanan: r.uygulananMalzemeNo === null ? null : { no: r.uygulananMalzemeNo, kod: kart?.kod ?? null, ad: kart?.ad ?? null },
+      fason: r.isEmriId === null ? null : {
+        isEmriId: r.isEmriId, uretimEmriId: ie?.uretimEmriId ?? null, emirNo: ie?.emirNo || null, opNo: ie?.opNo ?? null, adim: ie?.ad ?? null,
+        firmaId: f, firmaAdi: f === null ? null : (firmalar.get(f)?.ad ?? null),
+      },
+    };
+    m.set(r.talepId, [...(m.get(r.talepId) ?? []), bag]);
+  }
+  return m;
 }
 
 // 898 a: kalem bağlarının görünen hâli; adlar sahiplerinden (malzeme kartı, iş emri). Silinmiş kart ya da iş emri numarayla yazılır.

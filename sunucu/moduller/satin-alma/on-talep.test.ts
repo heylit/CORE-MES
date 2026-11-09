@@ -4,7 +4,7 @@ import type { FastifyInstance } from 'fastify';
 import { testVeritabaniKur } from '#cekirdek/test-vt.ts';
 import type { TestVeritabani } from '#cekirdek/test-vt.ts';
 import { uygulamaKur } from '#cekirdek/uygulama.ts';
-import type { DisOperasyonlarCevabi, FasonOnTalep, OnTalepleriCevabi, PlanOnTalep, TaleplerimCevabi, Talebim } from '#paylasilan/sozlesme/satin-alma.ts';
+import type { AcilisCevabi, DisOperasyonlarCevabi, FasonOnTalep, OnTalepleriCevabi, PlanOnTalep, TaleplerimCevabi, Talebim } from '#paylasilan/sozlesme/satin-alma.ts';
 import { denetimYaz } from '../denetim/disari.ts';
 import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
@@ -179,6 +179,28 @@ describe('satin-alma fason ön talep (898 a, gerçek PostgreSQL)', () => {
     assert.equal(elle.statusCode, 200, elle.body);
     const t = elle.json() as Talebim;
     assert.deepEqual([t.kaynak, t.kalemler[0]!.uygulanan, t.kalemler[0]!.fasonAdim], ['elle', 'HM-SAT-00001 · Deneme mil', null]);
+  });
+  test('2429: açılış verisi ve talep kalem bağlarını taşır (parça, fason adımı, firma); değişmeyen kalemde bağ kalır, silinen kalemle gider', async () => {
+    const { isEmriId, emirId } = await fasonIsEmri({});
+    const r = await istek(cerezTalep, 'POST', '/satin-alma-talepleri/hizli-ac',
+      hizmetTalebi([fasonKalemi({ isEmriId, uygulananMalzemeNo: parcaNo }), fasonKalemi({ ad: 'Deneme kaplama', uygulananMalzemeNo: parcaNo })], emirId));
+    assert.equal(r.statusCode, 200, r.body);
+    const id = (r.json() as Talebim).id;
+    const acilis = async () => ((await istek(cerezYonetici, 'GET', '/satin-alma-acilis')).json() as AcilisCevabi).talepler.find((x) => x.id === id)!;
+    let t = await acilis();
+    const [k1, k2] = t.kalemler.map((k) => k.id) as [string, string];
+    assert.deepEqual(t.kalemBaglari, [
+      { kalemId: k1, uygulanan: { no: parcaNo, kod: 'HM-SAT-00001', ad: 'Deneme mil' },
+        fason: { isEmriId, uretimEmriId: emirId, emirNo: t.uretimEmriNo, opNo: 30, adim: 'Deneme fason', firmaId, firmaAdi: 'Deneme Fason A' } },
+      { kalemId: k2, uygulanan: { no: parcaNo, kod: 'HM-SAT-00001', ad: 'Deneme mil' }, fason: null },
+    ]);
+    // Satın almacı kaydeder (geri gönderilen kalemBaglari gövdede atılır): değişmeyen kalemin bağı korunur, çıkarılan kalemle bağı gider.
+    const { no: _n, talepEdenAdi: _a, acanKisiId: _k, olusturma: _o, guncelleme: _g, ...g } = t;
+    const k = await istek(cerezYonetici, 'POST', `/satin-alma-talepleri/${id}/kaydet`, { ...g, kalemler: [{ ...t.kalemler[0]!, ozellik: 'Deneme değişiklik' }] });
+    assert.equal(k.statusCode, 200, k.body);
+    t = await acilis();
+    assert.deepEqual(t.kalemBaglari?.map((b) => [b.kalemId, b.fason?.isEmriId ?? null, b.uygulanan?.no ?? null]), [[k1, isEmriId, parcaNo]]);
+    assert.equal(await ortam!.sahip.tek('SELECT 1 FROM satin_alma_talep_kalemi WHERE talep_id = $1 AND id = $2', [id, k2]), null);
   });
   test('Dal 2: plan ihtiyacından açık talep ve yoksayılan düşer; artan ihtiyaç yeniden düşer; tam liste eskiyi siler', async () => {
     const yaz = (miktar: number) => ortam!.vt.tx((db) => planIhtiyaclariniYaz(db, [{ malzemeNo: parcaNo, miktar, gerekenTarih: '2026-11-10', emirler: ['E-1'], stokBilinmiyor: true }]));
