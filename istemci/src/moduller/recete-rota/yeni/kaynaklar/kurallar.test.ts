@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  karsilastirmaTeorigi, planTeoriktenFarkli, sapiyor, sapmaMetni, sapmaYuzdesi, sureSuzgecindenGecer, virgullu,
   aralikDakika, basHarfler, eskiKalemler, etkinMakine, geceyiGecer, gunListesi, gunParcalari, gunSaati, haftaSaati, kapasiteKaynagi, kategoriler, malzemeSuz,
   minimumAltinda, ondalik, oranMetni, planEkleri, sayiGirdisi, sonrakiKod, statuluKartlar, vardiyaHaftaSaati, yetkinler, yetkinlikDegistir,
 } from './kurallar.ts';
@@ -139,5 +140,47 @@ describe('R2 statülü kart satırı', () => {
     expect(statuluKartlar(malzemeler[0]!, { ...g, kirilim: () => null }).map((c) => c.miktar)).toEqual([null, null]);
     const k = statuluKartlar(malzemeler[0]!, { ...g, rotalar: {}, kirilim: () => [{ statuId: 9, miktar: '2' }, { statuId: 7, miktar: '0' }] });
     expect(k.map((c) => [c.baslik, c.miktar, c.rotaAdimi])).toEqual([['Statü 9', 2, false]]);
+  });
+});
+
+describe('2564 a Süreler hesapları', () => {
+  it('virgüllü girdi değeri; boşsa boş', () => {
+    expect(virgullu(0.71)).toBe('0,71');
+    expect(virgullu(12)).toBe('12');
+    expect(virgullu(null)).toBe('');
+  });
+  it('işlem ölçümü teorik işlem + değişimle karşılaştırılır; hazırlık ve değişim kendileriyle', () => {
+    const t = { hazirlikDk: 10, islemDk: 2.1, degisimDk: 0.2 };
+    expect(karsilastirmaTeorigi(t, 'islem')).toBe(2.3);
+    expect(karsilastirmaTeorigi({ ...t, degisimDk: null }, 'islem')).toBe(2.1);
+    expect(karsilastirmaTeorigi({ ...t, islemDk: null }, 'islem')).toBeNull();
+    expect(karsilastirmaTeorigi(t, 'hazirlik')).toBe(10);
+    expect(karsilastirmaTeorigi(t, 'degisim')).toBe(0.2);
+  });
+  it('sapma yüzdesi, eşik ve metin; teorik yok ya da 0 ise null', () => {
+    expect(sapmaYuzdesi(2.36, 2)).toBe(18);
+    expect(sapmaYuzdesi(1.9, 2)).toBe(-5);
+    expect(sapmaYuzdesi(2, 0)).toBeNull();
+    expect(sapmaYuzdesi(null, 2)).toBeNull();
+    expect(sapiyor(15)).toBe(false);
+    expect(sapiyor(16)).toBe(true);
+    expect(sapiyor(-16)).toBe(true);
+    expect(sapiyor(null)).toBe(false);
+    expect(sapmaMetni(18)).toBe('+%18');
+    expect(sapmaMetni(-5)).toBe('−%5');
+    expect(sapmaMetni(0)).toBe('%0');
+  });
+  it('plan farkı: boş ile 0 aynı; işlem yoksa birim süreyle karşılaştırılır', () => {
+    const t = { hazirlikDk: 10, islemDk: 2, degisimDk: null };
+    expect(planTeoriktenFarkli(t, { hazirlikDk: 10, birimSureDk: 2, islemDk: 2, degisimDk: 0 })).toBe(false);
+    expect(planTeoriktenFarkli(t, { hazirlikDk: 10, birimSureDk: 2, islemDk: null, degisimDk: null })).toBe(false);
+    expect(planTeoriktenFarkli(t, { hazirlikDk: 15, birimSureDk: 2, islemDk: 2, degisimDk: null })).toBe(true);
+  });
+  it('süzgeç', () => {
+    expect(sureSuzgecindenGecer('', false, [])).toBe(true);
+    expect(sureSuzgecindenGecer('bekleyen', true, [])).toBe(true);
+    expect(sureSuzgecindenGecer('bekleyen', false, [30])).toBe(false);
+    expect(sureSuzgecindenGecer('sapan', false, [null, 30])).toBe(true);
+    expect(sureSuzgecindenGecer('sapan', true, [5])).toBe(false);
   });
 });
