@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
   KARNE_BILESENLERI, KARNE_SINIF_ALT_SINIRLARI, LOT_KARARLARI, LOT_KARAR_PUANI, hizmetPuaniGovdesi, karneCevabi, karneOlayi,
-  karneAgirlikGovdesi, yillikKarneGovdesi,
+  OTOMATIK_AGIRLIK_SIFIR, karneAgirlikGovdesi, yillikKarneGovdesi,
 } from './musteri-tedarikci.ts';
 
 const ZAMAN = '2026-10-30T09:00:00+03:00';
@@ -13,6 +13,9 @@ test('ağırlık gövdesi toplamı 100 ister, sınıf eşikleri azalarak sıral�
   assert.equal(karneAgirlikGovdesi.safeParse({ surum: 2, agirliklar: { ...agirliklar, lot: 26 }, gerekce: 'deneme' }).success, false);
   assert.equal(karneAgirlikGovdesi.safeParse({ surum: 2, agirliklar: { ...agirliklar, lot: -5, ppm: 45 }, gerekce: 'deneme' }).success, false);
   assert.equal(karneAgirlikGovdesi.safeParse({ surum: 2, agirliklar, gerekce: ' ' }).success, false);
+  const elle = karneAgirlikGovdesi.safeParse({ surum: 2, agirliklar: { lot: 0, ppm: 0, zamaninda: 0, tam: 0, teklif: 0, satinAlma: 60, kalite: 40 }, gerekce: 'deneme' });
+  assert.equal(elle.success, false);
+  assert.equal(elle.error?.issues[0]?.message, OTOMATIK_AGIRLIK_SIFIR);
   assert.equal(Object.keys(agirliklar).length, KARNE_BILESENLERI.length);
   const esikler = Object.values(KARNE_SINIF_ALT_SINIRLARI);
   assert.deepEqual([...esikler].sort((a, b) => b - a), esikler);

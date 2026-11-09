@@ -177,8 +177,8 @@ export function ellePuani(e: ElleSayilar): { ortalama: number | null; puan: numb
 }
 
 // MT-32: ağırlıklı ortalama yalnız verisi olan bileşenler üzerinden alınır; null bileşenin ağırlığı ötekilere oranla dağılır (sıfır
-// sayılmaz). Otomatik bileşenlerin (lot, PPM, zamanında, tam, teklif) hiçbirinde veri yoksa puan null'dır: tek kişinin elle puanı
-// tedarikçiye karne puanı vermez (Maliyet ön bakışı A1). Hiçbir bileşenin verisi ya da ağırlığı yoksa da puan null'dır.
+// sayılmaz). Ağırlığı 0'dan büyük otomatik bileşenlerin (lot, PPM, zamanında, tam, teklif) hiçbirinde veri yoksa puan null'dır: elle
+// puanlar tek başına tedarikçiye karne puanı vermez (Maliyet A1, N1; otomatik ağırlıklar 0 yapılsa da). Hiçbir bileşenin verisi ya da ağırlığı yoksa da puan null'dır.
 export function bilesenPuani(degerler: Record<KarneBileseni, number | null>, agirliklar: KarneAgirliklari): {
   puan: number | null; bilesenler: KarneBilesenSatiri[]; gruplar: Record<KarneBilesenGrubu, number | null>;
 } {
@@ -187,7 +187,7 @@ export function bilesenPuani(degerler: Record<KarneBileseni, number | null>, agi
     const toplamAgirlik = dolu.reduce((t, b) => t + agirliklar[b], 0);
     return { toplamAgirlik, puan: toplamAgirlik > 0 ? ondalik1(dolu.reduce((t, b) => t + degerler[b]! * agirliklar[b], 0) / toplamAgirlik) : null };
   };
-  const otomatikVar = KARNE_BILESENLERI.some((b) => KARNE_BILESEN_GRUPLARI[b] !== 'elle' && degerler[b] !== null);
+  const otomatikVar = KARNE_BILESENLERI.some((b) => KARNE_BILESEN_GRUPLARI[b] !== 'elle' && degerler[b] !== null && agirliklar[b] > 0);
   const genel = ortalama(KARNE_BILESENLERI);
   const puan = otomatikVar ? genel.puan : null;
   const grup = (g: KarneBilesenGrubu) => ortalama(KARNE_BILESENLERI.filter((b) => KARNE_BILESEN_GRUPLARI[b] === g)).puan;
