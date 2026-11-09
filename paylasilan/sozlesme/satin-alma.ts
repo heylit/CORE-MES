@@ -169,6 +169,8 @@ export const senaryoSemasi = z.object({
   dengeler: z.array(z.object({ kalemId: uuid, denge: ondalikMetinSemasi.nullable() })).max(500),
 });
 
+const projeSecenegiSemasi = z.object({ id: z.number().int(), kod: z.string(), ad: z.string() });
+
 const talepAlanlari = {
   id: uuid,
   baslik: z.string().trim().min(1, 'Başlık zorunlu.').max(160),
@@ -181,6 +183,9 @@ const talepAlanlari = {
   iptalNedeni: metin(500),
   // Talebin açıldığı üretim emri; yalnız açık (planlı ya da başlamış) emir seçilir. Boş: emre bağlı değil.
   uretimEmriId: z.number().int().positive().max(2147483647).nullable().prefault(null),
+  // 2611 a: emre bağlı olmayan talebin projesi; alımın bedeli proje maliyetine gider. Emirli talepte boştur (proje emirden gelir).
+  // Gelmeyen alan kayıttaki projeyi korur: alanı bilmeyen istemci kaydederken projeyi silmez.
+  projeId: z.number().int().positive().max(2147483647).nullable().optional(),
   agirliklar: agirliklarSemasi.nullable(),
   kalemler: z.array(kalemSemasi).max(200),
   teklifIstekleri: z.array(teklifIstegiSemasi).max(50),
@@ -290,6 +295,7 @@ export const talepSemasi = z.object({
   teslimYontemi: z.enum(TESLIM_YONTEMLERI).nullable(),
   no: z.string(),
   uretimEmriNo: z.string().nullable(),
+  proje: projeSecenegiSemasi.nullable().optional(),
   talepEdenAdi: z.string().nullable(),
   acanKisiId: z.number().int(),
   surum: surumSemasi,
@@ -298,6 +304,9 @@ export const talepSemasi = z.object({
 });
 
 // Talep formunun üretim emri seçimi: açık emirler.
+// 2611 a: talepte seçilebilen projeler (yalnız aktif); talep açan projeler.oku yetkisini taşımayabilir.
+export const projeSecenekleriCevabi = z.object({ projeler: z.array(projeSecenegiSemasi) });
+export type ProjeSecenekleriCevabi = z.output<typeof projeSecenekleriCevabi>;
 export const acikEmirlerCevabi = z.object({
   emirler: z.array(z.object({ id: z.number().int(), emirNo: z.string(), parcaNo: z.string(), parcaAd: z.string() })),
 });
@@ -623,6 +632,7 @@ export interface SatinAlmaUclari {
   'GET /satin-alma-fason-sureleri': { sorgu: z.input<typeof fasonSureleriSorgusu>; cevap: FasonSureleriCevabi };
   'GET /satin-alma-acilis': { cevap: AcilisCevabi };
   'GET /satin-alma-acik-emirler': { cevap: AcikEmirlerCevabi };
+  'GET /satin-alma-talepleri/proje-secenekleri': { cevap: ProjeSecenekleriCevabi };
   'POST /satin-alma-talepleri/ac': { govde: z.input<typeof talepGovdesi>; cevap: Talep };
   'GET /satin-alma-taleplerim': { sorgu: z.input<typeof taleplerimSorgusu>; cevap: TaleplerimCevabi };
   'POST /satin-alma-talepleri/hizli-ac': { govde: z.input<typeof hizliAcGovdesi>; cevap: Talebim };

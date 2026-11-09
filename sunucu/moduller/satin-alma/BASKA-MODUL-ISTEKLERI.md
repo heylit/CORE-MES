@@ -78,3 +78,12 @@ Yok.
 
 ## Malzemeler (kart #1192)
 - `malzemeAra` (sunucu/moduller/malzemeler/servis.ts) metni kategori adında da arasın: `katalogMalzemeAra` `ARAMA_KOSULU` bugün yalnız `stok_kodu`, ad ve `no`ya bakar; `kt.ad ILIKE $1` eklenmesi istenir. Neden: talepteki açılır liste "Malzemeler ve Hizmetler"deki gibi kategoriyle de arasın. Gelene kadar kategori yalnız satırda görünür.
+
+## Proje maliyeti (2611 a)
+- `proje-maliyet/servis.ts` emre bağlı olmayan projeli alımı `satin-alma/disari.ts` `projeSatinAlmaTutarlari(db, projeIdler)` ile okusun. Dönen değer proje başına ve para birimi başına tutardır, KDV hariç. Yalnız stoğa girmeyen satırlar sayılır: hizmet kartlı satır teslim değeriyle, masraf da payı kadar. Proje maliyeti bu tutarı bugünün kuruyla TL'ye çevirir (N1). Neden: emre bağlı olmayan alım bugün projeye ulaşmıyor. Gelene kadar tutar hesaplanır ama ekranda görünmez.
+
+## İdari İşler (2614 1/2 a)
+- `POST /idari-isler/talepler/:id/satin-almaya-cevir` ucu ve düğmesi. Uç `satin-alma/disari.ts` `idariTaleptenTalepAc(db, k, {idariTalepId, idariTalepNo, baslik, notlar, talepEdenKisiId})` çağırır. Talep eden, idari talebi açan kişidir.
+  - Uçun yetkisi idari tarafın `talep-yonet` işlemidir. Satın alma yetkisini çağrılan işlev kendisi denetler: `satin-alma.talep-ac` ya da `yaz` yoksa 403 döner. Aynı idari talep ikinci kez çevrilirse 409 döner.
+  - Güvenlik K2'nin istediği "uç üzerinden" testi İdari İşler tesliminde ya da bağlamada yazılır.
+- Talep ekranında bağlı satın alma talebinin numarası ve durumu `idariTalepSatinAlmalari(db, idariIdler)` ile okunur.

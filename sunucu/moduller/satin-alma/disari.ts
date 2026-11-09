@@ -76,6 +76,15 @@ export async function isEmriFasonTutarlari(db: Db, isEmriIdleri: readonly number
   return harita;
 }
 
+// 2611 a, Maliyet C1: proje maliyeti emre bağlı olmayan projeli talebin alım değerini buradan alır: proje başına, para birimi başına
+// (sırası para birimi kodu), KDV hariç; yalnız stoğa girmeyen satırlar (hizmet kartlı teslim değeriyle, kartsız sipariş tutarıyla) ve
+// onların masraf payı. Değeri olmayan proje haritada yoktur. Yetki denetlemez, yalnız okur.
+export { projeSatinAlmaTutarlari } from './servis.ts';
+// 2614 1/2 a: İdari İşler talebi satın alma talebine çevrilir (kalemsiz taslak; açan çeviren, talep eden idari talebi açan). Yetkiyi kendi
+// içinde denetler (satin-alma.talep-ac ya da yaz; 403); ikinci çevirme 409. Çağıranın işlemini kullanır. İdari ekran bağı ikinci işlevle okur.
+export { idariTalepSatinAlmalari, idariTaleptenTalepAc } from './servis.ts';
+export type { IdaridenTalep } from './servis.ts';
+
 // Plan: fason süresi tahmini (sorgularla aynı sırada, takvim günü); veri yoksa null. Yetki denetlemez, yalnız okur.
 export { fasonSuresiTahminleri } from './servis.ts';
 
