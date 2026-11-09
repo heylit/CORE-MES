@@ -16,7 +16,7 @@ export interface IhtiyacGirdisi {
   emirler: readonly { id: number; no: string }[];
   // Üretim emri -> adım malzemeleri (brüt, ondalık metin); ürünü olmayan emirde null.
   ihtiyaclar: ReadonlyMap<number, readonly { malzemeNo: number; opNo: number; brut: string }[] | null>;
-  // Emre verilmiş net sarf (malzeme başına, ondalık metin).
+  // Emre verilen: net sarf ve statü zincirindeki miktar (B-2482-8), malzeme başına ondalık metin; aynı malzemenin satırları toplanır.
   sarflar: readonly { emirId: number; malzemeId: number; miktar: string }[];
   // `${uretimEmriId}:${opNo}` -> adımın canlı plandaki başlangıcı (ms). Canlıda yeri olmayan adım yoktur.
   baslangiclar: ReadonlyMap<string, number>;
