@@ -1062,10 +1062,12 @@ export async function kalemBaglariYaz(db: Db, talepId: string, baglar: readonly 
     [talepId, baglar.map((b) => b.kalemId), baglar.map((b) => b.uygulananMalzemeNo), baglar.map((b) => b.isEmriId)],
   );
 }
+// Talepteki kalem sırasıyla: sıra burada verilir, PostgreSQL ORDER BY olmadan sıra garantisi vermez (kalem bağları ekranda bu sırayla).
 export function kalemBaglariOku(db: Db, talepIdleri: readonly string[]): Promise<(KalemBagSatiri & { talepId: string })[]> {
   return db.sorgu(
     `SELECT talep_id AS "talepId", id AS "kalemId", uygulanan_malzeme_no AS "uygulananMalzemeNo", is_emri_id AS "isEmriId"
-       FROM satin_alma_talep_kalemi WHERE talep_id = ANY($1::uuid[]) AND (uygulanan_malzeme_no IS NOT NULL OR is_emri_id IS NOT NULL)`,
+       FROM satin_alma_talep_kalemi WHERE talep_id = ANY($1::uuid[]) AND (uygulanan_malzeme_no IS NOT NULL OR is_emri_id IS NOT NULL)
+      ORDER BY talep_id, sira`,
     [talepIdleri],
   );
 }
