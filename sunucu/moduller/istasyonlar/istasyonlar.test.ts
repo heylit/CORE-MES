@@ -265,7 +265,7 @@ describe('istasyonlar (gerçek PostgreSQL)', () => {
       aparatKapasiteleri: (await oku('/istasyonlar/aparat-kapasiteleri')).govde,
     });
     // Sıra önemlidir: silmeler bağlı kayıttan başlar; gövdeler geçerlidir, yoksa red yetkiden değil doğrulamadan gelirdi.
-    const yazilar: { uc: string; yol: string; govde?: unknown; basari: number }[] = [
+    const yazilar: { uc: string; yol: string; govde?: unknown; basari: number; tekrarKorumali?: true }[] = [
       { uc: '/is-merkezleri', yol: '/is-merkezleri', govde: { kod: yeniKod('YT'), ad: 'Yetki' }, basari: 200 },
       { uc: '/istasyonlar', yol: '/istasyonlar', govde: { kod: yeniKod('YT'), ad: 'Yetki', isMerkeziId: digerMerkez.id }, basari: 200 },
       { uc: '/makineler', yol: '/makineler', govde: { kod: yeniKod('YT'), ad: 'Yetki' }, basari: 200 },
@@ -320,6 +320,10 @@ describe('istasyonlar (gerçek PostgreSQL)', () => {
         uc: '/istasyonlar/coklu-ekle', yol: '/istasyonlar/coklu-ekle',
         govde: { kayitlar: [{ kod: yeniKod('YT'), ad: 'Yetki' }], isMerkeziId: digerMerkez.id, kapasiteKaynagi: 'makine' }, basari: 200,
       },
+      {
+        uc: '/istasyonlar/toplu-kaydet', yol: '/istasyonlar/toplu-kaydet', tekrarKorumali: true, basari: 200,
+        govde: { satirlar: [{ kayit: 'is-merkezi', islem: 'ekle', satir: 1, kod: yeniKod('YT'), ad: 'Yetki' }] },
+      },
       { uc: '/tesis-sablonu/uygula', yol: '/tesis-sablonu/uygula', basari: 200 },
       { uc: '/makineler/:id/sil', yol: `/makineler/${mk.id}/sil`, basari: 204 },
       { uc: '/istasyonlar/:id/sil', yol: `/istasyonlar/${ist.id}/sil`, basari: 204 },
@@ -330,14 +334,15 @@ describe('istasyonlar (gerçek PostgreSQL)', () => {
       yazilar.map((y) => y.uc).sort(),
       uclar.filter((u) => u.yontem !== 'GET').map((u) => u.yol).sort(),
     );
-    for (const { uc, yol, govde, basari } of yazilar) {
+    for (const { uc, yol, govde, basari, tekrarKorumali } of yazilar) {
+      const kimlik = (): Record<string, string> => (tekrarKorumali ? { 'istek-kimligi': randomUUID() } : {});
       const once = await durum();
-      assert.equal((await istek(null, 'POST', yol, govde)).durum, 401, uc);
-      const red = await istek(operator, 'POST', yol, govde);
+      assert.equal((await istek(null, 'POST', yol, govde, kimlik())).durum, 401, uc);
+      const red = await istek(operator, 'POST', yol, govde, kimlik());
       assert.equal(red.durum, 403, uc);
       assert.equal(hataKodu(red), 'YETKI_YOK', uc);
       assert.deepEqual(await durum(), once, uc);
-      const kabul = await yaz(yol, govde);
+      const kabul = await istek(yonetici, 'POST', yol, govde, kimlik());
       assert.equal(kabul.durum, basari, `${uc}: ${JSON.stringify(kabul.govde)}`);
       assert.notDeepEqual(await durum(), once, uc);
     }

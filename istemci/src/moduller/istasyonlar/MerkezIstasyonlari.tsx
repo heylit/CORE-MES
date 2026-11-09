@@ -7,6 +7,7 @@ import { Dugme, DurumKutusu, Girdi, IsaretKutusu, Rozet, Secim, Simge } from '..
 import { AranabilirSecim } from './AranabilirSecim.tsx';
 import { CokluEklePenceresi } from './CokluEklePenceresi.tsx';
 import { csvIndir } from './csv.ts';
+import { ExcelMenusu } from './ExcelGirisi.tsx';
 import { KAPASITE_KAYNAGI_ADLARI, KAPASITE_KAYNAGI_SECENEKLERI, TIP_ADLARI } from './etiketler.ts';
 import { MakineEtiketi } from './GenelBakis.tsx';
 import { Hucre, MetinHucresi, SatirHatasi, SayiHucresi, SecimHucresi } from './Hucreler.tsx';
@@ -263,6 +264,7 @@ export function MerkezIstasyonlari({ v, y, yazabilir, islemler = [] }: { v: Tesi
             {hepsiKapali ? 'Hepsini aç' : 'Hepsini kapat'}
           </Dugme>
           <Dugme simge="download" onClick={csv} disabled={gorunenler.length === 0}>CSV indir</Dugme>
+          {yazabilir && <ExcelMenusu tur="tesis" v={v} bolum="İş merkezleri ve istasyonlar" />}
           {yazabilir && (
             <Dugme simge="layers" disabled={y.mesgul} title="Hazır iş merkezi ve istasyon listesini açar (Kalite dahil); var olan kayda dokunmaz."
               onClick={() => { sablonSonucuYaz(null); y.gonder({ yol: '/tesis-sablonu/uygula', satir: 'sablon' }, { onSuccess: (c) => sablonSonucuYaz(sablonIletisi(c as TesisSablonuSonucu)) }); }}>
