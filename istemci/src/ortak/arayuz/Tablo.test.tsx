@@ -76,3 +76,14 @@ describe('tabloCsvSatirlari', () => {
     });
   });
 });
+
+// 2633 a: yapışık başlığın yatay kesmesi (tablo.css) yalnız ölçen ortak kaba uygulanır; sınıfı elle kullanan kap işaretsizdir ve kayar.
+describe('Tablo kabı ölçen işareti', () => {
+  it('satırlı ve iskelet kabı data-olcer taşır', () => {
+    ac();
+    expect(screen.getByRole('table', { name: 'Gider' }).closest('.tc-tablo-kap')?.hasAttribute('data-olcer')).toBe(true);
+    cleanup();
+    render(<Tablo etiket="Gider" sutunlar={SUTUNLAR} satirlar={[]} satirAnahtari={(s) => s.no} yukleniyor />);
+    expect(document.querySelector('.tc-tablo-kap')?.hasAttribute('data-olcer')).toBe(true);
+  });
+});
