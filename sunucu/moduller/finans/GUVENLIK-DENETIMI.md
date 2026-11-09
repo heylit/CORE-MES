@@ -140,3 +140,8 @@ Tekrar koruması yok: aynı isteğin ikinci kez işlenmesi aynı değerli ikinci
 `genelGiderOrani` yetki denetlemez; çağıran modülün ucu denetler (proje maliyet: finans.maliyet-oku).
 
 Ekran (`/finans/genel-gider`): `finans.maliyet-oku` yoksa liste istenmez; form yalnız `finans.yonet` ile çizilir. Asıl denetim sunucudadır (yukarıdaki iki uç). Testler: `GenelGiderOrani.test.tsx`.
+
+## Birim maliyeti kaldırma (2574, 2572)
+| Uç | İşlem | Kural | İzinli test | Reddeden test |
+|---|---|---|---|---|
+| POST /finans/maliyetler/:tur/:anahtar/kaldir | finans.yonet | FNS-75: tür malzeme, istasyon ya da kişi; okunan sürümle satır silinir, okuyanlar yeniden null görür (sıfır yazılmaz); satır kilitli okunur; silinen değer denetim ekine (`_ek`) yazılır; gövde `.strict()`; tekrar korumalı (istek kimliği zorunlu) | maliyet-kaldir: "okunan sürümle kaldırılır" (200, denetim eki), "aynı istek kimliğiyle" | maliyet-kaldir: "yetki:" (oturumsuz 401, finans.maliyet-oku ve finans.yaz 403), "yasak:" (eski sürüm 409, olmayan 404, kimliksiz 400, fazla alan 400, geçersiz anahtar ve tür 400) |

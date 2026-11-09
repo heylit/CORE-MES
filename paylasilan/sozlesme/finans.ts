@@ -527,6 +527,10 @@ export const maliyetSatiri = z.object({
   anahtar: z.number().int(), birimMaliyet: numerik, paraBirimi: z.string(), guncelleme: zamanSemasi, guncelleyenId: z.number().int(), surum: surumSemasi,
 });
 export type MaliyetSatiri = z.output<typeof maliyetSatiri>;
+// 2574 (2572): kayıt kaldırılınca maliyet yeniden bilinmiyordur (satır yok); sıfır yazılmaz. Sürüm okunan satırdandır.
+export const maliyetKaldirParametresi = z.object({ tur: z.enum(MALIYET_TURLERI), anahtar: z.coerce.number<number>().int().positive() });
+export const maliyetKaldirGovdesi = z.object({ ...beklenenSurum }).strict();
+export const maliyetKaldirCevabi = z.object({ kaldirilan: z.object({ tur: z.enum(MALIYET_TURLERI), anahtar: z.number().int() }) });
 export const maliyetCevabi = z.object({ maliyet: maliyetSatiri });
 export const maliyetListesiCevabi = listeCevapSemasi(maliyetSatiri);
 
