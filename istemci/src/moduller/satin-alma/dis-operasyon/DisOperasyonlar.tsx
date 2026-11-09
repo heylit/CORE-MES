@@ -1,9 +1,9 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import type { DisOperasyon } from '#paylasilan/sozlesme/satin-alma.ts';
 import type { FasonGidisGovdesi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
-import { DurumKutusu, Dugme, Girdi, Kart, Pencere, Rozet, Tablo, useBildirim, type Sutun } from '../../../ortak/arayuz/index.ts';
+import { DurumKutusu, Dugme, Girdi, Kart, Menu, Pencere, Rozet, Tablo, useBildirim, type MenuOgesi, type Sutun } from '../../../ortak/arayuz/index.ts';
 import type { Siralama } from '../../../ortak/veri/liste-durumu.ts';
 import { ApiHatasi, api } from '../../../ortak/veri/api.ts';
 import { tekrarKorumaliGonder, yeniIstekKimligi } from '../../../ortak/veri/istek-kimligi.ts';
@@ -36,16 +36,23 @@ export function malKabulAdresi(x: DisOperasyon): string {
   return `/stok/mal-kabul?${p.toString()}`;
 }
 
+// 2449: tek satırda okunur; ikincil bilgi ana değerin altında soluk satırdır (planlanan gidiş gidişin, ilk dönüş terminin altında).
+const ikili = (ana: ReactNode, alt: string | null) => (alt ? <span className="sa-gecikme"><span>{ana}</span><small>{alt}</small></span> : ana);
+const adetMetni = (x: DisOperasyon) => {
+  if (!x.gonderilen) return '—';
+  const kalan = disarida(x);
+  const alt = [kalan > 0 ? `${adet(kalan)} dışarıda` : null, x.hurda ? `${adet(x.hurda)} hurda` : null].filter(Boolean).join(' · ');
+  return ikili(<span className="sa-nowrap">{adet(x.donen ?? 0)} / {adet(x.gonderilen)}</span>, alt || null);
+};
 const SUTUNLAR: Sutun<DisOperasyon>[] = [
-  { anahtar: 'emir', baslik: 'Emir', mono: true, kirilmaz: true, sirala: true, hucre: (x) => x.emirNo },
-  { anahtar: 'adim', baslik: 'Adım', hucre: (x) => `${x.opNo}${x.adim ? ` ${x.adim}` : ''}` },
-  { anahtar: 'urun', baslik: 'Ürün', sirala: true, hucre: (x) => x.urun ?? '—' },
+  // Ürün ayrı sütun değil, emrin altında adımla birlikte: uzun ürün ve firma adıyla da 1280'de tablo kalır (Arayüz, 2449).
+  { anahtar: 'emir', baslik: 'Emir, ürün ve adım', sirala: true,
+    hucre: (x) => ikili(<span className="sa-mono sa-nowrap">{x.emirNo}</span>, [x.urun, `Op ${x.opNo}${x.adim ? ` ${x.adim}` : ''}`].filter(Boolean).join(' · ')),
+    csv: (x) => [x.emirNo, x.urun, `Op ${x.opNo}`, x.adim].filter(Boolean).join(' / ') },
   { anahtar: 'firma', baslik: 'Firma', sirala: true, hucre: (x) => x.firmaAdi ?? 'Seçilmedi' },
-  { anahtar: 'planlanan', baslik: 'Planlanan gidiş', kirilmaz: true, sirala: true, hucre: (x) => gun(x.planlananGidis) },
-  { anahtar: 'gidis', baslik: 'Gidiş', kirilmaz: true, sirala: true, hucre: (x) => zaman(x.gerceklesenGidis) },
-  { anahtar: 'termin', baslik: 'Termin', kirilmaz: true, sirala: true, hucre: (x) => gun(x.termin) },
-  { anahtar: 'donus', baslik: 'İlk dönüş', kirilmaz: true, hucre: (x) => zaman(x.ilkDonus) },
-  { anahtar: 'adet', baslik: 'Giden / dönen / hurda', hizala: 'sag', hucre: (x) => `${adet(x.gonderilen)} / ${adet(x.donen)} / ${adet(x.hurda)}` },
+  { anahtar: 'gidis', baslik: 'Gidiş', sirala: true, hucre: (x) => (x.gerceklesenGidis ? <span title={zaman(x.gerceklesenGidis)}>{gun(x.gerceklesenGidis)}</span> : ikili('—', x.planlananGidis ? `plan ${gun(x.planlananGidis)}` : null)) },
+  { anahtar: 'termin', baslik: 'Termin', sirala: true, hucre: (x) => ikili(gun(x.termin), x.ilkDonus ? `ilk dönüş ${gun(x.ilkDonus)}` : null) },
+  { anahtar: 'adet', baslik: 'Dönen / giden', hucre: adetMetni, csv: (x) => `${x.gonderilen ?? ''}/${x.donen ?? ''}/${x.hurda ?? ''}` },
   // 2424-a c: iki ölçü yan yana; ana sayı son dönüşe göre (karneyle aynı), altında adet ağırlıklı (farklıysa).
   { anahtar: 'gecikme', baslik: 'Gecikme', sirala: true, hucre: (x) => gecikmeHucresi(x) },
 ];
@@ -61,7 +68,7 @@ const DURUMLAR: { deger: Durum; baslik: string; uyar: (x: DisOperasyon) => boole
 ];
 const kucuk = (t: string | null) => (t ?? '').toLocaleLowerCase('tr-TR');
 const SIRA_DEGERI: Record<string, (x: DisOperasyon) => string | number> = {
-  emir: (x) => x.emirNo, urun: (x) => kucuk(x.urun), firma: (x) => kucuk(x.firmaAdi), planlanan: (x) => x.planlananGidis ?? '9999',
+  emir: (x) => x.emirNo, firma: (x) => kucuk(x.firmaAdi),
   gidis: (x) => x.gerceklesenGidis ?? '9999', termin: (x) => x.termin ?? '9999', gecikme: (x) => x.gecikmeSonDonus ?? -1,
 };
 // Varsayılan sıra (2424): geciken önde (çok geciken önce), sonra termini yakın olan; terminsiz sonda.
@@ -123,6 +130,15 @@ function IslemPenceresi({ x, islem, kapat }: { x: DisOperasyon; islem: Islem; ka
   );
 }
 
+export function islemOgeleri(x: DisOperasyon, ac: (islem: Islem) => void, malKabul: () => void): MenuOgesi[] {
+  const gonderNedeni = x.firmaId === null ? 'Önce fason firması seçilmeli' : !x.sirada ? 'Önceki iş emirleri bitmeden fasona gönderilmez.' : undefined;
+  return [
+    { anahtar: 'gidis', baslik: 'Gönder', simge: 'truck', sec: () => ac('gidis'), pasif: gonderNedeni !== undefined, pasifNedeni: gonderNedeni },
+    { anahtar: 'mal-kabul', baslik: 'Mal kabulde gir', simge: 'box', sec: malKabul, pasif: disarida(x) <= 0, pasifNedeni: 'Dışarıda adet yok; dönüş (sağlam ve hurda) mal kabulden girilir.' },
+    { anahtar: 'tamamla', baslik: 'Tamamla', simge: 'check', sec: () => ac('tamamla'), pasif: !(x.gonderilen && disarida(x) <= 0), pasifNedeni: 'Bütün adet dönünce tamamlanır.' },
+  ];
+}
+
 // Dış operasyonlar (kart #542, D1 a): fason iş emirlerinin gidiş, termin ve dönüşü; fason yetkisi olan gidişi buradan girer (#995),
 // dönüş mal kabule yönlendirir.
 export function DisOperasyonlar() {
@@ -136,13 +152,18 @@ export function DisOperasyonlar() {
   const [siralama, siralamaYaz] = useState<Siralama | null>(null);
   const satirlar = useMemo(() => disOperasyonSuz(l.data?.operasyonlar ?? [], metin, durum, siralama), [l.data, metin, durum, siralama]);
   const sutunlar: Sutun<DisOperasyon>[] = !yazar ? SUTUNLAR : [...SUTUNLAR, {
-    anahtar: 'islem', baslik: 'İşlem', kirilmaz: true, hucre: (x) => (
-      <>
-        <Dugme simge="truck" disabled={x.firmaId === null || !x.sirada} title={x.firmaId === null ? 'Önce fason firması seçilmeli' : !x.sirada ? 'Önceki iş emirleri bitmeden fasona gönderilmez.' : undefined} onClick={() => acikYaz({ x, islem: 'gidis' })}>Gönder</Dugme>
-        <Dugme simge="box" disabled={disarida(x) <= 0} title="Dönüş (sağlam ve hurda) mal kabulden girilir" onClick={() => { void git(malKabulAdresi(x)); }}>Mal kabulde gir</Dugme>
-        <Dugme simge="check" disabled={!(x.gonderilen && disarida(x) <= 0)} onClick={() => acikYaz({ x, islem: 'tamamla' })}>Tamamla</Dugme>
-      </>
-    ),
+    // 2449: satırda yalnız sıradaki işlem görünür; öbürleri menüde, pasifse nedeniyle.
+    anahtar: 'islem', baslik: 'İşlem', kirilmaz: true, hucre: (x) => {
+      const ogeler = islemOgeleri(x, (islem) => acikYaz({ x, islem }), () => { void git(malKabulAdresi(x)); });
+      const siradaki = !x.gonderilen ? 'gidis' : disarida(x) > 0 ? 'mal-kabul' : 'tamamla';
+      const sira = ogeler.find((o) => o.anahtar === siradaki && !o.pasif);
+      return (
+        <span className="sa-islem">
+          {sira && <Dugme simge={sira.simge} aria-label={`${x.emirNo} Op ${x.opNo}: ${sira.baslik}`} title={sira.baslik} onClick={sira.sec}>{sira.anahtar === 'mal-kabul' ? 'Mal kabul' : sira.baslik}</Dugme>}
+          <Menu etiket={`${x.emirNo} Op ${x.opNo} için işlemler`} ogeler={ogeler.filter((o) => o !== sira)} />
+        </span>
+      );
+    },
   }];
   return (
     <Kart baslik="Dış operasyonlar">
