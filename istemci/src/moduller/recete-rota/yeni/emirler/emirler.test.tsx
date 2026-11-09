@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import type { Kullanici } from '#paylasilan/kullanici.ts';
+import { zaman } from '../bicim.ts';
 import { json, KAPI, OKUYAN, ornekDurum, rrAc, sunucuKur, YONETICI, type Istek } from '../test-ortak.tsx';
 import { durumAdi } from './kurallar.ts';
 
@@ -119,6 +120,34 @@ describe('R3 Üretim emirleri: plan bitiş', () => {
     yerlesimler: [{ isEmriId: 1, uretimEmriId: 61, emirNo: 'UE-0001', opNo: 10, kaynak: { tur: 'makine', id: 51 }, kaynakAdi: null,
       baslangic: '2026-11-02T06:00:00.000Z', bitis: '2026-11-03T09:00:00.000Z', sabit: false }],
   };
+
+  const canliOzet = (isler: { anahtar: string; dondurulmus: boolean; sabit: boolean; baslangic?: string; bitis?: string }[]) => ({
+    planSurumu: 3, sonCanliyaAlma: null, planlanacak: ['UE-0001|10'], kuyruklar: [{ makineId: 51, isler }],
+  });
+  it('adım canlı planda yoksa saati motorun önerisi olarak yazılır (B-2499-7)', async () => {
+    sunucuKur(OKUYAN, { durum: { ...planli('2026-11-05'), planCanli: canliOzet([]) }, motorYerlesimi: motor });
+    rrAc();
+    const b = await emirAc();
+    const ayrinti = within(b).getByLabelText('UE-0001 ayrıntısı');
+    expect(await within(ayrinti).findByText(/öneri \(canlı planda yok\)/)).toBeTruthy();
+    // Özetteki plan bitişi de motorun önerisidir (03.11) ve öyle etiketlenir.
+    expect(within(ayrinti).getByText('03.11.2026')).toBeTruthy();
+    expect(within(ayrinti).getByText('öneri, canlıda yok')).toBeTruthy();
+  });
+
+  it('adım canlı plandaysa saati canlı plandan okunur, öneri yazmaz (B-2499-7)', async () => {
+    const canli = canliOzet([{ anahtar: 'UE-0001|10', dondurulmus: false, sabit: false, baslangic: '2026-11-04T07:00:00.000Z', bitis: '2026-11-04T09:00:00.000Z' }]);
+    sunucuKur(OKUYAN, { durum: { ...planli('2026-11-05'), planCanli: canli }, motorYerlesimi: motor });
+    rrAc();
+    const b = await emirAc();
+    const ayrinti = within(b).getByLabelText('UE-0001 ayrıntısı');
+    const satir = await within(ayrinti).findByText(/· plan /);
+    expect(satir.textContent).toContain(zaman('2026-11-04T07:00:00.000Z'));
+    expect(within(ayrinti).queryByText(/öneri/)).toBeNull();
+    // Bütün açık adımlar canlıda: özetteki plan bitişi canlı plandan (04.11), motorunki (03.11) değil.
+    expect(within(ayrinti).getByText('04.11.2026')).toBeTruthy();
+    expect(within(ayrinti).queryByText('03.11.2026')).toBeNull();
+  });
 
   it('sütun "Plan bitiş": motorun adım bitişini gösterir, teslimden sonra biten emir gecikir', async () => {
     sunucuKur(OKUYAN, { durum: planli('2026-11-02'), motorYerlesimi: motor });

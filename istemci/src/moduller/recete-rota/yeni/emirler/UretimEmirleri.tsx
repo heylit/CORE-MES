@@ -126,7 +126,7 @@ function EmirSatiri({ durum: d, emir: o, derinlik, secili, sira, sec }: {
 }) {
   const urun = d.items?.find((i) => i.id === o.itemId) ?? null;
   const il = ilerleme(d, o);
-  const ozet = planOzeti(d, d.planYerlesim, o);
+  const ozet = planOzeti(d, d.planYerlesim, o, d.planCanli);
   const plan = planMetni(ozet);
   const tampon = tamponRozeti(ozet);
   const gecikiyor = ozet.tur === 'planlanamiyor' || (ozet.tur === 'plan' && ozet.gecikiyor);

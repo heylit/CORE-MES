@@ -11,8 +11,8 @@ import { ReworkSatirlari } from './ReworkAdimi.tsx';
 import { DalRozeti } from '../rotalar/PatlamisRota.tsx';
 import { IS_EMRI_DURUMU, KAPANIS_EVI, StokTamamlama, UretimYerleri } from '../../../uretim-emirleri/disari.ts';
 import {
-  acikMi, adimDugumu, adimDurumu, altDugumAdimlari, adimPlani, durumAdi, durumGosterimi, emirAdimlari, emirAraligi, ilerleme, planOzeti, planSirasi, plandaMi, rotaFarki, sureMetni,
-  ONCELIK_ADI, yeniOpNo, yururluktekiRevizyon, type EmirAdimi, type Emir,
+  acikMi, adimDugumu, adimDurumu, altDugumAdimlari, adimPlani, canliAdimPlani, durumAdi, durumGosterimi, emirAdimlari, emirAraligi, ilerleme, planOzeti, planSirasi, plandaMi, rotaFarki, sureMetni,
+  ONCELIK_ADI, yeniOpNo, yururluktekiRevizyon, type AdimPlani, type EmirAdimi, type Emir,
 } from './kurallar.ts';
 import type { MalzemeIhtiyaciCevabi, MalzemeIhtiyaciSatiri } from '#paylasilan/sozlesme/recete-rota.ts';
 import { api, hataIletisi } from '../../../../ortak/veri/api.ts';
@@ -51,7 +51,7 @@ export function EmirAyrintisi({ durum: d, emir: o, yetki, git, komut, emirAc, ka
   const [islem, setIslem] = useState<'bol' | 'katil' | null>(null);
   const urun = d.items?.find((i) => i.id === o.itemId) ?? null;
   const adimlar = emirAdimlari(d, o);
-  const plan = planOzeti(d, d.planYerlesim, o);
+  const plan = planOzeti(d, d.planYerlesim, o, d.planCanli);
   const pm = planMetni(plan);
   const tampon = tamponRozeti(plan);
   const il = ilerleme(d, o);
@@ -385,7 +385,7 @@ function RotasizAdimlar({ durum: d, emir: o, adimlar, yetki, komut }: {
   );
 }
 
-interface OpSatiri { adim: EmirAdimi; durum: 'bekliyor' | 'calisiyor' | 'tamam'; baslangic: string | null; makine: string | null; saglam: number | null }
+interface OpSatiri { adim: EmirAdimi; durum: 'bekliyor' | 'calisiyor' | 'tamam'; baslangic: string | null; makine: string | null; saglam: number | null; oneri: boolean }
 
 // Adımlar ve malzeme: her emirde adım tablosu; plandaki (serbest ya da üretimdeki) emirde plan yerleşimi, uyarılar, malzeme ihtiyacı ve yan ürün.
 function PlanBolumu({ durum: d, emir: o, adimlar, yetki }: {
@@ -401,25 +401,33 @@ function PlanBolumu({ durum: d, emir: o, adimlar, yetki }: {
     queryFn: () => api.get<MalzemeIhtiyaciCevabi>(`/recete-rota/malzeme-ihtiyaci?emir=${String(o.kayitNo)}`),
   });
   const R = ihtiyac.data?.emirler.find((e) => e.emirId === o.kayitNo) ?? null;
-  const plan = planOzeti(d, d.planYerlesim, o);
+  const plan = planOzeti(d, d.planYerlesim, o, d.planCanli);
   const { ilk, son } = emirAraligi(o, adimlar.length);
   const opStatus = d.emirler?.opStatus ?? {};
   const opProg = d.emirler?.opProg ?? {};
   const makineKodu = (id: string) => d.machines?.find((m) => m.id === id)?.code ?? id;
+  // B-2499-7: saat canlı plandan okunur; canlıda olmayan adımda motorun yerleşimi "öneri" diye gösterilir. Canlı özet yoksa (plan okuması
+  // gelmedi) ayrım yapılamaz, eskisi gibi motor saati yazılır.
+  const adimYerlesimi = (opNo: number): { p: AdimPlani | null; oneri: boolean } => {
+    if (!planda) return { p: null, oneri: false };
+    const c = canliAdimPlani(d.planCanli, o.no, opNo);
+    if (c) return { p: c, oneri: false };
+    return { p: adimPlani(d.planYerlesim, o.no, opNo), oneri: d.planCanli !== undefined };
+  };
   const kokOps: OpSatiri[] = adimlar.filter((a) => a.sira >= ilk && a.sira <= son).map((a) => {
-    const p = planda ? adimPlani(d.planYerlesim, o.no, a.opNo) : null;
+    const { p, oneri } = adimYerlesimi(a.opNo);
     const k = `${o.id}|root|${String(o.kol ? a.sira - o.kol.n : a.sira)}`;
     return {
       adim: a, durum: a.durum ?? adimDurumu(o, a.sira, opStatus), baslangic: p?.baslangic ?? null,
-      makine: p && p.makineIdler.length ? p.makineIdler.map(makineKodu).join(', ') : null, saglam: opProg[k] ?? null,
+      makine: p && p.makineIdler.length ? p.makineIdler.map(makineKodu).join(', ') : null, saglam: opProg[k] ?? null, oneri: oneri && p !== null,
     };
   });
   // 1476-F C: alt parça adımları kökten önce (iş sırası); durumları emrin kaydından, sağlam sayacı yalnız kök adımda vardır.
   const altOps: OpSatiri[] = altDugumAdimlari(d, o).map((a) => {
-    const p = planda ? adimPlani(d.planYerlesim, o.no, a.opNo) : null;
+    const { p, oneri } = adimYerlesimi(a.opNo);
     return {
       adim: a, durum: a.durum ?? 'bekliyor', baslangic: p?.baslangic ?? null,
-      makine: p && p.makineIdler.length ? p.makineIdler.map(makineKodu).join(', ') : null, saglam: null,
+      makine: p && p.makineIdler.length ? p.makineIdler.map(makineKodu).join(', ') : null, saglam: null, oneri: oneri && p !== null,
     };
   });
   const ops = [...altOps, ...kokOps];
@@ -432,7 +440,7 @@ function PlanBolumu({ durum: d, emir: o, adimlar, yetki }: {
   // Yan panel dardır: tablo sığmayıp karta döner; adım tek satırda (OP, operasyon ve yeri, sağlam, durum) yazılır (tuval 3).
   // Başlamamış adımın plan başlangıcı, makinesi ve sağlam adedi "henüz yok"tur, veri eksikliği değil: çizgi yazılır.
   const adimYeri = (s: OpSatiri): string => [
-    d.stations?.find((x) => x.id === s.adim.stationId)?.name ?? null, s.makine, s.baslangic ? `plan ${zaman(s.baslangic)}` : null,
+    d.stations?.find((x) => x.id === s.adim.stationId)?.name ?? null, s.makine, s.baslangic ? `${s.oneri ? 'öneri (canlı planda yok)' : 'plan'} ${zaman(s.baslangic)}` : null,
   ].filter((x) => x !== null).join(' · ') || YOK;
   const hamSutunlar: Sutun<MalzemeIhtiyaciSatiri>[] = [
     { anahtar: 'kod', baslik: 'Kod', hucre: kod, mono: true },

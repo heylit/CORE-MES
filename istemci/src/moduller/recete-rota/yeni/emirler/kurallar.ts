@@ -2,6 +2,7 @@ import type { DurumEmirleri, DurumRotaAdimi } from '#paylasilan/sozlesme/recete-
 import { EMIR_DURUMU, emirDurumuGosterimi, type DurumGosterimi } from '#paylasilan/sozlesme/emir-durumu.ts';
 import type { EmirDurumu } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import type { DurumCevabi } from '#paylasilan/sozlesme/planlama.ts';
+import type { PlanCanliOzeti } from '#paylasilan/sozlesme/plan.ts';
 import type { PatlatmaOnizlemeCevabi } from '#paylasilan/sozlesme/rota.ts';
 import type { StokOkumasi } from '../../kopru.ts';
 import { sayi } from '../bicim.ts';
@@ -131,6 +132,22 @@ export function adimPlani(yerlesim: EkranYerlesimi | null, emirNo: string, opNo:
   return { baslangic, bitis, makineIdler };
 }
 
+// B-2499-7: adımın canlı plandaki yeri (terminal ve Arkon Hazırlık bunu kullanır). Canlı kuyrukta yoksa null; motorun yerleşimi o zaman
+// yalnız öneridir. Bölünmüş işte parçaların en erken başlangıcı, en geç bitişi ve bütün makineleri.
+export function canliAdimPlani(canli: PlanCanliOzeti | undefined, emirNo: string, opNo: number): AdimPlani | null {
+  if (canli === undefined) return null;
+  const anahtar = `${emirNo}|${String(opNo)}`;
+  const isler = canli.kuyruklar.flatMap((k) => k.isler.filter((x) => x.anahtar === anahtar).map((x) => ({ ...x, makineId: k.makineId })));
+  const baslangiclar = isler.flatMap((x) => x.baslangic ?? []).sort();
+  if (baslangiclar.length === 0) return null;
+  const bitisler = isler.map((x) => x.bitis ?? null);
+  return {
+    baslangic: baslangiclar[0] as string,
+    bitis: bitisler.includes(null) ? null : (bitisler as string[]).sort().at(-1) as string,
+    makineIdler: [...new Set(isler.map((x) => String(x.makineId)))],
+  };
+}
+
 // Emrin tampon durumu (477 a, eski ekranın hesabı): bolluk teslim günü sonuna kalan takvim günüdür (kesirli); plan ayarının tampon günüyle
 // kıyaslanır. Tampon 0 ise geç olmayan emir yeterli sayılır.
 export type TamponDurumu = 'gec' | 'kirmizi' | 'sari' | 'yesil';
@@ -152,11 +169,13 @@ const teslimGunuSonu = (due: string): number => { const t = new Date(`${due}T00:
 export type PlanOzeti =
   | { tur: 'tamam'; metin: string } | { tur: 'plan-disi' } | { tur: 'motor-yok' } | { tur: 'yerlesmedi'; acikAdim: number; calisanPlanDisi: number[] }
   | { tur: 'planlanamiyor'; adimlar: { opNo: number; neden: string }[]; kok: { opNo: number; neden: string }[] }
-  | { tur: 'plan'; ilk: string; bitis: string | null; gecikiyor: boolean; bolluk: number | null; tampon: TamponDurumu | null; calisanPlanDisi: number[] };
+  | { tur: 'plan'; ilk: string; bitis: string | null; gecikiyor: boolean; bolluk: number | null; tampon: TamponDurumu | null; calisanPlanDisi: number[]; oneri?: boolean };
 // Plan motorunun ardıl nedenleri (`sunucu/moduller/plan/kurallar.ts`): kök adım yerleşmeyince arkasındakiler bunlarla bırakılır.
 const ARDIL_NEDENLERI: ReadonlySet<string> = new Set(['Önceki iş emri yerleşmedi.', 'Bağlı parti yerleşmedi.']);
 export function planOzeti(
   d: Durum & Pick<DurumCevabi, 'settings'> & { planYerlesmeyen?: Record<string, string> }, yerlesim: EkranYerlesimi | null, o: Emir,
+  // B-2499-7: verilirse açık adımların hepsi canlıdaysa tarihler canlı plandan; biri bile yoksa motorun tarihleri "öneri"dir.
+  canli?: PlanCanliOzeti,
 ): PlanOzeti {
   if (o.status === 'tamam') return { tur: 'tamam', metin: durumAdi(o) };
   if (!plandaMi(o)) return { tur: 'plan-disi' };
@@ -173,7 +192,9 @@ export function planOzeti(
     return { tur: 'planlanamiyor', adimlar: yerlesmeyen, kok: kok.length > 0 ? kok : yerlesmeyen };
   }
   const calisanPlanDisi = acik.filter((a) => durumu(a) === 'calisiyor' && adimPlani(yerlesim, o.no, a.opNo) === null).map((a) => a.opNo);
-  const planlar = acik.map((a) => adimPlani(yerlesim, o.no, a.opNo)).filter((p): p is AdimPlani => p !== null);
+  const canlilar = canli === undefined ? [] : acik.map((a) => canliAdimPlani(canli, o.no, a.opNo));
+  const hepsiCanli = canli !== undefined && acik.length > 0 && canlilar.every((p) => p !== null);
+  const planlar = hepsiCanli ? canlilar as AdimPlani[] : acik.map((a) => adimPlani(yerlesim, o.no, a.opNo)).filter((p): p is AdimPlani => p !== null);
   if (planlar.length === 0) return { tur: 'yerlesmedi', acikAdim: acik.length, calisanPlanDisi };
   const bitisler = planlar.map((p) => p.bitis);
   const bitis = bitisler.includes(null) ? null : (bitisler as string[]).sort().at(-1) as string;
@@ -182,6 +203,7 @@ export function planOzeti(
   const tampon = bolluk === null ? null : tamponDurumu(bolluk, d.settings.buffer);
   return {
     tur: 'plan', ilk: planlar.map((p) => p.baslangic).sort()[0] as string, bitis, gecikiyor: tampon === 'gec', bolluk, tampon, calisanPlanDisi,
+    ...(canli !== undefined && !hepsiCanli ? { oneri: true } : {}),
   };
 }
 
