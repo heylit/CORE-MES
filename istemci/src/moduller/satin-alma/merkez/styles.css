@@ -138,6 +138,7 @@
 .sa-kok .strip > button{ display:block; width:auto; min-height:var(--dokunma); text-align:left; background:none; border-right:0; border-bottom:0; font:inherit; color:inherit; cursor:pointer; }
 .sa-kok .strip > button:hover{ background:var(--sa-surface-2); }
 .sa-kok .strip > button:focus-visible{ outline-offset:-2px; }
+.sa-kok .strip .v, .sa-kok .strip .k, .sa-kok .strip .d{ display:block; }
 .sa-kok .strip .v{ font-family:var(--sa-cond); font-size:var(--yazi-xl); font-weight:600; font-variant-numeric:tabular-nums; line-height:1.2; }
 .sa-kok .strip .k{ font-size:var(--yazi-s); color:var(--sa-muted); }
 .sa-kok .strip .d{ font-size:var(--yazi-xs); color:var(--sa-faint); }

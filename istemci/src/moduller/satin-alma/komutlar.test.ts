@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { IKINCI_MENULER, SAYFALAR } from '#paylasilan/sayfalar.ts';
 import { gorunenKomutlar, komutAra, komutlariTopla } from '../../ortak/rota/komutlar.ts';
-import { acilisOku } from './merkez/bagla.ts';
 import { komutlar } from './komutlar.ts';
 
 // İşlem setleri menu.test.ts'teki rol satırlarıyla aynıdır (kisiler göçleri).
@@ -21,8 +20,8 @@ describe('Satın alma Ctrl K komutları', () => {
     expect(komutlariTopla({ '../../moduller/satin-alma/komutlar.ts': { komutlar } }).map((k) => k.anahtar)).toEqual(komutlar.map((k) => k.anahtar));
   });
 
-  it('izinli: satın almacı yeni talebi, müdür onayları, talep eden kendi formunu görür', () => {
-    expect(gor('satin_alma')).toEqual(['satin-alma-yeni-talep', 'satin-alma-talep-ac']);
+  it('izinli: satın almacı ve talep eden Taleplerim formunu, müdür onayları görür; merkezde yeni talep komutu yok (2405 a)', () => {
+    expect(gor('satin_alma')).toEqual(['satin-alma-talep-ac']);
     expect(gor('mudur')).toEqual(['satin-alma-talep-ac', 'satin-alma-onay-bekleyenler']);
     expect(gor('kalite')).toEqual(['satin-alma-talep-ac']);
   });
@@ -31,10 +30,7 @@ describe('Satın alma Ctrl K komutları', () => {
     expect(gor('muhasebe_finans')).toEqual([]);
   });
 
-  it('"talep aç" iki formu da bulur; yollar ekranın okuduğu açılışa çözülür', () => {
-    // Başlığı sorgunun ilk sözcüğüyle başlayan önce gelir ("talep" ile "talebi" ayrıdır).
-    expect(komutAra(komutlar, 'talep aç').map((k) => k.anahtar)).toEqual(['satin-alma-talep-ac', 'satin-alma-yeni-talep']);
-    const yeni = komutlar.find((k) => k.anahtar === 'satin-alma-yeni-talep')!;
-    expect(acilisOku(new URLSearchParams(yeni.yol.split('?')[1]))).toEqual({ talep: null, bolum: null, yeniTalep: true });
+  it('"talep aç" yalnız Taleplerim formunu bulur', () => {
+    expect(komutAra(komutlar, 'talep aç').map((k) => k.anahtar)).toEqual(['satin-alma-talep-ac']);
   });
 });

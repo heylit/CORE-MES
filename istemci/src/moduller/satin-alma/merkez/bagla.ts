@@ -6,8 +6,8 @@
 import "./styles.css";
 import "./yerlesim.css";
 import { setOnaylayabilir, setRole, type Role } from "./roles.ts";
-import { UNDO, V, canWrite, init, yenile, setRenderer, setToaster, setUndoUI, undoLast, type Page } from "./store.ts";
-import { bildirimYoluKur, bildirimYoluOku, go, registerUIHooks, requestModal, toast, type BildirimYolu } from "./ui.ts";
+import { UNDO, V, init, yenile, setRenderer, setToaster, setUndoUI, undoLast, type Page } from "./store.ts";
+import { bildirimYoluKur, bildirimYoluOku, go, registerUIHooks, toast, type BildirimYolu } from "./ui.ts";
 import { onAfterRender, render } from "./views.ts";
 
 // Prototipin sayfa iskeleti (index.html gövdesi) kendi menüsü olmadan; bildirim ve geri al ortak bildirimdedir.
@@ -24,7 +24,6 @@ const ISKELET = `<div class="app">
       <div class="market" id="market" aria-label="Kurlar ve faiz"></div>
       <span class="spacer"></span>
       <span class="flag warn" id="kayit-uyari" role="status" hidden></span>
-      <button class="btn primary" data-act="new-request">Yeni talep</button>
     </div>
     <div id="main" class="sa-icerik"><p class="loading">Veriler yükleniyor…</p></div>
   </div>
@@ -112,22 +111,18 @@ export function merkeziBagla(kok: HTMLElement, secenek: BaglamaSecenegi): () => 
   };
 }
 
-// Ctrl K sonucu ya da komutu (1237) ekranı adresle açar: talep ayrıntısı (bölümüyle) ya da boş yeni talep penceresi.
-// Yazma pencerenin kendi ucundadır; açılış yetki vermez, yazamayan kişide pencere açılmaz.
-export interface MerkezAcilisi { talep: string | null; bolum: string | null; yeniTalep: boolean }
+// Ctrl K sonucu (1237) ekranı adresle açar: talep ayrıntısı (bölümüyle). Yeni talep merkezde açılmaz, Taleplerim'dedir (2405 a).
+export interface MerkezAcilisi { talep: string; bolum: string | null }
 export const ACILIS_BOLUMLERI = ["items", "quotes", "compare", "approval", "order", "delivery"] as const;
 
 export function acilisOku(adres: URLSearchParams): MerkezAcilisi | null {
   const talep = adres.get("talep");
   const bolum = adres.get("bolum");
-  const yeniTalep = adres.get("yeni") === "talep";
-  if (!talep && !yeniTalep) return null;
-  return { talep: talep || null, bolum: bolum && (ACILIS_BOLUMLERI as readonly string[]).includes(bolum) ? bolum : null, yeniTalep };
+  if (!talep) return null;
+  return { talep, bolum: bolum && (ACILIS_BOLUMLERI as readonly string[]).includes(bolum) ? bolum : null };
 }
 
 export function merkezAc(acilis: MerkezAcilisi): void {
-  const secenek = etkin;
-  if (!secenek) return;
-  if (acilis.talep) go("request", acilis.talep, acilis.bolum);
-  if (acilis.yeniTalep) void (ilkYukleme ?? Promise.resolve()).then(() => { if (etkin === secenek && canWrite()) requestModal(null); }, () => {});
+  if (!etkin) return;
+  go("request", acilis.talep, acilis.bolum);
 }

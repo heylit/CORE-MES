@@ -48,7 +48,7 @@ export function viewMaterial(): string {
   const openReqs = reqs.filter(r => OPEN.includes(r.status));
   return `<div class="crumb"><button data-act="go" data-page="materials">Malzemeler</button> / <span class="num">${esc(m.code || "")}</span></div>
   <div class="phead"><div class="ttl"><h1>${esc(m.name)}</h1><p class="small muted" data-sa-y="5">${[m.category, m.unit && "Birim: " + m.unit, m.spec].filter(Boolean).map(esc).join("&ensp;&ensp;")}</p></div>
-    <div class="row"><button class="btn" data-act="edit-material">Düzenle</button><button class="btn primary" data-act="req-from-mat">Bu malzeme için talep aç</button></div></div>
+    <div class="row"><button class="btn" data-act="edit-material">Düzenle</button></div></div>
   <div class="kv" data-sa-y="6">
     <div><div class="k">Son alış</div><div class="v">${st.last ? money(st.last.unitTRY) : "–"}</div><div class="d">${st.last ? esc(st.last.supplier) + ", " + fmtDate(st.last.date) : "henüz alınmadı"}</div></div>
     <div><div class="k">İlk alışa göre</div><div class="v">${isNum(st.change) ? deltaHTML(st.change) : "–"}</div><div class="d">${st.first && st.first !== st.last ? "ilk " + money(st.first.unitTRY) + ", " + fmtDate(st.first.date) : "karşılaştırma için 2 alım gerekir"}</div></div>
@@ -210,7 +210,14 @@ export function viewSettings(draft?: Settings | null): string {
     <label class="f"><span>Önerilen en az teklif</span><input type="number" min="1" data-set="minQuotes" value="${s.minQuotes}"></label>
     <label class="f"><span>Fiyat artış uyarısı (%)</span><input type="number" min="1" data-set="priceAlertPct" value="${s.priceAlertPct}"></label>
     <label class="f"><span>Şirket adı <small>— Sistem Ayarları &gt; Firma adı'ndan gelir</small></span><input type="text" readonly value="${esc(s.company)}"></label>
-  </div></section>
+  </div><div class="panel-b" data-sa-agirlik-aciklama><p class="small muted">Ağırlıklar her talepte karşılaştırma ekranından o talebe özel değiştirilebilir; burada yeni talebin başlangıcıdır. Puan 0-100 arasıdır:</p>
+    <ul class="small muted">
+      <li>Maliyet: en düşük net maliyet 100; diğerleri en düşük ÷ kendi maliyeti. Net maliyet TL'ye çevrilmiş, vadeyle bugüne indirgenmiş toplamdır (iskonto, nakliye, masraf dahil); teklif verilmeyen kalem en pahalı teklifin fiyatıyla doldurulur.</li>
+      <li>Termin: ihtiyaç tarihi varsa her gecikme günü puan düşürür, 15 günde sıfır; yoksa en kısa termin 100, 30 gün fazlası sıfır.</li>
+      <li>Tedarikçi: yıldız puanı, zamanında teslim oranı (1,5 kat) ve kalite oranının ortalaması.</li>
+      <li>Garanti: 12 aya kadar orantılı; fazlası ek puan getirmez.</li>
+      <li>Bilinmeyen ölçüt (termin girilmemiş, tedarikçinin verisi yok) o teklifte hesaba katılmaz; ağırlığı bilinen ölçütlere dağılır. Sıralamada önce bütün kalemlere teklif verenler gelir.</li>
+    </ul></div></section>
   <div class="cols">
     <section class="panel"><div class="panel-h"><h2>Onay limitleri</h2><span class="sub">tutar (KDV hariç TL) bu değere kadar</span></div><div class="panel-b">
       <table class="itbl rt"><thead><tr><th>Üst limit</th><th>Onaylayan</th><th></th></tr></thead><tbody id="ap-rows">${(s.approvalLimits || []).map((l, i) => `<tr data-ap="${i}"><td><input type="text" inputmode="decimal" data-apk="max" value="${l.max === null || l.max === undefined ? "" : numIn(l.max)}" placeholder="limitsiz"></td><td><input type="text" data-apk="role" value="${esc(l.role)}"></td><td class="acts"><button class="btn sm ghost danger" data-act="rm-ap" data-i="${i}">Kaldır</button></td></tr>`).join("")}</tbody></table>

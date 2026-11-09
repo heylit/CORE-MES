@@ -29,7 +29,7 @@ export type DateStr = string;
 
 export interface Weights { cost: number; lead: number; supplier: number; warranty: number }
 /** Güncel kur finanstan gelir (SA3 a); finansta kuru olmayan para biriminde boş. */
-export interface CurrencySetting { rate: number | null; monthly: number }
+export interface CurrencySetting { rate: number | null; monthly: number | null }
 export interface DepartmentSetting { name: string; budget: number }
 export interface ApprovalLimit { max: number | null; role: string }
 

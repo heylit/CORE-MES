@@ -99,11 +99,12 @@ describe('Merkez bağlama', () => {
     expect(f).toHaveBeenCalledTimes(once + 1);
   });
 
-  // 1237: Ctrl K sonucu talebi, komut yeni talep penceresini adresle açar.
-  it('açılış adresi: talep ayrıntısı bölümüyle açılır; yeni talep penceresi veri gelince açılır; bilinmeyen bölüm yok sayılır', async () => {
+  // 1237: Ctrl K sonucu talebi adresle açar. 2405 a: eski yeni talep adresi merkezde pencere açmaz.
+  it('açılış adresi: talep ayrıntısı bölümüyle açılır; bilinmeyen bölüm yok sayılır; yeni talep adresi yok sayılır', async () => {
     vi.spyOn(window, 'scrollTo').mockImplementation(() => {});
     expect(acilisOku(new URLSearchParams(''))).toBeNull();
-    expect(acilisOku(new URLSearchParams(`talep=${ILK}&bolum=boyle-yok`))).toEqual({ talep: ILK, bolum: null, yeniTalep: false });
+    expect(acilisOku(new URLSearchParams(`talep=${ILK}&bolum=boyle-yok`))).toEqual({ talep: ILK, bolum: null });
+    expect(acilisOku(new URLSearchParams('yeni=talep'))).toBeNull();
     vi.stubGlobal('fetch', vi.fn(async () => json(200, acilis([talep(ILK, 'ST-2026-001')]))));
     const kok = document.createElement('div');
     document.body.append(kok);
@@ -111,8 +112,7 @@ describe('Merkez bağlama', () => {
     merkezAc(acilisOku(new URLSearchParams(`talep=${ILK}&bolum=order`))!);
     expect([V.page, V.id, V.tab]).toEqual(['request', ILK, 'order']);
     await vi.waitFor(() => expect(kok.querySelector('#main')?.textContent).toContain('ST-2026-001'));
-    merkezAc(acilisOku(new URLSearchParams('yeni=talep'))!);
-    await vi.waitFor(() => expect(document.querySelector('#modal-root')?.textContent).toContain('Yeni satın alma talebi'));
+    expect(kok.querySelector('[data-act="new-request"]')).toBeNull();
     kapat();
   });
 

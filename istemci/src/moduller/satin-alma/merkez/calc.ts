@@ -16,6 +16,8 @@ export interface QuoteCalc {
   /** birim fiyatı iskonto sonrası TL'ye çeviren çarpan */
   unitTRY: number;
   monthly: number;
+  /** vadeli kısım var ama finansta o para biriminin faizi yok: vade hesaba katılamadı */
+  faizYok: boolean;
 }
 
 export function rateOf(q: Quote, set: Settings): number {
@@ -58,7 +60,7 @@ export function fixedRates(r: PurchaseRequest, set: Settings): Record<string, nu
 export function quoteCalc(req: PurchaseRequest, q: Quote, set: Settings = settings()): QuoteCalc {
   const cur = set.currencies[q.currency] ?? { rate: 1, monthly: 0 };
   const rate = rateFor(req, q, set);
-  const m = (parseNum(cur.monthly) || 0) / 100;
+  const m = (parseNum(cur.monthly) ?? 0) / 100;
   let sub = 0, covered = 0;
   const lines: QuoteCalc["lines"] = {};
   for (const it of req.items ?? []) {
@@ -76,7 +78,7 @@ export function quoteCalc(req: PurchaseRequest, q: Quote, set: Settings = settin
   const factor = adv + (1 - adv) * vadeIndirimCarpani(m * 100, days);
   const totalTRY = total * rate, pvTRY = totalTRY * factor;
   const n = (req.items ?? []).length;
-  return { rate, sub, disc, net, ship, other, total, totalTRY, pvTRY, factor, vadeGain: totalTRY - pvTRY, covered, coverage: n ? covered / n : 0, lines, unitFactorTRY: rate * (1 - disc) * factor, unitTRY: rate * (1 - disc), monthly: m };
+  return { rate, sub, disc, net, ship, other, total, totalTRY, pvTRY, factor, vadeGain: totalTRY - pvTRY, covered, coverage: n ? covered / n : 0, lines, unitFactorTRY: rate * (1 - disc) * factor, unitTRY: rate * (1 - disc), monthly: m, faizYok: days > 0 && adv < 1 && parseNum(cur.monthly) === null };
 }
 
 /** Tek teklif ve toplu giriş aynı iletiyi gösterir: döviz teklifi kursuz kaydedilmez (SA3 a). */
@@ -487,12 +489,13 @@ export function orderDue(o: { q: Quote; expectedDate: string; orderDate: string 
  * Termin puanı:
  * - İhtiyaç tarihi varsa zamanında yetişen her teklif 100; her gecikme günü 100/15 puan düşürür.
  * - İhtiyaç tarihi yoksa en kısa termine göre her fazla gün 100/30 puan düşürür.
- * - Termin bilinmiyorsa 0.
+ * - Termin bilinmiyorsa ölçüt yok (null); ağırlığı bilinen ölçütlere dağılır.
  */
 export const LATE_ZERO_DAYS = 15, SPREAD_ZERO_DAYS = 30, WARRANTY_CAP = 12;
-export function leadScore(req: PurchaseRequest, q: Quote, minLead: number): number {
+// Termin girilmemişse ölçüt bilinmez (null); ağırlığı bilinen ölçütlere dağılır (sunucudaki terminPuani ile aynı).
+export function leadScore(req: PurchaseRequest, q: Quote, minLead: number): number | null {
   const ld = parseNum(q.leadDays);
-  if (ld === null) return 0;
+  if (ld === null) return null;
   if (req.needDate) return clamp(100 - ((lateBy(req, q) ?? 0) * 100) / LATE_ZERO_DAYS, 0, 100);
   return clamp(100 - ((ld - minLead) * 100) / SPREAD_ZERO_DAYS, 0, 100);
 }

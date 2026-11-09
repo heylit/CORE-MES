@@ -758,12 +758,12 @@ function calcModal(r: PurchaseRequest, qid: string | undefined): void {
       ${cur !== "TRY" ? line("Kur", nfx.format(c.rate), rateHow) : ""}
       ${line("Toplam TL", money(c.totalTRY), cur !== "TRY" ? `${money(c.total, cur)} × ${nfx.format(c.rate)}` : "")}
       ${adv ? line("Avans (peşin ödenen)", money(c.totalTRY * adv), `%${nf0.format(adv * 100)}`) : ""}
-      ${days ? line("Vadeli kısmın bugünkü değeri", money(c.totalTRY * (1 - adv) * vadeIndirimCarpani(c.monthly * 100, days)), `${money(c.totalTRY * (1 - adv))} ÷ (1 + %${nfx.format(aylikFaizdenYillik(c.monthly * 100))} × ${days} ÷ 365); ${cur} yıllık fırsat maliyeti, basit faiz`) : line("Ödeme", "Peşin", "indirgeme yok")}
+      ${c.faizYok ? line("Vadeli kısmın bugünkü değeri", money(c.totalTRY * (1 - adv)), `${cur} faizi Finans'ta girilmemiş; ${days} gün vade hesaba katılmadı`) : days ? line("Vadeli kısmın bugünkü değeri", money(c.totalTRY * (1 - adv) * vadeIndirimCarpani(c.monthly * 100, days)), `${money(c.totalTRY * (1 - adv))} ÷ (1 + %${nfx.format(aylikFaizdenYillik(c.monthly * 100))} × ${days} ÷ 365); ${cur} yıllık fırsat maliyeti, basit faiz`) : line("Ödeme", "Peşin", "indirgeme yok")}
       ${line("Net bugünkü maliyet", money(c.pvTRY), c.vadeGain > 0.5 ? `vade avantajı ${money(c.vadeGain)}` : "", "tot")}
       ${elig && x.fill > 0 ? line("Eksik kalemler için ekleme", "+ " + money(x.fill), "eksik kalemler diğer tekliflerin en yüksek fiyatıyla tamamlanır (yalnızca puanlamada)") : ""}
       ${elig ? `<tr class="sec"><td colspan="2"><b>3. Puan</b></td></tr>
       ${line(`Net maliyet (ağırlık %${nf0.format((+ev.w.cost || 0) / tw * 100)})`, nf1.format(x.s.cost ?? 0), `en düşük ${money(minPV, "TRY", 0)} ÷ bu teklif ${money(x.scorePV, "TRY", 0)} × 100`)}
-      ${line(`Termin (ağırlık %${nf0.format((+ev.w.lead || 0) / tw * 100)})`, nf1.format(x.s.lead ?? 0), leadHow)}
+      ${line(`Termin (ağırlık %${nf0.format((+ev.w.lead || 0) / tw * 100)})`, x.s.lead === null ? "–" : nf1.format(x.s.lead), x.s.lead === null ? "termin girilmemiş; ağırlığı bilinen ölçütlere dağıldı" : leadHow)}
       ${line(`Tedarikçi performansı (ağırlık %${nf0.format((+ev.w.supplier || 0) / tw * 100)})`, x.s.supplier === null ? "–" : nf1.format(x.s.supplier), x.s.supplier === null ? `${supHow}; veri yok, bu ölçütün ağırlığı diğer ölçütlere dağıtıldı` : supHow)}
       ${line(`Garanti (ağırlık %${nf0.format((+ev.w.warranty || 0) / tw * 100)})`, nf1.format(x.s.warranty ?? 0), maxW ? `en çok 12 ay sayılır: ${Math.min(parseNum(q.warrantyMonths) || 0, 12)} ay ÷ ${Math.min(maxW, 12)} ay × 100` : "hiçbir teklif garanti belirtmemiş: herkese 100")}
       ${line("Toplam puan", nf1.format(x.score), "her ölçüt puanı × ağırlık payı, toplamı", "tot")}` : `<tr><td colspan="2" class="muted">Bu teklif ${q.compliant === false ? "teknik olarak uygun değil" : "fiyat içermiyor"}; puanlamaya girmez.</td></tr>`}
@@ -818,7 +818,6 @@ function closeMenus(except?: Element | null): void {
 function reqAction(v: string, r: PurchaseRequest): void {
   if (!canWrite()) return;
   if (v === "edit") requestModal(r);
-  else if (v === "dup") { const items = (r.items || []).map(it => ({ id: uid(), name: it.name, spec: it.spec || "", qty: it.qty, unit: it.unit, materialId: it.materialId })); requestModal(null, items); $("#r-title").value = r.title; $("#r-dep").value = r.department || ""; $("#r-req").value = r.requester || ""; }
   else if (v === "status") openModal(`<div class="mh"><h2>Durumu değiştir</h2></div><div class="mb"><p class="small muted">Normalde durum karar, onay ve sipariş adımlarıyla kendiliğinden ilerler. Elle değişiklik geçmişe kaydedilir.</p><select id="st-new">${STATUSES.map(s => `<option value="${s.k}" ${r.status === s.k ? "selected" : ""}>${s.l}</option>`).join("")}</select></div><div class="mf"><button class="btn primary" data-act="set-status">Kaydet</button><button class="btn ghost" data-act="close">Vazgeç</button></div>`, true);
   else if (v === "cancel") openModal(`<div class="mh"><h2>Talebi iptal et</h2></div><div class="mb"><label class="f"><span>İptal nedeni</span><input type="text" id="cx-reason" placeholder="Örn. ihtiyaç ortadan kalktı, stoktan karşılandı"></label></div><div class="mf"><button class="btn bad" data-act="cancel-req">İptal et</button><button class="btn ghost" data-act="close">Vazgeç</button></div>`, true);
   else if (v === "delete") confirmModal(`${r.no} ${r.title} talebi ve tüm teklifleri silinecek; fiyat geçmişinden de çıkar. Kaydı hafızada tutmak için iptal etmeyi tercih edin.`, () => { persistUndoable("requests", r.id, null, `${r.no} silindi`, () => go("request", r.id)); go("requests"); });
@@ -827,7 +826,6 @@ function reqAction(v: string, r: PurchaseRequest): void {
 const ACTIONS: Record<string, Action> = {
   "menu": el => { const list = el.nextElementSibling as HTMLElement | null; if (!list) return; const open = list.hidden; closeMenus(list); list.hidden = !open; el.setAttribute("aria-expanded", String(open)); if (open) (list.querySelector("button") as HTMLElement | null)?.focus(); },
   "req-edit": (_el, r) => { if (r) reqAction("edit", r); },
-  "req-dup": (_el, r) => { if (r) reqAction("dup", r); },
   "req-status": (_el, r) => { if (r) reqAction("status", r); },
   "req-cancel": (_el, r) => { if (r) reqAction("cancel", r); },
   "req-delete": (_el, r) => { if (r) reqAction("delete", r); },
@@ -852,7 +850,6 @@ const ACTIONS: Record<string, Action> = {
   "confirm-yes": () => { const f = confirmCb; confirmCb = null; closeModal(); if (f) f(); },
 
   /* talep */
-  "new-request": () => { if (canWrite()) requestModal(null); },
   "open-at": el => go("request", el.dataset.id, el.dataset.tab || null),
   "edit-request": (el, r) => { if (canWrite() && r) requestModal(r); },
   "add-item": () => { if (syncItems()) { toast(BELIRSIZ_MIKTAR); return; } draftReq.items.push({ id: uid(), name: "", spec: "", qty: 1, unit: "adet" }); $("#items-box").innerHTML = itemsEditor(); labelTables($("#items-box")); const ins = $$("#items-box [data-it=name]"); ins[ins.length - 1]!.focus(); },
@@ -1099,7 +1096,6 @@ const ACTIONS: Record<string, Action> = {
     const m = draftM; const n = priceHistory(m.id).length;
     confirmModal(n ? `${m.name} için ${n} teklif kaydı var. Silerseniz talepler kalır ama fiyat geçmişi bu kartta toplanmaz.` : `${m.name} silinecek.`, () => { persistUndoable("materials", m.id, null, `${m.name} silindi`, () => go("material", m.id)); go("materials"); });
   },
-  "req-from-mat": () => { const m = S.materials[V.id ?? ""]; if (m && canWrite()) requestModal(null, [{ id: uid(), name: m.name, spec: m.spec || "", qty: 1, unit: m.unit || "adet", materialId: m.id }]); },
   "link-items": () => { if (canWrite()) linkItemsModal(); },
   "apply-link": () => {
     const map: Record<string, string> = {}; $$("[data-link]").forEach(s => { if (s.value) map[s.dataset.link!] = s.value; });
@@ -1489,6 +1485,14 @@ document.addEventListener("change", (e) => {
   if (!kokIcinde(e) || (e.target as FormEl).id !== "fi-order" || !faturaSiparisi) return;
   faturaSiparisi = { talepId: faturaSiparisi.talepId, teklifId: (e.target as FormEl).value };
   void faturalariYukle();
+});
+// Sipariş tarihi değişince beklenen teslim termine göre yeniden önerilir; elle değiştirilmişse dokunulmaz.
+document.addEventListener("change", (e) => {
+  const t = e.target as FormEl;
+  if (!kokIcinde(e) || !(t.id === "o-date" || t.dataset.of === "orderDate")) return;
+  const exp = t.id === "o-date" ? $<HTMLInputElement>("#o-exp") : t.closest("tr")?.querySelector<HTMLInputElement>('[data-of="expectedDate"]');
+  if (!exp || exp.dataset.termin === undefined || !t.value || exp.value !== (exp.dataset.oneri ?? "")) return;
+  exp.value = exp.dataset.oneri = addDays(t.value, Number(exp.dataset.termin));
 });
 document.addEventListener("change", (e) => {
   if (!kokIcinde(e) || (e.target as FormEl).id !== "oc-item") return;

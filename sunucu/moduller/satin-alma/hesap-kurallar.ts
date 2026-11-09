@@ -116,8 +116,8 @@ export interface DegerlendirmeSatiri {
   // Eksik kalemler en pahalı teklifin bedeliyle doldurulur: eksik teklif ucuz görünmesin.
   dolgu: number;
   puanDegeri: number;
-  // Tedarikçi başarımı bilinmeyebilir; diğer ölçütler her zaman hesaplanır.
-  kriterPuani: Record<Exclude<Kriter, 'tedarikci'>, number> & { tedarikci: number | null };
+  // Tedarikçi başarımı ve termin bilinmeyebilir; maliyet ve garanti her zaman hesaplanır.
+  kriterPuani: Record<Exclude<Kriter, 'tedarikci' | 'termin'>, number> & { tedarikci: number | null; termin: number | null };
   pay: Record<Kriter, number>;
   puan: number;
   gecikme: number | null;
@@ -145,8 +145,9 @@ export function gecikmeGunuHesabi(termin: number | null, ihtiyacTarihi: string |
   return g > 0 ? g : null;
 }
 
-export function terminPuani(termin: number | null, enKisa: number, o: Pick<HesapOrtami, 'ihtiyacTarihi' | 'bazTarih'>): number {
-  if (termin === null) return 0;
+// Termini girilmemiş teklifte ölçüt bilinmez (null): en kötü termin sayılmaz, ağırlığı bilinen ölçütlere dağılır (tedarikçi puanı gibi).
+export function terminPuani(termin: number | null, enKisa: number, o: Pick<HesapOrtami, 'ihtiyacTarihi' | 'bazTarih'>): number | null {
+  if (termin === null) return null;
   if (o.ihtiyacTarihi !== null) return kirp(100 - ((gecikmeGunuHesabi(termin, o.ihtiyacTarihi, o.bazTarih) ?? 0) * 100) / GECIKME_SIFIR_GUN, 0, 100);
   return kirp(100 - ((termin - enKisa) * 100) / YAYILMA_SIFIR_GUN, 0, 100);
 }

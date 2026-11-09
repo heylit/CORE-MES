@@ -146,6 +146,10 @@ describe('SA-HESAP H2: puanlama ve öneri', () => {
     expect(lateBy(talep(TALEP), teklif({ leadDays: 20 }))).toBe(10);
   });
 
+  it('termin girilmemişse termin ölçütü bilinmez (null), en kötü termin sayılmaz', () => {
+    expect(leadScore(talep(TALEP), teklif({ leadDays: null }), 5)).toBeNull();
+  });
+
   it('SA-HESAP H2: uyumsuz tek teklifte uygun teklif ve bölme yok', () => {
     const a = { id: 'a', supplierId: 's1', currency: 'TRY', prices: { i1: 100, i2: 100 }, shipping: 0, deliveryIncluded: true, leadDays: 5, compliant: false };
     const ev = evaluate(talep({ id: 'r3', status: 'eval', items: KALEMLER, quotes: [a], updatedAt: 3 }));
