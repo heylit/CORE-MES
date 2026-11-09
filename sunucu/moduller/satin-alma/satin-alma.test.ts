@@ -3107,9 +3107,10 @@ describe('satin-alma sürüm 6 (gerçek PostgreSQL)', () => {
     // Güvenlik: notlar tutar taşır; yazarı kapatan satın almacıdır, talep edenin görünümüne girmez.
     assert.ok(notlar.every((h) => h.kisiId === kisi.sa));
     assert.equal(talepEdenGorunumu(t, kisi.talep!).hareketler.some((h) => /gerçekleşen teslim/.test(h.metin)), false);
-    // Kapalı siparişte teslim geri alınır: teslim kalmaz, gerçekleşen değer 0; yalnız avans satırı kalır.
+    // Kapalı siparişte teslim geri alınır: teslim kalmaz, gerçekleşen değer 0; plandaki avans da 0'a iner (2480-1 a), plan kalkar.
     await geriAl(247201);
-    assert.deepEqual(await odemePlani(s.id, a), [['avans', '16.56']]);
+    assert.deepEqual(await odemePlani(s.id, a), []);
+    assert.ok((await acilistaki(s.id)).hareketler.some((h) => h.metin.includes('ödeme planı kaldırıldı: gerçekleşen teslim değeri yok')));
   });
 
   test('2472 M2, 2132-6 a: avans gerçekleşen değeri aşarsa vadeli satır yazılmaz, fark KDV dahil sipariş dövizinde geçmişe düşer; elle plan değişmez, not düşer', async () => {
@@ -3120,8 +3121,14 @@ describe('satin-alma sürüm 6 (gerçek PostgreSQL)', () => {
     await logoyaGitti(s.id, b, satirB, '24731');
     await teslimEt(satirA, '1', 247301);
     tamam<Talep>(await kapat(await acilistaki(s.id), a));
-    assert.deepEqual(await odemePlani(s.id, a), [['avans', '38.4']]);
-    assert.ok((await acilistaki(s.id)).hareketler.some((h) => /ödenen avans gerçekleşen teslim değerini 26\.4 TRY aşıyor; fark tedarikçiden alacaktır/.test(h.metin)));
+    // 2480-1 a: plandaki avans gerçekleşen değere (KDV dahil 12) iner; asıl aşım geçmişte alacak notu olarak kalır.
+    assert.deepEqual(await odemePlani(s.id, a), [['avans', '12']]);
+    assert.ok((await acilistaki(s.id)).hareketler.some((h) => /avans gerçekleşen teslim değerini 26\.4 TRY aşıyor; plandaki avans gerçekleşen değere indirildi, avans ödendiyse fark tedarikçiden alacaktır/.test(h.metin)));
+    // 2480: kapalı siparişin faturası gerçekleşen değerle (KDV hariç 10) eşleşir; bilerek kapatılan kalan eksik teslim uyarısı vermez.
+    const belge = tamam<{ belge: { id: number } }>(await istek(c.yonetici, 'POST', '/finans/belgeler/ekle', {
+      yon: 'gider', kategori: 'mal_alimi', firmaId: firmaA, belgeNo: 'DN-2480', belgeTarihi: '2026-10-09', vade: '2026-11-09', tutar: 10, kdvOrani: 20,
+    })).belge.id;
+    assert.deepEqual(tamam<{ uyarilar: string[] }>(await istek(c.sa, 'POST', `/satin-alma-talepleri/${s.id}/siparis-faturasi`, { teklifId: a, belgeId: belge, bagla: true })).uyarilar, []);
     // B: elle plan (100); 4 / 10 teslim, gerçekleşen 36, KDV dahil 43.20: plan yerinde kalır, fark 56.80.
     tamam(await istek(c.sa, 'POST', `/satin-alma-talepleri/${s.id}/odeme-plani`, { teklifId: b, surum: (await acilistaki(s.id)).surum,
       satirlar: [{ tur: 'vade', vade: '2026-12-15', yontem: 'banka', tutar: '100' }] }));
@@ -3129,6 +3136,23 @@ describe('satin-alma sürüm 6 (gerçek PostgreSQL)', () => {
     tamam<Talep>(await kapat(await acilistaki(s.id), b));
     assert.deepEqual(await odemePlani(s.id, b), [['vade', '100']]);
     assert.ok((await acilistaki(s.id)).hareketler.some((h) => h.metin.includes('ödeme planı gerçekleşen teslim değerinden 56.8 TRY farklı')));
+  });
+
+  test('2480 (Maliyet P1): dövizli kapalı siparişte plan ve bütçe aynı değeri verir; karşılaştırma sipariş dövizinde, 0,01 USD', async () => {
+    tamam(await istek(c.yonetici, 'POST', '/finans/kur-ciftleri/ekle', { paraBirimi: 'USD', tarih: '2025-07-02', alis: 34.5, satis: 35 }));
+    // A: k2 4 x 8.33 USD, nakliye 4.17 hariç; 1 / 4 teslim: 8.33 + 4.17 = 12.50 USD.
+    const { s, a, b } = await bolunmusSiparis('8.33', { paraBirimi: 'USD', teklifTarihi: '2025-07-03', nakliye: '4.17', nakliyeDahil: false });
+    const kur = Number(s.karar!.sabitKurlar.find((x) => x.paraBirimi === 'USD')?.kur ?? s.teklifler.find((q) => q.id === a)!.kur);
+    const [satirA, satirB] = [siparisi(s, a).satirlar[0]!.id, siparisi(s, b).satirlar[0]!.id];
+    await logoyaGitti(s.id, a, satirA, '24800');
+    await logoyaGitti(s.id, b, satirB, '24801');
+    await teslimEt(satirA, '1', 248001);
+    tamam<Talep>(await kapat(await acilistaki(s.id), a));
+    const planA = await odemePlani(s.id, a);
+    assert.equal(planToplami(planA), 15);
+    // B açık, TRY 10 x 9 = 90.
+    const d = tamam<{ butce: { buAlim: string }[] }>(await istek(c.mudur, 'GET', `/satin-alma-talepleri/${s.id}/degerlendirme`)).butce;
+    assert.ok(Math.abs((Number(d[0]!.buAlim) - 90) / kur - planToplami(planA) / 1.2) <= 0.01, `${d[0]!.buAlim} / ${kur}`);
   });
 });
 

@@ -698,13 +698,14 @@ export function siparisFaturaFirmasi(t: Pick<Talep, 'durum' | 'teklifler' | 'kar
 // döner: fatura kısmi teslimde ya da toplu faturada da bağlanabilir. Uyarı rakam taşımaz; fatura tutarı finans rakamıdır (FNS-48).
 // Fatura tutarı okunamazsa (null) tutar karşılaştırılmaz.
 export function faturaEslesmeUyarilari(
-  siparis: { toplam: string | null; paraBirimi: string; satirlar: readonly { miktar: string; teslimAlinan: string | null }[] },
+  siparis: { toplam: string | null; paraBirimi: string; satirlar: readonly { miktar: string; teslimAlinan: string | null }[]; kapali?: boolean },
   fatura: { tutar: string; paraBirimi: string } | null,
 ): string[] {
   const uyarilar: string[] = [];
   const s = siparis.satirlar;
+  // 2480: kalanı kapatılmış siparişte eksik teslim bilerek kapatılmıştır, uyarı değildir; toplam çağıranın verdiği gerçekleşen değerdir.
   if (s.some((x) => ondalikKiyas(x.teslimAlinan ?? '0', x.miktar) > 0)) uyarilar.push(ILETILER.eslesmeFazlaTeslim);
-  else if (s.some((x) => ondalikKiyas(x.teslimAlinan ?? '0', x.miktar) < 0)) uyarilar.push(ILETILER.eslesmeEksikTeslim);
+  else if (siparis.kapali !== true && s.some((x) => ondalikKiyas(x.teslimAlinan ?? '0', x.miktar) < 0)) uyarilar.push(ILETILER.eslesmeEksikTeslim);
   if (fatura !== null && siparis.toplam !== null) {
     if (fatura.paraBirimi.trim() !== siparis.paraBirimi.trim()) uyarilar.push(ILETILER.eslesmeParaBirimi);
     else {
@@ -738,7 +739,7 @@ export interface OdemeKosulu {
 }
 // 2463 a, 2472: kalanı kapatılmış siparişin planı gerçekleşen teslim değerine iner (bütçe kullanımıyla aynı tanım, gerceklesenPay).
 // Toplam gerçekleşen değerdir; avans siparişin avansı olarak kalır (önceden ödenir), kalan farktır: avans aşarsa kalan eksidir ve vadeli
-// satır yazılmaz. Partiler gerçekleşen teslime oranlanır (payların toplamı 1); kapatılan kalan için dilim yoktur. Açık sipariş değişmez.
+// satır yazılmaz (2480-1 a: plandaki avans gerçekleşen değere iner). Partiler gerçekleşen teslime oranlanır (payların toplamı 1); kapatılan kalan için dilim yoktur. Açık sipariş değişmez.
 export function gerceklesenKosul<T extends OdemeKosulu>(k: T): T {
   if (k.kapali !== true || k.satirlar === undefined) return k;
   const deger = gerceklesenSiparisDegeri(k.satirlar.map((s) => ({ mal: Number(s.mal), miktar: Number(s.miktar), teslim: Number(s.teslim) })), Number(k.masraf ?? '0'));
@@ -797,8 +798,11 @@ export function varsayilanOdemePlani(kosul: OdemeKosulu, bugun: string, kdvOrani
   const k = gerceklesenKosul(kosul);
   const baslangic = k.siparisTarihi ?? bugun;
   const gunEkle = (tarih: string, gun: number) => new Date(Date.parse(`${tarih}T00:00:00Z`) + gun * GUN_MS).toISOString().slice(0, 10);
-  const avans = kdvOrani === null ? k.avans : kdvEkle(k.avans, kdvOrani);
-  const kalan = kdvOrani === null ? k.kalan : ondalikMetni(tamSayiya(kdvEkle(k.toplam, kdvOrani)) - tamSayiya(avans));
+  const tamAvans = kdvOrani === null ? k.avans : kdvEkle(k.avans, kdvOrani);
+  const kdvliToplam = kdvOrani === null ? k.toplam : kdvEkle(k.toplam, kdvOrani);
+  // 2480-1 a: kapalı siparişte plandaki avans gerçekleşen değeri aşmaz (KDV dahil, sipariş dövizinde); aşan kısım geçmiş notundadır.
+  const avans = k.kapali === true && ondalikKiyas(tamAvans, kdvliToplam) > 0 ? kdvliToplam : tamAvans;
+  const kalan = kdvOrani === null && k.kapali !== true ? k.kalan : ondalikMetni(tamSayiya(kdvliToplam) - tamSayiya(avans));
   const plan: { tur: 'avans' | 'vade'; vade: string; yontem: 'banka'; tutar: string }[] = [];
   if (ondalikKiyas(avans, '0') > 0) plan.push({ tur: 'avans', vade: baslangic, yontem: 'banka', tutar: avans });
   if (ondalikKiyas(kalan, '0') <= 0) return plan;

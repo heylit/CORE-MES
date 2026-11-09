@@ -833,7 +833,10 @@ test('2472 M2: avans aşımında vadeli satır çıkmaz, fark KDV dahil sipariş
     toplam: '100', avans: '50', kalan: '50', vadeGun: 30, siparisTarihi: '2026-10-01', beklenenTeslim: null, vadeBaslangici: 'teslim' as const,
     partiler: [{ gun: '2026-10-10', oran: '0.2' }], tamTeslim: true, kapali: true, masraf: '0', satirlar: [{ mal: '100', miktar: '10', teslim: '2' }],
   };
-  assert.deepEqual(varsayilanOdemePlani(k, '2026-11-09', '20').map((x) => [x.tur, x.tutar]), [['avans', '60.00']]);
+  // 2480-1 a: plandaki avans gerçekleşen değere (KDV dahil 24) iner; vadeli satır yok. Asıl aşım notta kalır.
+  assert.deepEqual(varsayilanOdemePlani(k, '2026-11-09', '20').map((x) => [x.tur, x.tutar]), [['avans', '24.00']]);
+  assert.deepEqual(varsayilanOdemePlani(k, '2026-11-09', null).map((x) => [x.tur, x.tutar]), [['avans', '20.00']]);
+  assert.deepEqual(varsayilanOdemePlani({ ...k, satirlar: [{ mal: '100', miktar: '10', teslim: '0' }], partiler: [] }, '2026-11-09', '20'), []);
   assert.equal(avansAsimi(k, '20'), '36');
   assert.equal(avansAsimi(k, null), '30');
   assert.equal(avansAsimi({ ...k, avans: '10' }, '20'), null);
@@ -855,4 +858,11 @@ test('2472 M3: ödeme planı ve bütçe kullanımı aynı tanımı kullanır (ge
   assert.ok(Math.abs(b.reduce((t, x) => t + x.tl!, 0) - Number(plan.toplam)) <= 0.01);
   assert.equal(gerceklesenPay(90, 10, 0.4, true), 46);
   assert.equal(gerceklesenPay(90, 10, 0.4, false), 0);
+});
+
+test('2480: kalanı kapatılmış siparişte fatura gerçekleşen değerle karşılaştırılır; eksik teslim uyarısı çıkmaz, fazla teslim çıkar', () => {
+  const sip = (teslim: string, kapali: boolean) => ({ toplam: '19', paraBirimi: 'TRY', satirlar: [{ miktar: '4', teslimAlinan: teslim }], kapali });
+  assert.deepEqual(faturaEslesmeUyarilari(sip('1', true), { tutar: '19', paraBirimi: 'TRY' }), []);
+  assert.deepEqual(faturaEslesmeUyarilari(sip('1', false), { tutar: '19', paraBirimi: 'TRY' }), [ILETILER.eslesmeEksikTeslim]);
+  assert.deepEqual(faturaEslesmeUyarilari(sip('5', true), { tutar: '20', paraBirimi: 'TRY' }), [ILETILER.eslesmeFazlaTeslim, ILETILER.eslesmeTutarFazla]);
 });
