@@ -1,13 +1,26 @@
-import type { SatinAlmaAnaliziCevabi, SatinAlmaTedarikcisi, SatinAlmaTuketimMalzemesi } from '#paylasilan/sozlesme/satin-alma-analiz.ts';
+import type {
+  SatinAlmaAnaliziCevabi, SatinAlmaAsamasi, SatinAlmaKuralDisiDonemi, SatinAlmaSapmaDonemi, SatinAlmaTedarikcisi, SatinAlmaTuketimMalzemesi,
+  SatinAlmaTutarOlcusu,
+} from '#paylasilan/sozlesme/satin-alma-analiz.ts';
 
 // Satın alma analizi ekranının saf yardımcıları (2151). Bilinmeyen değer "-" ya da gerekçesiyle yazılır; sıfır uydurulmaz.
 
 const sayi = (n: number, basamak = 1) => n.toLocaleString('tr-TR', { maximumFractionDigits: basamak });
-export const yuzdeMetni = (n: number | null) => (n === null ? '-' : `%${sayi(n)}`);
+// Eksi yüzde işaret önde yazılır: -%7,9.
+export const yuzdeMetni = (n: number | null) => (n === null ? '-' : n < 0 ? `-%${sayi(-n)}` : `%${sayi(n)}`);
+export const isaretliYuzde = (n: number | null) => (n === null ? '-' : n > 0 ? `+${yuzdeMetni(n)}` : yuzdeMetni(n));
 export const gunMetni = (n: number | null) => (n === null ? '-' : `${sayi(n)} gün`);
-export const tlMetni = (n: number | null) => (n === null ? '-' : `${n.toLocaleString('tr-TR', { maximumFractionDigits: 0 })} TL`);
+// 2464 b: para TL simgesiyle. Tutarlar tam lira; birim fiyat farkı kuruşlu (isaretliBirimTl).
+const TL = '₺';
+export const tlMetni = (n: number | null) => (n === null ? '-' : `${n.toLocaleString('tr-TR', { maximumFractionDigits: 0 })} ${TL}`);
 export const miktarMetni = (n: number | null) => (n === null ? '-' : sayi(n, 2));
-export const isaretliTl = (n: number) => `${n > 0 ? '+' : ''}${n.toLocaleString('tr-TR', { maximumFractionDigits: 2 })} TL`;
+const isaretli = (n: number, basamak: number) => {
+  const yuvarlak = Number(n.toFixed(basamak));
+  const mutlak = Math.abs(yuvarlak).toLocaleString('tr-TR', { minimumFractionDigits: basamak, maximumFractionDigits: basamak });
+  return `${yuvarlak > 0 ? '+' : yuvarlak < 0 ? '-' : ''}${mutlak} ${TL}`;
+};
+export const isaretliTl = (n: number) => isaretli(n, 0);
+export const isaretliBirimTl = (n: number) => isaretli(n, 2);
 export const ayEtiketi = (ay: string) => `${ay.slice(5, 7)}.${ay.slice(2, 4)}`;
 
 // Karne zamanında oranı; karnenin kendi eşiği altındaysa "yetersiz veri" ve teslim sayısı yazar.
@@ -48,3 +61,33 @@ export function guvenlikMetni(m: SatinAlmaTuketimMalzemesi): string {
   return 'Tedarik süresi bilinmiyor';
 }
 export const XYZ_ACIKLAMA = { X: 'düzenli', Y: 'dalgalı', Z: 'düzensiz' } as const;
+
+// ---- 2471: süreç ve fiyat ölçülerinin metinleri.
+export const ASAMA_ADLARI: Readonly<Record<SatinAlmaAsamasi, string>> = {
+  'teklif-istegi': 'Talep → teklif isteği', teklif: 'Teklif isteği → son teklif', karar: 'Son teklif → karar', onay: 'Karar → son onay',
+  siparis: 'Onay → sipariş', 'ilk-teslim': 'Sipariş → ilk teslim', 'tam-teslim': 'İlk teslim → tam teslim',
+};
+export const KIRILIM_ADLARI = { kategori: 'Kategori', birim: 'Birim', alici: 'Alıcı' } as const;
+
+// Ortanca ve P80; eşik altında örnek sayısıyla "yetersiz veri".
+export function sureOzetiMetni(s: { ornek: number; ortancaGun: number | null; yuzde80Gun: number | null }, gereken: number): string {
+  if (s.ortancaGun === null) return s.ornek === 0 ? 'Örnek yok' : `Yetersiz veri: ${String(s.ornek)} örnek, ${String(gereken)} gerekir`;
+  return `${gunMetni(s.ortancaGun)}, P80 ${gunMetni(s.yuzde80Gun)}`;
+}
+// Önceki dönemle kıyas satırı; önceki değer yoksa yalnız ek yazılır.
+export function oncekiMetni(onceki: string | null, ek = ''): string {
+  return [ek, onceki === null ? '' : `önceki ${onceki}`].filter((x) => x !== '').join(' · ');
+}
+export const tutarMetni = (t: SatinAlmaTutarOlcusu): string => (t.tutarTl === null ? 'Veri yok' : isaretliTl(t.tutarTl));
+export function tutarAltMetni(t: SatinAlmaTutarOlcusu, birim: string, onceki: SatinAlmaTutarOlcusu): string {
+  const kursuz = t.kursuz > 0 ? `, kuru girilmemiş ${String(t.kursuz)}` : '';
+  const kur = t.kurEtkisiTl === null || t.kurEtkisiTl === 0 ? '' : `, kur etkisi ayrıca ${isaretliTl(t.kurEtkisiTl)}`;
+  return oncekiMetni(onceki.tutarTl === null ? null : isaretliTl(onceki.tutarTl), `${String(t.ornek)} ${birim}${kursuz}${kur}`);
+}
+export function sapmaAltMetni(d: SatinAlmaSapmaDonemi): string {
+  const endeks = d.endeksYok > 0 ? ` · ₺ kalemde endeks yok: ${String(d.endeksYok)}` : '';
+  return `${String(d.satir)} satır, bant dışı ${String(d.bantDisi)}${endeks}`;
+}
+export const bantDisiOrani = (d: SatinAlmaSapmaDonemi): number | null => (d.satir === 0 ? null : Math.round((d.bantDisi / d.satir) * 1000) / 10);
+export const BANT_ADLARI = { icinde: 'Bant içinde', ustunde: 'Hedefin üstünde', altinda: 'Hedefin altında' } as const;
+export const kuralDisiMetni = (d: SatinAlmaKuralDisiDonemi): string => (d.payYuzde === null ? 'Veri yok' : yuzdeMetni(d.payYuzde));

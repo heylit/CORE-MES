@@ -1,6 +1,7 @@
 import {
-  SATIN_ALMA_ANALIZI_GUVENLIK_EN_AZ, SATIN_ALMA_ANALIZI_SURE_EN_AZ, SATIN_ALMA_ANALIZI_TAHMIN_EN_AZ_AY,
-  type SatinAlmaAnaliziCevabi, type SatinAlmaTuketimMalzemesi,
+  SATIN_ALMA_ANALIZI_GUVENLIK_EN_AZ, SATIN_ALMA_ANALIZI_SURE_EN_AZ, SATIN_ALMA_ANALIZI_TAHMIN_EN_AZ_AY, SATIN_ALMA_ASAMALARI, SATIN_ALMA_SAPMA_ILK,
+  type SatinAlmaAnaliziCevabi, type SatinAlmaAsamaOzeti, type SatinAlmaAsamasi, type SatinAlmaKuralDisiDonemi, type SatinAlmaSapmaDonemi,
+  type SatinAlmaTuketimMalzemesi, type SatinAlmaTutarOlcusu,
 } from '#paylasilan/sozlesme/satin-alma-analiz.ts';
 
 // 2151: Satın alma analizinin saf hesapları. Bilinmeyen değer null döner; eşik altında istatistik verilmez.
@@ -219,5 +220,208 @@ export function tuketimMalzemesi(g: {
     tahminAylik: tahmin === null ? null : iki(tahmin),
     tedarikSuresiGun: sure,
     guvenlikStogu: tahmin === null || sure === null ? null : iki(GUVENLIK_Z * sd * Math.sqrt(sure / 30)),
+  };
+}
+
+// ---- 2471: süreç ve fiyat ölçüleri.
+
+// Talebin aşama uçları (tesis günü, YYYY-AA-GG). Olmayan uç null.
+export interface TalepAsamaSatiri {
+  talepId: string; acilis: string; ilkIstek: string | null; sonTeklif: string | null; karar: string | null; sonOnay: string | null;
+  siparis: string | null; ilkTeslim: string | null; tamTeslim: string | null; birim: string | null; kategoriler: readonly string[];
+  kararVeren: number | null;
+}
+const ASAMA_UCU: Readonly<Record<SatinAlmaAsamasi, keyof TalepAsamaSatiri>> = {
+  'teklif-istegi': 'ilkIstek', teklif: 'sonTeklif', karar: 'karar', onay: 'sonOnay', siparis: 'siparis', 'ilk-teslim': 'ilkTeslim', 'tam-teslim': 'tamTeslim',
+};
+const sureOzeti = (gunler: number[], enAz: number): { ornek: number; ortancaGun: number | null; yuzde80Gun: number | null } => {
+  const l = sirala(gunler);
+  const yeterli = l.length >= enAz;
+  return { ornek: l.length, ortancaGun: yeterli ? ortanca(l) : null, yuzde80Gun: yeterli ? yuzdelik(l, 0.8) : null };
+};
+
+// SA-2471-1: Aşama süresi, bir önceki VAR OLAN uçtan bu aşamanın ucuna geçen gündür; atlanan aşama sayılmaz, süresi sonrakine yazılır.
+// Eksi aralık veri hatasıdır, sayılmaz ve hataliAralik'ta görünür. Toplam açılıştan tam teslime ayrıca ölçülür. Darboğaz ortancası en
+// uzun aşamadır (eşitlikte süreçte önce gelen).
+export function asamaOzeti(satirlar: readonly TalepAsamaSatiri[], enAz = SATIN_ALMA_ANALIZI_SURE_EN_AZ): SatinAlmaAsamaOzeti {
+  const gunler = new Map<SatinAlmaAsamasi, number[]>(SATIN_ALMA_ASAMALARI.map((a) => [a, []]));
+  const toplam: number[] = [];
+  let hatali = 0;
+  for (const t of satirlar) {
+    let onceki = t.acilis;
+    for (const a of SATIN_ALMA_ASAMALARI) {
+      const uc = t[ASAMA_UCU[a]] as string | null;
+      if (uc === null) continue;
+      const gun = gunFarki(onceki, uc);
+      if (gun < 0) { hatali += 1; continue; }
+      gunler.get(a)!.push(gun);
+      onceki = uc;
+    }
+    if (t.tamTeslim !== null) {
+      const gun = gunFarki(t.acilis, t.tamTeslim);
+      if (gun >= 0) toplam.push(gun);
+    }
+  }
+  const asamalar = SATIN_ALMA_ASAMALARI.map((asama) => ({ asama, ...sureOzeti(gunler.get(asama)!, enAz) }));
+  let darbogaz: SatinAlmaAsamasi | null = null, enUzun = -1;
+  for (const a of asamalar) if (a.ortancaGun !== null && a.ortancaGun > enUzun) { enUzun = a.ortancaGun; darbogaz = a.asama; }
+  return { asamalar, toplam: sureOzeti(toplam, enAz), darbogaz, hataliAralik: hatali };
+}
+
+// SA-2471-2: Kırılım; talep her kalem kategorisinde bir kez sayılır. Boş kategori "Kategorisiz", birimsiz talep "Birimsiz"; kararı
+// vermeyen (karar yok) talep alıcı kırılımına girmez. Örneği çok olan önce.
+export function asamaKirilimlari(
+  satirlar: readonly TalepAsamaSatiri[], kisiAdi: ReadonlyMap<number, string>, enAz = SATIN_ALMA_ANALIZI_SURE_EN_AZ, ilk = 40,
+): { tur: 'kategori' | 'birim' | 'alici'; anahtar: string; ad: string; ozet: SatinAlmaAsamaOzeti }[] {
+  const gruplar = new Map<string, { tur: 'kategori' | 'birim' | 'alici'; anahtar: string; ad: string; l: TalepAsamaSatiri[] }>();
+  const ekle = (tur: 'kategori' | 'birim' | 'alici', anahtar: string, ad: string, t: TalepAsamaSatiri) => {
+    const k = `${tur}:${anahtar}`;
+    const g = gruplar.get(k) ?? { tur, anahtar, ad, l: [] };
+    g.l.push(t);
+    gruplar.set(k, g);
+  };
+  for (const t of satirlar) {
+    for (const k of new Set(t.kategoriler.map((x) => x.trim()))) ekle('kategori', k, k === '' ? 'Kategorisiz' : k, t);
+    ekle('birim', t.birim ?? '', t.birim ?? 'Birimsiz', t);
+    if (t.kararVeren !== null) ekle('alici', String(t.kararVeren), kisiAdi.get(t.kararVeren) ?? '', t);
+  }
+  return [...gruplar.values()]
+    .sort((a, b) => b.l.length - a.l.length || a.ad.localeCompare(b.ad, 'tr'))
+    .slice(0, ilk)
+    .map((g) => ({ tur: g.tur, anahtar: g.anahtar, ad: g.ad, ozet: asamaOzeti(g.l, enAz) }));
+}
+
+export type KimlikliSatir = AnalizSatiri & { id: number };
+const tarihSirasi = (a: KimlikliSatir, b: KimlikliSatir): number =>
+  (a.siparisTarihi < b.siparisTarihi ? -1 : a.siparisTarihi > b.siparisTarihi ? 1 : a.id - b.id);
+const icinde = (s: { siparisTarihi: string }, bas: string, bit: string): boolean => s.siparisTarihi >= bas && s.siparisTarihi <= bit;
+
+// Aynı katalog kaleminin aynı birimdeki bir önceki sipariş satırı (pencere içinde). Katalogsuz satırın öncesi yoktur.
+export function oncekiAlislar(satirlar: readonly KimlikliSatir[]): Map<number, KimlikliSatir> {
+  const son = new Map<string, KimlikliSatir>();
+  const sonuc = new Map<number, KimlikliSatir>();
+  for (const s of [...satirlar].sort(tarihSirasi)) {
+    if (s.katalogId === null || netBirimFiyat(s) === null) continue;
+    const anahtar = `${s.katalogId}|${s.birim}`;
+    const o = son.get(anahtar);
+    if (o) sonuc.set(s.id, o);
+    son.set(anahtar, s);
+  }
+  return sonuc;
+}
+
+// SA-2471-3 (2468 a): son alışa göre fiyat farkı. Aynı dövizde (P1 - P0) x K1 x miktar: kurun etkisi P0 x (K1 - K0) x miktar olarak
+// ayrı toplanır, tutara girmez (Maliyet ön bakışı K1). TL kalemde ya da para birimi değişmişse TL net birim farkı x miktar. Eksi gerçek
+// azalmadır. Her iki satırın kuru bilinmeli; bilinmeyen kursuz sayılır.
+export function fiyatFarki(satirlar: readonly KimlikliSatir[], onceki: ReadonlyMap<number, KimlikliSatir>, bas: string, bit: string): SatinAlmaTutarOlcusu {
+  let tutar = 0, kurEtkisi = 0, ornek = 0, kursuz = 0;
+  for (const s of satirlar) {
+    const o = onceki.get(s.id);
+    if (!o || !icinde(s, bas, bit)) continue;
+    const k1 = satirKuru(s), k0 = satirKuru(o);
+    if (k1 === null || k0 === null) { kursuz += 1; continue; }
+    const m = Number(s.miktar), p1 = netBirimFiyat(s)!, p0 = netBirimFiyat(o)!;
+    if (s.paraBirimi !== 'TRY' && s.paraBirimi === o.paraBirimi) {
+      tutar += (p1 - p0) * k1 * m;
+      kurEtkisi += p0 * (k1 - k0) * m;
+    } else tutar += (p1 * k1 - p0 * k0) * m;
+    ornek += 1;
+  }
+  return { tutarTl: ornek === 0 ? null : iki(tutar), ornek, kursuz, kurEtkisiTl: ornek === 0 ? null : iki(kurEtkisi) };
+}
+
+// Teklifteki bir kalemin fiyatı (teklif para biriminde, iskontosuz) ve kuru.
+export interface TeklifFiyati {
+  talepId: string; teklifId: string; kalemId: string; paraBirimi: string; kur: string | null; genelIskonto: string; birimFiyat: string;
+  satirIskonto: string | null; teknikUygun: boolean;
+}
+export interface SiparisBagi { id: number; talepId: string; teklifId: string; kalemId: string; talepAcilis: string; teklifSayisi: number }
+
+// SA-2471-4 (2468 a): kaçınılan maliyet = (aynı kalemde teknik uygun öteki tekliflerin en düşük TL net birimi - seçilen TL net birim)
+// x miktar; nakliye ve vade hariç. Seçilenle aynı dövizdeki teklif seçilenin kuruyla çevrilir (iki kur farkı kazanç sayılmaz; Maliyet K2).
+// Öteki teklif yoksa satır sayılmaz; seçilen en ucuz değilse sonuç eksidir ve öyle gösterilir. Kuru bilinmeyen teklif kursuzdur.
+export function kacinilanMaliyet(
+  satirlar: readonly KimlikliSatir[], baglar: ReadonlyMap<number, SiparisBagi>, teklifler: readonly TeklifFiyati[], bas: string, bit: string,
+): SatinAlmaTutarOlcusu {
+  const kalemTeklifleri = new Map<string, TeklifFiyati[]>();
+  for (const t of teklifler) {
+    if (!t.teknikUygun) continue;
+    const k = `${t.talepId}|${t.kalemId}`;
+    kalemTeklifleri.set(k, [...(kalemTeklifleri.get(k) ?? []), t]);
+  }
+  let tutar = 0, ornek = 0, kursuz = 0;
+  for (const s of satirlar) {
+    const b = baglar.get(s.id);
+    if (!b || !icinde(s, bas, bit)) continue;
+    const otekiler = (kalemTeklifleri.get(`${b.talepId}|${b.kalemId}`) ?? []).filter((t) => t.teklifId !== b.teklifId);
+    if (otekiler.length === 0) continue;
+    const secilenKur = satirKuru(s);
+    const tl = otekiler.map((t) => { const k = t.paraBirimi === s.paraBirimi ? secilenKur : satirKuru(t); return k === null ? null : netBirimFiyat(t)! * k; });
+    if (secilenKur === null || tl.some((x) => x === null)) { kursuz += 1; continue; }
+    tutar += (Math.min(...(tl as number[])) - netBirimFiyat(s)! * secilenKur) * Number(s.miktar);
+    ornek += 1;
+  }
+  return { tutarTl: ornek === 0 ? null : iki(tutar), ornek, kursuz, kurEtkisiTl: null };
+}
+
+// SA-2471-5: hedef fiyata göre sapma (2440 Maliyet tanımı). Döviz kalemde hedef = önceki alışın döviz net birimi x sipariş günü kuru; sapma (fiili - hedef) x kur x miktar ve önceki alışa göre TL değişimin kur payı ayrıdır. TL kalemde hedef enflasyon
+// endeksi ister; endeks yokken hedef yoktur, satır endeksYok sayılır (nominal değişim hedef yerine konmaz). Para birimi değişmişse
+// kıyas yoktur. Bant: fark yüzdesi eşikten büyükse üstünde, eksi eşikten küçükse altında (2440-6 a).
+export interface SapmaSatiri {
+  katalogId: string; ad: string; siparisTarihi: string; paraBirimi: string; birim: string; hedef: number; fiili: number;
+  farkYuzde: number | null; sapmaTl: number; kurEtkisiTl: number; bant: 'icinde' | 'ustunde' | 'altinda';
+}
+export function hedefSapmalari(
+  satirlar: readonly KimlikliSatir[], onceki: ReadonlyMap<number, KimlikliSatir>, esikYuzde: number, bas: string, bit: string,
+): { donem: SatinAlmaSapmaDonemi; satirlar: SapmaSatiri[] } {
+  const l: SapmaSatiri[] = [];
+  let endeksYok = 0;
+  for (const s of satirlar) {
+    const o = onceki.get(s.id);
+    if (!o || !icinde(s, bas, bit) || o.paraBirimi !== s.paraBirimi) continue;
+    if (s.paraBirimi === 'TRY') { endeksYok += 1; continue; }
+    const k1 = satirKuru(s), k0 = satirKuru(o), hedef = netBirimFiyat(o)!, fiili = netBirimFiyat(s)!;
+    if (k1 === null || k0 === null || !(hedef > 0)) continue;
+    const farkYuzde = bir((fiili / hedef - 1) * 100);
+    const m = Number(s.miktar);
+    l.push({
+      katalogId: s.katalogId!, ad: s.ad, siparisTarihi: s.siparisTarihi, paraBirimi: s.paraBirimi, birim: s.birim,
+      hedef: iki(hedef), fiili: iki(fiili), farkYuzde, sapmaTl: iki((fiili - hedef) * k1 * m), kurEtkisiTl: iki(hedef * (k1 - k0) * m),
+      bant: farkYuzde > esikYuzde ? 'ustunde' : farkYuzde < -esikYuzde ? 'altinda' : 'icinde',
+    });
+  }
+  return {
+    donem: {
+      satir: l.length, toplamTl: l.length === 0 ? null : iki(l.reduce((t, x) => t + x.sapmaTl, 0)),
+      bantDisi: l.filter((x) => x.bant !== 'icinde').length, endeksYok,
+    },
+    satirlar: l,
+  };
+}
+export const enCokSapanlar = (l: readonly SapmaSatiri[], ilk = SATIN_ALMA_SAPMA_ILK): SapmaSatiri[] =>
+  [...l].sort((a, b) => Math.abs(b.sapmaTl) - Math.abs(a.sapmaTl) || (a.siparisTarihi < b.siparisTarihi ? 1 : -1)).slice(0, ilk);
+
+// SA-2471-6: kural dışı alım vekili (gerçek ölçü 2331 ile gelir). Sipariş (talep, teklif) başına: talepteki teklif sayısı ayardaki en
+// az teklifin altındaysa azTeklif; sipariş günü talebin açılış gününden önceyse talepOncesi. Tutar kuru bilinen satırların TL toplamıdır.
+// Pay, iki durumdan en az birine giren siparişlerin tutarının dönem harcamasına oranıdır.
+export function kuralDisiAlim(
+  satirlar: readonly KimlikliSatir[], baglar: ReadonlyMap<number, SiparisBagi>, enAzTeklif: number, harcamaTl: number | null, bas: string, bit: string,
+): SatinAlmaKuralDisiDonemi {
+  const siparisler = new Map<string, { tutar: number; az: boolean; once: boolean }>();
+  for (const s of satirlar) {
+    const b = baglar.get(s.id);
+    if (!b || !icinde(s, bas, bit)) continue;
+    const k = satirKuru(s), f = netBirimFiyat(s);
+    const anahtar = `${b.talepId}|${b.teklifId}`;
+    const g = siparisler.get(anahtar) ?? { tutar: 0, az: b.teklifSayisi < enAzTeklif, once: s.siparisTarihi < b.talepAcilis };
+    if (k !== null && f !== null) g.tutar += f * k * Number(s.miktar);
+    siparisler.set(anahtar, g);
+  }
+  const l = [...siparisler.values()];
+  const topla = (x: typeof l) => ({ siparis: x.length, tutarTl: iki(x.reduce((t, g) => t + g.tutar, 0)) });
+  const ikisi = l.filter((g) => g.az || g.once).reduce((t, g) => t + g.tutar, 0);
+  return {
+    azTeklif: topla(l.filter((g) => g.az)), talepOncesi: topla(l.filter((g) => g.once)),
+    payYuzde: harcamaTl === null || !(harcamaTl > 0) ? null : bir(Math.min(100, (ikisi / harcamaTl) * 100)),
   };
 }
