@@ -389,6 +389,7 @@ export { DAL_AZAMI, ONCUL_TURLERI, adimOnculleri } from './kurallar.ts';
 export type { AdimOnculu, OnculTuru, OnculluAdim } from './kurallar.ts';
 
 // Rota (UE1): emir, yürürlükteki rotanın kopyasıyla açılır; "emirlere uygula" güvenli kipte yeniler. Liste ve ayrıntı rota ekranı içindir.
+// "Emirlere uygula" çağıranı okuduğu emrin sürümünü verir (surum): kilit altında denetlenir, arada değişen emir ESKI_SURUM ile reddedilir.
 export const uretimEmriAc = isEmri.uretimEmriAc;
 export const isEmirleriniYenile = isEmri.isEmirleriniYenile;
 export const adimliEmirListesi = isEmri.adimliListe;
