@@ -183,7 +183,7 @@ function AdimDuzeni({ r, s, kapat }: { r: RotaEkrani; s: Extract<Secim, { tur: '
   const yanEkle = (m: Malzeme, n: number) => { yaz((x) => ({ ...x, outs: [...x.outs, { itemId: m.id, qty: n, kind: 'yan' as const }] }), `${m.code} yan ürün eklendi`); };
   return (
     <>
-      <Baslik baslik={a.opNo === null ? `${op?.abbr ?? 'Adım'} · yeni adım` : `${op?.abbr ?? 'Adım'} ${String(a.opNo)}`} etiket={sahip.code} kapat={kapat} />
+      <Baslik baslik={`${op?.abbr ?? op?.code ?? 'Adım'} ${a.opNo === null ? '· yeni adım' : String(a.opNo)}`} etiket={sahip.code} kapat={kapat} />
       {a.opNo === null && <YeniNumara siradaki={numaralar ? yeniAdimNumaralari(liste, numaralar.siradaki).get(a.id) : undefined} />}
       {!duzen && r.yetki.rotaYaz && <p className="tc-rr1-ipucu">Bu revizyon salt gösteriliyor; değiştirmek için açık taslağı seç.</p>}
       {eksik && <div className="tc-rr1-warnbox" role="alert">{eksik.metin}. Eksik rota onaya gönderilemez ve emri plana alınmaz.</div>}
@@ -602,6 +602,35 @@ function BosPanel({ r }: { r: RotaEkrani }) {
         <li>Tekerlek yakınlaştırır, sürükleyerek gezersin; sağ alttaki yardım tüm kısayolları gösterir.</li>
       </ul>
     </div>
+  );
+}
+
+// Daraltılmış panelin şeridi (B-2482-R5): seçimin kısa adını gösterir, dokununca panel açılır. Seçim paneli kendiliğinden açmaz.
+function secimAdi(r: RotaEkrani): string {
+  const s = r.secim;
+  const { h } = r.duzen;
+  switch (s?.tur) {
+    case undefined: return 'Seçim yok';
+    case 'adim': {
+      const a = r.duzen.adimlar(s.urunId).find((x) => x.id === s.adimId);
+      const op = a ? h.op.get(a.opId) : undefined;
+      return a ? `${a.opNo === null ? 'Yeni adım' : `OP ${String(a.opNo)}`} ${op?.name ?? ''}`.trim() : 'Adım';
+    }
+    case 'urun': return h.malzeme.get(s.urunId)?.code ?? 'Ürün';
+    case 'giren': case 'girenEkle': return 'Giren';
+    case 'yan': case 'yanEkle': return 'Yan ürün';
+    case 'adimEkle': return 'Adım ekle';
+    case 'yeniRota': return 'Yeni rota';
+  }
+}
+
+export function PanelSeridi({ r, ac }: { r: RotaEkrani; ac: () => void }) {
+  const ad = secimAdi(r);
+  return (
+    <button type="button" className="tc-rr1-insp-serit" onClick={ac} aria-label={`Düzenleme panelini aç: ${ad}`} title="Düzenleme panelini aç">
+      <Simge ad="chev-left" boyut="k" />
+      <span className="tc-rr1-insp-serit-ad">{ad}</span>
+    </button>
   );
 }
 
