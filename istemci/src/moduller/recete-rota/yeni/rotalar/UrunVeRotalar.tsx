@@ -139,6 +139,12 @@ export function UrunVeRotalar(o: EkranOzellikleri) {
     if ((e.target as HTMLElement).closest('input, select, textarea')) return;
     const k = e.key.toLocaleLowerCase('tr-TR');
     const hedef = secim && 'urunId' in secim ? secim.urunId : revId;
+    // B-2482-2: F tam ekranı her görünümde açar ve kapatır (şema, tablo, patlamış rota); yalnız şema odaktayken değil.
+    if (k === 'f' && !e.ctrlKey && !e.metaKey && !e.altKey && (tamEkran || (!liste && kokId))) {
+      e.preventDefault();
+      setTamEkran(!tamEkran);
+      return;
+    }
     if ((e.ctrlKey || e.metaKey) && hedef && (k === 'z' || k === 'y')) {
       e.preventDefault();
       duzen.geriAl(hedef, k === 'z' && !e.shiftKey ? 'geri' : 'ileri');
@@ -211,7 +217,7 @@ export function UrunVeRotalar(o: EkranOzellikleri) {
         <span className="tc-rr1-grow" />
         {/* Düğme şemada, tabloda ve patlamış rotada aynı yerdedir; tam ekranda üst çubuk sabit kalır, çıkış kaydırmadan görünür (B-2482-R3). */}
         {(tamEkran || (!liste && kokId)) && (
-          <Dugme className="tc-rr1-kd" simge={tamEkran ? 'x' : 'expand'} aria-pressed={tamEkran} title={tamEkran ? 'Tam ekrandan çık (Esc)' : 'Rotayı tam ekranda aç'}
+          <Dugme className="tc-rr1-kd" simge={tamEkran ? 'x' : 'expand'} aria-pressed={tamEkran} title={tamEkran ? 'Tam ekrandan çık (Esc ya da F)' : 'Rotayı tam ekranda aç (F)'}
             onClick={() => { setTamEkran(!tamEkran); }}>{tamEkran ? 'Tam ekrandan çık' : 'Tam ekranda aç'}</Dugme>
         )}
         {!liste && kokId && (o.yetki.maliyetOku || uyarilar.length > 0 || o.yetki.emirYaz) && (
@@ -237,7 +243,7 @@ export function UrunVeRotalar(o: EkranOzellikleri) {
             {dugum ? (
               gorunum === 'tablo'
                 ? <AkisTablosu r={r} urunler={agac} miktar={miktar} cop={cop} />
-                : <AkisSemasi r={r} kok={dugum} tamEkranDegistir={() => { setTamEkran(!tamEkran); }} cop={cop} />
+                : <AkisSemasi r={r} kok={dugum} cop={cop} />
             ) : (
               <div className="tc-rr1-emptycv">
                 <h3>İlk rotanı kur</h3>
