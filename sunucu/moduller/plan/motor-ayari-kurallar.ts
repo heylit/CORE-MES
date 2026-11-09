@@ -39,9 +39,24 @@ export interface MotorOlcegi { ufukGun: number; dilimDk: number }
 // ayar sürümüyle ikinci kez uygulanan çözücü girdisi (plan-cozucusu) taze değeri böyle taşır, taslakta öğrenme kapalıysa boşaltır.
 // 2523 a: paralel bölme ayarı kayıttaki param.bolmeKip ve param.bolmeMaks'ın üstüne yazılır (girdi.betik stKur okur); sayfanın eski
 // kaydındaki değer motoru yönetmez. Sabit kip (plan-cozucusu bolmesiz) bundan sonra uygulanır, orada bölme yine kapalıdır.
+// 2601 a: genel gider saat başı tutarı Finans'ın o güne geçerli oranıdır (proje maliyetiyle tek tanım); motor ve sayfa D.planTL.genelGider'i
+// okur (durum.betik ymAyar). Finans'ta oran yoksa null (bilinmiyor): elle girilmiş değer kullanılmaz. Verilmezse (undefined) çalışmadaki kalır.
+// 2668 a: oran gizliyse genelGider null ve genelGiderGizli true yazılır (motor null'ı 0 sayar; ekran "gizli" gösterir); açık oranda false.
+// 2601 a, Güvenlik K1: genel gider her okumada Finans'tan (ya da okuyamayana null) yazıldığı için kayda girmez; sayfa çalışmanın tamamını
+// geri yazdığında oran kayıtta kalıp planlama kaydını okuyan herkese gitmesin diye yazmada ve ham kayıt okumasında çıkarılır.
+export function genelGiderAlanlariniCikar(calisma: unknown): unknown {
+  if (calisma === null || typeof calisma !== 'object') return calisma;
+  const D = (calisma as { D?: unknown }).D;
+  if (D === null || typeof D !== 'object') return calisma;
+  const planTL = (D as { planTL?: unknown }).planTL;
+  if (planTL === null || typeof planTL !== 'object' || !('genelGider' in planTL || 'genelGiderGizli' in planTL)) return calisma;
+  const { genelGider: _g, genelGiderGizli: _z, ...kalan } = planTL as Record<string, unknown>;
+  return { ...calisma, D: { ...D, planTL: kalan } };
+}
+
 export function calismayaMotorAyari(
   calisma: unknown, ayar: MotorAyarlari, finansmanOraniGun: number | null = null, olcek: MotorOlcegi | null = null,
-  ogren?: Readonly<Record<string, OgrenilenSure>> | null,
+  ogren?: Readonly<Record<string, OgrenilenSure>> | null, genelGider?: { saatBasi: number | null; gizli: boolean },
 ): unknown {
   if (calisma === null || typeof calisma !== 'object') return calisma;
   const c = calisma as { D?: unknown };
@@ -57,7 +72,7 @@ export function calismayaMotorAyari(
   const ogrenilen = ogren !== undefined ? ogren
     : onceki !== null && typeof onceki === 'object' ? onceki as Readonly<Record<string, OgrenilenSure>> : null;
   return {
-    ...c, D: { ...D, ...agirlik, planTL: { ...planTL, amac: ayar.amac === 'tl' ? 'tl' : 'sira' } },
+    ...c, D: { ...D, ...agirlik, planTL: { ...planTL, amac: ayar.amac === 'tl' ? 'tl' : 'sira', ...(genelGider === undefined ? {} : { genelGider: genelGider.gizli ? null : genelGider.saatBasi, genelGiderGizli: genelGider.gizli }) } },
     param: { ...(param !== null && typeof param === 'object' ? param : {}), acilPay: ayar.acilPay, bolmeKip: ayar.bolmeKip, bolmeMaks: ayar.bolmeMaks },
     w: { ...(w !== null && typeof w === 'object' ? w : {}), rule: ayar.kural, amac: ayar.amac, ...(olcek ?? {}) },
     ogren: ayar.ogrenme === 'acik' && ogrenilen !== null ? { ...ogrenilen } : {},

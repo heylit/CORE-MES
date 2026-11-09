@@ -70,11 +70,12 @@ function calismaGunleri(o: KaynakDilimiOkumasi, sira: ReadonlyMap<number, number
   return GUN_ADLARI.some((g) => hafta[g]!.length > 0) ? hafta : {};
 }
 
-// 71 b: elle değiştirilmemiş tezgâhın ücreti istasyon maliyetini izler (girdi.betik ucretIzle); maliyet okunamazsa son ücret kalır.
-function ucretIzle(a: Record<string, unknown>, maliyet: number | null): void {
-  if (maliyet === null) return;
-  const izler = a['ucretIst'] !== undefined ? a['ucret'] === a['ucretIst'] : a['ucret'] === maliyet;
-  if (izler) { a['ucret'] = maliyet; a['ucretIst'] = maliyet; }
+// 2601 a: tezgâh ücreti Finans'ın istasyon saat maliyetidir; elle girilmiş ücret de ezilir (proje maliyetiyle tek tanım). Finans'ta satır
+// yoksa ücret bilinmez (null). Maliyet hiç okunamadıysa (yetki yok, harita null) son ücret kalır: okuyamayan kullanıcının açılışı ücreti silmesin.
+function ucretIzle(a: Record<string, unknown>, o: KaynakDilimiOkumasi, istasyonId: number): void {
+  if (o.istasyonMaliyeti === null) return;
+  const maliyet = o.istasyonMaliyeti.get(istasyonId) ?? null;
+  a['ucret'] = maliyet; a['ucretIst'] = maliyet;
 }
 // B-2483-15: verim ve tezgâhın vardiya listesi ücret gibi izlenir (girdi.betik verimIzle, vardiyaIzle ile aynı kural).
 function verimIzle(a: Record<string, unknown>, verim: number): void {
@@ -112,7 +113,7 @@ function tezgahlar(o: KaynakDilimiOkumasi, elle: KaynakElleVerisi, sira: Readonl
     const id = kisiTezgahKimligi(k.id);
     const a = kimlikle(elle.tezgahlar, id);
     const maliyet = o.istasyonMaliyeti?.get(ist.id) ?? null;
-    if (a !== undefined) { ucretIzle(a, maliyet); verimIzle(a, istasyonVerimi(ist.verimYuzde)); }
+    if (a !== undefined) { ucretIzle(a, o, ist.id); verimIzle(a, istasyonVerimi(ist.verimYuzde)); }
     const ilk = a === undefined ? { ucret: maliyet, ucretIst: maliyet, verim: istasyonVerimi(ist.verimYuzde), verimIst: istasyonVerimi(ist.verimYuzde) } : {};
     return ustuneYaz<MotorTezgahi>(a, {
       id, ad: k.ad, grup: String(ist.id), grupKod: ist.kod || undefined, grupAd: ist.ad || undefined, ...ilk, vardiyalar: [k.vardiya], hafta: undefined, opOran: 1,
@@ -132,7 +133,7 @@ function makineTezgahlari(
     const maliyet = o.istasyonMaliyeti?.get(ist.id) ?? null;
     const a = kimlikle(elle.tezgahlar, id);
     const vl = o.vardiyalar.map((v) => String(v.id));
-    if (a !== undefined) { ucretIzle(a, maliyet); verimIzle(a, istasyonVerimi(ist.verimYuzde)); vardiyaIzle(a, vl); }
+    if (a !== undefined) { ucretIzle(a, o, ist.id); verimIzle(a, istasyonVerimi(ist.verimYuzde)); vardiyaIzle(a, vl); }
     // 69 a: ilk kurulumda ücret istasyon maliyetinden (yoksa null), verim istasyonun verimi, vardiyalar takvimin bütün vardiyaları.
     const ilk = a === undefined
       ? { ucret: maliyet, ucretIst: maliyet, verim: istasyonVerimi(ist.verimYuzde), verimIst: istasyonVerimi(ist.verimYuzde), vardiyalar: vl, vardiyalarIst: [...vl] }

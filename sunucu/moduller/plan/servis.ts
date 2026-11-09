@@ -12,7 +12,7 @@ import {
   aktifIstasyonlar, isMerkezleri, istasyondakiMakineler, kapasiteKaynaklari, istasyonKisileri, istasyonlar as istasyonListesi, istasyonYetkinlikleri, kisininIzinliIsMerkezleri, makineDurumlari, makineDurumuYaz, makineGetir, makineler as makineListesi, makineYetkinlikleri, operasyonTipleri, planAyarlari,
 } from '../istasyonlar/disari.ts';
 import { sistemAyariOku } from '../ayarlar/disari.ts';
-import { gunlukFaizGetir, kurlar } from '../finans/disari.ts';
+import { genelGiderOrani, gunlukFaizGetir, kurlar } from '../finans/disari.ts';
 import type { Makine } from '../istasyonlar/disari.ts';
 import { kisiAdlari, kisileriListele } from '../kisiler/disari.ts';
 import { malzemeOzeti, malzemeOzetleri } from '../malzemeler/disari.ts';
@@ -1298,6 +1298,18 @@ export async function canliOzeti(db: Db): Promise<PlanCanliOzeti> {
 // 1383 a: planın finansman oranı finansın o günkü TRY faizidir (günlük yüzde, aylık x 12 / 365); finansta yoksa null.
 export async function planFinansmanOrani(db: Db, gun: string): Promise<number | null> {
   return (await gunlukFaizGetir(db, 'TRY', gun))?.gunlukYuzde ?? null;
+}
+// 2601 a: planlamanın genel gider saat başı tutarı finansın o güne geçerli oranıdır (proje maliyetiyle aynı); finansta yoksa null.
+// 2668 a: oranın gizli olduğu ayda (Finans gizli bayrağı, 2652 a) plan genel gideri saymaz ve oran çalışmaya, yani tarayıcıya gitmez.
+export interface PlanGenelGideri { saatBasi: number | null; gizli: boolean }
+export function planGenelGideriCevir(o: { saatBasi: number | null } | null): PlanGenelGideri {
+  if (o === null) return { saatBasi: null, gizli: false };
+  // Bayrak Finans 2594 b ile gelir; gelmeden önce alan yoktur ve oran açıktır.
+  const gizli = 'gizli' in o && o.gizli === true;
+  return { saatBasi: gizli ? null : o.saatBasi, gizli };
+}
+export async function planGenelGiderSaatBasi(db: Db, gun: string): Promise<PlanGenelGideri> {
+  return planGenelGideriCevir(await genelGiderOrani(db, gun));
 }
 // 1397 a: plan gününün geçerli kurları (finans); kuru girilmemiş para birimi haritada yoktur.
 async function planKurlari(db: Db, gun: string): Promise<Map<string, number>> {

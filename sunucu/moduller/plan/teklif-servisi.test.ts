@@ -48,6 +48,8 @@ describe('teklif denemesi servisi (gerçek PostgreSQL)', () => {
     const ist = await s.tek<{ id: number }>("INSERT INTO istasyon (kod, ad, is_merkezi_id, aktif) VALUES ('TK-IS', 'Deneme torna', $1, true) RETURNING id", [im!.id]);
     const mk = await s.tek<{ id: number }>("INSERT INTO makine (kod, ad, istasyon_id, aktif) VALUES ('TK-M1', 'Deneme torna 1', $1, true) RETURNING id", [ist!.id]);
     const v = await s.tek<{ id: number }>("INSERT INTO vardiya (ad, baslangic, bitis, aktif) VALUES ('Gunduz', '08:00', '16:00', true) RETURNING id");
+    // 2601 a: tezgâh ücreti Finans'ın istasyon saat maliyetidir (kayıttaki elle ücret ezilir).
+    await s.sorgu("INSERT INTO finans_istasyon_maliyet (istasyon_id, saat_maliyeti, para_birimi, guncelleyen_id) VALUES ($1, 750, 'TRY', $2)", [ist!.id, yoneticiId]);
     makineId = mk!.id;
     merkezId = im!.id;
     vardiyaId = v!.id;

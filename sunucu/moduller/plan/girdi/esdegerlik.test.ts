@@ -168,8 +168,8 @@ describe('motor girdisi eşdeğerliği (1715)', () => {
   test('ED-05: elle girilen ve sunucudan gelen değerler eski yolda bilinen kaynağından kurulur (yeni yolun hedef değerleri)', () => {
     const D = eskiYol() as unknown as MotorVerisi;
     const t100 = D.tezgahlar.find((m) => m.id === '100');
-    // elle: sayfada girilen ücret (izlemeden çıkmış) ve ışıksız/arıza ayarları korunur; oran istasyondan (561 1 b).
-    assert.deepEqual([t100?.ucret, t100?.isiksiz, t100?.arizaGun, t100?.opOran], [950, true, 30, 0.5]);
+    // elle: ışıksız/arıza ayarları korunur; oran istasyondan (561 1 b). Sayfada girilen ücret Finans'ın istasyon maliyetiyle ezilir (2601 a).
+    assert.deepEqual([t100?.ucret, t100?.isiksiz, t100?.arizaGun, t100?.opOran], [900, true, 30, 0.5]);
     // ilk kurulumdaki tezgâh: ücret istasyon maliyetinden, verim istasyonun veriminden.
     const t110 = D.tezgahlar.find((m) => m.id === '110');
     assert.deepEqual([t110?.ucret, t110?.verim], [1200, 1]);

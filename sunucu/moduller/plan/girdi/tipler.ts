@@ -211,7 +211,8 @@ export const TEZGAH_ALANLARI = {
   kod: { kaynak: 'sunucu', sahip: 'istasyonlar', kart: 1786 },
   grupKod: { kaynak: 'sunucu', sahip: 'istasyonlar', kart: 1786 },
   grupAd: { kaynak: 'sunucu', sahip: 'istasyonlar', kart: 1786 },
-  ucret: { kaynak: 'karma', sahip: 'finans', kart: 1716 },
+  // 2601 a: elle ücret yok; Finans istasyon saat maliyeti her okumada yazılır.
+  ucret: { kaynak: 'sunucu', sahip: 'finans', kart: 1716 },
   ucretIst: { kaynak: 'sunucu', sahip: 'finans', kart: 1716 },
   verim: { kaynak: 'karma', sahip: 'istasyonlar', kart: 1716 },
   verimIst: { kaynak: 'sunucu', sahip: 'istasyonlar', kart: 1716 },
