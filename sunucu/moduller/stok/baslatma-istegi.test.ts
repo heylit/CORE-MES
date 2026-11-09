@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { randomUUID } from 'node:crypto';
+import { randomBytes, randomUUID } from 'node:crypto';
 import { after, before, describe, test } from 'node:test';
 import type { FastifyInstance } from 'fastify';
 import { testVeritabaniKur } from '#cekirdek/test-vt.ts';
@@ -13,8 +13,10 @@ import { kullaniciYukle, rolAl, rolAta, yoneticiOlustur } from '../kisiler/disar
 import { kimlikCozucu } from '../oturum/disari.ts';
 import { uretimEmriAc } from '../uretim-emirleri/disari.ts';
 import type { IsEmriGirdisi } from '../uretim-emirleri/disari.ts';
-import { adimKalanIhtiyaci, baslatmaEksikleri } from './kurallar.ts';
+import { adimKalanIhtiyaci, baslatmaEksikleri, tasinanMahsubu } from './kurallar.ts';
+import { adimStatusuCozucusuKaydet, uretimSayimiYansit } from './servis.ts';
 
+// 2522 a: elle sarf edilen taşınan statü zincirinin dışında kalır.
 // B-2501-3 (2493-10): adım başlarken açılan depo isteği emrin kalan ihtiyacıdır: kopyanın fire payı eklenir, emre verilmiş sarf düşülür.
 // Veriler uydurmadır.
 const PAROLA = 'dogru-parola-1';
@@ -32,6 +34,11 @@ describe('adım kalan ihtiyacı (saf, B-2501-3)', () => {
     const girdiler = [{ malzemeNo: 1, miktar: '1' }, { malzemeNo: 2, miktar: '2' }];
     assert.deepEqual(baslatmaEksikleri(girdiler, new Map(), 100000n, new Map([[1, 62000n]])).map((e) => [e.malzemeId, e.istenecek]), [[1, 62000n], [2, 200000n]]);
     assert.deepEqual(baslatmaEksikleri(girdiler, new Map([[1, 1000n], [2, 2000n]]), 100000n, new Map([[1, 62000n]])), []);
+  });
+  test('2522 a: taşınan mahsubu: tek sayımda elle verilen kadar; parça parça sayımda elle verilen sona sayılır; elle yoksa ya da ihtiyaç bilinmiyorsa yok', () => {
+    const m = (istenen: bigint, elle: bigint, oncekiTasinan: bigint, ihtiyac: bigint | null = 6000n) => tasinanMahsubu({ istenen, elle, oncekiTasinan, ihtiyac });
+    assert.deepEqual([m(6000n, 4000n, 0n), m(6000n, 6000n, 0n), m(3000n, 4000n, 0n), m(3000n, 4000n, 3000n)], [4000n, 6000n, 1000n, 3000n]);
+    assert.deepEqual([m(6000n, 0n, 0n), m(6000n, 4000n, 0n, null)], [0n, 0n]);
   });
 });
 
@@ -101,6 +108,12 @@ describe('stok: adım başı depo isteğinin miktarı (gerçek PostgreSQL)', () 
       isEmirleri: [adim(1, a, [{ malzemeNo: hm, miktar: '1', fireYuzde }]), adim(2, b, [])],
     }))).uretimEmriId;
   }
+  const sayim = (e: number, isEmriId: number, istasyonId: number, fark: string) =>
+    o().vt.tx((db) => uretimSayimiYansit(db, { uretimEmriId: e, isEmriId, istasyonId, kisiId: kisiler.get('operator')!, fark }));
+  const hareketToplami = async (e: number, malzemeId: number, tur: string): Promise<number> => Number((await o().vt.tek<{ m: string }>(
+    'SELECT COALESCE(sum(miktar), 0)::text AS m FROM stok_hareketi WHERE uretim_emri_id = $1 AND malzeme_id = $2 AND tur = $3', [e, malzemeId, tur]))!.m);
+  const statuBakiyesi = async (malzemeId: number, statuId: number): Promise<number> => Number((await o().vt.tek<{ m: string }>(
+    'SELECT COALESCE(sum(miktar), 0)::text AS m FROM stok_bakiye WHERE malzeme_id = $1 AND statu_id = $2', [malzemeId, statuId]))!.m);
   const kabulKonumu = async (): Promise<number> => (await o().vt.tek<{ id: number }>("SELECT id FROM stok_konum WHERE kod = 'KABUL'"))!.id;
   const malKabul = async (malzemeId: number, miktar: string): Promise<void> => {
     const c = await istek('depo', 'POST', '/stok/mal-kabul', { tur: 'diger', satirlar: [{ malzemeId, miktar }] });
@@ -129,7 +142,7 @@ describe('stok: adım başı depo isteğinin miktarı (gerçek PostgreSQL)', () 
     }
     for (const rol of ['depo', 'operator', 'planlama_proje']) await kisiEkle(rol);
   });
-  after(async () => { await ortam?.kaldir(); });
+  after(async () => { adimStatusuCozucusuKaydet(async () => null); await ortam?.kaldir(); });
 
   test('B-2501-3: 100 adet x 1 kg, fire %2: istek 102 kg; emre 40 kg sarf verilmişse 62 kg', async () => {
     const [ym, hm] = [await kart('yarimamul'), await kart('hammadde')];
@@ -153,5 +166,26 @@ describe('stok: adım başı depo isteğinin miktarı (gerçek PostgreSQL)', () 
     const e = await emir(ym, hm, a.makine, b.makine, 10, '0');
     await hazirlik(e, a.id);
     assert.equal(await istekMiktari(e, hm), 10);
+  });
+
+  test('2522 a: OP 10 hammaddeyi statüye çevirirken elle sarf edilen kısım zincir dışında kalır: hammadde bir kez düşer, statüde eksi kalmaz', async () => {
+    const [ym, hm] = [await kart('yarimamul'), await kart('hammadde')];
+    const a = await istasyon();
+    const e = await emir(ym, hm, a.makine, a.makine, 10, '0');
+    const [op10, op20] = (await o().vt.sorgu<{ id: number }>('SELECT id FROM uretim_emirleri_is_emri WHERE uretim_emri_id = $1 ORDER BY op_no', [e])).map((x) => x.id);
+    const s10 = (await o().sahip.tek<{ id: number }>(
+      "INSERT INTO recete_rota_statu (malzeme_no, ad, kaynak_adim, renk, tur) VALUES ('HM', 'OP 10', $1, '#2F6FDE', 'HM') RETURNING id", [`zincir-${randomBytes(4).toString('hex')}`]))!.id;
+    adimStatusuCozucusuKaydet(async (_db, g) => (g.malzemeNo === ym && g.opNo === 10 ? s10 : null));
+    await malKabul(hm, '10');
+    const sarf = await istek('yonetici', 'POST', '/stok/cikis', { malzemeId: hm, konumId: await kabulKonumu(), miktar: '4', cikisNedeni: 'uretime_sarf', uretimEmriId: e });
+    assert.equal(sarf.durum, 200, JSON.stringify(sarf.govde));
+    // 10 adet x 1 kg: 4 kg elle verildi; zincire 6 kg girer. Parça parça sayımın birikimi saf testtedir (sayım satırı uretim-emirlerinindir).
+    await sayim(e, op10!, a.id, '10');
+    assert.equal(await statuBakiyesi(hm, s10), 6, 'OP 10 statüsüne elle verilmeyen 6 kg çevrildi');
+    await sayim(e, op20!, a.id, '10');
+    assert.equal(await hareketToplami(e, hm, 'cikis'), 10, 'hammadde bir kez düşer: 4 elle + 6 zincirden');
+    assert.equal(await statuBakiyesi(hm, s10), 0, 'statüde eksi ya da artık kalmaz');
+    const toplam = Number((await o().vt.tek<{ m: string }>('SELECT COALESCE(sum(miktar), 0)::text AS m FROM stok_bakiye WHERE malzeme_id = $1', [hm]))!.m);
+    assert.equal(toplam, 0, '10 kg kabul, 10 kg düştü');
   });
 });

@@ -964,6 +964,9 @@ export interface UretimAdimPlani {
   cevirme: { malzemeId: number; kaynakStatuId: number | null; hedefStatuId: number | null; miktar: bigint; tasinan?: true } | null;
   // malzemeId null: emrin ürünü. statuId: birleştirmede dalların parçasından doğan ürün adımın statüsüne girer (1348 a); öteki hâllerde yok.
   giris: { malzemeId: number | null; miktar: bigint; statuId?: number | null } | null;
+  // 2522 a: bu adımda daha önce sayılanın taşınan miktarı (binde; adimPlaniKur ekler). Elle sarf edilen taşınan statü zincirinin dışında
+  // kalır; mahsup bununla birikimli hesaplanır (tasinanMahsubu).
+  oncekiTasinan?: bigint;
 }
 export function uretimAdimPlani(g: {
   adet: bigint; ilkAdim: boolean; sonAdim: boolean; statuId: number | null; oncekiStatuId: number | null; oncekiCiktili: boolean;
@@ -992,6 +995,13 @@ export function uretimAdimPlani(g: {
   }
   const giris = g.sonAdim ? { malzemeId: g.cikti, miktar: g.adet } : g.cikti === null ? null : { malzemeId: g.cikti, miktar: g.adet };
   return { sarflar, cevirme, giris };
+}
+
+// 2522 a: emre elle sarf edilen taşınan malzeme statü zincirinin dışında kalır. Zincirin her taşınan hareketinden (çevirme, statüden sarf)
+// elle verilenin, adımın birikimli miktarı ihtiyacı (elle verilen düşülmüş) aştığı kadarı düşülür; elle verilen emrin sonuna sayılır
+// (elleSarfMahsubu ile aynı). Hammadde bir kez düşer; zincirde eksi oluşmaz.
+export function tasinanMahsubu(g: { istenen: bigint; elle: bigint; oncekiTasinan: bigint; ihtiyac: bigint | null }): bigint {
+  return elleSarfMahsubu({ istenen: g.istenen, elle: g.elle, net: g.elle + g.oncekiTasinan, ihtiyac: g.ihtiyac });
 }
 
 // Dallı emirde (1348 a) adımın taşıma kaynağı, Reçete ve Rota statü kuralıyla aynı. Öncül listesi başka öncülün zaten beklediği
