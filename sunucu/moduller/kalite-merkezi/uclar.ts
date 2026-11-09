@@ -16,6 +16,8 @@ import {
 import * as studyo from './studyo.ts';
 import { kmCmmOnizlemeCevabi, kmCmmOnizleGovdesi, kmCmmPlaniCevabi, kmCmmYazCevabi, kmCmmYazGovdesi } from '#paylasilan/sozlesme/kalite-merkezi-cmm.ts';
 import * as cmm from './cmm.ts';
+import { kmKategoriKarariCevabi, kmKategoriKarariGovdesi, kmKategoriOnaylariCevabi, kmKategoriOnayiSorgusu } from '#paylasilan/sozlesme/kalite-merkezi-kategori-onayi.ts';
+import * as kategoriOnayi from './kategori-onayi/servis.ts';
 
 // Uygulamanın yerel sunucu sözleşmesinin (sunucu.py: sync, doc, files, restore) TMI karşılığı. Okuma tek akıştan, yazma
 // kayıt başına; kural sunucudadır (değişiklik izi yalnız eklenir), kaydın içeriği uygulamanındır.
@@ -89,6 +91,23 @@ export const uclar: Uc[] = [
     yetki: 'kalite-merkezi.onayla',
     cevap: kmTedarikciFirmalariCevabi,
     isle: async ({ db }) => ({ firmalar: await servis.tedarikciFirmaSecenekleri(db) }),
+  }),
+  // 2466 (2461-2 a): tedarikçinin kategori başına Kalite kararı. Tedarikçi kaydını yazan onay yetkisi kararı da verir; ekranı da o açar.
+  uc({
+    yontem: 'GET',
+    yol: '/kalite-merkezi/kategori-onaylari',
+    yetki: 'kalite-merkezi.onayla',
+    sorgu: kmKategoriOnayiSorgusu,
+    cevap: kmKategoriOnaylariCevabi,
+    isle: ({ db, sorgu }) => kategoriOnayi.ekran(db, sorgu.firmaId),
+  }),
+  uc({
+    yontem: 'POST',
+    yol: '/kalite-merkezi/kategori-onaylari/karar',
+    yetki: 'kalite-merkezi.onayla',
+    govde: kmKategoriKarariGovdesi,
+    cevap: kmKategoriKarariCevabi,
+    isle: ({ db, kullanici, govde }) => kategoriOnayi.kararVer(db, kullanici, govde),
   }),
   uc({
     yontem: 'GET',
