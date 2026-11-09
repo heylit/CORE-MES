@@ -115,6 +115,43 @@ const kuralDisiDonemi = z.object({
 });
 const donem = <T extends z.ZodType>(t: T) => z.object({ simdi: t, onceki: t });
 
+// 2477 (2467 a): Raporlar'dan Analiz'e taşınan dağılımlar. Raporlar ayrı hesap yapmaz, bunları okur.
+// Tedarik riskinde listelenen en çok tek kaynak kalemi.
+export const SATIN_ALMA_TEK_KAYNAK_ILK = 15;
+const dagilimKalemi = z.object({ anahtar: z.string(), ad: z.string(), tutarTl: z.number().nonnegative(), pay: yuzde });
+const harcamaDagilimi = z.object({
+  // Bu ay dahil son 12 takvim ayı; ilk siparişten önceki ay null (veri yok), siparişsiz ay 0. Bu ay sürüyor.
+  aylar: z.array(z.object({ ay, tutarTl: z.number().nonnegative().nullable() })),
+  // Harcama penceresinde (donem.bas - donem.bit) kuru bilinen satırlar; kategorisiz kalem boş anahtarla.
+  kategoriler: z.array(dagilimKalemi),
+  // Firmaya bağlı teklif firma kimliğiyle (f:<id>), firmasız teklif adıyla (ad:<ad>).
+  tedarikciler: z.array(dagilimKalemi),
+  // En büyük bir ve üç tedarikçinin harcama payı; harcama yoksa null.
+  ilkBirPay: yuzde.nullable(),
+  ilkUcPay: yuzde.nullable(),
+});
+const tedarikRiski = z.object({
+  // Dönemde siparişe dönen taleplerin teklif sayısı: talep, ortanca ve ayardaki en az teklifin altında kalan talep.
+  teklif: z.object({ talep: SAYI, ortanca: z.number().nonnegative().nullable(), hedefAlti: SAYI }),
+  // Dönemde alınan ve aldığı her talepte fiyatı tek tedarikçiden gelen kalem (katalog, katalogsuzsa ad).
+  tekKaynak: z.object({
+    kalemSayisi: SAYI,
+    kalemler: z.array(z.object({ anahtar: z.string(), ad: z.string(), tedarikci: z.string(), siparisSatiri: SAYI, tutarTl: z.number().nonnegative().nullable() })),
+  }),
+});
+
+// 2477: GET /satin-alma-analiz/siparis-satirlari. Analiz döneminin sipariş satırları; sütunlar eski CSV dökümüyle aynı. TL tutar KDV ve
+// masraf hariç, iskonto dahil, sipariş günü kuruyla; kuru girilmemiş döviz satırında null.
+export const satinAlmaSiparisDokumu = z.object({
+  basTarih: tarih,
+  bitTarih: tarih,
+  satirlar: z.array(z.object({
+    siparisTarihi: tarih, talepNo: z.string(), birim: z.string().nullable(), kategori: z.string(), malzeme: z.string(), tedarikci: z.string(),
+    paraBirimi: z.string(), tutarTl: z.number().nullable(),
+  })),
+});
+export type SatinAlmaSiparisDokumu = z.output<typeof satinAlmaSiparisDokumu>;
+
 export const satinAlmaAnaliziCevabi = z.object({
   hesaplanan: z.string(),
   tedarikciler: z.array(tedarikci),
@@ -170,6 +207,8 @@ export const satinAlmaAnaliziCevabi = z.object({
     })),
   }),
   kuralDisi: z.object({ enAzTeklif: SAYI, donem: donem(kuralDisiDonemi) }),
+  harcamaDagilimi,
+  tedarikRiski,
   tuketim: z.object({
     // Stok tüketim serisinin bağı (kablolama); yoksa malzeme listesi boştur.
     stokBagi: z.boolean(),
@@ -186,3 +225,5 @@ export type SatinAlmaAsamaOzeti = z.output<typeof asamaOzeti>;
 export type SatinAlmaTutarOlcusu = z.output<typeof tutarOlcusu>;
 export type SatinAlmaSapmaDonemi = z.output<typeof sapmaDonemi>;
 export type SatinAlmaKuralDisiDonemi = z.output<typeof kuralDisiDonemi>;
+export type SatinAlmaHarcamaDagilimi = z.output<typeof harcamaDagilimi>;
+export type SatinAlmaTedarikRiski = z.output<typeof tedarikRiski>;

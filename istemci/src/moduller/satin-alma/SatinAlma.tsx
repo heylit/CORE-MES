@@ -61,7 +61,8 @@ export function OnaylarSayfasi() {
 }
 export const MalzemelerSayfasi = () => <Merkez rol="buyer" sayfa="materials" yol="/satin-alma/malzemeler" />;
 export const TedarikcilerSayfasi = () => <Merkez rol="buyer" sayfa="suppliers" yol="/satin-alma/tedarikciler" />;
-export const RaporlarSayfasi = () => <Merkez rol="buyer" sayfa="reports" yol="/satin-alma/raporlar" />;
+// 2477: Raporlar, Analiz'in dışa aktarımıdır; merkezin prototip sayfası kalktı.
+export { Raporlar as RaporlarSayfasi } from './raporlar/Raporlar.tsx';
 export { DisOperasyonlar as DisOperasyonlarSayfasi } from './dis-operasyon/DisOperasyonlar.tsx';
 export { KgFiyatlari as KgFiyatlariSayfasi } from './kg-fiyat/KgFiyatlari.tsx';
 export { TedarikTerminleri as TedarikTerminleriSayfasi } from './tedarik-termin/TedarikTerminleri.tsx';

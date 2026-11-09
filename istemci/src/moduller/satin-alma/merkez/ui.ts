@@ -18,7 +18,7 @@ import {
   $, $$, addDays, clamp, clone, dayDiff, deltaHTML, esc, fmtDate, isNum, money, nf0, nf2, nfx, norm, numIn, parseNum,
   nf1, pct, sum, todayStr, toCSV, uid, kokIcinde, type FormEl } from "./util.ts";
 import { labelTables, onAfterRender, PRESETS, rankHTML, readSplitAssign, render, summaryText, UI, updateSplitSum, verdictHTML } from "./views.ts";
-import { basamakYazabilir, reportCSV, unlinkedItems } from "./memory.ts";
+import { basamakYazabilir, unlinkedItems } from "./memory.ts";
 import { partileriUnut } from "./partiler.ts";
 import { ODEME_SEKLI, siparisTakibi, takibiUnut, takipGuncelle } from "./takip.ts";
 import { approvalFormHTML, poText, printDoc } from "./docs.ts";
@@ -864,7 +864,6 @@ const ACTIONS: Record<string, Action> = {
   "view": el => { V.view = el.dataset.v as ViewState["view"]; render(); },
   // Panoda 40'tan fazla talebi olan sütun: o durumun listesi açılır (2412-2).
   "pano-sutun": el => { V.view = "list"; V.status = el.dataset.v || "all"; render(); },
-  "period": el => { V.period = el.dataset.v as ViewState["period"]; render(); },
   "close": () => closeModal(),
   "toggle": el => { const t = $("#" + el.dataset.t!); if (t) t.hidden = !t.hidden; },
   "copy-tm": () => { void copyText($("#tm-ta").value); },
@@ -1175,8 +1174,7 @@ const ACTIONS: Record<string, Action> = {
   "bulk-rm": el => { bulkRead(); BULK!.cols.splice(+el.dataset.col!, 1); if (!BULK!.cols.length) BULK!.cols.push(bulkBlank("")); bulkRerender(); },
   "bulk-save": () => bulkSave(),
   "bulk-close": () => bulkClose(),
-  "pick-top": (el, r) => { if (!r) return; const top = evaluate(r).ranking[0]; if (!top) return; V.tab = "compare"; render(); teklifSec(top.q.id); $<HTMLElement>(".sa-karar")?.scrollIntoView({ block: "center" }); },
-  "export-report": () => offerFile(`satin-alma-harcama-${todayStr()}.csv`, reportCSV())
+  "pick-top": (el, r) => { if (!r) return; const top = evaluate(r).ranking[0]; if (!top) return; V.tab = "compare"; render(); teklifSec(top.q.id); $<HTMLElement>(".sa-karar")?.scrollIntoView({ block: "center" }); }
 };
 let SET_DRAFT: Settings | null = null;
 export function readSettingsForm(): Settings {

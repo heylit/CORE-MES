@@ -12,7 +12,7 @@ import {
   $, $$, addDays, clamp, dayDiff, deltaHTML, esc, fmtDate, fmtTs, isNum, money, MONTHS, nf0, nf2, nfx, norm, numIn,
   pad, parseNum, pct, short, sum, todayStr, type FormEl,
 } from "./util.ts";
-import { viewMaterial, viewMaterials, viewReports, viewSettings, viewSupplier, viewSuppliers } from "./memory.ts";
+import { viewMaterial, viewMaterials, viewSettings, viewSupplier, viewSuppliers } from "./memory.ts";
 import { tabSim } from "./sim.ts";
 import { siparisTakibiHTML } from "./takip.ts";
 import { inlineBulkHTML } from "./ui.ts";
@@ -32,7 +32,7 @@ export function render(): void {
   const ae = document.activeElement as FormEl | null;
   const keep = ae && m.contains(ae) && ae.id ? { id: ae.id, s: ae.selectionStart, e: ae.selectionEnd } : null;
   if (!S.ready) { m.innerHTML = '<p class="loading">Veriler yükleniyor…</p>'; return; }
-  const P: Record<Page, () => string> = { dash: viewDash, requests: viewRequests, orders: () => "", request: viewRequest, materials: viewMaterials, material: viewMaterial, suppliers: viewSuppliers, supplier: viewSupplier, reports: viewReports, settings: viewSettings };
+  const P: Record<Page, () => string> = { dash: viewDash, requests: viewRequests, orders: () => "", request: viewRequest, materials: viewMaterials, material: viewMaterial, suppliers: viewSuppliers, supplier: viewSupplier, reports: () => "", settings: viewSettings };
   const role = getRole();
   if (V.page === "dash") P.dash = role === "approver" ? viewApprovals : role === "requester" ? viewRequesterHome : () => "";
   if (role === "buyer" && V.page === "requests") P.requests = () => (V.view === "board" ? boardHTML() : "");

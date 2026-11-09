@@ -91,3 +91,14 @@ export function sapmaAltMetni(d: SatinAlmaSapmaDonemi): string {
 export const bantDisiOrani = (d: SatinAlmaSapmaDonemi): number | null => (d.satir === 0 ? null : Math.round((d.bantDisi / d.satir) * 1000) / 10);
 export const BANT_ADLARI = { icinde: 'Bant içinde', ustunde: 'Hedefin üstünde', altinda: 'Hedefin altında' } as const;
 export const kuralDisiMetni = (d: SatinAlmaKuralDisiDonemi): string => (d.payYuzde === null ? 'Veri yok' : yuzdeMetni(d.payYuzde));
+
+// ---- 2477: harcama dağılımı ve tedarik riski metinleri.
+export const kategoriAdi = (ad: string): string => (ad === '' ? 'Kategorisiz' : ad);
+export function yogunlasmaMetni(d: SatinAlmaAnaliziCevabi['harcamaDagilimi']): string {
+  if (d.ilkBirPay === null || d.ilkUcPay === null) return 'Dönemde harcama yok.';
+  return `En büyük tedarikçi ${yuzdeMetni(d.ilkBirPay)}, ilk üç ${yuzdeMetni(d.ilkUcPay)}.`;
+}
+export function teklifAltMetni(t: SatinAlmaAnaliziCevabi['tedarikRiski']['teklif'], enAz: number): string {
+  if (t.talep === 0) return 'Son 12 ayda siparişe dönen talep yok.';
+  return `ortanca, ${String(t.talep)} talep · en az ${String(enAz)} teklifin altında ${String(t.hedefAlti)}`;
+}

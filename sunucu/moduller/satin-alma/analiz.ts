@@ -1,6 +1,6 @@
 import type { Db } from '#cekirdek/db.ts';
 import {
-  SATIN_ALMA_ANALIZI_GECMIS_AY, SATIN_ALMA_ANALIZI_HARCAMA_AY, SATIN_ALMA_ANALIZI_SURE_EN_AZ, SATIN_ALMA_ANALIZI_TAHMIN_EN_AZ_AY, type SatinAlmaAnaliziCevabi,
+  type SatinAlmaSiparisDokumu, SATIN_ALMA_ANALIZI_GECMIS_AY, SATIN_ALMA_ANALIZI_HARCAMA_AY, SATIN_ALMA_ANALIZI_SURE_EN_AZ, SATIN_ALMA_ANALIZI_TAHMIN_EN_AZ_AY, type SatinAlmaAnaliziCevabi,
 } from '#paylasilan/sozlesme/satin-alma-analiz.ts';
 import { TESIS_SAAT_DILIMI, tesisGunu } from '#paylasilan/zaman.ts';
 import { kisiAdlari } from '../kisiler/disari.ts';
@@ -8,6 +8,7 @@ import { firmaAdlari, karneOzetleri, teslimGecikmeleri } from '../musteri-tedari
 import {
   asamaKirilimlari, asamaOzeti, enCokSapanlar, fiyatDegisimleri, fiyatFarki, gercekSure, harcamaAbc, hedefSapmalari, kacinilanMaliyet,
   kuralDisiAlim, oncekiAlislar, tamAylar, tedarikSuresi, tuketimMalzemesi, zamanindaBayes, type AnalizSatiri,
+  aylikHarcama, harcamaDagilimi, satirTutariTl, tedarikciAnahtari, tekKaynak, teklifOzeti, yogunlasma,
 } from './analiz-kurallar.ts';
 import * as sorgular from './sorgular.ts';
 
@@ -104,6 +105,13 @@ export async function satinAlmaAnalizi(db: Db, simdi: number = Date.now()): Prom
   const oncekiHarcama = harcamaAbc(satirlar, oncekiBas, oncekiBit).toplamTl;
   const sapmaSimdi = hedefSapmalari(kimlikli, onceki, esik, harcamaBas, bugun);
   const sapmaOnceki = hedefSapmalari(kimlikli, onceki, esik, oncekiBas, oncekiBit);
+
+  // 2477: Raporlar'dan taşınan dağılımlar.
+  const dokum = await sorgular.analizSiparisDokumu(db, harcamaBas, bugun);
+  const tedarikciAdi = await tedarikciAdlari(db, dokum);
+  const tedarikcilerDagilimi = harcamaDagilimi(dokum, tedarikciAnahtari, (_s, a) => tedarikciAdi(a), harcamaBas, bugun);
+  const verenler = await sorgular.analizTeklifVerenler(db, [...new Set(dokum.map((d) => d.talepId))]);
+  const sonAylar = [...tamAylar(bugun.slice(0, 7), SATIN_ALMA_ANALIZI_HARCAMA_AY - 1), bugun.slice(0, 7)];
   return {
     hesaplanan: new Date(simdi).toISOString(),
     tedarikciler,
@@ -134,5 +142,40 @@ export async function satinAlmaAnalizi(db: Db, simdi: number = Date.now()): Prom
         onceki: kuralDisiAlim(kimlikli, baglar, ayar.enAzTeklif, oncekiHarcama, oncekiBas, oncekiBit),
       },
     },
+    harcamaDagilimi: {
+      aylar: aylikHarcama(satirlar, sonAylar),
+      kategoriler: harcamaDagilimi(dokum, (d) => d.kategori.trim(), (d) => d.kategori.trim(), harcamaBas, bugun),
+      tedarikciler: tedarikcilerDagilimi,
+      ...yogunlasma(tedarikcilerDagilimi),
+    },
+    tedarikRiski: {
+      teklif: teklifOzeti(kimlikli, baglar, ayar.enAzTeklif, harcamaBas, bugun),
+      tekKaynak: tekKaynak(dokum, verenler, tedarikciAdi, harcamaBas, bugun),
+    },
+  };
+}
+
+// Firmaya bağlı teklifin adı firma kaydından (yoksa teklifteki son ad), firmasız teklifin adı teklifte yazılandır.
+async function tedarikciAdlari(db: Db, dokum: readonly sorgular.AnalizDokumSatiri[]): Promise<(anahtar: string) => string> {
+  const adlar = await firmaAdlari(db, [...new Set(dokum.map((d) => d.firmaId).filter((x): x is number => x !== null))]);
+  const teklifteki = new Map(dokum.map((d) => [tedarikciAnahtari(d), d.firmaId !== null ? (adlar.get(d.firmaId) ?? d.tedarikciAdi) : d.tedarikciAdi]));
+  return (anahtar) => teklifteki.get(anahtar) ?? '';
+}
+
+// 2477: Raporlar > Sipariş satırları (eski CSV dökümünün sütunları). Dönem Analiz'in harcama penceresidir.
+export async function siparisDokumu(db: Db, simdi: number = Date.now()): Promise<SatinAlmaSiparisDokumu> {
+  const bugun = tesisGunu(simdi);
+  const bas = birYilOnce(bugun);
+  const dokum = await sorgular.analizSiparisDokumu(db, bas, bugun);
+  const ad = await tedarikciAdlari(db, dokum);
+  return {
+    basTarih: bas, bitTarih: bugun,
+    satirlar: dokum.map((d) => {
+      const t = satirTutariTl(d);
+      return {
+        siparisTarihi: d.siparisTarihi, talepNo: d.talepNo, birim: d.birim, kategori: d.kategori, malzeme: d.ad, tedarikci: ad(tedarikciAnahtari(d)),
+        paraBirimi: d.paraBirimi, tutarTl: t === null ? null : Math.round(t * 100) / 100,
+      };
+    }),
   };
 }
