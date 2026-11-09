@@ -64,22 +64,11 @@ const lifeDef = (): OmurAyari => ({
 });
 export const LIFE_DEF: Readonly<OmurAyari> = lifeDef();
 
-const gsimOptDef = () => ({
-  rapid: 30000, dialect: 'auto', lathe: false, removal: true, showRapid: true, follow: false, speed: 'auto', stockSrc: 'blk', hamOrigin: 'tlf',
-  showPart: true, compare: true,
-});
-
-const alanNesnesi = (v: unknown): Record<string, unknown> => (v !== null && typeof v === 'object' ? v as Record<string, unknown> : {});
-
 // Prototipin betik yüklenirken duruma uyguladığı varsayılanlar, prototipteki sırayla (satır 18517-18518, 19069-19071, 19646-19647).
 // Kayıt yüklendikten hemen sonra bir kez uygulanır. Oto-CAM kalktı (1399): kayıttaki `cam` ve `suProf` alanlarına dokunulmaz.
 export function acilisVarsayimlari(s: CncDurumu): void {
   s.stock = Object.assign({}, STOCK_DEF, s.stock || {});
   if (s.stock.axV !== 3) { s.stock.axis = 'auto'; s.stock.axV = 3; }
-  s['gsimOpt'] = Object.assign(gsimOptDef(), s['gsimOpt'] || {});
-  const gtools = s['gtools'];
-  if (!gtools || !alanNesnesi(gtools)['__v2']) s['gtools'] = { __v2: 1 };
-  if (s['gstock'] && !s['gstockMan']) { s['gstockMan'] = s['gstock']; delete s['gstock']; }
   s.life = Object.assign(lifeDef(), s.life || {});
   if (!s.life.cal) s.life.cal = {};
   s['wear'] = s['wear'] || {};

@@ -2,10 +2,10 @@ import { useEffect, useSyncExternalStore } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 
 // Görünümler prototipin anahtarlarıyla (data-view) anılır; adresleri prototipin VIEW_HASH'idir.
-export const GORUNUMLER = ['home', 'setup', 'prep', 'lib', 'stock', 'gcode', 'life'] as const;
+export const GORUNUMLER = ['home', 'setup', 'prep', 'lib', 'stock', 'life'] as const;
 export type Gorunum = (typeof GORUNUMLER)[number];
 export const VIEW_HASH: Record<Gorunum, string> = {
-  home: 'ana-sayfa', setup: 'kurulum', prep: 'hazirlik', lib: 'kutuphane', stock: 'hammadde', gcode: 'simulasyon', life: 'takim-omru',
+  home: 'ana-sayfa', setup: 'kurulum', prep: 'hazirlik', lib: 'kutuphane', stock: 'hammadde', life: 'takim-omru',
 };
 export const HASH_VIEW: Record<string, Gorunum> = Object.fromEntries(GORUNUMLER.map((g) => [VIEW_HASH[g], g]));
 export const KOK = '/cnc-kurulum/yeni';

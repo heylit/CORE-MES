@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { Simge } from '../../../../ortak/arayuz/index.ts';
 
-// Prototipte iletiler isaretle baslar (⚠ uyari, ✓ tamam); isaret simge olur (T4), metin aynen kalir. G-Kod Sim. de kullanir.
+// Prototipte iletiler isaretle baslar (⚠ uyari, ✓ tamam); isaret simge olur (T4), metin aynen kalir.
 export function ileti(m: string | null | undefined): ReactNode {
   if (!m) return null;
   const uyari = m.startsWith('⚠'), tamam = m.startsWith('✓');

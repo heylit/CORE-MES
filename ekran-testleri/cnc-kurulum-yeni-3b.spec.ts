@@ -10,9 +10,9 @@ test.use({ launchOptions: async ({ launchOptions }, kullan) => { await kullan({ 
 test.describe('3B sahne', () => {
   // Her 3B alan tek çizicinin kopyasını kendi tuvalinde gösterir (sahne/Sahne.tsx): tuval görünür alanı kaplar ve boş değildir.
   // CI'daki başsız tarayıcı yazılım çizicisidir ve orada 3B kapalıdır (1138 a); sahne testte zorlanarak çizdirilir (sahne/gl.ts).
-  test('Kurulum, Hazırlık, Kütüphane, Ham Malzeme, G-Kod ve Takım Ömrü sahneleri çizilir', async ({ page, ac, ag }) => {
+  test('Kurulum, Hazırlık, Kütüphane, Ham Malzeme ve Takım Ömrü sahneleri çizilir', async ({ page, ac, ag }) => {
     // Yazılım çizicisinde ilk kare saniyeler sürer; CI'da g768'de 30 sn'yi aştığı görüldü (2418). Sahne başına bekleme 60 sn'dir,
-    // toplam süre altı sahnenin çoğu birkaç saniyede çizildiği için 240 sn içinde kalır. İlk kare süresi CI kaydına yazılır ki
+    // toplam süre beş sahnenin çoğu birkaç saniyede çizildiği için 240 sn içinde kalır. İlk kare süresi CI kaydına yazılır ki
     // yavaşlama sınıra dayanmadan görülsün.
     test.setTimeout(240_000);
     const SAHNE_BEKLEME = 60_000;
@@ -21,7 +21,7 @@ test.describe('3B sahne', () => {
       (globalThis as { tmiv2Sahne3B?: string }).tmiv2Sahne3B = 'zorla';
       localStorage.setItem('tmiv2.cnc-kurulum.cizim-modu', '3d');
     });
-    for (const yol of ['kurulum', 'hazirlik', 'kutuphane', 'hammadde', 'simulasyon', 'takim-omru']) {
+    for (const yol of ['kurulum', 'hazirlik', 'kutuphane', 'hammadde', 'takim-omru']) {
       await ac(`/cnc-kurulum/yeni/${yol}`);
       const baslangic = Date.now();
       // Kütüphane tezgâh cepleriyle açılır (1276 a); raf sahnesi Elimizdekiler'dedir.
@@ -66,15 +66,14 @@ test.describe('3B sahne', () => {
     expect(ag.hatalar).toEqual([]);
   });
 
-  // 3D'li bilgisayarda da varsayılan 2B'dir (1921 a): Ham Malzeme ve G-Kod düz tuvale çizilir. 3D seçimi sayfa yenilenince de kalır (1271).
-  test('2B modda Ham Malzeme ve G-Kod çizilir, seçim hatırlanır', async ({ page, ac, ag }) => {
+  // 3D'li bilgisayarda da varsayılan 2B'dir (1921 a): Ham Malzeme düz tuvale çizilir. 3D seçimi sayfa yenilenince de kalır (1271).
+  test('2B modda Ham Malzeme çizilir, seçim hatırlanır', async ({ page, ac, ag }) => {
     test.setTimeout(120_000);
     await page.addInitScript(() => { (globalThis as { tmiv2Sahne3B?: string }).tmiv2Sahne3B = 'zorla'; });
     const secici = page.getByRole('group', { name: 'Çizim modu' });
-    for (const yol of ['hammadde', 'simulasyon']) {
-      // Her açılış sayfayı yeniden yükler; örnek parça yeniden seçilir, G-Kod örnek programla açılır.
+    for (const yol of ['hammadde']) {
       await ac(`/cnc-kurulum/yeni/${yol}`);
-      if (yol === 'hammadde') await page.getByRole('button', { name: 'Örnek parça' }).click();
+      await page.getByRole('button', { name: 'Örnek parça' }).click();
       const tuval = page.locator('.tc-cy-sahne-2b');
       // 2B modda da modül açılırken 3B çizici yazılım çizicisinde kurulur (sahne/gl.ts, 3D seçilebilir mi diye); yüklü makinede bu
       // saniyeler sürer ve görünüm ondan sonra çizilir. Tuvalin gelmesi, ilk sahne testindeki gibi yazılım çizicisinin süresiyle beklenir.

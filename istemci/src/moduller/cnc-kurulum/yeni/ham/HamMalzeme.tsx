@@ -3,8 +3,6 @@ import { Dugme, OnayPenceresi } from '../../../../ortak/arayuz/index.ts';
 import type { HamAnaliziCevabi } from '#paylasilan/sozlesme/cnc-kurulum.ts';
 import { fmt, fmtN } from '../bicim.ts';
 import { save, state, useCncSurum } from '../depo.ts';
-import { useGorunum } from '../gorunum.ts';
-import { gsimHazirla } from '../hesap/gkod.ts';
 import { hamCsv, hamCsvAdi, type HamAyar } from '../hesap/ham.ts';
 import { download } from '../indir.ts';
 import {
@@ -36,7 +34,6 @@ type Bekleyen = { olcu: NonNullable<HamAnaliziCevabi['olcu']>; kaynak: string };
 export function HamMalzeme() {
   useCncSurum();
   useParca();
-  const { git } = useGorunum();
   const { yazabilir } = useCncYetkisi();
   const dosya = useRef<HTMLInputElement>(null), alan = useRef<HTMLDivElement>(null), sahne = useRef<HamSahnesi | null>(null);
   const [cizici2b] = useState(() => new Ham2b()), mod = useCizimModu();
@@ -75,8 +72,7 @@ export function HamMalzeme() {
   const sonucEylemi = (a: SonucEylemi): void => {
     const r = S.res;
     if (!r) return;
-    if (a === 'toSim') { gsimHazirla().stockSrc = 'ham'; save(); git('gcode'); }
-    else if (a === 'toSetup') {
+    if (a === 'toSetup') {
       state.meta.stock = r.label + ' · ' + stockMat().name + ' · ' + fmtN(r.ms, 2) + ' kg';
       save();
       S.msg = '✓ Kurulum kartına yazıldı: ' + state.meta.stock;

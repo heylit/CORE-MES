@@ -20,6 +20,5 @@ export const GORUNUM_KAYITLARI: readonly GorunumKaydi[] = [
   { anahtar: 'prep', baslik: 'Hazırlık', simge: 'clipboard-check', bilesen: parca(() => import('./kurulum/index.tsx'), 'Hazirlik') },
   { anahtar: 'lib', baslik: 'Kütüphane', simge: 'layers', bilesen: parca(() => import('./kutuphane/index.tsx'), 'Kutuphane') },
   { anahtar: 'stock', baslik: 'Ham Malzeme', simge: 'cube', bilesen: parca(() => import('./ham/index.tsx'), 'HamMalzeme') },
-  { anahtar: 'gcode', baslik: 'G-Kod Sim.', simge: 'play', bilesen: parca(() => import('./gkod/index.tsx'), 'GkodSim') },
   { anahtar: 'life', baslik: 'Takım Ömrü', simge: 'gauge', bilesen: parca(() => import('./omur/index.tsx'), 'TakimOmru') },
 ];
