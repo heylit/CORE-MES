@@ -201,6 +201,13 @@ export interface VtGirdisi {
   yamalar: { ad: string; sha256: string; dosyalar: string[] }[];
 }
 
+// Yerel ayarsız küme kabuğun LANG'ından C olur; C'de lower('Ç') = 'Ç' kalır ve Türkçe harf tekilliği CI'dan (en_US.utf8) farklı
+// davranır (2457 a). C.UTF-8 sıralamayı C ile aynı bırakır, yalnız harf katlamayı açar. Windows'ta C.UTF-8 yoktur.
+export function initdbArgumanlari(veri: string, platform: NodeJS.Platform = process.platform): string[] {
+  const temel = ['-D', veri, '-U', 'postgres', '-A', 'trust', '-E', 'UTF8', '--no-instructions'];
+  return platform === 'win32' ? temel : [...temel, '--locale=C.UTF-8'];
+}
+
 // Root ile koşan konteynerde initdb ve postgres root'u reddeder: küme postgres kullanıcısıyla açılır.
 function kullaniciAyari(): { uid: number; gid: number } | null {
   if (process.platform === 'win32' || process.getuid?.() !== 0) return null;
@@ -255,7 +262,7 @@ export async function vtDenemesi(g: VtGirdisi): Promise<{ sonuc: VtSonuc; satirl
     mkdirSync(kume);
     if (kullanici) chownSync(kume, kullanici.uid, kullanici.gid);
     const veri = join(kume, 'veri');
-    const init = pgKos('initdb', ['-D', veri, '-U', 'postgres', '-A', 'trust', '-E', 'UTF8', '--no-instructions']);
+    const init = pgKos('initdb', initdbArgumanlari(veri));
     if (init.kod !== 0) throw new Error(`initdb: ${sonSatirlar(init.cikti, 3).join(' | ')}`);
     const port = await bosPort();
     // CI'daki atılacak test sunucusunun ayarları (kontrol.yml): diske yazma beklenmez.
