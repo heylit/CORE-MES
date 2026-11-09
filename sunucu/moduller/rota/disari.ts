@@ -23,6 +23,9 @@ export {
 } from './kurallar.ts';
 // 3D Atölyesi yüzey işaretlemesinin işlem listesi (2144, 2140-3); bağı kablolama.ts kurar, yetki denetlemez.
 export { yuzeyIslemiAdimlari } from './servis.ts';
+// Patlamış rota önizlemesinde ara adımın statülü kartı ve stoğu (2610 a); bağı kablolama.ts kurar (Reçete ve Rota rotayı ithal eder).
+export { araHalCozucusuKaydet } from './servis.ts';
+export type { AraHalCozucusu, AraHalCozumu } from './servis.ts';
 export { malzemeKartiIzleri } from './sorgular.ts';
 
 // Hazırlık matrisinin rota maddesi (2146-1 a, yalnız uyarır): emir, ürünün yürürlükteki rota revizyonuyla mı açıldı. Rotadan açılmamış

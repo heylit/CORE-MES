@@ -20,9 +20,10 @@ import { kisiSecenekleri } from '../kisiler/disari.ts';
 import { firmaAra } from '../musteri-tedarikci/disari.ts';
 import { fasonSuresiTahminleri } from '../satin-alma/disari.ts';
 import { durumRevizyonlari, patlatmaRevizyonu, revizyonKunyeleri, yururluktekiRevizyonId, yururluktekiRevizyonIdleri } from '../rota/disari.ts';
+import type { AraHalCozumu } from '../rota/disari.ts';
 import type { malzemeAra } from '../malzemeler/disari.ts';
 import { aktifMalzemelerSinirli, malzemeOzetleri, olcuBirimleri } from '../malzemeler/disari.ts';
-import { emirlerinNetSarfi, malzemeStokDurumlari, sonHareketler, statuluStoklar } from '../stok/disari.ts';
+import { emirlerinNetSarfi, malzemeStokDurumlari, sonHareketler, statuluStoklar, statuStoklari, stokMiktarlari } from '../stok/disari.ts';
 import { takvimGunleri, vardiyaTanimlari } from '../vardiya/disari.ts';
 import {
   adimCiktisiBul, adimKimligi, araStokHavuzuKur, bagFarklari, emirMalzemeIhtiyaclari, bagiDegisenUrunler, jsondanSatirlar, degerBicimeUyarMi, emirleriCevir, adimAdetleriCevir, hareketleriCevir, isMerkeziCevir, maliyetCevir,
@@ -387,6 +388,40 @@ export async function adimStatusu(db: Db, g: { malzemeNo: number; opNo: number; 
   if (id !== null) return id;
   await sorgular.statuEsitle(db, turetilen.filter((x) => urunu(x) === g.malzemeNo).map((x) => ({ ...x, rotaRevizyonuId: revizyon })));
   return sorgular.statuKimligi(db, kimlik, revizyon);
+}
+
+// Patlamış rota önizlemesinde ara adımların çıktısı (2610 a): adımStatusu ve adimCiktisi ile aynı belge ve kural, ama yazmaz (GET okur; statü
+// satırı yoksa açılmaz, statu null). Çıktı kartlı adımda stok kartın statüsüz stoğudur (kullanılabilir plana sayılandır); statülü adımda
+// taşınan malzemenin o statüdeki stoğu. Statünün taşınanı belgede stok koduyla durur; kart kimliği sayımın okuduğu kartlardan bulunur.
+export async function adimAraHalleri(
+  db: Db, g: { malzemeNo: number; revizyonId: number; opNolari: readonly number[] },
+): Promise<Map<number, AraHalCozumu>> {
+  const sonuc = new Map<number, AraHalCozumu>();
+  const belge = await sayimDurumu(db, g.malzemeNo, g.revizyonId);
+  if (belge === null) return sonuc;
+  const turetilen = statuleriTuret(belge);
+  const kodlar = new Map([...(await malzemeOzetleri(db, sayimKartKimlikleri(belge, g.malzemeNo))).values()].map((o) => [malzemeCevir(o, undefined).code, o.id]));
+  const satirlar: { opNo: number; kartId: number | null; statu: { id: number; ad: string } | null; ciktiKarti: boolean }[] = [];
+  for (const opNo of g.opNolari) {
+    const cikti = adimCiktisiBul(belge, g.malzemeNo, opNo);
+    if (cikti !== null) { satirlar.push({ opNo, kartId: cikti, statu: null, ciktiKarti: true }); continue; }
+    const kimlik = adimKimligi(g.malzemeNo, opNo);
+    const t = turetilen.find((x) => x.kaynakAdim === kimlik);
+    if (t === undefined) continue;
+    const id = await sorgular.statuKimligi(db, kimlik, g.revizyonId);
+    satirlar.push({ opNo, kartId: kodlar.get(t.malzemeNo) ?? null, statu: id === null ? null : { id, ad: t.ad }, ciktiKarti: false });
+  }
+  const statuStogu = new Map((await statuStoklari(db, satirlar.flatMap((x) => (x.kartId === null || x.statu === null ? [] : [{ malzemeId: x.kartId, statuId: x.statu.id }]))))
+    .map((r) => [`${String(r.malzemeId)}:${String(r.statuId)}`, { toplam: r.toplam, planaSayilan: r.planaSayilan }]));
+  const kartStogu = await stokMiktarlari(db, satirlar.flatMap((x) => (x.ciktiKarti && x.kartId !== null ? [x.kartId] : [])));
+  for (const x of satirlar) {
+    const k = x.kartId === null ? undefined : x.ciktiKarti ? kartStogu.get(x.kartId) : undefined;
+    const stok = x.kartId === null ? null
+      : x.ciktiKarti ? (k === undefined ? null : { toplam: k.toplam, planaSayilan: k.kullanilabilir })
+      : x.statu === null ? null : statuStogu.get(`${String(x.kartId)}:${String(x.statu.id)}`) ?? null;
+    sonuc.set(x.opNo, { statu: x.statu, kartId: x.kartId, stok });
+  }
+  return sonuc;
 }
 
 // Üretim sayımında adımın çıktı kartı (kart #1289): rotada ara adımın "çıkan" kalemi; yoksa null. Statüyle aynı revizyondan okunur
