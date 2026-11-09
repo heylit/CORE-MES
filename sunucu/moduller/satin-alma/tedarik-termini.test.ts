@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { randomUUID } from 'node:crypto';
 import { after, before, describe, test } from 'node:test';
 import type { FastifyInstance } from 'fastify';
 import { ESKI_SURUM_ILETISI } from '#paylasilan/hata.ts';
@@ -11,7 +12,7 @@ import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
 import { tedarikIhtiyaclariniYaz, tedarikTerminleri } from './disari.ts';
-import { tedarikTerminiKaydet, tedarikTerminleriListesi } from './servis.ts';
+import { planIhtiyaclariniYaz, tedarikTerminiKaydet, tedarikTerminleriListesi } from './servis.ts';
 
 const PAROLA = 'dogru-parola-1';
 
@@ -164,5 +165,59 @@ describe('satin-alma tedarik termini (533 a, gerçek PostgreSQL)', () => {
     assert.equal((await istek(ilgisiz, 'GET', '/satin-alma-tedarik-terminleri')).statusCode, 403);
     const oturumsuz = await app.inject({ method: 'POST', url: '/api/satin-alma-tedarik-terminleri/kaydet', headers: { 'istek-kimligi': crypto.randomUUID() }, payload: { malzemeNo: m2, termin: null, surum: 1 } });
     assert.equal(oturumsuz.statusCode, 401);
+  });
+
+  test('2433: termin takibi malzemeyi plan, talep, sipariş ve elle terminle birleştirir; durum sunucudan; siparişte elle termin gösterilmez', async () => {
+    const s = ortam!.sahip;
+    let sira = 0;
+    const talep = async (durum: string, ihtiyac: string | null, malzemeNo: number | null, miktar: string, siparis?: { teslim: string | null }) => {
+      sira += 1;
+      const [t, kl, tk] = [randomUUID(), randomUUID(), randomUUID()];
+      await s.sorgu('INSERT INTO satin_alma_talep (id, yil, sira, baslik, talep_eden_kisi_id, acan_kisi_id, durum, ihtiyac_tarihi, iptal_nedeni) VALUES ($1, 2099, $2, $3, $4, $4, $5, $6, $7)',
+        [t, 70000 + sira, `Deneme talep ${sira}`, yonetici.id, durum, ihtiyac, durum === 'iptal' ? 'Deneme iptal' : '']);
+      let katalog: string | null = null;
+      if (malzemeNo !== null) {
+        katalog = randomUUID();
+        await s.sorgu('INSERT INTO satin_alma_katalog (id, malzeme_no) VALUES ($1, $2)', [katalog, malzemeNo]);
+      }
+      await s.sorgu("INSERT INTO satin_alma_talep_kalemi (talep_id, id, sira, ad, katalog_id, miktar, birim) VALUES ($1, $2, 1, 'Deneme serbest kalem', $3, $4, 'adet')", [t, kl, katalog, miktar]);
+      if (siparis) {
+        await s.sorgu("INSERT INTO satin_alma_teklif (talep_id, id, para_birimi, teklif_tarihi) VALUES ($1, $2, 'TRY', current_date)", [t, tk]);
+        await s.sorgu("INSERT INTO satin_alma_karar (talep_id, mod, karar_tarihi) VALUES ($1, 'bolunmus', current_date)", [t]);
+        await s.sorgu('INSERT INTO satin_alma_siparis (talep_id, teklif_id, beklenen_teslim) VALUES ($1, $2, $3)', [t, tk, siparis.teslim]);
+        await s.sorgu("INSERT INTO satin_alma_siparis_satiri (talep_id, teklif_id, kalem_id, miktar, birim) VALUES ($1, $2, $3, $4, 'adet')", [t, tk, kl, miktar]);
+      }
+      return t;
+    };
+    const bugun = (await s.tek<{ g: string }>('SELECT current_date::text AS g'))!.g;
+    const gun = async (n: number) => (await s.tek<{ g: string }>('SELECT (current_date + $1::int)::text AS g', [n]))!.g;
+    // m1: plan 10 adet, 10 gün sonra; 4 adet sipariş 5 gün sonra + 3 adet açık talep: eksik 3.
+    await vt().tx((db) => planIhtiyaclariniYaz(db, [{ malzemeNo: m1, miktar: 10, gerekenTarih: '2099-01-01', emirler: ['UE-1'], stokBilinmiyor: false }]));
+    await s.sorgu('UPDATE satin_alma_plan_ihtiyaci SET gereken_tarih = current_date + 10 WHERE malzeme_no = $1', [m1]);
+    const sip = await talep('siparis_verildi', null, m1, '4', { teslim: await gun(5) });
+    await talep('teklif_isteniyor', await gun(8), m1, '3');
+    // Serbest kalem (kartsız): kalem başına satır, talep yolda.
+    const serbest = await talep('taslak', await gun(20), null, '2');
+    // İptal edilmiş talep görünmez.
+    await talep('iptal', await gun(2), m2, '9');
+    const cevap = await vt().tx((db) => tedarikTerminleriListesi(db));
+    const takip = cevap.takip!;
+    const a = takip.find((x) => x.anahtar === `malzeme:${m1}`)!;
+    assert.deepEqual([a.tur, a.kod, a.ihtiyacMiktari, a.gerekenTarih, a.emirler, a.karsilanan, a.eksik, a.durum, a.elleTermin],
+      ['malzeme', 'HM-SAT-00001', '10', await gun(10), ['UE-1'], '7', '3', 'eksik', null]);
+    assert.deepEqual(a.karsilayanlar.map((k) => [k.tur, k.talepId === sip, k.tarih, k.miktar]).sort(), [['siparis', true, await gun(5), '4'], ['talep', false, await gun(8), '3']]);
+    assert.equal(a.karsilayanTarih, await gun(5));
+    assert.equal(a.elleTermin, null, 'm1 elle termini (2020-01-01) sipariş varken gösterilmez');
+    const b = takip.find((x) => x.anahtar.startsWith(`kalem:${serbest}:`))!;
+    assert.deepEqual([b.tur, b.malzemeNo, b.ad, b.ihtiyacMiktari, b.eksik, b.durum], ['malzeme', null, 'Deneme serbest kalem', '2', '0', 'talep_yolda']);
+    assert.equal(takip.some((x) => x.anahtar === `malzeme:${m2}` && x.karsilayanlar.length > 0), false);
+    // Plan tarihi geçmişse gecikti ve listenin başında; teslim tarihi olmayan eski sipariş ayrı durumdur.
+    await s.sorgu('UPDATE satin_alma_plan_ihtiyaci SET gereken_tarih = current_date - 1 WHERE malzeme_no = $1', [m1]);
+    await talep('siparis_verildi', null, m2, '1', { teslim: null });
+    const ikinci = (await vt().tx((db) => tedarikTerminleriListesi(db))).takip!;
+    assert.deepEqual([ikinci[0]!.anahtar, ikinci[0]!.durum], [`malzeme:${m1}`, 'gecikti']);
+    assert.equal(ikinci.find((x) => x.anahtar === `malzeme:${m2}`)?.durum, 'teslim_tarihi_yok');
+    assert.ok(bugun.length === 10);
+    await vt().tx((db) => planIhtiyaclariniYaz(db, []));
   });
 });

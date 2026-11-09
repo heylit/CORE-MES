@@ -1273,3 +1273,32 @@ export function fasonSiparisSatirlari(db: Db, isEmriIdleri: readonly number[]): 
       ORDER BY s.is_emri_id, coalesce((SELECT sum(m.miktar) FROM satin_alma_teslim m WHERE m.siparis_satiri_id = s.id), 0) < s.miktar DESC, s.id DESC`,
     [isEmriIdleri]);
 }
+
+// ---- 2433 termin takibi: siparişi verilmemiş açık talep kalemleri ve açık sipariş satırlarının kalanı (net teslim düşülür; Logo'da
+// kapatılan ya da tamamı gelen satır gelmez). Fiyat taşımaz.
+export interface TerminKalemiOkuma {
+  kaynak: 'talep' | 'siparis'; talepId: string; talepNo: string; talepDurumu: string; ihtiyacTarihi: string | null;
+  kalemId: string; ad: string; birim: string; miktar: string | null; malzemeNo: number | null; isEmriId: number | null;
+  teklifId: string | null; siparisNo: string | null; beklenenTeslim: string | null;
+}
+export function terminKalemleriOku(db: Db): Promise<TerminKalemiOkuma[]> {
+  return db.sorgu<TerminKalemiOkuma>(
+    `SELECT 'talep' AS kaynak, t.id AS "talepId", t.no AS "talepNo", t.durum AS "talepDurumu", to_char(t.ihtiyac_tarihi, 'YYYY-MM-DD') AS "ihtiyacTarihi",
+        k.id AS "kalemId", k.ad, k.birim, k.miktar::text AS miktar, c.malzeme_no AS "malzemeNo", k.is_emri_id AS "isEmriId",
+        NULL::uuid AS "teklifId", NULL::text AS "siparisNo", NULL::text AS "beklenenTeslim", t.yil, t.sira, k.sira AS ksira
+       FROM satin_alma_talep_kalemi k JOIN satin_alma_talep t ON t.id = k.talep_id LEFT JOIN satin_alma_katalog c ON c.id = k.katalog_id
+      WHERE t.durum IN ('taslak', 'teklif_isteniyor', 'degerlendirme', 'onayda')
+     UNION ALL
+     SELECT 'siparis', t.id, t.no, t.durum, to_char(t.ihtiyac_tarihi, 'YYYY-MM-DD'),
+        k.id, k.ad, s.birim, (s.miktar - coalesce(m.toplam, 0))::text, c.malzeme_no, k.is_emri_id,
+        s.teklif_id, coalesce(p.no, p.siparis_no), to_char(p.beklenen_teslim, 'YYYY-MM-DD'), t.yil, t.sira, k.sira
+       FROM satin_alma_siparis_satiri s
+       JOIN satin_alma_siparis p ON p.talep_id = s.talep_id AND p.teklif_id = s.teklif_id
+       JOIN satin_alma_talep t ON t.id = s.talep_id
+       JOIN satin_alma_talep_kalemi k ON k.talep_id = s.talep_id AND k.id = s.kalem_id
+       LEFT JOIN satin_alma_katalog c ON c.id = k.katalog_id
+       LEFT JOIN LATERAL (SELECT sum(x.miktar) AS toplam FROM satin_alma_teslim x WHERE x.siparis_satiri_id = s.id) m ON true
+      WHERE t.durum = 'siparis_verildi' AND p.logo_kapatma_durumu IS NULL AND coalesce(m.toplam, 0) < s.miktar
+      ORDER BY yil, sira, ksira`,
+  );
+}

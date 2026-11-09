@@ -4,7 +4,7 @@ import type { Talep, TalepYazimi } from '#paylasilan/sozlesme/satin-alma.ts';
 import {
   VARSAYILAN_ONAY_LIMITLERI, talebinAlimlari,
   FIYAT_IZI_SINIRI, GECISLER, ISLEM, degisiklikReddi, degisiklikTuru, dortGozSonucu, fazlaTeslim, finanstanEklenenKurlar, fiyatIzleri, kullanilanParaBirimleri, gecisVarMi, gkkKalitesi, gorunenDurum, izi,
-  ILETILER, askidakiTedarikciReddi, kaliteSiparisReddi, kartBirimiReddi, yeniSiparisFirmalari, gecikmeGunu, satinAlinabilirKartReddi, hizliBaslik, hizliKalemReddi, kararDegistiMi, kartsizSiparisReddi, talepKartiReddi, kararOnayliMi, talepFisiGiderMi, ondalikKiyas, ondalikTopla, siparisFaturaFirmasi, faturaEslesmeUyarilari, siparisReddi, terminsizSiparisReddi, talepEdenGorunumu, tamGorurMu, teklifKuru, teslimDurumu,
+  ILETILER, askidakiTedarikciReddi, kaliteSiparisReddi, kartBirimiReddi, yeniSiparisFirmalari, gecikmeGunu, satinAlinabilirKartReddi, hizliBaslik, hizliKalemReddi, kararDegistiMi, kartsizSiparisReddi, talepKartiReddi, kararOnayliMi, talepFisiGiderMi, ondalikKiyas, ondalikTopla, siparisFaturaFirmasi, faturaEslesmeUyarilari, siparisReddi, terminsizSiparisReddi, terminDurumu, terminTakibi, type TerminKalemi, talepEdenGorunumu, tamGorurMu, teklifKuru, teslimDurumu,
 } from './kurallar.ts';
 import { birimFiyati, ondalikCarp, stokTutari, uygulananKgFiyati } from './kurallar.ts';
 import { agirlikliGecikme, fasonKalani, sonDonusGecikmesi } from './kurallar.ts';
@@ -577,4 +577,37 @@ test('2433-4 a: tarihsiz yeni sipariş ve tarihi boşaltılan sipariş reddedili
   assert.equal(terminsizSiparisReddi(k({ teklifId: 'a', beklenenTeslim: null }), k({ teklifId: 'a', beklenenTeslim: null })), null);
   assert.equal(terminsizSiparisReddi({ karar: null }, k({ teklifId: 'a', beklenenTeslim: '2026-10-20' })), null);
   assert.equal(terminsizSiparisReddi(k({ teklifId: 'a', beklenenTeslim: null }), { karar: null }), null);
+});
+
+test('2433: terminDurumu sırası: gecikti, teslim tarihi yok, geç kalıyor, termin bekleniyor, eksik, talep yolda, plan istemiyor, zamanında', () => {
+  const g = { bugun: '2026-11-10', gerekenTarih: '2026-11-20', ihtiyacVar: true, eksik: '0', siparisTarihleri: ['2026-11-15'], talepVar: false, elleTermin: null, karsilayanTarih: '2026-11-15' };
+  assert.equal(terminDurumu(g), 'zamaninda');
+  assert.equal(terminDurumu({ ...g, gerekenTarih: '2026-11-09' }), 'gecikti');
+  assert.equal(terminDurumu({ ...g, siparisTarihleri: ['2026-11-09'] }), 'gecikti');
+  assert.equal(terminDurumu({ ...g, siparisTarihleri: ['2026-11-15', null] }), 'teslim_tarihi_yok');
+  assert.equal(terminDurumu({ ...g, karsilayanTarih: '2026-11-25', siparisTarihleri: ['2026-11-25'] }), 'gec_kaliyor');
+  assert.equal(terminDurumu({ ...g, siparisTarihleri: [], karsilayanTarih: null, eksik: '5' }), 'termin_bekleniyor');
+  assert.equal(terminDurumu({ ...g, eksik: '5' }), 'eksik');
+  assert.equal(terminDurumu({ ...g, siparisTarihleri: [], karsilayanTarih: null, talepVar: true }), 'talep_yolda');
+  assert.equal(terminDurumu({ ...g, ihtiyacVar: false, gerekenTarih: null, eksik: null }), 'plan_istemiyor');
+  assert.equal(terminDurumu({ ...g, siparisTarihleri: [], elleTermin: '2026-11-25', karsilayanTarih: '2026-11-25' }), 'gec_kaliyor');
+});
+
+test('2433: terminTakibi fason kalemi emriyle ayrı satırdır; hizmet kartı hizmet satırıdır; elle termin yalnız siparişsiz malzemede', () => {
+  const kalem = (ek: Partial<TerminKalemi>): TerminKalemi => ({
+    kaynak: 'talep', talepId: 't1', talepNo: 'T-1', talepDurumu: 'onayda', ihtiyacTarihi: '2026-11-20', kalemId: 'k1', ad: 'Kalem', birim: 'adet', miktar: '2',
+    malzemeNo: null, isEmriId: null, teklifId: null, siparisNo: null, beklenenTeslim: null, ...ek,
+  });
+  const satirlar = terminTakibi({
+    bugun: '2026-11-10', planlar: [],
+    elleTerminler: [{ malzemeNo: 5, termin: '2026-11-30', gerekenTarih: null, aciklama: '', surum: 1, guncelleme: '2026-11-01T00:00:00Z' }],
+    kalemler: [kalem({ kalemId: 'f', isEmriId: 7, malzemeNo: 9 }), kalem({ kalemId: 'h', malzemeNo: 9 })],
+    kartlar: new Map([[9, { kod: 'HZ-1', ad: 'Kaplama', birim: 'adet', tur: 'hizmet' }], [5, { kod: 'HM-5', ad: 'Mil', birim: 'kg', tur: 'hammadde' }]]),
+    isEmirleri: new Map([[7, 'UE-1 · Op 30']]),
+  });
+  // Sıra: gereken tarih (iki kalem 20.11), sonra ad, sonra anahtar; tarihsiz satır sonda.
+  assert.deepEqual(satirlar.map((x) => [x.anahtar, x.tur, x.emirler, x.durum]), [
+    ['kalem:t1:f', 'fason', ['UE-1 · Op 30'], 'talep_yolda'], ['kalem:t1:h', 'hizmet', [], 'talep_yolda'], ['malzeme:5', 'malzeme', [], 'plan_istemiyor'],
+  ]);
+  assert.equal(satirlar.find((x) => x.anahtar === 'malzeme:5')?.elleTermin?.termin, '2026-11-30');
 });

@@ -8,7 +8,7 @@ import type { DenetimSecimi, IkiliCevap } from '#cekirdek/uc.ts';
 import type { KmTedarikciDurumu } from '#paylasilan/sozlesme/kalite-merkezi.ts';
 import type {
   AcilisCevabi, Ayarlar, DegerlendirmeCevabi, KartAyrintilariCevabi, KartAyrintisi, DisOperasyonlarCevabi, FasonSureleriCevabi, SiparisBelgeleriCevabi, SiparisBelgesi, SiparisBelgesiYazimi, AyarlarKaydetYazimi, HizliAcYazimi, KatalogKaydetYazimi, KatalogKaydi, MalzemeSecenekleriCevabi, SatinAlmaOzetiCevabi, SiparisCikisi, SiparisFaturalariCevabi, SiparisFaturasiYazimi, SiparisKalemiDegistirYazimi, SiparisKapatYazimi, TeslimYontemiYazimi, OdemePlaniYazimi, SiparisTakibiCevabi, Talep, TalepDurumu, TalepKaydetYazimi, TalepTuru,
-  AcikEmirlerCevabi, Onay, OnTalepleriCevabi, OnTalepYoksayYazimi, TedarikTermini, TedarikTerminiKaydetYazimi, TedarikTerminleriCevabi, KgFiyatiGecmisiCevabi, KgFiyatiSatiri, KgFiyatlariCevabi, KgStokDegeri, StokAyriGrubu, StokYokIstekleriCevabi, TaleplerimCevabi, Talebim, TalepYazimi, Tedarikci, TedarikciKaydetYazimi,
+  AcikEmirlerCevabi, Onay, OnTalepleriCevabi, OnTalepYoksayYazimi, TedarikTermini, TedarikTerminiKaydetYazimi, TedarikTerminleriCevabi, TerminTakipSatiri, KgFiyatiGecmisiCevabi, KgFiyatiSatiri, KgFiyatlariCevabi, KgStokDegeri, StokAyriGrubu, StokYokIstekleriCevabi, TaleplerimCevabi, Talebim, TalepYazimi, Tedarikci, TedarikciKaydetYazimi,
 } from '#paylasilan/sozlesme/satin-alma.ts';
 import { STOK_AYRI_GRUPLARI } from '#paylasilan/sozlesme/satin-alma.ts';
 import { randomUUID } from 'node:crypto';
@@ -27,7 +27,7 @@ import { acikEmirler, emirDurumlari, emirNolari, fasonGecmisi, fasonGonderimleri
 import { operasyonTipleri } from '../istasyonlar/disari.ts';
 import { bildirimGonder } from '../bildirim/disari.ts';
 import {
-  ILETILER, ISLEM, type KurKilidiIsi, emirAcikMi, kilitliDurum, tedarikciyeGidenAyrinti, kalemAyrintisiniKoru, kilittenSonraOnayliMi, kurKilidiIsi, kurKilidiReddi, degisiklikReddi, gecikmeGunu, fasonKalani, sonDonusGecikmesi, agirlikliGecikme, degisiklikTuru, dortGozSonucu, onayKademesiReddi, onayLimitRolleri, onayLimitleriDegistiMi, onayLimitiReddi, terminsizSiparisReddi, fazlaTeslim, finanstanEklenenKurlar, aylikFaiz, fiyatIzleri, kullanilanParaBirimleri, gecisVarMi, gorunenDurum, kararDegistiMi, kararOnayliMi, talepFisiGiderMi,
+  ILETILER, ISLEM, type KurKilidiIsi, emirAcikMi, kilitliDurum, tedarikciyeGidenAyrinti, kalemAyrintisiniKoru, kilittenSonraOnayliMi, kurKilidiIsi, kurKilidiReddi, degisiklikReddi, gecikmeGunu, fasonKalani, sonDonusGecikmesi, agirlikliGecikme, degisiklikTuru, dortGozSonucu, onayKademesiReddi, onayLimitRolleri, onayLimitleriDegistiMi, onayLimitiReddi, terminsizSiparisReddi, terminTakibi, fazlaTeslim, finanstanEklenenKurlar, aylikFaiz, fiyatIzleri, kullanilanParaBirimleri, gecisVarMi, gorunenDurum, kararDegistiMi, kararOnayliMi, talepFisiGiderMi,
   KARTSIZ_KATEGORI, TALEP_TURU_KARTLARI, satinAlinabilirKartReddi, kartBirimiReddi, hizliBaslik, hizliKalemReddi, kartKopyasi, kartsizSiparisReddi, katalogKartiReddi, logoGuncellenecekSiparisler, logoIptalGeriAlmaReddi, logoSiparisDegisikligiReddi, siparisliKalemReddi, siparisDegisikligiMetni, siparisFaturaFirmasi, faturaEslesmeUyarilari, siparisKalemiDegisikligiReddi, siparisKapatmaReddi, talebinAlimlari, ondalikKiyas, siparisReddi, talebim,
   fasonOnTalepAdaylari, hizliBagReddi, planOnTalepAdaylari, uygulananKartReddi, type KalemBagi,
   fasonKirilimlari, fasonSureOrnekleri, fasonSuresiTahmini, fasonTerminUyumu, talepEdenDurumu, talepEdenGorunumu, talepKartiReddi, tamGorurMu, teklifKuru, teslimDurumu, odemePlaniHedefi, varsayilanOdemePlani,
@@ -1565,7 +1565,9 @@ export async function tedarikTerminleriListesi(db: Db): Promise<TedarikTerminler
   const adlar = await kisiAdlari(db, satirlar.flatMap((t) => (t.kisiId === null ? [] : [t.kisiId])));
   // Sipariş verilmiş malzeme "termin bekleniyor" görünmesin: açık siparişin beklenen teslimi satırda gösterilir (TMI A3).
   const gelisler = await malzemeGelisTarihleri(db, satirlar.map((t) => t.malzemeNo));
+  const bugun = await s.bugun(db);
   return {
+    takip: await terminTakibiKur(db, satirlar.map(terminCikisi), bugun),
     terminler: satirlar.map((t) => {
       const m = malzemeler.get(t.malzemeNo);
       return {
@@ -1573,8 +1575,22 @@ export async function tedarikTerminleriListesi(db: Db): Promise<TedarikTerminler
         siparisler: gelisler.get(t.malzemeNo) ?? [],
       };
     }),
-    bugun: await s.bugun(db),
+    bugun,
   };
+}
+// 2433: ihtiyaç canlı plandan (2433-2 a), karşılayan açık talep ve sipariş, elle termin yalnız siparişsiz malzemede (2433-3 a).
+async function terminTakibiKur(db: Db, elleTerminler: readonly TedarikTermini[], bugun: string): Promise<TerminTakipSatiri[]> {
+  const planlar = await s.planIhtiyaclariOku(db);
+  const kalemler = await s.terminKalemleriOku(db);
+  const kartlar = await malzemeOzetleri(db, [...planlar.map((p) => p.malzemeNo), ...elleTerminler.map((t) => t.malzemeNo),
+    ...kalemler.flatMap((k) => (k.malzemeNo === null ? [] : [k.malzemeNo]))]);
+  const ozetler = await isEmriOzetleri(db, kalemler.flatMap((k) => (k.isEmriId === null ? [] : [k.isEmriId])));
+  return terminTakibi({
+    bugun, planlar, elleTerminler,
+    kalemler: kalemler.map((k) => ({ ...k, talepDurumu: k.talepDurumu as TalepDurumu, miktar: sade(k.miktar) })),
+    kartlar: new Map([...kartlar].map(([no, k]) => [no, { kod: k.kod, ad: k.ad, birim: k.birim, tur: k.tur }])),
+    isEmirleri: new Map([...ozetler].map(([id, o]) => [id, `${o.emirNo} · Op ${o.opNo}`])),
+  }).map((t) => ({ ...t, ihtiyacMiktari: sade(t.ihtiyacMiktari) }));
 }
 // Plan okuması: satırı olmayan malzeme haritada yoktur (termin bekliyor, ilk giriş sürümsüz yazılır).
 export async function tedarikTerminleri(db: Db, malzemeNolar: readonly number[]): Promise<Map<number, TedarikTermini>> {
