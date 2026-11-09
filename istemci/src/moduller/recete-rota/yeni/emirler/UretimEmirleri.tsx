@@ -165,7 +165,7 @@ function EmirSatiri({ durum: d, emir: o, derinlik, secili, sira, sec }: {
         </span>
         <span data-baslik="Plan bitiş" className="tc-rr3-plan-hucre">
           <PlanHucresi plan={plan} tampon={tampon} />
-          {plan.alt && <small className="tc-rr3-plan-alt" data-ton={plan.altTon ?? undefined}>{plan.alt}</small>}
+          {plan.alt && <small className="tc-rr3-plan-alt" data-ton={plan.altTon ?? undefined} title={plan.alt}>{plan.alt}</small>}
         </span>
         <span className="tc-rr3-durum-hucre"><span className="tc-rr3-durum" data-durum={o.status} data-ton={durumGosterimi(o).ton}>{durumAdi(o)}</span></span>
         <Simge ad="chev-right" boyut="k" />
