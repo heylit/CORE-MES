@@ -442,7 +442,7 @@ function rng(seed){let a=seed>>>0||1;const u=()=>{a|=0;a=a+0x6D2B79F5|0;let t=Ma
 /** @param {MotorDurumu} [st] @param {any} [mode] @param {any} [base] @param {any} [opt] */
 function schedule(st,mode,base,opt={}){
   const cx=opt.cx||compile(st);
-  const ctx={P:{},av:{},lastFam:{},lastId:{},ver:{},cache:{},u:newUse(cx),fas:{},kilit:{},rnd:rng(opt.seed||7),fail:[]};
+  const ctx={P:{},av:{},lastFam:{},lastId:{},ver:{},cache:{},u:newUse(cx),fas:{},kilit:{},rnd:rng(opt.seed||7),fail:[],neden:{}};
   const all=cx.ops.filter(o=>o.c.length);let ps=0,ss=0,n=0;for(const o of all){const c=o.c.find(x=>!x.fas);if(c){ps+=c.su+c.run;ss+=c.su;n++;}}
   ctx.pbar=n?ps/n:4;ctx.sbar=n?Math.max(.1,ss/n):.5;
   const now=st.now,frz=now+(st.w.dondurma||0);
@@ -464,6 +464,15 @@ function schedule(st,mode,base,opt={}){
       else pins.push({...b,pin:1});continue;}
     if(b.S<frz-1e-9&&!hit&&!opt.noFreeze&&mode!=='sabit-mc')pins.push({...b,pin:1,frz:1});
   }
+  /* B-2499-7: başvuru planından sabitlenen (geçmişte kalmış ya da donuk) iş öncülü o saatte hazır değilse olmuş sayılamaz: öncülü başlamış
+     ve hâlâ sürüyorsa ya da öncülü bu yüzden yeniden diziliyorsa sabit bırakılmaz, yeniden dizilir. Öncülü hiç sabitlenmemişse (sunucu
+     kuyruğunda olmayan adım "şimdi bitti" diye tabana girer, plan-girdisi) dokunulmaz. Yoksa başlamış emrin sonraki adımları eski
+     saatlerinde "bitti" sayılır, plandan düşer ve tezgâhta başlamış işle çakışır. Gerçekleşen (act) iş sunucunun bilgisidir, dokunulmaz. */
+  {const yer={},dus=new Set();for(const r of pins)yer[r.id]=r;for(const r of kilitler)yer[r.id]=r;
+    for(let deg=true;deg;){deg=false;for(const id in yer){const r=yer[id];if(r.act||r.kilit)continue;const o=cx.byId[id];if(!o)continue;
+      for(const [p,t] of o.pr){const q=yer[p];
+        if(q?!((t==='o'&&!q.fas?q.lot1:q.C)<=r.S+1e-6):dus.has(p)){delete yer[id];dus.add(id);deg=true;break;}}}}
+    for(let i=pins.length-1;i>=0;i--)if(dus.has(pins[i].id))pins.splice(i,1);}
   pins.sort((a,b)=>a.S-b.S).forEach(r=>commit(cx,ctx,r));
   kilitler.forEach(r=>kilitKoy(cx,ctx,r));
   /* sunucu (669 a): yeri sabit iş tam saatinde durur, tezgâhın boş anını ilerletmez (kilit gibi); ardılı bitişini bekler */
@@ -495,13 +504,14 @@ function schedule(st,mode,base,opt={}){
         if(d){delete bek[d];bi=q.indexOf(d);o=cx.byId[d];c=o.c.find(x=>x.m===bm);r=c&&timing(o,c,cx,ctx);}
         else delete bek[o.id];
       }
-      if(r)commit(cx,ctx,r);else ctx.fail.push(o.id);U.delete(o.id);q.splice(bi,1);}
+      /* B-2483-72: tabandaki tezgâhında yeri yoksa (aday değil ya da zamanlanamıyor) iş düşmez, aşağıdaki dağıtıma kalır */
+      if(r){commit(cx,ctx,r);U.delete(o.id);}q.splice(bi,1);}
   }
   let guard=0;
   /* 763: adaylardan birinin bedeli bilinmiyorsa (saat ücreti ya da fason fiyatı boş) o adımda bedel kıyaslanmaz; boş bedel 0 sayılsaydı
      ücretsiz tezgâh en ucuz görünür ve hep o seçilirdi. Seçim yalnız bitişle yapılır. */
-  const evalOp=(o,fast)=>{const rs=[];
-    for(const c of candM(o,st,opt,base)){let r;
+  const evalOp=(o,fast)=>{const rs=[];const cs=candM(o,st,opt,base);if(!cs.length)ctx.neden[o.id]={kod:'aday'};
+    for(const c of cs){let r;
       if(fast&&!c.fas){const key=o.id+'|'+c.m,ce=ctx.cache[key];if(ce&&ce.v===(ctx.ver[c.m]||0))r=ce.r;else{r=timing(o,c,cx,ctx,true);ctx.cache[key]={v:ctx.ver[c.m]||0,r};}}
       else r=timing(o,c,cx,ctx,false);
       if(r)rs.push([c,r]);}
@@ -524,8 +534,9 @@ function schedule(st,mode,base,opt={}){
     if(!fin){ctx.fail.push(bi.id);U.delete(bi.id);continue;}
     fin.idx=bv;commit(cx,ctx,fin);U.delete(fin.id);
   }
-  for(const id of U)ctx.fail.push(id);
-  const plan={ops:ctx.P,fail:[...new Set(ctx.fail)],mode,downIds:(st.down||[]).map(d=>d.id)};
+  for(const id of U){ctx.fail.push(id);const p=(cx.byId[id].pr.find(([q])=>!ctx.P[q])||[])[0];if(p)ctx.neden[id]={kod:'oncul',oncul:p};}
+  const fail=[...new Set(ctx.fail)],failNeden={};for(const id of fail)failNeden[id]=ctx.neden[id]||{kod:'zaman'};
+  const plan={ops:ctx.P,fail,failNeden,mode,downIds:(st.down||[]).map(d=>d.id)};
   if(!opt.noSlack)slack(plan,cx);
   plan.cx=undefined;Object.defineProperty(plan,'cx',{value:cx,enumerable:false,writable:true});
   return plan;
@@ -623,9 +634,14 @@ function evaluate(plan,st,ref,fast){
   /* 1459 a: stoku bilinmeyen malzeme dağıtımda 0 sayılır; plana gerçekten girdiyse söylenir */
   if(!fast)for(const m of cx.D.malzemeler||[])if(m.stok==null&&cx.mat.summ[m.kod])warn.push({t:'malzeme',txt:`${m.kod}: stok bilinmiyor; 0 sayıldı`});
   if(st.ayarciYok)warn.push({t:'Ayarcı',txt:'Vardiyası olan ayarcı yok; ayarcı sınırı uygulanmadı. Ayarcılara vardiya verince sınır yeniden uygulanır.'});
-  for(const id of plan.fail||[])warn.push({t:'plan',j:id.split('.')[0],txt:`${id} planlanamadı (kaynak ya da ufuk)`});
+  for(const id of plan.fail||[])warn.push({t:'plan',j:id.split('.')[0],id,txt:`${id} planlanamadı: ${failNedenMetni((plan.failNeden||{})[id])}`});
   return {Z,lex,tl,wB,bufN,J,rev,cost,pen,hold,onT,late,yerlesmeyenSip:yerN,n:Object.keys(cx.jobs).length,sumT,wT,suH,suN,famN,Cmax,chg,stab,idle,fas,unk,warn,mesaiH,mesaiTL,util,score,amac:w.amac};
 }
+
+/* B-2483-72: plan.failNeden kodu; aday: işi yapabilecek tezgâh ya da fasoncu yok; oncul: öncülü yerleşmedi;
+   zaman: aday var ama ufuk içinde vardiya, kaynak ya da malzeme yeri bulunamadı (eski plan kaydında neden yoksa da bu yazılır) */
+function failNedenMetni(n){if(n&&n.kod==='aday')return 'işi yapabilecek tezgâh ya da fasoncu yok';
+  if(n&&n.kod==='oncul')return `öncülü ${n.oncul} yerleşmedi`;return 'ufuk içinde tezgâh, vardiya, kaynak ya da malzeme yeri yok';}
 
 const LEX_EPS=[.5,.5,0,.25,1,.25,.1];
 const LEX_SIRA=[0,1,2,3,5,6,4];
