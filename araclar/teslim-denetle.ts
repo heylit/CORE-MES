@@ -248,10 +248,21 @@ export function enBuyukGoc(adlar: readonly string[]): string | null {
   return damgalar.at(-1) ?? null;
 }
 
+// Ek yama "<kart>-<n>.patch" adıyla ilk yamanın ("<kart>.patch") ardından gelir; düz sıralamada '-' '.'den küçük olduğu için önce gelirdi.
+export function yamaSirasi(a: string, b: string): number {
+  const ayir = (ad: string): [string, number] => {
+    const m = /^(.*?)(?:-(\d+))?\.patch$/.exec(ad);
+    return m ? [m[1] ?? '', Number(m[2] ?? 0)] : [ad, 0];
+  };
+  const [ka, na] = ayir(a);
+  const [kb, nb] = ayir(b);
+  return ka === kb ? na - nb : ka.localeCompare(kb, 'tr', { numeric: true });
+}
+
 export function klasorOku(kok: string, klasor: string, dal: string): TeslimGirdisi {
   const devirYolu = join(klasor, 'DEVIR.md');
   const devir = existsSync(devirYolu) ? devirOku(readFileSync(devirYolu, 'utf8')) : null;
-  const yamalar = readdirSync(klasor).filter((a) => a.endsWith('.patch') && statSync(join(klasor, a)).isFile()).sort().map((ad) => {
+  const yamalar = readdirSync(klasor).filter((a) => a.endsWith('.patch') && statSync(join(klasor, a)).isFile()).sort(yamaSirasi).map((ad) => {
     const icerik = readFileSync(join(klasor, ad));
     return { ad, sha256: createHash('sha256').update(icerik).digest('hex'), dosyalar: yamaDosyalari(icerik.toString('utf8')) };
   });
