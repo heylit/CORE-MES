@@ -44,6 +44,14 @@ export async function isEmirleriDegistiYansit(db: Db, olay: { uretimEmriId: numb
   });
 }
 
+// B-2499-12: adım bitti ve canlıda o adımın şimdiden sonra biten satırı var: plan ona hâlâ yer ayırıyor. kaynak_id adımdır (iş emri):
+// aynı adım bir kez sayılır.
+export async function adimBittiYansit(db: Db, olay: { isEmriId: number; uretimEmriId: number }): Promise<void> {
+  await isaretYaz(db, async () => {
+    if (await s.bitmemisSatirVar(db, [olay.isEmriId], new Date().toISOString())) await s.olayYaz(db, 'adim-bitti', olay.uretimEmriId, olay.isEmriId);
+  });
+}
+
 export async function planBayatligi(db: Db, simdi: number = Date.now()): Promise<PlanBayatligi> {
   const son = await sonCanliyaAlma(db);
   if (son === null) return bayatOzeti(null, []);

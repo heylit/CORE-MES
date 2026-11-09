@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import type { PlanSurumCevabi, SenaryolarCevabi } from '#paylasilan/sozlesme/plan.ts';
-import { bayatEmirBittiYansit, bayatIsEmirleriDegistiYansit, planBayatligi } from '../disari.ts';
+import { bayatAdimBittiYansit, bayatEmirBittiYansit, bayatIsEmirleriDegistiYansit, planBayatligi } from '../disari.ts';
 import { kullaniciYukle } from '../../kisiler/disari.ts';
 import { emirBaslat, emirBitir } from '../../uretim-emirleri/disari.ts';
 import { planTestOrtami } from '../plan-ortak.test.ts';
@@ -131,7 +131,8 @@ describe('plan (gerçek PostgreSQL): canlı plan bayat işareti', () => {
       if (sinir) await db.sorgu("SET LOCAL lock_timeout = '200ms'");
       return emirBitir(db, k, emirId, 1);
     });
-    const say = (emirId: number) => vt().tx((db) => db.tek<{ n: number }>('SELECT count(*)::int AS n FROM plan_bayat_olayi WHERE uretim_emri_id = $1', [emirId]));
+    // B-2499-12: son adım emirle birlikte bitince adim-bitti de yazılır; bu test emir-bitti işaretini sayar.
+    const say = (emirId: number) => vt().tx((db) => db.tek<{ n: number }>("SELECT count(*)::int AS n FROM plan_bayat_olayi WHERE uretim_emri_id = $1 AND neden = 'emir-bitti'", [emirId]));
     let birak!: () => void, tutuldu!: () => void;
     const bekle = new Promise<void>((r) => { birak = r; }), tutuyor = new Promise<void>((r) => { tutuldu = r; });
     const tutan = durum().ortam!.sahip.tx(async (db) => { await db.sorgu('LOCK TABLE plan_bayat_olayi IN EXCLUSIVE MODE'); tutuldu(); await bekle; });
@@ -176,5 +177,45 @@ describe('plan (gerçek PostgreSQL): canlı plan bayat işareti', () => {
     assert.equal((await bayatlik()).sayilar['rota-degisti'], 0, 'canlıya alma sıfırlar');
     await yansit(e7);
     assert.equal((await say(e7))?.n, 2, 'yeni canlı sürümde yeniden yazılır');
+  });
+
+  // B-2499-12: adım canlıdaki yerinden erken bittiyse (canlıda o adımın şimdiden sonra biten satırı var) işaret; adım başına bir satır.
+  test('BY-10: erken biten adım adim-bitti işaretler; yeri geçmişte bitmiş adım yazmaz; tekrar yazılmaz', async () => {
+    const [a1, a2] = await isEmirleriAc([yeniAdim(), yeniAdim()]);
+    const p = await taslaktaOner();
+    const o = (await tamam<SenaryolarCevabi>(c.planlama, 'POST', `/plan/senaryolar/${p.taslak!.id}/onaya-gonder`, { surum: p.taslak!.surum }))
+      .senaryolar.find((x) => x.id === p.taslak!.id)!;
+    await tamam(c.mudur, 'POST', `/plan/senaryolar/${o.id}/canliya-al`, { surum: o.surum, cakismalariKabul: true });
+    await ileri([a1!], '1 day');
+    await ileri([a2!], '-30 days');
+    const e = await emriOf(a1!);
+    const yansit = (isEmriId: number) => vt().tx((db) => bayatAdimBittiYansit(db, { isEmriId, uretimEmriId: e }));
+    await yansit(a1!);
+    await yansit(a1!);
+    await yansit(a2!);
+    const n = await vt().tx((db) => db.tek<{ n: number }>("SELECT count(*)::int AS n FROM plan_bayat_olayi WHERE neden = 'adim-bitti' AND uretim_emri_id = $1", [e]));
+    assert.equal(n?.n, 1, 'yalnız erken biten adım, bir kez');
+    const b = await bayatlik();
+    assert.equal(b.sayilar['adim-bitti'], 1);
+    assert.ok(b.olaylar.some((x) => x.neden === 'adim-bitti' && x.emirNo !== null));
+  });
+
+  // B-2499-12 (2520-5): gerçek bitir komutu kayıtlı dinleyiciyle adım-bitti işaretini yazar; emir sürer (ilk adım), emir-bitti yazılmaz.
+  test('BY-11: emirBitir ile erken biten ilk adım kablodan adim-bitti işaretler', async () => {
+    const [b1] = await isEmirleriAc([yeniAdim(), yeniAdim()]);
+    const p = await taslaktaOner();
+    const o = (await tamam<SenaryolarCevabi>(c.planlama, 'POST', `/plan/senaryolar/${p.taslak!.id}/onaya-gonder`, { surum: p.taslak!.surum }))
+      .senaryolar.find((x) => x.id === p.taslak!.id)!;
+    // Önceki testlerin canlı işleri dört saat içinde başlar; bu canlıya alma gerekçeyle geçer.
+    await tamam(c.mudur, 'POST', `/plan/senaryolar/${o.id}/canliya-al`, { surum: o.surum, cakismalariKabul: true, dortSaatGerekcesi: 'Deneme gerekcesi: test sirasi' });
+    await ileri([b1!], '1 day');
+    const e = await emriOf(b1!);
+    await vt().tx(async (db) => {
+      const k = (await kullaniciYukle(db, durum().yoneticiId))!;
+      await emirBaslat(db, k, e);
+      await emirBitir(db, k, e, 1);
+    });
+    const r = await vt().tx((db) => db.sorgu<{ neden: string; kaynak_id: number | null }>('SELECT neden, kaynak_id FROM plan_bayat_olayi WHERE uretim_emri_id = $1', [e]));
+    assert.deepEqual(r.map((x) => [x.neden, x.kaynak_id]), [['adim-bitti', b1]]);
   });
 });
