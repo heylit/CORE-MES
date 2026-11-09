@@ -1459,6 +1459,31 @@ function cakismaDenetle(b: Baglam, yerler: readonly Yer[], y: Yer, haric: readon
   if (c) throw cakisma('Bu makine ya da kişide aynı zamana yerleşmiş başka iş var.');
 }
 
+// Aynı kaynakta üst üste binen ilk iki yer; çiftten en az biri odaktaysa. Kaynak başına başlangıca göre tek tarama: odaktaki yer kendinden
+// önce başlayıp henüz bitmemiş herhangi bir yerle, odak dışı yer kendinden önce başlayıp bitmemiş odaktaki bir yerle çakışır.
+function ustUsteBinen(b: Baglam, yerler: readonly Yer[], odak: ReadonlySet<number>): [Yer, Yer] | null {
+  const gruplar = new Map<string, Yer[]>();
+  for (const y of isgal(plandakiler(b, yerler))) {
+    const a = kaynakAnahtari(y.kaynak);
+    gruplar.set(a, [...(gruplar.get(a) ?? []), y]);
+  }
+  for (const l of gruplar.values()) {
+    l.sort((x, y) => x.baslangic - y.baslangic || x.bitis - y.bitis);
+    let enGec = -Infinity;
+    let enGecOdak = -Infinity;
+    for (const [i, y] of l.entries()) {
+      const odakta = odak.has(y.isEmriId);
+      if ((odakta && y.baslangic < enGec) || y.baslangic < enGecOdak) {
+        const es = l.slice(0, i).find((x) => x.isEmriId !== y.isEmriId && (odakta || odak.has(x.isEmriId)) && cakisirMi(x, y));
+        if (es) return [y, es];
+      }
+      enGec = Math.max(enGec, y.bitis);
+      if (odakta) enGecOdak = Math.max(enGecOdak, y.bitis);
+    }
+  }
+  return null;
+}
+
 const kaynakMetni = (b: Baglam, k: Kaynak) => { const v = b.kaynaklar.get(kaynakAnahtari(k)); return v ? (v.kod ?? v.ad) : `${k.tur} ${k.id}`; };
 const zamanMetni = (b: Baglam, d: number) => tesisSaati(tarih(b, d));
 const isMetni = (b: Baglam, id: number) => { const i = b.isler.get(id); return i ? `${i.emirNo} OP ${i.opNo}` : `İş emri ${id}`; };
@@ -1732,8 +1757,10 @@ export async function kuyruklariYazIc(db: Db, k: Kullanici, g: KuyrukYazGovdesi,
         const m = await sunucuMotoru(db, b, id, [...motorKuyrugu].map(([makineId, l]) => ({
           makineId, isler: l.map(({ i }) => ({ isId: i.is.id, onizleme: i.x.onizleme ?? null })),
         })));
-        // 168 b, 763: vardiyasız tezgâhtaki ya da malzeme bekleyen işin taslaktaki eski yeri kalkar; iş yerleşmemiş görünür.
+        // 168 b, 763: vardiyasız tezgâhtaki ya da malzeme bekleyen işin taslaktaki eski yeri kalkar; iş yerleşmemiş görünür. Kalkan iş de
+        // defterdedir: canlı değişti kabulünde taslağın kaldırdığı iş canlıdan kalkar (B-2483-1).
         if (m.yerlesmez.size > 0) await s.yerlesimleriSil(db, id, [...m.yerlesmez]);
+        idler.push(...m.yerlesmez);
         for (const [makineId, l] of motorKuyrugu) {
           for (const { i } of l) {
             const y = m.yer.get(i.is.id);
@@ -1846,6 +1873,7 @@ export async function kuyruklariYazIc(db: Db, k: Kullanici, g: KuyrukYazGovdesi,
       if (planMotoru !== null && motorKuyrugu.length > 0) {
         const m = await sunucuMotoru(db, await baglamKur(db, k, id), id, motorKuyrugu);
         if (m.yerlesmez.size > 0) await s.yerlesimleriSil(db, id, [...m.yerlesmez]);
+        idler.push(...m.yerlesmez);
         const yazili = new Map((await s.yerlesimler(db, id)).map((y) => [y.isEmriId, y]));
         for (const [isId, y] of m.yer) await s.yerlesimYaz(db, id, { ...yazili.get(isId)!, baslangic: y.baslangic, bitis: y.bitis });
         motorFarki = m.fark;
@@ -2381,11 +2409,24 @@ export async function degisiklikleriAt(db: Db, k: Kullanici, id: number, surum: 
 // Yeniden temellendirme: defterde olmayan iş emirleri canlıdan yeniden kopyalanır, taban canlının bugünkü sürümü olur.
 export async function canlidakileriAl(db: Db, k: Kullanici, id: number, surum: number) {
   await acikTaslak(db, k, id, surum);
-  const dokunulan = new Set((await s.degisiklikler(db, [id])).flatMap((d) => d.isEmriIdleri));
-  const tum = new Set([...(await s.yerlesimler(db, null)).map((y) => y.isEmriId), ...(await s.yerlesimler(db, id)).map((y) => y.isEmriId)]);
-  await s.canlidanAl(db, id, [...tum].filter((x) => x > 0 && !dokunulan.has(x)));
+  await canliyaTemellendir(db, id, await s.degisiklikler(db, [id]));
   await s.tabanYenile(db, id);
   return senaryolar(db, k);
+}
+
+// Taslağın değiştirmediği her şey canlının bugünkü hâline döner: defterde olmayan iş emirlerinin yeri (yersiz bölmeler dahil), defterde
+// ayar, bedel ya da ek mesai kaydı yoksa onlar da. Taslağın açılışındaki kopya, arada canlıya giren değişikliği geri almasın diye.
+async function canliyaTemellendir(db: Db, id: number, defter: readonly DegisiklikSatiri[]): Promise<void> {
+  const dokunulan = new Set(defter.flatMap((d) => d.isEmriIdleri));
+  const tum = new Set([
+    ...(await s.yerlesimler(db, null)).map((y) => y.isEmriId), ...(await s.yerlesimler(db, id)).map((y) => y.isEmriId),
+    ...(await s.yersizBolmeler(db, null)).keys(), ...(await s.yersizBolmeler(db, id)).keys(),
+  ]);
+  await s.canlidanAl(db, id, [...tum].filter((x) => x > 0 && !dokunulan.has(x)));
+  const turler = new Set(defter.map((d) => d.tur));
+  if (!turler.has('ayar')) await s.ayariCanlidanAl(db, id);
+  if (!turler.has('bedel_ayari')) await s.bedelTaslaktanSil(db, id);
+  if (!turler.has('ek_mesai')) await s.ekMesaiCanlidanAl(db, id);
 }
 
 // Hızlı dene ("ya şöyle olursa"): canlı planın durumundan somut bir deneme üretilir, taslakta benzetilir ve motor yeniden önerir.
@@ -2460,6 +2501,8 @@ export async function canliyaAl(db: Db, k: Kullanici, id: number, g: { surum: nu
     throw cakisma('Senaryo açıldıktan sonra canlı plan değişti; onaylayarak canlıya al.',
       { neden: CANLI_DEGISTI, tabanSurumu: x.tabanPlanSurumu, canliSurumu: surum } satisfies CanliDegistiAyrintisi);
   }
+  // B-2483-1: onaylanan "canlı değişti"de yalnız taslağın değiştirdikleri canlıya geçer; arada canlıya giren yer, iş ve ayar korunur.
+  if (surum !== x.tabanPlanSurumu) await canliyaTemellendir(db, id, defter);
   const b = await baglamKur(db, k, id);
   const canli = await s.yerlesimler(db, null);
   let taslak = await s.yerlesimler(db, id);
@@ -2517,6 +2560,13 @@ export async function canliyaAl(db: Db, k: Kullanici, id: number, g: { surum: nu
   const gerekce = dortSaatGerekcesi(g.dortSaatGerekcesi);
   if (dortSaat.length > 0 && gerekce === null) throw dortSaatReddi(b, dortSaat[0]!);
   const asmaKaydi = dortSaat.length > 0 ? `4 saat kuralı aşıldı (${dortSaat.map((i) => isMetni(b, i.isEmriId)).join(', ')}): ${gerekce!}` : null;
+  // B-2483-2 (P5, PL-01): canlıya geçecek birleşik planda (canlıda kalan + taslaktan gelen) aynı makine ya da kişide üst üste binme olmaz.
+  // 308 b gibi yalnız taslakta yeri değişen işlerin çakışmasına bakılır: canlıda önceden kalmış çakışma canlıya almayı durdurmaz.
+  const birlesik = [...canli.filter((y) => !gecen.has(y.isEmriId)), ...taslak.filter((y) => gecen.has(y.isEmriId))].filter((y) => y.isEmriId > 0);
+  const ust = ustUsteBinen(b, birlesik.map((y) => yerOf(b, y)), new Set(degisen.map((y) => y.isEmriId)));
+  if (ust !== null) {
+    throw cakisma(`Canlıya geçecek planda ${kaynakMetni(b, ust[0].kaynak)} üzerinde ${isMetni(b, ust[0].isEmriId)} ile ${isMetni(b, ust[1].isEmriId)} üst üste biniyor; taslağı düzeltmeden canlıya alınmaz.`);
+  }
   await s.canliyaYaz(db, id, idler, k.id);
   for (const y of taslak) {
     const is = b.isler.get(y.isEmriId);
@@ -2620,7 +2670,8 @@ async function baslayanlariSabitle(db: Db, k: Kullanici, b: Baglam, id: number, 
   }));
   const m = await sunucuMotoru(db, b, id, kuyruklar);
   if (m.yerlesmez.size > 0) await s.yerlesimleriSil(db, id, [...m.yerlesmez]);
-  const idler: number[] = [];
+  // Sabitlenen çalışan iş ve yeri kalkan iş de defterdedir (B-2483-1: defter taslağın değiştirdiği işlerin tek listesidir).
+  const idler: number[] = [...calisan, ...m.yerlesmez];
   for (const q of kuyruklar) {
     for (const { isId } of q.isler) {
       const y = m.yer.get(isId), eski = taslak.find((x) => x.isEmriId === isId)!;
