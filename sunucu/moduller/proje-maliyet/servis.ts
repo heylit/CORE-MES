@@ -24,7 +24,7 @@ import * as sorgular from './sorgular.ts';
 import {
   beklemeFinansmani, defteriUygula, genelGiderEksikleri, projeGeliri, dondurulacaklar, gercekTalasAdedi, gunlukFaizOrani, eksikKalemler, isEmriKaydi, malzemePlani, tahminiIsEmriMaliyeti, gecikmeCezasi, gecikmeGunu, gostergeler, haftalikBirikim, kalemKirilimi, karRiski, iscilikPlaniEksik, planTarihiEksik, sapanIsEmirleri, tahminiBitis,
 } from './kurallar.ts';
-import { MASRAF_YOK, aramaKalibi, butceTl, maliyetFarki, masrafReddi, tabanKarari } from './kurallar.ts';
+import { MASRAF_YOK, aramaKalibi, butceTl, maliyetFarki, masrafReddi, masrafSayilmaz, tabanKarari } from './kurallar.ts';
 import { faturaDurumu } from './kurallar.ts';
 import { MASRAF_KALDIRMA_YETKISI, projeMasrafReddi } from './kurallar.ts';
 import type { FaturaDurumu, FaturaKaydi, GelirPayi, MalzemeBileseni, MaliyetKaydi, ProjeGeliri as ProjeGeliriSonucu, TalasAdedi } from './kurallar.ts';
@@ -398,13 +398,13 @@ async function maliyetOzeti(db: Db, projeId: number, h: Pick<Hesap, 'gerceklesen
     kisiAd: adlar.get(t.kisiId) ?? null,
     an: t.an,
   }));
-  // Bağ belgeye yabancı anahtarla durur; belge silinmez, iptal edilir ve iptal satırı toplama girmez (PM-42).
+  // Bağ belgeye yabancı anahtarla durur; belge silinmez, iptal edilir ve iptal satırı toplama girmez (PM-42); sayılmayan türdeki eski bağ da (PM-49).
   const masraflar = baglar.flatMap((b) => {
     const d = belgeler.get(b.belgeId);
     if (d === undefined) return [];
     return [{
       id: b.id, belgeId: b.belgeId, belgeNo: d.belgeNo, belgeTarihi: d.belgeTarihi, kategori: d.kategori, aciklama: d.aciklama,
-      tutarTl: Number(d.tutarTl), iptal: d.durum === 'iptal', gorevId: b.gorevId, kisiAd: adlar.get(b.kisiId) ?? null, an: b.an,
+      tutarTl: Number(d.tutarTl), iptal: d.durum === 'iptal', sayilmaz: masrafSayilmaz(d, PROJE_MASRAF_KATEGORILERI), gorevId: b.gorevId, kisiAd: adlar.get(b.kisiId) ?? null, an: b.an,
     }];
   });
   const [taban = null, ...tabanGecmisi] = tabanlar;
