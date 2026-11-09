@@ -375,6 +375,8 @@ export function useRotaDuzeni(veri: RrVerisi, yetki: RrYetkisi, adimaGit: (urunI
     kayitHatasi: (id: string) => hatalar.current.get(id) ?? null,
     degistir, tasi, tasimaOnayi, tasimaKarari, geriAl, geriAlinabilir, yinelenebilir, revSec, revEylemi, yeniTaslak, ilkRevizyonaCevir, kopyala,
     opAdi, malzemeVar,
+    // 2685: istasyonun kapasite kaynağı yalnız istasyonda saklanan değerdir; boş istasyon planda makine sayılır (kapasite-insan.md madde 1).
+    insanli: (istasyonId: string | null) => istasyonId !== null && veri.ek.kapasiteKaynagi?.[istasyonId] === 'insan',
     // Taslağın notu (onaya gönderirken yazılır).
     taslakNotu: (id: string) => taslaklar.current.get(id)?.not ?? null,
   };
