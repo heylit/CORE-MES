@@ -6,7 +6,7 @@ import type { FasonIsEmri } from '../uretim-emirleri/disari.ts';
 import type { AlimTasimasi } from './alim-olayi.ts';
 import type { HizliKalem, KartAyrintisi, Kalite, Karar, Onay, Talebim, Talep, TalepDurumu, TalepTuru, TalepYazimi, TedarikTermini, TerminDurumu, TerminTakipSatiri, TeslimDurumu } from '#paylasilan/sozlesme/satin-alma.ts';
 import { MALZEMELER_SAYFALARI } from '#paylasilan/sayfalar/malzemeler.ts';
-import { gerceklesenSiparisDegeri } from './hesap-kurallar.ts';
+import { gerceklesenPay, gerceklesenSiparisDegeri } from './hesap-kurallar.ts';
 
 export const ISLEM = {
   oku: 'satin-alma.oku', talepAc: 'satin-alma.talep-ac', yaz: 'satin-alma.yaz', onayla: 'satin-alma.onayla', ayar: 'satin-alma.ayar',
@@ -77,6 +77,10 @@ export const ILETILER = {
   kgZatenIptal: 'Bu kg fiyatı girişi zaten iptal edildi.',
   yalnizTaslakSilinir: 'Yalnız taslak talep silinir; ilerlemiş talep iptal edilir.',
   emirKapali: 'Üretim emri açık değil: yalnız planlı ya da başlamış emir seçilir.',
+  projeEmirli: 'Emre bağlı talebin projesi emirden gelir; proje ayrıca seçilmez.',
+  projeAktifDegil: 'Proje aktif değil: yalnız aktif proje seçilir.',
+  birlesmeProjesi: 'Talepler farklı projelere bağlı; aynı projenin talepleri birleştirilir.',
+  idariCevrildi: (no: string) => `Bu idari talep daha önce ${no} satın alma talebine çevrildi.`,
   tedarikciYok: 'Tedarikçi bulunamadı.',
   terminMalzemesiYok: 'Malzeme kartı bulunamadı.',
   terminVar: 'Bu malzemenin termini başka biri tarafından girildi; sayfayı yenileyin.',
@@ -217,7 +221,8 @@ export function izi(deger: unknown): string {
 const govdeIzi = (t: TalepYazimi, durumHaric: boolean): string => {
   // Yalnız talebin kendi alanları; sunucunun verdiği salt okunur alanlar (no, ad, sürüm, tarihler) karşılaştırılmaz.
   const g = { baslik: t.baslik, birim: t.birim, talepEdenKisiId: t.talepEdenKisiId, oncelik: t.oncelik, ihtiyacTarihi: t.ihtiyacTarihi,
-    notlar: t.notlar, iptalNedeni: t.iptalNedeni, kalemler: t.kalemler, uretimEmriId: t.uretimEmriId };
+    notlar: t.notlar, iptalNedeni: t.iptalNedeni, kalemler: t.kalemler, uretimEmriId: t.uretimEmriId,
+    projeId: t.projeId ?? null };
   return izi({ ...g, ...(durumHaric ? {} : { durum: t.durum }) });
 };
 // Satın almanın işi: teklif, istek, karar, senaryo, ağırlık. Siparişte yalnız satın almanın alanları (teslim bilgisi stoktan okunur).
@@ -1422,7 +1427,11 @@ export const BIRLESIK_KALEM_SINIRI = 200;
 
 // 2414 a madde 4: birleşik talebin alanları kaynaklardan türetilir. İhtiyaç tarihi en erken, öncelik en yüksek olandır; birim boştur
 // (V4 a: harcama kalemin kaynak birimine yazılır). Üretim emri yalnız bütün kaynaklar aynı emre bağlıysa taşınır.
-export function birlesikTalep(id: string, kaynaklar: readonly Pick<Talep, 'no' | 'ihtiyacTarihi' | 'oncelik' | 'uretimEmriId'>[]): TalepYazimi {
+// 2611 a (Veri 2): kaynaklar aynı projeye bağlıdır (hepsi projesiz de olabilir); birleşik talep ortak projeyi taşır.
+export function birlesmeProjesiReddi(kaynaklar: readonly Partial<Pick<Talep, 'proje'>>[]): string | null {
+  return new Set(kaynaklar.map((t) => t.proje?.id ?? null)).size > 1 ? ILETILER.birlesmeProjesi : null;
+}
+export function birlesikTalep(id: string, kaynaklar: readonly (Pick<Talep, 'no' | 'ihtiyacTarihi' | 'oncelik' | 'uretimEmriId'> & Partial<Pick<Talep, 'proje'>>)[]): TalepYazimi {
   const tarihler = kaynaklar.flatMap((t) => (t.ihtiyacTarihi === null ? [] : [t.ihtiyacTarihi])).sort();
   const oncelik = ONCELIKLER[Math.max(...kaynaklar.map((t) => ONCELIKLER.indexOf(t.oncelik)))]!;
   const emirler = new Set(kaynaklar.map((t) => t.uretimEmriId));
@@ -1430,7 +1439,7 @@ export function birlesikTalep(id: string, kaynaklar: readonly Pick<Talep, 'no' |
   return {
     id, baslik: baslik.length > 160 ? `${baslik.slice(0, 159)}…` : baslik, birim: null, talepEdenKisiId: null, oncelik,
     ihtiyacTarihi: tarihler[0] ?? null, notlar: '', durum: 'taslak', iptalNedeni: '',
-    uretimEmriId: emirler.size === 1 ? [...emirler][0]! : null, agirliklar: null,
+    uretimEmriId: emirler.size === 1 ? [...emirler][0]! : null, projeId: kaynaklar[0]?.proje?.id ?? null, agirliklar: null,
     kalemler: [], teklifIstekleri: [], teklifler: [], karar: null, onaylar: [], hareketler: [], senaryolar: [],
   };
 }
@@ -1448,4 +1457,59 @@ export function ayirmaReddi(t: Pick<Talep, 'kaynaklar' | 'teklifler' | 'karar'>,
 export function kaynakKalemiReddi(eski: Pick<Talep, 'kaynaklar'>, yeniKalemler: readonly { id: string }[]): string | null {
   const kalan = new Set(yeniKalemler.map((k) => k.id));
   return (eski.kaynaklar ?? []).some((x) => x.kalemIdleri.some((id) => !kalan.has(id))) ? ILETILER.kaynakKalemiSilinmez : null;
+}
+
+// 2611 a: proje yalnız emre bağlı olmayan talepte seçilir; yeni seçilen proje aktiftir (değişmeyen eski proje durumu değişse de kalır).
+export function projeReddi(t: Pick<TalepYazimi, 'projeId' | 'uretimEmriId'>, eskiProjeId: number | null, projeAktif: boolean): string | null {
+  if (t.projeId == null) return null;
+  if (t.uretimEmriId !== null) return ILETILER.projeEmirli;
+  if (t.projeId !== eskiProjeId && !projeAktif) return ILETILER.projeAktifDegil;
+  return null;
+}
+export const projeHareketi = (eski: string | null, yeni: string | null): string => `Proje: ${eski ?? 'yok'} -> ${yeni ?? 'yok'}`;
+export const emirHareketi = (eski: string | null, yeni: string | null): string => `Üretim emri: ${eski ?? 'yok'} -> ${yeni ?? 'yok'}`;
+
+// 2637 a, 2638, 2611 a: sipariş satırının maliyet yolu; her satır tek yoldadır, hiçbiri iki kez sayılmaz ya da kaybolmaz. Sıra:
+// fason (iş emrine, isEmriFasonTutarlari), stok (stoğa girer, sarfla emre), emir (kalemin emri, 2624 KALEM_EMRI; Maliyet C1: yalnız
+// emrin projesi varsa), proje (talebin projesi), genel gider (kalan hizmet ve kartsız satır). Kartı bulunamayan satırın yolu bilinmiyor:
+// stok varsayılmaz (Maliyet, Mimar N2).
+export type SatirYolu = 'fason' | 'bilinmiyor' | 'stok' | 'emir' | 'proje' | 'genel_gider';
+export interface YolGirdisi { fason: boolean; kartTuru: string | null; kartBulunamadi?: boolean; emirId: number | null; emirProjeli: boolean; projeId: number | null }
+export function satirYolu(r: YolGirdisi): SatirYolu {
+  if (r.fason) return 'fason';
+  if (r.kartBulunamadi === true) return 'bilinmiyor';
+  if (r.kartTuru !== null && r.kartTuru !== 'hizmet') return 'stok';
+  if (r.emirId !== null && r.emirProjeli) return 'emir';
+  if (r.projeId !== null) return 'proje';
+  return 'genel_gider';
+}
+
+// Bir siparişin dağılımı. Emir ve proje yolunda değer gerçekleşen değerdir: hizmet teslim oranıyla (gerceklesenPay), kartsız satır teslim
+// kaydı olamadığı için sipariş tutarıyla (2611 varsayım 7). Masraf satırın sipariş malı payı kadardır ve o hedefte değer varsa girer
+// (2611 N2). Genel gider oranı (2637 a) genel gider yolundaki malın bütün mala oranıdır; Finans belge tutarını bununla çarpar. Mal 0 ise
+// oran tanımsızdır: null (Veri 1); yolu bilinmeyen satır varsa oran bilinemez: null. Fason ve stok yolunun masraf payı hiçbir hedefe verilmez (Maliyet N4, ayrı iş).
+export interface DagilimSatiri extends YolGirdisi { mal: number; miktar: number; teslim: number }
+export interface SiparisDagilimi { hedefler: { yol: 'emir' | 'proje'; hedefId: number; deger: number }[]; genelGiderOrani: number | null }
+export function siparisDagilimi(satirlar: readonly DagilimSatiri[], masraf: number): SiparisDagilimi {
+  const teslimVar = satirlar.some((x) => x.teslim > 0);
+  const tumMal = satirlar.reduce((t, x) => t + x.mal, 0);
+  const hedefler = new Map<string, { yol: 'emir' | 'proje'; hedefId: number; deger: number; pay: number }>();
+  let genelMal = 0;
+  let bilinmeyen = false;
+  for (const x of satirlar) {
+    const yol = satirYolu(x);
+    if (yol === 'bilinmiyor') bilinmeyen = true;
+    if (yol === 'genel_gider') genelMal += x.mal;
+    if (yol !== 'emir' && yol !== 'proje') continue;
+    const hedefId = yol === 'emir' ? x.emirId! : x.projeId!;
+    const a = `${yol}/${hedefId}`;
+    const h = hedefler.get(a) ?? { yol, hedefId, deger: 0, pay: 0 };
+    h.deger += x.kartTuru === null ? x.mal : gerceklesenPay(x.mal, 0, x.miktar > 0 ? x.teslim / x.miktar : 0, teslimVar);
+    h.pay += tumMal > 0 ? masraf * x.mal / tumMal : 0;
+    hedefler.set(a, h);
+  }
+  return {
+    hedefler: [...hedefler.values()].filter((h) => h.deger > 0).map((h) => ({ yol: h.yol, hedefId: h.hedefId, deger: h.deger + h.pay })),
+    genelGiderOrani: tumMal > 0 && !bilinmeyen ? Math.round(genelMal / tumMal * 1e6) / 1e6 : null,
+  };
 }
