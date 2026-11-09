@@ -87,7 +87,7 @@ function KarRiskiSeridi({ m }: { m: ProjeMaliyetCevabi }) {
             )}
           </>
         )}
-        {planGorur && <Link className="tc-pm-risk-git" to="/plan"><Simge ad="gantt" /> Plana git</Link>}
+        {planGorur && <Link className="tc-pm-risk-git" to="/plan/plan"><Simge ad="gantt" /> Plana git</Link>}
       </div>
     </Kart>
   );

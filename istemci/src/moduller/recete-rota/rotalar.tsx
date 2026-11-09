@@ -5,15 +5,15 @@ import { ReceteRotaYeni } from './yeni/ReceteRotaYeni.tsx';
 import { SEKMELER } from './yeni/sekmeler.ts';
 
 // Reçete ve Rota maddeleri yeni ekranı açar (541, 527 1 a; eski çerçeve 805 ile kalktı). Planlama plan modülünün sayfasıdır (658 b):
-// eski planlama adresleri ve deneme ekranının adresi oraya yönlenir (kayıtlı bağlantılar kırılmasın).
+// eski planlama adresleri ve deneme ekranının adresi oraya yönlenir (kayıtlı bağlantılar kırılmasın). Eski kök motordu: motor `/plan/plan`'dadır (2535 a).
 function PlanlamayaYonlen() {
   const { gorunum } = useParams<{ gorunum?: string }>();
-  return <Navigate to={gorunum === undefined || gorunum === 'plan' ? '/plan' : `/plan/${gorunum}`} replace />;
+  return <Navigate to={`/plan/${gorunum ?? 'plan'}`} replace />;
 }
 
 export const rotalar: ModulRotasi[] = [
   ...SEKMELER.map((s) => ({ yol: s.yol, ekran: ReceteRotaYeni })),
-  ...PLANLAMA_ANAHTARLARI.map((a) => ({ yol: `/recete-rota/${a}`, ekran: () => <Navigate to={a === 'plan' ? '/plan' : `/plan/${a}`} replace /> })),
+  ...PLANLAMA_ANAHTARLARI.map((a) => ({ yol: `/recete-rota/${a}`, ekran: () => <Navigate to={`/plan/${a}`} replace /> })),
   { yol: '/recete-rota/planlama-yeni', ekran: PlanlamayaYonlen },
   { yol: '/recete-rota/planlama-yeni/:gorunum', ekran: PlanlamayaYonlen },
 ];
