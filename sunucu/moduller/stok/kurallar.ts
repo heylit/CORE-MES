@@ -912,8 +912,10 @@ const onBindeCarp = (adetBinde: bigint, onBinde: bigint): bigint => (adetBinde *
 // Başlatmadan önce adımın girdileri (kart #1289): istasyonda en az bir adetlik girdi yoksa eksiktir. İstenecek, emrin bütün adedi
 // için gereken miktarın istasyondakinden fazlasıdır. Aynı malzeme adımda iki kez yazılmışsa miktarları toplanır.
 export interface BaslatmaEksigi { malzemeId: number; gereken: bigint; istasyonda: bigint; istenecek: bigint }
+// kalanlar: malzeme başına adımın kalan ihtiyacı (binde; adimKalanIhtiyaci). Verilen malzemede istek bu toplamdan açılır, yoksa adet x miktar.
 export function baslatmaEksikleri(
   girdiler: readonly { malzemeNo: number; miktar: string }[], istasyonda: ReadonlyMap<number, bigint>, adetBinde: bigint,
+  kalanlar?: ReadonlyMap<number, bigint>,
 ): BaslatmaEksigi[] {
   // Toplam, bir adetin yuvarlanmış miktarından değil reçetenin dört ondalığından çarpılır: 1000 x 0,0004 kg 1 kg değil 0,4 kg'dır.
   const birim = new Map<number, bigint>();
@@ -923,10 +925,30 @@ export function baslatmaEksikleri(
     const gereken = onBindeCarp(1000n, onBinde);
     const mevcut = istasyonda.get(malzemeId) ?? 0n;
     if (gereken <= 0n || mevcut >= gereken) continue;
-    const toplam = onBindeCarp(adetBinde, onBinde);
+    const toplam = kalanlar?.get(malzemeId) ?? onBindeCarp(adetBinde, onBinde);
     eksikler.push({ malzemeId, gereken, istasyonda: mevcut, istenecek: toplam > mevcut ? toplam - mevcut : gereken - mevcut });
   }
   return eksikler;
+}
+
+// B-2501-3: adımın kalan malzeme ihtiyacı (binde). Brüt emrin iş emri kopyasındandır (fire payı ve dal çarpanı içinde); emre verilmiş net
+// sarf malzeme başına önce önceki adımların brütüne, artanı bu adıma düşülür. Brüt dört ondalıklı metindir; binde yukarı yuvarlanır.
+export function adimKalanIhtiyaci(
+  ihtiyac: readonly { malzemeNo: number; opNo: number; brut: string }[], opNo: number, verilen: ReadonlyMap<number, bigint>,
+): Map<number, bigint> {
+  const bu = new Map<number, bigint>();
+  const onceki = new Map<number, bigint>();
+  for (const s of ihtiyac) {
+    const m = s.opNo === opNo ? bu : s.opNo < opNo ? onceki : null;
+    if (m !== null) m.set(s.malzemeNo, (m.get(s.malzemeNo) ?? 0n) + (onBindeOku(s.brut) + 9n) / 10n);
+  }
+  const sonuc = new Map<number, bigint>();
+  for (const [malzemeNo, brut] of bu) {
+    const artan = (verilen.get(malzemeNo) ?? 0n) - (onceki.get(malzemeNo) ?? 0n);
+    const kalan = brut - (artan > 0n ? artan : 0n);
+    sonuc.set(malzemeNo, kalan > 0n ? kalan : 0n);
+  }
+  return sonuc;
 }
 
 // Sayım farkının stoğa planı. Adım taşınan malzemeyi (statü kuralı: ilk adımın ilk girdisi; çıktılı adımdan sonra o adımın çıktısı)
@@ -942,6 +964,9 @@ export interface UretimAdimPlani {
   cevirme: { malzemeId: number; kaynakStatuId: number | null; hedefStatuId: number | null; miktar: bigint; tasinan?: true } | null;
   // malzemeId null: emrin ürünü. statuId: birleştirmede dalların parçasından doğan ürün adımın statüsüne girer (1348 a); öteki hâllerde yok.
   giris: { malzemeId: number | null; miktar: bigint; statuId?: number | null } | null;
+  // 2522 a: bu adımda daha önce sayılanın taşınan miktarı (binde; adimPlaniKur ekler). Elle sarf edilen taşınan statü zincirinin dışında
+  // kalır; mahsup bununla birikimli hesaplanır (tasinanMahsubu).
+  oncekiTasinan?: bigint;
 }
 export function uretimAdimPlani(g: {
   adet: bigint; ilkAdim: boolean; sonAdim: boolean; statuId: number | null; oncekiStatuId: number | null; oncekiCiktili: boolean;
@@ -970,6 +995,13 @@ export function uretimAdimPlani(g: {
   }
   const giris = g.sonAdim ? { malzemeId: g.cikti, miktar: g.adet } : g.cikti === null ? null : { malzemeId: g.cikti, miktar: g.adet };
   return { sarflar, cevirme, giris };
+}
+
+// 2522 a: emre elle sarf edilen taşınan malzeme statü zincirinin dışında kalır. Zincirin her taşınan hareketinden (çevirme, statüden sarf)
+// elle verilenin, adımın birikimli miktarı ihtiyacı (elle verilen düşülmüş) aştığı kadarı düşülür; elle verilen emrin sonuna sayılır
+// (elleSarfMahsubu ile aynı). Hammadde bir kez düşer; zincirde eksi oluşmaz.
+export function tasinanMahsubu(g: { istenen: bigint; elle: bigint; oncekiTasinan: bigint; ihtiyac: bigint | null }): bigint {
+  return elleSarfMahsubu({ istenen: g.istenen, elle: g.elle, net: g.elle + g.oncekiTasinan, ihtiyac: g.ihtiyac });
 }
 
 // Dallı emirde (1348 a) adımın taşıma kaynağı, Reçete ve Rota statü kuralıyla aynı. Öncül listesi başka öncülün zaten beklediği

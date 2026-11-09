@@ -21,7 +21,7 @@ import {
 import {
   binde, bindenMetin, cikisOnerisi, stoklanirMi, partiSec, ihtiyacToplami, kalanSarf, tamamlamaEngeli, ISTEK_GECIS_KAYNAKLARI, istekGecisEngeli, istekAcilisDurumu, sayimArtisPlani, sayimAzalisPlani,
   istekliTeslimEngeli, istekListeEngeli, teslimAlimMiktariEngeli, istenenFazlaNotu, teslimAlmaEngeli, teslimKapanisEngeli, kaynaklardanAl, uretimAdimPlani, dalliAdimPlani, birikimliMiktar,
-  kalanAdimAdedi, tasimaKaynagi, type TasimaKaynagi, gelenOrani, oranliAdet, type GelenOrani, type ReceteGirdisi, type UretimAdimPlani, baslatmaEksikleri, adetMiktari, type BaslatmaEksigi,
+  kalanAdimAdedi, tasimaKaynagi, type TasimaKaynagi, gelenOrani, oranliAdet, type GelenOrani, type ReceteGirdisi, type UretimAdimPlani, baslatmaEksikleri, adimKalanIhtiyaci, tasinanMahsubu, adetMiktari, type BaslatmaEksigi,
   rezerveSiniri, enKotuKalite, girdiSec, eksidenUyari, geriCevirmeKaliteleri, teslimBolmesi, elleSarfMahsubu, sarfKapanisEngeli, refakatSayimEngeli, refakatTeslimEngeli, kartOnayiTuru,
 } from '../kurallar.ts';
 import * as sorgular from '../sorgular.ts';
@@ -185,7 +185,12 @@ async function baslatmaGirdiEksikleri(db: Db, uretimEmriId: number, isEmriId: nu
   // Çok katmanlı emirde alt düğümün girdisi alt parça başınadır: emrin bütün adedi kök başına adetle çarpılır (1476-C). Dal çarpanı
   // malzemeyi çarpmaz (1333 a): tek katmanlı emirde ve kökte emir adedi.
   const carpan = Number((await emirDugumleri(db, uretimEmriId)).get(bilgi.opNo)?.birimCarpani ?? 1);
-  return baslatmaEksikleri(girdiler, istasyonda, BigInt(Math.round(adet * carpan * 1000)));
+  // B-2501-3: istek emrin kalan ihtiyacıdır (kopyanın fire payı eklenir, emre verilmiş sarf düşülür); kopyası okunamayan emirde adet x miktar.
+  const ihtiyac = await emirMalzemeIhtiyaci(db, uretimEmriId);
+  const verilen = new Map<number, bigint>();
+  for (const m of new Set(girdiler.map((g) => g.malzemeNo))) verilen.set(m, binde(await sorgular.emrinNetSarfi(db, uretimEmriId, m)));
+  const kalanlar = ihtiyac === null ? undefined : adimKalanIhtiyaci(ihtiyac, bilgi.opNo, verilen);
+  return baslatmaEksikleri(girdiler, istasyonda, BigInt(Math.round(adet * carpan * 1000)), kalanlar);
 }
 
 // Terminal başlatmadan önce sorar: her eksik girdi için istasyona malzeme isteği bir kez açılır (aynı adım ve malzeme ikinci istek açmaz,
@@ -890,12 +895,13 @@ export async function adimPlaniKur(
   }
   const { oncekiOpNo, tasinan, cikti } = await adimTasinani(db, malzemeNo, bilgi, uretimEmriId);
   if (tasinan === null) return null;
-  return uretimAdimPlani({
+  const plan = uretimAdimPlani({
     adet, ilkAdim: oncekiOpNo === null, sonAdim: bilgi.sonAdim, statuId,
     oncekiStatuId: oncekiOpNo === null || adimStatusu === null ? null : await adimStatusu(db, { malzemeNo, opNo: oncekiOpNo, uretimEmriId }),
     oncekiCiktili: oncekiOpNo !== null && (await cikti(oncekiOpNo)) !== null,
     cikti: bilgi.sonAdim ? null : await cikti(bilgi.opNo), girdiler: bilgi.girdiler, tasinan, onceki,
   });
+  return { ...plan, oncekiTasinan: adetMiktari(onceki, tasinan.miktar, tasinan.bolen) };
 }
 
 // 1554 a: adımın bu sayımdan önceki toplam adedi (binde, adetMiktari'nin onceki'si). Sayım satırı olaydan önce aynı işlemde yazılır;
@@ -1188,6 +1194,13 @@ async function elleSarfMahsubuOku(db: Db, uretimEmriId: number, malzemeId: numbe
   const ihtiyac = ihtiyacToplami(((await emirMalzemeIhtiyaci(db, uretimEmriId)) ?? []).map((m) => ({ malzemeId: m.malzemeNo, brut: m.brut }))).get(malzemeId) ?? null;
   return elleSarfMahsubu({ istenen, elle: binde(sarf.elle), net: binde(sarf.net), ihtiyac });
 }
+async function tasinanMahsubuOku(db: Db, uretimEmriId: number, malzemeId: number, istenen: bigint, oncekiTasinan: bigint | undefined): Promise<bigint> {
+  if (oncekiTasinan === undefined) return 0n;
+  const elle = binde((await sorgular.emrinStatusuzSarfi(db, uretimEmriId, malzemeId)).elle);
+  if (elle <= 0n) return 0n;
+  const ihtiyac = ihtiyacToplami(((await emirMalzemeIhtiyaci(db, uretimEmriId)) ?? []).map((m) => ({ malzemeId: m.malzemeNo, brut: m.brut }))).get(malzemeId) ?? null;
+  return tasinanMahsubu({ istenen, elle, oncekiTasinan, ihtiyac });
+}
 // Artış: girdiler yalnız istasyondan emre sarf edilir, taşınan malzeme adımın statüsüne istasyonda çevrilir; çıktılı
 // ve son adımda çıktı (son adımda emrin ürünü) emir partisiyle istasyona girer. Yetmeyen girdi istasyonda eksiye düşülür (iş 558, 562 2 b).
 // Döner: konuma giren son hareket (çıktı girişi ya da statü çevirme); yalnız sarf varsa null.
@@ -1199,7 +1212,8 @@ export async function uretimAdiminiYaz(db: Db, y: UretimYazimi, plan: UretimAdim
   const cevirmePayi: SarfPayi = new Map();
   const pay = (m: SarfPayi, partiId: number | null | typeof ISTISNA, miktar: bigint) => { m.set(partiId, (m.get(partiId) ?? 0n) + miktar); };
   for (const s of plan.sarflar) {
-    const istenen = s.statuId === null ? s.miktar - await elleSarfMahsubuOku(db, y.uretimEmriId, s.malzemeId, s.miktar) : s.miktar;
+    const istenen = s.statuId === null ? s.miktar - await elleSarfMahsubuOku(db, y.uretimEmriId, s.malzemeId, s.miktar)
+      : s.tasinan === true ? s.miktar - await tasinanMahsubuOku(db, y.uretimEmriId, s.malzemeId, s.miktar, plan.oncekiTasinan) : s.miktar;
     if (istenen <= 0n) continue;
     const hak = await kullanilabilirStatu(db, s.malzemeId, s.statuId, y.uretimEmriId, istenen);
     let dusulen = 0n;
@@ -1228,8 +1242,9 @@ export async function uretimAdiminiYaz(db: Db, y: UretimYazimi, plan: UretimAdim
       pay(sarfPayi, null, istenen - dusulen);
     }
   }
-  const c = plan.cevirme;
-  if (c !== null) {
+  const tam = plan.cevirme;
+  const c = tam === null ? null : { ...tam, miktar: tam.miktar - await tasinanMahsubuOku(db, y.uretimEmriId, tam.malzemeId, tam.miktar, plan.oncekiTasinan) };
+  if (c !== null && c.miktar > 0n) {
     const hak = await kullanilabilirStatu(db, c.malzemeId, c.kaynakStatuId, y.uretimEmriId, c.miktar);
     let cevrilen = 0n;
     for (const a of await uretimKaynaklariSec(db, y, c.malzemeId, c.kaynakStatuId, c.miktar, hak)) {
