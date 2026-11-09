@@ -95,4 +95,15 @@ OK: `oncul-kurallar.test.ts` (saf), OC: `oncul.test.ts` (gerçek PostgreSQL), KT
 
 KK: `kapanis-kurallar.test.ts` (saf), KP: `kapanis.test.ts` (gerçek PostgreSQL), KG: `kapanis-goc.test.ts`.
 
+DK: `dis-islem-emri.test.ts` "UE-DIE kuralları (saf)", DP: aynı dosya "gerçek PostgreSQL", DG: `dis-islem-emri-goc.test.ts`.
+
+| Kural | Madde | Test (izinli ve reddedilen) | Kısıt |
+|---|---|---|---|
+| UE-DIE-1 | Her fason adımın tek dış işlem emri olur: plandaki adımda kendiliğinden (tetikleyici), elle açmada belgesi olan ve fason olmayan adım reddedilir, talepten açmada var olan döner (2428-1) | DP "UE-DIE-1", "izinli ve reddedilen: elle açma", "talepten açma" | uretim_emirleri_dis_islem_emri_is_emri_tekil, _kaynak_tek |
+| UE-DIE-2 | Durum saklanmaz: emre bağlı belgede iş emri ve emirden, partide kapanış ve hareketlerden türer; içeri alınan adımın belgesi iptal görünür; hesabı kapanan iş emri kuralıyla aynı (GKK firmada hatalı dahil), hedefin hepsi gitmeden döndü olmaz | DK "UE-DIE-2", "Mimar K1, K2"; DP "UE-DIE-1/2", "Mimar K1", "Mimar N1" | uretim_emirleri_dis_islem_emri_emirde_sade |
+| UE-DIE-3 | Parti belgesi parça, adet ve işlem (tip ya da hizmet) ister; termin gidişten önce olmaz; sistem parti belgesi açmaz | DK "UE-DIE-5 ... UE-DIE-3"; DP "UE-DIE-3", "kısıtlar" | _partide_tam, _termin_sirasi, _partiyi_kisi_acar, _acan |
+| UE-DIE-4 | Parti belgesinin gidişi adedi, dönüşü gönderileni aşmaz; dışarıda parça varken tamamlanmaz; emre bağlı ve kapalı belge hareket almaz; eşzamanlı iki dönüş birlikte aşamaz | DK "UE-DIE-4"; DP "parti belgesi", "eşzamanlı iki dönüş", "emre bağlı belge" | uretim_emirleri_fason_hareketi_tek_bag |
+| UE-DIE-5 | İptal yalnız gidişsiz parti belgesinde, güncel sürümle | DK "UE-DIE-5"; DP "parti belgesi iptal" (403, eski sürüm 409, gidişli 409) | yok |
+| UE-DIE-G | Göç açık fason işlerine belge ekler; iş emri ve hareket satırları değişmez (2428-3 a) | DG | yok |
+
 Bağsız kural: yok.

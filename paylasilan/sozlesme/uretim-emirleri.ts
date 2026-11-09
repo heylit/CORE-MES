@@ -930,3 +930,45 @@ export type KapanisListeCevabi = z.output<typeof kapanisListeCevabi>;
 // Sahibi modülün çözücüsünün emir başına verdiği bilgi.
 // Sunucu imzası: (db, uretimEmriId) => Promise<KapanisMaddeBilgisi | null>; null ya da kayıtsız madde "bilinmiyor" olur ve durdurmaz.
 export interface KapanisMaddeBilgisi { durum: 'tamam' | 'eksik' | 'gerekmez'; ayrinti: string | null }
+
+/* ---------------- dış işlem emri (DIE, 2428) ---------------- */
+// Her dış işlem (fason) tek belgedir: emre bağlı fason adımda iş emriyle 1:1, stoktaki partide parti kimliğiyle. Durum türetilir.
+// dondu: gönderilenin hepsi döndü, tamamlama bekleniyor.
+export const DIS_ISLEM_EMRI_DURUMLARI = ['acik', 'disarida', 'kismi_dondu', 'dondu', 'tamamlandi', 'iptal'] as const;
+export type DisIslemEmriDurumu = (typeof DIS_ISLEM_EMRI_DURUMLARI)[number];
+// plan: plandaki fason adımdan kendiliğinden; talep: Fason türündeki satın alma talebinden; elle: kişi açtı; goc: canlıya geçişte açık işe.
+export const DIS_ISLEM_EMRI_ACILISLARI = ['plan', 'talep', 'elle', 'goc'] as const;
+const DIE_ACIKLAMA = 500;
+
+export const disIslemEmriParametresi = z.object({ id: yolKimligi });
+const dieKaynagi = z.discriminatedUnion('tur', [
+  z.object({ tur: z.literal('emir'), uretimEmriId: KIMLIK, emirNo: z.string(), isEmriId: KIMLIK, opNo: z.number().int(), adim: z.string().nullable() }),
+  z.object({ tur: z.literal('parti'), partiId: KIMLIK, konumId: KIMLIK.nullable() }),
+]);
+const dieHareketi = z.object({
+  id: KIMLIK, yon: z.enum(['gidis', 'donus']), adet: z.number().int(), hurda: z.number().int().nullable(),
+  kisi: z.object({ id: KIMLIK, ad: z.string() }), zaman: zamanSemasi,
+});
+export const disIslemEmriSemasi = z.object({
+  id: KIMLIK, no: z.string(), kaynak: dieKaynagi, durum: z.enum(DIS_ISLEM_EMRI_DURUMLARI), acilis: z.enum(DIS_ISLEM_EMRI_ACILISLARI),
+  malzeme: z.object({ no: KIMLIK, kod: z.string(), ad: z.string() }).nullable(),
+  operasyonTipi: z.object({ id: KIMLIK, kod: z.string(), ad: z.string() }).nullable(),
+  hizmet: z.object({ no: KIMLIK, kod: z.string(), ad: z.string() }).nullable(),
+  firmaId: KIMLIK.nullable(), adet: z.number().int().nullable(), planlananGidis: tarihSemasi.nullable(), termin: tarihSemasi.nullable(),
+  aciklama: z.string().nullable(), gonderilen: z.number().int(), donen: z.number().int(), hurda: z.number().int(),
+  olusturan: z.object({ id: KIMLIK, ad: z.string() }).nullable(), olusturmaZamani: zamanSemasi, surum: z.number().int(),
+  hareketler: z.array(dieHareketi),
+});
+export const disIslemEmriCevabi = z.object({ disIslemEmri: disIslemEmriSemasi });
+
+// Elle açma (2428-1): emrin fason adımına; stoktaki partinin belgesi partiyi denetleyen stok ucundan açılır.
+export const disIslemEmriAcGovdesi = z.object({
+  isEmriId: KIMLIK,
+  aciklama: z.string().trim().max(DIE_ACIKLAMA, `Açıklama en çok ${DIE_ACIKLAMA} karakterdir.`).nullable().prefault(null),
+}).strict();
+export const disIslemEmriIptalGovdesi = z.object({ surum: surumSemasi }).strict();
+
+export type DisIslemEmri = z.output<typeof disIslemEmriSemasi>;
+export type DisIslemEmriCevabi = z.output<typeof disIslemEmriCevabi>;
+export type DisIslemEmriAcGovdesi = z.input<typeof disIslemEmriAcGovdesi>;
+export type DisIslemEmriIptalGovdesi = z.input<typeof disIslemEmriIptalGovdesi>;

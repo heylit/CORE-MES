@@ -8,10 +8,12 @@ import {
   asimlarCevabi, fasonHareketiCevabi, isEmriParametresi, oncelikGovdesi, ozetCevabi, partiBirlestirGovdesi, partiBolCevabi, partiBolGovdesi, planaAlGovdesi,
   birlesmePlaniGovdesi, ekAdimGovdesi, ekAdimKaldirGovdesi, hazirlikCevabi, hazirlikMuafiyetiGovdesi, hazirlikOzetiCevabi, hazirlikOzetiSorgusu, refakatKartiCevabi, katilimCevabi, rotasizAdimDuzenleGovdesi, rotasizAdimEkleGovdesi, rotasizAdimSilGovdesi, rotasizEmirCevabi, rotasizEmirGovdesi, acilisSecenekleriCevabi, acilisSecenekleriSorgusu, makineDevralGovdesi, makineEkleGovdesi, adimPaylariCevabi, durusDagilimiCevabi, sonOlaylarCevabi, sonOlaylarSorgusu, gunlukUretimCevabi, panelSorgusu, sureOzetiCevabi,
   hataliCevabi, hataliGovdesi, hataliListeCevabi, hataliListeSorgusu, reworkAdimiGovdesi,
+  disIslemEmriAcGovdesi, disIslemEmriCevabi, disIslemEmriIptalGovdesi, disIslemEmriParametresi,
   emirKapatGovdesi, kapanisCevabi, kapanisGeriAcGovdesi, kapanisListeCevabi, kapanislarSorgusu, kapanisMuafGovdesi, kapanisOnayGovdesi, kapanisRetGovdesi,
 } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { aramaUclari } from './arama/uclar.ts';
 import * as isEmri from './is-emri-servis.ts';
+import { dieAc, dieIptal, dieOku } from './dis-islem-emri.ts';
 import { hataliKaydet, hataliKayitlari } from './hatali-parca.ts';
 import { hazirlik, hazirliklar, muafiyetVer } from './hazirlik.ts';
 import { emirKapat, kapanis, kapanisGeriAc, kapanislar, kapanisMuafTut, kapanisOnayla, kapanisReddet } from './kapanis.ts';
@@ -688,4 +690,44 @@ const kapanisUclari = [
   }),
 ];
 
-export const uclar = [...aramaUclari, ...emirUclari, ...adimliUclar, ...katilimUclari, ...adimKomutUclari, ...hataliUclari, ...kapanisUclari];
+// Dış işlem emri (2428): ayrıntıyı emri okuyan görür (fason yetkilisi dahil); elle açma ve iptal fason yetkisiyle (2428 varsayım 1).
+// Stoktaki partinin belgesi stok ucundan açılır (parti stokta denetlenir); burada yalnız emrin fason adımı.
+const disIslemEmriUclari = [
+  uc({
+    yontem: 'GET',
+    yol: '/dis-islem-emirleri/:id',
+    yetki: ADIMLI_OKUMA,
+    parametre: disIslemEmriParametresi,
+    cevap: disIslemEmriCevabi,
+    isle: async ({ db, parametre }) => ({ disIslemEmri: await dieOku(db, parametre.id) }),
+  }),
+  uc({
+    yontem: 'POST',
+    yol: '/dis-islem-emirleri',
+    yetki: 'uretim-emirleri.fason',
+    tekrarKorumali: true,
+    govde: disIslemEmriAcGovdesi,
+    cevap: disIslemEmriCevabi,
+    isle: async ({ db, kullanici, govde }) => {
+      const { id } = await dieAc(db, kullanici.id, { kaynak: 'emir', isEmriId: govde.isEmriId, aciklama: govde.aciklama || null }, { acilis: 'elle' });
+      return { disIslemEmri: await dieOku(db, id) };
+    },
+  }),
+  uc({
+    yontem: 'POST',
+    yol: '/dis-islem-emirleri/:id/iptal',
+    yetki: 'uretim-emirleri.fason',
+    tekrarKorumali: true,
+    parametre: disIslemEmriParametresi,
+    govde: disIslemEmriIptalGovdesi,
+    cevap: disIslemEmriCevabi,
+    isle: async ({ db, kullanici, parametre, govde }) => {
+      await dieIptal(db, kullanici.id, parametre.id, govde.surum);
+      return { disIslemEmri: await dieOku(db, parametre.id) };
+    },
+  }),
+];
+
+export const uclar = [
+  ...aramaUclari, ...emirUclari, ...adimliUclar, ...katilimUclari, ...adimKomutUclari, ...hataliUclari, ...kapanisUclari, ...disIslemEmriUclari,
+];
