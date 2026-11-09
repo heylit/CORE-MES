@@ -6,6 +6,7 @@ import { DEFAULT_SETTINGS } from './constants.ts';
 import { S, V, bump } from './store.ts';
 import { render } from './views.ts';
 import { setRole, type Role } from './roles.ts';
+import { ekranCiz, ekranKaldir } from './test-ekrani.ts';
 
 function teklif(id: string, fiyat: number, tarih: string): Quote {
   return {
@@ -33,7 +34,7 @@ function kur(): void {
   bump();
 }
 
-afterEach(() => { S.ready = false; setRole('buyer'); document.body.innerHTML = ''; });
+afterEach(() => { ekranKaldir(); S.ready = false; setRole('buyer'); document.body.innerHTML = ''; });
 
 // Her bölüm uydurma veriyle hata vermeden çizilir; boş, "undefined" ya da "NaN" metin çıkmaz.
 describe('satın alma ekran çizimi', () => {
@@ -46,7 +47,8 @@ describe('satın alma ekran çizimi', () => {
       kur();
       V.page = sayfa; V.id = id; V.tab = null;
       render();
-      const metin = document.querySelector('#main')!.textContent ?? '';
+      // Satın almacının ortak parçalı ekranı (2412-2) #main'in üstündedir; ikisi birlikte okunur.
+      const metin = (document.querySelector('#main')!.textContent ?? '') + (ekranCiz().textContent ?? '');
       expect(metin.trim().length).toBeGreaterThan(0);
       expect(metin).not.toMatch(/undefined|NaN/);
     });
@@ -58,7 +60,8 @@ describe('satın alma ekran çizimi', () => {
       setRole(rol);
       V.page = 'dash'; V.id = null; V.tab = null;
       render();
-      const metin = document.querySelector('#main')!.textContent ?? '';
+      // Satın almacının ortak parçalı ekranı (2412-2) #main'in üstündedir; ikisi birlikte okunur.
+      const metin = (document.querySelector('#main')!.textContent ?? '') + (ekranCiz().textContent ?? '');
       expect(metin.trim().length).toBeGreaterThan(0);
       expect(metin).not.toMatch(/undefined|NaN/);
     });

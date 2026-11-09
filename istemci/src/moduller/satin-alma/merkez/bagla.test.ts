@@ -5,6 +5,7 @@ import { S, V, persistUndoable, UNDO } from './store.ts';
 import { openModal, toast } from './ui.ts';
 import { YENILEME_MS, acilisOku, ayrintidanDon, merkezAc, merkezAdresi, merkeziBagla } from './bagla.ts';
 import { go } from './ui.ts';
+import { ekranliBagla } from './test-ekrani.ts';
 
 const talep = (id: string, no: string): Talep => ({
   id, no, baslik: 'Deneme talep', birim: null, talepEdenKisiId: 5, talepEdenAdi: 'Deneme Kişi', teslimYontemi: null, uretimEmriId: null, uretimEmriNo: null, acanKisiId: 5, oncelik: 'normal', ihtiyacTarihi: null,
@@ -21,6 +22,7 @@ const acilis = (talepler: Talep[]): AcilisCevabi => ({
 });
 const json = (durum: number, govde: unknown) => new Response(JSON.stringify(govde), { status: durum, headers: { 'content-type': 'application/json' } });
 const ILK = '00000000-0000-4000-8000-000000000101';
+const IKINCI = '00000000-0000-4000-8000-000000000102';
 const YENI = '00000000-0000-4000-8000-000000000102';
 
 afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); document.body.innerHTML = ''; });
@@ -109,10 +111,11 @@ describe('Merkez bağlama', () => {
     vi.stubGlobal('fetch', vi.fn(async () => json(200, acilis([talep(ILK, 'ST-2026-001')]))));
     const kok = document.createElement('div');
     document.body.append(kok);
-    const kapat = merkeziBagla(kok, { rol: 'buyer', sayfa: 'requests', yol: '/satin-alma/talepler', git: () => {} });
+    const kapat = ekranliBagla(kok, { rol: 'buyer', sayfa: 'requests', yol: '/satin-alma/talepler', git: () => {} });
     merkezAc(acilisOku(new URLSearchParams(`talep=${ILK}&bolum=order`))!);
     expect([V.page, V.id, V.tab]).toEqual(['request', ILK, 'order']);
-    await vi.waitFor(() => expect(kok.querySelector('#main')?.textContent).toContain('ST-2026-001'));
+    await vi.waitFor(() => expect(kok.querySelector('#sa-ekran')?.textContent).toContain('ST-2026-001'));
+    expect(kok.querySelector('#main .sa-adim-govde')?.getAttribute('data-sec')).toBe('order');
     expect(kok.querySelector('[data-act="new-request"]')).toBeNull();
     kapat();
   });
@@ -121,16 +124,16 @@ describe('Merkez bağlama', () => {
   it('talep ayrıntısı adrese ?talep= ile yazılır; geri tuşu ve geri düğmesi listeye döner; adresle açılış ayrıntıyı açar', async () => {
     vi.spyOn(window, 'scrollTo').mockImplementation(() => {});
     window.history.replaceState(null, '', '/satin-alma/talepler');
-    vi.stubGlobal('fetch', vi.fn(async () => json(200, acilis([talep(ILK, 'ST-2026-001')]))));
+    vi.stubGlobal('fetch', vi.fn(async () => json(200, acilis([talep(ILK, 'ST-2026-001'), talep(IKINCI, 'ST-2026-002')]))));
     const gidilen: [string, boolean][] = [];
     const git = (y: string, yerine?: boolean) => { gidilen.push([y, yerine === true]); if (yerine) window.history.replaceState(null, '', y); else window.history.pushState(null, '', y); };
     let kok = document.createElement('div');
     document.body.append(kok);
-    let kapat = merkeziBagla(kok, { rol: 'buyer', sayfa: 'requests', yol: '/satin-alma/talepler', git });
-    await vi.waitFor(() => expect(Object.keys(S.requests)).toEqual([ILK]));
+    let kapat = ekranliBagla(kok, { rol: 'buyer', sayfa: 'requests', yol: '/satin-alma/talepler', git });
+    await vi.waitFor(() => expect(Object.keys(S.requests).sort()).toEqual([ILK, IKINCI]));
     go('request', ILK);
     expect(gidilen.at(-1)).toEqual([`/satin-alma/talepler?talep=${ILK}`, false]);
-    expect(kok.querySelector('[data-act="ayrinti-geri"]')?.textContent).toContain('Taleplere dön');
+    await vi.waitFor(() => expect(kok.querySelector('[data-sa-geri]')?.textContent).toContain('Taleplere dön'));
     // Bölüm değişince geçmişe kayıt eklenmez.
     const kayit = gidilen.length;
     go('request', ILK, 'quotes');
@@ -152,6 +155,14 @@ describe('Merkez bağlama', () => {
     go('request', ILK);
     ayrintidanDon();
     expect(geri).toHaveBeenCalledTimes(1);
+    // Talepten talebe geçilince "Taleplere dön" önceki talebe değil listeye gider.
+    window.history.replaceState(null, '', '/satin-alma/talepler');
+    merkezAdresi(null);
+    go('request', ILK);
+    go('request', IKINCI);
+    ayrintidanDon();
+    expect(geri).toHaveBeenCalledTimes(1);
+    expect(V.page).toBe('requests');
     kapat();
     // Yenileme: adreste talep varken ekran ayrıntıyla açılır.
     window.history.replaceState(null, '', `/satin-alma/talepler?talep=${ILK}`);
