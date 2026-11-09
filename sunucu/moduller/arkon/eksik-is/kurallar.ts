@@ -1,7 +1,7 @@
 import { kesisimDakika } from '../kurallar.ts';
 import type { NetAralik } from '../kurallar.ts';
 
-// Eksik iş kuralları (kart 2421 c, AR-EK-1..7). Saftır: zamanlar milisaniye, tarihler YYYY-AA-GG. Her kural plandan bağımsız bir yükümlülüğü
+// Eksik iş kuralları (kart 2421 c, AR-EK-1..7). Saftır: zamanlar milisaniye, süreler vardiya takviminden, tarihler YYYY-AA-GG. Her kural plandan bağımsız bir yükümlülüğü
 // gerçekleşenle karşılaştırır; eşik boşsa kural kapalıdır (null), bilinmeyen veride hüküm yoktur (null): eksik uydurulmaz.
 
 const SAAT_MS = 3_600_000;
@@ -35,17 +35,20 @@ export interface IstasyonGunu {
   acikIs: boolean;
   // O günkü net sayım girişi var mı.
   girisVar: boolean;
+  // O gün istasyonda kayıtlı duruş (durdurma olayı) var mı; duruş günü kayıtsız sayılmaz.
+  durusVar: boolean;
 }
 
 // AR-EK-2, kayıtsız iş günü: son kapanmış günden geriye, giriş olan ilk güne kadar, vardiyası ve açık işi olup hiç girişi olmayan gün sayısı.
-// Vardiyası olmayan (tatil) ya da açık işi olmayan gün sayılmaz ama zinciri kırmaz; vardiyası bilinmeyen gün hüküm vermez, zinciri keser.
+// Vardiyası olmayan (tatil, bütün gün planlı duruş ya da bakım), açık işi olmayan ya da duruş kaydı girilmiş gün sayılmaz ama zinciri kırmaz;
+// vardiyası bilinmeyen gün hüküm vermez, zinciri keser.
 // Günler eskiden yeniye verilir.
 export function kayitsizGunSayisi(gunler: readonly IstasyonGunu[]): number {
   let sayi = 0;
   for (let n = gunler.length - 1; n >= 0; n -= 1) {
     const g = gunler[n]!;
     if (g.girisVar || g.aktifDk === null) break;
-    if (g.aktifDk > 0 && g.acikIs) sayi += 1;
+    if (g.aktifDk > 0 && g.acikIs && !g.durusVar) sayi += 1;
   }
   return sayi;
 }
@@ -56,20 +59,26 @@ export function kayitsizGun(g: { gunler: readonly IstasyonGunu[]; sonGiris: numb
   return sayi > 0 && sayi >= g.esikGun ? hukum(sayi, g.sonGiris) : null;
 }
 
+// Vardiya saati: iki an arasındaki net aktif süre (gece, tatil, mola ve planlı duruş düşülmüş). Atölyede bekleyiş iş saatiyle ölçülür;
+// takvim saati geceyi ve hafta sonunu gecikme gibi gösterir.
+const vardiyaSaati = (araliklar: readonly NetAralik[], bas: number, bit: number): number => kesisimDakika(araliklar, bas, bit) / 60;
+
 // AR-EK-3, yarım kalan iş: başlamış adım tezgahta açık değil (açık kullanım yok) ve son hareketinden (son sayım, yoksa başlama) bu yana
-// eşik kadar saat geçti. Saat takvim saatidir: başlamış işin bekleyişi vardiyadan bağımsız görünür.
-export function yarimIs(g: { calisiyor: boolean; tezgahtaAcik: boolean; sonHareket: number | null; simdi: number; kalanAdet: number; esikSaat: number | null }): EksikHukum | null {
-  if (g.esikSaat === null || !g.calisiyor || g.tezgahtaAcik || g.sonHareket === null || !(g.kalanAdet > 0)) return null;
-  const saat = (g.simdi - g.sonHareket) / SAAT_MS;
-  return saat >= g.esikSaat ? hukum(Math.floor(saat), g.sonHareket, { kalanAdet: g.kalanAdet }) : null;
+// eşik kadar vardiya saati geçti. Vardiyası bilinmeyen kaynakta hüküm yoktur.
+export function yarimIs(g: {
+  calisiyor: boolean; tezgahtaAcik: boolean; sonHareket: number | null; simdi: number; araliklar: readonly NetAralik[] | null; kalanAdet: number; esikSaat: number | null;
+}): EksikHukum | null {
+  if (g.esikSaat === null || g.araliklar === null || !g.calisiyor || g.tezgahtaAcik || g.sonHareket === null || !(g.kalanAdet > 0)) return null;
+  const saat = vardiyaSaati(g.araliklar, g.sonHareket, g.simdi);
+  return saat >= g.esikSaat && saat > 0 ? hukum(Math.floor(saat), g.sonHareket, { kalanAdet: g.kalanAdet }) : null;
 }
 
 // AR-EK-4, plana girmemiş açık iş: planlı ya da başlamış emrin bitmemiş adımı canlı planda yerleşmemiş (ya da kaynaksız); emrin açılışından
-// bu yana eşik kadar saat geçti.
-export function plansizIs(g: { yerlesimVar: boolean; acilma: number; simdi: number; esikSaat: number | null }): EksikHukum | null {
-  if (g.esikSaat === null || g.yerlesimVar) return null;
-  const saat = (g.simdi - g.acilma) / SAAT_MS;
-  return saat >= g.esikSaat ? hukum(Math.floor(saat), g.acilma) : null;
+// bu yana eşik kadar vardiya saati geçti. Takvim adımın kaynağından, yoksa istasyonundan, yoksa tesisten gelir; bilinmiyorsa hüküm yoktur.
+export function plansizIs(g: { yerlesimVar: boolean; acilma: number; simdi: number; araliklar: readonly NetAralik[] | null; esikSaat: number | null }): EksikHukum | null {
+  if (g.esikSaat === null || g.yerlesimVar || g.araliklar === null) return null;
+  const saat = vardiyaSaati(g.araliklar, g.acilma, g.simdi);
+  return saat >= g.esikSaat && saat > 0 ? hukum(Math.floor(saat), g.acilma) : null;
 }
 
 const gunNo = (tarih: string): number => Date.UTC(Number(tarih.slice(0, 4)), Number(tarih.slice(5, 7)) - 1, Number(tarih.slice(8, 10))) / GUN_MS;
@@ -85,13 +94,16 @@ export function gecikenEmir(g: { teslim: string | null; bugun: string; teslimSon
   return kayma > 0 ? hukum(kayma, g.teslimSonu, { planaGore: true }) : null;
 }
 
-// AR-EK-6, bayat plan: son canlıya almadan eşik kadar saat geçti ve plan gerisinde iş var. Plan hiç canlıya alınmadıysa ve açık iş varsa da
-// bayattır (dayanak yok, değer 0).
-export function bayatPlan(g: { sonCanliyaAlma: number | null; simdi: number; planGerisi: number; acikIs: number; esikSaat: number | null }): EksikHukum | null {
+// AR-EK-6, bayat plan: son canlıya almadan eşik kadar vardiya saati (tesis takvimi) geçti ve plan gerisinde iş var. Plan hiç canlıya
+// alınmadıysa ve açık iş varsa da bayattır (dayanak yok, değer 0). Tesis takvimi bilinmiyorsa canlıya alınmış planda hüküm yoktur.
+export function bayatPlan(g: {
+  sonCanliyaAlma: number | null; simdi: number; araliklar: readonly NetAralik[] | null; planGerisi: number; acikIs: number; esikSaat: number | null;
+}): EksikHukum | null {
   if (g.esikSaat === null) return null;
   if (g.sonCanliyaAlma === null) return g.acikIs > 0 ? hukum(0, null) : null;
-  const saat = (g.simdi - g.sonCanliyaAlma) / SAAT_MS;
-  return g.planGerisi > 0 && saat >= g.esikSaat ? hukum(Math.floor(saat), g.sonCanliyaAlma) : null;
+  if (g.araliklar === null) return null;
+  const saat = vardiyaSaati(g.araliklar, g.sonCanliyaAlma, g.simdi);
+  return g.planGerisi > 0 && saat >= g.esikSaat && saat > 0 ? hukum(Math.floor(saat), g.sonCanliyaAlma) : null;
 }
 
 export type EksikEylem = { tur: 'ac'; h: EksikHukum } | { tur: 'guncelle'; h: EksikHukum } | { tur: 'kapat' } | { tur: 'yok' };

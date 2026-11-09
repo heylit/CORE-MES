@@ -125,7 +125,7 @@ export function kapaliZamanKurallari(e: AnomaliOlaylari['esikler']): string[] {
 }
 
 /* Eksik iş (kart 2421 c): plandan bağımsız olarak yapılmayan, girilmeyen ya da geciken iş (GET /arkon/eksik-isler, terminal için
-   /arkon/eksik-islerim). Değerin birimi türündedir: plan gerisi net dakika, kayıtsız gün iş günü, yarım ve plansız iş ile bayat plan saat,
+   /arkon/eksik-islerim). Değerin birimi türündedir: plan gerisi net dakika, kayıtsız gün iş günü, yarım ve plansız iş ile bayat plan vardiya saati,
    geciken emir gün. Eşik boşsa o kural kapalıdır. */
 export type EksikIsTuru = 'plan-gerisi' | 'kayitsiz-gun' | 'yarim-is' | 'plansiz-is' | 'geciken-emir' | 'bayat-plan';
 export interface EksikIs {

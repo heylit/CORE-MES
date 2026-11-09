@@ -18,33 +18,42 @@ describe('eksik iş kuralları (2421 c)', () => {
     assert.equal(planGerisi({ planBitis: 15.5 * S, simdi: 31 * S, araliklar: vardiya, kalanAdet: 1, esikDk: 60 }), null, 'gece beklemesi gecikme değil');
   });
 
-  test('AR-EK-2: kayıtsız gün sondan sayılır; tatil ve açık işsiz gün zinciri kırmaz, giriş ve bilinmeyen vardiya keser', () => {
-    const g = (aktifDk: number | null, acikIs: boolean, girisVar: boolean) => ({ aktifDk, acikIs, girisVar });
+  test('AR-EK-2: kayıtsız gün sondan sayılır; tatil, duruş ve açık işsiz gün zinciri kırmaz, giriş ve bilinmeyen vardiya keser', () => {
+    const g = (aktifDk: number | null, acikIs: boolean, girisVar: boolean, durusVar = false) => ({ aktifDk, acikIs, girisVar, durusVar });
     assert.equal(kayitsizGunSayisi([g(480, true, true), g(480, true, false), g(0, true, false), g(480, true, false)]), 2);
     assert.equal(kayitsizGunSayisi([g(480, true, false), g(480, true, true)]), 0);
     assert.equal(kayitsizGunSayisi([g(480, true, false), g(null, true, false), g(480, true, false)]), 1);
     assert.equal(kayitsizGunSayisi([g(480, false, false), g(480, true, false)]), 1);
+    assert.equal(kayitsizGunSayisi([g(480, true, false), g(480, true, false, true), g(480, true, false)]), 2, 'duruş günü sayılmaz, zinciri kırmaz');
     assert.deepEqual(kayitsizGun({ gunler: [g(480, true, false), g(480, true, false)], sonGiris: 5, esikGun: 2 }), { deger: 2, dayanak: 5, kalanAdet: null, planaGore: false });
     assert.equal(kayitsizGun({ gunler: [g(480, true, false)], sonGiris: 5, esikGun: 2 }), null);
     assert.equal(kayitsizGun({ gunler: [g(480, true, false)], sonGiris: 5, esikGun: null }), null);
     assert.equal(kayitsizGun({ gunler: [g(0, true, false)], sonGiris: null, esikGun: 1 }), null, 'sıfır gün işaret değil');
   });
 
-  test('AR-EK-3: tezgahta açık olmayan başlamış iş son hareketinden saatle yarım kalır', () => {
-    const t = { calisiyor: true, tezgahtaAcik: false, sonHareket: 0, simdi: 30 * S, kalanAdet: 3, esikSaat: 24 };
-    assert.deepEqual(yarimIs(t), { deger: 30, dayanak: 0, kalanAdet: 3, planaGore: false });
+  test('AR-EK-3: tezgahta açık olmayan başlamış iş son hareketinden vardiya saatiyle yarım kalır', () => {
+    const t = { calisiyor: true, tezgahtaAcik: false, sonHareket: 0, simdi: 30 * S, araliklar: gun, kalanAdet: 3, esikSaat: 8 };
+    assert.deepEqual(yarimIs(t), { deger: 24, dayanak: 0, kalanAdet: 3, planaGore: false });
     assert.equal(yarimIs({ ...t, tezgahtaAcik: true }), null);
     assert.equal(yarimIs({ ...t, calisiyor: false }), null);
-    assert.equal(yarimIs({ ...t, simdi: 10 * S }), null);
+    assert.equal(yarimIs({ ...t, simdi: 5 * S }), null);
     assert.equal(yarimIs({ ...t, esikSaat: null }), null);
     assert.equal(yarimIs({ ...t, sonHareket: null }), null);
+    assert.equal(yarimIs({ ...t, araliklar: null }), null, 'vardiya bilinmiyor');
+    // Vardiya 8-16: son hareket 15:00, şimdi ertesi gün 9:00; 1 + 1 = 2 vardiya saati (takvimde 18 saat).
+    const vardiya = [{ bas: 8 * S, bit: 16 * S }, { bas: 32 * S, bit: 40 * S }];
+    assert.equal(yarimIs({ ...t, sonHareket: 15 * S, simdi: 33 * S, araliklar: vardiya, esikSaat: 2 })?.deger, 2);
+    assert.equal(yarimIs({ ...t, sonHareket: 15 * S, simdi: 33 * S, araliklar: vardiya, esikSaat: 8 }), null, 'gece ve hafta sonu bekleyişi sayılmaz');
   });
 
-  test('AR-EK-4: yerleşmemiş açık iş emrin açılışından saatle', () => {
-    assert.equal(plansizIs({ yerlesimVar: false, acilma: 0, simdi: 25 * S, esikSaat: 24 })?.deger, 25);
-    assert.equal(plansizIs({ yerlesimVar: true, acilma: 0, simdi: 25 * S, esikSaat: 24 }), null);
-    assert.equal(plansizIs({ yerlesimVar: false, acilma: 0, simdi: 2 * S, esikSaat: 24 }), null);
-    assert.equal(plansizIs({ yerlesimVar: false, acilma: 0, simdi: 25 * S, esikSaat: null }), null);
+  test('AR-EK-4: yerleşmemiş açık iş emrin açılışından vardiya saatiyle', () => {
+    const t = { yerlesimVar: false, acilma: 0, simdi: 25 * S, araliklar: gun, esikSaat: 8 };
+    assert.equal(plansizIs(t)?.deger, 24);
+    assert.equal(plansizIs({ ...t, yerlesimVar: true }), null);
+    assert.equal(plansizIs({ ...t, simdi: 2 * S }), null);
+    assert.equal(plansizIs({ ...t, esikSaat: null }), null);
+    assert.equal(plansizIs({ ...t, araliklar: null }), null, 'takvim bilinmiyor');
+    assert.equal(plansizIs({ ...t, araliklar: [{ bas: 8 * S, bit: 16 * S }] })?.deger, 8);
   });
 
   test('AR-EK-5: teslim günü geçen emir gün farkıyla; gelmediyse plana göre geciken; teslimsizde hüküm yok', () => {
@@ -58,13 +67,16 @@ describe('eksik iş kuralları (2421 c)', () => {
     assert.equal(gecikenEmir({ ...t, teslim: '2026-11-05', bugun: '2026-11-09', esikGun: null }), null);
   });
 
-  test('AR-EK-6: plan gerisi varken eşikten eski canlı bayattır; hiç canlıya alınmamış plan açık işte bayattır', () => {
-    assert.equal(bayatPlan({ sonCanliyaAlma: 0, simdi: 30 * S, planGerisi: 1, acikIs: 3, esikSaat: 24 })?.deger, 30);
-    assert.equal(bayatPlan({ sonCanliyaAlma: 0, simdi: 30 * S, planGerisi: 0, acikIs: 3, esikSaat: 24 }), null);
-    assert.equal(bayatPlan({ sonCanliyaAlma: 0, simdi: 10 * S, planGerisi: 1, acikIs: 3, esikSaat: 24 }), null);
-    assert.deepEqual(bayatPlan({ sonCanliyaAlma: null, simdi: 1, planGerisi: 0, acikIs: 1, esikSaat: 24 }), { deger: 0, dayanak: null, kalanAdet: null, planaGore: false });
-    assert.equal(bayatPlan({ sonCanliyaAlma: null, simdi: 1, planGerisi: 0, acikIs: 0, esikSaat: 24 }), null);
-    assert.equal(bayatPlan({ sonCanliyaAlma: 0, simdi: 30 * S, planGerisi: 1, acikIs: 3, esikSaat: null }), null);
+  test('AR-EK-6: plan gerisi varken eşikten eski canlı (vardiya saati) bayattır; hiç canlıya alınmamış plan açık işte bayattır', () => {
+    const t = { sonCanliyaAlma: 0, simdi: 20 * S, araliklar: gun, planGerisi: 1, acikIs: 3, esikSaat: 12 };
+    assert.equal(bayatPlan(t)?.deger, 20);
+    assert.equal(bayatPlan({ ...t, planGerisi: 0 }), null);
+    assert.equal(bayatPlan({ ...t, simdi: 10 * S }), null);
+    assert.equal(bayatPlan({ ...t, araliklar: [{ bas: 8 * S, bit: 16 * S }] }), null, 'tek vardiyada 8 saat, eşik 12');
+    assert.equal(bayatPlan({ ...t, araliklar: null }), null, 'tesis takvimi bilinmiyor');
+    assert.deepEqual(bayatPlan({ ...t, sonCanliyaAlma: null, simdi: 1, planGerisi: 0, acikIs: 1, araliklar: null }), { deger: 0, dayanak: null, kalanAdet: null, planaGore: false });
+    assert.equal(bayatPlan({ ...t, sonCanliyaAlma: null, simdi: 1, planGerisi: 0, acikIs: 0 }), null);
+    assert.equal(bayatPlan({ ...t, esikSaat: null }), null);
   });
 
   test('AR-EK-7: olay açılır, sürerken güncellenir, hüküm kalkınca kapanır', () => {

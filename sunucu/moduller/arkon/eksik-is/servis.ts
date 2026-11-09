@@ -13,7 +13,7 @@ import { istasyonlar, kisininIzinliIsMerkezleri, makineKisiAtamalari, makineler 
 import { kisiAdlari } from '../../kisiler/disari.ts';
 import { canliSira, planBayatligi } from '../../plan/disari.ts';
 import type { Kaynak } from '../../plan/disari.ts';
-import { aralikAdetleri, gunlukAralikAdetleri, planlanacakIsEmirleri, sonGirisler } from '../../uretim-emirleri/disari.ts';
+import { aralikAdetleri, gunlukAralikAdetleri, istasyonDurusSureleri, planlanacakIsEmirleri, sonGirisler } from '../../uretim-emirleri/disari.ts';
 import { basladigiGunTakvimleri } from '../../vardiya/disari.ts';
 import { araliklariBirlestir, gunEkle, kalanAdet, kesisimDakika } from '../kurallar.ts';
 import type { NetAralik } from '../kurallar.ts';
@@ -24,7 +24,7 @@ import * as s from './sorgular.ts';
 // Kart 2421 c: eksik iş olayları. Hesap Arkon'dadır; plan, uretim-emirleri, istasyonlar ve vardiya `disari.ts` ile okunur (ADR 0006). Olaylar
 // 15 dakikalık işte yenilenir, sayfa ve terminal kayıtlı olayları okur.
 
-// Net dakika ve kayıtsız gün için takvim bu kadar gün geriye okunur.
+// Vardiya süreleri ve kayıtsız gün için takvim bu kadar gün geriye okunur; daha eski bekleyiş en çok bu kadar günün vardiyasıyla ölçülür.
 const GERI_GUN = 14;
 const OLAY_SINIRI = 500;
 const KISI_KIRILIMI = 'arkon.anomali-kisi' as const;
@@ -55,7 +55,7 @@ const OLAY_ADI: Record<EksikIsTuru, string> = {
   'plan-gerisi': 'Plan gerisi', 'kayitsiz-gun': 'Kayıtsız gün', 'yarim-is': 'Yarım iş', 'plansiz-is': 'Plansız iş', 'geciken-emir': 'Geciken emir', 'bayat-plan': 'Bayat plan',
 };
 const BIRIM: Record<EksikIsTuru, string> = {
-  'plan-gerisi': 'dk', 'kayitsiz-gun': 'iş günü', 'yarim-is': 'saat', 'plansiz-is': 'saat', 'geciken-emir': 'gün', 'bayat-plan': 'saat',
+  'plan-gerisi': 'dk', 'kayitsiz-gun': 'iş günü', 'yarim-is': 'vardiya saati', 'plansiz-is': 'vardiya saati', 'geciken-emir': 'gün', 'bayat-plan': 'vardiya saati',
 };
 
 const iso = (t: number): string => new Date(t).toISOString();
@@ -102,12 +102,38 @@ async function bulgular(db: Db, e: EksikEsikleri, simdi: number): Promise<Bulgu[
   const saglam = await aralikAdetleri(db, 'is_emri', idler, '-infinity', iso(simdi));
   const kalan = (i: (typeof isler)[number]): number => kalanAdet(i.adimAdedi ?? i.adet, saglam.get(i.id)?.saglam ?? 0);
 
+  // Takvim bir kez okunur: canlı yerleşimlerin, adımların ve etkin makinelerin kaynakları. Süreler vardiya saatidir (AR-EK-1, 3, 4, 6).
   const gecmis = gunEkle(bugun, -GERI_GUN);
-  const kaynaklar = [...new Map(yerlesimler.map((y) => [kaynakAnahtari(y.kaynak), y.kaynak])).values()];
+  const adimKaynagi = (i: (typeof isler)[number]): Kaynak | null =>
+    i.kaynak?.tur === 'makine' || i.kaynak?.tur === 'kisi' ? { tur: i.kaynak.tur, id: i.kaynak.id } : null;
+  const etkinMakineler = [...makineById.values()].filter((m) => m.aktif);
+  const kaynaklar = [...new Map([
+    ...yerlesimler.map((y) => y.kaynak), ...isler.flatMap((i) => { const k = adimKaynagi(i); return k === null ? [] : [k]; }),
+    ...etkinMakineler.map((m): Kaynak => ({ tur: 'makine', id: m.id })),
+  ].map((k) => [kaynakAnahtari(k), k])).values()];
   const takvim = await gunlukAraliklar(db, kaynaklar, gecmis, bugun);
   const netAraliklar = (k: Kaynak): NetAralik[] | null => {
     const g = takvim.get(kaynakAnahtari(k));
     return g === null || g === undefined ? null : araliklariBirlestir([...g.values()].flat());
+  };
+  // Birleşik takvim: makinelerden bilineni; hiçbiri bilinmiyorsa null.
+  const birlesik = (mk: readonly Kaynak[]): NetAralik[] | null => {
+    const bilinen = mk.map(netAraliklar).filter((a): a is NetAralik[] => a !== null);
+    return bilinen.length === 0 ? null : araliklariBirlestir(bilinen.flat());
+  };
+  const tesisTakvimi = birlesik(etkinMakineler.map((m): Kaynak => ({ tur: 'makine', id: m.id })));
+  const istasyonTakvimi = new Map<number, NetAralik[] | null>();
+  const istasyonAraliklari = (istasyonId: number): NetAralik[] | null => {
+    if (!istasyonTakvimi.has(istasyonId)) {
+      istasyonTakvimi.set(istasyonId, birlesik(etkinMakineler.filter((m) => m.istasyonId === istasyonId).map((m): Kaynak => ({ tur: 'makine', id: m.id }))));
+    }
+    return istasyonTakvimi.get(istasyonId) ?? null;
+  };
+  // Adımın takvimi: kaynağı varsa onunki (bilinmiyorsa hüküm yok), yoksa istasyonun makineleri, o da yoksa tesis.
+  const adimAraliklari = (kaynak: Kaynak | null, istasyonId: number | null): NetAralik[] | null => {
+    if (kaynak !== null) return netAraliklar(kaynak);
+    const ist = istasyonId === null ? null : istasyonAraliklari(istasyonId);
+    return ist ?? tesisTakvimi;
   };
 
   const sonuc: Bulgu[] = [];
@@ -122,10 +148,15 @@ async function bulgular(db: Db, e: EksikEsikleri, simdi: number): Promise<Bulgu[
     if (pg !== null) planGerisiSayisi += 1;
     sonuc.push(isBulgusu('plan-gerisi', i, y?.kaynak ?? null, pg));
     const sonHareket = [i.sonSayimAni, i.adimBaslama].flatMap((t) => (t ? [Date.parse(t)] : [])).reduce<number | null>((a, b) => (a === null || b > a ? b : a), null);
-    sonuc.push(isBulgusu('yarim-is', i, y?.kaynak ?? (i.kaynak?.tur === 'makine' || i.kaynak?.tur === 'kisi' ? { tur: i.kaynak.tur, id: i.kaynak.id } : null), yarimIs({
-      calisiyor: i.adimDurumu === 'calisiyor', tezgahtaAcik: i.fiiliMakineId !== undefined, sonHareket, simdi, kalanAdet: kalan(i), esikSaat: e.yarimIsSaat,
+    const yarimKaynak = y?.kaynak ?? adimKaynagi(i);
+    sonuc.push(isBulgusu('yarim-is', i, yarimKaynak, yarimIs({
+      calisiyor: i.adimDurumu === 'calisiyor', tezgahtaAcik: i.fiiliMakineId !== undefined, sonHareket, simdi,
+      araliklar: adimAraliklari(yarimKaynak, istasyonOf(i)), kalanAdet: kalan(i), esikSaat: e.yarimIsSaat,
     })));
-    sonuc.push(isBulgusu('plansiz-is', i, null, plansizIs({ yerlesimVar: y !== undefined && i.kaynak !== null, acilma: Date.parse(i.acilma), simdi, esikSaat: e.plansizIsSaat })));
+    sonuc.push(isBulgusu('plansiz-is', i, null, plansizIs({
+      yerlesimVar: y !== undefined && i.kaynak !== null, acilma: Date.parse(i.acilma), simdi, araliklar: adimAraliklari(adimKaynagi(i), istasyonOf(i)),
+      esikSaat: e.plansizIsSaat,
+    })));
   }
 
   // Geciken emir: emrin açık adımları birlikte okunur; plana göre bitiş canlı plandaki en geç bitiştir.
@@ -145,7 +176,8 @@ async function bulgular(db: Db, e: EksikEsikleri, simdi: number): Promise<Bulgu[
     });
   }
 
-  // Kayıtsız gün: makineli istasyonlarda son kapanmış günden geriye. Gün sınırı tesis günüdür.
+  // Kayıtsız gün: makineli istasyonlarda son kapanmış günden geriye. Gün sınırı tesis günüdür. Planlı duruş ve bakım vardiyadan düşülmüş
+  // gelir (tam gün duruşta aktif dakika 0); kayıtlı duruşu (durdurma) olan gün de sayılmaz.
   const aktifIstasyonlar = await istasyonlar(db, { pasiflerDahil: false });
   const istasyonMakineleri = new Map<number, Kaynak[]>();
   for (const m of makineById.values()) {
@@ -154,23 +186,24 @@ async function bulgular(db: Db, e: EksikEsikleri, simdi: number): Promise<Bulgu[
   }
   const gunler: string[] = [];
   for (let t = gecmis; t < bugun; t = gunEkle(t, 1)) gunler.push(t);
-  const makineKaynaklari = [...istasyonMakineleri.values()].flat();
-  const makineTakvimi = e.kayitsizGun === null ? new Map() : await gunlukAraliklar(db, makineKaynaklari, gecmis, gunEkle(bugun, -1));
   const istasyonIdleri = aktifIstasyonlar.map((x) => x.id).filter((id) => istasyonMakineleri.has(id));
   const girisler = e.kayitsizGun === null ? [] : await gunlukAralikAdetleri(db, 'istasyon', istasyonIdleri, [...gunler, bugun].map((t) => iso(tesisGunBasi(t))));
   const sonGirisi = e.kayitsizGun === null ? new Map<number, string>() : await sonGirisler(db, 'istasyon', istasyonIdleri);
+  const duruslar: Map<number, number>[] = [];
+  if (e.kayitsizGun !== null) for (const t of gunler) duruslar.push(await istasyonDurusSureleri(db, istasyonIdleri, iso(tesisGunBasi(t)), iso(tesisGunBasi(gunEkle(t, 1)))));
   for (const istasyonId of istasyonIdleri) {
     const mk = istasyonMakineleri.get(istasyonId)!;
     const acilislar = isler.filter((i) => istasyonOf(i) === istasyonId).map((i) => Date.parse(i.acilma));
     const gunListesi: IstasyonGunu[] = gunler.map((t, n) => {
       const bas = tesisGunBasi(t);
       const bit = tesisGunBasi(gunEkle(t, 1));
-      const parcalar = mk.map((k) => { const g = makineTakvimi.get(kaynakAnahtari(k)); return g === null || g === undefined ? null : g.get(t) ?? []; });
+      const parcalar = mk.map((k) => { const g = takvim.get(kaynakAnahtari(k)); return g === null || g === undefined ? null : g.get(t) ?? []; });
       const bilinen = parcalar.filter((p): p is NetAralik[] => p !== null);
       return {
         aktifDk: bilinen.length === 0 ? null : kesisimDakika(araliklariBirlestir(bilinen.flat()), bas, bit),
         acikIs: acilislar.some((a) => a < bit),
         girisVar: girisler[n]?.has(istasyonId) ?? false,
+        durusVar: (duruslar[n]?.get(istasyonId) ?? 0) > 0,
       };
     });
     const son = sonGirisi.get(istasyonId);
@@ -184,7 +217,7 @@ async function bulgular(db: Db, e: EksikEsikleri, simdi: number): Promise<Bulgu[
   sonuc.push({
     tur: 'bayat-plan', konuTur: 'plan', konuId: null, isEmriId: null, uretimEmriId: null, emirNo: null, opNo: null, istasyonId: null, kaynak: null,
     hukum: bayatPlan({
-      sonCanliyaAlma: bayat?.sonCanliyaAlma ? Date.parse(bayat.sonCanliyaAlma) : null, simdi, planGerisi: planGerisiSayisi, acikIs: isler.length, esikSaat: e.bayatPlanSaat,
+      sonCanliyaAlma: bayat?.sonCanliyaAlma ? Date.parse(bayat.sonCanliyaAlma) : null, simdi, araliklar: tesisTakvimi, planGerisi: planGerisiSayisi, acikIs: isler.length, esikSaat: e.bayatPlanSaat,
     }),
   });
   return sonuc;

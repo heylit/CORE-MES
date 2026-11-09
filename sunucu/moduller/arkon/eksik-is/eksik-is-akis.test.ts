@@ -139,7 +139,7 @@ describe('arkon eksik iş olayları (gerçek PostgreSQL)', () => {
     const cevap = await istek<EksikIslerCevabi>(hazirlik, 'GET', '/arkon/eksik-isler');
     assert.equal(cevap.durum, 200, JSON.stringify(cevap.govde));
     assert.equal(eksikIslerCevabi.safeParse(cevap.govde).success, true);
-    assert.deepEqual(cevap.govde.esikler, { planGerisiDk: 60, kayitsizGun: 1, yarimIsSaat: 24, plansizIsSaat: 24, gecikenEmirGun: 0, bayatPlanSaat: 24 });
+    assert.deepEqual(cevap.govde.esikler, { planGerisiDk: 60, kayitsizGun: 1, yarimIsSaat: 8, plansizIsSaat: 8, gecikenEmirGun: 0, bayatPlanSaat: 8 });
     assert.equal((await istek(operator, 'GET', '/arkon/eksik-isler')).durum, 403);
     assert.equal((await istek(null, 'GET', '/arkon/eksik-isler')).durum, 401);
   });
@@ -150,9 +150,10 @@ describe('arkon eksik iş olayları (gerçek PostgreSQL)', () => {
     // Vardiya 23:59'da biter: gece yarısını geçen her gün bir dakika net sayılmaz.
     assert.deepEqual([pg?.deger, pg?.kalanAdet], [28 * 60 - 1, 10], 'dün 8:00 bitmeliydi: 28 saat net gecikme, 10 adet kaldı');
     assert.equal(await acik('plan-gerisi', yarim.adim), undefined, 'yerleşimi ileride');
-    assert.ok((await acik('plansiz-is', plansiz.adim))?.deger === 48);
+    // Yarım ve plansız iş de vardiya saatiyle: aynı gece yarısı dakikaları düşer, değer aşağı yuvarlanır.
+    assert.equal((await acik('plansiz-is', plansiz.adim))?.deger, 47);
     assert.equal(await acik('plansiz-is', geride.adim), undefined);
-    assert.equal((await acik('yarim-is', yarim.adim))?.deger, 30);
+    assert.equal((await acik('yarim-is', yarim.adim))?.deger, 29);
     const ge = await acik('geciken-emir', geride.emirId);
     assert.deepEqual([ge?.deger, ge?.planaGore], [3, false]);
     assert.equal(await acik('geciken-emir', plansiz.emirId), undefined, 'teslimsiz');
@@ -174,6 +175,16 @@ describe('arkon eksik iş olayları (gerçek PostgreSQL)', () => {
     assert.equal(await say(), 1);
     assert.equal((await olaylar()).filter((r) => r.tur === 'plan-gerisi').length, 1);
     assert.equal((await acik('plan-gerisi', geride.adim))?.deger, 29 * 60 - 1);
+  });
+
+  test('AR-EK-2: duruş kaydı girilmiş gün kayıtsız sayılmaz, zinciri kırmaz', async () => {
+    const neden = (await o().sahip.tek<{ id: number }>("INSERT INTO durus_nedeni (kod, ad, kategori, sira) VALUES ('EK-D1', 'Deneme duruşu', 'plansiz', 901) RETURNING id"))!.id;
+    await o().sahip.sorgu(
+      `INSERT INTO uretim_olayi (emir_id, is_emri_id, kisi_id, istasyon_id, olay, durus_nedeni_id, zaman)
+       VALUES ($1, $2, $3, $4, 'durdur', $5, $6::timestamptz), ($1, $2, $3, $4, 'devam', NULL, $7::timestamptz)`,
+      [geride.emirId, geride.adim, yoneticiId, istasyonId, neden, anMetni(simdi - 48 * SAAT), anMetni(simdi - 47 * SAAT)]);
+    await yenile(simdi + SAAT);
+    assert.equal((await acik('kayitsiz-gun', istasyonId))?.deger, 2, 'iki gün önce duruş girildi: o gün sayılmaz, önceki gün sayılır');
   });
 
   test('saha görünümü: operatör kendi tezgahının eksiklerini görür; atanmayan operatör boş, operatör rolü olmayan 403', async () => {
