@@ -41,6 +41,27 @@ describe('bildirim kuralları', () => {
     assert.deepEqual(alicilariSec('istasyonlar.makine-durdu', kisiler, { ayarli: [1, 3], haric: 3 }), [1]);
   });
 
+  test('2453: yalnizKisiler alıcıyı adıyla verilenlerle türü alanların kesişimine daraltır', () => {
+    // Türün işlemi olmayan kişi (2, 4) adıyla verilse de almaz; haritada olmayan (girişsiz) düşer; haric düşer.
+    assert.deepEqual(alicilariSec('istasyonlar.makine-durdu', kisiler, { yalnizKisiler: true, kisiler: [1, 2, 4, 99] }), [1]);
+    assert.deepEqual(alicilariSec('istasyonlar.makine-durdu', kisiler, { yalnizKisiler: true, kisiler: [1, 3], haric: 3 }), [1]);
+    // Yinelenen kimlik tek alıcıdır.
+    assert.deepEqual(alicilariSec('istasyonlar.makine-durdu', kisiler, { yalnizKisiler: true, kisiler: [3, 3, 1, 1] }), [1, 3]);
+  });
+
+  test('2453: seçimli türde (BIL-10) seçim dışındaki kişi, bütün işlemleri taşıyan yönetici de olsa, bayrakla almaz', () => {
+    const yoneticili = new Map<number, readonly Islem[]>([...kisiler, [5, ['arkon.bakim', 'arkon.amir', 'arkon.operator', 'kisiler.rol-yonet']]]);
+    assert.deepEqual(alicilariSec('istasyonlar.makine-durdu', yoneticili, { ayarli: [2], yalnizKisiler: true, kisiler: [1, 2, 5] }), [2]);
+    assert.deepEqual(alicilariSec('istasyonlar.makine-durdu', yoneticili, { ayarli: [2], kisiler: [1, 5] }), [1, 2, 5]);
+  });
+
+  test('2453: boş liste sıfır alıcıdır, hata vermez; kişi listesi hiç verilmezse geliştirici hatası', () => {
+    assert.deepEqual(alicilariSec('istasyonlar.makine-durdu', kisiler, { yalnizKisiler: true, kisiler: [] }), []);
+    assert.throws(() => alicilariSec('istasyonlar.makine-durdu', kisiler, { yalnizKisiler: true }), /kişi listesi/);
+    // Bayraksız davranış aynı: birleşim.
+    assert.deepEqual(alicilariSec('istasyonlar.makine-durdu', kisiler, { yalnizKisiler: false, kisiler: [4] }), [1, 3, 4]);
+  });
+
   test('BIL-2: operatör e-posta seçemez; rol yöneten (yönetici) seçer', () => {
     assert.equal(epostaSecilebilir(['arkon.operator']), false);
     assert.equal(epostaSecilebilir(['arkon.operator', 'kisiler.rol-yonet']), true);
