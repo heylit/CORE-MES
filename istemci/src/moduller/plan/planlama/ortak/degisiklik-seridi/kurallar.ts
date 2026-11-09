@@ -50,17 +50,17 @@ export function seritListesi(c: PlanlamaCalismasi, dis: BekleyenDegisiklik | nul
 
 // 2319 (2311 S7): canlı plan bayat işareti (sunucu plan/bayat; GET /plan/surum ile gelir). Yalnız işarettir: plan kendiliğinden değişmez.
 // Biçim sunucunun PlanBayatligi'nin şeridin okuduğu kısmıdır; sözleşme 2321'de gelene kadar burada yazılı.
-export type CanliBayatNedeni = 'emir-bitti' | 'fason-donusu' | 'durus' | 'rota-degisti';
+export type CanliBayatNedeni = 'emir-bitti' | 'adim-bitti' | 'fason-donusu' | 'durus' | 'rota-degisti';
 export interface CanliBayatlik {
   bayat: boolean;
   sayilar: Readonly<Record<CanliBayatNedeni, number>>;
   olaylar: readonly { neden: CanliBayatNedeni; zaman: string; emirNo: string | null; makineKod: string | null }[];
 }
-const NEDEN_ADLARI: Readonly<Record<CanliBayatNedeni, string>> = { 'emir-bitti': 'emir erken bitti', durus: 'makine duruşu', 'fason-donusu': 'fason dönüşü', 'rota-degisti': 'emir adımı değişti' };
+const NEDEN_ADLARI: Readonly<Record<CanliBayatNedeni, string>> = { 'emir-bitti': 'emir erken bitti', 'adim-bitti': 'adım erken bitti', durus: 'makine duruşu', 'fason-donusu': 'fason dönüşü', 'rota-degisti': 'emir adımı değişti' };
 
 export function canliBayatMetni(b: CanliBayatlik): string | null {
   if (!b.bayat) return null;
-  const parcalar = (['emir-bitti', 'durus', 'fason-donusu', 'rota-degisti'] as const).filter((n) => b.sayilar[n] > 0).map((n) => `${String(b.sayilar[n])} ${NEDEN_ADLARI[n]}`);
+  const parcalar = (['emir-bitti', 'adim-bitti', 'durus', 'fason-donusu', 'rota-degisti'] as const).filter((n) => b.sayilar[n] > 0).map((n) => `${String(b.sayilar[n])} ${NEDEN_ADLARI[n]}`);
   return `Canlı plan son canlıya almadan sonra eskidi: ${parcalar.join(', ')}; planı gözden geçirin`;
 }
 

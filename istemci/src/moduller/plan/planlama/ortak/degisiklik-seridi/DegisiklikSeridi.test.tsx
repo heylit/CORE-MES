@@ -100,7 +100,7 @@ describe('DegisiklikSeridi', () => {
 // 2319 (S7): canlı plan bayat işareti. Veriler uydurmadır.
 const CANLI: CanliBayatlik = {
   bayat: true,
-  sayilar: { 'emir-bitti': 2, 'fason-donusu': 0, durus: 1, 'rota-degisti': 0 },
+  sayilar: { 'emir-bitti': 2, 'adim-bitti': 0, 'fason-donusu': 0, durus: 1, 'rota-degisti': 0 },
   olaylar: [
     { neden: 'durus', zaman: '2026-11-08T08:00:00.000Z', emirNo: null, makineKod: 'T1' },
     { neden: 'emir-bitti', zaman: '2026-11-08T07:00:00.000Z', emirNo: 'E-1', makineKod: null },
@@ -110,7 +110,9 @@ const CANLI: CanliBayatlik = {
 describe('canlı plan bayat işareti (2319)', () => {
   it('metin yalnız sıfırdan büyük nedenleri sayar; bayat değilse yok', () => {
     expect(canliBayatMetni(CANLI)).toBe('Canlı plan son canlıya almadan sonra eskidi: 2 emir erken bitti, 1 makine duruşu; planı gözden geçirin');
-    expect(canliBayatMetni({ bayat: false, sayilar: { 'emir-bitti': 0, 'fason-donusu': 0, durus: 0, 'rota-degisti': 0 }, olaylar: [] })).toBeNull();
+    expect(canliBayatMetni({ bayat: false, sayilar: { 'emir-bitti': 0, 'adim-bitti': 0, 'fason-donusu': 0, durus: 0, 'rota-degisti': 0 }, olaylar: [] })).toBeNull();
+    // B-2499-12: erken biten adım da sayılır.
+    expect(canliBayatMetni({ ...CANLI, sayilar: { ...CANLI.sayilar, 'adim-bitti': 3 } })).toBe('Canlı plan son canlıya almadan sonra eskidi: 2 emir erken bitti, 3 adım erken bitti, 1 makine duruşu; planı gözden geçirin');
   });
 
   it('bayatsa ikinci satır çizilir, olaylar düğmeyle açılır; şerit eski görünür', () => {
