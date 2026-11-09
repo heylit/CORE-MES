@@ -78,6 +78,7 @@ export const ILETILER = {
   katalogYok: 'Katalog kalemi bulunamadı.',
   yetkiYok: 'Bu değişiklik için yetkiniz yok.',
   gecisYok: 'Talep bu durumdan istenen duruma geçemez.',
+  iptalDegil: 'Yalnız iptal edilmiş talebin iptali geri alınır.',
   dortGoz: 'Kararı veren kişi o kararı onaylayamaz.',
   onayKademesi: 'Bu tutardaki kararı onaylama basamağınız yetmiyor.',
   rolsuzUstBasamak: 'Rolü boş basamak, rolü olan basamağın üstünde olamaz: üst basamağa da rol verin.',
@@ -156,18 +157,35 @@ export const ILETILER = {
   planIhtiyaciTekrar: 'Aynı malzeme plan ihtiyacı listesinde iki kez var.',
 } as const;
 
-// SAT-07: durum geçişleri. Aynı durumda kalmak her zaman serbest. Yanlış iptal elle önceki duruma çevrilir (SAT-68).
+// SAT-07: durum geçişleri. Aynı durumda kalmak her zaman serbest. Yalnız akışın ürettiği geçişler vardır (2413 a; SAT-68 daraltıldı):
+// teklif isteği ve teklif girişi, karar ve onaya gönderme, ret ve kararı kaldırma, sipariş, iptal. İptalden dönüş yalnız gerekçeli
+// "İptali geri al" komutuyladır (iptaliGeriAl); genel kayıt iptalden çıkamaz.
 // "Teslim alındı" istemciyle yazılmaz: stoktaki mal kabulden türetilir (SAT-38).
 // Teklif isteniyor -> onayda: ekran karar kaydedilince talebi bulunduğu açık durumdan onaya gönderir; geçiş olmasa karar kaybolurdu.
 export const GECISLER: Readonly<Record<TalepDurumu, readonly TalepDurumu[]>> = {
   taslak: ['teklif_isteniyor', 'degerlendirme', 'iptal'],
-  teklif_isteniyor: ['taslak', 'degerlendirme', 'onayda', 'iptal'],
-  degerlendirme: ['teklif_isteniyor', 'onayda', 'iptal'],
+  teklif_isteniyor: ['degerlendirme', 'onayda', 'iptal'],
+  degerlendirme: ['onayda', 'iptal'],
   onayda: ['degerlendirme', 'siparis_verildi', 'iptal'],
-  siparis_verildi: ['onayda', 'iptal'],
+  siparis_verildi: ['iptal'],
   teslim_alindi: [],
-  iptal: ['taslak', 'teklif_isteniyor', 'degerlendirme', 'onayda', 'siparis_verildi'],
+  iptal: [],
 };
+
+// 2413 a: iptalden önceki durum kayıtlı değilse (2413'ten önceki iptaller) veriden türetilir. Ret kararı silmez, talebi değerlendirmeye
+// döndürür: son onay kaydı ret olan karar değerlendirmeye, onay kaydı olmayan karar onaya döner.
+export function iptalOncesiTuret(t: Pick<Talep, 'karar' | 'onaylar' | 'teklifler' | 'teklifIstekleri'>): TalepDurumu {
+  if (t.karar !== null && t.karar.siparisler.length > 0) return 'siparis_verildi';
+  if (t.karar !== null) {
+    const son = t.onaylar.at(-1)?.sonuc;
+    return son === 'ret' ? 'degerlendirme' : 'onayda';
+  }
+  if (t.teklifler.length > 0) return 'degerlendirme';
+  if (t.teklifIstekleri.length > 0) return 'teklif_isteniyor';
+  return 'taslak';
+}
+export const iptalGeriAlmaHareketi = (iptalNedeni: string, gerekce: string, turetildi: boolean): string =>
+  `İptal geri alındı${iptalNedeni === '' ? '' : ` (iptal nedeni: ${iptalNedeni})`}${turetildi ? ', önceki durum veriden türetildi' : ''}: ${gerekce}`.slice(0, 1000);
 export const gecisVarMi = (eski: TalepDurumu, yeni: TalepDurumu): boolean => eski === yeni || GECISLER[eski].includes(yeni);
 
 // Karşılaştırma alan sırasından bağımsızdır: sunucunun kurduğu ile istemciden ayrıştırılan nesne aynı alanları başka sırada taşır.

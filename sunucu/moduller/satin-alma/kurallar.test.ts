@@ -61,13 +61,19 @@ test('SAT-38: teslim durumu stoktaki kabul miktarından; kalite GKK sonucundan; 
   assert.equal(ondalikKiyas('-1', '0'), -1);
 });
 
-test('SAT-07: geçişler; aynı durumda kalmak serbest; iptal önceki duruma döner (geri al)', () => {
+test('SAT-07 2413 a: yalnız akış geçişleri; aynı durumda kalmak serbest; iptalden genel kayıtla çıkılmaz', () => {
   assert.equal(gecisVarMi('taslak', 'onayda'), false);
   assert.equal(gecisVarMi('degerlendirme', 'onayda'), true);
   // S4 a: ekran kararı teklif isteniyor durumundaki talepte de onaya gönderir.
   assert.equal(gecisVarMi('teklif_isteniyor', 'onayda'), true);
   assert.equal(gecisVarMi('teslim_alindi', 'teslim_alindi'), true);
-  assert.equal(gecisVarMi('iptal', 'degerlendirme'), true);
+  assert.equal(gecisVarMi('iptal', 'degerlendirme'), false);
+  assert.equal(gecisVarMi('iptal', 'iptal'), true);
+  // 2413 a: yalnız "Durumu elle değiştir"in yaptığı dört geçiş kalktı.
+  for (const [a, b] of [['teklif_isteniyor', 'taslak'], ['degerlendirme', 'teklif_isteniyor'], ['siparis_verildi', 'onayda']] as const) assert.equal(gecisVarMi(a, b), false, `${a} -> ${b}`);
+  // Akışın geçişleri durur: teklif, karar, ret, sipariş, iptal.
+  for (const [a, b] of [['taslak', 'teklif_isteniyor'], ['taslak', 'degerlendirme'], ['teklif_isteniyor', 'degerlendirme'], ['onayda', 'degerlendirme'],
+    ['onayda', 'siparis_verildi'], ['siparis_verildi', 'iptal'], ['taslak', 'iptal']] as const) assert.equal(gecisVarMi(a, b), true, `${a} -> ${b}`);
   // Teslim alındı istemciyle yazılmaz (SAT-38).
   assert.equal(gecisVarMi('siparis_verildi', 'teslim_alindi'), false);
   assert.deepEqual(GECISLER.teslim_alindi, []);
@@ -696,4 +702,23 @@ test('2432: fark yalnız kayıtta olmayanı açar, koşulu kalkan açığı kapa
   assert.deepEqual(hatirlatmaFarki(istenen, new Set([anahtar]), []).acilacak, []);
   const f = hatirlatmaFarki([], new Set([anahtar]), [{ anahtar, tur: 'satin-alma.hatirlatma-taslak-bekliyor' }]);
   assert.deepEqual(f.kapanacak, [{ anahtar, tur: 'satin-alma.hatirlatma-taslak-bekliyor', kaynakKimlik: `t1:${hTalep({}).durumAni}` }]);
+});
+
+// 2413 a: iptalden önceki durum kayıtlı değilse veriden türetilir.
+import { iptalGeriAlmaHareketi, iptalOncesiTuret } from './kurallar.ts';
+test('2413 a: iptal öncesi durum türetmesi; son onayı ret olan karar değerlendirmeye döner', () => {
+  const bos = { karar: null, onaylar: [], teklifler: [], teklifIstekleri: [] } as unknown as Parameters<typeof iptalOncesiTuret>[0];
+  const karar = { siparisler: [] } as unknown as NonNullable<Talep['karar']>;
+  assert.equal(iptalOncesiTuret(bos), 'taslak');
+  assert.equal(iptalOncesiTuret({ ...bos, teklifIstekleri: [{}] as never }), 'teklif_isteniyor');
+  assert.equal(iptalOncesiTuret({ ...bos, teklifIstekleri: [{}] as never, teklifler: [{}] as never }), 'degerlendirme');
+  assert.equal(iptalOncesiTuret({ ...bos, karar }), 'onayda');
+  assert.equal(iptalOncesiTuret({ ...bos, karar, onaylar: [{ sonuc: 'onay' }] as never }), 'onayda');
+  assert.equal(iptalOncesiTuret({ ...bos, karar, onaylar: [{ sonuc: 'onay' }, { sonuc: 'ret' }] as never }), 'degerlendirme');
+  assert.equal(iptalOncesiTuret({ ...bos, karar: { ...karar, siparisler: [{}] } as never, onaylar: [{ sonuc: 'onay' }] as never }), 'siparis_verildi');
+});
+test('2413 a: geri alma hareketi gerekçeyi, eski iptal nedenini ve türetmeyi yazar', () => {
+  assert.equal(iptalGeriAlmaHareketi('Yanlış talep', 'Yanlışlıkla iptal', false), 'İptal geri alındı (iptal nedeni: Yanlış talep): Yanlışlıkla iptal');
+  assert.equal(iptalGeriAlmaHareketi('', 'G', true), 'İptal geri alındı, önceki durum veriden türetildi: G');
+  assert.equal(iptalGeriAlmaHareketi('x'.repeat(2000), 'G', false).length, 1000);
 });

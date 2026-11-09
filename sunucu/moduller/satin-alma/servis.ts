@@ -8,7 +8,7 @@ import type { DenetimSecimi, IkiliCevap } from '#cekirdek/uc.ts';
 import type { KmTedarikciDurumu } from '#paylasilan/sozlesme/kalite-merkezi.ts';
 import type {
   AcilisCevabi, Ayarlar, DegerlendirmeCevabi, KartAyrintilariCevabi, KartAyrintisi, DisOperasyonlarCevabi, FasonSureleriCevabi, SiparisBelgeleriCevabi, SiparisBelgesi, SiparisBelgesiYazimi, AyarlarKaydetYazimi, HizliAcYazimi, KatalogKaydetYazimi, KatalogKaydi, MalzemeSecenekleriCevabi, SatinAlmaOzetiCevabi, SiparisCikisi, SiparisFaturalariCevabi, SiparisFaturasiYazimi, SiparisKalemiDegistirYazimi, SiparisKapatYazimi, TeslimYontemiYazimi, OdemePlaniYazimi, SiparisTakibiCevabi, Talep, TalepDurumu, TalepKaydetYazimi, TalepTuru,
-  AcikEmirlerCevabi, Onay, OnTalepleriCevabi, OnTalepYoksayYazimi, TedarikTermini, TedarikTerminiKaydetYazimi, TedarikTerminleriCevabi, TerminTakipSatiri, KgFiyatiGecmisiCevabi, KgFiyatiSatiri, KgFiyatlariCevabi, KgStokDegeri, StokAyriGrubu, StokYokIstekleriCevabi, TaleplerimCevabi, Talebim, TalepYazimi, Tedarikci, TedarikciKaydetYazimi,
+  IptaliGeriAlCevabi, IptaliGeriAlYazimi, AcikEmirlerCevabi, Onay, OnTalepleriCevabi, OnTalepYoksayYazimi, TedarikTermini, TedarikTerminiKaydetYazimi, TedarikTerminleriCevabi, TerminTakipSatiri, KgFiyatiGecmisiCevabi, KgFiyatiSatiri, KgFiyatlariCevabi, KgStokDegeri, StokAyriGrubu, StokYokIstekleriCevabi, TaleplerimCevabi, Talebim, TalepYazimi, Tedarikci, TedarikciKaydetYazimi,
 } from '#paylasilan/sozlesme/satin-alma.ts';
 import { STOK_AYRI_GRUPLARI } from '#paylasilan/sozlesme/satin-alma.ts';
 import { randomUUID } from 'node:crypto';
@@ -33,7 +33,7 @@ import {
   fasonOnTalepAdaylari, hizliBagReddi, planOnTalepAdaylari, uygulananKartReddi, type KalemBagi,
   fasonKirilimlari, fasonSureOrnekleri, fasonSuresiTahmini, fasonTerminUyumu, talepEdenDurumu, talepEdenGorunumu, talepKartiReddi, tamGorurMu, teklifKuru, teslimDurumu, odemePlaniHedefi, varsayilanOdemePlani,
   askidakiTedarikciReddi, birimFiyati, kaliteSiparisReddi, karneTeslimOlayi, stokTutari, uygulananKgFiyati, yeniSiparisFirmalari,
-  KUR_KILIDI, HATIRLATMA_ADLARI, type HatirlatmaAyarlari, type HatirlatmaTalebi, haftaIciGunleri, hatirlatmaAnahtari, hatirlatmaFarki, hatirlatmalar,
+  iptalOncesiTuret, iptalGeriAlmaHareketi, KUR_KILIDI, HATIRLATMA_ADLARI, type HatirlatmaAyarlari, type HatirlatmaTalebi, haftaIciGunleri, hatirlatmaAnahtari, hatirlatmaFarki, hatirlatmalar,
 } from './kurallar.ts';
 import type { FiyatIzi } from './kurallar.ts';
 import { degerlendir, esitVadeOrtami, gerekenBasamak, kararTutari, tedarikciBasarimi, teklifHesabi } from './hesap-kurallar.ts';
@@ -621,7 +621,7 @@ async function askidakiTedarikciyiDenetle(db: Db, eski: Talep, yeni: TalepYazimi
 }
 
 // SAT-07, SAT-30, SAT-45, SAT-64: değişiklik sınıflanır, gereken işlem aranır, durum geçişi ve dört göz denetlenir; sonra sürümle yazılır.
-export async function talepKaydet(db: Db, k: Kullanici, id: string, g: TalepKaydetYazimi, izYaz: FiyatIziYazici): Promise<Talep> {
+export async function talepKaydet(db: Db, k: Kullanici, id: string, g: TalepKaydetYazimi, izYaz: FiyatIziYazici, iptaldenDonus?: TalepDurumu): Promise<Talep> {
   if (g.id !== id) throw dogrulama('Kimlik adresle aynı olmalı.', 'id');
   const eski = await talepOku(db, id);
   if (eski === null) throw bulunamadi(ILETILER.talepYok);
@@ -632,7 +632,9 @@ export async function talepKaydet(db: Db, k: Kullanici, id: string, g: TalepKayd
   const kiyas = tamGorurMu(k.islemler) ? eski : talepEdenGorunumu(eski, k.id);
   const red = degisiklikReddi(degisiklikTuru(kiyas, yeni), k.islemler, kendiTaslagi);
   if (red !== null) throw yetkiYok(red);
-  if (!gecisVarMi(eski.durum, yeni.durum)) throw gecersiz(ILETILER.gecisYok);
+  // 2413 a: iptalden çıkış yalnız iptaliGeriAl'ın verdiği hedefe; genel kayıt iptalden çıkamaz.
+  const gecer = iptaldenDonus === undefined ? gecisVarMi(eski.durum, yeni.durum) : eski.durum === 'iptal' && yeni.durum === iptaldenDonus;
+  if (!gecer) throw gecersiz(ILETILER.gecisYok);
   // Boş gelen talep eden mevcut olanı korur: kaydeden kişiye sessizce dönmez.
   const talepEden = await talepEdeniDenetle(db, k, yeni.talepEdenKisiId ?? eski.talepEdenKisiId);
   await birimiDenetle(db, yeni.birim);
@@ -1674,4 +1676,17 @@ export async function hatirlatmalariYenile(db: Db, simdi: Date = new Date()): Pr
     acilan += 1;
   }
   return { acilan, kapanan: kapanacak.length };
+}
+
+// 2413 a: iptal edilmiş talep gerekçeyle iptalden önceki durumuna döner; dönüş genel kaydın bütün kurallarından geçer (sipariş onaylı
+// karar ister, Logo iptali gitmişse geri alınmaz, siparişe dönüşte ödeme planı yeniden kurulur). Sürüm tutmazsa 409.
+export async function iptaliGeriAl(db: Db, k: Kullanici, id: string, g: IptaliGeriAlYazimi, izYaz: FiyatIziYazici): Promise<IptaliGeriAlCevabi> {
+  const eski = await talepOku(db, id);
+  if (eski === null) throw bulunamadi(ILETILER.talepYok);
+  if (eski.durum !== 'iptal') throw gecersiz(ILETILER.iptalDegil);
+  const kayitli = await s.iptalOncesiDurum(db, id);
+  const durum = kayitli ?? iptalOncesiTuret(eski);
+  const hareket = { id: randomUUID(), zaman: '', kisiId: null, kisiAdi: null, metin: iptalGeriAlmaHareketi(eski.iptalNedeni, g.gerekce, kayitli === null) };
+  const talep = await talepKaydet(db, k, id, { ...eski, durum, iptalNedeni: '', hareketler: [...eski.hareketler, hareket], surum: g.surum }, izYaz, durum);
+  return { talep, durum, turetildi: kayitli === null };
 }

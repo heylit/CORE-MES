@@ -194,6 +194,8 @@ const talepAlanlari = {
 export const talepGovdesi = z.object(talepAlanlari);
 export const talepKaydetGovdesi = z.object({ ...talepAlanlari, ...beklenenSurum });
 export const talepSilGovdesi = z.object(beklenenSurum);
+// 2413 a: elle durum değiştirme yalnız "İptali geri al"dır. Talep iptalden önceki durumuna döner; gerekçe zorunlu, talebin hareketine yazılır.
+export const iptaliGeriAlGovdesi = z.object({ gerekce: z.string().trim().min(1, 'Gerekçe zorunlu.').max(500), ...beklenenSurum });
 // Borç 36: siparişi verilmiş kalemin miktarı ya da birimi onay yetkilisince, gerekçeyle değişir; değişiklik talebin hareketine yazılır.
 export const siparisKalemiDegistirGovdesi = z.object({
   kalemId: uuid,
@@ -603,6 +605,7 @@ export interface SatinAlmaUclari {
   'POST /satin-alma-on-talepleri/yoksay': { govde: z.input<typeof onTalepYoksayGovdesi>; cevap: { tamam: true } };
   'POST /satin-alma-on-talepleri/geri-al': { govde: z.input<typeof onTalepGeriAlGovdesi>; cevap: { tamam: true } };
   'POST /satin-alma-talepleri/:id/kaydet': { govde: z.input<typeof talepKaydetGovdesi>; cevap: Talep };
+  'POST /satin-alma-talepleri/:id/iptali-geri-al': { govde: z.input<typeof iptaliGeriAlGovdesi>; cevap: IptaliGeriAlCevabi };
   'POST /satin-alma-talepleri/:id/sil': { govde: z.input<typeof talepSilGovdesi>; cevap: { tamam: true } };
   'POST /satin-alma-talepleri/:id/siparis-kalemi-degistir': { govde: z.input<typeof siparisKalemiDegistirGovdesi>; cevap: Talep };
   'POST /satin-alma-talepleri/:id/siparis-kapat': { govde: z.input<typeof siparisKapatGovdesi>; cevap: Talep };
@@ -923,3 +926,8 @@ export type TedarikTermini = z.output<typeof tedarikTerminiSemasi>;
 export type TedarikTerminleriCevabi = z.output<typeof tedarikTerminleriCevabi>;
 export type TedarikTerminiKaydetYazimi = z.output<typeof tedarikTerminiKaydetGovdesi>;
 export type TedarikTerminiKaydetCevabi = z.output<typeof tedarikTerminiKaydetCevabi>;
+
+// 2413 a: iptalden önceki durum kayıtlı değilse (2413'ten önceki iptal) veriden türetilir; ekran bunu kullanıcıya söyler.
+export const iptaliGeriAlCevabi = z.object({ talep: talepSemasi, durum: z.enum(TALEP_DURUMLARI), turetildi: z.boolean() });
+export type IptaliGeriAlCevabi = z.infer<typeof iptaliGeriAlCevabi>;
+export type IptaliGeriAlYazimi = z.infer<typeof iptaliGeriAlGovdesi>;

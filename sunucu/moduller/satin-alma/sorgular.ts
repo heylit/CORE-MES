@@ -140,6 +140,7 @@ export async function talepGuncelle(db: Db, t: TalepYazimi, talepEden: number, s
     `UPDATE satin_alma_talep SET baslik = $3, birim = $4, talep_eden_kisi_id = $5, oncelik = $6, ihtiyac_tarihi = $7, notlar = $8, durum = $9,
        iptal_nedeni = $10, agirlik_maliyet = $11, agirlik_termin = $12, agirlik_tedarikci = $13, agirlik_garanti = $14, uretim_emri_id = $15,
        durum_zamani = CASE WHEN durum IS DISTINCT FROM $9 THEN now() ELSE durum_zamani END,
+       iptal_oncesi_durum = CASE WHEN $9 <> 'iptal' THEN NULL WHEN durum <> 'iptal' THEN durum ELSE iptal_oncesi_durum END,
        surum = surum + 1, guncelleme = now()
      WHERE id = $1 AND surum = $2 RETURNING id`,
     [t.id, surum, ...anaDegerler(t, talepEden)],
@@ -1357,4 +1358,9 @@ export async function hatirlatmaEkle(db: Db, anahtar: string, tur: string, talep
 export async function hatirlatmaKapat(db: Db, anahtarlar: readonly string[]): Promise<void> {
   if (anahtarlar.length === 0) return;
   await db.sorgu('UPDATE satin_alma_hatirlatma SET kapandi = now() WHERE anahtar = ANY($1::text[]) AND kapandi IS NULL', [anahtarlar]);
+}
+
+// 2413 a: iptalden önceki durum yalnız sunucunundur (gövdeden yazılmaz); kayıtlı değilse null.
+export async function iptalOncesiDurum(db: Db, id: string): Promise<TalepDurumu | null> {
+  return (await db.tek<{ d: TalepDurumu | null }>('SELECT iptal_oncesi_durum AS d FROM satin_alma_talep WHERE id = $1', [id]))?.d ?? null;
 }
