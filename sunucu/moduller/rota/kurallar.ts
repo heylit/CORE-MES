@@ -434,6 +434,31 @@ export function adimMiktarlari(
   return new Map(adimlar.map((a) => [a.opNo, urunMiktari * (carpan.get(a.opNo) ?? 1)]));
 }
 
+// Emrin adım fire çarpanı (2557): uretim-emirleri malzemeIhtiyaci ile aynı kural, emre kopyalanan adımlar üzerinde. Çarpan
+// max(1, ardılların çarpanı) / (1 - pay); öncül listesi yoksa (tek hat) öncül sırası bir önceki adımdır, listede sonraki sıradaki adım sayılmaz.
+// Anahtar emirdeki OP no.
+export function emirFireCarpanlari(
+  adimlar: readonly { sira: number; opNo: number; firePayiYuzde: number; onculler?: readonly { opNo: number }[] | null }[],
+): Map<number, number> {
+  const sirali = [...adimlar].sort((a, b) => a.sira - b.sira);
+  const sirasi = new Map(sirali.map((a) => [a.opNo, a.sira]));
+  const ardillar = new Map<number, number[]>();
+  sirali.forEach((a, i) => {
+    const onceki = sirali[i - 1];
+    const liste = a.onculler != null
+      ? a.onculler.filter((o) => (sirasi.get(o.opNo) ?? Infinity) < a.sira).map((o) => o.opNo)
+      : (onceki ? [onceki.opNo] : []);
+    for (const o of liste) ardillar.set(o, [...(ardillar.get(o) ?? []), a.opNo]);
+  });
+  const carpan = new Map<number, number>();
+  for (let i = sirali.length - 1; i >= 0; i -= 1) {
+    const a = sirali[i];
+    if (!a) continue;
+    carpan.set(a.opNo, Math.max(1, ...(ardillar.get(a.opNo) ?? []).map((x) => carpan.get(x) ?? 1)) / (1 - a.firePayiYuzde / 100));
+  }
+  return carpan;
+}
+
 // Teorik süre (dk) = ayar + birim süre x adım miktarı; süre eksikse null (sıfır uydurulmaz).
 export function teorikSure(ayarSuresiDk: number | null, birimSureDk: number | null, miktar: number): number | null {
   if (ayarSuresiDk === null || birimSureDk === null) return null;
