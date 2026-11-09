@@ -1,6 +1,7 @@
-import { useRef, useState } from 'react';
+import { useRef, useState, useSyncExternalStore } from 'react';
 import type { FormEvent } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useLocation } from 'react-router-dom';
 import type { FaizTuru, OranOzeti } from '#paylasilan/sozlesme/finans.ts';
 import { FAIZ_TURLERI, ORAN_ESKIME_GUNU } from '#paylasilan/sozlesme/finansman.ts';
 import { Dugme, Girdi, Simge, useBildirim } from '../../ortak/arayuz/index.ts';
@@ -59,14 +60,32 @@ function girisMetni(iso: string, bugun: string): string {
 
 // Ortak kur ve faiz şeridi (939, 952 a, 953 a; 2238): her sayfanın en üstünde durur; giriş yapan herkes okur, finans.kur-yaz taşıyan
 // bugünün alış ve satış kurunu ve bugünden geçerli yıllık faizleri girer. Her giriş kişi ve saatle kaydedilir.
+// 2667 b: telefonda şerit yalnız ana sayfada ve Finans sayfalarında; öteki sayfalarda hiç çizilmez (kabuk sarmalamaz, boş satır kalmaz).
+// Sınır kur-faiz-seridi.css'teki telefon sınırıyla aynıdır; 768 ve üstünde her sayfada kalır (952 a).
+const TELEFON = '(max-width: 767px)';
+export const telefondaGorunurMu = (yol: string): boolean => yol === '/' || yol === '/finans' || yol.startsWith('/finans/');
+function telefonMu(): boolean {
+  try { return window.matchMedia(TELEFON).matches; } catch { return false; }
+}
+function telefonuIzle(degisti: () => void): () => void {
+  try {
+    const m = window.matchMedia(TELEFON);
+    m.addEventListener('change', degisti);
+    return () => m.removeEventListener('change', degisti);
+  } catch { return () => undefined; }
+}
+
 export function KurFaizSeridi() {
+  const telefon = useSyncExternalStore(telefonuIzle, telefonMu, () => false);
+  const { pathname } = useLocation();
   const islemler = useOturum().data?.islemler ?? [];
   const yazabilir = islemler.includes('finans.kur-yaz');
   const [acik, acikYaz] = useState(false);
-  const ozet = useQuery({ queryKey: OZET_ANAHTARI, queryFn: () => api.get<OranOzeti>('/finans/oran-ozeti') });
+  const gizli = telefon && !telefondaGorunurMu(pathname);
+  const ozet = useQuery({ queryKey: OZET_ANAHTARI, queryFn: () => api.get<OranOzeti>('/finans/oran-ozeti'), enabled: !gizli });
   // Okunamayan ya da henüz gelmeyen özet şerit çizmez: her sayfanın üstünde boş ya da hatalı bir şerit durmasın.
   const o = ozet.data;
-  if (!o) return null;
+  if (!o || gizli) return null;
   const kur = (p: string) => o.kurlar.find((k) => k.paraBirimi === p);
   const faiz = (t: FaizTuru) => o.faizler.find((f) => f.tur === t && f.paraBirimi === 'TRY');
   const bugunEksik = KUR_BIRIMLERI.some((p) => kur(p)?.tarih !== o.bugun);

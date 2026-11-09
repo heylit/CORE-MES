@@ -249,3 +249,6 @@ Yok (yeni modül). Prototipin kendi kurallarına göre değişenler UYUM-BORCU.m
 - disari: çözücü kayıtları (genelGiderOrani, projeMasrafi, dolayliPersonel, stokCikisi, aracMasrafi) ve `belgelerinSiparisleri` (2642 b). `genelGiderOrani` cevabına `gizli` eklendi.
 - Ekran: Genel gider oranı sayfasında belgelerden öneri ve kayıt; tabloda kaynak sütunu; eski elle giriş kalır.
 - proje-maliyet: `projedeSayilanBelgeler` (disari).
+
+## 2676 (2667 b): kur şeridi telefonda yalnız ana sayfa ve Finans sayfalarında
+- 767 px ve altında şerit yalnız `/`, `/finans` ve `/finans/...` adreslerinde çizilir; öteki sayfalarda bileşen null döner ve özet okunmaz (kabuk sarmalamadığından boş satır kalmaz). 768 ve üstünde davranış aynı (952 a). Kabuk değişmedi.
