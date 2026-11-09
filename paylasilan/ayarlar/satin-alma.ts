@@ -8,7 +8,7 @@ export const SATIN_ALMA_AYARLARI = {
     tur: 'boolean',
     varsayilan: true,
     baslik: 'Satın alma kararlarında dört göz kuralı',
-    aciklama: 'Açıkken kararı veren kişi o kararı onaylayamaz. Kapalıyken verilen onay kayıtta dört gözsüz olarak işaretlenir.',
+    aciklama: 'Açıkken kararı veren kişi o kararı, talebi açan ya da talep eden kişi o talebi onaylayamaz. Kapalıyken verilen onay kayıtta dört gözsüz olarak işaretlenir.',
   },
   'satin-alma.talep-no': {
     modul: 'satin-alma', tur: 'numara', varsayilan: 'ST-{YYYY}-{SAYAC:3}', alanlar: [], baslik: 'Satın alma talebi numarası',

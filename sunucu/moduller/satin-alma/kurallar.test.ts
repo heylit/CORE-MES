@@ -72,10 +72,20 @@ test('SAT-07: geçişler; aynı durumda kalmak serbest; iptal önceki duruma dö
 });
 
 test('SAT-30: ayar açıkken kararı veren onaylayamaz; kapalıyken dört gözsüz işaretlenir', () => {
-  assert.equal(dortGozSonucu(1, 1, true), 'red');
-  assert.equal(dortGozSonucu(2, 1, true), 'normal');
-  assert.equal(dortGozSonucu(1, null, true), 'normal');
-  assert.equal(dortGozSonucu(1, 1, false), 'dortGozsuz');
+  assert.equal(dortGozSonucu(1, 1, true, [], 'onay'), 'red');
+  assert.equal(dortGozSonucu(2, 1, true, [], 'onay'), 'normal');
+  assert.equal(dortGozSonucu(1, null, true, [], 'onay'), 'normal');
+  assert.equal(dortGozSonucu(1, 1, false, [], 'onay'), 'dortGozsuz');
+});
+
+test('2398 a: ayar açıkken talebi açan ya da talep eden onaylayamaz; reddedebilir; ayar kapalıyken dört gözsüz işaretlenir', () => {
+  assert.equal(dortGozSonucu(3, 1, true, [3, 4], 'onay'), 'talepEdenRed');
+  assert.equal(dortGozSonucu(4, 1, true, [3, 4], 'onay'), 'talepEdenRed');
+  assert.equal(dortGozSonucu(3, 1, true, [3, 4], 'ret'), 'normal');
+  assert.equal(dortGozSonucu(2, 1, true, [3, 4], 'onay'), 'normal');
+  assert.equal(dortGozSonucu(3, 1, false, [3, 4], 'onay'), 'dortGozsuz');
+  // Kararı veren kuralı önce gelir: kendi kararını ret de veremez (SAT-30 değişmedi).
+  assert.equal(dortGozSonucu(1, 1, true, [1], 'ret'), 'red');
 });
 
 test('SAT-53 #375: talep edenin görünümünde teklif, istek, senaryo ve karar yok (seçilen dahil); geçmişte yalnız kendi yazdığı, onayda not yok', () => {

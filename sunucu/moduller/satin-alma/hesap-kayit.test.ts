@@ -24,7 +24,7 @@ test('SA-HESAP H5: sipariş yalnız son kaydı onay olan kararla verilir', () =>
 
 test('SA-HESAP H5: dört göz sonucu [kendi kararı, başkası, ayar kapalı, karar veren yok]', () => {
   assert.deepEqual(
-    [dortGozSonucu(5, 5, true), dortGozSonucu(5, 6, true), dortGozSonucu(5, 5, false), dortGozSonucu(5, null, true)],
+    [dortGozSonucu(5, 5, true, [], 'onay'), dortGozSonucu(5, 6, true, [], 'onay'), dortGozSonucu(5, 5, false, [], 'onay'), dortGozSonucu(5, null, true, [], 'onay')],
     ['red', 'normal', 'dortGozsuz', 'normal'],
   );
 });

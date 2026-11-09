@@ -622,8 +622,11 @@ export async function talepKaydet(db: Db, k: Kullanici, id: string, g: TalepKayd
   if (siparisteMi(yazilacak.durum)) await kartKopyalariniAl(db, id);
   for (const o of yeniOnaylar) {
     // Dört göz yazılan kararın sahibine bakar (B-001): istemcinin gönderdiği ya da eski karar değil.
-    const sonuc = dortGozSonucu(k.id, yazilacak.karar?.kararVerenKisiId ?? null, await sistemAyariOku(db, 'satin-alma.dort-goz'));
+    const sonuc = dortGozSonucu(
+      k.id, yazilacak.karar?.kararVerenKisiId ?? null, await sistemAyariOku(db, 'satin-alma.dort-goz'), [eski.acanKisiId, ...(eski.talepEdenKisiId === null ? [] : [eski.talepEdenKisiId])], o.sonuc,
+    );
     if (sonuc === 'red') throw yetkiYok(ILETILER.dortGoz);
+    if (sonuc === 'talepEdenRed') throw yetkiYok(ILETILER.dortGozTalepEden);
     await s.onayEkle(db, id, o, k.id, sonuc === 'dortGozsuz');
   }
   // TMI A2: karar talebi açana ve talep edene haber verilir; ret gerekçesi metindedir. Karar veren kendisi almaz.
