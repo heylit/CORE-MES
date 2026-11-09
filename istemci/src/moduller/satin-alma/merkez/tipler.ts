@@ -110,6 +110,9 @@ export interface RequestItem {
   qty: number | null;
   unit: string;
   category?: string;
+  /** Hizmet kaleminin bağları (2429): uygulanan parça ve fason adımı; yalnız okunur, kayıtta gönderilmez. */
+  parca?: { no: number; kod: string | null; ad: string | null } | null;
+  fason?: { emirNo: string | null; opNo: number | null; adim: string | null; firmaAdi: string | null } | null;
 }
 
 export interface Rfq { supplierId: string; sentAt: DateStr; dueDate: DateStr }

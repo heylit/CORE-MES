@@ -1,4 +1,5 @@
 import { aylikFaizdenYillik, vadeIndirimCarpani } from "#paylasilan/sozlesme/finansman.ts";
+import { teklifMetniSatirlari } from "./kalem-bagi.ts";
 import type {
   Award, AwardMode, Currency, MalzemeSecenegi, Material, SiparisFaturasi, Priority, PurchaseRequest, Quality, Quote, RequestItem, RequestStatus,
   Settings, Supplier, Weights,
@@ -286,7 +287,7 @@ function syncRfqPreview(): void {
   if (cur && !sel.includes(cur)) p.value = "";
   $("#rfq-out").textContent = rfqText(r, p.value, $("#rfq-due").value || addDays(todayStr(), 3));
 }
-function rfqText(r: PurchaseRequest, supId: string, due: string, reminder = false): string {
+export function rfqText(r: PurchaseRequest, supId: string, due: string, reminder = false): string {
   const set = settings(), s = S.suppliers[supId];
   const L: string[] = [];
   L.push(`Konu: ${reminder ? "Hatırlatma: " : ""}Fiyat teklifi talebi, ${r.no} ${r.title}`);
@@ -296,7 +297,10 @@ function rfqText(r: PurchaseRequest, supId: string, due: string, reminder = fals
   if (reminder) { L.push(`${fmtDate(due)} tarihinde ilettiğimiz teklif talebimize henüz cevap alamadık. Aşağıdaki kalemler için teklifinizi en kısa sürede bekliyoruz.`); }
   else L.push(`${set.company ? set.company + " olarak " : ""}aşağıdaki kalemler için fiyat teklifinizi rica ederiz.`);
   L.push("");
-  (r.items || []).forEach((i, n) => L.push(`${n + 1}. ${i.name}, ${numIn(parseNum(i.qty))} ${i.unit}${i.spec ? ` (${i.spec})` : ""}`));
+  (r.items || []).forEach((i, n) => {
+    L.push(`${n + 1}. ${i.name}, ${numIn(parseNum(i.qty))} ${i.unit}${i.spec ? ` (${i.spec})` : ""}`);
+    for (const t of teklifMetniSatirlari(i)) L.push(`   ${t}`);
+  });
   L.push("");
   L.push("Tekliflerin karşılaştırılabilmesi için lütfen şunları belirtin:");
   L.push("- Her kalem için birim fiyat ve para birimi (KDV hariç)");
