@@ -164,6 +164,27 @@ describe('Merkez bağlama', () => {
     window.history.replaceState(null, '', '/');
   });
 
+  // 2422: onay ekranı da Onaylar yolunda ?talep= ile durur; geri düğmesi Onaylar listesine döner.
+  it('onaylayanın ayrıntısı /satin-alma/onaylar?talep= adresinde; geri tuşu listeye döner', async () => {
+    vi.spyOn(window, 'scrollTo').mockImplementation(() => {});
+    window.history.replaceState(null, '', '/satin-alma/onaylar');
+    vi.stubGlobal('fetch', vi.fn(async () => json(200, acilis([talep(ILK, 'ST-2026-001')]))));
+    const gidilen: string[] = [];
+    const git = (y: string, yerine?: boolean) => { gidilen.push(y); if (yerine) window.history.replaceState(null, '', y); else window.history.pushState(null, '', y); };
+    const kok = document.createElement('div');
+    document.body.append(kok);
+    const kapat = merkeziBagla(kok, { rol: 'approver', sayfa: 'dash', yol: '/satin-alma/onaylar', git });
+    await vi.waitFor(() => expect(Object.keys(S.requests)).toEqual([ILK]));
+    go('request', ILK);
+    expect(gidilen.at(-1)).toBe(`/satin-alma/onaylar?talep=${ILK}`);
+    expect(kok.querySelector('[data-act="ayrinti-geri"]')?.textContent).toContain('Onay bekleyenlere dön');
+    window.history.replaceState(null, '', '/satin-alma/onaylar');
+    merkezAdresi(null);
+    expect([V.page, V.id]).toEqual(['dash', null]);
+    kapat();
+    window.history.replaceState(null, '', '/');
+  });
+
   // 2165: pencere ortak pencerenin yapısıyla, bildirim ve geri al kabuğun ortak bildirimiyle çizilir.
   it('pencere ortak pencere bölmeleriyle açılır; kapat düğmesi ve perde kapatır, yapışkan perde kapatmaz', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => json(200, acilis([talep(ILK, 'ST-2026-001')]))));

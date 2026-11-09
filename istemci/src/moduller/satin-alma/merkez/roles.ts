@@ -171,17 +171,21 @@ export function viewRequestRequester(r: PurchaseRequest): string {
 
 /* ================= onaylayan ================= */
 function pendingApprovals(): PurchaseRequest[] {
+  // Önce acil, sonra ihtiyaç tarihi (tarihsiz sonda).
+  const acil = (r: PurchaseRequest) => (r.priority === "urgent" ? 0 : 1);
   return Object.values(S.requests).filter(r => r.status === "approval" && approvalState(r).state === "pending")
-    .sort((a, b) => (a.needDate || "9999").localeCompare(b.needDate || "9999"));
+    .sort((a, b) => acil(a) - acil(b) || (a.needDate || "9999").localeCompare(b.needDate || "9999"));
 }
 export const pendingApprovalCount = (): number => pendingApprovals().length;
 export function viewApprovals(): string {
   const list = pendingApprovals();
-  const recent = Object.values(S.requests).filter(r => r.award?.approvals?.length).map(r => ({ r, a: r.award!.approvals!.slice(-1)[0]! })).sort((x, y) => y.a.at - x.a.at).slice(0, 6);
+  // "Son kararlarınız" yalnız bu kişinin onay ve retleridir; başkasının kararı listeye girmez.
+  const ben = S.me?.id ?? null;
+  const recent = Object.values(S.requests).flatMap(r => (r.award?.approvals || []).filter(a => ben !== null && a.by === ben).slice(-1).map(a => ({ r, a }))).sort((x, y) => y.a.at - x.a.at).slice(0, 6);
   return `<div class="phead"><div><h1>Onay bekleyenler</h1><p class="lead">${list.length ? `${list.length} karar onayınızı bekliyor.` : "Onay bekleyen karar yok."}</p></div></div>
   <div class="inbox">
     <section class="panel jobs"><div class="panel-h"><h2>Bekleyenler</h2><span class="cnt">${list.length}</span></div>
-    ${list.length ? `<ul class="joblist">${list.map(r => { const tt = awardTotals(r); const req = tt ? requiredApprover(tt.totalTRY) : null; return `<li><button class="job" data-act="open" data-id="${r.id}"><span class="no num">${esc(r.no)}</span><span class="tt"><span class="ln">${prioDot(r.priority)}<b>${esc(r.title)}</b></span><span class="sub">${esc([r.department, tt ? (tt.x ? supName(tt.x.q) : "kalem bazlı") : "", req ? `${req.role} onayı` : ""].filter(Boolean).join(", "))}</span></span><span class="fl num"><b>${tt ? money(tt.totalTRY, "TRY", 0) : ""}</b></span><span class="btn sm primary">İncele</span></button></li>`; }).join("")}</ul>` : `<div class="panel-b muted">Şu an bekleyen bir karar yok.</div>`}</section>
+    ${list.length ? `<ul class="joblist">${list.map(r => { const tt = awardTotals(r); const req = tt ? requiredApprover(tt.totalTRY) : null; return `<li><button class="job" data-act="open" data-id="${r.id}"><span class="no num">${esc(r.no)}</span><span class="tt"><span class="ln">${prioDot(r.priority)}<b>${esc(r.title)}</b></span><span class="sub">${esc([r.department, tt ? (tt.x ? supName(tt.x.q) : "kalem bazlı") : "", req ? `${req.role} onayı` : ""].filter(Boolean).join(", "))}${approvalState(r).resubmitted ? ' <span class="flag warn">yeniden gönderildi</span>' : ""}</span></span><span class="fl num"><b>${tt ? money(tt.totalTRY, "TRY", 0) : ""}</b></span><span class="btn sm primary">İncele</span></button></li>`; }).join("")}</ul>` : `<div class="panel-b muted">Şu an bekleyen bir karar yok.</div>`}</section>
     ${recent.length ? `<section class="panel jobs"><div class="panel-h"><h2>Son kararlarınız</h2></div><ul class="joblist">${recent.map(({ r, a }) => `<li><button class="job" data-act="open" data-id="${r.id}"><span class="no num">${esc(r.no)}</span><span class="tt"><b>${esc(r.title)}</b><span class="sub">${fmtTs(a.at)}, ${esc(a.name || nameOf(a.by))}${a.note ? ": " + esc(a.note) : ""}</span></span><span class="fl">${a.decision === "approved" ? '<span class="flag good">onaylandı</span>' : '<span class="flag bad">reddedildi</span>'}</span></button></li>`).join("")}</ul></section>` : ""}
   </div>`;
 }
@@ -201,7 +205,12 @@ export function viewApproval(r: PurchaseRequest): string {
   const status = aps.state === "approved" ? '<div class="nextline done"><span class="nd"></span><span class="nt"><b>Onaylandı</b> <span>' + esc(aps.last?.name || "") + ", " + fmtTs(aps.last?.at ?? 0) + "</span></span></div>"
     : aps.state === "rejected" ? '<div class="nextline bad"><span class="nd"></span><span class="nt"><b>Reddedildi</b> <span>' + esc(aps.last?.note || "") + "</span></span></div>"
     : r.status !== "approval" ? `<div class="nextline"><span class="nd"></span><span class="nt"><b>${esc(stLabel(r.status))}</b></span></div>` : "";
-  return back + head + status + `
+  // Yeniden gönderilen kararda önceki ret notu ve retten sonra talepte yapılanlar (hareket geçmişinden) en üstte durur.
+  const ret = aps.resubmitted ? aps.last : null;
+  const sonra = ret ? (r.log || []).filter(l => l.at > ret.at) : [];
+  const yeniden = ret ? `<div class="callout sa-yeniden" role="note"><b>Yeniden gönderildi.</b> Önceki ret: ${esc(ret.name || nameOf(ret.by))}, ${fmtTs(ret.at)}${ret.note ? `: “${esc(ret.note)}”` : ""}
+    ${sonra.length ? `<ul class="small">${sonra.slice(-8).map(l => `<li>${fmtTs(l.at)}: ${esc(l.t)}</li>`).join("")}</ul>` : '<p class="small muted">Retten sonra talepte kayıtlı değişiklik yok.</p>'}</div>` : "";
+  return back + head + status + yeniden + `
   <div class="appr">
     <section class="panel appr-main"><div class="panel-b">
       <div class="vk">Satın almanın kararı</div>
@@ -221,7 +230,7 @@ export function viewApproval(r: PurchaseRequest): string {
     ${ev.ranking.map((x, i) => { const chosen = orders.some(o => o.qid === x.q.id); return `<tr class="${chosen ? "chosen" : ""}"><td>${i + 1}</td><td class="lead"><b>${esc(supName(x.q))}</b>${chosen ? ' <span class="flag good">seçilen</span>' : ""}${x.c.covered < (r.items || []).length ? ' <span class="flag warn">eksik kalemli</span>' : ""}</td><td class="r num">${money(x.c.pvTRY, "TRY", 0)}</td><td>${esc(payText(x.q))}</td><td class="r num">${parseNum(x.q.leadDays) ?? "–"} gün</td><td class="r num">${nf0.format(x.score)}</td></tr>`; }).join("")}
   </tbody></table></div></section>
   ${aps.state === "pending" && r.status === "approval" ? `<section class="panel appr-act"><div class="panel-b">
-    <div class="grid g2"><label class="f"><span>Adınız</span><input type="text" id="ap-name" value="${esc(S.me?.name ?? "")}" readonly></label><label class="f"><span>Not <small>— ret için zorunlu</small></span><input type="text" id="ap-note" placeholder="Örn. vade kısa, tekrar pazarlık edin"></label></div>
+    <label class="f"><span>Not <small>— ret için zorunlu</small></span><input type="text" id="ap-note" placeholder="Örn. vade kısa, tekrar pazarlık edin"></label>
     <div class="row" data-sa-y="14"><button class="btn good" data-act="approve">Onayla</button><button class="btn bad" data-act="reject">Reddet</button></div>
   </div></section>` : ""}
   <details class="adv"><summary>Kalemler ve hareket geçmişi</summary>${tabItems(r, true)}${tabLog(r)}</details>`;
