@@ -62,3 +62,22 @@ export function ayAraligi(ay: string): { ayBasi: string; aySonu: string } | null
   const son = new Date(Date.UTC(Number(m[1]), Number(m[2]), 0)).getUTCDate();
   return { ayBasi: `${ay}-01`, aySonu: `${ay}-${String(son).padStart(2, '0')}` };
 }
+
+// IK-87 (2653, 2657 a): küçük grupların (kucuk) sayılan kişileri tek havuzda, IK-86 formülüyle (saat ağırlıklı) toplanır. Havuz da eşiğin
+// altındaysa değer kullanılmaz (null): iki ya da daha az kişilik havuz kişi değerini verir. Kişi sayılma kuralı IK-86 ile aynıdır.
+export interface HavuzDegeri { deger: number; kisiSayisi: number }
+export function kucukGrupHavuzu(girdiler: readonly Girdi[], p: Parametreler, esik = KUCUK_GRUP_ESIGI): HavuzDegeri | null {
+  const kucukler = new Set(grupDegerleri(girdiler, p, esik).filter((g) => g.kucuk).map((g) => g.departmanNo));
+  let pay = 0;
+  let saat = 0;
+  let kisi = 0;
+  for (const g of girdiler) {
+    if (!kucukler.has(g.departmanNo)) continue;
+    const m = girdiSaatMaliyeti(g, p);
+    if (m === null || !(g.saat > 0)) continue;
+    pay += m * g.saat;
+    saat += g.saat;
+    kisi += 1;
+  }
+  return kisi < esik || !(saat > 0) ? null : { deger: Math.round((pay / saat) * 10000) / 10000, kisiSayisi: kisi };
+}

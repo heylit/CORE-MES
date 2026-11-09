@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { ayAraligi, girdiSaatMaliyeti, grupDegerleri, isverenMaliyeti, kisiSaatMaliyeti, KUCUK_GRUP_ESIGI } from './kurallar.ts';
+import { ayAraligi, girdiSaatMaliyeti, grupDegerleri, isverenMaliyeti, kisiSaatMaliyeti, KUCUK_GRUP_ESIGI, kucukGrupHavuzu } from './kurallar.ts';
 
 const p = { sgkIsverenOrani: 20, issizlikIsverenOrani: 2, sgkTavani: 150000, aylikSaat: 220 };
 
@@ -55,4 +55,15 @@ test('IK-85 (2632 a): kesinleşmiş bordro varsa işveren maliyeti / (aylık saa
   assert.equal(girdiSaatMaliyeti({ brut: 22000, bordro: null }, p), 122);
   assert.equal(girdiSaatMaliyeti({ brut: null, bordro: b(26400, 30, 0, 0) }, p), 120);
   assert.equal(girdiSaatMaliyeti({ brut: 22000, bordro: b(26400, 30, 0, 0) }, { ...p, aylikSaat: null }), null);
+});
+
+test('IK-87: küçük grupların sayılan kişileri tek havuzda saatle ağırlıklı; büyük grup girmez; havuz eşik altındaysa null', () => {
+  const g = (personelNo: number, departmanNo: number, brut: number | null, saat: number) => ({ personelNo, departmanNo, departmanAd: `D${departmanNo}`, brut, saat });
+  const buyuk = [g(1, 1, 22000, 100), g(2, 1, 22000, 100), g(3, 1, 22000, 100)];
+  // D2 iki kişi (122 x 10, 244 x 30), D3 bir kişi (122 x 20); D3'ün saatsiz kişisi sayılmaz.
+  const kucukler = [g(4, 2, 22000, 10), g(5, 2, 44000, 30), g(6, 3, 22000, 20), g(7, 3, 22000, 0)];
+  assert.deepEqual(kucukGrupHavuzu([...buyuk, ...kucukler], p), { deger: Math.round(((1220 + 7320 + 2440) / 60) * 10000) / 10000, kisiSayisi: 3 });
+  assert.equal(kucukGrupHavuzu([...buyuk, g(4, 2, 22000, 10), g(5, 2, 44000, 30)], p), null);
+  assert.equal(kucukGrupHavuzu(buyuk, p), null);
+  assert.equal(kucukGrupHavuzu(kucukler, { ...p, aylikSaat: null }), null);
 });

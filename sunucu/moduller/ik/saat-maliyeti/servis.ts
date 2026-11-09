@@ -1,10 +1,10 @@
 import type { Db } from '#cekirdek/db.ts';
-import { ayAraligi, grupDegerleri, type GrupDegeri, type Parametreler } from './kurallar.ts';
+import { ayAraligi, grupDegerleri, kucukGrupHavuzu, type Girdi, type GrupDegeri, type HavuzDegeri, type Parametreler } from './kurallar.ts';
 import { ayinParametreleri, personelGirdileri } from './sorgular.ts';
 
 const sayi = (v: string | null): number | null => (v === null ? null : Number(v));
 
-async function hesapla(db: Db, ay: string): Promise<{ gruplar: GrupDegeri[]; kisiGrubu: Map<number, number> }> {
+async function girdileriOku(db: Db, ay: string): Promise<{ girdiler: Girdi[]; parametreler: Parametreler; kisiGrubu: Map<number, number> }> {
   const aralik = ayAraligi(ay);
   if (aralik === null) throw new Error(`Geçersiz ay: ${ay}`);
   const p = await ayinParametreleri(db, aralik.ayBasi);
@@ -17,10 +17,15 @@ async function hesapla(db: Db, ay: string): Promise<{ gruplar: GrupDegeri[]; kis
     bordro: r.bordroMaliyeti === null ? null : { maliyet: Number(r.bordroMaliyeti), mesaiSaati: sayi(r.bordroMesaiSaati), tatilSaati: sayi(r.bordroTatilSaati), gun: sayi(r.bordroGun) },
   }));
   const kisiGrubu = new Map(satirlar.flatMap((r) => (r.kisiId === null ? [] : [[r.kisiId, r.departmanNo] as const])));
+  return { girdiler, parametreler, kisiGrubu };
+}
+
+async function hesapla(db: Db, ay: string): Promise<{ gruplar: GrupDegeri[]; kisiGrubu: Map<number, number> }> {
+  const { girdiler, parametreler, kisiGrubu } = await girdileriOku(db, ay);
   return { gruplar: grupDegerleri(girdiler, parametreler), kisiGrubu };
 }
 
-export type { GrupDegeri } from './kurallar.ts';
+export type { GrupDegeri, HavuzDegeri } from './kurallar.ts';
 export interface KisiGrupDegeri { departmanNo: number; saatMaliyeti: number | null; kucuk: boolean }
 
 // Küçük grupta değer gizlenir (2603 a, Güvenlik K1): tek ya da iki kişilik grubun ortalaması kişinin kendi değerini verir.
@@ -53,4 +58,11 @@ export async function kisilerinGrupSaatMaliyeti(db: Db, kisiIdler: readonly numb
 // cevaba, günlüğe ya da dışa aktarıma konmaz, yalnız toplanmış tutarın (iş emri, proje, OEE kaybı) içinde kullanılır.
 export async function kisilerinGrupSaatMaliyetiYalnizHesapIcin(db: Db, kisiIdler: readonly number[], ay: string): Promise<Map<number, KisiGrupDegeri>> {
   return kisiDegerleri(db, kisiIdler, ay);
+}
+
+// YALNIZ SUNUCU İÇİ TOPLAM HESABI (IK-87, 2657 a): küçük grupların tek havuz değeri; havuz 3 kişiden azsa null. Değer hiçbir cevaba,
+// günlüğe ya da dışa aktarıma konmaz; yalnız toplanmış tutarın içinde kullanılır. Yetki denetlemez.
+export async function kucukGrupHavuzuYalnizHesapIcin(db: Db, ay: string): Promise<HavuzDegeri | null> {
+  const { girdiler, parametreler } = await girdileriOku(db, ay);
+  return kucukGrupHavuzu(girdiler, parametreler);
 }

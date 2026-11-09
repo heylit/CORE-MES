@@ -3,7 +3,7 @@ import { after, before, describe, test } from 'node:test';
 import { testVeritabaniKur } from '#cekirdek/test-vt.ts';
 import type { TestVeritabani } from '#cekirdek/test-vt.ts';
 import { yoneticiOlustur } from '../../kisiler/disari.ts';
-import { grupSaatMaliyetleri, kisilerinGrupSaatMaliyeti, kisilerinGrupSaatMaliyetiYalnizHesapIcin } from '../disari.ts';
+import { grupSaatMaliyetleri, kisilerinGrupSaatMaliyeti, kisilerinGrupSaatMaliyetiYalnizHesapIcin, kucukGrupHavuzuYalnizHesapIcin } from '../disari.ts';
 
 describe('İK grup saat maliyeti (2602-a; gerçek PostgreSQL)', () => {
   let ortam: TestVeritabani | undefined;
@@ -56,6 +56,9 @@ describe('İK grup saat maliyeti (2602-a; gerçek PostgreSQL)', () => {
       await gun(p4, '2026-01-05', '08:00', '12:00');
       // Departmansız kişi hiçbir gruba girmez.
       await personel(5, null, 22000, kisi[4]!);
+      // IK-87: ikinci küçük grup, tek kişi; ocakta havuz Kalite'nin iki kişisiyle üç kişi olur.
+      const p6 = await personel(6, await dep('dep_kucuk2', 'Bakım'), 44000, null);
+      await gun(p6, '2026-01-05', '08:00', '12:00');
     });
   });
   after(async () => { await ortam?.kaldir(); });
@@ -89,5 +92,14 @@ describe('İK grup saat maliyeti (2602-a; gerçek PostgreSQL)', () => {
     assert.deepEqual([...hesap], [[kisi[3]!, { departmanNo: kucuk, saatMaliyeti: 122, kucuk: true }]]);
     assert.equal(m.get(kisi[0]!)?.saatMaliyeti, Math.round((5572 / 38) * 10000) / 10000);
     assert.equal((await ortam!.vt.tx((db) => kisilerinGrupSaatMaliyeti(db, [], '2026-01'))).size, 0);
+  });
+
+  test('IK-87 (2657 a): küçük grupların kişileri tek havuzda saatle ağırlıklı; havuz 3 kişiden azsa null; büyük grup havuza girmez', async () => {
+    // Ocak: Kalite 122 x 4 iki kişi, Bakım 244 x 4 -> (488 + 488 + 976) / 12. Üretim (3 kişi) havuzda değil.
+    const ocak = await ortam!.vt.tx((db) => kucukGrupHavuzuYalnizHesapIcin(db, '2026-01'));
+    assert.deepEqual(ocak, { deger: Math.round((1952 / 12) * 10000) / 10000, kisiSayisi: 3 });
+    // Şubat: yalnız Üretim'in tek kişisi küçük, havuz tek kişi.
+    assert.equal(await ortam!.vt.tx((db) => kucukGrupHavuzuYalnizHesapIcin(db, '2026-02')), null);
+    assert.equal(await ortam!.vt.tx((db) => kucukGrupHavuzuYalnizHesapIcin(db, '2026-03')), null);
   });
 });
