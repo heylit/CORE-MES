@@ -1,9 +1,9 @@
-import { Dugme, Kart, Simge, Tablo, useBildirim, type Sutun } from '../../../../ortak/arayuz/index.ts';
+import { Dugme, Kart, Rozet, Simge, Tablo, useBildirim, type Sutun } from '../../../../ortak/arayuz/index.ts';
 import type { SimgeAdi } from '../../../../ortak/tasarim/simgeler.ts';
 import { planGuncel } from '../durum.ts';
 import type { CalismaKomutu } from '../kayit.ts';
 import type { PlanlamaCalismasi, Siparis } from '../tipler.ts';
-import { agAyar, maliyetBaglami, siparisMaliyeti, wipAyar, YOK, type SiparisMaliyeti } from '../maliyet/kurallar.ts';
+import { agAyar, maliyetBaglami, siparisMaliyeti, wipAyar, ymAyar, YOK, type SiparisMaliyeti } from '../maliyet/kurallar.ts';
 import { KAR_ORANLARI, hedefKarOrani, onerilenFiyat, saat, sayi, tl, urunAdi, type KayitliPlan } from './kurallar.ts';
 import { SayiGirdisi } from './SayiGirdisi.tsx';
 import { planDisi } from '../tipler.ts';
@@ -16,6 +16,9 @@ import { planDisi } from '../tipler.ts';
 const BASLIK = 'Siparişler: maliyet ve kâr';
 const yuzde = (x: number | null | undefined): string => (x == null || !Number.isFinite(x) ? '—' : `%${sayi(x * 100, 1)}`);
 const eksiTl = (x: number | null | undefined): string => (x != null && x < 0 ? `−${tl(-x)}` : tl(x));
+// Genel gider oranı gizli ayda maliyet genel gider hariçtir; kâr ondan yüksek çıkacağı için yazılmaz (2677 b).
+const GIZLI = 'gizli';
+const gizliRozet = <Rozet ton="pasif">{GIZLI}</Rozet>;
 
 interface Gosterge { simge: SimgeAdi; ad: string; deger: string; not: string; ton?: 'uyari' | 'hata' | 'tamam' }
 function Gostergeler({ l }: { l: readonly Gosterge[] }) {
@@ -41,6 +44,7 @@ export function KarTablosu({ c, p, fg, komut, emirler = null }: { c: PlanlamaCal
   const top = (f: (x: SiparisMaliyeti) => number | null): number => satirlar.reduce((a, r) => a + (r.x ? f(r.x) ?? 0 : 0), 0);
   const tutar = top((x) => x.tutar); const maliyet = top((x) => x.top); const gec = top((x) => x.gec); const net = top((x) => x.net);
   const W = b?.W ?? null; const wa = wipAyar(D);
+  const gizli = ymAyar(D).genelGiderGizli;
   const oner = (r: Satir): number | null => { const o = r.x && !r.x.eksik.length ? onerilenFiyat(r.x.top, hedefKarOrani(D, r.s)) : null; const y = o == null ? null : Math.round(o); return y != null && y > 0 ? y : null; };
 
   const yaz = (r: Satir, ne: string, ayrinti: string, fn: (s: Siparis) => void, planKoru = false) => {
@@ -72,7 +76,7 @@ export function KarTablosu({ c, p, fg, komut, emirler = null }: { c: PlanlamaCal
         <><b className="mono">{x.eksik.length ? '—' : tl(x.top)}</b>
           <small className="tc-pys-dok">
             <span>malzeme {tl(x.mal)}</span>{x.talas ? <span>talaş −{tl(x.talas)}</span> : null}<span>işleme {tezEksik(x) ? YOK : tl(x.isl)}</span><span>ayar {tezEksik(x) ? YOK : tl(x.ayar)}</span>
-            {x.gg === null ? <span>genel gider —</span> : x.gg ? <span>genel gider {tl(x.gg)}</span> : null}{x.mes ? <span>ek mesai {tl(x.mes)}</span> : null}{x.fas ? <span>fason {tl(x.fas)}</span> : null}
+            {x.ggGizli ? <span>genel gider gizli</span> : x.gg === null ? <span>genel gider —</span> : x.gg ? <span>genel gider {tl(x.gg)}</span> : null}{x.mes ? <span>ek mesai {tl(x.mes)}</span> : null}{x.fas ? <span>fason {tl(x.fas)}</span> : null}
           </small>
           {x.eksik.length > 0 && <span className="tc-pys-uyari"><Simge ad="alert" boyut="k" />{x.eksik.join(', ')} yok</span>}</>
       );
@@ -94,7 +98,8 @@ export function KarTablosu({ c, p, fg, komut, emirler = null }: { c: PlanlamaCal
           <small>gün</small>
         </span>
       </span>) },
-    { anahtar: 'oran', baslik: 'Kâr oranı', hizala: 'sag', hucre: (r) => {
+    { anahtar: 'oran', baslik: 'Kâr oranı', hizala: 'sag', csv: (r) => (r.x?.ggGizli ? GIZLI : ''), hucre: (r) => {
+      if (r.x?.ggGizli) return gizliRozet;
       const g = r.x && r.x.kar != null && r.x.top ? r.x.kar / r.x.top : null;
       return <b className="mono" data-ton={g != null && g < hedefKarOrani(D, r.s) / 100 ? 'uyari' : undefined}>{yuzde(g)}</b>;
     } },
@@ -111,6 +116,7 @@ export function KarTablosu({ c, p, fg, komut, emirler = null }: { c: PlanlamaCal
             <b className="mono">{tl(o)}</b>
             {o != null && (r.s.gelir == null || Math.abs(r.s.gelir - o) >= 1) && <Dugme simge="check" disabled={!yazilir} title={yazilir ? `Tutarı ${tl(o)} yap` : 'Tutar yazma yetkiniz yok.'} onClick={() => uygula(r, o)}>Uygula</Dugme>}
           </span>
+          {gizli && o != null && <small className="tc-pys-not">genel gider hariç</small>}
           {fark != null && Math.abs(fark) >= 1 && <small className="tc-pys-not">{fark > 0 ? `tutar ${tl(fark)} üstünde` : `tutar ${tl(-fark)} altında`}</small>}
         </>
       );
@@ -132,18 +138,18 @@ export function KarTablosu({ c, p, fg, komut, emirler = null }: { c: PlanlamaCal
           </small></>
       );
     } },
-    { anahtar: 'net', baslik: 'Net kâr', hizala: 'sag', hucre: (r) => <><b className="mono" data-ton={r.x?.net != null && r.x.net < 0 ? 'hata' : undefined}>{tl(r.x?.net)}</b>{r.x?.fin ? <small className="tc-pys-not">finansman {tl(r.x.fin)}</small> : null}</> },
+    { anahtar: 'net', baslik: 'Net kâr', hizala: 'sag', csv: (r) => (r.x?.ggGizli ? GIZLI : ''), hucre: (r) => r.x?.ggGizli ? gizliRozet : <><b className="mono" data-ton={r.x?.net != null && r.x.net < 0 ? 'hata' : undefined}>{tl(r.x?.net)}</b>{r.x?.fin ? <small className="tc-pys-not">finansman {tl(r.x.fin)}</small> : null}</> },
   ];
 
   return (
     <Kart baslik={BASLIK} simge="list" baslikEki={<span className="tc-pys-kucuk">plandan</span>}>
       <Gostergeler l={[
         { simge: 'lira', ad: 'Toplam tutar', deger: tl(tutar), not: `${String(satirlar.filter((r) => r.s.gelir != null).length)} fiyatlı sipariş` },
-        { simge: 'layers', ad: 'Toplam maliyet', deger: tl(maliyet), not: 'malzeme, işleme, ayar, genel gider, fason, ek mesai' },
-        { simge: 'chart', ad: 'Brüt kâr oranı', deger: yuzde(maliyet ? (tutar - maliyet) / maliyet : null), not: 'maliyet üstüne' },
+        { simge: 'layers', ad: 'Toplam maliyet', deger: tl(maliyet), not: gizli ? 'malzeme, işleme, ayar, fason, ek mesai; genel gider hariç (gizli)' : 'malzeme, işleme, ayar, genel gider, fason, ek mesai' },
+        { simge: 'chart', ad: 'Brüt kâr oranı', deger: gizli ? GIZLI : yuzde(maliyet ? (tutar - maliyet) / maliyet : null), not: 'maliyet üstüne' },
         { simge: 'clock', ad: 'Gecikme bedeli', deger: tl(gec), not: 'bu planda', ton: gec > 0 ? 'uyari' : 'tamam' },
         { simge: 'pause', ad: 'Bekleme maliyeti', deger: eksiTl(W?.tl), not: `${sayi(W?.saat ?? 0, 0)} sa bekleme${W && W.tah < -0.5 ? ` · erken tahsilat −${tl(-W.tah)}` : ''}${wa.ac ? '' : ' · plan amacında değil'}` },
-        { simge: 'check', ad: 'Net kâr', deger: tl(net), not: 'gecikme, finansman, bekleme düşülmüş', ton: net < 0 ? 'hata' : undefined },
+        { simge: 'check', ad: 'Net kâr', deger: gizli ? GIZLI : tl(net), not: 'gecikme, finansman, bekleme düşülmüş', ton: !gizli && net < 0 ? 'hata' : undefined },
       ]} />
       <div className="tc-pys-sira">
         <span className="tc-pys-kucuk tc-pys-sira-ara">Önerilen fiyat = maliyet × (1 + hedef kâr oranı), tam liraya yuvarlanır. Uygula siparişin tutarını değiştirir; gecikme bedeli ve öncelik tutardan yeniden hesaplanır.</span>

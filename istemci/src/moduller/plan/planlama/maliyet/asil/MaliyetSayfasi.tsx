@@ -152,7 +152,9 @@ function IscilikKarti({ c, kapali, y, git }: { c: PlanlamaCalismasi; kapali: boo
           </>}
         {kalem
           ? <Alan ad="Genel gider"><b className="tc-pyk-mono">{ort === null ? '—' : tlSaat(ort)} ort.</b><button type="button" className="tc-pyk-bag" onClick={() => { git('giderler'); }}>kalemlerden, tezgâh başına</button></Alan>
-          : <Alan ad="Genel gider TL/tezgâh saati"><SayiGir deger={Y.genelGider} ad="Genel gider TL/tezgâh saati" adim={10} max={100000} yer="yok" kapali={kapali} yaz={(v) => y((z) => maliyetAyariYaz(z, D, 'genelGider', v))} /></Alan>}
+          : Y.genelGiderGizli
+            ? <Alan ad="Genel gider TL/tezgâh saati"><Rozet ton="pasif">gizli</Rozet><span className="tc-pyk-soluk">Finans oranı bu ay gizli; maliyet genel gider hariç</span></Alan>
+            : <Alan ad="Genel gider TL/tezgâh saati"><SayiGir deger={Y.genelGider} ad="Genel gider TL/tezgâh saati" adim={10} max={100000} yer="yok" kapali={kapali} yaz={(v) => y((z) => maliyetAyariYaz(z, D, 'genelGider', v))} /></Alan>}
         <Alan ad="Varsayılan hedef kâr oranı %"><SayiGir deger={Y.karHedef} ad="Varsayılan hedef kâr oranı %" max={300} bosOlmaz kapali={kapali} yaz={(v) => y((z) => maliyetAyariYaz(z, D, 'karHedef', v))} /></Alan>
       </div>
       <Not>Finansman oranı (%{sayi(agAyar(D).fin, 2)}/gün) Öncelik ve ağırlık sayfasındadır. Genel gider ürün maliyetinde ve teklifte sayılır, plan amacına girmez: kira ve amortisman iş hangi tezgâhta yapılırsa yapılsın aynıdır.</Not>
