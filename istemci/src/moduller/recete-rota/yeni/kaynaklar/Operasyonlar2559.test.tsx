@@ -33,6 +33,7 @@ const satir = (adimId: number, opNo: number, opId: number, kod: string) => ({
   adimId, opNo, sira: opNo / 10, ad: kod, operasyonTipi: { id: opId, kod, ad: kod }, kaynak: null,
   teorik: { hazirlikDk: '10', islemDk: '2', degisimDk: null, degisimOraniYuzde: null },
   sonKayit: { hazirlik: null, islem: null, degisim: null }, olcum: { hazirlik: null, islem: null, degisim: null },
+  ozet: { hazirlik: null, islem: null, degisim: null },
   etkin: { hazirlikDk: '10', birimSureDk: '2', islemDk: '2', degisimDk: '0', degisimOraniYuzde: null }, fason: false,
 });
 const sureler = (rev: number, malzemeId: number, adimlar: SurelerCevabi['adimlar']): SurelerCevabi => ({

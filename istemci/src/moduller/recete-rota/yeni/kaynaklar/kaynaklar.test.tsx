@@ -69,9 +69,9 @@ describe('R2 Süreler', () => {
     await waitFor(() => expect(yazmalar(istekler)).toHaveLength(1));
     expect(yazmalar(istekler)[0]).toMatchObject({ yol: '/rota/adimlar/41/gerceklesen-sure', govde: { tur: 'hazirlik', sureDk: 3.5, makineId: null, okunanId: null } });
 
-    fireEvent.click(within(bolge).getByRole('button', { name: 'İşlem ölçümünü kabul et, MM-0001 OP 10' }));
+    fireEvent.click(within(bolge).getByRole('button', { name: 'İşlem ortancasını kabul et, MM-0001 OP 10' }));
     await waitFor(() => expect(yazmalar(istekler)).toHaveLength(2));
-    expect(yazmalar(istekler)[1]).toMatchObject({ yol: '/rota/adimlar/41/gerceklesen-sure/kabul', govde: { tur: 'islem', olcumId: 9, okunanId: 9, makineId: null } });
+    expect(yazmalar(istekler)[1]).toMatchObject({ yol: '/rota/adimlar/41/gerceklesen-sure/kabul', govde: { tur: 'islem', olcumId: 9, deger: 'ortanca', okunanId: 9, makineId: null } });
     await waitFor(() => expect(istekler.filter((i) => i.yol === '/rota/revizyonlar/7/sureler').length).toBeGreaterThanOrEqual(3));
   });
 
@@ -86,7 +86,7 @@ describe('R2 Süreler', () => {
     });
     rrAc('/recete-rota/sureler');
     const bolge = await bolumAc('Süreler');
-    fireEvent.click(await within(bolge).findByRole('button', { name: 'İşlem ölçümünü kabul et, MM-0001 OP 10' }));
+    fireEvent.click(await within(bolge).findByRole('button', { name: 'İşlem ortancasını kabul et, MM-0001 OP 10' }));
     expect(await screen.findByText(uyari)).toBeTruthy();
   });
 

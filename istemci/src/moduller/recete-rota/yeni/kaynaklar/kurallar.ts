@@ -24,6 +24,47 @@ export const ondalik = (v: string | null | undefined): number | null => {
 
 export const oranMetni = (v: number | null): string => (v === null ? '—' : `%${v.toLocaleString('tr-TR', { maximumFractionDigits: 1 })}`);
 
+/* ---------------- Süreler (2564 a) ---------------- */
+
+// Girdi kutusundaki ondalık virgüllüdür (2566 S-4: 0.71 değil 0,71); sayiGirdisi ikisini de okur.
+export const virgullu = (v: number | null): string => (v === null ? '' : String(v).replace('.', ','));
+
+// Ölçüm türünün karşılaştırıldığı teorik süre. "İşlem" ölçümü değişim dahil birim süredir (170 b): teorik işlem + değişim.
+export interface TeorikSure { hazirlikDk: number | null; islemDk: number | null; degisimDk: number | null }
+export function karsilastirmaTeorigi(t: TeorikSure, tur: 'hazirlik' | 'islem' | 'degisim'): number | null {
+  if (tur === 'hazirlik') return t.hazirlikDk;
+  if (tur === 'degisim') return t.degisimDk;
+  return t.islemDk === null ? null : Math.round((t.islemDk + (t.degisimDk ?? 0)) * 1e4) / 1e4;
+}
+
+// Sapma % = (gerçekleşen − teorik) ÷ teorik × 100, tam sayıya yuvarlı. Teorik yoksa ya da 0 ise null (oran tanımsız).
+export const SAPMA_ESIGI_YUZDE = 15;
+export function sapmaYuzdesi(gercek: number | null, teorik: number | null): number | null {
+  if (gercek === null || teorik === null || teorik <= 0) return null;
+  return Math.round(((gercek - teorik) / teorik) * 100);
+}
+export const sapiyor = (s: number | null): boolean => s !== null && Math.abs(s) > SAPMA_ESIGI_YUZDE;
+export const sapmaMetni = (s: number): string => `${s > 0 ? '+' : s < 0 ? '−' : ''}%${String(Math.abs(s))}`;
+
+// Ortanca 3'ten az ölçümdense güvenilir değildir; kabul yine yapılır, sunucu da uyarır (2564 a).
+export const AZ_OLCUM = 3;
+
+// Plan teorik süreyle hesaplanır (169 c); plan sütunu yalnız planın kullandığı süre teorikten farklıysa bir şey söyler.
+export interface EtkinSure { hazirlikDk: number | null; birimSureDk: number | null; islemDk: number | null; degisimDk: number | null }
+// Boş süre ile 0 plan için aynıdır (adım o süreyi kullanmaz).
+export function planTeoriktenFarkli(t: TeorikSure, e: EtkinSure): boolean {
+  const f = (a: number | null, b: number | null): boolean => (a ?? 0) !== (b ?? 0);
+  return f(t.hazirlikDk, e.hazirlikDk) || f(t.islemDk, e.islemDk ?? e.birimSureDk) || f(t.degisimDk, e.degisimDk);
+}
+
+// Süzgeç: bekleyen ölçümü olan adım ya da bir türü eşiği aşan adım.
+export type SureSuzgeci = '' | 'bekleyen' | 'sapan';
+export function sureSuzgecindenGecer(s: SureSuzgeci, bekleyenVar: boolean, sapmalar: ReadonlyArray<number | null>): boolean {
+  if (s === 'bekleyen') return bekleyenVar;
+  if (s === 'sapan') return sapmalar.some(sapiyor);
+  return true;
+}
+
 /* ---------------- Malzemeler ---------------- */
 
 export const MALZEME_TURLERI = [
