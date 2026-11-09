@@ -63,13 +63,18 @@ function sunucuCozumGirdisi(calisma, kayit, kaynak, istek, bugun) {
   for (const m of istek.kapaliMakineler || []) st.down.push({ id: 'ariza-' + m, m: String(m), from: st.now, to: st.now + HDAYS * 24, neden: 'ariza' });
   if ((istek.kapaliGunler || []).length) st.D.tatiller = [...new Set([...(st.D.tatiller || []), ...istek.kapaliGunler])];
   const opOf = tmiIslemler(k, D);
+  /* B-2483-16: sağlam adedi emri karşılamış çalışan adımın kalanı 0'dır; 1 adet uydurulmaz. Sıfır süreli yer yazılamaz (bitiş başlangıçtan
+     sonra olmalı): adım kuyruğa yeniden dizilmez, şimdi bitmiş sayılır, ardılı onu beklemez; yer yazılmaz, yerleşmeyen de sayılmaz. */
+  const kalaniYok = new Set();
   for (const c of istek.calisanlar) {
     const id = opOf[c.anahtar], o = okunan.get(c.anahtar) || {};
     if (!id || !kuyruktaki.has(c.anahtar) || !isFinite(+o.adet)) continue;
-    /* B-2483-16: sağlam adedi emri karşılamışsa kalan 0'dır; 1 adet uydurulmaz */
-    st.D.opAdet = Object.assign({}, st.D.opAdet, { [id]: Math.max(0, +o.adet - (+o.saglam || 0)) });
+    const kalan = Math.max(0, +o.adet - (+o.saglam || 0));
+    if (kalan === 0) { kalaniYok.add(id); continue; }
+    st.D.opAdet = Object.assign({}, st.D.opAdet, { [id]: kalan });
     if (+o.saglam > 0) st.ayarsiz = Object.assign({}, st.ayarsiz, { [id]: 1 });
   }
+  for (const id of kalaniYok) { const a = st.gercek && st.gercek[id]; if (a && a.S != null) st.gercek[id] = Object.assign({}, a, { C: Math.max(st.now, a.S) }); }
   fasonlariAdimaCevir(k, st.D);
   emirFasonlariniEkle(st.D, durum.emirler, k);
   emirYerleriniEkle(st.D, durum.emirler, k);
@@ -95,7 +100,8 @@ function sunucuCozumGirdisi(calisma, kayit, kaynak, istek, bugun) {
   const kuyruklar = [...istek.kuyruklar.map(q => ({ m: String(q.makineId), anahtarlar: q.anahtarlar })),
     ...(istek.kisiKuyruklari || []).map(q => ({ m: kisiTezgahi(q.kisiId), anahtarlar: q.anahtarlar }))];
   kuyruklar.forEach((q, mi) => q.anahtarlar.forEach((a, i) => {
-    const id = opOf[a]; if (!id || !cx.byId[id]) { yerlesmeyen.push(a); return; }
+    const id = opOf[a]; if (kalaniYok.has(id)) return;
+    if (!id || !cx.byId[id]) { yerlesmeyen.push(a); return; }
     if (takvimsiz(q.m)) { vardiyasiz.push(a); return; }
     const S = frz + 1 + i * 1e-3 + mi * 1e-7;
     ops[id] = { id, job: cx.byId[id].job, m: q.m, S, C: S + 1e-7 };
