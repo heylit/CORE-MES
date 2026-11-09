@@ -2,6 +2,7 @@
 .tc-rr1 { display: flex; flex-direction: column; gap: var(--b-3); min-width: 0; --rr1-statu: var(--cmm); }
 /* Statülü kart eski sayfadaki gibi mordur; tasarım setindeki tek mor --cmm. */
 .tc-rr1-tam { position: fixed; inset: 0; z-index: var(--z-katman); background: var(--bg); padding: var(--b-3); overflow: auto; }
+.tc-rr1-tam > .tc-rr1-top { position: sticky; top: calc(-1 * var(--b-3)); z-index: 1; background: var(--bg); padding-block: var(--b-2); }
 .tc-rr1-top, .tc-rr1-btnrow, .tc-rr1-rv-row { display: flex; flex-wrap: wrap; gap: var(--b-2); align-items: center; min-width: 0; }
 .tc-rr1-grow { flex: 1 1 auto; }
 .tc-rr1-ipucu { color: var(--muted); font-size: var(--yazi-s); margin: 0; }

@@ -390,8 +390,8 @@ function kenarlariOlc(ic: HTMLElement, olcek: number): { kenarlar: Kenar[]; en: 
   return { kenarlar, en: kok.width / olcek, boy: kok.height / olcek };
 }
 
-export function AkisSemasi({ r, kok, tamEkran, tamEkranDegistir, cop }: {
-  r: RotaEkrani; kok: Dugum; tamEkran: boolean; tamEkranDegistir: () => void; cop: ReactNode;
+export function AkisSemasi({ r, kok, tamEkranDegistir, cop }: {
+  r: RotaEkrani; kok: Dugum; tamEkranDegistir: () => void; cop: ReactNode;
 }) {
   const vp = useRef<HTMLDivElement>(null);
   const ic = useRef<HTMLDivElement>(null);
@@ -537,7 +537,6 @@ export function AkisSemasi({ r, kok, tamEkran, tamEkranDegistir, cop }: {
         <button type="button" className="tc-rr1-ib" onClick={() => { yakinlas(-1); }} title="Uzaklaştır (−)" aria-label="Uzaklaştır"><Simge ad="zout" boyut="k" /></button>
         <button type="button" className="tc-rr1-ib" onClick={() => { elle(); sigdir(false); }} title="Tümünü sığdır (0)" aria-label="Tümünü sığdır"><Simge ad="fit" boyut="k" /></button>
         <button type="button" className="tc-rr1-ib" onClick={() => { elle(); sigdir(true); }} title="Genişliğe sığdır, başa git (Home)" aria-label="Genişliğe sığdır"><Simge ad="first" boyut="k" /></button>
-        <button type="button" className="tc-rr1-ib" aria-pressed={tamEkran} onClick={tamEkranDegistir} title="Tam ekran (F)" aria-label="Tam ekran"><Simge ad="expand" boyut="k" /></button>
         <button type="button" className="tc-rr1-ib" aria-pressed={yardim} onClick={() => { setYardim(!yardim); }} title="Gezinme yardımı" aria-label="Gezinme yardımı"><Simge ad="help" boyut="k" /></button>
       </div>
       {yardim && (

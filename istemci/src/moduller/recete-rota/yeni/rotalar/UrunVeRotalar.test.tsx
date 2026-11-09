@@ -19,6 +19,23 @@ const bolumAc = async () => {
 const tabloyuKapat = (bolge: HTMLElement) => { fireEvent.click(within(bolge).getByRole('button', { name: /Akış şeması/ })); };
 
 describe('R1 Ürün ve rotalar: izinli', () => {
+  it('tam ekran düğmesi şemada ve tabloda durur; "Tam ekrandan çık" ve Esc tam ekrandan çıkarır (B-2482-R3)', async () => {
+    sunucuKur(YONETICI, { durum: () => json(200, rotaDurumu()) });
+    rrAc('/recete-rota/schema');
+    const bolge = await bolumAc();
+    const kok = () => bolge.querySelector('[data-parca="R1"]')!;
+    fireEvent.click(within(bolge).getByRole('button', { name: 'Tam ekranda aç' }));
+    expect(kok().classList.contains('tc-rr1-tam')).toBe(true);
+    fireEvent.click(within(bolge).getByRole('button', { name: /Akış tablosu/ }));
+    fireEvent.click(within(bolge).getByRole('button', { name: 'Tam ekrandan çık' }));
+    expect(kok().classList.contains('tc-rr1-tam')).toBe(false);
+    fireEvent.click(within(bolge).getByRole('button', { name: 'Tam ekranda aç' }));
+    expect(kok().classList.contains('tc-rr1-tam')).toBe(true);
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(kok().classList.contains('tc-rr1-tam')).toBe(false);
+    tabloyuKapat(bolge);
+  });
+
   it('akış tablosunda adım satırının boş yerine tıklayınca düzenleme paneli açılır; satırdaki alan ve düğme adımı seçmez (B-2482-1)', async () => {
     sunucuKur(YONETICI, { durum: () => json(200, rotaDurumu()) });
     rrAc('/recete-rota/schema');
