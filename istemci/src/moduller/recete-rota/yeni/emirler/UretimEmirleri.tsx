@@ -1,10 +1,13 @@
 import { useMemo, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { Link, useSearchParams } from 'react-router-dom';
 import { EMIR_TURU_ADLARI } from '#paylasilan/sozlesme/emir-turleri.ts';
+import type { AcilisSecenekleri } from '#paylasilan/sozlesme/uretim-emirleri.ts';
+import { api } from '../../../../ortak/veri/api.ts';
 import { Dugme, DurumKutusu, Girdi, IsaretKutusu, Pencere, Secim, Simge } from '../../../../ortak/arayuz/index.ts';
 import { sayi, tarih } from '../bicim.ts';
 import type { EkranOzellikleri } from '../sekmeler.ts';
-import { usePatlatmaOnizlemesi, type RrDurumu } from '../veri.ts';
+import { RR_ANAHTARI, usePatlatmaOnizlemesi, type RrDurumu } from '../veri.ts';
 import { BolmePaneli, bolmeSonucu, bosBolme, type BolmeDurumu } from './Bolme.tsx';
 import { bosCokKatman, CokKatmanPaneli, type CokKatmanSecimi } from './CokKatman.tsx';
 import { EmirAyrintisi, PlanHucresi } from './EmirAyrintisi.tsx';
@@ -15,6 +18,7 @@ import {
   type DurumSuzgeci, type Emir,
 } from './kurallar.ts';
 
+const PROJELER_YOLU = '/projeler';
 const TUR_SECENEKLERI = Object.entries(EMIR_TURU_ADLARI).map(([deger, baslik]) => ({ deger, baslik }));
 
 const URUN_ONEKI = 'urun:';
@@ -199,6 +203,15 @@ function YeniEmirFormu({ durum: d, yetki, komut, acildi, git, ilkUrun }: {
   const cokKatmanVar = onizleme !== undefined && onizleme.kokRevizyon.id === kokRevizyon && (onizleme.ileti !== null || onizleme.dugumler.length > 1);
   const cokAcik = cokKatmanVar && cok.acik && onizleme.ileti === null && onizleme.engel === null;
   const yaz = (alan: Partial<YeniFormDurumu>) => { setF({ ...f, ...alan }); setHata(null); };
+  // Proje şartı form açıkken bilinsin (B-2502-3): ürün ve türün açık projesi yoksa emir gönderimde değil burada durur. Okunamazsa
+  // form eskisi gibi çalışır; şartı açılışta sahibi yine denetler.
+  const malzemeNo = Number(f.urun);
+  const acilis = useQuery({
+    queryKey: [...RR_ANAHTARI, 'acilis-secenekleri', malzemeNo, f.tur] as const,
+    enabled: Number.isInteger(malzemeNo) && malzemeNo > 0,
+    queryFn: () => api.get<AcilisSecenekleri>(`/adimli-emirler/acilis-secenekleri?malzemeNo=${String(malzemeNo)}&emirTuru=${encodeURIComponent(f.tur)}`),
+  });
+  const projeYok = acilis.data?.projeZorunlu === true && acilis.data.projeler.length === 0;
 
   if (urunler.length === 0) {
     return <DurumKutusu durum="bos" mesaj={'Emir açmak için mamul ya da yarı mamul gerekli. "Ürün ve rotalar"dan başlayın.'} />;
@@ -288,9 +301,14 @@ function YeniEmirFormu({ durum: d, yetki, komut, acildi, git, ilkUrun }: {
           yeni girdi={girdi} adimlar={adimlar} baslamis={[]} opdefs={d.opdefs} istasyonlar={d.stations} deger={bolme} degistir={setBolme}
         />
       )}
+      {projeYok && (
+        <p className="tc-rr3-uyari" role="status">
+          <Simge ad="alert" boyut="k" />Bu ürün için açık proje yok; bu türde üretim emri bir projeyle açılır. <Link to={PROJELER_YOLU}>Projeler</Link>
+        </p>
+      )}
       {hata && <p className="tc-rr3-uyari" role="alert"><Simge ad="alert" boyut="k" />{hata}</p>}
       <div className="tc-rr3-arac">
-        <Dugme tur="birincil" boyut="ana" simge="check" yukleniyor={komut.mesgul} onClick={() => { void olustur(); }}>Emri oluştur</Dugme>
+        <Dugme tur="birincil" boyut="ana" simge="check" yukleniyor={komut.mesgul} disabled={projeYok} onClick={() => { void olustur(); }}>Emri oluştur</Dugme>
       </div>
       {gecmisSorusu && (
         <Pencere acik kapat={() => { setGecmisSorusu(false); }} baslik="Teslim tarihi geçmişte" alt={(
