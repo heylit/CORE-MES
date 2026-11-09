@@ -5,11 +5,12 @@ import { testVeritabaniKur } from '#cekirdek/test-vt.ts';
 import type { TestVeritabani } from '#cekirdek/test-vt.ts';
 import { uygulamaKur } from '#cekirdek/uygulama.ts';
 import { denetimYaz } from '../denetim/disari.ts';
-import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
+import { kullaniciYukle, rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
 import { DURUM_ANAHTARI, receteRotaStatuleri } from './disari.ts';
 import { adimCiktisiBul, statuleriTuret } from './kurallar.ts';
-import { adimCiktisi, adimStatusu } from './servis.ts';
+import { adimCiktisi, adimStatusu, yaz } from './servis.ts';
+import { anaKayitYaz } from './test-ortak.ts';
 
 const PAROLA = 'dogru-parola-1';
 
@@ -202,14 +203,7 @@ describe('recete_rota_statu göçü ve akışı (gerçek PostgreSQL)', () => {
     return girisCerezi(kullaniciAdi);
   }
 
-  const kaydet = async (deger: unknown) => {
-    const c = await app.inject({
-      method: 'POST', url: '/api/recete-rota/kayitlar/yaz', headers: { cookie: yazar },
-      payload: { anahtar: DURUM_ANAHTARI, bicim: 'json', deger, beklenenSurum: surum },
-    });
-    assert.equal(c.statusCode, 200, c.body);
-    surum = (c.json() as { kayit: { surum: number } }).kayit.surum;
-  };
+  const kaydet = async (deger: unknown) => { surum = await anaKayitYaz(vt(), deger, surum); };
   const sayim = async (): Promise<number> => (await vt().sorgu('SELECT 1 FROM recete_rota_statu')).length;
 
   before(async () => {
@@ -279,12 +273,11 @@ describe('recete_rota_statu göçü ve akışı (gerçek PostgreSQL)', () => {
     });
     assert.equal(c.statusCode, 200, c.body);
     assert.equal(await sayim(), once);
-    const metin = await app.inject({
-      method: 'POST', url: '/api/recete-rota/kayitlar/yaz', headers: { cookie: yazar },
-      payload: { anahtar: DURUM_ANAHTARI, bicim: 'metin', deger: JSON.stringify(belge('ham', [adim('t1', 1), adim('t2', 2)])), beklenenSurum: surum },
+    surum = await vt().tx(async (db) => {
+      const k = await kullaniciYukle(db, yoneticiId);
+      if (k === null) throw new Error('yönetici yok');
+      return (await yaz(db, k, { anahtar: DURUM_ANAHTARI, bicim: 'metin', deger: JSON.stringify(belge('ham', [adim('t1', 1), adim('t2', 2)])), beklenenSurum: surum })).kayit.surum;
     });
-    assert.equal(metin.statusCode, 200, metin.body);
-    surum = (metin.json() as { kayit: { surum: number } }).kayit.surum;
     assert.equal(await sayim(), once);
     assert.equal((await vt().sorgu(`SELECT 1 FROM recete_rota_statu WHERE kaynak_adim = 't1'`)).length, 0);
   });
@@ -296,11 +289,7 @@ describe('recete_rota_statu göçü ve akışı (gerçek PostgreSQL)', () => {
     await ortam.sahip.sorgu(`CREATE FUNCTION recete_rota_statu_deneme_hatasi() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'deneme'; END $$`);
     await ortam.sahip.sorgu('CREATE TRIGGER recete_rota_statu_deneme BEFORE INSERT ON recete_rota_statu FOR EACH ROW EXECUTE FUNCTION recete_rota_statu_deneme_hatasi()');
     try {
-      const c = await app.inject({
-        method: 'POST', url: '/api/recete-rota/kayitlar/yaz', headers: { cookie: yazar },
-        payload: { anahtar: DURUM_ANAHTARI, bicim: 'json', deger: belge('yari', [adim('r1', 1), adim('r2', 2)]), beklenenSurum: surum },
-      });
-      assert.equal(c.statusCode, 500);
+      await assert.rejects(anaKayitYaz(vt(), belge('yari', [adim('r1', 1), adim('r2', 2)]), surum), /deneme/);
     } finally {
       await ortam.sahip.sorgu('DROP TRIGGER recete_rota_statu_deneme ON recete_rota_statu');
       await ortam.sahip.sorgu('DROP FUNCTION recete_rota_statu_deneme_hatasi()');
@@ -513,4 +502,5 @@ describe('recete_rota_statu göçü ve akışı (gerçek PostgreSQL)', () => {
     const yabanci = await kartAc(5, 'yarimamul');
     assert.equal(await adimCiktisi(vt(), { malzemeNo: yabanci, opNo: 10, uretimEmriId: emir }), null);
   });
+
 });

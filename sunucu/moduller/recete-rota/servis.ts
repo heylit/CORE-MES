@@ -44,12 +44,30 @@ export function planlamaAnahtariniReddet(anahtar: string): void {
   if (planlamaAnahtariMi(anahtar)) throw dogrulama(PLANLAMA_ILETISI, 'anahtar');
 }
 
+// Ana durum kaydı komutla yazılmaz, silinmez (B-2484-2): yeni ekran yazmaz (204 a); eski çerçevenin bütün-belge yazımı taşıma tablolarında
+// belgede olmayan bütün bağları siliyordu. Reçete ve rota sahiplerinin komutlarıyla değişir; kayıt yalnız örnek veri yüklemesinde yazılır.
+const ANA_KAYIT_ILETISI = 'Reçete ve rota ana kaydı salt okunurdur; reçete ve rota kendi ekranlarından değiştirilir.';
+export function anaKaydiReddet(anahtar: string): void {
+  if (anahtar === DURUM_ANAHTARI) throw dogrulama(ANA_KAYIT_ILETISI, 'anahtar');
+}
+
 export function ben(kullanici: Kullanici): BenCevabi {
   return { kisi: { id: kullanici.id, ad: kullanici.ad }, yazabilir: kullanici.islemler.includes(ISLEM_YAZ) };
 }
 
 export async function kayitlar(db: Db): Promise<KayitlarCevabi> {
   return { kayitlar: await sorgular.kayitlar(db) };
+}
+
+// Komut ucu: ana kayıt dışındaki anahtarlar.
+export async function komutlaYaz(db: Db, kullanici: Kullanici, g: YazGovdesi, gunluk?: Gunluk): Promise<YazCevabi> {
+  anaKaydiReddet(g.anahtar);
+  return yaz(db, kullanici, g, gunluk);
+}
+
+export async function komutlaSil(db: Db, anahtar: string, beklenenSurum: number): Promise<SilCevabi> {
+  anaKaydiReddet(anahtar);
+  return sil(db, anahtar, beklenenSurum);
 }
 
 export async function yaz(db: Db, kullanici: Kullanici, g: YazGovdesi, gunluk?: Gunluk): Promise<YazCevabi> {
