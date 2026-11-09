@@ -1238,3 +1238,14 @@ export function analizSiparisSatirlari(db: Db, basTarih: string, saatDilimi: str
     [basTarih, saatDilimi],
   );
 }
+
+// 2426: fason iş emrinin hizmet sipariş satırı (iptal olmayan talep). Birden çoksa teslimi tamamlanmamış en yenisi, hepsi tamamsa en yenisi.
+export function fasonSiparisSatirlari(db: Db, isEmriIdleri: readonly number[]): Promise<{ isEmriId: number; id: number }[]> {
+  if (isEmriIdleri.length === 0) return Promise.resolve([]);
+  return db.sorgu<{ isEmriId: number; id: number }>(
+    `SELECT DISTINCT ON (s.is_emri_id) s.is_emri_id AS "isEmriId", s.id
+       FROM satin_alma_siparis_satiri s JOIN satin_alma_talep t ON t.id = s.talep_id AND t.durum <> 'iptal'
+      WHERE s.is_emri_id = ANY($1::int[])
+      ORDER BY s.is_emri_id, coalesce((SELECT sum(m.miktar) FROM satin_alma_teslim m WHERE m.siparis_satiri_id = s.id), 0) < s.miktar DESC, s.id DESC`,
+    [isEmriIdleri]);
+}

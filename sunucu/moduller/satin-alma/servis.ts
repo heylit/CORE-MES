@@ -562,6 +562,10 @@ async function planlananGidisler(db: Db, isEmriIdleri: readonly number[]): Promi
   }
   return m;
 }
+// 2426: stok satın almayı ithal eder; firmanın fason kutusu çözücüyle gelir (sunucu/kablolama.ts).
+export type FasonKonumuCozucusu = (db: Db, firmaIdler: readonly number[]) => Promise<ReadonlyMap<number, number>>;
+let fasonKonumuCozucu: FasonKonumuCozucusu | null = null;
+export function fasonKonumuCozucusuKaydet(cozucu: FasonKonumuCozucusu | null): void { fasonKonumuCozucu = cozucu; }
 export type KaliteDurumuCozucusu = (db: Db, firmaIdler: readonly number[]) => Promise<ReadonlyMap<number, KmTedarikciDurumu>>;
 let kaliteDurumuCozucu: KaliteDurumuCozucusu | null = null;
 export function kaliteDurumuCozucusuKaydet(cozucu: KaliteDurumuCozucusu | null): void { kaliteDurumuCozucu = cozucu; }
@@ -1153,13 +1157,17 @@ export async function disOperasyonlar(db: Db): Promise<DisOperasyonlarCevabi> {
   // 1849 (C17): gidiş kaydıyla aynı sıra kuralı; ekran sırası gelmemiş adımda "Gönder"i kapatır, sunucu yine reddeder.
   const gonderim = await fasonGonderimleri(db, liste.map((x) => ({ isEmriId: x.isEmriId, uretimEmriId: x.uretimEmriId, adet: x.adet })));
   const plan = await planlananGidisler(db, liste.map((x) => x.isEmriId));
+  const satirlar = new Map((await s.fasonSiparisSatirlari(db, liste.map((x) => x.isEmriId))).map((r) => [r.isEmriId, r.id]));
+  const firmaIdleri = [...new Set(liste.flatMap((x) => (x.firmaId === null ? [] : [x.firmaId])))];
+  const kutular = fasonKonumuCozucu === null || firmaIdleri.length === 0 ? new Map<number, number>() : await fasonKonumuCozucu(db, firmaIdleri);
   return {
     hazir: true,
     operasyonlar: liste.map(({ ilkGidis, donusler, ...x }) => {
       const kalan = fasonKalani(x.adet, x.gonderilen, x.donen, x.hurda);
       return {
         ...x, gerceklesenGidis: ilkGidis, firmaAdi: x.firmaId === null ? null : (firmalar.get(x.firmaId)?.ad ?? null),
-        planlananGidis: plan.get(x.isEmriId) ?? null,
+        planlananGidis: plan.get(x.isEmriId) ?? null, siparisSatirId: satirlar.get(x.isEmriId) ?? null,
+        fasonKonumId: x.firmaId === null ? null : (kutular.get(x.firmaId) ?? null),
         gecikmeGun: gecikmeGunu(x.termin, x.ilkDonus, gun), gecikmeSonDonus: sonDonusGecikmesi(x.termin, x.sonDonus, kalan, gun),
         gecikmeAgirlikli: agirlikliGecikme(x.termin, donusler, kalan, gun), sirada: gonderim.get(x.isEmriId)?.siradaki ?? false,
       };

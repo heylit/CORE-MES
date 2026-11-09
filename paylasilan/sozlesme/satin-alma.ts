@@ -711,6 +711,9 @@ export const disOperasyonSemasi = z.object({
   // Adet ağırlıklı: her dönüşün (hurda dahil) termin aşımı adediyle; dönmeyen adet bugüne göre. Termin yoksa ikisi de boş.
   gecikmeSonDonus: z.number().int().nullable(),
   gecikmeAgirlikli: z.number().nullable(),
+  // 2426: mal kabul formu iş emriyle dolsun. Hizmet sipariş satırı ve firmanın stoktaki fason kutusu; bilinmiyorsa boş.
+  siparisSatirId: z.number().int().nullable(),
+  fasonKonumId: z.number().int().nullable(),
   // 1849: önceki iş emirleri bitti mi (fasona gönderilebilir mi); gidiş kaydıyla aynı kural.
   sirada: z.boolean(),
 });
