@@ -2,7 +2,7 @@ import { ikiliCevap, uc } from '#cekirdek/uc.ts';
 import { ikinciMenuSayacSemasi } from '#paylasilan/ikinci-menu.ts';
 import {
   acilisCevabi, disOperasyonlarCevabi, fasonSureleriCevabi, fasonSureleriSorgusu, ayarlarKaydetGovdesi, hizliAcGovdesi, talebimSemasi, taleplerimCevabi, taleplerimSorgusu, ayarlarSemasi, firmaParametresi, firmaSecenekleriCevabi, firmaSecenekleriSorgusu, katalogKaydetGovdesi, malzemeSecenekleriCevabi, malzemeSecenekleriSorgusu, katalogSemasi, katalogSilGovdesi, talepGovdesi, acikEmirlerCevabi, onTalepleriCevabi, onTalepYoksayGovdesi, onTalepGeriAlGovdesi,
-  iptaliGeriAlCevabi, iptaliGeriAlGovdesi, satinAlmaOzetiCevabi, degerlendirmeCevabi, kartAyrintilariCevabi, stokYokIstekleriCevabi, odemePlaniGovdesi, siparisTakibiCevabi, siparisBelgeleriCevabi, siparisBelgesiGovdesi, siparisBelgesiParametresi, siparisSatiriParametresi, siparisFaturalariCevabi, siparisFaturalariSorgusu, siparisFaturasiGovdesi, siparisKalemiDegistirGovdesi, siparisKapatGovdesi, teslimYontemiGovdesi, talepKaydetGovdesi, talepParametresi, talepSemasi, talepSilGovdesi, tamamCevabi, tedarikciKaydetGovdesi, tedarikciSemasi,
+  iptaliGeriAlCevabi, iptaliGeriAlGovdesi, talepAyirGovdesi, talepBirlestirGovdesi, satinAlmaOzetiCevabi, degerlendirmeCevabi, kartAyrintilariCevabi, stokYokIstekleriCevabi, odemePlaniGovdesi, siparisTakibiCevabi, siparisBelgeleriCevabi, siparisBelgesiGovdesi, siparisBelgesiParametresi, siparisSatiriParametresi, siparisFaturalariCevabi, siparisFaturalariSorgusu, siparisFaturasiGovdesi, siparisKalemiDegistirGovdesi, siparisKapatGovdesi, teslimYontemiGovdesi, talepKaydetGovdesi, talepParametresi, talepSemasi, talepSilGovdesi, tamamCevabi, tedarikciKaydetGovdesi, tedarikciSemasi,
   tedarikTerminiKaydetGovdesi, tedarikTerminiKaydetCevabi, tedarikTerminleriCevabi,
   kgFiyatiEkleGovdesi, kgFiyatiGecmisiCevabi, kgFiyatiGecmisiSorgusu, kgFiyatlariCevabi, malzemeKgFiyatlariCevabi, malzemeKgFiyatlariSorgusu,
 } from '#paylasilan/sozlesme/satin-alma.ts';
@@ -87,6 +87,15 @@ export const uclar = [
     yontem: 'POST', yol: '/satin-alma-talepleri/:id/iptali-geri-al', yetki: 'satin-alma.yaz', parametre: talepParametresi, govde: iptaliGeriAlGovdesi,
     cevap: iptaliGeriAlCevabi,
     isle: ({ db, kullanici, parametre, govde, denetimEki }) => servis.iptaliGeriAl(db, kullanici, parametre.id, govde, denetimEki),
+  }),
+  // 2414 a: talepleri birleştirme ve ayırma; teklif ve karar yokken (V2 a), satın almanın işi.
+  uc({
+    yontem: 'POST', yol: '/satin-alma-talepleri/birlestir', yetki: 'satin-alma.yaz', govde: talepBirlestirGovdesi, cevap: talepSemasi,
+    isle: ({ db, kullanici, govde }) => servis.talepleriBirlestir(db, kullanici, govde),
+  }),
+  uc({
+    yontem: 'POST', yol: '/satin-alma-talepleri/:id/ayir', yetki: 'satin-alma.yaz', parametre: talepParametresi, govde: talepAyirGovdesi, cevap: talepSemasi,
+    isle: ({ db, kullanici, parametre, govde }) => servis.talepAyir(db, kullanici, parametre.id, govde),
   }),
   uc({
     yontem: 'POST', yol: '/satin-alma-talepleri/:id/sil', yetki: 'satin-alma.talep-ac', parametre: talepParametresi, govde: talepSilGovdesi,

@@ -15,6 +15,9 @@ const RESTRICT_ANAHTARLARI = [
   'kalibrasyon_kaydi.alet_id -> olcu_aleti',
   // 2397 b: onay basamağında kullanılan rol silinmez; silinse basamak rolsüz kalır ve denetim sessizce gevşerdi.
   'satin_alma_onay_limiti.rol_id -> rol',
+  // 2414 a: birleşmiş kaynak ve kalemi kaynakta olan talep silinmez; silinse birleşik talep kaynağını, kalem geri döneceği yeri yitirirdi.
+  'satin_alma_talep.birlesen_talep_id -> satin_alma_talep',
+  'satin_alma_talep_kalemi.kaynak_talep_id -> satin_alma_talep',
   // Gerçek ihlal testi stokta: `stok.test.ts` DEP-14/12/13, DEP-09/13 ve DEP-57 bakiyeli konumu kapatmayı uçtan 409 BAGIMLI_KAYIT ile sınar.
   'stok_bakiye.konum_aktif -> stok_konum',
   'stok_bakiye.konum_id -> stok_konum',
@@ -93,5 +96,28 @@ describe('RESTRICT yabancı anahtar (bütün göçler, gerçek PostgreSQL)', () 
     assert.ok(['23503', '23001'].includes(String(ihlal?.iz.pgKodu)));
     await uygulama.tx((db) => db.sorgu('DELETE FROM rol WHERE id = $1', [bos]));
     assert.equal((await s.tek<{ n: number }>('SELECT count(*)::int AS n FROM rol WHERE id = ANY($1)', [[kullanilan, bos]]))?.n, 1);
+  });
+
+  test('2414 a: birleşik talebi ya da kalemi birleşikte olan kaynak talebi silmek 409 BAGIMLI_KAYIT; bağsız talep silinir', async () => {
+    const { vt: uygulama, sahip: s } = acik();
+    const kisi = (await s.tek<{ id: number }>("INSERT INTO kisi (ad) VALUES ('Deneme Kişi') RETURNING id"))!.id;
+    let sayac = 0;
+    const talep = async (birlesen: string | null = null): Promise<string> => (await s.tek<{ id: string }>(
+      `INSERT INTO satin_alma_talep (id, no, acan_kisi_id, baslik, talep_eden_kisi_id, birlesen_talep_id) VALUES (gen_random_uuid(), $3, $1, 'Deneme', $1, $2) RETURNING id`,
+      [kisi, birlesen, `RT-${++sayac}`]))!.id;
+    const birlesik = await talep();
+    const kaynak = await talep(birlesik);
+    const kalemKaynagi = await talep();
+    const bos = await talep();
+    await s.sorgu("INSERT INTO satin_alma_talep_kalemi (talep_id, id, sira, ad, kaynak_talep_id, kaynak_sira) VALUES ($1, gen_random_uuid(), 1, 'Deneme kalem', $2, 1)", [birlesik, kalemKaynagi]);
+    const sil = (id: string) => uygulama.tx((db) => db.sorgu('DELETE FROM satin_alma_talep WHERE id = $1', [id])).catch((h: unknown) => h);
+    for (const [id, kisit] of [[birlesik, 'satin_alma_talep_birlesen'], [kalemKaynagi, 'satin_alma_talep_kalemi_kaynak']] as const) {
+      const ihlal = kisitIhlali(await sil(id));
+      assert.equal(ihlal?.hata.kod, 'BAGIMLI_KAYIT', kisit);
+      assert.equal(ihlal?.iz.kisit, kisit);
+      assert.ok(['23503', '23001'].includes(String(ihlal?.iz.pgKodu)));
+    }
+    await sil(bos);
+    assert.equal((await s.tek<{ n: number }>('SELECT count(*)::int AS n FROM satin_alma_talep WHERE id = ANY($1)', [[birlesik, kaynak, kalemKaynagi, bos]]))?.n, 3);
   });
 });

@@ -22,11 +22,12 @@ export interface TalepSatiri {
   ihtiyacTarihi: string | null; notlar: string; durum: string; iptalNedeni: string;
   agirlikMaliyet: number | null; agirlikTermin: number | null; agirlikTedarikci: number | null; agirlikGaranti: number | null;
   teslimYontemi: 'firma_getirir' | 'biz_alacagiz' | null; uretimEmriId: number | null; surum: number; olusturma: string; guncelleme: string;
+  birlesenTalepId: string | null;
 }
 const TALEP = `id, no, baslik, birim, talep_eden_kisi_id AS "talepEdenKisiId", acan_kisi_id AS "acanKisiId", oncelik,
   ihtiyac_tarihi AS "ihtiyacTarihi", notlar, durum, iptal_nedeni AS "iptalNedeni", agirlik_maliyet AS "agirlikMaliyet",
   agirlik_termin AS "agirlikTermin", agirlik_tedarikci AS "agirlikTedarikci", agirlik_garanti AS "agirlikGaranti", teslim_yontemi AS "teslimYontemi", uretim_emri_id AS "uretimEmriId", surum,
-  ${ISO('olusturma')} AS olusturma, ${ISO('guncelleme')} AS guncelleme`;
+  ${ISO('olusturma')} AS olusturma, ${ISO('guncelleme')} AS guncelleme, birlesen_talep_id AS "birlesenTalepId"`;
 
 // kisiId verilirse yalnız o kişinin açtığı ya da adına açılan talepler.
 export function talepSatirlariOku(db: Db, kisiId: number | null, id: string | null = null): Promise<TalepSatiri[]> {
@@ -36,6 +37,11 @@ export function talepSatirlariOku(db: Db, kisiId: number | null, id: string | nu
       ORDER BY olusturma DESC, no DESC`,
     [kisiId, id],
   );
+}
+
+export function talepSatirlariIdlerle(db: Db, idler: readonly string[]): Promise<TalepSatiri[]> {
+  if (idler.length === 0) return Promise.resolve([]);
+  return db.sorgu<TalepSatiri>(`SELECT ${TALEP} FROM satin_alma_talep WHERE id = ANY($1::uuid[]) ORDER BY array_position($1::uuid[], id)`, [idler]);
 }
 
 export interface AltKayitlar {
@@ -1285,13 +1291,13 @@ export interface TerminKalemiOkuma {
 }
 export function terminKalemleriOku(db: Db): Promise<TerminKalemiOkuma[]> {
   return db.sorgu<TerminKalemiOkuma>(
-    `SELECT 'talep' AS kaynak, t.id AS "talepId", t.no AS "talepNo", t.durum AS "talepDurumu", to_char(t.ihtiyac_tarihi, 'YYYY-MM-DD') AS "ihtiyacTarihi",
+    `SELECT 'talep' AS kaynak, t.id AS "talepId", t.no AS "talepNo", t.durum AS "talepDurumu", to_char(coalesce(k.kaynak_ihtiyac_tarihi, t.ihtiyac_tarihi), 'YYYY-MM-DD') AS "ihtiyacTarihi",
         k.id AS "kalemId", k.ad, k.birim, k.miktar::text AS miktar, c.malzeme_no AS "malzemeNo", k.is_emri_id AS "isEmriId",
         NULL::uuid AS "teklifId", NULL::text AS "siparisNo", NULL::text AS "beklenenTeslim", t.yil, t.sira, k.sira AS ksira
        FROM satin_alma_talep_kalemi k JOIN satin_alma_talep t ON t.id = k.talep_id LEFT JOIN satin_alma_katalog c ON c.id = k.katalog_id
       WHERE t.durum IN ('taslak', 'teklif_isteniyor', 'degerlendirme', 'onayda')
      UNION ALL
-     SELECT 'siparis', t.id, t.no, t.durum, to_char(t.ihtiyac_tarihi, 'YYYY-MM-DD'),
+     SELECT 'siparis', t.id, t.no, t.durum, to_char(coalesce(k.kaynak_ihtiyac_tarihi, t.ihtiyac_tarihi), 'YYYY-MM-DD'),
         k.id, k.ad, s.birim, (s.miktar - coalesce(m.toplam, 0))::text, c.malzeme_no, k.is_emri_id,
         s.teklif_id, coalesce(p.no, p.siparis_no), to_char(p.beklenen_teslim, 'YYYY-MM-DD'), t.yil, t.sira, k.sira
        FROM satin_alma_siparis_satiri s
@@ -1342,7 +1348,7 @@ export function hatirlatmaTalepleriOku(db: Db): Promise<HatirlatmaTalebiOkuma[]>
             LEFT JOIN LATERAL (SELECT sum(x.miktar) AS toplam FROM satin_alma_teslim x WHERE x.siparis_satiri_id = s.id) m ON true
             WHERE s.talep_id = p.talep_id AND s.teklif_id = p.teklif_id AND coalesce(m.toplam, 0) < s.miktar)), '[]') AS siparisler
        FROM satin_alma_talep t LEFT JOIN satin_alma_karar k ON k.talep_id = t.id
-      WHERE t.durum NOT IN ('iptal', 'teslim_alindi')
+      WHERE t.durum NOT IN ('iptal', 'teslim_alindi') AND t.birlesen_talep_id IS NULL
       ORDER BY t.yil, t.sira`,
   );
 }
@@ -1363,4 +1369,65 @@ export async function hatirlatmaKapat(db: Db, anahtarlar: readonly string[]): Pr
 // 2413 a: iptalden önceki durum yalnız sunucunundur (gövdeden yazılmaz); kayıtlı değilse null.
 export async function iptalOncesiDurum(db: Db, id: string): Promise<TalepDurumu | null> {
   return (await db.tek<{ d: TalepDurumu | null }>('SELECT iptal_oncesi_durum AS d FROM satin_alma_talep WHERE id = $1', [id]))?.d ?? null;
+}
+
+// 2414 a: birleşen talebin kalemlerinin kaynakları (kaynak talep, sırası, ihtiyaç tarihi, birimi).
+export interface KalemKaynagi { talepId: string; kalemId: string; kaynakTalepId: string; kaynakIhtiyacTarihi: string | null; kaynakBirim: string | null }
+export function kalemKaynaklariOku(db: Db, talepIdleri: readonly string[]): Promise<KalemKaynagi[]> {
+  return db.sorgu<KalemKaynagi>(
+    `SELECT talep_id AS "talepId", id AS "kalemId", kaynak_talep_id AS "kaynakTalepId", to_char(kaynak_ihtiyac_tarihi, 'YYYY-MM-DD') AS "kaynakIhtiyacTarihi",
+        kaynak_birim AS "kaynakBirim"
+       FROM satin_alma_talep_kalemi WHERE talep_id = ANY($1::uuid[]) AND kaynak_talep_id IS NOT NULL ORDER BY talep_id, sira`,
+    [talepIdleri],
+  );
+}
+// K7: birleştirilecek talepler tek işlemde, kimlik sırasıyla kilitlenir (aynı anda iki birleştirme kilitlenmez); bulunanlar döner.
+export async function talepleriKilitle(db: Db, idler: readonly string[]): Promise<string[]> {
+  return (await db.sorgu<{ id: string }>('SELECT id FROM satin_alma_talep WHERE id = ANY($1::uuid[]) ORDER BY id FOR UPDATE', [idler])).map((r) => r.id);
+}
+// Kalemler kaynak sırası ve kendi sırasıyla birleşen talebe taşınır; anahtar (talep, kalem) değişir. Teklif satırı, karar, senaryo ve
+// sipariş satırı yokken çağrılır (2414 V2 a): kalem yabancı anahtarlarında ON UPDATE yoktur.
+export async function kalemleriBirlesenTalebeTasi(db: Db, birlesenId: string, kaynakIdleri: readonly string[]): Promise<void> {
+  await db.sorgu(
+    `WITH sirali AS (
+       SELECT k.talep_id, k.id, row_number() OVER (ORDER BY array_position($2::uuid[], k.talep_id), k.sira) AS yeni_sira
+         FROM satin_alma_talep_kalemi k WHERE k.talep_id = ANY($2::uuid[]))
+     UPDATE satin_alma_talep_kalemi k SET talep_id = $1, sira = s.yeni_sira, kaynak_talep_id = k.talep_id, kaynak_sira = k.sira,
+         kaynak_ihtiyac_tarihi = t.ihtiyac_tarihi, kaynak_birim = t.birim
+       FROM sirali s, satin_alma_talep t
+      WHERE k.talep_id = s.talep_id AND k.id = s.id AND t.id = k.talep_id`,
+    [birlesenId, kaynakIdleri],
+  );
+  await db.sorgu('UPDATE satin_alma_talep SET birlesen_talep_id = $1, surum = surum + 1, guncelleme = now() WHERE id = ANY($2::uuid[])', [birlesenId, kaynakIdleri]);
+}
+// Ayırma: kalemler kaynağına, kaynaktaki sırasıyla döner; kaynak talebin birleşme bağı kalkar.
+export async function kalemleriKaynagaDondur(db: Db, birlesenId: string, kaynakIdleri: readonly string[]): Promise<void> {
+  await db.sorgu(
+    `UPDATE satin_alma_talep_kalemi SET talep_id = kaynak_talep_id, sira = kaynak_sira, kaynak_talep_id = NULL, kaynak_sira = NULL,
+         kaynak_ihtiyac_tarihi = NULL, kaynak_birim = NULL
+      WHERE talep_id = $1 AND kaynak_talep_id = ANY($2::uuid[])`,
+    [birlesenId, kaynakIdleri],
+  );
+  await db.sorgu('UPDATE satin_alma_talep SET birlesen_talep_id = NULL, surum = surum + 1, guncelleme = now() WHERE id = ANY($2::uuid[]) AND birlesen_talep_id = $1',
+    [birlesenId, kaynakIdleri]);
+}
+// Dört göz (madde 8): kaynakların açanları, talep edenleri ve geçmişleri birleşen talebin talep eden geçmişine girer. Okuma erişimine girmez (K3).
+export async function talepEdenGecmisiniKopyala(db: Db, hedef: string, kaynakIdleri: readonly string[]): Promise<void> {
+  await db.sorgu(
+    `INSERT INTO satin_alma_talep_eden_gecmisi (talep_id, kisi_id)
+     SELECT $1, k FROM (
+       SELECT acan_kisi_id AS k FROM satin_alma_talep WHERE id = ANY($2::uuid[])
+       UNION SELECT talep_eden_kisi_id FROM satin_alma_talep WHERE id = ANY($2::uuid[])
+       UNION SELECT kisi_id FROM satin_alma_talep_eden_gecmisi WHERE talep_id = ANY($2::uuid[])) x
+     WHERE k IS NOT NULL ON CONFLICT DO NOTHING`,
+    [hedef, kaynakIdleri],
+  );
+}
+// Son kaynak da ayrılınca kalemsiz birleşen talep silinmez, iptal edilir: numara ve geçmiş kalır (Veri). Sürüm çağıranda arttı.
+export async function kalemsizTalebiIptalEt(db: Db, id: string, neden: string): Promise<void> {
+  await db.sorgu(
+    `UPDATE satin_alma_talep SET durum = 'iptal', iptal_nedeni = $2, iptal_oncesi_durum = NULL, durum_zamani = now(), surum = surum + 1, guncelleme = now()
+      WHERE id = $1 AND NOT EXISTS (SELECT 1 FROM satin_alma_talep_kalemi WHERE talep_id = $1)`,
+    [id, neden],
+  );
 }

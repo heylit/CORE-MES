@@ -4,7 +4,7 @@ import type { Talep, TalepYazimi } from '#paylasilan/sozlesme/satin-alma.ts';
 import {
   VARSAYILAN_ONAY_LIMITLERI, talebinAlimlari,
   FIYAT_IZI_SINIRI, GECISLER, ISLEM, degisiklikReddi, degisiklikTuru, dortGozSonucu, fazlaTeslim, finanstanEklenenKurlar, fiyatIzleri, kullanilanParaBirimleri, gecisVarMi, gkkKalitesi, gorunenDurum, izi,
-  ILETILER, askidakiTedarikciReddi, kaliteSiparisReddi, kartBirimiReddi, yeniSiparisFirmalari, gecikmeGunu, satinAlinabilirKartReddi, hizliBaslik, hizliKalemReddi, kararDegistiMi, kartsizSiparisReddi, talepKartiReddi, kararOnayliMi, talepFisiGiderMi, ondalikKiyas, ondalikTopla, siparisFaturaFirmasi, faturaEslesmeUyarilari, siparisReddi, terminsizSiparisReddi, terminDurumu, terminTakibi, type TerminKalemi, talepEdenGorunumu, tamGorurMu, teklifKuru, teslimDurumu,
+  ILETILER, askidakiTedarikciReddi, kaliteSiparisReddi, kartBirimiReddi, yeniSiparisFirmalari, gecikmeGunu, satinAlinabilirKartReddi, hizliBaslik, hizliKalemReddi, kararDegistiMi, kartsizSiparisReddi, talepKartiReddi, kararOnayliMi, talepFisiGiderMi, ondalikKiyas, ondalikTopla, siparisFaturaFirmasi, faturaEslesmeUyarilari, siparisReddi, terminsizSiparisReddi, terminDurumu, terminTakibi, type TerminKalemi, talepEdenGorunumu, birlesikTalep, tamGorurMu, teklifKuru, teslimDurumu,
 } from './kurallar.ts';
 import { birimFiyati, ondalikCarp, stokTutari, uygulananKgFiyati } from './kurallar.ts';
 import { agirlikliGecikme, fasonKalani, sonDonusGecikmesi } from './kurallar.ts';
@@ -721,4 +721,24 @@ test('2413 a: geri alma hareketi gerekçeyi, eski iptal nedenini ve türetmeyi y
   assert.equal(iptalGeriAlmaHareketi('Yanlış talep', 'Yanlışlıkla iptal', false), 'İptal geri alındı (iptal nedeni: Yanlış talep): Yanlışlıkla iptal');
   assert.equal(iptalGeriAlmaHareketi('', 'G', true), 'İptal geri alındı, önceki durum veriden türetildi: G');
   assert.equal(iptalGeriAlmaHareketi('x'.repeat(2000), 'G', false).length, 1000);
+});
+
+test('2414 a K3 K4: kaynak talebin görünümü birleşik talepten yalnız kendi kalemleriyle süzülür; seçilen tedarikçi yalnız kendi kalemini kapsayandır; kaynak listesi düşer', () => {
+  const kalem = (id: string) => ({ id, katalogId: null, ad: 'Kalem ' + id, ozellik: '', miktar: '1', birim: 'adet', kategori: '' });
+  const q = (id: string, kalemId: string) => ({ id, tedarikciAdi: 'Firma ' + id, firmaId: 1, fiyatlar: [{ kalemId, birimFiyat: '5' }] }) as unknown as Talep['teklifler'][number];
+  const birlesen = { ...T, id: 'm', kalemler: [kalem('a1'), kalem('b1')], teklifler: [q('x', 'a1'), q('y', 'b1')],
+    kalemBaglari: [{ kalemId: 'b1', uygulanan: null, fason: null }],
+    karar: { mod: 'bolunmus', teklifId: null, bolunme: [{ kalemId: 'a1', teklifId: 'x' }, { kalemId: 'b1', teklifId: 'y' }], sabitKurlar: [] },
+    kaynaklar: [{ talepId: 'A', no: 'ST-A', talepEdenAdi: 'A kişisi', kalemIdleri: ['a1'], ihtiyacTarihi: null, birim: null },
+      { talepId: 'B', no: 'ST-B', talepEdenAdi: 'B kişisi', kalemIdleri: ['b1'], ihtiyacTarihi: null, birim: null }] } as unknown as Talep;
+  const kaynak = { ...T, id: 'A', kalemler: [], birlesme: { talepId: 'm', no: 'ST-M', durum: 'taslak' } } as unknown as Talep;
+  const g = talepEdenGorunumu(kaynak, 5, birlesen);
+  assert.deepEqual([g.kalemler.map((k) => k.id), g.secilenTedarikciler, g.kalemBaglari, g.karar, g.teklifler], [['a1'], [{ firmaId: 1, ad: 'Firma x' }], [], null, []]);
+  assert.equal('kaynaklar' in talepEdenGorunumu(birlesen, 5), false);
+  assert.deepEqual(birlesikTalep('n', [
+    { no: 'ST-1', ihtiyacTarihi: '2026-12-01', oncelik: 'dusuk', uretimEmriId: 3 }, { no: 'ST-2', ihtiyacTarihi: null, oncelik: 'acil', uretimEmriId: 4 },
+  ]).baslik, 'Birleşik talep: ST-1, ST-2');
+  const b = birlesikTalep('n', [{ no: 'ST-1', ihtiyacTarihi: '2026-12-01', oncelik: 'dusuk', uretimEmriId: 3 }, { no: 'ST-2', ihtiyacTarihi: '2026-11-01', oncelik: 'normal', uretimEmriId: 3 }]);
+  assert.deepEqual([b.ihtiyacTarihi, b.oncelik, b.uretimEmriId, b.birim, b.durum], ['2026-11-01', 'normal', 3, null, 'taslak']);
+  assert.equal(birlesikTalep('n', [{ no: 'ST-1', ihtiyacTarihi: null, oncelik: 'dusuk', uretimEmriId: 3 }, { no: 'ST-2', ihtiyacTarihi: null, oncelik: 'dusuk', uretimEmriId: 4 }]).uretimEmriId, null);
 });
