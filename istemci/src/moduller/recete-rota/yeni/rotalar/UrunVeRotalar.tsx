@@ -17,6 +17,7 @@ import { DuzenlemePaneli, PanelSeridi } from './DuzenlemePaneli.tsx';
 import { PanelTutamagi } from './PanelTutamagi.tsx';
 import { RevizyonCubugu } from './RevizyonCubugu.tsx';
 import { UrunListesi } from './UrunListesi.tsx';
+import { RotaExcelPenceresi } from './ExcelGirisi.tsx';
 
 // Ürün ve rotalar: ürün listesi, akış şeması ya da akış tablosu, revizyon çubuğu ve düzenleme paneli. Açılışta yazma yoktur; rota
 // değişikliği ilk düzenlemede taslağa yazılır.
@@ -38,6 +39,7 @@ export function UrunVeRotalar(o: EkranOzellikleri) {
   const kokId = kok !== null && h.malzeme.has(kok) ? kok : urunler[0]?.id ?? null;
   const [revUrun, setRevUrun] = useState<string | null>(null);
   const [liste, setListe] = useState(false);
+  const [excelAcik, setExcelAcik] = useState(false);
   const [gorunumTercihi, setGorunum] = useState(() => tercihOku('gorunum', 'sema'));
   // Patlamış rota (1476-F) emri açabilenindir; işlemi olmayanda kalmış tercih şemaya düşer.
   const gorunum = gorunumTercihi === 'patlamis' && !o.yetki.rotaEmreKopyala ? 'sema' : gorunumTercihi;
@@ -156,6 +158,7 @@ export function UrunVeRotalar(o: EkranOzellikleri) {
   const digerIslemler: MenuOgesi[] = [
     { anahtar: 'liste', baslik: liste ? 'Şemaya dön' : 'Ürün listesi', simge: 'list', sec: () => { setListe(!liste); } },
     ...(o.yetki.rotaYaz ? [{ anahtar: 'yeni', baslik: 'Yeni rota', simge: 'plus' as const, sec: () => { setListe(false); secimYaz({ tur: 'yeniRota' }); } }] : []),
+    ...(o.yetki.rotaYaz ? [{ anahtar: 'excel', baslik: 'Excel ile rota adımları', simge: 'file' as const, sec: () => { setExcelAcik(true); } }] : []),
     ...(!liste && kokId ? [
       { anahtar: 'ara', baslik: araKartlar ? 'Ara kartları gizle' : 'Ara kartları göster', simge: 'box' as const,
         sec: () => { tercihYazVeAyarla('ara-kartlar', !araKartlar, setAraKartlar); } },
@@ -320,6 +323,7 @@ export function UrunVeRotalar(o: EkranOzellikleri) {
           <Dugme className="tc-rr1-kd" tur="birincil" simge="clipboard-check" onClick={() => { o.git('orders', `urun:${kokId}`); }}>Üretim emri oluştur</Dugme>
         )}
         <Menu etiket="Diğer rota işlemleri" ogeler={digerIslemler} />
+        {excelAcik && <RotaExcelPenceresi durum={o.veri.durum} kapat={() => { setExcelAcik(false); }} />}
       </div>
       <OnayPenceresi
         acik={duzen.tasimaOnayi !== null} baslik="Dalın yeri değişsin mi?" onayMetni="Taşı" vazgec={() => { duzen.tasimaKarari(false); }}

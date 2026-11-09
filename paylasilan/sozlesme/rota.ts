@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { ondalikMetinSemasi } from '../ondalik.ts';
+import { TOPLU_EN_COK_SATIR } from '../toplu.ts';
 import { tarihSemasi } from '../zaman.ts';
 import { OPERASYON_GRUP_KODLARI } from './istasyonlar.ts';
 import { EMIR_TURLERI } from './uretim-emirleri.ts';
@@ -579,6 +580,49 @@ export const emreKopyalaTopluCevabi = z.object({ eklenen: z.number().int().min(0
 export type EmreKopyalaTopluSatiri = z.input<typeof emreKopyalaTopluSatiri>;
 export type EmreKopyalaTopluGirdisi = z.output<typeof emreKopyalaTopluGovdesi>;
 export type EmreKopyalaTopluCevabi = z.output<typeof emreKopyalaTopluCevabi>;
+
+// Excel ile rota adımları (2627, Ürün ve rotalar): satır bir ürünün bir adımıdır. Ürünün açık taslağı varsa ona, yoksa yürürlükteki
+// revizyondan (o da yoksa boş) açılan taslağa yazılır; onaya gönderilmez. OP numarası dolu satır o adımı günceller, boş satır yeni adımdır
+// (numarayı sunucu verir). Güncellemede gelmeyen alan değişmez; dosyada olmayan adım silinmez. Hepsi tek işlemde; biri reddedilirse hiçbiri kalmaz.
+export const ROTA_TOPLU_EN_COK = TOPLU_EN_COK_SATIR;
+// Önizlemenin okuduğu revizyon (Veri koşulu): açık revizyon ya da yürürlükteki, sürümüyle; ürünün hiç revizyonu yoksa null. Yazım anında
+// ürünün durumu bu değilse (taslak değişti, açıldı ya da yürürlükteki değişti) satır reddedilir: OP numarası başka adımı gösterebilir.
+export const rotaExcelDayanagi = z.object({ revizyonId: KIMLIK, surum: z.number().int().min(0) }).strict().nullable();
+export const rotaAdimTopluSatiri = z.object({
+  satir: z.number().int().min(1).max(1_048_576),
+  urunId: MALZEME_KIMLIGI,
+  dayanak: rotaExcelDayanagi,
+  opNo: KIMLIK.nullable(),
+  operasyonTipiId: KIMLIK.optional(),
+  ad: metin(80, 'Adım adı zorunlu.').optional(),
+  // Excel'de istasyon ya da makine seçilir; kişi ve fason kaynağı sayfada verilir.
+  kaynak: z.object({ tur: z.enum(['istasyon', 'makine']), id: KIMLIK }).strict().optional(),
+  ayarSuresiDk: sure(99_999).optional(),
+  birimSureDk: z.number().positive('Birim süre sıfırdan büyük olmalı.').max(99_999).optional(),
+}).strict();
+const dayanakMetni = (d: z.output<typeof rotaExcelDayanagi>): string => (d === null ? '-' : `${String(d.revizyonId)}:${String(d.surum)}`);
+export const rotaAdimTopluGovdesi = z.object({
+  satirlar: z.array(rotaAdimTopluSatiri).min(1).max(ROTA_TOPLU_EN_COK)
+    .refine((x) => new Set(x.map((y) => y.satir)).size === x.length, 'Satır numarası iki kez var.')
+    .refine((x) => {
+      const n = x.flatMap((y) => (y.opNo === null ? [] : [`${String(y.urunId)}|${String(y.opNo)}`]));
+      return new Set(n).size === n.length;
+    }, 'Aynı ürünün aynı adımı dosyada iki kez var.')
+    .refine((x) => {
+      const d = new Map<number, string>();
+      return x.every((y) => (d.get(y.urunId) ?? d.set(y.urunId, dayanakMetni(y.dayanak)).get(y.urunId)) === dayanakMetni(y.dayanak));
+    }, 'Aynı ürünün satırları farklı revizyona dayanıyor.'),
+}).strict();
+// Excel'in açtığı yeni adımın Excel'de olmayan alanları (sayfadaki "adım ekle" ile aynı seçimler; sayfa ekranın alan adlarını kullanır).
+export const YENI_ADIM_VARSAYILANI = {
+  islemSuresiDk: null, degisimSuresiDk: null, terminGun: null, bagimlilik: 'bekleyen', devirAdedi: null, firePayiYuzde: 0, makineKullanimi: 'tek',
+  enKucukParca: null, yenidenAyar: false, ilkParca: 'her_kurulum', hazirlikDk: null, ayar: true, ayarDk: null, dal: null, adetCarpani: null,
+} as const;
+// taslaklar: Excel'in yazdığı (açtığı ya da değiştirdiği) taslak revizyon sayısı.
+export const rotaAdimTopluCevabi = z.object({ eklenen: z.number().int().min(0), guncellenen: z.number().int().min(0), taslaklar: z.number().int().min(0) });
+export type RotaAdimTopluSatiri = z.input<typeof rotaAdimTopluSatiri>;
+export type RotaAdimTopluGirdisi = z.output<typeof rotaAdimTopluGovdesi>;
+export type RotaAdimTopluCevabi = z.output<typeof rotaAdimTopluCevabi>;
 
 // Patlamış rota (1476, 1481 a): donmuş anlık görüntü; düğüm yolu "0" kök, "0.2" kökün 2. ürün bileşeni.
 export const patlatmaParametresi = z.object({ id: yolKimligi });

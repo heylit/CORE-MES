@@ -1473,6 +1473,98 @@ describe('rotalar (gerçek PostgreSQL)', () => {
     assert.equal(e.kaynakRotaRevizyonId, rev);
     assert.equal(e.isEmirleri.length, 2);
   });
+  test('2627: Excel rota adımları taslağa yazar (yoksa yürürlükteki revizyondan açar), onaya göndermez; satırlı ret hiçbir şey bırakmaz', async () => {
+    const urun = await mamulAc();
+    const rev = await yururlugeAlinmisRota(urun, [yeniAdim(), yeniAdim({ ad: 'İkinci' })]);
+    const r0 = await ayrinti(rev);
+    const [op1, op2] = r0.adimlar.map((a) => a.opNo);
+    const yol = '/rota/adimlar/toplu-kaydet';
+    const taslakId = async (u: number) => (await vt().tek<{ id: number }>("SELECT id FROM rota_revizyonu WHERE malzeme_id = $1 AND durum = 'taslak'", [u]))?.id ?? null;
+    const yururlukteDayanak = { revizyonId: rev, surum: r0.revizyon.surum };
+    const govde = { satirlar: [
+      { satir: 2, urunId: urun, dayanak: yururlukteDayanak, opNo: op1, ad: 'Yeni ad', ayarSuresiDk: 45 },
+      { satir: 3, urunId: urun, dayanak: yururlukteDayanak, opNo: null, operasyonTipiId: tip('TRN'), ad: 'Ek adım', kaynak: { tur: 'makine', id: makineB }, birimSureDk: 3 },
+    ] };
+    assert.equal((await istek(c.operator, 'POST', yol, govde)).statusCode, 403);
+    assert.equal((await istek(c.planlama, 'POST', yol, govde, null)).statusCode, 400);
+    // Aynı ürünün satırları farklı revizyona dayanamaz.
+    const karisik = await istek(c.planlama, 'POST', yol, { satirlar: [govde.satirlar[0], { ...govde.satirlar[1], dayanak: null }] });
+    assert.equal(karisik.statusCode, 400, karisik.body);
+    assert.equal(await taslakId(urun), null);
+    const kabul = await istek(c.planlama, 'POST', yol, govde);
+    assert.equal(kabul.statusCode, 200, kabul.body);
+    assert.deepEqual(kabul.json(), { eklenen: 1, guncellenen: 1, taslaklar: 1 });
+    const id = await taslakId(urun);
+    assert.ok(id !== null);
+    const t = await ayrinti(id);
+    assert.equal(t.revizyon.durum, 'taslak');
+    assert.deepEqual(t.adimlar.map((a) => [a.opNo === op1 || a.opNo === op2 ? a.opNo : 'yeni', a.ad, a.ayarSuresiDk === null ? null : Number(a.ayarSuresiDk), Number(a.birimSureDk)]), [
+      [op1, 'Yeni ad', 45, 2], [op2, 'İkinci', 30, 2], ['yeni', 'Ek adım', null, 3],
+    ]);
+    assert.deepEqual(t.adimlar[2]?.kaynak && { tur: t.adimlar[2].kaynak.tur, id: t.adimlar[2].kaynak.id }, { tur: 'makine', id: makineB });
+    assert.equal((await ayrinti(rev)).adimlar[0]?.ad, 'Deneme adım');
+    // Veri koşulu: yürürlükteki revizyona dayanan dosya, arada taslak açılmışsa 409 alır (OP numarası başka adımı gösterebilir).
+    const eskiDosya = await istek(c.planlama, 'POST', yol, { satirlar: [{ satir: 2, urunId: urun, dayanak: yururlukteDayanak, opNo: op2, ad: 'Yazılmayacak' }] });
+    assert.equal(eskiDosya.statusCode, 409, eskiDosya.body);
+    assert.match(eskiDosya.json<{ mesaj: string }>().mesaj, /^Satır 2: Rota bu arada değişti/);
+    // İkinci dosya aynı taslağa yazar; olmayan OP satır numarasıyla reddedilir ve hiçbir şey değişmez.
+    const surum = t.revizyon.surum;
+    const dayanak = { revizyonId: id, surum };
+    const red = await istek(c.planlama, 'POST', yol, { satirlar: [
+      { satir: 4, urunId: urun, dayanak, opNo: op2, ad: 'Yazılmayacak' },
+      { satir: 5, urunId: urun, dayanak, opNo: 999, ad: 'Yok' },
+    ] });
+    assert.equal(red.statusCode, 422, red.body);
+    assert.deepEqual(red.json<{ mesaj: string; ayrinti: unknown }>().mesaj, 'Satır 5: OP 999 bu ürünün taslağında yok.');
+    assert.equal((await ayrinti(id)).revizyon.surum, surum);
+    const eksik = await istek(c.planlama, 'POST', yol, { satirlar: [{ satir: 7, urunId: urun, dayanak, opNo: null, ad: 'Tipsiz' }] });
+    assert.equal(eksik.statusCode, 422, eksik.body);
+    assert.match(eksik.json<{ mesaj: string }>().mesaj, /^Satır 7: Yeni adımda operasyon tipi/);
+    // Taslak önizlemeden sonra değişirse (başka yazım sürümü artırır) eski sürümlü dosya 409 alır ve hiçbir şey yazılmaz.
+    assert.equal((await istek(c.planlama, 'POST', yol, { satirlar: [{ satir: 2, urunId: urun, dayanak, opNo: op2, ad: 'Araya giren' }] })).statusCode, 200);
+    const sonra = await ayrinti(id);
+    const bayat = await istek(c.planlama, 'POST', yol, { satirlar: [{ satir: 8, urunId: urun, dayanak, opNo: op1, ad: 'Bayat' }] });
+    assert.equal(bayat.statusCode, 409, bayat.body);
+    assert.match(bayat.json<{ mesaj: string }>().mesaj, /^Satır 8: Rota bu arada değişti/);
+    assert.equal((await ayrinti(id)).revizyon.surum, sonra.revizyon.surum);
+    assert.equal((await ayrinti(id)).adimlar[0]?.ad, 'Yeni ad');
+    // Rotası olmayan ürüne boş taslak açılır (dayanak yok); revizyonu olan ürüne dayanaksız dosya 409 alır. Onay bekleyen rotaya yazılmaz.
+    const rotasiz = await mamulAc();
+    const ilkAdim = { satir: 2, urunId: rotasiz, dayanak: null, opNo: null, operasyonTipiId: tip('TRN'), ad: 'İlk adım', kaynak: { tur: 'makine', id: makineA } };
+    const bos = await istek(c.planlama, 'POST', yol, { satirlar: [ilkAdim] });
+    assert.equal(bos.statusCode, 200, bos.body);
+    assert.equal((await ayrinti((await taslakId(rotasiz))!)).adimlar.length, 1);
+    assert.equal((await istek(c.planlama, 'POST', yol, { satirlar: [{ ...ilkAdim, ad: 'İkinci kez' }] })).statusCode, 409);
+    const onayda = await mamulAc();
+    const ac = (await taslakAc(onayda)).json<KomutCevabi>();
+    const k = (await kaydet(ac.id, ac.surum, [yeniAdim()])).json<KomutCevabi>();
+    assert.equal((await komut(ac.id, 'onaya-gonder', { surum: k.surum }, c.planlama)).statusCode, 200);
+    const onayRed = await istek(c.planlama, 'POST', yol, { satirlar: [{ satir: 9, urunId: onayda, dayanak: null, opNo: null, operasyonTipiId: tip('TRN'), ad: 'X' }] });
+    assert.equal(onayRed.statusCode, 422, onayRed.body);
+    assert.match(onayRed.json<{ mesaj: string }>().mesaj, /^Satır 9: Ürünün rotası onay bekliyor/);
+    // Rota sahibi B1: fason adıma Excel'de makine yazılırsa adım iç adıma döner, fasonun takvim günü düşer.
+    const firma = (await tamam<{ firma: { id: number } }>(c.yonetici, 'POST', '/musteri-tedarikci/firmalar/ekle', { ad: `Deneme fasoncu ${++sayac}`, tur: 'tedarikci', fason: true })).firma;
+    const fUrun = await mamulAc();
+    const fRev = await yururlugeAlinmisRota(fUrun, [yeniAdim({ kaynak: { tur: 'fason', id: firma.id }, ayarSuresiDk: null, birimSureDk: null, terminGun: 5 })]);
+    const f0 = await ayrinti(fRev);
+    const icAdim = await istek(c.planlama, 'POST', yol, { satirlar: [
+      { satir: 2, urunId: fUrun, dayanak: { revizyonId: fRev, surum: f0.revizyon.surum }, opNo: f0.adimlar[0]!.opNo, kaynak: { tur: 'makine', id: makineA }, ayarSuresiDk: 10, birimSureDk: 2 },
+    ] });
+    assert.equal(icAdim.statusCode, 200, icAdim.body);
+    const fa = (await ayrinti((await taslakId(fUrun))!)).adimlar[0]!;
+    assert.deepEqual([fa.kaynak?.tur, fa.kaynak?.id, fa.terminGun], ['makine', makineA, null]);
+    // Mimar N3 (2681): firmasız fason adımlı taslakta başka adım ve firmasız adımın adı Excel'le değişir; adım firmasız kalır.
+    const fsUrun = await mamulAc();
+    const fsRev = await yururlugeAlinmisRota(fsUrun, [yeniAdim(), yeniAdim({ ad: 'Kaplama', kaynak: { tur: 'fason', id: null }, ayarSuresiDk: null, birimSureDk: null, terminGun: 5 })]);
+    const fs0 = await ayrinti(fsRev);
+    const firmasizYaz = await istek(c.planlama, 'POST', yol, { satirlar: [
+      { satir: 2, urunId: fsUrun, dayanak: { revizyonId: fsRev, surum: fs0.revizyon.surum }, opNo: fs0.adimlar[0]!.opNo, ad: 'Torna (Excel)' },
+      { satir: 3, urunId: fsUrun, dayanak: { revizyonId: fsRev, surum: fs0.revizyon.surum }, opNo: fs0.adimlar[1]!.opNo, ad: 'Kaplama (Excel)' },
+    ] });
+    assert.equal(firmasizYaz.statusCode, 200, firmasizYaz.body);
+    const fsT = (await ayrinti((await taslakId(fsUrun))!)).adimlar;
+    assert.deepEqual([fsT[0]?.ad, fsT[1]?.ad, fsT[1]?.kaynak, fsT[1]?.terminGun], ['Torna (Excel)', 'Kaplama (Excel)', { tur: 'fason', id: null }, 5]);
+  });
   test('malzeme arama kullanımdaki kartları türe göre verir; hepsi istenince taslak kart da gelir', async () => {
     const mm = await mamulAc();
     const mmAdi = `Deneme mamul ${String(sayac)}`;

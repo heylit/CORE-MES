@@ -13,6 +13,7 @@ import { azOlcumUyarisi, olcumOzeti, olcumPenceresi, bekleyenOlcum, degisenTurle
 import { EK_ADIM_SARTNAME_BASLAMIS, EK_ADIM_SARTNAME_KAPALI, EK_ADIM_SARTNAME_ROTA, ekAdimSartnameIhlali } from './kurallar.ts';
 import { adimDegerleriDenetle, cozulmusDegerler, degerHatasi, eksikZorunlular, kapsamUyarMi, sartnameOnayEngeli, sartnameSablonuDenetle, yayinEksigi } from './kurallar.ts';
 import { adimliKontrolListesi, adimliTalimatMetni, eskiTalimatAdimi, kontrolAyrisi, kontrolKur, talimatAdimiHatasi } from './kurallar.ts';
+import { AYRILMIS_SURE, excelAdimiUygula, excelDayanagiTutar, excelYeniAdimi } from './kurallar.ts';
 import type { GerceklesenSatiri, SartnameAlani } from './kurallar.ts';
 import type { AgacRotasi, FarkAdimi, HazirlikAdimi, KomutBaglami, TaslakAdimi } from './kurallar.ts';
 
@@ -730,5 +731,35 @@ describe('1476 patlamış rota ve çok katmanlı emir', () => {
     assert.deepEqual(c.girdiler.map((x) => [x.opNo, x.dal, x.onculler?.map((o) => o.opNo)]), [
       [1010, 'K1/A', []], [1020, 'K1/B', []], [1030, 'K1', [1010]], [10, null, [1020, 1030]],
     ]);
+  });
+});
+
+describe('Excel ile rota adımları (2627)', () => {
+  const hedef = () => ({ operasyonTipiId: 1, ad: 'Adım', kaynak: { tur: 'fason', id: 4 } as { tur: string; id: number | null } | null,
+    ayarSuresiDk: '30' as number | string | null, birimSureDk: 2 as number | string | null, islemSuresiDk: null, degisimSuresiDk: null, terminGun: 5 as number | null });
+  test('gelen alan yazılır, gelmeyen değişmez; kaynak verilince fason termini düşer; hazırlık değişimi bildirilir', () => {
+    const h = hedef();
+    assert.deepEqual(excelAdimiUygula(h, { ad: 'Yeni' }), { hazirlikDegisti: false });
+    assert.deepEqual([h.ad, h.terminGun, h.ayarSuresiDk], ['Yeni', 5, '30']);
+    assert.deepEqual(excelAdimiUygula(h, { kaynak: { tur: 'makine', id: 9 }, ayarSuresiDk: 12 }), { hazirlikDegisti: true });
+    assert.deepEqual([h.kaynak, h.terminGun, h.ayarSuresiDk], [{ tur: 'makine', id: 9 }, null, 12]);
+  });
+  test('işlem/değişim olarak ayrılmış birim süre değiştirilmez ve adıma hiç dokunulmaz', () => {
+    const h = { ...hedef(), islemSuresiDk: 1.5 };
+    assert.deepEqual(excelAdimiUygula(h, { ad: 'X', birimSureDk: 3 }), { hata: AYRILMIS_SURE });
+    assert.equal(h.ad, 'Adım');
+  });
+  test('yeni adım tip ve ad ister; gerisi varsayılandan', () => {
+    assert.equal(excelYeniAdimi({ ad: 'Tipsiz' }), null);
+    const y = excelYeniAdimi({ operasyonTipiId: 3, ad: 'Ek' });
+    assert.deepEqual([y?.opNo, y?.kaynak, y?.bagimlilik, y?.makineKullanimi, y?.ilkParca, y?.ayar], [null, null, 'bekleyen', 'tek', 'her_kurulum', true]);
+  });
+  test('dayanak: revizyon ve sürüm aynıysa tutar; revizyonsuz ürün yalnız dayanaksız dosyayla', () => {
+    assert.equal(excelDayanagiTutar({ revizyonId: 7, surum: 3 }, { id: 7, surum: 3 }), true);
+    assert.equal(excelDayanagiTutar({ revizyonId: 7, surum: 3 }, { id: 7, surum: 4 }), false);
+    assert.equal(excelDayanagiTutar({ revizyonId: 7, surum: 3 }, { id: 8, surum: 3 }), false);
+    assert.equal(excelDayanagiTutar(null, null), true);
+    assert.equal(excelDayanagiTutar(null, { id: 8, surum: 1 }), false);
+    assert.equal(excelDayanagiTutar({ revizyonId: 7, surum: 3 }, null), false);
   });
 });
