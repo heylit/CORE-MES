@@ -5,6 +5,7 @@ import { ZodError } from 'zod';
 import type { FastifyInstance } from 'fastify';
 import type { Db } from '#cekirdek/db.ts';
 import { UygulamaHatasi } from '#cekirdek/hata.ts';
+import { ESKI_SURUM_ILETISI } from '#paylasilan/hata.ts';
 import { testVeritabaniKur } from '#cekirdek/test-vt.ts';
 import type { TestVeritabani } from '#cekirdek/test-vt.ts';
 import { uygulamaKur } from '#cekirdek/uygulama.ts';
@@ -776,6 +777,7 @@ describe('uretim-emirleri iş emirli emir (gerçek PostgreSQL)', () => {
     const ie2 = (await ayrinti(id2)).isEmirleri[0]?.id ?? 0;
     const ikinci = await terminal(`/${id2}/baslat`, undefined, 'kisi_op');
     assert.equal(ikinci.durum, 409, 'istasyonun makinesiz yeri dolu');
+    await ilkParcaOnay(id);
     assert.equal((await terminal(`/${id}/bitir`, { saglamAdet: 1 }, 'kisi_op')).durum, 200);
     await o().vt.tx((db) => emirBaslat(db, kim('kisi_op'), id2, undefined, undefined, ie2));
     assert.equal((await ayrinti(id2)).isEmirleri[0]?.istasyon?.id, ist);
@@ -925,6 +927,17 @@ describe('uretim-emirleri iş emirli emir (gerçek PostgreSQL)', () => {
     const e = await ayrinti(id);
     assert.deepEqual(e.isEmirleri.map((i) => [i.opNo, i.sira, i.ad, i.durum]), [[10, 1, 'Adım 1', 'calisiyor'], [20, 2, 'Yeni ad', 'bekliyor'], [40, 3, 'Adım 4', 'bekliyor']]);
     assert.equal(e.kaynakRotaRevizyonId, 2);
+  });
+
+  test('2520-2 emirlere uygula: çağıranın okuduğu sürüm satır kilidi altında denetlenir; arada değişen emir yenilenmez', async () => {
+    const { uretimEmriId: id } = await ac([adim(1, null), adim(2, null)]);
+    const okunan = (await ayrinti(id)).surum;
+    await o().sahip.sorgu('UPDATE uretim_emri SET surum = surum + 1 WHERE id = $1', [id]);
+    const yenile = (surum: number) => o().vt.tx((db) => isEmirleriniYenile(db, kim('planlama_proje'), id, { kaynakRotaRevizyonId: rev2, isEmirleri: [adim(1, null)], surum }));
+    await assert.rejects(yenile(okunan), (h: unknown) => h instanceof UygulamaHatasi && h.message === ESKI_SURUM_ILETISI);
+    assert.deepEqual((await ayrinti(id)).isEmirleri.map((i) => i.opNo), [10, 20], 'eski sürümle adım çıkarılmaz');
+    await yenile((await ayrinti(id)).surum);
+    assert.deepEqual((await ayrinti(id)).isEmirleri.map((i) => i.opNo), [10], 'güncel sürümle yenilenir');
   });
 
   test('ROT-2 emirlere uygula: güncellenen iş emrinin süre ve kaynak değişikliği yazılır; değişmeyen iş emri listeye girmez', async () => {
