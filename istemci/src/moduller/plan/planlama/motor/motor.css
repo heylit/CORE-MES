@@ -219,7 +219,8 @@
   border-radius: var(--yari-1); background: var(--panel2);
 }
 .tc-pym-br-kpi > span { display: inline-flex; align-items: center; gap: var(--b-1); color: var(--muted); font-size: var(--yazi-xs); }
-.tc-pym-br-kpi > b { overflow: hidden; font-size: var(--yazi-l); line-height: 1.15; font-variant-numeric: tabular-nums; white-space: nowrap; text-overflow: ellipsis; }
+/* Tezgâh kodu gibi uzun değer kırpılmaz, alt satıra iner. */
+.tc-pym-br-kpi > b { font-size: var(--yazi-l); line-height: 1.15; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 .tc-pym-br-kpi > small { color: var(--muted); font-size: var(--yazi-xs); }
 .tc-pym-br-kpi > small b { color: var(--ink); }
 .tc-pym-br-kpi[data-ton="tamam"] { border-left-color: var(--run); }

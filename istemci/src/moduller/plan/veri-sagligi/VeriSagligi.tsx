@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
+import { Link } from 'react-router-dom';
 import type { VeriSagligiCevabi } from '#paylasilan/sozlesme/plan.ts';
 import { DurumKutusu } from '../../../ortak/arayuz/DurumKutusu.tsx';
 import { Kart } from '../../../ortak/arayuz/Kart.tsx';
@@ -6,7 +7,7 @@ import { Rozet } from '../../../ortak/arayuz/Rozet.tsx';
 import { SayfaBasligi } from '../../../ortak/arayuz/SayfaBasligi.tsx';
 import { Tablo } from '../../../ortak/arayuz/Tablo.tsx';
 import { api } from '../../../ortak/veri/api.ts';
-import { durumu, ozet, type VeriSagligiKategorisi } from './kurallar.ts';
+import { DUZELTME_YERI, durumu, ozet, type VeriSagligiKategorisi } from './kurallar.ts';
 
 // Veri sağlığı (782): plana giden verinin kaynağında boş olan yerler ve motorun o boşlukta bugün ne varsaydığı. Yalnız okur; düzeltme
 // verinin sahibi ekranda yapılır.
@@ -40,6 +41,7 @@ function Rapor({ c }: { c: VeriSagligiCevabi }) {
           { anahtar: 'baslik', baslik: 'Konu', hucre: (k) => k.baslik },
           { anahtar: 'durum', baslik: 'Durum', kirilmaz: true, hucre: (k) => { const d = durumu(k); return <Rozet ton={d.ton}>{d.metin}</Rozet>; }, csv: (k) => durumu(k).metin },
           { anahtar: 'etki', baslik: 'Planda ne olur', hucre: (k) => k.etki },
+          { anahtar: 'yer', baslik: 'Nerede düzeltilir', hucre: (k) => { const y = DUZELTME_YERI[k.anahtar]; return y ? <Link to={y.yol}>{y.ad}</Link> : '—'; }, csv: (k) => DUZELTME_YERI[k.anahtar]?.ad ?? '' },
         ]}
       />
       {eksikler.map((k) => (

@@ -59,7 +59,7 @@ export function mesaiIsisi(c: PlanlamaCalismasi, T: Takvim): IsiVerisi<Satir> | 
     genis: 'gun', baslik: 'Tezgâh × gün, doluluk ve ek mesai', satirAd: 'Tezgâh', sutunlar: G.l, satirlar, gizliAd: 'doluluğu %75 altında',
     ust: { ton: dolu.length ? 'uyari' : 'tamam', simge: 'clock', metin },
     lejant: { kdAd: { 1: '%50-75', 2: '%75-90', 3: '%90-98', 4: 'Tam dolu' }, simge: [['plus', 'Planlı ek vardiya']] },
-    not: 'Hücre, günün açık saatlerinde tezgâhın dolu olduğu yüzdedir; boş hücre o gün vardiya olmadığını söyler.',
+    not: `${satirlar.length > 0 && satirlar.every((r) => r.gizli) ? 'İki haftada %75 üstü dolu tezgâh yok; bütün tezgâhlar "satır daha göster" ile açılır. ' : ''}Hücre, günün açık saatlerinde tezgâhın dolu olduğu yüzdedir; boş hücre o gün vardiya olmadığını söyler.`,
   };
 }
 

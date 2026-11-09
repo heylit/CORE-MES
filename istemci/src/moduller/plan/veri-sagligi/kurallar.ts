@@ -17,3 +17,15 @@ export function ozet(c: VeriSagligiCevabi): string {
   if (okunamayan > 0) parcalar.push(`${String(okunamayan)} konu yetkiniz ya da kayıt olmadığı için okunamadı`);
   return `${parcalar.join('. ')}.`;
 }
+
+// Eksik verinin düzeltildiği sayfa (2664, B-2482-31/7). Plan yalnız okur; düzeltme verinin sahibinde yapılır. Sahibi belli olmayan konuda
+// (Finans'ın birim maliyeti) bağlantı verilmez; yanlış sayfaya göndermek boş bırakmaktan kötüdür.
+export const DUZELTME_YERI: Partial<Record<VeriSagligiKategorisi['anahtar'], { yol: string; ad: string }>> = {
+  'stok-bos': { yol: '/stok', ad: 'Stok Merkezi' },
+  'sure-bos': { yol: '/recete-rota/sureler', ad: 'Reçete ve Rota > Süreler' },
+  'istasyon-plan-ayari-yok': { yol: '/istasyonlar/is-merkezleri', ad: 'İstasyonlar > İş merkezleri ve istasyonlar' },
+  'vardiyasiz-istasyon': { yol: '/istasyonlar/vardiyalar', ad: 'İstasyonlar > Vardiyalar' },
+  'terminsiz-emir': { yol: '/siparisler', ad: 'Siparişler' },
+  'arizali-makine': { yol: '/istasyonlar/makineler', ad: 'İstasyonlar > Makineler' },
+  'elle-tezgah-ucreti': { yol: '/plan/maliyet', ad: 'Planlama > Maliyetler' },
+};
