@@ -411,3 +411,8 @@ Teslim olduğu gibi alındı; yalnız oturtma için değişenler:
 - VARSAYIM: çarpan pozitif tam sayıdır (en çok 1000). Geri alma: ucuz (kısıt ve şema).
 - VARSAYIM: bileşen miktarı mamul başınadır; çarpan malzeme ihtiyacını değiştirmez. Geri alma: orta.
 - VARSAYIM: dala sonradan eklenen adım (GKK, yeniden işleme) önceki adımın çarpanını alır. Geri alma: ucuz.
+
+## 2486-1: dallı rotada adım miktarı (B-2485-1)
+- Adım miktarı ardıl yolu kuralıyla hesaplanır: adım, çıktısını tüketen adımların fire yollarından en büyüğünü taşır; dallı rotada bir dalın
+  firesi paralel dalı büyütmez. Kural emrin malzeme ihtiyacıyla (uretim-emirleri `malzemeIhtiyaci`) aynıdır; öncüller `oncullerCikar`dan.
+  Rota ayrıntısındaki adım miktarı, teorik süre ve ürün ağacı ihtiyacı dallı rotada artık emirle aynı çıkar. Tek hatlı rota değişmez.

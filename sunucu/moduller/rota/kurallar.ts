@@ -411,17 +411,27 @@ export function akisiCikar(adimlar: readonly { opNo: number; bagimlilik: Bagimli
 
 /* ---------------- miktar ve süre (RT-26, RT-27, RT-35, RT-36, RT-41, RT-42) ---------------- */
 
-// Adım miktarı: ürün miktarı, kendisi ve sonraki adımların fire paylarıyla büyür: miktar / Π(1 - pay).
-export function adimMiktarlari(adimlar: readonly { opNo: number; firePayiYuzde: number }[], urunMiktari: number): Map<number, number> {
-  const sonuc = new Map<number, number>();
-  let miktar = urunMiktari;
+// Adım miktarı: ürün miktarı, kendisi ve ardıllarının (adımın çıktısını tüketen adımlar, zincirle) fire paylarıyla büyür:
+// miktar / Π(1 - pay); birden çok ardıl yolunda en büyüğü. Dallı rotada bir dalın firesi paralel dalı büyütmez. Emrin malzeme
+// ihtiyacıyla (uretim-emirleri malzemeIhtiyaci) aynı kuraldır; öncüller emre kopyalanan listedir (oncullerCikar), tek hatta önceki adım.
+export function adimMiktarlari(
+  adimlar: readonly { opNo: number; firePayiYuzde: number; bagimlilik?: Bagimlilik; dal?: string | null; birlesen?: readonly string[] }[],
+  urunMiktari: number,
+): Map<number, number> {
+  const onculler = oncullerCikar(adimlar.map((a) => ({ opNo: a.opNo, bagimlilik: a.bagimlilik ?? 'bekleyen', devirAdedi: null, dal: a.dal ?? null, birlesen: a.birlesen ?? [] })));
+  const ardillar = new Map<number, number[]>();
+  adimlar.forEach((a, i) => {
+    const onceki = adimlar[i - 1];
+    const liste = onculler[i]?.map((o) => o.opNo) ?? (onceki ? [onceki.opNo] : []);
+    for (const o of liste) ardillar.set(o, [...(ardillar.get(o) ?? []), a.opNo]);
+  });
+  const carpan = new Map<number, number>();
   for (let i = adimlar.length - 1; i >= 0; i -= 1) {
     const a = adimlar[i];
     if (!a) continue;
-    miktar /= 1 - a.firePayiYuzde / 100;
-    sonuc.set(a.opNo, miktar);
+    carpan.set(a.opNo, Math.max(1, ...(ardillar.get(a.opNo) ?? []).map((x) => carpan.get(x) ?? 1)) / (1 - a.firePayiYuzde / 100));
   }
-  return sonuc;
+  return new Map(adimlar.map((a) => [a.opNo, urunMiktari * (carpan.get(a.opNo) ?? 1)]));
 }
 
 // Teorik süre (dk) = ayar + birim süre x adım miktarı; süre eksikse null (sıfır uydurulmaz).
@@ -498,6 +508,9 @@ export interface AgacRotasi {
   adimlar: readonly {
     opNo: number;
     firePayiYuzde: number;
+    bagimlilik?: Bagimlilik;
+    dal?: string | null;
+    birlesen?: readonly string[];
     bilesenler: readonly { malzemeId: number; miktar: number; fireYuzde: number }[];
   }[];
 }
