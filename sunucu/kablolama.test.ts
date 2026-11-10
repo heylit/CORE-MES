@@ -82,6 +82,10 @@ test('plan, kâr riski için üretim emrinin malzeme maliyetini proje maliyetten
   assert.ok(sunucununBaglari().some((b) => b.ad === 'üretim emri malzeme maliyeti -> plan'));
 });
 
+test('genel gider, projede sayılan belgeleri proje maliyetten alır (2594 b)', () => {
+  assert.ok(sunucununBaglari().some((b) => b.ad === 'projede sayılan belgeler -> finans genel gider'));
+});
+
 test('815: müşteri sınıfı plana girmez; plan müşteri kartından sınıf okumaz', () => {
   assert.ok(!sunucununBaglari().some((b) => b.ad === 'müşteri sınıfı -> plan'));
 });
