@@ -322,7 +322,8 @@ function AdimDuzeni({ r, s, kapat }: { r: RotaEkrani; s: Extract<Secim, { tur: '
               {dz.insanli(a.stationId) ? (
                 // 2685: insanlı istasyonda adayları istasyonda yetkin kişilerdir; makineleri olsa da aday olmaz (kapasite-insan.md madde 2).
                 <span className="tc-rr1-genis tc-rr1-alan">
-                  <span className="tc-rr1-lbl">Makine</span>
+                  {/* 2698 c: başlık istasyonun türüne göre; insanlı istasyonda kaynak istasyondur (yetkin kişiler), makine değil. */}
+                  <span className="tc-rr1-lbl">İstasyon</span>
                   <small className="tc-rr1-ipucu">
                     İnsanlı istasyon: iş, istasyonda yetkin ve vardiyası olan kişilere açılır; makine seçilmez.
                     {a.machineId && ' Bu adımda eskiden seçilmiş bir makine var; plan onu kullanmaz.'}

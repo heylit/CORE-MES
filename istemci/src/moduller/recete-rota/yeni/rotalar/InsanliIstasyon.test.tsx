@@ -34,6 +34,17 @@ describe('2685 insanlı istasyonda makine seçimi', () => {
     expect(within(panel).queryByRole('button', { name: 'Makine seçimini kaldır' })).toBeNull();
   });
 
+  it('2698 c: insanlı istasyonda başlık İstasyon; akış tablosunda da makine seçicisi yok', async () => {
+    const panel = await panelAc('insan');
+    const bilgi = await within(panel).findByText(/İnsanlı istasyon: iş, istasyonda yetkin/);
+    const alan = bilgi.closest('.tc-rr1-alan');
+    expect(alan?.querySelector('.tc-rr1-lbl')?.textContent).toBe('İstasyon');
+    const bolge = screen.getByRole('region', { name: 'Ürün ve rotalar' });
+    fireEvent.click(within(bolge).getByRole('button', { name: 'Akış tablosu' }));
+    await within(bolge).findByText('İnsanlı istasyon: makine seçilmez.');
+    expect(within(bolge).queryByRole('combobox', { name: 'Makine' })).toBeNull();
+  });
+
   it('eskiden makine seçilmiş insanlı adımda seçim kaldırılabilir', async () => {
     const panel = await panelAc('insan', '51');
     const kaldir = await within(panel).findByRole('button', { name: 'Makine seçimini kaldır' });
