@@ -27,7 +27,7 @@ import { defterSatirlari } from './degisiklik-defteri-kurallar.ts';
 import { kaynakDilimiOku } from './girdi/kaynaklar.ts';
 import { kapasitedenIzinler, type KaynakDilimiOkumasi } from './girdi/kaynaklar-kurallar.ts';
 import { hedefMotorAyari } from './motor-ayari.ts';
-import { brutAlanlariniCikar, calismayaMotorAyari, saklanmayanAlanlariCikar, type MotorOlcegi } from './motor-ayari-kurallar.ts';
+import { brutAlanlariniCikar, calismayaMotorAyari, mesaiSaatiniCikar, saklanmayanAlanlariCikar, type MotorOlcegi } from './motor-ayari-kurallar.ts';
 import { sureOgrenmesi } from './ogrenme.ts';
 import { planGirdisi, yeniCalisma, type KaynakOkumasi } from './plan-girdisi.ts';
 import {
@@ -372,7 +372,7 @@ export async function planlamaCalismasi(db: Db, kullanici: Kullanici, simdi: num
   const fin = finansman.gun === gun ? finansman.oran : await planFinansmanOrani(db, gun);
   const gg = genelGider.gun === gun ? genelGider.oran : await planGenelGideri(db, kullanici, gun);
   // 2728 a: brüt (göçten önceki kayıtta kalmış olsa da) sayfaya gitmez.
-  return { calisma: brutAlanlariniCikar(calismayaMotorAyari(g.S, degerler, fin, olcek, undefined, gg)) as PlanlamaCalismasiCevabi['calisma'], surum: k.surum, kaynakDegisikligi: g.kaynakDegisikligi ?? null };
+  return { calisma: mesaiSaatiniCikar(brutAlanlariniCikar(calismayaMotorAyari(g.S, degerler, fin, olcek, undefined, gg))) as PlanlamaCalismasiCevabi['calisma'], surum: k.surum, kaynakDegisikligi: g.kaynakDegisikligi ?? null };
 }
 
 // 657 a: kayıt yoksa sayfa boş çalışmayı kendisi açar ve düzenlenebilir başlar. Çalışma çerçevenin ilk açılışındaki gibi Reçete ve Rota

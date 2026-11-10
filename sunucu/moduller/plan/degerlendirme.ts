@@ -12,8 +12,9 @@ import type { HataKodu } from '#paylasilan/hata.ts';
 import type { DegerlendirmeCevabi, DegerlendirmeDurumuCevabi, DegerlendirmeIstegi, DegerlendirmeSonucu } from '#paylasilan/sozlesme/planlama.ts';
 import { BIRLESTIRME_ADRESI, ISCI_TIPLI_KAYNAK } from './girdi/birlestirme.ts';
 import type { KaynakDilimiOkumasi } from './girdi/kaynaklar-kurallar.ts';
-import type { KaynakOkumasi } from './plan-girdisi.ts';
-import { planlamaGirdisi } from './planlama-servis.ts';
+import { planGirdisi, type KaynakOkumasi } from './plan-girdisi.ts';
+import { planlamaGirdisi, type PlanCozumKaynagi } from './planlama-servis.ts';
+import { mesaiSaatGirdisi } from './mesai-maliyeti.ts';
 import { izlemeIletisi } from './isci-iletisi.ts';
 
 // Planlama değerlendirmesi (Soru 357 a): planlama sayfasının tarayıcıda motoru koşturan kartları burada, sayfanın motor kancaları
@@ -24,7 +25,7 @@ const MOTOR = join(dirname(fileURLToPath(import.meta.url)), 'motor');
 export const DEGERLENDIRME_DOSYALARI = ['engine', 'kisitlar', 'girdi', 'durum', 'kancalar', 'degerlendir'] as const;
 
 let kod: string | null = null;
-function degerlendirmeKodu(): string {
+export function degerlendirmeKodu(): string {
   kod ??= `${DEGERLENDIRME_DOSYALARI.map((m) => readFileSync(join(MOTOR, `${m}.js`), 'utf8')).join('\n')}\n;({ degerlendir });`;
   return kod;
 }
@@ -138,7 +139,12 @@ export async function degerlendirmeBaslat(
   } catch (e) { isler.delete(is); throw e; }
   const surum = k.surum;
   const karGizli = genelGiderGizliMi(k.girdi.calisma);
-  yap({ ...k.girdi, bugun: tesisGunu(simdi), istek: g.istek }, simdi).then((r) => {
+  // 2742 (Güvenlik K3): ek mesai saat değeri yalnız maliyeti görenin hesabına girer; görmeyenin TL'si zaten null döner.
+  let girdi = k.girdi;
+  try {
+    if (maliyetGorunur) girdi = await mesaiSaatliGirdi(db, girdi, simdi);
+  } catch (e) { isler.delete(is); throw e; }
+  yap({ ...girdi, bugun: tesisGunu(simdi), istek: g.istek }, simdi).then((r) => {
     if (r === null) throw cakisma(CALISMA_YOK);
     if ('hata' in r) throw HATALAR[r.hata]();
     const sonuc = r.sonuc as DegerlendirmeSonucu;
@@ -151,6 +157,16 @@ export async function degerlendirmeBaslat(
     isler.set(is, { kisi, durum: 'hata', ...h, bitis: Date.now() });
   });
   return { is };
+}
+
+// Değer birleşmiş çalışmanın tezgâhlarıyla kurulur ve iş parçacığının girdisindeki D.mesaiSaat'e yazılır (birleşme D'nin bilinmeyen alanını
+// korur, girdi.js tmiCevir). Okunan çalışma kopyalanır; kayıt ve cevap D taşımaz.
+async function mesaiSaatliGirdi(db: Db, girdi: PlanCozumKaynagi, simdi: number): Promise<PlanCozumKaynagi> {
+  const c = girdi.calisma as { D?: unknown } | null;
+  if (c === null || typeof c !== 'object' || c.D === null || typeof c.D !== 'object') return girdi;
+  const D = planGirdisi({ ...girdi, bugun: tesisGunu(simdi) }, simdi)?.S.D ?? c.D;
+  const mesaiSaat = await mesaiSaatGirdisi(db, D, new Date(simdi));
+  return { ...girdi, calisma: { ...c, D: { ...c.D, mesaiSaat } } };
 }
 
 // Sonucu yalnız başlatan kişi okur; başkasının kimliği yokmuş gibi döner. Biten sonuç okununca silinir.

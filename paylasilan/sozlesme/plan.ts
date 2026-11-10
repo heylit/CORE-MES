@@ -603,3 +603,11 @@ export type GrupSaatMaliyetleriCevabi = z.output<typeof grupSaatMaliyetleriCevab
 export const mesaiMaliyetiSorgusu = z.object({ taslak: z.coerce.number<number>().int().positive() }).strict();
 export const mesaiMaliyetiCevabi = z.object({ ay: z.string(), toplam: z.number().nullable(), bilinmeyen: z.boolean() }).strict();
 export type MesaiMaliyetiCevabi = z.output<typeof mesaiMaliyetiCevabi>;
+// 2742 (2745 a): yıllık planın grup başına ek mesai saat değeri (TL/sa, çarpan ve kişi başı ek dahil). Parametresiz; kişi ve departman
+// alanı yok. Bilinmeyen grup null: yıllık plan o grupta ek mesai önermez. Cevapta olmayan grup da bilinmiyor sayılır.
+export const mesaiSaatDegerleriSorgusu = z.object({}).strict();
+export const mesaiSaatDegerleriCevabi = z.object({
+  ay: z.string(),
+  gruplar: z.array(z.object({ grup: z.string(), saatTL: z.number().nullable() }).strict()),
+}).strict();
+export type MesaiSaatDegerleriCevabi = z.output<typeof mesaiSaatDegerleriCevabi>;

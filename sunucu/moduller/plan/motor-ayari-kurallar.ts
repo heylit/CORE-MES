@@ -70,8 +70,18 @@ export function brutAlanlariniCikar(calisma: unknown): unknown {
   return { ...calisma, D: yeni };
 }
 
-// Planlama kaydına yazılmayan ve ham okumada dönmeyen alanlar tek yerden (2601 a genel gider, 2728 a brüt).
-export const saklanmayanAlanlariCikar = (calisma: unknown): unknown => brutAlanlariniCikar(genelGiderAlanlariniCikar(calisma));
+// 2742 (Güvenlik Ek): ek mesai saat değeri (D.mesaiSaat) yalnız değerlendirmenin iş parçacığı girdisinde yaşar; istemci gönderse de kayda
+// girmez, okuyana dönmez.
+export function mesaiSaatiniCikar(calisma: unknown): unknown {
+  if (calisma === null || typeof calisma !== 'object') return calisma;
+  const D = (calisma as { D?: unknown }).D;
+  if (D === null || typeof D !== 'object' || !('mesaiSaat' in D)) return calisma;
+  const { mesaiSaat: _m, ...kalan } = D as Record<string, unknown>;
+  return { ...calisma, D: kalan };
+}
+
+// Planlama kaydına yazılmayan ve ham okumada dönmeyen alanlar tek yerden (2601 a genel gider, 2728 a brüt, 2742 mesai saat değeri).
+export const saklanmayanAlanlariCikar = (calisma: unknown): unknown => mesaiSaatiniCikar(brutAlanlariniCikar(genelGiderAlanlariniCikar(calisma)));
 
 export function calismayaMotorAyari(
   calisma: unknown, ayar: MotorAyarlari, finansmanOraniGun: number | null = null, olcek: MotorOlcegi | null = null,

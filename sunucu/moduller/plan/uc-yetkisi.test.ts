@@ -36,6 +36,7 @@ const BEKLENEN: BeklenenYetkiler = {
   'GET /plan/mrp-ihtiyaci': 'plan.planlama-oku',
   'GET /plan/grup-saat-maliyetleri': 'finans.maliyet-oku',
   'GET /plan/mesai-maliyeti': 'finans.maliyet-oku',
+  'GET /plan/mesai-saat-degerleri': 'finans.maliyet-oku',
   'GET /plan/surum': 'oturum',
   'GET /plan/menu-sayaclari': 'oturum',
   'POST /plan/yerlestir': 'plan.yaz',

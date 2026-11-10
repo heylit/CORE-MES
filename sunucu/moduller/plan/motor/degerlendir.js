@@ -106,20 +106,22 @@ function ymTalas(D, s) {
 /* kişi bazlı mesai yalnız çalışmada kayıtlıysa: sayfa yoksa deneme varsayılanı kurardı. Kayıttaki eski kalem kipi verisi (maliyetSis) okunmaz:
    genel gider oranının tek kaynağı Finans oranıdır (planTL.genelGider). */
 const mesSis = (D = S.D) => D.mesaiSis || null;
-const msSgkKat = (D = S.D) => { const m = mesSis(D); return 1 + ((+m.sgk || 0) + (+m.yanHak || 0)) / 100; };
-/* B-2483-16: aylık çalışma saati ya da tezgâh verimi girilmemişse saat maliyeti ve kapasite bilinmez (null); 225 sa ve %85 uydurulmaz */
-const msSayi = x => x == null || x === '' || !isFinite(+x) || +x <= 0 ? null : +x;
-function msSaat(p, D = S.D) { const m = mesSis(D); const u = (m.ucret || {})[p.id]; const ay = msSayi(m.aylikSaat); return u && u.brut != null && ay != null ? +u.brut * msSgkKat(D) / ay : null; }
-function msGrupSaat(grup, D = S.D) { const l = D.personel.filter(p => (p.gruplar || []).includes(grup)).map(p => msSaat(p, D)).filter(x => x != null); const t = l.length ? l : D.personel.map(p => msSaat(p, D)).filter(x => x != null); return t.length ? t.reduce((a, b) => a + b, 0) / t.length : null; }
+/* 2742 (2740 a): ek mesai saat değeri İK'nın departman saat maliyetinden, tezgâh başına; sunucu girdiye yazar (mesai-maliyeti.ts
+   mesaiSaatGirdisi). Değer yoksa (küçük ya da karışık grup, atama yok, maliyet görmeyen okuyucu) yalın mesai ücretine düşer. */
+const msTezgahSaat = (D, m) => { const s = D.mesaiSaat && typeof D.mesaiSaat === 'object' ? D.mesaiSaat[m] : null; return typeof s === 'number' && isFinite(s) ? s : null; };
 /* tek oran girilmemişse genel gider bilinmez (null, 2173-1 a) */
 const ggTek = () => { const g = ymAyar().genelGider; return g == null || g === '' ? null : +g; };
 function msGunTur(D, gun) { const iso = isoT(D, gun * 24).slice(0, 10); if ((D.tatiller || []).includes(iso)) return 'tatil'; const g = fmtDT(D, gun * 24).slice(6, 9); return g === 'Cmt' ? 'cmt' : g === 'Paz' ? 'paz' : 'hi'; }
 /** @param {any} [D] @param {Derleme} [cx] @param {any} [e] */
+/* kişi bazlı kip istemcinin mesaiSistemi ve sunucu mesaiAyarlari ile aynı okunur: mesai sistemi yoksa ya da alan yoksa açık, yalnız false kapalı;
+   gün çarpanı yoksa onların varsayılanı */
+const MS_CARP0 = { hi: 1.5, cmt: 1.5, paz: 2, tatil: 2 };
 function ymMesaiTL(D, cx, e) {
-  const m = mesSis(D); if (!m || !m.kisiBazli) return ymMesaiTLYalin(D, cx, e);
+  const m = mesSis(D) || {}; if (m.kisiBazli === false) return ymMesaiTLYalin(D, cx, e);
   const t = D.tezgahlar.find(x => x.id === e.m); const h = ymVH(D, e.vardiya); const op = t && t.opOran != null ? +t.opOran : 1;
-  const s = msGrupSaat(t ? t.grup : '', D); if (s == null) return ymMesaiTLYalin(D, cx, e);
-  return h * op * s * (+(m.carp || {})[msGunTur(D, e.gun)] || 1.5) + op * (+m.kisiEk || 0);
+  const s = msTezgahSaat(D, e.m); if (s == null) return ymMesaiTLYalin(D, cx, e);
+  const tur = msGunTur(D, e.gun); const c = (m.carp || {})[tur];
+  return h * op * s * (c == null || c === '' || !isFinite(+c) ? MS_CARP0[tur] : +c || 1.5) + op * (+m.kisiEk || 0);
 }
 /* ek mesai bedeli, mesai vardiyasında o tezgâhta çalışan işlere çalıştıkları saat oranında dağıtılır; bedeli bilinmeyen vardiyadaki işin payı null */
 /** @param {any} [p] @param {Derleme} [cx] */

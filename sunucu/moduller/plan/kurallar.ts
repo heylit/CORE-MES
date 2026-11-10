@@ -597,14 +597,15 @@ export function grupSaatEkrani(gruplar: Iterable<GrupSaatDegeri>): GrupSaatDeger
 
 // 2653 (2644 b): ek mesai tutarı. İstemcinin `mesaiTutari` kuralının sunucu kopyasıdır (planlama/maliyet/kurallar.ts); ikisi aynı örnek
 // tablosuyla sınanır (mesai-maliyeti.test.ts "ortak örnekler"), biri değişirse öteki de değişir. Kişi bazlıysa saat x operatör oranı x
-// saat değeri x gün çarpanı + operatör oranı x kişi başı ek; değilse ya da saat değeri yoksa saat x mesai ücreti x (vardiyasız günde)
-// mesai çarpanı. Ücret de yoksa null. 0 çarpan "yok" sayılır (istemcideki ||).
+// saat değeri x gün çarpanı + operatör oranı x kişi başı ek; değilse ya da saat değeri yoksa saat x mesai ücreti x mesai çarpanı: çarpan
+// her ek mesaide uygulanır (2510 a; plan motorunun ymMesaiTLYalin'i ile aynı tutar). Ücret de yoksa null. 0 ya da boş çarpan 1,5 sayılır
+// (motorun mesaiCarpani'si gibi).
 export interface MesaiGirdisi {
   h: number; kisiBazli: boolean; op: number | null | undefined; saatDegeri: number | null; carpan: number | undefined; kisiEk: number | null | undefined;
-  ucret: number | null; vardiyasiz: boolean; mesaiCarpan: number | undefined;
+  ucret: number | null; mesaiCarpan: number | undefined;
 }
 export function mesaiTutari(g: MesaiGirdisi): number | null {
-  if (!g.kisiBazli || g.saatDegeri === null) return g.ucret === null ? null : g.h * g.ucret * (g.vardiyasiz ? g.mesaiCarpan || 1 : 1);
+  if (!g.kisiBazli || g.saatDegeri === null) return g.ucret === null ? null : g.h * g.ucret * (g.mesaiCarpan || 1.5);
   const op = g.op ?? 1;
   return g.h * op * g.saatDegeri * (g.carpan || 1.5) + op * (g.kisiEk ?? 0);
 }
@@ -649,18 +650,12 @@ export function mesaiGunTuru(gun: string, a: Pick<MesaiAyarlari, 'tatiller'>): G
   const w = haftaGunuOf(gun);
   return w === 'cmt' ? 'cmt' : w === 'paz' ? 'paz' : 'hi';
 }
-// İstemcinin takvimindeki "vardiyasız gün": tatil ya da o hafta gününde çalışma vardiyası yok. Gün türünden ayrı bir ölçüdür.
-export function vardiyasizGun(gun: string, a: Pick<MesaiAyarlari, 'tatiller' | 'calismaGunleri'>): boolean {
-  if (a.tatiller.has(gun)) return true;
-  const cg = a.calismaGunleri[haftaGunuOf(gun)];
-  return !Array.isArray(cg) || cg.length === 0;
-}
 
 // 2653 S1 (Mimar K1): istasyonun saat değeri, ayın son günü geçerli atamaların yüzdesiyle ağırlıklı ortalamadır. Kişinin değeri
-// departmanınınki; küçük departmanda küçük grup havuzu (2657 a). Atama yoksa ya da bir kişinin değeri bilinmiyorsa değer null (sıfır
-// sayılmaz, başka gruba aktarılmaz). `havuz`: değere havuz girdi.
-export interface AtamaDegeri { yuzde: number; deger: number | null; havuz: boolean }
-export function istasyonSaatDegeri(atamalar: readonly AtamaDegeri[]): { deger: number; havuz: boolean } | null {
+// departmanınınki. Küçük departmanın (2740 a, 2743 b) değeri bilinmiyor sayılır: hiçbir yoldan hesaba girmez, istasyon yalın mesai
+// ücretine düşer. Atama yoksa ya da bir kişinin değeri bilinmiyorsa (karışık istasyon da) değer null; sıfır sayılmaz, başka gruba aktarılmaz.
+export interface AtamaDegeri { yuzde: number; deger: number | null }
+export function istasyonSaatDegeri(atamalar: readonly AtamaDegeri[]): number | null {
   let pay = 0;
   let agirlik = 0;
   for (const a of atamalar) {
@@ -669,21 +664,37 @@ export function istasyonSaatDegeri(atamalar: readonly AtamaDegeri[]): { deger: n
     pay += a.deger * a.yuzde;
     agirlik += a.yuzde;
   }
-  return agirlik > 0 ? { deger: pay / agirlik, havuz: atamalar.some((a) => a.havuz && a.yuzde > 0) } : null;
+  return agirlik > 0 ? pay / agirlik : null;
 }
 
-// 2653 (Maliyet koşulu): cevapta yalnız toplam. Bilinmeyen satır toplamda sıfır sayılmaz, `bilinmeyen` olur. Bilinen satırların hepsine
-// havuz değeri girdiyse toplam null: toplam yalnız küçük grupların değerini taşımasın. Satır yoksa toplam 0'dır (ek mesai yok).
+// 2742 C2: yıllık planın grup saat değeri (istemcinin ufuk mesaiSaatTL'sinin sunucu karşılığı). Grubun tezgâhlarının istasyon değeri
+// opOran ağırlıklı ortalanır (bilinmeyen tezgâh ortalamaya girmez; hepsi bilinmiyorsa null); op, saat değerine bir kez, sonda girer:
+// saatTL = s x op x hafta içi çarpanı + kişi başı ek / 8 x op; op grubun tezgâhlarının ortalama opOran'ı (yoksa 1).
+export function grupMesaiSaatTL(
+  tezgahlar: readonly { opOran: number | null | undefined; deger: number | null }[], carpHi: number, kisiEk: number | null,
+): number | null {
+  if (tezgahlar.length === 0) return null;
+  const op = (t: { opOran: number | null | undefined }): number => t.opOran ?? 1;
+  const bilinen = tezgahlar.filter((t): t is { opOran: number | null | undefined; deger: number } => t.deger !== null);
+  const agirlik = bilinen.reduce((a, t) => a + op(t), 0);
+  if (bilinen.length === 0 || !(agirlik > 0)) return null;
+  const s = bilinen.reduce((a, t) => a + op(t) * t.deger, 0) / agirlik;
+  const opOrt = tezgahlar.reduce((a, t) => a + op(t), 0) / tezgahlar.length;
+  return s * opOrt * (carpHi || 1.5) + (kisiEk ?? 0) / 8 * opOrt;
+}
+
+// 2653 (Maliyet koşulu): cevapta yalnız toplam. Bilinmeyen satır toplamda sıfır sayılmaz, `bilinmeyen` olur; bilinen yoksa toplam null.
+// Satır yoksa toplam 0'dır (ek mesai yok).
 // "YYYY-MM" ayının son günü (YYYY-MM-DD).
 export function aySonuGunu(ay: string): string {
   const [y, m] = ay.split('-').map(Number);
   return `${ay}-${String(new Date(Date.UTC(y!, m!, 0)).getUTCDate()).padStart(2, '0')}`;
 }
 
-export function mesaiToplami(satirlar: readonly { tutar: number | null; havuz: boolean }[]): { toplam: number | null; bilinmeyen: boolean } {
-  const bilinen = satirlar.filter((s): s is { tutar: number; havuz: boolean } => s.tutar !== null);
+export function mesaiToplami(satirlar: readonly (number | null)[]): { toplam: number | null; bilinmeyen: boolean } {
+  const bilinen = satirlar.filter((s): s is number => s !== null);
   const bilinmeyen = bilinen.length < satirlar.length;
   if (satirlar.length === 0) return { toplam: 0, bilinmeyen: false };
-  if (bilinen.length === 0 || bilinen.every((s) => s.havuz)) return { toplam: null, bilinmeyen };
-  return { toplam: Math.round(bilinen.reduce((t, s) => t + s.tutar, 0) * 100) / 100, bilinmeyen };
+  if (bilinen.length === 0) return { toplam: null, bilinmeyen };
+  return { toplam: Math.round(bilinen.reduce((t, s) => t + s, 0) * 100) / 100, bilinmeyen };
 }
