@@ -396,6 +396,15 @@ describe('bekleyen değişiklikler (755 a)', () => {
     expect(b.calisma.w.sure).toBe(calisma().w.sure);
   });
 
+  it('2791: komut adımı yalnız komutun alanlarına bakar; yeniden okunan kayıttaki başka fark (sessiz yazma, birleşme) adım olmaz', () => {
+    const { y: a } = kur();
+    a.komutBasladi('İş taşındı');
+    const okunan = structuredClone(a.calisma);
+    okunan.w.sure = 9;
+    const { y: b } = kur({ calisma: okunan, surum: 9, gecmis: a.gecmis() });
+    expect(b.geriAlinabilir()).toBe(false);
+  });
+
   it('2791: düşen ya da çalışmayı değiştirmeyen komut geri alma adımı bırakmaz', () => {
     const { y: a } = kur();
     a.komutBasladi('İş taşındı');

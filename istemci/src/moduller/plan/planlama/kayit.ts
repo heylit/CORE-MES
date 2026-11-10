@@ -32,6 +32,8 @@ export const RET = 'Son değişikliğiniz sunucu tarafından reddedildi ve kayde
 // nabız referansı) kopyalanır; yoksa geri alma o değişikliği geri getirmez.
 const GERI_ALANLAR = ['D', 'down', 'ekMesai', 'locks', 'pref', 'w', 'param', 'kapali', 'bekleyen'] as const;
 const GERI_DISI = new Set<string>([...GERI_ALANLAR, 'dataVer', 'plan', 'iz']);
+// Sunucu komutlarının (iş taşı, olay, ek mesai) çalışmada değiştirdiği alanlar (sunucu atolye-komutlari-kurallar.ts).
+const KOMUT_ALANLARI = ['locks', 'olaylar', 'ekMesai', 'bekleyen'] as const;
 type GeriKopyasi = Record<string, unknown> & { dataVer: number };
 // 2792 a: plan yerleşimini değiştiren adımın kopyası planı da taşır; geri alma önceki yerleşimi getirir. `eski`: kopya alındıktan sonra
 // çalışmaya dışarıdan veri geldi (başka sayfa, iş emri, stok, vardiya); geri gelen plan o veriyle çözülmemiştir.
@@ -163,12 +165,12 @@ export class CalismaYazici implements CalismaKomutu {
   // yazmayla). Komut çalışmayı değiştirmediyse adım olmaz.
   #komutAdimi(k: NonNullable<YaziciGecmisi['komut']>): boolean {
     const o = k.once as Record<string, unknown>, y = this.#calisma as Record<string, unknown>;
-    const degisen = [...new Set([...Object.keys(o), ...Object.keys(y)])]
-      .filter((x) => x !== 'dataVer' && x !== 'iz' && x !== 'plan' && JSON.stringify(o[x]) !== JSON.stringify(y[x]));
+    // Yalnız komutların yazdığı alanlar karşılaştırılır: yeniden okunan kayıt başka alanlarda (sessiz yazma, sunucu birleşmesi) farklı
+    // olabilir; onları geri almak komutun değil başkasının işini geri alırdı.
+    const degisen = KOMUT_ALANLARI.filter((x) => JSON.stringify(o[x]) !== JSON.stringify(y[x]));
     if (degisen.length === 0) return false;
-    const ek = degisen.filter((x) => !GERI_DISI.has(x));
     this.#ileri.bosalt();
-    const adim: GeriAdimi = { ne: k.ne, t: k.t, kopya: kopya(Object.fromEntries([...GERI_ALANLAR, 'dataVer', ...ek].map((x) => [x, o[x]]))) as GeriKopyasi };
+    const adim: GeriAdimi = { ne: k.ne, t: k.t, kopya: kopya(Object.fromEntries([...degisen, 'dataVer'].map((x) => [x, o[x]]))) as GeriKopyasi };
     this.#geri.koy(adim);
     this.#sonKomutAdimi = adim;
     return true;
