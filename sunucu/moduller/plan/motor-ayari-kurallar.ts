@@ -80,8 +80,21 @@ export function mesaiSaatiniCikar(calisma: unknown): unknown {
   return { ...calisma, D: kalan };
 }
 
-// Planlama kaydına yazılmayan ve ham okumada dönmeyen alanlar tek yerden (2601 a genel gider, 2728 a brüt, 2742 mesai saat değeri).
-export const saklanmayanAlanlariCikar = (calisma: unknown): unknown => mesaiSaatiniCikar(brutAlanlariniCikar(genelGiderAlanlariniCikar(calisma)));
+// 2772 M2 (Güvenlik O2, 2601 a): tezgâhın saat ücreti Finans'ın istasyon saat maliyetidir (girdi.js ucretIzle). Kayda yazılmaz; maliyeti
+// gören her açılışta Finans'tan yeniden alır, görmeyenin hesabında boştur.
+export function tezgahUcretiniCikar(calisma: unknown): unknown {
+  if (calisma === null || typeof calisma !== 'object') return calisma;
+  const D = (calisma as { D?: unknown }).D;
+  if (D === null || typeof D !== 'object' || !Array.isArray((D as { tezgahlar?: unknown }).tezgahlar)) return calisma;
+  const tezgahlar = (D as { tezgahlar: unknown[] }).tezgahlar;
+  const ucretli = (t: unknown): t is Record<string, unknown> => t !== null && typeof t === 'object' && ('ucret' in t || 'ucretIst' in t);
+  if (!tezgahlar.some(ucretli)) return calisma;
+  return { ...calisma, D: { ...D, tezgahlar: tezgahlar.map((t) => { if (!ucretli(t)) return t; const { ucret: _u, ucretIst: _i, ...kalan } = t; return kalan; }) } };
+}
+
+// Planlama kaydına yazılmayan ve ham okumada dönmeyen alanlar tek yerden (2601 a genel gider ve tezgâh ücreti, 2728 a brüt, 2742 mesai saat değeri).
+export const saklanmayanAlanlariCikar = (calisma: unknown): unknown =>
+  tezgahUcretiniCikar(mesaiSaatiniCikar(brutAlanlariniCikar(genelGiderAlanlariniCikar(calisma))));
 
 // 2747 (Güvenlik): planlama anahtarına yeni yazma yalnız json'dur; eski metin biçimli satır (geçmiş sürüm dahil) JSON metniyse ayrıştırılıp
 // aynı süzgeçten geçer ve yine metin olarak döner. JSON olmayan metin yapılı alan taşımaz, olduğu gibi kalır.

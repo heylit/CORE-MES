@@ -28,7 +28,8 @@ import { kaynakDilimiOku } from './girdi/kaynaklar.ts';
 import { kapasitedenIzinler, type KaynakDilimiOkumasi } from './girdi/kaynaklar-kurallar.ts';
 import { hedefMotorAyari } from './motor-ayari.ts';
 import {
-  brutAlanlariniCikar, calismayaMotorAyari, maliyetsizKayitDegeri, mesaiSaatiniCikar, planTlToplaminiCikar, saklanmayanAlanlariCikar, saklanmayanKayitDegeri, type MotorOlcegi,
+  brutAlanlariniCikar, calismayaMotorAyari, maliyetsizKayitDegeri, mesaiSaatiniCikar, planTlToplaminiCikar, saklanmayanAlanlariCikar, saklanmayanKayitDegeri,
+  tezgahUcretiniCikar, type MotorOlcegi,
 } from './motor-ayari-kurallar.ts';
 import { sureOgrenmesi } from './ogrenme.ts';
 import { planGirdisi, yeniCalisma, type KaynakOkumasi } from './plan-girdisi.ts';
@@ -380,7 +381,7 @@ export async function planlamaCalismasi(db: Db, kullanici: Kullanici, simdi: num
   // 2728 a: brüt (göçten önceki kayıtta kalmış olsa da) sayfaya gitmez.
   const calisma = mesaiSaatiniCikar(brutAlanlariniCikar(calismayaMotorAyari(g.S, degerler, fin, olcek, undefined, gg)));
   return {
-    calisma: (islemVarMi(kullanici, PLAN_TL_OKUMA) ? calisma : planTlToplaminiCikar(calisma)) as PlanlamaCalismasiCevabi['calisma'],
+    calisma: (islemVarMi(kullanici, PLAN_TL_OKUMA) ? calisma : tezgahUcretiniCikar(planTlToplaminiCikar(calisma))) as PlanlamaCalismasiCevabi['calisma'],
     surum: k.surum, kaynakDegisikligi: g.kaynakDegisikligi ?? null,
   };
 }

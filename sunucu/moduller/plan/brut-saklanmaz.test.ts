@@ -13,7 +13,7 @@ import { kimlikCozucu } from '../oturum/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { DURUM_ANAHTARI } from '../recete-rota/disari.ts';
 import { PLANLAMA_ANAHTARI } from './disari.ts';
-import { brutAlanlariniCikar, maliyetsizKayitDegeri, saklanmayanKayitDegeri } from './motor-ayari-kurallar.ts';
+import { brutAlanlariniCikar, maliyetsizKayitDegeri, saklanmayanKayitDegeri, tezgahUcretiniCikar } from './motor-ayari-kurallar.ts';
 import { planlamaCalismasi, planlamaKayitlari } from './planlama-servis.ts';
 import * as sorgular from './sorgular.ts';
 
@@ -171,5 +171,29 @@ describe('brüt ücret kayda girmez ve dönmez (2728 a, gerçek PostgreSQL)', as
     assert.equal(maliyetsizKayitDegeri('metin', m), JSON.stringify({ surum: 2, plan: { ozet: { late: 1 } }, D: { meta: {} } }));
     assert.equal(maliyetsizKayitDegeri('metin', 'duz metin'), 'duz metin');
     assert.deepEqual(maliyetsizKayitDegeri('json', { plan: null, D: {} }), { plan: null, D: {} });
+  });
+  // 2772 M2 (Güvenlik O2): tezgâhın saat ücreti (Finans istasyon saat maliyeti) kayda yazılmaz ve hiçbir okumada maliyet görmeyene dönmez.
+  // Ücret uydurmadır (7319).
+  test('BS-10: tezgâh ücreti kayda girmez; ham okuma ve görmeyenin çalışma okuması taşımaz; öteki tezgâh alanları kalır', async () => {
+    const UCRET = 7319;
+    const okunan = await app.inject({ method: 'GET', url: '/api/plan/planlama-calismasi', headers: { cookie: cerez } });
+    const { surum } = okunan.json() as PlanlamaCalismasiCevabi;
+    const tezgahlar = [{ id: 'T9', ad: 'Deneme', grup: '10', ucret: UCRET, ucretIst: UCRET, verim: 1, opOran: 1 }];
+    const yaz = await app.inject({ method: 'POST', url: '/api/plan/planlama-kayitlari/yaz', headers: { cookie: cerez },
+      payload: { anahtar: PLANLAMA_ANAHTARI, bicim: 'json', deger: { ...calisma, D: { ...calisma.D, tezgahlar } }, beklenenSurum: surum } });
+    assert.equal(yaz.statusCode, 200, yaz.body);
+    const ham = JSON.stringify((await sorgular.planlamaKaydi(vt(), PLANLAMA_ANAHTARI))?.deger);
+    assert.ok(!ham.includes(String(UCRET)) && ham.includes('"opOran":1'), ham.slice(0, 200));
+    // Göçten önce kalmış kayıt: ücret kayıtta dursa da görmeyene dönmez.
+    await vt().sorgu(`UPDATE plan_planlama_kaydi SET deger = $2::jsonb, surum = surum + 1 WHERE anahtar = $1`,
+      [PLANLAMA_ANAHTARI, JSON.stringify({ ...calisma, D: { ...calisma.D, tezgahlar } })]);
+    const kisi = (islemler: string[]) => ({ id: 1, ad: 'Deneme', islemler }) as unknown as Parameters<typeof planlamaKayitlari>[1];
+    for (const k of [kisi(['plan.planlama-oku', 'plan.yaz']), kisi(['recete-rota.oku']), kisi(['plan.planlama-oku', 'finans.maliyet-oku'])]) {
+      const g = JSON.stringify(await vt().tx((db) => planlamaKayitlari(db, k)));
+      assert.ok(!g.includes(String(UCRET)), `ham okuma ${k.islemler.join(',')}`);
+    }
+    const cal = JSON.stringify(await vt().tx((db) => planlamaCalismasi(db, kisi(['plan.planlama-oku', 'plan.yaz']))));
+    assert.ok(!cal.includes(String(UCRET)), cal.slice(0, 200));
+    assert.deepEqual(tezgahUcretiniCikar({ D: { tezgahlar: [{ id: 'A', ucret: 1, ucretIst: 1, grup: '1' }, 'x'] } }), { D: { tezgahlar: [{ id: 'A', grup: '1' }, 'x'] } });
   });
 });

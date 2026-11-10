@@ -369,3 +369,9 @@ Testler: plan-bedel 815 (iki test), kurallar 815, kablolama 815; istemci planlam
   göstergesi kayıttaki değeri okur; görmeyen geri yazınca toplam kaydan düşer (bir sonraki uygulamada yeniden yazılır).
 - Canlıya alma ve atölye okumaları plan kaydını taşımaz: taslak ve canlı plan satırlarından okunur (kod okuması).
 - Test: `brut-saklanmaz.test.ts` BS-08, BS-09.
+- M2 (Güvenlik O2, 2601 a): tezgâhın saat ücreti (`D.tezgahlar[].ucret`, `ucretIst`; Finans istasyon saat maliyeti, girdi.js ucretIzle) kayda
+  yazılmaz, ham kayıt okumasında kimseye dönmez, çalışma okumasında yalnız finans.maliyet-oku olana (her açılışta Finans'tan yeniden kurulur).
+  GÖRÜNEN DEĞİŞİKLİK: maliyet görmeyen rolde motor bugüne kadar kayıttaki son ücretle hesaplıyordu; artık tezgâh ücreti boş, işlem bedeli
+  bilinmez ("saat ücreti" eksik uyarısı) ve tezgâh seçiminde bedel ağırlığı kalkar. Bu rolün planı ve ek mesai seçimi değişebilir (kart 2770).
+  Sunucu plan motoru (maliyet okuyucusu) ve maliyeti gören değişmez.
+- Kişi maliyeti (`people[].cost`) motorun kaynak biçiminde kalır, çalışmaya (D) kopyalanmaz; kayda girmez (girdi.js kod okuması).
