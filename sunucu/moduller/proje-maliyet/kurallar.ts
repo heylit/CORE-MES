@@ -419,18 +419,30 @@ export interface MalzemeBileseni {
   // Stok birimi başına kg; null bilinmiyor.
   kgBasina: number | null;
   tryTalasKgFiyati: number | null;
+  // Bilinen toplam TRY tutar (PM-52 son alış); varsa brut x birim fiyat yerine doğrudan kullanılır, null bilinmiyor.
+  tryTutar?: number | null;
 }
 
 // PM-51 (2613 2/2, 2720-2): gerçekleşen malzemenin birim fiyatı bağlı satın alma siparişindendir: önce emrin, yoksa projenin siparişi.
-// Sipariş varsa fiyatı bilinmese de listeye düşülmez (null, bilinmiyor). Bağlı sipariş yoksa liste fiyatı kalır (2613-3 açık). Fiyat
-// emre çıkan miktarla çarpılır, siparişin tamamı yazılmaz (artan mal stokta kalır; 2637 a ile çift sayılmaz). Plan liste fiyatıyla kalır.
+// Sipariş varsa fiyatı bilinmese de listeye düşülmez (null, bilinmiyor). Fiyat emre çıkan miktarla çarpılır, siparişin tamamı yazılmaz
+// (artan mal stokta kalır; 2637 a ile çift sayılmaz). Plan liste fiyatıyla kalır.
+// PM-52 (2613-3 a, 2727): bağlı siparişi olmayan çıkış, çıkış anındaki son alışla (stok `emirSarfSonAlisTutarlari`, genel giderdeki emirsiz
+// çıkışla aynı fiyat); çiftin tutarı doğrudan yazılır, birim fiyata çevrilip yeniden çarpılmaz (yuvarlama kaymaz). Talaş liste kg fiyatından
+// düşülmeye devam eder. Son alışı bilinmeyen çift bilinmiyor sayılır, listeye düşülmez.
 export interface SiparisFiyati { hedef: 'emir' | 'proje'; hedefId: number; malzemeNo: number; tryBirimFiyati: string | null }
-export function gercekBilesenFiyatlari(bilesenler: readonly MalzemeBileseni[], fiyatlar: readonly SiparisFiyati[], emirId: number, projeId: number): MalzemeBileseni[] {
+export interface SonAlisTutari { emirId: number; malzemeId: number; miktar: string; tutar: string | null }
+export function gercekBilesenFiyatlari(
+  bilesenler: readonly MalzemeBileseni[], fiyatlar: readonly SiparisFiyati[], sonAlislar: readonly SonAlisTutari[], emirId: number, projeId: number,
+): MalzemeBileseni[] {
   const bul = (hedef: 'emir' | 'proje', id: number, no: number) => fiyatlar.find((f) => f.hedef === hedef && f.hedefId === id && f.malzemeNo === no);
+  const sonAlisTutari = (no: number): number | null => {
+    const a = sonAlislar.find((x) => x.emirId === emirId && x.malzemeId === no);
+    return a === undefined || a.tutar === null ? null : Number(a.tutar);
+  };
   return bilesenler.map((b) => {
     const siparis = bul('emir', emirId, b.malzemeNo) ?? bul('proje', projeId, b.malzemeNo);
-    if (siparis === undefined) return b;
-    return { ...b, tryBirimFiyati: siparis.tryBirimFiyati === null ? null : Number(siparis.tryBirimFiyati) };
+    if (siparis !== undefined) return { ...b, tryBirimFiyati: siparis.tryBirimFiyati === null ? null : Number(siparis.tryBirimFiyati) };
+    return { ...b, tryTutar: sonAlisTutari(b.malzemeNo) };
   });
 }
 
@@ -443,8 +455,9 @@ export function malzemePlani(
 ): { tutar: number | null; talas: number | null } {
   let brut = 0;
   for (const b of bilesenler) {
-    if (b.tryBirimFiyati === null) return { tutar: null, talas: null };
-    brut += b.brut * b.tryBirimFiyati;
+    const t = b.tryTutar !== undefined ? b.tryTutar : b.tryBirimFiyati === null ? null : b.brut * b.tryBirimFiyati;
+    if (t === null) return { tutar: null, talas: null };
+    brut += t;
   }
   const hammaddeler = bilesenler.filter((b) => b.hammadde);
   if (hammaddeler.length === 0) return { tutar: brut, talas: 0 };

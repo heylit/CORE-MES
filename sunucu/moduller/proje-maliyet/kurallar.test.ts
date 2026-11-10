@@ -405,8 +405,24 @@ test('PM-51 (2613 2/2): gerçekleşen birim fiyat emrin siparişinden, yoksa pro
     { hedef: 'emir' as const, hedefId: 7, malzemeNo: 4, tryBirimFiyati: null },
     { hedef: 'proje' as const, hedefId: 9, malzemeNo: 5, tryBirimFiyati: '1' },
   ];
-  const sonuc = gercekBilesenFiyatlari([b(1, 100), b(2, 100), b(3, 100), b(4, 100), b(5, null)], fiyatlar, 7, 3).map((x) => x.tryBirimFiyati);
-  // 1: emrin siparişi; 2: projenin; 3: başka emrin siparişi sayılmaz, liste; 4: sipariş var fiyatı bilinmiyor, listeye düşmez; 5: başka proje, liste (yok).
-  assert.deepEqual(sonuc, [120, 6.1667, 100, null, null]);
-  assert.equal(malzemePlani(gercekBilesenFiyatlari([b(1, 100)], fiyatlar, 7, 3), 1, null).tutar, 240, 'emre çıkan miktar x sipariş fiyatı');
+  // Siparişsiz çiftler (PM-52) son alıştan: 3 için 2 x 45 = 90; 5 için son alış yok.
+  const sonAlis = [{ emirId: 7, malzemeId: 3, miktar: '2', tutar: '90.00' }, { emirId: 7, malzemeId: 5, miktar: '2', tutar: null }, { emirId: 7, malzemeId: 1, miktar: '2', tutar: '1.00' }];
+  const sonuc = gercekBilesenFiyatlari([b(1, 100), b(2, 100), b(3, 100), b(4, 100), b(5, 100)], fiyatlar, sonAlis, 7, 3).map((x) => x.tryTutar !== undefined ? { tutar: x.tryTutar } : x.tryBirimFiyati);
+  // 1: emrin siparişi (son alış sayılmaz); 2: projenin; 3: başka emrin siparişi sayılmaz, son alış; 4: sipariş var fiyatı bilinmiyor, son alışa da
+  // listeye de düşmez; 5: başka proje, son alış yok, listeye düşmez.
+  assert.deepEqual(sonuc, [120, 6.1667, { tutar: 90 }, null, { tutar: null }]);
+  assert.equal(malzemePlani(gercekBilesenFiyatlari([b(1, 100)], fiyatlar, [], 7, 3), 1, null).tutar, 240, 'emre çıkan miktar x sipariş fiyatı');
+});
+
+test('PM-52 (2613-3 a): siparişsiz çıkış son alışla; 50 kg, son alış 120, liste 100 -> 6.000; son alış yoksa bilinmiyor; net sıfır çift 0', () => {
+  const kg = (tryBirimFiyati: number | null): MalzemeBileseni => ({ malzemeNo: 1, brut: 50, tryBirimFiyati, hammadde: false, kgBasina: 1, tryTalasKgFiyati: null });
+  assert.equal(malzemePlani(gercekBilesenFiyatlari([kg(100)], [], [{ emirId: 7, malzemeId: 1, miktar: '50', tutar: '6000.00' }], 7, 3), 1, null).tutar, 6000);
+  assert.equal(malzemePlani(gercekBilesenFiyatlari([kg(100)], [], [], 7, 3), 1, null).tutar, null, 'son alış okuması yok: listeye düşülmez');
+  assert.equal(malzemePlani(gercekBilesenFiyatlari([kg(100)], [], [{ emirId: 8, malzemeId: 1, miktar: '50', tutar: '6000.00' }], 7, 3), 1, null).tutar, null, 'başka emrin çıkışı sayılmaz');
+  assert.equal(malzemePlani(gercekBilesenFiyatlari([kg(100)], [], [{ emirId: 7, malzemeId: 1, miktar: '0', tutar: '0.00' }], 7, 3), 1, null).tutar, 0);
+  // Tutar doğrudan: 123.45 / 3 x 3 = 123.44999999999999 olurdu.
+  assert.equal(malzemePlani(gercekBilesenFiyatlari([{ ...kg(100), brut: 3 }], [], [{ emirId: 7, malzemeId: 1, miktar: '3', tutar: '123.45' }], 7, 3), 1, null).tutar, 123.45);
+  // Talaş liste kg fiyatından düşülür: 50 kg kütük, parça 30 kg, talaş 20 kg x 10 = 200 -> 6000 - 200.
+  const talasli = { ...kg(100), hammadde: true, tryTalasKgFiyati: 10 };
+  assert.deepEqual(malzemePlani(gercekBilesenFiyatlari([talasli], [], [{ emirId: 7, malzemeId: 1, miktar: '50', tutar: '6000.00' }], 7, 3), 1, 30), { tutar: 5800, talas: 200 });
 });

@@ -39,6 +39,12 @@ Taban: main 06144ea. Başvuru: kullanıcı kararları 194 a, 197 a, 198 a, 199 a
 - İstemci: "Gizli" bayraktan gelir (`gizli.ts` `gizliVeyaDeger`), açıklama satırı bilgi rozetli ve kilit simgeli; haftalık birikim yerine boş durum metni; kalem kırılımında not (Arayüz K1-K6).
 
 ## 2720-2 (2613 2/2): gerçekleşen malzeme sipariş fiyatıyla
-- Gerçekleşen malzeme (PM-27) birim fiyatını emrin, yoksa projenin bağlı satın alma siparişinden alır (`satin-alma/disari.ts` `siparisBirimFiyatlari`, 2720-1); bağlı sipariş yoksa bugünkü liste kg fiyatı (2613-3 açık). Plan ve talaş kg fiyatı değişmedi. Saf kural `gercekBilesenFiyatlari` (PM-51).
+- Gerçekleşen malzeme (PM-27) birim fiyatını emrin, yoksa projenin bağlı satın alma siparişinden alır (`satin-alma/disari.ts` `siparisBirimFiyatlari`, 2720-1); bağlı sipariş yoksa son alış (2727, PM-52). Plan ve talaş kg fiyatı değişmedi. Saf kural `gercekBilesenFiyatlari` (PM-51).
 - Miktar emre çıkan net sarftır; siparişin tamamı yazılmaz (artan mal stokta kalır, 2637 a ile çift sayılmaz). VARSAYIM (Maliyet okuması); geri alma orta.
+- Göç, uç, sözleşme ve eksik kodu değişmedi.
+
+## 2727 (2613-3 a): siparişsiz çıkış son alışla
+- Bağlı siparişi olmayan çıkış, çıkış anındaki son alışla fiyatlanır (`stok/disari.ts` `emirSarfSonAlisTutarlari`, 2727-1; 2707 emirsiz çıkışla aynı tanım). Son alışı yoksa bilinmiyor (null, `birim_maliyet_eksik`); liste fiyatına düşülmez. Kural PM-52.
+- Çiftin tutarı doğrudan kullanılır, birim fiyata çevrilip yeniden çarpılmaz (Maliyet N1). Talaş liste kg fiyatından düşülmeye devam eder. Plan değişmedi.
+- VARSAYIM: emrin ya da projenin siparişi varsa çıkışın tamamı sipariş fiyatıyla (PM-51) fiyatlanır, kısmen siparişsiz çıkış ayrılmaz; geri alma orta. Fire dahil net sarf son alışla.
 - Göç, uç, sözleşme ve eksik kodu değişmedi.
