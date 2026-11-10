@@ -217,6 +217,7 @@ async function ozetle(db: Db, satirlar: readonly HataliKaydiSatiri[]): Promise<H
       adet: r.adet, aciklama: r.aciklama, kisi: { id: r.kisiId, ad: kisiler.get(r.kisiId) ?? null }, zaman: r.zaman, karar: r.karar,
       kararKisi: r.kararKisiId === null ? null : { id: r.kararKisiId, ad: kisiler.get(r.kararKisiId) ?? null },
       kararZamani: r.kararZamani, kararNotu: r.kararNotu, ncrKimlik: r.ncrKimlik,
+      arsivde: hataliArsivdeMi({ durum: r.hedefDurum, arsiv: r.hedefArsiv }, { durum: r.kokDurum, arsiv: r.kokArsiv }, r.kokKapanisVar),
     };
   });
 }
