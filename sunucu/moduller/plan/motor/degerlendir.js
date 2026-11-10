@@ -215,11 +215,11 @@ function pdSecenekler(sira) {
   const M = ymMesaiAdaylari();
   const D0 = [...new Set([0, 50, 100, pdDenge()])].sort((a, b) => a - b);
   const l = (sira == null ? D0 : D0.slice(sira, sira + 1)).map(d => { const st = dengeKilit(stOf()); st.tlAmac.kT = pdKat(d);
-    const ac = M.filter(a => a.dGec * pdKat(d) - a.tl - a.dDiger > 0).map(a => ({ m: a.m, gun: a.gun, vardiya: a.vardiya, tl: a.tl }));
+    const ac = M.filter(a => a.tl != null && a.dGec * pdKat(d) - a.tl - a.dDiger > 0).map(a => ({ m: a.m, gun: a.gun, vardiya: a.vardiya, tl: a.tl }));
     st.ekMesai = [...st.ekMesai, ...ac.map(({ tl, ...e }) => e)]; return { id: 'd' + d, d, st, mesai: ac }; });
   const r = pdCalistir(l, pdMs()); Object.assign(TL_AMAC, stOf().tlAmac);
-  /* sayfa bedeli bilinmeyen vardiyayı sıfır toplardı: burada toplam ve net kâr bilinmez (null) */
-  return { secenekler: r.map(x => { const o = pdOzet(x.k, x.st); const mTL = x.mesai.some(e => e.tl == null) ? null : x.mesai.reduce((a, e) => a + e.tl, 0);
+  /* bedeli bilinmeyen ek mesai bedava sayılmaz, seçilmez (2745 a ilkesi); kart bunu bildirsin diye işaret döner */
+  return { bedeliBilinmeyenEkMesai: M.some(a => a.tl == null), secenekler: r.map(x => { const o = pdOzet(x.k, x.st); const mTL = x.mesai.some(e => e.tl == null) ? null : x.mesai.reduce((a, e) => a + e.tl, 0);
     return { denge: x.d, carpan: pdKat(x.d), ekMesai: x.mesai.map(e => ({ makineId: e.m, gun: e.gun, vardiya: e.vardiya, tl: e.tl })), ekMesaiTl: mTL,
       geciken: o.late, isSayisi: x.k.ozet.n, gecikmeSaat: o.gecSa, netKar: mTL == null ? null : o.net - mTL, eksik: o.eksik, plan: { ...x.k, dataVer: S.dataVer } }; }) };
 }

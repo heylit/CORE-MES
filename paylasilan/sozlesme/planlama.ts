@@ -246,6 +246,8 @@ const planKur = z.object({ tur: z.literal('plan-kur'), plan: planKaydiSemasi });
 const planUygula = z.object({ tur: z.literal('plan-uygula'), plan: planKaydiSemasi });
 const planSecenekleri = z.object({
   tur: z.literal('plan-secenekleri'),
+  // en az bir aday bedeli bilinmediği için ele alınmadı (seçilen ek mesailerin hepsinin bedeli bilinir)
+  bedeliBilinmeyenEkMesai: z.boolean(),
   secenekler: z.array(z.object({
     // çubuğun konumu (0 termin önce, 100 kâr önce) ve gecikme bedelinin çarpanı
     denge: z.number().min(0).max(100), carpan: z.number(),
