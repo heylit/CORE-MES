@@ -263,6 +263,42 @@ describe('proje-maliyet (gerçek PostgreSQL, gerçek giriş)', () => {
     assert.equal(malzeme.gerceklesen, null);
   });
 
+  // Stok ve satın alma tablolarına fikstür (PM-52, PM-53): emre sarf ya da mal kabullü giriş; fiyatlı alış, isteğe bağlı emre bağlı sipariş.
+  let alisSirasi = 0;
+  const stokFiksturu = async (kod: string, emir: number) => {
+    const sh = ortam!.sahip;
+    const konum = (await sh.tek<{ id: number }>("INSERT INTO stok_konum (depo_id, kod, tur) SELECT id, $1, 'depo_zemini' FROM stok_depo ORDER BY id LIMIT 1 RETURNING id", [kod]))!.id;
+    const hareket = async (tur: 'giris' | 'cikis', malzeme: number, miktar: number, gunOnce: number): Promise<number> => (await sh.tek<{ id: number }>(
+      `WITH f AS (INSERT INTO stok_hareket_fisi (tur, islem_kimligi, kisi_id) VALUES ($1, pg_current_xact_id(), $5) RETURNING id),
+         h AS (INSERT INTO stok_hareketi (zaman, tur, malzeme_id, kaynak_konum_id, hedef_konum_id, miktar, giris_kaynagi, cikis_nedeni, uretim_emri_id, kisi_id, onayli_eksi, eksi_onay_kaynagi)
+               VALUES (now() - make_interval(days => $6), $1, $2, CASE WHEN $1 = 'cikis' THEN $3::int END, CASE WHEN $1 = 'giris' THEN $3::int END, $4,
+                       CASE WHEN $1 = 'giris' THEN 'mal_kabul' END, CASE WHEN $1 = 'cikis' THEN 'uretime_sarf' END, CASE WHEN $1 = 'cikis' THEN $7::int END, $5, $1 = 'cikis', CASE WHEN $1 = 'cikis' THEN 'kisi' END) RETURNING id),
+         s AS (INSERT INTO stok_hareket_fisi_satiri (hareket_id, fis_id) SELECT h.id, f.id FROM h, f)
+       SELECT id::int FROM h`, [tur, malzeme, konum, miktar, yoneticiId, gunOnce, emir]))!.id;
+    // Fiyatlı mal kabul (bağ verilmezse emre ve projeye bağlı olmayan): TRY teklifli sipariş satırı, mal kabul satırı ve teslim kaydı.
+    const alis = async (malzeme: number, miktar: number, fiyat: number, gunOnce: number, bag: { emir?: number; siparis?: { miktar: number; birim: string } } = {}): Promise<void> => {
+      alisSirasi += 1;
+      const sira = alisSirasi;
+      const [t, kl, tk, katalog] = [randomUUID(), randomUUID(), randomUUID(), randomUUID()];
+      await sh.sorgu("INSERT INTO satin_alma_talep (id, yil, sira, baslik, talep_eden_kisi_id, acan_kisi_id, durum, uretim_emri_id) VALUES ($1, 2099, $2, 'Deneme talep', $3, $3, 'siparis_verildi', $4)", [t, 95200 + sira, yoneticiId, bag.emir ?? null]);
+      await sh.sorgu('INSERT INTO satin_alma_katalog (id, malzeme_no) VALUES ($1, $2)', [katalog, malzeme]);
+      await sh.sorgu("INSERT INTO satin_alma_talep_kalemi (talep_id, id, sira, ad, katalog_id) VALUES ($1, $2, 1, 'Deneme kalem', $3)", [t, kl, katalog]);
+      await sh.sorgu("INSERT INTO satin_alma_teklif (talep_id, id, para_birimi, teklif_tarihi) VALUES ($1, $2, 'TRY', current_date)", [t, tk]);
+      await sh.sorgu('INSERT INTO satin_alma_teklif_satiri (talep_id, teklif_id, kalem_id, birim_fiyat) VALUES ($1, $2, $3, $4)', [t, tk, kl, fiyat]);
+      await sh.sorgu("INSERT INTO satin_alma_karar (talep_id, mod, karar_tarihi) VALUES ($1, 'bolunmus', current_date)", [t]);
+      await sh.sorgu('INSERT INTO satin_alma_siparis (talep_id, teklif_id) VALUES ($1, $2)', [t, tk]);
+      const ss = (await sh.tek<{ id: number }>('INSERT INTO satin_alma_siparis_satiri (talep_id, teklif_id, kalem_id, miktar, birim) VALUES ($1, $2, $3, $4, $5) RETURNING id',
+        [t, tk, kl, bag.siparis?.miktar ?? miktar, bag.siparis?.birim ?? 'adet']))!.id;
+      const h = await hareket('giris', malzeme, miktar, gunOnce);
+      const mk = (await sh.tek<{ id: number }>("INSERT INTO stok_mal_kabul (no, tur, zaman, kisi_id) VALUES ($1, 'satin_alma', now() - make_interval(days => $2), $3) RETURNING id", [`PM-MK-${sira}`, gunOnce, yoneticiId]))!.id;
+      const satir = (await sh.tek<{ id: number }>(
+        'INSERT INTO stok_mal_kabul_satiri (mal_kabul_id, sira, malzeme_id, sayilan_miktar, konum_id, hareket_id, siparis_satir_id) VALUES ($1, 1, $2, $3, $4, $5, $6) RETURNING id',
+        [mk, malzeme, miktar, konum, h, ss]))!.id;
+      await sh.sorgu('INSERT INTO satin_alma_teslim (siparis_satiri_id, mal_kabul_satiri_id, miktar, kisi_id) VALUES ($1, $2, $3, $4)', [ss, satir, miktar, yoneticiId]);
+    };
+    return { hareket, alis };
+  };
+
   test('PM-51 (2613 2/2, 2720-2): gerçekleşen malzeme emre çıkan miktar x bağlı siparişin fiyatı; önce emrin, yoksa projenin siparişi; plan siparişten fiyat almaz', async () => {
     const hedef = (await tamam<Proje>(gonder(yonetici, '/projeler', { kod: 'PM.51', ad: 'Sipariş fiyatlı', siparisId: siparis.id }))).id;
     const { isEmriId } = await isEmriAc(hedef);
@@ -317,34 +353,7 @@ describe('proje-maliyet (gerçek PostgreSQL, gerçek giriş)', () => {
     const [bilesen, fiyatsiz] = [await mamulAc(), await mamulAc()];
     const sh = ortam!.sahip;
     await sh.sorgu('INSERT INTO uretim_emirleri_is_emri_bileseni (is_emri_id, malzeme_no, miktar, fire_yuzde) VALUES ($1, $2, 50, 0)', [isEmriId, bilesen]);
-    const konum = (await sh.tek<{ id: number }>("INSERT INTO stok_konum (depo_id, kod, tur) SELECT id, 'PM-52', 'depo_zemini' FROM stok_depo ORDER BY id LIMIT 1 RETURNING id"))!.id;
-    const hareket = async (tur: 'giris' | 'cikis', malzeme: number, miktar: number, gunOnce: number): Promise<number> => (await sh.tek<{ id: number }>(
-      `WITH f AS (INSERT INTO stok_hareket_fisi (tur, islem_kimligi, kisi_id) VALUES ($1, pg_current_xact_id(), $5) RETURNING id),
-         h AS (INSERT INTO stok_hareketi (zaman, tur, malzeme_id, kaynak_konum_id, hedef_konum_id, miktar, giris_kaynagi, cikis_nedeni, uretim_emri_id, kisi_id, onayli_eksi, eksi_onay_kaynagi)
-               VALUES (now() - make_interval(days => $6), $1, $2, CASE WHEN $1 = 'cikis' THEN $3::int END, CASE WHEN $1 = 'giris' THEN $3::int END, $4,
-                       CASE WHEN $1 = 'giris' THEN 'mal_kabul' END, CASE WHEN $1 = 'cikis' THEN 'uretime_sarf' END, CASE WHEN $1 = 'cikis' THEN $7::int END, $5, $1 = 'cikis', CASE WHEN $1 = 'cikis' THEN 'kisi' END) RETURNING id),
-         s AS (INSERT INTO stok_hareket_fisi_satiri (hareket_id, fis_id) SELECT h.id, f.id FROM h, f)
-       SELECT id::int FROM h`, [tur, malzeme, konum, miktar, yoneticiId, gunOnce, emir]))!.id;
-    // Siparişsiz (emre ve projeye bağlı olmayan) fiyatlı mal kabul: TRY teklifli sipariş satırı, mal kabul satırı ve teslim kaydı.
-    let sira = 0;
-    const alis = async (malzeme: number, miktar: number, fiyat: number, gunOnce: number): Promise<void> => {
-      sira += 1;
-      const [t, kl, tk, katalog] = [randomUUID(), randomUUID(), randomUUID(), randomUUID()];
-      await sh.sorgu("INSERT INTO satin_alma_talep (id, yil, sira, baslik, talep_eden_kisi_id, acan_kisi_id, durum) VALUES ($1, 2099, $2, 'Deneme talep', $3, $3, 'siparis_verildi')", [t, 95200 + sira, yoneticiId]);
-      await sh.sorgu('INSERT INTO satin_alma_katalog (id, malzeme_no) VALUES ($1, $2)', [katalog, malzeme]);
-      await sh.sorgu("INSERT INTO satin_alma_talep_kalemi (talep_id, id, sira, ad, katalog_id) VALUES ($1, $2, 1, 'Deneme kalem', $3)", [t, kl, katalog]);
-      await sh.sorgu("INSERT INTO satin_alma_teklif (talep_id, id, para_birimi, teklif_tarihi) VALUES ($1, $2, 'TRY', current_date)", [t, tk]);
-      await sh.sorgu('INSERT INTO satin_alma_teklif_satiri (talep_id, teklif_id, kalem_id, birim_fiyat) VALUES ($1, $2, $3, $4)', [t, tk, kl, fiyat]);
-      await sh.sorgu("INSERT INTO satin_alma_karar (talep_id, mod, karar_tarihi) VALUES ($1, 'bolunmus', current_date)", [t]);
-      await sh.sorgu('INSERT INTO satin_alma_siparis (talep_id, teklif_id) VALUES ($1, $2)', [t, tk]);
-      const ss = (await sh.tek<{ id: number }>("INSERT INTO satin_alma_siparis_satiri (talep_id, teklif_id, kalem_id, miktar, birim) VALUES ($1, $2, $3, $4, 'adet') RETURNING id", [t, tk, kl, miktar]))!.id;
-      const h = await hareket('giris', malzeme, miktar, gunOnce);
-      const mk = (await sh.tek<{ id: number }>("INSERT INTO stok_mal_kabul (no, tur, zaman, kisi_id) VALUES ($1, 'satin_alma', now() - make_interval(days => $2), $3) RETURNING id", [`PM-MK-${sira}`, gunOnce, yoneticiId]))!.id;
-      const satir = (await sh.tek<{ id: number }>(
-        'INSERT INTO stok_mal_kabul_satiri (mal_kabul_id, sira, malzeme_id, sayilan_miktar, konum_id, hareket_id, siparis_satir_id) VALUES ($1, 1, $2, $3, $4, $5, $6) RETURNING id',
-        [mk, malzeme, miktar, konum, h, ss]))!.id;
-      await sh.sorgu('INSERT INTO satin_alma_teslim (siparis_satiri_id, mal_kabul_satiri_id, miktar, kisi_id) VALUES ($1, $2, $3, $4)', [ss, satir, miktar, yoneticiId]);
-    };
+    const { hareket, alis } = await stokFiksturu('PM-52', emir);
     const malzeme = async () => {
       const c = await vt().tx((db) => projeMaliyeti(db, kullanici(['finans.maliyet-oku', FIYAT_ISLEMI]), hedef, SIMDI));
       const k = c.kalemler.find((x) => x.kalem === 'malzeme')!;
@@ -359,6 +368,33 @@ describe('proje-maliyet (gerçek PostgreSQL, gerçek giriş)', () => {
     // Son alışı olmayan malzemenin sarfı malzemeyi bilinmez yapar (listeye düşülmez).
     await hareket('cikis', fiyatsiz, 2, 2);
     assert.deepEqual(await malzeme(), [null, null]);
+  });
+
+  test('PM-53 (2733 a, 2739): emrin siparişi teslim miktarına kadar sipariş fiyatı, fazlası son alış; 80 kg, 50 kg @100, son alış 120 -> 8.600', async () => {
+    const hedef = (await tamam<Proje>(gonder(yonetici, '/projeler', { kod: 'PM.53', ad: 'Kısmi siparişli', siparisId: siparis.id }))).id;
+    const { isEmriId } = await isEmriAc(hedef);
+    const emir = (await vt().tek<{ id: number }>('SELECT uretim_emri_id AS id FROM uretim_emirleri_is_emri WHERE id = $1', [isEmriId]))!.id;
+    const bilesen = await mamulAc();
+    await ortam!.sahip.sorgu('INSERT INTO uretim_emirleri_is_emri_bileseni (is_emri_id, malzeme_no, miktar, fire_yuzde) VALUES ($1, $2, 80, 0)', [isEmriId, bilesen]);
+    const { hareket, alis } = await stokFiksturu('PM-53', emir);
+    const malzeme = async () => {
+      const c = await vt().tx((db) => projeMaliyeti(db, kullanici(['finans.maliyet-oku', FIYAT_ISLEMI]), hedef, SIMDI));
+      const k = c.kalemler.find((x) => x.kalem === 'malzeme')!;
+      return { degerler: [k.plan, k.gerceklesen], eksik: c.eksikler.includes('birim_maliyet_eksik') };
+    };
+    // Emre bağlı sipariş 50 kg @100 (6 gün önce), bağsız alış 100 kg @120 (4 gün önce), emre 80 kg sarf (3 gün önce). Birim dönüşümlü
+    // (Mimar N3): sipariş satırı 2 'rulo', teslim stok biriminde 50; sınır sipariş satırının miktarı (2) değil, teslim (50).
+    await alis(bilesen, 50, 100, 6, { emir, siparis: { miktar: 2, birim: 'rulo' } });
+    await alis(bilesen, 100, 120, 4);
+    await hareket('cikis', bilesen, 80, 3);
+    // 50 x 100 + 30 x 120; plan liste fiyatsız, bilinmez.
+    assert.deepEqual((await malzeme()).degerler, [null, 8600]);
+    // Fazlası son alışsız malzemede çift bilinmez ve eksik kodu yazılır (2727'de yazılmıyordu): 2 sarf (2 gün önce), emre bağlı siparişten
+    // 1 teslim sonradan (1 gün önce); çıkış anında son alış yok.
+    const fiyatsiz = await mamulAc();
+    await hareket('cikis', fiyatsiz, 2, 2);
+    await alis(fiyatsiz, 1, 100, 1, { emir });
+    assert.deepEqual(await malzeme(), { degerler: [null, null], eksik: true });
   });
 
   test('PM-30 bekleme finansmanı (PM-29): TL faizi yoksa bildirilir; vadesiz siparişte vade eksik; plan tarihi yoksa plan bilinmez, başlamamış işte gerçek 0', async () => {

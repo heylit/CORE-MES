@@ -423,28 +423,63 @@ export interface MalzemeBileseni {
   tryTutar?: number | null;
 }
 
-// PM-51 (2613 2/2, 2720-2): gerçekleşen malzemenin birim fiyatı bağlı satın alma siparişindendir: önce emrin, yoksa projenin siparişi.
-// Sipariş varsa fiyatı bilinmese de listeye düşülmez (null, bilinmiyor). Fiyat emre çıkan miktarla çarpılır, siparişin tamamı yazılmaz
-// (artan mal stokta kalır; 2637 a ile çift sayılmaz). Plan liste fiyatıyla kalır.
-// PM-52 (2613-3 a, 2727): bağlı siparişi olmayan çıkış, çıkış anındaki son alışla (stok `emirSarfSonAlisTutarlari`, genel giderdeki emirsiz
-// çıkışla aynı fiyat); çiftin tutarı doğrudan yazılır, birim fiyata çevrilip yeniden çarpılmaz (yuvarlama kaymaz). Talaş liste kg fiyatından
-// düşülmeye devam eder. Son alışı bilinmeyen çift bilinmiyor sayılır, listeye düşülmez.
-export interface SiparisFiyati { hedef: 'emir' | 'proje'; hedefId: number; malzemeNo: number; tryBirimFiyati: string | null }
-export interface SonAlisTutari { emirId: number; malzemeId: number; miktar: string; tutar: string | null }
-export function gercekBilesenFiyatlari(
-  bilesenler: readonly MalzemeBileseni[], fiyatlar: readonly SiparisFiyati[], sonAlislar: readonly SonAlisTutari[], emirId: number, projeId: number,
-): MalzemeBileseni[] {
+// PM-51 (2613 2/2, 2720-2): gerçekleşen malzemenin bağlı satın alma siparişi fiyatı: önce emrin, sonra projenin siparişi. Sipariş fiyatı
+// bilinmiyorsa listeye düşülmez (null). Fiyat emre çıkan miktarla çarpılır, siparişin tamamı yazılmaz (artan mal stokta kalır; 2637 a).
+// PM-52 (2613-3 a, 2727): siparişin karşılamadığı çıkış, çıkış anındaki son alışla (stok `emirSarfSonAlisTutarlari`, genel giderdeki emirsiz
+// çıkışla aynı fiyat). Son alışı bilinmeyen çift bilinmiyor sayılır, listeye düşülmez. Talaş liste kg fiyatından.
+// PM-53 (2733 a, 2739): sipariş yalnız teslim alınan net miktarına kadar fiyatlar. Çift başına sırayla: emrin siparişi (teslimine kadar),
+// projenin siparişi (projede kalan teslimine kadar; emirlere ilk sarf zamanı, eşitse emir no sırasıyla dağılır), kalan fazla son alıştan
+// orantıyla (fazla / çıkış x çiftin son alış tutarı, kuruşa yuvarlanır). Miktarlar binde tam sayıyla: kalan kapasite kaymasın.
+// Çıkışlar arası düşüm (Mimar N4): sağlayıcıların miktarı hedef toplamıdır. Bir emrin aynı malzemedeki bütün çıkışları tek çift (net sarf)
+// olduğu için emrin siparişi bir kez tüketilir; projenin siparişi emirler arasında `projeKalan` ile düşülür, emrin kullandığı kısım bir
+// sonraki emre kalmaz. Teslim ve sarf ikisi de stok birimindedir (2739-1); sipariş satırının kendi birimi kullanılmaz.
+export interface SiparisFiyati { hedef: 'emir' | 'proje'; hedefId: number; malzemeNo: number; tryBirimFiyati: string | null; teslimMiktari: string }
+export interface SonAlisTutari { emirId: number; malzemeId: number; miktar: string; tutar: string | null; ilkZaman?: string | null }
+const ciftAnahtari = (emirId: number, malzemeNo: number): string => `${emirId}|${malzemeNo}`;
+export function gercekCiftTutarlari(sonAlislar: readonly SonAlisTutari[], fiyatlar: readonly SiparisFiyati[], projeId: number): Map<string, number | null> {
   const bul = (hedef: 'emir' | 'proje', id: number, no: number) => fiyatlar.find((f) => f.hedef === hedef && f.hedefId === id && f.malzemeNo === no);
-  const sonAlisTutari = (no: number): number | null => {
-    const a = sonAlislar.find((x) => x.emirId === emirId && x.malzemeId === no);
-    return a === undefined || a.tutar === null ? null : Number(a.tutar);
-  };
-  return bilesenler.map((b) => {
-    const siparis = bul('emir', emirId, b.malzemeNo) ?? bul('proje', projeId, b.malzemeNo);
-    if (siparis !== undefined) return { ...b, tryBirimFiyati: siparis.tryBirimFiyati === null ? null : Number(siparis.tryBirimFiyati) };
-    return { ...b, tryTutar: sonAlisTutari(b.malzemeNo) };
-  });
+  const binde = (m: string): number => Math.round(Number(m) * 1000);
+  const zaman = (z: string | null | undefined): number => (z == null ? Number.POSITIVE_INFINITY : Date.parse(z));
+  const sirali = [...sonAlislar].sort((x, y) => zaman(x.ilkZaman) - zaman(y.ilkZaman) || x.emirId - y.emirId);
+  const projeKalan = new Map<number, number>();
+  const sonuc = new Map<string, number | null>();
+  for (const a of sirali) {
+    const cikis = binde(a.miktar);
+    if (!(cikis > 0)) {
+      sonuc.set(ciftAnahtari(a.emirId, a.malzemeId), cikis === 0 ? 0 : a.tutar === null ? null : Number(a.tutar));
+      continue;
+    }
+    let kalan = cikis;
+    let toplam = 0;
+    let bilinmez = false;
+    const katman = (f: SiparisFiyati | undefined, kapasite: number): number => {
+      if (f === undefined || kalan === 0) return 0;
+      const m = Math.min(kalan, Math.max(0, kapasite));
+      if (m === 0) return 0;
+      if (f.tryBirimFiyati === null) bilinmez = true;
+      else toplam += (m / 1000) * Number(f.tryBirimFiyati);
+      kalan -= m;
+      return m;
+    };
+    const emrin = bul('emir', a.emirId, a.malzemeId);
+    katman(emrin, emrin === undefined ? 0 : binde(emrin.teslimMiktari));
+    const projenin = bul('proje', projeId, a.malzemeId);
+    if (projenin !== undefined) {
+      const kapasite = projeKalan.get(a.malzemeId) ?? binde(projenin.teslimMiktari);
+      projeKalan.set(a.malzemeId, kapasite - katman(projenin, kapasite));
+    }
+    if (kalan > 0) {
+      if (a.tutar === null) bilinmez = true;
+      else toplam += Math.round((kalan / cikis) * Number(a.tutar) * 100) / 100;
+    }
+    sonuc.set(ciftAnahtari(a.emirId, a.malzemeId), bilinmez ? null : toplam);
+  }
+  return sonuc;
 }
+export function gercekBilesenFiyatlari(bilesenler: readonly MalzemeBileseni[], tutarlar: ReadonlyMap<string, number | null>, emirId: number): MalzemeBileseni[] {
+  return bilesenler.map((b) => ({ ...b, tryTutar: tutarlar.get(ciftAnahtari(emirId, b.malzemeNo)) ?? null }));
+}
+export const bilesenTutariBilinmiyor = (b: MalzemeBileseni): boolean => (b.tryTutar !== undefined ? b.tryTutar === null : b.tryBirimFiyati === null);
 
 // PM-25 (208 a, 214 a): emrin planlanan malzemesi = Σ brüt x birim fiyat - talaş değeri. Birinin fiyatı yoksa malzeme bilinmez.
 // Talaş kg = hammaddelerin kütük kg toplamı - adet x parça net kg (en az 0); değeri kütük kg'ı ağırlıklı talaş kg fiyatıyla. Kütük ağırlığı,
