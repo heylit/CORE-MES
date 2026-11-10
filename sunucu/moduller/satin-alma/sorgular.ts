@@ -838,11 +838,14 @@ export function ortalamaAlisFiyatlariOku(db: Db, malzemeNolar: readonly number[]
 // 2613 2/2, 2720-1: emre (KALEM_EMRI) ya da projeye (talebin projesi; emirli talep projeye sayılmaz, 2611 a) bağlı siparişin malzeme başına
 // net TRY birim fiyatı, stok değeriyle aynı yoldan; net teslimi olan satırlar, net teslimle ağırlıklı. Fason satırı (iş emri bağı) ve
 // kartsız kalem gelmez; iptal talep sayılmaz. Bir satırın TL karşılığı yoksa o çiftin fiyatı boş: kısmi ortalama gerçek alıştan sapardı.
-export interface SiparisBirimFiyatiSatiri { hedef: 'emir' | 'proje'; hedefId: number; malzemeNo: number; tryBirimFiyati: string | null }
+// 2733 a: teslim miktarı fiyatın ağırlığı olan aynı net teslimdir (teslimler eksi iadeler); mal kabul onu stok giriş hareketiyle aynı
+// miktardan yazar, birimi stok birimidir. Fiyatı boş çiftin miktarı da bilinir.
+export interface SiparisBirimFiyatiSatiri { hedef: 'emir' | 'proje'; hedefId: number; malzemeNo: number; tryBirimFiyati: string | null; teslimMiktari: string }
 export function siparisBirimFiyatlariOku(db: Db, emirIdler: readonly number[], projeIdler: readonly number[], malzemeNolar: readonly number[]): Promise<SiparisBirimFiyatiSatiri[]> {
   return db.sorgu<SiparisBirimFiyatiSatiri>(
     `SELECT x.hedef, x.hedef_id AS "hedefId", x.malzeme_no AS "malzemeNo",
-            CASE WHEN bool_or(x.tl IS NULL) THEN NULL ELSE (round(sum(x.tl * x.net) / sum(x.net), 4))::text END AS "tryBirimFiyati"
+            CASE WHEN bool_or(x.tl IS NULL) THEN NULL ELSE (round(sum(x.tl * x.net) / sum(x.net), 4))::text END AS "tryBirimFiyati",
+            sum(x.net)::text AS "teslimMiktari"
        FROM (
          SELECT h.hedef, h.hedef_id, c.malzeme_no, sum(m.miktar) AS net, ${NET_BIRIM_FIYAT} * ${TRY_KURU} AS tl
            FROM satin_alma_teslim m ${TESLIM_FIYATI_BAGI}

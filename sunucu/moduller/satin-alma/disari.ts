@@ -11,7 +11,7 @@ export type { SiparisSatiriOkuma as SiparisSatiri } from './sorgular.ts';
 // denetlemez (stok ucunda); hata UygulamaHatasi'dır (422 geçersiz, 409 aynı mal kabul satırı ikinci kez), stok işlemi geri sarar.
 export { teslimGeriAl, teslimIsle } from './servis.ts';
 // Stok değeri: malzemenin en son teslim alınan satın alma fiyatı (teklif birim fiyatı, para birimi, TRY karşılığı ve teslim zamanı).
-export { ortalamaAlisFiyatlari, siparisBirimFiyatlari, sonAlisFiyatlari } from './servis.ts';
+export { ortalamaAlisFiyatlari, siparisBirimFiyatlari, sonAlisFiyatlari, type SiparisBirimFiyati } from './servis.ts';
 // Plan motoru: açık satın alma siparişinde gelecek malzemenin kalan miktarı ve beklenen gelişi (termin sırasıyla, tarihsiz en sonda).
 // Yetki denetlemez; fiyat yok.
 export { malzemeGelisTarihleri } from './servis.ts';

@@ -3265,7 +3265,7 @@ describe('satin-alma sürüm 6 (gerçek PostgreSQL)', () => {
     assert.equal((await oranlar()).get(anahtar), 0.166667);
   });
 
-  test('2613 2/2, 2720-1: emre ve projeye bağlı siparişin malzeme birim fiyatı; teslimle ağırlıklı, iki iskonto, sabit kur önce; iade, fason, iptal ve emirli talebin projesi sayılmaz', async () => {
+  test('2613 2/2, 2720-1, 2733 a: emre ve projeye bağlı siparişin malzeme birim fiyatı ve net teslim miktarı; teslimle ağırlıklı, iki iskonto, sabit kur önce; iade, fason, iptal ve emirli talebin projesi sayılmaz', async () => {
     const e = await emirAc();
     const p = await projeEkle('P2720');
     const emirli = await bolunmusSiparis('5');
@@ -3283,15 +3283,19 @@ describe('satin-alma sürüm 6 (gerçek PostgreSQL)', () => {
     const oku = (emirIdleri: number[], projeIdleri: number[], malzemeNolar: number[]) => vt().tx((db) => siparisBirimFiyatlari(db, { emirIdleri, projeIdleri, malzemeNolar }));
     assert.deepEqual(await oku([e], [p], [m]), [], 'teslimsiz satır yok');
     await teslimEt(siparisi(emirli.s, emirli.a).satirlar[0]!.id, '1', 272001);
-    await teslimEt(siparisi(ikinci.s, ikinci.a).satirlar[0]!.id, '2', 272002);
+    // Mal kabul düzeltmesi (2733 a, Test): 3 alınıp geri alınır, 2.5 yeniden alınır; net 2.5.
+    await teslimEt(siparisi(ikinci.s, ikinci.a).satirlar[0]!.id, '3', 272002);
+    await geriAl(272002);
+    await teslimEt(siparisi(ikinci.s, ikinci.a).satirlar[0]!.id, '2.500', 272005);
     await teslimEt(siparisi(projeli.s, projeli.a).satirlar[0]!.id, '1', 272003);
     // İade: B satırı (aynı kart, 9) teslim alınıp geri alınır; neti 0, ortalamaya girmez.
     await teslimEt(siparisi(emirli.s, emirli.b).satirlar[0]!.id, '2', 272004);
     await geriAl(272004);
-    // (4.5 x 1 + 7 x 2) / 3 = 6.16667 -> 4 ondalık. Proje: USD 8 x teklif kuru 30.
+    // (4.5 x 1 + 7 x 2.5) / 3.5 = 6.285714 -> 4 ondalık. Proje: USD 8 x teklif kuru 30. Teslim miktarı net teslimdir (iade ve geri alınan
+    // düşer), sondaki sıfırlar atılır; mal kabulün stok giriş miktarıyla aynıdır (stok birimi).
     assert.deepEqual(await oku([e, e], [p], [m, 2147483000]), [
-      { hedef: 'emir', hedefId: e, malzemeNo: m, tryBirimFiyati: '6.1667' },
-      { hedef: 'proje', hedefId: p, malzemeNo: m, tryBirimFiyati: '240' },
+      { hedef: 'emir', hedefId: e, malzemeNo: m, tryBirimFiyati: '6.2857', teslimMiktari: '3.5' },
+      { hedef: 'proje', hedefId: p, malzemeNo: m, tryBirimFiyati: '240', teslimMiktari: '1' },
     ]);
     // Sabit kur teklif kurundan önce gelir.
     await ortam!.sahip.sorgu("INSERT INTO satin_alma_sabit_kur (talep_id, para_birimi, kur, aylik_faiz_yuzdesi) VALUES ($1, 'USD', 32, NULL)", [projeli.s.id]);
@@ -3304,13 +3308,13 @@ describe('satin-alma sürüm 6 (gerçek PostgreSQL)', () => {
       await db.sorgu('UPDATE satin_alma_talep_kalemi SET kaynak_talep_id = $2, kaynak_sira = 1 WHERE talep_id = $1', [emirli.s.id, ikinci.s.id]);
     });
     assert.deepEqual(await oku([], [p2], [m]), []);
-    assert.deepEqual((await oku([e], [], [m])).map((x) => x.tryBirimFiyati), ['6.1667']);
+    assert.deepEqual((await oku([e], [], [m])).map((x) => [x.tryBirimFiyati, x.teslimMiktari]), [['6.2857', '3.5']]);
     // Fason satırı (iş emri bağı) gelmez: ikinci siparişin satırı fasona bağlanınca emirde yalnız ilk sipariş kalır.
     const tip = (await ortam!.sahip.tek<{ id: number }>('SELECT id FROM istasyonlar_operasyon_tipi ORDER BY id LIMIT 1'))!.id;
     const ie = (await ortam!.sahip.tek<{ id: number }>(
       "INSERT INTO uretim_emirleri_is_emri (uretim_emri_id, sira, op_no, operasyon_tipi_id, ad) VALUES ($1, 1, 10, $2, 'Deneme fason') RETURNING id", [e, tip]))!.id;
     await ortam!.sahip.sorgu('UPDATE satin_alma_siparis_satiri SET is_emri_id = $2 WHERE id = $1', [siparisi(ikinci.s, ikinci.a).satirlar[0]!.id, ie]);
-    assert.deepEqual((await oku([e], [], [m])).map((x) => x.tryBirimFiyati), ['4.5']);
+    assert.deepEqual((await oku([e], [], [m])).map((x) => [x.tryBirimFiyati, x.teslimMiktari]), [['4.5', '1']]);
     // İptal talep sayılmaz.
     await ortam!.sahip.sorgu("UPDATE satin_alma_talep SET durum = 'iptal', iptal_nedeni = 'Deneme' WHERE id = $1", [emirli.s.id]);
     assert.deepEqual(await oku([e], [], [m]), []);
