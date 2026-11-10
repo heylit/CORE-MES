@@ -633,3 +633,31 @@ export type MerkezBelgelerCevabi = z.output<typeof merkezBelgelerCevabi>;
 export type MerkezEkleCevabi = z.output<typeof merkezEkleCevabi>;
 export type MerkezKontrolCevabi = z.output<typeof merkezKontrolCevabi>;
 export type MerkezDurumu = (typeof MERKEZ_DURUMLARI)[number];
+
+// 2227-1 b: Üretim Hazırlık'ın iş emrine özel hazırlık maddesi. Hazırlık matrisinde "Ek madde" olarak yalnız uyarır.
+export const AZAMI_HAZIRLIK_MADDESI = 30;
+export const HAZIRLIK_MADDESI_OLAYLARI = ['tamamla', 'geri-al', 'kaldir'] as const;
+const isEmriKimligi = z.coerce.number<number>({ message: 'İş emri sayı olmalı.' }).int().positive().max(2147483647);
+export const hazirlikMaddeleriSorgusu = z.object({ isEmriId: isEmriKimligi });
+export const hazirlikMaddesiEkleGovdesi = z.object({
+  isEmriId: isEmriKimligi,
+  ad: z.string().trim().min(1, 'Madde adı boş olamaz.').max(120, 'Madde adı en çok 120 karakter olur.'),
+});
+export const hazirlikMaddesiParametresi = z.object({ id: z.coerce.number<number>().int().positive().max(2147483647) });
+export const hazirlikMaddesiIsaretleGovdesi = z.object({ olay: z.enum(HAZIRLIK_MADDESI_OLAYLARI) });
+export const hazirlikMaddeleriCevabi = z.object({
+  isEmriId: z.number().int().positive(),
+  // İş emri bitmişse madde eklenmez, işaretlenmez.
+  kapali: z.boolean(),
+  maddeler: z.array(z.object({
+    id: z.number().int().positive(),
+    ad: z.string(),
+    ekleyenAdi: z.string().nullable(),
+    eklenme: zamanSemasi,
+    tamam: z.boolean(),
+    tamamlayanAdi: z.string().nullable(),
+    tamamlanma: zamanSemasi.nullable(),
+  })),
+});
+export type HazirlikMaddeleriCevabi = z.output<typeof hazirlikMaddeleriCevabi>;
+export type HazirlikMaddesiOlayi = (typeof HAZIRLIK_MADDESI_OLAYLARI)[number];

@@ -505,6 +505,27 @@ export function isEmriYayinda(paketler: readonly { parca: boolean; durum: unknow
   return bakilan.length > 0 && bakilan.every((p) => !yayinlanmamis(p.durum));
 }
 
+// 2227-1 b: iş emrine özel hazırlık maddesi. Yalnız uyarır: madde yoksa gerekmez, hepsi tamamsa tamam, kısmen sürüyor, hiç yoksa eksik.
+export function ekMaddeHazirligi(maddeler: readonly { tamam: boolean }[]): { durum: 'yok' | 'suruyor' | 'tamam'; secildi: boolean } {
+  if (maddeler.length === 0) return { durum: 'yok', secildi: false };
+  const tamam = maddeler.filter((m) => m.tamam).length;
+  return { durum: tamam === maddeler.length ? 'tamam' : tamam > 0 ? 'suruyor' : 'yok', secildi: true };
+}
+export const HAZIRLIK_MADDESI_ILETILERI = {
+  isEmriYok: 'İş emri bulunamadı.',
+  maddeYok: 'Hazırlık maddesi bulunamadı.',
+  kapali: 'Bitmiş iş emrinde hazırlık maddesi değişmez.',
+  dolu: 'Bir iş emrine en çok 30 hazırlık maddesi eklenir.',
+  zaten: 'Madde zaten bu durumda.',
+} as const;
+// Son olaydan yeni olaya geçiş: kaldırılmış madde değişmez (bulunamadı), aynı hâle ikinci kez geçilmez.
+export function hazirlikMaddesiOlayReddi(son: string | null, yeni: 'tamamla' | 'geri-al' | 'kaldir'): 'maddeYok' | 'zaten' | null {
+  if (son === 'kaldir') return 'maddeYok';
+  if (yeni === 'tamamla' && son === 'tamamla') return 'zaten';
+  if (yeni === 'geri-al' && son !== 'tamamla') return 'zaten';
+  return null;
+}
+
 // İş emri paketinde çalışmaya geçen olay adımı başlatır, biten olay bitirir; parti kuralı bu iki komut için kayıttan önce sorulur.
 export function partiKomutu(tur: ArkonKayitTuru, satir: Readonly<Record<string, unknown>>): 'baslat' | 'bitir' | null {
   if (tur !== 'events' || paketIsEmri(satir['pkgId']) === null) return null;
