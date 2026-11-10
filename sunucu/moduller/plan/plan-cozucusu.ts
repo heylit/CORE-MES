@@ -6,7 +6,7 @@ import { hedefMotorAyari } from './motor-ayari.ts';
 import { calismayaMotorAyari } from './motor-ayari-kurallar.ts';
 import { planAni } from './planlama-kurallar.ts';
 import { cozumGirdisi, type EkAdim, type PlanBenzetimi } from './plan-girdisi.ts';
-import { motorKodu, planCoz, type MotorDurumu } from './plan-motoru.ts';
+import { motorKodu, planCoz, type MotorDurumu, type MotorPlani } from './plan-motoru.ts';
 import { planCozumKaynagi } from './planlama-servis.ts';
 import type { PlanMotoruCozucusu, PlanMotoruIstegi } from './servis.ts';
 
@@ -59,6 +59,7 @@ export async function coz(
   const plan = await planCoz({ durum: g.st, kip: istek.kip, taban: g.taban });
   const basarisiz = new Set((plan.fail ?? []).map(String));
   const gelmeyen = basarisiz.size > 0 ? malzemesiGelmeyenler(g.st) : new Set<string>();
+  const neden = (id: string): MotorNedeni | undefined => (plan.failNeden ?? {})[id];
   const yerlesimler: { anahtar: string; makineId: number; baslangic: string; bitis: string }[] = [];
   const parcaliYerlesimler: ParcaliYerlesim[] = [];
   for (const id of g.sira) {
@@ -76,7 +77,7 @@ export async function coz(
       });
       if (parcalar.length !== paylar.length) {
         yerlesmeyen.push(anahtar);
-        nedenler[anahtar] = yerlesmemeNedeni(g, id, (p) => plan.ops[p] !== undefined && !basarisiz.has(p));
+        nedenler[anahtar] = yerlesmemeNedeni(g, id, (p) => plan.ops[p] !== undefined && !basarisiz.has(p), neden(id), kaynak.kaynak);
         continue;
       }
       parcaliYerlesimler.push({ anahtar, parcalar });
@@ -87,7 +88,7 @@ export async function coz(
     if (basarisiz.has(id) && gelmeyen.has(id.slice(0, id.lastIndexOf('.')))) { malzemeBekleyen.push(anahtar); continue; }
     if (r === undefined || basarisiz.has(id) || !(Number.isInteger(makineId) || Number.isInteger(kisiId)) || !Number.isFinite(r.S) || !Number.isFinite(r.C)) {
       yerlesmeyen.push(anahtar);
-      nedenler[anahtar] = yerlesmemeNedeni(g, id, (p) => plan.ops[p] !== undefined && !basarisiz.has(p));
+      nedenler[anahtar] = yerlesmemeNedeni(g, id, (p) => plan.ops[p] !== undefined && !basarisiz.has(p), neden(id), kaynak.kaynak);
       continue;
     }
     const yer = { anahtar, baslangic: planAni(g.baslangic, r.S), bitis: planAni(g.baslangic, r.C) };
@@ -139,11 +140,68 @@ type KisiYerlesimi = NonNullable<Awaited<ReturnType<PlanMotoruCozucusu>>['kisiYe
 // Motorda karşılığı olmayan kuyruk işi: adım ürünün yürürlükteki rotasında yok (983 b), emir ya da ürünü okunamadı.
 const ROTADA_YOK = 'Adım ürünün yürürlükteki rotasında ya da emirlerde bulunamadı.';
 // Öncülü yerleşmeyen iş bekler (981 a-1): öncül kuyrukta yerleşmedi ya da motorda tezgâhı yok (pasif makine, kişi kaynağı).
-function yerlesmemeNedeni(g: { oncul: Record<string, string[]>; kimlik: Record<string, string> }, id: string, yerlesti: (p: string) => boolean): string {
+// B-2482-32: öncülü yerleşmiş işin nedeni motorun failNeden'idir, metni motorun failNedenMetni'yle (tarayıcıdaki uyarıyla aynı söz).
+// Kaynakta adayı boşaltan sebep (adayNedeni) varsa o yazılır: kuyruğun tezgâhı adaylara eklendiğinden pasif makinedeki iş motorda 'aday'
+// değil 'zaman' çıkar, gerçek sebep yine kaynaktadır.
+function yerlesmemeNedeni(
+  g: { oncul: Record<string, string[]>; kimlik: Record<string, string> }, id: string, yerlesti: (p: string) => boolean,
+  neden: MotorNedeni | undefined, kaynak: AdayKaynagi | null,
+): string {
   const p = (g.oncul[id] ?? []).find((x) => !yerlesti(x));
-  if (p === undefined) return 'Sunucu motoru yerleştiremedi.';
+  if (p === undefined) {
+    const ayrinti = neden?.kod !== 'oncul' && g.kimlik[id] !== undefined ? adayNedeni(kaynak, g.kimlik[id]) : null;
+    return `Sunucu motoru yerleştiremedi: ${ayrinti ?? failNedenMetni(neden)}.`;
+  }
   const a = g.kimlik[p];
   return a === undefined ? 'Önceki adım yerleşmedi.' : `Önceki adım (${a.replace('|', ' OP ')}) yerleşmedi.`;
+}
+
+type MotorNedeni = NonNullable<MotorPlani['failNeden']>[string];
+let nedenMetni: ((n: MotorNedeni | undefined) => string) | null = null;
+function failNedenMetni(n: MotorNedeni | undefined): string {
+  if (nedenMetni === null) {
+    const b = vm.createContext({ GIRDI_SAAT_DILIMI: TESIS_SAAT_DILIMI }); b['self'] = b;
+    vm.runInContext(motorKodu(), b, { filename: 'plan-motoru.js' });
+    nedenMetni = vm.runInContext('failNedenMetni', b) as (n: MotorNedeni | undefined) => string;
+  }
+  return nedenMetni(n === undefined ? undefined : { ...n });
+}
+
+// Kaynak okumasının (planlama sayfasının çerçeve biçimi) adayı belirleyen alanları; motor/girdi.js rrCevir ve rrKaynagiCevir aynı alanları okur.
+export interface AdayKaynagi { durum: unknown; ek: unknown }
+interface KaynakAdimi { opNo?: unknown; stationId?: unknown; fasonId?: unknown; proc?: unknown; chg?: unknown; cycle?: unknown; alts?: unknown; altTimes?: unknown }
+const bosSure = (x: unknown): boolean => x === null || x === undefined || x === '' || !Number.isFinite(Number(x));
+// B-2482-32: motorun 'aday' nedeni ("işi yapabilecek tezgâh ya da fasoncu yok") için kaynaktaki sebep. Sıra: adımın işlem süresi boş (1737 c:
+// süresiz aday plana girmez), insanlı istasyonda vardiyası olan yetkin kişi yok (1952), istasyonun aktif makinesi yok. Adım ya da emir
+// kaynakta bulunamazsa ya da üçü de değilse null: motorun genel metni yazılır.
+export function adayNedeni(kaynak: AdayKaynagi | null, anahtar: string): string | null {
+  const d = (kaynak?.durum ?? null) as {
+    routes?: Record<string, { steps?: KaynakAdimi[] }>; stations?: { id: string; name?: string; code?: string; aktif?: boolean }[];
+    machines?: { stationId: string; aktif?: boolean }[]; people?: { id: string; active?: boolean; skills?: string[] }[];
+    emirler?: { orders?: { no: string; itemId: string }[] };
+  } | null;
+  const ek = (kaynak?.ek ?? null) as { insanliIstasyonlar?: unknown[]; takvim?: { kisiVardiyasi?: Record<string, string> } | null } | null;
+  const ayrac = anahtar.lastIndexOf('|');
+  const no = anahtar.slice(0, ayrac), opNo = Number(anahtar.slice(ayrac + 1));
+  const emir = d?.emirler?.orders?.find((o) => o.no === no);
+  const adim = emir === undefined ? undefined : (d?.routes?.[emir.itemId]?.steps ?? []).find((s) => Number(s.opNo) === opNo);
+  if (adim === undefined || typeof adim.stationId !== 'string' || adim.stationId === '') return null;
+  const altSure = (g: string): unknown => ((adim.altTimes ?? {}) as Record<string, { cycle?: unknown } | undefined>)[g]?.cycle;
+  const alternatifler = Array.isArray(adim.alts) ? (adim.alts as string[]).filter((g) => !bosSure(altSure(g))) : [];
+  // Ana istasyonun süresi motor/girdi.js rrCevir'in kuralıdır (2701): işlem ya da değişim süresi; işlem alanı olmayan kayıtta çevrim.
+  const anaSureli = !bosSure(adim.proc) || !bosSure(adim.chg) || (adim.proc === undefined && !bosSure(adim.cycle));
+  if (!anaSureli && alternatifler.length === 0) return 'adımın işlem süresi boş (rotada çevrim süresi girilmemiş)';
+  const istasyon = d?.stations?.find((x) => x.id === adim.stationId);
+  const ad = istasyon?.name ?? istasyon?.code ?? adim.stationId;
+  const insanli = new Set((ek?.insanliIstasyonlar ?? []).map(String));
+  if (insanli.has(adim.stationId)) {
+    const vardiya = ek?.takvim?.kisiVardiyasi ?? {};
+    const kisiVar = (d?.people ?? []).some((k) => k.active !== false && (k.skills ?? []).map(String).includes(adim.stationId as string) && !!vardiya[k.id]);
+    return kisiVar ? null : `${ad} insanlı istasyon; vardiyası olan yetkin kişi yok`;
+  }
+  const makineVar = istasyon !== undefined && istasyon.aktif !== false
+    && (d?.machines ?? []).some((m) => m.stationId === adim.stationId && m.aktif !== false);
+  return makineVar ? null : `${ad} istasyonunun aktif makinesi yok`;
 }
 
 // 525 4 a: katı malzeme kipinde (w.mat 'sert', K3) malzemesi stok ve satın almayla ufuk içinde karşılanmayan siparişin işleri motorda
