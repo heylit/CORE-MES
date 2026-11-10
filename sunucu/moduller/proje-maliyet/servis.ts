@@ -15,7 +15,7 @@ import { canliSira, karRiskiOraniGun } from '../plan/disari.ts';
 import { projeGetir } from '../projeler/disari.ts';
 import { malzemeMaliyetBilgileri } from '../malzemeler/disari.ts';
 import { isEmriFasonTutarlari, malzemeKgFiyatlari, siparisBirimFiyatlari } from '../satin-alma/disari.ts';
-import { emirlerinNetSarfi } from '../stok/disari.ts';
+import { emirSarfSonAlisTutarlari } from '../stok/disari.ts';
 import { siparisAyrintisi, siparisSatiriOzetleri } from '../siparisler/disari.ts';
 import { bitenIsEmirleri, emirlerinMalzemeIhtiyaci, emirlerinProjeleri, isEmriPlanBilgileri, isEmriSureleri, projeninIsEmirleri, uretimEmriOzeti } from '../uretim-emirleri/disari.ts';
 import type { ProjeIsEmri } from '../uretim-emirleri/disari.ts';
@@ -94,12 +94,14 @@ async function maliyetKayitlari(
 type ProjeIsi = Awaited<ReturnType<typeof projeninIsEmirleri>>[number];
 
 // PM-25, PM-27: üretim emri başına malzeme kaydı (iş emrine bağlı değil, dondurulmaz). Plan reçeteden (emrin brüt ihtiyacı), gerçek stoktan
-// emre verilen net sarftan; plan kg fiyatından, gerçek bağlı siparişin fiyatından (PM-51, 2613 2/2; yoksa kg fiyatı), birim fiyat x miktar eksi talaş. Bileşen projedeki başka emrin ürünüyse iç yarımamuldür;
+// emre verilen net sarftan; plan kg fiyatından, gerçek bağlı siparişin fiyatından (PM-51, 2613 2/2), yoksa çıkış anındaki son alıştan (PM-52, 2613-3 a), birim fiyat x miktar eksi talaş. Bileşen projedeki başka emrin ürünüyse iç yarımamuldür;
 // maliyeti kendi emrinde olduğu için burada sayılmaz. Gerçek talaşın parça adedi PM-31.
 async function malzemeKayitlari(db: Db, projeId: number, isler: readonly ProjeIsi[], isKayitlari: readonly MaliyetKaydi[], eksikler: Set<EksikVeri>): Promise<MaliyetKaydi[]> {
   const emirIdleri = [...new Set(isler.map((i) => i.uretimEmriId))];
+  // Net sarf ve çıkış anındaki son alış tutarı aynı okumadan (PM-27, PM-52): çift ve miktar emirlerinNetSarfi ile birebir aynıdır.
+  const sonAlislar = await emirSarfSonAlisTutarlari(db, emirIdleri);
   const sarflar = new Map<number, { malzemeNo: number; miktar: number }[]>();
-  for (const r of await emirlerinNetSarfi(db, emirIdleri)) {
+  for (const r of sonAlislar) {
     const liste = sarflar.get(r.emirId) ?? [];
     liste.push({ malzemeNo: r.malzemeId, miktar: Number(r.miktar) });
     sarflar.set(r.emirId, liste);
@@ -125,7 +127,7 @@ async function malzemeKayitlari(db: Db, projeId: number, isler: readonly ProjeIs
     const bitti = isleri.every((i) => i.durum === 'tamam');
     const planB = planBilesenleri(emirId);
     const plan = planB === null ? null : tutar(planB, ilk.adet, netKg);
-    const gercek = tutar(gercekBilesenFiyatlari(bilesenler(sarflar.get(emirId) ?? []), siparisFiyatlari, emirId, projeId), ilk.adet, netKg, gercekTalasAdedi(bitti, ilk.adet, ilk.saglam, son.saglam));
+    const gercek = tutar(gercekBilesenFiyatlari(bilesenler(sarflar.get(emirId) ?? []), siparisFiyatlari, sonAlislar, emirId, projeId), ilk.adet, netKg, gercekTalasAdedi(bitti, ilk.adet, ilk.saglam, son.saglam));
     const kayitlari = isleri.flatMap((i) => kayitBul.get(i.isEmriId) ?? []);
     const planlar = kayitlari.flatMap((k) => (k.planTarihi === null ? [] : [k.planTarihi])).sort();
     const gercekler = kayitlari.flatMap((k) => (k.gercekTarihi === null ? [] : [k.gercekTarihi])).sort();
