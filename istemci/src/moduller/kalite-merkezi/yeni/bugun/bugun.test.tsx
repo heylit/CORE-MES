@@ -261,6 +261,27 @@ describe('Hatalı parça kararı', () => {
     expect(s.yazmalar.find((y) => y.yol === '/kalite-merkezi/hatali/5/karar')?.govde).toMatchObject({ karar: 'kabul', ciddiyet: 'Kritik' });
   });
 
+  it('2753: arşivdeki emrin hatalı kaydında rework seçeneği yoktur; pencere seçimsiz açılır', async () => {
+    ac(MUHENDIS, { ncr: [] }, { emirler: [] }, { kayitlar: [{ ...HATALI, arsivde: true }] });
+    const bolum = await screen.findByRole('region', { name: 'Hatalı parça kararı' });
+    fireEvent.click(within(bolum).getByRole('button', { name: 'Karar ver' }));
+    const pencere = screen.getByRole('dialog', { name: 'Hatalı parça kararı' });
+    const secim = within(pencere).getByLabelText(/^Karar/) as HTMLSelectElement;
+    expect(secim.value).toBe('');
+    expect(within(secim).queryByRole('option', { name: /Rework/ })).toBeNull();
+    expect(within(secim).getByRole('option', { name: 'Hurda' })).toBeTruthy();
+    expect(within(pencere).getByText('Emir arşivde; rework verilemez, hurda, red ya da kabul verin.')).toBeTruthy();
+  });
+
+  it('arşivde olmayan emrin hatalı kaydında rework seçilebilir', async () => {
+    ac(MUHENDIS, { ncr: [] }, { emirler: [] }, { kayitlar: [{ ...HATALI, arsivde: false }] });
+    const bolum = await screen.findByRole('region', { name: 'Hatalı parça kararı' });
+    fireEvent.click(within(bolum).getByRole('button', { name: 'Karar ver' }));
+    const pencere = screen.getByRole('dialog', { name: 'Hatalı parça kararı' });
+    expect(within(within(pencere).getByLabelText(/^Karar/)).getByRole('option', { name: /Rework/ })).toBeTruthy();
+    expect(within(pencere).queryByText('Emir arşivde; rework verilemez, hurda, red ya da kabul verin.')).toBeNull();
+  });
+
   it('onay yetkisi olmayan kişide liste istenmez ve bölüm çizilmez', async () => {
     const s = ac(MUAYENECI, {}, { emirler: [] }, { kayitlar: [HATALI] });
     await screen.findByRole('heading', { level: 2, name: 'Merhaba Deneme' });

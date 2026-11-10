@@ -18,6 +18,8 @@ const KARARLAR: { deger: Karar; baslik: string }[] = [
 ];
 // Sözleşmedeki KM_CIDDIYETLER ile aynı sıra; istemci paylaşılanı yalnız tip olarak ithal eder (zod istemci paketine girmesin).
 const CIDDIYETLER: readonly Ciddiyet[] = ['Kritik', 'Majör', 'Minör'];
+// 2731 b: arşivdeki (iptal, kapanışı açık) emrin hatalı kaydında rework verilmez; sunucu da reddeder (HATALI_ARSIVDE_REWORK).
+const kararlar = (k: Kayit | null) => (k?.arsivde ? KARARLAR.filter((x) => x.deger !== 'rework') : KARARLAR);
 const KARAR_ADI: Record<Karar, string> = {
   rework: 'reworke gönderildi', kabul: 'kabul edildi', sartli_kabul: 'şartlı kabul edildi', hurda: 'hurdaya ayrıldı', red: 'reddedildi',
 };
@@ -94,9 +96,10 @@ export function HataliKarari({ ncrler }: { ncrler: readonly { no?: unknown }[] }
         {secili && (
           <>
             <p>{secili.uretimEmri.emirNo} Op {secili.isEmri.opNo} ({secili.isEmri.ad}): {secili.adet} adet, {secili.hurdaNedeni.ad}. Karar geri alınamaz; aynı işlemde NCR açılır.</p>
+            {secili.arsivde && <p className="tc-km1-soluk">Emir arşivde; rework verilemez, hurda, red ya da kabul verin.</p>}
             <Secim
               etiket="Karar" value={karar} required bosSecenek="Seçiniz" hata={eksikGoster && karar === '' ? 'Karar seçin.' : undefined}
-              onChange={(o) => { kararYaz(o.target.value as Karar | ''); }} secenekler={KARARLAR}
+              onChange={(o) => { kararYaz(o.target.value as Karar | ''); }} secenekler={kararlar(secili)}
             />
             <Secim
               etiket="Ciddiyet" value={ciddiyet} required bosSecenek="Seçiniz" hata={eksikGoster && ciddiyet === '' ? 'Ciddiyet seçin.' : undefined}
