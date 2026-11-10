@@ -5,7 +5,7 @@ import { testVeritabaniKur } from '#cekirdek/test-vt.ts';
 import type { TestVeritabani } from '#cekirdek/test-vt.ts';
 import { TESIS_SAAT_DILIMI } from '#paylasilan/zaman.ts';
 import { yoneticiOlustur } from '../kisiler/disari.ts';
-import { emirsizCikisTutari } from './disari.ts';
+import { emirlerinNetSarfi, emirSarfSonAlisTutarlari, emirsizCikisTutari } from './disari.ts';
 import { emirsizCikisTutari as tutarKurali } from './kurallar.ts';
 
 // 2623 a, 2594 b: finansın genel gider "diğer" bileşenine giden emirsiz stok çıkışı. Hareketler ve satın alma fiyatı tablo sahibiyle
@@ -13,7 +13,7 @@ import { emirsizCikisTutari as tutarKurali } from './kurallar.ts';
 // Veriler uydurmadır.
 describe('stok emirsiz çıkış tutarı (gerçek PostgreSQL)', () => {
   let ortam: TestVeritabani | undefined;
-  let kisi = 0, zemin = 0, emir = 0, talepSira = 0;
+  let kisi = 0, zemin = 0, emir = 0, ist = 0, talepSira = 0;
   const o = (): TestVeritabani => {
     if (!ortam) throw new Error('Test veritabanı açılamadı (TMIV2_PG_* ve TMIV2_PG_TEST_DATABASE ayarlarını denetleyin).');
     return ortam;
@@ -80,7 +80,7 @@ describe('stok emirsiz çıkış tutarı (gerçek PostgreSQL)', () => {
     const depo = (await s.tek<{ id: number }>("INSERT INTO stok_depo (kod, ad) VALUES ('EC', 'Deneme') RETURNING id"))!.id;
     zemin = (await s.tek<{ id: number }>("INSERT INTO stok_konum (depo_id, kod, tur, ad) VALUES ($1, 'EC-01', 'depo_zemini', 'Zemin') RETURNING id", [depo]))!.id;
     const im = (await s.tek<{ id: number }>("INSERT INTO is_merkezi (kod, ad) VALUES ('ECM', 'Deneme Merkezi') RETURNING id"))!.id;
-    const ist = (await s.tek<{ id: number }>("INSERT INTO istasyon (kod, ad, is_merkezi_id, aktif) VALUES ('ECI', 'Deneme', $1, true) RETURNING id", [im]))!.id;
+    ist = (await s.tek<{ id: number }>("INSERT INTO istasyon (kod, ad, is_merkezi_id, aktif) VALUES ('ECI', 'Deneme', $1, true) RETURNING id", [im]))!.id;
     emir = (await s.tek<{ id: number }>("INSERT INTO uretim_emri (parca_no, parca_ad, adet, istasyon_id, acan_id) VALUES ('EC-P', 'Deneme', 10, $1, $2) RETURNING id", [ist, kisi]))!.id;
   });
   after(async () => { await ortam?.kaldir(); });
@@ -148,5 +148,37 @@ describe('stok emirsiz çıkış tutarı (gerçek PostgreSQL)', () => {
     await alis(d, await an(4, 6), 10, 7);
     await hareket({ tur: 'sayim_eksik', kart: await kart(), zaman: await an(4, 7), miktar: 2 });
     assert.deepEqual(await sonuc(await ayi(4)), { tutar: 5, eksik: ['2 stok çıkışının son alış fiyatı yok; tutara girmedi'] });
+  });
+
+  // 2727-1: proje maliyetinin siparişsiz sarfı aynı fiyat tanımıyla.
+  test('2727-1 emir sarfı: emirlerinNetSarfi ile aynı çift ve miktar; tutar her çıkış x anındaki son alış; geri alınan çift dışarıda; fiyatsız çıkış tutarı null yapar', async () => {
+    const yeniEmir = async (no: string): Promise<number> => (await o().sahip.tek<{ id: number }>(
+      "INSERT INTO uretim_emri (parca_no, parca_ad, adet, istasyon_id, acan_id) VALUES ($1, 'Deneme', 10, $2, $3) RETURNING id", [no, ist, kisi]))!.id;
+    const [e1, e2] = [await yeniEmir('EC-P1'), await yeniEmir('EC-P2')];
+    const [m, n, r] = [await kart(), await kart(), await kart()];
+    await alis(m, await an(8, 1), 100, 10);
+    await alis(m, await an(8, 5), 100, 12);
+    await alis(r, await an(8, 1), 100, 3);
+    // e1, m: 2 x 10 (ikinci alıştan önce) + 3 x 12 sarf + 1 x 12 fire = 68; 4'lük sarf geri alındı (fiyatsız olsa da sayılmaz).
+    await hareket({ tur: 'cikis', kart: m, zaman: await an(8, 2), miktar: 2, neden: 'uretime_sarf', emir: e1 });
+    await hareket({ tur: 'cikis', kart: m, zaman: await an(8, 6), miktar: 3, neden: 'uretime_sarf', emir: e1 });
+    await hareket({ tur: 'cikis', kart: m, zaman: await an(8, 7), miktar: 1, neden: 'fire', emir: e1 });
+    const geri = await hareket({ tur: 'cikis', kart: m, zaman: await an(8, 8), miktar: 4, neden: 'uretime_sarf', emir: e1 });
+    await hareket({ tur: 'geri_alma', kart: m, zaman: await an(8, 9), miktar: 4, geriAlinan: geri, emir: e1 });
+    // e1, n: alışı olmayan kartın sarfı -> null. e1, r: tamamı geri alınan çift -> net 0, tutar 0.00.
+    await hareket({ tur: 'cikis', kart: n, zaman: await an(8, 3), miktar: 1, neden: 'uretime_sarf', emir: e1 });
+    const rGeri = await hareket({ tur: 'cikis', kart: r, zaman: await an(8, 3), miktar: 5, neden: 'uretime_sarf', emir: e1 });
+    await hareket({ tur: 'geri_alma', kart: r, zaman: await an(8, 4), miktar: 5, geriAlinan: rGeri, emir: e1 });
+    // e2, m: 2.5 x 12 = 30; emirsiz çıkış ve "diğer" nedenli emirli çıkış kapsam dışı.
+    await hareket({ tur: 'cikis', kart: m, zaman: await an(8, 10), miktar: 2.5, neden: 'uretime_sarf', emir: e2 });
+    await hareket({ tur: 'cikis', kart: m, zaman: await an(8, 10), miktar: 9, neden: 'diger', emir: e2 });
+    await hareket({ tur: 'cikis', kart: m, zaman: await an(8, 10), miktar: 9, neden: 'diger' });
+    const sonucu = await o().vt.tx((db) => emirSarfSonAlisTutarlari(db, [e1, e2, e1]));
+    const net = await o().vt.tx((db) => emirlerinNetSarfi(db, [e1, e2]));
+    const sirala = <T extends { emirId: number; malzemeId: number }>(l: T[]) => [...l].sort((a, b) => a.emirId - b.emirId || a.malzemeId - b.malzemeId);
+    assert.deepEqual(sirala(sonucu).map((x) => [x.emirId, x.malzemeId, x.miktar]), sirala(net).map((x) => [x.emirId, x.malzemeId, x.miktar]));
+    assert.deepEqual(sirala(sonucu).map((x) => [x.emirId, x.malzemeId, Number(x.miktar), x.tutar]),
+      [[e1, m, 6, '68.00'], [e1, n, 1, null], [e1, r, 0, '0.00'], [e2, m, 2.5, '30.00']]);
+    assert.deepEqual(await o().vt.tx((db) => emirSarfSonAlisTutarlari(db, [])), []);
   });
 });

@@ -90,6 +90,10 @@ export const emrinPartileri = (db: Db, uretimEmriId: number) => sorgular.emrinPa
 export type { EmirFisSatiri } from './servis.ts';
 export const emirMalzemeFisleri = (db: Db, emirIdler: readonly number[]) => servis.emirMalzemeFisleri(db, emirIdler);
 export const emirlerinNetSarfi = (db: Db, emirIdler: readonly number[]) => sorgular.emirlerinNetSarfi(db, emirIdler);
+// 2727-1 (2613-3 a): proje maliyetinin siparişsiz sarfı. emirlerinNetSarfi ile aynı çift ve miktar; tutar geri alınmamış her çıkışın
+// miktarı x çıkış anındaki son alış (TL kuruşlu metin, emirsizCikisTutari ile aynı hesap); çiftte son alışı bilinmeyen çıkış varsa null.
+export const emirSarfSonAlisTutarlari = (db: Db, emirIdler: readonly number[]): Promise<{ emirId: number; malzemeId: number; miktar: string; tutar: string | null }[]> =>
+  servis.emirSarfSonAlisTutarlari(db, emirIdler);
 // B-2482-8: emrin statü zincirinde duran hammaddesi (ilk adımın çevirmesi, statüden sarf düşülmüş). Malzeme ihtiyacında verilene eklenir:
 // verilen = emirlerinNetSarfi + bu. Okuma yetkisini çağıran korur.
 export const emirlerinZincirdekiMiktari = (db: Db, emirIdler: readonly number[]) => sorgular.emirlerinZincirdekiMiktari(db, emirIdler);

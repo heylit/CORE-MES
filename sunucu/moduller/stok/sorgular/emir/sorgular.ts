@@ -32,6 +32,14 @@ export const emirlerinNetSarfi = (db: Db, emirIdler: readonly number[]): Promise
    FROM stok_hareketi h JOIN stok_hareketi a ON a.id = COALESCE(h.geri_alinan_id, h.id)
    WHERE a.uretim_emri_id = ANY($1::int[]) AND a.tur = 'cikis' AND a.cikis_nedeni IN ('uretime_sarf', 'fire')
    GROUP BY a.uretim_emri_id, h.malzeme_id`, [[...emirIdler]]);
+// 2727-1: emirlerinNetSarfi'nın kapsamındaki geri alınmamış çıkışlar, tek tek ve anıyla (son alış fiyatı çıkış anına göre). Geri alma
+// bütün miktarı çevirdiğinden geri alınan çıkış ile geri alması birlikte dışarıdadır; net miktar bu satırların toplamına eşittir.
+export const emirlerinSarfCikislari = (db: Db, emirIdler: readonly number[]): Promise<{ emirId: number; malzemeId: number; zaman: string; miktar: string }[]> => db.sorgu(
+  `SELECT h.uretim_emri_id AS "emirId", h.malzeme_id AS "malzemeId", ${zamanMetni('h.zaman')} AS zaman, h.miktar::text AS miktar
+   FROM stok_hareketi h
+   WHERE h.uretim_emri_id = ANY($1::int[]) AND h.tur = 'cikis' AND h.cikis_nedeni IN ('uretime_sarf', 'fire')
+     AND NOT EXISTS (SELECT 1 FROM stok_hareketi g WHERE g.geri_alinan_id = h.id)
+   ORDER BY h.zaman, h.id`, [[...emirIdler]]);
 // B-2482-8, 2534: emrin statü zincirindeki malzemesi, emir ve malzeme başına: statüde emre ayrılan (stok_rezerve, statülü satır). Çevirme
 // ayrılanı statüye taşır, statüden sarf ve fire düşer; parti birleşince ayrılan hedef emre geçer, müdür kaldırınca emirden çıkar. Hareketten
 // okunsaydı birleşen emrin zinciri kaynakta kalırdı. Emre verilenin bir parçasıdır: emirlerinNetSarfi statüden sarfı sayar, ayrılan sarfla
