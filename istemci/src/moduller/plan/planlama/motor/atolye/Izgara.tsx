@@ -106,6 +106,8 @@ export function Izgara({ ort, pano, parla }: { ort: Ortam; pano: MutableRefObjec
   type Suruk = {
     id: string; m: string; S: number; C: number; x0: number; y0: number; el: HTMLElement; oldu: boolean; hedef: HTMLElement | null;
     sl0: number; px: number; py: number; hayalet: HTMLElement | null; kare: number; klavye: { dS: number; m: string } | null;
+    // Dikey kaymada çubuk imlecin altında kalsın diye: panonun ve sayfa kaydırıcısının başlangıç scrollTop'u.
+    st0: number; dis: HTMLElement | null; dt0: number;
   };
   const suruk = useRef<Suruk | null>(null);
   const birakti = useRef(false);
@@ -152,7 +154,8 @@ export function Izgara({ ort, pano, parla }: { ort: Ortam; pano: MutableRefObjec
     } else {
       const kayma = (pano.current?.scrollLeft ?? s.sl0) - s.sl0;
       const hm = s.hedef?.dataset.m ?? null; m = hm && adaylar.includes(hm) ? hm : s.m; uygunsuz = hm !== null && hm !== s.m && m === s.m;
-      S = tasimaSaati(s.S + (s.px - s.x0 + kayma) / k, now); dy = s.py - s.y0; x = s.px; y = s.py;
+      S = tasimaSaati(s.S + (s.px - s.x0 + kayma) / k, now); x = s.px; y = s.py;
+      dy = s.py - s.y0 + (pano.current?.scrollTop ?? s.st0) - s.st0 + (s.dis?.scrollTop ?? s.dt0) - s.dt0;
     }
     s.el.style.setProperty('--dx', `${(S - s.S) * k}px`); s.el.style.setProperty('--dy', `${dy}px`);
     const C = S + (s.C - s.S); const cak = yardim && cakisiyor(s.id, m, S, C);
@@ -176,7 +179,11 @@ export function Izgara({ ort, pano, parla }: { ort: Ortam; pano: MutableRefObjec
     const hx = kenarHizi(s.px, r.left + gen.e, r.right, KENAR, KAYMA_HIZI);
     const dis = kaydirici(pn);
     const dr = dis?.getBoundingClientRect();
-    const ust = Math.max(r.top, dr?.top ?? 0, 0), alt = Math.min(r.bottom, dr ? dr.top + dis!.clientHeight : Infinity, window.innerHeight);
+    // Bugün şeridi panonun altını örter: görünen alt kenar onun üstüdür.
+    const serit = pn.closest('.tc-pym-tp-govde')?.querySelector<HTMLElement>('.tc-pym-tp-bugun')?.getBoundingClientRect().top ?? Infinity;
+    // Telefonda alt menü pencerenin altını örter.
+    const menu = document.querySelector<HTMLElement>('.tc-kabuk-alt'); const menuUst = menu && menu.offsetParent ? menu.getBoundingClientRect().top : window.innerHeight;
+    const ust = Math.max(r.top, dr?.top ?? 0, 0), alt = Math.min(r.bottom, serit, dr ? dr.top + dis!.clientHeight : Infinity, menuUst);
     const hy = kenarHizi(s.py, ust, alt, KENAR, KAYMA_HIZI);
     cancelAnimationFrame(s.kare);
     if (hx === 0 && hy === 0) return;
@@ -187,7 +194,9 @@ export function Izgara({ ort, pano, parla }: { ort: Ortam; pano: MutableRefObjec
     const adim = () => {
       if (suruk.current !== s) return;
       const yatay = kay(pn, 'scrollLeft', hx);
-      const dikey = kay(dis, 'scrollTop', hy) || kay(pn, 'scrollTop', hy);
+      // Pano satırların sonunda durur: sürüklenen çubuğun kayması taşma alanını büyütür, scrollHeight'a göre kayılsa boşluğa kaçardı.
+      const al = alan.current; const sinir = al ? al.offsetTop + al.offsetHeight - pn.clientHeight : Infinity;
+      const dikey = kay(dis, 'scrollTop', hy) || kay(pn, 'scrollTop', hy > 0 ? Math.min(hy, Math.max(0, sinir - pn.scrollTop)) : hy);
       if (!yatay && !dikey) return;
       const h = hedefSatir(s.px, s.py, s.el);
       if (h !== s.hedef) { if (s.hedef) delete s.hedef.dataset.hedef; if (h) h.dataset.hedef = ''; s.hedef = h; }
@@ -195,9 +204,13 @@ export function Izgara({ ort, pano, parla }: { ort: Ortam; pano: MutableRefObjec
     };
     s.kare = requestAnimationFrame(adim);
   };
-  const yeniSuruk = (r: PlanIslemi, el: HTMLElement, x: number, y: number): Suruk => ({
-    id: r.id, m: r.m, S: r.S, C: r.C, x0: x, y0: y, el, oldu: false, hedef: null, sl0: pano.current?.scrollLeft ?? 0, px: x, py: y, hayalet: null, kare: 0, klavye: null,
-  });
+  const yeniSuruk = (r: PlanIslemi, el: HTMLElement, x: number, y: number): Suruk => {
+    const pn = pano.current; const dis = pn ? kaydirici(pn) : null;
+    return {
+      id: r.id, m: r.m, S: r.S, C: r.C, x0: x, y0: y, el, oldu: false, hedef: null, sl0: pn?.scrollLeft ?? 0, px: x, py: y, hayalet: null, kare: 0, klavye: null,
+      st0: pn?.scrollTop ?? 0, dis, dt0: dis?.scrollTop ?? 0,
+    };
+  };
   const surukle = (r: PlanIslemi, acik: boolean) => (acik ? {
     onPointerDown: (e: ReactPointerEvent<HTMLElement>) => {
       if (e.button > 0 || !ort.tasi) return;
