@@ -1385,6 +1385,14 @@ export async function ortalamaAlisFiyatlari(db: Db, malzemeNolar: readonly numbe
   const l = await s.ortalamaAlisFiyatlariOku(db, [...new Set(malzemeNolar)]);
   return new Map(l.map(({ malzemeNo, tryBirimFiyat, teslimSayisi }) => [malzemeNo, { tryBirimFiyat: sade(tryBirimFiyat), teslimSayisi }]));
 }
+// 2613 2/2, 2720-1: proje maliyetinin gerçekleşen malzemesi için emre ya da projeye bağlı siparişin birim fiyatı (stok biriminde, TRY,
+// iskontolu, KDV hariç, masrafsız). Bağlı teslimli sipariş yoksa çift listede yoktur; öncelik tüketen taraftadır.
+export async function siparisBirimFiyatlari(db: Db, istek: { emirIdleri: readonly number[]; projeIdleri: readonly number[]; malzemeNolar: readonly number[] }): Promise<{ hedef: 'emir' | 'proje'; hedefId: number; malzemeNo: number; tryBirimFiyati: string | null }[]> {
+  const tekil = (l: readonly number[]) => [...new Set(l)];
+  if (istek.malzemeNolar.length === 0 || (istek.emirIdleri.length === 0 && istek.projeIdleri.length === 0)) return [];
+  const l = await s.siparisBirimFiyatlariOku(db, tekil(istek.emirIdleri), tekil(istek.projeIdleri), tekil(istek.malzemeNolar));
+  return l.map((x) => ({ ...x, tryBirimFiyati: sade(x.tryBirimFiyati) }));
+}
 // Stok değerlemesi (1382 d): mal kabul satırı -> net TRY birim fiyatı; teslimi olmayan satır haritada yoktur, karşılığı olmayanın fiyatı boş.
 export async function malKabulFiyatlari(db: Db, malKabulSatirIdler: readonly number[]): Promise<Map<number, string | null>> {
   if (malKabulSatirIdler.length === 0) return new Map();

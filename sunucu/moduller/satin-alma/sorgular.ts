@@ -835,6 +835,29 @@ export function ortalamaAlisFiyatlariOku(db: Db, malzemeNolar: readonly number[]
     [malzemeNolar],
   );
 }
+// 2613 2/2, 2720-1: emre (KALEM_EMRI) ya da projeye (talebin projesi; emirli talep projeye sayılmaz, 2611 a) bağlı siparişin malzeme başına
+// net TRY birim fiyatı, stok değeriyle aynı yoldan; net teslimi olan satırlar, net teslimle ağırlıklı. Fason satırı (iş emri bağı) ve
+// kartsız kalem gelmez; iptal talep sayılmaz. Bir satırın TL karşılığı yoksa o çiftin fiyatı boş: kısmi ortalama gerçek alıştan sapardı.
+export interface SiparisBirimFiyatiSatiri { hedef: 'emir' | 'proje'; hedefId: number; malzemeNo: number; tryBirimFiyati: string | null }
+export function siparisBirimFiyatlariOku(db: Db, emirIdler: readonly number[], projeIdler: readonly number[], malzemeNolar: readonly number[]): Promise<SiparisBirimFiyatiSatiri[]> {
+  return db.sorgu<SiparisBirimFiyatiSatiri>(
+    `SELECT x.hedef, x.hedef_id AS "hedefId", x.malzeme_no AS "malzemeNo",
+            CASE WHEN bool_or(x.tl IS NULL) THEN NULL ELSE (round(sum(x.tl * x.net) / sum(x.net), 4))::text END AS "tryBirimFiyati"
+       FROM (
+         SELECT h.hedef, h.hedef_id, c.malzeme_no, sum(m.miktar) AS net, ${NET_BIRIM_FIYAT} * ${TRY_KURU} AS tl
+           FROM satin_alma_teslim m ${TESLIM_FIYATI_BAGI}
+           JOIN satin_alma_talep t ON t.id = s.talep_id
+           LEFT JOIN satin_alma_talep kt ON kt.id = k.kaynak_talep_id
+           CROSS JOIN LATERAL (VALUES ('emir', ${KALEM_EMRI}), ('proje', CASE WHEN ${KALEM_EMRI} IS NULL THEN t.proje_id END)) AS h(hedef, hedef_id)
+          WHERE t.durum <> 'iptal' AND s.is_emri_id IS NULL AND k.is_emri_id IS NULL AND c.malzeme_no = ANY($3::int[])
+            AND ((h.hedef = 'emir' AND h.hedef_id = ANY($1::int[])) OR (h.hedef = 'proje' AND h.hedef_id = ANY($2::int[])))
+          GROUP BY h.hedef, h.hedef_id, c.malzeme_no, m.mal_kabul_satiri_id, m.siparis_satiri_id, f.birim_fiyat, f.iskonto_yuzdesi, q.iskonto_yuzdesi, sk.kur, q.kur, q.para_birimi
+         HAVING sum(m.miktar) > 0) x
+      GROUP BY x.hedef, x.hedef_id, x.malzeme_no
+      ORDER BY x.hedef, x.hedef_id, x.malzeme_no`,
+    [emirIdler, projeIdler, malzemeNolar],
+  );
+}
 export interface SonAlisFiyatiSatiri { malzemeNo: number; birimFiyat: string; paraBirimi: string; tryBirimFiyat: string | null; zaman: string }
 export function sonAlisFiyatlariOku(db: Db, malzemeNolar: readonly number[]): Promise<SonAlisFiyatiSatiri[]> {
   return db.sorgu<SonAlisFiyatiSatiri>(
