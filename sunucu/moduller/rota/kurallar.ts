@@ -716,6 +716,30 @@ export function terminalOlcumleri(olcum: { hazirlikDk: number | null; netBirimDk
   };
 }
 
+// İş emri ya da emir bitince terminal ölçümü (B38, 2578 a) ve Arkon "Süre ölçülmedi" (2567) aynı ölçütü kullanır. Ölçüm adayı bitmiş (tamam), kaynağı olan,
+// fason olmayan iş emridir. Rotada olmayan adım (ek adım) ölçülmez. Rotadaki adımda süresi çıkan tür yazılır; çıkmayan tür atlanır ve
+// nedeni yazılır. İşlem süresi sağlam ya da hurda sayımdan çıkar: sayımı olup hepsi karar bekleyen ya da red olan iş emri "sağlam sayım
+// yok"tur (2566 S-1), sayımı hiç olmayan "sayım yok"tur.
+export type OlcumAtlamaNedeni = 'rotada-yok' | 'ayar-yok' | 'sayim-yok' | 'saglam-yok';
+export interface OlcumAdayi { id: number; opNo: number; durum: string; kaynak: { tur: string } | null }
+
+export function terminalOlcumAdaylari<T extends OlcumAdayi>(isEmirleri: readonly T[], opNolari: ReadonlySet<number>): { rotada: T[]; rotadaYok: T[] } {
+  const adaylar = isEmirleri.filter((i) => i.durum === 'tamam' && i.kaynak !== null && i.kaynak.tur !== 'fason');
+  return { rotada: adaylar.filter((i) => opNolari.has(i.opNo)), rotadaYok: adaylar.filter((i) => !opNolari.has(i.opNo)) };
+}
+
+export function terminalOlcumKarari(
+  olcum: { hazirlik: number | null; islem: number | null }, sayimVar: boolean,
+): { yazilacak: { tur: 'hazirlik' | 'islem'; sureDk: number }[]; atlananlar: OlcumAtlamaNedeni[] } {
+  const yazilacak: { tur: 'hazirlik' | 'islem'; sureDk: number }[] = [];
+  const atlananlar: OlcumAtlamaNedeni[] = [];
+  if (olcum.hazirlik === null) atlananlar.push('ayar-yok');
+  else yazilacak.push({ tur: 'hazirlik', sureDk: olcum.hazirlik });
+  if (olcum.islem === null) atlananlar.push(sayimVar ? 'saglam-yok' : 'sayim-yok');
+  else yazilacak.push({ tur: 'islem', sureDk: olcum.islem });
+  return { yazilacak, atlananlar };
+}
+
 export interface AdimSureleri { ayarSuresiDk: number | null; birimSureDk: number | null; islemSuresiDk: number | null; degisimSuresiDk: number | null }
 
 // RT-78: kabul ölçümü teorik süreye yazar (169 c). Hazırlık ayar süresidir. "İşlem" ölçümü birim süredir (170 b): değişim korunur, işlem

@@ -368,12 +368,16 @@ export const anomaliOlaylariCevabi = z.object({
 export type AnomaliOlaylariCevabi = z.output<typeof anomaliOlaylariCevabi>;
 
 // Eksik iş (2421 c): plandan bağımsız "yapılması gereken ama yapılmayan, girilmeyen ya da geciken" iş. Olaylar 15 dakikalık işte yazılır;
-// sürerken değeri güncellenir, kendiliğinden giderilince kapanır. Değerin birimi türündedir: plan gerisi ve yarım iş net dakika, kayıtsız gün
-// iş günü, plansız iş ve bayat plan saat, geciken emir gün.
-export const EKSIK_IS_TURLERI = ['plan-gerisi', 'kayitsiz-gun', 'yarim-is', 'plansiz-is', 'geciken-emir', 'bayat-plan', 'geride-onceki'] as const;
+// sürerken değeri güncellenir, kendiliğinden giderilince kapanır. Değerin birimi türündedir: plan gerisi net dakika, kayıtsız gün iş günü,
+// yarım iş, plansız iş ve bayat plan vardiya saati, geciken emir ve ölçülmeyen süre (2567) gün, geride kalan önceki adım (2769) adet.
+export const EKSIK_IS_TURLERI = ['plan-gerisi', 'kayitsiz-gun', 'yarim-is', 'plansiz-is', 'geciken-emir', 'bayat-plan', 'geride-onceki', 'olcumsuz-is'] as const;
 export type EksikIsTuru = (typeof EKSIK_IS_TURLERI)[number];
 export const EKSIK_IS_KONULARI = ['is_emri', 'istasyon', 'uretim_emri', 'plan'] as const;
 export type EksikIsKonusu = (typeof EKSIK_IS_KONULARI)[number];
+// Süre ölçülmedi (2567): biten iş emrinin terminal ölçümü neden yazılmadı. Ayar basılmadı (hazırlık yok), sayım yok (işlem yok), sayım var
+// ama sağlam ya da hurda değil (ilk parça ya da kalite onayı bekliyor; işlem yok), emrin iş emri yok, adım rotada yok.
+export const OLCUM_NEDENLERI = ['ayar-yok', 'sayim-yok', 'saglam-yok', 'is-emirsiz', 'rotada-yok'] as const;
+export type OlcumNedeni = (typeof OLCUM_NEDENLERI)[number];
 export const eksikIsSatiri = z.object({
   id: olayKimligi,
   tur: z.enum(EKSIK_IS_TURLERI),
@@ -389,8 +393,10 @@ export const eksikIsSatiri = z.object({
   kalanAdet: z.number().int().nonnegative().nullable(),
   // Geciken emirde: teslim günü henüz gelmedi ama plandaki bitiş teslimden sonra.
   planaGore: z.boolean(),
-  // Olaya bakılan an: plan bitişi, son hareket, son giriş, son canlıya alma ya da teslim günü.
+  // Olaya bakılan an: plan bitişi, son hareket, son giriş, son canlıya alma, teslim günü ya da bitiş.
   dayanakAni: zamanSemasi.nullable(),
+  // Yalnız ölçülmeyen sürede dolu; öteki türlerde boş liste.
+  nedenler: z.array(z.enum(OLCUM_NEDENLERI)),
   acilis: zamanSemasi,
   kapanis: zamanSemasi.nullable(),
 });
@@ -401,6 +407,7 @@ export const eksikIslerCevabi = z.object({
   // Boş eşik o kuralı kapatır.
   esikler: z.object({
     planGerisiDk: eksikIsEsigi, kayitsizGun: eksikIsEsigi, yarimIsSaat: eksikIsEsigi, plansizIsSaat: eksikIsEsigi, gecikenEmirGun: eksikIsEsigi, bayatPlanSaat: eksikIsEsigi,
+    olcumsuzIsGun: eksikIsEsigi,
   }),
   ozet: z.record(z.enum(EKSIK_IS_TURLERI), z.number().int().nonnegative()),
   olaylar: z.array(eksikIsSatiri),

@@ -4,7 +4,7 @@ import {
   OZET_DONEM_ADI, OZET_IS_DURUMU, fazlaMesaiDolulugu, ozetAdet, ozetGrafikUstu, ozetGunEtiketi, ozetSaat, ozetSayi, ozetSure, ozetTarih, ozetYuzde,
   type OperatorOzeti, type OzetDonemi, type OzetGunu,
 } from '../../../../../../arkon/web/src/data/ozetim.ts';
-import { EKSIK_IS_ETIKETI, eksikDegerMetni, eksikKonuMetni, type EksikIslerim } from '../../../../../../arkon/web/src/data/anomali.ts';
+import { EKSIK_IS_ETIKETI, eksikDegerMetni, eksikKonuMetni, OLCUM_NEDENI_ETIKETI, type EksikIslerim } from '../../../../../../arkon/web/src/data/anomali.ts';
 import { basHarfler } from '../cekirdek/bicim.ts';
 import type { User } from '../cekirdek/tipler.ts';
 import { Cubuk } from '../hazirlik/index.tsx';
@@ -122,9 +122,9 @@ export function Ozetim() {
               <ul className="tc-ay1-oz-isler">
                 {eksik.olaylar.map((e) => (
                   <li key={e.id}>
-                    <div><b>{eksikKonuMetni(e)}</b><span className="tc-ay1-cip" data-durum={e.tur === 'yarim-is' ? 'durakli' : 'durdu'}><i aria-hidden="true" />{EKSIK_IS_ETIKETI[e.tur]}</span>
+                    <div><b>{eksikKonuMetni(e)}</b><span className="tc-ay1-cip" data-durum={e.tur === 'yarim-is' ? 'durakli' : e.tur === 'olcumsuz-is' ? 'ayar' : 'durdu'}><i aria-hidden="true" />{EKSIK_IS_ETIKETI[e.tur]}</span>
                       <small>{[e.istasyon?.ad, e.kaynak?.ad].filter(Boolean).join(' · ')}</small></div>
-                    <div className="tc-ay1-oz-n">{eksikDegerMetni(e)}{e.tur !== 'geride-onceki' && <small>{e.kalanAdet != null ? `${ozetAdet(e.kalanAdet)} adet kaldı` : 'kayıt yok'}</small>}</div>
+                    <div className="tc-ay1-oz-n">{eksikDegerMetni(e)}{e.tur !== 'geride-onceki' && <small>{e.nedenler.length > 0 ? e.nedenler.map((n) => OLCUM_NEDENI_ETIKETI[n]).join(', ') : e.kalanAdet != null ? `${ozetAdet(e.kalanAdet)} adet kaldı` : 'kayıt yok'}</small>}</div>
                   </li>
                 ))}
               </ul>

@@ -105,8 +105,11 @@ describe('arkon eksik iş olayları (gerçek PostgreSQL)', () => {
      ON CONFLICT (is_emri_id) DO UPDATE SET baslangic = EXCLUDED.baslangic, bitis = EXCLUDED.bitis`,
     [isEmriId, makineId, anMetni(bas), anMetni(bit), yoneticiId]);
   const yenile = (an = simdi) => o().vt.tx((db) => eksikIsleriYenile(db, an));
-  const olaylar = () => o().sahip.sorgu<{ tur: string; konuId: number | null; deger: number; kalanAdet: number | null; planaGore: boolean; kapanis: string | null; bildirim: string | null }>(
-    `SELECT tur, konu_id AS "konuId", deger::float8 AS deger, kalan_adet AS "kalanAdet", plana_gore AS "planaGore", kapanis::text AS kapanis, bildirim::text AS bildirim
+  const olaylar = () => o().sahip.sorgu<{
+    tur: string; konuId: number | null; deger: number; kalanAdet: number | null; planaGore: boolean; nedenler: string[]; kapanis: string | null; bildirim: string | null;
+  }>(
+    `SELECT tur, konu_id AS "konuId", deger::float8 AS deger, kalan_adet AS "kalanAdet", plana_gore AS "planaGore", nedenler, kapanis::text AS kapanis,
+            bildirim::text AS bildirim
        FROM arkon_eksik_is_olayi ORDER BY id`);
   const acik = async (tur: string, konuId: number | null) => (await olaylar()).find((r) => r.tur === tur && r.konuId === konuId && r.kapanis === null);
 
@@ -143,7 +146,7 @@ describe('arkon eksik iş olayları (gerçek PostgreSQL)', () => {
     const cevap = await istek<EksikIslerCevabi>(hazirlik, 'GET', '/arkon/eksik-isler');
     assert.equal(cevap.durum, 200, JSON.stringify(cevap.govde));
     assert.equal(eksikIslerCevabi.safeParse(cevap.govde).success, true);
-    assert.deepEqual(cevap.govde.esikler, { planGerisiDk: 60, kayitsizGun: 1, yarimIsSaat: 8, plansizIsSaat: 8, gecikenEmirGun: 0, bayatPlanSaat: 8 });
+    assert.deepEqual(cevap.govde.esikler, { planGerisiDk: 60, kayitsizGun: 1, yarimIsSaat: 8, plansizIsSaat: 8, gecikenEmirGun: 0, bayatPlanSaat: 8, olcumsuzIsGun: 0 });
     assert.equal((await istek(operator, 'GET', '/arkon/eksik-isler')).durum, 403);
     assert.equal((await istek(null, 'GET', '/arkon/eksik-isler')).durum, 401);
   });
@@ -167,7 +170,7 @@ describe('arkon eksik iş olayları (gerçek PostgreSQL)', () => {
 
     const cevap = await istek<EksikIslerCevabi>(hazirlik, 'GET', '/arkon/eksik-isler');
     assert.equal(eksikIslerCevabi.safeParse(cevap.govde).success, true, JSON.stringify(cevap.govde));
-    assert.deepEqual(cevap.govde.ozet, { 'plan-gerisi': 1, 'kayitsiz-gun': 1, 'yarim-is': 1, 'plansiz-is': 1, 'geciken-emir': 1, 'bayat-plan': 1, 'geride-onceki': 0 });
+    assert.deepEqual(cevap.govde.ozet, { 'plan-gerisi': 1, 'kayitsiz-gun': 1, 'yarim-is': 1, 'plansiz-is': 1, 'geciken-emir': 1, 'bayat-plan': 1, 'geride-onceki': 0, 'olcumsuz-is': 0 });
     const satir = cevap.govde.olaylar.find((x) => x.tur === 'plan-gerisi')!;
     assert.deepEqual([satir.istasyon?.id, satir.kaynak, satir.opNo, satir.uretimEmriId], [istasyonId, { tur: 'makine', id: makineId, ad: 'Tezgah E' }, 10, geride.emirId]);
   });
@@ -244,5 +247,42 @@ describe('arkon eksik iş olayları (gerçek PostgreSQL)', () => {
     await sayim(e.adim, 1);
     await yenile();
     assert.equal(await acik('geride-onceki', ikinci), undefined, 'önceki adım yetişti: yeniden açılmaz');
+  });
+
+  test('AR-EK-9 (2567): biten iş emrinde (emir açık olsa da) ölçülmeyen süre nedenleriyle görünür; rotada olmayan adım ayrı nedendir; operatör kendi tezgahında görür', async () => {
+    const bitir = async (e: { emirId: number; adim: number }, emirDe = true) => {
+      await o().sahip.sorgu("UPDATE uretim_emirleri_is_emri SET durum = 'tamam', baslama = $2::timestamptz, bitis = $3::timestamptz, saglam_adet = 0 WHERE id = $1",
+        [e.adim, anMetni(simdi - 28 * SAAT), anMetni(simdi - 26 * SAAT)]);
+      if (emirDe) await o().sahip.sorgu("UPDATE uretim_emri SET durum = 'bitti', baslama = $2::timestamptz, bitis = $3::timestamptz, saglam_adet = 0 WHERE id = $1",
+        [e.emirId, anMetni(simdi - 28 * SAAT), anMetni(simdi - 26 * SAAT)]);
+    };
+    const ekAdim = await emirKur(30);
+    const rotada = await emirKur(30);
+    const bekleyen = await emirKur(30);
+    // Rotadaki adım: ürünün OP numarası rotada kayıtlı; ölçüm kaynağı (ayar ve sayım) yok. Bekleyende sayım var ama karar bekliyor (2566 S-1).
+    for (const e of [rotada, bekleyen]) {
+      await o().sahip.sorgu(
+        `INSERT INTO rota_op_numarasi (malzeme_id, op_no, ilk_revizyon_id)
+         SELECT e.malzeme_no, 10, e.kaynak_rota_revizyonu_id FROM uretim_emri e WHERE e.id = $1`, [e.emirId]);
+    }
+    await o().sahip.sorgu(
+      "INSERT INTO uretim_sayimi (emir_id, is_emri_id, kisi_id, istasyon_id, tur, adet, zaman) VALUES ($1, $2, $3, $4, 'karar_bekliyor', 1, $5::timestamptz)",
+      [bekleyen.emirId, bekleyen.adim, yoneticiId, istasyonId, anMetni(simdi - 27 * SAAT)]);
+    await bitir(ekAdim);
+    await bitir(rotada);
+    // 2578 a: ölçüm iş emri bitince yazılır; emir açıkken de atlanan ölçüm görünür.
+    await bitir(bekleyen, false);
+    await yenile(simdi + 3 * SAAT);
+    const ek = await acik('olcumsuz-is', ekAdim.adim);
+    assert.deepEqual([ek?.deger, ek?.nedenler], [1, ['rotada-yok']], 'dün bitti, adım rotada yok');
+    assert.deepEqual((await acik('olcumsuz-is', rotada.adim))?.nedenler, ['ayar-yok', 'sayim-yok']);
+    assert.deepEqual((await acik('olcumsuz-is', bekleyen.adim))?.nedenler, ['ayar-yok', 'saglam-yok']);
+    assert.ok((await olaylar()).filter((r) => r.tur === 'olcumsuz-is').every((r) => r.bildirim !== null), 'planlamaya bildirildi');
+    const benim = await istek<EksikIslerimCevabi>(operator, 'GET', '/arkon/eksik-islerim');
+    assert.equal(eksikIslerimCevabi.safeParse(benim.govde).success, true, JSON.stringify(benim.govde));
+    assert.deepEqual(benim.govde.olaylar.filter((x) => x.tur === 'olcumsuz-is').map((x) => x.nedenler).sort(), [['ayar-yok', 'saglam-yok'], ['ayar-yok', 'sayim-yok'], ['rotada-yok']]);
+    assert.equal((await ayarYaz('arkon.eksik-olcumsuz-is-gun', null)).durum, 200);
+    await yenile(simdi + 4 * SAAT);
+    assert.equal(await acik('olcumsuz-is', rotada.adim), undefined, 'kural kapanınca kapanır');
   });
 });

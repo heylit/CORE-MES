@@ -142,6 +142,10 @@ export const BILDIRIM_TURLERI = {
   'arkon.bayat-plan': {
     baslik: 'Plan bayat: canlıya alınmadı', onem: 'bilgi', sinif: 'hatirlatma', alanIslemler: ['arkon.planlama'], yol: '/arkon/anomali', varsayilan: { mesaj: false, eposta: false },
   },
+  // 2567: ölçümü planlamacı kabul eder; atlanan ölçümü de o görür. Operatör terminaldeki listede görür, bildirim almaz.
+  'arkon.olcumsuz-is': {
+    baslik: 'Biten işin süresi ölçülmedi', onem: 'bilgi', sinif: 'hatirlatma', alanIslemler: ['arkon.planlama'], yol: '/arkon/anomali', varsayilan: { mesaj: false, eposta: false },
+  },
   // 1365 a: Güvenlik Merkezi'nin kritik alarmı yöneticilere uygulama içinde duyurulur; dışarı (e-posta) gitmez.
   'guvenlik.kritik-alarm': {
     baslik: 'Kritik güvenlik alarmı', onem: 'acil', alanIslemler: ['guvenlik.oku'], yol: '/guvenlik', varsayilan: { mesaj: false, eposta: false },

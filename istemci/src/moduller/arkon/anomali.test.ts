@@ -107,17 +107,23 @@ describe('Üretim anomalisi panosu (kart #1149)', () => {
     expect(eksikKonuMetni({ ...konu, konu: 'istasyon' })).toBe('Torna');
     expect(eksikKonuMetni({ ...konu, konu: 'uretim_emri', emirNo: null, opNo: null })).toBe('Emir 4');
     expect(eksikKonuMetni({ ...konu, konu: 'plan' })).toBe('Canlı plan');
-    expect(kapaliEksikKurallari({ planGerisiDk: 60, kayitsizGun: null, yarimIsSaat: 24, plansizIsSaat: 24, gecikenEmirGun: 0, bayatPlanSaat: null })).toEqual(['Kayıtsız gün', 'Bayat plan']);
+    expect(kapaliEksikKurallari({ planGerisiDk: 60, kayitsizGun: null, yarimIsSaat: 24, plansizIsSaat: 24, gecikenEmirGun: 0, bayatPlanSaat: null, olcumsuzIsGun: 0 })).toEqual(['Kayıtsız gün', 'Bayat plan']);
+  });
+
+  it('süre ölçülmedi (2567): değer bitişten gün, kapalıysa kurallar listesinde', () => {
+    expect(eksikDegerMetni({ tur: 'olcumsuz-is', deger: 0, planaGore: false })).toBe('bugün');
+    expect(eksikDegerMetni({ tur: 'olcumsuz-is', deger: 2, planaGore: false })).toBe('2 gün önce');
+    expect(kapaliEksikKurallari({ planGerisiDk: 60, kayitsizGun: 1, yarimIsSaat: 8, plansizIsSaat: 8, gecikenEmirGun: 0, bayatPlanSaat: 8, olcumsuzIsGun: null })).toEqual(['Süre ölçülmedi']);
   });
 
   it('eksik iş ucu Arkon köprüsünden CORE\'a gider; yazma yoktur', async () => {
     const cevap = {
       hesaplama: '2026-11-09T09:00:00.000Z',
-      esikler: { planGerisiDk: 60, kayitsizGun: 1, yarimIsSaat: 24, plansizIsSaat: 24, gecikenEmirGun: 0, bayatPlanSaat: 24 },
-      ozet: { 'plan-gerisi': 1, 'kayitsiz-gun': 0, 'yarim-is': 0, 'plansiz-is': 0, 'geciken-emir': 0, 'bayat-plan': 0, 'geride-onceki': 0 },
+      esikler: { planGerisiDk: 60, kayitsizGun: 1, yarimIsSaat: 24, plansizIsSaat: 24, gecikenEmirGun: 0, bayatPlanSaat: 24, olcumsuzIsGun: 0 },
+      ozet: { 'plan-gerisi': 1, 'kayitsiz-gun': 0, 'yarim-is': 0, 'plansiz-is': 0, 'geciken-emir': 0, 'bayat-plan': 0, 'geride-onceki': 0, 'olcumsuz-is': 0 },
       olaylar: [{
         id: 1, tur: 'plan-gerisi', konu: 'is_emri', isEmriId: 5, uretimEmriId: 4, emirNo: 'E-1', opNo: 10, istasyon: { id: 2, ad: 'Torna' }, kaynak: { tur: 'makine', id: 3, ad: 'Tezgah' },
-        deger: 120, kalanAdet: 4, planaGore: false, dayanakAni: '2026-11-09T07:00:00.000Z', acilis: '2026-11-09T08:00:00.000Z', kapanis: null,
+        deger: 120, kalanAdet: 4, planaGore: false, dayanakAni: '2026-11-09T07:00:00.000Z', nedenler: [], acilis: '2026-11-09T08:00:00.000Z', kapanis: null,
       }],
     } satisfies EksikIslerCevabi;
     const yollar: string[] = [];

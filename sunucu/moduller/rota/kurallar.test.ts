@@ -9,7 +9,7 @@ import { emreKopyalanabilirMi, karttanAdimlar, kontrolListesi } from './kurallar
 import { PATLATMA_AZAMI_KATMAN, cokKatmanaCevir, dugumDalAdi, emirFireCarpanlari, emirOpNumaralari, patlatmaOzeti, rotaPatlat } from './kurallar.ts';
 import type { PatlatmaRotasi } from './kurallar.ts';
 import { eskiTabanUyarisi, girdiEksigi, hazirlikBol, hazirlikCeliskisi, isEmriBagimliligi, onayaHazirlikHatalari, topluHataIletisi } from './kurallar.ts';
-import { azOlcumUyarisi, olcumOzeti, olcumPenceresi, bekleyenOlcum, degisenTurler, degisimOrani, etkinAdimSuresi, gerceklesenDenetle, kabulDenetle, kabulSureleri, sureAyrimi, taslakSureleri, teorikAyrim, terminalOlcumleri } from './kurallar.ts';
+import { azOlcumUyarisi, olcumOzeti, olcumPenceresi, bekleyenOlcum, degisenTurler, degisimOrani, etkinAdimSuresi, gerceklesenDenetle, kabulDenetle, kabulSureleri, sureAyrimi, taslakSureleri, teorikAyrim, terminalOlcumAdaylari, terminalOlcumKarari, terminalOlcumleri } from './kurallar.ts';
 import { EK_ADIM_SARTNAME_BASLAMIS, EK_ADIM_SARTNAME_KAPALI, EK_ADIM_SARTNAME_ROTA, ekAdimSartnameIhlali } from './kurallar.ts';
 import { adimDegerleriDenetle, cozulmusDegerler, degerHatasi, eksikZorunlular, kapsamUyarMi, sartnameOnayEngeli, sartnameSablonuDenetle, yayinEksigi } from './kurallar.ts';
 import { adimliKontrolListesi, adimliTalimatMetni, eskiTalimatAdimi, kontrolAyrisi, kontrolKur, talimatAdimiHatasi } from './kurallar.ts';
@@ -440,6 +440,18 @@ describe('süre ayrımı ve gerçekleşen süre', () => {
     assert.deepEqual(terminalOlcumleri({ hazirlikDk: 0, netBirimDk: 0.3 }), { hazirlik: 0, islem: 0.3 });
     assert.deepEqual(terminalOlcumleri({ hazirlikDk: null, netBirimDk: null }), { hazirlik: null, islem: null });
     assert.equal(terminalOlcumleri({ hazirlikDk: null, netBirimDk: 0 }).islem, null);
+  });
+  test('RT-83 (2567): terminal ölçümü adayı bitmiş, kaynaklı, fason olmayan iş emridir; ek adım ayrı döner; atlanan tür nedeniyle döner', () => {
+    const ie = (id: number, opNo: number, durum: string, kaynak: string | null) => ({ id, opNo, durum, kaynak: kaynak === null ? null : { tur: kaynak } });
+    const { rotada, rotadaYok } = terminalOlcumAdaylari(
+      [ie(1, 10, 'tamam', 'makine'), ie(2, 20, 'tamam', 'kisi'), ie(3, 30, 'tamam', 'fason'), ie(4, 40, 'devam', 'makine'), ie(5, 50, 'tamam', null), ie(6, 99, 'tamam', 'makine')],
+      new Set([10, 20, 30, 40, 50]),
+    );
+    assert.deepEqual(rotada.map((i) => i.id), [1, 2]);
+    assert.deepEqual(rotadaYok.map((i) => i.id), [6]);
+    assert.deepEqual(terminalOlcumKarari({ hazirlik: 20, islem: 3 }, true), { yazilacak: [{ tur: 'hazirlik', sureDk: 20 }, { tur: 'islem', sureDk: 3 }], atlananlar: [] });
+    assert.deepEqual(terminalOlcumKarari({ hazirlik: 0, islem: null }, false), { yazilacak: [{ tur: 'hazirlik', sureDk: 0 }], atlananlar: ['sayim-yok'] });
+    assert.deepEqual(terminalOlcumKarari({ hazirlik: null, islem: null }, true), { yazilacak: [], atlananlar: ['ayar-yok', 'saglam-yok'] });
   });
   test('RT-73: bekleyen ölçüm son boşaltmadan sonraki son dolu elle ya da terminal satırıdır; makinesiz görünüm her makineninkini gösterir', () => {
     const t = (id: number, p: Partial<GerceklesenSatiri> = {}) => satir({ id, kaynak: 'terminal', ...p });
