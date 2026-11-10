@@ -213,9 +213,14 @@ function RotaBolumu({ r, s, kokMu, sira }: { r: RotaEkrani; s: Sira; kokMu: bool
                 <SecimAlani etiket="İstasyon" deger={a.stationId ?? ''} kapali={!duzen} bos="İstasyon seç…"
                   secenekler={istasyonlar.map((x) => ({ deger: x.id, baslik: `${x.code} ${x.name}` }))}
                   yaz={(v) => { yaz(a, (x) => istasyonYaz(x, v || null), 'İstasyon değişti'); }} />
-                <SecimAlani etiket="Makine" deger={a.machineId ?? ''} kapali={!duzen || makineler.length === 0} bos="Planlayıcı seçer"
-                  secenekler={makineler.map((x) => ({ deger: x.id, baslik: `${x.code} ${x.name}` }))}
-                  yaz={(v) => { yaz(a, (x) => ({ ...x, machineId: v || null }), 'Makine değişti'); }} />
+                {r.duzen.insanli(a.stationId) ? (
+                  // 2685 ve 2698 c: insanlı istasyonda makine seçilmez; iş yetkin kişilere açılır.
+                  <span className="tc-rr1-ipucu">İnsanlı istasyon: makine seçilmez.{a.machineId && ' Eski makine seçimi plan için kullanılmaz; düzenleme panelinden kaldırılır.'}</span>
+                ) : (
+                  <SecimAlani etiket="Makine" deger={a.machineId ?? ''} kapali={!duzen || makineler.length === 0} bos="Planlayıcı seçer"
+                    secenekler={makineler.map((x) => ({ deger: x.id, baslik: `${x.code} ${x.name}` }))}
+                    yaz={(v) => { yaz(a, (x) => ({ ...x, machineId: v || null }), 'Makine değişti'); }} />
+                )}
                 <div className="tc-rr1-fsnums">
                   <SayiAlani etiket="Hazırlık dk" enCok={SURE_EN_COK} deger={a.setup} kapali={!duzen} yaz={(v) => { yaz(a, (x) => sureYaz(x, 'setup', v), 'Hazırlık süresi değişti'); }} />
                   <SayiAlani etiket="İşlem dk" enCok={SURE_EN_COK} deger={a.proc} kapali={!duzen} yaz={(v) => { yaz(a, (x) => sureYaz(x, 'proc', v), 'İşlem süresi değişti'); }} />
