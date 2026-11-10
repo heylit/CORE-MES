@@ -1,0 +1,73 @@
+import { describe, expect, it } from 'vitest';
+import { PLANLANAMAMA_NEDENLERI } from '#paylasilan/sozlesme/planlanamama-sabitleri.ts';
+import { adimSatirlari, eksikAdimlar, emirNedenleri, gecis, KONTROL_ADLARI, NEDEN_ADLARI, ozet, suzgeceUyar, zincirMetni } from './kurallar.ts';
+import { ornekEmirler, ornekRotalar } from './ornek.ts';
+
+describe('planlanabilirlik kuralları (2779)', () => {
+  const [e1, e2] = ornekEmirler().emirler as [ReturnType<typeof ornekEmirler>['emirler'][number], ReturnType<typeof ornekEmirler>['emirler'][number]];
+
+  it('her nedenin adı ve kontrol adı var', () => {
+    for (const k of PLANLANAMAMA_NEDENLERI) {
+      expect(NEDEN_ADLARI[k]).toBeTruthy();
+      expect(KONTROL_ADLARI[k]).toBeTruthy();
+    }
+  });
+
+  it('zincirdeki adım kök sayılmaz; emrin nedenleri yalnız kök adımlardır', () => {
+    expect(emirNedenleri(e1)).toEqual(['ufuk', 'kisi-vardiyasiz']);
+    expect(emirNedenleri(e2)).toEqual(['sure-bos']);
+  });
+
+  it('kökü emrin dışında olan emir öncül nedeniyle sayılır, ölçülemedi yazılmaz (Atölye K1)', () => {
+    const bekleyen = { ...e2, uretimEmriId: 104, emirNo: 'UE-0104', adimlar: [
+      { opNo: 10, ad: 'Montaj', istasyon: 'Montaj', kok: 'oncul' as const, bekledigiEmirNo: null, bekledigiOp: null, kontroller: [] },
+      { opNo: 20, ad: 'Paket', istasyon: 'Paket', kok: 'oncul' as const, bekledigiEmirNo: null, bekledigiOp: 10, kontroller: [] },
+    ] };
+    expect(emirNedenleri(bekleyen)).toEqual(['oncul']);
+    expect(suzgeceUyar(bekleyen, 'oncul')).toBe(true);
+    expect(ozet([e1, bekleyen]).find((x) => x.kod === 'oncul')).toEqual({ kod: 'oncul', emir: 1, adim: 1 });
+    const baskaEmir = { ...bekleyen, adimlar: [{ ...bekleyen.adimlar[0]!, bekledigiEmirNo: 'UE-0042', bekledigiOp: 30 }] };
+    expect(emirNedenleri(baskaEmir)).toEqual(['oncul']);
+    const ayniEmir = { ...bekleyen, adimlar: [bekleyen.adimlar[0]!, { ...bekleyen.adimlar[1]!, bekledigiEmirNo: 'UE-0104' }] };
+    expect(adimSatirlari(ayniEmir.adimlar, 'UE-0104')[1]).toEqual({ tur: 'zincir', bekledigiEmirNo: null, bekledigiOp: 10, oplar: [20] });
+    expect(adimSatirlari(baskaEmir.adimlar, 'UE-0104')).toEqual([{ tur: 'zincir', bekledigiEmirNo: 'UE-0042', bekledigiOp: 30, oplar: [10] }]);
+  });
+
+  it('özet neden türü başına emir ve adım sayar, çok emri etkileyen önce', () => {
+    const s = ozet([e1, e2, { ...e2, uretimEmriId: 103, emirNo: 'UE-0103' }]);
+    expect(s[0]).toEqual({ kod: 'sure-bos', emir: 2, adim: 2 });
+    expect(s.map((x) => x.kod)).toContain('ufuk');
+    expect(s.find((x) => x.kod === 'oncul')).toBeUndefined();
+  });
+
+  it('süzgeç yalnız o nedende kök adımı olan emri bırakır; süzgeçsiz hepsi', () => {
+    expect(suzgeceUyar(e1, 'ufuk')).toBe(true);
+    expect(suzgeceUyar(e2, 'ufuk')).toBe(false);
+    expect(suzgeceUyar(e2, 'oncul')).toBe(false);
+    expect(suzgeceUyar(e2, null)).toBe(true);
+  });
+
+  it('öncül bekleyen adımlar beklediği kök adıma göre tek satırda toplanır', () => {
+    const s = adimSatirlari(e1.adimlar, e1.emirNo);
+    expect(s.map((x) => (x.tur === 'kok' ? x.adim.opNo : x.oplar))).toEqual([20, [30, 40, 50], 60, [70]]);
+    const z = s[1];
+    expect(z?.tur === 'zincir' ? zincirMetni(z) : null).toBe('OP 30, 40, 50: OP 20 düzelince yerleşir');
+    expect(zincirMetni({ tur: 'zincir', bekledigiEmirNo: null, bekledigiOp: null, oplar: [30] })).toBe('OP 30: önceki adım yerleşmedi');
+    expect(zincirMetni({ tur: 'zincir', bekledigiEmirNo: 'UE-0042', bekledigiOp: 30, oplar: [10, 20] })).toBe('OP 10, 20: UE-0042 OP 30 bekleniyor');
+  });
+
+  it('rota sekmesinde yalnız eksiği olan adım listelenir', () => {
+    const [u1, u2] = ornekRotalar().urunler;
+    expect(eksikAdimlar(u1?.adimlar ?? []).map((a) => a.opNo)).toEqual([10]);
+    expect(eksikAdimlar(u2?.adimlar ?? [])).toEqual([]);
+  });
+
+  it('düzeltme yeri sekmeye ya da başka sayfanın adresine çevrilir; yeri olmayan neden geçişsizdir', () => {
+    expect(gecis('sure-bos')).toMatchObject({ tur: 'sekme', anahtar: 'sureler' });
+    expect(gecis('istasyon-yok')).toMatchObject({ tur: 'sekme', anahtar: 'schema', urunlu: true });
+    expect(gecis('kisi-vardiyasiz')).toMatchObject({ tur: 'adres', yol: '/vardiya/personel', islem: 'sayfa.vardiya' });
+    expect(gecis('ufuk')).toMatchObject({ tur: 'adres', yol: '/plan/motor-ayarlari' });
+    expect(gecis('oncul')).toBeNull();
+    expect(gecis('yetki-disi')).toBeNull();
+  });
+});

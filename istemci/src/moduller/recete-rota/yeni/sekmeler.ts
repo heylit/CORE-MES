@@ -51,6 +51,8 @@ const Malzemeler = tembel(yukleyiciler.kaynaklar, (m) => m.Malzemeler);
 const Kaynaklar = tembel(yukleyiciler.kaynaklar, (m) => m.Kaynaklar);
 const Ayarlar = tembel(yukleyiciler.kaynaklar, (m) => m.Ayarlar);
 const SartnameTalimat = tembel(yukleyiciler.sartnameler, (m) => m.SartnameTalimat);
+// Planlanabilirlik ön yüklemeye girmez: yalnız açılınca indirilir, öteki bölümlerin ilk açılışını ağırlaştırmaz.
+const Planlanabilirlik = tembel(() => import('./planlanabilirlik/index.tsx'), (m) => m.Planlanabilirlik);
 
 const menu = IKINCI_MENULER.find((m) => m.kok === '/recete-rota');
 if (!menu) throw new Error('Reçete ve Rota ikinci menüsü bulunamadı');
@@ -66,6 +68,8 @@ export const EKRANLAR: Record<SekmeAnahtari, { ekran: ComponentType<EkranOzellik
   sureler: { ekran: Sureler, parca: 'R2' },
   items: { ekran: Malzemeler, parca: 'R2' },
   res: { ekran: Kaynaklar, parca: 'R2' },
+  // 2779: planlanabilirlik; emir ve rota adımlarının kontrolleri plan sunucusundan okunur (yalnız okur).
+  planlanabilirlik: { ekran: Planlanabilirlik, parca: 'R3' },
   // Rota modülünün kütüphaneleri (989 a); rota tarafı olduğu için R1'in alanındadır.
   sartnameler: { ekran: SartnameTalimat, parca: 'R1' },
   kapanis: { ekran: Kapanis, parca: 'R3' },
