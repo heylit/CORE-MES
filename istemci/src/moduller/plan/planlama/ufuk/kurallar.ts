@@ -441,6 +441,13 @@ export function mesaiTLKaynagi(cevap: { gruplar: readonly { grup: string; saatTL
   const m = new Map((cevap?.gruplar ?? []).map((x) => [x.grup, x.saatTL]));
   return (g) => m.get(g) ?? null;
 }
+// TL görmeyen rol (2750 b) LP'ye bedel yerine sunucunun yoğun sırasını verir (1 en ucuz). Katsayı geç teslimin ve acil kapasitenin çok
+// altındadır: ek mesai geç teslimden önce, ucuz gruptan başlayarak sınıra kadar seçilir; TL hiçbir yerde görünmez. Sırası bilinmeyen grup null.
+export const SIRA_KATSAYI = 0.001;
+export function mesaiSiraKaynagi(cevap: { gruplar: readonly { grup: string; sira: number | null }[] } | null): (g: string) => number | null {
+  const m = new Map((cevap?.gruplar ?? []).map((x) => [x.grup, x.sira]));
+  return (g) => { const s = m.get(g); return s === undefined || s === null ? null : s * SIRA_KATSAYI; };
+}
 export interface ModelSecenegi { yat: boolean; yatAday?: (g: string, s: number) => boolean; sabit?: Record<string, number>; mesaiTL?: (g: string) => number | null }
 export interface YillikModel { lp: string; want: string[]; fi: (f: string) => string; gi: (g: string) => string; mesaiBilinmez: string[] }
 

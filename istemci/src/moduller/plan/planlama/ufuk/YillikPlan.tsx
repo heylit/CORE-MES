@@ -22,6 +22,10 @@ import { ufukGunu } from '../ufuk-olcegi.ts';
 // tutulur. Ayarlar ve elle tahmin çalışmanın `D.yillik` alanına `komut.degistir` ile yazılır (plan.yaz, 223 a). TL yalnız maliyet okuyabilen görür.
 
 type Bitti = Extract<YillikDurum, { durum: 'bitti' }>;
+const MESAI_YOK_IPUCU: Record<Bitti['mesai'], string> = {
+  tl: 'Mesai bedeli bilinmiyor, ek mesai önerilmedi', sira: 'Mesai bedeli bilinmiyor, ek mesai önerilmedi',
+  yetkisiz: 'Mesai bedeli bu rolde okunamıyor, ek mesai önerilmedi', okunamadi: 'Mesai bedeli okunamadı, ek mesai önerilmedi',
+};
 const AYAR_ADI: Record<string, string> = {
   tahmin: 'Talep tahmini', buyume: 'Yıllık büyüme %', mesaiMaks: 'Ek mesai sınırı %', yatirim: 'Yatırım adayları', teslimAy: 'Yeni tezgâhın en erken geliş ayı',
   gecTL: 'Geç teslim bedeli %/gün', stokTL: 'Stok taşıma %/ay',
@@ -42,7 +46,7 @@ export function YillikPlan({ calisma, komut, yetki }: PlanlamaEkranOzellikleri) 
   const yok = durum?.durum === 'yok';
   const y = durum !== null && !yok && durum.anah === anah ? durum : null;
   const bayat = durum !== null && !yok && durum.anah !== anah;
-  const coz = (): void => { void yillikCoz(calisma).then((h) => { if (h) bildir('hata', h); }); };
+  const coz = (): void => { void yillikCoz(calisma, fg).then((h) => { if (h) bildir('hata', h); }); };
   const ayarDegistir = (ne: string, ayrinti: string, fn: (A: YillikAyar) => void, planKoru = true): void => {
     komut?.degistir(ne, (t) => { fn(yillikAyarYaz(t.D)); }, { ayrinti, planKoru });
   };
@@ -185,7 +189,7 @@ function varsayimFormu(calisma: PlanlamaCalismasi, fg: boolean, ayarDegistir: Ay
     alanlar: () => alanlar,
     adimlar: [
       { ad: 'Talep', ne: 'Gelecek talep nereden tahmin edilsin.', k: ['tahmin', 'buyume'] },
-      { ad: 'Kapasite', ne: 'Kapasite yetmezse plan önce ek mesai, sonra yeni tezgâh dener.', k: fg ? ['mesaiMaks', 'yatirim', 'teslimAy'] : ['mesaiMaks', 'yatirim'] },
+      { ad: 'Kapasite', ne: 'Kapasite yetmezse plan önce ek mesai (bedeli bilinen gruplarda), sonra yeni tezgâh dener.', k: fg ? ['mesaiMaks', 'yatirim', 'teslimAy'] : ['mesaiMaks', 'yatirim'] },
       ...(fg ? [{ ad: 'Bedeller', ne: 'Geç teslim ve stokta bekleme ne kadar pahalı.', k: ['gecTL', 'stokTL'] }] : []),
     ],
     ilk: () => {
@@ -336,7 +340,7 @@ function Sonuc({ b, calisma, fg, yaz, ayarDegistir }: { b: Bitti; calisma: Planl
     ) },
     { anahtar: 'ort', baslik: 'Ortalama yük', hizala: 'sag', hucre: (x) => `%${sayi(x.ort * 100, 0)}` },
     { anahtar: 'en', baslik: 'En yüklü dönem', hucre: (x) => `${P[x.enY.t]?.uzun ?? ''} · %${sayi(x.enY.o * 100, 0)}` },
-    { anahtar: 'o', baslik: 'Ek mesai', hizala: 'sag', hucre: (x) => `${sayi(x.o, 0)} sa` },
+    { anahtar: 'o', baslik: 'Ek mesai', hizala: 'sag', hucre: (x) => (b.m.mesaiBilinmez.includes(x.g) ? <span title={MESAI_YOK_IPUCU[b.mesai]}>—</span> : `${sayi(x.o, 0)} sa`) },
     ...(fg ? [{ anahtar: 'gm', baslik: '1 saat ek kapasitenin değeri', hizala: 'sag' as const, hucre: (x: Darbogaz) => (x.gm >= YL_ACIL
       ? <span className="tc-pyu-ton" data-ton="hata">kapasite yetmiyor</span> : x.gm > 0.5 ? <span className="tc-pyu-grup"><b className="mono">{tl(x.gm)}</b><small>en yüksek dönem</small></span> : '0') }] : []),
     { anahtar: 'gd', baslik: 'Dar dönem', hizala: 'sag', hucre: (x) => `${x.gD} / ${P.length}` },
@@ -350,7 +354,10 @@ function Sonuc({ b, calisma, fg, yaz, ayarDegistir }: { b: Bitti; calisma: Planl
     <>
       <Kart baslik="Yıllık plan" baslikEki={<span className="tc-pyu-kucuk">{P[0]?.uzun} – {P[P.length - 1]?.uzun} · HiGHS {sayi(b.sn, 1)} sn · {HS_DURUM[s.durum] ?? String(s.durum)}</span>}>
         <GostergeSeridi l={kpi} />
-        {b.m.mesaiBilinmez.length > 0 && <Not ton="uyari">Mesai bedeli bilinmiyor, ek mesai önerilmedi: {b.m.mesaiBilinmez.join(', ')}. Bu gruplarda açık geç teslim ya da acil kapasite olarak görünür.</Not>}
+        {b.mesai === 'yetkisiz' || b.mesai === 'okunamadi'
+          ? <Not ton="uyari">{b.mesai === 'yetkisiz' ? 'Mesai bedeli bu rolde okunamıyor' : 'Mesai bedeli okunamadı, yeniden çözün'}; ek mesai önerilmedi. Açık geç teslim ya da acil kapasite olarak görünür.</Not>
+          : b.m.mesaiBilinmez.length > 0 && <Not ton="uyari">Mesai bedeli bilinmiyor, ek mesai önerilmedi: {b.m.mesaiBilinmez.join(', ')}. Bu gruplarda açık geç teslim ya da acil kapasite olarak görünür.</Not>}
+        {b.mesai === 'sira' && b.m.mesaiBilinmez.length < v.gruplar.length && <Not>Ek mesai, tutarı gösterilmeden grupların bedel sırasıyla önerildi.</Not>}
         {fg && varsayilan.length > 0 && <Not ton="uyari">Plan bedeli varsayılan model bedeli içerir: {varsayilan.join('; ')}.</Not>}
         <h3 className="tc-pyu-alt-baslik">Grup yükü, kapasitenin %'si</h3>
         <div className="tc-pyu-kaydir">
@@ -371,7 +378,7 @@ function Sonuc({ b, calisma, fg, yaz, ayarDegistir }: { b: Bitti; calisma: Planl
             </tbody>
           </table>
         </div>
-        <p className="tc-pyu-not">Yük %100'ü geçiyorsa ek mesai ya da yeni tezgâhla karşılanıyor; kırmızı hücrede onlar da yetmiyor.</p>
+        <p className="tc-pyu-not">Yük %100'ü geçiyorsa ek mesai (bedeli bilinen gruplarda) ya da yeni tezgâhla karşılanıyor; kırmızı hücrede onlar da yetmiyor.</p>
       </Kart>
       <Kart baslik="Darboğaz ve gölge fiyat">
         <Tablo etiket="Darboğaz" sutunlar={dbSutun} satirlar={db} satirAnahtari={(x) => x.g} />

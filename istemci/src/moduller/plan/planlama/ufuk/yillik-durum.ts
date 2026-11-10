@@ -2,7 +2,7 @@ import { useSyncExternalStore } from 'react';
 import { ApiHatasi, api } from '../../../../ortak/veri/api.ts';
 import type { PlanlamaCalismasi } from '../tipler.ts';
 import {
-  yatirimTL, yillikAyarOku, yillikDonemler, yillikModel, yillikSonuc, yillikTalep, yillikVeri, zamanKur,
+  mesaiSiraKaynagi, mesaiTLKaynagi, yatirimTL, yillikAyarOku, yillikDonemler, yillikModel, yillikSonuc, yillikTalep, yillikVeri, zamanKur,
   type CozumCevabi, type Donem, type YillikModel, type YillikSonuc, type YillikTalep, type YillikVeri,
 } from './kurallar.ts';
 
@@ -12,7 +12,21 @@ export type YillikDurum =
   | { durum: 'yok'; anah: string }
   | { durum: 'hesap'; anah: string; adim: string }
   | { durum: 'hata'; anah: string; hata: string }
-  | { durum: 'bitti'; anah: string; v: YillikVeri; P: Donem[]; T: YillikTalep; m: YillikModel; sn: number; sonuc: YillikSonuc };
+  | { durum: 'bitti'; anah: string; v: YillikVeri; P: Donem[]; T: YillikTalep; m: YillikModel; sn: number; sonuc: YillikSonuc; mesai: MesaiKaynagi };
+
+// Ek mesai bedelinin nereden geldiği: TL değeri (maliyet gören), TL'siz sıra (2750 b), ya da okunamadı (yetki yok ya da uç cevap vermedi).
+export type MesaiKaynagi = 'tl' | 'sira' | 'yetkisiz' | 'okunamadi';
+async function mesaiKaynagiOku(maliyetOku: boolean): Promise<{ tur: MesaiKaynagi; fn: (g: string) => number | null }> {
+  try {
+    if (maliyetOku) return { tur: 'tl', fn: mesaiTLKaynagi(await api.get<{ gruplar: { grup: string; saatTL: number | null }[] }>(MESAI_TL_YOLU)) };
+    return { tur: 'sira', fn: mesaiSiraKaynagi(await api.get<{ gruplar: { grup: string; sira: number | null }[] }>(MESAI_SIRA_YOLU)) };
+  } catch (e) {
+    // Değer okunamazsa bütün gruplar bilinmez sayılır: ek mesai önerilmez (2745 a), bedel uydurulmaz.
+    return { tur: e instanceof ApiHatasi && e.durum === 403 ? 'yetkisiz' : 'okunamadi', fn: mesaiTLKaynagi(null) };
+  }
+}
+export const MESAI_TL_YOLU = '/plan/mesai-saat-degerleri';
+export const MESAI_SIRA_YOLU = '/plan/mesai-grup-sirasi';
 
 export type Cozucu = (lp: string, sure: number, want: readonly string[]) => Promise<CozumCevabi>;
 
@@ -57,7 +71,7 @@ export function useYillikDurum(): YillikDurum | null {
 export function yillikDurumSifirla(): void { koy(null); }
 
 // Üç çözüm: yatırımsız; yatırım adaylarıyla (MIP); yatırım kararı sabit doğrusal model (gölge fiyat). Dönen ileti hata ya da null.
-export async function yillikCoz(c: PlanlamaCalismasi, coz: Cozucu = sunucuCoz): Promise<string | null> {
+export async function yillikCoz(c: PlanlamaCalismasi, maliyetOku: boolean, coz: Cozucu = sunucuCoz): Promise<string | null> {
   const z = zamanKur(c.D);
   if (z === null) return 'Planın başlangıç günü yok; yıllık plan kurulamıyor.';
   const A = yillikAyarOku(c.D);
@@ -74,20 +88,23 @@ export async function yillikCoz(c: PlanlamaCalismasi, coz: Cozucu = sunucuCoz): 
   };
   const t0 = performance.now();
   try {
+    yaz('Mesai bedeli okunuyor');
+    const mk = await mesaiKaynagiOku(maliyetOku);
+    const mesaiTL = mk.fn;
     yaz('Yatırımsız plan çözülüyor');
-    const m0 = yillikModel(c.D, v, P, T, A, { yat: false });
+    const m0 = yillikModel(c.D, v, P, T, A, { yat: false, mesaiTL });
     const r0 = await coz(m0.lp, 30, m0.want);
     let r1 = r0; let m1 = m0;
     if (A.yatirim) {
       yaz('Yatırım adaylarıyla çözülüyor');
-      m1 = yillikModel(c.D, v, P, T, A, { yat: true, yatAday });
+      m1 = yillikModel(c.D, v, P, T, A, { yat: true, yatAday, mesaiTL });
       r1 = await coz(m1.lp, 60, m1.want);
     }
     yaz('Gölge fiyatlar hesaplanıyor');
     let r2 = r0;
-    if (A.yatirim) { const m2 = yillikModel(c.D, v, P, T, A, { yat: true, yatAday, sabit: r1.val ?? {} }); r2 = await coz(m2.lp, 30, m2.want); }
+    if (A.yatirim) { const m2 = yillikModel(c.D, v, P, T, A, { yat: true, yatAday, sabit: r1.val ?? {}, mesaiTL }); r2 = await coz(m2.lp, 30, m2.want); }
     if (guncel?.anah !== anah) return null;
-    koy({ durum: 'bitti', anah, v, P, T, m: m1, sn: (performance.now() - t0) / 1000, sonuc: yillikSonuc(c.D, v, P, T, r1, r2, m1, r0) });
+    koy({ durum: 'bitti', anah, v, P, T, m: m1, sn: (performance.now() - t0) / 1000, sonuc: yillikSonuc(c.D, v, P, T, r1, r2, m1, r0), mesai: mk.tur });
   } catch (e) {
     if (e instanceof CozucuYok) { koy({ durum: 'yok', anah }); return null; }
     koy({ durum: 'hata', anah, hata: e instanceof Error ? e.message : String(e) });
