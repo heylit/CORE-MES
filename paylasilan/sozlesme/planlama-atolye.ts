@@ -37,10 +37,30 @@ export const ekMesaiEkleGovdesi = z.object({
   calismaSurumu: z.number().int(), tezgah: kimlik, gun: z.number().int().nonnegative().max(400), vardiya: kimlik,
 });
 
-export const atolyeKomutuCevabi = z.object({ calismaSurumu: z.number().int(), oncekiSurum: z.number().int() });
+// ileti: elle taşımada aynı emrin adımları itildi ya da taşınan iş öncülünün arkasına kaydıysa nedeni, tek satır (2794 3/3 b); yoksa null.
+export const atolyeKomutuCevabi = z.object({ calismaSurumu: z.number().int(), oncekiSurum: z.number().int(), ileti: z.string().nullable().optional() });
+
+// Elle taşımanın önizlemesi (2790 a, 2794 1/3 a): taşıma yazılmadan, bırakılınca yazılacak yerler. Aynı emrin adımları rotadaki bağ türüne
+// göre itilir ya da geri çekilir; başka emrin işi kımıldamaz. gecerli false ise taşımanın tamamı yapılmaz, ileti nedenidir, isler boştur.
+// isler taşınan işi de içerir (tur 'tasinan'); saatler çalışmanın ekseninde.
+export const isTasiOnizlemeSorgusu = z.object({
+  isId: kimlik,
+  tezgah: kimlik,
+  baslangic: z.coerce.number<number>({ message: 'Başlangıç sayı olmalı.' }).pipe(saat),
+});
+export const isTasiOnizlemesiCevabi = z.object({
+  gecerli: z.boolean(),
+  ileti: z.string().nullable(),
+  isler: z.array(z.object({
+    isId: z.string(), tezgah: z.string(), S: z.number(), C: z.number(), eskiTezgah: z.string(), eskiS: z.number(),
+    tur: z.enum(['tasinan', 'itilen', 'cekilen']),
+  })),
+});
 
 export type IsTasiGovdesi = z.output<typeof isTasiGovdesi>;
 export type AtolyeOlayi = z.output<typeof atolyeOlayi>;
 export type OlayEkleGovdesi = z.output<typeof olayEkleGovdesi>;
 export type EkMesaiEkleGovdesi = z.output<typeof ekMesaiEkleGovdesi>;
 export type AtolyeKomutuCevabi = z.output<typeof atolyeKomutuCevabi>;
+export type IsTasiOnizlemeSorgusu = z.output<typeof isTasiOnizlemeSorgusu>;
+export type IsTasiOnizlemesiCevabi = z.output<typeof isTasiOnizlemesiCevabi>;

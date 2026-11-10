@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { before, describe, test } from 'node:test';
 import type { PlanCevabi } from '#paylasilan/sozlesme/plan.ts';
-import type { AtolyeKomutuCevabi } from '#paylasilan/sozlesme/planlama-atolye.ts';
+import type { AtolyeKomutuCevabi, IsTasiOnizlemesiCevabi } from '#paylasilan/sozlesme/planlama-atolye.ts';
 import type { CalismaTaslagiCevabi, CanliFarkiCevabi, DegerlendirmeDurumuCevabi, PlanlamaCalismasiCevabi } from '#paylasilan/sozlesme/planlama.ts';
 import { PLANLAMA_ANAHTARI } from './disari.ts';
 import { planSaati } from './planlama-kurallar.ts';
@@ -86,8 +86,14 @@ describe('plan (gerçek PostgreSQL): planlama zinciri, emirden canlıya ve atöl
     // 2506 a: atölye komutunun şimdisi gerçek saattir (planın ekseninde); hedef saat işin bir saat ilerisi ve şimdiden sonra.
     const simdi = planSaati((c2 as unknown as { D: { meta: { baslangic: string } } }).D.meta.baslangic, Date.now());
     const baslangic = Math.max(Math.round((ilkIs[1].S + 1) * 4) / 4, Math.ceil(simdi * 4) / 4 + 0.25);
+    // 2790: önizleme bırakılınca yazılacak yeri gösterir ve yazmaz.
+    const on = await tamam<IsTasiOnizlemesiCevabi>(c.planlama, 'GET', `/plan/planlama-calismasi/is-tasi-onizlemesi?isId=${encodeURIComponent(ilkIs[0])}&tezgah=${String(makineA)}&baslangic=${String(baslangic)}`);
+    assert.equal(on.gecerli, true, on.ileti ?? '');
+    assert.deepEqual(on.isler.filter((x) => x.tur === 'tasinan').map((x) => [x.isId, x.tezgah, x.S]), [[ilkIs[0], String(makineA), baslangic]]);
+    assert.equal((await calismaOku()).surum, s2);
     const t = await tamam<AtolyeKomutuCevabi>(c.planlama, 'POST', '/plan/planlama-calismasi/is-tasi', { isId: ilkIs[0], tezgah: String(makineA), baslangic, calismaSurumu: s2 });
     assert.equal(t.oncekiSurum, s2);
+    assert.equal(t.ileti, on.ileti);
     assert.ok(t.calismaSurumu > s2);
     const { calisma: c3 } = await calismaOku();
     assert.deepEqual(c3.locks[ilkIs[0]], { m: String(makineA), S: baslangic });
