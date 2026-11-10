@@ -86,6 +86,12 @@ test('genel gider, projede sayılan belgeleri proje maliyetten alır (2594 b)', 
   assert.ok(sunucununBaglari().some((b) => b.ad === 'projede sayılan belgeler -> finans genel gider'));
 });
 
+test('genel gider personel bileşenleri İK\'dan gelir (2647 a, 2659)', () => {
+  const adlar = sunucununBaglari().map((b) => b.ad);
+  assert.ok(adlar.includes('İK dolaylı personel -> finans genel gider'));
+  assert.ok(adlar.includes('İK emilmeyen doğrudan işçilik -> finans genel gider'));
+});
+
 test('815: müşteri sınıfı plana girmez; plan müşteri kartından sınıf okumaz', () => {
   assert.ok(!sunucununBaglari().some((b) => b.ad === 'müşteri sınıfı -> plan'));
 });
