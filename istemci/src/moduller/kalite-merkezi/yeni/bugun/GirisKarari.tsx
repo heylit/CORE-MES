@@ -32,7 +32,9 @@ export function GirisKarari({ ncrler }: { ncrler: readonly { no?: unknown }[] })
   const [islem, islemYaz] = useState<Islem | null>(null);
   const [kabul, kabulYaz] = useState('');
   const [hatali, hataliYaz] = useState('');
-  const [karar, kararYaz] = useState<Karar>('red');
+  // 2754 a/a: karar seçimsiz açılır; seçilmeden yazılmaz (yanlış varsayılan dalgınlıkla onaylanmasın).
+  const [karar, kararYaz] = useState<Karar | ''>('');
+  const [kararEksik, kararEksikYaz] = useState(false);
   const [ciddiyet, ciddiyetYaz] = useState<Ciddiyet>('Majör');
   const [not, notYaz] = useState('');
   const liste = useQuery({
@@ -72,7 +74,7 @@ export function GirisKarari({ ncrler }: { ncrler: readonly { no?: unknown }[] })
   if (kayitlar.length === 0) return null;
   const bekliyor = gkk.isPending || kararVer.isPending;
   const ac = (i: Islem) => {
-    kabulYaz(sayi(i.kayit.miktar)); hataliYaz('0'); kararYaz('red'); ciddiyetYaz('Majör'); notYaz(''); islemYaz(i);
+    kabulYaz(sayi(i.kayit.miktar)); hataliYaz('0'); kararYaz(''); kararEksikYaz(false); ciddiyetYaz('Majör'); notYaz(''); islemYaz(i);
   };
   const miktarlarGecerli = MIKTAR.test(kabul.trim()) && MIKTAR.test(hatali.trim());
   const onayla = () => {
@@ -82,6 +84,7 @@ export function GirisKarari({ ncrler }: { ncrler: readonly { no?: unknown }[] })
       if (!miktarlarGecerli) { bildir('hata', 'Kabul ve hatalı miktarı sayı olmalı.'); return; }
       gkk.mutate({ kayit: islem.kayit, govde: { kabul: sade(kabul), hatali: sade(hatali), not: n } });
     } else {
+      if (karar === '') { kararEksikYaz(true); return; }
       kararVer.mutate({ kayit: islem.kayit, govde: { karar, ciddiyet, not: n, ncrKimlik: yeniKimlik('ncr'), ncrNo: siradakiNo(ncrler, 'NCR') } });
     }
   };
@@ -127,7 +130,10 @@ export function GirisKarari({ ncrler }: { ncrler: readonly { no?: unknown }[] })
         {k && islem?.tur === 'karar' && (
           <>
             <p>{k.malKabulNo}, lot {k.partiEtiketi ?? '-'}: {sayi(k.hataliMiktar)} {k.birim ?? ''} hatalı. Karar geri alınamaz; aynı işlemde NCR açılır.</p>
-            <Secim etiket="Karar" value={karar} onChange={(e) => { kararYaz(e.target.value as Karar); }} secenekler={KARARLAR} />
+            <Secim
+              etiket="Karar" value={karar} required bosSecenek="Seçiniz" hata={kararEksik && karar === '' ? 'Karar seçin.' : undefined}
+              onChange={(e) => { kararYaz(e.target.value as Karar | ''); }} secenekler={KARARLAR}
+            />
             <Secim
               etiket="Ciddiyet" value={ciddiyet} onChange={(e) => { ciddiyetYaz(e.target.value as Ciddiyet); }}
               secenekler={CIDDIYETLER.map((c) => ({ deger: c, baslik: c }))}

@@ -80,8 +80,34 @@ export function mesaiSaatiniCikar(calisma: unknown): unknown {
   return { ...calisma, D: kalan };
 }
 
-// Planlama kaydına yazılmayan ve ham okumada dönmeyen alanlar tek yerden (2601 a genel gider, 2728 a brüt, 2742 mesai saat değeri).
-export const saklanmayanAlanlariCikar = (calisma: unknown): unknown => mesaiSaatiniCikar(brutAlanlariniCikar(genelGiderAlanlariniCikar(calisma)));
+// 2772 M2 (Güvenlik O2, 2601 a): tezgâhın saat ücreti Finans'ın istasyon saat maliyetidir (girdi.js ucretIzle). Kayda yazılmaz; maliyeti
+// gören her açılışta Finans'tan yeniden alır, görmeyenin hesabında boştur.
+export function tezgahUcretiniCikar(calisma: unknown): unknown {
+  if (calisma === null || typeof calisma !== 'object') return calisma;
+  const D = (calisma as { D?: unknown }).D;
+  if (D === null || typeof D !== 'object' || !Array.isArray((D as { tezgahlar?: unknown }).tezgahlar)) return calisma;
+  const tezgahlar = (D as { tezgahlar: unknown[] }).tezgahlar;
+  const ucretli = (t: unknown): t is Record<string, unknown> => t !== null && typeof t === 'object' && ('ucret' in t || 'ucretIst' in t);
+  if (!tezgahlar.some(ucretli)) return calisma;
+  return { ...calisma, D: { ...D, tezgahlar: tezgahlar.map((t) => { if (!ucretli(t)) return t; const { ucret: _u, ucretIst: _i, ...kalan } = t; return kalan; }) } };
+}
+
+// 2772 M4 (2601 a): malzemenin birim fiyatı Finans'ın malzeme maliyetidir (girdi.js sunucuKaydi, tmiCevir). Kayda yazılmaz; birleşme her
+// okumada kaynaktan yeniden kurar (değer yokken bugünkü gibi 0, bu satıra dokunulmadı).
+export function malzemeFiyatiniCikar(calisma: unknown): unknown {
+  if (calisma === null || typeof calisma !== 'object') return calisma;
+  const D = (calisma as { D?: unknown }).D;
+  if (D === null || typeof D !== 'object' || !Array.isArray((D as { malzemeler?: unknown }).malzemeler)) return calisma;
+  const malzemeler = (D as { malzemeler: unknown[] }).malzemeler;
+  const fiyatli = (m: unknown): m is Record<string, unknown> => m !== null && typeof m === 'object' && 'birimFiyat' in m;
+  if (!malzemeler.some(fiyatli)) return calisma;
+  return { ...calisma, D: { ...D, malzemeler: malzemeler.map((m) => { if (!fiyatli(m)) return m; const { birimFiyat: _f, ...kalan } = m; return kalan; }) } };
+}
+
+// Planlama kaydına yazılmayan ve ham okumada dönmeyen alanlar tek yerden (2601 a genel gider, tezgâh ücreti ve malzeme fiyatı, 2728 a brüt,
+// 2742 mesai saat değeri).
+export const saklanmayanAlanlariCikar = (calisma: unknown): unknown =>
+  malzemeFiyatiniCikar(tezgahUcretiniCikar(mesaiSaatiniCikar(brutAlanlariniCikar(genelGiderAlanlariniCikar(calisma)))));
 
 // 2747 (Güvenlik): planlama anahtarına yeni yazma yalnız json'dur; eski metin biçimli satır (geçmiş sürüm dahil) JSON metniyse ayrıştırılıp
 // aynı süzgeçten geçer ve yine metin olarak döner. JSON olmayan metin yapılı alan taşımaz, olduğu gibi kalır.
@@ -92,6 +118,27 @@ export function saklanmayanKayitDegeri(bicim: string, deger: unknown): unknown {
   try { c = JSON.parse(deger) as unknown; } catch { return deger; }
   const s = saklanmayanAlanlariCikar(c);
   return s === c ? deger : JSON.stringify(s);
+}
+
+// 2772 (Güvenlik O1, 2601 a, K3): planın TL toplamı (plan.ozet.tl) motorun maliyet görenin girdisiyle (genel gider, İK ek mesai değeri,
+// istasyon maliyeti) kurduğu toplamdır; kayıtta kalır, yalnız finans.maliyet-oku olana döner. Başka alana dokunulmaz.
+export function planTlToplaminiCikar(calisma: unknown): unknown {
+  if (calisma === null || typeof calisma !== 'object') return calisma;
+  const plan = (calisma as { plan?: unknown }).plan;
+  if (plan === null || typeof plan !== 'object') return calisma;
+  const ozet = (plan as { ozet?: unknown }).ozet;
+  if (ozet === null || typeof ozet !== 'object' || !('tl' in ozet)) return calisma;
+  const { tl: _t, ...kalan } = ozet as Record<string, unknown>;
+  return { ...calisma, plan: { ...plan, ozet: kalan } };
+}
+export function maliyetsizKayitDegeri(bicim: string, deger: unknown): unknown {
+  const s = saklanmayanKayitDegeri(bicim, deger);
+  if (bicim === 'json') return planTlToplaminiCikar(s);
+  if (bicim !== 'metin' || typeof s !== 'string') return s;
+  let c: unknown;
+  try { c = JSON.parse(s) as unknown; } catch { return s; }
+  const t = planTlToplaminiCikar(c);
+  return t === c ? s : JSON.stringify(t);
 }
 
 export function calismayaMotorAyari(

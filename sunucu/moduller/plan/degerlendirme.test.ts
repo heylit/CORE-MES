@@ -146,6 +146,22 @@ describe('planlama değerlendirmesi: hesap', () => {
     const b = sonuc(await dene({ tur: 'parti-bolme', siparisId: 'O2', dagitim: 'ayni', adetler: [8, 8] }));
     const mb = maliyetsiz(b); if (mb.tur !== 'parti-bolme') return assert.fail(mb.tur);
     assert.equal(mb.sonuc?.tl, null);
+    const tlsiz = (p: Record<string, unknown>) => ({ ...p, ozet: { ...(p['ozet'] as object), tl: null } });
+    assert.ok(b.tur === 'parti-bolme' && b.sonuc && mb.sonuc);
+    assert.deepEqual(mb.sonuc.plan, tlsiz(b.sonuc.plan), 'bölmenin planında TL toplamı yok');
+    const kur = sonuc(await dene({ tur: 'plan-kur' }, calismaKur()));
+    assert.ok(kur.tur === 'plan-kur');
+    const guncel = { ...calismaKur(), plan: kur.plan };
+    const ops = kur.plan['ops'] as Record<string, { m: string; S: number }>;
+    const ters = Object.keys(ops).filter((id) => ops[id]?.m === '100').sort((a, b) => (ops[b]?.S ?? 0) - (ops[a]?.S ?? 0));
+    const istekler: DegerlendirmeIstegi[] = [{ tur: 'plan-kur' }, { tur: 'plan-iyilestir' }, { tur: 'one-al', siparisId: 'O1' }, { tur: 'sira-degistir', tezgah: '100', sira: ters }];
+    for (const istek of istekler) {
+      const k = sonuc(await dene(istek, guncel)); const mk = maliyetsiz(k);
+      assert.ok('plan' in k && 'plan' in mk && mk.tur === k.tur, istek.tur);
+      if (k.plan === null) { assert.equal(mk.plan, null, istek.tur); continue; }
+      assert.equal(typeof (k.plan['ozet'] as { tl: unknown }).tl, 'number', istek.tur);
+      assert.deepEqual(mk.plan, tlsiz(k.plan), `${istek.tur}: planın TL toplamı yok, öteki alanlar aynı`);
+    }
   });
 
   test('PD-18: planı kur (576): kuraldan sıfırdan kurar; iki emir yerleşir, plan çalışmanın veri sürümünde, alt sınır ve ilk gecikme kayıtta', async () => {
@@ -353,7 +369,12 @@ describe('planlama değerlendirmesi ucu (gerçek PostgreSQL)', () => {
     assert.equal(typeof c.sonuc.plan['ops'], 'object');
     assert.ok(c.sonuc.plan['ozet']);
     assert.deepEqual(await vt().tek('SELECT deger FROM plan_planlama_kaydi WHERE anahtar = $1', [PLANLAMA_ANAHTARI]), once);
-    assert.equal((await iste(planlamaci, surum, { tur: 'plan-kur' })).statusCode, 200);
+    assert.equal(typeof (c.sonuc.plan['ozet'] as { tl: unknown }).tl, 'number', 'maliyeti görene planın TL toplamı gider');
+    const g = await iste(planlamaci, surum, { tur: 'plan-kur' });
+    assert.equal(g.statusCode, 200);
+    const gc = degerlendirmeCevabi.parse(g.json());
+    if (gc.sonuc.tur !== 'plan-kur') return assert.fail(gc.sonuc.tur);
+    assert.equal((gc.sonuc.plan['ozet'] as { tl: unknown }).tl, null, 'görmeyenin plan-kur durum gövdesinde planın TL toplamı yok (Güvenlik O1)');
     assert.equal((await iste(yalnizYazar, surum, { tur: 'plan-kur' })).statusCode, 403);
   });
 

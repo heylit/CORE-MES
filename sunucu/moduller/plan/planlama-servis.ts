@@ -27,7 +27,10 @@ import { defterSatirlari } from './degisiklik-defteri-kurallar.ts';
 import { kaynakDilimiOku } from './girdi/kaynaklar.ts';
 import { kapasitedenIzinler, type KaynakDilimiOkumasi } from './girdi/kaynaklar-kurallar.ts';
 import { hedefMotorAyari } from './motor-ayari.ts';
-import { brutAlanlariniCikar, calismayaMotorAyari, mesaiSaatiniCikar, saklanmayanAlanlariCikar, saklanmayanKayitDegeri, type MotorOlcegi } from './motor-ayari-kurallar.ts';
+import {
+  brutAlanlariniCikar, calismayaMotorAyari, maliyetsizKayitDegeri, mesaiSaatiniCikar, planTlToplaminiCikar, saklanmayanAlanlariCikar, saklanmayanKayitDegeri,
+  tezgahUcretiniCikar, type MotorOlcegi,
+} from './motor-ayari-kurallar.ts';
 import { sureOgrenmesi } from './ogrenme.ts';
 import { planGirdisi, yeniCalisma, type KaynakOkumasi } from './plan-girdisi.ts';
 import {
@@ -59,9 +62,11 @@ export function planlamaYazmaDenetimi(kullanici: Kullanici, anahtar: string): vo
   } else if (!islemVarMi(kullanici, 'recete-rota.yaz')) throw yetkiYok(KAYIT_YETKI_ILETISI);
 }
 
-export async function planlamaKayitlari(db: Db): Promise<KayitlarCevabi> {
+const PLAN_TL_OKUMA = 'finans.maliyet-oku';
+export async function planlamaKayitlari(db: Db, kullanici: Kullanici): Promise<KayitlarCevabi> {
   const kayitlar = await sorgular.planlamaKayitlari(db);
-  return { kayitlar: kayitlar.map((k) => (k.anahtar === PLANLAMA_ANAHTARI ? { ...k, deger: saklanmayanKayitDegeri(k.bicim, k.deger) } : k)) };
+  const suz = islemVarMi(kullanici, PLAN_TL_OKUMA) ? saklanmayanKayitDegeri : maliyetsizKayitDegeri;
+  return { kayitlar: kayitlar.map((k) => (k.anahtar === PLANLAMA_ANAHTARI ? { ...k, deger: suz(k.bicim, k.deger) } : k)) };
 }
 
 export async function planlamaYaz(db: Db, kullanici: Kullanici, g: PlanlamaYazGovdesi): Promise<YazCevabi> {
@@ -374,7 +379,11 @@ export async function planlamaCalismasi(db: Db, kullanici: Kullanici, simdi: num
   const fin = finansman.gun === gun ? finansman.oran : await planFinansmanOrani(db, gun);
   const gg = genelGider.gun === gun ? genelGider.oran : await planGenelGideri(db, kullanici, gun);
   // 2728 a: brüt (göçten önceki kayıtta kalmış olsa da) sayfaya gitmez.
-  return { calisma: mesaiSaatiniCikar(brutAlanlariniCikar(calismayaMotorAyari(g.S, degerler, fin, olcek, undefined, gg))) as PlanlamaCalismasiCevabi['calisma'], surum: k.surum, kaynakDegisikligi: g.kaynakDegisikligi ?? null };
+  const calisma = mesaiSaatiniCikar(brutAlanlariniCikar(calismayaMotorAyari(g.S, degerler, fin, olcek, undefined, gg)));
+  return {
+    calisma: (islemVarMi(kullanici, PLAN_TL_OKUMA) ? calisma : tezgahUcretiniCikar(planTlToplaminiCikar(calisma))) as PlanlamaCalismasiCevabi['calisma'],
+    surum: k.surum, kaynakDegisikligi: g.kaynakDegisikligi ?? null,
+  };
 }
 
 // 657 a: kayıt yoksa sayfa boş çalışmayı kendisi açar ve düzenlenebilir başlar. Çalışma çerçevenin ilk açılışındaki gibi Reçete ve Rota

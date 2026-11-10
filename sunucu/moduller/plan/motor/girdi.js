@@ -228,7 +228,9 @@ function rrCevir(st) {
     /* 1459 a: stok satırı olmayan malzemenin stoku bilinmez (null); 0 sayılmaz. Motor dağıtımda 0 gibi kullanır ve uyarır (engine evaluate) */
     const stok = it.stock == null || it.stock === '' || !isFinite(+it.stock) ? null : +it.stock;
     if (!a || (a.stok ?? null) !== stok) y.stok = stok;
-    if (!a || (+a.birimFiyat || 0) !== it.cost) y.birimFiyat = +it.cost || 0;
+    /* veri yoksa null (yapı 5, stokla aynı); fiyatı 0 girilmiş malzeme 0 kalır. Motor null'u eksik sayar (engine evaluate, durum.js) */
+    const fiyat = it.cost == null || it.cost === '' || !isFinite(+it.cost) ? null : +it.cost;
+    if (!a || (a.birimFiyat ?? null) !== fiyat) y.birimFiyat = fiyat;
     if (!a) Object.assign(y, { tedarikGun: 0, muayeneGun: 0 });
     return rrKur(a, y);
   });

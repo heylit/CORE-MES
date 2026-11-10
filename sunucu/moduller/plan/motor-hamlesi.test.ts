@@ -120,12 +120,12 @@ describe('planlama hamlesi: ret ve sözleşme', () => {
     assert.deepEqual(await dene({ tur: 'one-al', siparisId: 'YOK' }, c), { hata: 'siparis-yok' });
   });
 
-  test('MH-07: gövde: öne al sipariş ister, iyileştirme alan almaz; maliyetsiz görünüm planı değiştirmez', async () => {
+  test('MH-07: gövde: öne al sipariş ister, iyileştirme alan almaz; maliyetsiz görünümde planın yalnız TL toplamı düşer', async () => {
     assert.ok(degerlendirmeGovdesi.safeParse({ surum: 1, istek: { tur: 'plan-iyilestir' } }).success);
     assert.ok(!degerlendirmeGovdesi.safeParse({ surum: 1, istek: { tur: 'plan-iyilestir', ms: 5 } }).success);
     assert.ok(!degerlendirmeGovdesi.safeParse({ surum: 1, istek: { tur: 'one-al' } }).success);
     assert.ok(degerlendirmeGovdesi.safeParse({ surum: 1, istek: { tur: 'one-al', siparisId: 'O1' } }).success);
     const s = sonuc(await dene({ tur: 'plan-iyilestir' }));
-    assert.deepEqual(maliyetsiz(s), s);
+    assert.deepEqual(maliyetsiz(s), s.tur === 'plan-iyilestir' && s.plan ? { ...s, plan: { ...s.plan, ozet: { ...(s.plan['ozet'] as object), tl: null } } } : s);
   });
 });

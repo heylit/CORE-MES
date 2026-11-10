@@ -360,3 +360,27 @@ Testler: plan-bedel 815 (iki test), kurallar 815, kablolama 815; istemci planlam
   ham kayıt okuması (`planlamaKayitlari`) ve geri al (`calismaGeriAl`). JSON olmayan metin yapılı alan taşımaz, olduğu gibi kalır.
 - Brüt silme göçü (2737-1-goc) metin satırı çevirmez; son sayımı metin satırındaki brütü de bulur ve göçü geri alır.
 - Test: `brut-saklanmaz.test.ts` BS-05..07, `brut-sil-goc.test.ts` BG-02.
+
+## Planın TL toplamı yalnız maliyeti görene (2772; Güvenlik O1, 2601 a, K3; 2026-11-10)
+- Planlama kaydındaki `plan.ozet.tl` (motorun maliyet görenin girdisiyle kurduğu toplam: genel gider, İK ek mesai değeri, istasyon maliyeti)
+  kayıtta kalır; `GET /plan/planlama-kayitlari` (metin biçimli eski satır dahil) ve `GET /plan/planlama-calismasi` onu yalnız
+  finans.maliyet-oku olana döndürür (`motor-ayari-kurallar.ts planTlToplaminiCikar`, `maliyetsizKayitDegeri`). Öteki özet alanları herkese.
+- Görünen fark yok: sayfa "Plan TL"yi zaten yalnız maliyeti görene gösteriyordu (Onay.tsx). Yazmada süzülmez, çünkü maliyeti görenin
+  göstergesi kayıttaki değeri okur; görmeyen geri yazınca toplam kaydan düşer (bir sonraki uygulamada yeniden yazılır).
+- Canlıya alma ve atölye okumaları plan kaydını taşımaz: taslak ve canlı plan satırlarından okunur (kod okuması).
+- Test: `brut-saklanmaz.test.ts` BS-08, BS-09.
+- M2 (Güvenlik O2, 2601 a): tezgâhın saat ücreti (`D.tezgahlar[].ucret`, `ucretIst`; Finans istasyon saat maliyeti, girdi.js ucretIzle) kayda
+  yazılmaz, ham kayıt okumasında kimseye dönmez, çalışma okumasında yalnız finans.maliyet-oku olana (her açılışta Finans'tan yeniden kurulur).
+  GÖRÜNEN DEĞİŞİKLİK: maliyet görmeyen rolde motor bugüne kadar kayıttaki son ücretle hesaplıyordu; artık tezgâh ücreti boş, işlem bedeli
+  bilinmez ("saat ücreti" eksik uyarısı) ve tezgâh seçiminde bedel ağırlığı kalkar. Bu rolün planı ve ek mesai seçimi değişebilir (kart 2770).
+  Sunucu plan motoru (maliyet okuyucusu) ve maliyeti gören değişmez.
+- Kişi maliyeti (`people[].cost`) motorun kaynak biçiminde kalır, çalışmaya (D) kopyalanmaz; kayda girmez (girdi.js kod okuması).
+- M4 (2601 a): malzemenin birim fiyatı (`D.malzemeler[].birimFiyat`, Finans malzeme maliyeti) kayda yazılmaz ve ham okumada dönmez;
+  birleşme her okumada kaynaktan yeniden kurar.
+- M5 (yapı 5, 1459 a; Maliyet): fiyatı bilinmeyen malzemenin birim fiyatı artık null (önce 0 yazılıyordu); 0 girilmiş fiyat 0 kalır.
+  GÖRÜNEN DEĞİŞİKLİK: fiyatı bilinmeyen malzeme eksik sayılır; maliyeti görende siparişin malzeme bedeli bilinmez (null) görünebilir ve
+  "eksik" sayısı artabilir. Maliyet görmeyende malzeme fiyatı hep null (önce 0).
+- Test isteği (Güvenlik O1): değerlendirme sonuçlarında da planın TL toplamı maliyeti görmeyene gitmez. `maliyetsiz` artık plan-kur,
+  plan-uygula, plan-iyilestir, one-al, sira-degistir ve parti-bolme sonuçlarının planında `ozet.tl`'yi null yapar (plan null ise dokunmaz);
+  planın öteki alanları aynı kalır. Görünen fark yok: sayfa toplamı zaten yalnız maliyeti görene gösteriyordu.
+  Test: `degerlendirme.test.ts` PD-08 (her tür, saf), PD-21 (gerçek uç, planlamacının plan-kur durum gövdesi; kırmızı-önce: süzgeçsiz ikisi kırmızı).
