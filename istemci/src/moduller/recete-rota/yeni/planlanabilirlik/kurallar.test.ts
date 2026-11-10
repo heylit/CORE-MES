@@ -20,12 +20,15 @@ describe('planlanabilirlik kuralları (2779)', () => {
 
   it('kökü emrin dışında olan emir öncül nedeniyle sayılır, ölçülemedi yazılmaz (Atölye K1)', () => {
     const bekleyen = { ...e2, uretimEmriId: 104, emirNo: 'UE-0104', adimlar: [
-      { opNo: 10, ad: 'Montaj', istasyon: 'Montaj', kok: 'oncul' as const, bekledigiOp: null, kontroller: [] },
-      { opNo: 20, ad: 'Paket', istasyon: 'Paket', kok: 'oncul' as const, bekledigiOp: 10, kontroller: [] },
+      { opNo: 10, ad: 'Montaj', istasyon: 'Montaj', kok: 'oncul' as const, bekledigiEmirNo: null, bekledigiOp: null, kontroller: [] },
+      { opNo: 20, ad: 'Paket', istasyon: 'Paket', kok: 'oncul' as const, bekledigiEmirNo: null, bekledigiOp: 10, kontroller: [] },
     ] };
     expect(emirNedenleri(bekleyen)).toEqual(['oncul']);
     expect(suzgeceUyar(bekleyen, 'oncul')).toBe(true);
     expect(ozet([e1, bekleyen]).find((x) => x.kod === 'oncul')).toEqual({ kod: 'oncul', emir: 1, adim: 1 });
+    const baskaEmir = { ...bekleyen, adimlar: [{ ...bekleyen.adimlar[0]!, bekledigiEmirNo: 'UE-0042', bekledigiOp: 30 }] };
+    expect(emirNedenleri(baskaEmir)).toEqual(['oncul']);
+    expect(adimSatirlari(baskaEmir.adimlar)).toEqual([{ tur: 'zincir', bekledigiEmirNo: 'UE-0042', bekledigiOp: 30, oplar: [10] }]);
   });
 
   it('özet neden türü başına emir ve adım sayar, çok emri etkileyen önce', () => {
@@ -47,7 +50,8 @@ describe('planlanabilirlik kuralları (2779)', () => {
     expect(s.map((x) => (x.tur === 'kok' ? x.adim.opNo : x.oplar))).toEqual([20, [30, 40, 50], 60, [70]]);
     const z = s[1];
     expect(z?.tur === 'zincir' ? zincirMetni(z) : null).toBe('OP 30, 40, 50: OP 20 düzelince yerleşir');
-    expect(zincirMetni({ tur: 'zincir', bekledigiOp: null, oplar: [30] })).toBe('OP 30: önceki adım yerleşmedi');
+    expect(zincirMetni({ tur: 'zincir', bekledigiEmirNo: null, bekledigiOp: null, oplar: [30] })).toBe('OP 30: önceki adım yerleşmedi');
+    expect(zincirMetni({ tur: 'zincir', bekledigiEmirNo: 'UE-0042', bekledigiOp: 30, oplar: [10, 20] })).toBe('OP 10, 20: UE-0042 OP 30 bekleniyor');
   });
 
   it('rota sekmesinde yalnız eksiği olan adım listelenir', () => {

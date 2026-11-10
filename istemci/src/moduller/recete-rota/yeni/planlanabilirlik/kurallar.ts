@@ -67,10 +67,10 @@ export const DURUM_GOSTERIMI: Readonly<Record<Kontrol['durum'], { ad: string; si
 };
 
 // Kök neden: emrin zincir dışı (öncül olmayan) adımları. Öncül bekleyen adımın kökü zincirin başındaki adımdadır, sayılmaz; ama emrin
-// hiçbir adımı kök değilse ve zincir emrin dışında başlıyorsa (bekledigiOp yok: başka emir ya da parça) emrin nedeni 'oncul'dur.
+// hiçbir adımı kök değilse ve zincir emrin dışında başlıyorsa (başka emir ya da bilinmeyen öncül) emrin nedeni 'oncul'dur.
 export function kokAdimlar(e: Emir): Adim[] {
   const kok = e.adimlar.filter((a) => a.kok !== null && a.kok !== 'oncul');
-  return kok.length > 0 ? kok : e.adimlar.filter((a) => a.kok === 'oncul' && a.bekledigiOp === null);
+  return kok.length > 0 ? kok : e.adimlar.filter((a) => a.kok === 'oncul' && (a.bekledigiEmirNo !== null || a.bekledigiOp === null));
 }
 
 export interface OzetSatiri { kod: PlanlanamamaNedeni; emir: number; adim: number }
@@ -99,18 +99,19 @@ export function suzgeceUyar(e: Emir, kod: PlanlanamamaNedeni | null): boolean {
 }
 
 // Adımlar ekranda iki türdür: kendi eksiği olan (kontrolleriyle) ve zincirde bekleyen (kök adıma göre tek satırda toplanır).
-export type AdimSatiri = { tur: 'kok'; adim: Adim } | { tur: 'zincir'; bekledigiOp: number | null; oplar: number[] };
+export type AdimSatiri = { tur: 'kok'; adim: Adim } | { tur: 'zincir'; bekledigiEmirNo: string | null; bekledigiOp: number | null; oplar: number[] };
 export function adimSatirlari(adimlar: readonly Adim[]): AdimSatiri[] {
   const sirali = [...adimlar].sort((a, b) => a.opNo - b.opNo);
-  const zincir = new Map<number | null, number[]>();
+  const zincir = new Map<string, number[]>();
   const sonuc: AdimSatiri[] = [];
   for (const a of sirali) {
     if (a.kok === 'oncul') {
-      const l = zincir.get(a.bekledigiOp);
+      const anahtar = `${a.bekledigiEmirNo ?? ''}|${String(a.bekledigiOp)}`;
+      const l = zincir.get(anahtar);
       if (l) { l.push(a.opNo); continue; }
       const yeni = [a.opNo];
-      zincir.set(a.bekledigiOp, yeni);
-      sonuc.push({ tur: 'zincir', bekledigiOp: a.bekledigiOp, oplar: yeni });
+      zincir.set(anahtar, yeni);
+      sonuc.push({ tur: 'zincir', bekledigiEmirNo: a.bekledigiEmirNo, bekledigiOp: a.bekledigiOp, oplar: yeni });
     } else {
       sonuc.push({ tur: 'kok', adim: a });
     }
@@ -120,6 +121,7 @@ export function adimSatirlari(adimlar: readonly Adim[]): AdimSatiri[] {
 
 export function zincirMetni(s: Extract<AdimSatiri, { tur: 'zincir' }>): string {
   const op = s.oplar.length === 1 ? `OP ${String(s.oplar[0])}` : `OP ${s.oplar.join(', ')}`;
+  if (s.bekledigiEmirNo !== null) return `${op}: ${s.bekledigiEmirNo}${s.bekledigiOp === null ? '' : ` OP ${String(s.bekledigiOp)}`} bekleniyor`;
   return s.bekledigiOp === null ? `${op}: önceki adım yerleşmedi` : `${op}: OP ${String(s.bekledigiOp)} düzelince yerleşir`;
 }
 

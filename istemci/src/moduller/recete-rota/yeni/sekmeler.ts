@@ -19,13 +19,12 @@ export interface EkranOzellikleri {
 }
 
 // Ekranlar ana pakete girmez: rotalar.tsx bu dosyayı sabit olarak ithal eder, kabuk da rotaları hevesli tarar; doğrudan ithal
-// bütün bölümleri ilk açılışta indirtiyordu. Bir bölüm ilk açılınca öteki klasörler de indirilir, sekmeler arası geçiş beklemez.
+// bütün bölümleri ilk açılışta indirtiyordu. Bir bölüm ilk açılınca öteki üç klasör de indirilir, sekmeler arası geçiş beklemez.
 const yukleyiciler = {
   rotalar: () => import('./rotalar/index.tsx'),
   kaynaklar: () => import('./kaynaklar/index.tsx'),
   emirler: () => import('./emirler/index.tsx'),
   sartnameler: () => import('./sartnameler/index.tsx'),
-  planlanabilirlik: () => import('./planlanabilirlik/index.tsx'),
 };
 let hepsi: Promise<unknown> | null = null;
 // İndirilemeyen bölüm (bağlantı koptu) burada sessiz kalır: açıldığında kendi beklemesi hatayı gösterir, sonraki açılış yeniden dener.
@@ -52,7 +51,8 @@ const Malzemeler = tembel(yukleyiciler.kaynaklar, (m) => m.Malzemeler);
 const Kaynaklar = tembel(yukleyiciler.kaynaklar, (m) => m.Kaynaklar);
 const Ayarlar = tembel(yukleyiciler.kaynaklar, (m) => m.Ayarlar);
 const SartnameTalimat = tembel(yukleyiciler.sartnameler, (m) => m.SartnameTalimat);
-const Planlanabilirlik = tembel(yukleyiciler.planlanabilirlik, (m) => m.Planlanabilirlik);
+// Planlanabilirlik ön yüklemeye girmez: yalnız açılınca indirilir, öteki bölümlerin ilk açılışını ağırlaştırmaz.
+const Planlanabilirlik = tembel(() => import('./planlanabilirlik/index.tsx'), (m) => m.Planlanabilirlik);
 
 const menu = IKINCI_MENULER.find((m) => m.kok === '/recete-rota');
 if (!menu) throw new Error('Reçete ve Rota ikinci menüsü bulunamadı');
