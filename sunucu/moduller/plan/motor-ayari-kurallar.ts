@@ -54,6 +54,25 @@ export function genelGiderAlanlariniCikar(calisma: unknown): unknown {
   return { ...calisma, D: { ...D, planTL: kalan } };
 }
 
+// 2728 a: planlama brüt ücret saklamaz (Giderler dolaylı personel kartı, ek mesai planının kişi ücreti). Gelen çalışma brüt taşısa da
+// kayda girmez ve planlama kaydını okuyan kimseye dönmez; brütsüz alanlar (ad, SGK oranı, aylık saat) aynen kalır.
+export function brutAlanlariniCikar(calisma: unknown): unknown {
+  if (calisma === null || typeof calisma !== 'object') return calisma;
+  const D = (calisma as { D?: unknown }).D;
+  if (D === null || typeof D !== 'object') return calisma;
+  const nesne = (x: unknown): x is Record<string, unknown> => x !== null && typeof x === 'object' && !Array.isArray(x);
+  const brutsuz = (x: unknown): unknown => { if (!nesne(x) || !('brut' in x)) return x; const { brut: _b, ...kalan } = x; return kalan; };
+  const yeni: Record<string, unknown> = { ...(D as Record<string, unknown>) };
+  const ms = yeni['maliyetSis'];
+  if (nesne(ms) && Array.isArray(ms['dolayli'])) yeni['maliyetSis'] = { ...ms, dolayli: ms['dolayli'].map(brutsuz) };
+  const mes = yeni['mesaiSis'];
+  if (nesne(mes) && nesne(mes['ucret'])) yeni['mesaiSis'] = { ...mes, ucret: Object.fromEntries(Object.entries(mes['ucret']).map(([k, v]) => [k, brutsuz(v)])) };
+  return { ...calisma, D: yeni };
+}
+
+// Planlama kaydına yazılmayan ve ham okumada dönmeyen alanlar tek yerden (2601 a genel gider, 2728 a brüt).
+export const saklanmayanAlanlariCikar = (calisma: unknown): unknown => brutAlanlariniCikar(genelGiderAlanlariniCikar(calisma));
+
 export function calismayaMotorAyari(
   calisma: unknown, ayar: MotorAyarlari, finansmanOraniGun: number | null = null, olcek: MotorOlcegi | null = null,
   ogren?: Readonly<Record<string, OgrenilenSure>> | null, genelGider?: { saatBasi: number | null; gizli: boolean },

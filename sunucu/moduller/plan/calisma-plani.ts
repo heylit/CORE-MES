@@ -6,6 +6,7 @@ import { tesisGunu } from '#paylasilan/zaman.ts';
 import { emirDilimi, isEmriPlanBilgileri } from '../uretim-emirleri/disari.ts';
 import { calismaTaslagiYaz, canliSira, tabanPlani, taslakYerlesimleriOku } from './disari.ts';
 import { calismaEkMesaisi, calismaElleBolmeleri, calismaFarki, calismaIsleri, calismaKilitleri, calismaKuyruklari, taslaktanCalismaya as kuralTaslaktanCalismaya, type TaslakYeri } from './planlama-kurallar.ts';
+import { saklanmayanAlanlariCikar } from './motor-ayari-kurallar.ts';
 import { calismaPlani, type CalismaPlani } from './plan-girdisi.ts';
 import { PLANLAMA_ANAHTARI, planlamaGirdisi, planlamaYaz, planlamaYazmaDenetimi } from './planlama-servis.ts';
 import { planlanacakIsler } from './servis.ts';
@@ -140,13 +141,14 @@ export async function taslaktanCalismaya(db: Db, kullanici: Kullanici, g: Taslak
 }
 
 // 508 2 a: çalışma kaydı geçmişteki bir önceki sürümüne döner (geçmiş 242 a, son 50 sürüm). Okunan sürümden sonra başka yazma olduysa
-// eski sürüm (409). Dönüş de bir yazmadır: geri alınan sürüm geçmişe düşer, ikinci geri alma onu getirir.
+// eski sürüm (409). Dönüş de bir yazmadır: geri alınan sürüm geçmişe düşer, ikinci geri alma onu getirir. Geçmişteki sürüm saklanmayan alanları
+// (genel gider 2601 a, brüt 2728 a) taşıyabilir: yazma yolundaki gibi çıkarılır.
 export async function calismaGeriAl(db: Db, kullanici: Kullanici, calismaSurumu: number): Promise<CalismaGeriAlCevabi> {
   planlamaYazmaDenetimi(kullanici, PLANLAMA_ANAHTARI);
   const mevcut = await sorgular.planlamaSurumKilitle(db, PLANLAMA_ANAHTARI);
   if (mevcut !== calismaSurumu) throw eskiSurum();
   const onceki = await sorgular.planlamaSonGecmis(db, PLANLAMA_ANAHTARI);
   if (onceki === null) throw cakisma('Geri alınacak önceki sürüm yok.');
-  const k = await sorgular.planlamaKaydiGuncelle(db, { anahtar: PLANLAMA_ANAHTARI, bicim: onceki.bicim, deger: onceki.deger, kisiId: kullanici.id });
+  const k = await sorgular.planlamaKaydiGuncelle(db, { anahtar: PLANLAMA_ANAHTARI, bicim: onceki.bicim, deger: onceki.bicim === 'json' ? saklanmayanAlanlariCikar(onceki.deger) : onceki.deger, kisiId: kullanici.id });
   return { calismaSurumu: k!.surum, donulenSurum: onceki.surum };
 }

@@ -295,3 +295,8 @@ Testler: plan-bedel 815 (iki test), kurallar 815, kablolama 815; istemci planlam
   iki ayrılık bilinçlidir: istemci istasyonu bilinmeyen tezgâhta bütün personelin ortalamasına düşer, sunucu düşmez (değer başka gruba
   aktarılmaz); istemci ufuk dışındaki günü vardiyasız sayar, sunucu günün hafta gününe bakar.
 - Test: `mesai-maliyeti.test.ts` (PL-2653), `uc-yetkisi.test.ts` satırı.
+
+## 2737-1 (2728 a): planlama brüt ücret saklamaz
+- Dolaylı personel kartının ve ek mesai planındaki kişi ücretinin brütü (`D.maliyetSis.dolayli[].brut`, `D.mesaiSis.ucret[*].brut`) planlama kaydına yazılmaz; `GET /plan/planlama-kayitlari` ve `GET /plan/planlama-calismasi` brüt döndürmez (`motor-ayari-kurallar.ts` `brutAlanlariniCikar`).
+- Sonuç (kart 2740 bekler): brüt olmayınca kişi bazlı ek mesai bedeli ücretten hesaplanmaz; motor yalın mesai hesabına düşer (`degerlendir.js` `msSaat` null, `ymMesaiTLYalin`). Başka yol seçilmedi.
+- Kayıtta kalmış brütün silinmesi ayrı göçtedir (2615 a planından sonra); o zamana kadar okumada çıkarılır.
