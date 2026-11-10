@@ -54,14 +54,18 @@ describe('Giriş kontrolü (1246)', () => {
     expect(new Headers((istek?.[1] as RequestInit | undefined)?.headers).get('istek-kimligi')).toMatch(/^[0-9a-f-]{36}$/);
   });
 
-  it('hatalının kararı NCR numarasıyla gider; red varsayılandır; şartlı kabulde şart zorunludur', async () => {
+  it('hatalının kararı NCR numarasıyla gider; karar seçimsiz açılır ve seçilmeden yazılmaz (2754 a/a); şartlı kabulde şart zorunludur', async () => {
     const s = ac(MUHENDIS, [KARAR], { ncr: [{ no: `NCR-${String(new Date().getFullYear())}-0004` }] });
     const bolum = await screen.findByRole('region', { name: 'Giriş kontrolü' });
     fireEvent.click(within(bolum).getByRole('button', { name: 'Karar ver' }));
     const pencere = screen.getByRole('dialog', { name: 'Hatalı giriş kararı' });
-    fireEvent.change(within(pencere).getByLabelText('Karar'), { target: { value: 'sartli_kabul' } });
+    expect((within(pencere).getByLabelText(/^Karar/) as HTMLSelectElement).value).toBe('');
+    fireEvent.click(within(pencere).getByRole('button', { name: 'Kararı yaz' }));
+    expect(within(pencere).getByText('Karar seçin.')).toBeTruthy();
+    expect(s.yazmalar.some((y) => y.yol.includes('/karar'))).toBe(false);
+    fireEvent.change(within(pencere).getByLabelText(/^Karar/), { target: { value: 'sartli_kabul' } });
     expect((within(pencere).getByLabelText(/Şart/) as HTMLTextAreaElement).required).toBe(true);
-    fireEvent.change(within(pencere).getByLabelText('Karar'), { target: { value: 'red' } });
+    fireEvent.change(within(pencere).getByLabelText(/^Karar/), { target: { value: 'red' } });
     fireEvent.change(within(pencere).getByLabelText('Gerekçe'), { target: { value: 'Ölçü dışı' } });
     fireEvent.click(within(pencere).getByRole('button', { name: 'Kararı yaz' }));
     await waitFor(() => { expect(s.yazmalar.some((y) => y.yol === '/kalite-merkezi/giris/12/karar')).toBe(true); });
