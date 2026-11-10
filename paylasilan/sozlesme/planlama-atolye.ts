@@ -37,7 +37,8 @@ export const ekMesaiEkleGovdesi = z.object({
   calismaSurumu: z.number().int(), tezgah: kimlik, gun: z.number().int().nonnegative().max(400), vardiya: kimlik,
 });
 
-// ileti: elle taşımada aynı emrin adımları itildi ya da taşınan iş öncülünün arkasına kaydıysa nedeni, tek satır (2794 3/3 b); yoksa null.
+// ileti yalnız taşıma komutunda gelir (öteki komutlarda alan yoktur): adımlar itildiyse, taşınan iş öncülünün arkasına kaydıysa ya da
+// operatör listesi değiştiyse nedeni, tek satır (2794 3/3 b); taşımada söylenecek bir şey yoksa null.
 export const atolyeKomutuCevabi = z.object({ calismaSurumu: z.number().int(), oncekiSurum: z.number().int(), ileti: z.string().nullable().optional() });
 
 // Elle taşımanın önizlemesi (2790 a, 2794 1/3 a): taşıma yazılmadan, bırakılınca yazılacak yerler. Aynı emrin adımları rotadaki bağ türüne
@@ -48,7 +49,9 @@ export const isTasiOnizlemeSorgusu = z.object({
   tezgah: kimlik,
   baslangic: z.coerce.number<number>({ message: 'Başlangıç sayı olmalı.' }).pipe(saat),
 });
+// calismaSurumu: önizlemenin hesaplandığı çalışma sürümü; sayfa kendi sürümünden farklıysa önizleme eskidir.
 export const isTasiOnizlemesiCevabi = z.object({
+  calismaSurumu: z.number().int().nullable(),
   gecerli: z.boolean(),
   ileti: z.string().nullable(),
   isler: z.array(z.object({

@@ -269,11 +269,12 @@ export interface TasimaTakvimi {
   opNo: Record<string, string>;
   yer: (id: string, m: string, t: number) => { S: number; C: number; lot1: number } | null;
   saatMetni: (h: number) => string;
+  tezgahAdi: (m: string) => string;
 }
 // Girdi birleşmiş çalışmadır (planlamaCalismasi); kopyalanır. Şimdi planın ekseninde saattir.
 export function tasimaTakvimi(calisma: unknown, simdi: number): TasimaTakvimi {
   const { sunucuTasimaTakvimi } = baglamla<{ sunucuTasimaTakvimi: (S: unknown, now: number) => TasimaTakvimi }>(tasimaKodu(), 'tasima-takvimi.js', null);
   const t = sunucuTasimaTakvimi(jsonKopya(calisma), simdi);
   const yer: TasimaTakvimi['yer'] = (id, m, h) => { const y = t.yer(id, m, h); return y === null ? null : { S: y.S, C: y.C, lot1: y.lot1 }; };
-  return { donuk: t.donuk, ufuk: t.ufuk, tasimaSaat: t.tasimaSaat, onculler: structuredClone(t.onculler), opNo: structuredClone(t.opNo), yer, saatMetni: (h) => String(t.saatMetni(h)) };
+  return { donuk: t.donuk, ufuk: t.ufuk, tasimaSaat: t.tasimaSaat, onculler: structuredClone(t.onculler), opNo: structuredClone(t.opNo), yer, saatMetni: (h) => String(t.saatMetni(h)), tezgahAdi: (m) => String(t.tezgahAdi(m)) };
 }

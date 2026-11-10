@@ -28,5 +28,5 @@ export function tasimaHesabi(calisma: Nesne, simdi: number, g: { isId: string; t
     const l = (t.onculler[id] ?? []).filter(([p]) => isler.has(p) && !biten.has(p));
     if (l.length > 0) onculler.set(id, l);
   }
-  return tasimaItmesi({ isler, onculler, simdi, donuk: t.donuk, ufuk: t.ufuk, tasimaSaat: t.tasimaSaat, yer: t.yer, saatMetni: t.saatMetni }, g.isId, g.tezgah, g.baslangic);
+  return tasimaItmesi({ isler, onculler, simdi, donuk: t.donuk, ufuk: t.ufuk, tasimaSaat: t.tasimaSaat, yer: t.yer, saatMetni: t.saatMetni, tezgahAdi: t.tezgahAdi }, g.isId, g.tezgah, g.baslangic);
 }

@@ -397,6 +397,9 @@ Testler: plan-bedel 815 (iki test), kurallar 815, kablolama 815; istemci planlam
 - Kural saf (`tasima-kurallar.ts`), takvim motorun derlemesinden (`motor/tasima.js`, `kilitYeri` ile aynı yer). Biten öncül beklenmez.
   Taşınan işin kendisi donuk bölgede olsa da elle taşınır (önceki davranış); yalnız itilen ve çekilen adımlar donuk bölgeye dokunmaz.
 - Motor değişmedi: kilitli iş yine öncülünü beklemez (2507 a motor kuralı); sırayı artık taşıma komutu kilitleriyle korur.
+- İnsanlı istasyondaki ardıl (kişinin el tezgâhı) da aynı kuralla itilir (Atölye K1). Ardılın tezgâhı ona uygun değilse ret adımı ve
+  tezgâhı söyler; ufuk ayrı iletidir. Taşınan iş donuk bölgede başka işin yerine girerse ileti operatör listesinin değiştiğini söyler (Atölye N1).
+  Önizleme cevabı hesaplandığı `calismaSurumu`nu taşır (Mimar N2).
 
 ## Planlanabilirlik uçları (2779 sayfası; 2026-11-10)
 - `GET /plan/planlanabilirlik`: plana giren açık emirlerden yerleşmeyen adımı olanlar, yalnız yerleşmeyen adımlarıyla. Motor önerisi motor

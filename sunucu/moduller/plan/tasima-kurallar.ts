@@ -17,9 +17,10 @@ export interface TasimaGirdisi {
   // İşin öncülleri (aynı emirden) ve bağ türü; bağımsız adımın öncülü yoktur.
   onculler: ReadonlyMap<string, readonly (readonly [string, BagTuru])[]>;
   simdi: number; donuk: number; ufuk: number; tasimaSaat: number;
-  // İşin m tezgâhında t'den sonraki ilk çalışma anında başlayan yeri; tezgâh işe uygun değilse ya da ufukta yer yoksa null.
+  // İşin m tezgâhında t'den sonraki ilk çalışma anında başlayan yeri; tezgâh işe uygun değilse null. Ufukta yer yoksa bitiş sonsuzdur.
   yer: (id: string, m: string, t: number) => TasimaYeri | null;
   saatMetni: (h: number) => string;
+  tezgahAdi: (m: string) => string;
 }
 export interface TasimaSatiri { isId: string; tezgah: string; S: number; C: number; eskiTezgah: string; eskiS: number; tur: 'tasinan' | 'itilen' | 'cekilen' }
 export type TasimaSonucu = { gecerli: true; ileti: string | null; isler: TasimaSatiri[] } | { gecerli: false; ileti: string; isler: [] };
@@ -51,17 +52,20 @@ export function tasimaItmesi(g: TasimaGirdisi, isId: string, m0: string, S0: num
     .filter((i) => i.m === m);
   const carpan = (m: string, id: string, y: TasimaYeri) => dolu(m, id).find((a) => a.S < y.C - E && a.C > y.S + E);
   // t'den sonra tezgâhtaki en yakın boş yer (başka işi itmez); örtülü bağda öncülden önce bitmeyecek kadar geç başlar.
-  const bosYer = (id: string, m: string, t: number, bitSiniri: number): TasimaYeri | null => {
+  const bosYer = (id: string, m: string, t: number, bitSiniri: number): TasimaYeri | 'uygunsuz' | 'ufuk' => {
     for (let n = 0; n < 2000; n++) {
       const y = g.yer(id, m, t);
-      if (y === null || y.C > g.ufuk + E) return null;
+      if (y === null) return 'uygunsuz';
+      if (y.C > g.ufuk + E) return 'ufuk';
       if (y.C < bitSiniri - E) { t = Math.max(t + ADIM, y.S + (bitSiniri - y.C)); continue; }
       const c = carpan(m, id, y);
       if (c === undefined) return y;
       t = Math.max(c.C, t + E);
     }
-    return null;
+    return 'ufuk';
   };
+  const bosRed = (id: string, m: string, r: 'uygunsuz' | 'ufuk') => red(r === 'uygunsuz'
+    ? `${op(id)} ${g.tezgahAdi(m)} tezgâhında yerleşemiyor; taşıma yapılmadı.` : `${op(id)} planlama ufkuna sığmıyor; taşıma yapılmadı.`);
   const alt = Math.max(g.simdi, g.donuk);
   // Geri çekme: öncül, ardılının başlangıcına yetişecek en geç boş yere çekilir; kendi öncülleri de gerekirse çekilir. Yer yoksa null.
   const cek = (id: string, ty: BagTuru, sonHazir: number, derinlik: number): boolean => {
@@ -85,7 +89,8 @@ export function tasimaItmesi(g: TasimaGirdisi, isId: string, m0: string, S0: num
   if (x.sabit) return red(`${op(isId)} başlamış ya da donuk bölgede; taşınamaz.`);
   if (S0 < g.simdi - E) return red('İş geçmiş bir saate taşınamaz.');
   const yx = g.yer(isId, m0, S0);
-  if (yx === null || yx.C > g.ufuk + E) return red(`${op(isId)} planlama ufkuna sığmıyor; taşıma yapılmadı.`);
+  if (yx === null) return bosRed(isId, m0, 'uygunsuz');
+  if (yx.C > g.ufuk + E) return bosRed(isId, m0, 'ufuk');
   yeni.set(isId, { ...yx, m: m0, tur: 'tasinan' });
   const notlar: string[] = [];
   // Öncülü taşınan işten sonra hazır olan: geri çekilir; çekilemezse en erken yerinde kalır ve taşınan iş onun arkasına kayar.
@@ -97,7 +102,7 @@ export function tasimaItmesi(g: TasimaGirdisi, isId: string, m0: string, S0: num
     if (!pi.sabit && !pi.fas) {
       const s = sinir(p);
       const y = bosYer(p, pi.m, Math.max(alt, s.bas), s.bit);
-      if (y === null) return red(`${op(p)} planlama ufkuna sığmıyor; taşıma yapılmadı.`);
+      if (typeof y === 'string') return bosRed(p, pi.m, y);
       if (y.S < pi.S - E) yeni.set(p, { ...y, m: pi.m, tur: 'cekilen' });
     }
     notlar.push(`${op(p)} en erken ${g.saatMetni(yeri(p).S)} başlayabilir (${engel})`);
@@ -124,13 +129,18 @@ export function tasimaItmesi(g: TasimaGirdisi, isId: string, m0: string, S0: num
       if (ai.sabit) return red(`${op(a)} başlamış ya da donuk bölgede; taşıma onu sıraya aykırı bırakır, yapılmadı.`);
       if (ai.fas) continue;
       const y = bosYer(a, ai.m, s.bas, s.bit);
-      if (y === null) return red(`${op(a)} planlama ufkuna sığmıyor; taşıma yapılmadı.`);
+      if (typeof y === 'string') return bosRed(a, ai.m, y);
       yeni.set(a, { ...y, m: ai.m, tur: yeni.get(a)?.tur === 'cekilen' ? 'cekilen' : 'itilen' });
       if (!itilen.includes(a)) itilen.push(a);
       kuyruk.push(a);
     }
   }
   if (itilen.length > 0) notlar.push(`${itilen.map(op).join(', ')} ileri itildi`);
+  // Taşınan iş donuk bölgede başka işin yerine girerse operatörün yakın listesi değişir (Atölye N1).
+  const xs = yeri(isId);
+  if (xs.S < g.donuk - E && dolu(m0, isId).some((a) => a.S < g.donuk - E && a.S < xs.C - E && a.C > xs.S + E)) {
+    notlar.push(`${g.tezgahAdi(m0)} tezgâhında sıradaki iş değişir; operatör listesi güncellenir`);
+  }
   const isler = [...yeni].map(([id, y]) => {
     const i = g.isler.get(id)!;
     return { isId: id, tezgah: y.m, S: y.S, C: y.C, eskiTezgah: i.m, eskiS: i.S, tur: y.tur };

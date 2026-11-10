@@ -11,8 +11,8 @@ const calisma = (tur: 'b' | 'o', ops: Record<string, unknown>, ek: Record<string
   D: {
     meta: { ad: 'Ornek', baslangic: '2026-01-05' }, ayarlar: {}, vardiyalar: [{ id: 'V1', bas: '08:00', bit: '16:00' }],
     calismaGunleri: Object.fromEntries(GUN.map((g, i) => [g, i < 5 ? ['V1'] : []])), tatiller: [],
-    tezgahlar: [{ id: 'T1', grup: 'G' }, { id: 'T2', grup: 'G' }], personel: [], malzemeler: [],
-    urunler: [{ id: 'U', rota: [adim('10', 'T1'), adim('20', 'T2', [['10', tur]])] }, { id: 'Y', rota: [adim('10', 'T2')] }],
+    tezgahlar: [{ id: 'T1', grup: 'G' }, { id: 'T2', grup: 'G' }, { id: 'kisi-7', ad: 'Deneme Kisi', grup: 'kisi-7', vardiyalar: ['V1'], opOran: 0, verim: 1 }], personel: [], malzemeler: [],
+    urunler: [{ id: 'U', rota: [adim('10', 'T1'), adim('20', 'T2', [['10', tur]]), adim('30', 'kisi-7', [['20', 'b']])] }, { id: 'Y', rota: [adim('10', 'T2')] }],
     siparisler: [{ id: 'S1', urun: 'U', adet: 2, termin: null }, { id: 'S2', urun: 'Y', adet: 2, termin: null }],
   },
   plan: { dataVer: 1, ops },
@@ -51,6 +51,13 @@ describe('taşıma hesabı motorun takvimiyle (2790)', () => {
     const r = tasimaHesabi(calisma('b', { 'S1.10': op('S1', 'T1', 8, { done: 1 }), 'S1.20': op('S1', 'T2', 10) }), 8, { isId: 'S1.20', tezgah: 'T2', baslangic: 8 });
     assert.deepEqual(ozet(r), { 'S1.20': ['T2', 8, 10, 'tasinan'] });
     assert.equal(tasimaHesabi(calisma('b', { 'S1.10': op('S1', 'T1', 8) }), 8, { isId: 'S1.10', tezgah: 'T2', baslangic: 15 }).gecerli, false);
+  });
+
+  test('TH-07 (Atölye K1): insanlı istasyondaki ardıl da kişinin el tezgâhında en yakın boş yere itilir', () => {
+    const r = tasimaHesabi(calisma('b', { 'S1.10': op('S1', 'T1', 8), 'S1.20': op('S1', 'T2', 10), 'S1.30': op('S1', 'kisi-7', 12), 'S2.10': op('S2', 'kisi-7', 35) }), 8,
+      { isId: 'S1.10', tezgah: 'T1', baslangic: 15 });
+    assert.equal(r.gecerli, true, r.ileti ?? '');
+    assert.deepEqual(ozet(r), { 'S1.10': ['T1', 15, 33, 'tasinan'], 'S1.20': ['T2', 33, 35, 'itilen'], 'S1.30': ['kisi-7', 37, 39, 'itilen'] });
   });
 
   test('TH-06: öne alınan ardılın öncülü geri çekilir; şimdiye çarparsa ardıl arkasına kayar, neden saatle yazılır', () => {

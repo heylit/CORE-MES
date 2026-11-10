@@ -89,6 +89,7 @@ describe('plan (gerçek PostgreSQL): planlama zinciri, emirden canlıya ve atöl
     // 2790: önizleme bırakılınca yazılacak yeri gösterir ve yazmaz.
     const on = await tamam<IsTasiOnizlemesiCevabi>(c.planlama, 'GET', `/plan/planlama-calismasi/is-tasi-onizlemesi?isId=${encodeURIComponent(ilkIs[0])}&tezgah=${String(makineA)}&baslangic=${String(baslangic)}`);
     assert.equal(on.gecerli, true, on.ileti ?? '');
+    assert.equal(on.calismaSurumu, s2);
     assert.deepEqual(on.isler.filter((x) => x.tur === 'tasinan').map((x) => [x.isId, x.tezgah, x.S]), [[ilkIs[0], String(makineA), baslangic]]);
     assert.equal((await calismaOku()).surum, s2);
     const t = await tamam<AtolyeKomutuCevabi>(c.planlama, 'POST', '/plan/planlama-calismasi/is-tasi', { isId: ilkIs[0], tezgah: String(makineA), baslangic, calismaSurumu: s2 });

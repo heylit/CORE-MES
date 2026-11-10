@@ -37,8 +37,8 @@ export async function isTasiOnizlemesi(db: Db, kullanici: Kullanici, g: IsTasiOn
   planlamaYazmaDenetimi(kullanici, PLANLAMA_ANAHTARI);
   const c = await planlamaCalismasi(db, kullanici, simdi);
   const d = tasimaDenetimi(c.calisma, g, simdi);
-  if ('hata' in d) return { gecerli: false, ileti: d.hata.ileti, isler: [] };
-  return tasimaHesabi(d.deger, d.simdi, g);
+  if ('hata' in d) return { calismaSurumu: c.surum, gecerli: false, ileti: d.hata.ileti, isler: [] };
+  return { calismaSurumu: c.surum, ...tasimaHesabi(d.deger, d.simdi, g) };
 }
 
 export function olayiEkle(db: Db, kullanici: Kullanici, g: OlayEkleGovdesi, simdi: number = Date.now()): Promise<AtolyeKomutuCevabi> {

@@ -278,7 +278,7 @@ describe('atölye komut uçları (gerçek PostgreSQL)', () => {
     for (const cerez of [okuyucu, receteYazari]) assert.equal((await oku(cerez, q)).statusCode, 403);
     const o = await oku(tam, q);
     assert.equal(o.statusCode, 200, o.body);
-    assert.deepEqual(o.json(), { gecerli: false, ileti: 'Çalışmada plan yok; önce planı kurun.', isler: [] });
+    assert.deepEqual(o.json(), { calismaSurumu: surum, gecerli: false, ileti: 'Çalışmada plan yok; önce planı kurun.', isler: [] });
     assert.equal((await oku(tam, `isId=J1.10&tezgah=${makineId}&baslangic=abc`)).statusCode, 400);
     assert.equal((await oku(tam, `isId=J1.10&baslangic=12`)).statusCode, 400);
     assert.equal((await vt().tx((db) => sorgular.planlamaKaydi(db, PLANLAMA_ANAHTARI)))?.surum, surum);

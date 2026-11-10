@@ -14,6 +14,7 @@ function girdi(isler: Record<string, Kur>, bag: Record<string, [string, BagTuru]
     isler: m, onculler: new Map(Object.entries(bag)), simdi: -100, donuk: -100, ufuk: 1000, tasimaSaat: 0,
     yer: (id, _m, t) => { const k = isler[id]!; return { S: t, C: t + k.d, lot1: t + (k.lot ?? k.d) }; },
     saatMetni: (h) => `${h}`,
+    tezgahAdi: (m) => `Tezgah ${m}`,
     ...ek,
   };
 }
@@ -89,7 +90,12 @@ describe('elle taşımada itme (2790, 2794)', () => {
 
   test('tezgâh işe uygun değilse taşıma yapılmaz', () => {
     const g = girdi({ 'E1.10': { m: 'M1', S: 0, d: 4 } }, {}, { yer: () => null });
-    assert.equal(tasimaItmesi(g, 'E1.10', 'M9', 6).gecerli, false);
+    assert.deepEqual(tasimaItmesi(g, 'E1.10', 'M9', 6), { gecerli: false, ileti: 'OP 10 Tezgah M9 tezgâhında yerleşemiyor; taşıma yapılmadı.', isler: [] });
+    // İtilecek ardılın tezgâhı ona uygun değilse neden o adımı ve tezgâhı söyler.
+    const g2 = girdi({ 'E1.10': { m: 'M1', S: 0, d: 4 }, 'E1.20': { m: 'K7', S: 4, d: 4 } }, { 'E1.20': [['E1.10', 'b']] });
+    const yer0 = g2.yer;
+    const r = tasimaItmesi({ ...g2, yer: (id, m, t) => (id === 'E1.20' ? null : yer0(id, m, t)) }, 'E1.10', 'M1', 6);
+    assert.equal(r.ileti, 'OP 20 Tezgah K7 tezgâhında yerleşemiyor; taşıma yapılmadı.');
   });
 
   test('öne alınan ardıl: öncül geri çekilir, zincir boyunca', () => {
@@ -142,7 +148,13 @@ describe('elle taşımada itme (2790, 2794)', () => {
     assert.equal(r.ileti, null);
   });
 
-  test('başka tezgâha taşıma: eski ve yeni tezgâh sonuçta', () => {
+  test('Atölye N1: taşınan iş donuk bölgede başka işin yerine girerse operatör listesinin değiştiği söylenir', () => {
+    const g = girdi({ 'E1.10': { m: 'M1', S: 10, d: 2 }, 'E2.10': { m: 'M1', S: 1, d: 2 } }, {}, { simdi: 0, donuk: 4 });
+    assert.equal(tasimaItmesi(g, 'E1.10', 'M1', 1).ileti, 'Tezgah M1 tezgâhında sıradaki iş değişir; operatör listesi güncellenir.');
+    assert.equal(tasimaItmesi(g, 'E1.10', 'M1', 5).ileti, null);
+  });
+
+    test('başka tezgâha taşıma: eski ve yeni tezgâh sonuçta', () => {
     const g = girdi({ 'E1.10': { m: 'M1', S: 0, d: 4 } }, {});
     const r = tasimaItmesi(g, 'E1.10', 'M2', 0);
     assert.deepEqual(r.isler, [{ isId: 'E1.10', tezgah: 'M2', S: 0, C: 4, eskiTezgah: 'M1', eskiS: 0, tur: 'tasinan' }]);
