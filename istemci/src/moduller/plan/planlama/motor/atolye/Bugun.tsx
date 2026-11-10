@@ -1,4 +1,3 @@
-import type { ReactNode } from 'react';
 import { Simge } from '../../../../../ortak/arayuz/index.ts';
 import type { SimgeAdi } from '../../../../../ortak/tasarim/simgeler.ts';
 import { hamleYapisi, useHamleci } from '../hamle/hamle.ts';
@@ -73,33 +72,45 @@ export function Kararlar({ ort, n, bos }: { ort: Ortam; n: number; bos: string }
   );
 }
 
-// Sabah brifingi (cizBrif): günün ilk açılışında bir kez; kapatmadan da çalışılır, satır çözüme götürür.
-export function Brif({ ort, kapat }: { ort: Ortam; kapat: () => void }) {
-  const { c, p, cx, now, liste } = ort; const D = c.D;
+// Sabah brifingi (cizBrif): çizelgeyi örtmeyen, katlı başlayan şerit (2729 b). Özeti üst çubuktaki gecikme satırındadır; gün temizse
+// düğme ve şerit çıkmaz. Satır çözüme götürür.
+type BrifHedefi = { sip: string } | { tezgah: string } | { ariza: string };
+interface BrifOgesi { ik: SimgeAdi; durum: 'gec' | 'risk'; ana: string; alt: string; git: BrifHedefi }
+// Saf: Pano her çizimde değil, plan değişince hesaplar (sürüklerken yeniden çizim sık).
+export function brifOgeleri({ c, p, cx, now, liste, emirNo }: Pick<Ortam, 'c' | 'p' | 'cx' | 'now' | 'liste' | 'emirNo'>): BrifOgesi[] {
+  const D = c.D;
   const gec = liste.filter((x) => x.durum === 'gec').sort((a, b) => (b.T ?? 0) - (a.T ?? 0)); const risk = liste.filter((x) => x.durum === 'risk');
   const dar = yukOranlari(D, p, cx, now, now + 72).filter((x) => x.oran >= DARBOGAZ); const mal = liste.filter(malzemeGec); const dn = duruslar(c);
-  const sat = (ik: SimgeAdi, durum: 'gec' | 'risk', ana: string, alt: ReactNode, git: () => void) => (
-    <button key={ana} type="button" className="tc-pym-tp-brif-sat" data-durum={durum} onClick={git}>
-      <Simge ad={ik} boyut="k" /><span><b>{ana}</b><small>{alt}</small></span><Simge ad="chev-right" boyut="k" />
-    </button>
-  );
   const ilk = gec[0] ?? risk[0];
-  const S1 = [
-    ilk ? sat('alert', 'gec', `${gec.length} geciken, ${risk.length} riskli sipariş`,
-      gec.slice(0, 3).map((x) => `${ort.emirNo(x.id)} ${sure(x.T)}`).join(' · ') || `Riskliler: ${risk.slice(0, 3).map((x) => ort.emirNo(x.id)).join(', ')}`, () => ort.sipGoster(ilk.id)) : null,
-    dar[0] ? sat('fire', 'risk', `${dar.length} tezgâh darboğaz (3 gün)`, dar.slice(0, 3).map((x) => `${x.m} %${Math.round(x.oran * 100)}`).join(' · '),
-      () => ort.suzSec({ g: null, m: dar[0]?.m ?? null, j: null })) : null,
-    mal[0] ? sat('box', 'risk', `${mal.length} siparişte malzeme geç`, mal.slice(0, 3).map((x) => `${ort.emirNo(x.id)} malzeme ${tz(D, x.bas)}`).join(' · '), () => ort.sipGoster(mal[0]?.id ?? '')) : null,
-    dn[0] ? sat('wrench', 'gec', `${dn.length} arıza`, dn.map((d) => `${d.m} ${tz(D, d.from)} → ${zs(D, d.to)}`).join(' · '),
-      () => ort.kartAc({ tur: 'gunluk', m: dn[0]?.m ?? '' })) : null,
-  ].filter(Boolean);
+  const l: (BrifOgesi | null)[] = [
+    ilk ? { ik: 'alert', durum: 'gec', ana: `${gec.length} geciken, ${risk.length} riskli sipariş`,
+      alt: gec.slice(0, 3).map((x) => `${emirNo(x.id)} ${sure(x.T)}`).join(' · ') || `Riskliler: ${risk.slice(0, 3).map((x) => emirNo(x.id)).join(', ')}`, git: { sip: ilk.id } } : null,
+    dar[0] ? { ik: 'fire', durum: 'risk', ana: `${dar.length} tezgâh darboğaz (3 gün)`, alt: dar.slice(0, 3).map((x) => `${x.m} %${Math.round(x.oran * 100)}`).join(' · '),
+      git: { tezgah: dar[0]?.m ?? '' } } : null,
+    mal[0] ? { ik: 'box', durum: 'risk', ana: `${mal.length} siparişte malzeme geç`, alt: mal.slice(0, 3).map((x) => `${emirNo(x.id)} malzeme ${tz(D, x.bas)}`).join(' · '), git: { sip: mal[0]?.id ?? '' } } : null,
+    dn[0] ? { ik: 'wrench', durum: 'gec', ana: `${dn.length} arıza`, alt: dn.map((d) => `${d.m} ${tz(D, d.from)} → ${zs(D, d.to)}`).join(' · '), git: { ariza: dn[0]?.m ?? '' } } : null,
+  ];
+  return l.filter((x): x is BrifOgesi => x !== null);
+}
+export const BRIF_SERIDI = 'tc-pym-tp-brif';
+function brifeGit(ort: Ortam, h: BrifHedefi): void {
+  if ('sip' in h) ort.sipGoster(h.sip);
+  else if ('tezgah' in h) ort.suzSec({ g: null, m: h.tezgah, j: null });
+  else ort.kartAc({ tur: 'gunluk', m: h.ariza });
+}
+
+export function Brif({ ort, l, kapat }: { ort: Ortam; l: BrifOgesi[]; kapat: () => void }) {
   return (
-    <section className="tc-pym-tp-brif" aria-label="Sabah brifingi">
-      <h4><Simge ad="sun" boyut="k" />{`Günaydın · ${gs(D, now)}`}<span className="tc-pym-tp-bosluk" />
-        <button type="button" className="tc-dugme tc-pym-hayalet tc-pym-kucuk" aria-label="Kapat" onClick={kapat}><Simge ad="x" boyut="k" /></button>
-      </h4>
-      {S1.length ? S1 : <p className="tc-pym-tp-not"><Simge ad="check" boyut="k" /> Geciken, darboğaz ve eksik malzeme yok.</p>}
-      <p className="tc-pym-tp-not">Satıra dokun, çözüme git.</p>
+    <section className="tc-pym-tp-brif" id={BRIF_SERIDI} aria-label="Sabah brifingi">
+      <span className="tc-pym-tp-brif-bas"><Simge ad="sun" boyut="k" />{`Günaydın · ${gs(ort.c.D, ort.now)}`}</span>
+      <div className="tc-pym-tp-brif-l">
+        {l.length ? l.map((x) => (
+          <button key={x.ana} type="button" className="tc-pym-tp-brif-sat" data-durum={x.durum} onClick={() => brifeGit(ort, x.git)} title={x.alt}>
+            <Simge ad={x.ik} boyut="k" /><span><b>{x.ana}</b><small>{x.alt}</small></span><Simge ad="chev-right" boyut="k" />
+          </button>
+        )) : <p className="tc-pym-tp-not"><Simge ad="check" boyut="k" /> Geciken, darboğaz ve eksik malzeme yok.</p>}
+      </div>
+      <button type="button" className="tc-dugme tc-pym-hayalet tc-pym-kucuk" aria-label="Brifingi katla" onClick={kapat}><Simge ad="up" boyut="k" /></button>
     </section>
   );
 }

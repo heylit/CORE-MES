@@ -10,7 +10,7 @@ import type { KbPanel } from '../Duzenle.tsx';
 import { Yapilacaklar } from '../Yapilacaklar.tsx';
 import type { AtolyeSekmesi } from './Atolye.tsx';
 import { AtolyeEkrani } from './AtolyeEkrani.tsx';
-import { Brif, Bugun } from './Bugun.tsx';
+import { Brif, BRIF_SERIDI, brifOgeleri, Bugun } from './Bugun.tsx';
 import { useAtolyeKomutlari, useOtomatikUygula } from './gonder.ts';
 import { Izgara } from './Izgara.tsx';
 import { KartKatmani, type AcikKart, type Ankraj } from './Kartlar.tsx';
@@ -77,10 +77,11 @@ export function Pano({ o, c, p, cf: fark, sekSec, onayda, sen, senYaz }: Ozellik
   const [rayAcik, setRayAcik] = useState(false);
   const [bugunAcik, setBugunAcik] = useState(false);
   const bugun = gunAnahtari(Date.now());
-  // Brifing günün ilk açılışında bir kez (eski gunBasla: geniş ekranda, açılışta gün yazılır); kapatmak yalnız gizler. Eskide gün bu tarayıcının
-  // kaydındaydı; ortak çalışmaya yazılsa ilk açan herkesin brifingini kapatırdı, bu yüzden tarayıcıda tutulur.
-  const [brif, setBrif] = useState(() => typeof window !== 'undefined' && window.innerWidth >= 768 && brifGunu() !== bugun);
-  useEffect(() => { if (brif) brifGunuYaz(bugun); }, [brif, bugun]);
+  // Brifing katlı başlar (2729 b); günün ilk açılışında üst çubuktaki düğmesi vurgulanır, açılınca o gün sönük kalır. Gün bu tarayıcıda
+  // tutulur: ortak çalışmaya yazılsa ilk açan herkesin vurgusunu söndürürdü.
+  const [brif, setBrif] = useState(false);
+  const [brifYeni, setBrifYeni] = useState(() => brifGunu() !== bugun);
+  useEffect(() => { if (brif) { brifGunuYaz(bugun); setBrifYeni(false); } }, [brif, bugun]);
   const [kart, setKart] = useState<{ k: AcikKart; a: Ankraj | null } | null>(null);
   const [parla, setParla] = useState<string | null>(null);
   const [atolye, setAtolye] = useState(false);
@@ -214,6 +215,7 @@ export function Pano({ o, c, p, cf: fark, sekSec, onayda, sen, senYaz }: Ozellik
     olcek, olcekSec: setOlcek, sekSec, bugunAc: setBugunAcik, brifAc: () => { setBrif(true); setKart(null); }, atolyeAc: () => { setAtolye(true); setKart(null); }, sen, senYaz,
     tasi, olayEkle, isleniyor, ekMesai,
   };
+  const brifL = useMemo(() => brifOgeleri({ c, p, cx, now, liste, emirNo }), [c, p, cx, now, liste, emirNo]);
   const ozet = p.ozet;
   const farkli = !fark || fark.farkli || !planGuncel(c);
   const ns = suzSayisi(suz);
@@ -239,6 +241,12 @@ export function Pano({ o, c, p, cf: fark, sekSec, onayda, sen, senYaz }: Ozellik
         <span title={gecikenIpucu(liste)}><b data-ton={gecikenSay(liste) ? 'kotu' : 'iyi'}>{gecikenSay(liste)}</b> <span data-ad="">geciken</span></span>
         <span title="Öncelik ağırlıklı gecikme: geciken saat, öncelik 1 için 4, öncelik 2 için 2 katıyla sayılır."><b>{sure(ozet.wT)}</b> <span data-ad="">ağırlıklı gecikme</span></span>
         {yetki.maliyetOku && <span data-kar="" title="Kâr kayıtlı planda yok"><b>—</b> <span data-ad="">kâr</span></span>}
+        {brifL.length > 0 && (
+          <button type="button" className="tc-pym-tp-brif-ac" aria-expanded={brif} aria-controls={brif ? BRIF_SERIDI : undefined} data-yeni={brifYeni && !brif ? '' : undefined}
+            title={brifL.map((x) => x.ana).join(' · ')} onClick={() => setBrif((x) => !x)}>
+            <Simge ad="sun" boyut="k" /><b>{brifL.length}</b> <span data-ad="">brifing</span><Simge ad={brif ? 'up' : 'down'} boyut="k" />
+          </button>
+        )}
       </div>
       <span className="tc-pym-tp-bosluk" />
       <div className="tc-pym-tp-grup" role="group" aria-label="Ölçek">
@@ -281,10 +289,9 @@ export function Pano({ o, c, p, cf: fark, sekSec, onayda, sen, senYaz }: Ozellik
     <HamleBaglami.Provider value={hamle}>
     <div className="tc-pym-tp-kap" ref={kap}>
       {ust}
+      {brif && <Brif ort={ort} l={brifL} kapat={brifKapat} />}
       <HamleOnizlemesi h={hamle} D={c.D} ad={(j) => c.D.siparisler.find((x) => x.id === j)?.ad ?? j} />
       <div className="tc-pym-tp-govde" data-ray={rayAcik ? '' : undefined}>
-        {/* Gövdenin içinde: üst çubuk kaç satıra kayarsa kaysın kutu altında başlar, Kapat örtülmez. */}
-        {brif && <Brif ort={ort} kapat={brifKapat} />}
         <Ray ort={ort} />
         <Izgara ort={ort} pano={pano} parla={parla} />
         <Bugun ort={ort} acik={bugunAcik} />

@@ -13,7 +13,7 @@ import { PlanlamaAtolyesi } from '../index.tsx';
 import { ornekCalisma } from '../ornek.ts';
 import { saatiSabitle } from '../../test-saati.ts';
 
-// 2726: sabah brifingi gövdenin içinde durur (üst çubuk iki satıra kaysa da Kapat örtülmez), Esc kapatır; satırlar tam emir no yazar (2693 a).
+// 2729 b: sabah brifingi çizelgeyi örtmeyen, katlı başlayan şerittir; özeti üst çubuktadır, gün temizse çıkmaz. Esc katlar; satırlar tam emir no yazar (2693 a).
 saatiSabitle(() => ornekCalisma());
 const BRIF = 'tmi:planlama:brif';
 beforeEach(() => { localStorage.removeItem(BRIF); });
@@ -36,23 +36,43 @@ function ac(c: PlanlamaCalismasi) {
 }
 const brif = () => screen.queryByRole('region', { name: 'Sabah brifingi' });
 
-describe('sabah brifingi (2726)', () => {
-  it('çizelge gövdesinin içinde açılır, üst çubuğun kardeşi değildir', () => {
+const dugme = () => screen.queryByRole('button', { name: /brifing/ });
+
+describe('sabah brifingi şeridi (2729 b)', () => {
+  it('katlı başlar; üst çubuktaki düğme açar, şerit üst çubuğun altında akışta durur, gövdenin içinde değildir', () => {
     ac(ornekCalisma());
+    expect(brif()).toBeNull();
+    const d = dugme();
+    if (!d) throw new Error('brifing düğmesi yok');
+    expect(d.closest('.tc-pym-tp-ust')).toBeTruthy();
+    expect(d.getAttribute('aria-expanded')).toBe('false');
+    fireEvent.click(d);
     const b = brif();
-    expect(b?.parentElement?.classList.contains('tc-pym-tp-govde')).toBe(true);
+    expect(d.getAttribute('aria-expanded')).toBe('true');
+    expect(b?.previousElementSibling?.classList.contains('tc-pym-tp-ust')).toBe(true);
+    expect(b?.closest('.tc-pym-tp-govde')).toBeNull();
+    fireEvent.click(d);
+    expect(brif()).toBeNull();
   });
 
-  it('Esc brifingi kapatır', () => {
+  it('Esc şeridi katlar', () => {
     ac(ornekCalisma());
+    fireEvent.click(dugme()!);
     expect(brif()).toBeTruthy();
     fireEvent.keyDown(window, { key: 'Escape' });
     expect(brif()).toBeNull();
   });
 
-  it('satırlar sipariş kimliğini değil tam emir noyu yazar', () => {
+  it('gün temizse düğme de şerit de çıkmaz', () => {
     const c = ornekCalisma();
-    ac(c);
+    ac({ ...c, D: { ...c.D, siparisler: [] } });
+    expect(dugme()).toBeNull();
+    expect(brif()).toBeNull();
+  });
+
+  it('satırlar sipariş kimliğini değil tam emir noyu yazar', () => {
+    ac(ornekCalisma());
+    fireEvent.click(dugme()!);
     const b = brif();
     if (!b) throw new Error('brifing yok');
     const metin = within(b).getAllByRole('button').map((x) => x.textContent ?? '').join(' | ');
