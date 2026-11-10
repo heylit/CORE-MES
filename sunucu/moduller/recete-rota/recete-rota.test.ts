@@ -41,6 +41,8 @@ describe('recete-rota kayıt deposu (gerçek PostgreSQL)', () => {
   let sayfali = '';
   let yetkisiz = '';
   let tam = '';
+  let maliyetci = '';
+  let maliyetciYazar = '';
   let sayac = 0;
   // Her test kendi anahtarında çalışır; ötekinin bıraktığına yaslanmaz.
   const yeniAnahtar = (): string => `recete-rota-motoru-v1:deneme${String(++sayac)}`;
@@ -89,6 +91,8 @@ describe('recete-rota kayıt deposu (gerçek PostgreSQL)', () => {
     ({ cerez: okur } = await islemliKisi('okur', ['recete-rota.oku']));
     ({ cerez: sayfali } = await islemliKisi('sayfali', ['sayfa.recete-rota']));
     ({ cerez: yetkisiz } = await islemliKisi('yetkisiz', ['sayfa.ayarlar']));
+    ({ cerez: maliyetci } = await islemliKisi('maliyetci', ['recete-rota.oku', 'finans.maliyet-oku']));
+    ({ cerez: maliyetciYazar } = await islemliKisi('maliyetciyazar', ['recete-rota.yaz', 'finans.maliyet-oku']));
     tam = await girisCerezi('yonetici');
   });
 
@@ -179,6 +183,67 @@ describe('recete-rota kayıt deposu (gerçek PostgreSQL)', () => {
     assert.equal((await yaz(okur, { anahtar: a, bicim: 'json', deger: {}, beklenenSurum: null })).statusCode, 403);
     assert.equal((await yaz(sayfali, { anahtar: a, bicim: 'json', deger: {}, beklenenSurum: null })).statusCode, 403);
     assert.equal((await istek(okur, 'POST', '/recete-rota/kayitlar/sil', { anahtar: a, beklenenSurum: 1 })).statusCode, 403);
+  });
+
+  test('RR-25 (2783, 2601 a): ham kayıtta kalmış kalem, istasyon ve kişi maliyeti finans.maliyet-oku taşımayana null döner; taşıyana ve tabloda değişmez', async () => {
+    const a = yeniAnahtar();
+    const m = yeniAnahtar();
+    // Uydurma maliyetler: sunucunun kurduğu satır cost: null yazar; dolu değer yalnız eski çerçeveden kalmış kayıtta olur.
+    const belge = {
+      name: 'Deneme', items: [{ id: 'i1', code: 'HM-1', cost: 12.5, stock: 3 }, { id: 'i2', code: 'HM-2', cost: null }, 'bozuk'],
+      stations: [{ id: 's1', cost: 3 }], people: [{ id: 'p1', cost: 4, name: 'Deneme kişi' }], orders: [{ id: 'o1', cost: 9 }],
+    };
+    const suzulmus = {
+      ...belge, items: [{ id: 'i1', code: 'HM-1', cost: null, stock: 3 }, { id: 'i2', code: 'HM-2', cost: null }, 'bozuk'],
+      stations: [{ id: 's1', cost: null }], people: [{ id: 'p1', cost: null, name: 'Deneme kişi' }],
+    };
+    // Kaydı maliyet gören yazar kurar: maliyet görmeyenin gönderdiği cost yok sayılır (RR-25b).
+    const yazilan = await yaz(maliyetciYazar, { anahtar: a, bicim: 'json', deger: belge, beklenenSurum: null });
+    assert.equal(yazilan.statusCode, 200, yazilan.body);
+    assert.deepEqual((yazilan.json() as { kayit: Kayit }).kayit.deger, belge);
+    const metin = await yaz(maliyetciYazar, { anahtar: m, bicim: 'metin', deger: JSON.stringify(belge), beklenenSurum: null });
+    assert.equal(metin.statusCode, 200, metin.body);
+    for (const cerez of [okur, sayfali, yazar]) {
+      assert.deepEqual((await kayit(cerez, a))?.deger, suzulmus);
+      assert.deepEqual(JSON.parse(String((await kayit(cerez, m))?.deger)), suzulmus);
+    }
+    assert.deepEqual((await kayit(maliyetci, a))?.deger, belge);
+    assert.equal((await kayit(maliyetci, m))?.deger, JSON.stringify(belge));
+    // Süzgeç yalnız cevaptadır; kayıt göçsüz kalır (silme kullanıcıya sorulur).
+    const tablo = await vt().tek<{ deger: unknown }>('SELECT deger FROM recete_rota_kayit WHERE anahtar = $1', [a]);
+    assert.deepEqual(tablo?.deger, belge);
+    // Yazmanın geri dönen kaydı da süzülür: maliyet görmeyen yazar geri yazınca kayıtta kalan maliyeti cevapta görmez.
+    const geri = await yaz(yazar, { anahtar: a, bicim: 'json', deger: suzulmus, beklenenSurum: (await kayit(yazar, a))!.surum });
+    assert.equal(geri.statusCode, 200, geri.body);
+    assert.deepEqual((geri.json() as { kayit: Kayit }).kayit.deger, suzulmus);
+    assert.deepEqual((await vt().tek<{ deger: unknown }>('SELECT deger FROM recete_rota_kayit WHERE anahtar = $1', [a]))?.deger, belge);
+  });
+
+  test('RR-25b (2783, Veri N1, Güvenlik K1): maliyet görmeyenin yazmasında cost yok sayılır; süzülmüş kaydın geri yazması maliyeti silmez, dolu cost kaydı değiştirmez', async () => {
+    for (const bicim of ['json', 'metin'] as const) {
+      const a = yeniAnahtar();
+      const belge = { name: 'Deneme', items: [{ id: 'i1', cost: 12.5 }, { cost: 7 }], stations: [{ id: 's1', cost: 3 }], people: [{ id: 'p1', cost: 0 }] };
+      const ilk = await yaz(maliyetciYazar, { anahtar: a, bicim, deger: bicim === 'json' ? belge : JSON.stringify(belge), beklenenSurum: null });
+      assert.equal(ilk.statusCode, 200, ilk.body);
+      const okunan = (await kayit(yazar, a))!;
+      const gorulen = (bicim === 'json' ? okunan.deger : JSON.parse(String(okunan.deger))) as typeof belge;
+      assert.deepEqual(gorulen.items, [{ id: 'i1', cost: null }, { cost: null }]);
+      // Güvenlik K1: dolu gönderilen cost da yok sayılır (i1 99 kayıtta 12.5 kalır, yeni i2 5 null olur).
+      const geri = { ...gorulen, name: 'Değişti', items: [{ id: 'i1', cost: 99 }, gorulen.items[1]!, { id: 'i2', cost: 5 }] };
+      const ikinci = await yaz(yazar, { anahtar: a, bicim, deger: bicim === 'json' ? geri : JSON.stringify(geri), beklenenSurum: okunan.surum });
+      assert.equal(ikinci.statusCode, 200, ikinci.body);
+      const tablo = await vt().tek<{ deger: unknown }>('SELECT deger FROM recete_rota_kayit WHERE anahtar = $1', [a]);
+      const kalan = (bicim === 'json' ? tablo?.deger : JSON.parse(String(tablo?.deger))) as typeof belge;
+      assert.deepEqual(kalan, {
+        name: 'Değişti', items: [{ id: 'i1', cost: 12.5 }, { cost: null }, { id: 'i2', cost: null }], stations: [{ id: 's1', cost: 3 }], people: [{ id: 'p1', cost: 0 }],
+      });
+      // Maliyet gören null yazarsa siler: koruma yalnız göremeyenin geri yazmasındadır.
+      const m = (await kayit(maliyetci, a))!;
+      const silen = { ...kalan, items: [{ id: 'i1', cost: null }] };
+      assert.equal((await yaz(maliyetciYazar, { anahtar: a, bicim, deger: bicim === 'json' ? silen : JSON.stringify(silen), beklenenSurum: m.surum })).statusCode, 200);
+      const son = (await kayit(maliyetci, a))!;
+      assert.deepEqual(((bicim === 'json' ? son.deger : JSON.parse(String(son.deger))) as typeof belge).items, [{ id: 'i1', cost: null }]);
+    }
   });
 
   test('RR-08: ben kişiyi ve yazma bayrağını döner', async () => {

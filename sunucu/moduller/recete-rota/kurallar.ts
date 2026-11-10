@@ -73,6 +73,77 @@ export function bagliDilimleriAyikla(deger: unknown): unknown {
   return sonuc;
 }
 
+// Birim maliyetin sahibi Finans'tır (2601 a); durumda maliyet dilimi yalnız finans.maliyet-oku taşıyana gelir. Ham kayıtta eski çerçeveden
+// ya da örnek veriden kalmış malzeme, istasyon ve kişi maliyeti (prototipin items, stations, people dizilerinde cost) bu yetkisi olmayana
+// ham kayıt okumasından da dönmemelidir (2783). Değer null'a iner, alan ve öteki alanlar kalır. Metin biçimi JSON olarak çözülürse aynı
+// süzgeçten geçer; çözülemeyen metin prototipin durumu değildir, olduğu gibi döner. Kayıt değişmez: süzgeç yalnız cevaptadır.
+export const MALIYETLI_DIZILER = ['items', 'stations', 'people'] as const;
+function maliyetSil(deger: unknown): { deger: unknown; degisti: boolean } {
+  const d = nesne(deger);
+  if (d === null) return { deger, degisti: false };
+  let degisti = false;
+  const sonuc: Record<string, unknown> = { ...d };
+  for (const dizi of MALIYETLI_DIZILER) {
+    const liste = d[dizi];
+    if (!Array.isArray(liste)) continue;
+    sonuc[dizi] = liste.map((x: unknown) => {
+      const s = nesne(x);
+      if (s === null || s['cost'] === undefined || s['cost'] === null) return x;
+      degisti = true;
+      return { ...s, cost: null };
+    });
+  }
+  return degisti ? { deger: sonuc, degisti } : { deger, degisti };
+}
+export function kayitMaliyetiniSuz<T extends { bicim: string; deger: unknown }>(k: T): T {
+  if (k.bicim !== 'metin') {
+    const s = maliyetSil(k.deger);
+    return s.degisti ? { ...k, deger: s.deger } : k;
+  }
+  if (typeof k.deger !== 'string') return k;
+  let cozulen: unknown;
+  try { cozulen = JSON.parse(k.deger); } catch { return k; }
+  const s = maliyetSil(cozulen);
+  return s.degisti ? { ...k, deger: JSON.stringify(s.deger) } : k;
+}
+
+// Maliyet görmeyen kişinin yazmasında gelen cost yok sayılır (2783; 2601 a: birim maliyetin sahibi Finans, yazma yolu finans.yonet): kayıtta
+// aynı dizide aynı kimlikli kalemin dolu cost'u varsa o kalır (süzülmüş kaydın geri yazması maliyeti silmez, Veri N1), yoksa null olur.
+// Kimliksiz ya da kayıtta olmayan kalemin gelen değeri null'a iner; cost alanı hiç gelmeyen ve kayıtta da olmayan kaleme alan eklenmez.
+const cozulmus = (k: { bicim: string; deger: unknown }): unknown => {
+  if (k.bicim !== 'metin') return k.deger;
+  if (typeof k.deger !== 'string') return null;
+  try { return JSON.parse(k.deger); } catch { return null; }
+};
+export function kayitMaliyetiniKoru<T extends { bicim: string; deger: unknown }>(yeni: T, eski: { bicim: string; deger: unknown } | null): T {
+  const y = nesne(cozulmus(yeni));
+  const e = eski === null ? null : nesne(cozulmus(eski));
+  if (y === null) return yeni;
+  let degisti = false;
+  const sonuc: Record<string, unknown> = { ...y };
+  for (const dizi of MALIYETLI_DIZILER) {
+    const liste = y[dizi];
+    const eskiListe = e?.[dizi];
+    if (!Array.isArray(liste)) continue;
+    const eskiMaliyet = new Map<unknown, unknown>();
+    for (const x of Array.isArray(eskiListe) ? (eskiListe as unknown[]) : []) {
+      const s = nesne(x);
+      if (s !== null && s['id'] !== undefined && s['cost'] !== undefined && s['cost'] !== null) eskiMaliyet.set(s['id'], s['cost']);
+    }
+    sonuc[dizi] = liste.map((x: unknown) => {
+      const s = nesne(x);
+      if (s === null) return x;
+      const gelen = s['cost'];
+      const kalan = eskiMaliyet.has(s['id']) ? eskiMaliyet.get(s['id']) : gelen === undefined ? undefined : null;
+      if (kalan === gelen) return x;
+      degisti = true;
+      return { ...s, cost: kalan };
+    });
+  }
+  if (!degisti) return yeni;
+  return { ...yeni, deger: yeni.bicim === 'metin' ? JSON.stringify(sonuc) : sonuc };
+}
+
 // PostgreSQL jsonb dizede U+0000 kabul etmez; bu değer sunucu hatası yerine doğrulama hatasıyla döner.
 export function nulKarakteriVarMi(deger: unknown): boolean {
   return JSON.stringify(deger).includes('\\u0000');

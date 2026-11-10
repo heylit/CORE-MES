@@ -28,7 +28,7 @@ import { takvimGunleri, vardiyaTanimlari } from '../vardiya/disari.ts';
 import {
   adimCiktisiBul, adimKimligi, araStokHavuzuKur, bagFarklari, emirMalzemeIhtiyaclari, bagiDegisenUrunler, jsondanSatirlar, degerBicimeUyarMi, emirleriCevir, adimAdetleriCevir, hareketleriCevir, isMerkeziCevir, maliyetCevir,
   istasyonCevir, kisiCevir, makineCevir, malzemeCevir, degerCokBuyukMu, nulKarakteriVarMi, operasyonCevir, statuleriTuret, sunucuRevizyonlariyla, planAlanlariniKoru,
-  bagliDilimleriAyikla, rotaDilimiCevir, sayimBelgesiTablodan, sayimKartKimlikleri, sunucuKaynaklariyla, surumUyarMi, tatilTarihleri, vardiyaCevir, type EmirKaydi,
+  bagliDilimleriAyikla, kayitMaliyetiniKoru, kayitMaliyetiniSuz, rotaDilimiCevir, sayimBelgesiTablodan, sayimKartKimlikleri, sunucuKaynaklariyla, surumUyarMi, tatilTarihleri, vardiyaCevir, type EmirKaydi,
 } from './kurallar.ts';
 import { DURUM_ANAHTARI } from './disari.ts';
 import * as sorgular from './sorgular.ts';
@@ -56,14 +56,23 @@ export function ben(kullanici: Kullanici): BenCevabi {
   return { kisi: { id: kullanici.id, ad: kullanici.ad }, yazabilir: kullanici.islemler.includes(ISLEM_YAZ) };
 }
 
-export async function kayitlar(db: Db): Promise<KayitlarCevabi> {
-  return { kayitlar: await sorgular.kayitlar(db) };
+// Ham kayıt okuması ve yazmanın geri dönen kaydı maliyet görmeyene kalem maliyetsiz döner (2783, 2601 a; kurallar.ts kayitMaliyetiniSuz).
+const gorunenKayit = <T extends { bicim: string; deger: unknown }>(k: Kullanici, kayit: T): T => (yetkiliMi(k, MALIYET_OKUMA) ? kayit : kayitMaliyetiniSuz(kayit));
+
+export async function kayitlar(db: Db, kullanici: Kullanici): Promise<KayitlarCevabi> {
+  return { kayitlar: (await sorgular.kayitlar(db)).map((k) => gorunenKayit(kullanici, k)) };
 }
 
 // Komut ucu: ana kayıt dışındaki anahtarlar.
 export async function komutlaYaz(db: Db, kullanici: Kullanici, g: YazGovdesi, gunluk?: Gunluk): Promise<YazCevabi> {
   anaKaydiReddet(g.anahtar);
-  return yaz(db, kullanici, g, gunluk);
+  // Maliyet görmeyenin gönderdiği maliyet yok sayılır, kayıttaki kalır (kurallar.ts kayitMaliyetiniKoru). Satır kilitlenip okunur:
+  // korunan değer yazmanın sürüm denetimindeki kayıttandır.
+  const korunmus = yetkiliMi(kullanici, MALIYET_OKUMA)
+    ? g
+    : kayitMaliyetiniKoru(g, (await sorgular.surumKilitle(db, g.anahtar)) === null ? null : await sorgular.kayitGetir(db, g.anahtar));
+  const { kayit } = await yaz(db, kullanici, korunmus, gunluk);
+  return { kayit: gorunenKayit(kullanici, kayit) };
 }
 
 export async function komutlaSil(db: Db, anahtar: string, beklenenSurum: number): Promise<SilCevabi> {
