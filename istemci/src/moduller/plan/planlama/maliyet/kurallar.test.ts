@@ -282,16 +282,23 @@ describe('P3 saf hesaplar', () => {
 
 // 2653: sunucunun mesai tutarı kopyası bu tabloyla sınanır; tablo devir-heylit/2653/ORNEKLER.md ile aynıdır, biri değişirse öteki de değişir.
 const MESAI_ORNEKLERI: [string, Parameters<typeof mesaiTutari>[0], number | null][] = [
-  ['M1 hafta içi', { h: 8, kisiBazli: true, op: 1, saatDegeri: 400, carpan: 1.5, kisiEk: 150, ucret: null, vardiyasiz: false, mesaiCarpan: undefined }, 4950],
-  ['M2 cumartesi, iki operatör', { h: 8, kisiBazli: true, op: 2, saatDegeri: 350, carpan: 2, kisiEk: 100, ucret: null, vardiyasiz: false, mesaiCarpan: undefined }, 11400],
-  ['M3 pazar, yarım operatör', { h: 7.5, kisiBazli: true, op: 0.5, saatDegeri: 500, carpan: 2, kisiEk: 0, ucret: null, vardiyasiz: false, mesaiCarpan: undefined }, 3750],
-  ['M4 resmî tatil', { h: 8, kisiBazli: true, op: 1, saatDegeri: 420, carpan: 2.5, kisiEk: 120, ucret: null, vardiyasiz: true, mesaiCarpan: 3 }, 8520],
-  ['M5 gün çarpanı yok: 1,5', { h: 4, kisiBazli: true, op: 1, saatDegeri: 300, carpan: undefined, kisiEk: null, ucret: null, vardiyasiz: false, mesaiCarpan: undefined }, 1800],
-  ['M6 operatör oranı tanımsız: 1', { h: 8, kisiBazli: true, op: undefined, saatDegeri: 400, carpan: 1.5, kisiEk: 150, ucret: null, vardiyasiz: false, mesaiCarpan: undefined }, 4950],
-  ['M7 saat değeri yok: mesai ücretine düşer', { h: 8, kisiBazli: true, op: 2, saatDegeri: null, carpan: 2, kisiEk: 100, ucret: 250, vardiyasiz: false, mesaiCarpan: 2 }, 2000],
-  ['M8 saat değeri yok, vardiyasız gün', { h: 8, kisiBazli: true, op: 1, saatDegeri: null, carpan: 2, kisiEk: 100, ucret: 250, vardiyasiz: true, mesaiCarpan: 2 }, 4000],
-  ['M9 saat değeri ve ücret yok: bilinmez', { h: 8, kisiBazli: true, op: 1, saatDegeri: null, carpan: 1.5, kisiEk: 100, ucret: null, vardiyasiz: false, mesaiCarpan: 2 }, null],
-  ['M10 kişi bazlı değil, vardiyasız gün, çarpan yok: 1', { h: 8, kisiBazli: false, op: 1, saatDegeri: 400, carpan: 2, kisiEk: 100, ucret: 300, vardiyasiz: true, mesaiCarpan: undefined }, 2400],
+  ['M1 hafta içi', { h: 8, kisiBazli: true, op: 1, saatDegeri: 400, carpan: 1.5, kisiEk: 150, ucret: null, mesaiCarpan: undefined }, 4950],
+  ['M2 cumartesi, iki operatör', { h: 8, kisiBazli: true, op: 2, saatDegeri: 350, carpan: 2, kisiEk: 100, ucret: null, mesaiCarpan: undefined }, 11400],
+  ['M3 pazar, yarım operatör', { h: 7.5, kisiBazli: true, op: 0.5, saatDegeri: 500, carpan: 2, kisiEk: 0, ucret: null, mesaiCarpan: undefined }, 3750],
+  ['M4 resmî tatil', { h: 8, kisiBazli: true, op: 1, saatDegeri: 420, carpan: 2.5, kisiEk: 120, ucret: null, mesaiCarpan: 3 }, 8520],
+  ['M5 gün çarpanı yok: 1,5', { h: 4, kisiBazli: true, op: 1, saatDegeri: 300, carpan: undefined, kisiEk: null, ucret: null, mesaiCarpan: undefined }, 1800],
+  ['M6 operatör oranı tanımsız: 1', { h: 8, kisiBazli: true, op: undefined, saatDegeri: 400, carpan: 1.5, kisiEk: 150, ucret: null, mesaiCarpan: undefined }, 4950],
+  ['M7 saat değeri yok: mesai ücretine düşer, hafta içinde de çarpanla', { h: 8, kisiBazli: true, op: 2, saatDegeri: null, carpan: 2, kisiEk: 100, ucret: 250, mesaiCarpan: 2 }, 4000],
+  ['M8 saat değeri yok, vardiyasız gün', { h: 8, kisiBazli: true, op: 1, saatDegeri: null, carpan: 2, kisiEk: 100, ucret: 250, mesaiCarpan: 2 }, 4000],
+  ['M9 saat değeri ve ücret yok: bilinmez', { h: 8, kisiBazli: true, op: 1, saatDegeri: null, carpan: 1.5, kisiEk: 100, ucret: null, mesaiCarpan: 2 }, null],
+  ['M10 kişi bazlı değil, vardiyasız gün, çarpan yok: 1,5', { h: 8, kisiBazli: false, op: 1, saatDegeri: 400, carpan: 2, kisiEk: 100, ucret: 300, mesaiCarpan: undefined }, 3600],
+  // 2510 a: 1,5 çarpanı her ek mesaide; 2749 ortak örnekleri (sunucu 2742 aynı değerlerle sınar).
+  ['Y1 yalın, hafta içi vardiyalı gün', { h: 8, kisiBazli: false, op: 1, saatDegeri: null, carpan: 1.5, kisiEk: null, ucret: 200, mesaiCarpan: 1.5 }, 2400],
+  ['Y2 yalın, vardiyasız gün', { h: 8, kisiBazli: false, op: 1, saatDegeri: null, carpan: 2, kisiEk: null, ucret: 200, mesaiCarpan: 1.5 }, 2400],
+  ['Y3 yalın, çarpan kayıtta yok: 1,5', { h: 8, kisiBazli: false, op: 1, saatDegeri: null, carpan: 1.5, kisiEk: null, ucret: 200, mesaiCarpan: undefined }, 2400],
+  ['Y4 yalın, ücret yok: bilinmez', { h: 8, kisiBazli: false, op: 1, saatDegeri: null, carpan: 1.5, kisiEk: null, ucret: null, mesaiCarpan: 1.5 }, null],
+  ['Y5 yalın, çarpan 2, hafta içi', { h: 8, kisiBazli: false, op: 1, saatDegeri: null, carpan: 1.5, kisiEk: null, ucret: 200, mesaiCarpan: 2 }, 3200],
+  ['Y6 yalın, hafta içi 8 sa, ücret 300 (Maliyet T-2742-1, motorla aynı)', { h: 8, kisiBazli: false, op: 1, saatDegeri: null, carpan: 1.5, kisiEk: null, ucret: 300, mesaiCarpan: 1.5 }, 3600],
 ];
 describe('mesaiTutari (2653 ortak örnekler)', () => {
   it.each(MESAI_ORNEKLERI)('%s', (_ad, girdi, beklenen) => { expect(mesaiTutari(girdi)).toBe(beklenen); });
