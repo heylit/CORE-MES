@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { Dugme, Menu, OnayPenceresi, Simge, useBildirim, type MenuOgesi } from '../../../../ortak/arayuz/index.ts';
 import type { EkranOzellikleri } from '../sekmeler.ts';
 import {
-  kolaEkle, adimSil, ortalamaGunSaati, adimSurukle, agacKur, agacUrunleri, acikRevizyon, malzemeMaliyeti, rotaSahibiOlur, rotaSorunlari,
+  kolaEkle, adimSil, ortalamaGunSaati, adimSurukle, agacKur, agacUrunleri, acikRevizyon, malzemeMaliyetiSonucu, rotaSahibiOlur, rotaSorunlari,
   sirali, statuNo, yeniAdim, yururlukteki, type Operasyon,
 } from './kurallar.ts';
 import { sayi, YOK } from '../bicim.ts';
@@ -133,7 +133,8 @@ export function UrunVeRotalar(o: EkranOzellikleri) {
     const n = g ? Number(g.birimMaliyet) : NaN;
     return Number.isFinite(n) ? n : null;
   };
-  const birimMaliyet = kokId && duzen.durum.maliyet ? malzemeMaliyeti(kokId, duzen.adimlar, malzeme, birim) : null;
+  const maliyetSonucu = kokId && duzen.durum.maliyet ? malzemeMaliyetiSonucu(kokId, duzen.adimlar, malzeme, birim) : null;
+  const birimMaliyet = maliyetSonucu?.deger ?? null;
   // 2558 b/7: şemadaki bütün rotaların sorunları (giren, dal, ayar, süre, istasyon); seçilince adım seçilir ve ortalanır.
   const sorunlar = agac.flatMap((id) => {
     const kod = h.malzeme.get(id)?.code ?? id;
@@ -278,7 +279,7 @@ export function UrunVeRotalar(o: EkranOzellikleri) {
         {!liste && kokId && (
           <span className="tc-rr1-ozetgrup" role="group" aria-label="Rota özeti">
             {o.yetki.maliyetOku && (
-              <span className="tc-rr1-ozet" title={birimMaliyet === null ? 'Girenlerden biri ya da birim maliyeti bilinmiyor' : 'Girenlerin birim maliyet toplamı; işçilik ve makine hariç'}>
+              <span className="tc-rr1-ozet" title={birimMaliyet === null ? maliyetSonucu?.neden ?? 'Maliyet okuma yetkiniz yok ya da maliyet okunamadı.' : 'Girenlerin birim maliyet toplamı; işçilik ve makine hariç'}>
                 Birim malzeme <b>{birimMaliyet === null ? YOK : `${sayi(Math.round(birimMaliyet * 100) / 100)} ₺`}</b>
               </span>
             )}

@@ -36,11 +36,17 @@ export function MasrafBelgeleri({ projeId, ozet, yazabilir }: { projeId: number;
 
   const sutunlar: Sutun<MasrafSatiri>[] = [
     { anahtar: 'belge', baslik: 'Belge', hucre: (m) => (
-      <span>{belgeAdi(m)}{m.iptal && <> <Rozet ton="hata" gorunum="cizgi">İptal edildi</Rozet></>}</span>
+      <span>
+        {belgeAdi(m)}
+        {m.iptal && <> <Rozet ton="hata" gorunum="cizgi">İptal edildi</Rozet></>}
+        {!m.iptal && m.sayilmaz && <> <Rozet ton="uyari" gorunum="cizgi">Sayılmıyor</Rozet></>}
+      </span>
     ), csv: (m) => belgeAdi(m) },
     { anahtar: 'kategori', baslik: 'Tür', hucre: (m) => kategori(m.kategori) },
     { anahtar: 'gorev', baslik: 'Görev', hucre: (m) => (m.gorevId === null ? '—' : gorevAdi.get(m.gorevId) ?? `Görev ${m.gorevId}`) },
-    { anahtar: 'tutar', baslik: 'Tutar (KDV hariç)', hizala: 'sag', mono: true, kirilmaz: true, hucre: (m) => (m.iptal ? <s>{tl(m.tutarTl)}</s> : tl(m.tutarTl)), csv: (m) => m.tutarTl },
+    { anahtar: 'tutar', baslik: 'Tutar (KDV hariç)', hizala: 'sag', mono: true, kirilmaz: true, hucre: (m) => (m.iptal || m.sayilmaz ? <s>{tl(m.tutarTl)}</s> : tl(m.tutarTl)), csv: (m) => m.tutarTl },
+    // Toplama giriyor mu (iptal ve PM-49 hariç); CSV'de de ayrı sütun olarak çıkar.
+    { anahtar: 'sayiliyor', baslik: 'Sayılıyor', hucre: (m) => (m.iptal || m.sayilmaz ? 'Hayır' : 'Evet') },
     { anahtar: 'kisi', baslik: 'Bağlayan', hucre: (m) => m.kisiAd ?? '—' },
     ...(yazabilir ? [{
       anahtar: 'islem', baslik: 'İşlem', kirilmaz: true, csv: false as const, hucre: (m: MasrafSatiri) => (
@@ -60,6 +66,13 @@ export function MasrafBelgeleri({ projeId, ozet, yazabilir }: { projeId: number;
         {ozet.masraflar.length > 0 && (
           <p className="tc-pm-risk-etiket">
             Toplam (iptal edilenler hariç): <span className="mono">{tl(ozet.masrafToplami)}</span>. Masrafın planı yoktur; farka plansız gerçekleşen olarak girer.
+          </p>
+        )}
+        {ozet.masraflar.some((m) => !m.iptal && m.sayilmaz) && (
+          <p className="tc-pm-risk-etiket">
+            &quot;Sayılmıyor&quot; işaretli bağlar toplama girmez. Ya artık proje masrafı sayılmayan türdedir (mal alımı, personel, kira, enerji;
+            malzeme sarftan, işçilik saatten, kira ve enerji genel giderden gelir) ya da belge sonradan satın alma siparişine bağlanmıştır
+            (tutar projeye satın almadan girer). İsterseniz bağı kaldırabilirsiniz.
           </p>
         )}
         {kaldir.isError && <p className="tc-pm-hata" role="alert">{hataIletisi(kaldir.error, 'Bağ kaldırılamadı')}</p>}
@@ -116,7 +129,7 @@ function BaglaPenceresi({ projeId, gorevler, kapat }: { projeId: number; gorevle
           secenekler={(secenekler.data?.belgeler ?? []).map((b) => ({
             deger: String(b.id), baslik: `${belgeAdi(b)} · ${kategori(b.kategori)}${b.tutarTl === null ? '' : ` · ${tl(b.tutarTl)}`}`,
           }))}
-          ipucu="Yalnız başka projeye bağlı olmayan, satın almaya bağlı olmayan gider belgeleri; faiz, vergi ve kredi girmez."
+          ipucu="Yalnız lojistik, pazarlama ve diğer gider; başka projeye ya da satın almaya bağlı belge girmez."
           hata={hata ?? (secenekler.isError ? hataIletisi(secenekler.error, 'Belgeler alınamadı') : undefined)}
           onChange={(e) => { belgeYaz(e.target.value); hataYaz(undefined); }}
         />

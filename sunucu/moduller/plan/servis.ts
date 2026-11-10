@@ -12,7 +12,7 @@ import {
   aktifIstasyonlar, isMerkezleri, istasyondakiMakineler, kapasiteKaynaklari, istasyonKisileri, istasyonlar as istasyonListesi, istasyonYetkinlikleri, kisininIzinliIsMerkezleri, makineDurumlari, makineDurumuYaz, makineGetir, makineler as makineListesi, makineYetkinlikleri, operasyonTipleri, planAyarlari,
 } from '../istasyonlar/disari.ts';
 import { sistemAyariOku } from '../ayarlar/disari.ts';
-import { gunlukFaizGetir, kurlar } from '../finans/disari.ts';
+import { genelGiderOrani, gunlukFaizGetir, kurlar } from '../finans/disari.ts';
 import type { Makine } from '../istasyonlar/disari.ts';
 import { kisiAdlari, kisileriListele } from '../kisiler/disari.ts';
 import { malzemeOzeti, malzemeOzetleri } from '../malzemeler/disari.ts';
@@ -1299,6 +1299,18 @@ export async function canliOzeti(db: Db): Promise<PlanCanliOzeti> {
 export async function planFinansmanOrani(db: Db, gun: string): Promise<number | null> {
   return (await gunlukFaizGetir(db, 'TRY', gun))?.gunlukYuzde ?? null;
 }
+// 2601 a: planlamanın genel gider saat başı tutarı finansın o güne geçerli oranıdır (proje maliyetiyle aynı); finansta yoksa null.
+// 2668 a: oranın gizli olduğu ayda (Finans gizli bayrağı, 2652 a) plan genel gideri saymaz ve oran çalışmaya, yani tarayıcıya gitmez.
+export interface PlanGenelGideri { saatBasi: number | null; gizli: boolean }
+export function planGenelGideriCevir(o: { saatBasi: number | null } | null): PlanGenelGideri {
+  if (o === null) return { saatBasi: null, gizli: false };
+  // Bayrak Finans 2594 b ile gelir; gelmeden önce alan yoktur ve oran açıktır.
+  const gizli = 'gizli' in o && o.gizli === true;
+  return { saatBasi: gizli ? null : o.saatBasi, gizli };
+}
+export async function planGenelGiderSaatBasi(db: Db, gun: string): Promise<PlanGenelGideri> {
+  return planGenelGideriCevir(await genelGiderOrani(db, gun));
+}
 // 1397 a: plan gününün geçerli kurları (finans); kuru girilmemiş para birimi haritada yoktur.
 async function planKurlari(db: Db, gun: string): Promise<Map<string, number>> {
   return new Map([...await kurlar(db, gun)].map(([pb, k]) => [pb, Number(k.kur)]));
@@ -2078,6 +2090,15 @@ async function motorOner(db: Db, b: Baglam, satirlar: readonly YerlesimSatiri[],
   const vardiyasiOlan = new Set((await kisiVardiyalari(db)).map((k) => k.kisiId));
   const ekAdaylari = await ekAdimAdaylari(db, b, isler.filter((i) => !yerli.has(i.id) && !i.parcalar?.length && i.elleSira == null).map((i) => i.id));
   const ekAdayli = new Map<number, number[]>();
+  // B-2482-33: 2685 öncesi kayıtta insanlı istasyonun makinesi adımda seçili kalabilir; motor o makineye istasyonun vardiyalı yetkin
+  // kişisini ister. Kişi yoksa iş motora gitmez, istasyon adımının iletisiyle yerleşmez.
+  const insanli = new Set([...await kapasiteKaynaklari(db, [...b.istasyonMakineleri.keys()])].filter(([, k]) => k === 'insan').map(([id]) => id));
+  const insanliMakineNedeni = (makineId: number): string | null => {
+    const ist = b.kaynaklar.get(kaynakAnahtari({ tur: 'makine', id: makineId }))?.istasyon?.id;
+    if (ist === undefined || !insanli.has(ist)) return null;
+    const yetkin = (b.istasyonMakineleri.get(ist) ?? []).filter((k) => k.tur === 'kisi').map((k) => k.id);
+    return yetkin.some((id) => vardiyasiOlan.has(id)) ? null : yetkin.length > 0 ? ISTASYON_VARDIYASIZ : ADAYSIZ_IS;
+  };
   for (const i of isler) {
     const y = yerli.get(i.id);
     const makinesi = (k: Kaynak | null | undefined) => (k?.tur === 'makine' && (i.adaylar.length === 0 || i.adaylar.some((a) => ayniKaynak(a, k))) ? k.id : null);
@@ -2109,6 +2130,8 @@ async function motorOner(db: Db, b: Baglam, satirlar: readonly YerlesimSatiri[],
       if (adaylar.length > 0) kisiAdaylari.set(i.id, [...new Set([kisiId, ...adaylar])]);
       continue;
     }
+    const insanliNeden = insanliMakineNedeni(makineId!);
+    if (insanliNeden !== null) { yerlesmeyen.push({ isEmriId: i.id, neden: insanliNeden }); continue; }
     kuyruk.set(makineId!, [...(kuyruk.get(makineId!) ?? []), { isId: i.id, onizleme: null }]);
   }
   if (planMotoru === null && (kuyruk.size > 0 || kisiKuyrugu.size > 0)) throw cakisma('Plan motoru kayıtlı değil; plan önerilemez.');

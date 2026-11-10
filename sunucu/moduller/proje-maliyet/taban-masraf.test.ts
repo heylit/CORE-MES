@@ -24,6 +24,7 @@ describe('proje-maliyet taban ve masraf (934, 936 a, 940 c; gerçek PostgreSQL, 
   let yoneticiId = 0;
   let sayac = 0;
   let siparis: SiparisAyrintisi;
+  let firmaId = 0;
 
   const sahip = (): TestVeritabani['sahip'] => {
     if (!ortam) throw new Error('Test veritabanı açılamadı (TMIV2_PG_* ve TMIV2_PG_TEST_DATABASE ayarlarını denetleyin).');
@@ -83,12 +84,13 @@ describe('proje-maliyet taban ve masraf (934, 936 a, 940 c; gerçek PostgreSQL, 
     await sahip().sorgu('INSERT INTO finans_istasyon_maliyet (istasyon_id, saat_maliyeti, guncelleyen_id) VALUES ($1, 600, $2)', [ist!.id, yoneticiId]);
   }
 
-  // Finans belgesi açılışı bu testin konusu değil: faturasız gider doğrudan yazılır (kategori faturasız türlerden).
+  // Finans belgesi açılışı bu testin konusu değil: belge doğrudan yazılır. Faturasız türlerde (personel, faiz) firmasız, ötekilerde fatura.
   async function giderAc(kategori: string, tutar: number, kur = 1, paraBirimi = 'TRY'): Promise<number> {
+    const faturasiz = ['personel', 'sgk_stopaj', 'kdv_vergi', 'faiz', 'kredi_anapara'].includes(kategori);
     const b = await sahip().tek<{ id: number }>(
-      `INSERT INTO finans_belge (yon, tur, kategori, aciklama, belge_tarihi, vade, para_birimi, kur, tutar, kdv_orani, olusturan_id)
-       VALUES ('gider', 'faturasiz', $1, 'Deneme masraf', '2026-10-20', '2026-10-20', $2, $3, $4, 20, $5) RETURNING id`,
-      [kategori, paraBirimi, kur, tutar, yoneticiId]);
+      `INSERT INTO finans_belge (yon, tur, kategori, firma_id, aciklama, belge_tarihi, vade, para_birimi, kur, tutar, kdv_orani, olusturan_id)
+       VALUES ('gider', $1, $2, $3, 'Deneme masraf', '2026-10-20', '2026-10-20', $4, $5, $6, 20, $7) RETURNING id`,
+      [faturasiz ? 'faturasiz' : 'fatura', kategori, faturasiz ? null : firmaId, paraBirimi, kur, tutar, yoneticiId]);
     return b!.id;
   }
 
@@ -105,7 +107,7 @@ describe('proje-maliyet taban ve masraf (934, 936 a, 940 c; gerçek PostgreSQL, 
     yoneticiId = y.id;
     planlama = (await girisYap('planlama_proje', y.id)).cerez;
     kalite = (await girisYap('kalite', y.id)).cerez;
-    const firmaId = (await tamam<{ firma: { id: number } }>(gonder(yonetici, '/musteri-tedarikci/firmalar/ekle', { ad: 'Deneme Müşteri', tur: 'musteri' }))).firma.id;
+    firmaId = (await tamam<{ firma: { id: number } }>(gonder(yonetici, '/musteri-tedarikci/firmalar/ekle', { ad: 'Deneme Müşteri', tur: 'musteri' }))).firma.id;
     const taslak = await tamam<SiparisAyrintisi>(gonder(yonetici, '/siparisler/ekle', {
       firmaId, musteriSiparisNo: null, siparisTarihi: '2026-10-19', termin: '2026-11-15', kdvOrani: '20', odemeKosulu: null, aciklama: null,
       satirlar: [{ malzemeNo: await mamulAc(), miktar: '10', birimFiyat: '250', termin: null, aciklama: null }],
@@ -156,21 +158,27 @@ describe('proje-maliyet taban ve masraf (934, 936 a, 940 c; gerçek PostgreSQL, 
     const baskaGorev = (await tamam<ProjeYonetimiCevabi>(gonder(yonetici, `/projeler/${baska.id}/gorevler`, {
       ad: 'Başka görev', planBaslangic: '2026-10-20', planBitis: '2026-10-25',
     }))).gorevler[0]!.id;
-    const personel = await giderAc('personel', 1000);
-    const doviz = await giderAc('personel', 100, 35.5, 'EUR');
+    const lojistik = await giderAc('lojistik', 1000);
+    const doviz = await giderAc('lojistik', 100, 35.5, 'EUR');
     const faiz = await giderAc('faiz', 50);
 
-    await tamam(gonder(yonetici, `/proje-maliyet/${p.id}/masraflar`, { belgeId: personel, gorevId }));
+    await tamam(gonder(yonetici, `/proje-maliyet/${p.id}/masraflar`, { belgeId: lojistik, gorevId }));
     await tamam(gonder(yonetici, `/proje-maliyet/${p.id}/masraflar`, { belgeId: doviz }));
-    assert.equal((await gonder(yonetici, `/proje-maliyet/${baska.id}/masraflar`, { belgeId: personel })).statusCode, 409);
+    assert.equal((await gonder(yonetici, `/proje-maliyet/${baska.id}/masraflar`, { belgeId: lojistik })).statusCode, 409);
     assert.equal((await gonder(yonetici, `/proje-maliyet/${p.id}/masraflar`, { belgeId: faiz })).statusCode, 422);
-    assert.equal((await gonder(yonetici, `/proje-maliyet/${p.id}/masraflar`, { belgeId: await giderAc('personel', 5), gorevId: baskaGorev })).statusCode, 409);
+    // 2599 a: mal alımı, personel, kira ve enerji projeye bağlanmaz (üretim maliyetine ve genel gidere başka yoldan girer).
+    for (const kategori of ['mal_alimi', 'personel', 'kira', 'enerji']) {
+      const red = await gonder(yonetici, `/proje-maliyet/${p.id}/masraflar`, { belgeId: await giderAc(kategori, 20) });
+      assert.equal(red.statusCode, 422, kategori);
+      assert.match(red.body, /yalnız lojistik, pazarlama ve diğer gider/);
+    }
+    assert.equal((await gonder(yonetici, `/proje-maliyet/${p.id}/masraflar`, { belgeId: await giderAc('lojistik', 5), gorevId: baskaGorev })).statusCode, 409);
     assert.equal((await gonder(yonetici, `/proje-maliyet/${p.id}/masraflar`, { belgeId: 999999 })).statusCode, 404);
-    assert.equal((await gonder(yonetici, '/proje-maliyet/999999/masraflar', { belgeId: personel })).statusCode, 404);
+    assert.equal((await gonder(yonetici, '/proje-maliyet/999999/masraflar', { belgeId: lojistik })).statusCode, 404);
 
     let c = await maliyet(p.id);
     // KDV hariç TL: 1000 + 100 x 35,5 = 4550. Emirsiz projede üretim gerçekleşeni bilinmez, masraf ayrı görünür.
-    assert.deepEqual(c.ozet.masraflar.map((m) => [m.belgeId, m.tutarTl, m.gorevId, m.iptal]), [[personel, 1000, gorevId, false], [doviz, 3550, null, false]]);
+    assert.deepEqual(c.ozet.masraflar.map((m) => [m.belgeId, m.tutarTl, m.gorevId, m.iptal]), [[lojistik, 1000, gorevId, false], [doviz, 3550, null, false]]);
     assert.equal(c.ozet.masrafToplami, 4550);
     assert.deepEqual([c.ozet.sonGerceklesen, c.ozet.fark], [null, null]);
 
@@ -179,21 +187,27 @@ describe('proje-maliyet taban ve masraf (934, 936 a, 940 c; gerçek PostgreSQL, 
     c = await maliyet(p.id);
     assert.equal(c.ozet.masraflar.find((m) => m.belgeId === doviz)?.iptal, true);
     assert.equal(c.ozet.masrafToplami, 1000);
-    const iptalBelge = await giderAc('personel', 10);
+    // PM-49 (2599 a): kural öncesi kurulmuş personel bağı silinmez; listede "sayılmaz" görünür, toplama girmez.
+    const eskiPersonel = await giderAc('personel', 700);
+    await sahip().sorgu('INSERT INTO proje_maliyet_masraf (proje_id, finans_belge_id, kisi_id) VALUES ($1, $2, $3)', [p.id, eskiPersonel, yoneticiId]);
+    c = await maliyet(p.id);
+    assert.deepEqual(c.ozet.masraflar.map((m) => [m.belgeId, m.sayilmaz]), [[lojistik, false], [doviz, false], [eskiPersonel, true]]);
+    assert.equal(c.ozet.masrafToplami, 1000);
+    const iptalBelge = await giderAc('lojistik', 10);
     await sahip().sorgu("UPDATE finans_belge SET durum = 'iptal', iptal_zamani = now(), iptal_eden_id = $2 WHERE id = $1", [iptalBelge, yoneticiId]);
     assert.equal((await gonder(yonetici, `/proje-maliyet/${p.id}/masraflar`, { belgeId: iptalBelge })).statusCode, 422);
 
-    const bag = c.ozet.masraflar.find((m) => m.belgeId === personel)!;
+    const bag = c.ozet.masraflar.find((m) => m.belgeId === lojistik)!;
     await tamam(gonder(yonetici, `/proje-maliyet/masraflar/${bag.id}/kaldir`));
     assert.equal((await gonder(yonetici, `/proje-maliyet/masraflar/${bag.id}/kaldir`)).statusCode, 404);
-    await tamam(gonder(yonetici, `/proje-maliyet/${baska.id}/masraflar`, { belgeId: personel }));
+    await tamam(gonder(yonetici, `/proje-maliyet/${baska.id}/masraflar`, { belgeId: lojistik }));
   });
 
   test('940 c yetki: projeler.yaz taban alır ve bağlar; tutarı yalnız finans.maliyet-oku görür; projeler.yaz olmayan 403; girişsiz 401', async () => {
     const p = await projeAc('PMT.4');
     await isEmriAc(p.id);
     await tamam(gonder(planlama, `/proje-maliyet/${p.id}/taban`));
-    const belge = await giderAc('personel', 250);
+    const belge = await giderAc('lojistik', 250);
     const planlamaSecenek = await tamam<MasrafSecenekleriCevabi>(oku(planlama, '/proje-maliyet/masraf-secenekleri?ara=Deneme'));
     assert.equal(planlamaSecenek.belgeler.find((b) => b.id === belge)?.tutarTl, null);
     const yoneticiSecenek = await tamam<MasrafSecenekleriCevabi>(oku(yonetici, '/proje-maliyet/masraf-secenekleri'));
@@ -212,24 +226,24 @@ describe('proje-maliyet taban ve masraf (934, 936 a, 940 c; gerçek PostgreSQL, 
 
   test('PM-45 (K18 a): tamamlanmış ya da iptal edilmiş projeye masraf bağlanamaz; var olan bağ kalır', async () => {
     const p = await projeAc('PMT.9');
-    const once = await giderAc('personel', 40);
+    const once = await giderAc('lojistik', 40);
     await tamam(gonder(yonetici, `/proje-maliyet/${p.id}/masraflar`, { belgeId: once }));
     const kapat = async (durum: 'tamamlandi' | 'iptal', proje: Proje) => tamam<Proje>(gonder(yonetici, `/projeler/${proje.id}/guncelle`, {
       ad: proje.ad, firmaId: proje.firmaId, baslangic: proje.baslangic, bitis: proje.bitis, aciklama: proje.aciklama, durum, surum: proje.surum,
     }));
     await kapat('iptal', p);
-    const red = await gonder(yonetici, `/proje-maliyet/${p.id}/masraflar`, { belgeId: await giderAc('personel', 10) });
+    const red = await gonder(yonetici, `/proje-maliyet/${p.id}/masraflar`, { belgeId: await giderAc('lojistik', 10) });
     assert.equal(red.statusCode, 409);
     assert.match(red.body, /iptal edilmiş projeye masraf bağlanamaz/);
     assert.equal((await maliyet(p.id)).ozet.masraflar.length, 1);
 
     const tamamlanan = await kapat('tamamlandi', await projeAc('PMT.10'));
-    assert.equal((await gonder(yonetici, `/proje-maliyet/${tamamlanan.id}/masraflar`, { belgeId: await giderAc('personel', 10) })).statusCode, 409);
+    assert.equal((await gonder(yonetici, `/proje-maliyet/${tamamlanan.id}/masraflar`, { belgeId: await giderAc('lojistik', 10) })).statusCode, 409);
   });
 
   test('PM-46 (K18 a): masraf bağını yalnız maliyeti gören kaldırır; kaldırma iz bırakır, iz değiştirilemez', async () => {
     const p = await projeAc('PMT.11');
-    const belge = await giderAc('personel', 60);
+    const belge = await giderAc('lojistik', 60);
     await tamam(gonder(planlama, `/proje-maliyet/${p.id}/masraflar`, { belgeId: belge }));
     const bag = (await maliyet(p.id)).ozet.masraflar[0]!;
     const red = await gonder(planlama, `/proje-maliyet/masraflar/${bag.id}/kaldir`);

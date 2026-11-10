@@ -12,7 +12,7 @@ import { cokKatmanaCevir, emreKopyalanabilirMi, girdiEksigi, oncullerCikar } fro
 import type { Oncul } from '../kurallar.ts';
 import * as s from '../sorgular.ts';
 import type { AdimKaynagi, Icerik, Kaynak, RevizyonSatiri } from '../sorgular.ts';
-import { ARAMA_SAYFA_BOYU, icerikYazimlari, isEmirlerineSabitle, isEmriGirdileri, patlat, revizyonuAl, urunOzetiAl, urunOzetine } from './ortak.ts';
+import { ARAMA_SAYFA_BOYU, firmasizFasonuReddet, icerikYazimlari, isEmirlerineSabitle, isEmriGirdileri, patlat, revizyonuAl, urunOzetiAl, urunOzetine } from './ortak.ts';
 import { agac } from './agac.ts';
 
 /* ---------------- başka modüllere ---------------- */
@@ -25,7 +25,8 @@ export interface RotaAdimi {
   // Operasyonu yapan makine ya da kişi; null: henüz atanmadı ya da adım fason.
   kaynak: Kaynak | null;
   // Fason adım: işi yapan finans firması ve takvim günü termini. Plan fason adımı henüz yerleştirmez (F10).
-  fason: { firmaId: number; terminGun: number | null } | null;
+  // fason doluysa adım fasondadır; firmaId null: firma seçilmedi (2681). Fason olup olmadığı yalnız bu alandan okunur (Mimar K2).
+  fason: { firmaId: number | null; terminGun: number | null } | null;
   ayarSuresiDk: OndalikMetin | null;
   birimSureDk: OndalikMetin | null;
   bagimlilik: Bagimlilik;
@@ -101,7 +102,7 @@ function revizyonKur(r: RevizyonSatiri, icerik: Icerik, talimatlar: ReadonlyMap<
     id: r.id, malzemeId: r.malzemeId, harf: r.harf, durum: r.durum,
     adimlar: icerik.adimlar.map((a, i) => ({
       opNo: a.opNo, sira: a.sira, operasyonTipiId: a.operasyonTipiId, ad: a.ad,
-      kaynak: a.kaynak?.tur === 'fason' ? null : (a.kaynak as Kaynak | null),
+      kaynak: a.kaynak === null || a.kaynak.tur === 'fason' ? null : (a.kaynak as Kaynak),
       fason: a.kaynak?.tur === 'fason' ? { firmaId: a.kaynak.id, terminGun: a.terminGun } : null,
       ayarSuresiDk: a.ayarSuresiDk, birimSureDk: a.birimSureDk, bagimlilik: a.bagimlilik, devirAdedi: a.devirAdedi, firePayiYuzde: a.firePayiYuzde,
       makineKullanimi: a.makineKullanimi, enKucukParca: a.enKucukParca, yenidenAyar: a.yenidenAyar, ilkParca: a.ilkParca,
@@ -242,6 +243,7 @@ export async function emreKopyala(db: Db, kullanici: Kullanici, id: number, g: {
   const rota = await revizyonGetir(db, id);
   const ret = emreKopyalanabilirMi({ durum: r.durum, adimSayisi: rota?.adimlar.length ?? 0 });
   if (ret || !rota) throw gecersiz(ret ?? 'Rota bulunamadı.');
+  firmasizFasonuReddet(rota);
   const baslik = {
     malzemeNo: r.malzemeId, adet: g.adet, teslim: g.teslim, oncelik: g.oncelik, baslangic: g.baslangic ?? null, aciklama: g.aciklama ?? null,
     ...(g.taslak ? { taslak: true } : {}), ...(g.stoktanRezerve ? { stoktanRezerve: true } : {}), ...(g.emirTuru ? { emirTuru: g.emirTuru } : {}), projeId: g.projeId ?? null, siparisSatiriId: g.siparisSatiriId ?? null, kaynakRotaRevizyonId: r.id,
@@ -270,6 +272,7 @@ async function cokKatmanliAc(
   for (const d of dugumler) {
     const rota = d.dugum === '0' ? kokRota : await revizyonGetir(db, d.revizyonId);
     if (rota === null) throw gecersiz('Alt parçanın rotası bulunamadı.');
+    firmasizFasonuReddet(rota);
     girdiler.set(d.dugum, await isEmriGirdileri(db, d.malzemeId, rota));
   }
   const c = cokKatmanaCevir(p.satirlar, girdiler, stoktan);
@@ -297,6 +300,7 @@ export async function emreUygula(db: Db, kullanici: Kullanici, emirId: number) {
   const rota = await revizyonGetir(db, yid);
   const ret = emreKopyalanabilirMi({ durum: r.durum, adimSayisi: rota?.adimlar.length ?? 0 });
   if (ret || !rota) throw gecersiz(ret ?? 'Rota bulunamadı.');
+  firmasizFasonuReddet(rota);
   const { degisenler } = await isEmirleriniYenile(db, kullanici, emirId, { kaynakRotaRevizyonId: yid, isEmirleri: await isEmriGirdileri(db, r.malzemeId, rota) });
   // Yenilenen (başlamamış) iş emirleri yeni revizyonun şartnamelerini alır; değiştirilmeyen parti (kaynak revizyonu eski kalır) dokunulmaz.
   const sonra = await adimliEmirAyrintisi(db, emirId);

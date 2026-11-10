@@ -109,8 +109,9 @@ export const tabanSemasi = z.object({
   kisiAd: z.string().nullable(),
   an: zamanSemasi,
 });
-// Projeye bağlanabilen gider kategorileri: üretim dışı proje masrafı. Faiz (finansman kalemi), vergi, kredi ve kur farkı girmez.
-export const PROJE_MASRAF_KATEGORILERI = ['mal_alimi', 'personel', 'kira', 'enerji', 'lojistik', 'pazarlama', 'diger_gider'] as const;
+// Projeye bağlanabilen gider kategorileri (2599 a): yalnız projeye özel gider. Malzeme üretim maliyetine sarftan, işçilik saatten,
+// kira ve enerji genel giderden girer; ikinci kez sayılmasın diye bağlanamaz. Faiz (finansman kalemi), vergi, kredi ve kur farkı da girmez.
+export const PROJE_MASRAF_KATEGORILERI = ['lojistik', 'pazarlama', 'diger_gider'] as const;
 export const masrafSatiriSemasi = z.object({
   id: z.number().int().positive(),
   belgeId: z.number().int().positive(),
@@ -121,6 +122,8 @@ export const masrafSatiriSemasi = z.object({
   // KDV hariç TL. İptal edilen belge toplama girmez.
   tutarTl: z.number(),
   iptal: z.boolean(),
+  // 2599 a öncesi kurulmuş, artık proje masrafı sayılmayan türde bağ (mal alımı, personel, kira, enerji): listede kalır, toplama girmez.
+  sayilmaz: z.boolean(),
   gorevId: z.number().int().nullable(),
   kisiAd: z.string().nullable(),
   an: zamanSemasi,
@@ -129,6 +132,7 @@ export const maliyetOzetiSemasi = z.object({
   taban: tabanSemasi.nullable(),
   tabanGecmisi: z.array(tabanSemasi),
   masraflar: z.array(masrafSatiriSemasi),
+  // İptal edilen ve sayılmayan türdeki bağ hariç.
   masrafToplami: z.number(),
   // Son gerçekleşen: üretim gerçekleşeni + bağlı masraf. Tahmini son: son gerçekleşen + kalan plan. Fark tahmini son - taban; taban yoksa null.
   sonGerceklesen: tutar,

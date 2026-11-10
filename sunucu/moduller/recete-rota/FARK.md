@@ -244,3 +244,7 @@ Derlenmiş planlama sayfası yamada yok: birleştirmede `node istemci/src/modull
 ## Gece vardiyası (741 a, 2026-10-27)
 - Sayfanın "şimdi"si yeniden planlamada gerçek saattir, 07:00'den önce de (`zz31-tmi.betik`): gece önceki günün vardiyasının devamıdır. Motor tarafı plan
   dalındadır (`sunucu/moduller/plan/FARK.md`, 741 a). Test: planlama-simdi.test.ts.
+
+## Firmasız fason durum adımında (2681, 2682 a; 2026-11-09)
+- Durum adımı (`DurumRotaAdimi`) `fason: boolean` taşır (sözleşmede isteğe bağlı; eski kayıtta yok, false sayılır). Firması seçilmemiş fason adımda `fason` true,
+  `fasonId` null; işaret rotanın adım kaynağından gelir, Reçete ve Rota türetmez. Test `rota-dilimi.test.ts` RRR-6.

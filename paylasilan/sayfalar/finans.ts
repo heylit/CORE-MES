@@ -37,6 +37,7 @@ export const FINANS_IKINCI_MENU = {
     ] },
     { baslik: 'Sistem', maddeler: [
       { anahtar: 'genel-gider', baslik: 'Genel gider oranı', yol: '/finans/genel-gider', simge: 'tag', islem: 'finans.maliyet-oku' },
+      { anahtar: 'saatlik-maliyet', baslik: 'Saatlik maliyetler', yol: '/finans/saatlik-maliyet', simge: 'lira', islem: 'finans.maliyet-oku' },
       { anahtar: 'ayarlar', baslik: 'Ayarlar', yol: '/finans/ayarlar', simge: 'gear', islem: 'finans.yonet' },
     ] },
   ],

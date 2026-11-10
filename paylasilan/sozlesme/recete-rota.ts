@@ -172,6 +172,8 @@ export const durumRotaAdimiSemasi = z.object({
   machineId: kimlikMetni.nullable(),
   kisiId: kimlikMetni.nullable(),
   fasonId: kimlikMetni.nullable(),
+  // 2681 (2682 a): adım fasondadır; fasonId null iken firma seçilmemiştir. Eski kayıtta alan yoktur (false sayılır).
+  fason: z.boolean().optional(),
   terminGun: z.number().int().nullable(),
   setup: sayiAlani,
   proc: sayiAlani,

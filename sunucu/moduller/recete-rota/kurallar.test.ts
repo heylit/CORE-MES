@@ -224,6 +224,9 @@ describe('recete-rota çok katmanlı emrin düğümleri (saf, 1476-D)', () => {
     assert.deepEqual(d.find((x) => x.dugum === '0.1.1')!.adimlar, [{ opNo: 1030, kaynakOpNo: 10, durum: 'tamam' }], 'biten fason adım plana girmez');
     const terminsiz = { ...e, isEmirleri: e.isEmirleri.map((i) => (i.sira === 2 ? { ...i, kaynak: { tur: 'fason', id: 9 } } : i)) };
     assert.deepEqual(dugumleriCevir(terminsiz)!.find((x) => x.dugum === '0.1')!.adimlar[0], { opNo: 1010, kaynakOpNo: 10, durum: 'bekliyor', fasonId: '9', terminGun: null });
+    // 2694: kimliği olmayan fason kaynak "null" firma yazmaz.
+    const kimliksiz = { ...e, isEmirleri: e.isEmirleri.map((i) => (i.sira === 2 ? { ...i, kaynak: { tur: 'fason', id: null as unknown as number } } : i)) };
+    assert.deepEqual(dugumleriCevir(kimliksiz)!.find((x) => x.dugum === '0.1')!.adimlar[0], { opNo: 1010, kaynakOpNo: 10, durum: 'bekliyor' });
     assert.deepEqual(Object.keys(emirleriCevir([fasonlu]).opYer ?? {}), ['7|root|2'], 'düğüm adımı kök anahtarına yazılmaz');
     assert.doesNotThrow(() => durumEmirlerSemasi.parse(emirleriCevir([fasonlu])));
   });

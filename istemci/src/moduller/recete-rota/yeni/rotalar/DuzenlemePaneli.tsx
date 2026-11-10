@@ -5,7 +5,7 @@ import { miktar as miktarMetni, sayi, YOK } from '../bicim.ts';
 import {
   adimBirlesen, adimCarpani, adimDali, adimGuncelle, adimOnculleri, adimSil, adimSurukle, akisKarti, bagimlilikYaz, BAGIMLILIK_SIRASI, birlesebilenDallar, birlesenYaz,
   cevrimToplami, DAL_HARFLERI, dalBilgileri, dalCarpaniYaz, dalEtiketi, dalYaz, kollariBirlestir, serbestDal, degisimOrani, fasonaCevir, fasonMu,
-  girenTekrarIletisi, girenTekrari, hazirlikBolumu, hazirlikYaz, istasyonYaz, kartBasligi, katalogaDon, katalogdanFarkli, kucuk, malzemeMaliyeti, operasyonYaz, rotaEksikleri,
+  girenTekrarIletisi, girenTekrari, hazirlikBolumu, hazirlikYaz, istasyonYaz, kartBasligi, katalogaDon, katalogdanFarkli, kucuk, malzemeMaliyetiSonucu, operasyonYaz, rotaEksikleri,
   sirali, statuNo, sureYaz, tuketilenAdimlar, TUR_ADI, turKisa,
   type Adim, type Malzeme,
 } from './kurallar.ts';
@@ -52,7 +52,8 @@ function KartBilgisi({ r, m }: { r: RotaEkrani; m: Malzeme }) {
     return Number.isFinite(n) ? n : null;
   };
   const uretilen = duzen.adimlar(m.id).length > 0;
-  const tutar = maliyet ? (uretilen ? malzemeMaliyeti(m.id, duzen.adimlar, (id) => duzen.h.malzeme.get(id), birim) : birim(m.id)) : null;
+  const sonuc = maliyet ? malzemeMaliyetiSonucu(m.id, duzen.adimlar, (id) => duzen.h.malzeme.get(id), birim) : null;
+  const tutar = sonuc?.deger ?? null;
   return (
     <>
       <dl className="tc-rr1-ig">
@@ -60,7 +61,7 @@ function KartBilgisi({ r, m }: { r: RotaEkrani; m: Malzeme }) {
         <div><dt>Kod</dt><dd>{m.code}</dd></div>
         <div><dt>Birim</dt><dd>{m.unit ?? YOK}</dd></div>
         <div><dt>Tür</dt><dd>{TUR_ADI[m.type] ?? m.type}</dd></div>
-        {r.yetki.maliyetOku && <div><dt>{uretilen ? 'Malzeme maliyeti' : 'Birim maliyet'}</dt><dd>{tutar === null ? YOK : `${sayi(Math.round(tutar * 100) / 100)} ₺`}</dd></div>}
+        {r.yetki.maliyetOku && <div><dt>{uretilen ? 'Malzeme maliyeti' : 'Birim maliyet'}</dt><dd title={sonuc?.neden ?? undefined}>{tutar === null ? YOK : `${sayi(Math.round(tutar * 100) / 100)} ₺`}{sonuc?.neden ? <small> · {sonuc.neden}</small> : null}</dd></div>}
         <div><dt>Eldeki stok</dt><dd>{miktarMetni(m.stock, m.unit)}</dd></div>
         <div><dt>Minimum stok</dt><dd>{miktarMetni(m.min, m.unit)}</dd></div>
       </dl>
@@ -104,39 +105,40 @@ function UrunPaneli({ r, s, kapat }: { r: RotaEkrani; s: Extract<Secim, { tur: '
 }
 
 function UretimYeri({ r, s, a, duzen }: { r: RotaEkrani; s: { urunId: string }; a: Adim; duzen: boolean }) {
-  const [dis, setDis] = useState(false);
   const firmalar = r.duzen.durum.fasonFirms ?? [];
   const fason = fasonMu(a);
-  const acik = fason || dis;
-  const kapali = firmalar.length === 0 && !fason;
+  const firmasiz = fason && !a.fasonId;
   const op = r.duzen.h.op.get(a.opId);
   const yaz = (f: (x: Adim) => Adim, metin: string) => { r.duzen.degistir(s.urunId, (l) => adimGuncelle(l, a.id, f), metin); };
-  const bilinmeyen = fason && !firmalar.some((f) => f.id === a.fasonId);
+  const bilinmeyen = fason && !!a.fasonId && !firmalar.some((f) => f.id === a.fasonId);
   return (
     <Bolme baslik="Nerede yapılır" ek="tc-rr1-depbox">
       <div className="tc-rr1-depsel tc-rr1-depsel-2">
-        <button type="button" className={`tc-rr1-depb${acik ? '' : ' tc-rr1-on'}`} aria-pressed={!acik} disabled={!duzen}
-          onClick={() => { setDis(false); if (fason) yaz((x) => fasonaCevir(x, null, op), 'İç üretime alındı'); }}>
+        <button type="button" className={`tc-rr1-depb${fason ? '' : ' tc-rr1-on'}`} aria-pressed={!fason} disabled={!duzen}
+          onClick={() => { if (fason) yaz((x) => fasonaCevir(x, null, op), 'İç üretime alındı'); }}>
           <b>İç üretim</b><small>Atölyede, istasyonda yapılır.</small>
         </button>
-        <button type="button" className={`tc-rr1-depb${acik ? ' tc-rr1-on' : ''}`} aria-pressed={acik} disabled={!duzen || kapali}
-          onClick={() => { setDis(true); }}>
+        <button type="button" className={`tc-rr1-depb${fason ? ' tc-rr1-on' : ''}`} aria-pressed={fason} disabled={!duzen}
+          onClick={() => { if (!fason) yaz((x) => fasonaCevir(x, null, op, true), 'Dış üretime alındı'); }}>
           <b>Dış üretim (fason)</b><small>Fason firmada yapılır; termin gün olarak girilir.</small>
         </button>
       </div>
-      {kapali && <p className="tc-rr1-ipucu">Fason işaretli firma yok. Müşteri ve Tedarikçi sayfasında firmayı fason işaretleyince dış üretim seçilebilir.</p>}
-      {acik && (
+      {fason && (
         <div className="tc-rr1-ig">
-          <SecimAlani etiket="Fason firma" deger={fason ? a.fasonId ?? '' : ''} kapali={!duzen} bos="Fason firma seç…"
+          <SecimAlani etiket="Fason firma" deger={a.fasonId ?? ''} kapali={!duzen} bos="Firma seçilmedi"
             secenekler={[...(bilinmeyen ? [{ deger: a.fasonId ?? '', baslik: `Fason firma #${a.fasonId ?? ''} (listede yok)` }] : []),
               ...firmalar.map((f) => ({ deger: f.id, baslik: `${f.code ? `${f.code} ` : ''}${f.name}` }))]}
-            yaz={(v) => { if (v) yaz((x) => fasonaCevir(x, v, op), 'Dış üretime alındı'); }} />
-          {fason && (
-            <SayiAlani etiket="Termin (gün)" deger={a.terminGun} kapali={!duzen} yerTutucu="gün"
-              yaz={(v) => { yaz((x) => ({ ...x, terminGun: v === null || v <= 0 ? null : Math.round(v) }), 'Termin değişti'); }} />
+            yaz={(v) => { yaz((x) => fasonaCevir(x, v || null, op, true), v ? 'Fason firma seçildi' : 'Fason firma kaldırıldı'); }} />
+          <SayiAlani etiket="Termin (gün)" deger={a.terminGun} kapali={!duzen} yerTutucu="gün"
+            yaz={(v) => { yaz((x) => ({ ...x, terminGun: v === null || v <= 0 ? null : Math.round(v) }), 'Termin değişti'); }} />
+          {firmasiz && (
+            <p className="tc-rr1-warnbox tc-rr1-genis" role="status">
+              Fason firma seçilmedi. Rota böyle kaydedilir ve onaya gider; emir açılmadan önce firma seçilmeli.
+              {firmalar.length === 0 && ' Fason işaretli firma yok: Müşteri ve Tedarikçi sayfasında firmayı fason işaretleyin.'}
+            </p>
           )}
           <p className="tc-rr1-ipucu tc-rr1-genis">
-            {fason ? 'İş firmada yapılır: istasyon, makine ve süre girilmez; firmanın teslim süresi gün olarak yazılır.' : 'Firma seçilince adım dış üretime geçer.'}
+            İş firmada yapılır: istasyon, makine ve süre girilmez; firmanın teslim süresi gün olarak yazılır.
             {' '}Açılmış emirde bu adım, başlamadan önce emrin kendisinde de değiştirilebilir.
           </p>
         </div>

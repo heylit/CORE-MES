@@ -2,11 +2,11 @@ import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import {
   defteriUygula, dondurulacaklar, eksikKalemler, isEmriKaydi, gecikmeCezasi, gecikmeGunu, gostergeler, haftaBasi, haftalikBirikim, iscilikTutari, kalemKirilimi, karRiski,
-  faturaDurumu, projeGeliri, saatTutari, sapanIsEmirleri, tahminiBitis, tamamlanmaOrani, MASRAF_IPTAL, MASRAF_KATEGORI, MASRAF_SATIN_ALMA, MASRAF_YOK, TABAN_EMIRSIZ, TABAN_GEREKCE, aramaKalibi, maliyetFarki, masrafReddi, tabanKarari,
+  faturaDurumu, projeGeliri, saatTutari, sapanIsEmirleri, tahminiBitis, tamamlanmaOrani, MASRAF_IPTAL, MASRAF_KATEGORI, MASRAF_SATIN_ALMA, MASRAF_YOK, masrafSayilmaz, TABAN_EMIRSIZ, TABAN_GEREKCE, aramaKalibi, maliyetFarki, masrafReddi, tabanKarari,
 } from './kurallar.ts';
 import type { FaturaDurumu, GelirPayi, IsEmriGirdisi, MaliyetKaydi } from './kurallar.ts';
 import { butceTl, iscilikPlaniEksik, planTarihiEksik, beklemeFinansmani, genelGiderEksikleri, genelGiderTutari, genelGiderYukAlir, gercekTalasAdedi, gunlukFaizOrani, malzemePlani, tahminiIsEmriMaliyeti } from './kurallar.ts';
-import { MALIYET_KALEMLERI } from '#paylasilan/sozlesme/proje-maliyet.ts';
+import { MALIYET_KALEMLERI, PROJE_MASRAF_KATEGORILERI } from '#paylasilan/sozlesme/proje-maliyet.ts';
 import type { MalzemeBileseni } from './kurallar.ts';
 import { MASRAF_KAPALI_PROJE, projeMasrafReddi } from './kurallar.ts';
 
@@ -337,8 +337,15 @@ test('PM-41 masraf reddi: yok, iptal, satın almaya bağlı ve proje masrafı ol
   assert.equal(masrafReddi({ ...b, durum: 'kapandi' }, tur), null);
 });
 
+test('PM-41 (2599 a): proje masrafı yalnız lojistik, pazarlama ve diğer gider; mal alımı, personel, kira ve enerji reddedilir', () => {
+  assert.deepEqual([...PROJE_MASRAF_KATEGORILERI], ['lojistik', 'pazarlama', 'diger_gider']);
+  const b = { durum: 'acik', satinAlmaBagli: false };
+  for (const kategori of ['mal_alimi', 'personel', 'kira', 'enerji']) assert.equal(masrafReddi({ ...b, kategori }, PROJE_MASRAF_KATEGORILERI), MASRAF_KATEGORI);
+  for (const kategori of PROJE_MASRAF_KATEGORILERI) assert.equal(masrafReddi({ ...b, kategori }, PROJE_MASRAF_KATEGORILERI), null);
+});
+
 test('PM-42 fark: son gerçekleşen üretim + iptal dışı masraf; tahmini son + kalan plan; taban ya da bilinmeyen taraf yoksa null', () => {
-  const m = [{ tutarTl: 100, iptal: false }, { tutarTl: 50, iptal: true }];
+  const m = [{ tutarTl: 100, iptal: false, sayilmaz: false }, { tutarTl: 50, iptal: true, sayilmaz: false }];
   assert.deepEqual(maliyetFarki(1000, 400, 700, m), { masrafToplami: 100, sonGerceklesen: 500, tahminiSon: 1200, fark: 200 });
   assert.deepEqual(maliyetFarki(null, 400, 700, m), { masrafToplami: 100, sonGerceklesen: 500, tahminiSon: 1200, fark: null });
   assert.deepEqual(maliyetFarki(1000, null, 700, m), { masrafToplami: 100, sonGerceklesen: null, tahminiSon: null, fark: null });
@@ -375,4 +382,15 @@ test('PM-48 (PM-1 a): işçiliğin planı yoksa bildirilir; işçilik kalemi olm
   assert.equal(iscilikPlaniEksik([kayit({ plan: { fason: 100 } })]), false);
   assert.equal(iscilikPlaniEksik([kayit({ plan: { isleme: 100, iscilik: 50 } })]), false);
   assert.equal(iscilikPlaniEksik([kayit({ plan: { fason: 100 } }), kayit({ plan: { isleme: 100, iscilik: null } })]), true);
+});
+
+test('PM-49 (2599 a): sayılmayan türdeki eski bağ ve sonradan siparişe bağlanan belge toplama ve farka girmez', () => {
+  const b = (kategori: string, satinAlmaBagli = false) => ({ kategori, satinAlmaBagli });
+  assert.equal(masrafSayilmaz(b('personel'), PROJE_MASRAF_KATEGORILERI), true);
+  assert.equal(masrafSayilmaz(b('mal_alimi'), PROJE_MASRAF_KATEGORILERI), true);
+  assert.equal(masrafSayilmaz(b('lojistik'), PROJE_MASRAF_KATEGORILERI), false);
+  // Bağdan sonra siparişe bağlanan belge (2611 ön bakışı): izinli türde de sayılmaz.
+  assert.equal(masrafSayilmaz(b('diger_gider', true), PROJE_MASRAF_KATEGORILERI), true);
+  const m = [{ tutarTl: 100, iptal: false, sayilmaz: false }, { tutarTl: 900, iptal: false, sayilmaz: true }];
+  assert.deepEqual(maliyetFarki(1000, 400, 700, m), { masrafToplami: 100, sonGerceklesen: 500, tahminiSon: 1200, fark: 200 });
 });

@@ -1,0 +1,2 @@
+.tc-sm-ad { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--b-2); }
+.tc-sm-eylem { display: inline-flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--b-2); }

@@ -295,7 +295,8 @@ export function dugumleriCevir(e: EmirKaydi): NonNullable<DurumEmirleri['orders'
       ustOpNo: tuketen === undefined ? null : tuketen.dugum?.kaynakOpNo ?? tuketen.opNo,
       adimlar: adimlar.map((a) => ({
         opNo: a.opNo, kaynakOpNo: a.dugum!.kaynakOpNo, durum: a.durum,
-        ...(a.durum !== 'tamam' && a.kaynak?.tur === 'fason' ? { fasonId: String(a.kaynak.id), terminGun: a.terminGun ?? null } : {}),
+        // 2694: firmasız fason emre gitmez (rota reddeder); gitse de "null" firma kimliği yazılmasın.
+        ...(a.durum !== 'tamam' && a.kaynak?.tur === 'fason' && a.kaynak.id != null ? { fasonId: String(a.kaynak.id), terminGun: a.terminGun ?? null } : {}),
       })),
     };
   });
@@ -848,7 +849,8 @@ function adimCevir(a: DurumRotaAdimi, sira: number, malzemeId: number, makineIst
     stationId: kimlik(istasyon),
     machineId: kimlik(makine),
     kisiId: k?.tur === 'kisi' ? String(k.id) : null,
-    fasonId: k?.tur === 'fason' ? String(k.id) : null,
+    fasonId: k?.tur === 'fason' && k.id !== null ? String(k.id) : null,
+    fason: k?.tur === 'fason',
     terminGun: a.terminGun,
     setup: metindenSayi(a.ayarSuresiDk),
     proc: metindenSayi(a.islemSuresiDk ?? a.birimSureDk),

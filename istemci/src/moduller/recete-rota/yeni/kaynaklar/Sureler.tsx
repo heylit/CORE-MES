@@ -19,7 +19,7 @@ type SureAdimi = SurelerCevabi['adimlar'][number];
 
 // Eski ekrandaki gibi kaynak istasyonuyla yazılır: istasyon kodu, altında istasyon adı ve makine kodu; istasyonu olmayan kaynak kendi kodu ve adıyla.
 function kaynakMetni(k: SureAdimi['kaynak']): React.ReactNode {
-  if (k === null) return YOK;
+  if (k === null || k.id === null) return YOK;
   const ist = k.istasyon;
   if (ist === null || (k.tur === 'istasyon' && ist.id === k.id)) return <><b>{k.kod ?? k.ad}</b>{k.kod !== null && <small>{k.ad}</small>}</>;
   const alt = k.tur === 'makine' && k.kod !== null ? `${ist.ad} · ${k.kod}` : `${ist.ad} · ${k.ad}`;

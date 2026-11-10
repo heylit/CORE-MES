@@ -47,7 +47,8 @@ export function veriSagligi(g: VeriSagligiGirdisi): VeriSagligiCevabi {
     sureToplam = 0;
     for (const [urun, r] of rotalar) {
       for (const s of r.steps) {
-        if (s.fasonId !== null) continue;
+        // Firmasız fason adım (2681) de fasondur: süresi yoktur, eksik sayılmaz.
+        if (s.fasonId !== null || s.fason === true) continue;
         sureToplam += 1;
         const islemYok = s.cycle === null && s.proc === null;
         const alternatifYok = Object.entries(s.altTimes).filter(([, t]) => t.cycle === null).map(([id]) => id);
@@ -103,8 +104,9 @@ export function veriSagligi(g: VeriSagligiGirdisi): VeriSagligiCevabi {
       kategori('terminsiz-emir', 'Teslimi olmayan emir', 'Gecikmesi hesaplanmaz; sıralamada en sona itilir.', terminsiz, emirler?.length ?? null),
       kategori('arizali-makine', 'Arızada ya da bakımda makine',
         'Bitişi girilmemiş duruş 8 saat sürer sayılır; makine sonra çalışır kabul edilir.', arizali, makineler?.length ?? null),
+      // 2601 a: ücret her okumada Finans istasyon saat maliyetiyle ezilir; çalışmada kalan farklı elle değer yalnız gösterilir.
       kategori('elle-tezgah-ucreti', 'Planda elle değiştirilmiş tezgâh ücreti',
-        'Ana veri değişmedikçe planlama çalışmasındaki elle ücret kullanılır; istasyon maliyetinden farklıdır.', elle, g.tezgahlar?.length ?? null),
+        "Finans'tan farklı elle ücret yok sayıldı; planda Finans istasyon saat maliyeti kullanılır.", elle, g.tezgahlar?.length ?? null),
     ],
   };
 }

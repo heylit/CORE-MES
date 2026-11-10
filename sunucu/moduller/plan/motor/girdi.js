@@ -168,9 +168,12 @@ function rrCevir(st) {
         return !rrEsit(b.slice().sort(), v.slice().sort());
       });
       if (!o0 || elDegisti || RR_ADIM_SURE.some(f => !rrEsit(ref[f], s[f]))) {
-        /* 1737 c: işlem süresi girilmemiş aday plana girmez; boş süre 0 okunursa iş o tezgâhta sıfır sürede bitiyor görünürdü. Ayar süresi
-           boşsa 0'dır (rota onayındaki gibi). Veri sağlığı boş süreyi ayrıca listeler. */
-        const izin = [s.stationId, ...(s.alts || []).filter(g => rrSayi(((s.altTimes || {})[g] || {}).cycle) !== null)].filter(Boolean);
+        /* 1737 c: işlem süresi girilmemiş aday plana girmez; boş süre 0 okunursa iş o tezgâhta sıfır sürede bitiyor görünürdü. Ana istasyon da
+           alternatif gibi süresizse aday değildir (2701); emirde süre varsa emirler.js emirYerleriniEkle onu ekler. Sunucu kaynağı çevrimi
+           işlem + değişim diye kurar (rrKaynagiCevir), boş işlem orada 0 olur; süre işlem ve değişimden okunur, ikisi de yoksa çevrimden.
+           Ayar süresi boşsa 0'dır (rota onayındaki gibi). Veri sağlığı boş süreyi ayrıca listeler. */
+        const anaSureli = rrSayi(s.proc) !== null || rrSayi(s.chg) !== null || (s.proc === undefined && rrSayi(s.cycle) !== null);
+        const izin = [...(anaSureli ? [s.stationId] : []), ...(s.alts || []).filter(g => rrSayi(((s.altTimes || {})[g] || {}).cycle) !== null)].filter(Boolean);
         const eski = (o0 && o0.tezgahlar) || [];
         const sure = g => g === s.stationId ? { ayar: +s.setup || 0, cevrim: +s.cycle || 0 } : { ayar: +((s.altTimes || {})[g] || {}).setup || 0, cevrim: +((s.altTimes || {})[g] || {}).cycle || 0 };
         const degisti = g => !ref || (g === s.stationId ? (ref.stationId !== g || ref.setup !== s.setup || ref.cycle !== s.cycle) : !rrEsit(ref.altTimes[g], (s.altTimes || {})[g]));
@@ -336,13 +339,11 @@ function tmiTabanKur(D, bugun = duvarSaati(Date.now()).slice(0, 10)) {
    kaydıyla aynıdır, rrDenemeyeCevir değişmeden okur. Pasif kaynak plana girmez. Sayfanın tek takvimi vardır: çalışma günü aktif iş
    merkezlerinin haftalarının birleşimidir. D: açık çalışma; tezgâh ve kişinin motor ayarları (plan alt nesnesi) aynı kimlikte korunur.
    Okunamayan dilim (yetki yok) kayıttaki gibi kalır; maliyet satırı yoksa null, sıfır uydurulmaz. */
-/* 71 b: elle değiştirilmemiş tezgâhın saat ücreti istasyon maliyetini izler; ucretIst istasyondan alınan son ücrettir, ücret ondan farklıysa
-   elle girilmiştir ve korunur. İşareti olmayan eski tezgâh ücreti maliyete eşitse izlemeye girer. Maliyet okunamazsa (satır yok, yetki yok)
-   son ücret kalır: okuyamayan kullanıcının açılışı ücreti silmesin. */
-function ucretIzle(a, maliyet) {
-  if (maliyet == null) return;
-  const izler = a.ucretIst !== undefined ? a.ucret === a.ucretIst : a.ucret === maliyet;
-  if (izler) { a.ucret = maliyet; a.ucretIst = maliyet; }
+/* 2601 a: tezgâhın saat ücreti Finans'ın istasyon saat maliyetidir; elle girilmiş ücret de ezilir (proje maliyetiyle tek tanım). Finans'ta satır
+   yoksa ücret bilinmez (null). Maliyet hiç okunamadıysa (yetki yok) son ücret kalır: okuyamayan kullanıcının açılışı ücreti silmesin. */
+function ucretIzle(a, maliyet, okundu) {
+  if (!okundu) return;
+  a.ucret = maliyet; a.ucretIst = maliyet;
 }
 /* B-2483-15: verim ve tezgâhın vardiya listesi de ücret gibi izlenir (ucretIzle kuralı): verimIst / vardiyalarIst istasyondan ve takvimden
    alınan son değerdir; tezgâhtaki değer ona eşitse elle değiştirilmemiştir ve yenisini alır, farklıysa elle girilmiştir ve korunur. İşareti
@@ -392,7 +393,7 @@ function tmiKaynakIle(st, kaynak, D) {
     o.machines = d.machines.filter(m => m.aktif !== false && ist.has(m.stationId)).map(m => {
       const y = { id: m.id, code: m.code, name: m.name, stationId: m.stationId, status: m.status, note: (ek.makineNotu && ek.makineNotu[m.id]) || '' };
       const a = eski('tezgahlar', m.id);
-      if (a) { y.plan = a; ucretIzle(a, maliyet('istasyon', m.stationId)); verimIzle(a, istasyonVerimi(istasyonlar.find(x => x.id === m.stationId))); if (d.cal) vardiyaIzle(a, d.cal.shifts.map(v => v.id)); }
+      if (a) { y.plan = a; ucretIzle(a, maliyet('istasyon', m.stationId), !!d.maliyet); verimIzle(a, istasyonVerimi(istasyonlar.find(x => x.id === m.stationId))); if (d.cal) vardiyaIzle(a, d.cal.shifts.map(v => v.id)); }
       return y;
     });
   }
@@ -403,7 +404,7 @@ function tmiKaynakIle(st, kaynak, D) {
         machines: (k.machines || []).slice(), maxMachines: k.maxMachines ?? null };
       const a = eski('personel', k.id); if (a) y.plan = a;
       const t = eski('tezgahlar', kisiTezgahKimligi(k.id));
-      if (t) { y.tezgahPlan = t; ucretIzle(t, maliyet('istasyon', String(t.grup))); if (istasyonlar) verimIzle(t, istasyonVerimi(istasyonlar.find(x => x.id === String(t.grup)))); }
+      if (t) { y.tezgahPlan = t; ucretIzle(t, maliyet('istasyon', String(t.grup)), !!d.maliyet); if (istasyonlar) verimIzle(t, istasyonVerimi(istasyonlar.find(x => x.id === String(t.grup)))); }
       return y;
     });
   }
