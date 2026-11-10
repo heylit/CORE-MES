@@ -400,6 +400,9 @@ Testler: plan-bedel 815 (iki test), kurallar 815, kablolama 815; istemci planlam
 - İnsanlı istasyondaki ardıl (kişinin el tezgâhı) da aynı kuralla itilir (Atölye K1). Ardılın tezgâhı ona uygun değilse ret adımı ve
   tezgâhı söyler; ufuk ayrı iletidir. Taşınan iş donuk bölgede başka işin yerine girerse ileti operatör listesinin değiştiğini söyler (Atölye N1).
   Önizleme cevabı hesaplandığı `calismaSurumu`nu taşır (Mimar N2).
+- Fason ardıl kilitlenmez (motor fason kilidini yok sayar); aynı süreyle kaymış sayılır, arkasındaki adımlar ona göre itilir ve ileti fason
+  süresinin plan uygulanınca yeniden hesaplanacağını söyler (Test N1). Taşınan işin kendisi hedef tezgâhta başka işle çakışabilir: kilit
+  kazanır, motor öteki işi kaydırır (önceki davranış, Test N2).
 
 ## Planlanabilirlik uçları (2779 sayfası; 2026-11-10)
 - `GET /plan/planlanabilirlik`: plana giren açık emirlerden yerleşmeyen adımı olanlar, yalnız yerleşmeyen adımlarıyla. Motor önerisi motor

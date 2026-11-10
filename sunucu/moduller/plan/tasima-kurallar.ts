@@ -119,6 +119,7 @@ export function tasimaItmesi(g: TasimaGirdisi, isId: string, m0: string, S0: num
   }
   // İleri itme: yeri değişen her işin ardılı, öncüllerinin izin verdiği yerden önceyse tezgâhındaki en yakın boş yere itilir.
   const itilen: string[] = [];
+  const fasonlar: string[] = [];
   const kuyruk = [...yeni.keys()];
   for (let n = 0; kuyruk.length > 0 && n < 10_000; n++) {
     const id = kuyruk.shift()!;
@@ -127,7 +128,15 @@ export function tasimaItmesi(g: TasimaGirdisi, isId: string, m0: string, S0: num
       const s = sinir(a), y0 = yeri(a);
       if (y0.S >= s.bas - E && y0.C >= s.bit - E) continue;
       if (ai.sabit) return red(`${op(a)} başlamış ya da donuk bölgede; taşıma onu sıraya aykırı bırakır, yapılmadı.`);
-      if (ai.fas) continue;
+      // Fason adım tezgâhta durmaz ve kilitlenmez; süresini motor plan uygulanınca kurar. Arkasındakiler bekleyecek diye aynı süreyle
+      // kaydırılmış sayılır, kendisi sonuca girmez.
+      if (ai.fas) {
+        const S = Math.max(y0.S, s.bas);
+        yeni.set(a, { S, C: y0.C + (S - y0.S), lot1: y0.lot1 + (S - y0.S), m: ai.m, tur: 'itilen' });
+        if (!fasonlar.includes(a)) fasonlar.push(a);
+        kuyruk.push(a);
+        continue;
+      }
       const y = bosYer(a, ai.m, s.bas, s.bit);
       if (typeof y === 'string') return bosRed(a, ai.m, y);
       yeni.set(a, { ...y, m: ai.m, tur: yeni.get(a)?.tur === 'cekilen' ? 'cekilen' : 'itilen' });
@@ -136,6 +145,7 @@ export function tasimaItmesi(g: TasimaGirdisi, isId: string, m0: string, S0: num
     }
   }
   if (itilen.length > 0) notlar.push(`${itilen.map(op).join(', ')} ileri itildi`);
+  if (fasonlar.length > 0) notlar.push(`${fasonlar.map(op).join(', ')} fason; süresi plan uygulanınca yeniden hesaplanır`);
   // Taşınan iş donuk bölgede başka işin yerine girerse operatörün yakın listesi değişir (Atölye N1).
   const xs = yeri(isId);
   if (xs.S < g.donuk - E && dolu(m0, isId).some((a) => a.S < g.donuk - E && a.S < xs.C - E && a.C > xs.S + E)) {
@@ -144,6 +154,6 @@ export function tasimaItmesi(g: TasimaGirdisi, isId: string, m0: string, S0: num
   const isler = [...yeni].map(([id, y]) => {
     const i = g.isler.get(id)!;
     return { isId: id, tezgah: y.m, S: y.S, C: y.C, eskiTezgah: i.m, eskiS: i.S, tur: y.tur };
-  }).filter((r) => r.tur === 'tasinan' || Math.abs(r.S - r.eskiS) > E || r.tezgah !== r.eskiTezgah);
+  }).filter((r) => !g.isler.get(r.isId)!.fas && (r.tur === 'tasinan' || Math.abs(r.S - r.eskiS) > E || r.tezgah !== r.eskiTezgah));
   return { gecerli: true, ileti: notlar.length > 0 ? `${notlar.join('; ')}.` : null, isler };
 }

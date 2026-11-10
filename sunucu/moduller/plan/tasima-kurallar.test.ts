@@ -148,7 +148,15 @@ describe('elle taşımada itme (2790, 2794)', () => {
     assert.equal(r.ileti, null);
   });
 
-  test('Atölye N1: taşınan iş donuk bölgede başka işin yerine girerse operatör listesinin değiştiği söylenir', () => {
+  test('Test N1: fason ardıl kilitlenmez ama aynı süreyle kaymış sayılır; arkasındaki adım da itilir', () => {
+    const g = girdi({ 'E1.10': { m: 'M1', S: 0, d: 4 }, 'E1.20': { m: '@F', S: 4, d: 24, fas: true }, 'E1.30': { m: 'M2', S: 28, d: 2 } },
+      { 'E1.20': [['E1.10', 'b']], 'E1.30': [['E1.20', 'b']] });
+    const r = tasimaItmesi(g, 'E1.10', 'M1', 6);
+    assert.deepEqual(ozet(r), { 'E1.10': ['M1', 6, 'tasinan'], 'E1.30': ['M2', 34, 'itilen'] });
+    assert.equal(r.ileti, 'OP 30 ileri itildi; OP 20 fason; süresi plan uygulanınca yeniden hesaplanır.');
+  });
+
+    test('Atölye N1: taşınan iş donuk bölgede başka işin yerine girerse operatör listesinin değiştiği söylenir', () => {
     const g = girdi({ 'E1.10': { m: 'M1', S: 10, d: 2 }, 'E2.10': { m: 'M1', S: 1, d: 2 } }, {}, { simdi: 0, donuk: 4 });
     assert.equal(tasimaItmesi(g, 'E1.10', 'M1', 1).ileti, 'Tezgah M1 tezgâhında sıradaki iş değişir; operatör listesi güncellenir.');
     assert.equal(tasimaItmesi(g, 'E1.10', 'M1', 5).ileti, null);
