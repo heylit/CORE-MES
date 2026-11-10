@@ -949,3 +949,15 @@ Bu tur şunları varsaydı:
 ## Onaylı kararlar
 - 1765 b + teyit: arkon_kayit aylık bölümlenir; arkon_tmi_yansima bağı değişir; tetikler her bölüme kurulur.
 - 2520-3 (B-2499-9): Hazırlık "Çizim Merkezi'nden ekle" dosyayı yüklemeyen paket yazarında 404 veriyordu (ekle kişisiz bağlar, 732 a; okuma yalnız yükleyene ya da kayıtlı paketi okuyabilene açıktı). Okuma kuralına merkezden alma rolü + etkin belgenin yayındaki dosyası eklendi; belge-merkezi `yayindaOzetMi` okuması kullanılır. Taslak ve arşivdeki merkez dosyası bu yolla okunmaz.
+## İş emrine özel hazırlık maddesi (kart 2227, karar 2227-1 b)
+- Üretim Hazırlık, rota talimatı dışında işe özgü hazırlık maddesi ekler, tamamlar, geri alır ve kaldırır (Yayınla sekmesi, hazırlık matrisinin altında, `yeni/hazirlik/EkHazirlikMaddeleri.tsx`). Matriste "Ek madde" sütunu yalnız uyarır; başlatma değişmez.
+- Göç `20261110032643_arkon_hazirlik_maddesi.sql`: iki yeni boş tablo (madde ve olayı), yalnız ekleme; iş emrine yabancı anahtar bilinçli yok (arkon_kuyruk_sirasi gerekçesi).
+- Uçlar `/arkon/hazirlik-maddeleri` (okuma: hazırlık, planlama, yönetici; yazma: hazırlık, yönetici). Arkon rolüne değil TMI işlemine bağlı; yeni işlem yok.
+- Matris bağı: `disari.ts isEmriEkMaddeDurumlari` -> uretim-emirleri `ekMaddeHazirlikCozucusu` (kablolama.ts).
+
+Bu tur şunları varsaydı:
+1. Madde iş emri başınadır; aynı emrin öteki iş emirlerine kopyalanmaz.
+2. Veri kapsamı (iş merkezi kısıtı) uygulanmaz: madde metni ve iş emri numarası dışında veri dönmez; kısıtlı hazırlıkçı başka merkezin iş emrine madde ekleyebilir.
+3. Bitmiş iş emrinde madde eklenmez ve işaretlenmez; liste okunur.
+4. Kaldırılan madde silinmez, son olayı "kaldır" olur ve listeden çıkar.
+

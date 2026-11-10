@@ -34,7 +34,8 @@ import {
   planDisiEki,
 } from './kurallar.ts';
 import { HazirlikListesi } from '../operator/HazirlikListesi.tsx';
-import { HazirlikPaketCipi, paketHazirligi, useHazirlikOzeti } from './HazirlikTakibi.tsx';
+import { EkHazirlikMaddeleri } from './EkHazirlikMaddeleri.tsx';
+import { HazirlikPaketCipi, paketHazirligi, paketIsEmriId, useHazirlikOzeti } from './HazirlikTakibi.tsx';
 import { NumuneSekmesi } from './NumuneSekmesi.tsx';
 import { PlanCipi } from './PlanCipi.tsx';
 import type { OpType, Pkg, PkgFile, PlanItem, Result, SampleRequest, Step, Ton } from './tipler.ts';
@@ -808,6 +809,7 @@ export function Hazirlik({ kimlik }: ArkonEkranOzellikleri) {
                       <HazirlikListesi satirlar={hzSecili} baslik={p.no} zaman={hz.zaman} yenile={hz.yenile} cagir={null} />
                     </div>
                   ) : null}
+                  {paketIsEmriId(p) !== null ? <EkHazirlikMaddeleri isEmriId={paketIsEmriId(p) ?? 0} degisti={hz.yenile} /> : null}
                   <section className="tc-ay2-kart" aria-label="Yayın öncesi kontrol">
                     <span className="tc-ay2-ust-yazi">Yayın öncesi kontrol</span>
                     {v.map((x, i) => (

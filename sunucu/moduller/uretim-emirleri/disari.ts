@@ -439,6 +439,8 @@ export const cncHazirlikCozucusu = (c: HazirlikCozucusu | null): void => { hazir
 export const cizimHazirlikCozucusu = (c: HazirlikCozucusu | null): void => { hazirlikCozucusuKaydet('cizim', c); };
 // Paket yayını (2227): iş emri başına; başlatma kancası sormaz, reddi Arkon verir (2189-1 a).
 export const yayinHazirlikCozucusu = (c: HazirlikCozucusu | null): void => { hazirlikCozucusuKaydet('yayin', c); };
+// 2227-1 b: iş emrine özel hazırlık maddesi; sahibi Arkon (Üretim Hazırlık).
+export const ekMaddeHazirlikCozucusu = (c: HazirlikCozucusu | null): void => { hazirlikCozucusuKaydet('ek-madde', c); };
 // Uyaran maddeler (2146-1 a): eksikken iş başlar; makine durumu bu modülde çözülür (hazirlik.ts).
 export const rotaHazirlikCozucusu = (c: HazirlikCozucusu | null): void => { hazirlikCozucusuKaydet('rota', c); };
 export const malzemeHazirlikCozucusu = (c: HazirlikCozucusu | null): void => { hazirlikCozucusuKaydet('malzeme', c); };

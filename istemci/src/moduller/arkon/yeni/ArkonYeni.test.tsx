@@ -5,7 +5,7 @@ import { YENI_EKRAN_ILETISI } from '../../../ortak/rota/yeni-ekran.tsx';
 import { eskiAdresinYenisi, rotalar } from '../rotalar.tsx';
 import { baglantiOzeti } from './ortak/BaglantiDurumu.tsx';
 import { yalnizMalKabul } from './ArkonYeni.tsx';
-import { SAYFALAR, arkonGirisSayfasi, sekmeMaddeleri } from './sayfalar.ts';
+import { SAYFALAR, SAYFA_DISI, arkonGirisSayfasi, sekmeMaddeleri } from './sayfalar.ts';
 import { arkonAc, KAPISIZ, OPERATOR, sunucuKur, YONETICI } from './test-ortak.tsx';
 
 // İskeletin sözleşmesi: yol, giriş sayfası, bölüm. Bölümlerin içine bakılmaz (parçalar doldurur); bölüm adıyla (aria-label) ve
@@ -21,7 +21,7 @@ describe('Yeni Arkon ekranı (iskelet)', () => {
   it('yollar eski Arkon yollarıyla çakışmaz; her sayfanın bir ekranı vardır', () => {
     expect(() => rotalariTopla({ 'arkon/rotalar.tsx': { rotalar } })).not.toThrow();
     for (const m of sekmeMaddeleri()) {
-      if (m.anahtar !== 'tmi-yansimalari') expect(Object.hasOwn(SAYFALAR, m.anahtar)).toBe(true);
+      if (!Object.hasOwn(SAYFA_DISI, m.anahtar)) expect(Object.hasOwn(SAYFALAR, m.anahtar)).toBe(true);
     }
   });
 
