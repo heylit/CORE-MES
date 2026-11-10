@@ -1337,15 +1337,22 @@ export const KATILIM_TEK_ACIK_IS_EMIRSIZ = 'uretim_emirleri_katilim_is_emirsiz_t
 
 // 626 a: kuralı tutmayan başlatma reddedilmez, uyarı döner. Bekleyen öncül bitmeden, akışlı öncülden devir adedi gelmeden başlarsa uyarır;
 // 1248 a ile her öncül ayrı denetlenir. oncekiSaglam: öncülün şu ana kadarki sağlamı (bitmişse kapanışı); sayı verilirse her öncüle aynısı.
-export function siraDisiBaslatmaUyarisi<T extends ParalelAdim>(adimlar: readonly T[], adim: T, oncekiSaglam: number | ((oncul: T) => number)): string | null {
-  const uyarilar = adimOnculleri(adimlar, adim).map(({ adim: onceki, tur, devirAdedi }) => {
-    if (onceki.durum === 'tamam') return null;
-    if (tur === 'bekleyen') return `OP ${onceki.opNo} bitmeden OP ${adim.opNo} başlatıldı.`;
-    const devir = devirAdedi ?? 0;
-    const gelen = onculdenGelen(typeof oncekiSaglam === 'number' ? oncekiSaglam : oncekiSaglam(onceki), onceki, adim);
-    return gelen >= devir ? null : `OP ${onceki.opNo}'den devir adedi (${devir}) gelmeden OP ${adim.opNo} başlatıldı; gelen ${gelen}.`;
+// 2768 (2756 b): sıra dışı başlatma bir öncül başına bir kayıttır; uyarı cümlesi ve kayıt aynı koşuldan çıkar. gelen: öncülden bu adıma
+// gelen (hazır) adet, sayilan: öncülün sayılan sağlamı. Bekleyen öncül bitmemişse, akışlı öncülde devir adedi gelmemişse kayıt vardır.
+export interface SiraDisiBaslatma<T> { onceki: T; tur: OnculTuru; devirAdedi: number | null; gelen: number; sayilan: number }
+export function siraDisiBaslatmalar<T extends ParalelAdim>(adimlar: readonly T[], adim: T, oncekiSaglam: number | ((oncul: T) => number)): SiraDisiBaslatma<T>[] {
+  return adimOnculleri(adimlar, adim).flatMap(({ adim: onceki, tur, devirAdedi }) => {
+    if (onceki.durum === 'tamam') return [];
+    const sayilan = typeof oncekiSaglam === 'number' ? oncekiSaglam : oncekiSaglam(onceki);
+    const gelen = onculdenGelen(sayilan, onceki, adim);
+    if (tur === 'akisli' && gelen >= (devirAdedi ?? 0)) return [];
+    return [{ onceki, tur, devirAdedi, gelen, sayilan }];
   });
-  return uyarilariBirlestir(...uyarilar);
+}
+export function siraDisiBaslatmaUyarisi<T extends ParalelAdim>(adimlar: readonly T[], adim: T, oncekiSaglam: number | ((oncul: T) => number)): string | null {
+  return uyarilariBirlestir(...siraDisiBaslatmalar(adimlar, adim, oncekiSaglam).map(({ onceki, tur, devirAdedi, gelen }) => (tur === 'bekleyen'
+    ? `OP ${onceki.opNo} bitmeden OP ${adim.opNo} başlatıldı.`
+    : `OP ${onceki.opNo}'den devir adedi (${devirAdedi ?? 0}) gelmeden OP ${adim.opNo} başlatıldı; gelen ${gelen}.`)));
 }
 
 // Kuralı tutan, şimdi başlatılabilecek adımlar: bekleyen, istasyonlu ve fason olmayan; sıra dışı uyarısı vermeyenler.
