@@ -3,7 +3,7 @@ import { describe, test } from 'node:test';
 import type { Hareket } from '#paylasilan/sozlesme/stok.ts';
 import { ANAHTAR_BICIMI, durumEmirlerSemasi } from '#paylasilan/sozlesme/recete-rota.ts';
 import {
-  degerBicimeUyarMi, dugumleriCevir, kayitMaliyetiniSuz, emirleriCevir, hareketleriCevir, isMerkeziCevir, istasyonCevir, kisiCevir, makineCevir, malzemeCevir, metindenSayi, degerCokBuyukMu, nulKarakteriVarMi, operasyonCevir,
+  degerBicimeUyarMi, dugumleriCevir, kayitMaliyetiniKoru, kayitMaliyetiniSuz, emirleriCevir, hareketleriCevir, isMerkeziCevir, istasyonCevir, kisiCevir, makineCevir, malzemeCevir, metindenSayi, degerCokBuyukMu, nulKarakteriVarMi, operasyonCevir,
   rotaAramaSonuclari, rotasizAdimlariCevir, surumUyarMi, tatilTarihleri, vardiyaCevir,
 } from './kurallar.ts';
 import type { EmirKaydi } from './kurallar.ts';
@@ -43,6 +43,17 @@ describe('recete-rota kuralları (saf)', () => {
     assert.equal(ANAHTAR_BICIMI.test('recete-rota-motoru.'), false);
     assert.equal(ANAHTAR_BICIMI.test('mesai:tercih'), false);
     assert.equal(ANAHTAR_BICIMI.test('recete-rota-motoru-v1:a/b'), false);
+  });
+
+  test('RR-K6 (2783, Veri N1): geri yazmada null maliyet kayıttaki aynı kimlikli kalemden korunur; dolu gelen, yeni ve kimliksiz kalem değişmez', () => {
+    const eski = { bicim: 'json', deger: { items: [{ id: 'i1', cost: 5 }, { id: 'i2', cost: 6 }, { cost: 7 }], people: [{ id: 'p1', cost: 0 }] } };
+    const yeni = { bicim: 'json', deger: { items: [{ id: 'i1', cost: null }, { id: 'i2', cost: 9 }, { cost: null }, { id: 'i3', cost: null }], people: [{ id: 'p1', cost: null }] } };
+    assert.deepEqual(kayitMaliyetiniKoru(yeni, eski).deger, { items: [{ id: 'i1', cost: 5 }, { id: 'i2', cost: 9 }, { cost: null }, { id: 'i3', cost: null }], people: [{ id: 'p1', cost: 0 }] });
+    assert.equal(kayitMaliyetiniKoru(yeni, null), yeni);
+    const metin = { bicim: 'metin', deger: '{"items":[{"id":"i1","cost":null}]}' };
+    assert.deepEqual(JSON.parse(String(kayitMaliyetiniKoru(metin, eski).deger)), { items: [{ id: 'i1', cost: 5 }] });
+    const bozuk = { bicim: 'metin', deger: 'düz metin' };
+    assert.equal(kayitMaliyetiniKoru(bozuk, eski), bozuk);
   });
 
   test('RR-K5 (2783): kayıt süzgeci kalem, istasyon ve kişi maliyetini null yapar; maliyetsiz kayıt aynı nesne, çözülemeyen metin aynen döner', () => {

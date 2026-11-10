@@ -28,7 +28,7 @@ import { takvimGunleri, vardiyaTanimlari } from '../vardiya/disari.ts';
 import {
   adimCiktisiBul, adimKimligi, araStokHavuzuKur, bagFarklari, emirMalzemeIhtiyaclari, bagiDegisenUrunler, jsondanSatirlar, degerBicimeUyarMi, emirleriCevir, adimAdetleriCevir, hareketleriCevir, isMerkeziCevir, maliyetCevir,
   istasyonCevir, kisiCevir, makineCevir, malzemeCevir, degerCokBuyukMu, nulKarakteriVarMi, operasyonCevir, statuleriTuret, sunucuRevizyonlariyla, planAlanlariniKoru,
-  bagliDilimleriAyikla, kayitMaliyetiniSuz, rotaDilimiCevir, sayimBelgesiTablodan, sayimKartKimlikleri, sunucuKaynaklariyla, surumUyarMi, tatilTarihleri, vardiyaCevir, type EmirKaydi,
+  bagliDilimleriAyikla, kayitMaliyetiniKoru, kayitMaliyetiniSuz, rotaDilimiCevir, sayimBelgesiTablodan, sayimKartKimlikleri, sunucuKaynaklariyla, surumUyarMi, tatilTarihleri, vardiyaCevir, type EmirKaydi,
 } from './kurallar.ts';
 import { DURUM_ANAHTARI } from './disari.ts';
 import * as sorgular from './sorgular.ts';
@@ -66,7 +66,12 @@ export async function kayitlar(db: Db, kullanici: Kullanici): Promise<KayitlarCe
 // Komut ucu: ana kayıt dışındaki anahtarlar.
 export async function komutlaYaz(db: Db, kullanici: Kullanici, g: YazGovdesi, gunluk?: Gunluk): Promise<YazCevabi> {
   anaKaydiReddet(g.anahtar);
-  const { kayit } = await yaz(db, kullanici, g, gunluk);
+  // Maliyet görmeyen süzülmüş kaydı geri yazar; kayıttaki maliyet korunur (kurallar.ts kayitMaliyetiniKoru). Satır kilitlenip okunur:
+  // korunan değer yazmanın sürüm denetimindeki kayıttandır.
+  const korunmus = yetkiliMi(kullanici, MALIYET_OKUMA) || (await sorgular.surumKilitle(db, g.anahtar)) === null
+    ? g
+    : kayitMaliyetiniKoru(g, await sorgular.kayitGetir(db, g.anahtar));
+  const { kayit } = await yaz(db, kullanici, korunmus, gunluk);
   return { kayit: gorunenKayit(kullanici, kayit) };
 }
 
