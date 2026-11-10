@@ -46,8 +46,8 @@ test('ci-kapsam: yalnız belge değişince ağır işler atlanır; modül klasö
   assert.deepEqual(kapsam('pull_request', ['istemci/src/moduller/stok/NOT.md']), { sunucu: false, istemci: true, ekran: true });
 });
 
-test('ci-kapsam: ana dalda belge dışı tek dosya her işi koşturur, elle koşu ve boş fark daraltılmaz', () => {
-  assert.deepEqual(kapsam('push', ['istemci/src/moduller/stok/NOT.md', 'belgeler/a.md']), HICBIRI);
+test('ci-kapsam: ana dal gönderimi yalnız belgeyle de daraltılmaz (2705 a), elle koşu ve boş fark daraltılmaz', () => {
+  assert.deepEqual(kapsam('push', ['belgeler/a.md']), HEPSI);
   assert.deepEqual(kapsam('push', ['belgeler/a.md', 'istemci/src/moduller/stok/StokSayfa.tsx']), HEPSI);
   assert.deepEqual(kapsam('workflow_dispatch', ['belgeler/a.md']), HEPSI);
   assert.deepEqual(kapsam('pull_request', []), HEPSI);
@@ -58,4 +58,20 @@ test('ci-kapsam: taşımada eski ve yeni yol birlikte gelir, kontrol.yml farkı 
   assert.deepEqual(kapsam('pull_request', ['istemci/src/moduller/stok/X.tsx', 'istemci/src/ortak/X.tsx']), HEPSI);
   const is = readFileSync(`${KOK}.github/workflows/kontrol.yml`, 'utf8');
   assert.match(is, /degisenler=\$\(git diff --name-only --no-renames "\$taban" HEAD\)/);
+});
+
+test('kontrol.yml: ana dalda yalnız ağır test işleri iptal edilir, gruplar parçaya göre (2705 a)', () => {
+  const is = readFileSync(`${KOK}.github/workflows/kontrol.yml`, 'utf8');
+  assert.match(is, /^concurrency:\n {2}group: kontrol-\$\{\{ github\.ref == 'refs\/heads\/main' && github\.sha \|\| github\.ref \}\}\n {2}cancel-in-progress: \$\{\{ github\.event_name == 'pull_request' \}\}$/m);
+  for (const [ad, matris] of [['istemci-test', true], ['sunucu-test', true], ['ekran', true], ['windows', false]] as const) {
+    const parca = matris ? '-\\$\\{\\{ matrix\\.parca \\}\\}' : '';
+    assert.match(is, new RegExp(`\\n {2}${ad}:\\n(?: {4}.*\\n)*? {4}concurrency:\\n {6}group: kontrol-${ad}${parca}-\\$\\{\\{ github\\.event_name == 'push' && github\\.ref \\|\\| github\\.run_id \\}\\}\\n {6}cancel-in-progress: \\$\\{\\{ github\\.event_name == 'push' \\}\\}\\n`), ad);
+  }
+  const blok = (ad: string): string => {
+    const bas = is.indexOf(`\n  ${ad}:\n`);
+    assert.ok(bas >= 0, `${ad} işi yok`);
+    const sonraki = is.slice(bas + 1).search(/\n {2}[a-z-]+:\n/);
+    return sonraki === -1 ? is.slice(bas) : is.slice(bas, bas + 1 + sonraki);
+  };
+  for (const ad of ['kapsam', 'tip', 'denetim', 'lint', 'kontrol']) assert.ok(!blok(ad).includes('concurrency:'), `${ad} iptal edilmemeli`);
 });
