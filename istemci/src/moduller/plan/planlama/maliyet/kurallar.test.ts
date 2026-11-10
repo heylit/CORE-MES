@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   beklemeHesabi, bitenAdimMaliyeti, birimMaliyet, calisilir, katkiPayi, fasonDurumu, genelGiderOrani, fasonIsleri, genelGiderHesabi, isTanimlari, maliyetBaglami, malzemeler, malzemeTutari, mesaiAtamasi,
-  mesaiBedeli, mesaiSistemi, maliyetSistemi, planMaliyeti, sayiGirdisi, siparisMaliyeti, sonrakiKimlik, sureSapmasi, takvimKur, talasKredisi, kisaTl,
+  mesaiBedeli, mesaiSistemi, planMaliyeti, sayiGirdisi, siparisMaliyeti, sonrakiKimlik, sureSapmasi, takvimKur, talasKredisi, kisaTl,
 } from './kurallar.ts';
 import { mesaiTutari } from './kurallar.ts';
 import { ornekCalisma } from './test-verisi.ts';
