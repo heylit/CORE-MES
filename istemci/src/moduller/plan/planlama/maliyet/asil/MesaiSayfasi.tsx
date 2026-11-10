@@ -29,7 +29,8 @@ export function MesaiSayfasi({ c, T, para, yaz }: { c: PlanlamaCalismasi; T: Tak
   const red = mesaiKararlari(D).filter((k) => k.karar === 'red').length;
   // Grup saat maliyeti istemciye gelmez (2742); bu sayfadaki tutar her zaman yalın ücretledir. Kişi bazlı seçiliyken bunu açıkça söyler.
   const ucret = mesaiUcreti(D);
-  const yalin = ucret === null ? 'mesai ücreti girilmemiş' : `${sayi(ucret, 0)} TL/sa, ek mesai ×${sayi(Y.mesaiCarpan, 1)}`;
+  // Maliyet görmeyen rolde ücret tutarı alt metinde de görünmez; yalnız çarpan.
+  const yalin = ucret === null ? 'mesai ücreti girilmemiş' : para ? `${sayi(ucret, 0)} TL/sa, ek mesai ×${sayi(Y.mesaiCarpan, 1)}` : `ek mesai ×${sayi(Y.mesaiCarpan, 1)}`;
   const yalinNotu = m.kisiBazli ? `yalın ücretle (${yalin}); grup saat maliyeti planın değerlendirmesinde` : yalin;
   return (
     <>

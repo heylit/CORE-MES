@@ -22,6 +22,10 @@ import { ufukGunu } from '../ufuk-olcegi.ts';
 // tutulur. Ayarlar ve elle tahmin çalışmanın `D.yillik` alanına `komut.degistir` ile yazılır (plan.yaz, 223 a). TL yalnız maliyet okuyabilen görür.
 
 type Bitti = Extract<YillikDurum, { durum: 'bitti' }>;
+const MESAI_YOK_IPUCU: Record<Bitti['mesai'], string> = {
+  tl: 'Mesai bedeli bilinmiyor, ek mesai önerilmedi', sira: 'Mesai bedeli bilinmiyor, ek mesai önerilmedi',
+  yetkisiz: 'Mesai bedeli bu rolde okunamıyor, ek mesai önerilmedi', okunamadi: 'Mesai bedeli okunamadı, ek mesai önerilmedi',
+};
 const AYAR_ADI: Record<string, string> = {
   tahmin: 'Talep tahmini', buyume: 'Yıllık büyüme %', mesaiMaks: 'Ek mesai sınırı %', yatirim: 'Yatırım adayları', teslimAy: 'Yeni tezgâhın en erken geliş ayı',
   gecTL: 'Geç teslim bedeli %/gün', stokTL: 'Stok taşıma %/ay',
@@ -336,7 +340,7 @@ function Sonuc({ b, calisma, fg, yaz, ayarDegistir }: { b: Bitti; calisma: Planl
     ) },
     { anahtar: 'ort', baslik: 'Ortalama yük', hizala: 'sag', hucre: (x) => `%${sayi(x.ort * 100, 0)}` },
     { anahtar: 'en', baslik: 'En yüklü dönem', hucre: (x) => `${P[x.enY.t]?.uzun ?? ''} · %${sayi(x.enY.o * 100, 0)}` },
-    { anahtar: 'o', baslik: 'Ek mesai', hizala: 'sag', hucre: (x) => (b.m.mesaiBilinmez.includes(x.g) ? <span title="Mesai bedeli bilinmiyor, ek mesai önerilmedi">—</span> : `${sayi(x.o, 0)} sa`) },
+    { anahtar: 'o', baslik: 'Ek mesai', hizala: 'sag', hucre: (x) => (b.m.mesaiBilinmez.includes(x.g) ? <span title={MESAI_YOK_IPUCU[b.mesai]}>—</span> : `${sayi(x.o, 0)} sa`) },
     ...(fg ? [{ anahtar: 'gm', baslik: '1 saat ek kapasitenin değeri', hizala: 'sag' as const, hucre: (x: Darbogaz) => (x.gm >= YL_ACIL
       ? <span className="tc-pyu-ton" data-ton="hata">kapasite yetmiyor</span> : x.gm > 0.5 ? <span className="tc-pyu-grup"><b className="mono">{tl(x.gm)}</b><small>en yüksek dönem</small></span> : '0') }] : []),
     { anahtar: 'gd', baslik: 'Dar dönem', hizala: 'sag', hucre: (x) => `${x.gD} / ${P.length}` },

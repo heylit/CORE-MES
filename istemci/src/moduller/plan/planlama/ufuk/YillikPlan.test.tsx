@@ -167,8 +167,9 @@ describe('Yıllık plan', () => {
     expect(screen.getByText(/^Mesai bedeli bu rolde okunamıyor; ek mesai önerilmedi\./)).toBeTruthy();
     expect(screen.queryByText(/^Mesai bedeli bilinmiyor/)).toBeNull();
     expect(cozumler[1]?.lp).toMatch(/ 0 <= o_g0_0 <= 0\n/);
-    // Arayüz notu 1: bedeli bilinmeyen grupta ek mesai hücresi "0 sa" değil "—".
-    expect(screen.getAllByTitle('Mesai bedeli bilinmiyor, ek mesai önerilmedi').length).toBeGreaterThan(0);
+    // Arayüz notu 1: değeri olmayan grupta ek mesai hücresi "0 sa" değil "—"; ipucu üstteki uyarıyla aynı nedeni söyler.
+    expect(screen.getAllByTitle('Mesai bedeli bu rolde okunamıyor, ek mesai önerilmedi').length).toBeGreaterThan(0);
+    expect(screen.queryByTitle('Mesai bedeli bilinmiyor, ek mesai önerilmedi')).toBeNull();
     cleanup(); yillikDurumSifirla();
     sunucuKur(YONETICI, calismaKaydi());
     cozucuKur();
