@@ -103,8 +103,9 @@ export function veriSagligi(g: VeriSagligiGirdisi): VeriSagligiCevabi {
       kategori('terminsiz-emir', 'Teslimi olmayan emir', 'Gecikmesi hesaplanmaz; sıralamada en sona itilir.', terminsiz, emirler?.length ?? null),
       kategori('arizali-makine', 'Arızada ya da bakımda makine',
         'Bitişi girilmemiş duruş 8 saat sürer sayılır; makine sonra çalışır kabul edilir.', arizali, makineler?.length ?? null),
+      // 2601 a: ücret her okumada Finans istasyon saat maliyetiyle ezilir; çalışmada kalan farklı elle değer yalnız gösterilir.
       kategori('elle-tezgah-ucreti', 'Planda elle değiştirilmiş tezgâh ücreti',
-        'Ana veri değişmedikçe planlama çalışmasındaki elle ücret kullanılır; istasyon maliyetinden farklıdır.', elle, g.tezgahlar?.length ?? null),
+        "Finans'tan farklı elle ücret yok sayıldı; planda Finans istasyon saat maliyeti kullanılır.", elle, g.tezgahlar?.length ?? null),
     ],
   };
 }

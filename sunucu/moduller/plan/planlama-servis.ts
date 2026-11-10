@@ -27,7 +27,7 @@ import { defterSatirlari } from './degisiklik-defteri-kurallar.ts';
 import { kaynakDilimiOku } from './girdi/kaynaklar.ts';
 import { kapasitedenIzinler, type KaynakDilimiOkumasi } from './girdi/kaynaklar-kurallar.ts';
 import { hedefMotorAyari } from './motor-ayari.ts';
-import { calismayaMotorAyari, type MotorOlcegi } from './motor-ayari-kurallar.ts';
+import { calismayaMotorAyari, genelGiderAlanlariniCikar, type MotorOlcegi } from './motor-ayari-kurallar.ts';
 import { sureOgrenmesi } from './ogrenme.ts';
 import { planGirdisi, yeniCalisma, type KaynakOkumasi } from './plan-girdisi.ts';
 import {
@@ -35,7 +35,7 @@ import {
 } from './planlama-kurallar.ts';
 import { satinAlmaCalismasi } from './satin-alma-gorunumu.ts';
 import { emirTutari, satirKuru } from './kurallar.ts';
-import { calisanAdimlar, canliOzeti, okumaBellegiyle, planFinansmanOrani, planlanacakIsler } from './servis.ts';
+import { calisanAdimlar, canliOzeti, okumaBellegiyle, planFinansmanOrani, planGenelGiderSaatBasi, planlanacakIsler, type PlanGenelGideri } from './servis.ts';
 import * as sorgular from './sorgular.ts';
 import { teklifDenemesi, type DenemeSonucu, type TeklifTaslagi } from './teklif-denemesi.ts';
 
@@ -60,7 +60,8 @@ export function planlamaYazmaDenetimi(kullanici: Kullanici, anahtar: string): vo
 }
 
 export async function planlamaKayitlari(db: Db): Promise<KayitlarCevabi> {
-  return { kayitlar: await sorgular.planlamaKayitlari(db) };
+  const kayitlar = await sorgular.planlamaKayitlari(db);
+  return { kayitlar: kayitlar.map((k) => (k.anahtar === PLANLAMA_ANAHTARI ? { ...k, deger: genelGiderAlanlariniCikar(k.deger) } : k)) };
 }
 
 export async function planlamaYaz(db: Db, kullanici: Kullanici, g: PlanlamaYazGovdesi): Promise<YazCevabi> {
@@ -73,7 +74,7 @@ export async function planlamaYaz(db: Db, kullanici: Kullanici, g: PlanlamaYazGo
   // Bitiş tarihi akışını sunucu yazar (455/2 a); eklenen satırlarla değer yeniden boyut denetiminden geçer.
   const calisma = g.anahtar === PLANLAMA_ANAHTARI && g.bicim === 'json';
   const onceki = calisma && mevcut !== null ? (await sorgular.planlamaKaydi(db, g.anahtar))?.deger : null;
-  const deger = calisma ? bitisAkisiEkle(g.deger, onceki, kullanici.ad, Date.now()) : g.deger;
+  const deger = calisma ? bitisAkisiEkle(genelGiderAlanlariniCikar(g.deger), onceki, kullanici.ad, Date.now()) : g.deger;
   if (deger !== g.deger && degerCokBuyukMu(deger)) throw cokBuyuk(BUYUK_ILETISI);
   const satir = { anahtar: g.anahtar, bicim: g.bicim, deger, kisiId: kullanici.id };
   const kayit = mevcut === null ? await sorgular.planlamaKaydiEkle(db, satir) : await sorgular.planlamaKaydiGuncelle(db, satir);
@@ -366,9 +367,11 @@ export async function planlamaCalismasi(db: Db, kullanici: Kullanici, simdi: num
   if (g === null) return { calisma: null, surum: k.surum };
   // Birleşme kayıtta olmayan planTL'yi düşürebilir; sayfanın gördüğü ve geri yazdığı da aynı amacı taşır (yazıp okuma eşit kalır).
   // Motor ayarı, ölçek ve finansman oranı girdi kurulurken aynı istekte okundu; oran gününe bağlıdır, gün başkaysa yeniden okunur.
-  const { degerler, olcek, finansman } = k.okunan!;
-  const fin = finansman.gun === tesisGunu(simdi) ? finansman.oran : await planFinansmanOrani(db, tesisGunu(simdi));
-  return { calisma: calismayaMotorAyari(g.S, degerler, fin, olcek) as PlanlamaCalismasiCevabi['calisma'], surum: k.surum, kaynakDegisikligi: g.kaynakDegisikligi ?? null };
+  const { degerler, olcek, finansman, genelGider } = k.okunan!;
+  const gun = tesisGunu(simdi);
+  const fin = finansman.gun === gun ? finansman.oran : await planFinansmanOrani(db, gun);
+  const gg = genelGider.gun === gun ? genelGider.oran : await planGenelGideri(db, kullanici, gun);
+  return { calisma: calismayaMotorAyari(g.S, degerler, fin, olcek, undefined, gg) as PlanlamaCalismasiCevabi['calisma'], surum: k.surum, kaynakDegisikligi: g.kaynakDegisikligi ?? null };
 }
 
 // 657 a: kayıt yoksa sayfa boş çalışmayı kendisi açar ve düzenlenebilir başlar. Çalışma çerçevenin ilk açılışındaki gibi Reçete ve Rota
@@ -409,7 +412,14 @@ interface GirdiOkumasi {
   degerler: Awaited<ReturnType<typeof hedefMotorAyari>>['degerler'];
   olcek: MotorOlcegi;
   finansman: { gun: string; oran: Awaited<ReturnType<typeof planFinansmanOrani>> };
+  genelGider: { gun: string; oran: PlanGenelGideri };
 }
+// 2601 a: genel gider finans rakamıdır; finans.maliyet-oku olmayan okuyucu için okunmaz (istasyon maliyeti gibi, kaynaklar.ts).
+// Güvenlik K1: okuyamayana kayıttaki değer de gitmez; genelGider null, ekran "gizli" gösterir.
+const GENEL_GIDER_OKUMA = 'finans.maliyet-oku';
+const OKUNAMAYAN_GENEL_GIDER: PlanGenelGideri = { saatBasi: null, gizli: true };
+const planGenelGideri = async (db: Db, kullanici: Kullanici, gun: string): Promise<PlanGenelGideri> =>
+  (islemVarMi(kullanici, GENEL_GIDER_OKUMA) ? planGenelGiderSaatBasi(db, gun) : OKUNAMAYAN_GENEL_GIDER);
 async function planlamaGirdisiOkumasi(db: Db, kullanici: Kullanici, bosCalismaAni?: number): Promise<{ surum: number | null; girdi: PlanCozumKaynagi | null; okunan?: GirdiOkumasi }> {
   const satir = await sorgular.planlamaKaydi(db, PLANLAMA_ANAHTARI);
   const kayitli = kayitDegeri(satir) as { surum?: unknown; D?: unknown } | null;
@@ -423,14 +433,15 @@ async function planlamaGirdisiOkumasi(db: Db, kullanici: Kullanici, bosCalismaAn
   const { degerler } = await hedefMotorAyari(db, null);
   const finGunu = tesisGunu(bosCalismaAni ?? Date.now());
   const fin = await planFinansmanOrani(db, finGunu);
+  const gg = await planGenelGideri(db, kullanici, finGunu);
   // 1714: öğrenme kapalıyken okunmaz; değer hep açıkça verilir ki kayıtta kalmış eski değer kullanılmasın.
   const ogren = degerler.ogrenme === 'acik' ? await sureOgrenmesi(db) : null;
   const kaynakDilimi = await tipliKaynakOkumasi(db, kullanici, kaynak);
   const olcek = await motorOlcegi(db);
   return {
     surum,
-    girdi: { calisma: calismayaMotorAyari(calisma, degerler, fin, olcek, ogren), kayit, kaynak: { durum: kaynak.durum, ek }, kaynakDilimi },
-    okunan: { degerler, olcek, finansman: { gun: finGunu, oran: fin } },
+    girdi: { calisma: calismayaMotorAyari(calisma, degerler, fin, olcek, ogren, gg), kayit, kaynak: { durum: kaynak.durum, ek }, kaynakDilimi },
+    okunan: { degerler, olcek, finansman: { gun: finGunu, oran: fin }, genelGider: { gun: finGunu, oran: gg } },
   };
 }
 

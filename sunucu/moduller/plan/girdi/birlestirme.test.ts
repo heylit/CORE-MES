@@ -37,7 +37,8 @@ describe('tipli kaynak birleştirmesi (1720 kaynak)', () => {
     const yeni = kaynakDilimiKur(OKUMA, elle);
     assert.equal(farkMetni(girdiFarki(D0['tezgahlar'], yeni.tezgahlar)), '');
     assert.deepEqual([D0['tatiller'], D0['vardiyalar'], D0['devamsizlik'], D0['urunler']], [yeni.tatiller, yeni.vardiyalar, yeni.devamsizlik, ['eski yol']]);
-    assert.deepEqual((D0['tezgahlar'] as { ucret: unknown }[])[0]?.ucret, 950, 'elle ücret eski birleştirmenin yazdığından değil açık çalışmadan');
+    // 2601 a ile ücret Finans'tan ezilir; elle verinin açık çalışmadan geldiğini elle verim gösterir.
+    assert.deepEqual((D0['tezgahlar'] as { verim: unknown }[])[0]?.verim, 0.8, 'elle verim eski birleştirmenin yazdığından değil açık çalışmadan');
     assert.ok(alanlar.includes('urunler') && alanlar.includes('personel'));
   });
 
