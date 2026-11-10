@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type FocusEvent as ReactFocusEvent, type KeyboardEvent as ReactKeyboardEvent, type MutableRefObject, type PointerEvent as ReactPointerEvent, type TouchEvent as ReactTouchEvent } from 'react';
 import { Simge } from '../../../../../ortak/arayuz/index.ts';
 import { etkiAcik } from '../../../../../ortak/veri/etki.ts';
-import { tasimaSaati } from './gonder.ts';
+import { isTasiOnizle, tasimaSaati, type IsTasiOnizlemesi } from './gonder.ts';
 import type { PlanIslemi } from '../kurallar.ts';
 import { degisken } from '../ortak.tsx';
 import {
@@ -10,6 +10,8 @@ import {
 } from './kurallar.ts';
 import { ankraj, kaydirici, type Ortam } from './Pano.tsx';
 
+// Önizleme sürüklerken her adımda değil, çubuk bu kadar durunca sorulur (hesap sunucuda motor derlemesi ister).
+const ONIZLEME_BEKLEMESI_MS = 150;
 // Bırakılan çubuğun yeni planı bekleme sınırı; komut bittikten sonra plan bu kadar içinde gelmezse çubuk eski yerine döner.
 const BIRAKMA_SINIRI_MS = 15_000;
 const BIRAKMA_BEKLEMESI_MS = 3_000;
@@ -115,6 +117,14 @@ export function Izgara({ ort, pano, parla }: { ort: Ortam; pano: MutableRefObjec
   };
   const suruk = useRef<Suruk | null>(null);
   const birakti = useRef(false);
+  // İtme önizlemesi (2790 a, 2794): sürüklenen işin gönderilecek yeri için sunucunun hesabı. Aynı emrin itilen ya da çekilen adımları kendi
+  // satırlarında kesikli çubukla gösterilir; geçersiz taşıma kırmızı çerçeve ve nedenle. Eski (yarışan) cevap atılır.
+  const itme = useRef<{ anahtar: string; zaman: number; seri: number; cevap: IsTasiOnizlemesi | null; hayaletler: HTMLElement[] }>({ anahtar: '', zaman: 0, seri: 0, cevap: null, hayaletler: [] });
+  const itmeTemizle = () => {
+    const o = itme.current; window.clearTimeout(o.zaman); o.seri += 1; o.anahtar = ''; o.cevap = null;
+    for (const h of o.hayaletler) h.remove();
+    o.hayaletler = [];
+  };
   // Bırakılan çubuk yeni yeri gelene kadar bırakıldığı yerde durur: yoksa komut sürerken eski yerine döner, plan gelince yeniden kayar
   // (yanıp sönme). Taşıma önce yalnız kilidi yazar, yer kendiliğinden uygulanan planla gelir: çubuk yeri değişince (ya da başka satıra
   // geçip yeniden çizilince) ya da ikinci plan gelince geçişsiz oturur. Komut düşerse (plan hiç gelmezse) kısa süre sonra eski yerine döner.
@@ -135,7 +145,7 @@ export function Izgara({ ort, pano, parla }: { ort: Ortam; pano: MutableRefObjec
     if (ort.isleniyor || !b || b.plan > 0) return;
     window.clearTimeout(b.zaman); b.zaman = window.setTimeout(() => { if (birakilan.current === b && b.plan === 0) birakilaniBirak(); }, BIRAKMA_BEKLEMESI_MS);
   }, [ort.isleniyor]);
-  useEffect(() => () => { birakilaniBirak(); }, []);
+  useEffect(() => () => { birakilaniBirak(); itmeTemizle(); }, []);
   const yuzen = useRef<HTMLDivElement | null>(null);
   const bilgiZamani = useRef(0);
   // Sürüklenen çubuk imleci izler ve en üstte çizilir; onu atlamazsak hedef hep kendi satırı olur, geçişte titrer.
@@ -167,6 +177,7 @@ export function Izgara({ ort, pano, parla }: { ort: Ortam; pano: MutableRefObjec
     } else { s.el.style.removeProperty('--dx'); s.el.style.removeProperty('--dy'); }
     s.hayalet?.remove();
     if (s.hedef) delete s.hedef.dataset.hedef;
+    itmeTemizle();
     yuzenGizle();
   };
   // Önizleme: gönderilecek saat ve tezgâh; çubuk oraya oturur, ipucu ve çakışma ona göre yazılır.
@@ -187,7 +198,11 @@ export function Izgara({ ort, pano, parla }: { ort: Ortam; pano: MutableRefObjec
       dy = s.py - s.y0 + (pano.current?.scrollTop ?? s.st0) - s.st0 + (s.dis?.scrollTop ?? s.dt0) - s.dt0;
     }
     s.el.style.setProperty('--dx', `${(S - s.S) * k}px`); s.el.style.setProperty('--dy', `${dy}px`);
-    const C = S + (s.C - s.S); const cak = yardim && cakisiyor(s.id, m, S, C);
+    const C = S + (s.C - s.S);
+    const on = itmeOnizle(s, m, S);
+    const gecersiz = on !== null && !on.gecerli;
+    // Sunucu itmeyi hesapladıysa üst üste binme ondan okunur (itilenler kayar); hesap gelmeden eski kural.
+    const cak = gecersiz || (yardim && on === null && cakisiyor(s.id, m, S, C));
     if (cak) s.el.dataset.cakisma = ''; else delete s.el.dataset.cakisma;
     if (yardim) {
       if (!s.hayalet && s.el.parentElement) {
@@ -195,9 +210,42 @@ export function Izgara({ ort, pano, parla }: { ort: Ortam; pano: MutableRefObjec
         for (const v of ['--x', '--w']) h.style.setProperty(v, s.el.style.getPropertyValue(v));
         s.el.parentElement.insertBefore(h, s.el); s.hayalet = h;
       }
-      yuzenGoster([`${m} · ${tz(D, S)} → ${tz(D, C)}`, ...(uygunsuz ? ['Bu tezgâha uygun değil; kendi tezgâhında kalır'] : []), ...(cak ? ['Başka işle üst üste; bırakınca motor yeniden dizer'] : []), ...(s.klavye ? ['Enter taşır, Esc vazgeçer'] : [])], x, y, cak ? 'cakisma' : 'tasima');
+      const neden = on?.ileti ? [on.ileti] : cak ? ['Başka işle üst üste; bırakınca motor yeniden dizer'] : [];
+      yuzenGoster([`${m} · ${tz(D, S)} → ${tz(D, C)}`, ...(uygunsuz ? ['Bu tezgâha uygun değil; kendi tezgâhında kalır'] : []), ...neden, ...(s.klavye ? ['Enter taşır, Esc vazgeçer'] : [])], x, y, cak ? 'cakisma' : 'tasima');
     }
     return { m, S };
+  };
+  // Gönderilecek yer değişince önceki hesap düşer; çubuk ONIZLEME_BEKLEMESI_MS durunca sunucuya sorulur, cevap gelince önizleme yeniden
+  // çizilir. Dönen: bu yerin hesabı (henüz yoksa null).
+  const itmeOnizle = (s: Suruk, m: string, S: number): IsTasiOnizlemesi | null => {
+    const o = itme.current; const anahtar = `${s.id}|${m}|${String(S)}`;
+    if (!ort.tasi) return null;
+    if (o.anahtar === anahtar) return o.cevap;
+    itmeTemizle(); o.anahtar = anahtar;
+    const seri = o.seri;
+    o.zaman = window.setTimeout(() => {
+      void isTasiOnizle({ isId: s.id, tezgah: m, baslangic: S }).then((c) => {
+        if (suruk.current !== s || itme.current.seri !== seri || c === null) return;
+        itme.current.cevap = c; itmeCiz(c, s.id);
+        onizle(s);
+      });
+    }, ONIZLEME_BEKLEMESI_MS);
+    return null;
+  };
+  // İtilen ve çekilen adımlar kendi tezgâh satırında, yeni yerinde kesikli çubuk olur (sürüklenen çubuğun eski yerindeki gibi).
+  const itmeCiz = (c: IsTasiOnizlemesi, id: string) => {
+    const o = itme.current;
+    for (const h of o.hayaletler) h.remove();
+    o.hayaletler = [];
+    if (!c.gecerli) return;
+    for (const x of c.isler) {
+      if (x.isId === id || x.tur === 'tasinan') continue;
+      const serit = alan.current?.querySelector<HTMLElement>(`.tc-pym-tp-satir[data-m="${secKacis(x.tezgah)}"] .tc-pym-tp-zaman`);
+      if (!serit) continue;
+      const h = document.createElement('div'); h.className = 'tc-pym-tp-hayalet'; h.dataset.itme = x.tur; h.setAttribute('aria-hidden', 'true');
+      h.style.setProperty('--x', `${x.S * k}px`); h.style.setProperty('--w', `${Math.max(3, (x.C - x.S) * k)}px`);
+      serit.appendChild(h); o.hayaletler.push(h);
+    }
   };
   // Kenarda kayma: imleç panonun sol (etiket sütunundan sonra) ya da sağ kenarına yaklaştıkça çizelge o yöne hızlanarak kayar. Üst ve alt
   // kenarda önce sayfanın kaydırıcısı kayar (pano ondan uzunsa alttaki tezgâhlar görünür alanın dışındadır), sonra panonun kendisi.

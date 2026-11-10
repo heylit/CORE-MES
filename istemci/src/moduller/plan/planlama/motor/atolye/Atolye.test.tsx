@@ -545,6 +545,64 @@ describe('PlanlamaAtolyesi', () => {
     post.mockRestore();
   });
 
+  it('2789: sürükleme durunca itme önizlemesi sorulur; itilenler kesikli çubukla çizilir, eski cevap atılır, bırakınca sunucunun nedeni bildirimde', async () => {
+    let cevapla: ((c: unknown) => void)[] = [];
+    const get = vi.spyOn(api, 'get').mockImplementation(((yol: string) => (yol.startsWith('/plan/planlama-calismasi/is-tasi-onizlemesi')
+      ? new Promise((r) => { cevapla.push(r); }) : Promise.reject(new Error('yok')))) as never);
+    const post = vi.spyOn(api, 'post').mockResolvedValue({ calismaSurumu: 9, oncekiSurum: 8, ileti: 'Aynı emrin 1 adımı itildi.' });
+    ac();
+    const cubuk = document.querySelector('[data-id="2.40"]') as HTMLElement;
+    const m = cubuk.closest<HTMLElement>('.tc-pym-tp-satir')?.dataset['m'] ?? '';
+    fireEvent.pointerDown(cubuk, { button: 0, clientX: 100, clientY: 10, pointerId: 1 });
+    fireEvent.pointerMove(cubuk, { clientX: 140, clientY: 10, pointerId: 1 });
+    // Her harekette değil, durunca sorulur.
+    expect(get.mock.calls.filter(([y]) => String(y).includes('is-tasi-onizlemesi'))).toHaveLength(0);
+    await waitFor(() => expect(cevapla).toHaveLength(1));
+    const ilkYol = String(get.mock.calls.find(([y]) => String(y).includes('is-tasi-onizlemesi'))?.[0]);
+    expect(ilkYol).toContain('isId=2.40'); expect(ilkYol).toContain(`tezgah=${encodeURIComponent(m)}`);
+    const ilk = cevapla[0]!;
+    fireEvent.pointerMove(cubuk, { clientX: 170, clientY: 10, pointerId: 1 });
+    await waitFor(() => expect(cevapla).toHaveLength(2));
+    // Önceki yerin geç gelen cevabı atılır: hayalet çizilmez.
+    ilk({ gecerli: true, ileti: null, isler: [{ isId: 'X1', tezgah: m, S: 300, C: 302, eskiTezgah: m, eskiS: 299, tur: 'itilen' }] });
+    await new Promise((r) => { setTimeout(r, 20); });
+    expect(document.querySelector('.tc-pym-tp-hayalet[data-itme]')).toBeNull();
+    cevapla[1]!({ gecerli: true, ileti: 'Aynı emrin 1 adımı itilecek.', isler: [
+      { isId: '2.40', tezgah: m, S: 210, C: 212, eskiTezgah: m, eskiS: 208, tur: 'tasinan' },
+      { isId: 'X1', tezgah: m, S: 300, C: 302, eskiTezgah: m, eskiS: 299, tur: 'itilen' },
+    ] });
+    await waitFor(() => expect(document.querySelectorAll('.tc-pym-tp-hayalet[data-itme="itilen"]')).toHaveLength(1));
+    expect(document.querySelector('.tc-pym-tp-hayalet[data-itme="tasinan"]')).toBeNull();
+    expect(cubuk.dataset['cakisma']).toBeUndefined();
+    expect(screen.getByText('Aynı emrin 1 adımı itilecek.')).toBeTruthy();
+    fireEvent.pointerUp(cubuk, { clientX: 170, clientY: 10, pointerId: 1 });
+    expect(document.querySelector('.tc-pym-tp-hayalet[data-itme]')).toBeNull();
+    await waitFor(() => expect(post).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(screen.getByText(/Aynı emrin 1 adımı itildi\./)).toBeTruthy());
+    cevapla = [];
+    get.mockRestore(); post.mockRestore();
+  });
+
+  it('2789: sunucu taşımayı geçersiz sayarsa çubuk kırmızı çerçeve alır, ipucunda nedeni yazar; uç yoksa eski önizleme sürer', async () => {
+    let gecerli = false;
+    const get = vi.spyOn(api, 'get').mockImplementation(((yol: string) => (yol.startsWith('/plan/planlama-calismasi/is-tasi-onizlemesi')
+      ? (gecerli ? Promise.reject(new ApiHatasi(404, { kod: 'BULUNAMADI', mesaj: 'yok' })) : Promise.resolve({ gecerli: false, ileti: 'Plan ufku aşılır; taşıma yapılmaz.', isler: [] }))
+      : Promise.reject(new Error('yok')))) as never);
+    ac();
+    const cubuk = document.querySelector('[data-id="2.40"]') as HTMLElement;
+    fireEvent.pointerDown(cubuk, { button: 0, clientX: 100, clientY: 10, pointerId: 1 });
+    fireEvent.pointerMove(cubuk, { clientX: 160, clientY: 10, pointerId: 1 });
+    await waitFor(() => expect(cubuk.dataset['cakisma']).toBe(''));
+    expect(screen.getByText('Plan ufku aşılır; taşıma yapılmaz.')).toBeTruthy();
+    gecerli = true;
+    fireEvent.pointerMove(cubuk, { clientX: 175, clientY: 10, pointerId: 1 });
+    await waitFor(() => expect(get.mock.calls.filter(([y]) => String(y).includes('is-tasi-onizlemesi'))).toHaveLength(2));
+    await waitFor(() => expect(screen.queryByText('Plan ufku aşılır; taşıma yapılmaz.')).toBeNull());
+    fireEvent.keyDown(cubuk, { key: 'Escape' });
+    fireEvent.pointerCancel(cubuk, { pointerId: 1 });
+    get.mockRestore();
+  });
+
   it('2788: bırakılan çubuk yeni yeri gelene kadar bırakıldığı yerde durur, sayfa yeniden kurulmaz; yeni planda geçişsiz oturur', async () => {
     const post = vi.spyOn(api, 'post').mockResolvedValue({ calismaSurumu: 9, oncekiSurum: 8 });
     const c = ornekCalisma();
