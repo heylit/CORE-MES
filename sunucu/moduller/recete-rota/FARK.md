@@ -253,7 +253,8 @@ Derlenmiş planlama sayfası yamada yok: birleştirmede `node istemci/src/modull
 - `GET /recete-rota/kayitlar` ve `POST /recete-rota/kayitlar/yaz` cevabı `finans.maliyet-oku` taşımayana prototipin `items[].cost`, `stations[].cost`,
   `people[].cost` alanlarını null verir. Birim maliyetin sahibi Finans'tır; durum ucu da maliyet dilimini yalnız bu yetkiyle verir. Önceki davranış: kayıt süzülmeden
   dönüyordu, eski çerçeveden ya da örnek veriden kalmış maliyeti maliyet görmeyen rol okuyabiliyordu (Veri, 2782 madde 3).
-- Kayıttaki eski değer silinmez (veri dönüştüren göç kullanıcıya sorulur); süzgeç yalnız cevaptadır. Maliyet görmeyen süzülmüş kaydı geri yazarsa gelen null
-  cost kayıttaki aynı kimlikli kalemin değeriyle korunur (Veri N1); kimliksiz ya da yeni kalem null kalır. Recete_rota_kayit_gecmisi tablosunu okuyan uç yok.
+- Kayıttaki eski değer silinmez (veri dönüştüren göç kullanıcıya sorulur); süzgeç yalnız cevaptadır. Maliyet görmeyenin yazmasında gelen cost yok sayılır
+  (Güvenlik K1, 2601 a): kayıttaki aynı kimlikli kalemin değeri kalır, yoksa null olur; süzülmüş kaydın geri yazması maliyeti silmez (Veri N1). Önceki davranış: maliyet
+  görmeyen yazar kayda dolu cost yazabiliyordu. Recete_rota_kayit_gecmisi tablosunu okuyan uç yok.
 - Test `recete-rota.test.ts` RR-25, RR-25b; `kurallar.test.ts` RR-K5, RR-K6.
 

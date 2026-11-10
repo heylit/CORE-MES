@@ -197,11 +197,11 @@ describe('recete-rota kayıt deposu (gerçek PostgreSQL)', () => {
       ...belge, items: [{ id: 'i1', code: 'HM-1', cost: null, stock: 3 }, { id: 'i2', code: 'HM-2', cost: null }, 'bozuk'],
       stations: [{ id: 's1', cost: null }], people: [{ id: 'p1', cost: null, name: 'Deneme kişi' }],
     };
-    const yazilan = await yaz(yazar, { anahtar: a, bicim: 'json', deger: belge, beklenenSurum: null });
+    // Kaydı maliyet gören yazar kurar: maliyet görmeyenin gönderdiği cost yok sayılır (RR-25b).
+    const yazilan = await yaz(maliyetciYazar, { anahtar: a, bicim: 'json', deger: belge, beklenenSurum: null });
     assert.equal(yazilan.statusCode, 200, yazilan.body);
-    // Yazmanın geri dönen kaydı da süzülür: yazar maliyet görmez.
-    assert.deepEqual((yazilan.json() as { kayit: Kayit }).kayit.deger, suzulmus);
-    const metin = await yaz(yazar, { anahtar: m, bicim: 'metin', deger: JSON.stringify(belge), beklenenSurum: null });
+    assert.deepEqual((yazilan.json() as { kayit: Kayit }).kayit.deger, belge);
+    const metin = await yaz(maliyetciYazar, { anahtar: m, bicim: 'metin', deger: JSON.stringify(belge), beklenenSurum: null });
     assert.equal(metin.statusCode, 200, metin.body);
     for (const cerez of [okur, sayfali, yazar]) {
       assert.deepEqual((await kayit(cerez, a))?.deger, suzulmus);
@@ -212,18 +212,24 @@ describe('recete-rota kayıt deposu (gerçek PostgreSQL)', () => {
     // Süzgeç yalnız cevaptadır; kayıt göçsüz kalır (silme kullanıcıya sorulur).
     const tablo = await vt().tek<{ deger: unknown }>('SELECT deger FROM recete_rota_kayit WHERE anahtar = $1', [a]);
     assert.deepEqual(tablo?.deger, belge);
+    // Yazmanın geri dönen kaydı da süzülür: maliyet görmeyen yazar geri yazınca kayıtta kalan maliyeti cevapta görmez.
+    const geri = await yaz(yazar, { anahtar: a, bicim: 'json', deger: suzulmus, beklenenSurum: (await kayit(yazar, a))!.surum });
+    assert.equal(geri.statusCode, 200, geri.body);
+    assert.deepEqual((geri.json() as { kayit: Kayit }).kayit.deger, suzulmus);
+    assert.deepEqual((await vt().tek<{ deger: unknown }>('SELECT deger FROM recete_rota_kayit WHERE anahtar = $1', [a]))?.deger, belge);
   });
 
-  test('RR-25b (2783, Veri N1): maliyet görmeyen süzülmüş kaydı geri yazınca kayıttaki maliyet silinmez; yeni ya da kimliksiz kalem null kalır', async () => {
+  test('RR-25b (2783, Veri N1, Güvenlik K1): maliyet görmeyenin yazmasında cost yok sayılır; süzülmüş kaydın geri yazması maliyeti silmez, dolu cost kaydı değiştirmez', async () => {
     for (const bicim of ['json', 'metin'] as const) {
       const a = yeniAnahtar();
       const belge = { name: 'Deneme', items: [{ id: 'i1', cost: 12.5 }, { cost: 7 }], stations: [{ id: 's1', cost: 3 }], people: [{ id: 'p1', cost: 0 }] };
-      const ilk = await yaz(yazar, { anahtar: a, bicim, deger: bicim === 'json' ? belge : JSON.stringify(belge), beklenenSurum: null });
+      const ilk = await yaz(maliyetciYazar, { anahtar: a, bicim, deger: bicim === 'json' ? belge : JSON.stringify(belge), beklenenSurum: null });
       assert.equal(ilk.statusCode, 200, ilk.body);
       const okunan = (await kayit(yazar, a))!;
       const gorulen = (bicim === 'json' ? okunan.deger : JSON.parse(String(okunan.deger))) as typeof belge;
       assert.deepEqual(gorulen.items, [{ id: 'i1', cost: null }, { cost: null }]);
-      const geri = { ...gorulen, name: 'Değişti', items: [...gorulen.items, { id: 'i2', cost: null }] };
+      // Güvenlik K1: dolu gönderilen cost da yok sayılır (i1 99 kayıtta 12.5 kalır, yeni i2 5 null olur).
+      const geri = { ...gorulen, name: 'Değişti', items: [{ id: 'i1', cost: 99 }, gorulen.items[1]!, { id: 'i2', cost: 5 }] };
       const ikinci = await yaz(yazar, { anahtar: a, bicim, deger: bicim === 'json' ? geri : JSON.stringify(geri), beklenenSurum: okunan.surum });
       assert.equal(ikinci.statusCode, 200, ikinci.body);
       const tablo = await vt().tek<{ deger: unknown }>('SELECT deger FROM recete_rota_kayit WHERE anahtar = $1', [a]);

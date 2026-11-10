@@ -45,12 +45,19 @@ describe('recete-rota kuralları (saf)', () => {
     assert.equal(ANAHTAR_BICIMI.test('recete-rota-motoru-v1:a/b'), false);
   });
 
-  test('RR-K6 (2783, Veri N1): geri yazmada null maliyet kayıttaki aynı kimlikli kalemden korunur; dolu gelen, yeni ve kimliksiz kalem değişmez', () => {
-    const eski = { bicim: 'json', deger: { items: [{ id: 'i1', cost: 5 }, { id: 'i2', cost: 6 }, { cost: 7 }], people: [{ id: 'p1', cost: 0 }] } };
-    const yeni = { bicim: 'json', deger: { items: [{ id: 'i1', cost: null }, { id: 'i2', cost: 9 }, { cost: null }, { id: 'i3', cost: null }], people: [{ id: 'p1', cost: null }] } };
-    assert.deepEqual(kayitMaliyetiniKoru(yeni, eski).deger, { items: [{ id: 'i1', cost: 5 }, { id: 'i2', cost: 9 }, { cost: null }, { id: 'i3', cost: null }], people: [{ id: 'p1', cost: 0 }] });
-    assert.equal(kayitMaliyetiniKoru(yeni, null), yeni);
-    const metin = { bicim: 'metin', deger: '{"items":[{"id":"i1","cost":null}]}' };
+  test('RR-K6 (2783, Veri N1, Güvenlik K1): maliyet görmeyenin yazmasında gelen cost yok sayılır; kayıttaki aynı kimlikli değer kalır, yoksa null', () => {
+    const eski = { bicim: 'json', deger: { items: [{ id: 'i1', cost: 5 }, { id: 'i2', cost: 6 }, { cost: 7 }, { id: 'i4' }], people: [{ id: 'p1', cost: 0 }] } };
+    const yeni = { bicim: 'json', deger: {
+      items: [{ id: 'i1', cost: null }, { id: 'i2', cost: 9 }, { cost: 8 }, { id: 'i3', cost: 4 }, { id: 'i4' }, { id: 'i5', cost: null }, { id: 'i2' }], people: [{ id: 'p1', cost: null }],
+    } };
+    assert.deepEqual(kayitMaliyetiniKoru(yeni, eski).deger, {
+      items: [{ id: 'i1', cost: 5 }, { id: 'i2', cost: 6 }, { cost: null }, { id: 'i3', cost: null }, { id: 'i4' }, { id: 'i5', cost: null }, { id: 'i2', cost: 6 }], people: [{ id: 'p1', cost: 0 }],
+    });
+    // Kayıt yoksa gelen her dolu cost null'a iner.
+    assert.deepEqual(kayitMaliyetiniKoru({ bicim: 'json', deger: { items: [{ id: 'i1', cost: 3 }, { id: 'i2' }] } }, null).deger, { items: [{ id: 'i1', cost: null }, { id: 'i2' }] });
+    const temiz = { bicim: 'json', deger: { items: [{ id: 'i9', cost: null }] } };
+    assert.equal(kayitMaliyetiniKoru(temiz, eski), temiz);
+    const metin = { bicim: 'metin', deger: '{"items":[{"id":"i1","cost":1}]}' };
     assert.deepEqual(JSON.parse(String(kayitMaliyetiniKoru(metin, eski).deger)), { items: [{ id: 'i1', cost: 5 }] });
     const bozuk = { bicim: 'metin', deger: 'düz metin' };
     assert.equal(kayitMaliyetiniKoru(bozuk, eski), bozuk);

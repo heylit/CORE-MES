@@ -66,11 +66,11 @@ export async function kayitlar(db: Db, kullanici: Kullanici): Promise<KayitlarCe
 // Komut ucu: ana kayıt dışındaki anahtarlar.
 export async function komutlaYaz(db: Db, kullanici: Kullanici, g: YazGovdesi, gunluk?: Gunluk): Promise<YazCevabi> {
   anaKaydiReddet(g.anahtar);
-  // Maliyet görmeyen süzülmüş kaydı geri yazar; kayıttaki maliyet korunur (kurallar.ts kayitMaliyetiniKoru). Satır kilitlenip okunur:
+  // Maliyet görmeyenin gönderdiği maliyet yok sayılır, kayıttaki kalır (kurallar.ts kayitMaliyetiniKoru). Satır kilitlenip okunur:
   // korunan değer yazmanın sürüm denetimindeki kayıttandır.
-  const korunmus = yetkiliMi(kullanici, MALIYET_OKUMA) || (await sorgular.surumKilitle(db, g.anahtar)) === null
+  const korunmus = yetkiliMi(kullanici, MALIYET_OKUMA)
     ? g
-    : kayitMaliyetiniKoru(g, await sorgular.kayitGetir(db, g.anahtar));
+    : kayitMaliyetiniKoru(g, (await sorgular.surumKilitle(db, g.anahtar)) === null ? null : await sorgular.kayitGetir(db, g.anahtar));
   const { kayit } = await yaz(db, kullanici, korunmus, gunluk);
   return { kayit: gorunenKayit(kullanici, kayit) };
 }
