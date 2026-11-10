@@ -319,6 +319,7 @@ Testler: plan-bedel 815 (iki test), kurallar 815, kablolama 815; istemci planlam
   saatTL = s x op x hafta içi çarpanı + kişi başı ek / 8 x op, op grubun ortalama opOran'ı (yoksa 1); istemcinin ufuk `mesaiSaatTL`'si ile aynı
   formül, op bir kez girer. Kişi bazlı değilse ya da mesai sistemi kayıtlı değilse bütün gruplar null. Cevapta olmayan grup istemcide null
   sayılır (2742-1a). Yıllık plan null grupta ek mesai önermez (2745 a; istemci 2503).
-- VARSAYIM: motorda kişi bazlı kip yalnız `mesaiSis.kisiBazli` true iken açıktır; sunucu `mesaiAyarlari` alan yoksa kişi bazlı sayar. Alan
-  kayıtta yoksa iki ekran farklı tutar verir (öncesinde de böyleydi). Maliyet'e bildirildi; bu yamada değişmedi.
-- Test: `ek-mesai-grup.test.ts` (EG-01..05, motor = 2653 satırı üç durumda), `mesai-maliyeti.test.ts` (PL-2653, PL-2742), `uc-yetkisi.test.ts` satırı.
+- Maliyet a (kisiBazli farkı): motor kişi bazlı kipi istemci ve sunucu gibi okur: mesai sistemi yoksa ya da alan yoksa açık, yalnız
+  `kisiBazli === false` kapalı; gün çarpanı yoksa onların varsayılanı (hafta içi ve cumartesi 1,5, pazar ve tatil 2). Görünür değişiklik:
+  alanı olmayan kayıtta değerlendirmenin ek mesai bedeli yalından kişi bazlıya geçer.
+- Test: `ek-mesai-grup.test.ts` (EG-01..08, motor = 2653 satırı üç durumda ve kişi bazlı alanı olmadan), `mesai-maliyeti.test.ts` (PL-2653, PL-2742), `uc-yetkisi.test.ts` satırı.

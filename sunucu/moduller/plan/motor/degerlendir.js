@@ -113,11 +113,15 @@ const msTezgahSaat = (D, m) => { const s = D.mesaiSaat && typeof D.mesaiSaat ===
 const ggTek = () => { const g = ymAyar().genelGider; return g == null || g === '' ? null : +g; };
 function msGunTur(D, gun) { const iso = isoT(D, gun * 24).slice(0, 10); if ((D.tatiller || []).includes(iso)) return 'tatil'; const g = fmtDT(D, gun * 24).slice(6, 9); return g === 'Cmt' ? 'cmt' : g === 'Paz' ? 'paz' : 'hi'; }
 /** @param {any} [D] @param {Derleme} [cx] @param {any} [e] */
+/* kişi bazlı kip istemcinin mesaiSistemi ve sunucu mesaiAyarlari ile aynı okunur: mesai sistemi yoksa ya da alan yoksa açık, yalnız false kapalı;
+   gün çarpanı yoksa onların varsayılanı */
+const MS_CARP0 = { hi: 1.5, cmt: 1.5, paz: 2, tatil: 2 };
 function ymMesaiTL(D, cx, e) {
-  const m = mesSis(D); if (!m || !m.kisiBazli) return ymMesaiTLYalin(D, cx, e);
+  const m = mesSis(D) || {}; if (m.kisiBazli === false) return ymMesaiTLYalin(D, cx, e);
   const t = D.tezgahlar.find(x => x.id === e.m); const h = ymVH(D, e.vardiya); const op = t && t.opOran != null ? +t.opOran : 1;
   const s = msTezgahSaat(D, e.m); if (s == null) return ymMesaiTLYalin(D, cx, e);
-  return h * op * s * (+(m.carp || {})[msGunTur(D, e.gun)] || 1.5) + op * (+m.kisiEk || 0);
+  const tur = msGunTur(D, e.gun); const c = (m.carp || {})[tur];
+  return h * op * s * (c == null || c === '' || !isFinite(+c) ? MS_CARP0[tur] : +c || 1.5) + op * (+m.kisiEk || 0);
 }
 /* ek mesai bedeli, mesai vardiyasında o tezgâhta çalışan işlere çalıştıkları saat oranında dağıtılır; bedeli bilinmeyen vardiyadaki işin payı null */
 /** @param {any} [p] @param {Derleme} [cx] */

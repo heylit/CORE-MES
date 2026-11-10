@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import vm from 'node:vm';
 import { describe, test } from 'node:test';
 import { DEGERLENDIRME_DOSYALARI } from './degerlendirme.ts';
-import { mesaiTutari, type MesaiGirdisi } from './kurallar.ts';
+import { mesaiAyarlari, mesaiGunTuru, mesaiTutari, type MesaiGirdisi } from './kurallar.ts';
 
 // 2742 (2740 a, 2743 b, 2510 a; T-2742-1): plan değerlendirmesinin ek mesai bedeli (motor ymMesaiTL) ile taslak toplamının satırı (2653
 // mesaiTutari) aynı ek vardiyada aynı tutardır. Motor değeri sunucunun yazdığı D.mesaiSaat[tezgahId]'den okur. Veriler uydurmadır.
@@ -58,5 +58,27 @@ describe('2742 T-2742-1: değerlendirme ek mesai bedeli = 2653 satırı', () => 
     const d = { ...D({ T2: SAAT }), tezgahlar: [{ id: 'T1', grup: '10', opOran: 1 }, { id: 'T2', grup: '10', opOran: 1 }] };
     assert.equal(ymMesaiTL(d, null, { m: 'T1', gun: 0, vardiya: 'V1' }), 3600);
     assert.equal(ymMesaiTL(d, null, { m: 'T2', gun: 0, vardiya: 'V1' }), 8 * SAAT * 1.5 + 100);
+  });
+  // Maliyet a: kişi bazlı kip istemci ve 2653 gibi okunur; motorun girdisi sunucunun mesaiAyarlari'ndan kurulan 2653 satırıyla aynı tutarı verir.
+  const ikiYol = (d: Record<string, unknown>, gun: number, iso: string) => {
+    const a = mesaiAyarlari(d);
+    const t = a.tezgahlar.get('T1');
+    const sunucuTutar = mesaiTutari({
+      h: 8, kisiBazli: a.kisiBazli, op: t?.opOran, saatDegeri: a.kisiBazli ? SAAT : null, carpan: a.carp[mesaiGunTuru(iso, a)],
+      kisiEk: a.kisiEk, ucret: a.ucret, mesaiCarpan: a.mesaiCarpan,
+    });
+    return [ymMesaiTL(d, null, { m: 'T1', gun, vardiya: 'V1' }), sunucuTutar];
+  };
+  test('EG-06 kişi bazlı alanı olmayan kayıt: iki yol da kişi bazlı, aynı tutar', () => {
+    const d = { ...D({ T1: SAAT }), mesaiSis: { carp: { hi: 1.5 }, kisiEk: 100 } };
+    assert.deepEqual(ikiYol(d, 0, '2026-01-05'), [8 * SAAT * 1.5 + 100, 8 * SAAT * 1.5 + 100]);
+  });
+  test('EG-07 mesai sistemi hiç yok, pazar: kişi bazlı, gün çarpanı varsayılanı 2, kişi başı ek yok', () => {
+    const { mesaiSis: _m, ...d } = D({ T1: SAAT });
+    assert.deepEqual(ikiYol(d, 6, '2026-01-11'), [8 * SAAT * 2, 8 * SAAT * 2]);
+  });
+  test('EG-08 kişi bazlı kapalı (false): iki yol da yalın', () => {
+    const d = { ...D({ T1: SAAT }), mesaiSis: { kisiBazli: false } };
+    assert.deepEqual(ikiYol(d, 0, '2026-01-05'), [3600, 3600]);
   });
 });
