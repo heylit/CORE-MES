@@ -80,7 +80,7 @@ function EmirGorunumu({ git, kimlik }: { git: Git; kimlik: string | null }) {
             <span>{secili.emirNo} <small className="tc-rrp-soluk">{secili.urunKodu} {secili.urunAdi}</small></span>
             <Dugme simge="x" onClick={() => { acikYaz(null); }} aria-label="Kapat" />
           </h3>
-          <Adimlar adimlar={secili.adimlar} urunId={secili.urunId} git={git} />
+          <Adimlar adimlar={secili.adimlar} emirNo={secili.emirNo} urunId={secili.urunId} git={git} />
         </section>
       )}
     </div>
@@ -146,17 +146,17 @@ function RotaGorunumu({ git }: { git: Git }) {
             <Dugme simge="x" onClick={() => { acikYaz(null); }} aria-label="Kapat" />
           </h3>
           {secili.acikEmir > 0 && <p className="tc-rrp-soluk">{`Buradaki eksik bu ürünün ${sayi(secili.acikEmir)} açık emrini etkiler.`}</p>}
-          <Adimlar adimlar={hepsi ? secili.adimlar : eksikAdimlar(secili.adimlar)} urunId={secili.urunId} git={git} />
+          <Adimlar adimlar={hepsi ? secili.adimlar : eksikAdimlar(secili.adimlar)} emirNo={null} urunId={secili.urunId} git={git} />
         </section>
       )}
     </div>
   );
 }
 
-function Adimlar({ adimlar, urunId, git }: { adimlar: readonly Adim[]; urunId: number; git: Git }) {
+function Adimlar({ adimlar, emirNo, urunId, git }: { adimlar: readonly Adim[]; emirNo: string | null; urunId: number; git: Git }) {
   return (
     <ol className="tc-rrp-adimlar">
-      {adimSatirlari(adimlar).map((s) => (s.tur === 'zincir'
+      {adimSatirlari(adimlar, emirNo).map((s) => (s.tur === 'zincir'
         ? <li key={`z${s.oplar.join('-')}`} className="tc-rrp-zincir"><Simge ad="clock" boyut="k" />{zincirMetni(s)}</li>
         : (
           <li key={s.adim.opNo} className="tc-rrp-adim">

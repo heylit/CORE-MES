@@ -16,14 +16,14 @@ export function ornekEmirler(): PlanlanabilirlikCevabi {
             tamam('sure-bos'), tamam('istasyon-yok'), tamam('makine-yok'), tamam('takvim-yok'),
             { kod: 'ufuk', durum: 'eksik', metin: 'Adımın süresi kalan ufku aşıyor.', hedef: null, yaklasik: true },
           ] },
-          { opNo: 30, ad: 'Taşlama', istasyon: 'Taşlama', kok: 'oncul', bekledigiEmirNo: null, bekledigiOp: 20, kontroller: [] },
-          { opNo: 40, ad: 'Çapak', istasyon: 'Tezgâh', kok: 'oncul', bekledigiEmirNo: null, bekledigiOp: 20, kontroller: [] },
-          { opNo: 50, ad: 'Yıkama', istasyon: 'Yıkama', kok: 'oncul', bekledigiEmirNo: null, bekledigiOp: 20, kontroller: [] },
+          { opNo: 30, ad: 'Taşlama', istasyon: 'Taşlama', kok: 'oncul', bekledigiEmirNo: 'UE-0101', bekledigiOp: 20, kontroller: [] },
+          { opNo: 40, ad: 'Çapak', istasyon: 'Tezgâh', kok: 'oncul', bekledigiEmirNo: 'UE-0101', bekledigiOp: 20, kontroller: [] },
+          { opNo: 50, ad: 'Yıkama', istasyon: 'Yıkama', kok: 'oncul', bekledigiEmirNo: 'UE-0101', bekledigiOp: 20, kontroller: [] },
           { opNo: 60, ad: 'Kontrol', istasyon: 'Kalite', kok: 'kisi-vardiyasiz', bekledigiEmirNo: null, bekledigiOp: null, kontroller: [
             tamam('sure-bos'), tamam('yetkin-kisi-yok'),
             { kod: 'kisi-vardiyasiz', durum: 'eksik', metin: 'Kalite insanlı istasyon; yetkin kişilerin vardiyası yok.', hedef: { tur: 'istasyon', id: 7, ad: 'Kalite' }, yaklasik: false },
           ] },
-          { opNo: 70, ad: 'Paketleme', istasyon: 'Paket', kok: 'oncul', bekledigiEmirNo: null, bekledigiOp: 60, kontroller: [] },
+          { opNo: 70, ad: 'Paketleme', istasyon: 'Paket', kok: 'oncul', bekledigiEmirNo: 'UE-0101', bekledigiOp: 60, kontroller: [] },
         ],
       },
       {

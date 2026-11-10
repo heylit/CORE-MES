@@ -28,7 +28,9 @@ describe('planlanabilirlik kuralları (2779)', () => {
     expect(ozet([e1, bekleyen]).find((x) => x.kod === 'oncul')).toEqual({ kod: 'oncul', emir: 1, adim: 1 });
     const baskaEmir = { ...bekleyen, adimlar: [{ ...bekleyen.adimlar[0]!, bekledigiEmirNo: 'UE-0042', bekledigiOp: 30 }] };
     expect(emirNedenleri(baskaEmir)).toEqual(['oncul']);
-    expect(adimSatirlari(baskaEmir.adimlar)).toEqual([{ tur: 'zincir', bekledigiEmirNo: 'UE-0042', bekledigiOp: 30, oplar: [10] }]);
+    const ayniEmir = { ...bekleyen, adimlar: [bekleyen.adimlar[0]!, { ...bekleyen.adimlar[1]!, bekledigiEmirNo: 'UE-0104' }] };
+    expect(adimSatirlari(ayniEmir.adimlar, 'UE-0104')[1]).toEqual({ tur: 'zincir', bekledigiEmirNo: null, bekledigiOp: 10, oplar: [20] });
+    expect(adimSatirlari(baskaEmir.adimlar, 'UE-0104')).toEqual([{ tur: 'zincir', bekledigiEmirNo: 'UE-0042', bekledigiOp: 30, oplar: [10] }]);
   });
 
   it('özet neden türü başına emir ve adım sayar, çok emri etkileyen önce', () => {
@@ -46,7 +48,7 @@ describe('planlanabilirlik kuralları (2779)', () => {
   });
 
   it('öncül bekleyen adımlar beklediği kök adıma göre tek satırda toplanır', () => {
-    const s = adimSatirlari(e1.adimlar);
+    const s = adimSatirlari(e1.adimlar, e1.emirNo);
     expect(s.map((x) => (x.tur === 'kok' ? x.adim.opNo : x.oplar))).toEqual([20, [30, 40, 50], 60, [70]]);
     const z = s[1];
     expect(z?.tur === 'zincir' ? zincirMetni(z) : null).toBe('OP 30, 40, 50: OP 20 düzelince yerleşir');
