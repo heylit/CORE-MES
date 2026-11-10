@@ -209,7 +209,7 @@ export function karsiz(s: DegerlendirmeSonucu): DegerlendirmeSonucu {
   }
 }
 
-// Seçeneğin planı İK değeriyle seçilmiş ek mesaiyle kurulur (2760 b); planın TL toplamı (ozet.tl) görmeyene gitmez (Güvenlik C6).
+// Planın TL toplamı (ozet.tl) maliyeti görmeyene hiçbir sonuçta gitmez (Güvenlik C6, O1); planın geri kalanı çalışmaya geri yazılır.
 function tlsizPlan(plan: Record<string, unknown>): Record<string, unknown> {
   const ozet = plan['ozet'];
   return ozet !== null && typeof ozet === 'object' ? { ...plan, ozet: { ...(ozet as Record<string, unknown>), tl: null } } : plan;
@@ -228,13 +228,15 @@ export function maliyetsiz(s: DegerlendirmeSonucu): DegerlendirmeSonucu {
     case 'malzeme-one-cekme':
       return { ...s, taban: { ...s.taban, tl: null }, satirlar: s.satirlar.map((x) => ({ ...x, kazanc: x.kazanc.map((z) => ({ ...z, tl: null })) })) };
     case 'parti-bolme':
-      return s.sonuc === null ? s : { ...s, sonuc: { ...s.sonuc, tl: null } };
-    case 'malzeme-terminleri':
+      return s.sonuc === null ? s : { ...s, sonuc: { ...s.sonuc, tl: null, plan: tlsizPlan(s.sonuc.plan) } };
     case 'plan-kur':
     case 'plan-uygula':
+      return { ...s, plan: tlsizPlan(s.plan) };
     case 'plan-iyilestir':
     case 'one-al':
     case 'sira-degistir':
+      return s.plan === null ? s : { ...s, plan: tlsizPlan(s.plan) };
+    case 'malzeme-terminleri':
       return s;
   }
 }

@@ -380,3 +380,7 @@ Testler: plan-bedel 815 (iki test), kurallar 815, kablolama 815; istemci planlam
 - M5 (yapı 5, 1459 a; Maliyet): fiyatı bilinmeyen malzemenin birim fiyatı artık null (önce 0 yazılıyordu); 0 girilmiş fiyat 0 kalır.
   GÖRÜNEN DEĞİŞİKLİK: fiyatı bilinmeyen malzeme eksik sayılır; maliyeti görende siparişin malzeme bedeli bilinmez (null) görünebilir ve
   "eksik" sayısı artabilir. Maliyet görmeyende malzeme fiyatı hep null (önce 0).
+- Test isteği (Güvenlik O1): değerlendirme sonuçlarında da planın TL toplamı maliyeti görmeyene gitmez. `maliyetsiz` artık plan-kur,
+  plan-uygula, plan-iyilestir, one-al, sira-degistir ve parti-bolme sonuçlarının planında `ozet.tl`'yi null yapar (plan null ise dokunmaz);
+  planın öteki alanları aynı kalır. Görünen fark yok: sayfa toplamı zaten yalnız maliyeti görene gösteriyordu.
+  Test: `degerlendirme.test.ts` PD-08 (her tür, saf), PD-21 (gerçek uç, planlamacının plan-kur durum gövdesi; kırmızı-önce: süzgeçsiz ikisi kırmızı).
