@@ -353,3 +353,10 @@ Testler: plan-bedel 815 (iki test), kurallar 815, kablolama 815; istemci planlam
 - Kabul edilen risk (2760 b kartı): planlama rolü çalışmayı değiştirip yeniden değerlendirerek büyük grubun (en az 3 kişi) ek mesai saat
   bedelini yaklaşık bulabilir. Kişi ücreti ve küçük grup değeri çıkmaz.
 - Test: `mesai-maliyeti.test.ts` "2766", "2742 K2, K3"; `degerlendirme.test.ts` PD-08.
+## Planlama çalışması metin biçimiyle yazılmaz (2747; Güvenlik notu, 2728 a, 2601 a; 2026-11-10)
+- `planlama-kayitlari/yaz` planlama anahtarında `bicim: 'metin'`i 400 ile reddeder: metin değer brüt ve genel gider süzgecinden geçmeden saklanırdı.
+  İstemci bu anahtarı yalnız json yazar (`planlama/kayit.ts`); başka anahtarlar değişmez.
+- Eski metin biçimli satır (şimdiki ya da geçmiş sürüm) JSON metniyse `saklanmayanKayitDegeri` ile ayrıştırılıp süzülür ve yine metin döner:
+  ham kayıt okuması (`planlamaKayitlari`) ve geri al (`calismaGeriAl`). JSON olmayan metin yapılı alan taşımaz, olduğu gibi kalır.
+- Brüt silme göçü (2737-1-goc) metin satırı çevirmez; son sayımı metin satırındaki brütü de bulur ve göçü geri alır.
+- Test: `brut-saklanmaz.test.ts` BS-05..07, `brut-sil-goc.test.ts` BG-02.

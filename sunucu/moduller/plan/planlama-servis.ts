@@ -27,7 +27,7 @@ import { defterSatirlari } from './degisiklik-defteri-kurallar.ts';
 import { kaynakDilimiOku } from './girdi/kaynaklar.ts';
 import { kapasitedenIzinler, type KaynakDilimiOkumasi } from './girdi/kaynaklar-kurallar.ts';
 import { hedefMotorAyari } from './motor-ayari.ts';
-import { brutAlanlariniCikar, calismayaMotorAyari, mesaiSaatiniCikar, saklanmayanAlanlariCikar, type MotorOlcegi } from './motor-ayari-kurallar.ts';
+import { brutAlanlariniCikar, calismayaMotorAyari, mesaiSaatiniCikar, saklanmayanAlanlariCikar, saklanmayanKayitDegeri, type MotorOlcegi } from './motor-ayari-kurallar.ts';
 import { sureOgrenmesi } from './ogrenme.ts';
 import { planGirdisi, yeniCalisma, type KaynakOkumasi } from './plan-girdisi.ts';
 import {
@@ -61,12 +61,14 @@ export function planlamaYazmaDenetimi(kullanici: Kullanici, anahtar: string): vo
 
 export async function planlamaKayitlari(db: Db): Promise<KayitlarCevabi> {
   const kayitlar = await sorgular.planlamaKayitlari(db);
-  return { kayitlar: kayitlar.map((k) => (k.anahtar === PLANLAMA_ANAHTARI ? { ...k, deger: saklanmayanAlanlariCikar(k.deger) } : k)) };
+  return { kayitlar: kayitlar.map((k) => (k.anahtar === PLANLAMA_ANAHTARI ? { ...k, deger: saklanmayanKayitDegeri(k.bicim, k.deger) } : k)) };
 }
 
 export async function planlamaYaz(db: Db, kullanici: Kullanici, g: PlanlamaYazGovdesi): Promise<YazCevabi> {
   planlamaYazmaDenetimi(kullanici, g.anahtar);
   if (!degerBicimeUyarMi(g.bicim, g.deger)) throw dogrulama('Metin biçimli değer dize olmalıdır.', 'deger');
+  // 2747: çalışma yalnız json yazılır; metin biçimi süzgeçten (2601 a, 2728 a) geçmeden saklanırdı.
+  if (g.anahtar === PLANLAMA_ANAHTARI && g.bicim !== 'json') throw dogrulama('Planlama çalışması yalnız JSON biçiminde yazılır.', 'bicim');
   if (nulKarakteriVarMi(g.deger)) throw dogrulama('Değer boş karakter (U+0000) içeremez.', 'deger');
   if (degerCokBuyukMu(g.deger)) throw cokBuyuk(BUYUK_ILETISI);
   const mevcut = await sorgular.planlamaSurumKilitle(db, g.anahtar);

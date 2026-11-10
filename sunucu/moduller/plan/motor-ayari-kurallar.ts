@@ -83,6 +83,17 @@ export function mesaiSaatiniCikar(calisma: unknown): unknown {
 // Planlama kaydına yazılmayan ve ham okumada dönmeyen alanlar tek yerden (2601 a genel gider, 2728 a brüt, 2742 mesai saat değeri).
 export const saklanmayanAlanlariCikar = (calisma: unknown): unknown => mesaiSaatiniCikar(brutAlanlariniCikar(genelGiderAlanlariniCikar(calisma)));
 
+// 2747 (Güvenlik): planlama anahtarına yeni yazma yalnız json'dur; eski metin biçimli satır (geçmiş sürüm dahil) JSON metniyse ayrıştırılıp
+// aynı süzgeçten geçer ve yine metin olarak döner. JSON olmayan metin yapılı alan taşımaz, olduğu gibi kalır.
+export function saklanmayanKayitDegeri(bicim: string, deger: unknown): unknown {
+  if (bicim === 'json') return saklanmayanAlanlariCikar(deger);
+  if (bicim !== 'metin' || typeof deger !== 'string') return deger;
+  let c: unknown;
+  try { c = JSON.parse(deger) as unknown; } catch { return deger; }
+  const s = saklanmayanAlanlariCikar(c);
+  return s === c ? deger : JSON.stringify(s);
+}
+
 export function calismayaMotorAyari(
   calisma: unknown, ayar: MotorAyarlari, finansmanOraniGun: number | null = null, olcek: MotorOlcegi | null = null,
   ogren?: Readonly<Record<string, OgrenilenSure>> | null, genelGider?: { saatBasi: number | null; gizli: boolean },

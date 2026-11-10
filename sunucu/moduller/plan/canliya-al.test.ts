@@ -484,7 +484,7 @@ describe('Reçete ve Rota canlıya al akışı (gerçek PostgreSQL)', () => {
           personel: [], siparisler: [], ayarlar: {} },
       };
       const r = await tamam<{ kayit: { surum: number } }>(c.yonetici, 'POST', '/plan/planlama-kayitlari/yaz',
-        { anahtar: PLANLAMA_ANAHTARI, bicim: 'metin', deger: JSON.stringify(calisma), beklenenSurum: calismaSurumu });
+        { anahtar: PLANLAMA_ANAHTARI, bicim: 'json', deger: calisma, beklenenSurum: calismaSurumu });
       calismaSurumu = r.kayit.surum;
     };
     await calismaYaz(null);
