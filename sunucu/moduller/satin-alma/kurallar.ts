@@ -78,6 +78,14 @@ export const ILETILER = {
   yalnizTaslakSilinir: 'Yalnız taslak talep silinir; ilerlemiş talep iptal edilir.',
   emirKapali: 'Üretim emri açık değil: yalnız planlı ya da başlamış emir seçilir.',
   projeEmirli: 'Emre bağlı talebin projesi emirden gelir; proje ayrıca seçilmez.',
+  eslemeTekrar: 'Aynı sipariş satırı listede iki kez var.',
+  eslemeBaskaSiparis: 'Satır bu faturanın siparişine ait değil.',
+  eslemeTutar: 'Tutar sıfırdan büyük olmalı ve en çok iki ondalık taşımalı.',
+  eslemeAsim: 'Eşlenen toplam fatura tutarını (KDV hariç) aşıyor.',
+  eslemeSiparissiz: 'Bu fatura bir siparişe bağlı değil ya da bulunamadı.',
+  eslemeIptal: 'İptal edilmiş fatura eşlenemez.',
+  eslemeSurum: 'Bu fatura başka biri tarafından değiştirildi, yeniden yükleyin.',
+  eslemeliSatir: 'Bu satır bir faturayla eşlendi (kaldırılmış eşleme dahil); siparişten çıkarılamaz.',
   projeAktifDegil: 'Proje aktif değil: yalnız aktif proje seçilir.',
   birlesmeProjesi: 'Talepler farklı projelere bağlı; aynı projenin talepleri birleştirilir.',
   idariCevrildi: (no: string) => `Bu idari talep daha önce ${no} satın alma talebine çevrildi.`,
@@ -1512,4 +1520,36 @@ export function siparisDagilimi(satirlar: readonly DagilimSatiri[], masraf: numb
     hedefler: [...hedefler.values()].filter((h) => h.deger > 0).map((h) => ({ yol: h.yol, hedefId: h.hedefId, deger: h.deger + h.pay })),
     genelGiderOrani: tumMal > 0 && !bilinmeyen ? Math.round(genelMal / tumMal * 1e6) / 1e6 : null,
   };
+}
+
+// 2642 b, 2646 a: belgenin genel gidere giren oranı. B belgenin KDV hariç tutarı, E sayılan eşlemelerin toplamı, G genel gider yolundaki
+// eşlenen tutar, S siparişin oranı (siparisDagilimi). Eşleme belgenin güncel siparişinde değilse (yol null, bayat) sayılmaz (Veri 1).
+// Sayılan eşleme yoksa S; varsa (G + (B - E) x S) / B. E > B, yolu bilinmeyen eşlenmiş satır ya da kalan varken S null ise oran null.
+// Tutarlar kuruşla toplanır (iki ondalık), kayan nokta birikmez.
+export type EslemeDurumu = 'yok' | 'kismi' | 'tam';
+export interface BelgeOranGirdisi { belgeTutari: string; siparisOrani: number | null; eslemeler: readonly { tutar: string; yol: SatirYolu | null }[] }
+export function belgeGenelGiderOrani(g: BelgeOranGirdisi): { oran: number | null; esleme: EslemeDurumu } {
+  const kurus = (x: string): number => Math.round(Number(x) * 100);
+  const sayilan = g.eslemeler.filter((x) => x.yol !== null);
+  if (sayilan.length === 0) return { oran: g.siparisOrani, esleme: 'yok' };
+  const b = kurus(g.belgeTutari);
+  const e = sayilan.reduce((t, x) => t + kurus(x.tutar), 0);
+  const kalan = b - e;
+  const esleme: EslemeDurumu = kalan > 0 ? 'kismi' : 'tam';
+  if (b <= 0 || kalan < 0 || sayilan.some((x) => x.yol === 'bilinmiyor') || (kalan > 0 && g.siparisOrani === null)) return { oran: null, esleme };
+  const genel = sayilan.filter((x) => x.yol === 'genel_gider').reduce((t, x) => t + kurus(x.tutar), 0);
+  return { oran: Math.round((genel + kalan * (g.siparisOrani ?? 0)) / b * 1e6) / 1e6, esleme };
+}
+
+// 2642 b: eşleme sürümü; kayıt silinmez, kaldırma bir kez yazılır, bu yüzden yalnız artar (Mimar notu).
+export const eslemeSurumu = (l: readonly { kaldirilma: string | null }[]): number => l.length + l.filter((x) => x.kaldirilma !== null).length;
+
+// 2642 b: kaydedilecek tam listenin denetimi (sunucu). Satır belgenin siparişinde olmalı, tekrar etmemeli, tutar pozitif ve iki ondalık;
+// toplam belge tutarını aşamaz. Hata iletisi ya da null.
+export function eslemeListesiHatasi(liste: readonly { siparisSatiriId: number; tutar: string }[], siparisSatirlari: ReadonlySet<number>, belgeTutari: string): string | null {
+  if (new Set(liste.map((x) => x.siparisSatiriId)).size !== liste.length) return ILETILER.eslemeTekrar;
+  if (liste.some((x) => !siparisSatirlari.has(x.siparisSatiriId))) return ILETILER.eslemeBaskaSiparis;
+  if (liste.some((x) => !/^\d+(\.\d{1,2})?$/.test(x.tutar) || Number(x.tutar) <= 0)) return ILETILER.eslemeTutar;
+  const toplam = liste.reduce((t, x) => t + Math.round(Number(x.tutar) * 100), 0);
+  return toplam > Math.round(Number(belgeTutari) * 100) ? ILETILER.eslemeAsim : null;
 }

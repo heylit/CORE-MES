@@ -86,6 +86,9 @@ export { emirHizmetTutarlari } from './servis.ts';
 // 2637 a, Mimar K1: siparişin genel gidere giren oranı; Finans kablolamadaki genelGiderOraniCozucusu ile toplu çeker (anahtar 'talepId:teklifId',
 // 0-1, malı olmayan siparişte null, bilinmeyen sipariş haritada yok). Yetki denetlemez, yalnız okur.
 export { siparisGenelGiderOranlari } from './servis.ts';
+// 2642 b, 2646 a, Mimar: Finans genelGiderOraniCozucusu'nun kaynağı (kablolama); belge başına { oran, esleme }. Eşlemesi olmayan belgede sipariş
+// oranı; bayat eşleme sayılmaz (Veri 1). Bulunmayan, siparişsiz ve iptal belge haritada yok. Yetki denetlemez, yalnız okur.
+export { belgeGenelGiderOranlari } from './servis.ts';
 // 2614 1/2 a: İdari İşler talebi satın alma talebine çevrilir (kalemsiz taslak; açan çeviren, talep eden idari talebi açan). Yetkiyi kendi
 // içinde denetler (satin-alma.talep-ac ya da yaz; 403); ikinci çevirme 409. Çağıranın işlemini kullanır. İdari ekran bağı ikinci işlevle okur.
 export { idariTalepSatinAlmalari, idariTaleptenTalepAc } from './servis.ts';

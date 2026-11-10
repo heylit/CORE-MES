@@ -5,6 +5,7 @@ import {
   iptaliGeriAlCevabi, iptaliGeriAlGovdesi, talepAyirGovdesi, talepBirlestirGovdesi, satinAlmaOzetiCevabi, degerlendirmeCevabi, kartAyrintilariCevabi, stokYokIstekleriCevabi, odemePlaniGovdesi, siparisTakibiCevabi, siparisBelgeleriCevabi, siparisBelgesiGovdesi, siparisBelgesiParametresi, siparisSatiriParametresi, siparisFaturalariCevabi, siparisFaturalariSorgusu, siparisFaturasiGovdesi, siparisKalemiDegistirGovdesi, siparisKapatGovdesi, teslimYontemiGovdesi, talepKaydetGovdesi, talepParametresi, talepSemasi, talepSilGovdesi, tamamCevabi, tedarikciKaydetGovdesi, tedarikciSemasi,
   tedarikTerminiKaydetGovdesi, tedarikTerminiKaydetCevabi, tedarikTerminleriCevabi,
   butceKullanimiCevabi, butceKullanimiSorgusu, kgFiyatiEkleGovdesi, kgFiyatiIptalGovdesi, kgFiyatiParametresi, kgFiyatiGecmisiCevabi, kgFiyatiGecmisiSorgusu, kgFiyatlariCevabi, malzemeKgFiyatlariCevabi, malzemeKgFiyatlariSorgusu,
+  faturaEslemesiCevabi, faturaEslemesiKaydetGovdesi, faturaEslemesiParametresi,
 } from '#paylasilan/sozlesme/satin-alma.ts';
 import { satinAlmaAnaliziCevabi } from '#paylasilan/sozlesme/satin-alma-analiz.ts';
 import { z } from 'zod';
@@ -261,5 +262,15 @@ export const uclar = [
   uc({
     yontem: 'POST', yol: '/satin-alma-tedarik-terminleri/kaydet', yetki: { biri: TERMIN_YAZAR }, govde: tedarikTerminiKaydetGovdesi, cevap: tedarikTerminiKaydetCevabi,
     isle: ({ db, kullanici, govde }) => servis.tedarikTerminiKaydet(db, kullanici, govde),
+  }),
+  // 2642 b (Güvenlik K1-K3): cevapta fiyat var; talep eden ve yalnız oturumu olan okuyamaz. Belge yalnız yoldan, kişi oturumdan.
+  uc({
+    yontem: 'GET', yol: '/satin-alma-fatura-eslemeleri/:belgeId', yetki: { biri: ['finans.oku', 'finans.maliyet-oku'] }, parametre: faturaEslemesiParametresi,
+    cevap: faturaEslemesiCevabi, isle: ({ db, parametre }) => servis.faturaEslemesiGetir(db, parametre.belgeId),
+  }),
+  uc({
+    yontem: 'POST', yol: '/satin-alma-fatura-eslemeleri/:belgeId/kaydet', yetki: 'finans.yaz', parametre: faturaEslemesiParametresi,
+    govde: faturaEslemesiKaydetGovdesi, cevap: faturaEslemesiCevabi,
+    isle: ({ db, kullanici, parametre, govde }) => servis.faturaEslemesiYaz(db, kullanici.id, parametre.belgeId, govde),
   }),
 ];

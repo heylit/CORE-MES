@@ -187,7 +187,7 @@ export const KALEM_EMRI = 'COALESCE(kt.uretim_emri_id, t.uretim_emri_id)';
 // (KALEM_EMRI, 2624) ve talebin projesi; masraf siparişin nakliyesi (hariçse) ve diğer masrafı. İptal talep gelmez; birleşmiş kaynağın
 // siparişi yoktur (siparişler birleşik taleptedir).
 export interface YolSatiri {
-  talepId: string; teklifId: string; paraBirimi: string; mal: string; miktar: string; teslim: string;
+  satirId: number; kalemAdi: string; birim: string; talepId: string; teklifId: string; paraBirimi: string; mal: string; miktar: string; teslim: string;
   malzemeNo: number | null; fason: boolean; emirId: number | null; projeId: number | null; masraf: string;
 }
 // siparisler: Finans'ın belgesine bağlı sipariş; talep iptal olsa da fatura gerçektir, durum süzülmez.
@@ -202,7 +202,7 @@ export function siparisYolSatirlari(db: Db, f: YolFiltresi): Promise<YolSatiri[]
        SELECT DISTINCT s.talep_id, s.teklif_id ${YOL_KAYNAGI}
         WHERE (t.durum <> 'iptal' AND (t.proje_id = ANY($1::int[]) OR ${KALEM_EMRI} = ANY($2::int[])))
            OR (s.talep_id, s.teklif_id) IN (SELECT * FROM unnest($3::uuid[], $4::uuid[])))
-     SELECT s.talep_id AS "talepId", s.teklif_id AS "teklifId", q.para_birimi::text AS "paraBirimi",
+     SELECT s.id AS "satirId", k.ad AS "kalemAdi", k.birim, s.talep_id AS "talepId", s.teklif_id AS "teklifId", q.para_birimi::text AS "paraBirimi",
             (s.miktar * f.birim_fiyat * (1 - COALESCE(f.iskonto_yuzdesi, 0) / 100) * (1 - q.iskonto_yuzdesi / 100))::text AS mal,
             s.miktar::text AS miktar,
             coalesce((SELECT sum(x.miktar) FROM satin_alma_teslim x WHERE x.siparis_satiri_id = s.id), 0)::text AS teslim,
@@ -217,6 +217,31 @@ export function siparisYolSatirlari(db: Db, f: YolFiltresi): Promise<YolSatiri[]
       ORDER BY s.talep_id, s.teklif_id, s.id`,
     [f.projeIdler ?? [], f.emirIdler ?? [], (f.siparisler ?? []).map((x) => x.talepId), (f.siparisler ?? []).map((x) => x.teklifId)],
   );
+}
+
+// 2642 b: belgelerin eşlemeleri (kaldırılmışlar dahil; sürüm onlarla hesaplanır). Satırın siparişi okunur: belgenin güncel siparişiyle
+// karşılaştırılır (Veri 1). Satır silinemez (RESTRICT), iç birleştirme.
+export interface EslemeSatiri { id: number; belgeId: number; siparisSatiriId: number; tutar: string; kaldirilma: string | null; talepId: string; teklifId: string }
+export function faturaEslemeleri(db: Db, belgeIdler: readonly number[]): Promise<EslemeSatiri[]> {
+  return db.sorgu<EslemeSatiri>(
+    `SELECT e.id, e.belge_id AS "belgeId", e.siparis_satiri_id AS "siparisSatiriId", e.tutar::text AS tutar, e.kaldirilma::text AS kaldirilma,
+            s.talep_id AS "talepId", s.teklif_id AS "teklifId"
+       FROM satin_alma_fatura_eslemesi e JOIN satin_alma_siparis_satiri s ON s.id = e.siparis_satiri_id
+      WHERE e.belge_id = ANY($1::int[]) ORDER BY e.belge_id, e.id`, [belgeIdler]);
+}
+// Maliyet N2: satır başına başka belgelerin etkin eşlemeleri (mükerrer eşleme uyarısı). Para birimi Finans'tadır; toplamı servis
+// aynı para birimindeki belgelerle yapar.
+export function satirlarinBaskaEslemeleri(db: Db, belgeId: number, satirIdler: readonly number[]): Promise<{ siparisSatiriId: number; belgeId: number; tutar: string }[]> {
+  return db.sorgu<{ siparisSatiriId: number; belgeId: number; tutar: string }>(
+    `SELECT siparis_satiri_id AS "siparisSatiriId", belge_id AS "belgeId", tutar::text AS tutar FROM satin_alma_fatura_eslemesi
+      WHERE siparis_satiri_id = ANY($2::int[]) AND belge_id <> $1 AND kaldirilma IS NULL`, [belgeId, satirIdler]);
+}
+export function faturaEslemesiEkle(db: Db, g: { belgeId: number; siparisSatiriId: number; tutar: string; kisiId: number }): Promise<unknown> {
+  return db.sorgu('INSERT INTO satin_alma_fatura_eslemesi (belge_id, siparis_satiri_id, tutar, ekleyen_kisi_id) VALUES ($1, $2, $3, $4)',
+    [g.belgeId, g.siparisSatiriId, g.tutar, g.kisiId]);
+}
+export function faturaEslemesiKaldir(db: Db, idler: readonly number[], kisiId: number): Promise<unknown> {
+  return db.sorgu('UPDATE satin_alma_fatura_eslemesi SET kaldiran_kisi_id = $2, kaldirilma = now() WHERE id = ANY($1::int[]) AND kaldirilma IS NULL', [idler, kisiId]);
 }
 
 export function talepNolari(db: Db, idler: readonly string[]): Promise<{ id: string; no: string }[]> {

@@ -17,7 +17,7 @@ import { firmaAdlari, karneOlayiKaldir, karneOlayiYaz } from '../musteri-tedarik
 import type { KalemBagiCikisi, TeslimDurumu } from '#paylasilan/sozlesme/satin-alma.ts';
 import { numaraAl, sistemAyariOku } from '../ayarlar/disari.ts';
 import { kisiAdlari, kisiVarMi, kisininRolleri, rolSecenekleri } from '../kisiler/disari.ts';
-import { alacakliSiparisler, alisBelgeleri, alisBelgesiEslesmeTutari, belgeSiparisBagla, siparisAvansAlacagiYaz, kdvSecenekleri, kurCiftiGetir, kurCiftleri, oranlar, siparisOdemePlaniKaldir, siparisOdemePlaniYaz, siparisOtomatikPlaniVarMi, siparisPlanlari } from '../finans/disari.ts';
+import { alacakliSiparisler, alisBelgeleri, belgelerinSiparisleri, alisBelgesiEslesmeTutari, belgeSiparisBagla, siparisAvansAlacagiYaz, kdvSecenekleri, kurCiftiGetir, kurCiftleri, oranlar, siparisOdemePlaniKaldir, siparisOdemePlaniYaz, siparisOtomatikPlaniVarMi, siparisPlanlari } from '../finans/disari.ts';
 import type { AvansAlacagiSonucu, FaizTuru } from '../finans/disari.ts';
 import { ORAN_KULLANIMLARI, yillikFaizdenAylik } from '#paylasilan/sozlesme/finans.ts';
 import { firmaAra, firmaOzeti, firmaOzetleri, tedarikciOlabilirMi, tumFirmalar, type FirmaOzeti } from '../musteri-tedarikci/disari.ts';
@@ -37,7 +37,7 @@ import {
   fasonKalemReddi, fasonOnTalepAdaylari, hizliBagReddi, planOnTalepAdaylari, uygulananKartReddi, type KalemBagi,
   fasonKirilimlari, fasonSureOrnekleri, fasonSuresiTahmini, fasonTerminUyumu, talepEdenDurumu, talepEdenGorunumu, avansAsimi, gerceklesenKosul, planGerceklesenFarki, talepKartiReddi, tamGorurMu, teklifKuru, teslimDurumu, odemePlaniHedefi, varsayilanOdemePlani,
   askidakiTedarikciReddi, birimFiyati, kaliteSiparisReddi, karneTeslimOlayi, stokTutari, uygulananKgFiyati, yeniSiparisFirmalari,
-  iptalOncesiTuret, iptalGeriAlmaHareketi, bilinmeyenKgSatirlari, kgEskimeHatirlatmalari, kgFiyatiEskiMi, kgFiyatiKartta, kgFiyatiYasi, kgSapanMi, kgSapmasi, kgSonAlislari, ondalikCarp, birlestirmeReddi, birlesmeProjesiReddi, birlesikTalep, emirHareketi, projeHareketi, projeReddi, siparisDagilimi, type SiparisDagilimi, ayirmaReddi, kaynakKalemiReddi, BIRLESIK_KALEM_SINIRI, KUR_KILIDI, HATIRLATMA_ADLARI, type HatirlatmaAyarlari, type HatirlatmaTalebi, haftaIciGunleri, hatirlatmaAnahtari, hatirlatmaFarki, hatirlatmalar,
+  iptalOncesiTuret, iptalGeriAlmaHareketi, bilinmeyenKgSatirlari, kgEskimeHatirlatmalari, kgFiyatiEskiMi, kgFiyatiKartta, kgFiyatiYasi, kgSapanMi, kgSapmasi, kgSonAlislari, ondalikCarp, birlestirmeReddi, birlesmeProjesiReddi, birlesikTalep, emirHareketi, projeHareketi, projeReddi, siparisDagilimi, type SiparisDagilimi, satirYolu, type SatirYolu, belgeGenelGiderOrani, eslemeListesiHatasi, eslemeSurumu, type EslemeDurumu, ayirmaReddi, kaynakKalemiReddi, BIRLESIK_KALEM_SINIRI, KUR_KILIDI, HATIRLATMA_ADLARI, type HatirlatmaAyarlari, type HatirlatmaTalebi, haftaIciGunleri, hatirlatmaAnahtari, hatirlatmaFarki, hatirlatmalar,
 } from './kurallar.ts';
 import type { FiyatIzi } from './kurallar.ts';
 import { butceKullanimi, butceSatirlari, degerlendir, esitVadeOrtami, gerekenBasamak, kalemHarcamalari, kararTutari, tedarikciBasarimi, teklifHesabi, type ButceSatiri } from './hesap-kurallar.ts';
@@ -774,7 +774,8 @@ export async function talepKaydet(db: Db, k: Kullanici, id: string, g: TalepKayd
     });
   }
   const guncellenecek = logoGuncellenecekSiparisler(eski, yazilacak);
-  await s.altKayitlariYaz(db, yazilacak, siparisNoVerici(db));
+  // 2642 b, Veri 2: faturaya eşlenmiş satır (kaldırılmış eşleme dahil) ve onun siparişi silinmez (RESTRICT).
+  await kisitKorumali({ satin_alma_fatura_eslemesi_satir: ILETILER.eslemeliSatir }, () => s.altKayitlariYaz(db, yazilacak, siparisNoVerici(db)));
   await siparisRevizyonlariniYaz(db, id);
   await s.siparisGuncellemesiniIsaretle(db, id, guncellenecek);
   const siparisteMi = (d: TalepDurumu) => d === 'siparis_verildi' || d === 'teslim_alindi';
@@ -2050,7 +2051,7 @@ export async function talepAyir(db: Db, k: Kullanici, id: string, g: TalepAyirYa
 
 // 2611 a, 2637 a, 2638 (Veri 2): emir ve proje tutarı ile genel gider oranı aynı dağılımdan (satirYolu) okunur. Kart türü malzeme
 // kartından (malzemeOzetleri pasif ve iptal kartı da döner; bulunamayan kartın yolu bilinmiyor), emrin projesi üretim emrinden gelir.
-interface DagitilmisSiparis { talepId: string; teklifId: string; paraBirimi: string; dagilim: SiparisDagilimi }
+interface DagitilmisSiparis { talepId: string; teklifId: string; paraBirimi: string; dagilim: SiparisDagilimi; satirlar: (s.YolSatiri & { yol: SatirYolu })[] }
 async function dagitilmisSiparisler(db: Db, f: s.YolFiltresi): Promise<DagitilmisSiparis[]> {
   const satirlar = await s.siparisYolSatirlari(db, f);
   if (satirlar.length === 0) return [];
@@ -2063,13 +2064,14 @@ async function dagitilmisSiparisler(db: Db, f: s.YolFiltresi): Promise<Dagitilmi
   }
   return [...siparisler.values()].map((l) => {
     const ilk = l[0]!;
-    const dagilim = siparisDagilimi(l.map((r) => ({
+    const girdiler = l.map((r) => ({
       fason: r.fason, kartTuru: r.malzemeNo === null ? null : (kartlar.get(r.malzemeNo)?.tur ?? null),
       kartBulunamadi: r.malzemeNo !== null && !kartlar.has(r.malzemeNo),
       emirId: r.emirId, emirProjeli: r.emirId !== null && projeliEmirler.has(r.emirId), projeId: r.projeId,
       mal: Number(r.mal), miktar: Number(r.miktar), teslim: Number(r.teslim),
-    })), Number(ilk.masraf));
-    return { talepId: ilk.talepId, teklifId: ilk.teklifId, paraBirimi: ilk.paraBirimi, dagilim };
+    }));
+    const dagilim = siparisDagilimi(girdiler, Number(ilk.masraf));
+    return { talepId: ilk.talepId, teklifId: ilk.teklifId, paraBirimi: ilk.paraBirimi, dagilim, satirlar: l.map((r, i) => ({ ...r, yol: satirYolu(girdiler[i]!) })) };
   });
 }
 function hedefTutarlari(siparisler: readonly DagitilmisSiparis[], yol: 'emir' | 'proje', istenen: ReadonlySet<number>): Map<number, { tutar: string; paraBirimi: string }[]> {
@@ -2107,6 +2109,110 @@ export async function siparisGenelGiderOranlari(db: Db, siparisler: readonly { t
   const tekil = [...new Map(siparisler.map((x) => [`${x.talepId}:${x.teklifId}`, x])).values()];
   if (tekil.length === 0) return new Map();
   return new Map((await dagitilmisSiparisler(db, { siparisler: tekil })).map((p) => [`${p.talepId}:${p.teklifId}`, p.dagilim.genelGiderOrani]));
+}
+
+// 2642 b: Finans'ın verdiği belge bilgisi (belgelerinSiparisleri); satın alma finans_belge'yi okumaz.
+export interface EslemeBelgesi { belgeId: number; belgeNo?: string | null; firmaId?: number | null; talepId: string; teklifId: string; kdvHaricTutar: string; paraBirimi: string; iptal: boolean }
+const siparisAnahtari = (x: { talepId: string; teklifId: string }): string => `${x.talepId}:${x.teklifId}`;
+
+// 2642 b, 2646 a: belge başına genel gider oranı ve eşleme durumu; iptal belge haritada yok (Finans da sormaz). Eşleme belgenin güncel
+// siparişinde değilse sayılmaz (Veri 1).
+export async function belgeOranlariHesapla(db: Db, belgeler: readonly EslemeBelgesi[]): Promise<Map<number, { oran: number | null; esleme: EslemeDurumu }>> {
+  const gecerli = belgeler.filter((b) => !b.iptal);
+  if (gecerli.length === 0) return new Map();
+  const siparisler = new Map((await dagitilmisSiparisler(db, { siparisler: gecerli })).map((p) => [siparisAnahtari(p), p]));
+  const eslemeler = await s.faturaEslemeleri(db, gecerli.map((b) => b.belgeId));
+  return new Map(gecerli.map((b) => {
+    const p = siparisler.get(siparisAnahtari(b));
+    const yollar = new Map((p?.satirlar ?? []).map((r) => [r.satirId, r.yol]));
+    const kendi = eslemeler.filter((e) => e.belgeId === b.belgeId && e.kaldirilma === null);
+    return [b.belgeId, belgeGenelGiderOrani({
+      belgeTutari: b.kdvHaricTutar, siparisOrani: p?.dagilim.genelGiderOrani ?? null,
+      eslemeler: kendi.map((e) => ({ tutar: e.tutar, yol: siparisAnahtari(e) === siparisAnahtari(b) ? (yollar.get(e.siparisSatiriId) ?? null) : null })),
+    })];
+  }));
+}
+
+export interface FaturaEslemesiOkuma {
+  belgeId: number; belgeNo: string | null; firmaAdi: string | null; belgeTutari: string; paraBirimi: string; siparisParaBirimi: string | null; surum: number;
+  satirlar: { siparisSatiriId: number; kalemAdi: string; miktar: string; birim: string; siparisTutari: string; yol: SatirYolu; tutar: string | null; baskaBelgelerden: string | null }[];
+  bayat: { siparisSatiriId: number; tutar: string }[];
+  eslenmemisKalan: string; oran: number | null; esleme: EslemeDurumu;
+}
+// 2642 b: eşleme ekranının verisi. Yetki ucundadır (Güvenlik K2: fiyat var).
+export async function faturaEslemesiOku(db: Db, b: EslemeBelgesi): Promise<FaturaEslemesiOkuma> {
+  const p = (await dagitilmisSiparisler(db, { siparisler: [b] }))[0];
+  const tum = await s.faturaEslemeleri(db, [b.belgeId]);
+  const etkin = tum.filter((e) => e.kaldirilma === null);
+  const satirlar = p?.satirlar ?? [];
+  // Maliyet (21:15Z): yalnız bu belgeyle aynı para birimindeki belgeler toplanır; başka para birimi katılmaz.
+  const baskaSatirlar = await s.satirlarinBaskaEslemeleri(db, b.belgeId, satirlar.map((r) => r.satirId));
+  const baskaBelgeler = await belgelerinSiparisleri(db, [...new Set(baskaSatirlar.map((x) => x.belgeId))]);
+  const baskaKurus = new Map<number, number>();
+  for (const x of baskaSatirlar) {
+    const o = baskaBelgeler.get(x.belgeId);
+    if (o === undefined || o.iptal || o.paraBirimi !== b.paraBirimi) continue;
+    baskaKurus.set(x.siparisSatiriId, (baskaKurus.get(x.siparisSatiriId) ?? 0) + Math.round(Number(x.tutar) * 100));
+  }
+  const baska = new Map([...baskaKurus].map(([k, v]) => [k, (v / 100).toFixed(2)]));
+  const sayilan = etkin.filter((e) => siparisAnahtari(e) === siparisAnahtari(b) && satirlar.some((r) => r.satirId === e.siparisSatiriId));
+  const kurus = (x: string): number => Math.round(Number(x) * 100);
+  const oran = (await belgeOranlariHesapla(db, [b])).get(b.belgeId) ?? { oran: null, esleme: 'yok' as const };
+  // Arayüz K9: başlıkta belge no ve tedarikçi (firma adı sahibinden).
+  const firmaAdi = b.firmaId === null || b.firmaId === undefined ? null : ((await firmaAdlari(db, [b.firmaId])).get(b.firmaId) ?? null);
+  return {
+    belgeId: b.belgeId, belgeNo: b.belgeNo ?? null, firmaAdi, belgeTutari: b.kdvHaricTutar, paraBirimi: b.paraBirimi, siparisParaBirimi: p?.paraBirimi ?? null, surum: eslemeSurumu(tum),
+    satirlar: satirlar.map((r) => ({
+      siparisSatiriId: r.satirId, kalemAdi: r.kalemAdi, miktar: r.miktar, birim: r.birim, siparisTutari: (Math.round(Number(r.mal) * 100) / 100).toFixed(2), yol: r.yol,
+      tutar: sayilan.find((e) => e.siparisSatiriId === r.satirId)?.tutar ?? null, baskaBelgelerden: baska.get(r.satirId) ?? null,
+    })),
+    bayat: etkin.filter((e) => !sayilan.includes(e)).map((e) => ({ siparisSatiriId: e.siparisSatiriId, tutar: e.tutar })),
+    eslenmemisKalan: ((kurus(b.kdvHaricTutar) - sayilan.reduce((t, e) => t + kurus(e.tutar), 0)) / 100).toFixed(2),
+    ...oran,
+  };
+}
+
+// 2642 b: tam liste kaydı; çağıran belgeyi Finans'ın kilidiyle aynı işlemde vermiştir (Mimar K1). Bayat eşlemeler de kaldırılır: liste
+// belgenin bütün etkin eşlemesidir. Sürüm eskiyse 409.
+export async function faturaEslemesiKaydet(db: Db, kisiId: number, b: EslemeBelgesi, g: { satirlar: readonly { siparisSatiriId: number; tutar: string }[]; surum: number }): Promise<void> {
+  if (b.iptal) throw gecersiz(ILETILER.eslemeIptal);
+  const tum = await s.faturaEslemeleri(db, [b.belgeId]);
+  if (eslemeSurumu(tum) !== g.surum) throw cakisma(ILETILER.eslemeSurum);
+  const siparisSatirlari = new Set((await s.siparisYolSatirlari(db, { siparisler: [b] })).filter((r) => siparisAnahtari(r) === siparisAnahtari(b)).map((r) => r.satirId));
+  const hata = eslemeListesiHatasi(g.satirlar, siparisSatirlari, b.kdvHaricTutar);
+  if (hata) throw gecersiz(hata);
+  const etkin = tum.filter((e) => e.kaldirilma === null);
+  const yeni = new Map(g.satirlar.map((x) => [x.siparisSatiriId, x.tutar]));
+  const kalan = etkin.filter((e) => yeni.get(e.siparisSatiriId) !== undefined && Number(yeni.get(e.siparisSatiriId)) === Number(e.tutar) && siparisAnahtari(e) === siparisAnahtari(b));
+  await s.faturaEslemesiKaldir(db, etkin.filter((e) => !kalan.includes(e)).map((e) => e.id), kisiId);
+  for (const x of g.satirlar) {
+    if (!kalan.some((e) => e.siparisSatiriId === x.siparisSatiriId)) await s.faturaEslemesiEkle(db, { belgeId: b.belgeId, siparisSatiriId: x.siparisSatiriId, tutar: x.tutar, kisiId });
+  }
+}
+
+// 2642 b: belge Finans'tan okunur; kaydetmede Finans aynı işlemde kilitler (Mimar K1). Finans yalnız siparişli belgeyi döner: siparişsiz
+// ve bulunmayan belge aynı 422'dir (belgenin varlığı fiyat değildir ama ayrı uç gerekmez).
+async function eslemeBelgesi(db: Db, belgeId: number, kilitle: boolean): Promise<EslemeBelgesi> {
+  const b = (await belgelerinSiparisleri(db, [belgeId], { kilitle })).get(belgeId);
+  if (b === undefined) throw gecersiz(ILETILER.eslemeSiparissiz);
+  return { belgeId, ...b };
+}
+export async function faturaEslemesiGetir(db: Db, belgeId: number): Promise<FaturaEslemesiOkuma> {
+  const b = await eslemeBelgesi(db, belgeId, false);
+  if (b.iptal) throw gecersiz(ILETILER.eslemeIptal);
+  return faturaEslemesiOku(db, b);
+}
+export async function faturaEslemesiYaz(db: Db, kisiId: number, belgeId: number, g: { satirlar: readonly { siparisSatiriId: number; tutar: string }[]; surum: number }): Promise<FaturaEslemesiOkuma> {
+  const b = await eslemeBelgesi(db, belgeId, true);
+  await faturaEslemesiKaydet(db, kisiId, b, g);
+  return faturaEslemesiOku(db, b);
+}
+// 2642 b, 2646 a: Finans genel gider önerisi bunu çözücüyle çeker (kablolama). Bulunmayan, siparişsiz ve iptal belge haritada yoktur.
+export async function belgeGenelGiderOranlari(db: Db, belgeIdler: readonly number[]): Promise<Map<number, { oran: number | null; esleme: EslemeDurumu }>> {
+  const tekil = [...new Set(belgeIdler)];
+  if (tekil.length === 0) return new Map();
+  const bilgi = await belgelerinSiparisleri(db, tekil, { kilitle: false });
+  return belgeOranlariHesapla(db, [...bilgi].map(([belgeId, b]) => ({ belgeId, ...b })));
 }
 
 // 2614 1/2 a: idari talepten kalemsiz taslak satın alma talebi. Açan çevirendir (K3); talep eden idari talebi açandır ve harekete yazılır.
