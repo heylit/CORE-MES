@@ -13,6 +13,7 @@ export {
   malzemeAra,
 } from './servis/okuma.ts';
 export { emreKopyalaToplu } from './servis/emir-toplu.ts';
+export { rotaAdimlariToplu } from './servis/adim-toplu.ts';
 export { sablonListesi, sablonEkle, sablonKaydet, sablonuVarsayilanYap, sablonuSil } from './servis/sablon.ts';
 export {
   sartnameListesi, sartnameAyrintisi, sartnameEkle, sartnameKopyala, sartnameKunyeKaydet, sartnameSurumAc, sartnameTaslakKaydet, sartnameYayinla,

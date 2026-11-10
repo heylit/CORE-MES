@@ -20,6 +20,8 @@ export interface ExcelSutunu {
   // Liste aynı dosyadaki sayfanın yeni satırlarını da tanır (ör. yeni iş merkezine istasyon): o sayfanın adı.
   dosyadakiSayfa?: string;
   not?: string;
+  // Bilgi sütunu: kayıtlı değer şablonda gelir ama bu sayfada değişmez; değiştirilen hücre satırı hatalı yapar (örnek: emrin miktarı).
+  salt?: true;
   enUzun?: number;
   genislik?: number;
 }
@@ -30,6 +32,9 @@ export interface ExcelSayfasi<K = unknown> {
   sutunlar: readonly ExcelSutunu[];
   // Eşleşme anahtarı sütunu (kod); kayıt bu değerle bulunursa satır güncellemedir. Boş metin: eşleşme yok, her satır yeni kayıttır (emir gibi).
   anahtarSutun: string;
+  // Bileşik anahtarın ikinci sütunu (rota adımı: ürün + OP no). Doluysa kayıt iki değerle bulunur ve bulunamazsa satır hatadır;
+  // boşsa satır yeni kayıttır. `anahtar(k)` bu durumda iki değeri ANAHTAR_AYRACI ile birleştirir.
+  ikinciAnahtar?: string;
   kayitlar: readonly K[];
   anahtar: (k: K) => string;
   // Kaydın ekranda gösterilen alanları, sütun anahtarlarıyla (dolu şablon ve fark için).
@@ -41,6 +46,8 @@ export interface ExcelSayfasi<K = unknown> {
   // Yazımı durdurmayan uyarı (örnek: aynı ürün, miktar ve teslimle açık emir var); önizlemede satırın açıklamasında görünür.
   // eslesen: satırın güncellediği kayıt, yeni kayıtta null.
   uyari?: (degerler: Readonly<Record<string, Deger>>, eslesen: K | null) => string | null;
+  // Satırı hatalı yapan sayfa kuralı (örnek: planlı emir taslağa dönmez); önizlemede görünür, sunucu ayrıca denetler.
+  denetle?: (degerler: Readonly<Record<string, Deger>>, eslesen: K | null) => string | null;
 }
 
 // Kayıt türü sayfa tanımında kalır; tanım listesi türü silinmiş sayfaları taşır.
@@ -54,6 +61,9 @@ export interface ExcelTanimi {
   kilavuz: readonly string[];
   // Önizlemede yazılacak satırların özeti (örnek: "3 emir stok ayıracak"); yoksa null.
   ozet?: (gidecek: readonly PlanSatiri[]) => string | null;
+  // Gönderime plan dışından giren veri (örnek: rota adımlarının revizyon dayanağı); istek kimliğine katılır. Aynı dosya bu veri değişince
+  // yeni istektir: eski kimlikle farklı gövde sunucuda reddedilirdi.
+  kimlikEki?: unknown;
 }
 
 export type Islem = 'ekle' | 'guncelle' | 'ayni' | 'hata';
@@ -80,6 +90,8 @@ export class YazimReddi extends Error {}
 
 // Sunucunun toplu sözleşmeleriyle aynı sınır.
 export const TOPLU_EN_COK = TOPLU_EN_COK_SATIR;
+// Bileşik anahtarın ayracı: koddaki hiçbir karakterle karışmaz (Excel hücresinde birim ayırıcı yazılamaz; Mimar N4).
+export const ANAHTAR_AYRACI = '\u001f';
 export const DOSYA_EN_BUYUK_BAYT = 5 * 1024 * 1024;
 export const DAMGA_ONEKI = 'core-mes-excel';
 const AYRAC = ' — ';
@@ -199,7 +211,9 @@ export function planKur(t: ExcelTanimi, sayfalar: SayfaSatirlari): { plan: PlanS
         if (hata) { hatalar.push(hata); hataliSutun.add(c.anahtar); }
         else if (deger !== undefined) degerler[c.anahtar] = deger;
       });
-      const anahtar = degerler[s.anahtarSutun];
+      const birinci = degerler[s.anahtarSutun];
+      const ikinci = s.ikinciAnahtar === undefined ? undefined : degerler[s.ikinciAnahtar];
+      const anahtar = typeof birinci !== 'string' ? birinci : s.ikinciAnahtar === undefined ? birinci : ikinci === undefined ? null : `${birinci}${ANAHTAR_AYRACI}${String(ikinci)}`;
       const eslesen = typeof anahtar === 'string' ? kayitlar.get(kucuk(anahtar)) ?? null : null;
       if (typeof anahtar === 'string') {
         const once = gorulen.get(kucuk(anahtar));
@@ -207,7 +221,10 @@ export function planKur(t: ExcelTanimi, sayfalar: SayfaSatirlari): { plan: PlanS
         else gorulen.set(kucuk(anahtar), satir);
       }
       const farklar: Fark[] = [];
-      if (eslesen === null && s.ekleme === false) {
+      const ikinciBaslik = s.sutunlar.find((c) => c.anahtar === s.ikinciAnahtar)?.baslik ?? '';
+      if (eslesen === null && typeof anahtar === 'string' && s.ikinciAnahtar !== undefined) {
+        hatalar.push(`Bu ${ikinciBaslik} kayıtlı değil; yeni kayıt için ${ikinciBaslik} boş bırakılır.`);
+      } else if (eslesen === null && s.ekleme === false) {
         hatalar.push(`${s.sutunlar[anahtarYeri]?.baslik ?? 'Kayıt'} listeden seçilmeli; bu sayfada yeni kayıt açılmaz.`);
       } else if (eslesen === null) {
         for (const c of s.sutunlar) if (c.zorunlu && degerler[c.anahtar] === undefined && !hataliSutun.has(c.anahtar)) hatalar.push(`${c.baslik} zorunlu.`);
@@ -215,17 +232,21 @@ export function planKur(t: ExcelTanimi, sayfalar: SayfaSatirlari): { plan: PlanS
         const mevcut = s.satir(eslesen);
         for (const c of s.sutunlar) {
           const yeni = degerler[c.anahtar];
-          if (yeni === undefined || c.anahtar === s.anahtarSutun) continue;
+          if (yeni === undefined || c.anahtar === s.anahtarSutun || c.anahtar === s.ikinciAnahtar) continue;
           const eski = mevcut[c.anahtar] ?? null;
-          if (eski !== yeni) farklar.push({ alan: c.anahtar, baslik: c.baslik, eski: gorunen(c, eski), yeni: gorunen(c, yeni) });
+          if (eski === yeni) continue;
+          if (c.salt) hatalar.push(`${c.baslik} bu sayfada değişmez.`);
+          else farklar.push({ alan: c.anahtar, baslik: c.baslik, eski: gorunen(c, eski), yeni: gorunen(c, yeni) });
         }
         const kilit = farklar.length ? s.kilitli?.(eslesen) ?? null : null;
         if (kilit !== null) hatalar.push(kilit);
       }
+      const kural = hatalar.length ? null : s.denetle?.(degerler, eslesen) ?? null;
+      if (kural !== null) hatalar.push(kural);
       const islem: Islem = hatalar.length ? 'hata' : eslesen === null ? 'ekle' : farklar.length ? 'guncelle' : 'ayni';
       const uyari = islem === 'hata' ? null : s.uyari?.(degerler, eslesen) ?? null;
       plan.push({
-        sayfa: s.ad, kayitTuru: s.kayitTuru, satir, kod: typeof anahtar === 'string' ? anahtar : null, islem, degerler, eslesen, farklar, hatalar,
+        sayfa: s.ad, kayitTuru: s.kayitTuru, satir, kod: typeof anahtar === 'string' ? anahtar.split(ANAHTAR_AYRACI).join(' / ') : typeof birinci === 'string' ? birinci : null, islem, degerler, eslesen, farklar, hatalar,
         ...(uyari === null ? {} : { uyarilar: [uyari] }), ham: yer.map((y) => (y < 0 ? null : r[y] ?? null)),
       });
     });

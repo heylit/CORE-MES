@@ -35,8 +35,8 @@ const SAYFA_BOYU = 50;
 interface Okunan { dosyaAdi: string; plan: PlanSatiri[]; istekKimligi: string }
 interface Sonuc { tamam: boolean; metin: string; redSatiri: PlanSatiri | null; redIletisi: string | null }
 
-const planKimligi = (ad: string, plan: readonly PlanSatiri[]): Promise<string> => icerikKimligi(new TextEncoder().encode(JSON.stringify([
-  ad, gonderilecekler(plan).map((p) => [p.sayfa, p.satir, p.islem, p.degerler, p.eslesen ?? null]),
+const planKimligi = (t: ExcelTanimi, plan: readonly PlanSatiri[]): Promise<string> => icerikKimligi(new TextEncoder().encode(JSON.stringify([
+  t.ad, gonderilecekler(plan).map((p) => [p.sayfa, p.satir, p.islem, p.degerler, p.eslesen ?? null]), ...(t.kimlikEki === undefined ? [] : [t.kimlikEki]),
 ])));
 
 const notlar = (p: PlanSatiri): string[] => [
@@ -72,7 +72,7 @@ export function ExcelPenceresi({ kapat, tanim, yaz }: Ozellikler) {
     try {
       const { plan, uyari } = planKur(tanim, await dosyaOku(tanim, f));
       if (uyari) { iletiYaz(uyari); return; }
-      okunanYaz({ dosyaAdi: f.name, plan, istekKimligi: await planKimligi(tanim.ad, plan) });
+      okunanYaz({ dosyaAdi: f.name, plan, istekKimligi: await planKimligi(tanim, plan) });
       suzYaz(planSayilari(plan).hata > 0 ? 'hata' : ''); sayfaYaz(1); adimYaz('onizle');
     } catch (e) {
       iletiYaz(e instanceof DosyaReddi ? e.message : 'Dosya okunamadı. Bu sayfadan indirilen şablonla doldurulmuş bir .xlsx olmalı.');

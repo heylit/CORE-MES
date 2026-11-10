@@ -1,9 +1,9 @@
 // Excel ile toplu emir (2627): "Yeni üretim emri" formunun alanları. Her satır yeni emirdir; ürünün yürürlükteki rotasından açılır
 // (`/rota/emre-kopyala-toplu`, tek transaction). Bölme, çok katmanlı emir ve sipariş satırı seçimi sayfada tek tek yapılır.
 import { EMIR_TURU_ADLARI } from '#paylasilan/sozlesme/emir-turleri.ts';
-import type { AcilisSecenekleri } from '#paylasilan/sozlesme/uretim-emirleri.ts';
+import type { AcilisSecenekleri, EmirTopluGuncelleCevabi, EmirTopluGuncelleSatiri } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import type { EmreKopyalaTopluCevabi, EmreKopyalaTopluSatiri } from '#paylasilan/sozlesme/rota.ts';
-import { YazimReddi, gonderimNumaralari, sayfaTanimi, type ExcelTanimi, type PlanSatiri } from '../../../../ortak/excel/kurallar.ts';
+import { TOPLU_EN_COK, YazimReddi, gonderimNumaralari, sayfaTanimi, type ExcelTanimi, type ListeSecenegi, type PlanSatiri } from '../../../../ortak/excel/kurallar.ts';
 import { api } from '../../../../ortak/veri/api.ts';
 import type { RrDurumu } from '../veri.ts';
 import { ONCELIK_ADI, yururlukteRevizyonId } from './kurallar.ts';
@@ -96,4 +96,57 @@ export async function emirYaz(satirlar: readonly PlanSatiri[], istekKimligi: str
   if (kesirli) throw new YazimReddi(`${kesirli.sayfa} sayfası, ${String(kesirli.satir)}. satır: miktar sıfırdan büyük tam sayı olmalı.`);
   const no = gonderimNumaralari(satirlar);
   return api.post<EmreKopyalaTopluCevabi>('/rota/emre-kopyala-toplu', { satirlar: satirlar.map((p, i) => emirSatiri(p, no[i] ?? i + 1, k)) }, { istekKimligi });
+}
+
+// Excel ile var olan emirleri güncelleme (2627 2/2 c, kart 2704 a): yalnız sayfada da değişenler, öncelik ve taslağı plana alma
+// (`/adimli-emirler/toplu-guncelle`, tek transaction). Ürün, miktar ve tarihler bilgi içindir; bu sayfada değişmez.
+export const GUNCELLE_SAYFASI = 'Açık emirler';
+export const PLANLI_TASLAGA_DONMEZ = 'Planlı emir taslağa alınmaz.';
+type Emir = NonNullable<RrDurumu['emirler']>['orders'][number];
+const DURUM_SECENEKLERI: readonly ListeSecenegi[] = [{ kod: 'serbest', ad: 'Planlı (plana girer)' }, { kod: 'taslak', ad: 'Taslak' }];
+const bilgi = 'Bilgi için; bu sayfada değişmez.';
+
+export function emirGuncelleTanimi(d: RrDurumu): ExcelTanimi {
+  const urun = new Map((d.items ?? []).map((i) => [i.id, i.code] as const));
+  const acik = (d.emirler?.orders ?? []).filter((o) => o.status === 'taslak' || o.status === 'serbest');
+  return {
+    ad: 'acik-emirler', baslik: 'Açık emirleri güncelle',
+    kilavuz: [
+      'Her satır başlamamış (taslak ya da planlı) bir emirdir; "Kayıtlarla indir" bütün açık emirleri getirir.',
+      'Değişen yalnız Öncelik ve Durum\'dur: taslak emir Planlı yapılınca plana girer. Planlı emir taslağa dönmez.',
+      'Ürün, miktar ve tarihler bilgi içindir; değiştirilirse satır reddedilir. Bölme ve iptal sayfada yapılır.',
+      `Tek satır reddedilirse hiçbir emir değişmez. Bir dosyada en çok ${String(TOPLU_EN_COK)} emir güncellenir.`,
+    ],
+    sayfalar: [sayfaTanimi<Emir>({
+      ad: GUNCELLE_SAYFASI, kayitTuru: 'emir', anahtarSutun: 'no', ekleme: false,
+      kayitlar: acik, anahtar: (o) => o.no,
+      sutunlar: [
+        { anahtar: 'no', baslik: 'Emir no', tur: 'liste', zorunlu: true, liste: acik.map((o) => ({ kod: o.no, ad: urun.get(o.itemId) ?? '' })), genislik: 30 },
+        { anahtar: 'urun', baslik: 'Ürün', tur: 'kod', salt: true, not: bilgi, genislik: 22 },
+        { anahtar: 'adet', baslik: 'Miktar', tur: 'sayi', salt: true, not: bilgi },
+        { anahtar: 'teslim', baslik: 'Teslim', tur: 'tarih', salt: true, not: bilgi },
+        { anahtar: 'oncelik', baslik: 'Öncelik', tur: 'liste', liste: Object.entries(ONCELIK_ADI).map(([kod, ad]) => ({ kod, ad })) },
+        { anahtar: 'durum', baslik: 'Durum', tur: 'liste', liste: DURUM_SECENEKLERI },
+      ],
+      satir: (o) => ({ no: o.no, urun: urun.get(o.itemId) ?? null, adet: o.qty, teslim: o.due === null ? null : o.due.slice(0, 10), oncelik: String(o.priority), durum: o.status }),
+      denetle: (v, o) => (o?.status === 'serbest' && v['durum'] === 'taslak' ? PLANLI_TASLAGA_DONMEZ : null),
+    })],
+  };
+}
+
+export function emirGuncelleSatiri(p: PlanSatiri, satir: number): EmirTopluGuncelleSatiri {
+  const o = p.eslesen as Emir | null;
+  if (o === null) throw new YazimReddi(`${p.sayfa} sayfası, ${String(p.satir)}. satır: emir bulunamadı.`);
+  const alan = new Set(p.farklar.map((f) => f.alan));
+  return {
+    satir, id: Number(o.id), surum: o.surum,
+    ...(alan.has('oncelik') ? { oncelik: Number(p.degerler['oncelik']) } : {}),
+    ...(alan.has('durum') && p.degerler['durum'] === 'serbest' ? { planaAl: true as const } : {}),
+  };
+}
+
+export async function emirGuncelleYaz(satirlar: readonly PlanSatiri[], istekKimligi: string): Promise<EmirTopluGuncelleCevabi> {
+  if (satirlar.length > TOPLU_EN_COK) throw new YazimReddi(`Bir dosyada en çok ${String(TOPLU_EN_COK)} emir güncellenir; dosyayı bölün.`);
+  const no = gonderimNumaralari(satirlar);
+  return api.post<EmirTopluGuncelleCevabi>('/adimli-emirler/toplu-guncelle', { satirlar: satirlar.map((p, i) => emirGuncelleSatiri(p, no[i] ?? i + 1)) }, { istekKimligi });
 }

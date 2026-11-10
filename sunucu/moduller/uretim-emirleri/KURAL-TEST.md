@@ -109,3 +109,10 @@ DK: `dis-islem-emri.test.ts` "UE-DIE kuralları (saf)", DP: aynı dosya "gerçek
 Bağsız kural: yok.
 | 2521 b (09.11.2026): karar bekleyen varken bitirme reddedilir, sayım ve iş değişmez; onay ya da ret bekleyeni kapatınca bitirilir | kurallar.test.ts "2521 b", karar-bekliyor.test.ts "2521 b" (izinli ve yasak), karar-bekleyen-adet.test.ts "2521 b", arkon/yansima.test.ts "K1, T1" |
 | 2520-5 (09.11.2026): terminalde biten adım olay verir; dinleyicinin reddi bitirmeyi geri alır | karar-bekleyen-adet.test.ts "2520-5" |
+
+## 2627 2/2 c: Excel ile açık emirleri güncelleme (2704 a)
+| Kural | Madde | Test (izinli ve reddedilen) |
+|---|---|---|
+| UE-TOPLU-1 | Öncelik ve taslağı plana alma tek istekte, tek kayıt komutlarının kuralıyla; öncelik değişimi kayda girer | toplu-guncelle.test.ts "izinli" |
+| UE-TOPLU-2 | Tek satırın reddi (eski sürüm, planlı emri plana alma, başlamış emirde öncelik) hiçbir satırı yazmaz ve satır numarasını söyler | toplu-guncelle.test.ts "reddedilen" |
+| UE-TOPLU-3 | Alansız satır ve aynı emir iki kez 400; istek kimliği zorunlu; yetkisiz 403 | toplu-guncelle.test.ts "gövde ve yetki" |

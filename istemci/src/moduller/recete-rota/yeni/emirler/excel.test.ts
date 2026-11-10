@@ -3,7 +3,7 @@ import type { AcilisSecenekleri } from '#paylasilan/sozlesme/uretim-emirleri.ts'
 import { YazimReddi, planKur } from '../../../../ortak/excel/kurallar.ts';
 import { api } from '../../../../ortak/veri/api.ts';
 import type { RrDurumu } from '../veri.ts';
-import { EMIR_SAYFASI, emirKaynagi, emirSatiri, emirTanimi, emirYaz } from './excel.ts';
+import { EMIR_SAYFASI, GUNCELLE_SAYFASI, PLANLI_TASLAGA_DONMEZ, emirGuncelleSatiri, emirGuncelleTanimi, emirGuncelleYaz, emirKaynagi, emirSatiri, emirTanimi, emirYaz } from './excel.ts';
 
 // Sentetik veri: gerçek ürün ya da proje yok.
 const madde = (id: string, code: string, type: string) => ({ id, code, name: `Ad ${code}`, type, aktif: true });
@@ -11,8 +11,11 @@ const d = {
   items: [madde('11', 'MM-1', 'mamul'), madde('12', 'MM-2', 'mamul'), madde('13', 'HM-1', 'ham')],
   routeRevs: [{ id: '91', itemId: '11', status: 'yururlukte' }, { id: '92', itemId: '12', status: 'taslak' }],
   emirler: { orders: [
-    { id: '1', itemId: '11', qty: 5, due: '2026-11-20', status: 'serbest' },
+    { id: '1', no: 'UE-1', itemId: '11', qty: 5, due: '2026-11-20', priority: 3, status: 'serbest', surum: 1 },
     { id: '2', itemId: '11', qty: 7, due: '2026-11-20', status: 'iptal' },
+    { id: '3', no: 'UE-3', itemId: '11', qty: 4, due: '2026-11-25', priority: 3, status: 'taslak', surum: 2 },
+    { id: '4', no: 'UE-4', itemId: '12', qty: 6, due: null, priority: 2, status: 'serbest', surum: 5 },
+    { id: '5', no: 'UE-5', itemId: '12', qty: 6, due: null, priority: 2, status: 'uretimde', surum: 1 },
   ] },
 } as unknown as RrDurumu;
 const secenekler = { projeZorunlu: true, rotasizAcik: false, projeler: [{ id: 5, kod: 'PRJ-1', ad: 'Deneme projesi', satirlar: [] }] } as AcilisSecenekleri;
@@ -67,5 +70,32 @@ describe('emir Excel tanımı', () => {
     ));
     expect(plan.map((p) => [p.islem, p.uyarilar ?? []])).toEqual([['ekle', ['Aynı ürün, miktar ve teslimle açık emir var.']], ['ekle', []]]);
     expect(t.ozet?.(plan)).toBe('1 emir stoktan rezerve ayıracak (Stoktan rezerve sütunu Evet ya da boş).');
+  });
+});
+
+describe('açık emirleri güncelleme (2704 a)', () => {
+  const okuG = (...satirlar: (string | number | null)[][]) => ({
+    [GUNCELLE_SAYFASI]: [
+      { no: 1, hucreler: ['Emir no *', 'Ürün', 'Miktar', 'Teslim', 'Öncelik', 'Durum'] },
+      ...satirlar.map((h, i) => ({ no: i + 2, hucreler: h })),
+    ],
+  });
+  it('yalnız taslak ve planlı emirler; öncelik ve plana alma gider, bilgi sütunu değişirse ve planlı taslağa dönerse satır hatalı', () => {
+    const t = emirGuncelleTanimi(d);
+    expect(t.sayfalar[0]?.kayitlar.map((o) => (o as { no: string }).no)).toEqual(['UE-1', 'UE-3', 'UE-4']);
+    const { plan } = planKur(t, okuG(['UE-3', 'MM-1', 4, '25.11.2026', '1', 'Planlı (plana girer)'], ['UE-4', null, null, null, 'Acil', null], ['UE-5', null, null, null, '1', null]));
+    expect(plan.map((p) => p.islem)).toEqual(['guncelle', 'guncelle', 'hata']);
+    const tek = (h: (string | number | null)[]) => planKur(t, okuG(h)).plan[0];
+    expect(tek(['UE-4', null, 9, null, null, null])?.hatalar).toEqual(['Miktar bu sayfada değişmez.']);
+    expect(tek(['UE-4', null, null, null, null, 'Taslak'])?.hatalar).toEqual([PLANLI_TASLAGA_DONMEZ]);
+    expect(tek(['UE-3', null, null, null, null, null])?.islem).toBe('ayni');
+    expect(emirGuncelleSatiri(plan[0]!, 2)).toEqual({ satir: 2, id: 3, surum: 2, oncelik: 1, planaAl: true });
+    expect(emirGuncelleSatiri(plan[1]!, 3)).toEqual({ satir: 3, id: 4, surum: 5, oncelik: 1 });
+  });
+  it('sunucuya Excel satır numarası ve istek kimliği gider', async () => {
+    const { plan } = planKur(emirGuncelleTanimi(d), okuG(['UE-4', null, null, null, '4', null]));
+    const post = vi.spyOn(api, 'post').mockResolvedValue({ eklenen: 0, guncellenen: 1 });
+    await emirGuncelleYaz(plan, 'k1');
+    expect(post.mock.calls[0]).toEqual(['/adimli-emirler/toplu-guncelle', { satirlar: [{ satir: 2, id: 4, surum: 5, oncelik: 4 }] }, { istekKimligi: 'k1' }]);
   });
 });

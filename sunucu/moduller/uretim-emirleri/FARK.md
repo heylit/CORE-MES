@@ -268,3 +268,8 @@ Taban main 6d14403. Başvuru: DEVAM-paketi-rota-plan/ilk-sistem-kodu (adımlı �
 - 2520-2: `isEmirleriniYenile` isteğe bağlı `surum` alır; satır kilidinden sonra denetlenir, eski sürüm ESKI_SURUM (409). Çağıran rota (B17) verene kadar davranış değişmez.
 - 2521 b (kullanıcı kararı 09.11.2026): ilk parça kararı bekleyen parça varken adım (adımsız emirde emir) bitirilmez; `emirBitir` CAKISMA (409) "n parça ilk parça kararı bekliyor (OP x). Kalite Merkezi kararı gelmeden iş bitirilemez." döner, yazı olmaz. Adetli bitişte karar bekleyene fark yazma yolu (327 a) kalktı. Arkon bitiş kaydı "reddedildi" yansır; terminal nedeni ve işin süren hâlini kayıt cevabından alır. 2102-2 b (bitmiş adımda karar bekleyenin sonraki adım hedefine yazılması) bitiş yolunda artık oluşmaz.
 - 2520-5 (2497, B-2499-12): terminalde çalışan iş emri bitince (`emirBitir`, emirle biten son adım dahil) aynı işlemde `adimBittiBildir({ isEmriId, uretimEmriId, kisiId })`; `disari.ts` `adimBittiDinle` verir. Fason dönüşü, GKK kalite kararı, adımsız eski emir ve katılımdan ayrılma olay vermez.
+
+## 2627 2/2 c: Excel ile açık emirleri güncelleme (kart 2704 a kapsamı)
+- Yeni uç `POST /adimli-emirler/toplu-guncelle` (`uretim-emirleri.yaz`, istek kimliği zorunlu, tek transaction). Satır: emir kimliği, önizlemedeki sürüm, isteğe bağlı öncelik ve `planaAl`.
+- Yeni dosya `toplu-guncelle.ts`: satırlar var olan tek kayıt komutlarından geçer (`planaAl`, `oncelikDegistir`); kural, sürüm denetimi ve öncelik değişim kaydı onlarındır. Bir satırın reddi bütün satırları geri alır, ileti "Satır N: ..." olur (`satirdaReddet`).
+- Servis, kural, sorgu ve `disari.ts` değişmedi. İşlem ve rol değişmedi.

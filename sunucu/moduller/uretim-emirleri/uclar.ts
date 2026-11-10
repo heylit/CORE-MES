@@ -3,7 +3,7 @@ import { islemVarMi } from '#cekirdek/yetki.ts';
 import {
   ADIMLI_OKUMA_ISLEMLERI, adimCevabi, adimNotuGovdesi, adimParametresi, adimTamamlaGovdesi, emirAyrintiCevabi, emirCevabi,
   emirParametresi, izlemeListeCevabi, bitenEmirlerCevabi, bitenEmirlerSorgusu, adimliBitenlerCevabi, adimliBitenlerSorgusu,
-  emirlerSorgusu,
+  emirlerSorgusu, emirTopluGuncelleCevabi, emirTopluGuncelleGovdesi,
   adimKaynagiGovdesi, uretimYeriGovdesi, fasonFirmalariCevabi, adimliEmirCevabi, adimliIptalGovdesi, adimliListeCevabi, adimliListeSorgusu, adimliOzetCevabi, fasonGidisGovdesi, siradakiFasonCevabi,
   asimlarCevabi, fasonHareketiCevabi, isEmriParametresi, oncelikGovdesi, ozetCevabi, partiBirlestirGovdesi, partiBolCevabi, partiBolGovdesi, planaAlGovdesi,
   birlesmePlaniGovdesi, ekAdimGovdesi, ekAdimKaldirGovdesi, hazirlikCevabi, hazirlikMuafiyetiGovdesi, hazirlikOzetiCevabi, hazirlikOzetiSorgusu, refakatKartiCevabi, katilimCevabi, rotasizAdimDuzenleGovdesi, rotasizAdimEkleGovdesi, rotasizAdimSilGovdesi, rotasizEmirCevabi, rotasizEmirGovdesi, acilisSecenekleriCevabi, acilisSecenekleriSorgusu, makineDevralGovdesi, makineEkleGovdesi, adimPaylariCevabi, durusDagilimiCevabi, sonOlaylarCevabi, sonOlaylarSorgusu, gunlukUretimCevabi, panelSorgusu, sureOzetiCevabi,
@@ -13,6 +13,7 @@ import {
 } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { aramaUclari } from './arama/uclar.ts';
 import * as isEmri from './is-emri-servis.ts';
+import { emirleriTopluGuncelle } from './toplu-guncelle.ts';
 import { dieAc, dieIptal, dieOku } from './dis-islem-emri.ts';
 import { hataliKaydet, hataliKayitlari } from './hatali-parca.ts';
 import { hazirlik, hazirliklar, muafiyetVer } from './hazirlik.ts';
@@ -283,6 +284,8 @@ const adimliUclar = [
       return { emir: await isEmri.adimliAyrinti(db, parametre.id) };
     },
   }),
+  // Excel ile var olan emirleri güncelleme (2627, 2704): satırlar tek kayıt komutlarından geçer; tek transaction, istek kimliği zorunlu.
+  uc({ yontem: 'POST', yol: '/adimli-emirler/toplu-guncelle', yetki: 'uretim-emirleri.yaz', tekrarKorumali: true, govde: emirTopluGuncelleGovdesi, cevap: emirTopluGuncelleCevabi, isle: ({ db, kullanici, govde }) => emirleriTopluGuncelle(db, kullanici, govde) }),
   // 163 a: başlamamış emrin önceliği senaryo açmadan değişir; eski ve yeni değer kim ve ne zamanla kayda girer.
   uc({
     yontem: 'POST',

@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { listeCevapSemasi, sayfaSorguAlanlari } from '../liste.ts';
 import { ondalikMetinSemasi } from '../ondalik.ts';
 import { surumSemasi } from '../surum.ts';
+import { TOPLU_EN_COK_SATIR } from '../toplu.ts';
 import { tarihSemasi, zamanSemasi } from '../zaman.ts';
 import { TALIMAT_ASAMALARI } from './talimat-asamasi.ts';
 import { KOD_DESENI as NEDEN_KODU } from './durus-nedenleri.ts';
@@ -974,3 +975,26 @@ export type DisIslemEmri = z.output<typeof disIslemEmriSemasi>;
 export type DisIslemEmriCevabi = z.output<typeof disIslemEmriCevabi>;
 export type DisIslemEmriAcGovdesi = z.input<typeof disIslemEmriAcGovdesi>;
 export type DisIslemEmriIptalGovdesi = z.input<typeof disIslemEmriIptalGovdesi>;
+
+// Excel ile var olan emirleri güncelleme (2627 2/2 c, kart 2704): satır bir emirdir ve yalnız sayfada da değişen alanları taşır
+// (öncelik, taslağı plana alma). Her satır emrin önizlemedeki sürümüyle gelir; hepsi tek işlemde, biri reddedilirse hiçbiri yazılmaz.
+// Satır yalnız emrin kendi satırını yazar (iş emri açmaz); sınır öteki toplu girişlerinki gibi ortak toplu sınırdır.
+export const EMIR_TOPLU_GUNCELLE_EN_COK = TOPLU_EN_COK_SATIR;
+// Emir önceliği (1 acil ... 4 düşük). Öteki öncelik alanları kilit kalkınca bu sabite taşınır (Mimar notu, 2704).
+export const emirOncelikSemasi = z.number().int().min(1, 'Öncelik 1-4 olmalı.').max(4, 'Öncelik 1-4 olmalı.');
+export const emirTopluGuncelleSatiri = z.object({
+  satir: z.number().int().min(1).max(1_048_576),
+  id: KIMLIK,
+  surum: surumSemasi,
+  oncelik: emirOncelikSemasi.optional(),
+  planaAl: z.literal(true).optional(),
+}).strict().refine((x) => x.oncelik !== undefined || x.planaAl !== undefined, 'Satırda değişecek alan yok.');
+export const emirTopluGuncelleGovdesi = z.object({
+  satirlar: z.array(emirTopluGuncelleSatiri).min(1).max(EMIR_TOPLU_GUNCELLE_EN_COK)
+    .refine((x) => new Set(x.map((y) => y.satir)).size === x.length, 'Satır numarası iki kez var.')
+    .refine((x) => new Set(x.map((y) => y.id)).size === x.length, 'Aynı emir dosyada iki kez var.'),
+}).strict();
+export const emirTopluGuncelleCevabi = z.object({ eklenen: z.literal(0), guncellenen: z.number().int().min(0) });
+export type EmirTopluGuncelleGirdisi = z.output<typeof emirTopluGuncelleGovdesi>;
+export type EmirTopluGuncelleSatiri = z.input<typeof emirTopluGuncelleSatiri>;
+export type EmirTopluGuncelleCevabi = z.output<typeof emirTopluGuncelleCevabi>;
