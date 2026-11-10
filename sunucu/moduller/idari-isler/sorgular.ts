@@ -639,6 +639,17 @@ export async function aracYilToplami(db: Db, aracId: number): Promise<string | n
   return satir?.toplam ?? null;
 }
 
+// 2594 b, 2614-2 a: ayın (tarih sütununa göre) bütün araçlardaki iptal edilmemiş masraf toplamı; kayıt yoksa '0'.
+// `ay` doğrulanmış 'GGGG-AA' metnidir.
+export async function aylikAracMasrafi(db: Db, ay: string): Promise<string> {
+  const satir = await db.tek<{ toplam: string }>(
+    `SELECT coalesce(sum(tutar), 0)::text AS toplam FROM idari_isler_arac_masrafi
+      WHERE iptal IS NULL AND tarih >= to_date($1, 'YYYY-MM') AND tarih < (to_date($1, 'YYYY-MM') + interval '1 month')::date`,
+    [ay],
+  );
+  return satir?.toplam ?? '0';
+}
+
 export interface DemirbasSatiri {
   id: number;
   tur: DemirbasTuru;

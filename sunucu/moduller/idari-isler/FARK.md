@@ -83,3 +83,9 @@ Taslaktan farklar (VARSAYIM, geri alması ucuz):
 - İK'daki her kayıt ayrı demirbaş olur; aynı eşyanın iki İK kaydı iki demirbaş olarak gelir.
 - Kişiye bağlanmamış personelin zimmeti adla gelir, ekranda uyarıyla görünür, kişiye bağlanır (koordinatör kararı, 244).
 - Zimmet formu yazdırma, demirbaş etiketi, kişi odaklı ekran ve "Zimmetlerim" bu parçada yok.
+
+2708 (2594 b, 2614-2 a): `disari.ts` `aylikAracMasrafi(db, ay)`: finans genel giderinin "diğer" bileşenine giren aylık araç masrafı. Göç, uç,
+sözleşme ve ekran değişmedi.
+- Bütün araçların o ay iptal edilmemiş masraf toplamı (TL, kuruşlu sayı); ay masraf tarihine göre; masraf yoksa 0.
+- Tutar tabloda zorunlu ve sıfırdan büyük; tutarı bilinmeyen masraf olmadığından `null` dönmez (imza istekteki `number | null`).
+- Bağ `sunucu/kablolama.ts`'te `aracMasrafiCozucusu` ile ayrı yamada kurulur (dosya kilidi).
