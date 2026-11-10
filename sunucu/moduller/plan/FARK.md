@@ -341,3 +341,15 @@ Testler: plan-bedel 815 (iki test), kurallar 815, kablolama 815; istemci planlam
 - Sözleşme (yalnız ekleme): plan-secenekleri cevabına `bedeliBilinmeyenEkMesai: boolean` (cevap başına; en az bir aday bedeli bilinmediği
   için ele alınmadı). TL değildir; maliyet görmeyende de aynıdır. Kartta 2745 a metni istemcide (2503, ayrı yama).
 - Test: `ek-mesai-secenek.test.ts` PS-01, 02, 04, 05.
+
+## Ek mesai seçenekleri her rolde İK değeriyle (2766; 2760 b, Güvenlik C1-C6, Maliyet, Test; 2026-11-10)
+- `degerlendirmeBaslat`: D.mesaiSaat (İK grup değeri) maliyet görmeyenin işçi girdisine de yazılır, yalnız plan-secenekleri isteğinde. Öteki
+  türlerde görmeyen yalın kalır (termin uzatma satırları kâr farkına göre sıralanır; değer sıra yoluyla taşınmasın).
+- Güvenlik K3 yeni okunuşu: ek mesai bedeli içeren tutarlar yalnız finans.maliyet-oku ile; seçimin kendisi her rolde aynı İK değeriyle.
+- `maliyetsiz` plan-secenekleri: ek mesai TL'leri, toplam ve net kâr yine null; seçeneğin planındaki TL toplamı (`plan.ozet.tl`) da null (C6).
+  Yeni alan yok; seçenekler denge sırasında.
+- Kalan rol farkı (kapsam dışı, kart 2770): genel gider oranı (2601 a) ve kaynak maliyeti görmeyenin girdisinde yok; oran tanımlı ayda iki rol
+  yine farklı ek mesai seçebilir.
+- Kabul edilen risk (2760 b kartı): planlama rolü çalışmayı değiştirip yeniden değerlendirerek büyük grubun (en az 3 kişi) ek mesai saat
+  bedelini yaklaşık bulabilir. Kişi ücreti ve küçük grup değeri çıkmaz.
+- Test: `mesai-maliyeti.test.ts` "2766", "2742 K2, K3"; `degerlendirme.test.ts` PD-08.

@@ -139,10 +139,11 @@ export async function degerlendirmeBaslat(
   } catch (e) { isler.delete(is); throw e; }
   const surum = k.surum;
   const karGizli = genelGiderGizliMi(k.girdi.calisma);
-  // 2742 (Güvenlik K3): ek mesai saat değeri yalnız maliyeti görenin hesabına girer; görmeyenin TL'si zaten null döner.
+  // Güvenlik K3 (2760 b): ek mesai seçenekleri her rolde aynı İK değeriyle seçilir, görmeyenin TL'si null döner. Öteki türlerde görmeyen
+  // yalın kalır: sonuçları kâr farkına göre sıralanabilir (termin uzatma) ve değer sıra yoluyla taşınmasın.
   let girdi = k.girdi;
   try {
-    if (maliyetGorunur) girdi = await mesaiSaatliGirdi(db, girdi, simdi);
+    if (maliyetGorunur || g.istek.tur === 'plan-secenekleri') girdi = await mesaiSaatliGirdi(db, girdi, simdi);
   } catch (e) { isler.delete(is); throw e; }
   yap({ ...girdi, bugun: tesisGunu(simdi), istek: g.istek }, simdi).then((r) => {
     if (r === null) throw cakisma(CALISMA_YOK);
@@ -208,12 +209,18 @@ export function karsiz(s: DegerlendirmeSonucu): DegerlendirmeSonucu {
   }
 }
 
+// Seçeneğin planı İK değeriyle seçilmiş ek mesaiyle kurulur (2760 b); planın TL toplamı (ozet.tl) görmeyene gitmez (Güvenlik C6).
+function tlsizPlan(plan: Record<string, unknown>): Record<string, unknown> {
+  const ozet = plan['ozet'];
+  return ozet !== null && typeof ozet === 'object' ? { ...plan, ozet: { ...(ozet as Record<string, unknown>), tl: null } } : plan;
+}
+
 // 180 a, 200 a: tutar, maliyet, kâr ve TL farkı yalnız maliyeti görene. Saat, adet ve plan kaydı kalır (plan kaydı çalışmaya geri yazılır,
 // biçimi bozulmaz). Sipariş maliyeti ve kârı bu durumda hiç hesaplanmaz.
 export function maliyetsiz(s: DegerlendirmeSonucu): DegerlendirmeSonucu {
   switch (s.tur) {
     case 'plan-secenekleri':
-      return { ...s, secenekler: s.secenekler.map((x) => ({ ...x, ekMesaiTl: null, netKar: null, ekMesai: x.ekMesai.map((e) => ({ ...e, tl: null })) })) };
+      return { ...s, secenekler: s.secenekler.map((x) => ({ ...x, ekMesaiTl: null, netKar: null, ekMesai: x.ekMesai.map((e) => ({ ...e, tl: null })), plan: tlsizPlan(x.plan) })) };
     case 'termin-secenekleri':
       return { ...s, satirlar: s.satirlar.map((x) => ({ ...x, tutar: null, netKar: null, digerKarFarki: null, toplamKar: null })) };
     case 'termin-uzatma':
