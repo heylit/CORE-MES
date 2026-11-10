@@ -759,15 +759,19 @@ describe('PlanlamaAtolyesi', () => {
     get.mockRestore();
   });
 
-  it('sabah brifingi günün ilk açılışında (gün tarayıcıda); gün başı açılışta çalışmaya sessiz yazılır', () => {
+  it('sabah brifingi katlı başlar, günün ilk açılışında düğmesi vurgulu (gün tarayıcıda); gün başı açılışta çalışmaya sessiz yazılır', () => {
     localStorage.removeItem(BRIF);
     const c = ornekCalisma();
     const { komut, yazilan } = komutKur(c);
     ac({ c, komut });
+    expect(screen.queryByRole('region', { name: 'Sabah brifingi' })).toBeNull();
+    const d = screen.getByRole('button', { expanded: false, name: /brifing/ });
+    expect(d.hasAttribute('data-yeni')).toBe(true);
+    fireEvent.click(d);
     const b = screen.getByRole('region', { name: 'Sabah brifingi' });
     expect(within(b).getByText('1 geciken, 1 riskli sipariş')).toBeTruthy();
     expect(localStorage.getItem(BRIF)).toBe(bugunAnahtari());
-    fireEvent.click(within(b).getByRole('button', { name: 'Kapat' }));
+    fireEvent.click(within(b).getByRole('button', { name: 'Brifingi katla' }));
     expect(screen.queryByRole('region', { name: 'Sabah brifingi' })).toBeNull();
     expect(yazilan.every((t) => !('tpBrif' in t) || t.tpBrif === c.tpBrif)).toBe(true);
     const gun = yazilan.at(-1)?.tpGun as { basi: { gun: string; e: { late: number } } } | undefined;
