@@ -169,7 +169,7 @@ function failNedenMetni(n: MotorNedeni | undefined): string {
 
 // Kaynak okumasının (planlama sayfasının çerçeve biçimi) adayı belirleyen alanları; motor/girdi.js rrCevir ve rrKaynagiCevir aynı alanları okur.
 export interface AdayKaynagi { durum: unknown; ek: unknown }
-interface KaynakAdimi { opNo?: unknown; stationId?: unknown; fasonId?: unknown; cycle?: unknown; alts?: unknown; altTimes?: unknown }
+interface KaynakAdimi { opNo?: unknown; stationId?: unknown; fasonId?: unknown; proc?: unknown; chg?: unknown; cycle?: unknown; alts?: unknown; altTimes?: unknown }
 const bosSure = (x: unknown): boolean => x === null || x === undefined || x === '' || !Number.isFinite(Number(x));
 // B-2482-32: motorun 'aday' nedeni ("işi yapabilecek tezgâh ya da fasoncu yok") için kaynaktaki sebep. Sıra: adımın işlem süresi boş (1737 c:
 // süresiz aday plana girmez), insanlı istasyonda vardiyası olan yetkin kişi yok (1952), istasyonun aktif makinesi yok. Adım ya da emir
@@ -188,7 +188,9 @@ export function adayNedeni(kaynak: AdayKaynagi | null, anahtar: string): string 
   if (adim === undefined || typeof adim.stationId !== 'string' || adim.stationId === '') return null;
   const altSure = (g: string): unknown => ((adim.altTimes ?? {}) as Record<string, { cycle?: unknown } | undefined>)[g]?.cycle;
   const alternatifler = Array.isArray(adim.alts) ? (adim.alts as string[]).filter((g) => !bosSure(altSure(g))) : [];
-  if (bosSure(adim.cycle) && alternatifler.length === 0) return 'adımın işlem süresi boş (rotada çevrim süresi girilmemiş)';
+  // Ana istasyonun süresi motor/girdi.js rrCevir'in kuralıdır (2701): işlem ya da değişim süresi; işlem alanı olmayan kayıtta çevrim.
+  const anaSureli = !bosSure(adim.proc) || !bosSure(adim.chg) || (adim.proc === undefined && !bosSure(adim.cycle));
+  if (!anaSureli && alternatifler.length === 0) return 'adımın işlem süresi boş (rotada çevrim süresi girilmemiş)';
   const istasyon = d?.stations?.find((x) => x.id === adim.stationId);
   const ad = istasyon?.name ?? istasyon?.code ?? adim.stationId;
   const insanli = new Set((ek?.insanliIstasyonlar ?? []).map(String));

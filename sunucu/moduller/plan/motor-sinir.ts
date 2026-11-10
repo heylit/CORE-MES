@@ -44,7 +44,8 @@ const yerlesim = z.object({
 const tabanPlani = z.object({ ops: z.record(z.string(), yerlesim), fail: z.array(z.unknown()).optional() });
 export const motorYerlesimi = yerlesim.refine((r) => r.C >= r.S - 1e-9, { message: 'bitiş başlangıçtan önce' });
 // B-2482-32: motorun yerleştiremediği işin nedeni (engine.js failNeden: aday, oncul, zaman); sunucu çözücüsü iletisini bundan yazar.
-const motorNedeni = z.object({ kod: z.enum(['aday', 'oncul', 'zaman']), oncul: z.string().optional() });
+// Motora yeni kod eklenirse plan reddedilmez: tanınmayan neden düşer, ileti motorun genel metnine kalır.
+const motorNedeni = z.object({ kod: z.enum(['aday', 'oncul', 'zaman']), oncul: z.string().optional() }).optional().catch(undefined);
 export const motorPlani = z.object({
   ops: z.record(z.string(), motorYerlesimi), fail: z.array(z.unknown()).optional(), failNeden: z.record(z.string(), motorNedeni).optional(),
 });

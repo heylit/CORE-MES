@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import type { PlanMotoruIstegi } from './disari.ts';
+import { motorPlaniDenetle } from './motor-sinir.ts';
 import { adayNedeni, coz } from './plan-cozucusu.ts';
 
 // B-2482-32 (2696): sunucu çözücüsü yerleştiremediği işin nedenini motorun failNeden'inden yazar; 'aday' nedeninde (işi yapabilecek tezgâh
@@ -71,12 +72,28 @@ describe('sunucu çözücüsünde yerleşmeme nedeni (2696, B-2482-32)', () => {
   });
 });
 
+describe('motor nedeni şeması (Mimar N1)', () => {
+  test('YN-09: tanınmayan neden kodu planı reddettirmez; yalnız o neden düşer', () => {
+    const p = motorPlaniDenetle({ ops: {}, fail: ['S1.10', 'S1.20'], failNeden: { 'S1.10': { kod: 'yeni-kod' }, 'S1.20': { kod: 'oncul', oncul: 'S1.10' } } });
+    assert.deepEqual(p.failNeden, { 'S1.10': undefined, 'S1.20': { kod: 'oncul', oncul: 'S1.10' } });
+  });
+});
+
 describe('aday nedeni (saf)', () => {
   const k = (o: Parameters<typeof kaynakKur>[0]) => kaynakKur(o).kaynak;
   test('YN-01: adımın işlem süresi boş ve süreli alternatifi yoksa neden odur (makine ve kişi denetiminden önce)', () => {
     assert.equal(adayNedeni(k({ adimlar: [adim(10, null)] }), 'E-1|10'), 'adımın işlem süresi boş (rotada çevrim süresi girilmemiş)');
     assert.equal(adayNedeni(k({ adimlar: [adim(10, null)], makineler: [] }), 'E-1|10'), 'adımın işlem süresi boş (rotada çevrim süresi girilmemiş)');
     assert.equal(adayNedeni(k({ adimlar: [adim(10, '')] }), 'E-1|10'), 'adımın işlem süresi boş (rotada çevrim süresi girilmemiş)');
+  });
+  test('YN-08 (Mimar N2): süre kuralı motorunkiyle aynı; işlem ya da değişim dolu, çevrim boşsa süre nedeni değildir', () => {
+    const makinesiz = { makineler: [] };
+    assert.equal(adayNedeni(k({ adimlar: [adim(10, null, { proc: 30 })], ...makinesiz }), 'E-1|10'), 'Torna istasyonunun aktif makinesi yok');
+    assert.equal(adayNedeni(k({ adimlar: [adim(10, null, { proc: null, chg: 5 })], ...makinesiz }), 'E-1|10'), 'Torna istasyonunun aktif makinesi yok');
+    const { proc: _p, ...islemsiz } = adim(10, 30);
+    assert.equal(adayNedeni(k({ adimlar: [islemsiz], ...makinesiz }), 'E-1|10'), 'Torna istasyonunun aktif makinesi yok', 'işlem alanı olmayan eski kayıtta çevrim');
+    const { proc: _q, ...islemsizBos } = adim(10, null);
+    assert.equal(adayNedeni(k({ adimlar: [islemsizBos] }), 'E-1|10'), 'adımın işlem süresi boş (rotada çevrim süresi girilmemiş)');
   });
   test('YN-06: süresi olan alternatif istasyon varsa süre nedeni değildir; adım ya da emir bulunamazsa null', () => {
     const alt = adim(10, null, { alts: ['11'], altTimes: { 11: { setup: 0, cycle: 5 } } });
