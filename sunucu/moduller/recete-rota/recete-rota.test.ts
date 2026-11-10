@@ -41,6 +41,7 @@ describe('recete-rota kayıt deposu (gerçek PostgreSQL)', () => {
   let sayfali = '';
   let yetkisiz = '';
   let tam = '';
+  let maliyetci = '';
   let sayac = 0;
   // Her test kendi anahtarında çalışır; ötekinin bıraktığına yaslanmaz.
   const yeniAnahtar = (): string => `recete-rota-motoru-v1:deneme${String(++sayac)}`;
@@ -89,6 +90,7 @@ describe('recete-rota kayıt deposu (gerçek PostgreSQL)', () => {
     ({ cerez: okur } = await islemliKisi('okur', ['recete-rota.oku']));
     ({ cerez: sayfali } = await islemliKisi('sayfali', ['sayfa.recete-rota']));
     ({ cerez: yetkisiz } = await islemliKisi('yetkisiz', ['sayfa.ayarlar']));
+    ({ cerez: maliyetci } = await islemliKisi('maliyetci', ['recete-rota.oku', 'finans.maliyet-oku']));
     tam = await girisCerezi('yonetici');
   });
 
@@ -179,6 +181,35 @@ describe('recete-rota kayıt deposu (gerçek PostgreSQL)', () => {
     assert.equal((await yaz(okur, { anahtar: a, bicim: 'json', deger: {}, beklenenSurum: null })).statusCode, 403);
     assert.equal((await yaz(sayfali, { anahtar: a, bicim: 'json', deger: {}, beklenenSurum: null })).statusCode, 403);
     assert.equal((await istek(okur, 'POST', '/recete-rota/kayitlar/sil', { anahtar: a, beklenenSurum: 1 })).statusCode, 403);
+  });
+
+  test('RR-25 (2783, 2601 a): ham kayıtta kalmış kalem, istasyon ve kişi maliyeti finans.maliyet-oku taşımayana null döner; taşıyana ve tabloda değişmez', async () => {
+    const a = yeniAnahtar();
+    const m = yeniAnahtar();
+    // Uydurma maliyetler: sunucunun kurduğu satır cost: null yazar; dolu değer yalnız eski çerçeveden kalmış kayıtta olur.
+    const belge = {
+      name: 'Deneme', items: [{ id: 'i1', code: 'HM-1', cost: 12.5, stock: 3 }, { id: 'i2', code: 'HM-2', cost: null }, 'bozuk'],
+      stations: [{ id: 's1', cost: 3 }], people: [{ id: 'p1', cost: 4, name: 'Deneme kişi' }], orders: [{ id: 'o1', cost: 9 }],
+    };
+    const suzulmus = {
+      ...belge, items: [{ id: 'i1', code: 'HM-1', cost: null, stock: 3 }, { id: 'i2', code: 'HM-2', cost: null }, 'bozuk'],
+      stations: [{ id: 's1', cost: null }], people: [{ id: 'p1', cost: null, name: 'Deneme kişi' }],
+    };
+    const yazilan = await yaz(yazar, { anahtar: a, bicim: 'json', deger: belge, beklenenSurum: null });
+    assert.equal(yazilan.statusCode, 200, yazilan.body);
+    // Yazmanın geri dönen kaydı da süzülür: yazar maliyet görmez.
+    assert.deepEqual((yazilan.json() as { kayit: Kayit }).kayit.deger, suzulmus);
+    const metin = await yaz(yazar, { anahtar: m, bicim: 'metin', deger: JSON.stringify(belge), beklenenSurum: null });
+    assert.equal(metin.statusCode, 200, metin.body);
+    for (const cerez of [okur, sayfali, yazar]) {
+      assert.deepEqual((await kayit(cerez, a))?.deger, suzulmus);
+      assert.deepEqual(JSON.parse(String((await kayit(cerez, m))?.deger)), suzulmus);
+    }
+    assert.deepEqual((await kayit(maliyetci, a))?.deger, belge);
+    assert.equal((await kayit(maliyetci, m))?.deger, JSON.stringify(belge));
+    // Süzgeç yalnız cevaptadır; kayıt göçsüz kalır (silme kullanıcıya sorulur).
+    const tablo = await vt().tek<{ deger: unknown }>('SELECT deger FROM recete_rota_kayit WHERE anahtar = $1', [a]);
+    assert.deepEqual(tablo?.deger, belge);
   });
 
   test('RR-08: ben kişiyi ve yazma bayrağını döner', async () => {

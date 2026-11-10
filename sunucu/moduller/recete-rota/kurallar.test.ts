@@ -3,7 +3,7 @@ import { describe, test } from 'node:test';
 import type { Hareket } from '#paylasilan/sozlesme/stok.ts';
 import { ANAHTAR_BICIMI, durumEmirlerSemasi } from '#paylasilan/sozlesme/recete-rota.ts';
 import {
-  degerBicimeUyarMi, dugumleriCevir, emirleriCevir, hareketleriCevir, isMerkeziCevir, istasyonCevir, kisiCevir, makineCevir, malzemeCevir, metindenSayi, degerCokBuyukMu, nulKarakteriVarMi, operasyonCevir,
+  degerBicimeUyarMi, dugumleriCevir, kayitMaliyetiniSuz, emirleriCevir, hareketleriCevir, isMerkeziCevir, istasyonCevir, kisiCevir, makineCevir, malzemeCevir, metindenSayi, degerCokBuyukMu, nulKarakteriVarMi, operasyonCevir,
   rotaAramaSonuclari, rotasizAdimlariCevir, surumUyarMi, tatilTarihleri, vardiyaCevir,
 } from './kurallar.ts';
 import type { EmirKaydi } from './kurallar.ts';
@@ -43,6 +43,19 @@ describe('recete-rota kuralları (saf)', () => {
     assert.equal(ANAHTAR_BICIMI.test('recete-rota-motoru.'), false);
     assert.equal(ANAHTAR_BICIMI.test('mesai:tercih'), false);
     assert.equal(ANAHTAR_BICIMI.test('recete-rota-motoru-v1:a/b'), false);
+  });
+
+  test('RR-K5 (2783): kayıt süzgeci kalem, istasyon ve kişi maliyetini null yapar; maliyetsiz kayıt aynı nesne, çözülemeyen metin aynen döner', () => {
+    const json = { bicim: 'json', deger: { items: [{ id: 'i1', cost: 5 }], stations: [{ id: 's1', cost: 0 }], people: 'dizi değil', orders: [{ cost: 1 }] } };
+    assert.deepEqual(kayitMaliyetiniSuz(json).deger, { items: [{ id: 'i1', cost: null }], stations: [{ id: 's1', cost: null }], people: 'dizi değil', orders: [{ cost: 1 }] });
+    assert.equal(json.deger.items[0]?.cost, 5);
+    const temiz = { bicim: 'json', deger: { items: [{ id: 'i1', cost: null }, { id: 'i2' }] } };
+    assert.equal(kayitMaliyetiniSuz(temiz), temiz);
+    assert.deepEqual(JSON.parse(String(kayitMaliyetiniSuz({ bicim: 'metin', deger: '{"items":[{"cost":-2}]}' }).deger)), { items: [{ cost: null }] });
+    const bozuk = { bicim: 'metin', deger: 'düz metin {"cost":3' };
+    assert.equal(kayitMaliyetiniSuz(bozuk), bozuk);
+    const dizi = { bicim: 'json', deger: [1, 2] };
+    assert.equal(kayitMaliyetiniSuz(dizi), dizi);
   });
 });
 

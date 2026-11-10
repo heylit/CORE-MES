@@ -73,6 +73,40 @@ export function bagliDilimleriAyikla(deger: unknown): unknown {
   return sonuc;
 }
 
+// Birim maliyetin sahibi Finans'tır (2601 a); durumda maliyet dilimi yalnız finans.maliyet-oku taşıyana gelir. Ham kayıtta eski çerçeveden
+// ya da örnek veriden kalmış malzeme, istasyon ve kişi maliyeti (prototipin items, stations, people dizilerinde cost) bu yetkisi olmayana
+// ham kayıt okumasından da dönmemelidir (2783). Değer null'a iner, alan ve öteki alanlar kalır. Metin biçimi JSON olarak çözülürse aynı
+// süzgeçten geçer; çözülemeyen metin prototipin durumu değildir, olduğu gibi döner. Kayıt değişmez: süzgeç yalnız cevaptadır.
+export const MALIYETLI_DIZILER = ['items', 'stations', 'people'] as const;
+function maliyetSil(deger: unknown): { deger: unknown; degisti: boolean } {
+  const d = nesne(deger);
+  if (d === null) return { deger, degisti: false };
+  let degisti = false;
+  const sonuc: Record<string, unknown> = { ...d };
+  for (const dizi of MALIYETLI_DIZILER) {
+    const liste = d[dizi];
+    if (!Array.isArray(liste)) continue;
+    sonuc[dizi] = liste.map((x: unknown) => {
+      const s = nesne(x);
+      if (s === null || s['cost'] === undefined || s['cost'] === null) return x;
+      degisti = true;
+      return { ...s, cost: null };
+    });
+  }
+  return degisti ? { deger: sonuc, degisti } : { deger, degisti };
+}
+export function kayitMaliyetiniSuz<T extends { bicim: string; deger: unknown }>(k: T): T {
+  if (k.bicim !== 'metin') {
+    const s = maliyetSil(k.deger);
+    return s.degisti ? { ...k, deger: s.deger } : k;
+  }
+  if (typeof k.deger !== 'string') return k;
+  let cozulen: unknown;
+  try { cozulen = JSON.parse(k.deger); } catch { return k; }
+  const s = maliyetSil(cozulen);
+  return s.degisti ? { ...k, deger: JSON.stringify(s.deger) } : k;
+}
+
 // PostgreSQL jsonb dizede U+0000 kabul etmez; bu değer sunucu hatası yerine doğrulama hatasıyla döner.
 export function nulKarakteriVarMi(deger: unknown): boolean {
   return JSON.stringify(deger).includes('\\u0000');

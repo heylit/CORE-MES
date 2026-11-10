@@ -22,7 +22,7 @@ export const uclar = [
     yol: '/recete-rota/kayitlar',
     yetki: OKUMA,
     cevap: kayitlarCevabi,
-    isle: ({ db }) => kayitlar(db),
+    isle: ({ db, kullanici }) => kayitlar(db, kullanici),
   }),
   uc({
     yontem: 'GET',
