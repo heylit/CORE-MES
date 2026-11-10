@@ -326,7 +326,6 @@ function Sonuc({ b, calisma, fg, yaz, ayarDegistir }: { b: Bitti; calisma: Planl
     ...(fg ? [{ simge: 'lira' as const, ad: 'Plan bedeli', deger: tl(s.tl === null ? null : s.tl - o.acil * YL_ACIL), alt: 'stok, geç teslim, mesai primi, yatırım' }] : []),
   ];
   const varsayilan = [
-    ...(b.m.mesaiVarsayilan.length ? [`mesai saat bedeli bilinmeyen gruplarda (${b.m.mesaiVarsayilan.join(', ')}) 1.500 TL/sa`] : []),
     ...(v.degerVarsayilan.length ? [`geliri bilinmeyen ailelerde (${v.degerVarsayilan.join(', ')}) birim değer 1.000 TL`] : []),
   ];
   const db = darbogazlar(v, s);
@@ -351,6 +350,7 @@ function Sonuc({ b, calisma, fg, yaz, ayarDegistir }: { b: Bitti; calisma: Planl
     <>
       <Kart baslik="Yıllık plan" baslikEki={<span className="tc-pyu-kucuk">{P[0]?.uzun} – {P[P.length - 1]?.uzun} · HiGHS {sayi(b.sn, 1)} sn · {HS_DURUM[s.durum] ?? String(s.durum)}</span>}>
         <GostergeSeridi l={kpi} />
+        {b.m.mesaiBilinmez.length > 0 && <Not ton="uyari">Mesai bedeli bilinmiyor, ek mesai önerilmedi: {b.m.mesaiBilinmez.join(', ')}. Bu gruplarda açık geç teslim ya da acil kapasite olarak görünür.</Not>}
         {fg && varsayilan.length > 0 && <Not ton="uyari">Plan bedeli varsayılan model bedeli içerir: {varsayilan.join('; ')}.</Not>}
         <h3 className="tc-pyu-alt-baslik">Grup yükü, kapasitenin %'si</h3>
         <div className="tc-pyu-kaydir">

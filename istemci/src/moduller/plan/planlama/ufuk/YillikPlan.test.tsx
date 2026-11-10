@@ -50,6 +50,10 @@ describe('Yıllık plan', () => {
     // Genel gider girilmemiş: yatırım denenmez ve nedeni bu yazılır (kapasite açığının yokluğu değil).
     expect(screen.getByText('Genel gider (tezgâh bedeli) girilmediği için yatırım denenmedi.')).toBeTruthy();
     expect(screen.queryByText(/kapasite açığı yok/)).toBeNull();
+    // 2745 a: grup saat maliyeti bilinmiyor; varsayılan bedel yok, ek mesai önerilmez ve bu yazılır.
+    expect(screen.getByText(/^Mesai bedeli bilinmiyor, ek mesai önerilmedi: /)).toBeTruthy();
+    expect(screen.queryByText(/1\.500 TL/)).toBeNull();
+    expect(cozumler[1]?.lp).toMatch(/ 0 <= o_g0_0 <= 0\n/);
     expect(screen.getByLabelText('Geç teslim bedeli, değerin %/gün')).toBeTruthy();
   }, 20000);
 
