@@ -171,8 +171,12 @@ export type PlanOzeti =
   | { tur: 'tamam'; metin: string } | { tur: 'plan-disi' } | { tur: 'motor-yok' } | { tur: 'yerlesmedi'; acikAdim: number; calisanPlanDisi: number[] }
   | { tur: 'planlanamiyor'; adimlar: { opNo: number; neden: string }[]; kok: { opNo: number; neden: string }[] }
   | { tur: 'plan'; ilk: string; bitis: string | null; gecikiyor: boolean; bolluk: number | null; tampon: TamponDurumu | null; calisanPlanDisi: number[]; oneri?: boolean };
-// Plan motorunun ardıl nedenleri (`sunucu/moduller/plan/kurallar.ts`): kök adım yerleşmeyince arkasındakiler bunlarla bırakılır.
+// Plan motorunun ardıl nedenleri: kök adım yerleşmeyince arkasındakiler bunlarla bırakılır. Sunucu motoru öncülü adıyla yazar
+// ("Önceki adım (UE-1 OP 20) yerleşmedi.", plan-cozucusu.ts) ya da motorun öncül kodunu metne çevirir ("öncülü X yerleşmedi");
+// bunlar kök sayılırsa tek kök "N adım planlanamadı" diye çoğalır.
 const ARDIL_NEDENLERI: ReadonlySet<string> = new Set(['Önceki iş emri yerleşmedi.', 'Bağlı parti yerleşmedi.']);
+const ardilNedeniMi = (neden: string): boolean =>
+  ARDIL_NEDENLERI.has(neden) || neden.startsWith('Önceki adım') || /öncülü .+ yerleşmedi\.?$/.test(neden);
 export function planOzeti(
   d: Durum & Pick<DurumCevabi, 'settings'> & { planYerlesmeyen?: Record<string, string> }, yerlesim: EkranYerlesimi | null, o: Emir,
   // B-2499-7: verilirse açık adımların hepsi canlıdaysa tarihler canlı plandan; biri bile yoksa motorun tarihleri "öneri"dir.
@@ -189,7 +193,7 @@ export function planOzeti(
   const yerlesmeyen = acik.flatMap((a) => { const neden = d.planYerlesmeyen?.[`${o.no}|${String(a.opNo)}`]; return neden === undefined ? [] : [{ opNo: a.opNo, neden }]; });
   if (yerlesmeyen.length > 0) {
     // Kök adım başka emirdeyse (bağlı parti) bu emirde yalnız ardıl kalır; o zaman ardıllar gösterilir, boş neden yazılmaz.
-    const kok = yerlesmeyen.filter((y) => !ARDIL_NEDENLERI.has(y.neden));
+    const kok = yerlesmeyen.filter((y) => !ardilNedeniMi(y.neden));
     return { tur: 'planlanamiyor', adimlar: yerlesmeyen, kok: kok.length > 0 ? kok : yerlesmeyen };
   }
   const calisanPlanDisi = acik.filter((a) => durumu(a) === 'calisiyor' && adimPlani(yerlesim, o.no, a.opNo) === null).map((a) => a.opNo);
