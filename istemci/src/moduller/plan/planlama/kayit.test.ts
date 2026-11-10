@@ -3,7 +3,7 @@ import type { PlanlamaYazGovdesi } from '#paylasilan/sozlesme/planlama.ts';
 import type { YazCevabi, YazGovdesi } from '#paylasilan/sozlesme/recete-rota.ts';
 import { ApiHatasi } from '../../../ortak/veri/api.ts';
 import { calismaOku } from './durum.ts';
-import { BUYUK, CATISMA, CalismaYazici, GEREKCE_YOK, ESKI_DEGISIKLIK, IZ_SINIRI, OTURUM, PLAN_YETKI, RET, bekleyenListesi, bekleyenler, type YaziciAyari } from './kayit.ts';
+import { BUYUK, CATISMA, CalismaYazici, GEREKCE_YOK, PLAN_ESKI, ESKI_DEGISIKLIK, IZ_SINIRI, OTURUM, PLAN_YETKI, RET, bekleyenListesi, bekleyenler, type YaziciAyari } from './kayit.ts';
 import type { PlanlamaCalismasi } from './tipler.ts';
 import { ONEK, PLANLAMA_ANAHTARI } from './veri.ts';
 
@@ -403,5 +403,45 @@ describe('bekleyen değişiklikler (755 a)', () => {
     expect(kur({ calisma: structuredClone(a.calisma), gecmis: a.gecmis() }).y.geriAlinabilir()).toBe(false);
     a.komutBasladi('İş taşındı');
     expect(kur({ calisma: structuredClone(a.calisma), gecmis: a.gecmis() }).y.geriAlinabilir()).toBe(false);
+  });
+
+  // 2792 a: plan yerleşimini değiştiren adım (çözüm, uygula) geri alınınca önceki plan gelir.
+  const coz = (y: CalismaYazici, n: number) => y.degistir('Plan çözüldü', (t) => { t.plan = { ...(t.plan ?? { dataVer: t.dataVer }), dataVer: t.dataVer, cozum: n }; }, { planKoru: true });
+  const cozum = (c: PlanlamaCalismasi) => (c.plan as unknown as { cozum?: number } | null)?.cozum;
+
+  it('2792 a: plan çözümü geri alınınca önceki plan yerleşimi gelir, güncel sayılır; yinele yeniden getirir', () => {
+    const { y, uyarilar } = kur();
+    coz(y, 1);
+    coz(y, 2);
+    expect(cozum(y.calisma)).toBe(2);
+    expect(y.geriAl()).toBe(true);
+    expect(cozum(y.calisma)).toBe(1);
+    expect(y.calisma.plan?.dataVer).toBe(y.calisma.dataVer);
+    expect(y.yinele()).toBe(true);
+    expect(cozum(y.calisma)).toBe(2);
+    expect(y.calisma.plan?.dataVer).toBe(y.calisma.dataVer);
+    expect(uyarilar).toEqual([]);
+  });
+
+  it('2792 a: tarayıcıda en çok 20 plan kopyası; daha eskisi yalnız girdileri getirir', () => {
+    const { y } = kur();
+    for (let i = 1; i <= 25; i++) coz(y, i);
+    for (let i = 0; i < 20; i++) y.geriAl();
+    expect(cozum(y.calisma)).toBe(5);
+    expect(y.geriAl()).toBe(true);
+    expect(cozum(y.calisma)).toBe(5);
+  });
+
+  it('2792 a (Atölye): kopyadan sonra veri dışarıdan değiştiyse geri gelen plan güncel sayılmaz, "yeniden çözün" uyarısı çıkar', () => {
+    const { y: a } = kur();
+    coz(a, 1);
+    coz(a, 2);
+    // Yeniden okunan çalışmada veri sürümü ilerlemiş: başka sayfa ya da atölye verisi gelmiş.
+    const okunan = { ...structuredClone(a.calisma), dataVer: a.calisma.dataVer + 2 };
+    const { y: b, uyarilar } = kur({ calisma: okunan, surum: 9, gecmis: a.gecmis() });
+    expect(b.geriAl()).toBe(true);
+    expect(cozum(b.calisma)).toBe(1);
+    expect(b.calisma.plan?.dataVer).not.toBe(b.calisma.dataVer);
+    expect(uyarilar).toEqual([PLAN_ESKI]);
   });
 });

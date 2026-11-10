@@ -1,7 +1,7 @@
 import type { BekleyenKarari, PlanlamaYazGovdesi } from '#paylasilan/sozlesme/planlama.ts';
 import type { YazCevabi } from '#paylasilan/sozlesme/recete-rota.ts';
 import { ApiHatasi } from '../../../ortak/veri/api.ts';
-import { GeriAlYigini, VERI_GERI_ALMA } from './durum.ts';
+import { GeriAlYigini, PLAN_GERI_ALMA, VERI_GERI_ALMA } from './durum.ts';
 import type { BekleyenDegisiklik, GeriYama, PlanlamaCalismasi } from './tipler.ts';
 import { PLANLAMA_ANAHTARI } from './veri.ts';
 
@@ -24,6 +24,7 @@ export const BUYUK = 'Planlama çalışması 1 MB sınırını aştı ve sunucuy
 export const OTURUM = 'Oturumunuz kapandı ya da yazma yetkiniz kalmadı; son değişiklikleriniz kaydedilmedi. Sayfayı yenileyip yeniden giriş yapın.';
 export const PLAN_YETKI = 'Plan yazma yetkiniz yok; son değişikliğiniz kaydedilmedi.';
 export const GEREKCE_YOK = 'Ret gerekçesi yazın; değişiklik defterine girer.';
+export const PLAN_ESKI = 'Geri alındı. Plan veriden eski, yeniden çözün.';
 export const RET = 'Son değişikliğiniz sunucu tarafından reddedildi ve kaydedilmedi. Sonraki değişiklikte yeniden denenir; sürerse sayfayı yenileyin.';
 
 // Geri almanın kopyaladığı alanlar (a-durum.betik degistir): veri, arıza, ek mesai, kilitler, tercihler, ağırlıklar, parametreler, kapalı kısıtlar
@@ -32,13 +33,22 @@ export const RET = 'Son değişikliğiniz sunucu tarafından reddedildi ve kayde
 const GERI_ALANLAR = ['D', 'down', 'ekMesai', 'locks', 'pref', 'w', 'param', 'kapali', 'bekleyen'] as const;
 const GERI_DISI = new Set<string>([...GERI_ALANLAR, 'dataVer', 'plan', 'iz']);
 type GeriKopyasi = Record<string, unknown> & { dataVer: number };
-interface GeriAdimi { ne: string; t: number; kopya: GeriKopyasi }
+// 2792 a: plan yerleşimini değiştiren adımın kopyası planı da taşır; geri alma önceki yerleşimi getirir. `eski`: kopya alındıktan sonra
+// çalışmaya dışarıdan veri geldi (başka sayfa, iş emri, stok, vardiya); geri gelen plan o veriyle çözülmemiştir.
+interface GeriAdimi { ne: string; t: number; kopya: GeriKopyasi; eski?: boolean }
+// Plan kopyası büyüktür: yığında en çok PLAN_GERI_ALMA tanesi tutulur, eskilerinin plan kopyası düşer (o adım yalnız girdileri getirir).
+function planSiniri(y: GeriAlYigini<GeriAdimi>): void {
+  let n = 0;
+  for (const g of [...y.liste()].reverse()) if ('plan' in g.kopya && ++n > PLAN_GERI_ALMA) delete g.kopya.plan;
+}
 // Sayfa yeniden okunduğunda yazıcı yeniden kurulur; geri alma geçmişi yeni yazıcıya taşınır. Sunucu komutu (iş taşı, olay, ek mesai)
 // çalışmayı sunucuda değiştirir: komuttan önceki çalışma burada tutulur, yeniden okunan çalışmayla farkı geri alma adımı olur.
 export interface YaziciGecmisi {
   readonly geri: readonly GeriAdimi[];
   readonly ileri: readonly GeriAdimi[];
   readonly komut: { ne: string; t: number; once: PlanlamaCalismasi } | null;
+  // Önceki yazıcının son veri sürümü: yeniden okunan çalışma bundan (ve komutun artışından) ileriyse veri dışarıdan değişmiştir.
+  readonly dataVer: number;
 }
 
 export interface DegisiklikSecenegi {
@@ -130,24 +140,32 @@ export class CalismaYazici implements CalismaKomutu {
     if (gecmis) {
       for (const g of gecmis.geri) this.#geri.koy(g);
       for (const g of gecmis.ileri) this.#ileri.koy(g);
-      if (gecmis.komut) this.#komutAdimi(gecmis.komut);
+      const komutAdimi = gecmis.komut ? this.#komutAdimi(gecmis.komut) : false;
+      if (ayar.calisma.dataVer > gecmis.dataVer + (komutAdimi ? 1 : 0)) this.#eskit(komutAdimi ? 1 : 0);
     }
   }
 
-  gecmis = (): YaziciGecmisi => ({ geri: [...this.#geri.liste()], ileri: [...this.#ileri.liste()], komut: this.#komut });
+  gecmis = (): YaziciGecmisi => ({ geri: [...this.#geri.liste()], ileri: [...this.#ileri.liste()], komut: this.#komut, dataVer: this.#calisma.dataVer });
+  // Dışarıdan veri geldi: o ana kadarki adımların kopyası eskidir (son `haric` adım bu veriyle alındı).
+  #eskit(haric = 0): void {
+    const l = this.#geri.liste();
+    for (let i = 0; i < l.length - haric; i++) { const g = l[i]; if (g) g.eski = true; }
+    for (const g of this.#ileri.liste()) g.eski = true;
+  }
   komutBasladi = (ne: string): void => { this.#komut = { ne, t: this.#a.simdi(), once: this.#calisma }; };
   komutDustu = (): void => { this.#komut = null; };
 
   // Komuttan önceki çalışma ile yeniden okunan çalışmanın farkı: geri alma onu komuttan önceki hâle yazar (her zamanki sürüm denetimli
   // yazmayla). Komut çalışmayı değiştirmediyse adım olmaz.
-  #komutAdimi(k: NonNullable<YaziciGecmisi['komut']>): void {
+  #komutAdimi(k: NonNullable<YaziciGecmisi['komut']>): boolean {
     const o = k.once as Record<string, unknown>, y = this.#calisma as Record<string, unknown>;
     const degisen = [...new Set([...Object.keys(o), ...Object.keys(y)])]
       .filter((x) => x !== 'dataVer' && x !== 'iz' && x !== 'plan' && JSON.stringify(o[x]) !== JSON.stringify(y[x]));
-    if (degisen.length === 0) return;
+    if (degisen.length === 0) return false;
     const ek = degisen.filter((x) => !GERI_DISI.has(x));
     this.#ileri.bosalt();
     this.#geri.koy({ ne: k.ne, t: k.t, kopya: kopya(Object.fromEntries([...GERI_ALANLAR, 'dataVer', ...ek].map((x) => [x, o[x]]))) as GeriKopyasi });
+    return true;
   }
 
   get calisma(): PlanlamaCalismasi { return this.#calisma; }
@@ -173,7 +191,9 @@ export class CalismaYazici implements CalismaKomutu {
     const gunceldi = once.plan !== null && once.plan.dataVer === once.dataVer;
     const o = once as Record<string, unknown>, y = taslak as Record<string, unknown>;
     const ek = [...new Set([...Object.keys(o), ...Object.keys(y)])].filter((k) => !GERI_DISI.has(k) && JSON.stringify(o[k]) !== JSON.stringify(y[k]));
+    if (JSON.stringify(o.plan) !== JSON.stringify(y.plan)) ek.push('plan');
     this.#geri.koy({ ne, t: this.#a.simdi(), kopya: kopya(Object.fromEntries([...GERI_ALANLAR, 'dataVer', ...ek].map((k) => [k, o[k]]))) as GeriKopyasi });
+    planSiniri(this.#geri);
     if (!secenek.planKoru && once.plan !== null) bekleyeneYaz(once, taslak, { ne, ayrinti: secenek.ayrinti ?? '', kim: this.#a.kim, t: this.#a.simdi() });
     taslak.dataVer = once.dataVer + 1;
     if (secenek.planKoru && gunceldi && taslak.plan !== null) taslak.plan = { ...taslak.plan, dataVer: taslak.dataVer };
@@ -196,22 +216,27 @@ export class CalismaYazici implements CalismaKomutu {
     if (n < 1 || this.#geri.boy === 0) return false;
     let taslak = kopya(this.#calisma) as PlanlamaCalismasi & Record<string, unknown>;
     let x: GeriKopyasi | null = null;
+    let eski = false; let planGeldi = false;
     // En yeniden eskiye: her kopya kendi değişikliğinden önceki hâli koyar, en eskisi son sözü söyler.
     for (let i = 0; i < n; i++) {
       const g = this.#geri.al(); if (g === null) break;
       x = g.kopya;
-      this.#ileri.koy({ ne: g.ne, t: g.t, kopya: anlik(taslak, x) });
+      if ('plan' in x) { planGeldi = true; eski ||= g.eski === true; }
+      this.#ileri.koy({ ne: g.ne, t: g.t, kopya: anlik(taslak, x), ...(g.eski ? { eski: true } : {}) });
       taslak = { ...taslak, ...x };
       for (const [k, v] of Object.entries(x)) if (v === undefined) delete taslak[k];
     }
     if (x === null) return false;
+    planSiniri(this.#ileri);
     this.#yalnizSessiz = false;
-    // Eski sayfadaki gibi: veri sürümü geri gitmez; plan geri alınan veriyle çözülmüşse yeniden güncel sayılır.
+    // Eski sayfadaki gibi: veri sürümü geri gitmez; plan geri alınan veriyle çözülmüşse yeniden güncel sayılır. Kopyadan sonra dışarıdan
+    // veri geldiyse geri gelen plan güncel sayılmaz (Atölye 2792): kişi yeniden çözer.
     taslak.dataVer = Math.max(this.#calisma.dataVer + 1, x.dataVer + 1);
-    if (taslak.plan !== null && taslak.plan.dataVer === x.dataVer) taslak.plan = { ...taslak.plan, dataVer: taslak.dataVer };
+    if (taslak.plan !== null && taslak.plan.dataVer === x.dataVer && !eski) taslak.plan = { ...taslak.plan, dataVer: taslak.dataVer };
     guncelseBosalt(taslak);
     this.#izYaz(taslak, ne, '');
     this.#koy(taslak);
+    if (planGeldi && eski) this.#a.uyar(PLAN_ESKI);
     return true;
   }
 
@@ -220,11 +245,14 @@ export class CalismaYazici implements CalismaKomutu {
     if (this.#durdu) { this.#a.uyar(CATISMA); return false; }
     const g = this.#ileri.al(); if (g === null) return false;
     const once = this.#calisma as PlanlamaCalismasi & Record<string, unknown>;
-    this.#geri.koy({ ne: g.ne, t: g.t, kopya: anlik(once, g.kopya) });
+    this.#geri.koy({ ne: g.ne, t: g.t, kopya: anlik(once, g.kopya), ...(g.eski ? { eski: true } : {}) });
+    planSiniri(this.#geri);
     const taslak = { ...kopya(once), ...kopya(g.kopya) } as PlanlamaCalismasi & Record<string, unknown>;
     for (const [k, v] of Object.entries(g.kopya)) if (v === undefined) delete taslak[k];
     this.#yalnizSessiz = false;
     taslak.dataVer = once.dataVer + 1;
+    // Yinelenen adım plan getirdiyse ve plan o anki veriyle çözülmüşse güncel kalır.
+    if ('plan' in g.kopya && taslak.plan !== null && taslak.plan.dataVer === g.kopya.dataVer && !g.eski) taslak.plan = { ...taslak.plan, dataVer: taslak.dataVer };
     guncelseBosalt(taslak);
     this.#izYaz(taslak, `Yinelendi: ${g.ne}`, '');
     this.#koy(taslak);
@@ -261,6 +289,7 @@ export class CalismaYazici implements CalismaKomutu {
     if (l.some((b) => b.id === satir.id)) return false;
     const taslak = kopya(once);
     taslak.bekleyen = [...l, satir];
+    this.#eskit();
     this.#koy(taslak);
     return true;
   };

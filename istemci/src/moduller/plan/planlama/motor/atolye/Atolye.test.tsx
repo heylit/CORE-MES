@@ -925,6 +925,8 @@ describe('PlanlamaAtolyesi 2531 a', () => {
       yinele, yinelenebilir: () => true, kaydet: vi.fn(async () => 8) } as unknown as CalismaKomutu;
     ac({ c, komut });
     fireEvent.click(screen.getByRole('button', { name: 'Karar geçmişi ve taslağı sıfırla' }));
+    // 2792 (Atölye): geçmişin sayfa yenilenince gittiği tek yerde yazılır.
+    expect(within(kart()).getByText(/sayfa yenilenince silinir/)).toBeTruthy();
     fireEvent.click(within(kart()).getByRole('button', { name: 'Yinele' }));
     expect(yinele).toHaveBeenCalledTimes(1);
     fireEvent.click(within(kart()).getByRole('button', { name: 'Taslağı sıfırla' }));
