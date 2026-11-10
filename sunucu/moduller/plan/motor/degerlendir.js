@@ -103,40 +103,16 @@ function ymTalas(D, s) {
   return { kg: t, tl: tl / kg * t };
 }
 
-/* kişi bazlı mesai ve kalemli genel gider (zz6) yalnız çalışmada kayıtlıysa: sayfa yoksa deneme varsayılanı kurardı */
-const msSis = (D = S.D) => D.maliyetSis || null;
+/* kişi bazlı mesai yalnız çalışmada kayıtlıysa: sayfa yoksa deneme varsayılanı kurardı. Kayıttaki eski kalem kipi verisi (maliyetSis) okunmaz:
+   genel gider oranının tek kaynağı Finans oranıdır (planTL.genelGider). */
 const mesSis = (D = S.D) => D.mesaiSis || null;
 const msSgkKat = (D = S.D) => { const m = mesSis(D); return 1 + ((+m.sgk || 0) + (+m.yanHak || 0)) / 100; };
-const msDolayliAylik = (D = S.D) => msSis(D).dolayli.reduce((t, g) => t + (+g.brut || 0) * msSgkKat(D), 0);
-const msKalemTL = (k, D = S.D) => k.tur === 'personel' && k.aylik == null ? msDolayliAylik(D) : (+k.aylik || 0);
 /* B-2483-16: aylık çalışma saati ya da tezgâh verimi girilmemişse saat maliyeti ve kapasite bilinmez (null); 225 sa ve %85 uydurulmaz */
 const msSayi = x => x == null || x === '' || !isFinite(+x) || +x <= 0 ? null : +x;
 function msSaat(p, D = S.D) { const m = mesSis(D); const u = (m.ucret || {})[p.id]; const ay = msSayi(m.aylikSaat); return u && u.brut != null && ay != null ? +u.brut * msSgkKat(D) / ay : null; }
 function msGrupSaat(grup, D = S.D) { const l = D.personel.filter(p => (p.gruplar || []).includes(grup)).map(p => msSaat(p, D)).filter(x => x != null); const t = l.length ? l : D.personel.map(p => msSaat(p, D)).filter(x => x != null); return t.length ? t.reduce((a, b) => a + b, 0) / t.length : null; }
-let msOn = null;
-function msHesap() {
-  const cx = cxAl(); if (!cx) return null; const D = S.D;
-  if (msOn && msOn.dv === S.dataVer && msOn.p === S.plan) return msOn.v;
-  const M = msSis(D); const now = cx.st.now; const son = now + 720;
-  const tez = D.tezgahlar.map(t => { const W = cx.M[t.id] && cx.M[t.id].rw; const acik = W ? workIn(W, now, son) : 0; const x = M.tez[t.id] || {};
-    const vr = msSayi(M.verim); const kap = vr == null ? null : acik * vr / 100; const amort = x.bedel > 0 && x.omur > 0 ? (+x.bedel * (1 - (+x.hurda || 0) / 100)) / (+x.omur * 12) : null;
-    const op = t.opOran == null ? 1 : +t.opOran;
-    let mesgul = 0; if (S.plan) for (const r of Object.values(S.plan.ops)) if (r.m === t.id && isFinite(r.C)) mesgul += Math.max(0, Math.min(son, r.C) - Math.max(now, r.S));
-    return { t, acik, kap, amort, op, pay: 0, kalem: {}, mesgul, x }; });
-  const taban = (k, z) => k.anahtar === 'alan' ? +z.x.alan || 0 : k.anahtar === 'kw' ? +z.x.kw || 0 : k.anahtar === 'kisi' ? z.op : k.anahtar === 'esit' ? 1 : z.kap;
-  for (const k of M.kalemler) { const tl = msKalemTL(k, D); const l = tez.filter(z => !k.kapsam || z.t.grup === k.kapsam); const top = l.reduce((a, z) => a + taban(k, z), 0); if (!(top > 0) || !tl) continue;
-    for (const z of l) { const p = tl * taban(k, z) / top; z.pay += p; z.kalem[k.id] = p; } }
-  // Bedel ya da ömür girilmemişse amortisman, dolayısıyla oran bilinmez (2173-1 a): sıfır uydurulmaz.
-  for (const z of tez) { z.aylik = z.pay + (z.amort || 0); z.oran = z.kap > 0 && z.amort != null ? z.aylik / z.kap : null; }
-  const top = k => tez.reduce((a, z) => a + (z[k] || 0), 0);
-  const v = { tez, byM: Object.fromEntries(tez.map(z => [z.t.id, z])), aylik: top('aylik'), kap: top('kap') };
-  v.ort = v.kap > 0 && tez.every(z => z.amort != null) ? v.aylik / v.kap : null;
-  msOn = { dv: S.dataVer, p: S.plan, v }; return v;
-}
-/* tek oran girilmemişse genel gider bilinmez (null, 2173-1 a); kalem kipinde amortismanı bilinmeyen tezgâhın oranı da bilinmez */
+/* tek oran girilmemişse genel gider bilinmez (null, 2173-1 a) */
 const ggTek = () => { const g = ymAyar().genelGider; return g == null || g === '' ? null : +g; };
-function msGgOran(m) { const v = msHesap(); const z = v && v.byM[m]; if (z && z.amort == null && z.kap > 0) return null; if (z && z.oran != null) return z.oran; return v && v.ort ? v.ort : ggTek(); }
-const msKalemli = () => { const M = msSis(); return !!(M && M.kip === 'kalem' && mesSis() && Array.isArray(M.kalemler) && M.tez); };
 function msGunTur(D, gun) { const iso = isoT(D, gun * 24).slice(0, 10); if ((D.tatiller || []).includes(iso)) return 'tatil'; const g = fmtDT(D, gun * 24).slice(6, 9); return g === 'Cmt' ? 'cmt' : g === 'Paz' ? 'paz' : 'hi'; }
 /** @param {any} [D] @param {Derleme} [cx] @param {any} [e] */
 function ymMesaiTL(D, cx, e) {
@@ -157,7 +133,7 @@ function ymMesaiPay(p, cx) {
 }
 /* sipariş maliyeti son plandan: tezgâh seçimi, ayar ve fason planın kendisidir; malzeme fire payıyla */
 /** @param {any} [s] @param {any} [p] @param {Derleme} [cx] @param {any} [W] @param {any} [MP] */
-function ymSipMaliyetYalin(s, p, cx, W, MP) {
+function ymSipMaliyet(s, p, cx, W, MP) {
   if (!p || !cx) return null; const A = cx.A; const ops = Object.values(p.ops).filter(r => r.job === s.id); if (!ops.length) return null;
   let isl = 0, ayar = 0, fas = 0, gg = 0; const eksik = []; const tek = ggTek();
   for (const r of ops) {
@@ -176,16 +152,6 @@ function ymSipMaliyetYalin(s, p, cx, W, MP) {
   const top = (mal || 0) - talas + isl + ayar + (gg || 0) + fas + (mes || 0);
   const gec = J.T > 0.05 ? agGecTL(agBedel(S.D, s), J.T) : 0;
   return { mal, talas, talasKg: tal ? tal.kg : null, isl, ayar, gg, mes, fas, fin, bek, top, eksik: [...new Set(eksik)], tutar, gec, T: J.T, erken, kar: tutar == null || eksik.length ? null : tutar - top, net: tutar == null || eksik.length ? null : tutar - top - gec - (fin || 0) - (bek ? bek.tl : 0) };
-}
-/* genel gider tezgâhın kendi oranıyla (zz6); geri kalan hesap yalın hesabın aynısıdır */
-/** @param {any} [s] @param {any} [p] @param {Derleme} [cx] @param {any} [W] @param {any} [MP] */
-function ymSipMaliyet(s, p, cx, W, MP) {
-  const x = ymSipMaliyetYalin(s, p, cx, W, MP); if (!x || !msKalemli()) return x;
-  const ops = Object.values(p.ops).filter(r => r.job === s.id && !r.fas);
-  let gg = 0; for (const r of ops) { const o = msGgOran(r.m); gg = gg == null || o == null ? null : gg + (r.run + r.su) * o; }
-  const fark = (gg || 0) - (x.gg || 0); const y = { ...x, gg, top: x.top + fark };
-  if (y.kar != null) y.kar -= fark; if (y.net != null) y.net -= fark;
-  return y;
 }
 
 /* ---------- plan dengesi (zw-denge) ---------- */
@@ -562,7 +528,7 @@ const DG_PLANLI = new Set(['plan-uygula', 'termin-uzatma', 'malzeme-terminleri',
 /* Hamle kayıtlı planı taban alır: plan veriden eskiyse önce bekleyen değişiklik uygulanır. */
 const DG_GUNCEL = new Set(['plan-iyilestir', 'one-al', 'sira-degistir']);
 function degerlendir(calisma, kayit, kaynak, bugun, an, istek) {
-  S = null; U = {}; DG_CX = null; msOn = null;
+  S = null; U = {}; DG_CX = null;
   const g = girdiKur(calisma, kayit, kaynak, bugun); if (!g) return null;
   S = g.S; const k = kayit && kayit.items ? kayit : null;
   DG_BITEN = tmiBitenler((kaynak && kaynak.durum && kaynak.durum.emirler) || k, S.D);

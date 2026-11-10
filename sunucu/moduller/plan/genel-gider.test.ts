@@ -28,7 +28,7 @@ const KAYNAK = {
   ek: { takvim: { hafta: { 1: { 1: ['3'], 2: ['3'], 3: ['3'], 4: ['3'], 5: ['3'] } }, kisiVardiyasi: {} }, makineNotu: null, kisiGorevi: null, siparisBedelleri: { O1: { gelir: 50000 } } },
 };
 // Kayıttan kurulan çalışmanın verisine sayfanın maliyet ayarı (planTL) yazılır; kayıt değişmediği için girdi onu yeniden kurmaz.
-const calisma = (planTL: Record<string, unknown> | undefined): Record<string, unknown> => {
+const calisma = (planTL: Record<string, unknown> | undefined, ekD: Record<string, unknown> = {}): Record<string, unknown> => {
   const c0 = {
     surum: 2, D: { meta: { ad: 'Ornek', baslangic: '2026-10-19' }, vardiyalar: [], calismaGunleri: {}, tatiller: [], urunler: [], malzemeler: [], tezgahlar: [], personel: [], siparisler: [], ayarlar: {} },
     rrSavedAt: 5, dataVer: 1, down: [], ekMesai: [], locks: {}, gercek: {}, w: { famK: 0.3, mat: 'sert', dondurma: 4 },
@@ -38,6 +38,7 @@ const calisma = (planTL: Record<string, unknown> | undefined): Record<string, un
   assert.ok(g0);
   const S = structuredClone(g0.S) as { D: Record<string, unknown> };
   if (planTL) S.D['planTL'] = planTL;
+  Object.assign(S.D, ekD);
   const g = planGirdisi({ calisma: S, kayit: KAYIT, kaynak: KAYNAK, bugun: '2026-10-19' });
   assert.ok(g);
   assert.deepEqual((g.S as { D: Record<string, unknown> }).D['planTL'], planTL);
@@ -46,9 +47,9 @@ const calisma = (planTL: Record<string, unknown> | undefined): Record<string, un
   return { ...S, plan: { ops: p.ops, fail: [], J: Object.fromEntries(Object.entries(e.J).map(([k, x]) => [k, { C: x.C, T: x.T }])), dataVer: 1 } };
 };
 const AN = Date.parse('2026-10-19T06:00:00Z');
-const netKar = async (planTL: Record<string, unknown> | undefined): Promise<number | null> => {
+const netKar = async (planTL: Record<string, unknown> | undefined, ekD: Record<string, unknown> = {}): Promise<number | null> => {
   const istek: DegerlendirmeIstegi = { tur: 'termin-secenekleri', siparisId: 'O1' };
-  const r = await degerlendirmeYap({ calisma: calisma(planTL), kayit: KAYIT, kaynak: KAYNAK, bugun: '2026-10-19', istek }, AN);
+  const r = await degerlendirmeYap({ calisma: calisma(planTL, ekD), kayit: KAYIT, kaynak: KAYNAK, bugun: '2026-10-19', istek }, AN);
   assert.ok(r && !('hata' in r), JSON.stringify(r));
   const s = degerlendirmeSonucu.parse(r.sonuc);
   if (s.tur !== 'termin-secenekleri') return assert.fail(s.tur);
@@ -66,5 +67,25 @@ describe('genel gider oranı girilmemişse (2173-1 a)', () => {
     assert.ok(yuz !== null && sifir !== null && yuz < sifir, `${String(yuz)} < ${String(sifir)}`);
     assert.ok(yuzYirmi !== null && yuzYirmi < (yuz ?? 0));
     assert.notEqual(yok, yuzYirmi);
+  });
+});
+
+// 2601 a, 2668 a, 2648 b: genel gider oranının tek kaynağı Finans oranıdır (planTL). Kayıtta eski kalem kipi verisi (maliyetSis, mesaiSis) kalsa da
+// motor tezgâh başı kalem oranını kurmaz; veri silinmez, yalnız okunmaz.
+const KALEM_KIPI = {
+  maliyetSis: { kip: 'kalem', verim: 85, kalemler: [{ id: 'K1', ad: 'Kira', tur: 'kira', aylik: 900000, anahtar: 'esit', kapsam: '' }], tez: { 100: { bedel: 1200000, omur: 10 } }, dolayli: [] },
+  mesaiSis: { kisiBazli: false, sgk: 0, yanHak: 0, aylikSaat: 225, ucret: {} },
+};
+describe('kayıtta eski kalem kipi verisi (2718)', () => {
+  test('GG-02: kalem kipi kaydı varken genel gider Finans oranından gelir; kâr kaydı olmayan planla aynıdır', async () => {
+    const finans = await netKar({ genelGider: 100 });
+    const kalemli = await netKar({ genelGider: 100 }, KALEM_KIPI);
+    assert.equal(typeof finans, 'number');
+    assert.equal(kalemli, finans);
+  });
+  test('GG-03: gizli ayda kalem kipi kaydı genel gider oranı kurmaz; kâr oranı 0 girilmiş planla aynıdır', async () => {
+    const sifir = await netKar({ genelGider: 0 });
+    const gizliKalemli = await netKar({ genelGider: null, genelGiderGizli: true }, KALEM_KIPI);
+    assert.equal(gizliKalemli, sifir);
   });
 });
