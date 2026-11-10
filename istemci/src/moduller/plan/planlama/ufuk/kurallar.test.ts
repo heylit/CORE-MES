@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { calismaOku } from '../durum.ts';
 import type { PlanlamaCalismasi } from '../tipler.ts';
 import {
-  DEGER_VARSAYILAN_TL, bedelsizGruplar, darbogazlar, geriIsGunu, geriZamanla, grupSaatTL, gunAyHafta, mesaiSaatTL, mesaiTLKaynagi, pencereSaati, planUretimi, saatOku, simdiOku,
+  DEGER_VARSAYILAN_TL, bedelsizGruplar, darbogazlar, geriIsGunu, geriZamanla, grupSaatTL, gunAyHafta, mesaiSaatTL, mesaiSiraKaynagi, mesaiTLKaynagi, SIRA_KATSAYI, pencereSaati, planUretimi, saatOku, simdiOku,
   talepHizi, tezgahPencereleri, ufukMalzemesi, ufukTakvimi, ufukVerisi, urunAileleri, yatirimTL, yillikAyarOku, yillikAyarYaz, yillikDonemler,
   yillikHedefKur, yillikModel, yillikOzet, yillikSonuc, yillikTalep, yillikVeri, zamanKur, type CozumCevabi, type Zaman,
 } from './kurallar.ts';
@@ -211,6 +211,16 @@ describe('yıllık plan', () => {
     expect(m.mesaiBilinmez).toEqual(['freze']);
   });
 
+  // 2750 b: TL'siz sıra; katsayı küçük ve sıralı, sırası olmayan grup null.
+  it('mesai bedel sırası kaynağı: sıra × küçük katsayı; null, eksik ve cevapsız grup null', () => {
+    const k = mesaiSiraKaynagi({ gruplar: [{ grup: 'torna', sira: 1 }, { grup: 'freze', sira: 2 }, { grup: 'taslama', sira: null }] });
+    expect(k('torna')).toBe(SIRA_KATSAYI);
+    expect(k('freze')).toBe(2 * SIRA_KATSAYI);
+    expect(k('taslama')).toBeNull();
+    expect(k('yeni-grup')).toBeNull();
+    expect(mesaiSiraKaynagi(null)('torna')).toBeNull();
+  });
+
   it('HiGHS ile: kapasite yetiyorsa açık yok; yetmiyorsa önce ek mesai, sonra acil kapasite ve gölge fiyat', async () => {
     const c = calisma({ yillik: { yatirim: false } });
     const z = zaman(c);
@@ -242,6 +252,13 @@ describe('yıllık plan', () => {
     expect(ilk?.o).toBeCloseTo((vb.kapH.torna ?? 0) * 0.15, 3);
     expect(yillikOzet(vb, sb).gecAdet).toBeGreaterThan(0);
     expect(darbogazlar(vb, sb)[0]?.g).toBe('torna');
+
+    // 2750 b: TL'siz sırayla da ek mesai geç teslimden önce kullanılır, sonuç TL'li bedelle aynı.
+    const ms = yillikModel(b.D, vb, P, Tb, Ab, { yat: false, mesaiTL: mesaiSiraKaynagi({ gruplar: [{ grup: 'torna', sira: 1 }, { grup: 'freze', sira: 1 }] }) });
+    const rs = await coz(ms.lp, 30, ms.want);
+    const ss = yillikSonuc(b.D, vb, P, Tb, rs, rs, ms, rs);
+    expect(ss.grup.torna?.[0]?.o).toBeCloseTo((vb.kapH.torna ?? 0) * 0.15, 3);
+    expect(yillikOzet(vb, ss).gecAdet).toBe(yillikOzet(vb, sb).gecAdet);
 
     // 2745 a: bedeli bilinmeyen grupta ek mesai önerilmez; açık acil kapasiteye düşer.
     const mn = yillikModel(b.D, vb, P, Tb, Ab, { yat: false });

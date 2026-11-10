@@ -27,12 +27,16 @@ export function MesaiSayfasi({ c, T, para, yaz }: { c: PlanlamaCalismasi; T: Tak
   const topH = EK.reduce((a, e) => a + vardiyaSaati(D, e.vardiya), 0);
   const butce = sayiOku(c.param.mesaiHafta) ?? MESAI_HAFTA0;
   const red = mesaiKararlari(D).filter((k) => k.karar === 'red').length;
+  // Grup saat maliyeti istemciye gelmez (2742); bu sayfadaki tutar her zaman yalın ücretledir. Kişi bazlı seçiliyken bunu açıkça söyler.
+  const ucret = mesaiUcreti(D);
+  const yalin = ucret === null ? 'mesai ücreti girilmemiş' : `${sayi(ucret, 0)} TL/sa, ek mesai ×${sayi(Y.mesaiCarpan, 1)}`;
+  const yalinNotu = m.kisiBazli ? `yalın ücretle (${yalin}); grup saat maliyeti planın değerlendirmesinde` : yalin;
   return (
     <>
       <AsilKart simge="clock" baslik="Ek mesai planı">
         <Kpi l={[
           ['clock', 'Planlı ek mesai', `${sayi(topH, 1)} sa`, `${String(EK.length)} vardiya`],
-          ['lira', 'Mesai maliyeti', para ? tl(topTL) : 'müdürde', m.kisiBazli ? 'grup saat maliyetinden, gün türüne göre çarpan' : `${sayi(mesaiUcreti(D), 0)} TL/sa, ek mesai ×${sayi(Y.mesaiCarpan, 1)}`],
+          ['lira', 'Mesai maliyeti', para ? tl(topTL) : 'müdürde', yalinNotu],
           ['gauge', 'Haftalık sınır', butce ? `${sayi(butce, 0)} sa` : 'yok', 'Kısıtlar sayfasında'],
         ]} />
         <div className="tc-tablo-kap">
