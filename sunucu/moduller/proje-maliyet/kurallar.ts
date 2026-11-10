@@ -506,7 +506,7 @@ export const TABAN_GEREKCE = 'Taban yenileniyor: gerekçe zorunlu.';
 export const MASRAF_YOK = 'Gider belgesi bulunamadı.';
 export const MASRAF_IPTAL = 'İptal edilmiş belge projeye bağlanamaz.';
 export const MASRAF_SATIN_ALMA = 'Satın alma siparişine bağlı belge üretim maliyetine satın almadan girer; projeye ayrıca bağlanamaz.';
-export const MASRAF_KATEGORI = 'Bu gider türü proje masrafı sayılmaz (faiz, vergi, kredi, kur farkı).';
+export const MASRAF_KATEGORI = 'Bu gider türü proje masrafı sayılmaz; projeye yalnız lojistik, pazarlama ve diğer gider bağlanır.';
 export const MASRAF_KAPALI_PROJE = 'Tamamlanmış ya da iptal edilmiş projeye masraf bağlanamaz.';
 export const MASRAF_KALDIRMA_YETKISI = 'Masraf bağını yalnız proje maliyetini gören kaldırabilir.';
 
@@ -535,12 +535,19 @@ export function masrafReddi(
   return null;
 }
 
-// PM-42: son gerçekleşen = üretim gerçekleşeni + iptal edilmemiş bağlı masraf; tahmini son = son gerçekleşen + kalan plan;
+// PM-49 (2599 a): bağ, türü bugünkü proje masrafı listesinde değilse sayılmaz. Belge bağdan sonra satın alma siparişine bağlandıysa da
+// sayılmaz: tutar projeye satın almadan girer, ikinci kez sayılmasın (masrafReddi yalnız bağlama anına bakar). Bağ silinmez; listede kalır.
+export function masrafSayilmaz(belge: { kategori: string; satinAlmaBagli: boolean }, kategoriler: readonly string[]): boolean {
+  return belge.satinAlmaBagli || !kategoriler.includes(belge.kategori);
+}
+
+// PM-42: son gerçekleşen = üretim gerçekleşeni + iptal edilmemiş ve sayılan (PM-49) bağlı masraf; tahmini son = son gerçekleşen + kalan plan;
 // fark = tahmini son - taban planı. Bilinmeyen taraf varsa sonuç bilinmez (sıfır uydurulmaz). Masrafın planı yoktur.
 export function maliyetFarki(
-  tabanPlan: number | null, uretimGerceklesen: number | null, kalanPlan: number | null, masraflar: readonly { tutarTl: number; iptal: boolean }[],
+  tabanPlan: number | null, uretimGerceklesen: number | null, kalanPlan: number | null,
+  masraflar: readonly { tutarTl: number; iptal: boolean; sayilmaz: boolean }[],
 ): { masrafToplami: number; sonGerceklesen: number | null; tahminiSon: number | null; fark: number | null } {
-  const masrafToplami = masraflar.reduce((t, m) => (m.iptal ? t : t + m.tutarTl), 0);
+  const masrafToplami = masraflar.reduce((t, m) => (m.iptal || m.sayilmaz ? t : t + m.tutarTl), 0);
   const sonGerceklesen = uretimGerceklesen === null ? null : uretimGerceklesen + masrafToplami;
   const tahminiSon = sonGerceklesen === null || kalanPlan === null ? null : sonGerceklesen + kalanPlan;
   const fark = tahminiSon === null || tabanPlan === null ? null : tahminiSon - tabanPlan;

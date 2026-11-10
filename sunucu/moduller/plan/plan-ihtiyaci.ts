@@ -3,8 +3,9 @@ import { ACIK_EMIR_DURUMLARI } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { malzemeOzetleri } from '../malzemeler/disari.ts';
 import { urunAgaci } from '../rota/disari.ts';
 import { planIhtiyaclariniYaz } from '../satin-alma/disari.ts';
-import { emirlerinNetSarfi, malzemeStokDurumlari } from '../stok/disari.ts';
+import { malzemeStokDurumlari } from '../stok/disari.ts';
 import { emirDurumlari, emirlerinMalzemeIhtiyaci, emirNolari, isEmriPlanBilgileri } from '../uretim-emirleri/disari.ts';
+import { emreVerilenler } from './mrp.ts';
 import { acilacakUrunler, planIhtiyaclari, type PlanIhtiyaci } from './plan-ihtiyaci-kurallar.ts';
 import { yerlesimler } from './sorgular.ts';
 
@@ -30,7 +31,7 @@ export async function canliPlanIhtiyaclari(db: Db): Promise<PlanIhtiyaci[]> {
   const temel = {
     emirler: acik.map((id) => ({ id, no: nolar.get(id) ?? String(id) })),
     ihtiyaclar,
-    sarflar: await emirlerinNetSarfi(db, acik),
+    sarflar: await emreVerilenler(db, acik),
     baslangiclar,
     kartlar: await malzemeOzetleri(db, malzemeler),
     serbest: new Map(await serbestOku(malzemeler)),
