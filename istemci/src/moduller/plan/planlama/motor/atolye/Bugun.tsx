@@ -31,10 +31,10 @@ export function Bugun({ ort, acik }: { ort: Ortam; acik: boolean }) {
               return (
                 <div key={x.id} className="tc-pym-tp-bugun-satir">
                   <button type="button" className="tc-pym-tp-bugun-sat" onClick={() => ort.sipGoster(x.id)}>
-                    <b>{x.id}</b><span className="tc-pym-tp-rozet" data-durum={x.durum}>{x.durum === 'gec' ? `${sure(x.T)} geç` : `${sure(x.pay)} pay`}</span>
+                    <b>{ort.emirNo(x.id)}</b><span className="tc-pym-tp-rozet" data-durum={x.durum}>{x.durum === 'gec' ? `${sure(x.T)} geç` : `${sure(x.pay)} pay`}</span>
                     <span className="tc-pym-tp-not">{dar ? `asıl bekleme · ${dar}` : ''}</span>
                   </button>
-                  <button type="button" className="tc-dugme tc-pym-kucuk" aria-label={`${x.id} öne al`} aria-disabled={oneY.yap ? undefined : 'true'}
+                  <button type="button" className="tc-dugme tc-pym-kucuk" aria-label={`${ort.emirNo(x.id)} öne al`} aria-disabled={oneY.yap ? undefined : 'true'}
                     title={oneY.yap ? 'Motor bu siparişi öne alan planı arar; önizlersiniz.' : `Öne al: ${oneY.not}`} onClick={oneY.yap ?? undefined}>
                     <Simge ad="first" boyut="k" /><span data-metin="">Öne al</span>
                   </button>
@@ -86,10 +86,10 @@ export function Brif({ ort, kapat }: { ort: Ortam; kapat: () => void }) {
   const ilk = gec[0] ?? risk[0];
   const S1 = [
     ilk ? sat('alert', 'gec', `${gec.length} geciken, ${risk.length} riskli sipariş`,
-      gec.slice(0, 3).map((x) => `${x.id} ${sure(x.T)}`).join(' · ') || `Riskliler: ${risk.slice(0, 3).map((x) => x.id).join(', ')}`, () => ort.sipGoster(ilk.id)) : null,
+      gec.slice(0, 3).map((x) => `${ort.emirNo(x.id)} ${sure(x.T)}`).join(' · ') || `Riskliler: ${risk.slice(0, 3).map((x) => ort.emirNo(x.id)).join(', ')}`, () => ort.sipGoster(ilk.id)) : null,
     dar[0] ? sat('fire', 'risk', `${dar.length} tezgâh darboğaz (3 gün)`, dar.slice(0, 3).map((x) => `${x.m} %${Math.round(x.oran * 100)}`).join(' · '),
       () => ort.suzSec({ g: null, m: dar[0]?.m ?? null, j: null })) : null,
-    mal[0] ? sat('box', 'risk', `${mal.length} siparişte malzeme geç`, mal.slice(0, 3).map((x) => `${x.id} malzeme ${tz(D, x.bas)}`).join(' · '), () => ort.sipGoster(mal[0]?.id ?? '')) : null,
+    mal[0] ? sat('box', 'risk', `${mal.length} siparişte malzeme geç`, mal.slice(0, 3).map((x) => `${ort.emirNo(x.id)} malzeme ${tz(D, x.bas)}`).join(' · '), () => ort.sipGoster(mal[0]?.id ?? '')) : null,
     dn[0] ? sat('wrench', 'gec', `${dn.length} arıza`, dn.map((d) => `${d.m} ${tz(D, d.from)} → ${zs(D, d.to)}`).join(' · '),
       () => ort.kartAc({ tur: 'gunluk', m: dn[0]?.m ?? '' })) : null,
   ].filter(Boolean);
