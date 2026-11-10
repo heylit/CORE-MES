@@ -83,7 +83,7 @@ describe('plan (gerçek PostgreSQL): sunucu motoru son sözü söyler (ADR 0018)
       kip = 'yerlesmeyen';
       const y = await tamam<KuyrukYazCevabi>(c.planlama, 'POST', '/plan/kuyruklari-yaz', govde({ id: r.taslak, surum }));
       assert.equal(y.yazilan, 0);
-      assert.deepEqual(y.yerlesmeyen, [a2, a1].map((a) => ({ ...a, neden: 'Sunucu motoru yerleştiremedi.' })));
+      assert.deepEqual(y.yerlesmeyen, [a2, a1].map((a) => ({ ...a, neden: 'Sunucu motoru yerleştiremedi; nedeni ölçülemedi.', nedenKodu: 'bilinmiyor', hedef: null })));
       assert.deepEqual((await planOku(r.taslak)).yerlesmemis.filter((x) => x.isEmriId === i1 || x.isEmriId === i2).length, 2);
     } finally {
       kip = 'tamam';

@@ -51,7 +51,7 @@ describe('süresiz ana istasyon adayı (2701, 1737 c)', () => {
       const r = await coz(kaynakKur([adim(10, null)]), istek({ kip, kuyruklar: [{ makineId: 100, anahtarlar: ['E-1|10'] }] }));
       assert.equal(r.yerlesimler.some((y) => y.anahtar === 'E-1|10'), false, `${kip}: ${JSON.stringify(r.yerlesimler)}`);
       assert.deepEqual(r.yerlesmeyen, ['E-1|10'], kip);
-      assert.equal(r.nedenler['E-1|10'], 'Sunucu motoru yerleştiremedi: adımın işlem süresi boş (rotada çevrim süresi girilmemiş).', kip);
+      assert.deepEqual(r.nedenler['E-1|10'], { kod: 'sure-bos', metin: 'Adımın Torna istasyonundaki işlem süresi girilmemiş.', hedef: { tur: 'istasyon', id: 10, ad: 'Torna' } }, kip);
     }
   });
   test('SB-02: süreli alternatif istasyon aday kalır; iş alternatifte kendi süresiyle yerleşir', async () => {

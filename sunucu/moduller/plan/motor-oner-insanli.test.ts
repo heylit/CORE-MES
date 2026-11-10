@@ -24,20 +24,24 @@ describe('plan (gerçek PostgreSQL): insanlı istasyonda makineli adım (2696, B
     return { istasyon, makine };
   }
   const yerlesim = () => o.tamam<MotorYerlesimiCevabi>(o.c.planlama, 'GET', '/plan/motor-yerlesimi');
-  const nedeni = (m: MotorYerlesimiCevabi, id: number) => m.yerlesmeyen.find((y) => y.isEmriId === id)?.neden;
+  const nedeni = (m: MotorYerlesimiCevabi, id: number) => { const y = m.yerlesmeyen.find((x) => x.isEmriId === id); return y && [y.neden, y.nedenKodu, y.hedef]; };
 
-  test('MI-01: makine seçili adım insanlı istasyonda, yetkin kişi vardiyasız: istasyon adımının iletisi; motorun genel iletisi değil', async () => {
-    const { makine } = await insanliIstasyon(true, false);
+  test('MI-01: makine seçili adım insanlı istasyonda, yetkin kişi vardiyasız: makine ve istasyon adıyla vardiya nedeni (2780)', async () => {
+    const { makine, istasyon } = await insanliIstasyon(true, false);
     const [is] = await o.isEmirleriAc([o.yeniAdim({ kaynak: { tur: 'makine', id: makine }, ayarSuresiDk: 0, birimSureDk: 2 })]);
     const m = await yerlesim();
     assert.equal(m.yerlesimler.some((y) => y.isEmriId === is), false);
-    assert.equal(nedeni(m, is!), 'İnsanlı istasyonda yetkin kişilerin hiçbirinin vardiyası tanımlı değil.', JSON.stringify(m.yerlesmeyen));
+    const ad = `Deneme insanli ${String(sayac)}`;
+    assert.deepEqual(nedeni(m, is!), [`Deneme insanli makine ${String(sayac)} makinesi insanlı ${ad} istasyonunda; istasyondaki yetkin kişilerin hiçbirinin vardiyası seçilmemiş.`,
+      'kisi-vardiyasiz', { tur: 'istasyon', id: istasyon, ad }], JSON.stringify(m.yerlesmeyen));
   });
-  test('MI-02: makine seçili adım insanlı istasyonda, yetkin kişi yok: adaysız iletisi', async () => {
-    const { makine } = await insanliIstasyon(false, false);
+  test('MI-02: makine seçili adım insanlı istasyonda, yetkin kişi yok: yetkin kişi nedeni (2780)', async () => {
+    const { makine, istasyon } = await insanliIstasyon(false, false);
     const [is] = await o.isEmirleriAc([o.yeniAdim({ kaynak: { tur: 'makine', id: makine }, ayarSuresiDk: 0, birimSureDk: 2 })]);
     const m = await yerlesim();
-    assert.match(nedeni(m, is!) ?? '', /kullanılabilir makinesi ya da kişisi yok/, JSON.stringify(m.yerlesmeyen));
+    const ad = `Deneme insanli ${String(sayac)}`;
+    assert.deepEqual(nedeni(m, is!), [`Deneme insanli makine ${String(sayac)} makinesi insanlı ${ad} istasyonunda; istasyonda yetkin kişi tanımlı değil.`,
+      'yetkin-kisi-yok', { tur: 'istasyon', id: istasyon, ad }], JSON.stringify(m.yerlesmeyen));
   });
   test('MI-03: makine seçili adım insanlı istasyonda, yetkin kişi vardiyalı: yerleşir', async () => {
     const { makine } = await insanliIstasyon(true, true);

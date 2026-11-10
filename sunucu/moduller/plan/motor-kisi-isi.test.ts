@@ -131,7 +131,9 @@ describe('plan (gerçek PostgreSQL): kişi işi motor yerleşiminde (1888 b)', (
     assert.ok(e2?.kaynak.tur === 'kisi' && yetkinler.includes(e2.kaynak.id), JSON.stringify(m.yerlesmeyen));
     assert.ok(Date.parse(e2!.baslangic) < Date.parse(e!.bitis), `havuzdaki ikinci iş ilkini beklemez: ${e2!.baslangic} / ${e!.baslangic}-${e!.bitis}`);
     if (e2!.kaynak.id === e!.kaynak.id) assert.ok(Date.parse(e2!.bitis) <= Date.parse(e!.baslangic), 'aynı kişide üst üste binmez');
-    assert.match(m.yerlesmeyen.find((y) => y.isEmriId === adaysiz)?.neden ?? '', /kullanılabilir makinesi ya da kişisi yok/);
+    // 2780: tek ve somut neden, düzeltilecek istasyonla.
+    const a = m.yerlesmeyen.find((y) => y.isEmriId === adaysiz);
+    assert.deepEqual([a?.neden, a?.nedenKodu, a?.hedef], ['Deneme RT-BOS istasyonunda aktif makine yok.', 'makine-yok', { tur: 'istasyon', id: bos, ad: 'Deneme RT-BOS' }]);
     assert.equal(m.yerlesmeyen.some((y) => /dizilmez/.test(y.neden)), false);
   });
 
@@ -145,6 +147,7 @@ describe('plan (gerçek PostgreSQL): kişi işi motor yerleşiminde (1888 b)', (
     const [elIsi] = await o.isEmirleriAc([o.yeniAdim({ kaynak: { tur: 'istasyon', id: insanli }, ayarSuresiDk: 0, birimSureDk: 2 })]);
     const m = await o.tamam<MotorYerlesimiCevabi>(o.c.planlama, 'GET', '/plan/motor-yerlesimi');
     assert.equal(m.yerlesimler.some((y) => y.isEmriId === elIsi), false, JSON.stringify(m.yerlesimler.find((y) => y.isEmriId === elIsi)));
-    assert.match(m.yerlesmeyen.find((y) => y.isEmriId === elIsi)?.neden ?? '', /vardiyası tanımlı değil/);
+    const y = m.yerlesmeyen.find((x) => x.isEmriId === elIsi);
+    assert.deepEqual([y?.neden, y?.nedenKodu, y?.hedef], ['Deneme RT-VS istasyonundaki yetkin kişilerin hiçbirinin vardiyası seçilmemiş.', 'kisi-vardiyasiz', { tur: 'istasyon', id: insanli, ad: 'Deneme RT-VS' }]);
   });
 });

@@ -45,30 +45,44 @@ function kaynakKur(o: { adimlar?: unknown[]; makineler?: unknown[]; kisiler?: un
 const istek = (ek: Partial<PlanMotoruIstegi>): PlanMotoruIstegi => ({
   kip: 'yeni', simdi: new Date('2026-10-19T05:00:00Z'), kuyruklar: [], sabitler: [], calisanlar: [], taslakId: 1, ...ek,
 });
-const ONEK = 'Sunucu motoru yerleştiremedi: ';
+const TORNA = { tur: 'istasyon', id: 10, ad: 'Torna' } as const;
+const neden = (kod: string, metin: string, hedef: unknown = null) => ({ kod, metin, hedef });
 
-describe('sunucu çözücüsünde yerleşmeme nedeni (2696, B-2482-32)', () => {
+// 2780: ileti tek ve somut nedendir (kod, tek cümle, düzeltilecek istasyon ya da tezgâh); motorun genel 'zaman' metni yazılmaz.
+describe('sunucu çözücüsünde yerleşmeme nedeni (2696, B-2482-32, 2780)', () => {
   test('YN-02 aday: istasyonun aktif makinesi yoksa neden odur', async () => {
     const r = await coz(kaynakKur({ makineler: [{ ...MAKINE, aktif: false }] }), istek({ kuyruklar: [{ makineId: 100, anahtarlar: ['E-1|10'] }] }));
     assert.deepEqual(r.yerlesmeyen, ['E-1|10']);
-    assert.equal(r.nedenler['E-1|10'], `${ONEK}Torna istasyonunun aktif makinesi yok.`);
+    assert.deepEqual(r.nedenler['E-1|10'], neden('makine-yok', 'Torna istasyonunda aktif makine yok.', TORNA));
   });
-  test('YN-03 aday: insanlı istasyonda vardiyası olan yetkin kişi yoksa neden odur; kişiye vardiya verilince yerleşir', async () => {
+  test('YN-03 aday: insanlı istasyonda yetkin kişi vardiyasız ya da hiç yoksa ayrı neden; kişiye vardiya verilince yerleşir', async () => {
     const yok = await coz(kaynakKur({ insanli: ['10'], kisiler: [KISI] }), istek({ kuyruklar: [{ makineId: 100, anahtarlar: ['E-1|10'] }] }));
     assert.deepEqual(yok.yerlesmeyen, ['E-1|10']);
-    assert.equal(yok.nedenler['E-1|10'], `${ONEK}Torna insanlı istasyon; vardiyası olan yetkin kişi yok.`);
+    assert.deepEqual(yok.nedenler['E-1|10'], neden('kisi-vardiyasiz', 'Torna istasyonundaki yetkin kişilerin hiçbirinin vardiyası seçilmemiş.', TORNA));
+    const yetkinsiz = await coz(kaynakKur({ insanli: ['10'], kisiler: [] }), istek({ kuyruklar: [{ makineId: 100, anahtarlar: ['E-1|10'] }] }));
+    assert.deepEqual(yetkinsiz.nedenler['E-1|10'], neden('yetkin-kisi-yok', 'Torna insanlı istasyonunda yetkin kişi tanımlı değil.', TORNA));
     const var_ = await coz(kaynakKur({ insanli: ['10'], kisiler: [KISI], kisiVardiyasi: { 7: V } }), istek({}));
     assert.ok(!var_.yerlesmeyen.includes('E-1|10'), JSON.stringify(var_.nedenler));
   });
-  test('YN-04 zaman: aday var ama ufukta yer yoksa motorun metni', async () => {
+  test('YN-04 zaman: işin süresi tezgâhın ufuktaki açık süresinden uzunsa neden ufuktur, iki süreyle', async () => {
     const r = await coz(kaynakKur({ adimlar: [adim(10, 1e7)] }), istek({ kuyruklar: [{ makineId: 100, anahtarlar: ['E-1|10'] }] }));
     assert.deepEqual(r.yerlesmeyen, ['E-1|10']);
-    assert.equal(r.nedenler['E-1|10'], `${ONEK}ufuk içinde tezgâh, vardiya, kaynak ya da malzeme yeri yok.`);
+    const n = r.nedenler['E-1|10'];
+    assert.equal(n?.kod, 'ufuk');
+    assert.deepEqual(n?.hedef, { tur: 'makine', id: 100, ad: 'Torna 1' });
+    assert.match(n?.metin ?? '', /^İşin süresi \([\d.,]+ sa\) Torna 1 tezgâhının planlama ufkunda \(\d+ gün\) açık süresinden \([\d.,]+ sa\) uzun\.$/);
+  });
+  test('YN-10: vardiyası hiç tanımsız tezgâhın işi motora girmez, vardiyasız listesindedir (168 b; neden servisçe takvim-yok)', async () => {
+    const k = kaynakKur({});
+    (k.calisma as { D: { calismaGunleri: object } }).D.calismaGunleri = {};
+    (k.kaynak.ek as { takvim: { hafta: object } }).takvim.hafta = {};
+    const r = await coz(k, istek({ kuyruklar: [{ makineId: 100, anahtarlar: ['E-1|10'] }] }));
+    assert.deepEqual([r.vardiyasiz, r.nedenler], [['E-1|10'], {}]);
   });
   test('YN-05 öncül: öncülü yerleşmeyen adım öncülü söyler, öncülün kendisi kendi nedenini', async () => {
     const r = await coz(kaynakKur({ adimlar: [adim(10, 30), adim(20, 15)], makineler: [{ ...MAKINE, aktif: false }] }),
       istek({ kuyruklar: [{ makineId: 100, anahtarlar: ['E-1|10', 'E-1|20'] }] }));
-    assert.deepEqual(r.nedenler, { 'E-1|10': `${ONEK}Torna istasyonunun aktif makinesi yok.`, 'E-1|20': 'Önceki adım (E-1 OP 10) yerleşmedi.' });
+    assert.deepEqual(r.nedenler, { 'E-1|10': neden('makine-yok', 'Torna istasyonunda aktif makine yok.', TORNA), 'E-1|20': neden('oncul', 'Önceki adım (E-1 OP 10) yerleşmedi.') });
   });
 });
 
@@ -80,32 +94,40 @@ describe('motor nedeni şeması (Mimar N1)', () => {
 });
 
 describe('aday nedeni (saf)', () => {
+  const SURE_BOS = neden('sure-bos', 'Adımın Torna istasyonundaki işlem süresi girilmemiş.', TORNA);
+  const MAKINESIZ = neden('makine-yok', 'Torna istasyonunda aktif makine yok.', TORNA);
+  const YETKINSIZ = neden('yetkin-kisi-yok', 'Torna insanlı istasyonunda yetkin kişi tanımlı değil.', TORNA);
   const k = (o: Parameters<typeof kaynakKur>[0]) => kaynakKur(o).kaynak;
   test('YN-01: adımın işlem süresi boş ve süreli alternatifi yoksa neden odur (makine ve kişi denetiminden önce)', () => {
-    assert.equal(adayNedeni(k({ adimlar: [adim(10, null)] }), 'E-1|10'), 'adımın işlem süresi boş (rotada çevrim süresi girilmemiş)');
-    assert.equal(adayNedeni(k({ adimlar: [adim(10, null)], makineler: [] }), 'E-1|10'), 'adımın işlem süresi boş (rotada çevrim süresi girilmemiş)');
-    assert.equal(adayNedeni(k({ adimlar: [adim(10, '')] }), 'E-1|10'), 'adımın işlem süresi boş (rotada çevrim süresi girilmemiş)');
+    assert.deepEqual(adayNedeni(k({ adimlar: [adim(10, null)] }), 'E-1|10'), SURE_BOS);
+    assert.deepEqual(adayNedeni(k({ adimlar: [adim(10, null)], makineler: [] }), 'E-1|10'), SURE_BOS);
+    assert.deepEqual(adayNedeni(k({ adimlar: [adim(10, '')] }), 'E-1|10'), SURE_BOS);
   });
   test('YN-08 (Mimar N2): süre kuralı motorunkiyle aynı; işlem ya da değişim dolu, çevrim boşsa süre nedeni değildir', () => {
     const makinesiz = { makineler: [] };
-    assert.equal(adayNedeni(k({ adimlar: [adim(10, null, { proc: 30 })], ...makinesiz }), 'E-1|10'), 'Torna istasyonunun aktif makinesi yok');
-    assert.equal(adayNedeni(k({ adimlar: [adim(10, null, { proc: null, chg: 5 })], ...makinesiz }), 'E-1|10'), 'Torna istasyonunun aktif makinesi yok');
+    assert.deepEqual(adayNedeni(k({ adimlar: [adim(10, null, { proc: 30 })], ...makinesiz }), 'E-1|10'), MAKINESIZ);
+    assert.deepEqual(adayNedeni(k({ adimlar: [adim(10, null, { proc: null, chg: 5 })], ...makinesiz }), 'E-1|10'), MAKINESIZ);
     const { proc: _p, ...islemsiz } = adim(10, 30);
-    assert.equal(adayNedeni(k({ adimlar: [islemsiz], ...makinesiz }), 'E-1|10'), 'Torna istasyonunun aktif makinesi yok', 'işlem alanı olmayan eski kayıtta çevrim');
+    assert.deepEqual(adayNedeni(k({ adimlar: [islemsiz], ...makinesiz }), 'E-1|10'), MAKINESIZ, 'işlem alanı olmayan eski kayıtta çevrim');
     const { proc: _q, ...islemsizBos } = adim(10, null);
-    assert.equal(adayNedeni(k({ adimlar: [islemsizBos] }), 'E-1|10'), 'adımın işlem süresi boş (rotada çevrim süresi girilmemiş)');
+    assert.deepEqual(adayNedeni(k({ adimlar: [islemsizBos] }), 'E-1|10'), SURE_BOS);
+  });
+  test('YN-11: pasif istasyon kendi nedenidir (makine ve kişiden önce)', () => {
+    const d = kaynakKur({}).kaynak;
+    (d.durum as { stations: { aktif: boolean }[] }).stations[0]!.aktif = false;
+    assert.deepEqual(adayNedeni(d, 'E-1|10'), neden('istasyon-pasif', 'Torna istasyonu pasif.', TORNA));
   });
   test('YN-06: süresi olan alternatif istasyon varsa süre nedeni değildir; adım ya da emir bulunamazsa null', () => {
     const alt = adim(10, null, { alts: ['11'], altTimes: { 11: { setup: 0, cycle: 5 } } });
-    assert.notEqual(adayNedeni(k({ adimlar: [alt] }), 'E-1|10'), 'adımın işlem süresi boş (rotada çevrim süresi girilmemiş)');
+    assert.notDeepEqual(adayNedeni(k({ adimlar: [alt] }), 'E-1|10'), SURE_BOS);
     assert.equal(adayNedeni(k({}), 'E-9|10'), null);
     assert.equal(adayNedeni(k({}), 'E-1|99'), null);
     assert.equal(adayNedeni(null, 'E-1|10'), null);
   });
-  test('YN-07: aktif makinesi ve süresi olan istasyonda neden ayrılamaz (null; motorun genel metni yazılır)', () => {
+  test('YN-07: aktif makinesi ve süresi olan istasyonda kaynakta neden yok (null; motor ölçüsüne kalır)', () => {
     assert.equal(adayNedeni(k({}), 'E-1|10'), null);
     assert.equal(adayNedeni(k({ insanli: ['10'], kisiler: [KISI], kisiVardiyasi: { 7: V } }), 'E-1|10'), null);
-    assert.equal(adayNedeni(k({ insanli: ['10'], kisiler: [{ ...KISI, skills: ['12'] }], kisiVardiyasi: { 7: V } }), 'E-1|10'), 'Torna insanlı istasyon; vardiyası olan yetkin kişi yok');
-    assert.equal(adayNedeni(k({ insanli: ['10'], kisiler: [{ ...KISI, active: false }], kisiVardiyasi: { 7: V } }), 'E-1|10'), 'Torna insanlı istasyon; vardiyası olan yetkin kişi yok');
+    assert.deepEqual(adayNedeni(k({ insanli: ['10'], kisiler: [{ ...KISI, skills: ['12'] }], kisiVardiyasi: { 7: V } }), 'E-1|10'), YETKINSIZ);
+    assert.deepEqual(adayNedeni(k({ insanli: ['10'], kisiler: [{ ...KISI, active: false }], kisiVardiyasi: { 7: V } }), 'E-1|10'), YETKINSIZ);
   });
 });
