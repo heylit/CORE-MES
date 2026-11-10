@@ -15,7 +15,7 @@ import type { EklenenAdim } from './is-emri-servis.ts';
 import {
   ADIM_ACIK_DEGIL, ADIM_SECILMELI, EMIR_YOK, FIRMA_HATALISI_GKK_DISI, firmaHatalisiIhlali, HATALI_ADET, HATALI_ADIMSIZ, HATALI_EMIR_DURDU, HATALI_KALITE_ADIMI, HATALI_KALITE_TIPI_YOK, HATALI_KAYIT_YOK,
   HATALI_NEDEN_YOK, HATALI_OP_YERI, IS_EMRI_YOK, ISTASYONSUZ_ADIM, KAPSAM_DISI, TERMINAL_FASON, adetOnculleri, araOpNolari, calismaDurumu, hataliDurduMu, hataliIhlali,
-  hataliKarariIhlali, hataliKararNotuIhlali, hataliYolu, kabulKarariMi, kaliteIstasyonuSec, kaliteTipiSec, sayimIhlali, siradakiIsEmri,
+  hataliArsivdeMi, hataliKarariIhlali, hataliKararNotuIhlali, hataliYolu, kabulKarariMi, kaliteIstasyonuSec, kaliteTipiSec, sayimIhlali, siradakiIsEmri,
 } from './kurallar.ts';
 import { hurdaSayimiBildir, saglamSayimiBildir } from './sayim-olayi.ts';
 import { emirBitir } from './servis.ts';
@@ -143,7 +143,9 @@ export async function hataliKarariVer(
   const kayit = await s.hataliKaydiBul(db, kayitId, true);
   if (kayit === null) throw bulunamadi(HATALI_KAYIT_YOK);
   const kalite = await s.isEmriBul(db, kayit.kaliteIsEmriId);
-  const ihlal = hataliKarariIhlali(kayit, kalite, hedef);
+  const kok = kayit.uretimEmriId === hedef?.id ? hedef : await s.ustEmirBul(db, kayit.uretimEmriId);
+  const arsivde = hedef !== null && kok !== null && hataliArsivdeMi(hedef, kok, (await s.kapanisBul(db, kok.id)) !== null);
+  const ihlal = hataliKarariIhlali(kayit, kalite, hedef, arsivde ? g.karar : null);
   if (ihlal !== null || kalite === null || hedef === null) throw cakisma(ihlal ?? HATALI_KAYIT_YOK);
   const notIhlali = hataliKararNotuIhlali(g.karar, g.not);
   if (notIhlali !== null) throw dogrulama(notIhlali, 'not');
@@ -171,10 +173,10 @@ export async function hataliKarariVer(
   }
   await s.isEmriBitir(db, kalite.id, saglamGecer ? kayit.adet : 0, an);
   await s.hataliKarariYaz(db, kayit.id, { karar: g.karar, kisiId, an, not: g.not, ncrKimlik: g.ncrKimlik });
-  if (g.karar !== 'rework') {
+  // 2731 b: arşivde iş durmuştur; parça ayrılır ya da sağlam sayılır, kol katılmaz ve emir bitmez.
+  if (!arsivde && g.karar !== 'rework') {
     uyari = [uyari, await ayrilaniKapat(db, kayit, hedef.id, kisiId, an, !saglamGecer)].filter((u) => u !== null).join(' ') || null;
-  }
-  else await siradakiIstasyonuYaz(db, hedef.id);
+  } else if (!arsivde) await siradakiIstasyonuYaz(db, hedef.id);
   const [ozet] = await ozetle(db, [(await s.hataliKaydiBul(db, kayit.id))!]);
   return { kayit: ozet!, uyari };
 }

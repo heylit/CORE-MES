@@ -9,11 +9,12 @@ import {
   birlesmePlaniGovdesi, ekAdimGovdesi, ekAdimKaldirGovdesi, hazirlikCevabi, hazirlikMuafiyetiGovdesi, hazirlikOzetiCevabi, hazirlikOzetiSorgusu, refakatKartiCevabi, katilimCevabi, rotasizAdimDuzenleGovdesi, rotasizAdimEkleGovdesi, rotasizAdimSilGovdesi, rotasizEmirCevabi, rotasizEmirGovdesi, acilisSecenekleriCevabi, acilisSecenekleriSorgusu, makineDevralGovdesi, makineEkleGovdesi, adimPaylariCevabi, durusDagilimiCevabi, sonOlaylarCevabi, sonOlaylarSorgusu, gunlukUretimCevabi, panelSorgusu, sureOzetiCevabi,
   hataliCevabi, hataliGovdesi, hataliListeCevabi, hataliListeSorgusu, reworkAdimiGovdesi,
   disIslemEmriAcGovdesi, disIslemEmriCevabi, disIslemEmriIptalGovdesi, disIslemEmriParametresi,
-  emirKapatGovdesi, kapanisCevabi, kapanisGeriAcGovdesi, kapanisListeCevabi, kapanislarSorgusu, kapanisMuafGovdesi, kapanisOnayGovdesi, kapanisRetGovdesi,
+  arsivOnizlemeCevabi, arsiveAlCevabi, arsiveAlGovdesi, emirKapatGovdesi, kapanisCevabi, kapanisGeriAcGovdesi, kapanisListeCevabi, kapanislarSorgusu, kapanisMuafGovdesi, kapanisOnayGovdesi, kapanisRetGovdesi,
 } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { aramaUclari } from './arama/uclar.ts';
 import * as isEmri from './is-emri-servis.ts';
 import { emirleriTopluGuncelle } from './toplu-guncelle.ts';
+import { ARSIV_YETKISI, arsiveAl, arsivOnizleme } from './arsiv.ts';
 import { dieAc, dieIptal, dieOku } from './dis-islem-emri.ts';
 import { hataliKaydet, hataliKayitlari } from './hatali-parca.ts';
 import { hazirlik, hazirliklar, muafiyetVer } from './hazirlik.ts';
@@ -281,6 +282,28 @@ const adimliUclar = [
     cevap: adimliEmirCevabi,
     isle: async ({ db, kullanici, parametre, govde }) => {
       await isEmri.adimliIptal(db, kullanici, parametre.id, govde.surum);
+      return { emir: await isEmri.adimliAyrinti(db, parametre.id) };
+    },
+  }),
+  // 2721: başlamış emir arşive alınır; önizleme ve komut aynı yetkiyle (2721 3/3), engel ikisinde de aynı kuraldan.
+  uc({
+    yontem: 'GET',
+    yol: '/adimli-emirler/:id/arsiv-onizleme',
+    yetki: ARSIV_YETKISI,
+    parametre: emirParametresi,
+    cevap: arsivOnizlemeCevabi,
+    isle: ({ db, parametre }) => arsivOnizleme(db, parametre.id),
+  }),
+  uc({
+    yontem: 'POST',
+    yol: '/adimli-emirler/:id/arsive-al',
+    yetki: ARSIV_YETKISI,
+    tekrarKorumali: true,
+    parametre: emirParametresi,
+    govde: arsiveAlGovdesi,
+    cevap: arsiveAlCevabi,
+    isle: async ({ db, kullanici, parametre, govde }) => {
+      await arsiveAl(db, kullanici, parametre.id, govde.surum);
       return { emir: await isEmri.adimliAyrinti(db, parametre.id) };
     },
   }),

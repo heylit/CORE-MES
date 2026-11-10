@@ -9,6 +9,7 @@ import { AdimSeridi, BolmePaneli, bolmeSonucu, bosBolme, EK_TURLERI, type BolmeD
 import { guncelSurum, type useEmirKomutu } from './komut.ts';
 import { EkAdimPaneli, type EkYeri } from './EkAdim.tsx';
 import { ReworkSatirlari } from './ReworkAdimi.tsx';
+import { ArsivPenceresi, useArsivKapanisi } from './ArsiveAl.tsx';
 import { DalRozeti } from '../rotalar/PatlamisRota.tsx';
 import { IS_EMRI_DURUMU, KAPANIS_EVI, StokTamamlama, UretimYerleri } from '../../../uretim-emirleri/disari.ts';
 import {
@@ -49,6 +50,8 @@ export function PlanHucresi({ plan, tampon }: { plan: ReturnType<typeof planMetn
 export function EmirAyrintisi({ durum: d, emir: o, yetki, git, komut, emirAc, kapat }: Ozellikler) {
   const yonlen = useNavigate();
   const [iptal, setIptal] = useState(false);
+  const [arsiv, setArsiv] = useState(false);
+  const arsivKapanisi = useArsivKapanisi(o).data ?? null;
   const [islem, setIslem] = useState<'bol' | 'katil' | 'ek' | null>(null);
   const urun = d.items?.find((i) => i.id === o.itemId) ?? null;
   const adimlar = emirAdimlari(d, o);
@@ -78,7 +81,10 @@ export function EmirAyrintisi({ durum: d, emir: o, yetki, git, komut, emirAc, ka
           .then((c) => { if (c.tamam) emirAc(ana.id); });
       },
     }] : []),
-    ...(acik && yetki.emirYaz ? [{ anahtar: 'iptal', baslik: 'İptal et', simge: 'x' as const, ton: 'tehlike' as const, sec: () => { setIptal(true); } }] : []),
+    // 2721: başlamış emir iptal edilemez (sahibi reddeder); uyarı ve durdurmayla arşive alınır, kapanış açık kalır.
+    ...(acik && yetki.emirYaz && o.status !== 'uretimde' ? [{ anahtar: 'iptal', baslik: 'İptal et', simge: 'x' as const, ton: 'tehlike' as const, sec: () => { setIptal(true); } }] : []),
+    ...(acik && yetki.emirYaz && o.status === 'uretimde'
+      ? [{ anahtar: 'arsiv', baslik: 'Durdur ve arşive al', simge: 'box' as const, ton: 'tehlike' as const, sec: () => { setArsiv(true); } }] : []),
   ];
 
   return (
@@ -130,6 +136,13 @@ export function EmirAyrintisi({ durum: d, emir: o, yetki, git, komut, emirAc, ka
           )}
         </div>
       )}
+      {arsivKapanisi && arsivKapanisi.asama !== 'tamam' && (
+        <div className="tc-rr3-uyari-kutu" data-ton="bilgi" role="status">
+          <Simge ad="clipboard-check" />
+          <span>Emir arşivde; kapanış açık. Sayılanlar stoğa işlenir, eksikler kararla ya da muafiyetle kapanır.</span>
+          <Dugme simge="next" onClick={() => { void yonlen(`${KAPANIS_EVI}?emir=${String(o.kayitNo)}`); }}>Kapanış onayları</Dugme>
+        </div>
+      )}
       {o.status === 'tamam' && !o.kapanisSonucu && (
         <div className="tc-rr3-uyari-kutu" data-ton="bilgi" role="status">
           <Simge ad="clipboard-check" />
@@ -173,6 +186,7 @@ export function EmirAyrintisi({ durum: d, emir: o, yetki, git, komut, emirAc, ka
       >
         <p>Emir iptal edilir; plandan ve terminalden kalkar.</p>
       </OnayPenceresi>
+      <ArsivPenceresi emir={o} acik={arsiv} kapat={() => { setArsiv(false); }} komut={komut} />
     </section>
   );
 }

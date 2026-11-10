@@ -266,3 +266,10 @@ small.tc-rr3-plan-alt[data-ton="uyari"] { color: var(--hold); }
 }
 /* 1476-F C (1553 a): alt parça adımının dal etiketi adın önünde. */
 .tc-rr3-adim-dal { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2); }
+
+/* 2721: arşive alma penceresi; engel kırmızı çerçeveyle, onay düğmesi kapalıyken nedeni görünür. */
+.tc-rr3-arsiv { display: flex; flex-direction: column; gap: var(--b-3); min-width: 0; }
+.tc-rr3-arsiv > p { margin: 0; }
+.tc-rr3-arsiv-uyari { flex: 1 1 var(--acilir-enaz); min-width: 0; margin: 0; padding-left: var(--b-4); overflow-wrap: anywhere; }
+.tc-rr3-uyari-kutu[data-ton="engel"] { border-color: var(--stop); }
+.tc-rr3-uyari-kutu[data-ton="engel"] > svg { color: var(--stop); }

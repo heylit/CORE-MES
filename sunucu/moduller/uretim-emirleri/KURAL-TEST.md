@@ -116,3 +116,10 @@ Bağsız kural: yok.
 | UE-TOPLU-1 | Öncelik ve taslağı plana alma tek istekte, tek kayıt komutlarının kuralıyla; öncelik değişimi kayda girer | toplu-guncelle.test.ts "izinli" |
 | UE-TOPLU-2 | Tek satırın reddi (eski sürüm, planlı emri plana alma, başlamış emirde öncelik) hiçbir satırı yazmaz ve satır numarasını söyler | toplu-guncelle.test.ts "reddedilen" |
 | UE-TOPLU-3 | Alansız satır ve aynı emir iki kez 400; istek kimliği zorunlu; yetkisiz 403 | toplu-guncelle.test.ts "gövde ve yetki" |
+| UE-ARSIV-1 | Başlamış açık emir arşive alınır; açık olmayan, başlamamış ve açık kollu emir alınmaz; uyarı cümleleri | arsiv-kurallar.test.ts "2721", arsiv.test.ts "önizleme" |
+| UE-ARSIV-2 | Arşive alma işi durdurur (kullanım, katılım, duraklat olayı; durdur yok), sayımı korur, emri iptal eder, iptal olayını yayar, kapanışı açar; emir plan hesabından düşer, sayım reddedilir, kalite kararı verilir | arsiv.test.ts "arşive alma" |
+| UE-ARSIV-3 | Onaysız 400, eski sürüm 409, operatör 403 (önizleme de) | arsiv.test.ts "gövde, sürüm ve yetki" |
+| UE-ARSIV-4 | İptal emirde başlama kalabilir; bitiş ve sağlam adet olamaz (`uretim_emri_durum_alanlari`) | arsiv.test.ts "kısıt" |
+| UE-ARSIV-5 | Fasonda parça uyarıdır; arşivden sonra fason dönüşü yazılır, gidiş yazılmaz (2721 2/3 b) | arsiv.test.ts "2721 2/3 b". Mutasyon: dönüşte arşiv istisnası kalkınca kırmızı (DOĞRULANDI, yerelde) |
+| UE-ARSIV-6 | Kararsız hatalı kayıt arşivi durdurmaz; kolu emirle arşive gider; arşivde hurda, red, kabul açık, rework kapalı; kol katılmaz, emir bitmez (2731 b) | arsiv-kurallar.test.ts "2721", arsiv.test.ts "2731 b" (iki test) |
+| UE-ARSIV-7 | Önizlemenin sağlamı en ileri sayılmış adımın sağlam sayımıdır (T-2721-1) | arsiv.test.ts "arşive alma", arsiv-kurallar.test.ts |

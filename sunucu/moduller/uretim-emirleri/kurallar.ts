@@ -1,7 +1,7 @@
 import { KOD_ONEKI } from '#paylasilan/kod-sozlugu.ts';
 import { HAZIRLIK_MADDELERI, MUAF_TUTULABILEN_MADDELER, hazirlikUyarirMi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import type {
-  CalismaDurumu, EmirDurumu, EmirIlerlemesi, EmirTuru, HazirlikMaddesi, IlerlemeEsasi, KapanisAsamasi, KapanisMaddeBilgisi, KapanisMaddeHali, KapanisMaddesi, KapanisOnayi,
+  CalismaDurumu, EmirDurumu, EmirIlerlemesi, EmirTuru, HataliKarari, HazirlikMaddesi, IlerlemeEsasi, KapanisAsamasi, KapanisMaddeBilgisi, KapanisMaddeHali, KapanisMaddesi, KapanisOnayi,
 } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import type { Islem } from '#paylasilan/islemler.ts';
 import type { TalimatAsamasi } from '#paylasilan/sozlesme/talimat-asamasi.ts';
@@ -336,6 +336,45 @@ export function adimliIptalIhlali(durum: EmirDurumu, arsiv: boolean, baslamisIsE
   if (arsiv || baslamisIsEmriVar) return ADIMLI_IPTAL_DURUMU;
   if (durum !== 'taslak' && durum !== 'planli') return ADIMLI_IPTAL_DURUMU;
   return acikKolVar ? ADIMLI_IPTAL_KOLLU : null;
+}
+
+// 2721: başlamış emir silinmez, arşive alınır: çalışan iş durur, sayılanlar ve tüketim kalır, emir iptal olur ve kapanışı açık kalır.
+// Hiç başlamamış emir için iptal yeter; açık kolu olan emir iptal gibi reddedilir. Fasondaki parça engel değil, uyarıdır (2721 2/3 b).
+export const ARSIV_DURUMU = 'Yalnız açık (taslak, planlı, başlamış) emir arşive alınır.';
+export const ARSIV_BASLAMAMIS = 'Hiç adımı başlamamış emir arşive alınmaz; iptal edin.';
+export const ARSIV_FASONDA = 'Fasondaki parçaların dış işlemi açık kalır.';
+// 2731 b: kararsız hatalı parça arşivi durdurmaz; arşivde hurda, red ve kabul kararı verilir, rework kapalıdır (iş durmuştur).
+export const ARSIV_HATALI_ACIK = (adet: number): string =>
+  `${String(adet)} hatalı parça kaydı kararsız; arşivde Kalite Merkezi hurda ya da kabul kararı verir, rework kapalıdır.`;
+export const HATALI_ARSIVDE_REWORK = 'Arşivdeki emirde rework kararı verilmez; hurda, red ya da kabul verin.';
+export const ARSIV_GIRIS =
+  'İptalden farkı: iş durur, sayılanlar ve tüketim kalır, kapanış açık kalır. Tezgahtaki parçaları ve refakat kartlarını amire teslim edin.';
+export const ARSIV_YARI_MAMUL = 'Tezgahtaki yarı mamulün emir rezervesi kalkar; parça Stok > Sahipsiz statülü stok listesine düşer.';
+export interface ArsivDurumu {
+  durum: EmirDurumu; arsiv: boolean; baslamisAdimVar: boolean; acikKolVar: boolean;
+}
+export function arsivIhlali(d: ArsivDurumu): string | null {
+  if (acikEmirIhlali(d.durum, d.arsiv) !== null) return ARSIV_DURUMU;
+  if (!d.baslamisAdimVar) return ARSIV_BASLAMAMIS;
+  return d.acikKolVar ? ADIMLI_IPTAL_KOLLU : null;
+}
+// Arşivdeki (iptal ve kapanışı açılmış) emirde fason dönüşü yazılır; hiç başlamamış iptal emrin kapanışı yoktur.
+export const arsivdeFasonDonusuAcik = (durum: EmirDurumu, eskiArsiv: boolean, kapanisVar: boolean): boolean =>
+  durum === 'iptal' && !eskiArsiv && kapanisVar;
+// Önizlemenin cümleleri: ekran yalnız bunları yazar.
+export function arsivUyarilari(d: {
+  calisan: readonly { opNo: number | null; operator: string | null }[]; saglam: { opNo: number; adet: number } | null; hurda: number; kararBekleyen: number; fasondaAdet: number; hataliAcik: number;
+}): string[] {
+  const l = [ARSIV_GIRIS];
+  for (const c of d.calisan) l.push(`${c.opNo === null ? 'İş' : `OP ${String(c.opNo)}`} çalışıyor${c.operator === null ? '' : ` (${c.operator})`}: iş terminalden hemen düşer.`);
+  if (d.saglam !== null || d.hurda > 0) {
+    l.push(`Sayılanlar kalır: sağlam ${d.saglam === null ? 'yok' : `${String(d.saglam.adet)} (OP ${String(d.saglam.opNo)})`}, hurda ${String(d.hurda)}.`);
+  }
+  if (d.kararBekleyen > 0) l.push(`${String(d.kararBekleyen)} parça kalite kararı bekliyor; karar arşivde de verilir.`);
+  if (d.hataliAcik > 0) l.push(ARSIV_HATALI_ACIK(d.hataliAcik));
+  if (d.fasondaAdet > 0) l.push(ARSIV_FASONDA);
+  l.push(ARSIV_YARI_MAMUL);
+  return l;
 }
 
 // Plan bilgisi (öncelik, başlangıç, teslim) ve kaynak yalnız açık emirde değişir.
@@ -1461,13 +1500,20 @@ export function hataliIhlali(d: BolmeDurumu, adimSira: number, adet: number, rot
 
 export const hataliYolu = (d: BolmeDurumu, adimSira: number, adet: number): HataliYolu => (adet < eldekiAdet(d, adimSira) ? 'kol' : 'kok');
 
+// arsivdeKarar: hedef 2721 arşivindedir (iptal, kapanışı açık); 2731 b ile yalnız rework kapalıdır.
 export function hataliKarariIhlali(
   kayit: { karar: string | null }, kaliteAdimi: { durum: IsEmriDurumu } | null, hedef: { durum: EmirDurumu; arsiv: boolean } | null,
+  arsivdeKarar: HataliKarari | null = null,
 ): string | null {
   if (kayit.karar !== null) return HATALI_KARAR_VERILMIS;
   if (hedef === null || kaliteAdimi === null) return HATALI_KALITE_BASLAMIS;
-  return acikEmirIhlali(hedef.durum, hedef.arsiv) ?? (kaliteAdimi.durum === 'bekliyor' ? null : HATALI_KALITE_BASLAMIS);
+  if (arsivdeKarar === 'rework') return HATALI_ARSIVDE_REWORK;
+  const acik = arsivdeKarar === null ? acikEmirIhlali(hedef.durum, hedef.arsiv) : null;
+  return acik ?? (kaliteAdimi.durum === 'bekliyor' ? null : HATALI_KALITE_BASLAMIS);
 }
+// Arşivdeki emirin (iptal, kapanışı açık) hatalı kaydı: kök emir arşivde, hedef (kök ya da hatalı kolu) de iptaldir.
+export const hataliArsivdeMi = (hedef: { durum: EmirDurumu; arsiv: boolean }, kok: { durum: EmirDurumu; arsiv: boolean }, kokKapanisVar: boolean): boolean =>
+  hedef.durum === 'iptal' && !hedef.arsiv && arsivdeFasonDonusuAcik(kok.durum, kok.arsiv, kokKapanisVar);
 
 export function reworkAdimiIhlali(kayit: { karar: string | null }, adim: { durum: IsEmriDurumu } | null): string | null {
   if (kayit.karar !== 'rework' || adim === null) return REWORK_KARARSIZ;
