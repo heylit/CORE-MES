@@ -8,10 +8,10 @@ import { Cip } from './ortak.tsx';
 
 // Eksik iş (kart 2421 c): plandan bağımsız; plan yeniden canlıya alınmasa da yapılmayan, girilmeyen ve geciken iş görünür.
 const EKSIK_SIMGESI: Record<EksikIsTuru, SimgeAdi> = {
-  'plan-gerisi': 'gantt', 'kayitsiz-gun': 'clipboard-check', 'yarim-is': 'pause', 'plansiz-is': 'calendar', 'geciken-emir': 'truck', 'bayat-plan': 'rotate',
+  'plan-gerisi': 'gantt', 'kayitsiz-gun': 'clipboard-check', 'yarim-is': 'pause', 'plansiz-is': 'calendar', 'geciken-emir': 'truck', 'bayat-plan': 'rotate', 'geride-onceki': 'list',
 };
 const EKSIK_RENGI: Record<EksikIsTuru, Renk> = {
-  'plan-gerisi': 'stop', 'kayitsiz-gun': 'stop', 'yarim-is': 'hold', 'plansiz-is': 'hazard', 'geciken-emir': 'stop', 'bayat-plan': 'hazard',
+  'plan-gerisi': 'stop', 'kayitsiz-gun': 'stop', 'yarim-is': 'hold', 'plansiz-is': 'hazard', 'geciken-emir': 'stop', 'bayat-plan': 'hazard', 'geride-onceki': 'hold',
 };
 export function EksikSatiri({ o }: { o: EksikIs }) {
   const yer = o.konu === 'istasyon' ? '' : [o.istasyon?.ad, o.kaynak?.ad].filter((x): x is string => !!x).join(' · ');
@@ -21,7 +21,7 @@ export function EksikSatiri({ o }: { o: EksikIs }) {
       <div className="mono">{eksikDegerMetni(o)}</div>
       <div className="tc-ay3-anom-sag">
         <Cip renk={o.kapanis === null ? EKSIK_RENGI[o.tur] : 'done'} simge={o.kapanis === null ? EKSIK_SIMGESI[o.tur] : 'check'}>{EKSIK_IS_ETIKETI[o.tur]}{o.kapanis === null ? '' : ' · giderildi'}</Cip>
-        {o.kalanAdet !== null && <small>{anomaliAdedi(o.kalanAdet)} adet kaldı</small>}
+        {o.kalanAdet !== null && o.tur !== 'geride-onceki' && <small>{anomaliAdedi(o.kalanAdet)} adet kaldı</small>}
       </div>
     </div>
   );

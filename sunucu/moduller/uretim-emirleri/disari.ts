@@ -631,3 +631,7 @@ export { malzemeKartiIzleri } from './sorgular.ts';
 // dönüş, tamamlamada partiye giriş) bu fonksiyonları kendi transaction'ında çağırır; yetki denetlemezler, çağıranın ucu korur.
 export { dieAc, dieDonusuYaz, dieGidisYaz, dieIptal, dieListesi, dieOku, dieTamamla } from './dis-islem-emri.ts';
 export type { DieAcGirdisi } from './dis-islem-emri.ts';
+
+// 2769: sıra dışı başlamış adımların öncül durumu (arkon eksik iş AR-EK-8).
+export type { GeridekiOncul } from './servis.ts';
+export const geridekiOnculler = (db: Db, isEmriIdleri: readonly number[]): Promise<servis.GeridekiOncul[]> => servis.geridekiOnculler(db, isEmriIdleri);

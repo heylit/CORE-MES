@@ -370,7 +370,7 @@ export type AnomaliOlaylariCevabi = z.output<typeof anomaliOlaylariCevabi>;
 // Eksik iş (2421 c): plandan bağımsız "yapılması gereken ama yapılmayan, girilmeyen ya da geciken" iş. Olaylar 15 dakikalık işte yazılır;
 // sürerken değeri güncellenir, kendiliğinden giderilince kapanır. Değerin birimi türündedir: plan gerisi ve yarım iş net dakika, kayıtsız gün
 // iş günü, plansız iş ve bayat plan saat, geciken emir gün.
-export const EKSIK_IS_TURLERI = ['plan-gerisi', 'kayitsiz-gun', 'yarim-is', 'plansiz-is', 'geciken-emir', 'bayat-plan'] as const;
+export const EKSIK_IS_TURLERI = ['plan-gerisi', 'kayitsiz-gun', 'yarim-is', 'plansiz-is', 'geciken-emir', 'bayat-plan', 'geride-onceki'] as const;
 export type EksikIsTuru = (typeof EKSIK_IS_TURLERI)[number];
 export const EKSIK_IS_KONULARI = ['is_emri', 'istasyon', 'uretim_emri', 'plan'] as const;
 export type EksikIsKonusu = (typeof EKSIK_IS_KONULARI)[number];
@@ -385,7 +385,7 @@ export const eksikIsSatiri = z.object({
   istasyon: z.object({ id: olayKimligi, ad: z.string() }).nullable(),
   kaynak: z.object({ tur: z.enum(['makine', 'kisi']), id: olayKimligi, ad: z.string().nullable() }).nullable(),
   deger: z.number().nonnegative(),
-  // Geride kalan adet (plan gerisi, yarım iş); bilinmiyorsa boş.
+  // Geride kalan adet (plan gerisi, yarım iş; geride kalan önceki adımda akışlı devir için eksik); bilinmiyorsa boş.
   kalanAdet: z.number().int().nonnegative().nullable(),
   // Geciken emirde: teslim günü henüz gelmedi ama plandaki bitiş teslimden sonra.
   planaGore: z.boolean(),

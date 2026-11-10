@@ -13,11 +13,11 @@ import { istasyonlar, kisininIzinliIsMerkezleri, makineKisiAtamalari, makineler 
 import { kisiAdlari } from '../../kisiler/disari.ts';
 import { canliSira, planBayatligi } from '../../plan/disari.ts';
 import type { Kaynak } from '../../plan/disari.ts';
-import { aralikAdetleri, gunlukAralikAdetleri, istasyonDurusSureleri, planlanacakIsEmirleri, sonGirisler } from '../../uretim-emirleri/disari.ts';
+import { aralikAdetleri, geridekiOnculler, gunlukAralikAdetleri, istasyonDurusSureleri, planlanacakIsEmirleri, sonGirisler } from '../../uretim-emirleri/disari.ts';
 import { basladigiGunTakvimleri } from '../../vardiya/disari.ts';
 import { araliklariBirlestir, gunEkle, kalanAdet, kesisimDakika } from '../kurallar.ts';
 import type { NetAralik } from '../kurallar.ts';
-import { bayatPlan, eksikEylemi, gecikenEmir, kayitsizGun, planGerisi, plansizIs, yarimIs } from './kurallar.ts';
+import { bayatPlan, eksikEylemi, gecikenEmir, gerideOnceki, kayitsizGun, planGerisi, plansizIs, yarimIs } from './kurallar.ts';
 import type { EksikHukum, IstasyonGunu } from './kurallar.ts';
 import * as s from './sorgular.ts';
 
@@ -36,6 +36,7 @@ export interface EksikEsikleri {
   plansizIsSaat: number | null;
   gecikenEmirGun: number | null;
   bayatPlanSaat: number | null;
+  gerideOnceki: boolean;
 }
 
 export const eksikEsikleri = async (db: Db): Promise<EksikEsikleri> => ({
@@ -45,22 +46,24 @@ export const eksikEsikleri = async (db: Db): Promise<EksikEsikleri> => ({
   plansizIsSaat: await sistemAyariOku(db, 'arkon.eksik-plansiz-is-saat'),
   gecikenEmirGun: await sistemAyariOku(db, 'arkon.eksik-geciken-emir-gun'),
   bayatPlanSaat: await sistemAyariOku(db, 'arkon.eksik-bayat-plan-saat'),
+  gerideOnceki: await sistemAyariOku(db, 'arkon.eksik-geride-onceki'),
 });
 
 const BILDIRIM_TURU = {
   'plan-gerisi': 'arkon.plan-gerisi', 'kayitsiz-gun': 'arkon.kayitsiz-gun', 'yarim-is': 'arkon.yarim-is', 'plansiz-is': 'arkon.plansiz-is',
-  'geciken-emir': 'arkon.geciken-emir', 'bayat-plan': 'arkon.bayat-plan',
+  'geciken-emir': 'arkon.geciken-emir', 'bayat-plan': 'arkon.bayat-plan', 'geride-onceki': 'arkon.geride-onceki',
 } as const satisfies Record<EksikIsTuru, BildirimTuru>;
 const OLAY_ADI: Record<EksikIsTuru, string> = {
   'plan-gerisi': 'Plan gerisi', 'kayitsiz-gun': 'Kayıtsız gün', 'yarim-is': 'Yarım iş', 'plansiz-is': 'Plansız iş', 'geciken-emir': 'Geciken emir', 'bayat-plan': 'Bayat plan',
+  'geride-onceki': 'Sayımı geride kalan önceki adım',
 };
 const BIRIM: Record<EksikIsTuru, string> = {
-  'plan-gerisi': 'dk', 'kayitsiz-gun': 'iş günü', 'yarim-is': 'vardiya saati', 'plansiz-is': 'vardiya saati', 'geciken-emir': 'gün', 'bayat-plan': 'vardiya saati',
+  'plan-gerisi': 'dk', 'kayitsiz-gun': 'iş günü', 'yarim-is': 'vardiya saati', 'plansiz-is': 'vardiya saati', 'geciken-emir': 'gün', 'bayat-plan': 'vardiya saati', 'geride-onceki': 'adet',
 };
 
 // Terminaldeki "Girilmemiş işlerim" sırası; saha görünümüne yalnız bu üç tür girer.
 const SAHA_SIRASI: Record<EksikIsTuru, number> = {
-  'kayitsiz-gun': 0, 'yarim-is': 1, 'plan-gerisi': 2, 'plansiz-is': 3, 'geciken-emir': 4, 'bayat-plan': 5,
+  'kayitsiz-gun': 0, 'yarim-is': 1, 'plan-gerisi': 2, 'plansiz-is': 3, 'geciken-emir': 4, 'bayat-plan': 5, 'geride-onceki': 6,
 };
 
 const iso = (t: number): string => new Date(t).toISOString();
@@ -163,6 +166,18 @@ async function bulgular(db: Db, e: EksikEsikleri, simdi: number): Promise<Bulgu[
       esikSaat: e.plansizIsSaat,
     })));
   }
+
+  // AR-EK-8: sıra dışı başlamış açık adım; öncül başına tek hüküm olmasın diye en büyük değerli öncül alınır. Kapalı ayar ya da kapanmış adım olayı kapatır.
+  const geride = e.gerideOnceki ? await geridekiOnculler(db, idler) : [];
+  const adimById = new Map(isler.map((i) => [i.id, i]));
+  const gerideHukmu = new Map<number, EksikHukum>();
+  const agirlik = (h: EksikHukum): number => Math.max(h.deger, h.kalanAdet ?? 0);
+  for (const g of geride) {
+    const h = gerideOnceki({ acik: adimById.has(g.isEmriId), oncul: { tur: g.tur, bitti: g.onculBitti, devirAdedi: g.devirAdedi, gelen: g.gelen }, girdi: g.girdi, kayit: Date.parse(g.kayit) });
+    const onceki = gerideHukmu.get(g.isEmriId);
+    if (h !== null && (onceki === undefined || agirlik(h) > agirlik(onceki))) gerideHukmu.set(g.isEmriId, h);
+  }
+  for (const i of isler) sonuc.push(isBulgusu('geride-onceki', i, adimKaynagi(i), gerideHukmu.get(i.id) ?? null));
 
   // Geciken emir: emrin açık adımları birlikte okunur; plana göre bitiş canlı plandaki en geç bitiştir.
   const emirler = new Map<number, (typeof isler)[number][]>();
@@ -288,7 +303,8 @@ async function satirlar(db: Db, kullanici: Kullanici, olaylar: readonly s.EksikI
 // Anomali sayfasının Eksik işler bölümü: açık olaylar ve bugün kapananlar, kişinin veri kapsamıyla süzülür. Kişi kaynağının adı yalnız kişi
 // kırılımını görene gelir (kart #1306).
 export async function eksikIsler(db: Db, kullanici: Kullanici, simdi: number = Date.now()): Promise<EksikIslerCevabi> {
-  const esikler = await eksikEsikleri(db);
+  // Sözleşmedeki eşikler sayıdır; açık/kapalı kural (geride kalan önceki adım) eşik değildir, gönderilmez.
+  const { gerideOnceki: _acikKapali, ...esikler } = await eksikEsikleri(db);
   const kapsam = await kisininKapsami(db, kullanici.id, kisininIzinliIsMerkezleri);
   const istasyonById = new Map((await istasyonlar(db, { pasiflerDahil: true })).map((i) => [i.id, i]));
   const olaylar = (await s.eksikIslerGoster(db, iso(tesisGunBasi(tesisGunu(simdi))), OLAY_SINIRI))

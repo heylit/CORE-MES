@@ -124,7 +124,7 @@ export function Ozetim() {
                   <li key={e.id}>
                     <div><b>{eksikKonuMetni(e)}</b><span className="tc-ay1-cip" data-durum={e.tur === 'yarim-is' ? 'durakli' : 'durdu'}><i aria-hidden="true" />{EKSIK_IS_ETIKETI[e.tur]}</span>
                       <small>{[e.istasyon?.ad, e.kaynak?.ad].filter(Boolean).join(' · ')}</small></div>
-                    <div className="tc-ay1-oz-n">{eksikDegerMetni(e)}<small>{e.kalanAdet != null ? `${ozetAdet(e.kalanAdet)} adet kaldı` : 'kayıt yok'}</small></div>
+                    <div className="tc-ay1-oz-n">{eksikDegerMetni(e)}{e.tur !== 'geride-onceki' && <small>{e.kalanAdet != null ? `${ozetAdet(e.kalanAdet)} adet kaldı` : 'kayıt yok'}</small>}</div>
                   </li>
                 ))}
               </ul>
