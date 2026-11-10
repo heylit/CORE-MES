@@ -998,3 +998,22 @@ export const emirTopluGuncelleCevabi = z.object({ eklenen: z.literal(0), guncell
 export type EmirTopluGuncelleGirdisi = z.output<typeof emirTopluGuncelleGovdesi>;
 export type EmirTopluGuncelleSatiri = z.input<typeof emirTopluGuncelleSatiri>;
 export type EmirTopluGuncelleCevabi = z.output<typeof emirTopluGuncelleCevabi>;
+
+// 2721: başlamış emri arşive alma. Önizleme ekranın uyarısını kurar (cümleler sunucunun); `engel` doluysa komut reddedilir.
+export const arsivOnizlemeCevabi = z.object({
+  surum: surumSemasi,
+  calisan: z.array(z.object({ opNo: z.number().int().nullable(), ad: z.string().nullable(), operator: z.string().nullable() })),
+  saglam: z.number().int().nullable(),
+  hurda: z.number().int().nullable(),
+  kararBekleyen: z.number().int().nullable(),
+  fasonda: z.array(z.object({ opNo: z.number().int(), adet: z.number().int() })),
+  hataliAcik: z.number().int(),
+  engel: z.string().nullable(),
+  uyarilar: z.array(z.string()),
+});
+export const arsiveAlGovdesi = z.object({ surum: surumSemasi, onay: z.literal(true) }).strict();
+// İptal ve öteki emir komutlarıyla aynı cevap: emrin son hâli.
+export const arsiveAlCevabi = adimliEmirCevabi;
+export type ArsivOnizlemeCevabi = z.output<typeof arsivOnizlemeCevabi>;
+export type ArsiveAlGovdesi = z.input<typeof arsiveAlGovdesi>;
+export type ArsiveAlCevabi = z.output<typeof arsiveAlCevabi>;

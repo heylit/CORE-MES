@@ -23,7 +23,7 @@ import { firmaKodu, malzemeOzeti, malzemeOzetleri } from '../malzemeler/disari.t
 import { projeGetir, projeSecenekleri } from '../projeler/disari.ts';
 import { siparisAyrintisi, siparisKilitliAyrinti, siparisSatiriOzetleri } from '../siparisler/disari.ts';
 import {
-  EMIR_YOK, IS_EMRI_YOK, KAYNAK_YOK, acikEmirIhlali, adimliOzetSay, adimliIptalIhlali, hataliDurduMu, kaynakSuresi, fasonDonusIhlali, fasonGidisIhlali, fasonTamamIhlali,
+  EMIR_YOK, IS_EMRI_YOK, KAYNAK_YOK, acikEmirIhlali, arsivdeFasonDonusuAcik, adimliOzetSay, adimliIptalIhlali, hataliDurduMu, kaynakSuresi, fasonDonusIhlali, fasonGidisIhlali, fasonTamamIhlali,
   gorunenDurum, guvenliUygula, isEmriFarki, oneDusenYeniAdimlar, yeniAdimOndeIletisi, isEmirleriIhlali, kaynakDegisimIhlali, kisininIstasyonu, siparisSatiriIhlali, oncelikDegisimIhlali, malzemeIhtiyaci, planaAlIhlali, siradakiFasonAdimi, siradakiIsEmri, teslimIhlali,
   BIRLESME_ADIMI_YOK, BIRLESME_PLANI_KOLDA, BOLME_ADET, BOLME_BIRLESME_ADIMI, BOLME_URETILMIS, EK_ADIM_OP, birlesmeBeklemeIhlali, birlesmePlaniIhlali, birlesmePlaniKaldirIhlali, birlestirmeIhlali, bolmeIhlali, ekAdimIhlali,
   ekAdimKaldirIhlali, kartAdimi, kartSiniri, kolBaslamaIhlali, kolEmirNo, refakatIhlali, refakatQrMetni,
@@ -861,10 +861,11 @@ export async function uretimYeriDegistir(
 
 /* ---------------- fason (UE3; kullanıcı kararı c: her gidiş ve dönüş ayrı satır) ---------------- */
 
-async function fasonBaglami(db: Db, emirId: number, isEmriId: number) {
+// 2721 2/3 b: arşive alınan emrin fasondaki parçası açık kalır; yalnız dönüşü yazılır (gidiş ve tamamlama açık emirde).
+async function fasonBaglami(db: Db, emirId: number, isEmriId: number, donus = false) {
   const e = await kilitliUstEmir(db, emirId);
   const acik = acikEmirIhlali(e.durum, e.arsiv);
-  if (acik !== null) throw cakisma(acik);
+  if (acik !== null && !(donus && arsivdeFasonDonusuAcik(e.durum, e.arsiv, (await s.kapanisBul(db, emirId)) !== null))) throw cakisma(acik);
   if (e.durum === 'taslak') throw cakisma('Taslak emir önce plana alınır.');
   const hepsi = await s.isEmirleriGetir(db, [emirId]);
   const isEmri = hepsi.find((i) => i.id === isEmriId);
@@ -965,7 +966,7 @@ async function fasonGidisiKaydet(db: Db, kisiId: number, emirId: number, isEmriI
 // Fason dönüşü mal kabulden girer (kullanıcı kararı 15.10, B): stok, mal kabul yetkisiyle dönüş kaydını bu yoldan yazar; adet sınırı
 // burada denetlenir, hurda stok dinleyicisiyle firmadan düşer.
 export async function fasonDonusuKaydet(db: Db, kisiId: number, emirId: number, isEmriId: number, saglamAdet: number, hurdaAdet: number): Promise<{ hareketId: number }> {
-  const { isEmri, durum, oncekiIsEmriId } = await fasonBaglami(db, emirId, isEmriId);
+  const { isEmri, durum, oncekiIsEmriId } = await fasonBaglami(db, emirId, isEmriId, true);
   const ihlal = fasonDonusIhlali(durum, saglamAdet, hurdaAdet);
   if (ihlal !== null) throw cakisma(ihlal);
   const hareketId = await s.fasonHareketiEkle(db, { isEmriId, yon: 'donus', adet: saglamAdet, hurdaAdet, kisiId, an: await s.anAl(db) });

@@ -273,3 +273,11 @@ Taban main 6d14403. Başvuru: DEVAM-paketi-rota-plan/ilk-sistem-kodu (adımlı �
 - Yeni uç `POST /adimli-emirler/toplu-guncelle` (`uretim-emirleri.yaz`, istek kimliği zorunlu, tek transaction). Satır: emir kimliği, önizlemedeki sürüm, isteğe bağlı öncelik ve `planaAl`.
 - Yeni dosya `toplu-guncelle.ts`: satırlar var olan tek kayıt komutlarından geçer (`planaAl`, `oncelikDegistir`); kural, sürüm denetimi ve öncelik değişim kaydı onlarındır. Bir satırın reddi bütün satırları geri alır, ileti "Satır N: ..." olur (`satirdaReddet`).
 - Servis, kural, sorgu ve `disari.ts` değişmedi. İşlem ve rol değişmedi.
+
+## 2721 (10.11.2026): başlamış emri arşive alma
+- Yeni uçlar `GET /adimli-emirler/:id/arsiv-onizleme` ve `POST /adimli-emirler/:id/arsive-al` (`uretim-emirleri.yaz`, 2721 3/3 a). Kalıcı silme yok.
+- Komut tek işlemde: açık makine kullanımı ve katılım `duraklat` olayıyla kapanır (duruş sayılmaz, iş terminalden düşer); sayım, olay ve tüketim kalır; emir `iptal` olur, iptal olayı yayılır (stok rezerveyi kaldırır, açık depo isteklerini iptal eder); kapanış açılır, eksik maddeler muafiyet ya da kararla kapanır.
+- Engeller (`arsivIhlali`): açık olmayan emir, hiç adımı başlamamış emir (iptal edilir), açık kollu emir. Fasonda parça engel değil uyarıdır (2721 2/3 b); arşivdeki emrin fason dönüşü yazılır (`arsivdeFasonDonusuAcik`), yeni gidiş ve tamamlama yazılmaz.
+- Durum 2721 1/3 a: arşiv iptal durumudur; ayrı damga eklenmedi.
+- Göç `20261110065306_uretim_emirleri_arsiv_baslama.sql`: `uretim_emri_durum_alanlari` yalnız genişler, iptal emirde başlama anı kalabilir.
+- 2731 b: kararsız hatalı parça kaydı arşive almayı durdurmaz, uyarı olur (`ARSIV_HATALI_ACIK`). Kaydın açtığı kol kol engeline girmez, emirle birlikte iptal olur (kendi kapanışı açılmaz). Arşivde Kalite Merkezi hurda, red, kabul ve şartlı kabul verir; rework kapalıdır (`HATALI_ARSIVDE_REWORK`). Arşivdeki kararda kol katılmaz, emir bitmez; sayım ve stok olayı terminaldeki gibi yazılır. Kapanışsız iptal emirde karar kapalı kalır.
