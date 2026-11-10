@@ -1765,6 +1765,9 @@ describe('satin-alma sürüm 6 (gerçek PostgreSQL)', () => {
     });
     // İskonto satıra düşer; nakliye ve diğer masraf teklif başınadır, iş emrine dağıtılmaz.
     assert.deepEqual([...(await oku())], [[ie, [{ tutar: '18.00', paraBirimi: 'TRY' }, { tutar: '90.00', paraBirimi: 'USD' }]]]);
+    // 2600 3/3 b: fason siparişin masrafı (7 + 3) genel gidere girer, emre değil: oran 10 / (18 + 10); masrafsız sipariş 0.
+    const oranlar = await vt().tx((db) => servis.siparisGenelGiderOranlari(db, [{ talepId: s.id, teklifId: a }, { talepId: s.id, teklifId: b }]));
+    assert.deepEqual([...oranlar].sort(), [[`${s.id}:${a}`, 0.357143], [`${s.id}:${b}`, 0]].sort());
     assert.equal((await vt().tx((db) => isEmriFasonTutarlari(db, []))).size, 0);
     tamam<Talep>(await kaydet(c.sa, { ...govde(await acilistaki(s.id)), durum: 'iptal', iptalNedeni: 'Deneme' }));
     assert.equal((await oku()).size, 0);
@@ -3352,9 +3355,10 @@ describe('satin-alma sürüm 6 (gerçek PostgreSQL)', () => {
     // Güvenlik K1-K2: talep eden okuyamaz; satın almacı (finans.yaz yok) yazamaz.
     assert.equal((await istek(c.talep, 'GET', yol)).statusCode, 403);
     assert.equal((await yaz(0, [], c.sa)).statusCode, 403);
-    // Kısmi: yalnız stok eşlendi; kalan 32 sipariş oranıyla (2646 a).
+    // Kısmi: yalnız stok eşlendi; kalan 32, siparişin eşlenmemiş kısmının oranıyla (2646 a, Maliyet C1): hizmet 20 ve masrafın hizmet payı
+    // 12 x 20 / 120 = 2, payda 20 + 12: kalanın oranı 22 / 32, belge oranı 22 / 132. Stokun masraf payı hiçbir hedefe gitmez (N4).
     const kismi = tamam<FaturaEslemesiCevabi>(await yaz(0, [{ siparisSatiriId: a.stok, tutar: '100' }]));
-    assert.deepEqual([kismi.esleme, kismi.oran, kismi.surum, kismi.eslenmemisKalan], ['kismi', Math.round(3200 * S / 13200 * 1e6) / 1e6, 1, '32.00']);
+    assert.deepEqual([kismi.esleme, kismi.oran, kismi.surum, kismi.eslenmemisKalan], ['kismi', 0.166667, 1, '32.00']);
     assert.equal((await yaz(0, [{ siparisSatiriId: a.stok, tutar: '100' }])).statusCode, 409, 'eski sürüm');
     assert.equal((await yaz(1, [{ siparisSatiriId: a.stok, tutar: '100' }, { siparisSatiriId: a.hizmet, tutar: '40' }])).statusCode, 422, 'aşım');
     const tam = tamam<FaturaEslemesiCevabi>(await yaz(1, [{ siparisSatiriId: a.stok, tutar: '100' }, { siparisSatiriId: a.hizmet, tutar: '32' }]));

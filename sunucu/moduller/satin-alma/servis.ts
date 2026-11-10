@@ -37,7 +37,7 @@ import {
   fasonKalemReddi, fasonOnTalepAdaylari, hizliBagReddi, planOnTalepAdaylari, uygulananKartReddi, type KalemBagi,
   fasonKirilimlari, fasonSureOrnekleri, fasonSuresiTahmini, fasonTerminUyumu, talepEdenDurumu, talepEdenGorunumu, avansAsimi, gerceklesenKosul, planGerceklesenFarki, talepKartiReddi, tamGorurMu, teklifKuru, teslimDurumu, odemePlaniHedefi, varsayilanOdemePlani,
   askidakiTedarikciReddi, birimFiyati, kaliteSiparisReddi, karneTeslimOlayi, stokTutari, uygulananKgFiyati, yeniSiparisFirmalari,
-  iptalOncesiTuret, iptalGeriAlmaHareketi, bilinmeyenKgSatirlari, kgEskimeHatirlatmalari, kgFiyatiEskiMi, kgFiyatiKartta, kgFiyatiYasi, kgSapanMi, kgSapmasi, kgSonAlislari, ondalikCarp, birlestirmeReddi, birlesmeProjesiReddi, birlesikTalep, emirHareketi, projeHareketi, projeReddi, siparisDagilimi, type SiparisDagilimi, satirYolu, type SatirYolu, belgeGenelGiderOrani, eslemeListesiHatasi, eslemeSurumu, type EslemeDurumu, ayirmaReddi, kaynakKalemiReddi, BIRLESIK_KALEM_SINIRI, KUR_KILIDI, HATIRLATMA_ADLARI, type HatirlatmaAyarlari, type HatirlatmaTalebi, haftaIciGunleri, hatirlatmaAnahtari, hatirlatmaFarki, hatirlatmalar,
+  iptalOncesiTuret, iptalGeriAlmaHareketi, bilinmeyenKgSatirlari, kgEskimeHatirlatmalari, kgFiyatiEskiMi, kgFiyatiKartta, kgFiyatiYasi, kgSapanMi, kgSapmasi, kgSonAlislari, ondalikCarp, birlestirmeReddi, birlesmeProjesiReddi, birlesikTalep, emirHareketi, projeHareketi, projeReddi, siparisDagilimi, type SiparisDagilimi, type DagilimSatiri, genelGiderOrani, satirYolu, type SatirYolu, belgeGenelGiderOrani, eslemeListesiHatasi, eslemeSurumu, type EslemeDurumu, ayirmaReddi, kaynakKalemiReddi, BIRLESIK_KALEM_SINIRI, KUR_KILIDI, HATIRLATMA_ADLARI, type HatirlatmaAyarlari, type HatirlatmaTalebi, haftaIciGunleri, hatirlatmaAnahtari, hatirlatmaFarki, hatirlatmalar,
 } from './kurallar.ts';
 import type { FiyatIzi } from './kurallar.ts';
 import { butceKullanimi, butceSatirlari, degerlendir, esitVadeOrtami, gerekenBasamak, kalemHarcamalari, kararTutari, tedarikciBasarimi, teklifHesabi, type ButceSatiri } from './hesap-kurallar.ts';
@@ -2059,7 +2059,7 @@ export async function talepAyir(db: Db, k: Kullanici, id: string, g: TalepAyirYa
 
 // 2611 a, 2637 a, 2638 (Veri 2): emir ve proje tutarı ile genel gider oranı aynı dağılımdan (satirYolu) okunur. Kart türü malzeme
 // kartından (malzemeOzetleri pasif ve iptal kartı da döner; bulunamayan kartın yolu bilinmiyor), emrin projesi üretim emrinden gelir.
-interface DagitilmisSiparis { talepId: string; teklifId: string; paraBirimi: string; dagilim: SiparisDagilimi; satirlar: (s.YolSatiri & { yol: SatirYolu })[] }
+interface DagitilmisSiparis { talepId: string; teklifId: string; paraBirimi: string; dagilim: SiparisDagilimi; satirlar: (s.YolSatiri & { yol: SatirYolu })[]; girdiler: DagilimSatiri[]; masraf: number }
 async function dagitilmisSiparisler(db: Db, f: s.YolFiltresi): Promise<DagitilmisSiparis[]> {
   const satirlar = await s.siparisYolSatirlari(db, f);
   if (satirlar.length === 0) return [];
@@ -2079,7 +2079,7 @@ async function dagitilmisSiparisler(db: Db, f: s.YolFiltresi): Promise<Dagitilmi
       mal: Number(r.mal), miktar: Number(r.miktar), teslim: Number(r.teslim),
     }));
     const dagilim = siparisDagilimi(girdiler, Number(ilk.masraf));
-    return { talepId: ilk.talepId, teklifId: ilk.teklifId, paraBirimi: ilk.paraBirimi, dagilim, satirlar: l.map((r, i) => ({ ...r, yol: satirYolu(girdiler[i]!) })) };
+    return { talepId: ilk.talepId, teklifId: ilk.teklifId, paraBirimi: ilk.paraBirimi, dagilim, satirlar: l.map((r, i) => ({ ...r, yol: satirYolu(girdiler[i]!) })), girdiler, masraf: Number(ilk.masraf) };
   });
 }
 function hedefTutarlari(siparisler: readonly DagitilmisSiparis[], yol: 'emir' | 'proje', istenen: ReadonlySet<number>): Map<number, { tutar: string; paraBirimi: string }[]> {
@@ -2134,8 +2134,10 @@ export async function belgeOranlariHesapla(db: Db, belgeler: readonly EslemeBelg
     const p = siparisler.get(siparisAnahtari(b));
     const yollar = new Map((p?.satirlar ?? []).map((r) => [r.satirId, r.yol]));
     const kendi = eslemeler.filter((e) => e.belgeId === b.belgeId && e.kaldirilma === null);
+    const sayilanSatirlar = new Set(kendi.filter((e) => siparisAnahtari(e) === siparisAnahtari(b)).map((e) => e.siparisSatiriId));
+    const eslenen = new Set((p?.satirlar ?? []).flatMap((r, i) => (sayilanSatirlar.has(r.satirId) ? [i] : [])));
     return [b.belgeId, belgeGenelGiderOrani({
-      belgeTutari: b.kdvHaricTutar, siparisOrani: p?.dagilim.genelGiderOrani ?? null,
+      belgeTutari: b.kdvHaricTutar, kalanOrani: p === undefined ? null : genelGiderOrani(p.girdiler, p.masraf, eslenen),
       eslemeler: kendi.map((e) => ({ tutar: e.tutar, yol: siparisAnahtari(e) === siparisAnahtari(b) ? (yollar.get(e.siparisSatiriId) ?? null) : null })),
     })];
   }));
