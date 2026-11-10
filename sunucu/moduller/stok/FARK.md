@@ -566,3 +566,7 @@ Lotun son kullanma tarihi (SKT) yeni `stok_parti_son_kullanma` tablosundadır (2
 ## Emirsiz stok çıkışı tutarı (kart 2707; 2623 a, 2594 b)
 
 `disari.ts` `emirsizCikisTutari(db, 'GGGG-AA'): { tutar, eksik }`: ayın (tesis saati) emre bağlı olmayan diğer, numune ve fire çıkışları ve sayım eksikleri (2709 c) x çıkış anındaki son alış (TRY; dövizli alış siparişin sabit kuruyla, yoksa teklif kuruyla, stok değeriyle aynı). Sayım eksiği aynı ayın sayım fazlasıyla netleşmez. Çıkış yoksa 0. Son alışı bilinmeyen çıkış tutara girmez, sayısı `eksik` listesinde döner (2710 b). Finans genel giderin "diğer" bileşenine alır. Fiyatı bilinmeyen mal kabul (TRY karşılığı yok; dövizli teklif kursuz yazılamaz, CHECK `satin_alma_teklif_doviz_kuru`) son alışı değiştirmez: önceki fiyatlı alış geçerli kalır, hiç yoksa çıkış fiyatsızdır. Uç ve yetki yok.
+
+## Emir sarfının son alış tutarı (kart 2727-1; 2613-3 a)
+
+`disari.ts` `emirSarfSonAlisTutarlari(db, emirIdler)`: emirlerinNetSarfi ile aynı (emir, malzeme) çifti ve net miktarı; tutar geri alınmamış her sarf ve emirli fire çıkışının miktarı x çıkış anındaki son alış (emirsizCikisTutari ile aynı fiyat yolu), TL kuruşlu metin. Geri alınan çıkış ile geri alması birlikte dışarıdadır; kısmi geri almada kalan miktar yeni çıkış olarak kendi anının fiyatıyla sayılır. Fire de son alışla sayılır (talaş fiyatı değil). Çiftte son alışı bilinmeyen çıkış varsa tutar null. Uç ve yetki yok.
