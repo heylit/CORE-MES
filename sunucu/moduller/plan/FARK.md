@@ -374,3 +374,13 @@ Testler: plan-bedel 815 (iki test), kurallar 815, kablolama 815; istemci planlam
   yerleşmedi.", "Bağlı parti yerleşmedi.") aynıdır. Plan cevabının yerlesmemis[].neden metni yalnız pasif kaynakta adı söyler.
 - Test: `planlanamama-kurallar.test.ts` PN-01..06, `planlanamama-uc.test.ts` PU-01, 02, `plan-cozucusu-neden.test.ts` YN-01..11,
   `motor-oner-insanli.test.ts` MI-01, 02, `motor-kisi-isi.test.ts`.
+
+## Planlanabilirlik uçları (2779 sayfası; 2026-11-10)
+- `GET /plan/planlanabilirlik`: plana giren açık emirlerden yerleşmeyen adımı olanlar, yalnız yerleşmeyen adımlarıyla. Motor önerisi motor
+  yerleşimiyle aynı çalışmadır, hiçbir şey yazılmaz; `motorZamani` bu çalışmanın anıdır, motor kayıtlı değilse null ve liste boş.
+  Kontroller sırayla: rota revizyonu, süre, kaynak, yetki, tezgâh vardiyası, kişi vardiyası, malzeme, ufuk (yaklaşık), öncül. Motorun
+  tanısının yuvası 'eksik'tir; önceki yuva yalnız tanı onu geçtiyse 'tamam', yoksa 'olculemedi' (uydurulmaz). Kök ilk eksiktir; kök öncül ya
+  da bağlı partiyse `bekledigiOp` ve `bekledigiEmirNo` zincirin kök adımıdır.
+- `GET /plan/planlanabilirlik/rotalar`: yürürlükteki rotası olan ürünlerin bütün adımları; yalnız süre, kaynak, tezgâh vardiyası ve kişi
+  vardiyası (emre bağlı yuva yok). Fason adım kontrol almaz. Yetki: iki uç da `/plan/planlama-kaynagi` ile aynı (sayfa.recete-rota okuyan).
+- Test: `planlanabilirlik-uc.test.ts` PB-01, 02; `uc-yetkisi.test.ts` iki satır.

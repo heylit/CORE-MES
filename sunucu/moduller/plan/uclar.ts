@@ -5,7 +5,7 @@ import {
   motorAyariGovdesi, motorAyarlariCevabi, motorKuraliGovdesi, planCevabi, planSorgusu, planSurumCevabi,
   senaryoBilgiGovdesi, senaryoGovdesi, senaryoParametresi, senaryoSurumGovdesi, senaryolarCevabi, siparisCarpaniCevabi, siparisParametresi,
   siralaGovdesi, taslakGovdesi, grupSaatMaliyetleriCevabi, mesaiMaliyetiCevabi, mesaiMaliyetiSorgusu, mesaiSaatDegerleriCevabi, mesaiSaatDegerleriSorgusu, mesaiGrupSirasiCevabi, mesaiGrupSirasiSorgusu, tasiGovdesi, PLAN_ONAY_KOMUTLARI, mrpIhtiyaciCevabi, planSagligiCevabi, veriSagligiCevabi,
-  yerlestirGovdesi,
+  yerlestirGovdesi, planlanabilirlikCevabi, rotaPlanlanabilirlikCevabi,
 } from '#paylasilan/sozlesme/plan.ts';
 import {
   calismaGeriAlCevabi, calismaGeriAlGovdesi, calismaTaslagiCevabi, calismaTaslagiGovdesi, canliFarkiCevabi, degerlendirmeBaslatCevabi, degisiklikDefteriCevabi, degisiklikDefteriSorgusu, duzenleyenCevabi, degerlendirmeDurumuCevabi, degerlendirmeGovdesi,
@@ -174,6 +174,9 @@ export const uclar = [
 
   // ----- Planlama sayfası ve ortak motor (658 b): Reçete ve Rota'dan taşındı; yollar /plan altında, yetkiler aynı (işlem adı 663 a). -----
   uc({ yontem: 'GET', yol: '/plan/planlama-kaynagi', yetki: KAYNAK_OKUR, cevap: durumCevabi, isle: ({ db, kullanici }) => planlama.planlamaKaynagi(db, kullanici) }),
+  // 2779: Reçete ve Rota planlanabilirlik sayfası; kaynak okumasıyla aynı yetki (sayfa.recete-rota okuyan görür), hiçbir şey yazılmaz.
+  uc({ yontem: 'GET', yol: '/plan/planlanabilirlik', yetki: KAYNAK_OKUR, cevap: planlanabilirlikCevabi, isle: ({ db, kullanici }) => servis.planlanabilirlik(db, kullanici) }),
+  uc({ yontem: 'GET', yol: '/plan/planlanabilirlik/rotalar', yetki: KAYNAK_OKUR, cevap: rotaPlanlanabilirlikCevabi, isle: ({ db, kullanici }) => servis.rotaPlanlanabilirligi(db, kullanici) }),
   // Plan kapasitesi (kart #1324): izin, fazla mesai ve atama payı; köprü kaynak okumasında ister.
   uc({ yontem: 'GET', yol: '/plan/planlama-kapasitesi', yetki: KAYNAK_OKUR, cevap: kapasiteCevabi, isle: ({ db, kullanici }) => planlama.kapasite(db, kullanici) }),
   // 525 1 a, 533 a: planın satın alma eki (açık sipariş gelişi, tedarik termini); çerçevenin kaynak okuması ister.

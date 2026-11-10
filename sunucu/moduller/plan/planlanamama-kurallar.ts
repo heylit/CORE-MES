@@ -62,3 +62,56 @@ export function zamanNedeni(g: { ufukGun: number; malzemeHazirSaat: number | nul
   const p = uygun[0]!;
   return yerlesmemeNedeni('ufuk', uygun.length === 1 ? `${ad(p)} tezgâhı ${ufuk} dolu.` : `Aday tezgâhlar ${ufuk} dolu (${uygun.map(ad).join(', ')}).`, p.makine);
 }
+
+// 2779: planlanabilirlik sayfasının adım kontrolleri. Her yuva bir kontroldür ve kodu 2780 listesindendir; ölçülemeyen yuva uydurulmaz,
+// 'olculemedi' döner. Kök ilk 'eksik' yuvanın kodudur.
+export type KontrolYuvasi = 'rota' | 'sure' | 'kaynak' | 'yetki' | 'takvim' | 'kisi' | 'malzeme' | 'ufuk' | 'oncul';
+export type KontrolOlcusu = { durum: 'tamam' } | { durum: 'olculemedi' } | { durum: 'eksik'; neden: YerlesmemeNedeni };
+export interface AdimKontrolu { kod: PlanlanamamaNedeni; durum: 'tamam' | 'eksik' | 'olculemedi'; metin: string; hedef: PlanlanamamaHedefi | null; yaklasik: boolean }
+const YUVALAR: Record<KontrolYuvasi, { kod: PlanlanamamaNedeni; tamam: string; kapsar: readonly PlanlanamamaNedeni[] }> = {
+  rota: { kod: 'rotada-yok', tamam: 'Adım ürünün yürürlükteki rotasında.', kapsar: ['rotada-yok'] },
+  sure: { kod: 'sure-bos', tamam: 'İşlem süresi girilmiş.', kapsar: ['sure-bos'] },
+  kaynak: {
+    kod: 'makine-yok', tamam: 'Adımın aktif makinesi ya da yetkin kişisi var.',
+    kapsar: ['istasyon-yok', 'istasyon-pasif', 'makine-yok', 'makine-pasif', 'kisi-pasif', 'yetkin-kisi-yok', 'insanli-makine', 'ek-adaysiz'],
+  },
+  yetki: { kod: 'yetki-disi', tamam: 'Adımın kaynakları görebildiğiniz kaynaklar içinde.', kapsar: ['yetki-disi'] },
+  takvim: { kod: 'takvim-yok', tamam: 'Tezgâhın vardiyası var.', kapsar: ['takvim-yok'] },
+  kisi: { kod: 'kisi-vardiyasiz', tamam: 'Vardiyada çalışacak yetkin kişi var.', kapsar: ['kisi-vardiyasiz'] },
+  malzeme: { kod: 'malzeme', tamam: 'Malzemesi planlama ufkunda karşılanıyor.', kapsar: ['malzeme'] },
+  ufuk: { kod: 'ufuk', tamam: 'Planlama ufkunda yer var.', kapsar: ['ufuk'] },
+  oncul: { kod: 'oncul', tamam: 'Önceki adımlar yerleşti.', kapsar: ['oncul', 'bagli-parti'] },
+};
+export const EMIR_YUVALARI: readonly KontrolYuvasi[] = ['rota', 'sure', 'kaynak', 'yetki', 'takvim', 'kisi', 'malzeme', 'ufuk', 'oncul'];
+// Rota sekmesi emre bağlı yuvaları (rota revizyonu, yetki, malzeme, ufuk, öncül) döndürmez.
+export const ROTA_YUVALARI: readonly KontrolYuvasi[] = ['sure', 'kaynak', 'takvim', 'kisi'];
+const OLCULEMEDI = 'Ölçülmedi; önce üstteki eksik giderilmeli.';
+export const yuvasi = (kod: PlanlanamamaNedeni): KontrolYuvasi | null =>
+  (Object.keys(YUVALAR) as KontrolYuvasi[]).find((y) => YUVALAR[y].kapsar.includes(kod)) ?? null;
+
+export function kontrolleriKur(yuvalar: readonly KontrolYuvasi[], olc: (y: KontrolYuvasi) => KontrolOlcusu, ek: YerlesmemeNedeni | null = null):
+{ kok: PlanlanamamaNedeni | null; kontroller: AdimKontrolu[] } {
+  const kontroller: AdimKontrolu[] = yuvalar.map((y) => {
+    const o = olc(y), yaklasik = y === 'ufuk';
+    if (o.durum === 'eksik') return { kod: o.neden.kod, durum: 'eksik', metin: o.neden.metin, hedef: o.neden.hedef, yaklasik };
+    return { kod: YUVALAR[y].kod, durum: o.durum, metin: o.durum === 'tamam' ? YUVALAR[y].tamam : OLCULEMEDI, hedef: null, yaklasik };
+  });
+  if (ek !== null) kontroller.push({ kod: ek.kod, durum: 'eksik', metin: ek.metin, hedef: ek.hedef, yaklasik: false });
+  return { kok: kontroller.find((k) => k.durum === 'eksik')?.kod ?? null, kontroller };
+}
+
+// Motorun tanısı sırayla ölçer: kaynak (adayNedeni), sonra zaman (malzeme, tezgâh vardiyası, kişi, ufuk). Tanının yuvasından önceki yuva
+// yalnız tanı onu geçtiyse 'tamam'dır; öncül, bölünmüş ve elle sıralı işte motor adımın kendi kontrollerine bakmaz.
+const TANI_GECTI: Partial<Record<KontrolYuvasi, readonly KontrolYuvasi[]>> = {
+  yetki: ['kaynak'], takvim: ['kaynak'], kisi: ['kaynak'], malzeme: ['kaynak'], ufuk: ['kaynak', 'takvim', 'kisi', 'malzeme'],
+};
+export const ROTADA_YOK = yerlesmemeNedeni('rotada-yok', 'Adım ürünün yürürlükteki rotasında yok; emir eski rota revizyonundan açıldı.');
+export function emirAdimKontrolleri(n: YerlesmemeNedeni, a: { rotadaVar: boolean; sureVar: boolean; istasyon: PlanlanamamaHedefi | null }) {
+  const e = yuvasi(n.kod);
+  return kontrolleriKur(EMIR_YUVALARI, (y) => {
+    if (y === e) return { durum: 'eksik', neden: n };
+    if (y === 'rota') return a.rotadaVar ? { durum: 'tamam' } : { durum: 'eksik', neden: ROTADA_YOK };
+    if (y === 'sure') return a.sureVar ? { durum: 'tamam' } : { durum: 'eksik', neden: sureBos(a.istasyon) };
+    return e !== null && TANI_GECTI[e]?.includes(y) ? { durum: 'tamam' } : { durum: 'olculemedi' };
+  }, e === null ? n : null);
+}

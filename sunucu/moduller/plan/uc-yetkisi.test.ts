@@ -77,6 +77,8 @@ const BEKLENEN: BeklenenYetkiler = {
   'POST /plan/senaryolar/:id/ek-mesai': 'plan.yaz',
   'POST /plan/senaryolar/:id/vazgec': 'plan.studyo',
   'GET /plan/planlama-kaynagi': KAYNAK_OKUR,
+  'GET /plan/planlanabilirlik': KAYNAK_OKUR,
+  'GET /plan/planlanabilirlik/rotalar': KAYNAK_OKUR,
   'GET /plan/planlama-kapasitesi': KAYNAK_OKUR,
   'GET /plan/satin-alma-eki': KAYNAK_OKUR,
   'GET /plan/planlama-kayitlari': KAYNAK_OKUR,

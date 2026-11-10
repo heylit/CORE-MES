@@ -4,7 +4,7 @@ import { islemVarMi, type Kullanici } from '#cekirdek/yetki.ts';
 import type {
   DortSaatAyrintisi,
   CanliYerlesimCevabi, CanliyaAlCevabi, CanliyaAlmaGecmisiCevabi, HizliDeneme, MotorFarki, MotorUyarilariCevabi, MotorYerlesimiCevabi, KuyrukYazCevabi, KuyrukYazGovdesi, OnizlemeCevabi, PlanAyari, PlanCanliOzeti, PlanCevabi, PlanKaynagi, BedelAyari, BedelAyariGovdesi, PlanSurumCevabi, SenaryolarCevabi, SiparisCarpaniCevabi, TaslakGirdisi,
-  EkMesaiGovdesi, GeriGonderGovdesi, MotorKuraliGovdesi, OnayaGonderGovdesi, PlanEkMesai, PlanOnayKomutu,
+  EkMesaiGovdesi, GeriGonderGovdesi, MotorKuraliGovdesi, OnayaGonderGovdesi, PlanEkMesai, PlanOnayKomutu, PlanlanabilirlikCevabi, RotaPlanlanabilirlikCevabi,
 } from '#paylasilan/sozlesme/plan.ts';
 import { CANLI_DEGISTI, DORT_SAAT_RED_NEDENI, PLAN_ONAY_KOMUTLARI, SONRADAN_BASLAYAN, type CanliDegistiAyrintisi, type SonradanBaslayanAyrintisi } from '#paylasilan/sozlesme/plan.ts';
 import { tesisGunBasi, tesisGunu, tesisSaati } from '#paylasilan/zaman.ts';
@@ -15,11 +15,15 @@ import { sistemAyariOku } from '../ayarlar/disari.ts';
 import { genelGiderOrani, gunlukFaizGetir, kurlar } from '../finans/disari.ts';
 import type { Makine } from '../istasyonlar/disari.ts';
 import { kisiAdlari, kisileriListele } from '../kisiler/disari.ts';
-import { hedef, insanliMakine, istasyonKisiVardiyasiz, makineYok, NEDEN_OLCULEMEDI, yerlesmemeNedeni as yerlesmeme, yetkinKisiYok, type PlanlanamamaHedefi, type YerlesmemeNedeni } from './planlanamama-kurallar.ts';
+import {
+  emirAdimKontrolleri, hedef, insanliMakine, istasyonKisiVardiyasiz, kontrolleriKur, makineYok, NEDEN_OLCULEMEDI, ROTA_YUVALARI, sureBos, yerlesmemeNedeni as yerlesmeme, yetkinKisiYok,
+  type KontrolOlcusu, type KontrolYuvasi, type PlanlanamamaHedefi, type YerlesmemeNedeni,
+} from './planlanamama-kurallar.ts';
 import { malzemeOzeti, malzemeOzetleri } from '../malzemeler/disari.ts';
 import { firmaAra } from '../musteri-tedarikci/disari.ts';
 import { siparisinProjeleri, siparistenProjeAc } from '../projeler/disari.ts';
-import { acikRevizyonSayisi, emreKopyala, girdisiEksikRevizyonlar, revizyonGetir, yururluktekiRevizyonIdleri } from '../rota/disari.ts';
+import { acikRevizyonSayisi, durumRevizyonlari, emreKopyala, girdisiEksikRevizyonlar, revizyonGetir, yururluktekiRevizyonIdleri } from '../rota/disari.ts';
+import type { DurumRotaAdimi } from '../rota/disari.ts';
 import { fasonSuresiTahminleri } from '../satin-alma/disari.ts';
 import { siparisKilitliAyrinti, siparisSatiriOzetleri, taslakSiparisAc } from '../siparisler/disari.ts';
 import { dusukStokSayisi } from '../stok/disari.ts';
@@ -2386,6 +2390,142 @@ async function motorYerlesimiKur(db: Db, k: Kullanici, taslak?: number): Promise
       })),
     ],
     yerlesmeyen: sonuc.yerlesmeyen.filter((x) => b.isler.has(x.isEmriId)).map((x) => ({ ...kimlik(x.isEmriId), ...nedenAlanlari(x.neden) })),
+  };
+}
+
+/* ---------------- planlanabilirlik (2779) ---------------- */
+
+// GET /plan/planlanabilirlik: motor önerisi (motor yerleşimiyle aynı çalışma, hiçbir şey yazılmaz) yerleşmeyen adımları tek nedenleriyle
+// verir; adımın kontrolleri bu nedenden ve adımın kendi verisinden kurulur. Öncül zinciri kök adıma kadar izlenir (ara adım değil).
+export function planlanabilirlik(db: Db, k: Kullanici): Promise<PlanlanabilirlikCevabi> {
+  return okumaBellegiyle(db, () => planlanabilirlikKur(db, k));
+}
+async function planlanabilirlikKur(db: Db, k: Kullanici): Promise<PlanlanabilirlikCevabi> {
+  const b = await baglamKur(db, k, null);
+  const acik = [...b.isler.values()].filter(planlanacak);
+  const acikEmir = new Set(acik.map((i) => i.uretimEmriId)).size;
+  if (planMotoru === null) return { motorZamani: null, acikEmir, emirler: [] };
+  const oneri = await motorOner(db, b, await s.yerlesimler(db, null));
+  const nedenler = new Map(oneri.yerlesmeyen.filter((x) => b.isler.has(x.isEmriId)).map((x) => [x.isEmriId, x.neden]));
+  const adlar = await istasyonAdlari(db, [...new Set([...nedenler.keys()].flatMap((id) => { const x = b.isler.get(id)?.istasyonId; return x == null ? [] : [x]; }))]);
+  const bagli = partiBaglariOf(b);
+  const bekledigi = (i: Is): Is | null => {
+    let x = i;
+    const gorulen = new Set<number>();
+    for (;;) {
+      const n = nedenler.get(x.id);
+      if (n === undefined || (n.kod !== 'oncul' && n.kod !== 'bagli-parti') || gorulen.has(x.id)) break;
+      gorulen.add(x.id);
+      const sonraki = n.kod === 'oncul' ? icOnculler(b.isler, x).find((o) => nedenler.has(o.is.id))?.is
+        : (bagli.get(x.id) ?? []).map((id) => b.isler.get(id)).find((o) => o !== undefined && nedenler.has(o.id));
+      if (sonraki === undefined) break;
+      x = sonraki;
+    }
+    return x === i ? null : x;
+  };
+  const emirler = new Map<number, Is[]>();
+  for (const i of acik) if (nedenler.has(i.id)) emirler.set(i.uretimEmriId, [...(emirler.get(i.uretimEmriId) ?? []), i]);
+  return {
+    motorZamani: new Date(b.simdi).toISOString(), acikEmir,
+    emirler: [...emirler].map(([id, l]) => {
+      const ilk = l[0]!;
+      return {
+        uretimEmriId: id, emirNo: ilk.emirNo, urunId: ilk.malzemeNo, urunKodu: ilk.urunKodu, urunAdi: ilk.urunAdi, adet: ilk.adet, termin: ilk.teslim,
+        adimlar: [...l].sort((x, y) => x.opNo - y.opNo).map((i) => {
+          const istasyon = i.istasyonId == null ? null : hedef('istasyon', i.istasyonId, adlar.get(i.istasyonId) ?? null);
+          const { kok, kontroller } = emirAdimKontrolleri(nedenler.get(i.id)!, {
+            rotadaVar: b.eskiRota.get(i.uretimEmriId)?.has(i.opNo) !== false, sureVar: i.sureDk !== null, istasyon,
+          });
+          const kokAdim = kok === 'oncul' || kok === 'bagli-parti' ? bekledigi(i) : null;
+          return {
+            opNo: i.opNo, ad: i.ad, istasyon: istasyon?.ad ?? null, kok,
+            bekledigiEmirNo: kokAdim?.emirNo ?? null, bekledigiOp: kokAdim?.opNo ?? null, kontroller,
+          };
+        }),
+      };
+    }).sort((x, y) => x.emirNo.localeCompare(y.emirNo, 'tr')),
+  };
+}
+
+// GET /plan/planlanabilirlik/rotalar: yürürlükteki rotası olan ürünlerin bütün adımları, emre bağlı kontroller olmadan. Ölçü planın
+// kaynak okumasındandır (aktif istasyon ve makine, insanlı istasyonun yetkin kişileri, tezgâh takvimi, kişi vardiyası). Fason adım
+// kaynak ve vardiya ölçüsü almaz.
+export function rotaPlanlanabilirligi(db: Db, k: Kullanici): Promise<RotaPlanlanabilirlikCevabi> {
+  return okumaBellegiyle(db, () => rotaPlanlanabilirligiKur(db, k));
+}
+async function rotaPlanlanabilirligiKur(db: Db, k: Kullanici): Promise<RotaPlanlanabilirlikCevabi> {
+  const b = await baglamKur(db, k, null);
+  const revizyonlar = (await durumRevizyonlari(db)).filter((r) => r.durum === 'yururlukte');
+  const urunler = await malzemeOzetleri(db, revizyonlar.map((r) => r.malzemeId));
+  const aktifIst = new Set((await aktifIstasyonlar(db)).map((i) => i.id));
+  const insanli = new Set([...await kapasiteKaynaklari(db, [...b.istasyonMakineleri.keys()])].filter(([, x]) => x === 'insan').map(([id]) => id));
+  const vardiyasiOlan = new Set((await kisiVardiyalari(db)).map((x) => x.kisiId));
+  const istIdleri = [...new Set(revizyonlar.flatMap((r) => r.adimlar.flatMap((a) => (a.kaynak?.tur === 'istasyon' ? [a.kaynak.id] : []))))];
+  const adlar = await istasyonAdlari(db, istIdleri);
+  const acikEmir = new Map<number, Set<number>>();
+  for (const i of b.isler.values()) if (planlanacak(i)) acikEmir.set(i.malzemeNo, (acikEmir.get(i.malzemeNo) ?? new Set()).add(i.uretimEmriId));
+  return {
+    urunler: revizyonlar.flatMap((r) => {
+      const u = urunler.get(r.malzemeId);
+      if (u === undefined) return [];
+      return [{
+        urunId: r.malzemeId, urunKodu: u.kod, urunAdi: u.ad ?? u.kod, acikEmir: acikEmir.get(r.malzemeId)?.size ?? 0,
+        adimlar: r.adimlar.map((a) => {
+          const istId = a.kaynak?.tur === 'istasyon' ? a.kaynak.id : a.kaynak?.tur === 'makine' ? b.kaynaklar.get(kaynakAnahtari({ tur: 'makine', id: a.kaynak.id }))?.istasyon?.id ?? null : null;
+          const istasyon = istId === null ? null : hedef('istasyon', istId, adlar.get(istId) ?? b.kaynaklar.get(`makine:${String(a.kaynak?.id)}`)?.istasyon?.ad ?? null);
+          const { kok, kontroller } = a.kaynak?.tur === 'fason' ? { kok: null, kontroller: [] }
+            : kontrolleriKur(ROTA_YUVALARI, rotaAdimOlcusu(b, a, istasyon, { aktifIst, insanli, vardiyasiOlan }));
+          return { opNo: a.opNo, ad: a.ad, istasyon: istasyon?.ad ?? null, kok, bekledigiEmirNo: null, bekledigiOp: null, kontroller };
+        }),
+      }];
+    }).sort((x, y) => x.urunKodu.localeCompare(y.urunKodu, 'tr')),
+  };
+}
+const SURE_ALANLARI = ['ayarSuresiDk', 'birimSureDk', 'islemSuresiDk'] as const;
+function rotaAdimOlcusu(
+  b: Baglam, a: DurumRotaAdimi, istasyon: PlanlanamamaHedefi | null,
+  o: { aktifIst: ReadonlySet<number>; insanli: ReadonlySet<number>; vardiyasiOlan: ReadonlySet<number> },
+): (y: KontrolYuvasi) => KontrolOlcusu {
+  const eksik = (neden: YerlesmemeNedeni): KontrolOlcusu => ({ durum: 'eksik', neden });
+  const dolu = (x: Record<(typeof SURE_ALANLARI)[number], unknown>) => SURE_ALANLARI.some((f) => x[f] !== null);
+  const k = a.kaynak;
+  const bilgi = (x: Kaynak) => b.kaynaklar.get(kaynakAnahtari(x));
+  const istInsanli = istasyon !== null && o.insanli.has(istasyon.id);
+  // Adımın kaynakları: seçili makine ya da kişi, adaylar; istasyon seçiliyse istasyonun planda açıldığı kaynaklar (aktif makineler ya da
+  // insanlı istasyonun yetkin kişileri).
+  const ac = (x: { tur: 'makine' | 'kisi' | 'istasyon'; id: number }): Kaynak[] => (x.tur === 'istasyon' ? b.istasyonMakineleri.get(x.id) ?? [] : [{ tur: x.tur, id: x.id }]);
+  const secili: Kaynak[] = k === null || k.tur === 'fason' || k.id === null ? [] : ac({ tur: k.tur, id: k.id });
+  const tumu = [...secili, ...a.adaylar.flatMap((x) => ac(x.kaynak))];
+  const aktif = tumu.filter((x) => bilgi(x)?.aktif === true);
+  const kaynakOlcusu = (): KontrolOlcusu => {
+    if (k === null) return eksik(yerlesmeme('istasyon-yok', 'Adıma istasyon ya da kaynak atanmamış.'));
+    if (istasyon !== null && !o.aktifIst.has(istasyon.id)) return eksik(yerlesmeme('istasyon-pasif', `${istasyon.ad} istasyonu pasif.`, istasyon));
+    if (aktif.length > 0) return { durum: 'tamam' };
+    const tek = tumu.length === 1 ? bilgi(tumu[0]!) : undefined;
+    if (tek !== undefined && k.tur !== 'istasyon') {
+      return eksik(yerlesmeme(tek.tur === 'makine' ? 'makine-pasif' : 'kisi-pasif', tek.tur === 'makine' ? `${tek.ad} makinesi kullanımda değil.` : `${tek.ad} kullanımda değil.`, hedef(tek.tur, tek.id, tek.ad)));
+    }
+    if (istasyon === null) return { durum: 'olculemedi' };
+    return eksik(istInsanli ? yetkinKisiYok(istasyon) : makineYok(istasyon));
+  };
+  const ko = kaynakOlcusu();
+  return (y) => {
+    if (y === 'sure') return dolu(a) || a.adaylar.some(dolu) ? { durum: 'tamam' } : eksik(sureBos(istasyon));
+    if (y === 'kaynak') return ko;
+    if (ko.durum !== 'tamam') return { durum: 'olculemedi' };
+    const makineler = aktif.filter((x) => x.tur === 'makine');
+    const kisiler = aktif.filter((x) => x.tur === 'kisi');
+    if (y === 'takvim') {
+      if (makineler.length === 0 || istInsanli) return { durum: 'tamam' };
+      if (makineler.some((x) => (b.takvimler.get(kaynakAnahtari(x)) ?? null) !== null)) return { durum: 'tamam' };
+      const m = bilgi(makineler[0]!)!;
+      return eksik(yerlesmeme('takvim-yok', makineler.length === 1 ? `${m.ad} tezgâhının vardiyası tanımsız.` : `Aday tezgâhların hiçbirinin vardiyası tanımlı değil (${makineler.map((x) => bilgi(x)?.ad ?? String(x.id)).join(', ')}).`, hedef('makine', m.id, m.ad)));
+    }
+    if (!istInsanli && kisiler.length === 0) return { durum: 'tamam' };
+    const yetkin = istInsanli ? (b.istasyonMakineleri.get(istasyon.id) ?? []).filter((x) => x.tur === 'kisi') : kisiler;
+    if (yetkin.some((x) => o.vardiyasiOlan.has(x.id))) return { durum: 'tamam' };
+    if (istasyon === null) return { durum: 'olculemedi' };
+    return eksik(yetkin.length === 0 ? yetkinKisiYok(istasyon) : istasyonKisiVardiyasiz(istasyon));
   };
 }
 
