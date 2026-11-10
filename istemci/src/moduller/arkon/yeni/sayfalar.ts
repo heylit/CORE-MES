@@ -60,7 +60,7 @@ export const SAYFALAR = {
 export const sayfaMi = (s: string | undefined): s is ArkonSayfasi => s !== undefined && Object.hasOwn(SAYFALAR, s);
 
 // TMI'nin kendi ekranı olan madde: sekmesi o adrese gider (çerçevede de açılmıyordu).
-export const SAYFA_DISI: Readonly<Record<string, string>> = { 'tmi-yansimalari': '/arkon/tmi-yansimalari' };
+export const SAYFA_DISI: Readonly<Record<string, string>> = { 'tmi-yansimalari': '/arkon/tmi-yansimalari', 'hazirlik-matrisi': '/arkon/hazirlik-matrisi' };
 
 export interface SekmeMaddesi { anahtar: string; baslik: string; simge: SimgeAdi; islem: string; veya?: readonly string[] }
 

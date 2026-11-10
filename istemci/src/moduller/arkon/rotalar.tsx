@@ -1,5 +1,6 @@
 import { Navigate, useLocation } from 'react-router-dom';
 import type { ModulRotasi } from '../../ortak/rota/kesif.ts';
+import { HazirlikMatrisi } from './HazirlikMatrisi.tsx';
 import { TmiYansimalari } from './TmiYansimalari.tsx';
 import { ArkonAyriSayfa, ArkonYeni } from './yeni/ArkonYeni.tsx';
 import './cikis-temizligi.ts';
@@ -28,6 +29,7 @@ export const rotalar: ModulRotasi[] = [
   { yol: '/kuyruk/eski', ekran: EskiAdres },
   // Sabit yollar /arkon/:sayfa'dan önce eşlenir.
   { yol: '/arkon/tmi-yansimalari', ekran: TmiYansimalari },
+  { yol: '/arkon/hazirlik-matrisi', ekran: HazirlikMatrisi },
   { yol: '/arkon/eski', ekran: EskiAdres },
   { yol: '/arkon/eski/:sayfa', ekran: EskiAdres },
   { yol: '/arkon/eski/:sayfa/:kimlik', ekran: EskiAdres },
