@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { calismaOku } from '../durum.ts';
 import type { PlanlamaCalismasi } from '../tipler.ts';
 import {
-  DEGER_VARSAYILAN_TL, bedelsizGruplar, darbogazlar, geriIsGunu, geriZamanla, grupSaatTL, gunAyHafta, mesaiSaatTL, pencereSaati, planUretimi, saatOku, simdiOku,
+  DEGER_VARSAYILAN_TL, bedelsizGruplar, darbogazlar, geriIsGunu, geriZamanla, grupSaatTL, gunAyHafta, mesaiSaatTL, mesaiTLKaynagi, pencereSaati, planUretimi, saatOku, simdiOku,
   talepHizi, tezgahPencereleri, ufukMalzemesi, ufukTakvimi, ufukVerisi, urunAileleri, yatirimTL, yillikAyarOku, yillikAyarYaz, yillikDonemler,
   yillikHedefKur, yillikModel, yillikOzet, yillikSonuc, yillikTalep, yillikVeri, zamanKur, type CozumCevabi, type Zaman,
 } from './kurallar.ts';
@@ -193,6 +193,22 @@ describe('yıllık plan', () => {
     expect(yatirimTL(m.D, 'torna')).toBe(10000);
     expect(bedelsizGruplar(c.D, ['torna', 'freze'])).toEqual(['torna', 'freze']);
     expect(bedelsizGruplar(m.D, ['torna', 'freze', 'yok'])).toEqual(['yok']);
+  });
+
+  // Mimar N2: sunucu cevabında olmayan grup bilinmez; cevap yoksa (403) hepsi bilinmez.
+  it('mesai saat değeri kaynağı: cevaptaki grup değeri, cevapta olmayan ya da null grup ve cevapsızlık null', () => {
+    const k = mesaiTLKaynagi({ gruplar: [{ grup: 'torna', saatTL: 100 }, { grup: 'freze', saatTL: null }] });
+    expect(k('torna')).toBe(100);
+    expect(k('freze')).toBeNull();
+    expect(k('yeni-grup')).toBeNull();
+    expect(mesaiTLKaynagi(null)('torna')).toBeNull();
+    const c = calisma({ yillik: { yatirim: false } });
+    const z = zaman(c);
+    const A = yillikAyarOku(c.D);
+    const v = yillikVeri(c, z, A);
+    const P = yillikDonemler(z);
+    const m = yillikModel(c.D, v, P, yillikTalep(v, P, A, z), A, { yat: false, mesaiTL: mesaiTLKaynagi({ gruplar: [{ grup: 'torna', saatTL: 100 }] }) });
+    expect(m.mesaiBilinmez).toEqual(['freze']);
   });
 
   it('HiGHS ile: kapasite yetiyorsa açık yok; yetmiyorsa önce ek mesai, sonra acil kapasite ve gölge fiyat', async () => {

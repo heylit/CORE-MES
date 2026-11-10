@@ -434,6 +434,13 @@ export function yillikTalep(v: YillikVeri, P: readonly Donem[], A: YillikAyar, z
   return { fir, tah, d };
 }
 
+// Sunucunun mesai saat değerleri (GET /plan/mesai-saat-degerleri) LP'nin mesai bedeli kaynağına çevrilir. Cevapta olmayan grup null sayılır:
+// sunucu kayıttaki tezgâhları okur, LP açık çalışmanınkileri; taslakta yeni açılan grup sessizce bedel almaz, mesai önerilmez (2745 a).
+// Cevap yoksa (maliyet görmeyen rol, 403) bütün gruplar bilinmez.
+export function mesaiTLKaynagi(cevap: { gruplar: readonly { grup: string; saatTL: number | null }[] } | null): (g: string) => number | null {
+  const m = new Map((cevap?.gruplar ?? []).map((x) => [x.grup, x.saatTL]));
+  return (g) => m.get(g) ?? null;
+}
 export interface ModelSecenegi { yat: boolean; yatAday?: (g: string, s: number) => boolean; sabit?: Record<string, number>; mesaiTL?: (g: string) => number | null }
 export interface YillikModel { lp: string; want: string[]; fi: (f: string) => string; gi: (g: string) => string; mesaiBilinmez: string[] }
 
