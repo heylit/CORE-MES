@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { useBildirim } from '../../../../ortak/arayuz/Bildirim.tsx';
 import { Dugme } from '../../../../ortak/arayuz/Dugme.tsx';
 import { OnayPenceresi } from '../../../../ortak/arayuz/OnayPenceresi.tsx';
+import { Rozet, type RozetTonu } from '../../../../ortak/arayuz/Rozet.tsx';
+import { Simge } from '../../../../ortak/arayuz/Simge.tsx';
 import { SayfaBasligi } from '../../../../ortak/arayuz/SayfaBasligi.tsx';
 import { Tablo, type Sutun } from '../../../../ortak/arayuz/Tablo.tsx';
 import { useSayfaKomutlari, type SayfaKomutu } from '../../../../ortak/rota/sayfa-komutlari.ts';
@@ -21,6 +23,13 @@ import './personel.css';
 
 interface DepartmanSatiri { d: Departman; calisanlar: Personel[]; beyaz: number | null; mavi: number | null; brut: number }
 
+// 2647 a (Arayüz K4): metinli rozet; doğru/yanlış anlamı olmadığından tamam ve hata tonu yok.
+const ISCILIK: Record<'evet' | 'hayir' | 'yok', { ad: string; ton: RozetTonu }> = {
+  evet: { ad: 'Doğrudan', ton: 'bilgi' }, hayir: { ad: 'Dolaylı', ton: 'pasif' }, yok: { ad: 'İşaretlenmedi', ton: 'uyari' },
+};
+const iscilikDurumu = (d: Departman): keyof typeof ISCILIK => (d.dogrudanIscilik === true ? 'evet' : d.dogrudanIscilik === false ? 'hayir' : 'yok');
+const iscilik = (d: Departman) => ISCILIK[iscilikDurumu(d)];
+
 // Departmanlar, pozisyon tanımları (2177-3 a) ve raporlama ilişkileri; şema personel kartlarındaki "bağlı olduğu yönetici" alanından oluşur.
 export function Organizasyon(o: IkEkranOzellikleri) {
   const { depo, yetki, motor, git } = o;
@@ -28,6 +37,7 @@ export function Organizasyon(o: IkEkranOzellikleri) {
   const [form, formYaz] = useState<{ kayit: Departman | null } | null>(null);
   const [pozisyonFormu, pozisyonFormuYaz] = useState<{ kayit: PozisyonTanimi | null } | null>(null);
   const [hazirOnay, hazirOnayYaz] = useState<'departman' | 'pozisyon' | null>(null);
+  const [yalnizIsaretsiz, yalnizIsaretsizYaz] = useState(false);
   const komut = useIkKomutu();
   const { bildir } = useBildirim();
   const sabit = ikSabitleri();
@@ -41,8 +51,15 @@ export function Organizasyon(o: IkEkranOzellikleri) {
     return { d, calisanlar, beyaz: yaka('Beyaz yaka'), mavi: yaka('Mavi yaka'), brut: calisanlar.reduce((a, p) => a + ucretTarihte(p, gun), 0) };
   });
 
+  // Arayüz K5: işaretsiz departman varsa dolaylı personel maliyeti hesaplanamaz; tek uyarı ve süzgeç.
+  // Rozetle aynı koşul (Arayüz kod notu): true ve false dışındaki her değer işaretsizdir.
+  const isaretsizler = satirlar.filter((r) => iscilikDurumu(r.d) === 'yok');
+  const isaretsiz = isaretsizler.length;
+  const gorunen = yalnizIsaretsiz && isaretsiz > 0 ? isaretsizler : satirlar;
+
   const sutunlar: Sutun<DepartmanSatiri>[] = [
     { anahtar: 'ad', baslik: 'Departman', hucre: (r) => <b>{r.d.ad ?? ''}</b>, csv: (r) => r.d.ad ?? '' },
+    { anahtar: 'iscilik', baslik: 'İşçilik', kirilmaz: true, hucre: (r) => <Rozet ton={iscilik(r.d).ton}>{iscilik(r.d).ad}</Rozet>, csv: (r) => iscilik(r.d).ad },
     { anahtar: 'kod', baslik: 'Kod', hucre: (r) => r.d.kod || YOK, mono: true },
     { anahtar: 'yonetici', baslik: 'Yönetici', hucre: (r) => personelAdi(r.d.yoneticiId) },
     { anahtar: 'calisan', baslik: 'Çalışan', hizala: 'sag', hucre: (r) => r.calisanlar.length },
@@ -74,7 +91,8 @@ export function Organizasyon(o: IkEkranOzellikleri) {
       : eksikHazir.map((h) => ({ id: yeniKimlik('title'), kind: 'title', ...h }));
     try {
       await komut.topluKaydet(kayitlar);
-      bildir('tamam', `${String(kayitlar.length)} ${departman ? 'departman' : 'pozisyon'} eklendi.`);
+      // Arayüz K6: hazır departmanlar işaretsiz (NULL) eklenir; uyarı satırı boşta kalmasın.
+      bildir('tamam', departman ? `${String(kayitlar.length)} departman eklendi; işçilik türünü seçin.` : `${String(kayitlar.length)} pozisyon eklendi.`);
     } catch {
       bildir('hata', departman ? 'Hazır departmanlar eklenemedi.' : 'Hazır pozisyonlar eklenemedi.');
     } finally {
@@ -130,8 +148,14 @@ export function Organizasyon(o: IkEkranOzellikleri) {
           ? <Dugme simge="list" onClick={() => { hazirOnayYaz('departman'); }}>Hazır listeyi ekle</Dugme>
           : undefined}
       >
+        {isaretsiz > 0 && (
+          <p className="tc-ikp-uyari" role="status">
+            <Simge ad="alert" /> {`${String(isaretsiz)} departman işaretlenmedi; dolaylı personel maliyeti hesaplanamıyor.`}{' '}
+            <Dugme onClick={() => { yalnizIsaretsizYaz((x) => !x); }}>{yalnizIsaretsiz ? 'Tümünü göster' : 'Göster'}</Dugme>
+          </p>
+        )}
         <Tablo
-          etiket="Departmanlar" sutunlar={sutunlar} satirlar={satirlar} satirAnahtari={(r) => r.d.id}
+          etiket="Departmanlar" sutunlar={sutunlar} satirlar={gorunen} satirAnahtari={(r) => r.d.id}
           satirSec={yetki.personelYaz ? (r) => { formYaz({ kayit: r.d }); } : undefined}
           bosMesaj="Departman yok. Hazır listeyi ekleyin ya da personeli gruplamak için departman girin."
         />

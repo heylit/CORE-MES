@@ -6,7 +6,7 @@ import type { Departman, Personel, PozisyonTanimi } from '../tipler.ts';
 
 export type AlanTuru =
   | 'metin' | 'tarih' | 'sayi' | 'para' | 'secim' | 'cok' | 'isaret' | 'personel' | 'departman' | 'ismerkezi' | 'tmikisi'
-  | 'tckn' | 'iban' | 'eposta' | 'tel' | 'tesvik' | 'primler';
+  | 'tckn' | 'iban' | 'eposta' | 'tel' | 'tesvik' | 'primler' | 'evetHayir';
 
 export type PersonelBolumu = 'Kimlik' | 'İletişim' | 'İş' | 'Ücret' | 'Ayrılış';
 export const YENI_PERSONEL_BOLUMLERI: readonly PersonelBolumu[] = ['Kimlik', 'İletişim', 'İş', 'Ücret'];
@@ -102,6 +102,8 @@ export const DEPARTMAN_ALANLARI: readonly FormAlani<keyof Departman & string>[] 
   { k: 'yoneticiId', l: 'Departman yöneticisi', tur: 'personel' },
   { k: 'butce', l: 'Yıllık personel bütçesi (₺)', tur: 'para' },
   { k: 'aciklama', l: 'Açıklama', tur: 'cok' },
+  // 2647 a (Arayüz K1-K3): üç durum; boş kalırsa işaretlenmedi (NULL), Hayır'a çevrilmez.
+  { k: 'dogrudanIscilik', l: 'Doğrudan işçilik', tur: 'evetHayir', ipucu: 'Üretimde istasyonda çalışır; maliyeti istasyon saatine girer. Hayır ise genel gidere sayılır.' },
 ];
 
 // Pozisyon tanımı (2177-3 a): yaka tipi ve kademe personel formundaki listelerle aynıdır; personelde boşsa tanımdan dolar.

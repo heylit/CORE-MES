@@ -1,7 +1,7 @@
 import type { Db } from '#cekirdek/db.ts';
 import { UygulamaHatasi } from '#cekirdek/hata.ts';
 import { ayarDegistiDinle } from './moduller/ayarlar/disari.ts';
-import { genelGiderOraniCozucusu, projeMasrafiCozucusu, satisSevkleriCozucusu, satisSiparisleriCozucusu, sevkIsiOzetiCozucusu, siparisOzetiCozucusu } from './moduller/finans/disari.ts';
+import { dolayliPersonelCozucusu, emilmeyenDogrudanCozucusu, genelGiderOraniCozucusu, projeMasrafiCozucusu, satisSevkleriCozucusu, satisSiparisleriCozucusu, sevkIsiOzetiCozucusu, siparisOzetiCozucusu } from './moduller/finans/disari.ts';
 import * as arkon from './moduller/arkon/disari.ts';
 import * as atolye from './moduller/atolye/disari.ts';
 import * as cncKurulum from './moduller/cnc-kurulum/disari.ts';
@@ -201,6 +201,13 @@ export function sunucununBaglari(): Bag[] {
         return sonuc;
       }
       : undefined),
+    // 2647 a, 2659: genel gider personel bileşenleri İK'dan; yalnız toplam, gerçek değerle (gizleme Finans'ta, 2652 a). Emilmeyen için
+    // katılım üretim emirlerinden (İK onu ithal etmez).
+    bag('İK dolaylı personel -> finans genel gider', dolayliPersonelCozucusu, typeof ik.dolayliPersonelToplamiYalnizHesapIcin === 'function'
+      ? (db: Db, ay: string) => ik.dolayliPersonelToplamiYalnizHesapIcin(db, ay) : undefined),
+    bag('İK emilmeyen doğrudan işçilik -> finans genel gider', emilmeyenDogrudanCozucusu,
+      [ik.dogrudanEmilmeyenToplamiYalnizHesapIcin, uretimEmirleri.katilimSureleri].every((f) => typeof f === 'function')
+        ? (db: Db, ay: string) => ik.dogrudanEmilmeyenToplamiYalnizHesapIcin(db, ay, uretimEmirleri.katilimSureleri) : undefined),
     bag('kart izleri -> malzemeler arşivi', kartIzleriCozucusu, kartIzleriTopla({
       'Değişiklik yönetimi': degisiklikKartIzleri, 'Finans': finansKartIzleri, 'İstasyonlar': istasyonKartIzleri, 'Markalama': markalamaKartIzleri,
       'Plan': planKartIzleri, 'Satın alma': satinAlmaKartIzleri, 'Rota': rotaKartIzleri, 'Siparişler': siparisKartIzleri,

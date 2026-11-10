@@ -81,3 +81,101 @@ export function kucukGrupHavuzu(girdiler: readonly Girdi[], p: Parametreler, esi
   }
   return kisi < esik || !(saat > 0) ? null : { deger: Math.round((pay / saat) * 10000) / 10000, kisiSayisi: kisi };
 }
+
+// 2647 a, 2659 (2656 a): personel bileşenlerinin girdisi. Kişi değeri İK dışına çıkmaz; dışarı yalnız toplam gider.
+export interface KapsamGirdisi {
+  personelNo: number; kisiId: number | null; departmanNo: number | null; departmanAd: string | null; departmanIptal: boolean | null;
+  dogrudan: boolean | null; brut: number | null; iseGiris: string | null; cikis: string | null; bordroMaliyeti: number | null;
+}
+export interface PersonelToplami { tutar: number | null; kisiSayisi: number; kucuk: boolean; eksik: string[] }
+
+const gunSayisi = (t: string): number => Date.UTC(Number(t.slice(0, 4)), Number(t.slice(5, 7)) - 1, Number(t.slice(8, 10))) / 86_400_000;
+// -0 yerine 0 (eksi sıfır ekranda "-0,00" yazardı); NaN olduğu gibi kalır (Veri kod notu).
+const kurus = (x: number): number => Math.round(x * 100) / 100 + 0;
+
+// IK-88 (Maliyet C1): ay içindeki çalışılan gün, işe giriş ve çıkış tarihine göre; bütün ay çalışan 30 gün sayılır (motorla aynı taban:
+// aylık / 30 x gün), kısmi ayda takvim günü, en çok 30. Ücretsiz izin ve rapor günü düşülmez (Maliyet N3, bordro varsa bordro geçerli).
+export function calisilanGun(iseGiris: string | null, cikis: string | null, ayBasi: string, aySonu: string): number {
+  const bas = iseGiris !== null && iseGiris > ayBasi ? iseGiris : ayBasi;
+  const son = cikis !== null && cikis < aySonu ? cikis : aySonu;
+  if (son < bas) return 0;
+  if (bas === ayBasi && son === aySonu) return 30;
+  return Math.min(30, gunSayisi(son) - gunSayisi(bas) + 1);
+}
+
+// IK-88 (2632 a): kişinin ayın işveren maliyeti. Kesinleşmiş bordro varsa bordronun maliyeti; yoksa IK-85 formülü gün oranlı brütle,
+// SGK tavanı da gün oranlı (prim günü kadar matrah). Brüt ya da parametre yoksa bilinmez (null).
+export function aylikIsverenMaliyeti(g: Pick<KapsamGirdisi, 'brut' | 'bordroMaliyeti' | 'iseGiris' | 'cikis'>, p: Parametreler, ayBasi: string, aySonu: string): number | null {
+  if (g.bordroMaliyeti !== null) return g.bordroMaliyeti;
+  if (g.brut === null || p.sgkTavani === null) return null;
+  const oran = calisilanGun(g.iseGiris, g.cikis, ayBasi, aySonu) / 30;
+  return isverenMaliyeti(g.brut * oran, { ...p, sgkTavani: p.sgkTavani * oran });
+}
+
+// İki bileşende ortak bilinmezlik (2647 a, Veri 2647): kapsamdaki kişinin departmanı yoksa ya da departmanı iptalse, ya da departmanı
+// işaretlenmemişse hangi bileşene girdiği bilinmez. Ad yalnız departmanındır; kişi adı yazılmaz.
+function siniflandirmaEksikleri(kapsam: readonly KapsamGirdisi[]): string[] {
+  const isaretsiz = new Set<string>();
+  let departmansiz = 0;
+  for (const k of kapsam) {
+    if (k.departmanNo === null || k.departmanIptal === true) departmansiz += 1;
+    else if (k.dogrudan === null) isaretsiz.add(k.departmanAd ?? String(k.departmanNo));
+  }
+  return [
+    ...[...isaretsiz].sort((a, b) => a.localeCompare(b, 'tr')).map((ad) => `işaretlenmemiş departman: ${ad}`),
+    ...(departmansiz > 0 ? [`departmanı olmayan ${String(departmansiz)} kişi`] : []),
+  ];
+}
+const sinifta = (k: KapsamGirdisi, dogrudan: boolean): boolean => k.departmanNo !== null && k.departmanIptal !== true && k.dogrudan === dogrudan;
+
+// IK-88 (2647 a, 2596 2/2 a): dolaylı personel = dolaylı (işareti Hayır) departmanlardaki kişilerin ayın işveren maliyeti toplamı.
+// Bilinmezlik varsa tutar null, nedeni eksik'te. kucuk birleşik kişi sayısına (2603 a, 2652 a); gizleme çağıranındır.
+export function dolayliPersonel(kapsam: readonly KapsamGirdisi[], p: Parametreler, ayBasi: string, aySonu: string, esik = KUCUK_GRUP_ESIGI): PersonelToplami {
+  const eksik = siniflandirmaEksikleri(kapsam);
+  const kisiler = kapsam.filter((k) => sinifta(k, false));
+  let toplam = 0;
+  let bilinmeyen = 0;
+  for (const k of kisiler) {
+    const m = aylikIsverenMaliyeti(k, p, ayBasi, aySonu);
+    if (m === null) bilinmeyen += 1;
+    else toplam += m;
+  }
+  if (bilinmeyen > 0) eksik.push(`maaşı bilinmeyen ${String(bilinmeyen)} kişi`);
+  return { tutar: eksik.length > 0 ? null : kurus(toplam), kisiSayisi: kisiler.length, kucuk: kisiler.length < esik, eksik };
+}
+
+// 2706 a (Güvenlik 2647 K2): emilen tutarda küçük grup kendi değeriyle değil IK-87 havuz değeriyle çarpılır; aksi hâlde katılım
+// değiştirilip emilmeyen farkı alınarak tek kişilik departmanın kişi değeri çıkar. Havuz yoksa (3 kişiden az) değer bilinmez.
+export function emilimDegerleri(gruplar: readonly GrupDegeri[], havuz: HavuzDegeri | null): Map<number, number | null> {
+  return new Map(gruplar.map((g) => [g.departmanNo, g.kucuk ? havuz?.deger ?? null : g.saatMaliyeti]));
+}
+
+// IK-89 (2659, 2656 a): doğrudan işçilikte emilmeyen = doğrudan departmanlardaki kişilerin ayın işveren maliyeti toplamı - toplam(kişinin
+// ayın katılım saati x kendi departmanının grup saat değeri). Grup değeri `emilimDegerleri`'nden gelir (küçük grupta havuz, 2706 a). Kişi bağı (kisi_id) olmayanın
+// katılımı yoktur, maliyetinin tamamı girer. Eksi olabilir (fazla emilim), kırpılmaz. Yuvarlama en sonda bir kez (Veri 3).
+// katilimSaati null: katılım kaynağı bağlı değil.
+export function dogrudanEmilmeyen(
+  kapsam: readonly KapsamGirdisi[], p: Parametreler, ayBasi: string, aySonu: string,
+  katilimSaati: ReadonlyMap<number, number> | null, grupDegeri: ReadonlyMap<number, number | null>, esik = KUCUK_GRUP_ESIGI,
+): PersonelToplami {
+  const eksik = siniflandirmaEksikleri(kapsam);
+  if (katilimSaati === null) eksik.push('katılım kaynağı yok');
+  const kisiler = kapsam.filter((k) => sinifta(k, true));
+  let maliyet = 0;
+  let emilen = 0;
+  let maassiz = 0;
+  let degersiz = 0;
+  for (const k of kisiler) {
+    const m = aylikIsverenMaliyeti(k, p, ayBasi, aySonu);
+    if (m === null) maassiz += 1;
+    else maliyet += m;
+    const saat = k.kisiId === null ? 0 : katilimSaati?.get(k.kisiId) ?? 0;
+    if (saat <= 0) continue;
+    const deger = grupDegeri.get(k.departmanNo!) ?? null;
+    if (deger === null) degersiz += 1;
+    else emilen += saat * deger;
+  }
+  if (maassiz > 0) eksik.push(`maaşı bilinmeyen ${String(maassiz)} kişi`);
+  if (degersiz > 0) eksik.push(`grup saat değeri bilinmeyen ${String(degersiz)} kişi`);
+  return { tutar: eksik.length > 0 ? null : kurus(maliyet - emilen), kisiSayisi: kisiler.length, kucuk: kisiler.length < esik, eksik };
+}

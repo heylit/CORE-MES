@@ -67,3 +67,8 @@ export type { GrupDegeri, KisiGrupDegeri } from './saat-maliyeti/servis.ts';
 // IK-87 (2653, 2657 a): küçük grupların tek havuz değeri, YALNIZ SUNUCU İÇİ TOPLAM İÇİN (cevaba konmaz); havuz 3 kişiden azsa null.
 export { kucukGrupHavuzuYalnizHesapIcin } from './saat-maliyeti/servis.ts';
 export type { HavuzDegeri } from './saat-maliyeti/servis.ts';
+// IK-88 (2647 a) ve IK-89 (2659): genel gider personel bileşenleri; yalnız toplam, kişi değeri ve brüt dışarı çıkmaz. Ay "YYYY-MM".
+// Ekran işlevleri küçük birleşik grupta (3 kişiden az) tutarı null verir; `...YalnizHesapIcin` gerçek tutarı yalnız sunucu içi toplam için
+// verir (cevaba ayrı alan olarak konmaz). Katılım kaynağını kablolama verir (uretim-emirleri katilimSureleri). Yetki denetlemez.
+export { dogrudanEmilmeyenToplami, dogrudanEmilmeyenToplamiYalnizHesapIcin, dolayliPersonelToplami, dolayliPersonelToplamiYalnizHesapIcin } from './saat-maliyeti/servis.ts';
+export type { KatilimKaynagi, PersonelToplami } from './saat-maliyeti/servis.ts';

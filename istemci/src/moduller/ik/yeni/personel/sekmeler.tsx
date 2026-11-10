@@ -58,6 +58,7 @@ function deger(f: FormAlani, p: Personel, o: IkEkranOzellikleri): ReactNode {
     case 'ismerkezi': { const m = o.depo.ben.secenekler.isMerkezleri.find((x) => x.id === Number(v)); return m ? m.ad : `İş merkezi ${String(v)}`; }
     case 'tmikisi': { const k = o.depo.ben.secenekler.kisiler.find((x) => x.id === Number(v)); return k ? k.ad + (k.sicilNo ? ` (${k.sicilNo})` : '') : `Kullanıcı ${String(v)}`; }
     case 'isaret': return v ? <Rozet ton="tamam">Evet</Rozet> : 'Hayır';
+    case 'evetHayir': return v === true ? 'Evet' : v === false ? 'Hayır' : null;
     case 'tesvik': return o.motor?.tesvikById(String(v))?.ad ?? null;
     case 'primler': return null;
     case 'cok': case 'eposta': case 'metin': case 'sayi': case 'secim': case 'tckn': case 'tel': case undefined:

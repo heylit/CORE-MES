@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { ayAraligi, girdiSaatMaliyeti, grupDegerleri, isverenMaliyeti, kisiSaatMaliyeti, KUCUK_GRUP_ESIGI, kucukGrupHavuzu } from './kurallar.ts';
+import {
+  ayAraligi, aylikIsverenMaliyeti, calisilanGun, dogrudanEmilmeyen, dolayliPersonel, emilimDegerleri, girdiSaatMaliyeti, grupDegerleri, isverenMaliyeti, kisiSaatMaliyeti,
+  KUCUK_GRUP_ESIGI, kucukGrupHavuzu, type KapsamGirdisi,
+} from './kurallar.ts';
 
 const p = { sgkIsverenOrani: 20, issizlikIsverenOrani: 2, sgkTavani: 150000, aylikSaat: 220 };
 
@@ -66,4 +69,82 @@ test('IK-87: küçük grupların sayılan kişileri tek havuzda saatle ağırlı
   assert.equal(kucukGrupHavuzu([...buyuk, g(4, 2, 22000, 10), g(5, 2, 44000, 30)], p), null);
   assert.equal(kucukGrupHavuzu(buyuk, p), null);
   assert.equal(kucukGrupHavuzu(kucukler, { ...p, aylikSaat: null }), null);
+});
+
+// 2026-11: 30 günlük ay. Adlar ve tutarlar uydurmadır.
+const AB = '2026-11-01', AS = '2026-11-30';
+const k = (o: Partial<KapsamGirdisi> & { personelNo: number }): KapsamGirdisi => ({
+  kisiId: null, departmanNo: 1, departmanAd: 'Dolayli', departmanIptal: false, dogrudan: false, brut: 22000, iseGiris: null, cikis: null, bordroMaliyeti: null, ...o,
+});
+
+test('IK-88 (Maliyet C1): çalışılan gün işe giriş ve çıkışa göre, bütün ay 30; formül brütü ve SGK tavanı gün oranlı; bordro varsa bordro', () => {
+  assert.equal(calisilanGun(null, null, AB, AS), 30);
+  assert.equal(calisilanGun(null, null, '2026-10-01', '2026-10-31'), 30);
+  assert.equal(calisilanGun('2026-11-16', null, AB, AS), 15);
+  assert.equal(calisilanGun(null, '2026-11-10', AB, AS), 10);
+  assert.equal(calisilanGun('2026-10-16', '2026-11-03', AB, AS), 3);
+  assert.equal(calisilanGun('2026-12-01', null, AB, AS), 0);
+  // Ayın 16'sında giren: maliyet yarı (26.840 / 2).
+  assert.equal(aylikIsverenMaliyeti(k({ personelNo: 1, iseGiris: '2026-11-16' }), p, AB, AS), 13420);
+  // Tavan da gün oranlı: brüt 200.000, yarım ay -> brüt 100.000, tavan 75.000: 100.000 + 75.000 x 0,22 = 116.500.
+  assert.equal(aylikIsverenMaliyeti(k({ personelNo: 1, brut: 200000, iseGiris: '2026-11-16' }), p, AB, AS), 116500);
+  assert.equal(aylikIsverenMaliyeti(k({ personelNo: 1, bordroMaliyeti: 31000, iseGiris: '2026-11-16' }), p, AB, AS), 31000);
+  assert.equal(aylikIsverenMaliyeti(k({ personelNo: 1, brut: null }), p, AB, AS), null);
+  assert.equal(aylikIsverenMaliyeti(k({ personelNo: 1 }), { ...p, sgkTavani: null }, AB, AS), null);
+});
+
+test('IK-88 (2647 a): dolaylı personel yalnız dolaylı departmanların toplamı; doğrudan girmez; bordro ve formül karışık; küçük grup bayrağı', () => {
+  const kapsam = [
+    k({ personelNo: 1 }), k({ personelNo: 2, bordroMaliyeti: 30000.004 }), k({ personelNo: 3, iseGiris: '2026-11-16' }),
+    k({ personelNo: 4, departmanNo: 2, departmanAd: 'Uretim', dogrudan: true, brut: 99999 }),
+  ];
+  assert.deepEqual(dolayliPersonel(kapsam, p, AB, AS), { tutar: 26840 + 30000 + 13420, kisiSayisi: 3, kucuk: false, eksik: [] });
+  assert.deepEqual(dolayliPersonel(kapsam.slice(0, 2), p, AB, AS), { tutar: 56840, kisiSayisi: 2, kucuk: true, eksik: [] });
+  assert.equal(KUCUK_GRUP_ESIGI, 3);
+});
+
+test('IK-88: işaretlenmemiş departman, departmansız ya da iptal departmandaki kişi ve maaşı bilinmeyen kişi tutarı null yapar; ad yalnız departmanın', () => {
+  const temel = [k({ personelNo: 1 }), k({ personelNo: 2 }), k({ personelNo: 3 })];
+  const isaretsiz = dolayliPersonel([...temel, k({ personelNo: 4, departmanNo: 3, departmanAd: 'Kalite', dogrudan: null })], p, AB, AS);
+  assert.deepEqual(isaretsiz, { tutar: null, kisiSayisi: 3, kucuk: false, eksik: ['işaretlenmemiş departman: Kalite'] });
+  const departmansiz = dolayliPersonel([...temel, k({ personelNo: 5, departmanNo: null, departmanAd: null, dogrudan: null }), k({ personelNo: 6, departmanIptal: true })], p, AB, AS);
+  assert.deepEqual(departmansiz.eksik, ['departmanı olmayan 2 kişi']);
+  assert.equal(departmansiz.tutar, null);
+  const maassiz = dolayliPersonel([...temel, k({ personelNo: 7, brut: null })], p, AB, AS);
+  assert.deepEqual(maassiz, { tutar: null, kisiSayisi: 4, kucuk: false, eksik: ['maaşı bilinmeyen 1 kişi'] });
+});
+
+test('IK-89 (2659): emilmeyen = doğrudan maliyet - katılım saati x grup değeri; bağsız kişinin tamamı girer; eksi korunur; yuvarlama sonda', () => {
+  const d = (o: Partial<KapsamGirdisi> & { personelNo: number }) => k({ departmanNo: 2, departmanAd: 'Uretim', dogrudan: true, ...o });
+  const kapsam = [d({ personelNo: 1, kisiId: 11 }), d({ personelNo: 2, kisiId: 12, bordroMaliyeti: 30000 }), d({ personelNo: 3 }), k({ personelNo: 4, kisiId: 14 })];
+  const grup = new Map([[2, 122.3333]]);
+  // 26.840 + 30.000 + 26.840 - (150 + 100) x 122,3333 = 83.680 - 30.583,325 = 53.096,675 -> 53.096,68 (kişi başı yuvarlanmaz).
+  const saat = new Map([[11, 150], [12, 100], [14, 500]]);
+  assert.deepEqual(dogrudanEmilmeyen(kapsam, p, AB, AS, saat, grup), { tutar: 53096.68, kisiSayisi: 3, kucuk: false, eksik: [] });
+  // Fazla emilim (Maliyet 2): katılım ödenen saati aşarsa eksi.
+  assert.equal(dogrudanEmilmeyen(kapsam, p, AB, AS, new Map([[11, 400], [12, 400]]), grup).tutar, Math.round((83680 - 800 * 122.3333) * 100) / 100);
+  assert.ok(dogrudanEmilmeyen(kapsam, p, AB, AS, new Map([[11, 400], [12, 400]]), grup).tutar! < 0);
+  // Tam emilim sıfır verir, eksi sıfır değil.
+  assert.ok(Object.is(dogrudanEmilmeyen([d({ personelNo: 9, kisiId: 19 })], p, AB, AS, new Map([[19, 220]]), new Map([[2, 122]])).tutar, 0));
+  // Katılımı olmayan doğrudan kişi: maliyetin tamamı.
+  assert.equal(dogrudanEmilmeyen(kapsam, p, AB, AS, new Map(), grup).tutar, 83680);
+});
+
+test('IK-89: katılım kaynağı yok, grup değeri bilinmeyen katılımlı kişi, işaretsiz departman null; küçük birleşik doğrudan grup bayrağı', () => {
+  const d = (o: Partial<KapsamGirdisi> & { personelNo: number }) => k({ departmanNo: 2, departmanAd: 'Uretim', dogrudan: true, ...o });
+  const kapsam = [d({ personelNo: 1, kisiId: 11 }), d({ personelNo: 2, kisiId: 12 })];
+  assert.deepEqual(dogrudanEmilmeyen(kapsam, p, AB, AS, null, new Map([[2, 100]])), { tutar: null, kisiSayisi: 2, kucuk: true, eksik: ['katılım kaynağı yok'] });
+  assert.deepEqual(dogrudanEmilmeyen(kapsam, p, AB, AS, new Map([[11, 10]]), new Map([[2, null]])).eksik, ['grup saat değeri bilinmeyen 1 kişi']);
+  // Katılımsız kişi için grup değeri gerekmez.
+  assert.equal(dogrudanEmilmeyen(kapsam, p, AB, AS, new Map(), new Map()).tutar, 53680);
+  const isaretsiz = dogrudanEmilmeyen([...kapsam, d({ personelNo: 3, departmanNo: 5, departmanAd: 'Bakim', dogrudan: null })], p, AB, AS, new Map(), new Map());
+  assert.deepEqual(isaretsiz.eksik, ['işaretlenmemiş departman: Bakim']);
+  assert.equal(isaretsiz.tutar, null);
+});
+
+test('2706 a: emilim değeri büyük grupta kendi değeri, küçük grupta IK-87 havuzu; havuz yoksa bilinmez', () => {
+  const g = (departmanNo: number, saatMaliyeti: number | null, kucuk: boolean) => ({ departmanNo, departmanAd: 'D', saatMaliyeti, kisiSayisi: kucuk ? 1 : 3, kucuk });
+  const gruplar = [g(1, 122, false), g(2, 244, true), g(3, null, false)];
+  assert.deepEqual([...emilimDegerleri(gruplar, { deger: 162.6667, kisiSayisi: 3 })], [[1, 122], [2, 162.6667], [3, null]]);
+  assert.deepEqual([...emilimDegerleri(gruplar, null)], [[1, 122], [2, null], [3, null]]);
 });
