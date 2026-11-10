@@ -37,3 +37,8 @@ Taban: main 06144ea. Başvuru: kullanıcı kararları 194 a, 197 a, 198 a, 199 a
 - Defter: dondurulan satırın `ucretler.genelGider.gizli` alanı okunur; gizlilik dondurma anındakidir. VARSAYIM; geri alma düşük.
 - Göç `20261110003323_proje_maliyet_taban_genel_gider_gizli.sql` (Veri 2663): varsayılanlı boolean, veri dönüşmez. Taban gerçek değerle saklanır, okumada plan ve genel gider kalemi gizli.
 - İstemci: "Gizli" bayraktan gelir (`gizli.ts` `gizliVeyaDeger`), açıklama satırı bilgi rozetli ve kilit simgeli; haftalık birikim yerine boş durum metni; kalem kırılımında not (Arayüz K1-K6).
+
+## 2720-2 (2613 2/2): gerçekleşen malzeme sipariş fiyatıyla
+- Gerçekleşen malzeme (PM-27) birim fiyatını emrin, yoksa projenin bağlı satın alma siparişinden alır (`satin-alma/disari.ts` `siparisBirimFiyatlari`, 2720-1); bağlı sipariş yoksa bugünkü liste kg fiyatı (2613-3 açık). Plan ve talaş kg fiyatı değişmedi. Saf kural `gercekBilesenFiyatlari` (PM-51).
+- Miktar emre çıkan net sarftır; siparişin tamamı yazılmaz (artan mal stokta kalır, 2637 a ile çift sayılmaz). VARSAYIM (Maliyet okuması); geri alma orta.
+- Göç, uç, sözleşme ve eksik kodu değişmedi.

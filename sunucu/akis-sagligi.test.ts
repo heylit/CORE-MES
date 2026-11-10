@@ -527,7 +527,10 @@ describe('akış sağlığı: modüller arası uçtan uca senaryo, gerçek rolle
     const mud = tamam(await oku<ProjeMaliyet>('mudur', `/proje-maliyet/${S.proje}`));
     assert.equal(mud.fiyatGorunur, true);
     assert.equal(Number(mud.gelir), 2500);
-    assert.deepEqual(mud.kalemler.filter((k) => k.gerceklesen !== null).map((k) => k.kalem), ['fason']);
+    // 2613 2/2 (PM-51): emre sarf edilen hammadde emre bağlı siparişin fiyatıyla: 10 x 40 (siparişin tamamı 50 değil). Kartın liste kg
+    // fiyatı yok, plan bilinmez.
+    assert.deepEqual(mud.kalemler.filter((k) => k.gerceklesen !== null).map((k) => [k.kalem, k.gerceklesen]), [['malzeme', 400], ['fason', 0]]);
+    assert.equal(mud.kalemler.find((k) => k.kalem === 'malzeme')?.plan, null);
     // Kalemler eksikken katkı payı hesaplanmaz (veri yoksa null).
     assert.equal(mud.katkiPayi, null);
     yasak(await oku('planlama', `/proje-maliyet/${S.proje}`));
