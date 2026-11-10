@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import type { PlanSurumCevabi, SenaryolarCevabi } from '#paylasilan/sozlesme/plan.ts';
-import { bayatEmirBittiYansit, bayatIsEmirleriDegistiYansit, planBayatligi } from '../disari.ts';
+import { bayatEmirBittiYansit, bayatEmirIptalYansit, bayatIsEmirleriDegistiYansit, planBayatligi } from '../disari.ts';
 import { kullaniciYukle } from '../../kisiler/disari.ts';
-import { emirBaslat, emirBitir } from '../../uretim-emirleri/disari.ts';
+import { emirBaslat, emirBitir, emirIptalEt } from '../../uretim-emirleri/disari.ts';
 import { planTestOrtami } from '../plan-ortak.test.ts';
 import { isaretYaz } from './servis.ts';
 import * as s from './sorgular.ts';
@@ -176,5 +176,40 @@ describe('plan (gerçek PostgreSQL): canlı plan bayat işareti', () => {
     assert.equal((await bayatlik()).sayilar['rota-degisti'], 0, 'canlıya alma sıfırlar');
     await yansit(e7);
     assert.equal((await say(e7))?.n, 2, 'yeni canlı sürümde yeniden yazılır');
+  });
+  // 2732: iptal ya da arşiv (ikisi de iptal olayını yayar) canlıdaki emrin yerini boşaltır. Canlıdaki emir işaretlenir, ikinci yazım tek satır kalır;
+  // canlıda olmayan emir işaretlenmez. Gerçek iptal komutu kayıtlı dinleyiciyle işaret yazar.
+  test('BY-10 (2732): iptal edilen canlı emir emir-iptal işaretler; canlıda olmayan yazmaz; tekrar yazılmaz', async () => {
+    const [i9] = await isEmirleriAc([yeniAdim()]);
+    const p = await taslaktaOner();
+    const o = (await tamam<SenaryolarCevabi>(c.planlama, 'POST', `/plan/senaryolar/${p.taslak!.id}/onaya-gonder`, { surum: p.taslak!.surum }))
+      .senaryolar.find((x) => x.id === p.taslak!.id)!;
+    await tamam(c.mudur, 'POST', `/plan/senaryolar/${o.id}/canliya-al`, { surum: o.surum, cakismalariKabul: true });
+    const e9 = await emriOf(i9!);
+    const [i10] = await isEmirleriAc([yeniAdim()]);
+    const e10 = await emriOf(i10!);
+    const say = (id: number) => vt().tx((db) => db.tek<{ n: number }>("SELECT count(*)::int AS n FROM plan_bayat_olayi WHERE neden = 'emir-iptal' AND uretim_emri_id = $1", [id]));
+    await vt().tx((db) => bayatEmirIptalYansit(db, { uretimEmriId: e9 }));
+    await vt().tx((db) => bayatEmirIptalYansit(db, { uretimEmriId: e9 }));
+    await vt().tx((db) => bayatEmirIptalYansit(db, { uretimEmriId: e10 }));
+    assert.equal((await say(e9))?.n, 1, 'aynı emir bir satır');
+    assert.equal((await say(e10))?.n, 0, 'canlıda olmayan emir');
+    const b = await bayatlik();
+    assert.equal(b.bayat, true);
+    assert.equal(b.sayilar['emir-iptal'], 1);
+    assert.ok(b.olaylar.some((x) => x.neden === 'emir-iptal' && x.emirNo !== null));
+  });
+
+  test('BY-11 (2732): emirIptalEt ile iptal edilen canlı emir kablodan emir-iptal işaretler', async () => {
+    const [i11] = await isEmirleriAc([yeniAdim()]);
+    const p = await taslaktaOner();
+    const o = (await tamam<SenaryolarCevabi>(c.planlama, 'POST', `/plan/senaryolar/${p.taslak!.id}/onaya-gonder`, { surum: p.taslak!.surum }))
+      .senaryolar.find((x) => x.id === p.taslak!.id)!;
+    await tamam(c.mudur, 'POST', `/plan/senaryolar/${o.id}/canliya-al`, { surum: o.surum, cakismalariKabul: true });
+    const e11 = await emriOf(i11!);
+    await vt().tx(async (db) => { await emirIptalEt(db, (await kullaniciYukle(db, durum().yoneticiId))!, e11); });
+    const n = await vt().tx((db) => db.tek<{ n: number }>("SELECT count(*)::int AS n FROM plan_bayat_olayi WHERE neden = 'emir-iptal' AND uretim_emri_id = $1", [e11]));
+    assert.equal(n?.n, 1);
+    assert.equal((await bayatlik()).sayilar['emir-iptal'], 1);
   });
 });

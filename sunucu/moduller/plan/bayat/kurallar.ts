@@ -3,8 +3,9 @@
 // Hangi olay sayılır (VARSAYIM, 2319): emir bitti, emrin canlıda o andan sonra biten satırı varken (plan hâlâ ona yer ayırıyor, erken bitti);
 // fason dönüşü, emir canlıdaysa; makine duruşu, makine arıza ya da bakıma son canlıya almadan sonra geçmiş ve canlıda bitmemiş işi varsa.
 // rota-degisti (2327-1 a): emrin adımı eklendi ya da değişti ve emir canlıdaysa; olayı uretim-emirleri yayınlar (2319d).
+// emir-iptal (2732): emir iptal edildi ya da arşive alındı ve emir canlıdaysa; plan iptal emrin yerini ayırmaz, tezgâhta boşluk kalır.
 
-export const BAYAT_NEDENLERI = ['emir-bitti', 'fason-donusu', 'durus', 'rota-degisti'] as const;
+export const BAYAT_NEDENLERI = ['emir-bitti', 'fason-donusu', 'durus', 'rota-degisti', 'emir-iptal'] as const;
 export type BayatNedeni = (typeof BAYAT_NEDENLERI)[number];
 export const BAYAT_OLAY_EN_COK = 20;
 
@@ -25,7 +26,7 @@ export interface PlanBayatligi {
 }
 
 export function bayatOzeti(sonCanliyaAlma: string | null, olaylar: readonly BayatOlayi[]): PlanBayatligi {
-  const sayilar: Record<BayatNedeni, number> = { 'emir-bitti': 0, 'fason-donusu': 0, durus: 0, 'rota-degisti': 0 };
+  const sayilar: Record<BayatNedeni, number> = { 'emir-bitti': 0, 'fason-donusu': 0, durus: 0, 'rota-degisti': 0, 'emir-iptal': 0 };
   const gecerli = sonCanliyaAlma === null ? [] : olaylar.filter((o) => Date.parse(o.zaman) > Date.parse(sonCanliyaAlma));
   for (const o of gecerli) sayilar[o.neden] += 1;
   const sirali = [...gecerli].sort((a, b) => Date.parse(b.zaman) - Date.parse(a.zaman));

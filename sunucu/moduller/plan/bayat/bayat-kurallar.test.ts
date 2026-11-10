@@ -8,13 +8,13 @@ const SON = '2026-11-08T08:00:00.000Z';
 
 describe('plan bayat kuralları', () => {
   test('BK-01: canlı plan yoksa bayat değildir; olay sayılmaz', () => {
-    assert.deepEqual(bayatOzeti(null, [olay('emir-bitti', '2026-11-08T09:00:00Z')]), { bayat: false, sonCanliyaAlma: null, sayilar: { 'emir-bitti': 0, 'fason-donusu': 0, durus: 0, 'rota-degisti': 0 }, olaylar: [] });
+    assert.deepEqual(bayatOzeti(null, [olay('emir-bitti', '2026-11-08T09:00:00Z')]), { bayat: false, sonCanliyaAlma: null, sayilar: { 'emir-bitti': 0, 'fason-donusu': 0, durus: 0, 'rota-degisti': 0, 'emir-iptal': 0 }, olaylar: [] });
   });
 
   test('BK-02: yalnız son canlıya almadan sonraki olaylar sayılır, yeniden eskiye', () => {
     const o = bayatOzeti(SON, [olay('emir-bitti', '2026-11-08T07:59:00Z'), olay('durus', '2026-11-08T09:00:00Z'), olay('fason-donusu', '2026-11-08T10:00:00Z')]);
     assert.equal(o.bayat, true);
-    assert.deepEqual(o.sayilar, { 'emir-bitti': 0, 'fason-donusu': 1, durus: 1, 'rota-degisti': 0 });
+    assert.deepEqual(o.sayilar, { 'emir-bitti': 0, 'fason-donusu': 1, durus: 1, 'rota-degisti': 0, 'emir-iptal': 0 });
     assert.deepEqual(o.olaylar.map((x) => x.neden), ['fason-donusu', 'durus']);
   });
 

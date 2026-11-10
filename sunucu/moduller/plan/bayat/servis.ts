@@ -44,6 +44,13 @@ export async function isEmirleriDegistiYansit(db: Db, olay: { uretimEmriId: numb
   });
 }
 
+// 2732: emir iptal edildi ya da arşive alındı (ikisi de iptal olayını yayar) ve canlıdaysa işaret. Emir bir kez iptal olur: kaynak yok.
+export async function emirIptalYansit(db: Db, olay: { uretimEmriId: number }): Promise<void> {
+  await isaretYaz(db, async () => {
+    if (await s.canlidaVar(db, await isEmirleri(db, olay.uretimEmriId))) await s.olayYaz(db, 'emir-iptal', olay.uretimEmriId, null);
+  });
+}
+
 export async function planBayatligi(db: Db, simdi: number = Date.now()): Promise<PlanBayatligi> {
   const son = await sonCanliyaAlma(db);
   if (son === null) return bayatOzeti(null, []);
