@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import {
   ADIM_SECILMELI, ISTASYON_DOLU, MAKINEDE_AYNI_IS, MAKINE_DOLU, adimEksigi, adimEksikleri, baslatilabilirAdimlar, eksiyleBitirmeUyarisi, emirEksiUyarisi,
-  makineDoluIhlali, oncekiBitmediIhlali, oncekiParalelAdim, sayimAsimiUyarisi, siraDisiBaslatmaUyarisi, uyarilariBirlestir, varsayilanAdim,
+  makineDoluIhlali, oncekiBitmediIhlali, oncekiParalelAdim, sayimAsimiUyarisi, siraDisiBaslatmalar, siraDisiBaslatmaUyarisi, uyarilariBirlestir, varsayilanAdim,
 } from './kurallar.ts';
 import type { EksikAdimi, ParalelAdim } from './kurallar.ts';
 
@@ -38,6 +38,11 @@ describe('paralel adım kuralları (kart 639)', () => {
     assert.equal(siraDisiBaslatmaUyarisi(bagimsiz, bagimsiz[1]!, 0), null);
     const bitti = [adim(1, { durum: 'tamam' }), adim(2)];
     assert.equal(siraDisiBaslatmaUyarisi(bitti, bitti[1]!, 0), null);
+    // 2768: kayıt ve uyarı aynı koşuldan; kayıt öncülü, gelen (hazır) ve sayılanı taşır.
+    assert.deepEqual(siraDisiBaslatmalar(akisli, akisli[1]!, 4).map((x) => [x.onceki.id, x.tur, x.devirAdedi, x.gelen, x.sayilan]), [[100, 'akisli', 5, 4, 4]]);
+    assert.deepEqual(siraDisiBaslatmalar(akisli, akisli[1]!, 5), []);
+    assert.deepEqual(siraDisiBaslatmalar(bekleyen, bekleyen[1]!, 50).map((x) => [x.tur, x.gelen, x.sayilan]), [['bekleyen', 50, 50]]);
+    assert.deepEqual(siraDisiBaslatmalar(bitti, bitti[1]!, 0), []);
   });
 
   test('başlatılabilir adımlar: bekleyen, istasyonlu, fason olmayan ve uyarısız olanlar', () => {

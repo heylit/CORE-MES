@@ -15,7 +15,7 @@ import { denetimYaz } from '../denetim/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { kullaniciYukle, rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
-import { acikEmir, emirBaslat, emirBitir, emirDevam, emirDilimi, emirDuraklat, emirSayim, kararliSayimiSonuclandir, uretimEmriAc } from './disari.ts';
+import { acikEmir, emirBaslat, emirBitir, emirDevam, emirDilimi, emirDuraklat, emirSayim, katil, kararliSayimiSonuclandir, uretimEmriAc } from './disari.ts';
 import type { IsEmriGirdisi } from './disari.ts';
 import { ADIM_ACIK_DEGIL, ADIM_BASLAMIS, ADIM_SECILMELI, IS_EMRI_YOK, MAKINE_DOLU } from './kurallar.ts';
 
@@ -181,6 +181,59 @@ describe('uretim-emirleri paralel adım (kart 639, gerçek PostgreSQL)', () => {
     assert.equal(son.uyari, null);
   });
 
+  const siraDisiKayitlari = (id: number) => o().sahip.sorgu<Record<string, unknown>>(
+    `SELECT is_emri_id, oncul_is_emri_id, oncul_turu, devir_adedi, hazir_adet, oncul_sayilan, kisi_id
+       FROM uretim_emirleri_sira_disi_baslatma WHERE uretim_emri_id = $1 ORDER BY id`, [id]);
+
+  test('2768: akışlı öncülde devir adedi gelmeden başlatma iz bırakır, gelince bırakmaz; duraklamadan dönüş yeniden yazmaz', async () => {
+    const a = await makineliIstasyon();
+    const b = await makineliIstasyon();
+    const { id, adimlar: [ie1, ie2] } = await ac([adim(1, a.makine), adim(2, b.makine, { bagimlilik: 'akisli', devirAdedi: 2 })]) as { id: number; adimlar: [number, number] };
+    await tx((db) => emirBaslat(db, op(), id));
+    await sayim(id, 1, ie1);
+    await ilkParcaOnay(id);
+    const r = await tx((db) => emirBaslat(db, op(), id, undefined, undefined, ie2));
+    assert.match(r.uyari ?? '', /devir adedi \(2\) gelmeden OP 20 başlatıldı; gelen 1/);
+    const beklenen = [{ is_emri_id: ie2, oncul_is_emri_id: ie1, oncul_turu: 'akisli', devir_adedi: 2, hazir_adet: 1, oncul_sayilan: 1, kisi_id: op().id }];
+    assert.deepEqual(await siraDisiKayitlari(id), beklenen);
+    await tx((db) => emirDuraklat(db, op(), id, undefined, ie2));
+    await tx((db) => emirDevam(db, op(), id, undefined, undefined, ie2));
+    assert.deepEqual(await siraDisiKayitlari(id), beklenen, 'duraklamadan dönüş ilk başlatma değildir');
+    const c = await makineliIstasyon();
+    const d = await makineliIstasyon();
+    const tam = await ac([adim(1, c.makine), adim(2, d.makine, { bagimlilik: 'akisli', devirAdedi: 1 })]) as { id: number; adimlar: [number, number] };
+    await tx((db) => emirBaslat(db, op(), tam.id));
+    await sayim(tam.id, 1, tam.adimlar[0]);
+    await ilkParcaOnay(tam.id);
+    assert.equal((await tx((db) => emirBaslat(db, op(), tam.id, undefined, undefined, tam.adimlar[1]))).uyari, null);
+    assert.deepEqual(await siraDisiKayitlari(tam.id), [], 'devir adedi gelmişse iz yok');
+    await assert.rejects(o().sahip.sorgu('UPDATE uretim_emirleri_sira_disi_baslatma SET hazir_adet = 9 WHERE uretim_emri_id = $1', [id]), 'yalnız eklenir');
+  });
+
+  test('2768: hazır adet öncülden gelendir (çarpanlı öncülde sayılandan ayrı); başlamış adım yeniden başlatılamaz, ikinci kişinin katılımı yeni iz yazmaz', async () => {
+    const a = await makineliIstasyon();
+    const b = await makineliIstasyon();
+    const { id, adimlar: [ie1, ie2] } = await ac([adim(1, a.makine), adim(2, b.makine, { bagimlilik: 'akisli', devirAdedi: 2 })]) as { id: number; adimlar: [number, number] };
+    // Dallı rota: öncül A dalında mamul başına 2 parça işler; 3 sağlam ana hattaki adıma 1 adet verir.
+    await o().sahip.sorgu("INSERT INTO uretim_emirleri_is_emri_dali (is_emri_id, dal, adet_carpani) VALUES ($1, 'A', 2), ($2, NULL, NULL)", [ie1, ie2]);
+    await o().sahip.sorgu("INSERT INTO uretim_emirleri_is_emri_onculu (is_emri_id, oncul_is_emri_id, tur, devir_adedi) VALUES ($1, $2, 'akisli', 2)", [ie2, ie1]);
+    await tx((db) => emirBaslat(db, op(), id));
+    await sayim(id, 1, ie1);
+    await ilkParcaOnay(id);
+    await sayim(id, 2, ie1);
+    const r = await tx((db) => emirBaslat(db, op(), id, undefined, undefined, ie2));
+    assert.match(r.uyari ?? '', /devir adedi \(2\) gelmeden OP 20 başlatıldı; gelen 1/);
+    const beklenen = [{ is_emri_id: ie2, oncul_is_emri_id: ie1, oncul_turu: 'akisli', devir_adedi: 2, hazir_adet: 1, oncul_sayilan: 3, kisi_id: op().id }];
+    assert.deepEqual(await siraDisiKayitlari(id), beklenen, 'hazır adet gelen (1), öncül sayılan (3)');
+    await red(tx((db) => emirBaslat(db, kim('operator2'), id, undefined, undefined, ie2)), ADIM_BASLAMIS);
+    const ekip = (await o().sahip.tek<{ id: number }>("INSERT INTO ekip (kod, ad, istasyon_id) VALUES ('PAEK1', 'Deneme ekibi', $1) RETURNING id", [b.ist]))!.id;
+    await o().sahip.sorgu('INSERT INTO ekip_uye (ekip_id, kisi_id, baslangic, yuzde) VALUES ($1, $2, current_date, 10)', [ekip, kim('operator2').id]);
+    await tx((db) => katil(db, kim('operator2'), id, undefined, ie2));
+    const katilim = await o().sahip.sorgu<{ kisi_id: number }>('SELECT kisi_id FROM uretim_emirleri_katilim WHERE is_emri_id = $1 AND cikis IS NULL ORDER BY kisi_id', [ie2]);
+    assert.deepEqual(katilim.map((k) => k.kisi_id), [op().id, kim('operator2').id].sort((x, y) => x - y), 'ikinci kişi adıma katıldı');
+    assert.deepEqual(await siraDisiKayitlari(id), beklenen, 'başlamış adıma katılım ilk başlatma değildir');
+  });
+
   test('bekleyen adım sıra dışı uyarıyla başlar; aynı kişi iki adımda katılımlıdır; adım verilen komut çalışmayan adımda reddedilir', async () => {
     const a = await makineliIstasyon();
     const b = await makineliIstasyon();
@@ -190,6 +243,8 @@ describe('uretim-emirleri paralel adım (kart 639, gerçek PostgreSQL)', () => {
     assert.deepEqual((await tx((db) => acikEmir(db, id)))!.baslatilabilirAdimlar, [], 'bekleyen adım önceki bitmeden kuralı tutmaz');
     const ikinci = await tx((db) => emirBaslat(db, op(), id, undefined, undefined, ie2));
     assert.equal(ikinci.uyari, 'OP 10 bitmeden OP 20 başlatıldı.');
+    assert.deepEqual(await siraDisiKayitlari(id), [{ is_emri_id: ie2, oncul_is_emri_id: ie1, oncul_turu: 'bekleyen', devir_adedi: null, hazir_adet: 0, oncul_sayilan: 0, kisi_id: op().id }],
+      '2768: sıra dışı başlatma öncül başına iz bırakır');
     const acik = await o().sahip.sorgu<{ is_emri_id: number }>('SELECT is_emri_id FROM uretim_emirleri_katilim WHERE emir_id = $1 AND cikis IS NULL ORDER BY is_emri_id', [id]);
     assert.deepEqual(acik.map((k) => k.is_emri_id), [ie1, ie2], '648 a: kişi iki adımda açık katılımlı');
     assert.equal((await istek('planlama_proje', 'POST', adimYolu(id, ie2, 'katilim/ayril'))).durum, 403, 'terminal işlemi olmayan kişi');
