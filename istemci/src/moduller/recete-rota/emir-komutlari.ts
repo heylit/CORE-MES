@@ -169,6 +169,13 @@ export const EMIR_KOMUTLARI: Readonly<Record<string, EmirKomutu>> = {
       return { yol: `/adimli-emirler/${String(id)}/iptal`, govde: { surum: ekranSurumu(girdi) } };
     },
   },
+  // 2721: başlamış emir silinmez; sahibi durdurur, iptal durumuna alır ve kapanışı açık bırakır. Onay ekrandaki uyarı penceresindedir.
+  'emir-arsive-al': {
+    hazirla: async (girdi) => {
+      const id = kimlik(girdi['id'], 'emir');
+      return { yol: `/adimli-emirler/${String(id)}/arsive-al`, govde: { surum: ekranSurumu(girdi), onay: true } };
+    },
+  },
   // Rotasız emrin adımları (kullanıcı kararı 2026-10-14): adımlar emrin kendisindedir, burada eklenir, düzenlenir, silinir. Kaynak
   // atanmaz (plan ve terminal adim-kaynagi ile atar); yer, op numarası ve durum kuralları sahibindedir.
   'emir-adim-ekle': {
