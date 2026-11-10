@@ -14,6 +14,7 @@ import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { DURUM_ANAHTARI } from '../recete-rota/disari.ts';
 import { PLANLAMA_ANAHTARI } from './disari.ts';
 import { brutAlanlariniCikar, malzemeFiyatiniCikar, maliyetsizKayitDegeri, saklanmayanKayitDegeri, tezgahUcretiniCikar } from './motor-ayari-kurallar.ts';
+import { planGirdisi } from './plan-girdisi.ts';
 import { planlamaCalismasi, planlamaKayitlari } from './planlama-servis.ts';
 import * as sorgular from './sorgular.ts';
 
@@ -58,6 +59,26 @@ const receteRotaKaydiEkle = (db: Db, deger: unknown, kisiId: number) => db.sorgu
   `INSERT INTO recete_rota_kayit (anahtar, bicim, deger, surum, guncelleyen_kisi_id) VALUES ($1, 'json', $2::jsonb, nextval('recete_rota_surum'), $3)`,
   [DURUM_ANAHTARI, JSON.stringify(deger), kisiId]);
 const PAROLA = 'dogru-parola-1';
+
+// 2772 M5 (yapı 5, 1459 a): fiyatı bilinmeyen malzemenin birim fiyatı null'dur (motor eksik sayar); 0 girilmiş fiyat 0 kalır.
+describe('malzeme birim fiyatı uydurulmaz (2772 M5, saf)', () => {
+  const kayit = { version: 7, savedAt: 9, items: [], opdefs: [], machines: [], routes: {}, orders: [] };
+  const calisma = { surum: 2, D: { meta: { ad: 'Ornek', baslangic: '2026-10-19' }, vardiyalar: [], calismaGunleri: {}, tatiller: [], urunler: [], malzemeler: [],
+    tezgahlar: [], personel: [], siparisler: [], ayarlar: {} }, rrSavedAt: 5, dataVer: 1, down: [], ekMesai: [], locks: {}, gercek: {}, kapali: [], olaylar: [], plan: null,
+    w: { famK: 0.3, mat: 'uyari', dondurma: 4 }, param: { tampon: false, tamponZ: 0, acilPay: 0 } };
+  const malzeme = (id: string) => ({ id, code: id, name: id, type: 'ham', unit: 'kg', stock: 1 });
+  const fiyatlar = (maliyet: Record<string, unknown> | undefined) => {
+    const durum = { items: [malzeme('H1'), malzeme('H2'), malzeme('H3')], ...(maliyet ? { maliyet: { malzeme: maliyet, istasyon: {}, kisi: {} } } : {}) };
+    const g = planGirdisi({ calisma, kayit, kaynak: { durum, ek: {} }, bugun: '2026-10-19' });
+    const m = (g?.S.D as { malzemeler: { kod: string; birimFiyat?: number | null }[] }).malzemeler;
+    return Object.fromEntries(m.map((x) => [x.kod, x.birimFiyat ?? null]));
+  };
+  test('BS-12: fiyatsız malzeme null, 0 girilmiş 0, fiyatlı fiyatıyla; maliyet okunmayınca hepsi null (0 değil)', () => {
+    const try_ = (v: number) => ({ paraBirimi: 'TRY', birimMaliyet: v });
+    assert.deepEqual(fiyatlar({ H2: try_(0), H3: try_(12.5) }), { H1: null, H2: 0, H3: 12.5 });
+    assert.deepEqual(fiyatlar(undefined), { H1: null, H2: null, H3: null });
+  });
+});
 
 describe('brüt ücret kayda girmez ve dönmez (2728 a, gerçek PostgreSQL)', async () => {
   let ortam: TestVeritabani | undefined;

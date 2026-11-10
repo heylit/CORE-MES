@@ -375,3 +375,8 @@ Testler: plan-bedel 815 (iki test), kurallar 815, kablolama 815; istemci planlam
   bilinmez ("saat ücreti" eksik uyarısı) ve tezgâh seçiminde bedel ağırlığı kalkar. Bu rolün planı ve ek mesai seçimi değişebilir (kart 2770).
   Sunucu plan motoru (maliyet okuyucusu) ve maliyeti gören değişmez.
 - Kişi maliyeti (`people[].cost`) motorun kaynak biçiminde kalır, çalışmaya (D) kopyalanmaz; kayda girmez (girdi.js kod okuması).
+- M4 (2601 a): malzemenin birim fiyatı (`D.malzemeler[].birimFiyat`, Finans malzeme maliyeti) kayda yazılmaz ve ham okumada dönmez;
+  birleşme her okumada kaynaktan yeniden kurar.
+- M5 (yapı 5, 1459 a; Maliyet): fiyatı bilinmeyen malzemenin birim fiyatı artık null (önce 0 yazılıyordu); 0 girilmiş fiyat 0 kalır.
+  GÖRÜNEN DEĞİŞİKLİK: fiyatı bilinmeyen malzeme eksik sayılır; maliyeti görende siparişin malzeme bedeli bilinmez (null) görünebilir ve
+  "eksik" sayısı artabilir. Maliyet görmeyende malzeme fiyatı hep null (önce 0).
