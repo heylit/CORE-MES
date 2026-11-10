@@ -60,6 +60,12 @@ const kaynak = <T extends string>(v: unknown, izinli: readonly T[], alan: string
   return { tur: secenek(k['tur'], izinli, alan), id: tamSayi(k['id'], alan) };
 };
 
+// 2682 a: firması seçilmemiş fason adım { tur: 'fason', id: null } gider; öteki türlerde kimlik zorunludur.
+const adimKaynagi = (v: unknown): { tur: string; id: number | null } | null => {
+  if (v !== null && v !== undefined && nesne(v)['tur'] === 'fason' && nesne(v)['id'] === null) return { tur: 'fason', id: null };
+  return kaynak(v, ADIM_KAYNAK_TURLERI, 'kaynak');
+};
+
 function adim(a: Nesne): Nesne {
   const ad = typeof a['ad'] === 'string' ? a['ad'].trim().slice(0, 80) : '';
   if (ad === '') throw gecersiz('adım adı');
@@ -67,7 +73,7 @@ function adim(a: Nesne): Nesne {
     opNo: tamSayiVeyaBos(a['opNo'], 'OP numarası'),
     operasyonTipiId: tamSayi(a['operasyonTipiId'], 'operasyon'),
     ad,
-    kaynak: kaynak(a['kaynak'], ADIM_KAYNAK_TURLERI, 'kaynak'),
+    kaynak: adimKaynagi(a['kaynak']),
     ayarSuresiDk: sayiVeyaBos(a['ayarSuresiDk'], 'hazırlık süresi'),
     birimSureDk: sayiVeyaBos(a['birimSureDk'], 'birim süre'),
     islemSuresiDk: sayiVeyaBos(a['islemSuresiDk'], 'işlem süresi'),

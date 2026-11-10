@@ -79,6 +79,13 @@ describe('plan: veri sağlığı kuralı', () => {
     assert.deepEqual([c.calismaVar, c.malzemeKesildi], [true, false]);
   });
 
+  test('2681: firması seçilmemiş fason adım (fasonId null, fason true) süre istemez, eksik sayılmaz', () => {
+    const d = durum();
+    const steps = [...d.routes![3]!.steps, adim({ id: 'o40', seq: 40, opNo: 40, name: 'Boya', fasonId: null, fason: true, stationId: null, setup: null, cycle: null })];
+    const c = veriSagligi(girdi({ durum: durum({ routes: { 3: { base: null, steps } } }) }));
+    assert.deepEqual([bul(c, 'sure-bos').sayi, bul(c, 'sure-bos').toplam], [1, 2]);
+  });
+
   test('okunamayan dilim 0 değil boş sayıdır', () => {
     const c = veriSagligi(girdi({ durum: durum({ items: null, routes: null, stations: null, machines: null, maliyet: null, emirler: null }), tezgahlar: null }));
     for (const k of c.kategoriler) assert.deepEqual([k.anahtar, k.sayi, k.ornekler], [k.anahtar, null, []]);

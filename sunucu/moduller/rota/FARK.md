@@ -451,6 +451,21 @@ Teslim olduğu gibi alındı; yalnız oturtma için değişenler:
   firesiz; açılan emirdeki `dalBasiAdedi` ile aynı). Ekran ana sayıyı `hedef`ten, fire payıyla giren adedi `adet`ten alt satırda gösterir (2487).
 - Emir açılamıyorsa (engel) `hedef` null. Tablo, göç ve yetki değişmedi.
 
+## 2681: firması seçilmemiş fason adım (kullanıcı kararı 2682 a)
+- Sözleşme: adım kaynağı `{ tur: 'fason', id: null }` olabilir ("dış üretim, firma seçilmedi"); öteki türlerde id zorunlu. Ayrıntı ve önizlemede kaynak
+  aynı biçimde döner, ad ve etiket uydurulmaz (Mimar K1); fason firma seçicisine firmasız girmez.
+- Göç `20261109220934_rota_firmasiz_fason.sql`: `rota_adimi.fason_firmasiz boolean NOT NULL DEFAULT false`; firmasız adımda kaynak sütunları boş
+  (`rota_adimi_firmasiz_kaynaksiz`), termin ve "fason süresiz" kısıtları firmasızı da kapsar. Var olan satır değişmez.
+- Bayrak tek yerden okunur ve yazılır (`sorgular.ts adimKaynagiCoz`, `adimYaz`); revizyondan taslak açma bu yoldan geçer (Veri V1).
+- Kaydet ve onaya gönder geçer: fason kuralları (süre yok, aday ve paralel bölme yok) firmasızda da geçerlidir; onayda firmasız adım atanmamış kaynak gibi sayılır.
+- Emre kopya (tek ve çok katmanlı) ve emirlere uygula reddeder (400, alan `adimlar.<i>.kaynak`, ayrıntı `{ opNo }`; Mimar K3). İş emri tarafı fasonu yalnız
+  firma doluluğuyla ayırır; firmasız adım orada istasyonsuz iç üretim adımına dönerdi. Patlamış rota önizlemesi aynı iletiyi `engel` olarak verir, sayılar null.
+- Başka modüllere tek işaret (Mimar K2): `RotaAdimi.fason` doluysa adım fasondadır, `firmaId` null firma seçilmedi demektir. Reçete ve Rota durum adımı
+  `fason: boolean` taşır, `fasonId` null kalır ("null" metni yok, Veri V2). Plan veri sağlığı firmasız adımı süre eksiği saymaz.
+- VARSAYIM: revizyon farkında firmasız kaynak "Fason, firma seçilmedi" metniyle karşılaştırılır (fark satırı metindir; atanmamış kaynaktan ayrılsın diye).
+  Geri alma: ucuz.
+- VARSAYIM: plan motoru firmasız adımı emirden görmez (emir açılmaz). Emirsiz rota okuyan plan önizlemesi durum adımında fasonId null gördüğü için adımı
+  istasyonsuz sayar; bu iş emri yokken yalnız önizlemeyi etkiler. Geri alma: orta (motor girdisinde fason bayrağı).
 ## 2610: önizlemede ara adımın statülü kartı ve stoğu (kullanıcı kararı 2610 a)
 - Önizleme adımına `araHal: { statu { id, ad } | null, kart urunOzeti | null, stok { toplam, planaSayilan } | null } | null`. Ürün adımında ve engelde null.
 - Kaynak Reçete ve Rota'nın `adimAraHalleri`'dir (yazmaz; sayımın statü ve çıktı kartı kuralı); bağ kablolama.ts'te `araHalCozucusuKaydet`.

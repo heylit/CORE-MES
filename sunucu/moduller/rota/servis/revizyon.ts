@@ -11,13 +11,13 @@ import * as s from '../sorgular.ts';
 import type { AdimKaynagi, RevizyonSatiri } from '../sorgular.ts';
 import {
   ROTA_VAR, TASLAK_ACIK, type TaslakKaynagi, adimlariKur, adimlariYaz, baskaUruneAdimlar, cevap, donguDenetle, gorunumBaglami, icerikYazimlari,
-  kaynakBaglami, kaynakOzetiAl, komutIcinAl, olcumleriBosalt, operasyonTipleri, revizyonuAl, rotaKurulabilirUrun, rotaliTurMu, sartnameOnayDenetimi,
+  kaynakBaglami, kaynakOzetiAl, komutIcinAl, secilmisMi, olcumleriBosalt, operasyonTipleri, revizyonuAl, rotaKurulabilirUrun, rotaliTurMu, sartnameOnayDenetimi,
   taslagiAc, turu, urunOzetleri,
 } from './ortak.ts';
 
 function farkAdimlari(ayrinti: RevizyonAyrintisi['adimlar']): FarkAdimi[] {
   return ayrinti.map((a) => ({
-    opNo: a.opNo, sira: a.sira, ad: a.ad, operasyonTipi: a.operasyonTipi.ad, kaynak: a.kaynak ? (a.kaynak.kod ?? a.kaynak.ad) : null,
+    opNo: a.opNo, sira: a.sira, ad: a.ad, operasyonTipi: a.operasyonTipi.ad, kaynak: a.kaynak === null ? null : a.kaynak.id === null ? 'Fason, firma seçilmedi' : (a.kaynak.kod ?? a.kaynak.ad),
     ayarSuresiDk: a.ayarSuresiDk, birimSureDk: a.birimSureDk, islemSuresiDk: a.islemSuresiDk, degisimSuresiDk: a.degisimSuresiDk,
     terminGun: a.terminGun, bagimlilik: a.bagimlilik, devirAdedi: a.devirAdedi, firePayiYuzde: a.firePayiYuzde, bilesenler: a.bilesenler.map((b) => ({ ad: b.malzeme.stokKodu ?? b.malzeme.ad, miktar: b.miktar })),
   }));
@@ -42,12 +42,13 @@ async function onayDenetimi(db: Db, r: RevizyonSatiri): Promise<void> {
   const icerik = await s.icerikOku(db, r.id);
   const tipler = new Map((await operasyonTipleri(db)).map((t) => [t.id, t]));
   const kb = await kaynakBaglami(db);
-  const aktifMi = async (k: AdimKaynagi) => (await kaynakOzetiAl(db, kb, k)).aktif;
+  // Firmasız fason adım (2682 a) onaya gider: firma emre kopyada aranır, burada atanmamış kaynak gibi sayılır.
+  const aktifMi = async (k: AdimKaynagi) => (secilmisMi(k) ? (await kaynakOzetiAl(db, kb, k)).aktif : null);
   const hazirlik = [];
   for (const a of icerik.adimlar) {
     const adaylarAktif: boolean[] = [];
     const adaylar = icerik.adaylar.filter((y) => y.adimId === a.id);
-    for (const x of adaylar) adaylarAktif.push(await aktifMi(x.kaynak));
+    for (const x of adaylar) adaylarAktif.push((await kaynakOzetiAl(db, kb, x.kaynak)).aktif);
     hazirlik.push({
       a,
       kaynakAktif: a.kaynak === null ? null : await aktifMi(a.kaynak),
@@ -178,7 +179,7 @@ export async function kaydet(db: Db, kullanici: Kullanici, id: number, govde: Ka
   const eskiKaynaklar = new Set([...mevcut.adimlar.flatMap((a) => (a.kaynak ? [kaynakAnahtari(a.kaynak)] : [])), ...mevcut.adaylar.map((x) => kaynakAnahtari(x.kaynak))]);
   for (const [i, a] of adimlar.entries()) {
     for (const k of [...(a.kaynak ? [a.kaynak] : []), ...a.adaylar.map((x) => x.kaynak)]) {
-      if (eskiKaynaklar.has(kaynakAnahtari(k))) continue;
+      if (eskiKaynaklar.has(kaynakAnahtari(k)) || !secilmisMi(k)) continue;
       const o = await kaynakOzetiAl(db, kb, k);
       if (!o.aktif) {
         throw dogrulama(

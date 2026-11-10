@@ -47,6 +47,7 @@ export const bagMetni = (a: Adim): string => (a.dep === 'ortulu' ? `örtülü: $
 export const renkSinifi = (id: string | null): string => (id === null || !/^\d+$/.test(id) ? 'tc-rr1-renk-yok' : `tc-rr1-renk-${String(Number(id) % 6)}`);
 
 export function fasonAdi(firmalar: readonly { id: string; code: string | null; name: string }[] | null | undefined, id: string | null): string {
+  if (id === null) return 'firma seçilmedi';
   const f = (firmalar ?? []).find((x) => x.id === id);
   return f ? `${f.code ? `${f.code} ` : ''}${f.name}` : `Fason firma #${id ?? '?'}`;
 }

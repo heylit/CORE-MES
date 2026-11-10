@@ -75,7 +75,9 @@ export const yenidenNumarala = (adimlar: readonly Adim[]): Adim[] => adimlar.map
 export const statuNo = (a: Pick<Adim, 'opNo' | 'seq'>): number => a.opNo ?? a.seq;
 // Erişilebilir ad: numarası verilmiş adım "OP 20"; yeni adımın numarasını kayıt verir, bu yüzden sırasıyla okunur (OP numarası gibi değil).
 export const adimAdi = (a: Pick<Adim, 'opNo' | 'seq'>): string => (a.opNo === null ? `Yeni adım (${String(a.seq)}. sıra)` : `OP ${String(a.opNo)}`);
-export const fasonMu = (a: Pick<Adim, 'fasonId' | 'stationId' | 'machineId'>): boolean => !!a.fasonId && !a.stationId && !a.machineId;
+// Firması seçilmemiş fason adım (2682 a) da fasondur: `fason` bayrağı, fasonId boş.
+export const fasonMu = (a: Pick<Adim, 'fasonId' | 'fason' | 'stationId' | 'machineId'>): boolean =>
+  (!!a.fasonId || a.fason === true) && !a.stationId && !a.machineId;
 export const girdiOlur = (m: Malzeme | undefined): boolean => !!m && m.girdiOlabilir !== false && m.type !== 'hizmet';
 
 export const revizyonlari = (revler: readonly Revizyon[] | null, urunId: string): Revizyon[] =>
@@ -322,6 +324,8 @@ export function rotaSorunlari(adimlar: readonly Adim[], malzemeVar: (id: string)
     const ek = [
       ...(islemSuresiBos(a) ? ['işlem süresi yok'] : []),
       ...(!fasonMu(a) && !a.stationId ? ['istasyon yok'] : []),
+      // Kaydı ve onayı durdurmaz; emir açılmadan önce seçilmeli (sunucu emre kopyalamayı reddeder).
+      ...(fasonMu(a) && !a.fasonId ? ['fason firma seçilmedi'] : []),
     ];
     const m = eksik.get(a.id) ?? [];
     if (ek.length === 0) return m.map((metin) => ({ adimId: a.id, metin }));
@@ -342,30 +346,40 @@ export function adimCarpanlari(adimlar: readonly Adim[]): number[] {
 }
 
 // Malzeme maliyeti (prototipte matCost): rotası olan kartta girenlerin toplamı, olmayanda birim maliyet. Birim maliyeti bilinmeyen kalem
-// varsa toplam bilinmez (null); sıfır uydurulmaz. Kartı bulunamayan (silinmiş, okunamayan) giren ve kendine dönen rota da toplamı
-// bilinmez yapar (2684): atlamak ya da sıfır saymak eksik bir toplamı tam gibi gösterirdi.
-export function malzemeMaliyeti(
+// varsa toplam bilinmez (null); sıfır uydurulmaz. Kartı bulunamayan (silinmiş, okunamayan) giren, kendine dönen rota ve miktarı girilmemiş
+// giren de toplamı bilinmez yapar: atlamak ya da sıfır saymak eksik bir toplamı tam gibi gösterirdi. Kayıtlı rotada miktar zorunludur
+// (sunucu > 0); boş miktar yalnız düzenlenen taslakta olur ve özet taslaktan hesaplanır.
+export type MaliyetSonucu = { deger: number; neden: null } | { deger: null; neden: string };
+export function malzemeMaliyetiSonucu(
   id: string, rotaOf: (id: string) => readonly Adim[], malzeme: (id: string) => Malzeme | undefined,
   birimMaliyet: (id: string) => number | null, yol: readonly string[] = [],
-): number | null {
+): MaliyetSonucu {
+  const bos = (neden: string): MaliyetSonucu => ({ deger: null, neden });
   const m = malzeme(id);
-  if (!m || yol.includes(id)) return null;
+  if (!m) return bos(`Giren kartı bulunamadı (#${id}).`);
+  if (yol.includes(id)) return bos(`${m.code} rotası kendine dönüyor.`);
   const ss = sirali(rotaOf(id));
-  if (m.type === 'ham' || ss.length === 0) return birimMaliyet(id);
+  if (m.type === 'ham' || ss.length === 0) {
+    const b = birimMaliyet(id);
+    return b === null ? bos(`${m.code} birim maliyeti girilmemiş.`) : { deger: b, neden: null };
+  }
   const fs = adimCarpanlari(ss);
   let c = 0;
   let girdi = false;
   for (let j = 0; j < ss.length; j++) {
-    for (const x of ss[j]?.ins ?? []) {
-      const alt = malzemeMaliyeti(x.itemId, rotaOf, malzeme, birimMaliyet, [...yol, id]);
-      if (alt === null) return null;
+    const a = ss[j];
+    if (!a) continue;
+    for (const x of a.ins) {
+      if (!(Number(x.qty) > 0)) return bos(`${m.code} ${adimAdi(a)}: ${malzeme(x.itemId)?.code ?? 'giren'} miktarı girilmemiş.`);
+      const alt = malzemeMaliyetiSonucu(x.itemId, rotaOf, malzeme, birimMaliyet, [...yol, id]);
+      if (alt.deger === null) return alt;
       girdi = true;
-      c += (x.qty || 0) * (1 + (x.scrap || 0) / 100) * (fs[j] ?? 1) * alt;
+      c += Number(x.qty) * (1 + (x.scrap || 0) / 100) * (fs[j] ?? 1) * alt.deger;
     }
   }
-  // Rotada hiç giren yoksa maliyet sıfır değil, bilinmez (rota eksik): sıfır uydurulmaz.
-  return girdi ? c : null;
+  return girdi ? { deger: c, neden: null } : bos(`${m.code} rotasında giren yok.`);
 }
+export const malzemeMaliyeti = (...g: Parameters<typeof malzemeMaliyetiSonucu>): number | null => malzemeMaliyetiSonucu(...g).deger;
 
 // Adımın süresi (prototipte opDays): hazırlık + çevrim * miktar / verim; gün, iş merkezinin ortalama günlük saatiyle.
 export function adimSuresi(a: Adim, miktar: number, istasyon: Istasyon | undefined, gunSaati: number): { dk: number; gun: number } | null {
@@ -490,7 +504,7 @@ export const bagimlilikYaz = (a: Adim, d: Bagimlilik): Adim => ({ ...a, dep: d, 
 // İstasyon değişince makine seçimi kalkar; istasyon seçilen fason adım içeri döner.
 export function istasyonYaz(a: Adim, sid: string | null): Adim {
   const b: Adim = { ...a, stationId: sid, machineId: a.stationId === sid ? a.machineId : null };
-  return sid && a.fasonId ? { ...b, fasonId: null, terminGun: null } : b;
+  return sid && (a.fasonId || a.fason) ? { ...b, fasonId: null, fason: false, terminGun: null } : b;
 }
 // Operasyon değişince istasyon (fasonda değil), hazırlık ve süreler katalogdan gelir; adım adı operasyonun adı olur.
 export function operasyonYaz(a: Adim, op: Operasyon | undefined): Adim {
@@ -506,11 +520,14 @@ export const katalogaDon = (a: Adim, op: Operasyon): Adim => {
 export const katalogdanFarkli = (a: Adim, op: Operasyon): boolean =>
   op.stationId !== a.stationId || op.setup !== a.setup || sureSayisi(op.cycle) !== a.proc || a.chg !== null;
 // Fason adımın kaynağı fason firmadır: istasyon, makine, aday ve süre yoktur. İçeri alınınca operasyonun istasyonuna döner.
-export function fasonaCevir(a: Adim, firmaId: string | null, op: Operasyon | undefined): Adim {
-  if (firmaId) {
-    return { ...a, machineId: null, stationId: null, kisiId: null, alts: [], altTimes: {}, digerAdaylar: [], split: 'tek', minLot: null, fasonId: firmaId };
+// Firma sonra da seçilebilir (2682 a): `dis` ile firmasız dış üretime geçer; böylece seçim kaydedilir, başka yere geçince kaybolmaz.
+export function fasonaCevir(a: Adim, firmaId: string | null, op: Operasyon | undefined, dis = firmaId !== null): Adim {
+  if (dis) {
+    return {
+      ...a, machineId: null, stationId: null, kisiId: null, alts: [], altTimes: {}, digerAdaylar: [], split: 'tek', minLot: null, fasonId: firmaId, fason: true,
+    };
   }
-  const b: Adim = { ...a, fasonId: null, terminGun: null };
+  const b: Adim = { ...a, fasonId: null, fason: false, terminGun: null };
   return b.stationId ? b : { ...b, stationId: op?.stationId ?? null };
 }
 export function sureYaz(a: Adim, alan: 'setup' | 'proc' | 'chg', deger: number | null): Adim {
@@ -566,7 +583,6 @@ export function rotaFarki(A: readonly Adim[], B: readonly Adim[], ad: FarkAdlari
     ['depQty', 'örtüşme', (v) => `${sayiBicim(v.depQty ?? 1, 0)} adet`], ['rejectPct', 'fire payı', (v) => `%${sayiBicim(v.rejectPct, 1)}`],
     ['split', 'makine kullanımı', (v) => (v.split === 'bol' ? 'paralel böl' : 'tek')],
     ['alts', 'alternatif', (v) => v.alts.map((x) => ad.istasyon(x)).join(', ') || 'yok'],
-    ['fasonId', 'üretim yeri', (v) => (v.fasonId ? 'dış üretim' : 'iç üretim')],
   ];
   for (const s of B) {
     const o = am.get(s.id);
@@ -585,6 +601,8 @@ export function rotaFarki(A: readonly Adim[], B: readonly Adim[], ad: FarkAdlari
     });
     for (const x of o.ins) if (!s.ins.some((y) => y.itemId === x.itemId)) ch.push(`giren çıkarıldı ${ad.malzeme(x.itemId)}`);
     if (J(o.outs) !== J(s.outs)) ch.push('yan ürünler değişti');
+    if (fasonMu(o) !== fasonMu(s)) ch.push(`üretim yeri ${fasonMu(o) ? 'dış üretim' : 'iç üretim'} → ${fasonMu(s) ? 'dış üretim' : 'iç üretim'}`);
+    else if (fasonMu(s) && o.fasonId !== s.fasonId) ch.push(!s.fasonId ? 'fason firma kaldırıldı' : o.fasonId ? 'fason firma değişti' : 'fason firma seçildi');
     if (adimDali(o) !== adimDali(s)) ch.push(`dal ${adimDali(o) ?? 'ana hat'} → ${adimDali(s) ?? 'ana hat'}`);
     if (J(adimBirlesen(o)) !== J(adimBirlesen(s))) ch.push(`birleşen ${adimBirlesen(o).join(', ') || 'yok'} → ${adimBirlesen(s).join(', ') || 'yok'}`);
     if (ch.length) out.push(`${nm(s)}: ${ch.join('; ')}`);
@@ -610,7 +628,7 @@ export function kaydetGovdesi(adimlar: readonly Adim[], izinliOpNolar: readonly 
     const mk = s.machineId ? kimlik(s.machineId, s, 'Makine') : null;
     const ist = s.stationId ? kimlik(s.stationId, s, 'İstasyon') : null;
     const kaynak = mk ? { tur: 'makine', id: mk } : ist ? { tur: 'istasyon', id: ist } : s.fasonId ? { tur: 'fason', id: Number(s.fasonId) }
-      : s.kisiId ? { tur: 'kisi', id: Number(s.kisiId) } : null;
+      : s.fason ? { tur: 'fason', id: null } : s.kisiId ? { tur: 'kisi', id: Number(s.kisiId) } : null;
     const fason = kaynak?.tur === 'fason';
     const proc = (sureSayisi(s.proc) ?? 0) > 0 ? s.proc : null;
     const chg = proc === null ? null : sureSayisi(s.chg);

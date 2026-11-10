@@ -47,7 +47,8 @@ export function veriSagligi(g: VeriSagligiGirdisi): VeriSagligiCevabi {
     sureToplam = 0;
     for (const [urun, r] of rotalar) {
       for (const s of r.steps) {
-        if (s.fasonId !== null) continue;
+        // Firmasız fason adım (2681) de fasondur: süresi yoktur, eksik sayılmaz.
+        if (s.fasonId !== null || s.fason === true) continue;
         sureToplam += 1;
         const islemYok = s.cycle === null && s.proc === null;
         const alternatifYok = Object.entries(s.altTimes).filter(([, t]) => t.cycle === null).map(([id]) => id);

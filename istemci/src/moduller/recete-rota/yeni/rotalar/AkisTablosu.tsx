@@ -207,7 +207,7 @@ function RotaBolumu({ r, s, kokMu, sira }: { r: RotaEkrani; s: Sira; kokMu: bool
             <SecimAlani etiket="Operasyon" deger={a.opId} secenekler={opSecenek} kapali={!duzen} bos={op ? undefined : 'Operasyon seç…'}
               yaz={(v) => { yaz(a, (x) => operasyonYaz(x, h.op.get(v)), 'Operasyon değişti'); }} />
             {fason ? (
-              <span className="tc-rr1-ipucu"><span className="tc-rr1-tag">Dış üretim</span> {fasonAdi(r.duzen.durum.fasonFirms, a.fasonId)}</span>
+              <span className="tc-rr1-ipucu"><span className="tc-rr1-tag">Dış üretim</span> {a.fasonId ? fasonAdi(r.duzen.durum.fasonFirms, a.fasonId) : <b>firma seçilmedi</b>}</span>
             ) : (
               <>
                 <SecimAlani etiket="İstasyon" deger={a.stationId ?? ''} kapali={!duzen} bos="İstasyon seç…"

@@ -132,7 +132,7 @@ function OpKutusu({ r, a, d, sonraki, secili, duzen, sahip, liste, i, onculler }
       <span className="tc-rr1-obar"><span className="tc-rr1-abbr">{op?.abbr ?? op?.code ?? '???'}</span><span className="tc-rr1-oseq" title={a.opNo === null ? 'Yeni adım; numarayı sistem kayıtta verir' : undefined}>{a.opNo ?? 'yeni'}</span></span>
       <b className="tc-rr1-oname">{op?.name ?? 'Operasyon seç'}</b>
       <span className="tc-rr1-ost">
-        {fason ? `Dış üretim: ${fasonAdi(r.duzen.durum.fasonFirms, a.fasonId)}` : ist ? `${ist.code} ${ist.name}` : 'İstasyon seçilmedi'}
+        {fason ? <>Dış üretim: {a.fasonId ? fasonAdi(r.duzen.durum.fasonFirms, a.fasonId) : <b>firma seçilmedi</b>}</> : ist ? `${ist.code} ${ist.name}` : 'İstasyon seçilmedi'}
         {im && <em> {im.code}</em>}
       </span>
       <span className="tc-rr1-otime">

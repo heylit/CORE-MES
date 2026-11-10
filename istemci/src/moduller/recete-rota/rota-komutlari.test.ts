@@ -62,6 +62,13 @@ describe('rota köprü komutları', () => {
     });
   });
 
+  it('2682 a: firmasız fason adım kaynağı { tur: fason, id: null } gider; öteki türlerde kimliksiz kaynak reddedilir', async () => {
+    const istekler = sunucuKur(tamam);
+    await kopruKur()('komut', { ad: 'rota-kaydet', govde: { revizyonId: 101, surum: 2, aciklama: null, adimlar: [{ ...ADIM, kaynak: { tur: 'fason', id: null } }] } });
+    expect((istekler[0]?.govde as { adimlar: Record<string, unknown>[] }).adimlar[0]).toMatchObject({ kaynak: { tur: 'fason', id: null } });
+    await expect(kopruKur()('komut', { ad: 'rota-kaydet', govde: { revizyonId: 101, surum: 2, aciklama: null, adimlar: [{ ...ADIM, kaynak: { tur: 'makine', id: null } }] } })).rejects.toThrow();
+  });
+
   it('1248 a: dal ve birleşen dallar kaydet gövdesinde gider; gelmeyen alan gönderilmez (sahibi kayıtlıyı korur)', async () => {
     const istekler = sunucuKur(tamam);
     await kopruKur()('komut', { ad: 'rota-kaydet', govde: { revizyonId: 101, surum: 2, aciklama: null, adimlar: [{ ...ADIM, dal: 'A', birlesen: ['B'] }, { ...ADIM, dal: null }] } });

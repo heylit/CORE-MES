@@ -78,7 +78,9 @@ export const KAYNAK_TURLERI = ['makine', 'kisi', 'istasyon'] as const;
 export const kaynakGirdisi = z.object({ tur: z.enum(KAYNAK_TURLERI), id: KIMLIK });
 // Adımın kaynağı ayrıca fason firma olabilir (finansın fason işaretli firması; kimlik firma kimliğidir). Aday kaynak fason olmaz (FS2 a).
 export const ADIM_KAYNAK_TURLERI = ['makine', 'kisi', 'istasyon', 'fason'] as const;
-export const adimKaynakGirdisi = z.object({ tur: z.enum(ADIM_KAYNAK_TURLERI), id: KIMLIK });
+// 2681 (2682 a): fason adımın firması sonra seçilebilir; { tur: 'fason', id: null } "dış üretim, firma seçilmedi" demektir. Öteki türlerde id zorunlu.
+export const firmasizFason = z.object({ tur: z.literal('fason'), id: z.null() }).strict();
+export const adimKaynakGirdisi = z.union([z.object({ tur: z.enum(ADIM_KAYNAK_TURLERI), id: KIMLIK }), firmasizFason]);
 export const AZAMI_TERMIN_GUN = 365;
 
 export const adayGirdisi = z.object({
@@ -179,6 +181,8 @@ export const urunOzeti = z.object({
 });
 // Fason firmada kod ve ad firmanın, aktif "kullanımda ve fason işaretli" demektir; istasyon yoktur.
 export const adimKaynakOzeti = kaynakOzeti.extend({ tur: z.enum(ADIM_KAYNAK_TURLERI) });
+// Adımın kaynağı: seçilmiş kaynağın özeti ya da firmasız fason (2681, Mimar K1: ad ve etiket uydurulmaz, ekran yazar).
+export const adimKaynagiCevabi = z.union([adimKaynakOzeti, firmasizFason]);
 const revizyonBaglantisi = z.object({ id: KIMLIK, harf: z.string() });
 
 export const revizyonOzeti = z.object({
@@ -208,7 +212,7 @@ export const adimSemasi = z.object({
   sira: z.number().int(),
   operasyonTipi: z.object({ id: KIMLIK, kod: z.string(), ad: z.string(), kisaltma: z.string(), aktif: z.boolean() }),
   ad: z.string(),
-  kaynak: adimKaynakOzeti.nullable(),
+  kaynak: adimKaynagiCevabi.nullable(),
   ayarSuresiDk: ondalikMetinSemasi.nullable(),
   birimSureDk: ondalikMetinSemasi.nullable(),
   // Teorik çevrimin ayrımı: ayrılmamış adımda işlem birim süredir, değişim boştur. Oran (%) değişim / işlem; değişim yoksa null.
@@ -458,7 +462,7 @@ export const surelerCevabi = z.object({
     sira: z.number().int(),
     ad: z.string(),
     operasyonTipi: z.object({ id: KIMLIK, kod: z.string(), ad: z.string() }),
-    kaynak: adimKaynakOzeti.nullable(),
+    kaynak: adimKaynagiCevabi.nullable(),
     teorik: z.object({
       hazirlikDk: ondalikMetinSemasi.nullable(), islemDk: ondalikMetinSemasi.nullable(), degisimDk: ondalikMetinSemasi.nullable(),
       degisimOraniYuzde: ondalikMetinSemasi.nullable(),
@@ -532,6 +536,7 @@ export type KullanimCevabi = z.output<typeof kullanimCevabi>;
 export type KaynakGirdisi = z.input<typeof kaynakGirdisi>;
 export type KaynakOzeti = z.output<typeof kaynakOzeti>;
 export type AdimKaynakOzeti = z.output<typeof adimKaynakOzeti>;
+export type AdimKaynagiCevabi = z.output<typeof adimKaynagiCevabi>;
 export type AdimKaynakGirdisi = z.input<typeof adimKaynakGirdisi>;
 
 // Rotanın emre kopyalanması (karar K1): yürürlükteki revizyondan üretim emri açılır; her adım bir iş emri olur.
