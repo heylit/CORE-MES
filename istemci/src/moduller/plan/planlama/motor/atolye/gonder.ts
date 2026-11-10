@@ -207,7 +207,8 @@ export function useAtolyeKomutlari(o: Pick<PlanlamaEkranOzellikleri, 'komut' | '
   const gonder = useCallback(async (is: () => Promise<AtolyeKomutuCevabi>, tamam: string, ne: string): Promise<boolean> => {
     setIsleniyor(true);
     komut?.komutBasladi?.(ne);
-    try { otomatikUygulaIste(await is()); bildir('tamam', tamam); yenile(); return true; } catch (h) { komut?.komutDustu?.(); bildir('hata', gonderHataIletisi(h)); return false; } finally { setIsleniyor(false); }
+    // Taşıma aynı emrin adımlarını ittiyse ya da taşınanı öncülünün arkasına kaydırdıysa sunucu nedeni tek satır yazar (2794 3/3 b).
+    try { const r = await is(); otomatikUygulaIste(r); const ileti = (r as AtolyeKomutuCevabi & { ileti?: string | null }).ileti; bildir('tamam', ileti ? `${tamam} ${ileti}` : tamam); yenile(); return true; } catch (h) { komut?.komutDustu?.(); bildir('hata', gonderHataIletisi(h)); return false; } finally { setIsleniyor(false); }
   }, [bildir, yenile, komut]);
   const simdi = c ? simdiSaati(c, Date.now()) : 0;
   const tasi = useMemo(() => (yaz && komut ? (id: string, m: string, S: number): void => {
@@ -218,6 +219,22 @@ export function useAtolyeKomutlari(o: Pick<PlanlamaEkranOzellikleri, 'komut' | '
     void gonder(() => ekMesaiyiEkle(komut, { tezgah: m, gun, vardiya }), 'Ek mesai eklendi; plan yeniden diziliyor.', 'Ek mesai eklendi');
   } : null), [yaz, komut, gonder]);
   return isleniyor ? { tasi: null, olayEkle: null, ekMesai: null, isleniyor } : { tasi, olayEkle, ekMesai, isleniyor };
+}
+
+// Elle taşımanın önizlemesi (2790 a, 2794): bırakılınca yazılacak yerler; aynı emrin adımları rotadaki bağa göre itilir ya da çekilir.
+// Sözleşme sunucu yamasındadır (2790); bu parça ona derlemeyle bağlı olmasın diye cevap burada yerel tiptir. Uç yoksa (sunucu eski) ya da
+// okunamazsa null: sürükleme önizlemesiz sürer, taşımayı sunucu yine denetler.
+export interface IsTasiOnizlemesi {
+  gecerli: boolean;
+  ileti: string | null;
+  // Hesabın yapıldığı kayıtlı çalışma sürümü; eski sunucuda yok.
+  calismaSurumu?: number | null;
+  isler: { isId: string; tezgah: string; S: number; C: number; eskiTezgah: string; eskiS: number; tur: 'tasinan' | 'itilen' | 'cekilen' }[];
+}
+export const IS_TASI_ONIZLEME_YOLU = '/plan/planlama-calismasi/is-tasi-onizlemesi';
+export function isTasiOnizle(g: { isId: string; tezgah: string; baslangic: number }): Promise<IsTasiOnizlemesi | null> {
+  const q = new URLSearchParams({ isId: g.isId, tezgah: g.tezgah, baslangic: String(g.baslangic) });
+  return api.get<IsTasiOnizlemesi>(`${IS_TASI_ONIZLEME_YOLU}?${q.toString()}`).then((c) => c, () => null);
 }
 
 // Taşımanın saati çeyrek saate yuvarlanır ve şimdiden önce olamaz (sunucu geçmişe konan kilidi reddeder).

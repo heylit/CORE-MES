@@ -603,6 +603,9 @@
   position: absolute; top: var(--b-1); bottom: var(--b-1); left: var(--x); width: var(--w); z-index: 1; pointer-events: none;
   border: var(--cizgi-ince) dashed var(--edge2); border-radius: var(--b-1); background: color-mix(in srgb, var(--grafik) 8%, transparent);
 }
+/* Karar 2790: itilen ve çekilen adımların bırakınca oturacağı yer, kesikli ve sürüklenen çubuktan soluk. */
+.tc-pym-tp-hayalet[data-itme] { border-color: var(--grafik); background: color-mix(in srgb, var(--grafik) 14%, transparent); }
+.tc-pym-tp-hayalet[data-itme="cekilen"] { border-color: var(--done); }
 .tc-pym-tp-cubuk[data-surukle][data-cakisma] { outline: var(--cizgi) solid var(--stop); outline-offset: 0; }
 .tc-pym-tp-cubuk[data-surukle]:focus-visible { outline: var(--cizgi) solid var(--done); }
 .tc-pym-tp-yuzen {
