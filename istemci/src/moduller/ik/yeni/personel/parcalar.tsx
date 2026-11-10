@@ -95,6 +95,13 @@ export function AlanGirdisi({ f, deger, degistir, hata, b }: {
           {f.ipucu && <p className="tc-ikp-ipucu">{f.ipucu}</p>}
         </div>
       );
+    // Üç durum (2647 a, Arayüz K1): onay kutusu boşu Hayır gösterirdi; değer true, false ya da '' (boş, kayıtta NULL).
+    case 'evetHayir':
+      return (
+        <Secim {...ortak} value={deger === true ? 'evet' : deger === false ? 'hayir' : ''} bosSecenek="Seçilmedi"
+          secenekler={[{ deger: 'evet', baslik: 'Evet' }, { deger: 'hayir', baslik: 'Hayır' }]}
+          onChange={(o) => { degistir(o.target.value === 'evet' ? true : o.target.value === 'hayir' ? false : ''); }} />
+      );
     case 'secim': {
       const s = secenekler(f, b, metin);
       // Sabit liste motorla gelir; motor yokken değer serbest yazılır.

@@ -40,3 +40,26 @@ export function personelGirdileri(db: Db, ayBasi: string, aySonu: string): Promi
       WHERE NOT p.iptal
       ORDER BY d.no, p.no`, [ayBasi, aySonu]);
 }
+
+export interface KapsamSatiri {
+  personelNo: number; kisiId: number | null; departmanNo: number | null; departmanAd: string | null; departmanIptal: boolean | null;
+  dogrudan: boolean | null; brut: string | null; iseGiris: string | null; cikis: string | null; bordroMaliyeti: string | null;
+}
+// 2647 a, 2659: ay içinde kayıtlı (işe giriş ay sonundan sonra değil, çıkış ay başından önce değil), iptal edilmemiş her personel;
+// departmanı olmayan ya da iptal departmandaki kişi de gelir (bilinmezlik için). Brüt personelGirdileri ile aynı seçimdir; ayın kesinleşmiş,
+// iptal edilmemiş bordrosu varsa işveren maliyeti de gelir.
+export function personelKapsami(db: Db, ayBasi: string, aySonu: string): Promise<KapsamSatiri[]> {
+  return db.sorgu<KapsamSatiri>(
+    `SELECT p.no AS "personelNo", p.kisi_id AS "kisiId", d.no AS "departmanNo", d.ad AS "departmanAd", d.iptal AS "departmanIptal",
+            d.dogrudan_iscilik AS dogrudan,
+            COALESCE((SELECT u.brut FROM ik_personel_ucret u WHERE u.personel_no = p.no AND u.yururluk <= $2::date
+                       ORDER BY u.yururluk DESC, u.sira DESC LIMIT 1), p.brut_maas)::text AS brut,
+            p.ise_giris::text AS "iseGiris", p.cikis_tarihi::text AS cikis,
+            (SELECT x.maliyet FROM ik_bordro x
+              WHERE x.personel_no = p.no AND x.donem = $1::date AND NOT x.iptal AND x.kesinlesme IS NOT NULL AND x.maliyet IS NOT NULL
+              ORDER BY x.no DESC LIMIT 1)::text AS "bordroMaliyeti"
+       FROM ik_personel p
+       LEFT JOIN ik_departman d ON d.no = p.departman_no
+      WHERE NOT p.iptal AND (p.ise_giris IS NULL OR p.ise_giris <= $2::date) AND (p.cikis_tarihi IS NULL OR p.cikis_tarihi >= $1::date)
+      ORDER BY p.no`, [ayBasi, aySonu]);
+}

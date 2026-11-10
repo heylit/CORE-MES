@@ -290,6 +290,27 @@ describe('P1 organizasyon', () => {
     fireEvent.click(within(pencere).getByRole('button', { name: 'Kaydet' }));
     await waitFor(() => { expect(yazmalar).toHaveLength(1); });
     expect(yazmalar[0]?.yol).toMatch(/^\/ik\/departmanlar\/dept_[a-z0-9]+\/kaydet$/);
+    // 2647 a (Arayüz K2): seçilmeyen işçilik türü boş gider (sunucuda NULL), Hayır'a çevrilmez.
+    expect([undefined, '']).toContain(govdesi(yazmalar[0]?.govde).dogrudanIscilik);
+  });
+
+  it('2647 a: işçilik rozeti, işaretsiz departman uyarısı ve süzgeci; üç durumlu seçim Evet gönderir', async () => {
+    const { yazmalar } = ikAc('/ik/organizasyon');
+    const tablo = await screen.findByRole('table', { name: 'Departmanlar' });
+    const isaretsiz = within(tablo).getAllByText('İşaretlenmedi').length;
+    expect(isaretsiz).toBeGreaterThan(0);
+    expect(screen.getByText(new RegExp(`^${String(isaretsiz)} departman işaretlenmedi; dolaylı personel maliyeti hesaplanamıyor`))).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Göster' }));
+    expect(screen.getByRole('button', { name: 'Tümünü göster' })).toBeTruthy();
+    fireEvent.click(within(tablo).getByText('Üretim'));
+    const pencere = await screen.findByRole('dialog', { name: 'Departman düzenle' });
+    const secim = within(pencere).getByLabelText(/^Doğrudan işçilik/) as HTMLSelectElement;
+    expect(secim.value).toBe('');
+    expect([...secim.options].map((o) => o.text)).toEqual(['Seçilmedi', 'Evet', 'Hayır']);
+    fireEvent.change(secim, { target: { value: 'evet' } });
+    fireEvent.click(within(pencere).getByRole('button', { name: 'Kaydet' }));
+    await waitFor(() => { expect(yazmalar).toHaveLength(1); });
+    expect(govdesi(yazmalar[0]?.govde).dogrudanIscilik).toBe(true);
   });
 
   it('reddedilen: salt okuyan departman ekleyemez ve satır formu açmaz', async () => {
@@ -387,6 +408,9 @@ describe('pozisyon tanımları', () => {
     expect(gonderilen).toHaveLength(10);
     expect(gonderilen.every((g) => g.kind === 'dept' && g.kod === undefined && g.yoneticiId === undefined)).toBe(true);
     expect(gonderilen.map((g) => g.ad)).not.toContain('Üretim');
+    // 2647 a (Arayüz K6): hazır departmanlar işaretsiz eklenir, bildirim türü seçtirir.
+    expect(gonderilen.every((g) => g.dogrudanIscilik === undefined)).toBe(true);
+    expect(await screen.findByText('10 departman eklendi; işçilik türünü seçin.')).toBeTruthy();
     await waitFor(() => { expect(within(bolum).queryByRole('button', { name: 'Hazır listeyi ekle' })).toBeNull(); });
   });
 
