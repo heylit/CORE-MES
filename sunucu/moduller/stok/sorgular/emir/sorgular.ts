@@ -43,11 +43,15 @@ export const emirlerinZincirdekiMiktari = (db: Db, emirIdler: readonly number[])
   [[...emirIdler]]);
 // 2547 a: statüdeki stok, malzeme, statü ve kalite başına (toplamı artı olan), bulunduğu konumların kodlarıyla. Emre ayrılanı ve redi
 // kurallar.sahipsizStatuluHesapla düşer (açık emir süzmesi uretim-emirlerinin durumuyla).
-export const statuluStoklar = (db: Db): Promise<{ malzemeId: number; statuId: number; kaliteDurumu: KaliteDurumu; miktar: string; konumlar: string[] }[]> => db.sorgu(
+// malzemeIdler verilirse yalnız o malzemeler (2610 a önizlemesi); verilmezse bütün statülü stok.
+export const statuluStoklar = (
+  db: Db, malzemeIdler: readonly number[] | null = null,
+): Promise<{ malzemeId: number; statuId: number; kaliteDurumu: KaliteDurumu; miktar: string; konumlar: string[] }[]> => db.sorgu(
   `SELECT b.malzeme_id AS "malzemeId", b.statu_id AS "statuId", b.kalite_durumu AS "kaliteDurumu", sum(b.miktar)::text AS miktar,
           COALESCE(array_agg(DISTINCT k.kod ORDER BY k.kod) FILTER (WHERE b.miktar > 0), '{}') AS konumlar
      FROM stok_bakiye b JOIN stok_konum k ON k.id = b.konum_id
-    WHERE b.statu_id IS NOT NULL GROUP BY 1, 2, 3 HAVING sum(b.miktar) > 0 ORDER BY 1, 2, 3`);
+    WHERE b.statu_id IS NOT NULL AND ($1::int[] IS NULL OR b.malzeme_id = ANY($1::int[])) GROUP BY 1, 2, 3 HAVING sum(b.miktar) > 0 ORDER BY 1, 2, 3`,
+  [malzemeIdler === null ? null : [...malzemeIdler]]);
 // 2561 a: malzeme ve statü başına son hareket zamanı (statüye giren ya da çıkan) ve statüye son sokan emrin kimliği (yoksa null).
 export const statuSonHareketleri = (db: Db, malzemeIdler: readonly number[]): Promise<{ malzemeId: number; statuId: number; sonHareket: string; kaynakEmirId: number | null }[]> => db.sorgu(
   `WITH h AS (

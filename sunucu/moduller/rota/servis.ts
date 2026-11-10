@@ -5,7 +5,7 @@ export {
   talimatListesi, talimatMedyasi, talimatYaz, adimliTalimatYaz, talimatTaslakKaydet, talimatYayinla, talimatTaslakSil, talimatSurumuAdimlari,
   talimatSablonlari, talimatSablonu, talimatSablonKopyalari, talimatSablonEkle, talimatSablonKaydet, talimatSablonDurumuYaz,
 } from './servis/talimat.ts';
-export { type PatlatmaDugumu, patlatmaDugumleri, patlatmaRevizyonu, patlatmaGetir, patlatmaOnizlemesi, agac } from './servis/agac.ts';
+export { type PatlatmaDugumu, patlatmaDugumleri, patlatmaRevizyonu, patlatmaGetir, patlatmaOnizlemesi, agac, araHalCozucusuKaydet, type AraHalCozucusu, type AraHalCozumu } from './servis/agac.ts';
 export { sureler, gerceklesenSureYaz, gerceklesenKabulEt, emirBittiYansit, adimEtkinSureleri, adimEtkinSureleriToplu } from './servis/sureler.ts';
 export {
   type RotaAdimi, type RotaRevizyonu, girdisiEksikRevizyonlar, revizyonGetir, revizyonlar, type DurumRotaAdimi, type DurumRotaRevizyonu, durumRevizyonlari,

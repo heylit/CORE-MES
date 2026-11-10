@@ -1,6 +1,6 @@
 import type { Db } from '#cekirdek/db.ts';
 import { bulunamadi, gecersiz } from '#cekirdek/hata.ts';
-import type { AgacCevabi, PatlatmaCevabi, PatlatmaOnizlemeCevabi, UrunOzeti } from '#paylasilan/sozlesme/rota.ts';
+import type { AgacCevabi, AraHal, PatlatmaCevabi, PatlatmaOnizlemeCevabi, UrunOzeti } from '#paylasilan/sozlesme/rota.ts';
 import { AZAMI_AGAC_DERINLIGI } from '#paylasilan/sozlesme/rota.ts';
 import { cokKatmanaCevir, dugumDalAdi, emirFireCarpanlari, emirOpNumaralari, agaciAc, ondalikMetin } from '../kurallar.ts';
 import type { AgacRotasi } from '../kurallar.ts';
@@ -8,6 +8,20 @@ import * as s from '../sorgular.ts';
 import type { Icerik } from '../sorgular.ts';
 import { isEmriGirdileri, kaynakBaglami, kaynakOzetiAl, patlatmaKur, revizyonuAl, sayi, urunOzetiAl, urunOzetleri } from './ortak.ts';
 import { type RotaAdimi, type RotaRevizyonu, revizyonGetir } from './okuma.ts';
+
+/* ---------------- ara hal çözücüsü (2610 a) ---------------- */
+
+// Ara adımın statüsü, çıktı kartı ve stoğu Reçete ve Rota'dadır; o modül rotayı ithal ettiği için rota onu ithal edemez, bağı kablolama.ts
+// kurar. Kart rotanın ürün özetine burada çevrilir. Çözücü kayıtlı değilse ara hal null döner.
+export interface AraHalCozumu { statu: { id: number; ad: string } | null; kartId: number | null; stok: AraHal['stok'] }
+export type AraHalCozucusu = (db: Db, g: { malzemeNo: number; revizyonId: number; opNolari: readonly number[] }) => Promise<Map<number, AraHalCozumu>>;
+let araHalCozucusu: AraHalCozucusu | null = null;
+// Dönen işlev önceki kaydı geri koyar (testler bağı kendisi kurar).
+export function araHalCozucusuKaydet(c: AraHalCozucusu): () => void {
+  const onceki = araHalCozucusu;
+  araHalCozucusu = c;
+  return () => { araHalCozucusu = onceki; };
+}
 
 /* ---------------- ürün ağacı ve döngü ---------------- */
 
@@ -117,6 +131,14 @@ export async function patlatmaOnizlemesi(db: Db, revizyonId: number, miktar = 1)
     const urun = urunler.get(d.malzemeId);
     if (urun === undefined) throw gecersiz('Alt parçanın malzeme kartı bulunamadı.');
     const satirlar = p.satirlar.filter((x) => x.dugum === d.dugum);
+    const araOpNolari = satirlar.slice(0, -1).map((x) => x.kaynakOpNo);
+    const araHaller = araHalCozucusu === null || araOpNolari.length === 0 ? new Map<number, AraHalCozumu>()
+      : await araHalCozucusu(db, { malzemeNo: d.malzemeId, revizyonId: rota.id, opNolari: araOpNolari });
+    const araKartlari = await urunOzetleri(db, [...araHaller.values()].flatMap((h) => (h.kartId === null ? [] : [h.kartId])));
+    const araHal = (opNo: number): AraHal | null => {
+      const h = araHaller.get(opNo);
+      return h === undefined ? null : { statu: h.statu, kart: h.kartId === null ? null : araKartlari.get(h.kartId) ?? null, stok: h.stok };
+    };
     const adimlar = [];
     const altlar = bas.filter((c2) => c2.tuketenDugum === d.dugum);
     for (const [i, x] of satirlar.entries()) {
@@ -142,7 +164,8 @@ export async function patlatmaOnizlemesi(db: Db, revizyonId: number, miktar = 1)
       adimlar.push({
         kaynakOpNo: x.kaynakOpNo, emirOpNo: numara.get(`${d.dugum}|${x.kaynakOpNo}`)!, ad: a?.ad ?? '', yer: a ? await yer(a) : null,
         hedef: g === undefined ? null : ikili(g.adetCarpani ?? 1), adet: adet === null ? null : ikili(adet), cikanAdet: adet === null ? null : ikili(adet * (1 - fire / 100)),
-        cikti: i === satirlar.length - 1 ? 'urun' as const : 'ara-hal' as const, girenler, yanUrunler,
+        cikti: i === satirlar.length - 1 ? 'urun' as const : 'ara-hal' as const,
+        araHal: i === satirlar.length - 1 || g === undefined ? null : araHal(x.kaynakOpNo), girenler, yanUrunler,
       });
     }
     dugumler.push({

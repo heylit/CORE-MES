@@ -466,3 +466,9 @@ Teslim olduğu gibi alındı; yalnız oturtma için değişenler:
 - VARSAYIM: pasif şablondan kopyanın kökeni de yazılır (köken bilgidir, şablonu kullanıma açmaz). Geri alma: ucuz.
 - VARSAYIM: kopya listesinde sayfalama yok; şablon başına kopya sayısı OP sayısıyla sınırlı kalır. Geri alma: ucuz.
 - Kopyadan düzenlenen sürüm kökenini taşır (köken "nereden başladı" bilgisidir; Mimar K1).
+
+## 2610: önizlemede ara adımın statülü kartı ve stoğu (kullanıcı kararı 2610 a)
+- Önizleme adımına `araHal: { statu { id, ad } | null, kart urunOzeti | null, stok { toplam, planaSayilan } | null } | null`. Ürün adımında ve engelde null.
+- Kaynak Reçete ve Rota'nın `adimAraHalleri`'dir (yazmaz; sayımın statü ve çıktı kartı kuralı); bağ kablolama.ts'te `araHalCozucusuKaydet`.
+  Statü stoğu stok `statuStoklari` (2547 sorgusu, plana sayılan kalite `planaSayilirMi`), çıktı kartının stoğu `stokMiktarlari`.
+- Gösterilecek miktarı ekran seçer (2622 kararı); sözleşme ikisini de taşır. Tablo, göç ve yetki değişmedi.
