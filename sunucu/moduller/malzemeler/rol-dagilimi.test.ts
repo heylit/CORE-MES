@@ -172,6 +172,7 @@ describe('Malzemeler rol dağılımı (gerçek PostgreSQL, gerçek giriş)', () 
     sevkiyat: HIC,
     vardiya_sorumlusu: HIC,
     guvenlik_gorevlisi: HIC,
+    markalama_gorevlisi: HIC,
     genel_mudur: { ...ONAYCI, ayar: 200 },
     genel_mudur_yardimcisi: { ...ONAYCI, ayar: 200 },
     planlama_muduru: { ...YAZAR, ayar: 200 },

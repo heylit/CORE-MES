@@ -60,6 +60,19 @@ describe('markalama (gerçek PostgreSQL)', () => {
     await giris(kullaniciAdi);
   }
 
+  // Göçlerin kurduğu yerleşik rol: rol matrisinin markalama satırları (2730-1 a+c) gerçek rolle ölçülür.
+  async function yerlesikRolluKisi(kullaniciAdi: string, rolKodu: string): Promise<void> {
+    const rol = await o().vt.tek<{ id: number }>('SELECT id FROM rol WHERE kod = $1', [rolKodu]);
+    assert.ok(rol, rolKodu);
+    const yoneticiRolu = await o().vt.tek<{ id: number }>("SELECT id FROM rol WHERE kod = 'yonetici'");
+    await o().vt.tx(async (db) => {
+      const id = await yoneticiOlustur(db, { ad: `Deneme ${kullaniciAdi}`, kullaniciAdi, parola: PAROLA });
+      await rolAta(db, yoneticiId, id, rol.id);
+      await rolAl(db, yoneticiId, id, yoneticiRolu?.id ?? 0);
+    });
+    await giris(kullaniciAdi);
+  }
+
   async function malzemeAc(): Promise<number> {
     sayac += 1;
     await o().sahip.sorgu("INSERT INTO malzeme_katalog_kod_sirasi (onek, son_sira) VALUES ('MK-DNM-', 0) ON CONFLICT (onek) DO NOTHING");
@@ -142,6 +155,28 @@ describe('markalama (gerçek PostgreSQL)', () => {
     assert.equal((await istek('operator', 'POST', '/markalama/tanimlar/ekle', govde)).durum, 403);
     assert.equal((await istek('operator', 'GET', '/markalama/tanimlar')).durum, 200);
     assert.equal((await istek('yonetici', 'POST', '/markalama/tanimlar/ekle', govde)).durum, 200);
+  });
+
+  test('MRK-U16, 2730-1 a+c: yerleşik operatör markalamayı okuyamaz ve seri veremez; Markalama Görevlisi okur, tanım yazar, seri verir, durum yazamaz', async () => {
+    await yerlesikRolluKisi('gercek-operator', 'operator');
+    await yerlesikRolluKisi('gercek-gorevli', 'markalama_gorevlisi');
+    const m = await malzemeAc();
+    const t = await tanimAc(m);
+    const emir = await emirAc(m);
+    assert.equal((await istek('gercek-operator', 'GET', '/markalama/tanimlar')).durum, 403);
+    assert.equal((await istek('gercek-operator', 'GET', `/markalama/tanimlar/${t.id}/onizleme?emirId=${emir}`)).durum, 403);
+    assert.equal((await markala('gercek-operator', t.id, emir)).durum, 403);
+    assert.equal((await istek('gercek-operator', 'POST', '/markalama/birimler/dogrula', { tanimId: t.id, seriNo: 'YOK-1' })).durum, 403);
+    assert.equal((await istek('gercek-gorevli', 'GET', '/markalama/tanimlar')).durum, 200);
+    const yeni = await istek('gercek-gorevli', 'POST', '/markalama/tanimlar/ekle', {
+      malzemeId: await malzemeAc(), opNo: 40, seriSablonu: '{PARCA}-{SEQ}', alanlar: [seriAlani],
+    });
+    assert.equal(yeni.durum, 200, JSON.stringify(yeni.govde));
+    const b = await markala('gercek-gorevli', t.id, emir);
+    assert.equal(b.durum, 200, JSON.stringify(b.govde));
+    assert.equal((await istek('gercek-gorevli', 'POST', '/markalama/birimler/dogrula', { tanimId: t.id, seriNo: b.govde.seriNo })).durum, 200);
+    const durum = await istek('gercek-gorevli', 'POST', `/markalama/birimler/${b.govde.id}/durum`, { komut: 'red', aciklama: 'deneme', surum: b.govde.surum });
+    assert.equal(durum.durum, 403);
   });
 
   test('MRK-U2: tanım şablonu, adım tekilliği ve sürüm denetlenir; 3B yer saklanır', async () => {

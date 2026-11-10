@@ -89,6 +89,7 @@ describe('rol dağılımı: Arkon rolleri, bakım rolü ve malzeme tanım yetkis
     idari_isler: { arkon: null, tanim: false, yansima: false, yeniden: false },
     sevkiyat: { arkon: null, tanim: false, yansima: false, yeniden: false },
     guvenlik_gorevlisi: { arkon: null, tanim: false, yansima: false, yeniden: false },
+    markalama_gorevlisi: { arkon: null, tanim: false, yansima: false, yeniden: false },
     vardiya_sorumlusu: { arkon: 'lead', tanim: false, yansima: false, yeniden: false },
     genel_mudur: { arkon: 'lead', tanim: true, yansima: true, yeniden: true },
     genel_mudur_yardimcisi: { arkon: 'lead', tanim: true, yansima: true, yeniden: true },
