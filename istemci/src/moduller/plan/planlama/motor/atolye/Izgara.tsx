@@ -120,6 +120,7 @@ export function Izgara({ ort, pano, parla }: { ort: Ortam; pano: MutableRefObjec
   // İtme önizlemesi (2790 a, 2794): sürüklenen işin gönderilecek yeri için sunucunun hesabı. Aynı emrin itilen ya da çekilen adımları kendi
   // satırlarında kesikli çubukla gösterilir; geçersiz taşıma kırmızı çerçeve ve nedenle. Eski (yarışan) cevap atılır.
   const itme = useRef<{ anahtar: string; zaman: number; seri: number; cevap: IsTasiOnizlemesi | null; hayaletler: HTMLElement[] }>({ anahtar: '', zaman: 0, seri: 0, cevap: null, hayaletler: [] });
+  const itmeSurumu = useRef<{ s: Suruk | null; soz: Promise<number | null> }>({ s: null, soz: Promise.resolve(null) });
   const itmeTemizle = () => {
     const o = itme.current; window.clearTimeout(o.zaman); o.seri += 1; o.anahtar = ''; o.cevap = null;
     for (const h of o.hayaletler) h.remove();
@@ -224,8 +225,13 @@ export function Izgara({ ort, pano, parla }: { ort: Ortam; pano: MutableRefObjec
     itmeTemizle(); o.anahtar = anahtar;
     const seri = o.seri;
     o.zaman = window.setTimeout(() => {
-      void isTasiOnizle({ isId: s.id, tezgah: m, baslangic: S }).then((c) => {
+      // Sunucu kayıtlı çalışmayla hesaplar: sürükleme başına bir kez bekleyen değişiklik yazılır (bırakınca taşıma da yazar), sürümü
+      // tutmayan hesap eskidir ve gösterilmez.
+      if (itmeSurumu.current.s !== s) itmeSurumu.current = { s, soz: ort.o.komut?.kaydet() ?? Promise.resolve(null) };
+      const soz = itmeSurumu.current.soz;
+      void soz.then(async (surum) => [surum, await isTasiOnizle({ isId: s.id, tezgah: m, baslangic: S })] as const).then(([surum, c]) => {
         if (suruk.current !== s || itme.current.seri !== seri || c === null) return;
+        if (c.calismaSurumu != null && c.calismaSurumu !== surum) return;
         itme.current.cevap = c; itmeCiz(c, s.id);
         onizle(s);
       });

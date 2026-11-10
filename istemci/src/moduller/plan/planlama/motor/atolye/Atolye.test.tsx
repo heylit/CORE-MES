@@ -583,6 +583,29 @@ describe('PlanlamaAtolyesi', () => {
     get.mockRestore(); post.mockRestore();
   });
 
+  it('2789-2: önizleme sürükleme başına bir kez kaydedilen sürümle karşılaştırılır; sürümü tutmayan hesap gösterilmez', async () => {
+    let surum = 7;
+    const get = vi.spyOn(api, 'get').mockImplementation(((yol: string) => (yol.startsWith('/plan/planlama-calismasi/is-tasi-onizlemesi')
+      ? Promise.resolve({ gecerli: true, ileti: `Sürüm ${String(surum)}`, calismaSurumu: surum, isler: [{ isId: 'X1', tezgah: '5', S: 300, C: 302, eskiTezgah: '5', eskiS: 299, tur: 'itilen' }] })
+      : Promise.reject(new Error('yok')))) as never);
+    const c = ornekCalisma(); const { komut } = komutKur(c);
+    ac({ c, komut });
+    const cubuk = document.querySelector('[data-id="2.40"]') as HTMLElement;
+    const onizlemeler = () => get.mock.calls.filter(([y]) => String(y).includes('is-tasi-onizlemesi')).length;
+    fireEvent.pointerDown(cubuk, { button: 0, clientX: 100, clientY: 10, pointerId: 1 });
+    fireEvent.pointerMove(cubuk, { clientX: 140, clientY: 10, pointerId: 1 });
+    await waitFor(() => expect(onizlemeler()).toBe(1));
+    await new Promise((r) => { setTimeout(r, 20); });
+    expect(screen.queryByText('Sürüm 7')).toBeNull();
+    expect(document.querySelector('.tc-pym-tp-hayalet[data-itme]')).toBeNull();
+    surum = 8;
+    fireEvent.pointerMove(cubuk, { clientX: 170, clientY: 10, pointerId: 1 });
+    await waitFor(() => expect(screen.getByText('Sürüm 8')).toBeTruthy());
+    expect(komut.kaydet).toHaveBeenCalledTimes(1);
+    fireEvent.pointerCancel(cubuk, { pointerId: 1 });
+    get.mockRestore();
+  });
+
   it('2789: sunucu taşımayı geçersiz sayarsa çubuk kırmızı çerçeve alır, ipucunda nedeni yazar; uç yoksa eski önizleme sürer', async () => {
     let gecerli = false;
     const get = vi.spyOn(api, 'get').mockImplementation(((yol: string) => (yol.startsWith('/plan/planlama-calismasi/is-tasi-onizlemesi')

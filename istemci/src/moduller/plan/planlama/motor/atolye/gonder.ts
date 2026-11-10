@@ -227,6 +227,8 @@ export function useAtolyeKomutlari(o: Pick<PlanlamaEkranOzellikleri, 'komut' | '
 export interface IsTasiOnizlemesi {
   gecerli: boolean;
   ileti: string | null;
+  // Hesabın yapıldığı kayıtlı çalışma sürümü; eski sunucuda yok.
+  calismaSurumu?: number | null;
   isler: { isId: string; tezgah: string; S: number; C: number; eskiTezgah: string; eskiS: number; tur: 'tasinan' | 'itilen' | 'cekilen' }[];
 }
 export const IS_TASI_ONIZLEME_YOLU = '/plan/planlama-calismasi/is-tasi-onizlemesi';
