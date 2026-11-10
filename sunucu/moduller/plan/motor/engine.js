@@ -134,12 +134,15 @@ function compile(st){olcekKur(st.w);
     let sw=[];for(let d=-1;d<HDAYS;d++)for(const sid of gunu(d))if(!own||own.has(sid)){const w=inst(d,sid);if(w)sw.push(...subtract([w],molalar(d,sid)));}
     for(const e of ek)if(e.m===m.id){const w=inst(e.gun,e.vardiya);if(w)sw.push(...subtract([w],molalar(e.gun,e.vardiya)));}
     sw=merge(sw);
+    /* 2785 b: hazırlık tek parçadır; tezgâhın kesintisiz çalıştığı blok vardiyaların molasız birleşimidir (mola hazırlığı bölmez). */
+    let sb=[];for(let d=-1;d<HDAYS;d++)for(const sid of gunu(d))if(!own||own.has(sid)){const w=inst(d,sid);if(w)sb.push(w);}
+    for(const e of ek)if(e.m===m.id){const w=inst(e.gun,e.vardiya);if(w)sb.push(w);}
     let rw=sw;
     if(m.isiksiz){rw=[];for(let d=0;d<HDAYS;d++)if(gunu(d).length)rw.push([d*24,d*24+24]);rw=merge(rw.concat(sw));}
     const dn=(st.down||[]).filter(x=>x.m===m.id).map(x=>[x.from,x.to]);
-    sw=subtract(sw,dn);rw=subtract(rw,dn);
+    sw=subtract(sw,dn);rw=subtract(rw,dn);sb=subtract(merge(sb),dn);
     const pay=st.w.tampon?Math.min(.35,(m.arizaGun>0?(+m.onarimSaat||0)/(m.arizaGun*24):0)+(+st.w.acilPay||0)):0;
-    M[m.id]={...m,sw,rw,smask:mask(sw),rmask:mask(rw),opOran:m.opOran==null?1:+m.opOran,verim:m.verim||1,pay};
+    M[m.id]={...m,sw,rw,sblok:sb,smask:mask(sw),rmask:mask(rw),opOran:m.opOran==null?1:+m.opOran,verim:m.verim||1,pay};
   }
   const capTot=new Float32Array(NS),capAyar=new Float32Array(NS),capG={};
   const grups=new Set(D.tezgahlar.map(m=>m.grup));grups.forEach(g=>capG[g]=new Float32Array(NS));
@@ -377,6 +380,10 @@ function tMach(o,c,cx,ctx,b,fast){
   for(let it=0;it<600;it++){
     s=openAt(W0,s);if(!isFinite(s))return null;
     const Su=adv(M.sw,s,su);if(!isFinite(Su))return null;
+    /* 2785 b: hazırlık başladığı blokta biter; sığmazsa hazırlığın sığdığı ilk blokta başlar, sığan blok yoksa iş yerleşmez. İşleme
+       vardiya sınırında bölünür; tezgâh S..C boyunca bu işindir (ctx.av), bekleme aralığına başka işin hazırlığı girmez. */
+    if(su>0){const bi=M.sblok.findIndex(([a,z])=>s>=a-1e-9&&s<z-1e-9);
+      if(bi<0||Su>M.sblok[bi][1]+1e-9){const nx=M.sblok.findIndex(([a,z],i)=>i>bi&&a>s+1e-9&&workIn(M.sw,a,z)>=su-1e-9);if(nx<0)return null;s=M.sblok[nx][0];continue;}}
     const C=adv(M.rw,Su,run);if(!isFinite(C))return null;
     if(b.fin>-Infinity&&C<b.fin+lastLot-1e-9){const need=b.fin+lastLot-C;s+=Math.max(need,SL);why={t:'rota',r:b.finRef,o:2};continue;}
     const kl=ctx.kilit&&ctx.kilit[c.m]&&ctx.kilit[c.m].find(([a,z])=>s<z-1e-9&&C>a+1e-9);if(kl){s=kl[1];why={t:'tezgah',r:kl[2]};continue;}

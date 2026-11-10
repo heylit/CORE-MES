@@ -371,6 +371,17 @@ Testler: plan-bedel 815 (iki test), kurallar 815, kablolama 815; istemci planlam
   vardiyası yok, vardiyada yetkin kişi yok, işin süresi açık süreden uzun (iki süreyle), tezgâh dolu. Ölçülemeyen "nedeni ölçülemedi" olur.
 - 2784: hazırlık tek parçadır ve tezgâhın her hazırlık diliminde ayarcı ister (motor checkUse). Tezgâh ayarcının olmadığı vardiyada da
   çalışıyorsa ve hazırlık ayarcının kesintisiz bulunduğu süreden uzunsa neden iki süreyle yazılır (kod kisi-vardiyasiz, hedef tezgâh).
+
+## Hazırlık tek parça, işlem bölünür (2784, kart 2785 b; 2026-11-10)
+- Motor (engine.js tMach): hazırlık başladığı kesintisiz blokta biter. Blok tezgâhın vardiyalarının molalar dahil birleşimidir (ard arda
+  vardiyalar tek blok; mola hazırlığı bölmez, arıza ve vardiya arası böler). Vardiyanın kalanına sığmayan hazırlık sığdığı ilk bloğun başında
+  başlar; hiçbir bloğa sığmayan iş yerleşmez. İşleme vardiya sınırında bölünür (öncekiyle aynı).
+- Atölye koşulu (bekleme aralığında tezgâha başka işin hazırlığı girmez) motorda zaten sağlanıyordu: tezgâh S..C boyunca işindir (ctx.av).
+- Neden: hazırlık bloğa sığmazsa "{tezgâh} tezgâhında hazırlık (X) tezgâhın kesintisiz çalıştığı süreden (Y) uzun; hazırlık bölünmez. ..."
+  (kod takvim-yok, hedef tezgâh); bloğa sığıp ayarcının kesintisiz süresine sığmazsa 2784 tanı iletisi. Ayarcı süresi de blok sınırında kesilir.
+- GÖRÜNEN DEĞİŞİKLİK: vardiya sonunu aşan hazırlık artık bölünmez, ertesi vardiyanın başına kayar; tek vardiyalı tezgâhta vardiyadan uzun
+  hazırlık yerleşmez (önce günlere bölünerek yerleşiyordu). Gecikmenin türü (why) değişmez; ekranda ayrı "hazırlık sığmadı" etiketi yok.
+- Test: `uzun-hazirlik-neden.test.ts` UH-01..05.
 - B-2482-33 (insanlı istasyonun makinesi seçili): neden kişidedir (vardiya ya da yetkinlik), ileti makine ve istasyon adını söyler.
 - GÖRÜNEN DEĞİŞİKLİK: ileti metinleri değişir; "Sunucu motoru yerleştiremedi: " öneki kalkar. Ardıl metinleri ("Önceki adım (... OP n)
   yerleşmedi.", "Bağlı parti yerleşmedi.") aynıdır. Plan cevabının yerlesmemis[].neden metni yalnız pasif kaynakta adı söyler.
