@@ -18,7 +18,7 @@ import * as sorgular from './sorgular.ts';
 // 2677 b: genel gider oranının gizli olduğu ayda planlama değerlendirmesi kâr göndermez; tutar ve bedeller kalır. Veriler uydurmadır.
 const parse = (x: unknown): DegerlendirmeSonucu => degerlendirmeSonucu.parse(x);
 const PLAN_SECENEKLERI = parse({
-  tur: 'plan-secenekleri',
+  tur: 'plan-secenekleri', bedeliBilinmeyenEkMesai: false,
   secenekler: [{ denge: 50, carpan: 1, ekMesai: [{ makineId: 'T1', gun: 1, vardiya: '3', tl: 400 }], ekMesaiTl: 400, geciken: 1, isSayisi: 2, gecikmeSaat: 3, netKar: 1234, eksik: 0, plan: {} }],
 });
 const TERMIN_SECENEKLERI = parse({

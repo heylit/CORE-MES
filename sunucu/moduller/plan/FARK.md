@@ -332,3 +332,12 @@ Testler: plan-bedel 815 (iki test), kurallar 815, kablolama 815; istemci planlam
   eşit değer aynı sıra, boşluk yok; aralık ya da oran çıkmaz. Bilinmeyen grup (küçük, karışık, atamasız, kişi bazlı değil) null.
 - Kabul edilen kalan risk (Güvenlik): aylar arasında sıranın değişmesi kaba göreli bilgi verir.
 - Test: `mesai-maliyeti.test.ts` "2752", `uc-yetkisi.test.ts` satırı.
+
+## Bedeli bilinmeyen ek mesai seçilmez (2759; 2745 a ilkesi, yapı 5; Maliyet, Mimar, Test; 2026-11-10)
+- Plan seçenekleri (`motor/degerlendir.js pdSecenekler`) bedeli null olan ek mesai adayını hiçbir denge konumunda seçmez. Önce `- null` 0
+  sayılıyor, bedeli bilinmeyen ek mesai bedava sayılıp öneriliyordu. Bedeli bilinen adayda kârlılık eşiği değişmez.
+- Görünen fark: mesai ücreti ve grup değeri olmayan tezgâhta plan seçenekleri artık ek mesai önermez; seçilen ek mesailerin toplamı ve net kâr
+  her zaman bilinir.
+- Sözleşme (yalnız ekleme): plan-secenekleri cevabına `bedeliBilinmeyenEkMesai: boolean` (cevap başına; en az bir aday bedeli bilinmediği
+  için ele alınmadı). TL değildir; maliyet görmeyende de aynıdır. Kartta 2745 a metni istemcide (2503, ayrı yama).
+- Test: `ek-mesai-secenek.test.ts` PS-01, 02, 04, 05.
