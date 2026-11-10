@@ -300,3 +300,24 @@ Testler: plan-bedel 815 (iki test), kurallar 815, kablolama 815; istemci planlam
 - Dolaylı personel kartının ve ek mesai planındaki kişi ücretinin brütü (`D.maliyetSis.dolayli[].brut`, `D.mesaiSis.ucret[*].brut`) planlama kaydına yazılmaz; `GET /plan/planlama-kayitlari` ve `GET /plan/planlama-calismasi` brüt döndürmez (`motor-ayari-kurallar.ts` `brutAlanlariniCikar`).
 - Sonuç (kart 2740 bekler): brüt olmayınca kişi bazlı ek mesai bedeli ücretten hesaplanmaz; motor yalın mesai hesabına düşer (`degerlendir.js` `msSaat` null, `ymMesaiTLYalin`). Başka yol seçilmedi.
 - Kayıtta kalmış brütün silinmesi ayrı göçtedir (2615 a planından sonra); o zamana kadar okumada çıkarılır.
+## Ek mesai bedeli İK grup saat maliyetiyle (2742; 2740 a, 2743 b, 2745 a, 2510 a; 2026-11-10)
+- Ortak hesap `mesai-maliyeti.ts istasyonSaatDegerleri(db, ay, istasyonlar)`: istasyonun ay sonu atamaları (yüzde ağırlıklı) -> kişinin İK
+  departmanı -> büyük departmanda İK değeri. Küçük departman (3 kişiden az) bilinmiyor sayılır; karışık istasyon (büyük ve küçük grubun kişisi)
+  ve atamasız istasyon da null. Plan değerlendirmesi, 2653 taslak toplamı ve yıllık plan ucu bu tek yoldan okur.
+- 2743 b: 2653'teki küçük grup havuzu kalktı (`kucukGrupHavuzuYalnizHesapIcin` plan modülünde okunmaz); küçük grubun satırı yalın mesai
+  ücretine düşer, iki ekran aynı tutarı gösterir. "Yalnız havuzlu satırlardan oluşan toplam null" kuralı da kalktı. Görünür değişiklik: küçük
+  grupta mesai ücreti yoksa satır "bilinmiyor" (`bilinmeyen: true`); mesai ücreti varsa toplam artık görünür.
+- 2510 a (T-2742-1, Maliyet b): yalın ek mesai her ek vardiyada h x mesai ücreti x (mesai çarpanı || 1,5); motorun `ymMesaiTLYalin`'i ile aynı.
+  Görünür değişiklik: 2653 taslak toplamı vardiyalı hafta içi ek vardiyada 1,5 kat artar (vardiyasız günde değişmez). Ortak örnekler M7, M10
+  değişti, Y1-Y6 eklendi (2749 istemciyle aynı). `vardiyasizGun` ve `MesaiGirdisi.vardiyasiz` kalktı.
+- Motor (Maliyet C1): plan değerlendirmesi başlarken, yalnız finans.maliyet-oku olanda (Güvenlik K3), birleşmiş çalışmanın tezgâhlarına değer
+  yazılır: iş parçacığının girdisinde `D.mesaiSaat[tezgahId] = number | null` (`degerlendirme.ts mesaiSaatliGirdi`). `degerlendir.js
+  ymMesaiTL` bunu okur; null ya da yoksa yalın. Kayıttaki brütten kurulan `msGrupSaat`/`msSaat` kalktı. Değer kayda ve hiçbir cevaba girmez.
+- Yeni uç `GET /plan/mesai-saat-degerleri` (yalnız finans.maliyet-oku, parametresiz, strict): `{ ay, gruplar: [{ grup, saatTL | null }] }`.
+  Grup değeri (Maliyet C2, Mimar N1): s = bilinen tezgâhların opOran ağırlıklı istasyon değeri ortalaması (hepsi null ise null);
+  saatTL = s x op x hafta içi çarpanı + kişi başı ek / 8 x op, op grubun ortalama opOran'ı (yoksa 1); istemcinin ufuk `mesaiSaatTL`'si ile aynı
+  formül, op bir kez girer. Kişi bazlı değilse ya da mesai sistemi kayıtlı değilse bütün gruplar null. Cevapta olmayan grup istemcide null
+  sayılır (2742-1a). Yıllık plan null grupta ek mesai önermez (2745 a; istemci 2503).
+- VARSAYIM: motorda kişi bazlı kip yalnız `mesaiSis.kisiBazli` true iken açıktır; sunucu `mesaiAyarlari` alan yoksa kişi bazlı sayar. Alan
+  kayıtta yoksa iki ekran farklı tutar verir (öncesinde de böyleydi). Maliyet'e bildirildi; bu yamada değişmedi.
+- Test: `ek-mesai-grup.test.ts` (EG-01..05, motor = 2653 satırı üç durumda), `mesai-maliyeti.test.ts` (PL-2653, PL-2742), `uc-yetkisi.test.ts` satırı.
