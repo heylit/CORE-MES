@@ -1494,20 +1494,16 @@ export function satirYolu(r: YolGirdisi): SatirYolu {
 
 // Bir siparişin dağılımı. Emir ve proje yolunda değer gerçekleşen değerdir: hizmet teslim oranıyla (gerceklesenPay), kartsız satır teslim
 // kaydı olamadığı için sipariş tutarıyla (2611 varsayım 7). Masraf satırın sipariş malı payı kadardır ve o hedefte değer varsa girer
-// (2611 N2). Genel gider oranı (2637 a) genel gider yolundaki malın bütün mala oranıdır; Finans belge tutarını bununla çarpar. Mal 0 ise
-// oran tanımsızdır: null (Veri 1); yolu bilinmeyen satır varsa oran bilinemez: null. Fason ve stok yolunun masraf payı hiçbir hedefe verilmez (Maliyet N4, ayrı iş).
+// (2611 N2). Genel gider oranı (genelGiderOrani) Finans'ın belge tutarıyla çarptığı orandır. Mal 0 ise oran tanımsızdır: null (Veri 1); yolu
+// bilinmeyen satır varsa oran bilinemez: null. Stok yolunun masraf payı hiçbir hedefe verilmez (Maliyet N4, ayrı iş).
 export interface DagilimSatiri extends YolGirdisi { mal: number; miktar: number; teslim: number }
 export interface SiparisDagilimi { hedefler: { yol: 'emir' | 'proje'; hedefId: number; deger: number }[]; genelGiderOrani: number | null }
 export function siparisDagilimi(satirlar: readonly DagilimSatiri[], masraf: number): SiparisDagilimi {
   const teslimVar = satirlar.some((x) => x.teslim > 0);
   const tumMal = satirlar.reduce((t, x) => t + x.mal, 0);
   const hedefler = new Map<string, { yol: 'emir' | 'proje'; hedefId: number; deger: number; pay: number }>();
-  let genelMal = 0;
-  let bilinmeyen = false;
   for (const x of satirlar) {
     const yol = satirYolu(x);
-    if (yol === 'bilinmiyor') bilinmeyen = true;
-    if (yol === 'genel_gider') genelMal += x.mal;
     if (yol !== 'emir' && yol !== 'proje') continue;
     const hedefId = yol === 'emir' ? x.emirId! : x.projeId!;
     const a = `${yol}/${hedefId}`;
@@ -1518,27 +1514,45 @@ export function siparisDagilimi(satirlar: readonly DagilimSatiri[], masraf: numb
   }
   return {
     hedefler: [...hedefler.values()].filter((h) => h.deger > 0).map((h) => ({ yol: h.yol, hedefId: h.hedefId, deger: h.deger + h.pay })),
-    genelGiderOrani: tumMal > 0 && !bilinmeyen ? Math.round(genelMal / tumMal * 1e6) / 1e6 : null,
+    genelGiderOrani: genelGiderOrani(satirlar, masraf, new Set()),
   };
 }
 
+// 2637 a, 2600 3/3 b: siparişin (ya da belgede eşlenmemiş kısmının, 2642 b Maliyet C1) genel gidere giren oranı. Finans oranı belge
+// tutarıyla (mal + masraf varsayılır) çarpar. Pay: eşlenmemiş genel yol malı + masrafın genel ve fason yolundaki mal payı; fason malın
+// kendisi emre gider (isEmriFasonTutarlari), masrafı emre yazılmadığı için genel gidere girer. Payda: eşlenmemiş mal + masraf. Masraf
+// payı siparişin bütün malına oranlanır. Bütün malı 0, yolu bilinmeyen satırı olan ya da paydası 0 olan sipariş: null.
+export function genelGiderOrani(satirlar: readonly DagilimSatiri[], masraf: number, eslenen: ReadonlySet<number>): number | null {
+  const yollar = satirlar.map(satirYolu);
+  const tumMal = satirlar.reduce((t, x) => t + x.mal, 0);
+  if (tumMal <= 0 || yollar.includes('bilinmiyor')) return null;
+  const masrafli = satirlar.reduce((t, x, i) => t + (yollar[i] === 'genel_gider' || yollar[i] === 'fason' ? x.mal : 0), 0);
+  const kalan = satirlar.filter((_, i) => !eslenen.has(i));
+  const kalanMal = kalan.reduce((t, x) => t + x.mal, 0);
+  const kalanGenel = satirlar.reduce((t, x, i) => t + (!eslenen.has(i) && yollar[i] === 'genel_gider' ? x.mal : 0), 0);
+  const payda = kalanMal + masraf;
+  if (payda <= 0) return null;
+  return Math.round((kalanGenel + masraf * masrafli / tumMal) / payda * 1e6) / 1e6;
+}
+
 // 2642 b, 2646 a: belgenin genel gidere giren oranı. B belgenin KDV hariç tutarı, E sayılan eşlemelerin toplamı, G genel gider yolundaki
-// eşlenen tutar, S siparişin oranı (siparisDagilimi). Eşleme belgenin güncel siparişinde değilse (yol null, bayat) sayılmaz (Veri 1).
+// eşlenen tutar, S siparişin eşlenmemiş kısmının oranı (genelGiderOrani, eşlenen satırlar dışarıda; Maliyet C1: kalan çoğunlukla masraftır,
+// siparişin bütün oranıyla çarpılırsa fason masrafı kaybolur). Eşleme belgenin güncel siparişinde değilse (yol null, bayat) sayılmaz (Veri 1).
 // Sayılan eşleme yoksa S; varsa (G + (B - E) x S) / B. E > B, yolu bilinmeyen eşlenmiş satır ya da kalan varken S null ise oran null.
 // Tutarlar kuruşla toplanır (iki ondalık), kayan nokta birikmez.
 export type EslemeDurumu = 'yok' | 'kismi' | 'tam';
-export interface BelgeOranGirdisi { belgeTutari: string; siparisOrani: number | null; eslemeler: readonly { tutar: string; yol: SatirYolu | null }[] }
+export interface BelgeOranGirdisi { belgeTutari: string; kalanOrani: number | null; eslemeler: readonly { tutar: string; yol: SatirYolu | null }[] }
 export function belgeGenelGiderOrani(g: BelgeOranGirdisi): { oran: number | null; esleme: EslemeDurumu } {
   const kurus = (x: string): number => Math.round(Number(x) * 100);
   const sayilan = g.eslemeler.filter((x) => x.yol !== null);
-  if (sayilan.length === 0) return { oran: g.siparisOrani, esleme: 'yok' };
+  if (sayilan.length === 0) return { oran: g.kalanOrani, esleme: 'yok' };
   const b = kurus(g.belgeTutari);
   const e = sayilan.reduce((t, x) => t + kurus(x.tutar), 0);
   const kalan = b - e;
   const esleme: EslemeDurumu = kalan > 0 ? 'kismi' : 'tam';
-  if (b <= 0 || kalan < 0 || sayilan.some((x) => x.yol === 'bilinmiyor') || (kalan > 0 && g.siparisOrani === null)) return { oran: null, esleme };
+  if (b <= 0 || kalan < 0 || sayilan.some((x) => x.yol === 'bilinmiyor') || (kalan > 0 && g.kalanOrani === null)) return { oran: null, esleme };
   const genel = sayilan.filter((x) => x.yol === 'genel_gider').reduce((t, x) => t + kurus(x.tutar), 0);
-  return { oran: Math.round((genel + kalan * (g.siparisOrani ?? 0)) / b * 1e6) / 1e6, esleme };
+  return { oran: Math.round((genel + kalan * (g.kalanOrani ?? 0)) / b * 1e6) / 1e6, esleme };
 }
 
 // 2642 b: eşleme sürümü; kayıt silinmez, kaldırma bir kez yazılır, bu yüzden yalnız artar (Mimar notu).

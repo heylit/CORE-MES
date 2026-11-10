@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
-import { ILETILER, birlesikTalep, birlesmeProjesiReddi, projeReddi, satirYolu, siparisDagilimi, type DagilimSatiri } from './kurallar.ts';
+import { ILETILER, belgeGenelGiderOrani, birlesikTalep, birlesmeProjesiReddi, genelGiderOrani, projeReddi, satirYolu, siparisDagilimi, type DagilimSatiri } from './kurallar.ts';
 
 describe('2611 a, 2614 1/2 a, 2620 a: talebin projesi (saf kurallar)', () => {
   test('proje yalnız emirsiz talepte; yeni seçilen proje aktif, değişmeyen eski proje durumu değişse de kalır', () => {
@@ -48,8 +48,8 @@ describe('2611 a, 2614 1/2 a, 2620 a: talebin projesi (saf kurallar)', () => {
       satir({ ...p, mal: 30, miktar: 3 }),
       satir({ ...p, fason: true, kartTuru: 'hizmet', mal: 20, teslim: 1 }),
     ];
-    // 25 (hizmetin yarısı) + 30 (kartsız) + 20 x 80 / 200 = 8.
-    assert.deepEqual(siparisDagilimi(satirlar, 20), { hedefler: [{ yol: 'proje', hedefId: 5, deger: 63 }], genelGiderOrani: 0 });
+    // 25 (hizmetin yarısı) + 30 (kartsız) + 20 x 80 / 200 = 8. 2600 3/3 b: fasonun masraf payı (20 x 20 / 200 = 2) genel gidere: 2 / 220.
+    assert.deepEqual(siparisDagilimi(satirlar, 20), { hedefler: [{ yol: 'proje', hedefId: 5, deger: 63 }], genelGiderOrani: 0.009091 });
     // Yalnız stok ve fason: projeye bir şey gitmez, masraf da gitmez.
     assert.deepEqual(siparisDagilimi([satirlar[0]!, satirlar[3]!], 20).hedefler, []);
     // N2: hizmet satırı teslimsizse değeri yok, masraf da girmez.
@@ -82,5 +82,36 @@ describe('2611 a, 2614 1/2 a, 2620 a: talebin projesi (saf kurallar)', () => {
     // Mimar N2: yolu bilinmeyen satır varsa oran null; bilinen proje tutarı yine verilir.
     const b = siparisDagilimi([satir({ kartTuru: 'hizmet', mal: 10, miktar: 1, teslim: 1, projeId: 3 }), satir({ kartBulunamadi: true, mal: 10, projeId: 3 })], 0);
     assert.deepEqual(b, { hedefler: [{ yol: 'proje', hedefId: 3, deger: 10 }], genelGiderOrani: null });
+  });
+
+  test('2600 3/3 b: fason siparişinin masrafı genel gidere girer, fason malı girmez (Maliyet örneği)', () => {
+    // Emir A 6.000 ve emir B 4.000 kaplama, nakliye 500: genel gidere 500, belge 10.500.
+    const fason = [
+      satir({ fason: true, kartTuru: 'hizmet', emirId: 1, emirProjeli: true, mal: 6000, miktar: 1, teslim: 1 }),
+      satir({ fason: true, kartTuru: 'hizmet', emirId: 2, emirProjeli: true, mal: 4000, miktar: 1, teslim: 1 }),
+    ];
+    assert.deepEqual(siparisDagilimi(fason, 500), { hedefler: [], genelGiderOrani: 0.047619 });
+    assert.equal(siparisDagilimi(fason, 0).genelGiderOrani, 0);
+    // Karışık: genel 100, fason 100, stok 200, masraf 40 (mal 400). Pay 100 + 40 x 200 / 400 = 120; payda 440. Stokun masraf payı (20) düşer.
+    const karisik = [satir({ kartTuru: 'hizmet', mal: 100 }), satir({ fason: true, kartTuru: 'hizmet', mal: 100 }), satir({ kartTuru: 'hammadde', mal: 200 })];
+    assert.equal(siparisDagilimi(karisik, 40).genelGiderOrani, 0.272727);
+    // Yolu bilinmeyen satır fasonla birlikte de oranı bilinmez yapar.
+    assert.equal(siparisDagilimi([fason[0]!, satir({ kartBulunamadi: true, mal: 10 })], 500).genelGiderOrani, null);
+  });
+
+  test('2642 b Maliyet C1: belgede kalan, siparişin eşlenmemiş kısmının oranıyla çarpılır', () => {
+    const fason = [
+      satir({ fason: true, kartTuru: 'hizmet', emirId: 1, emirProjeli: true, mal: 6000 }),
+      satir({ fason: true, kartTuru: 'hizmet', emirId: 2, emirProjeli: true, mal: 4000 }),
+    ];
+    // İki fason satırı eşlendi, kalan nakliye 500: kalanın oranı 1, belge oranı 500 / 10.500.
+    const kalanOrani = genelGiderOrani(fason, 500, new Set([0, 1]));
+    assert.equal(kalanOrani, 1);
+    const eslemeler = [{ tutar: '6000.00', yol: 'fason' as const }, { tutar: '4000.00', yol: 'fason' as const }];
+    assert.deepEqual(belgeGenelGiderOrani({ belgeTutari: '10500.00', kalanOrani, eslemeler }), { oran: 0.047619, esleme: 'kismi' });
+    // Eşleme yoksa sipariş oranıyla aynı.
+    assert.equal(genelGiderOrani(fason, 500, new Set()), siparisDagilimi(fason, 500).genelGiderOrani);
+    // Hepsi eşlenmiş, masraf yok: payda 0, oran tanımsız (kalan da yoktur).
+    assert.equal(genelGiderOrani(fason, 0, new Set([0, 1])), null);
   });
 });
