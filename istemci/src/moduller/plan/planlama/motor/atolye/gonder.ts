@@ -187,7 +187,7 @@ export function useOtomatikUygula(o: Pick<PlanlamaEkranOzellikleri, 'komut' | 'y
   const surum = o.depo.calismaSurumu ?? null;
   useEffect(() => {
     if (bu?.suruyor) return;
-    if (otomatikUygulaAl(surum) && bu) bu.uygula();
+    if (otomatikUygulaAl(surum) && bu) bu.uygula(true);
   }, [bu, surum]);
 }
 
@@ -203,17 +203,19 @@ export function useAtolyeKomutlari(o: Pick<PlanlamaEkranOzellikleri, 'komut' | '
   const { komut, yenile } = o; const yaz = komut !== null && o.yetki.planYaz;
   const { bildir } = useBildirim();
   const [isleniyor, setIsleniyor] = useState(false);
-  const gonder = useCallback(async (is: () => Promise<AtolyeKomutuCevabi>, tamam: string): Promise<boolean> => {
+  // Komut geri alma geçmişine girer: sayfa yeniden okununca komuttan önceki hâl bir geri alma adımı olur (kayit.ts komutBasladi).
+  const gonder = useCallback(async (is: () => Promise<AtolyeKomutuCevabi>, tamam: string, ne: string): Promise<boolean> => {
     setIsleniyor(true);
-    try { otomatikUygulaIste(await is()); bildir('tamam', tamam); yenile(); return true; } catch (h) { bildir('hata', gonderHataIletisi(h)); return false; } finally { setIsleniyor(false); }
-  }, [bildir, yenile]);
+    komut?.komutBasladi?.(ne);
+    try { otomatikUygulaIste(await is()); bildir('tamam', tamam); yenile(); return true; } catch (h) { komut?.komutDustu?.(); bildir('hata', gonderHataIletisi(h)); return false; } finally { setIsleniyor(false); }
+  }, [bildir, yenile, komut]);
   const simdi = c ? simdiSaati(c, Date.now()) : 0;
   const tasi = useMemo(() => (yaz && komut ? (id: string, m: string, S: number): void => {
-    void gonder(() => isiTasi(komut, { isId: id, tezgah: m, baslangic: tasimaSaati(S, simdi) }), 'İş taşındı; plan yeniden diziliyor.');
+    void gonder(() => isiTasi(komut, { isId: id, tezgah: m, baslangic: tasimaSaati(S, simdi) }), 'İş taşındı; plan yeniden diziliyor.', 'İş taşındı');
   } : null), [yaz, komut, gonder, simdi]);
-  const olayEkle = useMemo(() => (yaz && komut ? (olay: AtolyeOlayi): Promise<boolean> => gonder(() => olayiEkle(komut, olay), 'Olay eklendi; plan yeniden diziliyor.') : null), [yaz, komut, gonder]);
+  const olayEkle = useMemo(() => (yaz && komut ? (olay: AtolyeOlayi): Promise<boolean> => gonder(() => olayiEkle(komut, olay), 'Olay eklendi; plan yeniden diziliyor.', 'Olay eklendi') : null), [yaz, komut, gonder]);
   const ekMesai = useMemo(() => (yaz && komut ? (m: string, gun: number, vardiya: string): void => {
-    void gonder(() => ekMesaiyiEkle(komut, { tezgah: m, gun, vardiya }), 'Ek mesai eklendi; plan yeniden diziliyor.');
+    void gonder(() => ekMesaiyiEkle(komut, { tezgah: m, gun, vardiya }), 'Ek mesai eklendi; plan yeniden diziliyor.', 'Ek mesai eklendi');
   } : null), [yaz, komut, gonder]);
   return isleniyor ? { tasi: null, olayEkle: null, ekMesai: null, isleniyor } : { tasi, olayEkle, ekMesai, isleniyor };
 }
