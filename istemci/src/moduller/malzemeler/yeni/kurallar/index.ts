@@ -5,7 +5,7 @@ import type { MalzemeYetkisi } from '../yetki.ts';
 import { cekirdekSec, derinKopya, type BaslatGirdisi } from './cekirdek/baglam.ts';
 import { SABIT_NESNELER } from './cekirdek/hepsi.ts';
 import type * as C from './cekirdek/hepsi.ts';
-import { esliAdlariCoz, standartAdlari } from '../standart-adlari.ts';
+import { esliAdlariCoz, kartStandardi, standartAdlari, standartEtiketi } from '../standart-adlari.ts';
 
 // Prototipin işlevleri aynı ad ve aynı parametre sırasıyla (PARCA-SOZLESMESI.md, imza kuralı): taslağa (prototipte genel `D`) bakan
 // işlev taslağı parametre olarak alır, genel duruma bakan her işlev son parametre olarak bağlamı alır. Çekirdek (cekirdek/) prototipin
@@ -225,7 +225,7 @@ export function foyVerisi(d: KartKaydi, b: KuralBaglami, kisa = false): FoyVeris
     if (m.isGen(d)) {
       const t: Partial<(typeof m.TURLER)[string]> = m.TURLER[d.tur] ?? {};
       const ad = String(m.finalAd(d) || t.ad || '');
-      const rows = (m.gFlat(d) as [string, string, string][]).filter(([s, k]) => s !== 'Tanım' || (k !== 'Kod' && k !== 'Ad'));
+      const rows = hizmetAdlariyla(m, d, b, (m.gFlat(d) as [string, string, string][]).filter(([s, k]) => s !== 'Tanım' || (k !== 'Kod' && k !== 'Ad')));
       const bolumler: FoyBolumu[] = [];
       if (kisa) bolumler.push({ baslik: '', satirlar: rows.slice(0, 9).map(([, ad, deger]) => ({ ad, deger })) });
       else for (const [s, k, v] of rows) {
@@ -258,7 +258,7 @@ export function foyVerisi(d: KartKaydi, b: KuralBaglami, kisa = false): FoyVeris
       const agir = w ? [[s.fm.mass ? 'Ambalaj / rulo ağırlığı' : 'Parça ağırlığı', m.kgFmt(w.kg)], ...(m.isNum(w.perM) ? [['Metre ağırlığı', m.perMFmt(w.perM)]] : []), ...(m.isNum(w.perM2) ? [['Metrekare ağırlığı', m.perM2Fmt(w.perM2)]] : [])] : [];
       bolumler.push({ baslik: 'Form ve ölçüler', satirlar: satirlar([['Form', s.fm.ad], ['Ölçüler', m.dimsStr(d)], ['Tolerans', d.tol], ...agir] as [string, unknown][]) });
     }
-    if (s.opts.length) bolumler.push({ baslik: 'Durum ve işlem', satirlar: satirlar((s.opts as { ad: string; v: string }[]).map((o) => [o.ad, o.v] as const)) });
+    if (s.opts.length) bolumler.push({ baslik: 'Durum ve işlem', satirlar: satirlar(durumSatirlari(s.f.opts, d, b)) });
     if (props.length) bolumler.push({ baslik: 'Teknik özellikler', satirlar: satirlar(props), not: TIPIK_DEGER_NOTU });
     const ekler = ((d.extra ?? []) as { ad?: string; v?: unknown; u?: string }[]).filter((e) => e.ad);
     if (ekler.length) bolumler.push({ baslik: 'Ek özellikler', satirlar: satirlar(ekler.map((e) => [String(e.ad), `${String(e.v)}${e.u ? ` ${e.u}` : ''}`] as const)) });
@@ -267,6 +267,40 @@ export function foyVerisi(d: KartKaydi, b: KuralBaglami, kisa = false): FoyVeris
     kodVeAciklama(m, d, kod, bolumler);
     return { kod, ad, tur, aile: d.fam, bos: false, agirliklar: [], bolumler };
   });
+}
+
+// 2763: föy, sihirbazdaki seçimle aynı adı yazar (seçili standardın adı önce, diğeri parantez içinde). Kart değeri, kod ve ad değişmez.
+// Eşli adlar yalnız durum ve işlem listelerindedir (DurumAdimi ile aynı süzgeç); hizmette seçimli alanlar ve öneri çipleri (GenelAlanlar ile aynı).
+function adlayici(d: KartKaydi, b: KuralBaglami): (x: unknown) => unknown {
+  const adlar = standartAdlari(b.ortam.malzemeAyari);
+  const standart = kartStandardi(d);
+  return (x) => (typeof x === 'string' && x ? standartEtiketi(x, adlar, standart) : x);
+}
+function durumSatirlari(opts: readonly { k: string; ad: string }[], d: KartKaydi, b: KuralBaglami): [string, unknown][] {
+  const ad = adlayici(d, b);
+  const secimler = (d.opts ?? {}) as Record<string, unknown>;
+  return opts.map((o) => {
+    const v = secimler[o.k];
+    const esli = o.k === 'durum' || o.k === 'islem';
+    const goster = (x: unknown) => (esli ? ad(x) : x);
+    return [o.ad, Array.isArray(v) ? v.map(goster).join(', ') : goster(v)] as [string, unknown];
+  });
+}
+function hizmetAdlariyla(m: Motor, d: KartKaydi, b: KuralBaglami, rows: [string, string, string][]): [string, string, string][] {
+  if (d.tur !== 'hizmet') return rows;
+  const ad = adlayici(d, b);
+  const g = (d.g ?? {}) as Record<string, unknown>;
+  const secimli = new Map<string, string>();
+  for (const st of m.turAdimlari(d)) {
+    for (const a of st.alanlar ?? []) {
+      const v = g[a.k];
+      // Metin alanında yalnız öneri çipinden gelen değer (çipte eşli adla göründüğü için); elle yazılan metin olduğu gibi kalır.
+      const oneriden = typeof v === 'string' && (a.oneri ?? []).some((o) => String(o) === v);
+      if ((a.tip !== 'sec' && a.tip !== 'coklu' && !oneriden) || v === undefined || v === null || v === '') continue;
+      secimli.set(`${st.ad}|${a.ad}`, Array.isArray(v) ? v.map((x) => String(ad(x))).join(', ') : String(ad(v)));
+    }
+  }
+  return rows.map(([s, k, v]) => [s, k, secimli.get(`${s}|${k}`) ?? v]);
 }
 
 function kodVeAciklama(m: Motor, d: KartKaydi, kod: string, bolumler: FoyBolumu[]): void {

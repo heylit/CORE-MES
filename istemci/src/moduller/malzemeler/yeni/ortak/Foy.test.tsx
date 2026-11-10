@@ -36,6 +36,27 @@ describe('foyVerisi', () => {
     expect(v.bolumler.find((x) => x.baslik === 'Eşdeğerler ve diğer adlar')?.not).toMatch(/yakın eşdeğer/);
   });
 
+  test('2763: durum ve işlem satırı kartın standardıyla yazılır; öteki listeler ve kart değeri değişmez', () => {
+    const b = baglam();
+    const d = { ...c45(b), opts: { durum: 'Normalize (+N)', islem: ['Islah'] } } as KartKaydi;
+    const satir = (x: KartKaydi) => foyVerisi(x, b).bolumler.find((s) => s.baslik === 'Durum ve işlem')?.satirlar.map((s) => s.deger);
+    expect(satir(d)).toEqual(['Normalized (+N)', 'Quench and temper (+QT)']);
+    const en = { ...d, standart: 'en' } as KartKaydi;
+    expect(satir(en)).toEqual(['+N (Normalized)', '+QT (Quench and temper)']);
+    expect(en.opts).toEqual({ durum: 'Normalize (+N)', islem: ['Islah'] });
+  });
+
+  test('2763: hizmet föyünde öneri çipinden gelen değer eşli adla, elle yazılan metin olduğu gibi', () => {
+    const ortam = ortamKur({ ...ORNEK_AYAR, malzeme: { surum: 1, standartAdlari: { T6: { astm: 'T6-A', en: 'T6-E' } } } });
+    const b = kuralBaglami({ ortam, kartlar: KARTLAR, kisi: { id: 1, ad: 'Deneme' }, birim: 'met', yetki: malzemeYetkisi(() => true, ortam) });
+    const d = newDraft(b) as KartKaydi;
+    const h = (temper: string, standart: string) => ({ ...d, tur: 'hizmet', standart, g: { kat: 'isil', cesit: 'Çözeltiye alma ve yaşlandırma (alüminyum)', temper } }) as unknown as KartKaydi;
+    const deger = (x: KartKaydi) => foyVerisi(x, b).bolumler.flatMap((s) => s.satirlar).find((s) => s.ad === 'Hedef temper')?.deger;
+    expect(deger(h('T6', 'en'))).toBe('T6-E (T6-A)');
+    expect(deger(h('T6', 'astm'))).toBe('T6-A (T6-E)');
+    expect(deger(h('Ozel temper', 'en'))).toBe('Ozel temper');
+  });
+
   test('MLZ-7 a (G8): kaliteden dolan teknik özellikler "tipik değer" notuyla gelir', () => {
     const b = baglam();
     const teknik = foyVerisi(c45(b), b).bolumler.find((x) => x.baslik === 'Teknik özellikler');

@@ -51,7 +51,7 @@ export function DurumAdimi() {
       t.opts[o.k] = [...a];
     });
   };
-  const bilgi = (k: string, degerler: readonly string[]) => {
+  const bilgi = (k: string, degerler: readonly string[], etiket: (x: string) => string) => {
     const v = degerler.filter((x) => S.INFO[x] || K.optStatus(k, x, d, b).m);
     if (!v.length) return null;
     return (
@@ -61,7 +61,7 @@ export function DurumAdimi() {
           const st = K.optStatus(k, x, d, b);
           return (
             <p key={x}>
-              <b>{x}:</b> {acik}
+              <b>{etiket(x)}:</b> {acik}
               {oneri && <span className="tc-my-oneri">Öneri: {oneri}</span>}
               {st.m && <span className={st.s === 'no' ? 'tc-my-hata' : 'tc-my-dikkat'}>{st.s === 'no' ? 'Uyumsuz' : 'Dikkat'}: {st.m}</span>}
             </p>
@@ -98,7 +98,7 @@ export function DurumAdimi() {
             ))}
           </CipGrubu>
           {mods.length > 0 && <p className="tc-my-kucuk">{mods.join(', ')} seçimi teknik değerleri otomatik günceller.</p>}
-          {bilgi(o.k, cur)}
+          {bilgi(o.k, cur, etiket)}
         </SecenekGrubu>
       );
     }
