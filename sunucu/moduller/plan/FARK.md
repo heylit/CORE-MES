@@ -385,4 +385,4 @@ Testler: plan-bedel 815 (iki test), kurallar 815, kablolama 815; istemci planlam
   da bağlı partiyse `bekledigiOp` ve `bekledigiEmirNo` zincirin kök adımıdır.
 - `GET /plan/planlanabilirlik/rotalar`: yürürlükteki rotası olan ürünlerin bütün adımları; yalnız süre, kaynak, tezgâh vardiyası ve kişi
   vardiyası (emre bağlı yuva yok). Fason adım kontrol almaz. Yetki: iki uç da `/plan/planlama-kaynagi` ile aynı (sayfa.recete-rota okuyan).
-- Test: `planlanabilirlik-uc.test.ts` PB-01, 02; `uc-yetkisi.test.ts` iki satır.
+- Test: `planlanabilirlik-uc.test.ts` PB-01..03; `uc-yetkisi.test.ts` iki satır.

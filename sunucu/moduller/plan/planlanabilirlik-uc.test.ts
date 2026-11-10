@@ -15,9 +15,10 @@ describe('plan (gerçek PostgreSQL): planlanabilirlik uçları (2779)', () => {
     const { merkezId, makineA } = o.durum();
     const ist = (await o.tamam<{ id: number }>(o.c.yonetici, 'POST', '/istasyonlar', { kod: 'RT-PB', ad: 'Deneme PB ist', isMerkeziId: merkezId })).id;
     const makine = (await o.tamam<{ id: number }>(o.c.yonetici, 'POST', '/makineler', { kod: 'RT-PBM', ad: 'Deneme PB makine', istasyonId: ist })).id;
-    const [, is20, is30] = await o.isEmirleriAc([
+    const [, is20, is30, is40] = await o.isEmirleriAc([
       o.yeniAdim({ kaynak: { tur: 'makine', id: makineA }, ayarSuresiDk: 0, birimSureDk: 1 }),
       o.yeniAdim({ kaynak: { tur: 'makine', id: makine }, ayarSuresiDk: 0, birimSureDk: 2, bilesenler: [] }),
+      o.yeniAdim({ kaynak: { tur: 'makine', id: makineA }, ayarSuresiDk: 0, birimSureDk: 2, bilesenler: [] }),
       o.yeniAdim({ kaynak: { tur: 'makine', id: makineA }, ayarSuresiDk: 0, birimSureDk: 2, bilesenler: [] }),
     ]);
     await o.vt().tx((db) => db.sorgu('UPDATE makine SET aktif = false WHERE id = $1', [makine]));
@@ -29,8 +30,8 @@ describe('plan (gerçek PostgreSQL): planlanabilirlik uçları (2779)', () => {
     const e = p.emirler.find((x) => x.emirNo === emirNo);
     assert.ok(e, JSON.stringify(p));
     assert.ok(p.motorZamani !== null && p.acikEmir >= 1);
-    assert.deepEqual(e.adimlar.map((a) => a.opNo), [op(is20!), op(is30!)], 'yerleşen ilk adım listede yok');
-    const [kok, ardil] = e.adimlar;
+    assert.deepEqual(e.adimlar.map((a) => a.opNo), [op(is20!), op(is30!), op(is40!)], 'yerleşen ilk adım listede yok');
+    const [kok, ardil, son] = e.adimlar;
     assert.equal(kok!.kok, 'makine-pasif');
     assert.deepEqual(kodlar(kok!.kontroller), ['rotada-yok:tamam', 'sure-bos:tamam', 'makine-pasif:eksik', 'yetki-disi:olculemedi', 'takvim-yok:olculemedi',
       'kisi-vardiyasiz:olculemedi', 'malzeme:olculemedi', 'ufuk:olculemedi', 'oncul:olculemedi']);
@@ -39,7 +40,31 @@ describe('plan (gerçek PostgreSQL): planlanabilirlik uçları (2779)', () => {
     assert.equal(kok!.kontroller.find((k) => k.kod === 'ufuk')?.yaklasik, true);
     assert.deepEqual([kok!.bekledigiOp, kok!.bekledigiEmirNo], [null, null]);
     assert.equal(ardil!.kok, 'oncul');
-    assert.deepEqual([ardil!.bekledigiOp, ardil!.bekledigiEmirNo], [op(is20!), emirNo], 'zincirin kökü, ara adım değil');
+    assert.deepEqual([ardil!.bekledigiOp, ardil!.bekledigiEmirNo], [op(is20!), emirNo]);
+    assert.equal(son!.kok, 'oncul');
+    assert.deepEqual([son!.bekledigiOp, son!.bekledigiEmirNo], [op(is20!), emirNo], 'üç adımlı zincirde kök adım, ara adım değil');
+  });
+
+  test('PB-03: bağlı partide bekledigiEmirNo öteki emrin (kolun) numarası, bekledigiOp kolun kök adımı', async () => {
+    const { makineA, denemeProjeId } = o.durum();
+    const ic = (bilesenli: boolean) => o.yeniAdim({ kaynak: { tur: 'makine', id: makineA }, ayarSuresiDk: 10, birimSureDk: 1, ...(bilesenli ? {} : { bilesenler: [] }) });
+    const rev = await o.yururlugeAlinmisRota(await o.mamulAc(), [ic(true), ic(false), ic(false)]);
+    const [a1, , a3] = (await o.tamam<{ isEmriIdleri: number[] }>(o.c.planlama, 'POST', `/rota/revizyonlar/${rev}/emre-kopyala`, { projeId: denemeProjeId, adet: 10, teslim: null })).isEmriIdleri;
+    const emir = (await o.vt().tx((db) => db.tek<{ u: number }>('SELECT uretim_emri_id AS u FROM uretim_emirleri_is_emri WHERE id = $1', [a1])))!.u;
+    const ayr = await o.tamam<{ emir: { surum: number } }>(o.c.planlama, 'GET', `/adimli-emirler/${emir}`);
+    const ek = { oncekiOpNo: null, opNo: 12, tur: 'ek', ad: 'Kalite kararı', operasyonTipiId: o.tip('TRN'), kaynak: null, ayarSuresiDk: null, birimSureDk: null, terminGun: null, aciklama: null };
+    const rw = { ...ek, oncekiOpNo: 12, opNo: 14, tur: 'rework', ad: 'Rework' };
+    const b = await o.tamam<{ altEmirId: number }>(o.c.planlama, 'POST', `/adimli-emirler/${emir}/bol`, { adimSira: 2, adet: 2, surum: ayr.emir.surum, birlesmeOpNo: 30, ekAdimlar: [ek, rw] });
+    const p = await emirSekmesi();
+    const p0 = await o.planOku();
+    const ana = p.emirler.find((x) => x.uretimEmriId === emir);
+    const kol = p.emirler.find((x) => x.uretimEmriId === b.altEmirId);
+    assert.ok(ana && kol, JSON.stringify(p.emirler.map((x) => x.emirNo)));
+    const birlesme = ana.adimlar.find((a) => a.opNo === p0.yerlesmemis.find((y) => y.isEmriId === a3)?.opNo);
+    assert.equal(birlesme?.kok, 'bagli-parti', JSON.stringify(ana.adimlar));
+    assert.equal(birlesme.bekledigiEmirNo, kol.emirNo);
+    const kokAdimi = kol.adimlar.find((a) => a.opNo === birlesme.bekledigiOp);
+    assert.ok(kokAdimi !== undefined && kokAdimi.kok !== 'oncul' && kokAdimi.kok !== 'bagli-parti', JSON.stringify(kol.adimlar));
   });
 
   test('PB-02: rota sekmesi: vardiyasız tezgâh takvim eksiği, emre bağlı kontrol yok', async () => {
