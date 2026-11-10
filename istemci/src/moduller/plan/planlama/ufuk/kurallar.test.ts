@@ -177,19 +177,20 @@ describe('yıllık plan', () => {
     expect(T.d.A?.[5]).toBe(0);
   });
 
-  it('mesai ve yatırım bedeli: ayar yoksa bilinmez (uydurma varsayılan kurulmaz); ayarla eski formül', () => {
+  it('mesai ve yatırım bedeli: ayar yoksa bilinmez (uydurma varsayılan kurulmaz); brüt ücret okunmaz', () => {
     const c = calisma();
     expect(grupSaatTL(c.D, 'torna')).toBeNull();
     expect(mesaiSaatTL(c.D, 'torna')).toBeNull();
     expect(yatirimTL(c.D, 'torna')).toBeNull();
     const m = calisma({
       personel: [{ id: 'P1', vardiya: 'V1', gruplar: ['torna'] }],
-      mesaiSis: { aylikSaat: 200, sgk: 20, yanHak: 0, carp: { hi: 1.5 }, kisiEk: 80, ucret: { P1: { brut: 40000 } } },
+      mesaiSis: { aylikSaat: 200, sgk: 20, yanHak: 0, carp: { hi: 1.5 }, kisiEk: 80, ucret: { P1: { brut: 1000 } } },
       maliyetSis: { verim: 85, tez: { T1: { bedel: 1_200_000, omur: 10, hurda: 0 } } },
     });
-    expect(grupSaatTL(m.D, 'torna')).toBe(240);
-    expect(mesaiSaatTL(m.D, 'torna')).toBe(240 * 1.5 + 10);
-    expect(yatirimTL(m.D, 'torna')).toBe(10000 + 240 * 200 * 2);
+    // 2728 a: eski kayıttaki brüt okunmaz; grup saat maliyeti bilinmez, yatırım bedeli yalnız amortismandır.
+    expect(grupSaatTL(m.D, 'torna')).toBeNull();
+    expect(mesaiSaatTL(m.D, 'torna')).toBeNull();
+    expect(yatirimTL(m.D, 'torna')).toBe(10000);
     expect(bedelsizGruplar(c.D, ['torna', 'freze'])).toEqual(['torna', 'freze']);
     expect(bedelsizGruplar(m.D, ['torna', 'freze', 'yok'])).toEqual(['yok']);
   });
@@ -227,7 +228,7 @@ describe('yıllık plan', () => {
   it('yatırım adayı bedeli bilinen grupta denenir; hedef yalnız öne üretimden kurulur', async () => {
     const c = calisma({
       personel: [{ id: 'P1', vardiya: 'V1', gruplar: ['torna'] }],
-      mesaiSis: { aylikSaat: 200, sgk: 0, yanHak: 0, ucret: { P1: { brut: 40000 } } },
+      mesaiSis: { aylikSaat: 200, sgk: 0, yanHak: 0 },
       maliyetSis: { verim: 85, tez: { T1: { bedel: 100000, omur: 10 } } },
       siparisler: [{ id: 'S1', urun: 'U1', adet: 3000, termin: '2027-03-01', gelir: 3e7 }],
       yillik: { teslimAy: 1 },

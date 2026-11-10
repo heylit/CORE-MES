@@ -107,25 +107,11 @@ export function kullanilabilirlik(D: PlanVerisi): number {
 }
 
 // ---------- mesai ve yatırım bedeli (zz6 msSaat, msGrupSaat; zz9 ylMesaiSaatTL, ylYatirimTL) ----------
-interface MesaiSis { aylikSaat?: number; sgk?: number; yanHak?: number; carp?: { hi?: number }; kisiEk?: number; ucret?: Record<string, { brut?: number | null }> }
+interface MesaiSis { aylikSaat?: number; carp?: { hi?: number }; kisiEk?: number }
 const mesaiSis = (D: PlanVerisi): MesaiSis | null => (nesneMi(D.mesaiSis) ? D.mesaiSis as MesaiSis : null);
 
-function kisiSaatTL(D: PlanVerisi, m: MesaiSis, kisi: string): number | null {
-  const u = m.ucret?.[kisi];
-  if (!u || u.brut === null || u.brut === undefined) return null;
-  return n(u.brut) * (1 + (n(m.sgk) + n(m.yanHak)) / 100) / (n(m.aylikSaat) || 225);
-}
-
-// Grubun kişi saat maliyeti: gruptaki kişilerin ortalaması, yoksa bütün kişilerin; mesai ayarı ya da ücret yoksa null.
-export function grupSaatTL(D: PlanVerisi, grup: string): number | null {
-  const m = mesaiSis(D);
-  if (m === null) return null;
-  const kisiler = D.personel ?? [];
-  const ort = (l: (number | null)[]): number[] => l.filter((x): x is number => x !== null);
-  const l = ort(kisiler.filter((p) => (p.gruplar ?? []).includes(grup)).map((p) => kisiSaatTL(D, m, p.id)));
-  const t = l.length ? l : ort(kisiler.map((p) => kisiSaatTL(D, m, p.id)));
-  return t.length ? toplam(t) / t.length : null;
-}
+// Grubun kişi saat maliyeti: brüt ücret kayıtta tutulmadığı için bugün kaynağı yok (2728 a); bilinmez, sıfır uydurulmaz.
+export function grupSaatTL(_D: PlanVerisi, _grup: string): number | null { return null; }
 
 const opOrani = (tz: readonly Tezgah[]): number => (tz.length ? toplam(tz.map((t) => t.opOran ?? 1)) / tz.length : 1);
 

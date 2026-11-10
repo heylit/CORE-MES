@@ -3,8 +3,8 @@ import { Dugme, Simge } from '../../../../../ortak/arayuz/index.ts';
 import type { PlanlamaGorunumu } from '../../gorunumler.ts';
 import type { PlanlamaCalismasi } from '../../tipler.ts';
 import {
-  aktifSiparisler, birimMaliyet, dolayliAylik, gecikmeBedeli, kalemTutari, maliyetSistemi, malzemeler, mesaiSistemi, MS_ANAHTAR, MS_TUR, sayi,
-  sayiGirdisi, sgkKatsayisi, tl, tlSaat, ymAyar, type GenelGiderHesabi, type TezgahGideri,
+  aktifSiparisler, birimMaliyet, gecikmeBedeli, kalemTutari, maliyetSistemi, malzemeler, MS_ANAHTAR, MS_TUR, sayi,
+  sayiGirdisi, tl, tlSaat, ymAyar, type GenelGiderHesabi, type TezgahGideri,
 } from '../kurallar.ts';
 import {
   dolayliEkleYaz, dolayliSilYaz, dolayliYaz, kalemEkleYaz, kalemSilYaz, kalemYaz, kwhYaz, makineyeYaz, tezGiderYaz, verimYaz, type Yaz,
@@ -54,8 +54,7 @@ export function GiderSayfasi({ c, G, para, yaz, git }: { c: PlanlamaCalismasi; G
 
 function VeriDurumu({ c, git }: { c: PlanlamaCalismasi; git: (g: PlanlamaGorunumu) => void }) {
   const D = c.D;
-  const M = maliyetSistemi(D), m = mesaiSistemi(D);
-  const P = D.personel ?? [];
+  const M = maliyetSistemi(D);
   const ml = malzemeler(D);
   const S = D.siparisler;
   const tz = (k: (x: TezgahGideri | undefined) => boolean) => D.tezgahlar.filter((t) => k(M.tez[t.id])).length;
@@ -63,7 +62,6 @@ function VeriDurumu({ c, git }: { c: PlanlamaCalismasi; git: (g: PlanlamaGorunum
     ['cpu', 'Tezgâh alış bedeli ya da ömrü', tz((x) => !((x?.bedel ?? 0) > 0 && (x?.omur ?? 0) > 0)), D.tezgahlar.length, 'giderler'],
     ['bolt', 'Tezgâh kurulu gücü', tz((x) => !((x?.kw ?? 0) > 0)), D.tezgahlar.length, 'giderler'],
     ['lira', 'Tezgâh makine saat maliyeti', D.tezgahlar.filter((t) => t.ucret === null || t.ucret === undefined).length, D.tezgahlar.length, 'maliyet'],
-    ['user', 'Kişi brüt ücreti', P.filter((p) => !((m.ucret[p.id]?.brut ?? 0) > 0)).length, P.length, 'mesaiplan'],
     ['box', 'Malzeme kg fiyatı', ml.filter((x) => birimMaliyet(D, x) === null).length, ml.length, 'maliyet'],
     ['flag', 'Sipariş tutarı', S.filter((x) => x.gelir === null || x.gelir === undefined).length, S.length, 'ysiparis'],
     ['alert', 'Gecikme ceza oranı (sipariş ya da müşteri)', aktifSiparisler(D).filter((x) => gecikmeBedeli(c, x).eksik.includes('ceza oranı')).length, S.length, 'oncelik'],
@@ -89,7 +87,7 @@ function VeriDurumu({ c, git }: { c: PlanlamaCalismasi; git: (g: PlanlamaGorunum
 
 function KalemKarti({ c, kapali, y }: { c: PlanlamaCalismasi; kapali: boolean; y: Y }) {
   const D = c.D;
-  const M = maliyetSistemi(D), m = mesaiSistemi(D);
+  const M = maliyetSistemi(D);
   const gruplar = [...new Set(D.tezgahlar.map((t) => t.grup ?? ''))].filter(Boolean);
   return (
     <AsilKart simge="list" baslik="Gider kalemleri">
@@ -104,7 +102,7 @@ function KalemKarti({ c, kapali, y }: { c: PlanlamaCalismasi; kapali: boolean; y
                   <td><MetinGir deger={k.ad} ad="Kalem adı" kapali={kapali} yaz={(v) => y((z) => kalemYaz(z, D, k.id, 'ad', v))} /></td>
                   <td><SecimGir deger={k.tur} ad="Tür" secenek={MS_TUR} kapali={kapali} yaz={(v) => { y((z) => kalemYaz(z, D, k.id, 'tur', v)); }} /></td>
                   <td className="tc-pyk-num">
-                    {hes ? <><b>{tl(dolayliAylik(M, m))}</b><AltNot>dolaylı personelden</AltNot></>
+                    {hes ? <><b>{tl(null)}</b><AltNot>tutar girilmedi</AltNot></>
                       : <SayiGir deger={k.aylik} ad={`${k.ad} aylık tutarı`} kapali={kapali} yaz={(v) => y((z) => kalemYaz(z, D, k.id, 'aylik', v))} />}
                   </td>
                   <td><SecimGir deger={k.anahtar} ad="Dağıtım anahtarı" secenek={MS_ANAHTAR} kapali={kapali} yaz={(v) => { y((z) => kalemYaz(z, D, k.id, 'anahtar', v)); }} /></td>
@@ -114,7 +112,7 @@ function KalemKarti({ c, kapali, y }: { c: PlanlamaCalismasi; kapali: boolean; y
               );
             })}
           </tbody>
-          <tfoot><tr><th>Toplam</th><td /><td className="tc-pyk-num"><b>{tl(M.kalemler.reduce((a, k) => a + kalemTutari(k, M, m), 0))}</b></td><td colSpan={3} /></tr></tfoot>
+          <tfoot><tr><th>Toplam</th><td /><td className="tc-pyk-num"><b>{tl(M.kalemler.reduce((a, k) => a + kalemTutari(k), 0))}</b></td><td colSpan={3} /></tr></tfoot>
         </table>
       </div>
       {!kapali && <KalemFormu y={y} />}
@@ -147,46 +145,41 @@ function KalemFormu({ y }: { y: Y }) {
   );
 }
 
+// Brüt ücret burada girilmez ve gösterilmez (2728 a); görevler bilgi olarak kalır (2724 a), tutar genel gider oranındadır.
 function DolayliKarti({ c, kapali, y }: { c: PlanlamaCalismasi; kapali: boolean; y: Y }) {
   const D = c.D;
-  const M = maliyetSistemi(D), m = mesaiSistemi(D);
-  const kat = sgkKatsayisi(m);
+  const M = maliyetSistemi(D);
   const [hata, hataYaz] = useState<string | null>(null);
   const gonder = (o: FormEvent<HTMLFormElement>) => {
     o.preventDefault();
     const f = o.currentTarget;
-    const g = deger(f, 'gorev').trim(); const b = sayiGirdisi(deger(f, 'brut'));
-    if (!g || !b.tamam || b.deger === null || !(b.deger > 0)) { hataYaz('Görev ve brüt ücret girin.'); return; }
-    const v = b.deger;
-    if (y((z) => dolayliEkleYaz(z, g, v))) { hataYaz(null); f.reset(); }
+    const g = deger(f, 'gorev').trim();
+    if (!g) { hataYaz('Görev girin.'); return; }
+    if (y((z) => dolayliEkleYaz(z, g))) { hataYaz(null); f.reset(); }
   };
   return (
     <AsilKart simge="user" baslik="Dolaylı personel">
       <div className="tc-tablo-kap">
         <table className="tc-tablo">
-          <thead><tr><th>Görev</th><th className="tc-pyk-num">Brüt aylık</th><th className="tc-pyk-num">İşverene maliyet</th><th><span className="tc-gizli-etiket">İşlem</span></th></tr></thead>
+          <thead><tr><th>Görev</th><th><span className="tc-gizli-etiket">İşlem</span></th></tr></thead>
           <tbody>
             {M.dolayli.map((g) => (
               <tr key={g.id}>
-                <td><MetinGir deger={g.gorev} ad="Görev" kapali={kapali} yaz={(v) => y((z) => dolayliYaz(z, D, g.id, 'gorev', v))} /></td>
-                <td className="tc-pyk-num"><SayiGir deger={g.brut} ad={`${g.gorev} brüt ücreti`} kapali={kapali} yaz={(v) => y((z) => dolayliYaz(z, D, g.id, 'brut', v))} /></td>
-                <td className="tc-pyk-num"><b>{tl((g.brut ?? 0) * kat)}</b></td>
+                <td><MetinGir deger={g.gorev} ad="Görev" kapali={kapali} yaz={(v) => y((z) => dolayliYaz(z, D, g.id, v))} /></td>
                 <td>{!kapali && <Dugme simge="trash" aria-label="Sil" className="tc-pyk-ikon" onClick={() => { y((z) => dolayliSilYaz(z, D, g.id)); }} />}</td>
               </tr>
             ))}
           </tbody>
-          <tfoot><tr><th>Toplam</th><td /><td className="tc-pyk-num"><b>{tl(dolayliAylik(M, m))}</b></td><td /></tr></tfoot>
         </table>
       </div>
       {!kapali && (
         <form className="tc-pyk-yeni" noValidate onSubmit={gonder} aria-label="Dolaylı personel ekle">
           <input className="tc-alan-kutu" name="gorev" placeholder="Görev" aria-label="Görev" required />
-          <input className="tc-alan-kutu" name="brut" inputMode="decimal" placeholder="Brüt aylık TL" aria-label="Brüt aylık" required />
           <Dugme type="submit" tur="birincil" simge="plus">Ekle</Dugme>
           {hata && <p className="tc-pyk-ileti" role="alert"><Simge ad="alert" boyut="k" />{hata}</p>}
         </form>
       )}
-      <Not>Üretimde doğrudan çalışmayan kişiler genel gidere girer; operatör ve ayarcı ücretleri doğrudan işçiliktir (Ek mesai planı &gt; Kişi ücretleri). İşverene maliyet = brüt × (1 + SGK işveren payı %{sayi(m.sgk, 2)} + yan hak %{sayi(m.yanHak, 1)}).</Not>
+      <Not>Üretimde doğrudan çalışmayan kişiler genel gidere girer; tutarları Finans'ın genel gider oranındadır, burada ücret tutulmaz. Liste yalnız bilgidir.</Not>
     </AsilKart>
   );
 }
