@@ -149,7 +149,7 @@ function IscilikKarti({ c, kapali, y, git }: { c: PlanlamaCalismasi; kapali: boo
           ? <Alan ad="Mesai bedeli"><button type="button" className="tc-pyk-bag" onClick={() => { git('mesaiplan'); }}>grup saat maliyetinden (bugün bilinmiyor), Ek mesai planı</button></Alan>
           : <>
             <Alan ad="Mesai ücreti TL/sa"><SayiGir deger={sayiOf(A.mesaiUcret)} ad="Mesai ücreti" adim={10} max={100000} bosOlmaz kapali={kapali} yaz={(v) => v !== null && y((z) => ucretYaz(z, D, 'mesaiUcret', v))} /></Alan>
-            <Alan ad="Hafta sonu ve tatil mesai çarpanı"><SayiGir deger={Y.mesaiCarpan} ad="Hafta sonu ve tatil mesai çarpanı" min={1} max={3} yer="1" bosOlmaz kapali={kapali} yaz={(v) => y((z) => maliyetAyariYaz(z, D, 'mesaiCarpan', v))} /></Alan>
+            <Alan ad="Ek mesai çarpanı"><SayiGir deger={Y.mesaiCarpan} ad="Ek mesai çarpanı" min={1} max={3} yer="1" bosOlmaz kapali={kapali} yaz={(v) => y((z) => maliyetAyariYaz(z, D, 'mesaiCarpan', v))} /></Alan>
           </>}
         {Y.genelGiderGizli
             ? <Alan ad="Genel gider TL/tezgâh saati"><Rozet ton="pasif">gizli</Rozet><span className="tc-pyk-soluk">Finans oranı bu ay gizli; maliyet genel gider hariç</span></Alan>

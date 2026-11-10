@@ -32,7 +32,7 @@ export function MesaiSayfasi({ c, T, para, yaz }: { c: PlanlamaCalismasi; T: Tak
       <AsilKart simge="clock" baslik="Ek mesai planı">
         <Kpi l={[
           ['clock', 'Planlı ek mesai', `${sayi(topH, 1)} sa`, `${String(EK.length)} vardiya`],
-          ['lira', 'Mesai maliyeti', para ? tl(topTL) : 'müdürde', m.kisiBazli ? 'grup saat maliyetinden, gün türüne göre çarpan' : `${sayi(mesaiUcreti(D), 0)} TL/sa, hafta sonu ×${sayi(Y.mesaiCarpan, 1)}`],
+          ['lira', 'Mesai maliyeti', para ? tl(topTL) : 'müdürde', m.kisiBazli ? 'grup saat maliyetinden, gün türüne göre çarpan' : `${sayi(mesaiUcreti(D), 0)} TL/sa, ek mesai ×${sayi(Y.mesaiCarpan, 1)}`],
           ['gauge', 'Haftalık sınır', butce ? `${sayi(butce, 0)} sa` : 'yok', 'Kısıtlar sayfasında'],
         ]} />
         <div className="tc-tablo-kap">

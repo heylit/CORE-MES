@@ -501,14 +501,14 @@ export function gunTuru(D: PlanVerisi, g: number): GunTuru {
   return w === 'cmt' ? 'cmt' : w === 'paz' ? 'paz' : 'hi';
 }
 // Ek vardiyanın bedeli: kişi bazlıysa saat × operatör oranı × grubun kişi saat maliyeti × gün çarpanı + kişi başı yemek ve servis;
-// değilse ya da grubun saat maliyeti yoksa vardiya saati × mesai ücreti × (vardiyasız günde) çarpan. Ücret yoksa null.
+// değilse ya da grubun saat maliyeti yoksa vardiya saati × mesai ücreti × ek mesai çarpanı (her ek vardiyada, 2510 a; yoksa 1,5). Ücret yoksa null.
 // Tutar saf işlevdedir: sunucunun kopyası (2653, sunucu/moduller/plan/kurallar.ts) aynı örnek tablosuyla sınanır (devir-heylit/2653/ORNEKLER.md).
 export interface MesaiGirdisi {
   h: number; kisiBazli: boolean; op: number | null | undefined; saatDegeri: number | null; carpan: number | undefined; kisiEk: number | null | undefined;
-  ucret: number | null; vardiyasiz: boolean; mesaiCarpan: number | undefined;
+  ucret: number | null; mesaiCarpan: number | undefined;
 }
 export function mesaiTutari(g: MesaiGirdisi): number | null {
-  if (!g.kisiBazli || g.saatDegeri === null) return g.ucret === null ? null : g.h * g.ucret * (g.vardiyasiz ? g.mesaiCarpan || 1 : 1);
+  if (!g.kisiBazli || g.saatDegeri === null) return g.ucret === null ? null : g.h * g.ucret * (g.mesaiCarpan || 1.5);
   const op = g.op ?? 1;
   return g.h * op * g.saatDegeri * (g.carpan || 1.5) + op * (g.kisiEk ?? 0);
 }
@@ -516,10 +516,9 @@ export function mesaiBedeli(c: PlanlamaCalismasi, T: Takvim, e: EkMesai): number
   const D = c.D;
   const m = mesaiSistemi(D);
   const t = D.tezgahlar.find((x) => x.id === e.m);
-  const g = T.gunler[e.gun];
   return mesaiTutari({
     h: vardiyaSaati(D, e.vardiya), kisiBazli: m.kisiBazli, op: t?.opOran, saatDegeri: m.kisiBazli ? grupSaati(D, t?.grup ?? '') : null,
-    carpan: m.carp[gunTuru(D, e.gun)], kisiEk: m.kisiEk, ucret: mesaiUcreti(D), vardiyasiz: !g || !g.vard.length, mesaiCarpan: ymAyar(D).mesaiCarpan,
+    carpan: m.carp[gunTuru(D, e.gun)], kisiEk: m.kisiEk, ucret: mesaiUcreti(D), mesaiCarpan: ymAyar(D).mesaiCarpan,
   });
 }
 // Ek mesai bedeli o tezgâhta mesai vardiyasında çalışan işlere çalıştıkları saat oranında dağılır; bedeli bilinmeyen vardiyadaki işin payı null.
