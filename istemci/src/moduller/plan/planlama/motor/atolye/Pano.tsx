@@ -52,13 +52,13 @@ interface Ozellikler {
   sen: SenaryolarCevabi | null; senYaz: (s: SenaryolarCevabi) => void;
 }
 
-// Kabı kaydıran en yakın ata kutunun görünen üst kenarı; yoksa pencerenin üstü.
-function kaydirmaUstu(k: HTMLElement): number {
+// Kabı dikey kaydıran en yakın ata kutu (sayfanın kaydırıcısı); yoksa null (pencere kayar).
+export function kaydirici(k: HTMLElement): HTMLElement | null {
   for (let e = k.parentElement; e; e = e.parentElement) {
     const y = getComputedStyle(e).overflowY;
-    if ((y === 'auto' || y === 'scroll') && e.scrollHeight > e.clientHeight) return Math.max(0, e.getBoundingClientRect().top);
+    if ((y === 'auto' || y === 'scroll') && e.scrollHeight > e.clientHeight) return e;
   }
-  return 0;
+  return null;
 }
 
 export function Pano({ o, c, p, cf: fark, sekSec, onayda, sen, senYaz }: Ozellikler) {
@@ -156,8 +156,12 @@ export function Pano({ o, c, p, cf: fark, sekSec, onayda, sen, senYaz }: Ozellik
       const k = kap.current; if (!k) return;
       const alt = document.querySelector<HTMLElement>('.tc-kabuk-alt');
       const altH = alt && alt.offsetParent ? alt.offsetHeight : 0;
-      const ust = kaydirmaUstu(k);
-      k.style.setProperty('--tc-pym-tp-yuk', `${Math.max(320, window.innerHeight - ust - altH - 8)}px`);
+      // Kaydırıcının alt iç boşluğu düşülür: sonuna kaydırınca pano üst çubuğu kesilmeden tam görünür.
+      const e = kaydirici(k);
+      const ust = e ? Math.max(0, e.getBoundingClientRect().top) : 0;
+      const son = e ? Math.min(e.getBoundingClientRect().top + e.clientHeight - (parseFloat(getComputedStyle(e).paddingBottom) || 0), window.innerHeight - altH)
+        : window.innerHeight - altH - 8;
+      k.style.setProperty('--tc-pym-tp-yuk', `${Math.max(320, son - ust)}px`);
     };
     olc(); window.addEventListener('resize', olc);
     return () => window.removeEventListener('resize', olc);

@@ -6,9 +6,9 @@ import type { PlanIslemi } from '../kurallar.ts';
 import { degisken } from '../ortak.tsx';
 import {
   secKacis, akis, cubukYazisi, darbogaz, doluluklar, gercekOku, haftaHucreleri, ilerleme, kapaliAraliklar, sabitMi, satirlar, saatPiksel, sure, suzUyar, tezGrup, tz,
-  ufuk, ufukSaati, zamanBasliklari, type PanoSatiri, duruslar,
+  ufuk, ufukSaati, zamanBasliklari, type PanoSatiri, duruslar, kenarHizi,
 } from './kurallar.ts';
-import { ankraj, type Ortam } from './Pano.tsx';
+import { ankraj, kaydirici, type Ortam } from './Pano.tsx';
 
 // Tezgâh çizelgesi (cizPano, cizCubuk, cizOklar): gün ve saat başlığı, tezgâh ve fason satırları, kapalı saat, arıza, çubuklar, donuk bölge,
 // şimdi çizgisi ve motorun ufku. Yıl ölçeğinde haftalık doluluk hücreleri. Seçili siparişin önceki-sonraki okları çubukların yerinden ölçülür.
@@ -167,19 +167,30 @@ export function Izgara({ ort, pano, parla }: { ort: Ortam; pano: MutableRefObjec
     }
     return { m, S };
   };
-  // Kenarda kayma: imleç panonun sol (etiket sütunundan sonra) ya da sağ kenarına yaklaştıkça çizelge o yöne hızlanarak kayar.
+  // Kenarda kayma: imleç panonun sol (etiket sütunundan sonra) ya da sağ kenarına yaklaştıkça çizelge o yöne hızlanarak kayar. Üst ve alt
+  // kenarda önce sayfanın kaydırıcısı kayar (pano ondan uzunsa alttaki tezgâhlar görünür alanın dışındadır), sonra panonun kendisi.
   const KENAR = 48; const KAYMA_HIZI = 14;
   const kenarKay = (s: Suruk) => {
     const pn = pano.current; if (!pn || !etkiAcik('gantt-kayma')) return;
     const r = pn.getBoundingClientRect();
-    const sol = r.left + gen.e + KENAR - s.px, sag = s.px - (r.right - KENAR);
-    const hiz = sol > 0 ? -Math.min(1, sol / KENAR) * KAYMA_HIZI : sag > 0 ? Math.min(1, sag / KENAR) * KAYMA_HIZI : 0;
+    const hx = kenarHizi(s.px, r.left + gen.e, r.right, KENAR, KAYMA_HIZI);
+    const dis = kaydirici(pn);
+    const dr = dis?.getBoundingClientRect();
+    const ust = Math.max(r.top, dr?.top ?? 0, 0), alt = Math.min(r.bottom, dr ? dr.top + dis!.clientHeight : Infinity, window.innerHeight);
+    const hy = kenarHizi(s.py, ust, alt, KENAR, KAYMA_HIZI);
     cancelAnimationFrame(s.kare);
-    if (hiz === 0) return;
+    if (hx === 0 && hy === 0) return;
+    const kay = (el: HTMLElement | null | undefined, yon: 'scrollLeft' | 'scrollTop', d: number): boolean => {
+      if (!el || d === 0) return false;
+      const once = el[yon]; el[yon] = once + d; return el[yon] !== once;
+    };
     const adim = () => {
       if (suruk.current !== s) return;
-      const once = pn.scrollLeft; pn.scrollLeft = once + hiz;
-      if (pn.scrollLeft === once) return;
+      const yatay = kay(pn, 'scrollLeft', hx);
+      const dikey = kay(dis, 'scrollTop', hy) || kay(pn, 'scrollTop', hy);
+      if (!yatay && !dikey) return;
+      const h = hedefSatir(s.px, s.py, s.el);
+      if (h !== s.hedef) { if (s.hedef) delete s.hedef.dataset.hedef; if (h) h.dataset.hedef = ''; s.hedef = h; }
       onizle(s); s.kare = requestAnimationFrame(adim);
     };
     s.kare = requestAnimationFrame(adim);

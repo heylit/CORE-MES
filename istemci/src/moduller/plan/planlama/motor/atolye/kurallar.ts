@@ -861,3 +861,11 @@ export function kilitOzeti(c: PlanlamaCalismasi, donuk: number): string {
   const e = elleSayilari(c);
   return `donuk ${donuk} sa · ${e.sabit} sabit · ${e.gun} gün`;
 }
+
+// Sürüklerken kenar kayması: imleç görünür alanın kenarına `kenar` pikselden yakınsa o yöne, kenara yaklaştıkça artan hız (en çok `azami`).
+// Negatif: geri (sol ya da yukarı), pozitif: ileri. Alan kenardan dar ise kayma yok (iki kenar birden tetiklenmesin).
+export function kenarHizi(konum: number, bas: number, son: number, kenar: number, azami: number): number {
+  if (son - bas < kenar * 2) return 0;
+  const geri = bas + kenar - konum, ileri = konum - (son - kenar);
+  return geri > 0 ? -Math.min(1, geri / kenar) * azami : ileri > 0 ? Math.min(1, ileri / kenar) * azami : 0;
+}

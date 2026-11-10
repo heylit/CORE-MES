@@ -6,7 +6,7 @@ import { ornekCalisma } from '../ornek.ts';
 import {
   akis, asilBekleme, bitisFarklari, calismaEkMesai, canliFarkOzeti, DONUK_SECENEKLERI, donukEtiketi, ekMesaiFarki, ekMesaiKontrol, sunucuEkMesai, tarihGunYaz, gunYeni, malzemeDetay, pgGostergeleri, pgKaynakKur, pgNedenOzeti, pgSatirlar, pgSerit, cubukYazisi, darbogaz, emirNoOkuyucu, ga, gs, gunKaydi, ilerleme, isaretliSure, kapaliAraliklar, parcaAyir, saatPiksel, satirlar,
   siparisler, sure, suzKoy, suzUyar, terminMetni, tz, ufuk, zamanBasliklari, zs, farkKur, paAdim, paEmirFarki, paKontrol, paPlanKontrol, paRedVar, paSecim, planFarki, planGecikme, agirlikliGecikme, ayarSaat, tlEksikUyarisi, tlKarsilastirilir, type Gostergeler, type SunucuSenaryosu,
-  kilitGunleri, kilitOzeti, siraKomsu, siraTasi,
+  kilitGunleri, kilitOzeti, siraKomsu, siraTasi, kenarHizi,
 } from './kurallar.ts';
 
 import { saatiSabitle } from '../../test-saati.ts';
@@ -331,5 +331,16 @@ describe('iş emri no (2690)', () => {
     expect(no('4')).toBe('4');
     expect(no('9')).toBe('9');
     expect(emirNoOkuyucu(null)('2')).toBe('2');
+  });
+});
+
+describe('kenarHizi (2734)', () => {
+  it('kenara yaklaştıkça artan hız, ortada sıfır; dar alanda kayma yok', () => {
+    expect(kenarHizi(500, 0, 1000, 48, 14)).toBe(0);
+    expect(kenarHizi(990, 0, 1000, 48, 14)).toBeCloseTo((38 / 48) * 14);
+    expect(kenarHizi(2000, 0, 1000, 48, 14)).toBe(14);
+    expect(kenarHizi(24, 0, 1000, 48, 14)).toBeCloseTo(-7);
+    expect(kenarHizi(-5, 0, 1000, 48, 14)).toBe(-14);
+    expect(kenarHizi(10, 0, 80, 48, 14)).toBe(0);
   });
 });
