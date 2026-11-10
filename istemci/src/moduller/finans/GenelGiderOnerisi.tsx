@@ -22,7 +22,7 @@ const BILESEN_ACIKLAMASI: Record<keyof Oneri['bilesenler'], string> = {
   amortisman: 'Bütün sabit kıymetlerin o ayki amortismanı.',
   dolayliPersonel: 'İK: doğrudan işçilik olmayan departmanların işveren maliyeti.',
   emilmeyenDogrudan: 'İK: doğrudan işçilik departmanlarının maaşından işlere yazılamayan kısım. Eksi değer fazla emilimdir.',
-  diger: 'Enerji, lojistik, pazarlama, diğer gider ve siparişsiz mal alımı faturaları; emirsiz stok çıkışı ve araç masrafı.',
+  diger: 'Enerji, lojistik, pazarlama, diğer gider ve siparişsiz mal alımı faturaları (araç faturaları dahil); emirsiz stok çıkışı.',
   projesizSatinAlma: 'Satın alma faturalarının genel gidere düşen payı (oran satın almadan).',
 };
 export const DISARIDA_ADLARI: Record<Disarida['neden'], string> = {
@@ -37,13 +37,14 @@ const KATEGORI_ADLARI: Record<string, string> = {
   kur_farki_gideri: 'kur farkı', satis_iadesi: 'satış iadesi', lojistik: 'lojistik', pazarlama: 'pazarlama', diger_gider: 'diğer gider',
 };
 
-interface BilesenSatiri { anahtar: keyof Oneri['bilesenler']; tutar: number | null; gizli: boolean }
+interface BilesenSatiri { anahtar: keyof Oneri['bilesenler']; tutar: number | null; gizli: boolean; enAz: boolean }
 export const GIZLI = 'Gizli';
 export const FAZLA_EMILIM = 'Fazla emilim';
+export const EN_AZ = 'En az';
 const BILESEN_SUTUNLARI: Sutun<BilesenSatiri>[] = [
   { anahtar: 'ad', baslik: 'Bileşen', hucre: (s) => <span title={BILESEN_ACIKLAMASI[s.anahtar]}>{BILESEN_ADLARI[s.anahtar]}</span> },
   { anahtar: 'tutar', baslik: 'Aylık tutar', hucre: (s) => (s.gizli ? <Rozet ton="bilgi">{GIZLI}</Rozet> : s.tutar === null ? <Rozet ton="uyari">{BILINMIYOR}</Rozet>
-      : s.tutar < 0 ? <span>{tl(s.tutar)} <Rozet ton="bilgi">{FAZLA_EMILIM}</Rozet></span> : tl(s.tutar)), hizala: 'sag', mono: true },
+      : s.tutar < 0 ? <span>{tl(s.tutar)} <Rozet ton="bilgi">{FAZLA_EMILIM}</Rozet></span> : s.enAz ? <span>{tl(s.tutar)} <Rozet ton="uyari">{EN_AZ}</Rozet></span> : tl(s.tutar)), hizala: 'sag', mono: true },
 ];
 const DISARIDA_SUTUNLARI: Sutun<Disarida>[] = [
   { anahtar: 'neden', baslik: 'Neden', hucre: (d) => `${DISARIDA_ADLARI[d.neden]}${d.kategori !== null ? `: ${KATEGORI_ADLARI[d.kategori] ?? d.kategori}` : ''}` },
@@ -76,11 +77,14 @@ export function GenelGiderOnerisi({ yazabilir, bugun, listeAnahtari }: { yazabil
       {o && (
         <>
           <Tablo etiket="Genel gider bileşenleri" sutunlar={BILESEN_SUTUNLARI}
-            satirlar={(Object.keys(BILESEN_ADLARI) as (keyof Oneri['bilesenler'])[]).map((k) => ({ anahtar: k, tutar: o.bilesenler[k], gizli: o.gizli && (k === 'dolayliPersonel' || k === 'emilmeyenDogrudan') }))}
+            satirlar={(Object.keys(BILESEN_ADLARI) as (keyof Oneri['bilesenler'])[]).map((k) => ({ anahtar: k, tutar: o.bilesenler[k], gizli: o.gizli && (k === 'dolayliPersonel' || k === 'emilmeyenDogrudan'), enAz: o.enAz.includes(k) }))}
             satirAnahtari={(s) => s.anahtar} bosMesaj={YOK} />
-          <p className="tc-kf-not"><strong>Aylık toplam: {o.gizli ? GIZLI : tl(o.toplam)}</strong> (elle ek hariç)</p>
+          <p className="tc-kf-not"><strong>Aylık toplam: {o.gizli ? GIZLI : tl(o.toplam)}{!o.gizli && o.toplam !== null && o.enAz.length > 0 ? ` (${EN_AZ.toLowerCase()})` : ''}</strong> (elle ek hariç)</p>
           {o.eksik.length > 0 && (
             <p className="tc-kf-not" role="note"><Rozet ton="uyari">Eksik</Rozet> Bilinmeyen kaynak: {o.eksik.join(', ')}. Bileşenlerin hepsi bilinmeden belgeden kayıt yapılmaz.</p>
+          )}
+          {o.uyarilar.length > 0 && (
+            <p className="tc-kf-not" role="note"><Rozet ton="uyari">Uyarı</Rozet> {o.uyarilar.join(', ')}. Bunlar toplama girmez, tutar en az değerdir; kayıt yapılabilir ve uyarı kayda yazılır.</p>
           )}
           {o.oraniBilinmeyen.length > 0 && (
             <p className="tc-kf-not" role="note"><Rozet ton="uyari">Oran yok</Rozet> Genel gider payı bilinmeyen satın alma faturaları: {o.oraniBilinmeyen.join(', ')}. Bu faturalar toplama girmez.</p>

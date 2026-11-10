@@ -43,7 +43,7 @@ export async function alisBelgesiEslesmeTutari(db: Db, belgeId: number, firmaId:
 export { malzemeKartiIzleri } from './sorgular.ts';
 // 2594 b (Mimar K1): genel gider bileşenlerinin başka modüllerdeki kaynakları kablolamada kaydedilir; finans onları ithal etmez.
 export {
-  aracMasrafiCozucusuKaydet as aracMasrafiCozucusu, dolayliPersonelCozucusuKaydet as dolayliPersonelCozucusu, emilmeyenDogrudanCozucusuKaydet as emilmeyenDogrudanCozucusu, genelGiderOraniCozucusuKaydet as genelGiderOraniCozucusu,
+  dolayliPersonelCozucusuKaydet as dolayliPersonelCozucusu, emilmeyenDogrudanCozucusuKaydet as emilmeyenDogrudanCozucusu, genelGiderOraniCozucusuKaydet as genelGiderOraniCozucusu,
   projeMasrafiCozucusuKaydet as projeMasrafiCozucusu, stokCikisiCozucusuKaydet as stokCikisiCozucusu,
 } from './genel-gider/servis.ts';
 export type { AylikTutarCozucusu, BelgeSiparisi, DolayliPersonelCozucusu, FaturaEslemesi, PersonelTutariCozucusu, GenelGiderOraniCozucusu, ProjeMasrafiCozucusu } from './genel-gider/servis.ts';

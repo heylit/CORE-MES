@@ -13,9 +13,9 @@ const satir = (id: number, gun: string, gider: string, saat: string, saatBasi: s
 const ONERI = {
   ay: '2026-10', donemBaslangic: '2026-10-01', donemBitis: '2026-10-31',
   bilesenler: { kira: 10000, amortisman: 1000, dolayliPersonel: null, emilmeyenDogrudan: -250, diger: 6400, projesizSatinAlma: 80 }, toplam: null,
-  ayrinti: { digerBelgeler: 5900, stokCikisi: 300, aracMasrafi: 200 },
+  ayrinti: { digerBelgeler: 5900, stokCikisi: 300 },
   disarida: [{ neden: 'kategori', kategori: 'faiz', tutar: 600, adet: 1 }, { neden: 'eski_belge', kategori: null, tutar: 900, adet: 1 }],
-  eksik: ['dolaylı personel (İK)'], oraniBilinmeyen: ['A-7'], gizli: false,
+  eksik: ['dolaylı personel (İK)'], oraniBilinmeyen: ['A-7'], uyarilar: ['emirsiz stok çıkışı: fiyatı bilinmeyen 1 çıkış'], enAz: ['diger'], gizli: false,
   baskinBelgeler: [{ bilesen: 'kira', belge: 'K-1', tutar: 10000 }],
 };
 const SATIRLAR = [
@@ -91,10 +91,12 @@ describe('Genel gider oranı (206 a)', () => {
     expect(within(tablo).getByText('10.000,00 TL')).toBeTruthy();
     expect(within(tablo).getByText('Bilinmiyor')).toBeTruthy();
     expect(within(tablo).getByText('Fazla emilim')).toBeTruthy();
+    expect(within(tablo).getByText('En az')).toBeTruthy();
     expect(screen.getByText(/Aylık toplam: Bilinmiyor/)).toBeTruthy();
     const notlar = screen.getAllByRole('note').map((n) => n.textContent ?? '');
     expect(notlar.some((n) => n.includes('dolaylı personel (İK)'))).toBe(true);
     expect(notlar.some((n) => n.includes('A-7'))).toBe(true);
+    expect(notlar.some((n) => n.includes('fiyatı bilinmeyen 1 çıkış') && n.includes('toplama girmez'))).toBe(true);
     expect(screen.getByText(/genel gider payı Satın Alma'dan gelir/)).toBeTruthy();
     expect(notlar.some((n) => n.includes('K-1') && n.includes('Peşin'))).toBe(true);
     const disarida = screen.getByRole('table', { name: 'Dışarıda kalanlar' });
