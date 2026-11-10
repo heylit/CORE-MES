@@ -312,7 +312,8 @@ Testler: plan-bedel 815 (iki test), kurallar 815, kablolama 815; istemci planlam
   değişti, Y1-Y6 eklendi (2749 istemciyle aynı). `vardiyasizGun` ve `MesaiGirdisi.vardiyasiz` kalktı.
 - Motor (Maliyet C1): plan değerlendirmesi başlarken, yalnız finans.maliyet-oku olanda (Güvenlik K3), birleşmiş çalışmanın tezgâhlarına değer
   yazılır: iş parçacığının girdisinde `D.mesaiSaat[tezgahId] = number | null` (`degerlendirme.ts mesaiSaatliGirdi`). `degerlendir.js
-  ymMesaiTL` bunu okur; null ya da yoksa yalın. Kayıttaki brütten kurulan `msGrupSaat`/`msSaat` kalktı. Değer kayda ve hiçbir cevaba girmez.
+  ymMesaiTL` bunu okur; null ya da yoksa yalın. Kayıttaki brütten kurulan `msGrupSaat`/`msSaat` kalktı. Değer kayda ve hiçbir cevaba girmez:
+  istemci gönderse de `saklanmayanAlanlariCikar` (`mesaiSaatiniCikar`) yazmada ve ham okumada çıkarır; planlama çalışması cevabı da çıkarır.
 - Yeni uç `GET /plan/mesai-saat-degerleri` (yalnız finans.maliyet-oku, parametresiz, strict): `{ ay, gruplar: [{ grup, saatTL | null }] }`.
   Grup değeri (Maliyet C2, Mimar N1): s = bilinen tezgâhların opOran ağırlıklı istasyon değeri ortalaması (hepsi null ise null);
   saatTL = s x op x hafta içi çarpanı + kişi başı ek / 8 x op, op grubun ortalama opOran'ı (yoksa 1); istemcinin ufuk `mesaiSaatTL`'si ile aynı

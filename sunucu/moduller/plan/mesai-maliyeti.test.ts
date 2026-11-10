@@ -310,5 +310,15 @@ describe('2653 mesai maliyeti (gerçek PostgreSQL)', () => {
       assert.equal(r.statusCode, 200, `${url} ${r.body.slice(0, 200)}`);
       assert.doesNotMatch(r.body, /mesaiSaat/, url);
     }
+    // İstemci değeri geri yazsa da kayda girmez (Güvenlik Ek).
+    const g = await app.inject({ method: 'POST', url: '/api/oturum/giris', payload: { kullaniciAdi: 'mm-yon', parola: PAROLA } });
+    const yon = String(g.headers['set-cookie']).split(';')[0] ?? '';
+    const k = (await sorgular.planlamaKaydi(vt(), PLANLAMA_ANAHTARI))!;
+    const deger = k.deger as { D: Record<string, unknown> };
+    const yaz = await app.inject({ method: 'POST', url: '/api/plan/planlama-kayitlari/yaz', headers: { cookie: yon },
+      payload: { anahtar: PLANLAMA_ANAHTARI, bicim: 'json', deger: { ...deger, D: { ...deger.D, mesaiSaat: { [String(makineBuyuk)]: 7771 } } }, beklenenSurum: k.surum } });
+    assert.equal(yaz.statusCode, 200, yaz.body);
+    const sonra = JSON.stringify((await sorgular.planlamaKaydi(vt(), PLANLAMA_ANAHTARI))?.deger);
+    assert.ok(!sonra.includes('mesaiSaat') && !sonra.includes('7771'), sonra.slice(0, 200));
   });
 });
