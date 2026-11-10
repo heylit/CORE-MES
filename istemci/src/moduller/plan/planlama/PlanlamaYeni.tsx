@@ -99,10 +99,8 @@ function PlanlamaEkrani() {
     return () => { window.removeEventListener('beforeunload', sor); window.removeEventListener('pagehide', cik); cik(); };
   }, [yazici]);
   // Yeniden okuma bekleyen yazmayı önce gönderir: yoksa okunan kayıt son değişikliği içermez, sonraki yazma kendi kendine 409 alırdı.
-  const yazYenile = useCallback((): void => {
-    if (yazici === null) { yenile(); return; }
-    void yazici.hepsiniYaz().then(yenile, yenile);
-  }, [yazici, yenile]);
+  // Görünümlerin yenilemesi sessizdir: komuttan sonra ekran yükleniyor kutusuna dönüp yeniden kurulursa çizelge yanıp söner,
+  // kaydırma ve seçim kaybolur; eski veri yenisi gelene kadar görünür kalır.
   const yazTazele = useCallback((): void => {
     if (yazici === null) { tazele(); return; }
     void yazici.hepsiniYaz().then(tazele, tazele);
@@ -156,14 +154,14 @@ function PlanlamaEkrani() {
               {gorunum !== 'plan' && (
                 <Suspense fallback={null}>
                   <PlanSeridi
-                    depo={durum.depo} calisma={calisma} komut={yazici} yetki={yetki} git={gec} yenile={yazYenile}
+                    depo={durum.depo} calisma={calisma} komut={yazici} yetki={yetki} git={gec} yenile={yazTazele}
                     olcek={olcek} olcekSec={olcekSec} kaydir={kaydir} secim={secim} sec={sec} alt={alt} altSec={altSec} istek={istek} studyoAc={studyoAc} gorunum={gorunum}
                   />
                 </Suspense>
               )}
               <Suspense fallback={<DurumKutusu durum="yukleniyor" />}>
                 <etkin.bilesen
-                  depo={durum.depo} calisma={calisma} komut={yazici} yetki={yetki} git={gec} yenile={yazYenile}
+                  depo={durum.depo} calisma={calisma} komut={yazici} yetki={yetki} git={gec} yenile={yazTazele}
                   olcek={olcek} olcekSec={olcekSec} kaydir={kaydir} secim={secim} sec={sec} alt={alt} altSec={altSec} istek={istek} studyoAc={studyoAc}
                 />
               </Suspense>

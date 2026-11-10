@@ -10,6 +10,10 @@ import {
 } from './kurallar.ts';
 import { ankraj, kaydirici, type Ortam } from './Pano.tsx';
 
+// Bırakılan çubuğun yeni planı bekleme sınırı; komut bittikten sonra plan bu kadar içinde gelmezse çubuk eski yerine döner.
+const BIRAKMA_SINIRI_MS = 15_000;
+const BIRAKMA_BEKLEMESI_MS = 3_000;
+
 // Tezgâh çizelgesi (cizPano, cizCubuk, cizOklar): gün ve saat başlığı, tezgâh ve fason satırları, kapalı saat, arıza, çubuklar, donuk bölge,
 // şimdi çizgisi ve motorun ufku. Yıl ölçeğinde haftalık doluluk hücreleri. Seçili siparişin önceki-sonraki okları çubukların yerinden ölçülür.
 // Çubuğu sürükleyip taşımak motor ister (357 b): çubuk seçilir, kartı açılır.
@@ -111,6 +115,27 @@ export function Izgara({ ort, pano, parla }: { ort: Ortam; pano: MutableRefObjec
   };
   const suruk = useRef<Suruk | null>(null);
   const birakti = useRef(false);
+  // Bırakılan çubuk yeni yeri gelene kadar bırakıldığı yerde durur: yoksa komut sürerken eski yerine döner, plan gelince yeniden kayar
+  // (yanıp sönme). Taşıma önce yalnız kilidi yazar, yer kendiliğinden uygulanan planla gelir: çubuk yeri değişince (ya da başka satıra
+  // geçip yeniden çizilince) ya da ikinci plan gelince geçişsiz oturur. Komut düşerse (plan hiç gelmezse) kısa süre sonra eski yerine döner.
+  const birakilan = useRef<{ el: HTMLElement; p: unknown; x: string; plan: number; zaman: number } | null>(null);
+  const birakilaniBirak = () => {
+    const b = birakilan.current; birakilan.current = null; if (!b) return;
+    window.clearTimeout(b.zaman);
+    b.el.style.removeProperty('--dx'); b.el.style.removeProperty('--dy');
+    requestAnimationFrame(() => { delete b.el.dataset.birakildi; });
+  };
+  useLayoutEffect(() => {
+    const b = birakilan.current; if (!b || b.p === p) return;
+    b.p = p; b.plan += 1;
+    if (!b.el.isConnected || b.el.style.getPropertyValue('--x') !== b.x || b.plan >= 2) birakilaniBirak();
+  }, [p]);
+  useEffect(() => {
+    const b = birakilan.current;
+    if (ort.isleniyor || !b || b.plan > 0) return;
+    window.clearTimeout(b.zaman); b.zaman = window.setTimeout(() => { if (birakilan.current === b && b.plan === 0) birakilaniBirak(); }, BIRAKMA_BEKLEMESI_MS);
+  }, [ort.isleniyor]);
+  useEffect(() => () => { birakilaniBirak(); }, []);
   const yuzen = useRef<HTMLDivElement | null>(null);
   const bilgiZamani = useRef(0);
   // Sürüklenen çubuk imleci izler ve en üstte çizilir; onu atlamazsak hedef hep kendi satırı olur, geçişte titrer.
@@ -132,10 +157,14 @@ export function Izgara({ ort, pano, parla }: { ort: Ortam; pano: MutableRefObjec
   const yuzenGizle = () => { window.clearTimeout(bilgiZamani.current); if (yuzen.current) delete yuzen.current.dataset.acik; };
   useEffect(() => () => { window.clearTimeout(bilgiZamani.current); yuzen.current?.remove(); yuzen.current = null; }, []);
   const cakisiyor = (id: string, m: string, S: number, C: number) => (opsM.get(m) ?? []).some((o) => o.id !== id && o.S < C - 1e-9 && o.C > S + 1e-9);
-  const surukBit = () => {
+  const surukBit = (yerindeKalsin = false) => {
     const s = suruk.current; suruk.current = null; if (!s) return;
     cancelAnimationFrame(s.kare);
-    delete s.el.dataset.surukle; delete s.el.dataset.cakisma; s.el.style.removeProperty('--dx'); s.el.style.removeProperty('--dy');
+    delete s.el.dataset.surukle; delete s.el.dataset.cakisma;
+    if (yerindeKalsin) {
+      s.el.dataset.birakildi = '';
+      birakilan.current = { el: s.el, p, x: s.el.style.getPropertyValue('--x'), plan: 0, zaman: window.setTimeout(birakilaniBirak, BIRAKMA_SINIRI_MS) };
+    } else { s.el.style.removeProperty('--dx'); s.el.style.removeProperty('--dy'); }
     s.hayalet?.remove();
     if (s.hedef) delete s.hedef.dataset.hedef;
     yuzenGizle();
@@ -214,7 +243,7 @@ export function Izgara({ ort, pano, parla }: { ort: Ortam; pano: MutableRefObjec
   const surukle = (r: PlanIslemi, acik: boolean) => (acik ? {
     onPointerDown: (e: ReactPointerEvent<HTMLElement>) => {
       if (e.button > 0 || !ort.tasi) return;
-      surukBit(); yuzenGizle();
+      surukBit(); yuzenGizle(); birakilaniBirak();
       suruk.current = yeniSuruk(r, e.currentTarget, e.clientX, e.clientY);
     },
     onPointerMove: (e: ReactPointerEvent<HTMLElement>) => {
@@ -230,12 +259,12 @@ export function Izgara({ ort, pano, parla }: { ort: Ortam; pano: MutableRefObjec
       const s = suruk.current; if (!s || s.id !== r.id || s.klavye) return;
       const oldu = s.oldu; s.px = e.clientX; s.py = e.clientY;
       const varis = oldu && Number.isFinite(e.clientX) ? onizle(s) : null;
-      surukBit();
+      surukBit(!!varis && !!ort.tasi && (varis.m !== r.m || varis.S !== tasimaSaati(r.S, now)));
       if (!varis || !ort.tasi) return;
       birakti.current = true;
       ort.tasi(r.id, varis.m, varis.S);
     },
-    onPointerCancel: surukBit,
+    onPointerCancel: () => { surukBit(); },
     onKeyDown: (e: ReactKeyboardEvent<HTMLElement>) => {
       if (!ort.tasi) return;
       let s = suruk.current;
@@ -244,7 +273,7 @@ export function Izgara({ ort, pano, parla }: { ort: Ortam; pano: MutableRefObjec
       if (e.key === 'Enter' && s?.klavye && s.id === r.id) {
         e.preventDefault();
         const varis = onizle(s); const degisti = varis.m !== r.m || varis.S !== tasimaSaati(r.S, now);
-        surukBit();
+        surukBit(degisti);
         if (degisti) ort.tasi(r.id, varis.m, varis.S);
         return;
       }

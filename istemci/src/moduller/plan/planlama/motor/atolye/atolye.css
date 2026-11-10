@@ -621,6 +621,8 @@
 /* Sürükleme sırasında çubuk adım adım (çeyrek saat) oturur: kısa kayma yumuşatır. */
 .tc-pym-tp-cubuk[data-surukle] { transition: translate 60ms linear; }
 @media (prefers-reduced-motion: reduce) { .tc-pym-tp-cubuk[data-surukle] { transition: none; } }
+/* Bırakılan çubuk yeni plana geçişsiz oturur: eski yerinden yeniden kaymaz. */
+.tc-pym-tp-cubuk[data-birakildi] { transition: none; }
 
 /* Düzenle ve Yapılacaklar köşesi (2531 a): panoda kabın içinde, Bugün şeridinin başlığının üstünde */
 .tc-pym-tp-kap > .tc-pym-yp-sira { position: absolute; right: var(--b-3); bottom: calc(var(--tc-pym-tp-bugun-yuk, var(--b-6)) + var(--b-3)); margin: 0; }

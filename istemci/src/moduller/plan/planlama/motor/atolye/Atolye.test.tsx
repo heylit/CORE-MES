@@ -531,11 +531,49 @@ describe('PlanlamaAtolyesi', () => {
     expect(govde.baslangic * 4).toBe(Math.round(govde.baslangic * 4));
     await waitFor(() => expect(screen.getByText(/Başlamış iş taşınamaz/)).toBeTruthy());
     expect(yenile).not.toHaveBeenCalled();
+    // Komut düşünce bırakılan çubuk kısa süre sonra eski yerine döner.
+    await waitFor(() => expect(cubuk.style.getPropertyValue('--dx')).toBe(''), { timeout: 4000 });
     fireEvent.pointerDown(cubuk, { button: 0, clientX: 100, clientY: 10, pointerId: 2 });
     fireEvent.pointerUp(cubuk, { clientX: 102, clientY: 10, pointerId: 2 });
     fireEvent.click(cubuk);
     expect(within(kart()).getByText('Neden bu saatte')).toBeTruthy();
     expect(post).toHaveBeenCalledTimes(1);
+    post.mockRestore();
+  });
+
+  it('2788: bırakılan çubuk yeni yeri gelene kadar bırakıldığı yerde durur, sayfa yeniden kurulmaz; yeni planda geçişsiz oturur', async () => {
+    const post = vi.spyOn(api, 'post').mockResolvedValue({ calismaSurumu: 9, oncekiSurum: 8 });
+    const c = ornekCalisma();
+    const yenile = vi.fn();
+    const oz = (calisma: PlanlamaCalismasi): Omit<PlanlamaEkranOzellikleri, 'olcek' | 'olcekSec' | 'kaydir' | 'secim' | 'sec'> => ({
+      depo: DEPO, calisma, komut: komutKur(c).komut, git: vi.fn(), yenile, istek: null, yetki: yetkiKur([PLANLAMA_ISLEMI, 'plan.yaz', 'plan.studyo']),
+    });
+    const { rerender } = render(<MemoryRouter><BildirimSaglayici><Iskelet {...oz(c)} /></BildirimSaglayici></MemoryRouter>);
+    const cubuk = document.querySelector('[data-id="2.40"]') as HTMLElement;
+    fireEvent.pointerDown(cubuk, { button: 0, clientX: 100, clientY: 10, pointerId: 1 });
+    fireEvent.pointerMove(cubuk, { clientX: 160, clientY: 10, pointerId: 1 });
+    fireEvent.pointerUp(cubuk, { clientX: 160, clientY: 10, pointerId: 1 });
+    await waitFor(() => expect(yenile).toHaveBeenCalledTimes(1));
+    expect(cubuk.dataset['surukle']).toBeUndefined();
+    expect(cubuk.dataset['birakildi']).toBe('');
+    const dx = cubuk.style.getPropertyValue('--dx');
+    expect(dx).not.toBe('');
+    // Yeniden okunan çalışma (yalnız kilit yazılmış, yer aynı) çubuğu bırakmaz.
+    const kilitli = structuredClone(c);
+    rerender(<MemoryRouter><BildirimSaglayici><Iskelet {...oz(kilitli)} /></BildirimSaglayici></MemoryRouter>);
+    expect(cubuk.style.getPropertyValue('--dx')).toBe(dx);
+    // Uygulanan planda iş yeni saatindedir: çubuk aynı öğe kalır, kayma silinir, geçişsiz oturur.
+    const yeni = structuredClone(c);
+    const plan = yeni.plan as unknown as { ops: Record<string, { S: number; C: number }> } | null;
+    const op = plan?.ops['2.40'];
+    if (!op || !plan) throw new Error('örnek planda 2.40 yok');
+    plan.ops['2.40'] = { ...op, S: op.S + 2, C: op.C + 2 };
+    rerender(<MemoryRouter><BildirimSaglayici><Iskelet {...oz(yeni)} /></BildirimSaglayici></MemoryRouter>);
+    const sonra = document.querySelector('[data-id="2.40"]') as HTMLElement;
+    expect(sonra).toBe(cubuk);
+    expect(cubuk.style.getPropertyValue('--dx')).toBe('');
+    expect(cubuk.dataset['birakildi']).toBe('');
+    await waitFor(() => expect(cubuk.dataset['birakildi']).toBeUndefined());
     post.mockRestore();
   });
 
