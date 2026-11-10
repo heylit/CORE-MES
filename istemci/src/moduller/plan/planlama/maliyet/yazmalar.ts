@@ -133,9 +133,6 @@ export function siparisFiyatYaz(yaz: Yaz, D: PlanVerisi, id: string, gelir: numb
 }
 
 // ---------- Genel gider (msDeg: plan korunur) ----------
-export function giderKipYaz(yaz: Yaz, v: 'kalem' | 'tek'): boolean {
-  return yaz('Genel gider hesabı', v === 'kalem' ? 'kalemlerden' : 'tek oran', (x) => { msYaz(x, (M) => { M.kip = v; }); }, MS);
-}
 export function verimYaz(yaz: Yaz, D: PlanVerisi, v: number): boolean {
   return yaz('Kapasite verimi', `%${String(maliyetSistemi(D).verim)} → %${String(v)}`, (x) => { msYaz(x, (M) => { M.verim = v; }); }, MS);
 }

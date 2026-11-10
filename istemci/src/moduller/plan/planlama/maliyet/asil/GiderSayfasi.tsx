@@ -7,9 +7,9 @@ import {
   sayiGirdisi, sgkKatsayisi, tl, tlSaat, ymAyar, type GenelGiderHesabi, type TezgahGideri,
 } from '../kurallar.ts';
 import {
-  dolayliEkleYaz, dolayliSilYaz, dolayliYaz, giderKipYaz, kalemEkleYaz, kalemSilYaz, kalemYaz, kwhYaz, makineyeYaz, tezGiderYaz, verimYaz, type Yaz,
+  dolayliEkleYaz, dolayliSilYaz, dolayliYaz, kalemEkleYaz, kalemSilYaz, kalemYaz, kwhYaz, makineyeYaz, tezGiderYaz, verimYaz, type Yaz,
 } from '../yazmalar.ts';
-import { Alan, AltNot, AsilKart, Kilit, Kpi, MetinGir, Not, SayiGir, SecimGir, Segment } from './girdi.tsx';
+import { Alan, AltNot, AsilKart, Kilit, Kpi, MetinGir, Not, SayiGir, SecimGir } from './girdi.tsx';
 
 // Genel gider sayfasının "Tüm satırlar"ı: bugünkü sayfanın kartları (zz6 sGenelGider, msVeriDurum). Yazma planı eskitmez (msDeg).
 
@@ -32,18 +32,17 @@ export function GiderSayfasi({ c, G, para, yaz, git }: { c: PlanlamaCalismasi; G
       <VeriDurumu c={c} git={git} />
       <AsilKart simge="layers" baslik="Genel gider nasıl hesaplanır">
         <div className="tc-pyk-sira">
-          <Segment ad="Genel gider hesabı" secenek={[['kalem', 'Kalemlerden'], ['tek', 'Tek oran']]} deger={M.kip} kapali={kapali} sec={(v) => { y((z) => giderKipYaz(z, v === 'tek' ? 'tek' : 'kalem')); }} />
           <Alan ad="Verim %"><SayiGir deger={M.verim} ad="Pratik kapasite verimi" min={10} max={100} bosOlmaz kapali={kapali} yaz={(v) => v !== null && y((z) => verimYaz(z, D, v))} /></Alan>
           <Alan ad="Elektrik TL/kWh"><SayiGir deger={M.kwh} ad="Elektrik birim fiyatı" max={100} bosOlmaz kapali={kapali} yaz={(v) => v !== null && y((z) => kwhYaz(z, D, v))} /></Alan>
         </div>
         <Kpi l={[
           ['layers', 'Aylık genel gider', tl(G.aylik), `kalemler ${tl(G.kalemTop)} + amortisman ${tl(G.amort)}`],
           ['clock', 'Pratik kapasite', `${sayi(G.kap, 0)} sa`, `30 gün, verim %${sayi(M.verim, 0)}`],
-          ['lira', 'Ortalama oran', G.ort === null ? '—' : tlSaat(G.ort), M.kip === 'kalem' ? 'maliyette kullanılıyor' : (ya.genelGiderGizli ? 'kullanılan: tek oran gizli' : `kullanılan: tek oran ${tlSaat(gg)}`)],
+          ['lira', 'Ortalama oran', G.ort === null ? '—' : tlSaat(G.ort), ya.genelGiderGizli ? 'bilgi; maliyette Finans oranı gizli' : `bilgi; maliyette Finans oranı ${tlSaat(gg)}`],
           ['gauge', 'Plan doluluğu', G.kap ? `%${sayi(Math.min(100, (G.mesgul / G.kap) * 100), 0)}` : '—', `${sayi(G.mesgul, 0)} sa planlı`],
           ['alert', 'Atıl kapasite gideri', tl(G.atil), 'ürüne yüklenmez, dönem gideri', G.atil !== null && G.atil > G.aylik * 0.3 ? 'uyari' : ''],
         ]} />
-        <Not>Her kalem aylık tutardır ve seçilen anahtarla tezgâhlara dağılır; amortisman tezgâhın kendisine yazılır. Tezgâhın oranı = (pay + amortisman) / pratik kapasite saati. Normal kapasiteyle dağıtıldığı için boş kalan saatin gideri ürüne yüklenmez, atıl kapasite olarak ayrı görünür. Genel gider plan amacına girmez (5 b); ürün maliyetinde, teklifte ve proje maliyetinde kullanılır.</Not>
+        <Not>Her kalem aylık tutardır ve seçilen anahtarla tezgâhlara dağılır; amortisman tezgâhın kendisine yazılır. Tezgâhın oranı = (pay + amortisman) / pratik kapasite saati. Normal kapasiteyle dağıtıldığı için boş kalan saatin gideri ürüne yüklenmez, atıl kapasite olarak ayrı görünür. Bu oranlar bilgi içindir: sipariş maliyeti, teklif ve plan genel gideri Finans'ın genel gider oranından alır (2608). Genel gider plan amacına girmez (5 b).</Not>
       </AsilKart>
       <KalemKarti c={c} kapali={kapali} y={y} />
       <DolayliKarti c={c} kapali={kapali} y={y} />
