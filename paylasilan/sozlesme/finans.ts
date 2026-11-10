@@ -216,9 +216,11 @@ export const genelGiderOnerisiCevabi = z.object({
   ay: z.string(), donemBaslangic: tarihSemasi, donemBitis: tarihSemasi,
   bilesenler: z.object({ kira: bilesenDegeri, amortisman: bilesenDegeri, dolayliPersonel: bilesenDegeri, emilmeyenDogrudan: bilesenDegeri, diger: bilesenDegeri, projesizSatinAlma: bilesenDegeri }),
   toplam: bilesenDegeri,
-  ayrinti: z.object({ digerBelgeler: bilesenDegeri, stokCikisi: bilesenDegeri, aracMasrafi: bilesenDegeri }),
+  ayrinti: z.object({ digerBelgeler: bilesenDegeri, stokCikisi: bilesenDegeri }),
   disarida: z.array(z.object({ neden: z.enum(GENEL_GIDER_DISARIDA_NEDENLERI), kategori: z.string().nullable(), tutar: z.number(), adet: z.number().int() })),
   eksik: z.array(z.string()), oraniBilinmeyen: z.array(z.string()),
+  // 2710 b: tutarı düşürmeyen eksikler (fiyatsız stok çıkışı); kaydı durdurmaz. enAz: uyarısı olan bileşen alt sınırdır.
+  uyarilar: z.array(z.string()), enAz: z.array(z.enum(['kira', 'amortisman', 'dolayliPersonel', 'emilmeyenDogrudan', 'diger', 'projesizSatinAlma'])),
   gizli: z.boolean(),
   baskinBelgeler: z.array(z.object({ bilesen: z.enum(['kira', 'diger']), belge: z.string(), tutar: z.number() })),
 });

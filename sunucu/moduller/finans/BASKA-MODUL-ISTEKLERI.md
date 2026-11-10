@@ -34,8 +34,8 @@ KAPANDI (#1846): açıklama istasyon saat maliyeti alanının altında görünü
 
 ## Stoka istek: aylık emirsiz stok çıkışı (2623 a, 2594 b)
 - Genel gider belgeden kaydı bu tutar olmadan satır yazmaz ("emirsiz stok çıkışı (diğer)" eksik kalır).
-- İstenen: `stok/disari.ts`'te `emirsizCikisTutari(db, ay: 'GGGG-AA'): Promise<number | null>`: ay içindeki emre bağlı olmayan stok çıkışlarının miktar x son alış fiyatı toplamı (TL, kuruş). Son alışı bilinmeyen çıkış varsa `null` (sıfır uydurulmaz). Bağ `sunucu/kablolama.ts`'te `stokCikisiCozucusu` ile kurulur.
+- İstenen (2714 ile güncellendi, 2709 c, 2710 b): `stok/disari.ts`'te `emirsizCikisTutari(db, ay: 'GGGG-AA'): Promise<{ tutar: number | null; eksik: string[] }>`: ay içindeki emre bağlı olmayan diğer, numune, fire çıkışları ve sayım eksiğinin miktar x son alış fiyatı toplamı (TL, kuruş). Son alışı bilinmeyen çıkış toplama girmez, tutarı null yapmaz; `eksik`'e okunur bir satırla yazılır (ör. "fiyatı bilinmeyen 2 çıkış"), Finans bunu öneride uyarı olarak gösterir. `tutar` yalnız hesap yapılamazsa null. Bağ `sunucu/kablolama.ts`'te `stokCikisiCozucusu` ile kurulur.
 
-## İdari işlere istek: aylık araç masrafı (2614 2/2 a, 2594 b)
-- Genel gider belgeden kaydı bu tutar olmadan satır yazmaz ("araç masrafı (diğer)" eksik kalır).
-- İstenen: `idari-isler/disari.ts`'te `aylikAracMasrafi(db, ay: 'GGGG-AA'): Promise<number | null>`: bütün araçların o aydaki masraf toplamı (TL, kuruş); masraf yoksa 0, tutarı bilinmeyen masraf varsa `null`. Bağ `sunucu/kablolama.ts`'te `aracMasrafiCozucusu` ile kurulur.
+## İdari işlere istek: aylık araç masrafı (2614 2/2 a, 2594 b) — KALDIRILDI (2711 b, kart 2714)
+- Araç gideri genel gidere yalnız Finans belgesinden girer; Finans `aracMasrafiCozucusu`'nu kaldırdı, bağ kurulmaz. `aylikAracMasrafi` (2708) Finans'ça kullanılmaz; kalıp kalmayacağı İdari İşler'in kararıdır.
+- Eski istek: `idari-isler/disari.ts`'te `aylikAracMasrafi(db, ay: 'GGGG-AA'): Promise<number | null>`: bütün araçların o aydaki masraf toplamı (TL, kuruş); masraf yoksa 0, tutarı bilinmeyen masraf varsa `null`. Bağ `sunucu/kablolama.ts`'te `aracMasrafiCozucusu` ile kurulur.

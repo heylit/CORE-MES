@@ -11,7 +11,7 @@ import { denetimYaz } from '../../denetim/disari.ts';
 import { tekrarDeposu } from '../../istek-kimligi/disari.ts';
 import { rolAl, rolAta, yoneticiOlustur } from '../../kisiler/disari.ts';
 import { kimlikCozucu } from '../../oturum/disari.ts';
-import { aracMasrafiCozucusu, belgelerinSiparisleri, dolayliPersonelCozucusu, emilmeyenDogrudanCozucusu, genelGiderOraniCozucusu, projeMasrafiCozucusu, stokCikisiCozucusu } from '../disari.ts';
+import { belgelerinSiparisleri, dolayliPersonelCozucusu, emilmeyenDogrudanCozucusu, genelGiderOraniCozucusu, projeMasrafiCozucusu, stokCikisiCozucusu } from '../disari.ts';
 import { genelGiderOnerisi } from './servis.ts';
 import type { GenelGiderOnerisi } from './servis.ts';
 
@@ -21,7 +21,7 @@ const AY = '2026-10';
 interface Cevap<T = unknown> { durum: number; govde: T }
 
 function cozuculeriKaldir(): void {
-  genelGiderOraniCozucusu(null); projeMasrafiCozucusu(null); dolayliPersonelCozucusu(null); emilmeyenDogrudanCozucusu(null); stokCikisiCozucusu(null); aracMasrafiCozucusu(null);
+  genelGiderOraniCozucusu(null); projeMasrafiCozucusu(null); dolayliPersonelCozucusu(null); emilmeyenDogrudanCozucusu(null); stokCikisiCozucusu(null);
 }
 
 describe('2594 b genel gider bileşenleri (gerçek PostgreSQL)', () => {
@@ -74,8 +74,7 @@ describe('2594 b genel gider bileşenleri (gerçek PostgreSQL)', () => {
     dolayliPersonelCozucusu(async () => ({ tutar: o.dolayli === undefined ? 5000 : o.dolayli, kucuk: o.kucuk === true, eksik: o.dolayli === null ? ['işaretlenmemiş departman: Kalite'] : [] }));
     // Fazla emilim: eksi değer kırpılmaz (2659, Maliyet 2).
     emilmeyenDogrudanCozucusu(async () => ({ tutar: o.emilmeyen ?? -250.004, kucuk: o.emilmeyenKucuk === true, eksik: [] }));
-    stokCikisiCozucusu(async () => 300);
-    aracMasrafiCozucusu(async () => 200);
+    stokCikisiCozucusu(async () => ({ tutar: 300, eksik: [] }));
   };
 
   before(async () => {
@@ -114,10 +113,10 @@ describe('2594 b genel gider bileşenleri (gerçek PostgreSQL)', () => {
     const o = await vt().tx((db) => genelGiderOnerisi(db, AY));
     assert.deepEqual(o.bilesenler, {
       // kira 10.000 (iptal ve eylül hariç); amortisman 1.000; diğer = enerji 2.000 + lojistik 100 x 35 + elle mal alımı 400 (2621 2/3 b)
-      // + stok 300 + araç 200; proje masrafı lojistik dışarıda. Siparişli: 180 x 80/180 = 80; 1.000 x 0 = 0.
-      kira: 10000, amortisman: 1000, dolayliPersonel: 5000, emilmeyenDogrudan: -250, diger: 6400, projesizSatinAlma: 80,
+      // + stok 300 (araç bileşeni yok, 2711 b); proje masrafı lojistik dışarıda. Siparişli: 180 x 80/180 = 80; 1.000 x 0 = 0.
+      kira: 10000, amortisman: 1000, dolayliPersonel: 5000, emilmeyenDogrudan: -250, diger: 6200, projesizSatinAlma: 80,
     });
-    assert.equal(o.toplam, 22230);
+    assert.equal(o.toplam, 22030);
     assert.equal(cagri.oran, 1);
     assert.equal(cagri.proje, 1);
     assert.deepEqual([...cagri.oranIdleri].sort((x, y) => x - y), [b.sip_karisik!, b.sip_uretim!, b.sip_bos!, b.sip_bilinmiyor!].sort((x, y) => x - y),
@@ -130,8 +129,10 @@ describe('2594 b genel gider bileşenleri (gerçek PostgreSQL)', () => {
     assert.deepEqual(neden('kategori', 'faiz'), { neden: 'kategori', kategori: 'faiz', tutar: 600, adet: 1 });
     assert.deepEqual(o.oraniBilinmeyen.sort(), ['sip_bilinmiyor', 'sip_bos']);
     assert.deepEqual(o.eksik, []);
+    assert.deepEqual(o.uyarilar, []);
+    assert.deepEqual(o.enAz, []);
     assert.equal(o.gizli, false);
-    // Kira tek belge; diğerde döviz lojistik 3.500, belge toplamı 5.900'ün yarısından fazla (stok ve araç sayılmaz).
+    // Kira tek belge; diğerde döviz lojistik 3.500, belge toplamı 5.900'ün yarısından fazla (stok sayılmaz).
     assert.deepEqual(o.baskinBelgeler, [{ bilesen: 'kira', belge: 'kira', tutar: 10000 }, { bilesen: 'diger', belge: 'lojistik_eur', tutar: 3500 }]);
   });
 
@@ -143,7 +144,8 @@ describe('2594 b genel gider bileşenleri (gerçek PostgreSQL)', () => {
     assert.equal(o.bilesenler.projesizSatinAlma, null);
     assert.equal(o.bilesenler.amortisman, 1000);
     assert.equal(o.toplam, null);
-    assert.equal(o.eksik.length, 6);
+    assert.equal(o.eksik.length, 5);
+    assert.ok(!o.eksik.some((e) => e.includes('araç')), '2711 b: araç bileşeni yok');
     hepsiniKaydet({ dolayli: null });
     const o2 = await vt().tx((db) => genelGiderOnerisi(db, AY));
     assert.equal(o2.bilesenler.dolayliPersonel, null);
@@ -154,7 +156,7 @@ describe('2594 b genel gider bileşenleri (gerçek PostgreSQL)', () => {
     hepsiniKaydet();
     const oneri = await istek<GenelGiderOnerisi>('okuyan', 'GET', `/finans/genel-gider-oranlari/oneri?ay=${AY}`);
     assert.equal(oneri.durum, 200);
-    assert.equal(oneri.govde.toplam, 22230);
+    assert.equal(oneri.govde.toplam, 22030);
     assert.equal((await istek('okuyan', 'POST', '/finans/genel-gider-oranlari/belgeden-ekle', { gecerlilikBaslangic: '2026-11-01', ay: AY, aylikMakineSaati: 400 })).durum, 403);
     assert.equal((await istek('yonetim', 'POST', '/finans/genel-gider-oranlari/belgeden-ekle', { gecerlilikBaslangic: '2026-11-01', ay: AY, aylikMakineSaati: 400, elleEk: 100 })).durum, 400, 'elle ek açıklamasız');
     const kayit = await istek<{ id: number }>('yonetim', 'POST', '/finans/genel-gider-oranlari/belgeden-ekle', { gecerlilikBaslangic: '2026-11-01', ay: AY, aylikMakineSaati: 400, elleEk: 20, aciklama: 'Belgesiz kalem' });
@@ -162,11 +164,11 @@ describe('2594 b genel gider bileşenleri (gerçek PostgreSQL)', () => {
     const satir = await vt().tek<Record<string, unknown>>(
       `SELECT kaynak, aylik_genel_gider::text AS t, kira::text, amortisman::text, dolayli_personel::text AS d, diger::text, projesiz_satin_alma::text AS p, elle_ek::text AS e,
               emilmeyen_dogrudan::text AS em, amortisman_dahil AS ad, donem_baslangic::text AS bas, donem_bitis::text AS bit, eksik FROM finans_genel_gider_orani WHERE id = $1`, [kayit.govde.id]);
-    assert.deepEqual(satir, { kaynak: 'belge', t: '22250.00', kira: '10000.00', amortisman: '1000.00', d: '5000.00', diger: '6400.00', p: '80.00', e: '20.00', em: '-250.00', ad: true,
+    assert.deepEqual(satir, { kaynak: 'belge', t: '22050.00', kira: '10000.00', amortisman: '1000.00', d: '5000.00', diger: '6200.00', p: '80.00', e: '20.00', em: '-250.00', ad: true,
       bas: '2026-10-01', bit: '2026-10-31', eksik: ['oranı bilinmeyen belge sip_bos', 'oranı bilinmeyen belge sip_bilinmiyor'] });
     // Fotoğraf: oran sonradan değişse de satır değişmez (yalnız ekleme).
     genelGiderOraniCozucusu(async (_db: Db, idler) => new Map(idler.map((i) => [i, { oran: 1, esleme: 'tam' as const }])));
-    assert.equal((await vt().tek<{ t: string }>('SELECT aylik_genel_gider::text AS t FROM finans_genel_gider_orani WHERE id = $1', [kayit.govde.id]))?.t, '22250.00');
+    assert.equal((await vt().tek<{ t: string }>('SELECT aylik_genel_gider::text AS t FROM finans_genel_gider_orani WHERE id = $1', [kayit.govde.id]))?.t, '22050.00');
     const liste = await istek<{ satirlar: { id: number; kaynak: string; projesizSatinAlma: string | null }[] }>('okuyan', 'GET', '/finans/genel-gider-oranlari');
     assert.deepEqual(liste.govde.satirlar.filter((s) => s.id === kayit.govde.id).map((s) => [s.kaynak, s.projesizSatinAlma]), [['belge', '80.00']]);
     cozuculeriKaldir();
@@ -174,6 +176,25 @@ describe('2594 b genel gider bileşenleri (gerçek PostgreSQL)', () => {
     const red = await istek<{ hata?: { ileti?: string } }>('yonetim', 'POST', '/finans/genel-gider-oranlari/belgeden-ekle', { gecerlilikBaslangic: '2026-11-02', ay: AY, aylikMakineSaati: 400 });
     assert.equal(red.durum, 422);
     assert.match(JSON.stringify(red.govde), /işaretlenmemiş departman: Kalite/);
+  });
+
+  test('2710 b: fiyatsız stok çıkışı tutarı düşürmez, öneride uyarı olur ve kaydı durdurmaz', async () => {
+    hepsiniKaydet();
+    stokCikisiCozucusu(async () => ({ tutar: 300, eksik: ['fiyatı bilinmeyen 2 çıkış'] }));
+    const o = (await istek<GenelGiderOnerisi>('okuyan', 'GET', `/finans/genel-gider-oranlari/oneri?ay=${AY}`)).govde;
+    assert.equal(o.bilesenler.diger, 6200);
+    assert.equal(o.ayrinti.stokCikisi, 300);
+    assert.equal(o.toplam, 22030);
+    assert.deepEqual(o.eksik, []);
+    assert.deepEqual(o.uyarilar, ['emirsiz stok çıkışı: fiyatı bilinmeyen 2 çıkış']);
+    assert.deepEqual(o.enAz, ['diger'], 'tutar alt sınırdır');
+    const kayit = await istek<{ id: number }>('yonetim', 'POST', '/finans/genel-gider-oranlari/belgeden-ekle', { gecerlilikBaslangic: '2026-11-04', ay: AY, aylikMakineSaati: 400 });
+    assert.equal(kayit.durum, 200);
+    const satir = await vt().tek<{ eksik: string[] }>('SELECT eksik FROM finans_genel_gider_orani WHERE id = $1', [kayit.govde.id]);
+    assert.ok(satir!.eksik.includes('emirsiz stok çıkışı: fiyatı bilinmeyen 2 çıkış'), 'uyarı kayda yazılır');
+    // Sağlayıcı tutarı bilemezse bileşen null, kayıt yine reddedilir (sıfır uydurulmaz).
+    stokCikisiCozucusu(async () => ({ tutar: null, eksik: [] }));
+    assert.equal((await vt().tx((db) => genelGiderOnerisi(db, AY))).bilesenler.diger, null);
   });
 
   test('2652 a, 2659: personel bileşenlerinden biri küçük grupsa ikisi ve toplam ekranda gizli; görünen iki sayının farkı dolaylı tutarı vermez; kayıt ayrı alan tutmaz, listede tutar gizli', async () => {
@@ -204,7 +225,7 @@ describe('2594 b genel gider bileşenleri (gerçek PostgreSQL)', () => {
     assert.equal(kayit.durum, 200);
     const satir = await vt().tek<{ t: string; d: string | null; g: boolean }>(
       'SELECT aylik_genel_gider::text AS t, dolayli_personel::text AS d, emilmeyen_dogrudan::text AS e, personel_gizli AS g FROM finans_genel_gider_orani WHERE id = $1', [kayit.govde.id]);
-    assert.deepEqual(satir, { t: (17480 - 250 + DOLAYLI).toFixed(2), d: null, e: null, g: true }, 'hesapta gerçek değer kullanılır, ayrı alan yok');
+    assert.deepEqual(satir, { t: (17280 - 250 + DOLAYLI).toFixed(2), d: null, e: null, g: true }, 'hesapta gerçek değer kullanılır, ayrı alan yok');
     const liste = await istek<{ satirlar: { id: number; aylikGenelGider: string | null; saatBasi: string | null; gizli: boolean; dolayliPersonel: string | null }[] }>('okuyan', 'GET', '/finans/genel-gider-oranlari');
     assert.deepEqual(liste.govde.satirlar.filter((r) => r.id === kayit.govde.id).map((r) => [r.aylikGenelGider, r.saatBasi, r.gizli, r.dolayliPersonel]), [[null, null, true, null]]);
   });

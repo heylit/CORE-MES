@@ -5,7 +5,7 @@ import { tesisGunu } from '#paylasilan/zaman.ts';
 import { ayEkle } from '../kurallar.ts';
 import { amortismanToplamlari } from '../servis.ts';
 import { belgeleriDagit, bilesenToplami, eksikBilesenler } from './kurallar.ts';
-import type { BelgeDagilimi, BilesenDegerleri } from './kurallar.ts';
+import type { BelgeDagilimi, Bilesen, BilesenDegerleri } from './kurallar.ts';
 import * as sorgular from './sorgular.ts';
 
 // Satın alma, proje maliyeti, İK, stok ve idari işler finansı ithal eder; değerleri kablolamada kaydedilen çözücülerden
@@ -20,28 +20,31 @@ export type ProjeMasrafiCozucusu = (db: Db, belgeIdler: readonly number[]) => Pr
 // 2652 a: kucuk (birleşik kişi sayısı 3'ten az) ise değer hesapta kullanılır, ekrana ve kayda ayrı alan olarak çıkmaz.
 export type PersonelTutariCozucusu = (db: Db, ay: string) => Promise<{ tutar: number | null; kucuk: boolean; eksik: string[] }>;
 export type DolayliPersonelCozucusu = PersonelTutariCozucusu;
-export type AylikTutarCozucusu = (db: Db, ay: string) => Promise<number | null>;
+// 2710 b: fiyatı bilinmeyen kalem toplama girmez, tutarı null yapmaz; nedeni eksik'te gelir ve öneride uyarı olarak görünür.
+export type AylikTutarCozucusu = (db: Db, ay: string) => Promise<{ tutar: number | null; eksik: string[] }>;
 
 const cozucu: {
   oran: GenelGiderOraniCozucusu | null; projeMasrafi: ProjeMasrafiCozucusu | null;
-  dolayliPersonel: PersonelTutariCozucusu | null; emilmeyenDogrudan: PersonelTutariCozucusu | null; stokCikisi: AylikTutarCozucusu | null; aracMasrafi: AylikTutarCozucusu | null;
-} = { oran: null, projeMasrafi: null, dolayliPersonel: null, emilmeyenDogrudan: null, stokCikisi: null, aracMasrafi: null };
+  dolayliPersonel: PersonelTutariCozucusu | null; emilmeyenDogrudan: PersonelTutariCozucusu | null; stokCikisi: AylikTutarCozucusu | null;
+} = { oran: null, projeMasrafi: null, dolayliPersonel: null, emilmeyenDogrudan: null, stokCikisi: null };
 export const genelGiderOraniCozucusuKaydet = (c: GenelGiderOraniCozucusu | null): void => { cozucu.oran = c; };
 export const projeMasrafiCozucusuKaydet = (c: ProjeMasrafiCozucusu | null): void => { cozucu.projeMasrafi = c; };
 export const dolayliPersonelCozucusuKaydet = (c: PersonelTutariCozucusu | null): void => { cozucu.dolayliPersonel = c; };
 // 2659 (2656 a): doğrudan departmanların işveren maliyeti eksi katılım saati x grup değeri (İK, gerçek değer; eksi olabilir).
 export const emilmeyenDogrudanCozucusuKaydet = (c: PersonelTutariCozucusu | null): void => { cozucu.emilmeyenDogrudan = c; };
-// 2623 a: emirsiz stok çıkışı (miktar x son alış) "diğer"e. 2614 2/2 a: araç masrafı "diğer"e.
+// 2623 a: emirsiz stok çıkışı (miktar x son alış) "diğer"e. 2711 b: araç masrafı ayrı bileşen değildir; araç faturası Finans belgesi olarak girer.
 export const stokCikisiCozucusuKaydet = (c: AylikTutarCozucusu | null): void => { cozucu.stokCikisi = c; };
-export const aracMasrafiCozucusuKaydet = (c: AylikTutarCozucusu | null): void => { cozucu.aracMasrafi = c; };
 
 export interface GenelGiderOnerisi {
   ay: string; donemBaslangic: string; donemBitis: string;
   bilesenler: BilesenDegerleri; toplam: number | null;
-  ayrinti: { digerBelgeler: number | null; stokCikisi: number | null; aracMasrafi: number | null };
+  ayrinti: { digerBelgeler: number | null; stokCikisi: number | null };
   disarida: BelgeDagilimi['disarida'];
   // Bilinmeyen bileşenler ve kaynakları; oranı bilinmeyen siparişli belgeler ayrı listededir.
   eksik: string[]; oraniBilinmeyen: string[];
+  // 2710 b: tutarı düşürmeyen eksikler (fiyatsız stok çıkışı); kaydı durdurmaz, kayda eksik olarak yazılır. Uyarısı olan bileşen ve
+  // toplam alt sınırdır (enAz; Veri ve Maliyet notu).
+  uyarilar: string[]; enAz: Bilesen[];
   // 2652 a: personel bileşenlerinden biri küçük grupsa ikisi ve toplam null gösterilir; kayıt yine yapılabilir.
   gizli: boolean;
   baskinBelgeler: BelgeDagilimi['baskinBelgeler'];
@@ -77,11 +80,11 @@ async function hesapOnerisi(db: Db, ay: string): Promise<GenelGiderOnerisi> {
   const kurusMu = (v: number | null | undefined): number | null => (v === null || v === undefined ? null : kurus(v));
   const dolayliPersonel = kurusMu(dolayli?.tutar);
   const emilmeyenDogrudan = kurusMu(emilmeyen?.tutar);
-  const stokCikisi = cozucu.stokCikisi === null ? null : await cozucu.stokCikisi(db, ay);
-  const aracMasrafi = cozucu.aracMasrafi === null ? null : await cozucu.aracMasrafi(db, ay);
+  const stok = cozucu.stokCikisi === null ? null : await cozucu.stokCikisi(db, ay);
+  const stokCikisi = stok === null ? null : kurusMu(stok.tutar);
   const bilesenler: BilesenDegerleri = {
     kira: dagilim.belgeler.kira, amortisman, dolayliPersonel, emilmeyenDogrudan,
-    diger: topla(dagilim.belgeler.diger, stokCikisi, aracMasrafi),
+    diger: topla(dagilim.belgeler.diger, stokCikisi),
     // Çözücü yoksa bileşen bilinmez; çözücü varken tek tek bilinmeyen belge eksik listesine gider.
     projesizSatinAlma: cozucu.oran === null && siparisli.length > 0 ? null : dagilim.belgeler.projesizSatinAlma,
   };
@@ -92,11 +95,11 @@ async function hesapOnerisi(db: Db, ay: string): Promise<GenelGiderOnerisi> {
   if (emilmeyen === null) eksik.push('emilmeyen doğrudan işçilik (İK)');
   else if (emilmeyen.tutar === null) eksik.push(...(emilmeyen.eksik.length > 0 ? emilmeyen.eksik.map((e) => `emilmeyen doğrudan işçilik: ${e}`) : ['emilmeyen doğrudan işçilik (İK)']));
   if (stokCikisi === null) eksik.push('emirsiz stok çıkışı (diğer)');
-  if (aracMasrafi === null) eksik.push('araç masrafı (diğer)');
   if (cozucu.oran === null && siparisli.length > 0) eksik.push('satın alma genel gider oranı');
   return {
     ay, donemBaslangic: bas, donemBitis: bit, bilesenler, toplam: bilesenToplami(bilesenler), gizli: (dolayli?.kucuk === true && dolayli.tutar !== null) || (emilmeyen?.kucuk === true && emilmeyen.tutar !== null),
-    ayrinti: { digerBelgeler: dagilim.belgeler.diger, stokCikisi, aracMasrafi },
+    ayrinti: { digerBelgeler: dagilim.belgeler.diger, stokCikisi },
+    uyarilar: (stok?.eksik ?? []).map((e) => `emirsiz stok çıkışı: ${e}`), enAz: (stok?.eksik.length ?? 0) > 0 ? ['diger'] : [],
     disarida: dagilim.disarida, eksik, oraniBilinmeyen: dagilim.oraniBilinmeyen, baskinBelgeler: dagilim.baskinBelgeler,
   };
 }
@@ -108,8 +111,8 @@ export async function genelGiderOnerisi(db: Db, ay: string = sonTamAy()): Promis
 
 export interface BelgeKaydi { gecerlilikBaslangic: string; aylikMakineSaati: string; ay: string; elleEk: string; aciklama: string | null }
 // 2594 b: değer kayıt anında sunucuda hesaplanır ve satıra yazılır (yalnız ekleme; sonradan oran değişirse bu satır değişmez).
-// Bileşenlerden biri bilinmiyorsa satır kaydedilmez (2626 2/2 a; Veri koşulu). Oranı bilinmeyen siparişli belge satırın eksik
-// listesine yazılır.
+// Bileşenlerden biri bilinmiyorsa satır kaydedilmez (2626 2/2 a; Veri koşulu). Oranı bilinmeyen siparişli belge ve öneri uyarıları
+// (2710 b, tutar alt sınır) satırın eksik listesine yazılır.
 export async function belgeSatiriKaydet(db: Db, k: Kullanici, g: BelgeKaydi): Promise<{ id: number }> {
   const o = await hesapOnerisi(db, g.ay);
   const bilinmeyen = eksikBilesenler(o.bilesenler);
@@ -124,7 +127,7 @@ export async function belgeSatiriKaydet(db: Db, k: Kullanici, g: BelgeKaydi): Pr
     donemBaslangic: o.donemBaslangic, donemBitis: o.donemBitis,
     kira: b.kira.toFixed(2), amortisman: b.amortisman.toFixed(2), dolayliPersonel: o.gizli ? null : b.dolayliPersonel.toFixed(2), emilmeyenDogrudan: o.gizli ? null : b.emilmeyenDogrudan.toFixed(2), diger: b.diger.toFixed(2),
     projesizSatinAlma: b.projesizSatinAlma.toFixed(2), elleEk: elleEk.toFixed(2), toplam: toplam.toFixed(2),
-    eksik: o.oraniBilinmeyen.map((n) => `oranı bilinmeyen belge ${n}`),
+    eksik: [...o.oraniBilinmeyen.map((n) => `oranı bilinmeyen belge ${n}`), ...o.uyarilar],
   }, k.id);
   return { id: satir!.id };
 }

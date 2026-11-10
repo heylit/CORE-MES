@@ -246,9 +246,10 @@ Yok (yeni modül). Prototipin kendi kurallarına göre değişenler UYUM-BORCU.m
 ## 2594 b, 2612 a: genel gider bileşenleri belgelerden
 - Göç `20261110002355_finans_genel_gider_bilesenleri.sql`: finans_genel_gider_orani'ya kaynak (elle | belge), dönem, bileşen sütunları, emilmeyen_dogrudan (eksi olabilir), eksik, personel_gizli ve kısıtlar; finans_ayar'a genel_gider_belge_esigi (göç anı). Var olan satır değişmez.
 - Yeni alt birim `finans/genel-gider/`; uçlar GET `/finans/genel-gider-oranlari/oneri`, POST `/finans/genel-gider-oranlari/belgeden-ekle` (finans.yonet, tekrar korumalı). Liste kaynak ve bileşenleri taşır; gizli satırda aylık tutar ve saat başı null.
-- disari: çözücü kayıtları (genelGiderOrani, projeMasrafi, dolayliPersonel, stokCikisi, aracMasrafi) ve `belgelerinSiparisleri` (2642 b). `genelGiderOrani` cevabına `gizli` eklendi.
+- disari: çözücü kayıtları (genelGiderOrani, projeMasrafi, dolayliPersonel, emilmeyenDogrudan, stokCikisi) ve `belgelerinSiparisleri` (2642 b). `genelGiderOrani` cevabına `gizli` eklendi.
 - Ekran: Genel gider oranı sayfasında belgelerden öneri ve kayıt; tabloda kaynak sütunu; eski elle giriş kalır.
 - proje-maliyet: `projedeSayilanBelgeler` (disari).
+- 2714 (2711 b, 2710 b): araç bileşeni kalktı (`aracMasrafiCozucusu`, eksikteki "araç masrafı (diğer)", sözleşmede `ayrinti.aracMasrafi`); araç faturası Finans belgesi olarak girer (`ARAC_FATURASI_KATEGORILERI` lojistik, diğer gider, kira; hepsi genel gidere girer, testli). `AylikTutarCozucusu` artık `{ tutar, eksik }` döner; stok çıkışının eksikleri tutarı null yapmaz, öneri cevabında yeni `uyarilar` alanında gelir ve ekranda "Uyarı" notu olur; kaydı durdurmaz, kaydın `eksik` listesine yazılır. Uyarısı olan bileşen alt sınırdır: cevapta `enAz` (bugün yalnız `diger`), ekranda "En az" rozeti ve toplamda "(en az)" (Veri, Maliyet notu).
 
 ## 2676 (2667 b): kur şeridi telefonda yalnız ana sayfa ve Finans sayfalarında
 - 767 px ve altında şerit yalnız `/`, `/finans` ve `/finans/...` adreslerinde çizilir; öteki sayfalarda bileşen null döner ve özet okunmaz (kabuk sarmalamadığından boş satır kalmaz). 768 ve üstünde davranış aynı (952 a). Kabuk değişmedi.

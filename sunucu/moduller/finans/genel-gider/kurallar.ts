@@ -7,6 +7,12 @@ export type Bilesen = (typeof BILESENLER)[number];
 // 2621 2/3 b: siparişe bağlı olmayan elle mal alımı "diğer"e girer. 2621 3/3 b: enerji tamamen genel giderde.
 export const DIGER_KATEGORILERI: readonly string[] = ['enerji', 'diger_gider', 'lojistik', 'pazarlama', 'mal_alimi'];
 
+// 2711 b: araç gideri genel gidere yalnız Finans belgesiyle girer (İdari İşler'deki araç masrafı rapordur, ayrıca sayılmaz). Araç
+// faturası bu kategorilerle kaydedilir; hepsi genel gidere girer (kira kirada, ötekiler diğerde). Liste DIGER_KATEGORILERI'nden
+// çıkarsa araç gideri sessizce dışarıda kalır; test bunu yakalar.
+export const ARAC_FATURASI_KATEGORILERI: readonly string[] = ['lojistik', 'diger_gider', 'kira'];
+export const genelGidereGirer = (kategori: string): boolean => kategori === 'kira' || DIGER_KATEGORILERI.includes(kategori);
+
 export type DisaridaNedeni = 'eski_belge' | 'oran_bilinmiyor' | 'uretime_giden_pay' | 'proje_masrafi' | 'kategori';
 
 export interface BelgeGirdisi {
@@ -61,7 +67,7 @@ export function belgeleriDagit(belgeler: readonly BelgeGirdisi[]): BelgeDagilimi
       disariya('uretime_giden_pay', null, kurus(b.tutarTl - pay));
       continue;
     }
-    const hedef = b.kategori === 'kira' ? 'kira' : DIGER_KATEGORILERI.includes(b.kategori) ? 'diger' : null;
+    const hedef = !genelGidereGirer(b.kategori) ? null : b.kategori === 'kira' ? 'kira' : 'diger';
     if (hedef === null) { disariya('kategori', b.kategori, b.tutarTl); continue; }
     if (b.projeMasrafi === null) { projeBilinmiyor = true; continue; }
     if (b.projeMasrafi) { disariya('proje_masrafi', b.kategori, b.tutarTl); continue; }
