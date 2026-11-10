@@ -84,11 +84,7 @@ Taslaktan farklar (VARSAYIM, geri alması ucuz):
 - Kişiye bağlanmamış personelin zimmeti adla gelir, ekranda uyarıyla görünür, kişiye bağlanır (koordinatör kararı, 244).
 - Zimmet formu yazdırma, demirbaş etiketi, kişi odaklı ekran ve "Zimmetlerim" bu parçada yok.
 
-2708 (2594 b, 2614-2 a): `disari.ts` `aylikAracMasrafi(db, ay)`: finans genel giderinin "diğer" bileşenine giren aylık araç masrafı. Göç, uç,
-sözleşme ve ekran değişmedi.
-- Bütün araçların o ay iptal edilmemiş masraf toplamı (TL, kuruşlu sayı); ay masraf tarihine göre; masraf yoksa 0.
-- Tutar tabloda zorunlu ve sıfırdan büyük; tutarı bilinmeyen masraf olmadığından `null` dönmez (imza istekteki `number | null`).
-- Bağ `sunucu/kablolama.ts`'te `aracMasrafiCozucusu` ile ayrı yamada kurulur (dosya kilidi).
+2708 ve 2714 (2711 b): `disari.ts`'e eklenen `aylikAracMasrafi` kaldırıldı; araç gideri genel gidere yalnız Finans belgesinden girer, sağlayıcıyı kullanan yok.
 
 2715 (2712 a): araç masrafına KDV tutarı. Göç `sunucu/gocler/20261110030712_idari_isler_arac_masrafi_kdv.sql`: boş olabilen `kdv numeric(12, 2)`,
 kısıt `idari_isler_arac_masrafi_kdv` (boş ya da 0 <= kdv < tutar). Var olan veri değişmez; eski kayıtlarda KDV boştur.
