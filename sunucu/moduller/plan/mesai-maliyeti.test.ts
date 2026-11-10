@@ -11,7 +11,7 @@ import { kimlikCozucu } from '../oturum/disari.ts';
 import {
   aySonuGunu, grupMesaiSaatTL, istasyonSaatDegeri, yogunSira, mesaiAyarlari, mesaiGunTuru, mesaiToplami, mesaiTutari, type MesaiGirdisi,
 } from './kurallar.ts';
-import { degerlendirmeBaslat, type degerlendirmeYap } from './degerlendirme.ts';
+import { degerlendirmeBaslat, degerlendirmeDurumu, type degerlendirmeYap } from './degerlendirme.ts';
 import { PLANLAMA_ANAHTARI } from './disari.ts';
 import { mesaiGrupSirasi, mesaiMaliyeti, mesaiSaatDegerleri } from './mesai-maliyeti.ts';
 import { planCozumKaynagi } from './planlama-servis.ts';
@@ -288,7 +288,7 @@ describe('2653 mesai maliyeti (gerçek PostgreSQL)', () => {
     }
   });
 
-  test('2742 K2, K3: değerlendirme girdisine tezgâh değeri yalnız maliyeti görende yazılır; hiçbir okuma cevabı mesaiSaat taşımaz', async () => {
+  test('2742 K2, K3 (2760 b): seçenek dışı değerlendirme girdisine tezgâh değeri yalnız maliyeti görende yazılır; hiçbir okuma cevabı mesaiSaat taşımaz', async () => {
     await kayitYaz();
     const surum = (await sorgular.planlamaKaydi(vt(), PLANLAMA_ANAHTARI))!.surum;
     const yakala = (): { yap: typeof degerlendirmeYap; girdi: () => unknown } => {
@@ -335,6 +335,68 @@ describe('2653 mesai maliyeti (gerçek PostgreSQL)', () => {
     assert.equal(yaz.statusCode, 200, yaz.body);
     const sonra = JSON.stringify((await sorgular.planlamaKaydi(vt(), PLANLAMA_ANAHTARI))?.deger);
     assert.ok(!sonra.includes('mesaiSaat') && !sonra.includes('7771'), sonra.slice(0, 200));
+  });
+
+  test('2766 (2760 b, Güvenlik C1, C3, C4): ek mesai seçeneklerinde iki rolün girdisi aynı İK değerini taşır; görmeyenin cevabında TL ve değer yok', async () => {
+    await kayitYaz();
+    const surum = (await sorgular.planlamaKaydi(vt(), PLANLAMA_ANAHTARI))!.surum;
+    const SAHTE = { tur: 'plan-secenekleri', bedeliBilinmeyenEkMesai: false, secenekler: [{
+      denge: 50, carpan: 1, ekMesai: [{ makineId: String(makineBuyuk), gun: 5, vardiya: 'V1', tl: 7771 }], ekMesaiTl: 7771, geciken: 0, isSayisi: 1,
+      gecikmeSaat: 0, netKar: 7771, eksik: 0, plan: { ozet: { late: 0, tl: 7771 } } }] };
+    const yakala = (): { yap: typeof degerlendirmeYap; girdi: () => unknown } => {
+      let g: unknown = null;
+      return { yap: ((girdi: unknown) => { g = girdi; return Promise.resolve({ dataVer: 1, baslangic: null, simdi: AN.getTime(), sonuc: SAHTE }); }) as unknown as typeof degerlendirmeYap, girdi: () => g };
+    };
+    const mesaiSaati = (g: unknown) => (g as { calisma: { D: { mesaiSaat?: Record<string, number | null> } } }).calisma.D.mesaiSaat;
+    const kosu = async (id: number, islemler: Parameters<typeof degerlendirmeBaslat>[1]["islemler"], istek: Parameters<typeof degerlendirmeBaslat>[2]['istek']) => {
+      const y = yakala();
+      const { is } = await vt().tx((db) => degerlendirmeBaslat(db, { id, ad: 'r', islemler }, { surum, istek }, AN.getTime(), y.yap));
+      await new Promise((coz) => setImmediate(coz));
+      return { girdi: y.girdi(), durum: degerlendirmeDurumu(id, is) };
+    };
+    const gorur = await kosu(yoneticiId + 10, ['plan.planlama-oku', 'finans.maliyet-oku'], { tur: 'plan-secenekleri' });
+    const gormez = await kosu(yoneticiId + 11, ['plan.planlama-oku'], { tur: 'plan-secenekleri' });
+    const ms = mesaiSaati(gormez.girdi);
+    assert.ok(ms !== undefined, 'görmeyenin seçenek girdisinde de değer var');
+    // Test ER-01, ER-05: girdinin tamamı karşılaştırılır; rolün bilinen farkları (genel gider 2601 a, kart 2770; kaynak maliyeti) çıkarılınca
+    // birebir aynıdır. Bilinmeyen yeni bir rol farkı kırmızı verir.
+    const bilinenFarksiz = (g: unknown) => {
+      const c = structuredClone(g) as { calisma: { D: { planTL?: Record<string, unknown> } }; kaynak: { durum: Record<string, unknown> } };
+      delete c.calisma.D.planTL?.['genelGider']; delete c.calisma.D.planTL?.['genelGiderGizli']; delete c.kaynak.durum['maliyet'];
+      return c;
+    };
+    assert.deepEqual(bilinenFarksiz(gormez.girdi), bilinenFarksiz(gorur.girdi), 'iki rolün işçi girdisi bilinen farklar dışında aynı: aynı aday bedeli');
+    assert.equal(ms[String(makineBuyuk)], 122);
+    for (const m of [makineKucuk, makineKarisik, makineAtamasiz]) assert.equal(ms[String(m)], null, `küçük, karışık, atamasız ${String(m)}`);
+    // C1: görmeyenin cevabı TL ve türevi taşımaz; uydurma tutar ve grup değeri gövdede yok.
+    assert.equal(gormez.durum.durum, 'bitti');
+    const govde = JSON.stringify(gormez.durum);
+    assert.doesNotMatch(govde, /7771|mesaiSaat/, govde);
+    const s = (gormez.durum as unknown as { cevap: { maliyetGorunur: boolean; sonuc: typeof SAHTE } }).cevap;
+    assert.equal(s.maliyetGorunur, false);
+    for (const x of s.sonuc.secenekler) {
+      assert.equal(x.ekMesaiTl, null); assert.equal(x.netKar, null); assert.ok(x.ekMesai.every((e) => e.tl === null));
+      assert.deepEqual(x.plan, { ozet: { late: 0, tl: null } }, 'planın TL toplamı gitmez, saat alanları kalır (C6)');
+    }
+    assert.match(JSON.stringify(gorur.durum), /7771/, 'maliyeti görene tutar gider');
+    // ER-05: genel gider oranı tanımlı ayda da fark yalnız bilinen alanlarda (tablo yalnız eklenir; sonraki testler orana bakmaz).
+    await vt().sorgu(
+      `INSERT INTO finans_genel_gider_orani (gecerlilik_baslangic, aylik_genel_gider, aylik_makine_saati, amortisman_dahil, olusturan_id, kaynak, donem_baslangic,
+         donem_bitis, kira, amortisman, dolayli_personel, emilmeyen_dogrudan, diger, projesiz_satin_alma, elle_ek, personel_gizli)
+       VALUES ('2026-01-01', 300000, 1000, false, $1, 'belge', '2025-12-01', '2025-12-31', 1000, 0, 299000, 0, 0, 0, 0, false)`, [yoneticiId]);
+    {
+      const gg = (g: unknown) => (g as { calisma: { D: { planTL?: { genelGider?: unknown } } } }).calisma.D.planTL?.genelGider;
+      const a = await kosu(yoneticiId + 13, ['plan.planlama-oku', 'finans.maliyet-oku'], { tur: 'plan-secenekleri' });
+      const b = await kosu(yoneticiId + 14, ['plan.planlama-oku'], { tur: 'plan-secenekleri' });
+      assert.equal(gg(a.girdi), 300, 'maliyeti görende oran var');
+      assert.equal(gg(b.girdi), null, 'görmeyende oran yok (2601 a)');
+      assert.deepEqual(bilinenFarksiz(b.girdi), bilinenFarksiz(a.girdi));
+    }
+    // Öteki türlerde görmeyen yalın kalır (sonuç kâr farkıyla sıralanabilir).
+    for (const istek of [{ tur: 'plan-kur' as const }, { tur: 'termin-uzatma' as const, gun: 2 as const }]) {
+      const r = await kosu(yoneticiId + 12, ['plan.planlama-oku'], istek);
+      assert.equal(mesaiSaati(r.girdi), undefined, istek.tur);
+    }
   });
 
   test('2752 sıra ucu: planlama-oku 200, yalnız grup ve sıra (TL yok); finans.maliyet-oku tek başına ve plan.yaz 403; parametre 400', async () => {

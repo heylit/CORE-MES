@@ -142,7 +142,7 @@ describe('planlama değerlendirmesi: hesap', () => {
     const s = sonuc(await dene({ tur: 'plan-secenekleri' }));
     const m = maliyetsiz(s);
     if (m.tur !== 'plan-secenekleri' || s.tur !== 'plan-secenekleri') return assert.fail(m.tur);
-    for (const [i, x] of m.secenekler.entries()) { assert.equal(x.netKar, null); assert.equal(x.ekMesaiTl, null); assert.equal(x.gecikmeSaat, s.secenekler[i]?.gecikmeSaat); assert.deepEqual(x.plan, s.secenekler[i]?.plan); }
+    for (const [i, x] of m.secenekler.entries()) { assert.equal(x.netKar, null); assert.equal(x.ekMesaiTl, null); assert.equal(x.gecikmeSaat, s.secenekler[i]?.gecikmeSaat); assert.deepEqual(x.plan, { ...s.secenekler[i]?.plan, ozet: { ...(s.secenekler[i]?.plan['ozet'] as object), tl: null } }); }
     const b = sonuc(await dene({ tur: 'parti-bolme', siparisId: 'O2', dagitim: 'ayni', adetler: [8, 8] }));
     const mb = maliyetsiz(b); if (mb.tur !== 'parti-bolme') return assert.fail(mb.tur);
     assert.equal(mb.sonuc?.tl, null);
