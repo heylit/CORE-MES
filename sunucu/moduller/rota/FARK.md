@@ -466,3 +466,8 @@ Teslim olduğu gibi alındı; yalnız oturtma için değişenler:
   Geri alma: ucuz.
 - VARSAYIM: plan motoru firmasız adımı emirden görmez (emir açılmaz). Emirsiz rota okuyan plan önizlemesi durum adımında fasonId null gördüğü için adımı
   istasyonsuz sayar; bu iş emri yokken yalnız önizlemeyi etkiler. Geri alma: orta (motor girdisinde fason bayrağı).
+## 2610: önizlemede ara adımın statülü kartı ve stoğu (kullanıcı kararı 2610 a)
+- Önizleme adımına `araHal: { statu { id, ad } | null, kart urunOzeti | null, stok { toplam, planaSayilan } | null } | null`. Ürün adımında ve engelde null.
+- Kaynak Reçete ve Rota'nın `adimAraHalleri`'dir (yazmaz; sayımın statü ve çıktı kartı kuralı); bağ kablolama.ts'te `araHalCozucusuKaydet`.
+  Statü stoğu stok `statuStoklari` (2547 sorgusu, plana sayılan kalite `planaSayilirMi`), çıktı kartının stoğu `stokMiktarlari`.
+- Gösterilecek miktarı ekran seçer (2622 kararı); sözleşme ikisini de taşır. Tablo, göç ve yetki değişmedi.

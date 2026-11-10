@@ -25,7 +25,8 @@ export function GiderSayfasi({ c, G, para, yaz, git }: { c: PlanlamaCalismasi; G
   const M = maliyetSistemi(D);
   const kapali = !yaz;
   const y: Y = (f) => (yaz ? f(yaz) : false);
-  const gg = ymAyar(D).genelGider;
+  const ya = ymAyar(D);
+  const gg = ya.genelGider;
   return (
     <div className="tc-pyk-ms">
       <VeriDurumu c={c} git={git} />
@@ -38,7 +39,7 @@ export function GiderSayfasi({ c, G, para, yaz, git }: { c: PlanlamaCalismasi; G
         <Kpi l={[
           ['layers', 'Aylık genel gider', tl(G.aylik), `kalemler ${tl(G.kalemTop)} + amortisman ${tl(G.amort)}`],
           ['clock', 'Pratik kapasite', `${sayi(G.kap, 0)} sa`, `30 gün, verim %${sayi(M.verim, 0)}`],
-          ['lira', 'Ortalama oran', G.ort === null ? '—' : tlSaat(G.ort), M.kip === 'kalem' ? 'maliyette kullanılıyor' : `kullanılan: tek oran ${tlSaat(gg)}`],
+          ['lira', 'Ortalama oran', G.ort === null ? '—' : tlSaat(G.ort), M.kip === 'kalem' ? 'maliyette kullanılıyor' : (ya.genelGiderGizli ? 'kullanılan: tek oran gizli' : `kullanılan: tek oran ${tlSaat(gg)}`)],
           ['gauge', 'Plan doluluğu', G.kap ? `%${sayi(Math.min(100, (G.mesgul / G.kap) * 100), 0)}` : '—', `${sayi(G.mesgul, 0)} sa planlı`],
           ['alert', 'Atıl kapasite gideri', tl(G.atil), 'ürüne yüklenmez, dönem gideri', G.atil !== null && G.atil > G.aylik * 0.3 ? 'uyari' : ''],
         ]} />

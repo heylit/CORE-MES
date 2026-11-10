@@ -12,6 +12,8 @@ import { MaliyetSayfasi } from './asil/MaliyetSayfasi.tsx';
 import { hucreKoy, IsiSayfasi, kdOran, yazici, type Acilim, type FormCagrisi, type FormTanimi, type Hucre, type IsiBos, type IsiSatiri, type IsiVerisi } from './ortak.tsx';
 
 const GG_BILINMEZ = 'Genel gider bilinmiyor: çalıştığı tezgâhlardan birinin amortismanı (bedel, ömür) girilmemiş';
+// Gizli ayda genel gider 0 yazılmaz ("yok" diye okunur); kâr genel gider hariç maliyetten yüksek çıkacağı için o da gizlidir (2677 b).
+const GG_GIZLI = 'Genel gider gizli: Finans oranı bu ay gizli, maliyet genel gider hariç';
 const SUTUN = [['mal', 'Malzeme'], ['isl', 'Tezgâh'], ['ayar', 'Ayar'], ['gg', 'Genel gider'], ['fas', 'Fason'], ['mes', 'Ek mesai'], ['gec', 'Gecikme'], ['kar', 'Kâr']] as const;
 type Kalem = (typeof SUTUN)[number][0];
 interface Satir { s: Siparis; m: SiparisMaliyeti }
@@ -32,6 +34,7 @@ export function maliyetIsisi(b: MaliyetBaglami): IsiVerisi<Satir> | IsiBos {
       mal: m.mal === null ? null : m.mal - m.talas, isl: tezEksik ? null : m.isl, ayar: tezEksik ? null : m.ayar, gg: m.gg, fas: fasEksik ? null : m.fas, mes: m.mes, gec: m.gec,
     };
     for (const [k, ad] of SUTUN) {
+      if (m.ggGizli && (k === 'gg' || k === 'kar')) { hucreKoy(h, k, { v: 'gizli', etiket: k === 'gg' ? GG_GIZLI : `${ad} gizli: maliyet genel gider hariç` }); continue; }
       if (k === 'kar') {
         const v = m.net ?? m.kar;
         hucreKoy(h, k, v === null ? { sm: 'alert', v: '?', etiket: m.eksik.length ? `${m.eksik.join(', ')} eksik` : 'tutar girilmedi' } : { v: kisaTl(v), kd: v < 0 ? 4 : undefined, iyi: v >= 0, etiket: `${ad} ${tl(v)}` });
@@ -50,15 +53,16 @@ export function maliyetIsisi(b: MaliyetBaglami): IsiVerisi<Satir> | IsiBos {
       const pay = top ? (v / top) * 100 : null;
       hucreKoy(h, k, { v: v ? kisaTl(v) : '0', kd: v ? kdOran(pay, [3, 8, 15, 30]) : 0, etiket: `${ad} ${tl(v)}${pay !== null ? `, toplam içindeki payı %${sayi(pay, 0)}` : ''}` });
     }
-    // Bilinmeyen kalem varken toplam kısmidir; tam gibi yazılmaz (kural 5).
-    const tutar = m.eksik.length ? (m.top ? `en az ${tl(m.top)}` : 'tutar eksik') : tl(m.top);
-    return { k: s.id, ad: s.id, alt: `${urunAdi(D, s.urun)} · ${sayi(s.adet, 0)} adet · ${tutar}`, simge: 'lira' as const, ton: (m.net ?? 0) < 0 ? 'hata' as const : m.eksik.length ? 'uyari' as const : '' as const, h, veri: { s, m } };
+    // Bilinmeyen kalem varken toplam kısmidir; tam gibi yazılmaz (kural 5). Gizli ayda genel gider hariçtir.
+    const tutar = `${m.eksik.length ? (m.top ? `en az ${tl(m.top)}` : 'tutar eksik') : tl(m.top)}${m.ggGizli ? ' genel gider hariç' : ''}`;
+    return { k: s.id, ad: s.id, alt: `${urunAdi(D, s.urun)} · ${sayi(s.adet, 0)} adet · ${tutar}`, simge: 'lira' as const, ton: !m.ggGizli && (m.net ?? 0) < 0 ? 'hata' as const : m.eksik.length ? 'uyari' as const : '' as const, h, veri: { s, m } };
   }).sort((a, b2) => (a.veri.m.net ?? 1e12) - (b2.veri.m.net ?? 1e12));
   let en: { r: IsiSatiri<Satir>; k: string; c: Hucre } | null = null;
   for (const r of satirlar) for (const [k] of SUTUN) { const c = r.h[k]; if (c && c.kd !== undefined && c.kd > 0 && k !== 'kar' && (!en || c.kd > (en.c.kd ?? 0))) en = { r, k, c }; }
-  const zarar = satirlar.filter((r) => r.veri.m.net !== null && r.veri.m.net < 0);
+  const gizli = satirlar.some((r) => r.veri.m.ggGizli);
+  const zarar = gizli ? [] : satirlar.filter((r) => r.veri.m.net !== null && r.veri.m.net < 0);
   const eks = satirlar.filter((r) => r.veri.m.eksik.length);
-  const metin = `${en ? `En sıcak hücre ${en.r.ad} ${kucukHarf(sutunAdi(en.k))}: ${en.c.etiket.replace(/^[^ ]+ /, '')}. ` : ''}${zarar.length ? `${String(zarar.length)} sipariş zarar ediyor` : 'Zarar eden sipariş yok'}${eks.length ? `, ${String(eks.length)} siparişte fiyat eksik` : ''}.`;
+  const metin = `${en ? `En sıcak hücre ${en.r.ad} ${kucukHarf(sutunAdi(en.k))}: ${en.c.etiket.replace(/^[^ ]+ /, '')}. ` : ''}${gizli ? 'Kâr gizli: genel gider oranı bu ay gizli' : zarar.length ? `${String(zarar.length)} sipariş zarar ediyor` : 'Zarar eden sipariş yok'}${eks.length ? `, ${String(eks.length)} siparişte fiyat eksik` : ''}.`;
   return {
     genis: 'kalem', baslik: 'Sipariş × maliyet kalemi, toplam içindeki payı', satirAd: 'Sipariş', sutunlar: SUTUN.map(([k, ad]) => ({ k, ad })), satirlar,
     ust: { ton: zarar.length ? 'hata' : eks.length ? 'uyari' : 'tamam', simge: zarar.length ? 'alert' : 'lira', metin },
@@ -122,6 +126,7 @@ export function Maliyetler(o: PlanlamaEkranOzellikleri) {
     } else if (ck === 'gec' || ck === 'kar') {
       neden = ck === 'gec'
         ? `${s.id} ${m.T !== null && m.T > 0.05 ? `${saatYaz(m.T)} geç bitiyor; gecikme bedeli ${tl(m.gec)}` : 'zamanında bitiyor; gecikme bedeli yok'}.`
+        : m.ggGizli ? `${s.id} kârı gizli: Finans genel gider oranı bu ay gizli, maliyet genel gider hariç.`
         : m.net === null ? `${s.id} kârı hesaplanamıyor: ${m.eksik.join(', ') || 'sipariş tutarı girilmedi'}.` : `${s.id} tutarı ${tl(m.tutar)}, maliyeti ${tl(m.top)}, gecikme ve finansman sonrası ${tl(m.net)}.`;
       if (ck === 'kar') ekle(F?.fiyat, { deg: { sip: s.id }, etki: 'Kâr bu tutardan hesaplanır.' });
       // Termin her açılışta kaynaktan yeniden yazılır (girdi.betik siparisler); burada yazılan termin kalmaz, kaynağı üretim emridir.
@@ -129,7 +134,8 @@ export function Maliyetler(o: PlanlamaEkranOzellikleri) {
       sec.push({ ad: 'Termin ve kâr', etki: 'Termin uzatmasının gecikmeyi ve kârı nasıl değiştirdiğini gösterir.', simge: 'gauge', yap: () => { o.git('denge'); } });
     } else {
       const v = ck === 'isl' ? m.isl : ck === 'ayar' ? m.ayar : m.gg;
-      neden = ck === 'gg' && v === null ? `${s.id} ${kucukHarf(GG_BILINMEZ)}.`
+      neden = ck === 'gg' && m.ggGizli ? `${s.id} ${kucukHarf(GG_GIZLI)}.`
+        : ck === 'gg' && v === null ? `${s.id} ${kucukHarf(GG_BILINMEZ)}.`
         : `${s.id} ${kucukHarf(sutunAdi(ck))} ${tl(v)}. En çok ${tez ?? YOK} tezgâhında çalışıyor; tutar o tezgâhın saat ücretinden gelir.`;
       if (tez) ekle(F?.tez, { ad: `${tez} saat ücreti`, deg: { tez }, etki: 'Bu tezgâhta çalışan bütün siparişlerin maliyeti değişir.' });
       if (ck === 'gg') sec.push({ ad: 'Genel gider', etki: 'Kira, enerji ve amortismanın tezgâhlara nasıl dağıldığını gösterir.', simge: 'layers', yap: () => { o.git('giderler'); } });
@@ -137,7 +143,7 @@ export function Maliyetler(o: PlanlamaEkranOzellikleri) {
     sec.push({ ad: `${s.id} çizelgede`, etki: 'Planlama motorunun tezgâh çizelgesine gider.', simge: 'gantt', yap: () => { o.git('plan'); } });
     return {
       baslik: `${s.id} · ${sutunAdi(ck)}`, simge: 'lira', ton: (cel?.kd ?? 0) >= 4 ? 'hata' : cel?.sm === 'alert' ? 'uyari' : '', neden,
-      bilgi: [['Toplam maliyet', tl(m.top)], ['Tutar', tl(m.tutar)], ['Net', tl(m.net)]], formlar: f, secenekler: sec, kilitli: kilitli && !yazabilir,
+      bilgi: [['Toplam maliyet', m.ggGizli ? `${tl(m.top)} genel gider hariç` : tl(m.top)], ['Tutar', tl(m.tutar)], ['Net', m.ggGizli ? 'gizli' : tl(m.net)]], formlar: f, secenekler: sec, kilitli: kilitli && !yazabilir,
     };
   };
 

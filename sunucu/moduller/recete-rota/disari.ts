@@ -6,6 +6,8 @@ import { statuListesi } from './servis.ts';
 
 // Stok üretim sayımında adımın statüsünü ve çıktı kartını bunlarla çözer; stok bu modülü ithal edemez, bağı sunucu/kablolama.ts kurar.
 export { adimCiktisi, adimStatusu } from './servis.ts';
+// Patlamış rota önizlemesinin ara hal çözücüsü (2610 a); bağı kablolama.ts kurar, yazmaz, yetki denetlemez.
+export { adimAraHalleri } from './servis.ts';
 import { kayitGetir } from './sorgular.ts';
 
 // Bağlamada (Aşama 2) başka modül bu modülün kaydını yalnız buradan okur; yazma dışarı açılmaz. Prototipin durumu

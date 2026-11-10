@@ -599,6 +599,14 @@ export type PatlatmaCevabi = z.output<typeof patlatmaCevabi>;
 // 2557: önizleme sipariş miktarıyla da hesaplanır (boş: 1); her sayı kökün 1 adedi için ve bu miktar için verilir.
 export const patlatmaOnizlemeSorgusu = z.object({ miktar: z.coerce.number<number>().int().positive().max(1_000_000).prefault(1) });
 const onizlemeMiktari = z.object({ kokBasina: ondalikMetinSemasi, siparis: ondalikMetinSemasi });
+// 2610 a: ara adımın çıktısı. Çıktı kartlı adımda kart o karttır ve statu null; statülü adımda kart statüdeki taşınan malzemedir. statu null:
+// statü henüz açılmadı (hiç sayım yok). stok: statüdeki (çıktı kartında statüsüz) bakiye; toplam bütün kalite, planaSayilan yalnız plana sayılan
+// kalite. Bakiye yoksa null, sıfır uydurulmaz. Gösterilecek miktarı ekran seçer (2622).
+const araHalSemasi = z.object({
+  statu: z.object({ id: KIMLIK, ad: z.string() }).nullable(),
+  kart: urunOzeti.nullable(),
+  stok: z.object({ toplam: ondalikMetinSemasi, planaSayilan: ondalikMetinSemasi }).nullable(),
+});
 export const patlatmaOnizlemeCevabi = z.object({
   kokRevizyon: revizyonBaglantisi,
   miktar: ondalikMetinSemasi,
@@ -628,6 +636,8 @@ export const patlatmaOnizlemeCevabi = z.object({
       cikanAdet: onizlemeMiktari.nullable(),
       // Son adımın çıktısı düğümün ürünüdür (kökte mamul, alt düğümde tüketen adıma girer); ötekiler ara haldir.
       cikti: z.enum(['ara-hal', 'urun']),
+      // Ara halde statülü kart ve stoğu (2610 a); ürün adımında ve çıktısı çözülemeyen adımda null.
+      araHal: araHalSemasi.nullable(),
       // Girenler rotadaki bileşenlerdir; altDugum dolu olan alt düğümün ürünüdür, stoktan gelmez. miktar ve fireYuzde rotadaki gibi bir adet içindir.
       girenler: z.array(z.object({
         malzeme: urunOzeti, altDugum: DUGUM_YOLU.nullable(), miktar: ondalikMetinSemasi, fireYuzde: ondalikMetinSemasi, toplam: onizlemeMiktari.nullable(),
@@ -639,6 +649,7 @@ export const patlatmaOnizlemeCevabi = z.object({
   hammaddeToplami: z.array(z.object({ malzeme: urunOzeti, toplam: onizlemeMiktari })),
 });
 export type PatlatmaOnizlemeCevabi = z.output<typeof patlatmaOnizlemeCevabi>;
+export type AraHal = z.output<typeof araHalSemasi>;
 export type EmreKopyalaGovdesi = z.input<typeof emreKopyalaGovdesi>;
 
 // Emir listesi (teslimdeki "Rev N akışta aç" ve "rota değişti"): emir kaynak revizyonun kimliğini taşır; harf ve yürürlük rotada.
