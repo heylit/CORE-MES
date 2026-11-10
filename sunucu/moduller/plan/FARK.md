@@ -324,3 +324,11 @@ Testler: plan-bedel 815 (iki test), kurallar 815, kablolama 815; istemci planlam
   `kisiBazli === false` kapalı; gün çarpanı yoksa onların varsayılanı (hafta içi ve cumartesi 1,5, pazar ve tatil 2). Görünür değişiklik:
   alanı olmayan kayıtta değerlendirmenin ek mesai bedeli yalından kişi bazlıya geçer.
 - Test: `ek-mesai-grup.test.ts` (EG-01..08, motor = 2653 satırı üç durumda ve kişi bazlı alanı olmadan), `mesai-maliyeti.test.ts` (PL-2653, PL-2742), `uc-yetkisi.test.ts` satırı.
+
+## TL'siz ek mesai grup bedel sırası (2752; 2750 b, Güvenlik Ek 2750, Mimar; 2026-11-10)
+- Yeni uç `GET /plan/mesai-grup-sirasi` (plan.planlama-oku, parametresiz, strict): `{ ay, gruplar: [{ grup, sira | null }] }`. Maliyet görmeyen
+  planlama rolünün yıllık planı ek mesaiyi ucuz gruptan başlayarak önerir (istemci 2742-1b). TL'li `mesai-saat-degerleri` olduğu gibi kalır.
+- Sıra `mesaiSaatDegerleri`'nin grup değerinden (tek yol, küçük grup ve havuz yok) `kurallar.ts yogunSira` ile: yoğun ve ölçeksiz, en ucuz 1,
+  eşit değer aynı sıra, boşluk yok; aralık ya da oran çıkmaz. Bilinmeyen grup (küçük, karışık, atamasız, kişi bazlı değil) null.
+- Kabul edilen kalan risk (Güvenlik): aylar arasında sıranın değişmesi kaba göreli bilgi verir.
+- Test: `mesai-maliyeti.test.ts` "2752", `uc-yetkisi.test.ts` satırı.
