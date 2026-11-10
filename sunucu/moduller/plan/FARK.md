@@ -360,3 +360,29 @@ Testler: plan-bedel 815 (iki test), kurallar 815, kablolama 815; istemci planlam
   ham kayıt okuması (`planlamaKayitlari`) ve geri al (`calismaGeriAl`). JSON olmayan metin yapılı alan taşımaz, olduğu gibi kalır.
 - Brüt silme göçü (2737-1-goc) metin satırı çevirmez; son sayımı metin satırındaki brütü de bulur ve göçü geri alır.
 - Test: `brut-saklanmaz.test.ts` BS-05..07, `brut-sil-goc.test.ts` BG-02.
+
+## "Planlanamıyor" tek ve somut neden (2780; B-2482-32, B-2482-33; 2026-11-10)
+- Yerleşmeyen işin nedeni artık tek cümle ve tek kaynak ya da istasyon adıdır; "ya da" ile birden çok olasılık yazılmaz. Motor yerleşimi
+  (`GET /plan/motor-yerlesimi`) ve kuyruk yazma cevabının `yerlesmeyen[]` satırına `nedenKodu` (paylasilan/sozlesme/planlanamama-sabitleri.ts
+  PLANLANAMAMA_NEDENLERI) ve `hedef` ({ tur: istasyon|makine|kisi, id, ad } | null) eklendi; düzeltme sayfası NEDEN_DUZELTME_YERI'ndedir.
+- Ayrılan nedenler: süre boş, istasyon pasif, istasyonda aktif makine yok, insanlı istasyonda yetkin kişi yok / yetkin kişilerin vardiyası
+  yok, seçili makine ya da kişi pasif, yetki dışı, tezgâh vardiyası tanımsız. Motorun "ufuk içinde tezgâh, vardiya, kaynak ya da malzeme yeri
+  yok" iletisi aday tezgâhların ufuk ölçüsüyle ayrılır (planlanamama-kurallar.ts zamanNedeni): malzeme ufuk dışında, tezgâhın ufukta
+  vardiyası yok, vardiyada yetkin kişi yok, işin süresi açık süreden uzun (iki süreyle), tezgâh dolu. Ölçülemeyen "nedeni ölçülemedi" olur.
+- 2784: hazırlık tek parçadır ve tezgâhın her hazırlık diliminde ayarcı ister (motor checkUse). Tezgâh ayarcının olmadığı vardiyada da
+  çalışıyorsa ve hazırlık ayarcının kesintisiz bulunduğu süreden uzunsa neden iki süreyle yazılır (kod kisi-vardiyasiz, hedef tezgâh).
+- B-2482-33 (insanlı istasyonun makinesi seçili): neden kişidedir (vardiya ya da yetkinlik), ileti makine ve istasyon adını söyler.
+- GÖRÜNEN DEĞİŞİKLİK: ileti metinleri değişir; "Sunucu motoru yerleştiremedi: " öneki kalkar. Ardıl metinleri ("Önceki adım (... OP n)
+  yerleşmedi.", "Bağlı parti yerleşmedi.") aynıdır. Plan cevabının yerlesmemis[].neden metni yalnız pasif kaynakta adı söyler.
+- Test: `planlanamama-kurallar.test.ts` PN-01..06, `planlanamama-uc.test.ts` PU-01, 02, `uzun-hazirlik-neden.test.ts` UH-01..03, `plan-cozucusu-neden.test.ts` YN-01..11,
+  `motor-oner-insanli.test.ts` MI-01, 02, `motor-kisi-isi.test.ts`.
+
+## Planlanabilirlik uçları (2779 sayfası; 2026-11-10)
+- `GET /plan/planlanabilirlik`: plana giren açık emirlerden yerleşmeyen adımı olanlar, yalnız yerleşmeyen adımlarıyla. Motor önerisi motor
+  yerleşimiyle aynı çalışmadır, hiçbir şey yazılmaz; `motorZamani` bu çalışmanın anıdır, motor kayıtlı değilse null ve liste boş.
+  Kontroller sırayla: rota revizyonu, süre, kaynak, yetki, tezgâh vardiyası, kişi vardiyası, malzeme, ufuk (yaklaşık), öncül. Motorun
+  tanısının yuvası 'eksik'tir; önceki yuva yalnız tanı onu geçtiyse 'tamam', yoksa 'olculemedi' (uydurulmaz). Kök ilk eksiktir; kök öncül ya
+  da bağlı partiyse `bekledigiOp` ve `bekledigiEmirNo` zincirin kök adımıdır.
+- `GET /plan/planlanabilirlik/rotalar`: yürürlükteki rotası olan ürünlerin bütün adımları; yalnız süre, kaynak, tezgâh vardiyası ve kişi
+  vardiyası (emre bağlı yuva yok). Fason adım kontrol almaz. Yetki: iki uç da `/plan/planlama-kaynagi` ile aynı (sayfa.recete-rota okuyan).
+- Test: `planlanabilirlik-uc.test.ts` PB-01..03; `uc-yetkisi.test.ts` iki satır.

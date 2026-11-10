@@ -34,7 +34,7 @@ describe('plan (gerçek PostgreSQL): eski rota revizyonundan açılmış emir (9
       kuyruklar: [{ kaynak: { tur: 'makine', id: makineA }, baslangic: new Date().toISOString(), isler: [op10!, op20!].map((x) => ({ emirNo, opNo: is(x).opNo, dondurulmus: false, elle: false })) }],
     });
     assert.equal(y.yazilan, 1);
-    assert.deepEqual(y.yerlesmeyen, [{ emirNo, opNo: is(op20!).opNo, neden: 'Adım ürünün yürürlükteki rotasında ya da emirlerde bulunamadı.' }]);
+    assert.deepEqual(y.yerlesmeyen, [{ emirNo, opNo: is(op20!).opNo, neden: 'Adım ürünün yürürlükteki rotasında ya da emirlerde bulunamadı.', nedenKodu: 'rotada-yok', hedef: null }]);
     const p = await planOku(y.taslak);
     assert.ok(p.yerlesimler.some((x) => x.isEmriId === op10));
     assert.equal(p.yerlesmemis.find((x) => x.isEmriId === op20)?.neden, 'Adım ürünün yürürlükteki rotasında yok; emir eski rota revizyonundan açıldı.');

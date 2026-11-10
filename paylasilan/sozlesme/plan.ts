@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import type { PLAN_ISLEMLERI } from '../islemler/plan.ts';
 import { IS_EMRI_TURLERI } from './uretim-emirleri.ts';
+import { DUZELTME_YERLERI, KONTROL_DURUMLARI, PLANLANAMAMA_NEDENLERI } from './planlanamama-sabitleri.ts';
 
 const KIMLIK = z.number().int().positive().max(2_147_483_647);
 // Taslaktaki acil sipariş denemesinin emri ve işleri canlıya geçmez, eksi kimlik taşır (plan servisi, denemeIsleri); taslağı okuyan
@@ -173,6 +174,39 @@ export const projePlaniCevabi = z.object({
   })),
 });
 
+export { DUZELTME_YERLERI, KONTROL_DURUMLARI, NEDEN_DUZELTME_YERI, PLANLANAMAMA_NEDENLERI } from './planlanamama-sabitleri.ts';
+export type { DuzeltmeYeri, KontrolDurumu, PlanlanamamaNedeni } from './planlanamama-sabitleri.ts';
+export const duzeltmeYeri = z.enum(DUZELTME_YERLERI);
+// Hedef: nedenin bağlı olduğu istasyon, makine ya da kişi (kimliği kendi tablosundandır); neden bir kaynağa bağlı değilse null.
+export const planlanamamaHedefi = z.object({ tur: z.enum(['istasyon', 'makine', 'kisi']), id: KIMLIK, ad: z.string() });
+// Yerleşmeyen işin neden alanları: motor yerleşimi, kuyruk yazma ve planlanabilirlik (2779) cevapları aynı parçayı kullanır.
+export const planlanamama = { neden: z.string(), nedenKodu: z.enum(PLANLANAMAMA_NEDENLERI), hedef: planlanamamaHedefi.nullable() };
+// 2779: planlanabilirlik sayfası. Adımın kontrolleri sırayla döner; kök, ilk 'eksik' kontrolün kodudur (ileti de ondan yazılır).
+// yaklasik: ölçü motorun son çalışmasına ya da kapasite tahminine dayanır (ufuk). Rota sekmesi emre bağlı kontrolleri hiç döndürmez.
+export const planlanabilirlikKontrolu = z.object({
+  kod: z.enum(PLANLANAMAMA_NEDENLERI), durum: z.enum(KONTROL_DURUMLARI), metin: z.string(), hedef: planlanamamaHedefi.nullable(), yaklasik: z.boolean(),
+});
+export const planlanabilirlikAdimi = z.object({
+  opNo: z.number().int(), ad: z.string(), istasyon: z.string().nullable(), kok: z.enum(PLANLANAMAMA_NEDENLERI).nullable(),
+  // Kök 'oncul' ya da 'bagli-parti' ise zincirin kök adımı (ara adım değil): emri (aynı emirde emrin kendisi, bağlı partide öteki emir) ve OP
+  // numarası birlikte dolu; rota sekmesinde ikisi de null.
+  bekledigiEmirNo: z.string().nullable(), bekledigiOp: z.number().int().nullable(), kontroller: z.array(planlanabilirlikKontrolu),
+});
+// GET /plan/planlanabilirlik: plana giren açık emirlerden yerleşmeyen adımı olanlar, yalnız yerleşmeyen adımlarıyla.
+export const planlanabilirlikCevabi = z.object({
+  motorZamani: zaman.nullable(), acikEmir: z.number().int(),
+  emirler: z.array(z.object({
+    uretimEmriId: PLAN_KIMLIGI, emirNo: z.string(), urunId: KIMLIK, urunKodu: z.string(), urunAdi: z.string(), adet: z.number().int(), termin: tarih.nullable(),
+    adimlar: z.array(planlanabilirlikAdimi),
+  })),
+});
+// GET /plan/planlanabilirlik/rotalar: yürürlükteki rotası olan ürünlerin bütün adımları, emre bağlı kontroller olmadan.
+export const rotaPlanlanabilirlikCevabi = z.object({
+  urunler: z.array(z.object({ urunId: KIMLIK, urunKodu: z.string(), urunAdi: z.string(), acikEmir: z.number().int(), adimlar: z.array(planlanabilirlikAdimi) })),
+});
+export type PlanlanabilirlikCevabi = z.infer<typeof planlanabilirlikCevabi>;
+export type RotaPlanlanabilirlikCevabi = z.infer<typeof rotaPlanlanabilirlikCevabi>;
+
 // 220 a: motorun yerleşimi, yazılmadan (Reçete ve Rota > Plan ekranı bunu çizer). Sabit (kilitli, dondurulmuş, başlamış) işler yerinde,
 // öteki işler motorun bugünkü ayarıyla; vardiya takvimi ve elle sıra dahil. Okuma kaynağıdır: plan sayfasını açan herkes aynı yerleşimi görür.
 export const motorYerlesimiCevabi = z.object({
@@ -184,7 +218,7 @@ export const motorYerlesimiCevabi = z.object({
     // 493 1 a: adet parçanın canlıya yazılacak tam sayı adedidir (kayıtlı bölmenin oranı adım adedine dağıtılmış); bölme yazılamıyorsa null.
     parcalar: z.array(z.object({ no: z.number().int().positive(), kaynak: kaynakGirdisi, baslangic: zaman, bitis: zaman, adet: z.number().int().positive().nullable() })).optional(),
   })),
-  yerlesmeyen: z.array(z.object({ isEmriId: PLAN_KIMLIGI, emirNo: z.string(), opNo: z.number().int(), neden: z.string() })),
+  yerlesmeyen: z.array(z.object({ isEmriId: PLAN_KIMLIGI, emirNo: z.string(), opNo: z.number().int(), ...planlanamama })),
   // Ekranın planRun opts.yerlesim girişi (Reçete ve Rota, #1860): anahtar canlı kuyruktaki gibi `emirNo|opNo`, bölünmüş işte parça başına
   // `emirNo|opNo~parçaNo`; değer makine (kişi kaynağında null) ve ISO başlangıç.
   ekranYerlesimi: z.record(z.string(), z.array(z.object({ makineId: KIMLIK.nullable(), baslangic: zaman }))),
@@ -369,7 +403,7 @@ export const kuyrukYazCevabi = z.object({
   // Yalnız sunucu motoru kayıtlıyken (ADR 0018).
   motorFarki: motorFarki.optional(),
   // 981 a-1: sunucu motorunun yerleştiremediği işler, nedeniyle (öncülü yerleşmeyen ardılı dahil); öteki işler yazılmıştır. Yoksa alan yok.
-  yerlesmeyen: z.array(z.object({ emirNo: z.string(), opNo: z.number().int(), neden: z.string() })).optional(),
+  yerlesmeyen: z.array(z.object({ emirNo: z.string(), opNo: z.number().int(), ...planlanamama })).optional(),
 });
 export const canliyaAlCevabi = senaryolarCevabi.extend({ motorFarki: motorFarki.optional() });
 // Canlı planın özeti: son canlıya alma ve makine kuyrukları. Reçete ve Rota bunu kendi hesapladığı kuyrukla karşılaştırıp canlıya
