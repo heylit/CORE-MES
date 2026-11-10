@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { OranOzeti } from '#paylasilan/sozlesme/finans.ts';
 import { BildirimSaglayici } from '../../ortak/arayuz/index.ts';
@@ -43,9 +44,16 @@ function sunucuKur(islemler: string[], faizYanit?: () => Response | Promise<Resp
   }));
   return istekler;
 }
-function ac() {
+function ac(adres = '/') {
   const istemci = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  render(<QueryClientProvider client={istemci}><BildirimSaglayici><KurFaizSeridi /></BildirimSaglayici></QueryClientProvider>);
+  render(<QueryClientProvider client={istemci}><MemoryRouter initialEntries={[adres]}><BildirimSaglayici><KurFaizSeridi /></BildirimSaglayici></MemoryRouter></QueryClientProvider>);
+}
+// Ekran genişliği: yalnız max-width sorgusu yanıtlanır (şeridin baktığı telefon sınırı).
+function genislik(px: number) {
+  vi.stubGlobal('matchMedia', (sorgu: string) => {
+    const sinir = /max-width:\s*(\d+)px/.exec(sorgu);
+    return { matches: sinir ? px <= Number(sinir[1]) : false, media: sorgu, addEventListener: () => undefined, removeEventListener: () => undefined };
+  });
 }
 const yazmalar = (istekler: Istek[]) => istekler.filter((i) => i.yontem === 'POST');
 
@@ -166,5 +174,37 @@ describe('Ortak kur ve faiz şeridi (939, 952 a, 953 a; 2238)', () => {
     ac();
     await new Promise((r) => setTimeout(r, 50));
     expect(document.querySelector('.tc-kfs')).toBeNull();
+  });
+});
+
+describe('2667 b: telefonda şerit yalnız ana sayfa ve Finans sayfalarında', () => {
+  it('360: öteki sayfada şerit yok, özet de okunmaz (boş satır kalmaz)', async () => {
+    genislik(360);
+    const istekler = sunucuKur(['musteri-tedarikci.oku']);
+    ac('/uretim-emirleri');
+    await new Promise((r) => setTimeout(r, 30));
+    expect(screen.queryByRole('region', { name: 'Kur ve faiz' })).toBeNull();
+    expect(document.body.textContent).toBe('');
+    expect(istekler.some((i) => i.yol === '/finans/oran-ozeti')).toBe(false);
+  });
+
+  it('360: ana sayfada ve Finans sayfalarında şerit görünür', async () => {
+    genislik(360);
+    for (const adres of ['/', '/finans', '/finans/kayitlar']) {
+      sunucuKur(['musteri-tedarikci.oku']);
+      ac(adres);
+      expect(await screen.findByRole('region', { name: 'Kur ve faiz' })).toBeTruthy();
+      cleanup();
+    }
+  });
+
+  it('768 ve 1280: her sayfada şerit kalır (952 a)', async () => {
+    for (const px of [768, 1280]) {
+      genislik(px);
+      sunucuKur(['musteri-tedarikci.oku']);
+      ac('/uretim-emirleri');
+      expect(await screen.findByRole('region', { name: 'Kur ve faiz' })).toBeTruthy();
+      cleanup();
+    }
   });
 });

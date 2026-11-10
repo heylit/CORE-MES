@@ -1,7 +1,7 @@
 // Proje maliyet kuralları (197 a, 194 a). Saf: veritabanı ve saat yok. Tutarlar TRY, KDV hariç; tarihler tesis günü (YYYY-AA-GG).
 import { aylikFaizdenGunluk } from '#paylasilan/sozlesme/finansman.ts';
 import { MALIYET_KALEMLERI } from '#paylasilan/sozlesme/proje-maliyet.ts';
-import type { EksikVeri, KalemSatiri, MaliyetKalemi, SapanIsEmri } from '#paylasilan/sozlesme/proje-maliyet.ts';
+import type { EksikVeri, KalemSatiri, MaliyetKalemi, ProjeMaliyetCevabi, SapanIsEmri } from '#paylasilan/sozlesme/proje-maliyet.ts';
 
 export const SAPAN_IS_EMRI_SAYISI = 5;
 // Sipariş tavanı boşken plan motoru da %10 kullanır (plan/motor/engine.betik CEZA_TAVANI_VARSAYILAN); rapor ile motor aynı
@@ -17,7 +17,7 @@ export interface Ucretler {
   kisiSaat?: { kisiId: number; saatMaliyeti: number | null }[];
   fason?: { tutar: string; paraBirimi: string }[];
   malzeme?: { malzemeId: number; birimMaliyet: number | null }[];
-  genelGider?: { saatBasi: number; amortismanDahil: boolean } | null;
+  genelGider?: GenelGiderOraniGirdisi | null;
 }
 
 export interface MaliyetKaydi {
@@ -33,6 +33,8 @@ export interface MaliyetKaydi {
   gercekTarihi: string | null;
   plan: KalemTutarlari;
   gercek: KalemTutarlari;
+  // 2661 a: kaydın genel gider tutarı gizli aylık orandan geldi; dışarı çıkan pay ve toplamlar maskelenir (gizliMaskele).
+  genelGiderGizli?: true;
 }
 
 // PM-01: süre x saat maliyeti. Süre ya da maliyet bilinmiyorsa null.
@@ -284,19 +286,23 @@ export function dondurulacaklar(kayitlar: readonly MaliyetKaydi[], defterde: Rea
   return kayitlar.filter((k) => k.bitti && k.isEmri !== null && k.isEmri.bitisZamani !== null && !defterde.has(k.isEmri.isEmriId));
 }
 
-export interface DefterSatiri { isEmriId: number; plan: KalemTutarlari; gercek: KalemTutarlari }
+export interface DefterSatiri { isEmriId: number; plan: KalemTutarlari; gercek: KalemTutarlari; genelGiderGizli: boolean }
 
 // PM-17 (199 a): defterdeki iş emrinin planı ve gerçekleşeni güncel hesap yerine defterden okunur; açık iş emri güncel hesapla kalır.
 export function defteriUygula(kayitlar: readonly MaliyetKaydi[], defter: ReadonlyMap<number, DefterSatiri>): MaliyetKaydi[] {
   return kayitlar.map((k) => {
     const d = k.isEmri === null || !k.bitti ? undefined : defter.get(k.isEmri.isEmriId);
-    return d === undefined ? k : { ...k, plan: d.plan, gercek: d.gercek };
+    if (d === undefined) return k;
+    // 2661 a: dondurulan iş emrinin gizliliği dondurma anındakidir; bugünün oranı gizli olsa da olmasa da defterdeki geçerlidir.
+    const { genelGiderGizli: _bugunku, ...kayit } = k;
+    return { ...kayit, plan: d.plan, gercek: d.gercek, ...(d.genelGiderGizli ? { genelGiderGizli: true as const } : {}) };
   });
 }
 
 // H8 (K-D6): genel gider kuralı tek yerdedir; proje maliyeti ve teklif maliyeti (Siparişler, kablolamayla) aynı işlevleri kullanır.
 export type AdimKaynagi = 'makine' | 'kisi' | 'fason' | null;
-export interface GenelGiderOraniGirdisi { saatBasi: number; amortismanDahil: boolean }
+// gizli (2652 a, 2661 a): oran az kişili personel bileşeni içerir; hesapta kullanılır, ondan türeyen sayı dışarı çıkmaz.
+export interface GenelGiderOraniGirdisi { saatBasi: number; amortismanDahil: boolean; gizli?: boolean }
 export type GenelGiderEksigi = Extract<EksikVeri, 'genel_gider_orani_yok' | 'amortisman_dahil_degil'>;
 
 // PM-21 (206 a): oran makine saatine bölündüğü için yükü makine ya da makinesi atanmamış adım alır (o da istasyon saatiyle hesaplanır);
@@ -385,6 +391,7 @@ export function isEmriKaydi(g: IsEmriGirdisi, bugun: string): MaliyetKaydi {
     gercekTarihi: g.durum === 'tamam' ? g.bitisGunu : basladi ? bugun : null,
     plan,
     gercek,
+    ...(yukAlir && g.genelGider?.gizli === true ? { genelGiderGizli: true as const } : {}),
   };
 }
 
@@ -575,4 +582,40 @@ export function iscilikPlaniEksik(kayitlar: readonly MaliyetKaydi[]): boolean {
 export function aramaKalibi(ara: string): string | null {
   const m = ara.trim();
   return m === '' ? null : `%${m.replace(/[\\%_]/g, (k) => `\\${k}`)}%`;
+}
+
+// 2661 a, 2663: genel gider oranı gizli olan ayın payı ve ondan türeyen her sayı dışarı çıkmaz; hesap içeride gerçek oranla yapılmıştır.
+// Maskelenen: genel gider kalemi, bütün toplamlar (plan, gerçekleşen, bugüne ve kalan plan, sapma), bütçe yokken hedef ve planlanan katkı,
+// katkı, kâr riski tutarı, haftalık birikim ve sapan iş emirleri (sıralaması da toplamdan türer). Genel gidersiz kalemler, gelir, bütçe ve
+// ceza oranla değişmez, kalır. Genel gider bekleme finansmanının tabanına girmediği için (FINANSMAN_TABANI) finansman kalemi de kalır.
+export type MaskelenecekMaliyet = Pick<ProjeMaliyetCevabi,
+  'butce' | 'hedef' | 'plan' | 'gerceklesen' | 'bugunePlan' | 'kalanPlan' | 'sapma' | 'katkiPayi' | 'katkiOrani' | 'planlananKatkiOrani'
+  | 'karRiski' | 'kalemler' | 'haftalar' | 'sapanIsEmirleri'>;
+export function genelGiderGizliMaskesi<T extends MaskelenecekMaliyet>(h: T): T {
+  return {
+    ...h,
+    hedef: h.butce,
+    plan: null,
+    gerceklesen: null,
+    bugunePlan: null,
+    kalanPlan: null,
+    sapma: null,
+    katkiPayi: null,
+    katkiOrani: null,
+    planlananKatkiOrani: h.butce === null ? null : h.planlananKatkiOrani,
+    karRiski: { ...h.karRiski, tutar: null },
+    kalemler: h.kalemler.map((k) => (k.kalem === 'genel_gider' ? { ...k, plan: null, gerceklesen: null, sapmaOrani: null } : k)),
+    haftalar: [],
+    sapanIsEmirleri: [],
+  };
+}
+
+export function genelGiderGizliMi(kayitlar: readonly MaliyetKaydi[]): boolean {
+  return kayitlar.some((k) => k.genelGiderGizli === true);
+}
+
+// Taban fotoğrafı gizli ayda alındıysa planı ve genel gider kalemi gizlidir (Veri 2663); öteki kalemler oranla değişmez.
+export function tabanMaskesi<T extends { plan: number | null; kalemler: { kalem: MaliyetKalemi; plan: number | null }[] }>(t: T, gizli: boolean): T {
+  if (!gizli) return t;
+  return { ...t, plan: null, kalemler: t.kalemler.map((k) => (k.kalem === 'genel_gider' ? { ...k, plan: null } : k)) };
 }

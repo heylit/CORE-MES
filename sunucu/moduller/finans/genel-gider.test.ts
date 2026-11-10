@@ -95,11 +95,11 @@ describe('finans genel gider oranı (gerçek PostgreSQL)', () => {
 
   test('disari.genelGiderOrani: o güne geçerli son kayıt; kayıt yoksa null; aynı güne ikinci giriş öncekini düzeltir', async () => {
     assert.equal(await genelGiderOrani(vt(), '2025-12-31'), null);
-    assert.deepEqual(await genelGiderOrani(vt(), '2026-01-15'), { saatBasi: 1, amortismanDahil: true });
-    assert.deepEqual(await genelGiderOrani(vt(), '2026-02-01'), { saatBasi: 416.6667, amortismanDahil: true });
+    assert.deepEqual(await genelGiderOrani(vt(), '2026-01-15'), { saatBasi: 1, amortismanDahil: true, gizli: false });
+    assert.deepEqual(await genelGiderOrani(vt(), '2026-02-01'), { saatBasi: 416.6667, amortismanDahil: true, gizli: false });
     assert.equal((await ekle('yonetim', { gecerlilikBaslangic: '2026-02-01', aylikGenelGider: 360000, aylikMakineSaati: 720, amortismanDahil: false, aciklama: 'Düzeltme' })).durum, 200);
-    assert.deepEqual(await genelGiderOrani(vt(), '2026-02-20'), { saatBasi: 500, amortismanDahil: false });
-    assert.deepEqual(await genelGiderOrani(vt(), '2026-01-31'), { saatBasi: 1, amortismanDahil: true });
+    assert.deepEqual(await genelGiderOrani(vt(), '2026-02-20'), { saatBasi: 500, amortismanDahil: false, gizli: false });
+    assert.deepEqual(await genelGiderOrani(vt(), '2026-01-31'), { saatBasi: 1, amortismanDahil: true, gizli: false });
     const l = (await liste('okuyan')).govde;
     assert.equal(l.toplam, 3);
     assert.deepEqual(l.satirlar.map((s) => [s.gecerlilikBaslangic, s.saatBasi, s.amortismanDahil, s.aciklama]),

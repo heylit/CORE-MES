@@ -29,3 +29,11 @@ Taban: main 06144ea. Başvuru: kullanıcı kararları 194 a, 197 a, 198 a, 199 a
 - PM-1 (PM-1 a, 1818): işçilik planı yokken yeni eksik `iscilik_plani_yok`; katkı payı kartı ve kâr riski boş tutar yerine "İşçilik planı yok" yazar, sayı uydurulmaz; plan girilince hesaplanır (PM-48).
 - Proje masrafı kategorileri (2599 a): `PROJE_MASRAF_KATEGORILERI` yalnız lojistik, pazarlama, diğer gider. Mal alımı (malzeme sarftan, fason siparişten girer), personel (işçilik saatten), kira ve enerji (genel gider) projeye yeni bağlanamaz; ikinci kez sayılmasın diye. Var olan bağlar silinmez (PM-41).
 - Sayılmayan bağ (2599-a2): masraf satırına `sayilmaz` eklendi; türü artık listede olmayan bağ ve bağdan sonra siparişe bağlanan belge (2611 ön bakışı) toplama ve farka girmez, tabloda ve CSV'de "Sayılıyor" sütunu; ekranda "Sayılmıyor" rozetiyle ve açıklamayla görünür, kaldırma mevcut yoldan (PM-49). Veri silinmez, göç yok.
+
+## 2663 (2661 a): gizli genel gider oranı
+- Finans `genelGiderOrani` gizli ayda gerçek oranı `gizli: true` ile verir (2594 b); hesap gerçek oranla sürer, cevap `genelGiderGizliMaskesi` ile tek yerde maskelenir. Cevaba `genelGiderGizli` eklendi (sözleşme `.strict()`).
+- Maskelenen alanlar oran oynatılarak bulundu (genel-gider-gizli.test.ts); bekleme finansmanı genel gideri tabana almadığı için (FINANSMAN_TABANI) kalır.
+- Sapan iş emirleri gizli ayda boş döner: sıralama da toplamdan türer. VARSAYIM; geri alma düşük (genel gidersiz sapmayla liste döndürülebilir, ayrı karar).
+- Defter: dondurulan satırın `ucretler.genelGider.gizli` alanı okunur; gizlilik dondurma anındakidir. VARSAYIM; geri alma düşük.
+- Göç `20261110003323_proje_maliyet_taban_genel_gider_gizli.sql` (Veri 2663): varsayılanlı boolean, veri dönüşmez. Taban gerçek değerle saklanır, okumada plan ve genel gider kalemi gizli.
+- İstemci: "Gizli" bayraktan gelir (`gizli.ts` `gizliVeyaDeger`), açıklama satırı bilgi rozetli ve kilit simgeli; haftalık birikim yerine boş durum metni; kalem kırılımında not (Arayüz K1-K6).

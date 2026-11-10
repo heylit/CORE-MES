@@ -6,6 +6,7 @@ import type { genelGiderOraniListesiCevabi } from '#paylasilan/sozlesme/finans.t
 import { Dugme, DurumKutusu, Girdi, Kart, Rozet, Secim, Tablo, useBildirim, type Sutun } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { useOturum } from '../../ortak/veri/oturum.ts';
+import { GenelGiderOnerisi } from './GenelGiderOnerisi.tsx';
 import './finans.css';
 
 type Liste = z.output<typeof genelGiderOraniListesiCevabi>;
@@ -42,9 +43,10 @@ const DURUM_ROZETI = {
 
 const SUTUNLAR: Sutun<Gosterim>[] = [
   { anahtar: 'gun', baslik: 'Geçerlilik', hucre: (s) => gun(s.gecerlilikBaslangic), kirilmaz: true },
-  { anahtar: 'gider', baslik: 'Aylık genel gider', hucre: (s) => tl(s.aylikGenelGider), hizala: 'sag', mono: true },
+  { anahtar: 'gider', baslik: 'Aylık genel gider', hucre: (s) => (s.gizli ? 'Gizli' : tl(s.aylikGenelGider)), hizala: 'sag', mono: true },
   { anahtar: 'saat', baslik: 'Aylık makine saati', hucre: (s) => Number(s.aylikMakineSaati).toLocaleString('tr-TR', { maximumFractionDigits: 2 }), hizala: 'sag', mono: true },
-  { anahtar: 'oran', baslik: 'Saat başı', hucre: (s) => tl(s.saatBasi, 4), hizala: 'sag', mono: true },
+  { anahtar: 'oran', baslik: 'Saat başı', hucre: (s) => (s.gizli ? 'Gizli' : tl(s.saatBasi, 4)), hizala: 'sag', mono: true },
+  { anahtar: 'kaynak', baslik: 'Kaynak', hucre: (s) => (s.kaynak === 'belge' ? <Rozet ton="bilgi">Belgelerden</Rozet> : 'Elle') },
   { anahtar: 'amortisman', baslik: 'Amortisman', hucre: (s) => (s.amortismanDahil ? 'Dahil' : 'Dahil değil') },
   { anahtar: 'aciklama', baslik: 'Açıklama', hucre: (s) => s.aciklama ?? YOK },
   {
@@ -80,6 +82,7 @@ export function GenelGiderOrani() {
             Kira, amortisman ve idari gider gibi işe yazılamayan aylık gider, aylık makine saatine bölünür ve proje maliyetinde
             her makine saatine eklenir. Makine saat maliyeti yalnız doğrudan gideri taşır: enerji, bakım, sarf (amortisman ve kira genel giderdedir).
           </p>
+          <GenelGiderOnerisi yazabilir={yazabilir} bugun={bugun} listeAnahtari={ANAHTAR} />
           {yazabilir && <OranFormu bugun={bugun} />}
           {liste.isPending && <DurumKutusu durum="yukleniyor" />}
           {liste.isError && <DurumKutusu durum="hata" mesaj={hataIletisi(liste.error, 'Genel gider oranları alınamadı')} yenile={() => { void liste.refetch(); }} />}

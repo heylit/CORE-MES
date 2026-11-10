@@ -347,8 +347,10 @@ const enGec = (tarihler: readonly string[]): string | null => (tarihler.length =
 // yerleşmeyen kalem varsa plan termini yoktur. Kartsız kalem plansızdır. İstenen termin bir siparişi geciktiriyorsa plancı onayı gerekir.
 export function denemeCevabi(
   satirlar: readonly Pick<TeklifSatiri, 'id' | 'sira' | 'malzemeNo' | 'tanim' | 'miktar'>[], sonuc: DenemeSonucu | null,
-  g: { gecerlilik: string | null; istenenTermin: string | null; genelGiderSaatBasi: number | null },
+  g: { gecerlilik: string | null; istenenTermin: string | null; genelGiderSaatBasi: number | null; genelGiderGizli?: boolean },
 ): TerminDenemesiCevabi {
+  // 2661 a, 2669 b: gizli oranlı ayda oran, genel gider payı ve onu içeren her maliyet null; genel gider hariç maliyet de verilmez.
+  const gizli = g.genelGiderGizli === true;
   const motor = new Map((sonuc?.kalemler ?? []).map((k) => [k.satirId, k]));
   const kalemler: TerminDenemesiKalemi[] = satirlar.map((s) => {
     const k = s.malzemeNo === null ? undefined : motor.get(s.id);
@@ -364,7 +366,9 @@ export function denemeCevabi(
     return {
       ...ortak, yerlesti: k.yerlesti, bitis: k.bitis, planTermini: k.planTermini, malzemeGelisi: k.malzemeGelisi,
       satinalma: k.satinalma.map((a) => ({ kod: a.kod, miktar: String(a.miktar), birim: a.birim, gelis: a.gelis })),
-      birimMaliyet: m.birim === null ? null : m.birim.toFixed(4), toplamMaliyet: tl(m.toplam), dokum: m.dokum, eksikVeri: eksik,
+      birimMaliyet: m.birim === null || gizli ? null : m.birim.toFixed(4), toplamMaliyet: gizli ? null : tl(m.toplam),
+      // 2669 b: genel gidersiz satırların toplamı da genel gider hariç maliyet olurdu; gizli ayda dökümün bütün tutarları null.
+      dokum: gizli ? m.dokum.map((d) => ({ ...d, tutar: null })) : m.dokum, eksikVeri: eksik,
     };
   });
   const planli = kalemler.filter((k) => !k.plansiz);
@@ -385,7 +389,8 @@ export function denemeCevabi(
     satinalmaGerekli: kalemler.some((k) => k.satinalma.length > 0),
     kalemler,
     maliyetToplami: planli.length === 0 ? null : tl(toplamVeyaNull(planli.map((k) => (k.toplamMaliyet === null ? null : Number(k.toplamMaliyet))))),
-    genelGiderSaatBasi: tl(g.genelGiderSaatBasi),
+    genelGiderSaatBasi: gizli ? null : tl(g.genelGiderSaatBasi),
+    genelGiderGizli: gizli,
     kayanlar,
     plan: sonuc?.plan ?? null,
   };

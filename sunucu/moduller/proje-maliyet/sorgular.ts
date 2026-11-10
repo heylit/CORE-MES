@@ -4,7 +4,8 @@ import type { DefterSatiri, MaliyetKaydi } from './kurallar.ts';
 
 export async function defterOku(db: Db, projeId: number): Promise<Map<number, DefterSatiri>> {
   const satirlar = await db.sorgu<DefterSatiri>(
-    `SELECT is_emri_id AS "isEmriId", plan, gercek FROM proje_maliyet_defteri WHERE proje_id = $1`,
+    `SELECT is_emri_id AS "isEmriId", plan, gercek, coalesce((ucretler->'genelGider'->>'gizli')::boolean, false) AS "genelGiderGizli"
+       FROM proje_maliyet_defteri WHERE proje_id = $1`,
     [projeId],
   );
   return new Map(satirlar.map((s) => [s.isEmriId, s]));
@@ -36,21 +37,21 @@ export async function defterYaz(db: Db, projeId: number, kisiId: number | null, 
 // --- Taban fotoğrafı ve masraf bağı ---
 export interface TabanSatiri {
   sira: number; plan: string | null; kalemler: Record<string, number | null>; eksikKalemler: string[]; isEmriSayisi: number;
-  gerekce: string | null; kisiId: number; an: string;
+  gerekce: string | null; kisiId: number; an: string; genelGiderGizli: boolean;
 }
 // Yeni sıradan eskiye; ilk satır güncel tabandır.
 export const tabanlar = (db: Db, projeId: number) => db.sorgu<TabanSatiri>(
   `SELECT sira, plan::text, kalemler, eksik_kalemler AS "eksikKalemler", is_emri_sayisi AS "isEmriSayisi", gerekce, kisi_id AS "kisiId",
-          ${zamanMetni('an')} AS an
+          ${zamanMetni('an')} AS an, genel_gider_gizli AS "genelGiderGizli"
      FROM proje_maliyet_taban WHERE proje_id = $1 ORDER BY sira DESC`, [projeId]);
 
 export async function tabanEkle(db: Db, projeId: number, t: {
-  sira: number; plan: number | null; kalemler: Record<string, number | null>; eksikKalemler: readonly string[]; isEmriSayisi: number; gerekce: string | null;
+  sira: number; plan: number | null; kalemler: Record<string, number | null>; eksikKalemler: readonly string[]; isEmriSayisi: number; gerekce: string | null; genelGiderGizli: boolean;
 }, kisiId: number): Promise<void> {
   await db.sorgu(
-    `INSERT INTO proje_maliyet_taban (proje_id, sira, plan, kalemler, eksik_kalemler, is_emri_sayisi, gerekce, kisi_id)
-     VALUES ($1, $2, round($3::numeric, 2), $4, $5, $6, $7, $8)`,
-    [projeId, t.sira, t.plan, JSON.stringify(t.kalemler), JSON.stringify(t.eksikKalemler), t.isEmriSayisi, t.gerekce, kisiId],
+    `INSERT INTO proje_maliyet_taban (proje_id, sira, plan, kalemler, eksik_kalemler, is_emri_sayisi, gerekce, kisi_id, genel_gider_gizli)
+     VALUES ($1, $2, round($3::numeric, 2), $4, $5, $6, $7, $8, $9)`,
+    [projeId, t.sira, t.plan, JSON.stringify(t.kalemler), JSON.stringify(t.eksikKalemler), t.isEmriSayisi, t.gerekce, kisiId, t.genelGiderGizli],
   );
 }
 

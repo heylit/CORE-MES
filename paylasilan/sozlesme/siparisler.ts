@@ -426,6 +426,8 @@ export const terminDenemesiCevabi = z.object({
   kalemler: z.array(terminDenemesiKalemiSemasi),
   maliyetToplami: tutar,
   genelGiderSaatBasi: tutar,
+  // 2661 a, 2669 b: genel gider oranı gizli ayda oran, genel gider payı, kalem ve toplam maliyet null; fiyat önerisi yapılmaz.
+  genelGiderGizli: z.boolean(),
   kayanlar: z.array(kayanSiparisSemasi),
   plan: planSeridiSemasi.nullable(),
 });
@@ -439,7 +441,11 @@ export const adetDenemesiSatiriSemasi = z.object({
   termin: tarihSemasi.nullable(),
   maliyetToplami: tutar,
 });
-export const adetDenemesiCevabi = z.object({ durum: z.enum(['hazir', 'cozucu-yok']), satirlar: z.array(adetDenemesiSatiriSemasi) });
+export const adetDenemesiCevabi = z.object({
+  durum: z.enum(['hazir', 'cozucu-yok']), satirlar: z.array(adetDenemesiSatiriSemasi),
+  // 2661 a: maliyet ve birim maliyet null, ekran "Gizli" yazar.
+  genelGiderGizli: z.boolean(),
+});
 
 // Atölyedeki satış taslakları (örnek sayfa): yer tutan, plancı onayı bekleyen ve son 30 günde süresi dolan bütün satış taslakları.
 export const ATOLYE_TASLAGI_GORUNUMLERI = ['satis', 'onay-bekliyor', 'satis-deneme'] as const;

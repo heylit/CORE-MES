@@ -7,6 +7,7 @@ import { anahtarlar } from './anahtarlar.ts';
 import { KALEM_ADI, MaliyetTabani, tl } from './MaliyetTabani.tsx';
 import { MasrafBelgeleri } from './MasrafBelgeleri.tsx';
 import { useOturum } from '../../ortak/veri/oturum.ts';
+import { GIZLI, GIZLI_ACIKLAMA, GIZLI_BIRIKIM, GIZLI_KIRILIM, GIZLI_SAPMA, gizliVeyaDeger } from './gizli.ts';
 import './proje-maliyet.css';
 
 // Sekmeyi açan uç bu işlemi ister; Projeler sekmeyi yalnız buna sahip olana gösterir.
@@ -39,15 +40,19 @@ const isaretliYuzde = (x: number | null): string => (x === null ? '—' : `${x >
 const gunAy = (tarih: string): string => `${tarih.slice(8, 10)}.${tarih.slice(5, 7)}`;
 const bolum = (pay: number | null, payda: number | null): number | null => (pay === null || payda === null || !(payda > 0) ? null : pay / payda);
 
-const KALEM_SUTUNLARI: Sutun<KalemSatiri>[] = [
-  { anahtar: 'kalem', baslik: 'Kalem', hucre: (k) => KALEM_ADI[k.kalem] },
-  { anahtar: 'plan', baslik: 'Plan', hizala: 'sag', mono: true, kirilmaz: true, hucre: (k) => tl(k.plan) },
-  { anahtar: 'gerceklesen', baslik: 'Gerçekleşen', hizala: 'sag', mono: true, kirilmaz: true, hucre: (k) => tl(k.gerceklesen) },
-  {
-    anahtar: 'sapma', baslik: 'Sapma', hizala: 'sag', mono: true,
-    hucre: (k) => (k.sapmaOrani !== null && k.sapmaOrani > 0 ? <Rozet ton="uyari">{isaretliYuzde(k.sapmaOrani)}</Rozet> : isaretliYuzde(k.sapmaOrani)),
-  },
-];
+// Gizli ayda yalnız genel gider satırı "Gizli" yazar; öteki kalemler oranla değişmez.
+const kalemSutunlari = (gizli: boolean): Sutun<KalemSatiri>[] => {
+  const g = (k: KalemSatiri): boolean => gizli && k.kalem === 'genel_gider';
+  return [
+    { anahtar: 'kalem', baslik: 'Kalem', hucre: (k) => KALEM_ADI[k.kalem] },
+    { anahtar: 'plan', baslik: 'Plan', hizala: 'sag', mono: true, kirilmaz: true, hucre: (k) => gizliVeyaDeger(tl(k.plan), g(k)) },
+    { anahtar: 'gerceklesen', baslik: 'Gerçekleşen', hizala: 'sag', mono: true, kirilmaz: true, hucre: (k) => gizliVeyaDeger(tl(k.gerceklesen), g(k)) },
+    {
+      anahtar: 'sapma', baslik: 'Sapma', hizala: 'sag', mono: true,
+      hucre: (k) => (g(k) ? GIZLI : k.sapmaOrani !== null && k.sapmaOrani > 0 ? <Rozet ton="uyari">{isaretliYuzde(k.sapmaOrani)}</Rozet> : isaretliYuzde(k.sapmaOrani)),
+    },
+  ];
+};
 
 const IS_EMRI_SUTUNLARI: Sutun<SapanIsEmri>[] = [
   { anahtar: 'emir', baslik: 'İş emri', mono: true, kirilmaz: true, hucre: (s) => `${s.emirNo} · ${s.opNo}` },
@@ -77,7 +82,7 @@ function KarRiskiSeridi({ m }: { m: ProjeMaliyetCevabi }) {
           <>
             <span className="tc-pm-risk-deger">
               <span className="tc-pm-risk-etiket">Kâr riski (katkı × {oranMetni} × gün)</span>
-              <span className="mono">{tutar !== null && tutar > 0 ? <Rozet ton="hata">{tl(tutar)}</Rozet> : tutar === null && iscilikYok ? ISCILIK_PLANI_YOK : tl(tutar)}</span>
+              <span className="mono">{m.genelGiderGizli ? GIZLI : tutar !== null && tutar > 0 ? <Rozet ton="hata">{tl(tutar)}</Rozet> : tutar === null && iscilikYok ? ISCILIK_PLANI_YOK : tl(tutar)}</span>
             </span>
             {ceza !== null && (
               <span className="tc-pm-risk-deger">
@@ -107,6 +112,7 @@ export function ProjeMaliyeti({ projeId }: { projeId: number }) {
   const m = sorgu.data;
   if (!m) return <DurumKutusu durum="yukleniyor" />;
 
+  const g = m.genelGiderGizli;
   const planaOran = bolum(m.gerceklesen, m.hedef);
   const kalemNoktalari = m.kalemler.flatMap((k) => (k.plan === null || k.gerceklesen === null || (k.plan === 0 && k.gerceklesen === 0)
     ? [] : [{ etiket: KALEM_ADI[k.kalem], birinci: k.plan, ikinci: k.gerceklesen }]));
@@ -122,6 +128,11 @@ export function ProjeMaliyeti({ projeId }: { projeId: number }) {
           {uyarilar.map((u) => <li key={u} className="tc-pm-uyari"><Simge ad="alert" boyut="k" />{u}</li>)}
         </ul>
       )}
+      {g && (
+        <p className="tc-pm-uyari" role="note">
+          <Rozet ton="bilgi"><Simge ad="lock" boyut="k" /> {GIZLI}</Rozet> {GIZLI_ACIKLAMA}
+        </p>
+      )}
       <div className="tc-pm-kartlar">
         {m.fiyatGorunur && (
           <SayiKarti baslik="Proje geliri" simge="lira" metin={tl(m.gelir)}
@@ -131,35 +142,37 @@ export function ProjeMaliyeti({ projeId }: { projeId: number }) {
           <SayiKarti baslik="Kur farkı" simge="rotate" metin={m.kurFarki === null ? '—' : `${m.kurFarki > 0 ? '+' : ''}${tl(m.kurFarki)}`}
             altMetin="Faturalanan kısım bugünün kuruyla; tutara ve katkıya eklenmez" />
         )}
-        <SayiKarti baslik="Gerçekleşen maliyet" simge="chart" metin={tl(m.gerceklesen)}
-          altMetin={planaOran === null ? `Hedef ${tl(m.hedef)}` : `Hedefin ${yuzde(planaOran)}'i · ${m.butce === null ? 'plan' : 'bütçe'} ${tl(m.hedef)}`} />
+        <SayiKarti baslik="Gerçekleşen maliyet" simge="chart" metin={gizliVeyaDeger(tl(m.gerceklesen), g)}
+          altMetin={g ? `${m.butce === null ? 'Hedef (plan)' : 'Bütçe'} ${gizliVeyaDeger(tl(m.hedef), m.butce === null)}`
+            : planaOran === null ? `Hedef ${tl(m.hedef)}` : `Hedefin ${yuzde(planaOran)}'i · ${m.butce === null ? 'plan' : 'bütçe'} ${tl(m.hedef)}`} />
         {m.fiyatGorunur && (
           <SayiKarti baslik="Tahmini katkı payı" simge="target"
-            metin={m.katkiPayi === null && m.eksikler.includes('iscilik_plani_yok') ? ISCILIK_PLANI_YOK : tl(m.katkiPayi)}
-            altMetin={`${yuzde(m.katkiOrani)} · planlanan ${yuzde(m.planlananKatkiOrani)}`}
+            metin={g ? GIZLI : m.katkiPayi === null && m.eksikler.includes('iscilik_plani_yok') ? ISCILIK_PLANI_YOK : tl(m.katkiPayi)}
+            altMetin={`${gizliVeyaDeger(yuzde(m.katkiOrani), g)} · planlanan ${gizliVeyaDeger(yuzde(m.planlananKatkiOrani), g && m.butce === null)}`}
             ton={m.katkiPayi !== null && m.katkiPayi < 0 ? 'hata' : 'bilgi'} />
         )}
         {m.fiyatGorunur && (
-          <SayiKarti baslik="Bugüne kadarki sapma" simge="gauge" metin={m.sapma === null ? '—' : `${m.sapma > 0 ? '+' : ''}${tl(m.sapma)}`}
-            altMetin={`Bugüne kadarki plan ${tl(m.bugunePlan)}`} ton={m.sapma !== null && m.sapma > 0 ? 'uyari' : 'bilgi'} />
+          <SayiKarti baslik="Bugüne kadarki sapma" simge="gauge" metin={g ? GIZLI : m.sapma === null ? '—' : `${m.sapma > 0 ? '+' : ''}${tl(m.sapma)}`}
+            altMetin={`Bugüne kadarki plan ${gizliVeyaDeger(tl(m.bugunePlan), g)}`} ton={m.sapma !== null && m.sapma > 0 ? 'uyari' : 'bilgi'} />
         )}
       </div>
-      <MaliyetTabani projeId={projeId} ozet={m.ozet} kalemler={m.kalemler} yazabilir={yazabilir} />
+      <MaliyetTabani projeId={projeId} ozet={m.ozet} kalemler={m.kalemler} yazabilir={yazabilir} gizli={g} />
       <KarRiskiSeridi m={m} />
       <div className="tc-pm-grafikler">
         <IkiSeriKarti baslik="Birikimli maliyet (haftalık)" simge="chart" seriAdlari={['Plan', 'Gerçekleşen']} birim="TL"
           noktalar={m.haftalar.map((h) => ({ etiket: gunAy(h.hafta), birinci: h.planBirikimli, ikinci: h.gerceklesenBirikimli }))}
-          altMetin={`Bugün ${gunAy(m.bugun)}`} />
-        <IkiSeriKarti baslik="Kalem kırılımı" simge="layers" seriAdlari={['Plan', 'Gerçekleşen']} birim="TL" noktalar={kalemNoktalari} />
+          altMetin={`Bugün ${gunAy(m.bugun)}`} {...(g ? { bosMetin: GIZLI_BIRIKIM } : {})} />
+        <IkiSeriKarti baslik="Kalem kırılımı" simge="layers" seriAdlari={['Plan', 'Gerçekleşen']} birim="TL" noktalar={kalemNoktalari}
+          {...(g ? { altMetin: GIZLI_KIRILIM } : {})} />
       </div>
       <Kart baslik="Kalemler">
-        <Tablo etiket="Maliyet kalemleri" sutunlar={KALEM_SUTUNLARI} satirlar={m.kalemler} satirAnahtari={(k) => k.kalem} />
+        <Tablo etiket="Maliyet kalemleri" sutunlar={kalemSutunlari(g)} satirlar={m.kalemler} satirAnahtari={(k) => k.kalem} />
       </Kart>
       <MasrafBelgeleri projeId={projeId} ozet={m.ozet} yazabilir={yazabilir} />
       {m.fiyatGorunur && (
         <Kart baslik="En çok sapan iş emirleri">
           <Tablo etiket="En çok sapan iş emirleri" sutunlar={IS_EMRI_SUTUNLARI} satirlar={m.sapanIsEmirleri} satirAnahtari={(s) => s.isEmriId}
-            bosMesaj="Planın üstüne çıkan iş emri yok" />
+            bosMesaj={g ? GIZLI_SAPMA : 'Planın üstüne çıkan iş emri yok'} />
         </Kart>
       )}
     </div>

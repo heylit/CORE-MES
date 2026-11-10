@@ -25,7 +25,7 @@ import {
   beklemeFinansmani, defteriUygula, genelGiderEksikleri, projeGeliri, dondurulacaklar, gercekTalasAdedi, gunlukFaizOrani, eksikKalemler, isEmriKaydi, malzemePlani, tahminiIsEmriMaliyeti, gecikmeCezasi, gecikmeGunu, gostergeler, haftalikBirikim, kalemKirilimi, karRiski, iscilikPlaniEksik, planTarihiEksik, sapanIsEmirleri, tahminiBitis,
 } from './kurallar.ts';
 import { MASRAF_YOK, aramaKalibi, butceTl, maliyetFarki, masrafReddi, masrafSayilmaz, tabanKarari } from './kurallar.ts';
-import { faturaDurumu } from './kurallar.ts';
+import { faturaDurumu, genelGiderGizliMaskesi, genelGiderGizliMi, tabanMaskesi } from './kurallar.ts';
 import { MASRAF_KALDIRMA_YETKISI, projeMasrafReddi } from './kurallar.ts';
 import type { FaturaDurumu, FaturaKaydi, GelirPayi, MalzemeBileseni, MaliyetKaydi, ProjeGeliri as ProjeGeliriSonucu, TalasAdedi } from './kurallar.ts';
 
@@ -240,7 +240,9 @@ type Hesap = Omit<ProjeMaliyetCevabi, 'ozet'> & { isEmriSayisi: number };
 // Projenin maliyet özeti (197 a): salt okuma; hesap kurallar.ts'tedir. Gelir sipariş para biriminden TRY'ye: faturalanan kısım fatura kuruyla,
 // kalanı bugünün kuruyla (1398 a).
 export async function projeMaliyeti(db: Db, kullanici: Kullanici, projeId: number, simdi = Date.now()): Promise<ProjeMaliyetCevabi> {
-  const { isEmriSayisi: _sayi, ...h } = await hesapla(db, kullanici, projeId, simdi);
+  const { isEmriSayisi: _sayi, ...gercek } = await hesapla(db, kullanici, projeId, simdi);
+  // 2661 a: maske cevabın tamamına bir kez uygulanır; özet (tahmini son, fark) maskelenmiş toplamlardan kurulur.
+  const h = gercek.genelGiderGizli ? genelGiderGizliMaskesi(gercek) : gercek;
   return { ...h, ozet: await maliyetOzeti(db, projeId, h) };
 }
 
@@ -320,6 +322,7 @@ async function hesapla(db: Db, kullanici: Kullanici, projeId: number, simdi: num
     sapanIsEmirleri: fiyatGorunur ? sapanIsEmirleri(kayitlar, dahil) : [],
     eksikKalemler: eksik,
     eksikler,
+    genelGiderGizli: genelGiderGizliMi(kayitlar),
     isEmriSayisi: isler.length,
   };
 }
@@ -397,7 +400,8 @@ async function maliyetOzeti(db: Db, projeId: number, h: Pick<Hesap, 'gerceklesen
     gerekce: t.gerekce,
     kisiAd: adlar.get(t.kisiId) ?? null,
     an: t.an,
-  }));
+    genelGiderGizli: t.genelGiderGizli,
+  })).map((t) => tabanMaskesi(t, t.genelGiderGizli));
   // Bağ belgeye yabancı anahtarla durur; belge silinmez, iptal edilir ve iptal satırı toplama girmez (PM-42); sayılmayan türdeki eski bağ da (PM-49).
   const masraflar = baglar.flatMap((b) => {
     const d = belgeler.get(b.belgeId);
@@ -429,6 +433,7 @@ export async function tabanAl(db: Db, kullanici: Kullanici, projeId: number, ger
     eksikKalemler: h.eksikKalemler,
     isEmriSayisi: h.isEmriSayisi,
     gerekce: karar.gerekce,
+    genelGiderGizli: h.genelGiderGizli,
   }, kullanici.id));
   return { tamam: true };
 }
@@ -466,3 +471,12 @@ export async function masrafSecenekleri(db: Db, kullanici: Kullanici, ara: strin
   };
 }
 
+
+// 2594 b (Mimar K1): finansın genel gider önerisi, projede sayılan masraf bağı olan belgeleri buradan çeker (kablolama). Sayılmayan bağ
+// (2599-a2: izinsiz kategori ya da satın almaya bağlı) projede sayılmadığı için genel gidere girebilir; burada dönmez.
+export async function projedeSayilanBelgeler(db: Db, belgeIdler: readonly number[]): Promise<Set<number>> {
+  const bagli = await sorgular.bagliBelgeler(db, belgeIdler);
+  if (bagli.size === 0) return bagli;
+  const belgeler = await giderBelgeleri(db, [...bagli]);
+  return new Set([...belgeler.values()].filter((d) => !masrafSayilmaz(d, PROJE_MASRAF_KATEGORILERI)).map((d) => d.id));
+}
