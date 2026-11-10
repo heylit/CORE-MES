@@ -48,3 +48,10 @@ Taban: main 06144ea. Başvuru: kullanıcı kararları 194 a, 197 a, 198 a, 199 a
 - Çiftin tutarı doğrudan kullanılır, birim fiyata çevrilip yeniden çarpılmaz (Maliyet N1). Talaş liste kg fiyatından düşülmeye devam eder. Plan değişmedi.
 - VARSAYIM: emrin ya da projenin siparişi varsa çıkışın tamamı sipariş fiyatıyla (PM-51) fiyatlanır, kısmen siparişsiz çıkış ayrılmaz; geri alma orta. Fire dahil net sarf son alışla.
 - Göç, uç, sözleşme ve eksik kodu değişmedi.
+
+## 2739 (2733 a): kısmi siparişte siparişe kadar sipariş fiyatı
+- Sipariş yalnız teslim alınan net miktarına kadar fiyatlar (satin-alma `teslimMiktari`, 2739-1). Çift başına sırayla emrin siparişi, projenin siparişi (projede kalan teslim, emirlere ilk sarf zamanı sırasıyla; stok `ilkZaman`, 2739-2), kalan fazla son alıştan orantıyla, kuruşa yuvarlanır. Kural PM-53. Fazla yoksa sonuç PM-51 ile aynı.
+- 2720-2'de emrin siparişi çıkışın tamamını fiyatlıyordu ve proje siparişinin miktar sınırı yoktu; ikisi de değişti.
+- Düzeltme: son alışı bilinmeyen siparişsiz ya da fazla çift artık `birim_maliyet_eksik` yazar (2727'de tutar null olup kod yazılmıyordu).
+- VARSAYIM (Maliyet tarifi): proje siparişi emirlere ilk sarf zamanı, eşitse emir no sırasıyla dağılır; emrin siparişi önce, proje siparişi sonra, son alış en son. Geri alma orta.
+- Göç, uç ve eksik kodu değişmedi; sözleşme alanları sağlayıcılarda (2739-1, 2739-2).

@@ -24,7 +24,7 @@ import * as sorgular from './sorgular.ts';
 import {
   beklemeFinansmani, defteriUygula, genelGiderEksikleri, projeGeliri, dondurulacaklar, gercekTalasAdedi, gunlukFaizOrani, eksikKalemler, isEmriKaydi, malzemePlani, tahminiIsEmriMaliyeti, gecikmeCezasi, gecikmeGunu, gostergeler, haftalikBirikim, kalemKirilimi, karRiski, iscilikPlaniEksik, planTarihiEksik, sapanIsEmirleri, tahminiBitis,
 } from './kurallar.ts';
-import { MASRAF_YOK, aramaKalibi, gercekBilesenFiyatlari, butceTl, maliyetFarki, masrafReddi, masrafSayilmaz, tabanKarari } from './kurallar.ts';
+import { MASRAF_YOK, aramaKalibi, bilesenTutariBilinmiyor, gercekBilesenFiyatlari, gercekCiftTutarlari, butceTl, maliyetFarki, masrafReddi, masrafSayilmaz, tabanKarari } from './kurallar.ts';
 import { faturaDurumu, genelGiderGizliMaskesi, genelGiderGizliMi, tabanMaskesi } from './kurallar.ts';
 import { MASRAF_KALDIRMA_YETKISI, projeMasrafReddi } from './kurallar.ts';
 import type { FaturaDurumu, FaturaKaydi, GelirPayi, MalzemeBileseni, MaliyetKaydi, ProjeGeliri as ProjeGeliriSonucu, TalasAdedi } from './kurallar.ts';
@@ -94,7 +94,7 @@ async function maliyetKayitlari(
 type ProjeIsi = Awaited<ReturnType<typeof projeninIsEmirleri>>[number];
 
 // PM-25, PM-27: üretim emri başına malzeme kaydı (iş emrine bağlı değil, dondurulmaz). Plan reçeteden (emrin brüt ihtiyacı), gerçek stoktan
-// emre verilen net sarftan; plan kg fiyatından, gerçek bağlı siparişin fiyatından (PM-51, 2613 2/2), yoksa çıkış anındaki son alıştan (PM-52, 2613-3 a), birim fiyat x miktar eksi talaş. Bileşen projedeki başka emrin ürünüyse iç yarımamuldür;
+// emre verilen net sarftan; plan kg fiyatından, gerçek bağlı siparişin fiyatından teslimine kadar (PM-51, PM-53), fazlası çıkış anındaki son alıştan (PM-52), eksi talaş. Bileşen projedeki başka emrin ürünüyse iç yarımamuldür;
 // maliyeti kendi emrinde olduğu için burada sayılmaz. Gerçek talaşın parça adedi PM-31.
 async function malzemeKayitlari(db: Db, projeId: number, isler: readonly ProjeIsi[], isKayitlari: readonly MaliyetKaydi[], eksikler: Set<EksikVeri>): Promise<MaliyetKaydi[]> {
   const emirIdleri = [...new Set(isler.map((i) => i.uretimEmriId))];
@@ -109,8 +109,9 @@ async function malzemeKayitlari(db: Db, projeId: number, isler: readonly ProjeIs
   const sarfNolari = [...new Set([...sarflar.values()].flat().map((b) => b.malzemeNo))];
   const { bilesenler, netKg: urunNetKg, planBilesenleri } = await malzemeHazirla(db, emirIdleri, sarfNolari);
   const siparisFiyatlari = sarfNolari.length === 0 ? [] : await siparisBirimFiyatlari(db, { emirIdleri, projeIdleri: [projeId], malzemeNolar: sarfNolari });
+  const ciftTutarlari = gercekCiftTutarlari(sonAlislar, siparisFiyatlari, projeId);
   const tutar = (b: readonly MalzemeBileseni[], adet: number, netKg: number | null, kullanim?: TalasAdedi): number | null => {
-    if (b.some((x) => x.tryBirimFiyati === null)) eksikler.add('birim_maliyet_eksik');
+    if (b.some(bilesenTutariBilinmiyor)) eksikler.add('birim_maliyet_eksik');
     const p = malzemePlani(b, adet, netKg, kullanim);
     if (p.talas === null && p.tutar !== null) eksikler.add('talas_dusulmedi');
     return p.tutar;
@@ -127,7 +128,7 @@ async function malzemeKayitlari(db: Db, projeId: number, isler: readonly ProjeIs
     const bitti = isleri.every((i) => i.durum === 'tamam');
     const planB = planBilesenleri(emirId);
     const plan = planB === null ? null : tutar(planB, ilk.adet, netKg);
-    const gercek = tutar(gercekBilesenFiyatlari(bilesenler(sarflar.get(emirId) ?? []), siparisFiyatlari, sonAlislar, emirId, projeId), ilk.adet, netKg, gercekTalasAdedi(bitti, ilk.adet, ilk.saglam, son.saglam));
+    const gercek = tutar(gercekBilesenFiyatlari(bilesenler(sarflar.get(emirId) ?? []), ciftTutarlari, emirId), ilk.adet, netKg, gercekTalasAdedi(bitti, ilk.adet, ilk.saglam, son.saglam));
     const kayitlari = isleri.flatMap((i) => kayitBul.get(i.isEmriId) ?? []);
     const planlar = kayitlari.flatMap((k) => (k.planTarihi === null ? [] : [k.planTarihi])).sort();
     const gercekler = kayitlari.flatMap((k) => (k.gercekTarihi === null ? [] : [k.gercekTarihi])).sort();
