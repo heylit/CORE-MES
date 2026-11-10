@@ -7,13 +7,19 @@ export const ARKON_SAYFALARI = [
   { yol: '/uretim-terminali', islem: 'sayfa.uretim-terminali', baslik: 'Üretim Terminali', simge: 'gauge', grup: 'Üretim', sira: 25 },
 ] as const satisfies readonly SayfaTanimi[];
 
-// Tek maddelik menü, terminalin çerçeveli (boşluksuz, tam ekran düğmeli) açılması içindir.
+// Menü, terminalin çerçeveli (boşluksuz, tam ekran düğmeli) açılması içindir; hazırlık sayfası da aynı çerçevede açılır.
 export const URETIM_TERMINALI_IKINCI_MENU = {
   kok: '/uretim-terminali',
   baslik: 'Üretim Terminali',
   simge: 'gauge',
   cerceveli: true,
-  gruplar: [{ maddeler: [{ anahtar: 'operator', baslik: 'Operatör', yol: '/uretim-terminali', simge: 'gauge', islem: 'sayfa.uretim-terminali' }] }],
+  gruplar: [{ maddeler: [
+    { anahtar: 'operator', baslik: 'Operatör', yol: '/uretim-terminali', simge: 'gauge', islem: 'sayfa.uretim-terminali' },
+    // 2748: bütün açık emirlerin hazırlık ve üretim durumu; operatör yalnız görür (2748-2 a). Uç (GET /adimli-emirler/hazirlik-matrisi) da
+    // aynı işlemleri ister: terminal.uret ya da emir listesini okuyan işlemler (ADIMLI_OKUMA_ISLEMLERI).
+    { anahtar: 'hazirlik', baslik: 'Hazırlık', yol: '/uretim-terminali/hazirlik', simge: 'clipboard-check', islem: 'terminal.uret',
+      veya: ['sayfa.uretim-emirleri', 'sayfa.rota', 'uretim-emirleri.yaz', 'uretim-emirleri.fason', 'plan.yaz'] },
+  ] }],
 } as const satisfies IkinciMenuTanimi;
 
 // Kuyruk sayfası (paylasilan/sayfalar/kuyruk.ts) Arkon'un Plan Kuyruğu'nu salt okunur açar; çerçeveli menü boşluksuz ve tam ekran düğmeli açmak içindir.

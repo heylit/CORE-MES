@@ -422,59 +422,60 @@ describe('A1 Üretim Terminali hatalı parça (1034)', () => {
   }, 40000);
 });
 
-describe('A1 Üretim Terminali hazırlık listesi (2079-1 b)', () => {
-  const cevap = (cnc: string, muafiyetler: unknown[] = []) => ({
-    maddeler: [
-      { madde: 'cnc', durum: cnc, muafTutulur: true, isEmriDuzeyi: true }, { madde: 'cizim', durum: 'gerekmez', muafTutulur: false, isEmriDuzeyi: false },
-      { madde: 'rota', durum: 'bilinmiyor', muafTutulur: false, isEmriDuzeyi: false },
-    ],
-    muafiyetler,
-    isEmirleri: [
-      { isEmriId: 90, opNo: 10, ad: 'Torna', bitti: false, maddeler: [{ madde: 'cnc', durum: cnc }] },
-      { isEmriId: 91, opNo: 20, ad: 'Freze', bitti: false, maddeler: [{ madde: 'cnc', durum: 'tamam' }] },
-    ],
+// 2748-1 b: terminalde liste yok; çip durumu gösterir ve hazırlık sayfasını bu emirle açar.
+describe('A1 Üretim Terminali hazırlık çipi (2079-1 b, 2748-1 b)', () => {
+  const ilerleme = (isEmriId: number, opNo: number, ad: string) => ({
+    isEmriId, emirId: 9, opNo, sira: opNo / 10, ad, istasyonId: null, istasyon: null, durum: 'bekliyor', fason: false, hedef: 10,
+    saglam: 0, hurda: 0, kararBekliyor: 0, kalan: 10, hazir: 10, fasonda: 0, devirAdedi: null,
+  });
+  const cevap = (cnc: string) => ({
+    emirler: [{
+      id: 9, emirNo: 'UE-DENEME-9', urun: { id: 1, kod: 'DNM-9', ad: 'Deneme parça' }, adet: 10, teslim: null, durum: 'planli',
+      isEmirleri: [ilerleme(90, 10, 'Torna'), ilerleme(91, 20, 'Freze')],
+      hazirlik: {
+        maddeler: [
+          { madde: 'cnc', durum: cnc, muafTutulur: true, isEmriDuzeyi: true }, { madde: 'cizim', durum: 'gerekmez', muafTutulur: false, isEmriDuzeyi: false },
+          { madde: 'rota', durum: 'bilinmiyor', muafTutulur: false, isEmriDuzeyi: false },
+        ],
+        isEmirleri: [
+          { isEmriId: 90, opNo: 10, ad: 'Torna', bitti: false, maddeler: [{ madde: 'cnc', durum: cnc }] },
+          { isEmriId: 91, opNo: 20, ad: 'Freze', bitti: false, maddeler: [{ madde: 'cnc', durum: 'tamam' }] },
+        ],
+      },
+    }],
   });
   const kur = (govde: unknown) => {
     const tmi = { ...PAKET, id: 'tmi-ie-90', no: 'UE-DENEME-9', tmi: { emirId: 9, isEmriId: 90 } };
-    const istekler = sunucuKur(ISTASYONLU, { belgeler: { pkgs: [{ kimlik: tmi.id, surum: 1, govde: tmi }], kv: [{ kimlik: 'plant', surum: 1, govde: { v: TESIS } }] } });
+    sunucuKur(ISTASYONLU, { belgeler: { pkgs: [{ kimlik: tmi.id, surum: 1, govde: tmi }], kv: [{ kimlik: 'plant', surum: 1, govde: { v: TESIS } }] } });
     const asil = globalThis.fetch;
     const okunan: string[] = [];
     vi.stubGlobal('fetch', async (adres: string, istek?: RequestInit) => {
-      if (String(adres).includes('/adimli-emirler/9/hazirlik')) { okunan.push(String(adres)); return new Response(JSON.stringify(govde), { status: 200 }); }
+      if (String(adres).includes('/adimli-emirler/hazirlik-matrisi')) { okunan.push(String(adres).replace('/api', '')); return new Response(JSON.stringify(govde), { status: 200 }); }
       return asil(adres, istek);
     });
     arkonAc('/uretim-terminali');
-    return { istekler, okunan };
+    return { okunan };
   };
 
-  it('eksik maddede çip ve sekme sayıyı gösterir; liste bu iş emrinin satırıdır; Başlat açık kalır; Sorumluya haber ver çağrı açar', async () => {
-    const { istekler, okunan } = kur(cevap('eksik'));
+  it('eksik maddede çip sayıyı gösterir; Başlat açık kalır; terminalde liste yok; çip hazırlık sayfasını bu emirle açar', async () => {
+    const { okunan } = kur(cevap('eksik'));
     const d = await ekran();
     const cip = await within(d).findByRole('button', { name: 'Hazırlık listesi: Hazırlık · 1 eksik' }, { timeout: 10000 });
-    expect(okunan.length).toBeGreaterThan(0);
+    expect(okunan).toContain('/adimli-emirler/hazirlik-matrisi?emirler=9');
     expect(within(screen.getByRole('group', { name: 'İş durumu' })).getByRole('button', { name: /Başlat/ }).getAttribute('aria-disabled')).not.toBe('true');
+    expect(screen.queryByRole('tab', { name: /Hazırlık/ })).toBeNull();
+    expect(screen.queryByRole('region', { name: 'Hazırlık' })).toBeNull();
     fireEvent.click(cip);
-    const l = await screen.findByRole('region', { name: 'Hazırlık' });
-    const satirlar = within(l).getAllByRole('listitem');
-    expect(satirlar.map((x) => x.getAttribute('data-hal'))).toEqual(['eksik', 'bilinmiyor', 'gerekmez']);
-    expect(within(satirlar[0]!).getByText('CNC kurulumu')).toBeTruthy();
-    expect(within(satirlar[0]!).getByText('bu iş emri')).toBeTruthy();
-    expect(within(l).queryByRole('button', { name: /muaf tut/i })).toBeNull();
-    fireEvent.click(within(satirlar[0]!).getByRole('button', { name: /Sorumluya haber ver/ }));
-    await waitFor(() => {
-      const c = istekler.filter((i) => i.yol === '/arkon/kayitlar/calls/ekle').flatMap((i) => (i.govde as { satirlar?: { team?: string; note?: string }[] }).satirlar ?? []);
-      expect(c.some((x) => x.team === 'amir' && x.note === 'Hazırlık eksik: CNC kurulumu')).toBe(true);
-    }, { timeout: 10000 });
+    const tablo = await screen.findByRole('table', { name: 'Hazırlık matrisi' }, { timeout: 10000 });
+    expect(screen.getByText('Yalnız bir emir gösteriliyor.')).toBeTruthy();
+    expect(within(tablo).getAllByRole('row').slice(1)).toHaveLength(2);
+    expect(screen.queryByRole('button', { name: /Sorumluya haber ver/ })).toBeNull();
   }, 40000);
 
-  it('muaf madde kişi, zaman ve gerekçeyle görünür; çip muafiyetle hazır der', async () => {
-    kur(cevap('muaf', [{ madde: 'cnc', isEmriId: 90, kisiId: 3, kisiAdi: 'Deneme Müdür', gerekce: 'Program tezgâhta doğrulandı.', zaman: '2026-11-04T08:40:00.000Z' }]));
+  it('muaf madde çipte muafiyetle hazır der (dar uç muafiyetin kişisini vermez)', async () => {
+    kur(cevap('muaf'));
     const d = await ekran();
-    fireEvent.click(await within(d).findByRole('button', { name: 'Hazırlık listesi: Hazır · muafiyetle' }, { timeout: 10000 }));
-    const l = await screen.findByRole('region', { name: 'Hazırlık' });
-    expect(within(l).getByText(/Müdür muaf tuttu · Deneme Müdür/)).toBeTruthy();
-    expect(within(l).getByText(/Gerekçe: Program tezgâhta doğrulandı\./)).toBeTruthy();
-    expect(within(l).queryByRole('button', { name: /Sorumluya haber ver/ })).toBeNull();
+    expect(await within(d).findByRole('button', { name: 'Hazırlık listesi: Hazır · muafiyetle' }, { timeout: 10000 })).toBeTruthy();
   }, 40000);
 });
 

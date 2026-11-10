@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import type { HazirlikCevabi, HazirlikMaddesi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
+import type { HazirlikCevabi, HazirlikMaddesi, HazirlikMatrisiCevabi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { Simge } from '../../../../ortak/arayuz/index.ts';
 import type { SimgeAdi } from '../../../../ortak/tasarim/simgeler.ts';
 import { api } from '../../../../ortak/veri/api.ts';
@@ -7,7 +7,8 @@ import { HAZIRLIK_MADDE_BILGISI, hazirlikHucreHali } from '../../../uretim-emirl
 import { CAGRI_EKIPLERI } from '../cekirdek/sabitler.ts';
 import './hazirlik-listesi.css';
 
-// Üretim Terminali hazırlık listesi (2057 a, 2079-1 b): emir ayrıntısındaki matrisle aynı kaynak, yalnız ekrandaki iş emrinin satırı.
+// Hazırlık listesi (2057 a, 2079-1 b): emir ayrıntısındaki matrisle aynı kaynak, yalnız bir iş emrinin satırı. Terminalde yalnız çip kalır
+// (2748-1 b); liste Üretim Hazırlık paketinde görünür.
 // Yalnız sistemin doğruladığı maddeler (2059 a). Terminal muaf tutmaz, muafiyeti gösterir (2068-1 a). Başlat'ı kapatmaz: eksikte
 // sunucu reddeder (2079-1 b). Uyaran maddenin (2146-1 a) eksiği "Uyarı" görünür; iş başlar.
 type Hal = HazirlikCevabi['maddeler'][number]['durum'];
@@ -48,7 +49,9 @@ export function useHazirlik(emirId: number | null, yenidenSor: unknown): { v: Ha
     dYaz(null);
     if (emirId === null) return;
     let canli = true;
-    api.get<HazirlikCevabi>(`/adimli-emirler/${String(emirId)}/hazirlik`).then((v) => { if (canli) dYaz({ v, zaman: Date.now() }); }).catch(() => undefined);
+    // 2748: operatör de okur (dar uç); emir ayrıntısının hazırlık ucu operatöre kapalıdır. Dar uç muafiyetin kişisini ve gerekçesini vermez; çip yalnız hâli okur.
+    api.get<HazirlikMatrisiCevabi>(`/adimli-emirler/hazirlik-matrisi?emirler=${String(emirId)}`)
+      .then((c) => { const h = c.emirler[0]?.hazirlik ?? null; if (canli && h !== null) dYaz({ v: { ...h, muafiyetler: [] }, zaman: Date.now() }); }).catch(() => undefined);
     return () => { canli = false; };
   }, [emirId, yenidenSor, n]);
   const yenile = useCallback(() => nYaz((x) => x + 1), []);

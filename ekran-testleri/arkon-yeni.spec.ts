@@ -413,11 +413,15 @@ test.describe('541 Üretim Hazırlık ve Üretim Terminali eski adreste', () => 
 
   test.describe('operatör', () => {
     test.use({ hesap: 'ornek.operator1' });
-    test('/uretim-terminali yeni ekrandır, tek maddelik şerit durur (genişte terminal şeridi üst çubukta, 2052-1 a); görünüm geçişi yoktur', async ({ page, ag, ac }) => {
+    // 2748: menü Operatör ve Hazırlık maddeleriyle iki maddelidir; kabuğun şeridi her genişlikte durur, genişte terminal şeridi yine üst çubuktadır.
+    test('/uretim-terminali yeni ekrandır, iki maddelik şerit durur (genişte terminal şeridi üst çubukta, 2052-1 a); görünüm geçişi yoktur', async ({ page, ag, ac }) => {
       await ac('/uretim-terminali');
       await expect(page.getByRole('region', { name: 'Üretim Terminali' })).toBeVisible();
       await expect(page.locator('iframe')).toHaveCount(0);
-      await tekSerit(page, 'Üretim Terminali', { genislik: 900, serit: '.tc-ay1-ust' });
+      const menu = page.getByRole('navigation', { name: 'Üretim Terminali menüsü' });
+      await expect(menu).toBeVisible();
+      await expect(menu.getByRole('link')).toHaveText([/^Operatör/, /^Hazırlık/]);
+      if ((page.viewportSize()?.width ?? 0) >= 900) await expect(page.locator('.tc-kabuk-ust .tc-ay1-ust')).toBeVisible();
       await page.getByRole('button', { name: 'Hesap' }).click();
       await expect(page.getByRole('menuitem').first()).toBeVisible();
       await expect(page.getByRole('menuitem', { name: /görünüm$/ })).toHaveCount(0);

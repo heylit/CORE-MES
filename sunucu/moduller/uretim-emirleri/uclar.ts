@@ -6,7 +6,7 @@ import {
   emirlerSorgusu, emirTopluGuncelleCevabi, emirTopluGuncelleGovdesi,
   adimKaynagiGovdesi, uretimYeriGovdesi, fasonFirmalariCevabi, adimliEmirCevabi, adimliIptalGovdesi, adimliListeCevabi, adimliListeSorgusu, adimliOzetCevabi, fasonGidisGovdesi, siradakiFasonCevabi,
   asimlarCevabi, fasonHareketiCevabi, isEmriParametresi, oncelikGovdesi, ozetCevabi, partiBirlestirGovdesi, partiBolCevabi, partiBolGovdesi, planaAlGovdesi,
-  birlesmePlaniGovdesi, ekAdimGovdesi, ekAdimKaldirGovdesi, hazirlikCevabi, hazirlikMuafiyetiGovdesi, hazirlikOzetiCevabi, hazirlikOzetiSorgusu, refakatKartiCevabi, katilimCevabi, rotasizAdimDuzenleGovdesi, rotasizAdimEkleGovdesi, rotasizAdimSilGovdesi, rotasizEmirCevabi, rotasizEmirGovdesi, acilisSecenekleriCevabi, acilisSecenekleriSorgusu, makineDevralGovdesi, makineEkleGovdesi, adimPaylariCevabi, durusDagilimiCevabi, sonOlaylarCevabi, sonOlaylarSorgusu, gunlukUretimCevabi, panelSorgusu, sureOzetiCevabi,
+  birlesmePlaniGovdesi, ekAdimGovdesi, ekAdimKaldirGovdesi, hazirlikCevabi, hazirlikMuafiyetiGovdesi, hazirlikOzetiCevabi, hazirlikOzetiSorgusu, hazirlikMatrisiCevabi, hazirlikMatrisiSorgusu, refakatKartiCevabi, katilimCevabi, rotasizAdimDuzenleGovdesi, rotasizAdimEkleGovdesi, rotasizAdimSilGovdesi, rotasizEmirCevabi, rotasizEmirGovdesi, acilisSecenekleriCevabi, acilisSecenekleriSorgusu, makineDevralGovdesi, makineEkleGovdesi, adimPaylariCevabi, durusDagilimiCevabi, sonOlaylarCevabi, sonOlaylarSorgusu, gunlukUretimCevabi, panelSorgusu, sureOzetiCevabi,
   hataliCevabi, hataliGovdesi, hataliListeCevabi, hataliListeSorgusu, reworkAdimiGovdesi,
   disIslemEmriAcGovdesi, disIslemEmriCevabi, disIslemEmriIptalGovdesi, disIslemEmriParametresi,
   arsivOnizlemeCevabi, arsiveAlCevabi, arsiveAlGovdesi, emirKapatGovdesi, kapanisCevabi, kapanisGeriAcGovdesi, kapanisListeCevabi, kapanislarSorgusu, kapanisMuafGovdesi, kapanisOnayGovdesi, kapanisRetGovdesi,
@@ -18,6 +18,7 @@ import { ARSIV_YETKISI, arsiveAl, arsivOnizleme } from './arsiv.ts';
 import { dieAc, dieIptal, dieOku } from './dis-islem-emri.ts';
 import { hataliKaydet, hataliKayitlari } from './hatali-parca.ts';
 import { hazirlik, hazirliklar, muafiyetVer } from './hazirlik.ts';
+import { hazirlikMatrisi } from './hazirlik-matrisi.ts';
 import { emirKapat, kapanis, kapanisGeriAc, kapanislar, kapanisMuafTut, kapanisOnayla, kapanisReddet } from './kapanis.ts';
 import {
   adimNotuYaz, adimTamamla, anaSayfaOzeti, asimlar, durusDagilimi, emirAyar, emirAyrintisi, emirDuraklat, katil, katilimAyril, katilimDuraklat, katilimlar, makineDevral, sonOlaylar, adimPaylari, makineEkle,
@@ -29,6 +30,8 @@ const ADIMLI_OKUMA = { biri: ADIMLI_OKUMA_ISLEMLERI } as const;
 const ADIMLI_OZET_OKUMA = { biri: [...ADIMLI_OKUMA_ISLEMLERI, 'plan.oku'] } as const;
 // Katılımları ve emrin ayrıntısını terminaldeki kişi de listeyi okuyan da görür.
 const KATILIM_OKUMA = { biri: [...ADIMLI_OKUMA_ISLEMLERI, 'terminal.uret'] } as const;
+// Hazırlık matrisini operatör de görür (2748-2 a); dar uçtur, emir listesi ve ayrıntısı ADIMLI_OKUMA'da kalır.
+const HAZIRLIK_MATRISI_OKUMA = { biri: [...ADIMLI_OKUMA_ISLEMLERI, 'terminal.uret'] } as const;
 // Açık emir listesini Stok'un emir seçicisi ve Fabrika Haritası da okur; terminal listeyi kullanmaz, emirle işi olmayan rol okumaz.
 const LISTE_OKUMA = { biri: [...ADIMLI_OKUMA_ISLEMLERI, 'sayfa.stok', 'sayfa.atolye'] } as const;
 
@@ -218,6 +221,15 @@ const adimliUclar = [
     sorgu: hazirlikOzetiSorgusu,
     cevap: hazirlikOzetiCevabi,
     isle: async ({ db, sorgu }) => ({ emirler: [...(await hazirliklar(db, sorgu.emirler))].map(([emirId, hazirlik]) => ({ emirId, hazirlik })) }),
+  }),
+  // Hazırlık matrisi (2748): operatör de okur (2748-2 a, terminal.uret); yalnız matrisin alanları döner, yazma yoktur.
+  uc({
+    yontem: 'GET',
+    yol: '/adimli-emirler/hazirlik-matrisi',
+    yetki: HAZIRLIK_MATRISI_OKUMA,
+    sorgu: hazirlikMatrisiSorgusu,
+    cevap: hazirlikMatrisiCevabi,
+    isle: ({ db, sorgu }) => hazirlikMatrisi(db, sorgu.emirler ?? null),
   }),
   uc({
     yontem: 'GET',

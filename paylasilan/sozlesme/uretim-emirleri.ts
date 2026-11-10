@@ -1017,3 +1017,53 @@ export const arsiveAlCevabi = adimliEmirCevabi;
 export type ArsivOnizlemeCevabi = z.output<typeof arsivOnizlemeCevabi>;
 export type ArsiveAlGovdesi = z.input<typeof arsiveAlGovdesi>;
 export type ArsiveAlCevabi = z.output<typeof arsiveAlCevabi>;
+
+// 2748: iş emri başına üretim ilerlemesi. Hazırlık matrisi ve terminalin Rota sekmesi (2746) aynı hesabı okur (isEmriIlerlemeleri).
+// hedef: emir adedi çarpı adımın çarpanı (dal adımında bir mamul için o daldan kaç parça). saglam: biten adımda kapanış değeri, açık adımda
+// sayaç. kalan: hedefe kalan sağlam, en az 0; hurda kalanı düşürmez, yerine yeni parça gerekir. hazir: adıma girmiş, henüz işlenmemiş adet
+// (adıma giren eksi adımın tükettiği; öncülü olmayan ya da bağımsız adımda giren hedeftir); öncül fazla saydıysa eksi olabilir (647 a).
+// Birden çok öncülde giren en az gelendir, çarpanla bu adımın birimine çevrilir (1248 a, 1257 a). fasonda: firmaya gidip dönmeyen adet.
+export const isEmriIlerlemesi = z.object({
+  isEmriId: KIMLIK,
+  emirId: KIMLIK,
+  opNo: z.number().int(),
+  sira: z.number().int(),
+  ad: z.string(),
+  istasyonId: KIMLIK.nullable(),
+  durum: isEmriDurumu,
+  fason: z.boolean(),
+  hedef: z.number().int().nonnegative(),
+  saglam: z.number().int().nonnegative(),
+  hurda: z.number().int().nonnegative(),
+  kararBekliyor: z.number().int().nonnegative(),
+  kalan: z.number().int().nonnegative(),
+  hazir: z.number().int(),
+  fasonda: z.number().int().nonnegative(),
+  devirAdedi: z.number().int().nullable(),
+});
+
+// Hazırlık matrisi (2748): açık emirlerin (taslak, planlı, başladı) hazırlığı ve iş emri ilerlemesi tek okumada. Operatör de okur
+// (2748-2 a): yalnız bu sayfanın alanları döner. `emirler` verilirse yalnız o emirler (terminaldeki tek emir çipi).
+// Operatör de okuduğu için muafiyetin kişisi ve gerekçesi gitmez (Güvenlik 2748 K-kod-1); muaf hâli madde durumunda kalır.
+export const matrisHazirligi = z.object({
+  maddeler: z.array(z.object({ madde: hazirlikMaddesi, durum: hazirlikHaliSemasi, muafTutulur: z.boolean(), isEmriDuzeyi: z.boolean() }).strict()),
+  isEmirleri: z.array(z.object({
+    isEmriId: KIMLIK, opNo: z.number().int(), ad: z.string(), bitti: z.boolean(),
+    maddeler: z.array(z.object({ madde: hazirlikMaddesi, durum: hazirlikHaliSemasi }).strict()),
+  }).strict()),
+}).strict();
+export const hazirlikMatrisiSorgusu = z.object({ emirler: hazirlikOzetiSorgusu.shape.emirler.optional() });
+export const hazirlikMatrisiCevabi = z.object({
+  emirler: z.array(z.object({
+    id: KIMLIK,
+    emirNo: z.string(),
+    urun: z.object({ id: KIMLIK.nullable(), kod: z.string(), ad: z.string() }).strict(),
+    adet: z.number().int().positive(),
+    teslim: tarihSemasi.nullable(),
+    durum: emirDurumu,
+    isEmirleri: z.array(isEmriIlerlemesi.extend({ istasyon: z.string().nullable() }).strict()),
+    hazirlik: matrisHazirligi.nullable(),
+  }).strict()),
+}).strict();
+export type IsEmriIlerlemesi = z.output<typeof isEmriIlerlemesi>;
+export type HazirlikMatrisiCevabi = z.output<typeof hazirlikMatrisiCevabi>;
