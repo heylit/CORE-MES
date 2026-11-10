@@ -1,4 +1,4 @@
-import { Suspense, useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { Navigate, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import type { PlanlamaYazGovdesi } from '#paylasilan/sozlesme/planlama.ts';
 import type { YazCevabi } from '#paylasilan/sozlesme/recete-rota.ts';
@@ -56,9 +56,15 @@ function PlanlamaEkrani() {
     );
   }, [tazele, bildir]);
   // Yazıcı açılıştaki çalışma ve sürümle kurulur; yazma yetkisi ya da çalışma kaydı yoksa ekran salt okunur (komut null).
+  // Yeniden okumada geri alma geçmişi önceki yazıcıdan taşınır (aynı kişi); çatışmayla duran yazıcının geçmişi taşınmaz: başkasının
+  // yazdığının üstüne geri alma yazılmasın.
+  const oncekiYazici = useRef<{ yazici: CalismaYazici; kisi: unknown } | null>(null);
   const yazici = useMemo(() => {
     if (durum.tur !== 'hazir' || yetki === null || !yetki.calismaYazabilir || durum.depo.calisma === null || !kullanici) return null;
-    return new CalismaYazici({
+    const onceki = oncekiYazici.current;
+    const gecmis = onceki && onceki.kisi === kullanici.id && !onceki.yazici.durdu ? onceki.yazici.gecmis() : undefined;
+    const y = new CalismaYazici({
+      ...(gecmis ? { gecmis } : {}),
       calisma: durum.depo.calisma, surum: durum.depo.calismaSurumu, kim: kullanici.ad,
       sayfa: () => GORUNUM_KAYITLARI.find((k) => k.anahtar === sonGorunum.deger)?.baslik ?? '',
       yaz: (g: PlanlamaYazGovdesi) => api.post<YazCevabi>('/plan/planlama-kayitlari/yaz', g),
@@ -66,6 +72,8 @@ function PlanlamaEkrani() {
       catismadaYenile: tazele,
       bildir: (ileti, geriAl) => { bildir('tamam', ileti, geriAl ? { eylem: { etiket: 'Geri al', yap: geriAl } } : undefined); },
     });
+    oncekiYazici.current = { yazici: y, kisi: kullanici.id };
+    return y;
     // Yazıcı yalnız açılış okumasıyla yeniden kurulur; bildir ve kullanıcı nesnesi çizimler arasında değişebilir.
   }, [durum, yetki]);
   sonGorunum.deger = gorunum;

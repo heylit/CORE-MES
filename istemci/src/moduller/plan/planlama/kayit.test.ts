@@ -360,4 +360,48 @@ describe('bekleyen değişiklikler (755 a)', () => {
     await vi.advanceTimersByTimeAsync(2000);
     expect(yazmalar.at(-1)?.kararlar).toBeUndefined();
   });
+
+  it('2791: yeniden okumada geri alma geçmişi yeni yazıcıya taşınır; geri alma okunan çalışmanın üstüne yazar', () => {
+    const { y: a } = kur();
+    a.degistir('Ağırlık değişti', (t) => { t.w.sure = 5; });
+    const okunan = structuredClone(a.calisma);
+    const { y: b } = kur({ calisma: okunan, surum: 9, gecmis: a.gecmis() });
+    expect(b.geriAlinabilir()).toBe(true);
+    expect(b.geriAdimlari().map((g) => g.ne)).toEqual(['Ağırlık değişti']);
+    expect(b.geriAl()).toBe(true);
+    expect(b.calisma.w.sure).toBe(calisma().w.sure);
+  });
+
+  it('2791: sunucu komutu (iş taşı) yeniden okumada geri alma adımı olur; geri alma komuttan önceki kilitleri ve bekleyeni yazar', async () => {
+    const { y: a } = kur();
+    a.degistir('Ağırlık değişti', (t) => { t.w.sure = 5; });
+    a.komutBasladi('İş taşındı');
+    // Sunucunun yazdığı: kilit, bekleyen satırı, veri sürümü ve iz.
+    const okunan = structuredClone(a.calisma) as PlanlamaCalismasi & Record<string, unknown>;
+    okunan.locks = { 'S1.a3': { m: 'M1', S: 12 } };
+    okunan.bekleyen = [{ id: 'k1', ne: 'İş saati kaydırıldı', ayrinti: 'S1.a3 → M1', kim: 'Deneme Planlamaci', t: 2, isler: ['S1'], geri: [] }];
+    okunan.dataVer = a.calisma.dataVer + 1;
+    const { y: b, yazmalar } = kur({ calisma: okunan as PlanlamaCalismasi, surum: 9, gecmis: a.gecmis() });
+    expect(b.geriAdimlari().map((g) => g.ne)).toEqual(['İş taşındı', 'Ağırlık değişti']);
+    expect(b.geriAl()).toBe(true);
+    expect(b.calisma.locks).toEqual({});
+    expect(bekleyenler(b.calisma)).toEqual(bekleyenler(a.calisma));
+    expect(b.calisma.w.sure).toBe(5);
+    expect(b.calisma.dataVer).toBeGreaterThan(okunan.dataVer as number);
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(yazmalar[0]).toMatchObject({ beklenenSurum: 9 });
+    expect((yazmalar[0]?.deger as PlanlamaCalismasi).locks).toEqual({});
+    // İkinci geri alma komuttan önceki değişikliği de geri alır.
+    expect(b.geriAl()).toBe(true);
+    expect(b.calisma.w.sure).toBe(calisma().w.sure);
+  });
+
+  it('2791: düşen ya da çalışmayı değiştirmeyen komut geri alma adımı bırakmaz', () => {
+    const { y: a } = kur();
+    a.komutBasladi('İş taşındı');
+    a.komutDustu();
+    expect(kur({ calisma: structuredClone(a.calisma), gecmis: a.gecmis() }).y.geriAlinabilir()).toBe(false);
+    a.komutBasladi('İş taşındı');
+    expect(kur({ calisma: structuredClone(a.calisma), gecmis: a.gecmis() }).y.geriAlinabilir()).toBe(false);
+  });
 });

@@ -72,7 +72,7 @@ function Iskelet(oz: Omit<PlanlamaEkranOzellikleri, 'olcek' | 'olcekSec' | 'kayd
 }
 const komutKur = (c: PlanlamaCalismasi) => {
   const yazilan: PlanlamaCalismasi[] = [];
-  const komut = { degistir: vi.fn((_ne: string, fn: (t: PlanlamaCalismasi) => void) => { const t = structuredClone(c); fn(t); yazilan.push(t); return true; }), geriAl: vi.fn(), geriAlinabilir: () => false, geriAdimlari: () => [], geriDon: vi.fn(), kaydet: vi.fn(async () => 8) } as unknown as CalismaKomutu;
+  const komut = { degistir: vi.fn((_ne: string, fn: (t: PlanlamaCalismasi) => void) => { const t = structuredClone(c); fn(t); yazilan.push(t); return true; }), geriAl: vi.fn(), geriAlinabilir: () => false, geriAdimlari: () => [], geriDon: vi.fn(), kaydet: vi.fn(async () => 8), komutBasladi: vi.fn(), komutDustu: vi.fn() } as unknown as CalismaKomutu;
   return { komut, yazilan };
 };
 const kart = () => screen.getByRole('dialog');
@@ -503,12 +503,16 @@ describe('PlanlamaAtolyesi', () => {
 
   it('taşı (1981 b, 1982 a): iş kartındaki saat ve tezgâh düğmeleri sunucu komutudur; çalışma önce kaydedilir, cevaptan sonra sayfa yenilenir', async () => {
     const post = vi.spyOn(api, 'post').mockResolvedValue({ calismaSurumu: 9, oncekiSurum: 8 });
-    const { yenile } = ac();
+    const c = ornekCalisma(); const { komut } = komutKur(c);
+    const { yenile } = ac({ c, komut });
     fireEvent.click(document.querySelector('[data-id="2.40"]') as HTMLElement);
     expect(within(kart()).getByRole('button', { name: '5', pressed: true })).toBeTruthy();
     fireEvent.click(within(kart()).getByRole('button', { name: '+1 sa' }));
     await waitFor(() => expect(post).toHaveBeenCalledWith('/plan/planlama-calismasi/is-tasi', { isId: '2.40', tezgah: '5', baslangic: 209, calismaSurumu: 8 }, expect.anything()));
     await waitFor(() => expect(yenile).toHaveBeenCalledTimes(1));
+    // 2791: komut geri alma geçmişine girer (sayfa yeniden okununca adım olur); düşmediği için komutDustu çağrılmaz.
+    expect(komut.komutBasladi).toHaveBeenCalledWith('İş taşındı');
+    expect(komut.komutDustu).not.toHaveBeenCalled();
     post.mockRestore();
   });
 

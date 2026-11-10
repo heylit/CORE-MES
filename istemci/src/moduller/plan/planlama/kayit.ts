@@ -33,6 +33,13 @@ const GERI_ALANLAR = ['D', 'down', 'ekMesai', 'locks', 'pref', 'w', 'param', 'ka
 const GERI_DISI = new Set<string>([...GERI_ALANLAR, 'dataVer', 'plan', 'iz']);
 type GeriKopyasi = Record<string, unknown> & { dataVer: number };
 interface GeriAdimi { ne: string; t: number; kopya: GeriKopyasi }
+// Sayfa yeniden okunduğunda yazıcı yeniden kurulur; geri alma geçmişi yeni yazıcıya taşınır. Sunucu komutu (iş taşı, olay, ek mesai)
+// çalışmayı sunucuda değiştirir: komuttan önceki çalışma burada tutulur, yeniden okunan çalışmayla farkı geri alma adımı olur.
+export interface YaziciGecmisi {
+  readonly geri: readonly GeriAdimi[];
+  readonly ileri: readonly GeriAdimi[];
+  readonly komut: { ne: string; t: number; once: PlanlamaCalismasi } | null;
+}
 
 export interface DegisiklikSecenegi {
   ayrinti?: string;
@@ -63,6 +70,9 @@ export interface CalismaKomutu {
   bekleyeniReddet?: (idler: readonly string[], gerekce: string) => string | null;
   // Uygulanan bekleyen değişiklikleri sonraki yazmayla değişiklik defterine bildirir (2129-2 b).
   uygulananlariBildir?: (idler: readonly string[]) => void;
+  // Sunucu komutu başlarken çağrılır; sayfa yeniden okununca komut geri alma adımı olur. Komut düşerse komutDustu.
+  komutBasladi?: (ne: string) => void;
+  komutDustu?: () => void;
 }
 
 export interface YaziciAyari {
@@ -82,6 +92,8 @@ export interface YaziciAyari {
   azamiBayt?: number;
   // İz satırının zamanı. Sunucunun kendi defteri (kayıt sürümü, yazan) ayrıdır; bu yalnız sayfanın gösterdiği izdir.
   simdi?: () => number;
+  // Önceki yazıcının geri alma geçmişi (aynı kişi, yeniden okunan çalışma).
+  gecmis?: YaziciGecmisi;
 }
 
 const kopya = <T>(v: T): T => structuredClone(v);
@@ -89,7 +101,7 @@ const kopya = <T>(v: T): T => structuredClone(v);
 const anlik = (t: Record<string, unknown>, x: GeriKopyasi): GeriKopyasi => kopya(Object.fromEntries(Object.keys(x).map((k) => [k, t[k]]))) as GeriKopyasi;
 
 export class CalismaYazici implements CalismaKomutu {
-  readonly #a: Required<YaziciAyari>;
+  readonly #a: Required<Omit<YaziciAyari, 'gecmis'>>;
   #calisma: PlanlamaCalismasi;
   #surum: number | null;
   readonly #geri = new GeriAlYigini<GeriAdimi>(VERI_GERI_ALMA);
@@ -107,12 +119,35 @@ export class CalismaYazici implements CalismaKomutu {
   #buyukUyarildi = false;
   // Çalışmadan düşen bekleyenlerin kararı; yazmayla gider, sunucu deftere yazar. Çakışmada değişiklikle birlikte düşer.
   #kararlar: BekleyenKarari[] = [];
+  #komut: YaziciGecmisi['komut'] = null;
 
   constructor(ayar: YaziciAyari) {
-    this.#a = { beklemeMs: BEKLEME_MS, azamiBayt: AZAMI_BAYT, simdi: () => Date.now(), bildir: () => {}, catismadaYenile: () => {}, ...ayar };
+    const { gecmis, ...a } = ayar;
+    this.#a = { beklemeMs: BEKLEME_MS, azamiBayt: AZAMI_BAYT, simdi: () => Date.now(), bildir: () => {}, catismadaYenile: () => {}, ...a };
     this.#yenileVar = ayar.catismadaYenile !== undefined;
     this.#calisma = ayar.calisma;
     this.#surum = ayar.surum;
+    if (gecmis) {
+      for (const g of gecmis.geri) this.#geri.koy(g);
+      for (const g of gecmis.ileri) this.#ileri.koy(g);
+      if (gecmis.komut) this.#komutAdimi(gecmis.komut);
+    }
+  }
+
+  gecmis = (): YaziciGecmisi => ({ geri: [...this.#geri.liste()], ileri: [...this.#ileri.liste()], komut: this.#komut });
+  komutBasladi = (ne: string): void => { this.#komut = { ne, t: this.#a.simdi(), once: this.#calisma }; };
+  komutDustu = (): void => { this.#komut = null; };
+
+  // Komuttan önceki çalışma ile yeniden okunan çalışmanın farkı: geri alma onu komuttan önceki hâle yazar (her zamanki sürüm denetimli
+  // yazmayla). Komut çalışmayı değiştirmediyse adım olmaz.
+  #komutAdimi(k: NonNullable<YaziciGecmisi['komut']>): void {
+    const o = k.once as Record<string, unknown>, y = this.#calisma as Record<string, unknown>;
+    const degisen = [...new Set([...Object.keys(o), ...Object.keys(y)])]
+      .filter((x) => x !== 'dataVer' && x !== 'iz' && x !== 'plan' && JSON.stringify(o[x]) !== JSON.stringify(y[x]));
+    if (degisen.length === 0) return;
+    const ek = degisen.filter((x) => !GERI_DISI.has(x));
+    this.#ileri.bosalt();
+    this.#geri.koy({ ne: k.ne, t: k.t, kopya: kopya(Object.fromEntries([...GERI_ALANLAR, 'dataVer', ...ek].map((x) => [x, o[x]]))) as GeriKopyasi });
   }
 
   get calisma(): PlanlamaCalismasi { return this.#calisma; }
