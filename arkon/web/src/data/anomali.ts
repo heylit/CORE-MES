@@ -127,7 +127,7 @@ export function kapaliZamanKurallari(e: AnomaliOlaylari['esikler']): string[] {
 /* Eksik iş (kart 2421 c): plandan bağımsız olarak yapılmayan, girilmeyen ya da geciken iş (GET /arkon/eksik-isler, terminal için
    /arkon/eksik-islerim). Değerin birimi türündedir: plan gerisi net dakika, kayıtsız gün iş günü, yarım ve plansız iş ile bayat plan vardiya saati,
    geciken emir gün. Eşik boşsa o kural kapalıdır. */
-export type EksikIsTuru = 'plan-gerisi' | 'kayitsiz-gun' | 'yarim-is' | 'plansiz-is' | 'geciken-emir' | 'bayat-plan';
+export type EksikIsTuru = 'plan-gerisi' | 'kayitsiz-gun' | 'yarim-is' | 'plansiz-is' | 'geciken-emir' | 'bayat-plan' | 'geride-onceki';
 export interface EksikIs {
   id: number; tur: EksikIsTuru; konu: 'is_emri' | 'istasyon' | 'uretim_emri' | 'plan'; isEmriId: number | null; uretimEmriId: number | null;
   emirNo: string | null; opNo: number | null; istasyon: { id: number; ad: string } | null; kaynak: { tur: 'makine' | 'kisi'; id: number; ad: string | null } | null;
@@ -143,14 +143,19 @@ export interface EksikIslerim { hesaplama: string; olaylar: EksikIs[] }
 
 export const EKSIK_IS_ETIKETI: Record<EksikIsTuru, string> = {
   'plan-gerisi': 'Plan gerisi', 'kayitsiz-gun': 'Kayıtsız gün', 'yarim-is': 'Yarım kaldı', 'plansiz-is': 'Plana girmedi', 'geciken-emir': 'Geciken emir', 'bayat-plan': 'Plan bayat',
+  'geride-onceki': 'Önceki adımın sayımı geride',
 };
 
 /** Olayın değeri birimiyle: plan gerisi süre, kayıtsız gün "3 iş günü", saatler süre, geciken emir "2 gün". */
-export function eksikDegerMetni(o: Pick<EksikIs, 'tur' | 'deger' | 'planaGore'>): string {
+export function eksikDegerMetni(o: Pick<EksikIs, 'tur' | 'deger' | 'planaGore'> & { kalanAdet?: number | null }): string {
   if (o.tur === 'plan-gerisi') return sureMetni(o.deger);
   if (o.tur === 'kayitsiz-gun') return o.deger + ' iş günü';
   if (o.tur === 'geciken-emir') return o.deger + ' gün' + (o.planaGore ? ' (plana göre)' : '');
   if (o.tur === 'bayat-plan' && o.deger === 0) return 'hiç canlıya alınmadı';
+  if (o.tur === 'geride-onceki') {
+    const parcalar = [o.deger > 0 ? o.deger + ' adet sayılmadı' : null, o.kalanAdet ? 'devir için ' + o.kalanAdet + ' eksik' : null].filter((x) => x !== null);
+    return parcalar.length === 0 ? 'önceki adım bitmedi' : parcalar.join(', ');
+  }
   return sureMetni(o.deger * 60);
 }
 

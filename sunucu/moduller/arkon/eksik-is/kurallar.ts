@@ -114,3 +114,18 @@ export function eksikEylemi(acik: boolean, h: EksikHukum | null): EksikEylem {
   if (h === null) return acik ? { tur: 'kapat' } : { tur: 'yok' };
   return acik ? { tur: 'guncelle', h } : { tur: 'ac', h };
 }
+
+// AR-EK-8 (2769, 2756 b), sayımı geride kalan önceki adım: adım önceki adımı bitmeden ya da devir adedi gelmeden başlatılmış (sıra dışı
+// başlatma kaydı) ve önceki adımın sayımı hâlâ geride. Değer, bu adıma girenin (sağlam + hurda) önceki adımdan gelenden fazlasıdır (önceki
+// adımda sayılmamış parça). Akışlı öncülde devir adedine eksik ayrı tutulur (kalan adet): o parçalar henüz üretilmemiş olabilir, sayım
+// eksiği sayılmaz. Bekleyen öncül bitmemişse fark sıfır olsa da olay açık kalır. Önceki adım yetişince kapanır.
+export function gerideOnceki(g: {
+  acik: boolean; oncul: { tur: 'bekleyen' | 'akisli'; bitti: boolean; devirAdedi: number | null; gelen: number }; girdi: number; kayit: number;
+}): EksikHukum | null {
+  if (!g.acik) return null;
+  const o = g.oncul;
+  const sayilmayan = Math.max(g.girdi - o.gelen, 0);
+  const devirEksigi = o.tur === 'akisli' ? Math.max((o.devirAdedi ?? 0) - o.gelen, 0) : null;
+  if (o.tur === 'bekleyen' ? o.bitti && sayilmayan === 0 : sayilmayan === 0 && devirEksigi === 0) return null;
+  return { ...hukum(sayilmayan, g.kayit), kalanAdet: devirEksigi };
+}

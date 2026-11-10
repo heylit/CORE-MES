@@ -20,17 +20,17 @@ import {
   adimlardanGorunum, isEmriSureOzeti as sureOzetiHesapla, kayitAniIhlali, sayimIhlali, sayimYetkiIhlali, siradakiIsEmri, toplamAsimiIhlali,
   ilkAyrim, kararAnlari, MAKINE_AYRIM_UFKU_DK, makineAyrildiMetni,
   ADIM_ACIK_DEGIL, ADIM_BASLAMIS, ADIM_SECILMELI, KATILIM_TEK_ACIK_IS_EMIRSIZ, adimEksigi, adimEksikleri, adimTuketimi, baslatilabilirAdimlar, eksiyleBitirmeUyarisi, kararBekleyenBitisIhlali,
-  emirEksiUyarisi, adimOnculleri, oncekiBitmediIhlali, oncekiParalelAdim, sayimAsimiUyarisi, siraDisiBaslatmalar, siraDisiBaslatmaUyarisi, uyarilariBirlestir, varsayilanAdim,
+  emirEksiUyarisi, adimOnculleri, oncekiBitmediIhlali, oncekiParalelAdim, sayimAsimiUyarisi, onculdenGelen, siraDisiBaslatmalar, siraDisiBaslatmaUyarisi, uyarilariBirlestir, varsayilanAdim,
   KAPANIS_KILITLI, kapanisSonucu, ISTASYONSUZ_KISI, baslatanIstasyonuGerekirMi, kisininIstasyonu, emirIlerlemesi,
   MAKINE_ZATEN_ADIMDA, PAYI_YOK_MAKINE, payIlerlemesi, payiVarMi, sayimMakinesi,
 } from './kurallar.ts';
-import type { IstasyonDurumu, MakineAyrimi, PlanPayi } from './kurallar.ts';
+import type { IstasyonDurumu, MakineAyrimi, OnculTuru, PlanPayi } from './kurallar.ts';
 import { adimaGiren, birlesmeAdimiBiterMi, dalBasiAdedi, kolAdimiBaslarMi, kolSonuysaKatil, ustuOnceKilitle } from './is-emri-servis.ts';
 import { hurdaSayimiBildir, kaliteKarariBildir, saglamSayimiBildir } from './sayim-olayi.ts';
 import { baslatmaDenetimi } from './baslatma-denetimi.ts';
 import { adimBittiBildir, emirBittiBildir, hazirlikTamamlandiBildir } from './emir-olaylari.ts';
 import * as sorgular from './sorgular.ts';
-import { siraDisiBaslatmaEkle } from './sorgular/sira-disi/sorgular.ts';
+import { siraDisiBaslatmaEkle, siraDisiBaslatmalarGetir } from './sorgular/sira-disi/sorgular.ts';
 import type { AdimDurumSatiri, AdimSatiri, EmirSatiri, IsEmriSatiri, KararGrubu, KayitSatiri } from './sorgular.ts';
 
 interface Adlar {
@@ -1217,4 +1217,29 @@ export async function makineEkle(db: Db, kisiId: number, id: number, isEmriId: n
   await yeriDenetle(db, id, yer, adim!.id);
   await yeriTut(db, id, adim!.id, yer, kisiId, await komutAni(db, id));
   return emirdenCevap(db, id);
+}
+
+// 2769 (AR-EK-8): sıra dışı başlamış adımların öncülü bugün nerede. gelen: öncülün sayılan sağlamından bu adıma düşen (çarpanlı), girdi: bu
+// adımın sağlamı + hurdası. Kaydı olmayan adım listede yoktur; adımı ya da öncülü silinmiş kayıt atlanır.
+export interface GeridekiOncul {
+  uretimEmriId: number; isEmriId: number; onculIsEmriId: number; onculOpNo: number; tur: OnculTuru; devirAdedi: number | null;
+  onculBitti: boolean; gelen: number; girdi: number; kayit: string;
+}
+export async function geridekiOnculler(db: Db, isEmriIdleri: readonly number[]): Promise<GeridekiOncul[]> {
+  const kayitlar = await siraDisiBaslatmalarGetir(db, isEmriIdleri);
+  if (kayitlar.length === 0) return [];
+  const hepsi = await sorgular.isEmirleriGetir(db, [...new Set(kayitlar.map((k) => k.uretimEmriId))]);
+  const adimById = new Map(hepsi.map((i) => [i.id, i]));
+  const sayac = new Map((await sorgular.adimSayaclariGetir(db, [...new Set(kayitlar.flatMap((k) => [k.isEmriId, k.onculIsEmriId]))])).map((x) => [x.isEmriId, x]));
+  return kayitlar.flatMap((k) => {
+    const adim = adimById.get(k.isEmriId);
+    const oncul = adimById.get(k.onculIsEmriId);
+    if (adim === undefined || oncul === undefined) return [];
+    const sayilan = oncul.durum === 'tamam' ? (oncul.saglamAdet ?? 0) : (sayac.get(oncul.id)?.saglam ?? 0);
+    const s = sayac.get(adim.id);
+    return [{
+      uretimEmriId: k.uretimEmriId, isEmriId: k.isEmriId, onculIsEmriId: k.onculIsEmriId, onculOpNo: oncul.opNo, tur: k.onculTuru, devirAdedi: k.devirAdedi,
+      onculBitti: oncul.durum === 'tamam', gelen: onculdenGelen(sayilan, oncul, adim), girdi: (s?.saglam ?? 0) + (s?.hurda ?? 0), kayit: k.zaman,
+    }];
+  });
 }

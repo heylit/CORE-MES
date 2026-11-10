@@ -15,7 +15,7 @@ import { denetimYaz } from '../denetim/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { kullaniciYukle, rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
-import { acikEmir, emirBaslat, emirBitir, emirDevam, emirDilimi, emirDuraklat, emirSayim, katil, kararliSayimiSonuclandir, uretimEmriAc } from './disari.ts';
+import { acikEmir, emirBaslat, emirBitir, emirDevam, emirDilimi, emirDuraklat, emirSayim, geridekiOnculler, katil, kararliSayimiSonuclandir, uretimEmriAc } from './disari.ts';
 import type { IsEmriGirdisi } from './disari.ts';
 import { ADIM_ACIK_DEGIL, ADIM_BASLAMIS, ADIM_SECILMELI, IS_EMRI_YOK, MAKINE_DOLU } from './kurallar.ts';
 
@@ -199,6 +199,10 @@ describe('uretim-emirleri paralel adım (kart 639, gerçek PostgreSQL)', () => {
     await tx((db) => emirDuraklat(db, op(), id, undefined, ie2));
     await tx((db) => emirDevam(db, op(), id, undefined, undefined, ie2));
     assert.deepEqual(await siraDisiKayitlari(id), beklenen, 'duraklamadan dönüş ilk başlatma değildir');
+    const geride = async () => (await tx((db) => geridekiOnculler(db, [ie1, ie2]))).map((g) => [g.isEmriId, g.onculIsEmriId, g.tur, g.devirAdedi, g.onculBitti, g.gelen, g.girdi]);
+    assert.deepEqual(await geride(), [[ie2, ie1, 'akisli', 2, false, 1, 0]], '2769: arkon eksik işi öncülün güncel sayımını okur');
+    await sayim(id, 1, ie1);
+    assert.deepEqual(await geride(), [[ie2, ie1, 'akisli', 2, false, 2, 0]], 'sayım yetişince gelen artar; iz kalır, olayı arkon kapatır');
     const c = await makineliIstasyon();
     const d = await makineliIstasyon();
     const tam = await ac([adim(1, c.makine), adim(2, d.makine, { bagimlilik: 'akisli', devirAdedi: 1 })]) as { id: number; adimlar: [number, number] };

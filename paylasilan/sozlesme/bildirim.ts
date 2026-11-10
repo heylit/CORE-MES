@@ -136,6 +136,9 @@ export const BILDIRIM_TURLERI = {
   'arkon.geciken-emir': {
     baslik: 'Emir teslim tarihini kaçırıyor', onem: 'acil', sinif: 'hatirlatma', alanIslemler: ['arkon.planlama', 'arkon.yonetici'], yol: '/arkon/anomali', varsayilan: { mesaj: false, eposta: false },
   },
+  'arkon.geride-onceki': {
+    baslik: 'Önceki adımın sayımı geride', onem: 'uyari', sinif: 'hatirlatma', alanIslemler: ['arkon.amir', 'arkon.hazirlik'], yol: '/arkon/anomali', varsayilan: { mesaj: false, eposta: false },
+  },
   'arkon.bayat-plan': {
     baslik: 'Plan bayat: canlıya alınmadı', onem: 'bilgi', sinif: 'hatirlatma', alanIslemler: ['arkon.planlama'], yol: '/arkon/anomali', varsayilan: { mesaj: false, eposta: false },
   },

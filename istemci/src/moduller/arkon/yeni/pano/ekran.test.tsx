@@ -285,7 +285,7 @@ describe('A3 sayfaları', () => {
     const eksik = {
       hesaplama: '2026-11-09T09:00:00.000Z',
       esikler: { planGerisiDk: 60, kayitsizGun: 1, yarimIsSaat: 24, plansizIsSaat: 24, gecikenEmirGun: 0, bayatPlanSaat: null },
-      ozet: { 'plan-gerisi': 1, 'kayitsiz-gun': 0, 'yarim-is': 0, 'plansiz-is': 0, 'geciken-emir': 1, 'bayat-plan': 0 },
+      ozet: { 'plan-gerisi': 1, 'kayitsiz-gun': 0, 'yarim-is': 0, 'plansiz-is': 0, 'geciken-emir': 1, 'bayat-plan': 0, 'geride-onceki': 0 },
       olaylar: [
         {
           id: 1, tur: 'plan-gerisi', konu: 'is_emri', isEmriId: 5, uretimEmriId: 4, emirNo: 'E-1', opNo: 10, istasyon: { id: 2, ad: 'Torna' }, kaynak: { tur: 'makine', id: 3, ad: 'Tezgah' },

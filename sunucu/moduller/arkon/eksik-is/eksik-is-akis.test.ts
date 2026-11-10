@@ -39,9 +39,10 @@ describe('arkon eksik iş olayları (gerçek PostgreSQL)', () => {
   let simdi = 0;
   let istasyonId = 0;
   let makineId = 0;
-  let geride = { emirId: 0, adim: 0 };
-  let plansiz = { emirId: 0, adim: 0 };
-  let yarim = { emirId: 0, adim: 0 };
+  type Emir = { emirId: number; adim: number; ikinci: number | null };
+  let geride: Emir = { emirId: 0, adim: 0, ikinci: null };
+  let plansiz: Emir = { emirId: 0, adim: 0, ikinci: null };
+  let yarim: Emir = { emirId: 0, adim: 0, ikinci: null };
 
   const o = (): TestVeritabani => { if (!ortam) throw new Error('Test veritabanı açılamadı (TMIV2_PG_* ayarları).'); return ortam; };
   const anMetni = (t: number): string => new Date(t).toISOString();
@@ -71,10 +72,10 @@ describe('arkon eksik iş olayları (gerçek PostgreSQL)', () => {
     });
     return { cerez: await girisCerezi(kullaniciAdi), id };
   }
-  const ayarYaz = (anahtar: string, deger: number | null) => istek(yonetici, 'POST', `/ayarlar/${anahtar}/degistir`, { deger });
+  const ayarYaz = (anahtar: string, deger: number | boolean | null) => istek(yonetici, 'POST', `/ayarlar/${anahtar}/degistir`, { deger });
 
-  // Rotalı tek adımlı emir; `acilma` saat önce açılmış.
-  async function emirKur(acilmaSaatOnce: number): Promise<{ emirId: number; adim: number }> {
+  // Rotalı emir; `acilma` saat önce açılmış. `akisliDevir` verilirse ikinci adım birinciye akışlı bağlıdır.
+  async function emirKur(acilmaSaatOnce: number, akisliDevir?: number): Promise<{ emirId: number; adim: number; ikinci: number | null }> {
     sayac += 1;
     const tip = (await o().sahip.tek<{ id: number }>('INSERT INTO istasyonlar_operasyon_tipi (kod, ad, grup) VALUES ($1, $2, $3) RETURNING id', [`EK${sayac}`, 'Deneme tipi', 'TAL']))!.id;
     await o().sahip.sorgu("INSERT INTO malzeme_katalog_kod_sirasi (onek, son_sira) VALUES ('EKS-', 0) ON CONFLICT (onek) DO NOTHING");
@@ -90,11 +91,14 @@ describe('arkon eksik iş olayları (gerçek PostgreSQL)', () => {
       isEmirleri: [{
         sira: 1, opNo: 10, ad: 'Adım 1', operasyonTipiId: tip, kaynak: { tur: 'makine' as const, id: makineId }, ayarSuresiDk: '0', birimSureDk: '1',
         terminGun: null, bagimlilik: 'bekleyen' as const, devirAdedi: null, talimatSurumu: null, kontrolListesi: [],
-      }],
+      }, ...(akisliDevir === undefined ? [] : [{
+        sira: 2, opNo: 20, ad: 'Adım 2', operasyonTipiId: tip, kaynak: { tur: 'makine' as const, id: makineId }, ayarSuresiDk: '0', birimSureDk: '1',
+        terminGun: null, bagimlilik: 'akisli' as const, devirAdedi: akisliDevir, talimatSurumu: null, kontrolListesi: [],
+      }])],
     }));
     await o().sahip.sorgu('UPDATE uretim_emri SET acilma = $2::timestamptz WHERE id = $1', [uretimEmriId, anMetni(simdi - acilmaSaatOnce * SAAT)]);
-    const adim = (await o().sahip.tek<{ id: number }>('SELECT id FROM uretim_emirleri_is_emri WHERE uretim_emri_id = $1', [uretimEmriId]))!.id;
-    return { emirId: uretimEmriId, adim };
+    const adimlar = await o().sahip.sorgu<{ id: number }>('SELECT id FROM uretim_emirleri_is_emri WHERE uretim_emri_id = $1 ORDER BY sira', [uretimEmriId]);
+    return { emirId: uretimEmriId, adim: adimlar[0]!.id, ikinci: adimlar[1]?.id ?? null };
   }
   const yerlestir = (isEmriId: number, bas: number, bit: number) => o().sahip.sorgu(
     `INSERT INTO plan_yerlesimi (is_emri_id, makine_id, kisi_id, baslangic, bitis, yazan_kisi_id) VALUES ($1, $2, NULL, $3::timestamptz, $4::timestamptz, $5)
@@ -163,7 +167,7 @@ describe('arkon eksik iş olayları (gerçek PostgreSQL)', () => {
 
     const cevap = await istek<EksikIslerCevabi>(hazirlik, 'GET', '/arkon/eksik-isler');
     assert.equal(eksikIslerCevabi.safeParse(cevap.govde).success, true, JSON.stringify(cevap.govde));
-    assert.deepEqual(cevap.govde.ozet, { 'plan-gerisi': 1, 'kayitsiz-gun': 1, 'yarim-is': 1, 'plansiz-is': 1, 'geciken-emir': 1, 'bayat-plan': 1 });
+    assert.deepEqual(cevap.govde.ozet, { 'plan-gerisi': 1, 'kayitsiz-gun': 1, 'yarim-is': 1, 'plansiz-is': 1, 'geciken-emir': 1, 'bayat-plan': 1, 'geride-onceki': 0 });
     const satir = cevap.govde.olaylar.find((x) => x.tur === 'plan-gerisi')!;
     assert.deepEqual([satir.istasyon?.id, satir.kaynak, satir.opNo, satir.uretimEmriId], [istasyonId, { tur: 'makine', id: makineId, ad: 'Tezgah E' }, 10, geride.emirId]);
   });
@@ -210,5 +214,35 @@ describe('arkon eksik iş olayları (gerçek PostgreSQL)', () => {
     const acikHatirlatma = await o().sahip.tek<{ n: number }>(
       "SELECT count(*)::int AS n FROM bildirim_kaydi WHERE tur = 'arkon.plansiz-is' AND yapildi IS NULL");
     assert.equal(acikHatirlatma?.n, 0);
+  });
+
+  test('AR-EK-8: sıra dışı başlayan adım, önceki adımın sayımı yetişene kadar açıktır; değer sayılmamış en az adettir; ayar kapanınca kapanır', async () => {
+    const e = await emirKur(4, 2);
+    const ikinci = e.ikinci!;
+    const sayim = (isEmriId: number, adet: number) => o().sahip.sorgu(
+      "INSERT INTO uretim_sayimi (emir_id, is_emri_id, kisi_id, istasyon_id, tur, adet, zaman) VALUES ($1, $2, $3, $4, 'saglam', $5, $6::timestamptz)",
+      [e.emirId, isEmriId, yoneticiId, istasyonId, adet, anMetni(simdi - SAAT)]);
+    await yenile();
+    assert.equal(await acik('geride-onceki', ikinci), undefined, 'kayıt yoksa olay yok');
+    await o().sahip.sorgu("UPDATE uretim_emirleri_is_emri SET durum = 'calisiyor', baslama = $2::timestamptz WHERE id = $1", [ikinci, anMetni(simdi - 2 * SAAT)]);
+    await o().sahip.sorgu(
+      `INSERT INTO uretim_emirleri_sira_disi_baslatma (uretim_emri_id, is_emri_id, oncul_is_emri_id, oncul_turu, devir_adedi, hazir_adet, oncul_sayilan, kisi_id, istasyon_id, zaman)
+       VALUES ($1, $2, $3, 'akisli', 2, 0, 0, $4, $5, $6::timestamptz)`,
+      [e.emirId, ikinci, e.adim, yoneticiId, istasyonId, anMetni(simdi - 2 * SAAT)]);
+    await sayim(ikinci, 3);
+    await yenile();
+    assert.deepEqual(await acik('geride-onceki', ikinci).then((r) => [r?.deger, r?.kalanAdet]), [3, 2], 'ikinci adımda 3 sayıldı, önceki adımda 0; devir için 2 eksik');
+    assert.equal(await acik('geride-onceki', e.adim), undefined, 'olay önceki adımda değil, sıra dışı başlayan adımda');
+    await sayim(e.adim, 2);
+    await yenile();
+    assert.deepEqual(await acik('geride-onceki', ikinci).then((r) => [r?.deger, r?.kalanAdet]), [1, 0], 'önceki adım yetiştikçe değer azalır; devir geldi');
+    assert.equal((await ayarYaz('arkon.eksik-geride-onceki', false)).durum, 200);
+    await yenile();
+    assert.equal(await acik('geride-onceki', ikinci), undefined, 'ayar kapalı: olay kapanır');
+    assert.notEqual((await olaylar()).find((r) => r.tur === 'geride-onceki')?.kapanis, null, 'iz kalır');
+    assert.equal((await ayarYaz('arkon.eksik-geride-onceki', true)).durum, 200);
+    await sayim(e.adim, 1);
+    await yenile();
+    assert.equal(await acik('geride-onceki', ikinci), undefined, 'önceki adım yetişti: yeniden açılmaz');
   });
 });

@@ -961,3 +961,14 @@ Bu tur şunları varsaydı:
 3. Bitmiş iş emrinde madde eklenmez ve işaretlenmez; liste okunur.
 4. Kaldırılan madde silinmez, son olayı "kaldır" olur ve listeden çıkar.
 
+
+## Eksik iş: sayımı geride kalan önceki adım (kart 2769; karar 2756 b)
+- Yeni eksik iş türü `geride-onceki`: uretim-emirleri'nin sıra dışı başlatma kaydı (2768) olan açık adım, önceki adımın sayımı yetişene kadar Eksik işler bölümünde ve terminalde görünür. Değer, önceki adımda sayılmamış en az adettir: adımın kendi girdisinin (sağlam + hurda) öncülden gelenden fazlası ("N adet sayılmadı"). Akışlıda devir adedine eksik ayrı tutulur (kalan adet, "devir için N eksik"; Atölye koşulu: o parçalar henüz üretilmemiş olabilir). Bekleyen öncül bitmedikçe olay açıktır ("önceki adım bitmedi"). Ekranda bu türde "adet kaldı" alt metni gösterilmez.
+- Okuma `uretim-emirleri/disari.ts geridekiOnculler` (öncülün güncel sayımı); kural `eksik-is/kurallar.ts gerideOnceki`. Adım başına en büyük (sayılmayan ya da devir eksiği) öncül tek olay olur.
+- Ayar `arkon.eksik-geride-onceki` (açık/kapalı, varsayılan açık); eşiği yoktur, sözleşmedeki `esikler` değişmez. Bildirim türü `arkon.geride-onceki` (amir, hazırlık; hatırlatma).
+- Göç `20261110095409_arkon_eksik_is_geride_onceki.sql`: `arkon_eksik_is_olayi_tur_degeri` kısıtına yeni değer (yalnız genişletir).
+
+Bu tur şunları varsaydı:
+1. Olay ilk sıra dışı başlatmadan beri açıktır (dayanak ilk kayıt); duraklamadan dönüş yeni kayıt yazmaz.
+2. Önceki adım bitince ya da sayım yetişince olay kapanır; sıra dışı kayıt silinmez, yalnız iz olarak kalır.
+3. Ayar kapalıyken açık olaylar kapanır; açılınca koşul sürüyorsa yeniden açılır.
