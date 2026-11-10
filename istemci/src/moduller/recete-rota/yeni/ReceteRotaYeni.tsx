@@ -34,6 +34,8 @@ export const BOLUM_ACIKLAMALARI: Readonly<Record<SekmeAnahtari, string | null>> 
   items: 'Kalemler Malzemeler ve Hizmetler kartlarından okunur; kod, ad, birim ve kategori orada değişir. Stok miktarı salt '
     + 'okunurdur. Birim maliyet Finans\'ta tutulur: rotası olan yarı mamul ve mamullerin malzeme maliyeti adımlara giren malzemelerden toplanır.',
   res: null,
+  planlanabilirlik: 'Plana girmeyen adımın her kontrolü ayrı satırdır: süre, istasyon, makine, yetkin kişi, vardiya, malzeme, ufuk ve önceki adım. '
+    + 'Kırmızı satırdaki düğme düzeltileceği sayfayı açar; önceki adımı bekleyen adımlar o adım düzelince kendiliğinden yerleşir.',
   sartnameler: null,
   kapanis: null,
   ayarlar: 'Operasyona bağlı olmayan statüler (karantina, giriş onaylı, ret gibi) burada tanımlanır; operasyon statüleri rotadan otomatik gelir.',
