@@ -16,6 +16,7 @@ import {
   AYAR_SINIRI, KAT_SINIRI, fasonDurumu, fasonKalemleri, fasonSatirlari, malzemeKalemleri, fasonTerminiYaz, gunYaz, katsayi, kayitliPlan, sayi, sinirliSayi,
   saatYaz, tarihGirdisi, terminAyari, terminIsisi, terminUyarisi, type FasonSatiri, type FasonTerminAyari, type TerminSatiri,
 } from './kurallar.ts';
+import { isAdi, useEmirNo, type EmirNo } from '../ortak/emir-no.ts';
 
 // Terminler: kalem × gün (zz30-isi ISI.terminler), satırın altında sihirbazla dönüş tarihi (zz25-sade-takvim SADE.terminler fason, ortak sade
 // kabuğu), "Tüm satırlar"da varsayılan termin, katsayılar, termin bekleyen malzemeler ve fason dönüş terminleri (zv-termin sTerminler).
@@ -110,11 +111,11 @@ function FasonDonusu({ D, x, komut }: { D: PlanVerisi; x: FasonSatiri; komut: Ca
   );
 }
 
-export function FasonTerminKarti({ c, L, komut, sadeceBos }: { c: PlanlamaCalismasi; L: FasonSatiri[]; komut: CalismaKomutu | null; sadeceBos: boolean }) {
+export function FasonTerminKarti({ c, L, komut, sadeceBos, emirNo = (j) => j }: { c: PlanlamaCalismasi; L: FasonSatiri[]; komut: CalismaKomutu | null; sadeceBos: boolean; emirNo?: EmirNo }) {
   const D = c.D; const A = terminAyari(D);
   const l = sadeceBos ? L.filter((x) => x.T == null) : L;
   const sut: Sutun<FasonSatiri>[] = [
-    { anahtar: 'is', baslik: 'İş', hucre: (x) => <><b className="mono">{x.id}</b><small className="tc-pys-not">{x.s.ad ?? ''} · {sayi(x.adet, 0)} adet</small></> },
+    { anahtar: 'is', baslik: 'İş', hucre: (x) => <><b className="mono">{isAdi(emirNo, x.id, x.r.job)}</b><small className="tc-pys-not">{x.s.ad ?? ''} · {sayi(x.adet, 0)} adet</small></> },
     { anahtar: 'fasoncu', baslik: 'Fasoncu', hucre: (x) => x.f?.ad ?? x.r.m },
     { anahtar: 'durum', baslik: 'Durum', hucre: (x) => { const [d, ton] = fasonDurumu(x); return <Rozet ton={ton}>{d}</Rozet>; } },
     { anahtar: 'cikis', baslik: 'Çıkış', kirilmaz: true, hucre: (x) => tarih(D, x.r.S) },
@@ -165,6 +166,7 @@ export function Terminler({ calisma, komut, yetki, git, depo, yenile }: Planlama
   const p = kayitliPlan(calisma);
   const L = calisma && p ? fasonSatirlari(calisma, p) : [];
   const degerlendir = useGorunumDegerlendiricisi(depo, komut);
+  const emirNo = useEmirNo(depo.receteRotaKaydi);
   const taban = calisma?.D.meta?.baslangic ? tabanMs(calisma.D.meta.baslangic) : null;
 
   const tum = calisma && (
@@ -176,7 +178,7 @@ export function Terminler({ calisma, komut, yetki, git, depo, yenile }: Planlama
           <>
             {alim && taban !== null && <TedarikTerminiKarti D={calisma.D} l={alim} taban={taban} yazar={yetki.planYaz} yenile={yenile} />}
             <MalzemeBekleyenKarti degerlendir={degerlendir} yenile={yenile} D={calisma.D} plandan={alim} />
-            <FasonTerminKarti c={calisma} L={L} komut={komut} sadeceBos />
+            <FasonTerminKarti c={calisma} L={L} komut={komut} sadeceBos emirNo={emirNo} />
           </>
         )
         : <Kart baslik="Terminler" simge="flag"><p className="tc-pys-kucuk">Önce plan kurulmalı.</p></Kart>}
@@ -196,12 +198,12 @@ export function Terminler({ calisma, komut, yetki, git, depo, yenile }: Planlama
   }
 
   const c = calisma;
-  const V = terminIsisi(c, [...malzemeKalemleri(c.D, alim ?? [], calismaSimdisi(c)), ...fasonKalemleri(c.D, L)]);
+  const V = terminIsisi(c, [...malzemeKalemleri(c.D, alim ?? [], calismaSimdisi(c), emirNo), ...fasonKalemleri(c.D, L, emirNo)]);
   const u = terminUyarisi(p);
   const fason = komut ? fasonTanimi(c, L, komut) : null;
   const acilim = (r: TerminSatiri, ck: string) => {
     const k = r.kalem;
-    const cizelge = (j: string): AcilimSecenegi => ({ ad: `${j} çizelgede`, etki: 'Bu kalemi bekleyen siparişin adımlarını tezgâh çizelgesinde gösterir.', simge: 'gantt', yap: () => { git('plan'); } });
+    const cizelge = (j: string): AcilimSecenegi => ({ ad: `${emirNo(j)} çizelgede`, etki: 'Bu kalemi bekleyen siparişin adımlarını tezgâh çizelgesinde gösterir.', simge: 'gantt', yap: () => { git('plan'); } });
     const formlar: AcilimFormu[] = k.grup === 'fas'
       ? [{ ad: k.x.T == null ? 'Dönüş tarihini gir' : 'Dönüş tarihini değiştir', etki: 'Girilen gün kesin süre sayılır; plan onu kullanır.', simge: 'flag', tanim: fason, deg: { is: k.x.id }, adim: 1 }]
       : [];

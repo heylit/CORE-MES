@@ -6,6 +6,7 @@ import type { PlanlamaCalismasi, Siparis } from '../tipler.ts';
 import { agAyar, maliyetBaglami, siparisMaliyeti, wipAyar, ymAyar, YOK, type SiparisMaliyeti } from '../maliyet/kurallar.ts';
 import { KAR_ORANLARI, hedefKarOrani, onerilenFiyat, saat, sayi, tl, urunAdi, type KayitliPlan } from './kurallar.ts';
 import { SayiGirdisi } from './SayiGirdisi.tsx';
+import type { EmirNo } from '../ortak/emir-no.ts';
 import { planDisi } from '../tipler.ts';
 
 // "Siparişler: maliyet ve kâr" (zu-yan-sayfalar sSiparisKar): gösterge satırı, toplu fiyat, sipariş tablosu, alt not. Tutar, vade ve hedef kâr
@@ -35,7 +36,8 @@ interface Satir { s: Siparis; x: SiparisMaliyeti | null }
 const tezEksik = (x: SiparisMaliyeti): boolean => x.eksik.some((e) => e.endsWith(' saat maliyeti'));
 
 // emirler: sunucunun iş emri durumu; biten adımların maliyeti ondan bulunur (1410 a).
-export function KarTablosu({ c, p, fg, komut, emirler = null }: { c: PlanlamaCalismasi | null; p: KayitliPlan | null; fg: boolean; komut: CalismaKomutu | null; emirler?: unknown }) {
+// emirNo: sipariş kimliğinin ekrandaki adı (iş emri no); verilmezse kimlik.
+export function KarTablosu({ c, p, fg, komut, emirler = null, emirNo = (j) => j }: { c: PlanlamaCalismasi | null; p: KayitliPlan | null; fg: boolean; komut: CalismaKomutu | null; emirler?: unknown; emirNo?: EmirNo }) {
   const { bildir } = useBildirim();
   if (!fg) return <Kart baslik={BASLIK} simge="lock"><p className="tc-pys-kucuk"><Simge ad="lock" boyut="k" /> Fiyat, maliyet ve kâr bilgisini müdür ve yönetici görür ve girer (karar 180, öneri a).</p></Kart>;
   if (!c || !p) return <Kart baslik={BASLIK} simge="list"><p className="tc-pys-kucuk">Maliyet plandan çıkar (tezgâh, ayar, fason). Önce plan kurulmalı.</p></Kart>;
@@ -59,18 +61,18 @@ export function KarTablosu({ c, p, fg, komut, emirler = null }: { c: PlanlamaCal
     return v;
   };
   const yazilir = Boolean(komut);
-  const uygula = (r: Satir, o: number): void => yaz(r, 'Gecikme bedeli verisi değişti', `${r.s.id} tutar: ${r.s.gelir ?? '—'} → ${String(o)} (önerilen)`, (s) => { Object.assign(s, { gelir: o }); });
+  const uygula = (r: Satir, o: number): void => yaz(r, 'Gecikme bedeli verisi değişti', `${emirNo(r.s.id)} tutar: ${r.s.gelir ?? '—'} → ${String(o)} (önerilen)`, (s) => { Object.assign(s, { gelir: o }); });
   const fiyatsiz = satirlar.flatMap((r) => { const o = r.s.gelir == null ? oner(r) : null; return o == null ? [] : [{ id: r.s.id, o }]; });
   const fiyatsizlaraYaz = (): void => {
     komut?.degistir('Gecikme bedeli verisi değişti', (t) => {
       let n = 0;
       for (const f of fiyatsiz) { const s = t.D.siparisler.find((x) => x.id === f.id); if (s && s.gelir == null) { Object.assign(s, { gelir: f.o }); n++; } }
       return n > 0;
-    }, { ayrinti: `Önerilen fiyat yazıldı: ${fiyatsiz.map((f) => f.id).join(', ')}` });
+    }, { ayrinti: `Önerilen fiyat yazıldı: ${fiyatsiz.map((f) => emirNo(f.id)).join(', ')}` });
   };
 
   const sutunlar: Sutun<Satir>[] = [
-    { anahtar: 'siparis', baslik: 'Sipariş', hucre: (r) => <><b className="mono">{r.s.id}</b><small className="tc-pys-not">{urunAdi(D, r.s.urun)} · {sayi(r.s.adet, 0)} adet</small></> },
+    { anahtar: 'siparis', baslik: 'Sipariş', hucre: (r) => <><b className="mono">{emirNo(r.s.id)}</b><small className="tc-pys-not">{urunAdi(D, r.s.urun)} · {sayi(r.s.adet, 0)} adet</small></> },
     { anahtar: 'maliyet', baslik: 'Maliyet', hizala: 'sag', csv: (r) => (r.x && !r.x.eksik.length ? String(Math.round(r.x.top)) : ''), hucre: (r) => {
       const x = r.x;
       if (!x) return <span className="tc-pys-kucuk">Planda yok.</span>;
@@ -86,15 +88,15 @@ export function KarTablosu({ c, p, fg, komut, emirler = null }: { c: PlanlamaCal
     { anahtar: 'tutar', baslik: 'Tutar · vade', hizala: 'sag', csv: (r) => (r.s.gelir == null ? '' : String(r.s.gelir)), hucre: (r) => (
       <span className="tc-pys-iki">
         {yazilir
-          ? <SayiGirdisi sinif="tc-pys-ag-sayi" deger={r.s.gelir ?? null} etiket={`${r.s.id} tutar`} min={0} adim={100} yer="fiyatsız"
-            yaz={(m) => { const v = sayiOku(m); if (v !== undefined) yaz(r, 'Gecikme bedeli verisi değişti', `${r.s.id} tutar: ${r.s.gelir ?? '—'} → ${v ?? '—'}`, (s) => { Object.assign(s, { gelir: v }); }); }} />
+          ? <SayiGirdisi sinif="tc-pys-ag-sayi" deger={r.s.gelir ?? null} etiket={`${emirNo(r.s.id)} tutar`} min={0} adim={100} yer="fiyatsız"
+            yaz={(m) => { const v = sayiOku(m); if (v !== undefined) yaz(r, 'Gecikme bedeli verisi değişti', `${emirNo(r.s.id)} tutar: ${r.s.gelir ?? '—'} → ${v ?? '—'}`, (s) => { Object.assign(s, { gelir: v }); }); }} />
           : <b className="mono">{tl(r.s.gelir)}</b>}
         <span className="tc-pys-vade">
           {yazilir
-            ? <SayiGirdisi sinif="tc-pys-ag-sayi" deger={r.s.vade == null ? null : Number(r.s.vade)} etiket={`${r.s.id} ödeme vadesi`} min={0} max={365} adim={1} yer="vade"
+            ? <SayiGirdisi sinif="tc-pys-ag-sayi" deger={r.s.vade == null ? null : Number(r.s.vade)} etiket={`${emirNo(r.s.id)} ödeme vadesi`} min={0} max={365} adim={1} yer="vade"
               yaz={(m) => {
                 const v = sayiOku(m, 365); if (v === undefined) return;
-                yaz(r, 'Ödeme vadesi değişti', `${r.s.id}: ${r.s.vade == null ? '—' : String(r.s.vade as number)} → ${v ?? '—'} gün`, (s) => { if (v == null) delete (s as Record<string, unknown>).vade; else Object.assign(s, { vade: v }); }, true);
+                yaz(r, 'Ödeme vadesi değişti', `${emirNo(r.s.id)}: ${r.s.vade == null ? '—' : String(r.s.vade as number)} → ${v ?? '—'} gün`, (s) => { if (v == null) delete (s as Record<string, unknown>).vade; else Object.assign(s, { vade: v }); }, true);
               }} />
             : <span className="mono">{r.s.vade == null ? '—' : String(r.s.vade as number)}</span>}
           <small>gün</small>
@@ -111,8 +113,8 @@ export function KarTablosu({ c, p, fg, komut, emirler = null }: { c: PlanlamaCal
       return (
         <>
           <span className="tc-pys-oner">
-            <select className="tc-alan-kutu tc-pys-secim" value={String(h)} disabled={!yazilir} aria-label={`${r.s.id} hedef kâr oranı`}
-              onChange={(e) => { const v = Number(e.target.value); yaz(r, 'Hedef kâr oranı değişti', `${r.s.id}: %${String(h)} → %${String(v)}`, (s) => { Object.assign(s, { karOran: v }); }, true); }}>
+            <select className="tc-alan-kutu tc-pys-secim" value={String(h)} disabled={!yazilir} aria-label={`${emirNo(r.s.id)} hedef kâr oranı`}
+              onChange={(e) => { const v = Number(e.target.value); yaz(r, 'Hedef kâr oranı değişti', `${emirNo(r.s.id)}: %${String(h)} → %${String(v)}`, (s) => { Object.assign(s, { karOran: v }); }, true); }}>
               {[...new Set([...KAR_ORANLARI, h])].sort((a, b) => a - b).map((x) => <option key={x} value={String(x)}>%{sayi(x, 1)}</option>)}
             </select>
             <b className="mono">{tl(o)}</b>

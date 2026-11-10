@@ -3,6 +3,7 @@ import type { CanliFarkiCevabi, TabanVeCanliCevabi } from '#paylasilan/sozlesme/
 import { tesisSaati } from '#paylasilan/tesis-zamani.ts';
 import type { PlanlamaCalismasi, PlanVerisi } from '../../tipler.ts';
 import { acikSaat, elleSayilari, saatOku, tabanMs, type Derleme, type FailNedeni, type OkunanPlan, type PlanIslemi } from '../kurallar.ts';
+import type { EmirNo } from '../../ortak/emir-no.ts';
 import { ufukGunu } from '../../ufuk-olcegi.ts';
 import { gunBaslayanlar, gunDonuk, gunNumarasi } from '../cizelge/kurallar.ts';
 
@@ -105,6 +106,7 @@ export const SIPARIS_GRUPLARI = [['gec', 'Geciken', 'alert'], ['risk', `Riskli �
 // Malzeme tahmini üretim başlangıcından sonra.
 export const malzemeGec = (s: SiparisBilgisi): boolean => s.ur != null && s.bas > s.ur + 0.25;
 // Sipariş numarasının parça eki (/2) ayrı yazılır.
+export { emirNoOkuyucu, type EmirNo } from '../../ortak/emir-no.ts';
 export function parcaAyir(id: string): [string, string | null] { const m = /^(.*)(\/\d+)$/.exec(id); return m ? [m[1] ?? id, m[2] ?? null] : [id, null]; }
 export const ONCELIK_KISA: Record<number, string> = { 1: 'acil/yüksek', 2: 'normal', 3: 'düşük' };
 
@@ -276,9 +278,11 @@ export function ilerleme(r: PlanIslemi, g: Gerceklesen | null, adet: number, now
 }
 export const sabitMi = (r: PlanIslemi, now: number, donuk: number): boolean => r.act || r.S < now + donuk - 1e-6;
 // Çubuğun yazısı genişliğe göre: sipariş, adım, adım adı; dar çubukta sipariş numarasının sonu.
-export function cubukYazisi(r: PlanIslemi, k: string, ad: string, w: number): { b: string; ek: string; alt: string } | null {
-  if (w > 46) return { b: r.job, ek: w > 80 ? ` · ${k}` : '', alt: w > 110 ? ad : '' };
-  if (w > 22) return { b: r.job.replace(/^\D+-?/, '').slice(-3), ek: '', alt: '' };
+// etiket: çubuktaki sipariş adı (ekranda tam emir no, 2693 a); verilmezse kimlik.
+export function cubukYazisi(r: PlanIslemi, k: string, ad: string, w: number, etiket: EmirNo = (j) => j): { b: string; ek: string; alt: string } | null {
+  const n = etiket(r.job);
+  if (w > 46) return { b: n, ek: w > 80 ? ` · ${k}` : '', alt: w > 110 ? ad : '' };
+  if (w > 22) return { b: n.replace(/^\D+-?/, '').slice(-3), ek: '', alt: '' };
   return null;
 }
 

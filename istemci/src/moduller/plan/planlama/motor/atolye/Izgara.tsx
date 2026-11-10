@@ -243,7 +243,7 @@ export function Izgara({ ort, pano, parla }: { ort: Ortam; pano: MutableRefObjec
   } : { onBlur: () => { yuzenGizle(); } });
   // İş bilgisi (karar 2081-6): tarayıcı başlığı yerine tema uyumlu kart; fareyle kısa beklemede, klavye odağında ve dokunmada basılı tutunca açılır.
   // Kurum yardımları kapattıysa eski başlık kalır.
-  const bilgi = (r: PlanIslemi, ad: string, il: number | null) => [`${r.job} · ${ad}`, `${tz(D, r.S)} → ${tz(D, r.C)}`, ...(il != null ? [`İlerleme %${Math.round(il * 100)}`] : [])];
+  const bilgi = (r: PlanIslemi, ad: string, il: number | null) => [`${ort.emirNo(r.job)} · ${ad}`, `${tz(D, r.S)} → ${tz(D, r.C)}`, ...(il != null ? [`İlerleme %${Math.round(il * 100)}`] : [])];
   const bilgiOlaylari = (satirlarBilgi: readonly string[]) => {
     const ac = (el: HTMLElement, gecikme: number) => {
       window.clearTimeout(bilgiZamani.current);
@@ -314,7 +314,7 @@ export function Izgara({ ort, pano, parla }: { ort: Ortam; pano: MutableRefObjec
     const vur = !!secJob && secJob === r.job; const soluk = (!!secJob && !vur) || (!!suz && !suzUyar(D, suz, r));
     const g = gercekOku(c, r.id); const il = ilerleme(r, g, cx.jobs[r.job]?.adet ?? 0, now);
     const sap = g && g.plan != null ? g.S - g.plan : 0;
-    const yz = cubukYazisi(r, ka, ad, w);
+    const yz = cubukYazisi(r, ka, ad, w, x.emirNo);
     const yardim = etkiAcik('gantt-yardim'); const bilgiMetni = bilgi(r, ad, il);
     return (
       <button key={r.id} type="button" className="tc-pym-tp-cubuk" data-id={r.id} data-durum={b && b.durum !== 'iyi' ? b.durum : undefined} data-sabit={sabit ? '' : undefined}

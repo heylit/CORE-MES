@@ -2,6 +2,7 @@ import { kisaTl, maliyetBaglami, siparisMaliyeti, type SiparisMaliyeti } from '.
 import { DURUM_ADI, DURUM_TONU, tedarikciAdi, type AlimPlaniSatiri } from '../malzeme/kurallar.ts';
 import type { ExtraAlanlar, Fasoncu, Malzeme, PlanVerisi, PlanlamaCalismasi, RotaAdimi, Siparis } from '../tipler.ts';
 import { planDisi } from '../tipler.ts';
+import { isAdi, type EmirNo } from '../ortak/emir-no.ts';
 
 // P2'nin saf hesapları (205 a): Siparişler, Terminler ve Termin ve kâr görünümlerinin kayıtlı plandan ve çalışmanın verisinden çıkan değerleri.
 // Kaynak bugünkü çerçevedir: zv-termin, zw-denge, zz25-sade-takvim, zz29-gorsel, zz30-isi, zr-agirlik ve motor/durum.betik, engine.betik
@@ -147,7 +148,8 @@ export interface SiparisSatiri extends IsiSatiri { s: Siparis; T: number | null;
 export interface SiparisIsisi { sutunlar: IsiSutunu[]; satirlar: SiparisSatiri[]; ust: UstDurum }
 
 // Sipariş × hafta, termin riski (zz30-isi ISI.ysiparis.veri).
-export function siparisIsisi(c: PlanlamaCalismasi, p: KayitliPlan): SiparisIsisi {
+// emirNo: satırın ekrandaki adı (iş emri no); verilmezse kimlik.
+export function siparisIsisi(c: PlanlamaCalismasi, p: KayitliPlan, emirNo: EmirNo = (j) => j): SiparisIsisi {
   const D = c.D; const now = simdi(c); const H = haftaSutunlari(D, now, 8);
   const bas: Record<string, number> = {};
   for (const r of Object.values(p.ops)) if (bas[r.job] == null || r.S < bas[r.job]!) bas[r.job] = r.S;
@@ -161,7 +163,7 @@ export function siparisIsisi(c: PlanlamaCalismasi, p: KayitliPlan): SiparisIsisi
     else if (due != null) hucreKoy(h, `w${H.b(due)}`, { kd: 4, sm: 'alert', v: '!', etiket: 'plana sığmadı' });
     if (due != null) hucreKoy(h, `w${H.b(due)}`, { bayrak: true, etiket: `termin ${gunYaz(D, due)}` });
     const ton: IsiTonu = C == null || gec ? ((kademe(T) ?? 0) >= 3 || C == null ? 'hata' : 'uyari') : 'tamam';
-    satirlar.push({ k: s.id, ad: s.id, alt: `${urunAdi(D, s.urun)} · ${sayi(s.adet, 0)} adet`, simge: 'flag', ton, gizli: !gec && C != null, h, s, T, C, due });
+    satirlar.push({ k: s.id, ad: emirNo(s.id), alt: `${urunAdi(D, s.urun)} · ${sayi(s.adet, 0)} adet`, simge: 'flag', ton, gizli: !gec && C != null, h, s, T, C, due });
   }
   satirlar.sort((a, b) => Number(b.C == null) - Number(a.C == null) || (b.T ?? 0) - (a.T ?? 0) || (a.due ?? 1e12) - (b.due ?? 1e12));
   const gecL = satirlar.filter((r) => r.T != null && r.T > 0.05); const top = gecL.reduce((a, r) => a + r.T!, 0); const en = gecL[0];
@@ -175,11 +177,11 @@ export function siparisIsisi(c: PlanlamaCalismasi, p: KayitliPlan): SiparisIsisi
 // Satırın açılımındaki neden ve bilgi (ISI.ysiparis.acilim). Termin Üretim emirlerinden gelir (222 a): değiştirme yolu orasıdır.
 export function siparisAcilimi(D: PlanVerisi, r: SiparisSatiri) {
   const s = r.s;
-  const neden = r.C == null ? `${s.id} plana sığmadı; termin ${gunYaz(D, r.due)}. Termini Üretim emirlerinde değiştirmek ya da önemini artırmak planın onu yerleştirmesine yardım eder.`
-    : r.T != null && r.T > 0.05 ? `${s.id} termini ${gunYaz(D, r.due)}, plan ${gunYaz(D, r.C)} bitiriyor: ${saat(r.T)} geç. Müşteri yeni tarih verdiyse termini Üretim emirlerinde değiştirin; vermediyse önemini artırın.`
-      : `${s.id} termini ${gunYaz(D, r.due)}, plan ${gunYaz(D, r.C)} bitiriyor; zamanında.`;
+  const neden = r.C == null ? `${r.ad} plana sığmadı; termin ${gunYaz(D, r.due)}. Termini Üretim emirlerinde değiştirmek ya da önemini artırmak planın onu yerleştirmesine yardım eder.`
+    : r.T != null && r.T > 0.05 ? `${r.ad} termini ${gunYaz(D, r.due)}, plan ${gunYaz(D, r.C)} bitiriyor: ${saat(r.T)} geç. Müşteri yeni tarih verdiyse termini Üretim emirlerinde değiştirin; vermediyse önemini artırın.`
+      : `${r.ad} termini ${gunYaz(D, r.due)}, plan ${gunYaz(D, r.C)} bitiriyor; zamanında.`;
   const bilgi: [string, string][] = [['Termin', gunYaz(D, r.due)], ['Planlanan bitiş', r.C == null ? 'plana sığmadı' : gunYaz(D, r.C)], ['Gecikme', r.T != null && r.T > 0.05 ? saat(r.T) : 'yok'], ['Adet', sayi(s.adet, 0)]];
-  return { baslik: `${s.id} · ${urunAdi(D, s.urun)}`, neden, bilgi };
+  return { baslik: `${r.ad} · ${urunAdi(D, s.urun)}`, neden, bilgi };
 }
 
 // ---- gecikme bedeli (durum.betik AG0, agAyar) ----
@@ -281,7 +283,7 @@ export type TerminKalemi = (KalemOrtak & { grup: 'fas'; x: FasonSatiri }) | (Kal
 
 // Terminler ısı haritasının malzeme kalemleri (zz29-gorsel gvTmKalemler, malzeme kısmı). Satırlar Malzeme satın alma planının hesabındandır
 // (malzeme/kurallar.ts alimPlani, eski tmMalzeme). Termini beklenen satır (554 a) olması gereken tarihte gelmiş sayılır.
-export function malzemeKalemleri(D: PlanVerisi, L: readonly AlimPlaniSatiri[], now: number): TerminKalemi[] {
+export function malzemeKalemleri(D: PlanVerisi, L: readonly AlimPlaniSatiri[], now: number, emirNo: EmirNo = (j) => j): TerminKalemi[] {
   const mats = new Map((D.malzemeler ?? []).map((m) => [m.kod, m]));
   const birim = (q: number, kod: string) => `${sayi(q, q < 10 ? 1 : 0)} ${mats.get(kod)?.birim ?? ''}`.trim();
   return L.map((r) => {
@@ -299,7 +301,7 @@ export function malzemeKalemleri(D: PlanVerisi, L: readonly AlimPlaniSatiri[], n
       grup: 'mal', m: r, k: `m:${r.alimNo ?? `e-${r.isler.join(',')}`}:${r.kod}`, ad: r.kod, alt: `${m?.ad ?? ''} · ${birim(r.miktar, r.kod)}`, durum: d, ton,
       bas: r.etkin != null || tahminGelis != null ? Math.max(now - 24, r.verildi ?? now) : null, son: tahminGelis, ger: r.gerekli, tahmini: !termin, neden,
       bilgi: [['Gerekli', gunYaz(D, r.gerekli)], [termin ? 'Geliş (termin)' : 'Geliş (olması gereken)', gunYaz(D, tahminGelis)], ['Sipariş gecikmeden en geç', gunYaz(D, r.enGec)],
-        ['Miktar', birim(r.miktar, r.kod)], ['Tedarikçi', ted || '—'], ['Bağlı siparişler', r.isler.join(', ') || '—']],
+        ['Miktar', birim(r.miktar, r.kod)], ['Tedarikçi', ted || '—'], ['Bağlı siparişler', r.isler.map(emirNo).join(', ') || '—']],
     };
   });
 }
@@ -316,15 +318,15 @@ function alimNedeni(r: AlimPlaniSatiri): string {
 }
 
 // Terminler ısı haritasının fason kalemleri (zz29-gorsel gvTmKalemler, fason kısmı).
-export function fasonKalemleri(D: PlanVerisi, L: FasonSatiri[]): TerminKalemi[] {
+export function fasonKalemleri(D: PlanVerisi, L: FasonSatiri[], emirNo: EmirNo = (j) => j): TerminKalemi[] {
   return L.map((x) => {
     const [d, ton] = fasonDurumu(x); const don = x.T ?? x.r.C;
     const neden = x.T == null ? `Fasoncu dönüş tarihi vermedi; plan fasoncunun süresinden ${gunYaz(D, x.r.C)} döner varsayıyor. Sonraki adım ${gunYaz(D, x.ger)} başlıyor.`
       : d === 'Siparişi geciktirir' ? `Dönüş ${gunYaz(D, don)}; sipariş gecikmeden en geç ${gunYaz(D, x.enGec)} dönmeliydi. Fasoncuyla tarihi öne çekin.`
         : d === 'Plandan geç' ? `Dönüş ${gunYaz(D, don)}, sonraki adım ${gunYaz(D, x.ger)} başlıyor; iş kayar ama sipariş termini tutar.` : `Dönüş ${gunYaz(D, don)}, sonraki adım ${gunYaz(D, x.ger)} başlıyor.`;
     return {
-      grup: 'fas', k: `f:${x.id}`, ad: x.id, alt: `${x.f?.ad ?? x.r.m} · ${sayi(x.adet, 0)} adet`, durum: d, ton, bas: x.r.S, son: don, ger: x.ger, tahmini: x.T == null, neden,
-      bilgi: [['Çıkış', gunYaz(D, x.r.S)], [x.T == null ? 'Dönüş (tahmini)' : 'Dönüş (fasoncu)', gunYaz(D, don)], ['Gerekli dönüş', gunYaz(D, x.ger)], ['Sipariş gecikmeden en geç', gunYaz(D, x.enGec)], ['Sipariş', x.r.job]],
+      grup: 'fas', k: `f:${x.id}`, ad: isAdi(emirNo, x.id, x.r.job), alt: `${x.f?.ad ?? x.r.m} · ${sayi(x.adet, 0)} adet`, durum: d, ton, bas: x.r.S, son: don, ger: x.ger, tahmini: x.T == null, neden,
+      bilgi: [['Çıkış', gunYaz(D, x.r.S)], [x.T == null ? 'Dönüş (tahmini)' : 'Dönüş (fasoncu)', gunYaz(D, don)], ['Gerekli dönüş', gunYaz(D, x.ger)], ['Sipariş gecikmeden en geç', gunYaz(D, x.enGec)], ['Sipariş', emirNo(x.r.job)]],
       x,
     };
   });
@@ -396,7 +398,7 @@ export function siparisMaliyetleri(c: PlanlamaCalismasi, emirler: unknown = null
 
 // Sipariş × termin uzatması, kalan gecikme (zz30-isi ISI.denge.veri). Kâr sütunu sipariş maliyetinin net kârıdır (486/1 a).
 // kar: maliyet okuyana sipariş maliyetleri (Kâr sütunu); null ise sütun yoktur.
-export function dengeIsisi(D: PlanVerisi, p: KayitliPlan, kar: ReadonlyMap<string, SiparisMaliyeti> | null = null): DengeIsisi {
+export function dengeIsisi(D: PlanVerisi, p: KayitliPlan, kar: ReadonlyMap<string, SiparisMaliyeti> | null = null, emirNo: EmirNo = (j) => j): DengeIsisi {
   let L = plandaki(D).filter((s) => p.J[s.id] && saatOku(D, s.termin) != null).map((s) => ({ s, T: p.J[s.id]!.T, C: p.J[s.id]!.C }));
   const gec = L.filter((z) => z.T != null && z.T > 0.05); const yalnizGec = gec.length > 0;
   L = (yalnizGec ? gec : L).sort((a, b) => (b.T ?? 1e9) - (a.T ?? 1e9) || (a.C ?? 0) - (b.C ?? 0)).slice(0, 12);
@@ -412,7 +414,7 @@ export function dengeIsisi(D: PlanVerisi, p: KayitliPlan, kar: ReadonlyMap<strin
       const m = kar.get(s.id); const v = m ? m.net ?? m.kar : null;
       h.kar = v == null ? { sm: 'alert', v: '?', etiket: 'kâr hesaplanamıyor' } : { v: kisaTl(v), kd: v < 0 ? 4 : undefined, iyi: v >= 0 ? true : undefined, etiket: `net ${tl(v)}` };
     }
-    return { k: s.id, ad: s.id, alt: `termin ${gunYaz(D, saatOku(D, s.termin))} · ${urunAdi(D, s.urun)}`, simge: 'flag', ton: T == null || T >= 24 ? 'hata' : T > 0.05 ? 'uyari' : '', gizli: false, h, s, T, C };
+    return { k: s.id, ad: emirNo(s.id), alt: `termin ${gunYaz(D, saatOku(D, s.termin))} · ${urunAdi(D, s.urun)}`, simge: 'flag', ton: T == null || T >= 24 ? 'hata' : T > 0.05 ? 'uyari' : '', gizli: false, h, s, T, C };
   });
   const en = satirlar[0]; const kurt = en && en.T != null ? UZATMALAR.find((d) => en.T! - d * 24 <= 0.05) : undefined;
   const metin = !yalnizGec ? `Geç biten sipariş yok; termine en yakın ${satirlar.length} sipariş gösteriliyor.`

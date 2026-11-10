@@ -84,7 +84,9 @@
   flex: 1; min-width: 0; min-height: calc(var(--dokunma) - var(--b-2)); background: var(--panel2); border: var(--cizgi-ince) solid var(--edge2); border-radius: var(--yari-1);
   padding: 0 var(--b-2); color: var(--ink); font: inherit;
 }
-.tc-pym-tp-sutun, .tc-pym-tp-sip-tus { display: grid; grid-template-columns: 1fr repeat(4, calc(var(--b-6) + var(--b-5))); gap: var(--b-1); }
+/* Sipariş satırı iki satırdır: emir no ve ürün tam genişlikte, altında dört zaman; dar rayda ad kesilmez. */
+.tc-pym-tp-sutun, .tc-pym-tp-sip-tus { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--b-1) var(--b-2); }
+.tc-pym-tp-sutun > :first-child, .tc-pym-tp-sip-ad { grid-column: 1 / -1; }
 .tc-pym-tp-sutun {
   padding: var(--b-1) var(--b-3); color: var(--faint); font-size: var(--yazi-xs); text-transform: uppercase; letter-spacing: var(--harf-aralik-06);
   border-bottom: var(--cizgi-ince) solid var(--edge);

@@ -16,7 +16,7 @@ export function Ray({ ort }: { ort: Ortam }) {
   const elle = elleSira(c).length > 0;
   const siraBirak = () => { if (ort.yaz) o.komut?.degistir('Sipariş sırası riske göre', (t) => { (t as Record<string, unknown>).tpSira = []; }, { planKoru: true }); };
   const q = ara.toLocaleLowerCase('tr-TR');
-  const L = ort.liste.filter((s) => (!q || `${s.id} ${s.ad}`.toLocaleLowerCase('tr-TR').includes(q)) && (!suz || s.ops.some((r) => suzUyar(c.D, suz, r))));
+  const L = ort.liste.filter((s) => (!q || `${ort.emirNo(s.id)} ${s.id} ${s.ad}`.toLocaleLowerCase('tr-TR').includes(q)) && (!suz || s.ops.some((r) => suzUyar(c.D, suz, r))));
   return (
     <aside className="tc-pym-tp-ray" aria-label="Siparişler">
       <div className="tc-pym-tp-ray-bas">
@@ -54,7 +54,7 @@ const SURUKLE_TURU = 'text/x-tc-siparis';
 
 function Satir({ ort, s, tasinan, tasi }: { ort: Ortam; s: SiparisBilgisi; tasinan: string | null; tasi: (id: string | null) => void }) {
   const D = ort.c.D; const ac = ort.secJob === s.id;
-  const [no, parca] = parcaAyir(s.id);
+  const [no, parca] = parcaAyir(ort.emirNo(s.id));
   const mg = malzemeGec(s);
   const ids = ort.liste.map((x) => x.id);
   const birak = (e: DragEvent) => { e.preventDefault(); const id = tasinan ?? e.dataTransfer.getData(SURUKLE_TURU); tasi(null); if (id) siraYaz(ort, siraTasi(ids, id, s.id)); };
