@@ -315,6 +315,21 @@ describe('Değerlendirme kartı (uç açılınca)', () => {
     expect(screen.queryByRole('button', { name: 'Bu planı al' })).toBeNull();
   });
 
+  // 2761 (2745 a, 2759): bedeli bilinmeyen ek mesai adayı ele alınmadıysa seçenek kartı bunu söyler; yoksa söylemez.
+  it('bedeli bilinmeyen ek mesai varsa seçenek kartında not çıkar, yoksa çıkmaz', async () => {
+    const NOT = /^ ?Mesai bedeli bilinmiyor, ek mesai önerilmedi/;
+    const c = cevap(false);
+    const d = vi.fn(async () => ({ ...c, sonuc: { ...c.sonuc, bedeliBilinmeyenEkMesai: true } })) as unknown as Degerlendirici;
+    ciz(d, null, false);
+    fireEvent.click(dugme(HESAPLA));
+    expect((await screen.findByRole('note')).textContent).toMatch(NOT);
+    cleanup();
+    ciz(vi.fn(async () => cevap(false)) as unknown as Degerlendirici, null, false);
+    fireEvent.click(dugme(HESAPLA));
+    expect(await screen.findByText('Termine yakın')).toBeTruthy();
+    expect(screen.queryByRole('note')).toBeNull();
+  });
+
   it('409 cevabında yenile düğmesi çıkar', async () => {
     const yenile = vi.fn();
     const d = vi.fn(async () => { throw new ApiHatasi(409, { kod: 'CAKISMA', mesaj: 'eski' }); }) as unknown as Degerlendirici;

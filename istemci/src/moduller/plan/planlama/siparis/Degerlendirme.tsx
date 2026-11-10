@@ -145,6 +145,9 @@ export function PlanSecenekleri({ cevap, komut, alabilir, kim, simdikiDenge }: {
   return (
     <>
       <Tablo etiket="Plan seçenekleri" sutunlar={sutunlar} satirlar={l} satirAnahtari={(x) => x.denge} bosMesaj="Seçenek kurulamadı." />
+      {cevap.sonuc.bedeliBilinmeyenEkMesai && (
+        <p className="tc-pys-kucuk" role="note"><Simge ad="alert" boyut="k" /> Mesai bedeli bilinmiyor, ek mesai önerilmedi: bedeli bilinmeyen ek mesai adayları seçeneklere eklenmedi.</p>
+      )}
       <p className="tc-pys-kucuk">
         Ek mesai: Ek mesai sayfasının ölçtüğü adaylardan, o seçeneğin çarpanıyla kazanç bırakanlar plana eklenerek denendi; seçenek alınınca bu vardiyalar
         kabul edilmiş olarak Ek mesai planına girer. Net kâr: tutar − malzeme + talaş − işleme, ayar, genel gider, fason, ek mesai − gecikme bedeli (gerçek,
