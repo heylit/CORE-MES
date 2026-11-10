@@ -400,7 +400,8 @@ export const planCanliOzeti = z.object({
 // Açık plan ekranlarının kısa aralıkla sorduğu hafif okuma: canlı plan sürümü değiştiyse ekran "plan değişti" der.
 // 2319 (2311 S7, 2327-1 a, 2732): canlı plan son canlıya almadan sonra eskidiyse (emir erken bitti, makine durdu, fason döndü, emrin adımı değişti, emir iptal) işaret. Yalnız işarettir,
 // plan değişmez. İsteğe bağlı: alanı göndermeyen sunucuyla ekran eskisi gibi çalışır.
-const bayatNedeni = z.enum(['emir-bitti', 'fason-donusu', 'durus', 'rota-degisti', 'emir-iptal']);
+// adim-bitti (B-2499-12): emir bitmeden adımı canlıdaki yerinden erken bitti.
+const bayatNedeni = z.enum(['emir-bitti', 'fason-donusu', 'durus', 'rota-degisti', 'adim-bitti', 'emir-iptal']);
 export const planBayatligi = z.object({
   bayat: z.boolean(),
   sonCanliyaAlma: zaman.nullable(),
