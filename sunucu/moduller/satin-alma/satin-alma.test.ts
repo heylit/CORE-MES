@@ -17,7 +17,7 @@ import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
 import {
-  karsilamaLogoSonucu, logoyaGidecekKarsilamalar, logoyaGidecekSiparisler, logoyaGidecekTalepler, logoyaGuncellemeGidecekSiparisler, logoyaKapatmaGidecekSiparisler, siparisLogoKapatmaSonucu, logoyaIptalGidecekSiparisler, malKabulFiyatlari, malzemeGelisTarihleri, ortalamaAlisFiyatlari, siparisSatiriBelgeleri, siparisLogoGuncellemeSonucu, siparisLogoIptalSonucu, siparisLogoSonucu, siparisSatirlari, sonAlisFiyatlari, talepLogoSonucu, teslimGeriAl, teslimIsle, siparisSatirlarininEmri, isEmriFasonTutarlari,
+  karsilamaLogoSonucu, logoyaGidecekKarsilamalar, logoyaGidecekSiparisler, logoyaGidecekTalepler, logoyaGuncellemeGidecekSiparisler, logoyaKapatmaGidecekSiparisler, siparisLogoKapatmaSonucu, logoyaIptalGidecekSiparisler, malKabulFiyatlari, malzemeGelisTarihleri, ortalamaAlisFiyatlari, siparisSatiriBelgeleri, siparisLogoGuncellemeSonucu, siparisLogoIptalSonucu, siparisLogoSonucu, siparisSatirlari, sonAlisFiyatlari, talepLogoSonucu, teslimGeriAl, teslimIsle, siparisSatirlarininEmri, isEmriFasonTutarlari, siparisBirimFiyatlari,
 } from './disari.ts';
 import { uclar } from './uclar.ts';
 import * as servis from './servis.ts';
@@ -3260,6 +3260,59 @@ describe('satin-alma sürüm 6 (gerçek PostgreSQL)', () => {
     // Fatura gerçektir: talep iptal olsa da oran çekilir.
     await ortam!.sahip.sorgu("UPDATE satin_alma_talep SET durum = 'iptal', iptal_nedeni = 'Deneme' WHERE id = $1", [t.id]);
     assert.equal((await oranlar()).get(anahtar), 0.166667);
+  });
+
+  test('2613 2/2, 2720-1: emre ve projeye bağlı siparişin malzeme birim fiyatı; teslimle ağırlıklı, iki iskonto, sabit kur önce; iade, fason, iptal ve emirli talebin projesi sayılmaz', async () => {
+    const e = await emirAc();
+    const p = await projeEkle('P2720');
+    const emirli = await bolunmusSiparis('5');
+    const ikinci = await bolunmusSiparis('7');
+    const projeli = await bolunmusSiparis('8');
+    const m = (await vt().tx((db) => db.tek<{ n: number }>(
+      'SELECT c.malzeme_no AS n FROM satin_alma_talep_kalemi k JOIN satin_alma_katalog c ON c.id = k.katalog_id WHERE k.talep_id = $1 AND k.id = $2', [emirli.s.id, emirli.k2])))!.n;
+    await ortam!.sahip.tx(async (db) => {
+      await db.sorgu('UPDATE satin_alma_talep SET uretim_emri_id = $2 WHERE id = ANY($1::uuid[])', [[emirli.s.id, ikinci.s.id], e]);
+      await db.sorgu('UPDATE satin_alma_talep SET proje_id = $2 WHERE id = $1', [projeli.s.id, p]);
+      // Teklif iskontosu 10: 5 -> 4.5.
+      await db.sorgu('UPDATE satin_alma_teklif SET iskonto_yuzdesi = 10 WHERE talep_id = $1 AND id = $2', [emirli.s.id, emirli.a]);
+      await db.sorgu("UPDATE satin_alma_teklif SET para_birimi = 'USD', kur = 30 WHERE talep_id = $1 AND id = $2", [projeli.s.id, projeli.a]);
+    });
+    const oku = (emirIdleri: number[], projeIdleri: number[], malzemeNolar: number[]) => vt().tx((db) => siparisBirimFiyatlari(db, { emirIdleri, projeIdleri, malzemeNolar }));
+    assert.deepEqual(await oku([e], [p], [m]), [], 'teslimsiz satır yok');
+    await teslimEt(siparisi(emirli.s, emirli.a).satirlar[0]!.id, '1', 272001);
+    await teslimEt(siparisi(ikinci.s, ikinci.a).satirlar[0]!.id, '2', 272002);
+    await teslimEt(siparisi(projeli.s, projeli.a).satirlar[0]!.id, '1', 272003);
+    // İade: B satırı (aynı kart, 9) teslim alınıp geri alınır; neti 0, ortalamaya girmez.
+    await teslimEt(siparisi(emirli.s, emirli.b).satirlar[0]!.id, '2', 272004);
+    await geriAl(272004);
+    // (4.5 x 1 + 7 x 2) / 3 = 6.16667 -> 4 ondalık. Proje: USD 8 x teklif kuru 30.
+    assert.deepEqual(await oku([e, e], [p], [m, 2147483000]), [
+      { hedef: 'emir', hedefId: e, malzemeNo: m, tryBirimFiyati: '6.1667' },
+      { hedef: 'proje', hedefId: p, malzemeNo: m, tryBirimFiyati: '240' },
+    ]);
+    // Sabit kur teklif kurundan önce gelir.
+    await ortam!.sahip.sorgu("INSERT INTO satin_alma_sabit_kur (talep_id, para_birimi, kur, aylik_faiz_yuzdesi) VALUES ($1, 'USD', 32, NULL)", [projeli.s.id]);
+    assert.deepEqual((await oku([], [p], [m])).map((x) => x.tryBirimFiyati), ['256']);
+    // 2611 a: emri olan satır proje hedefinde sayılmaz. Talepte emir ve proje birlikte olamaz (CHECK); emir birleşik talepte kalemin kaynağından
+    // gelebilir (KALEM_EMRI): projeli talebin kalemi emirli kaynağa bağlanınca satır emirde kalır, projede görünmez.
+    const p2 = await projeEkle('P2720B');
+    await ortam!.sahip.tx(async (db) => {
+      await db.sorgu('UPDATE satin_alma_talep SET uretim_emri_id = NULL, proje_id = $2 WHERE id = $1', [emirli.s.id, p2]);
+      await db.sorgu('UPDATE satin_alma_talep_kalemi SET kaynak_talep_id = $2, kaynak_sira = 1 WHERE talep_id = $1', [emirli.s.id, ikinci.s.id]);
+    });
+    assert.deepEqual(await oku([], [p2], [m]), []);
+    assert.deepEqual((await oku([e], [], [m])).map((x) => x.tryBirimFiyati), ['6.1667']);
+    // Fason satırı (iş emri bağı) gelmez: ikinci siparişin satırı fasona bağlanınca emirde yalnız ilk sipariş kalır.
+    const tip = (await ortam!.sahip.tek<{ id: number }>('SELECT id FROM istasyonlar_operasyon_tipi ORDER BY id LIMIT 1'))!.id;
+    const ie = (await ortam!.sahip.tek<{ id: number }>(
+      "INSERT INTO uretim_emirleri_is_emri (uretim_emri_id, sira, op_no, operasyon_tipi_id, ad) VALUES ($1, 1, 10, $2, 'Deneme fason') RETURNING id", [e, tip]))!.id;
+    await ortam!.sahip.sorgu('UPDATE satin_alma_siparis_satiri SET is_emri_id = $2 WHERE id = $1', [siparisi(ikinci.s, ikinci.a).satirlar[0]!.id, ie]);
+    assert.deepEqual((await oku([e], [], [m])).map((x) => x.tryBirimFiyati), ['4.5']);
+    // İptal talep sayılmaz.
+    await ortam!.sahip.sorgu("UPDATE satin_alma_talep SET durum = 'iptal', iptal_nedeni = 'Deneme' WHERE id = $1", [emirli.s.id]);
+    assert.deepEqual(await oku([e], [], [m]), []);
+    assert.deepEqual(await oku([], [], [m]), []);
+    assert.deepEqual(await oku([e], [p], []), []);
   });
 
   test('2642 b, 2646 a, Veri 1-2, Güvenlik K1-K3: fatura satırlara eşlenir; oran (G + (B - E) x S) / B; sürüm 409; aşım 422; bayat eşleme sayılmaz; eşlenen satır silinmez', async () => {
