@@ -12,7 +12,7 @@ import { kayitlaraBagliBelgeler, kayittakiBelgeDosyasi } from '../../belge-merke
 import { malzemeAra, malzemeOzeti } from '../../malzemeler/disari.ts';
 import { degerlemeKgFiyatlari, malKabulFiyatlari } from '../../satin-alma/disari.ts';
 import { acikEmirler, emirDurumlari, emirlerinMalzemeIhtiyaci, fasonIsEmirleri, uretimEmriOzeti } from '../../uretim-emirleri/disari.ts';
-import { binde, bindenMetin, partiEtiketi, stokDegeri, alisFiyatlari, DEGER_GRUPLARI, stoklanirMi, ihtiyacToplami, adetMiktari, fasonGonderimiEksikMi } from '../kurallar.ts';
+import { binde, bindenMetin, partiEtiketi, stokDegeri, alisFiyatlari, emirsizCikisTutari as cikisTutari, DEGER_GRUPLARI, stoklanirMi, ihtiyacToplami, adetMiktari, fasonGonderimiEksikMi } from '../kurallar.ts';
 import * as sorgular from '../sorgular.ts';
 import { haritaOzeti, anaDepo } from './depo.ts';
 import { fasonYariParcasi } from './dis-akis.ts';
@@ -187,6 +187,21 @@ export async function stokDegeriOku(db: Db, islemler: readonly string[], yontem:
       toplam: degerleriTopla(Object.values(d)).deger,
     },
   };
+}
+
+// 2623 a, 2594 b: ayın ('GGGG-AA') emirsiz genel kullanım çıkışlarının tutarı (TL), finansın genel gider "diğer" bileşenine. Fiyat
+// çıkış anındaki son alıştır (stok değerinin son alış yöntemiyle aynı hesap); 2710 b: fiyatı bilinmeyen çıkış toplama girmez, `eksik`
+// listesine yazılır (finans genel gider uyarısı). Yetki denetlemez.
+export async function emirsizCikisTutari(db: Db, ay: string): Promise<{ tutar: number; eksik: string[] }> {
+  if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(ay)) throw new Error(`Ay biçimi geçersiz: ${ay}`);
+  const cikislar = await sorgular.emirsizCikislar(db, ay);
+  if (cikislar.length === 0) return { tutar: 0, eksik: [] };
+  const zamanlar = [...new Set(cikislar.map((c) => c.zaman))];
+  const olaylar = await sorgular.degerlemeAlisOlaylari(db, [...new Set(cikislar.map((c) => c.malzemeId))]);
+  const fiyat = await malKabulFiyatlari(db, olaylar.map((o) => o.malKabulSatirId));
+  const kesimler = alisFiyatlari(olaylar.map((o) => ({ ...o, fiyat: fiyat.get(o.malKabulSatirId) ?? null })), zamanlar);
+  const tutar = cikisTutari(cikislar.map((c) => ({ miktar: c.miktar, fiyat: kesimler[zamanlar.indexOf(c.zaman)]?.get(c.malzemeId)?.sonAlis ?? null })));
+  return { tutar: Number(tutar.tutar), eksik: tutar.fiyatsizCikis === 0 ? [] : [`${tutar.fiyatsizCikis} stok çıkışının son alış fiyatı yok; tutara girmedi`] };
 }
 
 // Yönetici paneli (#1079): ay sonu stok değeri serisi. Ay listesi verisiz aylarda da tamdır; stoksuz ay null değerlidir.
