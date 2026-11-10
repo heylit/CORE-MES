@@ -147,6 +147,14 @@ export const ROL_MATRISI = {
       'sevkiyat.oku', 'siparisler.oku', 'stok.istek', 'terminal.uret', 'uretim-emirleri.kapanis-kalite', 'uretim-emirleri.kapanis-oku',
     ],
   },
+  markalama_gorevlisi: {
+    ad: 'Markalama Görevlisi',
+    islemler: [
+      'idari-isler.arac-talebi-ac', 'idari-isler.talep-ac', 'ik.bordro-gordum', 'ik.izin-talep', 'markalama.seri-ver', 'markalama.tanim-yaz',
+      'mesaj.oku', 'mesaj.yaz', 'sayfa.idari-isler', 'sayfa.ik-islemlerim', 'sayfa.markalama', 'sayfa.mesaj', 'sayfa.ortak-dosyalar',
+      'sayfa.profil', 'stok.istek',
+    ],
+  },
   mudur: {
     ad: 'Müdür',
     islemler: [
@@ -189,10 +197,9 @@ export const ROL_MATRISI = {
   operator: {
     ad: 'Operatör',
     islemler: [
-      'arkon.operator', 'idari-isler.arac-talebi-ac', 'idari-isler.talep-ac', 'ik.bordro-gordum', 'ik.izin-talep', 'markalama.seri-ver',
-      'mesaj.oku', 'mesaj.yaz', 'sayfa.idari-isler', 'sayfa.ik-islemlerim', 'sayfa.kuyruk', 'sayfa.markalama', 'sayfa.mesaj',
-      'sayfa.ortak-dosyalar', 'sayfa.profil', 'sayfa.terminal', 'sayfa.uretim-terminali', 'stok.istek', 'terminal.uret',
-      'uretim-emirleri.ara-istasyon',
+      'arkon.operator', 'idari-isler.arac-talebi-ac', 'idari-isler.talep-ac', 'ik.bordro-gordum', 'ik.izin-talep', 'mesaj.oku', 'mesaj.yaz',
+      'sayfa.idari-isler', 'sayfa.ik-islemlerim', 'sayfa.kuyruk', 'sayfa.mesaj', 'sayfa.ortak-dosyalar', 'sayfa.profil', 'sayfa.terminal',
+      'sayfa.uretim-terminali', 'stok.istek', 'terminal.uret', 'uretim-emirleri.ara-istasyon',
     ],
   },
   planlama_muduru: {

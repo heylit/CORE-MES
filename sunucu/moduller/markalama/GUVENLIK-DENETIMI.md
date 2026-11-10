@@ -2,6 +2,7 @@
 
 Her uç `uclar.ts`'te `uc({...})` ile. Testler `markalama.test.ts` (gerçek PostgreSQL). Oturumsuz istek her uçta 401 (çekirdek).
 Okuma: `{ biri: ['sayfa.markalama'] }`. Test rolleri: operatör (sayfa + seri-ver), kalite (sayfa + durum-yaz), yetkisiz (hiçbiri).
+Yerleşik roller (2730-1 a+c): Markalama Görevlisi sayfa, seri-ver ve tanim-yaz taşır; yerleşik operatör hiçbirini taşımaz (MRK-U16, gerçek rollerle).
 
 | Uç | İşlem | Sunucudaki kurallar | İzinli test | Reddeden test |
 |---|---|---|---|---|
@@ -20,4 +21,4 @@ Okuma: `{ biri: ['sayfa.markalama'] }`. Test rolleri: operatör (sayfa + seri-ve
 - 3B model Çizim Merkezi uçlarından okunur; o uçların yetkisi (`sayfa.cizimler`, `belge-merkezi.oku`, `malzemeler.yaz`) geçerlidir, ekran 403'te yazıyla uyarır.
 
 ## Açık konular
-Rol satırı yok (UYUM-BORCU 1). Kişi kimliği tabloda, ad yok; olayın kişisi denetim kaydı ve `kisi_id` ile.
+Rol satırı Markalama Görevlisi'nde (2730-1 a+c); `markalama.durum-yaz` hiçbir rolde değil, yalnız yöneticide. Kişi kimliği tabloda, ad yok; olayın kişisi denetim kaydı ve `kisi_id` ile.
