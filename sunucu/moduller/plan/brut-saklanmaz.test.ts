@@ -13,7 +13,8 @@ import { kimlikCozucu } from '../oturum/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { DURUM_ANAHTARI } from '../recete-rota/disari.ts';
 import { PLANLAMA_ANAHTARI } from './disari.ts';
-import { brutAlanlariniCikar, saklanmayanKayitDegeri } from './motor-ayari-kurallar.ts';
+import { brutAlanlariniCikar, maliyetsizKayitDegeri, saklanmayanKayitDegeri } from './motor-ayari-kurallar.ts';
+import { planlamaCalismasi, planlamaKayitlari } from './planlama-servis.ts';
 import * as sorgular from './sorgular.ts';
 
 // 2728 a: planlama brüt ücret saklamaz; dolaylı personel kartı ve ek mesai planının kişi ücreti kayda girmez, okumada dönmez.
@@ -141,5 +142,34 @@ describe('brüt ücret kayda girmez ve dönmez (2728 a, gerçek PostgreSQL)', as
     assert.ok(!ham.includes(String(BRUT)), ham.slice(0, 200));
     assert.equal(k?.bicim, 'metin', 'geri alınan sürüm metin biçimli');
     assert.ok(ham.includes('Deneme'), 'süzülmüş, brütsüz alanlar kalır');
+  });
+  // 2772 (Güvenlik O1): maliyet görenin uyguladığı planın TL toplamı kayıtta kalır; maliyet görmeyen planlama rolüne ve yalnız Reçete ve
+  // Rota okuyana iki okumada da dönmez. Toplam uydurmadır (77713).
+  test('BS-08: plan.ozet.tl yalnız finans.maliyet-oku olana döner; kayıtta kalır, öteki özet alanları herkese', async () => {
+    const TL = 77713;
+    const okunan = await app.inject({ method: 'GET', url: '/api/plan/planlama-calismasi', headers: { cookie: cerez } });
+    const { surum } = okunan.json() as PlanlamaCalismasiCevabi;
+    const yaz = await app.inject({ method: 'POST', url: '/api/plan/planlama-kayitlari/yaz', headers: { cookie: cerez },
+      payload: { anahtar: PLANLAMA_ANAHTARI, bicim: 'json', deger: { ...calisma, plan: { ops: {}, fail: [], J: {}, dataVer: 1, ozet: { late: 3, n: 4, tl: TL } } }, beklenenSurum: surum } });
+    assert.equal(yaz.statusCode, 200, yaz.body);
+    assert.ok(JSON.stringify((await sorgular.planlamaKaydi(vt(), PLANLAMA_ANAHTARI))?.deger).includes(String(TL)), 'kayıtta kalır');
+    const kisi = (islemler: string[]) => ({ id: 1, ad: 'Deneme', islemler }) as unknown as Parameters<typeof planlamaKayitlari>[1];
+    const okuyucular = { planlamaci: kisi(['plan.planlama-oku', 'plan.yaz']), receteRota: kisi(['recete-rota.oku']), maliyet: kisi(['plan.planlama-oku', 'finans.maliyet-oku']) };
+    for (const [ad, k] of Object.entries(okuyucular)) {
+      const ham = JSON.stringify(await vt().tx((db) => planlamaKayitlari(db, k)));
+      const cal = ad === 'receteRota' ? null : JSON.stringify(await vt().tx((db) => planlamaCalismasi(db, k)));
+      for (const g of [ham, cal]) {
+        if (g === null) continue;
+        assert.equal(g.includes(String(TL)), ad === 'maliyet', `${ad}: ${g.slice(0, 120)}`);
+        assert.match(g, /"late":3/, `${ad}: öteki özet alanları kalır`);
+      }
+    }
+  });
+
+  test('BS-09: metin biçimli eski satırda da toplam maliyet görmeyene dönmez (saf)', () => {
+    const m = JSON.stringify({ surum: 2, plan: { ozet: { late: 1, tl: 77713 } }, D: { meta: {} } });
+    assert.equal(maliyetsizKayitDegeri('metin', m), JSON.stringify({ surum: 2, plan: { ozet: { late: 1 } }, D: { meta: {} } }));
+    assert.equal(maliyetsizKayitDegeri('metin', 'duz metin'), 'duz metin');
+    assert.deepEqual(maliyetsizKayitDegeri('json', { plan: null, D: {} }), { plan: null, D: {} });
   });
 });

@@ -94,6 +94,27 @@ export function saklanmayanKayitDegeri(bicim: string, deger: unknown): unknown {
   return s === c ? deger : JSON.stringify(s);
 }
 
+// 2772 (Güvenlik O1, 2601 a, K3): planın TL toplamı (plan.ozet.tl) motorun maliyet görenin girdisiyle (genel gider, İK ek mesai değeri,
+// istasyon maliyeti) kurduğu toplamdır; kayıtta kalır, yalnız finans.maliyet-oku olana döner. Başka alana dokunulmaz.
+export function planTlToplaminiCikar(calisma: unknown): unknown {
+  if (calisma === null || typeof calisma !== 'object') return calisma;
+  const plan = (calisma as { plan?: unknown }).plan;
+  if (plan === null || typeof plan !== 'object') return calisma;
+  const ozet = (plan as { ozet?: unknown }).ozet;
+  if (ozet === null || typeof ozet !== 'object' || !('tl' in ozet)) return calisma;
+  const { tl: _t, ...kalan } = ozet as Record<string, unknown>;
+  return { ...calisma, plan: { ...plan, ozet: kalan } };
+}
+export function maliyetsizKayitDegeri(bicim: string, deger: unknown): unknown {
+  const s = saklanmayanKayitDegeri(bicim, deger);
+  if (bicim === 'json') return planTlToplaminiCikar(s);
+  if (bicim !== 'metin' || typeof s !== 'string') return s;
+  let c: unknown;
+  try { c = JSON.parse(s) as unknown; } catch { return s; }
+  const t = planTlToplaminiCikar(c);
+  return t === c ? s : JSON.stringify(t);
+}
+
 export function calismayaMotorAyari(
   calisma: unknown, ayar: MotorAyarlari, finansmanOraniGun: number | null = null, olcek: MotorOlcegi | null = null,
   ogren?: Readonly<Record<string, OgrenilenSure>> | null, genelGider?: { saatBasi: number | null; gizli: boolean },
