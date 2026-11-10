@@ -10,6 +10,7 @@ import { BosHarita, GorunumBasligi, IsiIzgarasi, Lejant, TumSatirlar, type Secim
 import {
   dengeAcilimi, dengeAdi, dengeEtkin, dengeIsisi, dengeKatYazi, kayitliPlan, planDengesi, siparisMaliyetleri, type DengeSatiri,
 } from './kurallar.ts';
+import { useEmirNo } from '../ortak/emir-no.ts';
 
 // Termin ve kâr (denge): sipariş × termin uzatması (zz30-isi ISI.denge), "Tüm satırlar"da plan dengesi çubuğu ve motorla hesaplanan kartlar
 // (zw-denge sDenge). Plan seçenekleri, teklif ve uzatma önerisi motoru birkaç kez koşturur; hesap sunucunun değerlendirme ucundadır.
@@ -62,6 +63,7 @@ export function TerminVeKar({ calisma, komut, yetki, git, depo, yenile }: Planla
   // Dengeyi eski sayfada müdür ve yönetici değiştirirdi (fiyat görür ve plan.kilitle); 223 a: fiyat görme maliyet okuma, sayfa içi kilit plan.yaz.
   const yazabilir = yetki.maliyetOku && yetki.planYaz;
   const degerlendir = useGorunumDegerlendiricisi(depo, komut);
+  const emirNo = useEmirNo(depo.receteRotaKaydi);
   const uzatma = useRef<HTMLDivElement>(null);
   const olc = () => {
     const el = uzatma.current; if (!el) return;
@@ -92,7 +94,7 @@ export function TerminVeKar({ calisma, komut, yetki, git, depo, yenile }: Planla
     );
   }
 
-  const V = dengeIsisi(calisma.D, p, yetki.maliyetOku ? siparisMaliyetleri(calisma, depo.durum?.emirler ?? null) : null);
+  const V = dengeIsisi(calisma.D, p, yetki.maliyetOku ? siparisMaliyetleri(calisma, depo.durum?.emirler ?? null) : null, emirNo);
   const acilim = (r: DengeSatiri, ck: string) => {
     const A = dengeAcilimi(r, ck, V.sutunlar.find((x) => x.k === ck)?.ad ?? '');
     return (

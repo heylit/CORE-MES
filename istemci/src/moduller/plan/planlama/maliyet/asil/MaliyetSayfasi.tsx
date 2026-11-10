@@ -14,14 +14,15 @@ import {
 } from '../yazmalar.ts';
 import { Alan, AltNot, AsilKart, Kilit, Not, SayiGir, Segment } from './girdi.tsx';
 import { planDisi } from '../../tipler.ts';
+import type { EmirNo } from '../../ortak/emir-no.ts';
 
 // Maliyetler sayfasının "Tüm satırlar"ı: bugünkü sayfanın kartları (zu-yan-sayfalar sMaliyetler, ymBeklemeKart; zv-termin "Bu planın bütün
 // maliyeti"; zz6 genel gider ve mesai bedeli satırları). Girdiler satır içidir; her biri tek değişiklik yazar.
 
-interface Ozellik { c: PlanlamaCalismasi; b: MaliyetBaglami | null; para: boolean; yaz: Yaz | null; kim: string; git: (g: PlanlamaGorunumu) => void }
+interface Ozellik { c: PlanlamaCalismasi; b: MaliyetBaglami | null; para: boolean; yaz: Yaz | null; kim: string; git: (g: PlanlamaGorunumu) => void; emirNo?: EmirNo }
 const sayiOf = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) ? v : null);
 
-export function MaliyetSayfasi({ c, b, para, yaz, kim, git }: Ozellik) {
+export function MaliyetSayfasi({ c, b, para, yaz, kim, git, emirNo = (j) => j }: Ozellik) {
   const D = c.D;
   const Y = ymAyar(D);
   const kapali = !yaz || !para;
@@ -58,7 +59,7 @@ export function MaliyetSayfasi({ c, b, para, yaz, kim, git }: Ozellik) {
       <KgKarti c={c} kapali={kapali} y={y} kim={kim} />
       <TalasKarti c={c} kapali={kapali} y={y} kim={kim} />
       <BeklemeKarti c={c} kapali={kapali} y={y} />
-      <ErkenSevkKarti c={c} kapali={kapali} y={y} />
+      <ErkenSevkKarti c={c} kapali={kapali} y={y} emirNo={emirNo} />
     </>
   );
 }
@@ -331,7 +332,7 @@ function BeklemeKarti({ c, kapali, y }: { c: PlanlamaCalismasi; kapali: boolean;
   );
 }
 
-function ErkenSevkKarti({ c, kapali, y }: { c: PlanlamaCalismasi; kapali: boolean; y: Y }) {
+function ErkenSevkKarti({ c, kapali, y, emirNo }: { c: PlanlamaCalismasi; kapali: boolean; y: Y; emirNo: EmirNo }) {
   const D = c.D;
   const l = D.siparisler.filter((s) => !planDisi(s));
   return (
@@ -341,7 +342,7 @@ function ErkenSevkKarti({ c, kapali, y }: { c: PlanlamaCalismasi; kapali: boolea
         {l.map((s) => (
           <label key={s.id} className="tc-pyk-es-sip">
             <input type="checkbox" checked={s.erkenSevk === true} disabled={kapali} onChange={(o) => { y((z) => erkenSevkYaz(z, D, s.id, o.currentTarget.checked)); }} />
-            <span className="tc-pyk-mono">{s.id}</span>
+            <span className="tc-pyk-mono">{emirNo(s.id)}</span>
           </label>
         ))}
       </div>

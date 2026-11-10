@@ -10,6 +10,7 @@ import {
 } from './kurallar.ts';
 import { MaliyetSayfasi } from './asil/MaliyetSayfasi.tsx';
 import { hucreKoy, IsiSayfasi, kdOran, yazici, type Acilim, type FormCagrisi, type FormTanimi, type Hucre, type IsiBos, type IsiSatiri, type IsiVerisi } from './ortak.tsx';
+import { useEmirNo, type EmirNo } from '../ortak/emir-no.ts';
 
 const GG_BILINMEZ = 'Genel gider bilinmiyor: çalıştığı tezgâhlardan birinin amortismanı (bedel, ömür) girilmemiş';
 // Gizli ayda genel gider 0 yazılmaz ("yok" diye okunur); kâr genel gider hariç maliyetten yüksek çıkacağı için o da gizlidir (2677 b).
@@ -21,7 +22,8 @@ const sutunAdi = (k: string): string => SUTUN.find((x) => x[0] === k)?.[1] ?? k;
 export const PARA_KILIDI: IsiBos = { bos: 'Tutarları yalnız maliyet görme yetkisi olanlar görür.', bosSimge: 'lock' };
 
 // Sipariş × maliyet kalemi; hücre kalemin siparişin toplam maliyeti içindeki payıyla koyulaşır (zz30-isi ISI.maliyet).
-export function maliyetIsisi(b: MaliyetBaglami): IsiVerisi<Satir> | IsiBos {
+// emirNo: satırın ekrandaki adı (iş emri no); verilmezse kimlik.
+export function maliyetIsisi(b: MaliyetBaglami, emirNo: EmirNo = (j) => j): IsiVerisi<Satir> | IsiBos {
   const D = b.c.D;
   const L = aktifSiparisler(D).flatMap((s) => { const m = siparisMaliyeti(b, s); return m ? [{ s, m }] : []; });
   if (!L.length) return { bos: 'Plan kurulunca her siparişin maliyeti kalem kalem burada görünür.' };
@@ -55,7 +57,7 @@ export function maliyetIsisi(b: MaliyetBaglami): IsiVerisi<Satir> | IsiBos {
     }
     // Bilinmeyen kalem varken toplam kısmidir; tam gibi yazılmaz (kural 5). Gizli ayda genel gider hariçtir.
     const tutar = `${m.eksik.length ? (m.top ? `en az ${tl(m.top)}` : 'tutar eksik') : tl(m.top)}${m.ggGizli ? ' genel gider hariç' : ''}`;
-    return { k: s.id, ad: s.id, alt: `${urunAdi(D, s.urun)} · ${sayi(s.adet, 0)} adet · ${tutar}`, simge: 'lira' as const, ton: !m.ggGizli && (m.net ?? 0) < 0 ? 'hata' as const : m.eksik.length ? 'uyari' as const : '' as const, h, veri: { s, m } };
+    return { k: s.id, ad: emirNo(s.id), alt: `${urunAdi(D, s.urun)} · ${sayi(s.adet, 0)} adet · ${tutar}`, simge: 'lira' as const, ton: !m.ggGizli && (m.net ?? 0) < 0 ? 'hata' as const : m.eksik.length ? 'uyari' as const : '' as const, h, veri: { s, m } };
   }).sort((a, b2) => (a.veri.m.net ?? 1e12) - (b2.veri.m.net ?? 1e12));
   let en: { r: IsiSatiri<Satir>; k: string; c: Hucre } | null = null;
   for (const r of satirlar) for (const [k] of SUTUN) { const c = r.h[k]; if (c && c.kd !== undefined && c.kd > 0 && k !== 'kar' && (!en || c.kd > (en.c.kd ?? 0))) en = { r, k, c }; }
@@ -83,7 +85,8 @@ export function Maliyetler(o: PlanlamaEkranOzellikleri) {
   const yonlen = useNavigate();
   const emirler = o.depo.durum?.emirler ?? null;
   const b = useMemo(() => (o.yetki.maliyetOku ? maliyetBaglami(c, emirler) : null), [c, emirler, o.yetki.maliyetOku]);
-  const V = useMemo(() => (!o.yetki.maliyetOku ? PARA_KILIDI : b ? maliyetIsisi(b) : { bos: 'Plan kurulunca her siparişin maliyeti kalem kalem burada görünür.' }), [b, o.yetki.maliyetOku]);
+  const emirNo = useEmirNo(o.depo.receteRotaKaydi);
+  const V = useMemo(() => (!o.yetki.maliyetOku ? PARA_KILIDI : b ? maliyetIsisi(b, emirNo) : { bos: 'Plan kurulunca her siparişin maliyeti kalem kalem burada görünür.' }), [b, o.yetki.maliyetOku, emirNo]);
   const yaz = yazici(o.komut);
   const yazabilir = o.komut !== null && o.yetki.maliyetOku;
   const kim = o.depo.ben.kisi.ad;
@@ -109,40 +112,40 @@ export function Maliyetler(o: PlanlamaEkranOzellikleri) {
       const mz = malzemeler(D).find((z) => z.kod === kod);
       const kg = mz ? kgSatiri(D, mz) : null;
       neden = m.mal === null
-        ? `${s.id} malzemesinin (${kod ?? 'ürünün malzemesi'}) Satın Alma fiyatı yok; malzeme maliyeti hesaplanamıyor. Kg fiyatı Satın Alma'da girilir.`
-        : `${s.id} malzemesi ${tl(m.mal)}${m.talas ? `, talaş geri dönüşü ${tl(m.talas)}` : ''}. Fiyat Satın Alma'dan gelir${mz?.fiyatTahmini ? ' (alışı yok, kg fiyatından tahmini)' : ''}.`;
+        ? `${r.ad} malzemesinin (${kod ?? 'ürünün malzemesi'}) Satın Alma fiyatı yok; malzeme maliyeti hesaplanamıyor. Kg fiyatı Satın Alma'da girilir.`
+        : `${r.ad} malzemesi ${tl(m.mal)}${m.talas ? `, talaş geri dönüşü ${tl(m.talas)}` : ''}. Fiyat Satın Alma'dan gelir${mz?.fiyatTahmini ? ' (alışı yok, kg fiyatından tahmini)' : ''}.`;
       if (kg) ekle(F?.kgDegis, { ad: `${kg.kalite} fire payını değiştir`, deg: { r: kg.id }, etki: 'Bu kalitedeki bütün malzemelerin ihtiyacı ve maliyeti değişir.' });
       else if (mz?.kalite) ekle(F?.kgYeni, { ad: `${mz.kalite} fire payı ekle`, deg: { kalite: mz.kalite, cins: mz.cins, form: mz.form }, adim: 1, etki: 'Bu kalitedeki bütün malzemeler bu payı kullanır.' });
     } else if (ck === 'fas') {
       const op = b.ops.find((z) => z.job === s.id && z.fas);
       const fid = op ? op.m.replace(/^@/, '') : null;
-      neden = op ? `${s.id} fason adımı ${fid ?? ''}; tutar ${m.fas ? tl(m.fas) : 'yok'}.` : `${s.id} fasona gitmiyor.`;
+      neden = op ? `${r.ad} fason adımı ${fid ?? ''}; tutar ${m.fas ? tl(m.fas) : 'yok'}.` : `${r.ad} fasona gitmiyor.`;
       if (fid) ekle(F?.fason, { ad: 'Fason fiyatını değiştir', deg: { fas: fid }, etki: 'Fason önerileri ve maliyet yeni fiyatla hesaplanır.' });
       sec.push({ ad: 'Fason planı', etki: 'Hangi işin dışarıda yapılacağını gösterir.', simge: 'truck', yap: () => { o.git('fasonplan'); } });
     } else if (ck === 'mes') {
-      neden = `${s.id} ek mesai payı ${tl(m.mes)}. Pay, siparişin ek vardiyada çalışan saatlerinden gelir.`;
+      neden = `${r.ad} ek mesai payı ${tl(m.mes)}. Pay, siparişin ek vardiyada çalışan saatlerinden gelir.`;
       ekle(F?.iscilik, { ad: 'İşçilik ücretleri', adim: 0, etki: 'Ek mesai ve ayar maliyeti bu ücretlerden hesaplanır.' });
       sec.push({ ad: 'Ek mesai planı', etki: 'Hangi tezgâha ne zaman ek vardiya açıldığını gösterir.', simge: 'clock', yap: () => { o.git('mesaiplan'); } });
     } else if (ck === 'gec' || ck === 'kar') {
       neden = ck === 'gec'
-        ? `${s.id} ${m.T !== null && m.T > 0.05 ? `${saatYaz(m.T)} geç bitiyor; gecikme bedeli ${tl(m.gec)}` : 'zamanında bitiyor; gecikme bedeli yok'}.`
-        : m.ggGizli ? `${s.id} kârı gizli: Finans genel gider oranı bu ay gizli, maliyet genel gider hariç.`
-        : m.net === null ? `${s.id} kârı hesaplanamıyor: ${m.eksik.join(', ') || 'sipariş tutarı girilmedi'}.` : `${s.id} tutarı ${tl(m.tutar)}, maliyeti ${tl(m.top)}, gecikme ve finansman sonrası ${tl(m.net)}.`;
+        ? `${r.ad} ${m.T !== null && m.T > 0.05 ? `${saatYaz(m.T)} geç bitiyor; gecikme bedeli ${tl(m.gec)}` : 'zamanında bitiyor; gecikme bedeli yok'}.`
+        : m.ggGizli ? `${r.ad} kârı gizli: Finans genel gider oranı bu ay gizli, maliyet genel gider hariç.`
+        : m.net === null ? `${r.ad} kârı hesaplanamıyor: ${m.eksik.join(', ') || 'sipariş tutarı girilmedi'}.` : `${r.ad} tutarı ${tl(m.tutar)}, maliyeti ${tl(m.top)}, gecikme ve finansman sonrası ${tl(m.net)}.`;
       if (ck === 'kar') ekle(F?.fiyat, { deg: { sip: s.id }, etki: 'Kâr bu tutardan hesaplanır.' });
       // Termin her açılışta kaynaktan yeniden yazılır (girdi.betik siparisler); burada yazılan termin kalmaz, kaynağı üretim emridir.
       else sec.push({ ad: 'Üretim emirleri', etki: 'Termin üretim emrinden değiştirilir; plan sonraki açılışta onu okur.', simge: 'list', yap: () => { void yonlen('/uretim-emirleri'); } });
       sec.push({ ad: 'Termin ve kâr', etki: 'Termin uzatmasının gecikmeyi ve kârı nasıl değiştirdiğini gösterir.', simge: 'gauge', yap: () => { o.git('denge'); } });
     } else {
       const v = ck === 'isl' ? m.isl : ck === 'ayar' ? m.ayar : m.gg;
-      neden = ck === 'gg' && m.ggGizli ? `${s.id} ${kucukHarf(GG_GIZLI)}.`
-        : ck === 'gg' && v === null ? `${s.id} ${kucukHarf(GG_BILINMEZ)}.`
-        : `${s.id} ${kucukHarf(sutunAdi(ck))} ${tl(v)}. En çok ${tez ?? YOK} tezgâhında çalışıyor; tutar o tezgâhın saat ücretinden gelir.`;
+      neden = ck === 'gg' && m.ggGizli ? `${r.ad} ${kucukHarf(GG_GIZLI)}.`
+        : ck === 'gg' && v === null ? `${r.ad} ${kucukHarf(GG_BILINMEZ)}.`
+        : `${r.ad} ${kucukHarf(sutunAdi(ck))} ${tl(v)}. En çok ${tez ?? YOK} tezgâhında çalışıyor; tutar o tezgâhın saat ücretinden gelir.`;
       if (tez) ekle(F?.tez, { ad: `${tez} saat ücreti`, deg: { tez }, etki: 'Bu tezgâhta çalışan bütün siparişlerin maliyeti değişir.' });
       if (ck === 'gg') sec.push({ ad: 'Genel gider', etki: 'Kira, enerji ve amortismanın tezgâhlara nasıl dağıldığını gösterir.', simge: 'layers', yap: () => { o.git('giderler'); } });
     }
-    sec.push({ ad: `${s.id} çizelgede`, etki: 'Planlama motorunun tezgâh çizelgesine gider.', simge: 'gantt', yap: () => { o.git('plan'); } });
+    sec.push({ ad: `${r.ad} çizelgede`, etki: 'Planlama motorunun tezgâh çizelgesine gider.', simge: 'gantt', yap: () => { o.git('plan'); } });
     return {
-      baslik: `${s.id} · ${sutunAdi(ck)}`, simge: 'lira', ton: (cel?.kd ?? 0) >= 4 ? 'hata' : cel?.sm === 'alert' ? 'uyari' : '', neden,
+      baslik: `${r.ad} · ${sutunAdi(ck)}`, simge: 'lira', ton: (cel?.kd ?? 0) >= 4 ? 'hata' : cel?.sm === 'alert' ? 'uyari' : '', neden,
       bilgi: [['Toplam maliyet', m.ggGizli ? `${tl(m.top)} genel gider hariç` : tl(m.top)], ['Tutar', tl(m.tutar)], ['Net', m.ggGizli ? 'gizli' : tl(m.net)]], formlar: f, secenekler: sec, kilitli: kilitli && !yazabilir,
     };
   };
@@ -151,7 +154,7 @@ export function Maliyetler(o: PlanlamaEkranOzellikleri) {
     <IsiSayfasi
       ad="Maliyetler" simge="lira" veri={V} acilim={acilim}
       planEski={c !== null && c.plan !== null && !planGuncel(c)} iyilestir={o.yetki.planYaz}
-      tum={c ? <MaliyetSayfasi c={c} b={b} para={o.yetki.maliyetOku} yaz={o.komut ? yaz : null} kim={kim} git={o.git} /> : null}
+      tum={c ? <MaliyetSayfasi c={c} b={b} para={o.yetki.maliyetOku} yaz={o.komut ? yaz : null} kim={kim} git={o.git} emirNo={emirNo} /> : null}
     />
   );
 }

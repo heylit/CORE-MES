@@ -11,6 +11,7 @@ import {
   type FasoncuBilgisi, type FasonIsi, type IsTanimi,
 } from './kurallar.ts';
 import { hucreKoy, IsiSayfasi, yazici, type Acilim, type FormTanimi, type Hucre, type IsiBos, type IsiSatiri, type IsiVerisi } from './ortak.tsx';
+import { isAdi, useEmirNo, type EmirNo } from '../ortak/emir-no.ts';
 
 interface Satir { f: FasoncuBilgisi; L: FasonIsi[]; kotu: number; ak: Record<string, FasonIsi[]> }
 interface Hazirlik { I: Map<string, IsTanimi>; L: FasonIsi[] }
@@ -66,12 +67,13 @@ export function fasonIsisi(c: PlanlamaCalismasi, h: Hazirlik): IsiVerisi<Satir> 
 }
 
 export function FasonPlani(o: PlanlamaEkranOzellikleri) {
-  return <FasonPlaniGorunumu c={o.calisma} komut={o.komut} planYaz={o.yetki.planYaz} maliyetOku={o.yetki.maliyetOku} git={o.git} />;
+  const emirNo = useEmirNo(o.depo.receteRotaKaydi);
+  return <FasonPlaniGorunumu c={o.calisma} komut={o.komut} planYaz={o.yetki.planYaz} maliyetOku={o.yetki.maliyetOku} git={o.git} emirNo={emirNo} />;
 }
 
 // Satın Alma'nın sayfası (546 a) aynı görünümü daraltılmış çalışmayla, yazmasız çizer: git null ise planlamaya geçiş seçeneği çıkmaz.
-export function FasonPlaniGorunumu({ c, komut, planYaz, maliyetOku, git }: {
-  c: PlanlamaCalismasi | null; komut: CalismaKomutu | null; planYaz: boolean; maliyetOku: boolean; git: PlanlamaEkranOzellikleri['git'] | null;
+export function FasonPlaniGorunumu({ c, komut, planYaz, maliyetOku, git, emirNo = (j) => j }: {
+  c: PlanlamaCalismasi | null; komut: CalismaKomutu | null; planYaz: boolean; maliyetOku: boolean; git: PlanlamaEkranOzellikleri['git'] | null; emirNo?: EmirNo;
 }) {
   const H = useMemo(() => fasonHazirligi(c), [c]);
   const V = useMemo(() => (c && H ? fasonIsisi(c, H) : { bos: 'Plan kurulunca fasona giden işler burada gün gün görünür.' }), [c, H]);
@@ -95,11 +97,11 @@ export function FasonPlaniGorunumu({ c, komut, planYaz, maliyetOku, git }: {
     return {
       baslik: `${r.ad} · ${gAd}`, simge: 'truck', ton: kd >= 4 ? 'hata' : kd >= 2 ? 'uyari' : '',
       neden: x
-        ? `${r.ad} ${gAd}: ${cel?.etiket ?? ''}. ${x.id} ${kucukHarf(fasonDurumu(x)[0])}; dönüş ${gunYaz(D, x.T ?? x.r.C)}${x.T === null ? ' (tahmini)' : ''}, sonraki adım ${gunYaz(D, x.ger)}.`
+        ? `${r.ad} ${gAd}: ${cel?.etiket ?? ''}. ${isAdi(emirNo, x.id, x.r.job)} ${kucukHarf(fasonDurumu(x)[0])}; dönüş ${gunYaz(D, x.T ?? x.r.C)}${x.T === null ? ' (tahmini)' : ''}, sonraki adım ${gunYaz(D, x.ger)}.`
         : `${r.ad} ${gAd}: iş yok.`,
-      bilgi: ak.slice(0, 4).map((z) => [z.id, `${fasonDurumu(z)[0]} · dönüş ${gunYaz(D, z.T ?? z.r.C)}`]),
-      formlar: F?.termin ? ak.slice(0, 3).map((z) => ({ tanim: { ...(F.termin as FormTanimi), ad: `${z.id} dönüş tarihi` }, deg: { is: z.id }, etki: 'Girilen gün kesin süre sayılır; plan onu kullanır.' })) : [],
-      secenekler: x && git ? [{ ad: `${x.r.job} çizelgede`, etki: 'Planlama motorunun tezgâh çizelgesine gider.', simge: 'gantt', yap: () => { git('plan'); } }] : [],
+      bilgi: ak.slice(0, 4).map((z) => [isAdi(emirNo, z.id, z.r.job), `${fasonDurumu(z)[0]} · dönüş ${gunYaz(D, z.T ?? z.r.C)}`]),
+      formlar: F?.termin ? ak.slice(0, 3).map((z) => ({ tanim: { ...(F.termin as FormTanimi), ad: `${isAdi(emirNo, z.id, z.r.job)} dönüş tarihi` }, deg: { is: z.id }, etki: 'Girilen gün kesin süre sayılır; plan onu kullanır.' })) : [],
+      secenekler: x && git ? [{ ad: `${emirNo(x.r.job)} çizelgede`, etki: 'Planlama motorunun tezgâh çizelgesine gider.', simge: 'gantt', yap: () => { git('plan'); } }] : [],
       kilitli: ak.length > 0 && !yazabilir,
     };
   };
@@ -107,7 +109,7 @@ export function FasonPlaniGorunumu({ c, komut, planYaz, maliyetOku, git }: {
   return (
     <IsiSayfasi
       ad="Fason planı" simge="truck" veri={V} acilim={acilim} planEski={c !== null && c.plan !== null && !planGuncel(c)} iyilestir={planYaz}
-      tum={c ? <FasonSayfasi c={c} I={H?.I ?? null} L={H?.L ?? []} para={maliyetOku} yaz={yazabilir ? yaz : null} /> : null}
+      tum={c ? <FasonSayfasi c={c} I={H?.I ?? null} L={H?.L ?? []} para={maliyetOku} yaz={yazabilir ? yaz : null} emirNo={emirNo} /> : null}
     />
   );
 }

@@ -3,6 +3,7 @@ import type { CanliFarkiCevabi, TabanVeCanliCevabi } from '#paylasilan/sozlesme/
 import { tesisSaati } from '#paylasilan/tesis-zamani.ts';
 import type { PlanlamaCalismasi, PlanVerisi } from '../../tipler.ts';
 import { acikSaat, elleSayilari, saatOku, tabanMs, type Derleme, type FailNedeni, type OkunanPlan, type PlanIslemi } from '../kurallar.ts';
+import type { EmirNo } from '../../ortak/emir-no.ts';
 import { ufukGunu } from '../../ufuk-olcegi.ts';
 import { gunBaslayanlar, gunDonuk, gunNumarasi } from '../cizelge/kurallar.ts';
 
@@ -105,19 +106,7 @@ export const SIPARIS_GRUPLARI = [['gec', 'Geciken', 'alert'], ['risk', `Riskli �
 // Malzeme tahmini üretim başlangıcından sonra.
 export const malzemeGec = (s: SiparisBilgisi): boolean => s.ur != null && s.bas > s.ur + 0.25;
 // Sipariş numarasının parça eki (/2) ayrı yazılır.
-// İş emri no (Reçete ve Rota kaydı orders[].no). Çalışmadaki sipariş kimliği emrin iç kimliğidir (girdi.betik); kullanıcı emri
-// numarasıyla tanır, ekran no gösterir. Parça soneki (/2) korunur; numarası bilinmeyen kimlik olduğu gibi yazılır.
-export type EmirNo = (id: string) => string;
-export function emirNoOkuyucu(kayit: unknown): EmirNo {
-  const orders = kayit !== null && typeof kayit === 'object' ? (kayit as { orders?: unknown }).orders : undefined;
-  const m = new Map<string, string>();
-  if (Array.isArray(orders)) for (const o of orders as unknown[]) {
-    if (o === null || typeof o !== 'object') continue;
-    const { id, no } = o as { id?: unknown; no?: unknown };
-    if ((typeof id === 'string' || typeof id === 'number') && typeof no === 'string' && no.trim()) m.set(String(id), no.trim());
-  }
-  return (id) => { const [kok, parca] = parcaAyir(id); const no = m.get(kok); return no ? `${no}${parca ?? ''}` : id; };
-}
+export { emirNoOkuyucu, type EmirNo } from '../../ortak/emir-no.ts';
 export function parcaAyir(id: string): [string, string | null] { const m = /^(.*)(\/\d+)$/.exec(id); return m ? [m[1] ?? id, m[2] ?? null] : [id, null]; }
 export const ONCELIK_KISA: Record<number, string> = { 1: 'acil/yüksek', 2: 'normal', 3: 'düşük' };
 
