@@ -4,7 +4,7 @@ import { siralamaSql } from '#cekirdek/liste.ts';
 import type { SiralamaTanimi } from '#cekirdek/liste.ts';
 import { zamanMetni } from '#cekirdek/zaman.ts';
 import { TESIS_SAAT_DILIMI } from '#paylasilan/zaman.ts';
-import { KULLANILABILIR_KONUM_TURLERI, type DegerGrubu } from '../../kurallar.ts';
+import { EMIRSIZ_CIKIS_NEDENLERI, KULLANILABILIR_KONUM_TURLERI, type DegerGrubu } from '../../kurallar.ts';
 import { malzemeKartiIzParametreleri, type MalzemeKartiAnahtari, type MalzemeKartiIzi } from '#paylasilan/malzeme-karti-izi.ts';
 import { KULLANILABILIR_SQL, MAL_KABUL_SECIMI, S, icinde, malzemeKaynagi } from '../ortak/sorgular.ts';
 import type { MalKabulHam } from '../depo/sorgular.ts';
@@ -328,6 +328,16 @@ export const aylikTuketim = (db: Db, basAy: string, bitAy: string, malzemeIdler:
      AND ${AY_SQL} BETWEEN $1 AND $2 AND ($3::int[] IS NULL OR h.malzeme_id = ANY($3::int[]))
    GROUP BY 1, 2 HAVING sum(CASE WHEN h.tur = 'cikis' THEN h.miktar ELSE -h.miktar END) <> 0 ORDER BY 1, 2`,
   [basAy, bitAy, malzemeIdler === null ? null : [...malzemeIdler]]);
+// 2623 a, 2709 c: ayın (tesis saat dilimi) geri alınmamış emirsiz genel kullanım çıkışları ve sayım eksikleri. Geri alma aylikTuketim'deki gibi çıkışın kendi
+// ayından düşer; geri alma bütün miktarı çevirdiğinden geri alınan çıkış hiç sayılmaz.
+export const emirsizCikislar = (db: Db, ay: string): Promise<{ malzemeId: number; zaman: string; miktar: string }[]> => db.sorgu(
+  `SELECT a.malzeme_id AS "malzemeId", ${zamanMetni('a.zaman')} AS zaman, a.miktar::text AS miktar
+   FROM stok_hareketi a
+   WHERE ((a.tur = 'cikis' AND a.cikis_nedeni = ANY($2::text[])) OR a.tur = 'sayim_eksik') AND a.uretim_emri_id IS NULL
+     AND a.zaman >= ($1 || '-01')::timestamp AT TIME ZONE '${TESIS_SAAT_DILIMI}'
+     AND a.zaman < (($1 || '-01')::timestamp + interval '1 month') AT TIME ZONE '${TESIS_SAAT_DILIMI}'
+     AND NOT EXISTS (SELECT 1 FROM stok_hareketi g WHERE g.geri_alinan_id = a.id)
+   ORDER BY a.zaman, a.id`, [ay, [...EMIRSIZ_CIKIS_NEDENLERI]]);
 // Kartın ilk hareketi (geçmişin ne kadar geriye gittiği) ve geri alınmamış son tüketim çıkışı; hareketi olmayan kart dönmez.
 export const tuketimTarihleri = (db: Db, malzemeIdler: readonly number[] | null): Promise<{ malzemeId: number; ilkHareket: string; sonTuketim: string | null }[]> => db.sorgu(
   `SELECT h.malzeme_id AS "malzemeId", ${zamanMetni('min(h.zaman)')} AS "ilkHareket",

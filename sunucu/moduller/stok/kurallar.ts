@@ -540,6 +540,22 @@ export function stokDegeri(toplamlar: readonly { malzemeId: number; toplam: stri
 }
 
 
+// ---- Emirsiz stok çıkışı (2623 a, 2594 b) --------------------------------------------------------------------------------------
+// Emre bağlı olmayan, genel kullanıma giden çıkışlar ve sayım eksiği (2709 c) genel giderin "diğer" bileşenine girer. Sevk (satış)
+// ve tedarikçiye iade tüketim değildir; üretime sarf hep emirlidir. Sayım eksiği aynı ayın sayım fazlasıyla netleşmez.
+export const EMIRSIZ_CIKIS_NEDENLERI = ['diger', 'numune', 'fire'] as const;
+// Tutar = her çıkışın miktarı x çıkış anındaki son alış fiyatı (TRY), kuruşa yarım yukarı. 2710 b: fiyatı bilinmeyen çıkış toplama
+// girmez, sayısı ayrı döner; sıfır fiyat uydurulmaz. Çıkış yoksa tutar sıfırdır.
+export function emirsizCikisTutari(cikislar: readonly { miktar: string; fiyat: string | null }[]): { tutar: string; fiyatsizCikis: number } {
+  let toplam = 0n, fiyatsizCikis = 0;
+  for (const c of cikislar) {
+    if (c.fiyat === null) { fiyatsizCikis += 1; continue; }
+    toplam += binde(c.miktar) * onBinde(c.fiyat);
+  }
+  const kurus = (toplam + 50000n) / 100000n;
+  return { tutar: `${kurus / 100n}.${(kurus % 100n).toString().padStart(2, '0')}`, fiyatsizCikis };
+}
+
 // ---- Alış fiyatı ile değerleme (1382 d) ----------------------------------------------------------------------------------------
 // Mal kabuller zaman sırasıyla işlenir; her kesimde (o andan önceki olaylar; null bütün geçmiş) kart başına iki fiyat çıkar:
 // - Hareketli ortalama: mal kabulde (eldeki x ortalama + miktar x fiyat) / (eldeki + miktar). Eldeki, hareketten önceki stoktur;

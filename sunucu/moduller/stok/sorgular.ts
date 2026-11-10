@@ -24,7 +24,7 @@ export {
   belgeNoVarMi, type GirisKontroluHam, girisKontroluSatirlari, malKabulAc, malKabulBul, malKabulSatiriYaz, type MalKabulSatirHam, malKabulSatirlari,
   type MalKabulSuzgeci, MAL_KABUL_SIRALAMASI, malKabulSay, malKabuller, gozAdaylari, konumunRafOlcusu, stokluMalzemeToplamlari, degerGrubuMalzemeToplamlari,
   type AySonuToplami, aySonuMalzemeToplamlari, type DegerlemeAlisOlayiHam, degerlemeAlisOlaylari, panelSayilari, gunlukHareketler, kritikMalzemeler,
-  malzemeKartiIzleri, aylikTuketim, tuketimTarihleri,
+  malzemeKartiIzleri, aylikTuketim, tuketimTarihleri, emirsizCikislar,
 } from './sorgular/malzeme/sorgular.ts';
 export {
   isKutusuSayilari, stokMiktarlari, malzemeToplamlari, dusukStokSayisi, emirlerinNetSarfi, emirlerinZincirdekiMiktari, statuluStoklar, statuSonHareketleri, emrinStatuAkisi, emirlerinFisHareketleri, emrinPartileri, type AkisHareketi,

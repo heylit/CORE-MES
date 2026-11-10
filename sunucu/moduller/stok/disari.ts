@@ -36,6 +36,10 @@ export async function stokMiktarlari(db: Db, malzemeIdler: number[]): Promise<Ma
 export type { DegerGrubu } from './kurallar.ts';
 // malzemeIdler verilirse yalnız o kartların satırları döner (tek kartı soran ekran bütün stoğu okumasın).
 export const degerGrubuToplamlari = (db: Db, malzemeIdler: readonly number[] | null = null) => sorgular.degerGrubuMalzemeToplamlari(db, malzemeIdler);
+// 2623 a, 2594 b: finansın genel gider çözücüsü (stokCikisiCozucusu). Ayın emre bağlı olmayan genel kullanım çıkışları (diğer, numune,
+// emirsiz fire) ve sayım eksikleri (2709 c) x çıkış anındaki son alış fiyatı, TL kuruşlu; çıkış yoksa 0. 2710 b: son alışı bilinmeyen
+// çıkış tutara girmez, `eksik` listesinde bildirilir (finans 2714 imzası).
+export const emirsizCikisTutari = (db: Db, ay: string): Promise<{ tutar: number; eksik: string[] }> => servis.emirsizCikisTutari(db, ay);
 // Kalite Merkezi (229 a): lot numarası ya da üretim emriyle parti kimlikleri; ve partinin bütün bakiyesini hedef kaliteye geçiren karar
 // (yoldaki teslime ayrılan miktar hariç; değişen satırlar döner). Çağıranın transaction'ında yürür; yetkiyi çağıran korur.
 export const partileriBul = (db: Db, a: { lotNo?: string; uretimEmriId?: number }) => sorgular.partileriBul(db, a);
