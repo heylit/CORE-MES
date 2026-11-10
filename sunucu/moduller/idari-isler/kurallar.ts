@@ -367,3 +367,6 @@ export function iadeReddi(verilis: string | null, iade: string, bugun: string): 
 export function iadeSonrasiDurum(iadeDurumu: IadeDurumu): DemirbasDurumu {
   return iadeDurumu === 'saglam' ? 'bosta' : iadeDurumu === 'hasarli' ? 'bakimda' : 'kayip';
 }
+
+// 2594 b: finansın genel gider ayı 'GGGG-AA' (ay 01-12).
+export const ayGecerliMi = (ay: string): boolean => /^[0-9]{4}-(0[1-9]|1[0-2])$/.test(ay);

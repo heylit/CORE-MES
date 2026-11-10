@@ -40,3 +40,4 @@
 | IDR-31 iade ileri ve verilişten önce olmaz; sağlam boşa, hasarlı bakıma, kayıp kayba; iade bir kez | `kurallar.test.ts` `IDR-31 ...`, `zimmet.test.ts` `IDR-31 ...`, `IDR-29, IDR-30 ve IDR-31 ret ...` |
 | IDR-32 İK kopyası: iptalsiz kayıt demirbaş ve zimmet olur, kişisiz personel adla gelir ve bir kez kişiye bağlanır, ikinci çalışma kopyalamaz | `zimmet.test.ts` `244 kopya göçü ...` (İK DROP göçüyle kalkar), `IDR-32: kişisiz (adla) zimmet ...` |
 | IDR-33 görevde durumu yalnız çıkışla başlar, dönüşle biter; elle seçilmez, yoldaki aracın durumu elle değişmez | `kurallar.test.ts` `IDR-33 ...`, `gorev.test.ts` `IDR-33 ...`, `IDR-23 akış ...`; istemci `araç ekleme tekrar korumalı ...` |
+| IDR-34 (2594 b, 2614-2 a) aylık araç masrafı: bütün araçların o ayki (masraf tarihi) iptalsiz masraf toplamı, TL kuruşlu; masraf yoksa 0; tutar zorunlu olduğundan null dönmez; ay GGGG-AA | `masraf.test.ts` `IDR-34 ...` |

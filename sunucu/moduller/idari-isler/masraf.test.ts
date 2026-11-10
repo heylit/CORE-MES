@@ -7,6 +7,7 @@ import type { TestVeritabani } from '#cekirdek/test-vt.ts';
 import { uygulamaKur } from '#cekirdek/uygulama.ts';
 import type { Arac, AracCevabi, Masraf, MasrafCevabi, MasraflarCevabi } from '#paylasilan/sozlesme/idari-isler.ts';
 import { denetimYaz } from '../denetim/disari.ts';
+import { aylikAracMasrafi } from './disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
@@ -146,5 +147,24 @@ describe('idari-isler araç masrafı (gerçek PostgreSQL, gerçek giriş)', () =
       o().sahip.sorgu('UPDATE idari_isler_arac_masrafi SET tutar = 0 WHERE id = $1', [m.id]),
       /idari_isler_arac_masrafi_tutar/,
     );
+  });
+
+  test('IDR-34 (2594 b): aylık araç masrafı bütün araçların o ayki iptalsiz masraf toplamı; ay sınırı tarihe göre; masraf yoksa 0', async () => {
+    const a = await aracEkle();
+    const b = await aracEkle();
+    const ay = (deger: string) => o().vt.tx((db) => aylikAracMasrafi(db, deger));
+    assert.equal(await ay('2025-03'), 0, 'masrafsız ay 0 (null değil)');
+    await masrafEkle(a.id, { tarih: '2025-03-01', tutar: '0.10' });
+    await masrafEkle(b.id, { tarih: '2025-03-31', tutar: '0.20', tur: 'kira' });
+    await masrafEkle(a.id, { tarih: '2025-02-28', tutar: '1000' });
+    await masrafEkle(b.id, { tarih: '2025-04-01', tutar: '2000' });
+    const iptalli = await masrafEkle(a.id, { tarih: '2025-03-15', tutar: '500' });
+    const iptal = await gonder(idari.cerez, `/idari-isler/masraflar/${iptalli.id}/iptal`, { surum: iptalli.surum, neden: 'Deneme yanlış ay' });
+    assert.equal(iptal.statusCode, 200, iptal.body);
+    assert.equal(await ay('2025-03'), 0.3, 'iki araç toplanır, kuruş korunur; iptal ve komşu aylar girmez');
+    assert.equal(await ay('2025-02'), 1000);
+    assert.equal(await ay('2025-04'), 2000);
+    await assert.rejects(ay('2025-13'), /GGGG-AA/);
+    await assert.rejects(ay('2025-3'), /GGGG-AA/);
   });
 });

@@ -15,7 +15,7 @@
 - Filo: Sevkiyat'ın `sevkiyat_araci` kaydı plaka ile araç kartına bağlanacak (172 a); bugün iki liste.
 - Filo: araç simgesi ortak sette yok; `truck` kullanıldı (Çekirdek §13 isteği, araba).
 
-- Araç masrafı: proje ve finans bağı (masrafın projeye ya da gider hesabına yazılması) bağlamada; bugün yalnız araç başına liste ve yıl toplamı.
+- Araç masrafı: proje bağı (masrafın projeye yazılması) bağlamada. Finans bağı 2708 ile geldi: aylık toplam genel giderin "diğer" bileşenine girer (2614-2 a).
 - Zimmet: İK zimmet alanını kaldırır, IK-74 çıkış uyarısını `kisilerinAcikZimmetleri` ile okur, `ik_zimmet`'i kaldıran göçünde önce
   `idari_isler_zimmet_ik_kopyala()` çağırır (İK şeridi). İdari İşler `ik/disari`'yi okuduğu için İK'dan bu okuma döngü yapar; çözücü kaydı gerekir.
 - Zimmet: kişi sayfasında "üzerindeki zimmetler", zimmet formu yazdırma ve demirbaş etiketi (Etiket Merkezi) bağlamada.
