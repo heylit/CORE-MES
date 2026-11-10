@@ -495,7 +495,7 @@ export async function aracTaleplerim(db: Db, kullanici: Kullanici): Promise<Arac
 async function masrafCevir(db: Db, satirlar: MasrafSatiri[]): Promise<Masraf[]> {
   const adlar = await kisiAdlari(db, satirlar.map((s) => s.kaydeden_kisi_id));
   return satirlar.map((s) => ({
-    id: s.id, aracId: s.arac_id, tarih: s.tarih, tur: s.tur, tutar: s.tutar, km: s.km, belgeNo: s.belge_no, aciklama: s.aciklama,
+    id: s.id, aracId: s.arac_id, tarih: s.tarih, tur: s.tur, tutar: s.tutar, kdv: s.kdv, km: s.km, belgeNo: s.belge_no, aciklama: s.aciklama,
     kaydedenAd: adlar.get(s.kaydeden_kisi_id) ?? null, kayit: s.kayit, iptal: s.iptal, iptalNedeni: s.iptal_nedeni, surum: s.surum,
   }));
 }
