@@ -25,6 +25,8 @@ export const rotalar: ModulRotasi[] = [
   // Operatör menüde gezip döndüğünde terminal yeniden kurulmaz, yarım iş yerinde kalır.
   { yol: '/uretim-terminali', ekran: YeniTerminal, kalici: true },
   { yol: '/uretim-terminali/eski', ekran: EskiAdres },
+  // 2748: hazırlık matrisi operatöre Üretim Terminali menüsünden açılır (operatörde Üretim Hazırlık sayfası yoktur).
+  { yol: '/uretim-terminali/hazirlik', ekran: HazirlikMatrisi },
   { yol: '/kuyruk', ekran: YeniKuyruk },
   { yol: '/kuyruk/eski', ekran: EskiAdres },
   // Sabit yollar /arkon/:sayfa'dan önce eşlenir.

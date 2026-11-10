@@ -12,7 +12,7 @@ import type { TakvimKaydi } from '#paylasilan/sozlesme/takvim.ts';
 import { tesisGunu } from '#paylasilan/zaman.ts';
 import type {
   AcilisSecenekleri, SiradakiFasonCevabi, AdimliEmirAyrintisi, AdimliEmirOzeti, AdimliOzetCevabi, AtanabilirKaynak, RefakatKartiCevabi, EkAdim, EmirDurumu, EmirTuru, IsEmri, IsEmriKaynagi,
-  ReworkAdimiGovdesi, RotasizAdimDuzenle, RotasizAdimEkle,
+  IsEmriIlerlemesi, ReworkAdimiGovdesi, RotasizAdimDuzenle, RotasizAdimEkle,
 } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { SABIT_HURDA_KODLARI, hurdaNedenleriniListele } from '../durus-nedenleri/disari.ts';
 import { firmaAra, firmaOzetleri, karneOlayiYaz } from '../musteri-tedarikci/disari.ts';
@@ -913,6 +913,38 @@ async function adimEksikHaritasi(db: Db, emirId: number, hepsi: readonly IsEmriS
   for (const i of hepsi) {
     if (i.bagimlilik === 'bagimsiz') { sonuc.set(i.id, null); continue; }
     sonuc.set(i.id, adimEksigi(await adimaGiren(db, emirId, hepsi, i), adimTuketimi(sayac.get(i.id))));
+  }
+  return sonuc;
+}
+
+// 2748: emirlerin iş emri başına ilerlemesi (sözleşme isEmriIlerlemesi). Hazırlık matrisi ve terminalin Rota sekmesi (2746) bunu okur.
+// Adıma giren adimaGiren'dir (emir ayrıntısındaki eksik ile aynı hesap); emir başına çalışır, sayaç ve fason toplu okunur.
+export async function isEmriIlerlemeleri(db: Db, emirIdleri: readonly number[]): Promise<Map<number, IsEmriIlerlemesi[]>> {
+  const sonuc = new Map<number, IsEmriIlerlemesi[]>();
+  const emirler = (await s.ustEmirlerBul(db, [...new Set(emirIdleri)])).filter((e) => e.malzemeNo !== null);
+  if (emirler.length === 0) return sonuc;
+  const hepsi = await s.isEmirleriGetir(db, emirler.map((e) => e.id));
+  const idler = hepsi.map((i) => i.id);
+  const sayac = new Map((await s.adimSayaclariGetir(db, idler)).map((x) => [x.isEmriId, x]));
+  const hareketler = await s.fasonHareketleriGetir(db, hepsi.filter((i) => i.fasonFirmaId !== null).map((i) => i.id));
+  for (const e of emirler) {
+    const kendi = hepsi.filter((i) => i.uretimEmriId === e.id).sort((a, b) => a.sira - b.sira);
+    const satirlar: IsEmriIlerlemesi[] = [];
+    for (const i of kendi) {
+      const say = sayac.get(i.id);
+      const hedef = dalBasiAdedi(e.adet, i);
+      const saglam = i.durum === 'tamam' ? (i.saglamAdet ?? 0) : (say?.saglam ?? 0);
+      const giren = i.bagimlilik === 'bagimsiz' ? null : await adimaGiren(db, e.id, kendi, i);
+      const f = i.fasonFirmaId === null ? null : fasonOzeti(hareketler.filter((h) => h.isEmriId === i.id));
+      satirlar.push({
+        isEmriId: i.id, emirId: e.id, opNo: i.opNo, sira: i.sira, ad: i.ad, istasyonId: i.istasyonId, durum: i.durum, fason: i.fasonFirmaId !== null,
+        hedef, saglam, hurda: say?.hurda ?? 0, kararBekliyor: say?.kararBekliyor ?? 0, kalan: Math.max(hedef - saglam, 0),
+        hazir: (giren ?? hedef) - adimTuketimi(say),
+        fasonda: f === null ? 0 : Math.max(f.gonderilen - f.donenSaglam - f.donenHurda, 0),
+        devirAdedi: i.devirAdedi,
+      });
+    }
+    sonuc.set(e.id, satirlar);
   }
   return sonuc;
 }

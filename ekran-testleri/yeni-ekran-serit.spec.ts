@@ -55,7 +55,8 @@ const SERITLI = [
   ['/malzemeler', 'Malzemeler ve Hizmetler', 'Katalog'], ['/malzemeler/ayarlar', 'Malzemeler ve Hizmetler', 'Malzeme ayarları'],
   ['/kalite-merkezi/dof', 'Kalite Merkezi', 'DÖF'],
 ] as const;
-const TEK_MADDELI = new Set<string>(['Üretim Terminali', 'Kuyruk']);
+// Üretim Terminali menüsü Hazırlık maddesiyle iki maddelidir (2748): şeridi her genişlikte çizilir.
+const TEK_MADDELI = new Set<string>(['Kuyruk']);
 for (const [yol, menuAdi, madde] of SERITLI) {
   test(`${yol}: yeni ekranda kabuğun şeridi durur`, async ({ page, ac }) => {
     await ac(yol);
@@ -63,7 +64,7 @@ for (const [yol, menuAdi, madde] of SERITLI) {
     // (900 px ve üstü) kendi şeridini kabuğun üst çubuğuna koyar, tek maddelik şerit orada da çizilmez (2052-1 a).
     const menu = page.locator(`nav[aria-label="${menuAdi} menüsü"]`);
     const en = page.viewportSize()?.width ?? 0;
-    if (TEK_MADDELI.has(menuAdi) && (en < 768 || (menuAdi === 'Üretim Terminali' && en >= 900))) await expect(menu, yol).toBeHidden();
+    if (TEK_MADDELI.has(menuAdi) && en < 768) await expect(menu, yol).toBeHidden();
     else await expect(menu, yol).toBeVisible();
     await expect(menu.locator('[aria-current="page"]'), yol).toHaveText(new RegExp(`^${madde}`));
     await expect(page.getByRole('tablist', { name: 'Üretim Hazırlık' }), yol).toHaveCount(0);

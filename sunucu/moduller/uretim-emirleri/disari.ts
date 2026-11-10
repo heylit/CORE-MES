@@ -631,3 +631,8 @@ export { malzemeKartiIzleri } from './sorgular.ts';
 // dönüş, tamamlamada partiye giriş) bu fonksiyonları kendi transaction'ında çağırır; yetki denetlemezler, çağıranın ucu korur.
 export { dieAc, dieDonusuYaz, dieGidisYaz, dieIptal, dieListesi, dieOku, dieTamamla } from './dis-islem-emri.ts';
 export type { DieAcGirdisi } from './dis-islem-emri.ts';
+
+// 2748: iş emri başına üretim ilerlemesi (hedef, sağlam, hurda, kalan, hazır, fasonda). Terminalin Rota sekmesi (2746) de bunu okur;
+// hesap tek yerdedir. Yetki çağıranın ucundadır.
+export { isEmriIlerlemeleri } from './is-emri-servis.ts';
+export type { IsEmriIlerlemesi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
