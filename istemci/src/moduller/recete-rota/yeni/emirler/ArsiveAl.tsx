@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
+import type { ArsivOnizlemeCevabi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { Dugme, Pencere, Simge } from '../../../../ortak/arayuz/index.ts';
 import { api, ApiHatasi } from '../../../../ortak/veri/api.ts';
 import { sayi } from '../bicim.ts';
@@ -7,21 +8,9 @@ import type { useEmirKomutu } from './komut.ts';
 import type { Emir } from './kurallar.ts';
 
 // 2721: başlamış emir silinmez, uyarı ve durdurmayla arşive alınır; sayılanlar ve tüketim kalır, kapanış açık kalır.
-// Sözleşme üretim emrinin sahibindedir (2520 yazarı); sunucu yaması gelince tip oradan ithal edilir.
-export interface ArsivOnizlemesi {
-  surum: number;
-  // Adımsız eski kullanım satırında opNo yoktur (null): "İş çalışıyor" yazılır.
-  calisan: { opNo: number | null; ad: string | null; operator: string | null }[];
-  saglam: number | null;
-  hurda: number | null;
-  kararBekleyen: number | null;
-  fasonda: { opNo: number; adet: number }[];
-  hataliAcik: number;
-  // Doluysa arşive alma kapalıdır (ör. açık kol); metni sunucu yazar.
-  engel: string | null;
-  // İlki iptal ile arşivin farkını anlatan sabit giriştir; metinlerin hepsi sunucudan gelir.
-  uyarilar: string[];
-}
+// Biçim üretim emrinin sözleşmesindedir. İlk uyarı iptal ile arşivin farkını anlatan sabit giriştir;
+// `engel` doluysa arşive alma kapalıdır. Metinlerin hepsi sunucudan gelir.
+export type ArsivOnizlemesi = ArsivOnizlemeCevabi;
 
 // Özet satırları: yalnız verisi olan satır yazılır; bilinmeyen değer sıfır diye yazılmaz.
 export function arsivOzeti(o: ArsivOnizlemesi): string[] {
