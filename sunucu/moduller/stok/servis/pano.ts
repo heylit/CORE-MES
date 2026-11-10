@@ -209,18 +209,27 @@ export async function emirsizCikisTutari(db: Db, ay: string): Promise<{ tutar: n
 }
 
 // 2727-1 (2613-3 a): emir ve malzeme başına net sarf (emirlerinNetSarfi ile aynı çift ve miktar) ve tutarı: geri alınmamış her çıkışın
-// miktarı x çıkış anındaki son alış (TL kuruşlu metin). Çiftte son alışı bilinmeyen çıkış varsa tutar null. Yetki denetlemez.
-export async function emirSarfSonAlisTutarlari(db: Db, emirIdler: readonly number[]): Promise<{ emirId: number; malzemeId: number; miktar: string; tutar: string | null }[]> {
+// miktarı x çıkış anındaki son alış (TL kuruşlu metin). Çiftte son alışı bilinmeyen çıkış varsa tutar null. 2739-2 (2733 a): ilkZaman
+// çiftin geri alınmamış ilk sarf ya da fire çıkışının anı (proje siparişi emirlere bu sırayla dağılır); böyle çıkış yoksa null.
+// Yetki denetlemez.
+export async function emirSarfSonAlisTutarlari(db: Db, emirIdler: readonly number[]): Promise<{ emirId: number; malzemeId: number; miktar: string; tutar: string | null; ilkZaman: string | null }[]> {
   if (emirIdler.length === 0) return [];
   const idler = [...new Set(emirIdler)];
   const [netler, cikislar] = [await sorgular.emirlerinNetSarfi(db, idler), await sorgular.emirlerinSarfCikislari(db, idler)];
   const fiyatli = await cikisSonAlislari(db, cikislar);
   const anahtar = (emirId: number, malzemeId: number) => `${emirId}|${malzemeId}`;
-  const ciftler = new Map<string, { miktar: string; fiyat: string | null }[]>();
-  for (const [i, c] of cikislar.entries()) ciftler.set(anahtar(c.emirId, c.malzemeId), [...(ciftler.get(anahtar(c.emirId, c.malzemeId)) ?? []), fiyatli[i]!]);
+  // Çıkışlar zaman sırasıyla gelir: çiftin ilk satırı ilk çıkışıdır.
+  const ciftler = new Map<string, { ilkZaman: string; satirlar: { miktar: string; fiyat: string | null }[] }>();
+  for (const [i, c] of cikislar.entries()) {
+    const k = anahtar(c.emirId, c.malzemeId);
+    const v = ciftler.get(k) ?? { ilkZaman: c.zaman, satirlar: [] };
+    v.satirlar.push(fiyatli[i]!);
+    ciftler.set(k, v);
+  }
   return netler.map((n) => {
-    const t = cikisTutari(ciftler.get(anahtar(n.emirId, n.malzemeId)) ?? []);
-    return { emirId: n.emirId, malzemeId: n.malzemeId, miktar: n.miktar, tutar: t.fiyatsizCikis > 0 ? null : t.tutar };
+    const c = ciftler.get(anahtar(n.emirId, n.malzemeId));
+    const t = cikisTutari(c?.satirlar ?? []);
+    return { emirId: n.emirId, malzemeId: n.malzemeId, miktar: n.miktar, tutar: t.fiyatsizCikis > 0 ? null : t.tutar, ilkZaman: c?.ilkZaman ?? null };
   });
 }
 

@@ -179,6 +179,19 @@ describe('stok emirsiz çıkış tutarı (gerçek PostgreSQL)', () => {
     assert.deepEqual(sirala(sonucu).map((x) => [x.emirId, x.malzemeId, x.miktar]), sirala(net).map((x) => [x.emirId, x.malzemeId, x.miktar]));
     assert.deepEqual(sirala(sonucu).map((x) => [x.emirId, x.malzemeId, Number(x.miktar), x.tutar]),
       [[e1, m, 6, '68.00'], [e1, n, 1, null], [e1, r, 0, '0.00'], [e2, m, 2.5, '30.00']]);
+    // 2739-2: ilk geri alınmamış sarf ya da fire anı; tamamı geri alınan çiftte null. Geri alınan erken çıkış ilk sayılmaz.
+    const ilk = new Map(sonucu.map((x) => [`${x.emirId}|${x.malzemeId}`, x.ilkZaman === null ? null : Date.parse(x.ilkZaman)]));
+    assert.equal(ilk.get(`${e1}|${m}`), Date.parse(await an(8, 2)));
+    assert.equal(ilk.get(`${e1}|${n}`), Date.parse(await an(8, 3)));
+    assert.equal(ilk.get(`${e1}|${r}`), null);
+    assert.equal(ilk.get(`${e2}|${m}`), Date.parse(await an(8, 10)));
+    // Geri alınan çıkış çiftin en erken çıkışıysa sonraki geri alınmamış çıkış ilk olur.
+    const e3 = await yeniEmir('EC-P3');
+    const erken = await hareket({ tur: 'cikis', kart: m, zaman: await an(8, 11), miktar: 1, neden: 'uretime_sarf', emir: e3 });
+    await hareket({ tur: 'geri_alma', kart: m, zaman: await an(8, 12), miktar: 1, geriAlinan: erken, emir: e3 });
+    await hareket({ tur: 'cikis', kart: m, zaman: await an(8, 13), miktar: 1, neden: 'fire', emir: e3 });
+    const [s3] = await o().vt.tx((db) => emirSarfSonAlisTutarlari(db, [e3]));
+    assert.equal(Date.parse(s3!.ilkZaman!), Date.parse(await an(8, 13)));
     assert.deepEqual(await o().vt.tx((db) => emirSarfSonAlisTutarlari(db, [])), []);
   });
 });
