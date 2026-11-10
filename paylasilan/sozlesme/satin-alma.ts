@@ -673,6 +673,8 @@ export interface SatinAlmaUclari {
   'GET /satin-alma-kg-fiyatlari/malzemeler': { sorgu: z.input<typeof malzemeKgFiyatlariSorgusu>; cevap: MalzemeKgFiyatlariCevabi };
   'GET /satin-alma-tedarik-terminleri': { cevap: TedarikTerminleriCevabi };
   'POST /satin-alma-tedarik-terminleri/kaydet': { govde: z.input<typeof tedarikTerminiKaydetGovdesi>; cevap: TedarikTerminiKaydetCevabi };
+  'GET /satin-alma-fatura-eslemeleri/:belgeId': { cevap: FaturaEslemesiCevabi };
+  'POST /satin-alma-fatura-eslemeleri/:belgeId/kaydet': { govde: z.input<typeof faturaEslemesiKaydetGovdesi>; cevap: FaturaEslemesiCevabi };
 }
 
 // 1094 b: teklif karşılaştırmasının sunucudaki hesabı. Tutarlar TL ve ondalık metindir (2 basamak); puanlar 0-100.
@@ -1033,3 +1035,24 @@ export type IptaliGeriAlCevabi = z.infer<typeof iptaliGeriAlCevabi>;
 export type IptaliGeriAlYazimi = z.infer<typeof iptaliGeriAlGovdesi>;
 export type TalepBirlestirYazimi = z.output<typeof talepBirlestirGovdesi>;
 export type TalepAyirYazimi = z.output<typeof talepAyirGovdesi>;
+
+// 2642 b: fatura (Finans belgesi) tutarının sipariş satırlarına eşlemesi. Tutar belgenin para biriminde, KDV hariç. surum belgenin eşleme
+// sürümüdür (kayıt sayısı + kaldırılmış sayısı; 0'dan başlar), belge sürümü değil.
+export const SATIR_YOLLARI = ['fason', 'bilinmiyor', 'stok', 'emir', 'proje', 'genel_gider'] as const;
+export const ESLEME_DURUMLARI = ['yok', 'kismi', 'tam'] as const;
+export const faturaEslemesiParametresi = z.object({ belgeId: z.coerce.number<number>().int().positive().max(2147483647) });
+export const faturaEslemesiCevabi = z.object({
+  belgeId: z.number().int(), belgeNo: z.string().nullable(), firmaAdi: z.string().nullable(), belgeTutari: ondalikMetinSemasi, paraBirimi: z.string(), siparisParaBirimi: z.string().nullable(), surum: z.number().int().min(0),
+  satirlar: z.array(z.object({
+    siparisSatiriId: z.number().int(), kalemAdi: z.string(), miktar: ondalikMetinSemasi, birim: z.string(), siparisTutari: ondalikMetinSemasi,
+    yol: z.enum(SATIR_YOLLARI), tutar: ondalikMetinSemasi.nullable(), baskaBelgelerden: ondalikMetinSemasi.nullable(),
+  })),
+  bayat: z.array(z.object({ siparisSatiriId: z.number().int(), tutar: ondalikMetinSemasi })),
+  eslenmemisKalan: ondalikMetinSemasi, oran: z.number().min(0).max(1).nullable(), esleme: z.enum(ESLEME_DURUMLARI),
+});
+export type FaturaEslemesiCevabi = z.output<typeof faturaEslemesiCevabi>;
+export const faturaEslemesiKaydetGovdesi = z.object({
+  surum: z.number().int().min(0).max(2147483647),
+  satirlar: z.array(z.object({ siparisSatiriId: z.number().int().positive().max(2147483647), tutar: ondalikMetinSemasi })).max(500),
+}).strict();
+export type FaturaEslemesiKaydetGovdesi = z.output<typeof faturaEslemesiKaydetGovdesi>;

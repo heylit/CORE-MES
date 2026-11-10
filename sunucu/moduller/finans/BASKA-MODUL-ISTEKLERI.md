@@ -31,3 +31,11 @@ KAPANDI (#1846): açıklama istasyon saat maliyeti alanının altında görünü
 - Finans satış faturasını `finans_belge.sevkiyat_isi_id` ile sevk işine bağlar; bugün yalnız yabancı anahtar denetlenir.
 - İstenen: `sevkiyat/disari.ts`'te `sevkIsiOzeti(db, id): Promise<{ tur: 'teslimat' | 'alim' | 'aktarma'; firmaId: number | null; siparisId: number | null; iptal: boolean } | null>` (yoksa `null`). Finans bununla yalnız iptal edilmemiş teslimatın, aynı firmaya (ve sevk siparişe bağlıysa aynı siparişe) faturalanmasına izin verir.
 - Sevkiyatın firma ve sipariş bağı 261 a göçüyle gelirse alanlar oradan doldurulur; gelene dek `null` döner.
+
+## Stoka istek: aylık emirsiz stok çıkışı (2623 a, 2594 b)
+- Genel gider belgeden kaydı bu tutar olmadan satır yazmaz ("emirsiz stok çıkışı (diğer)" eksik kalır).
+- İstenen: `stok/disari.ts`'te `emirsizCikisTutari(db, ay: 'GGGG-AA'): Promise<number | null>`: ay içindeki emre bağlı olmayan stok çıkışlarının miktar x son alış fiyatı toplamı (TL, kuruş). Son alışı bilinmeyen çıkış varsa `null` (sıfır uydurulmaz). Bağ `sunucu/kablolama.ts`'te `stokCikisiCozucusu` ile kurulur.
+
+## İdari işlere istek: aylık araç masrafı (2614 2/2 a, 2594 b)
+- Genel gider belgeden kaydı bu tutar olmadan satır yazmaz ("araç masrafı (diğer)" eksik kalır).
+- İstenen: `idari-isler/disari.ts`'te `aylikAracMasrafi(db, ay: 'GGGG-AA'): Promise<number | null>`: bütün araçların o aydaki masraf toplamı (TL, kuruş); masraf yoksa 0, tutarı bilinmeyen masraf varsa `null`. Bağ `sunucu/kablolama.ts`'te `aracMasrafiCozucusu` ile kurulur.

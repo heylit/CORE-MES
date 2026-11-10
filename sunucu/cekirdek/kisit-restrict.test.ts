@@ -16,6 +16,8 @@ const RESTRICT_ANAHTARLARI = [
   'finans_tedarikci_alacagi.satin_alma_talep_id -> satin_alma_siparis',
   'finans_tedarikci_alacagi.satin_alma_teklif_id -> satin_alma_siparis',
   'kalibrasyon_kaydi.alet_id -> olcu_aleti',
+  // 2642 b (Veri 2): faturaya eşlenmiş sipariş satırı (kaldırılmış eşleme dahil) silinmez; silinse eşlemenin oranı sessizce kaybolurdu.
+  'satin_alma_fatura_eslemesi.siparis_satiri_id -> satin_alma_siparis_satiri',
   // 2397 b: onay basamağında kullanılan rol silinmez; silinse basamak rolsüz kalır ve denetim sessizce gevşerdi.
   'satin_alma_onay_limiti.rol_id -> rol',
   // 2414 a: birleşmiş kaynak ve kalemi kaynakta olan talep silinmez; silinse birleşik talep kaynağını, kalem geri döneceği yeri yitirirdi.

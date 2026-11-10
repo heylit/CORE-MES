@@ -92,3 +92,7 @@ Yok.
   - Uçun yetkisi idari tarafın `talep-yonet` işlemidir. Satın alma yetkisini çağrılan işlev kendisi denetler: `satin-alma.talep-ac` ya da `yaz` yoksa 403 döner. Aynı idari talep ikinci kez çevrilirse 409 döner.
   - Güvenlik K2'nin istediği "uç üzerinden" testi İdari İşler tesliminde ya da bağlamada yazılır.
 - Talep ekranında bağlı satın alma talebinin numarası ve durumu `idariTalepSatinAlmalari(db, idariIdler)` ile okunur.
+
+## Finans (2642 b, 2646 a, 2651 b: fatura eşlemesi)
+- Kablolama: `genelGiderOraniCozucusu` <- `satin-alma/disari.ts` `belgeGenelGiderOranlari(db, belgeIdler)`; değer `{ oran, esleme: 'yok' | 'kismi' | 'tam' }`. Bulunmayan, siparişsiz ve iptal belge haritada yok. Bağ satırı Finans tesliminde (kablolama.ts, ortak dosya).
+- 2671 b, 2675: eşleme ekranı Finans'ındır (`/finans/fatura-eslemesi/:belgeId`); Satın Alma'nın uçlarını HTTP ile çağırır (GET ve POST `/satin-alma-fatura-eslemeleri/:belgeId`, tipler `paylasilan/sozlesme/satin-alma.ts`, `SatinAlmaUclari`). Uç yetkisi Finans yetkisidir. Rozet `esleme` değerinden.

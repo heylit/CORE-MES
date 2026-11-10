@@ -35,6 +35,8 @@ describe('Kayıtlar', () => {
     const pencere = await screen.findByRole('dialog');
     expect(within(pencere).getByText(/Düzeltme yetkiniz yok/)).toBeTruthy();
     expect(within(pencere).queryByRole('button', { name: /İptal et/ })).toBeNull();
+    // 2675: siparişli gider belgesinde eşleme bağlantısı okuyana da görünür.
+    expect(within(pencere).getByRole('button', { name: 'Sipariş satırlarına eşle' })).toBeTruthy();
     expect(istekler.some(kayitYazmasi)).toBe(false);
   });
 
@@ -44,7 +46,12 @@ describe('Kayıtlar', () => {
     fireEvent.click(await hammaddeSatiri());
     const pencere = await screen.findByRole('dialog', { name: 'Kaydı düzenle' });
     expect(within(pencere).queryByRole('button', { name: /İptal et/ })).toBeNull();
+    const esle = () => within(pencere).getByRole('button', { name: 'Sipariş satırlarına eşle' }) as HTMLButtonElement;
+    expect(esle().disabled).toBe(false);
     fireEvent.change(within(pencere).getByLabelText('Açıklama'), { target: { value: 'Duzeltilen not' } });
+    // Arayüz B3 (2675): kaydedilmemiş değişiklik varken eşleme sayfasına geçilmez.
+    expect(esle().disabled).toBe(true);
+    expect(within(pencere).getByText(/Eşlemeye geçmeden önce/)).toBeTruthy();
     fireEvent.click(within(pencere).getByRole('button', { name: 'Değişiklikleri kaydet' }));
     await waitFor(() => expect(istekler.filter(kayitYazmasi)).toHaveLength(1));
     const yazma = istekler.find(kayitYazmasi)!;
