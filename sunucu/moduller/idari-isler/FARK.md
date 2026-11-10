@@ -69,7 +69,7 @@ Yeni işlem yok.
 
 Taslaktan farklar (VARSAYIM, geri alması ucuz):
 - Kayıt düzeltilmez; yanlış kayıt gerekçeyle iptal edilir, listede kalır, toplama girmez.
-- Tutar TL; KDV ayrımı ve döviz yok. Proje ve finans bağı bağlamada.
+- Tutar TL; döviz yok. Proje ve finans bağı bağlamada. KDV tutarı 2715 ile geldi.
 - Ayrı "Masraf gir" menü maddesi yok; giriş araç satırından.
 - Belge (fiş, fatura) dosyası eklenmez; belge no yazılır.
 
@@ -89,3 +89,9 @@ sözleşme ve ekran değişmedi.
 - Bütün araçların o ay iptal edilmemiş masraf toplamı (TL, kuruşlu sayı); ay masraf tarihine göre; masraf yoksa 0.
 - Tutar tabloda zorunlu ve sıfırdan büyük; tutarı bilinmeyen masraf olmadığından `null` dönmez (imza istekteki `number | null`).
 - Bağ `sunucu/kablolama.ts`'te `aracMasrafiCozucusu` ile ayrı yamada kurulur (dosya kilidi).
+
+2715 (2712 a): araç masrafına KDV tutarı. Göç `sunucu/gocler/20261110030712_idari_isler_arac_masrafi_kdv.sql`: boş olabilen `kdv numeric(12, 2)`,
+kısıt `idari_isler_arac_masrafi_kdv` (boş ya da 0 <= kdv < tutar). Var olan veri değişmez; eski kayıtlarda KDV boştur.
+- Tutar KDV dahil kalır (ekran etiketi "Tutar, KDV dahil (TL)"); KDV ayrı, isteğe bağlı alan; listede yazılmışsa "KDV ... TL" görünür.
+- Yıl toplamı KDV dahil tutarlardır. Sözleşmede `masrafEkleGovdesi.kdv` (isteğe bağlı) ve `masrafSemasi.kdv` (boş olabilir). Uç ve işlem değişmedi.
+- KDV oranı değil tutarı tutulur (fişte yazan tutar); oran hesaplanmaz.

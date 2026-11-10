@@ -423,10 +423,10 @@ describe('Filo', () => {
 });
 
 const YAKIT = {
-  id: 41, aracId: 21, tarih: '2026-10-18', tur: 'yakit', tutar: '1250.50', km: 89_100, belgeNo: 'DNM-1', aciklama: null, kaydedenAd: 'Deneme Idari',
+  id: 41, aracId: 21, tarih: '2026-10-18', tur: 'yakit', tutar: '1250.50', kdv: '208.42', km: 89_100, belgeNo: 'DNM-1', aciklama: null, kaydedenAd: 'Deneme Idari',
   kayit: '2026-10-18T10:00:00.000+03:00', iptal: null, iptalNedeni: null, surum: 1,
 } satisfies Masraf;
-const IPTALLI = { ...YAKIT, id: 42, tur: 'bakim', tutar: '300.00', iptal: '2026-10-18T11:00:00.000+03:00', iptalNedeni: 'Deneme yanlış araç', surum: 2 } satisfies Masraf;
+const IPTALLI = { ...YAKIT, id: 42, tur: 'bakim', tutar: '300.00', kdv: null, iptal: '2026-10-18T11:00:00.000+03:00', iptalNedeni: 'Deneme yanlış araç', surum: 2 } satisfies Masraf;
 const MASRAFLAR = { masraflar: [YAKIT, IPTALLI], yilToplami: '1250.50' } satisfies MasraflarCevabi;
 const masrafSunucusu = (ek: (yontem: string, yol: string) => Response | undefined = () => undefined) =>
   (yontem: string, yol: string) => (yontem === 'GET' && yol === '/idari-isler/araclar/21/masraflar' ? json(200, MASRAFLAR) : ek(yontem, yol));
@@ -440,6 +440,7 @@ describe('Araç masrafları', () => {
     await within(pencere).findByText('Deneme yanlış araç', { exact: false });
     expect(within(pencere).getByText('İptal')).toBeTruthy();
     expect(within(pencere).getAllByText(/1\.250,50 TL/).length).toBeGreaterThan(0);
+    expect(within(pencere).getByText(/208,42 TL/)).toBeTruthy();
     expect(within(pencere).queryByRole('button', { name: 'Masrafı kaydet' })).toBeNull();
     expect(within(pencere).queryByRole('button', { name: 'İptal et' })).toBeNull();
   });
@@ -459,6 +460,24 @@ describe('Araç masrafları', () => {
     const [yazma] = yazmalar(istekler);
     expect(yazma?.govde).toEqual({ tarih: '2026-10-17', tur: 'yakit', tutar: '1250.5', km: 89_150 });
     expect(yazma?.baslik[ISTEK_KIMLIGI_BASLIGI]).toBeTruthy();
+  });
+
+  it('2712 a: tutar KDV dahil yazılır; KDV yazılırsa noktaya çevrilip gider, okunamayan KDV kaydı durdurur', async () => {
+    const istekler = sunucuKur(FILOCU, masrafSunucusu((yontem, yol) => (yontem === 'POST' && yol === '/idari-isler/araclar/21/masraf-ekle'
+      ? json(200, { masraf: { ...YAKIT, id: 44 } })
+      : undefined)));
+    ac('/idari-isler/filo');
+    fireEvent.click(await screen.findByRole('button', { name: '34 DNM 101 masrafları' }));
+    const pencere = await screen.findByRole('dialog', { name: '34 DNM 101 masrafları' });
+    fireEvent.change(within(pencere).getByLabelText(/Tutar, KDV dahil/), { target: { value: '1.250,50' } });
+    fireEvent.change(within(pencere).getByLabelText(/^KDV/), { target: { value: '20,8,4' } });
+    expect((within(pencere).getByRole('button', { name: 'Masrafı kaydet' }) as HTMLButtonElement).disabled).toBe(true);
+    within(pencere).getByText(/Okunamadı: KDV/);
+    fireEvent.change(within(pencere).getByLabelText(/^KDV/), { target: { value: '208,42' } });
+    fireEvent.click(within(pencere).getByRole('button', { name: 'Masrafı kaydet' }));
+    await screen.findByText('Masraf kaydedildi');
+    const [yazma] = yazmalar(istekler);
+    expect(yazma?.govde).toMatchObject({ tutar: '1250.50', kdv: '208.42' });
   });
 
   it('iptal neden ister ve sürümle gider', async () => {

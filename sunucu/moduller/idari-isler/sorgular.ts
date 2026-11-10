@@ -581,6 +581,7 @@ export interface MasrafSatiri {
   tarih: string;
   tur: MasrafTuru;
   tutar: string;
+  kdv: string | null;
   km: number | null;
   belge_no: string | null;
   aciklama: string | null;
@@ -591,15 +592,15 @@ export interface MasrafSatiri {
   surum: number;
 }
 
-const MASRAF_SECIM = `SELECT id, arac_id, tarih, tur, tutar::text AS tutar, km, belge_no, aciklama, kaydeden_kisi_id, ${zamanMetni('kayit')} AS kayit,
+const MASRAF_SECIM = `SELECT id, arac_id, tarih, tur, tutar::text AS tutar, kdv::text AS kdv, km, belge_no, aciklama, kaydeden_kisi_id, ${zamanMetni('kayit')} AS kayit,
                              ${zamanMetni('iptal')} AS iptal, iptal_nedeni, surum
                         FROM idari_isler_arac_masrafi`;
 
 export async function masrafEkle(db: Db, aracId: number, g: MasrafEkleVerisi, kisiId: number): Promise<number> {
   const satir = await db.tek<{ id: number }>(
-    `INSERT INTO idari_isler_arac_masrafi (arac_id, tarih, tur, tutar, km, belge_no, aciklama, kaydeden_kisi_id)
-     VALUES ($1, $2, $3, $4::numeric, $5, $6, $7, $8) RETURNING id`,
-    [aracId, g.tarih, g.tur, g.tutar, g.km, g.belgeNo, g.aciklama, kisiId],
+    `INSERT INTO idari_isler_arac_masrafi (arac_id, tarih, tur, tutar, kdv, km, belge_no, aciklama, kaydeden_kisi_id)
+     VALUES ($1, $2, $3, $4::numeric, $5::numeric, $6, $7, $8, $9) RETURNING id`,
+    [aracId, g.tarih, g.tur, g.tutar, g.kdv, g.km, g.belgeNo, g.aciklama, kisiId],
   );
   if (satir === null) throw new Error('Masraf yazılamadı');
   return satir.id;
