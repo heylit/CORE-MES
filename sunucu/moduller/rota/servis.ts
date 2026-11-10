@@ -1,9 +1,9 @@
 // Modülün servis girişi: işlevler alana göre servis/ altındadır. Uçlar, işler ve disari.ts yalnız bu dosyayı ithal eder.
-export { ROTALI_TURLER, secenekler, acikRevizyonSayisi, rotaListesi, revizyonOzeti, urunRevizyonlari, revizyonAyrintisi, hamOnerisi } from './servis/liste.ts';
+export { ROTALI_TURLER, secenekler, acikRevizyonSayisi, rotaListesi, revizyonOzeti, urunRevizyonlari, revizyonAyrintisi, hamOnerisi, opNumaralari } from './servis/liste.ts';
 export { fark, taslakAc, karttanTaslaklar, kaydet, onayaGonder, geriGonder, onayla, yururlugeAl, iptal, kopyala, kopyaIste } from './servis/revizyon.ts';
 export {
   talimatListesi, talimatMedyasi, talimatYaz, adimliTalimatYaz, talimatTaslakKaydet, talimatYayinla, talimatTaslakSil, talimatSurumuAdimlari,
-  talimatSablonlari, talimatSablonu, talimatSablonEkle, talimatSablonKaydet, talimatSablonDurumuYaz,
+  talimatSablonlari, talimatSablonu, talimatSablonKopyalari, talimatSablonEkle, talimatSablonKaydet, talimatSablonDurumuYaz,
 } from './servis/talimat.ts';
 export { type PatlatmaDugumu, patlatmaDugumleri, patlatmaRevizyonu, patlatmaGetir, patlatmaOnizlemesi, agac, araHalCozucusuKaydet, type AraHalCozucusu, type AraHalCozumu } from './servis/agac.ts';
 export { sureler, gerceklesenSureYaz, gerceklesenKabulEt, emirBittiYansit, adimEtkinSureleri, adimEtkinSureleriToplu } from './servis/sureler.ts';

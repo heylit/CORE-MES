@@ -427,6 +427,10 @@ Teslim olduğu gibi alındı; yalnız oturtma için değişenler:
 - VARSAYIM: yan ürün miktarı bileşen gibi mamul başınadır: adım miktarı x miktar (bileşen firesi yok). Geri alma: ucuz.
 - VARSAYIM: hammadde toplamı stoktan gelen bütün girenlerdir (alt düğüm ürünü hariç); tür süzülmez. Geri alma: ucuz.
 - VARSAYIM: engelde (emir açılamıyor) sayı verilmez, null kalır. Geri alma: ucuz.
+## 2486-4: OP numaraları okuma ucu (B-2482-R4)
+- `GET /rota/urunler/:urunId/op-numaralari` (ROTA_OKUR): ürüne verilmiş OP numaraları, her birinin ilk verildiği revizyon (kimlik ve harf)
+  ve sıradaki numara (`yeniOpNo`, RT-31 değişmedi). Ekran yeni adımın numarasını önceden gösterir; numarayı yine kaydet komutu verir.
+  Ürün yoksa 404. Yalnız okuma; tablo ve göç yok.
 ## 2564-1: Süreler ölçüm özeti (kullanıcı kararı 2564 a, 1. madde)
 - `GET /rota/revizyonlar/:id/sureler` her adım ve tür için `ozet: { n, ortancaDk, enAzDk, enCokDk }` döner (ölçüm yoksa null). Pencere bekleyen ölçümünkiyle
   aynıdır: son boşaltmadan sonraki elle ve terminal ölçümleri, görünümün makinesine göre (`olcumPenceresi`).
@@ -450,6 +454,18 @@ Teslim olduğu gibi alındı; yalnız oturtma için değişenler:
 - `GET /rota/revizyonlar/:id/patlatma-onizleme` her adımda `hedef: { kokBasina, siparis }` döner: emrin o adımdaki hedef adedi (adet x dal çarpanı,
   firesiz; açılan emirdeki `dalBasiAdedi` ile aynı). Ekran ana sayıyı `hedef`ten, fire payıyla giren adedi `adet`ten alt satırda gösterir (2487).
 - Emir açılamıyorsa (engel) `hedef` null. Tablo, göç ve yetki değişmedi.
+## 2588: şablondan kopya adım listesinin köken kaydı (kullanıcı kararı 2588 a)
+- Göç `20261109234127_rota_talimat_kokeni.sql`: yeni iki tablo, `rota_talimat_kokeni` (sürüm başına, yalnız eklenir) ve `rota_talimat_taslak_kokeni`
+  (taslak silinince birlikte silinir). Dolu tabloya dokunulmaz; eski sürümlerin kökeni bilinmez (null).
+- `talimat-adimli-yaz` ve `talimat-taslak-kaydet` gövdesine isteğe bağlı `kaynakSablon: { id, surum } | null`. Verilmezse köken devralınır: var olan taslakta
+  taslağınki korunur, yeni sürüm ve yeni taslak dayandığı yayın sürümünün kökenini alır (Mimar K1); null kaldırır.
+  Şablon yoksa 404, sürüm güncel değilse 409. Yayın kökeni taslaktan sürüme taşır.
+- `talimatlarCevabi`: her sürümde ve taslakta `koken: { sablon { id, kod, ad }, surum } | null`.
+- Yeni uç `GET /rota/talimat-sablonlari/:id/kopyalar` (ROTA_OKUR, 2490 b; operatör 403): ürün, OP, talimat sürümü (taslakta null), şablon sürümü, `geride`, `gecerli`.
+- Ekranı 2487 bağlar (şablondan başlarken `kaynakSablon` gönderir; şablon sayfasında kopyalar).
+- VARSAYIM: pasif şablondan kopyanın kökeni de yazılır (köken bilgidir, şablonu kullanıma açmaz). Geri alma: ucuz.
+- VARSAYIM: kopya listesinde sayfalama yok; şablon başına kopya sayısı OP sayısıyla sınırlı kalır. Geri alma: ucuz.
+- Kopyadan düzenlenen sürüm kökenini taşır (köken "nereden başladı" bilgisidir; Mimar K1).
 
 ## 2681: firması seçilmemiş fason adım (kullanıcı kararı 2682 a)
 - Sözleşme: adım kaynağı `{ tur: 'fason', id: null }` olabilir ("dış üretim, firma seçilmedi"); öteki türlerde id zorunlu. Ayrıntı ve önizlemede kaynak

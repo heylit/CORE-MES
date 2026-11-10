@@ -9,7 +9,7 @@ import { isiBirKezCalistir } from '#cekirdek/zamanlayici.ts';
 import { ISTEK_KIMLIGI_BASLIGI } from '#paylasilan/istek-kimligi.ts';
 import { OPERASYON_GRUP_ADLARI } from '#paylasilan/sozlesme/istasyonlar.ts';
 import type {
-  AdimGirdisi, AgacCevabi, PatlatmaCevabi, PatlatmaOnizlemeCevabi, GerceklesenKabulCevabi, KomutCevabi, SurelerCevabi, KullanimCevabi, RevizyonAyrintisi, RotaListesiCevabi, SablonCevabi, SablonlarCevabi, SeceneklerCevabi, TalimatlarCevabi, UrunRevizyonlariCevabi,
+  AdimGirdisi, AgacCevabi, OpNumaralariCevabi, PatlatmaCevabi, PatlatmaOnizlemeCevabi, GerceklesenKabulCevabi, KomutCevabi, SurelerCevabi, KullanimCevabi, RevizyonAyrintisi, RotaListesiCevabi, SablonCevabi, SablonlarCevabi, SeceneklerCevabi, TalimatlarCevabi, UrunRevizyonlariCevabi,
 } from '#paylasilan/sozlesme/rota.ts';
 import { denetimYaz } from '../denetim/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
@@ -1327,6 +1327,25 @@ describe('rotalar (gerçek PostgreSQL)', () => {
     const { uretimEmriId } = e.json<{ uretimEmriId: number }>();
     const ihtiyac = (await vt().tx((db) => emirlerinMalzemeIhtiyaci(db, [uretimEmriId]))).get(uretimEmriId);
     assert.deepEqual(ihtiyac?.map((m) => Number(m.brut)), a.adimlar.slice(0, 2).map((x) => Number(x.adimMiktari)));
+  });
+
+  test('B-2482-R4: OP numaraları ilk revizyonuyla döner, silinen numara listede kalır, sıradaki kaydetmenin vereceği numaradır; rota ve reçete okuyan okur, operatör okuyamaz', async () => {
+    const urun = await mamulAc();
+    const yol = `/rota/urunler/${urun}/op-numaralari`;
+    assert.deepEqual(await tamam<OpNumaralariCevabi>(c.planlama, 'GET', yol), { kullanilmis: [], siradaki: 10 });
+    const { id } = (await taslakAc(urun)).json<KomutCevabi>();
+    const k = await kaydet(id, 1, [yeniAdim(), yeniAdim(), yeniAdim()]);
+    assert.equal(k.statusCode, 200, k.body);
+    const a = await ayrinti(id);
+    const k2 = await kaydet(id, k.json<KomutCevabi>().surum, a.adimlar.slice(0, 2).map(govdeye));
+    assert.equal(k2.statusCode, 200, k2.body);
+    const cevap = await tamam<OpNumaralariCevabi>(c.kalite, 'GET', yol);
+    assert.deepEqual(cevap, { kullanilmis: [10, 20, 30].map((opNo) => ({ opNo, ilkRevizyonId: id, ilkRevizyonHarfi: 'A' })), siradaki: 40 });
+    const k3 = await kaydet(id, k2.json<KomutCevabi>().surum, [...(await ayrinti(id)).adimlar.map(govdeye), yeniAdim()]);
+    assert.equal(k3.statusCode, 200, k3.body);
+    assert.equal((await ayrinti(id)).adimlar.at(-1)?.opNo, cevap.siradaki);
+    assert.equal((await istek(c.operator, 'GET', yol)).statusCode, 403);
+    assert.equal((await istek(c.planlama, 'GET', '/rota/urunler/999999/op-numaralari')).statusCode, 404);
   });
 
   test('#861: emre kopyala gövdesindeki projeId üretim emrine gider; pasif ya da olmayan proje reddedilir; projeId verilmezse seri emir açılmaz (224)', async () => {
