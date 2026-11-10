@@ -444,4 +444,23 @@ describe('bekleyen değişiklikler (755 a)', () => {
     expect(b.calisma.plan?.dataVer).not.toBe(b.calisma.dataVer);
     expect(uyarilar).toEqual([PLAN_ESKI]);
   });
+
+  it('2794 1/3 a: taşımadan sonra kendiliğinden uygulanan plan taşımayla tek adımdır; tek Geri al kilidi ve planı birlikte geri getirir', () => {
+    const { y: a } = kur();
+    coz(a, 1);
+    a.komutBasladi('İş taşındı');
+    const okunan = structuredClone(a.calisma) as PlanlamaCalismasi & Record<string, unknown>;
+    okunan.locks = { 'S1.a3': { m: 'M1', S: 12 } };
+    okunan.dataVer = a.calisma.dataVer + 1;
+    const { y: b } = kur({ calisma: okunan as PlanlamaCalismasi, surum: 9, gecmis: a.gecmis() });
+    b.degistir('Bekleyen değişiklik uygulandı', (t) => { t.plan = { ...(t.plan ?? { dataVer: t.dataVer }), dataVer: t.dataVer, cozum: 2 }; }, { planKoru: true, komutunDevami: true });
+    expect(cozum(b.calisma)).toBe(2);
+    expect(b.geriAdimlari().map((g) => g.ne)).toEqual(['İş taşındı', 'Plan çözüldü']);
+    expect(b.geriAl()).toBe(true);
+    expect(b.calisma.locks).toEqual({});
+    expect(cozum(b.calisma)).toBe(1);
+    // Komutun devamı değilse (elle Uygula) ayrı adımdır.
+    b.degistir('Bekleyen değişiklik uygulandı', (t) => { t.plan = { ...(t.plan ?? { dataVer: t.dataVer }), dataVer: t.dataVer, cozum: 3 }; }, { planKoru: true, komutunDevami: true });
+    expect(b.geriAdimlari().map((g) => g.ne)).toEqual(['Bekleyen değişiklik uygulandı', 'Plan çözüldü']);
+  });
 });

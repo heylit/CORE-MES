@@ -55,6 +55,9 @@ export interface DegisiklikSecenegi {
   ayrinti?: string;
   // Değişiklik planın girdisini değiştirmiyor (görünüm tercihi gibi): güncel plan güncel kalır. Bekleyen değişiklik de olmaz.
   planKoru?: boolean;
+  // Değişiklik az önceki sunucu komutunun devamıdır (komuttan sonra kendiliğinden uygulanan plan): ayrı geri alma adımı olmaz, komutun
+  // adımı planı da geri getirir; tek Geri al hepsini geri alır (2794 1/3 a). Son adım o komut değilse ayrı adım olur.
+  komutunDevami?: boolean;
   // Eski sayfanın doğrudan kaydı (dis.kaydet: gün başı, brifing günü): iz, bildirim, geri alma ve veri sürümü artışı yok. Sunucuya yazma,
   // sürüm denetimi ve yetki aynıdır.
   sessiz?: boolean;
@@ -130,6 +133,7 @@ export class CalismaYazici implements CalismaKomutu {
   // Çalışmadan düşen bekleyenlerin kararı; yazmayla gider, sunucu deftere yazar. Çakışmada değişiklikle birlikte düşer.
   #kararlar: BekleyenKarari[] = [];
   #komut: YaziciGecmisi['komut'] = null;
+  #sonKomutAdimi: GeriAdimi | null = null;
 
   constructor(ayar: YaziciAyari) {
     const { gecmis, ...a } = ayar;
@@ -164,7 +168,9 @@ export class CalismaYazici implements CalismaKomutu {
     if (degisen.length === 0) return false;
     const ek = degisen.filter((x) => !GERI_DISI.has(x));
     this.#ileri.bosalt();
-    this.#geri.koy({ ne: k.ne, t: k.t, kopya: kopya(Object.fromEntries([...GERI_ALANLAR, 'dataVer', ...ek].map((x) => [x, o[x]]))) as GeriKopyasi });
+    const adim: GeriAdimi = { ne: k.ne, t: k.t, kopya: kopya(Object.fromEntries([...GERI_ALANLAR, 'dataVer', ...ek].map((x) => [x, o[x]]))) as GeriKopyasi };
+    this.#geri.koy(adim);
+    this.#sonKomutAdimi = adim;
     return true;
   }
 
@@ -192,7 +198,15 @@ export class CalismaYazici implements CalismaKomutu {
     const o = once as Record<string, unknown>, y = taslak as Record<string, unknown>;
     const ek = [...new Set([...Object.keys(o), ...Object.keys(y)])].filter((k) => !GERI_DISI.has(k) && JSON.stringify(o[k]) !== JSON.stringify(y[k]));
     if (JSON.stringify(o.plan) !== JSON.stringify(y.plan)) ek.push('plan');
-    this.#geri.koy({ ne, t: this.#a.simdi(), kopya: kopya(Object.fromEntries([...GERI_ALANLAR, 'dataVer', ...ek].map((k) => [k, o[k]]))) as GeriKopyasi });
+    const son = this.#geri.liste().at(-1);
+    if (secenek.komutunDevami && son !== undefined && son === this.#sonKomutAdimi) {
+      // Komutun kopyası komuttan önceki hâldir; devamın dokunduğu ve kopyada olmayan alanlar (plan) şimdiki (komuttan sonraki, devamdan
+      // önceki) değerle eklenir: plan komutla değişmediği için bu komuttan önceki plandır.
+      for (const k of ek) if (!(k in son.kopya)) son.kopya[k] = kopya(o[k]);
+    } else {
+      this.#geri.koy({ ne, t: this.#a.simdi(), kopya: kopya(Object.fromEntries([...GERI_ALANLAR, 'dataVer', ...ek].map((k) => [k, o[k]]))) as GeriKopyasi });
+    }
+    this.#sonKomutAdimi = null;
     planSiniri(this.#geri);
     if (!secenek.planKoru && once.plan !== null) bekleyeneYaz(once, taslak, { ne, ayrinti: secenek.ayrinti ?? '', kim: this.#a.kim, t: this.#a.simdi() });
     taslak.dataVer = once.dataVer + 1;

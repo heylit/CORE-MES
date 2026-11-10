@@ -187,7 +187,7 @@ export function useOtomatikUygula(o: Pick<PlanlamaEkranOzellikleri, 'komut' | 'y
   const surum = o.depo.calismaSurumu ?? null;
   useEffect(() => {
     if (bu?.suruyor) return;
-    if (otomatikUygulaAl(surum) && bu) bu.uygula();
+    if (otomatikUygulaAl(surum) && bu) bu.uygula(true);
   }, [bu, surum]);
 }
 

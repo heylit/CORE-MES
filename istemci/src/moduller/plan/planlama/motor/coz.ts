@@ -71,7 +71,7 @@ export function uygulananiAl(t: PlanlamaCalismasi, plan: Record<string, unknown>
   return true;
 }
 // `liste` atölyenin gördüğü listedir (kayit.ts bekleyenListesi), `idler` seçilenler.
-export async function planUygula(a: PlanKurmaAyari & { liste: readonly BekleyenDegisiklik[]; idler: readonly string[] }): Promise<string | null> {
+export async function planUygula(a: PlanKurmaAyari & { liste: readonly BekleyenDegisiklik[]; idler: readonly string[]; komutunDevami?: boolean }): Promise<string | null> {
   if (suruyor) return null;
   const secilen = a.liste.filter((e) => a.idler.includes(e.id));
   if (secilen.length === 0) return UYGULANACAK_YOK;
@@ -87,7 +87,7 @@ export async function planUygula(a: PlanKurmaAyari & { liste: readonly BekleyenD
     let alindi = false;
     const n = secilen.length;
     a.komut.degistir(n > 1 ? `${String(n)} bekleyen değişiklik uygulandı` : 'Bekleyen değişiklik uygulandı',
-      (t) => (alindi = uygulananiAl(t, plan, cv.dataVer, secilen.map((e) => e.id), a.kim, (a.simdi ?? Date.now)())), { ayrinti: isler.includes('*') ? 'Bütün işler' : isler.join(', '), planKoru: true });
+      (t) => (alindi = uygulananiAl(t, plan, cv.dataVer, secilen.map((e) => e.id), a.kim, (a.simdi ?? Date.now)())), { ayrinti: isler.includes('*') ? 'Bütün işler' : isler.join(', '), planKoru: true, ...(a.komutunDevami ? { komutunDevami: true } : {}) });
     if (alindi) a.komut.uygulananlariBildir?.(secilen.map((e) => e.id));
     return alindi ? null : VERI_DEGISTI;
   } catch (h) {
@@ -125,14 +125,15 @@ export function useBekleyenKarari(o: Pick<PlanlamaEkranOzellikleri, 'komut' | 'y
 // 1786 (PLN-2): plan varken açılan emir ve öteki değişiklikler bekleyen olur; plan çubuğu hepsini tek düğmeyle uygular (önceden tek yol
 // Onay sekmesindeki satırdı). Uygula sunucuda yalnız etkilenen işleri yeniden dizer; elle kararlar korunur. Plan güncelse ya da kişi
 // yazamıyorsa null.
-export interface BekleyenUygulayici { uygula: () => void; suruyor: boolean; say: number }
+// `komutunDevami`: sunucu komutundan sonra kendiliğinden uygulama; komutla tek geri alma adımıdır.
+export interface BekleyenUygulayici { uygula: (komutunDevami?: boolean) => void; suruyor: boolean; say: number }
 export function useBekleyenUygula(o: Pick<PlanlamaEkranOzellikleri, 'komut' | 'yetki' | 'calisma' | 'depo'>, uyar: (ileti: string) => void): BekleyenUygulayici | null {
   const s = useSyncExternalStore(abone, () => suruyor);
   const { komut, calisma } = o; const kim = o.depo.ben?.kisi.ad ?? '';
   const liste = useMemo(() => (calisma && calisma.plan !== null && calisma.plan.dataVer !== calisma.dataVer ? bekleyenListesi(calisma) : []), [calisma]);
-  const uygula = useCallback(() => {
+  const uygula = useCallback((komutunDevami?: boolean) => {
     if (!komut || liste.length === 0) return;
-    void planUygula({ komut, kim, liste, idler: liste.map((e) => e.id) }).then((h) => { if (h) uyar(h); });
+    void planUygula({ komut, kim, liste, idler: liste.map((e) => e.id), ...(komutunDevami === true ? { komutunDevami: true } : {}) }).then((h) => { if (h) uyar(h); });
   }, [komut, kim, liste, uyar]);
   return komut && calisma && o.yetki.planYaz && liste.length > 0 ? { uygula, suruyor: s, say: liste.length } : null;
 }

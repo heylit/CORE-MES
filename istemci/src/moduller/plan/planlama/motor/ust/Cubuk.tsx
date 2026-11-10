@@ -77,7 +77,7 @@ export function Cubuk(o: Ozellikler) {
           {o.planYaz && uyg ? (
             <button type="button" className="tc-dugme tc-pym-kucuk tc-pym-sb-iyi tc-dugme-birincil" disabled={uyg.suruyor} aria-busy={uyg.suruyor || undefined}
               title={uyg.suruyor ? KURULUYOR : `Değişiklikleri uygula: ${String(uyg.say)} bekleyen değişikliğin etkilediği işler yeniden dizilir; öteki işler yerinde kalır.`}
-              aria-label="Değişiklikleri uygula" onClick={uyg.uygula}>
+              aria-label="Değişiklikleri uygula" onClick={() => { uyg.uygula(); }}>
               <Simge ad="play" boyut="k" /><span>{uyg.suruyor ? 'Uygulanıyor' : `Değişiklikleri uygula (${String(uyg.say)})`}</span>
             </button>
           ) : o.planYaz && (kur ? (
