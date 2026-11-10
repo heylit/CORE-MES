@@ -118,9 +118,6 @@ export function emirNoOkuyucu(kayit: unknown): EmirNo {
   }
   return (id) => { const [kok, parca] = parcaAyir(id); const no = m.get(kok); return no ? `${no}${parca ?? ''}` : id; };
 }
-// Çubukta tam no sığmaz: baştaki harf öneki (firma kodu) atılır, gerisi tekildir. 2693 S1 cevabına göre tek satır: false tam no yazar.
-export const CUBUKTA_KISA_NO = true;
-export const kisaNo = (no: string): string => (CUBUKTA_KISA_NO ? no.replace(/^\D+/, '') || no : no);
 export function parcaAyir(id: string): [string, string | null] { const m = /^(.*)(\/\d+)$/.exec(id); return m ? [m[1] ?? id, m[2] ?? null] : [id, null]; }
 export const ONCELIK_KISA: Record<number, string> = { 1: 'acil/yüksek', 2: 'normal', 3: 'düşük' };
 
@@ -292,7 +289,7 @@ export function ilerleme(r: PlanIslemi, g: Gerceklesen | null, adet: number, now
 }
 export const sabitMi = (r: PlanIslemi, now: number, donuk: number): boolean => r.act || r.S < now + donuk - 1e-6;
 // Çubuğun yazısı genişliğe göre: sipariş, adım, adım adı; dar çubukta sipariş numarasının sonu.
-// etiket: çubuktaki sipariş adı (ekranda kisaNo(emirNo)); verilmezse kimlik.
+// etiket: çubuktaki sipariş adı (ekranda tam emir no, 2693 a); verilmezse kimlik.
 export function cubukYazisi(r: PlanIslemi, k: string, ad: string, w: number, etiket: EmirNo = (j) => j): { b: string; ek: string; alt: string } | null {
   const n = etiket(r.job);
   if (w > 46) return { b: n, ek: w > 80 ? ` · ${k}` : '', alt: w > 110 ? ad : '' };

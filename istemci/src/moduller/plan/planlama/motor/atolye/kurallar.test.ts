@@ -4,7 +4,7 @@ import type { PlanlamaCalismasi } from '../../tipler.ts';
 import { derle, girdiKur, malzemeHazir, planOku, plandanBitenler, type PlanIslemi } from '../kurallar.ts';
 import { ornekCalisma } from '../ornek.ts';
 import {
-  akis, asilBekleme, bitisFarklari, calismaEkMesai, canliFarkOzeti, DONUK_SECENEKLERI, donukEtiketi, ekMesaiFarki, ekMesaiKontrol, sunucuEkMesai, tarihGunYaz, gunYeni, malzemeDetay, pgGostergeleri, pgKaynakKur, pgNedenOzeti, pgSatirlar, pgSerit, cubukYazisi, darbogaz, emirNoOkuyucu, kisaNo, ga, gs, gunKaydi, ilerleme, isaretliSure, kapaliAraliklar, parcaAyir, saatPiksel, satirlar,
+  akis, asilBekleme, bitisFarklari, calismaEkMesai, canliFarkOzeti, DONUK_SECENEKLERI, donukEtiketi, ekMesaiFarki, ekMesaiKontrol, sunucuEkMesai, tarihGunYaz, gunYeni, malzemeDetay, pgGostergeleri, pgKaynakKur, pgNedenOzeti, pgSatirlar, pgSerit, cubukYazisi, darbogaz, emirNoOkuyucu, ga, gs, gunKaydi, ilerleme, isaretliSure, kapaliAraliklar, parcaAyir, saatPiksel, satirlar,
   siparisler, sure, suzKoy, suzUyar, terminMetni, tz, ufuk, zamanBasliklari, zs, farkKur, paAdim, paEmirFarki, paKontrol, paPlanKontrol, paRedVar, paSecim, planFarki, planGecikme, agirlikliGecikme, ayarSaat, tlEksikUyarisi, tlKarsilastirilir, type Gostergeler, type SunucuSenaryosu,
   kilitGunleri, kilitOzeti, siraKomsu, siraTasi,
 } from './kurallar.ts';
@@ -92,7 +92,7 @@ describe('atölye kuralları', () => {
     expect(cubukYazisi(r, '20', 'Freze', 30)).toEqual({ b: '012', ek: '', alt: '' });
     expect(cubukYazisi(r, '20', 'Freze', 10)).toBeNull();
     const no = emirNoOkuyucu({ orders: [{ id: 'IE-0012', no: 'MM-ORN-00012-26-11-012' }] });
-    expect(cubukYazisi(r, '20', 'Freze', 120, (j) => kisaNo(no(j)))).toEqual({ b: '00012-26-11-012', ek: ' · 20', alt: 'Freze' });
+    expect(cubukYazisi(r, '20', 'Freze', 120, no)).toEqual({ b: 'MM-ORN-00012-26-11-012', ek: ' · 20', alt: 'Freze' });
     expect(ilerleme(r, null, 10, 5)).toBe(0.5);
     expect(ilerleme(r, { S: 0, plan: 0, n: 4 }, 10, 5)).toBe(0.4);
     expect(ilerleme({ ...r, S: 6 }, null, 10, 5)).toBeNull();
@@ -331,6 +331,5 @@ describe('iş emri no (2690)', () => {
     expect(no('4')).toBe('4');
     expect(no('9')).toBe('9');
     expect(emirNoOkuyucu(null)('2')).toBe('2');
-    expect(kisaNo('MM-ORN-00002-26-11-002')).toBe('00002-26-11-002');
   });
 });

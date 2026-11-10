@@ -5,7 +5,7 @@ import { tasimaSaati } from './gonder.ts';
 import type { PlanIslemi } from '../kurallar.ts';
 import { degisken } from '../ortak.tsx';
 import {
-  secKacis, akis, cubukYazisi, darbogaz, kisaNo, doluluklar, gercekOku, haftaHucreleri, ilerleme, kapaliAraliklar, sabitMi, satirlar, saatPiksel, sure, suzUyar, tezGrup, tz,
+  secKacis, akis, cubukYazisi, darbogaz, doluluklar, gercekOku, haftaHucreleri, ilerleme, kapaliAraliklar, sabitMi, satirlar, saatPiksel, sure, suzUyar, tezGrup, tz,
   ufuk, ufukSaati, zamanBasliklari, type PanoSatiri, duruslar,
 } from './kurallar.ts';
 import { ankraj, type Ortam } from './Pano.tsx';
@@ -314,7 +314,7 @@ export function Izgara({ ort, pano, parla }: { ort: Ortam; pano: MutableRefObjec
     const vur = !!secJob && secJob === r.job; const soluk = (!!secJob && !vur) || (!!suz && !suzUyar(D, suz, r));
     const g = gercekOku(c, r.id); const il = ilerleme(r, g, cx.jobs[r.job]?.adet ?? 0, now);
     const sap = g && g.plan != null ? g.S - g.plan : 0;
-    const yz = cubukYazisi(r, ka, ad, w, (j) => kisaNo(x.emirNo(j)));
+    const yz = cubukYazisi(r, ka, ad, w, x.emirNo);
     const yardim = etkiAcik('gantt-yardim'); const bilgiMetni = bilgi(r, ad, il);
     return (
       <button key={r.id} type="button" className="tc-pym-tp-cubuk" data-id={r.id} data-durum={b && b.durum !== 'iyi' ? b.durum : undefined} data-sabit={sabit ? '' : undefined}

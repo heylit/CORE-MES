@@ -52,8 +52,6 @@ interface Ozellikler {
   sen: SenaryolarCevabi | null; senYaz: (s: SenaryolarCevabi) => void;
 }
 
-// 2693 S2 cevabına göre tek satır: false eski davranış (ilk açılışta kabın altında kalan yer).
-const STUDYO_EKRANI_DOLDURUR = true;
 // Kabı kaydıran en yakın ata kutunun görünen üst kenarı; yoksa pencerenin üstü.
 function kaydirmaUstu(k: HTMLElement): number {
   for (let e = k.parentElement; e; e = e.parentElement) {
@@ -151,14 +149,14 @@ export function Pano({ o, c, p, cf: fark, sekSec, onayda, sen, senYaz }: Ozellik
     if (g) komut.degistir('Gün özeti', (t) => { (t as Record<string, unknown>).tpGun = g; }, { sessiz: true });
   }, [yaz, komut, c, p, bugun]);
 
-  // Pano yüksekliği: STUDYO_EKRANI_DOLDURUR ise kaydırma alanının görünen boyu (üstteki şeritler kaydırınca gider, pano ekranı doldurur);
-  // değilse kabın altında kalan yer. Altta telefonda alt menü düşülür.
+  // Pano yüksekliği kaydırma alanının görünen boyudur: üstteki şeritler kaydırınca gider, pano ekranı doldurur (2693 a).
+  // Altta telefonda alt menü düşülür.
   useLayoutEffect(() => {
     const olc = () => {
       const k = kap.current; if (!k) return;
       const alt = document.querySelector<HTMLElement>('.tc-kabuk-alt');
       const altH = alt && alt.offsetParent ? alt.offsetHeight : 0;
-      const ust = STUDYO_EKRANI_DOLDURUR ? kaydirmaUstu(k) : k.getBoundingClientRect().top;
+      const ust = kaydirmaUstu(k);
       k.style.setProperty('--tc-pym-tp-yuk', `${Math.max(320, window.innerHeight - ust - altH - 8)}px`);
     };
     olc(); window.addEventListener('resize', olc);
