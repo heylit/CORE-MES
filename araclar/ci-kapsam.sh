@@ -3,12 +3,13 @@
 # `ad=true|false` satırlarıyla yazar. Değişen her yol önce kendi satırında yazılır, kararlar en sondadır.
 # Süzgeç bu işin içinde kalır, `on.paths`'e taşınmaz: dal koruması `kontrol` işini bekler, hiç açılmayan koşu onu kilitler.
 # Eşleme tablosu belgeler/ci/kapsam.md'dedir; buradaki case sırası o tabloyla aynı tutulur.
-# OLAY: pull_request | push | başka (her iş koşar). Çalışma dizini depo köküdür.
+# OLAY: pull_request daraltılır; başka her olay (ana dal gönderimi ve elle koşu dahil) her işi koşturur. Ana dalda daraltma
+# yoktur: önceki birleşmenin ağır işleri iptal edilmiş olabilir ve testlerini sonraki koşu taşır (2705 a). Çalışma dizini depo köküdür.
 set -euo pipefail
 
 hepsi() { printf 'sunucu=true\nistemci=true\nekran=true\n'; exit 0; }
 
-case "${OLAY:-}" in pull_request|push) ;; *) hepsi ;; esac
+[ "${OLAY:-}" = pull_request ] || hepsi
 
 degisenler=$(cat)
 # Boş fark (ör. yalnız birleştirme commit'i) daraltılmaz: neden boş olduğu bilinmiyorsa her iş koşar.
@@ -22,11 +23,6 @@ sunucu=false; istemci=false; ekran=false
 while IFS= read -r yol; do
   [ -z "$yol" ] && continue
   echo "$yol"
-  # Ana dal arka kontroldür, daraltılmaz: belge dışında tek dosya bile değiştiyse her iş koşar. Ana dalda her yerdeki .md
-  # belgedir; çekme isteği modül klasöründeki .md için testleri yine koşturur.
-  if [ "$OLAY" = push ]; then
-    case "$yol" in *.md|belgeler/*|kurulum/*) continue ;; *) hepsi ;; esac
-  fi
   case "$yol" in
     belgeler/*|kurulum/*) ;;
     # Ortak parçalar: her iş bunlara dayanır.

@@ -30,11 +30,15 @@ dosyalarında `../istemci/src/...` ithali geçen her dosyanın klasörü. Elle l
 
 ## Daraltılmayan durumlar
 
-- Ana dala gönderim: yalnız `.md`, `belgeler/` ve `kurulum/` değiştiyse ağır işler atlanır; başka tek dosya bile varsa her iş koşar.
-- Elle koşu (`workflow_dispatch`), gönderimden önceki ucun bilinmediği ya da alınamadığı gönderim, boş fark: her iş koşar.
+- Ana dala gönderim: her iş koşar, yalnız belge değişse de. Önceki birleşmenin ağır işleri iptal edilmiş olabilir; onların testlerini bu koşu taşır (2705 a).
+- Elle koşu (`workflow_dispatch`) ve boş fark: her iş koşar.
 
 ## Eski koşunun iptali
 
-`concurrency.group`: ana dalda commit sha'sı, başka yerde ref. `cancel-in-progress` yalnız `pull_request` olayında açıktır:
-çekme isteğine yeni gönderim eski koşuyu iptal eder. Ana dalda iptal kapalıdır ve her commit kendi grubundadır; kırmızıda
-bozan birleşme tek commit'e iner.
+- Çekme isteği: koşunun tamamı iptal edilir. `concurrency.group` ref'tir; `cancel-in-progress` yalnız `pull_request` olayında açıktır.
+- Ana dal (2705 a): koşu bütünüyle iptal edilmez. Koşu düzeyindeki grup commit sha'sıdır. `kapsam`, `tip`, `denetim` (göç damgası dahil), `lint` ve `kontrol` her birleşmede koşar.
+- Ağır işler (`istemci-test`, `sunucu-test`, `ekran`, `windows`) iş düzeyinde `kontrol-<iş>-<parça>-refs/heads/main` grubundadır. Yeni birleşme bu işlerin eski koşusunu iptal eder; matris parçaları birbirini iptal etmez.
+- İptal edilen ağır işi olan koşuda `kontrol` kırmızıdır ve "testleri sonraki koşuda" iletisini yazar. O commit'in sonucu ana daldaki sonraki koşudur.
+- Bedel: ana dal kırmızıya dönerse bozan birleşme, son yeşil koşudan bu yana birleşenlerin arasındadır; tek commit'e inmez. Birleştirici her birleşmeden sonra değil, son koşuya bakar.
+- Elle koşuda grup koşuya özgüdür ve hiçbir şey iptal edilmez.
+- Ana dalda yalnız son koşu yeniden koşulur. Eski bir koşunun yeniden denenmesi de push olayıdır ve aynı gruba girer; yeni koşunun ağır işlerini iptal eder. Eski commit'i denemek gerekiyorsa elle koşu (`workflow_dispatch`) kullanılır.
