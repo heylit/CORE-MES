@@ -369,10 +369,12 @@ Testler: plan-bedel 815 (iki test), kurallar 815, kablolama 815; istemci planlam
   yok, seçili makine ya da kişi pasif, yetki dışı, tezgâh vardiyası tanımsız. Motorun "ufuk içinde tezgâh, vardiya, kaynak ya da malzeme yeri
   yok" iletisi aday tezgâhların ufuk ölçüsüyle ayrılır (planlanamama-kurallar.ts zamanNedeni): malzeme ufuk dışında, tezgâhın ufukta
   vardiyası yok, vardiyada yetkin kişi yok, işin süresi açık süreden uzun (iki süreyle), tezgâh dolu. Ölçülemeyen "nedeni ölçülemedi" olur.
+- 2784: hazırlık tek parçadır ve tezgâhın her hazırlık diliminde ayarcı ister (motor checkUse). Tezgâh ayarcının olmadığı vardiyada da
+  çalışıyorsa ve hazırlık ayarcının kesintisiz bulunduğu süreden uzunsa neden iki süreyle yazılır (kod kisi-vardiyasiz, hedef tezgâh).
 - B-2482-33 (insanlı istasyonun makinesi seçili): neden kişidedir (vardiya ya da yetkinlik), ileti makine ve istasyon adını söyler.
 - GÖRÜNEN DEĞİŞİKLİK: ileti metinleri değişir; "Sunucu motoru yerleştiremedi: " öneki kalkar. Ardıl metinleri ("Önceki adım (... OP n)
   yerleşmedi.", "Bağlı parti yerleşmedi.") aynıdır. Plan cevabının yerlesmemis[].neden metni yalnız pasif kaynakta adı söyler.
-- Test: `planlanamama-kurallar.test.ts` PN-01..06, `planlanamama-uc.test.ts` PU-01, 02, `plan-cozucusu-neden.test.ts` YN-01..11,
+- Test: `planlanamama-kurallar.test.ts` PN-01..06, `planlanamama-uc.test.ts` PU-01, 02, `uzun-hazirlik-neden.test.ts` UH-01..03, `plan-cozucusu-neden.test.ts` YN-01..11,
   `motor-oner-insanli.test.ts` MI-01, 02, `motor-kisi-isi.test.ts`.
 
 ## Planlanabilirlik uçları (2779 sayfası; 2026-11-10)

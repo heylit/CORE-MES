@@ -182,15 +182,22 @@ function zamanOlcumu(durum: MotorDurumu, idler: readonly string[]): Record<strin
       const adaylar = (o.c || []).filter((c) => !c.fas && cx.M[c.m]).map((c) => {
         const M = cx.M[c.m], d = M.opOran;
         const personelYok = d > 0 && (M.kisiler ? !herhangi(M.kav) : enBuyuk(cx.capTot) < d - 1e-6 || (cx.capG && cx.capG[M.grup] ? enBuyuk(cx.capG[M.grup]) < d - 1e-6 : false));
-        return { m: String(c.m), ad: M.ad == null ? null : String(M.ad), acikSaat: workIn(M.rw, st.now, H), sureSaat: (+c.su || 0) + (+c.run || 0), personelYok };
+        // checkUse: hazırlık tek parçadır, tezgâhın hazırlık dilimlerinin her birinde ayarcı ister; ayarcısız dilim aralığı keser.
+        let ayarci = null;
+        if (+c.su > 0 && !o.ayarsiz && o.ayarSaat !== 0) {
+          let sure = 0, enUzun = 0;
+          for (let k = Math.max(0, Math.floor(st.now / SL)); k < NS; k++) { if (!M.smask[k]) continue; if (cx.capAyar[k] >= 1 - 1e-6) { sure += SL; if (sure > enUzun) enUzun = sure; } else sure = 0; }
+          ayarci = { gerekSaat: o.ayarSaat != null && o.ayarSaat < +c.su ? o.ayarSaat : +c.su, enUzunSaat: enUzun };
+        }
+        return { m: String(c.m), ad: M.ad == null ? null : String(M.ad), acikSaat: workIn(M.rw, st.now, H), sureSaat: (+c.su || 0) + (+c.run || 0), personelYok, ayarci };
       });
       return { ufukGun: HDAYS, malzemeHazirSaat: st.w.mat === 'sert' && mt != null && isFinite(mt) ? mt : st.w.mat === 'sert' && mt != null ? Infinity : null, adaylar };
     });
-  })()`, b) as ({ ufukGun: number; malzemeHazirSaat: number | null; adaylar: { m: string; ad: string | null; acikSaat: number; sureSaat: number; personelYok: boolean }[] } | null)[];
+  })()`, b) as ({ ufukGun: number; malzemeHazirSaat: number | null; adaylar: { m: string; ad: string | null; acikSaat: number; sureSaat: number; personelYok: boolean; ayarci: { gerekSaat: number; enUzunSaat: number } | null }[] } | null)[];
   return Object.fromEntries(idler.map((id, n) => {
     const x = ham[n] ?? null;
     if (x === null) return [id, null];
-    const adaylar: ZamanAdayi[] = x.adaylar.map((a) => ({ makine: hedef('makine', a.m, a.ad), acikSaat: a.acikSaat, sureSaat: a.sureSaat, personelYok: a.personelYok }));
+    const adaylar: ZamanAdayi[] = x.adaylar.map((a) => ({ makine: hedef('makine', a.m, a.ad), acikSaat: a.acikSaat, sureSaat: a.sureSaat, personelYok: a.personelYok, ayarci: a.ayarci }));
     return [id, { ufukGun: x.ufukGun, malzemeHazirSaat: x.malzemeHazirSaat, adaylar }];
   }));
 }

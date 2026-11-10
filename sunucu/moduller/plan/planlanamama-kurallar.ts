@@ -37,6 +37,8 @@ export interface ZamanAdayi {
   sureSaat: number;
   // Tezgâhın işçi kısıtı ufkun hiçbir diliminde karşılanmıyor (yetkin kişi, grup personeli ya da ayarcı).
   personelYok: boolean;
+  // Hazırlık ayarcı isterse: hazırlığın süresi ve ufukta tezgâhın hazırlık dilimlerinde ayarcının kesintisiz bulunduğu en uzun süre, saat.
+  ayarci?: { gerekSaat: number; enUzunSaat: number } | null;
 }
 export function zamanNedeni(g: { ufukGun: number; malzemeHazirSaat: number | null; adaylar: readonly ZamanAdayi[] }): YerlesmemeNedeni {
   const ufuk = `planlama ufkunda (${String(g.ufukGun)} gün)`;
@@ -53,7 +55,18 @@ export function zamanNedeni(g: { ufukGun: number; malzemeHazirSaat: number | nul
     const p = vardiyali[0]!;
     return yerlesmemeNedeni('kisi-vardiyasiz', `${ad(p)} tezgâhı için ${ufuk} vardiyada çalışacak yetkin kişi yok.`, p.makine);
   }
-  const uygun = vardiyali.filter((a) => !a.personelYok);
+  const personelli = vardiyali.filter((a) => !a.personelYok);
+  // 600 dakikanın üstünde saat de yazılır ki uzun hazırlık bir bakışta okunsun.
+  const dk = (x: number) => { const d = Math.round(x * 60); return d > 600 ? `${d.toLocaleString('tr-TR')} dk, ${(Math.round(x * 10) / 10).toLocaleString('tr-TR')} sa` : `${d.toLocaleString('tr-TR')} dk`; };
+  const ayarSigmaz = (a: ZamanAdayi) => a.ayarci != null && a.ayarci.gerekSaat > a.ayarci.enUzunSaat + 1e-9;
+  if (personelli.every(ayarSigmaz)) {
+    const p = personelli.reduce((x, y) => (y.ayarci!.enUzunSaat > x.ayarci!.enUzunSaat ? y : x));
+    const z = p.ayarci!;
+    return yerlesmemeNedeni('kisi-vardiyasiz', z.enUzunSaat > 0
+      ? `${ad(p)} tezgâhında hazırlık (${dk(z.gerekSaat)}) ayarcının kesintisiz bulunduğu süreden (${dk(z.enUzunSaat)}) uzun; hazırlık süresini kontrol edin ya da tezgâhın ayarcısız vardiyalarına ayarcı atayın.`
+      : `${ad(p)} tezgâhının vardiyalarında ${ufuk} ayarcı yok.`, p.makine);
+  }
+  const uygun = personelli.filter((a) => !ayarSigmaz(a));
   const saat = (x: number) => (Math.round(x * 10) / 10).toLocaleString('tr-TR');
   if (uygun.every((a) => a.sureSaat > a.acikSaat)) {
     const p = uygun.reduce((x, y) => (y.acikSaat > x.acikSaat ? y : x));
