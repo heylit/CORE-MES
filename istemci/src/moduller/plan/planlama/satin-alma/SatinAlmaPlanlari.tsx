@@ -6,6 +6,7 @@ import { useYetki } from '../../../../ortak/veri/yetki.ts';
 import { calismaOku } from '../durum.ts';
 import { FasonPlaniGorunumu } from '../maliyet/FasonPlani.tsx';
 import { MalzemePlaniGorunumu } from '../malzeme/MalzemePlani.tsx';
+import { emirNoOkuyucu, type EmirNo } from '../ortak/emir-no.ts';
 import type { PlanlamaCalismasi } from '../tipler.ts';
 import '../planlama-yeni.css';
 
@@ -45,11 +46,14 @@ function Kap({ ciz }: { ciz: (calisma: PlanlamaCalismasi | null, emirler: unknow
   return <div className="tc-py-gorunum">{ciz(durum.calisma, durum.emirler, yenile)}</div>;
 }
 
+// Satın Alma'da Reçete ve Rota kaydı yoktur; emir no sunucunun daraltılmış çalışmasında siparişle gelir (satin-alma-gorunumu.ts).
+const siparisEmirNo = (c: PlanlamaCalismasi | null): EmirNo => emirNoOkuyucu({ orders: (c?.D.siparisler ?? []).map((s) => ({ id: s.id, no: s['no'] })) });
+
 export function SatinAlmaMalzemePlani() {
   const yazar = useYetki().herhangi('satin-alma.yaz', 'plan.yaz');
-  return <Kap ciz={(c, emirler, yenile) => <MalzemePlaniGorunumu calisma={c} emirler={emirler} maliyetOku={false} calismaSurumu={null} terminYazar={yazar} yenile={yenile} />} />;
+  return <Kap ciz={(c, emirler, yenile) => <MalzemePlaniGorunumu calisma={c} emirler={emirler} emirNo={siparisEmirNo(c)} maliyetOku={false} calismaSurumu={null} terminYazar={yazar} yenile={yenile} />} />;
 }
 
 export function SatinAlmaFasonPlani() {
-  return <Kap ciz={(c) => <FasonPlaniGorunumu c={c} komut={null} planYaz={false} maliyetOku={false} git={null} />} />;
+  return <Kap ciz={(c) => <FasonPlaniGorunumu c={c} komut={null} planYaz={false} maliyetOku={false} git={null} emirNo={siparisEmirNo(c)} />} />;
 }
