@@ -22,7 +22,7 @@ const HATALI: KmHataliBekleyenCevabi['kayitlar'][number] = {
   id: 5, uretimEmri: { id: 7, emirNo: 'UE-0007', parcaNo: 'DNM-01', parcaAd: 'Deneme mili' }, isEmri: { id: 70, opNo: 20, ad: 'Tornalama' },
   hedefEmir: { id: 8, emirNo: 'UE-0007-K1' }, kaliteIsEmriId: 80, reworkIsEmriId: 81, hurdaNedeni: { id: 3, kod: 'TK', ad: 'Takım kırılması' },
   adet: 2, aciklama: null, kisi: { id: 9, ad: 'Deneme Operatör' }, zaman: '2026-10-28T08:00:00.000Z',
-  karar: null, kararKisi: null, kararZamani: null, kararNotu: null, ncrKimlik: null,
+  karar: null, kararKisi: null, kararZamani: null, kararNotu: null, ncrKimlik: null, arsivde: false,
 };
 
 function ac(k: TestKullanicisi, kayitlar: TestKayitlari = {}, bekleyen: KmIlkParcaBekleyenCevabi = { emirler: [] }, hatali: KmHataliBekleyenCevabi = { kayitlar: [] }) {

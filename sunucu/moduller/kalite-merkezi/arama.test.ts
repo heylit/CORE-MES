@@ -24,7 +24,7 @@ const PAROLA = 'dogru-parola-1';
 const hataliKaydi = (id: number, emirNo: string, parcaNo: string, parcaAd: string): HataliKaydiOzeti => ({
   id, uretimEmri: { id, emirNo, parcaNo, parcaAd }, isEmri: { id: id + 100, opNo: 20, ad: 'Frezeleme' }, hedefEmir: { id, emirNo },
   kaliteIsEmriId: id + 200, reworkIsEmriId: null, hurdaNedeni: { id: 1, kod: 'TK', ad: 'Takım kırılması' }, adet: 2, aciklama: null,
-  kisi: { id: 1, ad: null }, zaman: '2026-10-29T08:00:00.000Z', karar: null, kararKisi: null, kararZamani: null, kararNotu: null, ncrKimlik: null,
+  kisi: { id: 1, ad: null }, zaman: '2026-10-29T08:00:00.000Z', karar: null, kararKisi: null, kararZamani: null, kararNotu: null, ncrKimlik: null, arsivde: false,
 });
 
 describe('Kalite Merkezi Ctrl K arama kuralları (1238)', () => {

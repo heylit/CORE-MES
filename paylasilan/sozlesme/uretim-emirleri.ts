@@ -812,6 +812,8 @@ export const hataliKaydiSemasi = z.object({
   kararZamani: zaman.nullable(),
   kararNotu: z.string().nullable(),
   ncrKimlik: z.string().nullable(),
+  // 2731 b: hedef emir arşivde (iptal, kapanışı açık); kararda rework kapalıdır, hurda, red ve kabul açıktır.
+  arsivde: z.boolean(),
 });
 // Kalite "rework" dedikten sonra planlama ikinci adımı doldurur: ad, operasyon tipi, kaynak (iç ya da fason) ve süre. Fasonda süre yok,
 // termin günü vardır (tablo kısıtı); kaynak boş kalırsa adım atanmamış bekler.

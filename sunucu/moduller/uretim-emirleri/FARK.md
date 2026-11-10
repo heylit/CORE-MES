@@ -281,3 +281,4 @@ Taban main 6d14403. Başvuru: DEVAM-paketi-rota-plan/ilk-sistem-kodu (adımlı �
 - Durum 2721 1/3 a: arşiv iptal durumudur; ayrı damga eklenmedi.
 - Göç `20261110065306_uretim_emirleri_arsiv_baslama.sql`: `uretim_emri_durum_alanlari` yalnız genişler, iptal emirde başlama anı kalabilir.
 - 2731 b: kararsız hatalı parça kaydı arşive almayı durdurmaz, uyarı olur (`ARSIV_HATALI_ACIK`). Kaydın açtığı kol kol engeline girmez, emirle birlikte iptal olur (kendi kapanışı açılmaz). Arşivde Kalite Merkezi hurda, red, kabul ve şartlı kabul verir; rework kapalıdır (`HATALI_ARSIVDE_REWORK`). Arşivdeki kararda kol katılmaz, emir bitmez; sayım ve stok olayı terminaldeki gibi yazılır. Kapanışsız iptal emirde karar kapalı kalır.
+- 2757: hatalı kayıt özeti (`hataliKaydiSemasi`) `arsivde` taşır; `hataliArsivdeMi` ile doldurulur (kök emir arşivde, hedef iptal). Ekran arşivdeki kayıtta rework seçeneğini kapatır; davranış değişmez.

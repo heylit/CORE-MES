@@ -122,4 +122,5 @@ Bağsız kural: yok.
 | UE-ARSIV-4 | İptal emirde başlama kalabilir; bitiş ve sağlam adet olamaz (`uretim_emri_durum_alanlari`) | arsiv.test.ts "kısıt" |
 | UE-ARSIV-5 | Fasonda parça uyarıdır; arşivden sonra fason dönüşü yazılır, gidiş yazılmaz (2721 2/3 b) | arsiv.test.ts "2721 2/3 b". Mutasyon: dönüşte arşiv istisnası kalkınca kırmızı (DOĞRULANDI, yerelde) |
 | UE-ARSIV-6 | Kararsız hatalı kayıt arşivi durdurmaz; kolu emirle arşive gider; arşivde hurda, red, kabul açık, rework kapalı; kol katılmaz, emir bitmez (2731 b) | arsiv-kurallar.test.ts "2721", arsiv.test.ts "2731 b" (iki test) |
+| UE-ARSIV-8 | Hatalı kayıt özeti arşivi taşır (arsivde): arşivden önce false, kollu ve kolsuz arşivde true, kapanışsız iptalde false (2757) | arsiv.test.ts "2731 b" (iki test) |
 | UE-ARSIV-7 | Önizlemenin sağlamı en ileri sayılmış adımın sağlam sayımıdır (T-2721-1) | arsiv.test.ts "arşive alma", arsiv-kurallar.test.ts |
