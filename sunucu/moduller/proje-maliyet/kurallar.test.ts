@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import {
-  defteriUygula, dondurulacaklar, eksikKalemler, isEmriKaydi, gecikmeCezasi, gecikmeGunu, gostergeler, haftaBasi, haftalikBirikim, iscilikTutari, kalemKirilimi, karRiski,
+  defteriUygula, dondurulacaklar, eksikKalemler, isEmriKaydi, gecikmeCezasi, gecikmeGunu, gercekBilesenFiyatlari, gostergeler, haftaBasi, haftalikBirikim, iscilikTutari, kalemKirilimi, karRiski,
   faturaDurumu, projeGeliri, saatTutari, sapanIsEmirleri, tahminiBitis, tamamlanmaOrani, MASRAF_IPTAL, MASRAF_KATEGORI, MASRAF_SATIN_ALMA, MASRAF_YOK, masrafSayilmaz, TABAN_EMIRSIZ, TABAN_GEREKCE, aramaKalibi, maliyetFarki, masrafReddi, tabanKarari,
 } from './kurallar.ts';
 import type { FaturaDurumu, GelirPayi, IsEmriGirdisi, MaliyetKaydi } from './kurallar.ts';
@@ -393,4 +393,20 @@ test('PM-49 (2599 a): sayılmayan türdeki eski bağ ve sonradan siparişe bağl
   assert.equal(masrafSayilmaz(b('diger_gider', true), PROJE_MASRAF_KATEGORILERI), true);
   const m = [{ tutarTl: 100, iptal: false, sayilmaz: false }, { tutarTl: 900, iptal: false, sayilmaz: true }];
   assert.deepEqual(maliyetFarki(1000, 400, 700, m), { masrafToplami: 100, sonGerceklesen: 500, tahminiSon: 1200, fark: 200 });
+});
+
+test('PM-51 (2613 2/2): gerçekleşen birim fiyat emrin siparişinden, yoksa projeninkinden, yoksa listeden; siparişin bilinmeyen fiyatı listeye düşmez', () => {
+  const b = (malzemeNo: number, tryBirimFiyati: number | null): MalzemeBileseni => ({ malzemeNo, brut: 2, tryBirimFiyati, hammadde: false, kgBasina: null, tryTalasKgFiyati: null });
+  const fiyatlar = [
+    { hedef: 'emir' as const, hedefId: 7, malzemeNo: 1, tryBirimFiyati: '120' },
+    { hedef: 'proje' as const, hedefId: 3, malzemeNo: 1, tryBirimFiyati: '110' },
+    { hedef: 'proje' as const, hedefId: 3, malzemeNo: 2, tryBirimFiyati: '6.1667' },
+    { hedef: 'emir' as const, hedefId: 8, malzemeNo: 3, tryBirimFiyati: '50' },
+    { hedef: 'emir' as const, hedefId: 7, malzemeNo: 4, tryBirimFiyati: null },
+    { hedef: 'proje' as const, hedefId: 9, malzemeNo: 5, tryBirimFiyati: '1' },
+  ];
+  const sonuc = gercekBilesenFiyatlari([b(1, 100), b(2, 100), b(3, 100), b(4, 100), b(5, null)], fiyatlar, 7, 3).map((x) => x.tryBirimFiyati);
+  // 1: emrin siparişi; 2: projenin; 3: başka emrin siparişi sayılmaz, liste; 4: sipariş var fiyatı bilinmiyor, listeye düşmez; 5: başka proje, liste (yok).
+  assert.deepEqual(sonuc, [120, 6.1667, 100, null, null]);
+  assert.equal(malzemePlani(gercekBilesenFiyatlari([b(1, 100)], fiyatlar, 7, 3), 1, null).tutar, 240, 'emre çıkan miktar x sipariş fiyatı');
 });

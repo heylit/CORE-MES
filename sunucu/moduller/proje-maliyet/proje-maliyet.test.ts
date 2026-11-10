@@ -263,6 +263,53 @@ describe('proje-maliyet (gerçek PostgreSQL, gerçek giriş)', () => {
     assert.equal(malzeme.gerceklesen, null);
   });
 
+  test('PM-51 (2613 2/2, 2720-2): gerçekleşen malzeme emre çıkan miktar x bağlı siparişin fiyatı; önce emrin, yoksa projenin siparişi; plan siparişten fiyat almaz', async () => {
+    const hedef = (await tamam<Proje>(gonder(yonetici, '/projeler', { kod: 'PM.51', ad: 'Sipariş fiyatlı', siparisId: siparis.id }))).id;
+    const { isEmriId } = await isEmriAc(hedef);
+    const emir = (await vt().tek<{ id: number }>('SELECT uretim_emri_id AS id FROM uretim_emirleri_is_emri WHERE id = $1', [isEmriId]))!.id;
+    const bilesen = await mamulAc();
+    const sh = ortam!.sahip;
+    await sh.sorgu('INSERT INTO uretim_emirleri_is_emri_bileseni (is_emri_id, malzeme_no, miktar, fire_yuzde) VALUES ($1, $2, 3, 0)', [isEmriId, bilesen]);
+    // Satın almanın tabloları (fikstür): teslim alınmış sipariş satırı; bağ emre ya da projeye talepten.
+    const katalog = randomUUID();
+    await sh.sorgu('INSERT INTO satin_alma_katalog (id, malzeme_no) VALUES ($1, $2)', [katalog, bilesen]);
+    const siparisAc = async (sira: number, bag: { emir?: number; proje?: number }, fiyat: number): Promise<string> => {
+      const [t, kl, tk] = [randomUUID(), randomUUID(), randomUUID()];
+      await sh.sorgu("INSERT INTO satin_alma_talep (id, yil, sira, baslik, talep_eden_kisi_id, acan_kisi_id, durum, uretim_emri_id, proje_id) VALUES ($1, 2099, $2, 'Deneme talep', $3, $3, 'siparis_verildi', $4, $5)",
+        [t, 95100 + sira, yoneticiId, bag.emir ?? null, bag.proje ?? null]);
+      await sh.sorgu("INSERT INTO satin_alma_talep_kalemi (talep_id, id, sira, ad, katalog_id) VALUES ($1, $2, 1, 'Deneme kalem', $3)", [t, kl, katalog]);
+      await sh.sorgu("INSERT INTO satin_alma_teklif (talep_id, id, para_birimi, teklif_tarihi) VALUES ($1, $2, 'TRY', current_date)", [t, tk]);
+      await sh.sorgu('INSERT INTO satin_alma_teklif_satiri (talep_id, teklif_id, kalem_id, birim_fiyat) VALUES ($1, $2, $3, $4)', [t, tk, kl, fiyat]);
+      await sh.sorgu("INSERT INTO satin_alma_karar (talep_id, mod, karar_tarihi) VALUES ($1, 'bolunmus', current_date)", [t]);
+      await sh.sorgu('INSERT INTO satin_alma_siparis (talep_id, teklif_id) VALUES ($1, $2)', [t, tk]);
+      const satir = (await sh.tek<{ id: number }>("INSERT INTO satin_alma_siparis_satiri (talep_id, teklif_id, kalem_id, miktar, birim) VALUES ($1, $2, $3, 10, 'adet') RETURNING id", [t, tk, kl]))!.id;
+      await sh.sorgu('INSERT INTO satin_alma_teslim (siparis_satiri_id, mal_kabul_satiri_id, miktar, kisi_id) VALUES ($1, $2, 10, $3)', [satir, 951000 + sira, yoneticiId]);
+      return t;
+    };
+    const emrinTalebi = await siparisAc(1, { emir }, 40);
+    const projeninTalebi = await siparisAc(2, { proje: hedef }, 50);
+    // Siparişin tamamı (10) değil, emre çıkan 3 sayılır.
+    const konum = await sh.tek<{ id: number }>("INSERT INTO stok_konum (depo_id, kod, tur) SELECT id, 'PM-51', 'depo_zemini' FROM stok_depo ORDER BY id LIMIT 1 RETURNING id");
+    await sh.sorgu(
+      `WITH f AS (INSERT INTO stok_hareket_fisi (tur, islem_kimligi, kisi_id) VALUES ('cikis', pg_current_xact_id(), $4) RETURNING id),
+         h AS (INSERT INTO stok_hareketi (tur, malzeme_id, kaynak_konum_id, miktar, cikis_nedeni, uretim_emri_id, kisi_id, onayli_eksi, eksi_onay_kaynagi)
+               VALUES ('cikis', $1, $2, 3, 'uretime_sarf', $3, $4, true, 'kisi') RETURNING id)
+       INSERT INTO stok_hareket_fisi_satiri (hareket_id, fis_id) SELECT h.id, f.id FROM h, f`, [bilesen, konum!.id, emir, yoneticiId]);
+    const malzeme = async () => {
+      const c = await vt().tx((db) => projeMaliyeti(db, kullanici(['finans.maliyet-oku', FIYAT_ISLEMI]), hedef, SIMDI));
+      const k = c.kalemler.find((x) => x.kalem === 'malzeme')!;
+      return [k.plan, k.gerceklesen];
+    };
+    // Kartın liste kg fiyatı yok: plan bilinmez kalır; gerçek emrin siparişinden 3 x 40.
+    assert.deepEqual(await malzeme(), [null, 120]);
+    // Emrin siparişi iptal: projenin siparişi 3 x 50.
+    await sh.sorgu("UPDATE satin_alma_talep SET durum = 'iptal', iptal_nedeni = 'Deneme' WHERE id = $1", [emrinTalebi]);
+    assert.deepEqual(await malzeme(), [null, 150]);
+    // Bağlı sipariş kalmayınca liste fiyatına döner (yok: bilinmez).
+    await sh.sorgu("UPDATE satin_alma_talep SET durum = 'iptal', iptal_nedeni = 'Deneme' WHERE id = $1", [projeninTalebi]);
+    assert.deepEqual(await malzeme(), [null, null]);
+  });
+
   test('PM-30 bekleme finansmanı (PM-29): TL faizi yoksa bildirilir; vadesiz siparişte vade eksik; plan tarihi yoksa plan bilinmez, başlamamış işte gerçek 0', async () => {
     // Vade uyarısı yalnız hesaplanan iş varken (PM-44): aynı vadesiz siparişten açılan iş emirli proje.
     const vadesizProje = await tamam<Proje>(gonder(yonetici, `/projeler/siparisten/${siparis.id}/ac`, { kod: 'PM.30', ad: 'Vadesiz' }));

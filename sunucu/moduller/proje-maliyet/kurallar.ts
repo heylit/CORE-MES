@@ -421,6 +421,19 @@ export interface MalzemeBileseni {
   tryTalasKgFiyati: number | null;
 }
 
+// PM-51 (2613 2/2, 2720-2): gerçekleşen malzemenin birim fiyatı bağlı satın alma siparişindendir: önce emrin, yoksa projenin siparişi.
+// Sipariş varsa fiyatı bilinmese de listeye düşülmez (null, bilinmiyor). Bağlı sipariş yoksa liste fiyatı kalır (2613-3 açık). Fiyat
+// emre çıkan miktarla çarpılır, siparişin tamamı yazılmaz (artan mal stokta kalır; 2637 a ile çift sayılmaz). Plan liste fiyatıyla kalır.
+export interface SiparisFiyati { hedef: 'emir' | 'proje'; hedefId: number; malzemeNo: number; tryBirimFiyati: string | null }
+export function gercekBilesenFiyatlari(bilesenler: readonly MalzemeBileseni[], fiyatlar: readonly SiparisFiyati[], emirId: number, projeId: number): MalzemeBileseni[] {
+  const bul = (hedef: 'emir' | 'proje', id: number, no: number) => fiyatlar.find((f) => f.hedef === hedef && f.hedefId === id && f.malzemeNo === no);
+  return bilesenler.map((b) => {
+    const siparis = bul('emir', emirId, b.malzemeNo) ?? bul('proje', projeId, b.malzemeNo);
+    if (siparis === undefined) return b;
+    return { ...b, tryBirimFiyati: siparis.tryBirimFiyati === null ? null : Number(siparis.tryBirimFiyati) };
+  });
+}
+
 // PM-25 (208 a, 214 a): emrin planlanan malzemesi = Σ brüt x birim fiyat - talaş değeri. Birinin fiyatı yoksa malzeme bilinmez.
 // Talaş kg = hammaddelerin kütük kg toplamı - adet x parça net kg (en az 0); değeri kütük kg'ı ağırlıklı talaş kg fiyatıyla. Kütük ağırlığı,
 // parça net ağırlığı ya da talaş fiyatı bilinmiyorsa talaş düşülmez ve bildirilir (malzeme bilinmez sayılmaz; brüt tutar kalır).
