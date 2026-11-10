@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   beklemeHesabi, bitenAdimMaliyeti, birimMaliyet, calisilir, katkiPayi, fasonDurumu, genelGiderOrani, fasonIsleri, genelGiderHesabi, isTanimlari, maliyetBaglami, malzemeler, malzemeTutari, mesaiAtamasi,
-  mesaiBedeli, planMaliyeti, sayiGirdisi, siparisMaliyeti, sonrakiKimlik, sureSapmasi, takvimKur, talasKredisi, kisaTl,
+  mesaiBedeli, mesaiSistemi, maliyetSistemi, planMaliyeti, sayiGirdisi, siparisMaliyeti, sonrakiKimlik, sureSapmasi, takvimKur, talasKredisi, kisaTl,
 } from './kurallar.ts';
 import { mesaiTutari } from './kurallar.ts';
 import { ornekCalisma } from './test-verisi.ts';
@@ -121,15 +121,17 @@ describe('P3 saf hesaplar', () => {
     expect(B.atil).toBeNull();
   });
 
-  it('ek mesai takvime girer; bedeli kişi ücreti yoksa bilinmez, girilince cumartesi çarpanıyla hesaplanır', () => {
+  // 2728 a: brüt ücret kayıtta tutulmaz; eski kayıtta dursa da bedel ondan hesaplanmaz, grup saat maliyeti gelene kadar bilinmez.
+  it('ek mesai takvime girer; kişi bazlı bedel bilinmez, eski kayıttaki brüt hesaba girmez', () => {
     const ek = [{ m: 'T1', gun: 5, vardiya: 'V1' }];
     const c = ornekCalisma({ ekMesai: ek });
     const T = takvimKur(c);
     expect(calisilir(T.M.T1?.rw ?? [], 120, 144)).toBe(8);
     const e = { m: 'T1', gun: 5, vardiya: 'V1' };
     expect(mesaiBedeli(c, T, e)).toBeNull();
-    const u = ornekCalisma({ ekMesai: ek, D: { mesaiSis: { ucret: { P1: { brut: 22500 } } } } });
-    expect(mesaiBedeli(u, takvimKur(u), e)).toBeCloseTo(8 * ((22500 * 1.2875) / 225) * 1.5);
+    const u = ornekCalisma({ ekMesai: ek, D: { mesaiSis: { ucret: { P1: { brut: 1000, yil: 4 } } } } });
+    expect(mesaiBedeli(u, takvimKur(u), e)).toBeNull();
+    expect(mesaiSistemi(u.D).ucret).toEqual({ P1: { yil: 4 } });
     const A = mesaiAtamasi(u);
     expect(A.liste[0]?.kisiler.map((k) => k.id)).toEqual(['P1']);
     expect(A.liste[0]?.ihlal).toEqual([]);

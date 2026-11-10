@@ -1,6 +1,6 @@
 import type { PlanlamaCalismasi, PlanVerisi } from '../tipler.ts';
 import {
-  fasonTalasId, gunNo, isoGun, kalemTutari, kgFiyatlari, maliyetSistemi, malzemeler, mesaiSistemi, ML_CINS, ML_FORM, MS_ANAHTAR, sayi, tl, vardiyalar, vardiyaSaati, ymAyar, ekMesailer,
+  fasonTalasId, gunNo, isoGun, kalemTutari, kgFiyatlari, maliyetSistemi, malzemeler, ML_CINS, ML_FORM, MS_ANAHTAR, sayi, tl, vardiyalar, vardiyaSaati, ymAyar, ekMesailer,
   type FasonIsi, type IsTanimi, type TezgahGideri,
 } from './kurallar.ts';
 import { degisti, metinYaz, sayiAl, type Degerler, type FormTanimi } from './ortak.tsx';
@@ -182,14 +182,14 @@ export const amortismanEksik = (D: PlanVerisi): string[] => {
 };
 
 export function kalemDegisFormu(D: PlanVerisi, yaz: Yaz): FormTanimi | null {
-  const M = maliyetSistemi(D); const ms = mesaiSistemi(D);
+  const M = maliyetSistemi(D);
   if (!M.kalemler.length) return null;
   const kal = (id: string | undefined) => M.kalemler.find((z) => z.id === id);
   const hesap = (id: string | undefined) => { const k = kal(id); return Boolean(k && k.tur === 'personel' && k.aylik === null); };
   return {
     id: 'kalemdegis', ad: 'Gider kalemini değiştir', simge: 'edit', ne: 'Tutar, paylaşım ölçüsü ya da hangi tezgâhlara yazıldığı.',
     alanlar: (d) => [
-      { k: 'kal', ad: 'Kalem', tur: 'secim', zorunlu: true, secenek: M.kalemler.map((z) => ({ deger: z.id, baslik: `${z.ad} · ${tl(kalemTutari(z, M, ms))}/ay` })) },
+      { k: 'kal', ad: 'Kalem', tur: 'secim', zorunlu: true, secenek: M.kalemler.map((z) => ({ deger: z.id, baslik: `${z.ad} · ${tl(kalemTutari(z))}/ay` })) },
       { k: 'ad', ad: 'Kalem adı', tur: 'metin', zorunlu: true },
       ...(hesap(d.kal) ? [] : [{ k: 'aylik', ad: 'Aylık tutar (TL)', tur: 'sayi' as const, min: 0, ipucu: 'Boş: tutar yok' }]),
       { k: 'anahtar', ad: 'Paylaşım ölçüsü', tur: 'secim', zorunlu: true, secenek: anahtarSecenek },
