@@ -1,11 +1,11 @@
 import type { Db } from '#cekirdek/db.ts';
 import { bulunamadi } from '#cekirdek/hata.ts';
-import type { MesaiMaliyetiCevabi, MesaiSaatDegerleriCevabi } from '#paylasilan/sozlesme/plan.ts';
+import type { MesaiGrupSirasiCevabi, MesaiMaliyetiCevabi, MesaiSaatDegerleriCevabi } from '#paylasilan/sozlesme/plan.ts';
 import { tesisGunu } from '#paylasilan/tesis-zamani.ts';
 import { grupSaatMaliyetleri, kisilerinDepartmanlari } from '../ik/disari.ts';
 import { istasyonKisiAtamalari } from '../istasyonlar/disari.ts';
 import {
-  aySonuGunu, grupMesaiSaatTL, istasyonSaatDegeri, mesaiAyarlari, mesaiGunTuru, mesaiToplami, mesaiTutari, varsayilanMaliyetAyi, type MesaiAyarlari,
+  aySonuGunu, grupMesaiSaatTL, istasyonSaatDegeri, mesaiAyarlari, mesaiGunTuru, mesaiToplami, mesaiTutari, varsayilanMaliyetAyi, yogunSira, type MesaiAyarlari,
 } from './kurallar.ts';
 import { planGirdisi } from './plan-girdisi.ts';
 import { planCozumKaynagi } from './planlama-servis.ts';
@@ -91,4 +91,11 @@ export async function mesaiSaatDegerleri(db: Db, an: Date = new Date()): Promise
       grup, saatTL: a.kisiBazli ? grupMesaiSaatTL(tz, a.carp.hi, a.kisiEk) : null,
     })),
   };
+}
+
+// 2752 (2750 b): maliyet görmeyen planlama rolünün yıllık planı ek mesaiyi ucuz gruptan başlayarak önerir. Sıra TL'li değerden (yukarıdaki
+// tek yol) kurulur, cevapta yalnız grup ve sıra; değer cevaba, günlüğe girmez. Küçük ve bilinmeyen grup sırasız (null).
+export async function mesaiGrupSirasi(db: Db, an: Date = new Date()): Promise<MesaiGrupSirasiCevabi> {
+  const { ay, gruplar } = await mesaiSaatDegerleri(db, an);
+  return { ay, gruplar: yogunSira(gruplar) };
 }

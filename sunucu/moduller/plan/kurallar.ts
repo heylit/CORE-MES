@@ -683,6 +683,14 @@ export function grupMesaiSaatTL(
   return s * opOrt * (carpHi || 1.5) + (kisiEk ?? 0) / 8 * opOrt;
 }
 
+// 2752 (2750 b, Güvenlik Ek 2750): maliyet görmeyen planlama rolü için TL'siz grup bedel sırası. Yoğun ve ölçeksiz: en ucuz 1, eşit değer
+// aynı sıra, bir sonraki farklı değer bir fazlası; aralık ve oran çıkmaz. Bilinmeyen grup (null) sırasızdır.
+export function yogunSira<T extends { saatTL: number | null }>(gruplar: readonly T[]): (Omit<T, 'saatTL'> & { sira: number | null })[] {
+  const degerler = [...new Set(gruplar.flatMap((g) => (g.saatTL === null ? [] : [g.saatTL])))].sort((a, b) => a - b);
+  const sira = new Map(degerler.map((d, i) => [d, i + 1]));
+  return gruplar.map(({ saatTL, ...g }) => ({ ...g, sira: saatTL === null ? null : sira.get(saatTL) ?? null }));
+}
+
 // 2653 (Maliyet koşulu): cevapta yalnız toplam. Bilinmeyen satır toplamda sıfır sayılmaz, `bilinmeyen` olur; bilinen yoksa toplam null.
 // Satır yoksa toplam 0'dır (ek mesai yok).
 // "YYYY-MM" ayının son günü (YYYY-MM-DD).

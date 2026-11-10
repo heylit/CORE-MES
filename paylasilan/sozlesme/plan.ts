@@ -611,3 +611,10 @@ export const mesaiSaatDegerleriCevabi = z.object({
   gruplar: z.array(z.object({ grup: z.string(), saatTL: z.number().nullable() }).strict()),
 }).strict();
 export type MesaiSaatDegerleriCevabi = z.output<typeof mesaiSaatDegerleriCevabi>;
+// 2752 (2750 b): TL'siz grup bedel sırası (planlama okuma yetkisiyle). Yoğun ve ölçeksiz (1 en ucuz, eşit değer aynı sıra); bilinmeyen grup null.
+export const mesaiGrupSirasiSorgusu = z.object({}).strict();
+export const mesaiGrupSirasiCevabi = z.object({
+  ay: z.string(),
+  gruplar: z.array(z.object({ grup: z.string(), sira: z.number().int().positive().nullable() }).strict()),
+}).strict();
+export type MesaiGrupSirasiCevabi = z.output<typeof mesaiGrupSirasiCevabi>;

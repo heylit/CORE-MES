@@ -9,11 +9,11 @@ import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
 import {
-  aySonuGunu, grupMesaiSaatTL, istasyonSaatDegeri, mesaiAyarlari, mesaiGunTuru, mesaiToplami, mesaiTutari, type MesaiGirdisi,
+  aySonuGunu, grupMesaiSaatTL, istasyonSaatDegeri, yogunSira, mesaiAyarlari, mesaiGunTuru, mesaiToplami, mesaiTutari, type MesaiGirdisi,
 } from './kurallar.ts';
 import { degerlendirmeBaslat, type degerlendirmeYap } from './degerlendirme.ts';
 import { PLANLAMA_ANAHTARI } from './disari.ts';
-import { mesaiMaliyeti, mesaiSaatDegerleri } from './mesai-maliyeti.ts';
+import { mesaiGrupSirasi, mesaiMaliyeti, mesaiSaatDegerleri } from './mesai-maliyeti.ts';
 import { planCozumKaynagi } from './planlama-servis.ts';
 import * as sorgular from './sorgular.ts';
 
@@ -101,6 +101,16 @@ describe('2653 kuralları', () => {
     assert.equal(grupMesaiSaatTL([{ opOran: undefined, deger: 400 }, { opOran: 1, deger: null }], 1.5, 0), 400 * 1.5);
     assert.equal(grupMesaiSaatTL([{ opOran: 1, deger: null }], 1.5, 160), null);
     assert.equal(grupMesaiSaatTL([], 1.5, 160), null);
+  });
+});
+
+describe('2752 grup bedel sırası (saf)', () => {
+  test('yoğun ve ölçeksiz: en ucuz 1, eşit değer aynı sıra, boşluk yok; bilinmeyen null; yalnız grup ve sıra', () => {
+    const l = yogunSira([{ grup: 'A', saatTL: 520 }, { grup: 'B', saatTL: 420 }, { grup: 'C', saatTL: null }, { grup: 'D', saatTL: 420 }, { grup: 'E', saatTL: 9000 }]);
+    assert.deepEqual(l, [{ grup: 'A', sira: 2 }, { grup: 'B', sira: 1 }, { grup: 'C', sira: null }, { grup: 'D', sira: 1 }, { grup: 'E', sira: 3 }]);
+    for (const x of l) assert.deepEqual(Object.keys(x).sort(), ['grup', 'sira']);
+    assert.deepEqual(yogunSira([{ grup: 'A', saatTL: null }]), [{ grup: 'A', sira: null }]);
+    assert.deepEqual(yogunSira([]), []);
   });
 });
 
@@ -325,5 +335,26 @@ describe('2653 mesai maliyeti (gerçek PostgreSQL)', () => {
     assert.equal(yaz.statusCode, 200, yaz.body);
     const sonra = JSON.stringify((await sorgular.planlamaKaydi(vt(), PLANLAMA_ANAHTARI))?.deger);
     assert.ok(!sonra.includes('mesaiSaat') && !sonra.includes('7771'), sonra.slice(0, 200));
+  });
+
+  test('2752 sıra ucu: planlama-oku 200, yalnız grup ve sıra (TL yok); finans.maliyet-oku tek başına ve plan.yaz 403; parametre 400', async () => {
+    await kayitYaz();
+    const UC = '/api/plan/mesai-grup-sirasi';
+    const plan = await islemliKisi('mm_sira', ['plan.planlama-oku']);
+    const c = await app.inject({ method: 'GET', url: UC, headers: { cookie: plan } });
+    assert.equal(c.statusCode, 200, c.body);
+    const u = c.json() as { ay: string; gruplar: { grup: string; sira: number | null }[] };
+    assert.deepEqual(Object.keys(u).sort(), ['ay', 'gruplar']);
+    for (const x of u.gruplar) assert.deepEqual(Object.keys(x).sort(), ['grup', 'sira']);
+    assert.doesNotMatch(c.body, /saatTL|kisi|departman|havuz|193|122/i);
+    // Değer maliyet ayına bağlıdır (uç bugünün ayını okur): sıra testin anıyla doğrudan.
+    const g = await vt().tx((db) => mesaiGrupSirasi(db, AN));
+    assert.deepEqual(g.gruplar.filter((x) => x.sira !== null), [{ grup: String(istasyonBuyuk), sira: 1 }], JSON.stringify(g));
+    assert.ok(g.gruplar.length >= 4 && g.gruplar.every((x) => x.grup === String(istasyonBuyuk) || x.sira === null), 'küçük, karışık, atamasız sırasız');
+    assert.equal((await app.inject({ method: 'GET', url: `${UC}?grup=1`, headers: { cookie: plan } })).statusCode, 400);
+    for (const [ad, islemler] of [['mm_s_mal', ['finans.maliyet-oku']], ['mm_s_yaz', ['plan.yaz']]] as const) {
+      const cerez = await islemliKisi(ad, [...islemler]);
+      assert.equal((await app.inject({ method: 'GET', url: UC, headers: { cookie: cerez } })).statusCode, 403, ad);
+    }
   });
 });
