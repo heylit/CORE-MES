@@ -1,19 +1,15 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import vm from 'node:vm';
 import { describe, test } from 'node:test';
-import { DEGERLENDIRME_DOSYALARI } from './degerlendirme.ts';
+import { degerlendirmeKodu } from './degerlendirme.ts';
 import { mesaiAyarlari, mesaiGunTuru, mesaiTutari, type MesaiGirdisi } from './kurallar.ts';
 
 // 2742 (2740 a, 2743 b, 2510 a; T-2742-1): plan değerlendirmesinin ek mesai bedeli (motor ymMesaiTL) ile taslak toplamının satırı (2653
 // mesaiTutari) aynı ek vardiyada aynı tutardır. Motor değeri sunucunun yazdığı D.mesaiSaat[tezgahId]'den okur. Veriler uydurmadır.
-const MOTOR = join(dirname(fileURLToPath(import.meta.url)), 'motor');
 type MesaiTL = (D: unknown, cx: unknown, e: { m: string; gun: number; vardiya: string }) => number | null;
 function motorMesaiTL(): MesaiTL {
   const b = vm.createContext({}); b['self'] = b;
-  vm.runInContext(`${DEGERLENDIRME_DOSYALARI.map((m) => readFileSync(join(MOTOR, `${m}.js`), 'utf8')).join('\n')}\n;`, b);
+  vm.runInContext(degerlendirmeKodu(), b);
   return vm.runInContext('ymMesaiTL', b) as MesaiTL;
 }
 

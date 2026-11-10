@@ -25,7 +25,7 @@ const MOTOR = join(dirname(fileURLToPath(import.meta.url)), 'motor');
 export const DEGERLENDIRME_DOSYALARI = ['engine', 'kisitlar', 'girdi', 'durum', 'kancalar', 'degerlendir'] as const;
 
 let kod: string | null = null;
-function degerlendirmeKodu(): string {
+export function degerlendirmeKodu(): string {
   kod ??= `${DEGERLENDIRME_DOSYALARI.map((m) => readFileSync(join(MOTOR, `${m}.js`), 'utf8')).join('\n')}\n;({ degerlendir });`;
   return kod;
 }
