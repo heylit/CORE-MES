@@ -2,7 +2,7 @@ import type { PlanlanabilirlikCevabi, RotaPlanlanabilirlikCevabi } from '#paylas
 
 // Test verisi (uydurma): kullanıcının gördüğü durumun biçimi. OP 20 ufukta yer bulamadı, OP 60 insanlı istasyonda vardiyalı kişi yok,
 // OP 30-50 OP 20'yi, OP 70 OP 60'ı bekliyor. İkinci emir yalnız süre eksiği taşır.
-const tamam = (kod: 'sure-bos' | 'istasyon-yok' | 'makine-yok' | 'yetkin-kisi-yok' | 'takvim-yok') => ({ kod, durum: 'tamam' as const, metin: 'Tamam.', hedef: null });
+const tamam = (kod: 'sure-bos' | 'istasyon-yok' | 'makine-yok' | 'yetkin-kisi-yok' | 'takvim-yok') => ({ kod, durum: 'tamam' as const, metin: 'Tamam.', hedef: null, yaklasik: false });
 
 export function ornekEmirler(): PlanlanabilirlikCevabi {
   return {
@@ -21,7 +21,7 @@ export function ornekEmirler(): PlanlanabilirlikCevabi {
           { opNo: 50, ad: 'Yıkama', istasyon: 'Yıkama', kok: 'oncul', bekledigiOp: 20, kontroller: [] },
           { opNo: 60, ad: 'Kontrol', istasyon: 'Kalite', kok: 'kisi-vardiyasiz', bekledigiOp: null, kontroller: [
             tamam('sure-bos'), tamam('yetkin-kisi-yok'),
-            { kod: 'kisi-vardiyasiz', durum: 'eksik', metin: 'Kalite insanlı istasyon; yetkin kişilerin vardiyası yok.', hedef: { tur: 'istasyon', id: 7, ad: 'Kalite' } },
+            { kod: 'kisi-vardiyasiz', durum: 'eksik', metin: 'Kalite insanlı istasyon; yetkin kişilerin vardiyası yok.', hedef: { tur: 'istasyon', id: 7, ad: 'Kalite' }, yaklasik: false },
           ] },
           { opNo: 70, ad: 'Paketleme', istasyon: 'Paket', kok: 'oncul', bekledigiOp: 60, kontroller: [] },
         ],
@@ -30,8 +30,8 @@ export function ornekEmirler(): PlanlanabilirlikCevabi {
         uretimEmriId: 102, emirNo: 'UE-0102', urunId: 12, urunKodu: 'MM-0002', urunAdi: 'Örnek mil', adet: 10, termin: null,
         adimlar: [
           { opNo: 10, ad: 'Tornalama', istasyon: 'Torna 1', kok: 'sure-bos', bekledigiOp: null, kontroller: [
-            { kod: 'sure-bos', durum: 'eksik', metin: 'Rotada çevrim süresi girilmemiş.', hedef: null },
-            { kod: 'takvim-yok', durum: 'olculemedi', metin: 'Süre olmadan ölçülemedi.', hedef: null },
+            { kod: 'sure-bos', durum: 'eksik', metin: 'Rotada çevrim süresi girilmemiş.', hedef: null, yaklasik: false },
+            { kod: 'takvim-yok', durum: 'olculemedi', metin: 'Süre olmadan ölçülemedi.', hedef: null, yaklasik: false },
           ] },
         ],
       },
@@ -44,7 +44,7 @@ export function ornekRotalar(): RotaPlanlanabilirlikCevabi {
     urunler: [
       { urunId: 12, urunKodu: 'MM-0002', urunAdi: 'Örnek mil', acikEmir: 3, adimlar: [
         { opNo: 10, ad: 'Tornalama', istasyon: 'Torna 1', kok: 'sure-bos', bekledigiOp: null, kontroller: [
-          { kod: 'sure-bos', durum: 'eksik', metin: 'Rotada çevrim süresi girilmemiş.', hedef: null },
+          { kod: 'sure-bos', durum: 'eksik', metin: 'Rotada çevrim süresi girilmemiş.', hedef: null, yaklasik: false },
         ] },
         { opNo: 20, ad: 'Frezeleme', istasyon: 'Freze 1', kok: null, bekledigiOp: null, kontroller: [tamam('sure-bos'), tamam('makine-yok')] },
       ] },

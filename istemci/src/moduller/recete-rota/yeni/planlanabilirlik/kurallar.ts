@@ -49,7 +49,7 @@ export const NEDEN_ADLARI: Readonly<Record<PlanlanamamaNedeni, string>> = {
   'takvim-yok': 'Tezgâh takvimi yok',
   'insanli-makine': 'İnsanlı istasyonda makine',
   malzeme: 'Malzeme yok',
-  oncul: 'Önceki adımı bekliyor',
+  oncul: 'Başka işi bekliyor',
   ufuk: 'Ufukta yer yok',
   'rotada-yok': 'Rotada yok',
   bolunmus: 'Bölünmüş iş',
@@ -66,9 +66,11 @@ export const DURUM_GOSTERIMI: Readonly<Record<Kontrol['durum'], { ad: string; si
   olculemedi: { ad: 'Ölçülemedi', simge: 'help', ton: 'pasif' },
 };
 
-// Kök neden: emrin zincir dışı (öncül olmayan) ilk kökü. Öncül bekleyen adımın kökü zincirin başındaki adımdadır, sayılmaz.
+// Kök neden: emrin zincir dışı (öncül olmayan) adımları. Öncül bekleyen adımın kökü zincirin başındaki adımdadır, sayılmaz; ama emrin
+// hiçbir adımı kök değilse ve zincir emrin dışında başlıyorsa (bekledigiOp yok: başka emir ya da parça) emrin nedeni 'oncul'dur.
 export function kokAdimlar(e: Emir): Adim[] {
-  return e.adimlar.filter((a) => a.kok !== null && a.kok !== 'oncul');
+  const kok = e.adimlar.filter((a) => a.kok !== null && a.kok !== 'oncul');
+  return kok.length > 0 ? kok : e.adimlar.filter((a) => a.kok === 'oncul' && a.bekledigiOp === null);
 }
 
 export interface OzetSatiri { kod: PlanlanamamaNedeni; emir: number; adim: number }

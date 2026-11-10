@@ -18,6 +18,16 @@ describe('planlanabilirlik kuralları (2779)', () => {
     expect(emirNedenleri(e2)).toEqual(['sure-bos']);
   });
 
+  it('kökü emrin dışında olan emir öncül nedeniyle sayılır, ölçülemedi yazılmaz (Atölye K1)', () => {
+    const bekleyen = { ...e2, uretimEmriId: 104, emirNo: 'UE-0104', adimlar: [
+      { opNo: 10, ad: 'Montaj', istasyon: 'Montaj', kok: 'oncul' as const, bekledigiOp: null, kontroller: [] },
+      { opNo: 20, ad: 'Paket', istasyon: 'Paket', kok: 'oncul' as const, bekledigiOp: 10, kontroller: [] },
+    ] };
+    expect(emirNedenleri(bekleyen)).toEqual(['oncul']);
+    expect(suzgeceUyar(bekleyen, 'oncul')).toBe(true);
+    expect(ozet([e1, bekleyen]).find((x) => x.kod === 'oncul')).toEqual({ kod: 'oncul', emir: 1, adim: 1 });
+  });
+
   it('özet neden türü başına emir ve adım sayar, çok emri etkileyen önce', () => {
     const s = ozet([e1, e2, { ...e2, uretimEmriId: 103, emirNo: 'UE-0103' }]);
     expect(s[0]).toEqual({ kod: 'sure-bos', emir: 2, adim: 2 });

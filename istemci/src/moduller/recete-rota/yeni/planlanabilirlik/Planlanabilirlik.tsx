@@ -95,9 +95,9 @@ function Ozet({ emirler, secili, sec }: { emirler: readonly Emir[]; secili: Plan
     <div className="tc-rrp-ozet" role="group" aria-label="Neden türüne göre">
       {satirlar.map((s) => (
         <button key={s.kod} type="button" className="tc-rrp-ozet-kart" aria-pressed={secili === s.kod} onClick={() => { sec(secili === s.kod ? null : s.kod); }}>
-          <b>{sayi(s.emir)}</b>
+          <b>{`${sayi(s.emir)} emir`}</b>
           <span>{NEDEN_ADLARI[s.kod]}</span>
-          <small>{`${sayi(s.emir)} emir, ${sayi(s.adim)} adım`}</small>
+          <small>{`${sayi(s.adim)} adım`}</small>
         </button>
       ))}
     </div>
