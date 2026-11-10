@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
-  ayAraligi, aylikIsverenMaliyeti, calisilanGun, dogrudanEmilmeyen, dolayliPersonel, girdiSaatMaliyeti, grupDegerleri, isverenMaliyeti, kisiSaatMaliyeti,
+  ayAraligi, aylikIsverenMaliyeti, calisilanGun, dogrudanEmilmeyen, dolayliPersonel, emilimDegerleri, girdiSaatMaliyeti, grupDegerleri, isverenMaliyeti, kisiSaatMaliyeti,
   KUCUK_GRUP_ESIGI, kucukGrupHavuzu, type KapsamGirdisi,
 } from './kurallar.ts';
 
@@ -140,4 +140,11 @@ test('IK-89: katılım kaynağı yok, grup değeri bilinmeyen katılımlı kişi
   const isaretsiz = dogrudanEmilmeyen([...kapsam, d({ personelNo: 3, departmanNo: 5, departmanAd: 'Bakim', dogrudan: null })], p, AB, AS, new Map(), new Map());
   assert.deepEqual(isaretsiz.eksik, ['işaretlenmemiş departman: Bakim']);
   assert.equal(isaretsiz.tutar, null);
+});
+
+test('2706 a: emilim değeri büyük grupta kendi değeri, küçük grupta IK-87 havuzu; havuz yoksa bilinmez', () => {
+  const g = (departmanNo: number, saatMaliyeti: number | null, kucuk: boolean) => ({ departmanNo, departmanAd: 'D', saatMaliyeti, kisiSayisi: kucuk ? 1 : 3, kucuk });
+  const gruplar = [g(1, 122, false), g(2, 244, true), g(3, null, false)];
+  assert.deepEqual([...emilimDegerleri(gruplar, { deger: 162.6667, kisiSayisi: 3 })], [[1, 122], [2, 162.6667], [3, null]]);
+  assert.deepEqual([...emilimDegerleri(gruplar, null)], [[1, 122], [2, null], [3, null]]);
 });

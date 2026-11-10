@@ -95,15 +95,25 @@ describe('IK-88, IK-89 (2647 a, 2659): personel genel gider bileşenleri (gerçe
     assert.deepEqual(await tx((db) => dogrudanEmilmeyenToplami(db, '2026-11', null)), { tutar: null, kisiSayisi: 3, kucuk: false, eksik: ['katılım kaynağı yok'] });
   });
 
-  test('Güvenlik 2659: küçük doğrudan grupta ekran işlevi null, hesap işlevi gerçek ve eksi olabilir', async () => {
+  test('Güvenlik 2659, 2706 a: küçük doğrudan grupta ekran işlevi null; hesap işlevi havuz değeriyle, havuz yoksa null; eksi olabilir', async () => {
     await tx((db) => db.sorgu("UPDATE ik_personel SET iptal = true, surum = surum + 1 WHERE kimlik = 'emp_pb_7'"));
     try {
       const katilim: KatilimKaynagi = async () => new Map([[kisi[0]!, 300 * 3600], [kisi[1]!, 300 * 3600]]);
-      assert.deepEqual(await tx((db) => dogrudanEmilmeyenToplami(db, '2026-11', katilim)), { tutar: null, kisiSayisi: 2, kucuk: true, eksik: [] });
-      // Grup değeri iki kişiyle de 122 (gerçek değer): 53.680 - 600 x 122 = -19.520.
-      assert.deepEqual(await tx((db) => dogrudanEmilmeyenToplamiYalnizHesapIcin(db, '2026-11', katilim)), { tutar: -19520, kisiSayisi: 2, kucuk: true, eksik: [] });
+      assert.deepEqual(await tx((db) => dogrudanEmilmeyenToplami(db, '2026-11', katilim)), { tutar: null, kisiSayisi: 2, kucuk: true, eksik: ['grup saat değeri bilinmeyen 2 kişi'] });
+      // 2706 a: iki kişilik Üretim küçük; emilen havuz değeriyle. Havuz yalnız bu iki kişi (3'ten az): değer bilinmez.
+      assert.deepEqual(await tx((db) => dogrudanEmilmeyenToplamiYalnizHesapIcin(db, '2026-11', katilim)),
+        { tutar: null, kisiSayisi: 2, kucuk: true, eksik: ['grup saat değeri bilinmeyen 2 kişi'] });
+      // Tek kişilik Bakım havuza girince havuz üç kişi: (2 x 10 x 122 + 10 x 244) / 30 = 162,6667; 53.680 - 600 x 162,6667 = -43.920,02.
+      // Üretim'in kendi değeri (122) kullanılsaydı -19.520 çıkardı; katılım farkı küçük grubun kişi değerini vermez.
+      await tx(async (db) => {
+        const dep = (await db.tek<{ no: number }>(
+          "INSERT INTO ik_departman (kimlik, ad, dogrudan_iscilik, olusturan_kisi_id, guncelleyen_kisi_id) VALUES ('dep_pb_bakim', 'Bakım', false, $1, $1) RETURNING no", [yon]))!.no;
+        const no = await personel(db, 10, dep, 44000, null);
+        await db.sorgu("INSERT INTO ik_puantaj (personel_no, tarih, durum, giris, cikis, yazan_kisi_id) VALUES ($1, '2026-11-03', 'calisti', '08:00', '18:00', $2)", [no, yon]);
+      });
+      assert.deepEqual(await tx((db) => dogrudanEmilmeyenToplamiYalnizHesapIcin(db, '2026-11', katilim)), { tutar: -43920.02, kisiSayisi: 2, kucuk: true, eksik: [] });
     } finally {
-      await tx((db) => db.sorgu("UPDATE ik_personel SET iptal = false, surum = surum + 1 WHERE kimlik = 'emp_pb_7'"));
+      await tx((db) => db.sorgu("UPDATE ik_personel SET iptal = (kimlik = 'emp_pb_10'), surum = surum + 1 WHERE kimlik IN ('emp_pb_7', 'emp_pb_10')"));
     }
   });
 });

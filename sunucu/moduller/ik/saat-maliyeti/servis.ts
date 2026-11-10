@@ -1,7 +1,7 @@
 import type { Db } from '#cekirdek/db.ts';
 import { tesisGunBasi } from '#paylasilan/tesis-zamani.ts';
 import {
-  ayAraligi, dogrudanEmilmeyen, dolayliPersonel, grupDegerleri, kucukGrupHavuzu, type Girdi, type GrupDegeri, type HavuzDegeri, type KapsamGirdisi, type Parametreler,
+  ayAraligi, dogrudanEmilmeyen, dolayliPersonel, emilimDegerleri, grupDegerleri, kucukGrupHavuzu, type Girdi, type GrupDegeri, type HavuzDegeri, type KapsamGirdisi, type Parametreler,
   type PersonelToplami,
 } from './kurallar.ts';
 import { ayinParametreleri, personelGirdileri, personelKapsami } from './sorgular.ts';
@@ -109,9 +109,9 @@ export type KatilimKaynagi = (db: Db, kisiIdleri: readonly number[], baslangic: 
 
 async function emilmeyen(db: Db, ay: string, katilim: KatilimKaynagi | null): Promise<PersonelToplami> {
   const { kapsam, parametreler, ayBasi, aySonu } = await kapsamOku(db, ay);
-  // Maaş, katılım ve grup değeri aynı aydan (Maliyet 1); grup değeri gerçek değerdir (küçük grupta da).
-  const { gruplar } = await hesapla(db, ay);
-  const grup = new Map(gruplar.map((g) => [g.departmanNo, g.saatMaliyeti]));
+  // Maaş, katılım ve grup değeri aynı aydan (Maliyet 1); küçük grupta IK-87 havuz değeri (2706 a).
+  const { girdiler, parametreler: p } = await girdileriOku(db, ay);
+  const grup = emilimDegerleri(grupDegerleri(girdiler, p), kucukGrupHavuzu(girdiler, p));
   let saat: Map<number, number> | null = null;
   if (katilim !== null) {
     const kisiler = kapsam.flatMap((k) => (k.kisiId !== null && k.dogrudan === true ? [k.kisiId] : []));

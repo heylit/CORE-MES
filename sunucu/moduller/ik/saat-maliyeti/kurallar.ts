@@ -144,8 +144,14 @@ export function dolayliPersonel(kapsam: readonly KapsamGirdisi[], p: Parametrele
   return { tutar: eksik.length > 0 ? null : kurus(toplam), kisiSayisi: kisiler.length, kucuk: kisiler.length < esik, eksik };
 }
 
+// 2706 a (Güvenlik 2647 K2): emilen tutarda küçük grup kendi değeriyle değil IK-87 havuz değeriyle çarpılır; aksi hâlde katılım
+// değiştirilip emilmeyen farkı alınarak tek kişilik departmanın kişi değeri çıkar. Havuz yoksa (3 kişiden az) değer bilinmez.
+export function emilimDegerleri(gruplar: readonly GrupDegeri[], havuz: HavuzDegeri | null): Map<number, number | null> {
+  return new Map(gruplar.map((g) => [g.departmanNo, g.kucuk ? havuz?.deger ?? null : g.saatMaliyeti]));
+}
+
 // IK-89 (2659, 2656 a): doğrudan işçilikte emilmeyen = doğrudan departmanlardaki kişilerin ayın işveren maliyeti toplamı - toplam(kişinin
-// ayın katılım saati x kendi departmanının grup saat değeri). Grup değeri gerçek değerdir (küçük grupta da). Kişi bağı (kisi_id) olmayanın
+// ayın katılım saati x kendi departmanının grup saat değeri). Grup değeri `emilimDegerleri`'nden gelir (küçük grupta havuz, 2706 a). Kişi bağı (kisi_id) olmayanın
 // katılımı yoktur, maliyetinin tamamı girer. Eksi olabilir (fazla emilim), kırpılmaz. Yuvarlama en sonda bir kez (Veri 3).
 // katilimSaati null: katılım kaynağı bağlı değil.
 export function dogrudanEmilmeyen(
