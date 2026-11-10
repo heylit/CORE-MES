@@ -58,6 +58,24 @@ describe('2117 EN / ASTM adları: kart açan ekran', () => {
     expect(istekler.some((i) => i.yontem === 'POST')).toBe(false);
   });
 
+  test('2763: geçiş yalnız çipleri değil, föydeki durum satırını da değiştirir; kart değeri aynı kalır', async () => {
+    const istekler: Istek[] = sunucuKur(YAZAN, {
+      ...ESLI, 'POST /malzeme-katalogu-kartlari/mornek1/kaydet': () => json(200, { id: 'mornek1', stok_kodu: 'HM-MET-C45-0001', surum: 2 }),
+    });
+    await durumAdiminiAc();
+    fireEvent.click(screen.getByRole('radio', { name: 'QT-A (QT-E)' }));
+    fireEvent.click(within(screen.getByRole('group', { name: 'Bu kartta durum ve işlem adlarının standardı' })).getByRole('button', { name: 'EN' }));
+    expect(await screen.findByRole('radio', { name: 'QT-E (QT-A)' })).toBeTruthy();
+    fireEvent.click(within(screen.getByRole('navigation', { name: 'Adımlar' })).getByRole('button', { name: /Özet/ }));
+    await screen.findByRole('button', { name: 'Değişiklikleri kaydet' });
+    expect(screen.getAllByText('QT-E (QT-A)').length).toBeGreaterThan(0);
+    expect(screen.queryByText('QT-A (QT-E)')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Değişiklikleri kaydet' }));
+    await waitFor(() => { expect(istekler.some((i) => i.yontem === 'POST')).toBe(true); });
+    const govde = istekler.find((i) => i.yontem === 'POST')?.govde as { kayit: { talep?: { yeni: { opts: Record<string, unknown> } }; opts: Record<string, unknown> } };
+    expect((govde.kayit.talep?.yeni ?? govde.kayit).opts['durum']).toBe('Islah (+QT)');
+  });
+
   test('arama kutusu durum ve işlem seçeneklerini eşli adla da süzer; uyan yoksa söyler', async () => {
     sunucuKur(YAZAN, ESLI);
     const ara = await durumAdiminiAc();
