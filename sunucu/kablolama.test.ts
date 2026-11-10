@@ -92,6 +92,10 @@ test('genel gider personel bileşenleri İK\'dan gelir (2647 a, 2659)', () => {
   assert.ok(adlar.includes('İK emilmeyen doğrudan işçilik -> finans genel gider'));
 });
 
+test('genel gider, emirsiz stok çıkışı tutarını stoktan alır (2623 a, 2594 b)', () => {
+  assert.ok(sunucununBaglari().some((b) => b.ad === 'emirsiz stok çıkışı -> finans genel gider'));
+});
+
 test('815: müşteri sınıfı plana girmez; plan müşteri kartından sınıf okumaz', () => {
   assert.ok(!sunucununBaglari().some((b) => b.ad === 'müşteri sınıfı -> plan'));
 });
