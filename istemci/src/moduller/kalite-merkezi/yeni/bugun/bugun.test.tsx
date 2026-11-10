@@ -208,7 +208,8 @@ describe('Hatalı parça kararı', () => {
     expect(within(bolum).getByText('UE-0007 | Op 20 | DNM-01')).toBeTruthy();
     fireEvent.click(within(bolum).getByRole('button', { name: 'Karar ver' }));
     const pencere = screen.getByRole('dialog', { name: 'Hatalı parça kararı' });
-    fireEvent.change(within(pencere).getByLabelText('Karar'), { target: { value: 'hurda' } });
+    fireEvent.change(within(pencere).getByLabelText(/^Karar/), { target: { value: 'hurda' } });
+    fireEvent.change(within(pencere).getByLabelText(/^Ciddiyet/), { target: { value: 'Majör' } });
     fireEvent.change(within(pencere).getByLabelText('Gerekçe'), { target: { value: 'Kurtarılamaz' } });
     fireEvent.click(within(pencere).getByRole('button', { name: 'Kararı yaz' }));
     await waitFor(() => { expect(s.yazmalar.some((y) => y.yol === '/kalite-merkezi/hatali/5/karar')).toBe(true); });
@@ -225,7 +226,8 @@ describe('Hatalı parça kararı', () => {
     const bolum = await screen.findByRole('region', { name: 'Hatalı parça kararı' });
     fireEvent.click(within(bolum).getByRole('button', { name: 'Karar ver' }));
     const pencere = screen.getByRole('dialog', { name: 'Hatalı parça kararı' });
-    const secim = within(pencere).getByLabelText('Karar');
+    const secim = within(pencere).getByLabelText(/^Karar/);
+    fireEvent.change(within(pencere).getByLabelText(/^Ciddiyet/), { target: { value: 'Minör' } });
     expect(within(secim).getByRole('option', { name: 'Kabul (olduğu gibi)' })).toBeTruthy();
     fireEvent.change(secim, { target: { value: 'sartli_kabul' } });
     const sart = within(pencere).getByLabelText(/Şart/);
@@ -234,6 +236,29 @@ describe('Hatalı parça kararı', () => {
     fireEvent.click(within(pencere).getByRole('button', { name: 'Kararı yaz' }));
     await waitFor(() => { expect(s.yazmalar.some((y) => y.yol === '/kalite-merkezi/hatali/5/karar')).toBe(true); });
     expect(s.yazmalar.find((y) => y.yol === '/kalite-merkezi/hatali/5/karar')?.govde).toMatchObject({ karar: 'sartli_kabul', not: 'Çapak alınarak kullanılır' });
+  });
+
+  it('2754 a/a: pencere karar ve ciddiyet seçimsiz açılır; ikisi seçilmeden yazılmaz', async () => {
+    const s = ac(MUHENDIS, { ncr: [] }, { emirler: [] }, { kayitlar: [HATALI] });
+    const bolum = await screen.findByRole('region', { name: 'Hatalı parça kararı' });
+    fireEvent.click(within(bolum).getByRole('button', { name: 'Karar ver' }));
+    const pencere = screen.getByRole('dialog', { name: 'Hatalı parça kararı' });
+    const karar = within(pencere).getByLabelText(/^Karar/) as HTMLSelectElement;
+    const ciddiyet = within(pencere).getByLabelText(/^Ciddiyet/) as HTMLSelectElement;
+    expect(karar.value).toBe('');
+    expect(ciddiyet.value).toBe('');
+    fireEvent.click(within(pencere).getByRole('button', { name: 'Kararı yaz' }));
+    expect(within(pencere).getByText('Karar seçin.')).toBeTruthy();
+    expect(within(pencere).getByText('Ciddiyet seçin.')).toBeTruthy();
+    fireEvent.change(karar, { target: { value: 'kabul' } });
+    fireEvent.click(within(pencere).getByRole('button', { name: 'Kararı yaz' }));
+    expect(within(pencere).queryByText('Karar seçin.')).toBeNull();
+    expect(within(pencere).getByText('Ciddiyet seçin.')).toBeTruthy();
+    expect(s.yazmalar.some((y) => y.yol.includes('/hatali/'))).toBe(false);
+    fireEvent.change(ciddiyet, { target: { value: 'Kritik' } });
+    fireEvent.click(within(pencere).getByRole('button', { name: 'Kararı yaz' }));
+    await waitFor(() => { expect(s.yazmalar.some((y) => y.yol === '/kalite-merkezi/hatali/5/karar')).toBe(true); });
+    expect(s.yazmalar.find((y) => y.yol === '/kalite-merkezi/hatali/5/karar')?.govde).toMatchObject({ karar: 'kabul', ciddiyet: 'Kritik' });
   });
 
   it('onay yetkisi olmayan kişide liste istenmez ve bölüm çizilmez', async () => {
