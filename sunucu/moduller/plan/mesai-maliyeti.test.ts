@@ -231,6 +231,11 @@ describe('2653 mesai maliyeti (gerçek PostgreSQL)', () => {
     }
   });
 
+  test('Maliyet K1: mesai sistemi kayıtlı değilken yıllık grup değeri varsayılanlarla gelir (122 x 1,5); motorun saat başı tutarıyla aynı', async () => {
+    const g = await vt().tx((db) => mesaiSaatDegerleri(db, AN));
+    assert.deepEqual(g.gruplar.filter((x) => x.saatTL !== null), [{ grup: String(istasyonBuyuk), saatTL: 122 * 1.5 }], JSON.stringify(g));
+  });
+
   // Bundan sonraki testler planlama kaydı yazar (mesai ücreti 300, kişi başı ek 80); öncekiler kayıtsız çalışmayla koşar.
   const kayitYaz = async () => {
     const c = (await vt().tx((db) => planCozumKaynagi(db, AN.getTime()))).calisma as { D: Record<string, unknown> };

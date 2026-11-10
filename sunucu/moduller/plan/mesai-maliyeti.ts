@@ -74,7 +74,7 @@ export async function mesaiMaliyeti(db: Db, taslakId: number, an: Date = new Dat
 }
 
 // 2742 (Mimar, Güvenlik Ek; 2745 a): yıllık planın grup başına ek mesai saat değeri. Parametresiz: grup ve tezgâh istemciden alınmaz,
-// planlama çalışmasının tezgâhlarından okunur. Bilinmeyen grup (küçük, karışık, atamasız istasyon ya da kişi bazlı değil) null; yıllık
+// planlama çalışmasının tezgâhlarından okunur. Bilinmeyen grup (küçük, karışık, atamasız istasyon ya da kişi bazlı kapalı) null; yıllık
 // plan o grupta ek mesai önermez. Yetkiyi (finans.maliyet-oku) uç denetler.
 export async function mesaiSaatDegerleri(db: Db, an: Date = new Date()): Promise<MesaiSaatDegerleriCevabi> {
   const ay = varsayilanMaliyetAyi(tesisGunu(an));
@@ -82,14 +82,13 @@ export async function mesaiSaatDegerleri(db: Db, an: Date = new Date()): Promise
   const D = planGirdisi({ ...kaynak, bugun: tesisGunu(an) }, an.getTime())?.S.D;
   if (D === undefined) return { ay, gruplar: [] };
   const a = mesaiAyarlari(D);
-  const mesaiSisVar = typeof (D as { mesaiSis?: unknown }).mesaiSis === 'object' && (D as { mesaiSis?: unknown }).mesaiSis !== null;
   const deger = await tezgahSaatDegerleri(db, a, ay);
   const gruplar = new Map<string, { opOran: number | null | undefined; deger: number | null }[]>();
   for (const [id, t] of a.tezgahlar) if (t.grup !== '') gruplar.set(t.grup, [...(gruplar.get(t.grup) ?? []), { opOran: t.opOran, deger: deger.get(id) ?? null }]);
   return {
     ay,
     gruplar: [...gruplar].sort(([x], [y]) => x.localeCompare(y, 'tr')).map(([grup, tz]) => ({
-      grup, saatTL: mesaiSisVar && a.kisiBazli ? grupMesaiSaatTL(tz, a.carp.hi, a.kisiEk) : null,
+      grup, saatTL: a.kisiBazli ? grupMesaiSaatTL(tz, a.carp.hi, a.kisiEk) : null,
     })),
   };
 }

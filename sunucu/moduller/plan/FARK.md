@@ -317,7 +317,8 @@ Testler: plan-bedel 815 (iki test), kurallar 815, kablolama 815; istemci planlam
 - Yeni uç `GET /plan/mesai-saat-degerleri` (yalnız finans.maliyet-oku, parametresiz, strict): `{ ay, gruplar: [{ grup, saatTL | null }] }`.
   Grup değeri (Maliyet C2, Mimar N1): s = bilinen tezgâhların opOran ağırlıklı istasyon değeri ortalaması (hepsi null ise null);
   saatTL = s x op x hafta içi çarpanı + kişi başı ek / 8 x op, op grubun ortalama opOran'ı (yoksa 1); istemcinin ufuk `mesaiSaatTL`'si ile aynı
-  formül, op bir kez girer. Kişi bazlı değilse ya da mesai sistemi kayıtlı değilse bütün gruplar null. Cevapta olmayan grup istemcide null
+  formül, op bir kez girer. Yalnız kişi bazlı kapalıysa (`kisiBazli === false`) bütün gruplar null; mesai sistemi kayıtlı değilse
+  varsayılanlarla (kişi bazlı, hafta içi 1,5, kişi başı ek yok) değer verir, motorla aynı (Maliyet K1). Cevapta olmayan grup istemcide null
   sayılır (2742-1a). Yıllık plan null grupta ek mesai önermez (2745 a; istemci 2503).
 - Maliyet a (kisiBazli farkı): motor kişi bazlı kipi istemci ve sunucu gibi okur: mesai sistemi yoksa ya da alan yoksa açık, yalnız
   `kisiBazli === false` kapalı; gün çarpanı yoksa onların varsayılanı (hafta içi ve cumartesi 1,5, pazar ve tatil 2). Görünür değişiklik:
