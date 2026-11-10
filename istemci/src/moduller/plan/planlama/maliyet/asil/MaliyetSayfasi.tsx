@@ -6,7 +6,7 @@ import type { PlanlamaGorunumu } from '../../gorunumler.ts';
 import type { PlanlamaCalismasi } from '../../tipler.ts';
 import {
   agAyar, birimMaliyet, fasonTalasId, kgFiyatlari, kgSatiri, malzemeler, mesaiSistemi, ML_CINS, ML_FORM,
-  norm, planMaliyeti, sayi, sayiGirdisi, talasFiyatlari, tl, tlEksi, wipAyar, ymAyar, yuzde, type KgBasvurusu, type MaliyetBaglami,
+  norm, planMaliyeti, sayi, sayiGirdisi, talasFiyatlari, tl, tlEksi, tlSaat, wipAyar, ymAyar, yuzde, type KgBasvurusu, type MaliyetBaglami,
 } from '../kurallar.ts';
 import {
   ayarlar, beklemeAcikYaz, erkenSevkYaz, fasonAlanYaz, fasonFiyatAlani, kgAlanYaz, kgEkleYaz, kgSilYaz, kgVarMi, maliyetAyariYaz, netKgYaz, talasYaz,
@@ -153,7 +153,7 @@ function IscilikKarti({ c, kapali, y, git }: { c: PlanlamaCalismasi; kapali: boo
           </>}
         {Y.genelGiderGizli
             ? <Alan ad="Genel gider TL/tezgâh saati"><Rozet ton="pasif">gizli</Rozet><span className="tc-pyk-soluk">Finans oranı bu ay gizli; maliyet genel gider hariç</span></Alan>
-            : <Alan ad="Genel gider TL/tezgâh saati"><SayiGir deger={Y.genelGider} ad="Genel gider TL/tezgâh saati" adim={10} max={100000} yer="yok" kapali={kapali} yaz={(v) => y((z) => maliyetAyariYaz(z, D, 'genelGider', v))} /></Alan>}
+            : <Alan ad="Genel gider TL/tezgâh saati"><b className="tc-pyk-mono">{Y.genelGider === null ? '—' : tlSaat(Y.genelGider)}</b><span className="tc-pyk-soluk">{Y.genelGider === null ? 'Finans oranı girilmemiş; siparişin genel gideri bilinmez' : 'Finans oranı; Finans modülünde değişir'}</span></Alan>}
         <Alan ad="Varsayılan hedef kâr oranı %"><SayiGir deger={Y.karHedef} ad="Varsayılan hedef kâr oranı %" max={300} bosOlmaz kapali={kapali} yaz={(v) => y((z) => maliyetAyariYaz(z, D, 'karHedef', v))} /></Alan>
       </div>
       <Not>Finansman oranı (%{sayi(agAyar(D).fin, 2)}/gün) Öncelik ve ağırlık sayfasındadır. Genel gider ürün maliyetinde ve teklifte sayılır, plan amacına girmez: kira ve amortisman iş hangi tezgâhta yapılırsa yapılsın aynıdır.</Not>
