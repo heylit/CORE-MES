@@ -92,9 +92,22 @@ export function tezgahUcretiniCikar(calisma: unknown): unknown {
   return { ...calisma, D: { ...D, tezgahlar: tezgahlar.map((t) => { if (!ucretli(t)) return t; const { ucret: _u, ucretIst: _i, ...kalan } = t; return kalan; }) } };
 }
 
-// Planlama kaydına yazılmayan ve ham okumada dönmeyen alanlar tek yerden (2601 a genel gider ve tezgâh ücreti, 2728 a brüt, 2742 mesai saat değeri).
+// 2772 M4 (2601 a): malzemenin birim fiyatı Finans'ın malzeme maliyetidir (girdi.js sunucuKaydi, tmiCevir). Kayda yazılmaz; birleşme her
+// okumada kaynaktan yeniden kurar (değer yokken bugünkü gibi 0, bu satıra dokunulmadı).
+export function malzemeFiyatiniCikar(calisma: unknown): unknown {
+  if (calisma === null || typeof calisma !== 'object') return calisma;
+  const D = (calisma as { D?: unknown }).D;
+  if (D === null || typeof D !== 'object' || !Array.isArray((D as { malzemeler?: unknown }).malzemeler)) return calisma;
+  const malzemeler = (D as { malzemeler: unknown[] }).malzemeler;
+  const fiyatli = (m: unknown): m is Record<string, unknown> => m !== null && typeof m === 'object' && 'birimFiyat' in m;
+  if (!malzemeler.some(fiyatli)) return calisma;
+  return { ...calisma, D: { ...D, malzemeler: malzemeler.map((m) => { if (!fiyatli(m)) return m; const { birimFiyat: _f, ...kalan } = m; return kalan; }) } };
+}
+
+// Planlama kaydına yazılmayan ve ham okumada dönmeyen alanlar tek yerden (2601 a genel gider, tezgâh ücreti ve malzeme fiyatı, 2728 a brüt,
+// 2742 mesai saat değeri).
 export const saklanmayanAlanlariCikar = (calisma: unknown): unknown =>
-  tezgahUcretiniCikar(mesaiSaatiniCikar(brutAlanlariniCikar(genelGiderAlanlariniCikar(calisma))));
+  malzemeFiyatiniCikar(tezgahUcretiniCikar(mesaiSaatiniCikar(brutAlanlariniCikar(genelGiderAlanlariniCikar(calisma)))));
 
 // 2747 (Güvenlik): planlama anahtarına yeni yazma yalnız json'dur; eski metin biçimli satır (geçmiş sürüm dahil) JSON metniyse ayrıştırılıp
 // aynı süzgeçten geçer ve yine metin olarak döner. JSON olmayan metin yapılı alan taşımaz, olduğu gibi kalır.

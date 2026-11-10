@@ -13,7 +13,7 @@ import { kimlikCozucu } from '../oturum/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { DURUM_ANAHTARI } from '../recete-rota/disari.ts';
 import { PLANLAMA_ANAHTARI } from './disari.ts';
-import { brutAlanlariniCikar, maliyetsizKayitDegeri, saklanmayanKayitDegeri, tezgahUcretiniCikar } from './motor-ayari-kurallar.ts';
+import { brutAlanlariniCikar, malzemeFiyatiniCikar, maliyetsizKayitDegeri, saklanmayanKayitDegeri, tezgahUcretiniCikar } from './motor-ayari-kurallar.ts';
 import { planlamaCalismasi, planlamaKayitlari } from './planlama-servis.ts';
 import * as sorgular from './sorgular.ts';
 
@@ -195,5 +195,27 @@ describe('brüt ücret kayda girmez ve dönmez (2728 a, gerçek PostgreSQL)', as
     const cal = JSON.stringify(await vt().tx((db) => planlamaCalismasi(db, kisi(['plan.planlama-oku', 'plan.yaz']))));
     assert.ok(!cal.includes(String(UCRET)), cal.slice(0, 200));
     assert.deepEqual(tezgahUcretiniCikar({ D: { tezgahlar: [{ id: 'A', ucret: 1, ucretIst: 1, grup: '1' }, 'x'] } }), { D: { tezgahlar: [{ id: 'A', grup: '1' }, 'x'] } });
+  });
+  // 2772 M4: malzemenin birim fiyatı (Finans malzeme maliyeti) kayda girmez; ham okumada dönmez; görmeyenin çalışma okumasında kayıttaki
+  // değer görünmez. Fiyat uydurmadır (6131).
+  test('BS-11: malzeme birim fiyatı kayda girmez; kayıtta kalmış değer ham okumada ve görmeyenin çalışma okumasında yok', async () => {
+    const FIYAT = 6131;
+    const malzemeler = [{ kod: 'H1', ad: 'Ornek cubuk', birim: 'kg', stok: 5, birimFiyat: FIYAT, tedarikGun: 2, muayeneGun: 0 }];
+    const okunan = await app.inject({ method: 'GET', url: '/api/plan/planlama-calismasi', headers: { cookie: cerez } });
+    const { surum } = okunan.json() as PlanlamaCalismasiCevabi;
+    const yaz = await app.inject({ method: 'POST', url: '/api/plan/planlama-kayitlari/yaz', headers: { cookie: cerez },
+      payload: { anahtar: PLANLAMA_ANAHTARI, bicim: 'json', deger: { ...calisma, D: { ...calisma.D, malzemeler } }, beklenenSurum: surum } });
+    assert.equal(yaz.statusCode, 200, yaz.body);
+    const ham = JSON.stringify((await sorgular.planlamaKaydi(vt(), PLANLAMA_ANAHTARI))?.deger);
+    assert.ok(!ham.includes(String(FIYAT)) && ham.includes('"tedarikGun":2'), ham.slice(0, 200));
+    await vt().sorgu(`UPDATE plan_planlama_kaydi SET deger = $2::jsonb, surum = surum + 1 WHERE anahtar = $1`,
+      [PLANLAMA_ANAHTARI, JSON.stringify({ ...calisma, D: { ...calisma.D, malzemeler } })]);
+    const kisi = (islemler: string[]) => ({ id: 1, ad: 'Deneme', islemler }) as unknown as Parameters<typeof planlamaKayitlari>[1];
+    for (const k of [kisi(['plan.planlama-oku', 'plan.yaz']), kisi(['recete-rota.oku']), kisi(['plan.planlama-oku', 'finans.maliyet-oku'])]) {
+      assert.ok(!JSON.stringify(await vt().tx((db) => planlamaKayitlari(db, k))).includes(String(FIYAT)), `ham okuma ${k.islemler.join(',')}`);
+    }
+    const cal = JSON.stringify(await vt().tx((db) => planlamaCalismasi(db, kisi(['plan.planlama-oku', 'plan.yaz']))));
+    assert.ok(!cal.includes(String(FIYAT)), cal.slice(0, 300));
+    assert.deepEqual(malzemeFiyatiniCikar({ D: { malzemeler: [{ kod: 'A', birimFiyat: 0, stok: 1 }, null] } }), { D: { malzemeler: [{ kod: 'A', stok: 1 }, null] } });
   });
 });
