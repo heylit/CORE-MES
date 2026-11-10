@@ -153,6 +153,22 @@ describe('adımlar, ilerleme ve plan', () => {
     expect(planMetni(bagli).alt).toBe('2 adım planlanamadı: Bağlı parti yerleşmedi.');
   });
 
+  it('2780: sunucu motorunun öncül metni ardıl sayılır; tek kök tek neden olarak yazılır', () => {
+    const o = emir('1');
+    const zaman = 'Sunucu motoru yerleştiremedi: ufuk içinde tezgâh, vardiya, kaynak ya da malzeme yeri yok.';
+    const zincir = planOzeti({ ...durum([o]), planYerlesmeyen: {
+      'UE-1|10': zaman, 'UE-1|20': 'Önceki adım (UE-1 OP 10) yerleşmedi.', 'UE-1|30': 'Önceki adım yerleşmedi.',
+    } }, {}, o);
+    expect(zincir).toMatchObject({ tur: 'planlanamiyor', kok: [{ opNo: 10, neden: zaman }] });
+    expect(zincir.tur === 'planlanamiyor' && zincir.adimlar).toHaveLength(3);
+    expect(planMetni(zincir).alt).toBe(`OP 10: ${zaman}`);
+    const kodlu = planOzeti({ ...durum([o]), planYerlesmeyen: { 'UE-1|10': 'Süre bilinmiyor.', 'UE-1|20': 'Sunucu motoru yerleştiremedi: öncülü UE-1|10 yerleşmedi.' } }, {}, o);
+    expect(planMetni(kodlu).alt).toBe('OP 10: Süre bilinmiyor.');
+    // Kök başka emirdeyse bu emirde yalnız ardıl kalır; ardıllar yazılır, boş neden çıkmaz.
+    const baskaEmir = planOzeti({ ...durum([o]), planYerlesmeyen: { 'UE-1|10': 'Önceki adım (UE-9 OP 30) yerleşmedi.' } }, {}, o);
+    expect(planMetni(baskaEmir).alt).toBe('OP 10: Önceki adım (UE-9 OP 30) yerleşmedi.');
+  });
+
   it('487/2 b: plana girmeyen çalışan adım işaretlenir; tarih ve gecikme değişmez', () => {
     const o = emir('1');
     const d = durum([o], { emirler: { orders: [o], opStatus: { '1|root|1': 'calisiyor' }, opProg: {} } });
