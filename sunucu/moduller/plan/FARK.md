@@ -388,6 +388,22 @@ Testler: plan-bedel 815 (iki test), kurallar 815, kablolama 815; istemci planlam
 - Test: `planlanamama-kurallar.test.ts` PN-01..06, `planlanamama-uc.test.ts` PU-01, 02, `uzun-hazirlik-neden.test.ts` UH-01..03, `plan-cozucusu-neden.test.ts` YN-01..11,
   `motor-oner-insanli.test.ts` MI-01, 02, `motor-kisi-isi.test.ts`.
 
+## Elle taşımada itme (2790 a, 2790-2 a, 2794 1/3 a, 2/3 b, 3/3 b; 2026-11-10)
+- `POST /plan/planlama-calismasi/is-tasi`: taşınan işle birlikte aynı emrin itilen ve geri çekilen adımları da kilitlenir; hepsi tek bekleyen
+  satırı ve tek iz, geri alma hepsini döndürür. Geçersizse (başlamış ya da donuk ardıl, ufuk, uygun olmayan tezgâh) 400 ve hiçbiri yazılmaz.
+  Kilidin saati tezgâhın o saatten sonraki ilk açık anıdır. Cevaba `ileti` eklendi (itme ya da kayma nedeni, tek satır; yoksa null).
+- `GET /plan/planlama-calismasi/is-tasi-onizlemesi?isId&tezgah&baslangic` (plan.yaz): aynı denetim ve hesap, yazmaz;
+  `{ gecerli, ileti, isler: [{ isId, tezgah, S, C, eskiTezgah, eskiS, tur }] }`.
+- Kural saf (`tasima-kurallar.ts`), takvim motorun derlemesinden (`motor/tasima.js`, `kilitYeri` ile aynı yer). Biten öncül beklenmez.
+  Taşınan işin kendisi donuk bölgede olsa da elle taşınır (önceki davranış); yalnız itilen ve çekilen adımlar donuk bölgeye dokunmaz.
+- Motor değişmedi: kilitli iş yine öncülünü beklemez (2507 a motor kuralı); sırayı artık taşıma komutu kilitleriyle korur.
+- İnsanlı istasyondaki ardıl (kişinin el tezgâhı) da aynı kuralla itilir (Atölye K1). Ardılın tezgâhı ona uygun değilse ret adımı ve
+  tezgâhı söyler; ufuk ayrı iletidir. Taşınan iş donuk bölgede başka işin yerine girerse ileti operatör listesinin değiştiğini söyler (Atölye N1).
+  Önizleme cevabı hesaplandığı `calismaSurumu`nu taşır (Mimar N2).
+- Fason ardıl kilitlenmez (motor fason kilidini yok sayar); aynı süreyle kaymış sayılır, arkasındaki adımlar ona göre itilir ve ileti fason
+  süresinin plan uygulanınca yeniden hesaplanacağını söyler (Test N1). Taşınan işin kendisi hedef tezgâhta başka işle çakışabilir: kilit
+  kazanır, motor öteki işi kaydırır (önceki davranış, Test N2).
+
 ## Planlanabilirlik uçları (2779 sayfası; 2026-11-10)
 - `GET /plan/planlanabilirlik`: plana giren açık emirlerden yerleşmeyen adımı olanlar, yalnız yerleşmeyen adımlarıyla. Motor önerisi motor
   yerleşimiyle aynı çalışmadır, hiçbir şey yazılmaz; `motorZamani` bu çalışmanın anıdır, motor kayıtlı değilse null ve liste boş.

@@ -256,3 +256,25 @@ export function cozumGirdisi(g: Omit<GirdiIstegi, 'bugun'> & { istek: CozumIsteg
   const sonuc = sunucuCozumGirdisi(kopya(g.istek.ekMesai ? taslakEkMesaisi(g.calisma, g.istek.ekMesai) : g.calisma), kopya(g.kayit), kopya(g.kaynak), kopya(g.istek), tesisGunu(Date.parse(g.istek.simdi)));
   return sonuc === null ? null : structuredClone(sonuc);
 }
+
+// 2790: elle taşımanın takvimi (motor/tasima.js) aynı dosyalarla aynı bağlamda kurulur; yer işlevi bağlamın derlemesini kullanır.
+let tasimaKod: string | null = null;
+function tasimaKodu(): string {
+  tasimaKod ??= `${[...DOSYALAR, 'tasima'].map((m) => readFileSync(join(MOTOR, `${m}.js`), 'utf8')).join('\n')}\n;({ sunucuTasimaTakvimi });`;
+  return tasimaKod;
+}
+export interface TasimaTakvimi {
+  donuk: number; ufuk: number; tasimaSaat: number;
+  onculler: Record<string, [string, 'b' | 'o'][]>;
+  opNo: Record<string, string>;
+  yer: (id: string, m: string, t: number) => { S: number; C: number; lot1: number } | null;
+  saatMetni: (h: number) => string;
+  tezgahAdi: (m: string) => string;
+}
+// Girdi birleşmiş çalışmadır (planlamaCalismasi); kopyalanır. Şimdi planın ekseninde saattir.
+export function tasimaTakvimi(calisma: unknown, simdi: number): TasimaTakvimi {
+  const { sunucuTasimaTakvimi } = baglamla<{ sunucuTasimaTakvimi: (S: unknown, now: number) => TasimaTakvimi }>(tasimaKodu(), 'tasima-takvimi.js', null);
+  const t = sunucuTasimaTakvimi(jsonKopya(calisma), simdi);
+  const yer: TasimaTakvimi['yer'] = (id, m, h) => { const y = t.yer(id, m, h); return y === null ? null : { S: y.S, C: y.C, lot1: y.lot1 }; };
+  return { donuk: t.donuk, ufuk: t.ufuk, tasimaSaat: t.tasimaSaat, onculler: structuredClone(t.onculler), opNo: structuredClone(t.opNo), yer, saatMetni: (h) => String(t.saatMetni(h)), tezgahAdi: (m) => String(t.tezgahAdi(m)) };
+}

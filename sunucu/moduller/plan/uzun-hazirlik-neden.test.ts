@@ -85,4 +85,12 @@ describe('plan çözücüsü: uzun hazırlık tek parça, işlem bölünür (278
     assert.ok(Date.parse(a.bitis) > Date.parse('2026-10-19T13:00:00Z'), 'ilk iş vardiyayı aşar, bölünür');
     assert.ok(Date.parse(b.baslangic) >= Date.parse(a.bitis), `${b.baslangic} < ${a.bitis}`);
   });
+  test('UH-06 (Test T-2784-1): mola hazırlığı bölmez; molayı aşan hazırlık molanın iki yanındaki tek blokta kalır', async () => {
+    // Vardiya 08:00-16:00, mola 12:00-12:30; 300 dk hazırlık moladan önceki (240 dk) ya da sonraki (210 dk) parçaya tek başına sığmaz.
+    const k = kaynak(300, 60, [V], V, 1);
+    k.kaynak.durum.cal.shifts[0] = { ...k.kaynak.durum.cal.shifts[0]!, breaks: [{ start: '12:00', end: '12:30' }] as never };
+    const r = await coz(k as never, istek());
+    assert.equal(r.yerlesimler.length, 1, JSON.stringify(r.nedenler));
+    assert.equal(r.yerlesimler[0]!.baslangic, '2026-10-19T05:00:00.000Z');
+  });
 });
