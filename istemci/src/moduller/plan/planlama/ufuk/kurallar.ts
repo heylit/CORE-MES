@@ -14,8 +14,7 @@ export const OL_AY = ['Oca', 'Şub', 'Mar', 'Nis', 'May', 'Haz', 'Tem', 'Ağu', 
 export const YL_ACIL = 1e5;
 export const YL_GUN = 364;
 export const TALEP_GECMIS_ENAZ = 12;
-// Yatırım ve mesai bedeli bilinmeyen grupta eski sayfanın model ağırlıkları (zz9 ylModel: mesai `?? 1500`, birim değer `|| 1000`).
-export const MESAI_VARSAYILAN_TL = 1500;
+// Geliri bilinmeyen ailede eski sayfanın birim değer ağırlığı (zz9 ylModel `|| 1000`). Mesai bedeli için varsayılan yoktur (2745 a).
 export const DEGER_VARSAYILAN_TL = 1000;
 
 type Nesne = Record<string, unknown>;
@@ -435,8 +434,8 @@ export function yillikTalep(v: YillikVeri, P: readonly Donem[], A: YillikAyar, z
   return { fir, tah, d };
 }
 
-export interface ModelSecenegi { yat: boolean; yatAday?: (g: string, s: number) => boolean; sabit?: Record<string, number> }
-export interface YillikModel { lp: string; want: string[]; fi: (f: string) => string; gi: (g: string) => string; mesaiVarsayilan: string[] }
+export interface ModelSecenegi { yat: boolean; yatAday?: (g: string, s: number) => boolean; sabit?: Record<string, number>; mesaiTL?: (g: string) => number | null }
+export interface YillikModel { lp: string; want: string[]; fi: (f: string) => string; gi: (g: string) => string; mesaiBilinmez: string[] }
 
 // CPLEX LP biçimi; adlar yalnız harf, rakam ve alt çizgi.
 export function yillikModel(D: PlanVerisi, v: YillikVeri, P: readonly Donem[], T: YillikTalep, A: YillikAyar, o: ModelSecenegi): YillikModel {
@@ -444,7 +443,8 @@ export function yillikModel(D: PlanVerisi, v: YillikVeri, P: readonly Donem[], T
   const fi = (f: string): string => `f${F.indexOf(f)}`;
   const gi = (g: string): string => `g${G.indexOf(g)}`;
   const obj: string[] = []; const R: string[] = []; const bnd: string[] = []; const bin: string[] = [];
-  const mesaiVarsayilan: string[] = [];
+  const mesaiBilinmez: string[] = [];
+  const mesaiTL = o.mesaiTL ?? ((g: string) => mesaiSaatTL(D, g));
   const ter = (c: number, x: string): string => (c ? `${c >= 0 ? '+' : '-'} ${Math.abs(c).toFixed(6)} ${x}` : '');
   const yatAday = (g: string, s: number): boolean => o.yatAday?.(g, s) ?? false;
   P.forEach((p, t) => {
@@ -456,10 +456,11 @@ export function yillikModel(D: PlanVerisi, v: YillikVeri, P: readonly Donem[], T
     }
     for (const g of G) {
       const kap = (v.kapH[g] ?? 0) * gun / 7;
-      const mtl = mesaiSaatTL(D, g);
-      if (mtl === null && !mesaiVarsayilan.includes(g)) mesaiVarsayilan.push(g);
-      obj.push(ter(mtl ?? MESAI_VARSAYILAN_TL, `o_${gi(g)}_${t}`), ter(YL_ACIL, `e_${gi(g)}_${t}`));
-      bnd.push(` 0 <= o_${gi(g)}_${t} <= ${(kap * A.mesaiMaks / 100).toFixed(3)}`);
+      // Bedeli bilinmeyen grupta ek mesai önerilmez (2745 a): sütun sıfıra bağlanır, açık acil kapasiteye düşer; bedel uydurulmaz.
+      const mtl = mesaiTL(g);
+      if (mtl === null && !mesaiBilinmez.includes(g)) mesaiBilinmez.push(g);
+      obj.push(ter(mtl ?? 0, `o_${gi(g)}_${t}`), ter(YL_ACIL, `e_${gi(g)}_${t}`));
+      bnd.push(` 0 <= o_${gi(g)}_${t} <= ${mtl === null ? '0' : (kap * A.mesaiMaks / 100).toFixed(3)}`);
       const yuk = F.map((f) => ((v.saat[f]?.[g] ?? 0) > 0 ? ter(v.saat[f]?.[g] ?? 0, `x_${fi(f)}_${t}`) : '')).filter(Boolean).join(' ');
       const yat = o.yat ? P.slice(0, t + 1).map((_, s) => (yatAday(g, s) ? ter(-((v.yeniH[g] ?? 0) * gun / 7), `y_${gi(g)}_${s}`) : '')).filter(Boolean).join(' ') : '';
       R.push(`k_${gi(g)}_${t}: ${yuk || `0 x_${fi(F[0] ?? '')}_${t}`} - o_${gi(g)}_${t} - e_${gi(g)}_${t} ${yat} <= ${kap.toFixed(3)}`);
@@ -484,7 +485,7 @@ export function yillikModel(D: PlanVerisi, v: YillikVeri, P: readonly Donem[], T
     for (const g of G) want.push(`o_${gi(g)}_${t}`, `e_${gi(g)}_${t}`);
   });
   if (o.yat) for (const g of G) P.forEach((_, s) => { if (yatAday(g, s)) want.push(`y_${gi(g)}_${s}`); });
-  return { lp, want, fi, gi, mesaiVarsayilan };
+  return { lp, want, fi, gi, mesaiBilinmez };
 }
 
 // HiGHS'ın cevabı (sunucunun yıllık plan çözüm ucu): model durumu, amaç, istenen sütunların değeri ve indirgenmiş maliyeti.
