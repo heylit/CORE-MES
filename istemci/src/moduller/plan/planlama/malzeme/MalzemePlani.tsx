@@ -12,6 +12,7 @@ import {
 } from './kurallar.ts';
 import { Acilim, BosHarita, IsiIzgarasi, IsiSayfasi, IzinYok, Lejant, type IsiSecimi, type LejantOgesi } from '../ortak/isi/index.ts';
 import { OneCekme } from './OneCekme.tsx';
+import { useEmirNo, type EmirNo } from '../ortak/emir-no.ts';
 import { TedarikTerminiKarti } from './TedarikTermini.tsx';
 import './malzeme.css';
 
@@ -59,15 +60,16 @@ const Baslik = ({ simge, ad, ek }: { simge: SimgeAdi; ad: string; ek?: string })
 );
 
 export function MalzemePlani({ depo, calisma, yetki, yenile, sec, git }: PlanlamaEkranOzellikleri) {
-  return <MalzemePlaniGorunumu calisma={calisma} emirler={depo.durum?.emirler ?? depo.receteRotaKaydi} maliyetOku={yetki.maliyetOku} calismaSurumu={depo.calismaSurumu} terminYazar={yetki.planYaz} yenile={yenile}
+  const emirNo = useEmirNo(depo.receteRotaKaydi);
+  return <MalzemePlaniGorunumu calisma={calisma} emirNo={emirNo} emirler={depo.durum?.emirler ?? depo.receteRotaKaydi} maliyetOku={yetki.maliyetOku} calismaSurumu={depo.calismaSurumu} terminYazar={yetki.planYaz} yenile={yenile}
     goster={(j) => { sec({ siparis: j, adim: null, tezgah: null }); git('plan'); }} />;
 }
 
 // Satın Alma'nın sayfası (546 a) aynı görünümü daraltılmış çalışmayla çizer: emirler çalışmayla gelir, tutar ve öne çekme yoktur.
 // goster yoksa (Satın Alma) "çizelgede" pasif kalır: orada Planlama motoru tahtası yoktur.
-export function MalzemePlaniGorunumu({ calisma, emirler, maliyetOku, calismaSurumu, terminYazar, yenile, goster }: {
+export function MalzemePlaniGorunumu({ calisma, emirler, maliyetOku, calismaSurumu, terminYazar, yenile, goster, emirNo = (j) => j }: {
   calisma: PlanlamaCalismasi | null; emirler: unknown; maliyetOku: boolean; calismaSurumu: number | null; terminYazar: boolean; yenile: () => void;
-  goster?: (siparis: string) => void;
+  goster?: (siparis: string) => void; emirNo?: EmirNo;
 }) {
   const [stok, stokYaz] = useState<StokKaynagi | null | undefined>(undefined);
   const [kirilim, kirilimYaz] = useState<Kirilim>('gun');
@@ -145,7 +147,7 @@ export function MalzemePlaniGorunumu({ calisma, emirler, maliyetOku, calismaSuru
       <TedarikTerminiKarti D={D} l={alim} taban={taban} yazar={terminYazar} yenile={yenile} />
       <AlimPlani l={alim} fg={fg} dar={dar} taban={taban} simdi={g.simdi} fiyat={fiyat} malzemeAdi={(kod) => mats.get(kod)?.ad ?? ''}
         malzemeTedarikcisi={(kod) => { const t = mats.get(kod)?.tedarikci; return typeof t === 'string' && t !== '' ? tedarikciAdi(D, t) : null; }}
-        miktar={miktar} tedarikci={(t) => tedarikciAdi(D, t)} />
+        miktar={miktar} tedarikci={(t) => tedarikciAdi(D, t)} emirNo={emirNo} />
       <Kart baslikEki={<Baslik simge="box" ad="Malzeme planı" ek="plandan; alım ve bütçe için" />}>
         <div className="tc-pyz-ust">
           <span className="tc-pyz-kucuk">Kırılım: <b>{kirilimAdi}</b></span>
@@ -167,7 +169,7 @@ export function MalzemePlaniGorunumu({ calisma, emirler, maliyetOku, calismaSuru
       <Kart baslikEki={<Baslik simge="grid" ad="Dağılım ve toplam" />}>
         <DagilimTablosu d={dagilim(plan, kov, gor, dag, fg)} tur={dag} sec={dagYaz} fg={fg} dar={dar}
           ad={(i) => kovaAdi(taban, kirilim, kov.basi[i] ?? 0, true)} malzemeAdi={(kod) => mats.get(kod)?.ad ?? ''}
-          tedarikci={(t) => tedarikciAdi(D, t)} miktar={miktar} />
+          tedarikci={(t) => tedarikciAdi(D, t)} miktar={miktar} emirNo={emirNo} />
       </Kart>
       <OneCekme surum={calismaSurumu} malzemeAdi={malzemeAdi} dar={dar} />
     </div>
@@ -184,10 +186,10 @@ export function MalzemePlaniGorunumu({ calisma, emirler, maliyetOku, calismaSuru
               : `${r.kod} ${x.d.toLocaleLowerCase('tr-TR')}: plan ${gunYaz(taban, r.gerekli)} istiyor, geliş ${gunYaz(taban, r.etkin)}${r.tb ? ' (Satın Alma termini bekleniyor, olması gereken tarihte gelmiş sayıldı)' : ''}.`;
             return (
               <Acilim baslik={`${r.kod} · ${x.d}`} simge="box" ton={x.ton === 'tamam' ? '' : x.ton} neden={neden} kapat={kapat}
-                bilgi={[['Gerekli', gunYaz(taban, r.gerekli)], ['Geliş', gunYaz(taban, r.etkin)], ['Miktar', miktar(Math.ceil(r.miktar), r.kod)], ['Bağlı siparişler', r.isler.join(', ')]]}
+                bilgi={[['Gerekli', gunYaz(taban, r.gerekli)], ['Geliş', gunYaz(taban, r.etkin)], ['Miktar', miktar(Math.ceil(r.miktar), r.kod)], ['Bağlı siparişler', r.isler.map(emirNo).join(', ')]]}
                 // Sipariş ve geliş tarihi formu satın almanındır (222 a): eski sayfanın yetkisiz hali.
                 form={<IzinYok />}
-                secenekler={r.isler[0] ? [{ ad: `${r.isler[0]} çizelgede`, etki: 'Bu malzemeyi bekleyen siparişin adımlarını gösterir.', simge: 'gantt', ...cizelge(r.isler[0]) }] : []} />
+                secenekler={r.isler[0] ? [{ ad: `${emirNo(r.isler[0])} çizelgede`, etki: 'Bu malzemeyi bekleyen siparişin adımlarını gösterir.', simge: 'gantt', ...cizelge(r.isler[0]) }] : []} />
             );
           }} />
       </IsiSayfasi>
@@ -255,10 +257,11 @@ interface DagilimOzellikleri {
   malzemeAdi: (kod: string) => string;
   tedarikci: (t: string) => string;
   miktar: (q: number, kod: string) => string;
+  emirNo: EmirNo;
 }
 
 // Eski ekranın dağılım tablosu (zt mpDagilim): malzeme, sipariş ya da tedarikçiye göre, kova sütunlarıyla; tutar görene toplam satırı.
-function DagilimTablosu({ d, tur, sec, fg, dar, ad, malzemeAdi, tedarikci, miktar }: DagilimOzellikleri) {
+function DagilimTablosu({ d, tur, sec, fg, dar, ad, malzemeAdi, tedarikci, miktar, emirNo }: DagilimOzellikleri) {
   const hucre = (h: DagilimHucresi | undefined, kod: string | null): ReactNode => {
     if (!h || h.adet === 0) return <span className="tc-pyz-bos">·</span>;
     const q = kod === null ? '' : miktar(h.miktar, kod);
@@ -269,7 +272,7 @@ function DagilimTablosu({ d, tur, sec, fg, dar, ad, malzemeAdi, tedarikci, mikta
     if (a === BAGSIZ || a === TEDARIKCISIZ || a === 'Stok') return a;
     if (tur === 'malzeme') return <><b className="mono">{a}</b> <span className="tc-pyz-kucuk">{malzemeAdi(a)}</span></>;
     if (tur === 'tedarikci') return tedarikci(a);
-    return <b className="mono">{a}</b>;
+    return <b className="mono">{emirNo(a)}</b>;
   };
   const kolonAdi = tur === 'malzeme' ? 'Malzeme' : tur === 'siparis' ? 'Sipariş' : 'Tedarikçi';
   return (
@@ -316,11 +319,12 @@ interface AlimPlaniOzellikleri {
   malzemeTedarikcisi: (kod: string) => string | null;
   miktar: (q: number, kod: string) => string;
   tedarikci: (t: string) => string;
+  emirNo: EmirNo;
 }
 
 // Bugünkü eski sayfanın satın alma planı (zv-termin mpSatinalmaPlani): dört sayaç, verilecek siparişler ve açık siparişler. Seçim, tedarikçi
 // seçimi ve "Sipariş ver" yoktur (222 a): satın almada girilir. Tedarik termini üstteki karttadır (533 a).
-function AlimPlani({ l, fg, dar, taban, simdi, fiyat, malzemeAdi, malzemeTedarikcisi, miktar, tedarikci }: AlimPlaniOzellikleri) {
+function AlimPlani({ l, fg, dar, taban, simdi, fiyat, malzemeAdi, malzemeTedarikcisi, miktar, tedarikci, emirNo }: AlimPlaniOzellikleri) {
   const { yeni, acik } = alimTablolari(l);
   const say = alimSayaclari(l, simdi);
   const tarih = (t: number | null): ReactNode => (t === null || !Number.isFinite(t) ? '—' : <span className="mono">{gunYaz(taban, t)}</span>);
@@ -366,7 +370,7 @@ function AlimPlani({ l, fg, dar, taban, simdi, fiyat, malzemeAdi, malzemeTedarik
                   <Td b="Gerekli geliş">{tarih(r.gerekli)}</Td>
                   <Td b="Tedarik termini">{r.tb ? <span className="tc-pyz-kucuk">bekleniyor</span> : tarih(r.soz)}</Td>
                   <Td b="Tedarikçi">{t ?? '—'}</Td>
-                  <Td b="Siparişler"><span className="mono">{r.isler.join(', ')}</span></Td>
+                  <Td b="Siparişler"><span className="mono">{r.isler.map(emirNo).join(', ')}</span></Td>
                 </tr>
               );
             })}
@@ -401,7 +405,7 @@ function AlimPlani({ l, fg, dar, taban, simdi, fiyat, malzemeAdi, malzemeTedarik
                 <Td b="Planda geliş">
                   {tarih(r.etkin)}<small className="tc-pyz-not">{r.tb ? 'olması gereken tarih' : r.tm === 'sa-termin' ? 'Satın Alma termini' : 'termin + tedarikçi gecikmesi'}</small>
                 </Td>
-                <Td b="Siparişler"><span className="mono">{r.isler.join(', ')}</span></Td>
+                <Td b="Siparişler"><span className="mono">{r.isler.map(emirNo).join(', ')}</span></Td>
               </tr>
             ))}
           </tbody>

@@ -43,7 +43,18 @@ function plan(p: unknown): Nesne | null {
   return { dataVer: p['dataVer'], ops, J };
 }
 
-function veri(D: Nesne): Nesne {
+// Sipariş kimliği emrin iç kimliğidir; Satın Alma emri numarasıyla tanır (2693 a, 2717). Numara Planlama'nın okuduğu Reçete ve Rota
+// kaydından gelir; numarası olmayan siparişte alan yoktur, ekran kimliği yazar.
+function emirNolari(kayit: unknown): Map<string, string> {
+  const m = new Map<string, string>();
+  for (const o of nesneler(nesneMi(kayit) ? kayit['orders'] : undefined)) {
+    const id = o['id'], no = o['no'];
+    if ((typeof id === 'string' || typeof id === 'number') && typeof no === 'string' && no.trim()) m.set(String(id), no.trim());
+  }
+  return m;
+}
+
+function veri(D: Nesne, nolar: ReadonlyMap<string, string>): Nesne {
   const meta = nesneMi(D['meta']) ? D['meta'] : {};
   const terminAyar = nesneMi(D['terminAyar']) ? D['terminAyar'] : undefined;
   return {
@@ -51,6 +62,7 @@ function veri(D: Nesne): Nesne {
     // Havuzdaki (plana alınmamış) sipariş iki hesapta da sayılmaz; bayrağı gitmesin diye burada düşer.
     siparisler: nesneler(D['siparisler']).filter((s) => s['havuz'] !== true).map((s) => ({
       ...sec(s, SIPARIS),
+      ...(nolar.has(String(s['id'])) ? { no: nolar.get(String(s['id'])) } : {}),
       malzeme: nesneler(s['malzeme']).map((r) => sec(r, ['kod', 'miktar'])),
     })),
     urunler: nesneler(D['urunler']).map(urun),
@@ -85,11 +97,12 @@ function emirDurumu(kayit: unknown): Nesne {
 // Fason gecikme olayı fasoncunun süresini uzatır (maliyet/kurallar.ts fasonIsleri); başka olay gitmez.
 const fasonOlayi = (e: Nesne): boolean => e['tip'] === 'fason';
 
-// `S` girdi.betik'in birleştirdiği çalışmadır (planlamaCalismasi ile aynı); `kayit` Reçete ve Rota kaydı.
-export function satinAlmaCalismasi(S: Nesne, kayit: unknown): Nesne {
+// `S` girdi.betik'in birleştirdiği çalışmadır (planlamaCalismasi ile aynı); `kayit` emir durumu (canlı ya da Reçete ve Rota kaydındaki
+// kopyası), `receteRota` emir numaralarının okunduğu Reçete ve Rota kaydı.
+export function satinAlmaCalismasi(S: Nesne, kayit: unknown, receteRota: unknown = null): Nesne {
   return {
     surum: S['surum'],
-    D: veri(nesneMi(S['D']) ? S['D'] : {}),
+    D: veri(nesneMi(S['D']) ? S['D'] : {}, emirNolari(receteRota)),
     dataVer: S['dataVer'],
     ...(S['simdi'] !== undefined ? { simdi: S['simdi'] } : {}),
     plan: plan(S['plan']),

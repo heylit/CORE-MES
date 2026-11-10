@@ -396,7 +396,7 @@ export async function satinAlmaPlanCalismasi(db: Db, simdi: number = Date.now())
   const g = planGirdisi({ ...k.girdi, bugun: tesisGunu(simdi) }, simdi);
   if (g === null) return { calisma: null, surum: k.surum };
   const emirler = (k.girdi.kaynak.durum as { emirler?: unknown } | null)?.emirler ?? k.girdi.kayit;
-  return { calisma: satinAlmaCalismasi(g.S, emirler), surum: k.surum };
+  return { calisma: satinAlmaCalismasi(g.S, emirler, k.girdi.kayit), surum: k.surum };
 }
 
 // Planlama sayfasının birleştirilecek girdisi: çalışma kaydı, Reçete ve Rota kaydı ve çağıranın yetkisiyle kaynak okuması (takvim eki

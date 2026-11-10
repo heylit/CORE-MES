@@ -77,3 +77,13 @@ test('SA-03: plansız çalışmada plan null; eksik alanlar boş gelir, uydurulm
   assert.deepEqual(g.D['siparisler'], []);
   assert.equal(g.D['terminAyar'], undefined);
 });
+
+test('SA-04: emir no Reçete ve Rota kaydından siparişe eklenir; numarasız siparişte alan yok, kaydın başka alanı gitmez', () => {
+  const rr = { orders: [{ id: 'E-1', no: 'DN-0001-26-11-001', musteri: 'Deneme Musteri', fiyat: 1 }, { id: 'E-2', no: '  ' }], items: [{ id: 'U1', ad: 'Deneme urun adi' }] };
+  const S = { ...tam, D: { ...tam.D, siparisler: [...tam.D.siparisler, { id: 'E-2', urun: 'U1', adet: 1, termin: null }, { id: 'E-3', urun: 'U1', adet: 1, termin: null }] } };
+  const g = satinAlmaCalismasi(S, kayit, rr) as { D: { siparisler: Record<string, unknown>[] } };
+  assert.deepEqual(g.D.siparisler.map((s) => [s['id'], s['no']]), [['E-1', 'DN-0001-26-11-001'], ['E-2', undefined], ['E-3', undefined]]);
+  assert.ok(!('no' in g.D.siparisler[1]!));
+  const metin = JSON.stringify(g);
+  for (const yasak of ['Deneme Musteri', 'Deneme urun adi', 'fiyat', 'items']) assert.ok(!metin.includes(yasak), `${yasak} gitmemeli`);
+});
