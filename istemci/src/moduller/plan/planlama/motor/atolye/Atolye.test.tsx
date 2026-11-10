@@ -539,6 +539,35 @@ describe('PlanlamaAtolyesi', () => {
     post.mockRestore();
   });
 
+  it('2725: yavaş sürüklemede imlecin altındaki sürüklenen çubuk hedef satırı belirlemez; hedef titremez', () => {
+    const post = vi.spyOn(api, 'post').mockResolvedValue({ calismaSurumu: 9, oncekiSurum: 8 });
+    ac();
+    const cubuk = document.querySelector('[data-id="2.40"]') as HTMLElement;
+    const kendi = cubuk.closest('.tc-pym-tp-satir[data-m]') as HTMLElement;
+    const diger = [...document.querySelectorAll<HTMLElement>('.tc-pym-tp-satir[data-m]')].find((e) => e !== kendi) as HTMLElement;
+    expect(diger).toBeTruthy();
+    // Çubuk imlecin altında kalır (iz sürerken üstte çizilir); altında başka tezgâhın satırı vardır.
+    const ust = (cubuk.firstElementChild as HTMLElement | null) ?? cubuk;
+    const eski = document.elementsFromPoint;
+    document.elementsFromPoint = () => [ust, cubuk, diger];
+    const hedefler: string[] = [];
+    try {
+      fireEvent.pointerDown(cubuk, { button: 0, clientX: 100, clientY: 10, pointerId: 1 });
+      for (let i = 1; i <= 8; i++) {
+        fireEvent.pointerMove(cubuk, { clientX: 100 + i * 2, clientY: 10 + i * 4, pointerId: 1 });
+        hedefler.push([...document.querySelectorAll<HTMLElement>('.tc-pym-tp-satir[data-hedef]')].map((e) => e.dataset['m'] ?? '').join(','));
+      }
+    } finally {
+      document.elementsFromPoint = eski;
+    }
+    // İlk hareketler eşiğin altında (6 px); eşik geçilince hedef hep alttaki satırdır, kendi satırına dönmez.
+    const dolu = hedefler.filter((h) => h !== '');
+    expect(dolu.length).toBeGreaterThan(0);
+    expect(new Set(dolu)).toEqual(new Set([diger.dataset['m']]));
+    fireEvent.pointerCancel(cubuk, { pointerId: 1 });
+    post.mockRestore();
+  });
+
   it('2081-1, 2, 5: sürüklerken eski yerde kesikli kutu ve ipucu; bırakınca kalkar. Klavyede oklar önizler, Enter taşır, Esc vazgeçer', async () => {
     const post = vi.spyOn(api, 'post').mockResolvedValue({ calismaSurumu: 9, oncekiSurum: 8 });
     ac();

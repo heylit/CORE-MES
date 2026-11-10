@@ -111,8 +111,10 @@ export function Izgara({ ort, pano, parla }: { ort: Ortam; pano: MutableRefObjec
   const birakti = useRef(false);
   const yuzen = useRef<HTMLDivElement | null>(null);
   const bilgiZamani = useRef(0);
-  const hedefSatir = (x: number, y: number): HTMLElement | null =>
-    (typeof document.elementsFromPoint === 'function' ? document.elementsFromPoint(x, y) : []).map((e) => e.closest<HTMLElement>('.tc-pym-tp-satir[data-m]')).find((e) => e) ?? null;
+  // Sürüklenen çubuk imleci izler ve en üstte çizilir; onu atlamazsak hedef hep kendi satırı olur, geçişte titrer.
+  const hedefSatir = (x: number, y: number, haric: HTMLElement): HTMLElement | null =>
+    (typeof document.elementsFromPoint === 'function' ? document.elementsFromPoint(x, y) : [])
+      .filter((e) => !haric.contains(e)).map((e) => e.closest<HTMLElement>('.tc-pym-tp-satir[data-m]')).find((e) => e) ?? null;
   // Yüzen kart (ipucu ve iş bilgisi) panonun içinde tek öğedir; konum ölçüden gelir, tasarım değişkeni olarak yazılır.
   const yuzenGoster = (satirlar: readonly string[], x: number, y: number, ton: 'bilgi' | 'tasima' | 'cakisma') => {
     const pn = pano.current; if (!pn) return;
@@ -196,7 +198,7 @@ export function Izgara({ ort, pano, parla }: { ort: Ortam; pano: MutableRefObjec
       const dx = e.clientX - s.x0, dy = e.clientY - s.y0;
       if (!s.oldu) { if (Math.hypot(dx, dy) < 6) return; s.oldu = true; s.el.setPointerCapture?.(e.pointerId); s.el.dataset.surukle = ''; }
       s.px = e.clientX; s.py = e.clientY;
-      const h = hedefSatir(e.clientX, e.clientY);
+      const h = hedefSatir(e.clientX, e.clientY, s.el);
       if (h !== s.hedef) { if (s.hedef) delete s.hedef.dataset.hedef; if (h) h.dataset.hedef = ''; s.hedef = h; }
       onizle(s); kenarKay(s);
     },
