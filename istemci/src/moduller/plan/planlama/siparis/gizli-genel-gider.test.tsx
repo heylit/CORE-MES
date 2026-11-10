@@ -20,7 +20,7 @@ describe('gizli genel gider (2674, 2677 b)', () => {
     const c = gizliAy();
     const b = maliyetBaglami(c); const s = c.D.siparisler[0];
     if (!b || !s) throw new Error('bağlam yok');
-    expect(genelGiderOrani(c.D, b.G, 'T1')).toBe(0);
+    expect(genelGiderOrani(c.D)).toBe(0);
     const m = siparisMaliyeti(b, s);
     expect(m?.gg).toBe(0);
     expect(m?.ggGizli).toBe(true);
@@ -30,7 +30,7 @@ describe('gizli genel gider (2674, 2677 b)', () => {
     const c = acikAy();
     const b = maliyetBaglami(c); const s = c.D.siparisler[0];
     if (!b || !s) throw new Error('bağlam yok');
-    expect(genelGiderOrani(c.D, b.G, 'T1')).toBe(120);
+    expect(genelGiderOrani(c.D)).toBe(120);
     expect(siparisMaliyeti(b, s)?.ggGizli).toBe(false);
   });
 
@@ -58,7 +58,7 @@ describe('gizli genel gider (2674, 2677 b)', () => {
     const b = maliyetBaglami(c); const s = c.D.siparisler[0];
     if (!b || !s) throw new Error('bağlam yok');
     expect(b.G.tez.some((z) => (z.oran ?? 0) > 0)).toBe(true);
-    expect(genelGiderOrani(c.D, b.G, 'T1')).toBe(0);
+    expect(genelGiderOrani(c.D)).toBe(0);
     const m = siparisMaliyeti(b, s);
     expect(m?.gg).toBe(0);
     expect(m?.ggGizli).toBe(true);

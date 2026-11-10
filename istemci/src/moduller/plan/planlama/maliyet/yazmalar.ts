@@ -39,9 +39,10 @@ export function tezUcretYaz(yaz: Yaz, D: PlanVerisi, id: string, v: number): boo
     x.D = { ...x.D, tezgahlar: x.D.tezgahlar.map((z) => (z.id === id ? { ...z, ucret: v } : z)) };
   });
 }
-// Boş bırakılabilen yalnız operatör ücreti ve tek oran genel giderdir (ym-ayar).
-export function maliyetAyariYaz(yaz: Yaz, D: PlanVerisi, k: keyof MaliyetAyari, v: number | null): boolean {
-  if (v === null && k !== 'operatorUcret' && k !== 'genelGider') return false;
+// Genel gider oranı Finans'ındır: sunucu kayıtta siler, okumada Finans oranını yazar (genelGiderAlanlariniCikar); buradan yazılamaz (2608).
+// Boş bırakılabilen yalnız operatör ücretidir (ym-ayar).
+export function maliyetAyariYaz(yaz: Yaz, D: PlanVerisi, k: Exclude<keyof MaliyetAyari, 'genelGider' | 'genelGiderGizli'>, v: number | null): boolean {
+  if (v === null && k !== 'operatorUcret') return false;
   return yaz('Maliyet ayarı değişti', `${k}: ${yok(ymAyar(D)[k])} → ${yok(v)}`, (x) => { dYaz(x, { planTL: { ...planTL(x.D), [k]: v } }); });
 }
 export function ucretYaz(yaz: Yaz, D: PlanVerisi, k: 'ayarciUcret' | 'mesaiUcret', v: number): boolean {
@@ -133,9 +134,6 @@ export function siparisFiyatYaz(yaz: Yaz, D: PlanVerisi, id: string, gelir: numb
 }
 
 // ---------- Genel gider (msDeg: plan korunur) ----------
-export function giderKipYaz(yaz: Yaz, v: 'kalem' | 'tek'): boolean {
-  return yaz('Genel gider hesabı', v === 'kalem' ? 'kalemlerden' : 'tek oran', (x) => { msYaz(x, (M) => { M.kip = v; }); }, MS);
-}
 export function verimYaz(yaz: Yaz, D: PlanVerisi, v: number): boolean {
   return yaz('Kapasite verimi', `%${String(maliyetSistemi(D).verim)} → %${String(v)}`, (x) => { msYaz(x, (M) => { M.verim = v; }); }, MS);
 }

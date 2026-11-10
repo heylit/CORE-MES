@@ -5,8 +5,8 @@ import { planGuncel } from '../../durum.ts';
 import type { PlanlamaGorunumu } from '../../gorunumler.ts';
 import type { PlanlamaCalismasi } from '../../tipler.ts';
 import {
-  agAyar, baslangicMs, birimMaliyet, fasonTalasId, genelGiderHesabi, kgFiyatlari, kgSatiri, maliyetSistemi, malzemeler, mesaiSistemi, ML_CINS, ML_FORM,
-  norm, planMaliyeti, sayi, sayiGirdisi, takvimKur, talasFiyatlari, tl, tlEksi, tlSaat, wipAyar, ymAyar, yuzde, type KgBasvurusu, type MaliyetBaglami,
+  agAyar, birimMaliyet, fasonTalasId, kgFiyatlari, kgSatiri, malzemeler, mesaiSistemi, ML_CINS, ML_FORM,
+  norm, planMaliyeti, sayi, sayiGirdisi, talasFiyatlari, tl, tlEksi, tlSaat, wipAyar, ymAyar, yuzde, type KgBasvurusu, type MaliyetBaglami,
 } from '../kurallar.ts';
 import {
   ayarlar, beklemeAcikYaz, erkenSevkYaz, fasonAlanYaz, fasonFiyatAlani, kgAlanYaz, kgEkleYaz, kgSilYaz, kgVarMi, maliyetAyariYaz, netKgYaz, talasYaz,
@@ -139,9 +139,7 @@ function IscilikKarti({ c, kapali, y, git }: { c: PlanlamaCalismasi; kapali: boo
   const D = c.D;
   const Y = ymAyar(D);
   const A = ayarlar(D);
-  const kalem = maliyetSistemi(D).kip === 'kalem';
   const kisi = mesaiSistemi(D).kisiBazli;
-  const ort = kalem && baslangicMs(D) !== null ? genelGiderHesabi(c, takvimKur(c)).ort : null;
   return (
     <AsilKart simge="user" baslik="İşçilik ve mesai">
       <div className="tc-pyk-alanlar">
@@ -153,11 +151,9 @@ function IscilikKarti({ c, kapali, y, git }: { c: PlanlamaCalismasi; kapali: boo
             <Alan ad="Mesai ücreti TL/sa"><SayiGir deger={sayiOf(A.mesaiUcret)} ad="Mesai ücreti" adim={10} max={100000} bosOlmaz kapali={kapali} yaz={(v) => v !== null && y((z) => ucretYaz(z, D, 'mesaiUcret', v))} /></Alan>
             <Alan ad="Hafta sonu ve tatil mesai çarpanı"><SayiGir deger={Y.mesaiCarpan} ad="Hafta sonu ve tatil mesai çarpanı" min={1} max={3} yer="1" bosOlmaz kapali={kapali} yaz={(v) => y((z) => maliyetAyariYaz(z, D, 'mesaiCarpan', v))} /></Alan>
           </>}
-        {kalem
-          ? <Alan ad="Genel gider"><b className="tc-pyk-mono">{ort === null ? '—' : tlSaat(ort)} ort.</b><button type="button" className="tc-pyk-bag" onClick={() => { git('giderler'); }}>kalemlerden, tezgâh başına</button></Alan>
-          : Y.genelGiderGizli
+        {Y.genelGiderGizli
             ? <Alan ad="Genel gider TL/tezgâh saati"><Rozet ton="pasif">gizli</Rozet><span className="tc-pyk-soluk">Finans oranı bu ay gizli; maliyet genel gider hariç</span></Alan>
-            : <Alan ad="Genel gider TL/tezgâh saati"><SayiGir deger={Y.genelGider} ad="Genel gider TL/tezgâh saati" adim={10} max={100000} yer="yok" kapali={kapali} yaz={(v) => y((z) => maliyetAyariYaz(z, D, 'genelGider', v))} /></Alan>}
+            : <Alan ad="Genel gider TL/tezgâh saati"><b className="tc-pyk-mono">{Y.genelGider === null ? '—' : tlSaat(Y.genelGider)}</b><span className="tc-pyk-soluk">{Y.genelGider === null ? 'Finans oranı girilmemiş; siparişin genel gideri bilinmez' : 'Finans oranı; Finans modülünde değişir'}</span></Alan>}
         <Alan ad="Varsayılan hedef kâr oranı %"><SayiGir deger={Y.karHedef} ad="Varsayılan hedef kâr oranı %" max={300} bosOlmaz kapali={kapali} yaz={(v) => y((z) => maliyetAyariYaz(z, D, 'karHedef', v))} /></Alan>
       </div>
       <Not>Finansman oranı (%{sayi(agAyar(D).fin, 2)}/gün) Öncelik ve ağırlık sayfasındadır. Genel gider ürün maliyetinde ve teklifte sayılır, plan amacına girmez: kira ve amortisman iş hangi tezgâhta yapılırsa yapılsın aynıdır.</Not>
