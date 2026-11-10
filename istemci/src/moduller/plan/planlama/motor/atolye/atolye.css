@@ -307,7 +307,8 @@
 
 /* sabah brifingi (tp-brif) */
 .tc-pym-tp-brif {
-  position: absolute; z-index: 10; top: calc(var(--b-6) + var(--b-3)); right: var(--b-3); width: min(var(--tus-pencere-genis), calc(100% - var(--b-4) * 2)); background: var(--panel-solid);
+  position: absolute; z-index: 10; top: var(--b-2); right: var(--b-3); width: min(var(--tus-pencere-genis), calc(100% - var(--b-4) * 2)); background: var(--panel-solid);
+  max-height: calc(100% - var(--b-4)); overflow-y: auto; overscroll-behavior: contain;
   border: var(--cizgi-ince) solid var(--edge2); border-left: var(--b-1) solid var(--hazard); border-radius: var(--yari-1); box-shadow: var(--shadow); padding: var(--b-2) var(--b-3);
   animation: tc-pym-tp-ac var(--hareket-panel) var(--hareket-egri-panel);
 }

@@ -174,8 +174,8 @@ export function Pano({ o, c, p, cf: fark, sekSec, onayda, sen, senYaz }: Ozellik
 
   // Klavye: Esc kartı ya da seçimi kapatır, 1-5 ölçek, / arama, Ctrl+Z geri al, Ctrl+Shift+Z yinele, E Düzenle, Y Yapılacaklar. Yazı alanında
   // çalışmaz. Düzenle açıkken rakamlar ve oklar menünündür (Yapilacaklar yakalar).
-  const tuslar = useRef({ kart, secJob, secOp, sec, komut, yaz, ypAcik, pan, panAc, ypAc });
-  tuslar.current = { kart, secJob, secOp, sec, komut, yaz, ypAcik, pan, panAc, ypAc };
+  const tuslar = useRef({ kart, brif, secJob, secOp, sec, komut, yaz, ypAcik, pan, panAc, ypAc });
+  tuslar.current = { kart, brif, secJob, secOp, sec, komut, yaz, ypAcik, pan, panAc, ypAc };
   useEffect(() => {
     const tus = (e: KeyboardEvent) => {
       if (e.defaultPrevented) return;
@@ -183,6 +183,7 @@ export function Pano({ o, c, p, cf: fark, sekSec, onayda, sen, senYaz }: Ozellik
       const x = tuslar.current;
       if (e.key === 'Escape') {
         if (x.kart) { e.preventDefault(); setKart(null); return; }
+        if (x.brif) { e.preventDefault(); setBrif(false); return; }
         if (!yazi && (x.secJob || x.secOp)) { e.preventDefault(); x.sec({ siparis: null, adim: null, tezgah: null }); }
         return;
       }
@@ -277,8 +278,9 @@ export function Pano({ o, c, p, cf: fark, sekSec, onayda, sen, senYaz }: Ozellik
     <div className="tc-pym-tp-kap" ref={kap}>
       {ust}
       <HamleOnizlemesi h={hamle} D={c.D} ad={(j) => c.D.siparisler.find((x) => x.id === j)?.ad ?? j} />
-      {brif && <Brif ort={ort} kapat={brifKapat} />}
       <div className="tc-pym-tp-govde" data-ray={rayAcik ? '' : undefined}>
+        {/* Gövdenin içinde: üst çubuk kaç satıra kayarsa kaysın kutu altında başlar, Kapat örtülmez. */}
+        {brif && <Brif ort={ort} kapat={brifKapat} />}
         <Ray ort={ort} />
         <Izgara ort={ort} pano={pano} parla={parla} />
         <Bugun ort={ort} acik={bugunAcik} />
