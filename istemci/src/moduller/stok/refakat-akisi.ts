@@ -718,12 +718,15 @@ export function sonAnMetni(o: KartOzetleriCevabi['kartlar'][number]): string {
 }
 
 // 2907 (2912 a): listede kartın sıradaki adımı. Kart bir adımdaysa ondan sonraki ilk adım, değilse (depoda, yolda, önünde bekliyor)
-// sıradaki ilk adım; adım kalmadıysa çıkış. Kapanan ya da sevk edilen kartta yoktur.
+// sıradaki ilk adım; adım kalmadıysa çıkış. Kapanan ya da sevk edilen kartta yoktur. Sıra dışı başlatmada (sonraki adım başlamış,
+// önceki yapılmamış) atlanan ilk adım "atlandı" diye gösterilir: yapılmadan kalmasın.
 export function siradakiMetni(o: KartOzetleriCevabi['kartlar'][number]): string | null {
   const d = o.konum.durum;
   if (d === 'kapandi' || d === 'sevk_edildi') return null;
-  if (d === 'sevke_hazir') return 'Sevk';
   const simdi = o.rota.findIndex((r) => r.durum === 'simdi');
+  const atlanan = o.rota.find((r, i) => r.durum === 'sirada' && o.rota.slice(i + 1).some((x) => x.durum !== 'sirada'));
+  if (atlanan !== undefined) return `${opKodu(atlanan.opNo)} atlandı`;
+  if (d === 'sevke_hazir') return 'Sevk';
   const sonraki = o.rota.find((r, i) => i > simdi && r.durum === 'sirada');
   return sonraki === undefined ? 'Mamul deposu ya da sevk' : opKodu(sonraki.opNo);
 }
