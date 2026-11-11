@@ -1,12 +1,15 @@
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import type { StokTurListesi, TurListesiCevabi, TurListesiSatiri } from '#paylasilan/sozlesme/stok.ts';
-import { DurumKutusu, Dugme, Girdi, Kart, Rozet, Sekmeler, Tablo, type Sutun } from '../../ortak/arayuz/index.ts';
+import { DurumKutusu, Dugme, Kart, Rozet, Tablo, type Sutun } from '../../ortak/arayuz/index.ts';
 import { api } from '../../ortak/veri/api.ts';
+import type { Siralama } from '../../ortak/veri/liste-durumu.ts';
 import { anahtarlar } from './anahtarlar.ts';
-import { DURUM_ETIKETI, birimliMiktar } from './gorunum.ts';
+import { birimliMiktar } from './gorunum.ts';
+import { HizliIslem, SatirEylemleri, type HizliIslemTuru } from './HizliIslem.tsx';
 import { MalzemeSekmeleri, type MalzemeSekmesi } from './MalzemeSekmeleri.tsx';
+import { SutunSecici, malzemeSutunlari, useSutunSecimi } from './MalzemeTablosu.tsx';
 import { SayfaBasi, hataMetni, useIslem } from './ortak.tsx';
 import './stok.css';
 
@@ -54,19 +57,28 @@ function SktHucresi({ m, bugun }: { m: TurListesiSatiri; bugun: string }) {
   );
 }
 
-function sutunlar(liste: StokTurListesi, bugun: string): Sutun<TurListesiSatiri>[] {
+// Türe özel sütunlar ortak malzeme tablosunda Kategori'den sonra gelir; kimyasalda en yakın SKT de.
+function ekSutunlar(liste: StokTurListesi, bugun: string): Sutun<TurListesiSatiri>[] {
   return [
-    { anahtar: 'malzeme', baslik: 'Malzeme', hucre: (m) => (
-      <span className="tc-stok-ad"><strong>{m.ad ?? `Kart ${m.malzemeId}`}</strong>
-        <span><span className="tc-stok-mono">{m.stokKodu ?? `no ${m.malzemeId}`}</span> {m.durum === 'kritik' || m.durum === 'eksi' ? <Rozet ton={DURUM_ETIKETI[m.durum].ton}>{DURUM_ETIKETI[m.durum].etiket}</Rozet> : null}</span></span>
-    ) },
     ...ALANLAR[liste].map((a): Sutun<TurListesiSatiri> => ({ anahtar: `alan-${a.anahtar}`, baslik: a.baslik, hucre: (m) => alanMetni(m.alanlar[a.anahtar], a.birim) })),
-    ...(liste === 'kimyasal' ? [{ anahtar: 'skt', baslik: 'En yakın SKT', hucre: (m: TurListesiSatiri) => <SktHucresi m={m} bugun={bugun} /> }] : []),
-    { anahtar: 'konum', baslik: 'Konumlar', hucre: (m) => (m.konumlar.length === 0 ? '—' : m.konumlar.map((k) => k.kod).join(' ') + (m.konumSayisi > m.konumlar.length ? ` +${m.konumSayisi - m.konumlar.length}` : '')) },
-    { anahtar: 'toplam', baslik: 'Stok', hizala: 'sag', hucre: (m) => (
-      <strong className={`tc-stok-buyuk-miktar ${m.durum === 'eksi' ? 'tc-stok-eksi' : m.durum === 'kritik' ? 'tc-stok-uyari-yazi' : ''}`}>{birimliMiktar(m.serbest, m.birim)}</strong>
-    ) },
+    ...(liste === 'kimyasal' ? [{ anahtar: 'skt', baslik: 'En yakın SKT', csv: (m: TurListesiSatiri) => m.enYakinSkt, hucre: (m: TurListesiSatiri) => <SktHucresi m={m} bugun={bugun} /> }] : []),
   ];
+}
+
+// Tür listesi sayfalanmaz (bir kategoride yüzlerce kart, VARSAYIM 2099): sıralama ekranda yapılır; boş değer sonda kalır.
+const SIRA_DEGERI: Record<string, (m: TurListesiSatiri) => number | string | null> = {
+  malzeme: (m) => m.malzemeId, serbest: (m) => Number(m.serbest), toplam: (m) => Number(m.toplam),
+  kritik: (m) => (m.kritikSeviye === null ? null : Number(m.kritikSeviye)), son: (m) => m.sonHareket,
+};
+function turSirala(satirlar: readonly TurListesiSatiri[], s: Siralama | null): readonly TurListesiSatiri[] {
+  const al = s ? SIRA_DEGERI[s.alan] : undefined;
+  if (!s || !al) return satirlar;
+  const yon = s.yon === 'artan' ? 1 : -1;
+  return [...satirlar].sort((a, b) => {
+    const x = al(a), y = al(b);
+    if (x === null || y === null) return x === y ? 0 : x === null ? 1 : -1;
+    return (x < y ? -1 : x > y ? 1 : 0) * yon || a.malzemeId - b.malzemeId;
+  });
 }
 
 const SEKMELER = ['', 'kritik', 'skt'] as const;
@@ -76,11 +88,18 @@ function TurListesi({ liste }: { liste: StokTurListesi }) {
   const yonlendir = useNavigate();
   const malKabul = useIslem('stok.giris');
   const baslik = BASLIK[liste];
-  const [arama, setArama] = useState('');
+  const [adres, adresYaz] = useSearchParams();
+  const arama = adres.get('metin') ?? '';
+  // Arama adreste durur: sekmeler arasında taşınır, geri tuşu ve yenileme onu korur.
+  const setArama = (m: string) => { const y = new URLSearchParams(adres); if (m) y.set('metin', m); else y.delete('metin'); adresYaz(y, { replace: true }); };
   const [sekme, setSekme] = useState<Sekme>('');
+  const [hizli, setHizli] = useState<{ m: TurListesiSatiri; tur: HizliIslemTuru } | null>(null);
+  const secim = useSutunSecimi();
+  const [siralama, siralamaYaz] = useState<Siralama | null>(null);
   const l = useQuery({ queryKey: [...anahtarlar.hepsi, 'tur-listesi', liste], queryFn: () => api.get<TurListesiCevabi>(`/stok/tur-listeleri/${liste}`) });
   const bugun = l.data?.bugun ?? '';
-  const satirlar = useMemo(() => {
+  const sutunlar = malzemeSutunlari<TurListesiSatiri>({ gizli: secim.gizli, ek: ekSutunlar(liste, bugun), eylem: (m) => <SatirEylemleri m={m} sec={(tur) => setHizli({ m, tur })} /> });
+  const suzulen = useMemo(() => {
     const q = arama.trim().toLocaleLowerCase('tr-TR');
     return (l.data?.satirlar ?? []).filter((m) => {
       if (sekme === 'kritik' && m.durum !== 'kritik' && m.durum !== 'eksi') return false;
@@ -89,12 +108,13 @@ function TurListesi({ liste }: { liste: StokTurListesi }) {
       return [m.ad, m.stokKodu, ...Object.values(m.alanlar).flat().map(String)].some((x) => x?.toLocaleLowerCase('tr-TR').includes(q));
     });
   }, [l.data, arama, sekme, bugun]);
+  const satirlar = useMemo(() => turSirala(suzulen, siralama), [suzulen, siralama]);
   const sayi = (f: (m: TurListesiSatiri) => boolean) => (l.data ? ` ${l.data.satirlar.filter(f).length}` : '');
-  const sekmeler = [
-    { anahtar: '', baslik: `Tümü${sayi(() => true)}` },
-    { anahtar: 'kritik', baslik: `Kritik${sayi((m) => m.durum === 'kritik' || m.durum === 'eksi')}` },
-    ...(liste === 'kimyasal' ? [{ anahtar: 'skt', baslik: `SKT uyarısı${sayi((m) => ['gecmis', 'yaklasiyor'].includes(sktDurumu(m, bugun)))}` }] : []),
-  ] as { anahtar: Sekme; baslik: string }[];
+  const suzgecler = [
+    { deger: '', baslik: `Tümü${sayi(() => true)}` },
+    { deger: 'kritik', baslik: `Kritik${sayi((m) => m.durum === 'kritik' || m.durum === 'eksi')}` },
+    ...(liste === 'kimyasal' ? [{ deger: 'skt', baslik: `SKT uyarısı${sayi((m) => ['gecmis', 'yaklasiyor'].includes(sktDurumu(m, bugun)))}` }] : []),
+  ];
   return (
     <section className="tc-stok">
       <SayfaBasi baslik={baslik} alt={l.data ? `${l.data.satirlar.length} kart; kart ve alanlar Malzemeler ve Hizmetler'den, miktar stoktan.` : 'Türe göre stok.'}
@@ -102,18 +122,20 @@ function TurListesi({ liste }: { liste: StokTurListesi }) {
           {malKabul && <Link to="/stok/mal-kabul"><Dugme tur="birincil" simge="truck">Mal kabul</Dugme></Link>}
           <Link to="/malzemeler/yeni"><Dugme simge="layers">Malzeme kartı aç</Dugme></Link>
         </>} />
-      <MalzemeSekmeleri secili={SEKME[liste]} />
-      <div className="tc-stok-arac">
-        <Girdi etiket="Ara" placeholder="Ad, stok kodu ya da alan değeri" value={arama} onChange={(e) => setArama(e.target.value)} />
-      </div>
-      <div className="tc-stok-sekmeler-sar"><Sekmeler etiket="Süzgeç" sekmeler={sekmeler} secili={sekme} sec={(s) => setSekme(s)} /></div>
+      <MalzemeSekmeleri secili={SEKME[liste]} metin={arama} />
       <Kart>
         {l.isError ? <DurumKutusu durum="hata" mesaj={hataMetni(l.error)} yenile={() => void l.refetch()} /> : (
-          <Tablo etiket={baslik} sutunlar={sutunlar(liste, bugun)} satirlar={satirlar} satirAnahtari={(m) => m.malzemeId} mesgul={l.isPending}
-            satirSec={(m) => { void yonlendir(`/stok/malzemeler/${m.malzemeId}`); }}
-            bosMesaj={`Bu listede kart yok. Kartı Malzemeler ve Hizmetler'de "${KATEGORI_ADI[liste]}" kategorisiyle açın.`} />
+          <Tablo etiket={baslik} kip="kaydir" sutunlar={sutunlar} satirlar={satirlar} satirAnahtari={(m) => m.malzemeId} mesgul={l.isPending}
+            satirSec={(m) => { void yonlendir(`/stok/malzemeler/${m.malzemeId}`); }} siralama={siralama} siralamaDegistir={siralamaYaz}
+            bosMesaj={`Bu listede kart yok. Kartı Malzemeler ve Hizmetler'de "${KATEGORI_ADI[liste]}" kategorisiyle açın.`}
+            arac={{
+              arama: { deger: arama, degistir: setArama, etiket: 'Ara', yerTutucu: 'Ad, stok kodu ya da alan değeri' },
+              suzgec: { etiket: 'Süzgeç', secenekler: suzgecler, secili: sekme, sec: (s) => setSekme(s as Sekme) },
+              sag: <SutunSecici {...secim} />,
+            }} />
         )}
       </Kart>
+      {hizli && <HizliIslem tur={hizli.tur} m={hizli.m} kapat={() => setHizli(null)} />}
     </section>
   );
 }

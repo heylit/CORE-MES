@@ -10,7 +10,7 @@ afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
 const SATIR: MalzemeStokSatiri = {
   malzemeId: 901, ad: 'Deneme gövde', stokKodu: 'YM-001', tur: 'yarimamul', birim: 'adet', toplam: '10', serbest: '5', statude: '3', rezerve: '0',
-  kritikSeviye: null, durum: 'tanimsiz', konumSayisi: 1, konumlar: [{ kod: 'A-01-02', katNo: 2, miktar: '10' }],
+  kritikSeviye: null, durum: 'tanimsiz', konumSayisi: 1, konumlar: [{ kod: 'A-01-02', katNo: 2, miktar: '10' }], kategoriAdi: null, kartDurumu: null, varsayilanKonum: null, sonHareket: null,
 };
 const PANEL = {
   malzemeCesidi: 1, gozDolu: 0, gozToplam: 0, kritik: 0, eksi: 0, kabulde: 0, toplamaBekleyen: 0, gunluk: [], kritikListe: [], raflar: [], sonHareketler: [],
@@ -28,9 +28,9 @@ describe('Statü görünürlüğü', () => {
       'GET /stok/panel': () => json(200, PANEL),
     });
     ac('/stok/malzemeler');
-    expect(await screen.findByText(/statüde 3/)).toBeTruthy();
-    expect(screen.getByText(/toplam 10/).textContent).not.toMatch(/statüde 5/);
-    fireEvent.click(screen.getByRole('tab', { name: 'Statülü' }));
+    await screen.findByText('Deneme gövde');
+    expect(document.querySelector('td[data-baslik="Statüde"]')?.textContent).toBe('3');
+    fireEvent.click(screen.getByRole('button', { name: 'Statülü' }));
     await waitFor(() => expect(istekler.some((i) => i.yol.startsWith('/stok/malzemeler?') && i.yol.includes('durum=statulu'))).toBe(true));
   });
   it('yalnız karantinadaki fark statüde yazılmaz; toplam yine görünür', async () => {
@@ -39,8 +39,10 @@ describe('Statü görünürlüğü', () => {
       'GET /stok/panel': () => json(200, PANEL),
     });
     ac('/stok/malzemeler');
-    expect(await screen.findByText(/toplam 10/)).toBeTruthy();
-    expect(screen.queryByText(/statüde/)).toBeNull();
+    await screen.findByText('Deneme gövde');
+    expect(document.querySelector('td[data-baslik="Statüde"]')?.textContent).toBe('0');
+    expect(document.querySelector('td[data-baslik="Kabul / karantina"]')?.textContent).toBe('2');
+    expect(document.querySelector('td[data-baslik="Toplam"]')?.textContent).toBe('10');
   });
   it('arama kutusu statü adını da arar', async () => {
     sunucuKur(DEPOCU, { 'GET /stok/malzemeler': () => json(200, liste([])), 'GET /stok/panel': () => json(200, PANEL) });

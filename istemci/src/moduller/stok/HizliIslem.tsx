@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { Link } from 'react-router-dom';
 import type { BakiyeSatiri, MalzemeAyrintiCevabi, MalzemeStokSatiri } from '#paylasilan/sozlesme/stok.ts';
 import { Dugme, DurumKutusu, Pencere } from '../../ortak/arayuz/index.ts';
 import { api } from '../../ortak/veri/api.ts';
@@ -12,7 +13,8 @@ import { SepeteEklePenceresi } from './SepeteEkle.tsx';
 
 export type HizliIslemTuru = 'tasima' | 'cikis' | 'sepet';
 
-// Listedeki satırın eylem düğmeleri; satır seçimi (ayrıntıya gitme) tetiklenmez.
+// Listedeki satırın eylem düğmeleri; satır seçimi (ayrıntıya gitme) tetiklenmez. Kayan tabloda sağda sabit sütundadır: düğmeler
+// yalnız simgedir (adı aria-label ve title'da), sütun dar ekranda tabloyu örtmesin.
 export function SatirEylemleri({ m, sec }: { m: MalzemeStokSatiri; sec: (t: HizliIslemTuru) => void }) {
   const tasiyabilir = useIslem('stok.transfer');
   const cikabilir = useIslem('stok.cikis');
@@ -21,10 +23,13 @@ export function SatirEylemleri({ m, sec }: { m: MalzemeStokSatiri; sec: (t: Hizl
   const ad = m.ad ?? `Kart ${m.malzemeId}`;
   return (
     <span className="tc-stok-dugmeler">
-      {tasiyabilir && stoklu && <Dugme simge="sort" aria-label={`Taşı: ${ad}`} title="Taşı" onClick={tikla('tasima')}>Taşı</Dugme>}
-      {cikabilir && stoklu && <Dugme simge="truck" aria-label={`Çıkış: ${ad}`} title="Çıkış" onClick={tikla('cikis')}>Çıkış</Dugme>}
-      {tasiyabilir && stoklu && <Dugme simge="box" aria-label={`Sepete ekle: ${ad}`} title="Sepete ekle" onClick={tikla('sepet')}>Sepete</Dugme>}
-      <EtiketMerkeziDugmesi tur="malzeme" simge="scan" ad={`QR etiketi: ${ad}`} idler={[m.malzemeId]}>QR</EtiketMerkeziDugmesi>
+      {tasiyabilir && stoklu && <Dugme simge="sort" aria-label={`Taşı: ${ad}`} title="Taşı" onClick={tikla('tasima')} />}
+      {cikabilir && stoklu && <Dugme simge="truck" aria-label={`Çıkış: ${ad}`} title="Çıkış" onClick={tikla('cikis')} />}
+      {tasiyabilir && stoklu && <Dugme simge="box" aria-label={`Sepete ekle: ${ad}`} title="Sepete ekle" onClick={tikla('sepet')} />}
+      <span title="QR etiketi"><EtiketMerkeziDugmesi tur="malzeme" simge="scan" ad={`QR etiketi: ${ad}`} idler={[m.malzemeId]}>{null}</EtiketMerkeziDugmesi></span>
+      <Link to={`/stok/hareketler?malzemeId=${m.malzemeId}`} aria-label={`Hareketler: ${ad}`} onClick={(e) => e.stopPropagation()}>
+        <Dugme simge="list" aria-label={`Hareketler: ${ad}`} title="Hareketler" />
+      </Link>
     </span>
   );
 }

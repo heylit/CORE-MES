@@ -1,93 +1,65 @@
 import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link, useNavigate } from 'react-router-dom';
-import type { MalzemelerCevabi, MalzemeStokSatiri, PanelCevabi } from '#paylasilan/sozlesme/stok.ts';
-import { tesisGunu } from '#paylasilan/tesis-zamani.ts';
-import { Dugme, DurumKutusu, Girdi, Kart, Rozet, Sekmeler, Tablo, useBildirim, type Sutun } from '../../ortak/arayuz/index.ts';
+import type { MalzemeSiralamaAlani, MalzemelerCevabi, MalzemeStokSatiri, PanelCevabi } from '#paylasilan/sozlesme/stok.ts';
+import { Dugme, DurumKutusu, Kart, Secim, Tablo, tabloCsvSatirlari, useBildirim } from '../../ortak/arayuz/index.ts';
 import { api } from '../../ortak/veri/api.ts';
+import { csvIndir } from '../../ortak/veri/csv.ts';
 import { sorguMetni, useListeDurumu } from '../../ortak/veri/liste-durumu.ts';
 import { anahtarlar } from './anahtarlar.ts';
-import { stokCsvAlani } from './csv-alani.ts';
-import { DURUM_ETIKETI, MALZEME_TURU, STOK_DURUMLARI, birimliMiktar } from './gorunum.ts';
-import { EtiketMerkeziDugmesi } from './Etiketler.tsx';
+import { STOK_DURUMLARI } from './gorunum.ts';
+import { EtiketMerkeziDugmesi, etiketMerkeziAdresi, useEtiketMerkezi } from './Etiketler.tsx';
 import { CSV_AZAMI_SATIR, tumSatirlar } from './Hareketler.tsx';
 import { MalzemeSekmeleri } from './MalzemeSekmeleri.tsx';
+import { SutunSecici, malzemeSutunlari, useSutunSecimi } from './MalzemeTablosu.tsx';
 import { HizliIslem, SatirEylemleri, type HizliIslemTuru } from './HizliIslem.tsx';
 import { SayfaBasi, hataMetni, useIslem } from './ortak.tsx';
 import './stok.css';
 
-// Önizlemedeki raf etiketleri: konum kodu, kat rengiyle; en çok üç, fazlası +n.
-function KonumEtiketleri({ m }: { m: MalzemeStokSatiri }) {
-  return (
-    <span className="tc-stok-etiketler">
-      {m.konumlar.map((k) => (
-        <span key={k.kod} className="tc-stok-etiket">{k.katNo !== null && <span className={`tc-stok-kat tc-stok-kat-${((k.katNo - 1) % 6) + 1}`} />}{k.kod}</span>
-      ))}
-      {m.konumSayisi > m.konumlar.length && <span className="tc-stok-etiket">+{m.konumSayisi - m.konumlar.length}</span>}
-    </span>
-  );
-}
-
-const SUTUNLAR = (sec: (m: MalzemeStokSatiri, t: HizliIslemTuru) => void): Sutun<MalzemeStokSatiri>[] => [
-  { anahtar: 'malzeme', baslik: 'Malzeme', sirala: true, hucre: (m) => (
-    <span className="tc-stok-ad"><strong>{m.ad ?? `Kart ${m.malzemeId}`}</strong>
-      <span><span className="tc-stok-mono">{m.stokKodu ?? `no ${m.malzemeId}`}</span> · {m.tur ? MALZEME_TURU[m.tur] : '—'} {m.durum === 'kritik' || m.durum === 'eksi' ? <Rozet ton={DURUM_ETIKETI[m.durum].ton}>{DURUM_ETIKETI[m.durum].etiket}</Rozet> : null}</span></span>
-  ) },
-  { anahtar: 'konum', baslik: 'Konumlar', hucre: (m) => <KonumEtiketleri m={m} /> },
-  // Büyük sayı serbest stoktur; üretimde statü almış yarı parça (statüde, yalnız statülü bakiye) ve onun emirlere ayrılanı (rezerve)
-  // ayrıca yazılır. Karantina ya da kabuldeki statüsüz miktar statüde sayılmaz; toplamdan farkı kalite dışıdır.
-  { anahtar: 'toplam', baslik: 'Stok', hizala: 'sag', sirala: true, hucre: (m) => (
-    <span className="tc-stok-ad">
-      <strong className={`tc-stok-buyuk-miktar ${m.durum === 'eksi' ? 'tc-stok-eksi' : m.durum === 'kritik' ? 'tc-stok-uyari-yazi' : ''}`}>{birimliMiktar(m.serbest, m.birim)}</strong>
-      {m.serbest !== m.toplam && (
-        <span>{[
-          Number(m.statude) !== 0 ? `statüde ${birimliMiktar(m.statude, m.birim)}` : null,
-          Number(m.rezerve) > 0 ? `rezerve ${birimliMiktar(m.rezerve, m.birim)}` : null,
-          `toplam ${birimliMiktar(m.toplam, m.birim)}`,
-        ].filter(Boolean).join(' · ')}</span>
-      )}
-    </span>
-  ) },
-  { anahtar: 'eylem', baslik: '', hucre: (m) => <SatirEylemleri m={m} sec={(t) => sec(m, t)} /> },
-];
-
-// CSV: süzgece uyan bütün malzemeler (Excel Türkçe için noktalı virgül ve BOM; önizlemedeki dışa aktarım).
-function csvIndir(satirlar: MalzemeStokSatiri[]) {
-  const alan = stokCsvAlani;
-  const satir = (m: MalzemeStokSatiri) => [m.malzemeId, m.stokKodu, m.ad, m.tur ? MALZEME_TURU[m.tur] : '', m.toplam.replace('.', ','), m.serbest.replace('.', ','), m.birim, m.kritikSeviye?.replace('.', ',') ?? '', DURUM_ETIKETI[m.durum].etiket, m.konumlar.map((k) => k.kod).join(' ')].map(alan).join(';');
-  const blob = new Blob(['\ufeff' + [['Kart no', 'Stok kodu', 'Ad', 'Tür', 'Toplam', 'Serbest', 'Birim', 'Kritik seviye', 'Durum', 'Konumlar'].map(alan).join(';'), ...satirlar.map(satir)].join('\r\n')], { type: 'text/csv;charset=utf-8' });
-  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `stok-malzemeler-${tesisGunu(Date.now())}.csv`; a.click();
-  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
-}
+const SAYFA_BOYLARI = [50, 100, 200] as const;
+// Sözleşmedeki MALZEME_SIRALAMA_ALANLARI ile aynı (istemci paylaşılanı yalnız tip olarak ithal eder).
+const SIRALAMA_ALANLARI = ['malzeme', 'toplam', 'serbest', 'kritik', 'son'] as const satisfies readonly MalzemeSiralamaAlani[];
+const CSV_ADI = 'stok-malzemeler';
 
 export function Malzemeler() {
   const yonlendir = useNavigate();
   const { bildir } = useBildirim();
   const malKabul = useIslem('stok.giris');
-  const liste = useListeDurumu({ suzgecler: { durum: '' as '' | (typeof STOK_DURUMLARI)[number], metin: '', kapsam: '' as '' | 'kartlar' }, suzgecDegerleri: { durum: STOK_DURUMLARI, kapsam: ['kartlar'] as const }, siralamaAlanlari: ['malzeme', 'toplam'], adres: true });
+  const etiketMerkezi = useEtiketMerkezi();
+  const liste = useListeDurumu({
+    suzgecler: { durum: '' as '' | (typeof STOK_DURUMLARI)[number], metin: '', kapsam: '' as '' | 'kartlar' },
+    suzgecDegerleri: { durum: STOK_DURUMLARI, kapsam: ['kartlar'] as const }, siralamaAlanlari: SIRALAMA_ALANLARI,
+    sayfaBoyu: SAYFA_BOYLARI[0], sayfaBoyuSecenekleri: SAYFA_BOYLARI, adres: true,
+  });
   const [arama, setArama] = useState(liste.suzgecler.metin);
   const [hizli, setHizli] = useState<{ m: MalzemeStokSatiri; tur: HizliIslemTuru } | null>(null);
+  const [rahat, rahatYaz] = useState(false);
+  const secim = useSutunSecimi();
   useEffect(() => { const t = setTimeout(() => { if (arama !== liste.suzgecler.metin) liste.suzgecDegistir({ metin: arama }); }, 300); return () => clearTimeout(t); }, [arama]);
   const l = useQuery({ queryKey: anahtarlar.liste('malzemeler', liste.sorgu), queryFn: () => api.get<MalzemelerCevabi>(`/stok/malzemeler${sorguMetni(liste.sorgu)}`) });
   const p = useQuery({ queryKey: [...anahtarlar.hepsi, 'panel'], queryFn: () => api.get<PanelCevabi>('/stok/panel') });
   useEffect(() => { if (l.data) liste.sayfaEsitle(l.data.sayfa, liste.sorgu.sayfa); }, [l.data]);
   const say = (n: number | undefined) => (n === undefined ? '' : ` ${n}`);
-  const sekmeler = [
-    { anahtar: '', baslik: `Tümü${say(p.data?.malzemeCesidi)}` },
-    { anahtar: 'kritik', baslik: `Kritik${say(p.data?.kritik)}` },
-    { anahtar: 'eksi', baslik: `Eksi bakiye${say(p.data?.eksi)}` },
-    { anahtar: 'kabulde', baslik: `Rafa yerleşmemiş${say(p.data?.kabulde)}` },
-    { anahtar: 'statulu', baslik: 'Statülü' },
-    { anahtar: 'kartlar', baslik: 'Bütün kartlar' },
-  ] as const;
+  // Durum süzgeci tablonun araç çubuğunda çip olarak durur: tür sekmeleriyle üst üste iki sekme satırı olmaz.
+  const suzgecler = [
+    { deger: '', baslik: `Tümü${say(p.data?.malzemeCesidi)}` },
+    { deger: 'kritik', baslik: `Kritik${say(p.data?.kritik)}` },
+    { deger: 'eksi', baslik: `Eksi bakiye${say(p.data?.eksi)}` },
+    { deger: 'kabulde', baslik: `Rafa yerleşmemiş${say(p.data?.kabulde)}` },
+    { deger: 'statulu', baslik: 'Statülü' },
+    { deger: 'kartlar', baslik: 'Bütün kartlar' },
+  ];
   const kartlar = liste.suzgecler.kapsam === 'kartlar';
+  const sutunlar = malzemeSutunlari<MalzemeStokSatiri>({ gizli: secim.gizli, eylem: (m) => <SatirEylemleri m={m} sec={(tur) => setHizli({ m, tur })} /> });
   const [indiriliyor, setIndiriliyor] = useState(false);
+  // CSV süzgece uyan bütün malzemelerdir ve görünen sütunlarla iner (Excel Türkçe: noktalı virgül, BOM, ondalık virgül).
   const indir = async () => {
     setIndiriliyor(true);
     try {
       const { sayfa: _sayfa, sayfaBoyu: _boy, ...suzgec } = liste.sorgu;
       const t = await tumSatirlar<MalzemeStokSatiri>('/stok/malzemeler', suzgec);
-      csvIndir(t.satirlar);
+      const c = tabloCsvSatirlari(sutunlar, t.satirlar);
+      csvIndir(CSV_ADI, c.basliklar, c.satirlar);
       if (t.kesik) bildir('bilgi', `CSV ilk ${CSV_AZAMI_SATIR.toLocaleString('tr-TR')} malzemeyle sınırlandı; süzgeci daraltın.`);
     } catch (e) {
       bildir('hata', hataMetni(e));
@@ -95,8 +67,12 @@ export function Malzemeler() {
       setIndiriliyor(false);
     }
   };
+  const topluEylemler = [
+    ...(etiketMerkezi ? [{ anahtar: 'qr', baslik: 'QR etiketi bas', simge: 'scan' as const, yap: (s: readonly MalzemeStokSatiri[]) => { void yonlendir(etiketMerkeziAdresi('malzeme', s.map((m) => m.malzemeId))); } }] : []),
+    { anahtar: 'csv', baslik: 'Seçilenleri CSV', simge: 'download' as const, yap: (s: readonly MalzemeStokSatiri[]) => { const c = tabloCsvSatirlari(sutunlar, s); csvIndir(CSV_ADI, c.basliklar, c.satirlar); } },
+  ];
   return (
-    <section className="tc-stok">
+    <section className="tc-stok" data-rahat={rahat ? '' : undefined}>
       <SayfaBasi baslik="Malzemeler" alt={l.data?.toplam !== null && l.data ? (kartlar ? `${l.data.toplam} stoklanır malzeme kartı; stoğu olmayanlar 0 görünür.` : `${l.data.toplam} malzemenin stoğu ya da stok ayarı var. Stoğu olmayan kart için Bütün kartlar.`) : 'Malzeme başına stok.'}
         sag={<>
           {malKabul && <Link to="/stok/mal-kabul"><Dugme tur="birincil" simge="truck">Mal kabul</Dugme></Link>}
@@ -104,16 +80,22 @@ export function Malzemeler() {
           <Dugme simge="download" disabled={!l.data?.satirlar.length} yukleniyor={indiriliyor} onClick={() => void indir()}>CSV</Dugme>
           <Link to="/malzemeler/yeni"><Dugme simge="layers">Malzeme kartı aç</Dugme></Link>
         </>} />
-      <MalzemeSekmeleri secili="malzemeler" />
-      <div className="tc-stok-arac">
-        <Girdi etiket="Ara" placeholder="Ad, stok kodu, statü, konum kodu, parti no ya da kart numarası" value={arama} onChange={(e) => setArama(e.target.value)} />
-      </div>
-      <div className="tc-stok-sekmeler-sar"><Sekmeler etiket="Durum" sekmeler={sekmeler} secili={kartlar ? 'kartlar' : liste.suzgecler.durum} sec={(d) => liste.suzgecDegistir(d === 'kartlar' ? { durum: '', kapsam: 'kartlar' } : { durum: d, kapsam: '' })} /></div>
+      <MalzemeSekmeleri secili="malzemeler" metin={arama} />
       <Kart>
         {l.isError ? <DurumKutusu durum="hata" mesaj={hataMetni(l.error)} yenile={() => void l.refetch()} /> : (
-          <Tablo etiket="Malzeme stokları" sutunlar={SUTUNLAR((m, tur) => setHizli({ m, tur }))} satirlar={l.data?.satirlar ?? []} satirAnahtari={(m) => m.malzemeId} mesgul={l.isPending}
-            satirSec={(m) => { void yonlendir(`/stok/malzemeler/${m.malzemeId}`); }} bosMesaj={kartlar ? 'Malzeme kartı yok; kartı Malzemeler sayfasında açın.' : 'Bu süzgece uyan malzeme yok. Stoğu olmayan kartlar Bütün kartlar sekmesinde.'}
-            siralama={liste.siralama} siralamaDegistir={liste.siralamaDegistir}
+          <Tablo etiket="Malzeme stokları" kip="kaydir" sutunlar={sutunlar} satirlar={l.data?.satirlar ?? []} satirAnahtari={(m) => m.malzemeId} mesgul={l.isPending}
+            satirSec={(m) => { void yonlendir(`/stok/malzemeler/${m.malzemeId}`); }} bosMesaj={kartlar ? 'Malzeme kartı yok; kartı Malzemeler sayfasında açın.' : 'Bu süzgece uyan malzeme yok. Stoğu olmayan kartlar Bütün kartlar süzgecinde.'}
+            siralama={liste.siralama} siralamaDegistir={liste.siralamaDegistir} toplu={{ eylemler: topluEylemler }}
+            arac={{
+              arama: { deger: arama, degistir: setArama, etiket: 'Ara', yerTutucu: 'Ad, stok kodu, statü, konum kodu, parti no ya da kart numarası' },
+              suzgec: { etiket: 'Durum', secenekler: suzgecler, secili: kartlar ? 'kartlar' : liste.suzgecler.durum, sec: (d) => liste.suzgecDegistir(d === 'kartlar' ? { durum: '', kapsam: 'kartlar' } : { durum: d as '' | (typeof STOK_DURUMLARI)[number], kapsam: '' }) },
+              sag: <>
+                <SutunSecici {...secim} />
+                <Dugme simge="expand" aria-pressed={rahat} onClick={() => rahatYaz(!rahat)}>Rahat</Dugme>
+                <Secim etiket="Sayfa boyu" value={String(liste.sayfaBoyu ?? SAYFA_BOYLARI[0])} onChange={(e) => liste.sayfaBoyuDegistir(Number(e.target.value))}
+                  secenekler={SAYFA_BOYLARI.map((b) => ({ deger: String(b), baslik: String(b) }))} />
+              </>,
+            }}
             {...(l.data ? { sayfalama: { sayfa: l.data.sayfa, sayfaBoyu: l.data.sayfaBoyu, toplam: l.data.toplam, degistir: liste.sayfaDegistir } } : {})} />
         )}
       </Kart>

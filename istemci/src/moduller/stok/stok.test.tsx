@@ -21,7 +21,7 @@ const BAKIYE = {
   id: 11, malzemeId: 901, malzemeAd: 'Deneme sac', konumId: 3, konumKod: 'A-01-02', partiId: 4, partiEtiketi: 'TP-1 · döküm D-7',
   miktar: '3.000', ilkGiris: '2026-10-01T08:00:00+03:00', ambalaj: null, statuId: null,
 } satisfies BakiyeSatiri;
-const SATIR: MalzemeStokSatiri = { malzemeId: 901, ad: 'Deneme sac', stokKodu: 'HM-001', tur: 'hammadde', birim: 'kg', toplam: '3', serbest: '3', statude: '0', rezerve: '0', kritikSeviye: null, durum: 'tanimsiz', konumSayisi: 4, konumlar: [{ kod: 'A-01-02', katNo: 2, miktar: '3' }] };
+const SATIR: MalzemeStokSatiri = { malzemeId: 901, ad: 'Deneme sac', stokKodu: 'HM-001', tur: 'hammadde', birim: 'kg', toplam: '3', serbest: '3', statude: '0', rezerve: '0', kritikSeviye: null, durum: 'tanimsiz', konumSayisi: 4, konumlar: [{ kod: 'A-01-02', katNo: 2, miktar: '3' }], kategoriAdi: null, kartDurumu: null, varsayilanKonum: null, sonHareket: null };
 const PANEL = {
   malzemeCesidi: 8, gozDolu: 6, gozToplam: 28, kritik: 1, eksi: 1, kabulde: 2, toplamaBekleyen: 3,
   gunluk: [{ gun: '2026-10-06', giris: 2, cikis: 1 }, { gun: '2026-10-07', giris: 5, cikis: 3 }],
@@ -134,7 +134,7 @@ describe('Malzemeler', () => {
     expect(screen.getByText('A-01-02')).toBeTruthy();
     expect(screen.getByText('3 kg')).toBeTruthy();
     expect(screen.getByText('+3')).toBeTruthy();
-    fireEvent.click(await screen.findByRole('tab', { name: 'Eksi bakiye 1' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Eksi bakiye 1' }));
     await waitFor(() => expect(istekler.some((i) => i.yol.includes('durum=eksi'))).toBe(true));
   });
   it('satırın yanında taşı, çıkış, sepete ve QR: ayrıntıya girmeden; tek gözde form doğrudan açılır, satır seçilmez', async () => {
@@ -157,14 +157,19 @@ describe('Malzemeler', () => {
   it('Bütün kartlar sekmesi stoğu olmayan kartları ister (kapsam=kartlar); durum süzgeci kalkar', async () => {
     const istekler = sunucuKur(OKUYUCU, { 'GET /stok/malzemeler': () => json(200, { satirlar: [{ ...SATIR, toplam: '0', serbest: '0', konumSayisi: 0, konumlar: [] }], toplam: 1, sayfa: 1, sayfaBoyu: 50 } satisfies MalzemelerCevabi), 'GET /stok/panel': () => json(200, PANEL) });
     ac('/stok/malzemeler?durum=kritik');
-    fireEvent.click(await screen.findByRole('tab', { name: 'Bütün kartlar' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Bütün kartlar' }));
     await waitFor(() => expect(istekler.some((i) => i.yol.includes('kapsam=kartlar') && !i.yol.includes('durum='))).toBe(true));
     expect(await screen.findByText(/stoklanır malzeme kartı; stoğu olmayanlar 0 görünür/)).toBeTruthy();
   });
-  it('statülü stokta emirlere ayrılan (rezerve) statüdekinin yanında yazılır', async () => {
+  it('serbest, statüde, rezerve ve toplam ayrı sütunlardır (2905)', async () => {
     sunucuKur(OKUYUCU, { 'GET /stok/malzemeler': () => json(200, { satirlar: [{ ...SATIR, toplam: '5', serbest: '3', statude: '2', rezerve: '1.5' }], toplam: 1, sayfa: 1, sayfaBoyu: 50 } satisfies MalzemelerCevabi), 'GET /stok/panel': () => json(200, PANEL) });
     ac('/stok/malzemeler');
-    expect(await screen.findByText(/statüde 2 kg · rezerve 1,5 kg · toplam 5 kg/)).toBeTruthy();
+    await screen.findByText('Deneme sac');
+    const hucre = (baslik: string) => document.querySelector(`td[data-baslik="${baslik}"]`)?.textContent;
+    expect(hucre('Serbest')).toBe('3 kg');
+    expect(hucre('Statüde')).toBe('2');
+    expect(hucre('Rezerve')).toBe('1,5');
+    expect(hucre('Toplam')).toBe('5');
   });
   it("çok gözde önce göz sorulur; stoğu olmayan satırda yalnız QR (Etiket Merkezi'nde), okuyucuya taşı ve çıkış yok", async () => {
     const ikinci = { ...BAKIYE, id: 12, konumId: 8, konumKod: 'B-02-01', miktar: '5.000' };

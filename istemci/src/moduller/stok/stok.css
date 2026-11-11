@@ -578,3 +578,18 @@ li[data-tur="bilinmiyor"] > .tc-stok-seri-tur { color: var(--stop); }
   .tc-refakat-rota-adim { grid-template-columns: calc(var(--b-6) - var(--b-1)) minmax(0, 1fr); }
   .tc-refakat-rota-zaman { grid-column: 2; text-align: start; }
 }
+
+/* Malzeme tablosu: rahat görünüm hücre boşluğunu büyütür; sütun seçimi yan pencerede alt alta. */
+.tc-stok[data-rahat] .tc-tablo-kap { --tablo-hucre: var(--b-3); }
+.tc-stok-sutun-secimi { display: grid; gap: var(--b-2); }
+.tc-stok-soluk { color: var(--faint); }
+.tc-tablo-sabit-sag .tc-stok-dugmeler { flex-wrap: nowrap; gap: var(--b-1); }
+.tc-tablo-sabit-sag .tc-stok-dugmeler .tc-dugme { padding-inline: 0; min-inline-size: var(--dokunma); }
+/* Uzun ad ya da çok konum sütunu kabın genişliğini aşmasın: içerik sarar, sütun dar ekranda da bir bakışta görünür. */
+.tc-tablo-sabit-sol .tc-stok-ad { inline-size: max-content; max-inline-size: var(--acilir-encok); white-space: normal; overflow-wrap: anywhere; }
+@media (max-width: 1023px) {
+  .tc-tablo-sabit-sol .tc-stok-ad { max-inline-size: var(--menu-sabit); }
+}
+@media (max-width: 767px) {
+  .tc-tablo-kap[data-kaydir] .tc-stok-etiketler { max-inline-size: var(--menu-sabit); }
+}
