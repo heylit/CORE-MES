@@ -17,6 +17,9 @@
 .tc-kfs-eski { color: var(--hazard-ink); font-size: var(--yazi-xs); }
 .tc-kfs-ayrac { flex: none; align-self: stretch; width: 1px; margin-block: var(--b-2); background: var(--edge2); }
 .tc-kfs-uyari { display: inline-flex; align-items: center; gap: var(--b-1); color: var(--hazard-ink); font-size: var(--yazi-xs); font-weight: 600; white-space: nowrap; }
+/* 2996 a: hiç kur girilmemişken tek satır; giriş bağlantısı bağlantı gibi görünür, tıklama şeridin kendisidir. */
+.tc-kfs-bos { color: var(--muted); white-space: nowrap; }
+.tc-kfs-gir { color: var(--hazard-ink); font-weight: 600; text-decoration: underline; white-space: nowrap; }
 .tc-kfs-isaret { width: var(--b-2); height: var(--b-2); border-radius: 50%; background: var(--hazard); }
 .tc-kfs-panel {
   display: grid; gap: var(--b-4); grid-template-columns: repeat(3, minmax(0, 1fr));
