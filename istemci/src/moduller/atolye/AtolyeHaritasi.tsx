@@ -1,5 +1,5 @@
 import { Suspense, lazy, useCallback, useEffect, useMemo, useState } from 'react';
-import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import type { AramaSonucu, YerlesimCevabi } from '#paylasilan/sozlesme/atolye.ts';
 import {
   Dugme, DurumKutusu, Girdi, Kart, KuyrukKarti, KuyrukListesi, Rozet, Secim, Simge, useBildirim,
@@ -20,7 +20,7 @@ import { RafOdagi } from './RafOdagi.tsx';
 import type { RafOdakSecimi } from './RafOdagi.tsx';
 import { SalonPenceresi } from './SalonPenceresi.tsx';
 import { SonHareketler } from './SonHareketler.tsx';
-import { CANLI_ARALIK_MS, rotaGetir, useArama, useCanliDurum, useFabrika, useGozKalemleri, useKalemGorunumleri, useMakineArizalari, useMalzemeModelleri, useTumEmirler, useYerlesmemisIstasyonlar } from './veri.ts';
+import { CANLI_ARALIK_MS, rotaGetir, useArama, useCanliDurum, useFabrika, useGozKalemleri, useKalemGorunumleri, useMakineArizalari, useMalzemeModelleri, useStokKonumuOlmayanYer, useTumEmirler, useYerlesmemisIstasyonlar } from './veri.ts';
 import { SIFIR_KONUM, bolumeCevir, fabrikayaCevir, konumOku, ogeninBolumu } from './fabrika.ts';
 import type { BolumYerlesimi } from './sahne/motor.ts';
 import { YerlesimDuzenleyici } from './YerlesimDuzenleyici.tsx';
@@ -101,6 +101,7 @@ export function AtolyeHaritasi() {
     [gorunen, kapsam],
   );
   const canli = useCanliDurum();
+  const stoksuzYer = useStokKonumuOlmayanYer();
   const [hafif, hafifYaz] = useState(() => hafifTercihi() ?? performansOku());
   // Elle seçim yoksa ve sahne bu cihazda yavaşsa hafif görünüme kendiliğinden geçilir; kullanıcı düğmeyle geri alabilir.
   const yavasCizim = useCallback(() => {
@@ -375,6 +376,12 @@ export function AtolyeHaritasi() {
           onClick={() => ozetAyrintiYaz((v) => !v)}
         />
       </div>
+      {!tamEkran.acik && stoksuzYer !== null && stoksuzYer > 0 && (
+        <p className="tc-atolye-uyari" role="status">
+          <Simge ad="alert" boyut="k" />
+          {stoksuzYer} yer stok konumu değil. <Link to="/stok/ayarlar">Stok &gt; Ayarlar</Link>
+        </p>
+      )}
 
       <div className="tc-atolye-ana" data-liste={listeGorunur}>
         <div className="tc-atolye-sahne-alani" data-yuruyus={yuruyus}>

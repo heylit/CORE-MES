@@ -8,6 +8,7 @@ import { ISTEK_KIMLIGI_BASLIGI, istekKimligiMi } from '#paylasilan/istek-kimligi
 import type { BaskilarCevabi, BekleyenlerCevabi, CiktiCevabi, EtiketlerCevabi, KayitCiktiCevabi, SablonlarCevabi, YazdirCevabi, YazicilarCevabi } from '#paylasilan/sozlesme/etiket-merkezi.ts';
 import { BildirimSaglayici } from '../../ortak/arayuz/index.ts';
 import { Baskilar } from './Baskilar.tsx';
+import { cihazYazicilari, cihazYazicisiKaydet } from './cihaz-yazicisi.ts';
 import { Etiketler } from './Etiketler.tsx';
 import { HazirSablonlar, SablonKatalogu, YaziciDenemesi } from './EtiketMerkezi.tsx';
 import { Yazicilar } from './Yazicilar.tsx';
@@ -94,7 +95,7 @@ const KONUMLAR: Record<number, string> = { 11: 'R1-01-1-1', 12: 'R1-01-1-2' };
 
 interface Gonderilen { yol: string; govde: unknown; kimlik: string | null }
 
-function sunucuKur(secenek: { islemler?: Islem[]; yazicilar?: YazicilarCevabi } = {}) {
+function sunucuKur(secenek: { islemler?: Islem[]; yazicilar?: YazicilarCevabi; bekleyenler?: BekleyenlerCevabi } = {}) {
   const istekler: string[] = [];
   const gonderilenler: Gonderilen[] = [];
   vi.stubGlobal('fetch', vi.fn(async (adres: string, init?: RequestInit) => {
@@ -125,7 +126,7 @@ function sunucuKur(secenek: { islemler?: Islem[]; yazicilar?: YazicilarCevabi } 
     if (yol === '/etiket-merkezi/yazicilar') return json(200, secenek.yazicilar ?? YAZICILAR);
     if (yol === '/etiket-merkezi/baskilar') return json(200, BASKILAR);
     if (yol === '/etiket-merkezi/etiketler') return json(200, ETIKETLER);
-    if (yol === '/etiket-merkezi/bekleyenler') return json(200, BEKLEYENLER);
+    if (yol === '/etiket-merkezi/bekleyenler') return json(200, secenek.bekleyenler ?? BEKLEYENLER);
     if (yol === '/etiket-merkezi/raflar') {
       return json(200, { raflar: [{ id: 21, kod: 'A1', ad: 'Palet rafı', salonKodu: 'DEPO' }, { id: 22, kod: 'A2', ad: 'A2', salonKodu: 'DEPO' }, { id: 23, kod: 'B1', ad: 'Konsol', salonKodu: 'URETIM' }] });
     }
@@ -630,5 +631,90 @@ describe('EtiketMerkezi vektörel yazdırma', () => {
     ac(<HazirSablonlar />, '/etiket-merkezi?tur=konum&id=11,12');
     expect(await screen.findByText(/2 etiket, önizleme ilk kayıt/)).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Vektörel yazdır' })).toBeNull();
+  });
+});
+
+// 2916 a: olay ekranındaki etiket düğmesi bu cihazın varsayılan yazıcısına basar; varsayılan Etiket bas'ta seçilir, bekleyenlerde
+// türün hepsi Etiket Merkezi'ne gitmeden oraya gider.
+describe('EtiketMerkezi cihaz varsayılanı', () => {
+  afterEach(() => { localStorage.clear(); });
+  const BASAN: Islem[] = ['sayfa.etiket-merkezi', 'etiket-merkezi.oku', 'etiket-merkezi.bas'];
+
+  it('ağ yazıcısı seçilince bu cihazda varsayılan yapılır; sonraki açılışta seçili gelir; kaldırılınca düşer', async () => {
+    sunucuKur({ islemler: BASAN });
+    ac(<HazirSablonlar />, '/etiket-merkezi?tur=konum&id=11');
+    fireEvent.change(await screen.findByLabelText('Yazıcı'), { target: { value: '1' } });
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Bu cihazda varsayılan yap' }));
+    expect(cihazYazicilari().konum).toEqual({ yaziciId: 1, yaziciAd: 'Zebra depo', sablonAnahtar: 'konum-50x25', sablonAd: 'Konum 50x25' });
+    expect(screen.getByText(/doğrudan Zebra depo yazıcısına, Konum 50x25 ölçüsünde basar/)).toBeTruthy();
+    cleanup();
+    ac(<HazirSablonlar />, '/etiket-merkezi?tur=konum&id=11');
+    expect(((await screen.findByLabelText('Yazıcı')) as HTMLSelectElement).value).toBe('1');
+    const kutu = screen.getByRole('checkbox', { name: 'Bu cihazda varsayılan yap' }) as HTMLInputElement;
+    expect(kutu.checked).toBe(true);
+    fireEvent.click(kutu);
+    expect(cihazYazicilari().konum).toBeUndefined();
+  });
+
+  it('dosya yazıcısında ve kayıtsız yazıcı denemesinde varsayılan seçeneği yoktur (yasak)', async () => {
+    sunucuKur({ islemler: BASAN });
+    ac(<HazirSablonlar />, '/etiket-merkezi?tur=konum&id=11');
+    fireEvent.change(await screen.findByLabelText('Yazıcı'), { target: { value: '2' } });
+    expect(screen.queryByRole('checkbox', { name: 'Bu cihazda varsayılan yap' })).toBeNull();
+    cleanup();
+    ac(<YaziciDenemesi />, '/etiket-merkezi/yazici-denemesi');
+    fireEvent.change(await screen.findByLabelText('Yazıcı'), { target: { value: '1' } });
+    expect(screen.queryByRole('checkbox', { name: 'Bu cihazda varsayılan yap' })).toBeNull();
+  });
+
+  it('bekleyenlerde varsayılanı olan türün hepsi o yazıcıya kayıtlarla basılır; varsayılanı olmayan tür Etiket bas sayfasını açar', async () => {
+    cihazYazicisiKaydet('lot', { yaziciId: 1, yaziciAd: 'Zebra depo', sablonAnahtar: 'lot-100x50', sablonAd: 'Lot 100x50' });
+    const istekler = sunucuKur({ islemler: BASAN });
+    ac(<Etiketler />, '/etiket-merkezi/etiketler');
+    fireEvent.click(await screen.findByRole('button', { name: /hepsini bas \(1\) · Zebra depo$/ }));
+    await waitFor(() => expect(istekler.gonderilenler).toHaveLength(1));
+    expect(istekler.gonderilenler[0]).toMatchObject({ yol: '/etiket-merkezi/sablonlar/lot-100x50/bas', govde: { yaziciId: 1, adet: 1, kayit: { tur: 'mal-kabul', idler: [12] } } });
+    expect(istekler.gonderilenler[0]!.kimlik).not.toBeNull();
+    expect(await screen.findByText('Etiketler gönderildi: Zebra depo.')).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'Kalite durum etiketleri: hepsini bas (2)' }).getAttribute('href')).toBe('/etiket-merkezi?tur=kalite-durum&id=41%2C40');
+  });
+
+  it('başka ölçüde kayıtlı varsayılan bu şablonda işaretli görünmez; şu anki varsayılan yazılır', async () => {
+    cihazYazicisiKaydet('konum', { yaziciId: 1, yaziciAd: 'Zebra depo', sablonAnahtar: 'konum-100x50', sablonAd: 'Konum 100x50' });
+    sunucuKur({ islemler: BASAN });
+    ac(<HazirSablonlar />, '/etiket-merkezi?tur=konum&id=11');
+    fireEvent.change(await screen.findByLabelText('Yazıcı'), { target: { value: '1' } });
+    expect((screen.getByRole('checkbox', { name: 'Bu cihazda varsayılan yap' }) as HTMLInputElement).checked).toBe(false);
+    expect(screen.getByText('Bu cihazda şu an varsayılan: Zebra depo · Konum 100x50.')).toBeTruthy();
+  });
+
+  it('yazıcı adı düğmede görünür; 10 etiketten çoğu tek onayla basılır, vazgeçilirse istek gitmez; tek basım en çok 200 kayıttır', async () => {
+    cihazYazicisiKaydet('lot', { yaziciId: 1, yaziciAd: 'Zebra depo', sablonAnahtar: 'lot-100x50', sablonAd: 'Lot 100x50' });
+    const cok: BekleyenlerCevabi = {
+      gun: 30,
+      bekleyenler: Array.from({ length: 205 }, (_, i) => ({ tur: 'mal-kabul' as const, id: i + 1, baslik: `MK-${String(i + 1)}`, ayrinti: '', zaman: '2026-11-07T08:00:00.000Z', etiketSayisi: 1 })),
+    };
+    const istekler = sunucuKur({ islemler: BASAN, bekleyenler: cok });
+    ac(<Etiketler />, '/etiket-merkezi/etiketler');
+    const dugme = await screen.findByRole('button', { name: /hepsini bas \(200\) · Zebra depo$/ });
+    expect(dugme.textContent).toContain('· Zebra depo');
+    fireEvent.click(dugme);
+    expect(await screen.findByText('200 etiket Zebra depo yazıcısına basılsın mı?')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Vazgeç' }));
+    expect(istekler.gonderilenler).toHaveLength(0);
+    fireEvent.click(dugme);
+    fireEvent.click(await screen.findByRole('button', { name: 'Evet, bas' }));
+    await waitFor(() => expect(istekler.gonderilenler).toHaveLength(1));
+    const govde = istekler.gonderilenler[0]!.govde as { kayit: { idler: number[] } };
+    expect(govde.kayit.idler).toHaveLength(200);
+  });
+
+  it('basma yetkisi olmayan varsayılan olsa da hepsini bas ile Etiket bas sayfasına gider, baskı isteği gitmez (yasak)', async () => {
+    cihazYazicisiKaydet('lot', { yaziciId: 1, yaziciAd: 'Zebra depo', sablonAnahtar: 'lot-100x50', sablonAd: 'Lot 100x50' });
+    const istekler = sunucuKur({ islemler: ['sayfa.etiket-merkezi', 'etiket-merkezi.oku'] });
+    ac(<Etiketler />, '/etiket-merkezi/etiketler');
+    expect(await screen.findByText('MK-000012')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /· Zebra depo$/ })).toBeNull();
+    expect(istekler.gonderilenler).toHaveLength(0);
   });
 });

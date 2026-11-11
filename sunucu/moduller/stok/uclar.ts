@@ -1,7 +1,7 @@
 import { ikiliCevap, uc } from '#cekirdek/uc.ts';
 import {
   acikSiparisSatirlariCevabi, fasonIsleriCevabi, fasonIsleriSorgusu, cikisGovdesi, cikisOnerisiCevabi, emirTamamlaGovdesi, emirTamamlamaCevabi, cikisOnerisiSorgusu, depolarCevabi, geriAlGovdesi, topluGeriAlGovdesi, hareketCevabi, hareketlerCevabi, hareketlerSorgusu, isKutusuCevabi,
-  depoRaflariGovdesi, gozOnerisiCevabi, haritaEslemeCevabi, haritaOzetiCevabi, zeminCevabi, bolumDeposuGovdesi, gozStoklariSorgusu, gozStoklariCevabi, kimlikParametresi, konumAcGovdesi, panelCevabi, aylikStokDegeriCevabi, aylikStokDegeriSorgusu, stokDegeriCevabi, stokDegeriSorgusu, konumAyrintiCevabi, konumCevabi, konumDuzenleCevabi, konumDuzenleGovdesi, konumlarCevabi, konumlarSorgusu, konumMalzemeleriCevabi, konumMalzemeleriSorgusu, malKabulAyrintiCevabi,
+  depoRaflariGovdesi, gozOnerisiCevabi, haritaEslemeCevabi, haritaOzetiCevabi, topluBolumDeposuCevabi, zeminCevabi, bolumDeposuGovdesi, gozStoklariSorgusu, gozStoklariCevabi, kimlikParametresi, konumAcGovdesi, panelCevabi, aylikStokDegeriCevabi, aylikStokDegeriSorgusu, stokDegeriCevabi, stokDegeriSorgusu, konumAyrintiCevabi, konumCevabi, konumDuzenleCevabi, konumDuzenleGovdesi, konumlarCevabi, konumlarSorgusu, konumMalzemeleriCevabi, konumMalzemeleriSorgusu, malKabulAyrintiCevabi,
   malKabulCevabi, malKabulDuzeltGovdesi, malKabulGovdesi, malKabullerCevabi, malKabullerSorgusu, malzemeAyarGovdesi, malzemeAyrintiCevabi, malzemeKartBilgileriCevabi, partiBelgeParametresi, siparisIrsaliyeleriCevabi, siparisIrsaliyeleriSorgusu, sonPartilerCevabi, sonPartilerSorgusu,
   malzemelerCevabi, malzemelerSorgusu, malzemeOzetiCevabi, sayfaSorgusu, partiIziCevabi, partilerCevabi, partilerSorgusu, rafAcGovdesi,
   rafCevabi, rafDuzenleCevabi, rafDuzenleGovdesi, raflarCevabi, raflarSorgusu, rafMatrisiCevabi, sayimCevabi, sayimEsigiGovdesi, sayimFarkiOnayGovdesi, sayimFarkiRedGovdesi, sayimFarklariCevabi, sayimGovdesi, surumGovdesi, statuDegistirGovdesi, tasimaGovdesi, uretimGirisiGovdesi,
@@ -57,6 +57,7 @@ export const uclar = [
   uc({ yontem: 'GET', yol: '/stok/harita-ozeti', yetki: OKUMA, cevap: haritaOzetiCevabi, isle: ({ db }) => s.haritaOzeti(db) }),
   uc({ yontem: 'GET', yol: '/stok/zemin', yetki: OKUMA, cevap: zeminCevabi, isle: ({ db }) => s.zeminIzgarasi(db) }),
   uc({ yontem: 'POST', yol: '/stok/harita-bolumleri/:id/depo', yetki: 'stok.tanim', parametre: kimlikParametresi, govde: bolumDeposuGovdesi, cevap: haritaOzetiCevabi, isle: ({ db, parametre, govde }) => s.bolumDeposu(db, parametre.id, govde.depo) }),
+  uc({ yontem: 'POST', tekrarKorumali: true, yol: '/stok/harita-bolumleri/toplu-depo', yetki: 'stok.tanim', cevap: topluBolumDeposuCevabi, isle: ({ db }) => s.topluBolumDeposu(db) }),
   // Stok Merkezi > Depo: stok deposu bölümünün rafı ve göz kalemi (DEP-61, kart #1304). Kayıt Fabrika Haritası'nındır.
   uc({ yontem: 'POST', yol: '/stok/depo-bolumleri/:id/raflari-kaydet', yetki: 'stok.tanim', parametre: kimlikParametresi, govde: depoRaflariGovdesi, cevap: kayitCevabi, isle: ({ db, kullanici, parametre, govde }) => s.depoRaflariKaydet(db, parametre.id, govde, kullanici.id) }),
   uc({ yontem: 'POST', yol: '/stok/depo-goz-kalemleri/yaz', yetki: 'stok.tanim', govde: gozKalemiGovdesi, cevap: gozKalemiSemasi, isle: ({ db, kullanici, govde }) => s.depoGozKalemiYaz(db, govde, kullanici.id) }),

@@ -16,6 +16,7 @@ import { TesisAgaci, TUMU, type AgacSecimi } from './TesisAgaci.tsx';
 import { istasyonSecenekleri, makineGovdesi } from './tesis.ts';
 import { useTopluYaz, type TesisVerisi, type TesisYaz } from './tesisVerisi.ts';
 import { SecimKutusu, TopluCubuk } from './TopluCubuk.tsx';
+import { ilkMerkez, YeniIstasyonSecimi } from './YeniIstasyonSecimi.tsx';
 
 type DurumKodu = MakineDurumu['durum'];
 type SuzgecKodu = DurumKodu | 'girilmemis';
@@ -262,19 +263,34 @@ function SiraBasligi({ sira, aktif, sec }: { sira: Sira; aktif: Sira; sec: (s: S
 
 function MakineCokluEkle({ v, istasyon, mesgul, ret, kaydet, kapat }: {
   v: TesisVerisi; istasyon: SurumluIstasyon | undefined; mesgul: boolean; ret: string | null;
-  kaydet: (govde: { kayitlar: { kod: string; ad: string }[]; tur: string | null; istasyonId: number | null }) => void; kapat: () => void;
+  kaydet: (govde: { kayitlar: { kod: string; ad: string }[]; tur: string | null; istasyonId: number | null; yeniIstasyonIsMerkeziId?: number }) => void;
+  kapat: () => void;
 }) {
   const [tur, turYaz] = useState('');
   const [hedef, hedefYaz] = useState(istasyon?.aktif ? String(istasyon.id) : '');
+  // Her makine kendi istasyonuyla açılır (2902 madde 6); işaret kalkarsa hepsi seçilen istasyona ya da istasyonsuz eklenir.
+  const [yeni, yeniYaz] = useState(!istasyon?.aktif);
+  const [merkez, merkezYaz] = useState(() => ilkMerkez(v));
+  const [eksik, eksikYaz] = useState(false);
+  const gonder = (kayitlar: { kod: string; ad: string }[]) => {
+    const ortak = { kayitlar, tur: tur.trim() || null };
+    if (!yeni) { kaydet({ ...ortak, istasyonId: hedef === '' ? null : Number(hedef) }); return; }
+    if (merkez === '') { eksikYaz(true); return; }
+    kaydet({ ...ortak, istasyonId: null, yeniIstasyonIsMerkeziId: Number(merkez) });
+  };
   return (
     <CokluEklePenceresi baslik="Çoklu makine ekle" kodOnerisi={istasyon ? `${istasyon.kod}-M01` : 'CNC-01'} adOnerisi="CNC tezgah"
       kullanilan={new Set(v.makineler.map((x) => x.kod.toUpperCase()))} hazir mesgul={mesgul} ret={ret}
-      kaydet={(kayitlar) => kaydet({ kayitlar, tur: tur.trim() || null, istasyonId: hedef === '' ? null : Number(hedef) })} kapat={kapat}>
+      kaydet={gonder} kapat={kapat}>
       <Girdi etiket="Tür" value={tur} onChange={(o) => turYaz(o.target.value)} placeholder="CNC torna, dik işleme…" autoComplete="off" />
-      <div className="tc-alan">
-        <span className="tc-alan-etiket">İstasyon</span>
-        <AranabilirSecim etiket="Eklenecek makinelerin istasyonu" tur="istasyon" deger={hedef} bos="İstasyonsuz" secenekler={istasyonSecenekleri(v.merkezler, v.istasyonlar)} sec={hedefYaz} />
-      </div>
+      <YeniIstasyonSecimi v={v} acik={yeni} acikYaz={(a) => { yeniYaz(a); eksikYaz(false); }} merkez={merkez}
+        merkezYaz={(m) => { merkezYaz(m); eksikYaz(false); }} eksik={yeni && eksik} />
+      {!yeni && (
+        <div className="tc-alan">
+          <span className="tc-alan-etiket">İstasyon</span>
+          <AranabilirSecim etiket="Eklenecek makinelerin istasyonu" tur="istasyon" deger={hedef} bos="İstasyonsuz" secenekler={istasyonSecenekleri(v.merkezler, v.istasyonlar)} sec={hedefYaz} />
+        </div>
+      )}
     </CokluEklePenceresi>
   );
 }

@@ -970,6 +970,7 @@ describe('makineler bölümü (#1109, IS25)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Yeni makine' }));
     const pencere = await screen.findByRole('dialog', { name: 'Yeni makine' });
     fireEvent.change(within(pencere).getByLabelText(/Makine adı/), { target: { value: 'Freze Tezgahı' } });
+    fireEvent.click(within(pencere).getByRole('checkbox', { name: 'Bu makine için yeni istasyon aç' }));
     fireEvent.click(within(pencere).getByRole('button', { name: 'Kaydet' }));
     expect(await within(pencere).findByText(/İstasyon seçin; istasyonsuz makine plana iş almaz/)).toBeTruthy();
     expect(POSTLAR(cagrilar)).toHaveLength(0);
@@ -977,6 +978,47 @@ describe('makineler bölümü (#1109, IS25)', () => {
     fireEvent.click(within(pencere).getByRole('button', { name: 'Kaydet' }));
     await waitFor(() => { expect(POSTLAR(cagrilar)).toHaveLength(1); });
     expect(POSTLAR(cagrilar)[0]).toEqual({ yontem: 'POST', yol: '/makineler', govde: { kod: 'MK-1', ad: 'Freze Tezgahı', tur: null, istasyonId: 10 } });
+  });
+
+  it('2902 madde 6: istasyonu seçili olmayan yeni makine varsayılan olarak kendi istasyonuyla açılır; iş merkezi tekse seçili gelir', async () => {
+    const cagrilar = sunucuKur(YONETICI);
+    goster(<Istasyonlar />, '/istasyonlar/makineler');
+    await screen.findByRole('table', { name: 'Makineler' });
+    fireEvent.click(screen.getByRole('button', { name: 'Yeni makine' }));
+    const pencere = await screen.findByRole('dialog', { name: 'Yeni makine' });
+    expect((within(pencere).getByRole('checkbox', { name: 'Bu makine için yeni istasyon aç' }) as HTMLInputElement).checked).toBe(true);
+    expect(within(pencere).queryByRole('button', { name: 'Yeni makinenin istasyonu' })).toBeNull();
+    const merkez = within(pencere).getByLabelText(/Yeni istasyonun iş merkezi/) as HTMLSelectElement;
+    expect(merkez.value).toBe('1');
+    fireEvent.change(merkez, { target: { value: '' } });
+    fireEvent.change(within(pencere).getByLabelText(/Makine adı/), { target: { value: 'Freze Tezgahı' } });
+    fireEvent.click(within(pencere).getByRole('button', { name: 'Kaydet' }));
+    // Zorunlu seçim boşken kayıt gitmez.
+    expect(merkez.validity.valid).toBe(false);
+    expect(POSTLAR(cagrilar)).toHaveLength(0);
+    fireEvent.change(merkez, { target: { value: '1' } });
+    fireEvent.click(within(pencere).getByRole('button', { name: 'Kaydet' }));
+    await waitFor(() => { expect(POSTLAR(cagrilar)).toHaveLength(1); });
+    expect(POSTLAR(cagrilar)[0]).toEqual({
+      yontem: 'POST', yol: '/makineler', govde: { kod: 'MK-1', ad: 'Freze Tezgahı', tur: null, istasyonId: null, yeniIstasyonIsMerkeziId: 1 },
+    });
+  });
+
+  it('2902 madde 6: çoklu ekle varsayılan olarak her makineye kendi istasyonunu açtırır', async () => {
+    const cagrilar = sunucuKur(YONETICI);
+    goster(<Istasyonlar />, '/istasyonlar/makineler');
+    await screen.findByRole('table', { name: 'Makineler' });
+    fireEvent.click(screen.getByRole('button', { name: 'Çoklu ekle' }));
+    const pencere = await screen.findByRole('dialog', { name: 'Çoklu makine ekle' });
+    fireEvent.change(within(pencere).getByLabelText('İlk kod'), { target: { value: 'CNC-09' } });
+    fireEvent.change(within(pencere).getByLabelText('Adet'), { target: { value: '2' } });
+    fireEvent.change(within(pencere).getByLabelText('Ad'), { target: { value: 'Dik işleme' } });
+    fireEvent.click(within(pencere).getByRole('button', { name: '2 kayıt ekle' }));
+    await waitFor(() => { expect(POSTLAR(cagrilar)).toHaveLength(1); });
+    expect(POSTLAR(cagrilar)[0]).toEqual({
+      yontem: 'POST', yol: '/makineler/coklu-ekle',
+      govde: { kayitlar: [{ kod: 'CNC-09', ad: 'Dik işleme 1' }, { kod: 'CNC-10', ad: 'Dik işleme 2' }], tur: null, istasyonId: null, yeniIstasyonIsMerkeziId: 1 },
+    });
   });
 
   it('toplu taşıma, durum ve pasife alma seçilenleri tek komutla okunan sürümlerle gönderir; durum sürümü durum satırından, girilmemişte 0', async () => {
@@ -1039,6 +1081,7 @@ describe('makineler bölümü (#1109, IS25)', () => {
     fireEvent.change(within(pencere).getByLabelText('İlk kod'), { target: { value: 'CNC-09' } });
     fireEvent.change(within(pencere).getByLabelText('Ad'), { target: { value: 'Dik işleme' } });
     fireEvent.change(within(pencere).getByLabelText('Tür'), { target: { value: 'CNC dik' } });
+    fireEvent.click(within(pencere).getByRole('checkbox', { name: 'Bu makine için yeni istasyon aç' }));
     await seciciSec('Eklenecek makinelerin istasyonu', /T-01/, pencere);
     expect(within(pencere).getByText('CNC-11')).toBeTruthy();
     fireEvent.click(within(pencere).getByRole('button', { name: '3 kayıt ekle' }));

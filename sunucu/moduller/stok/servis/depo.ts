@@ -1,11 +1,11 @@
-import { type Db } from '#cekirdek/db.ts';
+import { type Db, kayitNoktasi } from '#cekirdek/db.ts';
 import { bulunamadi, cakisma, dogrulama, gecersiz, yetkiYok } from '#cekirdek/hata.ts';
 import { sayfaliListe } from '#cekirdek/liste.ts';
 import { surumluGuncelle } from '#cekirdek/surum.ts';
 import type { SayfaliListe } from '#paylasilan/liste.ts';
 import type {
   DepolarCevabi, Konum, KonumAyrintiCevabi, KonumlarListesi, Raf, RafAcKomutu, RafDuzenleKomutu, RafDuzenleCevabi, KonumDuzenleCevabi, RafMatrisiCevabi, RaflarListesi, YerlesimCevabi,
-  YerlesimKaydetKomutu, HaritaEslemeCevabi, HaritaOzetiCevabi, GozStoklariCevabi, KonumMalzemesi, KonumMalzemeleriListesi,
+  YerlesimKaydetKomutu, HaritaEslemeCevabi, HaritaOzetiCevabi, TopluBolumDeposuCevabi, GozStoklariCevabi, KonumMalzemesi, KonumMalzemeleriListesi,
 } from '#paylasilan/sozlesme/stok.ts';
 import type { GozKalemi, GozKalemiKaydi, KayitCevabi, RafKaydi } from '#paylasilan/sozlesme/atolye.ts';
 import { type ElleKonumTuru, type ZeminCevabi } from '#paylasilan/sozlesme/stok.ts';
@@ -13,8 +13,10 @@ import {
   alanlar as haritaAlanlari, gozAdresi as haritaGozAdresi, gozKaleminBolumu, gozKalemiSil as haritaGozKalemiSil, gozKalemiYaz as haritaGozKalemiYaz, gozler as haritaGozleri, rafYerlesimiKaydet,
   zemin as haritaZemini,
 } from '../../atolye/disari.ts';
-import { bolmeNo, rafGozleri, haritaPlani, haritaAlaniMi, depoKoduOner, konumTurDegisimEngeli, koduDegisenler } from '../kurallar.ts';
+import { bolmeNo, rafGozleri, haritaPlani, haritaAlaniMi, depoKoduOner, deposuzBolumler, konumTurDegisimEngeli, koduDegisenler } from '../kurallar.ts';
+import { aktifIstasyonlar } from '../../istasyonlar/disari.ts';
 import * as sorgular from '../sorgular.ts';
+import { istasyonKonumunuSil } from '../sorgular/depo/sorgular.ts';
 import { korumali, adlar, emirNoHaritasi, bakiyeSatiri } from './ortak.ts';
 
 // ---- Depo ve konum -----------------------------------------------------------------------------------------------------
@@ -105,7 +107,36 @@ async function haritaDurumu(db: Db) {
   const plan = haritaPlani({ gozler, alanlar, depolar, konumlar: await sorgular.haritaKonumlari(db), kodlar: new Set(await sorgular.tumKonumKodlari(db)) });
   return { gozler, alanlar, depolar, plan };
 }
+// 2902 (madde 5, karar 2903 a): aktif istasyonun stok konumu (IST-<no>, ANA depoda, adı istasyonun adı) ilk teslimi beklemez; istasyon
+// açılınca ve eşlemede açılır, açan kişinin stok yetkisine bakılmaz (konum sabit kodludur, kişi bir şey seçmez). Kodu elle başka
+// konuma verilmişse açılmaz; istasyon ilk teslimde yine aynı kuralla dener.
+async function istasyonKonumuAc(db: Db, ist: { id: number; ad: string }, kodlar: Set<string>): Promise<boolean> {
+  const kod = `IST-${ist.id}`;
+  if (kodlar.has(kod)) return false;
+  kodlar.add(kod);
+  return (await sorgular.istasyonKonumuAc(db, { depoId: await anaDepo(db), kod, ad: ist.ad.slice(0, 60), istasyonId: ist.id })) !== null;
+}
+export async function istasyonAcildiYansit(db: Db, olay: { istasyonId: number; ad: string; aktif: boolean }): Promise<void> {
+  if (!olay.aktif || (await sorgular.istasyonKonumu(db, olay.istasyonId)) !== null) return;
+  await istasyonKonumuAc(db, { id: olay.istasyonId, ad: olay.ad }, new Set(await sorgular.tumKonumKodlari(db)));
+}
+// Silinecek istasyonun konumu hiç kullanılmadıysa (hareket, bakiye, teslim yok) kalkar; kullanıldıysa bağımlı kayıt silmeyi durdurur ve
+// konum kalır, istasyon silinmez ("kullanımda").
+export async function istasyonSilinecekYansit(db: Db, olay: { istasyonId: number }): Promise<void> {
+  await kayitNoktasi(db, () => istasyonKonumunuSil(db, olay.istasyonId));
+}
+async function eksikIstasyonKonumlariniAc(db: Db): Promise<void> {
+  const istasyonlar = await aktifIstasyonlar(db);
+  if (istasyonlar.length === 0) return;
+  const olan = new Set((await sorgular.istasyonKonumlari(db, istasyonlar.map((i) => i.id))).map((k) => k.istasyonId));
+  const eksik = istasyonlar.filter((i) => !olan.has(i.id));
+  if (eksik.length === 0) return;
+  const kodlar = new Set(await sorgular.tumKonumKodlari(db));
+  for (const i of eksik) await istasyonKonumuAc(db, i, kodlar);
+}
+
 export async function haritadanEsle(db: Db): Promise<HaritaEslemeCevabi> {
+  await eksikIstasyonKonumlariniAc(db);
   const { plan } = await haritaDurumu(db);
   const idler = plan.guncelle.map((k) => k.id);
   const onceki = idler.length === 0 ? [] : await sorgular.kodDurumlari(db, { idler });
@@ -130,7 +161,9 @@ export async function haritaOzeti(db: Db): Promise<HaritaOzetiCevabi> {
   for (const a of alanlar) if (haritaAlaniMi(a.tur) && !bolumler.has(a.salonId)) bolumler.set(a.salonId, { salonId: a.salonId, kod: `Bölüm ${a.salonId}`, gozSayisi: 0 });
   const depo = new Map(depolar.flatMap((d) => (d.salonId !== null && d.aktif ? [[d.salonId, d.kod] as const] : [])));
   return {
-    ...(await sorgular.haritaBagSayilari(db)), eslenmemis: plan.ekle.length + plan.atlanan.length, bagsizKonumlar: await sorgular.haritasizKonumlar(db),
+    ...(await sorgular.haritaBagSayilari(db)), eslenmemis: plan.ekle.length + plan.atlanan.length,
+    // Elle depodan çıkarılmış bölüm sayılmaz: bilerek kapatılmıştır ve toplu komut onu açmaz.
+    deposuzYer: deposuzBolumler({ gozler, alanlar, depolar }).filter((b) => b.depoId === null).reduce((t, b) => t + b.yer, 0), bagsizKonumlar: await sorgular.haritasizKonumlar(db),
     bolumler: [...bolumler.values()].sort((x, y) => x.kod.localeCompare(y.kod, 'tr')).map((b) => ({ ...b, depoKod: depo.get(b.salonId) ?? null })),
   };
 }
@@ -182,6 +215,34 @@ export async function bolumDeposu(db: Db, salonId: number, depoOlsun: boolean): 
   }
   await haritadanEsle(db);
   return haritaOzeti(db);
+}
+
+// 2902: depo kaydı hiç olmayan bütün bölümler depo olur, sonra eşleme koşar. Elle depodan çıkarılmış bölüm (pasif depo) bilerek
+// kapatılmıştır; açılmaz, cevapta ayrı listelenir. Uç tek transaction'dır: bir bölümde kod çakışması ya da eşleme hatası olursa hiçbir
+// depo ve konum yazılmaz.
+export async function topluBolumDeposu(db: Db): Promise<TopluBolumDeposuCevabi> {
+  const { gozler, alanlar, depolar } = await haritaDurumu(db);
+  const kodlar = new Set(depolar.map((d) => d.kod));
+  const depoKodu = new Map(depolar.map((d) => [d.id, d.kod]));
+  const hepsi = deposuzBolumler({ gozler, alanlar, depolar });
+  const bolumler = hepsi.filter((b) => b.depoId === null);
+  const atlananPasifDepolar = hepsi.flatMap((b) => (b.depoId === null ? [] : [depoKodu.get(b.depoId) ?? b.kod]));
+  for (const b of bolumler) {
+    const kod = depoKoduOner(b.kod, kodlar);
+    kodlar.add(kod);
+    await korumali(() => sorgular.haritaDeposuAc(db, { salonId: b.salonId, kod, ad: b.kod }));
+  }
+  const e = await haritadanEsle(db);
+  return { acilanDepo: bolumler.length, eklenen: e.eklenen, atlanan: e.atlanan, koduDegisenler: e.koduDegisenler, ozet: await haritaOzeti(db), atlananPasifDepolar };
+}
+
+// 2902 (madde 1): her bölüm varsayılan olarak stok deposudur. Yeni bölüm, açan kişide stok.tanim varsa deposuyla açılır; yoksa
+// depo "Bütün bölümleri depo yap" ya da tek tek "Depo yap" ile açılır. Yeni bölümün gözü ve alanı yoktur, eşleme gerekmez.
+export async function bolumAcildiYansit(db: Db, olay: { salonId: number; kod: string; islemler: readonly string[] }): Promise<void> {
+  if (!olay.islemler.includes('stok.tanim')) return;
+  const depolar = await sorgular.haritaDepolari(db);
+  if (depolar.some((d) => d.salonId === olay.salonId)) return;
+  await korumali(() => sorgular.haritaDeposuAc(db, { salonId: olay.salonId, kod: depoKoduOner(olay.kod, new Set(depolar.map((d) => d.kod))), ad: olay.kod }));
 }
 
 // ---- Raf -------------------------------------------------------------------------------------------------------------------

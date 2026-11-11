@@ -137,10 +137,37 @@ async function istasyonAktifOlmali(db: Db, onceki: { istasyonId: number | null; 
   }
 }
 
+// 2902: istasyon açıldı haberi (stok istasyonun konumunu hemen açar; karar 2903 a). Stok bu modülü okur, bu modül stoku ithal edemez:
+// dinleyici sunucu/kablolama.ts'te bağlanır (ADR 0006). Olay komutla aynı işlemde verilir; dinleyicinin reddi istasyonu da geri alır.
+// Tek, çoklu ve toplu ekleme bu işlevden geçer.
+export interface IstasyonAcildiOlayi { istasyonId: number; ad: string; aktif: boolean }
+type IstasyonAcildiDinleyicisi = (db: Db, olay: IstasyonAcildiOlayi) => Promise<unknown>;
+const istasyonAcildiDinleyicileri: IstasyonAcildiDinleyicisi[] = [];
+export function istasyonAcildiDinle(d: IstasyonAcildiDinleyicisi): () => void {
+  if (!istasyonAcildiDinleyicileri.includes(d)) istasyonAcildiDinleyicileri.push(d);
+  return () => {
+    const i = istasyonAcildiDinleyicileri.indexOf(d);
+    if (i >= 0) istasyonAcildiDinleyicileri.splice(i, 1);
+  };
+}
+// Silmeden önce: istasyonun hiç kullanılmamış stok konumu kalkar (yoksa konum istasyonu silinemez kılardı). Kullanılmış konum kalır,
+// istasyon bugünkü gibi "kullanımda" diye silinmez.
+type IstasyonSilinecekDinleyicisi = (db: Db, olay: { istasyonId: number }) => Promise<unknown>;
+const istasyonSilinecekDinleyicileri: IstasyonSilinecekDinleyicisi[] = [];
+export function istasyonSilinecekDinle(d: IstasyonSilinecekDinleyicisi): () => void {
+  if (!istasyonSilinecekDinleyicileri.includes(d)) istasyonSilinecekDinleyicileri.push(d);
+  return () => {
+    const i = istasyonSilinecekDinleyicileri.indexOf(d);
+    if (i >= 0) istasyonSilinecekDinleyicileri.splice(i, 1);
+  };
+}
+
 export async function istasyonEkle(db: Db, kayit: IstasyonKaydi): Promise<SurumluIstasyon> {
   await isMerkeziAktifOlmali(db, null, kayit);
   if (kayit.sorumluKisiId !== null) await atanacakKisiyiDogrula(db, kayit.sorumluKisiId, 'sorumluKisiId');
-  return tekIstasyon(db, varOlan(await kodKorumali(() => sorgular.istasyonEkle(db, kayit)), 'İstasyon bulunamadı.'));
+  const yeni = await tekIstasyon(db, varOlan(await kodKorumali(() => sorgular.istasyonEkle(db, kayit)), 'İstasyon bulunamadı.'));
+  for (const d of [...istasyonAcildiDinleyicileri]) await d(db, { istasyonId: yeni.id, ad: yeni.ad, aktif: yeni.aktif });
+  return yeni;
 }
 
 export async function istasyonGuncelle(db: Db, id: number, kayit: IstasyonGuncellemesi): Promise<SurumluIstasyon> {
@@ -159,10 +186,20 @@ export async function istasyonGuncelle(db: Db, id: number, kayit: IstasyonGuncel
   })));
 }
 
-export const istasyonSil = (db: Db, id: number): Promise<void> =>
-  silmeKorumali(() => sorgular.istasyonSil(db, id), 'İstasyon bulunamadı.');
+export async function istasyonSil(db: Db, id: number): Promise<void> {
+  for (const d of [...istasyonSilinecekDinleyicileri]) await d(db, { istasyonId: id });
+  await silmeKorumali(() => sorgular.istasyonSil(db, id), 'İstasyon bulunamadı.');
+}
 
-export async function makineEkle(db: Db, kayit: MakineKaydi): Promise<Makine> {
+export async function makineEkle(db: Db, { yeniIstasyonIsMerkeziId, ...gelen }: MakineKaydi): Promise<Makine> {
+  let kayit = gelen;
+  if (yeniIstasyonIsMerkeziId != null) {
+    if (kayit.istasyonId !== null) throw dogrulama('İstasyon seçiliyken yeni istasyon açılmaz.', 'yeniIstasyonIsMerkeziId');
+    const ist = await istasyonEkle(db, {
+      kod: kayit.kod, ad: kayit.ad, isMerkeziId: yeniIstasyonIsMerkeziId, tip: 'talasli', sorumluKisiId: null, kapasiteKaynagi: 'makine', uretimAlani: false, aktif: kayit.aktif,
+    });
+    kayit = { ...kayit, istasyonId: ist.id };
+  }
   await istasyonAktifOlmali(db, null, kayit);
   return varOlan(await kodKorumali(() => sorgular.makineEkle(db, kayit)), 'Makine bulunamadı.');
 }
@@ -269,6 +306,7 @@ export async function makineleriEkle(db: Db, g: MakineCokluEkleGovdesi): Promise
   for (const k of g.kayitlar) {
     sonuc.push(await kayittaReddet(k.kod, null, () => makineEkle(db, {
       kod: k.kod, ad: k.ad, tur: g.tur ?? null, markaModel: null, seriNo: null, istasyonId: hedef, baglantiTuru: null, baglantiAdresi: null, aktif: true,
+      yeniIstasyonIsMerkeziId: g.yeniIstasyonIsMerkeziId ?? null,
     })));
   }
   return sonuc;
@@ -343,8 +381,9 @@ export async function topluKaydet(db: Db, g: IstasyonTopluKaydetGirdisi): Promis
       return;
     }
     if (s.islem === 'ekle') {
-      const { kayit: _k, islem: _i, satir: _s, istasyonKodu, ...kayit } = s;
-      await makineEkle(db, { ...kayit, istasyonId: istasyonKodu === null ? null : istasyonId(istasyonKodu) });
+      const { kayit: _k, islem: _i, satir: _s, istasyonKodu, yeniIstasyonIsMerkeziKodu, ...kayit } = s;
+      const yeniMerkez = yeniIstasyonIsMerkeziKodu == null ? null : kodlaBul(merkezKodlari, yeniIstasyonIsMerkeziKodu, 'yeniIstasyonIsMerkeziKodu', `İş merkezi kodu bulunamadı: ${yeniIstasyonIsMerkeziKodu}`);
+      await makineEkle(db, { ...kayit, istasyonId: istasyonKodu === null ? null : istasyonId(istasyonKodu), yeniIstasyonIsMerkeziId: yeniMerkez });
       eklenen += 1;
       return;
     }

@@ -555,6 +555,27 @@ describe('fabrika haritası', () => {
     expect(screen.queryByText(/stok konumu değil/)).toBeNull();
   });
 
+  it('2902: stok okuyana stok konumu olmayan yer sayısı (eşlenmemiş + deposuz bölüm) ve Stok > Ayarlar bağlantısı kalıcı görünür', async () => {
+    sunucuKur({ ...OKUYAN, islemler: [...OKUYAN.islemler, 'sayfa.stok'] }, { bolumler: [YERLESIM, YERLESIM_B], haritaOzeti: { ...HARITA_OZETI(1), deposuzYer: 3 } });
+    goster(<AtolyeHaritasi />);
+    const satir = await screen.findByText(/4 yer stok konumu değil/);
+    expect(within(satir).getByRole('link', { name: 'Stok > Ayarlar' }).getAttribute('href')).toBe('/stok/ayarlar');
+  });
+
+  it('2902: bütün yerler konumsa ya da stok okunmuyorsa bilgi satırı yok', async () => {
+    const cagrilar = sunucuKur(OKUYAN, { bolumler: [YERLESIM, YERLESIM_B], haritaOzeti: { ...HARITA_OZETI(1), deposuzYer: 3 } });
+    goster(<AtolyeHaritasi />);
+    expect(await screen.findAllByText(/Çalışıyor/)).toBeTruthy();
+    expect(screen.queryByText(/yer stok konumu değil/)).toBeNull();
+    expect(cagrilar.filter((c) => c.yol.startsWith('/stok/'))).toHaveLength(0);
+    cleanup();
+    sunucuKur({ ...OKUYAN, islemler: [...OKUYAN.islemler, 'sayfa.stok'] }, { bolumler: [YERLESIM, YERLESIM_B], haritaOzeti: { ...HARITA_OZETI(0), deposuzYer: 0 } });
+    goster(<AtolyeHaritasi />);
+    expect(await screen.findAllByText(/Çalışıyor/)).toBeTruthy();
+    await new Promise((r) => setTimeout(r, 50));
+    expect(screen.queryByText(/yer stok konumu değil/)).toBeNull();
+  });
+
   it('raf net ölçüleri: kat kat girilir, eksik kat uyarılır, kayıtta gövdeye gider', async () => {
     const cagrilar = sunucuKur(YAZAN, { bolumler: [YERLESIM, YERLESIM_B] });
     goster(<AtolyeHaritasi />);

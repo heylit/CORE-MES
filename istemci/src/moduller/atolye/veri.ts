@@ -158,10 +158,18 @@ export function useBolmeStoklari(rafId: number | null, bolme: number | null): Re
 export async function stokEslemeDurumu(): Promise<{ eslenmemis: number; yetimStoklu: number } | null> {
   try {
     const o = await api.get<HaritaOzetiCevabi>('/stok/harita-ozeti');
-    return { eslenmemis: o.eslenmemis, yetimStoklu: o.bagsizKonumlar.filter((k) => k.satirSayisi > 0).length };
+    return { eslenmemis: o.eslenmemis + (o.deposuzYer ?? 0), yetimStoklu: o.bagsizKonumlar.filter((k) => k.satirSayisi > 0).length };
   } catch {
     return null;
   }
+}
+
+// 2902: haritada stok konumu olmayan yer sayısı (eşlenmemiş + depo olmayan bölümdeki); sayfada kalıcı bilgi satırıdır. Stok okumayan
+// kişide istek atılmaz; okunamazsa null (satır çıkmaz).
+export function useStokKonumuOlmayanYer(): number | null {
+  const okur = useOturum().data?.islemler.some(stokOkurMu) === true;
+  const q = useQuery({ queryKey: ['atolye', 'stok-esleme-durumu'], queryFn: stokEslemeDurumu, enabled: okur });
+  return okur ? q.data?.eslenmemis ?? null : null;
 }
 
 export function useGozStogu(gozId: number | null, acik: boolean) {

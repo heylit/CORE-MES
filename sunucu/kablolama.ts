@@ -8,6 +8,7 @@ import * as cncKurulum from './moduller/cnc-kurulum/disari.ts';
 import { malzemeKartiIzleri as degisiklikKartIzleri, yururluktekiParcaRevizyonlari } from './moduller/degisiklik-yonetimi/disari.ts';
 import { malzemeKartiIzleri as finansKartIzleri } from './moduller/finans/disari.ts';
 import { aktifIstasyonlar, istasyondakiKisiler, malzemeKartiIzleri as istasyonKartIzleri } from './moduller/istasyonlar/disari.ts';
+import { istasyonAcildiDinle, istasyonSilinecekDinle } from './moduller/istasyonlar/disari.ts';
 import { istasyonCozucusuKaydet as bildirimIstasyonCozucusu } from './moduller/bildirim/disari.ts';
 import { malzemeKartiIzleri as markalamaKartIzleri } from './moduller/markalama/disari.ts';
 import * as idariIsler from './moduller/idari-isler/disari.ts';
@@ -89,6 +90,9 @@ export function sunucununBaglari(): Bag[] {
     bag('açık NCR partileri -> stok sevki', stok.acikNcrPartiCozucusu, kaliteMerkezi.acikNcrPartileri),
     bag('adım statüsü çözücüsü -> stok', stok.adimStatusuCozucusu, receteRota.adimStatusu),
     bag('makine 3B görünümü -> atölye', atolye.makineModelTuruCozucusu, cncKurulum.makineModelTurleri),
+    bag('bölüm açıldı -> stok deposu', atolye.bolumAcildiDinle, stok.bolumAcildiYansit),
+    bag('istasyon açıldı -> stok konumu', istasyonAcildiDinle, stok.istasyonAcildiYansit),
+    bag('istasyon silinecek -> kullanılmamış stok konumu', istasyonSilinecekDinle, stok.istasyonSilinecekYansit),
     bag('adım çıktısı çözücüsü -> stok', stok.adimCiktisiCozucusu, receteRota.adimCiktisi),
     bag('ara hal çözücüsü -> rota önizlemesi', rotaAraHalCozucusu, receteRota.adimAraHalleri),
     bag('statü listesi -> stok', stok.statuListesiCozucusu, receteRota.receteRotaStatuleri),

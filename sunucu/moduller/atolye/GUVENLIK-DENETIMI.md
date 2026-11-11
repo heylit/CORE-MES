@@ -15,3 +15,6 @@ Yalnız ekranda kalan kural: istasyon durum rengi ve özet sayılar istemcide ü
 Kart #1121, #1122: yeni uç yok. Harita iki var olan okuma ucunu kendi yetkisiyle çağırır (istasyonlar `GET /makine-durumlari`, üretim emirleri
 `GET /uretim-emirleri/son-olaylar`); yetkisiz kişide sunucu 403 verir, ekran bunu "yetki yok" ya da arızasız harita olarak gösterir.
 Kart #1122 (Arkon olayları): yeni uç yok; harita Arkon'un `GET /arkon/son-olaylar` ucunu okur (yetki ve iş merkezi kapsamı Arkon ucunda, #1160).
+Kart 2902 (D5): yeni uç yok. `POST /atolye/salonlar` (atolye.yaz) bölümü açtıktan sonra aynı işlemde `bolumAcildi` olayını açan kişinin
+işlemleriyle verir; stok dinleyicisi depoyu yalnız işlemlerde `stok.tanim` varsa açar (atolye.yaz tek başına stok deposu açtırmaz). İzinli:
+yönetici açınca depo var; reddeden: planlama müdürü (atolye.yaz, stok.tanim yok) açınca depo yok (`bolum-olayi.test.ts`).

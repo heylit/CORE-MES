@@ -13,6 +13,8 @@ import { secimSiniri } from './kayit-secimi.ts';
 // Varsayılan yoksa ya da işlem yoksa `yazici` null döner; çağıran bugünkü gibi Etiket Merkezi'ni açar.
 export const BAS_ISLEMI = 'etiket-merkezi.bas';
 const MERKEZDEN = "Etiket Merkezi'nden basın.";
+// Yazıcı cevap verdiyse sorun çoğu kez yazıcıdadır (kâğıt, şerit, kapalı): Merkez'de aynı yazıcı da basamaz.
+const YAZICI_HATASI = "Yazıcıyı kontrol edin ya da Etiket Merkezi'nden başka yazıcıya basın.";
 
 export function useDogrudanBasim(kayitTuru: KayitTuru): {
   yazici: CihazYazicisi | null; bas: (idler: readonly number[]) => void; basiyor: boolean;
@@ -26,8 +28,8 @@ export function useDogrudanBasim(kayitTuru: KayitTuru): {
       api.post<BasCevabi>(`/etiket-merkezi/sablonlar/${encodeURIComponent(y.sablonAnahtar)}/bas`,
         { yaziciId: y.yaziciId, adet: 1, kayit: { tur: kayitTuru, idler } }, { istekKimligi: yeniIstekKimligi(), zamanAsimiMs: 15000 }),
     onSuccess: (c, { y }) => {
-      if (c.sonuc === 'hata') bildir('hata', `${c.ileti ?? 'Yazıcı hata verdi.'} ${MERKEZDEN}`);
-      else bildir('tamam', `Etiketler ${y.yaziciAd} yazıcısına gönderildi.`);
+      if (c.sonuc === 'hata') bildir('hata', `${c.ileti ?? 'Yazıcı hata verdi.'} ${YAZICI_HATASI}`);
+      else bildir('tamam', `Etiketler gönderildi: ${y.yaziciAd}.`);
       void istemci.invalidateQueries({ queryKey: anahtarlar.baskilar });
       void istemci.invalidateQueries({ queryKey: anahtarlar.bekleyenler });
     },

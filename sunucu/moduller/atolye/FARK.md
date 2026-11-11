@@ -437,3 +437,9 @@ npm ls occt-import-js three pdfjs-dist → occt-import-js@0.0.23, three@0.186.1,
   güvenlidir (değişiklik yoksa sıfır); sonraki kayıt ya da Ayarlar düğmesi tamamlar.
 - ATL-5 bilgisi yerini doğru söyler: düğme Stok > Ayarlar'dadır. Stok tanımı olmayan kişiye "Stok yetkilisi Stok > Ayarlar'dan eşlemeli".
   Stok okuma yetkisi yoksa stok isteği atılmaz, bilgi çıkmaz. Sunucu, uç, yetki ve göç değişmedi.
+
+## Yeni bölüm stok deposuyla açılır (kart 2902, D5)
+
+- Yeni `olaylar.ts`: `BolumAcildi { salonId, kod, kisiId, islemler }`; `salonEkle` bölümü yazdıktan sonra aynı işlemde bildirir (4. argüman açan kişinin işlemleri, varsayılan boş: örnek veri ve testler değişmez). `disari.ts` `bolumAcildiDinle`.
+- Stok `disari.ts` `bolumAcildiYansit`: işlemlerde `stok.tanim` varsa bölümün deposu `depoKoduOner(kod)` ile açılır; yoksa yazılmaz. Bağ `sunucu/kablolama.ts`'te ("bölüm açıldı -> stok deposu").
+- Harita kaydında kendiliğinden eşleme (istek madde 3) aynı dosyaya ikinci olay olarak eklenir; bu dilimde yok.

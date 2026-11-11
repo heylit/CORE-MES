@@ -1,14 +1,16 @@
+import { useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { PiktogramAdi } from '#paylasilan/etiket-piktogramlari.ts';
 import { TUM_SAYFALAR } from '#paylasilan/sayfalar.ts';
 import type { AtlaCevabi, AtlaGovdesi, Bekleyen, BekleyenlerCevabi, EtiketDurumu, EtiketlerCevabi } from '#paylasilan/sozlesme/etiket-merkezi.ts';
 import { tesisSaati } from '#paylasilan/tesis-zamani.ts';
-import { Dugme, DurumKutusu, Kart, Rozet, Sekmeler, Tablo, useBildirim, type RozetTonu, type Sutun } from '../../ortak/arayuz/index.ts';
+import { Dugme, DurumKutusu, Kart, OnayPenceresi, Rozet, Sekmeler, Tablo, useBildirim, type RozetTonu, type Sutun } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { yeniIstekKimligi } from '../../ortak/veri/istek-kimligi.ts';
 import { useOturum } from '../../ortak/veri/oturum.ts';
 import { anahtarlar } from './anahtarlar.ts';
+import { useDogrudanBasim } from './HizliBas.tsx';
 import { KAYIT_BASLIKLARI, kayitSecimiYaz, secimSiniri } from './kayit-secimi.ts';
 import { Simge } from './Onizleme.tsx';
 import './etiket-merkezi.css';
@@ -104,20 +106,41 @@ function BekleyenListesi() {
       </p>
       {turler.length > 0 && (
         <div className="tc-etk-dugmeler">
-          {turler.map((t) => {
-            const idler = bekleyenler.filter((b) => b.tur === t).map((b) => b.id);
-            return (
-              <Link key={t} to={basmaAdresi(t, idler.slice(0, secimSiniri))}>
-                <Dugme tur="birincil" simge="printer">{KAYIT_BASLIKLARI[t]}: hepsini bas ({Math.min(idler.length, secimSiniri)})</Dugme>
-              </Link>
-            );
-          })}
+          {turler.map((t) => <HepsiniBas key={t} tur={t} kayitlar={bekleyenler.filter((b) => b.tur === t).slice(0, secimSiniri)} />)}
         </div>
       )}
       <Tablo etiket="Bekleyen etiketler" sutunlar={sutunlar} satirlar={bekleyenler} satirAnahtari={(b) => `${b.tur}-${String(b.id)}`}
         bosMesaj="Basılmayı bekleyen etiket yok." />
     </>
   );
+}
+
+// Bu sayının üstündeki toplu basım tek onay ister: yanlış dokunuş ya da yanlış rulo çok etiket harcar ve bekleyenleri boşaltır.
+const ONAYSIZ_EN_COK = 10;
+
+// 2916 a: bu cihazda türün varsayılan yazıcısı varsa hepsi Etiket Merkezi'ne gitmeden oraya basılır; yoksa seçili olarak Etiket bas açılır.
+// Varsayılanı başka biri seçmiş olabilir (cihaz başına), bu yüzden yazıcı adı düğmede görünür.
+function HepsiniBas({ tur, kayitlar }: { tur: Bekleyen['tur']; kayitlar: Bekleyen[] }) {
+  const dogrudan = useDogrudanBasim(tur);
+  const [soruyor, soruYaz] = useState(false);
+  const idler = kayitlar.map((b) => b.id);
+  const etiket = kayitlar.reduce((t, b) => t + b.etiketSayisi, 0);
+  const metin = `${KAYIT_BASLIKLARI[tur]}: hepsini bas (${idler.length})`;
+  const y = dogrudan.yazici;
+  if (y) {
+    const bas = () => { soruYaz(false); dogrudan.bas(idler); };
+    return (
+      <>
+        <Dugme tur="birincil" simge="printer" title={`Varsayılan yazıcı: ${y.yaziciAd} (${y.sablonAd})`}
+          yukleniyor={dogrudan.basiyor} onClick={() => { if (etiket > ONAYSIZ_EN_COK) soruYaz(true); else bas(); }}>{`${metin} · ${y.yaziciAd}`}</Dugme>
+        <OnayPenceresi acik={soruyor} baslik={`${String(etiket)} etiket ${y.yaziciAd} yazıcısına basılsın mı?`} onayMetni="Evet, bas"
+          onayla={bas} vazgec={() => soruYaz(false)}>
+          <p className="tc-etk-not">{`${KAYIT_BASLIKLARI[tur]}, ${y.sablonAd} ölçüsünde.`}</p>
+        </OnayPenceresi>
+      </>
+    );
+  }
+  return <Link to={basmaAdresi(tur, idler)}><Dugme tur="birincil" simge="printer">{metin}</Dugme></Link>;
 }
 
 function TurListesi() {

@@ -22,6 +22,7 @@ import {
   hucreKutusu, izgaraAdlari, modelParcaSayisi, odaDuvarlari, rafKutusu, rotaBul, rotaNoktasiIhlali, surumGuncelMi, yerlesimiDenetle, yerlesimiYuvarla,
 } from './kurallar.ts';
 import type { AramaAdayi, FabrikaBolumu, Kutu, MakineBilgisi, SalonOlcusu } from './kurallar.ts';
+import { bolumAcildiBildir } from './olaylar.ts';
 import * as sorgular from './sorgular.ts';
 import type { AlanSatiri, GozKalemiSatiri, KrokiKapsami, KrokiSatiri, ModelSatiri, RafSatiri, SalonSatiri } from './sorgular.ts';
 
@@ -158,10 +159,12 @@ const MAKINE_BASKA_BOLUMDE = 'Yerleştirilen makinelerden biri az önce başka b
 const RAF_KODU_KULLANILIYOR = (kodlar: string) => `Raf kodu başka salonda kullanılıyor: ${kodlar}.`;
 const SALON_KODU_KULLANILIYOR = 'Bu salon kodu kullanılıyor.';
 
-export async function salonEkle(db: Db, kayit: SalonKaydi, kisiId: number): Promise<SalonOzeti> {
+// 2902: yeni bölüm haber verir (stok, açan kişide stok.tanim varsa bölümün deposunu açar). Örnek veri ve testler işlemsiz çağırır.
+export async function salonEkle(db: Db, kayit: SalonKaydi, kisiId: number, islemler: readonly string[] = []): Promise<SalonOzeti> {
   try {
     const s = await sorgular.salonEkle(db, kayit, kisiId);
     if (s === null) throw new Error('Salon eklenemedi');
+    await bolumAcildiBildir(db, { salonId: s.id, kod: s.kod, kisiId, islemler });
     return ozet(s);
   } catch (hata) {
     if (kisitIhlali(hata)?.iz.kisit === 'atolye_salon_kod_tek') throw cakisma(SALON_KODU_KULLANILIYOR);

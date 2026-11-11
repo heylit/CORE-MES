@@ -51,7 +51,7 @@ export {
 export {
   istasyondakiEmirBakiyeleri, konumFirmasi, konumdakiParcaBakiyeleri, netStatuDonusumleri, konumdanTeslimEdilen, geriAlinmamisUretimGirisleri, firmaKonumu,
   firmaKonumuAc, firmadakiEmirler, emrinSevkBakiyeleri, geriAlinmamisSevkHareketleri, uretimGirdiKaynaklari, gozdekiKullanilamazKalite,
-  konumKaliteToplamlari, kaliteBakiyeleri, emrinIstasyonEksileri, emrinIstasyonArtilari, emrinStatuCevirmeleri, geriAlinmamisSarflar, emrinStatusuzSarfi,
+  konumKaliteToplamlari, kaliteBekleyenIstasyonKonumu, kaliteBakiyeleri, emrinIstasyonEksileri, emrinIstasyonArtilari, emrinStatuCevirmeleri, geriAlinmamisSarflar, emrinStatusuzSarfi,
   geriAlinmamisHurdaCikislari, type RezerveSatiri, rezerveKilidi, rezerveArtir, rezerveAzalt, rezerveler, tumRezerveler, statuToplami, emrinRezerveleriniSil,
   emirRezerveIstegiYaz, rezerveIsteyenEmirler, emrinNetSarfi, rezerveKaydiYaz, fasonaTasinan, type GirdiKaynagiAnahtari, uretimGirdiKaynaklariToplu,
 } from './sorgular/uretim/sorgular.ts';

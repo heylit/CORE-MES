@@ -1,12 +1,12 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
-import type { BolumDeposuGovdesi, HaritaEslemeCevabi, HaritaOzetiCevabi, KoduDegisenKonum } from '#paylasilan/sozlesme/stok.ts';
+import type { BolumDeposuGovdesi, HaritaEslemeCevabi, HaritaOzetiCevabi, KoduDegisenKonum, TopluBolumDeposuCevabi } from '#paylasilan/sozlesme/stok.ts';
 import { Dugme, DurumKutusu, Kart, Tablo, useBildirim } from '../../ortak/arayuz/index.ts';
 import { api } from '../../ortak/veri/api.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { KONUM_ETIKETI } from './gorunum.ts';
-import { hataMetni, useIslem, useStokKomutu } from './ortak.tsx';
+import { hataMetni, korumaliPost, useIslem, useStokKomutu } from './ortak.tsx';
 import { KodDegisimPenceresi } from './Etiketler.tsx';
 
 // Raf, göz ve zemin alanı Fabrika Haritası'nda tanımlanır (kart #686); stok ekranları oraya gönderir.
@@ -34,6 +34,28 @@ export function HaritaEsleDugmesi() {
   );
 }
 
+// 2902: deposu olmayan bütün bölümleri tek komutta depo yapar ve eşler; sonuç sayılarla söylenir. Deposuz bölüm yoksa görünmez.
+export function TopluDepoDugmesi({ deposuz }: { deposuz: number }) {
+  const tanimlar = useIslem('stok.tanim');
+  const { bildir } = useBildirim();
+  const [degisenler, setDegisenler] = useState<KoduDegisenKonum[]>([]);
+  const { komut } = useStokKomutu(async () => {
+    const c = await korumaliPost<TopluBolumDeposuCevabi>('/stok/harita-bolumleri/toplu-depo', {});
+    const pasif = c.atlananPasifDepolar.length > 0
+      ? ` Depodan çıkarılmış ${c.atlananPasifDepolar.length} bölüm açılmadı (${c.atlananPasifDepolar.slice(0, 5).join(', ')}); gerekirse tek tek "Depo yap".` : '';
+    bildir('bilgi', `${c.acilanDepo} bölüm depo oldu, ${c.eklenen} konum eklendi${c.atlanan.length > 0 ? `, ${c.atlanan.length} yer atlandı: ${c.atlanan.slice(0, 5).join(', ')}` : ''}.${pasif}`);
+    setDegisenler(c.koduDegisenler);
+    return c;
+  }, 'Bütün bölümler stok deposu.');
+  if (!tanimlar || deposuz === 0) return null;
+  return (
+    <>
+      <Dugme simge="layers" yukleniyor={komut.isPending} onClick={() => komut.mutate({})}>Bütün bölümleri depo yap</Dugme>
+      {degisenler.length > 0 && <KodDegisimPenceresi degisenler={degisenler} kapat={() => setDegisenler([])} />}
+    </>
+  );
+}
+
 // Ayarlar'da eşleme özeti: hangi bölüm stok deposu (yalnız onun gözleri konum olur), bağlı göz ve alan sayısı, eşlenmemiş harita
 // yeri, haritada karşılığı olmayan açık konumlar.
 export function HaritaOzeti() {
@@ -42,7 +64,7 @@ export function HaritaOzeti() {
   const [secili, setSecili] = useState<number | null>(null);
   const { komut } = useStokKomutu(({ salonId, ...g }: BolumDeposuGovdesi & { salonId: number }) => api.post<HaritaOzetiCevabi>(`/stok/harita-bolumleri/${salonId}/depo`, g), 'Bölüm güncellendi.', () => setSecili(null));
   return (
-    <Kart baslik="Fabrika Haritası eşlemesi" sag={<HaritaEsleDugmesi />}>
+    <Kart baslik="Fabrika Haritası eşlemesi" sag={<><TopluDepoDugmesi deposuz={o.data?.deposuzYer ?? 0} /><HaritaEsleDugmesi /></>}>
       {o.isError && <DurumKutusu durum="hata" mesaj={hataMetni(o.error)} yenile={() => void o.refetch()} />}
       {o.isPending && <DurumKutusu durum="yukleniyor" />}
       {o.data && (
@@ -57,7 +79,7 @@ export function HaritaOzeti() {
                   onClick={() => { setSecili(b.salonId); komut.mutate({ salonId: b.salonId, depo: b.depoKod === null }); }}>{b.depoKod ? 'Depodan çıkar' : 'Depo yap'}</Dugme>
               ) }] : []),
             ]} />
-          <p className="tc-stok-not">Yalnız stok deposu olan bölümün raf gözleri ve kabul, üretim çıkışı, depo zemini, fason alanları stok konumu olur. {o.data.bolum} bölüm, {o.data.goz} raf gözü ve {o.data.alan} alan bağlı.{o.data.eslenmemis > 0 ? ` Haritada stok konumu olmayan ${o.data.eslenmemis} yer var; "Haritadan eşle" ile eklenir.` : ''}</p>
+          <p className="tc-stok-not">Yalnız stok deposu olan bölümün raf gözleri ve kabul, üretim çıkışı, depo zemini, fason alanları stok konumu olur. {o.data.bolum} bölüm, {o.data.goz} raf gözü ve {o.data.alan} alan bağlı.{o.data.eslenmemis > 0 ? ` Haritada stok konumu olmayan ${o.data.eslenmemis} yer var; "Haritadan eşle" ile eklenir.` : ''}{(o.data.deposuzYer ?? 0) > 0 ? ` Depo olmayan bölümlerde ${o.data.deposuzYer} yer stok konumu değil; "Bütün bölümleri depo yap" ile eklenir.` : ''}</p>
           {o.data.bagsizKonumlar.length > 0 && (
             <>
               <p className="tc-stok-not">Haritada karşılığı olmayan açık konumlar ({o.data.bagsizKonumlar.length}): bunları haritada çizin ya da stoğu taşıyıp kapatın.</p>

@@ -68,3 +68,13 @@ Yalnız istemci; sunucu, sözleşme ve göç değişmedi. Bütün okumalar modü
 - Plan için: `disari.ts` `ayarYetkinlikleri(db)` → `{ kisiId, makineId }[]`, yalnız aktif makinede bugün geçerli olan. Plan bunu ayrı dalda okuyacak; bu dal plana dokunmaz.
 - Personel kartında "Ayar yapabildiği makineler" satırı: çip, "+ Ayar…" seçicisi (makine ya da istasyonun bütün makineleri), bitiş ve dayanak düzenleme.
 - VARSAYIM: ayar yetkinliği çalışma yetkinliğini şart koşmaz (ayarcı makinede üretim yapmayabilir); yetki ilkesi istasyon yetkinliğiyle aynıdır. Geri alma ucuzdur (kural IS31 tek satır).
+
+## İstasyon açıldı / silinecek haberi (kart 2902, D3)
+
+- `servis.ts`: `istasyonEkle` istasyonu yazdıktan sonra aynı işlemde `IstasyonAcildi { istasyonId, ad, aktif }` bildirir; `istasyonSil` silmeden önce `{ istasyonId }` bildirir. `disari.ts` `istasyonAcildiDinle`, `istasyonSilinecekDinle`. Dinleyen stok, bağ `sunucu/kablolama.ts`'te. Şema, uç ve yetki değişmedi.
+- Kart 2902 madde 6 (makine eklerken istasyon): `makineGovdesi` ve `makineCokluEkleGovdesi` boş olabilen `yeniIstasyonIsMerkeziId`, Excel makine ekleme
+  satırı `yeniIstasyonIsMerkeziKodu` alır. Verilirse makinenin kodu ve adıyla istasyon açılır (tip talaşlı, kapasite kaynağı makine, üretim alanı hayır)
+  ve makine ona bağlanır. "Yeni makine" ve "Çoklu ekle" pencerelerinde "Bu makine için yeni istasyon aç" işareti, ağaçta istasyon seçili değilse açık gelir;
+  Excel şablonuna "Yeni istasyonun iş merkezi" sütunu eklendi. Yeni yetki ya da göç yok.
+- VARSAYIM: Excel'de varsayılan yeni istasyon değildir; sütun doluysa açılır (boş İstasyon bugünkü gibi istasyonsuz demektir, anlamı değişmesin diye).
+  Geri alma ucuz: sütun notu ve `tesisSatiri`.

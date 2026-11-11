@@ -275,6 +275,8 @@ export type HaritaEslemeCevabi = z.output<typeof haritaEslemeCevabi>;
 // Eşleme özeti (#711): bağlı bölüm, göz ve alan sayısı; haritada olup stokta konumu olmayan yer; haritada karşılığı olmayan açık konumlar.
 export const haritaOzetiCevabi = z.object({
   bolum: z.number().int(), goz: z.number().int(), alan: z.number().int(), eslenmemis: z.number().int(),
+  // 2902: stok deposu olmayan bölümdeki raf gözü ve bölüm alanı (kabul, üretim çıkışı, depo zemini); bunlar eşlemeyle değil depo yapılınca konum olur.
+  deposuzYer: z.number().int().optional(),
   bagsizKonumlar: z.array(z.object({ id: z.number().int(), kod: z.string(), tur: z.enum(KONUM_TURLERI), satirSayisi: z.number().int() })),
   // Haritadaki bölümler; depoKod doluysa bölüm stok deposudur (yalnız onun gözleri konum olur).
   bolumler: z.array(z.object({ salonId: z.number().int(), kod: z.string(), gozSayisi: z.number().int(), depoKod: z.string().nullable() })),
@@ -291,6 +293,13 @@ export type GozStoklariCevabi = z.output<typeof gozStoklariCevabi>;
 export const bolumDeposuGovdesi = z.object({ depo: z.boolean() });
 export type BolumDeposuGovdesi = z.input<typeof bolumDeposuGovdesi>;
 export type HaritaOzetiCevabi = z.output<typeof haritaOzetiCevabi>;
+// 2902: "Bütün bölümleri depo yap": deposu olmayan bütün bölümler tek komutta depo olur, ardından eşleme koşar (tek transaction).
+export const topluBolumDeposuCevabi = z.object({
+  acilanDepo: z.number().int(), eklenen: z.number().int(), atlanan: z.array(z.string()), koduDegisenler: z.array(koduDegisenKonum), ozet: haritaOzetiCevabi,
+  // Elle depodan çıkarılmış bölümlerin depo kodları: toplu komut bunları açmaz (bilerek kapatılmıştır); tek tek "Depo yap" açar.
+  atlananPasifDepolar: z.array(z.string()),
+});
+export type TopluBolumDeposuCevabi = z.output<typeof topluBolumDeposuCevabi>;
 export const surumGovdesi = z.object({ ...beklenenSurum });
 
 export const raflarSorgusu = z.object({ ...listeSorguAlanlari(['kod']), tur: z.enum(RAF_TURLERI).optional(), metin: z.string().trim().max(10).optional() });

@@ -59,12 +59,16 @@ export function tesisTanimi(v: TesisVerisi): ExcelTanimi {
           { anahtar: 'markaModel', baslik: 'Marka / model', tur: 'metin', enUzun: 200, genislik: 24 },
           { anahtar: 'seriNo', baslik: 'Seri no', tur: 'metin', enUzun: 200 },
           { anahtar: 'istasyonKodu', baslik: 'İstasyon', tur: 'liste', liste: istasyonlar, dosyadakiSayfa: ISTASYON_SAYFASI, genislik: 30, not: 'Boşsa makine istasyonsuz kalır.' },
+          // 2902 (madde 6): yeni satırda İstasyon boşken bu iş merkezinde makinenin kodu ve adıyla istasyon açılır.
+          { anahtar: 'yeniIstasyonIsMerkeziKodu', baslik: 'Yeni istasyonun iş merkezi', tur: 'liste', liste: merkezler, dosyadakiSayfa: MERKEZ_SAYFASI, genislik: 30,
+            not: 'Yalnız yeni makinede ve İstasyon boşken: makine için bu iş merkezinde yeni istasyon açılır.' },
           { anahtar: 'baglantiTuru', baslik: 'Bağlantı türü', tur: 'liste', liste: sozluktenListe(BAGLANTI_ADLARI) },
           { anahtar: 'baglantiAdresi', baslik: 'Bağlantı adresi', tur: 'metin', enUzun: 200, not: 'Yalnız bağlantı türü seçiliyken.' },
           aktifSutunu,
         ],
         satir: (m: SurumluMakine) => ({
           kod: m.kod, ad: m.ad, tur: m.tur, markaModel: m.markaModel, seriNo: m.seriNo, istasyonKodu: m.istasyonId === null ? null : istasyonKodu.get(m.istasyonId) ?? null,
+          yeniIstasyonIsMerkeziKodu: null,
           baglantiTuru: m.baglantiTuru, baglantiAdresi: m.baglantiAdresi, aktif: m.aktif,
         }),
       }),
@@ -78,6 +82,8 @@ export function tesisSatiri(p: PlanSatiri, satir: number): TesisTopluSatiri {
   if (typeof d['sorumluKisiId'] === 'string') d['sorumluKisiId'] = Number(d['sorumluKisiId']);
   const kayit = p.kayitTuru as TesisTopluSatiri['kayit'];
   if (p.islem === 'ekle') return { kayit, islem: 'ekle', satir, ...d } as TesisTopluSatiri;
+  // Yeni istasyon yalnız eklemede açılır; güncelleme satırı bu sütunu taşımaz.
+  delete d['yeniIstasyonIsMerkeziKodu'];
   const e = p.eslesen as { id: number; surum: number };
   return { kayit, islem: 'guncelle', satir, id: e.id, surum: e.surum, ...d } as TesisTopluSatiri;
 }

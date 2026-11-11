@@ -34,7 +34,7 @@ export function EtiketMerkeziDugmesi({ tur, idler, children, simge = 'tag', turs
   if (y !== null) {
     const etiket = `${ad ?? (typeof children === 'string' ? children : 'Etiket bas')} · ${y.yaziciAd}`;
     return (
-      <Dugme tur={tursu} simge={simge} aria-label={etiket} title={`Varsayılan yazıcı: ${y.yaziciAd} (${y.sablonAd})`}
+      <Dugme tur={tursu} simge="printer" aria-label={etiket} title={`Varsayılan yazıcı: ${y.yaziciAd} (${y.sablonAd})`}
         disabled={disabled || (typeof idler !== 'function' && idler.length === 0)} yukleniyor={okunuyor || dogrudan.basiyor} onClick={(e) => {
           e.stopPropagation();
           if (typeof idler !== 'function') { dogrudan.bas(idler); return; }
