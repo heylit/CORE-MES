@@ -54,3 +54,6 @@ export {
   kapanisDefterineYaz, type KapanisEmirSatiri, kapanisEmriBul, acikKapanislar, tamamKapanisSay, tamamKapanislar, acikKolSayisi, saglamsizBitir,
   type KapanisDurumSatiri, kapanisDurumlari,
 } from './sorgular/kapanis/sorgular.ts';
+export {
+  type ElleStatuSatiri, type HazirlikOnaySatiri, elleStatuDefteri, elleStatuEkle, hazirlikOnayDefteri, hazirlikOnayiEkle, isEmriKilitle,
+} from './sorgular/adim-durumu/sorgular.ts';

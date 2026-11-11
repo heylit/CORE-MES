@@ -181,6 +181,7 @@ export const ISLEM_ADLARI: Readonly<Record<VeriIslemi, string>> = {
   'uretim-emirleri.fason': 'Fason işlemleri',
   'uretim-emirleri.ara-istasyon': 'Kendi istasyonundaki emirleri arama',
   'uretim-emirleri.hazirlik-muaf': 'Eksik hazırlık maddesini gerekçeyle geçme',
+  'uretim-emirleri.adim-durumu-yaz': 'Adım statüsünü elle yazma ve hazırlığı elle onaylama',
   'uretim-emirleri.sayim-duzelt': 'Başkasının sayımını düzeltme',
   'uretim-emirleri.kapanis-oku': 'Kapanış onaylarını görme',
   'uretim-emirleri.kapanis-kalite': 'Kapanışta kalite onayı ve reti',

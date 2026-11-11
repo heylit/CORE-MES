@@ -463,7 +463,7 @@ export async function emirAyrintisi(db: Db, id: number): Promise<EmirAyrintiCeva
 
 // 1944: rota ve adım yüzdesi. Çalışan adımın sağlamı canlı sayaçtan; çok katmanlı emirde alt düğüm adımı düğümün dal adını ve birim
 // çarpanını taşır (adımın kendi çarpanı yoksa).
-async function emrinIlerlemesi(db: Db, emirId: number, adet: number) {
+export async function emrinIlerlemesi(db: Db, emirId: number, adet: number) {
   const isEmirleri = await sorgular.isEmirleriGetir(db, [emirId]);
   if (isEmirleri.length === 0) return null;
   const sayac = new Map((await sorgular.adimSayaclariGetir(db, isEmirleri.filter((i) => i.durum === 'calisiyor').map((i) => i.id))).map((x) => [x.isEmriId, x.saglam]));

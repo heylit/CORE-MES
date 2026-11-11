@@ -835,7 +835,9 @@ describe('arkon (gerçek PostgreSQL)', () => {
       assert.ok(tamam?.secildi && tamam.zaman !== null);
       assert.equal((await baslat()).govde.eklenen, 1, 'güncel revizyonla başlar');
       await revizyonYayinla(id, pdf('bas-b'), 'bas-b.pdf');
-      assert.deepEqual((await cizimDurumu()).get(emir.id), { durum: 'suruyor', zaman: null, secildi: true }, 'yeni revizyon yayında');
+      const { surum, ...suruyor } = (await cizimDurumu()).get(emir.id) ?? {};
+      assert.deepEqual(suruyor, { durum: 'suruyor', zaman: null, secildi: true }, 'yeni revizyon yayında');
+      assert.notEqual(surum, tamam?.surum, 'sürüm yayındaki revizyonla değişir');
       const red = await baslat();
       assert.equal(red.durum, 409, JSON.stringify(red.govde));
       assert.match(JSON.stringify(red.govde), /Baslatma Revizyonu/);

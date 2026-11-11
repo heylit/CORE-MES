@@ -1,7 +1,7 @@
 import { KOD_ONEKI } from '#paylasilan/kod-sozlugu.ts';
 import { HAZIRLIK_MADDELERI, MUAF_TUTULABILEN_MADDELER, hazirlikUyarirMi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import type {
-  CalismaDurumu, EmirDurumu, EmirIlerlemesi, EmirTuru, HataliKarari, HazirlikMaddesi, IlerlemeEsasi, KapanisAsamasi, KapanisMaddeBilgisi, KapanisMaddeHali, KapanisMaddesi, KapanisOnayi,
+  AdimStatusu, CalismaDurumu, EmirDurumu, EmirIlerlemesi, EmirTuru, HataliKarari, HazirlikMaddesi, IlerlemeEsasi, KapanisAsamasi, KapanisMaddeBilgisi, KapanisMaddeHali, KapanisMaddesi, KapanisOnayi,
 } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import type { Islem } from '#paylasilan/islemler.ts';
 import type { TalimatAsamasi } from '#paylasilan/sozlesme/talimat-asamasi.ts';
@@ -1105,7 +1105,7 @@ export function talimatHazirligi(a: { toplam: number; tamam: number } | undefine
   if (a === undefined || a.toplam === 0) return { durum: 'yok', secildi: false };
   return { durum: a.tamam >= a.toplam ? 'tamam' : a.tamam > 0 ? 'suruyor' : 'yok', secildi: true };
 }
-export interface HazirlikBilgisi { durum: 'yok' | 'suruyor' | 'tamam'; secildi: boolean }
+export interface HazirlikBilgisi { durum: 'yok' | 'suruyor' | 'tamam'; secildi: boolean; surum?: string | null }
 export type HazirlikHali = 'tamam' | 'eksik' | 'muaf' | 'gerekmez' | 'bilinmiyor';
 export function hazirlikHali(bilgi: HazirlikBilgisi | undefined, muaf: boolean): HazirlikHali {
   if (bilgi === undefined) return 'bilinmiyor';
@@ -1691,4 +1691,72 @@ export function sayimMakinesi(
   if (kisiPayli) return { makineId: null };
   const makineler = [...new Set(acik.map((k) => k.makineId))];
   return { makineId: makineler.length === 1 ? makineler[0]! : null };
+}
+
+// Adım Durumu (2893). Sistem statüsü öncelik sırasıyla seçilir: bitmiş, çalışan (duruş ve duraklama dahil) ve fasondaki adım kendi
+// hâlini söyler; bekleyen adımda önce durduran eksikler (program, çizim, yayın), sonra uyaranlar (makine, malzeme), sonra önceki adım.
+// Muaf ya da elle onaylı madde eksik sayılmaz. Talep, sipariş ve firma statülerini satın alma okuması verir (D2, 2893); o gelene kadar
+// malzeme eksiği "malzeme" görünür.
+export interface AdimStatuGirdisi {
+  durum: 'bekliyor' | 'calisiyor' | 'tamam';
+  calisma: CalismaDurumu | null;
+  fasonda: boolean;
+  hal: ReadonlyMap<HazirlikMaddesi, HazirlikHali>;
+  oncekiBekleniyor: boolean;
+}
+const EKSIK_STATUSU: readonly [HazirlikMaddesi, AdimStatusu][] = [['cnc', 'program'], ['cizim', 'cizim'], ['yayin', 'yayin'], ['makine', 'makine'], ['malzeme', 'malzeme']];
+export function adimSistemStatusu(g: AdimStatuGirdisi): { statu: AdimStatusu; nedenler: string[] } {
+  const eksikler = HAZIRLIK_MADDELERI.filter((m) => g.hal.get(m) === 'eksik');
+  const nedenler = eksikler.map((m) => `${HAZIRLIK_ADI[m]} eksik`);
+  if (g.durum === 'tamam') return { statu: 'bitti', nedenler: [] };
+  if (g.durum === 'calisiyor') {
+    const statu: AdimStatusu = g.calisma === 'durdu' ? 'durdu' : g.calisma === 'durakli' ? 'duraklatildi' : 'uretimde';
+    return { statu, nedenler };
+  }
+  if (g.fasonda) return { statu: 'fasonda', nedenler };
+  if (g.oncekiBekleniyor) nedenler.push('Önceki adım bitmedi');
+  const ilk = EKSIK_STATUSU.find(([m]) => eksikler.includes(m));
+  if (ilk) return { statu: ilk[1], nedenler };
+  return { statu: g.oncekiBekleniyor ? 'onceki' : 'baslayabilir', nedenler };
+}
+
+// Önceki adım: dal öncülleri varsa onlar, yoksa sıraca önceki adımlar. Bekleyen bağımlılıkta öncül bitmeli, akışlıda başlamış olmalı;
+// bağımsız adım beklemez.
+export function oncekiBekleniyor(
+  adim: { sira: number; bagimlilik: 'bekleyen' | 'akisli' | 'bagimsiz'; oncul: readonly number[] | null },
+  hepsi: readonly { id: number; sira: number; durum: 'bekliyor' | 'calisiyor' | 'tamam' }[],
+): boolean {
+  if (adim.bagimlilik === 'bagimsiz') return false;
+  const oncekiler = adim.oncul === null ? hepsi.filter((h) => h.sira < adim.sira) : hepsi.filter((h) => adim.oncul?.includes(h.id));
+  return adim.bagimlilik === 'bekleyen' ? oncekiler.some((o) => o.durum !== 'tamam') : oncekiler.some((o) => o.durum === 'bekliyor');
+}
+
+// Açık elle statü: iş emrinin son satırı 'yaz' ve yazıldığı andaki sistem statüsü bugünküyle aynıysa. Sistem statüsü değişince düşer.
+export function acikElleStatu<T extends { olay: 'yaz' | 'kaldir'; sistemStatusu: string | null }>(defter: readonly T[], sistem: AdimStatusu): T | null {
+  const son = defter.at(-1);
+  return son !== undefined && son.olay === 'yaz' && son.sistemStatusu === sistem ? son : null;
+}
+
+// Açık onay: (iş emri, madde) başına son satır 'onay' ise. Onaylanan sürüm biliniyorsa ve madde başka sürüme geçtiyse geçmez (Atölye, 2893).
+export function acikOnaylar<T extends { madde: string; olay: 'onay' | 'kaldir' }>(defter: readonly T[]): Map<string, T> {
+  const son = new Map<string, T>();
+  for (const s of defter) son.set(s.madde, s);
+  return new Map([...son].filter(([, s]) => s.olay === 'onay'));
+}
+export const onayGecerliMi = (onaylananSurum: string | null, guncelSurum: string | null | undefined): boolean =>
+  onaylananSurum === null || guncelSurum == null || onaylananSurum === guncelSurum;
+
+export const STATU_ESKIDI = 'Adımın durumu bu arada değişti. Güncel durumu görüp yeniden yazın.';
+export const HAL_ESKIDI = 'Maddenin hâli bu arada değişti. Güncel hâli görüp yeniden onaylayın.';
+export const GEREKCE_GEREK = 'Bu madde eksikken iş emrini durdurur; elle onay için gerekçe yazın.';
+export const ONAY_GEREKSIZ = 'Madde tamam, muaf ya da gerekmiyor; onaya gerek yok.';
+export const ONAY_YOK = 'Bu maddede açık elle onay yok.';
+export const ELLE_STATU_YOK = 'Bu adımda elle yazılmış statü yok.';
+export const ADIM_KAPALI_EMIR = 'Biten ya da iptal edilen emirde adım durumu yazılmaz.';
+export const IS_EMRI_EMIRDE_YOK = 'İş emri bu emirde yok.';
+// 2893-2 b: elle onay durduran maddede başlatmayı açar; bu yüzden gerekçe zorunludur. Tamam, muaf ya da gerekmeyen madde onaylanmaz.
+export function hazirlikOnayiReddi(madde: HazirlikMaddesi, hal: HazirlikHali, gerekce: string | null): string | null {
+  if (hal === 'tamam' || hal === 'gerekmez' || hal === 'muaf') return ONAY_GEREKSIZ;
+  if (!hazirlikUyarirMi(madde) && (gerekce === null || gerekce === '')) return GEREKCE_GEREK;
+  return null;
 }

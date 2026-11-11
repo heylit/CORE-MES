@@ -8,7 +8,7 @@ import { ACIK_EMIR_DURUMLARI } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { adimlardanGorunum, SAYIM_DUZELTME_ISLEMI } from './kurallar.ts';
 import * as isEmri from './is-emri-servis.ts';
 import * as servis from './servis.ts';
-import { hazirlikCozucusuKaydet } from './hazirlik.ts';
+import { elleOnaylar, hazirlikCozucusuKaydet } from './hazirlik.ts';
 import type { HazirlikCozucusu } from './hazirlik.ts';
 import { kapanisCozucusuKaydet } from './kapanis.ts';
 import type { KapanisCozucusu } from './kapanis.ts';
@@ -637,3 +637,10 @@ export type { DieAcGirdisi } from './dis-islem-emri.ts';
 // 2769: sıra dışı başlamış adımların öncül durumu (arkon eksik iş AR-EK-8).
 export type { GeridekiOncul } from './servis.ts';
 export const geridekiOnculler = (db: Db, isEmriIdleri: readonly number[]): Promise<servis.GeridekiOncul[]> => servis.geridekiOnculler(db, isEmriIdleri);
+
+// Arkon kayıt kapısı (2893-2 b): iş emri başına açık elle onaylı maddeler, madde -> onaylanan sürüm (bilinmiyorsa null). Sürümün
+// geçerliliğine kapı kendisi bakar (çizim revizyonu Arkon'dadır). Yetki çağıranın işidir.
+export async function elleOnayliMaddeler(db: Db, isEmriIdleri: readonly number[]): Promise<Map<number, Map<string, string | null>>> {
+  const onay = await elleOnaylar(db, isEmriIdleri);
+  return new Map([...onay].map(([i, m]) => [i, new Map([...m].map(([madde, x]) => [madde, x.onaylananSurum]))]));
+}

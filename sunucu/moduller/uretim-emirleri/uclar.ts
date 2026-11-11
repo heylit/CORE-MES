@@ -9,8 +9,10 @@ import {
   birlesmePlaniGovdesi, ekAdimGovdesi, ekAdimKaldirGovdesi, hazirlikCevabi, hazirlikMuafiyetiGovdesi, hazirlikOzetiCevabi, hazirlikOzetiSorgusu, refakatKartiCevabi, katilimCevabi, rotasizAdimDuzenleGovdesi, rotasizAdimEkleGovdesi, rotasizAdimSilGovdesi, rotasizEmirCevabi, rotasizEmirGovdesi, acilisSecenekleriCevabi, acilisSecenekleriSorgusu, makineDevralGovdesi, makineEkleGovdesi, adimPaylariCevabi, durusDagilimiCevabi, sonOlaylarCevabi, sonOlaylarSorgusu, gunlukUretimCevabi, panelSorgusu, sureOzetiCevabi,
   hataliCevabi, hataliGovdesi, hataliListeCevabi, hataliListeSorgusu, reworkAdimiGovdesi,
   disIslemEmriAcGovdesi, disIslemEmriCevabi, disIslemEmriIptalGovdesi, disIslemEmriParametresi,
+  adimDurumuCevabi, adimDurumuTerminalCevabi, elleStatuGovdesi, elleStatuKaldirGovdesi, hazirlikOnayiGovdesi, hazirlikOnayiKaldirGovdesi,
   arsivOnizlemeCevabi, arsiveAlCevabi, arsiveAlGovdesi, emirKapatGovdesi, kapanisCevabi, kapanisGeriAcGovdesi, kapanisListeCevabi, kapanislarSorgusu, kapanisMuafGovdesi, kapanisOnayGovdesi, kapanisRetGovdesi,
 } from '#paylasilan/sozlesme/uretim-emirleri.ts';
+import { adimDurumu, adimDurumuTerminal, elleStatuKaldir, elleStatuYaz, hazirlikOnayKaldir, hazirlikOnayla } from './adim-durumu.ts';
 import { aramaUclari } from './arama/uclar.ts';
 import * as isEmri from './is-emri-servis.ts';
 import { emirleriTopluGuncelle } from './toplu-guncelle.ts';
@@ -30,6 +32,8 @@ const ADIMLI_OZET_OKUMA = { biri: [...ADIMLI_OKUMA_ISLEMLERI, 'plan.oku'] } as c
 // Katılımları ve emrin ayrıntısını terminaldeki kişi de listeyi okuyan da görür.
 const KATILIM_OKUMA = { biri: [...ADIMLI_OKUMA_ISLEMLERI, 'terminal.uret'] } as const;
 // Açık emir listesini Stok'un emir seçicisi ve Fabrika Haritası da okur; terminal listeyi kullanmaz, emirle işi olmayan rol okumaz.
+// Adım Durumu (2893-5 a): kendi sayfası olan okuma; emri gören de okur.
+const ADIM_DURUMU_OKUMA = { biri: [...ADIMLI_OKUMA_ISLEMLERI, 'sayfa.adim-durumu'] } as const;
 const LISTE_OKUMA = { biri: [...ADIMLI_OKUMA_ISLEMLERI, 'sayfa.stok', 'sayfa.atolye'] } as const;
 
 const emirUclari = [
@@ -260,6 +264,63 @@ const adimliUclar = [
     govde: hazirlikMuafiyetiGovdesi,
     cevap: hazirlikCevabi,
     isle: ({ db, kullanici, parametre, govde }) => muafiyetVer(db, kullanici, parametre.id, govde),
+  }),
+  // Adım Durumu (2893): okuma emri görene, terminal okuması (2893-3 b) operatöre de; yazma yalnız müdür ve planlama rollerine (2893-1 a).
+  uc({
+    yontem: 'GET',
+    yol: '/adimli-emirler/:id/adim-durumu',
+    yetki: ADIM_DURUMU_OKUMA,
+    parametre: emirParametresi,
+    cevap: adimDurumuCevabi,
+    isle: ({ db, parametre }) => adimDurumu(db, parametre.id),
+  }),
+  uc({
+    yontem: 'GET',
+    yol: '/adimli-emirler/:id/adim-durumu/terminal',
+    yetki: { biri: [...KATILIM_OKUMA.biri, 'sayfa.adim-durumu'] },
+    parametre: emirParametresi,
+    cevap: adimDurumuTerminalCevabi,
+    isle: ({ db, parametre }) => adimDurumuTerminal(db, parametre.id),
+  }),
+  uc({
+    yontem: 'POST',
+    yol: '/adimli-emirler/:id/is-emirleri/:isEmriId/statu-yaz',
+    yetki: 'uretim-emirleri.adim-durumu-yaz',
+    parametre: isEmriParametresi,
+    govde: elleStatuGovdesi,
+    cevap: adimDurumuCevabi,
+    tekrarKorumali: true,
+    isle: ({ db, kullanici, parametre, govde }) => elleStatuYaz(db, kullanici, parametre.id, parametre.isEmriId, govde),
+  }),
+  uc({
+    yontem: 'POST',
+    yol: '/adimli-emirler/:id/is-emirleri/:isEmriId/statu-kaldir',
+    yetki: 'uretim-emirleri.adim-durumu-yaz',
+    parametre: isEmriParametresi,
+    govde: elleStatuKaldirGovdesi,
+    cevap: adimDurumuCevabi,
+    tekrarKorumali: true,
+    isle: ({ db, kullanici, parametre }) => elleStatuKaldir(db, kullanici, parametre.id, parametre.isEmriId),
+  }),
+  uc({
+    yontem: 'POST',
+    yol: '/adimli-emirler/:id/is-emirleri/:isEmriId/hazirlik-onayla',
+    yetki: 'uretim-emirleri.adim-durumu-yaz',
+    parametre: isEmriParametresi,
+    govde: hazirlikOnayiGovdesi,
+    cevap: adimDurumuCevabi,
+    tekrarKorumali: true,
+    isle: ({ db, kullanici, parametre, govde }) => hazirlikOnayla(db, kullanici, parametre.id, parametre.isEmriId, govde),
+  }),
+  uc({
+    yontem: 'POST',
+    yol: '/adimli-emirler/:id/is-emirleri/:isEmriId/hazirlik-onay-kaldir',
+    yetki: 'uretim-emirleri.adim-durumu-yaz',
+    parametre: isEmriParametresi,
+    govde: hazirlikOnayiKaldirGovdesi,
+    cevap: adimDurumuCevabi,
+    tekrarKorumali: true,
+    isle: ({ db, kullanici, parametre, govde }) => hazirlikOnayKaldir(db, kullanici, parametre.id, parametre.isEmriId, govde),
   }),
   uc({
     yontem: 'POST',

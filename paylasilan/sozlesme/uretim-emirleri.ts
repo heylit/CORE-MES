@@ -1023,3 +1023,80 @@ export const arsiveAlCevabi = adimliEmirCevabi;
 export type ArsivOnizlemeCevabi = z.output<typeof arsivOnizlemeCevabi>;
 export type ArsiveAlGovdesi = z.input<typeof arsiveAlGovdesi>;
 export type ArsiveAlCevabi = z.output<typeof arsiveAlCevabi>;
+
+// Adım Durumu (2893): her iş emrinin son durumu tek statüyle. Statüyü sunucu emrin, hazırlığın ve çalışmanın hâlinden türetir;
+// yetkili kişi statüyü elle yazabilir (sistem statüsü değişince elle statü düşer) ve hazırlık maddesini elle onaylayabilir
+// (2893-2 b: elle onay durduran maddede de başlatmayı açar; gerekçe zorunludur). Yazma `uretim-emirleri.adim-durumu-yaz` (2893-1 a).
+// Sıra öncelik sırasıdır: bir adımda birden çok neden varsa görünen statü listede önce gelenidir (bitti en sonda değil, ilk denetlenir).
+export const ADIM_STATULERI = [
+  'bitti', 'uretimde', 'duraklatildi', 'durdu', 'fasonda', 'program', 'cizim', 'yayin', 'makine', 'talep', 'siparis', 'malzeme', 'firma',
+  'baslayabilir', 'onceki', 'diger',
+] as const;
+export const adimStatusu = z.enum(ADIM_STATULERI);
+export const ADIM_DURUMU_OLAYLARI = ['statu', 'statu-kaldir', 'onay', 'onay-kaldir'] as const;
+// Durduran maddede gerekçe zorunlu; uyaran maddede boş olabilir (sunucu kuralı, kurallar.ts).
+const kisaNot = z.string().trim().max(500).nullable();
+export const elleStatuGovdesi = z.object({
+  statu: adimStatusu,
+  not: kisaNot,
+  // İstemcinin gördüğü sistem statüsü; sunucudakiyle aynı değilse yazılmaz (409), kişi güncel durumu görüp yeniden karar verir.
+  sistemStatusu: adimStatusu,
+}).strict();
+export const elleStatuKaldirGovdesi = z.object({}).strict();
+export const hazirlikOnayiGovdesi = z.object({
+  madde: hazirlikMaddesi,
+  gerekce: kisaNot,
+  // İstemcinin gördüğü madde hâli; değişmişse yazılmaz (409).
+  sistemHali: hazirlikHaliSemasi,
+}).strict();
+export const hazirlikOnayiKaldirGovdesi = z.object({ madde: hazirlikMaddesi }).strict();
+export const adimDurumuCevabi = z.object({
+  emirId: KIMLIK,
+  emirNo: z.string(),
+  urun: z.object({ kod: z.string(), ad: z.string() }),
+  adet: z.number().int().positive(),
+  teslim: tarihSemasi.nullable(),
+  durum: emirDurumu,
+  // Rota ilerlemesi (1944); iş emri olmayan emirde null.
+  rotaYuzde: yuzdeSemasi.nullable(),
+  // Emir geneli matris (2060 a); elle onaylı madde hâli 'muaf'tır, onay ayrıntısı adımın `onaylar` listesindedir.
+  hazirlik: hazirlikCevabi,
+  adimlar: z.array(z.object({
+    isEmriId: KIMLIK,
+    opNo: z.number().int(),
+    ad: z.string(),
+    durum: isEmriDurumu,
+    calisma: calismaDurumu.nullable(),
+    bagimlilik: z.enum(BAGIMLILIKLAR),
+    fason: z.boolean(),
+    hedef: z.number().int().nonnegative(),
+    yapilan: z.number().int().nonnegative(),
+    yuzde: yuzdeSemasi,
+    sistemStatusu: adimStatusu,
+    // Sistem statüsünün nedenleri, önce gelen önce; boş olabilir.
+    nedenler: z.array(z.string()),
+    // Adımın madde hâlleri (emir düzeyindeki madde emrin bilgisi, onay adımın); ham onaysız hâldir: elle onayın neyi açtığını gösterir.
+    maddeler: z.array(z.object({ madde: hazirlikMaddesi, hal: hazirlikHaliSemasi, ham: hazirlikHaliSemasi })),
+    elle: z.object({ statu: adimStatusu, not: z.string().nullable(), kisiAdi: z.string().nullable(), zaman: zamanSemasi }).nullable(),
+    onaylar: z.array(z.object({
+      madde: hazirlikMaddesi, gerekce: z.string().nullable(), sistemHali: hazirlikHaliSemasi, kisiAdi: z.string().nullable(), zaman: zamanSemasi,
+    })),
+    gecmis: z.array(z.object({
+      olay: z.enum(ADIM_DURUMU_OLAYLARI), deger: z.string(), not: z.string().nullable(), kisiAdi: z.string().nullable(), zaman: zamanSemasi,
+    })),
+  })),
+});
+// Terminal okuması (2893-3 b): operatör yalnız statüyü, nedeni ve elle yazılmış statünün kendisini görür; kişi adı, gerekçe ve geçmiş yok.
+export const adimDurumuTerminalCevabi = z.object({
+  emirId: KIMLIK,
+  adimlar: z.array(z.object({
+    isEmriId: KIMLIK, opNo: z.number().int(), ad: z.string(), statu: adimStatusu, elle: z.boolean(), yuzde: yuzdeSemasi,
+    nedenler: z.array(z.string()),
+  })),
+});
+export type AdimStatusu = z.output<typeof adimStatusu>;
+export type ElleStatuGovdesi = z.output<typeof elleStatuGovdesi>;
+export type HazirlikOnayiGovdesi = z.output<typeof hazirlikOnayiGovdesi>;
+export type HazirlikOnayiKaldirGovdesi = z.output<typeof hazirlikOnayiKaldirGovdesi>;
+export type AdimDurumuCevabi = z.output<typeof adimDurumuCevabi>;
+export type AdimDurumuTerminalCevabi = z.output<typeof adimDurumuTerminalCevabi>;
