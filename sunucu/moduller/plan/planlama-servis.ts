@@ -33,7 +33,7 @@ import { planGirdisi, yeniCalisma, type KaynakOkumasi } from './plan-girdisi.ts'
 import {
   acikSiparisSatirlari, type AcikSiparisGelisi, ayarCevir, bitisAkisiEkle, calisanAdimlariCevir, gerekenTarihler, planAni, planGunu, planSaati,
 } from './planlama-kurallar.ts';
-import { maliyetiGeriKoy, maliyetsizCalisma } from './maliyet-gizleme.ts';
+import { type Gorunum, maliyetiGeriKoy, maliyetsizCalisma } from './maliyet-gizleme.ts';
 import { satinAlmaCalismasi } from './satin-alma-gorunumu.ts';
 import { emirTutari, satirKuru } from './kurallar.ts';
 import { calisanAdimlar, canliOzeti, okumaBellegiyle, planFinansmanOrani, planGenelGiderSaatBasi, planlanacakIsler, type PlanGenelGideri } from './servis.ts';
@@ -61,29 +61,35 @@ export function planlamaYazmaDenetimi(kullanici: Kullanici, anahtar: string): vo
 }
 
 // Fiyat ve maliyet görünümü (223 a, 2601 a): maliyet okumayana planlama çalışmasının para alanları gitmez, yazarken kayıttakiler geri konur.
+// 2897: sipariş geliri ve gelirden türeyen TL ayrıca sipariş fiyatını okuma yetkisini ister (siparisler 180).
 const MALIYET_OKUMA = 'finans.maliyet-oku';
-const maliyetGorur = (kullanici: Kullanici): boolean => islemVarMi(kullanici, MALIYET_OKUMA);
+const FIYAT_OKUMA = 'siparisler.fiyat-oku';
+const gorunum = (kullanici: Kullanici): Gorunum => {
+  const maliyet = islemVarMi(kullanici, MALIYET_OKUMA);
+  return { maliyet, gelir: maliyet && islemVarMi(kullanici, FIYAT_OKUMA) };
+};
+const hepsiniGorur = (g: Gorunum): boolean => g.maliyet && g.gelir;
 
 // Kayıt metin biçimliyse (yerel depo değeri) JSON'u süzülüp yeniden metne çevrilir; okunamayan metin olduğu gibi kalmaz, düşer.
-function kayitSuz<T extends { anahtar: string; bicim: string; deger?: unknown }>(k: T): T {
+function kayitSuz<T extends { anahtar: string; bicim: string; deger?: unknown }>(k: T, g: Gorunum): T {
   if (k.bicim === 'metin') {
     const d = kayitDegeri(k);
-    return { ...k, deger: d === null ? null : JSON.stringify(maliyetsizCalisma(d)) };
+    return { ...k, deger: d === null ? null : JSON.stringify(maliyetsizCalisma(d, g)) };
   }
-  return { ...k, deger: maliyetsizCalisma(k.deger) };
+  return { ...k, deger: maliyetsizCalisma(k.deger, g) };
 }
 
 // Maliyet okumayanın yazdığı çalışmaya kayıttaki para alanları geri konur (yazma yalnız json'dur, 2747).
-const paraAlanlariniKoru = (deger: unknown, eski: unknown): unknown => maliyetiGeriKoy(deger, eski);
+const paraAlanlariniKoru = (deger: unknown, eski: unknown, g: Gorunum): unknown => maliyetiGeriKoy(deger, eski, g);
 
 export async function planlamaKayitlari(db: Db, kullanici: Kullanici): Promise<KayitlarCevabi> {
   const kayitlar = await sorgular.planlamaKayitlari(db);
-  const gorur = maliyetGorur(kullanici);
+  const g = gorunum(kullanici);
   return {
     kayitlar: kayitlar.map((k) => {
       if (k.anahtar !== PLANLAMA_ANAHTARI) return k;
       const s = { ...k, deger: saklanmayanKayitDegeri(k.bicim, k.deger) };
-      return gorur ? s : kayitSuz(s);
+      return hepsiniGorur(g) ? s : kayitSuz(s, g);
     }),
   };
 }
@@ -100,7 +106,8 @@ export async function planlamaYaz(db: Db, kullanici: Kullanici, g: PlanlamaYazGo
   // Bitiş tarihi akışını sunucu yazar (455/2 a); eklenen satırlarla değer yeniden boyut denetiminden geçer.
   const calisma = g.anahtar === PLANLAMA_ANAHTARI && g.bicim === 'json';
   const onceki = calisma && mevcut !== null ? (await sorgular.planlamaKaydi(db, g.anahtar))?.deger : null;
-  const gelen = calisma && !maliyetGorur(kullanici) ? paraAlanlariniKoru(g.deger, onceki ?? null) : g.deger;
+  const gor = gorunum(kullanici);
+  const gelen = calisma && !hepsiniGorur(gor) ? paraAlanlariniKoru(g.deger, onceki ?? null, gor) : g.deger;
   const deger = calisma ? bitisAkisiEkle(saklanmayanAlanlariCikar(gelen), onceki, kullanici.ad, Date.now()) : g.deger;
   if (deger !== g.deger && degerCokBuyukMu(deger)) throw cokBuyuk(BUYUK_ILETISI);
   const satir = { anahtar: g.anahtar, bicim: g.bicim, deger, kisiId: kullanici.id };
@@ -401,7 +408,7 @@ export async function planlamaCalismasi(db: Db, kullanici: Kullanici, simdi: num
   // 2728 a: brüt (göçten önceki kayıtta kalmış olsa da) sayfaya gitmez.
   const calisma = mesaiSaatiniCikar(brutAlanlariniCikar(calismayaMotorAyari(g.S, degerler, fin, olcek, undefined, gg)));
   return {
-    calisma: (maliyetGorur(kullanici) ? calisma : maliyetsizCalisma(calisma)) as PlanlamaCalismasiCevabi['calisma'],
+    calisma: maliyetsizCalisma(calisma, gorunum(kullanici)) as PlanlamaCalismasiCevabi['calisma'],
     surum: k.surum, kaynakDegisikligi: g.kaynakDegisikligi ?? null,
   };
 }
