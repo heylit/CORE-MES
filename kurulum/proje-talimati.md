@@ -47,6 +47,7 @@ KURALLAR
 AKIS HIZI (kullanici 09.11.2026; tekrar etmesin diye kalici)
 - Birlesme zinciri yok (gocler haric, 1865 a: gocler sirayla birlesmeye devam eder): birbirine dosya ya da sema bagimliligi olmayan yamalar ayri cekme istegiyle, hazir olan once birlesir. Zincire yalniz DOGRULANDI bagimlilik girer; Birlestirici bagimliligi DEVIR.md'de yazar.
 - Once karar, sonra kod: yazar onizlemede o isin acik sorularinin hepsini tek seferde listeler; Soru Merkezi bunlari ayni turda kart yapar. Kod, o isin kartlari kapaninca yazilir. Yazim sirasinda cikan yeni soru ise durdurur ve ayni yolla gider.
+- Is basina tek onay karti (3019 a): bir isin on izlemesi hazir olunca kullaniciya o is icin tek karar karti gider: a) Boyle gelsin, b) Su maddeler degissin (maddeler kartta), c) Simdi yapilmasin, d) Bilmiyorum. Kart on izlemenin basindaki "Ne degisti" listesini aynen tasir; listede olmayan degisiklik birlesmez. ONAY'daki sorulan turler (veri silen ya da donusturen goc, yetki modeli, kirmizi cizgi, yeni paket, onayli kararla celisme) yine ayri kartla sorulur.
 - DEVIR toplu esitlenir: ayni turda gelen kararlar ve kayitlar tek yamada islenir; ayri ayri yama acilmaz.
 - On bakis en cok iki kisi kalir: sahip uzman ve Test. Guvenlik ve Veri yalniz kendi konularinda ek on bakis yapar (Guvenlik: yetki, goc, para ya da veri acan yamalar). Kapatilmis konu on bakis bekletmez.
 - Serbest yazi isteyen soru gonderilmez; her soru secenekli karar kartiyla sorulur.
