@@ -80,6 +80,14 @@ describe('rota kuralları', () => {
     expect(islemSuresiEksik([adim('a', 10, { proc: 1 })])).toBeNull();
   });
 
+  it('dallı rotada adım ardıllarının en büyük fire yolunu taşır; paralel dalın firesi öteki dalı büyütmez (sunucu RT-43 dallı örnekleri, B-2502-1)', () => {
+    const d = (id: string, seq: number, rejectPct: number, dal: string | null, birlesen: string[] = []) => adim(id, seq, { rejectPct, dal, birlesen });
+    expect(adimCarpanlari([d('a', 10, 0, 'A'), d('b', 20, 50, 'B'), d('c', 30, 0, null, ['A', 'B'])])).toEqual([1, 2, 1]);
+    expect(adimCarpanlari([d('e', 5, 0, null), d('a', 10, 50, 'A'), d('b', 20, 20, 'B'), d('c', 30, 0, null, ['A', 'B'])])).toEqual([2, 2, 1.25, 1]);
+    // Dal bilgisi olmayan tek hat zincir çarpar.
+    expect(adimCarpanlari([adim('a', 10, { rejectPct: 50 }), adim('b', 20, { rejectPct: 50 })])).toEqual([4, 2]);
+  });
+
   it('fire payı önceki adımları büyütür; bilinmeyen birim maliyet toplamı bilinmez yapar', () => {
     expect(adimCarpanlari([adim('a', 10), adim('b', 20, { rejectPct: 50 })])).toEqual([2, 2]);
     const kartlar = new Map([['1', malzeme('1', 'mamul')], ['2', malzeme('2', 'ham')], ['3', malzeme('3', 'ham')]]);
