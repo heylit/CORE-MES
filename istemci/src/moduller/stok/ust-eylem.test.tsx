@@ -307,6 +307,34 @@ describe('Malzeme · Teslim üst çubuk düğmesi', () => {
     expect(screen.queryByRole('button', { name: /Rotaya göre gönder/ })).toBeNull();
   });
 
+  it('2920 a: yoldaki teslimler Okut ilk ekraninda tek kartta; hepsini al gonderilen miktarla her birini ayri alir', async () => {
+    const IKINCI: Teslim = { ...GELEN, id: 42, no: 'TS-000042', malzemeAd: 'Deneme flans', miktar: '1.000', surum: 2 };
+    const istekler = ciz({ 'POST /stok/teslimler/41/teslim-al': () => json(200, { teslim: GELEN }), 'POST /stok/teslimler/42/teslim-al': () => json(200, { teslim: IKINCI }) },
+      { ...KUTU, gelenler: [GELEN, IKINCI] });
+    fireEvent.click(await screen.findByRole('button', { name: /^Okut(,|$)/ }));
+    const kart = await screen.findByRole('group', { name: 'Yoldaki teslimler' });
+    expect(within(kart).getByText('2 teslim seni bekliyor')).toBeTruthy();
+    expect(within(kart).getByText(/Deneme mil · 3, Deneme flans · 1/)).toBeTruthy();
+    fireEvent.click(within(kart).getByRole('button', { name: 'Hepsini al' }));
+    await waitFor(() => expect(istekler.filter((i) => i.yontem === 'POST')).toHaveLength(2));
+    expect(istekler.filter((i) => i.yontem === 'POST').map((i) => [i.yol, i.govde])).toEqual([
+      ['/stok/teslimler/41/teslim-al', { surum: 1, alinan: '3.000' }], ['/stok/teslimler/42/teslim-al', { surum: 2, alinan: '1.000' }],
+    ]);
+    expect(await screen.findByText('2 teslim alındı.')).toBeTruthy();
+  });
+
+  it('2920 a: yolda teslim yoksa kart cikmaz; tek tek bak Bana gelen ekranini acar', async () => {
+    ciz({}, { ...KUTU, gelenler: [] });
+    fireEvent.click(await screen.findByRole('button', { name: /^Okut(,|$)/ }));
+    await screen.findByRole('region', { name: 'Seni bekleyen' });
+    expect(screen.queryByRole('group', { name: 'Yoldaki teslimler' })).toBeNull();
+    cleanup();
+    ciz({});
+    fireEvent.click(await screen.findByRole('button', { name: /^Okut(,|$)/ }));
+    fireEvent.click(within(await screen.findByRole('group', { name: 'Yoldaki teslimler' })).getByRole('button', { name: 'Tek tek bak' }));
+    expect(await screen.findByRole('heading', { name: 'Bana gelenler' })).toBeTruthy();
+  });
+
   it('teslim al: onceki istasyonda bekleyen parca miktarla cekilir (kart #1289)', async () => {
     const gelecek: GelecekSepetCevabi = { satirlar: [{ ...SEPET.satirlar[0]!, sonraki: { istasyonId: 2, kod: 'F2', ad: 'Freze 2', opNo: 20 }, kaynak: { id: 1, kod: 'T1', ad: 'Torna 1' } }] };
     const istekler = ciz({
