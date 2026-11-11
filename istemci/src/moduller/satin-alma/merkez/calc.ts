@@ -10,7 +10,9 @@ import { belirsizMiktarVar, miktarGirdisi } from "../../../ortak/veri/miktar.ts"
 export interface QuoteCalc {
   rate: number; sub: number; disc: number; net: number; ship: number; other: number; total: number;
   totalTRY: number; pvTRY: number; factor: number; vadeGain: number; covered: number; coverage: number;
-  lines: Record<string, { unit: number; line: number }>;
+  /** tier: uygulanan ek basamağın eşiği (taban fiyatsa yok); ust: daha ucuz toplam veren üst basamak (yalnız bilgi, 2974-2). */
+  /** alinan: en az miktar yüzünden talepten fazla alınan miktar (2974-1 a; yalnız fark varsa). */
+  lines: Record<string, { unit: number; line: number; tier?: number; alinan?: number; ust?: { min: number; line: number } }>;
   /** birim fiyatı TL'ye ve net bugünkü değere çeviren çarpan */
   unitFactorTRY: number;
   /** birim fiyatı iskonto sonrası TL'ye çeviren çarpan */
@@ -57,6 +59,23 @@ export function fixedRates(r: PurchaseRequest, set: Settings): Record<string, nu
   return fx;
 }
 
+/** Kademeli fiyat (2975): miktarın düştüğü en yüksek basamağın birim fiyatı; basamak yoksa taban fiyat (bugünkü davranış).
+ *  Üst basamak daha ucuz toplam veriyorsa yalnız bilgi olarak döner; miktar değiştirilmez. */
+export function basamakFiyati(q: Quote, kalemId: string, qty: number): QuoteCalc["lines"][string] | null {
+  const p = q.prices ? q.prices[kalemId] : undefined;
+  if (!isNum(p)) return null;
+  const tiers = (q.tiers?.[kalemId] ?? []).filter((t) => isNum(t.min) && isNum(t.price)).sort((a, b) => a.min - b.min);
+  // Sunucudaki hesap-kurallar.ts teklifHesabi ile aynı: alınan = en büyük(talep, en az miktar).
+  const enAz = q.minQty?.[kalemId];
+  const alinan = isNum(enAz) && enAz > qty ? enAz : qty;
+  let unit = p, tier: number | undefined;
+  for (const t of tiers) if (alinan >= t.min) { unit = t.price; tier = t.min; }
+  const line = unit * alinan;
+  let ust: { min: number; line: number } | undefined;
+  for (const t of tiers) if (t.min > alinan && t.price * t.min < line && (!ust || t.price * t.min < ust.line)) ust = { min: t.min, line: t.price * t.min };
+  return { unit, line, ...(tier !== undefined ? { tier } : {}), ...(alinan !== qty ? { alinan } : {}), ...(ust ? { ust } : {}) };
+}
+
 export function quoteCalc(req: PurchaseRequest, q: Quote, set: Settings = settings()): QuoteCalc {
   const cur = set.currencies[q.currency] ?? { rate: 1, monthly: 0 };
   const rate = rateFor(req, q, set);
@@ -64,8 +83,8 @@ export function quoteCalc(req: PurchaseRequest, q: Quote, set: Settings = settin
   let sub = 0, covered = 0;
   const lines: QuoteCalc["lines"] = {};
   for (const it of req.items ?? []) {
-    const p = q.prices ? q.prices[it.id] : undefined;
-    if (isNum(p)) { const l = p * (parseNum(it.qty) || 0); sub += l; covered++; lines[it.id] = { unit: p, line: l }; }
+    const b = basamakFiyati(q, it.id, parseNum(it.qty) || 0);
+    if (b) { sub += b.line; covered++; lines[it.id] = b; }
   }
   const disc = clamp((parseNum(q.discountPct) || 0) / 100, 0, 1);
   const net = sub * (1 - disc);
@@ -406,6 +425,8 @@ const zero = (): Record<CritKey, number> => ({ cost: 0, lead: 0, supplier: 0, wa
    Kalem maliyeti: birim fiyat × miktar; TL'ye çevrilmiş, iskonto ve vade sonrası.
    Kullanılan her teklifin nakliye ve diğer masrafları sipariş başına TAM eklenir. */
 export function itemCost(x: EvalRow, it: RequestItem): number | null { const l = x.c.lines[it.id]; return l ? l.unit * x.c.unitFactorTRY : null; }
+/** Kalemin tutarı: en az miktar alınacaksa birim × miktar değil, alınan miktarın tutarı. */
+export function itemLineCost(x: EvalRow, it: RequestItem): number | null { const l = x.c.lines[it.id]; return l ? l.line * x.c.unitFactorTRY : null; }
 const extrasPV = (x: EvalRow): number => (x.c.ship + x.c.other) * x.c.rate * x.c.factor;
 
 export function planCost(req: PurchaseRequest, rows: EvalRow[], assign: Record<string, string>): Plan {
@@ -414,9 +435,8 @@ export function planCost(req: PurchaseRequest, rows: EvalRow[], assign: Record<s
   for (const it of req.items ?? []) {
     const qid = assign[it.id];
     const x = rows.find((y) => y.q.id === qid);
-    const u = x ? itemCost(x, it) : null;
-    if (!x || u === null || !qid) { ok = false; continue; }
-    const amt = u * (parseNum(it.qty) || 0);
+    const amt = x ? itemLineCost(x, it) : null;
+    if (!x || amt === null || !qid) { ok = false; continue; }
     goods += amt;
     const g = (by[qid] ??= { x, items: [], goods: 0, extras: 0, late: null });
     g.items.push(it); g.goods += amt;
@@ -442,7 +462,7 @@ export function optimalSplit(req: PurchaseRequest, rows: EvalRow[]): Plan | null
     let ok = true;
     for (const it of items) {
       let bx: EvalRow | null = null, bu = Infinity;
-      for (const x of sub) { const u = itemCost(x, it); if (u !== null && u < bu) { bu = u; bx = x; } }
+      for (const x of sub) { const u = itemLineCost(x, it); if (u !== null && u < bu) { bu = u; bx = x; } }
       if (!bx) { ok = false; break; }
       assign[it.id] = bx.q.id;
     }

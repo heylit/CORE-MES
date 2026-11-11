@@ -27,6 +27,7 @@ import { kablola } from '../../kablolama.ts';
 import { takvimKayitlari } from './disari.ts';
 import { tesisGunu } from '#paylasilan/zaman.ts';
 import { acikTalepMiktarlari, siparisOdemeKosullari, terminKalemleriOku } from './sorgular.ts';
+import * as sorgu from './sorgular.ts';
 
 const PAROLA = 'dogru-parola-1';
 type Cevap = Awaited<ReturnType<FastifyInstance['inject']>>;
@@ -475,6 +476,71 @@ describe('satin-alma sürüm 6 (gerçek PostgreSQL)', () => {
     assert.equal(s3.teklifler[0]?.revizyon, 1);
   });
 
+  test('2975: kademeli fiyat; toplam alınan miktarın basamağından, gönderilmeyen basamak korunur, boş liste siler', async () => {
+    const t = tamam<Talep>(await istek(c.sa, 'POST', '/satin-alma-talepleri/ac', yeniTalep()));
+    const [k1, k2] = t.kalemler.map((k) => k.id) as [string, string];
+    const toplam = async (teklifId: string) => (await vt().tx((db) => db.tek<{ t: string }>(
+      'SELECT satin_alma_teklif_toplami($1, $2)::text AS t', [t.id, teklifId])))!.t;
+    // k1 10 adet: 10 ve üstü 8 TL basamağı; k2 4 adet, 10 ve üstü basamağın altında kalır, taban 5 TL. 10 × 8 + 4 × 5 = 100.
+    const a = teklif(firmaA, [[k1, '10'], [k2, '5']]);
+    a.fiyatlar = [{ kalemId: k1, birimFiyat: '10', basamaklar: [{ esik: '10', birimFiyat: '8' }] } as never, { kalemId: k2, birimFiyat: '5', basamaklar: [{ esik: '10', birimFiyat: '1' }] } as never];
+    const s1 = tamam<Talep>(await kaydet(c.sa, { ...govde(t), durum: 'degerlendirme', teklifler: [a] }));
+    assert.deepEqual([s1.teklifler[0]?.ilkToplam, await toplam(a.id)], ['100', '100.0000']);
+    assert.deepEqual(s1.teklifler[0]?.fiyatlar.map((f) => f.basamaklar), [[{ esik: '10', birimFiyat: '8' }], [{ esik: '10', birimFiyat: '1' }]]);
+    // Basamağı bilmeyen ekran alanı göndermez: basamak silinmez.
+    const s2 = tamam<Talep>(await kaydet(c.sa, { ...govde(s1), teklifler: [{ ...s1.teklifler[0]!, fiyatlar: [{ kalemId: k1, birimFiyat: '10' }, { kalemId: k2, birimFiyat: '5' }] }] }));
+    assert.equal(await toplam(a.id), '100.0000');
+    // 2974-1 a: en az miktar ilk basamağın eşiğidir; üst basamak onun üstünde olur. En az 15 ise alınan 15'tir, 20 ve üstü
+    // basamağın altında kalır, taban 10 TL: 15 × 10 + 4 × 5 = 170.
+    const s3 = tamam<Talep>(await kaydet(c.sa, { ...govde(s2), teklifler: [{ ...s2.teklifler[0]!, fiyatlar: [
+      { kalemId: k1, birimFiyat: '10', enAzMiktar: '15', basamaklar: [{ esik: '20', birimFiyat: '7' }, { esik: '30', birimFiyat: '6' }] }, { kalemId: k2, birimFiyat: '5', basamaklar: [] }] }] }));
+    assert.equal(await toplam(a.id), '170.0000');
+    assert.deepEqual(s3.teklifler[0]?.fiyatlar.map((f) => f.basamaklar?.length), [2, 0]);
+    // Eşiği en az miktarda ya da altında olan üst basamak reddedilir; gönderilmeyen (korunan) en az miktar da sayılır.
+    const red = (r: Cevap) => [r.statusCode, (r.json() as { mesaj: string }).mesaj];
+    assert.deepEqual(red(await kaydet(c.sa, { ...govde(s3), teklifler: [{ ...s3.teklifler[0]!, fiyatlar: [
+      { kalemId: k1, birimFiyat: '10', enAzMiktar: '20', basamaklar: [{ esik: '10', birimFiyat: '8' }, { esik: '20', birimFiyat: '7' }] }] }] })), [422, ILETILER.basamakEnAz]);
+    assert.deepEqual(red(await kaydet(c.sa, { ...govde(s3), teklifler: [{ ...s3.teklifler[0]!, fiyatlar: [
+      { kalemId: k1, birimFiyat: '10', basamaklar: [{ esik: '15', birimFiyat: '8' }] }] }] })), [422, ILETILER.basamakEnAz]);
+    assert.equal(await toplam(a.id), '170.0000');
+    // Aynı eşik iki kez ve beşinci basamak reddedilir.
+    const cift = await kaydet(c.sa, { ...govde(s3), teklifler: [{ ...s3.teklifler[0]!, fiyatlar: [{ kalemId: k1, birimFiyat: '10', basamaklar: [{ esik: '20', birimFiyat: '7' }, { esik: '20.0', birimFiyat: '6' }] }] }] });
+    assert.equal(cift.statusCode, 400);
+    const bes = await kaydet(c.sa, { ...govde(s3), teklifler: [{ ...s3.teklifler[0]!, fiyatlar: [{ kalemId: k1, birimFiyat: '10',
+      basamaklar: ['11', '12', '13', '14', '15'].map((esik) => ({ esik, birimFiyat: '6' })) }] }] });
+    assert.equal(bes.statusCode, 400);
+  });
+
+  test('2975 (Veri): basamaksız teklifte toplam fonksiyonu eski gövdeyle birebir aynı sonucu verir', async () => {
+    const t = tamam<Talep>(await istek(c.sa, 'POST', '/satin-alma-talepleri/ac', yeniTalep()));
+    const [k1, k2] = t.kalemler.map((k) => k.id) as [string, string];
+    const a = teklif(firmaA, [[k1, '10.1234'], [k2, '5']], { iskontoYuzdesi: '7.5', nakliyeDahil: false, nakliye: '15.25', digerMasraf: '2' });
+    a.fiyatlar = [{ kalemId: k1, birimFiyat: '10.1234', iskontoYuzdesi: '3', enAzMiktar: '12' } as never, { kalemId: k2, birimFiyat: '5' } as never];
+    const b = teklif(firmaB, [[k1, '11'], [k2, '4.5']], { nakliyeDahil: true, nakliye: '99' });
+    tamam<Talep>(await kaydet(c.sa, { ...govde(t), durum: 'degerlendirme', teklifler: [a, b] }));
+    // 20261028100000 gövdesi, basamak öncesi.
+    const eski = `SELECT round(
+        COALESCE((SELECT sum(s.birim_fiyat * GREATEST(k.miktar, s.en_az_miktar) * (1 - COALESCE(s.iskonto_yuzdesi, 0) / 100))
+                    FROM satin_alma_teklif_satiri s JOIN satin_alma_talep_kalemi k ON k.talep_id = s.talep_id AND k.id = s.kalem_id
+                   WHERE s.talep_id = q.talep_id AND s.teklif_id = q.id), 0) * (1 - q.iskonto_yuzdesi / 100)
+        + CASE WHEN q.nakliye_dahil THEN 0 ELSE q.nakliye END + q.diger_masraf, 4)::text AS eski,
+      satin_alma_teklif_toplami(q.talep_id, q.id)::text AS yeni
+      FROM satin_alma_teklif q WHERE q.talep_id = $1 ORDER BY q.sira`;
+    const satirlar = await vt().tx((db) => db.sorgu<{ eski: string; yeni: string }>(eski, [t.id]));
+    assert.equal(satirlar.length, 2);
+    for (const r of satirlar) assert.equal(r.yeni, r.eski);
+  });
+
+  test('2975 (Veri): kilitli talepte basamak değişmez; basamağa dokunmayan kayıt geçer', async () => {
+    const t = await kararli();
+    assert.equal(t.durum, 'onayda');
+    const red = (r: Cevap) => [r.statusCode, (r.json() as { mesaj: string }).mesaj];
+    const [q0, ...diger] = t.teklifler;
+    const degisik = { ...q0!, fiyatlar: q0!.fiyatlar.map((f, i) => (i === 0 ? { ...f, basamaklar: [{ esik: '10', birimFiyat: '1' }] } : f)) };
+    assert.deepEqual(red(await kaydet(c.sa, { ...govde(t), teklifler: [degisik, ...diger] })), [422, ILETILER.kilitliBasamak]);
+    tamam<Talep>(await kaydet(c.sa, { ...govde(t), notlar: 'Basamak aynı' }));
+  });
+
   test('SAT-45: eski sürümle kaydeden 409 (eski-surum) alır; kayıt değişmez', async () => {
     const t = tamam<Talep>(await istek(c.sa, 'POST', '/satin-alma-talepleri/ac', yeniTalep()));
     tamam<Talep>(await kaydet(c.sa, { ...govde(t), baslik: 'Bir' }));
@@ -796,6 +862,23 @@ describe('satin-alma sürüm 6 (gerçek PostgreSQL)', () => {
     ]);
     const metin = JSON.stringify(await denetimler(t.id));
     for (const yasak of ['Deneme gizli not', 'Deneme yeni not', 'Deneme teklif notu', 'Deneme Tedarik A', 'Deneme rulman']) assert.equal(metin.includes(yasak), false, yasak);
+  });
+
+  test('2975 (Güvenlik N1): basamak ekleme, değiştirme ve silme fiyat izine girer; basamağa dokunmayan kayıt basamak satırı yazmaz', async () => {
+    const t = tamam<Talep>(await istek(c.sa, 'POST', '/satin-alma-talepleri/ac', yeniTalep()));
+    const [k1, k2] = t.kalemler.map((k) => k.id) as [string, string];
+    const a = teklif(firmaA, [[k1, '10'], [k2, '5']]);
+    a.fiyatlar = [{ kalemId: k1, birimFiyat: '10', basamaklar: [{ esik: '20', birimFiyat: '8' }] } as never, { kalemId: k2, birimFiyat: '5' } as never];
+    const s1 = tamam<Talep>(await kaydet(c.sa, { ...govde(t), durum: 'degerlendirme', teklifler: [a] }));
+    const fiyat = (basamaklar: { esik: string; birimFiyat: string }[]) =>
+      ({ ...s1.teklifler[0]!, fiyatlar: [{ kalemId: k1, birimFiyat: '10', basamaklar }, { kalemId: k2, birimFiyat: '5' }] });
+    const s2 = tamam<Talep>(await kaydet(c.sa, { ...govde(s1), teklifler: [fiyat([{ esik: '20', birimFiyat: '7.5' }, { esik: '30', birimFiyat: '7' }])] }));
+    const s3 = tamam<Talep>(await kaydet(c.sa, { ...govde(s2), teklifler: [fiyat([{ esik: '30', birimFiyat: '7' }])] }));
+    tamam<Talep>(await kaydet(c.sa, { ...govde(s3), notlar: 'Deneme basamak aynı' }));
+    const basamakSatirlari = (await denetimler(t.id)).map((d) => (d.govde._ek ?? []).filter((r) => 'basamakEsigi' in r).map((r) => [Number(r['basamakEsigi']), r['onceki'], r['yeni']]));
+    assert.deepEqual(basamakSatirlari, [[[20, null, '8']], [[20, '8', '7.5'], [30, null, '7']], [[20, '7.5', null]], []]);
+    const ornek = (await denetimler(t.id))[0]!.govde._ek!.find((r) => 'basamakEsigi' in r)!;
+    assert.deepEqual([ornek['teklifId'], ornek['firmaId'], ornek['kalemId'], ornek['miktar'], ornek['paraBirimi']], [a.id, firmaA, k1, '10', 'TRY']);
   });
 
   test('S2: fiyat değişikliği kayda girmeden geçemez; fiyatı değişmeyen kayıt ek yazmaz', async () => {
@@ -1145,11 +1228,18 @@ describe('satin-alma sürüm 6 (gerçek PostgreSQL)', () => {
   });
 
   // Kalem bazlı kararla iki tedarikçiye sipariş verilmiş talep: A'ya kayış (4), B'ye rulman (10).
-  async function bolunmusSiparis(k2FiyatiA = '5', teklifA: Record<string, unknown> = {}): Promise<{ s: Talep; k1: string; k2: string; a: string; b: string }> {
+  type Basamak = { esik: string; birimFiyat: string };
+  // basamak: A'nın k2 (4 adet) ve B'nin k1 (10 adet) satırına kademeli fiyat (2975); yoksa basamaksız.
+  async function bolunmusSiparis(k2FiyatiA = '5', teklifA: Record<string, unknown> = {}, basamak: { a?: Basamak[]; b?: Basamak[] } = {}): Promise<{ s: Talep; k1: string; k2: string; a: string; b: string }> {
     const t = tamam<Talep>(await istek(c.sa, 'POST', '/satin-alma-talepleri/ac', yeniTalep({ durum: 'degerlendirme' })));
     const [k1, k2] = t.kalemler.map((k) => k.id) as [string, string];
     const a = teklif(firmaA, [[k1, '10'], [k2, k2FiyatiA]], teklifA);
     const b = teklif(firmaB, [[k1, '9'], [k2, '6']]);
+    const basamakla = (q: typeof a, kalemId: string, l: Basamak[] | undefined) => {
+      if (l !== undefined) q.fiyatlar = q.fiyatlar.map((f) => (f.kalemId === kalemId ? { ...f, basamaklar: l } : f)) as typeof q.fiyatlar;
+    };
+    basamakla(a, k2, basamak.a);
+    basamakla(b, k1, basamak.b);
     const onayda = tamam<Talep>(await kaydet(c.sa, {
       ...govde(t), durum: 'onayda', teklifler: [a, b],
       karar: { mod: 'bolunmus', teklifId: null, bolunme: [{ kalemId: k1, teklifId: b.id }, { kalemId: k2, teklifId: a.id }], gerekce: 'Kalem bazlı fiyat',
@@ -2811,6 +2901,71 @@ describe('satin-alma sürüm 6 (gerçek PostgreSQL)', () => {
     // Siparişe dönmemiş talebin siparişi yoktur; kuyruğa sipariş verilmeden girilmez.
     const k = await kararli();
     assert.equal((await vt().tx((db) => db.tek('SELECT 1 FROM satin_alma_siparis WHERE talep_id = $1 AND logo_gonderim_durumu IS NOT NULL', [k.id]))), null);
+  });
+
+  // 2975 (Test B1): basamaklı fiyat siparişten sonra her okuma yolunda etkin basamaktan gelir. B'nin k1'i 10 adet: taban 9, "10 ve
+  // üstü" 8 TL. A'nın k2'si 4 adet: "10 ve üstü" 1 TL basamağına ulaşmaz, taban 5 TL kalır.
+  const basamakli = () => bolunmusSiparis('5', {}, { a: [{ esik: '10', birimFiyat: '1' }], b: [{ esik: '10', birimFiyat: '8' }] });
+
+  test('2975: basamaklı siparişte Logo birim fiyatı ve ödeme toplamı basamak fiyatından; ulaşılmayan basamak tabanı değiştirmez', async () => {
+    const { s, a, b } = await basamakli();
+    const [ia, ib] = [await siparisNo(s.id, a), await siparisNo(s.id, b)];
+    const kuyruk = await logoKuyrugu([ia, ib]);
+    assert.deepEqual(kuyruk.find((x) => x.id === ib)!.satirlar.map((r) => [r.miktar, r.birimFiyat]), [['10', '8']]);
+    assert.deepEqual(kuyruk.find((x) => x.id === ia)!.satirlar.map((r) => [r.miktar, r.birimFiyat]), [['4', '5']]);
+    const kosullar = await vt().tx((db) => siparisOdemeKosullari(db, s.id));
+    assert.deepEqual([Number(kosullar.find((x) => x.teklifId === b)!.toplam), Number(kosullar.find((x) => x.teklifId === a)!.toplam)], [80, 20]);
+  });
+
+  test('2975: basamaklı teslimde son ve ortalama alış basamak fiyatından', async () => {
+    const { s, b, k1 } = await basamakli();
+    const m = (await vt().tx((db) => db.tek<{ n: number }>(
+      'SELECT c.malzeme_no AS n FROM satin_alma_talep_kalemi k JOIN satin_alma_katalog c ON c.id = k.katalog_id WHERE k.talep_id = $1 AND k.id = $2', [s.id, k1])))!.n;
+    const ortalama = async () => (await vt().tx((db) => ortalamaAlisFiyatlari(db, [m]))).get(m)!;
+    // Önceki testlerin teslimleri de ortalamadadır: beklenen değer o anki toplam net miktardan hesaplanır.
+    const netMiktar = async () => Number((await vt().tx((db) => db.tek<{ q: string | null }>(
+      `SELECT sum(m.miktar)::text AS q FROM satin_alma_teslim m JOIN satin_alma_siparis_satiri s ON s.id = m.siparis_satiri_id
+         JOIN satin_alma_talep_kalemi k ON k.talep_id = s.talep_id AND k.id = s.kalem_id JOIN satin_alma_katalog c ON c.id = k.katalog_id
+        WHERE c.malzeme_no = $1 AND m.mal_kabul_satiri_id IN (SELECT mal_kabul_satiri_id FROM satin_alma_teslim GROUP BY 1 HAVING sum(miktar) > 0)`, [m])))!.q ?? '0');
+    const [once, miktar0] = [await ortalama(), await netMiktar()];
+    await teslimEt(siparisi(s, b).satirlar[0]!.id, '3', 79750);
+    const son = (await vt().tx((db) => sonAlisFiyatlari(db, [m]))).get(m)!;
+    assert.deepEqual([son.birimFiyat, son.tryBirimFiyat], ['8', '8']);
+    assert.deepEqual(await vt().tx((db) => malKabulFiyatlari(db, [79750])), new Map([[79750, '8']]));
+    const fiyat0 = once.tryBirimFiyat === null ? 0 : Number(once.tryBirimFiyat);
+    const sonra = await ortalama();
+    assert.ok(Math.abs(Number(sonra.tryBirimFiyat) - (fiyat0 * miktar0 + 8 * 3) / (miktar0 + 3)) < 0.0001, sonra.tryBirimFiyat ?? 'boş');
+    await geriAl(79750);
+  });
+
+  test('2975: basamaklı siparişte iş emrinin fason tutarı ve analiz fiyatları basamak fiyatından', async () => {
+    const { s, a, b, k1, k2 } = await basamakli();
+    const satirA = siparisi(s, a).satirlar[0]!.id, satirB = siparisi(s, b).satirlar[0]!.id;
+    const emir = await emirAc();
+    const tip = (await ortam!.sahip.tek<{ id: number }>('SELECT id FROM istasyonlar_operasyon_tipi ORDER BY id LIMIT 1'))!.id;
+    const ie = (await ortam!.sahip.tek<{ id: number }>(
+      "INSERT INTO uretim_emirleri_is_emri (uretim_emri_id, sira, op_no, operasyon_tipi_id, ad) VALUES ($1, 1, 10, $2, 'Deneme fason') RETURNING id", [emir, tip]))!.id;
+    await ortam!.sahip.tx((db) => db.sorgu('UPDATE satin_alma_siparis_satiri SET is_emri_id = $2 WHERE id = ANY($1::int[])', [[satirA, satirB], ie]));
+    // A: 4 × 5 (basamak ulaşılmadı), B: 10 × 8 (basamak) = 100; tabanla 110 olurdu.
+    assert.deepEqual([...(await vt().tx((db) => isEmriFasonTutarlari(db, [ie])))], [[ie, [{ tutar: '100.00', paraBirimi: 'TRY' }]]]);
+    const analiz = (await vt().tx((db) => sorgu.analizSiparisSatirlari(db, '2026-10-01', 'Europe/Istanbul'))).filter((r) => r.id === satirA || r.id === satirB);
+    assert.deepEqual(analiz.map((r) => [r.id, Number(r.birimFiyat)]).sort(), [[satirA, 5], [satirB, 8]].sort());
+    const teklifFiyatlari = await vt().tx((db) => sorgu.analizTeklifFiyatlari(db, [s.id]));
+    const fiyat = (teklifId: string, kalemId: string) => Number(teklifFiyatlari.find((x) => x.teklifId === teklifId && x.kalemId === kalemId)!.birimFiyat);
+    assert.deepEqual([fiyat(b, k1), fiyat(a, k2), fiyat(a, k1), fiyat(b, k2)], [8, 5, 10, 6]);
+  });
+
+  test('2975: basamaksız teklifte etkin fiyat her miktarda taban fiyattır; basamaksız siparişin okuma yolları tabanla aynı', async () => {
+    const { s, a, b } = await bolunmusSiparis();
+    const fark = await vt().tx((db) => db.tek<{ n: number }>(
+      `SELECT count(*)::int AS n FROM satin_alma_teklif_satiri f CROSS JOIN (VALUES (0.0001), (1), (10), (1000000)) m(q)
+        WHERE NOT EXISTS (SELECT 1 FROM satin_alma_teklif_fiyat_basamagi x WHERE x.talep_id = f.talep_id AND x.teklif_id = f.teklif_id AND x.kalem_id = f.kalem_id)
+          AND satin_alma_etkin_birim_fiyat(f.talep_id, f.teklif_id, f.kalem_id, f.birim_fiyat, m.q) IS DISTINCT FROM f.birim_fiyat`));
+    assert.equal(fark!.n, 0);
+    const kuyruk = await logoKuyrugu([await siparisNo(s.id, a), await siparisNo(s.id, b)]);
+    assert.deepEqual(kuyruk.flatMap((x) => x.satirlar.map((r) => r.birimFiyat)).sort(), ['5', '9']);
+    const kosullar = await vt().tx((db) => siparisOdemeKosullari(db, s.id));
+    assert.deepEqual(kosullar.map((x) => Number(x.toplam)).sort((x, y) => x - y), [20, 90]);
   });
 
   test('#205 Logo: hata kuyrukta kalır; başarı kayıt ve satır numaralarını yazar, kuyruktan çıkarır, yinelenirse değişmez; başka numara ya da yabancı satır reddedilir', async () => {

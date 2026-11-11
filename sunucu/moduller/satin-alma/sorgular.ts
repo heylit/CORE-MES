@@ -7,6 +7,10 @@ import type { TalepDurumu,
 import { MALZEME_KARTI_IZ_YOLU, malzemeKartiIzParametreleri, type MalzemeKartiAnahtari, type MalzemeKartiIzi } from '#paylasilan/malzeme-karti-izi.ts';
 
 const ISO = (s: string) => `to_json(${s}) #>> '{}'`;
+// Kademeli fiyat (2975): teklif satırının fiyatı alınan miktarın basamağından okunur; basamaksız satırda taban fiyattır.
+// Sipariş satırının miktarı alınan miktardır (en az miktar dahil), basamak ona göre seçilir.
+const etkin = (f: string, miktar: string): string =>
+  `satin_alma_etkin_birim_fiyat(${f}.talep_id, ${f}.teklif_id, ${f}.kalem_id, ${f}.birim_fiyat, ${miktar})`;
 
 // ---- Numaralar ayardaki kalıptan gelir (ayarlar numaraAl); kalıp değişince çakışan numara atlanır.
 export async function talepNoVarMi(db: Db, no: string): Promise<boolean> {
@@ -61,6 +65,7 @@ export interface AltKayitlar {
   istekler: (Talep['teklifIstekleri'][number] & { talepId: string })[];
   teklifler: (Omit<Teklif, 'fiyatlar'> & { talepId: string })[];
   fiyatlar: { talepId: string; teklifId: string; kalemId: string; birimFiyat: string; iskontoYuzdesi: string | null; terminGun: number | null; enAzMiktar: string | null }[];
+  basamaklar: { talepId: string; teklifId: string; kalemId: string; esik: string; birimFiyat: string }[];
   kararlar: { talepId: string; mod: 'tek' | 'bolunmus'; teklifId: string | null; gerekce: string; kararVerenKisiId: number | null; kararTarihi: string; ogrenilenler: string; kurKilidi: string | null }[];
   bolunmeler: { talepId: string; kalemId: string; teklifId: string }[];
   sabitKurlar: { talepId: string; paraBirimi: string; kur: string; aylikFaizYuzdesi: string | null }[];
@@ -97,6 +102,8 @@ export async function altKayitlariOku(db: Db, idler: readonly string[]): Promise
       s.iskonto_yuzdesi AS "iskontoYuzdesi", s.termin_gun AS "terminGun", s.en_az_miktar AS "enAzMiktar"
       FROM satin_alma_teklif_satiri s JOIN satin_alma_talep_kalemi k ON k.talep_id = s.talep_id AND k.id = s.kalem_id
       WHERE s.talep_id = ANY($1::uuid[]) ORDER BY s.talep_id, s.teklif_id, k.sira`),
+    basamaklar: await q(`SELECT talep_id AS "talepId", teklif_id AS "teklifId", kalem_id AS "kalemId", esik, birim_fiyat AS "birimFiyat"
+      FROM satin_alma_teklif_fiyat_basamagi WHERE talep_id = ANY($1::uuid[]) ORDER BY talep_id, teklif_id, kalem_id, esik`),
     kararlar: await q(`SELECT talep_id AS "talepId", mod, teklif_id AS "teklifId", gerekce, karar_veren_kisi_id AS "kararVerenKisiId",
       karar_tarihi AS "kararTarihi", ogrenilenler, ${ISO('kur_kilidi')} AS "kurKilidi" FROM satin_alma_karar WHERE talep_id = ANY($1::uuid[])`),
     bolunmeler: await q(`SELECT b.talep_id AS "talepId", b.kalem_id AS "kalemId", b.teklif_id AS "teklifId"
@@ -222,7 +229,7 @@ export function siparisYolSatirlari(db: Db, f: YolFiltresi): Promise<YolSatiri[]
         WHERE (t.durum <> 'iptal' AND (t.proje_id = ANY($1::int[]) OR ${KALEM_EMRI} = ANY($2::int[])))
            OR (s.talep_id, s.teklif_id) IN (SELECT * FROM unnest($3::uuid[], $4::uuid[])))
      SELECT s.id AS "satirId", k.ad AS "kalemAdi", k.birim, s.talep_id AS "talepId", s.teklif_id AS "teklifId", q.para_birimi::text AS "paraBirimi",
-            (s.miktar * f.birim_fiyat * (1 - COALESCE(f.iskonto_yuzdesi, 0) / 100) * (1 - q.iskonto_yuzdesi / 100))::text AS mal,
+            (s.miktar * ${etkin('f', 's.miktar')} * (1 - COALESCE(f.iskonto_yuzdesi, 0) / 100) * (1 - q.iskonto_yuzdesi / 100))::text AS mal,
             s.miktar::text AS miktar,
             coalesce((SELECT sum(x.miktar) FROM satin_alma_teslim x WHERE x.siparis_satiri_id = s.id), 0)::text AS teslim,
             c.malzeme_no AS "malzemeNo", (s.is_emri_id IS NOT NULL OR k.is_emri_id IS NOT NULL) AS fason,
@@ -344,6 +351,14 @@ export async function altKayitlariYaz(db: Db, t: TalepYazimi, yeniSiparisNo: () 
        SELECT $1, $2, * FROM unnest($3::uuid[], $4::numeric[], $5::numeric[], $6::int[], $7::numeric[])`,
       [id, q.id, q.fiyatlar.map((f) => f.kalemId), q.fiyatlar.map((f) => f.birimFiyat), q.fiyatlar.map((f) => f.iskontoYuzdesi ?? null),
         q.fiyatlar.map((f) => f.terminGun ?? null), q.fiyatlar.map((f) => f.enAzMiktar ?? null)]);
+    // Basamaklar satırla birlikte silinir (yabancı anahtar, CASCADE) ve yeniden yazılır.
+    const basamaklar = q.fiyatlar.flatMap((f) => (f.basamaklar ?? []).map((b) => ({ kalemId: f.kalemId, ...b })));
+    if (basamaklar.length > 0) {
+      await db.sorgu(
+        `INSERT INTO satin_alma_teklif_fiyat_basamagi (talep_id, teklif_id, kalem_id, esik, birim_fiyat)
+         SELECT $1, $2, * FROM unnest($3::uuid[], $4::numeric[], $5::numeric[])`,
+        [id, q.id, basamaklar.map((b) => b.kalemId), basamaklar.map((b) => b.esik), basamaklar.map((b) => b.birimFiyat)]);
+    }
     // İlk toplam bir kez yazılır; toplam 0,005'ten fazla değişirse revizyon artar (prototip kuralı).
     await db.sorgu(
       `UPDATE satin_alma_teklif SET
@@ -484,7 +499,7 @@ export interface LogoSiparisKalemi {
 }
 export function logoSiparisKalemleriOku(db: Db, siparisIdler: readonly number[]): Promise<LogoSiparisKalemi[]> {
   return db.sorgu<LogoSiparisKalemi>(
-    `SELECT p.id AS "siparisId", s.id AS "satirId", c.malzeme_no AS "malzemeNo", s.miktar::text AS miktar, s.birim, round(f.birim_fiyat * (1 - COALESCE(f.iskonto_yuzdesi, 0) / 100), 4)::text AS "birimFiyat",
+    `SELECT p.id AS "siparisId", s.id AS "satirId", c.malzeme_no AS "malzemeNo", s.miktar::text AS miktar, s.birim, round(${etkin('f', 's.miktar')} * (1 - COALESCE(f.iskonto_yuzdesi, 0) / 100), 4)::text AS "birimFiyat",
         s.logo_satir_ref AS "logoSatirRef"
        FROM satin_alma_siparis p
        JOIN satin_alma_siparis_satiri s ON s.talep_id = p.talep_id AND s.teklif_id = p.teklif_id
@@ -832,7 +847,8 @@ export function malzemeGelisleriOku(db: Db, malzemeNolar: readonly number[]): Pr
 // TRY karşılığı siparişte sabitlenen kurla, yoksa teklif günü kuruyla (döviz teklifi kursuz yazılamaz, SA3); ikisi de yoksa boş.
 // Güncel kur finanstadır, burada kullanılmaz. Teslim mal kabul satırı başına netlenir: geri alınan (neti sıfır ya da eksi) teslim
 // ne son alış ne ortalama sayılır.
-const NET_BIRIM_FIYAT = 'f.birim_fiyat * (1 - COALESCE(f.iskonto_yuzdesi, 0) / 100) * (1 - COALESCE(q.iskonto_yuzdesi, 0) / 100)';
+const ETKIN_TESLIM_FIYATI = etkin('f', 's.miktar');
+const NET_BIRIM_FIYAT = `${ETKIN_TESLIM_FIYATI} * (1 - COALESCE(f.iskonto_yuzdesi, 0) / 100) * (1 - COALESCE(q.iskonto_yuzdesi, 0) / 100)`;
 const TRY_KURU = "coalesce(sk.kur, q.kur, CASE WHEN q.para_birimi = 'TRY' THEN 1 END)";
 const TESLIM_FIYATI_BAGI = `
            JOIN satin_alma_siparis_satiri s ON s.id = m.siparis_satiri_id
@@ -851,7 +867,7 @@ export function ortalamaAlisFiyatlariOku(db: Db, malzemeNolar: readonly number[]
          SELECT c.malzeme_no, sum(m.miktar) AS net, ${NET_BIRIM_FIYAT} * ${TRY_KURU} AS tl
            FROM satin_alma_teslim m ${TESLIM_FIYATI_BAGI}
           WHERE c.malzeme_no = ANY($1::int[])
-          GROUP BY c.malzeme_no, m.mal_kabul_satiri_id, m.siparis_satiri_id, f.birim_fiyat, f.iskonto_yuzdesi, q.iskonto_yuzdesi, sk.kur, q.kur, q.para_birimi
+          GROUP BY c.malzeme_no, m.mal_kabul_satiri_id, m.siparis_satiri_id, ${ETKIN_TESLIM_FIYATI}, f.iskonto_yuzdesi, q.iskonto_yuzdesi, sk.kur, q.kur, q.para_birimi
          HAVING sum(m.miktar) > 0) x ON x.malzeme_no = n.no AND x.tl IS NOT NULL
       GROUP BY n.no`,
     [malzemeNolar],
@@ -876,7 +892,7 @@ export function siparisBirimFiyatlariOku(db: Db, emirIdler: readonly number[], p
            CROSS JOIN LATERAL (VALUES ('emir', ${KALEM_EMRI}), ('proje', CASE WHEN ${KALEM_EMRI} IS NULL THEN t.proje_id END)) AS h(hedef, hedef_id)
           WHERE t.durum <> 'iptal' AND s.is_emri_id IS NULL AND k.is_emri_id IS NULL AND c.malzeme_no = ANY($3::int[])
             AND ((h.hedef = 'emir' AND h.hedef_id = ANY($1::int[])) OR (h.hedef = 'proje' AND h.hedef_id = ANY($2::int[])))
-          GROUP BY h.hedef, h.hedef_id, c.malzeme_no, m.mal_kabul_satiri_id, m.siparis_satiri_id, f.birim_fiyat, f.iskonto_yuzdesi, q.iskonto_yuzdesi, sk.kur, q.kur, q.para_birimi
+          GROUP BY h.hedef, h.hedef_id, c.malzeme_no, m.mal_kabul_satiri_id, m.siparis_satiri_id, ${ETKIN_TESLIM_FIYATI}, f.iskonto_yuzdesi, q.iskonto_yuzdesi, sk.kur, q.kur, q.para_birimi
          HAVING sum(m.miktar) > 0) x
       GROUP BY x.hedef, x.hedef_id, x.malzeme_no
       ORDER BY x.hedef, x.hedef_id, x.malzeme_no`,
@@ -893,7 +909,7 @@ export function sonAlisFiyatlariOku(db: Db, malzemeNolar: readonly number[]): Pr
                 max(m.zaman) FILTER (WHERE m.miktar > 0) AS zaman, max(m.id) FILTER (WHERE m.miktar > 0) AS id
            FROM satin_alma_teslim m ${TESLIM_FIYATI_BAGI}
           WHERE c.malzeme_no = ANY($1::int[])
-          GROUP BY c.malzeme_no, m.mal_kabul_satiri_id, m.siparis_satiri_id, f.birim_fiyat, f.iskonto_yuzdesi, q.iskonto_yuzdesi, sk.kur, q.kur, q.para_birimi
+          GROUP BY c.malzeme_no, m.mal_kabul_satiri_id, m.siparis_satiri_id, ${ETKIN_TESLIM_FIYATI}, f.iskonto_yuzdesi, q.iskonto_yuzdesi, sk.kur, q.kur, q.para_birimi
          HAVING sum(m.miktar) > 0) x
       ORDER BY x.malzeme_no, x.zaman DESC, x.id DESC`,
     [malzemeNolar],
@@ -917,7 +933,7 @@ export function malKabulFiyatlariOku(db: Db, malKabulSatirIdler: readonly number
 export interface IsEmriFasonTutari { isEmriId: number; tutar: string; paraBirimi: string }
 export function isEmriFasonTutarlari(db: Db, isEmriIdler: readonly number[]): Promise<IsEmriFasonTutari[]> {
   return db.sorgu<IsEmriFasonTutari>(
-    `SELECT s.is_emri_id AS "isEmriId", round(sum(s.miktar * f.birim_fiyat * (1 - COALESCE(f.iskonto_yuzdesi, 0) / 100) * (1 - q.iskonto_yuzdesi / 100)), 2)::text AS tutar, q.para_birimi::text AS "paraBirimi"
+    `SELECT s.is_emri_id AS "isEmriId", round(sum(s.miktar * ${etkin('f', 's.miktar')} * (1 - COALESCE(f.iskonto_yuzdesi, 0) / 100) * (1 - q.iskonto_yuzdesi / 100)), 2)::text AS tutar, q.para_birimi::text AS "paraBirimi"
        FROM satin_alma_siparis_satiri s
        JOIN satin_alma_talep t ON t.id = s.talep_id
        JOIN satin_alma_teklif q ON q.talep_id = s.talep_id AND q.id = s.teklif_id
@@ -1036,7 +1052,7 @@ export async function panoSayilari(db: Db): Promise<PanoSayilariSatiri> {
             (SELECT max(current_date - ihtiyac_tarihi) FROM satin_alma_talep WHERE durum IN ('taslak', 'teklif_isteniyor', 'degerlendirme', 'onayda') AND ihtiyac_tarihi < current_date) AS "ihtiyaciGecenEnEskiGun",
             (SELECT count(*)::int FROM (SELECT DISTINCT talep_id, teklif_id FROM bekleyen) x) AS "acikSiparis",
             (SELECT CASE WHEN bool_and(kur IS NOT NULL) IS NOT FALSE THEN coalesce(round(sum(tutar * kur), 2), 0)::text END
-               FROM (SELECT (sum(f.birim_fiyat * s.miktar * (1 - COALESCE(f.iskonto_yuzdesi, 0) / 100)) * (1 - q.iskonto_yuzdesi / 100) + q.nakliye + q.diger_masraf) AS tutar,
+               FROM (SELECT (sum(${etkin('f', 's.miktar')} * s.miktar * (1 - COALESCE(f.iskonto_yuzdesi, 0) / 100)) * (1 - q.iskonto_yuzdesi / 100) + q.nakliye + q.diger_masraf) AS tutar,
                             coalesce(sk.kur, q.kur, CASE WHEN q.para_birimi = 'TRY' THEN 1 END) AS kur
                        FROM (SELECT DISTINCT talep_id, teklif_id FROM bekleyen) b
                        JOIN satin_alma_siparis_satiri s ON s.talep_id = b.talep_id AND s.teklif_id = b.teklif_id
@@ -1072,13 +1088,13 @@ export function siparisOdemeKosullari(db: Db, talepId: string): Promise<SiparisO
   return db.sorgu<SiparisOdemeKosulu>(
     `WITH t AS (
        SELECT o.teklif_id, round(
-           COALESCE((SELECT sum(ss.miktar * ts.birim_fiyat * (1 - COALESCE(ts.iskonto_yuzdesi, 0) / 100)) FROM satin_alma_siparis_satiri ss
+           COALESCE((SELECT sum(ss.miktar * ${etkin('ts', 'ss.miktar')} * (1 - COALESCE(ts.iskonto_yuzdesi, 0) / 100)) FROM satin_alma_siparis_satiri ss
                        JOIN satin_alma_teklif_satiri ts ON ts.talep_id = ss.talep_id AND ts.teklif_id = ss.teklif_id AND ts.kalem_id = ss.kalem_id
                       WHERE ss.talep_id = o.talep_id AND ss.teklif_id = o.teklif_id), 0) * (1 - q.iskonto_yuzdesi / 100)
            + CASE WHEN q.nakliye_dahil THEN 0 ELSE q.nakliye END + q.diger_masraf, 2) AS toplam,
          q.avans_yuzdesi, q.vade_gun, o.siparis_tarihi, o.logo_kapatma_durumu IS NOT NULL AS kapali,
          (SELECT COALESCE(json_agg(json_build_object(
-                   'mal', (ss.miktar * ts.birim_fiyat * (1 - COALESCE(ts.iskonto_yuzdesi, 0) / 100) * (1 - q.iskonto_yuzdesi / 100))::text,
+                   'mal', (ss.miktar * ${etkin('ts', 'ss.miktar')} * (1 - COALESCE(ts.iskonto_yuzdesi, 0) / 100) * (1 - q.iskonto_yuzdesi / 100))::text,
                    'miktar', ss.miktar::text,
                    'teslim', coalesce((SELECT sum(x.miktar) FROM satin_alma_teslim x WHERE x.siparis_satiri_id = ss.id), 0)::text) ORDER BY ss.id), '[]'::json)
             FROM satin_alma_siparis_satiri ss
@@ -1086,11 +1102,11 @@ export function siparisOdemeKosullari(db: Db, talepId: string): Promise<SiparisO
            WHERE ss.talep_id = o.talep_id AND ss.teklif_id = o.teklif_id) AS satirlar,
          (CASE WHEN q.nakliye_dahil THEN 0 ELSE q.nakliye END + q.diger_masraf)::text AS masraf, o.beklenen_teslim, o.kdv_orani, o.vade_baslangici,
          (SELECT COALESCE(json_agg(json_build_object('gun', to_char(p.gun, 'YYYY-MM-DD'), 'oran', round(p.deger / NULLIF(m.deger, 0), 6)::text) ORDER BY p.gun), '[]'::json)
-            FROM (SELECT (x.zaman AT TIME ZONE 'Europe/Istanbul')::date AS gun, sum(x.miktar * ts.birim_fiyat * (1 - COALESCE(ts.iskonto_yuzdesi, 0) / 100)) AS deger
+            FROM (SELECT (x.zaman AT TIME ZONE 'Europe/Istanbul')::date AS gun, sum(x.miktar * ${etkin('ts', 'ss.miktar')} * (1 - COALESCE(ts.iskonto_yuzdesi, 0) / 100)) AS deger
                     FROM satin_alma_teslim x JOIN satin_alma_siparis_satiri ss ON ss.id = x.siparis_satiri_id
                     JOIN satin_alma_teklif_satiri ts ON ts.talep_id = ss.talep_id AND ts.teklif_id = ss.teklif_id AND ts.kalem_id = ss.kalem_id
                    WHERE ss.talep_id = o.talep_id AND ss.teklif_id = o.teklif_id GROUP BY 1) p,
-                 (SELECT sum(ss.miktar * ts.birim_fiyat * (1 - COALESCE(ts.iskonto_yuzdesi, 0) / 100)) AS deger FROM satin_alma_siparis_satiri ss
+                 (SELECT sum(ss.miktar * ${etkin('ts', 'ss.miktar')} * (1 - COALESCE(ts.iskonto_yuzdesi, 0) / 100)) AS deger FROM satin_alma_siparis_satiri ss
                     JOIN satin_alma_teklif_satiri ts ON ts.talep_id = ss.talep_id AND ts.teklif_id = ss.teklif_id AND ts.kalem_id = ss.kalem_id
                    WHERE ss.talep_id = o.talep_id AND ss.teklif_id = o.teklif_id) m
            WHERE p.deger <> 0 AND m.deger > 0) AS partiler,
@@ -1484,7 +1500,7 @@ export function analizSiparisSatirlari(db: Db, basTarih: string, saatDilimi: str
   return db.sorgu<AnalizSiparisSatiri>(
     `SELECT r.id, s.siparis_tarihi::text AS "siparisTarihi", q.firma_id AS "firmaId", q.tedarikci_adi AS "tedarikciAdi",
             trim(q.para_birimi) AS "paraBirimi", q.kur::text AS kur, q.iskonto_yuzdesi::text AS "genelIskonto",
-            f.birim_fiyat::text AS "birimFiyat", f.iskonto_yuzdesi::text AS "satirIskonto", COALESCE(f.termin_gun, q.termin_gun) AS "terminGun",
+            ${etkin('f', 'r.miktar')}::text AS "birimFiyat", f.iskonto_yuzdesi::text AS "satirIskonto", COALESCE(f.termin_gun, q.termin_gun) AS "terminGun",
             r.miktar::text AS miktar, r.birim, k.katalog_id::text AS "katalogId", k.ad, c.malzeme_no AS "malzemeNo",
             t.teslim::text AS "teslimMiktari", t.son AS "sonTeslimGunu"
        FROM satin_alma_siparis_satiri r
@@ -1554,9 +1570,10 @@ export function analizTeklifFiyatlari(db: Db, talepIdler: readonly string[]): Pr
   if (talepIdler.length === 0) return Promise.resolve([]);
   return db.sorgu(
     `SELECT f.talep_id AS "talepId", f.teklif_id AS "teklifId", f.kalem_id AS "kalemId", trim(q.para_birimi) AS "paraBirimi", q.kur::text AS kur,
-            q.iskonto_yuzdesi::text AS "genelIskonto", f.birim_fiyat::text AS "birimFiyat", f.iskonto_yuzdesi::text AS "satirIskonto",
+            q.iskonto_yuzdesi::text AS "genelIskonto", ${etkin('f', 'GREATEST(k.miktar, f.en_az_miktar)')}::text AS "birimFiyat", f.iskonto_yuzdesi::text AS "satirIskonto",
             q.teknik_uygun AS "teknikUygun"
        FROM satin_alma_teklif_satiri f JOIN satin_alma_teklif q ON q.talep_id = f.talep_id AND q.id = f.teklif_id
+       JOIN satin_alma_talep_kalemi k ON k.talep_id = f.talep_id AND k.id = f.kalem_id
       WHERE f.talep_id = ANY($1::uuid[])`,
     [talepIdler],
   );

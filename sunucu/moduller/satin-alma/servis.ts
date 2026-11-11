@@ -32,7 +32,7 @@ import { resmiTatilGunleri } from '../ik/disari.ts';
 import { projeGetir, projeSecenekleri } from '../projeler/disari.ts';
 import { islemVarMi } from '#cekirdek/yetki.ts';
 import {
-  ILETILER, ISLEM, type KurKilidiIsi, emirAcikMi, kilitliDurum, tedarikciyeGidenAyrinti, kalemAyrintisiniKoru, kilittenSonraOnayliMi, kurKilidiIsi, kurKilidiReddi, degisiklikReddi, gecikmeGunu, fasonKalani, sonDonusGecikmesi, agirlikliGecikme, degisiklikTuru, dortGozSonucu, onayKademesiReddi, onayLimitRolleri, onayLimitleriDegistiMi, onayLimitiReddi, terminsizSiparisReddi, terminTakibi, fazlaTeslim, finanstanEklenenKurlar, aylikFaiz, fiyatIzleri, kullanilanParaBirimleri, gecisVarMi, gorunenDurum, kararDegistiMi, kararOnayliMi, talepFisiGiderMi,
+  ILETILER, ISLEM, type KurKilidiIsi, emirAcikMi, kilitliDurum, basamakEsigiReddi, basamakKilidiReddi, tedarikciyeGidenAyrinti, kalemAyrintisiniKoru, kilittenSonraOnayliMi, kurKilidiIsi, kurKilidiReddi, degisiklikReddi, gecikmeGunu, fasonKalani, sonDonusGecikmesi, agirlikliGecikme, degisiklikTuru, dortGozSonucu, onayKademesiReddi, onayLimitRolleri, onayLimitleriDegistiMi, onayLimitiReddi, terminsizSiparisReddi, terminTakibi, fazlaTeslim, finanstanEklenenKurlar, aylikFaiz, fiyatIzleri, kullanilanParaBirimleri, gecisVarMi, gorunenDurum, kararDegistiMi, kararOnayliMi, talepFisiGiderMi,
   KARTSIZ_KATEGORI, TALEP_TURU_KARTLARI, satinAlinabilirKartReddi, kartBirimiReddi, hizliBaslik, hizliKalemReddi, kartKopyasi, kartsizSiparisReddi, katalogKartiReddi, logoGuncellenecekSiparisler, logoIptalGeriAlmaReddi, logoSiparisDegisikligiReddi, siparisliKalemReddi, siparisDegisikligiMetni, siparisFaturaFirmasi, faturaEslesmeUyarilari, siparisKalemiDegisikligiReddi, siparisKapatmaReddi, talebinAlimlari, ondalikKiyas, siparisReddi, talebim, birimKarsiligi, talebimDuzenlenirMi, talebimKalemReddi, guncellemeReddi, guncellemeIptalleri, ikinciAlimRiski,
   fasonKalemReddi, fasonOnTalepAdaylari, hizliBagReddi, planOnTalepAdaylari, uygulananKartReddi, type KalemBagi,
   fasonKirilimlari, fasonSureOrnekleri, fasonSuresiTahmini, fasonTerminUyumu, talepEdenDurumu, talepEdenGovdeDurumu, talepEdenGorunumu, avansAsimi, gerceklesenKosul, planGerceklesenFarki, talepKartiReddi, tamGorurMu, teklifKuru, teslimDurumu, odemePlaniHedefi, varsayilanOdemePlani,
@@ -171,6 +171,8 @@ async function talepleriYalinKur(db: Db, satirlar: s.TalepSatiri[]): Promise<Tal
         avansYuzdesi: sade(q.avansYuzdesi), ilkToplam: sade(q.ilkToplam),
         fiyatlar: a.fiyatlar.filter((f) => f.talepId === t.id && f.teklifId === q.id).map((f) => ({
           kalemId: f.kalemId, birimFiyat: sade(f.birimFiyat), iskontoYuzdesi: sade(f.iskontoYuzdesi), terminGun: f.terminGun, enAzMiktar: sade(f.enAzMiktar),
+          basamaklar: a.basamaklar.filter((b) => b.talepId === t.id && b.teklifId === q.id && b.kalemId === f.kalemId)
+            .map((b) => ({ esik: sade(b.esik), birimFiyat: sade(b.birimFiyat) })),
         })),
       })),
       karar: k === null ? null : {
@@ -441,6 +443,8 @@ export async function talepAc(db: Db, k: Kullanici, gelen: TalepYazimi, izYaz: F
   }
   // B-002: açılış taslaktan geçiştir; onaya ve siparişe açılışta geçilmez.
   if (!gecisVarMi('taslak', gelen.durum)) throw gecersiz(ILETILER.acilisDurumu);
+  const esikRed = basamakEsigiReddi(gelen);
+  if (esikRed !== null) throw gecersiz(esikRed);
   const t = await sunucuAlanlari(db, k, gelen, null);
   await kalemKartlariniDenetle(db, t.kalemler, []);
   const talepEden = await talepEdeniDenetle(db, k, t.talepEdenKisiId);
@@ -889,6 +893,8 @@ export async function talepKaydet(db: Db, k: Kullanici, id: string, g: TalepKayd
     throw gecersiz(ILETILER.onayDurumu);
   }
   if (kararDegistiMi(eski.karar, temel.karar) && kararOnayliMi(eski.onaylar)) throw gecersiz(ILETILER.onayliKararDegismez);
+  const basamakRed = basamakKilidiReddi(eski.durum, eski, temel) ?? basamakEsigiReddi(temel);
+  if (basamakRed !== null) throw gecersiz(basamakRed);
   const siparisRed = siparisReddi(eski.durum, temel.durum, temel.karar !== null, [...eski.onaylar, ...yeniOnaylar])
     ?? kartsizSiparisReddi(eski.durum, temel.durum, temel.kalemler)
     ?? terminsizSiparisReddi(eski, temel)

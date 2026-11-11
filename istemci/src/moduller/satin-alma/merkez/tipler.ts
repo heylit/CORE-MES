@@ -120,6 +120,8 @@ export interface RequestItem {
 
 export interface Rfq { supplierId: string; sentAt: DateStr; dueDate: DateStr }
 
+export interface PriceTier { min: number; price: number }
+
 export interface Quote {
   id: string;
   supplierId: string;
@@ -130,6 +132,11 @@ export interface Quote {
   fxRate: number | null;
   /** kalem kimliği → birim fiyat (teklif para biriminde, KDV hariç) */
   prices: Record<string, number>;
+  /** Kademeli fiyat (2975): kalem kimliği → "eşik ve üstü" ek basamaklar; taban basamak `prices`'tır. */
+  tiers?: Record<string, PriceTier[]>;
+  /** 2974-1 a: ilk basamağın eşiği satırın en az miktarıdır; talep altında kalırsa alınan miktar eşiğe yükselir.
+   *  Anahtarı olmayan kalemde alan gönderilmez (sunucu saklananı korur); null temizler. */
+  minQty?: Record<string, number | null>;
   discountPct: number;
   shipping: number;
   otherCost: number;

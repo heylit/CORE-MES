@@ -1,11 +1,11 @@
 import type { SiparisLogo } from "#paylasilan/sozlesme/satin-alma.ts";
-import type { Award, ExcessLine, Priority, PurchaseRequest, Quality, RequestStatus, Weights } from "./tipler.ts";
+import type { Award, ExcessLine, Priority, PurchaseRequest, Quality, Quote, RequestItem, RequestStatus, Weights } from "./tipler.ts";
 import { CRIT, FLOW, OPEN, COMMITTED, PRIO, QUALITY, stLabel } from "./constants.ts";
 import { S, V, memo, nameOf, settings, type Page } from "./store.ts";
 import {
   awardTotals, budgetUse, evaluate, lateBy, matOf, matStats, payText, priceHistory, quoteCalc, requiredApprover,
   savingsOf, spendLines, supName, supplierStats, validity, vsLast, fiyatUyarisi, type EvalRow, type Evaluation, type PriceEntry,
-  awardOrders, orderDue, itemCost, planCost, type OrderInfo,
+  awardOrders, orderDue, itemCost, itemLineCost, planCost, type OrderInfo,
   approvalState, durumEtiketi, gecikenSiparisSayisi, siparisEtiketi,
 } from "./calc.ts";
 import {
@@ -23,6 +23,14 @@ import { getRole, onaylayabilir, viewApproval, viewApprovals, viewRequesterHome,
 // Ortak parçalarla çizilen ekranlar (iş kutusu, Talepler, talep ayrıntısı; 2412-2) merkezin durumunu her çizimde yeniden okur.
 let cizimSurumu = 0;
 const DINLEYICILER = new Set<() => void>();
+/** Kademeli fiyat (2975): basamaklı hücrede rozet; liste üzerine gelince görünür, ekran okuyucuya görünmez metinle okunur. */
+export function kademeRozeti(q: Pick<Quote, "prices" | "tiers" | "currency">, it: RequestItem): string {
+  const t = (q.tiers?.[it.id] ?? []).filter(b => isNum(b.min) && isNum(b.price)).sort((a, b) => a.min - b.min);
+  if (!t.length) return "";
+  const liste = [`taban ${money(q.prices[it.id] ?? 0, q.currency)}`, ...t.map(b => `${numIn(b.min)}+ ${money(b.price, q.currency)}`)].join(", ");
+  return ` <span class="flag info" title="${esc(liste)}" aria-hidden="true">kademeli</span><span class="sr-only">Kademeli fiyat: ${esc(liste)}</span>`;
+}
+
 export function merkezAbone(f: () => void): () => void { DINLEYICILER.add(f); return () => { DINLEYICILER.delete(f); }; }
 export const merkezSurumu = (): number => cizimSurumu;
 /** Bu sayfanın başlığını, listesini ve adım şeridini ortak parçalar çizer; merkez yalnız gövdeyi (ya da hiçbir şeyi) yazar. */
@@ -629,7 +637,7 @@ function matrixHTML(r: PurchaseRequest, ev: Evaluation): string {
     const vals = cols.map(x => x.c.lines[it.id] ? x.c.lines[it.id]!.unit * x.c.unitTRY : null);
     const any = vals.find(isNum); const vl = isNum(any) ? vsLast(r, it, any) : null;
     h += row(`${esc(it.name)}<span class="sub">${numIn(parseNum(it.qty))} ${esc(it.unit)}${vl ? `, son alış ${money(vl.last.unitTRY)}` : ""}</span>${parcaAltSatiri(it)}`,
-      cols.map(x => { const l = x.c.lines[it.id]; if (!l) return '<span class="faint">teklif yok</span>'; const d = vsLast(r, it, l.unit * x.c.unitTRY); return `${money(l.unit, x.q.currency)}<span class="sub">${money(l.line, x.q.currency)}${d ? " " + deltaHTML(d.pct) : ""}</span>`; }), vals, "min");
+      cols.map(x => { const l = x.c.lines[it.id]; if (!l) return '<span class="faint">teklif yok</span>'; const d = vsLast(r, it, l.unit * x.c.unitTRY); return `${money(l.unit, x.q.currency)}${kademeRozeti(x.q, it)}<span class="sub">${money(l.line, x.q.currency)}${d ? " " + deltaHTML(d.pct) : ""}</span>${l.ust ? `<span class="sub">${esc(numIn(l.ust.min))} ${esc(it.unit)} alınırsa ${money(l.ust.line, x.q.currency)}</span>` : ""}`; }), vals, "min");
   });
   h += sec("Ticari şartlar");
   h += row("Ara toplam", cols.map(x => money(x.c.sub, x.q.currency)));
@@ -819,8 +827,8 @@ export function updateSplitSum(): void {
   const r = S.requests[V.id ?? ""]; const box = $("#split-sum"); if (!r || !box) return;
   const ev = evaluate(r); if (!ev.split) return;
   const plan = planCost(r, ev.all, readSplitAssign());
-  (r.items || []).forEach(it => { const g = plan.groups.find(g => g.items.includes(it)); const u = g ? itemCost(g.x, it) : null;
-    const su = $(`[data-su="${it.id}"]`), st = $(`[data-st="${it.id}"]`); if (su) su.textContent = u === null ? "–" : money(u); if (st) st.textContent = u === null ? "–" : money(u * (parseNum(it.qty) || 0)); });
+  (r.items || []).forEach(it => { const g = plan.groups.find(g => g.items.includes(it)); const u = g ? itemCost(g.x, it) : null, t = g ? itemLineCost(g.x, it) : null;
+    const su = $(`[data-su="${it.id}"]`), st = $(`[data-st="${it.id}"]`); if (su) su.textContent = u === null ? "–" : money(u); if (st) st.textContent = t === null ? "–" : money(t); });
   const opt = ev.split.plan, best = ev.split.best;
   const diffOpt = plan.total - opt.total;
   box.innerHTML = `<div class="note">

@@ -11,6 +11,7 @@ import { bilinmeyenKgSatirlari, kgEskimeHatirlatmalari, kgFiyatiEskiMi, kgFiyati
 import { agirlikliGecikme, fasonKalani, sonDonusGecikmesi } from './kurallar.ts';
 import { fasonKalemReddi, fasonOnTalepAdaylari, hizliBagReddi, planOnTalepAdaylari, uygulananKartReddi } from './kurallar.ts';
 import { onayKademesiReddi, onayLimitRolleri, onayLimitleriDegistiMi, onayLimitiReddi } from './kurallar.ts';
+import { basamakEsigiReddi } from './kurallar.ts';
 import { KUR_KILIDI, tedarikciyeGidenAyrinti, kalemAyrintisiniKoru, kilittenSonraOnayliMi, kurKilidiIsi, kurKilidiReddi } from './kurallar.ts';
 
 const T: TalepYazimi = {
@@ -151,6 +152,34 @@ test('S2 fiyat izi: para birimi değişince fiyat aynı kalsa da satır yazılı
 test('S2 fiyat izi: fiyatı değişmeyen kayıt iz üretmez (not, koşul ve tedarikçi adı değişse de)', () => {
   const eski = hal([teklif(1, [[1, '10']])]);
   assert.deepEqual(fiyatIzleri(eski, hal([teklif(1, [[1, '10']], { notlar: 'başka not', vadeGun: 30, tedarikciAdi: 'Başka ad' })])), []);
+});
+
+test('2975 fiyat izi (Güvenlik N1): eklenen, değişen ve silinen basamak birer satırdır; eşik sayı olarak eşlenir, aynı basamak iz üretmez', () => {
+  const b = (basamaklar: { esik: string; birimFiyat: string }[]) => hal([teklif(1, [[1, '10']], {
+    fiyatlar: [{ kalemId: kimlik(101), birimFiyat: '10', basamaklar }] } as Partial<Teklif>)]);
+  const ortak = { teklifId: kimlik(201), firmaId: 910001, kalemId: kimlik(101), miktar: '2', paraBirimi: 'TRY' };
+  assert.deepEqual(fiyatIzleri(b([]), b([{ esik: '10', birimFiyat: '8' }])), [{ ...ortak, basamakEsigi: '10', onceki: null, yeni: '8' }]);
+  assert.deepEqual(fiyatIzleri(b([{ esik: '10', birimFiyat: '8' }]), b([{ esik: '10.0000', birimFiyat: '7.5' }])),
+    [{ ...ortak, basamakEsigi: '10.0000', onceki: '8', yeni: '7.5' }]);
+  assert.deepEqual(fiyatIzleri(b([{ esik: '10', birimFiyat: '8' }, { esik: '20', birimFiyat: '7' }]), b([{ esik: '10', birimFiyat: '8' }])),
+    [{ ...ortak, basamakEsigi: '20', onceki: '7', yeni: null }]);
+  assert.deepEqual(fiyatIzleri(b([{ esik: '10', birimFiyat: '8' }]), b([{ esik: '10.0', birimFiyat: '8.0000' }])), []);
+  // Taban fiyat ve basamak aynı kayıtta değişirse ikisi de ayrı satırdır; her satır çekirdeğin ek sınırındadır.
+  const ikisi = fiyatIzleri(b([]), hal([teklif(1, [[1, '9']], { fiyatlar: [{ kalemId: kimlik(101), birimFiyat: '9', basamaklar: [{ esik: '10', birimFiyat: '8' }] }] } as Partial<Teklif>)]));
+  assert.deepEqual(ikisi.map((r) => [r.basamakEsigi ?? null, r.onceki, r.yeni]), [[null, '10', '9'], ['10', null, '8']]);
+  for (const r of ikisi) assert.ok(Object.keys(r).length <= 8 && Buffer.byteLength(JSON.stringify(r), 'utf8') <= 512);
+  // Silinen teklifin basamakları da yeni değersiz girer.
+  assert.deepEqual(fiyatIzleri(b([{ esik: '10', birimFiyat: '8' }]), hal([])).map((r) => [r.basamakEsigi ?? null, r.onceki, r.yeni]), [[null, '10', null], ['10', '8', null]]);
+});
+
+test('2975 (Veri): üst basamağın eşiği en az miktardan büyük olur; en az miktar yoksa her eşik geçer', () => {
+  const q = (enAzMiktar: string | null, esikler: string[]) => ({ teklifler: [teklif(1, [[1, '10']], {
+    fiyatlar: [{ kalemId: kimlik(101), birimFiyat: '10', enAzMiktar, basamaklar: esikler.map((esik) => ({ esik, birimFiyat: '5' })) }] } as Partial<Teklif>)] });
+  assert.equal(basamakEsigiReddi(q('20', ['30', '40'])), null);
+  assert.equal(basamakEsigiReddi(q(null, ['1'])), null);
+  assert.equal(basamakEsigiReddi(q('20', ['20'])), ILETILER.basamakEnAz);
+  assert.equal(basamakEsigiReddi(q('20.5', ['30', '20.25'])), ILETILER.basamakEnAz);
+  assert.equal(basamakEsigiReddi(q('20', [])), null);
 });
 
 test('S2 fiyat izi: serbest metin ve dosya kayda girmez; her satır çekirdeğin ek sınırındadır (8 alan, 512 bayt)', () => {

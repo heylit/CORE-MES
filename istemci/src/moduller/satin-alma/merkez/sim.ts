@@ -6,7 +6,7 @@
 import type { Award, PurchaseRequest, RequestItem, SimScenario } from "./tipler.ts";
 import { OPEN } from "./constants.ts";
 import { S, V, saveRequest } from "./store.ts";
-import { evaluate, itemCost, miktarSayisi, optimalSplit, supName, payText, type EvalRow, type Evaluation } from "./calc.ts";
+import { basamakFiyati, evaluate, itemCost, miktarSayisi, optimalSplit, supName, payText, type EvalRow, type Evaluation } from "./calc.ts";
 import { BELIRSIZ_MIKTAR } from "../../../ortak/veri/miktar.ts";
 import { $, $$, addDays, clamp, clone, dayDiff, esc, fmtDate, money, nf0, numIn, parseNum, pct, sum, todayStr, uid, kokIcinde, type FormEl } from "./util.ts";
 import { empty, render } from "./views.ts";
@@ -141,7 +141,8 @@ function kpiOf(r: PurchaseRequest, ev: Evaluation, alloc: Alloc): SimKpi {
   for (const x of ev.elig) {
     const lines = (r.items ?? []).map((it) => ({ it, qty: alloc[it.id]?.[x.q.id] ?? 0 })).filter((l) => l.qty > 0);
     if (!lines.length) continue;
-    const goods = sum(lines.map((l) => l.qty * (itemCost(x, l.it) ?? 0)));
+    // Kademeli fiyat (2975): paylaştırılan miktarın basamağı (ve en az miktarı) geçerlidir, talebin tamamınınki değil.
+    const goods = sum(lines.map((l) => (basamakFiyati(x.q, l.it.id, l.qty)?.line ?? 0) * x.c.unitFactorTRY));
     const extras = (x.c.ship + x.c.other) * x.c.rate * x.c.factor; // sipariş başına tam masraf
     const lead = parseNum(x.q.leadDays);
     const late = r.needDate && lead !== null ? Math.max(0, dayDiff(r.needDate, addDays(today, lead))) || null : null;
@@ -229,7 +230,7 @@ export function tabSim(r: PurchaseRequest): string {
       ${items.map((it) => `<tr><td class="rl"><b>${esc(it.name)}</b><span class="sub">${numIn(qtyOf(it))} ${esc(it.unit)}</span><span class="sub" data-sneed="${it.id}"></span>${itemBalHTML(ev, st, it)}</td>
         ${cols.map((x) => { const u = itemCost(x, it); if (u === null) return '<td class="off"><span class="faint small">teklif yok</span></td>';
           const v = st.alloc[it.id]?.[x.q.id] ?? 0;
-          return `<td><div class="sc"><input type="range" data-sr="${it.id}" data-q="${x.q.id}" min="0" max="${qtyOf(it)}" step="${stepOf(it)}" value="${v}" aria-label="${esc(it.name)}, ${esc(supName(x.q))} miktarı"><div class="row" data-sa-y="24"><input type="text" inputmode="decimal" data-sn="${it.id}" data-q="${x.q.id}" value="${numIn(v)}" aria-label="${esc(it.name)}, ${esc(supName(x.q))} miktarı"><span class="sub">${money(u)}</span></div></div></td>`; }).join("")}</tr>`).join("")}
+          return `<td><div class="sc"><input type="range" data-sr="${it.id}" data-q="${x.q.id}" min="0" max="${qtyOf(it)}" step="${stepOf(it)}" value="${v}" aria-label="${esc(it.name)}, ${esc(supName(x.q))} miktarı"><div class="row" data-sa-y="24"><input type="text" inputmode="decimal" data-sn="${it.id}" data-q="${x.q.id}" value="${numIn(v)}" aria-label="${esc(it.name)}, ${esc(supName(x.q))} miktarı"><span class="sub" data-sbf="${it.id}:${x.q.id}">${birimHTML(x, it, v) ?? money(u)}</span></div></div></td>`; }).join("")}</tr>`).join("")}
       </tbody><tfoot>
         <tr><td class="rl">Mal bedeli (net)</td>${cols.map((x) => `<td data-sg="${x.q.id}:goods">–</td>`).join("")}</tr>
         <tr><td class="rl">Nakliye ve masraf</td>${cols.map((x) => `<td data-sg="${x.q.id}:extras">–</td>`).join("")}</tr>
@@ -248,6 +249,14 @@ function current(): { r: PurchaseRequest; ev: Evaluation; st: SimState } | null 
 }
 
 /** sonuç şeridi, tedarikçi satırları, kalem uyarıları, grafik ve senaryolar */
+/** Birim fiyat tedarikçiye düşen miktarın basamağından okunur; yoksa toplam ile birim fiyat tutmaz. */
+function birimHTML(x: EvalRow, it: RequestItem, qty: number): string | null {
+  const l = basamakFiyati(x.q, it.id, qty);
+  if (!l) return null;
+  const u = money(l.unit * x.c.unitFactorTRY);
+  return l.alinan !== undefined && qty > 0 ? `${u}, en az ${numIn(l.alinan)} ${esc(it.unit)}` : u;
+}
+
 export function simLive(): void {
   const c = current(); if (!c) return;
   const { r, ev, st } = c;
@@ -269,6 +278,11 @@ export function simLive(): void {
     set("goods", g ? money(g.goods, "TRY", 0) : '<span class="faint">sipariş yok</span>');
     set("extras", g ? (g.extras > 0.5 ? money(g.extras, "TRY", 0) : "dahil") : "–");
     set("arr", g ? (g.lead === null ? "termin yok" : `${fmtDate(addDays(todayStr(), g.lead))}${g.late ? ` <span class="flag bad">${g.late} gün geç</span>` : ""}`) : "–");
+  }
+  for (const it of r.items ?? []) for (const x of ev.elig) {
+    const el = $<HTMLElement>(`[data-sbf="${it.id}:${x.q.id}"]`);
+    const h = el ? birimHTML(x, it, st.alloc[it.id]?.[x.q.id] ?? 0) : null;
+    if (el && h !== null) el.innerHTML = h;
   }
   for (const it of r.items ?? []) {
     const p = k.perItem[it.id]; const el = $<HTMLElement>(`[data-sneed="${it.id}"]`);
