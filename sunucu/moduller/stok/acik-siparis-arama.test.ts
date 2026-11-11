@@ -11,6 +11,8 @@ import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
 import { emirNolari } from '../uretim-emirleri/disari.ts';
+import { parcaRevizyonuCozucusu } from './disari.ts';
+import { revizyonUyusmuyor } from './kurallar.ts';
 
 // Mal kabuldeki tek arama kutusu açık sipariş satırını malzeme, tedarikçi, üretim emri ve emrin projesiyle bulur. Satırın emri
 // talebin emridir; birleşmiş talepte kalemin kaynak talebinin emri önce gelir; fason satırında iş emrinin emridir. Proje emrin
@@ -53,17 +55,31 @@ describe('stok açık sipariş satırlarında emir ve proje (gerçek PostgreSQL)
     return t;
   }
   // Açık sipariş satırı: talebin emri, birleşmiş talepte kalemin kaynak talebinin emri ve sipariş satırının iş emri (fason) ayrı verilir.
-  async function siparisSatiri(x: { kalem: string; tedarikci: string; talepEmri?: number; kaynakEmri?: number; isEmri?: number }): Promise<number> {
+  let kartSira = 0;
+  async function kart(tur: 'hammadde' | 'yarimamul' | 'hizmet'): Promise<number> {
+    kartSira += 1;
+    await o().sahip.sorgu("INSERT INTO malzeme_katalog_kod_sirasi (onek, son_sira) VALUES ('ASA-DNM-', 0) ON CONFLICT (onek) DO NOTHING");
+    return (await o().sahip.tek<{ no: number }>(
+      `INSERT INTO malzeme_katalog_karti (kimlik, tur, onek, sira_no, onay_durumu, kayit, acan_kisi_id, guncelleyen_kisi_id, hizmet_yonu)
+       VALUES ($1, $2, 'ASA-DNM-', $3, 'aktif', $4, $5, $5, $6) RETURNING no`,
+      [`asa-dnm-${kartSira}`, tur, kartSira, JSON.stringify({ id: `asa-dnm-${kartSira}`, com: { ad: `Deneme ${tur} ${kartSira}` } }), kisi, tur === 'hizmet' ? 'alinan' : null]))!.no;
+  }
+  async function siparisSatiri(x: { kalem: string; tedarikci: string; talepEmri?: number; kaynakEmri?: number; isEmri?: number; malzemeNo?: number; revizyon?: string }): Promise<number> {
     const [t, kl, tk] = [await talep(x.talepEmri ?? null), randomUUID(), randomUUID()];
     const kaynak = x.kaynakEmri === undefined ? null : await talep(x.kaynakEmri);
     const s = o().sahip;
-    await s.sorgu('INSERT INTO satin_alma_talep_kalemi (talep_id, id, sira, ad, kaynak_talep_id, kaynak_sira) VALUES ($1, $2, 1, $3, $4, $5)',
-      [t, kl, x.kalem, kaynak, kaynak === null ? null : 1]);
+    let katalog: string | null = null;
+    if (x.malzemeNo !== undefined) {
+      katalog = randomUUID();
+      await s.sorgu('INSERT INTO satin_alma_katalog (id, malzeme_no) VALUES ($1, $2)', [katalog, x.malzemeNo]);
+    }
+    await s.sorgu('INSERT INTO satin_alma_talep_kalemi (talep_id, id, sira, ad, kaynak_talep_id, kaynak_sira, katalog_id) VALUES ($1, $2, 1, $3, $4, $5, $6)',
+      [t, kl, x.kalem, kaynak, kaynak === null ? null : 1, katalog]);
     await s.sorgu("INSERT INTO satin_alma_teklif (talep_id, id, para_birimi, teklif_tarihi, tedarikci_adi) VALUES ($1, $2, 'TRY', current_date, $3)", [t, tk, x.tedarikci]);
     await s.sorgu("INSERT INTO satin_alma_karar (talep_id, mod, karar_tarihi) VALUES ($1, 'bolunmus', current_date)", [t]);
     await s.sorgu('INSERT INTO satin_alma_siparis (talep_id, teklif_id) VALUES ($1, $2)', [t, tk]);
-    return (await s.tek<{ id: number }>("INSERT INTO satin_alma_siparis_satiri (talep_id, teklif_id, kalem_id, miktar, birim, is_emri_id) VALUES ($1, $2, $3, 4, 'adet', $4) RETURNING id",
-      [t, tk, kl, x.isEmri ?? null]))!.id;
+    return (await s.tek<{ id: number }>("INSERT INTO satin_alma_siparis_satiri (talep_id, teklif_id, kalem_id, miktar, birim, is_emri_id, parca_revizyonu) VALUES ($1, $2, $3, 4, 'adet', $4, $5) RETURNING id",
+      [t, tk, kl, x.isEmri ?? null, x.revizyon ?? null]))!.id;
   }
 
   before(async () => {
@@ -126,5 +142,50 @@ describe('stok açık sipariş satırlarında emir ve proje (gerçek PostgreSQL)
     assert.deepEqual(al(id.projesiz), ['Deneme Baglanti', projesiz, nolar.get(projesiz), null, null]);
     assert.deepEqual(al(id.bos), ['Deneme Sarf', null, null, null, null]);
     for (const x of l) assert.equal(Object.keys(x).some((k) => /fiyat|tutar|maliyet/i.test(k)), false, 'satırda fiyat alanı yok');
+  });
+
+  // 2877: parti sipariş satırının revizyonuyla açılır; satır bu revizyonu ve yürürlükteki revizyonu taşır, farkı sunucu söyler.
+  // Hizmet satırının iş emri bağı fason dönüşünü ayırır.
+  test('2877: sipariş revizyonu, yürürlükteki revizyon ve uyuşmazlık; hizmet satırında iş emri bağı', async () => {
+    const [eski, ayni, kucuk, revsiz, yururluksuz] = [await kart('yarimamul'), await kart('yarimamul'), await kart('yarimamul'), await kart('hammadde'), await kart('yarimamul')];
+    const hizmet = await kart('hizmet');
+    const id = {
+      eski: await siparisSatiri({ kalem: 'Deneme braket', tedarikci: 'Deneme Fasoncu', malzemeNo: eski, revizyon: 'A' }),
+      ayni: await siparisSatiri({ kalem: 'Deneme flans', tedarikci: 'Deneme Fasoncu', malzemeNo: ayni, revizyon: 'B' }),
+      kucuk: await siparisSatiri({ kalem: 'Deneme kapak', tedarikci: 'Deneme Fasoncu', malzemeNo: kucuk, revizyon: ' c ' }),
+      revsiz: await siparisSatiri({ kalem: 'Deneme cubuk', tedarikci: 'Deneme Celik', malzemeNo: revsiz }),
+      yururluksuz: await siparisSatiri({ kalem: 'Deneme govde', tedarikci: 'Deneme Fasoncu', malzemeNo: yururluksuz, revizyon: 'A' }),
+      fason: await siparisSatiri({ kalem: 'Deneme kaplama', tedarikci: 'Deneme Fasoncu', malzemeNo: hizmet, isEmri: await fasonIsi(await emir(null)) }),
+      hizmet: await siparisSatiri({ kalem: 'Deneme kalibrasyon', tedarikci: 'Deneme Lab', malzemeNo: hizmet }),
+    };
+    const istenen: number[][] = [];
+    parcaRevizyonuCozucusu(async (_db, idler) => {
+      istenen.push([...idler]);
+      return new Map<number, string>([[eski, 'B'], [ayni, 'b'], [kucuk, 'C'], [revsiz, 'A']]);
+    });
+    let l: AcikSiparisSatiri[];
+    try { l = await satirlar(); } finally { parcaRevizyonuCozucusu(async () => new Map()); }
+    const al = (x: number) => {
+      const r = l.find((y) => y.id === x);
+      assert.ok(r, String(x));
+      return [r.parcaRevizyonu, r.yururlukRevizyonu, r.revizyonUyusmuyor];
+    };
+    assert.deepEqual(al(id.eski), ['A', 'B', true]);
+    assert.deepEqual(al(id.ayni), ['B', 'b', false], 'büyük-küçük harf farkı uyuşmazlık değil');
+    assert.deepEqual(al(id.kucuk), [' c ', 'C', false], 'kenar boşluğu farkı uyuşmazlık değil');
+    assert.deepEqual(al(id.revsiz), [null, null, null], 'siparişte revizyon yoksa yürürlükteki istenmez, karşılaştırılmaz');
+    assert.deepEqual(al(id.yururluksuz), ['A', null, null], 'yürürlükte revizyon yoksa karşılaştırılmaz');
+    assert.equal(istenen.length, 1, 'yürürlükteki revizyonlar tek toplu istekle');
+    assert.ok(!istenen[0]!.includes(revsiz));
+    assert.equal(l.find((y) => y.id === id.fason)!.isEmriId !== null, true);
+    assert.equal(l.find((y) => y.id === id.hizmet)!.isEmriId, null);
+  });
+
+  test('2877: revizyon karşılaştırma kuralı', () => {
+    assert.equal(revizyonUyusmuyor('A', 'B'), true);
+    assert.equal(revizyonUyusmuyor(' a', 'A '), false);
+    assert.equal(revizyonUyusmuyor('i', 'İ'), false, 'Türkçe büyük harf');
+    assert.equal(revizyonUyusmuyor(null, 'A'), null);
+    assert.equal(revizyonUyusmuyor('A', '  '), null);
   });
 });

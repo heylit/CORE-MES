@@ -17,13 +17,13 @@ import { uretimEmriOzeti, emirDugumleri, emirlerinProjeleri, isEmriOzetleri, kap
 import {
   binde, bindenMetin, duzeltmeEngeli, partiDenetimi, partiEtiketi, partiGereksinimi, stoklanirMi, siparisBagiEngeli, siparisMalzemeEngeli, malKabulSatirTuru, fasonDonusKonumuEngeli,
   KARANTINA_KONUMU_YOK, gkkGirisKonumuEngeli, malKabulKonumuEngeli, GKK_KARANTINA_KONUMU_YOK, girisKontroluDuzeltmeEngeli, uretimGirisiEngeli, uretimGirisiDurumEngeli, uretimGirisiHedefi,
-  uretimGirisiKartEngeli, uretimGirisiKesirEngeli, sktGirisEngeli,
+  uretimGirisiKartEngeli, uretimGirisiKesirEngeli, sktGirisEngeli, revizyonUyusmuyor,
 } from '../kurallar.ts';
 import type { MalzemeTuru } from '../kurallar.ts';
 import * as sorgular from '../sorgular.ts';
 import { fasonIsindenDonus, sevkKalemiKabulu } from './dis-akis.ts';
 import { kaynakPartisi, dusumDenetle, kaliteDegistir, partiKaliteDurumuYap, karantinadanBirak, tersCevir } from './hareket.ts';
-import { belgeNo, partiBulVeyaAc, korumali, adlar, emirNoDe, emirNoHaritasi, aktifKonum, varsayilanKonum, bakiyeDegistir, siraliKilitle, hareket } from './ortak.ts';
+import { belgeNo, partiBulVeyaAc, yururluktekiRevizyonlar, korumali, adlar, emirNoDe, emirNoHaritasi, aktifKonum, varsayilanKonum, bakiyeDegistir, siraliKilitle, hareket } from './ortak.ts';
 import { partiBelgeleri } from './pano.ts';
 import { emirVarDenetle, bekleyenlereDagit } from './uretim.ts';
 
@@ -235,14 +235,19 @@ export async function acikSiparisSatirlari(db: Db): Promise<AcikSiparisSatirlari
   const nolar = await emirNoHaritasi(db, emirler);
   const projesi = await emirlerinProjeleri(db, emirler.filter((e): e is number => e !== null));
   const projeAdi = await projeAdlari(db, [...new Set(projesi.values())]);
+  const yururlukte = await yururluktekiRevizyonlar(db, l.flatMap((x) => (x.malzemeNo === null || x.parcaRevizyonu === null ? [] : [x.malzemeNo])));
   return { satirlar: l.map((x, i) => {
     const emirId = emirler[i] ?? null;
     const projeId = emirId === null ? null : projesi.get(emirId) ?? null;
+    // Siparişte revizyon yoksa karşılaştırılacak bir şey yoktur; yürürlükteki de yazılmaz.
+    const yur = x.malzemeNo === null || x.parcaRevizyonu === null ? null : yururlukte.get(x.malzemeNo) ?? null;
     return {
       id: x.id, siparisNo: x.siparisNo, talepNo: x.talepNo, tedarikciAdi: x.tedarikciAdi, malzemeId: x.malzemeNo,
       malzemeTur: (x.malzemeNo === null ? null : (kartlar.get(x.malzemeNo)?.tur as MalzemeTuru | undefined)) ?? null, kalemAdi: x.kalemAdi,
       miktar: x.miktar, kalanMiktar: x.kalanMiktar, birim: x.birim, beklenenTeslim: x.beklenenTeslim,
       uretimEmriId: emirId, emirNo: emirNoDe(nolar, emirId), projeId, projeAdi: projeId === null ? null : projeAdi.get(projeId) ?? null,
+      isEmriId: x.isEmriId, parcaRevizyonu: x.parcaRevizyonu, yururlukRevizyonu: yur,
+      revizyonUyusmuyor: revizyonUyusmuyor(x.parcaRevizyonu, yur),
     };
   }) };
 }

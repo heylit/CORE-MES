@@ -1564,3 +1564,11 @@ export function seriEklemeleri(son: { kod: string; adet: string | null } | null,
   }
   return { sonAdet, yeni, atlanan };
 }
+
+// Mal kabul (2877): sipariş satırının parça revizyonu yürürlüktekiyle karşılaştırılır; boşluk ve büyük-küçük harf gözetilmez.
+// Biri yoksa karşılaştırılamaz: null (uyarı verilmez, uyuşuyor da denmez).
+export function revizyonUyusmuyor(siparis: string | null | undefined, yururlukte: string | null | undefined): boolean | null {
+  const a = siparis?.trim().toLocaleUpperCase('tr-TR');
+  const b = yururlukte?.trim().toLocaleUpperCase('tr-TR');
+  return a && b ? a !== b : null;
+}

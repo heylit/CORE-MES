@@ -10,12 +10,12 @@ afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
 const satir = (id: number, x: Partial<AcikSiparisSatiri>): AcikSiparisSatiri => ({
   id, siparisNo: `SA-${id}`, talepNo: `ST-${id}`, tedarikciAdi: 'Deneme Tedarik', malzemeId: id, malzemeTur: null, kalemAdi: `Deneme kalem ${id}`,
-  miktar: '10', kalanMiktar: '10', birim: 'adet', beklenenTeslim: null, uretimEmriId: null, emirNo: null, projeId: null, projeAdi: null, ...x,
+  miktar: '10', kalanMiktar: '10', birim: 'adet', beklenenTeslim: null, uretimEmriId: null, emirNo: null, projeId: null, projeAdi: null, isEmriId: null, ...x,
 });
 const SATIRLAR = [
   satir(1, { kalemAdi: 'Çelik mil Ø20', tedarikciAdi: 'Deneme Çelik', uretimEmriId: 7, emirNo: 'UE-2026-0007', projeId: 3, projeAdi: 'Deneme Işık Projesi' }),
   satir(2, { kalemAdi: 'Pul M8', tedarikciAdi: 'Deneme Bağlantı' }),
-  satir(3, { kalemAdi: 'Kaplama hizmeti', malzemeTur: 'hizmet', tedarikciAdi: 'Deneme Fasoncu', uretimEmriId: 8, emirNo: 'UE-2026-0008', projeId: 3, projeAdi: 'Deneme Işık Projesi' }),
+  satir(3, { kalemAdi: 'Kaplama hizmeti', malzemeTur: 'hizmet', isEmriId: 31, tedarikciAdi: 'Deneme Fasoncu', uretimEmriId: 8, emirNo: 'UE-2026-0008', projeId: 3, projeAdi: 'Deneme Işık Projesi' }),
 ];
 const idler = (metin: string) => acikSiparisAra(SATIRLAR, metin).map((x) => x.id);
 

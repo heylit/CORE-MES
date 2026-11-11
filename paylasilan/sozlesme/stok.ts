@@ -693,6 +693,12 @@ export const acikSiparisSatiri = z.object({
   emirNo: z.string().nullable().optional(),
   projeId: z.number().int().nullable().optional(),
   projeAdi: z.string().nullable().optional(),
+  // 2877: satırın fason iş emri (doluysa hizmet satırı fason dönüşüdür), sipariş verilirken yazılan parça revizyonu ve yürürlükteki
+  // revizyon; uyuşmazlık ikisi de doluyken boşluk ve büyük-küçük harf gözetmeden farkta true, biri boşsa null.
+  isEmriId: z.number().int().nullable().optional(),
+  parcaRevizyonu: z.string().nullable().optional(),
+  yururlukRevizyonu: z.string().nullable().optional(),
+  revizyonUyusmuyor: z.boolean().nullable().optional(),
 });
 export type AcikSiparisSatiri = z.output<typeof acikSiparisSatiri>;
 export const acikSiparisSatirlariCevabi = z.object({ satirlar: z.array(acikSiparisSatiri) });
