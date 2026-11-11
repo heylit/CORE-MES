@@ -76,6 +76,11 @@ export const teklifSemasi = z.object({
     iskontoYuzdesi: yuzde.nullable().optional(),
     terminGun: z.number().int().min(0).max(3650).nullable().optional(),
     enAzMiktar: eksiOlmayan.refine((d) => !/^0*(\.0*)?$/.test(d), 'En az miktar sıfırdan büyük olur.').nullable().optional(),
+    // Kademeli fiyat (2975): "eşik ve üstü -> birim fiyat"; ilk basamak satırın kendisidir, burada en çok dört ek basamak.
+    basamaklar: z.array(z.object({
+      esik: eksiOlmayan.refine((d) => !/^0*(\.0*)?$/.test(d), 'Basamak eşiği sıfırdan büyük olur.'),
+      birimFiyat: eksiOlmayan,
+    })).max(4).refine((b) => new Set(b.map((x) => Number(x.esik))).size === b.length, 'Aynı eşik iki kez yazılmaz.').optional(),
   })).max(500),
 });
 

@@ -119,6 +119,8 @@ export function talepEkrana(t: Talep): PurchaseRequest {
     quotes: t.teklifler.map((q): Quote => ({
       id: q.id, supplierId: q.firmaId === null ? '' : String(q.firmaId), supplierName: q.tedarikciAdi, date: q.teklifTarihi, validUntil: q.gecerlilik ?? '',
       currency: q.paraBirimi, fxRate: sayi(q.kur), prices: Object.fromEntries(q.fiyatlar.map((f) => [f.kalemId, Number(f.birimFiyat)])),
+      ...(q.fiyatlar.some((f) => f.enAzMiktar) ? { minQty: Object.fromEntries(q.fiyatlar.filter((f) => f.enAzMiktar).map((f) => [f.kalemId, Number(f.enAzMiktar)])) } : {}),
+      ...(q.fiyatlar.some((f) => f.basamaklar?.length) ? { tiers: Object.fromEntries(q.fiyatlar.filter((f) => f.basamaklar?.length).map((f) => [f.kalemId, f.basamaklar!.map((b) => ({ min: Number(b.esik), price: Number(b.birimFiyat) }))])) } : {}),
       discountPct: Number(q.iskontoYuzdesi), shipping: Number(q.nakliye), otherCost: Number(q.digerMasraf), deliveryTerm: q.teslimSekli,
       deliveryIncluded: q.nakliyeDahil, leadDays: q.terminGun, payDays: q.vadeGun, advancePct: Number(q.avansYuzdesi), warrantyMonths: q.garantiAy,
       compliant: q.teknikUygun, note: q.notlar, ...(q.ilkToplam !== null ? { firstTotal: Number(q.ilkToplam) } : {}), revisions: q.revizyon,
@@ -208,7 +210,12 @@ export function talepSunucuya(r: PurchaseRequest): TalepGovdesi {
       digerMasraf: ond(q.otherCost || 0), teslimSekli: q.deliveryTerm ?? '', nakliyeDahil: q.deliveryIncluded, terminGun: q.leadDays, vadeGun: q.payDays || 0,
       avansYuzdesi: ond(q.advancePct || 0, 3), garantiAy: q.warrantyMonths, teknikUygun: q.compliant, notlar: q.note ?? '',
       ilkToplam: ondN(q.firstTotal ?? null), revizyon: q.revisions ?? 0,
-      fiyatlar: Object.entries(q.prices ?? {}).filter(([, p]) => typeof p === 'number' && !Number.isNaN(p)).map(([kalemId, p]) => ({ kalemId, birimFiyat: ond(p) })),
+      fiyatlar: Object.entries(q.prices ?? {}).filter(([, p]) => typeof p === 'number' && !Number.isNaN(p)).map(([kalemId, p]) => ({
+        kalemId, birimFiyat: ond(p),
+        // Basamak yalnız ekran tuttuysa gider; gönderilmeyen alan sunucuda saklananı korur.
+        ...(q.minQty && kalemId in q.minQty ? { enAzMiktar: ondN(q.minQty[kalemId] ?? null) } : {}),
+        ...(q.tiers?.[kalemId] ? { basamaklar: q.tiers[kalemId]!.filter((t) => t.min > 0 && t.price >= 0).map((t) => ({ esik: ond(t.min), birimFiyat: ond(t.price) })) } : {}),
+      })),
     })),
     karar: a === null ? null : {
       mod: a.mode === 'single' ? 'tek' : 'bolunmus', teklifId: a.mode === 'single' ? a.quoteId : null,

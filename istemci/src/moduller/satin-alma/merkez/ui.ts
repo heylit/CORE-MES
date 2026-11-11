@@ -17,7 +17,7 @@ import {
 import {
   $, $$, addDays, clamp, clone, dayDiff, deltaHTML, esc, fmtDate, isNum, money, nf0, nf2, nfx, norm, numIn, parseNum,
   nf1, pct, sum, todayStr, toCSV, uid, kokIcinde, type FormEl } from "./util.ts";
-import { labelTables, onAfterRender, PRESETS, rankHTML, readSplitAssign, render, summaryText, UI, updateSplitSum, verdictHTML } from "./views.ts";
+import { kademeRozeti, labelTables, onAfterRender, PRESETS, rankHTML, readSplitAssign, render, summaryText, UI, updateSplitSum, verdictHTML } from "./views.ts";
 import { basamakYazabilir, reportCSV, unlinkedItems } from "./memory.ts";
 import { partileriUnut } from "./partiler.ts";
 import { ODEME_SEKLI, siparisTakibi, takibiUnut, takipGuncelle } from "./takip.ts";
@@ -169,9 +169,7 @@ export function quoteModal(r: PurchaseRequest, q?: Quote | null, presetSup?: str
       <label class="f"><span>İskonto (%)</span><input type="text" inputmode="decimal" id="q-disc" value="${numIn(parseNum(draftQ.discountPct))}"></label>
     </div>
     <fieldset class="fs"><legend>Birim fiyatlar <span class="muted small" data-sa-y="28">KDV hariç; teklif verilmeyen kalemi boş bırakın</span></legend>
-      <div class="tw"><table class="itbl rt"><thead><tr><th>Kalem</th><th class="r">Miktar</th><th class="r">Birim fiyat</th><th class="r">Tutar</th><th>Son alışa göre</th></tr></thead><tbody>
-      ${(r.items || []).map(it => `<tr><td class="lead"><b>${esc(it.name)}</b>${it.spec ? `<span class="sub">${esc(it.spec)}</span>` : ""}</td><td class="r num">${numIn(parseNum(it.qty))} ${esc(it.unit)}</td><td class="r"><input class="price" type="text" inputmode="decimal" data-price="${it.id}" value="${numIn(draftQ.prices[it.id])}" aria-label="${esc(it.name)} birim fiyatı"></td><td class="r num" data-line="${it.id}"></td><td class="small" data-vs="${it.id}"></td></tr>`).join("")}
-      </tbody></table></div>
+      <div class="tw"><table class="itbl rt"><thead><tr><th>Kalem</th><th class="r">Miktar</th><th class="r">Birim fiyat</th><th class="r">Tutar</th><th>Son alışa göre</th></tr></thead><tbody id="q-items">${fiyatSatirlari(r, draftQ)}</tbody></table></div>
       <div class="row"><button class="btn sm ghost" data-act="toggle" data-t="paste-prices">Fiyatları yapıştır</button></div>
       <div id="paste-prices" hidden><label class="f"><span>Kalem sırasıyla, her satıra bir fiyat (Excel sütunundan kopyalayın)</span><textarea id="paste-prices-ta"></textarea></label><div class="row" data-sa-y="5"><button class="btn sm" data-act="apply-paste-prices">Fiyatlara uygula</button></div></div>
     </fieldset>
@@ -213,6 +211,25 @@ function eksiAlanVar(alanlar: readonly (HTMLInputElement | null | undefined)[]):
   return true;
 }
 const yuzdeAlaniMi = (i: HTMLInputElement): boolean => i.id === "q-disc" || i.id === "q-adv" || i.dataset.bf === "discountPct" || i.dataset.bf === "advancePct";
+const BASAMAK_SINIRI = 4;
+const BASAMAK_SIMGESI = `<svg class="tc-simge tc-simge-k" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="${SIMGELER.plus}"/></svg>`;
+/** Teklif formunun kalem satırları; kademeli fiyat (2975) basamakları kalemin altında "eşik ve üstü" satırı olarak durur. */
+function fiyatSatirlari(r: PurchaseRequest, q: Quote): string {
+  return (r.items || []).map(it => {
+    const tiers = q.tiers?.[it.id] ?? [];
+    const ekle = tiers.length < BASAMAK_SINIRI ? `<button type="button" class="btn sm ghost" data-act="add-tier" data-k="${it.id}" aria-label="${esc(it.name)} için basamak ekle" title="Basamak ekle">${BASAMAK_SIMGESI}</button>` : "";
+    const ana = `<tr><td class="lead"><b>${esc(it.name)}</b>${it.spec ? `<span class="sub">${esc(it.spec)}</span>` : ""}</td><td class="r num">${numIn(parseNum(it.qty))} ${esc(it.unit)}${tiers.length || isNum(q.minQty?.[it.id]) ? `<span class="basamak-esik ilk"><span class="muted small">1. basamak</span><input class="qty" type="text" inputmode="decimal" data-tmin0="${it.id}" value="${numIn(q.minQty?.[it.id] ?? null)}" placeholder="0" aria-label="${esc(it.name)} 1. basamak eşiği (en az miktar)"><span class="muted small">ve üstü</span></span>` : ""}</td><td class="r"><span class="fiyat-hucre"><input class="price" type="text" inputmode="decimal" data-price="${it.id}" value="${numIn(q.prices[it.id])}" aria-label="${esc(it.name)} birim fiyatı">${ekle}</span></td><td class="r num" data-line="${it.id}"></td><td class="small" data-vs="${it.id}"></td></tr>`;
+    const alt = tiers.map((t, i) => `<tr class="basamak"><td class="lead"><span class="sub">${i + 2}. basamak</span></td><td class="r"><span class="basamak-esik"><input class="qty" type="text" inputmode="decimal" data-tmin="${it.id}" data-ti="${i}" value="${numIn(t.min)}" aria-label="${esc(it.name)} ${i + 2}. basamak eşik miktarı"><span class="muted small">${esc(it.unit)} ve üstü</span></span></td><td class="r"><input class="price" type="text" inputmode="decimal" data-tprice="${it.id}" data-ti="${i}" value="${numIn(t.price)}" aria-label="${esc(it.name)} ${i + 2}. basamak birim fiyatı"></td><td></td><td><button type="button" class="btn sm ghost danger" data-act="rm-tier" data-k="${it.id}" data-ti="${i}" aria-label="${esc(it.name)} ${i + 2}. basamağı kaldır">Kaldır</button></td></tr>`).join("");
+    return ana + alt;
+  }).join("");
+}
+
+/** Toplu girişte basamaklı kalem rozetle görünür; basamaklar teklifin "Ayrıntı" penceresinde girilir (2975). */
+function kayitliRozet(c: BulkCol, it: RequestItem): string {
+  const q = c.qid ? (S.requests[BULK!.rid]?.quotes || []).find(x => x.id === c.qid) : undefined;
+  return q ? kademeRozeti(q, it) : "";
+}
+
 function readQuoteForm(): void {
   const g = (id: string) => $("#" + id); if (!g("q-sup")) return;
   const prevCur = draftQ.currency, prevDate = draftQ.date, set = settings();
@@ -226,6 +243,12 @@ function readQuoteForm(): void {
   g("q-fx-wrap").style.visibility = draftQ.currency === "TRY" ? "hidden" : "visible";
   draftQ.discountPct = parseNum(g("q-disc").value) || 0;
   $$("[data-price]").forEach(i => { const k = i.dataset.price!; const v = parseNum(i.value); if (v === null) delete draftQ.prices[k]; else draftQ.prices[k] = v; });
+  $$("[data-tmin0]").forEach(i => { const k = i.dataset.tmin0!; const v = parseNum(i.value); if (v !== null || (draftQ.minQty && k in draftQ.minQty)) (draftQ.minQty ??= {})[k] = v; });
+  $$("[data-tmin]").forEach(i => {
+    const t = draftQ.tiers?.[i.dataset.tmin!]?.[+i.dataset.ti!]; if (!t) return;
+    t.min = parseNum(i.value) ?? NaN;
+    t.price = parseNum($(`[data-tprice="${i.dataset.tmin}"][data-ti="${i.dataset.ti}"]`)?.value ?? "") ?? NaN;
+  });
   draftQ.payDays = parseNum(g("q-pay").value) || 0; draftQ.advancePct = parseNum(g("q-adv").value) || 0;
   draftQ.leadDays = parseNum(g("q-lead").value); draftQ.deliveryTerm = g("q-dterm").value.trim();
   draftQ.warrantyMonths = parseNum(g("q-war").value);
@@ -238,7 +261,14 @@ function updateQuoteLive(): void {
   const r = S.requests[V.id ?? ""]; if (!r || !draftQ || !$("#q-live")) return;
   const c = quoteCalc(r, draftQ, settings());
   (r.items || []).forEach(it => {
-    const cell = $(`[data-line="${it.id}"]`); if (cell) cell.textContent = c.lines[it.id] ? money(c.lines[it.id]!.line, draftQ.currency) : "–";
+    const cell = $(`[data-line="${it.id}"]`);
+    if (cell) {
+      const l = c.lines[it.id];
+      cell.innerHTML = l ? esc(money(l.line, draftQ.currency))
+        + (l.alinan !== undefined ? `<span class="sub">en az ${esc(numIn(l.alinan))} ${esc(it.unit)} alınır</span>` : "")
+        + (l.tier !== undefined ? `<span class="sub">${esc(numIn(l.tier))}+ basamağı, birim ${esc(money(l.unit, draftQ.currency))}</span>` : "")
+        + (l.ust ? `<span class="sub"><span class="flag info">${esc(numIn(l.ust.min))} ${esc(it.unit)} alınırsa toplam ${esc(money(l.ust.line, draftQ.currency))}</span></span>` : "") : "–";
+    }
     const vs = $(`[data-vs="${it.id}"]`);
     if (vs) { const l = c.lines[it.id]; const d = l ? vsLast(r, it, l.unit * c.unitTRY) : null; vs.innerHTML = d ? `${deltaHTML(d.pct)} <span class="faint">${money(d.last.unitTRY)}, ${esc(d.last.supplier)}</span>${fiyatUyarisi(d.pct, settings().priceAlertPct) ? ' <span class="flag warn">pazarlık payı</span>' : ""}` : '<span class="faint">kayıt yok</span>'; }
   });
@@ -518,7 +548,7 @@ function bulkGrid(r: PurchaseRequest): string {
   const head = `<tr><th class="rl">Kalem</th>${cols.map((c, j) => `<th><div class="bh"><select data-bf="supplierId" data-col="${j}" aria-label="${j + 1}. sütun tedarikçisi"><option value="">Tedarikçi seçin</option>${sups.map(s => `<option value="${s.id}" ${c.supplierId === s.id ? "selected" : ""}>${esc(s.name)}${pasifEki(s)}</option>`).join("")}${firmaKartiSecenekleri(c.supplierId)}<option value="__new" ${c.supplierId === "__new" ? "selected" : ""}>+ Kayıtsız tedarikçi (adla)</option></select>${c.qid ? "" : `<button class="btn sm ghost" data-act="bulk-rm" data-col="${j}" aria-label="Sütunu kaldır" title="Sütunu kaldır">✕</button>`}</div>${c.supplierId === "__new" ? `<input type="text" data-bf="newName" data-col="${j}" placeholder="Yeni tedarikçi adı" value="${esc(c.newName)}" data-sa-y="32">` : ""}${c.qid ? (() => { const q = (S.requests[BULK!.rid]?.quotes || []).find(x => x.id === c.qid); return `<div class="bh-acts"><span class="sub">kayıtlı${q?.revisions ? `, ${q.revisions}. revizyon` : ""}</span><button class="lnk" data-act="edit-quote" data-qid="${c.qid}">Ayrıntı</button><button class="lnk danger" data-act="del-quote" data-qid="${c.qid}">Sil</button></div>`; })() : ""}</th>`).join("")}</tr>`;
   const priceRows = items.map(it => {
     const mid = matOf(it), st = mid ? matStats(mid) : null, prev = st ? st.buys.filter(e => e.reqId !== r.id) : [], last = prev[prev.length - 1];
-    const tr = `<tr data-item="${it.id}"><td class="rl"><b>${esc(it.name)}</b><span class="sub">${numIn(parseNum(it.qty))} ${esc(it.unit)}${last ? `, son alış ${money(last.unitTRY)}` : ""}</span></td>${cols.map((c, j) => `<td data-pc="${j}"><input class="bp" type="text" inputmode="decimal" data-bi="${it.id}" data-col="${j}" data-nr="${row}" value="${numIn(c.prices[it.id])}" aria-label="${esc(it.name)}, ${j + 1}. sütun birim fiyat"></td>`).join("")}</tr>`;
+    const tr = `<tr data-item="${it.id}"><td class="rl"><b>${esc(it.name)}</b><span class="sub">${numIn(parseNum(it.qty))} ${esc(it.unit)}${last ? `, son alış ${money(last.unitTRY)}` : ""}</span></td>${cols.map((c, j) => `<td data-pc="${j}"><input class="bp" type="text" inputmode="decimal" data-bi="${it.id}" data-col="${j}" data-nr="${row}" value="${numIn(c.prices[it.id])}" aria-label="${esc(it.name)}, ${j + 1}. sütun birim fiyat">${kayitliRozet(c, it)}</td>`).join("")}</tr>`;
     row++; return tr;
   }).join("");
   const termRows = BULK_FIELDS.map(([f, l, kind]) => { const tr = `<tr><td class="rl">${l}</td>${cols.map((c, j) => `<td>${cell(j, f, kind, c[f])}</td>`).join("")}</tr>`; row++; return tr; }).join("");
@@ -935,6 +965,20 @@ const ACTIONS: Record<string, Action> = {
     saveRequestUndoable(n, `${supName(q)} teklifi silindi`, `${supName(q)} teklifi silindi`);
   },
   "pay-chip": el => { $("#q-pay").value = el.dataset.v ?? ""; if (el.dataset.v === "0") $("#q-adv").value = ""; readQuoteForm(); updateQuoteLive(); },
+  "add-tier": el => {
+    const r = S.requests[V.id ?? ""]; if (!r || !draftQ) return; readQuoteForm();
+    const k = el.dataset.k!, list = ((draftQ.tiers ??= {})[k] ??= []);
+    if (list.length >= BASAMAK_SINIRI) return;
+    list.push({ min: NaN, price: NaN });
+    $("#q-items").innerHTML = fiyatSatirlari(r, draftQ); updateQuoteLive();
+    $<HTMLInputElement>(`[data-tmin="${k}"][data-ti="${list.length - 1}"]`)?.focus();
+  },
+  "rm-tier": el => {
+    const r = S.requests[V.id ?? ""]; if (!r || !draftQ) return; readQuoteForm();
+    const list = draftQ.tiers?.[el.dataset.k!]; if (!list) return;
+    list.splice(+el.dataset.ti!, 1);
+    $("#q-items").innerHTML = fiyatSatirlari(r, draftQ); updateQuoteLive();
+  },
   "apply-paste-prices": () => {
     const vals = $("#paste-prices-ta").value.split(/\r?\n/).map(l => (l.split("\t").pop() ?? "").trim());
     let k = 0; $$("[data-price]").forEach((inp, i) => { if (i < vals.length && vals[i] !== "") { const v = parseNum(vals[i]); if (v !== null) { inp.value = numIn(v); k++; } } });
@@ -942,7 +986,7 @@ const ACTIONS: Record<string, Action> = {
   },
   "save-quote": (_el, r) => {
     if (!r) return; readQuoteForm(); const n = clone(r);
-    if (eksiAlanVar([...$$<HTMLInputElement>("#qform [data-price]"), ...EKSI_OLAMAZ.map(id => $<HTMLInputElement>("#" + id))])) return;
+    if (eksiAlanVar([...$$<HTMLInputElement>("#qform [data-price], #qform [data-tmin0], #qform [data-tmin], #qform [data-tprice]"), ...EKSI_OLAMAZ.map(id => $<HTMLInputElement>("#" + id))])) return;
     if (draftQ.supplierId === "__new") {
       const nm = $("#q-newsup").value.trim(); if (!nm) { toast("Yeni tedarikçinin adını girin."); $("#q-newsup").focus(); return; }
       const ex = Object.values(S.suppliers).find(s => norm(s.name) === norm(nm));
@@ -952,6 +996,18 @@ const ACTIONS: Record<string, Action> = {
     }
     if (!draftQ.supplierId && !draftQ.supplierName) { toast("Tedarikçi seçin."); $("#q-sup").focus(); return; }
     if (!Object.keys(draftQ.prices).length) { toast("En az bir kalem için birim fiyat girin."); return; }
+    if (Object.values(draftQ.minQty ?? {}).some(v => v !== null && v <= 0)) { toast("1. basamak eşiği (en az miktar) sıfırdan büyük olur; gerekmiyorsa boş bırakın."); return; }
+    if (draftQ.tiers) {
+      for (const [k, list] of Object.entries(draftQ.tiers)) {
+        const dolu = list.filter(t => isNum(t.min) || isNum(t.price));
+        if (dolu.some(t => !isNum(t.min) || !isNum(t.price) || t.min <= 0)) { toast("Her basamağa sıfırdan büyük eşik ve birim fiyat girin."); $<HTMLInputElement>(`[data-tmin="${k}"]`)?.focus(); return; }
+        const enAz = draftQ.minQty?.[k];
+        if (isNum(enAz) && dolu.some(t => t.min <= enAz)) { toast("Üst basamağın eşiği 1. basamaktan (en az miktar) büyük olur."); $<HTMLInputElement>(`[data-tmin="${k}"]`)?.focus(); return; }
+        if (new Set(dolu.map(t => t.min)).size !== dolu.length) { toast("Aynı eşik iki basamakta olamaz."); $<HTMLInputElement>(`[data-tmin="${k}"]`)?.focus(); return; }
+        if (dolu.length && !isNum(draftQ.prices[k])) { toast("Basamak girilen kalemin birim fiyatını da girin."); $<HTMLInputElement>(`[data-price="${k}"]`)?.focus(); return; }
+        draftQ.tiers[k] = dolu.sort((a, b) => a.min - b.min);
+      }
+    }
     if (kurIstenir(draftQ.currency, draftQ.fxRate, settings(), draftQ.date)) { toast(KUR_ILETISI); $("#q-fx").focus(); return; }
     draftQ.supplierName = tedarikciAdi(draftQ.supplierId) || draftQ.supplierName || "";
     const total = quoteCalc(n, draftQ).total;

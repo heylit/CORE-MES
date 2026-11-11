@@ -1,5 +1,5 @@
 import type { SiparisLogo } from "#paylasilan/sozlesme/satin-alma.ts";
-import type { Award, ExcessLine, Priority, PurchaseRequest, Quality, RequestStatus, Weights } from "./tipler.ts";
+import type { Award, ExcessLine, Priority, PurchaseRequest, Quality, Quote, RequestItem, RequestStatus, Weights } from "./tipler.ts";
 import { CRIT, FLOW, OPEN, COMMITTED, PRIO, QUALITY, stLabel } from "./constants.ts";
 import { S, V, memo, nameOf, settings, type Page } from "./store.ts";
 import {
@@ -23,6 +23,14 @@ import { getRole, onaylayabilir, viewApproval, viewApprovals, viewRequesterHome,
 // Ortak parçalarla çizilen ekranlar (iş kutusu, Talepler, talep ayrıntısı; 2412-2) merkezin durumunu her çizimde yeniden okur.
 let cizimSurumu = 0;
 const DINLEYICILER = new Set<() => void>();
+/** Kademeli fiyat (2975): basamaklı hücrede rozet; üzerine gelince ve ekran okuyucuda basamak listesi. */
+export function kademeRozeti(q: Pick<Quote, "prices" | "tiers" | "currency">, it: RequestItem): string {
+  const t = (q.tiers?.[it.id] ?? []).filter(b => isNum(b.min) && isNum(b.price)).sort((a, b) => a.min - b.min);
+  if (!t.length) return "";
+  const liste = [`taban ${money(q.prices[it.id] ?? 0, q.currency)}`, ...t.map(b => `${numIn(b.min)}+ ${money(b.price, q.currency)}`)].join(", ");
+  return ` <span class="flag info" title="${esc(liste)}" aria-label="Kademeli fiyat: ${esc(liste)}">kademeli</span>`;
+}
+
 export function merkezAbone(f: () => void): () => void { DINLEYICILER.add(f); return () => { DINLEYICILER.delete(f); }; }
 export const merkezSurumu = (): number => cizimSurumu;
 /** Bu sayfanın başlığını, listesini ve adım şeridini ortak parçalar çizer; merkez yalnız gövdeyi (ya da hiçbir şeyi) yazar. */
@@ -629,7 +637,7 @@ function matrixHTML(r: PurchaseRequest, ev: Evaluation): string {
     const vals = cols.map(x => x.c.lines[it.id] ? x.c.lines[it.id]!.unit * x.c.unitTRY : null);
     const any = vals.find(isNum); const vl = isNum(any) ? vsLast(r, it, any) : null;
     h += row(`${esc(it.name)}<span class="sub">${numIn(parseNum(it.qty))} ${esc(it.unit)}${vl ? `, son alış ${money(vl.last.unitTRY)}` : ""}</span>${parcaAltSatiri(it)}`,
-      cols.map(x => { const l = x.c.lines[it.id]; if (!l) return '<span class="faint">teklif yok</span>'; const d = vsLast(r, it, l.unit * x.c.unitTRY); return `${money(l.unit, x.q.currency)}<span class="sub">${money(l.line, x.q.currency)}${d ? " " + deltaHTML(d.pct) : ""}</span>`; }), vals, "min");
+      cols.map(x => { const l = x.c.lines[it.id]; if (!l) return '<span class="faint">teklif yok</span>'; const d = vsLast(r, it, l.unit * x.c.unitTRY); return `${money(l.unit, x.q.currency)}${kademeRozeti(x.q, it)}<span class="sub">${money(l.line, x.q.currency)}${d ? " " + deltaHTML(d.pct) : ""}</span>${l.ust ? `<span class="sub">${esc(numIn(l.ust.min))} ${esc(it.unit)} alınırsa ${money(l.ust.line, x.q.currency)}</span>` : ""}`; }), vals, "min");
   });
   h += sec("Ticari şartlar");
   h += row("Ara toplam", cols.map(x => money(x.c.sub, x.q.currency)));
