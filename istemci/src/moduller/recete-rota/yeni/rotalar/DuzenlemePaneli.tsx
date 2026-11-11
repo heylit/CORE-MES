@@ -10,6 +10,7 @@ import {
   type Adim, type Malzeme,
 } from './kurallar.ts';
 import { AdimSartnameleri } from './AdimSartnameleri.tsx';
+import { AdimEkipmani } from './AdimEkipmani.tsx';
 import { AdimTalimati } from './AdimTalimati.tsx';
 import { HamOnerisi } from './HamOnerisi.tsx';
 import { useOpNumaralari, yeniAdimNumaralari } from './opNumaralari.ts';
@@ -449,6 +450,7 @@ function AdimDuzeni({ r, s, kapat }: { r: RotaEkrani; s: Extract<Secim, { tur: '
       </Bolme>
       <AdimSartnameleri rev={dz.gorulen(s.urunId)} opNo={a.opNo} fason={fason} yazabilir={duzen} kayitBekliyor={dz.taslakVar(s.urunId) || dz.mesgul}
         taslakAc={() => { const g = dz.gorulen(s.urunId); if (g) void dz.yeniTaslak(s.urunId, g); }} />
+      <AdimEkipmani rev={dz.gorulen(s.urunId)} opNo={a.opNo} yazabilir={duzen} kayitBekliyor={dz.taslakVar(s.urunId) || dz.mesgul} />
       <AdimTalimati urunId={Number(s.urunId)} opNo={a.opNo} />
       {ist && (
         <Bolme baslik={<><span className={`tc-rr1-nokta ${ist.id ? `tc-rr1-renk-${String(Number(ist.id) % 6)}` : ''}`} /> İstasyon {ist.code}{im ? `, ${im.name}` : ''}</>}>

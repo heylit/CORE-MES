@@ -252,6 +252,7 @@ export async function isEmriKopyalandiYansit(db: Db, olay: IsEmriKopyalandiOlayi
   const baglar = kaynakRotaRevizyonId === null ? [] : await s.adimSartnameleri(db, [kaynakRotaRevizyonId]);
   const b = await sartnameBaglami(db, baglar.map((x) => x.sartnameId));
   for (const k of olay.isEmirleri) {
+    await s.isEmriEkipmaniniKopyala(db, k.kaynakIsEmriId, k.yeniIsEmriId);
     const r = k.rotaAdimi ? adimSabitleri(b, baglar, k.kaynakOpNo) : null;
     if (r !== null && !('hata' in r)) {
       if (r.sabitler.length > 0) await s.isEmriSabitle(db, k.yeniIsEmriId, r.sabitler, olay.kisiId);

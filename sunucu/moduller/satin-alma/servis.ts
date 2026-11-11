@@ -1,5 +1,5 @@
 import type { Db } from '#cekirdek/db.ts';
-import { bulunamadi, cakisma, dogrulama, gecersiz, yetkiYok } from '#cekirdek/hata.ts';
+import { bulunamadi, cakisma, dogrulama, eskiSurum, gecersiz, yetkiYok } from '#cekirdek/hata.ts';
 import { kisitKorumali } from '#cekirdek/kisit.ts';
 import { surumluGuncelle } from '#cekirdek/surum.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
@@ -7,7 +7,7 @@ import type { Islem } from '#paylasilan/islemler.ts';
 import type { DenetimSecimi, IkiliCevap } from '#cekirdek/uc.ts';
 import type { KmTedarikciDurumu } from '#paylasilan/sozlesme/kalite-merkezi.ts';
 import type {
-  AcilisCevabi, Ayarlar, ButceKullanimiCevabi, DegerlendirmeCevabi, DisOperasyonAyrintisiCevabi, KartAyrintilariCevabi, KartAyrintisi, DisOperasyonlarCevabi, FasonSureleriCevabi, SiparisBelgeleriCevabi, SiparisBelgesi, SiparisBelgesiYazimi, AyarlarKaydetYazimi, HizliAcYazimi, TalebimiDuzenleYazimi, KatalogKaydetYazimi, KatalogKaydi, MalzemeSecenekleriCevabi, SatinAlmaOzetiCevabi, SiparisCikisi, SiparisFaturalariCevabi, SiparisFaturasiYazimi, SiparisKalemiDegistirYazimi, SiparisKapatYazimi, TeslimYontemiYazimi, OdemePlaniYazimi, SiparisTakibiCevabi, Talep, TalepDurumu, TalepKaydetYazimi, TalepTuru,
+  AcilisCevabi, Ayarlar, ButceKullanimiCevabi, DegerlendirmeCevabi, DisOperasyonAyrintisiCevabi, KartAyrintilariCevabi, KartAyrintisi, DisOperasyonlarCevabi, FasonSureleriCevabi, SiparisBelgeleriCevabi, SiparisBelgesi, SiparisBelgesiYazimi, AyarlarKaydetYazimi, HizliAcYazimi, TalebimiDuzenleYazimi, TalebimGuncellemeYazimi, KatalogKaydetYazimi, KatalogKaydi, MalzemeSecenekleriCevabi, SatinAlmaOzetiCevabi, SiparisCikisi, SiparisFaturalariCevabi, SiparisFaturasiYazimi, SiparisKalemiDegistirYazimi, SiparisKapatYazimi, TeslimYontemiYazimi, OdemePlaniYazimi, SiparisTakibiCevabi, Talep, TalepDurumu, TalepKaydetYazimi, TalepTuru,
   IptaliGeriAlCevabi, IptaliGeriAlYazimi, ProjeSecenekleriCevabi, TalepAyirYazimi, TalepBirlestirYazimi, AcikEmirlerCevabi, Onay, OnTalepleriCevabi, OnTalepYoksayYazimi, TedarikTermini, TedarikTerminiKaydetYazimi, TedarikTerminleriCevabi, TerminTakipSatiri, GuncelKgFiyatiSatiri, KgFiyatiGecmisiCevabi, KgFiyatiIptalYazimi, KgFiyatiSatiri, KgFiyatlariCevabi, KgStokDegeri, StokAyriGrubu, StokYokIstekleriCevabi, TaleplerimCevabi, Talebim, TalepYazimi, Tedarikci, TedarikciKaydetYazimi,
 } from '#paylasilan/sozlesme/satin-alma.ts';
 import { STOK_AYRI_GRUPLARI } from '#paylasilan/sozlesme/satin-alma.ts';
@@ -33,7 +33,7 @@ import { projeGetir, projeSecenekleri } from '../projeler/disari.ts';
 import { islemVarMi } from '#cekirdek/yetki.ts';
 import {
   ILETILER, ISLEM, type KurKilidiIsi, emirAcikMi, kilitliDurum, tedarikciyeGidenAyrinti, kalemAyrintisiniKoru, kilittenSonraOnayliMi, kurKilidiIsi, kurKilidiReddi, degisiklikReddi, gecikmeGunu, fasonKalani, sonDonusGecikmesi, agirlikliGecikme, degisiklikTuru, dortGozSonucu, onayKademesiReddi, onayLimitRolleri, onayLimitleriDegistiMi, onayLimitiReddi, terminsizSiparisReddi, terminTakibi, fazlaTeslim, finanstanEklenenKurlar, aylikFaiz, fiyatIzleri, kullanilanParaBirimleri, gecisVarMi, gorunenDurum, kararDegistiMi, kararOnayliMi, talepFisiGiderMi,
-  KARTSIZ_KATEGORI, TALEP_TURU_KARTLARI, satinAlinabilirKartReddi, kartBirimiReddi, hizliBaslik, hizliKalemReddi, kartKopyasi, kartsizSiparisReddi, katalogKartiReddi, logoGuncellenecekSiparisler, logoIptalGeriAlmaReddi, logoSiparisDegisikligiReddi, siparisliKalemReddi, siparisDegisikligiMetni, siparisFaturaFirmasi, faturaEslesmeUyarilari, siparisKalemiDegisikligiReddi, siparisKapatmaReddi, talebinAlimlari, ondalikKiyas, siparisReddi, talebim, birimKarsiligi, talebimDuzenlenirMi, talebimKalemReddi,
+  KARTSIZ_KATEGORI, TALEP_TURU_KARTLARI, satinAlinabilirKartReddi, kartBirimiReddi, hizliBaslik, hizliKalemReddi, kartKopyasi, kartsizSiparisReddi, katalogKartiReddi, logoGuncellenecekSiparisler, logoIptalGeriAlmaReddi, logoSiparisDegisikligiReddi, siparisliKalemReddi, siparisDegisikligiMetni, siparisFaturaFirmasi, faturaEslesmeUyarilari, siparisKalemiDegisikligiReddi, siparisKapatmaReddi, talebinAlimlari, ondalikKiyas, siparisReddi, talebim, birimKarsiligi, talebimDuzenlenirMi, talebimKalemReddi, guncellemeReddi, guncellemeIptalleri, ikinciAlimRiski,
   fasonKalemReddi, fasonOnTalepAdaylari, hizliBagReddi, planOnTalepAdaylari, uygulananKartReddi, type KalemBagi,
   fasonKirilimlari, fasonSureOrnekleri, fasonSuresiTahmini, fasonTerminUyumu, talepEdenDurumu, talepEdenGovdeDurumu, talepEdenGorunumu, avansAsimi, gerceklesenKosul, planGerceklesenFarki, talepKartiReddi, tamGorurMu, teklifKuru, teslimDurumu, odemePlaniHedefi, varsayilanOdemePlani,
   askidakiTedarikciReddi, birimFiyati, kaliteSiparisReddi, karneTeslimOlayi, stokTutari, uygulananKgFiyati, yeniSiparisFirmalari,
@@ -55,6 +55,23 @@ export function sade(d: string | null): string | null;
 export function sade(d: string | null): string | null {
   if (d === null || !d.includes('.')) return d;
   return d.replace(/0+$/, '').replace(/\.$/, '');
+}
+
+// 2876: talep başına güncelleme grubu (kök önce); grubu olmayan talep haritada yoktur. Durum görünen durumdur: "teslim alındı" yazılmaz,
+// siparişlerden türetilir (SAT-38); bilinmeyen siparişteki üyenin durumu yalın kurulumla türetilir (grup okumadan, döngü yok).
+async function guncellemeGruplari(db: Db, idler: readonly string[], bilinen: ReadonlyMap<string, TalepDurumu> = new Map()): Promise<Map<string, NonNullable<Talep['guncellemeGrubu']>>> {
+  const uyeler = idler.length === 0 ? [] : await s.guncellemeGruplariOku(db, idler);
+  const eksik = uyeler.filter((u) => u.durum === 'siparis_verildi' && !bilinen.has(u.id)).map((u) => u.id);
+  const gorunen = new Map(bilinen);
+  if (eksik.length > 0) for (const t of await talepleriYalinKur(db, await s.talepSatirlariIdlerle(db, eksik))) gorunen.set(t.id, t.durum);
+  const kokune = new Map<string, NonNullable<Talep['guncellemeGrubu']>>();
+  for (const u of uyeler) {
+    const l = kokune.get(u.kokId) ?? [];
+    const durum = u.durum === 'siparis_verildi' ? gorunen.get(u.id) ?? 'siparis_verildi' : (u.durum as TalepDurumu);
+    l.push({ id: u.id, no: u.no, durum, kok: u.id === u.kokId });
+    kokune.set(u.kokId, l);
+  }
+  return new Map([...kokune.values()].flatMap((l) => l.map((u) => [u.id, l] as const)));
 }
 
 // Veritabanı satırlarından istemcinin bütününü kurar.
@@ -86,11 +103,14 @@ async function birlesmeyleKur(db: Db, satirlar: s.TalepSatiri[]): Promise<{ tale
     });
   };
   const birlesenler = new Map(birlesenYalin.map((t) => [t.id, { ...t, birlesme: null, kaynaklar: kaynaklariKur(t) }]));
+  const gruplar = await guncellemeGruplari(db, talepler.map((t) => t.id), new Map(talepler.map((t) => [t.id, t.durum])));
   return {
     talepler: talepler.map((t, i) => {
       const b = satirlar[i]!.birlesenTalepId;
       const bt = b === null ? undefined : birlesenler.get(b);
-      return { ...t, birlesme: bt === undefined ? null : { talepId: bt.id, no: bt.no, durum: bt.durum }, kaynaklar: kaynaklariKur(t) };
+      const grup = gruplar.get(t.id);
+      return { ...t, birlesme: bt === undefined ? null : { talepId: bt.id, no: bt.no, durum: bt.durum }, kaynaklar: kaynaklariKur(t),
+        ...(grup === undefined ? {} : { guncellemeGrubu: grup }) };
     }),
     birlesenler,
   };
@@ -462,11 +482,24 @@ export async function talebimiDuzenle(db: Db, k: Kullanici, id: string, g: Taleb
   const bagli = new Set((await s.kalemBaglariOku(db, [id])).map((b) => b.kalemId));
   const kalemRed = talebimKalemReddi(eski.kalemler.map((x) => ({ id: x.id, miktar: x.miktar, bagli: bagli.has(x.id) })), g.kalemler);
   if (kalemRed !== null) throw gecersiz(kalemRed);
-  g.kalemler.forEach((x, i) => {
+  const kalemler = await talebimKalemleri(db, k, eski, g.kalemler, false);
+  const baslik = talebimBasligi(eski, kalemler);
+  const taban = tamGorurMu(k.islemler) ? eski : talepEdenGorunumu(eski, k.id);
+  await talepKaydet(db, k, id, { ...taban, baslik, ihtiyacTarihi: g.ihtiyacTarihi, notlar: g.aciklama, kalemler, surum: g.surum }, izYaz);
+  const son = (await talepOku(db, id))!;
+  return talebim(gorunen(k, son), await kalemBagGorunumu(db, [id]), await kalemKarsiliklari(db, [son]));
+}
+
+// SAT-79, SAT-80: talep edenin gönderdiği kalemler. Kimlikli kalem eski talebin kalemidir: kartı, adı ve birimi eskiden alınır, miktar ve açıklama
+// yenidir (güncelleme talebinde yeni kimlikle kopyalanır). Kimliksiz kalem hızlı açmadaki gibi karttan (satın alınabilir kart) ya da adıyla gelir.
+async function talebimKalemleri(
+  db: Db, k: Kullanici, eski: Talep, gelen: TalebimiDuzenleYazimi['kalemler'], kopya: boolean,
+): Promise<TalepYazimi['kalemler']> {
+  gelen.forEach((x, i) => {
     const red = x.id === null ? hizliKalemReddi(x) : null;
     if (red !== null) throw dogrulama(red, `kalemler.${i}`);
   });
-  const nolar = [...new Set(g.kalemler.flatMap((x) => (x.id !== null || x.malzemeNo === null ? [] : [x.malzemeNo])))];
+  const nolar = [...new Set(gelen.flatMap((x) => (x.id !== null || x.malzemeNo === null ? [] : [x.malzemeNo])))];
   const kartlar = await malzemeOzetleri(db, nolar);
   for (const no of nolar) {
     const red = satinAlinabilirKartReddi(kartlar.get(no));
@@ -478,21 +511,60 @@ export async function talebimiDuzenle(db: Db, k: Kullanici, id: string, g: Taleb
     katalog.set(no, (await katalogKaydet(db, k, { id: randomUUID(), malzemeNo: no, ozellik: '', notlar: '', takmaAdlari: [], surum: null })).id);
   }
   const kartsizKategori = eski.kalemler.find((x) => x.katalogId === null)?.kategori ?? KARTSIZ_KATEGORI.malzeme;
-  const kalemler: TalepYazimi['kalemler'] = g.kalemler.map((x) => {
+  return gelen.map((x) => {
     const var_ = x.id === null ? undefined : eski.kalemler.find((e) => e.id === x.id)!;
-    if (var_ !== undefined) return { ...var_, miktar: sade(x.miktar), ozellik: x.aciklama };
-    const kopya = x.malzemeNo === null ? null : kartKopyasi(kartlar.get(x.malzemeNo)!);
+    if (var_ !== undefined) {
+      const { id, katalogId, ad, birim, kategori } = var_;
+      return { id: kopya ? randomUUID() : id, katalogId, ad, birim, kategori, miktar: sade(x.miktar), ozellik: x.aciklama };
+    }
+    const kk = x.malzemeNo === null ? null : kartKopyasi(kartlar.get(x.malzemeNo)!);
     return {
-      id: randomUUID(), katalogId: x.malzemeNo === null ? null : katalog.get(x.malzemeNo)!, ad: kopya?.ad ?? x.ad, ozellik: x.aciklama,
-      miktar: sade(x.miktar), birim: kopya?.birim ?? x.birim, kategori: kopya?.kategori ?? kartsizKategori,
+      id: randomUUID(), katalogId: x.malzemeNo === null ? null : katalog.get(x.malzemeNo)!, ad: kk?.ad ?? x.ad, ozellik: x.aciklama,
+      miktar: sade(x.miktar), birim: kk?.birim ?? x.birim, kategori: kk?.kategori ?? kartsizKategori,
     };
   });
-  // Başlık hızlı açmanın ürettiği başlıksa kalemlerle yenilenir; elle yazılmış başlık korunur.
-  const baslik = eski.baslik === hizliBaslik(eski.kalemler.map((x) => x.ad)) ? hizliBaslik(kalemler.map((x) => x.ad)) : eski.baslik;
-  const taban = tamGorurMu(k.islemler) ? eski : talepEdenGorunumu(eski, k.id);
-  await talepKaydet(db, k, id, { ...taban, baslik, ihtiyacTarihi: g.ihtiyacTarihi, notlar: g.aciklama, kalemler, surum: g.surum }, izYaz);
-  const son = (await talepOku(db, id))!;
-  return talebim(gorunen(k, son), await kalemBagGorunumu(db, [id]), await kalemKarsiliklari(db, [son]));
+}
+// Başlık hızlı açmanın ürettiği başlıksa kalemlerle yenilenir; elle yazılmış başlık korunur.
+const talebimBasligi = (eski: Talep, kalemler: TalepYazimi['kalemler']): string =>
+  (eski.baslik === hizliBaslik(eski.kalemler.map((x) => x.ad)) ? hizliBaslik(kalemler.map((x) => x.ad)) : eski.baslik);
+
+// SAT-80 (2876, 2871-1 b): teklif toplanırken sahibi güncelleme talebi açar. Eski talep, teklifleri ve tedarikçiye giden istekler değişmez;
+// yeni talep taslak açılır, eski talebin birim, emir, proje, öncelik ve talep edenini alır ve kök talebe bağlanır (zincir yok). İki talebin
+// geçmişine birbirinin numarası yazılır. Eski talebin sürümü, sahibin gördüğü hâlin güncel olduğunu denetler (409).
+export async function guncellemeAc(db: Db, k: Kullanici, id: string, g: TalebimGuncellemeYazimi, izYaz: FiyatIziYazici): Promise<Talebim> {
+  const eski = await talepOku(db, id);
+  if (eski === null) throw bulunamadi(ILETILER.talepYok);
+  if (eski.acanKisiId !== k.id && eski.talepEdenKisiId !== k.id) throw yetkiYok(ILETILER.talebimSahibiDegil);
+  const red = guncellemeReddi(eski, (await s.kalemBaglariOku(db, [id])).length > 0);
+  if (red !== null) throw gecersiz(red);
+  if (g.surum !== eski.surum) throw eskiSurum();
+  const kalemRed = talebimKalemReddi(eski.kalemler.map((x) => ({ id: x.id, miktar: x.miktar, bagli: false })), g.kalemler);
+  if (kalemRed !== null) throw gecersiz(kalemRed);
+  const kalemler = await talebimKalemleri(db, k, eski, g.kalemler, true);
+  const t: TalepYazimi = {
+    id: g.id, baslik: talebimBasligi(eski, kalemler), birim: eski.birim, talepEdenKisiId: eski.talepEdenKisiId, oncelik: eski.oncelik,
+    ihtiyacTarihi: g.ihtiyacTarihi, notlar: g.aciklama, durum: 'taslak', iptalNedeni: '', agirliklar: null, kalemler, teklifIstekleri: [],
+    teklifler: [], karar: null, onaylar: [], hareketler: [], senaryolar: [], uretimEmriId: eski.uretimEmriId, projeId: eski.projeId ?? null,
+  };
+  const acilan = await talepAc(db, k, t, izYaz);
+  const kok = (await s.talepSatirlariIdlerle(db, [id]))[0]!.guncellenenTalepId ?? id;
+  await s.guncellenenTalepYaz(db, g.id, kok);
+  await s.hareketEkle(db, id, randomUUID(), `Güncelleme talebi açıldı: ${acilan.no}`, k.id);
+  await s.hareketEkle(db, g.id, randomUUID(), `${eski.no} talebinin güncellemesi olarak açıldı.`, k.id);
+  const son = (await talepOku(db, g.id))!;
+  return talebim(gorunen(k, son), await kalemBagGorunumu(db, [g.id]), await kalemKarsiliklari(db, [son]));
+}
+
+// SAT-81 (2871-2 a): gruptaki talep siparişe geçince öteki açık talepler aynı işlemde iptal olur; gerekçe iptal nedenine ve geçmişe yazılır.
+// İptal genel kayıttan geçer (onay bildirimi kapanır, Logo iptali işaretlenir) ve "İptali geri al" ile geri alınır.
+async function guncellemeGrubunuKapat(db: Db, k: Kullanici, siparisteki: Talep, izYaz: FiyatIziYazici): Promise<void> {
+  const grup = (await s.guncellemeGruplariOku(db, [siparisteki.id]));
+  for (const u of guncellemeIptalleri(grup, siparisteki.id)) {
+    const o = (await talepOku(db, u.id))!;
+    const neden = ILETILER.guncellemeIptali(siparisteki.no);
+    const hareket = { id: randomUUID(), zaman: '', kisiId: null, kisiAdi: null, metin: `${neden} Talep kendiliğinden iptal edildi; iptal geri alınabilir.` };
+    await talepKaydet(db, k, o.id, { ...o, durum: 'iptal', iptalNedeni: neden, hareketler: [...o.hareketler, hareket], surum: o.surum }, izYaz);
+  }
 }
 
 // SAT-78 (2871): kalemlerin kg ile stok birimi karşılığı; kart bilgisi malzemelerden toplu okunur (talep sayısından bağımsız iki sorgu).
@@ -859,6 +931,7 @@ export async function talepKaydet(db: Db, k: Kullanici, id: string, g: TalepKayd
     await s.siparisleriLogoyaIsaretle(db, id, ILETILER.logoKayitsizTedarikci);
     await varsayilanPlanlariYaz(db, k, id);
     await fasonFirmalariniYaz(db, k, id);
+    await guncellemeGrubunuKapat(db, k, eski, izYaz);
   } else if (siparisteMi(yazilacak.durum)) await otomatikPlanlariYenile(db, k, id);
   if (yazilacak.durum === 'iptal' && eski.durum !== 'iptal') {
     await s.siparisIptaliniLogoyaIsaretle(db, id);
@@ -1308,7 +1381,9 @@ export async function talepSil(db: Db, k: Kullanici, id: string, surum: number):
   if ((eski.kaynaklar ?? []).length > 0) throw gecersiz(ILETILER.birlesikSilinmez);
   // Tetikleyici yine son sözdür; burada açık ileti verilir, tetikleyicinin genel 422 iletisi kullanıcıya yol göstermez.
   if (eski.durum !== 'taslak') throw gecersiz(ILETILER.yalnizTaslakSilinir);
-  await surumluGuncelle({ guncelle: () => s.talepSil(db, id, surum), varMi: () => s.talepVarMi(db, id), bulunamadiIletisi: ILETILER.talepYok });
+  // 2876 (Veri): güncelleme talebinin kökü silinmez (RESTRICT); kök taslağa dönemez, kısıt yine de açık iletiyle karşılanır.
+  await kisitKorumali({ satin_alma_talep_guncellenen: ILETILER.guncellemesiOlanSilinmez },
+    () => surumluGuncelle({ guncelle: () => s.talepSil(db, id, surum), varMi: () => s.talepVarMi(db, id), bulunamadiIletisi: ILETILER.talepYok }));
   return { tamam: true };
 }
 
@@ -2091,7 +2166,10 @@ export async function iptaliGeriAl(db: Db, k: Kullanici, id: string, g: IptaliGe
   const kayitli = await s.iptalOncesiDurum(db, id);
   const durum = kayitli ?? iptalOncesiTuret(eski);
   const hareket = { id: randomUUID(), zaman: '', kisiId: null, kisiAdi: null, metin: iptalGeriAlmaHareketi(eski.iptalNedeni, g.gerekce, kayitli === null) };
-  const talep = await talepKaydet(db, k, id, { ...eski, durum, iptalNedeni: '', hareketler: [...eski.hareketler, hareket], surum: g.surum }, izYaz, durum);
+  // 2876 (Maliyet N1): grubun başka talebi siparişte ya da teslim alınmışsa geri alma serbesttir (2871-2 a) ama ikinci alım olabilir; geçmişe uyarı yazılır.
+  const siparisteki = ikinciAlimRiski((await guncellemeGruplari(db, [id])).get(id) ?? [], id);
+  const uyari = siparisteki.length === 0 ? [] : [{ id: randomUUID(), zaman: '', kisiId: null, kisiAdi: null, metin: ILETILER.grupSipariste(siparisteki) }];
+  const talep = await talepKaydet(db, k, id, { ...eski, durum, iptalNedeni: '', hareketler: [...eski.hareketler, hareket, ...uyari], surum: g.surum }, izYaz, durum);
   return { talep, durum, turetildi: kayitli === null };
 }
 

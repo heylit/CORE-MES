@@ -31,7 +31,8 @@ function Adimlar({ t }: { t: Talebim }) {
   );
 }
 
-function Satir({ t, tam, duzenle }: { t: Talebim; tam: boolean; duzenle: ((t: Talebim) => void) | undefined }) {
+export type Duzenleme = 'duzenle' | 'guncelle';
+function Satir({ t, tam, duzenle }: { t: Talebim; tam: boolean; duzenle: ((t: Talebim, kip: Duzenleme) => void) | undefined }) {
   const [acik, acikYaz] = useState(false);
   const d = DURUM[t.durum];
   const bekleyen = t.kalemler.filter((k) => k.kartBekliyor).length;
@@ -51,6 +52,12 @@ function Satir({ t, tam, duzenle }: { t: Talebim; tam: boolean; duzenle: ((t: Ta
         {t.ihtiyacTarihi && <> · istenen {gunYaz(t.ihtiyacTarihi)}</>}
         {t.uretimEmriNo && <> · üretim emri {t.uretimEmriNo}</>}
       </div>
+      {t.guncellemeGrubu && (
+        <div className="sa-talep-not">
+          <Simge ad="layers" boyut="k" /> {t.guncellemeGrubu.find((x) => x.kok)?.id === t.id ? 'Güncellemeleri' : 'Güncelleme grubu'}:{' '}
+          {t.guncellemeGrubu.filter((x) => x.id !== t.id).map((x) => `${x.no}${x.kok ? ' (ilk talep)' : ''} ${DURUM[x.durum].metin.toLocaleLowerCase('tr-TR')}`).join(', ')}
+        </div>
+      )}
     </>
   );
   if (!tam) return <li className="sa-talep-satir">{ust}</li>;
@@ -75,7 +82,13 @@ function Satir({ t, tam, duzenle }: { t: Talebim; tam: boolean; duzenle: ((t: Ta
         </ul>
       )}
       {acik && t.duzenlenebilir && duzenle && (
-        <div className="sa-talep-duzenle"><Dugme simge="edit" onClick={() => duzenle(t)}>Düzenle</Dugme></div>
+        <div className="sa-talep-duzenle"><Dugme simge="edit" onClick={() => duzenle(t, 'duzenle')}>Düzenle</Dugme></div>
+      )}
+      {acik && t.guncellenebilir && duzenle && (
+        <div className="sa-talep-duzenle">
+          <span className="sa-talep-not">Teklif toplanıyor: talep değişmez, değişiklik yeni bir güncelleme talebiyle gider; satın alma ikisini birlikte görür.</span>
+          <Dugme simge="layers" onClick={() => duzenle(t, 'guncelle')}>Güncelleme talebi aç</Dugme>
+        </div>
       )}
     </li>
   );
@@ -83,9 +96,9 @@ function Satir({ t, tam, duzenle }: { t: Talebim; tam: boolean; duzenle: ((t: Ta
 
 // Kişinin kendi talepleri ve durumu (kart #375); fiyat, teklif ve tedarikçi sunucudan zaten gelmez. Ana sayfada son on talep;
 // Taleplerim sayfasında (898 a) arama, durum süzgeci, ilerleme ve kalem ayrıntısıyla.
-// 2871-1 a: `duzenle` verilirse teklif istenmemiş kendi talebinin ayrıntısında "Düzenle" çıkar.
+// 2871-1 a: `duzenle` verilirse teklif istenmemiş kendi talebinin ayrıntısında "Düzenle" çıkar; 2876: teklif toplanırken "Güncelleme talebi aç".
 export function Taleplerim({ tam = false, suzgec, suzgecYaz, duzenle }: {
-  tam?: boolean; suzgec?: DurumSuzgeci; suzgecYaz?: (s: DurumSuzgeci) => void; duzenle?: (t: Talebim) => void;
+  tam?: boolean; suzgec?: DurumSuzgeci; suzgecYaz?: (s: DurumSuzgeci) => void; duzenle?: (t: Talebim, kip: Duzenleme) => void;
 } = {}) {
   const [hepsi, hepsiYaz] = useState(false);
   const [ara, araYaz] = useState('');

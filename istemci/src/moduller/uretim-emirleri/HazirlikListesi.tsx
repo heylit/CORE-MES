@@ -47,6 +47,9 @@ export const MADDE: { [K in HazirlikMaddesi]: MaddeBilgisi<K> } = {
   talimat: { ad: 'Hazırlık talimatı', kisa: 'Talimat', sahip: 'Terminal', git: null, uyarir: true },
   // 2227-1 b: iş emrine özel madde Üretim Hazırlık'ta eklenir ve işaretlenir.
   'ek-madde': { ad: 'Ek hazırlık maddesi', kisa: 'Ek madde', sahip: 'Üretim Hazırlık', git: { yol: '/arkon/hazirlik', islem: 'sayfa.arkon', ad: "Üretim Hazırlık'ta aç" }, uyarir: true },
+  // 2893-4 a: liste rota adımında tanımlanır; aparat stokta, ölçü aleti türünde kalibrasyonu geçerli alet aranır.
+  aparat: { ad: 'Aparat', kisa: 'Aparat', sahip: 'Stok Merkezi', git: { yol: '/stok', islem: 'sayfa.stok', ad: "Stok Merkezi'nde aç" }, uyarir: true },
+  'olcu-aleti': { ad: 'Ölçü aleti (kalibrasyon)', kisa: 'Ölçü', sahip: 'Ölçü Aletleri', git: { yol: '/kalibrasyon', islem: 'sayfa.kalibrasyon', ad: "Ölçü Aletleri'nde aç" }, uyarir: true },
 };
 
 // Hücre kimliği: emir geneli madde yalnız madde, iş emri düzeyindeki madde madde ve iş emri.

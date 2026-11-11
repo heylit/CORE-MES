@@ -22,13 +22,13 @@ export interface TalepSatiri {
   ihtiyacTarihi: string | null; notlar: string; durum: string; iptalNedeni: string;
   agirlikMaliyet: number | null; agirlikTermin: number | null; agirlikTedarikci: number | null; agirlikGaranti: number | null;
   teslimYontemi: 'firma_getirir' | 'biz_alacagiz' | null; uretimEmriId: number | null; surum: number; olusturma: string; guncelleme: string;
-  birlesenTalepId: string | null; projeId: number | null; idariTalepId: number | null;
+  birlesenTalepId: string | null; projeId: number | null; idariTalepId: number | null; guncellenenTalepId: string | null;
 }
 const TALEP = `id, no, baslik, birim, talep_eden_kisi_id AS "talepEdenKisiId", acan_kisi_id AS "acanKisiId", oncelik,
   ihtiyac_tarihi AS "ihtiyacTarihi", notlar, durum, iptal_nedeni AS "iptalNedeni", agirlik_maliyet AS "agirlikMaliyet",
   agirlik_termin AS "agirlikTermin", agirlik_tedarikci AS "agirlikTedarikci", agirlik_garanti AS "agirlikGaranti", teslim_yontemi AS "teslimYontemi", uretim_emri_id AS "uretimEmriId", surum,
   ${ISO('olusturma')} AS olusturma, ${ISO('guncelleme')} AS guncelleme, birlesen_talep_id AS "birlesenTalepId",
-  proje_id AS "projeId", idari_talep_id AS "idariTalepId"`;
+  proje_id AS "projeId", idari_talep_id AS "idariTalepId", guncellenen_talep_id AS "guncellenenTalepId"`;
 
 // kisiId verilirse yalnız o kişinin açtığı ya da adına açılan talepler.
 export function talepSatirlariOku(db: Db, kisiId: number | null, id: string | null = null): Promise<TalepSatiri[]> {
@@ -156,6 +156,24 @@ export async function talepEdenGecmisi(db: Db, talepId: string): Promise<number[
 }
 
 // Sürüm tutmazsa satır dönmez; çağıran çekirdeğin surumluGuncelle'si ile 404/409 ayırır.
+// 2876: güncelleme talebi açılışta kök talebe bağlanır (açılışın parçası; aynı işlemde, sürüm değişmez).
+export async function guncellenenTalepYaz(db: Db, id: string, kokId: string): Promise<void> {
+  await db.sorgu('UPDATE satin_alma_talep SET guncellenen_talep_id = $2 WHERE id = $1', [id, kokId]);
+}
+
+// 2876: verilen taleplerin güncelleme grupları (kök ve köke bağlı talepler). Tek üyeli grup (güncellemesiz talep) dönmez.
+export interface GuncellemeUyesi { kokId: string; id: string; no: string; durum: string; surum: number }
+export function guncellemeGruplariOku(db: Db, idler: readonly string[]): Promise<GuncellemeUyesi[]> {
+  return db.sorgu(
+    `WITH kokler AS (SELECT DISTINCT coalesce(guncellenen_talep_id, id) AS kok FROM satin_alma_talep WHERE id = ANY($1::uuid[])),
+          uyeler AS (SELECT k.kok, t.id, t.no, t.durum, t.surum, t.olusturma FROM kokler k JOIN satin_alma_talep t ON t.id = k.kok OR t.guncellenen_talep_id = k.kok)
+     SELECT kok AS "kokId", id, no, durum, surum FROM uyeler
+      WHERE kok IN (SELECT kok FROM uyeler GROUP BY kok HAVING count(*) > 1)
+      ORDER BY kok, id <> kok, olusturma, no`,
+    [idler],
+  );
+}
+
 export async function talepGuncelle(db: Db, t: TalepYazimi, talepEden: number, surum: number): Promise<{ id: string } | null> {
   const satir = await db.tek<{ id: string }>(
     `UPDATE satin_alma_talep SET baslik = $3, birim = $4, talep_eden_kisi_id = $5, oncelik = $6, ihtiyac_tarihi = $7, notlar = $8, durum = $9,
@@ -1351,12 +1369,17 @@ export function planIhtiyaclariOku(db: Db): Promise<PlanIhtiyaciSatiri[]> {
   );
 }
 // Sipariş verilmemiş açık talepteki miktar, malzeme ve birim başına (siparişe geçen talep sipariş satırıyla sayılır).
+// 2876 (Maliyet E1): güncelleme grubunda aynı ihtiyacın birden çok açık talebi olabilir; grubun yalnız en yeni açık talebi sayılır.
 export function acikTalepMiktarlari(db: Db, malzemeNolar: readonly number[]): Promise<{ malzemeNo: number; birim: string; miktar: string }[]> {
   if (malzemeNolar.length === 0) return Promise.resolve([]);
   return db.sorgu(
-    `SELECT c.malzeme_no AS "malzemeNo", k.birim, sum(k.miktar)::text AS miktar
-       FROM satin_alma_talep_kalemi k JOIN satin_alma_talep t ON t.id = k.talep_id JOIN satin_alma_katalog c ON c.id = k.katalog_id
-      WHERE c.malzeme_no = ANY($1::int[]) AND k.miktar IS NOT NULL AND t.durum IN ('taslak', 'teklif_isteniyor', 'degerlendirme', 'onayda')
+    `WITH sayilan AS (
+       SELECT DISTINCT ON (coalesce(guncellenen_talep_id, id)) id FROM satin_alma_talep
+        WHERE durum IN ('taslak', 'teklif_isteniyor', 'degerlendirme', 'onayda')
+        ORDER BY coalesce(guncellenen_talep_id, id), olusturma DESC, id DESC)
+     SELECT c.malzeme_no AS "malzemeNo", k.birim, sum(k.miktar)::text AS miktar
+       FROM satin_alma_talep_kalemi k JOIN sayilan t ON t.id = k.talep_id JOIN satin_alma_katalog c ON c.id = k.katalog_id
+      WHERE c.malzeme_no = ANY($1::int[]) AND k.miktar IS NOT NULL
       GROUP BY c.malzeme_no, k.birim`,
     [[...malzemeNolar]],
   );
@@ -1708,5 +1731,31 @@ export async function kalemsizTalebiIptalEt(db: Db, id: string, neden: string): 
     `UPDATE satin_alma_talep SET durum = 'iptal', iptal_nedeni = $2, iptal_oncesi_durum = NULL, durum_zamani = now(), surum = surum + 1, guncelleme = now()
       WHERE id = $1 AND NOT EXISTS (SELECT 1 FROM satin_alma_talep_kalemi WHERE talep_id = $1)`,
     [id, neden],
+  );
+}
+
+// 2893 D2: Adım Durumu için emre (KALEM_EMRI) ya da fason iş emrine (sipariş satırının ya da kalemin iş emri) bağlı talep kalemleri;
+// sipariş satırı varsa sipariş no, beklenen teslim ve net teslim. Fiyat ve tedarikçi okunmaz. İptal talep ve birleşmiş kaynak gelmez
+// (kalemi birleşik taleptedir).
+export interface EmirTedarikSatiri {
+  uretimEmriId: number | null; isEmriId: number | null; malzemeNo: number | null; talepNo: string; talepDurumu: string;
+  siparisNo: string | null; beklenenTeslim: string | null; miktar: string | null; teslim: string; kapali: boolean;
+}
+export function emirTedarikDurumlariOku(db: Db, uretimEmriIdleri: readonly number[], isEmriIdleri: readonly number[]): Promise<EmirTedarikSatiri[]> {
+  return db.sorgu<EmirTedarikSatiri>(
+    `SELECT ${KALEM_EMRI} AS "uretimEmriId", coalesce(s.is_emri_id, k.is_emri_id) AS "isEmriId", c.malzeme_no AS "malzemeNo",
+            t.no AS "talepNo", t.durum AS "talepDurumu", coalesce(p.no, nullif(p.siparis_no, '')) AS "siparisNo", p.beklenen_teslim::text AS "beklenenTeslim",
+            s.miktar::text AS miktar, coalesce(m.toplam, 0)::text AS teslim, (p.logo_kapatma_durumu IS NOT NULL) AS kapali
+       FROM satin_alma_talep_kalemi k
+       JOIN satin_alma_talep t ON t.id = k.talep_id
+       LEFT JOIN satin_alma_talep kt ON kt.id = k.kaynak_talep_id
+       LEFT JOIN satin_alma_katalog c ON c.id = k.katalog_id
+       LEFT JOIN satin_alma_siparis_satiri s ON s.talep_id = k.talep_id AND s.kalem_id = k.id
+       LEFT JOIN satin_alma_siparis p ON p.talep_id = s.talep_id AND p.teklif_id = s.teklif_id
+       LEFT JOIN LATERAL (SELECT sum(x.miktar) AS toplam FROM satin_alma_teslim x WHERE x.siparis_satiri_id = s.id) m ON true
+      WHERE t.durum <> 'iptal' AND t.birlesen_talep_id IS NULL
+        AND (${KALEM_EMRI} = ANY($1::int[]) OR coalesce(s.is_emri_id, k.is_emri_id) = ANY($2::int[]))
+      ORDER BY t.yil, t.sira, k.sira`,
+    [uretimEmriIdleri, isEmriIdleri],
   );
 }

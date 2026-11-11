@@ -3,7 +3,7 @@ import { bulunamadi, cakisma, dogrulama } from '#cekirdek/hata.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
 import { ADIM_STATULERI } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import type {
-  AdimDurumuCevabi, AdimStatusu, AdimDurumuTerminalCevabi, ElleStatuGovdesi, HazirlikMaddesi, HazirlikOnayiGovdesi, HazirlikOnayiKaldirGovdesi,
+  AdimDurumuCevabi, AdimStatusu, AdimDurumuTerminalCevabi, AdimTedariki, ElleStatuGovdesi, HazirlikMaddesi, HazirlikOnayiGovdesi, HazirlikOnayiKaldirGovdesi,
 } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { kisiAdlari } from '../kisiler/disari.ts';
 import { hazirlik, isEmriHazirliklari } from './hazirlik.ts';
@@ -14,6 +14,34 @@ import {
 import type { HazirlikHali } from './kurallar.ts';
 import * as s from './sorgular.ts';
 import { emrinIlerlemesi } from './servis.ts';
+
+// 2893 D2: açık tedarik satın almadan okunur (satın alma bu modülün üstündedir; kablolama bağlar). Bağlı değilse tedarik boştur ve
+// malzeme eksiği "malzeme" görünür.
+export interface EmirTedarikSatiri {
+  uretimEmriId: number | null; isEmriId: number | null; malzemeNo: number | null; asama: 'talep' | 'siparis'; talepNo: string; siparisNo: string | null; termin: string | null;
+}
+export type TedarikCozucusu = (db: Db, uretimEmriIdleri: readonly number[], isEmriIdleri: readonly number[]) => Promise<readonly EmirTedarikSatiri[]>;
+let tedarikCozucusu: TedarikCozucusu | null = null;
+export function tedarikCozucusuKaydet(c: TedarikCozucusu | null): TedarikCozucusu | null {
+  const onceki = tedarikCozucusu;
+  tedarikCozucusu = c;
+  return onceki;
+}
+// Hammadde talebi adımın girdisine (emir bağı + malzeme no) eşlenir; emre bağlanmamış ya da katalogsuz kalem eşlenmez. Fason satırı iş emrine.
+async function adimTedarikleri(db: Db, emirId: number, idler: readonly number[]): Promise<Map<number, AdimTedariki[]>> {
+  const sonuc = new Map<number, AdimTedariki[]>(idler.map((id) => [id, []]));
+  if (tedarikCozucusu === null || idler.length === 0) return sonuc;
+  const satirlar = await tedarikCozucusu(db, [emirId], idler);
+  for (const id of idler) {
+    const girdiler = new Set((await s.adimGirdileriGetir(db, id)).map((g) => g.malzemeNo));
+    for (const r of satirlar) {
+      const fason = r.isEmriId !== null;
+      if (fason ? r.isEmriId !== id : r.uretimEmriId !== emirId || r.malzemeNo === null || !girdiler.has(r.malzemeNo)) continue;
+      sonuc.get(id)?.push({ asama: r.asama, fason, talepNo: r.talepNo, siparisNo: r.siparisNo, termin: r.termin });
+    }
+  }
+  return sonuc;
+}
 
 // Tabloda statü serbest metindir (liste sonradan değişebilir); listede olmayan eski değer 'diger' okunur.
 const statuOku = (x: string): AdimStatusu => (ADIM_STATULERI as readonly string[]).includes(x) ? x as AdimStatusu : 'diger';
@@ -31,6 +59,7 @@ export async function adimDurumu(db: Db, emirId: number): Promise<AdimDurumuCeva
   const fason = new Map<number, number>();
   for (const h of await s.akisFasonGetir(db, emirId)) fason.set(h.isEmriId, (fason.get(h.isEmriId) ?? 0) + (h.yon === 'gidis' ? h.adet : -h.adet));
   const haller = await isEmriHazirliklari(db, emirId, idler);
+  const tedarik = await adimTedarikleri(db, emirId, idler);
   const statuDefteri = await s.elleStatuDefteri(db, idler);
   const onayDefteri = await s.hazirlikOnayDefteri(db, idler);
   const adlar = await kisiAdlari(db, [...new Set([...statuDefteri, ...onayDefteri].map((x) => x.kisiId))]);
@@ -43,6 +72,7 @@ export async function adimDurumu(db: Db, emirId: number): Promise<AdimDurumuCeva
       const sistem = adimSistemStatusu({
         durum: i.durum, calisma: calisma.get(i.id) ?? null, fasonda: i.fasonFirmaId !== null && i.durum !== 'tamam' && (fason.get(i.id) ?? 0) > 0, hal,
         oncekiBekleniyor: oncekiBekleniyor({ sira: i.sira, bagimlilik: i.bagimlilik, oncul: i.onculler?.map((o) => o.id) ?? null }, isEmirleri),
+        tedarik: i.durum === 'tamam' ? [] : tedarik.get(i.id) ?? [],
       });
       const statuSatirlari = statuDefteri.filter((x) => x.isEmriId === i.id);
       const onaySatirlari = onayDefteri.filter((x) => x.isEmriId === i.id);
@@ -53,6 +83,7 @@ export async function adimDurumu(db: Db, emirId: number): Promise<AdimDurumuCeva
         fason: i.fasonFirmaId !== null, hedef: adim?.hedef ?? 0, yapilan: adim?.yapilan ?? 0, yuzde: adim?.yuzde ?? 0,
         sistemStatusu: sistem.statu, nedenler: sistem.nedenler,
         maddeler: [...(haller.get(i.id) ?? [])].map(([madde, h]) => ({ madde, hal: h.hal, ham: h.ham })),
+        tedarik: i.durum === 'tamam' ? [] : tedarik.get(i.id) ?? [],
         elle: elle === null || elle.statu === null ? null : { statu: statuOku(elle.statu), not: elle.aciklama, kisiAdi: ad(elle.kisiId), zaman: elle.zaman },
         onaylar: [...acikOnaylar(onaySatirlari).values()].map((o) => ({
           madde: o.madde as HazirlikMaddesi, gerekce: o.gerekce, sistemHali: (o.sistemHali ?? 'bilinmiyor') as HazirlikHali, kisiAdi: ad(o.kisiId), zaman: o.zaman,
@@ -66,13 +97,16 @@ export async function adimDurumu(db: Db, emirId: number): Promise<AdimDurumuCeva
   };
 }
 
-// 2893-3 b: operatör statüyü, nedenleri ve statünün elle yazıldığını görür; kişi, gerekçe ve geçmiş gitmez.
+// 2893-3 b: operatör statüyü, nedenleri ve statünün elle yazıldığını görür; kişi, gerekçe ve geçmiş gitmez. Tedarik satırı yalnız adım
+// malzeme, talep ya da sipariş beklerken gider: malzeme yerindeyken başka miktar için açık talep "malzeme yok" sanılmasın (Atölye N1).
+const TEDARIK_GORUNEN = new Set<AdimStatusu>(['talep', 'siparis', 'malzeme']);
 export async function adimDurumuTerminal(db: Db, emirId: number): Promise<AdimDurumuTerminalCevabi> {
   const d = await adimDurumu(db, emirId);
   return {
     emirId,
     adimlar: d.adimlar.map((a) => ({
       isEmriId: a.isEmriId, opNo: a.opNo, ad: a.ad, statu: a.elle?.statu ?? a.sistemStatusu, elle: a.elle !== null, yuzde: a.yuzde, nedenler: a.nedenler,
+      tedarik: TEDARIK_GORUNEN.has(a.elle?.statu ?? a.sistemStatusu) ? a.tedarik : [],
     })),
   };
 }

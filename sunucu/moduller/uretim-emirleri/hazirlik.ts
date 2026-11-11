@@ -15,7 +15,7 @@ import { talimatHazirlikSayilari } from './sorgular/adim/sorgular.ts';
 // bu modülü okuduğu için çözücüler kablolama.ts'te kaydedilir; kayıtsız madde emirde aranmaz. CNC kurulumu iş emri başınadır (266 a),
 // çözücüsü iş emri kimliği alır; ötekiler üretim emri kimliği. Uyaran maddeler (2146-1 a) başlatmada sorulmaz, yalnız görünümde.
 export type HazirlikCozucusu = (db: Db, idler: readonly number[]) => Promise<ReadonlyMap<number, HazirlikBilgisi>>;
-const IS_EMRI_DUZEYI: ReadonlySet<HazirlikMaddesi> = new Set(['cnc', 'malzeme', 'takim-omru', 'makine', 'yayin', 'talimat', 'ek-madde']);
+const IS_EMRI_DUZEYI: ReadonlySet<HazirlikMaddesi> = new Set(['cnc', 'malzeme', 'takim-omru', 'makine', 'yayin', 'talimat', 'ek-madde', 'aparat', 'olcu-aleti']);
 const BASLATMADA_SORULMAZ: ReadonlySet<string> = new Set(YALNIZ_GORUNUM_MADDELERI);
 const cozuculer = new Map<HazirlikMaddesi, HazirlikCozucusu>();
 // Önceki çözücüyü döner: test kendi çözücüsünü koyup sonra geri yükler.

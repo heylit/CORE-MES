@@ -5,7 +5,7 @@ import type { OnTalep, Talebim } from '#paylasilan/sozlesme/satin-alma.ts';
 import { Sekmeler, type Sekme } from '../../../ortak/arayuz/index.ts';
 import { OnTalepler } from './OnTalepler.tsx';
 import { TalepAc } from './TalepAc.tsx';
-import { HEPSI, Taleplerim, suzgeceUyar, type DurumSuzgeci } from './Taleplerim.tsx';
+import { HEPSI, Taleplerim, suzgeceUyar, type DurumSuzgeci, type Duzenleme } from './Taleplerim.tsx';
 import { SURE, anahtarlar, cagri } from './ortak.ts';
 import './talep.css';
 
@@ -17,6 +17,7 @@ export function TaleplerimSayfasi() {
   const [bolum, bolumYaz] = useState<Bolum>('on');
   const [taslak, taslakYaz] = useState<readonly OnTalep[] | null>(null);
   const [duzenlenen, duzenlenenYaz] = useState<Talebim | null>(null);
+  const [kip, kipYaz] = useState<Duzenleme>('duzenle');
   const [suzgec, suzgecYaz] = useState<DurumSuzgeci>('acik');
   // Ctrl K komutu ve arama sonucu (1237) bölümü adresle seçer; adres temizlenir ki geri gelince bölüm yeniden zorlanmasın.
   const [adres, adresYaz] = useSearchParams();
@@ -56,11 +57,11 @@ export function TaleplerimSayfasi() {
       </div>
       <Sekmeler etiket="Taleplerim bölümleri" sekmeler={sekmeler} secili={bolum} sec={bolumYaz} />
       {bolum === 'on' && <OnTalepler cevir={(l) => { taslakYaz(l); bolumYaz('yeni'); }} />}
-      {bolum === 'liste' && <Taleplerim tam suzgec={suzgec} suzgecYaz={suzgecYaz} duzenle={(t) => { duzenlenenYaz(t); bolumYaz('yeni'); }} />}
+      {bolum === 'liste' && <Taleplerim tam suzgec={suzgec} suzgecYaz={suzgecYaz} duzenle={(t, k) => { kipYaz(k); duzenlenenYaz(t); bolumYaz('yeni'); }} />}
       {/* Form bölüm değişse de bağlı kalır ki yarım kalan talep kaybolmasın. */}
       <div hidden={bolum !== 'yeni'}>
         <TalepAc taslak={taslak} taslakBitti={(gonderildi) => { taslakYaz(null); bolumYaz(gonderildi ? 'liste' : 'on'); suzgecYaz('acik'); }}
-          duzenlenen={duzenlenen} duzenlemeBitti={() => { duzenlenenYaz(null); bolumYaz('liste'); }} />
+          duzenlenen={duzenlenen} guncelleme={kip === 'guncelle'} duzenlemeBitti={() => { duzenlenenYaz(null); bolumYaz('liste'); }} />
       </div>
     </div>
   );

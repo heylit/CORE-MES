@@ -26,7 +26,7 @@ import { ILETILER, karneTeslimOlayi, talepEdenGorunumu } from './kurallar.ts';
 import { kablola } from '../../kablolama.ts';
 import { takvimKayitlari } from './disari.ts';
 import { tesisGunu } from '#paylasilan/zaman.ts';
-import { siparisOdemeKosullari, terminKalemleriOku } from './sorgular.ts';
+import { acikTalepMiktarlari, siparisOdemeKosullari, terminKalemleriOku } from './sorgular.ts';
 
 const PAROLA = 'dogru-parola-1';
 type Cevap = Awaited<ReturnType<FastifyInstance['inject']>>;
@@ -224,6 +224,142 @@ describe('satin-alma sürüm 6 (gerçek PostgreSQL)', () => {
     const tam = tamam<AcilisCevabi>(await istek(c.sa, 'GET', '/satin-alma-acilis')).talepler.find((x) => x.id === t.id)!;
     const sa = tamam<Talep>(await kaydet(c.sa, { ...govde(tam), notlar: 'Deneme satın alma notu' }));
     assert.equal(sa.notlar, 'Deneme satın alma notu');
+  });
+
+  // 2876: satın almanın gördüğü bütün talep; teklif isteme, karar, onay ve sipariş adımları.
+  const satinAlmaGorur = async (id: string) => tamam<AcilisCevabi>(await istek(c.sa, 'GET', '/satin-alma-acilis')).talepler.find((x) => x.id === id)!;
+  const teklifIste = async (t: Talep) =>
+    tamam<Talep>(await kaydet(c.sa, { ...govde(t), durum: 'teklif_isteniyor', teklifIstekleri: [{ firmaId: firmaA, gonderim: '2026-10-05', sonTarih: null }] }));
+  async function siparise(t: Talep, siparisNo: string): Promise<Talep> {
+    const a = teklif(firmaA, t.kalemler.map((k): [string, string] => [k.id, '10']));
+    const deg = tamam<Talep>(await kaydet(c.sa, { ...govde(t), durum: 'degerlendirme', teklifler: [a] }));
+    const ond = tamam<Talep>(await kaydet(c.sa, { ...govde(deg), durum: 'onayda', teklifler: [a],
+      karar: { mod: 'tek', teklifId: a.id, bolunme: [], gerekce: '', kararVerenKisiId: kisi.sa!, kararTarihi: '2026-10-07', ogrenilenler: '', sabitKurlar: [], siparisler: [] } }));
+    const onayli = tamam<Talep>(await kaydet(c.mudur, { ...govde(ond), onaylar: [onayKaydi()] }));
+    const siparis = { teklifId: a.id, siparisNo, siparisTarihi: '2026-10-07', beklenenTeslim: '2026-10-20' };
+    return tamam<Talep>(await kaydet(c.sa, { ...govde(onayli), durum: 'siparis_verildi', karar: { ...onayli.karar!, siparisler: [siparis] } }));
+  }
+  const guncellemeAc = (cerez: string, t: { id: string; surum: number; kalemler: { id: string }[] }, ek: Record<string, unknown> = {}) =>
+    istek(cerez, 'POST', `/satin-alma-talepleri/${t.id}/guncelleme-ac`, {
+      id: randomUUID(), surum: t.surum, ihtiyacTarihi: '2026-11-20', aciklama: 'Deneme güncelleme',
+      kalemler: [{ id: t.kalemler[0]!.id, miktar: '12', aciklama: 'Deneme ölçü' }, { id: t.kalemler[1]!.id, miktar: '4' }], ...ek,
+    });
+
+  test('SAT-80 (2876): teklif toplanırken sahibi güncelleme talebi açar; eski talep ve teklif istekleri değişmez; grup iki tarafta, zincir köke bağlanır', async () => {
+    const kok = await teklifIste(tamam<Talep>(await istek(c.talep, 'POST', '/satin-alma-talepleri/ac', yeniTalep())));
+    const r = await guncellemeAc(c.talep, kok);
+    const g = tamam<Talebim>(r);
+    assert.deepEqual([g.durum, g.aciklama, g.ihtiyacTarihi?.slice(0, 10), g.kalemler.map((k) => [k.ad, k.miktar, k.aciklama])],
+      ['taslak', 'Deneme güncelleme', '2026-11-20', [['Deneme rulman', '12', 'Deneme ölçü'], ['Deneme kayış', '4', '']]]);
+    assert.notEqual(g.kalemler[0]!.id, kok.kalemler[0]!.id);
+    assert.deepEqual(g.guncellemeGrubu?.map((x) => [x.no, x.kok]), [[kok.no, true], [g.no, false]]);
+    assert.doesNotMatch(r.body, SIZINTI);
+    const eski = await satinAlmaGorur(kok.id);
+    assert.deepEqual([eski.durum, eski.kalemler.map((k) => k.miktar), eski.teklifIstekleri.map((x) => x.firmaId), eski.guncellemeGrubu?.length],
+      ['teklif_isteniyor', ['10', '4'], [firmaA], 2]);
+    assert.match(eski.hareketler.at(-1)!.metin, new RegExp(`Güncelleme talebi açıldı: ${g.no}`));
+    const yeni = await satinAlmaGorur(g.id);
+    assert.deepEqual([yeni.talepEdenKisiId, yeni.kalemler.map((k) => k.katalogId)], [kisi.talep, [KATALOG, KATALOG]]);
+    const benim = tamam<TaleplerimCevabi>(await istek(c.talep, 'GET', '/satin-alma-taleplerim?sinir=500')).talepler;
+    assert.deepEqual([benim.find((x) => x.id === kok.id)?.guncellemeGrubu?.length, benim.find((x) => x.id === kok.id)?.guncellenebilir], [2, true]);
+    // Güncellemenin güncellemesi de köke bağlanır (zincir yok).
+    const ikinci = tamam<Talebim>(await guncellemeAc(c.talep, await teklifIste(yeni)));
+    assert.deepEqual(ikinci.guncellemeGrubu?.map((x) => x.no), [kok.no, g.no, ikinci.no]);
+  });
+
+  test('SAT-80 (2876): yasak: başkası 403, yetkisiz 403, taslak ve onaydaki talep 422, bağlı kalemli talep 422, eski sürüm 409, olmayan kalem 422', async () => {
+    const taslak = tamam<Talep>(await istek(c.talep, 'POST', '/satin-alma-talepleri/ac', yeniTalep()));
+    const red = (r: Cevap) => [r.statusCode, (r.json() as { mesaj: string }).mesaj];
+    assert.deepEqual(red(await guncellemeAc(c.talep, taslak)), [422, ILETILER.guncellemeAsamasi]);
+    const kok = await teklifIste(taslak);
+    assert.deepEqual(red(await guncellemeAc(c.talep2, kok)), [403, ILETILER.talebimSahibiDegil]);
+    assert.equal((await guncellemeAc(c.operator, kok)).statusCode, 403);
+    assert.equal((await guncellemeAc(c.talep, { ...kok, surum: kok.surum - 1 })).statusCode, 409);
+    assert.deepEqual(red(await guncellemeAc(c.talep, kok, { kalemler: [{ id: randomUUID(), miktar: '1' }] })), [422, ILETILER.talebimKalemYok]);
+    const onayda = await kararli();
+    assert.deepEqual(red(await guncellemeAc(c.talep, onayda)), [422, ILETILER.guncellemeAsamasi]);
+    await ortam!.sahip.sorgu('UPDATE satin_alma_talep_kalemi SET uygulanan_malzeme_no = $2 WHERE id = $1', [kok.kalemler[0]!.id, await kartNo('HM-SAT-00001')]);
+    assert.deepEqual(red(await guncellemeAc(c.talep, kok)), [422, ILETILER.guncellemeBagli]);
+    const sayi = await ortam!.sahip.tek<{ n: number }>('SELECT count(*)::int AS n FROM satin_alma_talep WHERE guncellenen_talep_id = $1', [kok.id]);
+    assert.equal(sayi!.n, 0);
+    // Göç: talep kendisinin güncellemesi olamaz; olmayan talebe bağlanamaz.
+    await assert.rejects(ortam!.sahip.sorgu('UPDATE satin_alma_talep SET guncellenen_talep_id = id WHERE id = $1', [kok.id]), kisitla('satin_alma_talep_guncellenen_kendisi_degil'));
+    await assert.rejects(ortam!.sahip.sorgu('UPDATE satin_alma_talep SET guncellenen_talep_id = $2 WHERE id = $1', [kok.id, randomUUID()]), kisitla('satin_alma_talep_guncellenen'));
+  });
+
+  test('2876 (Veri): güncellemesi olan kök taslağa dönmez ve silinmez; kısıt yine de açık iletiyle karşılanır; güncelleme taslağı silinir', async () => {
+    const kok = await teklifIste(tamam<Talep>(await istek(c.talep, 'POST', '/satin-alma-talepleri/ac', yeniTalep())));
+    const g = tamam<Talebim>(await guncellemeAc(c.talep, kok));
+    const sil = (t: { id: string; surum: number }) => istek(c.sa, 'POST', `/satin-alma-talepleri/${t.id}/sil`, { surum: t.surum });
+    const red = (r: Cevap) => [r.statusCode, (r.json() as { mesaj: string }).mesaj];
+    assert.equal((await kaydet(c.sa, { ...govde(await satinAlmaGorur(kok.id)), durum: 'taslak' })).statusCode, 422);
+    assert.deepEqual(red(await sil(await satinAlmaGorur(kok.id))), [422, ILETILER.yalnizTaslakSilinir]);
+    // Kural dışı bir yolla taslağa dönmüş olsa bile 500 değil, açık iletili çakışma (409).
+    await ortam!.sahip.sorgu("UPDATE satin_alma_talep SET durum = 'taslak' WHERE id = $1", [kok.id]);
+    assert.deepEqual(red(await sil(await satinAlmaGorur(kok.id))), [409, ILETILER.guncellemesiOlanSilinmez]);
+    assert.equal((await sil(await satinAlmaGorur(g.id))).statusCode, 200);
+  });
+
+  test('2876 (Maliyet E1): plan ön talebinde güncelleme grubunun yalnız en yeni açık talebi sayılır; güncelleme iptal olunca eskisi sayılır', async () => {
+    const no = (await ortam!.sahip.tek<{ n: number }>('SELECT malzeme_no AS n FROM satin_alma_katalog WHERE id = $1', [KATALOG]))!.n;
+    const acik = async () => Number((await vt().tx((db) => acikTalepMiktarlari(db, [no]))).find((x) => x.birim === 'adet')?.miktar ?? 0);
+    const once = await acik();
+    const kok = await teklifIste(tamam<Talep>(await istek(c.talep, 'POST', '/satin-alma-talepleri/ac', yeniTalep())));
+    assert.equal(await acik(), once + 14);
+    const g = tamam<Talebim>(await guncellemeAc(c.talep, kok));
+    assert.equal(await acik(), once + 16);
+    const yeni = await satinAlmaGorur(g.id);
+    tamam(await kaydet(c.sa, { ...govde(yeni), durum: 'iptal', iptalNedeni: 'Deneme vazgeçildi' }));
+    assert.equal(await acik(), once + 14);
+  });
+
+  test('2876 (Güvenlik N1): var olan bir talebin kimliğiyle güncelleme açılmaz (409); o talep gruba bağlanmaz', async () => {
+    const kok = await teklifIste(tamam<Talep>(await istek(c.talep, 'POST', '/satin-alma-talepleri/ac', yeniTalep())));
+    const baskasi = tamam<Talep>(await istek(c.talep2, 'POST', '/satin-alma-talepleri/ac', yeniTalep()));
+    assert.equal((await guncellemeAc(c.talep, kok, { id: baskasi.id })).statusCode, 409);
+    const satir = await ortam!.sahip.tek<{ g: string | null }>('SELECT guncellenen_talep_id AS g FROM satin_alma_talep WHERE id = $1', [baskasi.id]);
+    assert.equal(satir!.g, null);
+  });
+
+  test('SAT-81 (2871-2 a): güncelleme siparişe geçince eski talep kendiliğinden iptal olur, geri alınır; siparişteki talep iptal edilmez', async () => {
+    const kok = await teklifIste(tamam<Talep>(await istek(c.talep, 'POST', '/satin-alma-talepleri/ac', yeniTalep())));
+    const g = tamam<Talebim>(await guncellemeAc(c.talep, kok));
+    const siparisli = await siparise(await satinAlmaGorur(g.id), 'SA-GUNCEL-1');
+    assert.equal(siparisli.durum, 'siparis_verildi');
+    const iptal = await satinAlmaGorur(kok.id);
+    assert.deepEqual([iptal.durum, iptal.iptalNedeni], ['iptal', ILETILER.guncellemeIptali(g.no)]);
+    assert.match(iptal.hareketler.at(-1)!.metin, /kendiliğinden iptal/);
+    // Geri alınır; sonra eski talep de siparişe geçerse siparişteki güncelleme iptal edilmez (satın alma bilerek ikinci alımı yapmıştır).
+    const geri = tamam<{ talep: Talep; durum: string }>(await iptalGeriAl(c.sa, iptal, 'Deneme ikisi de alınacak'));
+    assert.equal(geri.durum, 'teklif_isteniyor');
+    assert.equal(geri.talep.hareketler.at(-1)!.metin, ILETILER.grupSipariste([{ no: g.no, durum: 'siparis_verildi' }]));
+    await siparise(geri.talep, 'SA-GUNCEL-2');
+    assert.equal((await satinAlmaGorur(g.id)).durum, 'siparis_verildi');
+  });
+
+  test('SAT-81 (2871-2 a): eski talep siparişe geçince açık güncelleme talebi iptal olur', async () => {
+    const kok = await teklifIste(tamam<Talep>(await istek(c.talep, 'POST', '/satin-alma-talepleri/ac', yeniTalep())));
+    const g = tamam<Talebim>(await guncellemeAc(c.talep, kok));
+    await siparise(kok, 'SA-GUNCEL-3');
+    const iptal = await satinAlmaGorur(g.id);
+    assert.deepEqual([iptal.durum, iptal.iptalNedeni], ['iptal', ILETILER.guncellemeIptali(kok.no)]);
+    const benim = tamam<TaleplerimCevabi>(await istek(c.talep, 'GET', '/satin-alma-taleplerim?sinir=500')).talepler.find((x) => x.id === g.id)!;
+    assert.deepEqual(benim.guncellemeGrubu?.map((x) => [x.no, x.durum]), [[kok.no, 'siparis_verildi'], [g.no, 'iptal']]);
+  });
+
+  test('2876 (Maliyet N1): grubun güncellemesi teslim alınmışsa iptali geri alınan eski talebin geçmişine ikinci alım uyarısı yazılır', async () => {
+    const kok = await teklifIste(tamam<Talep>(await istek(c.talep, 'POST', '/satin-alma-talepleri/ac', yeniTalep())));
+    const g = tamam<Talebim>(await guncellemeAc(c.talep, kok));
+    const siparisli = await siparise(await satinAlmaGorur(g.id), 'SA-GUNCEL-4');
+    let no = 8761;
+    for (const satir of siparisli.karar!.siparisler[0]!.satirlar) await teslimEt(satir.id, satir.miktar, no++);
+    assert.equal((await satinAlmaGorur(g.id)).durum, 'teslim_alindi');
+    // Grup görünen durumu taşır: "teslim alındı" yazılmaz, siparişten türetilir; kökün ve Taleplerim'in grubunda da öyle görünür.
+    assert.deepEqual((await satinAlmaGorur(kok.id)).guncellemeGrubu?.map((x) => [x.no, x.durum]), [[kok.no, 'iptal'], [g.no, 'teslim_alindi']]);
+    const benim = tamam<TaleplerimCevabi>(await istek(c.talep, 'GET', '/satin-alma-taleplerim?sinir=500')).talepler.find((x) => x.id === kok.id)!;
+    assert.deepEqual(benim.guncellemeGrubu?.map((x) => x.durum), ['iptal', 'teslim_alindi']);
+    const geri = tamam<{ talep: Talep }>(await iptalGeriAl(c.sa, await satinAlmaGorur(kok.id), 'Deneme ikinci alım bilerek'));
+    assert.equal(geri.talep.hareketler.at(-1)!.metin, ILETILER.grupSipariste([{ no: g.no, durum: 'teslim_alindi' }]));
   });
 
   test('SAT-70: talep bütün olarak eksiksiz kaydedilir ve açılışta aynı döner: kalem, istek, teklif ve fiyat, bölünmüş karar, sabit kur, sipariş, senaryo', async () => {
@@ -2489,6 +2625,30 @@ describe('satin-alma sürüm 6 (gerçek PostgreSQL)', () => {
   const kgEkle = (cerez: string, satirlar: unknown[]) => istek(cerez, 'POST', '/satin-alma-kg-fiyatlari/ekle', { satirlar });
   const kgListe = async (kalite: string) => tamam<KgFiyatlariCevabi>(await istek(c.sa, 'GET', '/satin-alma-kg-fiyatlari')).fiyatlar.filter((f) => f.kaliteKodu === kalite);
   const gunOnce = (g: string, n: number) => new Date(Date.parse(`${g}T12:00:00Z`) - n * 86400000).toISOString().slice(0, 10);
+
+  test('2891-1: birim fiyat kg fiyatı x parça ağırlığı; metre ve metrekare stoklu kartta karşılık yok (boş), adet stoklu kartta dolu', async () => {
+    const g = await bugun();
+    const kart = async (kimlik: string, kod: string, birim: string, d: number): Promise<number> => {
+      tamam(await istek(c.yonetici, 'POST', `/malzeme-katalogu-kartlari/${kimlik}/kaydet`, {
+        kayit: { id: kimlik, tur: 'hammadde', fam: 'metal', grade: 'DENEME-OL', form: 'cubuk', dims: { d, l: 6000 }, com: { kod, ad: `Deneme ${kod}`, birim }, onay: { durum: 'aktif' } },
+        ozet: { benzersiz_anahtar: `hammadde|satin-alma|${kimlik}`, mukerrer_gerekcesi: null, birim_agirlik_kg: 2 }, surum: null,
+      }));
+      return (await ortam!.sahip.tx((db) => db.tek<{ no: number }>('SELECT no FROM malzeme_katalog_karti WHERE kimlik = $1', [kimlik])))!.no;
+    };
+    const adet = await kart('sa-ol-1', 'HM-SAT-00011', 'adet', 21);
+    const metre = await kart('sa-ol-2', 'HM-SAT-00012', 'm', 22);
+    const alan = await kart('sa-ol-3', 'HM-SAT-00013', 'm²', 23);
+    tamam(await istek(c.sa, 'POST', '/satin-alma-kg-fiyatlari/ekle', { satirlar: [
+      { kaliteKodu: 'DENEME-OL', form: 'cubuk', kgFiyati: '50', talasKgFiyati: '10', paraBirimi: 'TRY', gecerlilik: g }] }));
+    const m = await vt().tx((db) => servis.malzemeKgFiyatlari(db, [adet, metre, alan]));
+    assert.deepEqual([Number(m.get(adet)?.kgFiyati), Number(m.get(adet)?.birimFiyati), Number(m.get(adet)?.tryBirimFiyati)], [50, 100, 100]);
+    for (const no of [metre, alan]) {
+      assert.deepEqual([Number(m.get(no)?.kgFiyati), m.get(no)?.birimFiyati, m.get(no)?.tryBirimFiyati], [50, null, null], String(no));
+    }
+    const gun = await vt().tx((db) => servis.degerlemeKgFiyatlari(db, [adet, metre, alan], g));
+    assert.deepEqual([gun.get(adet), gun.get(metre), gun.get(alan)], [
+      { tryBirimFiyati: '100', tryTalasBirimFiyati: '20' }, { tryBirimFiyati: null, tryTalasBirimFiyati: null }, { tryBirimFiyati: null, tryTalasBirimFiyati: null }]);
+  });
 
   test('2455-2 a: kartlarda olmayan kalite + form satır numarasıyla 422 alır ve hiçbir satır yazılmaz; formsuz satır kalitenin her formuna uyar; kaynak yazılır', async () => {
     const g = await bugun();

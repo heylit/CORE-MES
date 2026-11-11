@@ -1,9 +1,10 @@
 import type { Db } from '#cekirdek/db.ts';
 import type { IsEmriKaynagi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { adimliEmirAyrintisi, aralikAdetleri, isEmriSureOzeti, uretimEmriOzeti } from '../uretim-emirleri/disari.ts';
-import { terminalOlcumAdaylari, terminalOlcumKarari, terminalOlcumleri } from './kurallar.ts';
-import type { OlcumAtlamaNedeni } from './kurallar.ts';
-import { kullanilmisOpNolari, yururluktekiRevizyonIdleri } from './sorgular.ts';
+import { gecerliAletVarMi } from '../kalibrasyon/disari.ts';
+import { ekipmanHazirliklari, terminalOlcumAdaylari, terminalOlcumKarari, terminalOlcumleri } from './kurallar.ts';
+import type { EkipmanHazirligi, OlcumAtlamaNedeni } from './kurallar.ts';
+import { isEmriEkipmanlari, kullanilmisOpNolari, yururluktekiRevizyonIdleri } from './sorgular.ts';
 export type { DurumRotaAdimi, DurumRotaRevizyonu, RotaAdimi, RotaRevizyonu } from './servis.ts';
 export type { EtkinAdimSuresi } from './kurallar.ts';
 export { yururluktekiRevizyonId, yururluktekiRevizyonIdleri } from './sorgular.ts';
@@ -30,6 +31,23 @@ export { yuzeyIslemiAdimlari } from './servis.ts';
 export { araHalCozucusuKaydet } from './servis.ts';
 export type { AraHalCozucusu, AraHalCozumu } from './servis.ts';
 export { malzemeKartiIzleri } from './sorgular.ts';
+// Hazırlık matrisinin aparat ve ölçü aleti maddeleri (2893-4 a, yalnız uyarır): iş emrine rota adımından kopyalanan liste. Aparat
+// stokta en az bir adetse (stok üst kattadır: okuyucuyu kablolama verir), ölçü aleti türünde kalibrasyonu geçerli alet varsa hazırdır; listesi boş iş emrinde madde gerekmez. Bağı kablolama.ts kurar.
+export type StokAdetleri = (db: Db, malzemeIdler: number[]) => Promise<ReadonlyMap<number, { toplam: string }>>;
+export async function isEmriAparatHazirliklari(db: Db, isEmriIdleri: readonly number[], stokAdetleri: StokAdetleri): Promise<Map<number, EkipmanHazirligi>> {
+  const liste = await isEmriEkipmanlari(db, isEmriIdleri);
+  const kartlar = [...new Set(liste.flatMap((x) => (x.tur === 'aparat' && x.malzemeId !== null ? [x.malzemeId] : [])))];
+  const stokta = kartlar.length === 0 ? new Map() : await stokAdetleri(db, kartlar);
+  return ekipmanHazirliklari(isEmriIdleri, liste.flatMap((x) => (x.tur === 'aparat' && x.malzemeId !== null ? [{ isEmriId: x.isEmriId, kimlik: x.malzemeId }] : [])),
+    (id) => Number(stokta.get(id)?.toplam ?? 0) > 0);
+}
+export async function isEmriOlcuAletiHazirliklari(db: Db, isEmriIdleri: readonly number[]): Promise<Map<number, EkipmanHazirligi>> {
+  const liste = await isEmriEkipmanlari(db, isEmriIdleri);
+  const gecerli = new Map<number, boolean>();
+  for (const t of new Set(liste.flatMap((x) => (x.tur === 'olcu_aleti' && x.aletTuruId !== null ? [x.aletTuruId] : [])))) gecerli.set(t, (await gecerliAletVarMi(db, t)) === true);
+  return ekipmanHazirliklari(isEmriIdleri, liste.flatMap((x) => (x.tur === 'olcu_aleti' && x.aletTuruId !== null ? [{ isEmriId: x.isEmriId, kimlik: x.aletTuruId }] : [])),
+    (id) => gecerli.get(id) === true);
+}
 
 // Hazırlık matrisinin rota maddesi (2146-1 a, yalnız uyarır): emir, ürünün yürürlükteki rota revizyonuyla mı açıldı. Rotadan açılmamış
 // emirde madde gerekmez; ürünün yürürlükte revizyonu yoksa ya da emir eski revizyonla açıldıysa eksiktir. Bağı kablolama.ts kurar.

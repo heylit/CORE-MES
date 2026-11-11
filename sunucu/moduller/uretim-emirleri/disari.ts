@@ -441,6 +441,12 @@ export const cizimHazirlikCozucusu = (c: HazirlikCozucusu | null): void => { haz
 export const yayinHazirlikCozucusu = (c: HazirlikCozucusu | null): void => { hazirlikCozucusuKaydet('yayin', c); };
 // 2227-1 b: iş emrine özel hazırlık maddesi; sahibi Arkon (Üretim Hazırlık).
 export const ekMaddeHazirlikCozucusu = (c: HazirlikCozucusu | null): void => { hazirlikCozucusuKaydet('ek-madde', c); };
+// 2893-4 a: aparat ve ölçü aleti listesi rota'nın iş emri kopyasındadır; çözücüleri rota verir.
+export const aparatHazirlikCozucusu = (c: HazirlikCozucusu | null): void => { hazirlikCozucusuKaydet('aparat', c); };
+export const olcuAletiHazirlikCozucusu = (c: HazirlikCozucusu | null): void => { hazirlikCozucusuKaydet('olcu-aleti', c); };
+// 2893 D2: Adım Durumu'nun açık tedarik okuması (satın alma verir).
+export { tedarikCozucusuKaydet as adimTedarikCozucusu } from './adim-durumu.ts';
+export type { EmirTedarikSatiri, TedarikCozucusu } from './adim-durumu.ts';
 // Uyaran maddeler (2146-1 a): eksikken iş başlar; makine durumu bu modülde çözülür (hazirlik.ts).
 export const rotaHazirlikCozucusu = (c: HazirlikCozucusu | null): void => { hazirlikCozucusuKaydet('rota', c); };
 export const malzemeHazirlikCozucusu = (c: HazirlikCozucusu | null): void => { hazirlikCozucusuKaydet('malzeme', c); };

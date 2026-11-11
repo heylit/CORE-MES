@@ -96,7 +96,14 @@ export const ILETILER = {
   yetkiYok: 'Bu değişiklik için yetkiniz yok.',
   gecisYok: 'Talep bu durumdan istenen duruma geçemez.',
   talebimSahibiDegil: 'Yalnız kendi açtığınız ya da adınıza açılan talebi düzenleyebilirsiniz.',
-  talebimDuzenlenmez: 'Talep teklif istendikten sonra düzenlenemez; değişikliği satın almaya iletin.',
+  talebimDuzenlenmez: 'Talep teklif istendikten sonra düzenlenemez; teklif toplanırken güncelleme talebi açın, sonrasında değişikliği satın almaya iletin.',
+  guncellemeAsamasi: 'Güncelleme talebi yalnız teklif toplanırken (teklif isteniyor ya da değerlendirmede) açılır; taslağı düzenleyin, sonrası için satın almaya iletin.',
+  guncellemeBirlesik: 'Birleştirilmiş talep için güncelleme talebi açılmaz; değişikliği satın almaya iletin.',
+  guncellemeBagli: 'Fason adıma ya da parçaya bağlı kalemi olan talep için güncelleme talebi açılmaz; değişikliği satın almaya iletin.',
+  guncellemesiOlanSilinmez: 'Bu talebe bağlı güncelleme talebi var; silinemez, gerekirse iptal edin.',
+  grupSipariste: (uyeler: readonly { no: string; durum: string }[]): string =>
+    `Uyarı: güncelleme grubunda ${uyeler.map((x) => `${x.no} (${x.durum === 'teslim_alindi' ? 'teslim alındı' : 'sipariş verildi'})`).join(', ')}; aynı ihtiyaç için ikinci alım olabilir.`,
+  guncellemeIptali: (no: string): string => `Güncellemeyle karşılandı: ${no} siparişe geçti.`,
   talebimKalemYok: 'Düzenlenen kalem bu talepte yok.',
   talebimBagliKalem: 'Fason adıma ya da parçaya bağlı kalem buradan değişmez; değişikliği satın almaya iletin.',
   iptalDegil: 'Yalnız iptal edilmiş talebin iptali geri alınır.',
@@ -945,6 +952,8 @@ export function talebim(t: Talep, baglar: ReadonlyMap<string, KalemBagi> = new M
     id: t.id, no: t.no, baslik: t.baslik, durum: t.durum, ihtiyacTarihi: t.ihtiyacTarihi, olusturma: t.olusturma,
     uretimEmriNo: t.uretimEmriNo, birlesme: t.birlesme ?? null,
     surum: t.surum, aciklama: t.notlar, duzenlenebilir: talebimDuzenlenirMi(t),
+    guncellenebilir: guncellemeReddi(t, t.kalemler.some((k) => bag(k.id).uygulanan !== null || bag(k.id).fasonAdim !== null)) === null,
+    ...(t.guncellemeGrubu === undefined ? {} : { guncellemeGrubu: t.guncellemeGrubu }),
     kaynak: t.kalemler.some((k) => bag(k.id).fasonAdim !== null) ? 'fason' : 'elle',
     kalemler: t.kalemler.map((k) => ({ id: k.id, aciklama: k.ozellik, ad: k.ad, miktar: k.miktar, birim: k.birim, kartBekliyor: k.katalogId === null, ...bag(k.id), karsilik: karsiliklar.get(k.id) ?? null })),
   };
@@ -953,6 +962,23 @@ export function talebim(t: Talep, baglar: ReadonlyMap<string, KalemBagi> = new M
 // SAT-79 (2871-1 a): talep eden kendi talebini yalnız teklif istenmeden önce (taslak) düzenler; birleştirilmiş kaynak talep düzenlenmez
 // (kalemleri birleşik taleptedir). Sahiplik servis denetler. Teklif toplanırken güncelleme ayrı talep olarak açılır (kart 2876).
 export const talebimDuzenlenirMi = (t: Pick<Talep, 'durum' | 'birlesme'>): boolean => t.durum === 'taslak' && t.birlesme == null;
+// SAT-80 (2876, 2871-1 b): teklif toplanırken (teklif isteniyor, değerlendirme) sahibi asıl talebi bozmadan güncelleme talebi açar.
+// Birleştirilmiş ya da birleşik talepte ve bağlı (fason adım, uygulanan parça) kalemi olan talepte açılmaz: bağ ikinci kez kurulmasın.
+// Sahiplik servis denetler.
+export function guncellemeReddi(t: Pick<Talep, 'durum' | 'birlesme' | 'kaynaklar'>, bagliKalemVar: boolean): string | null {
+  if (t.durum !== 'teklif_isteniyor' && t.durum !== 'degerlendirme') return ILETILER.guncellemeAsamasi;
+  if (t.birlesme != null || (t.kaynaklar ?? []).length > 0) return ILETILER.guncellemeBirlesik;
+  return bagliKalemVar ? ILETILER.guncellemeBagli : null;
+}
+// SAT-81 (2871-2 a): gruptaki bir talep siparişe geçince öteki açık talepler (siparişte ya da iptal olmayan) kendiliğinden iptal olur;
+// iptal geri alınabilir. Siparişteki talep iptal edilmez (satın alma bilerek ikinci alımı yapmıştır).
+export function guncellemeIptalleri<T extends { id: string; durum: string }>(grup: readonly T[], siparisteki: string): T[] {
+  return grup.filter((x) => x.id !== siparisteki && !['siparis_verildi', 'teslim_alindi', 'iptal'].includes(x.durum));
+}
+// 2876 (Maliyet N1): iptali geri alınan talebin grubunda alımı yapılmış (siparişte ya da teslim alınmış) başka talep varsa ikinci alım olabilir.
+export function ikinciAlimRiski<T extends { id: string; no: string; durum: string }>(grup: readonly T[], id: string): T[] {
+  return grup.filter((x) => x.id !== id && (x.durum === 'siparis_verildi' || x.durum === 'teslim_alindi'));
+}
 // Gelen kalemler: kimlikli olan var olan kalemdir (tekrarsız); bağlı kalem (fason adım, uygulanan parça) çıkarılamaz, miktarı değişmez.
 export function talebimKalemReddi(
   eski: readonly { id: string; miktar: string | null; bagli: boolean }[], gelen: readonly { id: string | null; miktar: string }[],
@@ -973,11 +999,20 @@ export function talebimKalemReddi(
 export const OLCULU_STOK_BIRIMLERI: readonly string[] = ['mm', 'cm', 'm', 'mt', 'metre', 'mm2', 'mm²', 'cm2', 'cm²', 'm2', 'm²', 'metrekare'];
 export interface BirimKarsiligi { miktar: string; birim: string }
 const birimAdi = (b: string | null): string => (b ?? '').trim().toLocaleLowerCase('tr-TR');
+// 2891-1: stok biriminin bir birimi kaç kg. birim_agirlik_kg bütün parça ya da ambalaj başınadır; uzunluk ve alan stoklu kartta karşılığı yoktur
+// (metre ağırlığı sunucuda yok). Birim fiyat (SAT-77), kg karşılığı (SAT-78) ve proje maliyeti aynı kuralı kullanır.
+export function stokBirimiBasinaKg(stokBirimi: string | null, birimKg: number | null): number | null {
+  const stok = birimAdi(stokBirimi);
+  if (stok === 'kg') return 1;
+  if (OLCULU_STOK_BIRIMLERI.includes(stok)) return null;
+  return birimKg === null || !(birimKg > 0) ? null : birimKg;
+}
 export function birimKarsiligi(miktar: string | null, birim: string, kart: { stokBirimi: string | null; birimKg: number | null } | undefined): BirimKarsiligi | null {
-  if (miktar === null || kart === undefined || kart.birimKg === null || !(kart.birimKg > 0)) return null;
+  if (miktar === null || kart === undefined) return null;
   const stok = birimAdi(kart.stokBirimi);
-  if (stok === '' || stok === 'kg' || OLCULU_STOK_BIRIMLERI.includes(stok)) return null;
-  const kg = kart.birimKg.toFixed(OLCEK);
+  const kgBasina = stokBirimiBasinaKg(kart.stokBirimi, kart.birimKg);
+  if (stok === '' || stok === 'kg' || kgBasina === null) return null;
+  const kg = kgBasina.toFixed(OLCEK);
   if (birimAdi(birim) === 'kg') {
     const m = ondalikBol(miktar, kg);
     return m === null ? null : { miktar: m, birim: kart.stokBirimi!.trim() };
@@ -1125,8 +1160,9 @@ export function stokTutari(kalemler: readonly { miktar: string; tryBirimFiyati: 
 // Stok birimi başına fiyat: birim kg ise kg fiyatı; değilse kartın birim ağırlığıyla; ağırlık bilinmiyorsa boş (uydurulmaz).
 export function birimFiyati(kgFiyati: string | null, stokBirimi: string | null, birimKg: number | null): string | null {
   if (kgFiyati === null) return null;
-  if (stokBirimi !== null && stokBirimi.trim().toLocaleLowerCase('tr-TR') === 'kg') return kgFiyati;
-  return birimKg === null || !(birimKg > 0) ? null : ondalikCarp(kgFiyati, birimKg.toFixed(OLCEK));
+  if (birimAdi(stokBirimi) === 'kg') return kgFiyati;
+  const kgBasina = stokBirimiBasinaKg(stokBirimi, birimKg);
+  return kgBasina === null ? null : ondalikCarp(kgFiyati, kgBasina.toFixed(OLCEK));
 }
 
 // 2455-A: kg fiyatı girişinin denetimi ve izlenmesi. Bölme yarım yukarı yuvarlanır; bölen sıfırsa boş.
@@ -1609,4 +1645,14 @@ export function eslemeListesiHatasi(liste: readonly { siparisSatiriId: number; t
   if (liste.some((x) => !/^\d+(\.\d{1,2})?$/.test(x.tutar) || Number(x.tutar) <= 0)) return ILETILER.eslemeTutar;
   const toplam = liste.reduce((t, x) => t + Math.round(Number(x.tutar) * 100), 0);
   return toplam > Math.round(Number(belgeTutari) * 100) ? ILETILER.eslemeAsim : null;
+}
+
+// 2893 D2: talep kaleminin tedarik aşaması. Siparişi yoksa talep aşamasındadır (taslaktan onaya kadar); sipariş satırı açıksa ve net
+// teslim sipariş miktarına ulaşmadıysa sipariş bekleniyordur. Teslim alınan, tamamı gelen ya da kapatılan sipariş beklenmez (null).
+export type TedarikAsamasi = 'talep' | 'siparis';
+export function tedarikAsamasi(s: { talepDurumu: string; miktar: string | null; teslim: string; kapali: boolean }): TedarikAsamasi | null {
+  if (s.talepDurumu === 'teslim_alindi' || s.talepDurumu === 'iptal') return null;
+  if (s.miktar === null) return s.talepDurumu === 'siparis_verildi' ? null : 'talep';
+  if (s.kapali || Number(s.teslim) >= Number(s.miktar)) return null;
+  return 'siparis';
 }

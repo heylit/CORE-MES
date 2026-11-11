@@ -491,3 +491,26 @@ Kullanıcı: "yaz" (13.10.2026). Finans ve stok tarafı aynı dalda (yalnız yen
   kayıt değişmez; gördüğü gibi kaydetmek serbesttir. Önce: taslak ya da teklif isteniyor durumunda değiştirebiliyordu (2871-1 a ile çelişki,
   Güvenlik 2871 ön bakışı N1). Teklif toplanırken değişiklik güncelleme talebiyle gelir (kart 2876).
 - `satin-alma.yaz` taşıyan satın alma etkilenmez. Uç, işlem, rol x işlem, göç değişmedi.
+
+# FARK: satin-alma, teklif toplanırken güncelleme talebi (SAT-80, SAT-81, kart 2876; 11.11.2026)
+
+- Yeni uç `POST /satin-alma-talepleri/:id/guncelleme-ac` (var olan `satin-alma.talep-ac`, tekrar korumalı): sahibi, teklif isteniyor ya da değerlendirmedeki
+  talebi için güncelleme talebi açar. Eski talep, teklifleri ve tedarikçiye giden istekler değişmez; yeni talep taslak açılır, eski talebin birim, emir,
+  proje, öncelik ve talep edenini alır, kök talebe bağlanır (`satin_alma_talep.guncellenen_talep_id`, göç 20261111080314). İki talebin geçmişine
+  birbirinin numarası yazılır.
+- Talep ve Taleplerim cevabı `guncellemeGrubu` (kök önce; no, durum) taşır; Taleplerim `guncellenebilir` taşır. Fiyat yok.
+- SAT-81 (2871-2 a): gruptaki bir talep siparişe geçince öteki açık talepler aynı işlemde iptal olur (iptal nedeni "Güncellemeyle karşılandı: <no>
+  siparişe geçti."); "İptali geri al" ile döner. Siparişteki talep iptal edilmez.
+- Plan ön talebi (acikTalepMiktarlari): güncelleme grubunun yalnız en yeni açık talebi sayılır (aynı ihtiyaç iki kez düşülmez).
+- İptali geri alınan talebin grubunda siparişte ya da teslim alınmış talep varsa geçmişe "ikinci alım olabilir" uyarısı yazılır (kurallar.ts ikinciAlimRiski). Grup (Talep, Taleplerim) görünen durumu taşır: teslim alınmış üye "teslim alındı" görünür (SAT-38 türetmesi); uyarı her üyeyi durumuyla yazar. Güncellemesi olan kök talep silinmez
+  (kısıt açık iletiyle 409; kök zaten taslağa dönemez).
+- Ekran: Taleplerim'de teklif toplanan talepte "Güncelleme talebi aç" (Yeni talep formu güncelleme kipinde) ve satırda grup. Satın alma merkezinde
+  (2. kısım) Talepler listesinde ve talep başlığında grup satırı ("Güncellemeleri: ..." / "Güncelleme grubu: ... (ilk talep) ..."), aramada öteki
+  üyenin numarası; iptal talepte grubun başka talebi siparişte ya da teslim alınmışsa "İptali geri al"ın yanında ikinci alım uyarısı.
+
+# FARK: satin-alma, uzunluk ve alan stoklu kartta kg fiyatından birim fiyat yok (kart 2891-1; 11.11.2026)
+
+- `birim_agirlik_kg` bütün parça ya da ambalaj başınadır (2871 Maliyet E1). Önce birim fiyat (SAT-77) metre ya da metrekare stoklu kartta kg fiyatını
+  bu ağırlıkla çarpıyordu; stok değeri, plan birim fiyatı ve proje maliyeti yanlış olabiliyordu. Artık tek kural `stokBirimiBasinaKg` (kurallar.ts,
+  disari.ts ile dışarı verilir): kg 1; OLCULU_STOK_BIRIMLERI boş; öteki birim parça ağırlığı. birimFiyati, birimKarsiligi (SAT-78, davranış aynı) ve
+  proje-maliyet bileşeninin kg başına değeri bunu kullanır. Boş birim fiyat fiyatsız sayılır (sıfır uydurulmaz). Kayıtlı veri, göç, uç, yetki değişmedi.

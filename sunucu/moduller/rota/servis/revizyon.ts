@@ -3,8 +3,9 @@ import type { Db } from '#cekirdek/db.ts';
 import type { Gunluk } from '#cekirdek/gunluk.ts';
 import { UygulamaHatasi, bulunamadi, cakisma, dogrulama, gecersiz } from '#cekirdek/hata.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
-import type { FarkCevabi, KaydetGovdesiCikti, KomutCevabi, RevizyonAyrintisi, KopyaIstegiCevabi } from '#paylasilan/sozlesme/rota.ts';
+import type { AdimEkipmaniGovdesi, FarkCevabi, KaydetGovdesiCikti, KomutCevabi, RevizyonAyrintisi, KopyaIstegiCevabi } from '#paylasilan/sozlesme/rota.ts';
 import { operasyonluAktifKartlar } from '../../malzemeler/disari.ts';
+import { aletTurleri } from '../../kalibrasyon/disari.ts';
 import { kaynakAnahtari, ilkAdimiDuzenle, dalDenetle, hazirlikBol, girdiOlabilirMi, onayaHazirlikHatalari, topluHataIletisi, hazirlikCeliskisi, revizyonFarki, revizyonHarfi, rotasizMamuller, sayiyaCevir, taslakDenetle, dortGozEngeli, taslakSureleri } from '../kurallar.ts';
 import type { FarkAdimi } from '../kurallar.ts';
 import * as s from '../sorgular.ts';
@@ -161,8 +162,10 @@ export async function kaydet(db: Db, kullanici: Kullanici, id: number, govde: Ka
   const hata = taslakDenetle(adimlar, { urunId: r.malzemeId, taslaktakiOpNolari: mevcut.adimlar.map((a) => a.opNo) });
   if (hata) throw dogrulama(hata.ileti, hata.alan);
   const tipler = new Map((await operasyonTipleri(db)).map((t) => [t.id, t]));
-  const eskiKartlar = new Set([...mevcut.bilesenler.map((b) => b.malzemeId), ...mevcut.yanUrunler.map((y) => y.malzemeId)]);
-  const yeniKartlar = adimlar.flatMap((a) => [...a.bilesenler, ...a.yanUrunler].map((b) => b.malzemeId)).filter((m) => !eskiKartlar.has(m));
+  const eskiKartlar = new Set([...mevcut.bilesenler.map((b) => b.malzemeId), ...mevcut.yanUrunler.map((y) => y.malzemeId), ...(mevcut.ekipman ?? []).flatMap((x) => (x.malzemeId === null ? [] : [x.malzemeId]))]);
+  const yeniKartlar = adimlar.flatMap((a) => [
+    ...[...a.bilesenler, ...a.yanUrunler].map((b) => b.malzemeId), ...(a.ekipman ?? []).flatMap((x) => (x.tur === 'aparat' ? [x.malzemeId] : [])),
+  ]).filter((m) => !eskiKartlar.has(m));
   const kartlar = await urunOzetleri(db, yeniKartlar);
   for (const [i, a] of adimlar.entries()) {
     const tip = tipler.get(a.operasyonTipiId);
@@ -194,6 +197,14 @@ export async function kaydet(db: Db, kullanici: Kullanici, id: number, govde: Ka
     if (!k) throw dogrulama('Malzeme kartı bulunamadı.', 'adimlar');
     if (k.onayDurumu !== 'aktif') throw dogrulama(`${k.stokKodu ?? k.ad} kartı kullanımda değil.`, 'adimlar');
   }
+  // Ölçü aleti (2893-4 a) yeni seçimde kullanımdaki alet türü olmalı; var olan satırdaki tür kapansa da taslakta kalır.
+  const eskiTurler = new Set((mevcut.ekipman ?? []).flatMap((x) => (x.aletTuruId === null ? [] : [x.aletTuruId])));
+  const yeniTurler = adimlar.flatMap((a) => (a.ekipman ?? []).flatMap((x) => (x.tur === 'olcu_aleti' && !eskiTurler.has(x.aletTuruId) ? [x.aletTuruId] : [])));
+  if (yeniTurler.length > 0) {
+    const acik = new Set((await aletTurleri(db)).map((t) => t.id));
+    const i = adimlar.findIndex((a) => (a.ekipman ?? []).some((x) => x.tur === 'olcu_aleti' && yeniTurler.includes(x.aletTuruId) && !acik.has(x.aletTuruId)));
+    if (i >= 0) throw dogrulama('Ölçü aleti türü bulunamadı ya da kullanımda değil.', `adimlar.${i}.ekipman`);
+  }
   for (const [i, a] of adimlar.entries()) {
     for (const b of a.bilesenler) {
       const k = kartlar.get(b.malzemeId);
@@ -211,7 +222,12 @@ export async function kaydet(db: Db, kullanici: Kullanici, id: number, govde: Ka
     // Çarpan yalnız dal adımında anlamlıdır; 1 boş yazılır (1257 a).
     // Alanı göndermeyen kayıt çarpanı korur; dalı kaldırılan adımda korunan çarpan düşer (ana hat bir mamul içindir).
     const carpan = a.adetCarpani === undefined ? (dal === null ? null : eski?.adetCarpani ?? null) : a.adetCarpani;
-    return { ...a, dal, birlesen: a.birlesen ?? eski?.birlesen ?? [], adetCarpani: carpan === 1 ? null : carpan };
+    // Ekipmanı göndermeyen (alanı bilmeyen) ekran da adımın kayıtlı listesini silmesin (2893-4 a).
+    const ekipman = a.ekipman?.map((x) => (x.tur === 'aparat'
+      ? { tur: x.tur, malzemeId: x.malzemeId, aletTuruId: null, aciklama: x.aciklama }
+      : { tur: x.tur, malzemeId: null, aletTuruId: x.aletTuruId, aciklama: x.aciklama }))
+      ?? (eski === undefined ? [] : (mevcut.ekipman ?? []).filter((x) => x.adimId === eski.id).map(({ tur, malzemeId, aletTuruId, aciklama }) => ({ tur, malzemeId, aletTuruId, aciklama })));
+    return { ...a, dal, birlesen: a.birlesen ?? eski?.birlesen ?? [], adetCarpani: carpan === 1 ? null : carpan, ekipman };
   });
   const carpanHatasi = dalli.findIndex((a) => a.dal === null && a.adetCarpani !== null);
   if (carpanHatasi >= 0) throw dogrulama('Adet çarpanı yalnız dal adımında girilir; ana hat bir mamul içindir.', `adimlar.${carpanHatasi}.adetCarpani`);
@@ -220,6 +236,38 @@ export async function kaydet(db: Db, kullanici: Kullanici, id: number, govde: Ka
   await s.icerikSil(db, id);
   await adimlariYaz(db, id, r.malzemeId, dalli);
   return cevap(id, 'taslak', await s.kaydetYaz(db, id, govde.aciklama === '' ? null : govde.aciklama, kullanici.id));
+}
+
+// Adımın ekipman listesi (2893-4 a): şartname listesi gibi OP numarasıyla, yalnız taslakta, bütün olarak yazılır. Yeni seçilen aparat kartı
+// kullanımda, ölçü aleti türü açık olmalı; listede kalan eski satır kapansa da taslakta kalır (onayda sorulmaz, yalnız uyarır).
+export async function adimEkipmaniKaydet(db: Db, kullanici: Kullanici, id: number, g: AdimEkipmaniGovdesi): Promise<KomutCevabi> {
+  await komutIcinAl(db, kullanici, id, 'kaydet', g.surum);
+  const icerik = await s.icerikOku(db, id);
+  const adim = icerik.adimlar.find((a) => a.opNo === g.opNo);
+  if (!adim) throw dogrulama('Adım bu revizyonda yok.', 'opNo');
+  const eski = (icerik.ekipman ?? []).filter((x) => x.adimId === adim.id);
+  const eskiKart = new Set(eski.flatMap((x) => (x.malzemeId === null ? [] : [x.malzemeId])));
+  const eskiTur = new Set(eski.flatMap((x) => (x.aletTuruId === null ? [] : [x.aletTuruId])));
+  const kartlar = await urunOzetleri(db, g.ekipman.flatMap((x) => (x.tur === 'aparat' && !eskiKart.has(x.malzemeId) ? [x.malzemeId] : [])));
+  const turler = g.ekipman.some((x) => x.tur === 'olcu_aleti' && !eskiTur.has(x.aletTuruId)) ? new Set((await aletTurleri(db)).map((t) => t.id)) : new Set<number>();
+  const gorulen = new Set<string>();
+  for (const [i, x] of g.ekipman.entries()) {
+    const anahtar = x.tur === 'aparat' ? `a:${x.malzemeId}` : `o:${x.aletTuruId}`;
+    if (gorulen.has(anahtar)) throw dogrulama('Aynı aparat ya da ölçü aleti türü adıma iki kez eklenmez.', `ekipman.${i}`);
+    gorulen.add(anahtar);
+    if (x.tur === 'aparat' && !eskiKart.has(x.malzemeId)) {
+      const k = kartlar.get(x.malzemeId);
+      if (!k) throw dogrulama('Aparat kartı bulunamadı.', `ekipman.${i}.malzemeId`);
+      if (k.onayDurumu !== 'aktif') throw dogrulama(`${k.stokKodu ?? k.ad} kartı kullanımda değil.`, `ekipman.${i}.malzemeId`);
+    }
+    if (x.tur === 'olcu_aleti' && !eskiTur.has(x.aletTuruId) && !turler.has(x.aletTuruId)) {
+      throw dogrulama('Ölçü aleti türü bulunamadı ya da kullanımda değil.', `ekipman.${i}.aletTuruId`);
+    }
+  }
+  await s.adimEkipmaniniYaz(db, adim.id, g.ekipman.map((x) => (x.tur === 'aparat'
+    ? { tur: x.tur, malzemeId: x.malzemeId, aletTuruId: null, aciklama: x.aciklama }
+    : { tur: x.tur, malzemeId: null, aletTuruId: x.aletTuruId, aciklama: x.aciklama })));
+  return cevap(id, 'taslak', await s.duzenlemeYaz(db, id, kullanici.id));
 }
 
 export async function onayaGonder(db: Db, kullanici: Kullanici, id: number, surum: number): Promise<KomutCevabi> {

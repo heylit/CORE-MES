@@ -10,7 +10,7 @@ const EMIR = {
 const HAZIRLIK: HazirlikCevabi = { maddeler: [], muafiyetler: [], isEmirleri: [] };
 const ADIM = {
   isEmriId: 51, opNo: 10, ad: 'Testere kesim', durum: 'tamam', calisma: null, bagimlilik: 'bekleyen', fason: false, hedef: 40, yapilan: 40, yuzde: 100,
-  sistemStatusu: 'bitti', nedenler: [], maddeler: [{ madde: 'cnc', hal: 'gerekmez', ham: 'gerekmez' }, { madde: 'malzeme', hal: 'tamam', ham: 'tamam' }], elle: null, onaylar: [], gecmis: [],
+  sistemStatusu: 'bitti', nedenler: [], maddeler: [{ madde: 'cnc', hal: 'gerekmez', ham: 'gerekmez' }, { madde: 'malzeme', hal: 'tamam', ham: 'tamam' }], elle: null, onaylar: [], gecmis: [], tedarik: [],
 } satisfies AdimDurumuCevabi['adimlar'][number];
 const CEVAP = {
   emirId: 5, emirNo: 'UE-0005', urun: { kod: 'M-1', ad: 'Deneme flanş' }, adet: 40, teslim: null, durum: 'basladi', rotaYuzde: 45, hazirlik: HAZIRLIK,
@@ -19,6 +19,10 @@ const CEVAP = {
     {
       ...ADIM, isEmriId: 52, opNo: 20, ad: 'CNC freze', durum: 'bekliyor', yapilan: 0, yuzde: 0, sistemStatusu: 'program', nedenler: ['CNC kurulumu (NC) eksik'],
       maddeler: [{ madde: 'cnc', hal: 'eksik', ham: 'eksik' }, { madde: 'malzeme', hal: 'muaf', ham: 'eksik' }],
+      tedarik: [
+        { asama: 'siparis', fason: false, talepNo: 'ST-2099-002', siparisNo: 'SP-2099-001', termin: '2099-03-01' },
+        { asama: 'siparis', fason: false, talepNo: 'ST-2099-005', siparisNo: 'SP-2099-002', termin: '2020-01-02' },
+      ],
       elle: { statu: 'siparis', not: 'Tedarikçi bekleniyor', kisiAdi: 'Deneme Müdür', zaman: '2026-11-11T07:00:00.000Z' },
       onaylar: [{ madde: 'malzeme', gerekce: null, sistemHali: 'eksik', kisiAdi: 'Deneme Müdür', zaman: '2026-11-11T07:00:00.000Z' }],
       gecmis: [{ olay: 'statu', deger: 'siparis', not: 'Tedarikçi bekleniyor', kisiAdi: 'Deneme Müdür', zaman: '2026-11-11T07:00:00.000Z' }],
@@ -45,6 +49,7 @@ describe('Adım Durumu (2893)', () => {
     fireEvent.click(within(satirlar[1]!).getByText('CNC freze'));
     expect(await screen.findByText('CNC kurulumu (NC) eksik')).toBeTruthy();
     expect(screen.getByText('Program hazır değil')).toBeTruthy();
+    expect(screen.getByText('Sipariş SP-2099-001 bekleniyor · termin 01.03.2099, Sipariş SP-2099-002 bekleniyor · termin 02.01.2020 · gecikti')).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Yaz' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Onayı kaldır' })).toBeNull();
   });

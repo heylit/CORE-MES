@@ -7,7 +7,7 @@ import {
 import type { AdimStatuGirdisi, HazirlikHali } from './kurallar.ts';
 
 const g = (ek: Partial<AdimStatuGirdisi> = {}, hal: [HazirlikMaddesi, HazirlikHali][] = []): AdimStatuGirdisi => ({
-  durum: 'bekliyor', calisma: null, fasonda: false, hal: new Map(hal), oncekiBekleniyor: false, ...ek,
+  durum: 'bekliyor', calisma: null, fasonda: false, hal: new Map(hal), oncekiBekleniyor: false, tedarik: [], ...ek,
 });
 
 describe('uretim-emirleri adım durumu kuralları (2893)', () => {
@@ -26,6 +26,24 @@ describe('uretim-emirleri adım durumu kuralları (2893)', () => {
     assert.equal(adimSistemStatusu(g({}, [['malzeme', 'eksik']])).statu, 'malzeme');
     assert.equal(adimSistemStatusu(g({}, [['cnc', 'muaf'], ['rota', 'eksik']])).statu, 'baslayabilir', 'muaf ve elle onaylı madde eksik değil; rota statü vermez');
     assert.equal(adimSistemStatusu(g({ oncekiBekleniyor: true })).statu, 'onceki');
+  });
+
+  test('D2: malzeme eksiğinde açık talep "talep", yalnız sipariş "siparis"; fason talebi siparişe dönmediyse "talep"', () => {
+    const talep = { asama: 'talep' as const, fason: false, talepNo: 'ST-2026-001', siparisNo: null, termin: null };
+    const siparis = { asama: 'siparis' as const, fason: false, talepNo: 'ST-2026-002', siparisNo: 'SP-2026-007', termin: '2026-11-20' };
+    const fasonTalep = { asama: 'talep' as const, fason: true, talepNo: 'ST-2026-003', siparisNo: null, termin: null };
+    assert.deepEqual(adimSistemStatusu(g({ tedarik: [talep, siparis] }, [['malzeme', 'eksik']])),
+      { statu: 'talep', nedenler: ['Malzeme eksik', 'Talep ST-2026-001 siparişe dönmedi', 'Sipariş SP-2026-007 bekleniyor (termin 2026-11-20)'] });
+    assert.equal(adimSistemStatusu(g({ tedarik: [siparis] }, [['malzeme', 'eksik']])).statu, 'siparis');
+    assert.equal(adimSistemStatusu(g({ tedarik: [] }, [['malzeme', 'eksik']])).statu, 'malzeme');
+    assert.deepEqual(adimSistemStatusu(g({ tedarik: [siparis] }, [['malzeme', 'tamam']])), { statu: 'baslayabilir', nedenler: [] }, 'malzeme varsa sipariş beklenmez');
+    assert.equal(adimSistemStatusu(g({ tedarik: [talep] }, [['makine', 'eksik'], ['malzeme', 'eksik']])).statu, 'makine', 'makine önce gelir');
+    assert.equal(adimSistemStatusu(g({ tedarik: [talep] }, [['cnc', 'eksik'], ['malzeme', 'eksik']])).statu, 'program');
+    assert.deepEqual(adimSistemStatusu(g({ tedarik: [fasonTalep], oncekiBekleniyor: true })),
+      { statu: 'talep', nedenler: ['Fason talebi ST-2026-003 siparişe dönmedi', 'Önceki adım bitmedi'] });
+    assert.equal(adimSistemStatusu(g({ tedarik: [{ ...fasonTalep, asama: 'siparis', siparisNo: 'SP-1', termin: null }] })).statu, 'baslayabilir', 'fason siparişi verildi: gönderilebilir');
+    assert.equal(adimSistemStatusu(g({ fasonda: true, tedarik: [fasonTalep] })).statu, 'fasonda');
+    assert.equal(adimSistemStatusu(g({ durum: 'tamam', tedarik: [talep] }, [['malzeme', 'eksik']])).statu, 'bitti');
   });
 
   test('önceki adım: bekleyen bağımlılıkta öncül bitmeli, akışlıda başlamış olmalı, bağımsız beklemez; dal öncülleri sıradan önce gelir', () => {
