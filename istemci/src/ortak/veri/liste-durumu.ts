@@ -37,6 +37,12 @@ export interface ListeDurumu<S extends Suzgecler, A extends string = string> {
   // verisiyle gelen çağrı kullanıcıyı geri atmaz.
   sayfaEsitle: (uygulanan: number | undefined, istenen: number) => void;
   sifirla: () => void;
+  // Herhangi bir süzgeç boş değilse true (başlangıç değeri dolu olan süzgeç de sayılır: "Aktif" varsayılanı da gizler).
+  // Boş liste iletisi bununla seçilir: süzgeç yoksa "henüz kayıt yok", varsa "süzgece uyan yok" + temizle.
+  suzulu: boolean;
+  // Bütün süzgeçleri boşaltır (sıralama ve sayfa boyu kalır, ilk sayfaya döner). `sifirla` başlangıç süzgecine döndürür;
+  // başlangıcı dolu süzgeçte (Projeler "Aktif") o yetmez.
+  suzgecleriTemizle: () => void;
 }
 
 export interface ListeDurumuSecenegi<S extends Suzgecler, A extends string = string> {
@@ -198,6 +204,11 @@ export function useListeDurumu<S extends Suzgecler, A extends string = string>(s
     [guncelle],
   );
   const sifirla = useCallback(() => guncelle(() => kurulum.ilk, 'degistir'), [guncelle, kurulum]);
+  const suzgecleriTemizle = useCallback(
+    () => guncelle((d) => ({ ...d, suzgecler: Object.fromEntries(Object.keys(d.suzgecler).map((ad) => [ad, ''])) as S, sayfa: 1 }), 'degistir'),
+    [guncelle],
+  );
+  const suzulu = Object.values(durum.suzgecler).some((deger) => deger !== '');
 
   const sorgu = useMemo(() => {
     const s: Record<string, SuzgecDegeri> = {};
@@ -208,5 +219,5 @@ export function useListeDurumu<S extends Suzgecler, A extends string = string>(s
     return s as ListeDurumuSorgusu<S, A>;
   }, [durum]);
 
-  return { ...durum, sorgu, sayfaDegistir, sayfaBoyuDegistir, siralamaDegistir, suzgecDegistir, sayfaEsitle, sifirla };
+  return { ...durum, sorgu, sayfaDegistir, sayfaBoyuDegistir, siralamaDegistir, suzgecDegistir, sayfaEsitle, sifirla, suzulu, suzgecleriTemizle };
 }

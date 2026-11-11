@@ -69,6 +69,7 @@ export function SiparisListesi() {
   const sekme: SiparisSekmesi = DURUMLAR.find((d) => d === liste.suzgecler.durum) ?? 'tumu';
   // Firma süzgeci adrese yazılmaz: seçili firmanın adı yalnız bu oturumda bellidir.
   const sorgu = { ...liste.sorgu, ...(firma === null ? {} : { firmaId: firma.id }) };
+  const suzulu = liste.suzulu || firma !== null;
   const siparisler = useQuery({
     queryKey: anahtarlar.siparisListe(sorgu),
     queryFn: () => api.get<SiparisListesiCevabi>(`/siparisler${sorguMetni(sorgu)}`),
@@ -118,7 +119,10 @@ export function SiparisListesi() {
             satirAnahtari={(s) => s.id}
             satirSec={(s) => { void gezin(`/siparisler/${s.id}`); }}
             mesgul={siparisler.isPending}
-            bosMesaj={siparisler.isPending ? 'Yükleniyor' : 'Bu süzgece uyan sipariş yok.'}
+            bosMesaj={siparisler.isPending ? 'Yükleniyor' : suzulu ? 'Bu süzgece uyan sipariş yok.' : 'Henüz satış siparişi yok.'}
+            bosEylem={siparisler.isPending ? undefined : suzulu
+              ? <Dugme simge="x" onClick={() => { liste.suzgecleriTemizle(); firmaYaz(null); }}>Süzgeci temizle</Dugme>
+              : yazabilir && <Dugme simge="plus" onClick={() => { void gezin('/siparisler/yeni'); }}>Yeni sipariş</Dugme>}
             siralama={liste.siralama}
             siralamaDegistir={liste.siralamaDegistir}
             {...(siparisler.data

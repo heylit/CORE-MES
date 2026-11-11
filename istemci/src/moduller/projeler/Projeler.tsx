@@ -84,6 +84,13 @@ export function Projeler() {
                 siralama={liste.siralama}
                 siralamaDegistir={liste.siralamaDegistir}
                 bosMesaj={suzulu ? 'Süzgece uyan proje yok' : 'Henüz proje yok'}
+                // Başlangıç süzgeci "Aktif" olduğundan yeni kurulumda da süzgeç dolu görünür; ilk projeyi açan düğme süzgeçliyken de durur.
+                bosEylem={l.isPending ? undefined : (
+                  <div className="tc-durum-eylemler">
+                    {suzulu && <Dugme simge="x" onClick={liste.suzgecleriTemizle}>Süzgeci temizle</Dugme>}
+                    {yazabilir && <Dugme simge="plus" onClick={() => { yeniYaz(true); }}>Proje ekle</Dugme>}
+                  </div>
+                )}
                 {...(l.data ? { sayfalama: { sayfa: l.data.sayfa, sayfaBoyu: l.data.sayfaBoyu, toplam: l.data.toplam, degistir: liste.sayfaDegistir } } : {})}
               />
             </div>

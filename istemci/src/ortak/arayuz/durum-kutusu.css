@@ -4,3 +4,5 @@
   border: 1px dashed var(--edge2); color: var(--muted);
 }
 .tc-durum-hata { border-style: solid; border-color: var(--stop); color: var(--stop); }
+/* Boş durumda birden çok düğme yan yana durur; sığmazsa alt satıra iner. */
+.tc-durum-eylemler { display: flex; flex-wrap: wrap; gap: var(--b-2); }

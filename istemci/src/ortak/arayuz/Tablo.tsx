@@ -53,6 +53,8 @@ interface Ozellikler<S> {
   satirAnahtari: (satir: S) => string | number;
   satirSec?: (satir: S) => void;
   bosMesaj?: string;
+  // Boş listenin altındaki düğme ("Süzgeci temizle" ya da ilk kaydı açan düğme); boş iletinin yanında durur.
+  bosEylem?: ReactNode;
   siralama?: Siralama | null;
   siralamaDegistir?: (siralama: Siralama | null) => void;
   // Verilince tablonun altında sayfalama çizilir; satır sayısını tablo kendisi bildirir.
@@ -244,7 +246,7 @@ function useSatirKaydirma(etkin: boolean) {
 }
 
 export function Tablo<S>({
-  etiket, sutunlar, satirlar, satirAnahtari, satirSec, bosMesaj, siralama = null, siralamaDegistir, sayfalama, mesgul = false, arac,
+  etiket, sutunlar, satirlar, satirAnahtari, satirSec, bosMesaj, bosEylem, siralama = null, siralamaDegistir, sayfalama, mesgul = false, arac,
   yukleniyor = false, satirEylemi, toplu, kip = 'uyarlanir',
 }: Ozellikler<S>) {
   const kaydir = kip === 'kaydir';
@@ -326,7 +328,7 @@ export function Tablo<S>({
   if (bos && yukleniyor) {
     return <>{ust}{etkiAcik('tablo-iskelet') ? <TabloIskeleti etiket={etiket} sutunlar={sutunlar} /> : <DurumKutusu durum="yukleniyor" />}</>;
   }
-  if (bos) return <>{ust}<DurumKutusu durum="bos" mesaj={bosMesaj} />{alt}</>;
+  if (bos) return <>{ust}<DurumKutusu durum="bos" mesaj={bosMesaj}>{bosEylem}</DurumKutusu>{alt}</>;
 
   const sabitSinif = (s: Sutun<S>) => (kaydir && s.sabit ? `tc-tablo-sabit-${s.sabit}` : undefined);
   const siralanan = siralamaDegistir ? sutunlar.filter((s) => s.sirala) : [];

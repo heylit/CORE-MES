@@ -39,7 +39,7 @@ const STATULER = { statuler: [], serbestStatu: true, ayarSurum: 1 } satisfies St
 const json = (durum: number, govde: unknown) => new Response(JSON.stringify(govde), { status: durum });
 interface Cagri { yontem: string; yol: string; govde: unknown }
 
-function sunucuKur(kullanici: Kullanici, yazmaCevabi: () => Response = () => json(200, P2)) {
+function sunucuKur(kullanici: Kullanici, yazmaCevabi: () => Response = () => json(200, P2), liste: ProjeListesiCevabi = LISTE) {
   const cagrilar: Cagri[] = [];
   vi.stubGlobal('fetch', vi.fn(async (adres: string, ayar?: RequestInit) => {
     const yol = adres.replace('/api', '');
@@ -54,7 +54,7 @@ function sunucuKur(kullanici: Kullanici, yazmaCevabi: () => Response = () => jso
     if (yontem === 'GET' && yol === '/projeler/2/yonetim') return json(200, YONETIM);
     if (yontem === 'GET' && yol === '/projeler/statuler') return json(200, STATULER);
     if (yontem === 'GET' && yol === '/adimli-emirler?projeId=1') return json(200, EMIRLER);
-    if (yontem === 'GET' && yol.startsWith('/projeler')) return json(200, LISTE);
+    if (yontem === 'GET' && yol.startsWith('/projeler')) return json(200, liste);
     if (yontem === 'POST') return yazmaCevabi();
     return json(404, { kod: 'BULUNAMADI', mesaj: 'Adres bulunamadı.' });
   }));
@@ -92,6 +92,18 @@ describe('Projeler', () => {
     fireEvent.click(screen.getByText('PRJ.01'));
     expect(await screen.findByRole('heading', { name: 'PRJ.01 · Deneme projesi' })).toBeTruthy();
     expect(screen.queryByRole('button', { name: /Düzenle/ })).toBeNull();
+  });
+
+  it('boş listede başlangıç süzgeci (Aktif) dolu olsa da yazan ilk projeyi oradan açar; süzgeç temizlenince ileti değişir', async () => {
+    const cagrilar = sunucuKur(YAZAR, undefined, { satirlar: [], toplam: 0, sayfa: 1, sayfaBoyu: 50 });
+    ac();
+    const kutu = (await screen.findByText('Süzgece uyan proje yok')).closest('.tc-durum') as HTMLElement;
+    expect(await within(kutu).findByRole('button', { name: /Proje ekle/ })).toBeTruthy();
+    fireEvent.click(within(kutu).getByRole('button', { name: /Süzgeci temizle/ }));
+    const bos = (await screen.findByText('Henüz proje yok')).closest('.tc-durum') as HTMLElement;
+    expect(within(bos).queryByRole('button', { name: /Süzgeci temizle/ })).toBeNull();
+    expect(within(bos).getByRole('button', { name: /Proje ekle/ })).toBeTruthy();
+    expect(cagrilar.at(-1)?.yol.includes('durum=aktif')).toBe(false);
   });
 
   it('yazan yeni proje açar: sipariş seçmeden kaydetmez (224); kod büyük harfle, sipariş ile gider, firma gitmez; kayıttan sonra ayrıntıya geçer', async () => {

@@ -30,6 +30,8 @@ function Sonda({ no = '', ...secenek }: Ozellik) {
       {dugme('eksi sayfa', () => liste.sayfaDegistir(-3))}
       {dugme('ara ve sırala', () => { liste.suzgecDegistir({ metin: 'mil' }); liste.siralamaDegistir({ alan: 'adet', yon: 'azalan' }); liste.suzgecDegistir({ durum: 'acik' }); })}
       {dugme('geri', () => { void git(-1); })}
+      {dugme('temizle', () => liste.suzgecleriTemizle())}
+      <output data-testid={`suzulu${no}`}>{String(liste.suzulu)}</output>
     </>
   );
 }
@@ -96,6 +98,17 @@ describe('useListeDurumu', () => {
     bas('ileri');
     bas('sıfırla');
     expect(sorgu()).toEqual({ sayfa: 1 });
+  });
+
+  it('suzulu dolu suzgecte true; temizle baslangici dolu suzgeci de bosaltir, siralama kalir', () => {
+    ac('/liste', { suzgecler: { ...BOS, durum: 'aktif' } });
+    expect(screen.getByTestId('suzulu').textContent).toBe('true');
+    bas('sırala'); bas('ileri');
+    bas('temizle');
+    expect(sorgu()).toEqual({ sayfa: 1, sirala: 'ad', yon: 'artan' });
+    expect(screen.getByTestId('suzulu').textContent).toBe('false');
+    bas('süz');
+    expect(screen.getByTestId('suzulu').textContent).toBe('true');
   });
 
   it('gecersiz sayfa ilk sayfaya cekilir', () => {
