@@ -30,17 +30,24 @@ describe('LOGO-H1 akış durumu', () => {
     assert.equal(logoAkisDurumu({ kaynak: 'baglanmadi', ayarlar: ['logo.satin-alma-gonderimi'] }, { ortamVar: true, ayarlar: acik }), 'baglanmadi');
     assert.equal(logoAkisDurumu({ kaynak: 'kodda-yok', ayarlar: [] }, { ortamVar: true, ayarlar: acik }), 'kodda-yok');
   });
-  test('2971: yeni Logo işi kendi anahtarı kapalıyken, gönderim anahtarı açık olsa da çalışmaz; yeni anahtarların hepsi varsayılan kapalı', () => {
-    const iptal = { kaynak: 'bagli' as const, ayarlar: [...LOGO_AKISLARI.find((x) => x.anahtar === 'talep-iptali')!.ayarlar] };
+  test('2971: yeni Logo işi kendi anahtarı ve gönderim anahtarı birlikte açıkken çalışır; yeni anahtarların hepsi varsayılan kapalı', () => {
+    const t = LOGO_AKISLARI.find((x) => x.anahtar === 'talep-iptali')!;
+    const iptal = { kaynak: 'bagli' as const, ayarlar: [...t.ayarlar], ayarKosulu: t.ayarKosulu };
     const temel = { 'logo.baglanti': true, 'logo.satin-alma-gonderimi': true };
-    assert.equal(logoAkisDurumu(iptal, { ortamVar: true, ayarlar: temel }), 'kapali');
+    assert.equal(logoAkisDurumu(iptal, { ortamVar: true, ayarlar: temel }), 'kapali', 'gönderim açık, kendi anahtarı kapalı');
+    assert.equal(logoAkisDurumu(iptal, { ortamVar: true, ayarlar: { ...temel, 'logo.satin-alma-gonderimi': false, 'logo.talep-iptali-gonderimi': true } }), 'kapali',
+      'kendi anahtarı açık, gönderim kapalı');
     assert.equal(logoAkisDurumu(iptal, { ortamVar: true, ayarlar: { ...temel, 'logo.talep-iptali-gonderimi': true } }), 'hazir');
     const yeniler = LOGO_AKISLARI.filter((a) => a.kaynak === 'kodda-yok');
     assert.equal(yeniler.length, 6);
+    const eski = new Set(['logo.satin-alma-gonderimi', 'logo.satis-gonderimi']);
     for (const a of yeniler) {
-      assert.equal(a.ayarlar.length, 1, `${a.anahtar} yalnız kendi anahtarını taşır`);
-      assert.equal((LOGO_AYARLARI as Record<string, { varsayilan: unknown }>)[a.ayarlar[0]!]?.varsayilan, false, `${a.ayarlar[0]} varsayılan kapalı`);
+      const kendi = a.ayarlar.filter((k) => !eski.has(k));
+      assert.equal(kendi.length, 1, `${a.anahtar} tek kendi anahtarını taşır`);
+      assert.equal((LOGO_AYARLARI as Record<string, { varsayilan: unknown }>)[kendi[0]!]?.varsayilan, false, `${kendi[0]} varsayılan kapalı`);
+      if (a.ayarlar.length > 1) assert.equal(a.ayarKosulu, 'hepsi', `${a.anahtar}: iki anahtar birlikte`);
     }
+    for (const [k, v] of Object.entries(LOGO_AYARLARI)) assert.doesNotMatch(`${v.baslik} ${v.aciklama}`, /sözlük/i, k);
   });
   test('iki anahtarlı akışta (hizmet kartı) biri açıksa yeter', () => {
     const t = LOGO_AKISLARI.find((a) => a.anahtar === 'hizmet-karti');
