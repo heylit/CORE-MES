@@ -68,7 +68,7 @@ function Satir({ t, tam, duzenle }: { t: Talebim; tam: boolean; duzenle: ((t: Ta
               <span className="sa-talep-no">{x.miktar === null ? '—' : `${x.miktar} ${x.birim}`}</span>
               {x.karsilik && <span className="sa-talep-not">{karsilikYaz(x.karsilik)}</span>}
               {(x.uygulanan || x.fasonAdim) && (
-                <span className="sa-talep-not">{[x.uygulanan && `Parça: ${x.uygulanan}`, x.fasonAdim && `Fason: ${x.fasonAdim}`].filter(Boolean).join(' · ')}</span>
+                <span className="sa-talep-not">{[x.uygulanan && `Uygulanacak malzeme: ${x.uygulanan}`, x.fasonAdim && `Fason: ${x.fasonAdim}`].filter(Boolean).join(' · ')}</span>
               )}
             </li>
           ))}

@@ -395,7 +395,7 @@ describe('Planlama menüsünde Taleplerim sayfası (12.10.2026)', () => {
     const satir = screen.getByRole('button', { name: /ST-2026-001/ });
     expect(screen.getByText('Fason adım')).toBeTruthy();
     fireEvent.click(satir);
-    expect(screen.getByText('Parça: MM-00009 · Deneme flanş · Fason: UE-000031 · Op 30')).toBeTruthy();
+    expect(screen.getByText('Uygulanacak malzeme: MM-00009 · Deneme flanş · Fason: UE-000031 · Op 30')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Hepsi' }));
     fireEvent.change(screen.getByLabelText('Ara'), { target: { value: 'talep 12' } });
     await waitFor(() => expect(screen.getAllByRole('button', { name: /ST-2026-0/ })).toHaveLength(1));
