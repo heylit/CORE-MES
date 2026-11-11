@@ -6,6 +6,7 @@ import type { GelecekSepetCevabi, IsMalzemeleriCevabi, IstasyonSepetiCevabi, Ist
 import { BildirimSaglayici } from '../../ortak/arayuz/index.ts';
 import { json, sunucuKur } from './test-ortak.tsx';
 import { MALZEME_TESLIM_AC } from './disari.ts';
+import { rotadaGidenler } from './sepet-satirlari.tsx';
 import { ustEylemler } from './ust-eylem.tsx';
 
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
@@ -198,6 +199,140 @@ describe('Malzeme · Teslim üst çubuk düğmesi', () => {
     await waitFor(() => expect(istekler.find((i) => i.yontem === 'POST')?.govde).toMatchObject({
       malzemeId: 901, miktar: '5.000', partiId: 4, statuId: 7, kaynak: { istasyonId: 2 }, hedef: { istasyonId: 1 },
     }));
+  });
+
+  // 2920 a: rotası belli satırlar tek dokunuşla sonraki istasyona; onay isteyen satır nedeniyle sepette kalır, rotasız satır gitmez.
+  const ROTALI: IstasyonSepetiCevabi = {
+    ...SEPET,
+    satirlar: [
+      { ...SEPET.satirlar[0]!, koken: 'uretim' },
+      { ...SEPET.satirlar[0]!, koken: 'uretim', malzemeId: 903, kod: 'YM-3', ad: 'Deneme flans', partiId: 5, miktar: '2.000', sonraki: { istasyonId: 3, kod: 'T3', ad: 'Taşlama 3', opNo: 40 } },
+      // Depodan gelen statüsüz girdi: sunucu sonraki istasyonu hesaplar ama toplu gönderime girmez.
+      { ...SEPET.satirlar[0]!, koken: 'teslim', malzemeId: 904, kod: 'HM-4', ad: 'Deneme cubuk girdi', partiId: 6, statuId: null, sonraki: { istasyonId: 1, kod: 'T1', ad: 'Torna 1', opNo: 30 } },
+      SEPET.satirlar[1]!,
+    ],
+  };
+
+  it('2920 a: rotaya gore gonder rotasi belli her satiri kendi sonraki istasyonuna ayri teslimle yollar; rotasiz satir gitmez', async () => {
+    const istekler = ciz({ 'GET /stok/teslim-kutusu/sepet': () => json(200, ROTALI), 'POST /stok/teslimler/gonder': () => json(200, { teslim: GELEN }) }, KUTU_ISTASYONLU);
+    fireEvent.click(await screen.findByRole('button', { name: /^Okut(,|$)/ }));
+    fireEvent.click(await screen.findByRole('button', { name: /^Elimdekiler/ }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Rotaya göre gönder (2 satır)' }));
+    await waitFor(() => expect(istekler.filter((i) => i.yontem === 'POST')).toHaveLength(2));
+    const govdeler = istekler.filter((i) => i.yontem === 'POST').map((i) => i.govde as { malzemeId: number; hedef: unknown; kaynak: unknown; kaynakKimligi: string });
+    expect(govdeler.map((g) => [g.malzemeId, g.hedef, g.kaynak])).toEqual([[901, { istasyonId: 1 }, { istasyonId: 2 }], [903, { istasyonId: 3 }, { istasyonId: 2 }]]);
+    expect(new Set(govdeler.map((g) => g.kaynakKimligi)).size).toBe(2);
+    expect(await screen.findByText(/2 satır rotadaki sonraki istasyona gönderildi/)).toBeTruthy();
+  });
+
+  it('2920 a: onay isteyen satir sepette kalir ve nedeniyle listelenir; oteki satir gider (reddedilen)', async () => {
+    const istekler = ciz({
+      'GET /stok/teslim-kutusu/sepet': () => json(200, ROTALI),
+      'POST /stok/teslimler/gonder': (g) => ((g as { malzemeId: number }).malzemeId === 903
+        ? json(409, { kod: 'ONAY_GEREKLI', mesaj: 'Yetersiz stok', ayrinti: { mevcut: '1' } })
+        : json(200, { teslim: GELEN })),
+    }, KUTU_ISTASYONLU);
+    fireEvent.click(await screen.findByRole('button', { name: /^Okut(,|$)/ }));
+    fireEvent.click(await screen.findByRole('button', { name: /^Elimdekiler/ }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Rotaya göre gönder (2 satır)' }));
+    const kalan = await screen.findByRole('list', { name: 'Sepette kalanlar' });
+    expect(within(kalan).getByText('Deneme flans: onay istiyor, satırdan gönderin')).toBeTruthy();
+    expect(await screen.findByText(/1 satır rotadaki sonraki istasyona gönderildi.*1 satır sepette kaldı/)).toBeTruthy();
+    expect(istekler.filter((i) => i.yontem === 'POST')).toHaveLength(2);
+  });
+
+  it('2920 a: toplu gonderim surerken satir dugmeleri kapalidir; ayni satir ikinci kez gonderilemez (yasak)', async () => {
+    let birak: (r: Response) => void = () => undefined;
+    const bekleyen = new Promise<Response>((r) => { birak = r; });
+    let ilk = true;
+    const istekler = ciz({
+      'GET /stok/teslim-kutusu/sepet': () => json(200, ROTALI),
+      'POST /stok/teslimler/gonder': () => { if (!ilk) return json(200, { teslim: GELEN }); ilk = false; return bekleyen as unknown as Response; },
+    }, KUTU_ISTASYONLU);
+    fireEvent.click(await screen.findByRole('button', { name: /^Okut(,|$)/ }));
+    fireEvent.click(await screen.findByRole('button', { name: /^Elimdekiler/ }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Rotaya göre gönder (2 satır)' }));
+    const satirDugmeleri = () => screen.getAllByRole('button', { name: /^Sonraki istasyona/ }) as HTMLButtonElement[];
+    await waitFor(() => expect(satirDugmeleri().every((d) => d.disabled)).toBe(true));
+    fireEvent.click(screen.getByRole('button', { name: 'Sonraki istasyona: Taşlama 3 (OP 40)' }));
+    expect(istekler.filter((i) => i.yontem === 'POST')).toHaveLength(1);
+    birak(json(200, { teslim: GELEN }));
+    await waitFor(() => expect(satirDugmeleri().some((d) => d.disabled)).toBe(false));
+  });
+
+  it('2920 a: kalan satir satirdan gonderilip sepetten dusunce kalanlar listesinden de duser', async () => {
+    let sepet: IstasyonSepetiCevabi = ROTALI;
+    ciz({
+      'GET /stok/teslim-kutusu/sepet': () => json(200, sepet),
+      'POST /stok/teslimler/gonder': (g) => ((g as { malzemeId: number; eksiOnay?: boolean }).malzemeId === 903 && !(g as { eksiOnay?: boolean }).eksiOnay
+        ? json(409, { kod: 'ONAY_GEREKLI', mesaj: 'Yetersiz stok', ayrinti: { mevcut: '1' } })
+        : json(200, { teslim: GELEN })),
+    }, KUTU_ISTASYONLU);
+    fireEvent.click(await screen.findByRole('button', { name: /^Okut(,|$)/ }));
+    fireEvent.click(await screen.findByRole('button', { name: /^Elimdekiler/ }));
+    sepet = { ...ROTALI, satirlar: ROTALI.satirlar.filter((x) => x.malzemeId !== 901) };
+    fireEvent.click(await screen.findByRole('button', { name: 'Rotaya göre gönder (2 satır)' }));
+    expect(await screen.findByRole('list', { name: 'Sepette kalanlar' })).toBeTruthy();
+    sepet = { ...ROTALI, satirlar: ROTALI.satirlar.filter((x) => x.malzemeId !== 901 && x.malzemeId !== 903) };
+    fireEvent.click(screen.getByRole('button', { name: 'Sonraki istasyona: Taşlama 3 (OP 40)' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Yine de yaz' }));
+    await waitFor(() => expect(screen.queryByRole('list', { name: 'Sepette kalanlar' })).toBeNull());
+  });
+
+  it('2920 a: suzgec yalniz burada uretilen satiri alir; depodan gelen statusuz girdi, koken bilinmeyen ve teslimle gelen disarida (yasak)', () => {
+    const uretim = { ...SEPET.satirlar[0]!, koken: 'uretim' as const };
+    const statusuzUretim = { ...uretim, malzemeId: 905, statuId: null };
+    const girdi = { ...uretim, malzemeId: 904, statuId: null, koken: 'teslim' as const };
+    const kokensiz = { ...uretim, malzemeId: 906, koken: null };
+    const eskiSurum = { ...uretim, malzemeId: 907, koken: undefined };
+    const serbestYok = { ...uretim, malzemeId: 908, miktar: '0' };
+    const rotasiz = { ...uretim, malzemeId: 909, sonraki: null, sonrakiYok: 'son-adim' as const };
+    expect(rotadaGidenler([uretim, statusuzUretim, girdi, kokensiz, eskiSurum, serbestYok, rotasiz]).map((x) => x.malzemeId)).toEqual([901, 905]);
+  });
+
+  it('2920 a: gonderilecek satir yoksa (yalniz girdi ve rotasiz) toplu dugme cikmaz, istek gitmez', async () => {
+    const istekler = ciz({ 'GET /stok/teslim-kutusu/sepet': () => json(200, { ...ROTALI, satirlar: ROTALI.satirlar.slice(2) }) }, KUTU_ISTASYONLU);
+    fireEvent.click(await screen.findByRole('button', { name: /^Okut(,|$)/ }));
+    fireEvent.click(await screen.findByRole('button', { name: /^Elimdekiler/ }));
+    await screen.findByRole('list', { name: 'Freze 2 sepeti' });
+    expect(screen.queryByRole('button', { name: /Rotaya göre gönder/ })).toBeNull();
+    expect(istekler.some((i) => i.yontem === 'POST')).toBe(false);
+  });
+
+  it('2920 a: rotasi belli tek satirda toplu dugme cikmaz, satir dugmesi yeter', async () => {
+    ciz({ 'GET /stok/teslim-kutusu/sepet': () => json(200, SEPET) }, KUTU_ISTASYONLU);
+    fireEvent.click(await screen.findByRole('button', { name: /^Okut(,|$)/ }));
+    fireEvent.click(await screen.findByRole('button', { name: /^Elimdekiler/ }));
+    await screen.findByRole('list', { name: 'Freze 2 sepeti' });
+    expect(screen.queryByRole('button', { name: /Rotaya göre gönder/ })).toBeNull();
+  });
+
+  it('2920 a: yoldaki teslimler Okut ilk ekraninda tek kartta; hepsini al gonderilen miktarla her birini ayri alir', async () => {
+    const IKINCI: Teslim = { ...GELEN, id: 42, no: 'TS-000042', malzemeAd: 'Deneme flans', miktar: '1.000', surum: 2 };
+    const istekler = ciz({ 'POST /stok/teslimler/41/teslim-al': () => json(200, { teslim: GELEN }), 'POST /stok/teslimler/42/teslim-al': () => json(200, { teslim: IKINCI }) },
+      { ...KUTU, gelenler: [GELEN, IKINCI] });
+    fireEvent.click(await screen.findByRole('button', { name: /^Okut(,|$)/ }));
+    const kart = await screen.findByRole('group', { name: 'Yoldaki teslimler' });
+    expect(within(kart).getByText('2 teslim seni bekliyor')).toBeTruthy();
+    expect(within(kart).getByText(/Deneme mil · 3, Deneme flans · 1/)).toBeTruthy();
+    fireEvent.click(within(kart).getByRole('button', { name: 'Hepsini al' }));
+    await waitFor(() => expect(istekler.filter((i) => i.yontem === 'POST')).toHaveLength(2));
+    expect(istekler.filter((i) => i.yontem === 'POST').map((i) => [i.yol, i.govde])).toEqual([
+      ['/stok/teslimler/41/teslim-al', { surum: 1, alinan: '3.000' }], ['/stok/teslimler/42/teslim-al', { surum: 2, alinan: '1.000' }],
+    ]);
+    expect(await screen.findByText('2 teslim alındı.')).toBeTruthy();
+  });
+
+  it('2920 a: yolda teslim yoksa kart cikmaz; tek tek bak Bana gelen ekranini acar', async () => {
+    ciz({}, { ...KUTU, gelenler: [] });
+    fireEvent.click(await screen.findByRole('button', { name: /^Okut(,|$)/ }));
+    await screen.findByRole('region', { name: 'Seni bekleyen' });
+    expect(screen.queryByRole('group', { name: 'Yoldaki teslimler' })).toBeNull();
+    cleanup();
+    ciz({});
+    fireEvent.click(await screen.findByRole('button', { name: /^Okut(,|$)/ }));
+    fireEvent.click(within(await screen.findByRole('group', { name: 'Yoldaki teslimler' })).getByRole('button', { name: 'Tek tek bak' }));
+    expect(await screen.findByRole('heading', { name: 'Bana gelenler' })).toBeTruthy();
   });
 
   it('teslim al: onceki istasyonda bekleyen parca miktarla cekilir (kart #1289)', async () => {

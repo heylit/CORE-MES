@@ -29,7 +29,7 @@ import { PanelMalKabul } from './PanelMalKabul.tsx';
 import { PanelSevk } from './PanelSevk.tsx';
 import { SepetSeridi, useTasimaSepeti } from './TasimaSepeti.tsx';
 import { DepoSepeti } from './Sepet.tsx';
-import { GelenTeslim, OncekiSepetSatiri, SepetSatiri } from './sepet-satirlari.tsx';
+import { GelenTeslim, OncekiSepetSatiri, RotayaGoreGonder, SepetSatiri } from './sepet-satirlari.tsx';
 import { TeslimSatiri } from './TeslimSatiri.tsx';
 import { useStatuAdi } from './statu.ts';
 import { TasimaYolu, tasimaYolu } from './TasimaYolu.tsx';
@@ -237,6 +237,7 @@ function Kutucuklar({ kutu, git }: { kutu: TeslimKutusuCevabi; git: (g: Gorunum)
   const alinanVar = (kutu.okutarakAlinanlar ?? []).some((t) => !hedefTarafi(kutu, t));
   return (
     <section className="tc-stok-teslim-ana" aria-label="Seni bekleyen">
+      {kutu.gelenler.length > 0 && <GelenlerKarti gelenler={kutu.gelenler} ac={() => git('al')} />}
       <div className="tc-stok-kutucuklar">
         <Kutucuk simge="download" baslik="Bana gelen" sayi={gelen} vurgu={gelen !== null && gelen > 0} ac={() => git('al')} />
         <Kutucuk simge="upload" baslik="Elimdekiler" sayi={elimde} ac={() => git('et')} />
@@ -244,6 +245,25 @@ function Kutucuklar({ kutu, git }: { kutu: TeslimKutusuCevabi; git: (g: Gorunum)
       </div>
       <Dugme simge="plus" onClick={() => git('iste')}>Malzeme iste</Dugme>
     </section>
+  );
+}
+
+// 2920 a: yolda bana gelen teslimler Okut'un ilk ekranında tek kart; gönderilen miktarla hepsi tek dokunuşla alınır (Bana gelen'deki
+// Hepsini al ile aynı). Eksik gelen ya da reddedilecek olan için ayrıntı Bana gelen'dedir.
+function GelenlerKarti({ gelenler, ac }: { gelenler: Teslim[]; ac: () => void }) {
+  const adlar = gelenler.slice(0, 3).map((t) => `${t.malzemeAd ?? t.no} · ${miktarMetni(t.miktar)}`);
+  const fazla = gelenler.length - adlar.length;
+  return (
+    <div className="tc-stok-is" role="group" aria-label="Yoldaki teslimler">
+      <div>
+        <strong>{gelenler.length} teslim seni bekliyor</strong>
+        <span>{adlar.join(', ')}{fazla > 0 ? ` ve ${fazla} teslim daha` : ''}</span>
+      </div>
+      <div className="tc-stok-dugmeler">
+        <HepsiniAl gelenler={gelenler} />
+        <Dugme simge="list" onClick={ac}>Tek tek bak</Dugme>
+      </div>
+    </div>
   );
 }
 
@@ -663,6 +683,7 @@ const SUZGECLER: readonly { anahtar: SepetSuzgeci; baslik: string }[] = [
 ];
 function Sepet({ kutu, depoSepeti, buradaki }: { kutu: TeslimKutusuCevabi; depoSepeti: boolean; buradaki: number | null }) {
   const [suzgec, setSuzgec] = useState<SepetSuzgeci>(depoSepeti ? 'depo' : 'hepsi');
+  const [topluSuruyor, setTopluSuruyor] = useState(false);
   const istasyonId = buradaki ?? kutu.istasyonlar[0]?.id ?? 0;
   const sepet = useQuery({
     queryKey: sepetAnahtari(istasyonId),
@@ -686,9 +707,12 @@ function Sepet({ kutu, depoSepeti, buradaki }: { kutu: TeslimKutusuCevabi; depoS
         : sepet.isError ? <DurumKutusu durum="hata" mesaj={hataMetni(sepet.error)} yenile={() => { void sepet.refetch(); }} />
         : satirlar.length === 0 ? <DurumKutusu durum="bos" mesaj={suzgec === 'hepsi' ? `${sepet.data.istasyon.ad} istasyon sepeti boş` : `${sepet.data.istasyon.ad} istasyon sepetinde bu süzgece uyan satır yok`} />
         : (
-          <ul className="tc-stok-isler tc-stok-teslim-liste" aria-label={`${sepet.data.istasyon.ad} sepeti`}>
-            {satirlar.map((x) => <SepetSatiri key={`${x.malzemeId}-${x.partiId ?? 0}-${x.statuId ?? 0}`} istasyonId={istasyonId} x={x} emirler={sepet.data.emirler} />)}
-          </ul>
+          <>
+            <RotayaGoreGonder istasyonId={istasyonId} satirlar={satirlar} suruyor={setTopluSuruyor} />
+            <ul className="tc-stok-isler tc-stok-teslim-liste" aria-label={`${sepet.data.istasyon.ad} sepeti`}>
+              {satirlar.map((x) => <SepetSatiri key={`${x.malzemeId}-${x.partiId ?? 0}-${x.statuId ?? 0}`} istasyonId={istasyonId} x={x} emirler={sepet.data.emirler} kilitli={topluSuruyor} />)}
+            </ul>
+          </>
         )}
     </>
   );
