@@ -71,14 +71,25 @@ function Oge({ o }: { o: OnizlemeOgesi }) {
   );
 }
 
+// Etiketin kendisi: viewBox milimetredir, öğeler yazıcıya giden yerleşimin aynısıdır. Önizleme ve vektörel yazdırma aynı çizimi kullanır;
+// boyut verilmezse alana sığar, verilirse SVG o ölçüde (ör. "50mm") çizilir.
+export function EtiketCizimi({ genislik, yukseklik, ad, ogeler, sinif, boyut }: {
+  genislik: number; yukseklik: number; ad: string; ogeler: readonly OnizlemeOgesi[]; sinif: string; boyut?: { width: string; height: string };
+}) {
+  return (
+    <svg className={sinif} {...boyut} viewBox={`0 0 ${genislik} ${yukseklik}`} role="img" aria-label={ad}>
+      <rect className="tc-etk-kagit" width={genislik} height={yukseklik} />
+      {ogeler.map((o, i) => <Oge key={i} o={o} />)}
+    </svg>
+  );
+}
+
 // gercek verilince etiket ekranda mm ölçüsüyle (1:1) çizilir; olcek ekranın kalibrasyonudur. Verilmezse alana sığdırılır.
 export function Onizleme({ cikti, gercek }: { cikti: CiktiCevabi; gercek?: { olcek: number | null } }) {
   const { genislik, yukseklik, ad } = cikti.sablon;
-  const boyut = gercek ? { width: mmOzniteligi(genislik, gercek.olcek), height: mmOzniteligi(yukseklik, gercek.olcek) } : {};
+  const boyut = gercek ? { width: mmOzniteligi(genislik, gercek.olcek), height: mmOzniteligi(yukseklik, gercek.olcek) } : undefined;
   return (
-    <svg className={gercek ? 'tc-etk-onizleme-gercek' : 'tc-etk-onizleme'} {...boyut} viewBox={`0 0 ${genislik} ${yukseklik}`} role="img" aria-label={`${ad} önizleme`}>
-      <rect className="tc-etk-kagit" width={genislik} height={yukseklik} />
-      {cikti.onizleme.map((o, i) => <Oge key={i} o={o} />)}
-    </svg>
+    <EtiketCizimi genislik={genislik} yukseklik={yukseklik} ad={`${ad} önizleme`} ogeler={cikti.onizleme}
+      sinif={gercek ? 'tc-etk-onizleme-gercek' : 'tc-etk-onizleme'} boyut={boyut} />
   );
 }
