@@ -30,7 +30,7 @@ export function MerkezdenAl({ acik, kapat, al, alinan }: {
                 <li key={b.id}>
                   <button type="button" className="km-st-belge" disabled={alinan !== null} onClick={() => { al(b); }}>
                     <span className={`km-st-tur km-st-tur-${b.tur}`}><Simge ad={b.tur === 'resim' ? 'file' : 'cube'} boyut="k" /></span>
-                    <span className="km-st-belge-ad"><b>{b.ad}</b><small>{[BICIM_ADI[b.bicim], b.harf ? `Rev ${b.harf}` : null].filter(Boolean).join(' · ')}</small></span>
+                    <span className="km-st-belge-ad"><b>{b.ad}</b><small>{[BICIM_ADI[b.bicim], b.revKodu ? `Rev ${b.revKodu}` : 'Kodsuz revizyon'].filter(Boolean).join(' · ')}</small></span>
                     {b.bagli ? <Rozet ton="tamam">Parçaya bağlı</Rozet> : null}
                     <Simge ad={alinan === b.id ? 'rotate' : 'plus'} boyut="k" />
                   </button>

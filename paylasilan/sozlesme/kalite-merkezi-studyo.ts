@@ -110,7 +110,8 @@ export const KM_MERKEZ_BICIMLERI = ['pdf', 'step', 'stl', 'iges'] as const;
 // Parça verilirse o malzeme kartına Çizim Merkezi'nde bağlı belgeler önce ve `bagli` işaretiyle gelir (1306).
 export const kmMerkezBelgeSorgusu = z.object({ ara: z.string().trim().max(80).optional(), malzemeNo: z.coerce.number<number>().int().positive().max(2147483647).optional() });
 export const kmMerkezBelgesi = z.object({
-  id: z.number().int().positive(), ad: z.string(), harf: z.string(), tur: z.enum(KM_RESIM_TURLERI), bicim: z.enum(KM_MERKEZ_BICIMLERI), ozet: z.string(),
+  // 2138-2: revKodu gösterilen revizyon kodu (resmin kodu, yoksa bağlı malzeme kartının revizyonu); harf merkezin iç sırasıdır, gösterilmez.
+  id: z.number().int().positive(), ad: z.string(), harf: z.string(), revKodu: z.string().nullable().optional(), tur: z.enum(KM_RESIM_TURLERI), bicim: z.enum(KM_MERKEZ_BICIMLERI), ozet: z.string(),
   bagli: z.boolean(),
 });
 export const kmMerkezBelgeleriCevabi = z.object({ belgeler: z.array(kmMerkezBelgesi) });

@@ -60,7 +60,7 @@ const SUTUNLAR: readonly Sutun<MarkalamaTanimi>[] = [
   { anahtar: 'op', baslik: 'Op', mono: true, hucre: (t) => t.opNo },
   { anahtar: 'sablon', baslik: 'Seri şablonu', mono: true, hucre: (t) => t.seriSablonu },
   { anahtar: 'marka', baslik: 'Marka', hucre: (t) => t.alanlar.length },
-  { anahtar: 'model', baslik: '3B', hucre: (t) => (t.model ? <Rozet ton="tamam">Rev {t.model.revizyon}</Rozet> : <Rozet ton="pasif">Yok</Rozet>) },
+  { anahtar: 'model', baslik: '3B', hucre: (t) => (t.model ? <Rozet ton="tamam">Model var</Rozet> : <Rozet ton="pasif">Yok</Rozet>) },
   { anahtar: 'aktif', baslik: 'Durum', hucre: (t) => (t.aktif ? <Rozet ton="tamam">Etkin</Rozet> : <Rozet ton="pasif">Pasif</Rozet>) },
 ];
 

@@ -13,7 +13,8 @@ type ModelBagi = MarkalamaTanimi['model'];
 const yetkiIletisi = (hata: unknown, ekran: string): string =>
   hata instanceof ApiHatasi && hata.durum === 403 ? 'Modeli görmek için çizim okuma yetkisi gerekir.' : hataIletisi(hata, ekran);
 
-// Model, malzemeye bağlı çizim belgesinin revizyonudur (Çizim Merkezi); tanım belge ve revizyon harfini tutar.
+// Model, malzemeye bağlı çizim belgesinin revizyonudur (Çizim Merkezi); tanım belge ve revizyon harfini kimlik olarak tutar,
+// ekranda harf değil revizyon kodu görünür (2138-2).
 export function ModelPaneli({ malzemeId, model, modelSec, markalar, secili, yerSec }: {
   malzemeId: number;
   model: ModelBagi;
@@ -46,7 +47,7 @@ export function ModelPaneli({ malzemeId, model, modelSec, markalar, secili, yerS
         <Secim
           etiket="3B model"
           ipucu={secenekler.length === 0 ? 'Bu malzemeye bağlı model yok; Çizim Merkezi\'nden STEP ya da STL ekleyin.' : 'Yer, seçilen revizyonun üstünde işaretlenir.'}
-          secenekler={secenekler.map((s) => ({ deger: `${s.belgeId}:${s.harf}`, baslik: `${s.belgeAdi} · Rev ${s.harf}${s.durum === 'taslak' ? ' (taslak)' : ''}` }))}
+          secenekler={secenekler.map((s) => ({ deger: `${s.belgeId}:${s.harf}`, baslik: `${s.belgeAdi} · ${s.revKodu ? `Rev ${s.revKodu}` : 'Kodsuz revizyon'}${s.durum === 'taslak' ? ' (taslak)' : ''}` }))}
           bosSecenek="Model yok"
           value={model === null ? '' : `${model.belgeId}:${model.revizyon}`}
           onChange={(o) => {
@@ -56,7 +57,7 @@ export function ModelPaneli({ malzemeId, model, modelSec, markalar, secili, yerS
         />
       )}
       {model !== null && aktif === undefined && (
-        <DurumKutusu durum="hata" mesaj={`Tanımdaki model (Rev ${model.revizyon}) artık yok ya da eskidi; yeni revizyonu seçip yerleri yeniden işaretleyin.`} />
+        <DurumKutusu durum="hata" mesaj="Tanımdaki model revizyonu artık yok ya da eskidi; yeni revizyonu seçip yerleri yeniden işaretleyin." />
       )}
       {model === null && !modelSec && <DurumKutusu durum="bos" mesaj="Bu tanıma model bağlanmamış." />}
       {aktif && dosya.isPending && <DurumKutusu durum="yukleniyor" mesaj="Model indiriliyor" />}

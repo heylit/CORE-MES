@@ -190,7 +190,8 @@ describe('Kalite Merkezi CMM sonuç dönüşü (gerçek PostgreSQL, gerçek giri
     const r = await oku(okur, `/kalite-merkezi/studyo/resimler/${resimId}/cmm-plani`);
     assert.equal(r.statusCode, 200, r.body);
     const c = r.json() as KmCmmPlaniCevabi;
-    assert.deepEqual([c.kapsam, c.resim.revizyon], ['cmm', 'A']);
+    // 2138-2: tablodaki revizyon (burada istemcinin gönderdiği) değil, merkezin kodu gösterilir; bu belgede kod yok.
+    assert.deepEqual([c.kapsam, c.resim.revizyon], ['cmm', null]);
     assert.deepEqual(c.satirlar.map((s) => [s.no, s.ozellik, s.enAzNokta]), [[1, 'Silindir / delik', 8], [3, 'Uzunluk / mesafe (iki özellik arası)', 6]]);
     assert.equal((await oku(operator, `/kalite-merkezi/studyo/resimler/${resimId}/cmm-plani`)).statusCode, 403);
     assert.equal((await oku(okur, '/kalite-merkezi/studyo/resimler/999999/cmm-plani')).statusCode, 404);
