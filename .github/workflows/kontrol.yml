@@ -419,7 +419,8 @@ jobs:
   # atlanırsa iş yine yeşil görünür. PostgreSQL çalıştırıcı imajında kuruludur, hizmeti kapalı gelir; ağdan bir şey indirilmez.
   windows:
     needs: kapsam
-    if: needs.kapsam.outputs.sunucu == 'true'
+    # Cekme isteginde kosmaz; ana dala gonderimde ve elle kosuda kosar; atlanan is kontrol'de skipped sayilir.
+    if: needs.kapsam.outputs.sunucu == 'true' && github.event_name != 'pull_request'
     # Ana dal gönderiminde yeni birleşme bu işin eski koşusunu iptal eder (2705 a); başka olayda grup koşuya özgüdür.
     concurrency:
       group: kontrol-windows-${{ github.event_name == 'push' && github.ref || github.run_id }}
