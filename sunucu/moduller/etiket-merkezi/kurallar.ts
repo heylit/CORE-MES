@@ -6,7 +6,7 @@ import type { KatalogTuru } from '#paylasilan/sozlesme/malzemeler.ts';
 import type { KaliteDurumu } from '#paylasilan/sozlesme/stok.ts';
 import type { Bekleyen, Koli } from '#paylasilan/sozlesme/etiket-merkezi.ts';
 import type { HataliKaydiOzeti, RefakatKartiCevabi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
-import { EN_COK_ADET, QR_KENAR_MODUL, SATIR_ARALIGI, type KayitTuru, type OnizlemeOgesi, type Sablon, type SablonTuru, type SablonOgesi } from '#paylasilan/sozlesme/etiket-merkezi.ts';
+import { EN_COK_ADET, QR_KENAR_MODUL, SATIR_ARALIGI, type KayitTuru, type OnizlemeOgesi, type OzelOlcu, type Sablon, type SablonTuru, type SablonOgesi } from '#paylasilan/sozlesme/etiket-merkezi.ts';
 import { REFAKAT_KOPYA_SAYISI } from '#paylasilan/etiket-sabitleri.ts';
 import { simgeCoz } from '#paylasilan/etiket-piktogramlari.ts';
 import { YAZICI_AGI_DEGISKENI } from './ag.ts';
@@ -26,6 +26,60 @@ export function sablonHatalari(s: Sablon): string[] {
     if (o.tur === 'metin' && o.yaziMm > o.yukseklik + 1e-9) hatalar.push(`${i + 1}. öğenin yazısı kutusundan büyük.`);
   });
   return hatalar;
+}
+
+// EM-37: standart dışı rulo. Tasarım girilen ölçüye en ve boydan küçük kalan oranla (orantılı) ölçeklenir ve ortalanır; QR kare,
+// yerleşim aynı kalır, artan kenar boş kalır.
+const yuvarla = (v: number) => Math.round(v * 1e4) / 1e4;
+export function olcekle(s: Sablon, olcu: OzelOlcu): { sablon: Sablon; olcek: number } {
+  const olcek = Math.min(olcu.genislik / s.genislik, olcu.yukseklik / s.yukseklik);
+  const dx = (olcu.genislik - s.genislik * olcek) / 2;
+  const dy = (olcu.yukseklik - s.yukseklik * olcek) / 2;
+  const x = (v: number) => yuvarla(dx + v * olcek);
+  const y = (v: number) => yuvarla(dy + v * olcek);
+  const o = (v: number) => Math.floor(v * olcek * 1e4) / 1e4;
+  const ogeler = s.ogeler.map((g): SablonOgesi => {
+    if (g.tur === 'qr' || g.tur === 'simge') return { ...g, x: x(g.x), y: y(g.y), boyut: o(g.boyut) };
+    if (g.tur === 'metin') return { ...g, x: x(g.x), y: y(g.y), genislik: o(g.genislik), yukseklik: o(g.yukseklik), yaziMm: o(g.yaziMm) };
+    // Kalınlık da aynı oranla küçülür (dolu kutu dolu kalır); yazıcı dili çizgiyi en az bir noktayla basar.
+    return { ...g, x: x(g.x), y: y(g.y), genislik: o(g.genislik), yukseklik: o(g.yukseklik), kalinlik: o(g.kalinlik) };
+  });
+  return { sablon: { ...s, genislik: olcu.genislik, yukseklik: olcu.yukseklik, ogeler }, olcek };
+}
+
+// EM-38: okunurluk. QR karesi (modül) ve en küçük yazı ölçekle küçülür. Sınırın altı basılmaz (yazıcı 203 dpi'de bir kareyi iki
+// noktadan az basar, tarayıcı okumaz); uyarı aralığında basılır, okutup denemesi söylenir. Eşikler denemeyle değişebilir.
+export const QR_KARE_EN_AZ_MM = 0.25;
+export const QR_KARE_UYARI_MM = 0.38;
+export const YAZI_EN_AZ_MM = 1;
+export const YAZI_UYARI_MM = 1.5;
+const sayiYaz = (v: number) => String(Math.floor(v * 100) / 100).replace('.', ',');
+export const qrKaresi = (o: Extract<OnizlemeOgesi, { tur: 'qr' }>): number => o.boyut / (o.kareler.length + 2 * QR_KENAR_MODUL);
+const enKucukYazi = (s: Sablon): number | null => {
+  const yazilar = s.ogeler.flatMap((g) => (g.tur === 'metin' ? [g.yaziMm] : []));
+  return yazilar.length === 0 ? null : Math.min(...yazilar);
+};
+const enKucukKare = (ogeler: readonly OnizlemeOgesi[]): number | null => {
+  const kareler = ogeler.flatMap((g) => (g.tur === 'qr' ? [qrKaresi(g)] : []));
+  return kareler.length === 0 ? null : Math.min(...kareler);
+};
+// Tasarım ölçüsündeki yerleşimden: QR karesi ve yazı ölçekle doğru orantılıdır; en küçük ölçü yukarı yuvarlanır.
+export function enKucukOlcu(tasarim: Sablon, tasarimOgeleri: readonly OnizlemeOgesi[]): { genislik: number; yukseklik: number } {
+  const kare = enKucukKare(tasarimOgeleri);
+  const yazi = enKucukYazi(tasarim);
+  const oran = Math.max(kare === null ? 0 : QR_KARE_EN_AZ_MM / kare, yazi === null ? 0 : YAZI_EN_AZ_MM / yazi) * 1.02;
+  return { genislik: Math.max(10, Math.ceil(tasarim.genislik * oran)), yukseklik: Math.max(10, Math.ceil(tasarim.yukseklik * oran)) };
+}
+export function okunurluk(olcekli: Sablon, ogeler: readonly OnizlemeOgesi[], enKucuk: { genislik: number; yukseklik: number }): { engel: string | null; uyarilar: string[] } {
+  const kare = enKucukKare(ogeler);
+  const yazi = enKucukYazi(olcekli);
+  const sinir = `Bu etiket için en küçük ölçü ${enKucuk.genislik}x${enKucuk.yukseklik} mm.`;
+  if (kare !== null && kare < QR_KARE_EN_AZ_MM - 1e-9) return { engel: `Bu ölçüde QR okunmaz (kare ${sayiYaz(kare)} mm, en az ${sayiYaz(QR_KARE_EN_AZ_MM)} mm). ${sinir}`, uyarilar: [] };
+  if (yazi !== null && yazi < YAZI_EN_AZ_MM - 1e-9) return { engel: `Bu ölçüde yazı okunmaz (${sayiYaz(yazi)} mm, en az ${sayiYaz(YAZI_EN_AZ_MM)} mm). ${sinir}`, uyarilar: [] };
+  const uyarilar: string[] = [];
+  if (kare !== null && kare < QR_KARE_UYARI_MM) uyarilar.push(`QR küçük (kare ${sayiYaz(kare)} mm): ilk etiketi basıp okutarak deneyin.`);
+  if (yazi !== null && yazi < YAZI_UYARI_MM) uyarilar.push(`En küçük yazı ${sayiYaz(yazi)} mm: yakından okunur.`);
+  return { engel: null, uyarilar };
 }
 
 // EM-2: milimetre yazıcı noktasına en yakın tam noktaya yuvarlanır (203 dpi'de 1 mm = 8 nokta).

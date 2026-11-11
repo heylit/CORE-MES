@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { KARO_TURLERI, PIKTOGRAM_ADLARI } from '../etiket-piktogramlari.ts';
+import { OZEL_OLCU_SINIRI } from '../etiket-sabitleri.ts';
 
 // Etiket yazıcısının dili sunucuda üretilir; istemci yalnız önizlemeyi çizer ve komut dosyasını indirir.
 export const YAZICI_DILLERI = ['zpl', 'pplb'] as const;
@@ -86,16 +87,38 @@ export type SablonlarCevabi = z.infer<typeof sablonlarCevabi>;
 
 export const sablonParametresi = z.object({ anahtar: z.string().regex(/^[a-z0-9-]{1,40}$/, 'Şablon anahtarı geçersiz.') });
 
-export const ciktiSorgusu = z.object({
+// Standart dışı rulo: etiket hazır şablonun tasarımıyla basılır, içerik girilen ölçüye orantılı ölçeklenip ortalanır.
+// Sınır mm'dir; okunurluk (QR karesi, yazı boyu) ölçeğe göre sunucuda ayrıca denetlenir.
+const olcuSayisi = (ad: string, enCok: number) => z.number()
+  .min(OZEL_OLCU_SINIRI.enAz, `${ad} ${OZEL_OLCU_SINIRI.enAz} ile ${enCok} mm arasında olur.`)
+  .max(enCok, `${ad} ${OZEL_OLCU_SINIRI.enAz} ile ${enCok} mm arasında olur.`)
+  .refine((d) => Math.round(d * 10) === d * 10, `${ad} en çok bir ondalıkla yazılır.`);
+export const olcuSemasi = z.object({ genislik: olcuSayisi('En', OZEL_OLCU_SINIRI.enCokEn), yukseklik: olcuSayisi('Boy', OZEL_OLCU_SINIRI.enCokBoy) });
+export type OzelOlcu = z.infer<typeof olcuSemasi>;
+
+const ciktiSorgusuTemeli = z.object({
   dil: z.enum(YAZICI_DILLERI),
   dpi: z.coerce.number<number>().pipe(z.union([z.literal(203), z.literal(300)])),
   adet: z.coerce.number<number>().int().min(1, 'Adet en az 1 olur.').max(EN_COK_ADET, `Adet en çok ${EN_COK_ADET} olur.`).prefault(1),
   sade: z.enum(['true', 'false']).optional().transform((d) => d === 'true'),
+  // En ve boy birlikte gelir; ikisi de yoksa şablonun kendi ölçüsü.
+  en: z.coerce.number<number>().optional(),
+  boy: z.coerce.number<number>().optional(),
 });
+function olcuyaCevir<T extends { en?: number | undefined; boy?: number | undefined }>({ en, boy, ...geri }: T, c: z.RefinementCtx): Omit<T, 'en' | 'boy'> & { olcu?: OzelOlcu } {
+  if (en === undefined && boy === undefined) return geri;
+  const sonuc = olcuSemasi.safeParse({ genislik: en, yukseklik: boy });
+  if (!sonuc.success) {
+    c.addIssue({ code: z.ZodIssueCode.custom, message: sonuc.error.issues[0]?.message ?? 'Etiket ölçüsü geçersiz.', path: ['en'] });
+    return z.NEVER;
+  }
+  return { ...geri, olcu: sonuc.data };
+}
+export const ciktiSorgusu = ciktiSorgusuTemeli.transform(olcuyaCevir);
 export type CiktiSecenekleri = z.output<typeof ciktiSorgusu>;
 
 // Kimlikler adreste virgülle ayrılır; yinelenen kimlik bir kez basılır.
-export const kayitCiktiSorgusu = ciktiSorgusu.extend({
+export const kayitCiktiSorgusu = ciktiSorgusuTemeli.extend({
   tur: z.enum(KAYIT_TURLERI),
   id: z.string().max(4000).transform((d, c) => {
     const parcalar = d.split(',').map((p) => p.trim()).filter((p) => p !== '');
@@ -109,7 +132,7 @@ export const kayitCiktiSorgusu = ciktiSorgusu.extend({
   }),
   koliSayisi: z.coerce.number<number>().int().min(1, 'Koli sayısı en az 1 olur.').max(EN_COK_ADET, `Koli sayısı en çok ${EN_COK_ADET} olur.`).optional(),
   koliIci: z.coerce.number<number>().positive('Koli içi adet sıfırdan büyük olur.').max(1e9).optional(),
-});
+}).transform(olcuyaCevir);
 export type KayitCiktiSecenekleri = z.output<typeof kayitCiktiSorgusu>;
 
 // Etiket sayfasındaki raf seçimi (#116): Fabrika Haritası'nın kullanımdaki rafları; bölüm kodu rafın gözlerinden gelir.
@@ -127,6 +150,15 @@ export const onizlemeOgesiSemasi = z.discriminatedUnion('tur', [
 ]);
 export type OnizlemeOgesi = z.infer<typeof onizlemeOgesiSemasi>;
 
+// Özel ölçüde basılan etiketin tasarım ölçüsü, ölçeği, okunurluk uyarıları ve bu tasarımın okunur kaldığı en küçük ölçü.
+export const ozelOlcuBilgisi = z.object({
+  tasarim: z.object({ genislik: mm, yukseklik: mm }),
+  olcek: z.number().positive(),
+  uyarilar: z.array(z.string()),
+  enKucuk: z.object({ genislik: mm, yukseklik: mm }),
+});
+export type OzelOlcuBilgisi = z.infer<typeof ozelOlcuBilgisi>;
+
 export const ciktiCevabi = z.object({
   sablon: z.object({ anahtar: z.string(), ad: z.string(), genislik: mm, yukseklik: mm }),
   dil: z.enum(YAZICI_DILLERI),
@@ -135,6 +167,7 @@ export const ciktiCevabi = z.object({
   dosyaAdi: z.string(),
   komut: z.string(),
   onizleme: z.array(onizlemeOgesiSemasi),
+  ozelOlcu: ozelOlcuBilgisi.nullable(),
 });
 export type CiktiCevabi = z.infer<typeof ciktiCevabi>;
 
@@ -190,6 +223,8 @@ export const basGovdesi = z.object({
   adet: z.number().int().min(1, 'Adet en az 1 olur.').max(EN_COK_ADET, `Adet en çok ${EN_COK_ADET} olur.`),
   // Verilmezse örnek değerli deneme etiketi basılır.
   kayit: kayitSecimiSemasi.optional(),
+  // Verilmezse şablonun kendi ölçüsü.
+  olcu: olcuSemasi.optional(),
 });
 export type BasGovdesi = z.output<typeof basGovdesi>;
 export const basCevabi = z.object({ baskiId: z.number().int(), sonuc: z.enum(['gonderildi', 'hata']), ileti: z.string().nullable() });
@@ -207,6 +242,7 @@ export const yazdirGovdesi = basGovdesi.omit({ yaziciId: true });
 export type YazdirGovdesi = z.output<typeof yazdirGovdesi>;
 export const yazdirCevabi = z.object({
   baskiId: z.number().int(),
+  // Özel ölçüde genişlik ve yükseklik basılan ölçüdür (sayfa ölçüsü).
   sablon: z.object({ anahtar: z.string(), ad: z.string(), genislik: mm, yukseklik: mm }),
   adet: z.number().int(),
   // Basılacak her etiketin öğeleri (sevk kolisinde her koli ayrı); her biri `adet` sayfa basılır.

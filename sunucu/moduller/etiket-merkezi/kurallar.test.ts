@@ -4,7 +4,7 @@ import { agAraliklariniCoz } from '#paylasilan/ag-araligi.ts';
 import { kodTuru } from '#paylasilan/kod-sozlugu.ts';
 import { QR_KENAR_MODUL, SATIR_ARALIGI, type Sablon } from '#paylasilan/sozlesme/etiket-merkezi.ts';
 import { yaziciAgiOku } from './ag.ts';
-import { QR_ALTI_EN_KUCUK_YAZI, kopyaDegerleri, qrAltiYeri } from './kurallar.ts';
+import { QR_ALTI_EN_KUCUK_YAZI, QR_KARE_EN_AZ_MM, YAZI_EN_AZ_MM, enKucukOlcu, kopyaDegerleri, okunurluk, olcekle, qrAltiYeri, qrKaresi } from './kurallar.ts';
 import { BEKLEYEN_GUN, HATALI_KARAR_SIMGESI, KALITE_KARAR_SIMGESI, REFAKAT_ADIM_SAYISI, REFAKAT_CIKIS_SATIRI, bekleyenBaslangici, bekleyenSirasi, kaliteBekleyenleri, kaliteDurumDegerleri, hataliBekleyenleri, malKabulBekleyenleri, refakatBekleyenleri } from './kurallar.ts';
 import { alanDegeri, baskiEngeli, dogrudanBaskiDurumu, indirmeEngeli, istasyonDegerleri, kayitUyumHatasi, konumDegerleri, lotDegerleri, kayitSablonTuru, malzemeDegerleri, noktaya, rafDegerleri, refakatDegerleri, refakatPartisiDegerleri, toplamEtiketHatasi, yaziciAdresHatasi, qrDikdortgenleri, qrMatrisi, sablonHatalari, sadelestir, SATIR_BASI, satirlaraBol, sigdirilmisYazi, yerlesim } from './kurallar.ts';
 import { ALANLAR, HAZIR_SABLONLAR, ORNEK_DEGERLER } from './sablonlar.ts';
@@ -19,6 +19,49 @@ describe('etiket-merkezi kuralları', () => {
     assert.deepEqual(sablonHatalari(sablon([metin('ad', 20, 1, 31)])), ['1. öğe etiketin dışına taşıyor.']);
     assert.deepEqual(sablonHatalari(sablon([{ tur: 'qr', x: 10, y: 5, boyut: 21, alan: 'qr' }])), ['1. öğe etiketin dışına taşıyor.']);
     assert.deepEqual(sablonHatalari(sablon([metin('ad', 1, 1, 40, 2, 3)])), ['1. öğenin yazısı kutusundan büyük.']);
+  });
+
+  test('EM-37: özel ölçüde tasarım orantılı ölçeklenir ve ortalanır; QR kare kalır, öğeler etiketin içinde kalır, dolu kutu dolu kalır', () => {
+    const t = sablon([{ tur: 'qr', x: 0, y: 0, boyut: 25, alan: 'qr' }, metin('ad', 25, 0, 25, 5, 4), { tur: 'kutu', x: 25, y: 10, genislik: 25, yukseklik: 5, kalinlik: 5 }], 50, 25);
+    const { sablon: o, olcek } = olcekle(t, { genislik: 60, yukseklik: 40 });
+    assert.equal(olcek, 1.2);
+    assert.equal(o.genislik, 60);
+    assert.equal(o.yukseklik, 40);
+    const [q, m, k] = o.ogeler;
+    // 50x25 tasarım 1,2 ile 60x30 olur; dikeyde 5 mm boşluk iki yana: y = 5.
+    assert.ok(q?.tur === 'qr' && q.x === 0 && q.y === 5 && q.boyut === 30);
+    assert.ok(m?.tur === 'metin' && m.x === 30 && m.yaziMm === 4.8 && m.genislik === 30);
+    assert.ok(k?.tur === 'kutu' && k.kalinlik === k.yukseklik);
+    for (const h of HAZIR_SABLONLAR) {
+      for (const olcu of [{ genislik: 40, yukseklik: 30 }, { genislik: 100, yukseklik: 100 }, { genislik: 110, yukseklik: 300 }]) {
+        assert.deepEqual(sablonHatalari(olcekle(h, olcu).sablon), [], `${h.anahtar} ${olcu.genislik}x${olcu.yukseklik}`);
+      }
+    }
+    // Yazıcı dili ölçekle incelen çizgiyi en az bir noktayla basar.
+    const ince = olcekle(sablon([{ tur: 'kutu', x: 0, y: 10, genislik: 50, yukseklik: 0.3, kalinlik: 0.3 }]), { genislik: 20, yukseklik: 10 }).sablon;
+    assert.match(zpl({ genislik: 20, yukseklik: 10, ogeler: yerlesim(ince, {}, false), dpi: 203, adet: 1 }), /\^GB160,1,1\^FS/);
+  });
+
+  test('EM-38: QR karesi ya da yazı sınırın altına düşerse basılmaz ve en küçük ölçü söylenir; sınıra yakınsa uyarı verilir', () => {
+    const lot = HAZIR_SABLONLAR.find((h) => h.anahtar === 'lot-100x50')!;
+    const enKucuk = enKucukOlcu(lot, yerlesim(lot, ORNEK_DEGERLER.lot, false));
+    // En küçük ölçüde engel yoktur, biraz altında vardır.
+    const sinirda = olcekle(lot, enKucuk).sablon;
+    assert.equal(okunurluk(sinirda, yerlesim(sinirda, ORNEK_DEGERLER.lot, false), enKucuk).engel, null);
+    const kucuk = olcekle(lot, { genislik: 40, yukseklik: 20 }).sablon;
+    const sonuc = okunurluk(kucuk, yerlesim(kucuk, ORNEK_DEGERLER.lot, false), enKucuk);
+    assert.match(sonuc.engel ?? '', new RegExp(`en küçük ölçü ${enKucuk.genislik}x${enKucuk.yukseklik} mm`));
+    // 1:1 hazır şablonda engel ve uyarı yoktur.
+    assert.deepEqual(okunurluk(lot, yerlesim(lot, ORNEK_DEGERLER.lot, false), enKucuk), { engel: null, uyarilar: [] });
+    // 60x40: yazı 1 ile 1,5 mm arasında: uyarı, engel yok.
+    const orta = olcekle(lot, { genislik: 60, yukseklik: 40 }).sablon;
+    const u = okunurluk(orta, yerlesim(orta, ORNEK_DEGERLER.lot, false), enKucuk);
+    assert.equal(u.engel, null);
+    assert.ok(u.uyarilar.some((x) => x.startsWith('En küçük yazı')));
+    // QR karesi: boyut / (modül + iki kenar).
+    const q = yerlesim(sablon([{ tur: 'qr', x: 0, y: 0, boyut: 10, alan: '=A' }]), {}, false)[0];
+    assert.ok(q?.tur === 'qr' && Math.abs(qrKaresi(q) - 10 / (q.kareler.length + 2 * QR_KENAR_MODUL)) < 1e-9);
+    assert.ok(QR_KARE_EN_AZ_MM > 0 && YAZI_EN_AZ_MM > 0);
   });
 
   test('EM-34 (2885-1 a): QR\'ın metni QR\'ın altına basılır ve elle girişte aynı kod çözülür; yer varsa QR küçülmez, yoksa kendi kutusunda küçülür', () => {

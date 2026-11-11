@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { PiktogramAdi } from '#paylasilan/etiket-piktogramlari.ts';
 import { TUM_SAYFALAR } from '#paylasilan/sayfalar.ts';
 import type {
-  BasCevabi, CiktiCevabi, IndirCevabi, KayitCiktiCevabi, KayitSecimi, KayitTuru, Sablon, SablonlarCevabi, YaziciDili, YazicilarCevabi,
+  BasCevabi, CiktiCevabi, IndirCevabi, KayitCiktiCevabi, KayitSecimi, KayitTuru, OzelOlcu, Sablon, SablonlarCevabi, YaziciDili, YazicilarCevabi,
 } from '#paylasilan/sozlesme/etiket-merkezi.ts';
 import { REFAKAT_KOPYA_SAYISI } from '#paylasilan/etiket-sabitleri.ts';
 import { Dugme, DurumKutusu, Girdi, IsaretKutusu, Kart, Rozet, Secim, useBildirim } from '../../ortak/arayuz/index.ts';
@@ -18,6 +18,8 @@ import { gercekBoyutOku, gercekBoyutYaz, olcekOku, olcekYaz } from './gercek-boy
 import { Kalibrasyon } from './Kalibrasyon.tsx';
 import { KayitSecici } from './KayitSecici.tsx';
 import { Onizleme, Simge } from './Onizleme.tsx';
+import { OzelOlcuAyari } from './OzelOlcu.tsx';
+import { olcuCoz, olcuYazisi, ozelOlcuOku, ozelOlcuYaz } from './ozel-olcu.ts';
 import { VektorelYazdir } from './Yazdir.tsx';
 import { eslesmeKaldirilabilir, eslesmeyiKaldir, eslesmisYazici, usbDestekli, usbHatasi, usbyeGonder, yaziciDegistir, yaziciEsle, type UsbAygit } from './web-usb.ts';
 import './etiket-merkezi.css';
@@ -46,10 +48,11 @@ function komutuIndir(c: Pick<CiktiCevabi, 'komut' | 'dosyaAdi'>) {
 }
 
 type Secenekler = SablonlarCevabi['secenekler'];
+type BaskiGovdesi = { yaziciId: number; adet: number; kayit?: KayitSecimi; olcu?: OzelOlcu };
 
 // Ağ yazıcısına sunucu doğrudan gönderir (ayar açıksa); dosya yazıcısına komut dosyası iner. İkisi de baskı defterine yazılır ve
 // yazıcının kendi dili ve çözünürlüğüyle üretilir.
-function YaziciyaGonder({ sablon, adet, kayit }: { sablon: Sablon; adet: number | null; kayit: KayitSecimi | null }) {
+function YaziciyaGonder({ sablon, adet, kayit, olcu }: { sablon: Sablon; adet: number | null; kayit: KayitSecimi | null; olcu: OzelOlcu | null }) {
   const istemci = useQueryClient();
   const { bildir } = useBildirim();
   const liste = useQuery({ queryKey: anahtarlar.yazicilar, queryFn: () => api.get<YazicilarCevabi>('/etiket-merkezi/yazicilar') });
@@ -65,7 +68,7 @@ function YaziciyaGonder({ sablon, adet, kayit }: { sablon: Sablon; adet: number 
   };
   const hataGoster = (h: unknown) => setSonuc({ ton: 'hata', metin: hataIletisi(h, 'Baskı gönderilemedi; yeniden deneyin.') });
   const gonder = useMutation({
-    mutationFn: (g: { yaziciId: number; adet: number; kayit?: KayitSecimi }) =>
+    mutationFn: (g: BaskiGovdesi) =>
       api.post<BasCevabi>(`/etiket-merkezi/sablonlar/${sablon.anahtar}/bas`, g, { istekKimligi: kimlik, zamanAsimiMs: 15000 }),
     onSuccess: (c) => {
       bitti();
@@ -77,7 +80,7 @@ function YaziciyaGonder({ sablon, adet, kayit }: { sablon: Sablon; adet: number 
     onError: hataGoster,
   });
   const indir = useMutation({
-    mutationFn: (g: { yaziciId: number; adet: number; kayit?: KayitSecimi }) =>
+    mutationFn: (g: BaskiGovdesi) =>
       api.post<IndirCevabi>(`/etiket-merkezi/sablonlar/${sablon.anahtar}/indir`, g, { istekKimligi: kimlik }),
     onSuccess: (c) => {
       bitti();
@@ -111,7 +114,7 @@ function YaziciyaGonder({ sablon, adet, kayit }: { sablon: Sablon; adet: number 
     onError: (h) => setSonuc({ ton: 'hata', metin: `Eşleşme kaldırılamadı: ${usbHatasi(h).message}` }),
   });
   const usbBas = useMutation({
-    mutationFn: async (g: { yaziciId: number; adet: number; kayit?: KayitSecimi }) => {
+    mutationFn: async (g: BaskiGovdesi) => {
       const c = await api.post<IndirCevabi>(`/etiket-merkezi/sablonlar/${sablon.anahtar}/indir`, g, { istekKimligi: kimlik });
       bitti();
       if (!usb) return { c, hata: 'USB yazıcı eşleşmesi kalktı.' };
@@ -143,7 +146,7 @@ function YaziciyaGonder({ sablon, adet, kayit }: { sablon: Sablon; adet: number 
     return kapaliNotu || <p className="tc-etk-not">Kullanımda yazıcı yok; Yazıcılar sayfasından eklenir.</p>;
   }
   const secili = yazicilar.find((y) => String(y.id) === yaziciId);
-  const govde = secili && adet !== null ? { yaziciId: secili.id, adet, ...(kayit ? { kayit } : {}) } : null;
+  const govde = secili && adet !== null ? { yaziciId: secili.id, adet, ...(kayit ? { kayit } : {}), ...(olcu ? { olcu } : {}) } : null;
   return (
     <div className="tc-etk-gonder">
       {kapaliNotu}
@@ -184,18 +187,20 @@ function YaziciyaGonder({ sablon, adet, kayit }: { sablon: Sablon; adet: number 
         </div>
       )}
       {sonuc && <p className={sonuc.ton === 'hata' ? 'tc-etk-hata' : 'tc-etk-not'} role={sonuc.ton === 'hata' ? 'alert' : 'status'}>{sonuc.metin}</p>}
-      {kayit && secili?.baglanti === 'ag' && <CihazVarsayilani sablon={sablon} yazici={secili} />}
+      {kayit && secili?.baglanti === 'ag' && <CihazVarsayilani sablon={sablon} yazici={secili} olcu={olcu} />}
     </div>
   );
 }
 
 // 2916 a: olay ekranındaki etiket düğmesi bu türü Etiket Merkezi'ne gitmeden buradaki yazıcıya ve ölçüye basar. Yalnız ağ yazıcısı:
 // dosya yazıcısının dosyasını kişi kendi aracıyla gönderir. Seçim bu cihazda kalır (yazıcı cihazın yanındadır).
-function CihazVarsayilani({ sablon, yazici }: { sablon: Sablon; yazici: { id: number; ad: string } }) {
+function CihazVarsayilani({ sablon, yazici, olcu }: { sablon: Sablon; yazici: { id: number; ad: string }; olcu: OzelOlcu | null }) {
   const [varsayilan, setVarsayilan] = useState(() => cihazYazicilari()[sablon.tur] ?? null);
-  const bu = varsayilan?.yaziciId === yazici.id && varsayilan.sablonAnahtar === sablon.anahtar;
+  const ayniOlcu = (varsayilan?.olcu ?? null)?.genislik === olcu?.genislik && (varsayilan?.olcu ?? null)?.yukseklik === olcu?.yukseklik;
+  const bu = varsayilan?.yaziciId === yazici.id && varsayilan.sablonAnahtar === sablon.anahtar && ayniOlcu;
+  const olcuAdi = olcu ? `${sablon.ad} tasarımıyla ${olcuYazisi(olcu)}` : sablon.ad;
   const degistir = (acik: boolean) => {
-    const yeni = acik ? { yaziciId: yazici.id, yaziciAd: yazici.ad, sablonAnahtar: sablon.anahtar, sablonAd: sablon.ad } : null;
+    const yeni = acik ? { yaziciId: yazici.id, yaziciAd: yazici.ad, sablonAnahtar: sablon.anahtar, sablonAd: sablon.ad, ...(olcu ? { olcu } : {}) } : null;
     cihazYazicisiKaydet(sablon.tur, yeni);
     setVarsayilan(yeni);
   };
@@ -203,8 +208,8 @@ function CihazVarsayilani({ sablon, yazici }: { sablon: Sablon; yazici: { id: nu
     <div className="tc-etk-form">
       <IsaretKutusu etiket="Bu cihazda varsayılan yap" checked={bu} onChange={(e) => degistir(e.target.checked)} />
       <p className="tc-etk-not">
-        {bu ? `Bu cihazdaki etiket düğmeleri bu türü doğrudan ${yazici.ad} yazıcısına, ${sablon.ad} ölçüsünde basar.`
-          : varsayilan ? `Bu cihazda şu an varsayılan: ${varsayilan.yaziciAd} · ${varsayilan.sablonAd}.`
+        {bu ? `Bu cihazdaki etiket düğmeleri bu türü doğrudan ${yazici.ad} yazıcısına, ${olcuAdi} ölçüsünde basar.`
+          : varsayilan ? `Bu cihazda şu an varsayılan: ${varsayilan.yaziciAd} · ${varsayilan.sablonAd}${varsayilan.olcu ? ` · ${olcuYazisi(varsayilan.olcu)}` : ''}.`
           : 'Varsayılan yoksa etiket düğmeleri Etiket Merkezi\'ni açar.'}
       </p>
     </div>
@@ -223,6 +228,21 @@ function Cikti({ sablon, secenekler, basabilir, kayit, kayitCikar }: {
   const [gercek, setGercek] = useState(gercekBoyutOku);
   const [olcek, setOlcek] = useState(olcekOku);
   const [ayar, setAyar] = useState(false);
+  // Standart dışı rulo: ölçü bu cihazda şablon başına hatırlanır; açılınca şablonun kendi ölçüsüyle başlar.
+  const [ozel, setOzel] = useState(() => {
+    const k = ozelOlcuOku(sablon.anahtar);
+    return { acik: k !== null, en: String(k?.genislik ?? sablon.genislik), boy: String(k?.yukseklik ?? sablon.yukseklik) };
+  });
+  const olcuCozumu = olcuCoz(ozel.en, ozel.boy);
+  const olcu = ozel.acik && olcuCozumu.olcu && (olcuCozumu.olcu.genislik !== sablon.genislik || olcuCozumu.olcu.yukseklik !== sablon.yukseklik) ? olcuCozumu.olcu : null;
+  const olcuGecerli = !ozel.acik || olcuCozumu.olcu !== null;
+  const olcuDegistir = (d: { acik?: boolean; en?: string; boy?: string }) => {
+    const yeni = d.acik === false ? { acik: false, en: String(sablon.genislik), boy: String(sablon.yukseklik) } : { ...ozel, ...d };
+    setOzel(yeni);
+    const cozulen = olcuCoz(yeni.en, yeni.boy).olcu;
+    if (!yeni.acik) ozelOlcuYaz(sablon.anahtar, null);
+    else if (cozulen) ozelOlcuYaz(sablon.anahtar, cozulen);
+  };
   // 1287 a: giden ambalaj kaydı yok; sevk kolisinde koli sayısı ve koli içi adet burada girilir, her koli ayrı etikettir (n/N).
   const koliMi = kayit?.tur === 'sevk-koli';
   const [koliSayisi, setKoliSayisi] = useState('1');
@@ -243,6 +263,7 @@ function Cikti({ sablon, secenekler, basabilir, kayit, kayitCikar }: {
   const parametre = new URLSearchParams({ dil, dpi, adet: String(adetGecerli ? adetSayi : 1), sade: String(sade) });
   if (kayit) { parametre.set('tur', kayit.tur); parametre.set('id', kayit.idler.join(',')); }
   if (secim?.koli) { parametre.set('koliSayisi', String(secim.koli.sayi)); if (secim.koli.ici !== null) parametre.set('koliIci', String(secim.koli.ici)); }
+  if (olcu) { parametre.set('en', String(olcu.genislik)); parametre.set('boy', String(olcu.yukseklik)); }
   const sorgu = parametre.toString();
   const c = useQuery({
     queryKey: anahtarlar.cikti(sablon.anahtar, sorgu),
@@ -251,6 +272,8 @@ function Cikti({ sablon, secenekler, basabilir, kayit, kayitCikar }: {
   // EM-2: 4xx yeniden denemeyle değişmez (ör. mal kabulün lot sayısı x adet sınırı aşar); sunucu iletisi gösterilir, basma kapanır.
   const kaliciHata = c.isError && c.error instanceof ApiHatasi && c.error.durum >= 400 && c.error.durum < 500;
   const kayitlar = c.data && 'kayitlar' in c.data ? c.data : null;
+  // Okunmayan ölçü (sunucu 4xx) ve geçersiz ölçü girişi basmayı kapatır.
+  const basilacakAdet = adetGecerli && koliGecerli && olcuGecerli && !kaliciHata ? adetSayi : null;
   // Sevk kolisinde bir kalemin her kolisi ayrı etikettir; çip kalem başına birdir.
   const cipler = kayitlar ? [...new Map(kayitlar.kayitlar.map((k) => [k.id, k])).values()] : [];
   return (
@@ -266,6 +289,8 @@ function Cikti({ sablon, secenekler, basabilir, kayit, kayitCikar }: {
         )}
         <Girdi etiket={kayit?.tur === 'refakat-partisi' ? 'Kopya sayısı' : kayit ? 'Kayıt başına adet' : 'Adet'} inputMode="numeric" value={adet} onChange={(e) => setAdet(e.target.value)} hata={adetHatasi} />
       </div>
+      <OzelOlcuAyari sablon={sablon} acik={ozel.acik} en={ozel.en} boy={ozel.boy} enHatasi={ozel.acik ? olcuCozumu.enHatasi : undefined}
+        boyHatasi={ozel.acik ? olcuCozumu.boyHatasi : undefined} bilgi={olcu && c.data ? c.data.ozelOlcu : null} degistir={olcuDegistir} />
       {c.isPending && <DurumKutusu durum="yukleniyor" />}
       {c.isError && <DurumKutusu durum="hata" mesaj={hataIletisi(c.error, 'Önizleme alınamadı.')} yenile={kaliciHata ? undefined : () => { void c.refetch(); }} />}
       {kayitlar && (
@@ -300,13 +325,13 @@ function Cikti({ sablon, secenekler, basabilir, kayit, kayitCikar }: {
             <Onizleme cikti={c.data} gercek={gercek ? { olcek } : undefined} />
           </div>
           <p className="tc-etk-not">
-            {c.data.sablon.genislik}x{c.data.sablon.yukseklik} mm · {kayitlar ? `${kayitlar.kayitlar.length} etiket, önizleme ilk kayıt` : 'örnek değerlerle'}.
+            {olcuYazisi(c.data.sablon)}{c.data.ozelOlcu ? ` (${olcuYazisi(c.data.ozelOlcu.tasarim)} tasarımdan)` : ''} · {kayitlar ? `${kayitlar.kayitlar.length} etiket, önizleme ilk kayıt` : 'örnek değerlerle'}.
           </p>
         </>
       )}
       {/* Çıktı bloğunun dışında: adet değişip önizleme yeniden yüklenince seçilen yazıcı sıfırlanmaz. Vektörel yazdırma yazıcı tanımı istemez (kart 2904). */}
-      {basabilir && <VektorelYazdir sablon={sablon} adet={adetGecerli && koliGecerli && !kaliciHata ? adetSayi : null} kayit={secim} />}
-      {basabilir && <YaziciyaGonder sablon={sablon} adet={adetGecerli && koliGecerli && !kaliciHata ? adetSayi : null} kayit={secim} />}
+      {basabilir && <VektorelYazdir sablon={sablon} adet={basilacakAdet} kayit={secim} olcu={olcu} />}
+      {basabilir && <YaziciyaGonder sablon={sablon} adet={basilacakAdet} kayit={secim} olcu={olcu} />}
       {/* 2223-3 a: yazıcı seçilince dil ve çözünürlük yazıcıdan gelir; elle seçim yalnız önizleme komutu ve deftere yazılmayan indirme içindir. */}
       <details className="tc-etk-gelismis">
         <summary>Gelişmiş</summary>
@@ -321,7 +346,7 @@ function Cikti({ sablon, secenekler, basabilir, kayit, kayitCikar }: {
           <>
             <p className="tc-etk-not">Yazıcıya gönderilen etiket yazıcının kendi dili ve çözünürlüğüyle üretilir; buradaki seçim yalnız aşağıdaki dosya ve komut içindir.</p>
             <div className="tc-etk-dugmeler">
-              <Dugme simge="download" disabled={!adetGecerli || !koliGecerli} onClick={() => komutuIndir(c.data)}>Önizleme için indir ({c.data.dosyaAdi}, deftere yazılmaz)</Dugme>
+              <Dugme simge="download" disabled={!adetGecerli || !koliGecerli || !olcuGecerli} onClick={() => komutuIndir(c.data)}>Önizleme için indir ({c.data.dosyaAdi}, deftere yazılmaz)</Dugme>
             </div>
             <details className="tc-etk-komut">
               <summary>Komutu göster</summary>
