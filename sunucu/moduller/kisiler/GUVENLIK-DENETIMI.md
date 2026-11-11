@@ -2,7 +2,7 @@
 
 Zaman sunucudan (`kisi.olusturuldu` varsayılanı, `oturumlar_gecersiz_once` sunucu saatiyle). Eylemi yapan kişi oturumdan (`kullanici.id`).
 Her yazma `uc()` üstünden geçer; denetim kaydını uç katmanı tutar, parola alanları maskelenir (denetim modülü).
-Veri kapsamı yok (iş merkezine bağlı değil). `:id` alan yedi komut gövdede `surum` ister; eski sürüm 409 `eski-surum`, kişi yoksa 404,
+Veri kapsamı yok (iş merkezine bağlı değil). `:id` alan sekiz komut gövdede `surum` ister; eski sürüm 409 `eski-surum`, kişi yoksa 404,
 her başarılı komut sürümü artırır (KS-1). `POST /kisiler` istek kimliği ister (KS-2).
 "Bayraklı" = `rol.yonetici` bayrağı olan role sahip kişi.
 
@@ -22,10 +22,11 @@ her başarılı komut sürümü artırır (KS-1). `POST /kisiler` istek kimliği
 | POST /kisiler/:id/aktif-yap | `kisiler.yaz` | pasif bayraklıyı yalnız bayraklı başkası aktif yapar; eski çerez geri çalışmaz | `pasife alma ve yeniden aktif yapma: ...` | `pasif bayraklı kişiyi yalnız bayraklı başka kişi yeniden aktif yapar`, `pasife alma sürerken açılan giriş: yeniden aktif yapılınca o çerez geri çalışmaz` |
 | POST /kisiler/:id/hesap-ac | `kisiler.rol-yonet` | var olan hesap, kullanılan ad, kısa parola, biçimsiz ad reddedilir; bayraklı rolle ya da bayraklı hedefte yalnız bayraklı aktör | `hesap açma kisiler.rol-yonet ister; ...` | `hesap açma reddi hiçbir şey yazmaz: ...`, `bayraklı rolle hesap açmayı yalnız bayraklı kişi yapar`, `bayraklı rolü zaten olan girişsiz kişiye ...` |
 | POST /kisiler/:id/parola-degistir | `kisiler.parola-degistir` | kendi parolası bu yoldan değişmez; bayraklının parolasını yalnız bayraklı başkası; girişsizde olmaz; hedefin açık oturumları düşer | `başkasının parolası kisiler.parola-degistir ister; ...`, `başkası parolayı değiştirince hedefin açık oturumları geçersiz olur` | `bayraklı kişinin parolasını yalnız bayraklı başka kişi değiştirir; ...`, `başkasının parolası değişirken açılan giriş: ...` |
+| POST /kisiler/:id/oturumlari-kapat | `kisiler.oturum-kapat` (yalnız bayraklı rolde; ek işlem olarak verilmez) | kişi kendi oturumlarını bu yoldan kapatmaz (Profil yolu); bayraklının oturumlarını yalnız bayraklı aktör; girişsizde olmaz; kişi pasife alınmaz, giriş bilgisi değişmez; hedefin bütün oturumları düşer (`oturumlar_gecersiz_once`, sunucu saati); her komut denetime düşer | `izinli: yönetici kişinin bütün oturumlarını kapatır; ...`, `izinli: yönetici başka bir yöneticinin oturumlarını da kapatır` | `yasak: işlemsiz kişi (kisiler.yaz taşıyan İK dahil) 403, ...`, `yasak: kişi kendi oturumlarını ...`, `yasak: girişsiz kişi 422, ...`, `yasak: işlemi taşıyan ama bayraksız kişi ...`, `yasak: işlem kişiye ek işlem olarak verilemez ...` |
 | POST /kisiler/:id/rol-ata | `kisiler.rol-yonet` | aynı rol ikinci kez atanamaz; bayraklı rolü yalnız bayraklı aktör atar; başarılı atama denetime düşer | `M1: rol atama ve alma yalnız kisiler.rol-yonet ile; ...`, `M2: ...`, `RA1: pasif kişiye rol atanabilir` | `M1` (yetkisiz 403, durum değişmez), `P3: bayraksız ama kisiler.rol-yonet verilmiş kişi bayraklı rolü atayamaz ...`, `bulunamayan kişi ya da rol 404; ...` |
 | POST /kisiler/:id/rol-al | `kisiler.rol-yonet` | girişi olan kişinin son rolü alınamaz (422); kişi kendi bayraklı rolünü alamaz; son bayraklı kalır; eşzamanlı almada biri reddedilir | `P2: girişi olmayan kişiye rol atanır ve son rolü de alınabilir`, `M5: rol değişikliği açık oturumda sonraki istekte geçerli olur; ...` | `M3: girişi olan kişinin son rolü alınamaz ...`, `P1: kişi kendi bayraklı rolünü alamaz ...`, `M4: son bayraklı kişinin rolü alınamaz; ...`, `eşzamanlı iki alma: ...` |
 
-Sürüm satırları (yedi komut): izinli `KS-1: kişi komutları beklenen sürümü taşır; ...` (güncel sürüm 200, sürüm +1) ve `KS-1: rol komutu ...`;
+Sürüm satırları (sekiz komut; `oturumlari-kapat` kendi dosyasında): izinli `KS-1: kişi komutları beklenen sürümü taşır; ...` (güncel sürüm 200, sürüm +1) ve `KS-1: rol komutu ...`;
 reddeden aynı testler (eski sürüm 409, kayıt değişmez; sürümsüz 400; kişi yoksa 404) ve `KS-1: aynı sürümle gelen iki eşzamanlı düzenlemeden biri ...`.
 Oturumdan kendi parolasını değiştirme sürümü artırır: `KS-1: kişinin kendi parolasını değiştirmesi sürümü artırır; ...`.
 

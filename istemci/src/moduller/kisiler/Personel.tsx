@@ -146,9 +146,11 @@ export function Personel() {
   const yazabilir = islemler.includes('kisiler.yaz');
   const yonetebilir = islemler.includes('kisiler.rol-yonet');
   const parolaDegistirebilir = islemler.includes('kisiler.parola-degistir');
+  const oturumKapatabilir = islemler.includes('kisiler.oturum-kapat');
   const kisiler = useQuery({ queryKey: anahtarlar.kisiler, queryFn: () => api.get<PersonelCevabi>('/kisiler') });
   const [acik, acikYaz] = useState<Pencere | null>(null);
   const [pasifeAlinacak, pasifeAlinacakYaz] = useState<KisiOzeti | null>(null);
+  const [oturumuKapanacak, oturumuKapanacakYaz] = useState<KisiOzeti | null>(null);
   const [ara, araYaz] = useState('');
   const [durum, durumYaz] = useState<DurumSuzgeci>('tumu');
 
@@ -179,6 +181,19 @@ export function Personel() {
     onError: (hata) => {
       eskiyseYenile(istemci, hata);
       bildir('hata', hataIletisi(hata, 'Durum değiştirilemedi.'));
+    },
+  });
+
+  // 2288-1 a: kişi pasife alınmadan bütün oturumları düşer (kayıp telefon); girişi kalır, yeniden girebilir.
+  const oturumlariKapat = useMutation({
+    mutationFn: (kisi: KisiOzeti) => api.post<unknown>(`/kisiler/${kisi.id}/oturumlari-kapat`, { surum: kisi.surum } satisfies SurumGovdesi),
+    onSuccess: (_cevap, kisi) => {
+      void istemci.invalidateQueries({ queryKey: anahtarlar.kisiler });
+      bildir('tamam', `${kisi.ad} için bütün oturumlar kapatıldı.`);
+    },
+    onError: (hata) => {
+      eskiyseYenile(istemci, hata);
+      bildir('hata', hataIletisi(hata, 'Oturumlar kapatılamadı.'));
     },
   });
 
@@ -266,6 +281,15 @@ export function Personel() {
               onClick={() => durumDegistir.mutate({ kisi: k, islem: 'aktif-yap' })}
             />
           )}
+          {oturumKapatabilir && k.girisVar && k.aktif && !kendisi && !k.korumali && (
+            <Dugme
+              simge="logout"
+              aria-label={`${k.ad} bütün oturumlarını kapat`}
+              title="Bütün oturumları kapat"
+              disabled={oturumlariKapat.isPending}
+              onClick={() => oturumuKapanacakYaz(k)}
+            />
+          )}
           {yonetebilir && !k.girisVar && (
             <Dugme simge="plus" aria-label={`${k.ad} hesap aç`} title="Hesap aç" onClick={() => acikYaz({ tur: 'hesap', kisiId: k.id })} />
           )}
@@ -350,6 +374,20 @@ export function Personel() {
               ? `${pasifeAlinacak.ad} pasife alınırsa girişi kapanır.`
               : `${pasifeAlinacak?.ad ?? ''} pasife alınacak.`}
         </p>
+      </OnayPenceresi>
+      <OnayPenceresi
+        acik={oturumuKapanacak !== null}
+        baslik="Bütün oturumlar kapatılsın mı?"
+        onayMetni="Oturumları kapat"
+        tehlikeli
+        yukleniyor={oturumlariKapat.isPending}
+        vazgec={() => oturumuKapanacakYaz(null)}
+        onayla={() => {
+          if (oturumuKapanacak === null) return;
+          oturumlariKapat.mutate(oturumuKapanacak, { onSettled: () => oturumuKapanacakYaz(null) });
+        }}
+      >
+        <p>{`${oturumuKapanacak?.ad ?? ''} bütün cihazlardan çıkarılır. Hesabı açık kalır; yeniden girebilir.`}</p>
       </OnayPenceresi>
     </Kart>
   );

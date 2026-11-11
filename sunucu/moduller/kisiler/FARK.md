@@ -130,3 +130,11 @@ konusu kisiler adlı göçlerle yazar), K3 a ve ek karar (sürüm, `POST /kisile
 - `GET /kisiler/secim-ara?q&pasifler&sayfa` -> `{ sonuclar: [{ id, kod (sicil no ya da boş), ad, aktif, ust: null }], dahaVar }`. Ortak `KisiSecici` (kart #1317) bunu çağırır.
 - Yetki karar 1321 b: kisiler.oku, istasyonlar.yaz (bugünkü kişi seçeneği), sayfa.mesaj, sayfa.arkon. VARSAYIM: çağıranlar bugün kişi seçen modüller (istemci kodunda arandı); A5'te modül eklenir.
 - VARSAYIM: sicil no `kod` olarak döner (aynı adlı kişiyi ayırmak için); özlük bayrağı, rol ve kullanıcı adı dönmez. Şema, göç ve rol değişmedi.
+
+## 2820: başkasının bütün oturumlarını kapatma (dal 2820-oturum-kapat; karar 2288-1 a)
+- Yeni işlem `kisiler.oturum-kapat` (`paylasilan/islemler/kisiler.ts`, ad `islem-adlari.ts`). Hiçbir role verilmez; bayraklı rol kayıtlı her işlemi aldığından yalnız yönetici taşır. Göç yok.
+- `POST /kisiler/:id/oturumlari-kapat` (gövde `surum`, cevap `tamam`): kişiyi pasife almadan bütün oturumlarını `oturumlariGecersizKil` ile düşürür; giriş bilgisi değişmez, kişi yeniden girebilir. İK'nın pasife alma yolu aynen kalır.
+- Kural `oturumKapatmaReddi`: kendine 422 (kendi oturumları Profil > Oturumlar'dan), bayraklıya yalnız bayraklı aktör; girişsiz kişiye 422.
+- `DEVREDILMEZ_ISLEMLER` ve `IK_VEREMEZ_ISLEMLER`'e eklendi: kişiye ek işlem olarak ve İK'nın verebileceği role girmez.
+- Ekran: Personel satırında "Bütün oturumları kapat" düğmesi (yalnız işlem sahibine, başkasının aktif ve girişli satırında), onay penceresiyle.
+- Kalan (ayrı yama, kart 2824 cevabına bağlı): `araclar/yetki-beklentisi.ts` `YALNIZ_YONETICIDE` ve `kurulum/yetki-matrisi.md` "Yalnız yöneticide" satırı.

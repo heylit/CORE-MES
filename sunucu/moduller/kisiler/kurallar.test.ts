@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import { ISLEMLER } from '#paylasilan/islemler.ts';
 import {
-  GOREV_EN_FAZLA, PAROLA_EN_AZ, SICIL_EN_FAZLA, islemleriBirlestir, kisiAlanlariniDuzelt, kullaniciAdiHatasi, parolaBaskasiReddi,
+  GOREV_EN_FAZLA, PAROLA_EN_AZ, SICIL_EN_FAZLA, islemleriBirlestir, kisiAlanlariniDuzelt, kullaniciAdiHatasi, oturumKapatmaReddi, parolaBaskasiReddi,
   ILETILER, PIN_UZUNLUK, SINIRLI_EN_UZUN_GUN, bayrakliKisiReddi, gunEkle, icHesapReddi, sinirliHesapReddi, sinirliRolReddi, girisYontemi, korumaliMi, hesapAcmaReddi, parolaHatasi, pasifeAlmaReddi, pinHatasi, pinVermeReddi,
 } from './kurallar.ts';
 
@@ -70,6 +70,13 @@ describe('başkasının parolası', () => {
     assert.equal(parolaBaskasiReddi({ ...temel, kendiKendine: true, aktorBayrakli: true })?.tur, 'gecersiz');
     assert.equal(parolaBaskasiReddi({ ...temel, hedefBayrakli: true })?.tur, 'yetki');
     assert.equal(parolaBaskasiReddi({ ...temel, hedefBayrakli: true, aktorBayrakli: true }), null);
+  });
+
+  test('KS-11: başkasının oturumları kapanır; kendine geçersiz, bayraklıya yalnız bayraklı aktör', () => {
+    assert.equal(oturumKapatmaReddi(temel), null);
+    assert.deepEqual(oturumKapatmaReddi({ ...temel, kendiKendine: true, aktorBayrakli: true }), { tur: 'gecersiz', ileti: ILETILER.kendiOturumYolu });
+    assert.equal(oturumKapatmaReddi({ ...temel, hedefBayrakli: true })?.tur, 'yetki');
+    assert.equal(oturumKapatmaReddi({ ...temel, hedefBayrakli: true, aktorBayrakli: true }), null);
   });
 });
 
