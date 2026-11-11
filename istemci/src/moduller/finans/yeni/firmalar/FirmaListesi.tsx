@@ -61,8 +61,8 @@ export function FirmaListesi({ finans, yetki, ac, yeni, s, sYaz }: Pick<EkranOze
   return (
     <div className="tc-fk">
       <div className="tc-fk-bas">
-        <p className="tc-fk-not">Müşteri, tedarikçi ve fason firmaların kartları. Satın alma, stok ve Logo firmayı buradan alır.</p>
-        {yetki.firmaYaz && <Dugme tur="birincil" simge="plus" onClick={yeni}>Yeni firma</Dugme>}
+        <p className="tc-fk-not">Müşteri, tedarikçi ve fason firmaların cari hesabı. Firma kartları Müşteriler ve Tedarikçiler&apos;de eklenir ve düzenlenir.</p>
+        {yetki.firmaYaz && <Dugme simge="plus" onClick={yeni}>Müşteriler ve Tedarikçiler&apos;de ekle</Dugme>}
       </div>
       <div className="tc-fk-arac">
         <div className="tc-fk-cipler" role="group" aria-label="Firma türü">

@@ -75,6 +75,19 @@ test.describe('P3 ic denetim, takvim, performans, kalibrasyon, ayarlar', () => {
   });
 });
 
+// Ölçü aletlerinin ana yeri Ölçü Aletleri sayfasıdır (3002 a); bölümün adı Kalibrasyon kalır.
+test.describe('3002 Kalibrasyon bölümü Ölçü Aletleri sayfasını gösterir', () => {
+  test('bölüm adı Kalibrasyon; satırdaki bağlantı Ölçü Aletleri sayfasına götürür', async ({ page, ag, ac }) => {
+    await ac('/denetim-hazirlik/yeni/kalibrasyon');
+    await expect(page.getByRole('tablist', { name: 'Bölümler' }).getByRole('tab', { name: 'Kalibrasyon', selected: true })).toBeVisible();
+    // Örnek veride cihaz vardır: satırdaki bağlantı Ölçü Aletleri'ni açar.
+    await page.getByRole('link', { name: "Ölçü Aletleri'nde aç" }).first().click();
+    await expect(page).toHaveURL(/\/kalibrasyon$/);
+    expect(ag.yazmalar).toEqual([]);
+    expect(ag.hatalar).toEqual([]);
+  });
+});
+
 test.describe('1418 eski adres ve yardım', () => {
   test('menünün kökü Bugün\'ü açar; eski görünüm parçası yeni adrese gider; yardım ? ile açılır', async ({ page, ag, ac }) => {
     await ac('/denetim-hazirlik');

@@ -192,7 +192,7 @@ export function Rehber() {
         </div>
         <p className="tc-dhy-ton-soluk">{BULGU_ORNEGI.son}</p>
         <div className="tc-dhp-dugmeler">
-          <Dugme simge="ruler" onClick={() => { void gezin(OLCU_ALETI_YOLU); }}>Kalibrasyon sayfası</Dugme>
+          <Dugme simge="ruler" onClick={() => { void gezin(OLCU_ALETI_YOLU); }}>Ölçü Aletleri'ne git</Dugme>
           <Dugme simge="file" onClick={() => { d.git('kys', { kys: 'uret', dokuman: 'f_dof' }); }}>Uygunsuzluk ve DÖF formu</Dugme>
         </div>
       </Kart>

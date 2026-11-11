@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Dugme, Kart, Rozet, Simge } from '../../../../ortak/arayuz/index.ts';
 import { useDenetim } from '../baglam.tsx';
 import { prototipSimgesi as ps } from '../gorunumler.ts';
@@ -13,6 +14,7 @@ import { cihazDurumu, cihazVadesi } from '../kurallar/kalibrasyon.ts';
 import { ozSonrakiVade } from '../kurallar/oz.ts';
 import { profilAdi } from '../kurallar/profil.ts';
 import { yeniDenetim } from '../normalize.ts';
+import { OLCU_ALETI_YOLU } from '../veri.ts';
 import { aylar, bugunTarihi, gunFarki, tarihMetni, tariheGore } from '../tarih.ts';
 import type { ProgramKodu } from '../tipler.ts';
 import { DenetimFormu, useProfilDegistir, type FormAcilisi, type KayitSonucu } from './DenetimFormu.tsx';
@@ -98,6 +100,7 @@ function DenetimSatiri({ o, formAc, oneri, siliniyor, silSor, sil }: SatirOzelli
 
 export function Takvim() {
   const d = useDenetim();
+  const gezin = useNavigate();
   const profilDegistir = useProfilDegistir();
   const [kapsam, kapsamYaz] = useState<Kapsam>('all');
   const [form, formYaz] = useState<(FormAcilisi & { anahtar: number }) | null>(null);
@@ -292,7 +295,7 @@ export function Takvim() {
       )}
 
       {kalib.length > 0 && (
-        <Kart baslik="Kalibrasyon: gecikmiş ve 30 gün içinde" simge="ruler" sag={<Dugme simge="chev-right" onClick={() => { d.git('kalib'); }}>Kalibrasyon sayfası</Dugme>}>
+        <Kart baslik="Kalibrasyon: gecikmiş ve 30 gün içinde" simge="ruler" sag={<Dugme simge="chev-right" onClick={() => { void gezin(OLCU_ALETI_YOLU); }}>Ölçü Aletleri'ne git</Dugme>}>
           <ul className="tc-dhd-tliste">
             {kalib.slice(0, 10).map((x) => {
               const st = cihazDurumu(x);

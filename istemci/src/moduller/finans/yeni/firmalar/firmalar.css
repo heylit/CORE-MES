@@ -15,4 +15,8 @@
 .tc-fk-cek > b { font-variant-numeric: tabular-nums; white-space: nowrap; }
 .tc-fk-iz { color: var(--muted); font-size: var(--yazi-s); }
 .tc-fk-baglanti { padding: 0; border: 0; background: none; color: var(--ink); font: inherit; cursor: pointer; text-decoration: underline; }
+/* Telefonda uzun bağlantı düğmesi satıra sığmazsa kırılır (yatay kaydırma olmasın). */
+@media (max-width: 767px) {
+  .tc-fk-dugmeler .tc-dugme, .tc-fk-bas .tc-dugme { white-space: normal; text-align: start; max-width: 100%; }
+}
 .tc-fk-bolum { margin: var(--b-5) 0 0; font-size: var(--yazi-l); }

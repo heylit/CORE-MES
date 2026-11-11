@@ -26,7 +26,7 @@ export function kalibrasyonYuku(cihazlar: readonly Cihaz[], simdi = new Date()):
   };
 }
 
-// Satıra tıklamak bugünkü gibi Kalibrasyon sayfasına götürür (kayıt orada düzenlenir); Geçmiş düğmesi bu pencereyi açar.
+// Satıra tıklamak Ölçü Aletleri sayfasına götürür (kayıt orada düzenlenir); Geçmiş düğmesi bu pencereyi açar.
 // Kalibrasyonda gelen geçmiş ve bu cihazla yapılan muayeneler. Belge eki bugünkü gibi burada yok (kaynak Kalibrasyon).
 function CihazGecmisi({ cihaz, muayeneler, kapat }: { cihaz: Cihaz; muayeneler: readonly Muayene[]; kapat: () => void }) {
   const gecmis = [...(cihaz.gecmis ?? [])].sort((a, b) => (b.tarih ?? '').localeCompare(a.tarih ?? ''));
@@ -91,11 +91,10 @@ export function Cihazlar({ veri, gecis, gecisTamam }: EkranOzellikleri) {
         baslik="Ölçüm cihazları"
         simge="ruler"
         alt="Ölçüm ve test cihazlarının kaydı, periyodu, izlenebilirliği ve geçmişi. Geçersiz cihaz muayenede seçilemez."
-        birincil={{ etiket: 'Kalibrasyon sayfası', simge: 'gauge', yap: kalibrasyonaGit }}
+        birincil={{ etiket: "Ölçü Aletleri'ne git", simge: 'ruler', yap: kalibrasyonaGit }}
       />
       <div className="tc-km-not">
-        <p>Ölçü aletleri <b>Kalibrasyon</b> modülünden gelir ve burada yalnız görüntülenir. Ekleme, düzenleme ve kalibrasyon kaydı için Kalibrasyon sayfasına gidin.</p>
-        <Dugme tur="ikincil" simge="next" onClick={kalibrasyonaGit}>Kalibrasyon sayfasına git</Dugme>
+        <p>Ölçü aletleri <b>Ölçü Aletleri</b> sayfasında tutulur, burada yalnız görüntülenir. Ekleme, düzenleme ve kalibrasyon kaydı orada yapılır.</p>
       </div>
       <Panel baslik="Önümüzdeki 6 ayın kalibrasyon yükü" alt="Süresi dolanlar ilk sütunda; laboratuvar planlaması ve bütçe için">
         {veri.dev.length
@@ -115,7 +114,7 @@ export function Cihazlar({ veri, gecis, gecisTamam }: EkranOzellikleri) {
         suzgec={{ etiket: 'Durum', ilk: '', secenekler: [{ deger: '', baslik: 'Tüm durumlar' }, ...DURUMLAR.map((d) => ({ deger: d, baslik: d }))], uyar: (d, s) => d.durum.metin === s }}
         csv="olcum_cihazlari"
         ac={kalibrasyonaGit}
-        bos="Henüz cihaz kaydı yok. Ölçüm cihazları Kalibrasyon sayfasından eklenir."
+        bos="Henüz cihaz kaydı yok. Ölçüm cihazları Ölçü Aletleri sayfasından eklenir."
       />
       {secili && <CihazGecmisi cihaz={secili} muayeneler={veri.insp} kapat={() => acikYaz(null)} />}
     </div>

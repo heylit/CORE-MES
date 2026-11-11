@@ -40,7 +40,7 @@ function Durum({ d }: { d: Cihaz }) {
   );
 }
 
-const KalibrasyondaAc = ({ metin = 'Kalibrasyonda aç' }: { metin?: string }) => (
+const KalibrasyondaAc = ({ metin = "Ölçü Aletleri'nde aç" }: { metin?: string }) => (
   <Link className="tc-dugme tc-dugme-ikincil tc-dugme-normal" to={OLCU_ALETI_YOLU}><Simge ad="ruler" />{metin}</Link>
 );
 
@@ -142,7 +142,7 @@ export function Kalibrasyon() {
   return (
     <div className="tc-dhd">
       {d.ekran.ux !== 'uzman' && (
-        <p className="tc-dhd-aciklama">Ölçüm cihazları, araç ve gereçler: son ve sonraki kalibrasyon, geri sayım, geçmiş kayıtlar. ISO 9001 madde 7.1.5. Cihaz listesi Kalibrasyon modülünden gelir; kayıt orada yapılır.</p>
+        <p className="tc-dhd-aciklama">Ölçüm cihazları, araç ve gereçler: son ve sonraki kalibrasyon, geri sayım, geçmiş kayıtlar. ISO 9001 madde 7.1.5. Cihaz listesi Ölçü Aletleri sayfasından gelir; kayıt orada yapılır.</p>
       )}
       <Sekmeler
         etiket="Kalibrasyon görünümü" secili={takvimde ? 'takvim' : 'tablo'} sec={gorunumSec}
@@ -171,8 +171,8 @@ function TabloGorunumu({ araclar }: { araclar: ReactNode }) {
         <div className="tc-dhd-bos">
           <Simge ad="ruler" boyut="b" />
           <h3>Cihaz listesi boş</h3>
-          <p>Ürün uygunluğunu doğrulamak için kullandığınız her ölçüm cihazı, mastar ve test ekipmanı kalibrasyon takibinde olmalı; kişisel ölçü aletleri de dahil. Cihazlar Kalibrasyon modülünde eklenir.</p>
-          <KalibrasyondaAc metin="Kalibrasyona git" />
+          <p>Ürün uygunluğunu doğrulamak için kullandığınız her ölçüm cihazı, mastar ve test ekipmanı kalibrasyon takibinde olmalı; kişisel ölçü aletleri de dahil. Cihazlar Ölçü Aletleri sayfasında eklenir.</p>
+          <KalibrasyondaAc metin="Ölçü Aletleri'ne git" />
         </div>
       </Kart>
     );
@@ -210,7 +210,7 @@ function TabloGorunumu({ araclar }: { araclar: ReactNode }) {
           sag: araclar,
         }}
       />
-      <p className="tc-dhd-not">{`${String(liste.length)} cihaz gösteriliyor. Sonraki kalibrasyon = son kalibrasyon + periyot; Kalibrasyon modülünde elle de girilebilir.`}</p>
+      <p className="tc-dhd-not">{`${String(liste.length)} cihaz gösteriliyor. Sonraki kalibrasyon = son kalibrasyon + periyot; Ölçü Aletleri sayfasında elle de girilebilir.`}</p>
     </Kart>
   );
 }

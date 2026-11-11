@@ -38,6 +38,17 @@ describe('UretimEmirleri liste', () => {
     expect(within(planli).getByText('DNM-001')).toBeTruthy();
   });
 
+  it('liste yana kayan tablodur; Emir no sütunu solda sabit kalır', async () => {
+    sunucuKur(OKUYUCU, { 'GET /uretim-emirleri': () => json(200, liste([PLANLI])) });
+    ac(ekran, '/uretim-emirleri');
+    await screen.findByText('EM-1');
+    const tablo = screen.getByRole('table', { name: 'Üretim emirleri' });
+    expect(tablo.closest('.tc-tablo-kap')?.hasAttribute('data-kaydir')).toBe(true);
+    const ilkBaslik = within(tablo).getAllByRole('columnheader')[0]!;
+    expect(ilkBaslik.textContent).toBe('Emir no');
+    expect(ilkBaslik.classList.contains('tc-tablo-sabit-sol')).toBe(true);
+  });
+
   it('durum suzgeci sorguya girer', async () => {
     // Sunucu süzgeci uygular; sahte sunucu son isteğin yoluna bakarak aynısını yapar.
     const istekler = sunucuKur(OKUYUCU, {

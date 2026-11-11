@@ -102,9 +102,9 @@ export const SAYFA_YARDIMI: Partial<Record<GorunumKodu, SayfaYardimi>> = {
   kalib: {
     a: 'Ölçüm cihazlarının kalibrasyon durumunu, geri sayımını ve geçmişini takip eder (ISO 9001 madde 7.1.5).',
     s: [
-      'Cihazlar Kalibrasyon sayfasından salt okunur gelir; ekleme ve düzenleme orada yapılır, burada cihaz eklenmez.',
-      'Son kalibrasyon tarihi ve periyot Kalibrasyon sayfasında girilir; sonraki tarih hesaplanır.',
-      'Kalibrasyon yapılınca tarihi, sonucu ve sertifikayı Kalibrasyon sayfasında kaydedin.',
+      'Cihazlar Ölçü Aletleri sayfasından salt okunur gelir; ekleme ve düzenleme orada yapılır, burada cihaz eklenmez.',
+      'Son kalibrasyon tarihi ve periyot Ölçü Aletleri sayfasında girilir; sonraki tarih hesaplanır.',
+      'Kalibrasyon yapılınca tarihi, sonucu ve sertifikayı Ölçü Aletleri sayfasında kaydedin.',
       'Takvim görünümünden ayın planını görün; tarihleri takviminize ekleyin.',
     ],
     e: 'Kumpas OC-001: son kalibrasyon 10.10.2025, periyot 12 ay, yani sonraki 10.10.2026. 30 gün kala turuncu, 7 gün kala kırmızı olur. Laboratuvardan "uygun değil" gelirse cihaz kullanım dışına alınır ve son uygun kalibrasyondan beri bu cihazla ölçülen ürünler için geriye dönük değerlendirme hatırlatılır.',

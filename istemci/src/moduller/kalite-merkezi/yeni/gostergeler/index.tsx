@@ -55,7 +55,7 @@ export function Gostergeler({ veri, yetki, git }: EkranOzellikleri) {
       />
       {g.bos && (
         <div className="tc-km-not">
-          <p>Henüz kayıt yok. Önce <b>Ölçüm cihazları</b> ve <b>Tedarikçi kalitesi</b> listelerini girin; muayene ve uygunsuzluk kayıtları bunlara bağlanır.</p>
+          <p>Henüz kayıt yok. Önce <b>Ölçü Aletleri</b>&apos;nde cihazları, burada <b>Tedarikçi kalitesi</b> listesini girin; muayene ve uygunsuzluk kayıtları bunlara bağlanır.</p>
         </div>
       )}
       <section className="tc-km4-kpiler" aria-label="Kalite göstergeleri">
