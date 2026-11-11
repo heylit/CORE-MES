@@ -52,6 +52,15 @@ describe('1709 rota bileşeninde hammadde önerisi', () => {
     expect(kayitlar(istekler)[0]?.govde).toMatchObject({ adimlar: [{ bilesenler: [{ malzemeId: 12, miktar: 0.785 }] }] });
   });
 
+  it('2138-2: kodsuz modelde yalnız model adı yazılır, merkezin harfi görünmez', async () => {
+    kur([], YONETICI, { ...ONERI, model: { ...ONERI.model!, revKodu: null } });
+    rrAc('/recete-rota/schema');
+    const panel = await adimPaneli();
+    const grup = await within(panel).findByRole('group', { name: 'Önerilen hammadde' });
+    const ipucu = within(grup).getByText(/Önerilen hammadde: Model mil.step/);
+    expect(ipucu.textContent).toBe('Önerilen hammadde: Model mil.step 3B analizinden, en az talaş önce.');
+  });
+
   it('rotada ham girdi varken öneri istenmez ve görünmez', async () => {
     const istekler = kur([{ itemId: '12', qty: 2, scrap: 0 }]);
     rrAc('/recete-rota/schema');
