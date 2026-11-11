@@ -101,6 +101,8 @@ export const siparisSatiriSemasi = z.object({
   sonTeslimTarihi: z.string().nullable(),
   // Kalanı aşan teslim reddedilmez; sipariş miktarını aşan kısım. Aşma yoksa boş.
   fazlaTeslim: ondalikMetinSemasi.nullable(),
+  // 2881: sipariş anında sabitlenen parça revizyonu (fasonda uygulanacak parçanın); yoksa boş. Yalnız çıkışta.
+  parcaRevizyonu: z.string().nullable().optional(),
 });
 // #205 karar 1: siparişin Logo'daki durumu; Logo'ya hiç sıraya girmemiş siparişte (bağlantıdan önce verilmiş) boş. Sunucu yazar.
 export const LOGO_DURUMLARI = ['bekliyor', 'gonderildi', 'hata'] as const;
@@ -269,7 +271,8 @@ export const kararCikisSemasi = kararSemasi.extend({ siparisler: z.array(siparis
 // Silinmiş kart ya da iş emri numarasıyla gelir (ad boş). Talep eden firmayı görmez (firma boş).
 export const kalemBagiCikisSemasi = z.object({
   kalemId: uuid,
-  uygulanan: z.object({ no: z.number().int(), kod: z.string().nullable(), ad: z.string().nullable() }).nullable(),
+  // 2881: revizyon, parçanın o anki yürürlükteki revizyonu (teklif isteme metni); yoksa alan gelmez.
+  uygulanan: z.object({ no: z.number().int(), kod: z.string().nullable(), ad: z.string().nullable(), revizyon: z.string().nullable().optional() }).nullable(),
   fason: z.object({
     isEmriId: z.number().int(), uretimEmriId: z.number().int().nullable(), emirNo: z.string().nullable(), opNo: z.number().int().nullable(),
     adim: z.string().nullable(), firmaId: z.number().int().nullable(), firmaAdi: z.string().nullable(),

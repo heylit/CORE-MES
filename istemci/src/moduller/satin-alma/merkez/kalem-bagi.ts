@@ -32,11 +32,14 @@ export function fasonMetni(it: RequestItem): string | null {
 export const kalemBagMetinleri = (it: RequestItem): string[] => [parcaMetni(it), fasonMetni(it)].filter((x): x is string => x !== null);
 // Tedarikçiye giden teklif isteme metni (kullanıcı 08:31Z): yalnız yapılacak işlem; fason firması ve iç emir no gitmez. Silinmiş
 // kartın numarası tedarikçi için anlamsızdır, yazılmaz.
-export function teklifMetniSatirlari(it: RequestItem): string[] {
+// 2881 (karar 2879 a): parçanın revizyonu varsa "Rev X"; teklifte o anki yürürlükteki (varsayılan), siparişte sipariş anında sabitlenen
+// (çağıran verir; sabitlenmemişse boş geçer, o anki yazılmaz).
+export function teklifMetniSatirlari(it: RequestItem, revizyon: string | null | undefined = it.parca?.revizyon): string[] {
   const out: string[] = [];
   const p = it.parca;
   const ad = p ? [p.kod, p.ad].filter(Boolean).join(" ") : "";
-  if (ad) out.push(`Parça: ${ad}`);
+  const rev = revizyon?.trim();
+  if (ad) out.push(`Parça: ${ad}${rev ? ` Rev ${rev}` : ""}`);
   const f = it.fason;
   const islem = f ? [f.opNo === null ? "" : `Op ${f.opNo}`, f.adim ?? ""].filter(Boolean).join(" ") : "";
   if (islem) out.push(`İşlem: ${islem}`);

@@ -71,7 +71,7 @@ export interface AltKayitlar {
     logoGuncellemeDurumu: 'bekliyor' | 'gonderildi' | 'hata' | null; logoGuncellemeHata: string | null;
     logoKapatmaDurumu: 'bekliyor' | 'gonderildi' | 'hata' | null; logoKapatmaHata: string | null;
   }[];
-  siparisSatirlari: { talepId: string; teklifId: string; id: number; kalemId: string; miktar: string; birim: string }[];
+  siparisSatirlari: { talepId: string; teklifId: string; id: number; kalemId: string; miktar: string; birim: string; parcaRevizyonu: string | null }[];
   onaylar: (Omit<Onay, 'kisiAdi'> & { talepId: string })[];
   hareketler: (Omit<Hareket, 'kisiAdi'> & { talepId: string })[];
   senaryolar: { talepId: string; id: string; ad: string; kisiId: number | null; olusturma: string }[];
@@ -109,7 +109,8 @@ export async function altKayitlariOku(db: Db, idler: readonly string[]): Promise
       logo_iptal_durumu AS "logoIptalDurumu", logo_iptal_hata AS "logoIptalHata",
       logo_guncelleme_durumu AS "logoGuncellemeDurumu", logo_guncelleme_hata AS "logoGuncellemeHata",
       logo_kapatma_durumu AS "logoKapatmaDurumu", logo_kapatma_hata AS "logoKapatmaHata" FROM satin_alma_siparis WHERE talep_id = ANY($1::uuid[]) ORDER BY talep_id, id`),
-    siparisSatirlari: await q(`SELECT s.talep_id AS "talepId", s.teklif_id AS "teklifId", s.id, s.kalem_id AS "kalemId", s.miktar, s.birim
+    siparisSatirlari: await q(`SELECT s.talep_id AS "talepId", s.teklif_id AS "teklifId", s.id, s.kalem_id AS "kalemId", s.miktar, s.birim,
+        s.parca_revizyonu AS "parcaRevizyonu"
       FROM satin_alma_siparis_satiri s JOIN satin_alma_talep_kalemi k ON k.talep_id = s.talep_id AND k.id = s.kalem_id
       WHERE s.talep_id = ANY($1::uuid[]) ORDER BY s.talep_id, s.teklif_id, k.sira`),
     onaylar: await q(`SELECT talep_id AS "talepId", id, ${ISO('zaman')} AS zaman, kisi_id AS "kisiId", sonuc, dort_gozsuz AS "dortGozsuz", notlar
@@ -768,12 +769,15 @@ export interface SiparisSatiriOkuma {
   id: number; talepId: string; talepNo: string; siparisNo: string; firmaId: number | null; tedarikciAdi: string;
   malzemeNo: number | null; kalemAdi: string; miktar: string; kalanMiktar: string; birim: string; beklenenTeslim: string | null;
   isEmriId: number | null; parcaRevizyonu: string | null;
+  // 2881: revizyonun kartı (fasonda uygulanacak parça, değilse kalemin kartı); yürürlükteki revizyon bununla sorulur.
+  revizyonMalzemeNo: number | null;
 }
 export function siparisSatirlariOku(db: Db, idler: readonly number[] | null): Promise<SiparisSatiriOkuma[]> {
   return db.sorgu<SiparisSatiriOkuma>(
     `SELECT s.id, s.talep_id AS "talepId", t.no AS "talepNo", coalesce(p.no, p.siparis_no) AS "siparisNo", q.firma_id AS "firmaId", q.tedarikci_adi AS "tedarikciAdi",
         c.malzeme_no AS "malzemeNo", k.ad AS "kalemAdi", s.miktar, greatest(s.miktar - coalesce(m.toplam, 0), 0)::text AS "kalanMiktar", s.birim,
-        p.beklenen_teslim AS "beklenenTeslim", s.is_emri_id AS "isEmriId", s.parca_revizyonu AS "parcaRevizyonu"
+        p.beklenen_teslim AS "beklenenTeslim", s.is_emri_id AS "isEmriId", s.parca_revizyonu AS "parcaRevizyonu",
+        coalesce(k.uygulanan_malzeme_no, c.malzeme_no) AS "revizyonMalzemeNo"
        FROM satin_alma_siparis_satiri s
        JOIN satin_alma_siparis p ON p.talep_id = s.talep_id AND p.teklif_id = s.teklif_id
        JOIN satin_alma_talep t ON t.id = s.talep_id
@@ -1394,14 +1398,20 @@ export function takvimSiparisleri(db: Db, baslangic: string, bitis: string): Pro
 }
 
 // 1647: revizyonu henüz yazılmamış, malzemeli sipariş satırları (talep başına) ve revizyonun bir kez yazılması.
-export function revizyonsuzSiparisSatirlari(db: Db, talepId: string): Promise<{ id: number; malzemeNo: number }[]> {
+// 2881: fason kaleminin revizyonu hizmet kartının değil, uygulanacak parçanındır (REVIZYON_KARTI).
+const REVIZYON_KARTI = 'coalesce(k.uygulanan_malzeme_no, c.malzeme_no)';
+// Yalnız bu kayıtta açılan satır (oncekiler dışındaki): eski boş satıra kayıt anının revizyonu yazılmaz (2881 Test B1).
+export function siparisSatirIdleri(db: Db, talepId: string): Promise<number[]> {
+  return db.sorgu<{ id: number }>('SELECT id FROM satin_alma_siparis_satiri WHERE talep_id = $1', [talepId]).then((l) => l.map((x) => x.id));
+}
+export function revizyonsuzSiparisSatirlari(db: Db, talepId: string, oncekiler: readonly number[] = []): Promise<{ id: number; malzemeNo: number }[]> {
   return db.sorgu(
-    `SELECT s.id, c.malzeme_no AS "malzemeNo"
+    `SELECT s.id, ${REVIZYON_KARTI} AS "malzemeNo"
        FROM satin_alma_siparis_satiri s
        JOIN satin_alma_talep_kalemi k ON k.talep_id = s.talep_id AND k.id = s.kalem_id
-       JOIN satin_alma_katalog c ON c.id = k.katalog_id
-      WHERE s.talep_id = $1 AND s.parca_revizyonu IS NULL AND c.malzeme_no IS NOT NULL
-      ORDER BY s.id`, [talepId]);
+       LEFT JOIN satin_alma_katalog c ON c.id = k.katalog_id
+      WHERE s.talep_id = $1 AND s.parca_revizyonu IS NULL AND ${REVIZYON_KARTI} IS NOT NULL AND NOT (s.id = ANY($2::int[]))
+      ORDER BY s.id`, [talepId, oncekiler]);
 }
 export async function siparisSatiriRevizyonlariYaz(db: Db, satirlar: readonly { id: number; parcaRevizyonu: string }[]): Promise<void> {
   if (satirlar.length === 0) return;

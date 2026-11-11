@@ -114,7 +114,7 @@ export interface RequestItem {
   unit: string;
   category?: string;
   /** Hizmet kaleminin bağları (2429): uygulanan parça ve fason adımı; yalnız okunur, kayıtta gönderilmez. */
-  parca?: { no: number; kod: string | null; ad: string | null } | null;
+  parca?: { no: number; kod: string | null; ad: string | null; revizyon?: string | null } | null;
   fason?: { emirNo: string | null; opNo: number | null; adim: string | null; firmaAdi: string | null } | null;
 }
 
@@ -202,7 +202,8 @@ export interface Award {
 }
 
 /** Sipariş satırı; miktar ve stokta kabul edilen miktar Siparişler sayfası (2430) içindir, sunucuya geri gitmez. */
-export interface OrderLine { id: number; itemId: string; quoteId: string; qty?: number; unit?: string; received?: number | null }
+/** parcaRevizyonu: sipariş anında sabitlenen parça revizyonu (2881); yalnız okunur. */
+export interface OrderLine { id: number; itemId: string; quoteId: string; qty?: number; unit?: string; received?: number | null; parcaRevizyonu?: string | null }
 
 export interface LogEntry { id: string; at: number; by: string; t: string }
 

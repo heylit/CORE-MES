@@ -4,12 +4,14 @@ import type { FastifyInstance } from 'fastify';
 import { testVeritabaniKur } from '#cekirdek/test-vt.ts';
 import type { TestVeritabani } from '#cekirdek/test-vt.ts';
 import { uygulamaKur } from '#cekirdek/uygulama.ts';
-import type { DisOperasyonAyrintisiCevabi, DisOperasyonlarCevabi, Talebim } from '#paylasilan/sozlesme/satin-alma.ts';
+import type { AcilisCevabi, DisOperasyonAyrintisiCevabi, DisOperasyonlarCevabi, Talebim } from '#paylasilan/sozlesme/satin-alma.ts';
 import { denetimYaz } from '../denetim/disari.ts';
 import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
 import { ILETILER } from './kurallar.ts';
+import * as servis from './servis.ts';
+import * as sorgular from './sorgular.ts';
 
 const PAROLA = 'dogru-parola-1';
 
@@ -192,5 +194,82 @@ describe('satin-alma fason talebi ve dış işlem emri (2428, gerçek PostgreSQL
     assert.notEqual((await kalemDiesi(t.id))[0]!.dieId, null);
     await ortam!.sahip.sorgu('DELETE FROM uretim_emirleri_is_emri WHERE id = $1', [isEmriId]);
     assert.deepEqual(await kalemDiesi(t.id), [{ dieId: null, isEmriId: null }]);
+  });
+  // 2881 (karar 2879 a): fason kaleminin revizyonu hizmet kartının değil uygulanacak parçanındır. Teklif anında yürürlükteki revizyon
+  // kalem bağında gelir; sipariş satırına sipariş anında parçanın revizyonu sabitlenir; stoka giden satır revizyonun kartını taşır.
+  test('2881: fason sipariş satırının revizyonu uygulanacak parçadan; teklifte o anki, siparişte sabitlenen', async () => {
+    const revizyon = new Map<number, string>([[parcaNo, 'C'], [hizmetNo, 'HZ']]);
+    servis.parcaRevizyonuCozucusuKaydet(async (_db, nolar) => new Map(nolar.flatMap((n): [number, string][] => (revizyon.has(n) ? [[n, revizyon.get(n)!]] : []))));
+    try {
+      const r = await istek(cerezTalep, 'POST', '/satin-alma-talepleri/hizli-ac', fasonTalebi([partiKalemi({ partiId: 900003, konumId: null, miktar: '2' })]));
+      assert.equal(r.statusCode, 200, r.body);
+      const t = r.json() as Talebim;
+      const s = ortam!.sahip;
+      const kalemId = (await s.tek<{ id: string }>('SELECT id FROM satin_alma_talep_kalemi WHERE talep_id = $1', [t.id]))!.id;
+      const teklif = crypto.randomUUID();
+      await s.sorgu("INSERT INTO satin_alma_teklif (talep_id, id, tedarikci_adi, teklif_tarihi, para_birimi, kur) VALUES ($1, $2, 'Deneme fasoncu', current_date, 'TRY', 1)", [t.id, teklif]);
+      await s.sorgu("INSERT INTO satin_alma_karar (talep_id, mod, teklif_id, karar_tarihi) VALUES ($1, 'tek', $2, current_date)", [t.id, teklif]);
+      await s.sorgu("INSERT INTO satin_alma_siparis (talep_id, teklif_id, no, siparis_no, siparis_tarihi) VALUES ($1, $2, 'SA-FT-2', 'SA-FT-2', current_date)", [t.id, teklif]);
+      const satir = (await s.tek<{ id: number }>(
+        "INSERT INTO satin_alma_siparis_satiri (talep_id, teklif_id, kalem_id, miktar, birim) VALUES ($1, $2, $3, 2, 'adet') RETURNING id", [t.id, teklif, kalemId]))!.id;
+
+      // Kataloğa bağlanmamış (kart bekleyen) ama uygulanacak parçası seçilmiş kalem de parçasının revizyonunu alır (Test 2).
+      const kartsizKalem = crypto.randomUUID();
+      await s.sorgu("INSERT INTO satin_alma_talep_kalemi (talep_id, id, sira, ad, uygulanan_malzeme_no) VALUES ($1, $2, 2, 'Deneme kartsız işlem', $3)", [t.id, kartsizKalem, parcaNo]);
+      const kartsiz = (await s.tek<{ id: number }>(
+        "INSERT INTO satin_alma_siparis_satiri (talep_id, teklif_id, kalem_id, miktar, birim) VALUES ($1, $2, $3, 1, 'adet') RETURNING id", [t.id, teklif, kartsizKalem]))!.id;
+
+      // Revizyonu yazılacak satırın kartı parçadır, hizmet kartı değil.
+      assert.deepEqual(await ortam!.vt.tx((db) => sorgular.revizyonsuzSiparisSatirlari(db, t.id)),
+        [{ id: satir, malzemeNo: parcaNo }, { id: kartsiz, malzemeNo: parcaNo }]);
+      // Bu kayıttan önce var olan satır yazılmaz (Test B1).
+      assert.deepEqual(await ortam!.vt.tx((db) => sorgular.revizyonsuzSiparisSatirlari(db, t.id, [satir])), [{ id: kartsiz, malzemeNo: parcaNo }]);
+      await s.sorgu('DELETE FROM satin_alma_siparis_satiri WHERE id = $1', [kartsiz]);
+      // Stok: eşleşme hizmet kartıyla kalır, revizyon parçadan sorulur.
+      const [okunan] = await ortam!.vt.tx((db) => servis.siparisSatirlari(db, [satir]));
+      assert.deepEqual([okunan?.malzemeNo, okunan?.revizyonMalzemeNo], [hizmetNo, parcaNo]);
+
+      await s.sorgu("UPDATE satin_alma_siparis_satiri SET parca_revizyonu = 'B' WHERE id = $1", [satir]);
+      assert.deepEqual(await ortam!.vt.tx((db) => sorgular.revizyonsuzSiparisSatirlari(db, t.id)), []);
+      const a = await istek(cerezOkur, 'GET', '/satin-alma-acilis');
+      assert.equal(a.statusCode, 200, a.body);
+      const talep = (a.json() as AcilisCevabi).talepler.find((x) => x.id === t.id)!;
+      assert.equal(talep.kalemBaglari?.[0]?.uygulanan?.revizyon, 'C');
+      assert.equal(talep.karar?.siparisler[0]?.satirlar[0]?.parcaRevizyonu, 'B');
+    } finally {
+      servis.parcaRevizyonuCozucusuKaydet(async () => new Map());
+    }
+  });
+
+  // 2881 Test B1: revizyon yalnız o kayıtta yeni açılan sipariş satırına yazılır. Revizyonsuz kalmış eski satır (2881 öncesi fason
+  // siparişi) talep sonradan kaydedilince kayıt anının revizyonuyla dolmaz; sipariş anındaki revizyon bilinmez, boş kalır.
+  test('2881: talep yeniden kaydedilince revizyonsuz eski sipariş satırı dolmaz', async () => {
+    servis.parcaRevizyonuCozucusuKaydet(async (_db, nolar) => new Map(nolar.map((n): [number, string] => [n, 'D'])));
+    try {
+      const r = await istek(cerezTalep, 'POST', '/satin-alma-talepleri/hizli-ac', fasonTalebi([partiKalemi({ partiId: 900004, konumId: null, miktar: '2' })]));
+      assert.equal(r.statusCode, 200, r.body);
+      const t = r.json() as Talebim;
+      const s = ortam!.sahip;
+      const kalemId = (await s.tek<{ id: string }>('SELECT id FROM satin_alma_talep_kalemi WHERE talep_id = $1', [t.id]))!.id;
+      const teklif = crypto.randomUUID();
+      await s.sorgu("INSERT INTO satin_alma_teklif (talep_id, id, tedarikci_adi, teklif_tarihi, para_birimi, kur) VALUES ($1, $2, 'Deneme fasoncu', current_date, 'TRY', 1)", [t.id, teklif]);
+      await s.sorgu('INSERT INTO satin_alma_teklif_satiri (talep_id, teklif_id, kalem_id, birim_fiyat) VALUES ($1, $2, $3, 10)', [t.id, teklif, kalemId]);
+      await s.sorgu("INSERT INTO satin_alma_karar (talep_id, mod, teklif_id, karar_tarihi) VALUES ($1, 'tek', $2, current_date)", [t.id, teklif]);
+      await s.sorgu("INSERT INTO satin_alma_siparis (talep_id, teklif_id, no, siparis_no, siparis_tarihi) VALUES ($1, $2, 'SA-FT-3', 'SA-FT-3', current_date)", [t.id, teklif]);
+      const satir = (await s.tek<{ id: number }>(
+        "INSERT INTO satin_alma_siparis_satiri (talep_id, teklif_id, kalem_id, miktar, birim) VALUES ($1, $2, $3, 2, 'adet') RETURNING id", [t.id, teklif, kalemId]))!.id;
+      await s.sorgu("UPDATE satin_alma_talep SET durum = 'siparis_verildi' WHERE id = $1", [t.id]);
+
+      const a = await istek(cerezYonetici, 'GET', '/satin-alma-acilis');
+      assert.equal(a.statusCode, 200, a.body);
+      const { no: _n, talepEdenAdi: _a, acanKisiId: _k, olusturma: _o, guncelleme: _g, ...govde } = (a.json() as AcilisCevabi).talepler.find((x) => x.id === t.id)!;
+      const k = await istek(cerezYonetici, 'POST', `/satin-alma-talepleri/${t.id}/kaydet`, { ...govde, notlar: 'Deneme yeniden kayıt' });
+      assert.equal(k.statusCode, 200, k.body);
+      const rev = await s.tek<{ rev: string | null; n: number }>(
+        'SELECT parca_revizyonu AS rev, (SELECT count(*)::int FROM satin_alma_siparis_satiri WHERE talep_id = $2) AS n FROM satin_alma_siparis_satiri WHERE id = $1', [satir, t.id]);
+      assert.deepEqual(rev, { rev: null, n: 1 }, 'satır yerinde kalır, revizyonu boş kalır');
+    } finally {
+      servis.parcaRevizyonuCozucusuKaydet(async () => new Map());
+    }
   });
 });

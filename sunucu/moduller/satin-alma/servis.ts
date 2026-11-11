@@ -116,7 +116,7 @@ async function talepleriYalinKur(db: Db, satirlar: s.TalepSatiri[]): Promise<Tal
       const miktar = sade(r.miktar);
       return {
         id: r.id, kalemId: r.kalemId, miktar, birim: r.birim, teslimAlinan,
-        sonTeslimTarihi: t?.sonTarih ?? null, fazlaTeslim: fazlaTeslim(miktar, teslimAlinan),
+        sonTeslimTarihi: t?.sonTarih ?? null, fazlaTeslim: fazlaTeslim(miktar, teslimAlinan), parcaRevizyonu: r.parcaRevizyonu,
       };
     });
     return {
@@ -449,11 +449,16 @@ export async function taleplerim(db: Db, k: Kullanici, sinir: number): Promise<T
   return { talepler: talepler.map((t) => talebim(kaynakGorunumu(t, k.id, birlesenler), baglar)), toplam: satirlar.length };
 }
 
+// 2881: revizyonu olmayan parçada alan hiç gelmez (eski bağ biçimi değişmez).
+const revizyonAlani = (r: string | undefined): { revizyon?: string } => (r === undefined ? {} : { revizyon: r });
 // 2429: talep ve açılış verisi kalem bağlarını taşır; adlar sahiplerinden (malzeme kartı, iş emri, firma). Okunamayan numarayla gelir.
 async function kalemBaglariKur(db: Db, talepIdleri: readonly string[]): Promise<Map<string, KalemBagiCikisi[]>> {
   const satirlar = talepIdleri.length === 0 ? [] : await s.kalemBaglariOku(db, talepIdleri);
   if (satirlar.length === 0) return new Map();
-  const kartlar = await malzemeOzetleri(db, satirlar.flatMap((r) => (r.uygulananMalzemeNo === null ? [] : [r.uygulananMalzemeNo])));
+  const uygulananlar = [...new Set(satirlar.flatMap((r) => (r.uygulananMalzemeNo === null ? [] : [r.uygulananMalzemeNo])))];
+  const kartlar = await malzemeOzetleri(db, uygulananlar);
+  // 2881: teklif isteme metni parçanın o anki yürürlükteki revizyonunu yazar (değişiklik yönetimi).
+  const revizyonlar = uygulananlar.length === 0 ? new Map<number, string>() : await parcaRevizyonuCozucu(db, uygulananlar);
   const isler = await isEmriOzetleri(db, satirlar.flatMap((r) => (r.isEmriId === null ? [] : [r.isEmriId])));
   const firmaId = (id: number) => { const k = isler.get(id)?.kaynak; return k?.tur === 'fason' ? k.id : null; };
   const firmalar = await firmaOzetleri(db, [...new Set([...isler.keys()].flatMap((id) => { const f = firmaId(id); return f === null ? [] : [f]; }))]);
@@ -464,7 +469,8 @@ async function kalemBaglariKur(db: Db, talepIdleri: readonly string[]): Promise<
     const f = r.isEmriId === null ? null : firmaId(r.isEmriId);
     const bag: KalemBagiCikisi = {
       kalemId: r.kalemId,
-      uygulanan: r.uygulananMalzemeNo === null ? null : { no: r.uygulananMalzemeNo, kod: kart?.kod ?? null, ad: kart?.ad ?? null },
+      uygulanan: r.uygulananMalzemeNo === null ? null
+        : { no: r.uygulananMalzemeNo, kod: kart?.kod ?? null, ad: kart?.ad ?? null, ...revizyonAlani(revizyonlar.get(r.uygulananMalzemeNo)) },
       fason: r.isEmriId === null ? null : {
         isEmriId: r.isEmriId, uretimEmriId: ie?.uretimEmriId ?? null, emirNo: ie?.emirNo || null, opNo: ie?.opNo ?? null, adim: ie?.ad ?? null,
         firmaId: f, firmaAdi: f === null ? null : (firmalar.get(f)?.ad ?? null),
@@ -785,8 +791,9 @@ export async function talepKaydet(db: Db, k: Kullanici, id: string, g: TalepKayd
   }
   const guncellenecek = logoGuncellenecekSiparisler(eski, yazilacak);
   // 2642 b, Veri 2: faturaya eşlenmiş satır (kaldırılmış eşleme dahil) ve onun siparişi silinmez (RESTRICT).
+  const oncekiSatirlar = await s.siparisSatirIdleri(db, id);
   await kisitKorumali({ satin_alma_fatura_eslemesi_satir: ILETILER.eslemeliSatir }, () => s.altKayitlariYaz(db, yazilacak, siparisNoVerici(db)));
-  await siparisRevizyonlariniYaz(db, id);
+  await siparisRevizyonlariniYaz(db, id, oncekiSatirlar);
   await s.siparisGuncellemesiniIsaretle(db, id, guncellenecek);
   const siparisteMi = (d: TalepDurumu) => d === 'siparis_verildi' || d === 'teslim_alindi';
   if (siparisteMi(yazilacak.durum) && !siparisteMi(eski.durum)) {
@@ -1687,12 +1694,13 @@ export interface StokYokKaynagi {
   id: number; no: string; malzemeId: number; miktar: string; birim: string | null; uretimEmriId: number | null; acilma: string;
 }
 // 1647: sipariş satırı ilk yazıldığında kalemin malzemesinin yürürlükteki parça revizyonunu taşır. Revizyonun sahibi değişiklik
-// yönetimidir ve bu modülü okur; bağı kablolama.ts kurar. Bağ yoksa ya da parçanın revizyonu yoksa boş kalır; sonra yazılmaz.
+// yönetimidir ve bu modülü okur; bağı kablolama.ts kurar. Bağ yoksa ya da parçanın revizyonu yoksa boş kalır; sonra yazılmaz:
+// yalnız bu kayıtta açılan satır (oncekiler dışı) yazılır (2881 Test B1).
 export type ParcaRevizyonuCozucusu = (db: Db, malzemeNolari: readonly number[]) => Promise<Map<number, string>>;
 let parcaRevizyonuCozucu: ParcaRevizyonuCozucusu = async () => new Map();
 export function parcaRevizyonuCozucusuKaydet(cozucu: ParcaRevizyonuCozucusu): void { parcaRevizyonuCozucu = cozucu; }
-async function siparisRevizyonlariniYaz(db: Db, talepId: string): Promise<void> {
-  const satirlar = await s.revizyonsuzSiparisSatirlari(db, talepId);
+async function siparisRevizyonlariniYaz(db: Db, talepId: string, oncekiler: readonly number[] = []): Promise<void> {
+  const satirlar = await s.revizyonsuzSiparisSatirlari(db, talepId, oncekiler);
   if (satirlar.length === 0) return;
   const revizyonlar = await parcaRevizyonuCozucu(db, satirlar.map((x) => x.malzemeNo));
   await s.siparisSatiriRevizyonlariYaz(db, satirlar.flatMap((x) => {

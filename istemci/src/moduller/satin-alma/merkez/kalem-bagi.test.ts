@@ -149,3 +149,45 @@ describe('talep araması uygulanacak malzemeyle (2875)', () => {
     V.q = 'flanş'; expect(filteredRequests().map((x) => x.no)).toEqual(['ST-2026-001']);
   });
 });
+
+// 2881 (karar 2879 a): tedarikçiye giden metinlerde parçanın revizyonu "Rev X"; teklifte o anki yürürlükteki, siparişte sipariş anında
+// sabitlenen. Revizyon yoksa bugünkü gibi yalnız kod ve ad; siparişte sabitlenmemişse o anki revizyon yazılmaz.
+describe('fason metinlerinde parça revizyonu (2881)', () => {
+  const QA = '00000000-0000-4000-8000-000000000201';
+  const revli: Talep = {
+    ...TALEP,
+    kalemBaglari: [{ ...TALEP.kalemBaglari![0]!, uygulanan: { no: 7, kod: 'DNM-7', ad: 'Deneme flanş', revizyon: 'C' } }],
+    teklifler: [{ id: QA, firmaId: 3, tedarikciAdi: 'Deneme Tedarik', teklifTarihi: '2026-10-05', gecerlilik: null, paraBirimi: 'TRY', kur: null, iskontoYuzdesi: '0',
+      nakliye: '0', digerMasraf: '0', teslimSekli: '', nakliyeDahil: true, terminGun: 7, vadeGun: 30, avansYuzdesi: '0', garantiAy: null,
+      teknikUygun: true, notlar: '', ilkToplam: null, revizyon: 0,
+      fiyatlar: [{ kalemId: K1, birimFiyat: '100', iskontoYuzdesi: '0', terminGun: null, enAzMiktar: null }] }],
+    karar: { mod: 'tek', teklifId: QA, bolunme: [], gerekce: '', kararVerenKisiId: 7, kararVerenAdi: 'Deneme Alıcı', kararTarihi: '2026-10-06', ogrenilenler: '', sabitKurlar: [],
+      siparisler: [{ teklifId: QA, no: 'SA-1', siparisNo: '', siparisTarihi: '2026-10-07', beklenenTeslim: null, vadeBaslangici: 'teslim', teslimDurumu: 'bekleniyor', kalite: null, logo: null,
+        satirlar: [{ id: 41, kalemId: K1, miktar: '40', birim: 'adet', teslimAlinan: null, sonTeslimTarihi: null, fazlaTeslim: null, parcaRevizyonu: 'B' }] }] },
+  } as Talep;
+  const siparisMetni = (t: Talep) => {
+    const r = talepEkrana(t);
+    const o = { qid: QA, q: r.quotes[0]!, supplierId: '', items: r.items.filter((i) => i.id === K1), orderNo: 'SA-1', poNo: '', orderDate: '', expectedDate: '', deliveredDate: '', quality: '', excess: [], logo: null } as unknown as OrderInfo;
+    return poText(r, o);
+  };
+
+  it('teklif isteme metninde o anki revizyon; revizyonsuz parçada yok', () => {
+    S.settings = { ...DEFAULT_SETTINGS }; S.ready = true; bump();
+    expect(rfqText(talepEkrana(revli), '', '2026-10-20')).toContain('   Parça: DNM-7 Deneme flanş Rev C\n');
+    expect(rfqText(talepEkrana(TALEP), '', '2026-10-20')).toContain('   Parça: DNM-7 Deneme flanş\n');
+  });
+
+  it('sipariş metninde sipariş anında sabitlenen revizyon, o anki değil', () => {
+    S.settings = { ...DEFAULT_SETTINGS }; S.ready = true; bump();
+    expect(siparisMetni(revli)).toContain('   Parça: DNM-7 Deneme flanş Rev B\n');
+    expect(siparisMetni(revli)).not.toContain('Rev C');
+  });
+
+  it('siparişte revizyon sabitlenmemişse revizyon yazılmaz', () => {
+    S.settings = { ...DEFAULT_SETTINGS }; S.ready = true; bump();
+    const sabitsiz = { ...revli, karar: { ...revli.karar!, siparisler: [{ ...revli.karar!.siparisler[0]!, satirlar: [{ ...revli.karar!.siparisler[0]!.satirlar[0]!, parcaRevizyonu: null }] }] } } as Talep;
+    const m = siparisMetni(sabitsiz);
+    expect(m).toContain('   Parça: DNM-7 Deneme flanş\n');
+    expect(m).not.toContain('Rev');
+  });
+});
