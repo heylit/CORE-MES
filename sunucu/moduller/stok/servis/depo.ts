@@ -1,4 +1,4 @@
-import { type Db } from '#cekirdek/db.ts';
+import { type Db, kayitNoktasi } from '#cekirdek/db.ts';
 import { bulunamadi, cakisma, dogrulama, gecersiz, yetkiYok } from '#cekirdek/hata.ts';
 import { sayfaliListe } from '#cekirdek/liste.ts';
 import { surumluGuncelle } from '#cekirdek/surum.ts';
@@ -14,7 +14,9 @@ import {
   zemin as haritaZemini,
 } from '../../atolye/disari.ts';
 import { bolmeNo, rafGozleri, haritaPlani, haritaAlaniMi, depoKoduOner, deposuzBolumler, konumTurDegisimEngeli, koduDegisenler } from '../kurallar.ts';
+import { aktifIstasyonlar } from '../../istasyonlar/disari.ts';
 import * as sorgular from '../sorgular.ts';
+import { istasyonKonumunuSil } from '../sorgular/depo/sorgular.ts';
 import { korumali, adlar, emirNoHaritasi, bakiyeSatiri } from './ortak.ts';
 
 // ---- Depo ve konum -----------------------------------------------------------------------------------------------------
@@ -105,7 +107,36 @@ async function haritaDurumu(db: Db) {
   const plan = haritaPlani({ gozler, alanlar, depolar, konumlar: await sorgular.haritaKonumlari(db), kodlar: new Set(await sorgular.tumKonumKodlari(db)) });
   return { gozler, alanlar, depolar, plan };
 }
+// 2902 (madde 5, karar 2903 a): aktif istasyonun stok konumu (IST-<no>, ANA depoda, adı istasyonun adı) ilk teslimi beklemez; istasyon
+// açılınca ve eşlemede açılır, açan kişinin stok yetkisine bakılmaz (konum sabit kodludur, kişi bir şey seçmez). Kodu elle başka
+// konuma verilmişse açılmaz; istasyon ilk teslimde yine aynı kuralla dener.
+async function istasyonKonumuAc(db: Db, ist: { id: number; ad: string }, kodlar: Set<string>): Promise<boolean> {
+  const kod = `IST-${ist.id}`;
+  if (kodlar.has(kod)) return false;
+  kodlar.add(kod);
+  return (await sorgular.istasyonKonumuAc(db, { depoId: await anaDepo(db), kod, ad: ist.ad.slice(0, 60), istasyonId: ist.id })) !== null;
+}
+export async function istasyonAcildiYansit(db: Db, olay: { istasyonId: number; ad: string; aktif: boolean }): Promise<void> {
+  if (!olay.aktif || (await sorgular.istasyonKonumu(db, olay.istasyonId)) !== null) return;
+  await istasyonKonumuAc(db, { id: olay.istasyonId, ad: olay.ad }, new Set(await sorgular.tumKonumKodlari(db)));
+}
+// Silinecek istasyonun konumu hiç kullanılmadıysa (hareket, bakiye, teslim yok) kalkar; kullanıldıysa bağımlı kayıt silmeyi durdurur ve
+// konum kalır, istasyon silinmez ("kullanımda").
+export async function istasyonSilinecekYansit(db: Db, olay: { istasyonId: number }): Promise<void> {
+  await kayitNoktasi(db, () => istasyonKonumunuSil(db, olay.istasyonId));
+}
+async function eksikIstasyonKonumlariniAc(db: Db): Promise<void> {
+  const istasyonlar = await aktifIstasyonlar(db);
+  if (istasyonlar.length === 0) return;
+  const olan = new Set((await sorgular.istasyonKonumlari(db, istasyonlar.map((i) => i.id))).map((k) => k.istasyonId));
+  const eksik = istasyonlar.filter((i) => !olan.has(i.id));
+  if (eksik.length === 0) return;
+  const kodlar = new Set(await sorgular.tumKonumKodlari(db));
+  for (const i of eksik) await istasyonKonumuAc(db, i, kodlar);
+}
+
 export async function haritadanEsle(db: Db): Promise<HaritaEslemeCevabi> {
+  await eksikIstasyonKonumlariniAc(db);
   const { plan } = await haritaDurumu(db);
   const idler = plan.guncelle.map((k) => k.id);
   const onceki = idler.length === 0 ? [] : await sorgular.kodDurumlari(db, { idler });

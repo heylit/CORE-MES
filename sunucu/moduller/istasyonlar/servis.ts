@@ -137,10 +137,37 @@ async function istasyonAktifOlmali(db: Db, onceki: { istasyonId: number | null; 
   }
 }
 
+// 2902: istasyon açıldı haberi (stok istasyonun konumunu hemen açar; karar 2903 a). Stok bu modülü okur, bu modül stoku ithal edemez:
+// dinleyici sunucu/kablolama.ts'te bağlanır (ADR 0006). Olay komutla aynı işlemde verilir; dinleyicinin reddi istasyonu da geri alır.
+// Tek, çoklu ve toplu ekleme bu işlevden geçer.
+export interface IstasyonAcildiOlayi { istasyonId: number; ad: string; aktif: boolean }
+type IstasyonAcildiDinleyicisi = (db: Db, olay: IstasyonAcildiOlayi) => Promise<unknown>;
+const istasyonAcildiDinleyicileri: IstasyonAcildiDinleyicisi[] = [];
+export function istasyonAcildiDinle(d: IstasyonAcildiDinleyicisi): () => void {
+  if (!istasyonAcildiDinleyicileri.includes(d)) istasyonAcildiDinleyicileri.push(d);
+  return () => {
+    const i = istasyonAcildiDinleyicileri.indexOf(d);
+    if (i >= 0) istasyonAcildiDinleyicileri.splice(i, 1);
+  };
+}
+// Silmeden önce: istasyonun hiç kullanılmamış stok konumu kalkar (yoksa konum istasyonu silinemez kılardı). Kullanılmış konum kalır,
+// istasyon bugünkü gibi "kullanımda" diye silinmez.
+type IstasyonSilinecekDinleyicisi = (db: Db, olay: { istasyonId: number }) => Promise<unknown>;
+const istasyonSilinecekDinleyicileri: IstasyonSilinecekDinleyicisi[] = [];
+export function istasyonSilinecekDinle(d: IstasyonSilinecekDinleyicisi): () => void {
+  if (!istasyonSilinecekDinleyicileri.includes(d)) istasyonSilinecekDinleyicileri.push(d);
+  return () => {
+    const i = istasyonSilinecekDinleyicileri.indexOf(d);
+    if (i >= 0) istasyonSilinecekDinleyicileri.splice(i, 1);
+  };
+}
+
 export async function istasyonEkle(db: Db, kayit: IstasyonKaydi): Promise<SurumluIstasyon> {
   await isMerkeziAktifOlmali(db, null, kayit);
   if (kayit.sorumluKisiId !== null) await atanacakKisiyiDogrula(db, kayit.sorumluKisiId, 'sorumluKisiId');
-  return tekIstasyon(db, varOlan(await kodKorumali(() => sorgular.istasyonEkle(db, kayit)), 'İstasyon bulunamadı.'));
+  const yeni = await tekIstasyon(db, varOlan(await kodKorumali(() => sorgular.istasyonEkle(db, kayit)), 'İstasyon bulunamadı.'));
+  for (const d of [...istasyonAcildiDinleyicileri]) await d(db, { istasyonId: yeni.id, ad: yeni.ad, aktif: yeni.aktif });
+  return yeni;
 }
 
 export async function istasyonGuncelle(db: Db, id: number, kayit: IstasyonGuncellemesi): Promise<SurumluIstasyon> {
@@ -159,8 +186,10 @@ export async function istasyonGuncelle(db: Db, id: number, kayit: IstasyonGuncel
   })));
 }
 
-export const istasyonSil = (db: Db, id: number): Promise<void> =>
-  silmeKorumali(() => sorgular.istasyonSil(db, id), 'İstasyon bulunamadı.');
+export async function istasyonSil(db: Db, id: number): Promise<void> {
+  for (const d of [...istasyonSilinecekDinleyicileri]) await d(db, { istasyonId: id });
+  await silmeKorumali(() => sorgular.istasyonSil(db, id), 'İstasyon bulunamadı.');
+}
 
 export async function makineEkle(db: Db, kayit: MakineKaydi): Promise<Makine> {
   await istasyonAktifOlmali(db, null, kayit);

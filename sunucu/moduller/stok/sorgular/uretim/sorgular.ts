@@ -114,6 +114,12 @@ export const gozdekiKullanilamazKalite = (db: Db, malzemeId: number, konumId: nu
     `SELECT kalite_durumu AS "kaliteDurumu", sum(miktar)::text AS miktar FROM stok_bakiye
       WHERE malzeme_id = $1 AND konum_id = $2 AND parti_id IS NOT DISTINCT FROM $3 AND kalite_durumu IN ('red', 'karar_bekliyor') AND miktar > 0
       GROUP BY kalite_durumu ORDER BY kalite_durumu`, [malzemeId, konumId, partiId]);
+// İstasyonun konumu, yalnız konumda serbest olmayan (red, karar bekleyen) bakiye varsa (135 uyarısının ön denetimi): sayım yolunda her satırda
+// koşar; konumu olan ama kalite bekleyen parçası olmayan istasyonda emir ve adım okunmaz (2902: istasyon konumu artık baştan açık).
+export const kaliteBekleyenIstasyonKonumu = async (db: Db, istasyonId: number): Promise<number | null> =>
+  (await db.tek<{ id: number }>(
+    `SELECT k.id FROM stok_konum k WHERE k.istasyon_id = $1
+       AND EXISTS (SELECT 1 FROM stok_bakiye b WHERE b.konum_id = k.id AND b.kalite_durumu <> 'serbest' AND b.miktar > 0)`, [istasyonId]))?.id ?? null;
 // Konumda bir parçanın serbest olmayan kalite durumlarındaki toplamı (üretimde uyarı, 135).
 export const konumKaliteToplamlari = (db: Db, konumId: number, malzemeId: number, statuId: number | null): Promise<{ kaliteDurumu: KaliteDurumu; miktar: string }[]> =>
   db.sorgu(

@@ -68,3 +68,7 @@ Yalnız istemci; sunucu, sözleşme ve göç değişmedi. Bütün okumalar modü
 - Plan için: `disari.ts` `ayarYetkinlikleri(db)` → `{ kisiId, makineId }[]`, yalnız aktif makinede bugün geçerli olan. Plan bunu ayrı dalda okuyacak; bu dal plana dokunmaz.
 - Personel kartında "Ayar yapabildiği makineler" satırı: çip, "+ Ayar…" seçicisi (makine ya da istasyonun bütün makineleri), bitiş ve dayanak düzenleme.
 - VARSAYIM: ayar yetkinliği çalışma yetkinliğini şart koşmaz (ayarcı makinede üretim yapmayabilir); yetki ilkesi istasyon yetkinliğiyle aynıdır. Geri alma ucuzdur (kural IS31 tek satır).
+
+## İstasyon açıldı / silinecek haberi (kart 2902, D3)
+
+- `servis.ts`: `istasyonEkle` istasyonu yazdıktan sonra aynı işlemde `IstasyonAcildi { istasyonId, ad, aktif }` bildirir; `istasyonSil` silmeden önce `{ istasyonId }` bildirir. `disari.ts` `istasyonAcildiDinle`, `istasyonSilinecekDinle`. Dinleyen stok, bağ `sunucu/kablolama.ts`'te. Şema, uç ve yetki değişmedi.

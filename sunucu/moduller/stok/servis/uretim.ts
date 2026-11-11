@@ -1111,7 +1111,7 @@ export async function uretimGirdiUyarisi(db: Db, g: { uretimEmriId: number; isEm
 // 135: red ve karar bekleyen parça üretimde durmaz, operatör her sayımda görür. Adımın parçası (numunedeki gibi) istasyonda red ya da
 // karar bekliyorsa söylenir; o parçadan yapılan ürün de aynı durumu alır (138 a).
 async function kaliteUyarisi(db: Db, g: { uretimEmriId: number; isEmriId: number | null; istasyonId: number }): Promise<string | null> {
-  const konumId = await sorgular.istasyonKonumu(db, g.istasyonId);
+  const konumId = await sorgular.kaliteBekleyenIstasyonKonumu(db, g.istasyonId);
   const parca = konumId === null ? null : await adimParcasi(db, g.uretimEmriId, g.isEmriId, 1n);
   if (konumId === null || parca === null) return null;
   const toplam = await sorgular.konumKaliteToplamlari(db, konumId, parca.malzemeId, parca.statuId);

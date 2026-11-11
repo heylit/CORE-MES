@@ -239,3 +239,5 @@ export function konumMalzemeleri(db: Db, s: KonumMalzemesiSuzgeci, sira: Siralam
     [...f.p, d.sinir, d.atla],
   );
 }
+// 2902: silinecek istasyonun konumu; hareketi ya da bakiyesi olan konumu yabancı anahtar korur (çağıran kayıt noktasında dener).
+export const istasyonKonumunuSil = (db: Db, istasyonId: number): Promise<unknown[]> => db.sorgu('DELETE FROM stok_konum WHERE istasyon_id = $1 RETURNING id', [istasyonId]);

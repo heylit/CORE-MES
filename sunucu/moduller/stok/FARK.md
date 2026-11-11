@@ -577,3 +577,9 @@ Lotun son kullanma tarihi (SKT) yeni `stok_parti_son_kullanma` tablosundadır (2
 - `GET /stok/harita-ozeti` cevabına `deposuzYer` (boş olabilir): depo olmayan bölümdeki raf gözü ve kabul, üretim çıkışı, depo zemini alanı.
 - Ayarlar > "Fabrika Haritası eşlemesi" kartında "Bütün bölümleri depo yap" düğmesi (yalnız `stok.tanim`, yalnız deposuz bölüm varken); sonuç sayılarla bildirilir. Eşleme kuralı (`haritaPlani`) ve konum türleri değişmedi; göç yok.
 - VARSAYIM: elle "Depodan çıkar" yapılmış bölüm de toplu komutla yeniden depo olur (istek: "deposu olmayan bütün bölümler"). Geri alma ucuz (tek süzgeç).
+## İstasyon konumu baştan (kart 2902, D3; karar 2903 a)
+
+- `disari.ts` `istasyonAcildiYansit`, `istasyonSilinecekYansit` (bağ `sunucu/kablolama.ts`'te). Aktif istasyon açılınca konumu (`IST-<no>`, ANA, ad istasyonun adı) açılır; ilk teslim aynı kuralla dener (değişmedi).
+- `haritadanEsle` önce konumsuz aktif istasyonların konumunu açar (cevap değişmedi). Kodu elle başka konuma verilmişse atlanır.
+- İstasyon silinirken kullanılmamış konumu kayıt noktasında silinir; hareketi ya da bakiyesi olan konumu yabancı anahtar korur, istasyon "kullanımda" kalır. Konumu olan istasyonun silinemez hale gelmemesi için.
+- Kart 2902 v2: istasyon konumu artık baştan açık olduğu için sayımdaki kalite uyarısı (135) her satırda emri ve adımı okuyordu (Arkon satır başına sorgu sınırı aşıldı). Uyarı önce istasyon konumunda red ya da karar bekleyen bakiye var mı diye tek sorguyla bakar (`kaliteBekleyenIstasyonKonumu`); yoksa emir okunmaz. Davranış aynı.
