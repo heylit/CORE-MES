@@ -22,6 +22,7 @@
 | EM-19 mal kabul seçimi lot şablonuyla basılır, deftere lot olarak yazılır; sınır basılan etiket sayısıyla | `EM-11` (kurallar.test.ts), `EM-U14` |
 | EM-17 refakat kartı etiketi emrin refakat kartını basar; termin yoksa "yok", basım tesis günü, işlem sırası tek metin | `EM-17`, `EM-U13` |
 | EM-20 refakat partisinin kartı (kart #127): emrin kartı, QR `RP:<parti>`, başlık emir no-P sıra, lot satırı (lot no, parti, döküm, sertifika); refakat şablonuyla basılır | `EM-17`, `EM-U16` |
+| 2907 D4 (2887 a): refakat kartında revizyon kodu "Rev <kod>" kopya satırında ayrı kutuda (14 karaktere kadar tam), ekranlardaki kodun aynısı (belge-merkezi revKodu), basım anındaki değer; seçim 3B taslağına düşerse kartın revizyonu, o da yoksa boş (Kalite K1); kodsuz üründe ve rota harfiyle basılmaz; Kopya n/N ve karoyla çakışmaz | `EM-17`, `kurallar.test.ts` 2907 D4, `is-emri.test.ts` refakat kartı |
 | EM-21 etiket listesi koddaki şablon ve kayıt türleriyle ayrışmaz: her şablon türü ve basılabilen her kayıt türü tam bir "Basılıyor" satırında; yapılacak türün şablonu yok (kart #1292) | `EM-U17` |
 | Ekran: etiket listesi sahip modülü menü adıyla, durum ve başka yerdeki baskı yeriyle gösterir | `EtiketMerkezi.test.tsx` |
 | Okuma yalnız sayfayı görene | `EM-U1` (etiket-merkezi.test.ts, gerçek PostgreSQL) |

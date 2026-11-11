@@ -15,7 +15,7 @@ const KART: RefakatPartisi = {
   ust: null, birlestigi: null, birlesmeZamani: null,
 };
 const KOL: RefakatPartisi = { ...KART, id: 13, qr: 'RP:13', etiket: 'UE-000001/1-P1', uretimEmriId: 2, emirNo: 'UE-000001/1', verilen: '0', ust: { id: 12, etiket: 'UE-000001-P1' } };
-const BAS = { emirId: 1, qr: 'UE:1', emirNo: 'UE-000001', urun: { kod: 'P-1', ad: 'Deneme parça' }, adet: 10, teslim: null, parti: { ustEmirNo: null, bolunmeSira: null }, adimlar: [] };
+const BAS = { emirId: 1, qr: 'UE:1', emirNo: 'UE-000001', urun: { kod: 'P-1', ad: 'Deneme parça' }, revizyon: null, adet: 10, teslim: null, parti: { ustEmirNo: null, bolunmeSira: null }, adimlar: [] };
 const kartCevabi = (r: RefakatPartisi): RefakatPartisiKartiCevabi => ({ refakat: r, kart: { ...BAS, emirId: r.uretimEmriId, emirNo: r.emirNo ?? '' } });
 const IZ: RefakatIziCevabi = {
   refakat: KART, ustler: [], altlar: [KOL], birlesenler: [], ayniLot: [KOL],

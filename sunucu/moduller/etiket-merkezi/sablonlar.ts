@@ -16,7 +16,7 @@ export const ALANLAR: Record<SablonTuru, { anahtar: string; ad: string }[]> = {
     { anahtar: 'parti', ad: 'Parti, döküm, sertifika' }, { anahtar: 'giris', ad: 'Giriş, miktar, belge' },
   ],
   refakat: [
-    { anahtar: 'qr', ad: 'QR (UE ya da RP)' }, { anahtar: 'emirNo', ad: 'Emir no' }, { anahtar: 'urunAd', ad: 'Ürün adı' }, { anahtar: 'urunKod', ad: 'Parça no' },
+    { anahtar: 'qr', ad: 'QR (UE ya da RP)' }, { anahtar: 'emirNo', ad: 'Emir no' }, { anahtar: 'urunAd', ad: 'Ürün adı' }, { anahtar: 'urunKod', ad: 'Parça no' }, { anahtar: 'revizyon', ad: 'Revizyon kodu (Rev …)' },
     { anahtar: 'adetTermin', ad: 'Adet ve termin' }, { anahtar: 'parti', ad: 'Parti' }, { anahtar: 'basim', ad: 'Basım tarihi' },
     { anahtar: 'adimlar', ad: 'İşlem sırası' }, { anahtar: 'rota', ad: 'Rota (adım başına satır)' }, { anahtar: 'lot', ad: 'Lot, parti, döküm, sertifika' },
     { anahtar: 'adet', ad: 'Adet' }, { anahtar: 'termin', ad: 'Termin' }, { anahtar: 'adim1Ad', ad: 'İşlem satırları (no, ad, yer, piktogram)' },
@@ -106,7 +106,8 @@ export const HAZIR_SABLONLAR: readonly Sablon[] = [
     // Sağ üst karo bütün hazır şablonlardadır (2168-1 a); burada küçüktür, yer kart no ve QR'ındır.
     qr(3.5, 3.5, 37.5), simge(87, 2.5, 10.5, '=siyah:refakat'), metin(45, 3.4, 40, 3.6, 3, '=REFAKAT KARTI', true), metin(45, 7.6, 40, 2.4, 1.9, '=HER İŞLEMDE OKUTUN'),
     // 2929 a: kopya sırası başlığın altında; tek kopyada değer yoktur, yazı basılmaz.
-    metin(45, 10.6, 40, 2.6, 2.2, 'kopya', true),
+    // 2907 D4: revizyon kodu kopya sırasının sağında, aynı satırda; parça no satırı tam genişlikte kalır (uzun parça no kısalmasın).
+    metin(45, 10.6, 18, 2.6, 2.2, 'kopya', true), metin(64, 10.6, 22, 2.6, 2.2, 'revizyon', true),
     metin(45, 14, 52, 8.6, 7.4, 'emirNo', true), metin(45, 23.4, 52, 4.2, 3.6, 'urunAd', true), metin(45, 28, 52, 3.2, 2.6, 'urunKod'),
     kutu(45, 32, 52, 12.5, 0.4), kutu(71, 32, 0.4, 12.5, 0.4),
     baslik(47, 33.2, 22, 'EMİR ADEDİ'), metin(47, 35.6, 22, 7.2, 6.6, 'adet', true), baslik(73, 33.2, 22, 'TERMİN'), metin(73, 36.8, 22, 4.6, 4, 'termin', true),
@@ -165,7 +166,7 @@ export const ORNEK_DEGERLER: Record<SablonTuru, AlanDegerleri> = {
     parti: 'Parti P-01 · Döküm D-01', giris: '18.10.2026 · 12 adet · MK-000045',
   },
   refakat: {
-    qr: `${KOD_ONEKI['uretim-emri']}:4512`, emirNo: 'UE-004512', urunAd: 'Örnek flanş', urunKod: 'Parça no: ORN-FL-01',
+    qr: `${KOD_ONEKI['uretim-emri']}:4512`, emirNo: 'UE-004512', urunAd: 'Örnek flanş', urunKod: 'Parça no: ORN-FL-01', revizyon: 'Rev C',
     adetTermin: 'Adet 40 · Termin 30.10.2026', parti: null, basim: 'Basım 18.10.2026',
     adimlar: '10 Torna (Örnek tezgâh) · 20 Kaplama (Örnek fason, fason) · 30 Son kontrol',
     rota: ['10 Torna (Örnek tezgâh)', '20 Kaplama (Örnek fason, fason)', '30 Son kontrol'].join(SATIR_BASI), lot: 'Lot LT-000123 · Döküm D-01 · Sertifika S-01',

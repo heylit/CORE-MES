@@ -19,7 +19,8 @@ import { firmaAra, firmaOzetleri, karneOlayiYaz } from '../musteri-tedarikci/dis
 import { aktifIstasyonlar, istasyonAdlari, istasyonKisiAtamalari, istasyonlar, makineGetir, operasyonTipleri } from '../istasyonlar/disari.ts';
 import { kisiAdlari } from '../kisiler/disari.ts';
 import { numaraAl, sistemAyariOku } from '../ayarlar/disari.ts';
-import { firmaKodu, malzemeOzeti, malzemeOzetleri } from '../malzemeler/disari.ts';
+import { kayitlarinKucukResimleri } from '../belge-merkezi/disari.ts';
+import { firmaKodu, malzemeOzeti, malzemeOzetleri, malzemeResimAnahtarlari } from '../malzemeler/disari.ts';
 import { projeGetir, projeSecenekleri } from '../projeler/disari.ts';
 import { siparisAyrintisi, siparisKilitliAyrinti, siparisSatiriOzetleri } from '../siparisler/disari.ts';
 import {
@@ -1966,6 +1967,17 @@ export async function emrinIstasyonu(db: Db, emirId: number): Promise<number | n
   return baslamis?.istasyonId ?? kendi.find((i) => i.istasyonId !== null)?.istasyonId ?? null;
 }
 
+// Refakat kartındaki revizyon kodu (2907 D4): ekranlardaki kodun aynısı (yayındaki resmin anteti, yoksa kartın revizyonu; 2887 a).
+// Emirde saklanmaz, kart basıldığı andaki değerdir; rota harfi değildir. Kaynak yalnız burada seçilir.
+// Seçim 3B modelin taslağına düştüyse (yayına girmiş resim yok) taslağın anteti kâğıda basılmaz: kartın revizyonu, o da yoksa boş.
+async function refakatRevizyonu(db: Db, malzemeNo: number | null): Promise<string | null> {
+  if (malzemeNo === null) return null;
+  const resim = (await kayitlarinKucukResimleri(db, 'malzemeler', [malzemeNo])).get(malzemeNo);
+  if (resim === undefined) return null;
+  if (resim.taslak !== true) return resim.revKodu ?? null;
+  return (await malzemeResimAnahtarlari(db, [malzemeNo])).get(malzemeNo)?.revizyon ?? null;
+}
+
 // Refakat kartının verisi ayrıntıyla aynı kaynaktan gelir; alt partide üst emrin numarası da yazılır.
 export async function refakatKarti(db: Db, id: number): Promise<RefakatKartiCevabi> {
   const e = await adimliAyrinti(db, id);
@@ -1973,8 +1985,9 @@ export async function refakatKarti(db: Db, id: number): Promise<RefakatKartiCeva
   if (ihlal !== null) throw cakisma(ihlal);
   const ustId = e.parti?.ustEmirId ?? null;
   const ustEmirNo = ustId === null ? null : (await s.emirNolariGetir(db, [ustId]))[0]?.emirNo ?? null;
+  const rev = await refakatRevizyonu(db, (await s.ustEmirBul(db, id))?.malzemeNo ?? null);
   return {
-    emirId: e.id, qr: refakatQrMetni(e.id), emirNo: e.emirNo, urun: { kod: e.urun.kod, ad: e.urun.ad }, adet: e.adet, teslim: e.teslim,
+    emirId: e.id, qr: refakatQrMetni(e.id), emirNo: e.emirNo, urun: { kod: e.urun.kod, ad: e.urun.ad }, revizyon: rev, adet: e.adet, teslim: e.teslim,
     parti: { ustEmirNo, bolunmeSira: e.parti?.bolunmeSira ?? null },
     adimlar: e.isEmirleri.map((i) => ({
       opNo: i.opNo, ad: i.ad, yer: i.istasyon?.ad ?? (i.kaynak?.tur === 'fason' ? i.kaynak.ad : null), fason: i.kaynak?.tur === 'fason',

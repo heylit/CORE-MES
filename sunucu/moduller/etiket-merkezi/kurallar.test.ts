@@ -2,12 +2,12 @@ import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import { agAraliklariniCoz } from '#paylasilan/ag-araligi.ts';
 import { kodTuru } from '#paylasilan/kod-sozlugu.ts';
-import { QR_KENAR_MODUL, type Sablon } from '#paylasilan/sozlesme/etiket-merkezi.ts';
+import { QR_KENAR_MODUL, SATIR_ARALIGI, type Sablon } from '#paylasilan/sozlesme/etiket-merkezi.ts';
 import { yaziciAgiOku } from './ag.ts';
 import { QR_ALTI_EN_KUCUK_YAZI, kopyaDegerleri, qrAltiYeri } from './kurallar.ts';
 import { BEKLEYEN_GUN, HATALI_KARAR_SIMGESI, KALITE_KARAR_SIMGESI, REFAKAT_ADIM_SAYISI, REFAKAT_CIKIS_SATIRI, bekleyenBaslangici, bekleyenSirasi, kaliteBekleyenleri, kaliteDurumDegerleri, hataliBekleyenleri, malKabulBekleyenleri, refakatBekleyenleri } from './kurallar.ts';
 import { alanDegeri, baskiEngeli, dogrudanBaskiDurumu, indirmeEngeli, istasyonDegerleri, kayitUyumHatasi, konumDegerleri, lotDegerleri, kayitSablonTuru, malzemeDegerleri, noktaya, rafDegerleri, refakatDegerleri, refakatPartisiDegerleri, toplamEtiketHatasi, yaziciAdresHatasi, qrDikdortgenleri, qrMatrisi, sablonHatalari, sadelestir, SATIR_BASI, satirlaraBol, sigdirilmisYazi, yerlesim } from './kurallar.ts';
-import { HAZIR_SABLONLAR, ORNEK_DEGERLER } from './sablonlar.ts';
+import { ALANLAR, HAZIR_SABLONLAR, ORNEK_DEGERLER } from './sablonlar.ts';
 import { pplb, pplbKacir, pplbYaziSecimi, zpl, zplKacir } from './yazici-dili.ts';
 
 const sablon = (ogeler: Sablon['ogeler'], genislik = 50, yukseklik = 25): Sablon => ({ anahtar: 't', ad: 'T', tur: 'malzeme', genislik, yukseklik, ogeler });
@@ -276,7 +276,7 @@ describe('etiket-merkezi kuralları', () => {
 
   test('EM-17: refakat kartı etiketi üretim emrinin refakat kartı içeriğini basar; QR emir kimliğidir, termin yoksa "yok", basım tesis günüdür', () => {
     const k = {
-      emirId: 4512, qr: 'UE:4512', emirNo: 'UE-004512', urun: { kod: 'ORN-FL-01', ad: 'Örnek flanş' }, adet: 40, teslim: '2026-10-30',
+      emirId: 4512, qr: 'UE:4512', emirNo: 'UE-004512', urun: { kod: 'ORN-FL-01', ad: 'Örnek flanş' }, revizyon: null, adet: 40, teslim: '2026-10-30',
       parti: { ustEmirNo: null, bolunmeSira: null },
       adimlar: [{ opNo: 10, ad: 'Torna', yer: 'Deneme tezgâhı', fason: false }, { opNo: 20, ad: 'Kaplama', yer: 'Deneme Fason', fason: true }, { opNo: 30, ad: 'Kontrol', yer: null, fason: false }],
     };
@@ -284,8 +284,10 @@ describe('etiket-merkezi kuralları', () => {
     assert.deepEqual(Object.fromEntries(Object.entries(tam).filter(([a]) => !/^adim\d/.test(a) && a !== 'adet' && a !== 'termin')), {
       qr: 'UE:4512', emirNo: 'UE-004512', urunAd: 'Örnek flanş', urunKod: 'Parça no: ORN-FL-01', adetTermin: 'Adet 40 · Termin 30.10.2026',
       parti: null, basim: 'Basım 19.10.2026', adimlar: '10 Torna (Deneme tezgâhı) · 20 Kaplama (Deneme Fason, fason) · 30 Kontrol',
-      rota: ['10 Torna (Deneme tezgâhı)', '20 Kaplama (Deneme Fason, fason)', '30 Kontrol'].join(SATIR_BASI), lot: null, lotNo: null, lotEk: null,
+      rota: ['10 Torna (Deneme tezgâhı)', '20 Kaplama (Deneme Fason, fason)', '30 Kontrol'].join(SATIR_BASI), lot: null, lotNo: null, lotEk: null, revizyon: null,
     });
+    // 2907 D4: revizyon kodu "Rev <kod>" ayrı alanda; parça no satırı değişmez.
+    assert.deepEqual([refakatDegerleri({ ...k, revizyon: '03' }, new Date())['revizyon'], refakatDegerleri({ ...k, revizyon: '03' }, new Date())['urunKod']], ['Rev 03', 'Parça no: ORN-FL-01']);
     // EM-27: işlem satırları ayrı alanlarda; fason işlem kamyon piktogramıyla; adet ve termin ayrı.
     assert.deepEqual([tam['adet'], tam['termin'], tam['adim1No'], tam['adim1Ad'], tam['adim1Yer'], tam['adim1Simge']], ['40', '30.10.2026', '10', 'Torna', 'Deneme tezgâhı', 'siyah:tezgah']);
     assert.deepEqual([tam['adim2Yer'], tam['adim2Simge'], tam['adim3Yer'], tam['adim4No'], tam['adim4Simge']], ['Deneme Fason · fason', 'siyah:fason', null, null, null]);
@@ -488,5 +490,28 @@ describe('2929 a: refakat kartı kopyaları', () => {
     const d = [{ qr: 'RP:1', emirNo: 'UE-1-P1' }, { qr: 'RP:2', emirNo: 'UE-2-P1' }];
     assert.deepEqual(kopyaDegerleri(d, 1), d);
     assert.deepEqual(kopyaDegerleri(d, 2).map((x) => [x.qr, x.kopya]), [['RP:1', 'Kopya 1/2'], ['RP:1', 'Kopya 2/2'], ['RP:2', 'Kopya 1/2'], ['RP:2', 'Kopya 2/2']]);
+  });
+});
+
+describe('2907 D4: refakat kartında revizyon kodu', () => {
+  test('Rev kopya satırında kendi kutusunda: uzun kod (Atölye N2: Rev 03-A1, Rev 2024-07-A1) ve Kopya 10/10 tam basılır, çakışmaz, karoya taşmaz; parça no tam genişlikte; kodsuz kartta Rev yok', () => {
+    const s = HAZIR_SABLONLAR.find((x) => x.anahtar === 'refakat-100x150')!;
+    const ogeler = yerlesim(s, { ...ORNEK_DEGERLER.refakat, urunKod: 'Parça no: ORN-FLANS-GOVDE-0001-ABCDE-XYZ', revizyon: 'Rev 03-A1', kopya: 'Kopya 10/10' }, false);
+    const metinler = ogeler.flatMap((o) => (o.tur === 'metin' ? [o] : []));
+    const rev = metinler.find((m) => m.satirlar.join(' ') === 'Rev 03-A1');
+    const kopya = metinler.find((m) => m.satirlar.join(' ') === 'Kopya 10/10');
+    const parca = metinler.find((m) => m.satirlar.join(' ').startsWith('Parça no:'));
+    assert.ok(rev && kopya && parca, 'Rev, kopya ve parça no birlikte basılır');
+    const kutu = (m: typeof rev) => ({ x0: m!.x, x1: m!.x + m!.genislik, y0: m!.y, y1: m!.y + m!.satirlar.length * m!.yaziMm * SATIR_ARALIGI });
+    const kesisir = (a: ReturnType<typeof kutu>, b: ReturnType<typeof kutu>) => a.x0 < b.x1 && b.x0 < a.x1 && a.y0 < b.y1 && b.y0 < a.y1;
+    for (const [a, b] of [[rev, kopya], [rev, parca], [kopya, parca]] as const) assert.ok(!kesisir(kutu(a), kutu(b)), `${a!.satirlar[0]} ile ${b!.satirlar[0]}`);
+    const karo = ogeler.find((o) => o.tur === 'simge');
+    assert.ok(karo?.tur === 'simge' && kutu(rev).x1 <= karo.x, 'sağ üst karoya taşmaz');
+    assert.equal(parca!.genislik, 52, 'parça no satırı daralmaz');
+    const enUzun = yerlesim(s, { ...ORNEK_DEGERLER.refakat, revizyon: 'Rev 2024-07-A1', kopya: 'Kopya 10/10' }, false);
+    assert.ok(enUzun.some((o) => o.tur === 'metin' && o.satirlar.join(' ') === 'Rev 2024-07-A1'), 'on dört karakterlik kod da tam');
+    assert.ok(ALANLAR.refakat.some((a) => a.anahtar === 'revizyon'), 'kullanıcı şablonu revizyon alanını seçebilir');
+    const kodsuz = yerlesim(s, { ...ORNEK_DEGERLER.refakat, revizyon: null }, false);
+    assert.ok(!kodsuz.some((o) => o.tur === 'metin' && o.satirlar.join(' ').startsWith('Rev')));
   });
 });
