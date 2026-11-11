@@ -22,6 +22,8 @@ const RESTRICT_ANAHTARLARI = [
   'satin_alma_onay_limiti.rol_id -> rol',
   // 2414 a: birleşmiş kaynak ve kalemi kaynakta olan talep silinmez; silinse birleşik talep kaynağını, kalem geri döneceği yeri yitirirdi.
   'satin_alma_talep.birlesen_talep_id -> satin_alma_talep',
+  // 2876: güncellemesi olan kök talep silinmez; silinse güncelleme talebi grubunu ve otomatik iptalin bağını yitirirdi (servis önce 409 ile reddeder).
+  'satin_alma_talep.guncellenen_talep_id -> satin_alma_talep',
   'satin_alma_talep_kalemi.kaynak_talep_id -> satin_alma_talep',
   // Gerçek ihlal testi stokta: `stok.test.ts` DEP-14/12/13, DEP-09/13 ve DEP-57 bakiyeli konumu kapatmayı uçtan 409 BAGIMLI_KAYIT ile sınar.
   'stok_bakiye.konum_aktif -> stok_konum',
@@ -124,6 +126,30 @@ describe('RESTRICT yabancı anahtar (bütün göçler, gerçek PostgreSQL)', () 
     }
     await sil(bos);
     assert.equal((await s.tek<{ n: number }>('SELECT count(*)::int AS n FROM satin_alma_talep WHERE id = ANY($1)', [[birlesik, kaynak, kalemKaynagi, bos]]))?.n, 3);
+  });
+
+  test('2876: güncellemesi olan kök talebi silmek 409 BAGIMLI_KAYIT; güncelleme talebi ve bağsız talep silinir', async () => {
+    const { vt: uygulama, sahip: s } = acik();
+    const kisi = (await s.tek<{ id: number }>("INSERT INTO kisi (ad) VALUES ('Deneme Kişi') RETURNING id"))!.id;
+    let sayac = 0;
+    const talep = async (guncellenen: string | null = null): Promise<string> => (await s.tek<{ id: string }>(
+      `INSERT INTO satin_alma_talep (id, no, acan_kisi_id, baslik, talep_eden_kisi_id, guncellenen_talep_id) VALUES (gen_random_uuid(), $3, $1, 'Deneme', $1, $2) RETURNING id`,
+      [kisi, guncellenen, `RG-${++sayac}`]))!.id;
+    const kok = await talep();
+    const guncelleme = await talep(kok);
+    const bos = await talep();
+    const sil = (id: string) => uygulama.tx((db) => db.sorgu('DELETE FROM satin_alma_talep WHERE id = $1', [id])).catch((h: unknown) => h);
+    const ihlal = kisitIhlali(await sil(kok));
+    assert.equal(ihlal?.hata.kod, 'BAGIMLI_KAYIT');
+    assert.equal(ihlal?.hata.durum, 409);
+    assert.equal(ihlal?.iz.kisit, 'satin_alma_talep_guncellenen');
+    assert.ok(['23503', '23001'].includes(String(ihlal?.iz.pgKodu)));
+    await sil(guncelleme);
+    await sil(bos);
+    assert.deepEqual((await s.sorgu<{ id: string }>('SELECT id FROM satin_alma_talep WHERE id = ANY($1)', [[kok, guncelleme, bos]])).map((x) => x.id), [kok]);
+    // Güncellemesi silinen kök artık bağsızdır, silinir.
+    await sil(kok);
+    assert.equal((await s.tek<{ n: number }>('SELECT count(*)::int AS n FROM satin_alma_talep WHERE id = $1', [kok]))?.n, 0);
   });
 
   test('2540: tedarikçi alacağı olan siparişi silmek 409 BAGIMLI_KAYIT (düşüldü alacak da); alacağı olmayan sipariş silinir', async () => {
