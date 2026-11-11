@@ -50,6 +50,9 @@ describe('Depo sevk', () => {
     const girecek = screen.getByRole('table', { name: 'Kabul bekleyen' });
     expect(within(girecek).getByText('Firma getirir')).toBeTruthy();
     expect(within(girecek).getByText('10 / 25')).toBeTruthy();
+    expect(girecek.closest('.tc-tablo-kap')?.hasAttribute('data-kaydir')).toBe(true);
+    expect(within(girecek).getByRole('columnheader', { name: 'Kalem' }).classList.contains('tc-tablo-sabit-sol')).toBe(true);
+    expect(within(girecek).getByRole('button', { name: 'Kabul et' }).closest('td')?.classList.contains('tc-tablo-sabit-sag')).toBe(true);
     fireEvent.click(within(girecek).getByRole('button', { name: 'Kabul et' }));
     expect(await screen.findByText(/^Sevkiyat kalemi:/)).toBeTruthy();
     await waitFor(() => expect((screen.getAllByLabelText(/Sayılan miktar/) as HTMLInputElement[]).map((k) => k.value)).toEqual(['15']));

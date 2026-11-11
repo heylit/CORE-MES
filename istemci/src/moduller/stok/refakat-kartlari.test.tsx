@@ -32,6 +32,20 @@ describe('Refakat kartları sayfası (kart #708)', () => {
     expect(await screen.findByRole('dialog', { name: 'Refakat kartı UE-000001-P1' })).toBeTruthy();
   });
 
+  it('seçili kart birincil düğme olmaz (sayfada tek birincil); seçim aria-pressed ile görünür', async () => {
+    sunucuKur({ ...OKUYUCU, islemler: ['sayfa.stok', 'sayfa.akis'] }, {
+      'GET /stok/refakat-kartlari': () => json(200, { kartlar: LISTE, sinirda: false }),
+      'GET /akis/refakat-kartlari': () => json(200, { kartlar: [] }),
+    });
+    ac('/stok/refakat-kartlari');
+    const tablo = await screen.findByRole('table', { name: 'Kart listesi' });
+    fireEvent.click(within(tablo).getAllByRole('row')[2]!.querySelector('td[data-baslik="Ürün"]')!);
+    const secili = await within(tablo).findByRole('button', { pressed: true });
+    expect(secili.textContent).toBe('UE-000002-P1');
+    expect(secili.classList.contains('tc-dugme-birincil')).toBe(false);
+    expect(tablo.querySelector('.tc-dugme-birincil')).toBeNull();
+  });
+
   it('menüden açılır; kartları durumuyla listeler, okutma alanında süzer, tümü iptali de ister; Akış Süresi yetkisi yoksa kart penceresi açılır', async () => {
     const istekler = sunucuKur(OKUYUCU, {
       'GET /stok/refakat-kartlari': () => json(200, { kartlar: LISTE, sinirda: false }),

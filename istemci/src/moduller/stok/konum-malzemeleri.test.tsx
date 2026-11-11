@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
-import type { BakiyeSatiri, KonumAyrintiCevabi, KonumMalzemeleriCevabi, KonumMalzemesi } from '#paylasilan/sozlesme/stok.ts';
+import type { BakiyeSatiri, Konum, KonumAyrintiCevabi, KonumlarCevabi, KonumMalzemeleriCevabi, KonumMalzemesi } from '#paylasilan/sozlesme/stok.ts';
 import { beklemeMetni } from './gorunum.ts';
 import { OKUYUCU, ac, json, sunucuKur } from './test-ortak.tsx';
 
@@ -24,6 +24,18 @@ describe('Konumdaki malzemeler (2224)', () => {
     expect(beklemeMetni('2026-11-07T11:51:00Z', simdi)).toBe('9 dk');
     expect(beklemeMetni(null, simdi)).toBe('—');
     expect(beklemeMetni(undefined, simdi)).toBe('—');
+  });
+
+  it('Bütün konumlar: tek satırlı kayan tablo, Kod solda yapışık', async () => {
+    const k = { id: 7, kod: 'A-01-02', tur: 'raf_gozu', ad: 'Deneme raf gözü uzun adlı', depoId: 1, depoKod: 'ANA', haritaGozId: null, haritaAlanId: null, satirSayisi: 2, sonSayim: null } as unknown as Konum;
+    sunucuKur(OKUYUCU, { 'GET /stok/konumlar': () => json(200, { satirlar: [k], toplam: 1, sayfa: 1, sayfaBoyu: 50 } as KonumlarCevabi) });
+    ac('/stok/konumlar');
+    fireEvent.click(await screen.findByRole('tab', { name: /Bütün konumlar/ }));
+    const tablo = await screen.findByRole('table', { name: 'Konumlar' });
+    await within(tablo).findByText('A-01-02');
+    expect(tablo.closest('.tc-tablo-kap')?.hasAttribute('data-kaydir')).toBe(true);
+    expect(within(tablo).getByRole('columnheader', { name: /^Kod/ }).classList.contains('tc-tablo-sabit-sol')).toBe(true);
+    expect(within(tablo).getByText('Deneme raf gözü uzun adlı').closest('.tc-tablo-kes')?.getAttribute('title')).toBe('Deneme raf gözü uzun adlı');
   });
 
   it('sekme bütün konumlardaki malzemeyi süresiyle listeler; tür süzgeci sunucuya gider', async () => {
