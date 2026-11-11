@@ -1,9 +1,10 @@
 import { KucukResimKutusu, ResimPaneli, type useKucukResimler } from '../../../cizimler/disari.ts';
 import { KatalogSimgesi } from './KatalogSimgesi.tsx';
 
-// Resmin sahibi çizim merkezidir (688 a); kart kopya tutmaz. Eşleşme kartın "Teknik resim no" ve "Revizyon"u ile yalnız yarı
-// mamul ve mamulde yapılır; panel kart no olmadan (kaydedilmemiş kart) açılamaz.
-export const resimliTur = (tur: string | null | undefined): boolean => tur === 'yarimamul' || tur === 'mamul';
+// Resmin sahibi çizim merkezidir (688 a); kart kopya tutmaz. Resim her türde karta eklenir (2872-1 a: mal kabul hammadde ve sarfta
+// da resmi gösterir). Teknik resim no ve revizyonla eşleşme önerisi yine yalnız yarı mamul ve mamuldedir; onu sunucu kurar.
+// Panel kart no olmadan (kaydedilmemiş kart) açılamaz.
+export const resimliTur = (tur: string | null | undefined): boolean => tur != null && tur !== '';
 
 export function ResimAlani({ tur, no }: { tur: string | null | undefined; no: number | null | undefined }) {
   if (!resimliTur(tur) || !no) return null;
@@ -16,7 +17,7 @@ export function ResimAlani({ tur, no }: { tur: string | null | undefined; no: nu
 
 export type KucukResimler = ReturnType<typeof useKucukResimler>;
 
-// Liste satırı: resmi olan yarı mamul ve mamulde küçük resim (revizyon uyuşmazlığı kutunun içinde), diğerlerinde türün simgesi.
+// Liste satırı: resmi olan kartta küçük resim (revizyon uyuşmazlığı kutunun içinde), resmi olmayanda türün simgesi.
 export function SatirResmi({ tur, no, ad, simge, resimler }: {
   tur: string | null | undefined; no: number; ad: string; simge: string | null | undefined; resimler: KucukResimler;
 }) {
