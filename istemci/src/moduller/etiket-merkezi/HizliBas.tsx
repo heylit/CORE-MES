@@ -27,7 +27,7 @@ export function useDogrudanBasim(kayitTuru: KayitTuru): {
   const m = useMutation({
     mutationFn: ({ y, idler }: { y: CihazYazicisi; idler: number[] }) =>
       api.post<BasCevabi>(`/etiket-merkezi/sablonlar/${encodeURIComponent(y.sablonAnahtar)}/bas`,
-        { yaziciId: y.yaziciId, adet: kayitTuru === 'refakat-partisi' ? REFAKAT_KOPYA_SAYISI : 1, kayit: { tur: kayitTuru, idler } }, { istekKimligi: yeniIstekKimligi(), zamanAsimiMs: 15000 }),
+        { yaziciId: y.yaziciId, adet: kayitTuru === 'refakat-partisi' ? REFAKAT_KOPYA_SAYISI : 1, kayit: { tur: kayitTuru, idler }, ...(y.olcu ? { olcu: y.olcu } : {}) }, { istekKimligi: yeniIstekKimligi(), zamanAsimiMs: 15000 }),
     onSuccess: (c, { y }) => {
       if (c.sonuc === 'hata') bildir('hata', `${c.ileti ?? 'Yazıcı hata verdi.'} ${YAZICI_HATASI}`);
       else bildir('tamam', `Etiketler gönderildi: ${y.yaziciAd}.`);

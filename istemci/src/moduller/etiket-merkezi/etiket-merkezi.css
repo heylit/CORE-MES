@@ -10,6 +10,7 @@
 .tc-etk-kagit-alani-gercek { justify-content: flex-start; overflow: auto; }
 .tc-etk-onizleme-gercek { flex: none; margin-inline: auto; }
 .tc-etk-kart { fill: none; stroke: var(--ink); }
+.tc-etk-ozel-olcu { display: flex; flex-direction: column; gap: var(--b-2); min-width: 0; }
 .tc-etk-olcu-satiri { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2) var(--b-3); }
 .tc-etk-kalibrasyon { display: flex; flex-direction: column; gap: var(--b-3); min-width: 0; padding: var(--b-3); border: thin solid var(--edge); border-radius: var(--yari-1); }
 .tc-etk-kaydirici { display: flex; flex-direction: column; gap: var(--b-1); }

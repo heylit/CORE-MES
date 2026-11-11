@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import type { KayitSecimi, Sablon, YazdirCevabi } from '#paylasilan/sozlesme/etiket-merkezi.ts';
+import type { KayitSecimi, OzelOlcu, Sablon, YazdirCevabi } from '#paylasilan/sozlesme/etiket-merkezi.ts';
 import { Dugme } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { yeniIstekKimligi } from '../../ortak/veri/istek-kimligi.ts';
@@ -14,7 +14,7 @@ import { EtiketCizimi } from './Onizleme.tsx';
 export const BASKI_SINIFI = 'tc-etk-baskida';
 export const SAYFA_STILI_KIMLIGI = 'tc-etk-sayfa';
 
-// @page ölçüsü şablonun mm ölçüsüdür, kenar boşluğu yoktur: her etiket bir sayfadır.
+// @page ölçüsü basılan etiketin mm ölçüsüdür (özel ölçüde girilen ölçü), kenar boşluğu yoktur: her etiket bir sayfadır.
 export const sayfaKurali = (genislik: number, yukseklik: number): string => `@page { size: ${String(genislik)}mm ${String(yukseklik)}mm; margin: 0; }`;
 
 // Ekran ölçeği (gercek-boyut.ts) uygulanmaz: baskıda 1 mm = 1 mm. Her etiket `adet` kez, art arda sayfa olur.
@@ -38,13 +38,13 @@ function baskiyiKaldir(): void {
 }
 
 // Defter satırı yazdırma penceresi açılmadan yazılır; tarayıcı etiketin basılıp basılmadığını uygulamaya bildirmez.
-export function VektorelYazdir({ sablon, adet, kayit }: { sablon: Sablon; adet: number | null; kayit: KayitSecimi | null }) {
+export function VektorelYazdir({ sablon, adet, kayit, olcu = null }: { sablon: Sablon; adet: number | null; kayit: KayitSecimi | null; olcu?: OzelOlcu | null }) {
   const istemci = useQueryClient();
   const [kimlik, setKimlik] = useState(yeniIstekKimligi);
   const [baski, setBaski] = useState<YazdirCevabi | null>(null);
   const [sonuc, setSonuc] = useState<{ ton: 'tamam' | 'hata'; metin: string } | null>(null);
   const yazdir = useMutation({
-    mutationFn: (g: { adet: number; kayit?: KayitSecimi }) =>
+    mutationFn: (g: { adet: number; kayit?: KayitSecimi; olcu?: OzelOlcu }) =>
       api.post<YazdirCevabi>(`/etiket-merkezi/sablonlar/${sablon.anahtar}/yazdir`, g, { istekKimligi: kimlik }),
     onSuccess: (c) => {
       setKimlik(yeniIstekKimligi());
@@ -77,7 +77,7 @@ export function VektorelYazdir({ sablon, adet, kayit }: { sablon: Sablon; adet: 
     <div className="tc-etk-gonder">
       <div className="tc-etk-dugmeler">
         <Dugme simge="printer" disabled={adet === null} yukleniyor={yazdir.isPending}
-          onClick={() => { if (adet !== null) { setSonuc(null); yazdir.mutate({ adet, ...(kayit ? { kayit } : {}) }); } }}>
+          onClick={() => { if (adet !== null) { setSonuc(null); yazdir.mutate({ adet, ...(kayit ? { kayit } : {}), ...(olcu ? { olcu } : {}) }); } }}>
           Vektörel yazdır
         </Dugme>
       </div>

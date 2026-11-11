@@ -6,7 +6,7 @@ import type { Kullanici } from '#cekirdek/yetki.ts';
 import {
   COZUNURLUKLER, DOSYA_UZANTILARI, EN_COK_ADET, SABLON_TURU_ADLARI, YAZICI_DILLERI, YAZICI_DILI_ADLARI, type BasCevabi, type BasGovdesi, type BaskilarCevabi, type AtlaCevabi, type AtlaGovdesi, type BekleyenlerCevabi, type CiktiCevabi, type EtiketlerCevabi, type CiktiSecenekleri, type DogrudanBaski, type IndirCevabi, type YazdirCevabi, type YazdirGovdesi,
   type KayitCiktiCevabi, type KayitSecimi, type RaflarCevabi,
-  type Sablon, type SablonlarCevabi, type Yazici, type YaziciAcGovdesi, type YaziciGuncelleGovdesi, type YazicilarCevabi,
+  type OnizlemeOgesi, type OzelOlcu, type OzelOlcuBilgisi, type Sablon, type SablonlarCevabi, type Yazici, type YaziciAcGovdesi, type YaziciGuncelleGovdesi, type YazicilarCevabi,
 } from '#paylasilan/sozlesme/etiket-merkezi.ts';
 import { sistemAyariOku } from '../ayarlar/disari.ts';
 import { kisiAdlari } from '../kisiler/disari.ts';
@@ -19,7 +19,7 @@ import { emirNolari, hataliKaydi, hataliKayitlari, refakatKarti, uretimEmriOzeti
 import { yaziciAgiOku } from './ag.ts';
 import { tcpGonder, type Gonderici } from './gonderici.ts';
 import {
-  BEKLEYEN_GUN, baskiEngeli, bekleyenBaslangici, bekleyenSirasi, dogrudanBaskiDurumu, hataliBekleyenleri, kaliteBekleyenleri, malKabulBekleyenleri, refakatBekleyenleri, hataliParcaDegerleri, kaliteDurumDegerleri, koliHatasi, kopyaDegerleri, sevkKoliDegerleri, indirmeEngeli, istasyonDegerleri, kayitSablonTuru, kayitUyumHatasi, konumDegerleri, lotDegerleri, malzemeDegerleri, rafDegerleri, refakatPartisiDegerleri, sablonHatalari, toplamEtiketHatasi, yaziciAdresHatasi, yerlesim, type AlanDegerleri,
+  BEKLEYEN_GUN, baskiEngeli, enKucukOlcu, okunurluk, olcekle, bekleyenBaslangici, bekleyenSirasi, dogrudanBaskiDurumu, hataliBekleyenleri, kaliteBekleyenleri, malKabulBekleyenleri, refakatBekleyenleri, hataliParcaDegerleri, kaliteDurumDegerleri, koliHatasi, kopyaDegerleri, sevkKoliDegerleri, indirmeEngeli, istasyonDegerleri, kayitSablonTuru, kayitUyumHatasi, konumDegerleri, lotDegerleri, malzemeDegerleri, rafDegerleri, refakatPartisiDegerleri, sablonHatalari, toplamEtiketHatasi, yaziciAdresHatasi, yerlesim, type AlanDegerleri,
 } from './kurallar.ts';
 import { ALANLAR, HAZIR_SABLONLAR, ORNEK_DEGERLER } from './sablonlar.ts';
 import {
@@ -46,18 +46,43 @@ function sablonBul(anahtar: string): Sablon {
   return sablon;
 }
 
+// EM-37: özel ölçü verilmişse tasarım orantılı ölçeklenir; şablonun kendi ölçüsü verilirse olduğu gibi kalır.
+function olcekliSablon(tasarim: Sablon, olcu: OzelOlcu | undefined): { sablon: Sablon; olcek: number } | null {
+  if (olcu === undefined || (olcu.genislik === tasarim.genislik && olcu.yukseklik === tasarim.yukseklik)) return null;
+  const sonuc = olcekle(tasarim, olcu);
+  const hatalar = sablonHatalari(sonuc.sablon);
+  if (hatalar.length > 0) throw dogrulama(hatalar.join(' '));
+  return sonuc;
+}
+
+// EM-38: okunmayacak ölçüde hiçbir etiket üretilmez (önizleme, komut, baskı); her etiketin kendi QR'ı denetlenir.
+function ozelOlcuBilgisiUret(tasarim: Sablon, olcekli: { sablon: Sablon; olcek: number }, yerlesimler: readonly OnizlemeOgesi[][], ilkDegerler: AlanDegerleri): OzelOlcuBilgisi {
+  const enKucuk = enKucukOlcu(tasarim, yerlesim(tasarim, ilkDegerler, false));
+  const uyarilar = new Set<string>();
+  for (const ogeler of yerlesimler) {
+    const o = okunurluk(olcekli.sablon, ogeler, enKucuk);
+    if (o.engel !== null) throw dogrulama(o.engel, 'en');
+    o.uyarilar.forEach((u) => uyarilar.add(u));
+  }
+  return { tasarim: { genislik: tasarim.genislik, yukseklik: tasarim.yukseklik }, olcek: Math.round(olcekli.olcek * 1000) / 1000, uyarilar: [...uyarilar], enKucuk };
+}
+
 // Her değer kümesi için bir etiket; komutlar art arda gider, önizleme ilk etikettir.
-function cikti(sablon: Sablon, degerlerListesi: readonly AlanDegerleri[], secenek: CiktiSecenekleri): CiktiCevabi {
+function cikti(tasarim: Sablon, degerlerListesi: readonly AlanDegerleri[], secenek: CiktiSecenekleri): CiktiCevabi {
   const uret = KOMUT_URETICILERI[secenek.dil];
+  const olcekli = olcekliSablon(tasarim, secenek.olcu);
+  const sablon = olcekli?.sablon ?? tasarim;
   const yerlesimler = degerlerListesi.map((d) => yerlesim(sablon, d, secenek.sade));
+  const ozelOlcu = olcekli === null ? null : ozelOlcuBilgisiUret(tasarim, olcekli, yerlesimler, degerlerListesi[0] ?? {});
   const komut = yerlesimler
     .map((ogeler) => uret({ genislik: sablon.genislik, yukseklik: sablon.yukseklik, ogeler, dpi: secenek.dpi, adet: secenek.adet }))
     .join('');
+  const olcuEki = olcekli === null ? '' : `-${String(sablon.genislik)}x${String(sablon.yukseklik)}`;
   return {
     sablon: { anahtar: sablon.anahtar, ad: sablon.ad, genislik: sablon.genislik, yukseklik: sablon.yukseklik },
     dil: secenek.dil, dpi: secenek.dpi, adet: secenek.adet,
-    dosyaAdi: `${sablon.anahtar}-${secenek.dpi}.${DOSYA_UZANTILARI[secenek.dil]}`,
-    komut, onizleme: yerlesimler[0] ?? [],
+    dosyaAdi: `${sablon.anahtar}${olcuEki}-${secenek.dpi}.${DOSYA_UZANTILARI[secenek.dil]}`,
+    komut, onizleme: yerlesimler[0] ?? [], ozelOlcu,
   };
 }
 
@@ -295,15 +320,20 @@ export async function yazdir(db: Db, kullanici: Kullanici, anahtar: string, g: Y
   } else {
     degerler = [sablon.tur === 'deneme' ? { ...ORNEK_DEGERLER.deneme, yazici: 'Tarayıcıdan vektörel' } : ORNEK_DEGERLER[sablon.tur]];
   }
+  // Okunurluk deftere yazmadan önce denetlenir: okunmayacak ölçüde yazdırma penceresi açılmaz.
+  const olcekli = olcekliSablon(sablon, g.olcu);
+  const basilan = olcekli?.sablon ?? sablon;
+  const sayfalar = degerler.map((d) => yerlesim(basilan, d, false));
+  if (olcekli !== null) ozelOlcuBilgisiUret(sablon, olcekli, sayfalar, degerler[0] ?? {});
   const baskiId = await baskiEkle(db, {
     yaziciId: null, sablonAnahtar: anahtar, adet: g.adet, kisiId: kullanici.id, sonuc: 'yazdirildi', hata: null, kayit: basilanKayitlar(g, { kayitlar }),
   });
   return {
     baskiId,
-    sablon: { anahtar: sablon.anahtar, ad: sablon.ad, genislik: sablon.genislik, yukseklik: sablon.yukseklik },
+    sablon: { anahtar: basilan.anahtar, ad: basilan.ad, genislik: basilan.genislik, yukseklik: basilan.yukseklik },
     // Refakat kartının kopyaları ayrı sayfadır (Kopya n/N); sayfa başına adet 1 olur.
     adet: g.kayit?.tur === 'refakat-partisi' ? 1 : g.adet,
-    sayfalar: degerler.map((d) => yerlesim(sablon, d, false)),
+    sayfalar,
     kayitlar,
     eksikler,
   };
@@ -311,7 +341,7 @@ export async function yazdir(db: Db, kullanici: Kullanici, anahtar: string, g: Y
 
 // Yazıcı kendi dili, çözünürlüğü ve harf ayarıyla basar.
 function baskiCiktisi(db: Db, anahtar: string, yazici: Yazici, g: BasGovdesi): Promise<CiktiCevabi & { kayitlar: KayitCiktiCevabi['kayitlar'] | null }> {
-  const secenek = { dil: yazici.dil, dpi: yazici.dpi === 300 ? 300 : 203, adet: g.adet, sade: yazici.sade } as const;
+  const secenek = { dil: yazici.dil, dpi: yazici.dpi === 300 ? 300 : 203, adet: g.adet, sade: yazici.sade, ...(g.olcu ? { olcu: g.olcu } : {}) } as const;
   return g.kayit ? kayitCiktisi(db, anahtar, g.kayit, secenek) : Promise.resolve({ ...ornekCikti(anahtar, secenek), kayitlar: null });
 }
 

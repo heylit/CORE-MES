@@ -751,6 +751,70 @@ describe('etiket-merkezi (gerçek PostgreSQL)', () => {
     assert.equal(d.sayfalar.length, 1);
   });
 
+  test('EM-U26 (EM-37, EM-38): özel ölçü önizlemede, indirmede ve tarayıcıdan yazdırmada aynı orantılı ölçüyle gelir; okunmayacak ölçü basılmaz ve deftere yazılmaz', async () => {
+    const dosya = ((await al(yonetici, '/etiket-merkezi/yazicilar')).json() as YazicilarCevabi).yazicilar.find((x) => x.ad === DOSYA.ad);
+    assert.ok(dosya);
+    const a = await konumAc('ETK-O01');
+    const basan = await tekIslemliKisi('olculu', ['etiket-merkezi.bas', 'etiket-merkezi.oku']);
+    const on = await al(yonetici, '/etiket-merkezi/sablonlar/lot-100x50/cikti?dil=zpl&dpi=203&en=60&boy=40');
+    assert.equal(on.statusCode, 200, on.body);
+    const o = on.json() as CiktiCevabi;
+    assert.deepEqual({ g: o.sablon.genislik, y: o.sablon.yukseklik, t: o.ozelOlcu?.tasarim, k: o.ozelOlcu?.olcek }, { g: 60, y: 40, t: { genislik: 100, yukseklik: 50 }, k: 0.6 });
+    assert.ok(o.ozelOlcu && o.ozelOlcu.uyarilar.length > 0 && o.ozelOlcu.enKucuk.genislik < 60);
+    assert.match(o.komut, /\^PW480\n\^LL320\n/);
+    assert.equal(o.dosyaAdi, 'lot-100x50-60x40-203.zpl');
+    // Hazır ölçü verilirse özel ölçü yoktur; tek başına en ya da sınır dışı ölçü reddedilir.
+    assert.equal(((await al(yonetici, '/etiket-merkezi/sablonlar/lot-100x50/cikti?dil=zpl&dpi=203&en=100&boy=50')).json() as CiktiCevabi).ozelOlcu, null);
+    assert.equal((await al(yonetici, '/etiket-merkezi/sablonlar/lot-100x50/cikti?dil=zpl&dpi=203&en=60')).statusCode, 400);
+    assert.equal((await al(yonetici, '/etiket-merkezi/sablonlar/lot-100x50/cikti?dil=zpl&dpi=203&en=120&boy=40')).statusCode, 400);
+    const kucuk = await al(yonetici, '/etiket-merkezi/sablonlar/lot-100x50/cikti?dil=zpl&dpi=203&en=30&boy=20');
+    assert.equal(kucuk.statusCode, 400);
+    assert.match(kucuk.body, /en küçük ölçü/);
+
+    const once = ((await al(yonetici, '/etiket-merkezi/baskilar')).json() as BaskilarCevabi).baskilar.length;
+    const kayit = { tur: 'konum', idler: [a] };
+    assert.equal((await yaz(basan, '/etiket-merkezi/sablonlar/konum-50x25/indir', { yaziciId: dosya.id, adet: 1, kayit, olcu: { genislik: 20, yukseklik: 10 } })).statusCode, 400);
+    assert.equal((await yaz(basan, '/etiket-merkezi/sablonlar/konum-50x25/yazdir', { adet: 1, kayit, olcu: { genislik: 20, yukseklik: 10 } })).statusCode, 400);
+    assert.equal(((await al(yonetici, '/etiket-merkezi/baskilar')).json() as BaskilarCevabi).baskilar.length, once, 'reddedilen ölçü deftere yazılmaz');
+
+    const i = await yaz(basan, '/etiket-merkezi/sablonlar/konum-50x25/indir', { yaziciId: dosya.id, adet: 1, kayit, olcu: { genislik: 40, yukseklik: 30 } });
+    assert.equal(i.statusCode, 200, i.body);
+    // PPLB: q genişlik, Q yükseklik (203 dpi'de 40 mm = 320, 30 mm = 240 nokta).
+    assert.match((i.json() as IndirCevabi).komut, /\nq320\nQ240,/);
+    const y = await yaz(basan, '/etiket-merkezi/sablonlar/konum-50x25/yazdir', { adet: 1, kayit, olcu: { genislik: 40, yukseklik: 30 } });
+    assert.equal(y.statusCode, 200, y.body);
+    const yc = y.json() as YazdirCevabi;
+    assert.deepEqual({ g: yc.sablon.genislik, y: yc.sablon.yukseklik }, { g: 40, y: 30 });
+    assert.ok(yc.sayfalar[0]!.every((og) => og.x >= 0 && og.y >= 3), 'dikeyde ortalanır');
+  });
+
+  test('EM-U26b (EM-37, Test 4 K1): ölçü sınırı alttan ve ondalıktan da korunur; sınırdaki ölçü kabul edilir', async () => {
+    const cikti = (en: string, boy: string) => al(yonetici, `/etiket-merkezi/sablonlar/lot-100x50/cikti?dil=zpl&dpi=203&en=${en}&boy=${boy}`);
+    for (const en of ['0', '-5', '9.9']) {
+      const r = await cikti(en, '40');
+      assert.equal(r.statusCode, 400, `en=${en}`);
+      assert.match(r.body, /En 10 ile 110 mm arasında olur\./, `en=${en}`);
+    }
+    const ondalik = await cikti('60.25', '40');
+    assert.equal(ondalik.statusCode, 400);
+    assert.match(ondalik.body, /En en çok bir ondalıkla yazılır\./);
+    // Sınırdaki ölçü aralık kuralından geçer: 10x10'da tasarım okunmayabilir, red varsa okunurluk iletisidir.
+    const enKucuk = await cikti('10', '10');
+    if (enKucuk.statusCode !== 200) {
+      assert.equal(enKucuk.statusCode, 400);
+      assert.match(enKucuk.body, /okunmaz/);
+      assert.doesNotMatch(enKucuk.body, /arasında olur/);
+    }
+    const enBuyuk = await cikti('110', '300');
+    assert.equal(enBuyuk.statusCode, 200, enBuyuk.body);
+    assert.deepEqual({ g: (enBuyuk.json() as CiktiCevabi).sablon.genislik, y: (enBuyuk.json() as CiktiCevabi).sablon.yukseklik }, { g: 110, y: 300 });
+    const kayit = { tur: 'konum', idler: [await konumAc('ETK-O02')] };
+    const basan = await tekIslemliKisi('olcusinir', ['etiket-merkezi.bas', 'etiket-merkezi.oku']);
+    const sifir = await yaz(basan, '/etiket-merkezi/sablonlar/konum-50x25/yazdir', { adet: 1, kayit, olcu: { genislik: 0, yukseklik: 20 } });
+    assert.equal(sifir.statusCode, 400);
+    assert.match(sifir.body, /En 10 ile 110 mm arasında olur\./);
+  });
+
   test('EM-U25 (kart 2904): defter kısıtı yazıcısız satırı yalnız "yazdirildi" sonucunda kabul eder; tarayıcıdan yazdırılan lot bekleyenden düşer', async () => {
     const vt = ortam!.vt;
     const ekle = (yazici: number | null, sonuc: string) => vt.sorgu(

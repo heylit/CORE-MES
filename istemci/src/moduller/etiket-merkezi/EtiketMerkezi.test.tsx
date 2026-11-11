@@ -36,11 +36,17 @@ const SABLONLAR: SablonlarCevabi = {
 const cikti = (anahtar: string, sorgu: URLSearchParams): CiktiCevabi => {
   const dil = sorgu.get('dil') === 'pplb' ? 'pplb' : 'zpl';
   const s = SABLONLAR.sablonlar.find((x) => x.anahtar === anahtar) ?? SABLONLAR.sablonlar[0]!;
+  const en = sorgu.get('en') === null ? null : Number(sorgu.get('en'));
+  const boy = Number(sorgu.get('boy'));
   return {
-    sablon: { anahtar: s.anahtar, ad: s.ad, genislik: s.genislik, yukseklik: s.yukseklik },
+    sablon: { anahtar: s.anahtar, ad: s.ad, genislik: en ?? s.genislik, yukseklik: en === null ? s.yukseklik : boy },
     dil, dpi: Number(sorgu.get('dpi')), adet: Number(sorgu.get('adet')),
     dosyaAdi: `${s.anahtar}-${sorgu.get('dpi')}.${dil === 'zpl' ? 'zpl' : 'prn'}`,
     komut: dil === 'zpl' ? '^XA\n^XZ\n' : '\nN\nP1\n',
+    ozelOlcu: en === null ? null : {
+      tasarim: { genislik: s.genislik, yukseklik: s.yukseklik }, olcek: Math.min(en / s.genislik, boy / s.yukseklik),
+      uyarilar: en < 50 ? ['En küçük yazı 1,2 mm: yakından okunur.'] : [], enKucuk: { genislik: 54, yukseklik: 27 },
+    },
     onizleme: [
       { tur: 'metin', x: 1, y: 1, genislik: 40, yaziMm: 4, kalin: true, satirlar: ['LT-000123'] },
       { tur: 'qr', x: 50, y: 1, boyut: 20, veri: 'LOT:LT-000123', kareler: [[true, false], [false, true]] },
@@ -112,7 +118,8 @@ function sunucuKur(secenek: { islemler?: Islem[]; yazicilar?: YazicilarCevabi; b
       const yazdirEslesme = /^\/etiket-merkezi\/sablonlar\/([a-z0-9-]+)\/yazdir$/.exec(yol);
       if (yazdirEslesme?.[1]) {
         const g = JSON.parse(String(init.body)) as { adet: number; kayit?: { idler: number[] } };
-        const c = cikti(yazdirEslesme[1], new URLSearchParams());
+        const o = (JSON.parse(String(init.body)) as { olcu?: { genislik: number; yukseklik: number } }).olcu;
+        const c = cikti(yazdirEslesme[1], new URLSearchParams(o ? { en: String(o.genislik), boy: String(o.yukseklik) } : {}));
         const bulunan = g.kayit ? g.kayit.idler.filter((id) => KONUMLAR[id]) : [0];
         const cevap: YazdirCevabi = {
           baskiId: 11, sablon: c.sablon, adet: g.adet, sayfalar: bulunan.map(() => c.onizleme),
@@ -150,6 +157,9 @@ function sunucuKur(secenek: { islemler?: Islem[]; yazicilar?: YazicilarCevabi; b
         eksikler: malKabul ? [] : idler.filter((id) => !KONUMLAR[id]),
       };
       return json(200, govde);
+    }
+    if (Number(url.searchParams.get('en') ?? 100) < 30) {
+      return json(400, { kod: 'DOGRULAMA', mesaj: 'Bu ölçüde yazı okunmaz (0,4 mm, en az 1 mm). Bu etiket için en küçük ölçü 54x27 mm.', alan: 'en' } satisfies HataGovdesi);
     }
     const eslesme = /^\/etiket-merkezi\/sablonlar\/([a-z0-9-]+)\/cikti$/.exec(yol);
     if (eslesme?.[1]) return json(200, cikti(eslesme[1], url.searchParams));
@@ -902,5 +912,92 @@ describe('USB yazıcıya basım (2954)', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'USB yazıcıya bas' }));
     expect(await screen.findByText(/USB yazıcıya aktarılamadı: Yazıcı veriyi kabul etmedi\. Komut dosyası indirildi/)).toBeTruthy();
     expect(indirilen).toHaveBeenCalledWith('deneme-50x25-203.prn');
+  });
+});
+
+describe('Standart dışı ölçü (3011)', () => {
+  const BAS = ['sayfa.etiket-merkezi', 'etiket-merkezi.oku', 'etiket-merkezi.bas'] satisfies Islem[];
+  afterEach(() => { localStorage.clear(); });
+
+  it('EM-U27: kutu açılınca şablonun ölçüsüyle başlar; girilen ölçü sorguya gider, oran ve uyarı görünür, cihazda şablon başına kalır', async () => {
+    localStorage.clear();
+    const istekler = sunucuKur();
+    ac(<HazirSablonlar />, '/etiket-merkezi?tur=lot');
+    await screen.findByText('LT-000123');
+    expect(screen.queryByLabelText('Etiket eni (mm)')).toBeNull();
+    fireEvent.click(screen.getByLabelText('Standart dışı etikete bas'));
+    expect((screen.getByLabelText('Etiket eni (mm)') as HTMLInputElement).value).toBe('100');
+    expect((screen.getByLabelText('Etiket boyu (mm)') as HTMLInputElement).value).toBe('50');
+    expect(istekler.some((i) => i.includes('en='))).toBe(false);
+    fireEvent.change(screen.getByLabelText('Etiket eni (mm)'), { target: { value: '40' } });
+    fireEvent.change(screen.getByLabelText('Etiket boyu (mm)'), { target: { value: '30' } });
+    await waitFor(() => expect(istekler).toContain('/etiket-merkezi/sablonlar/lot-100x50/cikti?dil=zpl&dpi=203&adet=1&sade=false&en=40&boy=30'));
+    expect(await screen.findByText('%40')).toBeTruthy();
+    expect(screen.getByText('%40').closest('p')?.textContent).toContain('100x50 mm tasarım 40x30 mm etikete orantılı küçültülür ve ortalanır. Bu tasarımın en küçük ölçüsü 54x27 mm.');
+    expect(screen.getByText('En küçük yazı 1,2 mm: yakından okunur.')).toBeTruthy();
+    expect(JSON.parse(localStorage.getItem('coremes.etiket-merkezi.ozel-olcu') ?? '{}')).toEqual({ 'lot-100x50': { genislik: 40, yukseklik: 30 } });
+    cleanup();
+    ac(<HazirSablonlar />, '/etiket-merkezi?tur=lot');
+    expect(((await screen.findByLabelText('Standart dışı etikete bas')) as HTMLInputElement).checked).toBe(true);
+    expect((screen.getByLabelText('Etiket eni (mm)') as HTMLInputElement).value).toBe('40');
+  });
+
+  it('EM-U28: virgüllü ölçü kabul edilir; Standart ölçüye dön ölçüyü ve cihaz kaydını kaldırır', async () => {
+    const istekler = sunucuKur();
+    ac(<HazirSablonlar />, '/etiket-merkezi?tur=lot');
+    await screen.findByText('LT-000123');
+    fireEvent.click(screen.getByLabelText('Standart dışı etikete bas'));
+    fireEvent.change(screen.getByLabelText('Etiket eni (mm)'), { target: { value: '62,5' } });
+    await waitFor(() => expect(istekler.some((i) => i.endsWith('&en=62.5&boy=50'))).toBe(true));
+    fireEvent.click(screen.getByRole('button', { name: 'Standart ölçüye dön (100x50 mm)' }));
+    expect(screen.queryByLabelText('Etiket eni (mm)')).toBeNull();
+    expect((screen.getByLabelText('Standart dışı etikete bas') as HTMLInputElement).checked).toBe(false);
+    expect(localStorage.getItem('coremes.etiket-merkezi.ozel-olcu')).toBe('{}');
+  });
+
+  it('EM-U29: sınır dışı ya da iki ondalıklı ölçü sorguya gitmez, hata yazar ve indirmeyi kapatır', async () => {
+    const istekler = sunucuKur();
+    ac(<HazirSablonlar />, '/etiket-merkezi?tur=lot');
+    await screen.findByText('LT-000123');
+    fireEvent.click(screen.getByLabelText('Standart dışı etikete bas'));
+    fireEvent.change(screen.getByLabelText('Etiket eni (mm)'), { target: { value: '5' } });
+    fireEvent.change(screen.getByLabelText('Etiket boyu (mm)'), { target: { value: '30,25' } });
+    expect(screen.getByText('En 10 ile 110 mm arasında olur.')).toBeTruthy();
+    expect(screen.getByText('Boy en çok bir ondalıkla yazılır.')).toBeTruthy();
+    expect((screen.getByRole('button', { name: /^Önizleme için indir/ }) as HTMLButtonElement).disabled).toBe(true);
+    expect(istekler.some((i) => i.includes('en=5') || i.includes('boy=30.25'))).toBe(false);
+  });
+
+  it('EM-U30: okunmayan ölçüde sunucu iletisi görünür, yeniden deneme sunulmaz', async () => {
+    sunucuKur();
+    ac(<HazirSablonlar />, '/etiket-merkezi?tur=lot');
+    await screen.findByText('LT-000123');
+    fireEvent.click(screen.getByLabelText('Standart dışı etikete bas'));
+    fireEvent.change(screen.getByLabelText('Etiket eni (mm)'), { target: { value: '20' } });
+    fireEvent.change(screen.getByLabelText('Etiket boyu (mm)'), { target: { value: '10' } });
+    expect(await screen.findByText('Bu ölçüde yazı okunmaz (0,4 mm, en az 1 mm). Bu etiket için en küçük ölçü 54x27 mm.')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /Yeniden dene/ })).toBeNull();
+  });
+
+  it('EM-U31: seçili kayıtlar vektörel yazdırılırken ölçü gövdeye gider ve sayfa girilen ölçüdedir', async () => {
+    let stil: string | null = null;
+    vi.stubGlobal('print', vi.fn(() => { stil = document.getElementById('tc-etk-sayfa')?.textContent ?? null; }));
+    const istekler = sunucuKur({ islemler: BAS, yazicilar: { yazicilar: [], dogrudanBaski: { acik: false, neden: 'Kapalı.' }, usbBaski: false } });
+    localStorage.setItem('coremes.etiket-merkezi.ozel-olcu', JSON.stringify({ 'konum-50x25': { genislik: 40, yukseklik: 20 } }));
+    ac(<HazirSablonlar />, '/etiket-merkezi?tur=konum&id=11');
+    await waitFor(() => expect(istekler.some((i) => i.includes('/konum-50x25/kayit-cikti?') && i.includes('en=40&boy=20'))).toBe(true));
+    fireEvent.click(await screen.findByRole('button', { name: 'Vektörel yazdır' }));
+    await waitFor(() => expect(istekler.gonderilenler.find((x) => x.yol.endsWith('/yazdir'))?.govde).toEqual({ adet: 1, kayit: { tur: 'konum', idler: [11] }, olcu: { genislik: 40, yukseklik: 20 } }));
+    await waitFor(() => expect(stil).toBe('@page { size: 40mm 20mm; margin: 0; }'));
+    fireEvent(window, new Event('afterprint'));
+  });
+
+  it('EM-U32: ağ yazıcısına gönderilen baskıda ölçü gövdeye gider', async () => {
+    const istekler = sunucuKur({ islemler: BAS });
+    localStorage.setItem('coremes.etiket-merkezi.ozel-olcu', JSON.stringify({ 'konum-50x25': { genislik: 40, yukseklik: 20 } }));
+    ac(<HazirSablonlar />, '/etiket-merkezi?tur=konum&id=11');
+    fireEvent.change(await screen.findByLabelText('Yazıcı'), { target: { value: '1' } });
+    fireEvent.click(await screen.findByRole('button', { name: /Yazıcıya gönder/ }));
+    await waitFor(() => expect(istekler.gonderilenler.find((x) => x.yol.endsWith('/bas'))?.govde).toMatchObject({ yaziciId: 1, olcu: { genislik: 40, yukseklik: 20 } }));
   });
 });
