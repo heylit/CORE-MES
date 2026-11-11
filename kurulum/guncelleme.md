@@ -98,7 +98,8 @@ Sonuç Güncelleme sekmesinde "Son uygulama" ve "Uygulama geçmişi"nde görün�
 - `@playwright/test` (yalnız ekran testleri) sunucuya kurulmaz: paketteki `package.json` ve lock'tan çıkarılır. Sunucuda
   `npm run ekran` çalışmaz; ekran testleri geliştirme makinesinde ve CI'da koşar.
 - Paket boyutu çoğunu npm önbelleği tutar: 2026-10-16'da Windows x64 için 143 MB (önbellek 118 MB, 662 npm paketi).
-  Yükleme sınırı 200 MB'tır (`AZAMI_GUNCELLEME`); paket bunu aşarsa ekran yüklemeyi reddeder, sınır çekirdek işidir.
+  Yükleme sınırı 300 MB'tır (`AZAMI_GUNCELLEME`, `paylasilan/sozlesme/ayarlar.ts`); aşan paketi `paket-yap` yazmaz, ekran da
+  yüklemeyi reddeder. Sınırı değiştirmek kod ve karar ister.
 - Kurulum sırasında paket bellekte açılır; sunucuda paket boyutunun birkaç katı boş bellek gerekir (doğrulanmadı, ölçülmedi).
 - İlk kurulumun sürümü kökteki `surum.json`'dan (paket yazar), yoksa git'ten okunur; ikisi de yoksa bilinmez.
 - İlk kurulum git ağacıysa güncelleyici, kurduğu sürümü (`calisan.json`) ağaçtaki koddan önce açar. Ağacı git ile güncelleyip
