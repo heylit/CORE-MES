@@ -540,6 +540,52 @@ describe('Logo okuma akışları ve malzeme fişi, sahte köprüyle (gerçek Pos
     assert.equal(govde.TRANSACTIONS?.[0]?.DESCRIPTION, emirNo);
     assert.equal((await durum(ID)).durum, 'gonderildi');
     assert.deepEqual(await kos(), { tur: 'bos' }, 'bir kez gider');
+    const kayitli = await vt().tek<{ numara: string | null }>("SELECT numara FROM logo_malzeme_fisi_giden WHERE belge_turu = 'sarf-fisi' AND belge_no = $1", [ID]);
+    assert.equal(kayitli?.numara, 'SR-000301', 'sığmayan eski numara hiç gitmemiştir; yeni numara yazılır');
+  });
+
+  // 2948 K1: kural değişmeden önce Logo'ya gitmiş (ya da gitmiş olabilecek) emir fişi eski numarasıyla silinir ve açılır; yeni numarayla
+  // ikinci fiş açılmaz. Yardımcının "zaten var" cevabı TMI'de başarı değil hatadır.
+  test('LOGO-O22 eski numarayla Logo\'da duran fiş eski numarasını korur; aynı numarada fiş varsa yardımcının reddi hata sayılır, çift açılmaz', async () => {
+    await ayar('logo.malzeme-fisi-gonderimi', true);
+    kopru.fisNumaraKalkani = true;
+    const bellek = yeniSurecBellegi();
+    const kos = (): Promise<TurSonucu> => malzemeFisiTuru(vt(), { ...ortami(bellek), kaynak: stokKaynagi });
+    const numara = async (id: number) => (await vt().tek<{ numara: string | null }>(
+      "SELECT numara FROM logo_malzeme_fisi_giden WHERE belge_turu = 'sarf-fisi' AND belge_no = $1", [id]))?.numara ?? null;
+    const sarflar = () => kopru.malzemeFisleri.filter((f) => f.uc === 'AddConsumption').map((f) => f.no).sort();
+
+    // Eski kuralla gönderilmiş fiş: Logo'da emir numarasıyla duruyor, numara sütunu boş (göç doldurmaz).
+    const ESKI = 401;
+    stokDegistir(ESKI, { tur: 'sarf', no: 'SR-000401', emirNo: 'UE-ESKI-401', uretimEmriId: 41, satirlar: [{ stokKodu: 'HM-DEN-00001', birim: 'kg', miktar: '3' }] });
+    await vt().tx((db) => fisDegisiklikleriniAl(db, stokKaynaklari));
+    await vt().sorgu(
+      `UPDATE logo_malzeme_fisi_giden SET logo_kayit_no = '900', son_sonuc = 'gonderildi', son_deneme = now(), deneme_sayisi = 1, son_satir_ozeti = '[]'
+        WHERE belge_turu = 'sarf-fisi' AND belge_no = $1`, [ESKI]);
+    kopru.malzemeFisleri.push({ uc: 'AddConsumption', no: 'UE-ESKI-401', ref: 900, govde: {} });
+    const once = istekSayisi();
+    assert.deepEqual(await kos(), { tur: 'malzeme-fisi', no: ESKI, sonuc: 'silindi' });
+    assert.equal(`${kopru.istekler.at(-1)?.yontem} ${kopru.istekler.at(-1)?.yol}`, 'DELETE /api/MaterialSlip/Consumption/UE-ESKI-401');
+    assert.equal(await numara(ESKI), 'UE-ESKI-401');
+    assert.deepEqual(await kos(), { tur: 'malzeme-fisi-niyet', no: ESKI });
+    assert.deepEqual(await kos(), { tur: 'malzeme-fisi', no: ESKI, sonuc: 'gonderildi' });
+    assert.deepEqual(sarflar(), ['UE-ESKI-401'], 'Logo\'da tek fiş, eski numarayla');
+    assert.equal(kopru.istekler.length - once, 2);
+
+    // Yeni numara Logo'da elle açılmış: yardımcı "zaten var" der; TMI başarı saymaz, hata gösterir, ikinci fiş açılmaz.
+    const VAR = 402;
+    kopru.malzemeFisleri.push({ uc: 'AddConsumption', no: 'SR-000402', ref: 901, govde: {} });
+    stokDegistir(VAR, { tur: 'sarf', no: 'SR-000402', emirNo: 'UE-YENI-402', uretimEmriId: 42, satirlar: [{ stokKodu: 'HM-DEN-00001', birim: 'kg', miktar: '1' }] });
+    assert.deepEqual(await kos(), { tur: 'malzeme-fisi-niyet', no: VAR });
+    assert.deepEqual(await kos(), { tur: 'malzeme-fisi', no: VAR, sonuc: 'reddedildi' });
+    const d = await durum(VAR);
+    assert.equal(d.durum, 'hata');
+    assert.equal(d.kayitNo, null);
+    assert.match(d.neden ?? '', /zaten var/);
+    assert.equal(await numara(VAR), 'SR-000402', 'hiç denenmemiş fiş yeni numarayı alır');
+    assert.deepEqual(sarflar(), ['SR-000402', 'UE-ESKI-401'], 'çift açılmadı');
+    await assert.rejects(vt().sorgu("UPDATE logo_malzeme_fisi_giden SET numara = $2 WHERE belge_no = $1", [VAR, 'X'.repeat(17)]), /logo_malzeme_fisi_giden_numara/);
+    await assert.rejects(vt().sorgu("UPDATE logo_malzeme_fisi_giden SET numara = ' A' WHERE belge_no = $1", [VAR]), /logo_malzeme_fisi_giden_numara/);
   });
 
   test('LOGO-O20 gerçek stok akışıyla: imleç ilerler, yeni fiş sıraya girer, imleçten eski ve hiç değişmemiş fiş gönderilmez görünür', async () => {

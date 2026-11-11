@@ -11,7 +11,7 @@ import type { LogoyaGidecekMalzeme, MalzemeLogoSonucu } from '../malzemeler/disa
 import type { KopruIstemcisi, SatirliSonuc } from './kopru.ts';
 import {
   BELIRSIZ_BEKLEME_MS, eklemeGovdesi, kodCakismasiMetni, guncellemeEslemesi, HIZMET_ALANLARI, kapatmaGovdesi, karsilamaGovdesi, karsilamaKaydiBul, malzemeGuncellemeGovdesi, siparisGuncellemeGovdesi, talepGovdesi, satirEslemesi, siparisGovdesi, gecerliBirimSetleri, geriCekilmeMs, hizmetGovdesi, HIZMET_AYARI, kartEylemi, kirp, KUYRUK_SINIRI,
-  FATURA_TUR_SINIRI, FATURA_YENIDEN_OKUMA_MS, FIS_GONDERIM_AYARI, gonderimSekli, LOGO_FIS_TURLERI, logoFisDurumu, STOK_FISI_LOGO_TURU, stokFisindenLogoFisi, kontrolAdiminiYorumla, listeOkunmaliMi, malzemeFisiGovdesi, malzemeFisiOzeti, OKUMA_HATA_BEKLEME_MS, LOGO_AKISLARI, LOGO_KONTROL_ADIMLARI, logoAkisDurumu, satisSiparisiGovdesi, satisTeklifiGovdesi,
+  FATURA_TUR_SINIRI, FATURA_YENIDEN_OKUMA_MS, FIS_GONDERIM_AYARI, gonderimSekli, LOGO_FIS_TURLERI, logoFisDurumu, STOK_FISI_LOGO_TURU, stokFisindenLogoFisi, kontrolAdiminiYorumla, listeOkunmaliMi, malzemeFisiGovdesi, malzemeFisiOzeti, eskiEmirFisiNo, FIS_NO_EN_COK, logoFisNumarasi, OKUMA_HATA_BEKLEME_MS, LOGO_AKISLARI, LOGO_KONTROL_ADIMLARI, logoAkisDurumu, satisSiparisiGovdesi, satisTeklifiGovdesi,
   belgeStokKodlari, CARI_ARAMA_EN_AZ, CARI_ARAMA_EN_COK, logoKodlarinaCevir, sayfaliOkumaSirasi,
 } from './kurallar.ts';
 import type { LogoCari, LogoMalzemeKarti, LogoStokSatiri, Sayfa } from './kurallar.ts';
@@ -1053,6 +1053,8 @@ export interface EsitlenecekFis {
   tur: FisTuru;
   id: number;
   no: string;
+  // 2948: kural değişmeden önceki numara (yalnız emir fişi); Logo'da o numarayla durabilecek fiş için korunur.
+  eskiNo?: string | null;
   fis: GonderilecekMalzemeFisi | null;
 }
 
@@ -1145,7 +1147,7 @@ export function stokMalzemeFisiKaynagi(k: StokFisKaynaklari): MalzemeFisiKaynagi
         // Stokta olmayan fiş (silinmez; VARSAYIM) kuyrukta kalır, gönderilmez.
         if (!f) return [];
         const ek = f.tur === 'sarf' && f.uretimEmriId !== null ? (fireler.get(f.uretimEmriId) ?? []) : [];
-        return [{ tur: x.tur, id: x.id, no: f.no, fis: stokFisindenLogoFisi(f, ek) }];
+        return [{ tur: x.tur, id: x.id, no: f.no, eskiNo: eskiEmirFisiNo(f), fis: stokFisindenLogoFisi(f, ek) }];
       });
     },
     async sonuc() {},
@@ -1176,8 +1178,14 @@ export function malzemeFisiTuru(vt: TxAcan, o: MalzemeFisiTurOrtami): Promise<Tu
 async function malzemeFisiHazirla(db: Db, o: MalzemeFisiTurOrtami): Promise<TurSonucu | KopruAdimi> {
   const kopru = await okumaKapisi(db, o, 'logo.malzeme-fisi-gonderimi', 'malzeme-fisi-kapali');
   if ('tur' in kopru) return kopru;
-  for (const f of await o.kaynak.gidecekler(db, KUYRUK_SINIRI)) {
-    const g = await s.gidenSatiri(db, f.tur, f.id);
+  for (const kaynaktan of await o.kaynak.gidecekler(db, KUYRUK_SINIRI)) {
+    const g = await s.gidenSatiri(db, kaynaktan.tur, kaynaktan.id);
+    // Numara bir kez seçilir ve yazılır; fiş sonra hep o numarayla açılır ve silinir (2948).
+    const kayitli = await s.fisNumarasi(db, kaynaktan.tur, kaynaktan.id);
+    const numara = logoFisNumarasi(kaynaktan.no, kaynaktan.eskiNo ?? null, g === null ? null : { ...g, numara: kayitli });
+    // Sığmayan numara yazılmaz (gövde kuralı reddeder, sütun kısıtı da almaz).
+    if (kayitli === null && numara !== '' && numara.length <= FIS_NO_EN_COK) await s.fisNumarasiYaz(db, kaynaktan.tur, kaynaktan.id, numara);
+    const f: EsitlenecekFis = { ...kaynaktan, no: numara, fis: kaynaktan.fis === null ? null : { ...kaynaktan.fis, no: numara } };
     const durum = await s.esitlemeDurumu(db, f.tur, f.id);
     const okunan = durum?.bekleyen ?? 0;
     const hedef = f.fis === null ? null : malzemeFisiOzeti(f.fis);

@@ -1013,6 +1013,23 @@ export function stokFisindenLogoFisi(f: StokFisi, ekSatirlar: readonly StokFisSa
   return { id: f.id, tur: STOK_FISI_LOGO_TURU[f.tur], no: f.no, tarih: f.tarih, saat: f.saat, projeKodu: null, satirlar };
 }
 
+// 2948: emir fişinin eski numarası emir numarasıydı (yoksa "#<emir kimliği>"). Logo'ya hiç ulaşmamış olabilecek satırda değil, köprüye
+// gitmiş olabilecek satırda (deneme, niyet ya da kayıt no var) ve numara 16'ya sığıyorsa eski numara korunur: fiş Logo'da o numarayla
+// duruyor olabilir; yeni numarayla açmak ikinci fiş (çift stok hareketi) olur. Kayıtlı numara her zaman önce gelir.
+export function eskiEmirFisiNo(f: { id: number; tur: MalzemeFisiTuru; uretimEmriId: number | null; emirNo?: string | null }): string | null {
+  if (f.tur !== 'sarf' && f.tur !== 'uretim_girisi' && f.tur !== 'fire') return null;
+  return (f.emirNo ?? `#${f.uretimEmriId ?? f.id}`).trim();
+}
+export function logoFisNumarasi(
+  yeni: string, eski: string | null,
+  g: { numara: string | null; denemeSayisi: number; niyetZamani: Date | null; logoKayitNo: string | null } | null,
+): string {
+  if (g?.numara) return g.numara;
+  const gitmisOlabilir = g !== null && (g.denemeSayisi > 0 || g.niyetZamani !== null || g.logoKayitNo !== null);
+  if (gitmisOlabilir && eski !== null && eski !== '' && eski.length <= FIS_NO_EN_COK) return eski;
+  return yeni.trim();
+}
+
 // 233: Logo'daki fişin satırlarının özeti; aynı özet yeniden gönderilmez. Miktar ölçekli sayıyla karşılaştırılır ("2.50" ile "2.5" aynı).
 export function malzemeFisiOzeti(f: GonderilecekMalzemeFisi): string {
   return JSON.stringify(f.satirlar.map((x) => {

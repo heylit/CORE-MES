@@ -3,7 +3,7 @@ import { describe, test } from 'node:test';
 import { LOGO_AYARLARI } from '#paylasilan/ayarlar/logo.ts';
 import {
   faturalariAyikla, FIS_GONDERIM_AYARI, listeKayitlariniAyikla, LOGO_AKISLARI, LOGO_FIS_TURLERI, logoFisDurumu, malKabulSatirlariniAyikla, malzemeFisiGovdesi,
-  malzemeFisiOzeti, MALZEME_FISI_TURU, MALZEME_FISI_UCU, stokFisindenLogoFisi,
+  eskiEmirFisiNo, logoFisNumarasi, malzemeFisiOzeti, MALZEME_FISI_TURU, MALZEME_FISI_UCU, stokFisindenLogoFisi,
 } from './kurallar.ts';
 import type { FisGidenDurumu, GonderilecekMalzemeFisi, StokFisi } from './kurallar.ts';
 
@@ -167,6 +167,22 @@ describe('LOGO-O16 stoktaki fişten Logo fişi (293 a, 294 c)', () => {
     assert.equal(aciklamalar(govde(stokFisi({ emirNo: null, satirlar: [satir(null)] })))[0], undefined, 'emirsiz ve açıklamasız satırda alan yok');
     const eski = malzemeFisiGovdesi(stokFisindenLogoFisi(stokFisi({ no: emirNo }))!);
     assert.match('hata' in eski ? eski.hata : '', /Fiş numarası 1-16/, 'emir numarası fiş numarası olarak istek öncesi reddedilir');
+  });
+
+  test('2948 K1: köprüye gitmiş olabilecek fiş sığan eski numarasını korur; kayıtlı numara önce; hiç gitmemiş ya da sığmayan yeni numarayı alır', () => {
+    const g = (ek: Partial<{ numara: string | null; denemeSayisi: number; niyetZamani: Date | null; logoKayitNo: string | null }> = {}) =>
+      ({ numara: null, denemeSayisi: 0, niyetZamani: null, logoKayitNo: null, ...ek });
+    assert.equal(eskiEmirFisiNo({ id: 9, tur: 'sarf', uretimEmriId: 4, emirNo: ' UE-1 ' }), 'UE-1');
+    assert.equal(eskiEmirFisiNo({ id: 9, tur: 'fire', uretimEmriId: 4, emirNo: null }), '#4');
+    assert.equal(eskiEmirFisiNo({ id: 9, tur: 'ambar', uretimEmriId: null }), null);
+    assert.equal(logoFisNumarasi('SR-000009', 'UE-1', g({ numara: 'SR-000009', logoKayitNo: '5' })), 'SR-000009', 'kayıtlı numara');
+    assert.equal(logoFisNumarasi('SR-000009', 'UE-1', g({ logoKayitNo: '5' })), 'UE-1', 'Logo\'da kayıt no var');
+    assert.equal(logoFisNumarasi('SR-000009', 'UE-1', g({ niyetZamani: new Date() })), 'UE-1', 'niyet yazılmış');
+    assert.equal(logoFisNumarasi('SR-000009', 'UE-1', g({ denemeSayisi: 1 })), 'UE-1', 'denenmiş');
+    assert.equal(logoFisNumarasi('SR-000009', 'UE-1', g()), 'SR-000009', 'hiç denenmemiş');
+    assert.equal(logoFisNumarasi('SR-000009', 'UE-1', null), 'SR-000009', 'satır yok');
+    assert.equal(logoFisNumarasi('SR-000009', 'X'.repeat(17), g({ denemeSayisi: 297 })), 'SR-000009', 'sığmayan eski numara hiç gitmemiştir');
+    assert.equal(logoFisNumarasi('SR-000009', null, g({ logoKayitNo: '5' })), 'SR-000009', 'emir fişi değil');
   });
 
   test('(ret) kartı ya da birimi olmayan satır düşmez; gövde kuralı fişi nedeniyle reddeder', () => {
