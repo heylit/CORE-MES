@@ -10,8 +10,8 @@ on:
   workflow_dispatch:
 
 # Çekme isteğinde yeni gönderim eski koşuyu iptal eder. Ana dalda koşu bütünüyle iptal edilmez: her commit kendi grubundadır,
-# hızlı işler (kapsam, tip, denetim ve göç damgası, lint) her birleşmede koşar. Yalnız ağır test işleri (istemci, sunucu,
-# ekran, Windows) iş düzeyindeki grupla yeni birleşmeye yer açar (2705 a); ana dal gönderiminde kapsam daraltılmadığı için
+# hızlı işler (kapsam, tip, denetim ve göç damgası, lint) her birleşmede koşar. Yalnız Linux'taki ağır test işleri (istemci,
+# sunucu, ekran) iş düzeyindeki grupla yeni birleşmeye yer açar (2705 a); Windows iptal edilmez (3018 a); ana dal gönderiminde kapsam daraltılmadığı için
 # son koşu ondan önceki iptal edilen birleşmelerin testlerini de koşar. Elle koşu iptal etmez.
 concurrency:
   group: kontrol-${{ github.ref == 'refs/heads/main' && github.sha || github.ref }}
@@ -423,16 +423,20 @@ jobs:
   # denensin diye sunucu testlerinden bir parça (çekirdek ve en riskli üç modül) koşar. Bütün sunucu testleri koşmaz: süre
   # Linux işlerinin toplamını aşar. Atlanan ya da yapılacak diye bırakılan test kırmızıdır, çünkü Windows'a özgü yol sessizce
   # atlanırsa iş yine yeşil görünür. PostgreSQL çalıştırıcı imajında kuruludur, hizmeti kapalı gelir; ağdan bir şey indirilmez.
+  # Tek makinede sunucu testleri 20-31 dk sürüyordu; dosyalar dört makineye bölünür (3018 a). Bölme ad sırasıyla dönüşümlüdür:
+  # her dosya tek parçaya düşer, dört parçanın toplamı desenlerin bulduğu kümenin tamamıdır ve parça 1 bunu sayarak denetler.
   windows:
     needs: kapsam
     # Cekme isteginde kosmaz; ana dala gonderimde ve elle kosuda kosar; atlanan is kontrol'de skipped sayilir.
     if: needs.kapsam.outputs.sunucu == 'true' && github.event_name != 'pull_request'
-    # Ana dal gönderiminde yeni birleşme bu işin eski koşusunu iptal eder (2705 a); başka olayda grup koşuya özgüdür.
-    concurrency:
-      group: kontrol-windows-${{ github.event_name == 'push' && github.ref || github.run_id }}
-      cancel-in-progress: ${{ github.event_name == 'push' }}
+    # İptal yok (3018 a): yeni birleşme eski Windows koşusunu kesmez, her ana dal commit'inin kendi Windows sonucu olur;
+    # kırmızıda bozan birleşme, kırmızı koşunun commit'idir (son yeşilden sonraki ilk kırmızı).
+    strategy:
+      fail-fast: false
+      matrix:
+        parca: [1, 2, 3, 4]
     runs-on: windows-latest
-    timeout-minutes: 45
+    timeout-minutes: 25
     # Windows çalıştırıcısında sekiz paralel test dosyasının yükü altında yeni bağlantının kurulması 5 sn'yi aşabiliyor.
     # Yalnız bu iş uzatılır: Linux işleri ve uygulama ayarı aynı kalır; testler süreyi sabit yazmaz, ayardan okur.
     env:
@@ -443,7 +447,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       # Logo yardımcısı (ADR 0017) .NET Framework 4.x'in kendi derleyicisiyle x86 derlenir; testleri sahte Logo'yla koşar, COM ve SQL Server gerekmez.
+      # Sunucu testi dışındaki adımlar yalnız parça 1'de koşar; öteki parçalar aynı işi tekrarlamaz.
       - name: Logo yardımcısını derle ve testlerini koş
+        if: matrix.parca == 1
         shell: cmd
         run: call araclar\logo-yardimcisi\derle.cmd test
       - id: node
@@ -486,6 +492,7 @@ jobs:
       # Çalıştırıcıdaki PostgreSQL 17'dir (2340); sürüm burada zorunlu tutulmaz, PG18 denetimi Linux sunucu test işindedir.
       # Hedef platformda boş veritabanına bütün göçler uygulanır; testler asıl veritabanı yokken koşsun diye sonra silinir.
       - name: Boş veritabanına bütün göçler (PostgreSQL sürümü yazdırılır)
+        if: matrix.parca == 1
         env:
           PGPASSWORD: root
         run: |
@@ -498,6 +505,7 @@ jobs:
           "$PGBIN/psql" -X -v ON_ERROR_STOP=1 -h "$TMIV2_PG_HOST" -p "$TMIV2_PG_PORT" -U postgres -d postgres \
             -c "DROP DATABASE $TMIV2_PG_DATABASE WITH (FORCE)"
       - name: İşletme betiklerinin ve test robotunun testleri
+        if: matrix.parca == 1
         run: |
           node --import ./araclar/ortam-yukle-goc.ts --import ./araclar/kablolama-yukle.ts --test --test-reporter=tap \
             araclar/bekci.test.ts araclar/guncelleyici.test.ts araclar/yedek.test.ts 'ekran-testleri/benzetim/**/*.test.ts' 2>&1 | tee test-cikti.txt
@@ -506,26 +514,90 @@ jobs:
             || { echo 'Atlanan ya da yapılacak test var; Windows işinde kırmızı sayılır.'; exit 1; }
       # Node hiçbir dosyayla eşleşmeyen deseni hata saymaz: her desenin dosya bulduğu önceden denetlenir ki yol farkı sessiz
       # yeşil vermesin. Desenler node'a tırnaklı gider, node'un kendi glob'u açar.
-      - name: Sunucu testleri (çekirdek, stok, üretim emirleri, plan)
+      - name: Sunucu testleri (çekirdek, stok, üretim emirleri, plan), parça ${{ matrix.parca }}/4
+        env:
+          PARCA: ${{ matrix.parca }}
         run: |
           desenler=('sunucu/cekirdek/**/*.test.ts' 'sunucu/moduller/stok/**/*.test.ts'
             'sunucu/moduller/uretim-emirleri/**/*.test.ts' 'sunucu/moduller/plan/**/*.test.ts')
           shopt -s globstar nullglob
+          tumu=()
           for desen in "${desenler[@]}"; do
             dosyalar=($desen)
             [ "${#dosyalar[@]}" -gt 0 ] || { echo "Desen hiçbir test dosyası bulmadı: $desen"; exit 1; }
             echo "$desen: ${#dosyalar[@]} dosya"
+            tumu+=("${dosyalar[@]}")
           done
           shopt -u globstar nullglob
+          # Ad sırası (LC_ALL=C) her makinede aynıdır; dönüşümlü dağıtım plan dosyalarını dört parçaya yayar.
+          mapfile -t sirali < <(printf '%s\n' "${tumu[@]}" | LC_ALL=C sort -u)
+          toplam=${#sirali[@]}
+          parcalar=(0 0 0 0)
+          benim=()
+          for k in "${!sirali[@]}"; do
+            p=$(( k % 4 + 1 ))
+            parcalar[$((p - 1))]=$(( parcalar[p - 1] + 1 ))
+            [ "$p" -eq "$PARCA" ] && benim+=("${sirali[$k]}")
+          done
+          echo "Parça dosya sayıları: ${parcalar[*]}; toplam $toplam; bu parça $PARCA: ${#benim[@]}"
+          [ $(( parcalar[0] + parcalar[1] + parcalar[2] + parcalar[3] )) -eq "$toplam" ] \
+            || { echo 'Parçaların toplamı test kümesine eşit değil'; exit 1; }
+          [ "${#benim[@]}" -gt 0 ] || { echo "Parça $PARCA boş"; exit 1; }
+          # Bu parçanın node'a verdiği dosyalar günlüğe ve dosyaya yazılır; dört parçanın birleşimini `windows-butunluk`
+          # tam kümeyle karşılaştırır (seçim satırı bozulursa parçalar aynı dosyaları koşar, oradaki karşılaştırma yakalar).
+          printf '%s\n' "${benim[@]}" > "windows-parca-$PARCA.txt"
+          echo "Parça $PARCA dosyaları:"; cat "windows-parca-$PARCA.txt"
           node --import ./araclar/ortam-yukle-goc.ts --import ./araclar/kablolama-yukle.ts --test \
-            --test-concurrency="$TMIV2_TEST_ESZAMANLI" --test-reporter=tap "${desenler[@]}" 2>&1 | tee sunucu-test-cikti.txt
+            --test-concurrency="$TMIV2_TEST_ESZAMANLI" --test-reporter=tap "${benim[@]}" 2>&1 | tee sunucu-test-cikti.txt
           test "${PIPESTATUS[0]}" -eq 0
           grep -qx '# skipped 0' sunucu-test-cikti.txt && grep -qx '# todo 0' sunucu-test-cikti.txt \
             || { echo 'Atlanan ya da yapılacak test var; Windows işinde kırmızı sayılır.'; exit 1; }
+      # Liste yalnız testler yeşil bittiyse yüklenir: `windows-butunluk` dört listeyi de bulursa dört parça da yeşildir.
+      - name: Parçanın koştuğu dosya listesi
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-parca-${{ matrix.parca }}
+          path: windows-parca-${{ matrix.parca }}.txt
+          if-no-files-found: error
+          retention-days: 7
+
+  # Dört Windows parçasının koştuğu dosyaların birleşimi, aynı desenlerin bulduğu tam kümeye eşit mi (3018 a). Eksik, fazla ya
+  # da iki parçada koşan dosya varsa ya da bir parçanın listesi yoksa (parça kırmızı ya da iptal) kırmızıdır; etiket buna bağlıdır.
+  windows-butunluk:
+    needs: windows
+    if: needs.windows.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: windows-parca-*
+          merge-multiple: true
+          path: parcalar
+      - name: Dört parçanın birleşimi tam küme
+        shell: bash
+        run: |
+          set -euo pipefail
+          for p in 1 2 3 4; do
+            [ -s "parcalar/windows-parca-$p.txt" ] || { echo "Parça $p listesi yok: parça yeşil bitmemiş"; exit 1; }
+          done
+          desenler=('sunucu/cekirdek/**/*.test.ts' 'sunucu/moduller/stok/**/*.test.ts'
+            'sunucu/moduller/uretim-emirleri/**/*.test.ts' 'sunucu/moduller/plan/**/*.test.ts')
+          shopt -s globstar nullglob
+          tumu=()
+          for desen in "${desenler[@]}"; do tumu+=($desen); done
+          shopt -u globstar nullglob
+          printf '%s\n' "${tumu[@]}" | LC_ALL=C sort -u > tam.txt
+          cat parcalar/windows-parca-[1-4].txt | tr -d '\r' | LC_ALL=C sort > kosan.txt
+          tekrar=$(uniq -d kosan.txt)
+          [ -z "$tekrar" ] || { echo "İki parçada koşan dosya:"; echo "$tekrar"; exit 1; }
+          diff tam.txt kosan.txt || { echo 'Koşan dosyalar tam kümeye eşit değil (< koşmayan, > fazla)'; exit 1; }
+          echo "Dört parça: $(wc -l < kosan.txt) dosya, tam küme: $(wc -l < tam.txt)" | tee -a "$GITHUB_STEP_SUMMARY"
 
   kontrol:
     if: always()
-    needs: [kapsam, tip, denetim, lint, istemci-test, sunucu-test, ekran, windows]
+    needs: [kapsam, tip, denetim, lint, istemci-test, sunucu-test, ekran, windows, windows-butunluk]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -544,14 +616,16 @@ jobs:
             and .lint.result == "success"
             and all(.[]; .result == "success" or .result == "skipped")' > /dev/null
 
-  # Windows dahil bütün işleri yeşil biten ana dal commit'i etiketlenir (2964): canlı ve güncelleme paketi yalnız etiketli
+  # Windows dahil bütün işleri yeşil biten ana dal commit'i etiketlenir (2964). Dört Windows parçasının yeşili matris sonucuna
+  # bırakılmaz: `windows-butunluk` dört parçanın da yeşil bitince yüklediği listeyi arar ve birleşimini tam kümeyle karşılaştırır: canlı ve güncelleme paketi yalnız etiketli
   # commit'ten çıkar. Etiket commit başına ayrıdır ve hiç taşınmaz, zorla gönderme gerekmez; var olan etiket yeniden yazılmaz.
   # İptal edilen ya da kırmızı koşuda iş atlanır, etiket konmaz. Son yeşil (belgeler/ci/kapsam.md):
   # git fetch --tags && git describe --tags --abbrev=0 --first-parent --match 'windows-yesil/*' origin/main
   windows-yesil:
-    needs: [windows, kontrol]
+    needs: [windows, windows-butunluk, kontrol]
     if: >-
-      needs.windows.result == 'success' && needs.kontrol.result == 'success' && github.ref == 'refs/heads/main'
+      needs.windows.result == 'success' && needs['windows-butunluk'].result == 'success' && needs.kontrol.result == 'success'
+      && github.ref == 'refs/heads/main'
       && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
     timeout-minutes: 5
