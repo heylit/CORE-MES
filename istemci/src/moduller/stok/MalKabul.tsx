@@ -7,7 +7,7 @@ import type {
 import { Dugme, DurumKutusu, Girdi, Kart, Rozet, Secim, Tablo, type Sutun } from '../../ortak/arayuz/index.ts';
 import { api } from '../../ortak/veri/api.ts';
 import { useGonderimKilidi } from '../../ortak/veri/korumali-komut.ts';
-import { DosyaHatasi, dosyaYukle } from '../belge-merkezi/disari.ts';
+import { DosyaHatasi, dosyaYukle, KucukResimKutusu, useKucukResimler } from '../belge-merkezi/disari.ts';
 import { sorguMetni, useListeDurumu } from '../../ortak/veri/liste-durumu.ts';
 import { AMBALAJ_KATALOGU, olcuBul, olcuMetni, sigma } from './ambalaj.ts';
 import { AmbalajIkonu } from './AmbalajIkonu.tsx';
@@ -197,6 +197,14 @@ function SertifikaDosyasi({ s, degistir }: { s: Satir; degistir: (d: Partial<Sat
   );
 }
 
+// Kartın küçük resmi (2872): kare çizim merkezinin ortak ucundan okunur (688 a: oturum açan herkes okur). Resmi olmayan kartta
+// yer tutucu çizilmez: mal kabulün satırları çoğu kartta boş ikonla kalabalıklaşmasın.
+export function MalzemeResmi({ id, ad }: { id: number; ad: string }) {
+  const resim = useKucukResimler('malzemeler', [id]).get(id);
+  if (!resim) return null;
+  return <div className="tc-stok-tam"><KucukResimKutusu resim={resim} ad={ad} boy="orta" /></div>;
+}
+
 function SatirGirdisi({ s, konumlar, degistir, sil }: { s: Satir; konumlar: { deger: string; baslik: string }[]; degistir: (d: Partial<Satir>) => void; sil?: () => void }) {
   const o = useMalzemeOzeti(s.kart);
   const id = o.data?.ozet.id ?? 0;
@@ -216,6 +224,7 @@ function SatirGirdisi({ s, konumlar, degistir, sil }: { s: Satir; konumlar: { de
   return (
     <fieldset className="tc-stok-satir">
       <legend>Satır</legend>
+      {id > 0 && <MalzemeResmi id={id} ad={o.data?.ozet.ad ?? o.data?.ozet.kod ?? ''} />}
       {s.siparisSatirId && (
         <p className="tc-stok-tam tc-stok-bilgi">Sipariş satırı: <strong>{s.siparisEtiketi}</strong>{' '}
           <Dugme tur="ikincil" onClick={() => degistir({ siparisSatirId: '', siparisEtiketi: '', hizmetKarti: '', ...(s.hizmetKarti ? { kart: '' } : {}) })}>Bağı kaldır</Dugme></p>
