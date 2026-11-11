@@ -220,10 +220,10 @@ describe('fabrika haritası', () => {
     expect(within(ilk).getByText('Durdu')).toBeTruthy();
     expect(within(ilk).getByText('Takım değişimi')).toBeTruthy();
     expect(within(ilk).getByText('12 / 40')).toBeTruthy();
-    expect(within(within(liste).getByRole('button', { name: /CNC-02/ })).getByText('Bekliyor')).toBeTruthy();
+    expect(within(within(liste).getByRole('button', { name: /CNC-02/ })).getByText('Boş')).toBeTruthy();
     const ozet = screen.getByLabelText('Özet');
     expect(within(ozet).getByText('Durdu').closest('div')?.textContent).toBe('Durdu1');
-    expect(within(ozet).getByText('Bekliyor').closest('div')?.textContent).toBe('Bekliyor1');
+    expect(within(ozet).getByText('Boş').closest('div')?.textContent).toBe('Boş1');
     // Sağlam toplamı özet ayrıntısındadır.
     expect(within(ozet).queryByText('12')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Özet ayrıntısı' }));
@@ -327,6 +327,28 @@ describe('fabrika haritası', () => {
     expect(within(kartlar[1] as HTMLElement).getByText('Ölçüm')).toBeTruthy();
     fireEvent.click(kartlar[0] as HTMLElement);
     expect(await screen.findByRole('region', { name: 'CNC-02 ayrıntısı' })).toBeTruthy();
+  });
+
+  it('aynı istasyonda iki başlamış iş: listede "+1 iş", kartta ikisi de; durduran iş öne alınır', async () => {
+    const ilk = EMIRLER.emirler[0]!;
+    const calisan = { ...ilk, id: 31, emirNo: 'UE-000031', parcaAd: 'Deneme mil', adet: 10, canli: { ...ilk.canli, calisma: 'calisiyor' as const, saglam: 4, durusNedeni: null, durusBaslangic: null } };
+    sunucuKur(OKUYAN, { emirler: { emirler: [calisan, ilk] } });
+    goster(<AtolyeHaritasi />);
+    const plan = await screen.findByRole('img', { name: 'Atölye planı' });
+    await listeyiAc();
+    const liste = await screen.findByRole('region', { name: 'Makineler' });
+    const satir = await within(liste).findByRole('button', { name: /CNC-01/ });
+    expect(within(satir).getByText('UE-000030 · Deneme kapak · +1 iş')).toBeTruthy();
+    expect(within(satir).getByText('Durdu')).toBeTruthy();
+    fireEvent.pointerDown(within(plan).getByText('CNC-01').closest('g') as Element);
+    const kart = await screen.findByRole('region', { name: 'CNC-01 ayrıntısı' });
+    const obur = within(kart).getByRole('region', { name: 'Bu istasyondaki öbür işler' });
+    expect(within(obur).getByText('Bu istasyonda 2 iş')).toBeTruthy();
+    expect(within(obur).getByText('UE-000031')).toBeTruthy();
+    expect(within(obur).getByText('4 / 10')).toBeTruthy();
+    // Sağlam toplamı iki işten.
+    fireEvent.click(screen.getByRole('button', { name: 'Özet ayrıntısı' }));
+    expect(within(screen.getByLabelText('Özet')).getByText('16')).toBeTruthy();
   });
 
   it('WebGL yoksa aynı yerleşim iki boyutlu planla gösterilir; plana dokununca öğe kartı açılır', async () => {
@@ -443,6 +465,7 @@ describe('fabrika haritası', () => {
     sunucuKur(OKUYAN);
     goster(<AtolyeHaritasi />);
     await screen.findByRole('img', { name: 'Atölye planı' });
+    fireEvent.click(screen.getByRole('button', { name: 'Diğer araçlar' }));
     const dugme = screen.getByRole('button', { name: 'Hafif görünüm' });
     expect(dugme.getAttribute('aria-pressed')).toBe('false');
     fireEvent.click(dugme);
@@ -457,9 +480,19 @@ describe('fabrika haritası', () => {
   });
 
   it('aç/kapa düğmelerinin adı durumla değişmez, durum aria-pressed ile okunur; ipucu yapılacak işi söyler', async () => {
+    localStorage.setItem('tmiv2.atolye.hafif', 'kapali');
     sunucuKur(OKUYAN);
     goster(<AtolyeHaritasi />);
     await screen.findByRole('img', { name: 'Atölye planı' });
+    // Seyrek araçlar "Diğer araçlar" menüsündedir, adlarıyla; açık araç menü düğmesinde işaretlenir.
+    const diger = screen.getByRole('button', { name: 'Diğer araçlar' });
+    expect(diger.getAttribute('aria-expanded')).toBe('false');
+    fireEvent.click(diger);
+    const menu = screen.getByRole('group', { name: 'Diğer araçlar' });
+    expect(within(menu).getByRole('button', { name: 'Hücre ızgarası' }).textContent).toBe('Hücre ızgarası');
+    expect(diger.getAttribute('data-isaret')).toBeNull();
+    fireEvent.click(within(menu).getByRole('button', { name: 'Hücre ızgarası' }));
+    expect(screen.getByRole('button', { name: 'Diğer araçlar' }).getAttribute('data-isaret')).toBe('true');
     const yazilar = screen.getByRole('button', { name: 'Yazılar' });
     expect(yazilar.getAttribute('aria-pressed')).toBe('true');
     expect(yazilar.getAttribute('title')).toMatch(/^Yazıları gizle/);
@@ -471,6 +504,7 @@ describe('fabrika haritası', () => {
     fireEvent.click(liste);
     expect(screen.getByRole('button', { name: 'Makine listesi' }).getAttribute('aria-pressed')).toBe('true');
     expect(screen.getByRole('button', { name: 'Tam ekran' }).getAttribute('aria-pressed')).toBe('false');
+    localStorage.removeItem('tmiv2.atolye.hafif');
   });
 
   it('okuma yetkisiyle düzenleme ve salon ekleme düğmesi görünmez', async () => {

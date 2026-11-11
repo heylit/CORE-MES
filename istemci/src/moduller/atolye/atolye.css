@@ -292,8 +292,17 @@
   .tc-atolye-duzen-govde { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) auto; }
   .tc-atolye-duzen-plan { grid-column: 1; grid-row: 1; }
   .tc-atolye-duzen-yan { grid-column: 1; grid-row: 2; max-height: var(--ekran-boy-40); border-left: 0; border-top: 1px solid var(--edge); }
-  .tc-atolye-palet { position: absolute; inset: 0 0 auto 0; z-index: var(--z-ust); width: auto; max-height: var(--oran-70); box-shadow: var(--shadow); }
-  .tc-atolye-duzen-sag { margin-left: 0; }
+  /* Telefonda "Ekle" paleti alttan yarım yükseklikte açılır: planın üst yarısı görünür kalır, öğenin nereye konduğu görülür. */
+  .tc-atolye-palet {
+    position: absolute; inset: auto 0 0 0; z-index: var(--z-ust); width: auto; max-height: var(--oran-46);
+    border-right: 0; border-top: 1px solid var(--edge2); border-radius: var(--yari-2) var(--yari-2) 0 0; box-shadow: var(--shadow);
+  }
+  /* Araç çubuğu tek satır, yana kayar; Vazgeç ve Kaydet sağda sabit kalır. Izgara ve açı seçimi adsız (değer yazar). */
+  .tc-atolye-duzen-cubuk { flex-wrap: nowrap; align-items: center; overflow-x: auto; scrollbar-width: thin; }
+  .tc-atolye-duzen-cubuk > * { flex: none; }
+  .tc-atolye-duzen-secim .tc-alan-etiket { position: absolute; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .tc-atolye-duzen-secim .tc-alan { min-width: 0; }
+  .tc-atolye-duzen-sag { margin-left: 0; position: sticky; right: 0; flex-wrap: nowrap; padding-left: var(--b-2); background: var(--bg2); }
   .tc-atolye-ozellik-uclu { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
@@ -609,3 +618,46 @@
 .tc-atolye-zemin { position: relative; min-width: 0; height: max(var(--kadran-enaz), var(--ekran-boy-62)); border: thin solid var(--edge); border-radius: var(--yari-1); overflow: hidden; }
 .tc-atolye-zemin .tc-plan { position: absolute; inset: 0; }
 .tc-atolye-zemin .tc-plan-istasyon, .tc-atolye-zemin .tc-plan-raf, .tc-atolye-zemin .tc-plan-alan { cursor: pointer; }
+
+/* Makine kartı: aynı istasyonda süren öbür işler. Emir numarası kendi satırında, kırılmaz; altında parça, adet, durum. */
+.tc-atolye-obur-isler { display: grid; gap: var(--b-1); margin-top: var(--b-2); padding-top: var(--b-2); border-top: 1px solid var(--edge); }
+.tc-atolye-obur-isler h4 { margin: 0; font-size: var(--yazi-xs); font-weight: 700; letter-spacing: var(--harf-aralik-06); text-transform: uppercase; color: var(--muted); }
+.tc-atolye-obur-isler ul { display: grid; gap: var(--b-1); margin: 0; padding: 0; list-style: none; }
+.tc-atolye-obur-isler li { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: var(--b-1) var(--b-2); font-size: var(--yazi-s); }
+.tc-atolye-obur-isler li > span:first-child { grid-column: 1 / -1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tc-atolye-obur-isler li > span:nth-child(2) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* "Diğer araçlar": sütunun solunda açılan adlı düğmeler; içindeki bir araç açıksa düğmede işaret noktası. */
+.tc-atolye-arac-diger { position: relative; }
+.tc-atolye-arac .tc-atolye-arac-diger > .tc-dugme[data-isaret="true"]::after {
+  content: ""; position: absolute; right: var(--b-1); top: var(--b-1); width: var(--nokta); height: var(--nokta);
+  border-radius: var(--yari-tam); background: var(--hazard);
+}
+.tc-atolye-arac-diger > .tc-dugme { position: relative; }
+.tc-atolye-arac-menu {
+  position: absolute; right: calc(100% + var(--b-2)); top: 0; display: grid; gap: var(--pay-ince); padding: var(--pay-ince);
+  min-width: var(--orb-3); background: var(--panel-solid); border: 1px solid var(--edge2); border-radius: var(--yari-2); box-shadow: var(--shadow);
+}
+.tc-atolye-arac .tc-atolye-arac-menu .tc-dugme { width: auto; justify-content: flex-start; padding: 0 var(--b-3); white-space: nowrap; }
+
+/* Özet satırı: stok uyarısı şeridin sonunda kısa bağlantı olarak durur, ayrı satır açmaz. */
+.tc-atolye-serit .tc-atolye-uyari { flex: none; align-items: center; }
+
+/* Harita ekrana sığar (sigdir.ts): sahne yüksekliği ölçülen boşluktur, en az kadran yüksekliği. Tam ekranda ölçülmez. */
+.tc-atolye[data-sigdi] .tc-atolye-sahne-kap, .tc-atolye[data-sigdi] .tc-atolye-sahne-plan, .tc-atolye[data-sigdi] .tc-atolye-yukleniyor {
+  height: max(var(--kadran-enaz), var(--atolye-sahne-boy));
+}
+.tc-atolye[data-sigdi] .tc-atolye-ana > .tc-kuyruk { max-height: calc(max(var(--kadran-enaz), var(--atolye-sahne-boy)) - var(--b-4)); }
+
+@media (max-width: 767px) {
+  /* Telefonda seçili bölüm "Bölüm" seçiminde yazar; kart başlığı tekrar etmez, harita yukarı çıkar. */
+  .tc-kart-ust:has(.tc-atolye-ust-sag) .tc-kart-bas { display: none; }
+  .tc-kart-ust:has(.tc-atolye-ust-sag) .tc-kart-sag { width: 100%; }
+  /* Telefonun kendi saati var. */
+  .tc-atolye-ust-sag .tc-atolye-saat { display: none; }
+  /* Stok uyarısı şeridin altında tek satır; yatay kayan sayıların arkasında kalmaz. */
+  .tc-atolye-serit .tc-atolye-uyari { display: block; flex: 1 1 100%; min-width: 0; font-size: var(--yazi-xs); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .tc-atolye-serit .tc-atolye-uyari > svg { display: inline-block; vertical-align: middle; margin-right: var(--b-1); }
+  /* Klavye ve fare ipucu dokunmatikte anlamsız; sahnenin altındaki düğmelerle de çakışır. */
+  .tc-atolye-gezinme { display: none; }
+}

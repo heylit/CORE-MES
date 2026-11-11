@@ -15,7 +15,8 @@ export interface KucukHaritaOzellikleri {
 
 // Sahnenin köşesinde fabrika planı: bölümler, geçişler ve bakılan yer (yönüyle). Dokunulan yere gidilir.
 export function KucukHarita({ bolumler, yer, git }: KucukHaritaOzellikleri) {
-  const [acik, acikYaz] = useState(true);
+  // Telefonda küçük harita kapalı başlar: dar sahnenin ortasını örtmesin; düğmeyle açılır.
+  const [acik, acikYaz] = useState(() => typeof window.matchMedia !== 'function' || !window.matchMedia('(max-width: 767px)').matches);
   const svg = useRef<SVGSVGElement>(null);
   const plan = useMemo(() => {
     const liste = bolumler.map((b) => ({

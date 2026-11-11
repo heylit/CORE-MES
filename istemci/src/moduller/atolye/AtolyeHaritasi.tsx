@@ -1,4 +1,4 @@
-import { Suspense, lazy, useCallback, useEffect, useMemo, useState } from 'react';
+import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import type { AramaCevabi, AramaSonucu, YerlesimCevabi } from '#paylasilan/sozlesme/atolye.ts';
 import {
@@ -10,6 +10,7 @@ import { performansOku } from '../../ortak/veri/gorunum.ts';
 import { useOturum } from '../../ortak/veri/oturum.ts';
 import { HaritaAraclari } from './HaritaAraclari.tsx';
 import { useOtomatikTur, useTamEkran } from './tam-ekran.ts';
+import { useEkranaSigdir } from './sigdir.ts';
 import { ISTASYON_TIPI_ADI, istasyonNesnesi, nesneCanlilari, olayNesnesi, turSirasi, depoMerkezi, gozKalemiYukleri, ilerleme, istasyonGorunumu, istasyonParcalari, parcaYerleri, ozetle, sayi, sayiMetni, siradakiEmirler, yerlesmemisCalisanlar } from './kurallar.ts';
 import { DepoGorunumu } from './DepoGorunumu.tsx';
 import { DijitalIkiz } from './DijitalIkiz.tsx';
@@ -166,9 +167,12 @@ export function AtolyeHaritasi() {
     () => (kapsam === 'fabrika' ? new Map(gorunen.flatMap((b) => b.raflar.map((r) => [r.id, b.salon.kod] as const))) : undefined),
     [gorunen, kapsam],
   );
+  const tumEmirler = useTumEmirler();
+  const siradakiler = useMemo(() => siradakiEmirler(tumEmirler.data?.emirler ?? []), [tumEmirler.data]);
+  const siradaIstasyonlar = useMemo(() => new Set(siradakiler.keys()), [siradakiler]);
   const durumlar = useMemo(() => new Map<number, MakineDurumu>(yerler.map((i) => [i.istasyonId, istasyonGorunumu(i, canli.emirler.get(i.istasyonId)).durum])), [yerler, canli.emirler]);
   const { arizalar, okundu: arizaOkundu } = useMakineArizalari();
-  const canliHaritasi = useMemo(() => nesneCanlilari(gorunen, canli.liste, arizalar), [gorunen, canli.liste, arizalar]);
+  const canliHaritasi = useMemo(() => nesneCanlilari(gorunen, canli.liste, arizalar, siradaIstasyonlar), [gorunen, canli.liste, arizalar, siradaIstasyonlar]);
   const haritadaYokCalisan = useMemo(() => (fabrika.data ? yerlesmemisCalisanlar(tumBolumler, canli.liste) : []), [fabrika.data, tumBolumler, canli.liste]);
   const arizaSayisi = useMemo(() => [...canliHaritasi.values()].filter((c) => c.ariza !== null).length, [canliHaritasi]);
   // Adres: /atolye?suzgec=yerlesmemis[&istasyon=<id>] yan listeyi "Yerleşmemiş makineler"de açar, verilen istasyonu vurgular
@@ -176,11 +180,13 @@ export function AtolyeHaritasi() {
   const vurguIstasyon = Number(adres.get('istasyon')) || null;
   const [yanListe, yanListeYaz] = useState<'istasyon' | 'hareket' | 'yerlesmemis'>(() => (adres.get('suzgec') === 'yerlesmemis' ? 'yerlesmemis' : 'istasyon'));
   const yerlesmemis = useYerlesmemisIstasyonlar(yanListe === 'yerlesmemis', fabrika.dataUpdatedAt);
-  const ozet = useMemo(() => ozetle(yerler, canli.emirler), [yerler, canli.emirler]);
+  const ozet = useMemo(() => ozetle(yerler, canli.gruplar, siradaIstasyonlar), [yerler, canli.gruplar, siradaIstasyonlar]);
   const kalemGorunumleri = useKalemGorunumleri();
   const kalemler = kalemGorunumleri.data?.kalemler;
   const [parcaGoster, parcaGosterYaz] = useState(false);
   const tamEkran = useTamEkran();
+  const haritaKoku = useRef<HTMLDivElement>(null);
+  const sahneAlani = useRef<HTMLDivElement>(null);
   const [tur, turYaz] = useState(false);
   const [turDurdu, turDurduYaz] = useState(false);
   // Tam ekranda istasyon listesi çekmecedir; geniş ekranda açık başlar.
@@ -199,8 +205,6 @@ export function AtolyeHaritasi() {
   useEffect(() => { if (sekme !== 'harita') rafOdakYaz(null); }, [sekme]);
   const gozKalemleri = useGozKalemleri(salonId);
   const gozKalemListesi = gozKalemleri.data?.kalemler;
-  const tumEmirler = useTumEmirler();
-  const siradakiler = useMemo(() => siradakiEmirler(tumEmirler.data?.emirler ?? []), [tumEmirler.data]);
   const malzemeModelleri = useMalzemeModelleri();
   const parcalar = useMemo(
     () => istasyonParcalari(parcaYerleri(gorunen), canli.emirler, kalemler ?? [], malzemeModelleri, siradakiler),
@@ -354,6 +358,9 @@ export function AtolyeHaritasi() {
     />
   );
 
+  // Harita sekmesinde (tam ekran dışı) sahne ekrana sığacak boyda çizilir.
+  useEkranaSigdir(haritaKoku, sahneAlani, fabrika.isSuccess && gorunen.length > 0 && sekme === 'harita' && !tamEkran.acik);
+
   if (fabrika.isPending) {
     return <Kart baslik="Fabrika Haritası"><DurumKutusu durum="yukleniyor" /></Kart>;
   }
@@ -382,7 +389,7 @@ export function AtolyeHaritasi() {
   const haritaGorunur = sekme === 'harita' || tamEkran.acik;
   const odakRafi = rafOdak ? odakBolumu?.raflar.find((r) => r.id === rafOdak.rafId) : undefined;
   const harita = (
-    <div className={`tc-atolye${tamEkran.acik ? ' tc-atolye-tam' : ''}`} data-tam-ekran={tamEkran.acik || undefined} hidden={!haritaGorunur}>
+    <div ref={haritaKoku} className={`tc-atolye${tamEkran.acik ? ' tc-atolye-tam' : ''}`} data-tam-ekran={tamEkran.acik || undefined} hidden={!haritaGorunur}>
       <div className="tc-atolye-serit">
         {tamEkran.acik && (
           <div className="tc-atolye-tam-baslik">
@@ -395,7 +402,8 @@ export function AtolyeHaritasi() {
           <Gosterge ad="Çalışıyor" deger={sayiMetni(ozet.calisiyor)} durum="calisiyor" />
           <Gosterge ad="Duraklatıldı" deger={sayiMetni(ozet.durakli)} durum="durakli" />
           <Gosterge ad="Durdu" deger={sayiMetni(ozet.durdu)} durum="durdu" />
-          <Gosterge ad="Bekliyor" deger={sayiMetni(ozet.bekliyor)} durum="sirada" />
+          <Gosterge ad="Sırada" deger={sayiMetni(ozet.sirada)} durum="sirada" />
+          <Gosterge ad="Boş" deger={sayiMetni(ozet.bos)} />
           {arizaOkundu && <Gosterge ad="Arıza, bakım (makine)" deger={sayiMetni(arizaSayisi)} durum={arizaSayisi > 0 ? 'durdu' : undefined} />}
           {ozetAyrinti && (
             <>
@@ -413,16 +421,16 @@ export function AtolyeHaritasi() {
           title={ozetAyrinti ? 'Özet ayrıntısını gizle' : 'Sağlam, yerleşik istasyon ve bölüm sayıları'}
           onClick={() => ozetAyrintiYaz((v) => !v)}
         />
+        {!tamEkran.acik && stoksuzYer !== null && stoksuzYer > 0 && (
+          <p className="tc-atolye-uyari" role="status">
+            <Simge ad="alert" boyut="k" />
+            {stoksuzYer} yer stok konumu değil. <Link to="/stok/ayarlar">Stok &gt; Ayarlar</Link>
+          </p>
+        )}
       </div>
-      {!tamEkran.acik && stoksuzYer !== null && stoksuzYer > 0 && (
-        <p className="tc-atolye-uyari" role="status">
-          <Simge ad="alert" boyut="k" />
-          {stoksuzYer} yer stok konumu değil. <Link to="/stok/ayarlar">Stok &gt; Ayarlar</Link>
-        </p>
-      )}
 
       <div className="tc-atolye-ana" data-liste={listeGorunur}>
-        <div className="tc-atolye-sahne-alani" data-yuruyus={yuruyus}>
+        <div ref={sahneAlani} className="tc-atolye-sahne-alani" data-yuruyus={yuruyus}>
           <Suspense fallback={<div className="tc-atolye-yukleniyor"><DurumKutusu durum="yukleniyor" mesaj="3B atölye hazırlanıyor" /></div>}>
             <Sahne3B
               bolumler={bolumYerlesimleri}
@@ -561,6 +569,8 @@ export function AtolyeHaritasi() {
               yerlesim={seciliBolum}
               anahtar={secili}
               emirler={canli.emirler}
+              gruplar={canli.gruplar}
+              siradaIstasyonlar={siradaIstasyonlar}
               canli={canliHaritasi}
               parcalar={parcalar}
               siradakiler={siradakiler}
@@ -629,14 +639,15 @@ export function AtolyeHaritasi() {
             {yanListe === 'istasyon' && sirali.length === 0 && <p className="tc-atolye-ipucu">{fabrikaGorunumu ? 'Fabrikaya' : 'Bu bölüme'} istasyon yerleştirilmemiş.</p>}
             {yanListe === 'istasyon' && sirali.map((i) => {
               const emir = canli.emirler.get(i.istasyonId);
-              const g = istasyonGorunumu(i, emir);
+              const ekIs = (canli.gruplar.get(i.istasyonId)?.length ?? 0) - 1;
+              const g = istasyonGorunumu(i, emir, siradaIstasyonlar.has(i.istasyonId));
               const nesne = istasyonNesnesi(gorunen, i.istasyonId);
               const ayrinti = [i.ad, `Hücre ${i.hucre}`, emir?.canli?.durusNedeni?.ad].filter((m): m is string => Boolean(m));
               return (
                 <KuyrukKarti
                   key={i.istasyonId}
                   no={i.kod}
-                  parca={emir ? `${emir.emirNo} · ${emir.parcaAd}` : ISTASYON_TIPI_ADI[i.tip]}
+                  parca={emir ? `${emir.emirNo} · ${emir.parcaAd}${ekIs > 0 ? ` · +${ekIs} iş` : ''}` : ISTASYON_TIPI_ADI[i.tip]}
                   adet={emir ? `${emir.canli ? sayiMetni(emir.canli.saglam) : '—'} / ${sayiMetni(emir.adet)}` : 'İş yok'}
                   ayrinti={ayrinti}
                   durum={g.durum}
@@ -659,7 +670,7 @@ export function AtolyeHaritasi() {
   );
 
   return (
-    <Kart baslik={`Fabrika Haritası · ${baslik}`} sag={ustSag}>
+    <Kart baslik={baslik} sag={ustSag}>
       {harita}
       {!tamEkran.acik && sekme === 'ikiz' && (
         <DijitalIkiz bolumler={gorunen} fabrika={fabrikaGorunumu} baslik={baslik} canli={canliHaritasi} tumEmirler={tumEmirler.data?.emirler ?? null} />

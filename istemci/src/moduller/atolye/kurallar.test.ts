@@ -6,7 +6,7 @@ import {
 } from './duzenleyici-durumu.ts';
 import type { GozKalemi } from '#paylasilan/sozlesme/atolye.ts';
 import {
-  depoMerkezi, dolulukKademesi, emirlerIstasyonaGore, gozKalemiYukleri, gozOzetleri, ilerleme, istasyonCanli, istasyonGorunumu, istasyonParcalari, parcaYerleri, siradakiEmirler, yerlesmemisCalisanlar,
+  depoMerkezi, dolulukKademesi, emirlerIstasyonaGore, istasyonEmirGruplari, gozKalemiYukleri, gozOzetleri, ilerleme, istasyonCanli, istasyonGorunumu, istasyonParcalari, parcaYerleri, siradakiEmirler, yerlesmemisCalisanlar,
   eklenebilirIstasyonlar, ornekIstasyonMu,
   istasyonunParcalari, ozetle, parcaListesi, stokEslemeIletisi, turSirasi, govdeGorunumu, sahneModelTurleri,
 } from './kurallar.ts';
@@ -52,12 +52,16 @@ describe('atolye ekran yardımcıları', () => {
     });
     expect(istasyonCanli({ aktif: true }, durmus)).toMatchObject({ durum: 'durdu', sayac: '8/20', neden: 'Takım değişimi' });
     expect(istasyonCanli({ aktif: true }, emir(5, null))).toMatchObject({ sayac: null, oran: null, emirNo: 'UE-00005' });
-    expect(istasyonCanli({ aktif: true }, undefined)).toEqual({ durum: 'sirada', metin: 'Bekliyor', sayac: null, oran: null, emirNo: null, parca: null, neden: null });
+    expect(istasyonCanli({ aktif: true }, undefined)).toEqual({ durum: 'sirada', metin: 'Boş', sayac: null, oran: null, emirNo: null, parca: null, neden: null });
+    expect(istasyonCanli({ aktif: true }, undefined, true)).toMatchObject({ durum: 'sirada', metin: 'Sırada' });
     expect(istasyonCanli({ aktif: false }, emir(5, 'calisiyor', 9))).toMatchObject({ metin: 'Pasif', sayac: null, emirNo: null });
   });
 
   it('gösterim: istasyon durumu başlamış emrin canlı halidir; emir yoksa bekliyor, pasif istasyon durum göstermez', () => {
-    expect(istasyonGorunumu({ aktif: true }, undefined)).toEqual({ durum: 'sirada', metin: 'Bekliyor' });
+    expect(istasyonGorunumu({ aktif: true }, undefined)).toEqual({ durum: 'sirada', metin: 'Boş' });
+    expect(istasyonGorunumu({ aktif: true }, undefined, true)).toEqual({ durum: 'sirada', metin: 'Sırada' });
+    // Sırada bilgisi başlamış emri olan istasyonu değiştirmez.
+    expect(istasyonGorunumu({ aktif: true }, emir(5, 'calisiyor'), true).metin).toBe('Çalışıyor');
     expect(istasyonGorunumu({ aktif: true }, emir(5, 'calisiyor')).durum).toBe('calisiyor');
     expect(istasyonGorunumu({ aktif: true }, emir(5, 'durakli')).durum).toBe('durakli');
     expect(istasyonGorunumu({ aktif: true }, emir(5, 'durdu')).durum).toBe('durdu');
@@ -67,8 +71,8 @@ describe('atolye ekran yardımcıları', () => {
   it('özet sayıları; sağlam toplamı başlamış emir yoksa null (sıfır uydurulmaz)', () => {
     const yerler = YERLESIM.istasyonYerleri;
     expect(ozetle(yerler, new Map()).saglam).toBeNull();
-    const o = ozetle(yerler, emirlerIstasyonaGore([emir(5, 'durdu', 6)]));
-    expect(o).toEqual({ calisiyor: 0, durakli: 0, durdu: 1, bekliyor: 0, saglam: 6 });
+    const o = ozetle(yerler, istasyonEmirGruplari([emir(5, 'durdu', 6)]));
+    expect(o).toEqual({ calisiyor: 0, durakli: 0, durdu: 1, sirada: 0, bos: 0, saglam: 6 });
     expect(ilerleme(emir(5, 'calisiyor', 5))).toBe(0.25);
     expect(ilerleme(emir(5, null))).toBeNull();
   });
@@ -358,5 +362,28 @@ describe('katalog modeliyle 3B gövde (2100-2 a)', () => {
       istasyonYerleri: [ist(1, ['m_haasst30']), ist(2, ['m_haasvf2', 'm_haasvf4']), ist(3, [null])],
     } as unknown as YerlesimCevabi;
     expect([...sahneModelTurleri(y)]).toEqual([['makine:7', 'm_haasvf2'], ['istasyon:1', 'm_haasst30']]);
+  });
+});
+
+describe('boş, sırada ve aynı istasyonda çok iş', () => {
+  const ikinci = (calisma: 'calisiyor' | 'durakli' | 'durdu', saglam: number): Emir => ({ ...emir(5, calisma, saglam), id: 51 + saglam, emirNo: `UE-ORN-${saglam}` });
+
+  it('emirsiz istasyon: kuyrukta planlı emri varsa sırada, yoksa boş sayılır', () => {
+    const yer = YERLESIM.istasyonYerleri[0];
+    if (!yer) throw new Error('örnek yer yok');
+    const yerler = [yer, { ...yer, istasyonId: 6 }];
+    expect(ozetle(yerler, new Map(), new Set([6]))).toMatchObject({ sirada: 1, bos: 1, calisiyor: 0 });
+  });
+
+  it('aynı istasyonda iki başlamış emir: ikisi de grupta, sorunlu önce; gösterilen emir sorunlu olandır', () => {
+    const calisan = ikinci('calisiyor', 3);
+    const duran = ikinci('durdu', 4);
+    const gruplar = istasyonEmirGruplari([calisan, duran]);
+    expect(gruplar.get(5)?.map((e) => e.emirNo)).toEqual(['UE-ORN-4', 'UE-ORN-3']);
+    expect(emirlerIstasyonaGore([calisan, duran]).get(5)?.emirNo).toBe('UE-ORN-4');
+    // Sağlam toplamı iki emirden; istasyon bir kez sayılır (durdu).
+    const yer = YERLESIM.istasyonYerleri[0];
+    if (!yer) throw new Error('örnek yer yok');
+    expect(ozetle([yer], gruplar)).toEqual({ calisiyor: 0, durakli: 0, durdu: 1, sirada: 0, bos: 0, saglam: 7 });
   });
 });

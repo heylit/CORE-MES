@@ -11,7 +11,7 @@ import type { Emir, EmirlerCevabi, SonOlaylarCevabi } from '#paylasilan/sozlesme
 import { api, ApiHatasi, OTURUM_BITTI } from '../../ortak/veri/api.ts';
 import { useOturum } from '../../ortak/veri/oturum.ts';
 import { anahtarlar } from './anahtarlar.ts';
-import { emirlerIstasyonaGore, hucreAnahtari } from './kurallar.ts';
+import { emirlerIstasyonaGore, istasyonEmirGruplari, hucreAnahtari } from './kurallar.ts';
 import type { MakineArizasi } from './kurallar.ts';
 import { base64Oku, base64Yaz, parcala, sha256 } from './model-dosyasi.ts';
 
@@ -40,7 +40,7 @@ export function fabrikaKaydet(govde: FabrikaKayitGovdesi): Promise<FabrikaKayitC
 }
 
 // İstasyonun canlı durumu üretim emirleri modülünün okuma ucundan gelir (başlamış emirler ve canlı sayaçları).
-export function useCanliDurum(): { emirler: ReadonlyMap<number, Emir>; liste: readonly Emir[]; hata: boolean; guncellendi: number } {
+export function useCanliDurum(): { emirler: ReadonlyMap<number, Emir>; gruplar: ReadonlyMap<number, readonly Emir[]>; liste: readonly Emir[]; hata: boolean; guncellendi: number } {
   const sorgu = useQuery({
     queryKey: anahtarlar.canli,
     queryFn: () => api.get<EmirlerCevabi>('/uretim-emirleri?durum=basladi'),
@@ -49,7 +49,8 @@ export function useCanliDurum(): { emirler: ReadonlyMap<number, Emir>; liste: re
   });
   const liste = useMemo(() => sorgu.data?.emirler ?? [], [sorgu.data]);
   const emirler = useMemo(() => emirlerIstasyonaGore(liste), [liste]);
-  return { emirler, liste, hata: sorgu.isError, guncellendi: sorgu.dataUpdatedAt };
+  const gruplar = useMemo(() => istasyonEmirGruplari(liste), [liste]);
+  return { emirler, gruplar, liste, hata: sorgu.isError, guncellendi: sorgu.dataUpdatedAt };
 }
 
 // Yetkisiz (403) cevaptan sonra yeniden sorulmaz: yetki oturum boyunca değişmez. Öbür hatalarda yoklama sürer.
