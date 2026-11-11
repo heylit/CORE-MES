@@ -118,8 +118,11 @@ export async function labelSvg(sn, p, extra) {
   const q = await qrSvg(sn);
   const inner = q.replace(/^<svg[^>]*>/, '').replace(/<\/svg>$/, ''), vb = /viewBox="([^"]+)"/.exec(q)[1].split(' ').map(Number);
   const esc = s => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;');
+  const fs = Math.max(12, Math.min(20, Math.floor(260 / (Math.max(1, String(sn || '').length) * 0.6))));
   return '<svg class="lbl" xmlns="http://www.w3.org/2000/svg" width="60mm" height="30mm" viewBox="0 0 600 300"><rect width="600" height="300" fill="#fff" stroke="#000" stroke-width="3" rx="12"/>' +
-    '<svg x="20" y="20" width="260" height="260" viewBox="' + vb.join(' ') + '">' + inner + '</svg>' +
+    // 2885 (2885-1 a): seri QR'ın altında da okunur yazıdır (kamerasız elle giriş); QR kutusunda bir satır küçülür.
+    '<svg x="32" y="20" width="236" height="236" viewBox="' + vb.join(' ') + '">' + inner + '</svg>' +
+    '<text x="150" y="' + (258 + Math.round(fs * 0.85)) + '" text-anchor="middle" font-family="monospace" font-size="' + fs + '">' + esc(sn) + '</text>' +
     '<text x="300" y="80" font-family="monospace" font-size="34" font-weight="700">' + esc(sn) + '</text>' +
     '<text x="300" y="130" font-family="sans-serif" font-size="26">' + esc(p.part) + '</text>' +
     '<text x="300" y="170" font-family="sans-serif" font-size="22" fill="#444">' + esc(p.partNo) + ' · Rev ' + esc(p.rev) + '</text>' +

@@ -104,9 +104,53 @@ export function yerlesim(s: Sablon, veri: AlanDegerleri, sade: boolean): Onizlem
   const ogeler: OnizlemeOgesi[] = [];
   for (const o of s.ogeler) {
     const oge = ogeYerlesimi(o, veri, sade);
-    if (oge !== null) ogeler.push(oge);
+    if (oge === null) continue;
+    if (oge.tur === 'qr') ogeler.push(...qrVeKodu(s, o, oge)); else ogeler.push(oge);
   }
   return ogeler;
+}
+
+// EM-34 (2885, 2885-1 a): kamerayla okutamayan kodu elle yazabilsin diye QR'ın taşıdığı metin QR'ın hemen altına basılır.
+// QR'ın altında, QR genişliğinde başka öğeye ve etiket kenarına değmeden yer varsa yazı oraya girer, QR boyutu değişmez; yoksa QR kendi
+// kutusunda yazı satırı kadar küçülür ve ortalanır (2885-1 a, 2168-2 b'deki 46 mm bu kartla yaklaşık 43 mm olur). Yer hesabı şablonun
+// düzeninden yapılır; koşullu öğeler de varmış sayılır (basılan etiket veriye göre kaymaz).
+export const QR_ALTI_EN_KUCUK_YAZI = 1.6;
+export const QR_ALTI_EN_BUYUK_YAZI = 2.2;
+const QR_ALTI_YAZI_ORANI = 0.07;
+const QR_ALTI_ARALIK = 0.15;
+const ETIKET_KENAR_PAYI = 0.5;
+type Kutu = { x: number; y: number; genislik: number; yukseklik: number };
+const kutusu = (o: SablonOgesi): Kutu => (o.tur === 'qr' || o.tur === 'simge' ? { x: o.x, y: o.y, genislik: o.boyut, yukseklik: o.boyut } : o);
+export function qrAltiYeri(s: Sablon, qrOgesi: SablonOgesi): number {
+  const qr = kutusu(qrOgesi);
+  const ust = qr.y + qr.yukseklik;
+  const ortusur = (k: Kutu) => k.x < qr.x + qr.genislik - 1e-9 && k.x + k.genislik > qr.x + 1e-9;
+  let alt = s.yukseklik - ETIKET_KENAR_PAYI;
+  for (const o of s.ogeler) {
+    const k = kutusu(o);
+    if (o === qrOgesi || !ortusur(k)) continue;
+    if (k.y >= ust - 1e-9) alt = Math.min(alt, k.y);
+    // QR'ı içine alan çerçevenin alt çizgisi de sınırdır (durum etiketinin red çerçevesi).
+    else if (o.tur === 'kutu' && k.y + k.yukseklik > ust && k.x <= qr.x && k.x + k.genislik >= qr.x + qr.genislik) alt = Math.min(alt, k.y + k.yukseklik - o.kalinlik);
+  }
+  return Math.max(0, alt - ust - QR_ALTI_ARALIK);
+}
+type QrYerlesimi = Extract<OnizlemeOgesi, { tur: 'qr' }>;
+function qrVeKodu(s: Sablon, o: SablonOgesi, qr: QrYerlesimi): OnizlemeOgesi[] {
+  if (o.tur !== 'qr' || qr.veri === '') return [qr];
+  const yer = qrAltiYeri(s, o);
+  const istenen = Math.min(QR_ALTI_EN_BUYUK_YAZI, Math.max(QR_ALTI_EN_KUCUK_YAZI, Math.round(o.boyut * QR_ALTI_YAZI_ORANI * 10) / 10));
+  const disari = yer >= QR_ALTI_EN_KUCUK_YAZI;
+  const yazi = disari ? Math.min(istenen, Math.floor(yer * 10) / 10) : istenen;
+  const boyut = disari ? o.boyut : Math.round((o.boyut - yazi - QR_ALTI_ARALIK) * 100) / 100;
+  const kare: QrYerlesimi = { ...qr, x: o.x + (o.boyut - boyut) / 2, boyut };
+  const yaziMm = sigdirilmisYazi(qr.veri, o.boyut, yazi);
+  // Yazıcının yerleşik yazı tipi ortalama komutu bilmez; harf genişliği tahminiyle ortalanır.
+  const genislik = Math.min(o.boyut, qr.veri.length * yaziMm * HARF_ORANI);
+  return [kare, {
+    tur: 'metin', x: o.x + (o.boyut - genislik) / 2, y: Math.round((o.y + boyut + QR_ALTI_ARALIK) * 100) / 100, genislik, yaziMm, kalin: false,
+    satirlar: satirlaraBol(qr.veri, o.boyut, yaziMm, yaziMm),
+  }];
 }
 
 // EM-26 (kart 2168): koşullu öğe yalnız koşul alanının değeri varken basılır; tanınmayan simge değeri basılmaz.

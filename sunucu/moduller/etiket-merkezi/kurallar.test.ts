@@ -4,6 +4,7 @@ import { agAraliklariniCoz } from '#paylasilan/ag-araligi.ts';
 import { kodTuru } from '#paylasilan/kod-sozlugu.ts';
 import { QR_KENAR_MODUL, type Sablon } from '#paylasilan/sozlesme/etiket-merkezi.ts';
 import { yaziciAgiOku } from './ag.ts';
+import { QR_ALTI_EN_KUCUK_YAZI, qrAltiYeri } from './kurallar.ts';
 import { BEKLEYEN_GUN, HATALI_KARAR_SIMGESI, KALITE_KARAR_SIMGESI, REFAKAT_ADIM_SAYISI, bekleyenBaslangici, bekleyenSirasi, kaliteBekleyenleri, kaliteDurumDegerleri, hataliBekleyenleri, malKabulBekleyenleri, refakatBekleyenleri } from './kurallar.ts';
 import { alanDegeri, baskiEngeli, dogrudanBaskiDurumu, indirmeEngeli, istasyonDegerleri, kayitUyumHatasi, konumDegerleri, lotDegerleri, kayitSablonTuru, malzemeDegerleri, noktaya, rafDegerleri, refakatDegerleri, refakatPartisiDegerleri, toplamEtiketHatasi, yaziciAdresHatasi, qrDikdortgenleri, qrMatrisi, sablonHatalari, sadelestir, SATIR_BASI, satirlaraBol, sigdirilmisYazi, yerlesim } from './kurallar.ts';
 import { HAZIR_SABLONLAR, ORNEK_DEGERLER } from './sablonlar.ts';
@@ -18,6 +19,35 @@ describe('etiket-merkezi kuralları', () => {
     assert.deepEqual(sablonHatalari(sablon([metin('ad', 20, 1, 31)])), ['1. öğe etiketin dışına taşıyor.']);
     assert.deepEqual(sablonHatalari(sablon([{ tur: 'qr', x: 10, y: 5, boyut: 21, alan: 'qr' }])), ['1. öğe etiketin dışına taşıyor.']);
     assert.deepEqual(sablonHatalari(sablon([metin('ad', 1, 1, 40, 2, 3)])), ['1. öğenin yazısı kutusundan büyük.']);
+  });
+
+  test('EM-34 (2885-1 a): QR\'ın metni QR\'ın altına basılır ve elle girişte aynı kod çözülür; yer varsa QR küçülmez, yoksa kendi kutusunda küçülür', () => {
+    const qr = { tur: 'qr' as const, x: 2, y: 2, boyut: 20, alan: 'qr' };
+    const [q, yazi] = yerlesim(sablon([qr], 50, 25), { qr: 'LOC:A01-02-3' }, false);
+    assert.ok(q?.tur === 'qr' && q.boyut === 20 && q.x === 2);
+    assert.ok(yazi?.tur === 'metin');
+    assert.deepEqual(yazi.satirlar, ['LOC:A01-02-3']);
+    assert.ok(yazi.y >= 22 && yazi.y + yazi.yaziMm <= 25 && yazi.yaziMm >= QR_ALTI_EN_KUCUK_YAZI);
+    assert.deepEqual(kodTuru(yazi.satirlar.join('')), { tur: 'konum', deger: 'A01-02-3' });
+    // Altında başka öğe varsa yazı ona binmez: QR kutusunun içinde küçülür, yazı kutunun içinde kalır.
+    const dolu = yerlesim(sablon([qr, metin('ad', 2, 22.2, 20, 2, 1.8)], 50, 25), { qr: 'LOC:A01-02-3', ad: 'x' }, false);
+    const [q2, y2] = dolu;
+    assert.ok(q2?.tur === 'qr' && q2.boyut < 20 && q2.boyut >= 20 - 2.5 && q2.y === 2);
+    assert.ok(y2?.tur === 'metin' && y2.satirlar.join('') === 'LOC:A01-02-3' && y2.y + y2.yaziMm <= 22 + 1e-9);
+    // Yasak: QR'sız (boş değer) etikete kod yazılmaz.
+    assert.equal(yerlesim(sablon([qr], 50, 25), { qr: null }, false).length, 0);
+    // Bütün hazır şablonlarda kod QR'ın altında, etiketin ve QR kutusunun ya da altındaki boş yerin içinde.
+    for (const s of HAZIR_SABLONLAR) {
+      const kutu = s.ogeler.find((o) => o.tur === 'qr');
+      assert.ok(kutu?.tur === 'qr', s.anahtar);
+      const y = yerlesim(s, ORNEK_DEGERLER[s.tur], false);
+      const i = y.findIndex((o) => o.tur === 'qr');
+      const k = y[i];
+      const alt = y[i + 1];
+      assert.ok(k?.tur === 'qr' && alt?.tur === 'metin' && alt.satirlar.join('') === k.veri, s.anahtar);
+      assert.ok(alt.y >= k.y + k.boyut && alt.y + alt.yaziMm <= kutu.y + kutu.boyut + Math.max(0, qrAltiYeri(s, kutu)) + 0.15 + 1e-9, s.anahtar);
+      assert.ok(k.boyut >= kutu.boyut - 2.5, s.anahtar);
+    }
   });
 
   test('EM-2: milimetre yazıcı noktasına yuvarlanır', () => {
@@ -180,7 +210,7 @@ describe('etiket-merkezi kuralları', () => {
     assert.ok(sablon);
     const ogeler = yerlesim(sablon, d, false);
     // Sabit tür adı ve alt başlık basılır; değeri olmayan ad ve yer de başlıkları da basılmaz (EM-4, EM-26).
-    assert.deepEqual(ogeler.filter((o) => o.tur === 'metin').map((o) => o.satirlar), [['KONUM'], ['STOK KONUMU'], ['R1-02-3-1']]);
+    assert.deepEqual(ogeler.filter((o) => o.tur === 'metin').map((o) => o.satirlar), [['LOC:R1-02-3-1'], ['KONUM'], ['STOK KONUMU'], ['R1-02-3-1']]);
     assert.equal(ogeler.find((o) => o.tur === 'qr')?.veri, 'LOC:R1-02-3-1');
     // Stoktaki en uzun kod (20 karakter) konum ve istasyon şablonlarında kesilmez.
     const uzun = 'ABCDEFGHIJ-123456789';
@@ -323,8 +353,8 @@ describe('etiket-merkezi kuralları', () => {
     assert.equal(red.filter(cerceve).length, 1);
     assert.equal(serbest.filter(cerceve).length, 0);
     assert.deepEqual(serbest.filter((o) => o.tur === 'simge').map((o) => o.tur === 'simge' && `${o.karo}:${o.ad}`), ['beyaz:onay', 'yok:kalite']);
-    // QR bugünkü boyutunda (2168-2 b).
-    assert.equal(serbest.find((o) => o.tur === 'qr')?.tur === 'qr' && (serbest.find((o) => o.tur === 'qr') as { boyut: number }).boyut, 34);
+    // QR kutusu 34 mm (2168-2 b); altındaki kod satırı kadar küçülür (2885-1 a).
+    assert.equal(serbest.find((o) => o.tur === 'qr')?.tur === 'qr' && (serbest.find((o) => o.tur === 'qr') as { boyut: number }).boyut, 31.65);
   });
 
   test('2168: her hazır şablonun sağ üst köşesinde piktogram var ve örnek değerle basılır', () => {

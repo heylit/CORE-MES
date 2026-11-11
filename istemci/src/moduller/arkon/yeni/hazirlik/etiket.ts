@@ -3,13 +3,22 @@ import type { Pkg } from './tipler.ts';
 
 const kac = (s: unknown): string => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;');
 
+// 2885 (2885-1 a): kamerayla okutamayan seri numarasını elle yazabilsin diye QR'ın taşıdığı metin QR'ın hemen altına basılır; QR kendi
+// kutusunda (26 mm) bir yazı satırı kadar küçülür. Birim 0,1 mm.
+export const QR_ALTI = { boyut: 236, yazi: 20, enKucukYazi: 12 } as const;
+export function qrAltiYazisi(metin: string): string {
+  const yazi = Math.max(QR_ALTI.enKucukYazi, Math.min(QR_ALTI.yazi, Math.floor(260 / (Math.max(1, metin.length) * 0.6))));
+  return '<text x="150" y="' + (20 + QR_ALTI.boyut + 2 + Math.round(yazi * 0.85)) + '" text-anchor="middle" font-family="monospace" font-size="' + yazi + '">' + kac(metin) + '</text>';
+}
+
 // 60x30 mm parça etiketi (istasyonlar.ts labelSvg): solda seri numarasının QR'ı, sağda seri, parça adı, parça no ve revizyon, ek satır.
 // Kâğıda basılır; renk temadan değil, baskı için sabit siyah-beyazdır.
 export function etiketSvg(seri: string, p: Partial<Pick<Pkg, 'part' | 'partNo' | 'rev'>>, ek?: string | null): string {
   const { modul, yol } = qrKareleri(seri);
   const k = modul + 2 * QR_SESSIZ_PAY;
   return '<svg class="lbl" xmlns="http://www.w3.org/2000/svg" width="60mm" height="30mm" viewBox="0 0 600 300"><rect width="600" height="300" fill="#fff" stroke="#000" stroke-width="3" rx="12"/>'
-    + '<svg x="20" y="20" width="260" height="260" viewBox="0 0 ' + k + ' ' + k + '" shape-rendering="crispEdges"><rect width="' + k + '" height="' + k + '" fill="#fff"/><path d="' + yol + '" fill="#000"/></svg>'
+    + '<svg x="' + (20 + (260 - QR_ALTI.boyut) / 2) + '" y="20" width="' + QR_ALTI.boyut + '" height="' + QR_ALTI.boyut + '" viewBox="0 0 ' + k + ' ' + k + '" shape-rendering="crispEdges"><rect width="' + k + '" height="' + k + '" fill="#fff"/><path d="' + yol + '" fill="#000"/></svg>'
+    + qrAltiYazisi(seri)
     + '<text x="300" y="80" font-family="monospace" font-size="34" font-weight="700">' + kac(seri) + '</text>'
     + '<text x="300" y="130" font-family="sans-serif" font-size="26">' + kac(p.part) + '</text>'
     + '<text x="300" y="170" font-family="sans-serif" font-size="22" fill="#444">' + kac(p.partNo) + ' · Rev ' + kac(p.rev) + '</text>'
