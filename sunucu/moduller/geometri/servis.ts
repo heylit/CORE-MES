@@ -30,6 +30,8 @@ interface Model {
   belgeAdi: string;
   revizyonId: number;
   harf: string;
+  // 2138-2: gösterilen revizyon kodu; harf merkezin iç sırasıdır, gösterilmez.
+  revKodu: string | null;
   ozet: string;
   dosyaTuru: GeometriDosyaTuru;
   kapak: boolean;
@@ -41,7 +43,7 @@ async function modeller(db: Db): Promise<Model[]> {
   for (const [malzemeNo, belgeler] of await kayitlaraBagliYayindakiBelgeler(db, 'malzemeler', DOSYA_TURLERI)) {
     for (const b of belgeler) {
       if (!geometriTuruMu(b.dosyaTuru)) continue;
-      sonuc.push({ malzemeNo, belgeId: b.id, belgeAdi: b.ad, revizyonId: b.revizyonId, harf: b.harf, ozet: b.ozet, dosyaTuru: b.dosyaTuru, kapak: b.kapak });
+      sonuc.push({ malzemeNo, belgeId: b.id, belgeAdi: b.ad, revizyonId: b.revizyonId, harf: b.harf, revKodu: b.revKodu, ozet: b.ozet, dosyaTuru: b.dosyaTuru, kapak: b.kapak });
     }
   }
   return sonuc;
@@ -70,7 +72,7 @@ export async function modelListesi(
     const is = isler.get(m.revizyonId);
     const satir: GeometriModelSatiri = {
       malzemeNo: m.malzemeNo, malzemeKodu: mz.kod, malzemeAdi: mz.ad, belgeId: m.belgeId, belgeAdi: m.belgeAdi, revizyonId: m.revizyonId,
-      harf: m.harf, dosyaTuru: m.dosyaTuru, durum: durumu(is), hataMetni: is?.hataMetni ?? null,
+      harf: m.harf, revKodu: m.revKodu, dosyaTuru: m.dosyaTuru, durum: durumu(is), hataMetni: is?.hataMetni ?? null,
     };
     if (s.durum !== undefined && satir.durum !== s.durum) continue;
     if (ara !== null && ![satir.malzemeKodu, satir.malzemeAdi ?? '', satir.belgeAdi].some((x) => kucuk(x).includes(ara))) continue;
@@ -182,6 +184,7 @@ export interface MalzemeGeometrisi {
   malzemeNo: number;
   belgeAdi: string;
   harf: string;
+  revKodu: string | null;
   kapak: boolean;
   modelSayisi: number;
   analiz: GeometriAnalizCevabi;
@@ -196,7 +199,7 @@ export async function malzemeGeometrisi(
   const m = liste[0];
   if (m === undefined) return null;
   return {
-    malzemeNo, belgeAdi: m.belgeAdi, harf: m.harf, kapak: m.kapak, modelSayisi: liste.length,
+    malzemeNo, belgeAdi: m.belgeAdi, harf: m.harf, revKodu: m.revKodu, kapak: m.kapak, modelSayisi: liste.length,
     analiz: await analizCevabi(db, m), ham: await hamOnerisi(db, m.revizyonId, sorgu),
   };
 }

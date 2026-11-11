@@ -71,6 +71,8 @@ export const geometriModelSatiri = z.object({
   belgeAdi: z.string(),
   revizyonId: z.number().int(),
   harf: z.string(),
+  // 2138-2: gösterilen revizyon kodu (modelin kodu, yoksa bağlı malzeme kartının revizyonu); harf merkezin iç sırasıdır, gösterilmez.
+  revKodu: z.string().nullable().optional(),
   dosyaTuru: z.enum(GEOMETRI_DOSYA_TURLERI),
   durum: z.enum(GEOMETRI_DURUMLARI),
   hataMetni: z.string().nullable(),
@@ -184,7 +186,7 @@ export const yenidenHesaplaCevabi = geometriAnalizCevabi;
 export const malzemeParametresi = z.object({ malzemeNo: z.coerce.number<number>().int().min(1) });
 export const agirlikOzetiCevabi = z.object({
   // kapak: model kartta kapak seçili olduğu için alındı (GEO-2 a); değilse en son yayınlanan. modelSayisi: karta bağlı yayındaki 3B model sayısı.
-  model: z.object({ belgeAdi: z.string(), harf: z.string(), kapak: z.boolean() }).nullable(),
+  model: z.object({ belgeAdi: z.string(), harf: z.string(), revKodu: z.string().nullable().optional(), kapak: z.boolean() }).nullable(),
   modelSayisi: z.number().int().min(0),
   hacimMm3: z.number().positive().nullable(),
   neden: z.enum(['model-yok', 'analiz-yok', 'hacim-yok']).nullable(),
