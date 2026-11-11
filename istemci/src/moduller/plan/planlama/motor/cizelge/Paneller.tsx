@@ -219,7 +219,7 @@ function TeknikYardimci({ c, p, cx, komut, planYaz: yaz, planKilitle, solAc, mer
             {yaz && el.sabit > 0 && <Dg ad="Sabitleri kaldır" simge="lock" yap={planKilitle && komut ? () => setSabitOnay(true) : null} not="Kilitleme yetkiniz yok." />}
           </div>
         </>)}
-        {adim(4, 'play', 'Motor', `gecikme ${saatYazi(p.ozet.wT)} · ${p.ozet.late}/${p.ozet.n} geciken`, p.ozet.late ? 'uyari' : 'tamam', <>
+        {adim(4, 'play', 'Motor', `ağırlıklı gecikme ${saatYazi(p.ozet.wT)} · ${p.ozet.late}/${p.ozet.n} geciken`, p.ozet.late ? 'uyari' : 'tamam', <>
           <p className="tc-pym-kucuk-yazi">Motor planı kuran tek parçadır. Önce kural tabanlı ilk planı dizer, sonra yerel aramayla (LNS) bir bölgeyi söküp yeniden kurar, iyiyse alır. Amaç sırası: ağırlıklı gecikme (öncelik 1 dört, 2 iki kat), tampon ihlali, önceki plana göre değişiklik, ayar süresi, bilinen maliyet. Önceki eşitse sonrakine bakılır.</p>
           <p className="tc-pym-kucuk-yazi"><b>{DENGE[dg].ad}:</b> {DENGE[dg].m}</p>
           {yaz && <div className="tc-pym-dugmeler"><Dg ad="Plan iyileştirme ara" simge="play" birincil yap={iyi.yap} not={iyi.not} /><Dg ad="Sıfırdan kur" simge="rotate" /></div>}

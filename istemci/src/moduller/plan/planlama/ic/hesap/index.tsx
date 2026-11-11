@@ -228,7 +228,7 @@ function Kararlar({ o, c, son, yaz }: { o: PlanlamaEkranOzellikleri; c: Planlama
             <li key={k.id} className="tc-pyh-karar" data-durum={k.durum}>
               <span className="tc-pyh-karar-ad"><Simge ad={KARAR_SIMGE[k.tur] ?? 'cpu'} boyut="k" /><span><b>{k.ad}</b><small>{`${KARAR_ROL[k.tur] ?? ''} · ${k.neden}`}</small></span></span>
               <Rozet ton={ton}>{durumAd}</Rozet>
-              <span className="tc-pyh-karar-olcu" title={d == null ? k.neden : `Motorun ölçüsü: gecikme ${d >= 0 ? 'azalır' : 'artar'} ${sayiYaz(Math.abs(d), 1)} sa`}>
+              <span className="tc-pyh-karar-olcu" title={d == null ? k.neden : `Motorun ölçüsü: ağırlıklı gecikme ${d >= 0 ? 'azalır' : 'artar'} ${sayiYaz(Math.abs(d), 1)} sa`}>
                 {d == null ? <span className="tc-pyh-k">ölçülmedi</span> : (
                   <>
                     <span className="tc-pyh-karar-yol"><i className="tc-pyh-karar-orta" /><i className="tc-pyh-karar-cubuk" data-yon={d >= 0 ? 'iyi' : 'kotu'} data-alindi={k.durum === 'alindi'} ref={degisken({ '--w': yuzde(w) })} /></span>

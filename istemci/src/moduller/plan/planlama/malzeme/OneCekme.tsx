@@ -72,7 +72,7 @@ export function OneCekme({ surum, acik = ONE_CEKME_ACIK, malzemeAdi, dar = false
     return (
       <span className="tc-pyz-mo-h">
         {fg && <b className="mono">{tlYaz(x.tl)}</b>}
-        <small>{x.saat >= 0.05 ? `gecikme −${sayiYaz(x.saat, 1)} sa` : 'gecikme aynı'}{x.kurtulan.length ? ` · ${x.kurtulan.length} iş zamanında` : ''}</small>
+        <small>{x.saat >= 0.05 ? `toplam gecikme −${sayiYaz(x.saat, 1)} sa` : 'gecikme aynı'}{x.kurtulan.length ? ` · ${x.kurtulan.length} iş zamanında` : ''}</small>
       </span>
     );
   };
@@ -82,7 +82,7 @@ export function OneCekme({ surum, acik = ONE_CEKME_ACIK, malzemeAdi, dar = false
       <p className="tc-pyz-mo-ozet">
         <Simge ad={ust.length ? 'flag' : 'check'} boyut="k" />
         <span>{ust.length
-          ? `${ust.map((r) => `${r.kod} (${r.tedarikci ?? '—'}) 3 gün önce gelirse ${fg ? `${tlYaz(k(r, 3)?.tl ?? null)} kazanılır, ` : ''}gecikme ${sayiYaz(k(r, 3)?.saat ?? 0, 1)} sa azalır`).join('; ')}.`
+          ? `${ust.map((r) => `${r.kod} (${r.tedarikci ?? '—'}) 3 gün önce gelirse ${fg ? `${tlYaz(k(r, 3)?.tl ?? null)} kazanılır, ` : ''}toplam gecikme ${sayiYaz(k(r, 3)?.saat ?? 0, 1)} sa azalır`).join('; ')}.`
           : 'Hiçbir açık siparişi öne çekmek planı belirgin iyileştirmiyor; malzeme bu planda darboğaz değil.'}</span>
       </p>
       <div className="tc-tablo-kap" data-kip={dar ? 'kart' : undefined}>

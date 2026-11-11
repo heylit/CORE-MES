@@ -84,7 +84,7 @@ export function hamleUygula(komut: CalismaKomutu, kim: string, zaman: number = D
   const o = onizleme; if (o === null) return null;
   let alindi = false;
   komut.degistir(o.ad, (t) => (alindi = hamleyiAl(t, o, kim, zaman)), {
-    ayrinti: `gecikme ${saatYazi(o.gecikmeOnce)} → ${saatYazi(o.gecikmeSonra)}`, planKoru: true,
+    ayrinti: `ağırlıklı gecikme ${saatYazi(o.gecikmeOnce)} → ${saatYazi(o.gecikmeSonra)}`, planKoru: true,
   });
   yaz(null);
   return alindi ? null : HAMLE_ESKIDI;
