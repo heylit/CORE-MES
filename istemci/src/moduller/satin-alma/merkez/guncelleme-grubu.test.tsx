@@ -40,13 +40,17 @@ describe('2876: merkezde güncelleme grubu', () => {
   it('Maliyet N1: öteki üye siparişte ya da teslim alınmışsa iptal talepte ikinci alım uyarısı; açık ya da iptal üyede uyarı yok', () => {
     const grup = [uye(KOK, 'ST-1', 'cancelled', true), uye(G1, 'ST-2', 'ordered'), uye(G2, 'ST-3', 'received')];
     const r = talep(KOK, 'ST-1', 'cancelled', grup);
-    expect(ikinciAlimRiski(r)).toEqual(['ST-2', 'ST-3']);
+    expect(ikinciAlimRiski(r).map((x) => x.no)).toEqual(['ST-2', 'ST-3']);
+    expect(ikinciAlimUyarisi(r)).toBe('Güncelleme grubunda ST-2 (sipariş verildi), ST-3 (teslim alındı); iptal geri alınırsa aynı ihtiyaç için ikinci alım olabilir.');
+    // Arayüz N1: uyarı tonunda, geri alma ikincil düğme (engellenmez).
+    expect(nextStep(r).cls).toBe('warn');
     expect(nextStep(r).s).toContain(`Uyarı: ${ikinciAlimUyarisi(r)}`);
-    expect(nextStep(r).b.map((b) => b[0])).toEqual(['req-uncancel']);
+    expect(nextStep(r).b).toEqual([['req-uncancel', 'İptali geri al', 0]]);
     expect(talepGovdesi(r)).toContain('ikinci alım olabilir');
     const temiz = talep(KOK, 'ST-1', 'cancelled', [uye(KOK, 'ST-1', 'cancelled', true), uye(G1, 'ST-2', 'rfq'), uye(G2, 'ST-3', 'cancelled')]);
     expect(ikinciAlimUyarisi(temiz)).toBe('');
     expect(nextStep(temiz).s).toBe('Deneme iptal');
+    expect([nextStep(temiz).cls, nextStep(temiz).b]).toEqual(['done', [['req-uncancel', 'İptali geri al', 1]]]);
     expect(talepGovdesi(temiz)).not.toContain('ikinci alım');
   });
 

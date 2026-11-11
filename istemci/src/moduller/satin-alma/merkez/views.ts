@@ -433,7 +433,13 @@ export function nextStep(r: PurchaseRequest): { cls: string; t: string; s: strin
   const set = settings(), items = (r.items || []).length, q = (r.quotes || []).length, rfqs = r.rfqs || [];
   const pending = rfqs.filter(x => !(r.quotes || []).some(qq => qq.supplierId === x.supplierId));
   const a = r.award, ap = a && (a.approvals || []).slice(-1)[0];
-  if (r.status === "cancelled") return { cls: "done", t: "Talep iptal edildi", s: [r.cancelReason || "Kayıt ve teklifler hafızada kalır.", ikinciAlimUyarisi(r) ? `Uyarı: ${ikinciAlimUyarisi(r)}` : ""].filter(Boolean).join(" "), b: [["req-uncancel", "İptali geri al", 1]] };
+  if (r.status === "cancelled") {
+    // 2876 (Arayüz N1): grupta alım yapılmışsa geri alma engellenmez ama birincil iş değildir; önce gruptaki sipariş denetlenir.
+    const risk = ikinciAlimUyarisi(r);
+    return risk
+      ? { cls: "warn", t: "İptali geri almadan önce gruptaki alımı denetleyin", s: [r.cancelReason, `Uyarı: ${risk}`].filter(Boolean).join(" "), b: [["req-uncancel", "İptali geri al", 0]] }
+      : { cls: "done", t: "Talep iptal edildi", s: r.cancelReason || "Kayıt ve teklifler hafızada kalır.", b: [["req-uncancel", "İptali geri al", 1]] };
+  }
   if (!items) return { cls: "warn", t: "Kalemleri ekleyin", s: "Ne alınacağını miktar ve birimiyle girin.", b: [["edit-request", "Kalem ekle", 1]] };
   if (r.status === "received") return a && !a.lessons ? { cls: "done", t: "Alım tamamlandı", s: "Bir sonraki alıma not bırakın: neler iyi gitti, neye dikkat edilmeli?", b: [["tab", "Not ekle", 0, "decision"]] } : { cls: "done", t: "Alım tamamlandı", s: a && a.deliveredDate ? `Teslim ${fmtDate(a.deliveredDate)}${a.quality ? ", kalite: " + QUALITY[a.quality as Quality] : ""}` : "", b: [] };
   if (r.status === "ordered") {

@@ -34,7 +34,8 @@ describe('2876 (Maliyet N1): iptali geri alınan talebin grubunda ikinci alım r
       { id: 'a', no: 'ST-1', durum: 'iptal' }, { id: 'b', no: 'ST-2', durum: 'siparis_verildi' }, { id: 'c', no: 'ST-3', durum: 'teslim_alindi' },
       { id: 'd', no: 'ST-4', durum: 'teklif_isteniyor' }, { id: 'e', no: 'ST-5', durum: 'iptal' },
     ];
-    assert.deepEqual(ikinciAlimRiski(grup, 'a'), ['ST-2', 'ST-3']);
+    assert.deepEqual(ikinciAlimRiski(grup, 'a').map((x) => x.no), ['ST-2', 'ST-3']);
+    assert.equal(ILETILER.grupSipariste(ikinciAlimRiski(grup, 'a')), 'Uyarı: güncelleme grubunda ST-2 (sipariş verildi), ST-3 (teslim alındı); aynı ihtiyaç için ikinci alım olabilir.');
     assert.deepEqual(ikinciAlimRiski([{ id: 'b', no: 'ST-2', durum: 'teslim_alindi' }], 'b'), []);
     assert.deepEqual(ikinciAlimRiski([], 'a'), []);
   });

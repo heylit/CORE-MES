@@ -11,11 +11,11 @@ export function grupMetni(r: PurchaseRequest): string {
 }
 
 // 2876 (Maliyet N1): gruptaki öteki talep siparişte ya da teslim alınmışsa bu talebin iptali geri alınırsa ikinci alım olabilir (sunucu kuralı ikinciAlimRiski ile aynı).
-export function ikinciAlimRiski(r: PurchaseRequest): string[] {
-  return (r.guncellemeGrubu ?? []).filter((x) => x.id !== r.id && COMMITTED.includes(x.status)).map((x) => x.no);
+export function ikinciAlimRiski(r: PurchaseRequest): NonNullable<PurchaseRequest["guncellemeGrubu"]> {
+  return (r.guncellemeGrubu ?? []).filter((x) => x.id !== r.id && COMMITTED.includes(x.status));
 }
 
 export function ikinciAlimUyarisi(r: PurchaseRequest): string {
-  const nolar = ikinciAlimRiski(r);
-  return nolar.length ? `Güncelleme grubunda ${nolar.join(", ")} için sipariş verildi; iptal geri alınırsa aynı ihtiyaç için ikinci alım olabilir.` : "";
+  const uyeler = ikinciAlimRiski(r);
+  return uyeler.length ? `Güncelleme grubunda ${uyeler.map((x) => `${x.no} (${stLabel(x.status).toLocaleLowerCase("tr-TR")})`).join(", ")}; iptal geri alınırsa aynı ihtiyaç için ikinci alım olabilir.` : "";
 }

@@ -332,7 +332,7 @@ describe('satin-alma sürüm 6 (gerçek PostgreSQL)', () => {
     // Geri alınır; sonra eski talep de siparişe geçerse siparişteki güncelleme iptal edilmez (satın alma bilerek ikinci alımı yapmıştır).
     const geri = tamam<{ talep: Talep; durum: string }>(await iptalGeriAl(c.sa, iptal, 'Deneme ikisi de alınacak'));
     assert.equal(geri.durum, 'teklif_isteniyor');
-    assert.equal(geri.talep.hareketler.at(-1)!.metin, ILETILER.grupSipariste([g.no]));
+    assert.equal(geri.talep.hareketler.at(-1)!.metin, ILETILER.grupSipariste([{ no: g.no, durum: 'siparis_verildi' }]));
     await siparise(geri.talep, 'SA-GUNCEL-2');
     assert.equal((await satinAlmaGorur(g.id)).durum, 'siparis_verildi');
   });
@@ -354,8 +354,12 @@ describe('satin-alma sürüm 6 (gerçek PostgreSQL)', () => {
     let no = 8761;
     for (const satir of siparisli.karar!.siparisler[0]!.satirlar) await teslimEt(satir.id, satir.miktar, no++);
     assert.equal((await satinAlmaGorur(g.id)).durum, 'teslim_alindi');
+    // Grup görünen durumu taşır: "teslim alındı" yazılmaz, siparişten türetilir; kökün ve Taleplerim'in grubunda da öyle görünür.
+    assert.deepEqual((await satinAlmaGorur(kok.id)).guncellemeGrubu?.map((x) => [x.no, x.durum]), [[kok.no, 'iptal'], [g.no, 'teslim_alindi']]);
+    const benim = tamam<TaleplerimCevabi>(await istek(c.talep, 'GET', '/satin-alma-taleplerim?sinir=500')).talepler.find((x) => x.id === kok.id)!;
+    assert.deepEqual(benim.guncellemeGrubu?.map((x) => x.durum), ['iptal', 'teslim_alindi']);
     const geri = tamam<{ talep: Talep }>(await iptalGeriAl(c.sa, await satinAlmaGorur(kok.id), 'Deneme ikinci alım bilerek'));
-    assert.equal(geri.talep.hareketler.at(-1)!.metin, ILETILER.grupSipariste([g.no]));
+    assert.equal(geri.talep.hareketler.at(-1)!.metin, ILETILER.grupSipariste([{ no: g.no, durum: 'teslim_alindi' }]));
   });
 
   test('SAT-70: talep bütün olarak eksiksiz kaydedilir ve açılışta aynı döner: kalem, istek, teklif ve fiyat, bölünmüş karar, sabit kur, sipariş, senaryo', async () => {

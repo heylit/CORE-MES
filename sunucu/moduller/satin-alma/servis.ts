@@ -57,13 +57,18 @@ export function sade(d: string | null): string | null {
   return d.replace(/0+$/, '').replace(/\.$/, '');
 }
 
-// 2876: talep başına güncelleme grubu (kök önce); grubu olmayan talep haritada yoktur.
-async function guncellemeGruplari(db: Db, idler: readonly string[]): Promise<Map<string, NonNullable<Talep['guncellemeGrubu']>>> {
+// 2876: talep başına güncelleme grubu (kök önce); grubu olmayan talep haritada yoktur. Durum görünen durumdur: "teslim alındı" yazılmaz,
+// siparişlerden türetilir (SAT-38); bilinmeyen siparişteki üyenin durumu yalın kurulumla türetilir (grup okumadan, döngü yok).
+async function guncellemeGruplari(db: Db, idler: readonly string[], bilinen: ReadonlyMap<string, TalepDurumu> = new Map()): Promise<Map<string, NonNullable<Talep['guncellemeGrubu']>>> {
   const uyeler = idler.length === 0 ? [] : await s.guncellemeGruplariOku(db, idler);
+  const eksik = uyeler.filter((u) => u.durum === 'siparis_verildi' && !bilinen.has(u.id)).map((u) => u.id);
+  const gorunen = new Map(bilinen);
+  if (eksik.length > 0) for (const t of await talepleriYalinKur(db, await s.talepSatirlariIdlerle(db, eksik))) gorunen.set(t.id, t.durum);
   const kokune = new Map<string, NonNullable<Talep['guncellemeGrubu']>>();
   for (const u of uyeler) {
     const l = kokune.get(u.kokId) ?? [];
-    l.push({ id: u.id, no: u.no, durum: u.durum as TalepDurumu, kok: u.id === u.kokId });
+    const durum = u.durum === 'siparis_verildi' ? gorunen.get(u.id) ?? 'siparis_verildi' : (u.durum as TalepDurumu);
+    l.push({ id: u.id, no: u.no, durum, kok: u.id === u.kokId });
     kokune.set(u.kokId, l);
   }
   return new Map([...kokune.values()].flatMap((l) => l.map((u) => [u.id, l] as const)));
@@ -98,7 +103,7 @@ async function birlesmeyleKur(db: Db, satirlar: s.TalepSatiri[]): Promise<{ tale
     });
   };
   const birlesenler = new Map(birlesenYalin.map((t) => [t.id, { ...t, birlesme: null, kaynaklar: kaynaklariKur(t) }]));
-  const gruplar = await guncellemeGruplari(db, talepler.map((t) => t.id));
+  const gruplar = await guncellemeGruplari(db, talepler.map((t) => t.id), new Map(talepler.map((t) => [t.id, t.durum])));
   return {
     talepler: talepler.map((t, i) => {
       const b = satirlar[i]!.birlesenTalepId;
@@ -2162,7 +2167,7 @@ export async function iptaliGeriAl(db: Db, k: Kullanici, id: string, g: IptaliGe
   const durum = kayitli ?? iptalOncesiTuret(eski);
   const hareket = { id: randomUUID(), zaman: '', kisiId: null, kisiAdi: null, metin: iptalGeriAlmaHareketi(eski.iptalNedeni, g.gerekce, kayitli === null) };
   // 2876 (Maliyet N1): grubun başka talebi siparişte ya da teslim alınmışsa geri alma serbesttir (2871-2 a) ama ikinci alım olabilir; geçmişe uyarı yazılır.
-  const siparisteki = ikinciAlimRiski(await s.guncellemeGruplariOku(db, [id]), id);
+  const siparisteki = ikinciAlimRiski((await guncellemeGruplari(db, [id])).get(id) ?? [], id);
   const uyari = siparisteki.length === 0 ? [] : [{ id: randomUUID(), zaman: '', kisiId: null, kisiAdi: null, metin: ILETILER.grupSipariste(siparisteki) }];
   const talep = await talepKaydet(db, k, id, { ...eski, durum, iptalNedeni: '', hareketler: [...eski.hareketler, hareket, ...uyari], surum: g.surum }, izYaz, durum);
   return { talep, durum, turetildi: kayitli === null };
