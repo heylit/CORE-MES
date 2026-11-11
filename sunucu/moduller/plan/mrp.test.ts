@@ -49,4 +49,34 @@ describe('plan (gerçek PostgreSQL): MRP ihtiyaç raporu', () => {
     assert.equal((await istek(c.operator, 'GET', yol)).statusCode, 403);
     assert.equal((await istek('', 'GET', yol)).statusCode, 401);
   });
+
+  // B-2499-5: adımlarında hiç bileşen olmayan açık emrin ihtiyacı hesaplanamaz; sayıda görünür, sessiz düşmez.
+  test('bileşensiz açık emir hesaplanamayan emir sayısına girer', async () => {
+    const once = (await tamam<MrpIhtiyaciCevabi>(c.planlama, 'GET', yol)).urunsuzEmir;
+    // Rota adımı bileşen ister; bileşensiz emir eski ya da örnek veriden gelir (B-2499-4): emrin bileşenleri VT'de silinir.
+    const ham = await kartAc('hammadde');
+    const rota = await yururlugeAlinmisRota(await kartAc('mamul'), [yeniAdim({ bilesenler: [{ malzemeId: ham, miktar: 1, fireYuzde: 0 }] })]);
+    const e = await tamam<{ isEmriIdleri: number[] }>(c.planlama, 'POST', `/rota/revizyonlar/${rota}/emre-kopyala`, { projeId: durum().denemeProjeId, adet: 5, teslim: null });
+    await durum().ortam!.sahip.sorgu('DELETE FROM uretim_emirleri_is_emri_bileseni WHERE is_emri_id = ANY($1::int[])', [e.isEmriIdleri]);
+    assert.equal((await tamam<MrpIhtiyaciCevabi>(c.planlama, 'GET', yol)).urunsuzEmir, once + 1);
+  });
+
+  // B-2482-8 (2527-2): ilk adımı sayılmış emrin hammaddesi statü zincirindedir (stok rezervesi, statülü); MRP onu emre verilmiş sayar ve sahte
+  // eksik göstermez. Zincir burada doğrudan rezerve satırıyla kurulur (sayım akışı stok testinde, zincir-miktari.test.ts).
+  test('emrin statü zincirindeki hammaddesi emre verilmiş sayılır: OP 10 sayıldı, OP 20 sayılmadı, kalan 0 (B-2482-8)', async () => {
+    const ham = await kartAc('hammadde');
+    const mamul = await kartAc('mamul');
+    const rota = await yururlugeAlinmisRota(mamul, [yeniAdim({ bilesenler: [{ malzemeId: ham, miktar: 1, fireYuzde: 0 }] }), yeniAdim({ bilesenler: [] })]);
+    const { isEmriIdleri } = await tamam<{ isEmriIdleri: number[] }>(c.planlama, 'POST', `/rota/revizyonlar/${rota}/emre-kopyala`, { projeId: durum().denemeProjeId, adet: 10, teslim: null });
+    const { ortam } = durum();
+    const emir = (await ortam!.sahip.tek<{ u: number }>('SELECT uretim_emri_id AS u FROM uretim_emirleri_is_emri WHERE id = $1', [isEmriIdleri[0]]))!.u;
+    const brut = async () => (await tamam<MrpIhtiyaciCevabi>(c.planlama, 'GET', yol)).satirlar.find((x) => x.malzeme.id === ham && x.emirler.length > 0)?.brut ?? 0;
+    assert.equal(await brut(), 10, 'zincir yokken bütün ihtiyaç');
+    const statu = (await ortam!.sahip.tek<{ id: number }>(
+      "INSERT INTO recete_rota_statu (malzeme_no, ad, kaynak_adim, renk, tur) VALUES ($1, 'OP 10 sonrası', $2, '#112233', 'HM') RETURNING id", [String(ham), `${String(mamul)}-o10-mrp`]))!.id;
+    await ortam!.sahip.sorgu('INSERT INTO stok_rezerve (malzeme_id, statu_id, uretim_emri_id, miktar) VALUES ($1, $2, $3, 6)', [ham, statu, emir]);
+    assert.equal(await brut(), 4, '6 kg zincirde: kalan 4');
+    await ortam!.sahip.sorgu('UPDATE stok_rezerve SET miktar = 10 WHERE uretim_emri_id = $1', [emir]);
+    assert.equal(await brut(), 0, 'OP 10 bütünü sayıldı, OP 20 sayılmadı: kalan 0');
+  });
 });

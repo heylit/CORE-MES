@@ -1,3 +1,4 @@
+import { YENI_ADIM_VARSAYILANI } from '#paylasilan/sozlesme/rota.ts';
 import type { Bagimlilik, GerceklesenKaynagi, GerceklesenTuru, KontrolNoktasi, MakineKullanimi, ParametreDegeri, ParametreDegerleri, ParametreTuru, RevizyonDurumu, RevizyonKomutu, SartnameKapsami, TalimatAsamasi } from '#paylasilan/sozlesme/rota.ts';
 import { oncullerCikar } from '#paylasilan/sozlesme/rota-dal-kurali.ts';
 import type { Oncul } from '#paylasilan/sozlesme/rota-dal-kurali.ts';
@@ -129,15 +130,25 @@ export function kisiIstasyonlari(atamalar: readonly { kisiId: number; istasyonId
 }
 
 // Adımın kaynağı fason firma da olabilir; aday kaynak makine, kişi ya da istasyondur (FS2 a, #1184).
-export interface KaynakRef { tur: 'makine' | 'kisi' | 'istasyon' | 'fason'; id: number }
-export const kaynakAnahtari = (k: KaynakRef): string => `${k.tur}:${k.id}`;
+// 2681 (2682 a): firması seçilmemiş fason adımda id null'dır.
+export type KaynakRef = { tur: 'makine' | 'kisi' | 'istasyon' | 'fason'; id: number } | { tur: 'fason'; id: null };
+export const kaynakAnahtari = (k: KaynakRef): string => `${k.tur}:${String(k.id)}`;
 
 // Emre kopyada istasyona bağlı adımın iş emri kaynağı atanmamıştır; istasyon iş emrinin istasyonu olur (makineyi plan seçer, #1184).
-export function isEmriKaynagi(a: { kaynak: KaynakRef | null; fason: { firmaId: number } | null }):
+// Firmasız fason adım emre gelmez (firmasizFasonAdimi emre kopyada reddeder); gelse de iş emri kaynaksız açılır, firma uydurulmaz.
+export function isEmriKaynagi(a: { kaynak: KaynakRef | null; fason: { firmaId: number | null } | null }):
   { kaynak: { tur: 'makine' | 'kisi' | 'fason'; id: number } | null; istasyonId: number | null } {
-  if (a.fason) return { kaynak: { tur: 'fason', id: a.fason.firmaId }, istasyonId: null };
+  if (a.fason) return { kaynak: a.fason.firmaId === null ? null : { tur: 'fason', id: a.fason.firmaId }, istasyonId: null };
   if (a.kaynak?.tur === 'istasyon') return { kaynak: null, istasyonId: a.kaynak.id };
   return { kaynak: a.kaynak === null || a.kaynak.tur === 'fason' ? null : { tur: a.kaynak.tur, id: a.kaynak.id }, istasyonId: null };
+}
+
+// 2681 (2682 a, Mimar K3): firması seçilmemiş fason adım taslakta ve onayda durur, emre gitmez. İş emri tarafı fasonu yalnız
+// fason_firma_id dolu mu diye ayırır; firmasız adım emre gitse orada istasyonsuz bir iç üretim adımına dönerdi.
+export const FIRMASIZ_FASON_ILETISI = (opNo: number) => `OP ${String(opNo)}: fason firma seçilmedi; emir açılmadan önce rotada firma seçin.`;
+export function firmasizFasonAdimi(adimlar: readonly { opNo: number; fason: { firmaId: number | null } | null }[]): { sira: number; opNo: number } | null {
+  const i = adimlar.findIndex((a) => a.fason !== null && a.fason.firmaId === null);
+  return i < 0 ? null : { sira: i, opNo: adimlar[i]!.opNo };
 }
 
 export interface TaslakAdimi {
@@ -434,6 +445,31 @@ export function adimMiktarlari(
   return new Map(adimlar.map((a) => [a.opNo, urunMiktari * (carpan.get(a.opNo) ?? 1)]));
 }
 
+// Emrin adım fire çarpanı (2557): uretim-emirleri malzemeIhtiyaci ile aynı kural, emre kopyalanan adımlar üzerinde. Çarpan
+// max(1, ardılların çarpanı) / (1 - pay); öncül listesi yoksa (tek hat) öncül sırası bir önceki adımdır, listede sonraki sıradaki adım sayılmaz.
+// Anahtar emirdeki OP no.
+export function emirFireCarpanlari(
+  adimlar: readonly { sira: number; opNo: number; firePayiYuzde: number; onculler?: readonly { opNo: number }[] | null }[],
+): Map<number, number> {
+  const sirali = [...adimlar].sort((a, b) => a.sira - b.sira);
+  const sirasi = new Map(sirali.map((a) => [a.opNo, a.sira]));
+  const ardillar = new Map<number, number[]>();
+  sirali.forEach((a, i) => {
+    const onceki = sirali[i - 1];
+    const liste = a.onculler != null
+      ? a.onculler.filter((o) => (sirasi.get(o.opNo) ?? Infinity) < a.sira).map((o) => o.opNo)
+      : (onceki ? [onceki.opNo] : []);
+    for (const o of liste) ardillar.set(o, [...(ardillar.get(o) ?? []), a.opNo]);
+  });
+  const carpan = new Map<number, number>();
+  for (let i = sirali.length - 1; i >= 0; i -= 1) {
+    const a = sirali[i];
+    if (!a) continue;
+    carpan.set(a.opNo, Math.max(1, ...(ardillar.get(a.opNo) ?? []).map((x) => carpan.get(x) ?? 1)) / (1 - a.firePayiYuzde / 100));
+  }
+  return carpan;
+}
+
 // Teorik süre (dk) = ayar + birim süre x adım miktarı; süre eksikse null (sıfır uydurulmaz).
 export function teorikSure(ayarSuresiDk: number | null, birimSureDk: number | null, miktar: number): number | null {
   if (ayarSuresiDk === null || birimSureDk === null) return null;
@@ -627,14 +663,36 @@ const kapatirMi = (x: GerceklesenSatiri): boolean => x.kaynak === 'elle' && x.su
 
 // RT-73: bekleyen ölçüm tür başına bu görünümdeki son boşaltmadan sonraki son ölçümdür. Makinesiz görünüm her makinenin ölçümünü
 // gösterir, makineye özgü kapatma onu kapatmaz; makine görünümü o makinenin ve makinesiz ölçümü gösterir, makinesiz kapatma da onu kapatır.
-export function bekleyenOlcum(satirlar: readonly GerceklesenSatiri[], makineId: number | null): Record<GerceklesenTuru, GerceklesenSatiri | null> {
-  const sec = (tur: GerceklesenTuru): GerceklesenSatiri | null => {
+// Pencere (2564 a) aynı sınırdan sonraki bütün ölçümlerdir, eskiden yeniye.
+export function olcumPenceresi(satirlar: readonly GerceklesenSatiri[], makineId: number | null): Record<GerceklesenTuru, GerceklesenSatiri[]> {
+  const sec = (tur: GerceklesenTuru): GerceklesenSatiri[] => {
     const turun = [...satirlar].filter((x) => x.tur === tur).sort((a, b) => a.id - b.id);
     const sinir = turun.filter((x) => kapatirMi(x) && (x.makineId === null || x.makineId === makineId)).at(-1)?.id ?? 0;
-    return turun.filter((x) => olcumMu(x) && x.id > sinir && (makineId === null || x.makineId === null || x.makineId === makineId)).at(-1) ?? null;
+    return turun.filter((x) => olcumMu(x) && x.id > sinir && (makineId === null || x.makineId === null || x.makineId === makineId));
   };
   return { hazirlik: sec('hazirlik'), islem: sec('islem'), degisim: sec('degisim') };
 }
+
+export function bekleyenOlcum(satirlar: readonly GerceklesenSatiri[], makineId: number | null): Record<GerceklesenTuru, GerceklesenSatiri | null> {
+  const p = olcumPenceresi(satirlar, makineId);
+  return { hazirlik: p.hazirlik.at(-1) ?? null, islem: p.islem.at(-1) ?? null, degisim: p.degisim.at(-1) ?? null };
+}
+
+// 2564 a: penceredeki ölçümlerin sayısı, ortancası ve aralığı; çift sayıda ortanca ortadaki iki değerin ortalamasıdır. Ölçüm yoksa null.
+// Ortanca tek bir aykırı ölçümün (makine arızası, unutulmuş bitir) kabul edilen süreyi bozmasını önler.
+export interface OlcumOzeti { n: number; ortanca: number; enAz: number; enCok: number }
+export function olcumOzeti(sureler: readonly number[]): OlcumOzeti | null {
+  if (sureler.length === 0) return null;
+  const s = [...sureler].sort((a, b) => a - b);
+  const orta = Math.floor(s.length / 2);
+  const ortanca = s.length % 2 === 1 ? s[orta]! : (s[orta - 1]! + s[orta]!) / 2;
+  return { n: s.length, ortanca, enAz: s[0]!, enCok: s.at(-1)! };
+}
+
+// 2564 a: ortanca bundan az ölçümle kabul edilirse uyarılır; kabul yine yapılır.
+export const AZ_OLCUM_SINIRI = 3;
+export const azOlcumUyarisi = (n: number): string | null =>
+  (n >= AZ_OLCUM_SINIRI ? null : `Ortanca ${String(n)} ölçümden; güvenilir süre için en az ${String(AZ_OLCUM_SINIRI)} ölçüm önerilir.`);
 
 export interface KabulSatiri { malzemeId: number; opNo: number; tur: GerceklesenTuru; makineId: number | null; kaynak: GerceklesenKaynagi; sureDk: number | null }
 
@@ -656,6 +714,30 @@ export function terminalOlcumleri(olcum: { hazirlikDk: number | null; netBirimDk
     hazirlik: olcum.hazirlikDk === null || olcum.hazirlikDk < 0 ? null : onbinde(olcum.hazirlikDk) / 10_000,
     islem: olcum.netBirimDk === null || olcum.netBirimDk <= 0 ? null : onbinde(olcum.netBirimDk) / 10_000,
   };
+}
+
+// İş emri ya da emir bitince terminal ölçümü (B38, 2578 a) ve Arkon "Süre ölçülmedi" (2567) aynı ölçütü kullanır. Ölçüm adayı bitmiş (tamam), kaynağı olan,
+// fason olmayan iş emridir. Rotada olmayan adım (ek adım) ölçülmez. Rotadaki adımda süresi çıkan tür yazılır; çıkmayan tür atlanır ve
+// nedeni yazılır. İşlem süresi sağlam ya da hurda sayımdan çıkar: sayımı olup hepsi karar bekleyen ya da red olan iş emri "sağlam sayım
+// yok"tur (2566 S-1), sayımı hiç olmayan "sayım yok"tur.
+export type OlcumAtlamaNedeni = 'rotada-yok' | 'ayar-yok' | 'sayim-yok' | 'saglam-yok';
+export interface OlcumAdayi { id: number; opNo: number; durum: string; kaynak: { tur: string } | null }
+
+export function terminalOlcumAdaylari<T extends OlcumAdayi>(isEmirleri: readonly T[], opNolari: ReadonlySet<number>): { rotada: T[]; rotadaYok: T[] } {
+  const adaylar = isEmirleri.filter((i) => i.durum === 'tamam' && i.kaynak !== null && i.kaynak.tur !== 'fason');
+  return { rotada: adaylar.filter((i) => opNolari.has(i.opNo)), rotadaYok: adaylar.filter((i) => !opNolari.has(i.opNo)) };
+}
+
+export function terminalOlcumKarari(
+  olcum: { hazirlik: number | null; islem: number | null }, sayimVar: boolean,
+): { yazilacak: { tur: 'hazirlik' | 'islem'; sureDk: number }[]; atlananlar: OlcumAtlamaNedeni[] } {
+  const yazilacak: { tur: 'hazirlik' | 'islem'; sureDk: number }[] = [];
+  const atlananlar: OlcumAtlamaNedeni[] = [];
+  if (olcum.hazirlik === null) atlananlar.push('ayar-yok');
+  else yazilacak.push({ tur: 'hazirlik', sureDk: olcum.hazirlik });
+  if (olcum.islem === null) atlananlar.push(sayimVar ? 'saglam-yok' : 'sayim-yok');
+  else yazilacak.push({ tur: 'islem', sureDk: olcum.islem });
+  return { yazilacak, atlananlar };
 }
 
 export interface AdimSureleri { ayarSuresiDk: number | null; birimSureDk: number | null; islemSuresiDk: number | null; degisimSuresiDk: number | null }
@@ -1204,4 +1286,65 @@ export function cokKatmanaCevir<T extends KatmanAdimi>(
     }
   }
   return { girdiler };
+}
+
+// Excel ile rota adımları (2627): satırın adıma işlenmesi. Saf; servis okunan taslak adımına uygular, sonra kaydet komutu bütün denetimleri yapar.
+export const ONAYDAKI_ROTA = 'Ürünün rotası onay bekliyor; Excel yalnız taslağa yazar. Önce onaydan geri gönderin ya da onaylayın.';
+export const ROTA_DEGISTI = 'Rota bu arada değişti; Excel penceresini kapatıp dosyayı yeniden yükleyin.';
+export const AYRILMIS_SURE = 'Bu adımın birim süresi işlem ve değişim olarak ayrılmış; sayfada değiştirin.';
+export const FASON_KAYNAGI = 'Fason adıma Excel\'de makine ya da istasyon yazılamaz; kaynağı sayfada değiştirin.';
+export const YENI_ADIM_EKSIK = 'Yeni adımda operasyon tipi ve adım adı zorunlu.';
+
+export interface ExcelAdimSatiri {
+  operasyonTipiId?: number | undefined;
+  ad?: string | undefined;
+  kaynak?: { tur: 'istasyon' | 'makine'; id: number } | undefined;
+  ayarSuresiDk?: number | undefined;
+  birimSureDk?: number | undefined;
+}
+type Sure = number | string | null;
+export interface ExcelAdimHedefi {
+  operasyonTipiId: number;
+  ad: string;
+  kaynak: { tur: string; id: number | null } | null;
+  ayarSuresiDk: Sure;
+  birimSureDk: Sure;
+  islemSuresiDk: Sure;
+  degisimSuresiDk: Sure;
+}
+
+// Yeni adımın Excel'de gelmeyen alanları YENI_ADIM_VARSAYILANI'ndan; null: tip ya da ad eksik.
+export function excelYeniAdimi(x: ExcelAdimSatiri): (typeof YENI_ADIM_VARSAYILANI & {
+  opNo: null; operasyonTipiId: number; ad: string; kaynak: { tur: 'istasyon' | 'makine'; id: number } | null; ayarSuresiDk: number | null; birimSureDk: number | null;
+  adaylar: never[]; bilesenler: never[]; yanUrunler: never[]; birlesen: never[];
+}) | null {
+  if (x.operasyonTipiId === undefined || x.ad === undefined) return null;
+  return {
+    ...YENI_ADIM_VARSAYILANI, opNo: null, operasyonTipiId: x.operasyonTipiId, ad: x.ad, kaynak: x.kaynak ?? null,
+    ayarSuresiDk: x.ayarSuresiDk ?? null, birimSureDk: x.birimSureDk ?? null, adaylar: [], bilesenler: [], yanUrunler: [], birlesen: [],
+  };
+}
+
+// Gelen alanlar adıma yazılır (gelmeyen değişmez). Dönüş: ret iletisi ya da hazırlık toplamının değişip değişmediği (değiştiyse
+// hazırlık bölümü kaydette yeniden kurulur, 1310 a).
+export function excelAdimiUygula(hedef: ExcelAdimHedefi, x: ExcelAdimSatiri): { hata: string } | { hazirlikDegisti: boolean } {
+  if (x.birimSureDk !== undefined && (hedef.islemSuresiDk !== null || hedef.degisimSuresiDk !== null)) return { hata: AYRILMIS_SURE };
+  // 2703 b (kullanıcı kararı): fason adım (firmalı ya da firmasız) Excel'le iç adıma çevrilmez; satır reddedilir.
+  if (x.kaynak !== undefined && hedef.kaynak?.tur === 'fason') return { hata: FASON_KAYNAGI };
+  if (x.operasyonTipiId !== undefined) hedef.operasyonTipiId = x.operasyonTipiId;
+  if (x.ad !== undefined) hedef.ad = x.ad;
+  if (x.kaynak !== undefined) hedef.kaynak = x.kaynak;
+  if (x.birimSureDk !== undefined) hedef.birimSureDk = x.birimSureDk;
+  if (x.ayarSuresiDk === undefined) return { hazirlikDegisti: false };
+  hedef.ayarSuresiDk = x.ayarSuresiDk;
+  return { hazirlikDegisti: true };
+}
+
+// Önizlemenin dayandığı revizyon yazım anındakiyle aynı mı (Veri koşulu). simdiki: açık taslak, yoksa yürürlükteki; null: ürünün revizyonu yok.
+export function excelDayanagiTutar(
+  dayanak: { revizyonId: number; surum: number } | null,
+  simdiki: { id: number; surum: number } | null,
+): boolean {
+  if (dayanak === null || simdiki === null) return dayanak === simdiki;
+  return dayanak.revizyonId === simdiki.id && dayanak.surum === simdiki.surum;
 }

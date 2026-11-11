@@ -6,12 +6,15 @@ import { planGuncel } from '../../durum.ts';
 import { bekleyenListesi } from '../../kayit.ts';
 import type { AtolyeOlayi } from '#paylasilan/sozlesme/planlama-atolye.ts';
 import type { PlanlamaCalismasi } from '../../tipler.ts';
-import { degisken, MOTOR_NOTU } from '../ortak.tsx';
+import { degisken } from '../ortak.tsx';
+import { hamleYapisi, useHamleci } from '../hamle/hamle.ts';
+import { elleSayilari, simdiSaati } from '../kurallar.ts';
 import { mesaiAdaylari } from '../secim/kurallar.ts';
+import { gunDondurmasiniKaldir, gunuDondur, sabitleriKaldir } from '../cizelge/kurallar.ts';
 import { Kararlar } from './Bugun.tsx';
 import { calismayiYolla, gonderHataIletisi, gonderIletisi } from './gonder.ts';
 import {
-  bitisFarklari, DONUK_SECENEKLERI, IZ_KARAR, IZ_ONAY, duruslar, gecikenSay, gercekOku, grupAd, gs, gunAnahtari, gunKaydi, gunluk, nedenKisa, OLCEKLER, sabitMi, satirlar, sure, suzKoy,
+  bitisFarklari, DONUK_SECENEKLERI, donukEtiketi, IZ_KARAR, IZ_ONAY, duruslar, GOSTERGE_GECIKEN_IPUCU, gostergeGecikenSay, gercekOku, grupAd, gs, gunAnahtari, gunKaydi, gunluk, kilitGunleri, nedenKisa, OLCEKLER, sabitMi, satirlar, sure, suzKoy,
   terminMetni, tz, zs,
 } from './kurallar.ts';
 import { bilgiAl, type Ortam } from './Pano.tsx';
@@ -72,7 +75,7 @@ function kartGovdesi(ort: Ortam, kart: AcikKart, bildir: Bildir): Govde | null {
       const neden = nedenKisa(r); const g = gercekOku(c, kart.id); const sap = g ? g.S - (g.plan ?? g.S) : 0;
       const kilit = (ac: boolean) => komut?.degistir(ac ? 'Kilit açıldı' : 'İş kilitlendi', (t) => { if (ac) delete t.locks[kart.id]; else t.locks[kart.id] = { m: r.m, S: r.S }; }, { ayrinti: kart.id, planKoru: true });
       return {
-        ad: `${r.job} · ${k}`, simge: 'cube', ic: (
+        ad: `${ort.emirNo(r.job)} · ${k}`, simge: 'cube', ic: (
           <>
             <Not>{`${a.ad} · ${b?.ad ?? ''}`}</Not>
             <Satir a="Tezgâh" b={r.fas ? r.m.slice(1) : r.m} />
@@ -92,7 +95,7 @@ function kartGovdesi(ort: Ortam, kart: AcikKart, bildir: Bildir): Govde | null {
                 <Etiket>{g ? `Sayım: işlenen adet (toplam ${cx.jobs[r.job]?.adet ?? '—'})` : 'Atölyeden: gerçek başlama'}</Etiket>
                 <div className="tc-pym-tp-cipler">
                   {(g ? ['Kaydet'] : ['Planlı saatte', '+30 dk', '+1 sa', '+2 sa']).map((x) => (
-                    <button key={x} type="button" className="tc-pym-tp-cip" aria-disabled="true" title={`${x}: ${MOTOR_NOTU}`}>{x}</button>
+                    <button key={x} type="button" className="tc-pym-tp-cip" aria-disabled="true" title={`${x}: terminalden girilir.`}>{x}</button>
                   ))}
                 </div>
               </>
@@ -127,7 +130,7 @@ function kartGovdesi(ort: Ortam, kart: AcikKart, bildir: Bildir): Govde | null {
             <label htmlFor="tc-pym-tp-suz-j">Üretim emri</label>
             <select id="tc-pym-tp-suz-j" value={f?.j ?? ''} onChange={(e) => ort.suzSec(suzKoy(D, f ? { ...f, j: null } : null, 'j', e.target.value || null))}>
               <option value="">Hepsi</option>
-              {D.siparisler.filter((x) => x.iptal !== true).map((x) => x.id).sort().map((j) => <option key={j} value={j}>{j}</option>)}
+              {D.siparisler.filter((x) => x.iptal !== true).map((x) => x.id).sort().map((j) => <option key={j} value={j}>{ort.emirNo(j)}</option>)}
             </select>
             <div className="tc-pym-tp-eylem">
               <button type="button" className="tc-dugme" aria-disabled={!f} onClick={() => { if (f) ort.suzSec(null); }}><Simge ad="x" boyut="k" />Temizle</button>
@@ -141,11 +144,7 @@ function kartGovdesi(ort: Ortam, kart: AcikKart, bildir: Bildir): Govde | null {
         ad: 'Geri al', simge: 'back', ic: (
           <>
             <Kararlar ort={ort} n={10} bos="Bu panoda geri alınacak karar yok." />
-            <div className="tc-pym-tp-eylem">
-              <button type="button" className="tc-dugme" aria-disabled="true" title={`Yinele: ${MOTOR_NOTU}`}><Simge ad="next" boyut="k" />Yinele</button>
-              <button type="button" className="tc-dugme" aria-disabled="true" title={`Taslağı sıfırla: ${MOTOR_NOTU}`}><Simge ad="rotate" boyut="k" />Taslağı sıfırla</button>
-            </div>
-            <Not>Sıfırlama tek adım değildir: çalışmayı canlı plana döndürür, onay ister.</Not>
+            <GeriEylemleri ort={ort} />
           </>
         ),
       };
@@ -159,7 +158,7 @@ function kartGovdesi(ort: Ortam, kart: AcikKart, bildir: Bildir): Govde | null {
             {canli ? (
               <>
                 <Satir a="Canlı sürüm" b={canli} />
-                <Satir a="Geciken sipariş" b={`${sv ? sv.canli.geciken : '—'} → ${gecikenSay(ort.liste)}`} />
+                <Satir a={<span title={GOSTERGE_GECIKEN_IPUCU}>Geciken emir</span>} b={`${sv ? sv.canli.geciken : '—'} → ${gostergeGecikenSay(ort.liste)}`} />
                 <Satir a="Toplam gecikme" b={`— → ${sure(p.ozet.wT)}`} />
               </>
             ) : <Not>Henüz canlı plan yok; bu plan ilk canlı plan olarak onaya gider.</Not>}
@@ -192,7 +191,7 @@ function kartGovdesi(ort: Ortam, kart: AcikKart, bildir: Bildir): Govde | null {
               <button type="button" className="tc-pym-tp-cip" onClick={() => { ort.kartKapat(); ort.sekSec('pg'); }}><Simge ad="chart" boyut="k" />Plan ve gerçekleşen</button>
             </div>
             <Etiket>Kısayollar</Etiket>
-            <Not>Ctrl+Z geri al · Esc kapat · 1-5 ölçek · / ara</Not>
+            <Not>Ctrl+Z geri al · Ctrl+Shift+Z yinele · E düzenle · Y yapılacaklar · Esc kapat · 1-5 ölçek · / ara</Not>
             <Not>Her karar çalışma planına yazılır; canlı plan yalnız Onay sekmesinden değişir.</Not>
             <Not>Lejant: kırmızı geç, turuncu riskli (8 sa'ten az pay), çizgili baş ayar, kesikli çerçeve fason, mavi bölge donuk.</Not>
           </>
@@ -200,12 +199,7 @@ function kartGovdesi(ort: Ortam, kart: AcikKart, bildir: Bildir): Govde | null {
       };
     case 'dondurma':
       return {
-        ad: 'Donuk bölge', simge: 'lock', ic: (
-          <>
-            <Not>Şimdiden itibaren bu kadar saatlik işler yerinde kalır; taşıma ve iyileştirme dokunmaz.</Not>
-            <Donuk ort={ort} />
-          </>
-        ),
+        ad: 'Kilit ve dondurma', simge: 'lock', ic: <KilitPaneli ort={ort} />,
       };
     case 'gun': return gunOzeti(ort);
     case 'olay': return ort.olayEkle ? { ad: 'Olay ekle', simge: 'plus', ic: <OlayFormu ort={ort} ekle={ort.olayEkle} m={kart.m} on={kart.on} /> } : null;
@@ -218,7 +212,7 @@ function kartGovdesi(ort: Ortam, kart: AcikKart, bildir: Bildir): Govde | null {
         navigator.clipboard.writeText(metin).then(() => bildir('tamam', 'Metin kopyalandı.'), hata);
       };
       return {
-        ad: `${s.id} · termin konuş`, simge: 'clock', ic: (
+        ad: `${ort.emirNo(s.id)} · termin konuş`, simge: 'clock', ic: (
           <>
             <div className="tc-pym-tp-karsi">
               <span>Termin</span><b>{tz(D, s.due)}</b><span />
@@ -231,7 +225,7 @@ function kartGovdesi(ort: Ortam, kart: AcikKart, bildir: Bildir): Govde | null {
               <button type="button" className="tc-dugme tc-dugme-birincil" data-oto="" onClick={kopyala}><Simge ad="clipboard-check" boyut="k" />Kopyala</button>
               <button type="button" className="tc-dugme" onClick={ort.kartKapat}>Kapat</button>
             </div>
-            <Not>{`Tarih şimdiki plandan; öne alarak kısaltmak: ${MOTOR_NOTU}`}</Not>
+            <TerminOneAl ort={ort} j={s.id} />
           </>
         ),
       };
@@ -251,7 +245,7 @@ function kartGovdesi(ort: Ortam, kart: AcikKart, bildir: Bildir): Govde | null {
                 <b>{g.ac ? `%${Math.round(g.o * 100)}` : 'kapalı'}</b>
                 <small>
                   {`${g.n} iş · ${sure(g.is)} / ${sure(g.ac)}${g.ekMesai.length ? ` · ${g.ekMesai.map((e) => `ek mesai ${e}`).join(', ')}` : ''}`}
-                  {g.gercek.length ? ` · gerçek: ${g.gercek.map((x) => `${x.job} ${x.sapma > 0.25 ? `+${Math.round(x.sapma * 60)} dk` : 'planda'}`).join(', ')}` : ''}
+                  {g.gercek.length ? ` · gerçek: ${g.gercek.map((x) => `${ort.emirNo(x.job)} ${x.sapma > 0.25 ? `+${Math.round(x.sapma * 60)} dk` : 'planda'}`).join(', ')}` : ''}
                   {g.ariza.length > 0 && <> · <span className="tc-pym-tp-kotu">{g.ariza.map(([a, b]) => `arıza ${zs(D, a)}–${zs(D, b)}`).join(', ')}</span></>}
                 </small>
               </div>
@@ -347,7 +341,9 @@ function OlayFormu({ ort, ekle, m, on }: { ort: Ortam; ekle: (o: AtolyeOlayi) =>
   const gonder = async () => {
     if (!olay) return;
     setGidiyor(true);
-    if (await ekle(olay)) ort.kartKapat(); else setGidiyor(false);
+    // Arızanın başlangıcı gönderme anının saatinden (2506 a): form uzun açık kalsa da olay geçmişe yazılmaz.
+    const x = olay.tip === 'ariza' ? { ...olay, bas: simdiSaati(ort.c, Date.now()) + sayi('ofs') } : olay;
+    if (await ekle(x)) ort.kartKapat(); else setGidiyor(false);
   };
   const alan = (k: OlayAlani, ad: string, ic: ReactNode) => <><label htmlFor={`tc-pym-tp-olay-${k}`}>{ad}</label>{ic}</>;
   const secim = (k: OlayAlani, l: { id: string; ad: string }[]) => (
@@ -402,8 +398,8 @@ function Donuk({ ort }: { ort: Ortam }) {
     <div className="tc-pym-tp-cipler">
       {DONUK_SECENEKLERI.map((x) => (
         <button key={x} type="button" className="tc-pym-tp-cip" aria-pressed={ort.donuk === x} aria-disabled={!ort.yaz}
-          onClick={() => { if (ort.yaz && ort.donuk !== x) komut?.degistir(`Donuk bölge ${x} sa`, (t) => { t.w = { ...t.w, dondurma: x }; }, { planKoru: true }); }}>
-          {`${x} sa`}
+          onClick={() => { if (ort.yaz && ort.donuk !== x) komut?.degistir(`Donuk bölge ${donukEtiketi(x)}`, (t) => { t.w = { ...t.w, dondurma: x }; }, { planKoru: true }); }}>
+          {donukEtiketi(x)}
         </button>
       ))}
     </div>
@@ -434,7 +430,7 @@ function gunOzeti(ort: Ortam): Govde {
         <Etiket>Onay ve canlı</Etiket>
         {ony.length ? ony.map((z, i) => <Satir key={i} a={`${saatTr(z.t)} · ${z.ne}${z.ayrinti ? ` · ${z.ayrinti}` : ''}`} b="" />) : <Not>Onay hareketi yok.</Not>}
         <Etiket>Gün başına göre bitişi değişen</Etiket>
-        {fark.length ? fark.map((q) => <Satir key={q.j} a={`${q.j}${q.gec ? ` · ${q.gec}` : ''}`} b={`${q.d > 0 ? '+' : '−'}${sure(q.d)}`} durum={q.d > 0 ? 'gec' : 'iyi'} />) : <Not>Bitişi değişen sipariş yok.</Not>}
+        {fark.length ? fark.map((q) => <Satir key={q.j} a={`${ort.emirNo(q.j)}${q.gec ? ` · ${q.gec}` : ''}`} b={`${q.d > 0 ? '+' : '−'}${sure(q.d)}`} durum={q.d > 0 ? 'gec' : 'iyi'} />) : <Not>Bitişi değişen sipariş yok.</Not>}
         {dn.length > 0 && <><Etiket>Arızalar</Etiket>{dn.map((d) => <Satir key={`${d.m}-${d.from}`} a={d.m} b={`${tz(D, d.from)} → ${zs(D, d.to)}`} />)}</>}
         <Etiket>Geçmiş günler</Etiket>
         {g.gecmis.filter((x) => x.gun !== bu).slice(0, 30).map((x) => {
@@ -491,5 +487,91 @@ function GonderDugmesi({ ort, bildir, engel }: { ort: Ortam; bildir: Bildir; eng
   };
   return (
     <button type="button" className="tc-dugme tc-dugme-birincil" data-oto="" disabled={gidiyor} onClick={() => void gonder()}><Simge ad="upload" boyut="k" />{gidiyor ? 'Gönderiliyor' : 'Gönder'}</button>
+  );
+}
+
+// Yinele ve taslağı sıfırla (2531 a). Sıfırlama bu oturumdaki bütün kararları birlikte geri alır; ikinci basışla onaylanır. Canlı plana dönüş
+// sunucuda bir komut değildir; oturumdan önceki farklar Onaya gönder ve Onay sekmesinde kalır.
+function GeriEylemleri({ ort }: { ort: Ortam }) {
+  const komut = ort.o.komut;
+  const [emin, setEmin] = useState(false);
+  const n = komut?.geriAdimlari().length ?? 0;
+  const yinele = ort.yaz && !!komut?.yinelenebilir?.();
+  return (
+    <>
+      <div className="tc-pym-tp-eylem">
+        <button type="button" className="tc-dugme" aria-disabled={yinele ? undefined : 'true'} title={yinele ? 'Yinele (Ctrl+Shift+Z)' : 'Yinelenecek karar yok.'}
+          onClick={() => { if (yinele) komut?.yinele?.(); }}><Simge ad="next" boyut="k" />Yinele</button>
+        {emin && n > 0 ? (
+          <button type="button" className="tc-dugme tc-dugme-tehlike" data-oto="" onClick={() => { setEmin(false); if (ort.yaz) komut?.geriDon(n); }}>
+            <Simge ad="rotate" boyut="k" />{`${n} kararı geri al`}
+          </button>
+        ) : (
+          <button type="button" className="tc-dugme" aria-disabled={ort.yaz && n > 0 ? undefined : 'true'} title={n > 0 ? 'Bu oturumdaki bütün kararları birlikte geri alır.' : 'Bu oturumda karar yok.'}
+            onClick={() => { if (ort.yaz && n > 0) setEmin(true); }}><Simge ad="rotate" boyut="k" />Taslağı sıfırla</button>
+        )}
+      </div>
+      <Not>{emin ? 'Emin misiniz? Bu oturumdaki kararların hepsi geri alınır; canlı plan değişmez. Yinele ile dönülebilir.' : 'Sıfırlama bu oturumdaki kararları birlikte geri alır; canlı plan değişmez. Geri alma geçmişi ve plan kopyaları bu tarayıcıdadır, sayfa yenilenince silinir.'}</Not>
+    </>
+  );
+}
+
+// Termini kısaltmak: motor siparişi öne alan planı arar, sonuç panonun üstünde önizlenir (2531 a).
+function TerminOneAl({ ort, j }: { ort: Ortam; j: string }) {
+  const y = hamleYapisi(useHamleci(), (h) => { h.oneAl(j); });
+  return (
+    <>
+      <div className="tc-pym-tp-eylem">
+        <button type="button" className="tc-dugme" aria-disabled={y.yap ? undefined : 'true'} title={y.yap ? 'Motor bu siparişi öne alan planı arar; önizlersiniz.' : `Öne al: ${y.not}`}
+          onClick={y.yap ? () => { ort.kartKapat(); y.yap?.(); } : undefined}><Simge ad="first" boyut="k" />Öne alarak kısalt</button>
+      </div>
+      <Not>Tarih şimdiki plandan; öne alınca yeni bitiş önizlemede görünür.</Not>
+    </>
+  );
+}
+
+// Kilit ve dondurma (2539 a): donuk bölge, elle sabitlenen işler ve dondurulmuş günler tek panelde. Komutlar Çizelge'dekilerle aynıdır
+// (sabitleriKaldir, gunuDondur); oradaki yerler kısa yol olarak kalır. Başlamış iş bu ayarlardan bağımsızdır.
+function KilitPaneli({ ort }: { ort: Ortam }) {
+  const { c, p, now, yaz } = ort; const komut = ort.o.komut; const D = c.D;
+  const [emin, setEmin] = useState(false);
+  const e = elleSayilari(c);
+  const gunler = kilitGunleri(c, p, now);
+  const sabitKaldir = () => { setEmin(false); if (yaz) komut?.degistir('Sabitler kaldırıldı', sabitleriKaldir, { ayrinti: 'dondurulmuş günler korundu', planKoru: true }); };
+  const gun = (g: (typeof gunler)[number]) => {
+    if (!yaz) return;
+    komut?.degistir(g.donuk ? 'Gün dondurması kaldırıldı' : 'Gün donduruldu', (x) => { if (g.donuk) gunDondurmasiniKaldir(x, g.gNo); else gunuDondur(x, p, g.gNo); },
+      { ayrinti: gs(D, g.t), planKoru: true });
+  };
+  return (
+    <>
+      <Etiket>Donuk bölge</Etiket>
+      <Not>Şimdiden itibaren bu kadar saatlik işler yerinde kalır; taşıma ve iyileştirme dokunmaz.</Not>
+      <Donuk ort={ort} />
+      <Etiket>{`Elle sabitlenen işler · ${e.sabit}`}</Etiket>
+      <div className="tc-pym-tp-eylem">
+        {emin && e.sabit > 0 ? (
+          <button type="button" className="tc-dugme tc-dugme-tehlike" data-oto="" onClick={sabitKaldir}><Simge ad="x" boyut="k" />{`${e.sabit} sabiti kaldır`}</button>
+        ) : (
+          <button type="button" className="tc-dugme" aria-disabled={yaz && e.sabit > 0 ? undefined : 'true'} title={e.sabit ? 'Elle sabitlenen işlerin kilidi kalkar; dondurulmuş günler korunur.' : 'Elle sabitlenen iş yok.'}
+            onClick={() => { if (yaz && e.sabit > 0) setEmin(true); }}><Simge ad="x" boyut="k" />Sabitleri kaldır</button>
+        )}
+      </div>
+      {emin && <Not>Emin misiniz? Dondurulmuş günler korunur; geri al ile dönülebilir.</Not>}
+      <Etiket>{`Dondurulmuş günler · ${e.gun}`}</Etiket>
+      <ul className="tc-pym-tp-kilit-gun">
+        {gunler.map((g) => (
+          <li key={g.gNo} data-donuk={g.donuk ? '' : undefined}>
+            <span><b>{gs(D, g.t)}</b><small>{`${g.n} iş başlıyor`}</small></span>
+            <button type="button" className="tc-dugme" aria-disabled={yaz && (g.donuk || g.n > 0) ? undefined : 'true'} aria-pressed={g.donuk}
+              title={g.donuk ? 'Bu günün kilitleri kalkar; elle sabitlere dokunulmaz.' : g.n ? 'O gün başlayan işler yerinde kilitlenir.' : 'O gün başlayan iş yok.'}
+              onClick={() => { if (g.donuk || g.n > 0) gun(g); }}>
+              <Simge ad="lock" boyut="k" />{g.donuk ? 'Dondurmayı kaldır' : 'Günü dondur'}
+            </button>
+          </li>
+        ))}
+      </ul>
+      <Not>Başlamış iş bu ayarlardan bağımsızdır: yerinde kalır, kilidi kaldırılamaz.</Not>
+    </>
   );
 }

@@ -1,4 +1,4 @@
-import { Suspense, useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { Navigate, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import type { PlanlamaYazGovdesi } from '#paylasilan/sozlesme/planlama.ts';
 import type { YazCevabi } from '#paylasilan/sozlesme/recete-rota.ts';
@@ -40,7 +40,7 @@ function PlanlamaEkrani() {
   const girebilir = kullanici?.islemler.includes(PLANLAMA_ISLEMI) ?? false;
   const { durum, yenile, tazele } = usePlanlamaDeposu(girebilir);
   const yetki = useMemo(
-    () => (durum.tur === 'hazir' && kullanici ? yetkiKur(kullanici.islemler, durum.depo.ben) : null),
+    () => (durum.tur === 'hazir' && kullanici ? yetkiKur(kullanici.islemler) : null),
     [durum, kullanici],
   );
   const gorunum = parca === undefined ? ACILIS : gorunumOku(parca);
@@ -56,9 +56,15 @@ function PlanlamaEkrani() {
     );
   }, [tazele, bildir]);
   // Yazıcı açılıştaki çalışma ve sürümle kurulur; yazma yetkisi ya da çalışma kaydı yoksa ekran salt okunur (komut null).
+  // Yeniden okumada geri alma geçmişi önceki yazıcıdan taşınır (aynı kişi); çatışmayla duran yazıcının geçmişi taşınmaz: başkasının
+  // yazdığının üstüne geri alma yazılmasın.
+  const oncekiYazici = useRef<{ yazici: CalismaYazici; kisi: unknown } | null>(null);
   const yazici = useMemo(() => {
     if (durum.tur !== 'hazir' || yetki === null || !yetki.calismaYazabilir || durum.depo.calisma === null || !kullanici) return null;
-    return new CalismaYazici({
+    const onceki = oncekiYazici.current;
+    const gecmis = onceki && onceki.kisi === kullanici.id && !onceki.yazici.durdu ? onceki.yazici.gecmis() : undefined;
+    const y = new CalismaYazici({
+      ...(gecmis ? { gecmis } : {}),
       calisma: durum.depo.calisma, surum: durum.depo.calismaSurumu, kim: kullanici.ad,
       sayfa: () => GORUNUM_KAYITLARI.find((k) => k.anahtar === sonGorunum.deger)?.baslik ?? '',
       yaz: (g: PlanlamaYazGovdesi) => api.post<YazCevabi>('/plan/planlama-kayitlari/yaz', g),
@@ -66,6 +72,8 @@ function PlanlamaEkrani() {
       catismadaYenile: tazele,
       bildir: (ileti, geriAl) => { bildir('tamam', ileti, geriAl ? { eylem: { etiket: 'Geri al', yap: geriAl } } : undefined); },
     });
+    oncekiYazici.current = { yazici: y, kisi: kullanici.id };
+    return y;
     // Yazıcı yalnız açılış okumasıyla yeniden kurulur; bildir ve kullanıcı nesnesi çizimler arasında değişebilir.
   }, [durum, yetki]);
   sonGorunum.deger = gorunum;
@@ -83,12 +91,28 @@ function PlanlamaEkrani() {
   useEffect(() => {
     if (yazici !== null && disSatir !== null) yazici.kaynakDegisikliginiYaz(disSatir);
   }, [yazici, disSatir]);
+  // Sekme kapanırken bekleyen yazma (2 sn) tarayıcının sürdüreceği garanti değildir: kirliyken tarayıcı çıkışı sorar, yazma o sırada başlar.
+  // keepalive kullanılmaz: gövde sınırı (64 KB) çalışmanın boyutundan küçüktür.
   useEffect(() => {
     if (yazici === null) return undefined;
     const cik = (): void => { void yazici.hepsiniYaz(); };
+    const sor = (e: BeforeUnloadEvent): void => {
+      if (!yazici.bekleyenVar || yazici.durdu) return;
+      cik();
+      e.preventDefault();
+      e.returnValue = '';
+    };
+    window.addEventListener('beforeunload', sor);
     window.addEventListener('pagehide', cik);
-    return () => { window.removeEventListener('pagehide', cik); cik(); };
+    return () => { window.removeEventListener('beforeunload', sor); window.removeEventListener('pagehide', cik); cik(); };
   }, [yazici]);
+  // Yeniden okuma bekleyen yazmayı önce gönderir: yoksa okunan kayıt son değişikliği içermez, sonraki yazma kendi kendine 409 alırdı.
+  // Görünümlerin yenilemesi sessizdir: komuttan sonra ekran yükleniyor kutusuna dönüp yeniden kurulursa çizelge yanıp söner,
+  // kaydırma ve seçim kaybolur; eski veri yenisi gelene kadar görünür kalır.
+  const yazTazele = useCallback((): void => {
+    if (yazici === null) { tazele(); return; }
+    void yazici.hepsiniYaz().then(tazele, tazele);
+  }, [yazici, tazele]);
   // Ölçek ve seçim görünümler arasında taşınır (görünüm değişince bu bileşen kalır, adres parçası değişir).
   const [olcek, olcekKur] = useState<PlanlamaOlcegi>(ACILIS_OLCEGI);
   const [secim, secimKur] = useState<PlanlamaSecimi>(BOS_SECIM);
@@ -120,8 +144,8 @@ function PlanlamaEkrani() {
     <div className="tc-py" data-gorunum={gorunum} data-calisma-yok={calismaYok ? '' : undefined} data-serit={ust ? '' : undefined}>
       {ust && (
         <div className="tc-py-ust">
-          {duzenleyen && <DuzenleyenSeridi d={duzenleyen} yenile={tazele} />}
-          {serit && <DegisiklikSeridi calisma={calisma} dis={disSatir} canli={durum.depo.planSurumu?.bayat ?? null} />}
+          {duzenleyen && <DuzenleyenSeridi d={duzenleyen} yenile={yazTazele} />}
+          {serit && <DegisiklikSeridi calisma={calisma} dis={disSatir} canli={((b) => (b?.sayilar && b.olaylar ? { ...b, sayilar: b.sayilar, olaylar: b.olaylar } : null))(durum.depo.planSurumu?.bayat)} />}
           {calismaYok && (
             <div className="tc-py-calisma-yok" role="status">
               <span>Planlama çalışması henüz açılmadı; sayfa salt okunur.</span>
@@ -138,14 +162,14 @@ function PlanlamaEkrani() {
               {gorunum !== 'plan' && (
                 <Suspense fallback={null}>
                   <PlanSeridi
-                    depo={durum.depo} calisma={calisma} komut={yazici} yetki={yetki} git={gec} yenile={yenile}
+                    depo={durum.depo} calisma={calisma} komut={yazici} yetki={yetki} git={gec} yenile={yazTazele}
                     olcek={olcek} olcekSec={olcekSec} kaydir={kaydir} secim={secim} sec={sec} alt={alt} altSec={altSec} istek={istek} studyoAc={studyoAc} gorunum={gorunum}
                   />
                 </Suspense>
               )}
               <Suspense fallback={<DurumKutusu durum="yukleniyor" />}>
                 <etkin.bilesen
-                  depo={durum.depo} calisma={calisma} komut={yazici} yetki={yetki} git={gec} yenile={yenile}
+                  depo={durum.depo} calisma={calisma} komut={yazici} yetki={yetki} git={gec} yenile={yazTazele}
                   olcek={olcek} olcekSec={olcekSec} kaydir={kaydir} secim={secim} sec={sec} alt={alt} altSec={altSec} istek={istek} studyoAc={studyoAc}
                 />
               </Suspense>

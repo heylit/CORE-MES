@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { PlanlamaCalismasi } from '../tipler.ts';
 import { malzemeHazir, maliyetSistemi } from './kurallar.ts';
-import { bugunIso, ekMesaiKaldirYaz, tezGiderYaz, tezUcretYaz, type Yaz } from './yazmalar.ts';
+import { bugunIso, dolayliEkleYaz, dolayliYaz, ekMesaiKaldirYaz, kisiYilYaz, tezGiderYaz, tezUcretYaz, type Yaz } from './yazmalar.ts';
 import { ornekCalisma } from './test-verisi.ts';
 
 // Yazmalar tek alanı tek değişiklik olarak yazar; plan korunacak yazma bunu söyler. Malzeme sırası sunucu motorunun matAlloc'una uyar.
@@ -30,6 +30,24 @@ describe('P3 yazmalar', () => {
     expect(l[0]?.planKoru).toBe(true);
     expect(tezGiderYaz(yaz, c.D, 'T9', 'kw', 15)).toBe(false);
     expect(l).toHaveLength(1);
+  });
+
+  // 2728 a: brüt ücret kayda yazılmaz; eski kayıttaki brüt, o bölüme yapılan ilk yazmada düşer.
+  it('dolaylı personel ve fazla mesai yazmaları brüt taşımaz; eski brüt ilk yazmada düşer', () => {
+    const brutlu = () => ornekCalisma({ D: { maliyetSis: { dolayli: [{ id: 'G1', gorev: 'Deneme gorev', brut: 1000 }] }, mesaiSis: { ucret: { P1: { brut: 1000, yil: 2 } } } } });
+    const brutVar = (c: PlanlamaCalismasi) => JSON.stringify(c.D).includes('brut');
+    const a = brutlu();
+    expect(brutVar(a)).toBe(true);
+    const { l, yaz } = kayitci(a);
+    expect(dolayliYaz(yaz, a.D, 'G1', 'Deneme gorev 2')).toBe(true);
+    expect(dolayliEkleYaz(yaz, 'Deneme gorev 3')).toBe(true);
+    expect(kisiYilYaz(yaz, a.D, 'P1', 5)).toBe(true);
+    expect(brutVar(a)).toBe(false);
+    expect(maliyetSistemi(a.D).dolayli).toEqual([{ id: 'G1', gorev: 'Deneme gorev 2' }, { id: 'G2', gorev: 'Deneme gorev 3' }]);
+    expect(l.map((x) => x.ayrinti)).toEqual(['Deneme gorev → Deneme gorev 2', 'Deneme gorev 3', 'P1: 2 → 5 sa']);
+    const b = brutlu();
+    expect(tezGiderYaz(kayitci(b).yaz, b.D, 'T1', 'kw', 10)).toBe(true);
+    expect(JSON.stringify(b.D.maliyetSis)).not.toContain('brut');
   });
 
   it('ek mesai kaldırma süzülmüş sırayla kaydı bulur ve o vardiyanın kararını da siler', () => {

@@ -4,9 +4,14 @@ import type { PlanlamaCalismasi } from '../../tipler.ts';
 import { derle, girdiKur, malzemeHazir, planOku, plandanBitenler, type PlanIslemi } from '../kurallar.ts';
 import { ornekCalisma } from '../ornek.ts';
 import {
-  akis, asilBekleme, bitisFarklari, calismaEkMesai, canliFarkOzeti, DONUK_SECENEKLERI, ekMesaiFarki, ekMesaiKontrol, sunucuEkMesai, tarihGunYaz, gunYeni, malzemeDetay, pgGostergeleri, pgKaynakKur, pgNedenOzeti, pgSatirlar, pgSerit, cubukYazisi, darbogaz, ga, gs, gunKaydi, ilerleme, isaretliSure, kapaliAraliklar, parcaAyir, saatPiksel, satirlar,
+  akis, asilBekleme, bitisFarklari, calismaEkMesai, canliFarkOzeti, DONUK_SECENEKLERI, donukEtiketi, ekMesaiFarki, ekMesaiKontrol, sunucuEkMesai, tarihGunYaz, gunYeni, malzemeDetay, pgGostergeleri, pgKaynakKur, pgNedenOzeti, pgSatirlar, pgSerit, cubukYazisi, darbogaz, emirNoOkuyucu, ga, gs, gunKaydi, ilerleme, isaretliSure, kapaliAraliklar, parcaAyir, saatPiksel, satirlar,
   siparisler, sure, suzKoy, suzUyar, terminMetni, tz, ufuk, zamanBasliklari, zs, farkKur, paAdim, paEmirFarki, paKontrol, paPlanKontrol, paRedVar, paSecim, planFarki, planGecikme, agirlikliGecikme, ayarSaat, tlEksikUyarisi, tlKarsilastirilir, type Gostergeler, type SunucuSenaryosu,
+  kilitGunleri, kilitOzeti, siraKomsu, siraTasi, kenarHizi,
 } from './kurallar.ts';
+
+import { saatiSabitle } from '../../test-saati.ts';
+
+saatiSabitle(() => ornekCalisma());
 
 const kur = (c: PlanlamaCalismasi = ornekCalisma()) => {
   const p = planOku(c); if (!p) throw new Error('plan yok');
@@ -86,6 +91,8 @@ describe('atölye kuralları', () => {
     expect(cubukYazisi(r, '20', 'Freze', 120)).toEqual({ b: 'IE-0012', ek: ' · 20', alt: 'Freze' });
     expect(cubukYazisi(r, '20', 'Freze', 30)).toEqual({ b: '012', ek: '', alt: '' });
     expect(cubukYazisi(r, '20', 'Freze', 10)).toBeNull();
+    const no = emirNoOkuyucu({ orders: [{ id: 'IE-0012', no: 'MM-ORN-00012-26-11-012' }] });
+    expect(cubukYazisi(r, '20', 'Freze', 120, no)).toEqual({ b: 'MM-ORN-00012-26-11-012', ek: ' · 20', alt: 'Freze' });
     expect(ilerleme(r, null, 10, 5)).toBe(0.5);
     expect(ilerleme(r, { S: 0, plan: 0, n: 4 }, 10, 5)).toBe(0.4);
     expect(ilerleme({ ...r, S: 6 }, null, 10, 5)).toBeNull();
@@ -257,10 +264,11 @@ describe('Onay ve canlı (sunucu senaryoları)', () => {
   });
 });
 
-describe('donuk bölge seçenekleri (248 a)', () => {
-  it('4 saatten kısa donuk bölge seçilemez', () => {
-    expect(DONUK_SECENEKLERI).toEqual([4, 8, 16, 24]);
-    expect(Math.min(...DONUK_SECENEKLERI)).toBe(4);
+describe('donuk bölge seçenekleri (248 a, 2529)', () => {
+  it('donuk bölge kapatılabilir (0 sa); açıkken en az 4 saat', () => {
+    expect(DONUK_SECENEKLERI).toEqual([0, 4, 8, 16, 24]);
+    expect(Math.min(...DONUK_SECENEKLERI.filter((x) => x > 0))).toBe(4);
+    expect([donukEtiketi(0), donukEtiketi(8)]).toEqual(['0 sa (kapalı)', '8 sa']);
   });
 });
 
@@ -281,5 +289,58 @@ describe('2311 S9: kuru bilinmeyen emir varken Plan TL uyarısı', () => {
     expect(tlKarsilastirilir(g(1000, 0), g(900, 3))).toBe(false);
     expect(tlKarsilastirilir(g(1000, 0), g(null))).toBe(false);
     expect(tlKarsilastirilir(g(1000, 0), null)).toBe(false);
+  });
+});
+
+describe('elle sıra (2531 a)', () => {
+  it('siraTasi aşağı taşıyınca hedefin ardına, yukarı taşıyınca önüne koyar; hedefsiz sona; yer değişmezse null', () => {
+    expect(siraTasi(['a', 'b', 'c', 'd'], 'a', 'c')).toEqual(['b', 'c', 'a', 'd']);
+    expect(siraTasi(['a', 'b', 'c', 'd'], 'd', 'b')).toEqual(['a', 'd', 'b', 'c']);
+    expect(siraTasi(['a', 'b', 'c'], 'a', null)).toEqual(['b', 'c', 'a']);
+    expect(siraTasi(['a', 'b', 'c'], 'b', 'b')).toBeNull();
+    expect(siraTasi(['a', 'b', 'c'], 'c', null)).toBeNull();
+    expect(siraTasi(['a', 'b'], 'x', 'a')).toBeNull();
+  });
+  it('siraKomsu bir yukarı ya da aşağı; uçta null', () => {
+    expect(siraKomsu(['a', 'b', 'c'], 'b', -1)).toEqual(['b', 'a', 'c']);
+    expect(siraKomsu(['a', 'b', 'c'], 'b', 1)).toEqual(['a', 'c', 'b']);
+    expect(siraKomsu(['a', 'b', 'c'], 'a', -1)).toBeNull();
+    expect(siraKomsu(['a', 'b', 'c'], 'c', 1)).toBeNull();
+  });
+});
+
+describe('kilit ve dondurma paneli (2539 a)', () => {
+  it('günler bugünden yedi gün ve pencere dışındaki dondurulmuş gün; özet donuk, sabit ve gün sayar', () => {
+    const c = ornekCalisma(); const p = planOku(c)!;
+    const now = 30; const bugun = Math.floor(now / 24);
+    c.locks = { a: { m: '1', S: 1 }, b: { m: '1', S: 2, gun: bugun + 20 }, d: { m: '1', S: 3, gun: bugun + 1 } };
+    const l = kilitGunleri(c, p, now);
+    expect(l.map((g) => g.gNo)).toEqual([...Array.from({ length: 7 }, (_, i) => bugun + i), bugun + 20]);
+    expect(l.filter((g) => g.donuk).map((g) => g.gNo)).toEqual([bugun + 1, bugun + 20]);
+    expect(l[0]?.t).toBe(bugun * 24);
+    expect(kilitOzeti(c, 8)).toBe('donuk 8 sa · 1 sabit · 2 gün');
+  });
+});
+
+describe('iş emri no (2690)', () => {
+  it('sipariş kimliği Reçete ve Rota kaydındaki emir numarasıyla yazılır; parça soneki korunur, bilinmeyen kimlik olduğu gibi kalır', () => {
+    const no = emirNoOkuyucu({ orders: [{ id: '2', no: 'MM-ORN-00002-26-11-002' }, { id: 3, no: 'MM-ORN-00003-26-11-003' }, { id: '4', no: '' }, null] });
+    expect(no('2')).toBe('MM-ORN-00002-26-11-002');
+    expect(no('3')).toBe('MM-ORN-00003-26-11-003');
+    expect(no('2/1')).toBe('MM-ORN-00002-26-11-002/1');
+    expect(no('4')).toBe('4');
+    expect(no('9')).toBe('9');
+    expect(emirNoOkuyucu(null)('2')).toBe('2');
+  });
+});
+
+describe('kenarHizi (2734)', () => {
+  it('kenara yaklaştıkça artan hız, ortada sıfır; dar alanda kayma yok', () => {
+    expect(kenarHizi(500, 0, 1000, 48, 14)).toBe(0);
+    expect(kenarHizi(990, 0, 1000, 48, 14)).toBeCloseTo((38 / 48) * 14);
+    expect(kenarHizi(2000, 0, 1000, 48, 14)).toBe(14);
+    expect(kenarHizi(24, 0, 1000, 48, 14)).toBeCloseTo(-7);
+    expect(kenarHizi(-5, 0, 1000, 48, 14)).toBe(-14);
+    expect(kenarHizi(10, 0, 80, 48, 14)).toBe(0);
   });
 });

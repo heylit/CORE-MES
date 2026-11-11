@@ -3,7 +3,7 @@ import { describe, test } from 'node:test';
 import type { Hareket } from '#paylasilan/sozlesme/stok.ts';
 import { ANAHTAR_BICIMI, durumEmirlerSemasi } from '#paylasilan/sozlesme/recete-rota.ts';
 import {
-  degerBicimeUyarMi, dugumleriCevir, emirleriCevir, hareketleriCevir, isMerkeziCevir, istasyonCevir, kisiCevir, makineCevir, malzemeCevir, metindenSayi, degerCokBuyukMu, nulKarakteriVarMi, operasyonCevir,
+  degerBicimeUyarMi, dugumleriCevir, kayitMaliyetiniKoru, kayitMaliyetiniSuz, emirleriCevir, hareketleriCevir, isMerkeziCevir, istasyonCevir, kisiCevir, makineCevir, malzemeCevir, metindenSayi, degerCokBuyukMu, nulKarakteriVarMi, operasyonCevir,
   rotaAramaSonuclari, rotasizAdimlariCevir, surumUyarMi, tatilTarihleri, vardiyaCevir,
 } from './kurallar.ts';
 import type { EmirKaydi } from './kurallar.ts';
@@ -43,6 +43,37 @@ describe('recete-rota kuralları (saf)', () => {
     assert.equal(ANAHTAR_BICIMI.test('recete-rota-motoru.'), false);
     assert.equal(ANAHTAR_BICIMI.test('mesai:tercih'), false);
     assert.equal(ANAHTAR_BICIMI.test('recete-rota-motoru-v1:a/b'), false);
+  });
+
+  test('RR-K6 (2783, Veri N1, Güvenlik K1): maliyet görmeyenin yazmasında gelen cost yok sayılır; kayıttaki aynı kimlikli değer kalır, yoksa null', () => {
+    const eski = { bicim: 'json', deger: { items: [{ id: 'i1', cost: 5 }, { id: 'i2', cost: 6 }, { cost: 7 }, { id: 'i4' }], people: [{ id: 'p1', cost: 0 }] } };
+    const yeni = { bicim: 'json', deger: {
+      items: [{ id: 'i1', cost: null }, { id: 'i2', cost: 9 }, { cost: 8 }, { id: 'i3', cost: 4 }, { id: 'i4' }, { id: 'i5', cost: null }, { id: 'i2' }], people: [{ id: 'p1', cost: null }],
+    } };
+    assert.deepEqual(kayitMaliyetiniKoru(yeni, eski).deger, {
+      items: [{ id: 'i1', cost: 5 }, { id: 'i2', cost: 6 }, { cost: null }, { id: 'i3', cost: null }, { id: 'i4' }, { id: 'i5', cost: null }, { id: 'i2', cost: 6 }], people: [{ id: 'p1', cost: 0 }],
+    });
+    // Kayıt yoksa gelen her dolu cost null'a iner.
+    assert.deepEqual(kayitMaliyetiniKoru({ bicim: 'json', deger: { items: [{ id: 'i1', cost: 3 }, { id: 'i2' }] } }, null).deger, { items: [{ id: 'i1', cost: null }, { id: 'i2' }] });
+    const temiz = { bicim: 'json', deger: { items: [{ id: 'i9', cost: null }] } };
+    assert.equal(kayitMaliyetiniKoru(temiz, eski), temiz);
+    const metin = { bicim: 'metin', deger: '{"items":[{"id":"i1","cost":1}]}' };
+    assert.deepEqual(JSON.parse(String(kayitMaliyetiniKoru(metin, eski).deger)), { items: [{ id: 'i1', cost: 5 }] });
+    const bozuk = { bicim: 'metin', deger: 'düz metin' };
+    assert.equal(kayitMaliyetiniKoru(bozuk, eski), bozuk);
+  });
+
+  test('RR-K5 (2783): kayıt süzgeci kalem, istasyon ve kişi maliyetini null yapar; maliyetsiz kayıt aynı nesne, çözülemeyen metin aynen döner', () => {
+    const json = { bicim: 'json', deger: { items: [{ id: 'i1', cost: 5 }], stations: [{ id: 's1', cost: 0 }], people: 'dizi değil', orders: [{ cost: 1 }] } };
+    assert.deepEqual(kayitMaliyetiniSuz(json).deger, { items: [{ id: 'i1', cost: null }], stations: [{ id: 's1', cost: null }], people: 'dizi değil', orders: [{ cost: 1 }] });
+    assert.equal(json.deger.items[0]?.cost, 5);
+    const temiz = { bicim: 'json', deger: { items: [{ id: 'i1', cost: null }, { id: 'i2' }] } };
+    assert.equal(kayitMaliyetiniSuz(temiz), temiz);
+    assert.deepEqual(JSON.parse(String(kayitMaliyetiniSuz({ bicim: 'metin', deger: '{"items":[{"cost":-2}]}' }).deger)), { items: [{ cost: null }] });
+    const bozuk = { bicim: 'metin', deger: 'düz metin {"cost":3' };
+    assert.equal(kayitMaliyetiniSuz(bozuk), bozuk);
+    const dizi = { bicim: 'json', deger: [1, 2] };
+    assert.equal(kayitMaliyetiniSuz(dizi), dizi);
   });
 });
 
@@ -224,6 +255,9 @@ describe('recete-rota çok katmanlı emrin düğümleri (saf, 1476-D)', () => {
     assert.deepEqual(d.find((x) => x.dugum === '0.1.1')!.adimlar, [{ opNo: 1030, kaynakOpNo: 10, durum: 'tamam' }], 'biten fason adım plana girmez');
     const terminsiz = { ...e, isEmirleri: e.isEmirleri.map((i) => (i.sira === 2 ? { ...i, kaynak: { tur: 'fason', id: 9 } } : i)) };
     assert.deepEqual(dugumleriCevir(terminsiz)!.find((x) => x.dugum === '0.1')!.adimlar[0], { opNo: 1010, kaynakOpNo: 10, durum: 'bekliyor', fasonId: '9', terminGun: null });
+    // 2694: kimliği olmayan fason kaynak "null" firma yazmaz.
+    const kimliksiz = { ...e, isEmirleri: e.isEmirleri.map((i) => (i.sira === 2 ? { ...i, kaynak: { tur: 'fason', id: null as unknown as number } } : i)) };
+    assert.deepEqual(dugumleriCevir(kimliksiz)!.find((x) => x.dugum === '0.1')!.adimlar[0], { opNo: 1010, kaynakOpNo: 10, durum: 'bekliyor' });
     assert.deepEqual(Object.keys(emirleriCevir([fasonlu]).opYer ?? {}), ['7|root|2'], 'düğüm adımı kök anahtarına yazılmaz');
     assert.doesNotThrow(() => durumEmirlerSemasi.parse(emirleriCevir([fasonlu])));
   });

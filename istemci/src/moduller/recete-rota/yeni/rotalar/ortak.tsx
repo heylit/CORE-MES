@@ -10,7 +10,8 @@ export type Secim =
   | { tur: 'urun'; urunId: string; nid: string; miktar: number }
   | { tur: 'adim'; urunId: string; adimId: string; seq: number; miktar: number }
   | { tur: 'giren' | 'yan'; urunId: string; adimId: string; sira: number; nid: string; miktar: number }
-  | { tur: 'adimEkle'; urunId: string; sonraId: string | null }
+  // dal: "Buradan kol aç" (2542 A); eklenecek ilk adım bu yeni kola düşer.
+  | { tur: 'adimEkle'; urunId: string; sonraId: string | null; dal?: string }
   | { tur: 'girenEkle' | 'yanEkle'; urunId: string; adimId: string; yerine: number | null }
   | { tur: 'yeniRota' };
 
@@ -27,6 +28,11 @@ export interface RotaEkrani {
   gunSaati: (wcId: string | null) => number;
   // Operasyon paletini açar; eklenecek yer seçimden gelir (seçili adımın ardı ya da adimEkle seçiminin sonraId'si).
   paletAc: () => void;
+  // 2558 b/9: odak kipi. Odaktaki adım ortalanır ve yakınlaşır, öteki adımlar solar; Düzenleme paneli onun için açılır. null: odak yok.
+  odak: { urunId: string; adimId: string } | null;
+  odakla: (o: { urunId: string; adimId: string } | null) => void;
+  // 2558 b/6: ara (statülü) kart kutuları varsayılan olarak gizli; operasyon kutusu "Statülü" rozetini taşır.
+  araKartlar: boolean;
   // Sürükleme sürerken şemada bırakma şeritleri görünür.
   surukleniyor: boolean;
   surukleBasla: () => void;
@@ -41,6 +47,7 @@ export const bagMetni = (a: Adim): string => (a.dep === 'ortulu' ? `örtülü: $
 export const renkSinifi = (id: string | null): string => (id === null || !/^\d+$/.test(id) ? 'tc-rr1-renk-yok' : `tc-rr1-renk-${String(Number(id) % 6)}`);
 
 export function fasonAdi(firmalar: readonly { id: string; code: string | null; name: string }[] | null | undefined, id: string | null): string {
+  if (id === null) return 'firma seçilmedi';
   const f = (firmalar ?? []).find((x) => x.id === id);
   return f ? `${f.code ? `${f.code} ` : ''}${f.name}` : `Fason firma #${id ?? '?'}`;
 }
@@ -49,17 +56,20 @@ export function fasonAdi(firmalar: readonly { id: string; code: string | null; n
 // Bu alanların hepsi süre, miktar ya da yüzdedir: eksi kabul edilmez. Geçersiz girdi silinmez ve yazılmaz; altında nedeni görünür.
 export const SURE_EN_COK = 99_999;
 
-export function sayiAlaniHatasi(metin: string, enCok?: number): string | null {
-  if (metin.trim() === '') return null;
+// pozitif: alan boş ya da sıfır olamaz (sunucu miktarı sıfırdan büyük ister); boş bırakılan alana 0 yazılmaz (B-2484-6).
+export function sayiAlaniHatasi(metin: string, enCok?: number, pozitif = false): string | null {
+  if (metin.trim() === '') return pozitif ? 'Miktar zorunlu.' : null;
   const v = sayiGirisi(metin);
   if (v === null) return 'Sayı girin.';
   if (v < 0) return 'Eksi olamaz.';
+  if (pozitif && v === 0) return 'Sıfırdan büyük olmalı.';
   if (enCok !== undefined && v > enCok) return `En çok ${sayi(enCok)} olabilir.`;
   return null;
 }
 
-export function SayiAlani({ etiket, deger, yaz, kapali, yerTutucu, birim, ipucu, enCok }: {
+export function SayiAlani({ etiket, deger, yaz, kapali, yerTutucu, birim, ipucu, enCok, pozitif = false }: {
   etiket: string; deger: number | null; yaz: (v: number | null) => void; kapali?: boolean; yerTutucu?: string; birim?: string; ipucu?: string; enCok?: number;
+  pozitif?: boolean;
 }) {
   const metin = deger === null ? '' : String(deger).replace('.', ',');
   const [yerel, setYerel] = useState(metin);
@@ -67,7 +77,7 @@ export function SayiAlani({ etiket, deger, yaz, kapali, yerTutucu, birim, ipucu,
   useEffect(() => { setYerel(metin); setHata(null); }, [metin]);
   const isle = () => {
     if (yerel === metin) { setHata(null); return; }
-    const h = sayiAlaniHatasi(yerel, enCok);
+    const h = sayiAlaniHatasi(yerel, enCok, pozitif);
     setHata(h);
     if (h === null) yaz(sayiGirisi(yerel));
   };

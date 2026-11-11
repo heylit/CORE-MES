@@ -172,6 +172,8 @@ export const durumRotaAdimiSemasi = z.object({
   machineId: kimlikMetni.nullable(),
   kisiId: kimlikMetni.nullable(),
   fasonId: kimlikMetni.nullable(),
+  // 2681 (2682 a): adım fasondadır; fasonId null iken firma seçilmemiştir. Eski kayıtta alan yoktur (false sayılır).
+  fason: z.boolean().optional(),
   terminGun: z.number().int().nullable(),
   setup: sayiAlani,
   proc: sayiAlani,
@@ -252,6 +254,12 @@ export const durumEmirSemasi = z.object({
     seq: z.number().int(), opNo: z.number().int(), ad: z.string(), opId: kimlikMetni.nullable(), stationId: kimlikMetni.nullable(),
     setup: z.number().nullable(), cycle: z.number().nullable(), durum: z.enum(['bekliyor', 'calisiyor', 'tamam']),
   })).optional(),
+  // 2530 a: rotalı emre (bölünmüş ya da bölünmemiş) konan rework, tamir ya da ek adım; rotada olmadığı için opStatus anahtarı yoktur, durumu ve
+  // sağlamı (bitmişse kayıtlı, sürüyorsa canlı sayaç; yoksa null) burada. Sıra op numarasını izler. Ek adımı olmayan emirde alan yok.
+  ekAdimlar: z.array(z.object({
+    opNo: z.number().int(), tur: z.enum(['rework', 'tamir', 'ek']), ad: z.string(), opId: kimlikMetni.nullable(),
+    durum: z.enum(['bekliyor', 'calisiyor', 'tamam']), saglam: z.number().nullable(),
+  })).optional(),
   // 1476-D: çok katmanlı emrin alt düğümleri (kök hariç); tek katmanlı emirde alan yok. dugum patlatma yolu ("0.1"), itemId düğüm ürünü,
   // carpan kök başına, birim üst düğüm başına adet (okunamazsa null), ust üst düğümün yolu ("0" kök), ustOpNo çıktıyı tüketen üst adımın
   // rotadaki op numarası (bulunamazsa null). Adımın opNo'su emirdeki, kaynakOpNo düğüm ürününün rotasındaki numaradır.
@@ -267,15 +275,19 @@ export const durumEmirSemasi = z.object({
 });
 // opStatus ve opProg anahtarı `<emir>|root|<sıra>`: emrin kendi iş emrinin sırası (1 tabanlı). Prototip bunu rota adımına kendi emir
 // adımlarından çevirir (kolda ayrılma adımı kadar kayarak). Bekleyen iş emri opStatus'ta yoktur; opProg yalnız bitmemiş adımın sağlam adedidir.
+// opSaglam (aynı anahtar): biten adımın kayıtlı sağlam adedi; sayısı yazılmamış adım haritada yoktur. İsteğe bağlı: eski sunucu göndermez.
 // opYer (aynı anahtar): rotalı emirde adımın emirdeki iç ya da dış üretimi (UE-URY). Emirde fasona alınan ya da içeri alınan adım rotadan
 // ayrılabilir; plan rotanın değil emrin seçimini kullanır. fasonId doluysa adım fasondadır (istasyon ve süre yok, terminGun firma süresi).
+// tahminGun (B-2483-11): termini girilmemiş fason adımda Satın Alma'nın geçmiş teslim tahmini, takvim günü; tahmin yoksa alan yok.
 export const durumEmirYeriSemasi = z.object({
   fasonId: kimlikMetni.nullable(), terminGun: z.number().int().nullable(), stationId: kimlikMetni.nullable(), setup: z.number().nullable(), cycle: z.number().nullable(),
+  tahminGun: z.number().positive().optional(),
 });
 export const durumEmirlerSemasi = z.object({
   orders: z.array(durumEmirSemasi),
   opStatus: z.record(z.string(), z.enum(['calisiyor', 'tamam'])),
   opProg: z.record(z.string(), z.number()),
+  opSaglam: z.record(z.string(), z.number()).optional(),
   opYer: z.record(z.string(), durumEmirYeriSemasi).optional(),
 });
 // Birim maliyetler finanstadır (kart #1187). Anahtar kaydın sayı kimliğinin metnidir; satırı olmayan kalemin maliyeti bilinmiyordur (haritada yok).
@@ -363,7 +375,27 @@ export const fasonTahminSorgusu = z.object({
 });
 export const fasonTahminCevabi = z.object({ gunler: z.array(z.number().nonnegative().nullable()) });
 
+// Emir malzeme ihtiyacı (2486-8, 461 b): emir verilirse yalnız o emir, verilmezse plandaki bütün emirler; stok her durumda bütün plan
+// sırasıyla paylaştırılır. emirId emrin kayıt numarasıdır (durumdaki kayitNo; kol emirleri dahil). malzemeNo kartın kayıt numarasıdır;
+// kod, ad ve birim karttan, kart bulunamazsa null. Sayılar ondalık metin. stokGorunur false: stok okuma yetkisi yok; serbest stok durumdaki
+// kuralla (yetkisize 0) sayılır, ara adım stoğu düşülmez.
+export const malzemeIhtiyaciSorgusu = z.object({ emir: z.coerce.number<number>().int().positive().optional() });
+const ihtiyacKarti = { malzemeNo: z.number().int(), kod: z.string().nullable(), ad: z.string().nullable(), birim: z.string().nullable() };
+export const malzemeIhtiyaciSatiri = z.object({ ...ihtiyacKarti, brut: z.string(), verilen: z.string(), stoktan: z.string(), alinacak: z.string() });
+export const malzemeIhtiyaciCevabi = z.object({
+  stokGorunur: z.boolean(),
+  emirler: z.array(z.object({
+    emirId: z.number().int(),
+    hammadde: z.array(malzemeIhtiyaciSatiri),
+    yanUrun: z.array(z.object({ ...ihtiyacKarti, miktar: z.string() })),
+    eksikler: z.array(malzemeIhtiyaciSatiri),
+    uyarilar: z.array(z.string()),
+  })),
+});
+
 export type FasonTahminCevabi = z.output<typeof fasonTahminCevabi>;
+export type MalzemeIhtiyaciCevabi = z.output<typeof malzemeIhtiyaciCevabi>;
+export type MalzemeIhtiyaciSatiri = z.output<typeof malzemeIhtiyaciSatiri>;
 export type Statu = z.output<typeof statuSemasi>;
 export type StatulerCevabi = z.output<typeof statulerCevabi>;
 export type StatuTanimi = z.output<typeof statuTanimiSemasi>;

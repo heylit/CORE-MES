@@ -368,12 +368,16 @@ export const anomaliOlaylariCevabi = z.object({
 export type AnomaliOlaylariCevabi = z.output<typeof anomaliOlaylariCevabi>;
 
 // Eksik iş (2421 c): plandan bağımsız "yapılması gereken ama yapılmayan, girilmeyen ya da geciken" iş. Olaylar 15 dakikalık işte yazılır;
-// sürerken değeri güncellenir, kendiliğinden giderilince kapanır. Değerin birimi türündedir: plan gerisi ve yarım iş net dakika, kayıtsız gün
-// iş günü, plansız iş ve bayat plan saat, geciken emir gün.
-export const EKSIK_IS_TURLERI = ['plan-gerisi', 'kayitsiz-gun', 'yarim-is', 'plansiz-is', 'geciken-emir', 'bayat-plan'] as const;
+// sürerken değeri güncellenir, kendiliğinden giderilince kapanır. Değerin birimi türündedir: plan gerisi net dakika, kayıtsız gün iş günü,
+// yarım iş, plansız iş ve bayat plan vardiya saati, geciken emir ve ölçülmeyen süre (2567) gün, geride kalan önceki adım (2769) adet.
+export const EKSIK_IS_TURLERI = ['plan-gerisi', 'kayitsiz-gun', 'yarim-is', 'plansiz-is', 'geciken-emir', 'bayat-plan', 'geride-onceki', 'olcumsuz-is'] as const;
 export type EksikIsTuru = (typeof EKSIK_IS_TURLERI)[number];
 export const EKSIK_IS_KONULARI = ['is_emri', 'istasyon', 'uretim_emri', 'plan'] as const;
 export type EksikIsKonusu = (typeof EKSIK_IS_KONULARI)[number];
+// Süre ölçülmedi (2567): biten iş emrinin terminal ölçümü neden yazılmadı. Ayar basılmadı (hazırlık yok), sayım yok (işlem yok), sayım var
+// ama sağlam ya da hurda değil (ilk parça ya da kalite onayı bekliyor; işlem yok), emrin iş emri yok, adım rotada yok.
+export const OLCUM_NEDENLERI = ['ayar-yok', 'sayim-yok', 'saglam-yok', 'is-emirsiz', 'rotada-yok'] as const;
+export type OlcumNedeni = (typeof OLCUM_NEDENLERI)[number];
 export const eksikIsSatiri = z.object({
   id: olayKimligi,
   tur: z.enum(EKSIK_IS_TURLERI),
@@ -385,12 +389,14 @@ export const eksikIsSatiri = z.object({
   istasyon: z.object({ id: olayKimligi, ad: z.string() }).nullable(),
   kaynak: z.object({ tur: z.enum(['makine', 'kisi']), id: olayKimligi, ad: z.string().nullable() }).nullable(),
   deger: z.number().nonnegative(),
-  // Geride kalan adet (plan gerisi, yarım iş); bilinmiyorsa boş.
+  // Geride kalan adet (plan gerisi, yarım iş; geride kalan önceki adımda akışlı devir için eksik); bilinmiyorsa boş.
   kalanAdet: z.number().int().nonnegative().nullable(),
   // Geciken emirde: teslim günü henüz gelmedi ama plandaki bitiş teslimden sonra.
   planaGore: z.boolean(),
-  // Olaya bakılan an: plan bitişi, son hareket, son giriş, son canlıya alma ya da teslim günü.
+  // Olaya bakılan an: plan bitişi, son hareket, son giriş, son canlıya alma, teslim günü ya da bitiş.
   dayanakAni: zamanSemasi.nullable(),
+  // Yalnız ölçülmeyen sürede dolu; öteki türlerde boş liste.
+  nedenler: z.array(z.enum(OLCUM_NEDENLERI)),
   acilis: zamanSemasi,
   kapanis: zamanSemasi.nullable(),
 });
@@ -401,6 +407,7 @@ export const eksikIslerCevabi = z.object({
   // Boş eşik o kuralı kapatır.
   esikler: z.object({
     planGerisiDk: eksikIsEsigi, kayitsizGun: eksikIsEsigi, yarimIsSaat: eksikIsEsigi, plansizIsSaat: eksikIsEsigi, gecikenEmirGun: eksikIsEsigi, bayatPlanSaat: eksikIsEsigi,
+    olcumsuzIsGun: eksikIsEsigi,
   }),
   ozet: z.record(z.enum(EKSIK_IS_TURLERI), z.number().int().nonnegative()),
   olaylar: z.array(eksikIsSatiri),
@@ -633,3 +640,31 @@ export type MerkezBelgelerCevabi = z.output<typeof merkezBelgelerCevabi>;
 export type MerkezEkleCevabi = z.output<typeof merkezEkleCevabi>;
 export type MerkezKontrolCevabi = z.output<typeof merkezKontrolCevabi>;
 export type MerkezDurumu = (typeof MERKEZ_DURUMLARI)[number];
+
+// 2227-1 b: Üretim Hazırlık'ın iş emrine özel hazırlık maddesi. Hazırlık matrisinde "Ek madde" olarak yalnız uyarır.
+export const AZAMI_HAZIRLIK_MADDESI = 30;
+export const HAZIRLIK_MADDESI_OLAYLARI = ['tamamla', 'geri-al', 'kaldir'] as const;
+const isEmriKimligi = z.coerce.number<number>({ message: 'İş emri sayı olmalı.' }).int().positive().max(2147483647);
+export const hazirlikMaddeleriSorgusu = z.object({ isEmriId: isEmriKimligi });
+export const hazirlikMaddesiEkleGovdesi = z.object({
+  isEmriId: isEmriKimligi,
+  ad: z.string().trim().min(1, 'Madde adı boş olamaz.').max(120, 'Madde adı en çok 120 karakter olur.'),
+});
+export const hazirlikMaddesiParametresi = z.object({ id: z.coerce.number<number>().int().positive().max(2147483647) });
+export const hazirlikMaddesiIsaretleGovdesi = z.object({ olay: z.enum(HAZIRLIK_MADDESI_OLAYLARI) });
+export const hazirlikMaddeleriCevabi = z.object({
+  isEmriId: z.number().int().positive(),
+  // İş emri bitmişse madde eklenmez, işaretlenmez.
+  kapali: z.boolean(),
+  maddeler: z.array(z.object({
+    id: z.number().int().positive(),
+    ad: z.string(),
+    ekleyenAdi: z.string().nullable(),
+    eklenme: zamanSemasi,
+    tamam: z.boolean(),
+    tamamlayanAdi: z.string().nullable(),
+    tamamlanma: zamanSemasi.nullable(),
+  })),
+});
+export type HazirlikMaddeleriCevabi = z.output<typeof hazirlikMaddeleriCevabi>;
+export type HazirlikMaddesiOlayi = (typeof HAZIRLIK_MADDESI_OLAYLARI)[number];

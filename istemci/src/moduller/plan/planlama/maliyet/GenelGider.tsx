@@ -6,7 +6,7 @@ import type { PlanlamaCalismasi } from '../tipler.ts';
 import { GiderSayfasi } from './asil/GiderSayfasi.tsx';
 import { amortFormu, amortismanEksik, kalemDegisFormu, tezBilgiFormu } from './formlar.ts';
 import {
-  anahtarAdi, baslangicMs, genelGiderHesabi, kalemTutari, kisaTl, maliyetSistemi, mesaiSistemi, takvimKur, tl, YOK, type GenelGiderHesabi, type GiderKalemi, type TezgahGiderSatiri,
+  anahtarAdi, baslangicMs, genelGiderHesabi, kalemTutari, kisaTl, maliyetSistemi, takvimKur, tl, YOK, type GenelGiderHesabi, type GiderKalemi, type TezgahGiderSatiri,
 } from './kurallar.ts';
 import { PARA_KILIDI } from './Maliyetler.tsx';
 import { hucreKoy, IsiSayfasi, kdOran, yazici, type Acilim, type Hucre, type IsiBos, type IsiSatiri, type IsiVerisi } from './ortak.tsx';
@@ -21,7 +21,7 @@ export function genelGiderBaglami(c: PlanlamaCalismasi | null): GenelGiderHesabi
 export function giderIsisi(c: PlanlamaCalismasi, v: GenelGiderHesabi): IsiVerisi<Satir> | IsiBos {
   const D = c.D;
   if (!D.tezgahlar.length) return { bos: 'Tezgâh ve gider bilgisi girilince dağılım burada görünür.' };
-  const M = maliyetSistemi(D); const ms = mesaiSistemi(D);
+  const M = maliyetSistemi(D);
   const gr = [...new Set(D.tezgahlar.map((t) => t.grup ?? ''))];
   const ga = grupAdlari(D);
   const sutunlar = gr.map((g) => ({ k: g, ad: g ? ga[g] ?? g : YOK, alt: `${String(D.tezgahlar.filter((t) => (t.grup ?? '') === g).length)} tezgâh` }));
@@ -30,7 +30,7 @@ export function giderIsisi(c: PlanlamaCalismasi, v: GenelGiderHesabi): IsiVerisi
     return l.length ? l.reduce((a, b) => a + b, 0) : null;
   };
   const tanim: { k: string; ad: string; alt: string; simge: 'layers' | 'cpu'; veri: Satir }[] = [
-    ...M.kalemler.map((k) => ({ k: k.id, ad: k.ad, alt: `${tl(kalemTutari(k, M, ms))}/ay · ${anahtarAdi(k.anahtar)}`, simge: 'layers' as const, veri: { f: (z: TezgahGiderSatiri) => z.kalem[k.id] ?? null, kalem: k } })),
+    ...M.kalemler.map((k) => ({ k: k.id, ad: k.ad, alt: `${tl(kalemTutari(k))}/ay · ${anahtarAdi(k.anahtar)}`, simge: 'layers' as const, veri: { f: (z: TezgahGiderSatiri) => z.kalem[k.id] ?? null, kalem: k } })),
     { k: 'amort', ad: 'Amortisman', alt: 'tezgâh başına', simge: 'cpu', veri: { f: (z) => z.amort, kalem: null } },
   ];
   let mx = 0;
@@ -88,7 +88,7 @@ export function GenelGider(o: PlanlamaEkranOzellikleri) {
       };
     }
     const k = r.veri.kalem;
-    const tutar = kalemTutari(k, maliyetSistemi(D), mesaiSistemi(D));
+    const tutar = kalemTutari(k);
     return {
       baslik: `${k.ad} · ${ck || YOK}`, simge: 'layers', ton: '',
       neden: `${k.ad} ayda ${tl(tutar)}; ${anahtarAdi(k.anahtar)} ölçüsüyle dağılıyor, ${ck || YOK} grubuna ${cel?.etiket ?? 'pay düşmüyor'}.`,

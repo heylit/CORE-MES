@@ -1,20 +1,22 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type DragEvent, type KeyboardEvent } from 'react';
 import { Simge } from '../../../../../ortak/arayuz/index.ts';
-import { MOTOR_NOTU } from '../ortak.tsx';
+import { hamleYapisi, useHamleci } from '../hamle/hamle.ts';
 import {
-  akis, elleSira, ga, malzemeDetay, malzemeGec, ONCELIK_KISA, parcaAyir, SIPARIS_GRUPLARI, sure, suzUyar, tz, zs, type SiparisBilgisi,
+  akis, elleSira, ga, malzemeDetay, malzemeGec, ONCELIK_KISA, parcaAyir, SIPARIS_GRUPLARI, siraKomsu, siraTasi, sure, suzUyar, tz, zs, type SiparisBilgisi,
 } from './kurallar.ts';
 import { ankraj, type Ortam } from './Pano.tsx';
 
 // Sipariş rayı (cizRay): arama, sütunlar, durum ayraçlı liste; açılan siparişte ayrıntı, akış ve eylemler (cizSipAc, cizSipDetay).
-// Elle sıra kayıtlıysa liste o sıradadır ve bırakılabilir; sürükleyerek sıra değiştirmek ve çözüm yolları motor ister (357 b).
+// Sürükleyerek (ya da Alt+ok, açık siparişte Yukarı/Aşağı) elle sıra kurulur; kayıtlıysa liste o sıradadır ve bırakılabilir. Elle sıra
+// yalnız rayın sırasıdır (planın girdisi değil); siparişi planda öne almak motorun "öne al" hamlesidir (2531 a).
 export function Ray({ ort }: { ort: Ortam }) {
   const [ara, setAra] = useState('');
+  const [tasinan, setTasinan] = useState<string | null>(null);
   const { c, suz, o } = ort;
   const elle = elleSira(c).length > 0;
   const siraBirak = () => { if (ort.yaz) o.komut?.degistir('Sipariş sırası riske göre', (t) => { (t as Record<string, unknown>).tpSira = []; }, { planKoru: true }); };
   const q = ara.toLocaleLowerCase('tr-TR');
-  const L = ort.liste.filter((s) => (!q || `${s.id} ${s.ad}`.toLocaleLowerCase('tr-TR').includes(q)) && (!suz || s.ops.some((r) => suzUyar(c.D, suz, r))));
+  const L = ort.liste.filter((s) => (!q || `${ort.emirNo(s.id)} ${s.id} ${s.ad}`.toLocaleLowerCase('tr-TR').includes(q)) && (!suz || s.ops.some((r) => suzUyar(c.D, suz, r))));
   return (
     <aside className="tc-pym-tp-ray" aria-label="Siparişler">
       <div className="tc-pym-tp-ray-bas">
@@ -29,12 +31,12 @@ export function Ray({ ort }: { ort: Ortam }) {
       <div className="tc-pym-tp-sutun"><span title={elle ? 'Elle sıra' : 'En riskli üstte'}>Sipariş</span><span>Başl.</span><span>Üretim</span><span>Bitiş</span><span>Termin</span></div>
       <div className="tc-pym-tp-liste">
         {!L.length && <p className="tc-pym-tp-not tc-pym-bos"><Simge ad="search" boyut="k" />{` ${suz ? 'Süzgece' : 'Aramaya'} uyan sipariş yok.`}</p>}
-        {q || elle ? L.map((s) => <Satir key={s.id} ort={ort} s={s} />) : SIPARIS_GRUPLARI.map(([d, ad, ik]) => {
+        {q || elle ? L.map((s) => <Satir key={s.id} ort={ort} s={s} tasinan={tasinan} tasi={setTasinan} />) : SIPARIS_GRUPLARI.map(([d, ad, ik]) => {
           const G = L.filter((x) => x.durum === d); if (!G.length) return null;
           return (
             <div key={d} role="group" aria-label={ad}>
               <div className="tc-pym-tp-ayrac" data-durum={d}><Simge ad={ik} boyut="k" />{ad}<span>{G.length}</span></div>
-              {G.map((s) => <Satir key={s.id} ort={ort} s={s} />)}
+              {G.map((s) => <Satir key={s.id} ort={ort} s={s} tasinan={tasinan} tasi={setTasinan} />)}
             </div>
           );
         })}
@@ -43,18 +45,36 @@ export function Ray({ ort }: { ort: Ortam }) {
   );
 }
 
-function Satir({ ort, s }: { ort: Ortam; s: SiparisBilgisi }) {
+// Elle sırayı çalışmaya yazar (görünüm tercihi: plan güncel kalır, geri alınabilir).
+export function siraYaz(ort: Ortam, l: string[] | null): void {
+  if (!l || !ort.yaz) return;
+  ort.o.komut?.degistir('Sipariş sırası', (t) => { (t as Record<string, unknown>).tpSira = l; }, { planKoru: true });
+}
+const SURUKLE_TURU = 'text/x-tc-siparis';
+
+function Satir({ ort, s, tasinan, tasi }: { ort: Ortam; s: SiparisBilgisi; tasinan: string | null; tasi: (id: string | null) => void }) {
   const D = ort.c.D; const ac = ort.secJob === s.id;
-  const [no, parca] = parcaAyir(s.id);
+  const [no, parca] = parcaAyir(ort.emirNo(s.id));
   const mg = malzemeGec(s);
+  const ids = ort.liste.map((x) => x.id);
+  const birak = (e: DragEvent) => { e.preventDefault(); const id = tasinan ?? e.dataTransfer.getData(SURUKLE_TURU); tasi(null); if (id) siraYaz(ort, siraTasi(ids, id, s.id)); };
+  const tus = (e: KeyboardEvent) => {
+    if (!ort.yaz || !e.altKey || (e.key !== 'ArrowUp' && e.key !== 'ArrowDown')) return;
+    e.preventDefault(); siraYaz(ort, siraKomsu(ids, s.id, e.key === 'ArrowUp' ? -1 : 1));
+  };
   return (
-    <div className="tc-pym-tp-sip" data-durum={s.durum === 'iyi' ? undefined : s.durum} data-acik={ac ? '' : undefined} title={ort.yaz ? `Sürükleyerek sırasını değiştir: ${MOTOR_NOTU}` : undefined}>
-      <button type="button" className="tc-pym-tp-sip-tus" aria-expanded={ac} onClick={() => ort.sipSec(s.id)}>
+    <div className="tc-pym-tp-sip" data-durum={s.durum === 'iyi' ? undefined : s.durum} data-acik={ac ? '' : undefined} data-tasinan={tasinan === s.id ? '' : undefined}
+      title={ort.yaz ? 'Sürükleyerek ya da Alt+ok ile sırasını değiştir' : undefined} draggable={ort.yaz || undefined}
+      onDragStart={ort.yaz ? (e) => { e.dataTransfer.setData(SURUKLE_TURU, s.id); e.dataTransfer.effectAllowed = 'move'; tasi(s.id); } : undefined}
+      onDragEnd={ort.yaz ? () => tasi(null) : undefined}
+      onDragOver={ort.yaz ? (e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; } : undefined}
+      onDrop={ort.yaz ? birak : undefined}>
+      <button type="button" className="tc-pym-tp-sip-tus" aria-expanded={ac} onClick={() => ort.sipSec(s.id)} onKeyDown={tus}>
         <div className="tc-pym-tp-sip-ad">
           <b><Simge ad={ac ? 'down' : 'chev-right'} boyut="k" />{no}{parca && <i>{parca}</i>}</b>
           {s.durum === 'gec' ? <span className="tc-pym-tp-rozet" data-durum="gec">{`${sure(s.T)} geç`}</span>
             : s.durum === 'risk' ? <span className="tc-pym-tp-rozet" data-durum="risk">{`${sure(s.pay)} pay`}</span> : null}
-          <small>{`${s.ad} · ${s.adet} ad${s.oncelik === 1 ? ' · acil' : ''}`}</small>
+          <small>{`${s.ad} · ${s.adet} ad${s.oncelik === 1 ? ` · ${ONCELIK_KISA[1] ?? ''}` : ''}`}</small>
         </div>
         <Zaman D={D} t={s.bas} uyar={mg} title={mg ? 'Malzeme tahmini üretim başlangıcından sonra geliyor' : undefined} />
         <Zaman D={D} t={s.ur} />
@@ -74,6 +94,9 @@ function SipAc({ ort, s }: { ort: Ortam; s: SiparisBilgisi }) {
   const { c, p, cx, hazir } = ort; const D = c.D;
   const A = akis(p, cx, hazir, s.id);
   const malzemeVar = !!A?.malzeme && A.bas0 > cx.now + 0.01;
+  const oneY = hamleYapisi(useHamleci(), (h) => { h.oneAl(s.id); });
+  const ids = ort.liste.map((x) => x.id);
+  const yukari = siraKomsu(ids, s.id, -1); const asagi = siraKomsu(ids, s.id, 1);
   return (
     <div className="tc-pym-tp-ac">
       <Detay ort={ort} s={s} />
@@ -102,10 +125,22 @@ function SipAc({ ort, s }: { ort: Ortam; s: SiparisBilgisi }) {
       <p className="tc-pym-tp-not">Kalın çizgili adımlar bitişi belirleyen zincir. Adıma dokun, çizelgede açılsın.</p>
       {s.durum === 'iyi'
         ? <p className="tc-pym-tp-not"><Simge ad="check" boyut="k" />{` Termine ${sure(s.pay)} pay var.`}</p>
-        : <p className="tc-pym-tp-not" title={MOTOR_NOTU}><Simge ad="rotate" boyut="k" />{ort.tasi
-          ? ` Çözüm yolu: adımı seçip tezgâhını ya da saatini değiştirin ya da çubuğu sürükleyin. Öne al: ${MOTOR_NOTU}`
-          : ` Çözüm yolları (öne al, tezgâh değiştir): ${MOTOR_NOTU}`}</p>}
+        : <p className="tc-pym-tp-not"><Simge ad="rotate" boyut="k" />{ort.tasi
+          ? ' Çözüm yolu: öne alın (motor önizler) ya da adımı seçip tezgâhını, saatini değiştirin, çubuğu sürükleyin.'
+          : ' Çözüm yolu: öne alın; motor önizler, siz uygularsınız.'}</p>}
       <div className="tc-pym-tp-eylem">
+        {s.durum !== 'iyi' && (
+          <button type="button" className="tc-dugme" aria-disabled={oneY.yap ? undefined : 'true'} title={oneY.yap ? 'Motor bu siparişi öne alan planı arar; önizlersiniz.' : `Öne al: ${oneY.not}`}
+            onClick={oneY.yap ?? undefined}><Simge ad="first" boyut="k" />Öne al</button>
+        )}
+        {ort.yaz && (
+          <>
+            <button type="button" className="tc-dugme tc-pym-simge-d" aria-label="Listede yukarı" title="Listede yukarı (Alt+↑)" aria-disabled={yukari ? undefined : 'true'}
+              onClick={() => siraYaz(ort, yukari)}><Simge ad="up" boyut="k" /></button>
+            <button type="button" className="tc-dugme tc-pym-simge-d" aria-label="Listede aşağı" title="Listede aşağı (Alt+↓)" aria-disabled={asagi ? undefined : 'true'}
+              onClick={() => siraYaz(ort, asagi)}><Simge ad="down" boyut="k" /></button>
+          </>
+        )}
         {s.adet > 1 && !parcaAyir(s.id)[1] && ort.yaz && (
           <button type="button" className="tc-dugme" aria-disabled="true" title="Böl: iş emri Reçete ve Rota > Üretim emirlerinde bölünür."><Simge ad="layers" boyut="k" />Böl</button>
         )}

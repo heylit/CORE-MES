@@ -102,7 +102,7 @@ describe('arkon arıza kaydı makine durumuna yansır', () => {
       const surum = await yaz(bakim, ariza);
       assert.equal(await durum(mk.id), 'ariza');
       const satir = await vt().tek<{ aciklama: string | null }>('SELECT aciklama FROM istasyonlar_makine_durumu WHERE makine_id = $1', [mk.id]);
-      assert.equal(satir?.aciklama, 'Arkon Bakım: Hidrolik kaçak');
+      assert.equal(satir?.aciklama, 'Bakım: Hidrolik kaçak');
       const surum2 = await yaz(bakim, { ...ariza, cause: 'Conta' }, surum);
       assert.equal(await durum(mk.id), 'ariza', 'kapanmayan yazım durumu değiştirmez');
       await yaz(bakim, { ...ariza, cause: 'Conta', status: 'done', closedAt: Date.now() }, surum2);

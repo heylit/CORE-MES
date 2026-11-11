@@ -32,7 +32,7 @@
   border: 1px solid var(--hold); border-radius: var(--yari-1); background: var(--panel2);
 }
 .tc-rr3-uyari-kutu > span { flex: 1 1 var(--acilir-enaz); min-width: 0; }
-.tc-rr3-mesajlar { margin: 0; padding-left: var(--b-5); color: var(--muted); font-size: var(--yazi-s); }
+.tc-rr3-mesajlar { margin: 0; padding-left: var(--b-5); color: var(--muted); font-size: var(--yazi-s); overflow-wrap: anywhere; }
 .tc-rr3-bag { padding: 0; border: 0; background: none; color: var(--done); font: inherit; text-decoration: underline; cursor: pointer; }
 .tc-rr3-eylemler { display: inline-flex; flex-wrap: wrap; gap: var(--b-1); }
 .tc-rr3-iki { display: grid; grid-template-columns: repeat(auto-fit, minmax(var(--kuyruk-genis), 1fr)); gap: var(--b-4); min-width: 0; }
@@ -43,11 +43,14 @@
   container-type: inline-size; display: flex; flex-direction: column; margin: 0; padding: 0; list-style: none; min-width: 0; overflow: hidden;
   background: var(--panel); border: var(--cizgi-ince) solid var(--edge); border-radius: var(--yari-2);
 }
-/* Liste satırı (1100 B): solda emir no, ürün ve ilerleme; sağda durum ve plan bitişi; liste dar sütunda da iki satırda kalır. */
+/* Liste satırı (1100 B): solda emir no, ürün ve ilerleme; sağda durum ve plan bitişi; liste dar sütunda da iki satırda kalır.
+   Sağ sütun en çok satırın %40'ı ve plan nedeni iki satır (tamamı title'da): uzun neden sol sütunu sıfıra indirip yazıyı harf harf dizmesin. */
 .tc-rr3-emir {
   display: grid; align-items: center; gap: var(--b-1) var(--b-3);
-  grid-template-columns: minmax(0, 1fr) auto auto; grid-template-rows: auto auto;
+  grid-template-columns: minmax(0, 1fr) fit-content(40%) auto; grid-template-rows: auto auto;
 }
+.tc-rr3-emir > .tc-rr3-plan-hucre { text-align: end; }
+.tc-rr3-emir .tc-rr3-plan-alt { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; }
 .tc-rr3-emir > .tc-rr3-no { grid-row: 1 / span 2; }
 .tc-rr3-emir > .tc-rr3-durum-hucre { grid-column: 2; grid-row: 1; justify-content: flex-end; }
 .tc-rr3-emir > .tc-rr3-plan-hucre { grid-column: 2; grid-row: 2; flex-direction: column; align-items: flex-end; }
@@ -205,7 +208,7 @@ small.tc-rr3-plan-alt[data-ton="uyari"] { color: var(--hold); }
 .tc-rr3-bilgi { display: grid; grid-template-columns: repeat(auto-fit, minmax(calc(var(--b-6) * 4), 1fr)); gap: var(--b-3); margin: 0; }
 .tc-rr3-bilgi > div { display: flex; flex-direction: column; gap: var(--b-1); min-width: 0; }
 .tc-rr3-bilgi dt { color: var(--muted); font-size: var(--yazi-xs); font-weight: 600; }
-.tc-rr3-bilgi dd { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-1) var(--b-2); margin: 0; }
+.tc-rr3-bilgi dd { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-1) var(--b-2); margin: 0; min-width: 0; overflow-wrap: anywhere; }
 .tc-rr3-uyari-kutu[data-ton="bilgi"] { border-color: var(--done); }
 .tc-rr3-meta { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--b-1) var(--b-4); margin: 0; font-size: var(--yazi-s); }
 .tc-rr3-meta b { color: var(--ink); font-weight: 600; }
@@ -231,6 +234,9 @@ small.tc-rr3-plan-alt[data-ton="uyari"] { color: var(--hold); }
 .tc-rr3-adim-saglam { align-items: flex-end; }
 .tc-rr3-adimlar small { color: var(--muted); }
 .tc-rr3-adim-bos { color: var(--muted); }
+/* 2571: başlamış adımın süre özeti satırın altında, OP sütunundan sonra; nedeni uyarı rengiyle. */
+.tc-rr3-adim-sure { grid-column: 2 / -1; display: flex; flex-wrap: wrap; gap: var(--b-1) var(--b-3); font-variant-numeric: tabular-nums; }
+.tc-rr3-adim-sure-neden { flex-basis: 100%; color: var(--hazard-ink); }
 @container rr3-panel (max-width: 420px) {
   .tc-rr3-adimlar > li { grid-template-columns: auto minmax(0, 1fr) auto; }
   .tc-rr3-adimlar .tc-rr3-adim-saglam { grid-column: 2; flex-direction: row; gap: var(--b-1); justify-self: start; }
@@ -260,3 +266,10 @@ small.tc-rr3-plan-alt[data-ton="uyari"] { color: var(--hold); }
 }
 /* 1476-F C (1553 a): alt parça adımının dal etiketi adın önünde. */
 .tc-rr3-adim-dal { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2); }
+
+/* 2721: arşive alma penceresi; engel kırmızı çerçeveyle, onay düğmesi kapalıyken nedeni görünür. */
+.tc-rr3-arsiv { display: flex; flex-direction: column; gap: var(--b-3); min-width: 0; }
+.tc-rr3-arsiv > p { margin: 0; }
+.tc-rr3-arsiv-uyari { flex: 1 1 var(--acilir-enaz); min-width: 0; margin: 0; padding-left: var(--b-4); overflow-wrap: anywhere; }
+.tc-rr3-uyari-kutu[data-ton="engel"] { border-color: var(--stop); }
+.tc-rr3-uyari-kutu[data-ton="engel"] > svg { color: var(--stop); }

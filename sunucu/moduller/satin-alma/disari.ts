@@ -11,7 +11,7 @@ export type { SiparisSatiriOkuma as SiparisSatiri } from './sorgular.ts';
 // denetlemez (stok ucunda); hata UygulamaHatasi'dır (422 geçersiz, 409 aynı mal kabul satırı ikinci kez), stok işlemi geri sarar.
 export { teslimGeriAl, teslimIsle } from './servis.ts';
 // Stok değeri: malzemenin en son teslim alınan satın alma fiyatı (teklif birim fiyatı, para birimi, TRY karşılığı ve teslim zamanı).
-export { ortalamaAlisFiyatlari, sonAlisFiyatlari } from './servis.ts';
+export { ortalamaAlisFiyatlari, siparisBirimFiyatlari, sonAlisFiyatlari, type SiparisBirimFiyati } from './servis.ts';
 // Plan motoru: açık satın alma siparişinde gelecek malzemenin kalan miktarı ve beklenen gelişi (termin sırasıyla, tarihsiz en sonda).
 // Yetki denetlemez; fiyat yok.
 export { malzemeGelisTarihleri } from './servis.ts';
@@ -75,6 +75,24 @@ export async function isEmriFasonTutarlari(db: Db, isEmriIdleri: readonly number
   }
   return harita;
 }
+
+// 2611 a, Maliyet C1: proje maliyeti emre bağlı olmayan projeli talebin alım değerini buradan alır: proje başına, para birimi başına
+// (sırası para birimi kodu), KDV hariç; yalnız stoğa girmeyen satırlar (hizmet kartlı teslim değeriyle, kartsız sipariş tutarıyla) ve
+// onların masraf payı. Değeri olmayan proje haritada yoktur. Yetki denetlemez, yalnız okur.
+export { projeSatinAlmaTutarlari } from './servis.ts';
+// 2638 (Maliyet K1): üretim emri başına, para birimi başına emre yazılan hizmet ve kartsız alım (yalnız projesi olan emir; projesiz emrin
+// satırı genel gidere gider). Fiyattır: çağıran yalnız maliyet yetkisiyle gösterir (Güvenlik N1). Yetki denetlemez, yalnız okur.
+export { emirHizmetTutarlari } from './servis.ts';
+// 2637 a, Mimar K1: siparişin genel gidere giren oranı; Finans kablolamadaki genelGiderOraniCozucusu ile toplu çeker (anahtar 'talepId:teklifId',
+// 0-1, malı olmayan siparişte null, bilinmeyen sipariş haritada yok). Yetki denetlemez, yalnız okur.
+export { siparisGenelGiderOranlari } from './servis.ts';
+// 2642 b, 2646 a, Mimar: Finans genelGiderOraniCozucusu'nun kaynağı (kablolama); belge başına { oran, esleme }. Eşlemesi olmayan belgede sipariş
+// oranı; bayat eşleme sayılmaz (Veri 1). Bulunmayan, siparişsiz ve iptal belge haritada yok. Yetki denetlemez, yalnız okur.
+export { belgeGenelGiderOranlari } from './servis.ts';
+// 2614 1/2 a: İdari İşler talebi satın alma talebine çevrilir (kalemsiz taslak; açan çeviren, talep eden idari talebi açan). Yetkiyi kendi
+// içinde denetler (satin-alma.talep-ac ya da yaz; 403); ikinci çevirme 409. Çağıranın işlemini kullanır. İdari ekran bağı ikinci işlevle okur.
+export { idariTalepSatinAlmalari, idariTaleptenTalepAc } from './servis.ts';
+export type { IdaridenTalep } from './servis.ts';
 
 // Plan: fason süresi tahmini (sorgularla aynı sırada, takvim günü); veri yoksa null. Yetki denetlemez, yalnız okur.
 export { fasonSuresiTahminleri } from './servis.ts';

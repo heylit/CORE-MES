@@ -5,3 +5,5 @@ export { isEmriTahminiMaliyetleri, uretimEmriMalzemeMaliyetleri } from './servis
 // kablolama.ts'te kaydedilen karşılıkla alır. Saf işlevlerdir.
 export { genelGiderEksikleri, genelGiderTutari, genelGiderYukAlir } from './kurallar.ts';
 export type { AdimKaynagi, GenelGiderEksigi, GenelGiderOraniGirdisi } from './kurallar.ts';
+// 2594 b: projede sayılan masraf bağı olan finans belgeleri (finansın genel gider önerisine kablolamayla verilir). Yetki denetlemez.
+export { projedeSayilanBelgeler } from './servis.ts';

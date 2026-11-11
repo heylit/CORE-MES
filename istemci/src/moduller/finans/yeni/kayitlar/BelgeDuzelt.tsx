@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { DurumKutusu, Dugme, FormPenceresi, Girdi, Pencere, Secim, useBildirim } from '../../../../ortak/arayuz/index.ts';
 import { hataIletisi } from '../../../../ortak/veri/api.ts';
 import { useForm } from '../../../../ortak/veri/form.ts';
+import { EslemeBaglantisi } from '../../fatura-esleme/EslemeBaglantisi.tsx';
 import { tl, YOK } from '../bicim.ts';
 import type { Belge, Odeme } from '../donustur.ts';
 import { useFinansKomutu, type FinansVerisi, type FinansYetkisi } from '../veri.ts';
@@ -46,8 +47,9 @@ function BelgeDuzelt({ belge: b, finans, yetki, kapat }: { belge: Belge; finans:
   const { V, motor } = finans;
   const komut = useFinansKomutu();
   const { bildir } = useBildirim();
+  const [ilk] = useState(() => duzeltIlkDegerleri(V, b));
   const form = useForm<DuzeltDegerleri, string>({
-    ilk: duzeltIlkDegerleri(V, b),
+    ilk,
     hataIletisi: 'Belge düzeltilemedi.',
     alanEsle: (alan) => SUNUCU_ALANLARI[alan.split('.')[0] ?? ''] ?? null,
     dogrula: (d) => { const s = duzeltKomutu(V, b, d); return 'hata' in s ? { [s.alan]: s.hata } : {}; },
@@ -92,6 +94,7 @@ function BelgeDuzelt({ belge: b, finans, yetki, kapat }: { belge: Belge; finans:
         />
         {tutar > 0 && !tutarKilitli(b) && <p className="tc-fk-not">KDV {tl(tutar * kdv / 100)}, KDV dahil toplam <b>{tl(tutar * (1 + kdv / 100))}</b></p>}
         <Girdi etiket="Vade tarihi" type="date" {...form.alan('due')} />
+        <EslemeBaglantisi belge={b} kaydedilmemis={JSON.stringify(d) !== JSON.stringify(ilk)} />
         {yetki.yonet && (
           <div className="tc-fk-dugmeler">
             <IptalDugmesi komutKur={() => belgeIptalKomutu(b)} kapat={kapat} uyari={iptalUyarisi(b)} />
@@ -117,6 +120,7 @@ function KayitAyrintisi({ belge, odeme, yetki, kapat }: { belge: Belge | undefin
           </>
         )}
         {belge && !yetki.yaz && <p className="tc-fk-not">Düzeltme yetkiniz yok. Belge no: {belge.belgeNo ?? YOK}</p>}
+        {belge && <EslemeBaglantisi belge={belge} />}
         {iptal && (
           <div className="tc-fk-dugmeler">
             <IptalDugmesi komutKur={() => (belge ? belgeIptalKomutu(belge) : odemeIptalKomutu(odeme!))} kapat={kapat} uyari={belge ? iptalUyarisi(belge) : null} />

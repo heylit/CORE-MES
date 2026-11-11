@@ -16,6 +16,8 @@
 .tc-rr2-girdi { min-width: 0; width: 100%; max-width: var(--damga); }
 .tc-rr2-sayi { max-width: var(--dokunma-x24); text-align: right; }
 .tc-rr2-olcum { display: inline-flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: var(--b-1); }
+.tc-rr2-olcum-ozet { flex-basis: 100%; text-align: end; color: var(--muted); font-size: var(--yazi-xs); font-variant-numeric: tabular-nums; }
+.tc-rr2-olcum-az { color: var(--hazard-ink); font-weight: 600; }
 .tc-rr2-renk { min-height: var(--dokunma); min-width: var(--dokunma); padding: var(--b-1); border: var(--cizgi-ince) solid var(--edge); border-radius: var(--yari-1); background: var(--panel); }
 
 /* Kaynaklar */

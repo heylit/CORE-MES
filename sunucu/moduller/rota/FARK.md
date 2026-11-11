@@ -416,3 +416,74 @@ Teslim olduğu gibi alındı; yalnız oturtma için değişenler:
 - Adım miktarı ardıl yolu kuralıyla hesaplanır: adım, çıktısını tüketen adımların fire yollarından en büyüğünü taşır; dallı rotada bir dalın
   firesi paralel dalı büyütmez. Kural emrin malzeme ihtiyacıyla (uretim-emirleri `malzemeIhtiyaci`) aynıdır; öncüller `oncullerCikar`dan.
   Rota ayrıntısındaki adım miktarı, teorik süre ve ürün ağacı ihtiyacı dallı rotada artık emirle aynı çıkar. Tek hatlı rota değişmez.
+
+## 2557: patlamış rota önizlemesinde malzemeler (kullanıcı kararı 2557 a/a)
+- `GET /rota/revizyonlar/:id/patlatma-onizleme?miktar=` (parametre yoksa 1; boş metin ?miktar ucuyla (agac) aynı, 400). Cevaba `miktar` ve `hammaddeToplami`; her adıma `adet`, `cikanAdet`,
+  `cikti` (ara-hal ya da ürün), `girenler` (altDugum dolu olan alt düğümün ürünü) ve `yanUrunler` eklendi. Sayılar `{ kokBasina, siparis }`.
+- Sayılar açılacak emrin adımları üzerinde emir malzeme kuralıyla (`emirFireCarpanlari`, uretim-emirleri `malzemeIhtiyaci` ile aynı) çıkar;
+  test açılan emrin malzeme ihtiyacıyla eşitliği denetler. Emir açılamıyorsa (engel) sayılar null.
+- Kural iki yerde (UYUM-BORCU B49).
+- Yetki, tablo ve göç değişmedi.
+- VARSAYIM: yan ürün miktarı bileşen gibi mamul başınadır: adım miktarı x miktar (bileşen firesi yok). Geri alma: ucuz.
+- VARSAYIM: hammadde toplamı stoktan gelen bütün girenlerdir (alt düğüm ürünü hariç); tür süzülmez. Geri alma: ucuz.
+- VARSAYIM: engelde (emir açılamıyor) sayı verilmez, null kalır. Geri alma: ucuz.
+## 2486-4: OP numaraları okuma ucu (B-2482-R4)
+- `GET /rota/urunler/:urunId/op-numaralari` (ROTA_OKUR): ürüne verilmiş OP numaraları, her birinin ilk verildiği revizyon (kimlik ve harf)
+  ve sıradaki numara (`yeniOpNo`, RT-31 değişmedi). Ekran yeni adımın numarasını önceden gösterir; numarayı yine kaydet komutu verir.
+  Ürün yoksa 404. Yalnız okuma; tablo ve göç yok.
+## 2564-1: Süreler ölçüm özeti (kullanıcı kararı 2564 a, 1. madde)
+- `GET /rota/revizyonlar/:id/sureler` her adım ve tür için `ozet: { n, ortancaDk, enAzDk, enCokDk }` döner (ölçüm yoksa null). Pencere bekleyen ölçümünkiyle
+  aynıdır: son boşaltmadan sonraki elle ve terminal ölçümleri, görünümün makinesine göre (`olcumPenceresi`).
+- `POST /rota/adimlar/:id/gerceklesen-sure/kabul` gövdesine isteğe bağlı `deger: 'olcum' | 'ortanca'`. Ortancada değer sunucuda hesaplanır, `olcumId`
+  pencerenin son ölçümü olmalıdır (görünüm eskiyse 422); ölçüm 3'ten azsa `uyari` dolu, kabul yapılır. Gelmeyen değer eski davranıştır.
+- Ekranı 2487 bağlar ("Gerçekleşen (dk)" hücresi: ortanca, altında "n=5 · 3,8–5,1"; Kabul et ortancayı gönderir).
+- VARSAYIM: ortanca kabulünde kabul satırı (terminal ölçümü kabul edildiyse) son ölçümün iş emriyle ve ortanca değerle yazılır. Geri alma: ucuz.
+- VARSAYIM: kabul satırları ölçüm değildir, ortancaya girmez; pencere yürürlükte boşaltmayla kapanır (RT-79). Geri alma: ucuz.
+- VARSAYIM: ortanca 4 basamağa yuvarlanır (ölçüm sütunu gibi). Geri alma: ucuz.
+- Tablo, göç ve yetki değişmedi.
+
+## 2578: süre ölçümü her iş emri bitince (kullanıcı kararı 2578 a)
+- Terminal ölçümü iş emri bitince yazılır (`adimBittiYansit`, uretim-emirleri `adimBittiDinle` 2520-5, bağı kablolama.ts); emrin kapanması
+  beklenmez. Planlı birleşmeli kolun adımları da artık ölçülür (kol emir bitti olayı vermeden üste katılırdı).
+- `emirBittiYansit` toplayıcı olarak kalır: olaysız biten adımları (fason dönüşü, kalite kararı) aynı kuralla dener; ölçülmüş iş emri ikinci kez yazılmaz.
+- Tablo, göç, yetki değişmedi.
+- Fason dönüşü ve GKK kalite kararıyla biten adım adım bitti olayı vermez (2520-5); emir bitti toplayıcısı onları dener, rota fasonu zaten atlar.
+
+
+## 2605: önizlemede emir hedefi ana sayı (kullanıcı kararı 2605 a)
+- `GET /rota/revizyonlar/:id/patlatma-onizleme` her adımda `hedef: { kokBasina, siparis }` döner: emrin o adımdaki hedef adedi (adet x dal çarpanı,
+  firesiz; açılan emirdeki `dalBasiAdedi` ile aynı). Ekran ana sayıyı `hedef`ten, fire payıyla giren adedi `adet`ten alt satırda gösterir (2487).
+- Emir açılamıyorsa (engel) `hedef` null. Tablo, göç ve yetki değişmedi.
+## 2588: şablondan kopya adım listesinin köken kaydı (kullanıcı kararı 2588 a)
+- Göç `20261109234127_rota_talimat_kokeni.sql`: yeni iki tablo, `rota_talimat_kokeni` (sürüm başına, yalnız eklenir) ve `rota_talimat_taslak_kokeni`
+  (taslak silinince birlikte silinir). Dolu tabloya dokunulmaz; eski sürümlerin kökeni bilinmez (null).
+- `talimat-adimli-yaz` ve `talimat-taslak-kaydet` gövdesine isteğe bağlı `kaynakSablon: { id, surum } | null`. Verilmezse köken devralınır: var olan taslakta
+  taslağınki korunur, yeni sürüm ve yeni taslak dayandığı yayın sürümünün kökenini alır (Mimar K1); null kaldırır.
+  Şablon yoksa 404, sürüm güncel değilse 409. Yayın kökeni taslaktan sürüme taşır.
+- `talimatlarCevabi`: her sürümde ve taslakta `koken: { sablon { id, kod, ad }, surum } | null`.
+- Yeni uç `GET /rota/talimat-sablonlari/:id/kopyalar` (ROTA_OKUR, 2490 b; operatör 403): ürün, OP, talimat sürümü (taslakta null), şablon sürümü, `geride`, `gecerli`.
+- Ekranı 2487 bağlar (şablondan başlarken `kaynakSablon` gönderir; şablon sayfasında kopyalar).
+- VARSAYIM: pasif şablondan kopyanın kökeni de yazılır (köken bilgidir, şablonu kullanıma açmaz). Geri alma: ucuz.
+- VARSAYIM: kopya listesinde sayfalama yok; şablon başına kopya sayısı OP sayısıyla sınırlı kalır. Geri alma: ucuz.
+- Kopyadan düzenlenen sürüm kökenini taşır (köken "nereden başladı" bilgisidir; Mimar K1).
+
+## 2681: firması seçilmemiş fason adım (kullanıcı kararı 2682 a)
+- Sözleşme: adım kaynağı `{ tur: 'fason', id: null }` olabilir ("dış üretim, firma seçilmedi"); öteki türlerde id zorunlu. Ayrıntı ve önizlemede kaynak
+  aynı biçimde döner, ad ve etiket uydurulmaz (Mimar K1); fason firma seçicisine firmasız girmez.
+- Göç `20261109220934_rota_firmasiz_fason.sql`: `rota_adimi.fason_firmasiz boolean NOT NULL DEFAULT false`; firmasız adımda kaynak sütunları boş
+  (`rota_adimi_firmasiz_kaynaksiz`), termin ve "fason süresiz" kısıtları firmasızı da kapsar. Var olan satır değişmez.
+- Bayrak tek yerden okunur ve yazılır (`sorgular.ts adimKaynagiCoz`, `adimYaz`); revizyondan taslak açma bu yoldan geçer (Veri V1).
+- Kaydet ve onaya gönder geçer: fason kuralları (süre yok, aday ve paralel bölme yok) firmasızda da geçerlidir; onayda firmasız adım atanmamış kaynak gibi sayılır.
+- Emre kopya (tek ve çok katmanlı) ve emirlere uygula reddeder (400, alan `adimlar.<i>.kaynak`, ayrıntı `{ opNo }`; Mimar K3). İş emri tarafı fasonu yalnız
+  firma doluluğuyla ayırır; firmasız adım orada istasyonsuz iç üretim adımına dönerdi. Patlamış rota önizlemesi aynı iletiyi `engel` olarak verir, sayılar null.
+- Başka modüllere tek işaret (Mimar K2): `RotaAdimi.fason` doluysa adım fasondadır, `firmaId` null firma seçilmedi demektir. Reçete ve Rota durum adımı
+  `fason: boolean` taşır, `fasonId` null kalır ("null" metni yok, Veri V2). Plan veri sağlığı firmasız adımı süre eksiği saymaz.
+- VARSAYIM: revizyon farkında firmasız kaynak "Fason, firma seçilmedi" metniyle karşılaştırılır (fark satırı metindir; atanmamış kaynaktan ayrılsın diye).
+  Geri alma: ucuz.
+- VARSAYIM: plan motoru firmasız adımı emirden görmez (emir açılmaz). Emirsiz rota okuyan plan önizlemesi durum adımında fasonId null gördüğü için adımı
+  istasyonsuz sayar; bu iş emri yokken yalnız önizlemeyi etkiler. Geri alma: orta (motor girdisinde fason bayrağı).
+## 2610: önizlemede ara adımın statülü kartı ve stoğu (kullanıcı kararı 2610 a)
+- Önizleme adımına `araHal: { statu { id, ad } | null, kart urunOzeti | null, stok { toplam, planaSayilan } | null } | null`. Ürün adımında ve engelde null.
+- Kaynak Reçete ve Rota'nın `adimAraHalleri`'dir (yazmaz; sayımın statü ve çıktı kartı kuralı); bağ kablolama.ts'te `araHalCozucusuKaydet`.
+  Statü stoğu stok `statuStoklari` (2547 sorgusu, plana sayılan kalite `planaSayilirMi`), çıktı kartının stoğu `stokMiktarlari`.
+- Gösterilecek miktarı ekran seçer (2622 kararı); sözleşme ikisini de taşır. Tablo, göç ve yetki değişmedi.

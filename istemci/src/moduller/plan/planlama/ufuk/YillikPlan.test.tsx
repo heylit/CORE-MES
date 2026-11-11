@@ -6,11 +6,19 @@ import { yillikDurumSifirla } from './yillik-durum.ts';
 
 // Çözüm sunucudadır (454/6 a); model kurallar.test.ts'te gerçek HiGHS'le sınanır. Burada sahte sunucunun çözüm ucu her sütunu sıfır döndürür;
 // verilmezse uç yoktur (ortak sahte sunucu bilinmeyen yazmaya 405 döner).
-function cozucuKur(istekler: { lp: string; sure: number; want: string[] }[] = []) {
+// Mesai değer uçları (2742, 2752) verilmezse sahte sunucu 404 döner: değer okunamadı sayılır.
+type MesaiUclari = Record<string, { durum: number; govde: unknown }>;
+const TL_UCU = { '/plan/mesai-saat-degerleri': { durum: 200, govde: { ay: '2026-10', gruplar: [{ grup: 'torna', saatTL: 100 }, { grup: 'freze', saatTL: null }] } } };
+const SIRA_UCU = { '/plan/mesai-grup-sirasi': { durum: 200, govde: { ay: '2026-10', gruplar: [{ grup: 'torna', sira: 1 }] } } };
+function cozucuKur(istekler: { lp: string; sure: number; want: string[] }[] = [], mesai: MesaiUclari = {}, yollar: string[] = []) {
   const onceki = globalThis.fetch;
   const sonuclar = new Map<string, unknown>();
   vi.stubGlobal('fetch', vi.fn(async (adres: string, istek?: RequestInit) => {
     const json = (g: unknown) => new Response(JSON.stringify(g), { status: 200 });
+    const yol = adres.replace(/^\/api/, '');
+    yollar.push(yol);
+    const mu = mesai[yol];
+    if (mu) return new Response(JSON.stringify(mu.govde), { status: mu.durum });
     if (adres === '/api/plan/yillik-plan/coz' && istek?.method === 'POST') {
       const g = JSON.parse(String(istek.body)) as { lp: string; sure: number; want: string[] };
       istekler.push(g);
@@ -31,7 +39,8 @@ const BEKLE = { timeout: 10000 };
 describe('Yıllık plan', () => {
   it('ısı haritası katmanı: çözülmemişken boş harita ve çöz düğmesi; çözünce durum satırı, lejant, grup × dönem hücreleri; Tüm satırlar asıl sayfayı taşır', async () => {
     sunucuKur(YONETICI, calismaKaydi());
-    const cozumler = cozucuKur();
+    const yollar: string[] = [];
+    const cozumler = cozucuKur([], TL_UCU, yollar);
     ac('/plan/yillik');
     expect(await screen.findByText(/^Yıllık plan henüz hesaplanmadı; hesaplanınca/, {}, BEKLE)).toBeTruthy();
     expect(screen.queryByRole('tablist', { name: 'Görünüm' })).toBeNull();
@@ -50,6 +59,14 @@ describe('Yıllık plan', () => {
     // Genel gider girilmemiş: yatırım denenmez ve nedeni bu yazılır (kapasite açığının yokluğu değil).
     expect(screen.getByText('Genel gider (tezgâh bedeli) girilmediği için yatırım denenmedi.')).toBeTruthy();
     expect(screen.queryByText(/kapasite açığı yok/)).toBeNull();
+    // 2742: maliyet gören rol TL değerini okur; değeri olan grupta ek mesai açık ve bedeli LP'de (bu çalışmada yükü olan tek grup torna).
+    expect(yollar).toContain('/plan/mesai-saat-degerleri');
+    expect(yollar).not.toContain('/plan/mesai-grup-sirasi');
+    expect(screen.queryByText(/^Mesai bedeli/)).toBeNull();
+    expect(screen.queryByText(/1\.500 TL/)).toBeNull();
+    expect(cozumler[1]?.lp).toMatch(/ \+ 100\.000000 o_g0_0 /);
+    expect(cozumler[1]?.lp).not.toMatch(/ 0 <= o_g0_0 <= 0\n/);
+    expect(screen.queryByTitle('Mesai bedeli bilinmiyor, ek mesai önerilmedi')).toBeNull();
     expect(screen.getByLabelText('Geç teslim bedeli, değerin %/gün')).toBeTruthy();
   }, 20000);
 
@@ -112,6 +129,54 @@ describe('Yıllık plan', () => {
     expect(screen.getByRole('heading', { name: 'Elle tahmin' })).toBeTruthy();
     await waitFor(() => { expect(govdeler).toHaveLength(1); }, { timeout: 5000 });
     expect(govdeler[0]).toMatchObject({ beklenenSurum: 4, deger: { D: { yillik: { tahmin: 'elle', buyume: 10 } } } });
+  }, 20000);
+
+  it("maliyet görmeyen rol TL'siz bedel sırasını okur (2750 b): TL ucu çağrılmaz, sıralı grupta ek mesai açık, sırasız grupta kapalı", async () => {
+    sunucuKur(MALIYETSIZ, calismaKaydi());
+    const yollar: string[] = [];
+    const cozumler = cozucuKur([], SIRA_UCU, yollar);
+    ac('/plan/yillik');
+    fireEvent.click(await screen.findByRole('button', { name: 'Yıllık planı çöz' }, BEKLE));
+    await screen.findByRole('group', { name: 'Tezgâh grubu × dönem, kapasite kullanımı' });
+    expect(yollar).toContain('/plan/mesai-grup-sirasi');
+    expect(yollar).not.toContain('/plan/mesai-saat-degerleri');
+    expect(cozumler[1]?.lp).toMatch(/ \+ 0\.001000 o_g0_0 /);
+    expect(cozumler[1]?.lp).not.toMatch(/ 0 <= o_g0_0 <= 0\n/);
+    expect(screen.queryByText(/^Mesai bedeli/)).toBeNull();
+    expect(screen.getByText('Ek mesai, tutarı gösterilmeden grupların bedel sırasıyla önerildi.')).toBeTruthy();
+    expect(document.body.textContent).not.toMatch(/TL\/sa|₺/);
+  }, 20000);
+
+  it('sırası bilinmeyen grup adıyla yazılır ve ek mesai açılmaz', async () => {
+    sunucuKur(MALIYETSIZ, calismaKaydi());
+    const cozumler = cozucuKur([], { '/plan/mesai-grup-sirasi': { durum: 200, govde: { ay: '2026-10', gruplar: [{ grup: 'torna', sira: null }] } } });
+    ac('/plan/yillik');
+    fireEvent.click(await screen.findByRole('button', { name: 'Yıllık planı çöz' }, BEKLE));
+    await screen.findByRole('group', { name: 'Tezgâh grubu × dönem, kapasite kullanımı' });
+    expect(document.body.textContent).toContain('Mesai bedeli bilinmiyor, ek mesai önerilmedi: torna. Bu gruplarda açık geç teslim ya da acil kapasite olarak görünür.');
+    expect(screen.queryByText('Ek mesai, tutarı gösterilmeden grupların bedel sırasıyla önerildi.')).toBeNull();
+    expect(cozumler[1]?.lp).toMatch(/ 0 <= o_g0_0 <= 0\n/);
+  }, 20000);
+
+  it('mesai değeri okunamazsa (403 ya da uç yok) hiçbir grupta ek mesai önerilmez ve neden ayrı yazılır', async () => {
+    sunucuKur(YONETICI, calismaKaydi());
+    const cozumler = cozucuKur([], { '/plan/mesai-saat-degerleri': { durum: 403, govde: { kod: 'YETKI', mesaj: 'Bu işlem için yetkiniz yok.' } } });
+    ac('/plan/yillik');
+    fireEvent.click(within(await screen.findByRole('region', { name: 'Isı haritası' }, BEKLE)).getByRole('button', { name: 'Yıllık planı çöz' }));
+    await screen.findByRole('group', { name: 'Tezgâh grubu × dönem, kapasite kullanımı' });
+    expect(screen.getByText(/^Mesai bedeli bu rolde okunamıyor; ek mesai önerilmedi\./)).toBeTruthy();
+    expect(screen.queryByText(/^Mesai bedeli bilinmiyor/)).toBeNull();
+    expect(cozumler[1]?.lp).toMatch(/ 0 <= o_g0_0 <= 0\n/);
+    // Arayüz notu 1: değeri olmayan grupta ek mesai hücresi "0 sa" değil "—"; ipucu üstteki uyarıyla aynı nedeni söyler.
+    expect(screen.getAllByTitle('Mesai bedeli bu rolde okunamıyor, ek mesai önerilmedi').length).toBeGreaterThan(0);
+    expect(screen.queryByTitle('Mesai bedeli bilinmiyor, ek mesai önerilmedi')).toBeNull();
+    cleanup(); yillikDurumSifirla();
+    sunucuKur(YONETICI, calismaKaydi());
+    cozucuKur();
+    ac('/plan/yillik');
+    fireEvent.click(within(await screen.findByRole('region', { name: 'Isı haritası' }, BEKLE)).getByRole('button', { name: 'Yıllık planı çöz' }));
+    await screen.findByRole('group', { name: 'Tezgâh grubu × dönem, kapasite kullanımı' });
+    expect(screen.getByText(/^Mesai bedeli okunamadı, yeniden çözün; ek mesai önerilmedi\./)).toBeTruthy();
   }, 20000);
 
   it('plan.yaz ve maliyet okuması olmayan kişi: haritada çöz düğmesi ve form yok, açılımda yetki notu; ayarlar kapalı, TL görünmez (reddedilen)', async () => {

@@ -9,6 +9,11 @@ export const ayniKaynak = (a: Kaynak, b: Kaynak): boolean => a.tur === b.tur && 
 
 export interface Aralik { baslangic: number; bitis: number }
 export const cakisirMi = (a: Aralik, b: Aralik): boolean => a.baslangic < b.bitis && b.baslangic < a.bitis;
+// B-2483-5: vardiyası tanımlanmamış kaynak: takvimi yok ya da iş merkezinin matrisinde aktif vardiya yok. Tanımlı ama ufukta 0 dakikalı
+// kaynak (izin, ayrılma, vardiyası o günlerde yok) tanımsız değildir, kapasitesi 0'dır. Alanı taşımayan eski cevapta bütün günleri 0 olan
+// tanımsız sayılır.
+export const vardiyasiTanimsiz = (t: { vardiyaTanimli?: boolean | undefined; gunler: readonly { dakika: number }[] } | null): boolean =>
+  t === null || !(t.vardiyaTanimli ?? t.gunler.some((g) => g.dakika > 0));
 
 // 879 a: aynı kaynakta kilitli iki iş üst üste binemez; motor kilidi yerinden oynatmadığı için ikisini aynı anda çalıştırırdı.
 // Bölünmüş işin her parçası ayrı aralıktır. Dönen: çakıştığı ilk kilitli işin kimliği, yoksa null.
@@ -572,3 +577,132 @@ export const onayGecisleri = (b: OnayBaglami): SenaryoYapabilir => ({
   onayaGonder: onayGecisiReddi('onaya-gonder', b) === null, onaydanCek: onayGecisiReddi('onaydan-cek', b) === null,
   geriGonder: onayGecisiReddi('geri-gonder', b) === null, canliyaAl: onayGecisiReddi('canliya-al', b) === null,
 });
+
+// 2618, 2626 1/2 b: maliyet ayı her zaman son tam aydır. Gün tesis günüdür.
+export function varsayilanMaliyetAyi(tesisGunu: string): string {
+  const yil = Number(tesisGunu.slice(0, 4));
+  const ay = Number(tesisGunu.slice(5, 7));
+  const [y, a] = ay === 1 ? [yil - 1, 12] : [yil, ay - 1];
+  return `${String(y)}-${String(a).padStart(2, '0')}`;
+}
+
+// 2603 a: küçük grubun değeri ekrana gitmez. İK'nın ekran işlevi zaten gizler; uç da gizler ki işlev değişirse sızmasın. Kişi sayısı
+// cevaba girmez: sayı ile ortalama ay ay karşılaştırılınca tek kişinin değişimi görünür.
+export interface GrupSaatDegeri { departmanNo: number; departmanAd: string; saatMaliyeti: number | null; kucuk: boolean }
+export function grupSaatEkrani(gruplar: Iterable<GrupSaatDegeri>): GrupSaatDegeri[] {
+  return [...gruplar]
+    .map((g) => ({ departmanNo: g.departmanNo, departmanAd: g.departmanAd, saatMaliyeti: g.kucuk ? null : g.saatMaliyeti, kucuk: g.kucuk }))
+    .sort((a, b) => a.departmanAd.localeCompare(b.departmanAd, 'tr') || a.departmanNo - b.departmanNo);
+}
+
+// 2653 (2644 b): ek mesai tutarı. İstemcinin `mesaiTutari` kuralının sunucu kopyasıdır (planlama/maliyet/kurallar.ts); ikisi aynı örnek
+// tablosuyla sınanır (mesai-maliyeti.test.ts "ortak örnekler"), biri değişirse öteki de değişir. Kişi bazlıysa saat x operatör oranı x
+// saat değeri x gün çarpanı + operatör oranı x kişi başı ek; değilse ya da saat değeri yoksa saat x mesai ücreti x mesai çarpanı: çarpan
+// her ek mesaide uygulanır (2510 a; plan motorunun ymMesaiTLYalin'i ile aynı tutar). Ücret de yoksa null. 0 ya da boş çarpan 1,5 sayılır
+// (motorun mesaiCarpani'si gibi).
+export interface MesaiGirdisi {
+  h: number; kisiBazli: boolean; op: number | null | undefined; saatDegeri: number | null; carpan: number | undefined; kisiEk: number | null | undefined;
+  ucret: number | null; mesaiCarpan: number | undefined;
+}
+export function mesaiTutari(g: MesaiGirdisi): number | null {
+  if (!g.kisiBazli || g.saatDegeri === null) return g.ucret === null ? null : g.h * g.ucret * (g.mesaiCarpan || 1.5);
+  const op = g.op ?? 1;
+  return g.h * op * g.saatDegeri * (g.carpan || 1.5) + op * (g.kisiEk ?? 0);
+}
+
+type Nesne = Record<string, unknown>;
+const nesne = (v: unknown): v is Nesne => typeof v === 'object' && v !== null && !Array.isArray(v);
+const sayiOku = (v: unknown): number | null => {
+  if (typeof v === 'number') return Number.isFinite(v) ? v : null;
+  if (typeof v === 'string' && v.trim() !== '' && Number.isFinite(Number(v))) return Number(v);
+  return null;
+};
+export type GunTuru = 'hi' | 'cmt' | 'paz' | 'tatil';
+// Planlama çalışmasının (birleşmiş D) mesai ayarları; istemcinin mesaiSistemi, ymAyar ve mesaiUcreti okumalarıyla aynı varsayılanlar.
+export interface MesaiAyarlari {
+  kisiBazli: boolean; carp: Record<GunTuru, number>; kisiEk: number | null; ucret: number | null; mesaiCarpan: number | undefined;
+  tatiller: ReadonlySet<string>; calismaGunleri: Nesne; tezgahlar: ReadonlyMap<string, { opOran: number | null | undefined; grup: string }>;
+}
+export function mesaiAyarlari(D: unknown): MesaiAyarlari {
+  const d = nesne(D) ? D : {};
+  const m = nesne(d.mesaiSis) ? d.mesaiSis : null;
+  const c = m !== null && nesne(m.carp) ? m.carp : {};
+  const v = { hi: 1.5, cmt: 1.5, paz: 2, tatil: 2 };
+  const planTL = nesne(d.planTL) ? d.planTL : {};
+  const mc = 'mesaiCarpan' in planTL ? planTL.mesaiCarpan : 1.5;
+  const tezgahlar = new Map((Array.isArray(d.tezgahlar) ? d.tezgahlar.filter(nesne) : []).map((t) => [
+    String(t.id), { opOran: typeof t.opOran === 'number' ? t.opOran : t.opOran === null ? null : undefined, grup: typeof t.grup === 'string' ? t.grup : t.grup == null ? '' : String(t.grup as number) },
+  ] as const));
+  return {
+    kisiBazli: m === null || m.kisiBazli !== false,
+    carp: { hi: sayiOku(c.hi) ?? v.hi, cmt: sayiOku(c.cmt) ?? v.cmt, paz: sayiOku(c.paz) ?? v.paz, tatil: sayiOku(c.tatil) ?? v.tatil },
+    kisiEk: m === null ? null : sayiOku(m.kisiEk), ucret: sayiOku(nesne(d.ayarlar) ? d.ayarlar.mesaiUcret : undefined),
+    mesaiCarpan: typeof mc === 'number' ? mc : undefined,
+    tatiller: new Set(Array.isArray(d.tatiller) ? d.tatiller.filter((x): x is string => typeof x === 'string') : []),
+    calismaGunleri: nesne(d.calismaGunleri) ? d.calismaGunleri : {}, tezgahlar,
+  };
+}
+const HAFTA_GUNU = ['paz', 'pzt', 'sal', 'car', 'per', 'cum', 'cmt'] as const;
+const haftaGunuOf = (gun: string): (typeof HAFTA_GUNU)[number] => HAFTA_GUNU[new Date(`${gun}T00:00:00Z`).getUTCDay()] ?? 'pzt';
+// İstemcinin gunTuru'su: tatil listesindeki gün 'tatil', yoksa cumartesi, pazar ya da hafta içi.
+export function mesaiGunTuru(gun: string, a: Pick<MesaiAyarlari, 'tatiller'>): GunTuru {
+  if (a.tatiller.has(gun)) return 'tatil';
+  const w = haftaGunuOf(gun);
+  return w === 'cmt' ? 'cmt' : w === 'paz' ? 'paz' : 'hi';
+}
+
+// 2653 S1 (Mimar K1): istasyonun saat değeri, ayın son günü geçerli atamaların yüzdesiyle ağırlıklı ortalamadır. Kişinin değeri
+// departmanınınki. Küçük departmanın (2740 a, 2743 b) değeri bilinmiyor sayılır: hiçbir yoldan hesaba girmez, istasyon yalın mesai
+// ücretine düşer. Atama yoksa ya da bir kişinin değeri bilinmiyorsa (karışık istasyon da) değer null; sıfır sayılmaz, başka gruba aktarılmaz.
+export interface AtamaDegeri { yuzde: number; deger: number | null }
+export function istasyonSaatDegeri(atamalar: readonly AtamaDegeri[]): number | null {
+  let pay = 0;
+  let agirlik = 0;
+  for (const a of atamalar) {
+    if (!(a.yuzde > 0)) continue;
+    if (a.deger === null) return null;
+    pay += a.deger * a.yuzde;
+    agirlik += a.yuzde;
+  }
+  return agirlik > 0 ? pay / agirlik : null;
+}
+
+// 2742 C2: yıllık planın grup saat değeri (istemcinin ufuk mesaiSaatTL'sinin sunucu karşılığı). Grubun tezgâhlarının istasyon değeri
+// opOran ağırlıklı ortalanır (bilinmeyen tezgâh ortalamaya girmez; hepsi bilinmiyorsa null); op, saat değerine bir kez, sonda girer:
+// saatTL = s x op x hafta içi çarpanı + kişi başı ek / 8 x op; op grubun tezgâhlarının ortalama opOran'ı (yoksa 1).
+export function grupMesaiSaatTL(
+  tezgahlar: readonly { opOran: number | null | undefined; deger: number | null }[], carpHi: number, kisiEk: number | null,
+): number | null {
+  if (tezgahlar.length === 0) return null;
+  const op = (t: { opOran: number | null | undefined }): number => t.opOran ?? 1;
+  const bilinen = tezgahlar.filter((t): t is { opOran: number | null | undefined; deger: number } => t.deger !== null);
+  const agirlik = bilinen.reduce((a, t) => a + op(t), 0);
+  if (bilinen.length === 0 || !(agirlik > 0)) return null;
+  const s = bilinen.reduce((a, t) => a + op(t) * t.deger, 0) / agirlik;
+  const opOrt = tezgahlar.reduce((a, t) => a + op(t), 0) / tezgahlar.length;
+  return s * opOrt * (carpHi || 1.5) + (kisiEk ?? 0) / 8 * opOrt;
+}
+
+// 2752 (2750 b, Güvenlik Ek 2750): maliyet görmeyen planlama rolü için TL'siz grup bedel sırası. Yoğun ve ölçeksiz: en ucuz 1, eşit değer
+// aynı sıra, bir sonraki farklı değer bir fazlası; aralık ve oran çıkmaz. Bilinmeyen grup (null) sırasızdır.
+export function yogunSira<T extends { saatTL: number | null }>(gruplar: readonly T[]): (Omit<T, 'saatTL'> & { sira: number | null })[] {
+  const degerler = [...new Set(gruplar.flatMap((g) => (g.saatTL === null ? [] : [g.saatTL])))].sort((a, b) => a - b);
+  const sira = new Map(degerler.map((d, i) => [d, i + 1]));
+  return gruplar.map(({ saatTL, ...g }) => ({ ...g, sira: saatTL === null ? null : sira.get(saatTL) ?? null }));
+}
+
+// 2653 (Maliyet koşulu): cevapta yalnız toplam. Bilinmeyen satır toplamda sıfır sayılmaz, `bilinmeyen` olur; bilinen yoksa toplam null.
+// Satır yoksa toplam 0'dır (ek mesai yok).
+// "YYYY-MM" ayının son günü (YYYY-MM-DD).
+export function aySonuGunu(ay: string): string {
+  const [y, m] = ay.split('-').map(Number);
+  return `${ay}-${String(new Date(Date.UTC(y!, m!, 0)).getUTCDate()).padStart(2, '0')}`;
+}
+
+export function mesaiToplami(satirlar: readonly (number | null)[]): { toplam: number | null; bilinmeyen: boolean } {
+  const bilinen = satirlar.filter((s): s is number => s !== null);
+  const bilinmeyen = bilinen.length < satirlar.length;
+  if (satirlar.length === 0) return { toplam: 0, bilinmeyen: false };
+  if (bilinen.length === 0) return { toplam: null, bilinmeyen };
+  return { toplam: Math.round(bilinen.reduce((t, s) => t + s, 0) * 100) / 100, bilinmeyen };
+}

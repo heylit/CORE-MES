@@ -265,3 +265,151 @@ Testler: plan-bedel 815 (iki test), kurallar 815, kablolama 815; istemci planlam
 - Test: `plan-kg-fiyati.test.ts` (PKG-01..03), istemci `maliyet/kurallar.test.ts`.
 - VARSAYIM: ortalama bütün teslimlerindir (1291 a'nın 12 aylık ortalaması Satın Alma'dan okunur olunca geçer, P-B36); sunucu motoru fiyatı
   null alır (yalnız tutarı etkiler). Geri alma: `malzemeFiyatlari` alanı okunmaz, eski davranış döner.
+
+## Firmasız fason adım veri sağlığında (2681, 2682 a; 2026-11-09)
+- `veri-sagligi-kurallar.ts`: durum adımında `fason: true` ve `fasonId: null` olan adım (firma seçilmemiş fason) süre eksiği sayılmaz. Test `veri-sagligi.test.ts` "2681".
+## Departman saat maliyeti ucu (2618, 2602-a, 2603 a; 2026-11-09)
+- Yeni uç `GET /plan/grup-saat-maliyetleri` (finans.maliyet-oku): `{ ay, gruplar: [{ departmanNo, departmanAd, saatMaliyeti | null, kucuk }] }`.
+  Kaynak İK `grupSaatMaliyetleri` (2602-a); küçük grupta değer null (`kurallar.ts grupSaatEkrani`); kişi alanı, kişi sayısı ve saat yok.
+- Ay her zaman son tam aydır (2626 1/2 b; `kurallar.ts varsayilanMaliyetAyi`), seçilmez; kullanılan ay cevapta döner (Veri).
+- VARSAYIM: kişi sayısı cevaba girmez (sayı ile ortalama ay ay karşılaştırılınca tek kişinin değişimi görünür). Geri alma: ucuz, şemada tek alan.
+- Test: `grup-saat-maliyeti.test.ts` (PL-2618), `uc-yetkisi.test.ts` satırı.
+
+## Taslağın ek mesai tutarı (2653, 2644 b, 2657 a; 2026-11-09)
+- Yeni uç `GET /plan/mesai-maliyeti?taslak=<id>` (yalnız finans.maliyet-oku): `{ ay, toplam | null, bilinmeyen }`, şema `strict`; olmayan taslak 404.
+  Ek vardiyalar taslağın kayıtlı satırlarındandır (`plan_senaryo_ek_mesai`, saat yazıldığı andaki vardiya süresi); istemciden saat alınmaz.
+- Tutar istemcinin `mesaiTutari` kuralının kopyasıdır (`kurallar.ts mesaiTutari`), ortak örnek tablosuyla (M1-M10) sınanır; kural tek kaynak
+  değil (Mimar N1), paylaşılana alınması ayrı iş. Saat değeri: tezgâhın istasyonu -> ay sonunda geçerli kişi atamaları (yüzde ağırlıklı) ->
+  kişinin İK departmanı -> büyük departmanda İK ekran değeri, küçük departmanda İK küçük grup havuzu (IK-87). Bir kişinin değeri bilinmiyorsa
+  istasyonun değeri bilinmez; satır istemcideki gibi mesai ücreti yoluna düşer, o da yoksa satır bilinmiyor (`bilinmeyen: true`, sıfır sayılmaz).
+- Elle yedek (Maliyet notu): İK değeri olmayan satır, istemcideki gibi plan ayarındaki elle girilen mesai ücretine düşer; o satırın tutarı İK'dan
+  değil bu elle değerden gelir. Cevapta bunu gösteren işaret yok (isteğe bağlı, eklenmedi).
+- Bilinen satırların hepsine havuz girdiyse toplam null (Maliyet koşulu). Bu kural tek başına koruma değildir (Güvenlik): havuzlu satırın yanına
+  büyük grup satırı eklenince fark havuzu verir. Asıl koruma havuzun kendisidir (ay başına tek, en az 3 kişi, alt küme seçilemez; 2657 a). Ek mesaisi olmayan taslakta toplam 0 (gerçek sıfır, veri eksiği değil).
+- VARSAYIM (Maliyet N1): gün çarpanları, kişi başı ek, mesai ücreti ve vardiyasız gün çarpanı İK parametrelerinde yok; planlama sayfasının
+  gördüğü birleşmiş çalışmadan (sunucu okuyucusuyla) okunur, varsayılanlar istemcininkidir. Geri alma: `mesaiAyarlari` tek yer.
+- VARSAYIM (Maliyet N2): kesinleşmiş bordrolu ayda (2632 a) kişi değeri ödenmiş mesai primini içerir; üstüne gün çarpanı uygulanınca prim iki kez
+  sayılabilir. Sınır (Finans): fazla sayım en çok 0,5 x mesai payı; 225 normal ve 20 mesai saatinde
+  yaklaşık %4, mesaisiz ayda sıfır. Bu teslimde kapanmaz.
+- VARSAYIM: yetkinlik değil istasyon ataması kullanılır; atama kaydı boşsa satırlar bilinmiyor döner (ilk deneme sonrası ayrı kart). İstemciden
+  iki ayrılık bilinçlidir: istemci istasyonu bilinmeyen tezgâhta bütün personelin ortalamasına düşer, sunucu düşmez (değer başka gruba
+  aktarılmaz); istemci ufuk dışındaki günü vardiyasız sayar, sunucu günün hafta gününe bakar.
+- Test: `mesai-maliyeti.test.ts` (PL-2653), `uc-yetkisi.test.ts` satırı.
+
+## 2737-1 (2728 a): planlama brüt ücret saklamaz
+- Dolaylı personel kartının ve ek mesai planındaki kişi ücretinin brütü (`D.maliyetSis.dolayli[].brut`, `D.mesaiSis.ucret[*].brut`) planlama kaydına yazılmaz; `GET /plan/planlama-kayitlari` ve `GET /plan/planlama-calismasi` brüt döndürmez (`motor-ayari-kurallar.ts` `brutAlanlariniCikar`).
+- Sonuç (kart 2740 bekler): brüt olmayınca kişi bazlı ek mesai bedeli ücretten hesaplanmaz; motor yalın mesai hesabına düşer (`degerlendir.js` `msSaat` null, `ymMesaiTLYalin`). Başka yol seçilmedi.
+- Kayıtta kalmış brütün silinmesi ayrı göçtedir (2615 a planından sonra); o zamana kadar okumada çıkarılır.
+## Ek mesai bedeli İK grup saat maliyetiyle (2742; 2740 a, 2743 b, 2745 a, 2510 a; 2026-11-10)
+- Ortak hesap `mesai-maliyeti.ts istasyonSaatDegerleri(db, ay, istasyonlar)`: istasyonun ay sonu atamaları (yüzde ağırlıklı) -> kişinin İK
+  departmanı -> büyük departmanda İK değeri. Küçük departman (3 kişiden az) bilinmiyor sayılır; karışık istasyon (büyük ve küçük grubun kişisi)
+  ve atamasız istasyon da null. Plan değerlendirmesi, 2653 taslak toplamı ve yıllık plan ucu bu tek yoldan okur.
+- 2743 b: 2653'teki küçük grup havuzu kalktı (`kucukGrupHavuzuYalnizHesapIcin` plan modülünde okunmaz); küçük grubun satırı yalın mesai
+  ücretine düşer, iki ekran aynı tutarı gösterir. "Yalnız havuzlu satırlardan oluşan toplam null" kuralı da kalktı. Görünür değişiklik: küçük
+  grupta mesai ücreti yoksa satır "bilinmiyor" (`bilinmeyen: true`); mesai ücreti varsa toplam artık görünür.
+- 2510 a (T-2742-1, Maliyet b): yalın ek mesai her ek vardiyada h x mesai ücreti x (mesai çarpanı || 1,5); motorun `ymMesaiTLYalin`'i ile aynı.
+  Görünür değişiklik: 2653 taslak toplamı vardiyalı hafta içi ek vardiyada 1,5 kat artar (vardiyasız günde değişmez). Ortak örnekler M7, M10
+  değişti, Y1-Y6 eklendi (2749 istemciyle aynı). `vardiyasizGun` ve `MesaiGirdisi.vardiyasiz` kalktı.
+- Motor (Maliyet C1): plan değerlendirmesi başlarken, yalnız finans.maliyet-oku olanda (Güvenlik K3), birleşmiş çalışmanın tezgâhlarına değer
+  yazılır: iş parçacığının girdisinde `D.mesaiSaat[tezgahId] = number | null` (`degerlendirme.ts mesaiSaatliGirdi`). `degerlendir.js
+  ymMesaiTL` bunu okur; null ya da yoksa yalın. Kayıttaki brütten kurulan `msGrupSaat`/`msSaat` kalktı. Değer kayda ve hiçbir cevaba girmez:
+  istemci gönderse de `saklanmayanAlanlariCikar` (`mesaiSaatiniCikar`) yazmada ve ham okumada çıkarır; planlama çalışması cevabı da çıkarır.
+- Yeni uç `GET /plan/mesai-saat-degerleri` (yalnız finans.maliyet-oku, parametresiz, strict): `{ ay, gruplar: [{ grup, saatTL | null }] }`.
+  Grup değeri (Maliyet C2, Mimar N1): s = bilinen tezgâhların opOran ağırlıklı istasyon değeri ortalaması (hepsi null ise null);
+  saatTL = s x op x hafta içi çarpanı + kişi başı ek / 8 x op, op grubun ortalama opOran'ı (yoksa 1); istemcinin ufuk `mesaiSaatTL`'si ile aynı
+  formül, op bir kez girer. Yalnız kişi bazlı kapalıysa (`kisiBazli === false`) bütün gruplar null; mesai sistemi kayıtlı değilse
+  varsayılanlarla (kişi bazlı, hafta içi 1,5, kişi başı ek yok) değer verir, motorla aynı (Maliyet K1). Cevapta olmayan grup istemcide null
+  sayılır (2742-1a). Yıllık plan null grupta ek mesai önermez (2745 a; istemci 2503).
+- Maliyet a (kisiBazli farkı): motor kişi bazlı kipi istemci ve sunucu gibi okur: mesai sistemi yoksa ya da alan yoksa açık, yalnız
+  `kisiBazli === false` kapalı; gün çarpanı yoksa onların varsayılanı (hafta içi ve cumartesi 1,5, pazar ve tatil 2). Görünür değişiklik:
+  alanı olmayan kayıtta değerlendirmenin ek mesai bedeli yalından kişi bazlıya geçer.
+- Test: `ek-mesai-grup.test.ts` (EG-01..08, motor = 2653 satırı üç durumda ve kişi bazlı alanı olmadan), `mesai-maliyeti.test.ts` (PL-2653, PL-2742), `uc-yetkisi.test.ts` satırı.
+
+## TL'siz ek mesai grup bedel sırası (2752; 2750 b, Güvenlik Ek 2750, Mimar; 2026-11-10)
+- Yeni uç `GET /plan/mesai-grup-sirasi` (plan.planlama-oku, parametresiz, strict): `{ ay, gruplar: [{ grup, sira | null }] }`. Maliyet görmeyen
+  planlama rolünün yıllık planı ek mesaiyi ucuz gruptan başlayarak önerir (istemci 2742-1b). TL'li `mesai-saat-degerleri` olduğu gibi kalır.
+- Sıra `mesaiSaatDegerleri`'nin grup değerinden (tek yol, küçük grup ve havuz yok) `kurallar.ts yogunSira` ile: yoğun ve ölçeksiz, en ucuz 1,
+  eşit değer aynı sıra, boşluk yok; aralık ya da oran çıkmaz. Bilinmeyen grup (küçük, karışık, atamasız, kişi bazlı değil) null.
+- Kabul edilen kalan risk (Güvenlik): aylar arasında sıranın değişmesi kaba göreli bilgi verir.
+- Test: `mesai-maliyeti.test.ts` "2752", `uc-yetkisi.test.ts` satırı.
+
+## Bedeli bilinmeyen ek mesai seçilmez (2759; 2745 a ilkesi, yapı 5; Maliyet, Mimar, Test; 2026-11-10)
+- Plan seçenekleri (`motor/degerlendir.js pdSecenekler`) bedeli null olan ek mesai adayını hiçbir denge konumunda seçmez. Önce `- null` 0
+  sayılıyor, bedeli bilinmeyen ek mesai bedava sayılıp öneriliyordu. Bedeli bilinen adayda kârlılık eşiği değişmez.
+- Görünen fark: mesai ücreti ve grup değeri olmayan tezgâhta plan seçenekleri artık ek mesai önermez; seçilen ek mesailerin toplamı ve net kâr
+  her zaman bilinir.
+- Sözleşme (yalnız ekleme): plan-secenekleri cevabına `bedeliBilinmeyenEkMesai: boolean` (cevap başına; en az bir aday bedeli bilinmediği
+  için ele alınmadı). TL değildir; maliyet görmeyende de aynıdır. Kartta 2745 a metni istemcide (2503, ayrı yama).
+- Test: `ek-mesai-secenek.test.ts` PS-01, 02, 04, 05.
+
+## Ek mesai seçenekleri her rolde İK değeriyle (2766; 2760 b, Güvenlik C1-C6, Maliyet, Test; 2026-11-10)
+- `degerlendirmeBaslat`: D.mesaiSaat (İK grup değeri) maliyet görmeyenin işçi girdisine de yazılır, yalnız plan-secenekleri isteğinde. Öteki
+  türlerde görmeyen yalın kalır (termin uzatma satırları kâr farkına göre sıralanır; değer sıra yoluyla taşınmasın).
+- Güvenlik K3 yeni okunuşu: ek mesai bedeli içeren tutarlar yalnız finans.maliyet-oku ile; seçimin kendisi her rolde aynı İK değeriyle.
+- `maliyetsiz` plan-secenekleri: ek mesai TL'leri, toplam ve net kâr yine null; seçeneğin planındaki TL toplamı (`plan.ozet.tl`) da null (C6).
+  Yeni alan yok; seçenekler denge sırasında.
+- Kalan rol farkı (kapsam dışı, kart 2770): genel gider oranı (2601 a) ve kaynak maliyeti görmeyenin girdisinde yok; oran tanımlı ayda iki rol
+  yine farklı ek mesai seçebilir.
+- Kabul edilen risk (2760 b kartı): planlama rolü çalışmayı değiştirip yeniden değerlendirerek büyük grubun (en az 3 kişi) ek mesai saat
+  bedelini yaklaşık bulabilir. Kişi ücreti ve küçük grup değeri çıkmaz.
+- Test: `mesai-maliyeti.test.ts` "2766", "2742 K2, K3"; `degerlendirme.test.ts` PD-08.
+## Planlama çalışması metin biçimiyle yazılmaz (2747; Güvenlik notu, 2728 a, 2601 a; 2026-11-10)
+- `planlama-kayitlari/yaz` planlama anahtarında `bicim: 'metin'`i 400 ile reddeder: metin değer brüt ve genel gider süzgecinden geçmeden saklanırdı.
+  İstemci bu anahtarı yalnız json yazar (`planlama/kayit.ts`); başka anahtarlar değişmez.
+- Eski metin biçimli satır (şimdiki ya da geçmiş sürüm) JSON metniyse `saklanmayanKayitDegeri` ile ayrıştırılıp süzülür ve yine metin döner:
+  ham kayıt okuması (`planlamaKayitlari`) ve geri al (`calismaGeriAl`). JSON olmayan metin yapılı alan taşımaz, olduğu gibi kalır.
+- Brüt silme göçü (2737-1-goc) metin satırı çevirmez; son sayımı metin satırındaki brütü de bulur ve göçü geri alır.
+- Test: `brut-saklanmaz.test.ts` BS-05..07, `brut-sil-goc.test.ts` BG-02.
+
+## "Planlanamıyor" tek ve somut neden (2780; B-2482-32, B-2482-33; 2026-11-10)
+- Yerleşmeyen işin nedeni artık tek cümle ve tek kaynak ya da istasyon adıdır; "ya da" ile birden çok olasılık yazılmaz. Motor yerleşimi
+  (`GET /plan/motor-yerlesimi`) ve kuyruk yazma cevabının `yerlesmeyen[]` satırına `nedenKodu` (paylasilan/sozlesme/planlanamama-sabitleri.ts
+  PLANLANAMAMA_NEDENLERI) ve `hedef` ({ tur: istasyon|makine|kisi, id, ad } | null) eklendi; düzeltme sayfası NEDEN_DUZELTME_YERI'ndedir.
+- Ayrılan nedenler: süre boş, istasyon pasif, istasyonda aktif makine yok, insanlı istasyonda yetkin kişi yok / yetkin kişilerin vardiyası
+  yok, seçili makine ya da kişi pasif, yetki dışı, tezgâh vardiyası tanımsız. Motorun "ufuk içinde tezgâh, vardiya, kaynak ya da malzeme yeri
+  yok" iletisi aday tezgâhların ufuk ölçüsüyle ayrılır (planlanamama-kurallar.ts zamanNedeni): malzeme ufuk dışında, tezgâhın ufukta
+  vardiyası yok, vardiyada yetkin kişi yok, işin süresi açık süreden uzun (iki süreyle), tezgâh dolu. Ölçülemeyen "nedeni ölçülemedi" olur.
+- 2784: hazırlık tek parçadır ve tezgâhın her hazırlık diliminde ayarcı ister (motor checkUse). Tezgâh ayarcının olmadığı vardiyada da
+  çalışıyorsa ve hazırlık ayarcının kesintisiz bulunduğu süreden uzunsa neden iki süreyle yazılır (kod kisi-vardiyasiz, hedef tezgâh).
+
+## Hazırlık tek parça, işlem bölünür (2784, kart 2785 b; 2026-11-10)
+- Motor (engine.js tMach): hazırlık başladığı kesintisiz blokta biter. Blok tezgâhın vardiyalarının molalar dahil birleşimidir (ard arda
+  vardiyalar tek blok; mola hazırlığı bölmez, arıza ve vardiya arası böler). Vardiyanın kalanına sığmayan hazırlık sığdığı ilk bloğun başında
+  başlar; hiçbir bloğa sığmayan iş yerleşmez. İşleme vardiya sınırında bölünür (öncekiyle aynı).
+- Atölye koşulu (bekleme aralığında tezgâha başka işin hazırlığı girmez) motorda zaten sağlanıyordu: tezgâh S..C boyunca işindir (ctx.av).
+- Neden: hazırlık bloğa sığmazsa "{tezgâh} tezgâhında hazırlık (X) tezgâhın kesintisiz çalıştığı süreden (Y) uzun; hazırlık bölünmez. ..."
+  (kod takvim-yok, hedef tezgâh); bloğa sığıp ayarcının kesintisiz süresine sığmazsa 2784 tanı iletisi. Ayarcı süresi de blok sınırında kesilir.
+- GÖRÜNEN DEĞİŞİKLİK: vardiya sonunu aşan hazırlık artık bölünmez, ertesi vardiyanın başına kayar; tek vardiyalı tezgâhta vardiyadan uzun
+  hazırlık yerleşmez (önce günlere bölünerek yerleşiyordu). Gecikmenin türü (why) değişmez; ekranda ayrı "hazırlık sığmadı" etiketi yok.
+- Test: `uzun-hazirlik-neden.test.ts` UH-01..05.
+- B-2482-33 (insanlı istasyonun makinesi seçili): neden kişidedir (vardiya ya da yetkinlik), ileti makine ve istasyon adını söyler.
+- GÖRÜNEN DEĞİŞİKLİK: ileti metinleri değişir; "Sunucu motoru yerleştiremedi: " öneki kalkar. Ardıl metinleri ("Önceki adım (... OP n)
+  yerleşmedi.", "Bağlı parti yerleşmedi.") aynıdır. Plan cevabının yerlesmemis[].neden metni yalnız pasif kaynakta adı söyler.
+- Test: `planlanamama-kurallar.test.ts` PN-01..06, `planlanamama-uc.test.ts` PU-01, 02, `uzun-hazirlik-neden.test.ts` UH-01..03, `plan-cozucusu-neden.test.ts` YN-01..11,
+  `motor-oner-insanli.test.ts` MI-01, 02, `motor-kisi-isi.test.ts`.
+
+## Elle taşımada itme (2790 a, 2790-2 a, 2794 1/3 a, 2/3 b, 3/3 b; 2026-11-10)
+- `POST /plan/planlama-calismasi/is-tasi`: taşınan işle birlikte aynı emrin itilen ve geri çekilen adımları da kilitlenir; hepsi tek bekleyen
+  satırı ve tek iz, geri alma hepsini döndürür. Geçersizse (başlamış ya da donuk ardıl, ufuk, uygun olmayan tezgâh) 400 ve hiçbiri yazılmaz.
+  Kilidin saati tezgâhın o saatten sonraki ilk açık anıdır. Cevaba `ileti` eklendi (itme ya da kayma nedeni, tek satır; yoksa null).
+- `GET /plan/planlama-calismasi/is-tasi-onizlemesi?isId&tezgah&baslangic` (plan.yaz): aynı denetim ve hesap, yazmaz;
+  `{ gecerli, ileti, isler: [{ isId, tezgah, S, C, eskiTezgah, eskiS, tur }] }`.
+- Kural saf (`tasima-kurallar.ts`), takvim motorun derlemesinden (`motor/tasima.js`, `kilitYeri` ile aynı yer). Biten öncül beklenmez.
+  Taşınan işin kendisi donuk bölgede olsa da elle taşınır (önceki davranış); yalnız itilen ve çekilen adımlar donuk bölgeye dokunmaz.
+- Motor değişmedi: kilitli iş yine öncülünü beklemez (2507 a motor kuralı); sırayı artık taşıma komutu kilitleriyle korur.
+- İnsanlı istasyondaki ardıl (kişinin el tezgâhı) da aynı kuralla itilir (Atölye K1). Ardılın tezgâhı ona uygun değilse ret adımı ve
+  tezgâhı söyler; ufuk ayrı iletidir. Taşınan iş donuk bölgede başka işin yerine girerse ileti operatör listesinin değiştiğini söyler (Atölye N1).
+  Önizleme cevabı hesaplandığı `calismaSurumu`nu taşır (Mimar N2).
+- Fason ardıl kilitlenmez (motor fason kilidini yok sayar); aynı süreyle kaymış sayılır, arkasındaki adımlar ona göre itilir ve ileti fason
+  süresinin plan uygulanınca yeniden hesaplanacağını söyler (Test N1). Taşınan işin kendisi hedef tezgâhta başka işle çakışabilir: kilit
+  kazanır, motor öteki işi kaydırır (önceki davranış, Test N2).
+
+## Planlanabilirlik uçları (2779 sayfası; 2026-11-10)
+- `GET /plan/planlanabilirlik`: plana giren açık emirlerden yerleşmeyen adımı olanlar, yalnız yerleşmeyen adımlarıyla. Motor önerisi motor
+  yerleşimiyle aynı çalışmadır, hiçbir şey yazılmaz; `motorZamani` bu çalışmanın anıdır, motor kayıtlı değilse null ve liste boş.
+  Kontroller sırayla: rota revizyonu, süre, kaynak, yetki, tezgâh vardiyası, kişi vardiyası, malzeme, ufuk (yaklaşık), öncül. Motorun
+  tanısının yuvası 'eksik'tir; önceki yuva yalnız tanı onu geçtiyse 'tamam', yoksa 'olculemedi' (uydurulmaz). Kök ilk eksiktir; kök öncül ya
+  da bağlı partiyse `bekledigiOp` ve `bekledigiEmirNo` zincirin kök adımıdır.
+- `GET /plan/planlanabilirlik/rotalar`: yürürlükteki rotası olan ürünlerin bütün adımları; yalnız süre, kaynak, tezgâh vardiyası ve kişi
+  vardiyası (emre bağlı yuva yok). Fason adım kontrol almaz. Yetki: iki uç da `/plan/planlama-kaynagi` ile aynı (sayfa.recete-rota okuyan).
+- Test: `planlanabilirlik-uc.test.ts` PB-01..03; `uc-yetkisi.test.ts` iki satır.

@@ -9,6 +9,8 @@ import type { SayfaliListe } from '#paylasilan/liste.ts';
 import type { TakvimKaydi } from '#paylasilan/sozlesme/takvim.ts';
 import { tesisGunu } from '#paylasilan/zaman.ts';
 import type { z } from 'zod';
+import { tedarikciAlacagiGecisHatasi } from './kurallar.ts';
+import type { TedarikciAlacagi, TedarikciAlacaklariCevabi, TedarikciAlacagiDurumYazimi } from '#paylasilan/sozlesme/finans.ts';
 import { beyanIsaretHatasi, cekVadeHatasi, faizSec, gunlukSkorHesapla, ileriTarihHatasi, ILERI_BELGE_GUNU, kasaBakiyesiHatasi, ileriTarihliKurSirasi, pasifeAlmaEngeli, topluKurCiftiKarari, topluKurFaizKarari, vergiTakvimi } from './kurallar.ts';
 import type { FinansHamVerisi, FirmaCekirdegi } from '#paylasilan/finans-motor/donustur.ts';
 import {
@@ -805,13 +807,15 @@ export function faizEkle(db: Db, k: Kullanici, g: G<typeof faizEkleGovdesi>) {
 export function genelGiderOraniEkle(db: Db, k: Kullanici, g: G<typeof genelGiderOraniEkleGovdesi>) {
   return korumali(async () => ({ id: (await sorgular.genelGiderOraniEkle(db, g, k.id))!.id }));
 }
-export interface GenelGiderOrani { saatBasi: number; amortismanDahil: boolean }
+// 2652 a: gizli, dolaylı personeli 3 kişiden az olan belge satırıdır; değer hesapta kullanılır, okuyucu oranı ve ondan türeyen tutarı
+// ekranda, cevapta ve dışa aktarımda göstermez.
+export interface GenelGiderOrani { saatBasi: number; amortismanDahil: boolean; gizli: boolean }
 // Proje maliyet makine saatine ekler. O güne geçerli kayıt yoksa null (oran bilinmiyor; sıfır değil).
 export async function genelGiderOrani(db: Db, gun: string): Promise<GenelGiderOrani | null> {
   const s = await sorgular.sonGenelGiderOrani(db, gun);
   if (!s) return null;
   const saatBasi = genelGiderSaatBasi(s.aylikGenelGider, s.aylikMakineSaati);
-  return saatBasi === null ? null : { saatBasi, amortismanDahil: s.amortismanDahil };
+  return saatBasi === null ? null : { saatBasi, amortismanDahil: s.amortismanDahil, gizli: s.gizli };
 }
 export function kdvOraniEkle(db: Db, k: Kullanici, g: G<typeof kdvOraniEkleGovdesi>) {
   return korumali(async () => { await sorgular.kdvOraniEkle(db, g.oran, g.gecerlilikBaslangic, k.id); return { oran: g.oran }; });
@@ -1002,11 +1006,61 @@ export function siparisOdemePlaniYaz(db: Db, kisiId: number, g: { siparis: Sipar
   return korumali(async () => {
     const hata = siparisOdemePlaniHatasi(g.satirlar, await sorgular.siparisFaturasiVarMi(db, g.siparis.talepId, g.siparis.teklifId));
     if (hata) throw gecersiz(hata);
-    await sorgular.siparisOdemeleriniSil(db, g.siparis.talepId, g.siparis.teklifId);
+    // 2540 (Veri 1): satırlar sırayla güncellenir ya da eklenir, plandan çıkanlar silinir; değişiklik defterine yalnız fark düşer.
     for (const [i, x] of g.satirlar.entries()) {
-      await sorgular.siparisOdemesiEkle(db, { ...g.siparis, siparisNo: g.siparisNo, sira: i + 1, tur: x.tur, vade: x.vade, yontem: x.yontem, firmaId: g.firmaId, paraBirimi: g.paraBirimi, tutar: x.tutar }, kisiId, g.kaynak ?? 'elle');
+      await sorgular.siparisOdemesiYaz(db, { ...g.siparis, siparisNo: g.siparisNo, sira: i + 1, tur: x.tur, vade: x.vade, yontem: x.yontem, firmaId: g.firmaId, paraBirimi: g.paraBirimi, tutar: x.tutar }, kisiId, g.kaynak ?? 'elle');
     }
+    await sorgular.siparisOdemeleriniKirp(db, g.siparis.talepId, g.siparis.teklifId, g.satirlar.length);
   });
+}
+
+// 2540: kalanı kapatılmış siparişte gerçekleşen değeri aşan avansın tedarikçi alacağı. Yalnız satın almanın kapatma ve teslim akışı
+// çağırır (Güvenlik K3); tutarı satın alma sunucuda hesaplar, istemciden gelmez. Kayıt "teyit bekliyor" başlar (2544 a). Teyit bekleyen
+// kaydın tutarı aşım değişince güncellenir, aşım kalmazsa kayıt kalkar (değişiklik defterinde kalır). Açılmış ya da kapanmış kayıt
+// değişmez; sonuç 'korundu' döner ve satın alma farkı geçmişe yazar.
+export type AvansAlacagiSonucu = 'yok' | 'acildi' | 'guncellendi' | 'kaldirildi' | 'korundu';
+export function siparisAvansAlacagiYaz(db: Db, kisiId: number, g: { siparis: SiparisAnahtari; siparisNo: string; firmaId: number; paraBirimi: string; tutar: string | null }): Promise<AvansAlacagiSonucu> {
+  return korumali(async () => {
+    const mevcut = await sorgular.siparisAlacagiOku(db, g.siparis.talepId, g.siparis.teklifId);
+    const tutar = g.tutar !== null && Number(g.tutar) > 0 ? g.tutar : null;
+    if (mevcut === null) {
+      if (tutar === null) return 'yok';
+      await sorgular.tedarikciAlacagiEkle(db, { ...g.siparis, siparisNo: g.siparisNo, firmaId: g.firmaId, paraBirimi: g.paraBirimi, tutar }, kisiId);
+      return 'acildi';
+    }
+    if (mevcut.durum !== 'teyit_bekliyor') return Number(mevcut.tutar) === Number(tutar ?? '0') ? 'yok' : 'korundu';
+    if (tutar === null) { await sorgular.bekleyenAlacagiSil(db, mevcut.id); return 'kaldirildi'; }
+    if (Number(mevcut.tutar) === Number(tutar)) return 'yok';
+    await sorgular.bekleyenAlacakTutariYaz(db, mevcut.id, tutar);
+    return 'guncellendi';
+  });
+}
+// Satın almanın karar kaydı alacağı olan siparişi (düşüldü dahil) silmeye kalkarsa reddetmek için (Veri 2, Maliyet).
+export async function alacakliSiparisler(db: Db, talepId: string, teklifIdler: readonly string[]): Promise<string[]> {
+  return teklifIdler.length === 0 ? [] : (await sorgular.alacakliSiparisler(db, talepId, teklifIdler)).map((x) => x.teklifId);
+}
+async function alacakGorunumu(db: Db, satirlar: readonly sorgular.TedarikciAlacagiSatiri[]): Promise<TedarikciAlacagi[]> {
+  const firmalar = await firmaAdlari(db, satirlar.map((x) => x.firmaId));
+  const kisiler = await kisiAdlari(db, satirlar.flatMap((x) => (x.durumDegistirenId === null ? [] : [x.durumDegistirenId])));
+  return satirlar.map((x) => ({
+    id: x.id, talepId: x.talepId, teklifId: x.teklifId, siparisNo: x.siparisNo, firmaId: x.firmaId, firmaAdi: firmalar.get(x.firmaId) ?? '',
+    paraBirimi: x.paraBirimi, tutar: x.tutar, durum: x.durum, aciklama: x.aciklama,
+    durumDegistirenAdi: x.durumDegistirenId === null ? null : kisiler.get(x.durumDegistirenId) ?? null, durumZamani: x.durumZamani, olusturma: x.olusturma, surum: x.surum,
+  }));
+}
+export async function tedarikciAlacaklari(db: Db): Promise<TedarikciAlacaklariCevabi> {
+  return { alacaklar: await alacakGorunumu(db, await sorgular.tedarikciAlacaklari(db)) };
+}
+// Güvenlik K1, K2: geçiş sunucudaki tabloya göre, sürüm ve eski durum kilidiyle; kişi ve zaman sunucudan.
+export async function tedarikciAlacagiDurumYaz(db: Db, k: Kullanici, id: number, g: TedarikciAlacagiDurumYazimi): Promise<{ alacak: TedarikciAlacagi }> {
+  const eski = await sorgular.tedarikciAlacagiOku(db, id);
+  if (eski === null) throw bulunamadi('Alacak bulunamadı.');
+  if (eski.surum !== g.surum) throw eskiSurum();
+  const hata = tedarikciAlacagiGecisHatasi(eski.durum, g.durum, g.aciklama);
+  if (hata !== null) throw gecersiz(hata);
+  const yazildi = await sorgular.tedarikciAlacagiDurumYaz(db, { id, surum: g.surum, eski: eski.durum, durum: g.durum, aciklama: g.aciklama ?? eski.aciklama }, k.id);
+  if (yazildi === null) throw eskiSurum();
+  return { alacak: (await alacakGorunumu(db, [(await sorgular.tedarikciAlacagiOku(db, id))!]))[0]! };
 }
 // 2132-6: teslimle yeniden kurulabilecek plan: bütün satırları otomatik ve siparişe fatura bağlanmamış.
 export async function siparisOtomatikPlaniVarMi(db: Db, siparis: SiparisAnahtari): Promise<boolean> {
@@ -1098,7 +1152,7 @@ export function sabitKiymetleriListele(db: Db, sorgu: { sayfa: number; sayfaBoyu
   });
 }
 
-async function amortismanToplamlari(db: Db, aylar: string[], kiymetler?: sorgular.SabitKiymetKaydi[]): Promise<Map<string, number>> {
+export async function amortismanToplamlari(db: Db, aylar: string[], kiymetler?: sorgular.SabitKiymetKaydi[]): Promise<Map<string, number>> {
   const liste = kiymetler ?? await sorgular.sabitKiymetlerHepsi(db);
   const toplam = new Map(aylar.map((a) => [a, 0]));
   for (const k of liste) {

@@ -16,7 +16,7 @@ import { SABIT_HURDA_KODLARI } from '../durus-nedenleri/disari.ts';
 // Rol retlerinde modül adı geçmez: Üretim Terminali'ndeki operatör "Üretim Hazırlık rolünüz" sözünü kendi rolünün adı sanar (G1).
 export const ILETILER = {
   rolYok: 'Üretim Hazırlık için rolünüz yok.',
-  ozetRolYok: 'Özetim yalnız Arkon operatörü ve amiri içindir.',
+  ozetRolYok: 'Özetim yalnız operatör ve amir içindir.',
   ozetKapsamDisi: 'Bu kişinin özetini göremezsiniz: yalnız kendi özetiniz ya da amiri olduğunuz iş merkezindeki kişiler açılır.',
   silmeSurumu: 'Silmede belgenin sürümü gönderilmeli.',
   tmiYonetir: 'Bu ayar CORE\'da yönetilir (İstasyonlar, Duruş ve Hurda Nedenleri).',
@@ -503,6 +503,27 @@ export function isEmriYayinda(paketler: readonly { parca: boolean; durum: unknow
   const butun = paketler.filter((p) => !p.parca);
   const bakilan = butun.length > 0 ? butun : paketler;
   return bakilan.length > 0 && bakilan.every((p) => !yayinlanmamis(p.durum));
+}
+
+// 2227-1 b: iş emrine özel hazırlık maddesi. Yalnız uyarır: madde yoksa gerekmez, hepsi tamamsa tamam, kısmen sürüyor, hiç yoksa eksik.
+export function ekMaddeHazirligi(maddeler: readonly { tamam: boolean }[]): { durum: 'yok' | 'suruyor' | 'tamam'; secildi: boolean } {
+  if (maddeler.length === 0) return { durum: 'yok', secildi: false };
+  const tamam = maddeler.filter((m) => m.tamam).length;
+  return { durum: tamam === maddeler.length ? 'tamam' : tamam > 0 ? 'suruyor' : 'yok', secildi: true };
+}
+export const HAZIRLIK_MADDESI_ILETILERI = {
+  isEmriYok: 'İş emri bulunamadı.',
+  maddeYok: 'Hazırlık maddesi bulunamadı.',
+  kapali: 'Bitmiş iş emrinde hazırlık maddesi değişmez.',
+  dolu: 'Bir iş emrine en çok 30 hazırlık maddesi eklenir.',
+  zaten: 'Madde zaten bu durumda.',
+} as const;
+// Son olaydan yeni olaya geçiş: kaldırılmış madde değişmez (bulunamadı), aynı hâle ikinci kez geçilmez.
+export function hazirlikMaddesiOlayReddi(son: string | null, yeni: 'tamamla' | 'geri-al' | 'kaldir'): 'maddeYok' | 'zaten' | null {
+  if (son === 'kaldir') return 'maddeYok';
+  if (yeni === 'tamamla' && son === 'tamamla') return 'zaten';
+  if (yeni === 'geri-al' && son !== 'tamamla') return 'zaten';
+  return null;
 }
 
 // İş emri paketinde çalışmaya geçen olay adımı başlatır, biten olay bitirir; parti kuralı bu iki komut için kayıttan önce sorulur.
@@ -1123,7 +1144,7 @@ export function arizaMakineGecisi(depo: ArkonDeposu, govde: unknown, onceki: unk
 // Kapanışta makine yalnız bu arıza yüzünden arızalıysa çalışır olur: aynı makinede açık başka arıza varsa ya da makine elle bakıma alınmışsa kalır.
 export const acikArizaMi = (g: unknown, makine: string): boolean =>
   alanOku(g, 'type') === 'ariza' && !arizaKapali(g) && alanOku(g, 'mc') === makine;
-export const ARIZA_ACIKLAMASI = (baslik: string): string => (baslik === '' ? 'Arkon Bakım arızası' : `Arkon Bakım: ${baslik}`).slice(0, 200);
+export const ARIZA_ACIKLAMASI = (baslik: string): string => (baslik === '' ? 'Bakım arızası' : `Bakım: ${baslik}`).slice(0, 200);
 
 // Çalışma kuralı (kv/policy, `{ v: Policy }`): kalite onayı zorunlu mu. Kayıt yoksa Arkon varsayılanı (POLICY0) kapalıdır.
 export const onayZorunluMu = (politika: unknown): boolean => alanOku(alanOku(politika, 'v'), 'approval') === true;
@@ -1999,9 +2020,9 @@ export function istekKmPlani(istek: unknown, paket: unknown): IstekKmPlani {
 const pozitifTamSayi = (d: unknown): d is number => typeof d === 'number' && Number.isSafeInteger(d) && d > 0;
 
 export const KM_UYARILARI = {
-  numuneAcilmadi: 'Numune Kalite Merkezi\'ne açılamadı: ölçüler Arkon\'da kaldı.',
-  bagsizOlcu: (n: number) => `${String(n)} ölçünün Kalite Merkezi balonu yok: Arkon'da kaldı.`,
-  olcumYazilmadi: (neden: string) => `Ölçüm Kalite Merkezi'ne yazılamadı (${neden}): Arkon'da kaldı.`,
+  numuneAcilmadi: 'Numune Kalite Merkezi\'ne açılamadı: ölçüler Üretim Hazırlık\'ta kaldı.',
+  bagsizOlcu: (n: number) => `${String(n)} ölçünün Kalite Merkezi balonu yok: Üretim Hazırlık'ta kaldı.`,
+  olcumYazilmadi: (neden: string) => `Ölçüm Kalite Merkezi'ne yazılamadı (${neden}): Üretim Hazırlık'ta kaldı.`,
 } as const;
 
 // İsteğin kararı: durum karara girince ya da kararın kendisi değişince (ret sonra onay) doğar; aynı kararın yeniden yazılması karar değildir.

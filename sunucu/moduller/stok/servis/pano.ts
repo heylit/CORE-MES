@@ -12,7 +12,7 @@ import { kayitlaraBagliBelgeler, kayittakiBelgeDosyasi } from '../../belge-merke
 import { malzemeAra, malzemeOzeti } from '../../malzemeler/disari.ts';
 import { degerlemeKgFiyatlari, malKabulFiyatlari } from '../../satin-alma/disari.ts';
 import { acikEmirler, emirDurumlari, emirlerinMalzemeIhtiyaci, fasonIsEmirleri, uretimEmriOzeti } from '../../uretim-emirleri/disari.ts';
-import { binde, bindenMetin, partiEtiketi, stokDegeri, alisFiyatlari, DEGER_GRUPLARI, stoklanirMi, ihtiyacToplami, adetMiktari, fasonGonderimiEksikMi } from '../kurallar.ts';
+import { binde, bindenMetin, partiEtiketi, stokDegeri, alisFiyatlari, emirsizCikisTutari as cikisTutari, DEGER_GRUPLARI, stoklanirMi, ihtiyacToplami, adetMiktari, fasonGonderimiEksikMi } from '../kurallar.ts';
 import * as sorgular from '../sorgular.ts';
 import { haritaOzeti, anaDepo } from './depo.ts';
 import { fasonYariParcasi } from './dis-akis.ts';
@@ -132,6 +132,7 @@ export async function menuSayaclari(db: Db, islemler: readonly string[], kisiId:
     sepet: islemler.includes('stok.transfer') ? (await sorgular.sepetSatirlari(db, kisiId)).length : null,
     malzemeler: null, kimyasallar: null, 'kesici-takimlar': null, aparatlar: null, hareketler: null, 'refakat-kartlari': null, 'malzeme-fisleri': null, konumlar: null, ayarlar: null,
     'sayim-onaylari': islemler.includes('stok.sayim-onayla') ? await sorgular.bekleyenSayimFarkiSayisi(db) : null,
+    'sahipsiz-statulu': null,
     'defter-farklari': k.defterFarki ?? null,
   };
 }
@@ -186,6 +187,50 @@ export async function stokDegeriOku(db: Db, islemler: readonly string[], yontem:
       toplam: degerleriTopla(Object.values(d)).deger,
     },
   };
+}
+
+// Çıkışların anındaki son alış fiyatı (TRY; stok değerinin son alış yöntemiyle aynı hesap): her çıkışa fiyatı ya da null.
+async function cikisSonAlislari(db: Db, cikislar: readonly { malzemeId: number; zaman: string; miktar: string }[]): Promise<{ miktar: string; fiyat: string | null }[]> {
+  if (cikislar.length === 0) return [];
+  const zamanlar = [...new Set(cikislar.map((c) => c.zaman))];
+  const olaylar = await sorgular.degerlemeAlisOlaylari(db, [...new Set(cikislar.map((c) => c.malzemeId))]);
+  const fiyat = await malKabulFiyatlari(db, olaylar.map((o) => o.malKabulSatirId));
+  const kesimler = alisFiyatlari(olaylar.map((o) => ({ ...o, fiyat: fiyat.get(o.malKabulSatirId) ?? null })), zamanlar);
+  return cikislar.map((c) => ({ miktar: c.miktar, fiyat: kesimler[zamanlar.indexOf(c.zaman)]?.get(c.malzemeId)?.sonAlis ?? null }));
+}
+
+// 2623 a, 2594 b: ayın ('GGGG-AA') emirsiz genel kullanım çıkışlarının tutarı (TL), finansın genel gider "diğer" bileşenine. Fiyat
+// çıkış anındaki son alıştır; 2710 b: fiyatı bilinmeyen çıkış toplama girmez, `eksik` listesine yazılır (finans genel gider uyarısı).
+// Yetki denetlemez.
+export async function emirsizCikisTutari(db: Db, ay: string): Promise<{ tutar: number; eksik: string[] }> {
+  if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(ay)) throw new Error(`Ay biçimi geçersiz: ${ay}`);
+  const tutar = cikisTutari(await cikisSonAlislari(db, await sorgular.emirsizCikislar(db, ay)));
+  return { tutar: Number(tutar.tutar), eksik: tutar.fiyatsizCikis === 0 ? [] : [`${tutar.fiyatsizCikis} stok çıkışının son alış fiyatı yok; tutara girmedi`] };
+}
+
+// 2727-1 (2613-3 a): emir ve malzeme başına net sarf (emirlerinNetSarfi ile aynı çift ve miktar) ve tutarı: geri alınmamış her çıkışın
+// miktarı x çıkış anındaki son alış (TL kuruşlu metin). Çiftte son alışı bilinmeyen çıkış varsa tutar null. 2739-2 (2733 a): ilkZaman
+// çiftin geri alınmamış ilk sarf ya da fire çıkışının anı (proje siparişi emirlere bu sırayla dağılır); böyle çıkış yoksa null.
+// Yetki denetlemez.
+export async function emirSarfSonAlisTutarlari(db: Db, emirIdler: readonly number[]): Promise<{ emirId: number; malzemeId: number; miktar: string; tutar: string | null; ilkZaman: string | null }[]> {
+  if (emirIdler.length === 0) return [];
+  const idler = [...new Set(emirIdler)];
+  const [netler, cikislar] = [await sorgular.emirlerinNetSarfi(db, idler), await sorgular.emirlerinSarfCikislari(db, idler)];
+  const fiyatli = await cikisSonAlislari(db, cikislar);
+  const anahtar = (emirId: number, malzemeId: number) => `${emirId}|${malzemeId}`;
+  // Çıkışlar zaman sırasıyla gelir: çiftin ilk satırı ilk çıkışıdır.
+  const ciftler = new Map<string, { ilkZaman: string; satirlar: { miktar: string; fiyat: string | null }[] }>();
+  for (const [i, c] of cikislar.entries()) {
+    const k = anahtar(c.emirId, c.malzemeId);
+    const v = ciftler.get(k) ?? { ilkZaman: c.zaman, satirlar: [] };
+    v.satirlar.push(fiyatli[i]!);
+    ciftler.set(k, v);
+  }
+  return netler.map((n) => {
+    const c = ciftler.get(anahtar(n.emirId, n.malzemeId));
+    const t = cikisTutari(c?.satirlar ?? []);
+    return { emirId: n.emirId, malzemeId: n.malzemeId, miktar: n.miktar, tutar: t.fiyatsizCikis > 0 ? null : t.tutar, ilkZaman: c?.ilkZaman ?? null };
+  });
 }
 
 // Yönetici paneli (#1079): ay sonu stok değeri serisi. Ay listesi verisiz aylarda da tamdır; stoksuz ay null değerlidir.

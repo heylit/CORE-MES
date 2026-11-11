@@ -1,13 +1,17 @@
 import { useMemo, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { Link, useSearchParams } from 'react-router-dom';
 import { EMIR_TURU_ADLARI } from '#paylasilan/sozlesme/emir-turleri.ts';
+import type { AcilisSecenekleri } from '#paylasilan/sozlesme/uretim-emirleri.ts';
+import { api } from '../../../../ortak/veri/api.ts';
 import { Dugme, DurumKutusu, Girdi, IsaretKutusu, Pencere, Secim, Simge } from '../../../../ortak/arayuz/index.ts';
 import { sayi, tarih } from '../bicim.ts';
 import type { EkranOzellikleri } from '../sekmeler.ts';
-import { usePatlatmaOnizlemesi, type RrDurumu } from '../veri.ts';
+import { RR_ANAHTARI, usePatlatmaOnizlemesi, type RrDurumu } from '../veri.ts';
 import { BolmePaneli, bolmeSonucu, bosBolme, type BolmeDurumu } from './Bolme.tsx';
 import { bosCokKatman, CokKatmanPaneli, type CokKatmanSecimi } from './CokKatman.tsx';
 import { EmirAyrintisi, PlanHucresi } from './EmirAyrintisi.tsx';
+import { EmirExcelMenusu } from './ExcelGirisi.tsx';
 import { planMetni, tamponRozeti, turAdi } from './gorunum.ts';
 import { acilanEmir, guncelSurum, useEmirKomutu } from './komut.ts';
 import {
@@ -15,6 +19,7 @@ import {
   type DurumSuzgeci, type Emir,
 } from './kurallar.ts';
 
+const PROJELER_YOLU = '/projeler';
 const TUR_SECENEKLERI = Object.entries(EMIR_TURU_ADLARI).map(([deger, baslik]) => ({ deger, baslik }));
 
 const URUN_ONEKI = 'urun:';
@@ -83,6 +88,7 @@ export function UretimEmirleri({ veri, yetki, git, kimlik }: EkranOzellikleri) {
             {yeniAcik ? 'Yeni emir formunu kapat' : 'Yeni üretim emri'}
           </Dugme>
         )}
+        {(yetki.rotaEmreKopyala || yetki.emirYaz) && <EmirExcelMenusu durum={d} acabilir={yetki.rotaEmreKopyala} guncelleyebilir={yetki.emirYaz} />}
       </div>
       {(durumSuzgeci === 'tamam' || durumSuzgeci === 'tum') && (
         <p className="tc-rr3-ipucu tc-rr3-ipucu-simge">
@@ -126,7 +132,7 @@ function EmirSatiri({ durum: d, emir: o, derinlik, secili, sira, sec }: {
 }) {
   const urun = d.items?.find((i) => i.id === o.itemId) ?? null;
   const il = ilerleme(d, o);
-  const ozet = planOzeti(d, d.planYerlesim, o);
+  const ozet = planOzeti(d, d.planYerlesim, o, d.planCanli);
   const plan = planMetni(ozet);
   const tampon = tamponRozeti(ozet);
   const gecikiyor = ozet.tur === 'planlanamiyor' || (ozet.tur === 'plan' && ozet.gecikiyor);
@@ -161,7 +167,7 @@ function EmirSatiri({ durum: d, emir: o, derinlik, secili, sira, sec }: {
         </span>
         <span data-baslik="Plan bitiş" className="tc-rr3-plan-hucre">
           <PlanHucresi plan={plan} tampon={tampon} />
-          {plan.alt && <small className="tc-rr3-plan-alt" data-ton={plan.altTon ?? undefined}>{plan.alt}</small>}
+          {plan.alt && <small className="tc-rr3-plan-alt" data-ton={plan.altTon ?? undefined} title={plan.alt}>{plan.alt}</small>}
         </span>
         <span className="tc-rr3-durum-hucre"><span className="tc-rr3-durum" data-durum={o.status} data-ton={durumGosterimi(o).ton}>{durumAdi(o)}</span></span>
         <Simge ad="chev-right" boyut="k" />
@@ -183,7 +189,8 @@ function YeniEmirFormu({ durum: d, yetki, komut, acildi, git, ilkUrun }: {
   // (uretim-emirleri.yaz). İşlemi olmayan yolun ürünü listede yoktur.
   const urunler = useMemo(() => (d.items ?? [])
     .filter((i) => uretilirMi(d, i.id) ? yetki.rotaEmreKopyala : (i.type === 'mamul' || i.type === 'yari') && yetki.emirYaz)
-    .sort((a, b) => Number(b.type === 'mamul') - Number(a.type === 'mamul')), [d, yetki]);
+    // Rotalı ürün önce gelir: formun ilk seçimi emri açılabilen üründür (B-2500-6).
+    .sort((a, b) => Number(uretilirMi(d, b.id)) - Number(uretilirMi(d, a.id)) || Number(b.type === 'mamul') - Number(a.type === 'mamul')), [d, yetki]);
   const tatiller = d.cal.holidays;
   const ilk = isGunuEkle(bugun(), 0, tatiller);
   const [f, setF] = useState<YeniFormDurumu>({
@@ -199,6 +206,18 @@ function YeniEmirFormu({ durum: d, yetki, komut, acildi, git, ilkUrun }: {
   const cokKatmanVar = onizleme !== undefined && onizleme.kokRevizyon.id === kokRevizyon && (onizleme.ileti !== null || onizleme.dugumler.length > 1);
   const cokAcik = cokKatmanVar && cok.acik && onizleme.ileti === null && onizleme.engel === null;
   const yaz = (alan: Partial<YeniFormDurumu>) => { setF({ ...f, ...alan }); setHata(null); };
+  // Proje şartı form açıkken bilinsin (B-2502-3): ürün ve türün açık projesi yoksa emir gönderimde değil burada durur. Okunamazsa
+  // form eskisi gibi çalışır; şartı açılışta sahibi yine denetler.
+  const malzemeNo = Number(f.urun);
+  const acilis = useQuery({
+    queryKey: [...RR_ANAHTARI, 'acilis-secenekleri', malzemeNo, f.tur] as const,
+    enabled: Number.isInteger(malzemeNo) && malzemeNo > 0,
+    queryFn: () => api.get<AcilisSecenekleri & { rotasizAcik?: boolean }>(`/adimli-emirler/acilis-secenekleri?malzemeNo=${String(malzemeNo)}&emirTuru=${encodeURIComponent(f.tur)}`),
+  });
+  const projeYok = acilis.data?.projeZorunlu === true && acilis.data.projeler.length === 0;
+  // B-2500-6: rotasız emir ayarı kapalıyken rotasız ürün seçilse de emir açılamaz (sahibi 409 verir); form bunu baştan söyler ve rota
+  // kurulacak yere götürür. Ayarı açılış seçenekleri taşır; alan yoksa (eski sunucu) karar yine sahibindedir.
+  const rotasizKapali = acilis.data?.rotasizAcik === false && !uretilirMi(d, f.urun);
 
   if (urunler.length === 0) {
     return <DurumKutusu durum="bos" mesaj={'Emir açmak için mamul ya da yarı mamul gerekli. "Ürün ve rotalar"dan başlayın.'} />;
@@ -216,6 +235,8 @@ function YeniEmirFormu({ durum: d, yetki, komut, acildi, git, ilkUrun }: {
   const gecmis = gecmisTeslimMi(f.teslim, bugun());
   const olustur = async (gecmisOnayli = false) => {
     if (!adet.tamam || adet.deger === null || !(adet.deger > 0)) { setHata('Miktar sıfırdan büyük olmalı.'); return; }
+    // Emir adedi parça sayısıdır (2565): kesirli adet gönderilmez.
+    if (!Number.isInteger(adet.deger)) { setHata('Miktar tam sayı olmalı.'); return; }
     if (!/^\d{4}-\d{2}-\d{2}$/.test(f.baslangic) || !/^\d{4}-\d{2}-\d{2}$/.test(f.teslim)) { setHata('Başlangıç ve teslim tarihini girin.'); return; }
     // K19 a: geçmiş teslim engel değildir; emir kullanıcı onaylayınca açılır.
     if (gecmis && !gecmisOnayli) { setGecmisSorusu(true); return; }
@@ -258,7 +279,7 @@ function YeniEmirFormu({ durum: d, yetki, komut, acildi, git, ilkUrun }: {
           etiket="Ürün" value={f.urun} onChange={(o) => { yaz({ urun: o.target.value }); setBolme(bosBolme(true)); setCok(bosCokKatman()); }}
           secenekler={urunler.map((u) => ({ deger: u.id, baslik: `${u.code} ${u.name}${uretilirMi(d, u.id) ? '' : ' (rotasız)'}` }))}
         />
-        <Girdi etiket="Miktar" inputMode="decimal" value={f.miktar} onChange={(o) => { yaz({ miktar: o.target.value }); }} />
+        <Girdi etiket="Miktar" inputMode="numeric" value={f.miktar} onChange={(o) => { yaz({ miktar: o.target.value }); }} />
         <Girdi etiket="Başlangıç" type="date" value={f.baslangic} onChange={(o) => { yaz({ baslangic: o.target.value }); }} />
         <Girdi etiket="Teslim" type="date" value={f.teslim} onChange={(o) => { yaz({ teslim: o.target.value }); }}
           ipucu={gecmis ? 'Teslim tarihi geçmişte: emir açılınca gecikmiş görünür.' : undefined} />
@@ -280,7 +301,7 @@ function YeniEmirFormu({ durum: d, yetki, komut, acildi, git, ilkUrun }: {
         />
       )}
       {cokKatmanVar && (
-        <CokKatmanPaneli onizleme={onizleme} durum={d} miktar={adet.tamam ? adet.deger : null} deger={cok} degistir={(s) => { setCok(s); setHata(null); }} git={git} />
+        <CokKatmanPaneli onizleme={onizleme} durum={d} miktar={adet.tamam && adet.deger !== null && Number.isInteger(adet.deger) ? adet.deger : null} deger={cok} degistir={(s) => { setCok(s); setHata(null); }} git={git} />
       )}
       {rotali && cokAcik && <p className="tc-rr3-uyari" data-bilgi=""><Simge ad="alert" boyut="k" />Çok katmanlı emir açılırken bölünmez; sunucu bölmeyi bu emirde henüz kabul etmiyor.</p>}
       {rotali && !cokAcik && (
@@ -288,9 +309,20 @@ function YeniEmirFormu({ durum: d, yetki, komut, acildi, git, ilkUrun }: {
           yeni girdi={girdi} adimlar={adimlar} baslamis={[]} opdefs={d.opdefs} istasyonlar={d.stations} deger={bolme} degistir={setBolme}
         />
       )}
+      {rotasizKapali && (
+        <p className="tc-rr3-uyari" role="status">
+          <Simge ad="alert" boyut="k" />Bu ürünün rotası yok; rotasız üretim emri ayarlardan kapalı. Önce rotasını kurun.{' '}
+          <Dugme tur="ikincil" simge="route" onClick={() => { git('schema', f.urun); }}>Rotasını kur</Dugme>
+        </p>
+      )}
+      {projeYok && (
+        <p className="tc-rr3-uyari" role="status">
+          <Simge ad="alert" boyut="k" />Bu ürün için açık proje yok; bu türde üretim emri bir projeyle açılır. <Link to={PROJELER_YOLU}>Projeler</Link>
+        </p>
+      )}
       {hata && <p className="tc-rr3-uyari" role="alert"><Simge ad="alert" boyut="k" />{hata}</p>}
       <div className="tc-rr3-arac">
-        <Dugme tur="birincil" boyut="ana" simge="check" yukleniyor={komut.mesgul} onClick={() => { void olustur(); }}>Emri oluştur</Dugme>
+        <Dugme tur="birincil" boyut="ana" simge="check" yukleniyor={komut.mesgul} disabled={projeYok || rotasizKapali} onClick={() => { void olustur(); }}>Emri oluştur</Dugme>
       </div>
       {gecmisSorusu && (
         <Pencere acik kapat={() => { setGecmisSorusu(false); }} baslik="Teslim tarihi geçmişte" alt={(

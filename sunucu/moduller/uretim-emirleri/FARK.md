@@ -253,3 +253,33 @@ Taban main 6d14403. Başvuru: DEVAM-paketi-rota-plan/ilk-sistem-kodu (adımlı �
 - Davranış: onay sırasız, aynı kişi iki işleme sahipse ikisini verir (1077 b); ret verilmiş onayları düşürür; eksik madde onayı durdurur, yalnız müdür gerekçeyle muaf tutar (1076 a, tura bağlı); iki onay kapanışı tamamlar ve kalite kararını kilitler, müdür gerekçeyle geri açar, yeni turda iki onay yeniden (1080 a). `/kapat` yalnız hatalı parça kararıyla duran emri kapatır: bekleyen adımlar kalkar, emir sağlamsız biter ve kapanışa düşer; sonuç "saglamsiz" (1079 a).
 - Emir okumalarına (izleme, biten, ayrıntı) isteğe bağlı `kapanisSonucu` geldi; `disari.kapanisSonuclari(db, idler)` reçete-rota ve etiket için.
 - İşlem: `uretim-emirleri.kapanis-oku`, `kapanis-kalite`, `kapanis-onay` (1078 a); rol satırları K2'de.
+- 2520-2: `isEmirleriniYenile` isteğe bağlı `surum` alır; satır kilidinden sonra denetlenir, eski sürüm ESKI_SURUM (409). Çağıran rota (B17) verene kadar davranış değişmez.
+- 2521 b (kullanıcı kararı 09.11.2026): ilk parça kararı bekleyen parça varken adım (adımsız emirde emir) bitirilmez; `emirBitir` CAKISMA (409) "n parça ilk parça kararı bekliyor (OP x). Kalite Merkezi kararı gelmeden iş bitirilemez." döner, yazı olmaz. Adetli bitişte karar bekleyene fark yazma yolu (327 a) kalktı. Arkon bitiş kaydı "reddedildi" yansır; terminal nedeni ve işin süren hâlini kayıt cevabından alır. 2102-2 b (bitmiş adımda karar bekleyenin sonraki adım hedefine yazılması) bitiş yolunda artık oluşmaz.
+- 2520-5 (2497, B-2499-12): terminalde çalışan iş emri bitince (`emirBitir`, emirle biten son adım dahil) aynı işlemde `adimBittiBildir({ isEmriId, uretimEmriId, kisiId })`; `disari.ts` `adimBittiDinle` verir. Fason dönüşü, GKK kalite kararı, adımsız eski emir ve katılımdan ayrılma olay vermez.
+- 2520-6 (B-2499-4, 2493 sorusu): örnek veri emirleri rotanın adım girenlerini (bileşen) emre kopyalar; önceden kopyalanmadığı için örnek emirler Malzeme ihtiyacı'nda görünmüyor, sayım sarf ve depo isteği açmıyordu.
+- 2520-7 (B-2500-6, 2487 isteği): `GET /adimli-emirler/acilis-secenekleri` cevabına `rotasizAcik` ("Rotasız üretim emri" ayarı, `uretim-emirleri.rotasiz-emir`) eklendi. Uç yetkisi değişmedi (açma işlemlerinden biri); ayarın kendisi okunur, yazılmaz.
+
+## 2530-s: bölünmemiş emre ek adım (kullanıcı kararı 2530 a)
+- Rework, tamir ve ek adım artık bölünmemiş emre de konur ve çıkarılır (`ekAdimIhlali`, `ekAdimKaldirIhlali`; `kolOrtak` kökü reddetmez).
+  Önce yalnız bölünmüş partiye (kola) konuyordu. `EK_ADIM_KOLDA` iletisi kalktı.
+- VARSAYIM: açık alt partisi olan emir (kök ya da kol) ek adım almaz (KOL_ALT_PARTILI); alt parti kopyaladığı adımları kendisi yapar,
+  üstte değişen adım dizisi bölünme ve birleşme sırasını bozardı. Geri alma: ucuz (kural ve test).
+- Birleşme planı uçları kökü kendileri reddeder (BIRLESME_PLANI_KOLDA); değişmedi. Yetki değişmedi (uretim-emirleri.yaz ya da plan.canliya-al).
+- 2520-2: `isEmirleriniYenile` isteğe bağlı `surum` alır; satır kilidinden sonra denetlenir, eski sürüm ESKI_SURUM (409). Çağıran rota (B17) verene kadar davranış değişmez.
+- 2521 b (kullanıcı kararı 09.11.2026): ilk parça kararı bekleyen parça varken adım (adımsız emirde emir) bitirilmez; `emirBitir` CAKISMA (409) "n parça ilk parça kararı bekliyor (OP x). Kalite Merkezi kararı gelmeden iş bitirilemez." döner, yazı olmaz. Adetli bitişte karar bekleyene fark yazma yolu (327 a) kalktı. Arkon bitiş kaydı "reddedildi" yansır; terminal nedeni ve işin süren hâlini kayıt cevabından alır. 2102-2 b (bitmiş adımda karar bekleyenin sonraki adım hedefine yazılması) bitiş yolunda artık oluşmaz.
+- 2520-5 (2497, B-2499-12): terminalde çalışan iş emri bitince (`emirBitir`, emirle biten son adım dahil) aynı işlemde `adimBittiBildir({ isEmriId, uretimEmriId, kisiId })`; `disari.ts` `adimBittiDinle` verir. Fason dönüşü, GKK kalite kararı, adımsız eski emir ve katılımdan ayrılma olay vermez.
+
+## 2627 2/2 c: Excel ile açık emirleri güncelleme (kart 2704 a kapsamı)
+- Yeni uç `POST /adimli-emirler/toplu-guncelle` (`uretim-emirleri.yaz`, istek kimliği zorunlu, tek transaction). Satır: emir kimliği, önizlemedeki sürüm, isteğe bağlı öncelik ve `planaAl`.
+- Yeni dosya `toplu-guncelle.ts`: satırlar var olan tek kayıt komutlarından geçer (`planaAl`, `oncelikDegistir`); kural, sürüm denetimi ve öncelik değişim kaydı onlarındır. Bir satırın reddi bütün satırları geri alır, ileti "Satır N: ..." olur (`satirdaReddet`).
+- Servis, kural, sorgu ve `disari.ts` değişmedi. İşlem ve rol değişmedi.
+
+## 2721 (10.11.2026): başlamış emri arşive alma
+- Yeni uçlar `GET /adimli-emirler/:id/arsiv-onizleme` ve `POST /adimli-emirler/:id/arsive-al` (`uretim-emirleri.yaz`, 2721 3/3 a). Kalıcı silme yok.
+- Komut tek işlemde: açık makine kullanımı ve katılım `duraklat` olayıyla kapanır (duruş sayılmaz, iş terminalden düşer); sayım, olay ve tüketim kalır; emir `iptal` olur, iptal olayı yayılır (stok rezerveyi kaldırır, açık depo isteklerini iptal eder); kapanış açılır, eksik maddeler muafiyet ya da kararla kapanır.
+- Engeller (`arsivIhlali`): açık olmayan emir, hiç adımı başlamamış emir (iptal edilir), açık kollu emir. Fasonda parça engel değil uyarıdır (2721 2/3 b); arşivdeki emrin fason dönüşü yazılır (`arsivdeFasonDonusuAcik`), yeni gidiş ve tamamlama yazılmaz.
+- Durum 2721 1/3 a: arşiv iptal durumudur; ayrı damga eklenmedi.
+- Göç `20261110065306_uretim_emirleri_arsiv_baslama.sql`: `uretim_emri_durum_alanlari` yalnız genişler, iptal emirde başlama anı kalabilir.
+- 2731 b: kararsız hatalı parça kaydı arşive almayı durdurmaz, uyarı olur (`ARSIV_HATALI_ACIK`). Kaydın açtığı kol kol engeline girmez, emirle birlikte iptal olur (kendi kapanışı açılmaz). Arşivde Kalite Merkezi hurda, red, kabul ve şartlı kabul verir; rework kapalıdır (`HATALI_ARSIVDE_REWORK`). Arşivdeki kararda kol katılmaz, emir bitmez; sayım ve stok olayı terminaldeki gibi yazılır. Kapanışsız iptal emirde karar kapalı kalır.
+- 2757: hatalı kayıt özeti (`hataliKaydiSemasi`) `arsivde` taşır; `hataliArsivdeMi` ile doldurulur (kök emir arşivde, hedef iptal). Ekran arşivdeki kayıtta rework seçeneğini kapatır; davranış değişmez.
+- 2768 (2756 b): hazır olmayan adımın ilk başlatması uyarıyla sürer ve öncül başına `uretim_emirleri_sira_disi_baslatma` satırı yazar (kişi, istasyon, zaman, öncül, tür, devir adedi, hazır adet, öncülün sayılanı). Uyarı ve kayıt aynı kuraldan (`siraDisiBaslatmalar`); duraklamadan dönüş ve katılım yazmaz. Öncülün sayılanı her rotada öncülün kendi sayımıdır (sıralı rotada uyarıdaki gelen adıma girendir). Göç yalnız yeni tablo.

@@ -8,8 +8,8 @@ import { uygulamaKur } from '#cekirdek/uygulama.ts';
 import type {
   AcilisCevabi, Ayarlar, DegerlendirmeCevabi, KartAyrintilariCevabi, FirmaSecenekleriCevabi, KatalogKaydi, Talebim, TaleplerimCevabi, Talep, TalepGovdesi, Tedarikci,
 } from '#paylasilan/sozlesme/satin-alma.ts';
-import type { KgFiyatiGecmisiCevabi, KgFiyatlariCevabi, MalzemeSecenekleriCevabi, SatinAlmaOzetiCevabi, SiparisBelgeleriCevabi, SiparisFaturalariCevabi, SiparisTakibiCevabi } from '#paylasilan/sozlesme/satin-alma.ts';
-import type { BeklenenOdemelerCevabi } from '#paylasilan/sozlesme/finans.ts';
+import type { ButceKullanimiCevabi, FaturaEslemesiCevabi, KgFiyatiGecmisiCevabi, KgFiyatlariCevabi, MalzemeSecenekleriCevabi, SatinAlmaOzetiCevabi, SiparisBelgeleriCevabi, SiparisFaturalariCevabi, SiparisTakibiCevabi } from '#paylasilan/sozlesme/satin-alma.ts';
+import type { BeklenenOdemelerCevabi, TedarikciAlacagi, TedarikciAlacaklariCevabi } from '#paylasilan/sozlesme/finans.ts';
 import type { BildirimListeCevabi } from '#paylasilan/sozlesme/bildirim.ts';
 import { denetimYaz } from '../denetim/disari.ts';
 import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
@@ -17,12 +17,12 @@ import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
 import {
-  karsilamaLogoSonucu, logoyaGidecekKarsilamalar, logoyaGidecekSiparisler, logoyaGidecekTalepler, logoyaGuncellemeGidecekSiparisler, logoyaKapatmaGidecekSiparisler, siparisLogoKapatmaSonucu, logoyaIptalGidecekSiparisler, malKabulFiyatlari, malzemeGelisTarihleri, ortalamaAlisFiyatlari, siparisSatiriBelgeleri, siparisLogoGuncellemeSonucu, siparisLogoIptalSonucu, siparisLogoSonucu, siparisSatirlari, sonAlisFiyatlari, talepLogoSonucu, teslimGeriAl, teslimIsle, siparisSatirlarininEmri, isEmriFasonTutarlari,
+  karsilamaLogoSonucu, logoyaGidecekKarsilamalar, logoyaGidecekSiparisler, logoyaGidecekTalepler, logoyaGuncellemeGidecekSiparisler, logoyaKapatmaGidecekSiparisler, siparisLogoKapatmaSonucu, logoyaIptalGidecekSiparisler, malKabulFiyatlari, malzemeGelisTarihleri, ortalamaAlisFiyatlari, siparisSatiriBelgeleri, siparisLogoGuncellemeSonucu, siparisLogoIptalSonucu, siparisLogoSonucu, siparisSatirlari, sonAlisFiyatlari, talepLogoSonucu, teslimGeriAl, teslimIsle, siparisSatirlarininEmri, isEmriFasonTutarlari, siparisBirimFiyatlari,
 } from './disari.ts';
 import { uclar } from './uclar.ts';
 import * as servis from './servis.ts';
 import { tedarikciOnayDurumlari } from '../kalite-merkezi/disari.ts';
-import { ILETILER, karneTeslimOlayi } from './kurallar.ts';
+import { ILETILER, karneTeslimOlayi, talepEdenGorunumu } from './kurallar.ts';
 import { kablola } from '../../kablolama.ts';
 import { takvimKayitlari } from './disari.ts';
 import { tesisGunu } from '#paylasilan/zaman.ts';
@@ -1765,6 +1765,9 @@ describe('satin-alma sürüm 6 (gerçek PostgreSQL)', () => {
     });
     // İskonto satıra düşer; nakliye ve diğer masraf teklif başınadır, iş emrine dağıtılmaz.
     assert.deepEqual([...(await oku())], [[ie, [{ tutar: '18.00', paraBirimi: 'TRY' }, { tutar: '90.00', paraBirimi: 'USD' }]]]);
+    // 2600 3/3 b: fason siparişin masrafı (7 + 3) genel gidere girer, emre değil: oran 10 / (18 + 10); masrafsız sipariş 0.
+    const oranlar = await vt().tx((db) => servis.siparisGenelGiderOranlari(db, [{ talepId: s.id, teklifId: a }, { talepId: s.id, teklifId: b }]));
+    assert.deepEqual([...oranlar].sort(), [[`${s.id}:${a}`, 0.357143], [`${s.id}:${b}`, 0]].sort());
     assert.equal((await vt().tx((db) => isEmriFasonTutarlari(db, []))).size, 0);
     tamam<Talep>(await kaydet(c.sa, { ...govde(await acilistaki(s.id)), durum: 'iptal', iptalNedeni: 'Deneme' }));
     assert.equal((await oku()).size, 0);
@@ -3031,6 +3034,526 @@ describe('satin-alma sürüm 6 (gerçek PostgreSQL)', () => {
     assert.equal(sonra.tedarikciye.find((x) => x.ad === 'Tolerans')?.deger, 'h9');
     await assert.rejects(ortam!.sahip.tx((db) => db.sorgu("UPDATE satin_alma_siparis_kart_kopyasi SET kart_surumu = 0")), /yalnız ekleme/);
     for (const cerez of [c.talep, c.operator]) assert.equal((await istek(cerez, 'GET', `/satin-alma-talepleri/${t.id}/kart-ayrintilari`)).statusCode, 403);
+  });
+
+  test('2454: bütçe kullanımı sunucuda: kalem tutarı birime ve sipariş yılına, kur teklifin sabit kurundan (T1); kalanı kapatılan siparişte gerçekleşen teslim (2462 a); onay kırılımı', async () => {
+    const kurEkle = async (tarih: string, kur: number) => tamam(await istek(c.yonetici, 'POST', '/finans/kur-ciftleri/ekle', { paraBirimi: 'USD', tarih, alis: kur - 0.5, satis: kur }));
+    await kurEkle('2025-06-02', 30);
+    const kullanim = async (cerez = c.sa) => tamam<ButceKullanimiCevabi>(await istek(cerez, 'GET', '/satin-alma-butce-kullanimi?yil=2026')).birimler;
+    const bos = async () => Number((await kullanim()).find((b) => b.birim === null)?.kullanilan ?? '0');
+    const once = await bos();
+    // k1 B'den 10 x 9 TRY; k2 A'dan 4 x 8 USD, teklifin günü kuru 30.
+    const { s, a, k2 } = await bolunmusSiparis('8', { paraBirimi: 'USD', teklifTarihi: '2025-06-03' });
+    assert.equal(s.teklifler.find((q) => q.id === a)?.kur, '30');
+    // Onayda kur kilitlendiyse kararın sabit kuru, yoksa teklifin kuru.
+    const kur = Number(s.karar!.sabitKurlar.find((x) => x.paraBirimi === 'USD')?.kur ?? '30');
+    const usd = 4 * 8 * kur;
+    const ara = await bos();
+    assert.equal(Math.round((ara - once) * 100) / 100, 90 + usd);
+    // T1: finansın kuru sonradan değişir, kullanım değişmez.
+    await kurEkle('2025-06-20', 33);
+    assert.equal(await bos(), ara);
+    // Onay kırılımı: birim, bu talep hariç kullanım ve bu alım.
+    const d = tamam<{ butce: { birim: string | null; butce: string | null; yil: number; kullanilan: string; buAlim: string }[] }>(await istek(c.mudur, 'GET', `/satin-alma-talepleri/${s.id}/degerlendirme`)).butce;
+    assert.deepEqual(d.map((x) => [x.birim, x.butce, x.yil, x.buAlim]), [[null, null, 2026, (90 + usd).toFixed(2)]]);
+    assert.equal(Math.round(Number(d[0]!.kullanilan) * 100) / 100, Math.round((ara - 90 - usd) * 100) / 100);
+    // 2462 a: A siparişine 1 / 4 teslim gelir ve kalanı kapatılır: kullanım gerçekleşen teslim değerine iner (çeyreği kalır; teklifte masraf yok).
+    await teslimEt(siparisi(s, a).satirlar.find((x) => x.kalemId === k2)!.id, '1', 9901);
+    assert.equal(await bos(), ara, 'açık siparişte kullanım sipariş tutarıdır');
+    await ortam!.sahip.sorgu("UPDATE satin_alma_siparis SET logo_gonderim_durumu = 'gonderildi', logo_gonderim_zamani = now(), logo_kayit_no = 'DENEME-2454', logo_kapatma_durumu = 'bekliyor' WHERE talep_id = $1 AND teklif_id = $2", [s.id, a]);
+    assert.equal(Math.round((await bos()) * 100) / 100, Math.round((ara - usd * 0.75) * 100) / 100);
+    // V3: iptal edilen talep kullanımdan düşer. V4: talep eden ve işlemsiz göremez.
+    await ortam!.sahip.sorgu("UPDATE satin_alma_talep SET durum = 'iptal', iptal_nedeni = 'Deneme iptal' WHERE id = $1", [s.id]);
+    assert.equal(Math.round((await bos()) * 100) / 100, Math.round(once * 100) / 100);
+    for (const cerez of [c.talep, c.operator]) assert.equal((await istek(cerez, 'GET', '/satin-alma-butce-kullanimi?yil=2026')).statusCode, 403);
+    assert.equal((await istek(c.mudur, 'GET', '/satin-alma-butce-kullanimi?yil=26')).statusCode, 400);
+  });
+
+  // 2472 yardımcıları: siparişi Logo'ya gönderilmiş say, takipteki planı oku, notları süz.
+  const logoyaGitti = async (talepId: string, teklifId: string, satirId: number, kayitNo: string) =>
+    logoSonucu(await siparisNo(talepId, teklifId), { kayitNo, satirlar: [{ satirId, logoSatirRef: `${kayitNo}1` }] });
+  const odemePlani = async (talepId: string, teklifId: string) => tamam<SiparisTakibiCevabi>(await istek(c.sa, 'GET', `/satin-alma-talepleri/${talepId}/siparis-takibi`))
+    .siparisler.find((x) => x.teklifId === teklifId)!.odemePlani.map((x) => [x.tur, x.tutar]);
+  const planToplami = (p: unknown[][]) => Math.round(p.reduce((t, x) => t + Number(x[1]), 0) * 100) / 100;
+
+  test('2472: kalanı kapatılan siparişin planı aynı işlemde gerçekleşen teslim değerine iner (KDV dahil); bütçe kullanımıyla aynı tanım (M3); faturalı plan değişmez, not düşer; talep eden notu görmez; geri alma planı yeniden indirir', async () => {
+    // A: k2 4 x 10, genel iskonto %10 (mal 36), nakliye 7 hariç + diğer 3, avans %30: 46; KDV %20 dahil 55.20, avans 16.56.
+    const { s, a, b } = await bolunmusSiparis('10', { avansYuzdesi: '30', iskontoYuzdesi: '10', nakliye: '7', nakliyeDahil: false, digerMasraf: '3' });
+    const [satirA, satirB] = [siparisi(s, a).satirlar[0]!.id, siparisi(s, b).satirlar[0]!.id];
+    await logoyaGitti(s.id, a, satirA, '24720');
+    await logoyaGitti(s.id, b, satirB, '24721');
+    await teslimEt(satirA, '1', 247201);
+    await teslimEt(satirB, '5', 247202);
+    // Açık sipariş: plan sipariş tutarıdır.
+    assert.equal(planToplami(await odemePlani(s.id, a)), 55.2);
+    // B'ye fatura bağlanır: planı kilitlenir.
+    const belge = tamam<{ belge: { id: number } }>(await istek(c.yonetici, 'POST', '/finans/belgeler/ekle', {
+      yon: 'gider', kategori: 'mal_alimi', firmaId: firmaB, belgeNo: 'DN-2472', belgeTarihi: '2026-10-09', vade: '2026-11-09', tutar: 10, kdvOrani: 20,
+    })).belge.id;
+    tamam(await istek(c.sa, 'POST', `/satin-alma-talepleri/${s.id}/siparis-faturasi`, { teklifId: b, belgeId: belge, bagla: true }));
+    const bPlani = await odemePlani(s.id, b);
+    // A kapatılır: gerçekleşen 36 x 1/4 + 10 = 19, KDV dahil 22.80; avans 16.56 kalır, kalan tek vadeli satır.
+    tamam<Talep>(await kapat(await acilistaki(s.id), a));
+    const planA = await odemePlani(s.id, a);
+    assert.deepEqual([planA.length, planA[0], planToplami(planA)], [2, ['avans', '16.56'], 22.8]);
+    let t = await acilistaki(s.id);
+    assert.ok(t.hareketler.some((h) => h.metin.includes('ödeme planı gerçekleşen teslim değerine göre yeniden kuruldu')));
+    // M3: TL plan toplamı (KDV hariç) kapalı siparişin bütçe kullanımına eşittir; B açık, sipariş tutarı 10 x 9 = 90. Para birimi TRY.
+    const d = tamam<{ butce: { buAlim: string }[] }>(await istek(c.mudur, 'GET', `/satin-alma-talepleri/${s.id}/degerlendirme`)).butce;
+    assert.ok(Math.abs(Number(d[0]!.buAlim) - 90 - planToplami(planA) / 1.2) <= 0.01, `${d[0]!.buAlim}`);
+    // B kapatılır: faturalı plan değişmez; gerçekleşen 45 (KDV dahil 54), plan 108: fark not olarak düşer.
+    tamam<Talep>(await kapat(t, b));
+    assert.deepEqual(await odemePlani(s.id, b), bPlani);
+    t = await acilistaki(s.id);
+    const notlar = t.hareketler.filter((h) => /gerçekleşen teslim değerinden|gerçekleşen teslim değerine göre/.test(h.metin));
+    assert.ok(notlar.some((h) => h.metin.includes('ödeme planı gerçekleşen teslim değerinden 54 TRY farklı; planı gözden geçirin')));
+    // Güvenlik: notlar tutar taşır; yazarı kapatan satın almacıdır, talep edenin görünümüne girmez.
+    assert.ok(notlar.every((h) => h.kisiId === kisi.sa));
+    assert.equal(talepEdenGorunumu(t, kisi.talep!).hareketler.some((h) => /gerçekleşen teslim/.test(h.metin)), false);
+    // Kapalı siparişte teslim geri alınır: teslim kalmaz, gerçekleşen değer 0; plandaki avans da 0'a iner (2480-1 a), plan kalkar.
+    await geriAl(247201);
+    assert.deepEqual(await odemePlani(s.id, a), []);
+    assert.ok((await acilistaki(s.id)).hareketler.some((h) => h.metin.includes('ödeme planı kaldırıldı: gerçekleşen teslim değeri yok')));
+  });
+
+  test('2472 M2, 2132-6 a: avans gerçekleşen değeri aşarsa vadeli satır yazılmaz, fark KDV dahil sipariş dövizinde geçmişe düşer; elle plan değişmez, not düşer', async () => {
+    // A: 4 x 10 = 40, avans %80 = 32; KDV dahil avans 38.40. 1 / 4 teslim: gerçekleşen 10, KDV dahil 12; aşım 26.40.
+    const { s, a, b } = await bolunmusSiparis('10', { avansYuzdesi: '80' });
+    const [satirA, satirB] = [siparisi(s, a).satirlar[0]!.id, siparisi(s, b).satirlar[0]!.id];
+    await logoyaGitti(s.id, a, satirA, '24730');
+    await logoyaGitti(s.id, b, satirB, '24731');
+    await teslimEt(satirA, '1', 247301);
+    tamam<Talep>(await kapat(await acilistaki(s.id), a));
+    // 2480-1 a: plandaki avans gerçekleşen değere (KDV dahil 12) iner; asıl aşım geçmişte alacak notu olarak kalır.
+    assert.deepEqual(await odemePlani(s.id, a), [['avans', '12']]);
+    assert.ok((await acilistaki(s.id)).hareketler.some((h) => /avans gerçekleşen teslim değerini 26\.4 TRY aşıyor; plandaki avans gerçekleşen değere indirildi, avans ödendiyse fark tedarikçiden alacaktır/.test(h.metin)));
+    // 2480: kapalı siparişin faturası gerçekleşen değerle (KDV hariç 10) eşleşir; bilerek kapatılan kalan eksik teslim uyarısı vermez.
+    const belge = tamam<{ belge: { id: number } }>(await istek(c.yonetici, 'POST', '/finans/belgeler/ekle', {
+      yon: 'gider', kategori: 'mal_alimi', firmaId: firmaA, belgeNo: 'DN-2480', belgeTarihi: '2026-10-09', vade: '2026-11-09', tutar: 10, kdvOrani: 20,
+    })).belge.id;
+    assert.deepEqual(tamam<{ uyarilar: string[] }>(await istek(c.sa, 'POST', `/satin-alma-talepleri/${s.id}/siparis-faturasi`, { teklifId: a, belgeId: belge, bagla: true })).uyarilar, []);
+    // B: elle plan (100); 4 / 10 teslim, gerçekleşen 36, KDV dahil 43.20: plan yerinde kalır, fark 56.80.
+    tamam(await istek(c.sa, 'POST', `/satin-alma-talepleri/${s.id}/odeme-plani`, { teklifId: b, surum: (await acilistaki(s.id)).surum,
+      satirlar: [{ tur: 'vade', vade: '2026-12-15', yontem: 'banka', tutar: '100' }] }));
+    await teslimEt(satirB, '4', 247302);
+    tamam<Talep>(await kapat(await acilistaki(s.id), b));
+    assert.deepEqual(await odemePlani(s.id, b), [['vade', '100']]);
+    assert.ok((await acilistaki(s.id)).hareketler.some((h) => h.metin.includes('ödeme planı gerçekleşen teslim değerinden 56.8 TRY farklı')));
+  });
+
+  test('2480 (Maliyet P1): dövizli kapalı siparişte plan ve bütçe aynı değeri verir; karşılaştırma sipariş dövizinde, 0,01 USD', async () => {
+    tamam(await istek(c.yonetici, 'POST', '/finans/kur-ciftleri/ekle', { paraBirimi: 'USD', tarih: '2025-07-02', alis: 34.5, satis: 35 }));
+    // A: k2 4 x 8.33 USD, nakliye 4.17 hariç; 1 / 4 teslim: 8.33 + 4.17 = 12.50 USD.
+    const { s, a, b } = await bolunmusSiparis('8.33', { paraBirimi: 'USD', teklifTarihi: '2025-07-03', nakliye: '4.17', nakliyeDahil: false });
+    const kur = Number(s.karar!.sabitKurlar.find((x) => x.paraBirimi === 'USD')?.kur ?? s.teklifler.find((q) => q.id === a)!.kur);
+    const [satirA, satirB] = [siparisi(s, a).satirlar[0]!.id, siparisi(s, b).satirlar[0]!.id];
+    await logoyaGitti(s.id, a, satirA, '24800');
+    await logoyaGitti(s.id, b, satirB, '24801');
+    await teslimEt(satirA, '1', 248001);
+    tamam<Talep>(await kapat(await acilistaki(s.id), a));
+    const planA = await odemePlani(s.id, a);
+    assert.equal(planToplami(planA), 15);
+    // B açık, TRY 10 x 9 = 90.
+    const d = tamam<{ butce: { buAlim: string }[] }>(await istek(c.mudur, 'GET', `/satin-alma-talepleri/${s.id}/degerlendirme`)).butce;
+    assert.ok(Math.abs((Number(d[0]!.buAlim) - 90) / kur - planToplami(planA) / 1.2) <= 0.01, `${d[0]!.buAlim} / ${kur}`);
+  });
+
+  // 2611 a yardımcıları: projeler sahibin bağlantısıyla eklenir (projeler modülünün ucu bu testin konusu değil).
+  const projeEkle = async (kod: string, durum = 'aktif') => (await ortam!.sahip.tx((db) => db.tek<{ id: number }>(
+    "INSERT INTO projeler_proje (kod, ad, durum, olusturan_id) VALUES ($1, $2, $3, $4) RETURNING id", [kod, `Deneme proje ${kod}`, durum, yoneticiId])))!.id;
+
+  test('2611 a: emirsiz talep projeye bağlanır; yalnız aktif proje, emirli talepte proje yok; gelmeyen alan projeyi korur; değişiklik harekete yazılır; başkasının talebinde 403 (K1); seçenek ucu talep açana açık (K4)', async () => {
+    const aktif = await projeEkle('P2611A');
+    const pasif = await projeEkle('P2611B', 'tamamlandi');
+    const secenek = tamam<{ projeler: { id: number }[] }>(await istek(c.talep, 'GET', '/satin-alma-talepleri/proje-secenekleri')).projeler.map((p) => p.id);
+    assert.deepEqual([secenek.includes(aktif), secenek.includes(pasif)], [true, false]);
+    assert.equal((await istek(c.operator, 'GET', '/satin-alma-talepleri/proje-secenekleri')).statusCode, 403);
+    assert.equal((await istek(c.talep, 'POST', '/satin-alma-talepleri/ac', yeniTalep({ projeId: pasif }))).statusCode, 400);
+    const t = tamam<Talep>(await istek(c.talep, 'POST', '/satin-alma-talepleri/ac', yeniTalep({ projeId: aktif })));
+    assert.deepEqual([t.projeId, t.proje?.kod], [aktif, 'P2611A']);
+    // Alanı bilmeyen istemci: projeId gövdede yok, proje kalır.
+    const { projeId: _p, ...alansiz } = govde(t);
+    const korundu = tamam<Talep>(await kaydet(c.talep, { ...alansiz, notlar: 'Deneme not' }));
+    assert.equal(korundu.projeId, aktif);
+    // K1: başkasının talebinin projesini değiştirmek gövde değişikliğidir.
+    assert.equal((await kaydet(c.talep2, { ...govde(korundu), projeId: null })).statusCode, 403);
+    const kalkti = tamam<Talep>(await kaydet(c.talep, { ...govde(korundu), projeId: null }));
+    assert.deepEqual([kalkti.projeId, kalkti.proje], [null, null]);
+    assert.ok(kalkti.hareketler.some((h) => h.metin === 'Proje: P2611A Deneme proje P2611A -> yok'), JSON.stringify(kalkti.hareketler));
+    // Proje pasifleşince yeniden seçilemez; emirli talebe proje veritabanında da girmez.
+    assert.equal((await kaydet(c.talep, { ...govde(kalkti), projeId: pasif })).statusCode, 400);
+    await assert.rejects(ortam!.sahip.sorgu('UPDATE satin_alma_talep SET uretim_emri_id = $2, proje_id = $3 WHERE id = $1', [t.id, await emirAc(), aktif]),
+      kisitla('satin_alma_talep_proje_emirsiz'));
+  });
+
+  test('2611 a, Maliyet C1, Veri 2 ve 4: projeye yalnız stoğa girmeyen satır gider (hizmet teslim değeriyle, masraf payıyla); farklı projeli talepler birleşmez; birleşmiş kaynak sayılmaz', async () => {
+    const p = await projeEkle('P2611C');
+    const hizmetNo = await (async () => {
+      tamam(await istek(c.yonetici, 'POST', '/malzeme-katalogu-kartlari/sa-hizmet-2611/kaydet', {
+        kayit: { id: 'sa-hizmet-2611', tur: 'hizmet', com: { kod: 'HZ-SAT-00001', ad: 'Deneme hizmet 2611', birim: 'saat' }, g: { kat: 'fason', yon: 'Alınan', cesit: 'Talaşlı imalat' }, onay: { durum: 'aktif' } },
+        ozet: { benzersiz_anahtar: null, mukerrer_gerekcesi: null }, surum: null,
+      }));
+      return (await ortam!.sahip.tx((db) => db.tek<{ no: number }>("SELECT no FROM malzeme_katalog_karti WHERE kimlik = 'sa-hizmet-2611'")))!.no;
+    })();
+    const hizmetKatalog = tamam<KatalogKaydi>(await istek(c.sa, 'POST', '/satin-alma-katalogu/kaydet', { id: randomUUID(), malzemeNo: hizmetNo, ozellik: '', notlar: '', takmaAdlari: [], surum: null })).id;
+    const tutar = async () => (await vt().tx((db) => servis.projeSatinAlmaTutarlari(db, [p]))).get(p) ?? [];
+    // Stok kartlı 10 x 10 = 100, hizmet 4 x 5 = 20; nakliye 12 hariç.
+    const t = tamam<Talep>(await istek(c.sa, 'POST', '/satin-alma-talepleri/ac', yeniTalep({ durum: 'degerlendirme', projeId: p,
+      kalemler: [kalem('Deneme stoklu'), { ...kalem('Deneme hizmet', '4', hizmetKatalog), birim: 'saat' }] })));
+    const [k1, k2] = t.kalemler.map((k) => k.id) as [string, string];
+    const q = teklif(firmaA, [[k1, '10'], [k2, '5']], { nakliye: '12', nakliyeDahil: false });
+    const onayda = tamam<Talep>(await kaydet(c.sa, { ...govde(t), durum: 'onayda', teklifler: [q],
+      karar: { mod: 'tek', teklifId: q.id, bolunme: [], gerekce: '', kararVerenKisiId: kisi.sa!, kararTarihi: '2026-10-07', ogrenilenler: '', sabitKurlar: [], siparisler: [] } }));
+    const onayli = tamam<Talep>(await kaydet(c.mudur, { ...govde(onayda), onaylar: [onayKaydi()] }));
+    const s = tamam<Talep>(await kaydet(c.sa, { ...govde(onayli), durum: 'siparis_verildi',
+      karar: { ...onayli.karar!, siparisler: [{ teklifId: q.id, siparisNo: 'SA-2611', siparisTarihi: '2026-10-07', beklenenTeslim: '2026-10-20' }] } }));
+    const satir = (kalemId: string) => siparisi(s, q.id).satirlar.find((r) => r.kalemId === kalemId)!.id;
+    assert.deepEqual(await tutar(), [], 'teslimsiz');
+    await teslimEt(satir(k1), '10', 261101);
+    assert.deepEqual(await tutar(), [], 'yalnız stok kartlı satır geldi: stoğa girdi, sarfla emre gider');
+    // Hizmetin yarısı: 10 + 12 x 20 / 120 = 12.
+    await teslimEt(satir(k2), '2', 261102);
+    assert.deepEqual(await tutar(), [{ tutar: '12.00', paraBirimi: 'TRY' }]);
+    // Farklı projeli ya da projesiz kaynak birleşmez; aynı projeli kaynaklar birleşince yalnız birleşik talep sayılır.
+    const ac = async (projeId: number | null) => tamam<Talep>(await istek(c.sa, 'POST', '/satin-alma-talepleri/ac', yeniTalep({ projeId })));
+    const [a1, a2, bos] = [await ac(p), await ac(p), await ac(null)];
+    assert.equal((await birlestir(c.sa, [a1.id, bos.id])).statusCode, 422);
+    const birlesik = tamam<Talep>(await birlestir(c.sa, [a1.id, a2.id]));
+    assert.equal(birlesik.projeId, p);
+    const sayilan = await vt().tx((db) => db.sorgu<{ talepId: string }>('SELECT DISTINCT talep_id AS "talepId" FROM satin_alma_siparis_satiri WHERE talep_id = ANY($1::uuid[])', [[a1.id, a2.id]]));
+    assert.deepEqual(sayilan, [], 'kaynağın siparişi yok; tutar birleşik talepten bir kez gelir');
+    assert.deepEqual(await tutar(), [{ tutar: '12.00', paraBirimi: 'TRY' }]);
+  });
+
+  test('2638, 2637 a, Maliyet C1, Mimar N2: emirli talepte hizmet satırı projeli emre yazılır, projeye değil; projesiz emirde genel gidere gider; oran sipariş anahtarıyla toplu çekilir', async () => {
+    const p = await projeEkle('P2638');
+    const e = await emirAc();
+    await ortam!.sahip.sorgu('UPDATE uretim_emri SET proje_id = $2 WHERE id = $1', [e, p]);
+    tamam(await istek(c.yonetici, 'POST', '/malzeme-katalogu-kartlari/sa-hizmet-2638/kaydet', {
+      kayit: { id: 'sa-hizmet-2638', tur: 'hizmet', com: { kod: 'HZ-SAT-02638', ad: 'Deneme hizmet 2638', birim: 'saat' }, g: { kat: 'fason', yon: 'Alınan', cesit: 'Talaşlı imalat' }, onay: { durum: 'aktif' } },
+      ozet: { benzersiz_anahtar: null, mukerrer_gerekcesi: null }, surum: null,
+    }));
+    const hizmetNo = (await ortam!.sahip.tx((db) => db.tek<{ no: number }>("SELECT no FROM malzeme_katalog_karti WHERE kimlik = 'sa-hizmet-2638'")))!.no;
+    const hizmetKatalog = tamam<KatalogKaydi>(await istek(c.sa, 'POST', '/satin-alma-katalogu/kaydet', { id: randomUUID(), malzemeNo: hizmetNo, ozellik: '', notlar: '', takmaAdlari: [], surum: null })).id;
+    // Stok kartlı 10 x 10 = 100, hizmet 4 x 5 = 20; nakliye 12 hariç.
+    const t = tamam<Talep>(await istek(c.sa, 'POST', '/satin-alma-talepleri/ac', yeniTalep({ durum: 'degerlendirme', uretimEmriId: e,
+      kalemler: [kalem('Deneme stoklu'), { ...kalem('Deneme hizmet', '4', hizmetKatalog), birim: 'saat' }] })));
+    const [k1, k2] = t.kalemler.map((k) => k.id) as [string, string];
+    const q = teklif(firmaA, [[k1, '10'], [k2, '5']], { nakliye: '12', nakliyeDahil: false });
+    const onayda = tamam<Talep>(await kaydet(c.sa, { ...govde(t), durum: 'onayda', teklifler: [q],
+      karar: { mod: 'tek', teklifId: q.id, bolunme: [], gerekce: '', kararVerenKisiId: kisi.sa!, kararTarihi: '2026-10-07', ogrenilenler: '', sabitKurlar: [], siparisler: [] } }));
+    const onayli = tamam<Talep>(await kaydet(c.mudur, { ...govde(onayda), onaylar: [onayKaydi()] }));
+    const s = tamam<Talep>(await kaydet(c.sa, { ...govde(onayli), durum: 'siparis_verildi',
+      karar: { ...onayli.karar!, siparisler: [{ teklifId: q.id, siparisNo: 'SA-2638', siparisTarihi: '2026-10-07', beklenenTeslim: '2026-10-20' }] } }));
+    await teslimEt(siparisi(s, q.id).satirlar.find((r) => r.kalemId === k2)!.id, '2', 263801);
+    const emirTutari = async () => (await vt().tx((db) => servis.emirHizmetTutarlari(db, [e]))).get(e) ?? [];
+    const anahtar = `${t.id}:${q.id}`;
+    const oranlar = () => vt().tx((db) => servis.siparisGenelGiderOranlari(db, [{ talepId: t.id, teklifId: q.id }, { talepId: t.id, teklifId: randomUUID() }]));
+    // Hizmetin yarısı: 10 + 12 x 20 / 120 = 12; emrin projesine proje maliyeti kendisi bağlar, projeye ikinci kez sayılmaz.
+    assert.deepEqual(await emirTutari(), [{ tutar: '12.00', paraBirimi: 'TRY' }]);
+    assert.deepEqual((await vt().tx((db) => servis.projeSatinAlmaTutarlari(db, [p]))).get(p), undefined);
+    assert.deepEqual([...(await oranlar())], [[anahtar, 0]], 'bilinmeyen sipariş haritada yok');
+    // C1: emrin projesi kalkınca hizmet satırı genel gidere gider: oran 20 / 120.
+    await ortam!.sahip.sorgu('UPDATE uretim_emri SET proje_id = NULL WHERE id = $1', [e]);
+    assert.deepEqual(await emirTutari(), []);
+    assert.equal((await oranlar()).get(anahtar), 0.166667);
+    // Mimar N2: pasif hizmet kartı yine hizmettir; satır genel giderde kalır, stoğa sayılmaz.
+    await ortam!.sahip.sorgu("UPDATE malzeme_katalog_karti SET onay_durumu = 'pasif' WHERE kimlik = 'sa-hizmet-2638'");
+    assert.equal((await oranlar()).get(anahtar), 0.166667);
+    // Fatura gerçektir: talep iptal olsa da oran çekilir.
+    await ortam!.sahip.sorgu("UPDATE satin_alma_talep SET durum = 'iptal', iptal_nedeni = 'Deneme' WHERE id = $1", [t.id]);
+    assert.equal((await oranlar()).get(anahtar), 0.166667);
+  });
+
+  test('2613 2/2, 2720-1, 2733 a: emre ve projeye bağlı siparişin malzeme birim fiyatı ve net teslim miktarı; teslimle ağırlıklı, iki iskonto, sabit kur önce; iade, fason, iptal ve emirli talebin projesi sayılmaz', async () => {
+    const e = await emirAc();
+    const p = await projeEkle('P2720');
+    const emirli = await bolunmusSiparis('5');
+    const ikinci = await bolunmusSiparis('7');
+    const projeli = await bolunmusSiparis('8');
+    const m = (await vt().tx((db) => db.tek<{ n: number }>(
+      'SELECT c.malzeme_no AS n FROM satin_alma_talep_kalemi k JOIN satin_alma_katalog c ON c.id = k.katalog_id WHERE k.talep_id = $1 AND k.id = $2', [emirli.s.id, emirli.k2])))!.n;
+    await ortam!.sahip.tx(async (db) => {
+      await db.sorgu('UPDATE satin_alma_talep SET uretim_emri_id = $2 WHERE id = ANY($1::uuid[])', [[emirli.s.id, ikinci.s.id], e]);
+      await db.sorgu('UPDATE satin_alma_talep SET proje_id = $2 WHERE id = $1', [projeli.s.id, p]);
+      // Teklif iskontosu 10: 5 -> 4.5.
+      await db.sorgu('UPDATE satin_alma_teklif SET iskonto_yuzdesi = 10 WHERE talep_id = $1 AND id = $2', [emirli.s.id, emirli.a]);
+      await db.sorgu("UPDATE satin_alma_teklif SET para_birimi = 'USD', kur = 30 WHERE talep_id = $1 AND id = $2", [projeli.s.id, projeli.a]);
+    });
+    const oku = (emirIdleri: number[], projeIdleri: number[], malzemeNolar: number[]) => vt().tx((db) => siparisBirimFiyatlari(db, { emirIdleri, projeIdleri, malzemeNolar }));
+    assert.deepEqual(await oku([e], [p], [m]), [], 'teslimsiz satır yok');
+    await teslimEt(siparisi(emirli.s, emirli.a).satirlar[0]!.id, '1', 272001);
+    // Mal kabul düzeltmesi (2733 a, Test): 3 alınıp geri alınır, 2.5 yeniden alınır; net 2.5.
+    await teslimEt(siparisi(ikinci.s, ikinci.a).satirlar[0]!.id, '3', 272002);
+    await geriAl(272002);
+    await teslimEt(siparisi(ikinci.s, ikinci.a).satirlar[0]!.id, '2.500', 272005);
+    await teslimEt(siparisi(projeli.s, projeli.a).satirlar[0]!.id, '1', 272003);
+    // İade: B satırı (aynı kart, 9) teslim alınıp geri alınır; neti 0, ortalamaya girmez.
+    await teslimEt(siparisi(emirli.s, emirli.b).satirlar[0]!.id, '2', 272004);
+    await geriAl(272004);
+    // (4.5 x 1 + 7 x 2.5) / 3.5 = 6.285714 -> 4 ondalık. Proje: USD 8 x teklif kuru 30. Teslim miktarı net teslimdir (iade ve geri alınan
+    // düşer), sondaki sıfırlar atılır; mal kabulün stok giriş miktarıyla aynıdır (stok birimi).
+    assert.deepEqual(await oku([e, e], [p], [m, 2147483000]), [
+      { hedef: 'emir', hedefId: e, malzemeNo: m, tryBirimFiyati: '6.2857', teslimMiktari: '3.5' },
+      { hedef: 'proje', hedefId: p, malzemeNo: m, tryBirimFiyati: '240', teslimMiktari: '1' },
+    ]);
+    // Sabit kur teklif kurundan önce gelir.
+    await ortam!.sahip.sorgu("INSERT INTO satin_alma_sabit_kur (talep_id, para_birimi, kur, aylik_faiz_yuzdesi) VALUES ($1, 'USD', 32, NULL)", [projeli.s.id]);
+    assert.deepEqual((await oku([], [p], [m])).map((x) => x.tryBirimFiyati), ['256']);
+    // 2611 a: emri olan satır proje hedefinde sayılmaz. Talepte emir ve proje birlikte olamaz (CHECK); emir birleşik talepte kalemin kaynağından
+    // gelebilir (KALEM_EMRI): projeli talebin kalemi emirli kaynağa bağlanınca satır emirde kalır, projede görünmez.
+    const p2 = await projeEkle('P2720B');
+    await ortam!.sahip.tx(async (db) => {
+      await db.sorgu('UPDATE satin_alma_talep SET uretim_emri_id = NULL, proje_id = $2 WHERE id = $1', [emirli.s.id, p2]);
+      await db.sorgu('UPDATE satin_alma_talep_kalemi SET kaynak_talep_id = $2, kaynak_sira = 1 WHERE talep_id = $1', [emirli.s.id, ikinci.s.id]);
+    });
+    assert.deepEqual(await oku([], [p2], [m]), []);
+    assert.deepEqual((await oku([e], [], [m])).map((x) => [x.tryBirimFiyati, x.teslimMiktari]), [['6.2857', '3.5']]);
+    // Fason satırı (iş emri bağı) gelmez: ikinci siparişin satırı fasona bağlanınca emirde yalnız ilk sipariş kalır.
+    const tip = (await ortam!.sahip.tek<{ id: number }>('SELECT id FROM istasyonlar_operasyon_tipi ORDER BY id LIMIT 1'))!.id;
+    const ie = (await ortam!.sahip.tek<{ id: number }>(
+      "INSERT INTO uretim_emirleri_is_emri (uretim_emri_id, sira, op_no, operasyon_tipi_id, ad) VALUES ($1, 1, 10, $2, 'Deneme fason') RETURNING id", [e, tip]))!.id;
+    await ortam!.sahip.sorgu('UPDATE satin_alma_siparis_satiri SET is_emri_id = $2 WHERE id = $1', [siparisi(ikinci.s, ikinci.a).satirlar[0]!.id, ie]);
+    assert.deepEqual((await oku([e], [], [m])).map((x) => [x.tryBirimFiyati, x.teslimMiktari]), [['4.5', '1']]);
+    // İptal talep sayılmaz.
+    await ortam!.sahip.sorgu("UPDATE satin_alma_talep SET durum = 'iptal', iptal_nedeni = 'Deneme' WHERE id = $1", [emirli.s.id]);
+    assert.deepEqual(await oku([e], [], [m]), []);
+    assert.deepEqual(await oku([], [], [m]), []);
+    assert.deepEqual(await oku([e], [p], []), []);
+  });
+
+  test('2642 b, 2646 a, Veri 1-2, Güvenlik K1-K3: fatura satırlara eşlenir; oran (G + (B - E) x S) / B; sürüm 409; aşım 422; bayat eşleme sayılmaz; eşlenen satır silinmez', async () => {
+    const hizmetNo = await (async () => {
+      tamam(await istek(c.yonetici, 'POST', '/malzeme-katalogu-kartlari/sa-hizmet-2642/kaydet', {
+        kayit: { id: 'sa-hizmet-2642', tur: 'hizmet', com: { kod: 'HZ-SAT-02642', ad: 'Deneme hizmet 2642', birim: 'saat' }, g: { kat: 'fason', yon: 'Alınan', cesit: 'Talaşlı imalat' }, onay: { durum: 'aktif' } },
+        ozet: { benzersiz_anahtar: null, mukerrer_gerekcesi: null }, surum: null,
+      }));
+      return (await ortam!.sahip.tx((db) => db.tek<{ no: number }>("SELECT no FROM malzeme_katalog_karti WHERE kimlik = 'sa-hizmet-2642'")))!.no;
+    })();
+    const hizmetKatalog = tamam<KatalogKaydi>(await istek(c.sa, 'POST', '/satin-alma-katalogu/kaydet', { id: randomUUID(), malzemeNo: hizmetNo, ozellik: '', notlar: '', takmaAdlari: [], surum: null })).id;
+    // Stok kartlı 10 x 10 = 100, hizmet 4 x 5 = 20; nakliye 12 hariç; sipariş oranı S = 20 / 120.
+    const siparisAc = async (no: string) => {
+      const t = tamam<Talep>(await istek(c.sa, 'POST', '/satin-alma-talepleri/ac', yeniTalep({ durum: 'degerlendirme',
+        kalemler: [kalem('Deneme stoklu'), { ...kalem('Deneme hizmet', '4', hizmetKatalog), birim: 'saat' }] })));
+      const [k1, k2] = t.kalemler.map((k) => k.id) as [string, string];
+      const q = teklif(firmaA, [[k1, '10'], [k2, '5']], { nakliye: '12', nakliyeDahil: false });
+      const onayda = tamam<Talep>(await kaydet(c.sa, { ...govde(t), durum: 'onayda', teklifler: [q],
+        karar: { mod: 'tek', teklifId: q.id, bolunme: [], gerekce: '', kararVerenKisiId: kisi.sa!, kararTarihi: '2026-10-07', ogrenilenler: '', sabitKurlar: [], siparisler: [] } }));
+      const onayli = tamam<Talep>(await kaydet(c.mudur, { ...govde(onayda), onaylar: [onayKaydi()] }));
+      const s = tamam<Talep>(await kaydet(c.sa, { ...govde(onayli), durum: 'siparis_verildi',
+        karar: { ...onayli.karar!, siparisler: [{ teklifId: q.id, siparisNo: no, siparisTarihi: '2026-10-07', beklenenTeslim: '2026-10-20' }] } }));
+      const satir = (kalemId: string) => siparisi(s, q.id).satirlar.find((r) => r.kalemId === kalemId)!.id;
+      return { talepId: t.id, teklifId: q.id, stok: satir(k1), hizmet: satir(k2) };
+    };
+    const a = await siparisAc('SA-2642-A');
+    const belgeId = (await ortam!.sahip.tek<{ id: number }>(
+      `INSERT INTO finans_belge (yon, tur, kategori, firma_id, belge_tarihi, vade, para_birimi, kur, tutar, kdv_orani, satin_alma_talep_id, satin_alma_teklif_id, olusturan_id)
+       VALUES ('gider', 'fatura', 'mal_alimi', $1, '2026-10-21', '2026-11-20', 'TRY', 1, 132, 0, $2, $3, $4) RETURNING id`, [firmaA, a.talepId, a.teklifId, yoneticiId]))!.id;
+    const yol = `/satin-alma-fatura-eslemeleri/${belgeId}`;
+    const oku = async () => tamam<FaturaEslemesiCevabi>(await istek(c.yonetici, 'GET', yol));
+    const yaz = (surum: number, satirlar: { siparisSatiriId: number; tutar: string }[], kim = c.yonetici) => istek(kim, 'POST', `${yol}/kaydet`, { surum, satirlar });
+    const S = 0.166667;
+    const ilk = await oku();
+    assert.deepEqual([ilk.esleme, ilk.oran, ilk.surum, ilk.paraBirimi, ilk.eslenmemisKalan, ilk.belgeNo, ilk.firmaAdi], ['yok', S, 0, 'TRY', '132.00', null, 'Deneme Tedarik A']);
+    assert.deepEqual(ilk.satirlar.map((r) => [r.siparisSatiriId, r.yol, r.siparisTutari, r.tutar]), [[a.stok, 'stok', '100.00', null], [a.hizmet, 'genel_gider', '20.00', null]]);
+    // Güvenlik K1-K2: talep eden okuyamaz; satın almacı (finans.yaz yok) yazamaz.
+    assert.equal((await istek(c.talep, 'GET', yol)).statusCode, 403);
+    assert.equal((await yaz(0, [], c.sa)).statusCode, 403);
+    // Kısmi: yalnız stok eşlendi; kalan 32, siparişin eşlenmemiş kısmının oranıyla (2646 a, Maliyet C1): hizmet 20 ve masrafın hizmet payı
+    // 12 x 20 / 120 = 2, payda 20 + 12: kalanın oranı 22 / 32, belge oranı 22 / 132. Stokun masraf payı hiçbir hedefe gitmez (N4).
+    const kismi = tamam<FaturaEslemesiCevabi>(await yaz(0, [{ siparisSatiriId: a.stok, tutar: '100' }]));
+    assert.deepEqual([kismi.esleme, kismi.oran, kismi.surum, kismi.eslenmemisKalan], ['kismi', 0.166667, 1, '32.00']);
+    assert.equal((await yaz(0, [{ siparisSatiriId: a.stok, tutar: '100' }])).statusCode, 409, 'eski sürüm');
+    assert.equal((await yaz(1, [{ siparisSatiriId: a.stok, tutar: '100' }, { siparisSatiriId: a.hizmet, tutar: '40' }])).statusCode, 422, 'aşım');
+    const tam = tamam<FaturaEslemesiCevabi>(await yaz(1, [{ siparisSatiriId: a.stok, tutar: '100' }, { siparisSatiriId: a.hizmet, tutar: '32' }]));
+    assert.deepEqual([tam.esleme, tam.oran, tam.surum], ['tam', 0.242424, 2], 'stok satırı değişmedi, hizmet eklendi');
+    assert.deepEqual([...(await vt().tx((db) => servis.belgeGenelGiderOranlari(db, [belgeId, belgeId + 1000])))], [[belgeId, { oran: 0.242424, esleme: 'tam' }]]);
+    // Veri 2: eşlenen satır silinmez (kaldırılmış eşleme de tutar).
+    await assert.rejects(ortam!.sahip.sorgu('DELETE FROM satin_alma_siparis_satiri WHERE id = $1', [a.hizmet]), kisitla('satin_alma_fatura_eslemesi_satir'));
+    // Veri 1: belge başka siparişe bağlanınca eski eşleme bayattır, sayılmaz: oran yeni siparişin oranı.
+    const b = await siparisAc('SA-2642-B');
+    await ortam!.sahip.sorgu('UPDATE finans_belge SET satin_alma_talep_id = $2, satin_alma_teklif_id = $3 WHERE id = $1', [belgeId, b.talepId, b.teklifId]);
+    const bayat = await oku();
+    assert.deepEqual([bayat.esleme, bayat.oran, bayat.bayat.length, bayat.satirlar.every((r) => r.tutar === null)], ['yok', S, 2, true]);
+    // Bayat eşleme liste kaydında kaldırılır; başka siparişin satırı 422.
+    assert.equal((await yaz(2, [{ siparisSatiriId: a.stok, tutar: '10' }])).statusCode, 422);
+    const yeni = tamam<FaturaEslemesiCevabi>(await yaz(2, [{ siparisSatiriId: b.hizmet, tutar: '132' }]));
+    assert.deepEqual([yeni.esleme, yeni.oran, yeni.bayat, yeni.surum], ['tam', 1, [], 5]);
+    // Maliyet N2: aynı satır başka faturaya da eşlenirse uyarı verisi gelir (kayıt engellenmez).
+    const ikinci = (await ortam!.sahip.tek<{ id: number }>(
+      `INSERT INTO finans_belge (yon, tur, kategori, firma_id, belge_tarihi, vade, para_birimi, kur, tutar, kdv_orani, satin_alma_talep_id, satin_alma_teklif_id, olusturan_id)
+       VALUES ('gider', 'fatura', 'mal_alimi', $1, '2026-10-22', '2026-11-20', 'TRY', 1, 50, 0, $2, $3, $4) RETURNING id`, [firmaA, b.talepId, b.teklifId, yoneticiId]))!.id;
+    tamam(await istek(c.yonetici, 'POST', `/satin-alma-fatura-eslemeleri/${ikinci}/kaydet`, { surum: 0, satirlar: [{ siparisSatiriId: b.hizmet, tutar: '20' }] }));
+    assert.equal((await oku()).satirlar.find((r) => r.siparisSatiriId === b.hizmet)?.baskaBelgelerden, '20.00');
+    // Maliyet (21:15Z): başka para birimindeki belgenin eşlemesi toplama katılmaz.
+    const usd = (await ortam!.sahip.tek<{ id: number }>(
+      `INSERT INTO finans_belge (yon, tur, kategori, firma_id, belge_tarihi, vade, para_birimi, kur, tutar, kdv_orani, satin_alma_talep_id, satin_alma_teklif_id, olusturan_id)
+       VALUES ('gider', 'fatura', 'mal_alimi', $1, '2026-10-23', '2026-11-20', 'USD', 30, 5, 0, $2, $3, $4) RETURNING id`, [firmaA, b.talepId, b.teklifId, yoneticiId]))!.id;
+    tamam(await istek(c.yonetici, 'POST', `/satin-alma-fatura-eslemeleri/${usd}/kaydet`, { surum: 0, satirlar: [{ siparisSatiriId: b.hizmet, tutar: '5' }] }));
+    assert.equal((await oku()).satirlar.find((r) => r.siparisSatiriId === b.hizmet)?.baskaBelgelerden, '20.00');
+    // Veri K1: eşlenmiş satır (A'da yalnız kaldırılmış eşleme, B'de etkin) talep kaydında siparişten çıkarılamaz: 409.
+    for (const [x, satirId] of [[a, a.hizmet], [b, b.hizmet]] as const) {
+      const t = await acilistaki(x.talepId);
+      const kalemId = siparisi(t, x.teklifId).satirlar.find((r) => r.id === satirId)!.kalemId;
+      const red = await kaydet(c.sa, { ...govde(t), teklifler: t.teklifler.map((q) => (q.id === x.teklifId ? { ...q, fiyatlar: q.fiyatlar.filter((f) => f.kalemId !== kalemId) } : q)) });
+      assert.deepEqual([red.statusCode, (red.json() as { mesaj: string }).mesaj], [409, ILETILER.eslemeliSatir]);
+    }
+    // Veri 3: kaldırma dışındaki alan değişmez (tetik, adlı kısıt).
+    await assert.rejects(ortam!.sahip.sorgu('UPDATE satin_alma_fatura_eslemesi SET tutar = 1 WHERE belge_id = $1', [belgeId]), kisitla('satin_alma_fatura_eslemesi_kaldirma'));
+    // Siparişsiz belge 422.
+    await ortam!.sahip.sorgu('UPDATE finans_belge SET satin_alma_talep_id = NULL, satin_alma_teklif_id = NULL WHERE id = $1', [ikinci]);
+    assert.equal((await istek(c.yonetici, 'GET', `/satin-alma-fatura-eslemeleri/${ikinci}`)).statusCode, 422);
+  });
+
+  test('2614 1/2 a: idari talep kalemsiz taslak satın alma talebine çevrilir; açan çeviren, talep eden idari talebi açan (K3); yetkisiz 403 (K2); ikinci çevirme 409', async () => {
+    const idari = (await ortam!.sahip.tx((db) => db.tek<{ id: number }>(
+      "INSERT INTO idari_isler_talep (no, kategori, yer, aciklama, acan_kisi_id) VALUES ('IT-2611', 'bina', 'Deneme yer', 'Deneme açıklama', $1) RETURNING id", [kisi.talep])))!.id;
+    const g = { idariTalepId: idari, idariTalepNo: 'IT-2611', baslik: 'Deneme raf alımı', notlar: 'Deneme açıklama', talepEdenKisiId: kisi.talep! };
+    const kim = (islemler: string[]): Kullanici => ({ id: kisi.sa!, ad: 'Deneme sa', islemler: islemler as Kullanici['islemler'] });
+    await assert.rejects(vt().tx((db) => servis.idariTaleptenTalepAc(db, kim(['idari-isler.talep-yonet']), g)), hataKodu('YETKI_YOK'));
+    const acilan = await vt().tx((db) => servis.idariTaleptenTalepAc(db, kim(['satin-alma.talep-ac']), g));
+    const t = await acilistaki(acilan.id);
+    assert.deepEqual([t.no, t.durum, t.kalemler.length, t.acanKisiId, t.talepEdenKisiId, t.baslik], [acilan.no, 'taslak', 0, kisi.sa, kisi.talep, 'Deneme raf alımı']);
+    assert.ok(t.hareketler.some((h) => h.metin === 'İdari talep IT-2611 çevrildi; talep eden: Deneme talep'), JSON.stringify(t.hareketler));
+    await assert.rejects(vt().tx((db) => servis.idariTaleptenTalepAc(db, kim(['satin-alma.yaz']), g)), hataKodu('CAKISMA'));
+    assert.deepEqual((await vt().tx((db) => servis.idariTalepSatinAlmalari(db, [idari, idari + 1]))).get(idari), { talepId: acilan.id, no: acilan.no, durum: 'taslak' });
+    // Güncelleme yolu bağı değiştirmez.
+    tamam<Talep>(await kaydet(c.sa, { ...govde(t), baslik: 'Deneme raf alımı 2', idariTalepId: null }));
+    assert.equal((await vt().tx((db) => servis.idariTalepSatinAlmalari(db, [idari]))).get(idari)?.talepId, acilan.id);
+  });
+
+  test('2624 b: farklı emirli talepler birleşir, kaynaktan gelen kalem kendi emrine bağlı kalır (mal kabul); talep emri yalnız kaynaksız kaleme; emir değişikliği harekete; emirli kaynaklı birleşik talebe proje yok; talep eden başka kaynağın emrini görmez', async () => {
+    const [e1, e2, e3] = [await emirAc(), await emirAc(), await emirAc()];
+    const a = tamam<Talep>(await istek(c.talep, 'POST', '/satin-alma-talepleri/ac', yeniTalep({ uretimEmriId: e1, kalemler: [kalem('Deneme A kalemi')] })));
+    const b = tamam<Talep>(await istek(c.talep2, 'POST', '/satin-alma-talepleri/ac', yeniTalep({ uretimEmriId: e2, kalemler: [kalem('Deneme B kalemi')] })));
+    const birlesik = tamam<Talep>(await birlestir(c.sa, [a.id, b.id]));
+    assert.equal(birlesik.uretimEmriId, null);
+    const emirNo = (t: Talep, kaynakId: string) => t.kaynaklar?.find((x) => x.talepId === kaynakId)?.uretimEmriNo;
+    assert.deepEqual([emirNo(birlesik, a.id), emirNo(birlesik, b.id)], [a.uretimEmriNo, b.uretimEmriNo]);
+    // Veri 4: emirli kaynaktan kalemi olan birleşik talep projeye bağlanmaz.
+    const p = await projeEkle('P2624');
+    assert.equal((await kaydet(c.sa, { ...govde(birlesik), projeId: p })).statusCode, 400);
+    // Talep düzeyinde emir seçilir; hareket yazılır, kaynaktan gelen kalem kaynağın emrinde kalır.
+    const yeniKalem = kalem('Deneme sonradan eklenen');
+    const emirli = tamam<Talep>(await kaydet(c.sa, { ...govde(birlesik), uretimEmriId: e3, kalemler: [...birlesik.kalemler, yeniKalem] }));
+    assert.ok(emirli.hareketler.some((h) => h.metin === `Üretim emri: yok -> ${emirli.uretimEmriNo}`), JSON.stringify(emirli.hareketler));
+    const [ka, kb] = [emirli.kaynaklar!.find((x) => x.talepId === a.id)!.kalemIdleri[0]!, emirli.kaynaklar!.find((x) => x.talepId === b.id)!.kalemIdleri[0]!];
+    const q = teklif(firmaA, [[ka, '10'], [kb, '10'], [yeniKalem.id, '10']]);
+    const degerlendirmede = tamam<Talep>(await kaydet(c.sa, { ...govde(emirli), durum: 'degerlendirme' }));
+    const onayda = tamam<Talep>(await kaydet(c.sa, { ...govde(degerlendirmede), durum: 'onayda', teklifler: [q],
+      karar: { mod: 'tek', teklifId: q.id, bolunme: [], gerekce: '', kararVerenKisiId: kisi.sa!, kararTarihi: '2026-10-07', ogrenilenler: '', sabitKurlar: [], siparisler: [] } }));
+    const onayli = tamam<Talep>(await kaydet(c.mudur, { ...govde(onayda), onaylar: [onayKaydi()] }));
+    const sp = tamam<Talep>(await kaydet(c.sa, { ...govde(onayli), durum: 'siparis_verildi',
+      karar: { ...onayli.karar!, siparisler: [{ teklifId: q.id, siparisNo: 'SA-2624', siparisTarihi: '2026-10-07', beklenenTeslim: '2026-10-20' }] } }));
+    const satir = (kalemId: string) => siparisi(sp, q.id).satirlar.find((r) => r.kalemId === kalemId)!.id;
+    const emirler = await vt().tx((db) => siparisSatirlarininEmri(db, [satir(ka), satir(kb), satir(yeniKalem.id)]));
+    assert.deepEqual([emirler.get(satir(ka)), emirler.get(satir(kb)), emirler.get(satir(yeniKalem.id))], [e1, e2, e3]);
+    // Güvenlik K1: talep eden kendi kaynağını görür; birleşik talebin kaynak listesi ve başka kaynağın emri görünmez.
+    const gorunen = talepEdenGorunumu(sp, kisi.talep!);
+    assert.equal((gorunen.kaynaklar ?? []).length, 0);
+    const benim = tamam<TaleplerimCevabi>(await istek(c.talep, 'GET', '/satin-alma-taleplerim')).talepler;
+    assert.equal(JSON.stringify(benim).includes(b.uretimEmriNo!), false);
+    assert.ok(benim.some((t) => t.id === a.id));
+  });
+
+  // 2540 yardımcıları: finansın alacak listesi ve değişiklik defteri.
+  const alacagi = async (talepId: string, teklifId: string) => tamam<TedarikciAlacaklariCevabi>(await istek(c.yonetici, 'GET', '/finans/tedarikci-alacaklari'))
+    .alacaklar.find((x) => x.talepId === talepId && x.teklifId === teklifId);
+  const alacakDurumu = (id: number, govde: Record<string, unknown>) => istek(c.yonetici, 'POST', `/finans/tedarikci-alacaklari/${id}/durum`, govde);
+  const defter = (tablo: string, talepId: string) => vt().tx((db) => db.sorgu<{ islem: string; kisi: number | null; anahtar: Record<string, unknown>; alanlar: Record<string, unknown> }>(
+    `SELECT islem, kisi_id AS kisi, anahtar, alanlar FROM denetim_degisiklik WHERE tablo = $1 AND (anahtar ->> 'satin_alma_talep_id' = $2
+       OR anahtar ->> 'id' IN (SELECT id::text FROM finans_tedarikci_alacagi WHERE satin_alma_talep_id = $2::uuid)) ORDER BY id`, [tablo, talepId]));
+
+  test('2540: aşan avans kapatmada finansa "teyit bekliyor" alacağı olarak düşer; teslim düzeltmesi tutarı günceller; geçişler sunucuda (K2), sürümlü (K1); talep eden göremez (K4); defterde kişi dolu (K5)', async () => {
+    // A: 4 x 10, avans %80 = 32 (KDV dahil 38.40). 1 / 4 teslim: gerçekleşen 10, KDV dahil 12; aşım 26.40.
+    const { s, a, b } = await bolunmusSiparis('10', { avansYuzdesi: '80' });
+    const [satirA, satirB] = [siparisi(s, a).satirlar[0]!.id, siparisi(s, b).satirlar[0]!.id];
+    await logoyaGitti(s.id, a, satirA, '25400');
+    await logoyaGitti(s.id, b, satirB, '25401');
+    await teslimEt(satirA, '1', 254001);
+    tamam<Talep>(await kapat(await acilistaki(s.id), a));
+    let al = (await alacagi(s.id, a))!;
+    assert.deepEqual([al.durum, al.tutar, al.paraBirimi, al.siparisNo.length > 0], ['teyit_bekliyor', '26.40', 'TRY', true]);
+    assert.ok((await acilistaki(s.id)).hareketler.some((h) => h.metin.includes('fark tedarikçiden alacaktır (finansta teyit bekliyor)')));
+    assert.equal(await alacagi(s.id, b), undefined, 'B kapanmadı: alacak yok');
+    // K4: talep eden ve finans yetkisi olmayan göremez.
+    for (const cerez of [c.talep, c.operator]) assert.equal((await istek(cerez, 'GET', '/finans/tedarikci-alacaklari')).statusCode, 403);
+    // K5: kapatma ucundan yazılan alacağın defter satırında kişi kapatan satın almacıdır.
+    assert.deepEqual((await defter('finans_tedarikci_alacagi', s.id)).map((x) => [x.islem, x.kisi]), [['ekle', kisi.sa]]);
+    // Kapalı siparişte teslim düzeltmesi (aynı işlemde geri al ve yeniden yaz): 2 / 4 teslim, gerçekleşen 24, aşım 14.40; teyit bekleyen tutar güncellenir.
+    await vt().tx(async (db) => {
+      await teslimGeriAl(db, depocu(), { malKabulSatirId: 254001 });
+      await teslimIsle(db, depocu(), { siparisSatirId: satirA, miktar: '2', malKabulSatirId: 254002 });
+    });
+    al = (await alacagi(s.id, a))!;
+    assert.deepEqual([al.durum, al.tutar], ['teyit_bekliyor', '14.40']);
+    // K2: izinsiz geçiş 422; gerekçesiz düşürme 422; eski sürüm 409.
+    assert.equal((await alacakDurumu(al.id, { surum: al.surum, durum: 'kapandi', aciklama: 'Deneme' })).statusCode, 422);
+    assert.equal((await alacakDurumu(al.id, { surum: al.surum, durum: 'dusuldu' })).statusCode, 422);
+    assert.equal((await alacakDurumu(al.id, { surum: al.surum - 1, durum: 'acik' })).statusCode, 409);
+    assert.equal((await istek(c.sa, 'POST', `/finans/tedarikci-alacaklari/${al.id}/durum`, { surum: al.surum, durum: 'acik' })).statusCode, 403);
+    const acik = tamam<{ alacak: TedarikciAlacagi }>(await alacakDurumu(al.id, { surum: al.surum, durum: 'acik', aciklama: 'Avans ödendi' })).alacak;
+    assert.deepEqual([acik.durum, acik.durumDegistirenAdi !== null, acik.durumZamani !== null], ['acik', true, true]);
+    // Açılmış alacak teslim değişince değişmez; fark geçmişe not düşer.
+    await vt().tx(async (db) => {
+      await teslimGeriAl(db, depocu(), { malKabulSatirId: 254002 });
+      await teslimIsle(db, depocu(), { siparisSatirId: satirA, miktar: '3', malKabulSatirId: 254003 });
+    });
+    assert.equal((await alacagi(s.id, a))!.tutar, '14.40');
+    assert.ok((await acilistaki(s.id)).hareketler.some((h) => h.metin.includes('avans aşımı 2.4 TRY oldu; finanstaki alacak kaydı değişmedi')));
+    assert.equal((await alacakDurumu(al.id, { surum: acik.surum, durum: 'dusuldu', aciklama: 'Deneme' })).statusCode, 422, 'açık alacak düşürülmez');
+    const kapandi = tamam<{ alacak: TedarikciAlacagi }>(await alacakDurumu(al.id, { surum: acik.surum, durum: 'kapandi', aciklama: 'Mahsup edildi' })).alacak;
+    assert.equal(kapandi.durum, 'kapandi');
+    assert.equal((await alacakDurumu(al.id, { surum: kapandi.surum, durum: 'acik', aciklama: 'Yeniden' })).statusCode, 422, 'kapanan alacak yeniden açılmaz');
+    // Defter: ekle; düzeltmede geri alma ve yeniden yazım ayrı tutar güncellemesi; iki durum geçişi; uçtan gelen geçişlerde kişi finansçıdır.
+    const d = await defter('finans_tedarikci_alacagi', s.id);
+    assert.deepEqual(d.map((x) => x.islem), ['ekle', 'guncelle', 'guncelle', 'guncelle', 'guncelle']);
+    assert.ok(d.slice(3).every((x) => x.kisi !== null && x.kisi !== kisi.sa));
+    // Veri 2: alacağı olan sipariş silinemez (FK RESTRICT); satın almanın kaydı bunu 409 ile önceden reddeder.
+    await assert.rejects(ortam!.sahip.sorgu('DELETE FROM satin_alma_siparis WHERE talep_id = $1 AND teklif_id = $2', [s.id, a]));
+  });
+
+  test('2540 Maliyet C1: elle plan alacağı planın avans satırından hesaplanır; Veri 2: alacaklı sipariş (düşüldü dahil) karar değişikliğiyle silinmez, 409', async () => {
+    // B: 10 x 9 = 90, teklifte avans yok. Elle plan: avans 60, vade 48. 4 / 10 teslim: gerçekleşen 36, KDV dahil 43.20; aşım 16.80.
+    const { s, a, b } = await bolunmusSiparis();
+    const satirB = siparisi(s, b).satirlar[0]!.id;
+    await logoyaGitti(s.id, b, satirB, '25410');
+    tamam(await istek(c.sa, 'POST', `/satin-alma-talepleri/${s.id}/odeme-plani`, { teklifId: b, surum: (await acilistaki(s.id)).surum,
+      satirlar: [{ tur: 'avans', vade: '2026-10-08', yontem: 'banka', tutar: '60' }, { tur: 'vade', vade: '2026-12-15', yontem: 'banka', tutar: '48' }] }));
+    await teslimEt(satirB, '4', 254101);
+    tamam<Talep>(await kapat(await acilistaki(s.id), b));
+    const al = (await alacagi(s.id, b))!;
+    assert.deepEqual([al.durum, al.tutar], ['teyit_bekliyor', '16.80']);
+    assert.ok((await acilistaki(s.id)).hareketler.some((h) => h.metin.includes('avans gerçekleşen teslim değerini 16.8 TRY aşıyor; avans ödendiyse')));
+    tamam(await alacakDurumu(al.id, { surum: al.surum, durum: 'dusuldu', aciklama: 'Avans ödenmedi' }));
+    // A siparişine de deneme alacağı (açık sipariş, Logo'ya gitmemiş): kararı tek teklife çevirip A'yı silmek 409 verir, alacak yerinde kalır.
+    await ortam!.sahip.sorgu(`INSERT INTO finans_tedarikci_alacagi (satin_alma_talep_id, satin_alma_teklif_id, siparis_no, firma_id, para_birimi, tutar, olusturan_id, durum, aciklama, durum_degistiren_id, durum_zamani)
+      VALUES ($1, $2, 'DENEME', $3, 'TRY', 1, $4, 'dusuldu', 'Deneme', $4, now())`, [s.id, a, firmaA, kisi.sa]);
+    const t = await acilistaki(s.id);
+    const red = await kaydet(c.sa, { ...govde(t), karar: { ...t.karar!, siparisler: t.karar!.siparisler.filter((x) => x.teklifId !== a).map((x) => ({
+      teklifId: x.teklifId, siparisNo: x.siparisNo, siparisTarihi: x.siparisTarihi, beklenenTeslim: x.beklenenTeslim })) } });
+    assert.equal(red.statusCode, 409, red.body);
+    assert.match(red.body, /tedarikçi alacağı var; önce finansta alacağı kapatın ya da düşürün/);
+    assert.ok(await alacagi(s.id, a));
+  });
+
+  test('2540 Veri 1 ve test 5: plan upsert; aynı plan ikinci kez yazılınca defterde yeni satır yok, tek taksit değişince tek güncelle, plandan çıkan sıra sil; kişi dolu', async () => {
+    const { s, a } = await bolunmusSiparis();
+    const yaz = async (satirlar: unknown[]) => tamam(await istek(c.sa, 'POST', `/satin-alma-talepleri/${s.id}/odeme-plani`, { teklifId: a, surum: (await acilistaki(s.id)).surum, satirlar }));
+    const plan = [{ tur: 'avans', vade: '2026-10-07', yontem: 'banka', tutar: '10' }, { tur: 'vade', vade: '2026-12-01', yontem: 'banka', tutar: '14' }];
+    const satirlar = async () => (await defter('finans_siparis_odemesi', s.id)).filter((x) => x.anahtar.satin_alma_teklif_id === a);
+    await yaz(plan);
+    const ilk = (await satirlar()).length;
+    await yaz(plan);
+    assert.equal((await satirlar()).length, ilk, 'aynı plan defterde yeni satır açmaz');
+    await yaz([plan[0], { ...plan[1], tutar: '15' }]);
+    const tek = (await satirlar()).slice(ilk);
+    assert.deepEqual(tek.map((x) => [x.islem, x.anahtar.sira, Object.keys(x.alanlar)]), [['guncelle', 2, ['tutar']]]);
+    await yaz([plan[0]]);
+    const son = (await satirlar()).slice(ilk + 1);
+    assert.deepEqual(son.map((x) => [x.islem, x.anahtar.sira]), [['sil', 2]]);
+    assert.ok((await satirlar()).every((x) => x.kisi !== null), 'K5: uçtan yazımda kişi dolu');
+    assert.ok((await satirlar()).every((x) => !('id' in x.alanlar)), 'kimlik deftere girmez');
   });
 });
 

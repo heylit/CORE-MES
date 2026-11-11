@@ -5,6 +5,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { BildirimSaglayici } from '../../../../ortak/arayuz/index.ts';
 import { SatinAlmaFasonPlani, SatinAlmaMalzemePlani } from '../../disari.ts';
 import { SATIN_ALMA_CALISMASI } from './SatinAlmaPlanlari.tsx';
+import { planAni } from '../test-saati.ts';
 
 // 546 a: sayfalar sunucunun daraltılmış çalışmasıyla (satin-alma-gorunumu.ts beyaz listesi) planlama görünümünü yazmasız çizer. Çalışmalar
 // planlama testlerinin örneklerinin daraltılmış halidir: müşteri, fiyat, tezgâh ve personel yoktur. Veri uydurmadır.
@@ -23,7 +24,7 @@ const fasonCalismasi = {
     vardiyalar: [{ id: 'V1', bas: '08:00', bit: '16:00', molalar: [] }],
     calismaGunleri: { pzt: ['V1'], sal: ['V1'], car: ['V1'], per: ['V1'], cum: ['V1'], cmt: [], paz: [] }, tatiller: [],
     urunler: [{ id: 'U1', rota: [{ k: '10' }, { k: '20', bag: [['10']] }] }],
-    siparisler: [{ id: 'S1', urun: 'U1', adet: 2, termin: '2026-01-09 16:00', malzeme: [{ kod: 'M1', miktar: 1.5 }] }],
+    siparisler: [{ id: 'S1', no: 'DN-0001-26-01-001', urun: 'U1', adet: 2, termin: '2026-01-09 16:00', malzeme: [{ kod: 'M1', miktar: 1.5 }] }],
     malzemeler: [{ kod: 'M1', ad: 'Deneme çubuk', birim: 'kg', stok: 100 }],
     satinalma: [], tedarikciler: [], fasoncular: [{ id: 'F1', ad: 'Deneme kaplama', sureGun: 2, kapasite: 1 }],
     fasonTermin: {}, fasonRef: {}, opAdet: {}, tezgahlar: [], personel: [],
@@ -35,7 +36,7 @@ const malzemeCalismasi = {
   plan: { dataVer: 1, ops: { 'E-1.10': { job: 'E-1', S: 5 * G, C: 6 * G, done: 0 } }, J: {} },
   D: {
     meta: { baslangic: bugun },
-    siparisler: [{ id: 'E-1', urun: 'U1', adet: 10, termin: null, malzeme: [{ kod: 'M-1', miktar: 2 }] }],
+    siparisler: [{ id: 'E-1', no: 'DN-0002-26-01-002', urun: 'U1', adet: 10, termin: null, malzeme: [{ kod: 'M-1', miktar: 2 }] }],
     urunler: [{ id: 'U1', rota: [] }],
     malzemeler: [{ kod: 'M-1', ad: 'Deneme cubuk', birim: 'kg', stok: 5, tedarikGun: 2, muayeneGun: 0 }],
     satinalma: [{ kod: 'M-1', miktar: 3, gelis: '2099-01-01 08:00', tedarikci: 'T1' }],
@@ -65,10 +66,12 @@ const ciz = (ekran: React.ReactNode) => render(
 );
 const BEKLE = { timeout: 10000 };
 
-afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
+afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.useRealTimers(); });
 
 describe('Satın Alma menüsünün plan sayfaları (546 a)', () => {
   it('fason planı daraltılmış çalışmayla planlamadaki hesabı verir; termin girişi ve planlamaya geçiş yoktur', async () => {
+    // Ekranın şimdisi gerçek saattir; uydurma çalışmanın başlangıç günü 07:00'ına sabitlenir.
+    vi.useFakeTimers({ toFake: ['Date'] }); vi.setSystemTime(planAni(fasonCalismasi as unknown as Parameters<typeof planAni>[0]));
     const istekler = sunucu(fasonCalismasi);
     ciz(<SatinAlmaFasonPlani />);
     expect(await screen.findByRole('group', { name: 'Fasoncu × gün, kapasite ve gecikme' }, BEKLE)).toBeTruthy();
@@ -77,6 +80,9 @@ describe('Satın Alma menüsünün plan sayfaları (546 a)', () => {
     const acilim = screen.getByRole('region', { name: 'Deneme kaplama · 05.01 Pzt' });
     expect(within(acilim).queryByLabelText(/Dönüş günü/)).toBeNull();
     expect(within(acilim).queryByText(/çizelgede/)).toBeNull();
+    // 2717: emir no sunucunun çalışmasında siparişle gelir; adım adı tam no yazar.
+    expect(within(acilim).getByText(/DN-0001-26-01-001\.20 /)).toBeTruthy();
+    expect(within(acilim).queryByText(/\bS1\.20\b/)).toBeNull();
     fireEvent.click(screen.getByText('Tüm satırlar'));
     expect(screen.queryByLabelText('S1.20 fason dönüş termini')).toBeNull();
     expect(istekler.filter((i) => !i.startsWith('GET'))).toEqual([]);
@@ -89,6 +95,7 @@ describe('Satın Alma menüsünün plan sayfaları (546 a)', () => {
     const plan = screen.getByRole('table', { name: 'Verilecek siparişler' });
     expect(within(plan).getAllByRole('columnheader').map((h) => h.textContent)).not.toContain('Tutar');
     expect(within(plan).getByText('Termin bekleniyor')).toBeTruthy();
+    expect(within(plan).getByText('DN-0002-26-01-002')).toBeTruthy();
     expect(within(screen.getByRole('table', { name: 'Tedarik terminleri' })).getByText('M-1')).toBeTruthy();
     expect(screen.queryByLabelText('M-1 tedarik termini')).toBeNull();
     expect(screen.queryByText(/ TL$/)).toBeNull();

@@ -70,9 +70,10 @@ export const bekleyenSiralar = (db: Db, isEmriIdleri: readonly number[]): Promis
 // yazma yetkisi ister (uçtaki gibi), gövde aynı şemalardan geçer, kuyruk yazmanın sürüm, kapsam ve dondurma denetimi kuyruklariYaz'dadır.
 // Kişi çağıranın oturumudur; denetim kaydını çağıranın uç katmanı yazar.
 // 507 2 a, 512 1 a: çalışmanın ek vardiyaları kabul edilmiştir; kuyruklarla aynı işlemde, onlardan önce taslağa geçer ve kapasiteye girer.
-// Yazılamayan (sunucuda olmayan ya da kapsam dışı makine, kullanımda olmayan vardiya) atlanır.
+// Yazılamayan (sunucuda olmayan ya da kapsam dışı makine, kullanımda olmayan vardiya) atlanır. sabitler (B-2500-1): çalışmada sabitlenen
+// işlerin `emirNo|opNo` anahtarı; önizlemedeki saatine konur ve kilitlenir.
 export async function calismaTaslagiYaz(db: Db, k: Kullanici, g: {
-  ad: string; kuyruklar: unknown; planSurumu?: number; ekMesai?: readonly { makineId: number; gun: string; vardiyaId: number }[];
+  ad: string; kuyruklar: unknown; planSurumu?: number; ekMesai?: readonly { makineId: number; gun: string; vardiyaId: number }[]; sabitler?: ReadonlySet<string>;
 }): Promise<{ taslak: { id: number; surum: number }; yazilan: number; atlanan: number; ekMesai: { yazilan: number; atlanan: number } }> {
   if (!islemVarMi(k, 'plan.studyo') || !islemVarMi(k, 'plan.yaz')) throw yetkiYok('Plan taslağı yazmak plan stüdyosu ve plan yazma yetkisi ister.');
   const ad = senaryoGovdesi.safeParse({ ad: g.ad });
@@ -80,7 +81,7 @@ export async function calismaTaslagiYaz(db: Db, k: Kullanici, g: {
   const govde = kuyrukYazGovdesi.omit({ taslak: true }).safeParse({ kuyruklar: g.kuyruklar, planSurumu: g.planSurumu });
   if (!govde.success) throw dogrulama(govde.error.issues[0]?.message ?? 'Geçersiz kuyruk.', 'kuyruklar');
   const id = await taslakAc(db, ad.data.ad, null, k.id);
-  const { cevap: y, ekMesai } = await kuyruklariYazIc(db, k, { ...govde.data, taslak: { id, surum: (await senaryo(db, id))!.surum }, ekMesai: [...(g.ekMesai ?? [])] }, true);
+  const { cevap: y, ekMesai } = await kuyruklariYazIc(db, k, { ...govde.data, taslak: { id, surum: (await senaryo(db, id))!.surum }, ekMesai: [...(g.ekMesai ?? [])] }, true, g.sabitler);
   return { taslak: { id: y.taslak, surum: (await senaryo(db, y.taslak))!.surum }, yazilan: y.yazilan, atlanan: y.atlanan, ekMesai };
 }
 
@@ -107,7 +108,7 @@ export { malzemeKartiIzleri } from './sorgular.ts';
 
 // 2319 (2311 S7): emir bitti ve fason dönüşü canlı planı "bayat" işaretler (yalnız işaret); bağ kablolama.ts'te. Okuma: son canlıya almadan
 // sonraki olaylar ve makine duruşları.
-export { emirBittiYansit as bayatEmirBittiYansit, fasonHareketiYansit as bayatFasonHareketiYansit, isEmirleriDegistiYansit as bayatIsEmirleriDegistiYansit, planBayatligi } from './bayat/servis.ts';
+export { emirBittiYansit as bayatEmirBittiYansit, emirIptalYansit as bayatEmirIptalYansit, adimBittiYansit as bayatAdimBittiYansit, fasonHareketiYansit as bayatFasonHareketiYansit, isEmirleriDegistiYansit as bayatIsEmirleriDegistiYansit, planBayatligi } from './bayat/servis.ts';
 export type { BayatNedeni, BayatOlayi, PlanBayatligi } from './bayat/kurallar.ts';
 
 // 2319 (2311 S10): Arkon periyodik bakımı plan girdisine duruş olarak girer; plan Arkon'u okumaz (ADR 0006), sağlayıcıyı kablolama.ts bağlar.

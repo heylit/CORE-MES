@@ -27,3 +27,31 @@ Taban: main 06144ea. Başvuru: kullanıcı kararları 194 a, 197 a, 198 a, 199 a
 - Ekran uyarıları (1818): emirsiz projede yeni eksik `is_emri_yok`, vade uyarısı yalnız iş varken (PM-44); gelir kartının başlığı "Proje geliri" (değer siparişin tamamı değil, projenin emir payıdır, PM-36); üretim gerçekleşeni bilinmezken masraf "dahil" yazılmaz.
 - PM-7 (D5 a, 1818): plan tarihi olmayan kayıtta yeni eksik `plan_tarihi_yok`; defter işi bütün projeleri dolaşmak yerine uretim-emirleri `bitenIsEmirleri` ile defterde olmayan biten iş emirlerini bulur, `emirlerinProjeleri` ile yalnız o projeleri hesaplar (PM-47).
 - PM-1 (PM-1 a, 1818): işçilik planı yokken yeni eksik `iscilik_plani_yok`; katkı payı kartı ve kâr riski boş tutar yerine "İşçilik planı yok" yazar, sayı uydurulmaz; plan girilince hesaplanır (PM-48).
+- Proje masrafı kategorileri (2599 a): `PROJE_MASRAF_KATEGORILERI` yalnız lojistik, pazarlama, diğer gider. Mal alımı (malzeme sarftan, fason siparişten girer), personel (işçilik saatten), kira ve enerji (genel gider) projeye yeni bağlanamaz; ikinci kez sayılmasın diye. Var olan bağlar silinmez (PM-41).
+- Sayılmayan bağ (2599-a2): masraf satırına `sayilmaz` eklendi; türü artık listede olmayan bağ ve bağdan sonra siparişe bağlanan belge (2611 ön bakışı) toplama ve farka girmez, tabloda ve CSV'de "Sayılıyor" sütunu; ekranda "Sayılmıyor" rozetiyle ve açıklamayla görünür, kaldırma mevcut yoldan (PM-49). Veri silinmez, göç yok.
+
+## 2663 (2661 a): gizli genel gider oranı
+- Finans `genelGiderOrani` gizli ayda gerçek oranı `gizli: true` ile verir (2594 b); hesap gerçek oranla sürer, cevap `genelGiderGizliMaskesi` ile tek yerde maskelenir. Cevaba `genelGiderGizli` eklendi (sözleşme `.strict()`).
+- Maskelenen alanlar oran oynatılarak bulundu (genel-gider-gizli.test.ts); bekleme finansmanı genel gideri tabana almadığı için (FINANSMAN_TABANI) kalır.
+- Sapan iş emirleri gizli ayda boş döner: sıralama da toplamdan türer. VARSAYIM; geri alma düşük (genel gidersiz sapmayla liste döndürülebilir, ayrı karar).
+- Defter: dondurulan satırın `ucretler.genelGider.gizli` alanı okunur; gizlilik dondurma anındakidir. VARSAYIM; geri alma düşük.
+- Göç `20261110003323_proje_maliyet_taban_genel_gider_gizli.sql` (Veri 2663): varsayılanlı boolean, veri dönüşmez. Taban gerçek değerle saklanır, okumada plan ve genel gider kalemi gizli.
+- İstemci: "Gizli" bayraktan gelir (`gizli.ts` `gizliVeyaDeger`), açıklama satırı bilgi rozetli ve kilit simgeli; haftalık birikim yerine boş durum metni; kalem kırılımında not (Arayüz K1-K6).
+
+## 2720-2 (2613 2/2): gerçekleşen malzeme sipariş fiyatıyla
+- Gerçekleşen malzeme (PM-27) birim fiyatını emrin, yoksa projenin bağlı satın alma siparişinden alır (`satin-alma/disari.ts` `siparisBirimFiyatlari`, 2720-1); bağlı sipariş yoksa son alış (2727, PM-52). Plan ve talaş kg fiyatı değişmedi. Saf kural `gercekBilesenFiyatlari` (PM-51).
+- Miktar emre çıkan net sarftır; siparişin tamamı yazılmaz (artan mal stokta kalır, 2637 a ile çift sayılmaz). VARSAYIM (Maliyet okuması); geri alma orta.
+- Göç, uç, sözleşme ve eksik kodu değişmedi.
+
+## 2727 (2613-3 a): siparişsiz çıkış son alışla
+- Bağlı siparişi olmayan çıkış, çıkış anındaki son alışla fiyatlanır (`stok/disari.ts` `emirSarfSonAlisTutarlari`, 2727-1; 2707 emirsiz çıkışla aynı tanım). Son alışı yoksa bilinmiyor (null, `birim_maliyet_eksik`); liste fiyatına düşülmez. Kural PM-52.
+- Çiftin tutarı doğrudan kullanılır, birim fiyata çevrilip yeniden çarpılmaz (Maliyet N1). Talaş liste kg fiyatından düşülmeye devam eder. Plan değişmedi.
+- VARSAYIM: emrin ya da projenin siparişi varsa çıkışın tamamı sipariş fiyatıyla (PM-51) fiyatlanır, kısmen siparişsiz çıkış ayrılmaz; geri alma orta. Fire dahil net sarf son alışla.
+- Göç, uç, sözleşme ve eksik kodu değişmedi.
+
+## 2739 (2733 a): kısmi siparişte siparişe kadar sipariş fiyatı
+- Sipariş yalnız teslim alınan net miktarına kadar fiyatlar (satin-alma `teslimMiktari`, 2739-1). Çift başına sırayla emrin siparişi, projenin siparişi (projede kalan teslim, emirlere ilk sarf zamanı sırasıyla; stok `ilkZaman`, 2739-2), kalan fazla son alıştan orantıyla, kuruşa yuvarlanır. Kural PM-53. Fazla yoksa sonuç PM-51 ile aynı.
+- 2720-2'de emrin siparişi çıkışın tamamını fiyatlıyordu ve proje siparişinin miktar sınırı yoktu; ikisi de değişti.
+- Düzeltme: son alışı bilinmeyen siparişsiz ya da fazla çift artık `birim_maliyet_eksik` yazar (2727'de tutar null olup kod yazılmıyordu).
+- VARSAYIM (Maliyet tarifi): proje siparişi emirlere ilk sarf zamanı, eşitse emir no sırasıyla dağılır; emrin siparişi önce, proje siparişi sonra, son alış en son. Geri alma orta.
+- Göç, uç ve eksik kodu değişmedi; sözleşme alanları sağlayıcılarda (2739-1, 2739-2).

@@ -37,6 +37,7 @@ const SURELER: SurelerCevabi = {
       hazirlik: null, degisim: null,
       islem: { id: 9, sureDk: '4.5', kaynak: 'terminal', isEmriId: null, makineId: null, yazan: { id: 1, ad: null }, zaman: '2026-10-23T08:00:00.000Z' },
     },
+    ozet: { hazirlik: null, degisim: null, islem: { n: 1, ortancaDk: '4.5', enAzDk: '4.5', enCokDk: '4.5' } },
     etkin: { hazirlikDk: '30', birimSureDk: '6', islemDk: '5', degisimDk: '1', degisimOraniYuzde: '20' },
     fason: false,
   }],
@@ -68,9 +69,9 @@ describe('R2 Süreler', () => {
     await waitFor(() => expect(yazmalar(istekler)).toHaveLength(1));
     expect(yazmalar(istekler)[0]).toMatchObject({ yol: '/rota/adimlar/41/gerceklesen-sure', govde: { tur: 'hazirlik', sureDk: 3.5, makineId: null, okunanId: null } });
 
-    fireEvent.click(within(bolge).getByRole('button', { name: 'İşlem ölçümünü kabul et, MM-0001 OP 10' }));
+    fireEvent.click(within(bolge).getByRole('button', { name: 'İşlem ortancasını kabul et, MM-0001 OP 10' }));
     await waitFor(() => expect(yazmalar(istekler)).toHaveLength(2));
-    expect(yazmalar(istekler)[1]).toMatchObject({ yol: '/rota/adimlar/41/gerceklesen-sure/kabul', govde: { tur: 'islem', olcumId: 9, okunanId: 9, makineId: null } });
+    expect(yazmalar(istekler)[1]).toMatchObject({ yol: '/rota/adimlar/41/gerceklesen-sure/kabul', govde: { tur: 'islem', olcumId: 9, deger: 'ortanca', okunanId: 9, makineId: null } });
     await waitFor(() => expect(istekler.filter((i) => i.yol === '/rota/revizyonlar/7/sureler').length).toBeGreaterThanOrEqual(3));
   });
 
@@ -85,7 +86,7 @@ describe('R2 Süreler', () => {
     });
     rrAc('/recete-rota/sureler');
     const bolge = await bolumAc('Süreler');
-    fireEvent.click(await within(bolge).findByRole('button', { name: 'İşlem ölçümünü kabul et, MM-0001 OP 10' }));
+    fireEvent.click(await within(bolge).findByRole('button', { name: 'İşlem ortancasını kabul et, MM-0001 OP 10' }));
     expect(await screen.findByText(uyari)).toBeTruthy();
   });
 
@@ -148,7 +149,7 @@ describe('R2 Malzemeler', () => {
     expect(yazmalar(istekler)).toEqual([]);
   });
 
-  it('izinli: recete-rota.yaz statü tanımını sürümüyle yazar; finans.yonet birim maliyeti yazar', async () => {
+  it('2584 a: statüler Ayarlar\'dadır, Malzemeler\'de yoktur; recete-rota.yaz statü tanımını sürümüyle yazar; finans.yonet birim maliyeti yazar', async () => {
     const istekler = sunucuKur(MALIYETCI, {
       durum: statuluDurum(),
       yazmalar: {
@@ -156,16 +157,60 @@ describe('R2 Malzemeler', () => {
         'POST /finans/maliyetler/malzeme/yaz': () => json(200, {}),
       },
     });
-    rrAc('/recete-rota/items');
-    const bolge = await bolumAc('Malzemeler');
-    yaz(await within(bolge).findByRole('textbox', { name: 'Statü adı' }), 'Karantinada');
+    rrAc('/recete-rota/ayarlar');
+    const ayar = await bolumAc('Ayarlar');
+    yaz(await within(ayar).findByRole('textbox', { name: 'Statü adı' }), 'Karantinada');
     await waitFor(() => expect(yazmalar(istekler)).toHaveLength(1));
     expect(yazmalar(istekler)[0]).toMatchObject({
       yol: '/recete-rota/statu-tanimlari/S1/kaydet', govde: { code: 'KAR', name: 'Karantinada', kind: 'kalite', color: '#336699', beklenenSurum: 3 },
     });
-    yaz(within(bolge).getByRole('textbox', { name: 'MM-0001 birim maliyet' }), '12,5');
+    cleanup();
+    rrAc('/recete-rota/items');
+    const bolge = await bolumAc('Malzemeler');
+    expect(within(bolge).queryByRole('region', { name: 'Statüler' })).toBeNull();
+    yaz(await within(bolge).findByRole('textbox', { name: 'MM-0001 birim maliyet' }), '12,5');
     await waitFor(() => expect(yazmalar(istekler)).toHaveLength(2));
     expect(yazmalar(istekler)[1]).toMatchObject({ yol: '/finans/maliyetler/malzeme/yaz', govde: { anahtar: 11, birimMaliyet: 12.5, paraBirimi: 'TRY', surum: null } });
+  });
+
+  it('2584 a: "Yeni statü" düğmesi önce adı sorar; boş adla eklenmez, yazılan adla eklenir', async () => {
+    const istekler = sunucuKur(MALIYETCI, {
+      durum: statuluDurum(),
+      yazmalar: { 'POST /recete-rota/statu-tanimlari/S2/kaydet': () => json(200, { statuses: [] }) },
+    });
+    rrAc('/recete-rota/ayarlar');
+    const ayar = await bolumAc('Ayarlar');
+    fireEvent.click(await within(ayar).findByRole('button', { name: /^Yeni statü$/ }));
+    const pencere = await screen.findByRole('dialog', { name: 'Yeni statü' });
+    const ekle = within(pencere).getByRole('button', { name: /Ekle/ }) as HTMLButtonElement;
+    expect(ekle.disabled).toBe(true);
+    expect(yazmalar(istekler)).toEqual([]);
+    fireEvent.change(within(pencere).getByRole('textbox', { name: /Statü adı/ }), { target: { value: '  Kalite bekliyor ' } });
+    fireEvent.click(ekle);
+    await waitFor(() => expect(yazmalar(istekler)).toHaveLength(1));
+    expect(yazmalar(istekler)[0]).toMatchObject({ yol: '/recete-rota/statu-tanimlari/S2/kaydet', govde: { code: 'S2', name: 'Kalite bekliyor', beklenenSurum: null } });
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Yeni statü' })).toBeNull());
+  });
+
+  it('2584 Arayüz notu: aynı adla ikinci statü pencerede reddedilir; sunucu reddi de pencerede görünür, pencere açık kalır', async () => {
+    const istekler = sunucuKur(MALIYETCI, {
+      durum: statuluDurum(),
+      yazmalar: { 'POST /recete-rota/statu-tanimlari/S2/kaydet': () => json(409, { kod: 'CAKISMA', mesaj: 'S2 kimlikli statü zaten var; sayfayı yenileyin.' }) },
+    });
+    rrAc('/recete-rota/ayarlar');
+    const ayar = await bolumAc('Ayarlar');
+    fireEvent.click(await within(ayar).findByRole('button', { name: /^Yeni statü$/ }));
+    const pencere = await screen.findByRole('dialog', { name: 'Yeni statü' });
+    const ekle = within(pencere).getByRole('button', { name: /Ekle/ }) as HTMLButtonElement;
+    fireEvent.change(within(pencere).getByRole('textbox', { name: /Statü adı/ }), { target: { value: ' KARANTİNA' } });
+    expect(within(pencere).getByRole('alert').textContent).toBe('Bu adla bir statü zaten var.');
+    expect(ekle.disabled).toBe(true);
+    fireEvent.change(within(pencere).getByRole('textbox', { name: /Statü adı/ }), { target: { value: 'Ret' } });
+    expect(within(pencere).queryByRole('alert')).toBeNull();
+    fireEvent.click(ekle);
+    expect(await within(pencere).findByText('S2 kimlikli statü zaten var; sayfayı yenileyin.')).toBeTruthy();
+    expect(screen.getByRole('dialog', { name: 'Yeni statü' })).toBeTruthy();
+    expect(yazmalar(istekler)).toHaveLength(1);
   });
 
   it('statülü kartlar ana kartın altında yalnız okunur satırdır; stok okunamazsa miktar boş', async () => {
@@ -185,11 +230,15 @@ describe('R2 Malzemeler', () => {
 
   it('reddedilen: yazma işlemi olmayan statü ve maliyet girdisi görmez; kart okuma yetkisi yoksa bölüm boştur', async () => {
     sunucuKur(OKUYAN, { durum: statuluDurum() });
+    rrAc('/recete-rota/ayarlar');
+    const ayar = await bolumAc('Ayarlar');
+    expect(await within(ayar).findByText('Karantina')).toBeTruthy();
+    expect(within(ayar).queryAllByRole('textbox')).toEqual([]);
+    expect(within(ayar).queryByRole('button', { name: /Statü$/ })).toBeNull();
+    cleanup();
     rrAc('/recete-rota/items');
     const bolge = await bolumAc('Malzemeler');
-    expect(within(bolge).getByText('Karantina')).toBeTruthy();
     expect(within(bolge).queryAllByRole('textbox')).toEqual([]);
-    expect(within(bolge).queryByRole('button', { name: /Statü$/ })).toBeNull();
     cleanup();
 
     const d = ornekDurum();

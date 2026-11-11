@@ -135,7 +135,7 @@ export function planTestOrtami() {
 
   // Ayrıntıdan kaydet gövdesine: ekran da aynı dönüşümü yapar.
   const govdeye = (a: RevizyonAyrintisi['adimlar'][number]): AdimGirdisi => ({
-    opNo: a.opNo, operasyonTipiId: a.operasyonTipi.id, ad: a.ad, kaynak: a.kaynak ? { tur: a.kaynak.tur, id: a.kaynak.id } : null,
+    opNo: a.opNo, operasyonTipiId: a.operasyonTipi.id, ad: a.ad, kaynak: a.kaynak === null ? null : a.kaynak.id === null ? { tur: 'fason', id: null } : { tur: a.kaynak.tur, id: a.kaynak.id },
     ayarSuresiDk: a.ayarSuresiDk === null ? null : Number(a.ayarSuresiDk), birimSureDk: a.birimSureDk === null ? null : Number(a.birimSureDk),
     bagimlilik: a.bagimlilik, devirAdedi: a.devirAdedi, firePayiYuzde: Number(a.firePayiYuzde), makineKullanimi: a.makineKullanimi,
     enKucukParca: a.enKucukParca, yenidenAyar: a.yenidenAyar,
@@ -200,7 +200,7 @@ export function planTestOrtami() {
       await kisiEkle(ad, rol(rolAdi));
       c[ad] = await girisCerezi(ad);
     }
-    tipler = (await tamam<SeceneklerCevabi>(c.operator, 'GET', '/rota/secenekler')).operasyonTipleri;
+    tipler = (await tamam<SeceneklerCevabi>(c.planlama, 'GET', '/rota/secenekler')).operasyonTipleri;
     const merkez = await tamam<{ id: number }>(c.yonetici, 'POST', '/is-merkezleri', { kod: 'RT-IM', ad: 'Deneme merkez', aciklama: null });
     istasyonA = (await tamam<{ id: number }>(c.yonetici, 'POST', '/istasyonlar', { kod: 'RT-A', ad: 'Deneme A', isMerkeziId: merkez.id })).id;
     istasyonB = (await tamam<{ id: number }>(c.yonetici, 'POST', '/istasyonlar', { kod: 'RT-B', ad: 'Deneme B', isMerkeziId: merkez.id })).id;

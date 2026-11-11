@@ -63,7 +63,7 @@ describe('idari-isler araç masrafı (gerçek PostgreSQL, gerçek giriş)', () =
     return c.json<AracCevabi>().arac;
   }
   const masrafGovdesi = (degisen: Record<string, unknown> = {}) =>
-    ({ tarih: bugun, tur: 'yakit', tutar: '1250.50', km: 1200, belgeNo: 'DNM-1', aciklama: null, ...degisen });
+    ({ tarih: bugun, tur: 'yakit', tutar: '1250.50', kdv: null, km: 1200, belgeNo: 'DNM-1', aciklama: null, ...degisen });
   async function masrafEkle(aracId: number, degisen: Record<string, unknown> = {}): Promise<Masraf> {
     const c = await gonder(idari.cerez, `/idari-isler/araclar/${aracId}/masraf-ekle`, masrafGovdesi(degisen));
     assert.equal(c.statusCode, 200, c.body);
@@ -145,6 +145,28 @@ describe('idari-isler araç masrafı (gerçek PostgreSQL, gerçek giriş)', () =
     await assert.rejects(
       o().sahip.sorgu('UPDATE idari_isler_arac_masrafi SET tutar = 0 WHERE id = $1', [m.id]),
       /idari_isler_arac_masrafi_tutar/,
+    );
+  });
+
+  test('IDR-35 (2712 a): KDV boş olabilir; yazılırsa saklanır ve okunur; eksi, üç basamak, tutara eşit ya da büyük KDV 400; tablo kısıtı aynı kuralı tutar', async () => {
+    const arac = await aracEkle();
+    const kdvli = await masrafEkle(arac.id, { tutar: '1200.00', kdv: '200.00' });
+    assert.equal(kdvli.kdv, '200.00');
+    const sifir = await masrafEkle(arac.id, { tur: 'ceza', tutar: '500', kdv: '0' });
+    assert.equal(sifir.kdv, '0.00');
+    const bos = await masrafEkle(arac.id, { kdv: undefined });
+    assert.equal(bos.kdv, null);
+    const liste = (await oku(okuyan.cerez, `/idari-isler/araclar/${arac.id}/masraflar`)).json<MasraflarCevabi>();
+    assert.deepEqual(liste.masraflar.map((m) => m.kdv).sort(), ['0.00', '200.00', null].sort());
+    const n = await say();
+    for (const kdv of ['-1', '1.234', '1250.50', '2000']) {
+      const c = await gonder(idari.cerez, `/idari-isler/araclar/${arac.id}/masraf-ekle`, masrafGovdesi({ kdv }));
+      assert.equal(c.statusCode, 400, kdv);
+    }
+    assert.equal(await say(), n);
+    await assert.rejects(
+      o().sahip.sorgu('UPDATE idari_isler_arac_masrafi SET kdv = tutar WHERE id = $1', [kdvli.id]),
+      /idari_isler_arac_masrafi_kdv/,
     );
   });
 });

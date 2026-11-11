@@ -9,7 +9,8 @@ import { useIslemVar, useKorumaliGonderim, yazmaIletisi } from './yazma.ts';
 
 const TURLER = MASRAF_TURLERI.map((t) => ({ deger: t, baslik: MASRAF_TURU[t] }));
 
-// Araç masrafları (172 a): kayıt değişmez, yanlışı gerekçeyle iptal edilir. Tutar TL; yıl toplamı iptal edilmemiş kayıtlardan.
+// Araç masrafları (172 a): kayıt değişmez, yanlışı gerekçeyle iptal edilir. Tutar TL ve KDV dahil, KDV ayrıca yazılabilir (2712 a);
+// yıl toplamı iptal edilmemiş kayıtların KDV dahil tutarıdır.
 export function MasrafPenceresi({ arac, kapat }: { arac: Arac; kapat: () => void }) {
   const yazar = useIslemVar('idari-isler.filo-yaz');
   const liste = useQuery({
@@ -46,6 +47,7 @@ export function MasrafPenceresi({ arac, kapat }: { arac: Arac; kapat: () => void
                       </span>
                       <span className="tc-ii-soluk">
                         <span className="mono">{tarihMetni(m.tarih)}</span>
+                        {m.kdv !== null && <> · KDV <span className="mono">{tlMetni(m.kdv)}</span></>}
                         {m.km !== null && <> · <span className="mono">{kmMetni(m.km)}</span> km</>}
                         {m.belgeNo !== null && <> · Belge {m.belgeNo}</>}
                         {' · '}{m.kaydedenAd ?? 'Bilinmeyen kişi'}
@@ -73,6 +75,7 @@ function MasrafFormu({ arac }: { arac: Arac }) {
   const [tarih, tarihYaz] = useState(bugunTarihi);
   const [tur, turYaz] = useState<MasrafTuru>('yakit');
   const [tutar, tutarYaz] = useState('');
+  const [kdv, kdvYaz] = useState('');
   const [km, kmYaz] = useState('');
   const [belgeNo, belgeNoYaz] = useState('');
   const [aciklama, aciklamaYaz] = useState('');
@@ -81,21 +84,22 @@ function MasrafFormu({ arac }: { arac: Arac }) {
 
   // Tutar "1.250,50", "1250,50" ya da "1250.50" yazılır; km binlik noktalı da olabilir.
   const tutarMetni = tutarGirdisi(tutar, 10);
+  const kdvMetni = kdv.trim() === '' ? null : tutarGirdisi(kdv, 10);
   const kmSayi = km.trim() === '' ? null : tamSayiGirdisi(km, 7);
   const eksik = [...(tarih === '' ? ['tarih'] : []), ...(tutar.trim() === '' ? ['tutar'] : [])];
-  const hatali = [...(tutar.trim() !== '' && tutarMetni === null ? ['tutar'] : []), ...(km.trim() !== '' && kmSayi === null ? ['km'] : [])];
+  const hatali = [...(tutar.trim() !== '' && tutarMetni === null ? ['tutar'] : []), ...(kdv.trim() !== '' && kdvMetni === null ? ['KDV'] : []), ...(km.trim() !== '' && kmSayi === null ? ['km'] : [])];
 
   const gonder = async () => {
     bekliyorYaz(true);
     hataYaz(null);
     const govde: MasrafEkleGovdesi = {
-      tarih, tur, tutar: tutarMetni ?? '', km: kmSayi,
+      tarih, tur, tutar: tutarMetni ?? '', km: kmSayi, ...(kdvMetni === null ? {} : { kdv: kdvMetni }),
       ...(belgeNo.trim() === '' ? {} : { belgeNo: belgeNo.trim() }), ...(aciklama.trim() === '' ? {} : { aciklama: aciklama.trim() }),
     };
     try {
       await gonderim<MasrafCevabi>(`/idari-isler/araclar/${arac.id}/masraf-ekle`, govde);
       bildir('tamam', 'Masraf kaydedildi');
-      tutarYaz(''); kmYaz(''); belgeNoYaz(''); aciklamaYaz('');
+      tutarYaz(''); kdvYaz(''); kmYaz(''); belgeNoYaz(''); aciklamaYaz('');
     } catch (h) {
       hataYaz(yazmaIletisi(h, 'Masraf kaydedilemedi'));
     } finally {
@@ -109,12 +113,13 @@ function MasrafFormu({ arac }: { arac: Arac }) {
       <h3 className="tc-ii-ara-baslik">Masraf gir</h3>
       <div className="tc-ii-iki">
         <Secim etiket="Tür" value={tur} secenekler={TURLER} onChange={(o) => turYaz(o.target.value as MasrafTuru)} />
-        <Girdi etiket="Tutar (TL)" inputMode="decimal" required value={tutar} onChange={(o) => tutarYaz(o.target.value)} placeholder="1250,50" />
+        <Girdi etiket="Tarih" type="date" required value={tarih} onChange={(o) => tarihYaz(o.target.value)} />
       </div>
       <div className="tc-ii-iki">
-        <Girdi etiket="Tarih" type="date" required value={tarih} onChange={(o) => tarihYaz(o.target.value)} />
-        <Girdi etiket="Km (isteğe bağlı)" inputMode="numeric" value={km} onChange={(o) => kmYaz(o.target.value)} />
+        <Girdi etiket="Tutar, KDV dahil (TL)" inputMode="decimal" required value={tutar} onChange={(o) => tutarYaz(o.target.value)} placeholder="1250,50" />
+        <Girdi etiket="KDV (TL, isteğe bağlı)" inputMode="decimal" value={kdv} onChange={(o) => kdvYaz(o.target.value)} placeholder="208,42" />
       </div>
+      <Girdi etiket="Km (isteğe bağlı)" inputMode="numeric" value={km} onChange={(o) => kmYaz(o.target.value)} />
       <Girdi etiket="Belge no (isteğe bağlı)" maxLength={SINIR.belgeNo} value={belgeNo} onChange={(o) => belgeNoYaz(o.target.value)} />
       <CokSatir etiket="Açıklama (isteğe bağlı)" maxLength={SINIR.not} value={aciklama} onChange={(o) => aciklamaYaz(o.target.value)} />
       {eksik.length > 0 && <p className="tc-ii-soluk">Eksik: {eksik.join(', ')}</p>}

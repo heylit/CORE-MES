@@ -14,8 +14,8 @@ import type { BirimMaliyeti } from '../finans/disari.ts';
 import { canliSira, karRiskiOraniGun } from '../plan/disari.ts';
 import { projeGetir } from '../projeler/disari.ts';
 import { malzemeMaliyetBilgileri } from '../malzemeler/disari.ts';
-import { isEmriFasonTutarlari, malzemeKgFiyatlari } from '../satin-alma/disari.ts';
-import { emirlerinNetSarfi } from '../stok/disari.ts';
+import { isEmriFasonTutarlari, malzemeKgFiyatlari, siparisBirimFiyatlari } from '../satin-alma/disari.ts';
+import { emirSarfSonAlisTutarlari } from '../stok/disari.ts';
 import { siparisAyrintisi, siparisSatiriOzetleri } from '../siparisler/disari.ts';
 import { bitenIsEmirleri, emirlerinMalzemeIhtiyaci, emirlerinProjeleri, isEmriPlanBilgileri, isEmriSureleri, projeninIsEmirleri, uretimEmriOzeti } from '../uretim-emirleri/disari.ts';
 import type { ProjeIsEmri } from '../uretim-emirleri/disari.ts';
@@ -24,8 +24,8 @@ import * as sorgular from './sorgular.ts';
 import {
   beklemeFinansmani, defteriUygula, genelGiderEksikleri, projeGeliri, dondurulacaklar, gercekTalasAdedi, gunlukFaizOrani, eksikKalemler, isEmriKaydi, malzemePlani, tahminiIsEmriMaliyeti, gecikmeCezasi, gecikmeGunu, gostergeler, haftalikBirikim, kalemKirilimi, karRiski, iscilikPlaniEksik, planTarihiEksik, sapanIsEmirleri, tahminiBitis,
 } from './kurallar.ts';
-import { MASRAF_YOK, aramaKalibi, butceTl, maliyetFarki, masrafReddi, tabanKarari } from './kurallar.ts';
-import { faturaDurumu } from './kurallar.ts';
+import { MASRAF_YOK, aramaKalibi, bilesenTutariBilinmiyor, gercekBilesenFiyatlari, gercekCiftTutarlari, butceTl, maliyetFarki, masrafReddi, masrafSayilmaz, tabanKarari } from './kurallar.ts';
+import { faturaDurumu, genelGiderGizliMaskesi, genelGiderGizliMi, tabanMaskesi } from './kurallar.ts';
 import { MASRAF_KALDIRMA_YETKISI, projeMasrafReddi } from './kurallar.ts';
 import type { FaturaDurumu, FaturaKaydi, GelirPayi, MalzemeBileseni, MaliyetKaydi, ProjeGeliri as ProjeGeliriSonucu, TalasAdedi } from './kurallar.ts';
 
@@ -87,26 +87,31 @@ async function maliyetKayitlari(
       planBitisGunu: planBitis.get(i.isEmriId) ?? null, bitisGunu: i.bitis === null ? null : tesisGunu(new Date(i.bitis)),
     }, bugun));
   }
-  for (const k of await malzemeKayitlari(db, isler, kayitlar, eksikler)) kayitlar.push(k);
+  for (const k of await malzemeKayitlari(db, projeId, isler, kayitlar, eksikler)) kayitlar.push(k);
   return { kayitlar, eksikler: [...eksikler], isler };
 }
 
 type ProjeIsi = Awaited<ReturnType<typeof projeninIsEmirleri>>[number];
 
 // PM-25, PM-27: üretim emri başına malzeme kaydı (iş emrine bağlı değil, dondurulmaz). Plan reçeteden (emrin brüt ihtiyacı), gerçek stoktan
-// emre verilen net sarftan; ikisi de kg fiyatından birim fiyat x miktar eksi talaş. Bileşen projedeki başka emrin ürünüyse iç yarımamuldür;
+// emre verilen net sarftan; plan kg fiyatından, gerçek bağlı siparişin fiyatından teslimine kadar (PM-51, PM-53), fazlası çıkış anındaki son alıştan (PM-52), eksi talaş. Bileşen projedeki başka emrin ürünüyse iç yarımamuldür;
 // maliyeti kendi emrinde olduğu için burada sayılmaz. Gerçek talaşın parça adedi PM-31.
-async function malzemeKayitlari(db: Db, isler: readonly ProjeIsi[], isKayitlari: readonly MaliyetKaydi[], eksikler: Set<EksikVeri>): Promise<MaliyetKaydi[]> {
+async function malzemeKayitlari(db: Db, projeId: number, isler: readonly ProjeIsi[], isKayitlari: readonly MaliyetKaydi[], eksikler: Set<EksikVeri>): Promise<MaliyetKaydi[]> {
   const emirIdleri = [...new Set(isler.map((i) => i.uretimEmriId))];
+  // Net sarf ve çıkış anındaki son alış tutarı aynı okumadan (PM-27, PM-52): çift ve miktar emirlerinNetSarfi ile birebir aynıdır.
+  const sonAlislar = await emirSarfSonAlisTutarlari(db, emirIdleri);
   const sarflar = new Map<number, { malzemeNo: number; miktar: number }[]>();
-  for (const r of await emirlerinNetSarfi(db, emirIdleri)) {
+  for (const r of sonAlislar) {
     const liste = sarflar.get(r.emirId) ?? [];
     liste.push({ malzemeNo: r.malzemeId, miktar: Number(r.miktar) });
     sarflar.set(r.emirId, liste);
   }
-  const { bilesenler, netKg: urunNetKg, planBilesenleri } = await malzemeHazirla(db, emirIdleri, [...sarflar.values()].flat().map((b) => b.malzemeNo));
+  const sarfNolari = [...new Set([...sarflar.values()].flat().map((b) => b.malzemeNo))];
+  const { bilesenler, netKg: urunNetKg, planBilesenleri } = await malzemeHazirla(db, emirIdleri, sarfNolari);
+  const siparisFiyatlari = sarfNolari.length === 0 ? [] : await siparisBirimFiyatlari(db, { emirIdleri, projeIdleri: [projeId], malzemeNolar: sarfNolari });
+  const ciftTutarlari = gercekCiftTutarlari(sonAlislar, siparisFiyatlari, projeId);
   const tutar = (b: readonly MalzemeBileseni[], adet: number, netKg: number | null, kullanim?: TalasAdedi): number | null => {
-    if (b.some((x) => x.tryBirimFiyati === null)) eksikler.add('birim_maliyet_eksik');
+    if (b.some(bilesenTutariBilinmiyor)) eksikler.add('birim_maliyet_eksik');
     const p = malzemePlani(b, adet, netKg, kullanim);
     if (p.talas === null && p.tutar !== null) eksikler.add('talas_dusulmedi');
     return p.tutar;
@@ -123,7 +128,7 @@ async function malzemeKayitlari(db: Db, isler: readonly ProjeIsi[], isKayitlari:
     const bitti = isleri.every((i) => i.durum === 'tamam');
     const planB = planBilesenleri(emirId);
     const plan = planB === null ? null : tutar(planB, ilk.adet, netKg);
-    const gercek = tutar(bilesenler(sarflar.get(emirId) ?? []), ilk.adet, netKg, gercekTalasAdedi(bitti, ilk.adet, ilk.saglam, son.saglam));
+    const gercek = tutar(gercekBilesenFiyatlari(bilesenler(sarflar.get(emirId) ?? []), ciftTutarlari, emirId), ilk.adet, netKg, gercekTalasAdedi(bitti, ilk.adet, ilk.saglam, son.saglam));
     const kayitlari = isleri.flatMap((i) => kayitBul.get(i.isEmriId) ?? []);
     const planlar = kayitlari.flatMap((k) => (k.planTarihi === null ? [] : [k.planTarihi])).sort();
     const gercekler = kayitlari.flatMap((k) => (k.gercekTarihi === null ? [] : [k.gercekTarihi])).sort();
@@ -240,7 +245,9 @@ type Hesap = Omit<ProjeMaliyetCevabi, 'ozet'> & { isEmriSayisi: number };
 // Projenin maliyet özeti (197 a): salt okuma; hesap kurallar.ts'tedir. Gelir sipariş para biriminden TRY'ye: faturalanan kısım fatura kuruyla,
 // kalanı bugünün kuruyla (1398 a).
 export async function projeMaliyeti(db: Db, kullanici: Kullanici, projeId: number, simdi = Date.now()): Promise<ProjeMaliyetCevabi> {
-  const { isEmriSayisi: _sayi, ...h } = await hesapla(db, kullanici, projeId, simdi);
+  const { isEmriSayisi: _sayi, ...gercek } = await hesapla(db, kullanici, projeId, simdi);
+  // 2661 a: maske cevabın tamamına bir kez uygulanır; özet (tahmini son, fark) maskelenmiş toplamlardan kurulur.
+  const h = gercek.genelGiderGizli ? genelGiderGizliMaskesi(gercek) : gercek;
   return { ...h, ozet: await maliyetOzeti(db, projeId, h) };
 }
 
@@ -320,6 +327,7 @@ async function hesapla(db: Db, kullanici: Kullanici, projeId: number, simdi: num
     sapanIsEmirleri: fiyatGorunur ? sapanIsEmirleri(kayitlar, dahil) : [],
     eksikKalemler: eksik,
     eksikler,
+    genelGiderGizli: genelGiderGizliMi(kayitlar),
     isEmriSayisi: isler.length,
   };
 }
@@ -397,14 +405,15 @@ async function maliyetOzeti(db: Db, projeId: number, h: Pick<Hesap, 'gerceklesen
     gerekce: t.gerekce,
     kisiAd: adlar.get(t.kisiId) ?? null,
     an: t.an,
-  }));
-  // Bağ belgeye yabancı anahtarla durur; belge silinmez, iptal edilir ve iptal satırı toplama girmez (PM-42).
+    genelGiderGizli: t.genelGiderGizli,
+  })).map((t) => tabanMaskesi(t, t.genelGiderGizli));
+  // Bağ belgeye yabancı anahtarla durur; belge silinmez, iptal edilir ve iptal satırı toplama girmez (PM-42); sayılmayan türdeki eski bağ da (PM-49).
   const masraflar = baglar.flatMap((b) => {
     const d = belgeler.get(b.belgeId);
     if (d === undefined) return [];
     return [{
       id: b.id, belgeId: b.belgeId, belgeNo: d.belgeNo, belgeTarihi: d.belgeTarihi, kategori: d.kategori, aciklama: d.aciklama,
-      tutarTl: Number(d.tutarTl), iptal: d.durum === 'iptal', gorevId: b.gorevId, kisiAd: adlar.get(b.kisiId) ?? null, an: b.an,
+      tutarTl: Number(d.tutarTl), iptal: d.durum === 'iptal', sayilmaz: masrafSayilmaz(d, PROJE_MASRAF_KATEGORILERI), gorevId: b.gorevId, kisiAd: adlar.get(b.kisiId) ?? null, an: b.an,
     }];
   });
   const [taban = null, ...tabanGecmisi] = tabanlar;
@@ -429,6 +438,7 @@ export async function tabanAl(db: Db, kullanici: Kullanici, projeId: number, ger
     eksikKalemler: h.eksikKalemler,
     isEmriSayisi: h.isEmriSayisi,
     gerekce: karar.gerekce,
+    genelGiderGizli: h.genelGiderGizli,
   }, kullanici.id));
   return { tamam: true };
 }
@@ -466,3 +476,12 @@ export async function masrafSecenekleri(db: Db, kullanici: Kullanici, ara: strin
   };
 }
 
+
+// 2594 b (Mimar K1): finansın genel gider önerisi, projede sayılan masraf bağı olan belgeleri buradan çeker (kablolama). Sayılmayan bağ
+// (2599-a2: izinsiz kategori ya da satın almaya bağlı) projede sayılmadığı için genel gidere girebilir; burada dönmez.
+export async function projedeSayilanBelgeler(db: Db, belgeIdler: readonly number[]): Promise<Set<number>> {
+  const bagli = await sorgular.bagliBelgeler(db, belgeIdler);
+  if (bagli.size === 0) return bagli;
+  const belgeler = await giderBelgeleri(db, [...bagli]);
+  return new Set([...belgeler.values()].filter((d) => !masrafSayilmaz(d, PROJE_MASRAF_KATEGORILERI)).map((d) => d.id));
+}

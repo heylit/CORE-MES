@@ -283,7 +283,7 @@ export const GOREV_EN_COK = 200;
 export const GOREV_KAPANAN_GUN = 14;
 export const aracGorevleriCevabi = z.object({ gorevler: z.array(aracGoreviSemasi) });
 
-// Araç masrafı (172 a, 3. dilim): tutar TL; kayıt değişmez, gerekçeyle iptal edilir. Tutarı idari-isler.oku okur.
+// Araç masrafı (172 a, 3. dilim): tutar TL ve KDV dahil; KDV tutarı boş olabilir (2712 a). Kayıt değişmez, gerekçeyle iptal edilir. Tutarı idari-isler.oku okur.
 export const MASRAF_TURLERI = ['yakit', 'bakim', 'onarim', 'lastik', 'muayene', 'sigorta', 'ceza', 'otoyol', 'kira', 'diger'] as const;
 export const masrafTuruSemasi = z.enum(MASRAF_TURLERI);
 // IDR-27: tutar 0'dan büyük, en çok 9.999.999.999,99 ve en çok iki kuruş basamağı; tarih bugünden ileri değil.
@@ -293,6 +293,7 @@ export const masrafEkleGovdesi = z.object({
   tarih: tarihSemasi,
   tur: masrafTuruSemasi,
   tutar: ondalikMetinSemasi,
+  kdv: ondalikMetinSemasi.nullish().transform((k) => k ?? null),
   km: kmSemasi,
   belgeNo: istege(BELGE_NO_EN_UZUN),
   aciklama: istege(NOT_EN_UZUN),
@@ -308,6 +309,7 @@ export const masrafSemasi = z.object({
   tarih: tarihSemasi,
   tur: masrafTuruSemasi,
   tutar: ondalikMetinSemasi,
+  kdv: ondalikMetinSemasi.nullable(),
   km: z.number().int().nullable(),
   belgeNo: z.string().nullable(),
   aciklama: z.string().nullable(),

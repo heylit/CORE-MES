@@ -100,7 +100,7 @@ function YukGorunumu({ v, elle, ongoru, sec, secYaz }: { v: UfukVerisi; elle: bo
       : !elle && v.gec.dusuk
         ? [{ simge: 'chart' as const, ad: 'Öngörü', deger: `${sayi(top('ongoru'), 0)} sa`, alt: `düşük güven: ${sayi(v.gec.hafta, 0)} hafta giriş`, ton: 'uyari' as const }]
         : [{ simge: 'chart' as const, ad: 'Öngörü', deger: `${sayi(top('ongoru'), 0)} sa`, alt: `${v.ong.length} ürün-ay partisi` }]),
-    { simge: 'alert', ad: 'Kapasiteyi aşan', deger: `${asim} hücre`, alt: enDolu && enDolu.o > 0 ? `en dolu: ${enDolu.g} ${v.H[enDolu.i]?.ad ?? ''} haftası %${sayi(enDolu.o * 100, 0)}` : 'yok', ton: asim ? 'uyari' : 'tamam' },
+    { simge: 'alert', ad: 'Kapasiteyi aşan', deger: `${asim} hücre`, alt: enDolu && enDolu.o > 0 ? `en dolu: ${enDolu.g} grubu, ${v.H[enDolu.i]?.ad ?? ''} haftası %${sayi(enDolu.o * 100, 0)}` : 'yok', ton: asim ? 'uyari' : 'tamam' },
     { simge: 'clock', ad: 'Termine yetişmeyen', deger: `${gec.length} sipariş`, alt: gec.length ? 'plan dışı; bugün başlasa bile' : 'plan dışı siparişlerde yok', ton: gec.length ? 'hata' : 'tamam' },
   ];
   const sinir = v.H.findIndex((w) => !w.plan);

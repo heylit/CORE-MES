@@ -139,12 +139,20 @@ export const ROL_MATRISI = {
       'etiket-merkezi.bas', 'etiket-merkezi.oku', 'geometri.oku', 'idari-isler.arac-talebi-ac', 'idari-isler.talep-ac', 'ik.bordro-gordum',
       'ik.izin-talep', 'kalibrasyon.yaz', 'kalite-merkezi.oku', 'kalite-merkezi.onayla', 'kalite-merkezi.yaz', 'malzemeler.onayla',
       'malzemeler.yaz', 'mesaj.oku', 'mesaj.yaz', 'musteri-tedarikci.oku', 'plan.oku', 'portal.kalite', 'portal.oku', 'portal.yaz',
-      'projeler.oku', 'recete-rota.oku', 'saat.uyari-ustlen', 'satin-alma.talep-ac', 'sayfa.arkon', 'sayfa.atolye', 'sayfa.cizimler',
+      'projeler.oku', 'recete-rota.oku', 'rota.sartname-yayinla', 'rota.sartname-yaz', 'saat.uyari-ustlen', 'satin-alma.talep-ac', 'sayfa.arkon', 'sayfa.atolye', 'sayfa.cizimler',
       'sayfa.cnc-kurulum', 'sayfa.denetim-hazirlik', 'sayfa.emirler', 'sayfa.etiket-merkezi', 'sayfa.geometri', 'sayfa.idari-isler',
       'sayfa.ik-islemlerim', 'sayfa.kalibrasyon', 'sayfa.kalite-merkezi', 'sayfa.malzemeler', 'sayfa.mesaj', 'sayfa.musteri-tedarikci',
       'sayfa.ortak-dosyalar', 'sayfa.portal', 'sayfa.profil', 'sayfa.projeler', 'sayfa.recete-rota', 'sayfa.rota', 'sayfa.sevkiyat',
       'sayfa.siparisler', 'sayfa.stok', 'sayfa.taleplerim', 'sayfa.terminal', 'sayfa.uretim-emirleri', 'sayfa.uretim-terminali',
       'sevkiyat.oku', 'siparisler.oku', 'stok.istek', 'terminal.uret', 'uretim-emirleri.kapanis-kalite', 'uretim-emirleri.kapanis-oku',
+    ],
+  },
+  markalama_gorevlisi: {
+    ad: 'Markalama Görevlisi',
+    islemler: [
+      'idari-isler.arac-talebi-ac', 'idari-isler.talep-ac', 'ik.bordro-gordum', 'ik.izin-talep', 'markalama.seri-ver', 'markalama.tanim-yaz',
+      'mesaj.oku', 'mesaj.yaz', 'sayfa.idari-isler', 'sayfa.ik-islemlerim', 'sayfa.markalama', 'sayfa.mesaj', 'sayfa.ortak-dosyalar',
+      'sayfa.profil', 'stok.istek',
     ],
   },
   mudur: {
@@ -189,10 +197,9 @@ export const ROL_MATRISI = {
   operator: {
     ad: 'Operatör',
     islemler: [
-      'arkon.operator', 'idari-isler.arac-talebi-ac', 'idari-isler.talep-ac', 'ik.bordro-gordum', 'ik.izin-talep', 'markalama.seri-ver',
-      'mesaj.oku', 'mesaj.yaz', 'sayfa.idari-isler', 'sayfa.ik-islemlerim', 'sayfa.kuyruk', 'sayfa.markalama', 'sayfa.mesaj',
-      'sayfa.ortak-dosyalar', 'sayfa.profil', 'sayfa.terminal', 'sayfa.uretim-terminali', 'stok.istek', 'terminal.uret',
-      'uretim-emirleri.ara-istasyon',
+      'arkon.operator', 'idari-isler.arac-talebi-ac', 'idari-isler.talep-ac', 'ik.bordro-gordum', 'ik.izin-talep', 'mesaj.oku', 'mesaj.yaz',
+      'sayfa.idari-isler', 'sayfa.ik-islemlerim', 'sayfa.kuyruk', 'sayfa.mesaj', 'sayfa.ortak-dosyalar', 'sayfa.profil', 'sayfa.terminal',
+      'sayfa.uretim-terminali', 'stok.istek', 'terminal.uret', 'uretim-emirleri.ara-istasyon',
     ],
   },
   planlama_muduru: {
@@ -204,7 +211,7 @@ export const ROL_MATRISI = {
       'ik.izin-onay', 'ik.izin-talep', 'ik.pozisyon-onay', 'kisiler.oku', 'malzemeler.tanim-yaz', 'malzemeler.yaz', 'mesaj.oku',
       'mesaj.yaz', 'musteri-tedarikci.oku', 'musteri-tedarikci.yaz', 'oee.oku', 'plan.bedel-ayari', 'plan.canliya-al', 'plan.kilitle',
       'plan.motor-ayari', 'plan.oku', 'plan.planlama-oku', 'plan.studyo', 'plan.yaz', 'portal.oku', 'projeler.gorev-yaz', 'projeler.oku',
-      'projeler.statu-yaz', 'projeler.yaz', 'recete-rota.oku', 'recete-rota.yaz', 'rota.emre-kopyala', 'rota.onayla', 'rota.talimat-yaz',
+      'projeler.statu-yaz', 'projeler.yaz', 'recete-rota.oku', 'recete-rota.yaz', 'rota.emre-kopyala', 'rota.onayla', 'rota.sartname-yayinla', 'rota.sartname-yaz', 'rota.talimat-yaz',
       'rota.yaz', 'saat.uyari-ustlen', 'satin-alma.oku', 'satin-alma.talep-ac', 'sayfa.akis', 'sayfa.arkon', 'sayfa.atolye',
       'sayfa.cizelge', 'sayfa.cizimler', 'sayfa.cnc-kurulum', 'sayfa.denetim-hazirlik', 'sayfa.durus-nedenleri', 'sayfa.emirler',
       'sayfa.etiket-merkezi', 'sayfa.finans', 'sayfa.geometri', 'sayfa.idari-isler', 'sayfa.ik-islemlerim', 'sayfa.istasyonlar',
@@ -226,7 +233,7 @@ export const ROL_MATRISI = {
       'ik.izin-talep', 'kisiler.oku', 'malzemeler.tanim-yaz', 'malzemeler.yaz', 'mesaj.oku', 'mesaj.yaz', 'musteri-tedarikci.oku',
       'musteri-tedarikci.yaz', 'oee.oku', 'plan.canliya-al', 'plan.kilitle', 'plan.motor-ayari', 'plan.oku', 'plan.planlama-oku',
       'plan.studyo', 'plan.yaz', 'portal.oku', 'projeler.gorev-yaz', 'projeler.oku', 'projeler.statu-yaz', 'projeler.yaz',
-      'recete-rota.oku', 'recete-rota.yaz', 'rota.emre-kopyala', 'rota.talimat-yaz', 'rota.yaz', 'saat.uyari-ustlen', 'satin-alma.oku',
+      'recete-rota.oku', 'recete-rota.yaz', 'rota.emre-kopyala', 'rota.sartname-yayinla', 'rota.sartname-yaz', 'rota.talimat-yaz', 'rota.yaz', 'saat.uyari-ustlen', 'satin-alma.oku',
       'satin-alma.talep-ac', 'sayfa.akis', 'sayfa.arkon', 'sayfa.atolye', 'sayfa.cizelge', 'sayfa.cizimler', 'sayfa.cnc-kurulum',
       'sayfa.denetim-hazirlik', 'sayfa.durus-nedenleri', 'sayfa.emirler', 'sayfa.etiket-merkezi', 'sayfa.finans', 'sayfa.geometri',
       'sayfa.idari-isler', 'sayfa.ik-islemlerim', 'sayfa.istasyonlar', 'sayfa.kuyruk', 'sayfa.malzemeler', 'sayfa.matris', 'sayfa.mesai',

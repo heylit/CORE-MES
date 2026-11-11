@@ -1,4 +1,4 @@
-import { bitenler, planOku, plandanBitenler } from '../motor/kurallar.ts';
+import { bitenler, planOku, plandanBitenler, simdiSaati as motorSimdiSaati } from '../motor/kurallar.ts';
 import type { PlanlamaCalismasi, PlanVerisi, Siparis, Tezgah } from '../tipler.ts';
 import { ufukGunu } from '../ufuk-olcegi.ts';
 import { planDisi } from '../tipler.ts';
@@ -83,15 +83,16 @@ export function haftaGunu(D: PlanVerisi, g: number): GunAnahtari {
   return GUN[d === null ? 0 : (d.getUTCDay() + 6) % 7] ?? 'pzt';
 }
 const hm = (s: unknown): number => { const [h, m] = metin(s).split(':').map(Number); return (h ?? 0) + (m ?? 0) / 60; };
-// Sayfanın "şimdi"si: yeniden planlamada yazılan gerçek saat, yoksa başlangıç günü 07:00 (girdi.betik simdiUygula, 31 a, 741 a).
-export function simdiSaati(c: PlanlamaCalismasi): number { const s = sayiOku(c.simdi); return s !== null && s >= 0 ? s : 7; }
+// Sayfanın "şimdi"si planlama motorununkiyle aynıdır: gerçek saat (2506 a).
+export function simdiSaati(c: PlanlamaCalismasi, an?: number): number { return motorSimdiSaati(c, an); }
 
 // ---------- ayarlar (motor/durum.betik) ----------
-export interface MaliyetAyari { amac: string; risk: number; karHedef: number; mesaiCarpan: number; operatorUcret: number | null; genelGider: number | null }
-const YM0: MaliyetAyari = { amac: 'tl', risk: 0.25, karHedef: 25, mesaiCarpan: 1.5, operatorUcret: null, genelGider: null };
+// genelGiderGizli: Finans'ın genel gider oranı bu ay gizli; sunucu oranı göndermez (2668 a). Alan yoksa oran açıktır.
+export interface MaliyetAyari { amac: string; risk: number; karHedef: number; mesaiCarpan: number; operatorUcret: number | null; genelGider: number | null; genelGiderGizli: boolean }
+const YM0: MaliyetAyari = { amac: 'tl', risk: 0.25, karHedef: 25, mesaiCarpan: 1.5, operatorUcret: null, genelGider: null, genelGiderGizli: false };
 export function ymAyar(D: PlanVerisi): MaliyetAyari {
   const p = nesneMi(D.planTL) ? D.planTL : {};
-  return { ...YM0, ...p } as MaliyetAyari;
+  return { ...YM0, ...p, genelGiderGizli: p.genelGiderGizli === true } as MaliyetAyari;
 }
 export interface BeklemeAyari { ac: boolean; vadeBas: 'termin' | 'bitis'; paletM2: number; paletAdet: number; tasimaSa: number; alan: number; loj: number; alfa: number; esik: number }
 const WIP0: BeklemeAyari = { ac: true, vadeBas: 'termin', alan: 12.5, loj: 450, alfa: 0.05, esik: 8, paletM2: 2, paletAdet: 50, tasimaSa: 0.25 };
@@ -385,26 +386,27 @@ export const turAnahtari = (tur: string): string => ({ kira: 'alan', dogalgaz: '
 export interface GiderKalemi { id: string; ad: string; tur: string; aylik: number | null; anahtar: string; kapsam: string }
 export interface TezgahGideri { bedel: number | null; omur: number | null; hurda: number | null; kw: number | null; yuk: number | null; alan: number | null; sarf: number | null; bakim: number | null }
 export const TEZGAH_GIDER_ALANLARI = ['bedel', 'omur', 'hurda', 'kw', 'yuk', 'alan', 'sarf', 'bakim'] as const;
-export interface MaliyetSistemi { kip: 'kalem' | 'tek'; verim: number; kwh: number | null; tez: Record<string, TezgahGideri>; kalemler: GiderKalemi[]; dolayli: { id: string; gorev: string; brut: number | null }[] }
+// Kayıttaki eski `kip` alanı okunmaz: genel gider tek kaynaktan, Finans oranından gelir (2608, 2668 a); kalemler yalnız bilgidir.
+export interface MaliyetSistemi { verim: number; kwh: number | null; tez: Record<string, TezgahGideri>; kalemler: GiderKalemi[]; dolayli: { id: string; gorev: string }[] }
 // Belgede yoksa boş başlar: bugünkü sayfanın uydurma kalemleri ve tutarları yeni ekrana girmez (208 a).
-export function maliyetSistemiVarsayilan(): MaliyetSistemi { return { kip: 'kalem', verim: 85, kwh: null, tez: {}, kalemler: [], dolayli: [] }; }
+export function maliyetSistemiVarsayilan(): MaliyetSistemi { return { verim: 85, kwh: null, tez: {}, kalemler: [], dolayli: [] }; }
 export function maliyetSistemi(D: PlanVerisi): MaliyetSistemi {
   const m = D.maliyetSis;
   if (!nesneMi(m)) return maliyetSistemiVarsayilan();
   const tez: Record<string, TezgahGideri> = {};
   if (nesneMi(m.tez)) for (const [k, v] of Object.entries(m.tez)) tez[k] = Object.fromEntries(TEZGAH_GIDER_ALANLARI.map((a) => [a, sayiOku(alan(v, a))])) as unknown as TezgahGideri;
   return {
-    kip: m.kip === 'tek' ? 'tek' : 'kalem', verim: sayiOku(m.verim) ?? 85, kwh: sayiOku(m.kwh), tez,
+    verim: sayiOku(m.verim) ?? 85, kwh: sayiOku(m.kwh), tez,
     kalemler: diziOku(m.kalemler).map((k) => ({ id: metin(k.id), ad: metin(k.ad), tur: metin(k.tur), aylik: sayiOku(k.aylik), anahtar: metin(k.anahtar) || 'saat', kapsam: metin(k.kapsam) })),
-    dolayli: diziOku(m.dolayli).map((g) => ({ id: metin(g.id), gorev: metin(g.gorev), brut: sayiOku(g.brut) })),
+    dolayli: diziOku(m.dolayli).map((g) => ({ id: metin(g.id), gorev: metin(g.gorev) })),
   };
 }
 export interface MesaiSistemi {
   kisiBazli: boolean; aylikSaat: number; sgk: number; yanHak: number; carp: Record<'hi' | 'cmt' | 'paz' | 'tatil', number>; kisiEk: number | null;
-  gunlukSinir: number; geceSinir: number; yillikSinir: number; ucret: Record<string, { brut: number | null; yil: number | null }>;
+  gunlukSinir: number; geceSinir: number; yillikSinir: number; ucret: Record<string, { yil: number | null }>;
 }
-// Kural değerleri bugünkü sayfanınkidir (4857 sayılı kanundan bilinen sınırlar; belgeden doğrulanmadı, sayfadaki notla). Kişi ücreti ve
-// yemek-servis tutarı uydurulmaz: boş başlar.
+// Kural değerleri bugünkü sayfanınkidir (4857 sayılı kanundan bilinen sınırlar; belgeden doğrulanmadı, sayfadaki notla). Yemek-servis tutarı
+// uydurulmaz: boş başlar. Kişi brüt ücreti kayıtta tutulmaz ve okunmaz (2728 a); eski kayıtta dursa da hesaba girmez.
 export function mesaiSistemiVarsayilan(): MesaiSistemi {
   return { kisiBazli: true, aylikSaat: 225, sgk: 20.75, yanHak: 8, carp: { hi: 1.5, cmt: 1.5, paz: 2, tatil: 2 }, kisiEk: null, gunlukSinir: 11, geceSinir: 7.5, yillikSinir: 270, ucret: {} };
 }
@@ -413,7 +415,7 @@ export function mesaiSistemi(D: PlanVerisi): MesaiSistemi {
   const v = mesaiSistemiVarsayilan();
   if (!nesneMi(m)) return v;
   const ucret: MesaiSistemi['ucret'] = {};
-  if (nesneMi(m.ucret)) for (const [k, u] of Object.entries(m.ucret)) ucret[k] = { brut: sayiOku(alan(u, 'brut')), yil: sayiOku(alan(u, 'yil')) };
+  if (nesneMi(m.ucret)) for (const [k, u] of Object.entries(m.ucret)) ucret[k] = { yil: sayiOku(alan(u, 'yil')) };
   const c = nesneMi(m.carp) ? m.carp : {};
   return {
     kisiBazli: m.kisiBazli !== false, aylikSaat: sayiOku(m.aylikSaat) ?? v.aylikSaat, sgk: sayiOku(m.sgk) ?? v.sgk, yanHak: sayiOku(m.yanHak) ?? v.yanHak,
@@ -422,21 +424,10 @@ export function mesaiSistemi(D: PlanVerisi): MesaiSistemi {
     yillikSinir: sayiOku(m.yillikSinir) ?? v.yillikSinir, ucret,
   };
 }
-export const sgkKatsayisi = (m: MesaiSistemi): number => 1 + (m.sgk + m.yanHak) / 100;
-export const dolayliAylik = (M: MaliyetSistemi, m: MesaiSistemi): number => top(M.dolayli.map((g) => (g.brut ?? 0) * sgkKatsayisi(m)));
-export const kalemTutari = (k: GiderKalemi, M: MaliyetSistemi, m: MesaiSistemi): number => (k.tur === 'personel' && k.aylik === null ? dolayliAylik(M, m) : k.aylik ?? 0);
-// Kişinin saat maliyeti (SGK ve yan hak dahil); ücreti yoksa null.
-export function kisiSaati(id: string, m: MesaiSistemi): number | null {
-  const u = m.ucret[id];
-  return u && u.brut !== null ? (u.brut * sgkKatsayisi(m)) / (m.aylikSaat || 225) : null;
-}
-// Grubun ortalama kişi saat maliyeti; grupta ücretli kişi yoksa bütün kişilerin ortalaması.
-export function grupSaati(D: PlanVerisi, grup: string, m: MesaiSistemi): number | null {
-  const P = D.personel ?? [];
-  const l = P.filter((p) => (p.gruplar ?? []).includes(grup)).map((p) => kisiSaati(p.id, m)).filter((x): x is number => x !== null);
-  const t = l.length ? l : P.map((p) => kisiSaati(p.id, m)).filter((x): x is number => x !== null);
-  return t.length ? top(t) / t.length : null;
-}
+// Kalemler yalnız bilgidir; tutarı girilmemiş kalem (personel dahil, brüt ücret tutulmadığı için) toplamlara girmez (2724 a, 2728 a).
+export const kalemTutari = (k: GiderKalemi): number => k.aylik ?? 0;
+// Grubun kişi saat maliyeti: brüt ücret kayıtta tutulmadığı için bugün kaynağı yok (2728 a); değer gelene kadar bilinmez, sıfır uydurulmaz.
+export function grupSaati(_D: PlanVerisi, _grup: string): number | null { return null; }
 
 export interface TezgahGiderSatiri {
   tezgah: Tezgah; x: TezgahGideri; acik: number; kap: number; amort: number | null; op: number;
@@ -448,7 +439,7 @@ const bosGider: TezgahGideri = { bedel: null, omur: null, hurda: null, kw: null,
 // Tezgâhın genel gider oranı = (dağılan pay + amortisman) / önümüzdeki 30 günün pratik kapasitesi (msHesap).
 export function genelGiderHesabi(c: PlanlamaCalismasi, T: Takvim): GenelGiderHesabi {
   const D = c.D;
-  const M = maliyetSistemi(D), ms = mesaiSistemi(D);
+  const M = maliyetSistemi(D);
   const now = simdiSaati(c), son = now + 720;
   const ops = planIsleri(c);
   const tez = D.tezgahlar.map((t): TezgahGiderSatiri => {
@@ -459,7 +450,7 @@ export function genelGiderHesabi(c: PlanlamaCalismasi, T: Takvim): GenelGiderHes
     // Bedel ya da ömür girilmemişse amortisman bilinmez (null); sıfır uydurulmaz, toplamlar onu atlar.
     const amort = x.bedel !== null && x.bedel > 0 && x.omur !== null && x.omur > 0 ? (x.bedel * (1 - (x.hurda ?? 0) / 100)) / (x.omur * 12) : null;
     const op = t.opOran === undefined || t.opOran === null ? 1 : t.opOran;
-    const opSaat = grupSaati(D, t.grup ?? '', ms);
+    const opSaat = grupSaati(D, t.grup ?? '');
     const dog = { enerji: (x.kw ?? 0) * (x.yuk ?? 0) * (M.kwh ?? 0), sarf: x.sarf ?? 0, bakim: x.bakim ?? 0, operator: opSaat === null ? null : opSaat * op };
     let mesgul = 0;
     for (const r of ops) if (r.m === t.id && Number.isFinite(r.C)) mesgul += Math.max(0, Math.min(son, r.C) - Math.max(now, r.S));
@@ -467,7 +458,7 @@ export function genelGiderHesabi(c: PlanlamaCalismasi, T: Takvim): GenelGiderHes
   });
   const taban = (k: GiderKalemi, z: TezgahGiderSatiri): number => (k.anahtar === 'alan' ? z.x.alan ?? 0 : k.anahtar === 'kw' ? z.x.kw ?? 0 : k.anahtar === 'kisi' ? z.op : k.anahtar === 'esit' ? 1 : z.kap);
   for (const k of M.kalemler) {
-    const tutar = kalemTutari(k, M, ms);
+    const tutar = kalemTutari(k);
     const l = tez.filter((z) => !k.kapsam || z.tezgah.grup === k.kapsam);
     const t = top(l.map((z) => taban(k, z)));
     if (!(t > 0) || !tutar) continue;
@@ -489,21 +480,16 @@ export function genelGiderHesabi(c: PlanlamaCalismasi, T: Takvim): GenelGiderHes
   const bilinen = (f: (z: TezgahGiderSatiri) => number | null): number | null => { const l = tez.map(f).filter((x): x is number => x !== null); return l.length ? top(l) : null; };
   return {
     tez, aylik, amort: bilinen((z) => z.amort), kap, mesgul: t((z) => z.mesgul), absorbe: bilinen((z) => z.absorbe), atil: bilinen((z) => z.atil),
-    kalemTop: top(M.kalemler.map((k) => kalemTutari(k, M, ms))), ort: kap > 0 && tez.every((z) => z.amort !== null) ? aylik / kap : null,
+    kalemTop: top(M.kalemler.map((k) => kalemTutari(k))), ort: kap > 0 && tez.every((z) => z.amort !== null) ? aylik / kap : null,
   };
 }
-// Sipariş maliyetinde tezgâh saatine düşen genel gider: kalem kipinde tezgâhın kendi oranı, tek oranda plan ayarı (msGgOran). Kalem kipinde
-// tezgâhın amortismanı bilinmiyorsa oran da bilinmez (null); ortalamaya ya da tek orana düşülmez.
-export function genelGiderOrani(D: PlanVerisi, G: GenelGiderHesabi | null, m: string): number | null {
-  // Tek oran girilmemişse genel gider bilinmez (2173-1 a): sıfır ya da varsayılan uydurulmaz.
-  const tek = ymAyar(D).genelGider;
-  if (maliyetSistemi(D).kip !== 'kalem') return tek;
-  const z = G?.tez.find((x) => x.tezgah.id === m);
-  if (z && z.amort === null) return null;
-  if (z && z.oran !== null) return z.oran;
-  // Atölye ortalaması yoksa ya da sıfırsa tek orana düşülür (msGgOran).
-  const ort = G?.ort ?? null;
-  return ort !== null && ort !== 0 ? ort : tek;
+// Sipariş maliyetinde tezgâh saatine düşen genel gider: her tezgâhta Finans'ın tek oranı (2608, 2668 a). Sunucudaki plan motoru da yalnız
+// bu oranı kullanır; kalemlerden çıkan tezgâh oranı yalnız Giderler sayfasında bilgidir.
+export function genelGiderOrani(D: PlanVerisi): number | null {
+  // Tek oran girilmemişse genel gider bilinmez (2173-1 a): sıfır ya da varsayılan uydurulmaz. Gizli ayda oran yoktur ama bilinmez de
+  // sayılmaz: plan 0 alır (2668 a), sipariş maliyeti "genel gider hariç" kalır ve kâr gösterilmez (2677 b).
+  const Y = ymAyar(D);
+  return Y.genelGiderGizli ? 0 : Y.genelGider;
 }
 
 // ---------- ek mesai (zu-yan-sayfalar, zz6) ----------
@@ -515,24 +501,25 @@ export function gunTuru(D: PlanVerisi, g: number): GunTuru {
   return w === 'cmt' ? 'cmt' : w === 'paz' ? 'paz' : 'hi';
 }
 // Ek vardiyanın bedeli: kişi bazlıysa saat × operatör oranı × grubun kişi saat maliyeti × gün çarpanı + kişi başı yemek ve servis;
-// değilse vardiya saati × mesai ücreti × (hafta sonu ve tatilde) çarpan. Ücret yoksa null.
+// değilse ya da grubun saat maliyeti yoksa vardiya saati × mesai ücreti × ek mesai çarpanı (her ek vardiyada, 2510 a; yoksa 1,5). Ücret yoksa null.
+// Tutar saf işlevdedir: sunucunun kopyası (2653, sunucu/moduller/plan/kurallar.ts) aynı örnek tablosuyla sınanır (devir-heylit/2653/ORNEKLER.md).
+export interface MesaiGirdisi {
+  h: number; kisiBazli: boolean; op: number | null | undefined; saatDegeri: number | null; carpan: number | undefined; kisiEk: number | null | undefined;
+  ucret: number | null; mesaiCarpan: number | undefined;
+}
+export function mesaiTutari(g: MesaiGirdisi): number | null {
+  if (!g.kisiBazli || g.saatDegeri === null) return g.ucret === null ? null : g.h * g.ucret * (g.mesaiCarpan || 1.5);
+  const op = g.op ?? 1;
+  return g.h * op * g.saatDegeri * (g.carpan || 1.5) + op * (g.kisiEk ?? 0);
+}
 export function mesaiBedeli(c: PlanlamaCalismasi, T: Takvim, e: EkMesai): number | null {
   const D = c.D;
   const m = mesaiSistemi(D);
-  const h = vardiyaSaati(D, e.vardiya);
-  const tek = (): number | null => {
-    const u = mesaiUcreti(D);
-    if (u === null) return null;
-    const g = T.gunler[e.gun];
-    const tatil = !g || !g.vard.length;
-    return h * u * (tatil ? ymAyar(D).mesaiCarpan || 1 : 1);
-  };
-  if (!m.kisiBazli) return tek();
   const t = D.tezgahlar.find((x) => x.id === e.m);
-  const op = t && t.opOran !== undefined && t.opOran !== null ? t.opOran : 1;
-  const s = grupSaati(D, t?.grup ?? '', m);
-  if (s === null) return tek();
-  return h * op * s * (m.carp[gunTuru(D, e.gun)] || 1.5) + op * (m.kisiEk ?? 0);
+  return mesaiTutari({
+    h: vardiyaSaati(D, e.vardiya), kisiBazli: m.kisiBazli, op: t?.opOran, saatDegeri: m.kisiBazli ? grupSaati(D, t?.grup ?? '') : null,
+    carpan: m.carp[gunTuru(D, e.gun)], kisiEk: m.kisiEk, ucret: mesaiUcreti(D), mesaiCarpan: ymAyar(D).mesaiCarpan,
+  });
 }
 // Ek mesai bedeli o tezgâhta mesai vardiyasında çalışan işlere çalıştıkları saat oranında dağılır; bedeli bilinmeyen vardiyadaki işin payı null.
 export function mesaiPaylari(c: PlanlamaCalismasi, T: Takvim): Record<string, number | null> {
@@ -844,6 +831,8 @@ export interface SiparisMaliyeti {
   mal: number | null; talas: number; talasKg: number | null; isl: number; ayar: number; gg: number | null; mes: number | null; fas: number;
   fin: number | null; bek: Bekleme | null; top: number; eksik: string[]; tutar: number | null; gec: number; T: number | null; erken: number;
   kar: number | null; net: number | null;
+  // Genel gider oranı gizli: maliyet genel gider hariçtir, kâr ve kâr oranı ekranda "gizli" yazılır (2677 b).
+  ggGizli: boolean;
 }
 // biten: plana girmeyen biten adımların iş kaydı (1379 a); yerleri yoktur (S, C NaN), yalnız maliyete girer.
 export interface MaliyetBaglami { c: PlanlamaCalismasi; T: Takvim; I: Map<string, IsTanimi>; G: GenelGiderHesabi; W: BeklemeHesabi; MP: Record<string, number | null>; ops: PlanIsi[]; biten: PlanIsi[] }
@@ -883,24 +872,23 @@ function bitenIsler(c: PlanlamaCalismasi, T: Takvim, I: Map<string, IsTanimi>, o
   return out;
 }
 export function siparisMaliyeti(b: MaliyetBaglami, s: Siparis): SiparisMaliyeti | null {
-  const { c, T, I, G } = b;
+  const { c, T, I } = b;
   const D = c.D;
   const plandaki = b.ops.filter((r) => r.job === s.id);
   if (!plandaki.length) return null;
   const ops = [...plandaki, ...b.biten.filter((r) => r.job === s.id)];
   let isl = 0, ayar = 0, fas = 0, gg = 0, ggBilinmez = false;
   const eksik: string[] = [];
-  const ggEkle = (r: PlanIsi) => { const o = genelGiderOrani(D, G, r.m); if (o === null) ggBilinmez = true; else gg += (r.run + r.su) * o; };
-  // Kalem kipinde genel gider saat ücreti olmayan tezgâhın adımına da yazılır (zz6 ymSipMaliyet üstüne yazımı); tek oranda yalnız ücretli adıma.
-  const kalem = maliyetSistemi(D).kip === 'kalem';
+  const oran = genelGiderOrani(D);
+  // Genel gider yalnız saat ücreti bilinen tezgâhın adımına yazılır (sunucu ymSipMaliyet ile aynı).
+  const ggEkle = (r: PlanIsi) => { if (oran === null) ggBilinmez = true; else gg += (r.run + r.su) * oran; };
   for (const r of ops) {
     if (r.fas) { const t = fasonTutari(D, r, I.get(r.id)); if (t === null) eksik.push('fason fiyatı'); else fas += t; continue; }
-    if (kalem) ggEkle(r);
     const M = T.M[r.m];
     if (!M || M.ucret === null) { eksik.push(`${r.m} saat maliyeti`); continue; }
     isl += r.run * (1 - M.pay) * M.ucret;
     ayar += r.su * (M.ucret + ayarciUcreti(D));
-    if (!kalem) ggEkle(r);
+    ggEkle(r);
   }
   const mal = malzemeTutari(D, s);
   if (mal === null && (s.malzeme ?? []).length) eksik.push('malzeme kg fiyatı');
@@ -925,6 +913,7 @@ export function siparisMaliyeti(b: MaliyetBaglami, s: Siparis): SiparisMaliyeti 
   return {
     mal, talas, talasKg: tal ? tal.kg : null, isl, ayar, gg: ggS, mes, fas, fin, bek, top: topl, eksik: ek, tutar, gec, T: Tg, erken,
     kar: bilinmez ? null : tutar - topl, net: bilinmez ? null : tutar - topl - gec - (fin ?? 0) - (bek ? bek.tl : 0),
+    ggGizli: ymAyar(D).genelGiderGizli,
   };
 }
 export interface PlanMaliyeti { mal: number; talas: number; isl: number; ayar: number; gg: number; fas: number; mes: number; fin: number; tah: number; gec: number; eksik: number; mesTop: number | null }

@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react';
 import { Rozet, Simge } from '../../../../../ortak/arayuz/index.ts';
 import { nabizFarki, type NabizGostergesi } from '../kurallar.ts';
 import { KURULUYOR, type BekleyenUygulayici, type PlanKurucu } from '../coz.ts';
-import { MOTOR_NOTU, YOK_NOTU } from '../ortak.tsx';
+import { CALISMA_ACILINCA, PLANDA_IYILESTIR, YOK_NOTU } from '../ortak.tsx';
 import { hamleYapisi, type Hamleci } from '../hamle/hamle.ts';
 import { OLAY_YOK, useOlayAc } from '../../gorunumler.ts';
 import { egriNoktalari, NABIZ_GOSTERGELERI, nabizDegeri, type NabizDurumu } from './nabiz.ts';
@@ -30,6 +30,10 @@ const KISA: [NabizGostergesi, string, boolean][] = [['late', '', false], ['wT', 
 export function Cubuk(o: Ozellikler) {
   const olayAc = useOlayAc();
   const n = o.nabiz; const kur = !o.plan ? o.planKur ?? null : null; const uyg = o.plan && !o.guncel ? o.bekleyenUygula ?? null : null;
+  // Düğme pasifse nedeni: plan yokken çalışma açılmamıştır (Planı kur çalışmayla açılır); plan varken iyileştirme Plan sayfasındadır.
+  const pasif = o.planYaz && !uyg && !kur && !(o.plan && (o.hamle || o.planaGit));
+  const pasifNeden = o.plan ? PLANDA_IYILESTIR : CALISMA_ACILINCA;
+  const pasifNot = pasif ? (o.plan ? 'Plan sayfasında' : 'Çalışma açılınca') : null;
   return (
     <div className="tc-pym-sb-kap">
       <div className="tc-pym-sb" role="toolbar" aria-label="Plan çubuğu">
@@ -68,12 +72,12 @@ export function Cubuk(o: Ozellikler) {
               <Simge ad="alert" boyut="k" /><span>Olay ekle</span>
             </button>
           )}
-          {/* Motor isteyen düğmeler pasiftir (357 b); nedeni yalnız ipucunda kalınca kullanıcı düğmeyi bozuk sanıyor. Planı kur sunucudaki motorla açıktır (576). */}
-          {o.planYaz && !kur && !uyg && !o.hamle && <small className="tc-pym-sb-not">Motor kapalı</small>}
+          {/* Motor sunucuda açıktır (576): düğme ancak çalışma yokken pasiftir; nedeni yalnız ipucunda kalınca kullanıcı düğmeyi bozuk sanıyor. */}
+          {pasifNot !== null && <small className="tc-pym-sb-not">{pasifNot}</small>}
           {o.planYaz && uyg ? (
             <button type="button" className="tc-dugme tc-pym-kucuk tc-pym-sb-iyi tc-dugme-birincil" disabled={uyg.suruyor} aria-busy={uyg.suruyor || undefined}
               title={uyg.suruyor ? KURULUYOR : `Değişiklikleri uygula: ${String(uyg.say)} bekleyen değişikliğin etkilediği işler yeniden dizilir; öteki işler yerinde kalır.`}
-              aria-label="Değişiklikleri uygula" onClick={uyg.uygula}>
+              aria-label="Değişiklikleri uygula" onClick={() => { uyg.uygula(); }}>
               <Simge ad="play" boyut="k" /><span>{uyg.suruyor ? 'Uygulanıyor' : `Değişiklikleri uygula (${String(uyg.say)})`}</span>
             </button>
           ) : o.planYaz && (kur ? (
@@ -83,9 +87,14 @@ export function Cubuk(o: Ozellikler) {
             </button>
           ) : o.plan && o.hamle ? (
             <IyilestirDugmesi h={o.hamle} />
+          ) : o.plan && o.planaGit ? (
+            <button type="button" className={`tc-dugme tc-pym-kucuk tc-pym-sb-iyi${o.guncel ? '' : ' tc-dugme-birincil'}`}
+              title="Plan iyileştirme ara: Plan sayfasında motor daha iyi bir plan arar; bulursa önizlersiniz." aria-label="Plan iyileştirme ara" onClick={o.planaGit}>
+              <Simge ad="play" boyut="k" /><span>Plan iyileştirme ara</span>
+            </button>
           ) : (
             <button type="button" className={`tc-dugme tc-pym-kucuk tc-pym-sb-iyi${o.plan && o.guncel ? '' : ' tc-dugme-birincil'}`} aria-disabled="true"
-              title={`${o.plan ? 'Plan iyileştirme ara' : 'Planı kur'}. ${MOTOR_NOTU}`} aria-label={o.plan ? 'Plan iyileştirme ara' : 'Planı kur'}>
+              title={`${o.plan ? 'Plan iyileştirme ara' : 'Planı kur'}: ${pasifNeden}`} aria-label={o.plan ? 'Plan iyileştirme ara' : 'Planı kur'}>
               <Simge ad="play" boyut="k" /><span>{o.plan ? 'Plan iyileştirme ara' : 'Planı kur'}</span>
             </button>
           ))}

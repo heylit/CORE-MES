@@ -1,12 +1,12 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import {
-  defteriUygula, dondurulacaklar, eksikKalemler, isEmriKaydi, gecikmeCezasi, gecikmeGunu, gostergeler, haftaBasi, haftalikBirikim, iscilikTutari, kalemKirilimi, karRiski,
-  faturaDurumu, projeGeliri, saatTutari, sapanIsEmirleri, tahminiBitis, tamamlanmaOrani, MASRAF_IPTAL, MASRAF_KATEGORI, MASRAF_SATIN_ALMA, MASRAF_YOK, TABAN_EMIRSIZ, TABAN_GEREKCE, aramaKalibi, maliyetFarki, masrafReddi, tabanKarari,
+  defteriUygula, dondurulacaklar, eksikKalemler, isEmriKaydi, gecikmeCezasi, gecikmeGunu, gercekBilesenFiyatlari, gercekCiftTutarlari, bilesenTutariBilinmiyor, gostergeler, haftaBasi, haftalikBirikim, iscilikTutari, kalemKirilimi, karRiski,
+  faturaDurumu, projeGeliri, saatTutari, sapanIsEmirleri, tahminiBitis, tamamlanmaOrani, MASRAF_IPTAL, MASRAF_KATEGORI, MASRAF_SATIN_ALMA, MASRAF_YOK, masrafSayilmaz, TABAN_EMIRSIZ, TABAN_GEREKCE, aramaKalibi, maliyetFarki, masrafReddi, tabanKarari,
 } from './kurallar.ts';
 import type { FaturaDurumu, GelirPayi, IsEmriGirdisi, MaliyetKaydi } from './kurallar.ts';
 import { butceTl, iscilikPlaniEksik, planTarihiEksik, beklemeFinansmani, genelGiderEksikleri, genelGiderTutari, genelGiderYukAlir, gercekTalasAdedi, gunlukFaizOrani, malzemePlani, tahminiIsEmriMaliyeti } from './kurallar.ts';
-import { MALIYET_KALEMLERI } from '#paylasilan/sozlesme/proje-maliyet.ts';
+import { MALIYET_KALEMLERI, PROJE_MASRAF_KATEGORILERI } from '#paylasilan/sozlesme/proje-maliyet.ts';
 import type { MalzemeBileseni } from './kurallar.ts';
 import { MASRAF_KAPALI_PROJE, projeMasrafReddi } from './kurallar.ts';
 
@@ -188,8 +188,8 @@ describe('proje-maliyet kuralları', () => {
       kayit({ isEmri: isEmri(3), bitti: true, plan: { isleme: 100 }, gercek: { isleme: 90 } }),
     ];
     const defter = new Map([
-      [1, { isEmriId: 1, plan: { isleme: 100 }, gercek: { isleme: 120 } }],
-      [2, { isEmriId: 2, plan: { isleme: 1 }, gercek: { isleme: 1 } }],
+      [1, { isEmriId: 1, plan: { isleme: 100 }, gercek: { isleme: 120 }, genelGiderGizli: false }],
+      [2, { isEmriId: 2, plan: { isleme: 1 }, gercek: { isleme: 1 }, genelGiderGizli: false }],
     ]);
     assert.deepEqual(defteriUygula(kayitlar, defter).map((k) => k.gercek.isleme), [120, 50, 90]);
   });
@@ -337,8 +337,15 @@ test('PM-41 masraf reddi: yok, iptal, satın almaya bağlı ve proje masrafı ol
   assert.equal(masrafReddi({ ...b, durum: 'kapandi' }, tur), null);
 });
 
+test('PM-41 (2599 a): proje masrafı yalnız lojistik, pazarlama ve diğer gider; mal alımı, personel, kira ve enerji reddedilir', () => {
+  assert.deepEqual([...PROJE_MASRAF_KATEGORILERI], ['lojistik', 'pazarlama', 'diger_gider']);
+  const b = { durum: 'acik', satinAlmaBagli: false };
+  for (const kategori of ['mal_alimi', 'personel', 'kira', 'enerji']) assert.equal(masrafReddi({ ...b, kategori }, PROJE_MASRAF_KATEGORILERI), MASRAF_KATEGORI);
+  for (const kategori of PROJE_MASRAF_KATEGORILERI) assert.equal(masrafReddi({ ...b, kategori }, PROJE_MASRAF_KATEGORILERI), null);
+});
+
 test('PM-42 fark: son gerçekleşen üretim + iptal dışı masraf; tahmini son + kalan plan; taban ya da bilinmeyen taraf yoksa null', () => {
-  const m = [{ tutarTl: 100, iptal: false }, { tutarTl: 50, iptal: true }];
+  const m = [{ tutarTl: 100, iptal: false, sayilmaz: false }, { tutarTl: 50, iptal: true, sayilmaz: false }];
   assert.deepEqual(maliyetFarki(1000, 400, 700, m), { masrafToplami: 100, sonGerceklesen: 500, tahminiSon: 1200, fark: 200 });
   assert.deepEqual(maliyetFarki(null, 400, 700, m), { masrafToplami: 100, sonGerceklesen: 500, tahminiSon: 1200, fark: null });
   assert.deepEqual(maliyetFarki(1000, null, 700, m), { masrafToplami: 100, sonGerceklesen: null, tahminiSon: null, fark: null });
@@ -375,4 +382,79 @@ test('PM-48 (PM-1 a): işçiliğin planı yoksa bildirilir; işçilik kalemi olm
   assert.equal(iscilikPlaniEksik([kayit({ plan: { fason: 100 } })]), false);
   assert.equal(iscilikPlaniEksik([kayit({ plan: { isleme: 100, iscilik: 50 } })]), false);
   assert.equal(iscilikPlaniEksik([kayit({ plan: { fason: 100 } }), kayit({ plan: { isleme: 100, iscilik: null } })]), true);
+});
+
+test('PM-49 (2599 a): sayılmayan türdeki eski bağ ve sonradan siparişe bağlanan belge toplama ve farka girmez', () => {
+  const b = (kategori: string, satinAlmaBagli = false) => ({ kategori, satinAlmaBagli });
+  assert.equal(masrafSayilmaz(b('personel'), PROJE_MASRAF_KATEGORILERI), true);
+  assert.equal(masrafSayilmaz(b('mal_alimi'), PROJE_MASRAF_KATEGORILERI), true);
+  assert.equal(masrafSayilmaz(b('lojistik'), PROJE_MASRAF_KATEGORILERI), false);
+  // Bağdan sonra siparişe bağlanan belge (2611 ön bakışı): izinli türde de sayılmaz.
+  assert.equal(masrafSayilmaz(b('diger_gider', true), PROJE_MASRAF_KATEGORILERI), true);
+  const m = [{ tutarTl: 100, iptal: false, sayilmaz: false }, { tutarTl: 900, iptal: false, sayilmaz: true }];
+  assert.deepEqual(maliyetFarki(1000, 400, 700, m), { masrafToplami: 100, sonGerceklesen: 500, tahminiSon: 1200, fark: 200 });
+});
+
+test('PM-51 (2613 2/2): gerçekleşen tutar emrin siparişinden, yoksa projeninkinden, yoksa son alıştan; siparişin bilinmeyen fiyatı düşmez', () => {
+  const fiyatlar = [
+    { hedef: 'emir' as const, hedefId: 7, malzemeNo: 1, tryBirimFiyati: '120', teslimMiktari: '10' },
+    { hedef: 'proje' as const, hedefId: 3, malzemeNo: 1, tryBirimFiyati: '110', teslimMiktari: '10' },
+    { hedef: 'proje' as const, hedefId: 3, malzemeNo: 2, tryBirimFiyati: '6.1667', teslimMiktari: '10' },
+    { hedef: 'emir' as const, hedefId: 8, malzemeNo: 3, tryBirimFiyati: '50', teslimMiktari: '10' },
+    { hedef: 'emir' as const, hedefId: 7, malzemeNo: 4, tryBirimFiyati: null, teslimMiktari: '10' },
+    { hedef: 'proje' as const, hedefId: 9, malzemeNo: 5, tryBirimFiyati: '1', teslimMiktari: '10' },
+  ];
+  const cikis = (malzemeId: number, tutar: string | null) => ({ emirId: 7, malzemeId, miktar: '2', tutar });
+  const t = gercekCiftTutarlari([cikis(1, '1.00'), cikis(2, '1.00'), cikis(3, '90.00'), cikis(4, '1.00'), cikis(5, null)], fiyatlar, 3);
+  // 1: emrin siparişi (projeninki ve son alış sayılmaz); 2: projenin; 3: başka emrin siparişi sayılmaz, son alış; 4: sipariş var fiyatı
+  // bilinmiyor, son alışa düşmez; 5: başka proje, son alış yok.
+  assert.deepEqual([1, 2, 3, 4, 5].map((no) => t.get(`7|${no}`)), [240, 12.3334, 90, null, null]);
+  const b = (malzemeNo: number): MalzemeBileseni => ({ malzemeNo, brut: 2, tryBirimFiyati: 100, hammadde: false, kgBasina: null, tryTalasKgFiyati: null });
+  const bilesen = gercekBilesenFiyatlari([b(1), b(4), b(9)], t, 7);
+  assert.equal(malzemePlani([bilesen[0]!], 1, null).tutar, 240, 'emre çıkan miktar x sipariş fiyatı');
+  assert.deepEqual(bilesen.map(bilesenTutariBilinmiyor), [false, true, true], 'okunmayan çift de bilinmiyor; liste fiyatı kullanılmaz');
+});
+
+test('PM-52 (2613-3 a): siparişsiz çıkış son alışla; 50 kg, son alış 120, liste 100 -> 6.000; son alış yoksa bilinmiyor; net sıfır çift 0', () => {
+  const kg = (brut = 50): MalzemeBileseni => ({ malzemeNo: 1, brut, tryBirimFiyati: 100, hammadde: false, kgBasina: 1, tryTalasKgFiyati: null });
+  const gercek = (b: MalzemeBileseni, sonAlis: { emirId: number; malzemeId: number; miktar: string; tutar: string | null }[], netKg: number | null = null) =>
+    malzemePlani(gercekBilesenFiyatlari([b], gercekCiftTutarlari(sonAlis, [], 3), 7), 1, netKg);
+  assert.equal(gercek(kg(), [{ emirId: 7, malzemeId: 1, miktar: '50', tutar: '6000.00' }]).tutar, 6000);
+  assert.equal(gercek(kg(), []).tutar, null, 'son alış okuması yok: listeye düşülmez');
+  assert.equal(gercek(kg(), [{ emirId: 8, malzemeId: 1, miktar: '50', tutar: '6000.00' }]).tutar, null, 'başka emrin çıkışı sayılmaz');
+  assert.equal(gercek(kg(), [{ emirId: 7, malzemeId: 1, miktar: '0', tutar: '0.00' }]).tutar, 0);
+  // Tutar doğrudan: 123.45 / 3 x 3 = 123.44999999999999 olurdu.
+  assert.equal(gercek(kg(3), [{ emirId: 7, malzemeId: 1, miktar: '3', tutar: '123.45' }]).tutar, 123.45);
+  // Talaş liste kg fiyatından düşülür: 50 kg kütük, parça 30 kg, talaş 20 kg x 10 = 200 -> 6000 - 200.
+  assert.deepEqual(gercek({ ...kg(), hammadde: true, tryTalasKgFiyati: 10 }, [{ emirId: 7, malzemeId: 1, miktar: '50', tutar: '6000.00' }], 30), { tutar: 5800, talas: 200 });
+});
+
+test('PM-53 (2733 a): sipariş teslim miktarına kadar sipariş fiyatı, fazlası son alış; proje siparişi ilk sarf sırasıyla dağılır', () => {
+  const siparis = (hedef: 'emir' | 'proje', hedefId: number, tryBirimFiyati: string | null, teslimMiktari: string) => ({ hedef, hedefId, malzemeNo: 1, tryBirimFiyati, teslimMiktari });
+  const cikis = (emirId: number, miktar: string, tutar: string | null, ilkZaman: string | null = null) => ({ emirId, malzemeId: 1, miktar, tutar, ilkZaman });
+  // Kart örneği: 80 kg çıkış, emrin siparişinden 50 kg teslim @100, son alış 120 (çiftin tutarı 9.600) -> 5.000 + 30/80 x 9.600 = 8.600.
+  assert.equal(gercekCiftTutarlari([cikis(7, '80', '9600.00')], [siparis('emir', 7, '100', '50')], 3).get('7|1'), 8600);
+  // Fazla yoksa PM-51 ile aynı: 40 kg x 100; son alış bilinmese de etkilemez.
+  assert.equal(gercekCiftTutarlari([cikis(7, '40', null)], [siparis('emir', 7, '100', '50')], 3).get('7|1'), 4000);
+  // Fazla var, son alışı bilinmiyor: çift bilinmez, listeye düşülmez.
+  assert.equal(gercekCiftTutarlari([cikis(7, '80', null)], [siparis('emir', 7, '100', '50')], 3).get('7|1'), null);
+  // Üç katman: emir 20 @100, proje 30 @110, fazla 30 son alıştan (çift tutarı 9.600 / 80) -> 2.000 + 3.300 + 3.600.
+  assert.equal(gercekCiftTutarlari([cikis(7, '80', '9600.00')], [siparis('emir', 7, '100', '20'), siparis('proje', 3, '110', '30')], 3).get('7|1'), 8900);
+  // Proje siparişi 60 kg @110 iki emre ilk sarf sırasıyla: sonra gelen emir 8 (40 kg, ilk sarf 2.) önce gelen emir 9'dan (50 kg, 1.) sonra
+  // dağılır: emir 9 50 x 110; emir 8 10 x 110 + 30 kg son alış (çift tutarı 4.800 / 40 -> 3.600).
+  const t = gercekCiftTutarlari(
+    [cikis(8, '40', '4800.00', '2026-11-02T08:00:00Z'), cikis(9, '50', '6000.00', '2026-11-01T08:00:00Z')], [siparis('proje', 3, '110', '60')], 3,
+  );
+  assert.deepEqual([t.get('9|1'), t.get('8|1')], [5500, 1100 + 3600]);
+  // Eşit zamanda ve zamansız çiftte emir no sırası.
+  const e = gercekCiftTutarlari([cikis(9, '50', '0.00'), cikis(8, '50', '0.00')], [siparis('proje', 3, '110', '60')], 3);
+  assert.deepEqual([e.get('8|1'), e.get('9|1')], [5500, 1100]);
+  // Fazlanın payı kuruşa yuvarlanır: 1 / 3 x 100 = 33,33.
+  assert.equal(gercekCiftTutarlari([cikis(7, '3', '100.00')], [siparis('emir', 7, '10', '2')], 3).get('7|1'), 20 + 33.33);
+  // Kullanılmayan katmanın bilinmeyen fiyatı etkilemez; kullanılan katmanınki çifti bilinmez yapar.
+  assert.equal(gercekCiftTutarlari([cikis(7, '40', '1.00')], [siparis('emir', 7, '100', '50'), siparis('proje', 3, null, '50')], 3).get('7|1'), 4000);
+  assert.equal(gercekCiftTutarlari([cikis(7, '80', '1.00')], [siparis('emir', 7, '100', '50'), siparis('proje', 3, null, '50')], 3).get('7|1'), null);
+  // Kesirli miktar binde tam sayıyla: 0,3 + 0,3 + 0,4 teslim kapasitesi kaymaz.
+  const k = gercekCiftTutarlari([cikis(1, '0.3', '0.00'), cikis(2, '0.3', '0.00'), cikis(3, '0.4', '0.00')], [siparis('proje', 3, '10', '1')], 3);
+  assert.deepEqual([k.get('1|1'), k.get('2|1'), k.get('3|1')], [3, 3, 4]);
 });

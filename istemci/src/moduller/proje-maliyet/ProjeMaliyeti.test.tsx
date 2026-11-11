@@ -12,12 +12,12 @@ const BOS_OZET: MaliyetOzeti = { taban: null, tabanGecmisi: [], masraflar: [], m
 const TABANLI: MaliyetOzeti = {
   taban: {
     sira: 2, plan: 900, kalemler: [{ kalem: 'isleme', plan: 900 }], eksikKalemler: ['fason'], isEmriSayisi: 1, gerekce: 'Adet arttı',
-    kisiAd: 'Deneme Planlamacı', an: '2026-10-18T09:00:00.000Z',
+    kisiAd: 'Deneme Planlamacı', an: '2026-10-18T09:00:00.000Z', genelGiderGizli: false,
   },
-  tabanGecmisi: [{ sira: 1, plan: 800, kalemler: [], eksikKalemler: [], isEmriSayisi: 1, gerekce: null, kisiAd: 'Deneme Planlamacı', an: '2026-10-10T09:00:00.000Z' }],
+  tabanGecmisi: [{ sira: 1, plan: 800, kalemler: [], eksikKalemler: [], isEmriSayisi: 1, gerekce: null, kisiAd: 'Deneme Planlamacı', an: '2026-10-10T09:00:00.000Z', genelGiderGizli: false }],
   masraflar: [
-    { id: 4, belgeId: 41, belgeNo: 'GDR-41', belgeTarihi: '2026-10-15', kategori: 'lojistik', aciklama: 'Numune kargo', tutarTl: 150, iptal: false, gorevId: null, kisiAd: 'Deneme', an: '2026-10-16T09:00:00.000Z' },
-    { id: 5, belgeId: 42, belgeNo: 'GDR-42', belgeTarihi: '2026-10-15', kategori: 'personel', aciklama: null, tutarTl: 70, iptal: true, gorevId: null, kisiAd: 'Deneme', an: '2026-10-16T09:00:00.000Z' },
+    { id: 4, belgeId: 41, belgeNo: 'GDR-41', belgeTarihi: '2026-10-15', kategori: 'lojistik', aciklama: 'Numune kargo', tutarTl: 150, iptal: false, sayilmaz: false, gorevId: null, kisiAd: 'Deneme', an: '2026-10-16T09:00:00.000Z' },
+    { id: 5, belgeId: 42, belgeNo: 'GDR-42', belgeTarihi: '2026-10-15', kategori: 'personel', aciklama: null, tutarTl: 70, iptal: true, sayilmaz: true, gorevId: null, kisiAd: 'Deneme', an: '2026-10-16T09:00:00.000Z' },
   ],
   masrafToplami: 150, sonGerceklesen: 650, tahminiSon: 1250, fark: 350,
 };
@@ -55,6 +55,7 @@ const cevap = (fiyatGorunur: boolean, o: Partial<ProjeMaliyetCevabi> = {}): Proj
   sapanIsEmirleri: fiyatGorunur ? [{ isEmriId: 1, emirNo: 'UE-1', opNo: 10, istasyonAd: 'Torna', plan: 400, gerceklesen: 500, sapma: 100, neden: 'isleme' }] : [],
   eksikKalemler: ['fason'],
   eksikler: [],
+  genelGiderGizli: false,
   ozet: BOS_OZET,
   ...o,
 });
@@ -126,6 +127,34 @@ describe('Proje maliyet sekmesi', () => {
     expect(screen.queryByText('Kur farkı')).toBeNull();
   });
 
+  it('2661 a: gizli oranlı ayda toplamlar, katkı, sapma, kâr riski ve genel gider satırı "Gizli"; öteki kalemler ve bütçe görünür', async () => {
+    const gizli = cevap(true, {
+      genelGiderGizli: true, butce: 1200, hedef: 1200, plan: null, gerceklesen: null, bugunePlan: null, kalanPlan: null, sapma: null,
+      katkiPayi: null, katkiOrani: null, planlananKatkiOrani: 0.4, karRiski: { gecikmeGunu: 5, gunlukOran: 0.3, tutar: null, ceza: null },
+      kalemler: [
+        { kalem: 'isleme', plan: 1000, gerceklesen: 500, sapmaOrani: 0.25 },
+        { kalem: 'genel_gider', plan: null, gerceklesen: null, sapmaOrani: null },
+      ],
+      haftalar: [], sapanIsEmirleri: [],
+      ozet: { ...TABANLI, taban: { ...TABANLI.taban!, genelGiderGizli: true, plan: null, kalemler: [{ kalem: 'genel_gider', plan: null }] }, sonGerceklesen: null, tahminiSon: null, fark: null },
+    });
+    sunucuKur(() => json(200, gizli), { id: 1, ad: 'Deneme Müdür', islemler: ['finans.maliyet-oku'] });
+    cizdir();
+    expect(await screen.findByText(/az kişili personel bileşeni/)).toBeTruthy();
+    const kalemler = screen.getByRole('table', { name: 'Maliyet kalemleri' });
+    const gg = within(kalemler).getByText('Genel gider').closest('tr')!;
+    expect(within(gg).getAllByText('Gizli')).toHaveLength(3);
+    const isleme = within(kalemler).getByText('İşleme').closest('tr')!;
+    expect(within(isleme).queryByText('Gizli')).toBeNull();
+    // Bilinmeyen (—) ile gizli karışmaz: gizli alan "—" yazmaz.
+    expect(screen.getByText('Gerçekleşen maliyet').closest('div')?.textContent).toContain('Gizli');
+    expect(screen.getByText(/Bütçe 1\.200 TL/)).toBeTruthy();
+    expect(screen.getByText('Genel gider oranı gizli; birikim gösterilmez.')).toBeTruthy();
+    expect(screen.getByText('Genel gider oranı gizli; iş emri sapmaları gösterilmez.')).toBeTruthy();
+    const taban = screen.getByRole('table', { name: 'Taban ve güncel plan' });
+    expect(within(within(taban).getByText('Genel gider').closest('tr')!).getAllByText('Gizli')).toHaveLength(3);
+  });
+
   it('fiyat yetkisi yoksa tutar, katkı, sapma ve kâr riski görünmez; maliyet görünür', async () => {
     sunucuKur(() => json(200, cevap(false)));
     cizdir();
@@ -157,8 +186,22 @@ describe('Proje maliyet sekmesi', () => {
     expect(screen.getByRole('table', { name: 'Taban ve güncel plan' })).toBeTruthy();
     expect(screen.getByText(/1\. taban 800 TL/)).toBeTruthy();
     expect(screen.getByText('İptal edildi')).toBeTruthy();
+    expect(screen.queryByText('Sayılmıyor')).toBeNull();
     expect(screen.queryByRole('button', { name: /Taban al|Tabanı yenile/ })).toBeNull();
     expect(screen.queryByRole('button', { name: /Masraf bağla/ })).toBeNull();
+  });
+
+  it('PM-49 (2599 a): sayılmayan türdeki eski bağ "Sayılmıyor" işaretiyle listelenir, açıklaması görünür', async () => {
+    const eski = { id: 6, belgeId: 43, belgeNo: 'GDR-43', belgeTarihi: '2026-10-15', kategori: 'mal_alimi', aciklama: null, tutarTl: 900, iptal: false, sayilmaz: true, gorevId: null, kisiAd: 'Deneme', an: '2026-10-16T09:00:00.000Z' };
+    sunucuKur(() => json(200, cevap(true, { ozet: { ...TABANLI, masraflar: [...TABANLI.masraflar, eski] } })));
+    cizdir();
+    expect(await screen.findByText('Sayılmıyor')).toBeTruthy();
+    const tablo = screen.getByRole('table', { name: 'Projeye bağlı masraf belgeleri' });
+    expect(within(tablo).getByRole('columnheader', { name: 'Sayılıyor' })).toBeTruthy();
+    expect(within(tablo).getAllByText('Hayır')).toHaveLength(2);
+    expect(within(tablo).getAllByText('Evet')).toHaveLength(1);
+    expect(screen.getByText(/artık proje masrafı sayılmayan türdedir/)).toBeTruthy();
+    expect(screen.getByText(/sonradan satın alma siparişine bağlanmıştır/)).toBeTruthy();
   });
 
   it('proje yazan tabanı gerekçeyle yeniler ve masraf belgesini görevine bağlar; komutlar istek kimliğiyle gider', async () => {

@@ -5,6 +5,7 @@ import {
   eksikDosyaCevabi, eksikDosyaGovdesi, iletiGovdesi, iletiSorgusu, iletilerCevabi, kayitEkleCevabi, kayitEkleGovdesi, makineDevralGovdesi, calismaDevralGovdesi,
   kayitParametresi, kayitSorgusu, kayitlarCevabi, islerimCevabi, makineAyrimlariCevabi, makineAyrimlariSorgusu, planSiralaCevabi, planSiraSurumuCevabi, arkonOzetiCevabi, planSiralaGovdesi, tamamCevabi, yansimaParametresi, yansimaSorgusu, yansimaYenidenCevabi, yansimalarCevabi,
   kuyrukPlanaDonCevabi, kuyrukPlanaDonGovdesi, kuyrukSiralaCevabi, kuyrukSiralaGovdesi,
+  hazirlikMaddeleriCevabi, hazirlikMaddeleriSorgusu, hazirlikMaddesiEkleGovdesi, hazirlikMaddesiIsaretleGovdesi, hazirlikMaddesiParametresi,
   numuneOlcumuGovdesi, numuneParametresi, merkezBelgeParametresi, merkezBelgeSorgusu, refakatKartlariCevabi, refakatKartlariSorgusu, sonOlaylarCevabi, sonOlaylarSorgusu, merkezBelgelerCevabi, merkezEkleCevabi, merkezKontrolCevabi, merkezKontrolSorgusu,
 } from '#paylasilan/sozlesme/arkon.ts';
 import { anomaliOlaylari } from './anomali-zaman.ts';
@@ -23,6 +24,9 @@ const SON_OLAY_OKUMA = { biri: [...ARKON_SAYFASI.biri, 'sayfa.atolye'] } as cons
 // Anomali panosunu görenler: hazırlık, planlama ve yönetici (kart #1149 kararı).
 // Amir de okur (2421-4 a): eksik işi sahada kapatan odur; kişi adları yine arkon.anomali-kisi ister.
 const ANOMALI_OKUMA = { biri: ['arkon.hazirlik', 'arkon.planlama', 'arkon.amir', 'arkon.yonetici'] } as const;
+// İş emrine özel hazırlık maddesi (2227-1 b): Arkon rolüne değil işleme bağlıdır. Hazırlık ve yönetici yazar, planlama da okur.
+const HAZIRLIK_MADDESI_OKUMA = { biri: ['arkon.hazirlik', 'arkon.planlama', 'arkon.yonetici'] } as const;
+const HAZIRLIK_MADDESI_YAZMA = { biri: ['arkon.hazirlik', 'arkon.yonetici'] } as const;
 export const uclar = [
   uc({
     yontem: 'GET',
@@ -374,5 +378,30 @@ export const uclar = [
     govde: kuyrukPlanaDonGovdesi,
     cevap: kuyrukPlanaDonCevabi,
     isle: ({ db, kullanici, govde }) => servis.kuyrukPlanaDon(db, kullanici, govde),
+  }),
+  uc({
+    yontem: 'GET',
+    yol: '/arkon/hazirlik-maddeleri',
+    yetki: HAZIRLIK_MADDESI_OKUMA,
+    sorgu: hazirlikMaddeleriSorgusu,
+    cevap: hazirlikMaddeleriCevabi,
+    isle: ({ db, sorgu }) => servis.hazirlikMaddeleriListesi(db, sorgu.isEmriId),
+  }),
+  uc({
+    yontem: 'POST',
+    yol: '/arkon/hazirlik-maddeleri',
+    yetki: HAZIRLIK_MADDESI_YAZMA,
+    govde: hazirlikMaddesiEkleGovdesi,
+    cevap: hazirlikMaddeleriCevabi,
+    isle: ({ db, kullanici, govde }) => servis.hazirlikMaddesiEkle(db, kullanici, govde),
+  }),
+  uc({
+    yontem: 'POST',
+    yol: '/arkon/hazirlik-maddeleri/:id/isaretle',
+    yetki: HAZIRLIK_MADDESI_YAZMA,
+    parametre: hazirlikMaddesiParametresi,
+    govde: hazirlikMaddesiIsaretleGovdesi,
+    cevap: hazirlikMaddeleriCevabi,
+    isle: ({ db, kullanici, parametre, govde }) => servis.hazirlikMaddesiIsaretle(db, kullanici, parametre.id, govde.olay),
   }),
 ];

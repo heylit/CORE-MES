@@ -1,9 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import {
   beklemeHesabi, bitenAdimMaliyeti, birimMaliyet, calisilir, katkiPayi, fasonDurumu, genelGiderOrani, fasonIsleri, genelGiderHesabi, isTanimlari, maliyetBaglami, malzemeler, malzemeTutari, mesaiAtamasi,
-  mesaiBedeli, planMaliyeti, sayiGirdisi, siparisMaliyeti, sonrakiKimlik, sureSapmasi, takvimKur, talasKredisi, kisaTl,
+  mesaiBedeli, mesaiSistemi, planMaliyeti, sayiGirdisi, siparisMaliyeti, sonrakiKimlik, sureSapmasi, takvimKur, talasKredisi, kisaTl,
 } from './kurallar.ts';
+import { mesaiTutari } from './kurallar.ts';
 import { ornekCalisma } from './test-verisi.ts';
+
+import { saatiSabitle } from '../test-saati.ts';
+
+saatiSabitle(() => ornekCalisma());
 
 describe('P3 saf hesaplar', () => {
   it('sipariş maliyeti: malzeme, tezgâh saati ve fason; amortisman girilmemişse genel gider bilinmez (null), kâr tutardan', () => {
@@ -116,15 +121,17 @@ describe('P3 saf hesaplar', () => {
     expect(B.atil).toBeNull();
   });
 
-  it('ek mesai takvime girer; bedeli kişi ücreti yoksa bilinmez, girilince cumartesi çarpanıyla hesaplanır', () => {
+  // 2728 a: brüt ücret kayıtta tutulmaz; eski kayıtta dursa da bedel ondan hesaplanmaz, grup saat maliyeti gelene kadar bilinmez.
+  it('ek mesai takvime girer; kişi bazlı bedel bilinmez, eski kayıttaki brüt hesaba girmez', () => {
     const ek = [{ m: 'T1', gun: 5, vardiya: 'V1' }];
     const c = ornekCalisma({ ekMesai: ek });
     const T = takvimKur(c);
     expect(calisilir(T.M.T1?.rw ?? [], 120, 144)).toBe(8);
     const e = { m: 'T1', gun: 5, vardiya: 'V1' };
     expect(mesaiBedeli(c, T, e)).toBeNull();
-    const u = ornekCalisma({ ekMesai: ek, D: { mesaiSis: { ucret: { P1: { brut: 22500 } } } } });
-    expect(mesaiBedeli(u, takvimKur(u), e)).toBeCloseTo(8 * ((22500 * 1.2875) / 225) * 1.5);
+    const u = ornekCalisma({ ekMesai: ek, D: { mesaiSis: { ucret: { P1: { brut: 1000, yil: 4 } } } } });
+    expect(mesaiBedeli(u, takvimKur(u), e)).toBeNull();
+    expect(mesaiSistemi(u.D).ucret).toEqual({ P1: { yil: 4 } });
     const A = mesaiAtamasi(u);
     expect(A.liste[0]?.kisiler.map((k) => k.id)).toEqual(['P1']);
     expect(A.liste[0]?.ihlal).toEqual([]);
@@ -185,56 +192,41 @@ describe('P3 saf hesaplar', () => {
     expect(kisaTl(null)).toBe('');
   });
 
-  it('kalem kipinde genel gider saat ücreti olmayan tezgâhın adımına da yazılır; tek oranda yazılmaz (msGgOran, ymSipMaliyet)', () => {
+  it('kalem kaydı okunmaz: saat ücreti olmayan tezgâhın adımına genel gider yazılmaz, kip ne olursa olsun (2608, 2723)', () => {
     const ms = { kalemler: [{ id: 'K1', ad: 'Kira', tur: 'kira', aylik: 3000, anahtar: 'esit', kapsam: '' }], tez: { T1: { bedel: 120000, omur: 10 }, T2: { bedel: 60000, omur: 10 } } };
     const ucretsiz = [{ id: 'T1', ad: 'Deneme torna', grup: 'TORNA', ucret: null, verim: 1 }, { id: 'T2', ad: 'Deneme freze', grup: 'FREZE', ucret: null, verim: 1 }];
-    const kalem = ornekCalisma({ D: { tezgahlar: ucretsiz, maliyetSis: { ...ms, kip: 'kalem' } } });
-    const bk = maliyetBaglami(kalem);
-    const s = kalem.D.siparisler[0];
-    if (!bk || !s) throw new Error('bağlam yok');
-    const mk = siparisMaliyeti(bk, s);
-    expect(mk?.isl).toBe(0);
-    expect(mk?.eksik).toContain('T1 saat maliyeti');
-    expect(mk?.gg).toBeCloseTo(2 * (genelGiderOrani(kalem.D, bk.G, 'T1') ?? Number.NaN));
-    expect(mk?.gg ?? 0).toBeGreaterThan(0);
-    const tek = ornekCalisma({ D: { tezgahlar: ucretsiz, maliyetSis: { ...ms, kip: 'tek' } } });
-    const bt = maliyetBaglami(tek);
-    if (!bt) throw new Error('bağlam yok');
-    expect(siparisMaliyeti(bt, s)?.gg).toBe(0);
+    for (const kip of ['kalem', 'tek']) {
+      const c = ornekCalisma({ D: { tezgahlar: ucretsiz, maliyetSis: { ...ms, kip } } });
+      const b = maliyetBaglami(c); const s = c.D.siparisler[0];
+      if (!b || !s) throw new Error('bağlam yok');
+      const mk = siparisMaliyeti(b, s);
+      expect(mk?.isl).toBe(0);
+      expect(mk?.eksik).toContain('T1 saat maliyeti');
+      expect(mk?.gg).toBe(0);
+    }
   });
 
-  it('kalem kipinde amortismanı bilinmeyen tezgâhın oranı ve siparişin genel gideri bilinmez (null); toplam onu atlar', () => {
+  it('kalem kaydı okunmaz: amortismanı bilinmeyen tezgâhta da oran Finans oranıdır; bilgi hesabı yine null kalır', () => {
     const ms = { kip: 'kalem', kalemler: [{ id: 'K1', ad: 'Kira', tur: 'kira', aylik: 3000, anahtar: 'esit', kapsam: '' }] };
-    const c = ornekCalisma({ D: { maliyetSis: ms } });
+    const c = ornekCalisma({ D: { maliyetSis: ms, planTL: { genelGider: 80 } } });
     const b = maliyetBaglami(c); const s = c.D.siparisler[0];
     if (!b || !s) throw new Error('bağlam yok');
     expect(b.G.tez.every((z) => z.oran === null)).toBe(true);
     expect(b.G.ort).toBeNull();
-    expect(genelGiderOrani(c.D, b.G, 'T1')).toBeNull();
-    const m = siparisMaliyeti(b, s);
-    expect(m?.gg).toBeNull();
-    expect(m?.top).toBeCloseTo((m?.mal ?? 0) - (m?.talas ?? 0) + (m?.isl ?? 0) + (m?.ayar ?? 0) + (m?.fas ?? 0) + (m?.mes ?? 0));
+    expect(genelGiderOrani(c.D)).toBe(80);
+    expect(siparisMaliyeti(b, s)?.gg).not.toBeNull();
   });
 
   it('genel gider tek oranı girilmemişse oran ve siparişin genel gideri bilinmez (null), 120 TL/sa varsayılmaz (2173-1 a); toplam onu atlar', () => {
-    const c = ornekCalisma({ D: { planTL: {}, maliyetSis: { kip: 'tek', kalemler: [] } } });
-    const b = maliyetBaglami(c); const s = c.D.siparisler[0];
-    if (!b || !s) throw new Error('bağlam yok');
-    expect(genelGiderOrani(c.D, b.G, 'T1')).toBeNull();
-    const m = siparisMaliyeti(b, s);
-    expect(m?.gg).toBeNull();
-    expect(m?.top).toBeCloseTo((m?.mal ?? 0) - (m?.talas ?? 0) + (m?.isl ?? 0) + (m?.ayar ?? 0) + (m?.fas ?? 0) + (m?.mes ?? 0));
-    const k = ornekCalisma({ D: { planTL: {}, maliyetSis: { kip: 'kalem', kalemler: [] } } });
-    const G = genelGiderHesabi(k, takvimKur(k));
-    expect(genelGiderOrani(k.D, { ...G, tez: [], ort: null }, 'T1')).toBeNull();
-  });
-
-  it('tezgâhın oranı yoksa atölye ortalaması; ortalama yoksa ya da sıfırsa tek orana düşer', () => {
-    const c = ornekCalisma({ D: { maliyetSis: { kip: 'kalem', kalemler: [] }, planTL: { genelGider: 80 } } });
-    const G = genelGiderHesabi(c, takvimKur(c));
-    expect(genelGiderOrani(c.D, { ...G, tez: [], ort: 0 }, 'T1')).toBe(80);
-    expect(genelGiderOrani(c.D, { ...G, tez: [], ort: null }, 'T1')).toBe(80);
-    expect(genelGiderOrani(c.D, { ...G, tez: [], ort: 12 }, 'T1')).toBe(12);
+    for (const kip of ['tek', 'kalem']) {
+      const c = ornekCalisma({ D: { planTL: {}, maliyetSis: { kip, kalemler: [] } } });
+      const b = maliyetBaglami(c); const s = c.D.siparisler[0];
+      if (!b || !s) throw new Error('bağlam yok');
+      expect(genelGiderOrani(c.D)).toBeNull();
+      const m = siparisMaliyeti(b, s);
+      expect(m?.gg).toBeNull();
+      expect(m?.top).toBeCloseTo((m?.mal ?? 0) - (m?.talas ?? 0) + (m?.isl ?? 0) + (m?.ayar ?? 0) + (m?.fas ?? 0) + (m?.mes ?? 0));
+    }
   });
 
   it('erken sevki kabul eden siparişte vade üretim bitince başlar: termine kalan süre bekleme değil erken tahsilattır', () => {
@@ -286,4 +278,28 @@ describe('P3 saf hesaplar', () => {
     const ucretsiz = { ...yariBitti, D: { ...yariBitti.D, tezgahlar: yariBitti.D.tezgahlar.map((t) => ({ ...t, ucret: null })) } };
     expect(katkiPayi(ucretsiz, ucretsiz.D.siparisler[0]!)).toBeNull();
   });
+});
+
+// 2653: sunucunun mesai tutarı kopyası bu tabloyla sınanır; tablo devir-heylit/2653/ORNEKLER.md ile aynıdır, biri değişirse öteki de değişir.
+const MESAI_ORNEKLERI: [string, Parameters<typeof mesaiTutari>[0], number | null][] = [
+  ['M1 hafta içi', { h: 8, kisiBazli: true, op: 1, saatDegeri: 400, carpan: 1.5, kisiEk: 150, ucret: null, mesaiCarpan: undefined }, 4950],
+  ['M2 cumartesi, iki operatör', { h: 8, kisiBazli: true, op: 2, saatDegeri: 350, carpan: 2, kisiEk: 100, ucret: null, mesaiCarpan: undefined }, 11400],
+  ['M3 pazar, yarım operatör', { h: 7.5, kisiBazli: true, op: 0.5, saatDegeri: 500, carpan: 2, kisiEk: 0, ucret: null, mesaiCarpan: undefined }, 3750],
+  ['M4 resmî tatil', { h: 8, kisiBazli: true, op: 1, saatDegeri: 420, carpan: 2.5, kisiEk: 120, ucret: null, mesaiCarpan: 3 }, 8520],
+  ['M5 gün çarpanı yok: 1,5', { h: 4, kisiBazli: true, op: 1, saatDegeri: 300, carpan: undefined, kisiEk: null, ucret: null, mesaiCarpan: undefined }, 1800],
+  ['M6 operatör oranı tanımsız: 1', { h: 8, kisiBazli: true, op: undefined, saatDegeri: 400, carpan: 1.5, kisiEk: 150, ucret: null, mesaiCarpan: undefined }, 4950],
+  ['M7 saat değeri yok: mesai ücretine düşer, hafta içinde de çarpanla', { h: 8, kisiBazli: true, op: 2, saatDegeri: null, carpan: 2, kisiEk: 100, ucret: 250, mesaiCarpan: 2 }, 4000],
+  ['M8 saat değeri yok, vardiyasız gün', { h: 8, kisiBazli: true, op: 1, saatDegeri: null, carpan: 2, kisiEk: 100, ucret: 250, mesaiCarpan: 2 }, 4000],
+  ['M9 saat değeri ve ücret yok: bilinmez', { h: 8, kisiBazli: true, op: 1, saatDegeri: null, carpan: 1.5, kisiEk: 100, ucret: null, mesaiCarpan: 2 }, null],
+  ['M10 kişi bazlı değil, vardiyasız gün, çarpan yok: 1,5', { h: 8, kisiBazli: false, op: 1, saatDegeri: 400, carpan: 2, kisiEk: 100, ucret: 300, mesaiCarpan: undefined }, 3600],
+  // 2510 a: 1,5 çarpanı her ek mesaide; 2749 ortak örnekleri (sunucu 2742 aynı değerlerle sınar).
+  ['Y1 yalın, hafta içi vardiyalı gün', { h: 8, kisiBazli: false, op: 1, saatDegeri: null, carpan: 1.5, kisiEk: null, ucret: 200, mesaiCarpan: 1.5 }, 2400],
+  ['Y2 yalın, vardiyasız gün', { h: 8, kisiBazli: false, op: 1, saatDegeri: null, carpan: 2, kisiEk: null, ucret: 200, mesaiCarpan: 1.5 }, 2400],
+  ['Y3 yalın, çarpan kayıtta yok: 1,5', { h: 8, kisiBazli: false, op: 1, saatDegeri: null, carpan: 1.5, kisiEk: null, ucret: 200, mesaiCarpan: undefined }, 2400],
+  ['Y4 yalın, ücret yok: bilinmez', { h: 8, kisiBazli: false, op: 1, saatDegeri: null, carpan: 1.5, kisiEk: null, ucret: null, mesaiCarpan: 1.5 }, null],
+  ['Y5 yalın, çarpan 2, hafta içi', { h: 8, kisiBazli: false, op: 1, saatDegeri: null, carpan: 1.5, kisiEk: null, ucret: 200, mesaiCarpan: 2 }, 3200],
+  ['Y6 yalın, hafta içi 8 sa, ücret 300 (Maliyet T-2742-1, motorla aynı)', { h: 8, kisiBazli: false, op: 1, saatDegeri: null, carpan: 1.5, kisiEk: null, ucret: 300, mesaiCarpan: 1.5 }, 3600],
+];
+describe('mesaiTutari (2653 ortak örnekler)', () => {
+  it.each(MESAI_ORNEKLERI)('%s', (_ad, girdi, beklenen) => { expect(mesaiTutari(girdi)).toBe(beklenen); });
 });

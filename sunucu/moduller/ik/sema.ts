@@ -117,7 +117,9 @@ const PERSONEL: TurTanimi = {
 
 const DEPARTMAN: TurTanimi = {
   tur: 'dept', tablo: 'ik_departman', bagSutunu: 'departman_no',
-  alanlar: [m('ad', 'ad', { zorunlu: true }), m('kod', 'kod'), m('giderHesabi', 'gider_hesabi'), bag('yoneticiId', 'yonetici_no', 'emp'), tutar('butce', 'butce'), m('aciklama', 'aciklama')],
+  alanlar: [m('ad', 'ad', { zorunlu: true }), m('kod', 'kod'), m('giderHesabi', 'gider_hesabi'), bag('yoneticiId', 'yonetici_no', 'emp'), tutar('butce', 'butce'), m('aciklama', 'aciklama'),
+    // 2647 a: boş (NULL) = işaretlenmedi; dolaylı personel toplamı işaretsiz departmanda bilinmez.
+    mantik('dogrudanIscilik', 'dogrudan_iscilik')],
   listeler: [],
 };
 

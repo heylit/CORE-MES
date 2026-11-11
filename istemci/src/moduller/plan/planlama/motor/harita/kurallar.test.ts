@@ -6,6 +6,10 @@ import {
   yakinlikSiniri, yerlesim, yoldakiParcalar,
 } from './kurallar.ts';
 
+import { saatiSabitle } from '../../test-saati.ts';
+
+saatiSabitle(() => ornekCalisma());
+
 // Beklenen değerler eski sayfanın (cerceve/planlama) aynı örnek kayıtla, Harita görünümünde 1280 genişlikte (tuval 1080 x 677, alttaki
 // oynatıcı 98, üstteki çubuk yok sayılır 60) kurduğu sahnedir.
 function kur(olcek: 'gun' | 'hafta' | 'ay' | 'yil' = 'hafta', kayma = 0) {

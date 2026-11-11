@@ -51,11 +51,19 @@ const KULLANIMLAR = ['tek', 'paralel'] as const;
 const ILK_PARCA_SECIMLERI = ['yok', 'her_kurulum'] as const;
 const TASLAK_KAYNAKLARI = ['revizyon', 'bos'] as const;
 const SURE_TURLERI = ['hazirlik', 'islem', 'degisim'] as const;
+// 2564 a: kabul edilen değer seçilen ölçüm ya da penceresinin ortancası; ortancayı sahibi hesaplar, ekran süre göndermez.
+const KABUL_DEGERLERI = ['olcum', 'ortanca'] as const;
 
 const kaynak = <T extends string>(v: unknown, izinli: readonly T[], alan: string): { tur: T; id: number } | null => {
   if (v === null || v === undefined) return null;
   const k = nesne(v);
   return { tur: secenek(k['tur'], izinli, alan), id: tamSayi(k['id'], alan) };
+};
+
+// 2682 a: firması seçilmemiş fason adım { tur: 'fason', id: null } gider; öteki türlerde kimlik zorunludur.
+const adimKaynagi = (v: unknown): { tur: string; id: number | null } | null => {
+  if (v !== null && v !== undefined && nesne(v)['tur'] === 'fason' && nesne(v)['id'] === null) return { tur: 'fason', id: null };
+  return kaynak(v, ADIM_KAYNAK_TURLERI, 'kaynak');
 };
 
 function adim(a: Nesne): Nesne {
@@ -65,7 +73,7 @@ function adim(a: Nesne): Nesne {
     opNo: tamSayiVeyaBos(a['opNo'], 'OP numarası'),
     operasyonTipiId: tamSayi(a['operasyonTipiId'], 'operasyon'),
     ad,
-    kaynak: kaynak(a['kaynak'], ADIM_KAYNAK_TURLERI, 'kaynak'),
+    kaynak: adimKaynagi(a['kaynak']),
     ayarSuresiDk: sayiVeyaBos(a['ayarSuresiDk'], 'hazırlık süresi'),
     birimSureDk: sayiVeyaBos(a['birimSureDk'], 'birim süre'),
     islemSuresiDk: sayiVeyaBos(a['islemSuresiDk'], 'işlem süresi'),
@@ -145,7 +153,10 @@ export const ROTA_KOMUTLARI: Readonly<Record<string, RotaKomutu>> = {
   },
   'rota-olcum-kabul': {
     hafif: true,
-    hazirla: (g) => ({ yol: olcumYolu(g, '/kabul'), govde: { ...olcumGovdesi(g), olcumId: tamSayi(g['olcumId'], 'ölçüm') }, tekrarKorumali: true }),
+    hazirla: (g) => ({ yol: olcumYolu(g, '/kabul'), govde: {
+      ...olcumGovdesi(g), olcumId: tamSayi(g['olcumId'], 'ölçüm'),
+      ...(g['deger'] === undefined ? {} : { deger: secenek(g['deger'], KABUL_DEGERLERI, 'kabul değeri') }),
+    }, tekrarKorumali: true }),
   },
   'rota-onayla': {
     hafif: true,

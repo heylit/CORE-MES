@@ -1,10 +1,11 @@
 import { ikiliCevap, uc } from '#cekirdek/uc.ts';
 import { ikinciMenuSayacSemasi } from '#paylasilan/ikinci-menu.ts';
 import {
-  acilisCevabi, disOperasyonlarCevabi, disOperasyonAyrintisiCevabi, disOperasyonParametresi, fasonSureleriCevabi, fasonSureleriSorgusu, ayarlarKaydetGovdesi, hizliAcGovdesi, talebimSemasi, taleplerimCevabi, taleplerimSorgusu, ayarlarSemasi, firmaParametresi, firmaSecenekleriCevabi, firmaSecenekleriSorgusu, katalogKaydetGovdesi, malzemeSecenekleriCevabi, malzemeSecenekleriSorgusu, katalogSemasi, katalogSilGovdesi, talepGovdesi, acikEmirlerCevabi, onTalepleriCevabi, onTalepYoksayGovdesi, onTalepGeriAlGovdesi,
+  acilisCevabi, disOperasyonlarCevabi, disOperasyonAyrintisiCevabi, disOperasyonParametresi, fasonSureleriCevabi, fasonSureleriSorgusu, ayarlarKaydetGovdesi, hizliAcGovdesi, talebimSemasi, taleplerimCevabi, taleplerimSorgusu, ayarlarSemasi, firmaParametresi, firmaSecenekleriCevabi, firmaSecenekleriSorgusu, katalogKaydetGovdesi, malzemeSecenekleriCevabi, malzemeSecenekleriSorgusu, katalogSemasi, katalogSilGovdesi, talepGovdesi, acikEmirlerCevabi, projeSecenekleriCevabi, onTalepleriCevabi, onTalepYoksayGovdesi, onTalepGeriAlGovdesi,
   iptaliGeriAlCevabi, iptaliGeriAlGovdesi, talepAyirGovdesi, talepBirlestirGovdesi, satinAlmaOzetiCevabi, degerlendirmeCevabi, kartAyrintilariCevabi, stokYokIstekleriCevabi, odemePlaniGovdesi, siparisTakibiCevabi, siparisBelgeleriCevabi, siparisBelgesiGovdesi, siparisBelgesiParametresi, siparisSatiriParametresi, siparisFaturalariCevabi, siparisFaturalariSorgusu, siparisFaturasiGovdesi, siparisKalemiDegistirGovdesi, siparisKapatGovdesi, teslimYontemiGovdesi, talepKaydetGovdesi, talepParametresi, talepSemasi, talepSilGovdesi, tamamCevabi, tedarikciKaydetGovdesi, tedarikciSemasi,
   tedarikTerminiKaydetGovdesi, tedarikTerminiKaydetCevabi, tedarikTerminleriCevabi,
-  kgFiyatiEkleGovdesi, kgFiyatiIptalGovdesi, kgFiyatiParametresi, kgFiyatiGecmisiCevabi, kgFiyatiGecmisiSorgusu, kgFiyatlariCevabi, malzemeKgFiyatlariCevabi, malzemeKgFiyatlariSorgusu,
+  butceKullanimiCevabi, butceKullanimiSorgusu, kgFiyatiEkleGovdesi, kgFiyatiIptalGovdesi, kgFiyatiParametresi, kgFiyatiGecmisiCevabi, kgFiyatiGecmisiSorgusu, kgFiyatlariCevabi, malzemeKgFiyatlariCevabi, malzemeKgFiyatlariSorgusu,
+  faturaEslemesiCevabi, faturaEslemesiKaydetGovdesi, faturaEslemesiParametresi,
 } from '#paylasilan/sozlesme/satin-alma.ts';
 import { satinAlmaAnaliziCevabi } from '#paylasilan/sozlesme/satin-alma-analiz.ts';
 import { z } from 'zod';
@@ -126,6 +127,11 @@ export const uclar = [
     isle: ({ db, kullanici, parametre, govde }) => servis.siparisKapat(db, kullanici, parametre.id, govde),
   }),
   // 1094 b: teklif karşılaştırması ve kararın tutarı sunucuda hesaplanır; teklifleri gören görür.
+  // 2454: bütçe kullanımı yalnız tam görenlere (V4; talep eden görmez).
+  uc({
+    yontem: 'GET', yol: '/satin-alma-butce-kullanimi', yetki: { biri: ['satin-alma.oku', 'satin-alma.yaz', 'satin-alma.onayla'] }, sorgu: butceKullanimiSorgusu,
+    cevap: butceKullanimiCevabi, isle: ({ db, sorgu }) => servis.butceKullanimiOku(db, sorgu.yil),
+  }),
   uc({
     yontem: 'GET', yol: '/satin-alma-talepleri/:id/degerlendirme', yetki: { biri: ['satin-alma.oku', 'satin-alma.yaz', 'satin-alma.onayla'] },
     parametre: talepParametresi, cevap: degerlendirmeCevabi,
@@ -205,6 +211,11 @@ export const uclar = [
     yontem: 'GET', yol: '/satin-alma-acik-emirler', yetki: 'satin-alma.talep-ac', cevap: acikEmirlerCevabi,
     isle: ({ db }) => servis.acikEmirSecenekleri(db),
   }),
+  // 2611 a: talep formunun isteğe bağlı proje seçimi (yalnız aktif projeler); talep açan projeler.oku taşımayabilir.
+  uc({
+    yontem: 'GET', yol: '/satin-alma-talepleri/proje-secenekleri', yetki: { biri: ['satin-alma.talep-ac', 'satin-alma.yaz'] }, cevap: projeSecenekleriCevabi,
+    isle: ({ db }) => servis.talepProjeSecenekleri(db),
+  }),
   // Katalog: talep eden de malzeme kartını kataloğa bağlar (SAT-58, SA2 b); düzenlemeyi servis yaz işlemine bağlar.
   uc({
     yontem: 'POST', yol: '/satin-alma-katalogu/kaydet', yetki: 'satin-alma.talep-ac', govde: katalogKaydetGovdesi, cevap: katalogSemasi,
@@ -251,5 +262,15 @@ export const uclar = [
   uc({
     yontem: 'POST', yol: '/satin-alma-tedarik-terminleri/kaydet', yetki: { biri: TERMIN_YAZAR }, govde: tedarikTerminiKaydetGovdesi, cevap: tedarikTerminiKaydetCevabi,
     isle: ({ db, kullanici, govde }) => servis.tedarikTerminiKaydet(db, kullanici, govde),
+  }),
+  // 2642 b (Güvenlik K1-K3): cevapta fiyat var; talep eden ve yalnız oturumu olan okuyamaz. Belge yalnız yoldan, kişi oturumdan.
+  uc({
+    yontem: 'GET', yol: '/satin-alma-fatura-eslemeleri/:belgeId', yetki: { biri: ['finans.oku', 'finans.maliyet-oku'] }, parametre: faturaEslemesiParametresi,
+    cevap: faturaEslemesiCevabi, isle: ({ db, parametre }) => servis.faturaEslemesiGetir(db, parametre.belgeId),
+  }),
+  uc({
+    yontem: 'POST', yol: '/satin-alma-fatura-eslemeleri/:belgeId/kaydet', yetki: 'finans.yaz', parametre: faturaEslemesiParametresi,
+    govde: faturaEslemesiKaydetGovdesi, cevap: faturaEslemesiCevabi,
+    isle: ({ db, kullanici, parametre, govde }) => servis.faturaEslemesiYaz(db, kullanici.id, parametre.belgeId, govde),
   }),
 ];

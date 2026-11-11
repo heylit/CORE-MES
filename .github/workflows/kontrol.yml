@@ -2,18 +2,20 @@ name: kontrol
 
 on:
   # Yol süzgeci yok: ana dala giren her birleşmenin kendi koşusu olur, birleştirme kapısı yalnız belge taşıyan birleşmede
-  # hiç açılmayan koşuyu beklemez. Yalnız belge değiştiyse ağır işleri `kapsam` atlar.
+  # hiç açılmayan koşuyu beklemez. Çekme isteğinde yalnız belge değiştiyse ağır işleri `kapsam` atlar.
   push:
     branches: [main]
   pull_request:
   # Ana dalda ya da bir dalda elle yeniden koşu: boş commit ya da istek kapatıp açma gerekmez.
   workflow_dispatch:
 
-# Çekme isteğinde yeni gönderim eski koşuyu iptal eder. Ana dalda her commit kendi grubundadır, hiçbir koşu iptal edilmez ya da
-# bekleyen koşunun yerini almaz: kırmızıda bozan birleşme tek commit'e iner.
+# Çekme isteğinde yeni gönderim eski koşuyu iptal eder. Ana dalda koşu bütünüyle iptal edilmez: her commit kendi grubundadır,
+# hızlı işler (kapsam, tip, denetim ve göç damgası, lint) her birleşmede koşar. Yalnız ağır test işleri (istemci, sunucu,
+# ekran, Windows) iş düzeyindeki grupla yeni birleşmeye yer açar (2705 a); ana dal gönderiminde kapsam daraltılmadığı için
+# son koşu ondan önceki iptal edilen birleşmelerin testlerini de koşar. Elle koşu iptal etmez.
 concurrency:
   group: kontrol-${{ github.ref == 'refs/heads/main' && github.sha || github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
   TMIV2_ORTAM: test
@@ -38,11 +40,11 @@ env:
 
 # Tek iş 21 dakika sürüyordu; işler ayrı makinelerde aynı anda koşar (#1219). Dal korumasının beklediği `kontrol` en sondaki
 # toplayıcı iştir: bir iş bile yeşil değilse kırmızı biter. `kapsam` işinin atladığı test işi "atlandı" sayılır. Ana dala
-# gönderimde ağır işler yalnız gönderim belgeden ibaretse atlanır; elle koşuda her iş koşar.
+# gönderimde ve elle koşuda her iş koşar.
 jobs:
-  # Değişen dosyalara göre hangi ağır işlerin koşacağı. Bilinmeyen her yol (paylasilan, araclar, paketler, yapılandırma,
-  # iş akışı) her şeyi koşturur. Sunucu testleri arkon/web ve istemci/src'den dosya ithal eder: ithal edilen istemci
-  # klasörleri koddan okunur, elle liste tutulmaz.
+  # Değişen dosyalara göre hangi ağır işlerin koşacağı (araclar/ci-kapsam.sh; eşleme tablosu belgeler/ci/kapsam.md).
+  # Bilinmeyen yol ve ortak parçalar (paylasilan, istemci/src/ortak, sunucu/cekirdek, paketler, iş akışı, araclar) her
+  # şeyi koşturur. Süzgeç bu işin içindedir, `on.paths`'e taşınmaz: dal koruması hiç açılmayan `kontrol`'ü bekleyip kalır.
   kapsam:
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -58,51 +60,19 @@ jobs:
         shell: bash
         env:
           OLAY: ${{ github.event_name }}
-          ONCE: ${{ github.event.before }}
         run: |
           hepsi() { printf 'sunucu=true\nistemci=true\nekran=true\n' | tee -a "$GITHUB_OUTPUT"; exit 0; }
+          # Ana dalda daraltılmaz: önceki birleşmenin ağır işleri iptal edilmiş olabilir, testleri bu koşu taşır (2705 a).
           case "$OLAY" in
             pull_request) taban=HEAD^1 ;;
-            # Bir gönderim birden çok commit taşıyabilir: fark gönderimden önceki uca göre alınır. O uç yoksa ya da
-            # alınamazsa daraltılmaz, her iş koşar.
-            push)
-              case "$ONCE" in ''|*[!0]*) ;; *) hepsi ;; esac
-              [ -n "$ONCE" ] && git fetch --no-tags --depth=1 origin "$ONCE" || hepsi
-              taban=$ONCE ;;
             *) hepsi ;;
           esac
-          sunucu=false; istemci=false; ekran=false
-          # Süreç ikamesindeki hata yutulur ve testler sessizce atlanırdı: liste önce alınır, alınamazsa iş düşer.
-          degisenler=$(git diff --name-only "$taban" HEAD)
-          sunucunun_istemcisi=$(grep -rhoE "(\.\./)+istemci/src/[A-Za-z0-9_./-]+\.tsx?" sunucu araclar paylasilan --include=*.ts \
-            | sed -E 's#^(\.\./)+##' | xargs -r -n1 dirname | sort -u || true)
-          while IFS= read -r yol; do
-            [ -z "$yol" ] && continue
-            # Ana dal arka kontroldür, daraltılmaz: belge dışında tek dosya bile değiştiyse her iş koşar. Ana dalda her
-            # yerdeki .md belgedir; çekme isteği modül klasöründeki .md için testleri yine koşturur.
-            if [ "$OLAY" = push ]; then
-              case "$yol" in *.md|belgeler/*|kurulum/*) echo "$yol"; continue ;; *) hepsi ;; esac
-            fi
-            case "$yol" in
-              belgeler/*|kurulum/*) ;;
-              */*) case "$yol" in
-                     # Test robotu (ADR 0019) ekran işinde değil, sunucu test işinde ve Windows işinde koşar.
-                     ekran-testleri/benzetim/*) sunucu=true ;;
-                     ekran-testleri/*) ekran=true ;;
-                     sunucu/*) sunucu=true; ekran=true ;;
-                     arkon/*) sunucu=true; istemci=true; ekran=true ;;
-                     istemci/*) istemci=true; ekran=true
-                       for klasor in $sunucunun_istemcisi; do
-                         case "$yol" in "$klasor"/*) sunucu=true ;; esac
-                       done ;;
-                     *) sunucu=true; istemci=true; ekran=true ;;
-                   esac ;;
-              *.md) ;;
-              *) sunucu=true; istemci=true; ekran=true ;;
-            esac
-            echo "$yol"
-          done <<< "$degisenler"
-          printf 'sunucu=%s\nistemci=%s\nekran=%s\n' "$sunucu" "$istemci" "$ekran" | tee -a "$GITHUB_OUTPUT"
+          # Süreç ikamesindeki hata yutulur ve testler sessizce atlanırdı: liste önce alınır, alınamazsa iş düşer. Yeniden
+          # adlandırmada git yalnız yeni yolu verir; eski yol da listeye girsin diye --no-renames.
+          degisenler=$(git diff --name-only --no-renames "$taban" HEAD)
+          sonuc=$(printf '%s\n' "$degisenler" | OLAY="$OLAY" bash araclar/ci-kapsam.sh)
+          echo "$sonuc"
+          tail -n 3 <<< "$sonuc" >> "$GITHUB_OUTPUT"
 
   tip:
     runs-on: ubuntu-latest
@@ -242,6 +212,10 @@ jobs:
   istemci-test:
     needs: kapsam
     if: needs.kapsam.outputs.istemci == 'true'
+    # Ana dal gönderiminde yeni birleşme bu işin eski koşusunu iptal eder (2705 a); başka olayda grup koşuya özgüdür.
+    concurrency:
+      group: kontrol-istemci-test-${{ matrix.parca }}-${{ github.event_name == 'push' && github.ref || github.run_id }}
+      cancel-in-progress: ${{ github.event_name == 'push' }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     strategy:
@@ -274,6 +248,10 @@ jobs:
   sunucu-test:
     needs: kapsam
     if: needs.kapsam.outputs.sunucu == 'true'
+    # Ana dal gönderiminde yeni birleşme bu işin eski koşusunu iptal eder (2705 a); başka olayda grup koşuya özgüdür.
+    concurrency:
+      group: kontrol-sunucu-test-${{ matrix.parca }}-${{ github.event_name == 'push' && github.ref || github.run_id }}
+      cancel-in-progress: ${{ github.event_name == 'push' }}
     runs-on: ubuntu-latest
     timeout-minutes: 25
     strategy:
@@ -368,6 +346,10 @@ jobs:
   ekran:
     needs: kapsam
     if: needs.kapsam.outputs.ekran == 'true'
+    # Ana dal gönderiminde yeni birleşme bu işin eski koşusunu iptal eder (2705 a); başka olayda grup koşuya özgüdür.
+    concurrency:
+      group: kontrol-ekran-${{ matrix.parca }}-${{ github.event_name == 'push' && github.ref || github.run_id }}
+      cancel-in-progress: ${{ github.event_name == 'push' }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     strategy:
@@ -438,6 +420,10 @@ jobs:
   windows:
     needs: kapsam
     if: needs.kapsam.outputs.sunucu == 'true'
+    # Ana dal gönderiminde yeni birleşme bu işin eski koşusunu iptal eder (2705 a); başka olayda grup koşuya özgüdür.
+    concurrency:
+      group: kontrol-windows-${{ github.event_name == 'push' && github.ref || github.run_id }}
+      cancel-in-progress: ${{ github.event_name == 'push' }}
     runs-on: windows-latest
     timeout-minutes: 45
     # Windows çalıştırıcısında sekiz paralel test dosyasının yükü altında yeni bağlantının kurulması 5 sn'yi aşabiliyor.
@@ -541,6 +527,11 @@ jobs:
           SONUCLAR: ${{ toJSON(needs) }}
         run: |
           echo "$SONUCLAR" | jq -r 'to_entries[] | "\(.key): \(.value.result)"'
+          # Ana dalda iptal edilen ağır iş yeşil sayılmaz: bu commit'in testleri bir sonraki birleşmenin koşusundadır (2705 a).
+          if echo "$SONUCLAR" | jq -e 'any(.[]; .result == "cancelled")' > /dev/null; then
+            echo "::error::Ağır test işi iptal edildi; bu commit'in testleri ana daldaki sonraki koşudadır. O koşunun sonucuna bakın."
+            exit 1
+          fi
           # Atlanan iş yalnız kapsam yeşilse kabul edilir; kapsam düşerse ona bağlı işler de atlanır.
           echo "$SONUCLAR" | jq -e '.kapsam.result == "success" and .tip.result == "success" and .denetim.result == "success"
             and .lint.result == "success"

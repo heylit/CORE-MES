@@ -1,8 +1,11 @@
 import { uc } from '#cekirdek/uc.ts';
 import { tesisGunu } from '#paylasilan/zaman.ts';
 import { firmaCevabi, firmaDurumGovdesi } from '#paylasilan/sozlesme/musteri-tedarikci.ts';
-import { kimlikParametresi } from '#paylasilan/sozlesme/finans.ts';
+import { kimlikParametresi, tedarikciAlacagiCevabi, tedarikciAlacagiDurumGovdesi, tedarikciAlacaklariCevabi } from '#paylasilan/sozlesme/finans.ts';
+import * as genelGider from './genel-gider/servis.ts';
 import * as servis from './servis.ts';
+import { maliyetKaldir } from './maliyet-kaldir/servis.ts';
+import { saatlikMaliyetler } from './saatlik-maliyet/servis.ts';
 import { z as zod } from 'zod';
 import { ikinciMenuSayacSemasi } from '#paylasilan/ikinci-menu.ts';
 import {
@@ -10,9 +13,9 @@ import {
   cekCevabi, cekDuzeltGovdesi, cekEkleGovdesi, cekListesiCevabi, cekSonucGovdesi, cekTarihGovdesi, ciroGovdesi, dagilimListesiCevabi, dagitGovdesi,
   duzenliOdemeGovdesi, duzenliOdemeGuncelleGovdesi, duzenliOdemeListesiCevabi, duzenliOdemeSemasi, duzenliOdendiGovdesi, esitleGovdesi,
   aylikSeriCevabi, aylikSeriSorgusu, beklenenOdemelerCevabi, beklenenTahsilatlarCevabi, esitlemeListesiCevabi, finansListeSorgusu, finansOzetiCevabi, hesapCevabi, hesapEkleGovdesi, hesapGuncelleGovdesi, hesapListesiCevabi, iptalGovdesi, kapanisGovdesi,
-  kapanisListesiCevabi, faizEkleGovdesi, faizListesiCevabi, genelGiderOraniEkleGovdesi, genelGiderOraniListesiCevabi, kdvOraniEkleGovdesi, kdvOraniKapatGovdesi, kdvOraniListesiCevabi, kurFaizAraligiCevabi, kurFaizAraligiSorgusu, kurFaizOzetiCevabi, kurFaizTopluCevabi, kurFaizTopluGovdesi, kurGovdesi, kurGuncelleGovdesi, kurListesiCevabi, kurCiftiGovdesi, kurCiftiGuncelleGovdesi, kurCiftiListesiCevabi, oranAraligiCevabi, oranEkleGovdesi, oranListesiCevabi, oranOzetiCevabi, oranTopluCevabi, oranTopluGovdesi,
+  kapanisListesiCevabi, faizEkleGovdesi, faizListesiCevabi, genelGiderOraniEkleGovdesi, genelGiderOraniListesiCevabi, genelGiderOnerisiSorgusu, genelGiderOnerisiCevabi, genelGiderBelgedenEkleGovdesi, kdvOraniEkleGovdesi, kdvOraniKapatGovdesi, kdvOraniListesiCevabi, kurFaizAraligiCevabi, kurFaizAraligiSorgusu, kurFaizOzetiCevabi, kurFaizTopluCevabi, kurFaizTopluGovdesi, kurGovdesi, kurGuncelleGovdesi, kurListesiCevabi, kurCiftiGovdesi, kurCiftiGuncelleGovdesi, kurCiftiListesiCevabi, oranAraligiCevabi, oranEkleGovdesi, oranListesiCevabi, oranOzetiCevabi, oranTopluCevabi, oranTopluGovdesi,
   mahsupCevabi, mahsupEkleGovdesi, mahsupListesiCevabi, odemeCevabi, odemeEkleGovdesi, odemeListesiCevabi, oneriDurumuGovdesi, oneriListesiCevabi,
-  maliyetCevabi, maliyetListesiCevabi, maliyetTuruParametresi, maliyetYazGovdesi, amortismanCevabi, sabitKiymetCevabi, sabitKiymetEkleGovdesi, sabitKiymetGuncelleGovdesi, sabitKiymetListesiCevabi, sabitKiymetPasifGovdesi, makineIdParametresi, makineSabitKiymetleriCevabi,
+  maliyetCevabi, maliyetKaldirCevabi, maliyetKaldirGovdesi, maliyetKaldirParametresi, maliyetListesiCevabi, saatlikMaliyetListesiCevabi, saatlikMaliyetTuruParametresi, maliyetTuruParametresi, maliyetYazGovdesi, amortismanCevabi, sabitKiymetCevabi, sabitKiymetEkleGovdesi, sabitKiymetGuncelleGovdesi, sabitKiymetListesiCevabi, sabitKiymetPasifGovdesi, makineIdParametresi, makineSabitKiymetleriCevabi,
   skorListesiCevabi, vergiBeyaniGovdesi, vergiBeyaniSorgusu, vergiBeyanlariCevabi, topluAktarCevabi, topluAktarGovdesi, virmanEkleGovdesi, virmanListesiCevabi, virmanSemasi,
 } from '#paylasilan/sozlesme/finans.ts';
 import type { ListeAdi } from './sorgular.ts';
@@ -96,6 +99,10 @@ export const paraUclari = [
   uc({ yontem: 'GET', yol: '/finans/ozet', yetki: 'finans.oku', cevap: finansOzetiCevabi, isle: ({ db }) => servis.panoOzeti(db) }),
   // Kart #1124: faturası gelmemiş satın alma siparişlerinin ödeme planı, vadeye göre.
   uc({ yontem: 'GET', yol: '/finans/beklenen-odemeler', yetki: 'finans.oku', cevap: beklenenOdemelerCevabi, isle: ({ db }) => servis.beklenenOdemeler(db) }),
+  // 2540: kalanı kapatılmış siparişte aşan avansın tedarikçi alacağı; okuma finans.oku, durum finans.yaz (tekrar korumalı, sürümlü, tam denetim).
+  uc({ yontem: 'GET', yol: '/finans/tedarikci-alacaklari', yetki: 'finans.oku', cevap: tedarikciAlacaklariCevabi, isle: ({ db }) => servis.tedarikciAlacaklari(db) }),
+  uc({ yontem: 'POST', yol: '/finans/tedarikci-alacaklari/:id/durum', yetki: 'finans.yaz', tekrarKorumali: true, parametre: kimlikParametresi, govde: tedarikciAlacagiDurumGovdesi,
+    cevap: tedarikciAlacagiCevabi, isle: ({ db, kullanici, parametre, govde }) => servis.tedarikciAlacagiDurumYaz(db, kullanici, parametre.id, govde) }),
   // 2132c: onaylı satış siparişlerinin faturalanmamış kalanı, vadeye göre.
   uc({ yontem: 'GET', yol: '/finans/beklenen-tahsilatlar', yetki: 'finans.oku', cevap: beklenenTahsilatlarCevabi, isle: ({ db }) => servis.beklenenTahsilatlar(db) }),
   // Sayaç oturumla açılır; finans.oku yoksa sayılar null döner (rakam sızmaz).
@@ -188,6 +195,11 @@ export const paraUclari = [
     isle: ({ db, sorgu }) => servis.listele(db, 'genelGider', sorgu) }),
   uc({ yontem: 'POST', yol: '/finans/genel-gider-oranlari/ekle', yetki: 'finans.yonet', govde: genelGiderOraniEkleGovdesi, cevap: anahtarCevap,
     isle: ({ db, kullanici, govde }) => servis.genelGiderOraniEkle(db, kullanici, govde) }),
+  // 2594 b: belgelerden bileşenli öneri ve kayıt; tutarlar sunucuda hesaplanır.
+  uc({ yontem: 'GET', yol: '/finans/genel-gider-oranlari/oneri', yetki: 'finans.maliyet-oku', sorgu: genelGiderOnerisiSorgusu, cevap: genelGiderOnerisiCevabi,
+    isle: ({ db, sorgu }) => genelGider.genelGiderOnerisi(db, sorgu.ay) }),
+  uc({ yontem: 'POST', yol: '/finans/genel-gider-oranlari/belgeden-ekle', yetki: 'finans.yonet', tekrarKorumali: true, govde: genelGiderBelgedenEkleGovdesi, cevap: anahtarCevap,
+    isle: ({ db, kullanici, govde }) => genelGider.belgeSatiriKaydet(db, kullanici, govde) }),
   uc({ yontem: 'POST', yol: '/finans/sabit-kiymetler/ekle', yetki: 'finans.yonet', tekrarKorumali: true, govde: sabitKiymetEkleGovdesi, cevap: sabitKiymetCevabi,
     isle: async ({ db, kullanici, govde }) => ({ sabitKiymet: await servis.sabitKiymetEkle(db, kullanici, govde) }) }),
   uc({ yontem: 'POST', yol: '/finans/sabit-kiymetler/:id/guncelle', yetki: 'finans.yonet', parametre: kimlikParametresi, govde: sabitKiymetGuncelleGovdesi, cevap: sabitKiymetCevabi,
@@ -198,6 +210,12 @@ export const paraUclari = [
     isle: ({ db, parametre, sorgu }) => servis.maliyetleriListele(db, parametre.tur, sorgu) }),
   uc({ yontem: 'POST', yol: '/finans/maliyetler/:tur/yaz', yetki: 'finans.yonet', parametre: maliyetTuruParametresi, govde: maliyetYazGovdesi, cevap: maliyetCevabi,
     isle: async ({ db, kullanici, parametre, govde }) => ({ maliyet: await servis.maliyetYaz(db, kullanici, parametre.tur, govde) }) }),
+  // 2593 (2589 b): istasyon saatlik maliyeti Finans sayfasında; kaynak listesi adlarıyla, maliyeti yoksa null. Kişi türü yok (2598 c).
+  uc({ yontem: 'GET', yol: '/finans/saatlik-maliyetler/:tur', yetki: 'finans.maliyet-oku', parametre: saatlikMaliyetTuruParametresi, cevap: saatlikMaliyetListesiCevabi,
+    isle: async ({ db, parametre }) => ({ satirlar: await saatlikMaliyetler(db, parametre.tur) }) }),
+  // 2574: kaldırılan maliyet yeniden bilinmiyordur; yetki yazmayla aynı. Silinen değer denetim ekindedir.
+  uc({ yontem: 'POST', yol: '/finans/maliyetler/:tur/:anahtar/kaldir', yetki: 'finans.yonet', tekrarKorumali: true, parametre: maliyetKaldirParametresi, govde: maliyetKaldirGovdesi, cevap: maliyetKaldirCevabi,
+    isle: async ({ db, parametre, govde, denetimEki }) => ({ kaldirilan: await maliyetKaldir(db, parametre.tur, parametre.anahtar, govde.surum, denetimEki) }) }),
   uc({ yontem: 'POST', yol: '/finans/kdv-oranlari/ekle', yetki: 'finans.yonet', govde: kdvOraniEkleGovdesi, cevap: anahtarCevap, isle: ({ db, kullanici, govde }) => servis.kdvOraniEkle(db, kullanici, govde) }),
   uc({ yontem: 'POST', yol: '/finans/kdv-oranlari/kapat', yetki: 'finans.yonet', govde: kdvOraniKapatGovdesi, cevap: anahtarCevap, isle: ({ db, kullanici, govde }) => servis.kdvOraniKapat(db, kullanici, govde) }),
   uc({ yontem: 'POST', yol: '/finans/duzenli-odemeler/ekle', yetki: 'finans.yonet', tekrarKorumali: true, govde: duzenliOdemeGovdesi, cevap: zod.object({ duzenli: duzenliOdemeSemasi }),

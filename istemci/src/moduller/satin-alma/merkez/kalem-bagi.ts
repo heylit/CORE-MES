@@ -1,12 +1,21 @@
-import type { RequestItem } from "./tipler.ts";
+import type { PurchaseRequest, RequestItem } from "./tipler.ts";
+import { esc } from "./util.ts";
 
-// 2429: hizmet kaleminin parçası ve fason adımı kalemin altında ve teklif isteme metninde aynı biçimle yazılır. Ad ya da kod
-// boşsa (silinmiş kart) kart numarası yazılır.
+// 2429: hizmet kaleminin parçası ve fason adımı kalemin altında yazılır; etiket Taleplerim formundaki sözcüktür (2873). Ad ya da
+// kod boşsa (silinmiş kart) kart numarası yazılır.
+const parcaAdi = (p: NonNullable<RequestItem["parca"]>): string => [p.kod, p.ad].filter(Boolean).join(" ") || `kart ${p.no}`;
 export function parcaMetni(it: RequestItem): string | null {
-  const p = it.parca;
-  if (!p) return null;
-  const ad = [p.kod, p.ad].filter(Boolean).join(" ");
-  return `Parça: ${ad || `kart ${p.no}`}`;
+  return it.parca ? `Uygulanacak malzeme: ${parcaAdi(it.parca)}` : null;
+}
+// 2873: listede ve panoda talebe girmeden görünür; satır kısa kalsın diye ilk malzeme ve kalan farklı malzeme sayısı.
+export function uygulananOzeti(r: PurchaseRequest): string | null {
+  const nolar = [...new Map((r.items || []).flatMap((it) => (it.parca ? [[it.parca.no, it.parca] as const] : []))).values()];
+  if (!nolar.length) return null;
+  return `Uygulanacak: ${parcaAdi(nolar[0]!)}${nolar.length > 1 ? ` +${nolar.length - 1}` : ""}`;
+}
+export function uygulananSatiri(r: PurchaseRequest, cls: string): string {
+  const t = uygulananOzeti(r);
+  return t ? `<span class="${cls}" data-sa-uygulanan="">${esc(t)}</span>` : "";
 }
 export function fasonMetni(it: RequestItem): string | null {
   const f = it.fason;

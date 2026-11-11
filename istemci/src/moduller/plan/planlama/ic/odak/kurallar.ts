@@ -7,7 +7,7 @@ import type { PlanlamaCalismasi, PlanVerisi } from '../../tipler.ts';
 // tezgâhta her gün bir şerittir. Taşıma, sıra ve ek mesai motor ister (357 b); hesaplar kayıttaki plandandır.
 
 export interface OdakYeri { g: string; m: string | null }
-export const odakAdi = (m: string, kodlar?: Adlar): string => (m.startsWith('@') ? `${m.slice(1)} (fason)` : kodlar?.[m] ?? m);
+export const odakAdi = (m: string, kodlar?: Adlar): string => (m.startsWith('@') ? `${kodlar?.[m] ?? m.slice(1)} (fason)` : kodlar?.[m] ?? m);
 export const tezgahGrubu = (D: PlanVerisi, m: string): string => (m.startsWith('@') ? 'fason' : D.tezgahlar.find((t) => t.id === m)?.grup ?? 'diger');
 
 export function odakTezgahlari(c: PlanlamaCalismasi, p: OkunanPlan, g: string): string[] {

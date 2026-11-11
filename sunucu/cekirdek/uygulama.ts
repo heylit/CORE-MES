@@ -98,7 +98,9 @@ interface CevrilmisHata {
 
 function hatayiCevir(hata: unknown): CevrilmisHata {
   if (hata instanceof UygulamaHatasi) {
-    return { ...govdeGonder(hata.durum, hata.govde()), beklenmeyen: false };
+    // Sarılmış kısıt hatası (toplu komutun satır reddi) günlükte kısıt izini yine bırakır.
+    const iz = kisitIhlali(hata.cause)?.iz;
+    return { ...govdeGonder(hata.durum, hata.govde()), beklenmeyen: false, ...(iz ? { kisit: iz } : {}) };
   }
   const ihlal = kisitIhlali(hata);
   if (ihlal !== null) {

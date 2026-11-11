@@ -12,8 +12,9 @@ import type { HataKodu } from '#paylasilan/hata.ts';
 import type { DegerlendirmeCevabi, DegerlendirmeDurumuCevabi, DegerlendirmeIstegi, DegerlendirmeSonucu } from '#paylasilan/sozlesme/planlama.ts';
 import { BIRLESTIRME_ADRESI, ISCI_TIPLI_KAYNAK } from './girdi/birlestirme.ts';
 import type { KaynakDilimiOkumasi } from './girdi/kaynaklar-kurallar.ts';
-import type { KaynakOkumasi } from './plan-girdisi.ts';
-import { planlamaGirdisi } from './planlama-servis.ts';
+import { planGirdisi, type KaynakOkumasi } from './plan-girdisi.ts';
+import { planlamaGirdisi, type PlanCozumKaynagi } from './planlama-servis.ts';
+import { mesaiSaatGirdisi } from './mesai-maliyeti.ts';
 import { izlemeIletisi } from './isci-iletisi.ts';
 
 // Planlama değerlendirmesi (Soru 357 a): planlama sayfasının tarayıcıda motoru koşturan kartları burada, sayfanın motor kancaları
@@ -24,7 +25,7 @@ const MOTOR = join(dirname(fileURLToPath(import.meta.url)), 'motor');
 export const DEGERLENDIRME_DOSYALARI = ['engine', 'kisitlar', 'girdi', 'durum', 'kancalar', 'degerlendir'] as const;
 
 let kod: string | null = null;
-function degerlendirmeKodu(): string {
+export function degerlendirmeKodu(): string {
   kod ??= `${DEGERLENDIRME_DOSYALARI.map((m) => readFileSync(join(MOTOR, `${m}.js`), 'utf8')).join('\n')}\n;({ degerlendir });`;
   return kod;
 }
@@ -137,11 +138,19 @@ export async function degerlendirmeBaslat(
     if (k.surum !== g.surum) throw eskiSurum();
   } catch (e) { isler.delete(is); throw e; }
   const surum = k.surum;
-  yap({ ...k.girdi, bugun: tesisGunu(simdi), istek: g.istek }, simdi).then((r) => {
+  const karGizli = genelGiderGizliMi(k.girdi.calisma);
+  // Güvenlik K3 (2760 b): ek mesai seçenekleri her rolde aynı İK değeriyle seçilir, görmeyenin TL'si null döner. Öteki türlerde görmeyen
+  // yalın kalır: sonuçları kâr farkına göre sıralanabilir (termin uzatma) ve değer sıra yoluyla taşınmasın.
+  let girdi = k.girdi;
+  try {
+    if (maliyetGorunur || g.istek.tur === 'plan-secenekleri') girdi = await mesaiSaatliGirdi(db, girdi, simdi);
+  } catch (e) { isler.delete(is); throw e; }
+  yap({ ...girdi, bugun: tesisGunu(simdi), istek: g.istek }, simdi).then((r) => {
     if (r === null) throw cakisma(CALISMA_YOK);
     if ('hata' in r) throw HATALAR[r.hata]();
     const sonuc = r.sonuc as DegerlendirmeSonucu;
-    const cevap = { calismaSurumu: surum, dataVer: r.dataVer, baslangic: r.baslangic, simdi: r.simdi, maliyetGorunur, sonuc: maliyetGorunur ? sonuc : maliyetsiz(sonuc) };
+    const gorunen = !maliyetGorunur ? maliyetsiz(sonuc) : karGizli ? karsiz(sonuc) : sonuc;
+    const cevap = { calismaSurumu: surum, dataVer: r.dataVer, baslangic: r.baslangic, simdi: r.simdi, maliyetGorunur, sonuc: gorunen };
     isler.set(is, { kisi, durum: 'bitti', cevap, bitis: Date.now() });
   }).catch((e: unknown) => {
     // Beklenmeyen hata (iş parçacığı çöktü) iç ayrıntı taşımaz.
@@ -149,6 +158,16 @@ export async function degerlendirmeBaslat(
     isler.set(is, { kisi, durum: 'hata', ...h, bitis: Date.now() });
   });
   return { is };
+}
+
+// Değer birleşmiş çalışmanın tezgâhlarıyla kurulur ve iş parçacığının girdisindeki D.mesaiSaat'e yazılır (birleşme D'nin bilinmeyen alanını
+// korur, girdi.js tmiCevir). Okunan çalışma kopyalanır; kayıt ve cevap D taşımaz.
+async function mesaiSaatliGirdi(db: Db, girdi: PlanCozumKaynagi, simdi: number): Promise<PlanCozumKaynagi> {
+  const c = girdi.calisma as { D?: unknown } | null;
+  if (c === null || typeof c !== 'object' || c.D === null || typeof c.D !== 'object') return girdi;
+  const D = planGirdisi({ ...girdi, bugun: tesisGunu(simdi) }, simdi)?.S.D ?? c.D;
+  const mesaiSaat = await mesaiSaatGirdisi(db, D, new Date(simdi));
+  return { ...girdi, calisma: { ...c, D: { ...c.D, mesaiSaat } } };
 }
 
 // Sonucu yalnız başlatan kişi okur; başkasının kimliği yokmuş gibi döner. Biten sonuç okununca silinir.
@@ -164,12 +183,44 @@ export function degerlendirmeDurumu(kisi: number, is: string, simdi: number = Da
 // Testler için: bellekteki işleri boşaltır.
 export function degerlendirmeIsleriSifirla(): void { isler.clear(); }
 
+// 2677 b: genel gider oranının gizli olduğu ayda (2668 a) plan genel gideri 0 alır; kâr bu yüzden olduğundan yüksek çıkar ve maliyeti
+// görene de gitmez. Tutar, ek mesai ve gecikme bedelleri genel giderden bağımsızdır, kalır.
+export function genelGiderGizliMi(calisma: unknown): boolean {
+  const planTL = (calisma as { D?: { planTL?: unknown } } | null)?.D?.planTL;
+  return planTL !== null && typeof planTL === 'object' && (planTL as { genelGiderGizli?: unknown }).genelGiderGizli === true;
+}
+export function karsiz(s: DegerlendirmeSonucu): DegerlendirmeSonucu {
+  switch (s.tur) {
+    case 'plan-secenekleri':
+      return { ...s, secenekler: s.secenekler.map((x) => ({ ...x, netKar: null })) };
+    case 'termin-secenekleri':
+      return { ...s, satirlar: s.satirlar.map((x) => ({ ...x, netKar: null, digerKarFarki: null, toplamKar: null })) };
+    case 'termin-uzatma':
+      return { ...s, satirlar: s.satirlar.map((x) => ({ ...x, netKarFarki: null })) };
+    case 'malzeme-one-cekme':
+    case 'parti-bolme':
+    case 'malzeme-terminleri':
+    case 'plan-kur':
+    case 'plan-uygula':
+    case 'plan-iyilestir':
+    case 'one-al':
+    case 'sira-degistir':
+      return s;
+  }
+}
+
+// Seçeneğin planı İK değeriyle seçilmiş ek mesaiyle kurulur (2760 b); planın TL toplamı (ozet.tl) görmeyene gitmez (Güvenlik C6).
+function tlsizPlan(plan: Record<string, unknown>): Record<string, unknown> {
+  const ozet = plan['ozet'];
+  return ozet !== null && typeof ozet === 'object' ? { ...plan, ozet: { ...(ozet as Record<string, unknown>), tl: null } } : plan;
+}
+
 // 180 a, 200 a: tutar, maliyet, kâr ve TL farkı yalnız maliyeti görene. Saat, adet ve plan kaydı kalır (plan kaydı çalışmaya geri yazılır,
 // biçimi bozulmaz). Sipariş maliyeti ve kârı bu durumda hiç hesaplanmaz.
 export function maliyetsiz(s: DegerlendirmeSonucu): DegerlendirmeSonucu {
   switch (s.tur) {
     case 'plan-secenekleri':
-      return { ...s, secenekler: s.secenekler.map((x) => ({ ...x, ekMesaiTl: null, netKar: null, ekMesai: x.ekMesai.map((e) => ({ ...e, tl: null })) })) };
+      return { ...s, secenekler: s.secenekler.map((x) => ({ ...x, ekMesaiTl: null, netKar: null, ekMesai: x.ekMesai.map((e) => ({ ...e, tl: null })), plan: tlsizPlan(x.plan) })) };
     case 'termin-secenekleri':
       return { ...s, satirlar: s.satirlar.map((x) => ({ ...x, tutar: null, netKar: null, digerKarFarki: null, toplamKar: null })) };
     case 'termin-uzatma':

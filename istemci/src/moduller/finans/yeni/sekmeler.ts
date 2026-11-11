@@ -36,6 +36,7 @@ const yukleyiciler = {
   plan: () => import('./plan/index.tsx'),
   raporlar: () => import('./raporlar/index.tsx'),
   genelGider: () => import('./genel-gider.tsx'),
+  saatlikMaliyet: () => import('../saatlik-maliyet/SaatlikMaliyet.tsx'),
 };
 let hepsi: Promise<unknown> | null = null;
 // İndirilemeyen bölüm (bağlantı koptu) burada sessiz kalır: açıldığında kendi beklemesi hatayı gösterir, sonraki açılış yeniden dener.
@@ -66,8 +67,9 @@ const KararAraclari = tembel(yukleyiciler.raporlar, (m) => m.KararAraclari);
 const AyKapanisi = tembel(yukleyiciler.raporlar, (m) => m.AyKapanisi);
 const Tahminler = tembel(yukleyiciler.raporlar, (m) => m.Tahminler);
 const GenelGider = tembel(yukleyiciler.genelGider, (m) => m.GenelGider);
+const SaatlikMaliyet = tembel(yukleyiciler.saatlikMaliyet, (m) => m.SaatlikMaliyet);
 
-// Sekme -> ekran ve sahibi parça. Firmalar ve Genel gider rakam yetkisi istemez (kendi işlemiyle açılır).
+// Sekme -> ekran ve sahibi parça. Firmalar, Genel gider ve Saatlik maliyetler rakam yetkisi istemez (kendi işlemiyle açılır).
 export const EKRANLAR: Record<SekmeAnahtari, { ekran: ComponentType<EkranOzellikleri>; parca: 'F1' | 'F2' | 'F3' | 'F4' | 'var' }> = {
   'ana-sayfa': { ekran: AnaSayfa, parca: 'F4' },
   kayitlar: { ekran: Kayitlar, parca: 'F1' },
@@ -82,11 +84,12 @@ export const EKRANLAR: Record<SekmeAnahtari, { ekran: ComponentType<EkranOzellik
   'ay-sonu': { ekran: AyKapanisi, parca: 'F3' },
   tahminler: { ekran: Tahminler, parca: 'F3' },
   'genel-gider': { ekran: GenelGider, parca: 'var' },
+  'saatlik-maliyet': { ekran: SaatlikMaliyet, parca: 'var' },
   ayarlar: { ekran: Ayarlar, parca: 'F4' },
 };
 
 // Finans verisini beklemeden açılan sekmeler: kendi verisini kendisi okur.
-export const VERISIZ: ReadonlySet<SekmeAnahtari> = new Set<SekmeAnahtari>(['firmalar', 'genel-gider']);
+export const VERISIZ: ReadonlySet<SekmeAnahtari> = new Set<SekmeAnahtari>(['firmalar', 'genel-gider', 'saatlik-maliyet']);
 
 export interface YeniSekme {
   anahtar: SekmeAnahtari;

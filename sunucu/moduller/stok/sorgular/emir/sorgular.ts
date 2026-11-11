@@ -1,7 +1,7 @@
 import type { Db } from '#cekirdek/db.ts';
 import { islemKilidiAl } from '#cekirdek/kilit.ts';
 import { zamanMetni } from '#cekirdek/zaman.ts';
-import type { MalzemeIstegiDurumu, TeslimDurumu } from '#paylasilan/sozlesme/stok.ts';
+import type { KaliteDurumu, MalzemeIstegiDurumu, TeslimDurumu } from '#paylasilan/sozlesme/stok.ts';
 import { DEFTER_FARKI_SECIMI, KULLANILABILIR_SQL, MALZEME_KAYNAGI } from '../ortak/sorgular.ts';
 
 // ---- İş kutusu ve dışa açık okumalar -----------------------------------------------------------------------------------------
@@ -32,6 +32,52 @@ export const emirlerinNetSarfi = (db: Db, emirIdler: readonly number[]): Promise
    FROM stok_hareketi h JOIN stok_hareketi a ON a.id = COALESCE(h.geri_alinan_id, h.id)
    WHERE a.uretim_emri_id = ANY($1::int[]) AND a.tur = 'cikis' AND a.cikis_nedeni IN ('uretime_sarf', 'fire')
    GROUP BY a.uretim_emri_id, h.malzeme_id`, [[...emirIdler]]);
+// 2727-1: emirlerinNetSarfi'nın kapsamındaki geri alınmamış çıkışlar, tek tek ve anıyla (son alış fiyatı çıkış anına göre). Geri alma
+// bütün miktarı çevirdiğinden geri alınan çıkış ile geri alması birlikte dışarıdadır; net miktar bu satırların toplamına eşittir.
+export const emirlerinSarfCikislari = (db: Db, emirIdler: readonly number[]): Promise<{ emirId: number; malzemeId: number; zaman: string; miktar: string }[]> => db.sorgu(
+  `SELECT h.uretim_emri_id AS "emirId", h.malzeme_id AS "malzemeId", ${zamanMetni('h.zaman')} AS zaman, h.miktar::text AS miktar
+   FROM stok_hareketi h
+   WHERE h.uretim_emri_id = ANY($1::int[]) AND h.tur = 'cikis' AND h.cikis_nedeni IN ('uretime_sarf', 'fire')
+     AND NOT EXISTS (SELECT 1 FROM stok_hareketi g WHERE g.geri_alinan_id = h.id)
+   ORDER BY h.zaman, h.id`, [[...emirIdler]]);
+// B-2482-8, 2534: emrin statü zincirindeki malzemesi, emir ve malzeme başına: statüde emre ayrılan (stok_rezerve, statülü satır). Çevirme
+// ayrılanı statüye taşır, statüden sarf ve fire düşer; parti birleşince ayrılan hedef emre geçer, müdür kaldırınca emirden çıkar. Hareketten
+// okunsaydı birleşen emrin zinciri kaynakta kalırdı. Emre verilenin bir parçasıdır: emirlerinNetSarfi statüden sarfı sayar, ayrılan sarfla
+// düştüğü için toplam çift saymaz.
+export const emirlerinZincirdekiMiktari = (db: Db, emirIdler: readonly number[]): Promise<{ emirId: number; malzemeId: number; miktar: string }[]> => db.sorgu(
+  `SELECT uretim_emri_id AS "emirId", malzeme_id AS "malzemeId", sum(miktar)::text AS miktar
+     FROM stok_rezerve WHERE uretim_emri_id = ANY($1::int[]) AND statu_id IS NOT NULL
+    GROUP BY 1, 2 HAVING sum(miktar) <> 0 ORDER BY 1, 2`,
+  [[...emirIdler]]);
+// 2547 a: statüdeki stok, malzeme, statü ve kalite başına (toplamı artı olan), bulunduğu konumların kodlarıyla. Emre ayrılanı ve redi
+// kurallar.sahipsizStatuluHesapla düşer (açık emir süzmesi uretim-emirlerinin durumuyla).
+// malzemeIdler verilirse yalnız o malzemeler (2610 a önizlemesi); verilmezse bütün statülü stok.
+export const statuluStoklar = (
+  db: Db, malzemeIdler: readonly number[] | null = null,
+): Promise<{ malzemeId: number; statuId: number; kaliteDurumu: KaliteDurumu; miktar: string; konumlar: string[] }[]> => db.sorgu(
+  `SELECT b.malzeme_id AS "malzemeId", b.statu_id AS "statuId", b.kalite_durumu AS "kaliteDurumu", sum(b.miktar)::text AS miktar,
+          COALESCE(array_agg(DISTINCT k.kod ORDER BY k.kod) FILTER (WHERE b.miktar > 0), '{}') AS konumlar
+     FROM stok_bakiye b JOIN stok_konum k ON k.id = b.konum_id
+    WHERE b.statu_id IS NOT NULL AND ($1::int[] IS NULL OR b.malzeme_id = ANY($1::int[])) GROUP BY 1, 2, 3 HAVING sum(b.miktar) > 0 ORDER BY 1, 2, 3`,
+  [malzemeIdler === null ? null : [...malzemeIdler]]);
+// 2561 a: malzeme ve statü başına son hareket zamanı (statüye giren ya da çıkan) ve statüye son sokan emrin kimliği (yoksa null).
+export const statuSonHareketleri = (db: Db, malzemeIdler: readonly number[]): Promise<{ malzemeId: number; statuId: number; sonHareket: string; kaynakEmirId: number | null }[]> => db.sorgu(
+  `WITH h AS (
+     SELECT h.id, h.malzeme_id, h.zaman, h.uretim_emri_id, s.statu_id, s.giren
+       FROM stok_hareketi h CROSS JOIN LATERAL (VALUES (h.kaynak_statu_id, false), (h.hedef_statu_id, true)) AS s(statu_id, giren)
+      WHERE h.malzeme_id = ANY($1::int[]) AND s.statu_id IS NOT NULL)
+   SELECT malzeme_id AS "malzemeId", statu_id AS "statuId", ${zamanMetni('max(zaman)')} AS "sonHareket",
+          (array_agg(uretim_emri_id ORDER BY zaman DESC, id DESC) FILTER (WHERE giren AND uretim_emri_id IS NOT NULL))[1] AS "kaynakEmirId"
+     FROM h GROUP BY 1, 2 ORDER BY 1, 2`, [[...malzemeIdler]]);
+// 2554: emrin bir malzemesinin iki statü arasındaki çevirmeleri (net, geri çevirme düşülmüş). ust: öncül statüye giren (bu statüden geri
+// gelen hariç); bu: öncül statüden bu statüye geçen. Aynı statüde yer değiştirme iki tarafta da sayılır, net sıfırdır.
+export const emrinStatuAkisi = async (db: Db, g: { uretimEmriId: number; malzemeId: number; oncekiStatuId: number; statuId: number }): Promise<{ ust: string; bu: string }> => (await db.tek<{ ust: string; bu: string }>(
+  `SELECT (COALESCE(sum(miktar) FILTER (WHERE hedef_statu_id = $3 AND kaynak_statu_id IS DISTINCT FROM $4), 0)
+         - COALESCE(sum(miktar) FILTER (WHERE kaynak_statu_id = $3 AND hedef_statu_id IS DISTINCT FROM $4), 0))::text AS ust,
+          (COALESCE(sum(miktar) FILTER (WHERE kaynak_statu_id = $3 AND hedef_statu_id = $4), 0)
+         - COALESCE(sum(miktar) FILTER (WHERE kaynak_statu_id = $4 AND hedef_statu_id = $3), 0))::text AS bu
+     FROM stok_hareketi WHERE uretim_emri_id = $1 AND malzeme_id = $2 AND tur = 'transfer'`,
+  [g.uretimEmriId, g.malzemeId, g.oncekiStatuId, g.statuId]))!;
 // 335: emir başına fiş hareketleri, malzeme başına net. Geri alma, geri aldığı hareketin emri ve türüyle sayılır (geri alma geri alınmaz,
 // tek geri alma kısıtı vardır). fis: sarf (üretime sarf ve fire çıkışı) ya da giris (üretim girişi); hurda fire çıkışıdır.
 export const emirlerinFisHareketleri = (db: Db, emirIdler: readonly number[]): Promise<{ emirId: number; fis: 'sarf' | 'giris'; malzemeId: number; miktar: string; hurda: string }[]> => db.sorgu(

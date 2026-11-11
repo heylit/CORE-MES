@@ -37,9 +37,66 @@ export interface MotorOlcegi { ufukGun: number; dilimDk: number }
 // kapalıysa alan boştur, motor varsayılan belirsizlikle (w.mcSigma) kurar. Kayıttan okuyan girdi değeri hep açıkça verir (yoksa null):
 // sayfa kaydederse kayda geçen eski değer sonraki planda kullanılmaz. Verilmezse (undefined) çalışmadaki değer korunur; taslağın kendi
 // ayar sürümüyle ikinci kez uygulanan çözücü girdisi (plan-cozucusu) taze değeri böyle taşır, taslakta öğrenme kapalıysa boşaltır.
+// 2523 a: paralel bölme ayarı kayıttaki param.bolmeKip ve param.bolmeMaks'ın üstüne yazılır (girdi.betik stKur okur); sayfanın eski
+// kaydındaki değer motoru yönetmez. Sabit kip (plan-cozucusu bolmesiz) bundan sonra uygulanır, orada bölme yine kapalıdır.
+// 2601 a: genel gider saat başı tutarı Finans'ın o güne geçerli oranıdır (proje maliyetiyle tek tanım); motor ve sayfa D.planTL.genelGider'i
+// okur (durum.betik ymAyar). Finans'ta oran yoksa null (bilinmiyor): elle girilmiş değer kullanılmaz. Verilmezse (undefined) çalışmadaki kalır.
+// 2668 a: oran gizliyse genelGider null ve genelGiderGizli true yazılır (motor null'ı 0 sayar; ekran "gizli" gösterir); açık oranda false.
+// 2601 a, Güvenlik K1: genel gider her okumada Finans'tan (ya da okuyamayana null) yazıldığı için kayda girmez; sayfa çalışmanın tamamını
+// geri yazdığında oran kayıtta kalıp planlama kaydını okuyan herkese gitmesin diye yazmada ve ham kayıt okumasında çıkarılır.
+export function genelGiderAlanlariniCikar(calisma: unknown): unknown {
+  if (calisma === null || typeof calisma !== 'object') return calisma;
+  const D = (calisma as { D?: unknown }).D;
+  if (D === null || typeof D !== 'object') return calisma;
+  const planTL = (D as { planTL?: unknown }).planTL;
+  if (planTL === null || typeof planTL !== 'object' || !('genelGider' in planTL || 'genelGiderGizli' in planTL)) return calisma;
+  const { genelGider: _g, genelGiderGizli: _z, ...kalan } = planTL as Record<string, unknown>;
+  return { ...calisma, D: { ...D, planTL: kalan } };
+}
+
+// 2728 a: planlama brüt ücret saklamaz (Giderler dolaylı personel kartı, ek mesai planının kişi ücreti). Gelen çalışma brüt taşısa da
+// kayda girmez ve planlama kaydını okuyan kimseye dönmez; brütsüz alanlar (ad, SGK oranı, aylık saat) aynen kalır.
+export function brutAlanlariniCikar(calisma: unknown): unknown {
+  if (calisma === null || typeof calisma !== 'object') return calisma;
+  const D = (calisma as { D?: unknown }).D;
+  if (D === null || typeof D !== 'object') return calisma;
+  const nesne = (x: unknown): x is Record<string, unknown> => x !== null && typeof x === 'object' && !Array.isArray(x);
+  const brutsuz = (x: unknown): unknown => { if (!nesne(x) || !('brut' in x)) return x; const { brut: _b, ...kalan } = x; return kalan; };
+  const yeni: Record<string, unknown> = { ...(D as Record<string, unknown>) };
+  const ms = yeni['maliyetSis'];
+  if (nesne(ms) && Array.isArray(ms['dolayli'])) yeni['maliyetSis'] = { ...ms, dolayli: ms['dolayli'].map(brutsuz) };
+  const mes = yeni['mesaiSis'];
+  if (nesne(mes) && nesne(mes['ucret'])) yeni['mesaiSis'] = { ...mes, ucret: Object.fromEntries(Object.entries(mes['ucret']).map(([k, v]) => [k, brutsuz(v)])) };
+  return { ...calisma, D: yeni };
+}
+
+// 2742 (Güvenlik Ek): ek mesai saat değeri (D.mesaiSaat) yalnız değerlendirmenin iş parçacığı girdisinde yaşar; istemci gönderse de kayda
+// girmez, okuyana dönmez.
+export function mesaiSaatiniCikar(calisma: unknown): unknown {
+  if (calisma === null || typeof calisma !== 'object') return calisma;
+  const D = (calisma as { D?: unknown }).D;
+  if (D === null || typeof D !== 'object' || !('mesaiSaat' in D)) return calisma;
+  const { mesaiSaat: _m, ...kalan } = D as Record<string, unknown>;
+  return { ...calisma, D: kalan };
+}
+
+// Planlama kaydına yazılmayan ve ham okumada dönmeyen alanlar tek yerden (2601 a genel gider, 2728 a brüt, 2742 mesai saat değeri).
+export const saklanmayanAlanlariCikar = (calisma: unknown): unknown => mesaiSaatiniCikar(brutAlanlariniCikar(genelGiderAlanlariniCikar(calisma)));
+
+// 2747 (Güvenlik): planlama anahtarına yeni yazma yalnız json'dur; eski metin biçimli satır (geçmiş sürüm dahil) JSON metniyse ayrıştırılıp
+// aynı süzgeçten geçer ve yine metin olarak döner. JSON olmayan metin yapılı alan taşımaz, olduğu gibi kalır.
+export function saklanmayanKayitDegeri(bicim: string, deger: unknown): unknown {
+  if (bicim === 'json') return saklanmayanAlanlariCikar(deger);
+  if (bicim !== 'metin' || typeof deger !== 'string') return deger;
+  let c: unknown;
+  try { c = JSON.parse(deger) as unknown; } catch { return deger; }
+  const s = saklanmayanAlanlariCikar(c);
+  return s === c ? deger : JSON.stringify(s);
+}
+
 export function calismayaMotorAyari(
   calisma: unknown, ayar: MotorAyarlari, finansmanOraniGun: number | null = null, olcek: MotorOlcegi | null = null,
-  ogren?: Readonly<Record<string, OgrenilenSure>> | null,
+  ogren?: Readonly<Record<string, OgrenilenSure>> | null, genelGider?: { saatBasi: number | null; gizli: boolean },
 ): unknown {
   if (calisma === null || typeof calisma !== 'object') return calisma;
   const c = calisma as { D?: unknown };
@@ -49,11 +106,14 @@ export function calismayaMotorAyari(
   const agirlik = finansmanOraniGun === null ? {}
     : { planAgirlik: { ...(D.planAgirlik !== null && typeof D.planAgirlik === 'object' ? D.planAgirlik : {}), fin: finansmanOraniGun } };
   const w = (c as { w?: unknown }).w;
+  // 2509-1 c: acil iş payı sistem ayarındandır; çalışmanın param.acilPay'i (motor girdi.betik stKur ve sayfa hesapları onu okur) ezilir.
+  const param = (c as { param?: unknown }).param;
   const onceki = (c as { ogren?: unknown }).ogren;
   const ogrenilen = ogren !== undefined ? ogren
     : onceki !== null && typeof onceki === 'object' ? onceki as Readonly<Record<string, OgrenilenSure>> : null;
   return {
-    ...c, D: { ...D, ...agirlik, planTL: { ...planTL, amac: ayar.amac === 'tl' ? 'tl' : 'sira' } },
+    ...c, D: { ...D, ...agirlik, planTL: { ...planTL, amac: ayar.amac === 'tl' ? 'tl' : 'sira', ...(genelGider === undefined ? {} : { genelGider: genelGider.gizli ? null : genelGider.saatBasi, genelGiderGizli: genelGider.gizli }) } },
+    param: { ...(param !== null && typeof param === 'object' ? param : {}), acilPay: ayar.acilPay, bolmeKip: ayar.bolmeKip, bolmeMaks: ayar.bolmeMaks },
     w: { ...(w !== null && typeof w === 'object' ? w : {}), rule: ayar.kural, amac: ayar.amac, ...(olcek ?? {}) },
     ogren: ayar.ogrenme === 'acik' && ogrenilen !== null ? { ...ogrenilen } : {},
   };

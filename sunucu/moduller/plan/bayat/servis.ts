@@ -44,6 +44,21 @@ export async function isEmirleriDegistiYansit(db: Db, olay: { uretimEmriId: numb
   });
 }
 
+// 2732: emir iptal edildi ya da arşive alındı (ikisi de iptal olayını yayar) ve canlıdaysa işaret. Emir bir kez iptal olur: kaynak yok.
+export async function emirIptalYansit(db: Db, olay: { uretimEmriId: number }): Promise<void> {
+  await isaretYaz(db, async () => {
+    if (await s.canlidaVar(db, await isEmirleri(db, olay.uretimEmriId))) await s.olayYaz(db, 'emir-iptal', olay.uretimEmriId, null);
+  });
+}
+
+// B-2499-12: adım bitti ve canlıda o adımın şimdiden sonra biten satırı var: plan ona hâlâ yer ayırıyor. kaynak_id adımdır (iş emri):
+// aynı adım bir kez sayılır.
+export async function adimBittiYansit(db: Db, olay: { isEmriId: number; uretimEmriId: number }): Promise<void> {
+  await isaretYaz(db, async () => {
+    if (await s.bitmemisSatirVar(db, [olay.isEmriId], new Date().toISOString())) await s.olayYaz(db, 'adim-bitti', olay.uretimEmriId, olay.isEmriId);
+  });
+}
+
 export async function planBayatligi(db: Db, simdi: number = Date.now()): Promise<PlanBayatligi> {
   const son = await sonCanliyaAlma(db);
   if (son === null) return bayatOzeti(null, []);

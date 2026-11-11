@@ -6,13 +6,14 @@ import {
   fasonTerminToplami, opNolariVer, revizyonFarki, revizyonHarfi, rotasizMamuller, taslakDenetle, teorikSure, yeniOpNo,
 } from './kurallar.ts';
 import { emreKopyalanabilirMi, karttanAdimlar, kontrolListesi } from './kurallar.ts';
-import { PATLATMA_AZAMI_KATMAN, cokKatmanaCevir, dugumDalAdi, emirOpNumaralari, patlatmaOzeti, rotaPatlat } from './kurallar.ts';
+import { PATLATMA_AZAMI_KATMAN, cokKatmanaCevir, dugumDalAdi, emirFireCarpanlari, emirOpNumaralari, patlatmaOzeti, rotaPatlat } from './kurallar.ts';
 import type { PatlatmaRotasi } from './kurallar.ts';
 import { eskiTabanUyarisi, girdiEksigi, hazirlikBol, hazirlikCeliskisi, isEmriBagimliligi, onayaHazirlikHatalari, topluHataIletisi } from './kurallar.ts';
-import { bekleyenOlcum, degisenTurler, degisimOrani, etkinAdimSuresi, gerceklesenDenetle, kabulDenetle, kabulSureleri, sureAyrimi, taslakSureleri, teorikAyrim, terminalOlcumleri } from './kurallar.ts';
+import { azOlcumUyarisi, olcumOzeti, olcumPenceresi, bekleyenOlcum, degisenTurler, degisimOrani, etkinAdimSuresi, gerceklesenDenetle, kabulDenetle, kabulSureleri, sureAyrimi, taslakSureleri, teorikAyrim, terminalOlcumAdaylari, terminalOlcumKarari, terminalOlcumleri } from './kurallar.ts';
 import { EK_ADIM_SARTNAME_BASLAMIS, EK_ADIM_SARTNAME_KAPALI, EK_ADIM_SARTNAME_ROTA, ekAdimSartnameIhlali } from './kurallar.ts';
 import { adimDegerleriDenetle, cozulmusDegerler, degerHatasi, eksikZorunlular, kapsamUyarMi, sartnameOnayEngeli, sartnameSablonuDenetle, yayinEksigi } from './kurallar.ts';
 import { adimliKontrolListesi, adimliTalimatMetni, eskiTalimatAdimi, kontrolAyrisi, kontrolKur, talimatAdimiHatasi } from './kurallar.ts';
+import { AYRILMIS_SURE, FASON_KAYNAGI, excelAdimiUygula, excelDayanagiTutar, excelYeniAdimi } from './kurallar.ts';
 import type { GerceklesenSatiri, SartnameAlani } from './kurallar.ts';
 import type { AgacRotasi, FarkAdimi, HazirlikAdimi, KomutBaglami, TaslakAdimi } from './kurallar.ts';
 
@@ -253,6 +254,36 @@ describe('akış, miktar, süre', () => {
     assert.equal(m.get(10), 250);
   });
 
+  test('2557: emir fire çarpanı emrin malzeme kuralıdır: öncül listesi yoksa önceki adım, listede sonraki sıradaki öncül sayılmaz', () => {
+    const tek = emirFireCarpanlari([{ sira: 1, opNo: 10, firePayiYuzde: 20 }, { sira: 2, opNo: 20, firePayiYuzde: 50 }]);
+    assert.deepEqual([...tek], [[20, 2], [10, 2.5]]);
+    const dalli = emirFireCarpanlari([
+      { sira: 1, opNo: 1010, firePayiYuzde: 0, onculler: [] },
+      { sira: 2, opNo: 10, firePayiYuzde: 0, onculler: [] },
+      { sira: 3, opNo: 20, firePayiYuzde: 50, onculler: [{ opNo: 1010 }, { opNo: 30 }] },
+      { sira: 4, opNo: 30, firePayiYuzde: 10, onculler: [{ opNo: 10 }, { opNo: 20 }] },
+    ]);
+    assert.equal(Number(dalli.get(10)?.toFixed(4)), 1.1111);
+    assert.equal(Number(dalli.get(1010)?.toFixed(4)), 2.2222);
+  });
+
+  test('2564 a: ölçüm özeti: ortanca tekte ortadaki, çiftte ortadaki ikinin ortalaması; aralık en az ve en çok; ölçüm yoksa null', () => {
+    assert.equal(olcumOzeti([]), null);
+    assert.deepEqual(olcumOzeti([5]), { n: 1, ortanca: 5, enAz: 5, enCok: 5 });
+    assert.deepEqual(olcumOzeti([9, 3.8, 5.1]), { n: 3, ortanca: 5.1, enAz: 3.8, enCok: 9 });
+    assert.deepEqual(olcumOzeti([9, 3.8, 5.1, 4]), { n: 4, ortanca: 4.55, enAz: 3.8, enCok: 9 });
+    assert.match(String(azOlcumUyarisi(2)), /en az 3/);
+    assert.equal(azOlcumUyarisi(3), null);
+  });
+
+  test('2564 a: ölçüm penceresi son boşaltmadan sonraki ölçümlerdir; bekleyen ölçüm pencerenin sonudur', () => {
+    const x = (id: number, sureDk: number | null, kaynak: 'elle' | 'terminal' | 'kabul' = 'elle', makineId: number | null = null) => ({ id, tur: 'islem' as const, makineId, sureDk, kaynak });
+    const satirlar = [x(1, 4), x(2, null), x(3, 5), x(4, 6, 'kabul'), x(5, 7, 'terminal', 9)];
+    assert.deepEqual(olcumPenceresi(satirlar, null).islem.map((s) => s.id), [3, 5]);
+    assert.deepEqual(olcumPenceresi(satirlar, 8).islem.map((s) => s.id), [3]);
+    assert.equal(bekleyenOlcum(satirlar, null).islem?.id, 5);
+  });
+
   test('RT-43 dallı: bir dalın firesi paralel dalı büyütmez; adım ardıllarının en büyük fire yolunu taşır (B-2485-1)', () => {
     const d = (opNo: number, firePayiYuzde: number, dal: string | null, birlesen: string[] = []) => ({ opNo, firePayiYuzde, bagimlilik: 'bekleyen' as const, dal, birlesen });
     const m = adimMiktarlari([d(10, 0, 'A'), d(20, 50, 'B'), d(30, 0, null, ['A', 'B'])], 100);
@@ -409,6 +440,18 @@ describe('süre ayrımı ve gerçekleşen süre', () => {
     assert.deepEqual(terminalOlcumleri({ hazirlikDk: 0, netBirimDk: 0.3 }), { hazirlik: 0, islem: 0.3 });
     assert.deepEqual(terminalOlcumleri({ hazirlikDk: null, netBirimDk: null }), { hazirlik: null, islem: null });
     assert.equal(terminalOlcumleri({ hazirlikDk: null, netBirimDk: 0 }).islem, null);
+  });
+  test('RT-83 (2567): terminal ölçümü adayı bitmiş, kaynaklı, fason olmayan iş emridir; ek adım ayrı döner; atlanan tür nedeniyle döner', () => {
+    const ie = (id: number, opNo: number, durum: string, kaynak: string | null) => ({ id, opNo, durum, kaynak: kaynak === null ? null : { tur: kaynak } });
+    const { rotada, rotadaYok } = terminalOlcumAdaylari(
+      [ie(1, 10, 'tamam', 'makine'), ie(2, 20, 'tamam', 'kisi'), ie(3, 30, 'tamam', 'fason'), ie(4, 40, 'devam', 'makine'), ie(5, 50, 'tamam', null), ie(6, 99, 'tamam', 'makine')],
+      new Set([10, 20, 30, 40, 50]),
+    );
+    assert.deepEqual(rotada.map((i) => i.id), [1, 2]);
+    assert.deepEqual(rotadaYok.map((i) => i.id), [6]);
+    assert.deepEqual(terminalOlcumKarari({ hazirlik: 20, islem: 3 }, true), { yazilacak: [{ tur: 'hazirlik', sureDk: 20 }, { tur: 'islem', sureDk: 3 }], atlananlar: [] });
+    assert.deepEqual(terminalOlcumKarari({ hazirlik: 0, islem: null }, false), { yazilacak: [{ tur: 'hazirlik', sureDk: 0 }], atlananlar: ['sayim-yok'] });
+    assert.deepEqual(terminalOlcumKarari({ hazirlik: null, islem: null }, true), { yazilacak: [], atlananlar: ['ayar-yok', 'saglam-yok'] });
   });
   test('RT-73: bekleyen ölçüm son boşaltmadan sonraki son dolu elle ya da terminal satırıdır; makinesiz görünüm her makineninkini gösterir', () => {
     const t = (id: number, p: Partial<GerceklesenSatiri> = {}) => satir({ id, kaynak: 'terminal', ...p });
@@ -700,5 +743,38 @@ describe('1476 patlamış rota ve çok katmanlı emir', () => {
     assert.deepEqual(c.girdiler.map((x) => [x.opNo, x.dal, x.onculler?.map((o) => o.opNo)]), [
       [1010, 'K1/A', []], [1020, 'K1/B', []], [1030, 'K1', [1010]], [10, null, [1020, 1030]],
     ]);
+  });
+});
+
+describe('Excel ile rota adımları (2627)', () => {
+  const hedef = () => ({ operasyonTipiId: 1, ad: 'Adım', kaynak: { tur: 'fason', id: 4 } as { tur: string; id: number | null } | null,
+    ayarSuresiDk: '30' as number | string | null, birimSureDk: 2 as number | string | null, islemSuresiDk: null, degisimSuresiDk: null });
+  test('gelen alan yazılır, gelmeyen değişmez; hazırlık değişimi bildirilir; fason adıma kaynak yazılmaz (2703 b)', () => {
+    const h = hedef();
+    assert.deepEqual(excelAdimiUygula(h, { ad: 'Yeni' }), { hazirlikDegisti: false });
+    assert.deepEqual([h.ad, h.ayarSuresiDk], ['Yeni', '30']);
+    assert.deepEqual(excelAdimiUygula(h, { ad: 'Yazılmaz', kaynak: { tur: 'makine', id: 9 } }), { hata: FASON_KAYNAGI });
+    assert.deepEqual([h.ad, h.kaynak], ['Yeni', { tur: 'fason', id: 4 }]);
+    const ic = { ...hedef(), kaynak: { tur: 'istasyon', id: 2 } };
+    assert.deepEqual(excelAdimiUygula(ic, { kaynak: { tur: 'makine', id: 9 }, ayarSuresiDk: 12 }), { hazirlikDegisti: true });
+    assert.deepEqual([ic.kaynak, ic.ayarSuresiDk], [{ tur: 'makine', id: 9 }, 12]);
+  });
+  test('işlem/değişim olarak ayrılmış birim süre değiştirilmez ve adıma hiç dokunulmaz', () => {
+    const h = { ...hedef(), islemSuresiDk: 1.5 };
+    assert.deepEqual(excelAdimiUygula(h, { ad: 'X', birimSureDk: 3 }), { hata: AYRILMIS_SURE });
+    assert.equal(h.ad, 'Adım');
+  });
+  test('yeni adım tip ve ad ister; gerisi varsayılandan', () => {
+    assert.equal(excelYeniAdimi({ ad: 'Tipsiz' }), null);
+    const y = excelYeniAdimi({ operasyonTipiId: 3, ad: 'Ek' });
+    assert.deepEqual([y?.opNo, y?.kaynak, y?.bagimlilik, y?.makineKullanimi, y?.ilkParca, y?.ayar], [null, null, 'bekleyen', 'tek', 'her_kurulum', true]);
+  });
+  test('dayanak: revizyon ve sürüm aynıysa tutar; revizyonsuz ürün yalnız dayanaksız dosyayla', () => {
+    assert.equal(excelDayanagiTutar({ revizyonId: 7, surum: 3 }, { id: 7, surum: 3 }), true);
+    assert.equal(excelDayanagiTutar({ revizyonId: 7, surum: 3 }, { id: 7, surum: 4 }), false);
+    assert.equal(excelDayanagiTutar({ revizyonId: 7, surum: 3 }, { id: 8, surum: 3 }), false);
+    assert.equal(excelDayanagiTutar(null, null), true);
+    assert.equal(excelDayanagiTutar(null, { id: 8, surum: 1 }), false);
+    assert.equal(excelDayanagiTutar({ revizyonId: 7, surum: 3 }, null), false);
   });
 });

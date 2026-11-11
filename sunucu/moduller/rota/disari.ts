@@ -1,11 +1,16 @@
 import type { Db } from '#cekirdek/db.ts';
-import { uretimEmriOzeti } from '../uretim-emirleri/disari.ts';
-import { yururluktekiRevizyonIdleri } from './sorgular.ts';
+import type { IsEmriKaynagi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
+import { adimliEmirAyrintisi, aralikAdetleri, isEmriSureOzeti, uretimEmriOzeti } from '../uretim-emirleri/disari.ts';
+import { terminalOlcumAdaylari, terminalOlcumKarari, terminalOlcumleri } from './kurallar.ts';
+import type { OlcumAtlamaNedeni } from './kurallar.ts';
+import { kullanilmisOpNolari, yururluktekiRevizyonIdleri } from './sorgular.ts';
 export type { DurumRotaAdimi, DurumRotaRevizyonu, RotaAdimi, RotaRevizyonu } from './servis.ts';
 export type { EtkinAdimSuresi } from './kurallar.ts';
 export { yururluktekiRevizyonId, yururluktekiRevizyonIdleri } from './sorgular.ts';
 // Emir bitti olayının dinleyicisi (B38); bağı kablolama.ts kurar (uretim-emirleri rotayı ithal edemez).
 export { emirBittiYansit, isEmriKopyalandiYansit } from './servis.ts';
+// İş emri bitti (2578 a): ölçüm emrin kapanmasını beklemeden yazılır.
+export { adimBittiYansit } from './servis/sureler.ts';
 // Emre sabitlenen işlem şartnameleri (971 a): kalite, sevkiyat ve satın alma okur; tabloya yazmaz.
 export { isEmriSartnameleri } from './servis.ts';
 export type { IsEmriSartnamesi } from '#paylasilan/sozlesme/rota.ts';
@@ -21,6 +26,9 @@ export {
 } from './kurallar.ts';
 // 3D Atölyesi yüzey işaretlemesinin işlem listesi (2144, 2140-3); bağı kablolama.ts kurar, yetki denetlemez.
 export { yuzeyIslemiAdimlari } from './servis.ts';
+// Patlamış rota önizlemesinde ara adımın statülü kartı ve stoğu (2610 a); bağı kablolama.ts kurar (Reçete ve Rota rotayı ithal eder).
+export { araHalCozucusuKaydet } from './servis.ts';
+export type { AraHalCozucusu, AraHalCozumu } from './servis.ts';
 export { malzemeKartiIzleri } from './sorgular.ts';
 
 // Hazırlık matrisinin rota maddesi (2146-1 a, yalnız uyarır): emir, ürünün yürürlükteki rota revizyonuyla mı açıldı. Rotadan açılmamış
@@ -35,4 +43,33 @@ export async function emirRotaHazirliklari(db: Db, emirIdleri: readonly number[]
   return new Map(emirler.map((e) => [e.id, e.kaynakRotaRevizyonId === null || e.malzemeNo === null
     ? { durum: 'yok' as const, secildi: false }
     : { durum: yururlukte.get(e.malzemeNo) === e.kaynakRotaRevizyonId ? 'tamam' as const : 'yok' as const, secildi: true }]));
+}
+
+// Arkon "Süre ölçülmedi" (2567): emrin bitmiş iş emirlerinden terminal ölçümüne girmeyenler ve nedenleri; ölçüt iş emri bitince yazılan
+// ölçümle ortaktır (2578 a; terminalOlcumAdaylari, terminalOlcumKarari), emrin bitmesi beklenmez. Neden kayıtlı ölçümden değil, ölçümün
+// kaynağından (süre özeti) okunur: biri yazılıp öteki atlandıysa da görünür. İş emirsiz emir yalnız bittiyse işaretlenir. Malzemesiz emir
+// haritada yoktur. Yetki denetlemez, bağı çağıran kurar.
+export type { OlcumAtlamaNedeni } from './kurallar.ts';
+export interface OlcumAtlamasi { isEmriId: number; opNo: number; kaynak: IsEmriKaynagi; bitis: string | null; nedenler: OlcumAtlamaNedeni[] }
+export async function olcumAtlamalari(
+  db: Db, emirIdleri: readonly number[],
+): Promise<Map<number, { emirNo: string; isEmirsiz: boolean; atlananlar: OlcumAtlamasi[] }>> {
+  const sonuc = new Map<number, { emirNo: string; isEmirsiz: boolean; atlananlar: OlcumAtlamasi[] }>();
+  for (const id of new Set(emirIdleri)) {
+    const emir = await uretimEmriOzeti(db, id);
+    if (emir === null || emir.malzemeNo === null) continue;
+    const { isEmirleri } = await adimliEmirAyrintisi(db, id);
+    const { rotada, rotadaYok } = terminalOlcumAdaylari(isEmirleri, new Set(await kullanilmisOpNolari(db, emir.malzemeNo)));
+    // Sayımı olan her iş emri haritadadır, türü ne olursa olsun.
+    const sayimli = await aralikAdetleri(db, 'is_emri', rotada.map((i) => i.id), '-infinity', 'infinity');
+    const atlananlar: OlcumAtlamasi[] = [];
+    const ekle = (i: (typeof isEmirleri)[number], nedenler: OlcumAtlamaNedeni[]): void => {
+      if (i.kaynak !== null && nedenler.length > 0) atlananlar.push({ isEmriId: i.id, opNo: i.opNo, kaynak: i.kaynak, bitis: i.bitis, nedenler });
+    };
+    for (const i of rotadaYok) ekle(i, ['rotada-yok']);
+    for (const i of rotada) ekle(i, terminalOlcumKarari(terminalOlcumleri(await isEmriSureOzeti(db, i.id)), sayimli.has(i.id)).atlananlar);
+    atlananlar.sort((a, b) => a.opNo - b.opNo || a.isEmriId - b.isEmriId);
+    sonuc.set(id, { emirNo: emir.emirNo, isEmirsiz: emir.durum === 'bitti' && isEmirleri.length === 0, atlananlar });
+  }
+  return sonuc;
 }

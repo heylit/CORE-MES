@@ -4,6 +4,10 @@ import { ornekCalisma } from '../ornek.ts';
 import { ozetVerisi, type Metin, type OzetVerisi } from '../ozet/veri.ts';
 import { anlatAdimlari, hatDuzeni, HAZIRLIK_YOK, payDuzeni, paySayilari } from './kurallar.ts';
 
+import { saatiSabitle } from '../../test-saati.ts';
+
+saatiSabitle(() => ornekCalisma());
+
 // Hesap eski sayfanın (zn-kesif ksPaySvg, ksHat, ksAdimlar) aynısıdır; yerel kayıtta aynı genişlikte eski çerçevenin çizdiği konum, yarıçap ve
 // metinlerle karşılaştırıldı. Burada örnek kayıtla.
 const html = (m: Metin) => m.map((x) => (typeof x === 'string' ? x : `<b>${x.b}</b>`)).join('');

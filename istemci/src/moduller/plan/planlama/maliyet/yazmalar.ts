@@ -39,9 +39,10 @@ export function tezUcretYaz(yaz: Yaz, D: PlanVerisi, id: string, v: number): boo
     x.D = { ...x.D, tezgahlar: x.D.tezgahlar.map((z) => (z.id === id ? { ...z, ucret: v } : z)) };
   });
 }
-// Boş bırakılabilen yalnız operatör ücreti ve tek oran genel giderdir (ym-ayar).
-export function maliyetAyariYaz(yaz: Yaz, D: PlanVerisi, k: keyof MaliyetAyari, v: number | null): boolean {
-  if (v === null && k !== 'operatorUcret' && k !== 'genelGider') return false;
+// Genel gider oranı Finans'ındır: sunucu kayıtta siler, okumada Finans oranını yazar (genelGiderAlanlariniCikar); buradan yazılamaz (2608).
+// Boş bırakılabilen yalnız operatör ücretidir (ym-ayar).
+export function maliyetAyariYaz(yaz: Yaz, D: PlanVerisi, k: Exclude<keyof MaliyetAyari, 'genelGider' | 'genelGiderGizli'>, v: number | null): boolean {
+  if (v === null && k !== 'operatorUcret') return false;
   return yaz('Maliyet ayarı değişti', `${k}: ${yok(ymAyar(D)[k])} → ${yok(v)}`, (x) => { dYaz(x, { planTL: { ...planTL(x.D), [k]: v } }); });
 }
 export function ucretYaz(yaz: Yaz, D: PlanVerisi, k: 'ayarciUcret' | 'mesaiUcret', v: number): boolean {
@@ -133,9 +134,6 @@ export function siparisFiyatYaz(yaz: Yaz, D: PlanVerisi, id: string, gelir: numb
 }
 
 // ---------- Genel gider (msDeg: plan korunur) ----------
-export function giderKipYaz(yaz: Yaz, v: 'kalem' | 'tek'): boolean {
-  return yaz('Genel gider hesabı', v === 'kalem' ? 'kalemlerden' : 'tek oran', (x) => { msYaz(x, (M) => { M.kip = v; }); }, MS);
-}
 export function verimYaz(yaz: Yaz, D: PlanVerisi, v: number): boolean {
   return yaz('Kapasite verimi', `%${String(maliyetSistemi(D).verim)} → %${String(v)}`, (x) => { msYaz(x, (M) => { M.verim = v; }); }, MS);
 }
@@ -161,19 +159,19 @@ export function kalemEkleYaz(yaz: Yaz, s: { ad: string; tur: string; aylik: numb
     msYaz(x, (M) => { M.kalemler = [...M.kalemler, { id: sonrakiKimlik(M.kalemler, 'K'), ad: s.ad, tur: s.tur, aylik: s.aylik, anahtar: s.anahtar, kapsam: '' }]; });
   }, MS);
 }
-export function dolayliYaz(yaz: Yaz, D: PlanVerisi, id: string, k: 'gorev' | 'brut', v: string | number | null): boolean {
+// Brüt ücret kayda yazılmaz (2728 a); eski kayıttaki brüt, ilk yazmada satırdan düşer.
+export function dolayliYaz(yaz: Yaz, D: PlanVerisi, id: string, gorev: string): boolean {
   const g = maliyetSistemi(D).dolayli.find((z) => z.id === id);
   if (!g) return false;
-  const [ne, ayr] = k === 'gorev' ? ['Dolaylı personel görevi', `${g.gorev} → ${String(v)}`] : ['Dolaylı personel ücreti', `${g.gorev}: ${tl(g.brut)} → ${tl(v as number | null)}`];
-  return yaz(ne, ayr, (x) => { msYaz(x, (M) => { M.dolayli = M.dolayli.map((z) => (z.id === id ? { ...z, [k]: v } : z)); }); }, MS);
+  return yaz('Dolaylı personel görevi', `${g.gorev} → ${gorev}`, (x) => { msYaz(x, (M) => { M.dolayli = M.dolayli.map((z) => (z.id === id ? { id: z.id, gorev } : z)); }); }, MS);
 }
 export function dolayliSilYaz(yaz: Yaz, D: PlanVerisi, id: string): boolean {
   const g = maliyetSistemi(D).dolayli.find((z) => z.id === id);
   if (!g) return false;
   return yaz('Dolaylı personel silindi', g.gorev, (x) => { msYaz(x, (M) => { M.dolayli = M.dolayli.filter((z) => z.id !== id); }); }, MS);
 }
-export function dolayliEkleYaz(yaz: Yaz, gorev: string, brut: number): boolean {
-  return yaz('Dolaylı personel eklendi', `${gorev}: ${tl(brut)}`, (x) => { msYaz(x, (M) => { M.dolayli = [...M.dolayli, { id: sonrakiKimlik(M.dolayli, 'G'), gorev, brut }]; }); }, MS);
+export function dolayliEkleYaz(yaz: Yaz, gorev: string): boolean {
+  return yaz('Dolaylı personel eklendi', gorev, (x) => { msYaz(x, (M) => { M.dolayli = [...M.dolayli, { id: sonrakiKimlik(M.dolayli, 'G'), gorev }]; }); }, MS);
 }
 const BOS_GIDER: TezgahGideri = { bedel: null, omur: null, hurda: null, kw: null, yuk: null, alan: null, sarf: null, bakim: null };
 // Kaydı olmayan tezgâha ilk yazmada boş kayıt açılır; yalnız listede olmayan tezgâha yazılmaz.
@@ -193,16 +191,12 @@ export function makineyeYaz(yaz: Yaz, l: { id: string; eski: number | null; yeni
 }
 
 // ---------- Ek mesai ----------
-export function kisiUcretYaz(yaz: Yaz, D: PlanVerisi, id: string, v: number | null): boolean {
-  const u = mesaiSistemi(D).ucret[id];
-  return yaz('Kişi ücreti', `${id}: ${tl(u?.brut ?? null)} → ${tl(v)}`, (x) => { mesYaz(x, (M) => { M.ucret = { ...M.ucret, [id]: { brut: v, yil: M.ucret[id]?.yil ?? null } }; }); });
-}
 export function kisiYilYaz(yaz: Yaz, D: PlanVerisi, id: string, v: number | null): boolean {
   const u = mesaiSistemi(D).ucret[id];
-  return yaz('Yapılan fazla mesai', `${id}: ${String(u?.yil ?? 0)} → ${String(v ?? 0)} sa`, (x) => { mesYaz(x, (M) => { M.ucret = { ...M.ucret, [id]: { brut: M.ucret[id]?.brut ?? null, yil: v } }; }); }, MS);
+  return yaz('Yapılan fazla mesai', `${id}: ${String(u?.yil ?? 0)} → ${String(v ?? 0)} sa`, (x) => { mesYaz(x, (M) => { M.ucret = { ...M.ucret, [id]: { yil: v } }; }); }, MS);
 }
 export function kisiBazliYaz(yaz: Yaz, v: boolean): boolean {
-  return yaz('Mesai bedeli', v ? 'kişi ücretinden' : 'tek mesai ücreti', (x) => { mesYaz(x, (M) => { M.kisiBazli = v; }); }, MS);
+  return yaz('Mesai bedeli', v ? 'grup saat maliyetinden' : 'tek mesai ücreti', (x) => { mesYaz(x, (M) => { M.kisiBazli = v; }); }, MS);
 }
 export type MesaiKurali = 'aylikSaat' | 'sgk' | 'yanHak' | 'kisiEk' | 'gunlukSinir' | 'geceSinir' | 'yillikSinir';
 export function mesaiKuralYaz(yaz: Yaz, D: PlanVerisi, k: MesaiKurali, v: number): boolean {

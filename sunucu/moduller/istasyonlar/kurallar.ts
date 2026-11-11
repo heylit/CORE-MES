@@ -242,3 +242,13 @@ export function sablonPlani(
   });
   return { merkezler: plan, atlananlar };
 }
+
+// Toplu kaydet (2627): üst kayıt önce yazılır (iş merkezi, istasyon, makine) ki aynı istekte açılan koda bağlanılabilsin;
+// aynı türde dosyadaki sıra korunur. `sira` satırın istekteki yeridir, hata alanı ona göre yazılır.
+const TOPLU_SIRASI = { 'is-merkezi': 0, istasyon: 1, makine: 2 } as const;
+export const topluSirasi = <T extends { kayit: keyof typeof TOPLU_SIRASI }>(satirlar: readonly T[]): { satir: T; sira: number }[] =>
+  satirlar.map((satir, sira) => ({ satir, sira })).sort((a, b) => TOPLU_SIRASI[a.satir.kayit] - TOPLU_SIRASI[b.satir.kayit] || a.sira - b.sira);
+
+// Güncelleme satırı yalnız gelen alanları değiştirir: gönderilmeyen (undefined) alan mevcut kayıttan kalır.
+export const gelenAlanlar = <T extends object>(g: T): Partial<T> =>
+  Object.fromEntries(Object.entries(g).filter(([, v]) => v !== undefined)) as Partial<T>;

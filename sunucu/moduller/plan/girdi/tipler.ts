@@ -24,7 +24,10 @@ export interface MotorTezgahi {
   ucret: number | null;
   ucretIst?: number | null;
   verim: number;
+  // B-2483-15: istasyondan ve takvimden alınan son değer; tezgâhtaki değer buna eşitse izler (ucretIst gibi).
+  verimIst?: number;
   vardiyalar?: MotorKimligi[];
+  vardiyalarIst?: MotorKimligi[];
   opOran: number;
   hafta?: Partial<Record<GunAdi, MotorKimligi[]>>;
   isiksiz?: boolean;
@@ -208,10 +211,13 @@ export const TEZGAH_ALANLARI = {
   kod: { kaynak: 'sunucu', sahip: 'istasyonlar', kart: 1786 },
   grupKod: { kaynak: 'sunucu', sahip: 'istasyonlar', kart: 1786 },
   grupAd: { kaynak: 'sunucu', sahip: 'istasyonlar', kart: 1786 },
-  ucret: { kaynak: 'karma', sahip: 'finans', kart: 1716 },
+  // 2601 a: elle ücret yok; Finans istasyon saat maliyeti her okumada yazılır.
+  ucret: { kaynak: 'sunucu', sahip: 'finans', kart: 1716 },
   ucretIst: { kaynak: 'sunucu', sahip: 'finans', kart: 1716 },
   verim: { kaynak: 'karma', sahip: 'istasyonlar', kart: 1716 },
+  verimIst: { kaynak: 'sunucu', sahip: 'istasyonlar', kart: 1716 },
   vardiyalar: { kaynak: 'karma', sahip: 'vardiya', kart: 1716 },
+  vardiyalarIst: { kaynak: 'sunucu', sahip: 'vardiya', kart: 1716 },
   opOran: { kaynak: 'sunucu', sahip: 'istasyonlar', kart: 1716 },
   hafta: { kaynak: 'sunucu', sahip: 'vardiya', kart: 1716 },
   isiksiz: { kaynak: 'elle', sahip: 'istasyonlar', kart: 1719 },

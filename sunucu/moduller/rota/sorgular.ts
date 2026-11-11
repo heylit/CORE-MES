@@ -243,17 +243,19 @@ export async function revizyonEkle(
 
 // Kaynak: makine, kişi ya da istasyon (sütunlardan biri doludur); hepsi boşsa null. Adımda dördüncü kaynak fason firmadır.
 export interface Kaynak { tur: 'makine' | 'kisi' | 'istasyon'; id: number }
-export interface AdimKaynagi { tur: 'makine' | 'kisi' | 'istasyon' | 'fason'; id: number }
+// 2681 (2682 a): firması seçilmemiş fason adımın id'si null'dır (sütun fason_firmasiz). Fason olup olmadığı yalnız `fasonMu`'dan okunur.
+export type AdimKaynagi = { tur: 'makine' | 'kisi' | 'istasyon' | 'fason'; id: number } | { tur: 'fason'; id: null };
 interface KaynakSutunlari { makineId: number | null; kisiId: number | null; istasyonId: number | null }
 const kaynakCoz = (r: KaynakSutunlari): Kaynak | null =>
   r.makineId !== null ? { tur: 'makine', id: r.makineId } : r.kisiId !== null ? { tur: 'kisi', id: r.kisiId }
     : r.istasyonId !== null ? { tur: 'istasyon', id: r.istasyonId } : null;
-const adimKaynagiCoz = (r: KaynakSutunlari & { fasonFirmaId: number | null }): AdimKaynagi | null =>
-  kaynakCoz(r) ?? (r.fasonFirmaId !== null ? { tur: 'fason', id: r.fasonFirmaId } : null);
+const adimKaynagiCoz = (r: KaynakSutunlari & { fasonFirmaId: number | null; fasonFirmasiz: boolean }): AdimKaynagi | null =>
+  kaynakCoz(r) ?? (r.fasonFirmaId !== null ? { tur: 'fason', id: r.fasonFirmaId } : r.fasonFirmasiz ? { tur: 'fason', id: null } : null);
 const makineSutunu = (k: AdimKaynagi | null) => (k?.tur === 'makine' ? k.id : null);
 const kisiSutunu = (k: AdimKaynagi | null) => (k?.tur === 'kisi' ? k.id : null);
 const istasyonSutunu = (k: AdimKaynagi | null) => (k?.tur === 'istasyon' ? k.id : null);
 const fasonSutunu = (k: AdimKaynagi | null) => (k?.tur === 'fason' ? k.id : null);
+const firmasizSutunu = (k: AdimKaynagi | null) => k?.tur === 'fason' && k.id === null;
 
 export interface AdimSatiri {
   id: number;
@@ -304,9 +306,9 @@ export async function icerikOku(db: Db, revizyonId: number): Promise<Icerik> {
 
 // Birden çok revizyonun içeriği, revizyon sayısından bağımsız dört sorguyla; içeriği olmayan revizyon haritada yer almaz.
 export async function iceriklerOku(db: Db, revizyonIdleri: readonly number[]): Promise<Map<number, Icerik>> {
-  const adimHam = await db.sorgu<Omit<AdimSatiri, 'kaynak'> & KaynakSutunlari & { fasonFirmaId: number | null; revizyonId: number }>(
+  const adimHam = await db.sorgu<Omit<AdimSatiri, 'kaynak'> & KaynakSutunlari & { fasonFirmaId: number | null; fasonFirmasiz: boolean; revizyonId: number }>(
     `SELECT revizyon_id AS "revizyonId", id, op_no AS "opNo", sira, operasyon_tipi_id AS "operasyonTipiId", ad, makine_id AS "makineId", kisi_id AS "kisiId",
-            istasyon_id AS "istasyonId", fason_firma_id AS "fasonFirmaId", ayar_suresi_dk AS "ayarSuresiDk", birim_sure_dk AS "birimSureDk", termin_gun AS "terminGun",
+            istasyon_id AS "istasyonId", fason_firma_id AS "fasonFirmaId", fason_firmasiz AS "fasonFirmasiz", ayar_suresi_dk AS "ayarSuresiDk", birim_sure_dk AS "birimSureDk", termin_gun AS "terminGun",
             islem_suresi_dk AS "islemSuresiDk", degisim_suresi_dk AS "degisimSuresiDk",
             bagimlilik, devir_adedi AS "devirAdedi",
             fire_payi_yuzde AS "firePayiYuzde", makine_kullanimi AS "makineKullanimi", en_kucuk_parca AS "enKucukParca",
@@ -318,10 +320,10 @@ export async function iceriklerOku(db: Db, revizyonIdleri: readonly number[]): P
   );
   const sonuc = new Map<number, Icerik>();
   const adimRevizyonu = new Map<number, Icerik>();
-  for (const { revizyonId, makineId, kisiId, istasyonId, fasonFirmaId, ...a } of adimHam) {
+  for (const { revizyonId, makineId, kisiId, istasyonId, fasonFirmaId, fasonFirmasiz, ...a } of adimHam) {
     let icerik = sonuc.get(revizyonId);
     if (!icerik) sonuc.set(revizyonId, icerik = { adimlar: [], adaylar: [], bilesenler: [], yanUrunler: [] });
-    icerik.adimlar.push({ ...a, kaynak: adimKaynagiCoz({ makineId, kisiId, istasyonId, fasonFirmaId }) });
+    icerik.adimlar.push({ ...a, kaynak: adimKaynagiCoz({ makineId, kisiId, istasyonId, fasonFirmaId, fasonFirmasiz }) });
     adimRevizyonu.set(a.id, icerik);
   }
   const kimlikler = [...adimRevizyonu.keys()];
@@ -400,11 +402,11 @@ export async function adimYaz(db: Db, revizyonId: number, malzemeId: number, a: 
   const satir = await db.tek<{ id: number }>(
     `INSERT INTO rota_adimi (revizyon_id, malzeme_id, op_no, sira, operasyon_tipi_id, ad, makine_id, kisi_id, fason_firma_id, ayar_suresi_dk,
                              birim_sure_dk, termin_gun, bagimlilik, devir_adedi, fire_payi_yuzde, makine_kullanimi, en_kucuk_parca, yeniden_ayar,
-                             islem_suresi_dk, degisim_suresi_dk, istasyon_id, ilk_parca, hazirlik_dk, ayar, ayar_dk)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25) RETURNING id`,
+                             islem_suresi_dk, degisim_suresi_dk, istasyon_id, ilk_parca, hazirlik_dk, ayar, ayar_dk, fason_firmasiz)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26) RETURNING id`,
     [revizyonId, malzemeId, a.opNo, a.sira, a.operasyonTipiId, a.ad, makineSutunu(a.kaynak), kisiSutunu(a.kaynak), fasonSutunu(a.kaynak),
       a.ayarSuresiDk, a.birimSureDk, a.terminGun, a.bagimlilik, a.devirAdedi, a.firePayiYuzde, a.makineKullanimi, a.enKucukParca, a.yenidenAyar,
-      a.islemSuresiDk, a.degisimSuresiDk, istasyonSutunu(a.kaynak), a.ilkParca, a.hazirlikDk, a.ayar, a.ayarDk],
+      a.islemSuresiDk, a.degisimSuresiDk, istasyonSutunu(a.kaynak), a.ilkParca, a.hazirlikDk, a.ayar, a.ayarDk, firmasizSutunu(a.kaynak)],
   );
   const adimId = satir!.id;
   if (a.adaylar.length) {
@@ -438,6 +440,15 @@ export async function adimYaz(db: Db, revizyonId: number, malzemeId: number, a: 
 
 export async function kullanilmisOpNolari(db: Db, malzemeId: number): Promise<number[]> {
   return (await db.sorgu<{ opNo: number }>('SELECT op_no AS "opNo" FROM rota_op_numarasi WHERE malzeme_id = $1', [malzemeId])).map((s) => s.opNo);
+}
+
+export async function opNumaralari(db: Db, malzemeId: number): Promise<{ opNo: number; ilkRevizyonId: number; ilkRevizyonHarfi: string }[]> {
+  return db.sorgu(
+    `SELECT t.op_no AS "opNo", t.ilk_revizyon_id AS "ilkRevizyonId", r.harf AS "ilkRevizyonHarfi"
+       FROM rota_op_numarasi t JOIN rota_revizyonu r ON r.id = t.ilk_revizyon_id
+      WHERE t.malzeme_id = $1 ORDER BY t.op_no`,
+    [malzemeId],
+  );
 }
 
 // Ürüne aynı numara iki kez kaydolmaz; aynı ürünün başka revizyonundan gelen numara zaten kayıtlıdır.
@@ -638,7 +649,7 @@ export function talimatTaslagi(db: Db, malzemeId: number, opNo: number, kilitle 
 // Taslak kaydı adımlarıyla bütün olarak yazılır: varsa adımları silinir (medya adımla birlikte), sürümü artar.
 export async function talimatTaslagiYaz(
   db: Db, g: { malzemeId: number; opNo: number; tabanSurum: number | null; kisiId: number; adimlar: readonly TalimatAdimiYazisi[] }, mevcut: TalimatTaslagiSatiri | null,
-): Promise<void> {
+): Promise<number> {
   let id: number;
   if (mevcut) {
     id = mevcut.id;
@@ -651,6 +662,7 @@ export async function talimatTaslagiYaz(
     ))!.id;
   }
   await adimlariEkle(db, TASLAK_TABLOLARI, id, g.adimlar);
+  return id;
 }
 
 export async function talimatTaslagiSil(db: Db, id: number): Promise<void> {
@@ -671,6 +683,55 @@ export function taslakMedyalari(db: Db, taslakId: number): Promise<MedyaSatiri[]
 
 export async function talimatSurumuKimligi(db: Db, malzemeId: number, opNo: number, surum: number): Promise<{ id: number; metin: string } | null> {
   return db.tek<{ id: number; metin: string }>('SELECT id, metin FROM rota_talimati WHERE malzeme_id = $1 AND op_no = $2 AND surum = $3', [malzemeId, opNo, surum]);
+}
+
+/* ---------------- talimatın şablon kökeni (2588 a) ---------------- */
+
+export interface KokenSatiri { sahipId: number; sablonId: number; sablonKodu: string; sablonAdi: string; sablonSurum: number }
+export interface KokenYazisi { sablonId: number; sablonSurum: number }
+
+export function talimatKokenleri(db: Db, talimatIdleri: readonly number[]): Promise<KokenSatiri[]> {
+  return db.sorgu<KokenSatiri>(
+    `SELECT k.talimat_id AS "sahipId", k.sablon_id AS "sablonId", s.kod AS "sablonKodu", s.ad AS "sablonAdi", k.sablon_surum AS "sablonSurum"
+       FROM rota_talimat_kokeni k JOIN rota_talimat_sablonu s ON s.id = k.sablon_id WHERE k.talimat_id = ANY($1::int[])`,
+    [[...talimatIdleri]],
+  );
+}
+
+export function taslakKokeni(db: Db, taslakId: number): Promise<KokenSatiri | null> {
+  return db.tek<KokenSatiri>(
+    `SELECT k.taslak_id AS "sahipId", k.sablon_id AS "sablonId", s.kod AS "sablonKodu", s.ad AS "sablonAdi", k.sablon_surum AS "sablonSurum"
+       FROM rota_talimat_taslak_kokeni k JOIN rota_talimat_sablonu s ON s.id = k.sablon_id WHERE k.taslak_id = $1`,
+    [taslakId],
+  );
+}
+
+export async function talimatKokeniYaz(db: Db, talimatId: number, k: KokenYazisi): Promise<void> {
+  await db.sorgu('INSERT INTO rota_talimat_kokeni (talimat_id, sablon_id, sablon_surum) VALUES ($1, $2, $3)', [talimatId, k.sablonId, k.sablonSurum]);
+}
+
+// Taslağın kökeni kayıtla değişebilir: null kökeni kaldırır.
+export async function taslakKokeniYaz(db: Db, taslakId: number, k: KokenYazisi | null): Promise<void> {
+  await db.sorgu('DELETE FROM rota_talimat_taslak_kokeni WHERE taslak_id = $1', [taslakId]);
+  if (k) await db.sorgu('INSERT INTO rota_talimat_taslak_kokeni (taslak_id, sablon_id, sablon_surum) VALUES ($1, $2, $3)', [taslakId, k.sablonId, k.sablonSurum]);
+}
+
+export interface SablonKopyasiSatiri {
+  malzemeId: number; opNo: number; talimatSurumu: number | null; taslak: boolean; sablonSurumu: number; gecerli: boolean;
+}
+
+// Şablondan kopyalanan talimat sürümleri ve taslaklar; gecerli: sürüm OP'nin son yayınıdır (taslakta false).
+export function sablonKopyalari(db: Db, sablonId: number): Promise<SablonKopyasiSatiri[]> {
+  return db.sorgu<SablonKopyasiSatiri>(
+    `SELECT t.malzeme_id AS "malzemeId", t.op_no AS "opNo", t.surum AS "talimatSurumu", false AS taslak, k.sablon_surum AS "sablonSurumu",
+            t.surum = (SELECT max(x.surum) FROM rota_talimati x WHERE x.malzeme_id = t.malzeme_id AND x.op_no = t.op_no) AS gecerli
+       FROM rota_talimat_kokeni k JOIN rota_talimati t ON t.id = k.talimat_id WHERE k.sablon_id = $1
+     UNION ALL
+     SELECT t.malzeme_id, t.op_no, NULL, true, k.sablon_surum, false
+       FROM rota_talimat_taslak_kokeni k JOIN rota_talimat_taslagi t ON t.id = k.taslak_id WHERE k.sablon_id = $1
+     ORDER BY 1, 2, 4 DESC, 3 DESC`,
+    [sablonId],
+  );
 }
 
 /* ---------------- talimat şablonu (989 a) ---------------- */

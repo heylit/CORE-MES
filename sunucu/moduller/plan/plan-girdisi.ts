@@ -47,10 +47,46 @@ interface Izci { alanlar: Set<KaynakDegisiklikAlani>; farklar: GirdiFarki[]; kes
 const KAYNAK_ALANI = new Set<string>(KAYNAK_DEGISIKLIK_ALANLARI);
 const jsonKopya = <T>(x: T): T => (x === undefined ? x : (JSON.parse(JSON.stringify(x)) as T));
 
+// B-2500-4: kaynak listelerinin öğesi her düzeyde kimliğiyle (id, yoksa kod) eşlenir; sırayla eşlenseydi araya giren bir tezgâh bütün
+// tezgâhları değişmiş gösterirdi. Kimliği olmayan ya da tekrarlayan listede sıra kalır; nesne ve ilkel değerde girdiFarki'nin kuralı geçer.
+function kimlikle(l: readonly unknown[]): Map<string, unknown> | null {
+  const m = new Map<string, unknown>();
+  for (const x of l) {
+    const o = x !== null && typeof x === 'object' ? (x as { id?: unknown; kod?: unknown }) : null;
+    const k = o === null ? undefined : o.id ?? o.kod;
+    if ((typeof k !== 'string' && typeof k !== 'number') || m.has(String(k))) return null;
+    m.set(String(k), x);
+  }
+  return m;
+}
+const nesne = (x: unknown): x is Record<string, unknown> => x !== null && typeof x === 'object' && !Array.isArray(x);
+const altYol = (ust: string, k: string): string => (k.startsWith('[') ? `${ust}${k}` : `${ust}.${k}`);
+
+function kimlikFarki(eski: unknown, yeni: unknown, yol: string, l: GirdiFarki[], sinir: number): void {
+  if (l.length >= sinir) return;
+  if (Array.isArray(eski) && Array.isArray(yeni)) {
+    const e = kimlikle(eski), y = kimlikle(yeni);
+    if (e === null || y === null) {
+      if (eski.length !== yeni.length) l.push({ yol: `${yol}.length`, eski: eski.length, yeni: yeni.length });
+      for (let i = 0; i < Math.min(eski.length, yeni.length); i++) kimlikFarki(eski[i], yeni[i], `${yol}[${String(i)}]`, l, sinir);
+      return;
+    }
+    if (e.size !== y.size) l.push({ yol: `${yol}.length`, eski: e.size, yeni: y.size });
+    for (const k of new Set([...y.keys(), ...e.keys()])) kimlikFarki(e.get(k), y.get(k), `${yol}[${k}]`, l, sinir);
+    return;
+  }
+  if (nesne(eski) && nesne(yeni)) {
+    for (const k of [...new Set([...Object.keys(eski), ...Object.keys(yeni)])].sort()) kimlikFarki(eski[k], yeni[k], altYol(yol, k), l, sinir);
+    return;
+  }
+  for (const f of girdiFarki(eski, yeni, 1)) if (l.length < sinir) l.push({ ...f, yol });
+}
+
 function farkEkle(izci: Izci, eski: unknown, yeni: unknown, yol: KaynakDegisiklikAlani): void {
   const kalan = KAYNAK_FARKI_EN_COK - izci.farklar.length;
   if (kalan <= 0) { izci.kesik = true; return; }
-  const l = girdiFarki(eski, yeni, kalan + 1).map((f) => ({ ...f, yol: f.yol === '' ? yol : `${yol}${f.yol.startsWith('[') ? '' : '.'}${f.yol}` }));
+  const l: GirdiFarki[] = [];
+  kimlikFarki(eski, yeni, yol, l, kalan + 1);
   if (l.length > kalan) izci.kesik = true;
   izci.farklar.push(...l.slice(0, kalan));
 }
@@ -219,4 +255,26 @@ export function cozumGirdisi(g: Omit<GirdiIstegi, 'bugun'> & { istek: CozumIsteg
   const kopya = <T>(x: T): T => (x === undefined ? x : (JSON.parse(JSON.stringify(x)) as T));
   const sonuc = sunucuCozumGirdisi(kopya(g.istek.ekMesai ? taslakEkMesaisi(g.calisma, g.istek.ekMesai) : g.calisma), kopya(g.kayit), kopya(g.kaynak), kopya(g.istek), tesisGunu(Date.parse(g.istek.simdi)));
   return sonuc === null ? null : structuredClone(sonuc);
+}
+
+// 2790: elle taşımanın takvimi (motor/tasima.js) aynı dosyalarla aynı bağlamda kurulur; yer işlevi bağlamın derlemesini kullanır.
+let tasimaKod: string | null = null;
+function tasimaKodu(): string {
+  tasimaKod ??= `${[...DOSYALAR, 'tasima'].map((m) => readFileSync(join(MOTOR, `${m}.js`), 'utf8')).join('\n')}\n;({ sunucuTasimaTakvimi });`;
+  return tasimaKod;
+}
+export interface TasimaTakvimi {
+  donuk: number; ufuk: number; tasimaSaat: number;
+  onculler: Record<string, [string, 'b' | 'o'][]>;
+  opNo: Record<string, string>;
+  yer: (id: string, m: string, t: number) => { S: number; C: number; lot1: number } | null;
+  saatMetni: (h: number) => string;
+  tezgahAdi: (m: string) => string;
+}
+// Girdi birleşmiş çalışmadır (planlamaCalismasi); kopyalanır. Şimdi planın ekseninde saattir.
+export function tasimaTakvimi(calisma: unknown, simdi: number): TasimaTakvimi {
+  const { sunucuTasimaTakvimi } = baglamla<{ sunucuTasimaTakvimi: (S: unknown, now: number) => TasimaTakvimi }>(tasimaKodu(), 'tasima-takvimi.js', null);
+  const t = sunucuTasimaTakvimi(jsonKopya(calisma), simdi);
+  const yer: TasimaTakvimi['yer'] = (id, m, h) => { const y = t.yer(id, m, h); return y === null ? null : { S: y.S, C: y.C, lot1: y.lot1 }; };
+  return { donuk: t.donuk, ufuk: t.ufuk, tasimaSaat: t.tasimaSaat, onculler: structuredClone(t.onculler), opNo: structuredClone(t.opNo), yer, saatMetni: (h) => String(t.saatMetni(h)), tezgahAdi: (m) => String(t.tezgahAdi(m)) };
 }

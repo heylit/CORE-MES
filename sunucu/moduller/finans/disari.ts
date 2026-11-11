@@ -3,7 +3,7 @@
 import { satisSevkleriCozucusuKaydet, satisSiparisleriCozucusuKaydet, sevkIsiOzetiCozucusuKaydet, siparisOzetiCozucusuKaydet } from './servis.ts';
 import type { SatisSevkleriCozucusu, SatisSiparisleriCozucusu, SevkIsiOzetiCozucusu, SiparisOzetiCozucusu } from './servis.ts';
 export {
-  alisBelgeleri, belgeSiparisBagla, faizGetir, gunlukFaizGetir, kdvSecenekleri, siparisOdemePlaniKaldir, siparisOdemePlaniYaz, siparisOtomatikPlaniVarMi, siparisPlanlari, faizler, kurGetir, kurlar, makineAmortismani, birimMaliyetleri, genelGiderOrani,
+  alisBelgeleri, belgeSiparisBagla, faizGetir, gunlukFaizGetir, kdvSecenekleri, siparisOdemePlaniKaldir, siparisOdemePlaniYaz, siparisAvansAlacagiYaz, alacakliSiparisler, siparisOtomatikPlaniVarMi, siparisPlanlari, faizler, kurGetir, kurlar, makineAmortismani, birimMaliyetleri, genelGiderOrani,
 } from './servis.ts';
 // 260 a: satış siparişinin faturaları ve iadeleri (tutar finans rakamıdır; FNS-48 yetkisi çağıranın ucundadır).
 export { siparisFaturalari } from './servis.ts';
@@ -23,6 +23,7 @@ export const siparisOzetiCozucusu = (cozucu: SiparisOzetiCozucusu | null): void 
 export const satisSiparisleriCozucusu = (cozucu: SatisSiparisleriCozucusu | null): void => satisSiparisleriCozucusuKaydet(cozucu);
 export const sevkIsiOzetiCozucusu = (cozucu: SevkIsiOzetiCozucusu | null): void => sevkIsiOzetiCozucusuKaydet(cozucu);
 export const satisSevkleriCozucusu = (cozucu: SatisSevkleriCozucusu | null): void => satisSevkleriCozucusuKaydet(cozucu);
+export type { AvansAlacagiSonucu } from './servis.ts';
 export type { BirimMaliyeti, GenelGiderOrani, AlisBelgesi, GiderBelgesi, GecerliFaiz, GecerliKur, SiparisAnahtari, SiparisOdemesi, SiparisPlani } from './servis.ts';
 export type { MaliyetTuru } from './kurallar.ts';
 // Tedarikçi olabilme kuralı firmanın sahibi musteri-tedarikci'dedir; finansın eski çağıranları için yeniden verilir.
@@ -40,3 +41,11 @@ export async function alisBelgesiEslesmeTutari(db: Db, belgeId: number, firmaId:
   return { tutar: b.tutar, paraBirimi: b.paraBirimi };
 }
 export { malzemeKartiIzleri } from './sorgular.ts';
+// 2594 b (Mimar K1): genel gider bileşenlerinin başka modüllerdeki kaynakları kablolamada kaydedilir; finans onları ithal etmez.
+export {
+  dolayliPersonelCozucusuKaydet as dolayliPersonelCozucusu, emilmeyenDogrudanCozucusuKaydet as emilmeyenDogrudanCozucusu, genelGiderOraniCozucusuKaydet as genelGiderOraniCozucusu,
+  projeMasrafiCozucusuKaydet as projeMasrafiCozucusu, stokCikisiCozucusuKaydet as stokCikisiCozucusu,
+} from './genel-gider/servis.ts';
+export type { AylikTutarCozucusu, BelgeSiparisi, DolayliPersonelCozucusu, FaturaEslemesi, PersonelTutariCozucusu, GenelGiderOraniCozucusu, ProjeMasrafiCozucusu } from './genel-gider/servis.ts';
+// 2642 b: fatura eşlemesi (satın alma) belgenin siparişini ve tutarını okur; kilit seçeneği aynı işlem içindir.
+export { belgelerinSiparisleri } from './genel-gider/servis.ts';

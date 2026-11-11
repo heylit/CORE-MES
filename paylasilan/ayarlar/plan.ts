@@ -37,12 +37,12 @@ export const PLAN_AYARLARI = {
     baslik: 'Plan girdisinin kaynakları tipli yoldan',
     aciklama: 'Açıkken planın vardiya, takvim, tezgâh, kişi ve devamsızlık bilgisi doğrudan sahibi modüllerden kurulur. Kapalıyken (varsayılan) eski birleştirme kullanılır. Deneme içindir.',
   },
-  // 2319 (2311 S10): Arkon'daki periyodik bakım planları motora duruş olarak girer. Kapalıyken (varsayılan) girdi eskisi gibidir.
+  // 2319 (2311 S10): Arkon'daki periyodik bakım planları motora duruş olarak girer. 2512 a: canlıda açıktır (varsayılan açık).
   'plan.bakim-girdisi': {
     modul: 'plan',
     tur: 'boolean',
-    varsayilan: false,
+    varsayilan: true,
     baslik: 'Periyodik bakım plana girsin',
-    aciklama: 'Açıkken Arkon\'daki periyodik bakımlar, makinenin çalışma saatine denk gelen ilk dilimde plan duruşu olarak eklenir; planlamacı silebilir. Kapalıyken (varsayılan) bakım plana girmez.',
+    aciklama: 'Açıkken (varsayılan) Üretim Hazırlık\'taki periyodik bakımlar, makinenin çalışma saatine denk gelen ilk dilimde plan duruşu olarak eklenir; planlamacı silebilir. Kapalıyken bakım plana girmez.',
   },
 } as const satisfies Record<string, AyarTanimi>;

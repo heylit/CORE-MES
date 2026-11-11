@@ -45,6 +45,8 @@ export const MADDE: { [K in HazirlikMaddesi]: MaddeBilgisi<K> } = {
   yayin: { ad: 'Paket yayını', kisa: 'Yayın', sahip: 'Üretim Hazırlık', git: { yol: '/arkon/hazirlik', islem: 'sayfa.arkon', ad: "Üretim Hazırlık'ta aç" }, uyarir: false },
   // 2227-1: ön hazırlık ve hazırlık adımları terminalde işaretlenir; matris yalnız uyarır.
   talimat: { ad: 'Hazırlık talimatı', kisa: 'Talimat', sahip: 'Terminal', git: null, uyarir: true },
+  // 2227-1 b: iş emrine özel madde Üretim Hazırlık'ta eklenir ve işaretlenir.
+  'ek-madde': { ad: 'Ek hazırlık maddesi', kisa: 'Ek madde', sahip: 'Üretim Hazırlık', git: { yol: '/arkon/hazirlik', islem: 'sayfa.arkon', ad: "Üretim Hazırlık'ta aç" }, uyarir: true },
 };
 
 // Hücre kimliği: emir geneli madde yalnız madde, iş emri düzeyindeki madde madde ve iş emri.

@@ -4,8 +4,8 @@ import {
   ayarGovdesi, bedelAyari, canliyaAlmaGecmisiCevabi, ekMesaiGovdesi, bedelAyariTaslakGovdesi, geriGonderGovdesi, onayaGonderGovdesi, onaydanCekGovdesi, canliYerlesimCevabi, canliYerlesimSorgusu, canliyaAlCevabi, canliyaAlGovdesi, musteriSecenekleriCevabi, musteriSecenekleriSorgusu, degisiklikParametresi, hizliGovdesi, isEmriParametresi, kuyrukGovdesi, motorUyarilariCevabi, motorYerlesimiCevabi, kuyrukYazCevabi, kuyrukYazGovdesi, onizleSorgusu, onizlemeCevabi, projePlaniCevabi, projePlaniParametresi,
   motorAyariGovdesi, motorAyarlariCevabi, motorKuraliGovdesi, planCevabi, planSorgusu, planSurumCevabi,
   senaryoBilgiGovdesi, senaryoGovdesi, senaryoParametresi, senaryoSurumGovdesi, senaryolarCevabi, siparisCarpaniCevabi, siparisParametresi,
-  siralaGovdesi, taslakGovdesi, tasiGovdesi, PLAN_ONAY_KOMUTLARI, mrpIhtiyaciCevabi, planSagligiCevabi, veriSagligiCevabi,
-  yerlestirGovdesi,
+  siralaGovdesi, taslakGovdesi, grupSaatMaliyetleriCevabi, mesaiMaliyetiCevabi, mesaiMaliyetiSorgusu, mesaiSaatDegerleriCevabi, mesaiSaatDegerleriSorgusu, mesaiGrupSirasiCevabi, mesaiGrupSirasiSorgusu, tasiGovdesi, PLAN_ONAY_KOMUTLARI, mrpIhtiyaciCevabi, planSagligiCevabi, veriSagligiCevabi,
+  yerlestirGovdesi, planlanabilirlikCevabi, rotaPlanlanabilirlikCevabi,
 } from '#paylasilan/sozlesme/plan.ts';
 import {
   calismaGeriAlCevabi, calismaGeriAlGovdesi, calismaTaslagiCevabi, calismaTaslagiGovdesi, canliFarkiCevabi, degerlendirmeBaslatCevabi, degisiklikDefteriCevabi, degisiklikDefteriSorgusu, duzenleyenCevabi, degerlendirmeDurumuCevabi, degerlendirmeGovdesi,
@@ -13,11 +13,13 @@ import {
   taslaktanCalismayaCevabi, taslaktanCalismayaGovdesi, yillikCozBaslatCevabi, yillikCozDurumuCevabi, yillikCozGovdesi, yillikCozParametresi,
 } from '#paylasilan/sozlesme/planlama.ts';
 import { planAnaliziCevabi } from '#paylasilan/sozlesme/plan-analiz.ts';
-import { atolyeKomutuCevabi, ekMesaiEkleGovdesi, isTasiGovdesi, olayEkleGovdesi } from '#paylasilan/sozlesme/planlama-atolye.ts';
+import { atolyeKomutuCevabi, ekMesaiEkleGovdesi, isTasiGovdesi, isTasiOnizlemeSorgusu, isTasiOnizlemesiCevabi, olayEkleGovdesi } from '#paylasilan/sozlesme/planlama-atolye.ts';
 import { kayitlarCevabi, silCevabi, yazCevabi } from '#paylasilan/sozlesme/recete-rota.ts';
-import { ekMesaiyiEkle, isiTasi, olayiEkle } from './atolye-komutlari.ts';
+import { ekMesaiyiEkle, isiTasi, isTasiOnizlemesi, olayiEkle } from './atolye-komutlari.ts';
 import { calismaGeriAl, calismaTaslagi, canliFarki, tabanVeCanli, taslaktanCalismaya } from './calisma-plani.ts';
 import { degerlendirmeBaslat, degerlendirmeDurumu } from './degerlendirme.ts';
+import { grupSaatMaliyetleri } from './grup-saat-maliyeti.ts';
+import { mesaiGrupSirasi, mesaiMaliyeti, mesaiSaatDegerleri } from './mesai-maliyeti.ts';
 import { motorAyarlari, motorAyariYaz } from './motor-ayari.ts';
 import { mrpIhtiyaci } from './mrp.ts';
 import * as planlama from './planlama-servis.ts';
@@ -65,7 +67,19 @@ export const uclar = [
   // 1472 M1 (1522 a): açık emirlerin brüt ve net malzeme ihtiyacı; yalnız okur, yeni işlem açılmaz. Planlama sayfalarını gören okur;
   // stok ve satın alma miktarı okuyanın kendi yetkisiyle (1545 a).
   uc({ yontem: 'GET', yol: '/plan/mrp-ihtiyaci', yetki: PLANLAMA_OKUR, cevap: mrpIhtiyaciCevabi, isle: ({ db, kullanici }) => mrpIhtiyaci(db, kullanici) }),
-  uc({ yontem: 'GET', yol: '/plan/surum', yetki: 'oturum', cevap: planSurumCevabi, isle: ({ db }) => servis.canliSurum(db) }),
+  // 2618 (2602-a, 2603 a): mesai ve maliyet görünümünün departman saat maliyeti; maliyet görünümünün işlemiyle (223 a). Kişi değeri çıkmaz.
+  uc({ yontem: 'GET', yol: '/plan/grup-saat-maliyetleri', yetki: 'finans.maliyet-oku', cevap: grupSaatMaliyetleriCevabi,
+    isle: ({ db }) => grupSaatMaliyetleri(db) }),
+  // 2653 (2644 b): taslağın ek mesai tutarı, yalnız toplam; saat istemciden alınmaz. Yalnız maliyet görünümünün işlemi (Güvenlik K3).
+  uc({ yontem: 'GET', yol: '/plan/mesai-maliyeti', yetki: 'finans.maliyet-oku', sorgu: mesaiMaliyetiSorgusu, cevap: mesaiMaliyetiCevabi,
+    isle: ({ db, sorgu }) => mesaiMaliyeti(db, sorgu.taslak) }),
+  // 2742 (2745 a): yıllık planın grup ek mesai saat değeri; parametresiz, yalnız maliyet görünümünün işlemi (Güvenlik Ek).
+  uc({ yontem: 'GET', yol: '/plan/mesai-saat-degerleri', yetki: 'finans.maliyet-oku', sorgu: mesaiSaatDegerleriSorgusu, cevap: mesaiSaatDegerleriCevabi,
+    isle: ({ db }) => mesaiSaatDegerleri(db) }),
+  // 2752 (2750 b): TL'siz grup bedel sırası; planlama sayfalarını gören rol (Mimar: ayrı uç, TL'li uç olduğu gibi). Parametresiz.
+  uc({ yontem: 'GET', yol: '/plan/mesai-grup-sirasi', yetki: PLANLAMA_OKUR, sorgu: mesaiGrupSirasiSorgusu, cevap: mesaiGrupSirasiCevabi,
+    isle: ({ db }) => mesaiGrupSirasi(db) }),
+  uc({ yontem: 'GET', yol: '/plan/surum', yetki: 'oturum', cevap: planSurumCevabi, isle: ({ db, kullanici }) => servis.canliSurum(db, kullanici) }),
   uc({ yontem: 'GET', yol: '/plan/menu-sayaclari', yetki: 'oturum', cevap: ikinciMenuSayacSemasi,
     isle: ({ db, kullanici }) => servis.menuSayaclari(db, kullanici) }),
   uc({ yontem: 'POST', yol: '/plan/yerlestir', yetki: 'plan.yaz', tekrarKorumali: true, govde: yerlestirGovdesi, cevap: planCevabi,
@@ -160,6 +174,9 @@ export const uclar = [
 
   // ----- Planlama sayfası ve ortak motor (658 b): Reçete ve Rota'dan taşındı; yollar /plan altında, yetkiler aynı (işlem adı 663 a). -----
   uc({ yontem: 'GET', yol: '/plan/planlama-kaynagi', yetki: KAYNAK_OKUR, cevap: durumCevabi, isle: ({ db, kullanici }) => planlama.planlamaKaynagi(db, kullanici) }),
+  // 2779: Reçete ve Rota planlanabilirlik sayfası; kaynak okumasıyla aynı yetki (sayfa.recete-rota okuyan görür), hiçbir şey yazılmaz.
+  uc({ yontem: 'GET', yol: '/plan/planlanabilirlik', yetki: KAYNAK_OKUR, cevap: planlanabilirlikCevabi, isle: ({ db, kullanici }) => servis.planlanabilirlik(db, kullanici) }),
+  uc({ yontem: 'GET', yol: '/plan/planlanabilirlik/rotalar', yetki: KAYNAK_OKUR, cevap: rotaPlanlanabilirlikCevabi, isle: ({ db, kullanici }) => servis.rotaPlanlanabilirligi(db, kullanici) }),
   // Plan kapasitesi (kart #1324): izin, fazla mesai ve atama payı; köprü kaynak okumasında ister.
   uc({ yontem: 'GET', yol: '/plan/planlama-kapasitesi', yetki: KAYNAK_OKUR, cevap: kapasiteCevabi, isle: ({ db, kullanici }) => planlama.kapasite(db, kullanici) }),
   // 525 1 a, 533 a: planın satın alma eki (açık sipariş gelişi, tedarik termini); çerçevenin kaynak okuması ister.
@@ -224,6 +241,8 @@ export const uclar = [
   // sürükle-bırak (1981 b) işi kilitler; olay motorun olay listesine girer. Plan bir sonraki uygulamada değişir.
   uc({ yontem: 'POST', yol: '/plan/planlama-calismasi/is-tasi', yetki: 'plan.yaz', tekrarKorumali: true, govde: isTasiGovdesi, cevap: atolyeKomutuCevabi,
     isle: ({ db, kullanici, govde }) => isiTasi(db, kullanici, govde) }),
+  uc({ yontem: 'GET', yol: '/plan/planlama-calismasi/is-tasi-onizlemesi', yetki: 'plan.yaz', sorgu: isTasiOnizlemeSorgusu, cevap: isTasiOnizlemesiCevabi,
+    isle: ({ db, kullanici, sorgu }) => isTasiOnizlemesi(db, kullanici, sorgu) }),
   uc({ yontem: 'POST', yol: '/plan/planlama-calismasi/olay-ekle', yetki: 'plan.yaz', tekrarKorumali: true, govde: olayEkleGovdesi, cevap: atolyeKomutuCevabi,
     isle: ({ db, kullanici, govde }) => olayiEkle(db, kullanici, govde) }),
   // 2053: ek mesai de atölyenin ayrı komutudur (1982 a); haftalık bütçe onaya gönderirken denetlenir.

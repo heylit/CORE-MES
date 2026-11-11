@@ -39,9 +39,10 @@ describe('arkon eksik iş olayları (gerçek PostgreSQL)', () => {
   let simdi = 0;
   let istasyonId = 0;
   let makineId = 0;
-  let geride = { emirId: 0, adim: 0 };
-  let plansiz = { emirId: 0, adim: 0 };
-  let yarim = { emirId: 0, adim: 0 };
+  type Emir = { emirId: number; adim: number; ikinci: number | null };
+  let geride: Emir = { emirId: 0, adim: 0, ikinci: null };
+  let plansiz: Emir = { emirId: 0, adim: 0, ikinci: null };
+  let yarim: Emir = { emirId: 0, adim: 0, ikinci: null };
 
   const o = (): TestVeritabani => { if (!ortam) throw new Error('Test veritabanı açılamadı (TMIV2_PG_* ayarları).'); return ortam; };
   const anMetni = (t: number): string => new Date(t).toISOString();
@@ -71,10 +72,10 @@ describe('arkon eksik iş olayları (gerçek PostgreSQL)', () => {
     });
     return { cerez: await girisCerezi(kullaniciAdi), id };
   }
-  const ayarYaz = (anahtar: string, deger: number | null) => istek(yonetici, 'POST', `/ayarlar/${anahtar}/degistir`, { deger });
+  const ayarYaz = (anahtar: string, deger: number | boolean | null) => istek(yonetici, 'POST', `/ayarlar/${anahtar}/degistir`, { deger });
 
-  // Rotalı tek adımlı emir; `acilma` saat önce açılmış.
-  async function emirKur(acilmaSaatOnce: number): Promise<{ emirId: number; adim: number }> {
+  // Rotalı emir; `acilma` saat önce açılmış. `akisliDevir` verilirse ikinci adım birinciye akışlı bağlıdır.
+  async function emirKur(acilmaSaatOnce: number, akisliDevir?: number): Promise<{ emirId: number; adim: number; ikinci: number | null }> {
     sayac += 1;
     const tip = (await o().sahip.tek<{ id: number }>('INSERT INTO istasyonlar_operasyon_tipi (kod, ad, grup) VALUES ($1, $2, $3) RETURNING id', [`EK${sayac}`, 'Deneme tipi', 'TAL']))!.id;
     await o().sahip.sorgu("INSERT INTO malzeme_katalog_kod_sirasi (onek, son_sira) VALUES ('EKS-', 0) ON CONFLICT (onek) DO NOTHING");
@@ -90,19 +91,25 @@ describe('arkon eksik iş olayları (gerçek PostgreSQL)', () => {
       isEmirleri: [{
         sira: 1, opNo: 10, ad: 'Adım 1', operasyonTipiId: tip, kaynak: { tur: 'makine' as const, id: makineId }, ayarSuresiDk: '0', birimSureDk: '1',
         terminGun: null, bagimlilik: 'bekleyen' as const, devirAdedi: null, talimatSurumu: null, kontrolListesi: [],
-      }],
+      }, ...(akisliDevir === undefined ? [] : [{
+        sira: 2, opNo: 20, ad: 'Adım 2', operasyonTipiId: tip, kaynak: { tur: 'makine' as const, id: makineId }, ayarSuresiDk: '0', birimSureDk: '1',
+        terminGun: null, bagimlilik: 'akisli' as const, devirAdedi: akisliDevir, talimatSurumu: null, kontrolListesi: [],
+      }])],
     }));
     await o().sahip.sorgu('UPDATE uretim_emri SET acilma = $2::timestamptz WHERE id = $1', [uretimEmriId, anMetni(simdi - acilmaSaatOnce * SAAT)]);
-    const adim = (await o().sahip.tek<{ id: number }>('SELECT id FROM uretim_emirleri_is_emri WHERE uretim_emri_id = $1', [uretimEmriId]))!.id;
-    return { emirId: uretimEmriId, adim };
+    const adimlar = await o().sahip.sorgu<{ id: number }>('SELECT id FROM uretim_emirleri_is_emri WHERE uretim_emri_id = $1 ORDER BY sira', [uretimEmriId]);
+    return { emirId: uretimEmriId, adim: adimlar[0]!.id, ikinci: adimlar[1]?.id ?? null };
   }
   const yerlestir = (isEmriId: number, bas: number, bit: number) => o().sahip.sorgu(
     `INSERT INTO plan_yerlesimi (is_emri_id, makine_id, kisi_id, baslangic, bitis, yazan_kisi_id) VALUES ($1, $2, NULL, $3::timestamptz, $4::timestamptz, $5)
      ON CONFLICT (is_emri_id) DO UPDATE SET baslangic = EXCLUDED.baslangic, bitis = EXCLUDED.bitis`,
     [isEmriId, makineId, anMetni(bas), anMetni(bit), yoneticiId]);
   const yenile = (an = simdi) => o().vt.tx((db) => eksikIsleriYenile(db, an));
-  const olaylar = () => o().sahip.sorgu<{ tur: string; konuId: number | null; deger: number; kalanAdet: number | null; planaGore: boolean; kapanis: string | null; bildirim: string | null }>(
-    `SELECT tur, konu_id AS "konuId", deger::float8 AS deger, kalan_adet AS "kalanAdet", plana_gore AS "planaGore", kapanis::text AS kapanis, bildirim::text AS bildirim
+  const olaylar = () => o().sahip.sorgu<{
+    tur: string; konuId: number | null; deger: number; kalanAdet: number | null; planaGore: boolean; nedenler: string[]; kapanis: string | null; bildirim: string | null;
+  }>(
+    `SELECT tur, konu_id AS "konuId", deger::float8 AS deger, kalan_adet AS "kalanAdet", plana_gore AS "planaGore", nedenler, kapanis::text AS kapanis,
+            bildirim::text AS bildirim
        FROM arkon_eksik_is_olayi ORDER BY id`);
   const acik = async (tur: string, konuId: number | null) => (await olaylar()).find((r) => r.tur === tur && r.konuId === konuId && r.kapanis === null);
 
@@ -139,7 +146,7 @@ describe('arkon eksik iş olayları (gerçek PostgreSQL)', () => {
     const cevap = await istek<EksikIslerCevabi>(hazirlik, 'GET', '/arkon/eksik-isler');
     assert.equal(cevap.durum, 200, JSON.stringify(cevap.govde));
     assert.equal(eksikIslerCevabi.safeParse(cevap.govde).success, true);
-    assert.deepEqual(cevap.govde.esikler, { planGerisiDk: 60, kayitsizGun: 1, yarimIsSaat: 8, plansizIsSaat: 8, gecikenEmirGun: 0, bayatPlanSaat: 8 });
+    assert.deepEqual(cevap.govde.esikler, { planGerisiDk: 60, kayitsizGun: 1, yarimIsSaat: 8, plansizIsSaat: 8, gecikenEmirGun: 0, bayatPlanSaat: 8, olcumsuzIsGun: 0 });
     assert.equal((await istek(operator, 'GET', '/arkon/eksik-isler')).durum, 403);
     assert.equal((await istek(null, 'GET', '/arkon/eksik-isler')).durum, 401);
   });
@@ -163,7 +170,7 @@ describe('arkon eksik iş olayları (gerçek PostgreSQL)', () => {
 
     const cevap = await istek<EksikIslerCevabi>(hazirlik, 'GET', '/arkon/eksik-isler');
     assert.equal(eksikIslerCevabi.safeParse(cevap.govde).success, true, JSON.stringify(cevap.govde));
-    assert.deepEqual(cevap.govde.ozet, { 'plan-gerisi': 1, 'kayitsiz-gun': 1, 'yarim-is': 1, 'plansiz-is': 1, 'geciken-emir': 1, 'bayat-plan': 1 });
+    assert.deepEqual(cevap.govde.ozet, { 'plan-gerisi': 1, 'kayitsiz-gun': 1, 'yarim-is': 1, 'plansiz-is': 1, 'geciken-emir': 1, 'bayat-plan': 1, 'geride-onceki': 0, 'olcumsuz-is': 0 });
     const satir = cevap.govde.olaylar.find((x) => x.tur === 'plan-gerisi')!;
     assert.deepEqual([satir.istasyon?.id, satir.kaynak, satir.opNo, satir.uretimEmriId], [istasyonId, { tur: 'makine', id: makineId, ad: 'Tezgah E' }, 10, geride.emirId]);
   });
@@ -210,5 +217,72 @@ describe('arkon eksik iş olayları (gerçek PostgreSQL)', () => {
     const acikHatirlatma = await o().sahip.tek<{ n: number }>(
       "SELECT count(*)::int AS n FROM bildirim_kaydi WHERE tur = 'arkon.plansiz-is' AND yapildi IS NULL");
     assert.equal(acikHatirlatma?.n, 0);
+  });
+
+  test('AR-EK-8: sıra dışı başlayan adım, önceki adımın sayımı yetişene kadar açıktır; değer sayılmamış en az adettir; ayar kapanınca kapanır', async () => {
+    const e = await emirKur(4, 2);
+    const ikinci = e.ikinci!;
+    const sayim = (isEmriId: number, adet: number) => o().sahip.sorgu(
+      "INSERT INTO uretim_sayimi (emir_id, is_emri_id, kisi_id, istasyon_id, tur, adet, zaman) VALUES ($1, $2, $3, $4, 'saglam', $5, $6::timestamptz)",
+      [e.emirId, isEmriId, yoneticiId, istasyonId, adet, anMetni(simdi - SAAT)]);
+    await yenile();
+    assert.equal(await acik('geride-onceki', ikinci), undefined, 'kayıt yoksa olay yok');
+    await o().sahip.sorgu("UPDATE uretim_emirleri_is_emri SET durum = 'calisiyor', baslama = $2::timestamptz WHERE id = $1", [ikinci, anMetni(simdi - 2 * SAAT)]);
+    await o().sahip.sorgu(
+      `INSERT INTO uretim_emirleri_sira_disi_baslatma (uretim_emri_id, is_emri_id, oncul_is_emri_id, oncul_turu, devir_adedi, hazir_adet, oncul_sayilan, kisi_id, istasyon_id, zaman)
+       VALUES ($1, $2, $3, 'akisli', 2, 0, 0, $4, $5, $6::timestamptz)`,
+      [e.emirId, ikinci, e.adim, yoneticiId, istasyonId, anMetni(simdi - 2 * SAAT)]);
+    await sayim(ikinci, 3);
+    await yenile();
+    assert.deepEqual(await acik('geride-onceki', ikinci).then((r) => [r?.deger, r?.kalanAdet]), [3, 2], 'ikinci adımda 3 sayıldı, önceki adımda 0; devir için 2 eksik');
+    assert.equal(await acik('geride-onceki', e.adim), undefined, 'olay önceki adımda değil, sıra dışı başlayan adımda');
+    await sayim(e.adim, 2);
+    await yenile();
+    assert.deepEqual(await acik('geride-onceki', ikinci).then((r) => [r?.deger, r?.kalanAdet]), [1, 0], 'önceki adım yetiştikçe değer azalır; devir geldi');
+    assert.equal((await ayarYaz('arkon.eksik-geride-onceki', false)).durum, 200);
+    await yenile();
+    assert.equal(await acik('geride-onceki', ikinci), undefined, 'ayar kapalı: olay kapanır');
+    assert.notEqual((await olaylar()).find((r) => r.tur === 'geride-onceki')?.kapanis, null, 'iz kalır');
+    assert.equal((await ayarYaz('arkon.eksik-geride-onceki', true)).durum, 200);
+    await sayim(e.adim, 1);
+    await yenile();
+    assert.equal(await acik('geride-onceki', ikinci), undefined, 'önceki adım yetişti: yeniden açılmaz');
+  });
+
+  test('AR-EK-9 (2567): biten iş emrinde (emir açık olsa da) ölçülmeyen süre nedenleriyle görünür; rotada olmayan adım ayrı nedendir; operatör kendi tezgahında görür', async () => {
+    const bitir = async (e: { emirId: number; adim: number }, emirDe = true) => {
+      await o().sahip.sorgu("UPDATE uretim_emirleri_is_emri SET durum = 'tamam', baslama = $2::timestamptz, bitis = $3::timestamptz, saglam_adet = 0 WHERE id = $1",
+        [e.adim, anMetni(simdi - 28 * SAAT), anMetni(simdi - 26 * SAAT)]);
+      if (emirDe) await o().sahip.sorgu("UPDATE uretim_emri SET durum = 'bitti', baslama = $2::timestamptz, bitis = $3::timestamptz, saglam_adet = 0 WHERE id = $1",
+        [e.emirId, anMetni(simdi - 28 * SAAT), anMetni(simdi - 26 * SAAT)]);
+    };
+    const ekAdim = await emirKur(30);
+    const rotada = await emirKur(30);
+    const bekleyen = await emirKur(30);
+    // Rotadaki adım: ürünün OP numarası rotada kayıtlı; ölçüm kaynağı (ayar ve sayım) yok. Bekleyende sayım var ama karar bekliyor (2566 S-1).
+    for (const e of [rotada, bekleyen]) {
+      await o().sahip.sorgu(
+        `INSERT INTO rota_op_numarasi (malzeme_id, op_no, ilk_revizyon_id)
+         SELECT e.malzeme_no, 10, e.kaynak_rota_revizyonu_id FROM uretim_emri e WHERE e.id = $1`, [e.emirId]);
+    }
+    await o().sahip.sorgu(
+      "INSERT INTO uretim_sayimi (emir_id, is_emri_id, kisi_id, istasyon_id, tur, adet, zaman) VALUES ($1, $2, $3, $4, 'karar_bekliyor', 1, $5::timestamptz)",
+      [bekleyen.emirId, bekleyen.adim, yoneticiId, istasyonId, anMetni(simdi - 27 * SAAT)]);
+    await bitir(ekAdim);
+    await bitir(rotada);
+    // 2578 a: ölçüm iş emri bitince yazılır; emir açıkken de atlanan ölçüm görünür.
+    await bitir(bekleyen, false);
+    await yenile(simdi + 3 * SAAT);
+    const ek = await acik('olcumsuz-is', ekAdim.adim);
+    assert.deepEqual([ek?.deger, ek?.nedenler], [1, ['rotada-yok']], 'dün bitti, adım rotada yok');
+    assert.deepEqual((await acik('olcumsuz-is', rotada.adim))?.nedenler, ['ayar-yok', 'sayim-yok']);
+    assert.deepEqual((await acik('olcumsuz-is', bekleyen.adim))?.nedenler, ['ayar-yok', 'saglam-yok']);
+    assert.ok((await olaylar()).filter((r) => r.tur === 'olcumsuz-is').every((r) => r.bildirim !== null), 'planlamaya bildirildi');
+    const benim = await istek<EksikIslerimCevabi>(operator, 'GET', '/arkon/eksik-islerim');
+    assert.equal(eksikIslerimCevabi.safeParse(benim.govde).success, true, JSON.stringify(benim.govde));
+    assert.deepEqual(benim.govde.olaylar.filter((x) => x.tur === 'olcumsuz-is').map((x) => x.nedenler).sort(), [['ayar-yok', 'saglam-yok'], ['ayar-yok', 'sayim-yok'], ['rotada-yok']]);
+    assert.equal((await ayarYaz('arkon.eksik-olcumsuz-is-gun', null)).durum, 200);
+    await yenile(simdi + 4 * SAAT);
+    assert.equal(await acik('olcumsuz-is', rotada.adim), undefined, 'kural kapanınca kapanır');
   });
 });

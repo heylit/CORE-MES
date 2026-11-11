@@ -82,7 +82,8 @@ describe('stok: dallı rota (gerçek PostgreSQL)', () => {
     "INSERT INTO recete_rota_statu (malzeme_no, ad, kaynak_adim, renk, tur) VALUES ('DNM', $1, $2, '#2F6FDE', 'HM') RETURNING id", [ad, `dalli-${randomBytes(4).toString('hex')}`]))!.id;
 
   interface Kurulum { e: number; ie: Record<number, number>; urun: number; hm1: number; hm2: number; ist: { a: number; b: number; c: number }; s: Record<number, number> }
-  async function kur(bCarpani: number | null = null): Promise<Kurulum> {
+  // ortakHm: 2549 a, B dalı da A'nın hammaddesiyle (HM1, 0,6) başlar.
+  async function kur(bCarpani: number | null = null, ortakHm = false): Promise<Kurulum> {
     const [urun, hm1, hm2] = [await kart('yarimamul'), await kart('hammadde'), await kart('hammadde')];
     const [a, b, c] = [await istasyon(), await istasyon(), await istasyon()];
     const tip = (await o().sahip.tek<{ id: number }>("INSERT INTO istasyonlar_operasyon_tipi (kod, ad, grup) VALUES ($1, 'Deneme tipi', 'TAL') RETURNING id", [`SDT${String(++sira)}`]))!.id;
@@ -98,7 +99,7 @@ describe('stok: dallı rota (gerçek PostgreSQL)', () => {
     const { uretimEmriId: e } = await o().vt.tx((db) => uretimEmriAc(db, planlamaci, {
       projeId, malzemeNo: urun, adet: 10, teslim: null, kaynakRotaRevizyonId: rev, isEmirleri: [
         adim(1, a.makine, { dal: 'A', onculler: [], bilesenler: [{ malzemeNo: hm1, miktar: '0.6' }] }),
-        adim(2, b.makine, { dal: 'B', onculler: [], bilesenler: [{ malzemeNo: hm2, miktar: '1' }], adetCarpani: bCarpani }),
+        adim(2, b.makine, { dal: 'B', onculler: [], bilesenler: [ortakHm ? { malzemeNo: hm1, miktar: '0.6' } : { malzemeNo: hm2, miktar: '1' }], adetCarpani: bCarpani }),
         adim(3, c.makine, { onculler: [bekle(10), bekle(20)] }),
         adim(4, c.makine, { onculler: [bekle(30)] }),
       ],
@@ -121,6 +122,8 @@ describe('stok: dallı rota (gerçek PostgreSQL)', () => {
     ortam = await testVeritabaniKur('stok_dalli');
     app = await uygulamaKur({ vt: ortam.vt, ayar: ortam.ayar, kimlik: kimlikCozucu(ortam.vt), denetle: denetimYaz, tekrar: tekrarDeposu });
     kisiler.set('yonetici', await ortam.vt.tx((db) => yoneticiOlustur(db, { ad: 'Deneme Yönetici', kullaniciAdi: 'yonetici', parola: PAROLA })));
+    const gy = await app.inject({ method: 'POST', url: '/api/oturum/giris', payload: { kullaniciAdi: 'yonetici', parola: PAROLA } });
+    cerezler.set('yonetici', String(gy.headers['set-cookie']).split(';')[0] ?? '');
     projeId = (await ortam.sahip.tek<{ id: number }>(
       "INSERT INTO projeler_proje (kod, ad, olusturan_id) VALUES ('STOK.DALLI', 'Deneme proje', $1) RETURNING id", [kisiler.get('yonetici')]))!.id;
     for (const [rol, islemler] of Object.entries(ROL_ISLEMLERI)) {
@@ -220,4 +223,124 @@ describe('stok: dallı rota (gerçek PostgreSQL)', () => {
     assert.match(h.uyari ?? '', /eksi/i, 'B dalının parçası birleştirme istasyonunda yok: eksiye fire');
     assert.deepEqual([await bakiye(k.hm1, k.ist.c, k.s[10]!), await bakiye(k.hm2, k.ist.c, k.s[20]!)], [5.4, -1]);
   });
+
+  test('2528 (2522 a): dallı emirde elle sarf edilen A dalı hammaddesi zincir dışında kalır: OP 10 elle verilmeyeni çevirir, birleştirme statüden onu düşer; hammadde bir kez düşer', async () => {
+    const k = await kur();
+    await malKabul(k.hm1, '6');
+    await malKabul(k.hm2, '10');
+    const sarf = await istek('yonetici', 'POST', '/stok/cikis', { malzemeId: k.hm1, konumId: await kabulKonumu(), miktar: '2.4', cikisNedeni: 'uretime_sarf', uretimEmriId: k.e });
+    assert.equal(sarf.durum, 200, JSON.stringify(sarf.govde));
+    await teslimEt({ malzemeId: k.hm1, miktar: '3.6', kaynak: { konumId: await kabulKonumu() }, hedef: { istasyonId: k.ist.a } });
+    await teslimEt({ malzemeId: k.hm2, miktar: '10', kaynak: { konumId: await kabulKonumu() }, hedef: { istasyonId: k.ist.b } });
+    assert.equal((await sayim(k, 10, k.ist.a, '10')).uyari, null, 'A dalı elle verilen 2,4 kg dışında 3,6 kg çevirir');
+    await sayim(k, 20, k.ist.b, '10');
+    assert.deepEqual([await bakiye(k.hm1, k.ist.a, k.s[10]!), await bakiye(k.hm1, k.ist.a, null)], [3.6, 0]);
+    await teslimEt({ malzemeId: k.hm1, miktar: '3.6', statuId: k.s[10], kaynak: { istasyonId: k.ist.a }, hedef: { istasyonId: k.ist.c } });
+    await teslimEt({ malzemeId: k.hm2, miktar: '10', statuId: k.s[20], kaynak: { istasyonId: k.ist.b }, hedef: { istasyonId: k.ist.c } });
+    assert.equal((await sayim(k, 30, k.ist.c, '10')).uyari, null);
+    await sayim(k, 40, k.ist.c, '10');
+    const cikis = Number((await o().vt.tek<{ m: string }>(
+      "SELECT COALESCE(sum(miktar), 0)::text AS m FROM stok_hareketi WHERE uretim_emri_id = $1 AND malzeme_id = $2 AND tur = 'cikis'", [k.e, k.hm1]))!.m);
+    assert.equal(cikis, 6, 'hammadde bir kez düşer: 2,4 elle + 3,6 zincirden');
+    assert.deepEqual([await bakiye(k.hm1, k.ist.c, k.s[10]!), await bakiye(k.hm2, k.ist.c, k.s[20]!)], [0, 0]);
+    assert.equal(await eksiSatir(k), 0, 'statüde eksi kalmaz');
+  });
+
+  for (const sonDal of ['B', 'A'] as const) {
+    test(`2549 a: aynı hammadde iki paralel dalın ilk girdisi; elle verilen 2,4 kg bir kez mahsup edilir (${sonDal} dalı sona sayılır)`, async () => {
+      const k = await kur(null, true);
+      await malKabul(k.hm1, '12');
+      const sarf = await istek('yonetici', 'POST', '/stok/cikis', { malzemeId: k.hm1, konumId: await kabulKonumu(), miktar: '2.4', cikisNedeni: 'uretime_sarf', uretimEmriId: k.e });
+      assert.equal(sarf.durum, 200, JSON.stringify(sarf.govde));
+      // 10 adet x 0,6 kg x iki dal = 12 kg ihtiyaç; sona sayılan dal elle verilen kadar eksik çevirir.
+      const [ilk, son] = sonDal === 'B' ? [{ op: 10, ist: k.ist.a }, { op: 20, ist: k.ist.b }] : [{ op: 20, ist: k.ist.b }, { op: 10, ist: k.ist.a }];
+      await teslimEt({ malzemeId: k.hm1, miktar: '6', kaynak: { konumId: await kabulKonumu() }, hedef: { istasyonId: ilk.ist } });
+      await teslimEt({ malzemeId: k.hm1, miktar: '3.6', kaynak: { konumId: await kabulKonumu() }, hedef: { istasyonId: son.ist } });
+      // Sayım satırı olaydan önce yazılır (uretim-emirleri saglamYaz); kardeş dal başının sayılanı oradan okunur.
+      const satir = (op: number, ist: number) => o().sahip.sorgu(
+        "INSERT INTO uretim_sayimi (emir_id, kisi_id, istasyon_id, tur, adet, hurda_nedeni_id, duzeltme, is_emri_id) VALUES ($1, $2, $3, 'saglam', 10, NULL, false, $4)",
+        [k.e, kisiler.get('operator'), ist, k.ie[op]]);
+      await satir(ilk.op, ilk.ist);
+      assert.equal((await sayim(k, ilk.op, ilk.ist, '10')).uyari, null);
+      await satir(son.op, son.ist);
+      assert.equal((await sayim(k, son.op, son.ist, '10')).uyari, null, 'sona sayılan dal elle verilen 2,4 kg dışında 3,6 kg çevirir');
+      assert.deepEqual([await bakiye(k.hm1, ilk.ist, k.s[ilk.op]!), await bakiye(k.hm1, son.ist, k.s[son.op]!)], [6, 3.6]);
+      await teslimEt({ malzemeId: k.hm1, miktar: '6', statuId: k.s[ilk.op], kaynak: { istasyonId: ilk.ist }, hedef: { istasyonId: k.ist.c } });
+      await teslimEt({ malzemeId: k.hm1, miktar: '3.6', statuId: k.s[son.op], kaynak: { istasyonId: son.ist }, hedef: { istasyonId: k.ist.c } });
+      assert.equal((await sayim(k, 30, k.ist.c, '10')).uyari, null);
+      await sayim(k, 40, k.ist.c, '10');
+      const cikis = Number((await o().vt.tek<{ m: string }>(
+        "SELECT COALESCE(sum(miktar), 0)::text AS m FROM stok_hareketi WHERE uretim_emri_id = $1 AND malzeme_id = $2 AND tur = 'cikis'", [k.e, k.hm1]))!.m);
+      assert.equal(cikis, 12, 'hammadde bir kez düşer: 2,4 elle + 9,6 zincirden');
+      assert.deepEqual([await bakiye(k.hm1, k.ist.c, k.s[10]!), await bakiye(k.hm1, k.ist.c, k.s[20]!)], [0, 0], 'birleşme iki statüyü de sıfırlar');
+      assert.equal(await eksiSatir(k), 0);
+    });
+  }
+
+  // 2554: A dalı ara adımlı (OP10 HM1, sonra statüden statüye bir ya da iki ara adım), B dalı aynı HM1 ile; sonraki adım birleştirir,
+  // en son adım biter. 10 adet x 0,6 kg x iki dal.
+  type AraKurulum = Kurulum & { aralar: number[]; bOp: number; birlesme: number; son: number };
+  async function kurAra(araSayisi: 1 | 2): Promise<AraKurulum> {
+    const [urun, hm1] = [await kart('yarimamul'), await kart('hammadde')];
+    const [a, b, c] = [await istasyon(), await istasyon(), await istasyon()];
+    const tip = (await o().sahip.tek<{ id: number }>("INSERT INTO istasyonlar_operasyon_tipi (kod, ad, grup) VALUES ($1, 'Deneme tipi', 'TAL') RETURNING id", [`SDT${String(++sira)}`]))!.id;
+    const bekle = (opNo: number) => ({ opNo, tur: 'bekleyen' as const, devirAdedi: null });
+    const adim = (n: number, makine: number, ek: Partial<IsEmriGirdisi>): IsEmriGirdisi => ({
+      sira: n, opNo: n * 10, ad: `Adım ${n}`, operasyonTipiId: tip, kaynak: { tur: 'makine', id: makine }, ayarSuresiDk: '10', birimSureDk: '1',
+      terminGun: null, bagimlilik: 'bekleyen', devirAdedi: null, talimatSurumu: null, kontrolListesi: [], bilesenler: [], ...ek,
+    });
+    const rev = (await o().sahip.tek<{ id: number }>(
+      `INSERT INTO rota_revizyonu (malzeme_id, malzeme_turu, harf, durum, acan_kisi_id, iptal_eden_kisi_id, iptal_etme)
+       SELECT $1, 'yarimamul', 'ZZ', 'iptal', p.id, p.id, now() FROM (SELECT min(id) AS id FROM kisi) p RETURNING id`, [urun]))!.id;
+    const aralar = araSayisi === 1 ? [20] : [20, 30];
+    const bOp = aralar.at(-1)! + 10, birlesme = bOp + 10, son = birlesme + 10;
+    const planlamaci = (await o().vt.tx((db) => kullaniciYukle(db, kisiler.get('planlama_proje')!)))!;
+    const { uretimEmriId: e } = await o().vt.tx((db) => uretimEmriAc(db, planlamaci, {
+      projeId, malzemeNo: urun, adet: 10, teslim: null, kaynakRotaRevizyonId: rev, isEmirleri: [
+        adim(1, a.makine, { dal: 'A', onculler: [], bilesenler: [{ malzemeNo: hm1, miktar: '0.6' }] }),
+        ...aralar.map((op) => adim(op / 10, a.makine, { dal: 'A', onculler: [bekle(op - 10)] })),
+        adim(bOp / 10, b.makine, { dal: 'B', onculler: [], bilesenler: [{ malzemeNo: hm1, miktar: '0.6' }] }),
+        adim(birlesme / 10, c.makine, { onculler: [bekle(aralar.at(-1)!), bekle(bOp)] }),
+        adim(son / 10, c.makine, { onculler: [bekle(birlesme)] }),
+      ],
+    }));
+    const ie = Object.fromEntries((await o().vt.sorgu<{ id: number; op_no: number }>('SELECT id, op_no FROM uretim_emirleri_is_emri WHERE uretim_emri_id = $1', [e])).map((x) => [x.op_no, x.id]));
+    const st: Record<number, number> = {};
+    for (const op of [10, ...aralar, bOp, birlesme]) st[op] = await statu(`OP ${String(op)}`);
+    adimStatusuCozucusuKaydet(async (_db, g) => (g.uretimEmriId === e ? st[g.opNo] ?? null : null));
+    return { e, ie, urun, hm1, hm2: hm1, ist: { a: a.id, b: b.id, c: c.id }, s: st, aralar, bOp, birlesme, son };
+  }
+  for (const araSayisi of [1, 2] as const) {
+    for (const sonDal of ['A', 'B'] as const) {
+      test(`2554: paralel dalda ${String(araSayisi)} ara adım elle verileni mahsup eder; statüler sıfırlanır, eksi kalmaz (${sonDal} dal başı sona sayılır)`, async () => {
+        const k = await kurAra(araSayisi);
+        await malKabul(k.hm1, '12');
+        const sarf = await istek('yonetici', 'POST', '/stok/cikis', { malzemeId: k.hm1, konumId: await kabulKonumu(), miktar: '2.4', cikisNedeni: 'uretime_sarf', uretimEmriId: k.e });
+        assert.equal(sarf.durum, 200, JSON.stringify(sarf.govde));
+        const satir = (op: number, ist: number) => o().sahip.sorgu(
+          "INSERT INTO uretim_sayimi (emir_id, kisi_id, istasyon_id, tur, adet, hurda_nedeni_id, duzeltme, is_emri_id) VALUES ($1, $2, $3, 'saglam', 10, NULL, false, $4)",
+          [k.e, kisiler.get('operator'), ist, k.ie[op]]);
+        const say = async (op: number, ist: number) => { await satir(op, ist); return (await sayim(k, op, ist, '10')).uyari; };
+        // Sona sayılan dal başı elle verilen 2,4 kg kadar eksik çevirir; ona 3,6 kg teslim edilir.
+        await teslimEt({ malzemeId: k.hm1, miktar: sonDal === 'A' ? '3.6' : '6', kaynak: { konumId: await kabulKonumu() }, hedef: { istasyonId: k.ist.a } });
+        await teslimEt({ malzemeId: k.hm1, miktar: sonDal === 'A' ? '6' : '3.6', kaynak: { konumId: await kabulKonumu() }, hedef: { istasyonId: k.ist.b } });
+        const [ilk, son] = sonDal === 'A' ? [{ op: k.bOp, ist: k.ist.b }, { op: 10, ist: k.ist.a }] : [{ op: 10, ist: k.ist.a }, { op: k.bOp, ist: k.ist.b }];
+        assert.equal(await say(ilk.op, ilk.ist), null);
+        assert.equal(await say(son.op, son.ist), null);
+        for (const op of k.aralar) assert.equal(await say(op, k.ist.a), null, `ara adım OP ${String(op)} öncülün çevirmediğini çevirmez; statüde eksi yok`);
+        const a = sonDal === 'A' ? 3.6 : 6, b = sonDal === 'A' ? 6 : 3.6;
+        const sonAra = k.aralar.at(-1)!;
+        assert.deepEqual(await Promise.all([10, ...k.aralar].map((op) => bakiye(k.hm1, k.ist.a, k.s[op]!))), [...[10, ...k.aralar.slice(0, -1)].map(() => 0), a]);
+        await teslimEt({ malzemeId: k.hm1, miktar: String(a), statuId: k.s[sonAra], kaynak: { istasyonId: k.ist.a }, hedef: { istasyonId: k.ist.c } });
+        await teslimEt({ malzemeId: k.hm1, miktar: String(b), statuId: k.s[k.bOp], kaynak: { istasyonId: k.ist.b }, hedef: { istasyonId: k.ist.c } });
+        assert.equal(await say(k.birlesme, k.ist.c), null);
+        await say(k.son, k.ist.c);
+        const cikis = Number((await o().vt.tek<{ m: string }>(
+          "SELECT COALESCE(sum(miktar), 0)::text AS m FROM stok_hareketi WHERE uretim_emri_id = $1 AND malzeme_id = $2 AND tur = 'cikis'", [k.e, k.hm1]))!.m);
+        assert.equal(cikis, 12, 'hammadde bir kez düşer: 2,4 elle + 9,6 zincirden');
+        assert.deepEqual([await bakiye(k.hm1, k.ist.c, k.s[sonAra]!), await bakiye(k.hm1, k.ist.c, k.s[k.bOp]!)], [0, 0]);
+        assert.equal(await eksiSatir(k), 0, 'hiçbir statüde eksi kalmaz');
+      });
+    }
+  }
 });

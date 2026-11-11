@@ -25,11 +25,11 @@ for (const tur of ['pasif', 'kisi'] as const) {
       });
       const once = `${is(p0, oncul!).emirNo} OP ${String(is(p0, oncul!).opNo)}`;
       assert.equal(k.yazilan, 1);
-      assert.deepEqual(k.yerlesmeyen, [{ emirNo: is(p0, ardil!).emirNo, opNo: is(p0, ardil!).opNo, neden: `Önceki adım (${once}) yerleşmedi.` }]);
+      assert.deepEqual(k.yerlesmeyen, [{ emirNo: is(p0, ardil!).emirNo, opNo: is(p0, ardil!).opNo, neden: `Önceki adım (${once}) yerleşmedi.`, nedenKodu: 'oncul', hedef: null }]);
       const p = await planOku(k.taslak);
       assert.ok(p.yerlesimler.some((y) => y.isEmriId === baska));
       assert.equal(p.yerlesmemis.find((y) => y.isEmriId === ardil)?.neden, `Önceki adım (OP ${String(is(p0, oncul!).opNo)}) yerleşmedi.`);
-      if (tur === 'pasif') assert.equal(p.yerlesmemis.find((y) => y.isEmriId === oncul)?.neden, 'Makinesi kullanımda değil.');
+      if (tur === 'pasif') assert.match(p.yerlesmemis.find((y) => y.isEmriId === oncul)?.neden ?? '', /^.+ makinesi kullanımda değil\.$/);
       assert.ok(p.uyarilar.some((u) => u.includes(`OP ${String(is(p0, ardil!).opNo)}: yerleşmedi; önceki adım`)));
     });
   });

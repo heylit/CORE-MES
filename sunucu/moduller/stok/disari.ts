@@ -2,8 +2,8 @@ import type { Db } from '#cekirdek/db.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
 import { hareketlerSorgusu } from '#paylasilan/sozlesme/stok.ts';
 import type { KapanisMaddeBilgisi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
-import type { Hareket, MalzemeIstegiAcGirdisi, MalzemeIstegiDurumu, RefakatPartisi } from '#paylasilan/sozlesme/stok.ts';
-import { binde, stokDurumu, stoklanirMi, type StokDurumu } from './kurallar.ts';
+import type { Hareket, KaliteDurumu, MalzemeIstegiAcGirdisi, MalzemeIstegiDurumu, RefakatPartisi } from '#paylasilan/sozlesme/stok.ts';
+import { binde, bindenMetin, planaSayilirMi, statuKirilimi, stokDurumu, stoklanirMi, type StokDurumu } from './kurallar.ts';
 import { malzemeOzetleri } from '../malzemeler/disari.ts';
 import { isEmriPlanBilgileri, refakatKartiSayimlari } from '../uretim-emirleri/disari.ts';
 import * as servis from './servis.ts';
@@ -36,6 +36,10 @@ export async function stokMiktarlari(db: Db, malzemeIdler: number[]): Promise<Ma
 export type { DegerGrubu } from './kurallar.ts';
 // malzemeIdler verilirse yalnız o kartların satırları döner (tek kartı soran ekran bütün stoğu okumasın).
 export const degerGrubuToplamlari = (db: Db, malzemeIdler: readonly number[] | null = null) => sorgular.degerGrubuMalzemeToplamlari(db, malzemeIdler);
+// 2623 a, 2594 b: finansın genel gider çözücüsü (stokCikisiCozucusu). Ayın emre bağlı olmayan genel kullanım çıkışları (diğer, numune,
+// emirsiz fire) ve sayım eksikleri (2709 c) x çıkış anındaki son alış fiyatı, TL kuruşlu; çıkış yoksa 0. 2710 b: son alışı bilinmeyen
+// çıkış tutara girmez, `eksik` listesinde bildirilir (finans 2714 imzası).
+export const emirsizCikisTutari = (db: Db, ay: string): Promise<{ tutar: number; eksik: string[] }> => servis.emirsizCikisTutari(db, ay);
 // Kalite Merkezi (229 a): lot numarası ya da üretim emriyle parti kimlikleri; ve partinin bütün bakiyesini hedef kaliteye geçiren karar
 // (yoldaki teslime ayrılan miktar hariç; değişen satırlar döner). Çağıranın transaction'ında yürür; yetkiyi çağıran korur.
 export const partileriBul = (db: Db, a: { lotNo?: string; uretimEmriId?: number }) => sorgular.partileriBul(db, a);
@@ -86,6 +90,39 @@ export const emrinPartileri = (db: Db, uretimEmriId: number) => sorgular.emrinPa
 export type { EmirFisSatiri } from './servis.ts';
 export const emirMalzemeFisleri = (db: Db, emirIdler: readonly number[]) => servis.emirMalzemeFisleri(db, emirIdler);
 export const emirlerinNetSarfi = (db: Db, emirIdler: readonly number[]) => sorgular.emirlerinNetSarfi(db, emirIdler);
+// 2727-1 (2613-3 a): proje maliyetinin siparişsiz sarfı. emirlerinNetSarfi ile aynı çift ve miktar; tutar geri alınmamış her çıkışın
+// miktarı x çıkış anındaki son alış (TL kuruşlu metin, emirsizCikisTutari ile aynı hesap); çiftte son alışı bilinmeyen çıkış varsa null.
+// ilkZaman (2739-2): çiftin geri alınmamış ilk sarf ya da fire çıkışının anı; yoksa null.
+export const emirSarfSonAlisTutarlari = (db: Db, emirIdler: readonly number[]): Promise<{ emirId: number; malzemeId: number; miktar: string; tutar: string | null; ilkZaman: string | null }[]> =>
+  servis.emirSarfSonAlisTutarlari(db, emirIdler);
+// B-2482-8: emrin statü zincirinde duran hammaddesi (ilk adımın çevirmesi, statüden sarf düşülmüş). Malzeme ihtiyacında verilene eklenir:
+// verilen = emirlerinNetSarfi + bu. Okuma yetkisini çağıran korur.
+export const emirlerinZincirdekiMiktari = (db: Db, emirIdler: readonly number[]) => sorgular.emirlerinZincirdekiMiktari(db, emirIdler);
+// 2547 a (B-2482-12): statüde durup açık hiçbir emre ayrılmamış stok; plan aynı ürün ve OP'nin emrine kullanılabilir sayar. Yalnız
+// kullanılabilir kalite (serbest, şartlı) döner; karar bekleyen ve red plana stok sayılmaz. Okuma yetkisini çağıran korur.
+export const sahipsizStatuluStoklar = async (db: Db): Promise<{ malzemeId: number; statuId: number; kaliteDurumu: KaliteDurumu; sahipsiz: string }[]> =>
+  (await servis.sahipsizStatuluStoklar(db)).satirlar.filter((s) => planaSayilirMi(s.kaliteDurumu))
+    .map((s) => ({ malzemeId: s.malzemeId, statuId: s.statuId, kaliteDurumu: s.kaliteDurumu, sahipsiz: s.sahipsiz }));
+
+// 2610 a: istenen malzeme ve statü çiftlerinin statüdeki stoğu (2547'nin statuluStoklar sorgusu; konum toplamı eksi bakiyeyi düşer).
+// toplam bütün kalite durumları, planaSayilan yalnız plana sayılan kalite (planaSayilirMi). Bakiyesi olmayan çift satırsız döner (sıfır uydurulmaz).
+// Okuma yetkisini çağıran korur.
+export async function statuStoklari(
+  db: Db, ciftler: readonly { malzemeId: number; statuId: number }[],
+): Promise<{ malzemeId: number; statuId: number; toplam: string; planaSayilan: string }[]> {
+  if (ciftler.length === 0) return [];
+  const istenen = new Set(ciftler.map((c) => `${String(c.malzemeId)}:${String(c.statuId)}`));
+  const toplam = new Map<string, { malzemeId: number; statuId: number; toplam: bigint; planaSayilan: bigint }>();
+  for (const s of await sorgular.statuluStoklar(db, [...new Set(ciftler.map((c) => c.malzemeId))])) {
+    const k = `${String(s.malzemeId)}:${String(s.statuId)}`;
+    if (!istenen.has(k)) continue;
+    const t = toplam.get(k) ?? { malzemeId: s.malzemeId, statuId: s.statuId, toplam: 0n, planaSayilan: 0n };
+    t.toplam += binde(s.miktar);
+    if (planaSayilirMi(s.kaliteDurumu)) t.planaSayilan += binde(s.miktar);
+    toplam.set(k, t);
+  }
+  return [...toplam.values()].map((t) => ({ malzemeId: t.malzemeId, statuId: t.statuId, toplam: bindenMetin(t.toplam), planaSayilan: bindenMetin(t.planaSayilan) }));
+}
 
 // Akış süresi için emrin stok hareketleri (kart #1338): emrin kendi hareketleri, emrin partisinin hareketleri (statü çevirme,
 // sevk çıkışı) ve emrin teslimlerinin hareketleri; zamana göre, tekrarsız. Okuma yetkisini çağıran korur.
@@ -219,6 +256,15 @@ export const istasyondanTeslimEdilen = (db: Db, g: { uretimEmriId: number; istas
 export const adimStatusuCozucusu = (cozucu: servis.AdimStatusuCozucusu): void => servis.adimStatusuCozucusuKaydet(cozucu);
 // Reçete ve Rota adımın çıktı kartını (ara adımda parçanın dönüştüğü kart) çözen işlevi kaydeder; çıktısız adımda null döner.
 export const adimCiktisiCozucusu = (cozucu: servis.AdimStatusuCozucusu): void => servis.adimCiktisiCozucusuKaydet(cozucu);
+// Kartların statülü stoğu, kart ve statü başına (malzeme ayrıntısının statü kırılımıyla aynı toplam; statüsüz satır dönmez). Reçete ve
+// Rota'nın emir malzeme ihtiyacı ara adım stoğunu buradan okur (2493, 461 b). Salt okur; yetkiyi çağıran korur.
+export async function statuluStoklar(db: Db, malzemeIdler: readonly number[]): Promise<{ malzemeId: number; statuId: number; miktar: string }[]> {
+  const sonuc: { malzemeId: number; statuId: number; miktar: string }[] = [];
+  for (const id of new Set(malzemeIdler)) {
+    for (const k of statuKirilimi(await sorgular.malzemeBakiyeleri(db, id))) if (k.statuId !== null) sonuc.push({ malzemeId: id, statuId: k.statuId, miktar: k.miktar });
+  }
+  return sonuc;
+}
 // Reçete ve Rota statü listesini veren işlevi kaydeder; stok bunu `GET /stok/statuler` ucundan stok okuyanlara sunar.
 export const statuListesiCozucusu = (cozucu: servis.StatuListesiCozucusu): void => servis.statuListesiCozucusuKaydet(cozucu);
 // 1222 a: Kalite Merkezi verilen partilerden açık uygunsuzluğu (NCR) olanları veren işlevi kaydeder; ürün sevki ve depo çıkışı onları almaz.

@@ -11,7 +11,7 @@ import { uygulamaKur } from '#cekirdek/uygulama.ts';
 import { ISTEK_KIMLIGI_BASLIGI } from '#paylasilan/istek-kimligi.ts';
 import type {
   AdimGirdisi, IsEmriSartnameleriCevabi, KomutCevabi, ParametreGirdisi, RevizyonSartnameleriCevabi, SartnameCevabi, SartnamelerCevabi, SeceneklerCevabi,
-  TalimatAdimiGirdisi, TalimatlarCevabi, TalimatSablonlariCevabi, TalimatSablonuCevabi,
+  TalimatAdimiGirdisi, TalimatlarCevabi, TalimatSablonKopyalariCevabi, TalimatSablonlariCevabi, TalimatSablonuCevabi,
 } from '#paylasilan/sozlesme/rota.ts';
 import { denetimYaz } from '../denetim/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
@@ -28,7 +28,7 @@ describe('işlem şartnamesi (gerçek PostgreSQL)', () => {
   let app: FastifyInstance;
   let yoneticiId = 0;
   let projeId = 0;
-  const c: Record<'yonetici' | 'kartOnaycisi' | 'planlama' | 'mudur' | 'operator', string> = { yonetici: '', kartOnaycisi: '', planlama: '', mudur: '', operator: '' };
+  const c: Record<'yonetici' | 'kartOnaycisi' | 'planlama' | 'mudur' | 'kalite' | 'operator', string> = { yonetici: '', kartOnaycisi: '', planlama: '', mudur: '', kalite: '', operator: '' };
   let tipler: SeceneklerCevabi['operasyonTipleri'] = [];
   let makine = 0;
   let fasoncu = 0;
@@ -117,7 +117,7 @@ describe('işlem şartnamesi (gerçek PostgreSQL)', () => {
     if (!x) throw new Error(`Şartname yok: ${kod}`);
     return x;
   };
-  const ayrinti = (id: number) => tamam<SartnameCevabi>(c.operator, 'GET', `/rota/sartnameler/${id}`);
+  const ayrinti = (id: number) => tamam<SartnameCevabi>(c.mudur, 'GET', `/rota/sartnameler/${id}`);
 
   const alan = (p: Partial<ParametreGirdisi> & Pick<ParametreGirdisi, 'anahtar' | 'tur'>): ParametreGirdisi => ({
     ad: p.anahtar, birim: null, secenekler: null, varsayilan: null, ipucu: null, zorunlu: false, adimdaDegisir: true, ...p,
@@ -156,7 +156,7 @@ describe('işlem şartnamesi (gerçek PostgreSQL)', () => {
     await ortam.vt.tx((db) => yoneticiOlustur(db, { ad: 'Deneme Kart Onaycısı', kullaniciAdi: 'kartonay', parola: PAROLA }));
     c.kartOnaycisi = await girisCerezi('kartonay');
     const roller = ((await istek(c.yonetici, 'GET', '/roller')).json() as { roller: { id: number; ad: string }[] }).roller;
-    for (const [ad, rolAdi] of [['planlama', 'Planlama ve Proje'], ['mudur', 'Müdür'], ['operator', 'Operatör']] as const) {
+    for (const [ad, rolAdi] of [['planlama', 'Planlama ve Proje'], ['mudur', 'Müdür'], ['kalite', 'Kalite'], ['operator', 'Operatör']] as const) {
       const rolId = roller.find((x) => x.ad === rolAdi)!.id;
       await vt().tx(async (db) => {
         const id = await yoneticiOlustur(db, { ad: `Deneme ${ad}`, kullaniciAdi: ad, parola: PAROLA });
@@ -165,13 +165,13 @@ describe('işlem şartnamesi (gerçek PostgreSQL)', () => {
       });
       c[ad] = await girisCerezi(ad);
     }
-    tipler = (await tamam<SeceneklerCevabi>(c.operator, 'GET', '/rota/secenekler')).operasyonTipleri;
+    tipler = (await tamam<SeceneklerCevabi>(c.mudur, 'GET', '/rota/secenekler')).operasyonTipleri;
     const merkez = await tamam<{ id: number }>(c.yonetici, 'POST', '/is-merkezleri', { kod: 'SR-IM', ad: 'Deneme merkez', aciklama: null });
     const istasyon = (await tamam<{ id: number }>(c.yonetici, 'POST', '/istasyonlar', { kod: 'SR-A', ad: 'Deneme A', isMerkeziId: merkez.id })).id;
     makine = (await tamam<{ id: number }>(c.yonetici, 'POST', '/makineler', { kod: 'SR-MA', ad: 'Deneme makine', istasyonId: istasyon })).id;
     fasoncu = (await tamam<{ firma: { id: number } }>(c.yonetici, 'POST', '/musteri-tedarikci/firmalar/ekle', { ad: 'Deneme fasoncu', tur: 'tedarikci', fason: true })).firma.id;
     hammadde = await kartAc('hammadde');
-    kutuphane = await tamam<SartnamelerCevabi>(c.operator, 'GET', '/rota/sartnameler');
+    kutuphane = await tamam<SartnamelerCevabi>(c.mudur, 'GET', '/rota/sartnameler');
   });
 
   after(async () => { await ortam?.kaldir(); });
@@ -188,26 +188,36 @@ describe('işlem şartnamesi (gerçek PostgreSQL)', () => {
     assert.deepEqual(v?.parametreler.find((p) => p.anahtar === 'kalinlik')?.varsayilan, '8 µm (Fe/Zn8)');
     assert.equal(v?.atiflar.some((a) => a.standart.numara === 'ISO 2081' && a.rol === 'yontem'), true);
     assert.equal(kutuphane.sartnameler.some((s) => s.kod === 'TKR-SOK'), true, 'kırık takım sökümü (977)');
-    assert.equal((await istek(c.operator, 'GET', '/rota/sartnameler/2147483000')).statusCode, 404);
+    assert.equal((await istek(c.mudur, 'GET', '/rota/sartnameler/2147483000')).statusCode, 404);
+    for (const yol of ['/rota/sartnameler', `/rota/sartnameler/${zn.sartname.id}`]) assert.equal((await istek(c.operator, 'GET', yol)).statusCode, 403, 'operatör kütüphaneyi okuyamaz (2490 b)');
   });
 
-  test('976 a: şartname yazmak rota.sartname-yaz, yayınlamak rota.sartname-yayinla ister; rota yazan reddedilir, yönetici yazar', async () => {
+  test('976 a, 2491 c: şartname yazmak rota.sartname-yaz, yayınlamak rota.sartname-yayinla ister; kalite ve planlama yazar ve yayınlar, müdür ve operatör reddedilir', async () => {
     const govde = { kod: 'YT-1', kategoriId: kutuphane.kategoriler[0]!.id, ad: 'Yetki denemesi', kapsam: 'ic', musteriFirmaId: null, musteriBelgeNo: null };
-    await red(c.planlama, '/rota/sartnameler/ekle', govde, 403);
-    await red(c.planlama, '/rota/standartlar/ekle', { numara: 'DENEME 1', kisaAciklama: 'Deneme' }, 403);
-    const e = await tamam<SartnameCevabi>(c.yonetici, 'POST', '/rota/sartnameler/ekle', govde);
+    for (const cerez of [c.mudur, c.operator]) {
+      await red(cerez, '/rota/sartnameler/ekle', govde, 403);
+      await red(cerez, '/rota/standartlar/ekle', { numara: 'DENEME 1', kisaAciklama: 'Deneme' }, 403);
+    }
+    const e = await tamam<SartnameCevabi>(c.planlama, 'POST', '/rota/sartnameler/ekle', govde);
     assert.equal(e.sartname.kaynak, 'firma');
     assert.deepEqual(e.sartname.surumler.map((v) => [v.surumNo, v.durum]), [[1, 'taslak']]);
     const id = e.sartname.id;
-    await red(c.planlama, `/rota/sartnameler/${id}/taslak-kaydet`, taslakGovdesi(e.sartname.surum, []), 403);
-    await red(c.planlama, `/rota/sartnameler/${id}/yayinla`, { surum: e.sartname.surum }, 403);
-    await red(c.planlama, `/rota/sartnameler/${id}/pasife-al`, { surum: e.sartname.surum }, 403);
-    const y = await tamam<SartnameCevabi>(c.yonetici, 'POST', `/rota/sartnameler/${id}/yayinla`, { surum: e.sartname.surum });
+    for (const cerez of [c.mudur, c.operator]) {
+      await red(cerez, `/rota/sartnameler/${id}/taslak-kaydet`, taslakGovdesi(e.sartname.surum, []), 403);
+      await red(cerez, `/rota/sartnameler/${id}/yayinla`, { surum: e.sartname.surum }, 403);
+      await red(cerez, `/rota/sartnameler/${id}/pasife-al`, { surum: e.sartname.surum }, 403);
+    }
+    const k = await tamam<SartnameCevabi>(c.kalite, 'POST', `/rota/sartnameler/${id}/taslak-kaydet`, taslakGovdesi(e.sartname.surum, []));
+    const y = await tamam<SartnameCevabi>(c.kalite, 'POST', `/rota/sartnameler/${id}/yayinla`, { surum: k.sartname.surum });
     assert.equal(y.sartname.yururlukteSurumNo, 1);
-    assert.equal(y.sartname.surumler[0]?.yayinlayan?.id, yoneticiId);
+    assert.notEqual(y.sartname.surumler[0]?.yayinlayan?.id, yoneticiId, 'yayınlayan kalite kişisidir');
     // Aynı kod ikinci kez açılmaz; eski sürümle komut reddedilir.
     await red(c.yonetici, '/rota/sartnameler/ekle', govde, 409);
     await red(c.yonetici, `/rota/sartnameler/${id}/surum-ac`, { surum: e.sartname.surum }, 409);
+    // Planlama yayınlar: ikinci şartname planlamanın kendi açtığı ve yayınladığı sürümdür.
+    const p = await tamam<SartnameCevabi>(c.planlama, 'POST', '/rota/sartnameler/ekle', { ...govde, kod: 'YT-2' });
+    const py = await tamam<SartnameCevabi>(c.planlama, 'POST', `/rota/sartnameler/${p.sartname.id}/yayinla`, { surum: p.sartname.surum });
+    assert.equal(py.sartname.yururlukteSurumNo, 1);
   });
 
   test('müşteri şartnamesi firma ve belge numarasıyla birlikte tutulur; tedarikçi firma ve yarım bilgi reddedilir', async () => {
@@ -283,7 +293,7 @@ describe('işlem şartnamesi (gerçek PostgreSQL)', () => {
     assert.equal((await bagla(id, surum + 1, 20, [{ sartnameId: zn, degerler: {} }])).statusCode, 409, 'eski sürüm');
     const b = await bagla(id, surum, 20, [{ sartnameId: zn, degerler: { kalinlik: '12 µm (Fe/Zn12)', kirmiziPas: 720 } }]);
     assert.equal(b.statusCode, 200, b.body);
-    const okunan = await tamam<RevizyonSartnameleriCevabi>(c.operator, 'GET', `/rota/revizyonlar/${id}/sartnameler`);
+    const okunan = await tamam<RevizyonSartnameleriCevabi>(c.mudur, 'GET', `/rota/revizyonlar/${id}/sartnameler`);
     assert.deepEqual(okunan.adimlar.map((a) => [a.opNo, a.sartnameler.map((s) => [s.sartname.kod, s.degerler, s.eksikler, s.kapsamUyumsuz])]),
       [[20, [['KPL-ZN', { kalinlik: '12 µm (Fe/Zn12)', kirmiziPas: 720 }, [], false]]]]);
     // İç adım iç ya da ikisi kapsamlı şartname alır.
@@ -297,7 +307,7 @@ describe('işlem şartnamesi (gerçek PostgreSQL)', () => {
     const { id, surum } = await taslak();
     const b = await bagla(id, surum, 10, [{ sartnameId: x.id, degerler: {} }]);
     assert.equal(b.statusCode, 200, b.body);
-    const okunan = await tamam<RevizyonSartnameleriCevabi>(c.operator, 'GET', `/rota/revizyonlar/${id}/sartnameler`);
+    const okunan = await tamam<RevizyonSartnameleriCevabi>(c.mudur, 'GET', `/rota/revizyonlar/${id}/sartnameler`);
     assert.deepEqual(okunan.adimlar[0]?.sartnameler[0]?.eksikler, ['renk']);
     await red(c.planlama, `/rota/revizyonlar/${id}/onaya-gonder`, { surum: b.json<KomutCevabi>().surum }, 422, new RegExp(`OP 10: ${x.kod} şartnamesinde zorunlu alan boş: renk`));
     const d = await bagla(id, b.json<KomutCevabi>().surum, 10, [{ sartnameId: x.id, degerler: { renk: 'RAL 7035' } }]);
@@ -306,13 +316,13 @@ describe('işlem şartnamesi (gerçek PostgreSQL)', () => {
     const k = await tamam<KomutCevabi>(c.planlama, 'POST', `/rota/revizyonlar/${id}/kaydet`, {
       surum: d.json<KomutCevabi>().surum, aciklama: null, adimlar: [{ ...fasonAdim({ bilesenler: [{ malzemeId: hammadde, miktar: 1, fireYuzde: 0 }] }), opNo: 10 }, { ...fasonAdim(), opNo: 20 }],
     });
-    assert.equal((await tamam<RevizyonSartnameleriCevabi>(c.operator, 'GET', `/rota/revizyonlar/${id}/sartnameler`)).adimlar[0]?.sartnameler[0]?.kapsamUyumsuz, true);
+    assert.equal((await tamam<RevizyonSartnameleriCevabi>(c.mudur, 'GET', `/rota/revizyonlar/${id}/sartnameler`)).adimlar[0]?.sartnameler[0]?.kapsamUyumsuz, true);
     await red(c.planlama, `/rota/revizyonlar/${id}/onaya-gonder`, { surum: k.surum }, 422, /adımın kaynağına uymuyor/);
     // OP 10 çıkarılınca bağı da silinir; kalan rota onaya gider.
     const s = await tamam<KomutCevabi>(c.planlama, 'POST', `/rota/revizyonlar/${id}/kaydet`, {
       surum: k.surum, aciklama: null, adimlar: [{ ...fasonAdim({ bilesenler: [{ malzemeId: hammadde, miktar: 1, fireYuzde: 0 }] }), opNo: 20 }],
     });
-    assert.deepEqual((await tamam<RevizyonSartnameleriCevabi>(c.operator, 'GET', `/rota/revizyonlar/${id}/sartnameler`)).adimlar, []);
+    assert.deepEqual((await tamam<RevizyonSartnameleriCevabi>(c.mudur, 'GET', `/rota/revizyonlar/${id}/sartnameler`)).adimlar, []);
     const g = await tamam<KomutCevabi>(c.planlama, 'POST', `/rota/revizyonlar/${id}/onaya-gonder`, { surum: s.surum });
     // Onaya giden revizyonun bağı değişmez.
     assert.equal((await bagla(id, g.surum, 20, [])).statusCode, 409);
@@ -345,7 +355,7 @@ describe('işlem şartnamesi (gerçek PostgreSQL)', () => {
     await yururlugeAl(id, b2.json<KomutCevabi>().surum);
     const e1 = await emirAc(id);
     const [ie10, ie20] = e1.isEmriIdleri;
-    const okunan = await tamam<IsEmriSartnameleriCevabi>(c.operator, 'GET', `/rota/is-emri-sartnameleri?idler=${ie10},${ie20}`);
+    const okunan = await tamam<IsEmriSartnameleriCevabi>(c.mudur, 'GET', `/rota/is-emri-sartnameleri?idler=${ie10},${ie20}`);
     const ilk = okunan.isEmirleri.find((i) => i.isEmriId === ie10)!.sartnameler[0]!;
     assert.equal(ilk.surum.surumNo, 1);
     assert.deepEqual(ilk.degerler, { renk: 'RAL 9005', kalinlik: 60, sinif: 'C3' });
@@ -405,7 +415,7 @@ describe('işlem şartnamesi (gerçek PostgreSQL)', () => {
     await yururlugeAl(id, b.json<KomutCevabi>().surum);
     const emir = await emirAc(id);
     const yeni = await tamam<KomutCevabi>(c.planlama, 'POST', `/rota/urunler/${urun}/taslak-ac`, { kaynak: { tur: 'revizyon', revizyonId: id } });
-    const kopya = await tamam<RevizyonSartnameleriCevabi>(c.operator, 'GET', `/rota/revizyonlar/${yeni.id}/sartnameler`);
+    const kopya = await tamam<RevizyonSartnameleriCevabi>(c.mudur, 'GET', `/rota/revizyonlar/${yeni.id}/sartnameler`);
     assert.deepEqual(kopya.adimlar.map((a) => [a.opNo, a.sartnameler[0]?.degerler]), [[10, { renk: 'Kırmızı' }]]);
     const d = await bagla(yeni.id, yeni.surum, 10, [{ sartnameId: x.id, degerler: { renk: 'Mavi' } }]);
     await yururlugeAl(yeni.id, d.json<KomutCevabi>().surum);
@@ -442,14 +452,14 @@ describe('işlem şartnamesi (gerçek PostgreSQL)', () => {
   const adim = (p: Partial<TalimatAdimiGirdisi> = {}): TalimatAdimiGirdisi => ({ baslik: 'Parçayı bağla', metin: null, kontrol: { tur: 'yok' }, zorunlu: false, medya: [], ...p });
 
   test('varsayılan talimat şablonları göçle gelir; şablonun adımları ve şartnamesi okunur', async () => {
-    const l = await tamam<TalimatSablonlariCevabi>(c.operator, 'GET', '/rota/talimat-sablonlari');
+    const l = await tamam<TalimatSablonlariCevabi>(c.mudur, 'GET', '/rota/talimat-sablonlari');
     assert.deepEqual(l.sablonlar.map((x) => x.kod), ['TS-AST', 'TS-BYA', 'TS-CMM', 'TS-CNC', 'TS-FSN', 'TS-MON', 'TS-MRK', 'TS-TES', 'TS-TKR']);
     assert.equal(l.sablonlar.reduce((t, x) => t + x.adimSayisi, 0), 38);
     const ast = l.sablonlar.find((x) => x.kod === 'TS-AST')!;
     assert.equal(ast.sartname?.kod, 'AST-EPX');
     // Tohumda medya yok; kontrol noktalı adımlar sayılır (1180 a).
     assert.deepEqual([ast.kontrolSayisi, ast.resimSayisi, ast.videoSayisi], [3, 0, 0]);
-    const a = await tamam<TalimatSablonuCevabi>(c.operator, 'GET', `/rota/talimat-sablonlari/${ast.id}`);
+    const a = await tamam<TalimatSablonuCevabi>(c.mudur, 'GET', `/rota/talimat-sablonlari/${ast.id}`);
     assert.deepEqual(a.sablon.adimlar[2]?.kontrol, { tur: 'olcum', ad: 'Ortam sıcaklığı', alt: 10, ust: 35, birim: '°C' });
     assert.equal(a.sablon.adimlar[2]?.zorunlu, true);
   });
@@ -569,10 +579,10 @@ describe('işlem şartnamesi (gerçek PostgreSQL)', () => {
     const y = await tamam<TalimatlarCevabi>(c.planlama, 'POST', taslakUrl(t.urun, 'talimat-yayinla'), { opNo: 10, taslakSurum: 1 });
     assert.deepEqual(y.surumler[0]?.adimlar[0]?.medya.map((m) => [m.ozet, m.ad]), [[kalan, 'kalan.png']]);
     await tamam(c.planlama, 'POST', url, { opNo: 10, okunanSurum: 1, taslakSurum: null, adimlar: [adim({ medya: [{ ozet: kalan, ad: 'kalan.png' }, { ozet: giden, ad: 'giden.png' }] })] });
-    assert.equal((await istek(c.operator, 'GET', `/rota/talimat-medyasi/${giden}`)).statusCode, 200);
+    assert.equal((await istek(c.mudur, 'GET', `/rota/talimat-medyasi/${giden}`)).statusCode, 200);
     await tamam(c.planlama, 'POST', taslakUrl(t.urun, 'talimat-taslak-sil'), { opNo: 10, taslakSurum: 1 });
-    assert.equal((await istek(c.operator, 'GET', `/rota/talimat-medyasi/${giden}`)).statusCode, 404, 'yalnız taslaktaki dosyanın bağı kalkar');
-    assert.equal((await istek(c.operator, 'GET', `/rota/talimat-medyasi/${kalan}`)).statusCode, 200, 'yayındaki dosya kalır');
+    assert.equal((await istek(c.mudur, 'GET', `/rota/talimat-medyasi/${giden}`)).statusCode, 404, 'yalnız taslaktaki dosyanın bağı kalkar');
+    assert.equal((await istek(c.mudur, 'GET', `/rota/talimat-medyasi/${kalan}`)).statusCode, 200, 'yayındaki dosya kalır');
   });
 
   test('talimat şablonu yazılır, kaydedilir ve pasife alınır; kod tekil, sürüm denetlenir, operatör yazamaz', async () => {
@@ -590,6 +600,60 @@ describe('işlem şartnamesi (gerçek PostgreSQL)', () => {
     const p = await tamam<TalimatSablonuCevabi>(c.planlama, 'POST', `/rota/talimat-sablonlari/${e.sablon.id}/durum`, { surum: k.sablon.surum, aktif: false });
     assert.equal(p.sablon.aktif, false);
   });
+  test('2588 a: şablondan kopya kökeni kaydedilir, sürüm denetlenir, yayında taslaktan geçer; kopyalar şablonla listelenir', async () => {
+    const e = await tamam<TalimatSablonuCevabi>(c.planlama, 'POST', '/rota/talimat-sablonlari/ekle', {
+      kod: 'TS-KOKEN', ad: 'Köken şablonu', sartnameId: null, adimlar: [adim({ baslik: 'Şablon adımı' })],
+    });
+    const kaynak = { id: e.sablon.id, surum: e.sablon.surum };
+    const koken = { sablon: { id: e.sablon.id, kod: 'TS-KOKEN', ad: 'Köken şablonu' }, surum: e.sablon.surum };
+    const t = await taslak();
+    const yaz = `/rota/urunler/${t.urun}/talimat-adimli-yaz`;
+    await red(c.planlama, yaz, { opNo: 10, okunanSurum: null, adimlar: [adim()], kaynakSablon: { ...kaynak, surum: kaynak.surum + 1 } }, 409);
+    await red(c.planlama, yaz, { opNo: 10, okunanSurum: null, adimlar: [adim()], kaynakSablon: { id: 999999, surum: 1 } }, 404, /şablonu bulunamadı/);
+    const y1 = await tamam<TalimatlarCevabi>(c.planlama, 'POST', yaz, { opNo: 10, okunanSurum: null, adimlar: [adim()], kaynakSablon: kaynak });
+    assert.deepEqual(y1.surumler[0]?.koken, koken);
+    const y2 = await tamam<TalimatlarCevabi>(c.planlama, 'POST', yaz, { opNo: 10, okunanSurum: 1, adimlar: [adim({ baslik: 'Düzenlendi' })] });
+    assert.deepEqual(y2.surumler.map((x) => x.koken), [koken, koken], 'verilmeyen köken dayanılan sürümden devralınır');
+    const y3 = await tamam<TalimatlarCevabi>(c.planlama, 'POST', yaz, { opNo: 10, okunanSurum: 2, adimlar: [adim({ baslik: 'Elle' })], kaynakSablon: null });
+    assert.equal(y3.surumler[0]?.koken, null, 'null kökeni kaldırır');
+    const y4 = await tamam<TalimatlarCevabi>(c.planlama, 'POST', yaz, { opNo: 10, okunanSurum: 3, adimlar: [adim({ baslik: 'Elle 2' })] });
+    assert.equal(y4.surumler[0]?.koken, null, 'kökensiz sürümden devralınan köken yok');
+
+    const kaydet = taslakUrl(t.urun, 'talimat-taslak-kaydet');
+    const yayinla = taslakUrl(t.urun, 'talimat-yayinla');
+    const d1 = await tamam<TalimatlarCevabi>(c.planlama, 'POST', kaydet, { opNo: 10, okunanSurum: 4, taslakSurum: null, adimlar: [adim()], kaynakSablon: kaynak });
+    assert.deepEqual(d1.taslak?.koken, koken);
+    const d2 = await tamam<TalimatlarCevabi>(c.planlama, 'POST', kaydet, { opNo: 10, okunanSurum: 4, taslakSurum: 1, adimlar: [adim({ baslik: 'Düzeltildi' })] });
+    assert.deepEqual(d2.taslak?.koken, koken, 'verilmeyen köken taslakta korunur');
+    const y5 = await tamam<TalimatlarCevabi>(c.planlama, 'POST', yayinla, { opNo: 10, taslakSurum: 2 });
+    assert.deepEqual(y5.surumler.map((x) => [x.surum, x.koken]), [[5, koken], [4, null], [3, null], [2, koken], [1, koken]]);
+    // Mimar K1: kökenli sürümden kaynakSablon'suz açılan taslak kökeni devralır ve yayında taşır.
+    const d3 = await tamam<TalimatlarCevabi>(c.planlama, 'POST', kaydet, { opNo: 10, okunanSurum: 5, taslakSurum: null, adimlar: [adim({ baslik: 'Kopyayı düzenle' })] });
+    assert.deepEqual(d3.taslak?.koken, koken);
+    const y6 = await tamam<TalimatlarCevabi>(c.planlama, 'POST', yayinla, { opNo: 10, taslakSurum: 1 });
+    assert.deepEqual(y6.surumler[0]?.koken, koken, 'düzenlenen kopya kökenini taşır');
+    const d4 = await tamam<TalimatlarCevabi>(c.planlama, 'POST', kaydet, { opNo: 10, okunanSurum: 6, taslakSurum: null, adimlar: [adim()], kaynakSablon: null });
+    assert.equal(d4.taslak?.koken, null, 'null taslakta kökeni kaldırır');
+    await tamam(c.planlama, 'POST', kaydet, { opNo: 10, okunanSurum: 6, taslakSurum: 1, adimlar: [adim()], kaynakSablon: kaynak });
+
+    const k = await tamam<TalimatSablonuCevabi>(c.planlama, 'POST', `/rota/talimat-sablonlari/${e.sablon.id}/kaydet`, {
+      surum: e.sablon.surum, ad: 'Köken şablonu', sartnameId: null, adimlar: [adim({ baslik: 'Yeni şablon adımı' })],
+    });
+    await red(c.planlama, yaz, { opNo: 10, okunanSurum: 6, adimlar: [adim()], kaynakSablon: kaynak }, 409);
+    assert.equal((await istek(c.operator, 'GET', `/rota/talimat-sablonlari/${e.sablon.id}/kopyalar`)).statusCode, 403, 'kopyalar rota okuyanlara açıktır');
+    const l = await tamam<TalimatSablonKopyalariCevabi>(c.kalite, 'GET', `/rota/talimat-sablonlari/${e.sablon.id}/kopyalar`);
+    assert.deepEqual(l.sablon, { id: e.sablon.id, kod: 'TS-KOKEN', ad: 'Köken şablonu', surum: k.sablon.surum });
+    assert.deepEqual(l.kopyalar.map((x) => [x.urun.id, x.opNo, x.talimatSurumu, x.taslak, x.sablonSurumu, x.geride, x.gecerli]), [
+      [t.urun, 10, null, true, kaynak.surum, true, false],
+      [t.urun, 10, 6, false, kaynak.surum, true, true],
+      [t.urun, 10, 5, false, kaynak.surum, true, false],
+      [t.urun, 10, 2, false, kaynak.surum, true, false],
+      [t.urun, 10, 1, false, kaynak.surum, true, false],
+    ]);
+    assert.equal((await istek(c.kalite, 'GET', '/rota/talimat-sablonlari/999999/kopyalar')).statusCode, 404);
+    await assert.rejects(vt().tx((db) => db.sorgu('UPDATE rota_talimat_kokeni SET sablon_surum = sablon_surum + 1')), 'köken yalnız eklenir');
+  });
+
   // Sentetik PNG: imza ve rastgele gövde (tür ilk baytlardan bulunur).
   async function resimYukle(cerez: string, ek = randomUUID()): Promise<string> {
     const icerik = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.from(ek)]);
@@ -609,10 +673,11 @@ describe('işlem şartnamesi (gerçek PostgreSQL)', () => {
     // Dosyayı yüklemeyen yönetici, rotada bağlı dosyayı yeni sürümde kullanabilir (şablondan kopya gibi).
     const iki = await tamam<TalimatlarCevabi>(c.yonetici, 'POST', url, { opNo: 10, okunanSurum: 1, adimlar: [adim({ medya: [{ ozet, ad: 'yeni ad.png' }] })] });
     assert.equal(iki.surumler[0]?.adimlar[0]?.medya[0]?.ad, 'yeni ad.png');
-    const oku = await istek(c.operator, 'GET', `/rota/talimat-medyasi/${ozet}`);
+    const oku = await istek(c.mudur, 'GET', `/rota/talimat-medyasi/${ozet}`);
     assert.equal(oku.statusCode, 200);
     assert.equal(oku.headers['content-type'], 'image/png');
-    assert.equal((await istek(c.operator, 'GET', `/rota/talimat-medyasi/${'0'.repeat(64)}`)).statusCode, 404);
+    assert.equal((await istek(c.operator, 'GET', `/rota/talimat-medyasi/${ozet}`)).statusCode, 403, 'operatör rota medyasını okuyamaz (2490 b)');
+    assert.equal((await istek(c.mudur, 'GET', `/rota/talimat-medyasi/${'0'.repeat(64)}`)).statusCode, 404);
     const pdf = Buffer.from(`%PDF-1.4 ${randomUUID()}`);
     const pdfOzeti = createHash('sha256').update(pdf).digest('hex');
     await tamam(c.planlama, 'POST', `/dosyalar/${pdfOzeti}/parca`, { sira: 0, toplam: 1, veri: pdf.toString('base64') });
@@ -625,11 +690,11 @@ describe('işlem şartnamesi (gerçek PostgreSQL)', () => {
       kod: 'TS-MEDYA', ad: 'Medyalı şablon', sartnameId: null, adimlar: [adim({ baslik: 'Bak', medya: [{ ozet, ad: 'örnek.png' }] })],
     });
     assert.equal(e.sablon.adimlar[0]?.medya[0]?.ozet, ozet);
-    assert.equal((await istek(c.operator, 'GET', `/rota/talimat-medyasi/${ozet}`)).statusCode, 200);
-    const satir = (await tamam<TalimatSablonlariCevabi>(c.operator, 'GET', '/rota/talimat-sablonlari')).sablonlar.find((x) => x.id === e.sablon.id);
+    assert.equal((await istek(c.mudur, 'GET', `/rota/talimat-medyasi/${ozet}`)).statusCode, 200);
+    const satir = (await tamam<TalimatSablonlariCevabi>(c.mudur, 'GET', '/rota/talimat-sablonlari')).sablonlar.find((x) => x.id === e.sablon.id);
     assert.deepEqual([satir?.adimSayisi, satir?.kontrolSayisi, satir?.resimSayisi, satir?.videoSayisi], [1, 0, 1, 0]);
     await tamam(c.planlama, 'POST', `/rota/talimat-sablonlari/${e.sablon.id}/kaydet`, { surum: e.sablon.surum, ad: 'Medyasız', sartnameId: null, adimlar: [adim()] });
-    assert.equal((await istek(c.operator, 'GET', `/rota/talimat-medyasi/${ozet}`)).statusCode, 404);
+    assert.equal((await istek(c.mudur, 'GET', `/rota/talimat-medyasi/${ozet}`)).statusCode, 404);
   });
   test('video yalnız disk deposu açıkken bağlanır; açıkken diske alınır ve okunur', async () => {
     const t = await taslak();
@@ -645,7 +710,7 @@ describe('işlem şartnamesi (gerçek PostgreSQL)', () => {
     try {
       const l = await tamam<TalimatlarCevabi>(c.planlama, 'POST', url, { opNo: 10, okunanSurum: null, adimlar: [adim({ medya: [{ ozet, ad: 'video.mp4' }] })] });
       assert.equal(l.surumler[0]?.adimlar[0]?.medya[0]?.tur, 'video');
-      const oku = await istek(c.operator, 'GET', `/rota/talimat-medyasi/${ozet}`);
+      const oku = await istek(c.mudur, 'GET', `/rota/talimat-medyasi/${ozet}`);
       assert.equal(oku.statusCode, 200);
       assert.equal(oku.headers['content-type'], 'video/mp4');
       assert.deepEqual(oku.rawPayload, video);
@@ -684,7 +749,7 @@ describe('işlem şartnamesi (gerçek PostgreSQL)', () => {
     const [x] = r.isEmirleri[0]!.sartnameler;
     assert.deepEqual([r.isEmirleri[0]!.isEmriId, x?.sartname.kod, x?.surum.surumNo, x?.degerler.olcu, x?.degerler.sonra], [ek.id, 'TKR-SOK', 1, 'M6 kılavuz', 'Diş mastarla kontrol']);
     assert.equal(x?.sabitleyen.ad, 'Deneme planlama');
-    const okunan = await tamam<IsEmriSartnameleriCevabi>(c.operator, 'GET', `/rota/is-emri-sartnameleri?idler=${ek.id}`);
+    const okunan = await tamam<IsEmriSartnameleriCevabi>(c.mudur, 'GET', `/rota/is-emri-sartnameleri?idler=${ek.id}`);
     assert.equal(okunan.isEmirleri[0]!.sartnameler.length, 1, 'terminal aynı okumayla görür');
     // Liste bütün yazılır: yeniden yazılınca tek satır kalır, boş liste sabitleri kaldırır.
     await tamam(c.planlama, 'POST', yol(ek.id), govde([{ sartnameId: sok.id, degerler: { ...degerler, olcu: 'M8 kılavuz' } }]));

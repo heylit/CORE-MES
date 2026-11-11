@@ -4,7 +4,7 @@ import { kapsamdaMi, kisininKapsami } from '#cekirdek/kapsam.ts';
 import { islemVarMi } from '#cekirdek/yetki.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
 import { EKSIK_IS_TURLERI } from '#paylasilan/sozlesme/arkon.ts';
-import type { EksikIsKonusu, EksikIslerCevabi, EksikIslerimCevabi, EksikIsSatiri, EksikIsTuru } from '#paylasilan/sozlesme/arkon.ts';
+import type { EksikIsKonusu, EksikIslerCevabi, EksikIslerimCevabi, EksikIsSatiri, EksikIsTuru, OlcumNedeni } from '#paylasilan/sozlesme/arkon.ts';
 import type { BildirimTuru } from '#paylasilan/sozlesme/bildirim.ts';
 import { tesisGunBasi, tesisGunu } from '#paylasilan/tesis-zamani.ts';
 import { sistemAyariOku } from '../../ayarlar/disari.ts';
@@ -12,12 +12,13 @@ import { bildirimGonder, bildirimKapat } from '../../bildirim/disari.ts';
 import { istasyonlar, kisininIzinliIsMerkezleri, makineKisiAtamalari, makineler } from '../../istasyonlar/disari.ts';
 import { kisiAdlari } from '../../kisiler/disari.ts';
 import { canliSira, planBayatligi } from '../../plan/disari.ts';
+import { olcumAtlamalari } from '../../rota/disari.ts';
 import type { Kaynak } from '../../plan/disari.ts';
-import { aralikAdetleri, gunlukAralikAdetleri, istasyonDurusSureleri, planlanacakIsEmirleri, sonGirisler } from '../../uretim-emirleri/disari.ts';
+import { aralikAdetleri, bitenEmirler, bitenIsEmirleri, geridekiOnculler, gunlukAralikAdetleri, istasyonDurusSureleri, planlanacakIsEmirleri, sonGirisler } from '../../uretim-emirleri/disari.ts';
 import { basladigiGunTakvimleri } from '../../vardiya/disari.ts';
 import { araliklariBirlestir, gunEkle, kalanAdet, kesisimDakika } from '../kurallar.ts';
 import type { NetAralik } from '../kurallar.ts';
-import { bayatPlan, eksikEylemi, gecikenEmir, kayitsizGun, planGerisi, plansizIs, yarimIs } from './kurallar.ts';
+import { bayatPlan, eksikEylemi, gecikenEmir, gerideOnceki, kayitsizGun, olcumsuzIs, planGerisi, plansizIs, yarimIs } from './kurallar.ts';
 import type { EksikHukum, IstasyonGunu } from './kurallar.ts';
 import * as s from './sorgular.ts';
 
@@ -36,6 +37,8 @@ export interface EksikEsikleri {
   plansizIsSaat: number | null;
   gecikenEmirGun: number | null;
   bayatPlanSaat: number | null;
+  gerideOnceki: boolean;
+  olcumsuzIsGun: number | null;
 }
 
 export const eksikEsikleri = async (db: Db): Promise<EksikEsikleri> => ({
@@ -45,24 +48,32 @@ export const eksikEsikleri = async (db: Db): Promise<EksikEsikleri> => ({
   plansizIsSaat: await sistemAyariOku(db, 'arkon.eksik-plansiz-is-saat'),
   gecikenEmirGun: await sistemAyariOku(db, 'arkon.eksik-geciken-emir-gun'),
   bayatPlanSaat: await sistemAyariOku(db, 'arkon.eksik-bayat-plan-saat'),
+  gerideOnceki: await sistemAyariOku(db, 'arkon.eksik-geride-onceki'),
+  olcumsuzIsGun: await sistemAyariOku(db, 'arkon.eksik-olcumsuz-is-gun'),
 });
 
 const BILDIRIM_TURU = {
   'plan-gerisi': 'arkon.plan-gerisi', 'kayitsiz-gun': 'arkon.kayitsiz-gun', 'yarim-is': 'arkon.yarim-is', 'plansiz-is': 'arkon.plansiz-is',
-  'geciken-emir': 'arkon.geciken-emir', 'bayat-plan': 'arkon.bayat-plan',
+  'geciken-emir': 'arkon.geciken-emir', 'bayat-plan': 'arkon.bayat-plan', 'olcumsuz-is': 'arkon.olcumsuz-is', 'geride-onceki': 'arkon.geride-onceki',
 } as const satisfies Record<EksikIsTuru, BildirimTuru>;
 const OLAY_ADI: Record<EksikIsTuru, string> = {
-  'plan-gerisi': 'Plan gerisi', 'kayitsiz-gun': 'Kayıtsız gün', 'yarim-is': 'Yarım iş', 'plansiz-is': 'Plansız iş', 'geciken-emir': 'Geciken emir', 'bayat-plan': 'Bayat plan',
+  'plan-gerisi': 'Plan gerisi', 'kayitsiz-gun': 'Kayıtsız gün', 'yarim-is': 'Yarım iş', 'plansiz-is': 'Plansız iş', 'geciken-emir': 'Geciken emir', 'bayat-plan': 'Bayat plan', 'olcumsuz-is': 'Süre ölçülmedi',
+  'geride-onceki': 'Sayımı geride kalan önceki adım',
 };
 const BIRIM: Record<EksikIsTuru, string> = {
-  'plan-gerisi': 'dk', 'kayitsiz-gun': 'iş günü', 'yarim-is': 'vardiya saati', 'plansiz-is': 'vardiya saati', 'geciken-emir': 'gün', 'bayat-plan': 'vardiya saati',
+  'plan-gerisi': 'dk', 'kayitsiz-gun': 'iş günü', 'yarim-is': 'vardiya saati', 'plansiz-is': 'vardiya saati', 'geciken-emir': 'gün', 'bayat-plan': 'vardiya saati', 'olcumsuz-is': 'gün', 'geride-onceki': 'adet',
 };
 
 // Terminaldeki "Girilmemiş işlerim" sırası; saha görünümüne yalnız bu üç tür girer.
 const SAHA_SIRASI: Record<EksikIsTuru, number> = {
-  'kayitsiz-gun': 0, 'yarim-is': 1, 'plan-gerisi': 2, 'plansiz-is': 3, 'geciken-emir': 4, 'bayat-plan': 5,
+  'kayitsiz-gun': 0, 'yarim-is': 1, 'plan-gerisi': 2, 'olcumsuz-is': 3, 'plansiz-is': 4, 'geciken-emir': 5, 'bayat-plan': 6, 'geride-onceki': 7,
 };
 
+const NEDEN_ADI: Record<OlcumNedeni, string> = {
+  'ayar-yok': 'ayar basılmadı: hazırlık ölçülmedi', 'sayim-yok': 'sayım yok: işlem süresi ölçülmedi',
+  'saglam-yok': 'sağlam sayım yok (sayımlar karar bekliyor ya da reddedildi): işlem süresi ölçülmedi',
+  'is-emirsiz': 'iş emirsiz emir: adım süresi ölçülmedi', 'rotada-yok': 'adım rotada yok: süre rotaya yazılmadı',
+};
 const iso = (t: number): string => new Date(t).toISOString();
 const kaynakAnahtari = (k: Kaynak): string => `${k.tur}:${k.id}`;
 const olayAnahtari = (tur: EksikIsTuru, konuTur: EksikIsKonusu, konuId: number | null): string => `${tur}:${konuTur}:${konuId ?? ''}`;
@@ -164,6 +175,18 @@ async function bulgular(db: Db, e: EksikEsikleri, simdi: number): Promise<Bulgu[
     })));
   }
 
+  // AR-EK-8: sıra dışı başlamış açık adım; öncül başına tek hüküm olmasın diye en büyük değerli öncül alınır. Kapalı ayar ya da kapanmış adım olayı kapatır.
+  const geride = e.gerideOnceki ? await geridekiOnculler(db, idler) : [];
+  const adimById = new Map(isler.map((i) => [i.id, i]));
+  const gerideHukmu = new Map<number, EksikHukum>();
+  const agirlik = (h: EksikHukum): number => Math.max(h.deger, h.kalanAdet ?? 0);
+  for (const g of geride) {
+    const h = gerideOnceki({ acik: adimById.has(g.isEmriId), oncul: { tur: g.tur, bitti: g.onculBitti, devirAdedi: g.devirAdedi, gelen: g.gelen }, girdi: g.girdi, kayit: Date.parse(g.kayit) });
+    const onceki = gerideHukmu.get(g.isEmriId);
+    if (h !== null && (onceki === undefined || agirlik(h) > agirlik(onceki))) gerideHukmu.set(g.isEmriId, h);
+  }
+  for (const i of isler) sonuc.push(isBulgusu('geride-onceki', i, adimKaynagi(i), gerideHukmu.get(i.id) ?? null));
+
   // Geciken emir: emrin açık adımları birlikte okunur; plana göre bitiş canlı plandaki en geç bitiştir.
   const emirler = new Map<number, (typeof isler)[number][]>();
   for (const i of isler) emirler.set(i.uretimEmriId, [...(emirler.get(i.uretimEmriId) ?? []), i]);
@@ -218,6 +241,8 @@ async function bulgular(db: Db, e: EksikEsikleri, simdi: number): Promise<Bulgu[
     });
   }
 
+  if (e.olcumsuzIsGun !== null) sonuc.push(...await olcumsuzBulgular(db, e.olcumsuzIsGun, simdi, aktifIstasyonlar.map((x) => x.id)));
+
   const bayat = e.bayatPlanSaat === null ? null : await planBayatligi(db, simdi);
   sonuc.push({
     tur: 'bayat-plan', konuTur: 'plan', konuId: null, isEmriId: null, uretimEmriId: null, emirNo: null, opNo: null, istasyonId: null, kaynak: null,
@@ -228,14 +253,52 @@ async function bulgular(db: Db, e: EksikEsikleri, simdi: number): Promise<Bulgu[
   return sonuc;
 }
 
+// AR-EK-9 (2567): son GERI_GUN günde biten ölçülmeyen iş emirleri (emir açık olsa da) ve iş emirsiz biten emirler. Nedenleri ölçümün
+// sahibi rota verir (iş emri bitince yazdığı ölçümle aynı ölçüt, 2578 a). Pencereden çıkan iş hesaptan düşer, olayı kapanır. Kural kapalıyken hiç okunmaz; o
+// zaman olaylar konusu düşmüş gibi kapanır.
+async function olcumsuzBulgular(db: Db, esikGun: number, simdi: number, istasyonIdleri: readonly number[]): Promise<Bulgu[]> {
+  const bugun = tesisGunu(simdi);
+  const bas = iso(tesisGunBasi(gunEkle(bugun, -GERI_GUN)));
+  const isEmirleri = await bitenIsEmirleri(db, bas, iso(simdi));
+  const emirler = await bitenEmirler(db, istasyonIdleri, bas, iso(simdi));
+  const isEmriIstasyonu = new Map(isEmirleri.map((i) => [i.isEmriId, i.istasyonId]));
+  const emirBitisi = new Map(emirler.map((x) => [x.id, x]));
+  const durumlar = await olcumAtlamalari(db, [...isEmirleri.map((i) => i.uretimEmriId), ...emirler.map((x) => x.id)]);
+  const sonuc: Bulgu[] = [];
+  for (const [emirId, d] of durumlar) {
+    if (d.isEmirsiz) {
+      const biten = emirBitisi.get(emirId);
+      const bitis = biten === undefined ? null : Date.parse(biten.bitis);
+      sonuc.push({
+        tur: 'olcumsuz-is', konuTur: 'uretim_emri', konuId: emirId, isEmriId: null, uretimEmriId: emirId, emirNo: d.emirNo, opNo: null,
+        istasyonId: biten?.istasyonId ?? null, kaynak: null,
+        hukum: olcumsuzIs({ nedenler: ['is-emirsiz'], bitis, bitisGunu: bitis === null ? null : tesisGunu(bitis), bugun, esikGun }),
+      });
+      continue;
+    }
+    // Pencere iş emrinin bitişidir: emir açıkken bitmiş iş emri de görünür, pencereden önce biten görünmez.
+    for (const a of d.atlananlar.filter((x) => isEmriIstasyonu.has(x.isEmriId))) {
+      const bitis = a.bitis === null ? null : Date.parse(a.bitis);
+      const kaynak: Kaynak | null = a.kaynak.tur === 'makine' || a.kaynak.tur === 'kisi' ? { tur: a.kaynak.tur, id: a.kaynak.id } : null;
+      sonuc.push({
+        tur: 'olcumsuz-is', konuTur: 'is_emri', konuId: a.isEmriId, isEmriId: a.isEmriId, uretimEmriId: emirId, emirNo: d.emirNo, opNo: a.opNo,
+        istasyonId: isEmriIstasyonu.get(a.isEmriId) ?? null, kaynak,
+        hukum: olcumsuzIs({ nedenler: a.nedenler, bitis, bitisGunu: bitis === null ? null : tesisGunu(bitis), bugun, esikGun }),
+      });
+    }
+  }
+  return sonuc;
+}
+
 async function olayAc(db: Db, simdi: number, b: Bulgu, h: EksikHukum): Promise<void> {
   const id = await s.eksikIsAc(db, {
     tur: b.tur, konuTur: b.konuTur, konuId: b.konuId, isEmriId: b.isEmriId, uretimEmriId: b.uretimEmriId, emirNo: b.emirNo, opNo: b.opNo, istasyonId: b.istasyonId,
     kaynakTur: b.kaynak?.tur ?? null, kaynakId: b.kaynak?.id ?? null, deger: h.deger, kalanAdet: h.kalanAdet, planaGore: h.planaGore,
-    dayanakAni: h.dayanak === null ? null : iso(h.dayanak), acilis: iso(simdi),
+    dayanakAni: h.dayanak === null ? null : iso(h.dayanak), nedenler: [...h.nedenler], acilis: iso(simdi),
   });
   const konu = b.emirNo === null ? '' : `: ${b.emirNo}${b.opNo === null ? '' : ` · OP ${b.opNo}`}`;
-  const ek = h.planaGore ? ' (plana göre)' : h.kalanAdet === null ? '' : ` · ${h.kalanAdet} adet kaldı`;
+  const ek = h.nedenler.length > 0 ? ` · ${h.nedenler.map((n) => NEDEN_ADI[n]).join(', ')}`
+    : h.planaGore ? ' (plana göre)' : h.kalanAdet === null ? '' : ` · ${h.kalanAdet} adet kaldı`;
   await bildirimGonder(db, {
     tur: BILDIRIM_TURU[b.tur], baslik: `${OLAY_ADI[b.tur]}${konu}`, metin: `${h.deger} ${BIRIM[b.tur]}${ek}`, yol: '/arkon/anomali', kaynakKimlik: bildirimKimligi(id),
   });
@@ -261,6 +324,7 @@ export async function eksikIsleriYenile(db: Db, simdi: number = Date.now()): Pro
     else if (eylem.tur === 'guncelle') {
       await s.eksikIsGuncelle(db, o!.id, {
         deger: eylem.h.deger, kalanAdet: eylem.h.kalanAdet, planaGore: eylem.h.planaGore, dayanakAni: eylem.h.dayanak === null ? null : iso(eylem.h.dayanak),
+        nedenler: [...eylem.h.nedenler],
         istasyonId: b.istasyonId, guncelleme: iso(simdi),
       });
     } else if (eylem.tur === 'kapat') await kapat(o!);
@@ -280,7 +344,7 @@ async function satirlar(db: Db, kullanici: Kullanici, olaylar: readonly s.EksikI
       id: o.id, tur: o.tur, konu: o.konuTur, isEmriId: o.isEmriId, uretimEmriId: o.uretimEmriId, emirNo: o.emirNo, opNo: o.opNo,
       istasyon: ist === undefined ? null : { id: ist.id, ad: ist.ad },
       kaynak: o.kaynakTur === null || o.kaynakId === null ? null : { tur: o.kaynakTur, id: o.kaynakId, ad: kaynakAdi },
-      deger: o.deger, kalanAdet: o.kalanAdet, planaGore: o.planaGore, dayanakAni: o.dayanakAni, acilis: o.acilis, kapanis: o.kapanis,
+      deger: o.deger, kalanAdet: o.kalanAdet, planaGore: o.planaGore, dayanakAni: o.dayanakAni, nedenler: o.nedenler, acilis: o.acilis, kapanis: o.kapanis,
     };
   });
 }
@@ -288,7 +352,8 @@ async function satirlar(db: Db, kullanici: Kullanici, olaylar: readonly s.EksikI
 // Anomali sayfasının Eksik işler bölümü: açık olaylar ve bugün kapananlar, kişinin veri kapsamıyla süzülür. Kişi kaynağının adı yalnız kişi
 // kırılımını görene gelir (kart #1306).
 export async function eksikIsler(db: Db, kullanici: Kullanici, simdi: number = Date.now()): Promise<EksikIslerCevabi> {
-  const esikler = await eksikEsikleri(db);
+  // Sözleşmedeki eşikler sayıdır; açık/kapalı kural (geride kalan önceki adım) eşik değildir, gönderilmez.
+  const { gerideOnceki: _acikKapali, ...esikler } = await eksikEsikleri(db);
   const kapsam = await kisininKapsami(db, kullanici.id, kisininIzinliIsMerkezleri);
   const istasyonById = new Map((await istasyonlar(db, { pasiflerDahil: true })).map((i) => [i.id, i]));
   const olaylar = (await s.eksikIslerGoster(db, iso(tesisGunBasi(tesisGunu(simdi))), OLAY_SINIRI))
@@ -307,7 +372,7 @@ export async function eksikIslerim(db: Db, kullanici: Kullanici, simdi: number =
   const istasyonIdleri = new Set([...makineIdleri].flatMap((m) => { const i = makineById.get(m)?.istasyonId; return i === null || i === undefined ? [] : [i]; }));
   const benim = (o: s.EksikIsOlayiSatiri): boolean => {
     if (o.tur === 'kayitsiz-gun') return o.istasyonId !== null && istasyonIdleri.has(o.istasyonId);
-    if (o.tur !== 'plan-gerisi' && o.tur !== 'yarim-is') return false;
+    if (o.tur !== 'plan-gerisi' && o.tur !== 'yarim-is' && o.tur !== 'olcumsuz-is') return false;
     return (o.kaynakTur === 'kisi' && o.kaynakId === kullanici.id) || (o.kaynakTur === 'makine' && o.kaynakId !== null && makineIdleri.has(o.kaynakId));
   };
   // Önce tür (saha önce girilmemiş günü, sonra yarım işi kapatır), tür içinde değer: birim türden türe değiştiği için değerler karşılaştırılamaz.

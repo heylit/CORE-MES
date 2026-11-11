@@ -169,6 +169,8 @@ export const senaryoSemasi = z.object({
   dengeler: z.array(z.object({ kalemId: uuid, denge: ondalikMetinSemasi.nullable() })).max(500),
 });
 
+const projeSecenegiSemasi = z.object({ id: z.number().int(), kod: z.string(), ad: z.string() });
+
 const talepAlanlari = {
   id: uuid,
   baslik: z.string().trim().min(1, 'Başlık zorunlu.').max(160),
@@ -181,6 +183,9 @@ const talepAlanlari = {
   iptalNedeni: metin(500),
   // Talebin açıldığı üretim emri; yalnız açık (planlı ya da başlamış) emir seçilir. Boş: emre bağlı değil.
   uretimEmriId: z.number().int().positive().max(2147483647).nullable().prefault(null),
+  // 2611 a: emre bağlı olmayan talebin projesi; alımın bedeli proje maliyetine gider. Emirli talepte boştur (proje emirden gelir).
+  // Gelmeyen alan kayıttaki projeyi korur: alanı bilmeyen istemci kaydederken projeyi silmez.
+  projeId: z.number().int().positive().max(2147483647).nullable().optional(),
   agirliklar: agirliklarSemasi.nullable(),
   kalemler: z.array(kalemSemasi).max(200),
   teklifIstekleri: z.array(teklifIstegiSemasi).max(50),
@@ -277,6 +282,8 @@ export const talepKaynagiSemasi = z.object({
   talepId: uuid, no: z.string(), talepEdenAdi: z.string().nullable(), kalemIdleri: z.array(uuid), ihtiyacTarihi: z.string().nullable(),
   // V4 a: kalemin harcaması bu birime yazılır; boşsa birleşik talebin birimine.
   birim: z.string().nullable(),
+  // 2624 b: kaynağın üretim emri; birleşik talepte kaynaktan gelen kalem bu emre bağlı kalır (mal kabulde emre ayrılır).
+  uretimEmriNo: z.string().nullable(),
 });
 export type TalepKaynagi = z.output<typeof talepKaynagiSemasi>;
 export const talepSemasi = z.object({
@@ -290,6 +297,7 @@ export const talepSemasi = z.object({
   teslimYontemi: z.enum(TESLIM_YONTEMLERI).nullable(),
   no: z.string(),
   uretimEmriNo: z.string().nullable(),
+  proje: projeSecenegiSemasi.nullable().optional(),
   talepEdenAdi: z.string().nullable(),
   acanKisiId: z.number().int(),
   surum: surumSemasi,
@@ -298,6 +306,9 @@ export const talepSemasi = z.object({
 });
 
 // Talep formunun üretim emri seçimi: açık emirler.
+// 2611 a: talepte seçilebilen projeler (yalnız aktif); talep açan projeler.oku yetkisini taşımayabilir.
+export const projeSecenekleriCevabi = z.object({ projeler: z.array(projeSecenegiSemasi) });
+export type ProjeSecenekleriCevabi = z.output<typeof projeSecenekleriCevabi>;
 export const acikEmirlerCevabi = z.object({
   emirler: z.array(z.object({ id: z.number().int(), emirNo: z.string(), parcaNo: z.string(), parcaAd: z.string() })),
 });
@@ -623,6 +634,7 @@ export interface SatinAlmaUclari {
   'GET /satin-alma-fason-sureleri': { sorgu: z.input<typeof fasonSureleriSorgusu>; cevap: FasonSureleriCevabi };
   'GET /satin-alma-acilis': { cevap: AcilisCevabi };
   'GET /satin-alma-acik-emirler': { cevap: AcikEmirlerCevabi };
+  'GET /satin-alma-talepleri/proje-secenekleri': { cevap: ProjeSecenekleriCevabi };
   'POST /satin-alma-talepleri/ac': { govde: z.input<typeof talepGovdesi>; cevap: Talep };
   'GET /satin-alma-taleplerim': { sorgu: z.input<typeof taleplerimSorgusu>; cevap: TaleplerimCevabi };
   'POST /satin-alma-talepleri/hizli-ac': { govde: z.input<typeof hizliAcGovdesi>; cevap: Talebim };
@@ -639,6 +651,7 @@ export interface SatinAlmaUclari {
   'POST /satin-alma-talepleri/:id/teslim-yontemi': { govde: z.input<typeof teslimYontemiGovdesi>; cevap: Talep };
   'GET /satin-alma-talepleri/:id/siparis-takibi': { cevap: SiparisTakibiCevabi };
   'GET /satin-alma-talepleri/:id/degerlendirme': { cevap: DegerlendirmeCevabi };
+  'GET /satin-alma-butce-kullanimi': { sorgu: z.input<typeof butceKullanimiSorgusu>; cevap: ButceKullanimiCevabi };
   'GET /satin-alma-talepleri/:id/kart-ayrintilari': { cevap: KartAyrintilariCevabi };
   'POST /satin-alma-talepleri/:id/odeme-plani': { govde: z.input<typeof odemePlaniGovdesi>; cevap: SiparisTakibiCevabi };
   'GET /satin-alma-siparis-satirlari/:id/belgeler': { cevap: SiparisBelgeleriCevabi };
@@ -660,13 +673,25 @@ export interface SatinAlmaUclari {
   'GET /satin-alma-kg-fiyatlari/malzemeler': { sorgu: z.input<typeof malzemeKgFiyatlariSorgusu>; cevap: MalzemeKgFiyatlariCevabi };
   'GET /satin-alma-tedarik-terminleri': { cevap: TedarikTerminleriCevabi };
   'POST /satin-alma-tedarik-terminleri/kaydet': { govde: z.input<typeof tedarikTerminiKaydetGovdesi>; cevap: TedarikTerminiKaydetCevabi };
+  'GET /satin-alma-fatura-eslemeleri/:belgeId': { cevap: FaturaEslemesiCevabi };
+  'POST /satin-alma-fatura-eslemeleri/:belgeId/kaydet': { govde: z.input<typeof faturaEslemesiKaydetGovdesi>; cevap: FaturaEslemesiCevabi };
 }
 
 // 1094 b: teklif karşılaştırmasının sunucudaki hesabı. Tutarlar TL ve ondalık metindir (2 basamak); puanlar 0-100.
 // Karar onaydaysa ya da sipariş verildiyse sabit kur ve faizle, değilse finansın bugünkü kuru ve faiziyle hesaplanır (1096 a).
 // Tedarikçi başarımı bilinmiyorsa (puan, teslim ve kalite verisi yok) ya da termin girilmemişse null; o teklifte ağırlığı bilinen ölçütlere dağılır (2157).
 const kriterSayilari = z.object({ maliyet: z.number(), termin: z.number().nullable(), tedarikci: z.number().nullable(), garanti: z.number() });
+// 2454: birim başına bütçe kullanımı (TL, nominal). Birim kalemin kaynak birimi, yoksa talebin birimi; boş birim null. butce null: tanımsız.
+// kullanilan: yılın siparişi verilmiş taleplerinin kalem tutarları; kalanı kapatılmış siparişte gerçekleşen teslim değeri (2462 a).
+// hesaplanamayanKalem: kuru olmadığı için toplama girmeyen kalem sayısı.
+const butceBirimSatiri = z.object({ birim: z.string().nullable(), butce: ondalikMetinSemasi.nullable(), kullanilan: ondalikMetinSemasi, hesaplanamayanKalem: z.number().int() });
+export const butceKullanimiSorgusu = z.object({ yil: z.coerce.number<number>().int().min(2000).max(2100) });
+export const butceKullanimiCevabi = z.object({ yil: z.number().int(), birimler: z.array(butceBirimSatiri) });
+export type ButceKullanimiCevabi = z.output<typeof butceKullanimiCevabi>;
+// Onay kırılımı: talebin kalemlerinin düştüğü her birim için bütçe, bu talep hariç yılın kullanımı ve bu alımın tutarı.
+const talepButceSatiri = z.object({ birim: z.string().nullable(), butce: ondalikMetinSemasi.nullable(), yil: z.number().int(), kullanilan: ondalikMetinSemasi, buAlim: ondalikMetinSemasi });
 export const degerlendirmeCevabi = z.object({
+  butce: z.array(talepButceSatiri),
   kurKaynagi: z.enum(['sabit', 'guncel']),
   kurKilidi: z.string().nullable(),
   // Sabit kur 7 günü geçtiyse ya da kur %3'ten fazla saptıysa siparişi durduracak ileti; yoksa boş.
@@ -1010,3 +1035,24 @@ export type IptaliGeriAlCevabi = z.infer<typeof iptaliGeriAlCevabi>;
 export type IptaliGeriAlYazimi = z.infer<typeof iptaliGeriAlGovdesi>;
 export type TalepBirlestirYazimi = z.output<typeof talepBirlestirGovdesi>;
 export type TalepAyirYazimi = z.output<typeof talepAyirGovdesi>;
+
+// 2642 b: fatura (Finans belgesi) tutarının sipariş satırlarına eşlemesi. Tutar belgenin para biriminde, KDV hariç. surum belgenin eşleme
+// sürümüdür (kayıt sayısı + kaldırılmış sayısı; 0'dan başlar), belge sürümü değil.
+export const SATIR_YOLLARI = ['fason', 'bilinmiyor', 'stok', 'emir', 'proje', 'genel_gider'] as const;
+export const ESLEME_DURUMLARI = ['yok', 'kismi', 'tam'] as const;
+export const faturaEslemesiParametresi = z.object({ belgeId: z.coerce.number<number>().int().positive().max(2147483647) });
+export const faturaEslemesiCevabi = z.object({
+  belgeId: z.number().int(), belgeNo: z.string().nullable(), firmaAdi: z.string().nullable(), belgeTutari: ondalikMetinSemasi, paraBirimi: z.string(), siparisParaBirimi: z.string().nullable(), surum: z.number().int().min(0),
+  satirlar: z.array(z.object({
+    siparisSatiriId: z.number().int(), kalemAdi: z.string(), miktar: ondalikMetinSemasi, birim: z.string(), siparisTutari: ondalikMetinSemasi,
+    yol: z.enum(SATIR_YOLLARI), tutar: ondalikMetinSemasi.nullable(), baskaBelgelerden: ondalikMetinSemasi.nullable(),
+  })),
+  bayat: z.array(z.object({ siparisSatiriId: z.number().int(), tutar: ondalikMetinSemasi })),
+  eslenmemisKalan: ondalikMetinSemasi, oran: z.number().min(0).max(1).nullable(), esleme: z.enum(ESLEME_DURUMLARI),
+});
+export type FaturaEslemesiCevabi = z.output<typeof faturaEslemesiCevabi>;
+export const faturaEslemesiKaydetGovdesi = z.object({
+  surum: z.number().int().min(0).max(2147483647),
+  satirlar: z.array(z.object({ siparisSatiriId: z.number().int().positive().max(2147483647), tutar: ondalikMetinSemasi })).max(500),
+}).strict();
+export type FaturaEslemesiKaydetGovdesi = z.output<typeof faturaEslemesiKaydetGovdesi>;

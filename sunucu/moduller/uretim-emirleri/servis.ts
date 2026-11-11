@@ -19,17 +19,18 @@ import {
   duraklatmaIhlali, durdurmaIhlali, durusNedeniIhlali, hurdaNedeniIhlali, hurdaToplamIhlali, HURDA_NEDENI_YOK, katilimUyarisi, katilmaIhlali, makineDoluIhlali, saglamToplamIhlali,
   adimlardanGorunum, isEmriSureOzeti as sureOzetiHesapla, kayitAniIhlali, sayimIhlali, sayimYetkiIhlali, siradakiIsEmri, toplamAsimiIhlali,
   ilkAyrim, kararAnlari, MAKINE_AYRIM_UFKU_DK, makineAyrildiMetni,
-  ADIM_ACIK_DEGIL, ADIM_BASLAMIS, ADIM_SECILMELI, KATILIM_TEK_ACIK_IS_EMIRSIZ, adimEksigi, adimEksikleri, adimTuketimi, baslatilabilirAdimlar, eksiyleBitirmeUyarisi,
-  emirEksiUyarisi, adimOnculleri, oncekiBitmediIhlali, oncekiParalelAdim, sayimAsimiUyarisi, siraDisiBaslatmaUyarisi, uyarilariBirlestir, varsayilanAdim,
+  ADIM_ACIK_DEGIL, ADIM_BASLAMIS, ADIM_SECILMELI, KATILIM_TEK_ACIK_IS_EMIRSIZ, adimEksigi, adimEksikleri, adimTuketimi, baslatilabilirAdimlar, eksiyleBitirmeUyarisi, kararBekleyenBitisIhlali,
+  emirEksiUyarisi, adimOnculleri, oncekiBitmediIhlali, oncekiParalelAdim, sayimAsimiUyarisi, onculdenGelen, siraDisiBaslatmalar, siraDisiBaslatmaUyarisi, uyarilariBirlestir, varsayilanAdim,
   KAPANIS_KILITLI, kapanisSonucu, ISTASYONSUZ_KISI, baslatanIstasyonuGerekirMi, kisininIstasyonu, emirIlerlemesi,
   MAKINE_ZATEN_ADIMDA, PAYI_YOK_MAKINE, payIlerlemesi, payiVarMi, sayimMakinesi,
 } from './kurallar.ts';
-import type { IstasyonDurumu, MakineAyrimi, PlanPayi } from './kurallar.ts';
+import type { IstasyonDurumu, MakineAyrimi, OnculTuru, PlanPayi } from './kurallar.ts';
 import { adimaGiren, birlesmeAdimiBiterMi, dalBasiAdedi, kolAdimiBaslarMi, kolSonuysaKatil, ustuOnceKilitle } from './is-emri-servis.ts';
 import { hurdaSayimiBildir, kaliteKarariBildir, saglamSayimiBildir } from './sayim-olayi.ts';
 import { baslatmaDenetimi } from './baslatma-denetimi.ts';
-import { emirBittiBildir, hazirlikTamamlandiBildir } from './emir-olaylari.ts';
+import { adimBittiBildir, emirBittiBildir, hazirlikTamamlandiBildir } from './emir-olaylari.ts';
 import * as sorgular from './sorgular.ts';
+import { siraDisiBaslatmaEkle, siraDisiBaslatmalarGetir } from './sorgular/sira-disi/sorgular.ts';
 import type { AdimDurumSatiri, AdimSatiri, EmirSatiri, IsEmriSatiri, KararGrubu, KayitSatiri } from './sorgular.ts';
 
 interface Adlar {
@@ -640,8 +641,13 @@ export async function emirBaslat(
   const makineIhlali = yer.makineler.length === 0 ? null : makineYetkinlikIhlali(kisiId, yer.makineler, await makineYetkinlikleri(db), muaf);
   if (makineIhlali !== null) throw yetkiYok(makineIhlali);
   await yeriDenetle(db, id, yer, isEmri?.id ?? null);
-  const siraUyarisi = isEmri === null ? null : siraDisiBaslatmaUyarisi(hepsi, isEmri, isEmri.onculler === null
-    ? ((await adimaGiren(db, id, hepsi, isEmri)) ?? 0) : await onculSaglamlari(db, hepsi, isEmri));
+  const oncekiSaglam = isEmri === null ? null : isEmri.onculler === null
+    ? ((await adimaGiren(db, id, hepsi, isEmri)) ?? 0) : await onculSaglamlari(db, hepsi, isEmri);
+  const siraUyarisi = isEmri === null || oncekiSaglam === null ? null : siraDisiBaslatmaUyarisi(hepsi, isEmri, oncekiSaglam);
+  // 2768 (2756 b): adımın ilk başlatması sıra dışıysa öncül başına iz kalır; duraklamadan dönüş yeniden yazmaz.
+  const siraDisi = isEmri === null || oncekiSaglam === null || isEmri.durum !== 'bekliyor' ? [] : siraDisiBaslatmalar(hepsi, isEmri, oncekiSaglam);
+  // İz öncülün kendi sayımını tutar; sıralı rotada oncekiSaglam adıma girendir (birleşen, bölünen, GKK gönderilen dahil).
+  const onculSayilan = isEmri === null || siraDisi.length === 0 ? null : await onculSaglamlari(db, hepsi, isEmri);
   const an = await komutAni(db, id);
   // Planlı emir adımı verilerek başlarsa emir o adımın istasyonunda başlar; başlamış emrin istasyonu öncü adımda kalır.
   // İstasyon başlamadan önce yazılır: sıradaki adım fasondaysa emrin istasyonu boştur, başlamış emir istasyonsuz olamaz (1345).
@@ -650,6 +656,12 @@ export async function emirBaslat(
   if (isEmri !== null) await sorgular.isEmriBaslat(db, isEmri.id, an);
   const ilkBaslatma = !(await sorgular.baslatmaKaydiVarMi(db, id));
   await sorgular.kayitEkle(db, id, kisiId, istasyonId, 'baslat', null, an, isEmri?.id ?? null);
+  if (isEmri !== null) for (const x of siraDisi) {
+    await siraDisiBaslatmaEkle(db, {
+      uretimEmriId: id, isEmriId: isEmri.id, onculIsEmriId: x.onceki.id, onculTuru: x.tur, devirAdedi: x.devirAdedi,
+      hazirAdet: x.gelen, onculSayilan: onculSayilan === null ? x.sayilan : onculSayilan(x.onceki), kisiId, istasyonId, an,
+    });
+  }
   await yeriTut(db, id, isEmri?.id ?? null, yer, kisiId, an);
   await sorgular.katilimAc(db, id, isEmri?.id ?? null, kisiId, istasyonId, an);
   // Hazırlık denetiminden geçen ilk terminal başlatması; adımsız eski emir ve sonraki adımlar olay vermez.
@@ -723,28 +735,23 @@ export async function emirBitir(
     await birlesmeAdimiBiterMi(db, id, calisan);
   }
   const sayac = await sayaclar(db, id, adimId);
+  // 2521 b: ilk parça kararı bekleyen parça varken adım (adımsız emirde emir) bitmez; karar Kalite Merkezi'ndedir.
+  const kararIhlali = kararBekleyenBitisIhlali(sayac.kararBekliyor, calisan?.opNo ?? null);
+  if (kararIhlali !== null) throw cakisma(kararIhlali);
   const mevcut = sayac.saglam;
-  // 327 a: karar bekleyen varken verilen adet onunla birlikte sayılandır; fark karar bekleyene yazılır,
-  // kapanış onaylı sağlamdır ve onay bekleyeni sonradan ekler (çift sayım olmaz).
-  const bekleyen = sayac.kararBekliyor;
-  const onayBekler = saglamAdet !== undefined && bekleyen > 0;
-  const sayilan = onayBekler ? mevcut + bekleyen : mevcut;
-  const fark = (saglamAdet ?? sayilan) - sayilan;
-  // Eksi fark önce karar bekleyeni, artanı sağlamı düşer: karar bekleyen sıfırın altına inmez.
-  const bekleyeneFark = onayBekler ? Math.max(fark, -bekleyen) : 0;
-  const saglamaFark = fark - bekleyeneFark;
-  const kapanis = mevcut + saglamaFark;
+  const fark = (saglamAdet ?? mevcut) - mevcut;
+  const kapanis = mevcut + fark;
   const uyarilar = [await adimGirdisiUyarisi(db, emir, hepsi, calisan, fark), calisan === null ? null : await eksiyleBitisUyarisi(db, hepsi, calisan, kapanis)];
   const an = await komutAni(db, id);
   const makineId = fark === 0 ? null : await sayimMakinesiSec(db, adimId, kisiId, null);
-  if (bekleyeneFark !== 0) await saglamYaz(db, emir, kisiId, istasyonId, bekleyeneFark, true, an, true, refakatPartisiId, adimId, makineId);
-  if (saglamaFark !== 0) await saglamYaz(db, emir, kisiId, istasyonId, saglamaFark, true, an, false, refakatPartisiId, adimId, makineId);
+  if (fark !== 0) await saglamYaz(db, emir, kisiId, istasyonId, fark, true, an, false, refakatPartisiId, adimId, makineId);
   await sorgular.kayitEkle(db, id, kisiId, istasyonId, 'bitir', kapanis, an, adimId);
   await sorgular.emrinKullanimlariniKapat(db, id, kisiId, an, adimId);
   await sorgular.emrinKatilimlariniKapat(db, id, an, adimId);
   let emirKapanis = kapanis;
   if (calisan !== null) {
     await sorgular.isEmriBitir(db, calisan.id, kapanis, an);
+    await adimBittiBildir(db, { isEmriId: calisan.id, uretimEmriId: id, kisiId });
     const guncel = await sorgular.isEmirleriGetir(db, [id]);
     // Terminalde çalışan başka adım: emir başlamış kalır, istasyonu en küçük sıralı çalışan adıma geçer.
     const suren = guncel.filter((i) => i.durum === 'calisiyor' && i.fasonFirmaId === null && i.istasyonId !== null).sort((a, b) => a.sira - b.sira)[0];
@@ -1210,4 +1217,29 @@ export async function makineEkle(db: Db, kisiId: number, id: number, isEmriId: n
   await yeriDenetle(db, id, yer, adim!.id);
   await yeriTut(db, id, adim!.id, yer, kisiId, await komutAni(db, id));
   return emirdenCevap(db, id);
+}
+
+// 2769 (AR-EK-8): sıra dışı başlamış adımların öncülü bugün nerede. gelen: öncülün sayılan sağlamından bu adıma düşen (çarpanlı), girdi: bu
+// adımın sağlamı + hurdası. Kaydı olmayan adım listede yoktur; adımı ya da öncülü silinmiş kayıt atlanır.
+export interface GeridekiOncul {
+  uretimEmriId: number; isEmriId: number; onculIsEmriId: number; onculOpNo: number; tur: OnculTuru; devirAdedi: number | null;
+  onculBitti: boolean; gelen: number; girdi: number; kayit: string;
+}
+export async function geridekiOnculler(db: Db, isEmriIdleri: readonly number[]): Promise<GeridekiOncul[]> {
+  const kayitlar = await siraDisiBaslatmalarGetir(db, isEmriIdleri);
+  if (kayitlar.length === 0) return [];
+  const hepsi = await sorgular.isEmirleriGetir(db, [...new Set(kayitlar.map((k) => k.uretimEmriId))]);
+  const adimById = new Map(hepsi.map((i) => [i.id, i]));
+  const sayac = new Map((await sorgular.adimSayaclariGetir(db, [...new Set(kayitlar.flatMap((k) => [k.isEmriId, k.onculIsEmriId]))])).map((x) => [x.isEmriId, x]));
+  return kayitlar.flatMap((k) => {
+    const adim = adimById.get(k.isEmriId);
+    const oncul = adimById.get(k.onculIsEmriId);
+    if (adim === undefined || oncul === undefined) return [];
+    const sayilan = oncul.durum === 'tamam' ? (oncul.saglamAdet ?? 0) : (sayac.get(oncul.id)?.saglam ?? 0);
+    const s = sayac.get(adim.id);
+    return [{
+      uretimEmriId: k.uretimEmriId, isEmriId: k.isEmriId, onculIsEmriId: k.onculIsEmriId, onculOpNo: oncul.opNo, tur: k.onculTuru, devirAdedi: k.devirAdedi,
+      onculBitti: oncul.durum === 'tamam', gelen: onculdenGelen(sayilan, oncul, adim), girdi: (s?.saglam ?? 0) + (s?.hurda ?? 0), kayit: k.zaman,
+    }];
+  });
 }

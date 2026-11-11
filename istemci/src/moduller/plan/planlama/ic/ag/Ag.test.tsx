@@ -11,6 +11,10 @@ import { calismaKur, OKUYAN, PLANCI } from '../veri/test-veri.tsx';
 import { AkisAgi } from './index.tsx';
 import { atolyeOzeti, atolyeSahnesi, baglar, bul, ilkKamera, izdus, kararSahnesi, KISIT_HATTI, tezgahAni, uretimSahnesi, type Konum } from './kurallar.ts';
 
+import { saatiSabitle } from '../../test-saati.ts';
+
+saatiSabitle(() => calismaKur());
+
 afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
 // Uydurma ekip kaydı: bir alınan, bir alınmayan ek mesai ve kapalı CP-SAT kararı.
@@ -91,7 +95,7 @@ function tuvalKur() {
 function ac(c: PlanlamaCalismasi, islemler = PLANCI) {
   const git = vi.fn(); const sec = vi.fn(); const altSec = vi.fn<(a: PlanlamaAltEkrani) => void>();
   const o: PlanlamaEkranOzellikleri = {
-    depo: { durum: null } as unknown as PlanlamaDeposu, calisma: c, komut: null, yetki: yetkiKur(islemler, { yazabilir: true }), git, yenile: () => undefined,
+    depo: { durum: null } as unknown as PlanlamaDeposu, calisma: c, komut: null, yetki: yetkiKur(islemler), git, yenile: () => undefined,
     olcek: ACILIS_OLCEGI, olcekSec: () => undefined, kaydir: () => undefined, secim: BOS_SECIM, sec, altSec,
   };
   render(<BildirimSaglayici><AkisAgi o={o} c={c} /></BildirimSaglayici>);

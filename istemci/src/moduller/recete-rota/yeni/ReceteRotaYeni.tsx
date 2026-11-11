@@ -34,13 +34,16 @@ export const BOLUM_ACIKLAMALARI: Readonly<Record<SekmeAnahtari, string | null>> 
   items: 'Kalemler Malzemeler ve Hizmetler kartlarından okunur; kod, ad, birim ve kategori orada değişir. Stok miktarı salt '
     + 'okunurdur. Birim maliyet Finans\'ta tutulur: rotası olan yarı mamul ve mamullerin malzeme maliyeti adımlara giren malzemelerden toplanır.',
   res: null,
+  planlanabilirlik: 'Plana girmeyen adımın her kontrolü ayrı satırdır: süre, istasyon, makine, yetkin kişi, vardiya, malzeme, ufuk ve önceki adım. '
+    + 'Kırmızı satırdaki düğme düzeltileceği sayfayı açar; önceki adımı bekleyen adımlar o adım düzelince kendiliğinden yerleşir.',
   sartnameler: null,
   kapanis: null,
+  ayarlar: 'Operasyona bağlı olmayan statüler (karantina, giriş onaylı, ret gibi) burada tanımlanır; operasyon statüleri rotadan otomatik gelir.',
 };
 // Şartname ve talimatlar (prototip) ve kapanış onayları kendi başlığını çizer.
 const BASLIKSIZ: ReadonlySet<SekmeAnahtari> = new Set(['schema', 'sartnameler', 'kapanis']);
-// Kütüphane ve kapanış sayfası planla ilgisizdir: plan şeridi çizilmez.
-const PLANSIZ: ReadonlySet<SekmeAnahtari> = new Set(['sartnameler', 'kapanis']);
+// Kütüphane, kapanış ve ayarlar sayfası planla ilgisizdir: plan şeridi çizilmez.
+const PLANSIZ: ReadonlySet<SekmeAnahtari> = new Set(['sartnameler', 'kapanis', 'ayarlar']);
 
 // İkinci menü sayıları, eski ekranın kuralıyla (Sayaclar.hesapla): aktif emir (serbest ve üretimde), minimumun altındaki kalem, onayda
 // (yoksa taslak) rota revizyonu, operasyon ve malzeme sayısı. Okunamayan dilimin sayısı null'dır. Eski ekran boş stoğu 0 sayardı; burada
@@ -129,7 +132,7 @@ function Ekran({ motorOkunamadi, planVerisiEksik }: { motorOkunamadi: boolean; p
     <>
       {/* Bölümler kabuğun ikinci menü şeridindedir (553 1 a); eski ekranın sırası (497/1 a): şeridin altında kenardan kenara plan şeridi,
           sonra bölüm başı. */}
-      {/* Plan şeridi planı yazanındır (RR-9): plan yazmayan rol (kalite, CAM) onu ve pasif "Onaya gönder"i görmez. */}
+      {/* Plan şeridi planı yazanındır (RR-9): plan yazmayan rol (kalite, CAM) onu ve "Planlama'da aç" bağını görmez. */}
       {veri.data && yetki.planYaz && !PLANSIZ.has(sekme.anahtar) && <PlanSeridi durum={veri.data.durum} yerlesimOkunamadi={motorOkunamadi} />}
       <div className="tc-rry-govde">
         <BolumBasi key={sekme.anahtar} baslik={BASLIKSIZ.has(sekme.anahtar) ? null : sekme.baslik} aciklama={BOLUM_ACIKLAMALARI[sekme.anahtar]} />

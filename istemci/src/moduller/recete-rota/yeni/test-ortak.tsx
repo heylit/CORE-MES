@@ -1,4 +1,4 @@
-import { vi } from 'vitest';
+import { beforeAll, vi } from 'vitest';
 import { render } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Link, MemoryRouter, Route, Routes } from 'react-router-dom';
@@ -19,6 +19,17 @@ export const OKUYAN = kisi(2, [KAPI, 'sayfa.recete-rota', 'recete-rota.oku']);
 export const PLANCI = kisi(4, [KAPI, 'sayfa.recete-rota', 'recete-rota.oku', 'plan.yaz']);
 export const SAYFASIZ = kisi(3, [KAPI]);
 export const KAPISIZ = kisi(4, ['sayfa.recete-rota', 'recete-rota.oku', 'recete-rota.yaz']);
+
+// Bölüm klasörleri sekmeler.ts'te tembel yüklenir; dosyanın ilk testi yoksa bekleme süresinin içinde bütün klasörün dönüştürülmesini
+// öder ve yük altında bulma süresini aşar (2786). Dosya başında sırayla yüklenir; aynı anda istemek yükleyicide yarım modül döndürür.
+export async function bolumleriYukle(): Promise<void> {
+  await import('./rotalar/index.tsx');
+  await import('./kaynaklar/index.tsx');
+  await import('./emirler/index.tsx');
+  await import('./sartnameler/index.tsx');
+}
+// Bu dosyayı ithal eden her test dosyası toplama sırasında bu kancayı kendi kök takımına alır.
+beforeAll(bolumleriYukle);
 
 export const json = (durum: number, govde: unknown) => new Response(JSON.stringify(govde), { status: durum });
 export interface Istek { yontem: string; yol: string; govde: unknown }

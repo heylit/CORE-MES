@@ -2,7 +2,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { PlanCanliOzeti } from '#paylasilan/sozlesme/plan.ts';
-import { ONAYA_GONDER_PASIF, PlanSeridi } from './PlanSeridi.tsx';
+import { MemoryRouter } from 'react-router-dom';
+import { PLANLAMA_YOLU, PlanSeridi } from './PlanSeridi.tsx';
 import { json, ornekDurum, type Istek } from './test-ortak.tsx';
 import type { EkranYerlesimi, RrDurumu } from './veri.ts';
 
@@ -17,18 +18,19 @@ const ac = (d: RrDurumu, surum = 3) => {
     return json(200, { planSurumu: surum, sonCanliyaAlma: null });
   }));
   const istemci = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  render(<QueryClientProvider client={istemci}><PlanSeridi durum={d} yerlesimOkunamadi={d.planYerlesim === null} /></QueryClientProvider>);
+  render(<MemoryRouter><QueryClientProvider client={istemci}><PlanSeridi durum={d} yerlesimOkunamadi={d.planYerlesim === null} /></QueryClientProvider></MemoryRouter>);
   return istekler;
 };
 const yer = (makineId: number, saat: string) => [{ makineId, baslangic: `2026-10-26T${saat}:00.000Z` }];
 
 describe('plan şeridi', () => {
-  it('canlıyla aynıysa PLAN CANLI ve son canlıya alma; onaya gönder düğmesi yok', async () => {
+  it('canlıyla aynıysa PLAN CANLI ve son canlıya alma; onaya gönder düğmesi ve Planlama bağı yok', async () => {
     ac(durum({ 'UE-0001|10': yer(51, '08:00') }));
     const s = screen.getByRole('status', { name: 'Plan durumu' });
     expect(s.textContent).toContain('PLAN CANLI');
     expect(s.textContent).toContain('Plan henüz hiç canlıya alınmadı');
     expect(screen.queryByRole('button', { name: 'Onaya gönder' })).toBeNull();
+    expect(screen.queryByRole('link', { name: "Planlama'da aç" })).toBeNull();
   });
 
   it('canlı plan varken motor farkı: PLAN CANLI, altında motor önerisi satırı; onaya gönder yok (500 a)', () => {
@@ -40,14 +42,14 @@ describe('plan şeridi', () => {
     expect(screen.queryByRole('button', { name: 'Onaya gönder' })).toBeNull();
   });
 
-  it('hiç canlı plan yoksa değişiklik sayısı ve görünür ama pasif Onaya gönder (357 b); yazma isteği gitmez', async () => {
+  it('hiç canlı plan yoksa değişiklik sayısı ve Planlama bağı; pasif Onaya gönder ve birincil düğme yok, yazma isteği gitmez (2496 b)', async () => {
     const bos = { ...durum({ 'UE-0001|10': yer(51, '08:00') }), planCanli: { ...CANLI, kuyruklar: [] } };
     const istekler = ac(bos);
     expect(screen.getByText('1 değişiklik bekliyor')).toBeTruthy();
-    const d = screen.getByRole('button', { name: 'Onaya gönder' }) as HTMLButtonElement;
-    expect(d.disabled).toBe(true);
-    expect(d.title).toBe(ONAYA_GONDER_PASIF);
-    fireEvent.click(d);
+    const bag = screen.getByRole('link', { name: "Planlama'da aç" });
+    expect(bag.getAttribute('href')).toBe(PLANLAMA_YOLU);
+    expect(screen.queryByRole('button', { name: 'Onaya gönder' })).toBeNull();
+    expect(document.querySelector('.tc-dugme-birincil')).toBeNull();
     await waitFor(() => expect(istekler.some((i) => i.yol === '/plan/surum')).toBe(true));
     expect(istekler.every((i) => i.yontem === 'GET')).toBe(true);
   });

@@ -16,8 +16,9 @@ boş fabrikayla açılır (kurulum ekranı ve örnek senaryo yok) ve ilk değiş
 |---|---|---|
 | GET /recete-rota/ben | `sayfa.recete-rota` ya da `.oku` ya da `.yaz` | kişi ve yazma bayrağı |
 | GET /recete-rota/kayitlar | aynı | bütün kayıtlar (anahtar, biçim, değer, sürüm) |
-| POST /recete-rota/kayitlar/yaz | `recete-rota.yaz` | sürüm denetimli yazma (gövdesiz denetim) |
-| POST /recete-rota/kayitlar/sil | `recete-rota.yaz` | sürüm denetimli silme |
+| GET /recete-rota/malzeme-ihtiyaci?emir= | okuma (yukarıdaki gibi) ve emir okuma (`ADIMLI_OKUMA_ISLEMLERI`) | emir malzeme ihtiyacı (2486-8, 461 b): plan sırasıyla stok ve ara adım stoğu paylaştırılır, kökte emrin kopyası, verilen sarf düşülür |
+| POST /recete-rota/kayitlar/yaz | `recete-rota.yaz` | sürüm denetimli yazma (gövdesiz denetim); ana durum kaydı (`recete-rota-motoru-v1`) reddedilir (400, B-2484-2) |
+| POST /recete-rota/kayitlar/sil | `recete-rota.yaz` | sürüm denetimli silme; ana durum kaydı reddedilir (400) |
 
 Rol dağılımı (göç `20261013061901_kisiler_recete_rota_yetkileri.sql`, çekirdek yamasında; VARSAYIM, Rota'yı gören roller):
 

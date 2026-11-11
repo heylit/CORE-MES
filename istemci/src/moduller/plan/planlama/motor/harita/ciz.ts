@@ -123,7 +123,7 @@ export function ciz(g: CanvasRenderingContext2D, o: Cizim): { kutu: Kutu[]; yold
     // üst durum şeridi
     g.save(); yuvarlak(g, ox(x0), oy(y0), w, h, 10 * k); g.clip(); g.fillStyle = rgba(dr); g.fillRect(ox(x0), oy(y0), w, 5 * k); g.restore();
     g.textBaseline = 'alphabetic';
-    const adi = fas ? a.m.slice(1) : tezgahKodu(a.m, tezgahKodlari(o.D));
+    const adi = tezgahKodu(a.m, tezgahKodlari(o.D));
     if (k * 168 < 50) {
       // uzak görünüm: yalnız ad ve durum rengi
       g.fillStyle = rgba(dr, 0.25); yuvarlak(g, ox(x0), oy(y0), w, h, 10 * k); g.fill(); g.font = `800 ${Math.max(9, 26 * k)}px ${R.mono}`; g.fillStyle = rgba(R.ink);

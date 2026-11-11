@@ -26,6 +26,11 @@ const rrSeq = (o, i) => /^\d+$/.test(String(o.k)) ? +o.k : (i + 1) * 10;
 const dugumSipId = (o, yol) => String(o.id) + String(yol).split('.').slice(1).map(n => '-Y' + n).join('');
 /* 1952: kişinin el tezgâhının kimliği; sunucu motoru (emirler.js kisiTezgahi) ve çözücü (plan-cozucusu.ts) aynı öneki okur */
 const KISI_TEZGAH_ONEKI = 'kisi-';
+/* B-2500-2: kişi tezgâhına (insan kapasiteli istasyon) yerleşen iş motorda yerleşmiştir ama canlı planın makine kuyruğuna yazılmaz; plan
+   özeti onları ayrı sayar (ozet.kisiTezgahIsleri), ekran "bütün işler yerleşti" demez */
+function kisiTezgahIsleriOf(plan) {
+  return Object.values((plan && plan.ops) || {}).filter(r => r && !r.fas && String(r.m).startsWith(KISI_TEZGAH_ONEKI)).map(r => r.id).sort();
+}
 const kisiTezgahKimligi = id => KISI_TEZGAH_ONEKI + id;
 const rotaOpNo = a => a.opNo > 0 ? a.opNo : a.seq;
 const rotaAdimlari = (st, id) => ((((st && st.routes) || {})[id] || {}).steps || []).slice().sort((p, q) => p.seq - q.seq);
@@ -81,7 +86,7 @@ function rrCevir(st) {
     if (!a || a.grupKod !== grupKod) y.grupKod = grupKod;
     if (!a || a.grupAd !== grupAd) y.grupAd = grupAd;
     /* 69 a: istasyonun maliyeti okunamazsa (satır yok, yetki yok) saat ücreti boştur; motor o tezgâhın tutarını bilinmez sayar, sıfır uydurulmaz */
-    if (!a) { const s = (st.stations || []).find(x => x.id === m.stationId) || {}; Object.assign(y, { ucret: rrSayi(s.cost), ucretIst: rrSayi(s.cost), verim: (+s.eff || 100) / 100, vardiyalar: ((st.cal && st.cal.shifts) || []).map(x => x.id), opOran: 0 }); }
+    if (!a) { const s = (st.stations || []).find(x => x.id === m.stationId) || {}; const vl = ((st.cal && st.cal.shifts) || []).map(x => x.id); Object.assign(y, { ucret: rrSayi(s.cost), ucretIst: rrSayi(s.cost), verim: istasyonVerimi(s), verimIst: istasyonVerimi(s), vardiyalar: vl, vardiyalarIst: vl.slice(), opOran: 0 }); }
     const hafta = merkezHaftasi(m);
     if (!rrEsit(a && a.hafta, hafta)) y.hafta = hafta;
     return rrKur(a, y);
@@ -104,7 +109,7 @@ function rrCevir(st) {
     const grupKod = ist.code || undefined, grupAd = ist.name || undefined;
     if (!a || a.grupKod !== grupKod) y.grupKod = grupKod;
     if (!a || a.grupAd !== grupAd) y.grupAd = grupAd;
-    if (!a) Object.assign(y, { ucret: rrSayi(ist.cost), ucretIst: rrSayi(ist.cost), verim: (+ist.eff || 100) / 100, opOran: 1 });
+    if (!a) Object.assign(y, { ucret: rrSayi(ist.cost), ucretIst: rrSayi(ist.cost), verim: istasyonVerimi(ist), verimIst: istasyonVerimi(ist), opOran: 1 });
     if (!a || !rrEsit(a.vardiyalar, [p.shiftId])) y.vardiyalar = [p.shiftId];
     if (a && a.hafta !== undefined) y.hafta = undefined;
     tezgahlar.push(rrKur(a, y));
@@ -163,9 +168,12 @@ function rrCevir(st) {
         return !rrEsit(b.slice().sort(), v.slice().sort());
       });
       if (!o0 || elDegisti || RR_ADIM_SURE.some(f => !rrEsit(ref[f], s[f]))) {
-        /* 1737 c: işlem süresi girilmemiş aday plana girmez; boş süre 0 okunursa iş o tezgâhta sıfır sürede bitiyor görünürdü. Ayar süresi
-           boşsa 0'dır (rota onayındaki gibi). Veri sağlığı boş süreyi ayrıca listeler. */
-        const izin = [s.stationId, ...(s.alts || []).filter(g => rrSayi(((s.altTimes || {})[g] || {}).cycle) !== null)].filter(Boolean);
+        /* 1737 c: işlem süresi girilmemiş aday plana girmez; boş süre 0 okunursa iş o tezgâhta sıfır sürede bitiyor görünürdü. Ana istasyon da
+           alternatif gibi süresizse aday değildir (2701); emirde süre varsa emirler.js emirYerleriniEkle onu ekler. Sunucu kaynağı çevrimi
+           işlem + değişim diye kurar (rrKaynagiCevir), boş işlem orada 0 olur; süre işlem ve değişimden okunur, ikisi de yoksa çevrimden.
+           Ayar süresi boşsa 0'dır (rota onayındaki gibi). Veri sağlığı boş süreyi ayrıca listeler. */
+        const anaSureli = rrSayi(s.proc) !== null || rrSayi(s.chg) !== null || (s.proc === undefined && rrSayi(s.cycle) !== null);
+        const izin = [...(anaSureli ? [s.stationId] : []), ...(s.alts || []).filter(g => rrSayi(((s.altTimes || {})[g] || {}).cycle) !== null)].filter(Boolean);
         const eski = (o0 && o0.tezgahlar) || [];
         const sure = g => g === s.stationId ? { ayar: +s.setup || 0, cevrim: +s.cycle || 0 } : { ayar: +((s.altTimes || {})[g] || {}).setup || 0, cevrim: +((s.altTimes || {})[g] || {}).cycle || 0 };
         const degisti = g => !ref || (g === s.stationId ? (ref.stationId !== g || ref.setup !== s.setup || ref.cycle !== s.cycle) : !rrEsit(ref.altTimes[g], (s.altTimes || {})[g]));
@@ -190,6 +198,9 @@ function rrCevir(st) {
       if (!o0 || ref.depQty !== s.depQty || (s.dep === 'ortulu' && !('transfer' in o0))) { if (+s.depQty > 1 || s.dep === 'ortulu' || (o0 && 'transfer' in o0)) z.transfer = Math.max(1, +s.depQty || 1); }
       /* 1310 a: rotada ayarı işaretsiz adımda hazırlık sayılır, ayarcı aranmaz (engine ayarciIster); alanı olmayan eski kayıt ayarlıdır */
       if (s.ayarli === false) { if (!o0 || o0.ayarci !== false) z.ayarci = false; } else if (o0 && 'ayarci' in o0) z.ayarci = undefined;
+      /* 2513 a: hazırlığın (setup) ayarcı isteyen kısmı rotadaki ayar dakikasıdır (engine ayarciBitis); girilmemişse alan yoktur */
+      const ayarDk = s.ayarli === false ? null : rrSayi(s.ayarDk);
+      if (ayarDk !== null) { if (!o0 || o0.ayarDk !== ayarDk) z.ayarDk = ayarDk; } else if (o0 && 'ayarDk' in o0) z.ayarDk = undefined;
       /* 1952: rotadaki "paralel böl" (Reçete ve Rota split 'bol') motorun bölme işaretidir (engine compile) */
       if (s.split === 'bol') { if (!o0 || !o0.bol) z.bol = true; } else if (o0 && 'bol' in o0) z.bol = undefined;
       if (!o0 || ref.minLot !== s.minLot) { if (+s.minLot > 0 || (o0 && 'minParti' in o0)) z.minParti = +s.minLot; }
@@ -231,7 +242,8 @@ function rrCevir(st) {
     const makineler = [...(p.machines || []), ...(elKisisi.has(p.id) ? [kisiTezgahKimligi(p.id)] : [])];
     if (!a || !rrEsit(a.makineler || [], makineler)) y.makineler = makineler;
     if (!a || (a.enCok ?? null) !== (p.maxMachines ?? null)) y.enCok = p.maxMachines ?? null;
-    if (!a) y.ayar = p.role === 'Ayarcı';
+    /* 2513 a: ayarcılık her okumada kişinin rolündendir; ilk kurulumda kalan eski değer ayarcı sayısını bozmasın */
+    if (!a || a.ayar !== (p.role === 'Ayarcı')) y.ayar = p.role === 'Ayarcı';
     return rrKur(a, y);
   });
   const bas = rrTarih(P.meta && P.meta.baslangic);
@@ -327,14 +339,26 @@ function tmiTabanKur(D, bugun = duvarSaati(Date.now()).slice(0, 10)) {
    kaydıyla aynıdır, rrDenemeyeCevir değişmeden okur. Pasif kaynak plana girmez. Sayfanın tek takvimi vardır: çalışma günü aktif iş
    merkezlerinin haftalarının birleşimidir. D: açık çalışma; tezgâh ve kişinin motor ayarları (plan alt nesnesi) aynı kimlikte korunur.
    Okunamayan dilim (yetki yok) kayıttaki gibi kalır; maliyet satırı yoksa null, sıfır uydurulmaz. */
-/* 71 b: elle değiştirilmemiş tezgâhın saat ücreti istasyon maliyetini izler; ucretIst istasyondan alınan son ücrettir, ücret ondan farklıysa
-   elle girilmiştir ve korunur. İşareti olmayan eski tezgâh ücreti maliyete eşitse izlemeye girer. Maliyet okunamazsa (satır yok, yetki yok)
-   son ücret kalır: okuyamayan kullanıcının açılışı ücreti silmesin. */
-function ucretIzle(a, maliyet) {
-  if (maliyet == null) return;
-  const izler = a.ucretIst !== undefined ? a.ucret === a.ucretIst : a.ucret === maliyet;
-  if (izler) { a.ucret = maliyet; a.ucretIst = maliyet; }
+/* 2601 a: tezgâhın saat ücreti Finans'ın istasyon saat maliyetidir; elle girilmiş ücret de ezilir (proje maliyetiyle tek tanım). Finans'ta satır
+   yoksa ücret bilinmez (null). Maliyet hiç okunamadıysa (yetki yok) son ücret kalır: okuyamayan kullanıcının açılışı ücreti silmesin. */
+function ucretIzle(a, maliyet, okundu) {
+  if (!okundu) return;
+  a.ucret = maliyet; a.ucretIst = maliyet;
 }
+/* B-2483-15: verim ve tezgâhın vardiya listesi de ücret gibi izlenir (ucretIzle kuralı): verimIst / vardiyalarIst istasyondan ve takvimden
+   alınan son değerdir; tezgâhtaki değer ona eşitse elle değiştirilmemiştir ve yenisini alır, farklıysa elle girilmiştir ve korunur. İşareti
+   olmayan eski kayıt güncel değere eşitse izlemeye girer. Okunamayan dilimde son değer kalır. */
+function verimIzle(a, verim) {
+  if (verim == null) return;
+  const izler = a.verimIst !== undefined ? a.verim === a.verimIst : a.verim === verim;
+  if (izler) { a.verim = verim; a.verimIst = verim; }
+}
+function vardiyaIzle(a, vardiyalar) {
+  if (vardiyalar == null) return;
+  const izler = a.vardiyalarIst !== undefined ? rrEsit(a.vardiyalar, a.vardiyalarIst) : rrEsit(a.vardiyalar, vardiyalar);
+  if (izler) { a.vardiyalar = vardiyalar.slice(); a.vardiyalarIst = vardiyalar.slice(); }
+}
+const istasyonVerimi = s => (s && +s.eff > 0 ? +s.eff : 100) / 100;
 function tmiKaynakIle(st, kaynak, D) {
   const d = kaynak.durum, ek = kaynak.ek || {}, tk = ek.takvim || null;
   const o = Object.assign({}, st);
@@ -368,7 +392,8 @@ function tmiKaynakIle(st, kaynak, D) {
     const ist = new Set(istasyonlar.map(x => x.id));
     o.machines = d.machines.filter(m => m.aktif !== false && ist.has(m.stationId)).map(m => {
       const y = { id: m.id, code: m.code, name: m.name, stationId: m.stationId, status: m.status, note: (ek.makineNotu && ek.makineNotu[m.id]) || '' };
-      const a = eski('tezgahlar', m.id); if (a) { y.plan = a; ucretIzle(a, maliyet('istasyon', m.stationId)); }
+      const a = eski('tezgahlar', m.id);
+      if (a) { y.plan = a; ucretIzle(a, maliyet('istasyon', m.stationId), !!d.maliyet); verimIzle(a, istasyonVerimi(istasyonlar.find(x => x.id === m.stationId))); if (d.cal) vardiyaIzle(a, d.cal.shifts.map(v => v.id)); }
       return y;
     });
   }
@@ -378,7 +403,8 @@ function tmiKaynakIle(st, kaynak, D) {
         shiftId: (tk && tk.kisiVardiyasi[k.id]) || '', cost: maliyet('kisi', k.id), skills: k.skills.slice(), active: true,
         machines: (k.machines || []).slice(), maxMachines: k.maxMachines ?? null };
       const a = eski('personel', k.id); if (a) y.plan = a;
-      const t = eski('tezgahlar', kisiTezgahKimligi(k.id)); if (t) { y.tezgahPlan = t; ucretIzle(t, maliyet('istasyon', String(t.grup))); }
+      const t = eski('tezgahlar', kisiTezgahKimligi(k.id));
+      if (t) { y.tezgahPlan = t; ucretIzle(t, maliyet('istasyon', String(t.grup)), !!d.maliyet); if (istasyonlar) verimIzle(t, istasyonVerimi(istasyonlar.find(x => x.id === String(t.grup)))); }
       return y;
     });
   }
@@ -400,7 +426,7 @@ function tmiFasoncular(st, firmalar, D, onceki) {
   const eski = id => ((onceki && onceki.fasoncular) || D.fasoncular || []).find(f => String(f.id) === id) || null;
   return firmalar.map(f => {
     const a = eski(String(f.id));
-    const y = { id: String(f.id), ad: f.name, kapasite: 999, sureGun: sure[f.id] || 1, cikisGunleri: gunler.length ? gunler : GUNLER.slice(0, 5), cikisSaat: 16 };
+    const y = { id: String(f.id), ad: f.name, kapasite: null, sureGun: sure[f.id] || FASON_VARSAYILAN_GUN, cikisGunleri: gunler.length ? gunler : GUNLER.slice(0, 5), cikisSaat: 16 };
     return a ? Object.assign({}, y, rrKopya(a), { id: y.id, ad: y.ad }) : y;
   });
 }
@@ -548,7 +574,18 @@ function tmiCevir(st, kaynak, D0, bugun) {
   if (Array.isArray(D.malzemeler)) tmiTerminler(D.malzemeler, k && k.ek ? k.ek.tedarikTerminleri : null, D0 ? D0.malzemeler : null);
   if (k && k.ek && 'malzemeFiyatlari' in k.ek && Array.isArray(D.malzemeler)) tmiFiyatlar(D.malzemeler, k.ek.malzemeFiyatlari);
   if (k && k.ek && 'siparisBedelleri' in k.ek && Array.isArray(D.siparisler)) tmiSiparisBedelleri(D.siparisler, k.ek.siparisBedelleri);
+  if (k && k.ek && 'mrpEksikleri' in k.ek && Array.isArray(D.malzemeler)) tmiMrpEksikleri(D.malzemeler, k.ek.mrpEksikleri);
   return D;
+}
+/* B-2483-67: siparişi verilmemiş eksik malzemenin tek kuralı sunucudadır (plan/mrp-kurallar.ts: emrin brüt kopyası, adım ve bileşen firesi,
+   verilen sarf düşülür). Kaynak okuması malzeme başına eksiği verirse (mrpEksikleri [{ kod, eksik }]; eksik null = hesaplanamadı) malzemede
+   mrpEksik olarak durur ve motor (durum.js tmEksikYaz) kendi brüt hesabı yerine onu kullanır. Listede olmayan malzemenin eksiği 0'dır;
+   okunamadıysa (null) alan yazılmaz, motor kendi hesabıyla sürer. */
+function tmiMrpEksikleri(malzemeler, l) {
+  for (const m of malzemeler) delete m.mrpEksik;
+  if (!Array.isArray(l)) return;
+  const E = new Map(l.map(x => [String(x.kod), x.eksik == null || !isFinite(+x.eksik) ? null : Math.max(0, +x.eksik)]));
+  for (const m of malzemeler) m.mrpEksik = E.has(m.kod) ? E.get(m.kod) : 0;
 }
 /* 1280 a, 1329: ham malzemenin birim fiyatı Satın Alma'dandır: alış ortalaması, yoksa kg fiyatından tahmini (fiyatTahmini), yoksa null
    (bilinmez; sıfır sayılmaz). kgRef Satın Alma'nın geçerli kg fiyatı ve tarihidir, yalnız başvuru. Her okumada yeniden kurulur; okunamadıysa
@@ -637,8 +674,14 @@ function kaynakBirlestir(D0, kayit, kaynak, bugun) {
     ...(Array.isArray(d.machines) && Array.isArray(d.stations) || kayittaVar('machines') ? [] : ['tezgahlar', 'urunler']),
     ...(Array.isArray(d.people) || kayittaVar('people') ? [] : ['personel']),
   ].filter(a => Array.isArray(D0[a])));
-  const alanlar = TMI_KAYNAK_ALANLARI.filter(a => D[a] !== undefined && !okunamayan.has(a) && !rrEsit(D[a], D0k[a]));
-  for (const a of alanlar) D0[a] = D[a];
+  /* B-2499-1: malzemenin saSurum'u Satın Alma termin satırının yazma sürümüdür, plan girdisi değil: plan her kayıtta termin satırı açıp
+     sürümü artırdığı için kaynak değişikliği sayılırsa her "Planı kur"dan sonra plan güncel değil görünür. Karşılaştırmada dışarıda kalır;
+     ekran termin yazarken güncel sürümü ister, alan yine yenilenir. B-2500-4: terminsiz satır (saTermin null) ile satırın olmaması motor için
+     aynıdır (durum.js tmSaTermin yalnız metni okur); ilk termin satırı açılınca "boş → boş" farkı sayılmaz. */
+  const surumsuz = (a, v) => a === 'malzemeler' && Array.isArray(v) ? v.map(m => { if (!m || typeof m !== 'object') return m; const { saSurum, ...r } = m; if (r.saTermin == null) delete r.saTermin; return r; }) : v;
+  const uygun = TMI_KAYNAK_ALANLARI.filter(a => D[a] !== undefined && !okunamayan.has(a) && !rrEsit(D[a], D0k[a]));
+  const alanlar = uygun.filter(a => !rrEsit(surumsuz(a, D[a]), surumsuz(a, D0k[a])));
+  for (const a of uygun) D0[a] = D[a];
   if (alanlar.length) tmiTabanKur(D0, bugun);
   return alanlar;
 }

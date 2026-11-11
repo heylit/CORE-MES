@@ -9,6 +9,10 @@ import {
 import { calismaKur } from './test-veri.tsx';
 import { ufukKur } from '../../ufuk-olcegi.ts';
 
+import { saatiSabitle } from '../../test-saati.ts';
+
+saatiSabitle(() => calismaKur());
+
 const cxKur = (c = calismaKur()) => derle(girdiKur(c, plandanBitenler(c, planOku(c))));
 
 // Bu dosyanın beklenen değerleri 63 günlük ufukla kuruldu; testin konusu varsayılan ufuk değil (1681 b ile varsayılan 120 gün).
@@ -18,7 +22,7 @@ afterEach(() => { ufukKur(null); });
 describe('Veri ve kısıtlar hesapları', () => {
   it('kısıt kataloğu bugünkü sayfanınki: 6 grup, durum sayıları', () => {
     expect(KATALOG.map((g) => g.l.length)).toEqual([11, 6, 7, 12, 4, 7]);
-    expect(durumSayilari()).toEqual({ tam: 28, yaklasik: 5, karar: 2, yok: 12 });
+    expect(durumSayilari()).toEqual({ tam: 29, yaklasik: 5, karar: 2, yok: 11 });
   });
 
   it('parametre sınır dışını reddeder, seçimi ve boş fasoncuyu okur; yazma yerine göre', () => {
@@ -119,9 +123,9 @@ describe('Veri ve kısıtlar hesapları', () => {
   });
 });
 
-describe('dondurma ufku (248 a)', () => {
-  it('alt sınır 4 saattir', () => {
+describe('dondurma ufku (248 a, 2529)', () => {
+  it('alt sınır 0 saattir: donuk bölge kapatılabilir', () => {
     const k = KATALOG.flatMap((g) => g.l).find((x) => x.id === 'dondurma');
-    expect(k?.p?.[0]).toMatchObject({ k: 'dondurma', min: 4, birim: 'sa' });
+    expect(k?.p?.[0]).toMatchObject({ k: 'dondurma', min: 0, birim: 'sa' });
   });
 });

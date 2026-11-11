@@ -17,8 +17,8 @@ import type {
   MerkezBelgelerCevabi, MerkezEkleCevabi, MerkezKontrolCevabi, SonOlaylarCevabi, AnomaliCevabi, AnomaliIstasyonSatiri, AnomaliIstatistikCevabi, OperatorOzetiCevabi, OzetDonemi, AnomaliKisiSatiri, AnomaliMakineSatiri,
 } from '#paylasilan/sozlesme/arkon.ts';
 import { tesisGunBasi, tesisGunu } from '#paylasilan/tesis-zamani.ts';
-import { AZAMI_DOSYA } from '#paylasilan/sozlesme/arkon.ts';
-import type { KuyrukSiralaGovdesi } from '#paylasilan/sozlesme/arkon.ts';
+import { AZAMI_DOSYA, AZAMI_HAZIRLIK_MADDESI } from '#paylasilan/sozlesme/arkon.ts';
+import type { HazirlikMaddeleriCevabi, HazirlikMaddesiOlayi, KuyrukSiralaGovdesi } from '#paylasilan/sozlesme/arkon.ts';
 import type { IlkParcaSecimi } from '#paylasilan/sozlesme/rota.ts';
 import { durusNedenleriniListele, hurdaNedenleriniListele } from '../durus-nedenleri/disari.ts';
 import { aletlerVeKayitlari, olcumAletiGecerliMi } from '../kalibrasyon/disari.ts';
@@ -38,7 +38,7 @@ import { basladigiGunTakvimi, basladigiGunTakvimleri, calismaTakvimi, calismaTak
 import { izinliKisiler, kisininFazlaMesaisi, kisininIzinleri, kisininKalanIzni } from '../ik/disari.ts';
 import { sistemAyariOku } from '../ayarlar/disari.ts';
 import { ekipCagrisiBildir } from '../bildirim/disari.ts';
-import { kayitlaraBagliBelgeler, yayindakiBelgeDosyasi, yayindakiBelgeler } from '../belge-merkezi/disari.ts';
+import { kayitlaraBagliBelgeler, yayindakiBelgeDosyasi, yayindakiBelgeler, yayindaOzetMi } from '../belge-merkezi/disari.ts';
 import { depoDolulugu, eksikDosyalar as kisininEksikDosyalari, modulDeposuTutamagi } from '../dosya/disari.ts';
 import type { BagSiniri, SaklananTur } from '../dosya/disari.ts';
 import { isEmriHazirlikDurumlari } from '../cnc-kurulum/disari.ts';
@@ -46,7 +46,7 @@ import {
   acikEmir, acikEmirler, emirAyar, emirBaslat, emirBitir, emirDevam, emirDurdur, emirDuraklat, emirDurumlari, emirOzeti, emirSayim, isEmriOzeti, katil, katilimAyril, katilimDuraklat, katilimlar,
   calismaDevral, hataliAdimToplamlari, makineDevral, partiKomutuReddi, planlanacakIsEmirleri, rotasizIsEmirleri, uretimEmriOzeti, aralikAdetleri, katilimSureleri, sonGirisler,
   bitenIsEmirleri, gunlukAralikAdetleri, isEmriPlanBilgileri, kisininGunlukIsEmirleri, kisininHurdaNedenleri, kisininIsEmirleri, komutOnbellegiyle, standartSureler,
-  makineAyrimlari as emrinMakineAyrimlari, kisininAcikIsleri, emirlerinMalzemeIhtiyaci, adimliEmirAyrintisi, emirlerinProjeleri, isEmriDugumleri, kararliSayimiSonuclandir,
+  makineAyrimlari as emrinMakineAyrimlari, kisininAcikIsleri, emirlerinMalzemeIhtiyaci, adimliEmirAyrintisi, emirlerinProjeleri, isEmriDugumleri, kararliSayimiSonuclandir, isEmriZamanlari,
 } from '../uretim-emirleri/disari.ts';
 import type { Emir, Katilim } from '../uretim-emirleri/disari.ts';
 import { planliDuruslarinHepsi, planliDurusSilArkon, planliDurusYaz } from '../vardiya/disari.ts';
@@ -60,6 +60,7 @@ import {
   icerikSurumu, planYokDamgala, uyariBirlestir, guvensizCizimleriAyikla, acikIstekMi, alanOku, istekKmPlani, istekKarari, kmKarariniAynala, periyodikNumuneler, periyodikRetAcik, numuneTeslimKaynagi, kmOlcumGruplari, kmUyarisiniYaz, KM_UYARILARI, ilkParcaGereksinimi, tmiAqlPlani, iletiKonumu, kapsamdaMiKisitli, konumBosMu, kayitKonumu, kayitSutunlari, konumKimlikleri, ikinciKontrolEksik, ilkParcaOlculeri, gizliYansimaTuru, gecikmeliSayimReddi, tmiRetIletisi, ilkParcaSayimiAsildi, kararBekleyenAdet, KARAR_BEKLIYOR_ALANI, yenidenIlkParcaTabani, ILK_PARCA_ADEDI, ilkParcaYenidenSorulur, yenidenIlkParcaAcik, yenidenKarariDamgala, yenidenKarariDegisti, kodlarAyir, konumCoz, okuyabilirMi, paketEmri, paketIstasyonuReddi, paketKonumu, paketMakinesi, tesisHaritasiKur, kayitGovdesi, kayitReddi, gunlukSatirlari, paketSuzgeciVar, silmeCakisiyorMu, sunucuIletisiMi, tesisKur, tmiAyariMi, yazimCakisiyorMu, arkonVardiyalari, arkonTatilleri, arkonAletleri, TMI_AYARLARI,
   BITMIS_BITIR, DOSYA_KOTASI, olcumAletleri, islemImzasi, yoklamaDenetimiGecerli, katilimYolu, tmidekiDurum, ZATEN_CALISIYOR, GIZLI_YANSIMA_TURLERI, ILETI_HIZI, ISTEK_KILIT_BUTCESI_MS, KILIT_BEKLEME_MS, KUYRUK_DEGISIKLIK_YOK, HAZIRLIK_DEGISIKLIK_YOK, arizaCagrisi, SAYIM_ERTELEME, yansimaNedeni, yansimaSirasi, YANSIYAN_KAYITLAR, yansimaKarari, yenidenDenemeReddi, YENIDEN_YALNIZ_HATALI, alanYetkisiReddi, belgeRoluReddi, onayEskidiMi, onayIcerigi, onayOzetiDamgala, bitenEmirIsareti, bitmisIsReddi, onayZorunluMu, hizSiniriAsildi, iletiReddi, kayitRoluReddi, kisiAlanlariniDoldur, yazmaReddi, yayinEksigi, yerelPaketReddi, yeniSurum, yetkiMatrisi, yuklemeKotasiHatasi,
   cizimRevizyonuReddi, malzemeCizimleri, merkezDosyaAdi, merkezDosyaTipi, merkezDurumu, paketMerkezDosyalari, merkezTuruMu, merkezdenAlabilirMi, merkezDurumunuOkuyabilirMi,
+  HAZIRLIK_MADDESI_ILETILERI, hazirlikMaddesiOlayReddi,
   bakimAcikMi, hazirlikBekliyorMu, kaliteBekliyorMu, arizaMakineGecisi, acikArizaMi, ARIZA_ACIKLAMASI,
   adetEksikMi, araliklariBirlestir, araliklariKes, beklenenTopla, bitenIsBeklenen, girisYokAktifDakika, girisYokMu, isEmriBeklenenAdet, kaynakKarsilastir, kesinBeklenen, kisiBeklenen, makineIzinliMi, toplamOran, uretimOrani,
   donemAraligi, donemTopla, etkinGun, gunEkle, gunSiniri, isEmriBeklenenBirlestir, istasyonIsaretli, kalanAdet, kapanacakGunler, performansOrani, planliUretim,
@@ -2206,16 +2207,18 @@ export async function dosyaParcasi(
 
 // Özeti bilmek okumaya yetmez: kişi dosyayı ya kendisi yüklemiştir ya da onu anan bir belgeyi okuyabilir (rol ve iş merkezi kapsamı
 // belge okumasıyla aynı). Okuyamadığı dosya "yok" döner, varlığı da söylenmez. Yükleyen kuralı, belge yazılmadan önce yüklenen
-// dosyanın yazana geri okunabilmesi içindir.
+// dosyanın yazana geri okunabilmesi içindir. Merkezden alma rolü olan kişi Çizim Merkezi'nde yayındaki dosyayı da okur: seçicide zaten
+// görür ve pakete ekler; eklenen dosya paket kaydedilmeden önce ona geri okunabilmelidir (2520-3; bağ kişisizdir, 732 a).
 export async function dosya(db: Db, kullanici: Kullanici, ozet: string): Promise<IkiliCevap> {
-  await rolGerekli(db, kullanici);
+  const rol = await rolGerekli(db, kullanici);
   const cevap = await DOSYALAR.dosyaAkisi(db, DEPO_KAYDI, ozet);
-  if (cevap === null || !(await dosyayiOkuyabilir(db, kullanici, ozet))) throw bulunamadi(ILETILER.dosyaYok);
+  if (cevap === null || !(await dosyayiOkuyabilir(db, kullanici, rol, ozet))) throw bulunamadi(ILETILER.dosyaYok);
   return cevap;
 }
 
-async function dosyayiOkuyabilir(db: Db, kullanici: Kullanici, ozet: string): Promise<boolean> {
+async function dosyayiOkuyabilir(db: Db, kullanici: Kullanici, rol: ArkonRolu, ozet: string): Promise<boolean> {
   if ((await kisininEksikDosyalari(db, kullanici, [ozet])).length === 0) return true;
+  if (merkezdenAlabilirMi(rol) && (await yayindaOzetMi(db, ozet))) return true;
   for (const { depo, kimlik } of await sorgular.dosyayiAnanBelgeler(db, ozet)) {
     try {
       if ((await belge(db, kullanici, depo, kimlik)) !== null) return true;
@@ -3168,4 +3171,45 @@ async function gecmisBeklenenler(
     sonuc.set(tarih, { beklenen: kesinToplam(parcalar), standartla });
   }
   return sonuc;
+}
+
+// 2227-1 b: iş emrine özel hazırlık maddesi. Yetki uçta (arkon.hazirlik ya da arkon.yonetici yazar; planlama da okur); kişi ve zaman
+// sunucudan. İş emri uretim-emirleri disari.ts ile okunur: olmayan 404, bitmiş iş emrinde yazma 409.
+export async function hazirlikMaddeleriListesi(db: Db, isEmriId: number): Promise<HazirlikMaddeleriCevabi> {
+  const ie = (await isEmriZamanlari(db, [isEmriId])).get(isEmriId);
+  if (ie === undefined) throw bulunamadi(HAZIRLIK_MADDESI_ILETILERI.isEmriYok);
+  const satirlar = await sorgular.hazirlikMaddeleri(db, [isEmriId]);
+  const adlar = await kisiAdlari(db, [...new Set(satirlar.flatMap((s) => (s.tamamlayanId === null ? [s.kisiId] : [s.kisiId, s.tamamlayanId])))]);
+  return {
+    isEmriId, kapali: ie.durum === 'tamam',
+    maddeler: satirlar.map((s) => ({
+      id: s.id, ad: s.ad, ekleyenAdi: adlar.get(s.kisiId) ?? null, eklenme: s.zaman, tamam: s.tamam,
+      tamamlayanAdi: s.tamamlayanId === null ? null : (adlar.get(s.tamamlayanId) ?? null), tamamlanma: s.tamamlanma,
+    })),
+  };
+}
+
+async function hazirlikMaddesiYazilir(db: Db, isEmriId: number): Promise<void> {
+  await sorgular.hazirlikMaddesiKilitle(db, isEmriId);
+  const ie = (await isEmriZamanlari(db, [isEmriId])).get(isEmriId);
+  if (ie === undefined) throw bulunamadi(HAZIRLIK_MADDESI_ILETILERI.isEmriYok);
+  if (ie.durum === 'tamam') throw cakisma(HAZIRLIK_MADDESI_ILETILERI.kapali);
+}
+
+export async function hazirlikMaddesiEkle(db: Db, kullanici: Kullanici, g: { isEmriId: number; ad: string }): Promise<HazirlikMaddeleriCevabi> {
+  await hazirlikMaddesiYazilir(db, g.isEmriId);
+  if ((await sorgular.hazirlikMaddeleri(db, [g.isEmriId])).length >= AZAMI_HAZIRLIK_MADDESI) throw cakisma(HAZIRLIK_MADDESI_ILETILERI.dolu);
+  await sorgular.hazirlikMaddesiEkle(db, g.isEmriId, g.ad, kullanici.id);
+  return hazirlikMaddeleriListesi(db, g.isEmriId);
+}
+
+export async function hazirlikMaddesiIsaretle(db: Db, kullanici: Kullanici, id: number, olay: HazirlikMaddesiOlayi): Promise<HazirlikMaddeleriCevabi> {
+  const madde = await sorgular.hazirlikMaddesiBul(db, id);
+  if (madde === null) throw bulunamadi(HAZIRLIK_MADDESI_ILETILERI.maddeYok);
+  await hazirlikMaddesiYazilir(db, madde.isEmriId);
+  const ret = hazirlikMaddesiOlayReddi((await sorgular.hazirlikMaddesiBul(db, id))?.sonOlay ?? null, olay);
+  if (ret === 'maddeYok') throw bulunamadi(HAZIRLIK_MADDESI_ILETILERI.maddeYok);
+  if (ret === 'zaten') throw cakisma(HAZIRLIK_MADDESI_ILETILERI.zaten);
+  await sorgular.hazirlikMaddesiOlayiEkle(db, id, olay, kullanici.id);
+  return hazirlikMaddeleriListesi(db, madde.isEmriId);
 }

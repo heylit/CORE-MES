@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Dugme, OnayPenceresi, Tablo, type Sutun } from '../../../../ortak/arayuz/index.ts';
+import { Dugme, Girdi, OnayPenceresi, Pencere, Tablo, type Sutun } from '../../../../ortak/arayuz/index.ts';
 import type { RrDurumu } from '../veri.ts';
 import type { RrYetkisi } from '../yetki.ts';
 import { STATU_RENKLERI, STATU_TURLERI } from './kurallar.ts';
@@ -12,20 +12,29 @@ type Statu = NonNullable<RrDurumu['statuses']>[number];
 export function Statuler({ durum, yetki }: { durum: RrDurumu; yetki: RrYetkisi }) {
   const { calistir, mesgul } = useR2Komutu();
   const [silinecek, silinecekYaz] = useState<Statu | null>(null);
+  // 2584 a: "Ekle" önce adı sorar; boş adla "Yeni statü" satırı açılmaz. null pencere kapalıdır.
+  const [yeniAd, yeniAdYaz] = useState<string | null>(null);
+  // Ret pencerede görünür (2584 Arayüz notu): pencere kapanmaz, ileti ad kutusunun altındadır.
+  const [ekleHatasi, ekleHatasiYaz] = useState<string | null>(null);
+  const pencereyiAc = (deger: string | null) => { yeniAdYaz(deger); ekleHatasiYaz(null); };
   if (durum.statuses === undefined) return null;
   const liste = durum.statuses;
   const kaydet = async (s: Statu, yama: Partial<Pick<Statu, 'code' | 'name' | 'kind' | 'color'>>): Promise<boolean> => {
     const y = { ...s, ...yama };
     return (await calistir('statu-tanimi-kaydet', { id: s.id, code: y.code, name: y.name, kind: y.kind, color: y.color, beklenenSurum: s.surum })) === null;
   };
-  const ekle = () => {
+  const ekle = async (ad: string) => {
     let n = liste.length + 1;
     while (liste.some((x) => x.id === `S${String(n)}`)) n += 1;
     const kod = `S${String(n)}`;
-    void calistir('statu-tanimi-kaydet', {
-      id: kod, code: kod, name: 'Yeni statü', kind: 'uretim', color: STATU_RENKLERI[n % STATU_RENKLERI.length], beklenenSurum: null,
-    }, { basari: 'Statü eklendi.' });
+    const hata = await calistir('statu-tanimi-kaydet', {
+      id: kod, code: kod, name: ad, kind: 'uretim', color: STATU_RENKLERI[n % STATU_RENKLERI.length], beklenenSurum: null,
+    }, { basari: 'Statü eklendi.', sessiz: true });
+    if (hata === null) pencereyiAc(null); else ekleHatasiYaz(hata.ileti);
   };
+  const ad = yeniAd?.trim() ?? '';
+  const adVar = ad !== '' && liste.some((x) => x.name.trim().toLocaleLowerCase('tr') === ad.toLocaleLowerCase('tr'));
+  const eklenebilir = ad !== '' && !adVar;
   const sutunlar: Sutun<Statu>[] = [
     {
       anahtar: 'kod', baslik: 'Kod', kirilmaz: true,
@@ -67,7 +76,23 @@ export function Statuler({ durum, yetki }: { durum: RrDurumu; yetki: RrYetkisi }
         çıktısı normal stoktur. Burada yalnızca operasyona bağlı olmayan statüleri tanımla: karantina, giriş onaylı, kalite bekliyor, ret gibi.
       </p>
       <Tablo<Statu> etiket="Statü tanımları" sutunlar={sutunlar} satirlar={liste} satirAnahtari={(s) => s.id} bosMesaj="Elle tanımlanan statü yok." />
-      {yetki.yaz && <div className="tc-rr2-arac"><Dugme simge="plus" disabled={mesgul} onClick={ekle}>Statü</Dugme></div>}
+      {yetki.yaz && <div className="tc-rr2-arac"><Dugme simge="plus" disabled={mesgul} onClick={() => pencereyiAc('')}>Yeni statü</Dugme></div>}
+      <Pencere
+        acik={yeniAd !== null} kapat={() => pencereyiAc(null)} baslik="Yeni statü"
+        alt={(
+          <>
+            <Dugme onClick={() => pencereyiAc(null)} disabled={mesgul}>Vazgeç</Dugme>
+            <Dugme tur="birincil" simge="plus" disabled={!eklenebilir} yukleniyor={mesgul} onClick={() => { void ekle(ad); }}>Ekle</Dugme>
+          </>
+        )}
+      >
+        <form onSubmit={(o) => { o.preventDefault(); if (eklenebilir) void ekle(ad); }}>
+          <Girdi
+            etiket="Statü adı" required autoFocus value={yeniAd ?? ''} onChange={(o) => { pencereyiAc(o.target.value); }}
+            hata={adVar ? 'Bu adla bir statü zaten var.' : (ekleHatasi ?? undefined)}
+          />
+        </form>
+      </Pencere>
       <OnayPenceresi
         acik={silinecek !== null} baslik="Statü silinsin mi?" onayMetni="Sil" tehlikeli yukleniyor={mesgul}
         vazgec={() => silinecekYaz(null)}

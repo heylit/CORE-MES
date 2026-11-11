@@ -1,14 +1,14 @@
-import type { ReactNode } from 'react';
 import { Simge } from '../../../../../ortak/arayuz/index.ts';
 import type { SimgeAdi } from '../../../../../ortak/tasarim/simgeler.ts';
-import { MOTOR_NOTU } from '../ortak.tsx';
+import { hamleYapisi, useHamleci } from '../hamle/hamle.ts';
 import { akis, asilBekleme, DARBOGAZ, duruslar, gs, malzemeGec, sure, tz, yukOranlari, zs } from './kurallar.ts';
 import { ankraj, type Ortam } from './Pano.tsx';
 
-// Bugün (cizBugun): katlanır alt şerit; geciken ve riskli siparişler, asıl beklemesi ve son kararlar. Eski panonun her sipariş için arka planda
-// aradığı çözüm yolları motor ister (357 b). Kararlar bu oturumun geri alma listesidir.
+// Bugün (cizBugun): katlanır alt şerit; geciken ve riskli siparişler, asıl beklemesi ve son kararlar. Çözüm yolu motorun "öne al"
+// hamlesidir (2531 a): sonuç önizlenir, kişi uygular. Kararlar bu oturumun geri alma listesidir.
 export function Bugun({ ort, acik }: { ort: Ortam; acik: boolean }) {
   const { c, liste } = ort;
+  const hamle = useHamleci();
   const L = liste.filter((x) => x.durum !== 'iyi'); const gec = L.filter((x) => x.durum === 'gec').length;
   const ar = duruslar(c).length; const son = c.iz[0];
   return (
@@ -26,11 +26,18 @@ export function Bugun({ ort, acik }: { ort: Ortam; acik: boolean }) {
             <h4>Çözülecekler</h4>
             {L.map((x) => {
               const dar = asilBekleme(akis(ort.p, ort.cx, ort.hazir, x.id));
+              const oneY = hamleYapisi(hamle, (h) => { h.oneAl(x.id); });
               return (
-                <button key={x.id} type="button" className="tc-pym-tp-bugun-sat" onClick={() => ort.sipGoster(x.id)}>
-                  <b>{x.id}</b><span className="tc-pym-tp-rozet" data-durum={x.durum}>{x.durum === 'gec' ? `${sure(x.T)} geç` : `${sure(x.pay)} pay`}</span>
-                  <span className="tc-pym-tp-not" title={`Çözüm yolları: ${MOTOR_NOTU}`}>{dar ? `asıl bekleme · ${dar}` : 'çözüm yolu motorla'}</span>
-                </button>
+                <div key={x.id} className="tc-pym-tp-bugun-satir">
+                  <button type="button" className="tc-pym-tp-bugun-sat" onClick={() => ort.sipGoster(x.id)}>
+                    <b>{ort.emirNo(x.id)}</b><span className="tc-pym-tp-rozet" data-durum={x.durum}>{x.durum === 'gec' ? `${sure(x.T)} geç` : `${sure(x.pay)} pay`}</span>
+                    <span className="tc-pym-tp-not">{dar ? `asıl bekleme · ${dar}` : ''}</span>
+                  </button>
+                  <button type="button" className="tc-dugme tc-pym-kucuk" aria-label={`${ort.emirNo(x.id)} öne al`} aria-disabled={oneY.yap ? undefined : 'true'}
+                    title={oneY.yap ? 'Motor bu siparişi öne alan planı arar; önizlersiniz.' : `Öne al: ${oneY.not}`} onClick={oneY.yap ?? undefined}>
+                    <Simge ad="first" boyut="k" /><span data-metin="">Öne al</span>
+                  </button>
+                </div>
               );
             })}
             {!L.length && <p className="tc-pym-tp-not">Geciken ya da riskli sipariş yok.</p>}
@@ -65,33 +72,45 @@ export function Kararlar({ ort, n, bos }: { ort: Ortam; n: number; bos: string }
   );
 }
 
-// Sabah brifingi (cizBrif): günün ilk açılışında bir kez; kapatmadan da çalışılır, satır çözüme götürür.
-export function Brif({ ort, kapat }: { ort: Ortam; kapat: () => void }) {
-  const { c, p, cx, now, liste } = ort; const D = c.D;
+// Sabah brifingi (cizBrif): çizelgeyi örtmeyen, katlı başlayan şerit (2729 b). Özeti üst çubuktaki gecikme satırındadır; gün temizse
+// düğme ve şerit çıkmaz. Satır çözüme götürür.
+type BrifHedefi = { sip: string } | { tezgah: string } | { ariza: string };
+interface BrifOgesi { ik: SimgeAdi; durum: 'gec' | 'risk'; ana: string; alt: string; git: BrifHedefi }
+// Saf: Pano her çizimde değil, plan değişince hesaplar (sürüklerken yeniden çizim sık).
+export function brifOgeleri({ c, p, cx, now, liste, emirNo }: Pick<Ortam, 'c' | 'p' | 'cx' | 'now' | 'liste' | 'emirNo'>): BrifOgesi[] {
+  const D = c.D;
   const gec = liste.filter((x) => x.durum === 'gec').sort((a, b) => (b.T ?? 0) - (a.T ?? 0)); const risk = liste.filter((x) => x.durum === 'risk');
   const dar = yukOranlari(D, p, cx, now, now + 72).filter((x) => x.oran >= DARBOGAZ); const mal = liste.filter(malzemeGec); const dn = duruslar(c);
-  const sat = (ik: SimgeAdi, durum: 'gec' | 'risk', ana: string, alt: ReactNode, git: () => void) => (
-    <button key={ana} type="button" className="tc-pym-tp-brif-sat" data-durum={durum} onClick={git}>
-      <Simge ad={ik} boyut="k" /><span><b>{ana}</b><small>{alt}</small></span><Simge ad="chev-right" boyut="k" />
-    </button>
-  );
   const ilk = gec[0] ?? risk[0];
-  const S1 = [
-    ilk ? sat('alert', 'gec', `${gec.length} geciken, ${risk.length} riskli sipariş`,
-      gec.slice(0, 3).map((x) => `${x.id} ${sure(x.T)}`).join(' · ') || `Riskliler: ${risk.slice(0, 3).map((x) => x.id).join(', ')}`, () => ort.sipGoster(ilk.id)) : null,
-    dar[0] ? sat('fire', 'risk', `${dar.length} tezgâh darboğaz (3 gün)`, dar.slice(0, 3).map((x) => `${x.m} %${Math.round(x.oran * 100)}`).join(' · '),
-      () => ort.suzSec({ g: null, m: dar[0]?.m ?? null, j: null })) : null,
-    mal[0] ? sat('box', 'risk', `${mal.length} siparişte malzeme geç`, mal.slice(0, 3).map((x) => `${x.id} malzeme ${tz(D, x.bas)}`).join(' · '), () => ort.sipGoster(mal[0]?.id ?? '')) : null,
-    dn[0] ? sat('wrench', 'gec', `${dn.length} arıza`, dn.map((d) => `${d.m} ${tz(D, d.from)} → ${zs(D, d.to)}`).join(' · '),
-      () => ort.kartAc({ tur: 'gunluk', m: dn[0]?.m ?? '' })) : null,
-  ].filter(Boolean);
+  const l: (BrifOgesi | null)[] = [
+    ilk ? { ik: 'alert', durum: 'gec', ana: `${gec.length} geciken, ${risk.length} riskli sipariş`,
+      alt: gec.slice(0, 3).map((x) => `${emirNo(x.id)} ${sure(x.T)}`).join(' · ') || `Riskliler: ${risk.slice(0, 3).map((x) => emirNo(x.id)).join(', ')}`, git: { sip: ilk.id } } : null,
+    dar[0] ? { ik: 'fire', durum: 'risk', ana: `${dar.length} tezgâh darboğaz (3 gün)`, alt: dar.slice(0, 3).map((x) => `${x.m} %${Math.round(x.oran * 100)}`).join(' · '),
+      git: { tezgah: dar[0]?.m ?? '' } } : null,
+    mal[0] ? { ik: 'box', durum: 'risk', ana: `${mal.length} siparişte malzeme geç`, alt: mal.slice(0, 3).map((x) => `${emirNo(x.id)} malzeme ${tz(D, x.bas)}`).join(' · '), git: { sip: mal[0]?.id ?? '' } } : null,
+    dn[0] ? { ik: 'wrench', durum: 'gec', ana: `${dn.length} arıza`, alt: dn.map((d) => `${d.m} ${tz(D, d.from)} → ${zs(D, d.to)}`).join(' · '), git: { ariza: dn[0]?.m ?? '' } } : null,
+  ];
+  return l.filter((x): x is BrifOgesi => x !== null);
+}
+export const BRIF_SERIDI = 'tc-pym-tp-brif';
+function brifeGit(ort: Ortam, h: BrifHedefi): void {
+  if ('sip' in h) ort.sipGoster(h.sip);
+  else if ('tezgah' in h) ort.suzSec({ g: null, m: h.tezgah, j: null });
+  else ort.kartAc({ tur: 'gunluk', m: h.ariza });
+}
+
+export function Brif({ ort, l, kapat }: { ort: Ortam; l: BrifOgesi[]; kapat: () => void }) {
   return (
-    <section className="tc-pym-tp-brif" aria-label="Sabah brifingi">
-      <h4><Simge ad="sun" boyut="k" />{`Günaydın · ${gs(D, now)}`}<span className="tc-pym-tp-bosluk" />
-        <button type="button" className="tc-dugme tc-pym-hayalet tc-pym-kucuk" aria-label="Kapat" onClick={kapat}><Simge ad="x" boyut="k" /></button>
-      </h4>
-      {S1.length ? S1 : <p className="tc-pym-tp-not"><Simge ad="check" boyut="k" /> Geciken, darboğaz ve eksik malzeme yok.</p>}
-      <p className="tc-pym-tp-not">Satıra dokun, çözüme git.</p>
+    <section className="tc-pym-tp-brif" id={BRIF_SERIDI} aria-label="Sabah brifingi">
+      <span className="tc-pym-tp-brif-bas"><Simge ad="sun" boyut="k" />{`Günaydın · ${gs(ort.c.D, ort.now)}`}</span>
+      <div className="tc-pym-tp-brif-l">
+        {l.length ? l.map((x) => (
+          <button key={x.ana} type="button" className="tc-pym-tp-brif-sat" data-durum={x.durum} onClick={() => brifeGit(ort, x.git)} title={x.alt}>
+            <Simge ad={x.ik} boyut="k" /><span><b>{x.ana}</b><small>{x.alt}</small></span><Simge ad="chev-right" boyut="k" />
+          </button>
+        )) : <p className="tc-pym-tp-not"><Simge ad="check" boyut="k" /> Geciken, darboğaz ve eksik malzeme yok.</p>}
+      </div>
+      <button type="button" className="tc-dugme tc-pym-hayalet tc-pym-kucuk" aria-label="Brifingi katla" onClick={kapat}><Simge ad="up" boyut="k" /></button>
     </section>
   );
 }

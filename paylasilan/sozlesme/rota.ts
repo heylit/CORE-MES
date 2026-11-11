@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { ondalikMetinSemasi } from '../ondalik.ts';
+import { TOPLU_EN_COK_SATIR } from '../toplu.ts';
 import { tarihSemasi } from '../zaman.ts';
 import { OPERASYON_GRUP_KODLARI } from './istasyonlar.ts';
 import { EMIR_TURLERI } from './uretim-emirleri.ts';
@@ -78,7 +79,9 @@ export const KAYNAK_TURLERI = ['makine', 'kisi', 'istasyon'] as const;
 export const kaynakGirdisi = z.object({ tur: z.enum(KAYNAK_TURLERI), id: KIMLIK });
 // Adımın kaynağı ayrıca fason firma olabilir (finansın fason işaretli firması; kimlik firma kimliğidir). Aday kaynak fason olmaz (FS2 a).
 export const ADIM_KAYNAK_TURLERI = ['makine', 'kisi', 'istasyon', 'fason'] as const;
-export const adimKaynakGirdisi = z.object({ tur: z.enum(ADIM_KAYNAK_TURLERI), id: KIMLIK });
+// 2681 (2682 a): fason adımın firması sonra seçilebilir; { tur: 'fason', id: null } "dış üretim, firma seçilmedi" demektir. Öteki türlerde id zorunlu.
+export const firmasizFason = z.object({ tur: z.literal('fason'), id: z.null() }).strict();
+export const adimKaynakGirdisi = z.union([z.object({ tur: z.enum(ADIM_KAYNAK_TURLERI), id: KIMLIK }), firmasizFason]);
 export const AZAMI_TERMIN_GUN = 365;
 
 export const adayGirdisi = z.object({
@@ -179,6 +182,8 @@ export const urunOzeti = z.object({
 });
 // Fason firmada kod ve ad firmanın, aktif "kullanımda ve fason işaretli" demektir; istasyon yoktur.
 export const adimKaynakOzeti = kaynakOzeti.extend({ tur: z.enum(ADIM_KAYNAK_TURLERI) });
+// Adımın kaynağı: seçilmiş kaynağın özeti ya da firmasız fason (2681, Mimar K1: ad ve etiket uydurulmaz, ekran yazar).
+export const adimKaynagiCevabi = z.union([adimKaynakOzeti, firmasizFason]);
 const revizyonBaglantisi = z.object({ id: KIMLIK, harf: z.string() });
 
 export const revizyonOzeti = z.object({
@@ -208,7 +213,7 @@ export const adimSemasi = z.object({
   sira: z.number().int(),
   operasyonTipi: z.object({ id: KIMLIK, kod: z.string(), ad: z.string(), kisaltma: z.string(), aktif: z.boolean() }),
   ad: z.string(),
-  kaynak: adimKaynakOzeti.nullable(),
+  kaynak: adimKaynagiCevabi.nullable(),
   ayarSuresiDk: ondalikMetinSemasi.nullable(),
   birimSureDk: ondalikMetinSemasi.nullable(),
   // Teorik çevrimin ayrımı: ayrılmamış adımda işlem birim süredir, değişim boştur. Oran (%) değişim / işlem; değişim yoksa null.
@@ -297,6 +302,13 @@ export const urunRevizyonlariCevabi = z.object({
   kartOperasyonlari: z.object({ sayi: z.number().int().positive(), eslesmeyen: z.array(z.string()) }).nullable(),
 });
 
+// B-2482-R4: ürüne verilmiş OP numaraları (RT-31: hiçbiri yeniden verilmez) ve ilk verildiği revizyon; sıradaki numara sunucunun
+// vereceği numaradır (en büyük + 10). Ekran yeni adımın numarasını önceden gösterir, numarayı yine kaydet komutu verir.
+export const opNumaralariCevabi = z.object({
+  kullanilmis: z.array(z.object({ opNo: KIMLIK, ilkRevizyonId: KIMLIK, ilkRevizyonHarfi: z.string() })),
+  siradaki: KIMLIK,
+});
+
 export const sablonSemasi = z.object({
   id: KIMLIK, ad: z.string(), varsayilan: z.boolean(), surum: KIMLIK,
   adimlar: z.array(z.object({ sira: KIMLIK, operasyonTipi: z.object({ id: KIMLIK, kod: z.string(), ad: z.string(), aktif: z.boolean() }), ad: z.string() })),
@@ -379,8 +391,13 @@ export const talimatAdimiGirdisi = z.object({
   hedefSureDk: hedefSuresi.nullable().prefault(null),
 });
 const talimatAdimlari = z.array(talimatAdimiGirdisi).min(1, 'En az bir adım gerekir.').max(AZAMI_TALIMAT_ADIMI);
+// Adımlar şablondan kopyalandıysa şablonun kimliği ve ekranın gördüğü sürümü (2588 a); sunucu sürümü denetler ve kökeni kaydeder.
+// Verilmezse köken dayanılan yayın sürümünden devralınır (düzenlenen kopya kökenini taşır); null kökeni kaldırır.
+const kaynakSablonGirdisi = z.object({ id: KIMLIK, surum: KIMLIK });
 // okunanSurum: talimatYazGovdesi'ndeki gibi; adımlı yazım da yeni bir talimat sürümüdür.
-export const adimliTalimatYazGovdesi = z.object({ opNo: KIMLIK, okunanSurum: KIMLIK.nullable(), adimlar: talimatAdimlari });
+export const adimliTalimatYazGovdesi = z.object({
+  opNo: KIMLIK, okunanSurum: KIMLIK.nullable(), adimlar: talimatAdimlari, kaynakSablon: kaynakSablonGirdisi.nullable().optional(),
+});
 export const talimatAdimiSemasi = z.object({
   sira: KIMLIK, baslik: z.string(), metin: z.string().nullable(), kontrol: kontrolSemasi, zorunlu: z.boolean(), medya: z.array(medyaSemasi),
   asama: z.enum(TALIMAT_ASAMALARI), hedefSureDk: z.number().int().nullable(),
@@ -388,17 +405,22 @@ export const talimatAdimiSemasi = z.object({
 
 // adimli false: düz metinle yazılmış eski sürüm; tek adım olarak okunur (993 a, göçle taşınmaz).
 // taslak (1194 b): OP'nin yayınlanmamış taslağı; yoksa null. tabanSurum taslağın dayandığı son yayın sürümüdür.
+// koken (2588 a): sürüm ya da taslak hangi şablonun hangi sürümünden kopyalandı; null: elle yazıldı ya da kökeni bilinmiyor.
+const talimatKokeni = z.object({ sablon: z.object({ id: KIMLIK, kod: z.string(), ad: z.string() }), surum: KIMLIK }).nullable();
 export const talimatlarCevabi = z.object({
   surumler: z.array(z.object({
-    surum: z.number().int(), metin: z.string(), yazan: adliKayit, yazma: zaman, adimli: z.boolean(), adimlar: z.array(talimatAdimiSemasi),
+    surum: z.number().int(), metin: z.string(), yazan: adliKayit, yazma: zaman, adimli: z.boolean(), adimlar: z.array(talimatAdimiSemasi), koken: talimatKokeni,
   })),
   taslak: z.object({
-    surum: KIMLIK, tabanSurum: KIMLIK.nullable(), yazan: adliKayit, yazma: zaman, adimlar: z.array(talimatAdimiSemasi),
+    surum: KIMLIK, tabanSurum: KIMLIK.nullable(), yazan: adliKayit, yazma: zaman, adimlar: z.array(talimatAdimiSemasi), koken: talimatKokeni,
   }).nullable(),
 });
 
 // Taslak kaydı (1194 b): okunanSurum ekranın gördüğü son yayın sürümü, taslakSurum düzenlenen taslağın sürümü (yeni taslakta null).
-export const talimatTaslakKaydetGovdesi = z.object({ opNo: KIMLIK, okunanSurum: KIMLIK.nullable(), taslakSurum: KIMLIK.nullable(), adimlar: talimatAdimlari });
+// kaynakSablon (2588 a): verilmezse taslağın kökeni korunur (yeni taslakta dayanılan yayın sürümünden devralınır), null kökeni kaldırır.
+export const talimatTaslakKaydetGovdesi = z.object({
+  opNo: KIMLIK, okunanSurum: KIMLIK.nullable(), taslakSurum: KIMLIK.nullable(), adimlar: talimatAdimlari, kaynakSablon: kaynakSablonGirdisi.nullable().optional(),
+});
 export const talimatTaslakKomutGovdesi = z.object({ opNo: KIMLIK, taslakSurum: KIMLIK });
 
 export const komutCevabi = z.object({ id: KIMLIK, durum: revizyonDurumu, surum: KIMLIK });
@@ -428,9 +450,12 @@ export const gerceklesenSureGovdesi = z.object({
 
 // Ölçümün kabulü: değer ürünün açık taslağına (yoksa yürürlükteki revizyondan açılan taslağa) teorik süre olarak yazılır. Makine boşsa
 // adımın kendi süresi, makine verilirse o makinenin (adımın kaynağı ya da adayı) süresi değişir; okunanId elle girişteki gibidir.
+// deger (2564 a): "ortanca" bu görünümdeki ölçüm penceresinin ortancasını yazar, olcumId pencerenin son ölçümü olmalıdır; gelmeyen ya da
+// "olcum" seçilen ölçümün kendisini yazar.
 export const gerceklesenKabulGovdesi = z.object({
   tur: gerceklesenTuru,
   olcumId: KIMLIK,
+  deger: z.enum(['olcum', 'ortanca']).optional(),
   makineId: KIMLIK.nullable(),
   okunanId: KIMLIK.nullable(),
 });
@@ -442,6 +467,8 @@ const olcumKaydi = z.object({
   yazan: adliKayit, zaman,
 });
 const turBasina = <T extends z.ZodTypeAny>(t: T) => z.object({ hazirlik: t, islem: t, degisim: t });
+// 2564 a: bekleyen ölçümle aynı penceredeki (son boşaltmadan sonraki) ölçümlerin sayısı, ortancası ve aralığı.
+const olcumOzetiSemasi = z.object({ n: z.number().int().positive(), ortancaDk: ondalikMetinSemasi, enAzDk: ondalikMetinSemasi, enCokDk: ondalikMetinSemasi });
 
 export const surelerCevabi = z.object({
   revizyon: revizyonBaglantisi.extend({ durum: revizyonDurumu, malzemeId: MALZEME_KIMLIGI }),
@@ -453,7 +480,7 @@ export const surelerCevabi = z.object({
     sira: z.number().int(),
     ad: z.string(),
     operasyonTipi: z.object({ id: KIMLIK, kod: z.string(), ad: z.string() }),
-    kaynak: adimKaynakOzeti.nullable(),
+    kaynak: adimKaynagiCevabi.nullable(),
     teorik: z.object({
       hazirlikDk: ondalikMetinSemasi.nullable(), islemDk: ondalikMetinSemasi.nullable(), degisimDk: ondalikMetinSemasi.nullable(),
       degisimOraniYuzde: ondalikMetinSemasi.nullable(),
@@ -461,6 +488,7 @@ export const surelerCevabi = z.object({
     // Elle girişte ve kabulde okunanId olarak gönderilecek son satır (değeri ne olursa olsun); hiç yoksa null.
     sonKayit: turBasina(KIMLIK.nullable()),
     olcum: turBasina(olcumKaydi.nullable()),
+    ozet: turBasina(olcumOzetiSemasi.nullable()),
     // Planın kullandığı süre: teorik (169 c).
     etkin: z.object({
       hazirlikDk: ondalikMetinSemasi.nullable(), birimSureDk: ondalikMetinSemasi.nullable(),
@@ -471,7 +499,8 @@ export const surelerCevabi = z.object({
 });
 
 // Kabulün yazdığı taslak ve onun süreleri; plan yeni süreyi taslak yürürlüğe girince kullanır.
-// uyari: ölçüm yürürlükteki revizyondan açılmamış taslağa yazıldıysa dolu (ROT-4); kabul yine yapılmıştır.
+// uyari: ölçüm yürürlükteki revizyondan açılmamış taslağa yazıldıysa (ROT-4) ya da ortanca 3'ten az ölçümden kabul edildiyse (2564 a) dolu;
+// kabul yine yapılmıştır.
 export const gerceklesenKabulCevabi = z.object({ taslak: komutCevabi, sureler: surelerCevabi, uyari: z.string().nullable() });
 
 export type RevizyonDurumu = z.output<typeof revizyonDurumu>;
@@ -500,6 +529,7 @@ export type RevizyonAyrintisi = z.output<typeof revizyonAyrintisi>;
 export type RotaListesiCevabi = z.output<typeof rotaListesiCevabi>;
 export type RevizyonOzetiCevabi = z.output<typeof revizyonOzetiCevabi>;
 export type UrunRevizyonlariCevabi = z.output<typeof urunRevizyonlariCevabi>;
+export type OpNumaralariCevabi = z.output<typeof opNumaralariCevabi>;
 export type FarkCevabi = z.output<typeof farkCevabi>;
 export type AgacCevabi = z.output<typeof agacCevabi>;
 export type SeceneklerCevabi = z.output<typeof seceneklerCevabi>;
@@ -525,6 +555,7 @@ export type KullanimCevabi = z.output<typeof kullanimCevabi>;
 export type KaynakGirdisi = z.input<typeof kaynakGirdisi>;
 export type KaynakOzeti = z.output<typeof kaynakOzeti>;
 export type AdimKaynakOzeti = z.output<typeof adimKaynakOzeti>;
+export type AdimKaynagiCevabi = z.output<typeof adimKaynagiCevabi>;
 export type AdimKaynakGirdisi = z.input<typeof adimKaynakGirdisi>;
 
 // Rotanın emre kopyalanması (karar K1): yürürlükteki revizyondan üretim emri açılır; her adım bir iş emri olur.
@@ -553,6 +584,64 @@ export const emreKopyalaGovdesi = z.object({
 });
 export const emreKopyalaCevabi = z.object({ uretimEmriId: KIMLIK, isEmriIdleri: z.array(KIMLIK) });
 
+// Excel ile toplu emir (2627): her satır ürünün yürürlükteki revizyonundan emre-kopyala ile açılır, hepsi tek işlemde; biri reddedilirse
+// hiçbiri açılmaz. Çok katmanlı emir ve stoktan düğüm seçimi sayfada tek tek yapılır. Emir başına iş emirleri ve rezerve açıldığı için
+// satır sınırı genel toplu sınırdan küçüktür.
+export const EMIR_TOPLU_EN_COK = 200;
+export const emreKopyalaTopluSatiri = emreKopyalaGovdesi.omit({ cokKatmanli: true, stoktanDugumler: true, siparisSatiriId: true })
+  .extend({ satir: z.number().int().min(1).max(1_048_576), urunId: KIMLIK }).strict();
+export const emreKopyalaTopluGovdesi = z.object({
+  satirlar: z.array(emreKopyalaTopluSatiri).min(1).max(EMIR_TOPLU_EN_COK)
+    .refine((x) => new Set(x.map((y) => y.satir)).size === x.length, 'Satır numarası iki kez var.'),
+}).strict();
+export const emreKopyalaTopluCevabi = z.object({ eklenen: z.number().int().min(0), guncellenen: z.number().int().min(0) });
+export type EmreKopyalaTopluSatiri = z.input<typeof emreKopyalaTopluSatiri>;
+export type EmreKopyalaTopluGirdisi = z.output<typeof emreKopyalaTopluGovdesi>;
+export type EmreKopyalaTopluCevabi = z.output<typeof emreKopyalaTopluCevabi>;
+
+// Excel ile rota adımları (2627, Ürün ve rotalar): satır bir ürünün bir adımıdır. Ürünün açık taslağı varsa ona, yoksa yürürlükteki
+// revizyondan (o da yoksa boş) açılan taslağa yazılır; onaya gönderilmez. OP numarası dolu satır o adımı günceller, boş satır yeni adımdır
+// (numarayı sunucu verir). Güncellemede gelmeyen alan değişmez; dosyada olmayan adım silinmez. Hepsi tek işlemde; biri reddedilirse hiçbiri kalmaz.
+export const ROTA_TOPLU_EN_COK = TOPLU_EN_COK_SATIR;
+// Önizlemenin okuduğu revizyon (Veri koşulu): açık revizyon ya da yürürlükteki, sürümüyle; ürünün hiç revizyonu yoksa null. Yazım anında
+// ürünün durumu bu değilse (taslak değişti, açıldı ya da yürürlükteki değişti) satır reddedilir: OP numarası başka adımı gösterebilir.
+export const rotaExcelDayanagi = z.object({ revizyonId: KIMLIK, surum: z.number().int().min(0) }).strict().nullable();
+export const rotaAdimTopluSatiri = z.object({
+  satir: z.number().int().min(1).max(1_048_576),
+  urunId: MALZEME_KIMLIGI,
+  dayanak: rotaExcelDayanagi,
+  opNo: KIMLIK.nullable(),
+  operasyonTipiId: KIMLIK.optional(),
+  ad: metin(80, 'Adım adı zorunlu.').optional(),
+  // Excel'de istasyon ya da makine seçilir; kişi ve fason kaynağı sayfada verilir.
+  kaynak: z.object({ tur: z.enum(['istasyon', 'makine']), id: KIMLIK }).strict().optional(),
+  ayarSuresiDk: sure(99_999).optional(),
+  birimSureDk: z.number().positive('Birim süre sıfırdan büyük olmalı.').max(99_999).optional(),
+}).strict();
+const dayanakMetni = (d: z.output<typeof rotaExcelDayanagi>): string => (d === null ? '-' : `${String(d.revizyonId)}:${String(d.surum)}`);
+export const rotaAdimTopluGovdesi = z.object({
+  satirlar: z.array(rotaAdimTopluSatiri).min(1).max(ROTA_TOPLU_EN_COK)
+    .refine((x) => new Set(x.map((y) => y.satir)).size === x.length, 'Satır numarası iki kez var.')
+    .refine((x) => {
+      const n = x.flatMap((y) => (y.opNo === null ? [] : [`${String(y.urunId)}|${String(y.opNo)}`]));
+      return new Set(n).size === n.length;
+    }, 'Aynı ürünün aynı adımı dosyada iki kez var.')
+    .refine((x) => {
+      const d = new Map<number, string>();
+      return x.every((y) => (d.get(y.urunId) ?? d.set(y.urunId, dayanakMetni(y.dayanak)).get(y.urunId)) === dayanakMetni(y.dayanak));
+    }, 'Aynı ürünün satırları farklı revizyona dayanıyor.'),
+}).strict();
+// Excel'in açtığı yeni adımın Excel'de olmayan alanları (sayfadaki "adım ekle" ile aynı seçimler; sayfa ekranın alan adlarını kullanır).
+export const YENI_ADIM_VARSAYILANI = {
+  islemSuresiDk: null, degisimSuresiDk: null, terminGun: null, bagimlilik: 'bekleyen', devirAdedi: null, firePayiYuzde: 0, makineKullanimi: 'tek',
+  enKucukParca: null, yenidenAyar: false, ilkParca: 'her_kurulum', hazirlikDk: null, ayar: true, ayarDk: null, dal: null, adetCarpani: null,
+} as const;
+// taslaklar: Excel'in yazdığı (açtığı ya da değiştirdiği) taslak revizyon sayısı.
+export const rotaAdimTopluCevabi = z.object({ eklenen: z.number().int().min(0), guncellenen: z.number().int().min(0), taslaklar: z.number().int().min(0) });
+export type RotaAdimTopluSatiri = z.input<typeof rotaAdimTopluSatiri>;
+export type RotaAdimTopluGirdisi = z.output<typeof rotaAdimTopluGovdesi>;
+export type RotaAdimTopluCevabi = z.output<typeof rotaAdimTopluCevabi>;
+
 // Patlamış rota (1476, 1481 a): donmuş anlık görüntü; düğüm yolu "0" kök, "0.2" kökün 2. ürün bileşeni.
 export const patlatmaParametresi = z.object({ id: yolKimligi });
 export const patlatmaCevabi = z.object({
@@ -569,8 +658,20 @@ export type PatlatmaCevabi = z.output<typeof patlatmaCevabi>;
 // Patlamış rota önizlemesi (1476-F): çok katmanlı emrin bugünkü yürürlükteki rotalarla nasıl açılacağı; yazma yoktur, patlatma kaydı açılmaz.
 // Patlatma kurulamazsa (döngü, katman sınırı) `ileti` dolu, düğümler boştur. Kurulur ama çok katmanlı emir açılamazsa (kesirli ya da 1000 üstü
 // kök başına adet, uzun dal adı) `engel` doludur; düğümler yine gösterilir. Emir op numarası alt düğümlerde açılıştakiyle aynıdır.
+// 2557: önizleme sipariş miktarıyla da hesaplanır (boş: 1); her sayı kökün 1 adedi için ve bu miktar için verilir.
+export const patlatmaOnizlemeSorgusu = z.object({ miktar: z.coerce.number<number>().int().positive().max(1_000_000).prefault(1) });
+const onizlemeMiktari = z.object({ kokBasina: ondalikMetinSemasi, siparis: ondalikMetinSemasi });
+// 2610 a: ara adımın çıktısı. Çıktı kartlı adımda kart o karttır ve statu null; statülü adımda kart statüdeki taşınan malzemedir. statu null:
+// statü henüz açılmadı (hiç sayım yok). stok: statüdeki (çıktı kartında statüsüz) bakiye; toplam bütün kalite, planaSayilan yalnız plana sayılan
+// kalite. Bakiye yoksa null, sıfır uydurulmaz. Gösterilecek miktarı ekran seçer (2622).
+const araHalSemasi = z.object({
+  statu: z.object({ id: KIMLIK, ad: z.string() }).nullable(),
+  kart: urunOzeti.nullable(),
+  stok: z.object({ toplam: ondalikMetinSemasi, planaSayilan: ondalikMetinSemasi }).nullable(),
+});
 export const patlatmaOnizlemeCevabi = z.object({
   kokRevizyon: revizyonBaglantisi,
+  miktar: ondalikMetinSemasi,
   ileti: z.string().nullable(),
   engel: z.string().nullable(),
   dugumler: z.array(z.object({
@@ -588,10 +689,29 @@ export const patlatmaOnizlemeCevabi = z.object({
       kaynakOpNo: KIMLIK, emirOpNo: KIMLIK, ad: z.string(),
       // Adımın yeri: istasyon adı, istasyonsuz kaynağın adı ya da fason firması; atanmamışsa null.
       yer: z.string().nullable(),
+      // 2557: sayılar emir açılış kuralıyladır (uretim-emirleri malzemeIhtiyaci). Adet adıma giren parçadır: dal çarpanı ve adımla
+      // ardıllarının fire payı dahil; çıkan, adımın kendi firesinden sonra kalan sağlam parçadır. Emir açılamıyorsa (engel) sayılar null.
+      // 2605 a: hedef emrin bu adımdaki hedef adedidir (adet x dal çarpanı, firesiz; uretim-emirleri dalBasiAdedi); ekranın ana sayısı.
+      // adet fire payıyla giren parçadır (alt satır).
+      hedef: onizlemeMiktari.nullable(),
+      adet: onizlemeMiktari.nullable(),
+      cikanAdet: onizlemeMiktari.nullable(),
+      // Son adımın çıktısı düğümün ürünüdür (kökte mamul, alt düğümde tüketen adıma girer); ötekiler ara haldir.
+      cikti: z.enum(['ara-hal', 'urun']),
+      // Ara halde statülü kart ve stoğu (2610 a); ürün adımında ve çıktısı çözülemeyen adımda null.
+      araHal: araHalSemasi.nullable(),
+      // Girenler rotadaki bileşenlerdir; altDugum dolu olan alt düğümün ürünüdür, stoktan gelmez. miktar ve fireYuzde rotadaki gibi bir adet içindir.
+      girenler: z.array(z.object({
+        malzeme: urunOzeti, altDugum: DUGUM_YOLU.nullable(), miktar: ondalikMetinSemasi, fireYuzde: ondalikMetinSemasi, toplam: onizlemeMiktari.nullable(),
+      })),
+      yanUrunler: z.array(z.object({ malzeme: urunOzeti, miktar: ondalikMetinSemasi, toplam: onizlemeMiktari.nullable() })),
     })),
   })),
+  // Stoktan gelen girenlerin malzeme başına toplamı (alt düğüm ürünleri hariç); engelde ya da ileti varken boş.
+  hammaddeToplami: z.array(z.object({ malzeme: urunOzeti, toplam: onizlemeMiktari })),
 });
 export type PatlatmaOnizlemeCevabi = z.output<typeof patlatmaOnizlemeCevabi>;
+export type AraHal = z.output<typeof araHalSemasi>;
 export type EmreKopyalaGovdesi = z.input<typeof emreKopyalaGovdesi>;
 
 // Emir listesi (teslimdeki "Rev N akışta aç" ve "rota değişti"): emir kaynak revizyonun kimliğini taşır; harf ve yürürlük rotada.
@@ -777,6 +897,14 @@ const talimatSablonOzeti = z.object({
 });
 export const talimatSablonlariCevabi = z.object({ sablonlar: z.array(talimatSablonOzeti) });
 export const talimatSablonuCevabi = z.object({ sablon: talimatSablonOzeti.extend({ adimlar: z.array(talimatAdimiSemasi) }) });
+// Şablonun kopyaları (2588 a): kökeni bu şablon olan talimat sürümleri ve taslaklar. geride: kopyalandığı şablon sürümü güncelden eski;
+// gecerli: sürüm OP'nin son yayınıdır (taslakta false). Kopya şablona bağlı değildir; liste yalnız "nerede kullanıldı" bilgisidir.
+export const talimatSablonKopyalariCevabi = z.object({
+  sablon: z.object({ id: KIMLIK, kod: z.string(), ad: z.string(), surum: KIMLIK }),
+  kopyalar: z.array(z.object({
+    urun: urunOzeti, opNo: KIMLIK, talimatSurumu: KIMLIK.nullable(), taslak: z.boolean(), sablonSurumu: KIMLIK, geride: z.boolean(), gecerli: z.boolean(),
+  })),
+});
 
 export type KontrolNoktasi = z.output<typeof kontrolSemasi>;
 export type TalimatAdimiGirdisi = z.input<typeof talimatAdimiGirdisi>;
@@ -784,6 +912,7 @@ export type TalimatAdimi = z.output<typeof talimatAdimiSemasi>;
 export type TalimatMedyasi = z.output<typeof medyaSemasi>;
 export type AdimliTalimatYazGovdesi = z.input<typeof adimliTalimatYazGovdesi>;
 export type TalimatTaslakKaydetGovdesi = z.input<typeof talimatTaslakKaydetGovdesi>;
+export type TalimatSablonKopyalariCevabi = z.output<typeof talimatSablonKopyalariCevabi>;
 export type TalimatTaslakKomutGovdesi = z.input<typeof talimatTaslakKomutGovdesi>;
 export type TalimatSablonEkleGovdesi = z.input<typeof talimatSablonEkleGovdesi>;
 export type TalimatSablonKaydetGovdesi = z.input<typeof talimatSablonKaydetGovdesi>;

@@ -22,7 +22,7 @@ const HATALI: KmHataliBekleyenCevabi['kayitlar'][number] = {
   id: 5, uretimEmri: { id: 7, emirNo: 'UE-0007', parcaNo: 'DNM-01', parcaAd: 'Deneme mili' }, isEmri: { id: 70, opNo: 20, ad: 'Tornalama' },
   hedefEmir: { id: 8, emirNo: 'UE-0007-K1' }, kaliteIsEmriId: 80, reworkIsEmriId: 81, hurdaNedeni: { id: 3, kod: 'TK', ad: 'Takım kırılması' },
   adet: 2, aciklama: null, kisi: { id: 9, ad: 'Deneme Operatör' }, zaman: '2026-10-28T08:00:00.000Z',
-  karar: null, kararKisi: null, kararZamani: null, kararNotu: null, ncrKimlik: null,
+  karar: null, kararKisi: null, kararZamani: null, kararNotu: null, ncrKimlik: null, arsivde: false,
 };
 
 function ac(k: TestKullanicisi, kayitlar: TestKayitlari = {}, bekleyen: KmIlkParcaBekleyenCevabi = { emirler: [] }, hatali: KmHataliBekleyenCevabi = { kayitlar: [] }) {
@@ -208,7 +208,8 @@ describe('Hatalı parça kararı', () => {
     expect(within(bolum).getByText('UE-0007 | Op 20 | DNM-01')).toBeTruthy();
     fireEvent.click(within(bolum).getByRole('button', { name: 'Karar ver' }));
     const pencere = screen.getByRole('dialog', { name: 'Hatalı parça kararı' });
-    fireEvent.change(within(pencere).getByLabelText('Karar'), { target: { value: 'hurda' } });
+    fireEvent.change(within(pencere).getByLabelText(/^Karar/), { target: { value: 'hurda' } });
+    fireEvent.change(within(pencere).getByLabelText(/^Ciddiyet/), { target: { value: 'Majör' } });
     fireEvent.change(within(pencere).getByLabelText('Gerekçe'), { target: { value: 'Kurtarılamaz' } });
     fireEvent.click(within(pencere).getByRole('button', { name: 'Kararı yaz' }));
     await waitFor(() => { expect(s.yazmalar.some((y) => y.yol === '/kalite-merkezi/hatali/5/karar')).toBe(true); });
@@ -225,7 +226,8 @@ describe('Hatalı parça kararı', () => {
     const bolum = await screen.findByRole('region', { name: 'Hatalı parça kararı' });
     fireEvent.click(within(bolum).getByRole('button', { name: 'Karar ver' }));
     const pencere = screen.getByRole('dialog', { name: 'Hatalı parça kararı' });
-    const secim = within(pencere).getByLabelText('Karar');
+    const secim = within(pencere).getByLabelText(/^Karar/);
+    fireEvent.change(within(pencere).getByLabelText(/^Ciddiyet/), { target: { value: 'Minör' } });
     expect(within(secim).getByRole('option', { name: 'Kabul (olduğu gibi)' })).toBeTruthy();
     fireEvent.change(secim, { target: { value: 'sartli_kabul' } });
     const sart = within(pencere).getByLabelText(/Şart/);
@@ -234,6 +236,50 @@ describe('Hatalı parça kararı', () => {
     fireEvent.click(within(pencere).getByRole('button', { name: 'Kararı yaz' }));
     await waitFor(() => { expect(s.yazmalar.some((y) => y.yol === '/kalite-merkezi/hatali/5/karar')).toBe(true); });
     expect(s.yazmalar.find((y) => y.yol === '/kalite-merkezi/hatali/5/karar')?.govde).toMatchObject({ karar: 'sartli_kabul', not: 'Çapak alınarak kullanılır' });
+  });
+
+  it('2754 a/a: pencere karar ve ciddiyet seçimsiz açılır; ikisi seçilmeden yazılmaz', async () => {
+    const s = ac(MUHENDIS, { ncr: [] }, { emirler: [] }, { kayitlar: [HATALI] });
+    const bolum = await screen.findByRole('region', { name: 'Hatalı parça kararı' });
+    fireEvent.click(within(bolum).getByRole('button', { name: 'Karar ver' }));
+    const pencere = screen.getByRole('dialog', { name: 'Hatalı parça kararı' });
+    const karar = within(pencere).getByLabelText(/^Karar/) as HTMLSelectElement;
+    const ciddiyet = within(pencere).getByLabelText(/^Ciddiyet/) as HTMLSelectElement;
+    expect(karar.value).toBe('');
+    expect(ciddiyet.value).toBe('');
+    fireEvent.click(within(pencere).getByRole('button', { name: 'Kararı yaz' }));
+    expect(within(pencere).getByText('Karar seçin.')).toBeTruthy();
+    expect(within(pencere).getByText('Ciddiyet seçin.')).toBeTruthy();
+    fireEvent.change(karar, { target: { value: 'kabul' } });
+    fireEvent.click(within(pencere).getByRole('button', { name: 'Kararı yaz' }));
+    expect(within(pencere).queryByText('Karar seçin.')).toBeNull();
+    expect(within(pencere).getByText('Ciddiyet seçin.')).toBeTruthy();
+    expect(s.yazmalar.some((y) => y.yol.includes('/hatali/'))).toBe(false);
+    fireEvent.change(ciddiyet, { target: { value: 'Kritik' } });
+    fireEvent.click(within(pencere).getByRole('button', { name: 'Kararı yaz' }));
+    await waitFor(() => { expect(s.yazmalar.some((y) => y.yol === '/kalite-merkezi/hatali/5/karar')).toBe(true); });
+    expect(s.yazmalar.find((y) => y.yol === '/kalite-merkezi/hatali/5/karar')?.govde).toMatchObject({ karar: 'kabul', ciddiyet: 'Kritik' });
+  });
+
+  it('2753: arşivdeki emrin hatalı kaydında rework seçeneği yoktur; pencere seçimsiz açılır', async () => {
+    ac(MUHENDIS, { ncr: [] }, { emirler: [] }, { kayitlar: [{ ...HATALI, arsivde: true }] });
+    const bolum = await screen.findByRole('region', { name: 'Hatalı parça kararı' });
+    fireEvent.click(within(bolum).getByRole('button', { name: 'Karar ver' }));
+    const pencere = screen.getByRole('dialog', { name: 'Hatalı parça kararı' });
+    const secim = within(pencere).getByLabelText(/^Karar/) as HTMLSelectElement;
+    expect(secim.value).toBe('');
+    expect(within(secim).queryByRole('option', { name: /Rework/ })).toBeNull();
+    expect(within(secim).getByRole('option', { name: 'Hurda' })).toBeTruthy();
+    expect(within(pencere).getByText('Emir arşivde; rework verilemez, hurda, red ya da kabul verin.')).toBeTruthy();
+  });
+
+  it('arşivde olmayan emrin hatalı kaydında rework seçilebilir', async () => {
+    ac(MUHENDIS, { ncr: [] }, { emirler: [] }, { kayitlar: [{ ...HATALI, arsivde: false }] });
+    const bolum = await screen.findByRole('region', { name: 'Hatalı parça kararı' });
+    fireEvent.click(within(bolum).getByRole('button', { name: 'Karar ver' }));
+    const pencere = screen.getByRole('dialog', { name: 'Hatalı parça kararı' });
+    expect(within(within(pencere).getByLabelText(/^Karar/)).getByRole('option', { name: /Rework/ })).toBeTruthy();
+    expect(within(pencere).queryByText('Emir arşivde; rework verilemez, hurda, red ya da kabul verin.')).toBeNull();
   });
 
   it('onay yetkisi olmayan kişide liste istenmez ve bölüm çizilmez', async () => {

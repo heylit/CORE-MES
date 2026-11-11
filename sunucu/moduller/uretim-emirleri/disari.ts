@@ -67,6 +67,7 @@ export const makineDevral = (db: Db, kullanici: Kullanici, id: number, kullanimI
   servis.kayitAniyla(db, an, () => servis.makineDevral(db, uretenKisi(kullanici), id, kullanimId, isEmriId));
 // Adet verilirse sayım ona eşitlenir: başkasının sayımını düşürmesin diye kişi işe katılmış ya da düzeltme işlemli olmalı (185 a).
 // Akışlı ya da bekleyen adım önceki adım bitmeden bitmez (CAKISMA, 649 a); eksi bakiyeyle bitiş uyarı döner (654 a).
+// İlk parça kararı bekleyen parça varken adım bitmez (CAKISMA, 2521 b).
 export const emirBitir = (
   db: Db, kullanici: Kullanici, id: number, saglamAdet?: number, an?: string, isEmriId?: number,
 ): Promise<{ emir: Emir; uyari: string | null }> =>
@@ -389,6 +390,7 @@ export { DAL_AZAMI, ONCUL_TURLERI, adimOnculleri } from './kurallar.ts';
 export type { AdimOnculu, OnculTuru, OnculluAdim } from './kurallar.ts';
 
 // Rota (UE1): emir, yürürlükteki rotanın kopyasıyla açılır; "emirlere uygula" güvenli kipte yeniler. Liste ve ayrıntı rota ekranı içindir.
+// "Emirlere uygula" çağıranı okuduğu emrin sürümünü verir (surum): kilit altında denetlenir, arada değişen emir ESKI_SURUM ile reddedilir.
 export const uretimEmriAc = isEmri.uretimEmriAc;
 export const isEmirleriniYenile = isEmri.isEmirleriniYenile;
 export const adimliEmirListesi = isEmri.adimliListe;
@@ -437,6 +439,8 @@ export const cncHazirlikCozucusu = (c: HazirlikCozucusu | null): void => { hazir
 export const cizimHazirlikCozucusu = (c: HazirlikCozucusu | null): void => { hazirlikCozucusuKaydet('cizim', c); };
 // Paket yayını (2227): iş emri başına; başlatma kancası sormaz, reddi Arkon verir (2189-1 a).
 export const yayinHazirlikCozucusu = (c: HazirlikCozucusu | null): void => { hazirlikCozucusuKaydet('yayin', c); };
+// 2227-1 b: iş emrine özel hazırlık maddesi; sahibi Arkon (Üretim Hazırlık).
+export const ekMaddeHazirlikCozucusu = (c: HazirlikCozucusu | null): void => { hazirlikCozucusuKaydet('ek-madde', c); };
 // Uyaran maddeler (2146-1 a): eksikken iş başlar; makine durumu bu modülde çözülür (hazirlik.ts).
 export const rotaHazirlikCozucusu = (c: HazirlikCozucusu | null): void => { hazirlikCozucusuKaydet('rota', c); };
 export const malzemeHazirlikCozucusu = (c: HazirlikCozucusu | null): void => { hazirlikCozucusuKaydet('malzeme', c); };
@@ -503,6 +507,9 @@ export type {
 // Emir bitti ve fason hareketi olayları (kart #1310): sevkiyat bekleme listesine ve sevkiyat işine, stok fason konumlarına yazar.
 // Dinleyiciler kendini kaydeder; çağrı sayım olayıyla aynı yönde kurulur (modül döngüsü olmaz).
 export { emirAcildiDinle, emirBirlestiDinle, emirBittiDinle, emirIptalDinle, fasonHareketiDinle, hazirlikTamamlandiDinle, isEmirleriDegistiDinle, isEmriKopyalandiDinle } from './emir-olaylari.ts';
+// Adım bitti (2497): terminalde çalışan iş emri bitince aynı işlemde; dinleyicinin reddi bitirmeyi geri alır.
+export { adimBittiDinle } from './emir-olaylari.ts';
+export type { AdimBittiDinleyicisi, AdimBittiOlayi } from './emir-olaylari.ts';
 export type {
   EmirBittiDinleyicisi, EmirBittiOlayi, EmirIptalDinleyicisi, EmirIptalOlayi, FasonHareketiDinleyicisi, FasonHareketiOlayi, HazirlikTamamlandiDinleyicisi, HazirlikTamamlandiOlayi,
   IsEmriKopyalandiDinleyicisi, IsEmriKopyalandiOlayi,
@@ -624,3 +631,7 @@ export { malzemeKartiIzleri } from './sorgular.ts';
 // dönüş, tamamlamada partiye giriş) bu fonksiyonları kendi transaction'ında çağırır; yetki denetlemezler, çağıranın ucu korur.
 export { dieAc, dieDonusuYaz, dieGidisYaz, dieIptal, dieListesi, dieOku, dieTamamla } from './dis-islem-emri.ts';
 export type { DieAcGirdisi } from './dis-islem-emri.ts';
+
+// 2769: sıra dışı başlamış adımların öncül durumu (arkon eksik iş AR-EK-8).
+export type { GeridekiOncul } from './servis.ts';
+export const geridekiOnculler = (db: Db, isEmriIdleri: readonly number[]): Promise<servis.GeridekiOncul[]> => servis.geridekiOnculler(db, isEmriIdleri);

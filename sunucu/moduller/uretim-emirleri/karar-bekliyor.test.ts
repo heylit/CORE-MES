@@ -178,32 +178,23 @@ describe('uretim-emirleri karar bekleyen sayım (gerçek PostgreSQL)', () => {
     assert.match(String((hata as { constraint?: string } | null)?.constraint), /uretim_sayimi_karar_veren_duzeltmede/);
   });
 
-  test('327 a: onay beklerken adetli bitiş farkı karar bekleyene yazar; onay kapanışı verilen adede getirir, çift sayılmaz', async () => {
-    const ayni = await baslamisEmir();
-    await vt().tx((db) => emirSayim(db, operator, ayni, { tur: 'saglam', adet: 4 }));
-    const b1 = await vt().tx((db) => emirBitir(db, operator, ayni, 4));
-    assert.equal(b1.emir.saglamAdet, 0, 'karar bekleyen kapanışa onayla girer');
-    assert.deepEqual(await sayaclar(ayni), { kararBekliyor: 4, red: 0 }, 'sayılanla aynı adet fark yazmaz');
-    assert.equal((await vt().tx((db) => kararliSayimiSonuclandir(db, yoneticiId, ayni, 'onay'))).emir.saglamAdet, 4);
+  test('2521 b: ilk parça kararı beklenirken bitirme reddedilir, iş ve sayım değişmez; onay ya da ret bekleyeni kapatınca bitirilir', async () => {
+    const id = await baslamisEmir();
+    await vt().tx((db) => emirSayim(db, operator, id, { tur: 'saglam', adet: 3 }));
+    for (const adet of [undefined, 3, 5]) {
+      await assert.rejects(vt().tx((db) => emirBitir(db, operator, id, adet)), (h: unknown) => h instanceof UygulamaHatasi
+        && h.message === '3 parça ilk parça kararı bekliyor. Kalite Merkezi kararı gelmeden iş bitirilemez.', `adet ${String(adet)}`);
+    }
+    assert.deepEqual(await sayaclar(id), { kararBekliyor: 3, red: 0 }, 'ret sayımı değiştirmez');
+    assert.equal((await vt().tx((db) => emirAyrintisi(db, id))).emir.durum, 'basladi');
+    await vt().tx((db) => kararliSayimiSonuclandir(db, yoneticiId, id, 'onay'));
+    const bitti = await vt().tx((db) => emirBitir(db, operator, id));
+    assert.equal(bitti.emir.saglamAdet, 3, 'onaydan sonra bitirme onaylı sağlamla kapanır');
 
-    const fazla = await baslamisEmir();
-    await vt().tx((db) => emirSayim(db, operator, fazla, { tur: 'saglam', adet: 4 }));
-    await vt().tx((db) => emirBitir(db, operator, fazla, 6));
-    assert.deepEqual(await sayaclar(fazla), { kararBekliyor: 6, red: 0 });
-    assert.equal((await vt().tx((db) => kararliSayimiSonuclandir(db, yoneticiId, fazla, 'onay'))).emir.saglamAdet, 6);
-
-    const eksik = await baslamisEmir();
-    await vt().tx((db) => emirSayim(db, operator, eksik, { tur: 'saglam', adet: 4 }));
-    await vt().tx((db) => emirBitir(db, operator, eksik, 3));
-    assert.equal((await vt().tx((db) => kararliSayimiSonuclandir(db, yoneticiId, eksik, 'onay'))).emir.saglamAdet, 3);
-
-    const karisik = await baslamisEmir();
-    await vt().tx((db) => emirSayim(db, operator, karisik, { tur: 'saglam', adet: 2 }));
-    await vt().tx((db) => kararliSayimiSonuclandir(db, yoneticiId, karisik, 'onay'));
-    await vt().tx((db) => emirSayim(db, operator, karisik, { tur: 'saglam', adet: 3 }, { kararBekliyor: true }));
-    const b2 = await vt().tx((db) => emirBitir(db, operator, karisik, 1));
-    assert.equal(b2.emir.saglamAdet, 1, 'eksi fark önce karar bekleyeni, sonra sağlamı düşer');
-    assert.deepEqual(await sayaclar(karisik), { kararBekliyor: 0, red: 0 });
+    const retli = await baslamisEmir();
+    await vt().tx((db) => emirSayim(db, operator, retli, { tur: 'saglam', adet: 2 }));
+    await vt().tx((db) => kararliSayimiSonuclandir(db, yoneticiId, retli, 'ret'));
+    assert.equal((await vt().tx((db) => emirBitir(db, operator, retli))).emir.saglamAdet, 0, 'ret bekleyeni redde kapatır; bitirme serbest');
   });
 
   test('onay karar bekleyeni düzeltme satırıyla sağlama geçirir; stok için sağlam olayı değil karar olayı çıkar', async () => {
@@ -238,19 +229,18 @@ describe('uretim-emirleri karar bekleyen sayım (gerçek PostgreSQL)', () => {
     assert.deepEqual(kararOlaylari.map((o) => [o.karar, o.adet]), [['ret', '3'], ['onay', '2']]);
   });
 
-  test('bitmiş emirde onay kapanış adedine eklenir; ret eklemez; kayıt geçmişi karar bekleyeni göstermez', async () => {
+  test('2521 b: karar ret ya da onayla kapanınca bitirme kapanışı onaylı sağlamdır; kayıt geçmişi karar bekleyeni göstermez', async () => {
     const id = await baslamisEmir();
     await saglam(id);
     await vt().tx((db) => kararliSayimiSonuclandir(db, yoneticiId, id, 'onay'));
     await vt().tx((db) => emirSayim(db, operator, id, { tur: 'saglam', adet: 3 }, { kararBekliyor: true }));
+    await vt().tx((db) => kararliSayimiSonuclandir(db, yoneticiId, id, 'ret'));
     const bitti = await vt().tx((db) => emirBitir(db, operator, id));
-    assert.equal(bitti.emir.saglamAdet, 1);
-    const ret = await vt().tx((db) => kararliSayimiSonuclandir(db, yoneticiId, id, 'ret'));
-    assert.equal(ret.emir.saglamAdet, 1);
+    assert.equal(bitti.emir.saglamAdet, 1, 'ret sağlama eklemez');
     const id2 = await baslamisEmir();
     await vt().tx((db) => emirSayim(db, operator, id2, { tur: 'saglam', adet: 2 }, { kararBekliyor: true }));
-    await vt().tx((db) => emirBitir(db, operator, id2));
-    const onay = await vt().tx((db) => kararliSayimiSonuclandir(db, yoneticiId, id2, 'onay'));
+    await vt().tx((db) => kararliSayimiSonuclandir(db, yoneticiId, id2, 'onay'));
+    const onay = await vt().tx((db) => emirBitir(db, operator, id2));
     assert.equal(onay.emir.saglamAdet, 2);
     assert.equal(onay.emir.canli?.saglam, 2);
     const { kayitlar } = await vt().tx((db) => emirAyrintisi(db, id));

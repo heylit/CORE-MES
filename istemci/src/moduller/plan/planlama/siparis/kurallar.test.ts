@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { ApiHatasi } from '../../../../ortak/veri/api.ts';
-import { degerlendirici, degerlendirmeHatasi, esitPartiler, partiAdetleriDenetle, secenegiAl, type PlanSecenegi } from './degerlendirme.ts';
+import { KAYDEDILEMEDI, degerlendirici, degerlendirmeHatasi, esitPartiler, partiAdetleriDenetle, secenegiAl, type PlanSecenegi } from './degerlendirme.ts';
 import {
   darbogaz, kasayaBol, partiKurali, partiKuraliDenetle, taramaKapsami, taramaSecenekSayisi,
   dengeIsisi, dengeKatsayisi, fasonDurumu, fasonSatirlari, fasonTerminiYaz, kademe, kayitliPlan, planDengesi, saatOku, saatYaz,
@@ -177,6 +177,18 @@ describe('Değerlendirme ucu katmanı', () => {
     const iste = vi.fn(async () => ({ calismaSurumu: 7, dataVer: 1, baslangic: null, simdi: 0, maliyetGorunur: false, sonuc: { tur: 'termin-uzatma' as const, gun: 2, satirlar: [] } }));
     await degerlendirici(7, iste)({ tur: 'termin-uzatma', gun: 2 });
     expect(iste).toHaveBeenCalledWith(7, { tur: 'termin-uzatma', gun: 2 });
+  });
+
+  it('yazan ekranda sürüm her istekte yazıcıdan alınır; kaydedilemezse hesap istenmez (B-2483-32)', async () => {
+    const iste = vi.fn(async (_s: number, _i: unknown) => ({ calismaSurumu: 9, dataVer: 1, baslangic: null, simdi: 0, maliyetGorunur: false, sonuc: { tur: 'termin-uzatma' as const, gun: 2, satirlar: [] } }));
+    const surumler = [8, 9, null];
+    const d = degerlendirici(async () => surumler.shift() ?? null, iste);
+    await d({ tur: 'termin-uzatma', gun: 2 });
+    await d({ tur: 'termin-uzatma', gun: 3 });
+    expect(iste.mock.calls.map((c) => c[0])).toEqual([8, 9]);
+    const h = await d({ tur: 'termin-uzatma', gun: 5 }).catch((e: unknown) => e);
+    expect(iste).toHaveBeenCalledTimes(2);
+    expect(degerlendirmeHatasi(h)).toEqual({ metin: KAYDEDILEMEDI, yenile: true });
   });
 
   it('409 yenileme ister, 403 istemez', () => {

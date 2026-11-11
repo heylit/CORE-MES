@@ -45,7 +45,7 @@ const OKUMA: KaynakDilimiOkumasi = {
 };
 const ELLE: KaynakElleVerisi = {
   tezgahlar: [
-    // elle değiştirilmiş ücret (izlemez) ve sayfanın ayarları
+    // elle değiştirilmiş ücret (2601 a: Finans'ın istasyon maliyetiyle ezilir) ve sayfanın ayarları
     { id: '100', ad: 'Eski ad', grup: '10', ucret: 950, ucretIst: 900, verim: 0.8, vardiyalar: ['1'], opOran: 0, isiksiz: true, arizaGun: 30, onarimSaat: 4 },
     // izleyen ücret: istasyon maliyetine geçer
     { id: '110', ad: 'Freze 1', grup: '11', ucret: 1000, ucretIst: 1000, verim: 1, vardiyalar: ['1', '2'], opOran: 1 },
@@ -101,6 +101,12 @@ describe('kaynak dilimi eşdeğerliği (1716, saf)', () => {
   test('KD-01: tam okuma ve elle değerlerle eski yolla aynı', () => esdeger(OKUMA, ELLE));
   test('KD-02: elle verisi olmayan yeni çalışmada (ilk kurulum) eski yolla aynı', () => esdeger(OKUMA, {}));
   test('KD-03: maliyet okunamazsa ücret izlemesi durur, ilk kurulumdaki ücret boştur; eski yolla aynı', () => esdeger({ ...OKUMA, istasyonMaliyeti: null }, ELLE));
+  test('KD-03b: maliyet okunamazsa (yetki yok) elle ücret kalır; Finansta satırı olmayan istasyonun ücreti null (2601 a)', () => {
+    const t = (o: KaynakDilimiOkumasi) => Object.fromEntries(kaynakDilimiKur(o, ELLE).tezgahlar.map((x) => [x.id, x.ucret]));
+    assert.equal(t({ ...OKUMA, istasyonMaliyeti: null })['100'], 950);
+    assert.equal(t({ ...OKUMA, istasyonMaliyeti: new Map([[11, 1200]]) })['100'], null);
+    esdeger({ ...OKUMA, istasyonMaliyeti: new Map([[11, 1200]]) }, ELLE);
+  });
   test('KD-04: haftası olmayan takvim, vardiyasız gün ve vardiyasız kişi; eski yolla aynı', () => {
     esdeger({ ...OKUMA, takvim: { hafta: [], kisiVardiyasi: [] } }, ELLE);
     esdeger({ ...OKUMA, vardiyalar: [], takvim: { hafta: [], kisiVardiyasi: [] } }, {});
@@ -111,14 +117,16 @@ describe('kaynak dilimi eşdeğerliği (1716, saf)', () => {
     const d = kaynakDilimiKur(OKUMA, ELLE);
     const t = Object.fromEntries(d.tezgahlar.map((x) => [x.id, x]));
     assert.deepEqual(Object.keys(t), ['100', '101', '110', '120'], 'istasyonsuz ve okunmayan tezgâh düşer');
-    assert.deepEqual([t['100']?.ad, t['100']?.ucret, t['100']?.verim, t['100']?.opOran, t['100']?.isiksiz], ['Torna 1', 950, 0.8, 0.5, true]);
+    assert.deepEqual([t['100']?.ad, t['100']?.ucret, t['100']?.verim, t['100']?.opOran, t['100']?.isiksiz], ['Torna 1', 900, 0.8, 0.5, true]);
+    assert.equal(t['100']?.ucretIst, 900);
     assert.deepEqual([t['101']?.ucret, t['101']?.verim, t['101']?.vardiyalar], [900, 0.9, ['1', '2']]);
     assert.deepEqual([t['110']?.ucret, t['110']?.ucretIst], [1200, 1200]);
     assert.deepEqual([t['120']?.ucret, t['120']?.verim, t['120']?.opOran, t['120']?.hafta], [null, 1, 1, undefined]);
     assert.deepEqual(t['100']?.hafta, { pzt: ['1', '2'], sal: ['1'], car: [], per: [], cum: [], cmt: [], paz: [] });
     assert.deepEqual(d.calismaGunleri, { pzt: ['1', '2'], sal: ['1'], car: [], per: [], cum: [], cmt: ['1'], paz: [] });
     const p = Object.fromEntries(d.personel.map((x) => [x.id, x]));
-    assert.deepEqual([p['7']?.vardiya, p['7']?.ayar, p['8']?.vardiya, p['8']?.ayar, (p['8'] as unknown as Record<string, unknown>)['notu']], ['1', false, '', false, 'sayfanin alani']);
+    // 2513 a (1716): ayarcılık her okumada görevden; sayfadaki eski elle değer (false) kalmaz.
+    assert.deepEqual([p['7']?.vardiya, p['7']?.ayar, p['8']?.vardiya, p['8']?.ayar, (p['8'] as unknown as Record<string, unknown>)['notu']], ['1', false, '', true, 'sayfanin alani']);
     assert.deepEqual(d.devamsizlik, [
       { personel: '8', gun: '2026-10-23' }, { personel: '7', gun: '2026-10-21', sunucu: true }, { personel: '7', gun: '2026-10-22', sunucu: true },
     ]);
@@ -143,11 +151,11 @@ describe('kaynak dilimi eşdeğerliği (1716, saf)', () => {
     const p = Object.fromEntries(d.personel.map((x) => [x.id, x]));
     assert.deepEqual([p['7']?.makineler, p['8']?.makineler], [['100', 'kisi-7'], []]);
   });
-  test('KD-09: elle değiştirilen el tezgâhı ayarı korunur; eski yolla aynı', () => {
+  test('KD-09: elle değiştirilen el tezgâhı ayarı korunur, ücreti Finanstan (istasyonun maliyeti yoksa null, 2601 a); eski yolla aynı', () => {
     const elle: KaynakElleVerisi = { ...ELLE, tezgahlar: [...ELLE.tezgahlar!, { id: 'kisi-7', ad: 'Eski', grup: '12', ucret: 400, ucretIst: 300, verim: 0.7, vardiyalar: ['2'], opOran: 1, hafta: { pzt: ['1'] } }] };
     esdeger(INSANLI, elle);
     const t = kaynakDilimiKur(INSANLI, elle).tezgahlar.find((x) => x.id === 'kisi-7');
-    assert.deepEqual([t?.ad, t?.ucret, t?.verim, t?.vardiyalar, t?.hafta], ['Ornek Operator', 400, 0.7, ['1'], undefined]);
+    assert.deepEqual([t?.ad, t?.ucret, t?.verim, t?.vardiyalar, t?.hafta], ['Ornek Operator', null, 0.7, ['1'], undefined]);
   });
 
   // Eski yol okunamayan dilimde Reçete ve Rota kaydındaki kopyaya düşer; yeni yol açık çalışmadakini korur; hangisinin geçerli olacağı 1720'de sorulur.

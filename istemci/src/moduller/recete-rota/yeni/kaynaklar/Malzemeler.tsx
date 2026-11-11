@@ -8,7 +8,6 @@ import {
   eskiKalemler, kategoriler, malzemeSuz, MALZEME_TURLERI, minimumAltinda, sayiGirdisi, statuluKartlar, turAdi, type EskiKalem,
 } from './kurallar.ts';
 import { SahibindeDuzenle, SatirGirdisi, useR2Komutu } from './parcalar.tsx';
-import { Statuler } from './Statuler.tsx';
 
 // Malzemeler (envanter 2.6): kartlar Malzemeler ve Hizmetler'den okunur, burada yalnız okunur. Bu bölümde yazılanlar sahibinin
 // komutlarıdır: birim maliyet (finans) ve elle tanımlanan statü (Reçete ve Rota'nın kendi tablosu). Hammadde, yarı mamul ve mamulün
@@ -79,7 +78,6 @@ export function Malzemeler({ veri, yetki, git }: EkranOzellikleri) {
         );
       })}
       <EskiKayitlar kartlar={kartlar} />
-      <Statuler durum={durum} yetki={yetki} />
     </div>
   );
 }

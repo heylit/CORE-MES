@@ -49,7 +49,7 @@ describe('Geçmiş hesapları', () => {
 function ac(c: PlanlamaCalismasi | null, islemler = PLANCI, bolum?: GecmisBolumu, senaryolar: unknown = null) {
   const bolumSec = vi.fn<(b: GecmisBolumu) => void>(); const git = vi.fn();
   const o: PlanlamaEkranOzellikleri = {
-    depo: { durum: null, senaryolar } as unknown as PlanlamaDeposu, calisma: c, komut: null, yetki: yetkiKur(islemler, { yazabilir: true }), git, yenile: () => undefined,
+    depo: { durum: null, senaryolar } as unknown as PlanlamaDeposu, calisma: c, komut: null, yetki: yetkiKur(islemler), git, yenile: () => undefined,
     olcek: ACILIS_OLCEGI, olcekSec: () => undefined, kaydir: () => undefined, secim: BOS_SECIM, sec: vi.fn(),
   };
   render(<BildirimSaglayici><GecmisEkrani {...o} bolum={bolum} bolumSec={bolum ? bolumSec : undefined} /></BildirimSaglayici>);

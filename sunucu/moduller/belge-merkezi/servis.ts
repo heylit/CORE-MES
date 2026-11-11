@@ -557,6 +557,12 @@ export async function yayindakiBelgeDosyasi(db: Db, belgeId: number): Promise<Ya
   return { ad: b.ad, tur: b.tur, ozet: r.ozet, dosyaTuru: r.dosyaTuru, dosya: await revizyonDosyasi(db, belgeId, r.id) };
 }
 
+// Özet, etkin bir belgenin yayındaki dosyası mı; arşivdeki belge ve taslak ya da eski revizyon false. Yetki denetlemez: çağıran,
+// kişinin merkezden alma hakkını kendi ucunda denetler.
+export function yayindaOzetMi(db: Db, ozet: string): Promise<boolean> {
+  return sorgular.yayindaOzetMi(db, ozet);
+}
+
 // Başka modülün aldığı revizyon (belge kimliği ve özetle): belge sonradan yeni revizyona geçse de alınan revizyonun dosyası verilir
 // (Kalite Merkezi balonları o resmin üstündedir, 597 a). Kural yayındaki dosyayla aynıdır: arşivdeki belge ve taslak revizyon null.
 // Okuma yetkisi ve veri kapsamı çağıranın ucundadır.

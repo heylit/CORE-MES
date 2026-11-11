@@ -686,6 +686,13 @@ export const acikSiparisSatiri = z.object({
   kalanMiktar: ondalikMetinSemasi,
   birim: z.string(),
   beklenenTeslim: z.string().nullable(),
+  // Mal kabul araması: satırın üretim emri (talebin ya da kalemin kaynak talebinin emri; fason satırında iş emrinin emri) ve
+  // emrin projesi. Emre bağlı olmayan satırda hepsi null; projesiz emirde yalnız proje alanları null. Sunucu hep yazar; seçimli
+  // olmaları bu satırı kuran başka modül fikstürlerinin (plan) değişmemesi için.
+  uretimEmriId: z.number().int().nullable().optional(),
+  emirNo: z.string().nullable().optional(),
+  projeId: z.number().int().nullable().optional(),
+  projeAdi: z.string().nullable().optional(),
 });
 export type AcikSiparisSatiri = z.output<typeof acikSiparisSatiri>;
 export const acikSiparisSatirlariCevabi = z.object({ satirlar: z.array(acikSiparisSatiri) });
@@ -1545,6 +1552,17 @@ export type ZeminCevabi = z.output<typeof zeminCevabi>;
 export const rezerveSatirlari = z.array(z.object({ statuId: z.number().int().nullable(), uretimEmriId: z.number().int(), emirNo: z.string().nullable(), miktar: ondalikMetinSemasi }));
 export const rezervelerCevabi = z.object({ rezerveler: rezerveSatirlari });
 export type RezervelerCevabi = z.output<typeof rezervelerCevabi>;
+// 2547 a (B-2482-12): statüde durup açık hiçbir emre ayrılmamış stok (rezervesi kaldırılan ya da emri kapanan). Aynı ürün ve OP'nin herhangi
+// bir emri kullanabilir; plan onu bir emrin zincirinde görmez. Satır malzeme, statü ve kalite başınadır, red yoktur; sahipsiz = miktar - ayrilan (açık emirlere).
+export const sahipsizStatuluCevabi = z.object({
+  satirlar: z.array(z.object({
+    malzemeId: z.number().int(), malzemeKod: z.string().nullable(), malzemeAd: z.string().nullable(), statuId: z.number().int(), kaliteDurumu: z.enum(KALITE_DURUMLARI),
+    miktar: ondalikMetinSemasi, ayrilan: ondalikMetinSemasi, sahipsiz: ondalikMetinSemasi, konumlar: z.array(z.string()),
+    // 2561 a: statüye son sokan emir ve statüdeki son hareket; iz yoksa null.
+    kaynakEmirId: z.number().int().nullable().optional(), kaynakEmirNo: z.string().nullable().optional(), sonHareket: zamanSemasi.nullable().optional(),
+  })),
+});
+export type SahipsizStatuluCevabi = z.output<typeof sahipsizStatuluCevabi>;
 export const rezerveEtGovdesi = z.object({ malzemeId: kimlik, statuId: kimlik, uretimEmriId: kimlik, miktar: miktarSemasi });
 export type RezerveEtGovdesi = z.input<typeof rezerveEtGovdesi>;
 export type RezerveEtKomutu = z.output<typeof rezerveEtGovdesi>;

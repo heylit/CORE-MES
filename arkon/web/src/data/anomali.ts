@@ -126,16 +126,18 @@ export function kapaliZamanKurallari(e: AnomaliOlaylari['esikler']): string[] {
 
 /* Eksik iş (kart 2421 c): plandan bağımsız olarak yapılmayan, girilmeyen ya da geciken iş (GET /arkon/eksik-isler, terminal için
    /arkon/eksik-islerim). Değerin birimi türündedir: plan gerisi net dakika, kayıtsız gün iş günü, yarım ve plansız iş ile bayat plan vardiya saati,
-   geciken emir gün. Eşik boşsa o kural kapalıdır. */
-export type EksikIsTuru = 'plan-gerisi' | 'kayitsiz-gun' | 'yarim-is' | 'plansiz-is' | 'geciken-emir' | 'bayat-plan';
+   geciken emir ve ölçülmeyen süre (2567) gün, geride kalan önceki adım (2769) adet. Eşik boşsa o kural kapalıdır. */
+export type EksikIsTuru = 'plan-gerisi' | 'kayitsiz-gun' | 'yarim-is' | 'plansiz-is' | 'geciken-emir' | 'bayat-plan' | 'geride-onceki' | 'olcumsuz-is';
+export type OlcumNedeni = 'ayar-yok' | 'sayim-yok' | 'saglam-yok' | 'is-emirsiz' | 'rotada-yok';
 export interface EksikIs {
   id: number; tur: EksikIsTuru; konu: 'is_emri' | 'istasyon' | 'uretim_emri' | 'plan'; isEmriId: number | null; uretimEmriId: number | null;
   emirNo: string | null; opNo: number | null; istasyon: { id: number; ad: string } | null; kaynak: { tur: 'makine' | 'kisi'; id: number; ad: string | null } | null;
-  deger: number; kalanAdet: number | null; planaGore: boolean; dayanakAni: string | null; acilis: string; kapanis: string | null;
+  deger: number; kalanAdet: number | null; planaGore: boolean; dayanakAni: string | null; nedenler: OlcumNedeni[]; acilis: string; kapanis: string | null;
 }
 export interface EksikIsler {
   hesaplama: string;
-  esikler: { planGerisiDk: number | null; kayitsizGun: number | null; yarimIsSaat: number | null; plansizIsSaat: number | null; gecikenEmirGun: number | null; bayatPlanSaat: number | null };
+  esikler: { planGerisiDk: number | null; kayitsizGun: number | null; yarimIsSaat: number | null; plansizIsSaat: number | null; gecikenEmirGun: number | null; bayatPlanSaat: number | null;
+    olcumsuzIsGun: number | null };
   ozet: Record<EksikIsTuru, number>;
   olaylar: EksikIs[];
 }
@@ -143,14 +145,27 @@ export interface EksikIslerim { hesaplama: string; olaylar: EksikIs[] }
 
 export const EKSIK_IS_ETIKETI: Record<EksikIsTuru, string> = {
   'plan-gerisi': 'Plan gerisi', 'kayitsiz-gun': 'Kayıtsız gün', 'yarim-is': 'Yarım kaldı', 'plansiz-is': 'Plana girmedi', 'geciken-emir': 'Geciken emir', 'bayat-plan': 'Plan bayat',
+  'geride-onceki': 'Önceki adımın sayımı geride', 'olcumsuz-is': 'Süre ölçülmedi',
 };
 
-/** Olayın değeri birimiyle: plan gerisi süre, kayıtsız gün "3 iş günü", saatler süre, geciken emir "2 gün". */
-export function eksikDegerMetni(o: Pick<EksikIs, 'tur' | 'deger' | 'planaGore'>): string {
+export const OLCUM_NEDENI_ETIKETI: Record<OlcumNedeni, string> = {
+  'ayar-yok': 'Ayar basılmadı: hazırlık ölçülmedi', 'sayim-yok': 'Sayım yok: işlem süresi ölçülmedi',
+  'saglam-yok': 'Sağlam sayım yok (sayımlar karar bekliyor ya da reddedildi): işlem süresi ölçülmedi',
+  'is-emirsiz': 'İş emirsiz emir: adım süresi ölçülmedi', 'rotada-yok': 'Adım rotada yok: süre rotaya yazılmadı',
+};
+
+/** Olayın değeri birimiyle: plan gerisi süre, kayıtsız gün "3 iş günü", saatler süre, geciken emir "2 gün", ölçülmeyen süre "bugün" ya da
+    "2 gün önce". */
+export function eksikDegerMetni(o: Pick<EksikIs, 'tur' | 'deger' | 'planaGore'> & { kalanAdet?: number | null }): string {
+  if (o.tur === 'olcumsuz-is') return o.deger === 0 ? 'bugün' : o.deger + ' gün önce';
   if (o.tur === 'plan-gerisi') return sureMetni(o.deger);
   if (o.tur === 'kayitsiz-gun') return o.deger + ' iş günü';
   if (o.tur === 'geciken-emir') return o.deger + ' gün' + (o.planaGore ? ' (plana göre)' : '');
   if (o.tur === 'bayat-plan' && o.deger === 0) return 'hiç canlıya alınmadı';
+  if (o.tur === 'geride-onceki') {
+    const parcalar = [o.deger > 0 ? o.deger + ' adet sayılmadı' : null, o.kalanAdet ? 'devir için ' + o.kalanAdet + ' eksik' : null].filter((x) => x !== null);
+    return parcalar.length === 0 ? 'önceki adım bitmedi' : parcalar.join(', ');
+  }
   return sureMetni(o.deger * 60);
 }
 
@@ -165,6 +180,7 @@ export function eksikKonuMetni(o: Pick<EksikIs, 'konu' | 'emirNo' | 'opNo' | 'is
 /** Eksik iş kurallarından kapalı olanlar (eşiği boş). */
 export function kapaliEksikKurallari(e: EksikIsler['esikler']): string[] {
   return [e.planGerisiDk === null ? 'Plan gerisi' : null, e.kayitsizGun === null ? 'Kayıtsız gün' : null, e.yarimIsSaat === null ? 'Yarım iş' : null,
-    e.plansizIsSaat === null ? 'Plansız iş' : null, e.gecikenEmirGun === null ? 'Geciken emir' : null, e.bayatPlanSaat === null ? 'Bayat plan' : null]
+    e.plansizIsSaat === null ? 'Plansız iş' : null, e.gecikenEmirGun === null ? 'Geciken emir' : null, e.bayatPlanSaat === null ? 'Bayat plan' : null,
+    e.olcumsuzIsGun === null ? 'Süre ölçülmedi' : null]
     .filter((x): x is string => x !== null);
 }

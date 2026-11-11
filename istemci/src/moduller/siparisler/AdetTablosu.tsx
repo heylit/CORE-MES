@@ -4,8 +4,9 @@ import { Tablo, type Sutun } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { miktarMetni, paraMetni, tarihMetni } from './gorunum.ts';
+import { GIZLI } from './gizli.ts';
 
-const tutar = (n: number | null, pb: string): string => (n === null || !Number.isFinite(n) ? '—' : paraMetni(n.toFixed(2), pb));
+const tutarMetni = (n: number | null, pb: string): string => (n === null || !Number.isFinite(n) ? '—' : paraMetni(n.toFixed(2), pb));
 const sayi = (m: string | null | undefined): number | null => (m === null || m === undefined ? null : Number(m));
 
 // Örnek sayfanın "Adet değişirse" tablosu: teklif yarım, aynı, iki ve dört kat adetle arkaya eklenerek ayrı denenir (aynı kâr).
@@ -22,6 +23,8 @@ export function AdetTablosu({ teklifId, gecerlilik, kar, paraBirimi }: { teklifI
   if (c === undefined || c.durum === 'cozucu-yok' || c.satirlar.length === 0) return null;
   const tek = c.satirlar.every((s) => s.kalemler.length === 1);
   const carp = (m: number | null): number | null => (m === null || kar === null ? null : m * (1 + kar / 100));
+  // 2661 a, 2669 b: gizli oranlı ayda maliyet ve fiyat sütunları "Gizli"; adet ve termin kalır.
+  const tutar = (n: number | null, pb: string): string => (c.genelGiderGizli ? GIZLI : tutarMetni(n, pb));
   const sutunlar: Sutun<AdetDenemesiSatiri>[] = [
     {
       anahtar: 'adet', baslik: 'Adet', hizala: 'sag', kirilmaz: true,

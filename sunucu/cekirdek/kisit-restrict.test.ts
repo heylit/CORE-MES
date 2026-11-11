@@ -12,7 +12,12 @@ import { hataYonetiminiKur } from './uygulama.ts';
 // 409 BAGIMLI_KAYIT olur; yeni RESTRICT anahtar eklenince liste ve aşağıdaki gerçek ihlal testi birlikte güncellenir. Modül kendi
 // servisinde `pgKodu === '23503'` diye bakıyorsa RESTRICT anahtarında bu ret onu ıskalar: `hata.kod === 'BAGIMLI_KAYIT'` ile bakılır.
 const RESTRICT_ANAHTARLARI = [
+  // 2540: tedarikçi alacağı olan sipariş silinmez; silinse para kaydı sessizce kaybolurdu (satın alma karar kaydını önceden 409 ile reddeder).
+  'finans_tedarikci_alacagi.satin_alma_talep_id -> satin_alma_siparis',
+  'finans_tedarikci_alacagi.satin_alma_teklif_id -> satin_alma_siparis',
   'kalibrasyon_kaydi.alet_id -> olcu_aleti',
+  // 2642 b (Veri 2): faturaya eşlenmiş sipariş satırı (kaldırılmış eşleme dahil) silinmez; silinse eşlemenin oranı sessizce kaybolurdu.
+  'satin_alma_fatura_eslemesi.siparis_satiri_id -> satin_alma_siparis_satiri',
   // 2397 b: onay basamağında kullanılan rol silinmez; silinse basamak rolsüz kalır ve denetim sessizce gevşerdi.
   'satin_alma_onay_limiti.rol_id -> rol',
   // 2414 a: birleşmiş kaynak ve kalemi kaynakta olan talep silinmez; silinse birleşik talep kaynağını, kalem geri döneceği yeri yitirirdi.
@@ -119,5 +124,37 @@ describe('RESTRICT yabancı anahtar (bütün göçler, gerçek PostgreSQL)', () 
     }
     await sil(bos);
     assert.equal((await s.tek<{ n: number }>('SELECT count(*)::int AS n FROM satin_alma_talep WHERE id = ANY($1)', [[birlesik, kaynak, kalemKaynagi, bos]]))?.n, 3);
+  });
+
+  test('2540: tedarikçi alacağı olan siparişi silmek 409 BAGIMLI_KAYIT (düşüldü alacak da); alacağı olmayan sipariş silinir', async () => {
+    const { vt: uygulama, sahip: s } = acik();
+    const kisi = (await s.tek<{ id: number }>("INSERT INTO kisi (ad) VALUES ('Deneme Kişi') RETURNING id"))!.id;
+    const firma = (await s.tek<{ id: number }>("INSERT INTO musteri_tedarikci_firma (ad, tur, olusturan_id) VALUES ('Deneme Tedarikçi', 'tedarikci', $1) RETURNING id", [kisi]))!.id;
+    const talep = (await s.tek<{ id: string }>(
+      "INSERT INTO satin_alma_talep (id, no, acan_kisi_id, baslik, talep_eden_kisi_id) VALUES (gen_random_uuid(), 'RT-2540', $1, 'Deneme', $1) RETURNING id", [kisi]))!.id;
+    await s.sorgu("INSERT INTO satin_alma_karar (talep_id, mod, karar_tarihi) VALUES ($1, 'bolunmus', current_date)", [talep]);
+    const siparis = async (): Promise<string> => {
+      const teklif = (await s.tek<{ id: string }>("INSERT INTO satin_alma_teklif (talep_id, id, para_birimi, teklif_tarihi) VALUES ($1, gen_random_uuid(), 'TRY', current_date) RETURNING id", [talep]))!.id;
+      await s.sorgu('INSERT INTO satin_alma_siparis (talep_id, teklif_id) VALUES ($1, $2)', [talep, teklif]);
+      return teklif;
+    };
+    const [alacakli, dusulmus, bos] = [await siparis(), await siparis(), await siparis()];
+    const alacak = (teklif: string, durum: string) => s.sorgu(
+      `INSERT INTO finans_tedarikci_alacagi (satin_alma_talep_id, satin_alma_teklif_id, siparis_no, firma_id, para_birimi, tutar, olusturan_id, durum, aciklama, durum_degistiren_id, durum_zamani)
+       VALUES ($1, $2, 'DENEME', $3, 'TRY', 10, $4::int, $5::text, CASE WHEN $5::text = 'teyit_bekliyor' THEN NULL ELSE 'Deneme' END,
+               CASE WHEN $5::text = 'teyit_bekliyor' THEN NULL ELSE $4::int END, CASE WHEN $5::text = 'teyit_bekliyor' THEN NULL ELSE now() END)`,
+      [talep, teklif, firma, kisi, durum]);
+    await alacak(alacakli, 'teyit_bekliyor');
+    await alacak(dusulmus, 'dusuldu');
+    const sil = (teklif: string) => uygulama.tx((db) => db.sorgu('DELETE FROM satin_alma_siparis WHERE talep_id = $1 AND teklif_id = $2', [talep, teklif])).catch((h: unknown) => h);
+    for (const teklif of [alacakli, dusulmus]) {
+      const ihlal = kisitIhlali(await sil(teklif));
+      assert.equal(ihlal?.hata.kod, 'BAGIMLI_KAYIT');
+      assert.equal(ihlal?.hata.durum, 409);
+      assert.equal(ihlal?.iz.kisit, 'finans_tedarikci_alacagi_siparis');
+      assert.ok(['23503', '23001'].includes(String(ihlal?.iz.pgKodu)));
+    }
+    await sil(bos);
+    assert.equal((await s.tek<{ n: number }>('SELECT count(*)::int AS n FROM satin_alma_siparis WHERE talep_id = $1', [talep]))?.n, 2);
   });
 });

@@ -86,6 +86,11 @@ function RezerveKaldirFormu({ malzemeId, r, kapat }: { malzemeId: number; r: Rez
       })}>Rezerveyi kaldır</Dugme>}>
       <div className="tc-stok-form">
         <p className="tc-stok-not">{statuAdi(r.statuId)} · ayrılan {miktarMetni(r.miktar)}. Malzeme statüsünü korur; aynı ürün ve OP'nin başka emri kullanabilir.</p>
+        {r.statuId !== null && (
+          <p className="tc-stok-not" role="note">
+            Kaldırılan kısım statüde sahipsiz kalır: plan bu emre yeniden ihtiyaç gösterir. <Link to="/stok/sahipsiz-statulu">Sahipsiz statülü stok</Link> listesinde görünür.
+          </p>
+        )}
         <Girdi etiket="Miktar" inputMode="decimal" value={miktar} onChange={(e) => setMiktar(e.target.value)} ipucu="Boşsa ayrılanın tamamı kalkar." />
         <Girdi etiket="Neden" value={neden} onChange={(e) => setNeden(e.target.value)} required maxLength={200} />
       </div>

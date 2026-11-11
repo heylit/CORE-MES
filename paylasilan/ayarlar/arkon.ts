@@ -132,4 +132,22 @@ export const ARKON_AYARLARI = {
     baslik: 'Eksik iş: bayat plan (vardiya saati)',
     aciklama: 'Son canlıya almadan bu kadar vardiya saati geçtiyse ve plan gerisinde iş varsa plan bayat işaretlenir. Vardiya saati gece, tatil ve planlı duruşu saymaz. Boş bırakılırsa bu kural kapalıdır.',
   },
+  // 2769 (2756 b): eşiği yoktur; sıra dışı başlatma kaydı düşünce açılır.
+  'arkon.eksik-geride-onceki': {
+    modul: 'arkon',
+    tur: 'boolean',
+    varsayilan: true,
+    baslik: 'Eksik iş: sayımı geride kalan önceki adım',
+    aciklama: 'Açıkken önceki adımı bitmeden ya da devir adedi gelmeden başlatılan adım, önceki adımın sayımı yetişene kadar eksik iş olarak görünür. Değer, önceki adımda sayılmamış en az adettir; akışlı adımda devir için eksik ayrıca gösterilir.',
+  },
+  'arkon.eksik-olcumsuz-is-gun': {
+    modul: 'arkon',
+    tur: 'sayi',
+    varsayilan: 0,
+    enAz: 0,
+    enCok: 14,
+    ondalik: 0,
+    baslik: 'Eksik iş: süre ölçülmedi (gün)',
+    aciklama: 'Biten emirde iş emrinin süresi ölçülemediyse (ayar basılmadı, sayım yok, sağlam sayım yok, emrin iş emri yok ya da adım rotada yok) bitişten bu kadar gün sonra işaretlenir. 0: hemen. Son 14 günde biten işlere bakılır. Boş bırakılırsa bu kural kapalıdır.',
+  },
 } as const satisfies Record<string, AyarTanimi>;

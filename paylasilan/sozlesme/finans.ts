@@ -198,8 +198,41 @@ export const genelGiderOraniEkleGovdesi = z.object({
   aciklama: metin(500),
 });
 export const genelGiderOraniSatiri = z.object({
-  id: z.number().int(), gecerlilikBaslangic: tarihSemasi, aylikGenelGider: numerik, aylikMakineSaati: numerik, saatBasi: numerik,
+  id: z.number().int(), gecerlilikBaslangic: tarihSemasi, aylikGenelGider: numerik.nullable(), aylikMakineSaati: numerik, saatBasi: numerik.nullable(),
   amortismanDahil: z.boolean(), aciklama: z.string().nullable(), olusturma: zamanSemasi,
+  // 2652 a: dolaylı personeli küçük grup olan satırda aylık tutar ve saat başı gizlidir (null).
+  gizli: z.boolean(),
+  // 2594 b: belgeden kurulan satırın bileşenleri; elle satırda null.
+  kaynak: z.enum(['elle', 'belge']), donemBaslangic: tarihSemasi.nullable(), donemBitis: tarihSemasi.nullable(),
+  kira: numerik.nullable(), amortisman: numerik.nullable(), dolayliPersonel: numerik.nullable(), emilmeyenDogrudan: numerik.nullable(), diger: numerik.nullable(),
+  projesizSatinAlma: numerik.nullable(), elleEk: numerik.nullable(), eksik: z.array(z.string()).nullable(),
+});
+// 2594 b, 2621 1/3 b: belgelerden genel gider önerisi; ay verilmezse son tam ay. Bilinmeyen bileşen null (sıfır değil).
+const aySemasi = z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/, 'Ay YYYY-AA biçimindedir.');
+export const genelGiderOnerisiSorgusu = z.object({ ay: aySemasi.optional() });
+const bilesenDegeri = z.number().nullable();
+export const GENEL_GIDER_DISARIDA_NEDENLERI = ['eski_belge', 'oran_bilinmiyor', 'uretime_giden_pay', 'proje_masrafi', 'kategori'] as const;
+export const genelGiderOnerisiCevabi = z.object({
+  ay: z.string(), donemBaslangic: tarihSemasi, donemBitis: tarihSemasi,
+  bilesenler: z.object({ kira: bilesenDegeri, amortisman: bilesenDegeri, dolayliPersonel: bilesenDegeri, emilmeyenDogrudan: bilesenDegeri, diger: bilesenDegeri, projesizSatinAlma: bilesenDegeri }),
+  toplam: bilesenDegeri,
+  ayrinti: z.object({ digerBelgeler: bilesenDegeri, stokCikisi: bilesenDegeri }),
+  disarida: z.array(z.object({ neden: z.enum(GENEL_GIDER_DISARIDA_NEDENLERI), kategori: z.string().nullable(), tutar: z.number(), adet: z.number().int() })),
+  eksik: z.array(z.string()), oraniBilinmeyen: z.array(z.string()),
+  // 2710 b: tutarı düşürmeyen eksikler (fiyatsız stok çıkışı); kaydı durdurmaz. enAz: uyarısı olan bileşen alt sınırdır.
+  uyarilar: z.array(z.string()), enAz: z.array(z.enum(['kira', 'amortisman', 'dolayliPersonel', 'emilmeyenDogrudan', 'diger', 'projesizSatinAlma'])),
+  gizli: z.boolean(),
+  baskinBelgeler: z.array(z.object({ bilesen: z.enum(['kira', 'diger']), belge: z.string(), tutar: z.number() })),
+});
+// Belgeden kayıt: tutarlar sunucuda yeniden hesaplanır; istemciden yalnız ay, makine saati, elle ek ve açıklama gelir.
+export const genelGiderBelgedenEkleGovdesi = z.object({
+  gecerlilikBaslangic: tarihSemasi,
+  ay: aySemasi,
+  aylikMakineSaati: z.number().positive('Makine saati sıfırdan büyük olmalı.').max(1e7, 'Makine saati çok büyük.')
+    .refine((v) => ondalik(2, '')(v) === true, 'Makine saati en çok iki ondalık olabilir.').transform((v) => v.toFixed(2)),
+  elleEk: z.number().min(0, 'Elle ek eksi olamaz.').max(1e13, 'Tutar çok büyük.')
+    .refine((v) => ondalik(2, '')(v) === true, 'Tutar en çok iki ondalık olabilir.').prefault(0).transform((v) => v.toFixed(2)),
+  aciklama: metin(500),
 });
 // Sabit kıymet yönetim amaçlıdır (Logo'ya gitmez). Kur boşsa sunucu alış gününün kurunu alır; devir tarihi ve birikmiş amortisman birlikte girilir.
 export const AMORTISMAN_YONTEMLERI = ['normal', 'azalan'] as const;
@@ -527,6 +560,20 @@ export const maliyetSatiri = z.object({
   anahtar: z.number().int(), birimMaliyet: numerik, paraBirimi: z.string(), guncelleme: zamanSemasi, guncelleyenId: z.number().int(), surum: surumSemasi,
 });
 export type MaliyetSatiri = z.output<typeof maliyetSatiri>;
+// 2574 (2572): kayıt kaldırılınca maliyet yeniden bilinmiyordur (satır yok); sıfır yazılmaz. Sürüm okunan satırdandır.
+export const maliyetKaldirParametresi = z.object({ tur: z.enum(MALIYET_TURLERI), anahtar: z.coerce.number<number>().int().positive() });
+export const maliyetKaldirGovdesi = z.object({ ...beklenenSurum }).strict();
+export const maliyetKaldirCevabi = z.object({ kaldirilan: z.object({ tur: z.enum(MALIYET_TURLERI), anahtar: z.number().int() }) });
+// 2593 (2589 b): istasyon saatlik maliyeti yalnız Finans sayfasından yazılır. Liste her aktif kaynağı ve maliyeti olan pasif
+// kaynağı taşır; maliyet null ise girilmemiştir (bilinmiyor), sıfır değildir. Kişi türü yoktur: kişi başı değer Finans'ta
+// gösterilmez (2598 c); grup değeri 2602 ile gelir.
+export const SAATLIK_MALIYET_TURLERI = ['istasyon'] as const;
+export const saatlikMaliyetTuruParametresi = z.object({ tur: z.enum(SAATLIK_MALIYET_TURLERI) });
+export const saatlikMaliyetSatiri = z.object({
+  anahtar: z.number().int(), kod: z.string().nullable(), ad: z.string(), aktif: z.boolean(), maliyet: maliyetSatiri.nullable(),
+});
+export type SaatlikMaliyetSatiri = z.output<typeof saatlikMaliyetSatiri>;
+export const saatlikMaliyetListesiCevabi = z.object({ satirlar: z.array(saatlikMaliyetSatiri) });
 export const maliyetCevabi = z.object({ maliyet: maliyetSatiri });
 export const maliyetListesiCevabi = listeCevapSemasi(maliyetSatiri);
 
@@ -558,3 +605,21 @@ export const vergiBeyaniSatiri = z.object({
 });
 export const vergiBeyanlariCevabi = z.object({ satirlar: z.array(vergiBeyaniSatiri) });
 export type VergiBeyaniSatiri = z.output<typeof vergiBeyaniSatiri>;
+
+// ---- 2540: tedarikçi alacağı (kalanı kapatılmış siparişte gerçekleşen değeri aşan avans) ----
+// Kayıt "teyit bekliyor" başlar (2544 a): sistem avansın ödendiğini bilmez. Finans açar (avans ödendi) ya da düşürür (ödenmedi);
+// açık alacak tahsil ya da mahsupla kapanır. Tutar KDV dahil, sipariş dövizindedir.
+export const TEDARIKCI_ALACAGI_DURUMLARI = ['teyit_bekliyor', 'acik', 'dusuldu', 'kapandi'] as const;
+export const tedarikciAlacagiSemasi = z.object({
+  id: z.number().int(), talepId: z.string(), teklifId: z.string(), siparisNo: z.string(), firmaId: z.number().int(), firmaAdi: z.string(),
+  paraBirimi: z.string(), tutar: numerik, durum: z.enum(TEDARIKCI_ALACAGI_DURUMLARI), aciklama: z.string().nullable(),
+  durumDegistirenAdi: z.string().nullable(), durumZamani: zamanSemasi.nullable(), olusturma: zamanSemasi, surum: surumSemasi,
+});
+export type TedarikciAlacagi = z.infer<typeof tedarikciAlacagiSemasi>;
+export const tedarikciAlacaklariCevabi = z.object({ alacaklar: z.array(tedarikciAlacagiSemasi) });
+export type TedarikciAlacaklariCevabi = z.infer<typeof tedarikciAlacaklariCevabi>;
+export const tedarikciAlacagiDurumGovdesi = z.object({
+  ...beklenenSurum, durum: z.enum(['acik', 'dusuldu', 'kapandi']), aciklama: metin(500),
+});
+export type TedarikciAlacagiDurumYazimi = z.output<typeof tedarikciAlacagiDurumGovdesi>;
+export const tedarikciAlacagiCevabi = z.object({ alacak: tedarikciAlacagiSemasi });

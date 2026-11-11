@@ -5,9 +5,10 @@ import type { PlanlamaEkranOzellikleri } from '../gorunumler.ts';
 import type { PlanlamaCalismasi } from '../tipler.ts';
 import { FormluAcilim, type AcilimFormu } from './AcilimFormu.tsx';
 import { BosHarita, GorunumBasligi, IsiIzgarasi, Lejant, TumSatirlar, type Secim as HucreSecimi } from './IsiHaritasi.tsx';
-import { OrtusmeKarti, PartiBolmeKarti, PartiTaramasiKarti, gorunumDegerlendiricisi } from './Degerlendirme.tsx';
+import { OrtusmeKarti, PartiBolmeKarti, PartiTaramasiKarti, useGorunumDegerlendiricisi } from './Degerlendirme.tsx';
 import { KarTablosu } from './KarTablosu.tsx';
 import { kayitliPlan, siparisAcilimi, siparisIsisi, type SiparisSatiri } from './kurallar.ts';
+import { useEmirNo } from '../ortak/emir-no.ts';
 
 // Siparişler (ysiparis): sipariş × hafta termin riski (zz30-isi ISI.ysiparis), satırın altında açılım (zz24-sade SADE.ysiparis,
 // ortak sade kabuğu), "Tüm satırlar"da asıl sayfa (zz10 partiyi böl, zz11 parti taraması, zz16 örtüşme, zu-yan-sayfalar sSiparisKar). Motor isteyen araçlar
@@ -20,18 +21,19 @@ export function Siparisler({ calisma, komut, yetki, git, depo, yenile }: Planlam
   const [secim, secimYaz] = useState<HucreSecimi | null>(null);
   const p = kayitliPlan(calisma);
   const fg = yetki.maliyetOku;
-  const degerlendir = gorunumDegerlendiricisi(depo);
+  const degerlendir = useGorunumDegerlendiricisi(depo, komut);
+  const emirNo = useEmirNo(depo.receteRotaKaydi);
 
   const tum = (
     <TumSatirlar>
       {yetki.planYaz && (
         <>
-          <PartiBolmeKarti c={calisma} p={p} degerlendir={degerlendir} yenile={yenile} />
-          <PartiTaramasiKarti c={calisma} p={p} />
-          <OrtusmeKarti c={calisma} p={p} />
+          <PartiBolmeKarti c={calisma} p={p} degerlendir={degerlendir} yenile={yenile} emirNo={emirNo} />
+          <PartiTaramasiKarti c={calisma} p={p} emirNo={emirNo} />
+          <OrtusmeKarti c={calisma} p={p} emirNo={emirNo} />
         </>
       )}
-      <KarTablosu c={calisma} p={p} fg={fg} komut={fg ? komut : null} emirler={depo.durum?.emirler ?? null} />
+      <KarTablosu c={calisma} p={p} fg={fg} komut={fg ? komut : null} emirler={depo.durum?.emirler ?? null} emirNo={emirNo} />
     </TumSatirlar>
   );
 
@@ -48,7 +50,7 @@ export function Siparisler({ calisma, komut, yetki, git, depo, yenile }: Planlam
   }
 
   const c: PlanlamaCalismasi = calisma;
-  const V = siparisIsisi(c, p);
+  const V = siparisIsisi(c, p, emirNo);
 
   const acilim = (r: SiparisSatiri, ck: string) => {
     const A = siparisAcilimi(c.D, r); const s = r.s; const deg = { sip: s.id };
@@ -59,7 +61,7 @@ export function Siparisler({ calisma, komut, yetki, git, depo, yenile }: Planlam
       <FormluAcilim
         key={`${s.id}|${ck}`} baslik={A.baslik} simge="flag" ton={r.ton} neden={A.neden} bilgi={A.bilgi} formlar={formlar} kapat={() => { secimYaz(null); }}
         planEski={c.plan !== null && !planGuncel(c)} iyilestirYetkisi={yetki.planYaz}
-        secenekler={[{ ad: `${s.id} çizelgede`, etki: 'Siparişin adımlarını tezgâh çizelgesinde gösterir.', simge: 'gantt', yap: () => { git('plan'); } }]}
+        secenekler={[{ ad: `${r.ad} çizelgede`, etki: 'Siparişin adımlarını tezgâh çizelgesinde gösterir.', simge: 'gantt', yap: () => { git('plan'); } }]}
       />
     );
   };

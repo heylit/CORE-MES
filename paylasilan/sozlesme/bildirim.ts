@@ -136,8 +136,15 @@ export const BILDIRIM_TURLERI = {
   'arkon.geciken-emir': {
     baslik: 'Emir teslim tarihini kaçırıyor', onem: 'acil', sinif: 'hatirlatma', alanIslemler: ['arkon.planlama', 'arkon.yonetici'], yol: '/arkon/anomali', varsayilan: { mesaj: false, eposta: false },
   },
+  'arkon.geride-onceki': {
+    baslik: 'Önceki adımın sayımı geride', onem: 'uyari', sinif: 'hatirlatma', alanIslemler: ['arkon.amir', 'arkon.hazirlik'], yol: '/arkon/anomali', varsayilan: { mesaj: false, eposta: false },
+  },
   'arkon.bayat-plan': {
     baslik: 'Plan bayat: canlıya alınmadı', onem: 'bilgi', sinif: 'hatirlatma', alanIslemler: ['arkon.planlama'], yol: '/arkon/anomali', varsayilan: { mesaj: false, eposta: false },
+  },
+  // 2567: ölçümü planlamacı kabul eder; atlanan ölçümü de o görür. Operatör terminaldeki listede görür, bildirim almaz.
+  'arkon.olcumsuz-is': {
+    baslik: 'Biten işin süresi ölçülmedi', onem: 'bilgi', sinif: 'hatirlatma', alanIslemler: ['arkon.planlama'], yol: '/arkon/anomali', varsayilan: { mesaj: false, eposta: false },
   },
   // 1365 a: Güvenlik Merkezi'nin kritik alarmı yöneticilere uygulama içinde duyurulur; dışarı (e-posta) gitmez.
   'guvenlik.kritik-alarm': {

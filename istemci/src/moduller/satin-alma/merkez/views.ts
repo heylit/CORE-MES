@@ -16,7 +16,7 @@ import { viewMaterial, viewMaterials, viewReports, viewSettings, viewSupplier, v
 import { tabSim } from "./sim.ts";
 import { siparisTakibiHTML } from "./takip.ts";
 import { inlineBulkHTML } from "./ui.ts";
-import { kalemBagMetinleri } from "./kalem-bagi.ts";
+import { kalemBagMetinleri, uygulananSatiri } from "./kalem-bagi.ts";
 import { getRole, onaylayabilir, viewApproval, viewApprovals, viewRequesterHome, viewRequestRequester } from "./roles.ts";
 /* ================= render çekirdeği ================= */
 // Ortak parçalarla çizilen ekranlar (iş kutusu, Talepler, talep ayrıntısı; 2412-2) merkezin durumunu her çizimde yeniden okur.
@@ -245,7 +245,7 @@ export function reqTable(list: PurchaseRequest[], compact = false, sortable = fa
     const d = r.needDate ? dayDiff(t, r.needDate) : null;
     const nd = r.needDate ? `${fmtDate(r.needDate)}${OPEN.includes(r.status) && d !== null ? (d < 0 ? ' <span class="flag bad">geçti</span>' : d <= 7 ? ` <span class="flag warn">${d} gün</span>` : "") : ""}` : "–";
     const val = tt ? `${money(tt.totalTRY, "TRY", 0)}<span class="sub">${tt.x ? esc(supName(tt.x.q)) : "kalem bazlı"}</span>` : best ? `${money(best.c.pvTRY, "TRY", 0)}<span class="sub">${esc(supName(best.q))}</span>` : "–";
-    return `<tr class="click" data-act="open" data-id="${r.id}"><td class="num muted">${esc(r.no)}</td><td class="lead">${prioDot(r.priority)}<b>${esc(r.title)}</b><span class="sub">${esc([r.department, (r.items || []).length + " kalem"].filter(Boolean).join(", "))}</span></td><td>${reqChip(r)}${ilerlemeNoktalari(r)}</td>${compact ? "" : `<td class="r num">${(r.quotes || []).length}${(r.rfqs || []).length ? `<span class="sub">${(r.rfqs || []).length} istendi</span>` : ""}</td>`}<td class="r num">${val}</td>${compact ? "" : `<td class="num">${nd}</td>`}</tr>`;
+    return `<tr class="click" data-act="open" data-id="${r.id}"><td class="num muted">${esc(r.no)}</td><td class="lead">${prioDot(r.priority)}<b>${esc(r.title)}</b><span class="sub">${esc([r.department, (r.items || []).length + " kalem"].filter(Boolean).join(", "))}</span>${uygulananSatiri(r, "sub")}</td><td>${reqChip(r)}${ilerlemeNoktalari(r)}</td>${compact ? "" : `<td class="r num">${(r.quotes || []).length}${(r.rfqs || []).length ? `<span class="sub">${(r.rfqs || []).length} istendi</span>` : ""}</td>`}<td class="r num">${val}</td>${compact ? "" : `<td class="num">${nd}</td>`}</tr>`;
   }).join("")}</tbody></table></div>`;
 }
 export function filteredRequests(): PurchaseRequest[] {
@@ -302,7 +302,7 @@ export function boardHTML(): string {
     return `<div class="bcol"><h4><span>${stLabel(k)}</span><span class="num">${items.length}</span></h4>${items.slice(0, 40).map(r => {
       const d = r.needDate ? dayDiff(t, r.needDate) : null;
       const tt = r.award ? awardTotals(r) : null;
-      return `<div class="card" data-act="open" data-id="${r.id}" tabindex="0"><span class="xs muted num">${esc(r.no)}${r.department ? ", " + esc(r.department) : ""}</span><span class="t">${prioDot(r.priority)}${esc(r.title)}</span>${ilerlemeNoktalari(r)}<span class="xs muted">${(r.items || []).length} kalem, ${(r.quotes || []).length} teklif${tt ? ", " + short(tt.totalTRY) : ""}</span>${OPEN.includes(k) && d !== null && d <= 7 ? `<span>${d < 0 ? `<span class="flag bad">ihtiyaç ${-d} gün geçti</span>` : `<span class="flag warn">ihtiyaca ${d} gün</span>`}</span>` : ""}</div>`;
+      return `<div class="card" data-act="open" data-id="${r.id}" tabindex="0"><span class="xs muted num">${esc(r.no)}${r.department ? ", " + esc(r.department) : ""}</span><span class="t">${prioDot(r.priority)}${esc(r.title)}</span>${ilerlemeNoktalari(r)}${uygulananSatiri(r, "xs muted")}<span class="xs muted">${(r.items || []).length} kalem, ${(r.quotes || []).length} teklif${tt ? ", " + short(tt.totalTRY) : ""}</span>${OPEN.includes(k) && d !== null && d <= 7 ? `<span>${d < 0 ? `<span class="flag bad">ihtiyaç ${-d} gün geçti</span>` : `<span class="flag warn">ihtiyaca ${d} gün</span>`}</span>` : ""}</div>`;
     }).join("") || '<span class="xs faint" data-sa-y="44">Boş</span>'}${items.length > 40 ? `<button class="btn ghost sm" data-act="pano-sutun" data-v="${k}">+${nf0.format(items.length - 40)} talep daha</button>` : ""}</div>`;
   }).join("")}</div>`;
 }

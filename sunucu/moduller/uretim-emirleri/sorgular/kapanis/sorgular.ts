@@ -1,6 +1,6 @@
 import type { Db } from '#cekirdek/db.ts';
 import type { Dilim } from '#cekirdek/liste.ts';
-import type { EmirTuru, HataliKarari } from '#paylasilan/sozlesme/uretim-emirleri.ts';
+import type { EmirDurumu, EmirTuru, HataliKarari } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { ARAMA, ISO, NULLU_ISO } from '../ortak/sorgular.ts';
 
 /* ---------------- hatalı parça (1034) ---------------- */
@@ -16,6 +16,12 @@ export interface HataliKaydiSatiri {
   isEmriAd: string;
   hedefEmirId: number;
   hedefEmirNo: string;
+  // 2757: arşiv bilgisi (hataliArsivdeMi girdisi); kök emir ile hedef (kök ya da hatalı kolu) ayrı okunur.
+  kokDurum: EmirDurumu;
+  kokArsiv: boolean;
+  kokKapanisVar: boolean;
+  hedefDurum: EmirDurumu;
+  hedefArsiv: boolean;
   kaliteIsEmriId: number;
   reworkIsEmriId: number | null;
   tekrarIsEmriId: number | null;
@@ -52,7 +58,8 @@ const HATALI = `h.id, h.uretim_emri_id AS "uretimEmriId", e.emir_no AS "emirNo",
   h.kalite_is_emri_id AS "kaliteIsEmriId", h.rework_is_emri_id AS "reworkIsEmriId", h.tekrar_is_emri_id AS "tekrarIsEmriId",
   h.hurda_nedeni_id AS "hurdaNedeniId", h.adet, h.aciklama,
   h.kisi_id AS "kisiId", ${ISO('h.zaman')} AS zaman, h.karar, h.karar_kisi_id AS "kararKisiId", ${NULLU_ISO('h.karar_zamani')} AS "kararZamani",
-  h.karar_notu AS "kararNotu", h.ncr_kimlik AS "ncrKimlik"`;
+  h.karar_notu AS "kararNotu", h.ncr_kimlik AS "ncrKimlik", e.durum AS "kokDurum", e.arsiv AS "kokArsiv",
+  EXISTS (SELECT 1 FROM uretim_emirleri_kapanis kp WHERE kp.uretim_emri_id = e.id) AS "kokKapanisVar", he.durum AS "hedefDurum", he.arsiv AS "hedefArsiv"`;
 const HATALI_KAYNAK = `uretim_emirleri_hatali_kaydi h JOIN uretim_emri e ON e.id = h.uretim_emri_id
   JOIN uretim_emirleri_is_emri i ON i.id = h.is_emri_id JOIN uretim_emri he ON he.id = h.hedef_emir_id`;
 

@@ -65,6 +65,7 @@ test.describe('P3 maliyet, genel gider, ek mesai ve fason', () => {
   for (const g of GORUNUMLER) {
     test(`${g.baslik}: uydurma planla ızgara ve açılım taşmadan çizilir`, async ({ page, ag, ac }) => {
       await page.route('**/api/plan/planlama-calismasi', (r) => r.fulfill({ json: { calisma: UYDURMA, surum: null } }));
+      await page.clock.setSystemTime(new Date(`${UYDURMA.D.meta.baslangic}T07:00:00+03:00`));
       await ac(`/plan/${g.yol}`);
       const kap = page.locator(`[data-gorunum="${g.yol}"]`);
       const izgara = kap.locator('.tc-pyk-tablo');

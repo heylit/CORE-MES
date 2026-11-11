@@ -1,13 +1,27 @@
 import type { Db } from '#cekirdek/db.ts';
 import { bulunamadi, gecersiz } from '#cekirdek/hata.ts';
-import type { AgacCevabi, PatlatmaCevabi, PatlatmaOnizlemeCevabi, UrunOzeti } from '#paylasilan/sozlesme/rota.ts';
+import type { AgacCevabi, AraHal, PatlatmaCevabi, PatlatmaOnizlemeCevabi, UrunOzeti } from '#paylasilan/sozlesme/rota.ts';
 import { AZAMI_AGAC_DERINLIGI } from '#paylasilan/sozlesme/rota.ts';
-import { cokKatmanaCevir, dugumDalAdi, emirOpNumaralari, agaciAc, ondalikMetin } from '../kurallar.ts';
+import { cokKatmanaCevir, dugumDalAdi, emirFireCarpanlari, emirOpNumaralari, agaciAc, FIRMASIZ_FASON_ILETISI, firmasizFasonAdimi, ondalikMetin } from '../kurallar.ts';
 import type { AgacRotasi } from '../kurallar.ts';
 import * as s from '../sorgular.ts';
 import type { Icerik } from '../sorgular.ts';
 import { isEmriGirdileri, kaynakBaglami, kaynakOzetiAl, patlatmaKur, revizyonuAl, sayi, urunOzetiAl, urunOzetleri } from './ortak.ts';
 import { type RotaAdimi, type RotaRevizyonu, revizyonGetir } from './okuma.ts';
+
+/* ---------------- ara hal çözücüsü (2610 a) ---------------- */
+
+// Ara adımın statüsü, çıktı kartı ve stoğu Reçete ve Rota'dadır; o modül rotayı ithal ettiği için rota onu ithal edemez, bağı kablolama.ts
+// kurar. Kart rotanın ürün özetine burada çevrilir. Çözücü kayıtlı değilse ara hal null döner.
+export interface AraHalCozumu { statu: { id: number; ad: string } | null; kartId: number | null; stok: AraHal['stok'] }
+export type AraHalCozucusu = (db: Db, g: { malzemeNo: number; revizyonId: number; opNolari: readonly number[] }) => Promise<Map<number, AraHalCozumu>>;
+let araHalCozucusu: AraHalCozucusu | null = null;
+// Dönen işlev önceki kaydı geri koyar (testler bağı kendisi kurar).
+export function araHalCozucusuKaydet(c: AraHalCozucusu): () => void {
+  const onceki = araHalCozucusu;
+  araHalCozucusu = c;
+  return () => { araHalCozucusu = onceki; };
+}
 
 /* ---------------- ürün ağacı ve döngü ---------------- */
 
@@ -73,12 +87,15 @@ export async function patlatmaGetir(db: Db, id: number): Promise<PatlatmaCevabi>
 
 // Patlamış rota önizlemesi (1476-F): emir açılışıyla aynı kural ve numara, kayıt yazmadan. Kök verilen revizyondur, alt ürünler
 // yürürlükteki revizyonlarıyla açılır (emir yalnız yürürlükteki kök revizyondan açılır; ekran onu sorar).
-export async function patlatmaOnizlemesi(db: Db, revizyonId: number): Promise<PatlatmaOnizlemeCevabi> {
+// 2557: adım adedi ve malzeme, açılacak emrin adımları üzerinde emir kuralıyla (uretim-emirleri malzemeIhtiyaci) hesaplanır: adım miktarı
+// sipariş x düğümün kök başına adedi x fire çarpanı, bileşen bunun miktar x (1 + bileşen firesi) katı. Adet dal çarpanıyla büyür, malzeme
+// büyümez (1333 a). Emir açılamıyorsa (engel) emir adımı yoktur; sayılar null kalır, uydurulmaz.
+export async function patlatmaOnizlemesi(db: Db, revizyonId: number, miktar = 1): Promise<PatlatmaOnizlemeCevabi> {
   const kok = await revizyonGetir(db, revizyonId);
   if (kok === null) throw bulunamadi('Rota revizyonu bulunamadı.');
   const kokRevizyon = { id: kok.id, harf: kok.harf };
   const p = await patlatmaKur(db, kok.id, kok.malzemeId);
-  if ('ileti' in p) return { kokRevizyon, ileti: p.ileti, engel: null, dugumler: [] };
+  if ('ileti' in p) return { kokRevizyon, miktar: ondalikMetin(miktar), ileti: p.ileti, engel: null, dugumler: [], hammaddeToplami: [] };
   const bas = [...new Map(p.satirlar.map((x) => [x.dugum, x])).values()];
   const rotalar = new Map<string, RotaRevizyonu>();
   const girdiler = new Map<string, Awaited<ReturnType<typeof isEmriGirdileri>>>();
@@ -88,12 +105,24 @@ export async function patlatmaOnizlemesi(db: Db, revizyonId: number): Promise<Pa
     rotalar.set(d.dugum, rota);
     girdiler.set(d.dugum, await isEmriGirdileri(db, d.malzemeId, rota));
   }
+  // 2681: firmasız fason adım emir açılışını durdurur; önizleme onu öteki engeller gibi gösterir, düğümler yine çizilir.
+  const firmasiz = [...rotalar.values()].map((r) => firmasizFasonAdimi(r.adimlar)).find((x) => x !== null) ?? null;
   const c = cokKatmanaCevir(p.satirlar, girdiler, []);
   const numara = emirOpNumaralari(p.satirlar);
-  const urunler = await urunOzetleri(db, bas.map((d) => d.malzemeId));
+  const emirAdimi = new Map('ileti' in c || firmasiz !== null ? [] : c.girdiler.map((g) => [`${g.dugum.ad}|${g.dugum.kaynakOpNo}`, g] as const));
+  const fireCarpani = emirFireCarpanlari([...emirAdimi.values()].map((g) => ({ sira: g.sira, opNo: g.opNo, firePayiYuzde: Number(g.firePayiYuzde), onculler: g.onculler })));
+  const ikili = (x: number) => ({ kokBasina: ondalikMetin(x), siparis: ondalikMetin(x * miktar) });
+  const malzemeIdleri = [...rotalar.values()].flatMap((r) => r.adimlar.flatMap((a) => [...a.bilesenler, ...a.yanUrunler].map((b) => b.malzemeId)));
+  const urunler = await urunOzetleri(db, [...bas.map((d) => d.malzemeId), ...malzemeIdleri]);
+  const ozet = (mid: number): UrunOzeti => {
+    const u = urunler.get(mid);
+    if (u === undefined) throw gecersiz('Adımın malzeme kartı bulunamadı.');
+    return u;
+  };
+  const hammadde = new Map<number, number>();
   const b = await kaynakBaglami(db);
   const yer = async (a: RotaAdimi): Promise<string | null> => {
-    if (a.fason) return (await kaynakOzetiAl(db, b, { tur: 'fason', id: a.fason.firmaId })).ad;
+    if (a.fason) return a.fason.firmaId === null ? null : (await kaynakOzetiAl(db, b, { tur: 'fason', id: a.fason.firmaId })).ad;
     if (a.kaynak === null) return null;
     const k = await kaynakOzetiAl(db, b, a.kaynak);
     return k.istasyon?.ad ?? k.ad;
@@ -104,10 +133,42 @@ export async function patlatmaOnizlemesi(db: Db, revizyonId: number): Promise<Pa
     const urun = urunler.get(d.malzemeId);
     if (urun === undefined) throw gecersiz('Alt parçanın malzeme kartı bulunamadı.');
     const satirlar = p.satirlar.filter((x) => x.dugum === d.dugum);
+    const araOpNolari = satirlar.slice(0, -1).map((x) => x.kaynakOpNo);
+    const araHaller = araHalCozucusu === null || araOpNolari.length === 0 ? new Map<number, AraHalCozumu>()
+      : await araHalCozucusu(db, { malzemeNo: d.malzemeId, revizyonId: rota.id, opNolari: araOpNolari });
+    const araKartlari = await urunOzetleri(db, [...araHaller.values()].flatMap((h) => (h.kartId === null ? [] : [h.kartId])));
+    const araHal = (opNo: number): AraHal | null => {
+      const h = araHaller.get(opNo);
+      return h === undefined ? null : { statu: h.statu, kart: h.kartId === null ? null : araKartlari.get(h.kartId) ?? null, stok: h.stok };
+    };
     const adimlar = [];
-    for (const x of satirlar) {
+    const altlar = bas.filter((c2) => c2.tuketenDugum === d.dugum);
+    for (const [i, x] of satirlar.entries()) {
       const a = rota.adimlar.find((y) => y.opNo === x.kaynakOpNo);
-      adimlar.push({ kaynakOpNo: x.kaynakOpNo, emirOpNo: numara.get(`${d.dugum}|${x.kaynakOpNo}`)!, ad: a?.ad ?? '', yer: a ? await yer(a) : null });
+      const g = emirAdimi.get(`${d.dugum}|${x.kaynakOpNo}`);
+      const fc = g === undefined ? undefined : fireCarpani.get(g.opNo);
+      const fire = a === undefined ? 0 : Number(a.firePayiYuzde);
+      const adet = g === undefined || fc === undefined ? null : (g.adetCarpani ?? 1) * fc;
+      const malzemeCarpani = fc === undefined ? null : d.birimCarpani * fc;
+      const girenler = (a?.bilesenler ?? []).map((b) => {
+        const alt = altlar.find((c2) => c2.tuketenOpNo === x.kaynakOpNo && c2.malzemeId === b.malzemeId);
+        const toplam = malzemeCarpani === null ? null : malzemeCarpani * Number(b.miktar) * (1 + Number(b.fireYuzde) / 100);
+        if (alt === undefined && toplam !== null) hammadde.set(b.malzemeId, (hammadde.get(b.malzemeId) ?? 0) + toplam);
+        return {
+          malzeme: ozet(b.malzemeId), altDugum: alt?.dugum ?? null, miktar: ondalikMetin(Number(b.miktar)), fireYuzde: ondalikMetin(Number(b.fireYuzde), 2),
+          toplam: toplam === null ? null : ikili(toplam),
+        };
+      });
+      const yanUrunler = (a?.yanUrunler ?? []).map((y) => ({
+        malzeme: ozet(y.malzemeId), miktar: ondalikMetin(Number(y.miktar)),
+        toplam: malzemeCarpani === null ? null : ikili(malzemeCarpani * Number(y.miktar)),
+      }));
+      adimlar.push({
+        kaynakOpNo: x.kaynakOpNo, emirOpNo: numara.get(`${d.dugum}|${x.kaynakOpNo}`)!, ad: a?.ad ?? '', yer: a ? await yer(a) : null,
+        hedef: g === undefined ? null : ikili(g.adetCarpani ?? 1), adet: adet === null ? null : ikili(adet), cikanAdet: adet === null ? null : ikili(adet * (1 - fire / 100)),
+        cikti: i === satirlar.length - 1 ? 'urun' as const : 'ara-hal' as const,
+        araHal: i === satirlar.length - 1 || g === undefined ? null : araHal(x.kaynakOpNo), girenler, yanUrunler,
+      });
     }
     dugumler.push({
       dugum: d.dugum, dal: dugumDalAdi(d.dugum), katman: d.katman, malzeme: urun, revizyon: { id: rota.id, harf: rota.harf },
@@ -118,7 +179,10 @@ export async function patlatmaOnizlemesi(db: Db, revizyonId: number): Promise<Pa
       adimlar,
     });
   }
-  return { kokRevizyon, ileti: null, engel: 'ileti' in c ? c.ileti : null, dugumler };
+  return {
+    kokRevizyon, miktar: ondalikMetin(miktar), ileti: null, engel: firmasiz !== null ? FIRMASIZ_FASON_ILETISI(firmasiz.opNo) : 'ileti' in c ? c.ileti : null, dugumler,
+    hammaddeToplami: [...hammadde].map(([mid, t]) => ({ malzeme: ozet(mid), toplam: ikili(t) })).sort((x, y) => x.malzeme.id - y.malzeme.id),
+  };
 }
 
 export async function agac(db: Db, id: number, miktar: number): Promise<AgacCevabi> {

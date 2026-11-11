@@ -21,7 +21,7 @@ K: `is-emri-kurallar.test.ts` (saf), U: `is-emri.test.ts` (gerçek PostgreSQL), 
 | UE-B (birleştirme) | Alt parti üst emrine ya da aynı adımdan bölünmüş kardeşine, ikisi aynı adımda beklerken birleşir; kaynak iptal olur, adedi hedefe geçer, katıldığı emir kaynakta tutulur | K parti birleştirme; U parti bölme ve birleştirme | uretim_emri_birlesen_iptal |
 | UE-B (malzeme) | Alt partinin adedi üst emrin bölünmeden önceki adımlarında sayılır; bölme ve birleştirme toplam ihtiyacı değiştirmez | K malzeme ihtiyacı alt parti; U parti bölme ve birleştirme | yok |
 | UE-PB1-3 | Bölme önceki adımlar bitmeden de yapılır (Soru 121 a: bölünen adım bitmemiş, sonrası başlamamış; çalışan adımda bölünen adet ≤ elde kalan - o adımda sayılan, `BOLME_URETILMIS`); elde kalan: önceki adım bitmemişse emir adedi, bitmişse sağlam + birleşen gelen - aynı sıradan bölünen; kol, üstün bölünme adımından önceki adım bitmeden başlamaz | K parti bölme; U parti kolu (KOL_ONCEKI_BITMEDI, gelenle 9 bölünür); U kart #125 (çalışan adımda 6 bölünür, 7 `BOLME_URETILMIS`, bitmiş adım `BOLME_BASLAMIS`) | yok |
-| UE-PB4 | Ek adım (rework, tamir, ek) yalnız kola, başlamamış adımın önüne ya da sona girer; op tekil ve aralıkta; rota adımı ve başlamış ek adım çıkmaz | K UE-PB4 ek adım; U ek adım ve akışlı birleşme (kök 409, op 400, rota 409, başlamış 409) | uretim_emirleri_is_emri_tur, uretim_emirleri_is_emri_ek_aciklama_ekte |
+| UE-PB4 | Ek adım (rework, tamir, ek) bölünmemiş emre ya da kola (2530 a), başlamamış adımın önüne ya da sona girer; açık alt partisi olan emre girmez; op tekil ve aralıkta; rota adımı ve başlamış ek adım çıkmaz | K UE-PB4 ek adım; U ek adım ve akışlı birleşme (bölünmemiş kök 200, alt partili kök 409, op 400, rota 409, başlamış 409); U 2530 a kabul (kök emre rework, plana sırasıyla girer, bitince ardılı açılır) | uretim_emirleri_is_emri_tur, uretim_emirleri_is_emri_ek_aciklama_ekte |
 | UE-PB5 | Elle birleştirme: kalan adımlar op ile karşılaştırılır, bitmemiş ek adımlı kol reddedilir | K UE-PB5 (parti birleştirme); U ek adım ve akışlı birleşme (BIRLESTIRME_EK_ADIM) | yok |
 | UE-PB6, 6a, 6c | Birleşme adımı bekleyen ise kol gelmeden başlamaz, akışlı ise başlar; ikisinde de kol gelmeden bitmez; kolun son adımı bitince kol üste katılır, adedi üste geçer | K UE-PB6, 6a, UE-PB2; U parti kolu, U ek adım ve akışlı birleşme | uretim_emri_birlesen_iptal |
 | UE-PB7 | Birleşme adımında elde kalan, kolun getirdiği sağlamı sayar; hurda kolun iş emirlerinde kalır | K parti bölme (birlesenGelen); U parti kolu | yok |
@@ -60,6 +60,7 @@ K: `is-emri-kurallar.test.ts` (saf), U: `is-emri.test.ts` (gerçek PostgreSQL), 
 | UE-S185 | Soru 185 a, 238 H4: `disari.ts` üzerinden gelen eksi sayımı ve adet verilen bitirmeyi yalnız emrin çalışan adımına başlamış ya da katılmış kişi yazar; `uretim-emirleri.sayim-duzelt` işlemi olan (yönetici, vardiya sorumlusu) düzeltir; öteki operatör ve müdür 403, satır yazılmaz. Artı sayım katılım istemez (Arkon cihazının kaydı) | `kurallar.ts` `sayimYetkiIhlali`; `uretim-emirleri.test.ts` "185 a ve H4", "H4: adetli bitiş" | yok |
 | UE-P1 | Paralel adım (639): komut adımı yoldan ya da `isEmriId` ile alır; verilmezse terminaldeki tek açık adım, yoksa sıradaki; iki açık adımda 409 adım seçilmeli; adım başka emrinse 404; adımı verilen komut çalışmayan adımda 409 | P "akışlı adım...", P "bekleyen adım..."; PK varsayılan adım | yok |
 | UE-P2 | 626 a: sıra dışı başlatma (bekleyen önceki bitmeden, akışlı devir adedi gelmeden) reddedilmez, uyarı döner; başlatılabilir adımlar listede | P "bekleyen adım..."; PK 626 a, başlatılabilir | yok |
+| UE-P2a | 2768 (2756 b): sıra dışı ilk başlatma öncül başına kayıt yazar (hazır adet, öncülün sayılanı); devir adedi gelmişse yazmaz; duraklamadan dönüş ve ikinci kişinin katılımı yazmaz; çarpanlı öncülde hazır adet gelendir, sayılan öncülün kendi sayımıdır; kayıt değişmez | P "2768: akışlı öncülde...", "2768: hazır adet...", "bekleyen adım..."; PK 626 a | uretim_emirleri_sira_disi_baslatma (yalniz_ekleme, CHECK) |
 | UE-P3 | 649 a: akışlı ya da bekleyen adım önceki adım bitmeden bitmez (409, nedenli); bağımsız adım beklemez; bir adım bitince öteki sürüyorsa emir başlamış kalır, istasyonu öncü adıma geçer; emrin sağlamı en büyük sıralı adımındır | P "akışlı adım...", P "aynı makinede..."; PK 649 a | yok |
 | UE-P4 | 647 a: adıma girenden fazla sayım reddedilmez, uyarır; iz `GET .../asimlar` (kişi, adet, o anki önceki sağlam); eksik alanı eksi bakiyeyi gösterir, önceki adım saydıkça kapanır | P "akışlı adım..."; U denetim #31, ek adım ve akışlı birleşme; PK eksik, 647 a | yok |
 | UE-P5 | 654 a: önceki adım sonrakinin saydığından az sağlamla biterse uyarır; emir eksi bakiyeyle biterse uyarır | P "654 a"; PK 654 a | yok |
@@ -107,3 +108,20 @@ DK: `dis-islem-emri.test.ts` "UE-DIE kuralları (saf)", DP: aynı dosya "gerçek
 | UE-DIE-G | Göç açık fason işlerine belge ekler; iş emri ve hareket satırları değişmez (2428-3 a) | DG | yok |
 
 Bağsız kural: yok.
+| 2521 b (09.11.2026): karar bekleyen varken bitirme reddedilir, sayım ve iş değişmez; onay ya da ret bekleyeni kapatınca bitirilir | kurallar.test.ts "2521 b", karar-bekliyor.test.ts "2521 b" (izinli ve yasak), karar-bekleyen-adet.test.ts "2521 b", arkon/yansima.test.ts "K1, T1" |
+| 2520-5 (09.11.2026): terminalde biten adım olay verir; dinleyicinin reddi bitirmeyi geri alır | karar-bekleyen-adet.test.ts "2520-5" |
+
+## 2627 2/2 c: Excel ile açık emirleri güncelleme (2704 a)
+| Kural | Madde | Test (izinli ve reddedilen) |
+|---|---|---|
+| UE-TOPLU-1 | Öncelik ve taslağı plana alma tek istekte, tek kayıt komutlarının kuralıyla; öncelik değişimi kayda girer | toplu-guncelle.test.ts "izinli" |
+| UE-TOPLU-2 | Tek satırın reddi (eski sürüm, planlı emri plana alma, başlamış emirde öncelik) hiçbir satırı yazmaz ve satır numarasını söyler | toplu-guncelle.test.ts "reddedilen" |
+| UE-TOPLU-3 | Alansız satır ve aynı emir iki kez 400; istek kimliği zorunlu; yetkisiz 403 | toplu-guncelle.test.ts "gövde ve yetki" |
+| UE-ARSIV-1 | Başlamış açık emir arşive alınır; açık olmayan, başlamamış ve açık kollu emir alınmaz; uyarı cümleleri | arsiv-kurallar.test.ts "2721", arsiv.test.ts "önizleme" |
+| UE-ARSIV-2 | Arşive alma işi durdurur (kullanım, katılım, duraklat olayı; durdur yok), sayımı korur, emri iptal eder, iptal olayını yayar, kapanışı açar; emir plan hesabından düşer, sayım reddedilir, kalite kararı verilir | arsiv.test.ts "arşive alma" |
+| UE-ARSIV-3 | Onaysız 400, eski sürüm 409, operatör 403 (önizleme de) | arsiv.test.ts "gövde, sürüm ve yetki" |
+| UE-ARSIV-4 | İptal emirde başlama kalabilir; bitiş ve sağlam adet olamaz (`uretim_emri_durum_alanlari`) | arsiv.test.ts "kısıt" |
+| UE-ARSIV-5 | Fasonda parça uyarıdır; arşivden sonra fason dönüşü yazılır, gidiş yazılmaz (2721 2/3 b) | arsiv.test.ts "2721 2/3 b". Mutasyon: dönüşte arşiv istisnası kalkınca kırmızı (DOĞRULANDI, yerelde) |
+| UE-ARSIV-6 | Kararsız hatalı kayıt arşivi durdurmaz; kolu emirle arşive gider; arşivde hurda, red, kabul açık, rework kapalı; kol katılmaz, emir bitmez (2731 b) | arsiv-kurallar.test.ts "2721", arsiv.test.ts "2731 b" (iki test) |
+| UE-ARSIV-8 | Hatalı kayıt özeti arşivi taşır (arsivde): arşivden önce false, kollu ve kolsuz arşivde true, kapanışsız iptalde false (2757) | arsiv.test.ts "2731 b" (iki test) |
+| UE-ARSIV-7 | Önizlemenin sağlamı en ileri sayılmış adımın sağlam sayımıdır (T-2721-1) | arsiv.test.ts "arşive alma", arsiv-kurallar.test.ts |

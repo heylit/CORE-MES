@@ -1,7 +1,7 @@
 import type { Db } from '#cekirdek/db.ts';
 import { UygulamaHatasi } from '#cekirdek/hata.ts';
 import { ayarDegistiDinle } from './moduller/ayarlar/disari.ts';
-import { satisSevkleriCozucusu, satisSiparisleriCozucusu, sevkIsiOzetiCozucusu, siparisOzetiCozucusu } from './moduller/finans/disari.ts';
+import { dolayliPersonelCozucusu, emilmeyenDogrudanCozucusu, genelGiderOraniCozucusu, projeMasrafiCozucusu, satisSevkleriCozucusu, satisSiparisleriCozucusu, sevkIsiOzetiCozucusu, siparisOzetiCozucusu, stokCikisiCozucusu } from './moduller/finans/disari.ts';
 import * as arkon from './moduller/arkon/disari.ts';
 import * as atolye from './moduller/atolye/disari.ts';
 import * as cncKurulum from './moduller/cnc-kurulum/disari.ts';
@@ -15,15 +15,15 @@ import * as ik from './moduller/ik/disari.ts';
 import * as kaliteMerkezi from './moduller/kalite-merkezi/disari.ts';
 import * as logo from './moduller/logo/disari.ts';
 import * as projeler from './moduller/projeler/disari.ts';
-import { acilSiparisOnaylandi, bakimCozucusu as planBakimCozucusu, bayatEmirBittiYansit, bayatFasonHareketiYansit, bayatIsEmirleriDegistiYansit, canliMakineAyrimlari, canliPaylar, canliPlan, malzemeKartiIzleri as planKartIzleri, malzemeMaliyetiCozucusu, planMotoruCozucusu, sunucuPlanCozucusu, tahminiMaliyetCozucusu, teklifDene } from './moduller/plan/disari.ts';
-import { isEmriTahminiMaliyetleri, uretimEmriMalzemeMaliyetleri } from './moduller/proje-maliyet/disari.ts';
-import { alimDinle, kaliteDurumuCozucusu, malzemeKartiIzleri as satinAlmaKartIzleri, parcaRevizyonuCozucusu as siparisParcaRevizyonuCozucusu, fasonKonumuCozucusu, planlananGidisCozucusu, stokMiktariCozucusu, stokYokCozucusu, tuketimSerisiCozucusu } from './moduller/satin-alma/disari.ts';
+import { acilSiparisOnaylandi, bakimCozucusu as planBakimCozucusu, bayatAdimBittiYansit, bayatEmirBittiYansit, bayatEmirIptalYansit, bayatFasonHareketiYansit, bayatIsEmirleriDegistiYansit, canliMakineAyrimlari, canliPaylar, canliPlan, malzemeKartiIzleri as planKartIzleri, malzemeMaliyetiCozucusu, planMotoruCozucusu, sunucuPlanCozucusu, tahminiMaliyetCozucusu, teklifDene } from './moduller/plan/disari.ts';
+import { isEmriTahminiMaliyetleri, projedeSayilanBelgeler, uretimEmriMalzemeMaliyetleri } from './moduller/proje-maliyet/disari.ts';
+import { alimDinle, belgeGenelGiderOranlari, kaliteDurumuCozucusu, malzemeKartiIzleri as satinAlmaKartIzleri, parcaRevizyonuCozucusu as siparisParcaRevizyonuCozucusu, fasonKonumuCozucusu, planlananGidisCozucusu, stokMiktariCozucusu, stokYokCozucusu, tuketimSerisiCozucusu } from './moduller/satin-alma/disari.ts';
 import * as receteRota from './moduller/recete-rota/disari.ts';
 import {
   logoBirimSetiCozucusu, logoEslemeYaziciCozucusu, logoKartAynasiCozucusu, logoKodCozucusu, logoTmiKodCozucusu, rotaRevizyonlariCozucusu, kartIzleriCozucusu,
 } from './moduller/malzemeler/disari.ts';
 import { firmaDegistiDinle, logoCariCozuculeriKaydet } from './moduller/musteri-tedarikci/disari.ts';
-import { durumRevizyonlari, emirBittiYansit as rotaEmirBittiYansit, emirRotaHazirliklari, isEmriKopyalandiYansit, malzemeKartiIzleri as rotaKartIzleri, yuzeyIslemiAdimlari } from './moduller/rota/disari.ts';
+import { araHalCozucusuKaydet as rotaAraHalCozucusu, durumRevizyonlari, emirBittiYansit as rotaEmirBittiYansit, adimBittiYansit as rotaAdimBittiYansit, emirRotaHazirliklari, isEmriKopyalandiYansit, malzemeKartiIzleri as rotaKartIzleri, yuzeyIslemiAdimlari } from './moduller/rota/disari.ts';
 import { yuzeyAdimlariCozucusu } from './moduller/geometri/disari.ts';
 import * as sevkiyat from './moduller/sevkiyat/disari.ts';
 import { bagliEmirCozucusu, malzemeKartiIzleri as siparisKartIzleri, siparisAyrintisi, siparisListesi, siparisOnaylandiDinle, teklifDenemeCozucusu } from './moduller/siparisler/disari.ts';
@@ -90,6 +90,7 @@ export function sunucununBaglari(): Bag[] {
     bag('adım statüsü çözücüsü -> stok', stok.adimStatusuCozucusu, receteRota.adimStatusu),
     bag('makine 3B görünümü -> atölye', atolye.makineModelTuruCozucusu, cncKurulum.makineModelTurleri),
     bag('adım çıktısı çözücüsü -> stok', stok.adimCiktisiCozucusu, receteRota.adimCiktisi),
+    bag('ara hal çözücüsü -> rota önizlemesi', rotaAraHalCozucusu, receteRota.adimAraHalleri),
     bag('statü listesi -> stok', stok.statuListesiCozucusu, receteRota.receteRotaStatuleri),
     bag('parça revizyonu -> stok partisi', stok.parcaRevizyonuCozucusu, yururluktekiParcaRevizyonlari),
     bag('parça revizyonu -> sipariş satırı', siparisParcaRevizyonuCozucusu, yururluktekiParcaRevizyonlari),
@@ -105,10 +106,13 @@ export function sunucununBaglari(): Bag[] {
     bag('logo cari okuması -> müşteri-tedarikçi', (ara: typeof cariAra) => logoCariCozuculeriKaydet({ ara, oku: cariOku }),
       [logo.logodaCariAra, logo.logodanCariOku].every((f) => typeof f === 'function') ? cariAra : undefined),
     bag('emir bitti -> rota gerçekleşen süre önerisi', uretimEmirleri.emirBittiDinle, rotaEmirBittiYansit),
+    bag('adım bitti -> rota gerçekleşen süre önerisi', uretimEmirleri.adimBittiDinle, rotaAdimBittiYansit),
     bag('iş emri kopyalandı -> rota şartname sabiti', uretimEmirleri.isEmriKopyalandiDinle, isEmriKopyalandiYansit),
     bag('fason hareketi -> sevkiyat', uretimEmirleri.fasonHareketiDinle, sevkiyat.fasonHareketiYansit),
     bag('stok yok istekleri -> satın alma', stokYokCozucusu, stok.stokYokIstekleri),
     bag('iş emri tahmini maliyeti -> plan', tahminiMaliyetCozucusu, isEmriTahminiMaliyetleri),
+    bag('projede sayılan belgeler -> finans genel gider', projeMasrafiCozucusu, projedeSayilanBelgeler),
+    bag('emirsiz stok çıkışı -> finans genel gider', stokCikisiCozucusu, stok.emirsizCikisTutari),
     bag('plan makine ayrımı -> üretim emirleri', uretimEmirleri.planAyrimiCozucusu, canliMakineAyrimlari),
     bag('plan payları -> üretim emirleri terminali', uretimEmirleri.planPaylariCozucusu, canliPaylar),
     bag('üretim emri malzeme maliyeti -> plan', malzemeMaliyetiCozucusu, uretimEmriMalzemeMaliyetleri),
@@ -116,7 +120,9 @@ export function sunucununBaglari(): Bag[] {
     // 2319 (2311 S7, S10): saha olayı canlı planı bayat işaretler (plan değişmez); Arkon periyodik bakımı plan girdisine duruş olarak girer.
     bag('emir bitti -> plan bayat işareti', uretimEmirleri.emirBittiDinle, bayatEmirBittiYansit),
     bag('fason hareketi -> plan bayat işareti', uretimEmirleri.fasonHareketiDinle, bayatFasonHareketiYansit),
+    bag('adım bitti -> plan bayat işareti', uretimEmirleri.adimBittiDinle, bayatAdimBittiYansit),
     bag('iş emirleri değişti -> plan bayat işareti', uretimEmirleri.isEmirleriDegistiDinle, bayatIsEmirleriDegistiYansit),
+    bag('emir iptal -> plan bayat işareti', uretimEmirleri.emirIptalDinle, bayatEmirIptalYansit),
     bag('periyodik bakım -> plan girdisi', planBakimCozucusu, arkon.periyodikBakimlar),
     bag('teklif denemesi -> siparişler (planlama motoru)', teklifDenemeCozucusu, teklifDene),
     // 2103-2 b: satıra bağlı emirlere siparişten açılan projelerin emirleri eklenir (iş emri olmayan emir proje okumasında yoktur).
@@ -159,6 +165,8 @@ export function sunucununBaglari(): Bag[] {
       }
     })),
     bag('sevk işi özeti -> finans satış faturası', sevkIsiOzetiCozucusu, sevkiyat.sevkIsiOzeti),
+    // 2642 b, 2646 a: siparişli faturanın genel gider oranı satın almanın satır yolundan (Mimar K1, çekme modeli).
+    bag('fatura genel gider oranı -> finans genel gider önerisi', genelGiderOraniCozucusu, belgeGenelGiderOranlari),
     bag('sipariş sevkleri -> finans satış formu', satisSevkleriCozucusu, sevkiyat.siparisinSevkleri),
     // Satış formu firmanın onaylı ve kapanmış son 200 siparişini gösterir (iki durum ayrı sorgulanır, birlikte tarihe dizilir).
     bag('satış siparişleri -> finans satış formu', satisSiparisleriCozucusu, siparisListesi && (async (db: Db, firmaId: number) => {
@@ -176,6 +184,7 @@ export function sunucununBaglari(): Bag[] {
     bag('CNC kurulumu (iş emri) -> başlatma hazırlığı', uretimEmirleri.cncHazirlikCozucusu, cncKurulum.isEmriHazirlikDurumlari),
     bag('çizim revizyonu -> başlatma hazırlığı', uretimEmirleri.cizimHazirlikCozucusu, arkon.emirCizimDurumlari),
     bag('paket yayını -> hazırlık matrisi', uretimEmirleri.yayinHazirlikCozucusu, arkon.isEmriYayinDurumlari),
+    bag('ek hazırlık maddesi -> hazırlık matrisi', uretimEmirleri.ekMaddeHazirlikCozucusu, arkon.isEmriEkMaddeDurumlari),
     bag('rota revizyonu -> hazırlık uyarısı', uretimEmirleri.rotaHazirlikCozucusu, emirRotaHazirliklari),
     bag('girdi stoğu -> hazırlık uyarısı', uretimEmirleri.malzemeHazirlikCozucusu, stok.isEmriMalzemeHazirliklari),
     bag('takım ömrü -> hazırlık uyarısı', uretimEmirleri.takimHazirlikCozucusu, cncKurulum.isEmriTakimHazirliklari),
@@ -196,6 +205,13 @@ export function sunucununBaglari(): Bag[] {
         return sonuc;
       }
       : undefined),
+    // 2647 a, 2659: genel gider personel bileşenleri İK'dan; yalnız toplam, gerçek değerle (gizleme Finans'ta, 2652 a). Emilmeyen için
+    // katılım üretim emirlerinden (İK onu ithal etmez).
+    bag('İK dolaylı personel -> finans genel gider', dolayliPersonelCozucusu, typeof ik.dolayliPersonelToplamiYalnizHesapIcin === 'function'
+      ? (db: Db, ay: string) => ik.dolayliPersonelToplamiYalnizHesapIcin(db, ay) : undefined),
+    bag('İK emilmeyen doğrudan işçilik -> finans genel gider', emilmeyenDogrudanCozucusu,
+      [ik.dogrudanEmilmeyenToplamiYalnizHesapIcin, uretimEmirleri.katilimSureleri].every((f) => typeof f === 'function')
+        ? (db: Db, ay: string) => ik.dogrudanEmilmeyenToplamiYalnizHesapIcin(db, ay, uretimEmirleri.katilimSureleri) : undefined),
     bag('kart izleri -> malzemeler arşivi', kartIzleriCozucusu, kartIzleriTopla({
       'Değişiklik yönetimi': degisiklikKartIzleri, 'Finans': finansKartIzleri, 'İstasyonlar': istasyonKartIzleri, 'Markalama': markalamaKartIzleri,
       'Plan': planKartIzleri, 'Satın alma': satinAlmaKartIzleri, 'Rota': rotaKartIzleri, 'Siparişler': siparisKartIzleri,

@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { listeCevapSemasi, sayfaSorguAlanlari } from '../liste.ts';
 import { ondalikMetinSemasi } from '../ondalik.ts';
 import { surumSemasi } from '../surum.ts';
+import { TOPLU_EN_COK_SATIR } from '../toplu.ts';
 import { tarihSemasi, zamanSemasi } from '../zaman.ts';
 import { TALIMAT_ASAMALARI } from './talimat-asamasi.ts';
 import { KOD_DESENI as NEDEN_KODU } from './durus-nedenleri.ts';
@@ -482,6 +483,8 @@ export const rotasizEmirCevabi = z.object({ uretimEmriId: KIMLIK });
 export const acilisSecenekleriSorgusu = z.object({ malzemeNo: z.coerce.number<number>().int().positive(), emirTuru: z.enum(EMIR_TURLERI).optional() });
 export const acilisSecenekleriCevabi = z.object({
   projeZorunlu: z.boolean(),
+  // "Rotasız üretim emri" ayarı (B13, B-2500-6): kapalıyken ekran rotasız emir yolunu sunmaz; açma ucu yine kendisi denetler.
+  rotasizAcik: z.boolean(),
   projeler: z.array(z.object({
     id: KIMLIK, kod: z.string(), ad: z.string(),
     satirlar: z.array(z.object({ id: KIMLIK, siparisNo: z.string(), satirNo: z.number().int(), adet: z.string(), termin: z.string().nullable() })),
@@ -699,7 +702,7 @@ export const refakatKartiCevabi = z.object({
 // Uyaran maddeler (2146-1 a) eksikken de iş emri başlar; matris ve terminal yalnız uyarır.
 // Paket yayını (2227, 2189-1 a): iş emri Üretim Hazırlık'ta yayınlanmadan terminalde başlamaz; reddi Arkon verir, matris yalnız gösterir.
 export const DURDURAN_HAZIRLIK_MADDELERI = ['cnc', 'cizim', 'yayin'] as const;
-export const UYARAN_HAZIRLIK_MADDELERI = ['rota', 'malzeme', 'takim-omru', 'makine', 'talimat'] as const;
+export const UYARAN_HAZIRLIK_MADDELERI = ['rota', 'malzeme', 'takim-omru', 'makine', 'talimat', 'ek-madde'] as const;
 export const HAZIRLIK_MADDELERI = [...DURDURAN_HAZIRLIK_MADDELERI, ...UYARAN_HAZIRLIK_MADDELERI] as const;
 export const hazirlikUyarirMi = (m: string): boolean => (UYARAN_HAZIRLIK_MADDELERI as readonly string[]).includes(m);
 // Başlatma kancasında sorulmayan durduran madde: kuralı sahibi kendi uygular (yayın: Arkon kayıt kapısı); emirden başka yoldan başlatma değişmez.
@@ -809,6 +812,8 @@ export const hataliKaydiSemasi = z.object({
   kararZamani: zaman.nullable(),
   kararNotu: z.string().nullable(),
   ncrKimlik: z.string().nullable(),
+  // 2731 b: hedef emir arşivde (iptal, kapanışı açık); kararda rework kapalıdır, hurda, red ve kabul açıktır.
+  arsivde: z.boolean(),
 });
 // Kalite "rework" dedikten sonra planlama ikinci adımı doldurur: ad, operasyon tipi, kaynak (iç ya da fason) ve süre. Fasonda süre yok,
 // termin günü vardır (tablo kısıtı); kaynak boş kalırsa adım atanmamış bekler.
@@ -972,3 +977,45 @@ export type DisIslemEmri = z.output<typeof disIslemEmriSemasi>;
 export type DisIslemEmriCevabi = z.output<typeof disIslemEmriCevabi>;
 export type DisIslemEmriAcGovdesi = z.input<typeof disIslemEmriAcGovdesi>;
 export type DisIslemEmriIptalGovdesi = z.input<typeof disIslemEmriIptalGovdesi>;
+
+// Excel ile var olan emirleri güncelleme (2627 2/2 c, kart 2704): satır bir emirdir ve yalnız sayfada da değişen alanları taşır
+// (öncelik, taslağı plana alma). Her satır emrin önizlemedeki sürümüyle gelir; hepsi tek işlemde, biri reddedilirse hiçbiri yazılmaz.
+// Satır yalnız emrin kendi satırını yazar (iş emri açmaz); sınır öteki toplu girişlerinki gibi ortak toplu sınırdır.
+export const EMIR_TOPLU_GUNCELLE_EN_COK = TOPLU_EN_COK_SATIR;
+// Emir önceliği (1 acil ... 4 düşük). Öteki öncelik alanları kilit kalkınca bu sabite taşınır (Mimar notu, 2704).
+export const emirOncelikSemasi = z.number().int().min(1, 'Öncelik 1-4 olmalı.').max(4, 'Öncelik 1-4 olmalı.');
+export const emirTopluGuncelleSatiri = z.object({
+  satir: z.number().int().min(1).max(1_048_576),
+  id: KIMLIK,
+  surum: surumSemasi,
+  oncelik: emirOncelikSemasi.optional(),
+  planaAl: z.literal(true).optional(),
+}).strict().refine((x) => x.oncelik !== undefined || x.planaAl !== undefined, 'Satırda değişecek alan yok.');
+export const emirTopluGuncelleGovdesi = z.object({
+  satirlar: z.array(emirTopluGuncelleSatiri).min(1).max(EMIR_TOPLU_GUNCELLE_EN_COK)
+    .refine((x) => new Set(x.map((y) => y.satir)).size === x.length, 'Satır numarası iki kez var.')
+    .refine((x) => new Set(x.map((y) => y.id)).size === x.length, 'Aynı emir dosyada iki kez var.'),
+}).strict();
+export const emirTopluGuncelleCevabi = z.object({ eklenen: z.literal(0), guncellenen: z.number().int().min(0) });
+export type EmirTopluGuncelleGirdisi = z.output<typeof emirTopluGuncelleGovdesi>;
+export type EmirTopluGuncelleSatiri = z.input<typeof emirTopluGuncelleSatiri>;
+export type EmirTopluGuncelleCevabi = z.output<typeof emirTopluGuncelleCevabi>;
+
+// 2721: başlamış emri arşive alma. Önizleme ekranın uyarısını kurar (cümleler sunucunun); `engel` doluysa komut reddedilir.
+export const arsivOnizlemeCevabi = z.object({
+  surum: surumSemasi,
+  calisan: z.array(z.object({ opNo: z.number().int().nullable(), ad: z.string().nullable(), operator: z.string().nullable() })),
+  saglam: z.number().int().nullable(),
+  hurda: z.number().int().nullable(),
+  kararBekleyen: z.number().int().nullable(),
+  fasonda: z.array(z.object({ opNo: z.number().int(), adet: z.number().int() })),
+  hataliAcik: z.number().int(),
+  engel: z.string().nullable(),
+  uyarilar: z.array(z.string()),
+});
+export const arsiveAlGovdesi = z.object({ surum: surumSemasi, onay: z.literal(true) }).strict();
+// İptal ve öteki emir komutlarıyla aynı cevap: emrin son hâli.
+export const arsiveAlCevabi = adimliEmirCevabi;
+export type ArsivOnizlemeCevabi = z.output<typeof arsivOnizlemeCevabi>;
+export type ArsiveAlGovdesi = z.input<typeof arsiveAlGovdesi>;
+export type ArsiveAlCevabi = z.output<typeof arsiveAlCevabi>;

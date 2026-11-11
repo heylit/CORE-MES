@@ -13,7 +13,7 @@ import {
   aracBelgeReddi, aracVerilemezMi, CIKIS_ERKEN, cikisGunuReddi, cikisKmReddi, elleAracDurumReddi, GOREVDE_ELLE, MUAYENE_GECIYOR, SIGORTA_GECIYOR, donusKmReddi,
   gorevGecisReddi, gorevHedefi, gorevTarihReddi,
 } from './kurallar.ts';
-import { MASRAF_GELECEK, TUTAR_GECERSIZ, masrafReddi } from './kurallar.ts';
+import { KDV_GECERSIZ, MASRAF_GELECEK, TUTAR_GECERSIZ, masrafReddi } from './kurallar.ts';
 import {
   DEGER_GECERSIZ, HURDA_SON, IADE_GELECEK, IADE_ONCE, VERILIS_GELECEK, ZIMMETLENEMEZ, ZIMMETLI_ELLE, degerReddi, demirbasNo, elleDurumReddi, iadeReddi,
   iadeSonrasiDurum, zimmetlemeReddi,
@@ -272,6 +272,15 @@ describe('idari-isler kuralları', () => {
     for (const tutar of ['0', '0.00', '-5', '1.234', '10000000000']) {
       assert.deepEqual(masrafReddi({ tutar, tarih: b }, b), { ileti: TUTAR_GECERSIZ, alan: 'tutar' }, tutar);
     }
+  });
+
+  test('IDR-35 (2712 a): KDV boş olabilir; yazılırsa sıfır ya da büyük, iki kuruş basamaklı ve KDV dahil tutardan küçük', () => {
+    const b = '2026-10-19';
+    for (const kdv of [undefined, null, '0', '208.42', '1250.49']) assert.equal(masrafReddi({ tutar: '1250.50', kdv, tarih: b }, b), null, String(kdv));
+    for (const kdv of ['-1', '1.234', '1250.50', '1300']) {
+      assert.deepEqual(masrafReddi({ tutar: '1250.50', kdv, tarih: b }, b), { ileti: KDV_GECERSIZ, alan: 'kdv' }, kdv);
+    }
+    assert.deepEqual(masrafReddi({ tutar: '0', kdv: '-1', tarih: b }, b), { ileti: TUTAR_GECERSIZ, alan: 'tutar' }, 'önce tutar denetlenir');
   });
 
   test('IDR-29: değer yoksa null; varsa sıfırdan büyük, en çok iki kuruş basamaklı; numara DB-00001 biçiminde', () => {

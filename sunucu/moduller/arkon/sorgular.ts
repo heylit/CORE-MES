@@ -731,3 +731,42 @@ export async function kuyrukSirasiYaz(
 export function kuyrukSirasiSil(db: Db, istasyonId: number): Promise<{ isEmriId: number; parcaNo: number }[]> {
   return db.sorgu('DELETE FROM arkon_kuyruk_sirasi WHERE istasyon_id = $1 RETURNING is_emri_id AS "isEmriId", parca_no AS "parcaNo"', [istasyonId]);
 }
+
+// 2227-1 b: iş emrine özel hazırlık maddesi. Hâl son olaydan çıkar; son olayı 'kaldir' olan madde listede yoktur.
+export interface HazirlikMaddesiSatiri {
+  id: number; isEmriId: number; ad: string; kisiId: number; zaman: string; tamam: boolean; tamamlayanId: number | null; tamamlanma: string | null;
+}
+export function hazirlikMaddeleri(db: Db, isEmriIdler: readonly number[]): Promise<HazirlikMaddesiSatiri[]> {
+  return db.sorgu<HazirlikMaddesiSatiri>(
+    `SELECT m.id, m.is_emri_id AS "isEmriId", m.ad, m.kisi_id AS "kisiId", ${zamanMetni('m.zaman')} AS zaman, COALESCE(o.olay = 'tamamla', false) AS tamam,
+            CASE WHEN o.olay = 'tamamla' THEN o.kisi_id END AS "tamamlayanId",
+            CASE WHEN o.olay = 'tamamla' THEN ${zamanMetni('o.zaman')} END AS tamamlanma
+       FROM arkon_hazirlik_maddesi m
+       LEFT JOIN LATERAL (SELECT olay, kisi_id, zaman FROM arkon_hazirlik_maddesi_olayi WHERE madde_id = m.id ORDER BY id DESC LIMIT 1) o ON true
+      WHERE m.is_emri_id = ANY($1::int[]) AND o.olay IS DISTINCT FROM 'kaldir'
+      ORDER BY m.is_emri_id, m.id`,
+    [[...isEmriIdler]],
+  );
+}
+
+// Aynı iş emrine eşzamanlı ekleme ve işaretleme sırayla yürür (azami sayı ve son olay denetimi kilit altında).
+export async function hazirlikMaddesiKilitle(db: Db, isEmriId: number): Promise<void> {
+  await islemKilidiAl(db, 'arkon-hazirlik-maddesi', isEmriId);
+}
+
+export async function hazirlikMaddesiEkle(db: Db, isEmriId: number, ad: string, kisiId: number): Promise<void> {
+  await db.sorgu('INSERT INTO arkon_hazirlik_maddesi (is_emri_id, ad, kisi_id) VALUES ($1, $2, $3)', [isEmriId, ad, kisiId]);
+}
+
+export function hazirlikMaddesiBul(db: Db, id: number): Promise<{ isEmriId: number; sonOlay: string | null } | null> {
+  return db.tek(
+    `SELECT m.is_emri_id AS "isEmriId",
+            (SELECT olay FROM arkon_hazirlik_maddesi_olayi WHERE madde_id = m.id ORDER BY id DESC LIMIT 1) AS "sonOlay"
+       FROM arkon_hazirlik_maddesi m WHERE m.id = $1`,
+    [id],
+  );
+}
+
+export async function hazirlikMaddesiOlayiEkle(db: Db, maddeId: number, olay: string, kisiId: number): Promise<void> {
+  await db.sorgu('INSERT INTO arkon_hazirlik_maddesi_olayi (madde_id, olay, kisi_id) VALUES ($1, $2, $3)', [maddeId, olay, kisiId]);
+}

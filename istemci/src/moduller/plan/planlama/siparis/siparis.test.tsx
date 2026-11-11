@@ -277,7 +277,7 @@ describe('P2 Termin ve kâr', () => {
 describe('Değerlendirme kartı (uç açılınca)', () => {
   const cevap = (maliyetGorunur: boolean): DegerlendirmeCevabi<'plan-secenekleri'> => ({
     calismaSurumu: 9, dataVer: 3, baslangic: '2026-10-19', simdi: 7, maliyetGorunur,
-    sonuc: { tur: 'plan-secenekleri', secenekler: [{ denge: 25, carpan: 4, ekMesai: [], ekMesaiTl: null, geciken: 1, isSayisi: 2, gecikmeSaat: 15, netKar: maliyetGorunur ? 500 : null, eksik: 0, plan: { dataVer: 3, ops: {}, J: {} } }] },
+    sonuc: { tur: 'plan-secenekleri', bedeliBilinmeyenEkMesai: false, secenekler: [{ denge: 25, carpan: 4, ekMesai: [], ekMesaiTl: null, geciken: 1, isSayisi: 2, gecikmeSaat: 15, netKar: maliyetGorunur ? 500 : null, eksik: 0, plan: { dataVer: 3, ops: {}, J: {} } }] },
   });
   const ciz = (d: Degerlendirici | null, komut: CalismaKomutu | null, alabilir: boolean, yenile = vi.fn()) => render(
     <BildirimSaglayici>
@@ -313,6 +313,21 @@ describe('Değerlendirme kartı (uç açılınca)', () => {
     expect(await screen.findByText('Termine yakın')).toBeTruthy();
     expect(screen.queryByText('Net kâr')).toBeNull();
     expect(screen.queryByRole('button', { name: 'Bu planı al' })).toBeNull();
+  });
+
+  // 2761 (2745 a, 2759): bedeli bilinmeyen ek mesai adayı ele alınmadıysa seçenek kartı bunu söyler; yoksa söylemez.
+  it('bedeli bilinmeyen ek mesai varsa seçenek kartında not çıkar, yoksa çıkmaz', async () => {
+    const NOT = /^ ?Mesai bedeli bilinmiyor, ek mesai önerilmedi/;
+    const c = cevap(false);
+    const d = vi.fn(async () => ({ ...c, sonuc: { ...c.sonuc, bedeliBilinmeyenEkMesai: true } })) as unknown as Degerlendirici;
+    ciz(d, null, false);
+    fireEvent.click(dugme(HESAPLA));
+    expect((await screen.findByRole('note')).textContent).toMatch(NOT);
+    cleanup();
+    ciz(vi.fn(async () => cevap(false)) as unknown as Degerlendirici, null, false);
+    fireEvent.click(dugme(HESAPLA));
+    expect(await screen.findByText('Termine yakın')).toBeTruthy();
+    expect(screen.queryByRole('note')).toBeNull();
   });
 
   it('409 cevabında yenile düğmesi çıkar', async () => {

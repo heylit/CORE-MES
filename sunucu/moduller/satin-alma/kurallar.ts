@@ -6,6 +6,7 @@ import type { FasonIsEmri } from '../uretim-emirleri/disari.ts';
 import type { AlimTasimasi } from './alim-olayi.ts';
 import type { HizliKalem, KartAyrintisi, Kalite, Karar, Onay, Talebim, Talep, TalepDurumu, TalepTuru, TalepYazimi, TedarikTermini, TerminDurumu, TerminTakipSatiri, TeslimDurumu } from '#paylasilan/sozlesme/satin-alma.ts';
 import { MALZEMELER_SAYFALARI } from '#paylasilan/sayfalar/malzemeler.ts';
+import { gerceklesenPay, gerceklesenSiparisDegeri } from './hesap-kurallar.ts';
 
 export const ISLEM = {
   oku: 'satin-alma.oku', talepAc: 'satin-alma.talep-ac', yaz: 'satin-alma.yaz', onayla: 'satin-alma.onayla', ayar: 'satin-alma.ayar',
@@ -76,6 +77,18 @@ export const ILETILER = {
   kgZatenIptal: 'Bu kg fiyatı girişi zaten iptal edildi.',
   yalnizTaslakSilinir: 'Yalnız taslak talep silinir; ilerlemiş talep iptal edilir.',
   emirKapali: 'Üretim emri açık değil: yalnız planlı ya da başlamış emir seçilir.',
+  projeEmirli: 'Emre bağlı talebin projesi emirden gelir; proje ayrıca seçilmez.',
+  eslemeTekrar: 'Aynı sipariş satırı listede iki kez var.',
+  eslemeBaskaSiparis: 'Satır bu faturanın siparişine ait değil.',
+  eslemeTutar: 'Tutar sıfırdan büyük olmalı ve en çok iki ondalık taşımalı.',
+  eslemeAsim: 'Eşlenen toplam fatura tutarını (KDV hariç) aşıyor.',
+  eslemeSiparissiz: 'Bu fatura bir siparişe bağlı değil ya da bulunamadı.',
+  eslemeIptal: 'İptal edilmiş fatura eşlenemez.',
+  eslemeSurum: 'Bu fatura başka biri tarafından değiştirildi, yeniden yükleyin.',
+  eslemeliSatir: 'Bu satır bir faturayla eşlendi (kaldırılmış eşleme dahil); siparişten çıkarılamaz.',
+  projeAktifDegil: 'Proje aktif değil: yalnız aktif proje seçilir.',
+  birlesmeProjesi: 'Talepler farklı projelere bağlı; aynı projenin talepleri birleştirilir.',
+  idariCevrildi: (no: string) => `Bu idari talep daha önce ${no} satın alma talebine çevrildi.`,
   tedarikciYok: 'Tedarikçi bulunamadı.',
   terminMalzemesiYok: 'Malzeme kartı bulunamadı.',
   terminVar: 'Bu malzemenin termini başka biri tarafından girildi; sayfayı yenileyin.',
@@ -216,7 +229,8 @@ export function izi(deger: unknown): string {
 const govdeIzi = (t: TalepYazimi, durumHaric: boolean): string => {
   // Yalnız talebin kendi alanları; sunucunun verdiği salt okunur alanlar (no, ad, sürüm, tarihler) karşılaştırılmaz.
   const g = { baslik: t.baslik, birim: t.birim, talepEdenKisiId: t.talepEdenKisiId, oncelik: t.oncelik, ihtiyacTarihi: t.ihtiyacTarihi,
-    notlar: t.notlar, iptalNedeni: t.iptalNedeni, kalemler: t.kalemler, uretimEmriId: t.uretimEmriId };
+    notlar: t.notlar, iptalNedeni: t.iptalNedeni, kalemler: t.kalemler, uretimEmriId: t.uretimEmriId,
+    projeId: t.projeId ?? null };
   return izi({ ...g, ...(durumHaric ? {} : { durum: t.durum }) });
 };
 // Satın almanın işi: teklif, istek, karar, senaryo, ağırlık. Siparişte yalnız satın almanın alanları (teslim bilgisi stoktan okunur).
@@ -697,13 +711,14 @@ export function siparisFaturaFirmasi(t: Pick<Talep, 'durum' | 'teklifler' | 'kar
 // döner: fatura kısmi teslimde ya da toplu faturada da bağlanabilir. Uyarı rakam taşımaz; fatura tutarı finans rakamıdır (FNS-48).
 // Fatura tutarı okunamazsa (null) tutar karşılaştırılmaz.
 export function faturaEslesmeUyarilari(
-  siparis: { toplam: string | null; paraBirimi: string; satirlar: readonly { miktar: string; teslimAlinan: string | null }[] },
+  siparis: { toplam: string | null; paraBirimi: string; satirlar: readonly { miktar: string; teslimAlinan: string | null }[]; kapali?: boolean },
   fatura: { tutar: string; paraBirimi: string } | null,
 ): string[] {
   const uyarilar: string[] = [];
   const s = siparis.satirlar;
+  // 2480: kalanı kapatılmış siparişte eksik teslim bilerek kapatılmıştır, uyarı değildir; toplam çağıranın verdiği gerçekleşen değerdir.
   if (s.some((x) => ondalikKiyas(x.teslimAlinan ?? '0', x.miktar) > 0)) uyarilar.push(ILETILER.eslesmeFazlaTeslim);
-  else if (s.some((x) => ondalikKiyas(x.teslimAlinan ?? '0', x.miktar) < 0)) uyarilar.push(ILETILER.eslesmeEksikTeslim);
+  else if (siparis.kapali !== true && s.some((x) => ondalikKiyas(x.teslimAlinan ?? '0', x.miktar) < 0)) uyarilar.push(ILETILER.eslesmeEksikTeslim);
   if (fatura !== null && siparis.toplam !== null) {
     if (fatura.paraBirimi.trim() !== siparis.paraBirimi.trim()) uyarilar.push(ILETILER.eslesmeParaBirimi);
     else {
@@ -733,6 +748,34 @@ export function odemePlaniHedefi(t: Pick<Talep, 'durum' | 'teklifler' | 'karar'>
 export interface OdemeKosulu {
   toplam: string; avans: string; kalan: string; vadeGun: number; siparisTarihi: string | null; beklenenTeslim: string | null; malKabul?: string | null;
   vadeBaslangici?: 'teslim' | 'siparis'; partiler?: readonly { gun: string; oran: string }[]; tamTeslim?: boolean;
+  kapali?: boolean; satirlar?: readonly { mal: string; miktar: string; teslim: string }[]; masraf?: string;
+}
+// 2463 a, 2472: kalanı kapatılmış siparişin planı gerçekleşen teslim değerine iner (bütçe kullanımıyla aynı tanım, gerceklesenPay).
+// Toplam gerçekleşen değerdir; avans siparişin avansı olarak kalır (önceden ödenir), kalan farktır: avans aşarsa kalan eksidir ve vadeli
+// satır yazılmaz (2480-1 a: plandaki avans gerçekleşen değere iner). Partiler gerçekleşen teslime oranlanır (payların toplamı 1); kapatılan kalan için dilim yoktur. Açık sipariş değişmez.
+export function gerceklesenKosul<T extends OdemeKosulu>(k: T): T {
+  if (k.kapali !== true || k.satirlar === undefined) return k;
+  const deger = gerceklesenSiparisDegeri(k.satirlar.map((s) => ({ mal: Number(s.mal), miktar: Number(s.miktar), teslim: Number(s.teslim) })), Number(k.masraf ?? '0'));
+  const toplam = (Math.round(deger * 100) / 100).toFixed(2);
+  const net = (k.partiler ?? []).reduce((t, p) => t + Number(p.oran), 0);
+  const partiler = net > 0 ? (k.partiler ?? []).map((p) => ({ gun: p.gun, oran: String(Number(p.oran) / net) })) : [];
+  return { ...k, toplam, kalan: ondalikMetni(tamSayiya(toplam) - tamSayiya(k.avans)), partiler, tamTeslim: true };
+}
+// 2472 M2: avans gerçekleşen değeri aşıyorsa fark (KDV dahil, sipariş dövizinde); aşmıyorsa ya da sipariş açıksa null.
+export function avansAsimi(k: OdemeKosulu, kdvOrani: string | null): string | null {
+  if (k.kapali !== true) return null;
+  const g = gerceklesenKosul(k);
+  const kdvli = (x: string) => (kdvOrani === null ? x : kdvEkle(x, kdvOrani));
+  const fark = tamSayiya(kdvli(g.avans)) - tamSayiya(kdvli(g.toplam));
+  return fark > 0n ? ondalikMetni(fark) : null;
+}
+// 2472 (2132-6 a): elle ya da faturalı plan değişmez; kapanışta plan toplamının gerçekleşen değerden (KDV dahil) farkı, yoksa null.
+export function planGerceklesenFarki(k: OdemeKosulu, kdvOrani: string | null, planTutarlari: readonly string[]): string | null {
+  if (k.kapali !== true || planTutarlari.length === 0) return null;
+  const g = gerceklesenKosul(k);
+  const hedef = kdvOrani === null ? g.toplam : kdvEkle(g.toplam, kdvOrani);
+  const fark = planTutarlari.reduce((t, x) => t + tamSayiya(x), 0n) - tamSayiya(hedef);
+  return fark === 0n ? null : ondalikMetni(fark);
 }
 export function vadeDilimleri(k: Pick<OdemeKosulu, 'siparisTarihi' | 'beklenenTeslim' | 'vadeBaslangici' | 'partiler' | 'tamTeslim'>, bugun: string): { gun: string; pay: number }[] {
   const baslangic = k.siparisTarihi ?? bugun;
@@ -764,11 +807,15 @@ export function kdvEkle(tutar: string, oran: string): string {
   const k = (c + 5_000n) / 10_000n;
   return `${k / 100n}.${(k % 100n).toString().padStart(2, '0')}`;
 }
-export function varsayilanOdemePlani(k: OdemeKosulu, bugun: string, kdvOrani: string | null): { tur: 'avans' | 'vade'; vade: string; yontem: 'banka'; tutar: string }[] {
+export function varsayilanOdemePlani(kosul: OdemeKosulu, bugun: string, kdvOrani: string | null): { tur: 'avans' | 'vade'; vade: string; yontem: 'banka'; tutar: string }[] {
+  const k = gerceklesenKosul(kosul);
   const baslangic = k.siparisTarihi ?? bugun;
   const gunEkle = (tarih: string, gun: number) => new Date(Date.parse(`${tarih}T00:00:00Z`) + gun * GUN_MS).toISOString().slice(0, 10);
-  const avans = kdvOrani === null ? k.avans : kdvEkle(k.avans, kdvOrani);
-  const kalan = kdvOrani === null ? k.kalan : ondalikMetni(tamSayiya(kdvEkle(k.toplam, kdvOrani)) - tamSayiya(avans));
+  const tamAvans = kdvOrani === null ? k.avans : kdvEkle(k.avans, kdvOrani);
+  const kdvliToplam = kdvOrani === null ? k.toplam : kdvEkle(k.toplam, kdvOrani);
+  // 2480-1 a: kapalı siparişte plandaki avans gerçekleşen değeri aşmaz (KDV dahil, sipariş dövizinde); aşan kısım geçmiş notundadır.
+  const avans = k.kapali === true && ondalikKiyas(tamAvans, kdvliToplam) > 0 ? kdvliToplam : tamAvans;
+  const kalan = kdvOrani === null && k.kapali !== true ? k.kalan : ondalikMetni(tamSayiya(kdvliToplam) - tamSayiya(avans));
   const plan: { tur: 'avans' | 'vade'; vade: string; yontem: 'banka'; tutar: string }[] = [];
   if (ondalikKiyas(avans, '0') > 0) plan.push({ tur: 'avans', vade: baslangic, yontem: 'banka', tutar: avans });
   if (ondalikKiyas(kalan, '0') <= 0) return plan;
@@ -1388,7 +1435,11 @@ export const BIRLESIK_KALEM_SINIRI = 200;
 
 // 2414 a madde 4: birleşik talebin alanları kaynaklardan türetilir. İhtiyaç tarihi en erken, öncelik en yüksek olandır; birim boştur
 // (V4 a: harcama kalemin kaynak birimine yazılır). Üretim emri yalnız bütün kaynaklar aynı emre bağlıysa taşınır.
-export function birlesikTalep(id: string, kaynaklar: readonly Pick<Talep, 'no' | 'ihtiyacTarihi' | 'oncelik' | 'uretimEmriId'>[]): TalepYazimi {
+// 2611 a (Veri 2): kaynaklar aynı projeye bağlıdır (hepsi projesiz de olabilir); birleşik talep ortak projeyi taşır.
+export function birlesmeProjesiReddi(kaynaklar: readonly Partial<Pick<Talep, 'proje'>>[]): string | null {
+  return new Set(kaynaklar.map((t) => t.proje?.id ?? null)).size > 1 ? ILETILER.birlesmeProjesi : null;
+}
+export function birlesikTalep(id: string, kaynaklar: readonly (Pick<Talep, 'no' | 'ihtiyacTarihi' | 'oncelik' | 'uretimEmriId'> & Partial<Pick<Talep, 'proje'>>)[]): TalepYazimi {
   const tarihler = kaynaklar.flatMap((t) => (t.ihtiyacTarihi === null ? [] : [t.ihtiyacTarihi])).sort();
   const oncelik = ONCELIKLER[Math.max(...kaynaklar.map((t) => ONCELIKLER.indexOf(t.oncelik)))]!;
   const emirler = new Set(kaynaklar.map((t) => t.uretimEmriId));
@@ -1396,7 +1447,7 @@ export function birlesikTalep(id: string, kaynaklar: readonly Pick<Talep, 'no' |
   return {
     id, baslik: baslik.length > 160 ? `${baslik.slice(0, 159)}…` : baslik, birim: null, talepEdenKisiId: null, oncelik,
     ihtiyacTarihi: tarihler[0] ?? null, notlar: '', durum: 'taslak', iptalNedeni: '',
-    uretimEmriId: emirler.size === 1 ? [...emirler][0]! : null, agirliklar: null,
+    uretimEmriId: emirler.size === 1 ? [...emirler][0]! : null, projeId: kaynaklar[0]?.proje?.id ?? null, agirliklar: null,
     kalemler: [], teklifIstekleri: [], teklifler: [], karar: null, onaylar: [], hareketler: [], senaryolar: [],
   };
 }
@@ -1414,4 +1465,105 @@ export function ayirmaReddi(t: Pick<Talep, 'kaynaklar' | 'teklifler' | 'karar'>,
 export function kaynakKalemiReddi(eski: Pick<Talep, 'kaynaklar'>, yeniKalemler: readonly { id: string }[]): string | null {
   const kalan = new Set(yeniKalemler.map((k) => k.id));
   return (eski.kaynaklar ?? []).some((x) => x.kalemIdleri.some((id) => !kalan.has(id))) ? ILETILER.kaynakKalemiSilinmez : null;
+}
+
+// 2611 a: proje yalnız emre bağlı olmayan talepte seçilir; yeni seçilen proje aktiftir (değişmeyen eski proje durumu değişse de kalır).
+export function projeReddi(t: Pick<TalepYazimi, 'projeId' | 'uretimEmriId'>, eskiProjeId: number | null, projeAktif: boolean): string | null {
+  if (t.projeId == null) return null;
+  if (t.uretimEmriId !== null) return ILETILER.projeEmirli;
+  if (t.projeId !== eskiProjeId && !projeAktif) return ILETILER.projeAktifDegil;
+  return null;
+}
+export const projeHareketi = (eski: string | null, yeni: string | null): string => `Proje: ${eski ?? 'yok'} -> ${yeni ?? 'yok'}`;
+export const emirHareketi = (eski: string | null, yeni: string | null): string => `Üretim emri: ${eski ?? 'yok'} -> ${yeni ?? 'yok'}`;
+
+// 2637 a, 2638, 2611 a: sipariş satırının maliyet yolu; her satır tek yoldadır, hiçbiri iki kez sayılmaz ya da kaybolmaz. Sıra:
+// fason (iş emrine, isEmriFasonTutarlari), stok (stoğa girer, sarfla emre), emir (kalemin emri, 2624 KALEM_EMRI; Maliyet C1: yalnız
+// emrin projesi varsa), proje (talebin projesi), genel gider (kalan hizmet ve kartsız satır). Kartı bulunamayan satırın yolu bilinmiyor:
+// stok varsayılmaz (Maliyet, Mimar N2).
+export type SatirYolu = 'fason' | 'bilinmiyor' | 'stok' | 'emir' | 'proje' | 'genel_gider';
+export interface YolGirdisi { fason: boolean; kartTuru: string | null; kartBulunamadi?: boolean; emirId: number | null; emirProjeli: boolean; projeId: number | null }
+export function satirYolu(r: YolGirdisi): SatirYolu {
+  if (r.fason) return 'fason';
+  if (r.kartBulunamadi === true) return 'bilinmiyor';
+  if (r.kartTuru !== null && r.kartTuru !== 'hizmet') return 'stok';
+  if (r.emirId !== null && r.emirProjeli) return 'emir';
+  if (r.projeId !== null) return 'proje';
+  return 'genel_gider';
+}
+
+// Bir siparişin dağılımı. Emir ve proje yolunda değer gerçekleşen değerdir: hizmet teslim oranıyla (gerceklesenPay), kartsız satır teslim
+// kaydı olamadığı için sipariş tutarıyla (2611 varsayım 7). Masraf satırın sipariş malı payı kadardır ve o hedefte değer varsa girer
+// (2611 N2). Genel gider oranı (genelGiderOrani) Finans'ın belge tutarıyla çarptığı orandır. Mal 0 ise oran tanımsızdır: null (Veri 1); yolu
+// bilinmeyen satır varsa oran bilinemez: null. Stok yolunun masraf payı hiçbir hedefe verilmez (Maliyet N4, ayrı iş).
+export interface DagilimSatiri extends YolGirdisi { mal: number; miktar: number; teslim: number }
+export interface SiparisDagilimi { hedefler: { yol: 'emir' | 'proje'; hedefId: number; deger: number }[]; genelGiderOrani: number | null }
+export function siparisDagilimi(satirlar: readonly DagilimSatiri[], masraf: number): SiparisDagilimi {
+  const teslimVar = satirlar.some((x) => x.teslim > 0);
+  const tumMal = satirlar.reduce((t, x) => t + x.mal, 0);
+  const hedefler = new Map<string, { yol: 'emir' | 'proje'; hedefId: number; deger: number; pay: number }>();
+  for (const x of satirlar) {
+    const yol = satirYolu(x);
+    if (yol !== 'emir' && yol !== 'proje') continue;
+    const hedefId = yol === 'emir' ? x.emirId! : x.projeId!;
+    const a = `${yol}/${hedefId}`;
+    const h = hedefler.get(a) ?? { yol, hedefId, deger: 0, pay: 0 };
+    h.deger += x.kartTuru === null ? x.mal : gerceklesenPay(x.mal, 0, x.miktar > 0 ? x.teslim / x.miktar : 0, teslimVar);
+    h.pay += tumMal > 0 ? masraf * x.mal / tumMal : 0;
+    hedefler.set(a, h);
+  }
+  return {
+    hedefler: [...hedefler.values()].filter((h) => h.deger > 0).map((h) => ({ yol: h.yol, hedefId: h.hedefId, deger: h.deger + h.pay })),
+    genelGiderOrani: genelGiderOrani(satirlar, masraf, new Set()),
+  };
+}
+
+// 2637 a, 2600 3/3 b: siparişin (ya da belgede eşlenmemiş kısmının, 2642 b Maliyet C1) genel gidere giren oranı. Finans oranı belge
+// tutarıyla (mal + masraf varsayılır) çarpar. Pay: eşlenmemiş genel yol malı + masrafın genel ve fason yolundaki mal payı; fason malın
+// kendisi emre gider (isEmriFasonTutarlari), masrafı emre yazılmadığı için genel gidere girer. Payda: eşlenmemiş mal + masraf. Masraf
+// payı siparişin bütün malına oranlanır. Bütün malı 0, yolu bilinmeyen satırı olan ya da paydası 0 olan sipariş: null.
+export function genelGiderOrani(satirlar: readonly DagilimSatiri[], masraf: number, eslenen: ReadonlySet<number>): number | null {
+  const yollar = satirlar.map(satirYolu);
+  const tumMal = satirlar.reduce((t, x) => t + x.mal, 0);
+  if (tumMal <= 0 || yollar.includes('bilinmiyor')) return null;
+  const masrafli = satirlar.reduce((t, x, i) => t + (yollar[i] === 'genel_gider' || yollar[i] === 'fason' ? x.mal : 0), 0);
+  const kalan = satirlar.filter((_, i) => !eslenen.has(i));
+  const kalanMal = kalan.reduce((t, x) => t + x.mal, 0);
+  const kalanGenel = satirlar.reduce((t, x, i) => t + (!eslenen.has(i) && yollar[i] === 'genel_gider' ? x.mal : 0), 0);
+  const payda = kalanMal + masraf;
+  if (payda <= 0) return null;
+  return Math.round((kalanGenel + masraf * masrafli / tumMal) / payda * 1e6) / 1e6;
+}
+
+// 2642 b, 2646 a: belgenin genel gidere giren oranı. B belgenin KDV hariç tutarı, E sayılan eşlemelerin toplamı, G genel gider yolundaki
+// eşlenen tutar, S siparişin eşlenmemiş kısmının oranı (genelGiderOrani, eşlenen satırlar dışarıda; Maliyet C1: kalan çoğunlukla masraftır,
+// siparişin bütün oranıyla çarpılırsa fason masrafı kaybolur). Eşleme belgenin güncel siparişinde değilse (yol null, bayat) sayılmaz (Veri 1).
+// Sayılan eşleme yoksa S; varsa (G + (B - E) x S) / B. E > B, yolu bilinmeyen eşlenmiş satır ya da kalan varken S null ise oran null.
+// Tutarlar kuruşla toplanır (iki ondalık), kayan nokta birikmez.
+export type EslemeDurumu = 'yok' | 'kismi' | 'tam';
+export interface BelgeOranGirdisi { belgeTutari: string; kalanOrani: number | null; eslemeler: readonly { tutar: string; yol: SatirYolu | null }[] }
+export function belgeGenelGiderOrani(g: BelgeOranGirdisi): { oran: number | null; esleme: EslemeDurumu } {
+  const kurus = (x: string): number => Math.round(Number(x) * 100);
+  const sayilan = g.eslemeler.filter((x) => x.yol !== null);
+  if (sayilan.length === 0) return { oran: g.kalanOrani, esleme: 'yok' };
+  const b = kurus(g.belgeTutari);
+  const e = sayilan.reduce((t, x) => t + kurus(x.tutar), 0);
+  const kalan = b - e;
+  const esleme: EslemeDurumu = kalan > 0 ? 'kismi' : 'tam';
+  if (b <= 0 || kalan < 0 || sayilan.some((x) => x.yol === 'bilinmiyor') || (kalan > 0 && g.kalanOrani === null)) return { oran: null, esleme };
+  const genel = sayilan.filter((x) => x.yol === 'genel_gider').reduce((t, x) => t + kurus(x.tutar), 0);
+  return { oran: Math.round((genel + kalan * (g.kalanOrani ?? 0)) / b * 1e6) / 1e6, esleme };
+}
+
+// 2642 b: eşleme sürümü; kayıt silinmez, kaldırma bir kez yazılır, bu yüzden yalnız artar (Mimar notu).
+export const eslemeSurumu = (l: readonly { kaldirilma: string | null }[]): number => l.length + l.filter((x) => x.kaldirilma !== null).length;
+
+// 2642 b: kaydedilecek tam listenin denetimi (sunucu). Satır belgenin siparişinde olmalı, tekrar etmemeli, tutar pozitif ve iki ondalık;
+// toplam belge tutarını aşamaz. Hata iletisi ya da null.
+export function eslemeListesiHatasi(liste: readonly { siparisSatiriId: number; tutar: string }[], siparisSatirlari: ReadonlySet<number>, belgeTutari: string): string | null {
+  if (new Set(liste.map((x) => x.siparisSatiriId)).size !== liste.length) return ILETILER.eslemeTekrar;
+  if (liste.some((x) => !siparisSatirlari.has(x.siparisSatiriId))) return ILETILER.eslemeBaskaSiparis;
+  if (liste.some((x) => !/^\d+(\.\d{1,2})?$/.test(x.tutar) || Number(x.tutar) <= 0)) return ILETILER.eslemeTutar;
+  const toplam = liste.reduce((t, x) => t + Math.round(Number(x.tutar) * 100), 0);
+  return toplam > Math.round(Number(belgeTutari) * 100) ? ILETILER.eslemeAsim : null;
 }

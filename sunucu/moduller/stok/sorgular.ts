@@ -24,10 +24,10 @@ export {
   belgeNoVarMi, type GirisKontroluHam, girisKontroluSatirlari, malKabulAc, malKabulBul, malKabulSatiriYaz, type MalKabulSatirHam, malKabulSatirlari,
   type MalKabulSuzgeci, MAL_KABUL_SIRALAMASI, malKabulSay, malKabuller, gozAdaylari, konumunRafOlcusu, stokluMalzemeToplamlari, degerGrubuMalzemeToplamlari,
   type AySonuToplami, aySonuMalzemeToplamlari, type DegerlemeAlisOlayiHam, degerlemeAlisOlaylari, panelSayilari, gunlukHareketler, kritikMalzemeler,
-  malzemeKartiIzleri, aylikTuketim, tuketimTarihleri,
+  malzemeKartiIzleri, aylikTuketim, tuketimTarihleri, emirsizCikislar,
 } from './sorgular/malzeme/sorgular.ts';
 export {
-  isKutusuSayilari, stokMiktarlari, malzemeToplamlari, dusukStokSayisi, emirlerinNetSarfi, emirlerinFisHareketleri, emrinPartileri, type AkisHareketi,
+  isKutusuSayilari, stokMiktarlari, malzemeToplamlari, dusukStokSayisi, emirlerinNetSarfi, emirlerinSarfCikislari, emirlerinZincirdekiMiktari, statuluStoklar, statuSonHareketleri, emrinStatuAkisi, emirlerinFisHareketleri, emrinPartileri, type AkisHareketi,
   emrinAkisHareketleri, refakatCiktiPartiIdleri, type KartTeslimi, kartTeslimleri, type EmirTeslimSatiri, emirTeslimleri, type EmirIstekSatiri,
   emirIstekleri, partiGirisZamanlari, sonPartiler, emirTamamlamaKilidi, emirUretimGirisi, konumKodlari, bakiyeDefterFarki,
 } from './sorgular/emir/sorgular.ts';

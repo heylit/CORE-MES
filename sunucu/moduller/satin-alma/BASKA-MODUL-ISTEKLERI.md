@@ -78,3 +78,21 @@ Yok.
 
 ## Malzemeler (kart #1192)
 - `malzemeAra` (sunucu/moduller/malzemeler/servis.ts) metni kategori adında da arasın: `katalogMalzemeAra` `ARAMA_KOSULU` bugün yalnız `stok_kodu`, ad ve `no`ya bakar; `kt.ad ILIKE $1` eklenmesi istenir. Neden: talepteki açılır liste "Malzemeler ve Hizmetler"deki gibi kategoriyle de arasın. Gelene kadar kategori yalnız satırda görünür.
+
+## Proje maliyeti (2611 a)
+- `proje-maliyet/servis.ts` emre bağlı olmayan projeli alımı `satin-alma/disari.ts` `projeSatinAlmaTutarlari(db, projeIdler)` ile okusun. Dönen değer proje başına ve para birimi başına tutardır, KDV hariç. Yalnız stoğa girmeyen satırlar sayılır: hizmet kartlı satır teslim değeriyle, masraf da payı kadar. Proje maliyeti bu tutarı bugünün kuruyla TL'ye çevirir (N1). Neden: emre bağlı olmayan alım bugün projeye ulaşmıyor. Gelene kadar tutar hesaplanır ama ekranda görünmez.
+
+- 2638 (Maliyet K1): emirli talepteki hizmet ve kartsız satır projesi olan emre yazılır; `emirHizmetTutarlari(db, uretimEmriIdler)` emir başına, para birimi başına tutar verir (KDV hariç, masraf payıyla). Proje maliyeti tutarı emrin projesine kendisi bağlar; `projeSatinAlmaTutarlari` bu satırları saymaz, iki kez sayılmaz. Projesi olmayan emrin satırı genel gidere gider (Maliyet C1). Tutar fiyattır: ekranda yalnız maliyet okuma yetkisiyle gösterilir (Güvenlik N1).
+
+## Finans (2637 a, Mimar K1: çekme modeli)
+- Finans `genelGiderOraniCozucusu` kaydını açar; kablolama `satin-alma/disari.ts` `siparisGenelGiderOranlari(db, siparisler)` ile bağlar (kalıp `siparisOzetiCozucusu`). Anahtar `talepId:teklifId`; değer siparişin genel gidere giren payı, 0-1, altı ondalık; malı olmayan siparişte null; satırı olmayan sipariş haritada yoktur (bilinmiyor). Talep iptal olsa da oran verilir (fatura gerçektir). Finans oranı satıra yazmaz, okurken çeker; itme yoktur (2631 konusuz).
+
+## İdari İşler (2614 1/2 a)
+- `POST /idari-isler/talepler/:id/satin-almaya-cevir` ucu ve düğmesi. Uç `satin-alma/disari.ts` `idariTaleptenTalepAc(db, k, {idariTalepId, idariTalepNo, baslik, notlar, talepEdenKisiId})` çağırır. Talep eden, idari talebi açan kişidir.
+  - Uçun yetkisi idari tarafın `talep-yonet` işlemidir. Satın alma yetkisini çağrılan işlev kendisi denetler: `satin-alma.talep-ac` ya da `yaz` yoksa 403 döner. Aynı idari talep ikinci kez çevrilirse 409 döner.
+  - Güvenlik K2'nin istediği "uç üzerinden" testi İdari İşler tesliminde ya da bağlamada yazılır.
+- Talep ekranında bağlı satın alma talebinin numarası ve durumu `idariTalepSatinAlmalari(db, idariIdler)` ile okunur.
+
+## Finans (2642 b, 2646 a, 2651 b: fatura eşlemesi)
+- Kablolama: `genelGiderOraniCozucusu` <- `satin-alma/disari.ts` `belgeGenelGiderOranlari(db, belgeIdler)`; değer `{ oran, esleme: 'yok' | 'kismi' | 'tam' }`. Bulunmayan, siparişsiz ve iptal belge haritada yok. Bağ satırı Finans tesliminde (kablolama.ts, ortak dosya).
+- 2671 b, 2675: eşleme ekranı Finans'ındır (`/finans/fatura-eslemesi/:belgeId`); Satın Alma'nın uçlarını HTTP ile çağırır (GET ve POST `/satin-alma-fatura-eslemeleri/:belgeId`, tipler `paylasilan/sozlesme/satin-alma.ts`, `SatinAlmaUclari`). Uç yetkisi Finans yetkisidir. Rozet `esleme` değerinden.

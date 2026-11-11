@@ -88,8 +88,10 @@ const LISTELER = {
   kurCifti: { secim: `rtrim(para_birimi) AS "paraBirimi", ${tarihMetni('tarih')} AS tarih, alis, satis, surum`, kaynak: 'finans_kur_cifti', iptal: 'true', sira: 'para_birimi, tarih' },
   oran: { secim: `id, tur, rtrim(para_birimi) AS "paraBirimi", ${tarihMetni('gecerlilik_baslangic')} AS "gecerlilikBaslangic", yillik_yuzde AS "yillikYuzde", "not", ${zamanMetni('olusturma')} AS olusturma`, kaynak: 'finans_oran', iptal: 'true', sira: 'id' },
   faiz: { secim: `id, rtrim(para_birimi) AS "paraBirimi", ${tarihMetni('gecerlilik_baslangic')} AS "gecerlilikBaslangic", aylik_yuzde AS "aylikYuzde", ${zamanMetni('olusturma')} AS olusturma`, kaynak: 'finans_faiz', iptal: 'true', sira: 'id' },
-  genelGider: { secim: `id, ${tarihMetni('gecerlilik_baslangic')} AS "gecerlilikBaslangic", aylik_genel_gider AS "aylikGenelGider", aylik_makine_saati AS "aylikMakineSaati",
-    round(aylik_genel_gider / aylik_makine_saati, 4)::text AS "saatBasi", amortisman_dahil AS "amortismanDahil", aciklama, ${zamanMetni('olusturma')} AS olusturma`,
+  genelGider: { secim: `id, ${tarihMetni('gecerlilik_baslangic')} AS "gecerlilikBaslangic", CASE WHEN personel_gizli THEN NULL ELSE aylik_genel_gider END AS "aylikGenelGider",
+    aylik_makine_saati AS "aylikMakineSaati", CASE WHEN personel_gizli THEN NULL ELSE round(aylik_genel_gider / aylik_makine_saati, 4)::text END AS "saatBasi", personel_gizli AS gizli, amortisman_dahil AS "amortismanDahil", aciklama, ${zamanMetni('olusturma')} AS olusturma,
+    kaynak, ${tarihMetni('donem_baslangic')} AS "donemBaslangic", ${tarihMetni('donem_bitis')} AS "donemBitis", kira::text, amortisman::text,
+    dolayli_personel::text AS "dolayliPersonel", emilmeyen_dogrudan::text AS "emilmeyenDogrudan", diger::text, projesiz_satin_alma::text AS "projesizSatinAlma", elle_ek::text AS "elleEk", eksik`,
     kaynak: 'finans_genel_gider_orani', iptal: 'true', sira: 'gecerlilik_baslangic, id' },
   kdv: { secim: `oran, ${tarihMetni('gecerlilik_baslangic')} AS "gecerlilikBaslangic", ${tarihMetni('gecerlilik_bitis')} AS "gecerlilikBitis", surum`, kaynak: 'finans_kdv_orani', iptal: 'true', sira: 'oran, gecerlilik_baslangic' },
   duzenli: { secim: DUZENLI, kaynak: 'finans_duzenli_odeme', iptal: 'true', sira: 'id' },
@@ -296,8 +298,8 @@ export const genelGiderOraniEkle = (db: Db, g: { gecerlilikBaslangic: string; ay
      VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`, [g.gecerlilikBaslangic, g.aylikGenelGider, g.aylikMakineSaati, g.amortismanDahil, g.aciklama, kisi]);
 // Faizle aynı kural: o güne kadar başlamış son satır geçerlidir, aynı güne sonra girilen öncekini düzeltir.
 export const sonGenelGiderOrani = (db: Db, gun: string) =>
-  db.tek<{ aylikGenelGider: string; aylikMakineSaati: string; amortismanDahil: boolean }>(
-    `SELECT aylik_genel_gider::text AS "aylikGenelGider", aylik_makine_saati::text AS "aylikMakineSaati", amortisman_dahil AS "amortismanDahil"
+  db.tek<{ aylikGenelGider: string; aylikMakineSaati: string; amortismanDahil: boolean; gizli: boolean }>(
+    `SELECT aylik_genel_gider::text AS "aylikGenelGider", aylik_makine_saati::text AS "aylikMakineSaati", amortisman_dahil AS "amortismanDahil", personel_gizli AS gizli
        FROM finans_genel_gider_orani WHERE gecerlilik_baslangic <= $1::date ORDER BY gecerlilik_baslangic DESC, id DESC LIMIT 1`, [gun]);
 // Kur ve faiz şeridi: o güne kadar geçerli son kur ve faiz, son yazanı ve zamanıyla (düzeltme de giriş sayılır).
 // Önceki değer şeridin artış/azalış işaretidir (2083): kurda bir önceki tarihli satır, çünkü aynı günün düzeltmesi eski değeri tutmaz;
@@ -613,10 +615,49 @@ export const siparisOdemeleriOku = (db: Db, talepIdler: readonly string[], tekli
    ORDER BY o.satin_alma_talep_id, o.satin_alma_teklif_id, o.sira`, [talepIdler, teklifIdler]);
 export const siparisOdemeleriniSil = (db: Db, talepId: string, teklifId: string) =>
   db.sorgu('DELETE FROM finans_siparis_odemesi WHERE satin_alma_talep_id = $1 AND satin_alma_teklif_id = $2', [talepId, teklifId]);
-export async function siparisOdemesiEkle(db: Db, o: SiparisOdemesiSatiri, kisiId: number, kaynak: 'elle' | 'otomatik'): Promise<void> {
-  await db.sorgu(`INSERT INTO finans_siparis_odemesi (satin_alma_talep_id, satin_alma_teklif_id, siparis_no, sira, tur, vade, yontem, firma_id, para_birimi, tutar, olusturan_id, kaynak)
-    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`, [o.talepId, o.teklifId, o.siparisNo, o.sira, o.tur, o.vade, o.yontem, o.firmaId, o.paraBirimi, o.tutar, kisiId, kaynak]);
+// 2540 (Veri 1): plan satırı (talep, teklif, sıra) anahtarıyla yazılır; değişmeyen satıra dokunulmaz (değişiklik defterine yalnız fark düşer).
+export async function siparisOdemesiYaz(db: Db, o: SiparisOdemesiSatiri, kisiId: number, kaynak: 'elle' | 'otomatik'): Promise<void> {
+  await db.sorgu(`INSERT INTO finans_siparis_odemesi AS m (satin_alma_talep_id, satin_alma_teklif_id, siparis_no, sira, tur, vade, yontem, firma_id, para_birimi, tutar, olusturan_id, kaynak)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+    ON CONFLICT (satin_alma_talep_id, satin_alma_teklif_id, sira) DO UPDATE SET siparis_no = EXCLUDED.siparis_no, tur = EXCLUDED.tur, vade = EXCLUDED.vade,
+      yontem = EXCLUDED.yontem, firma_id = EXCLUDED.firma_id, para_birimi = EXCLUDED.para_birimi, tutar = EXCLUDED.tutar, kaynak = EXCLUDED.kaynak
+    WHERE (m.siparis_no, m.tur, m.vade, m.yontem, m.firma_id, m.para_birimi, m.tutar, m.kaynak)
+      IS DISTINCT FROM (EXCLUDED.siparis_no, EXCLUDED.tur, EXCLUDED.vade, EXCLUDED.yontem, EXCLUDED.firma_id, EXCLUDED.para_birimi, EXCLUDED.tutar, EXCLUDED.kaynak)`,
+  [o.talepId, o.teklifId, o.siparisNo, o.sira, o.tur, o.vade, o.yontem, o.firmaId, o.paraBirimi, o.tutar, kisiId, kaynak]);
 }
+// Plandan çıkan satırlar (sıra yeni satır sayısından büyük) silinir.
+export const siparisOdemeleriniKirp = (db: Db, talepId: string, teklifId: string, satirSayisi: number) =>
+  db.sorgu('DELETE FROM finans_siparis_odemesi WHERE satin_alma_talep_id = $1 AND satin_alma_teklif_id = $2 AND sira > $3', [talepId, teklifId, satirSayisi]);
+
+// 2540: tedarikçi alacağı (kalanı kapatılmış siparişte gerçekleşen değeri aşan avans). Sipariş başına en çok bir kayıt.
+export type TedarikciAlacagiDurumu = 'teyit_bekliyor' | 'acik' | 'dusuldu' | 'kapandi';
+export interface TedarikciAlacagiSatiri {
+  id: number; talepId: string; teklifId: string; siparisNo: string; firmaId: number; paraBirimi: string; tutar: string; durum: TedarikciAlacagiDurumu;
+  aciklama: string | null; durumDegistirenId: number | null; durumZamani: string | null; olusturanId: number; olusturma: string; surum: number;
+}
+const TEDARIKCI_ALACAGI = `a.id, a.satin_alma_talep_id AS "talepId", a.satin_alma_teklif_id AS "teklifId", a.siparis_no AS "siparisNo", a.firma_id AS "firmaId",
+  rtrim(a.para_birimi) AS "paraBirimi", a.tutar::text AS tutar, a.durum, a.aciklama, a.durum_degistiren_id AS "durumDegistirenId",
+  ${zamanMetni('a.durum_zamani')} AS "durumZamani", a.olusturan_id AS "olusturanId", ${zamanMetni('a.olusturma')} AS olusturma, a.surum`;
+export const siparisAlacagiOku = (db: Db, talepId: string, teklifId: string) => db.tek<TedarikciAlacagiSatiri>(
+  `SELECT ${TEDARIKCI_ALACAGI} FROM finans_tedarikci_alacagi a WHERE a.satin_alma_talep_id = $1 AND a.satin_alma_teklif_id = $2 FOR UPDATE`, [talepId, teklifId]);
+export const tedarikciAlacagiOku = (db: Db, id: number) => db.tek<TedarikciAlacagiSatiri>(
+  `SELECT ${TEDARIKCI_ALACAGI} FROM finans_tedarikci_alacagi a WHERE a.id = $1`, [id]);
+export const tedarikciAlacaklari = (db: Db) => db.sorgu<TedarikciAlacagiSatiri>(
+  `SELECT ${TEDARIKCI_ALACAGI} FROM finans_tedarikci_alacagi a ORDER BY (a.durum IN ('teyit_bekliyor', 'acik')) DESC, a.id DESC`);
+export const tedarikciAlacagiEkle = (db: Db, g: { talepId: string; teklifId: string; siparisNo: string; firmaId: number; paraBirimi: string; tutar: string }, kisiId: number) =>
+  db.sorgu(`INSERT INTO finans_tedarikci_alacagi (satin_alma_talep_id, satin_alma_teklif_id, siparis_no, firma_id, para_birimi, tutar, olusturan_id)
+    VALUES ($1, $2, $3, $4, $5, $6, $7)`, [g.talepId, g.teklifId, g.siparisNo, g.firmaId, g.paraBirimi, g.tutar, kisiId]);
+// Yalnız teyit bekleyen kaydın tutarı kendiliğinden değişir ya da kayıt kalkar; açılmış ya da kapanmış kayıt değişmez.
+export const bekleyenAlacakTutariYaz = (db: Db, id: number, tutar: string) =>
+  db.sorgu(`UPDATE finans_tedarikci_alacagi SET tutar = $2, surum = surum + 1 WHERE id = $1 AND durum = 'teyit_bekliyor' AND tutar <> $2`, [id, tutar]);
+export const bekleyenAlacagiSil = (db: Db, id: number) =>
+  db.sorgu(`DELETE FROM finans_tedarikci_alacagi WHERE id = $1 AND durum = 'teyit_bekliyor'`, [id]);
+export const tedarikciAlacagiDurumYaz = (db: Db, g: { id: number; surum: number; eski: TedarikciAlacagiDurumu; durum: TedarikciAlacagiDurumu; aciklama: string | null }, kisiId: number) =>
+  db.tek<{ id: number }>(`UPDATE finans_tedarikci_alacagi SET durum = $4, aciklama = $5, durum_degistiren_id = $6, durum_zamani = now(), surum = surum + 1
+    WHERE id = $1 AND surum = $2 AND durum = $3 RETURNING id`, [g.id, g.surum, g.eski, g.durum, g.aciklama, kisiId]);
+// Satın almanın karar kaydı için: verilen siparişlerden alacağı (herhangi bir durumda) olanlar.
+export const alacakliSiparisler = (db: Db, talepId: string, teklifIdler: readonly string[]) => db.sorgu<{ teklifId: string }>(
+  `SELECT satin_alma_teklif_id AS "teklifId" FROM finans_tedarikci_alacagi WHERE satin_alma_talep_id = $1 AND satin_alma_teklif_id = ANY($2::uuid[])`, [talepId, teklifIdler]);
 // 2132-6: planın bütün satırları tekliften kurulduysa (otomatik) true; plan yoksa ya da bir satırı elle yazıldıysa false.
 export const siparisPlaniOtomatikMi = async (db: Db, talepId: string, teklifId: string): Promise<boolean> => (await db.tek<{ v: boolean }>(
   `SELECT COALESCE(bool_and(kaynak = 'otomatik'), false) AS v FROM finans_siparis_odemesi WHERE satin_alma_talep_id = $1 AND satin_alma_teklif_id = $2`,

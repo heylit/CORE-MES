@@ -3,16 +3,18 @@ import { islemVarMi } from '#cekirdek/yetki.ts';
 import {
   ADIMLI_OKUMA_ISLEMLERI, adimCevabi, adimNotuGovdesi, adimParametresi, adimTamamlaGovdesi, emirAyrintiCevabi, emirCevabi,
   emirParametresi, izlemeListeCevabi, bitenEmirlerCevabi, bitenEmirlerSorgusu, adimliBitenlerCevabi, adimliBitenlerSorgusu,
-  emirlerSorgusu,
+  emirlerSorgusu, emirTopluGuncelleCevabi, emirTopluGuncelleGovdesi,
   adimKaynagiGovdesi, uretimYeriGovdesi, fasonFirmalariCevabi, adimliEmirCevabi, adimliIptalGovdesi, adimliListeCevabi, adimliListeSorgusu, adimliOzetCevabi, fasonGidisGovdesi, siradakiFasonCevabi,
   asimlarCevabi, fasonHareketiCevabi, isEmriParametresi, oncelikGovdesi, ozetCevabi, partiBirlestirGovdesi, partiBolCevabi, partiBolGovdesi, planaAlGovdesi,
   birlesmePlaniGovdesi, ekAdimGovdesi, ekAdimKaldirGovdesi, hazirlikCevabi, hazirlikMuafiyetiGovdesi, hazirlikOzetiCevabi, hazirlikOzetiSorgusu, refakatKartiCevabi, katilimCevabi, rotasizAdimDuzenleGovdesi, rotasizAdimEkleGovdesi, rotasizAdimSilGovdesi, rotasizEmirCevabi, rotasizEmirGovdesi, acilisSecenekleriCevabi, acilisSecenekleriSorgusu, makineDevralGovdesi, makineEkleGovdesi, adimPaylariCevabi, durusDagilimiCevabi, sonOlaylarCevabi, sonOlaylarSorgusu, gunlukUretimCevabi, panelSorgusu, sureOzetiCevabi,
   hataliCevabi, hataliGovdesi, hataliListeCevabi, hataliListeSorgusu, reworkAdimiGovdesi,
   disIslemEmriAcGovdesi, disIslemEmriCevabi, disIslemEmriIptalGovdesi, disIslemEmriParametresi,
-  emirKapatGovdesi, kapanisCevabi, kapanisGeriAcGovdesi, kapanisListeCevabi, kapanislarSorgusu, kapanisMuafGovdesi, kapanisOnayGovdesi, kapanisRetGovdesi,
+  arsivOnizlemeCevabi, arsiveAlCevabi, arsiveAlGovdesi, emirKapatGovdesi, kapanisCevabi, kapanisGeriAcGovdesi, kapanisListeCevabi, kapanislarSorgusu, kapanisMuafGovdesi, kapanisOnayGovdesi, kapanisRetGovdesi,
 } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { aramaUclari } from './arama/uclar.ts';
 import * as isEmri from './is-emri-servis.ts';
+import { emirleriTopluGuncelle } from './toplu-guncelle.ts';
+import { ARSIV_YETKISI, arsiveAl, arsivOnizleme } from './arsiv.ts';
 import { dieAc, dieIptal, dieOku } from './dis-islem-emri.ts';
 import { hataliKaydet, hataliKayitlari } from './hatali-parca.ts';
 import { hazirlik, hazirliklar, muafiyetVer } from './hazirlik.ts';
@@ -283,6 +285,30 @@ const adimliUclar = [
       return { emir: await isEmri.adimliAyrinti(db, parametre.id) };
     },
   }),
+  // 2721: başlamış emir arşive alınır; önizleme ve komut aynı yetkiyle (2721 3/3), engel ikisinde de aynı kuraldan.
+  uc({
+    yontem: 'GET',
+    yol: '/adimli-emirler/:id/arsiv-onizleme',
+    yetki: ARSIV_YETKISI,
+    parametre: emirParametresi,
+    cevap: arsivOnizlemeCevabi,
+    isle: ({ db, parametre }) => arsivOnizleme(db, parametre.id),
+  }),
+  uc({
+    yontem: 'POST',
+    yol: '/adimli-emirler/:id/arsive-al',
+    yetki: ARSIV_YETKISI,
+    tekrarKorumali: true,
+    parametre: emirParametresi,
+    govde: arsiveAlGovdesi,
+    cevap: arsiveAlCevabi,
+    isle: async ({ db, kullanici, parametre, govde }) => {
+      await arsiveAl(db, kullanici, parametre.id, govde.surum);
+      return { emir: await isEmri.adimliAyrinti(db, parametre.id) };
+    },
+  }),
+  // Excel ile var olan emirleri güncelleme (2627, 2704): satırlar tek kayıt komutlarından geçer; tek transaction, istek kimliği zorunlu.
+  uc({ yontem: 'POST', yol: '/adimli-emirler/toplu-guncelle', yetki: 'uretim-emirleri.yaz', tekrarKorumali: true, govde: emirTopluGuncelleGovdesi, cevap: emirTopluGuncelleCevabi, isle: ({ db, kullanici, govde }) => emirleriTopluGuncelle(db, kullanici, govde) }),
   // 163 a: başlamamış emrin önceliği senaryo açmadan değişir; eski ve yeni değer kim ve ne zamanla kayda girer.
   uc({
     yontem: 'POST',

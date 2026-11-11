@@ -35,6 +35,8 @@ export interface Personel extends Kayit {
 export interface Departman extends Kayit {
   kind: 'dept';
   ad?: string; kod?: string; giderHesabi?: string; yoneticiId?: string; butce?: number; aciklama?: string;
+  // 2647 a: yoksa işaretlenmedi (dolaylı personel toplamı bilinmez).
+  dogrudanIscilik?: boolean;
 }
 
 // Pozisyon tanımı (2177-3 a): departmana bağlı unvan; personelin pozisyon alanı bu adı metin olarak taşır.

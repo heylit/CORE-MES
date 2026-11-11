@@ -309,12 +309,20 @@ export const MASRAF_YOK = 'Masraf kaydı bulunamadı.';
 export const MASRAF_IPTALLI = 'Masraf kaydı zaten iptal edilmiş.';
 export const MASRAF_GELECEK = 'Masraf tarihi bugünden ileri olamaz.';
 export const TUTAR_GECERSIZ = 'Tutar sıfırdan büyük, en çok iki kuruş basamaklı olmalı.';
+export const KDV_GECERSIZ = 'KDV sıfır ya da daha büyük, en çok iki kuruş basamaklı ve KDV dahil tutardan küçük olmalı.';
 
 // IDR-27: tutar sıfırdan büyük, en çok iki kuruş basamaklı ve sınır içinde; masraf tarihi bugünden ileri değil.
-export function masrafReddi(g: { tutar: string; tarih: string }, bugun: string): { ileti: string; alan: string } | null {
+// IDR-35 (2712 a): tutar KDV dahildir; KDV boş olabilir, yazılırsa sıfır ya da büyük, iki kuruş basamaklı ve tutardan küçüktür.
+export function masrafReddi(g: { tutar: string; kdv?: string | null; tarih: string }, bugun: string): { ileti: string; alan: string } | null {
   if (g.tarih > bugun) return { ileti: MASRAF_GELECEK, alan: 'tarih' };
   if (g.tarih < TARIH_EN_ERKEN) return { ileti: TARIH_ESKI, alan: 'tarih' };
-  return tutarGecerliMi(g.tutar, TUTAR_EN_COK) ? null : { ileti: TUTAR_GECERSIZ, alan: 'tutar' };
+  if (!tutarGecerliMi(g.tutar, TUTAR_EN_COK)) return { ileti: TUTAR_GECERSIZ, alan: 'tutar' };
+  return g.kdv === undefined || g.kdv === null || kdvGecerliMi(g.kdv, g.tutar) ? null : { ileti: KDV_GECERSIZ, alan: 'kdv' };
+}
+
+function kdvGecerliMi(kdv: string, tutar: string): boolean {
+  const kurus = kdv.split('.')[1] ?? '';
+  return !kdv.startsWith('-') && kurus.length <= 2 && Number(kdv) >= 0 && Number(kdv) < Number(tutar);
 }
 
 function tutarGecerliMi(tutar: string, enCok: string): boolean {

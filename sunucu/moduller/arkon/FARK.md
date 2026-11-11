@@ -948,3 +948,27 @@ Bu tur şunları varsaydı:
 
 ## Onaylı kararlar
 - 1765 b + teyit: arkon_kayit aylık bölümlenir; arkon_tmi_yansima bağı değişir; tetikler her bölüme kurulur.
+- 2520-3 (B-2499-9): Hazırlık "Çizim Merkezi'nden ekle" dosyayı yüklemeyen paket yazarında 404 veriyordu (ekle kişisiz bağlar, 732 a; okuma yalnız yükleyene ya da kayıtlı paketi okuyabilene açıktı). Okuma kuralına merkezden alma rolü + etkin belgenin yayındaki dosyası eklendi; belge-merkezi `yayindaOzetMi` okuması kullanılır. Taslak ve arşivdeki merkez dosyası bu yolla okunmaz.
+## İş emrine özel hazırlık maddesi (kart 2227, karar 2227-1 b)
+- Üretim Hazırlık, rota talimatı dışında işe özgü hazırlık maddesi ekler, tamamlar, geri alır ve kaldırır (Yayınla sekmesi, hazırlık matrisinin altında, `yeni/hazirlik/EkHazirlikMaddeleri.tsx`). Matriste "Ek madde" sütunu yalnız uyarır; başlatma değişmez.
+- Göç `20261110032643_arkon_hazirlik_maddesi.sql`: iki yeni boş tablo (madde ve olayı), yalnız ekleme; iş emrine yabancı anahtar bilinçli yok (arkon_kuyruk_sirasi gerekçesi).
+- Uçlar `/arkon/hazirlik-maddeleri` (okuma: hazırlık, planlama, yönetici; yazma: hazırlık, yönetici). Arkon rolüne değil TMI işlemine bağlı; yeni işlem yok.
+- Matris bağı: `disari.ts isEmriEkMaddeDurumlari` -> uretim-emirleri `ekMaddeHazirlikCozucusu` (kablolama.ts).
+
+Bu tur şunları varsaydı:
+1. Madde iş emri başınadır; aynı emrin öteki iş emirlerine kopyalanmaz.
+2. Veri kapsamı (iş merkezi kısıtı) uygulanmaz: madde metni ve iş emri numarası dışında veri dönmez; kısıtlı hazırlıkçı başka merkezin iş emrine madde ekleyebilir.
+3. Bitmiş iş emrinde madde eklenmez ve işaretlenmez; liste okunur.
+4. Kaldırılan madde silinmez, son olayı "kaldır" olur ve listeden çıkar.
+
+
+## Eksik iş: sayımı geride kalan önceki adım (kart 2769; karar 2756 b)
+- Yeni eksik iş türü `geride-onceki`: uretim-emirleri'nin sıra dışı başlatma kaydı (2768) olan açık adım, önceki adımın sayımı yetişene kadar Eksik işler bölümünde ve terminalde görünür. Değer, önceki adımda sayılmamış en az adettir: adımın kendi girdisinin (sağlam + hurda) öncülden gelenden fazlası ("N adet sayılmadı"). Akışlıda devir adedine eksik ayrı tutulur (kalan adet, "devir için N eksik"; Atölye koşulu: o parçalar henüz üretilmemiş olabilir). Bekleyen öncül bitmedikçe olay açıktır ("önceki adım bitmedi"). Ekranda bu türde "adet kaldı" alt metni gösterilmez.
+- Okuma `uretim-emirleri/disari.ts geridekiOnculler` (öncülün güncel sayımı); kural `eksik-is/kurallar.ts gerideOnceki`. Adım başına en büyük (sayılmayan ya da devir eksiği) öncül tek olay olur.
+- Ayar `arkon.eksik-geride-onceki` (açık/kapalı, varsayılan açık); eşiği yoktur, sözleşmedeki `esikler` değişmez. Bildirim türü `arkon.geride-onceki` (amir, hazırlık; hatırlatma).
+- Göç `20261110095409_arkon_eksik_is_geride_onceki.sql`: `arkon_eksik_is_olayi_tur_degeri` kısıtına yeni değer (yalnız genişletir).
+
+Bu tur şunları varsaydı:
+1. Olay ilk sıra dışı başlatmadan beri açıktır (dayanak ilk kayıt); duraklamadan dönüş yeni kayıt yazmaz.
+2. Önceki adım bitince ya da sayım yetişince olay kapanır; sıra dışı kayıt silinmez, yalnız iz olarak kalır.
+3. Ayar kapalıyken açık olaylar kapanır; açılınca koşul sürüyorsa yeniden açılır.

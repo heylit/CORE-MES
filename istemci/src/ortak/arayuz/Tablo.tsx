@@ -153,7 +153,7 @@ function AracCubugu<S>({ arac, sutunlar, satirlar }: { arac: TabloAraci<S>; sutu
 // Eşik ekran genişliği değildir: aynı ekranda dar tablo sığar, geniş tablo sığmaz; ölçü içerikten gelir.
 function TabloIskeleti<S>({ etiket, sutunlar }: { etiket: string; sutunlar: readonly Sutun<S>[] }) {
   return (
-    <div className="tc-tablo-kap" aria-busy="true">
+    <div className="tc-tablo-kap" data-olcer="" aria-busy="true">
       <span className="tc-gizli-etiket" role="status">Yükleniyor</span>
       <table className="tc-tablo tc-tablo-iskelet" aria-label={etiket} aria-hidden="true">
         <thead><tr>{sutunlar.map((s) => <th key={s.anahtar} scope="col">{s.baslik}</th>)}</tr></thead>
@@ -324,7 +324,7 @@ export function Tablo<S>({
   return (
     <>
       {ust}
-      <div ref={kap} className="tc-tablo-kap" data-kip={kart ? 'kart' : undefined} aria-busy={mesgul || undefined}>
+      <div ref={kap} className="tc-tablo-kap" data-olcer="" data-kip={kart ? 'kart' : undefined} aria-busy={mesgul || undefined}>
         {/* Kart kipinde sütun başlığı görünmez; sıralama düğmeleri kartların üstüne taşınır. */}
         {kart && siralanan.length > 0 && (
           <div className="tc-tablo-siralar" role="group" aria-label="Sıralama">

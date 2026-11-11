@@ -1,7 +1,7 @@
 import { KOD_ONEKI } from '#paylasilan/kod-sozlugu.ts';
 import { HAZIRLIK_MADDELERI, MUAF_TUTULABILEN_MADDELER, hazirlikUyarirMi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import type {
-  CalismaDurumu, EmirDurumu, EmirIlerlemesi, EmirTuru, HazirlikMaddesi, IlerlemeEsasi, KapanisAsamasi, KapanisMaddeBilgisi, KapanisMaddeHali, KapanisMaddesi, KapanisOnayi,
+  CalismaDurumu, EmirDurumu, EmirIlerlemesi, EmirTuru, HataliKarari, HazirlikMaddesi, IlerlemeEsasi, KapanisAsamasi, KapanisMaddeBilgisi, KapanisMaddeHali, KapanisMaddesi, KapanisOnayi,
 } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import type { Islem } from '#paylasilan/islemler.ts';
 import type { TalimatAsamasi } from '#paylasilan/sozlesme/talimat-asamasi.ts';
@@ -338,6 +338,45 @@ export function adimliIptalIhlali(durum: EmirDurumu, arsiv: boolean, baslamisIsE
   return acikKolVar ? ADIMLI_IPTAL_KOLLU : null;
 }
 
+// 2721: başlamış emir silinmez, arşive alınır: çalışan iş durur, sayılanlar ve tüketim kalır, emir iptal olur ve kapanışı açık kalır.
+// Hiç başlamamış emir için iptal yeter; açık kolu olan emir iptal gibi reddedilir. Fasondaki parça engel değil, uyarıdır (2721 2/3 b).
+export const ARSIV_DURUMU = 'Yalnız açık (taslak, planlı, başlamış) emir arşive alınır.';
+export const ARSIV_BASLAMAMIS = 'Hiç adımı başlamamış emir arşive alınmaz; iptal edin.';
+export const ARSIV_FASONDA = 'Fasondaki parçaların dış işlemi açık kalır.';
+// 2731 b: kararsız hatalı parça arşivi durdurmaz; arşivde hurda, red ve kabul kararı verilir, rework kapalıdır (iş durmuştur).
+export const ARSIV_HATALI_ACIK = (adet: number): string =>
+  `${String(adet)} hatalı parça kaydı kararsız; arşivde Kalite Merkezi hurda ya da kabul kararı verir, rework kapalıdır.`;
+export const HATALI_ARSIVDE_REWORK = 'Arşivdeki emirde rework kararı verilmez; hurda, red ya da kabul verin.';
+export const ARSIV_GIRIS =
+  'İptalden farkı: iş durur, sayılanlar ve tüketim kalır, kapanış açık kalır. Tezgahtaki parçaları ve refakat kartlarını amire teslim edin.';
+export const ARSIV_YARI_MAMUL = 'Tezgahtaki yarı mamulün emir rezervesi kalkar; parça Stok > Sahipsiz statülü stok listesine düşer.';
+export interface ArsivDurumu {
+  durum: EmirDurumu; arsiv: boolean; baslamisAdimVar: boolean; acikKolVar: boolean;
+}
+export function arsivIhlali(d: ArsivDurumu): string | null {
+  if (acikEmirIhlali(d.durum, d.arsiv) !== null) return ARSIV_DURUMU;
+  if (!d.baslamisAdimVar) return ARSIV_BASLAMAMIS;
+  return d.acikKolVar ? ADIMLI_IPTAL_KOLLU : null;
+}
+// Arşivdeki (iptal ve kapanışı açılmış) emirde fason dönüşü yazılır; hiç başlamamış iptal emrin kapanışı yoktur.
+export const arsivdeFasonDonusuAcik = (durum: EmirDurumu, eskiArsiv: boolean, kapanisVar: boolean): boolean =>
+  durum === 'iptal' && !eskiArsiv && kapanisVar;
+// Önizlemenin cümleleri: ekran yalnız bunları yazar.
+export function arsivUyarilari(d: {
+  calisan: readonly { opNo: number | null; operator: string | null }[]; saglam: { opNo: number; adet: number } | null; hurda: number; kararBekleyen: number; fasondaAdet: number; hataliAcik: number;
+}): string[] {
+  const l = [ARSIV_GIRIS];
+  for (const c of d.calisan) l.push(`${c.opNo === null ? 'İş' : `OP ${String(c.opNo)}`} çalışıyor${c.operator === null ? '' : ` (${c.operator})`}: iş terminalden hemen düşer.`);
+  if (d.saglam !== null || d.hurda > 0) {
+    l.push(`Sayılanlar kalır: sağlam ${d.saglam === null ? 'yok' : `${String(d.saglam.adet)} (OP ${String(d.saglam.opNo)})`}, hurda ${String(d.hurda)}.`);
+  }
+  if (d.kararBekleyen > 0) l.push(`${String(d.kararBekleyen)} parça kalite kararı bekliyor; karar arşivde de verilir.`);
+  if (d.hataliAcik > 0) l.push(ARSIV_HATALI_ACIK(d.hataliAcik));
+  if (d.fasondaAdet > 0) l.push(ARSIV_FASONDA);
+  l.push(ARSIV_YARI_MAMUL);
+  return l;
+}
+
 // Plan bilgisi (öncelik, başlangıç, teslim) ve kaynak yalnız açık emirde değişir.
 export const acikEmirIhlali = (durum: EmirDurumu, arsiv: boolean): string | null =>
   !arsiv && (durum === 'taslak' || durum === 'planli' || durum === 'basladi') ? null : ACIK_DEGIL;
@@ -627,7 +666,6 @@ export const BIRLESTIRME_ADIM = 'İki parti aynı adımda beklemeli ve o adımda
 export const BIRLESTIRME_ADIMLAR_FARKLI = 'İki partinin kalan adımları aynı değil.';
 export const BIRLESTIRME_EK_ADIM = 'Partinin bitmemiş rework, tamir ya da ek adımı var; önce onları bitirin.';
 export const BIRLESTIRME_TASLAK = 'Taslak ile planlı parti birleştirilemez.';
-export const EK_ADIM_KOLDA = 'Rework, tamir ve ek adım yalnız bölünmüş partiye (kola) konur.';
 export const KOL_ALT_PARTILI = 'Alt partisi olan kolun adımları ve birleşme planı değişmez; önce alt partileri birleştirin.';
 export const EK_ADIM_YERI_YOK = 'Ek adımın girdiği yerdeki adım bu kolda yok.';
 export const EK_ADIM_BASLAMIS = 'Ek adım yalnız başlamamış adımların önüne ya da kolun sonuna girer.';
@@ -730,14 +768,15 @@ export interface KolDurumu {
   isEmirleri: readonly PartiAdimi[];
 }
 
+// Bölünmemiş emir de kol da ek adım alır (2530 a). Açık alt partisi olan emir (kök ya da kol) almaz: alt parti kopyaladığı adımları
+// kendisi yapar, üstte değişen adım dizisi alt partinin bölünme ve birleşme sırasını bozardı.
 function kolOrtak(k: KolDurumu): string | null {
   const acik = acikEmirIhlali(k.durum, k.arsiv);
   if (acik !== null) return acik;
-  if (k.ustEmirId === null) return EK_ADIM_KOLDA;
   return k.acikAltPartiVar ? KOL_ALT_PARTILI : null;
 }
 
-// UE-PB4: ek adım yalnız kola, başlamamış bölgeye girer; op numarası tekildir ve komşularının arasındadır (sıra op sırasını izler).
+// UE-PB4: ek adım bölünmemiş emre ya da kola, başlamamış bölgeye girer; op numarası tekildir ve komşularının arasındadır (sıra op sırasını izler).
 export function ekAdimIhlali(k: KolDurumu, ek: { oncekiOpNo: number | null; opNo: number }): string | null {
   return kolOrtak(k) ?? adimYeriIhlali(k.isEmirleri, ek, k.birlesmeOpNo ?? null);
 }
@@ -1034,7 +1073,7 @@ export function fasonBeklemesi(
 // başlamaz. Çizim muaf tutulamaz (121 a).
 export const HAZIRLIK_ADI: Readonly<Record<HazirlikMaddesi, string>> = {
   cnc: 'CNC kurulumu (NC)', cizim: 'Çizim revizyonu', rota: 'Rota yürürlükte', malzeme: 'Malzeme', 'takim-omru': 'Takım ömrü', makine: 'Makine durumu', yayin: 'Paket yayını',
-  talimat: 'Hazırlık talimatı',
+  talimat: 'Hazırlık talimatı', 'ek-madde': 'Ek hazırlık maddesi',
 };
 // Muafiyet yalnız matristeki durduran maddeye verilir; özel proses matristen çıktı (2146-1 a), uyaran madde zaten durdurmaz.
 export const MUAF_TUTULUR: ReadonlySet<HazirlikMaddesi> = new Set(
@@ -1298,15 +1337,22 @@ export const KATILIM_TEK_ACIK_IS_EMIRSIZ = 'uretim_emirleri_katilim_is_emirsiz_t
 
 // 626 a: kuralı tutmayan başlatma reddedilmez, uyarı döner. Bekleyen öncül bitmeden, akışlı öncülden devir adedi gelmeden başlarsa uyarır;
 // 1248 a ile her öncül ayrı denetlenir. oncekiSaglam: öncülün şu ana kadarki sağlamı (bitmişse kapanışı); sayı verilirse her öncüle aynısı.
-export function siraDisiBaslatmaUyarisi<T extends ParalelAdim>(adimlar: readonly T[], adim: T, oncekiSaglam: number | ((oncul: T) => number)): string | null {
-  const uyarilar = adimOnculleri(adimlar, adim).map(({ adim: onceki, tur, devirAdedi }) => {
-    if (onceki.durum === 'tamam') return null;
-    if (tur === 'bekleyen') return `OP ${onceki.opNo} bitmeden OP ${adim.opNo} başlatıldı.`;
-    const devir = devirAdedi ?? 0;
-    const gelen = onculdenGelen(typeof oncekiSaglam === 'number' ? oncekiSaglam : oncekiSaglam(onceki), onceki, adim);
-    return gelen >= devir ? null : `OP ${onceki.opNo}'den devir adedi (${devir}) gelmeden OP ${adim.opNo} başlatıldı; gelen ${gelen}.`;
+// 2768 (2756 b): sıra dışı başlatma bir öncül başına bir kayıttır; uyarı cümlesi ve kayıt aynı koşuldan çıkar. gelen: öncülden bu adıma
+// gelen (hazır) adet, sayilan: öncülün sayılan sağlamı. Bekleyen öncül bitmemişse, akışlı öncülde devir adedi gelmemişse kayıt vardır.
+export interface SiraDisiBaslatma<T> { onceki: T; tur: OnculTuru; devirAdedi: number | null; gelen: number; sayilan: number }
+export function siraDisiBaslatmalar<T extends ParalelAdim>(adimlar: readonly T[], adim: T, oncekiSaglam: number | ((oncul: T) => number)): SiraDisiBaslatma<T>[] {
+  return adimOnculleri(adimlar, adim).flatMap(({ adim: onceki, tur, devirAdedi }) => {
+    if (onceki.durum === 'tamam') return [];
+    const sayilan = typeof oncekiSaglam === 'number' ? oncekiSaglam : oncekiSaglam(onceki);
+    const gelen = onculdenGelen(sayilan, onceki, adim);
+    if (tur === 'akisli' && gelen >= (devirAdedi ?? 0)) return [];
+    return [{ onceki, tur, devirAdedi, gelen, sayilan }];
   });
-  return uyarilariBirlestir(...uyarilar);
+}
+export function siraDisiBaslatmaUyarisi<T extends ParalelAdim>(adimlar: readonly T[], adim: T, oncekiSaglam: number | ((oncul: T) => number)): string | null {
+  return uyarilariBirlestir(...siraDisiBaslatmalar(adimlar, adim, oncekiSaglam).map(({ onceki, tur, devirAdedi, gelen }) => (tur === 'bekleyen'
+    ? `OP ${onceki.opNo} bitmeden OP ${adim.opNo} başlatıldı.`
+    : `OP ${onceki.opNo}'den devir adedi (${devirAdedi ?? 0}) gelmeden OP ${adim.opNo} başlatıldı; gelen ${gelen}.`)));
 }
 
 // Kuralı tutan, şimdi başlatılabilecek adımlar: bekleyen, istasyonlu ve fason olmayan; sıra dışı uyarısı vermeyenler.
@@ -1340,6 +1386,12 @@ export function sayimAsimiUyarisi(giren: number | null, mevcut: number, fark: nu
 export function eksiyleBitirmeUyarisi(kapanis: number, sonraki: { opNo: number; sayilan: number } | null): string | null {
   if (sonraki === null || sonraki.sayilan <= kapanis) return null;
   return `OP ${sonraki.opNo}'de bu adımdan ${sonraki.sayilan - kapanis} fazla parça sayıldı; eksi ${sonraki.sayilan - kapanis} kaldı.`;
+}
+
+// 2521 b: ilk parça kararı beklenirken sayılan parça varsa adım bitirilmez; Kalite Merkezi kararı (onay ya da ret) bekleyeni kapatır.
+export function kararBekleyenBitisIhlali(kararBekliyor: number, opNo: number | null): string | null {
+  if (kararBekliyor <= 0) return null;
+  return `${kararBekliyor} parça ilk parça kararı bekliyor${opNo === null ? '' : ` (OP ${opNo})`}. Kalite Merkezi kararı gelmeden iş bitirilemez.`;
 }
 
 // Birden çok uyarı tek metne birleşir; hiçbiri yoksa null.
@@ -1455,13 +1507,20 @@ export function hataliIhlali(d: BolmeDurumu, adimSira: number, adet: number, rot
 
 export const hataliYolu = (d: BolmeDurumu, adimSira: number, adet: number): HataliYolu => (adet < eldekiAdet(d, adimSira) ? 'kol' : 'kok');
 
+// arsivdeKarar: hedef 2721 arşivindedir (iptal, kapanışı açık); 2731 b ile yalnız rework kapalıdır.
 export function hataliKarariIhlali(
   kayit: { karar: string | null }, kaliteAdimi: { durum: IsEmriDurumu } | null, hedef: { durum: EmirDurumu; arsiv: boolean } | null,
+  arsivdeKarar: HataliKarari | null = null,
 ): string | null {
   if (kayit.karar !== null) return HATALI_KARAR_VERILMIS;
   if (hedef === null || kaliteAdimi === null) return HATALI_KALITE_BASLAMIS;
-  return acikEmirIhlali(hedef.durum, hedef.arsiv) ?? (kaliteAdimi.durum === 'bekliyor' ? null : HATALI_KALITE_BASLAMIS);
+  if (arsivdeKarar === 'rework') return HATALI_ARSIVDE_REWORK;
+  const acik = arsivdeKarar === null ? acikEmirIhlali(hedef.durum, hedef.arsiv) : null;
+  return acik ?? (kaliteAdimi.durum === 'bekliyor' ? null : HATALI_KALITE_BASLAMIS);
 }
+// Arşivdeki emirin (iptal, kapanışı açık) hatalı kaydı: kök emir arşivde, hedef (kök ya da hatalı kolu) de iptaldir.
+export const hataliArsivdeMi = (hedef: { durum: EmirDurumu; arsiv: boolean }, kok: { durum: EmirDurumu; arsiv: boolean }, kokKapanisVar: boolean): boolean =>
+  hedef.durum === 'iptal' && !hedef.arsiv && arsivdeFasonDonusuAcik(kok.durum, kok.arsiv, kokKapanisVar);
 
 export function reworkAdimiIhlali(kayit: { karar: string | null }, adim: { durum: IsEmriDurumu } | null): string | null {
   if (kayit.karar !== 'rework' || adim === null) return REWORK_KARARSIZ;

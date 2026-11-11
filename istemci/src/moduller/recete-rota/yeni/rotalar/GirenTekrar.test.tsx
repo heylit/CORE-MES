@@ -23,6 +23,10 @@ const kur = (d = durum()) => sunucuKur(YONETICI, {
 });
 const adimPaneli = async () => {
   const bolge = await screen.findByRole('region', { name: 'Ürün ve rotalar' });
+  // 2558 b/5: sayfa görüntüleme kipinde açılır; yazma yetkisi olan test "Düzenle" ile düzenleme kipine geçer.
+  await waitFor(() => { expect(bolge.querySelector('.tc-rr1-rcol, .tc-rr1-emptycv, .tc-rr1-ftab')).not.toBeNull(); });
+  const duzenle = within(bolge).queryByRole('button', { name: 'Düzenle' });
+  if (duzenle) fireEvent.click(duzenle);
   fireEvent.click(await within(bolge).findByRole('button', { name: 'OP 10 Tornalama' }));
   return { bolge, panel: within(bolge).getByRole('complementary', { name: 'Düzenleme paneli' }) };
 };
@@ -64,6 +68,8 @@ describe('823 Aynı giren bir adıma iki kez eklenmez', () => {
     const istekler = kur();
     rrAc('/recete-rota/schema');
     const bolge = await screen.findByRole('region', { name: 'Ürün ve rotalar' });
+    // 2558 b/5: düzenleme kipine geçilir.
+    fireEvent.click(await within(bolge).findByRole('button', { name: 'Düzenle' }));
     fireEvent.click(await within(bolge).findByRole('button', { name: /Giren$/ }));
     const panel = within(bolge).getByRole('complementary', { name: 'Düzenleme paneli' });
     fireEvent.click(await within(panel).findByRole('option', { name: /HM-0012/ }));
@@ -79,6 +85,9 @@ describe('823 Ara kartın birimi adettir', () => {
     rrAc('/recete-rota/schema');
     const bolge = await screen.findByRole('region', { name: 'Ürün ve rotalar' });
     await within(bolge).findByRole('button', { name: 'OP 20 Tornalama' });
+    // 2558 b/6: ara kartlar varsayılan olarak rozettir; kutu olarak ⋯ menüsünden açılır.
+    fireEvent.click(within(bolge).getByRole('button', { name: 'Diğer rota işlemleri' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Ara kartları göster' }));
     const birim = (k: Element | null) => k?.querySelector('.tc-rr1-cq small')?.textContent;
     const ara = [...bolge.querySelectorAll('.tc-rr1-cip-arahal')];
     expect(ara.length).toBeGreaterThan(0);

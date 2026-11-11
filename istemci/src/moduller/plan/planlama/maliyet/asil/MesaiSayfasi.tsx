@@ -1,10 +1,10 @@
 import { Dugme, Rozet, Simge } from '../../../../../ortak/arayuz/index.ts';
 import type { PlanlamaCalismasi } from '../../tipler.ts';
 import {
-  ekMesailer, GUN_TURU_ADI, gunYaz, kisiSaati, mesaiAtamasi, mesaiBedeli, mesaiSistemi, mesaiUcreti, pdDenge, pdKat, sayi, sayiOku, tl, tlSaat,
+  ekMesailer, GUN_TURU_ADI, gunYaz, mesaiAtamasi, mesaiBedeli, mesaiSistemi, mesaiUcreti, pdDenge, pdKat, sayi, sayiOku, tl,
   vardiyaSaati, ymAyar, type GunTuru, type Takvim,
 } from '../kurallar.ts';
-import { carpanYaz, ekMesaiKaldirYaz, kisiBazliYaz, kisiUcretYaz, kisiYilYaz, mesaiKarariBul, mesaiKararlari, mesaiKuralYaz, type MesaiKurali, type Yaz } from '../yazmalar.ts';
+import { carpanYaz, ekMesaiKaldirYaz, kisiBazliYaz, kisiYilYaz, mesaiKarariBul, mesaiKararlari, mesaiKuralYaz, type MesaiKurali, type Yaz } from '../yazmalar.ts';
 import { Alan, AltNot, AsilKart, Kpi, MOTOR_KAPALI, Not, SayiGir, Segment } from './girdi.tsx';
 
 // Ek mesai planının "Tüm satırlar"ı: bugünkü sayfanın kartları (zu-yan-sayfalar sMesaiPlani, zz6 msMesaiKartlar). Önerileri plan motoru
@@ -27,12 +27,17 @@ export function MesaiSayfasi({ c, T, para, yaz }: { c: PlanlamaCalismasi; T: Tak
   const topH = EK.reduce((a, e) => a + vardiyaSaati(D, e.vardiya), 0);
   const butce = sayiOku(c.param.mesaiHafta) ?? MESAI_HAFTA0;
   const red = mesaiKararlari(D).filter((k) => k.karar === 'red').length;
+  // Grup saat maliyeti istemciye gelmez (2742); bu sayfadaki tutar her zaman yalın ücretledir. Kişi bazlı seçiliyken bunu açıkça söyler.
+  const ucret = mesaiUcreti(D);
+  // Maliyet görmeyen rolde ücret tutarı alt metinde de görünmez; yalnız çarpan.
+  const yalin = ucret === null ? 'mesai ücreti girilmemiş' : para ? `${sayi(ucret, 0)} TL/sa, ek mesai ×${sayi(Y.mesaiCarpan, 1)}` : `ek mesai ×${sayi(Y.mesaiCarpan, 1)}`;
+  const yalinNotu = m.kisiBazli ? `yalın ücretle (${yalin}); grup saat maliyeti planın değerlendirmesinde` : yalin;
   return (
     <>
       <AsilKart simge="clock" baslik="Ek mesai planı">
         <Kpi l={[
           ['clock', 'Planlı ek mesai', `${sayi(topH, 1)} sa`, `${String(EK.length)} vardiya`],
-          ['lira', 'Mesai maliyeti', para ? tl(topTL) : 'müdürde', m.kisiBazli ? 'kişi ücretinden, gün türüne göre çarpan' : `${sayi(mesaiUcreti(D), 0)} TL/sa, hafta sonu ×${sayi(Y.mesaiCarpan, 1)}`],
+          ['lira', 'Mesai maliyeti', para ? tl(topTL) : 'müdürde', yalinNotu],
           ['gauge', 'Haftalık sınır', butce ? `${sayi(butce, 0)} sa` : 'yok', 'Kısıtlar sayfasında'],
         ]} />
         <div className="tc-tablo-kap">
@@ -64,7 +69,7 @@ export function MesaiSayfasi({ c, T, para, yaz }: { c: PlanlamaCalismasi; T: Tak
       </AsilKart>
       <div className="tc-pyk-ms">
         <AtamaKarti c={c} T={T} para={para} />
-        <KisiKarti c={c} para={para} kapali={!yaz || !para} y={y} />
+        <KisiKarti c={c} kapali={!yaz || !para} y={y} />
         {para && <KuralKarti c={c} kapali={!yaz} y={y} />}
       </div>
     </>
@@ -100,19 +105,18 @@ function AtamaKarti({ c, T, para }: { c: PlanlamaCalismasi; T: Takvim | null; pa
   );
 }
 
-function KisiKarti({ c, para, kapali, y }: { c: PlanlamaCalismasi; para: boolean; kapali: boolean; y: Y }) {
+function KisiKarti({ c, kapali, y }: { c: PlanlamaCalismasi; kapali: boolean; y: Y }) {
   const D = c.D;
   const m = mesaiSistemi(D);
   const at = mesaiAtamasi(c);
   return (
-    <AsilKart simge="user" baslik="Kişi ücretleri ve fazla mesai sayacı">
+    <AsilKart simge="user" baslik="Fazla mesai sayacı">
       <div className="tc-tablo-kap">
         <table className="tc-tablo">
-          <thead><tr><th>Kişi</th>{para && <><th className="tc-pyk-num">Brüt aylık</th><th className="tc-pyk-num">Saat maliyeti</th></>}<th className="tc-pyk-num">Bu yıl yapılan</th><th className="tc-pyk-num">Planlı</th><th className="tc-pyk-num">Yıllık sınıra kalan</th></tr></thead>
+          <thead><tr><th>Kişi</th><th className="tc-pyk-num">Bu yıl yapılan</th><th className="tc-pyk-num">Planlı</th><th className="tc-pyk-num">Yıllık sınıra kalan</th></tr></thead>
           <tbody>
             {(D.personel ?? []).map((p) => {
               const u = m.ucret[p.id];
-              const s = kisiSaati(p.id, m);
               const plan = at.plan[p.id] ?? 0;
               const topl = (u?.yil ?? 0) + plan;
               const asim = topl > m.yillikSinir;
@@ -120,10 +124,6 @@ function KisiKarti({ c, para, kapali, y }: { c: PlanlamaCalismasi; para: boolean
               return (
                 <tr key={p.id} data-uyari={asim ? '' : undefined}>
                   <td><b>{ad}</b><AltNot>{p.vardiya ?? ''} · {(p.gruplar ?? []).join(', ')}{p.ayar ? ' · ayarcı' : ''}</AltNot></td>
-                  {para && <>
-                    <td className="tc-pyk-num"><SayiGir deger={u?.brut ?? null} ad={`${ad} brüt ücreti`} kapali={kapali} yaz={(v) => y((z) => kisiUcretYaz(z, D, p.id, v))} /></td>
-                    <td className="tc-pyk-num">{s === null ? '—' : tlSaat(s)}<AltNot>fazla mesai {s === null ? '—' : tlSaat(s * m.carp.hi)}</AltNot></td>
-                  </>}
                   <td className="tc-pyk-num"><SayiGir deger={u?.yil ?? null} ad={`${ad} bu yıl yaptığı fazla mesai`} max={2000} kapali={kapali} yaz={(v) => y((z) => kisiYilYaz(z, D, p.id, v))} /></td>
                   <td className="tc-pyk-num">{sayi(plan, 1)} sa</td>
                   <td className="tc-pyk-num"><b data-ton={asim ? 'hata' : undefined}>{sayi(m.yillikSinir - topl, 0)} sa</b></td>
@@ -133,7 +133,7 @@ function KisiKarti({ c, para, kapali, y }: { c: PlanlamaCalismasi; para: boolean
           </tbody>
         </table>
       </div>
-      <Not>Saat maliyeti = brüt × (1 + SGK işveren payı + yan hak) / aylık ücret saati. Ücretleri müdür ve yönetici görür. "Bu yıl yapılan" bordrodan girilir; uygulamada PDKS ve İK kayıtlarından gelmelidir.</Not>
+      <Not>Kişi ücreti burada tutulmaz. "Bu yıl yapılan" bordrodan girilir; uygulamada PDKS ve İK kayıtlarından gelmelidir.</Not>
     </AsilKart>
   );
 }
@@ -156,7 +156,7 @@ function KuralKarti({ c, kapali, y }: { c: PlanlamaCalismasi; kapali: boolean; y
   return (
     <AsilKart simge="book" baslik="Mesai kuralları">
       <div className="tc-pyk-sira">
-        <Segment ad="Mesai bedeli" secenek={[['1', 'Kişi ücretinden'], ['0', 'Tek mesai ücreti']]} deger={m.kisiBazli ? '1' : '0'} kapali={kapali} sec={(v) => { y((z) => kisiBazliYaz(z, v === '1')); }} />
+        <Segment ad="Mesai bedeli" secenek={[['1', 'Grup saat maliyetinden'], ['0', 'Tek mesai ücreti']]} deger={m.kisiBazli ? '1' : '0'} kapali={kapali} sec={(v) => { y((z) => kisiBazliYaz(z, v === '1')); }} />
       </div>
       <div className="tc-pyk-alanlar">
         {KURAL.map(kural)}
@@ -165,7 +165,7 @@ function KuralKarti({ c, kapali, y }: { c: PlanlamaCalismasi; kapali: boolean; y
         ))}
         {SINIR.map(kural)}
       </div>
-      <Not>Varsayılanlar 4857 sayılı İş Kanunu'ndan bilinen değerlerdir (fazla çalışmada %50 zam, günlük 11 saat, gece 7,5 saat, yılda 270 saat); bu denemede belgeden doğrulanmadı. Pazar ve tatil çarpanları işyeri uygulamasına göre değişir; İK ve toplu sözleşmeyle kontrol edin. Ek vardiyanın bedeli = saat × operatör oranı × grubun ortalama saat maliyeti × gün çarpanı + yemek ve servis.</Not>
+      <Not>Varsayılanlar 4857 sayılı İş Kanunu'ndan bilinen değerlerdir (fazla çalışmada %50 zam, günlük 11 saat, gece 7,5 saat, yılda 270 saat); bu denemede belgeden doğrulanmadı. Pazar ve tatil çarpanları işyeri uygulamasına göre değişir; İK ve toplu sözleşmeyle kontrol edin. Ek vardiyanın bedeli = saat × operatör oranı × grubun ortalama saat maliyeti × gün çarpanı + yemek ve servis. Grup saat maliyeti bugün bilinmiyor (kişi ücreti tutulmuyor); bu seçenekte bedel boş kalır.</Not>
     </AsilKart>
   );
 }

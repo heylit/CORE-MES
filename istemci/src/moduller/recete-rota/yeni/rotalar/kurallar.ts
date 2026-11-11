@@ -73,7 +73,11 @@ export const sirali = (adimlar: readonly Adim[]): Adim[] => [...adimlar].sort((a
 export const yenidenNumarala = (adimlar: readonly Adim[]): Adim[] => adimlar.map((a, i) => ({ ...a, seq: (i + 1) * 10 }));
 // Statünün adı adımın OP numarasıdır; yeni adımda sırası.
 export const statuNo = (a: Pick<Adim, 'opNo' | 'seq'>): number => a.opNo ?? a.seq;
-export const fasonMu = (a: Pick<Adim, 'fasonId' | 'stationId' | 'machineId'>): boolean => !!a.fasonId && !a.stationId && !a.machineId;
+// Erişilebilir ad: numarası verilmiş adım "OP 20"; yeni adımın numarasını kayıt verir, bu yüzden sırasıyla okunur (OP numarası gibi değil).
+export const adimAdi = (a: Pick<Adim, 'opNo' | 'seq'>): string => (a.opNo === null ? `Yeni adım (${String(a.seq)}. sıra)` : `OP ${String(a.opNo)}`);
+// Firması seçilmemiş fason adım (2682 a) da fasondur: `fason` bayrağı, fasonId boş.
+export const fasonMu = (a: Pick<Adim, 'fasonId' | 'fason' | 'stationId' | 'machineId'>): boolean =>
+  (!!a.fasonId || a.fason === true) && !a.stationId && !a.machineId;
 export const girdiOlur = (m: Malzeme | undefined): boolean => !!m && m.girdiOlabilir !== false && m.type !== 'hizmet';
 
 export const revizyonlari = (revler: readonly Revizyon[] | null, urunId: string): Revizyon[] =>
@@ -120,6 +124,102 @@ export const carpanYaz = (a: Adim, v: number | null): Adim => ({ ...a, adetCarpa
 export const birlesenYaz = (a: Adim, d: string, sec: boolean): Adim => ({
   ...a, birlesen: sec ? [...new Set([...adimBirlesen(a), d])].sort() : adimBirlesen(a).filter((x) => x !== d),
 });
+
+// 2542 (çatallı rota kolaylıkları): veri biçimi ve sunucu kuralı aynı kalır; dal hâlâ adım başına harf ve birleşme adımında işarettir.
+// Rotada kullanılmayan ilk dal harfi; sekizi de doluysa null.
+export const serbestDal = (liste: readonly Adim[]): string | null => {
+  const kullanilan = new Set(liste.flatMap((a) => [...(adimDali(a) ?? []), ...adimBirlesen(a)]));
+  return DAL_HARFLERI.find((d) => !kullanilan.has(d)) ?? null;
+};
+// Dalın çatal ve birleşme yeri (paylaşılan öncül kuralıyla aynı): ilk adımı, listede kendinden önceki son ana hat adımını bekler (yoksa rotanın
+// başından); birleşme, dalı birleşen listesinde taşıyan adımdır. carpan dalın bütün adımlarında aynıysa o sayı, farklıysa null.
+export interface DalBilgisi { dal: string; adimlar: Adim[]; catal: Adim | null; birlesme: Adim | null; carpan: number | null; sonaKadar: boolean }
+export function dalBilgileri(adimlar: readonly Adim[]): DalBilgisi[] {
+  const l = sirali(adimlar);
+  const dallar = [...new Set(l.flatMap((a) => adimDali(a) ?? []))];
+  return dallar.map((dal) => {
+    const ad = l.filter((a) => adimDali(a) === dal);
+    const ilk = l.findIndex((a) => adimDali(a) === dal);
+    const catal = l.slice(0, ilk).reverse().find((a) => adimDali(a) === null) ?? null;
+    const birlesme = l.find((a) => adimBirlesen(a).includes(dal)) ?? null;
+    const carpanlar = new Set(ad.map(adimCarpani));
+    return { dal, adimlar: ad, catal, birlesme, carpan: carpanlar.size === 1 ? [...carpanlar][0] ?? null : null, sonaKadar: birlesme === null && l.at(-1) === ad.at(-1) };
+  });
+}
+export const dalEtiketi = (b: DalBilgisi): string => `Dal ${b.dal}: ${b.catal ? `OP ${String(statuNo(b.catal))} ardından başlar` : 'rotanın başından başlar'}, ${
+  b.birlesme ? `OP ${String(statuNo(b.birlesme))} adımında birleşir` : b.sonaKadar ? 'rotanın sonuna kadar yürür' : 'birleşmiyor'}.`;
+// Taşımadan önce ve sonra dalların çatal ya da birleşme yeri değiştiyse yeni etiketler (sürüklemede onay için); değişmediyse boş.
+export function catalFarki(once: readonly Adim[], sonra: readonly Adim[]): string[] {
+  const yer = (b: DalBilgisi) => `${b.catal?.id ?? ''}>${b.birlesme?.id ?? ''}`;
+  const eski = new Map(dalBilgileri(once).map((b) => [b.dal, yer(b)]));
+  return dalBilgileri(sonra).filter((b) => eski.has(b.dal) && eski.get(b.dal) !== yer(b)).map(dalEtiketi);
+}
+// A: adımın ardından yeni kol açılır; yeni adım `dal` ile ana hattın o adımından çatallanır. B: adımda açık kolların hepsi birleşir.
+export const kollariBirlestir = (adimlar: readonly Adim[], adimId: string): Adim[] => {
+  const l = sirali(adimlar);
+  const i = l.findIndex((a) => a.id === adimId);
+  if (i < 0) return [...adimlar];
+  const acik = birlesebilenDallar(l, i);
+  return adimlar.map((a) => (a.id === adimId ? { ...a, birlesen: [...new Set([...adimBirlesen(a), ...acik])].sort() } : a));
+};
+// D: dal çarpanı dalın her adımına aynı yazılır (veri adım başına kalır).
+export const dalCarpaniYaz = (adimlar: readonly Adim[], dal: string, v: number | null): Adim[] =>
+  adimlar.map((a) => (adimDali(a) === dal ? carpanYaz(a, v) : a));
+// Paletten ya da bırakmayla eklenen adım: `dal` verilirse o kolu açar; verilmezse ardına eklendiği adım koldaysa o kola düşer (kolun çarpanıyla).
+export function kolaEkle(adimlar: readonly Adim[], sonraId: string | null, a: Adim, dal?: string | null): Adim[] {
+  const onceki = sonraId === null ? undefined : adimlar.find((x) => x.id === sonraId);
+  const hedef = dal ?? (onceki ? adimDali(onceki) : null);
+  const yeni = hedef === null ? a : { ...a, dal: hedef, ...(dal == null && onceki?.adetCarpani != null ? { adetCarpani: onceki.adetCarpani } : {}) };
+  return adimEkle(adimlar, sonraId, yeni);
+}
+// C: şemada kollar yan yana. Rota sırası parçalara bölünür: çatalla birleşme arası (açık dal varken) tek "kollar" parçasıdır, içinde ana hat ve her dal
+// kendi sütunudur; kalan adımlar tek tek. Birleştiren adım, başka açık dal kalmadıysa parçadan sonra gelir.
+export type SemaParcasi = { tur: 'adim'; id: string } | { tur: 'kollar'; seritler: { dal: string | null; idler: string[] }[] };
+export function kolParcalari(adimlar: readonly Adim[]): SemaParcasi[] {
+  const l = sirali(adimlar);
+  const sonuc: SemaParcasi[] = [];
+  const acik = new Set<string>();
+  let bolge: Map<string | null, string[]> | null = null;
+  const kapat = () => {
+    if (!bolge) return;
+    const seritler = [...bolge.entries()].map(([dal, idler]) => ({ dal, idler }));
+    sonuc.push({ tur: 'kollar', seritler: [...seritler.filter((x) => x.dal === null), ...seritler.filter((x) => x.dal !== null)] });
+    bolge = null;
+  };
+  for (const a of l) {
+    for (const d of adimBirlesen(a)) acik.delete(d);
+    const dal = adimDali(a);
+    if (dal !== null) acik.add(dal);
+    if (dal !== null || acik.size > 0) {
+      bolge ??= new Map();
+      bolge.set(dal, [...(bolge.get(dal) ?? []), a.id]);
+    } else {
+      kapat();
+      sonuc.push({ tur: 'adim', id: a.id });
+    }
+  }
+  kapat();
+  return sonuc;
+}
+// C: adım sürüklenip bir kolun sütununa bırakılınca o kola geçer ve kolun son adımının ardına taşınır; ana hat sütununda dalı kalkar.
+export function kolaTasi(adimlar: readonly Adim[], adimId: string, dal: string | null, sonId: string): Adim[] {
+  const son = adimlar.find((a) => a.id === sonId);
+  const yer = sonId === adimId ? [...adimlar] : adimArkasinaTasi(adimlar, adimId, sonId);
+  // Kola geçen adım kolun çarpanını alır (D: çarpan kolda tektir).
+  const sonra = yer.map((a) => (a.id !== adimId ? a : dal === null ? dalYaz(a, null) : { ...dalYaz(a, dal), adetCarpani: son?.adetCarpani ?? null }));
+  // Son adımı da taşınan dal kalmaz; birleşme işareti de kalkar (yoksa "dalın adımı yok" hatası çıkar).
+  const kalan = new Set(sonra.flatMap((a) => adimDali(a) ?? []));
+  return sonra.map((a) => (adimBirlesen(a).some((d) => !kalan.has(d)) ? { ...a, birlesen: adimBirlesen(a).filter((d) => kalan.has(d)) } : a));
+}
+
+// F: düzenlerken dal denetimi (sunucuyla aynı kural); hatalı adımın kimliği ve iletisi, yoksa null.
+export function dalHatasi(adimlar: readonly Adim[]): { adimId: string | null; ileti: string } | null {
+  const l = sirali(adimlar);
+  const h = dalDenetle(l.map((a) => ({ dal: adimDali(a), birlesen: adimBirlesen(a) })));
+  if (!h) return null;
+  const i = /^adimlar\.(\d+)/.exec(h.alan)?.[1];
+  return { adimId: i === undefined ? null : l[Number(i)]?.id ?? null, ileti: h.ileti };
+}
 
 // Adımın tükettiği önceki adımlar (sunucunun akisiCikar kuralı): dallı rotada öncülleri; tek hatlı rotada bağımsız ve ilk adım tüketmez,
 // ötekiler zincirdeki bağımsız olmayan önceki adımın ve aradaki bağımsız adımların çıktısını tüketir.
@@ -209,8 +309,29 @@ export function gkkUyarilari(adimlar: readonly Adim[], opKodu: (opId: string) =>
 }
 
 // Fason olmayan her adımda işlem süresi zorunludur; hazırlık ve değişim 0 olabilir.
-export const islemSuresiEksik = (adimlar: readonly Adim[]): Adim | null =>
-  sirali(adimlar).find((s) => !fasonMu(s) && !((sureSayisi(s.proc) ?? 0) > 0)) ?? null;
+export const islemSuresiBos = (s: Adim): boolean => !fasonMu(s) && !((sureSayisi(s.proc) ?? 0) > 0);
+export const islemSuresiEksik = (adimlar: readonly Adim[]): Adim | null => sirali(adimlar).find(islemSuresiBos) ?? null;
+
+// 2558 b/7: üstteki "Sorunlar" çipinin listesi: rota eksikleri (giren, dal, ayar), işlem süresi boş ve istasyonu olmayan iç üretim adımı.
+// Her satır adıma gider; adım sırasıyla.
+export function rotaSorunlari(adimlar: readonly Adim[], malzemeVar: (id: string) => boolean, opAdi: (opId: string) => string | null): RotaEksigi[] {
+  const ss = sirali(adimlar);
+  const eksik = new Map<string, string[]>();
+  for (const e of rotaEksikleri(ss, malzemeVar, opAdi)) eksik.set(e.adimId, [e.metin]);
+  return ss.flatMap((a) => {
+    const ad = opAdi(a.opId);
+    const bas = `OP ${String(statuNo(a))}${ad ? ` ${ad}` : ''}`;
+    const ek = [
+      ...(islemSuresiBos(a) ? ['işlem süresi yok'] : []),
+      ...(!fasonMu(a) && !a.stationId ? ['istasyon yok'] : []),
+      // Kaydı ve onayı durdurmaz; emir açılmadan önce seçilmeli (sunucu emre kopyalamayı reddeder).
+      ...(fasonMu(a) && !a.fasonId ? ['fason firma seçilmedi'] : []),
+    ];
+    const m = eksik.get(a.id) ?? [];
+    if (ek.length === 0) return m.map((metin) => ({ adimId: a.id, metin }));
+    return [{ adimId: a.id, metin: m.length > 0 ? `${m.join('')}, ${ek.join(', ')}` : `${bas}: ${ek.join(', ')}` }];
+  });
+}
 
 // Fire payı olan adımdan önceki her adım ve girenleri fazladan işlenir.
 export function adimCarpanlari(adimlar: readonly Adim[]): number[] {
@@ -225,27 +346,40 @@ export function adimCarpanlari(adimlar: readonly Adim[]): number[] {
 }
 
 // Malzeme maliyeti (prototipte matCost): rotası olan kartta girenlerin toplamı, olmayanda birim maliyet. Birim maliyeti bilinmeyen kalem
-// varsa toplam bilinmez (null); sıfır uydurulmaz.
-export function malzemeMaliyeti(
+// varsa toplam bilinmez (null); sıfır uydurulmaz. Kartı bulunamayan (silinmiş, okunamayan) giren, kendine dönen rota ve miktarı girilmemiş
+// giren de toplamı bilinmez yapar: atlamak ya da sıfır saymak eksik bir toplamı tam gibi gösterirdi. Kayıtlı rotada miktar zorunludur
+// (sunucu > 0); boş miktar yalnız düzenlenen taslakta olur ve özet taslaktan hesaplanır.
+export type MaliyetSonucu = { deger: number; neden: null } | { deger: null; neden: string };
+export function malzemeMaliyetiSonucu(
   id: string, rotaOf: (id: string) => readonly Adim[], malzeme: (id: string) => Malzeme | undefined,
   birimMaliyet: (id: string) => number | null, yol: readonly string[] = [],
-): number | null {
+): MaliyetSonucu {
+  const bos = (neden: string): MaliyetSonucu => ({ deger: null, neden });
   const m = malzeme(id);
-  if (!m || yol.includes(id)) return 0;
+  if (!m) return bos(`Giren kartı bulunamadı (#${id}).`);
+  if (yol.includes(id)) return bos(`${m.code} rotası kendine dönüyor.`);
   const ss = sirali(rotaOf(id));
-  if (m.type === 'ham' || ss.length === 0) return birimMaliyet(id);
+  if (m.type === 'ham' || ss.length === 0) {
+    const b = birimMaliyet(id);
+    return b === null ? bos(`${m.code} birim maliyeti girilmemiş.`) : { deger: b, neden: null };
+  }
   const fs = adimCarpanlari(ss);
   let c = 0;
+  let girdi = false;
   for (let j = 0; j < ss.length; j++) {
-    for (const x of ss[j]?.ins ?? []) {
-      if (!malzeme(x.itemId)) continue;
-      const alt = malzemeMaliyeti(x.itemId, rotaOf, malzeme, birimMaliyet, [...yol, id]);
-      if (alt === null) return null;
-      c += (x.qty || 0) * (1 + (x.scrap || 0) / 100) * (fs[j] ?? 1) * alt;
+    const a = ss[j];
+    if (!a) continue;
+    for (const x of a.ins) {
+      if (!(Number(x.qty) > 0)) return bos(`${m.code} ${adimAdi(a)}: ${malzeme(x.itemId)?.code ?? 'giren'} miktarı girilmemiş.`);
+      const alt = malzemeMaliyetiSonucu(x.itemId, rotaOf, malzeme, birimMaliyet, [...yol, id]);
+      if (alt.deger === null) return alt;
+      girdi = true;
+      c += Number(x.qty) * (1 + (x.scrap || 0) / 100) * (fs[j] ?? 1) * alt.deger;
     }
   }
-  return c;
+  return girdi ? { deger: c, neden: null } : bos(`${m.code} rotasında giren yok.`);
 }
+export const malzemeMaliyeti = (...g: Parameters<typeof malzemeMaliyetiSonucu>): number | null => malzemeMaliyetiSonucu(...g).deger;
 
 // Adımın süresi (prototipte opDays): hazırlık + çevrim * miktar / verim; gün, iş merkezinin ortalama günlük saatiyle.
 export function adimSuresi(a: Adim, miktar: number, istasyon: Istasyon | undefined, gunSaati: number): { dk: number; gun: number } | null {
@@ -370,7 +504,7 @@ export const bagimlilikYaz = (a: Adim, d: Bagimlilik): Adim => ({ ...a, dep: d, 
 // İstasyon değişince makine seçimi kalkar; istasyon seçilen fason adım içeri döner.
 export function istasyonYaz(a: Adim, sid: string | null): Adim {
   const b: Adim = { ...a, stationId: sid, machineId: a.stationId === sid ? a.machineId : null };
-  return sid && a.fasonId ? { ...b, fasonId: null, terminGun: null } : b;
+  return sid && (a.fasonId || a.fason) ? { ...b, fasonId: null, fason: false, terminGun: null } : b;
 }
 // Operasyon değişince istasyon (fasonda değil), hazırlık ve süreler katalogdan gelir; adım adı operasyonun adı olur.
 export function operasyonYaz(a: Adim, op: Operasyon | undefined): Adim {
@@ -386,11 +520,14 @@ export const katalogaDon = (a: Adim, op: Operasyon): Adim => {
 export const katalogdanFarkli = (a: Adim, op: Operasyon): boolean =>
   op.stationId !== a.stationId || op.setup !== a.setup || sureSayisi(op.cycle) !== a.proc || a.chg !== null;
 // Fason adımın kaynağı fason firmadır: istasyon, makine, aday ve süre yoktur. İçeri alınınca operasyonun istasyonuna döner.
-export function fasonaCevir(a: Adim, firmaId: string | null, op: Operasyon | undefined): Adim {
-  if (firmaId) {
-    return { ...a, machineId: null, stationId: null, kisiId: null, alts: [], altTimes: {}, digerAdaylar: [], split: 'tek', minLot: null, fasonId: firmaId };
+// Firma sonra da seçilebilir (2682 a): `dis` ile firmasız dış üretime geçer; böylece seçim kaydedilir, başka yere geçince kaybolmaz.
+export function fasonaCevir(a: Adim, firmaId: string | null, op: Operasyon | undefined, dis = firmaId !== null): Adim {
+  if (dis) {
+    return {
+      ...a, machineId: null, stationId: null, kisiId: null, alts: [], altTimes: {}, digerAdaylar: [], split: 'tek', minLot: null, fasonId: firmaId, fason: true,
+    };
   }
-  const b: Adim = { ...a, fasonId: null, terminGun: null };
+  const b: Adim = { ...a, fasonId: null, fason: false, terminGun: null };
   return b.stationId ? b : { ...b, stationId: op?.stationId ?? null };
 }
 export function sureYaz(a: Adim, alan: 'setup' | 'proc' | 'chg', deger: number | null): Adim {
@@ -446,7 +583,6 @@ export function rotaFarki(A: readonly Adim[], B: readonly Adim[], ad: FarkAdlari
     ['depQty', 'örtüşme', (v) => `${sayiBicim(v.depQty ?? 1, 0)} adet`], ['rejectPct', 'fire payı', (v) => `%${sayiBicim(v.rejectPct, 1)}`],
     ['split', 'makine kullanımı', (v) => (v.split === 'bol' ? 'paralel böl' : 'tek')],
     ['alts', 'alternatif', (v) => v.alts.map((x) => ad.istasyon(x)).join(', ') || 'yok'],
-    ['fasonId', 'üretim yeri', (v) => (v.fasonId ? 'dış üretim' : 'iç üretim')],
   ];
   for (const s of B) {
     const o = am.get(s.id);
@@ -465,6 +601,8 @@ export function rotaFarki(A: readonly Adim[], B: readonly Adim[], ad: FarkAdlari
     });
     for (const x of o.ins) if (!s.ins.some((y) => y.itemId === x.itemId)) ch.push(`giren çıkarıldı ${ad.malzeme(x.itemId)}`);
     if (J(o.outs) !== J(s.outs)) ch.push('yan ürünler değişti');
+    if (fasonMu(o) !== fasonMu(s)) ch.push(`üretim yeri ${fasonMu(o) ? 'dış üretim' : 'iç üretim'} → ${fasonMu(s) ? 'dış üretim' : 'iç üretim'}`);
+    else if (fasonMu(s) && o.fasonId !== s.fasonId) ch.push(!s.fasonId ? 'fason firma kaldırıldı' : o.fasonId ? 'fason firma değişti' : 'fason firma seçildi');
     if (adimDali(o) !== adimDali(s)) ch.push(`dal ${adimDali(o) ?? 'ana hat'} → ${adimDali(s) ?? 'ana hat'}`);
     if (J(adimBirlesen(o)) !== J(adimBirlesen(s))) ch.push(`birleşen ${adimBirlesen(o).join(', ') || 'yok'} → ${adimBirlesen(s).join(', ') || 'yok'}`);
     if (ch.length) out.push(`${nm(s)}: ${ch.join('; ')}`);
@@ -490,7 +628,7 @@ export function kaydetGovdesi(adimlar: readonly Adim[], izinliOpNolar: readonly 
     const mk = s.machineId ? kimlik(s.machineId, s, 'Makine') : null;
     const ist = s.stationId ? kimlik(s.stationId, s, 'İstasyon') : null;
     const kaynak = mk ? { tur: 'makine', id: mk } : ist ? { tur: 'istasyon', id: ist } : s.fasonId ? { tur: 'fason', id: Number(s.fasonId) }
-      : s.kisiId ? { tur: 'kisi', id: Number(s.kisiId) } : null;
+      : s.fason ? { tur: 'fason', id: null } : s.kisiId ? { tur: 'kisi', id: Number(s.kisiId) } : null;
     const fason = kaynak?.tur === 'fason';
     const proc = (sureSayisi(s.proc) ?? 0) > 0 ? s.proc : null;
     const chg = proc === null ? null : sureSayisi(s.chg);
@@ -643,3 +781,12 @@ export const onerilebilirKartlar = (oneriler: readonly HamOneri[], malzeme: Read
     const kart = malzeme.get(String(oneri.malzemeNo));
     return kart !== undefined && kart.aktif && kart.girdiOlabilir ? [{ oneri, kart }] : [];
   });
+
+// 2557: önizlemeye gönderilecek sipariş miktarı. Sunucu yalnız 1..1 000 000 tam sayı alır; baz kipte, 1'de ve tam sayı olmayan miktarda
+// parametre gönderilmez (sunucu 1 alır) ve ekran sayıları kök başına gösterir. `kesirli` tam sayı olmayan sipariş miktarını bildirir.
+export const ONIZLEME_AZAMI_MIKTAR = 1_000_000;
+export function onizlemeMiktari(baz: boolean, miktar: number): { gonderilen: number | null; kesirli: boolean } {
+  if (baz) return { gonderilen: null, kesirli: false };
+  const gecerli = Number.isInteger(miktar) && miktar >= 1 && miktar <= ONIZLEME_AZAMI_MIKTAR;
+  return { gonderilen: gecerli && miktar !== 1 ? miktar : null, kesirli: !gecerli };
+}

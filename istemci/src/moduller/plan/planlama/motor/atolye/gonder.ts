@@ -2,7 +2,7 @@ import type { CanliDegistiAyrintisi, DortSaatAyrintisi, PlanSurumCevabi, Senaryo
 import type { EskiSurumAyrintisi } from '#paylasilan/hata.ts';
 import type { CalismaGeriAlCevabi, CalismaTaslagiCevabi, TaslaktanCalismayaCevabi } from '#paylasilan/sozlesme/planlama.ts';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import type { AtolyeKomutuCevabi, AtolyeOlayi, EkMesaiEkleGovdesi, IsTasiGovdesi } from '#paylasilan/sozlesme/planlama-atolye.ts';
+import type { AtolyeKomutuCevabi, AtolyeOlayi, EkMesaiEkleGovdesi, IsTasiGovdesi, IsTasiOnizlemesiCevabi } from '#paylasilan/sozlesme/planlama-atolye.ts';
 import { useBildirim } from '../../../../../ortak/arayuz/index.ts';
 import { api, ApiHatasi, hataIletisi } from '../../../../../ortak/veri/api.ts';
 import { tekrarKorumaliGonder } from '../../../../../ortak/veri/istek-kimligi.ts';
@@ -113,7 +113,7 @@ export function calismayiYolla(a: { o: PlanlamaEkranOzellikleri; c: PlanlamaCali
   const acik = (a.sen?.senaryolar ?? []).filter((x) => x.durum === 'acik').length;
   return calismayiGonder({
     komut, not: a.not, hedef: a.hedef, planSurumu: a.sen?.canliSurum ?? a.o.depo.planSurumu?.planSurumu ?? null, canliKabul: a.canliKabul === true,
-    ad: taslakAdi(a.hedef, gunAdi(a.c.D, simdiSaati(a.c)), a.o.depo.ben.kisi.ad, acik),
+    ad: taslakAdi(a.hedef, gunAdi(a.c.D, simdiSaati(a.c, Date.now())), a.o.depo.ben.kisi.ad, acik),
   });
 }
 
@@ -187,7 +187,7 @@ export function useOtomatikUygula(o: Pick<PlanlamaEkranOzellikleri, 'komut' | 'y
   const surum = o.depo.calismaSurumu ?? null;
   useEffect(() => {
     if (bu?.suruyor) return;
-    if (otomatikUygulaAl(surum) && bu) bu.uygula();
+    if (otomatikUygulaAl(surum) && bu) bu.uygula(true);
   }, [bu, surum]);
 }
 
@@ -203,19 +203,31 @@ export function useAtolyeKomutlari(o: Pick<PlanlamaEkranOzellikleri, 'komut' | '
   const { komut, yenile } = o; const yaz = komut !== null && o.yetki.planYaz;
   const { bildir } = useBildirim();
   const [isleniyor, setIsleniyor] = useState(false);
-  const gonder = useCallback(async (is: () => Promise<AtolyeKomutuCevabi>, tamam: string): Promise<boolean> => {
+  // Komut geri alma geçmişine girer: sayfa yeniden okununca komuttan önceki hâl bir geri alma adımı olur (kayit.ts komutBasladi).
+  const gonder = useCallback(async (is: () => Promise<AtolyeKomutuCevabi>, tamam: string, ne: string): Promise<boolean> => {
     setIsleniyor(true);
-    try { otomatikUygulaIste(await is()); bildir('tamam', tamam); yenile(); return true; } catch (h) { bildir('hata', gonderHataIletisi(h)); return false; } finally { setIsleniyor(false); }
-  }, [bildir, yenile]);
-  const simdi = c ? simdiSaati(c) : 0;
+    komut?.komutBasladi?.(ne);
+    // Taşıma aynı emrin adımlarını ittiyse ya da taşınanı öncülünün arkasına kaydırdıysa sunucu nedeni tek satır yazar (2794 3/3 b).
+    try { const r = await is(); otomatikUygulaIste(r); const ileti = r.ileti; bildir('tamam', ileti ? `${tamam} ${ileti}` : tamam); yenile(); return true; } catch (h) { komut?.komutDustu?.(); bildir('hata', gonderHataIletisi(h)); return false; } finally { setIsleniyor(false); }
+  }, [bildir, yenile, komut]);
+  const simdi = c ? simdiSaati(c, Date.now()) : 0;
   const tasi = useMemo(() => (yaz && komut ? (id: string, m: string, S: number): void => {
-    void gonder(() => isiTasi(komut, { isId: id, tezgah: m, baslangic: tasimaSaati(S, simdi) }), 'İş taşındı; plan yeniden diziliyor.');
+    void gonder(() => isiTasi(komut, { isId: id, tezgah: m, baslangic: tasimaSaati(S, simdi) }), 'İş taşındı; plan yeniden diziliyor.', 'İş taşındı');
   } : null), [yaz, komut, gonder, simdi]);
-  const olayEkle = useMemo(() => (yaz && komut ? (olay: AtolyeOlayi): Promise<boolean> => gonder(() => olayiEkle(komut, olay), 'Olay eklendi; plan yeniden diziliyor.') : null), [yaz, komut, gonder]);
+  const olayEkle = useMemo(() => (yaz && komut ? (olay: AtolyeOlayi): Promise<boolean> => gonder(() => olayiEkle(komut, olay), 'Olay eklendi; plan yeniden diziliyor.', 'Olay eklendi') : null), [yaz, komut, gonder]);
   const ekMesai = useMemo(() => (yaz && komut ? (m: string, gun: number, vardiya: string): void => {
-    void gonder(() => ekMesaiyiEkle(komut, { tezgah: m, gun, vardiya }), 'Ek mesai eklendi; plan yeniden diziliyor.');
+    void gonder(() => ekMesaiyiEkle(komut, { tezgah: m, gun, vardiya }), 'Ek mesai eklendi; plan yeniden diziliyor.', 'Ek mesai eklendi');
   } : null), [yaz, komut, gonder]);
   return isleniyor ? { tasi: null, olayEkle: null, ekMesai: null, isleniyor } : { tasi, olayEkle, ekMesai, isleniyor };
+}
+
+// Elle taşımanın önizlemesi (2790 a, 2794): bırakılınca yazılacak yerler; aynı emrin adımları rotadaki bağa göre itilir ya da çekilir.
+// Uç okunamazsa null: sürükleme önizlemesiz sürer, taşımayı sunucu yine denetler.
+export type IsTasiOnizlemesi = IsTasiOnizlemesiCevabi;
+export const IS_TASI_ONIZLEME_YOLU = '/plan/planlama-calismasi/is-tasi-onizlemesi';
+export function isTasiOnizle(g: { isId: string; tezgah: string; baslangic: number }): Promise<IsTasiOnizlemesi | null> {
+  const q = new URLSearchParams({ isId: g.isId, tezgah: g.tezgah, baslangic: String(g.baslangic) });
+  return api.get<IsTasiOnizlemesi>(`${IS_TASI_ONIZLEME_YOLU}?${q.toString()}`).then((c) => c, () => null);
 }
 
 // Taşımanın saati çeyrek saate yuvarlanır ve şimdiden önce olamaz (sunucu geçmişe konan kilidi reddeder).

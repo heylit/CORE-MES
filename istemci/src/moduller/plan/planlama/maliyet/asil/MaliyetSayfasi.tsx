@@ -5,8 +5,8 @@ import { planGuncel } from '../../durum.ts';
 import type { PlanlamaGorunumu } from '../../gorunumler.ts';
 import type { PlanlamaCalismasi } from '../../tipler.ts';
 import {
-  agAyar, baslangicMs, birimMaliyet, fasonTalasId, genelGiderHesabi, kgFiyatlari, kgSatiri, maliyetSistemi, malzemeler, mesaiSistemi, ML_CINS, ML_FORM,
-  norm, planMaliyeti, sayi, sayiGirdisi, takvimKur, talasFiyatlari, tl, tlEksi, tlSaat, wipAyar, ymAyar, yuzde, type KgBasvurusu, type MaliyetBaglami,
+  agAyar, birimMaliyet, fasonTalasId, kgFiyatlari, kgSatiri, malzemeler, mesaiSistemi, ML_CINS, ML_FORM,
+  norm, planMaliyeti, sayi, sayiGirdisi, talasFiyatlari, tl, tlEksi, tlSaat, wipAyar, ymAyar, yuzde, type KgBasvurusu, type MaliyetBaglami,
 } from '../kurallar.ts';
 import {
   ayarlar, beklemeAcikYaz, erkenSevkYaz, fasonAlanYaz, fasonFiyatAlani, kgAlanYaz, kgEkleYaz, kgSilYaz, kgVarMi, maliyetAyariYaz, netKgYaz, talasYaz,
@@ -14,14 +14,15 @@ import {
 } from '../yazmalar.ts';
 import { Alan, AltNot, AsilKart, Kilit, Not, SayiGir, Segment } from './girdi.tsx';
 import { planDisi } from '../../tipler.ts';
+import type { EmirNo } from '../../ortak/emir-no.ts';
 
 // Maliyetler sayfasının "Tüm satırlar"ı: bugünkü sayfanın kartları (zu-yan-sayfalar sMaliyetler, ymBeklemeKart; zv-termin "Bu planın bütün
 // maliyeti"; zz6 genel gider ve mesai bedeli satırları). Girdiler satır içidir; her biri tek değişiklik yazar.
 
-interface Ozellik { c: PlanlamaCalismasi; b: MaliyetBaglami | null; para: boolean; yaz: Yaz | null; kim: string; git: (g: PlanlamaGorunumu) => void }
+interface Ozellik { c: PlanlamaCalismasi; b: MaliyetBaglami | null; para: boolean; yaz: Yaz | null; kim: string; git: (g: PlanlamaGorunumu) => void; emirNo?: EmirNo }
 const sayiOf = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) ? v : null);
 
-export function MaliyetSayfasi({ c, b, para, yaz, kim, git }: Ozellik) {
+export function MaliyetSayfasi({ c, b, para, yaz, kim, git, emirNo = (j) => j }: Ozellik) {
   const D = c.D;
   const Y = ymAyar(D);
   const kapali = !yaz || !para;
@@ -58,7 +59,7 @@ export function MaliyetSayfasi({ c, b, para, yaz, kim, git }: Ozellik) {
       <KgKarti c={c} kapali={kapali} y={y} kim={kim} />
       <TalasKarti c={c} kapali={kapali} y={y} kim={kim} />
       <BeklemeKarti c={c} kapali={kapali} y={y} />
-      <ErkenSevkKarti c={c} kapali={kapali} y={y} />
+      <ErkenSevkKarti c={c} kapali={kapali} y={y} emirNo={emirNo} />
     </>
   );
 }
@@ -67,10 +68,12 @@ type Y = (f: (z: Yaz) => boolean) => boolean;
 
 function PlanMaliyetKarti({ b }: { b: MaliyetBaglami }) {
   const t = planMaliyeti(b);
+  // Gizli ayda genel gider 0 değil "gizli" yazılır; 0, "genel gider yok" diye okunurdu.
+  const gizli = ymAyar(b.c.D).genelGiderGizli;
   const sat: [Parameters<typeof Simge>[0]['ad'], string, number | null, string, boolean][] = [
     ['box', 'Malzeme', t.mal, 'kg fiyatı × fire dahil miktar', false], ['rotate', 'Talaş satışı', t.talas ? -t.talas : 0, 'malzemeden düşülür', false],
     ['cpu', 'İşleme', t.isl, 'tezgâh saat maliyeti', true], ['wrench', 'Ayar', t.ayar, 'tezgâh + ayarcı', true],
-    ['layers', 'Genel gider', t.gg, 'tezgâh saati × yük oranı', true], ['truck', 'Fason', t.fas, 'fiyat + taşıma', true],
+    ['layers', 'Genel gider', gizli ? null : t.gg, gizli ? 'Finans oranı bu ay gizli' : 'tezgâh saati × yük oranı', true], ['truck', 'Fason', t.fas, 'fiyat + taşıma', true],
     ['clock', 'Ek mesai', t.mesTop, t.mesTop !== null && t.mesTop - t.mes > 1 ? `${tl(t.mesTop - t.mes)} işe düşmüyor` : 'vardiya × ücret × çarpan', true],
     ['pause', 'Bekleme finansmanı', t.fin, 'yarı mamul', true], ['lira', 'Erken tahsilat', t.tah, 'vade üretim bitince başlar', true],
     ['alert', 'Gecikme bedeli', t.gec, 'sipariş başına bedel × saat', true],
@@ -85,11 +88,11 @@ function PlanMaliyetKarti({ b }: { b: MaliyetBaglami }) {
             {sat.map(([sm, ad, v, alt, amac]) => (
               <tr key={ad}>
                 <td><Simge ad={sm} boyut="k" /> {ad}<AltNot>{alt}</AltNot></td>
-                <td className="tc-pyk-num"><b>{v === null ? tl(null) : tlEksi(v)}</b></td>
+                <td className="tc-pyk-num"><b>{v === null ? (gizli && sm === 'layers' ? <Rozet ton="pasif">gizli</Rozet> : tl(null)) : tlEksi(v)}</b></td>
                 <td>{amac ? <Rozet ton="tamam">evet</Rozet> : <Rozet ton="pasif">sabit</Rozet>}</td>
               </tr>
             ))}
-            <tr className="tc-pyk-toplam"><td><b>Toplam</b></td><td className="tc-pyk-num"><b>{tl(top)}</b></td><td /></tr>
+            <tr className="tc-pyk-toplam"><td><b>Toplam</b>{gizli && <AltNot>genel gider hariç</AltNot>}</td><td className="tc-pyk-num"><b>{tl(top)}</b></td><td /></tr>
           </tbody>
         </table>
       </div>
@@ -136,23 +139,21 @@ function IscilikKarti({ c, kapali, y, git }: { c: PlanlamaCalismasi; kapali: boo
   const D = c.D;
   const Y = ymAyar(D);
   const A = ayarlar(D);
-  const kalem = maliyetSistemi(D).kip === 'kalem';
   const kisi = mesaiSistemi(D).kisiBazli;
-  const ort = kalem && baslangicMs(D) !== null ? genelGiderHesabi(c, takvimKur(c)).ort : null;
   return (
     <AsilKart simge="user" baslik="İşçilik ve mesai">
       <div className="tc-pyk-alanlar">
         <Alan ad="Ayarcı ücreti TL/sa"><SayiGir deger={sayiOf(A.ayarciUcret)} ad="Ayarcı ücreti" adim={10} max={100000} bosOlmaz kapali={kapali} yaz={(v) => v !== null && y((z) => ucretYaz(z, D, 'ayarciUcret', v))} /></Alan>
         <Alan ad="Operatör ücreti TL/sa"><SayiGir deger={Y.operatorUcret} ad="Operatör ücreti TL/sa" adim={10} yer="makineye dahil" kapali={kapali} yaz={(v) => y((z) => maliyetAyariYaz(z, D, 'operatorUcret', v))} /></Alan>
         {kisi
-          ? <Alan ad="Mesai bedeli"><button type="button" className="tc-pyk-bag" onClick={() => { git('mesaiplan'); }}>kişi ücretinden, Ek mesai planı</button></Alan>
+          ? <Alan ad="Mesai bedeli"><button type="button" className="tc-pyk-bag" onClick={() => { git('mesaiplan'); }}>grup saat maliyetinden (bugün bilinmiyor), Ek mesai planı</button></Alan>
           : <>
             <Alan ad="Mesai ücreti TL/sa"><SayiGir deger={sayiOf(A.mesaiUcret)} ad="Mesai ücreti" adim={10} max={100000} bosOlmaz kapali={kapali} yaz={(v) => v !== null && y((z) => ucretYaz(z, D, 'mesaiUcret', v))} /></Alan>
-            <Alan ad="Hafta sonu ve tatil mesai çarpanı"><SayiGir deger={Y.mesaiCarpan} ad="Hafta sonu ve tatil mesai çarpanı" min={1} max={3} yer="1" bosOlmaz kapali={kapali} yaz={(v) => y((z) => maliyetAyariYaz(z, D, 'mesaiCarpan', v))} /></Alan>
+            <Alan ad="Ek mesai çarpanı"><SayiGir deger={Y.mesaiCarpan} ad="Ek mesai çarpanı" min={1} max={3} yer="1" bosOlmaz kapali={kapali} yaz={(v) => y((z) => maliyetAyariYaz(z, D, 'mesaiCarpan', v))} /></Alan>
           </>}
-        {kalem
-          ? <Alan ad="Genel gider"><b className="tc-pyk-mono">{ort === null ? '—' : tlSaat(ort)} ort.</b><button type="button" className="tc-pyk-bag" onClick={() => { git('giderler'); }}>kalemlerden, tezgâh başına</button></Alan>
-          : <Alan ad="Genel gider TL/tezgâh saati"><SayiGir deger={Y.genelGider} ad="Genel gider TL/tezgâh saati" adim={10} max={100000} yer="yok" kapali={kapali} yaz={(v) => y((z) => maliyetAyariYaz(z, D, 'genelGider', v))} /></Alan>}
+        {Y.genelGiderGizli
+            ? <Alan ad="Genel gider TL/tezgâh saati"><Rozet ton="pasif">gizli</Rozet><span className="tc-pyk-soluk">Finans oranı bu ay gizli; maliyet genel gider hariç</span></Alan>
+            : <Alan ad="Genel gider TL/tezgâh saati"><b className="tc-pyk-mono">{Y.genelGider === null ? '—' : tlSaat(Y.genelGider)}</b><span className="tc-pyk-soluk">{Y.genelGider === null ? 'Finans oranı girilmemiş; siparişin genel gideri bilinmez' : 'Finans oranı; Finans modülünde değişir'}</span></Alan>}
         <Alan ad="Varsayılan hedef kâr oranı %"><SayiGir deger={Y.karHedef} ad="Varsayılan hedef kâr oranı %" max={300} bosOlmaz kapali={kapali} yaz={(v) => y((z) => maliyetAyariYaz(z, D, 'karHedef', v))} /></Alan>
       </div>
       <Not>Finansman oranı (%{sayi(agAyar(D).fin, 2)}/gün) Öncelik ve ağırlık sayfasındadır. Genel gider ürün maliyetinde ve teklifte sayılır, plan amacına girmez: kira ve amortisman iş hangi tezgâhta yapılırsa yapılsın aynıdır.</Not>
@@ -327,7 +328,7 @@ function BeklemeKarti({ c, kapali, y }: { c: PlanlamaCalismasi; kapali: boolean;
   );
 }
 
-function ErkenSevkKarti({ c, kapali, y }: { c: PlanlamaCalismasi; kapali: boolean; y: Y }) {
+function ErkenSevkKarti({ c, kapali, y, emirNo }: { c: PlanlamaCalismasi; kapali: boolean; y: Y; emirNo: EmirNo }) {
   const D = c.D;
   const l = D.siparisler.filter((s) => !planDisi(s));
   return (
@@ -337,7 +338,7 @@ function ErkenSevkKarti({ c, kapali, y }: { c: PlanlamaCalismasi; kapali: boolea
         {l.map((s) => (
           <label key={s.id} className="tc-pyk-es-sip">
             <input type="checkbox" checked={s.erkenSevk === true} disabled={kapali} onChange={(o) => { y((z) => erkenSevkYaz(z, D, s.id, o.currentTarget.checked)); }} />
-            <span className="tc-pyk-mono">{s.id}</span>
+            <span className="tc-pyk-mono">{emirNo(s.id)}</span>
           </label>
         ))}
       </div>
