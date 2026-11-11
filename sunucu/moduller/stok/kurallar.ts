@@ -3,6 +3,7 @@ import type { KatalogTuru } from '#paylasilan/sozlesme/malzemeler.ts';
 import { ACIK_EMIR_DURUMLARI, type KapanisMaddeBilgisi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { kodTuru, okutmaDuzelt } from '#paylasilan/kod-sozlugu.ts';
 import { ELLE_KONUM_TURLERI, type FisGonderimSekli, type LogoFisDurumu, type MalzemeFisiTuru, type KaliteDurumu, type KoduDegisenKonum, type KonumTuru, type MalzemeIstegiDurumu, type TeslimDurumu } from '#paylasilan/sozlesme/stok.ts';
+import { FABRIKA_GENELI_ALAN_TURLERI, HARITA_ALAN_TURLERI, type HaritaAlanTuru } from '#paylasilan/sozlesme/stok-harita-sabitleri.ts';
 
 // ---- Miktar: numeric(14,3) metni binde tam sayıya çevrilir; ondalık hata payı olmaz ------------------------------
 const MIKTAR = /^(-)?(\d+)(?:\.(\d{1,3}))?$/;
@@ -615,9 +616,9 @@ export function alisFiyatlari(olaylar: readonly AlisOlayi[], kesimler: readonly 
 // değişmesin), bildirilir.
 // Haritadaki bütün kutular stok barındırır (QR teslim, karar 97): oda, cam oda, bölge, karantina, sevkiyat ve palet de konum olur;
 // karantina ve sevkiyat ayrılmış yerdir (AYRILMIS_KONUM_TURLERI). Yürüyüş yolu yer değil geçittir, konum olmaz.
-export const HARITA_ALAN_TURLERI = ['kabul', 'uretim_cikisi', 'depo_zemini', 'fason', 'ara_alan', 'hurda', 'oda', 'cam_oda', 'bolge', 'karantina', 'sevkiyat', 'palet'] as const;
-const FABRIKA_GENELI = new Set<string>(['fason', 'ara_alan', 'hurda', 'oda', 'cam_oda', 'bolge', 'karantina', 'sevkiyat', 'palet'] satisfies HaritaAlanTuru[]);
-export type HaritaAlanTuru = (typeof HARITA_ALAN_TURLERI)[number];
+// Tür listeleri istemcideki notla tek kaynak olsun diye sözleşmededir (2884).
+export { HARITA_ALAN_TURLERI, type HaritaAlanTuru };
+const FABRIKA_GENELI = new Set<string>(FABRIKA_GENELI_ALAN_TURLERI);
 export interface HaritaGozu { id: number; adres: string; salonId: number; salonKodu: string; bolme: number; kat: number; rafAktif: boolean }
 export interface HaritaAlani { id: number; salonId: number; tur: string; ad: string }
 export interface HaritaDeposu { id: number; kod: string; salonId: number | null; aktif: boolean }
@@ -1261,6 +1262,30 @@ export const fasonDonusKonumuEngeli = (tur: KonumTuru): string | null => (tur ==
 export const GKK_GIRIS_KARANTINA = 'Giriş kalite kontrolü isteyen kart karantina konumuna girer; kalite kararından sonra çıkar.';
 export const GKK_KARANTINA_KONUMU_YOK = 'Karantina konumu yok; giriş kalite kontrolü için Depo haritasına karantina alanı ekleyin.';
 export const gkkGirisKonumuEngeli = (tur: KonumTuru): string | null => (tur === 'karantina' ? null : GKK_GIRIS_KARANTINA);
+// 2884: aktif karantina konumu yoksa neden haritadan söylenir; ilk ileti ne yapılacağını söyler. Haritada karantina alanı yoksa bugünkü
+// ileti kalır. Alanı olan pasif konum eşlemede yeniden açılır (haritaPlani), bu yüzden "eşlenmemiş" sayılır. Karantina fabrika geneli
+// türdür: bölüm deposu yoksa ANA depoya bağlanır; ikisi de yoksa konum olamaz. Stoklu konumun türü eşlemede değişmez.
+export type KarantinaEksigi = 'haritada_yok' | 'eslenmemis' | 'deposuz' | 'stoklu_tur';
+export function karantinaEksigi(g: { alanlar: readonly HaritaAlani[]; depolar: readonly HaritaDeposu[]; konumlar: readonly HaritaKonumu[] }): KarantinaEksigi {
+  const alanlar = g.alanlar.filter((a) => a.tur === 'karantina');
+  if (alanlar.length === 0) return 'haritada_yok';
+  const depolu = new Set(g.depolar.flatMap((d) => (d.salonId !== null && d.aktif ? [d.salonId] : [])));
+  const anaVar = g.depolar.some((d) => d.kod === 'ANA' && d.aktif);
+  const baglanan = alanlar.filter((a) => anaVar || depolu.has(a.salonId));
+  if (baglanan.length === 0) return 'deposuz';
+  const alanKonumu = new Map(g.konumlar.flatMap((k) => (k.alanId === null ? [] : [[k.alanId, k] as const])));
+  const turuTakili = (a: HaritaAlani): boolean => { const k = alanKonumu.get(a.id); return k !== undefined && k.tur !== 'karantina' && k.satirSayisi > 0; };
+  return baglanan.every(turuTakili) ? 'stoklu_tur' : 'eslenmemis';
+}
+export function karantinaYokIletisi(neden: KarantinaEksigi, amac: 'fason' | 'gkk'): string {
+  const icin = amac === 'fason' ? 'fason dönüşü' : 'giriş kalite kontrolü';
+  switch (neden) {
+    case 'haritada_yok': return amac === 'fason' ? KARANTINA_KONUMU_YOK : GKK_KARANTINA_KONUMU_YOK;
+    case 'eslenmemis': return `Karantina alanı haritada var ama stok konumu değil; ${icin} için Stok > Ayarlar'da "Haritadan eşle"ye basın.`;
+    case 'deposuz': return `Karantina alanı haritada var ama bölümü stok deposu değil ve ANA depo yok; ${icin} için Stok > Ayarlar'da bölümü depo yapın.`;
+    case 'stoklu_tur': return `Karantina alanının stok konumunda başka türde stok var; tür stok taşınmadan değişmez. ${icin} için stoğu taşıyın, sonra Stok > Ayarlar'da "Haritadan eşle"ye basın.`;
+  }
+}
 // 1246 (VARSAYIM): kalite kararı verilmiş GKK satırının stoğu karantinadan çıkmış ya da red olmuştur; ters hareket onu geri alamaz.
 export function girisKontroluDuzeltmeEngeli(satirlar: readonly { miktar: string; bekleyen: string }[]): string | null {
   return satirlar.some((s) => binde(s.bekleyen) < binde(s.miktar))

@@ -16,7 +16,7 @@ import { projeAdlari } from '../../projeler/disari.ts';
 import { uretimEmriOzeti, emirDugumleri, emirlerinProjeleri, isEmriOzetleri, kapanisSonuclari } from '../../uretim-emirleri/disari.ts';
 import {
   binde, bindenMetin, duzeltmeEngeli, partiDenetimi, partiEtiketi, partiGereksinimi, stoklanirMi, siparisBagiEngeli, siparisMalzemeEngeli, malKabulSatirTuru, fasonDonusKonumuEngeli,
-  KARANTINA_KONUMU_YOK, gkkGirisKonumuEngeli, malKabulKonumuEngeli, GKK_KARANTINA_KONUMU_YOK, girisKontroluDuzeltmeEngeli, uretimGirisiEngeli, uretimGirisiDurumEngeli, uretimGirisiHedefi,
+  karantinaYokIletisi, gkkGirisKonumuEngeli, malKabulKonumuEngeli, girisKontroluDuzeltmeEngeli, uretimGirisiEngeli, uretimGirisiDurumEngeli, uretimGirisiHedefi,
   uretimGirisiKartEngeli, uretimGirisiKesirEngeli, sktGirisEngeli, revizyonUyusmuyor,
 } from '../kurallar.ts';
 import type { MalzemeTuru } from '../kurallar.ts';
@@ -24,6 +24,7 @@ import * as sorgular from '../sorgular.ts';
 import { fasonIsindenDonus, sevkKalemiKabulu } from './dis-akis.ts';
 import { kaynakPartisi, dusumDenetle, kaliteDegistir, partiKaliteDurumuYap, karantinadanBirak, tersCevir } from './hareket.ts';
 import { belgeNo, partiBulVeyaAc, yururluktekiRevizyonlar, korumali, adlar, emirNoDe, emirNoHaritasi, aktifKonum, varsayilanKonum, bakiyeDegistir, siraliKilitle, hareket } from './ortak.ts';
+import { karantinaEksigiNedeni } from './depo.ts';
 import { partiBelgeleri } from './pano.ts';
 import { emirVarDenetle, bekleyenlereDagit } from './uretim.ts';
 
@@ -71,7 +72,7 @@ async function malKabulSatirlariniYaz(
       if (s.fason !== undefined) throw dogrulama('Fason işinden dönüşte giden kart ayrıca seçilmez; giden, işin parçasıdır.', `${alan}.fason`);
       if (s.partiId !== undefined || s.parti || s.ambalaj || s.sertifika) throw dogrulama('Fason işinden dönen parça emrin parçasıdır; parti, ambalaj ve sertifika girilmez.', `${alan}.parti`);
       const konumId = s.konumId === undefined ? await sorgular.ilkKarantinaKonumu(db) : Number(s.konumId);
-      if (konumId === null) throw dogrulama(KARANTINA_KONUMU_YOK, `${alan}.konumId`);
+      if (konumId === null) throw dogrulama(karantinaYokIletisi(await karantinaEksigiNedeni(db), 'fason'), `${alan}.konumId`);
       const konum = await aktifKonum(db, konumId, `${alan}.konumId`);
       const karantina = fasonDonusKonumuEngeli(konum.tur);
       if (karantina) throw dogrulama(karantina, `${alan}.konumId`);
@@ -89,7 +90,7 @@ async function malKabulSatirlariniYaz(
     // 1246 (1247 d, 1251): kartı GKK isteyen satın alma lotu karantinaya karar bekliyor girer; kararı giriş kontrolü verir.
     const gkk = tur === 'satin_alma' && satirTuru.tur === 'stok' && (await gkkGerekenKartlar(db, [malzemeId])).has(malzemeId);
     const konumId = s.konumId !== undefined ? Number(s.konumId) : gkk ? await sorgular.ilkKarantinaKonumu(db) : kabul;
-    if (konumId === null) throw dogrulama(GKK_KARANTINA_KONUMU_YOK, `${alan}.konumId`);
+    if (konumId === null) throw dogrulama(karantinaYokIletisi(await karantinaEksigiNedeni(db), 'gkk'), `${alan}.konumId`);
     const konum = await aktifKonum(db, konumId, `${alan}.konumId`);
     const gkkEngeli = gkk ? gkkGirisKonumuEngeli(konum.tur) : malKabulKonumuEngeli(konum.tur);
     if (gkkEngeli) throw dogrulama(gkkEngeli, `${alan}.konumId`);

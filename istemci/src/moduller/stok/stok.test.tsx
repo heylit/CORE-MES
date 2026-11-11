@@ -3,6 +3,8 @@ import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/re
 import type {
   AcikSiparisSatirlariCevabi, FasonIsleriCevabi, PartiIziCevabi, SonPartilerCevabi, BakiyeSatiri, EmirTamamlamaCevabi, KonumAyrintiCevabi, MalKabulAyrintiCevabi, HareketlerCevabi, IsKutusuCevabi, KonumlarCevabi, MalKabullerCevabi, MalzemeAyrintiCevabi, MalzemelerCevabi, MalzemeOzetiCevabi, MalzemeStokSatiri, PanelCevabi, StokDegeriCevabi, RafMatrisiCevabi, RaflarCevabi, ZeminCevabi,
 } from '#paylasilan/sozlesme/stok.ts';
+import { HARITA_ALAN_TURLERI } from '#paylasilan/sozlesme/stok-harita-sabitleri.ts';
+import { KONUM_ETIKETI } from './gorunum.ts';
 import { DEPOCU, MUDUR, OKUYUCU, ac, json, sunucuKur } from './test-ortak.tsx';
 import { ApiHatasi, ISTEK_KIMLIGI_BASLIGI } from '../../ortak/veri/api.ts';
 import { korumaliPost } from './ortak.tsx';
@@ -1070,6 +1072,14 @@ describe('Fabrika Haritası bağı (#686)', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Depo yap: DENEME-AT1' }));
     await waitFor(() => expect(istekler.find((i) => i.yol === '/stok/harita-bolumleri/2/depo')?.govde).toEqual({ depo: true }));
     expect(screen.getByRole('button', { name: 'Depodan çıkar: ANA' })).toBeTruthy();
+  });
+  it('2884: harita bağı notu eşlemenin bütün alan türlerini sayar ve ANA depo bağını söyler', async () => {
+    sunucuKur(MUDUR, { 'GET /stok/harita-ozeti': () => json(200, { bolum: 1, goz: 0, alan: 0, eslenmemis: 0, bagsizKonumlar: [], bolumler: [] }), 'GET /stok/depolar': () => json(200, { depolar: [] }) });
+    ac('/stok/ayarlar');
+    const not = (await screen.findByText(/Haritadaki şu alanlar da konum olur/)).textContent ?? '';
+    for (const t of HARITA_ALAN_TURLERI) expect(not).toContain(KONUM_ETIKETI[t].toLocaleLowerCase('tr-TR'));
+    expect(not).toContain('karantina alanı');
+    expect(not).toMatch(/ANA depoya bağlanır/);
   });
   it("1288: bütün raf gözü etiketleri gözleri okuyup Etiket Merkezi'ne gider; Etiket Merkezi'ni açamayan düğmeyi görmez", async () => {
     const ozet = { bolum: 1, goz: 2, alan: 0, eslenmemis: 0, bagsizKonumlar: [], bolumler: [] };

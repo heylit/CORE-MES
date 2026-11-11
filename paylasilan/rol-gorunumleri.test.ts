@@ -2,10 +2,10 @@ import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import { GENIS_MENU, MENU_SINIRI, ROL_GORUNUMLERI, etkinGorunum, seritRolGorunurMu } from './rol-gorunumleri.ts';
 import { SAYFALAR, menudeGorunur } from './sayfalar.ts';
-import { rolunIslemleri, type RolKodu } from '../araclar/yetki-beklentisi.ts';
+import { ROL_KODLARI, YONETICI_ROLU, rolunIslemleri, type RolKodu } from '../araclar/yetki-beklentisi.ts';
 
 describe('rol görünümleri (1390 a)', () => {
-  test('her rolün menüsü en çok 8 sayfadır (müdür ve planlamada 9, 1851 a), tekrarsızdır ve yalnız menüde görünen kayıtlı sayfaları içerir', () => {
+  test('her rolün menüsü en çok 8 sayfadır (müdür ve planlamada 10, kalitede 9; 1851 a, 2945 a), tekrarsızdır ve yalnız menüde görünen kayıtlı sayfaları içerir', () => {
     const menudekiler = new Set(SAYFALAR.filter(menudeGorunur).map((s) => s.yol as string));
     for (const [rol, g] of Object.entries(ROL_GORUNUMLERI)) {
       assert.ok(g.sayfalar.length > 0 && g.sayfalar.length <= (GENIS_MENU[rol] ?? MENU_SINIRI), `${rol}: ${String(g.sayfalar.length)} sayfa`);
@@ -27,8 +27,20 @@ describe('rol görünümleri (1390 a)', () => {
   };
 
   test('2893-5 a: Adım Durumu yetkili rolün ana menüsünde görünür, yetkisiz rolde görünmez', () => {
-    for (const rol of ['cam', 'muhasebe_finans', 'uretim_muduru'] as const) assert.ok(menusu(rol).includes('/adim-durumu'), rol);
-    for (const rol of ['operator', 'vardiya_sorumlusu', 'depo', 'satis'] as const) assert.equal(menusu(rol).includes('/adim-durumu'), false, rol);
+    for (const rol of ROL_KODLARI) {
+      if (rol === YONETICI_ROLU.kod || ROL_GORUNUMLERI[rol] === undefined) continue;
+      const yetkili = (rolunIslemleri(rol) as readonly string[]).includes('sayfa.adim-durumu');
+      assert.equal(menusu(rol).includes('/adim-durumu'), yetkili, rol);
+    }
+  });
+
+  test('2945 a: Adım Durumu Üretim Emirleri\'nin yanında; üretim müdüründe Vardiya\'dan sonra', () => {
+    for (const rol of ['mudur', 'planlama_proje', 'kalite', 'cam'] as const) {
+      const m = menusu(rol);
+      assert.equal(m.indexOf('/adim-durumu'), m.indexOf('/uretim-emirleri') + 1, rol);
+    }
+    const um = menusu('uretim_muduru');
+    assert.equal(um.indexOf('/adim-durumu'), um.indexOf('/vardiya') + 1);
   });
 
   test('operatör CNC Kurulum görmez (1393 c+); yönetici rol listesinde yoktur, tam görünümdedir', () => {

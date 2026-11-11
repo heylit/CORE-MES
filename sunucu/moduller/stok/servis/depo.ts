@@ -13,7 +13,7 @@ import {
   alanlar as haritaAlanlari, gozAdresi as haritaGozAdresi, gozKaleminBolumu, gozKalemiSil as haritaGozKalemiSil, gozKalemiYaz as haritaGozKalemiYaz, gozler as haritaGozleri, rafYerlesimiKaydet,
   zemin as haritaZemini,
 } from '../../atolye/disari.ts';
-import { bolmeNo, rafGozleri, haritaPlani, haritaAlaniMi, depoKoduOner, deposuzBolumler, konumTurDegisimEngeli, koduDegisenler } from '../kurallar.ts';
+import { bolmeNo, rafGozleri, haritaPlani, haritaAlaniMi, depoKoduOner, deposuzBolumler, konumTurDegisimEngeli, koduDegisenler, karantinaEksigi, type KarantinaEksigi } from '../kurallar.ts';
 import { aktifIstasyonlar } from '../../istasyonlar/disari.ts';
 import * as sorgular from '../sorgular.ts';
 import { istasyonKonumunuSil } from '../sorgular/depo/sorgular.ts';
@@ -148,6 +148,11 @@ export async function haritadanEsle(db: Db): Promise<HaritaEslemeCevabi> {
     eklenen: plan.ekle.length, guncellenen: plan.guncelle.length + plan.turDegisimi.length, kapatilan, atlanan: plan.atlanan,
     koduDegisenler: idler.length === 0 ? [] : koduDegisenler(onceki, await sorgular.kodDurumlari(db, { idler })),
   };
+}
+
+// 2884: aktif karantina konumu bulunamayınca nedeni (mal kabul iletisi için); yeni sorgu yok, eşlemenin okuduklarıyla.
+export async function karantinaEksigiNedeni(db: Db): Promise<KarantinaEksigi> {
+  return karantinaEksigi({ alanlar: await haritaAlanlari(db), depolar: await sorgular.haritaDepolari(db), konumlar: await sorgular.haritaKonumlari(db) });
 }
 
 export async function haritaOzeti(db: Db): Promise<HaritaOzetiCevabi> {

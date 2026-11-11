@@ -584,3 +584,11 @@ Lotun son kullanma tarihi (SKT) yeni `stok_parti_son_kullanma` tablosundadır (2
 - İstasyon silinirken kullanılmamış konumu kayıt noktasında silinir; hareketi ya da bakiyesi olan konumu yabancı anahtar korur, istasyon "kullanımda" kalır. Konumu olan istasyonun silinemez hale gelmemesi için.
 - Kart 2902 v2: istasyon konumu artık baştan açık olduğu için sayımdaki kalite uyarısı (135) her satırda emri ve adımı okuyordu (Arkon satır başına sorgu sınırı aşıldı). Uyarı önce istasyon konumunda red ya da karar bekleyen bakiye var mı diye tek sorguyla bakar (`kaliteBekleyenIstasyonKonumu`); yoksa emir okunmaz. Davranış aynı.
 - Kart 2902 ek (N1): toplu depo komutu elle depodan çıkarılmış bölümü artık yeniden açmaz; cevaba `atlananPasifDepolar` (depo kodları) eklendi, `deposuzYer` bu bölümleri saymaz. Düğme yalnız sayılan yer varken görünür.
+## Karantina konumu yokken ileti nedeni söyler; harita bağı notu tek kaynaktan (kart 2884, 11.11.2026)
+- Mal kabul (GKK isteyen satın alma satırı ve fason dönüşü) aktif karantina konumu bulamayınca ileti nedeni ayırır (`kurallar.ts`
+  `karantinaEksigi`, `karantinaYokIletisi`; `servis/depo.ts` `karantinaEksigiNedeni`, yeni sorgu yok): haritada karantina alanı yoksa bugünkü
+  ileti aynen; alan var ama eşlenmemişse ya da konumu kapanmışsa "Stok > Ayarlar'da Haritadan eşle"; bölümü depo değil ve ANA depo yoksa
+  "bölümü depo yapın"; alanın konumu başka türde stok tutuyorsa "stoğu taşıyın". Eşleme kuralı (`haritaPlani`) ve konum türleri değişmedi.
+- `HARITA_ALAN_TURLERI` ve fabrika geneli türler (`FABRIKA_GENELI_ALAN_TURLERI`) `paylasilan/sozlesme/stok.ts`'e taşındı (değerler aynı);
+  Ayarlar'daki "Fabrika Haritası eşlemesi" notu bu listelerden ve `KONUM_ETIKETI`'nden üretilir, ANA depo bağını da söyler.
+- Uç, yetki ve göç değişmedi.
