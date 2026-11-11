@@ -381,9 +381,9 @@ describe('boş, sırada ve aynı istasyonda çok iş', () => {
     const gruplar = istasyonEmirGruplari([calisan, duran]);
     expect(gruplar.get(5)?.map((e) => e.emirNo)).toEqual(['UE-ORN-4', 'UE-ORN-3']);
     expect(emirlerIstasyonaGore([calisan, duran]).get(5)?.emirNo).toBe('UE-ORN-4');
-    // Sağlam toplamı iki emirden; istasyon bir kez sayılır (durdu).
+    // Özet süren işleri kendi durumuyla sayar: kartta "Çalışıyor" görünen ikinci iş özette de çalışıyor sayılır.
     const yer = YERLESIM.istasyonYerleri[0];
     if (!yer) throw new Error('örnek yer yok');
-    expect(ozetle([yer], gruplar)).toEqual({ calisiyor: 0, durakli: 0, durdu: 1, sirada: 0, bos: 0, saglam: 7 });
+    expect(ozetle([yer], gruplar)).toEqual({ calisiyor: 1, durakli: 0, durdu: 1, sirada: 0, bos: 0, saglam: 7 });
   });
 });

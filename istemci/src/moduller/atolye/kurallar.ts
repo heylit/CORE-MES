@@ -141,19 +141,25 @@ export interface Ozet {
   saglam: number | null;
 }
 
-// İstasyon başına tek durum (sorunlu emir önce); sağlam toplamı istasyondaki bütün başlamış emirlerden.
+// Süren işler kendi durumuyla sayılır: iki işli istasyonda biri durmuş, öbürü çalışıyorsa ikisi de sayılır
+// (kartta görünen ikinci iş özette kaybolmaz). Emirsiz istasyon bir kez "Sırada" ya da "Boş" sayılır.
 export function ozetle(yerler: readonly IstasyonYeri[], gruplar: ReadonlyMap<number, readonly Emir[]>, siradaIstasyonlar: ReadonlySet<number> = new Set()): Ozet {
   const ozet: Ozet = { calisiyor: 0, durakli: 0, durdu: 0, sirada: 0, bos: 0, saglam: null };
   for (const y of yerler) {
     if (!y.aktif) continue;
     const grup = gruplar.get(y.istasyonId) ?? [];
-    const { durum } = istasyonGorunumu(y, grup[0]);
-    if (durum === 'calisiyor') ozet.calisiyor += 1;
-    else if (durum === 'durakli') ozet.durakli += 1;
-    else if (durum === 'durdu') ozet.durdu += 1;
-    else if (siradaIstasyonlar.has(y.istasyonId)) ozet.sirada += 1;
-    else ozet.bos += 1;
-    for (const e of grup) if (e.canli) ozet.saglam = (ozet.saglam ?? 0) + e.canli.saglam;
+    if (grup.length === 0) {
+      if (siradaIstasyonlar.has(y.istasyonId)) ozet.sirada += 1;
+      else ozet.bos += 1;
+      continue;
+    }
+    for (const e of grup) {
+      const { durum } = istasyonGorunumu(y, e);
+      if (durum === 'calisiyor') ozet.calisiyor += 1;
+      else if (durum === 'durakli') ozet.durakli += 1;
+      else if (durum === 'durdu') ozet.durdu += 1;
+      if (e.canli) ozet.saglam = (ozet.saglam ?? 0) + e.canli.saglam;
+    }
   }
   return ozet;
 }
