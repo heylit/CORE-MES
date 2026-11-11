@@ -113,8 +113,8 @@ function DepocuAcilis() {
   return (
     <div className="tc-stok-depocu">
       <button type="button" className="tc-stok-depocu-kutu tc-stok-depocu-ana" onClick={() => paneliAc({ sekme: 'sepet', depoSepeti: true })}><strong>Okut</strong><span>Ürün ya da raf kodunu okut</span></button>
-      {sepetYetki && <Link to="/stok/sepet" className="tc-stok-depocu-kutu"><strong>Depo sepeti</strong><span>{sepet.data ? `${sepet.data.satirlar.length} kalem` : '—'}</span></Link>}
-      {toplamaYetki && <Link to={toplama.data?.satirlar[0] ? `/stok/hazirlik/${toplama.data.satirlar[0].id}` : '/stok/hazirlik'} className="tc-stok-depocu-kutu"><strong>Toplama</strong><span>{toplama.data ? `${toplama.data.toplam ?? toplama.data.satirlar.length} açık liste` : '—'}</span></Link>}
+      {sepetYetki && <Link to="/stok/sepet" className="tc-stok-depocu-kutu"><strong>Transfer</strong><span>{sepet.data ? `${sepet.data.satirlar.length} kalem` : '—'}</span></Link>}
+      {toplamaYetki && <Link to={toplama.data?.satirlar[0] ? `/stok/hazirlik/${toplama.data.satirlar[0].id}` : '/stok/hazirlik'} className="tc-stok-depocu-kutu"><strong>Malzeme istekleri</strong><span>{toplama.data ? `${toplama.data.toplam ?? toplama.data.satirlar.length} açık toplama listesi` : '—'}</span></Link>}
       {girisYetki && <button type="button" className="tc-stok-depocu-kutu" onClick={() => paneliAc({ sekme: 'okut' })}><strong>Mal kabul</strong><span>Okutarak teslim al</span></button>}
     </div>
   );

@@ -831,7 +831,7 @@ describe('Taşı', () => {
     await waitFor(() => expect(istekler.some((i) => i.yol === '/stok/sepet/teslim-et')).toBe(true));
     expect(istekler.find((i) => i.yol === '/stok/sepet/teslim-et')!.govde).toEqual({ hedefKonumId: 9, satirHedefleri: [{ satirId: 8, hedefKonumId: 10 }], aciklama: '' });
     expect(await screen.findByText('Taşındı; fiş yazıldı.')).toBeTruthy();
-    expect(screen.getByRole('heading', { name: 'Taşı' })).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Transfer' })).toBeTruthy();
   });
 });
 
@@ -911,7 +911,7 @@ describe('Hazırlık listesi', () => {
   it('eski sipariş toplama adresi hazırlığa yönlenir', async () => {
     sunucuKur(DEPOCU, { 'GET /stok/toplamalar/3': () => json(200, T) });
     ac('/stok/toplama/3');
-    expect(await screen.findByRole('heading', { name: 'Hazırlık TL-000003' })).toBeTruthy();
+    expect(await screen.findByRole('heading', { name: 'Toplama listesi TL-000003' })).toBeTruthy();
   });
 });
 
