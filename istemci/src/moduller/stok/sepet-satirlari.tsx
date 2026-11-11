@@ -1,12 +1,15 @@
 import { useState } from 'react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../ortak/veri/api.ts';
 import type {
   GelecekSepetCevabi, IstasyonSepetiCevabi, IstasyonSepetiSatiri, SepettenCekGovdesi, Teslim, TeslimAlGovdesi, TeslimGonderGovdesi, TeslimReddetGovdesi,
 } from '#paylasilan/sozlesme/stok.ts';
-import { Dugme, Girdi } from '../../ortak/arayuz/index.ts';
+import { Dugme, Girdi, useBildirim } from '../../ortak/arayuz/index.ts';
+import { ApiHatasi } from '../../ortak/veri/api.ts';
+import { anahtarlar } from './anahtarlar.ts';
 import { yeniIstekKimligi } from '../../ortak/veri/istek-kimligi.ts';
 import { miktarGirdisi, miktarMetni, zamanMetni } from './gorunum.ts';
-import { korumaliPost, useStokKomutu } from './ortak.tsx';
+import { hataMetni, korumaliPost, useStokKomutu } from './ortak.tsx';
 import { useStatuAdi } from './statu.ts';
 import { TeslimSatiri } from './TeslimSatiri.tsx';
 
@@ -88,7 +91,10 @@ export const SONRAKI_YOK: Record<NonNullable<IstasyonSepetiSatiri['sonrakiYok']>
 
 // emirli: gönderim satırın emriyle yazılır (iki sepet, 745); gelen sepet yoldaki teslimi emirden bulur. Panel sepeti emirsiz gönderir.
 // Sarf yalnız sayımdan düşer (896 a): sepet satırında elle kullanım yoktur.
-export function SepetSatiri({ istasyonId, x, emirli = false }: { istasyonId: number; x: IstasyonSepetiSatiri; emirler: IstasyonSepetiCevabi['emirler']; emirli?: boolean }) {
+// kilitli: toplu gönderim sürerken satır düğmesi kapalıdır; aynı satır ikinci kimlikle iki kez gönderilmesin.
+export function SepetSatiri({ istasyonId, x, emirli = false, kilitli = false }: {
+  istasyonId: number; x: IstasyonSepetiSatiri; emirler: IstasyonSepetiCevabi['emirler']; emirli?: boolean; kilitli?: boolean;
+}) {
   const statuAdi = useStatuAdi();
   const [kimlik, setKimlik] = useState(yeniKimlik);
   const gonder = useStokKomutu((g: TeslimGonderGovdesi) => korumaliPost('/stok/teslimler/gonder', g),
@@ -104,7 +110,7 @@ export function SepetSatiri({ istasyonId, x, emirli = false }: { istasyonId: num
         {x.getiren && <span>{x.getiren}{x.gelis ? ` · ${zamanMetni(x.gelis)}` : ''}</span>}
         {x.sonraki && serbestVar && (
           <div className="tc-stok-dugmeler">
-            <Dugme tur="birincil" simge="upload" yukleniyor={gonder.komut.isPending} onClick={() => gonder.komut.mutate({
+            <Dugme tur="birincil" simge="upload" disabled={kilitli} yukleniyor={gonder.komut.isPending} onClick={() => gonder.komut.mutate({
               malzemeId: x.malzemeId, miktar: x.miktar, partiId: x.partiId, statuId: x.statuId, kaynak: { istasyonId }, hedef: { istasyonId: x.sonraki!.istasyonId },
               not: null, kaynakKimligi: kimlik, ...(emirli ? { uretimEmriId: x.uretimEmriId } : {}),
             })}>Sonraki istasyona: {x.sonraki.ad} (OP {x.sonraki.opNo})</Dugme>
@@ -117,3 +123,64 @@ export function SepetSatiri({ istasyonId, x, emirli = false }: { istasyonId: num
   );
 }
 
+
+// 2920 a: burada üretilen ve rotası belli satırlar tek dokunuşla sonraki istasyona gider; her satır ayrı teslim kaydıdır (satır
+// düğmesiyle aynı uç ve gövde). Yalnız üretim kökenli satır: depodan gelen statüsüz girdi sunucuda "son işlenmiş hâl" sayılır
+// (stok kurallar.ts sonrakiIstasyon) ve işlenmeden sonraki istasyona giderdi. Onay isteyen ya da reddedilen satır sepette kalır,
+// nedeniyle listelenir ve satırın kendi düğmesiyle gönderilir; satır gidince listeden düşer. Tek satırda satır düğmesi yeter.
+const satirAdi = (x: IstasyonSepetiSatiri): string => x.ad ?? x.kod ?? `Malzeme #${x.malzemeId}`;
+const satirAnahtari = (x: IstasyonSepetiSatiri): string => `${x.malzemeId}-${x.partiId ?? 0}-${x.statuId ?? 0}`;
+export const rotadaGidenler = (satirlar: readonly IstasyonSepetiSatiri[]): IstasyonSepetiSatiri[] =>
+  satirlar.filter((x) => x.sonraki !== null && x.koken === 'uretim' && Number(x.miktar) > 0);
+
+export function RotayaGoreGonder({ istasyonId, satirlar, suruyor }: {
+  istasyonId: number; satirlar: readonly IstasyonSepetiSatiri[]; suruyor?: (s: boolean) => void;
+}) {
+  const istemci = useQueryClient();
+  const { bildir } = useBildirim();
+  const [kalanlar, setKalanlar] = useState<{ anahtar: string; metin: string }[]>([]);
+  const gidenler = rotadaGidenler(satirlar);
+  // Satırdan gönderilen ya da başka yoldan giden satır sepette serbest miktarı kalmayınca listeden düşer.
+  const duranlar = new Set(satirlar.filter((x) => Number(x.miktar) > 0).map(satirAnahtari));
+  const gorunenKalanlar = kalanlar.filter((k) => duranlar.has(k.anahtar));
+  const gonder = useMutation({
+    mutationFn: async () => {
+      let giden = 0;
+      const kalan: { anahtar: string; metin: string }[] = [];
+      for (const x of gidenler) {
+        const g: TeslimGonderGovdesi = {
+          malzemeId: x.malzemeId, miktar: x.miktar, partiId: x.partiId, statuId: x.statuId, kaynak: { istasyonId }, hedef: { istasyonId: x.sonraki!.istasyonId },
+          not: null, kaynakKimligi: yeniKimlik(),
+        };
+        try { await korumaliPost('/stok/teslimler/gonder', g); giden += 1; } catch (h) {
+          const onayli = h instanceof ApiHatasi && h.govde.kod === 'ONAY_GEREKLI';
+          kalan.push({ anahtar: satirAnahtari(x), metin: `${satirAdi(x)}: ${onayli ? 'onay istiyor, satırdan gönderin' : hataMetni(h)}` });
+        }
+      }
+      return { giden, kalan };
+    },
+    onSuccess: ({ giden, kalan }) => {
+      setKalanlar(kalan);
+      const metin = `${giden} satır rotadaki sonraki istasyona gönderildi; alan taraf onaylayınca stok taşınır.`;
+      if (kalan.length === 0) bildir('tamam', metin); else bildir('hata', `${metin} ${kalan.length} satır sepette kaldı.`);
+    },
+    onError: (h) => bildir('hata', hataMetni(h)),
+    onMutate: () => suruyor?.(true),
+    onSettled: () => { suruyor?.(false); return istemci.invalidateQueries({ queryKey: anahtarlar.hepsi }); },
+  });
+  if (gidenler.length < 2 && gorunenKalanlar.length === 0) return null;
+  return (
+    <>
+      {gidenler.length >= 2 && (
+        <div className="tc-stok-dugmeler">
+          <Dugme tur="birincil" simge="upload" yukleniyor={gonder.isPending} onClick={() => gonder.mutate()}>Rotaya göre gönder ({gidenler.length} satır)</Dugme>
+        </div>
+      )}
+      {gorunenKalanlar.length > 0 && (
+        <div className="tc-stok-bilgi tc-stok-bilgi-uyari" role="alert">
+          <ul aria-label="Sepette kalanlar">{gorunenKalanlar.map((k) => <li key={k.anahtar}>{k.metin}</li>)}</ul>
+        </div>
+      )}
+    </>
+  );
+}

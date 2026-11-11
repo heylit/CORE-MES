@@ -29,7 +29,7 @@ import { PanelMalKabul } from './PanelMalKabul.tsx';
 import { PanelSevk } from './PanelSevk.tsx';
 import { SepetSeridi, useTasimaSepeti } from './TasimaSepeti.tsx';
 import { DepoSepeti } from './Sepet.tsx';
-import { GelenTeslim, OncekiSepetSatiri, SepetSatiri } from './sepet-satirlari.tsx';
+import { GelenTeslim, OncekiSepetSatiri, RotayaGoreGonder, SepetSatiri } from './sepet-satirlari.tsx';
 import { TeslimSatiri } from './TeslimSatiri.tsx';
 import { useStatuAdi } from './statu.ts';
 import { TasimaYolu, tasimaYolu } from './TasimaYolu.tsx';
@@ -663,6 +663,7 @@ const SUZGECLER: readonly { anahtar: SepetSuzgeci; baslik: string }[] = [
 ];
 function Sepet({ kutu, depoSepeti, buradaki }: { kutu: TeslimKutusuCevabi; depoSepeti: boolean; buradaki: number | null }) {
   const [suzgec, setSuzgec] = useState<SepetSuzgeci>(depoSepeti ? 'depo' : 'hepsi');
+  const [topluSuruyor, setTopluSuruyor] = useState(false);
   const istasyonId = buradaki ?? kutu.istasyonlar[0]?.id ?? 0;
   const sepet = useQuery({
     queryKey: sepetAnahtari(istasyonId),
@@ -686,9 +687,12 @@ function Sepet({ kutu, depoSepeti, buradaki }: { kutu: TeslimKutusuCevabi; depoS
         : sepet.isError ? <DurumKutusu durum="hata" mesaj={hataMetni(sepet.error)} yenile={() => { void sepet.refetch(); }} />
         : satirlar.length === 0 ? <DurumKutusu durum="bos" mesaj={suzgec === 'hepsi' ? `${sepet.data.istasyon.ad} istasyon sepeti boş` : `${sepet.data.istasyon.ad} istasyon sepetinde bu süzgece uyan satır yok`} />
         : (
-          <ul className="tc-stok-isler tc-stok-teslim-liste" aria-label={`${sepet.data.istasyon.ad} sepeti`}>
-            {satirlar.map((x) => <SepetSatiri key={`${x.malzemeId}-${x.partiId ?? 0}-${x.statuId ?? 0}`} istasyonId={istasyonId} x={x} emirler={sepet.data.emirler} />)}
-          </ul>
+          <>
+            <RotayaGoreGonder istasyonId={istasyonId} satirlar={satirlar} suruyor={setTopluSuruyor} />
+            <ul className="tc-stok-isler tc-stok-teslim-liste" aria-label={`${sepet.data.istasyon.ad} sepeti`}>
+              {satirlar.map((x) => <SepetSatiri key={`${x.malzemeId}-${x.partiId ?? 0}-${x.statuId ?? 0}`} istasyonId={istasyonId} x={x} emirler={sepet.data.emirler} kilitli={topluSuruyor} />)}
+            </ul>
+          </>
         )}
     </>
   );
