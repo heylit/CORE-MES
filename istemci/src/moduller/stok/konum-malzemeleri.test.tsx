@@ -32,6 +32,8 @@ describe('Konumdaki malzemeler (2224)', () => {
     ac('/stok/konumlar');
     fireEvent.click(await screen.findByRole('tab', { name: /Konumdaki malzemeler/ }));
     const tablo = await screen.findByRole('table', { name: 'Konumdaki malzemeler' });
+    expect(tablo.closest('.tc-tablo-kap')?.hasAttribute('data-kaydir')).toBe(true);
+    expect(within(tablo).getByRole('columnheader', { name: /^Konum/ }).classList.contains('tc-tablo-sabit-sol')).toBe(true);
     const satirlar = within(tablo).getAllByRole('row');
     expect(within(satirlar[1]!).getByText('Deneme sac')).toBeTruthy();
     expect(within(satirlar[1]!).getByText('3 gün')).toBeTruthy();
@@ -48,6 +50,8 @@ describe('Konumdaki malzemeler (2224)', () => {
     sunucuKur(OKUYUCU, { 'GET /stok/konumlar/5': () => json(200, ayrinti) });
     ac('/stok/konumlar/5');
     const tablo = await screen.findByRole('table', { name: 'Gözdeki stok' });
+    expect(tablo.closest('.tc-tablo-kap')?.hasAttribute('data-kaydir')).toBe(true);
+    expect(within(tablo).getByRole('columnheader', { name: /^Malzeme/ }).classList.contains('tc-tablo-sabit-sol')).toBe(true);
     expect(within(tablo).getByRole('columnheader', { name: 'Bu konumda' })).toBeTruthy();
     expect(within(tablo).getByRole('columnheader', { name: 'Depoya ilk giriş' })).toBeTruthy();
     expect(within(tablo).getByText('3 gün')).toBeTruthy();

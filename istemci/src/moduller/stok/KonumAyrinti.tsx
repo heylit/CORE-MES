@@ -63,13 +63,13 @@ export function KonumAyrinti() {
   if (k.isError) return <DurumKutusu durum="hata" mesaj={hataMetni(k.error)} yenile={() => void k.refetch()} />;
   const { konum, bakiyeler, haritaYeri, zemin } = k.data;
   const sutunlar: Sutun<BakiyeSatiri>[] = [
-    { anahtar: 'malzeme', baslik: 'Malzeme', hucre: (b) => <Link to={`/stok/malzemeler/${b.malzemeId}`}>{b.malzemeAd ?? `Kart ${b.malzemeId}`}</Link> },
-    { anahtar: 'parti', baslik: 'Parti', hucre: (b) => b.partiEtiketi ?? 'Parti bilinmiyor' },
+    { anahtar: 'malzeme', baslik: 'Malzeme', sabit: 'sol', kes: true, hucre: (b) => <Link to={`/stok/malzemeler/${b.malzemeId}`}>{b.malzemeAd ?? `Kart ${b.malzemeId}`}</Link>, csv: (b) => b.malzemeAd ?? `Kart ${b.malzemeId}` },
+    { anahtar: 'parti', baslik: 'Parti', kes: true, hucre: (b) => b.partiEtiketi ?? 'Parti bilinmiyor' },
     // 2224: "Bu konumda" konuma gelişten sayılır; "Depoya ilk giriş" transferde taşınan FIFO zamanıdır, konuma geliş değildir.
     { anahtar: 'bekleme', baslik: 'Bu konumda', kirilmaz: true, hucre: (b) => <span title={zamanMetni(b.konumaGelis ?? null)}>{beklemeMetni(b.konumaGelis)}</span> },
     { anahtar: 'giris', baslik: 'Depoya ilk giriş', kirilmaz: true, hucre: (b) => zamanMetni(b.ilkGiris) },
     ...(sayiyor ? [] : [{ anahtar: 'miktar', baslik: 'Sistemde', hizala: 'sag' as const, hucre: (b: BakiyeSatiri) => <strong>{miktarMetni(b.miktar)}</strong> }]),
-    ...(tasiyabilir && konum.tur === 'kabul' ? [{ anahtar: 'yerlestir', baslik: '', hucre: (b: BakiyeSatiri) => (b.miktar.startsWith('-') ? <span /> : <Dugme onClick={() => setYerlestir(b)}>Rafa yerleştir</Dugme>) }] : []),
+    ...(tasiyabilir && konum.tur === 'kabul' ? [{ anahtar: 'yerlestir', baslik: '', sabit: 'sag' as const, hucre: (b: BakiyeSatiri) => (b.miktar.startsWith('-') ? <span /> : <Dugme onClick={() => setYerlestir(b)}>Rafa yerleştir</Dugme>) }] : []),
     ...(sayabilir && sayiyor ? [{ anahtar: 'sayilan', baslik: 'Sayılan', hucre: (b: BakiyeSatiri) => (
       <Girdi etiket={`Sayılan ${b.malzemeAd ?? b.malzemeId}`} inputMode="decimal" value={sayilan[b.id] ?? ''} onChange={(e) => setSayilan((s) => ({ ...s, [b.id]: e.target.value }))} />
     ) }] : []),
@@ -85,7 +85,7 @@ export function KonumAyrinti() {
       <Kart baslik="Gözdeki stok" sag={sayabilir && bakiyeler.length > 0 && (sayiyor
         ? <><Dugme simge="x" onClick={() => { setSayilan({}); setSayiyor(false); }}>Vazgeç</Dugme><Dugme tur="birincil" simge="check" yukleniyor={komut.isPending} onClick={gonder}>Sayımı kaydet</Dugme></>
         : <Dugme simge="list" onClick={() => setSayiyor(true)}>Kör sayım</Dugme>)}>
-        <Tablo etiket="Gözdeki stok" sutunlar={sutunlar} satirlar={bakiyeler} satirAnahtari={(b) => b.id} bosMesaj="Bu konum boş." />
+        <Tablo etiket="Gözdeki stok" kip="kaydir" sutunlar={sutunlar} satirlar={bakiyeler} satirAnahtari={(b) => b.id} bosMesaj="Bu konum boş." />
       </Kart>
       <Link to={`/stok/hareketler?konumId=${id}`}>Bu konumun hareketleri</Link>
       {turAc && elleTurMu(konum) && <TurPenceresi konum={konum} kapat={() => setTurAc(false)} />}

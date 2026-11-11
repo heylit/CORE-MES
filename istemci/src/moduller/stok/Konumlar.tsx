@@ -22,7 +22,7 @@ function FasonKutulari({ ac }: { ac: (() => void) | null }) {
     <Kart baslik="Fason kutuları" sag={ac && <Dugme simge="plus" onClick={ac}>Fason kutusu aç</Dugme>}>
       <p className="tc-stok-not">Fasona giden yarı mamul kutusuna taşınır. Dönüşte hizmet siparişinin mal kabulü dönen malzemeyi stoğa alır, gideni buradan düşer.</p>
       {l.isError ? <DurumKutusu durum="hata" mesaj={hataMetni(l.error)} yenile={() => void l.refetch()} /> : (
-        <Tablo etiket="Fason kutuları" sutunlar={SUTUNLAR.filter((x) => x.anahtar !== 'tur' && x.anahtar !== 'sayim')} satirlar={l.data?.satirlar ?? []} satirAnahtari={(k) => k.id}
+        <Tablo etiket="Fason kutuları" kip="kaydir" sutunlar={SUTUNLAR.filter((x) => x.anahtar !== 'tur' && x.anahtar !== 'sayim')} satirlar={l.data?.satirlar ?? []} satirAnahtari={(k) => k.id}
           mesgul={l.isPending} satirSec={(k) => { void yonlendir(`/stok/konumlar/${k.id}`); }} bosMesaj="Fason kutusu yok." />
       )}
     </Kart>
@@ -30,9 +30,9 @@ function FasonKutulari({ ac }: { ac: (() => void) | null }) {
 }
 
 const SUTUNLAR: Sutun<Konum>[] = [
-  { anahtar: 'kod', baslik: 'Kod', mono: true, sirala: true, hucre: (k) => k.kod },
+  { anahtar: 'kod', baslik: 'Kod', mono: true, sirala: true, sabit: 'sol', hucre: (k) => k.kod },
   { anahtar: 'tur', baslik: 'Tür', sirala: true, hucre: (k) => KONUM_ETIKETI[k.tur] },
-  { anahtar: 'ad', baslik: 'Ad', hucre: (k) => k.ad ?? '—' },
+  { anahtar: 'ad', baslik: 'Ad', kes: true, hucre: (k) => k.ad ?? '—' },
   { anahtar: 'depo', baslik: 'Depo', hucre: (k) => k.depoKod },
   { anahtar: 'harita', baslik: 'Haritada', hucre: (k) => (k.haritaGozId !== null || k.haritaAlanId !== null ? 'Bağlı' : 'Yok') },
   { anahtar: 'satir', baslik: 'Dolu satır', hizala: 'sag', hucre: (k) => k.satirSayisi },
@@ -64,7 +64,7 @@ export function Konumlar() {
   const liste = useListeDurumu({ suzgecler: { tur: '' as '' | (typeof KONUM_TURLERI)[number] }, suzgecDegerleri: { tur: KONUM_TURLERI }, siralamaAlanlari: ['kod', 'tur'], adres: true });
   const l = useQuery({ queryKey: anahtarlar.liste('konumlar', liste.sorgu), queryFn: () => api.get<KonumlarCevabi>(`/stok/konumlar${sorguMetni(liste.sorgu)}`) });
   const sutunlar: Sutun<Konum>[] = [...SUTUNLAR, {
-    anahtar: 'etiket', baslik: '', hucre: (k) => <EtiketMerkeziDugmesi tur="konum" simge="scan" ad={`${k.kod} etiketi`} idler={[k.id]}>Etiket</EtiketMerkeziDugmesi>,
+    anahtar: 'etiket', baslik: '', sabit: 'sag', hucre: (k) => <EtiketMerkeziDugmesi tur="konum" simge="scan" ad={`${k.kod} etiketi`} idler={[k.id]}>Etiket</EtiketMerkeziDugmesi>,
   }];
   useEffect(() => { if (l.data) liste.sayfaEsitle(l.data.sayfa, liste.sorgu.sayfa); }, [l.data]);
   return (
@@ -77,7 +77,7 @@ export function Konumlar() {
       {gorunum === 'liste' && <>
       <Kart sag={<><EtiketMerkeziDugmesi tur="konum" simge="scan" idler={(l.data?.satirlar ?? []).map((k) => k.id)}>Sayfanın etiketleri</EtiketMerkeziDugmesi><Secim etiket="Tür" value={liste.suzgecler.tur} onChange={(e) => liste.suzgecDegistir({ tur: e.target.value as '' })} secenekler={KONUM_TURLERI.map((t) => ({ deger: t, baslik: KONUM_ETIKETI[t] }))} bosSecenek="Hepsi" /></>}>
         {l.isError ? <DurumKutusu durum="hata" mesaj={hataMetni(l.error)} yenile={() => void l.refetch()} /> : (
-          <Tablo etiket="Konumlar" sutunlar={sutunlar} satirlar={l.data?.satirlar ?? []} satirAnahtari={(k) => k.id} mesgul={l.isPending}
+          <Tablo etiket="Konumlar" kip="kaydir" sutunlar={sutunlar} satirlar={l.data?.satirlar ?? []} satirAnahtari={(k) => k.id} mesgul={l.isPending}
             satirSec={(k) => { void yonlendir(`/stok/konumlar/${k.id}`); }} siralama={liste.siralama} siralamaDegistir={liste.siralamaDegistir} bosMesaj="Konum yok."
             {...(l.data ? { sayfalama: { sayfa: l.data.sayfa, sayfaBoyu: l.data.sayfaBoyu, toplam: l.data.toplam, degistir: liste.sayfaDegistir } } : {})} />
         )}
