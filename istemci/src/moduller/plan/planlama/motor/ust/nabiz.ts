@@ -10,7 +10,7 @@ export interface NabizTanimi { id: NabizGostergesi; ad: string; simge: 'check' |
 export const NABIZ_GOSTERGELERI: readonly NabizTanimi[] = [
   { id: 'zam', ad: 'Zamanında', simge: 'check', kucukIyi: false, sayfa: 'siparisler', ipucu: 'Termininden önce biten siparişlerin payı.' },
   { id: 'late', ad: 'Geç sipariş', simge: 'alert', kucukIyi: true, sayfa: 'siparisler', ipucu: 'Termininden sonra biten sipariş sayısı.' },
-  { id: 'wT', ad: 'Gecikme', simge: 'clock', kucukIyi: true, sayfa: 'tahta', ipucu: 'Seçili dönemdeki siparişlerin toplam gecikmesi (saat).' },
+  { id: 'wT', ad: 'Toplam gecikme', simge: 'clock', kucukIyi: true, sayfa: 'tahta', ipucu: 'Seçili dönemdeki geciken siparişlerin gecikme saatleri toplamı; öncelikle ağırlıklandırılmaz (atölyedeki ağırlıklı gecikmeden ayrıdır).' },
   { id: 'dar', ad: 'Darboğaz', simge: 'gauge', kucukIyi: true, sayfa: 'tezgahlar', ipucu: 'En dolu tezgâhın doluluğu; %95 üstü sıkışma demektir.' },
   { id: 'suH', ad: 'Ayar', simge: 'wrench', kucukIyi: true, sayfa: 'ayar', ipucu: 'Planın toplam ayar süresi.' },
   { id: 'deg', ad: 'Değişen iş', simge: 'rotate', kucukIyi: true, sayfa: 'senaryolar', ipucu: 'Referansa göre tezgâhı ya da 8 saatten çok yeri değişen iş.' },

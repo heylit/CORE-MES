@@ -59,7 +59,7 @@ export function GunCizelgesi(o: Ozellikler) {
             o.komut?.degistir(dondu ? 'Gün dondurması kaldırıldı' : 'Gün donduruldu', (x) => { if (dondu) gunDondurmasiniKaldir(x, gNo); else gunuDondur(x, p, gNo); }, { ayrinti: gunAd, planKoru: true });
           }}><Simge ad="lock" boyut="k" /><span>{dondu ? 'Dondurmayı kaldır' : 'Günü dondur'}</span></button>
         ) : pasif('lock', dondu ? 'Dondurmayı kaldır' : 'Günü dondur', o.komut ? 'Bu günde başlayan iş yok.' : HAZIRLANIYOR))}
-        <span className="tc-pym-gy-oz tc-pym-mono" data-ton={oz.late ? 'hata' : undefined}>gecikme {saatYazi(oz.wT)} · geciken {oz.late}</span>
+        <span className="tc-pym-gy-oz tc-pym-mono" data-ton={oz.late ? 'hata' : undefined} title="Öncelik ağırlıklı gecikme: geciken saat, öncelik 1 için 4, öncelik 2 için 2 katıyla sayılır.">ağırlıklı gecikme {saatYazi(oz.wT)} · geciken {oz.late}</span>
       </header>
       <div className="tc-pym-gy-kilit" role="status">
         <Simge ad="lock" boyut="k" />

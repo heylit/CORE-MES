@@ -8,7 +8,7 @@ import type { AtolyeOlayi } from '#paylasilan/sozlesme/planlama-atolye.ts';
 import type { PlanlamaCalismasi } from '../../tipler.ts';
 import { degisken } from '../ortak.tsx';
 import { hamleYapisi, useHamleci } from '../hamle/hamle.ts';
-import { elleSayilari, simdiSaati } from '../kurallar.ts';
+import { elleSayilari, saatYazi, simdiSaati } from '../kurallar.ts';
 import { mesaiAdaylari } from '../secim/kurallar.ts';
 import { gunDondurmasiniKaldir, gunuDondur, sabitleriKaldir } from '../cizelge/kurallar.ts';
 import { Kararlar } from './Bugun.tsx';
@@ -421,7 +421,7 @@ function gunOzeti(ort: Ortam): Govde {
         <div className="tc-pym-tp-karsi">
           <span /><b>Gün başı</b><b>Şimdi</b>
           <span>Geciken</span><b>{basi ? basi.e.late : '—'}</b><b>{p.ozet.late}</b>
-          <span>Toplam gecikme</span><b>{basi ? sure(basi.e.wT) : '—'}</b><b>{sure(p.ozet.wT)}</b>
+          <span title="Öncelik ağırlıklı gecikme: geciken saat, öncelik 1 için 4, öncelik 2 için 2 katıyla sayılır.">Ağırlıklı gecikme</span><b>{basi ? saatYazi(basi.e.wT) : '—'}</b><b>{saatYazi(p.ozet.wT)}</b>
           <span>Canlı plan</span><b>{basi ? `sürüm ${basi.surum}` : '—'}</b><b>{`sürüm ${canli ?? 0}`}</b>
         </div>
         {!basi && <Not>Bugünün gün başı kaydı yok.</Not>}

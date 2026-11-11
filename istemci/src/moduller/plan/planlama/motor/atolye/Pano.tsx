@@ -5,7 +5,7 @@ import { Simge, useBildirim } from '../../../../../ortak/arayuz/index.ts';
 import type { PlanlamaEkranOzellikleri } from '../../gorunumler.ts';
 import { planGuncel } from '../../durum.ts';
 import type { PlanlamaCalismasi } from '../../tipler.ts';
-import { bitenler, derle, girdiKur, malzemeHazir, plandanBitenler, simdiSaati, sorunlar, type Derleme, type OkunanPlan } from '../kurallar.ts';
+import { bitenler, derle, girdiKur, malzemeHazir, plandanBitenler, saatYazi, simdiSaati, sorunlar, type Derleme, type OkunanPlan } from '../kurallar.ts';
 import type { KbPanel } from '../Duzenle.tsx';
 import { Yapilacaklar } from '../Yapilacaklar.tsx';
 import type { AtolyeSekmesi } from './Atolye.tsx';
@@ -15,7 +15,7 @@ import { useAtolyeKomutlari, useOtomatikUygula } from './gonder.ts';
 import { Izgara } from './Izgara.tsx';
 import { KartKatmani, type AcikKart, type Ankraj } from './Kartlar.tsx';
 import {
-  emirNoOkuyucu, gecikenIpucu, gecikenSay, kilitOzeti, secKacis, gunAnahtari, gunYeni, ilkOlcek, OLCEKLER, sipBilgi, siparisler, sure, suzKoy, suzSayisi, type AtolyeOlcegi, type CanliFark, type EmirNo, type SiparisBilgisi, type Suzgec,
+  emirNoOkuyucu, gecikenIpucu, gecikenSay, kilitOzeti, secKacis, gunAnahtari, gunYeni, ilkOlcek, OLCEKLER, sipBilgi, siparisler, suzKoy, suzSayisi, type AtolyeOlcegi, type CanliFark, type EmirNo, type SiparisBilgisi, type Suzgec,
 } from './kurallar.ts';
 import { Ray } from './Ray.tsx';
 import { HamleOnizlemesi } from '../hamle/Onizleme.tsx';
@@ -239,7 +239,7 @@ export function Pano({ o, c, p, cf: fark, sekSec, onayda, sen, senYaz }: Ozellik
       )}
       <div className="tc-pym-tp-olc">
         <span title={gecikenIpucu(liste)}><b data-ton={gecikenSay(liste) ? 'kotu' : 'iyi'}>{gecikenSay(liste)}</b> <span data-ad="">geciken</span></span>
-        <span title="Öncelik ağırlıklı gecikme: geciken saat, öncelik 1 için 4, öncelik 2 için 2 katıyla sayılır."><b>{sure(ozet.wT)}</b> <span data-ad="">ağırlıklı gecikme</span></span>
+        <span title="Öncelik ağırlıklı gecikme: geciken saat, öncelik 1 için 4, öncelik 2 için 2 katıyla sayılır."><b>{saatYazi(ozet.wT)}</b> <span data-ad="">ağırlıklı gecikme</span></span>
         {yetki.maliyetOku && <span data-kar="" title="Kâr kayıtlı planda yok"><b>—</b> <span data-ad="">kâr</span></span>}
         {brifL.length > 0 && (
           <button type="button" className="tc-pym-tp-brif-ac" aria-expanded={brif} aria-controls={brif ? BRIF_SERIDI : undefined} data-yeni={brifYeni && !brif ? '' : undefined}

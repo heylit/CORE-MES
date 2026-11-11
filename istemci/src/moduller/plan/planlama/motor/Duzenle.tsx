@@ -174,7 +174,7 @@ export function Degisiklikler({ p, studyo, kapat }: { p: OkunanPlan; studyo: () 
       <p>Plan her değişiklikte hemen güncellenir. Bir satırın geri düğmesi o değişiklikten öncesine döner.</p>
       <section className="tc-pym-taslak" aria-label="Taslak">
         <header><Simge ad="layers" boyut="k" /><b>Sepet</b><span className="tc-pym-mono">0 değişiklik</span></header>
-        <div className="tc-pym-taslak-ozet tc-pym-mono"><span>gecikme {saatYazi(o.wT)} → <b>{saatYazi(o.wT)}</b></span><span>geciken {o.late} → <b>{o.late}</b></span></div>
+        <div className="tc-pym-taslak-ozet tc-pym-mono"><span>ağırlıklı gecikme {saatYazi(o.wT)} → <b>{saatYazi(o.wT)}</b></span><span>geciken {o.late} → <b>{o.late}</b></span></div>
         <p className="tc-pym-kucuk-yazi">İşleri taşıyın, sıralayın ya da bir olay deneyin; her biri burada bir adım olur.</p>
         <div className="tc-pym-dugmeler">
           <button type="button" className="tc-dugme tc-pym-kucuk" onClick={studyo}><Simge ad="flag" boyut="k" />Stüdyoda incele</button>

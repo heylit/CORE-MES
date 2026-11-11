@@ -25,7 +25,7 @@ interface Ozellikler {
   hamle?: Hamleci | null;
 }
 
-const KISA: [NabizGostergesi, string, boolean][] = [['late', '', false], ['wT', 'gecikme', true], ['dar', 'darboğaz', true]];
+const KISA: [NabizGostergesi, string, boolean][] = [['late', '', false], ['wT', 'toplam gecikme', true], ['dar', 'darboğaz', true]];
 
 export function Cubuk(o: Ozellikler) {
   const olayAc = useOlayAc();
