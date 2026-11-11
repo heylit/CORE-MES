@@ -83,7 +83,7 @@ function ufukNotlari(c: PlanlamaCalismasi, v: UfukVerisi, ongoru: boolean): stri
     !ongoru ? 'Öngörü gizli.'
       : Y.tahmin === 'elle' ? 'Öngörü: elle girilen aylık aile tahmini, ürüne sipariş payıyla bölündü; aynı ay ve üründeki sipariş tahmini tüketir. Ayarı Yıllık plan sekmesindedir.'
       : v.gec.hiz ? `Öngörü: kapanmış ve açık siparişlerin ${v.gec.dusuk ? `${sayi(v.gec.hafta, 0)} haftalık girişi, en az ${TALEP_GECMIS_ENAZ} haftaya bölündü (düşük güven, giriş geldikçe düzelir)` : `son ${sayi(v.gec.hafta, 0)} haftalık giriş hızı`}, yıllık büyüme %${sayi(Y.buyume || 0, 0)}; aynı ay ve üründeki sipariş tahmini tüketir. Termin ve plan hız sayılmaz. Ayarı Yıllık plan sekmesindedir.`
-      : 'Öngörü yok: sipariş girişi yok. Termin ve plan hız sayılmaz. Yıllık plan sayfasında "Elle" seçip aylık tahmin girin.',
+      : 'Öngörü yok: sipariş girişi yok. Termin ve plan hız sayılmaz. Yıllık plan sekmesinde "Elle" seçip aylık tahmin girin.',
   ].filter(Boolean).join(' ');
 }
 
