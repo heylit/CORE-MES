@@ -122,12 +122,12 @@ describe('Resim ve modeller stüdyosu (597 a)', () => {
 
   // Resim alma seçicisi ve resim alma/kaldırma cevapları ortak deneme sunucusunun üstüne konur (ötekiler ona gider).
   const BELGE: KmMerkezBelgesi = { id: 41, ad: 'Merkez flanş', harf: 'C', revKodu: '02', tur: 'resim', bicim: 'pdf', ozet: 'b'.repeat(64), bagli: true };
-  function merkezliAc(k = MUHENDIS) {
+  function merkezliAc(k = MUHENDIS, belge: KmMerkezBelgesi = BELGE) {
     const acilan = kmAc('resimler?parca=7', k, {}, SECENEK);
     const asil = acilan.fetch.getMockImplementation()!;
     const cevap = (govde: unknown) => Promise.resolve(new Response(JSON.stringify(govde), { status: 200 }));
     acilan.fetch.mockImplementation((adres: string, istek?: RequestInit) => {
-      if (adres.startsWith('/api/kalite-merkezi/studyo/merkez-belgeleri')) { void asil(adres, istek); return cevap({ belgeler: [BELGE] }); }
+      if (adres.startsWith('/api/kalite-merkezi/studyo/merkez-belgeleri')) { void asil(adres, istek); return cevap({ belgeler: [belge] }); }
       if (adres === '/api/kalite-merkezi/studyo/resimler/al') { void asil(adres, istek); return cevap({ resim: resim({ id: 9, ad: 'Merkez flanş', merkezBelgeId: 41 }) }); }
       if (adres === '/api/kalite-merkezi/studyo/resimler/1/kaldir') { void asil(adres, istek); return cevap({ resim: resim({ aktif: false, surum: 2 }) }); }
       return asil(adres, istek);
@@ -150,6 +150,18 @@ describe('Resim ve modeller stüdyosu (597 a)', () => {
     expect(yazmalar.find((y) => y.yol === '/kalite-merkezi/studyo/resimler/al')?.govde).toEqual({ malzemeNo: 7, merkezBelgeId: 41, revizyon: '02' });
     const sol = screen.getByRole('complementary', { name: 'Parça ve resimler' });
     expect(await within(sol).findByRole('button', { name: 'Merkez flanş resmini kaldır' })).toBeTruthy();
+  });
+
+  it('2138-2: kodsuz belge "Kodsuz revizyon" yazar, harfi göstermez ve revizyonsuz alınır', async () => {
+    const { yazmalar } = merkezliAc(MUHENDIS, { ...BELGE, revKodu: null });
+    fireEvent.click(await screen.findByRole('button', { name: 'Belge merkezinden al' }));
+    const pencere = await screen.findByRole('dialog', { name: 'Belge merkezinden resim al' });
+    const satir = await within(pencere).findByRole('button', { name: /^Merkez flanş/ });
+    expect(satir.textContent).toContain('Kodsuz revizyon');
+    expect(satir.textContent).not.toContain('Rev C');
+    fireEvent.click(satir);
+    await waitFor(() => { expect(yazmalar.some((y) => y.yol === '/kalite-merkezi/studyo/resimler/al')).toBe(true); });
+    expect(yazmalar.find((y) => y.yol === '/kalite-merkezi/studyo/resimler/al')?.govde).toEqual({ malzemeNo: 7, merkezBelgeId: 41, revizyon: null });
   });
 
   it('onaylayan resmi onayla kaldırır; sürüm gider, resim listeden düşer', async () => {
