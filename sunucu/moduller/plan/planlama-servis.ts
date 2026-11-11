@@ -33,6 +33,7 @@ import { planGirdisi, yeniCalisma, type KaynakOkumasi } from './plan-girdisi.ts'
 import {
   acikSiparisSatirlari, type AcikSiparisGelisi, ayarCevir, bitisAkisiEkle, calisanAdimlariCevir, gerekenTarihler, planAni, planGunu, planSaati,
 } from './planlama-kurallar.ts';
+import { maliyetiGeriKoy, maliyetsizCalisma } from './maliyet-gizleme.ts';
 import { satinAlmaCalismasi } from './satin-alma-gorunumu.ts';
 import { emirTutari, satirKuru } from './kurallar.ts';
 import { calisanAdimlar, canliOzeti, okumaBellegiyle, planFinansmanOrani, planGenelGiderSaatBasi, planlanacakIsler, type PlanGenelGideri } from './servis.ts';
@@ -59,9 +60,32 @@ export function planlamaYazmaDenetimi(kullanici: Kullanici, anahtar: string): vo
   } else if (!islemVarMi(kullanici, 'recete-rota.yaz')) throw yetkiYok(KAYIT_YETKI_ILETISI);
 }
 
-export async function planlamaKayitlari(db: Db): Promise<KayitlarCevabi> {
+// Fiyat ve maliyet görünümü (223 a, 2601 a): maliyet okumayana planlama çalışmasının para alanları gitmez, yazarken kayıttakiler geri konur.
+const MALIYET_OKUMA = 'finans.maliyet-oku';
+const maliyetGorur = (kullanici: Kullanici): boolean => islemVarMi(kullanici, MALIYET_OKUMA);
+
+// Kayıt metin biçimliyse (yerel depo değeri) JSON'u süzülüp yeniden metne çevrilir; okunamayan metin olduğu gibi kalmaz, düşer.
+function kayitSuz<T extends { anahtar: string; bicim: string; deger?: unknown }>(k: T): T {
+  if (k.bicim === 'metin') {
+    const d = kayitDegeri(k);
+    return { ...k, deger: d === null ? null : JSON.stringify(maliyetsizCalisma(d)) };
+  }
+  return { ...k, deger: maliyetsizCalisma(k.deger) };
+}
+
+// Maliyet okumayanın yazdığı çalışmaya kayıttaki para alanları geri konur (yazma yalnız json'dur, 2747).
+const paraAlanlariniKoru = (deger: unknown, eski: unknown): unknown => maliyetiGeriKoy(deger, eski);
+
+export async function planlamaKayitlari(db: Db, kullanici: Kullanici): Promise<KayitlarCevabi> {
   const kayitlar = await sorgular.planlamaKayitlari(db);
-  return { kayitlar: kayitlar.map((k) => (k.anahtar === PLANLAMA_ANAHTARI ? { ...k, deger: saklanmayanKayitDegeri(k.bicim, k.deger) } : k)) };
+  const gorur = maliyetGorur(kullanici);
+  return {
+    kayitlar: kayitlar.map((k) => {
+      if (k.anahtar !== PLANLAMA_ANAHTARI) return k;
+      const s = { ...k, deger: saklanmayanKayitDegeri(k.bicim, k.deger) };
+      return gorur ? s : kayitSuz(s);
+    }),
+  };
 }
 
 export async function planlamaYaz(db: Db, kullanici: Kullanici, g: PlanlamaYazGovdesi): Promise<YazCevabi> {
@@ -76,7 +100,8 @@ export async function planlamaYaz(db: Db, kullanici: Kullanici, g: PlanlamaYazGo
   // Bitiş tarihi akışını sunucu yazar (455/2 a); eklenen satırlarla değer yeniden boyut denetiminden geçer.
   const calisma = g.anahtar === PLANLAMA_ANAHTARI && g.bicim === 'json';
   const onceki = calisma && mevcut !== null ? (await sorgular.planlamaKaydi(db, g.anahtar))?.deger : null;
-  const deger = calisma ? bitisAkisiEkle(saklanmayanAlanlariCikar(g.deger), onceki, kullanici.ad, Date.now()) : g.deger;
+  const gelen = calisma && !maliyetGorur(kullanici) ? paraAlanlariniKoru(g.deger, onceki ?? null) : g.deger;
+  const deger = calisma ? bitisAkisiEkle(saklanmayanAlanlariCikar(gelen), onceki, kullanici.ad, Date.now()) : g.deger;
   if (deger !== g.deger && degerCokBuyukMu(deger)) throw cokBuyuk(BUYUK_ILETISI);
   const satir = { anahtar: g.anahtar, bicim: g.bicim, deger, kisiId: kullanici.id };
   const kayit = mevcut === null ? await sorgular.planlamaKaydiEkle(db, satir) : await sorgular.planlamaKaydiGuncelle(db, satir);
@@ -374,7 +399,11 @@ export async function planlamaCalismasi(db: Db, kullanici: Kullanici, simdi: num
   const fin = finansman.gun === gun ? finansman.oran : await planFinansmanOrani(db, gun);
   const gg = genelGider.gun === gun ? genelGider.oran : await planGenelGideri(db, kullanici, gun);
   // 2728 a: brüt (göçten önceki kayıtta kalmış olsa da) sayfaya gitmez.
-  return { calisma: mesaiSaatiniCikar(brutAlanlariniCikar(calismayaMotorAyari(g.S, degerler, fin, olcek, undefined, gg))) as PlanlamaCalismasiCevabi['calisma'], surum: k.surum, kaynakDegisikligi: g.kaynakDegisikligi ?? null };
+  const calisma = mesaiSaatiniCikar(brutAlanlariniCikar(calismayaMotorAyari(g.S, degerler, fin, olcek, undefined, gg)));
+  return {
+    calisma: (maliyetGorur(kullanici) ? calisma : maliyetsizCalisma(calisma)) as PlanlamaCalismasiCevabi['calisma'],
+    surum: k.surum, kaynakDegisikligi: g.kaynakDegisikligi ?? null,
+  };
 }
 
 // 657 a: kayıt yoksa sayfa boş çalışmayı kendisi açar ve düzenlenebilir başlar. Çalışma çerçevenin ilk açılışındaki gibi Reçete ve Rota
