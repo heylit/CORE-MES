@@ -484,7 +484,9 @@ test.describe('Motordan sonra öteki sayfalar', () => {
     const serit = page.getByRole('navigation', { name: 'Planlama menüsü' });
     for (const ad of ['Maliyetler', 'Genel gider', 'Kapasite']) {
       await serit.getByRole('link', { name: new RegExp(`^${ad}`) }).click();
-      const baslik = page.locator('.tc-py-gorunum').getByRole('heading', { level: 2 }).first();
+      // Kapasite'nin başlığı bölüm sekmeleridir; çalışma yokken Yük haritası yalnız durum iletisi çizer.
+      const baslik = ad === 'Kapasite' ? page.getByRole('tablist', { name: 'Kapasite bölümleri' })
+        : page.locator('.tc-py-gorunum').getByRole('heading', { level: 2 }).first();
       const cubuk = page.getByRole('toolbar', { name: 'Plan çubuğu' });
       await expect(baslik).toBeVisible({ timeout: 20_000 });
       await expect(cubuk).toBeVisible();
