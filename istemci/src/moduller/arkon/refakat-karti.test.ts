@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { AZAMI_KART_EMRI, istasyondakiKartlar, kartDoldu, kartEmirleri, kartOkutmaKarari, refakatIsi, sayimKartAlani, sinirMetni } from '../../../../arkon/web/src/data/refakat-karti.ts';
+import { AZAMI_KART_EMRI, istasyondakiKartlar, kartDoldu, girdiAdaylari, kartEmirleri, kartOkutmaKarari, refakatIsi, sayimKartAlani, sinirMetni } from '../../../../arkon/web/src/data/refakat-karti.ts';
 import type { RefakatKarti } from '../../../../arkon/web/src/data/refakat-karti.ts';
 
 // Kart #156 (Soru 134): Arkon'da okutma yok; iş, işin altındaki refakat kartından "Aç" ile ya da Malzeme Teslim'den kartla açılır.
@@ -118,5 +118,30 @@ describe('kart okutma kararı', () => {
 
   it('emir bu cihazda hiç bilinmiyorsa yok', () => {
     expect(kartOkutmaKarari(99, [is(baska)], [a10, baska], makineli)).toEqual({ tur: 'yok' });
+  });
+});
+
+// 2933 a: ayrı emirli montajda alt parçanın kartı, parçayı girdi olarak kullanan montaj işini önerir.
+describe('montaj girdisi önerisi', () => {
+  const altParca = pk(21, 30, 10, 'TZG-04'), montaj = pk(22, 31, 10, 'MNT-01'), baskaMontaj = pk(23, 32, 10, 'MNT-01');
+  const insanli = { acikSira: -1, insanli: true };
+
+  it('parçanın malzemesi yalnız rota girdisi olan işlerle eşleşir', () => {
+    expect(girdiAdaylari([501], [{ sira: 0, malzemeIdler: [700, 501] }, { sira: 1, malzemeIdler: [702] }, { sira: 2, malzemeIdler: [501] }])).toEqual([0, 2]);
+    expect(girdiAdaylari([], [{ sira: 0, malzemeIdler: [501] }])).toEqual([]);
+  });
+
+  it('emrin burada işi yoksa girdi işi önerilir; birden çoksa liste, iş açılmaz', () => {
+    expect(kartOkutmaKarari(30, [is(montaj)], [altParca, montaj], { ...insanli, girdiAdaylari: [0] })).toEqual({ tur: 'sec', adaylar: [0], neden: 'montaj-girdisi' });
+    expect(kartOkutmaKarari(30, [is(baskaMontaj), is(montaj)], [altParca, montaj, baskaMontaj], { ...insanli, girdiAdaylari: [1, 0, 1] }))
+      .toEqual({ tur: 'sec', adaylar: [0, 1], neden: 'montaj-girdisi' });
+  });
+
+  it('biten iş ve listede olmayan sıra aday olmaz; aday kalmazsa yalnız teslim', () => {
+    expect(kartOkutmaKarari(30, [is(montaj, 'done')], [altParca, montaj], { ...insanli, girdiAdaylari: [0, 5] })).toEqual({ tur: 'yalniz-teslim', istasyon: 'TZG-04' });
+  });
+
+  it('kartın kendi emrinin işi buradaysa girdi önerisi devreye girmez', () => {
+    expect(kartOkutmaKarari(30, [is(altParca), is(montaj)], [altParca, montaj], { acikSira: -1, insanli: false, girdiAdaylari: [1] })).toEqual({ tur: 'ac', sira: 0 });
   });
 });

@@ -58,18 +58,21 @@ export function refakatIsi(emirId: number, isler: readonly RefakatIsi[], paketle
 // 2928 a: terminalde okutulan kart işi yalnız belirsizlik yoksa açar. Belirsiz: emrin burada birden çok bitmemiş işi var, başka iş
 // çalışıyor ya da istasyon insanlı (montaj gibi; Atölye görüşü: tek eşleşmede de tek dokunuşla onay). Seçimde çalışan iş kendiliğinden
 // durmaz; geçiş penceresi yine sorar. Emrin burada işi yoksa (montaja gelen alt parça karti) kart yalnız teslim alınır.
-export type KartSecimNedeni = 'cok-is' | 'calisan-is' | 'insanli';
+export type KartSecimNedeni = 'cok-is' | 'calisan-is' | 'insanli' | 'montaj-girdisi';
 export type KartOkutmaKarari =
   | { tur: 'ac'; sira: number }
   | { tur: 'sec'; adaylar: number[]; neden: KartSecimNedeni }
   | { tur: 'yalniz-teslim'; istasyon: string | null }
   | { tur: 'yok' };
 export function kartOkutmaKarari(
-  emirId: number, isler: readonly RefakatIsi[], paketler: readonly RefakatPaketi[], g: { acikSira: number; insanli: boolean },
+  emirId: number, isler: readonly RefakatIsi[], paketler: readonly RefakatPaketi[], g: { acikSira: number; insanli: boolean; girdiAdaylari?: readonly number[] },
 ): KartOkutmaKarari {
   const emrin = (p: RefakatPaketi | null | undefined): boolean => !!p && (p.tmi?.emirId === emirId || p.id === `tmi-ue-${emirId}`);
   const adaylar = isler.flatMap((x, i) => (emrin(x.pkg) && x.state !== 'done' ? [i] : []));
   if (adaylar.length === 0) {
+    // 2933 a: ayrı emirle üretilen alt parçanın emrinin burada işi yoksa parçayı girdi olarak kullanan bitmemiş işler önerilir.
+    const girdi = [...new Set(g.girdiAdaylari ?? [])].filter((i) => isler[i] !== undefined && isler[i]!.state !== 'done');
+    if (girdi.length > 0) return { tur: 'sec', adaylar: girdi.sort((a, b) => a - b), neden: 'montaj-girdisi' };
     const r = refakatIsi(emirId, isler, paketler);
     return r.tur === 'yok' ? r : { tur: 'yalniz-teslim', istasyon: r.tur === 'baska-istasyon' ? r.istasyon : null };
   }
@@ -79,4 +82,10 @@ export function kartOkutmaKarari(
   if (isler.some((x, i) => i !== sira && x.state === 'running')) return { tur: 'sec', adaylar, neden: 'calisan-is' };
   if (g.insanli) return { tur: 'sec', adaylar, neden: 'insanli' };
   return { tur: 'ac', sira };
+}
+
+// 2933 a: kartla gelen parçanın malzemesi istasyondaki hangi işlerin rota girdisi. Eşleşme yalnız malzemeyle; karta bağ yazılmaz.
+export function girdiAdaylari(parcaMalzemeleri: readonly number[], isGirdileri: readonly { sira: number; malzemeIdler: readonly number[] }[]): number[] {
+  const parca = new Set(parcaMalzemeleri);
+  return isGirdileri.filter((x) => x.malzemeIdler.some((m) => parca.has(m))).map((x) => x.sira);
 }
