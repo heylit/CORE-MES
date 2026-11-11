@@ -475,6 +475,63 @@ describe('satin-alma sürüm 6 (gerçek PostgreSQL)', () => {
     assert.equal(s3.teklifler[0]?.revizyon, 1);
   });
 
+  test('2975: kademeli fiyat; toplam alınan miktarın basamağından, gönderilmeyen basamak korunur, boş liste siler', async () => {
+    const t = tamam<Talep>(await istek(c.sa, 'POST', '/satin-alma-talepleri/ac', yeniTalep()));
+    const [k1, k2] = t.kalemler.map((k) => k.id) as [string, string];
+    const toplam = async (teklifId: string) => (await vt().tx((db) => db.tek<{ t: string }>(
+      'SELECT satin_alma_teklif_toplami($1, $2)::text AS t', [t.id, teklifId])))!.t;
+    // k1 10 adet: 10 ve üstü 8 TL basamağı; k2 4 adet, 10 ve üstü basamağın altında kalır, taban 5 TL. 10 × 8 + 4 × 5 = 100.
+    const a = teklif(firmaA, [[k1, '10'], [k2, '5']]);
+    a.fiyatlar = [{ kalemId: k1, birimFiyat: '10', basamaklar: [{ esik: '10', birimFiyat: '8' }] } as never, { kalemId: k2, birimFiyat: '5', basamaklar: [{ esik: '10', birimFiyat: '1' }] } as never];
+    const s1 = tamam<Talep>(await kaydet(c.sa, { ...govde(t), durum: 'degerlendirme', teklifler: [a] }));
+    assert.deepEqual([s1.teklifler[0]?.ilkToplam, await toplam(a.id)], ['100', '100.0000']);
+    assert.deepEqual(s1.teklifler[0]?.fiyatlar.map((f) => f.basamaklar), [[{ esik: '10', birimFiyat: '8' }], [{ esik: '10', birimFiyat: '1' }]]);
+    // Basamağı bilmeyen ekran alanı göndermez: basamak silinmez.
+    const s2 = tamam<Talep>(await kaydet(c.sa, { ...govde(s1), teklifler: [{ ...s1.teklifler[0]!, fiyatlar: [{ kalemId: k1, birimFiyat: '10' }, { kalemId: k2, birimFiyat: '5' }] }] }));
+    assert.equal(await toplam(a.id), '100.0000');
+    // 2974-1 a: en az miktar 20 ise alınan 20'dir ve 20 ve üstü basamağı uygulanır: 20 × 7 + 4 × 5 = 160.
+    const s3 = tamam<Talep>(await kaydet(c.sa, { ...govde(s2), teklifler: [{ ...s2.teklifler[0]!, fiyatlar: [
+      { kalemId: k1, birimFiyat: '10', enAzMiktar: '20', basamaklar: [{ esik: '10', birimFiyat: '8' }, { esik: '20', birimFiyat: '7' }] }, { kalemId: k2, birimFiyat: '5', basamaklar: [] }] }] }));
+    assert.equal(await toplam(a.id), '160.0000');
+    assert.deepEqual(s3.teklifler[0]?.fiyatlar.map((f) => f.basamaklar?.length), [2, 0]);
+    // Aynı eşik iki kez ve beşinci basamak reddedilir.
+    const cift = await kaydet(c.sa, { ...govde(s3), teklifler: [{ ...s3.teklifler[0]!, fiyatlar: [{ kalemId: k1, birimFiyat: '10', basamaklar: [{ esik: '20', birimFiyat: '7' }, { esik: '20.0', birimFiyat: '6' }] }] }] });
+    assert.equal(cift.statusCode, 400);
+    const bes = await kaydet(c.sa, { ...govde(s3), teklifler: [{ ...s3.teklifler[0]!, fiyatlar: [{ kalemId: k1, birimFiyat: '10',
+      basamaklar: ['11', '12', '13', '14', '15'].map((esik) => ({ esik, birimFiyat: '6' })) }] }] });
+    assert.equal(bes.statusCode, 400);
+  });
+
+  test('2975 (Veri): basamaksız teklifte toplam fonksiyonu eski gövdeyle birebir aynı sonucu verir', async () => {
+    const t = tamam<Talep>(await istek(c.sa, 'POST', '/satin-alma-talepleri/ac', yeniTalep()));
+    const [k1, k2] = t.kalemler.map((k) => k.id) as [string, string];
+    const a = teklif(firmaA, [[k1, '10.1234'], [k2, '5']], { iskontoYuzdesi: '7.5', nakliyeDahil: false, nakliye: '15.25', digerMasraf: '2' });
+    a.fiyatlar = [{ kalemId: k1, birimFiyat: '10.1234', iskontoYuzdesi: '3', enAzMiktar: '12' } as never, { kalemId: k2, birimFiyat: '5' } as never];
+    const b = teklif(firmaB, [[k1, '11'], [k2, '4.5']], { nakliyeDahil: true, nakliye: '99' });
+    tamam<Talep>(await kaydet(c.sa, { ...govde(t), durum: 'degerlendirme', teklifler: [a, b] }));
+    // 20261028100000 gövdesi, basamak öncesi.
+    const eski = `SELECT round(
+        COALESCE((SELECT sum(s.birim_fiyat * GREATEST(k.miktar, s.en_az_miktar) * (1 - COALESCE(s.iskonto_yuzdesi, 0) / 100))
+                    FROM satin_alma_teklif_satiri s JOIN satin_alma_talep_kalemi k ON k.talep_id = s.talep_id AND k.id = s.kalem_id
+                   WHERE s.talep_id = q.talep_id AND s.teklif_id = q.id), 0) * (1 - q.iskonto_yuzdesi / 100)
+        + CASE WHEN q.nakliye_dahil THEN 0 ELSE q.nakliye END + q.diger_masraf, 4)::text AS eski,
+      satin_alma_teklif_toplami(q.talep_id, q.id)::text AS yeni
+      FROM satin_alma_teklif q WHERE q.talep_id = $1 ORDER BY q.sira`;
+    const satirlar = await vt().tx((db) => db.sorgu<{ eski: string; yeni: string }>(eski, [t.id]));
+    assert.equal(satirlar.length, 2);
+    for (const r of satirlar) assert.equal(r.yeni, r.eski);
+  });
+
+  test('2975 (Veri): kilitli talepte basamak değişmez; basamağa dokunmayan kayıt geçer', async () => {
+    const t = await kararli();
+    assert.equal(t.durum, 'onayda');
+    const red = (r: Cevap) => [r.statusCode, (r.json() as { mesaj: string }).mesaj];
+    const [q0, ...diger] = t.teklifler;
+    const degisik = { ...q0!, fiyatlar: q0!.fiyatlar.map((f, i) => (i === 0 ? { ...f, basamaklar: [{ esik: '10', birimFiyat: '1' }] } : f)) };
+    assert.deepEqual(red(await kaydet(c.sa, { ...govde(t), teklifler: [degisik, ...diger] })), [422, ILETILER.kilitliBasamak]);
+    tamam<Talep>(await kaydet(c.sa, { ...govde(t), notlar: 'Basamak aynı' }));
+  });
+
   test('SAT-45: eski sürümle kaydeden 409 (eski-surum) alır; kayıt değişmez', async () => {
     const t = tamam<Talep>(await istek(c.sa, 'POST', '/satin-alma-talepleri/ac', yeniTalep()));
     tamam<Talep>(await kaydet(c.sa, { ...govde(t), baslik: 'Bir' }));
