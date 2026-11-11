@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type {
   GelecekSepetCevabi, IsMalzemeleriCevabi, IsMalzemesiIsteGovdesi, IstasyonSepetiCevabi, IstasyonSepetiSatiri, IstekAcGovdesi, IstekMalzemeleriCevabi, KisiKoduCevabi, MalzemeYerleriCevabi, OkutCozCevabi, Teslim, TeslimGonderGovdesi, TeslimKutusuCevabi, TeslimYeri, YerdekiStokCevabi,
 } from '#paylasilan/sozlesme/stok.ts';
-import { DurumKutusu, Dugme, Girdi, KodOkuyucu, Pencere, Rozet, Secim, Simge, useBildirim, type KomutIsleyici, type Secenek } from '../../ortak/arayuz/index.ts';
+import { DurumKutusu, Dugme, Girdi, KodOkuyucu, OnayPenceresi, Pencere, Rozet, Secim, Simge, useBildirim, type KomutIsleyici, type Secenek } from '../../ortak/arayuz/index.ts';
 import type { UstEylem } from '../../ortak/rota/ust-eylemler.ts';
 import { api } from '../../ortak/veri/api.ts';
 import { yeniIstekKimligi } from '../../ortak/veri/istek-kimligi.ts';
@@ -256,11 +256,11 @@ function GelenlerKarti({ gelenler, ac }: { gelenler: Teslim[]; ac: () => void })
   return (
     <div className="tc-stok-is" role="group" aria-label="Yoldaki teslimler">
       <div>
-        <strong>{gelenler.length} teslim seni bekliyor</strong>
+        <strong>{gelenler.length} teslim yolda</strong>
         <span>{adlar.join(', ')}{fazla > 0 ? ` ve ${fazla} teslim daha` : ''}</span>
       </div>
       <div className="tc-stok-dugmeler">
-        <HepsiniAl gelenler={gelenler} />
+        <HepsiniAl gelenler={gelenler} ozetle />
         <Dugme simge="list" onClick={ac}>Tek tek bak</Dugme>
       </div>
     </div>
@@ -358,7 +358,10 @@ function BuIs({ odak, gelenler, sepeteGec }: { odak: MalzemeTeslimOdagi; gelenle
 const hedefTarafi = (kutu: TeslimKutusuCevabi, t: Teslim): boolean => t.hedef.istasyonId !== null && kutu.istasyonlar.some((i) => i.id === t.hedef.istasyonId);
 
 // 545 T4: bekleyen her teslim gönderilen miktarla, sırayla ve ayrı kayıt olarak alınır; biri reddedilirse ötekiler alınmış kalır ve söylenir.
-function HepsiniAl({ gelenler }: { gelenler: Teslim[] }) {
+// `ozetle`: ilk ekranda teslimlerin hepsi görünmez; toplu kabul saymadan yapılır, eksik gelen tam alınmış görünür. Bu yüzden
+// orada önce hepsinin miktarı tek pencerede gösterilir, kabul oradan verilir; farklı gelen "Tek tek bak" ile sayılır.
+function HepsiniAl({ gelenler, ozetle = false }: { gelenler: Teslim[]; ozetle?: boolean }) {
+  const [soruyor, soruYaz] = useState(false);
   const istemci = useQueryClient();
   const { bildir } = useBildirim();
   const al = useMutation({
@@ -376,7 +379,19 @@ function HepsiniAl({ gelenler }: { gelenler: Teslim[] }) {
     },
     onSettled: () => istemci.invalidateQueries({ queryKey: KUTU }),
   });
-  return <Dugme tur="ikincil" simge="check" yukleniyor={al.isPending} onClick={() => al.mutate(gelenler)}>Hepsini al</Dugme>;
+  if (!ozetle) return <Dugme tur="ikincil" simge="check" yukleniyor={al.isPending} onClick={() => al.mutate(gelenler)}>Hepsini al</Dugme>;
+  return (
+    <>
+      <Dugme tur="birincil" simge="check" yukleniyor={al.isPending} onClick={() => soruYaz(true)}>{`Hepsini al (${String(gelenler.length)})`}</Dugme>
+      <OnayPenceresi acik={soruyor} baslik={`${String(gelenler.length)} teslim gönderilen miktarlarla alınsın mı?`} onayMetni="Hepsini al"
+        onayla={() => { soruYaz(false); al.mutate(gelenler); }} vazgec={() => soruYaz(false)}>
+        <ul className="tc-stok-liste" aria-label="Alınacak teslimler">
+          {gelenler.map((t) => <li key={t.id}>{`${t.malzemeAd ?? t.no} · ${miktarMetni(t.miktar)} · ${t.kaynak.ad ?? t.kaynak.kod}`}</li>)}
+        </ul>
+        <p className="tc-stok-not">Eksik ya da farklı gelen varsa Vazgeç'e basın, Tek tek bak ile sayıp alın.</p>
+      </OnayPenceresi>
+    </>
+  );
 }
 
 // Kişiye teslim (299 b): teslim edecek kişi bu kodu okutur. Kod sunucuda imzalanır ve kısa sürelidir; ekran süresi dolmadan yenisini alır.
