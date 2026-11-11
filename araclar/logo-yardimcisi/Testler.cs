@@ -361,6 +361,28 @@ namespace LogoYardimcisi
             Icerir(Hata(C(s, "POST", "/api/PurchaseOrder/UpdateRich", g)), "Cari değişikliği");
         }
 
+        static void T_siparis_duzenlemesi_durum_gelmezse_logodaki_durumu_korur()
+        {
+            var s = Logo();
+            var c = C(s, "POST", "/api/PurchaseOrder/AddRich", Siparis("SP-4D", SiparisSatiri(Malzeme, 4)));
+            var kayit = Ref(c);
+            var satir = SiparisSatiri(Malzeme, 6);
+            satir["logicalRef"] = Satirlar(c, "order")[0];
+            var g = Siparis("SP-4D", satir);
+            g["logicalRef"] = kayit;
+            g["orderStatus"] = 1;
+            Dogru(Basari(C(s, "POST", "/api/PurchaseOrder/UpdateRich", g)), "durumlu düzenleme");
+            Esit(1, s.Siparis("SP-4D", 2).Durum, "verilen durum yazılır");
+            g.Remove("orderStatus");
+            satir["quantity"] = 7;
+            Dogru(Basari(C(s, "POST", "/api/PurchaseOrder/UpdateRich", g)), "durumsuz düzenleme");
+            Dogru(!s.Cagrilar.Last().Contains("ORDER_STATUS"), "durum gelmeyince ORDER_STATUS yazılmaz: " + s.Cagrilar.Last());
+            Esit(1, s.Siparis("SP-4D", 2).Durum, "Logo'daki durum korunur");
+            Esit(7m, s.SiparisSatirlari(kayit)[0].Miktar, "satır yine yazılır");
+            g["orderStatus"] = 2;
+            Icerir(Hata(C(s, "POST", "/api/PurchaseOrder/UpdateRich", g)), "orderStatus geçersiz");
+        }
+
         static void T_satir_kapatma_iptal_ve_yinelenen_iptal()
         {
             var s = Logo();
