@@ -476,6 +476,18 @@ const backend: Backend = {
       return false;
     }
   },
+  async siparisLogoBeklet(id, teklifId, istek) {
+    const sun = talepSunucu.get(id);
+    if (sun === undefined) return false;
+    try {
+      const t = await uc.post('/satin-alma-talepleri/:id/siparis-logo-beklet', { parametre: { id }, govde: { teklifId, istek, surum: sun.surum }, ...sure });
+      applyLocal('requests', id, talepEkrana(t));
+      return true;
+    } catch (h) {
+      await hata(h);
+      return false;
+    }
+  },
   async siparisFaturalari(talepId, teklifId) {
     try {
       return (await uc.get('/satin-alma-siparis-faturalari', { sorgu: { talepId, teklifId }, ...sure })).faturalar;

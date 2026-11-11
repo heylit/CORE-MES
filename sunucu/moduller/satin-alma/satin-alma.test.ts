@@ -17,7 +17,7 @@ import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
 import {
-  karsilamaLogoSonucu, logoyaGidecekKarsilamalar, logoyaGidecekSiparisler, logoyaGidecekTalepler, logoyaGuncellemeGidecekSiparisler, logoyaKapatmaGidecekSiparisler, siparisLogoKapatmaSonucu, logoyaIptalGidecekSiparisler, malKabulFiyatlari, malzemeGelisTarihleri, ortalamaAlisFiyatlari, siparisSatiriBelgeleri, siparisLogoGuncellemeSonucu, siparisLogoIptalSonucu, siparisLogoSonucu, siparisSatirlari, sonAlisFiyatlari, talepLogoSonucu, teslimGeriAl, teslimIsle, siparisSatirlarininEmri, isEmriFasonTutarlari, siparisBirimFiyatlari,
+  karsilamaLogoSonucu, logoyaGidecekKarsilamalar, logoyaGidecekSiparisler, logoyaGidecekTalepler, logoyaGuncellemeGidecekSiparisler, logoyaKapatmaGidecekSiparisler, siparisLogoKapatmaSonucu, logoyaBekletmeGidecekSiparisler, siparisLogoBekletmeSonucu, logoyaIptalGidecekSiparisler, malKabulFiyatlari, malzemeGelisTarihleri, ortalamaAlisFiyatlari, siparisSatiriBelgeleri, siparisLogoGuncellemeSonucu, siparisLogoIptalSonucu, siparisLogoSonucu, siparisSatirlari, sonAlisFiyatlari, talepLogoSonucu, teslimGeriAl, teslimIsle, siparisSatirlarininEmri, isEmriFasonTutarlari, siparisBirimFiyatlari,
 } from './disari.ts';
 import { uclar } from './uclar.ts';
 import * as servis from './servis.ts';
@@ -2889,7 +2889,7 @@ describe('satin-alma sürüm 6 (gerçek PostgreSQL)', () => {
 
   test('#205 Logo: sipariş verilince her sipariş Logo kuyruğuna girer; kuyruk tedarikçi, para birimi, kur, iskonto, termin ve satırları stok koduyla verir', async () => {
     const { s, a, b } = await bolunmusSiparis();
-    assert.deepEqual(siparisi(s, a).logo, { durum: 'bekliyor', kayitNo: null, hata: null, iptalDurumu: null, iptalHata: null, guncellemeDurumu: null, guncellemeHata: null, kapatmaDurumu: null, kapatmaHata: null });
+    assert.deepEqual(siparisi(s, a).logo, { durum: 'bekliyor', kayitNo: null, hata: null, iptalDurumu: null, iptalHata: null, guncellemeDurumu: null, guncellemeHata: null, kapatmaDurumu: null, kapatmaHata: null, bekletmeIstegi: null, bekletmeDurumu: null, bekletmeHata: null });
     const [ia, ib] = [await siparisNo(s.id, a), await siparisNo(s.id, b)];
     const kuyruk = await logoKuyrugu([ia, ib]);
     assert.deepEqual(kuyruk.map((x) => x.id), [ia, ib].sort((x, y) => x - y));
@@ -2972,14 +2972,14 @@ describe('satin-alma sürüm 6 (gerçek PostgreSQL)', () => {
     const { s, a, b } = await bolunmusSiparis();
     const [ia, ib] = [await siparisNo(s.id, a), await siparisNo(s.id, b)];
     await logoSonucu(ia, { hata: '  Köprüye ulaşılamadı  ' });
-    assert.deepEqual(siparisi(await acilistaki(s.id), a).logo, { durum: 'hata', kayitNo: null, hata: 'Köprüye ulaşılamadı', iptalDurumu: null, iptalHata: null, guncellemeDurumu: null, guncellemeHata: null, kapatmaDurumu: null, kapatmaHata: null });
+    assert.deepEqual(siparisi(await acilistaki(s.id), a).logo, { durum: 'hata', kayitNo: null, hata: 'Köprüye ulaşılamadı', iptalDurumu: null, iptalHata: null, guncellemeDurumu: null, guncellemeHata: null, kapatmaDurumu: null, kapatmaHata: null, bekletmeIstegi: null, bekletmeDurumu: null, bekletmeHata: null });
     assert.equal((await logoKuyrugu([ia]))[0]?.durum, 'hata');
     const satirA = siparisi(s, a).satirlar[0]!.id, satirB = siparisi(s, b).satirlar[0]!.id;
     await assert.rejects(logoSonucu(ia, { kayitNo: '4711', satirlar: [{ satirId: satirB, logoSatirRef: '1' }] }));
     assert.equal(siparisi(await acilistaki(s.id), a).logo?.durum, 'hata');
     await logoSonucu(ia, { kayitNo: '4711', satirlar: [{ satirId: satirA, logoSatirRef: '9001' }] });
     await logoSonucu(ia, { kayitNo: '4711', satirlar: [{ satirId: satirA, logoSatirRef: '9001' }] });
-    assert.deepEqual(siparisi(await acilistaki(s.id), a).logo, { durum: 'gonderildi', kayitNo: '4711', hata: null, iptalDurumu: null, iptalHata: null, guncellemeDurumu: null, guncellemeHata: null, kapatmaDurumu: null, kapatmaHata: null });
+    assert.deepEqual(siparisi(await acilistaki(s.id), a).logo, { durum: 'gonderildi', kayitNo: '4711', hata: null, iptalDurumu: null, iptalHata: null, guncellemeDurumu: null, guncellemeHata: null, kapatmaDurumu: null, kapatmaHata: null, bekletmeIstegi: null, bekletmeDurumu: null, bekletmeHata: null });
     assert.equal((await vt().tx((db) => db.tek<{ r: string }>('SELECT logo_satir_ref AS r FROM satin_alma_siparis_satiri WHERE id = $1', [satirA])))!.r, '9001');
     assert.deepEqual((await logoKuyrugu([ia, ib])).map((x) => x.id), [ib]);
     await assert.rejects(logoSonucu(ia, { kayitNo: '4712', satirlar: [] }));
@@ -3018,7 +3018,7 @@ describe('satin-alma sürüm 6 (gerçek PostgreSQL)', () => {
     });
     assert.deepEqual(g!.satirlar, [{ satirId: satirA, stokKodu: 'HM-SAT-00004', hizmet: false, miktar: '4', birim: 'adet', birimFiyat: '5.5', logoSatirRef: '9001' }]);
     await guncellemeSonucu(ia, { satirlar: [] });
-    assert.deepEqual(siparisi(await acilistaki(s.id), a).logo, { durum: 'gonderildi', kayitNo: '5001', hata: null, iptalDurumu: null, iptalHata: null, guncellemeDurumu: 'gonderildi', guncellemeHata: null, kapatmaDurumu: null, kapatmaHata: null });
+    assert.deepEqual(siparisi(await acilistaki(s.id), a).logo, { durum: 'gonderildi', kayitNo: '5001', hata: null, iptalDurumu: null, iptalHata: null, guncellemeDurumu: 'gonderildi', guncellemeHata: null, kapatmaDurumu: null, kapatmaHata: null, bekletmeIstegi: null, bekletmeDurumu: null, bekletmeHata: null });
     assert.deepEqual(await guncellemeKuyrugu([ia]), []);
     const iskonto = tamam<Talep>(await kaydet(c.sa, teklifDegis(await acilistaki(s.id), a, () => ({ iskontoYuzdesi: '3' }))));
     assert.equal(siparisi(iskonto, a).logo?.guncellemeDurumu, 'bekliyor');
@@ -3096,6 +3096,85 @@ describe('satin-alma sürüm 6 (gerçek PostgreSQL)', () => {
     await vt().tx((db) => siparisLogoKapatmaSonucu(db, ia, { tamam: true }));
     assert.equal(siparisi(await acilistaki(s.id), a).logo?.kapatmaDurumu, 'gonderildi');
     assert.deepEqual(await kapatmaKuyrugu([ia]), []);
+  });
+
+  const beklet = (t: Talep, teklifId: string, istek_: 'beklet' | 'serbest') =>
+    istek(c.sa, 'POST', `/satin-alma-talepleri/${t.id}/siparis-logo-beklet`, { teklifId, istek: istek_, surum: t.surum });
+  const bekletmeKuyrugu = async (idler: number[]) => (await vt().tx((db) => logoyaBekletmeGidecekSiparisler(db, 10000))).filter((x) => idler.includes(x.id));
+  const logoAnahtari = (anahtar: string, deger: boolean) => istek(c.yonetici, 'POST', `/ayarlar/${anahtar}/degistir`, { deger });
+
+  test('2966-1 b Logo\'da beklet: istek kuyruğa girer, hareket yazılır; sonuç yalnız aynı isteğe yazılır; serbest bırakma geri alır', async () => {
+    const { s, a, b } = await bolunmusSiparis();
+    const [ia, ib] = [await siparisNo(s.id, a), await siparisNo(s.id, b)];
+    const satirA = siparisi(s, a).satirlar[0]!.id;
+    tamam(await logoAnahtari('logo.siparis-bekletme-gonderimi', true));
+    tamam(await logoAnahtari('logo.satin-alma-gonderimi', true));
+    try {
+      const gitmemis = await beklet(await acilistaki(s.id), a, 'beklet');
+      assert.equal(gitmemis.statusCode, 422);
+      assert.match(gitmemis.body, /Yalnız Logo'ya gönderilmiş sipariş/);
+      await logoSonucu(ia, { kayitNo: '9600', satirlar: [{ satirId: satirA, logoSatirRef: '9601' }] });
+      assert.match((await beklet(await acilistaki(s.id), a, 'serbest')).body, /bekletilmiyor/);
+      const t = tamam<Talep>(await beklet(await acilistaki(s.id), a, 'beklet'));
+      assert.deepEqual([siparisi(t, a).logo?.bekletmeIstegi, siparisi(t, a).logo?.bekletmeDurumu], ['beklet', 'bekliyor']);
+      assert.ok(t.hareketler.some((h) => h.metin.includes("Logo'da bekletme istendi")));
+      assert.match((await beklet(t, a, 'beklet')).body, /zaten sırada/);
+      const [k] = await bekletmeKuyrugu([ia, ib]);
+      assert.deepEqual([k?.id, k?.istek, k?.satirlar.map((x) => x.logoSatirRef)], [ia, 'beklet', ['9601']]);
+      await vt().tx((db) => siparisLogoBekletmeSonucu(db, ia, 'serbest', { tamam: true }));
+      assert.equal(siparisi(await acilistaki(s.id), a).logo?.bekletmeDurumu, 'bekliyor', 'başka isteğin sonucu yazılmaz');
+      await vt().tx((db) => siparisLogoBekletmeSonucu(db, ia, 'beklet', { hata: 'Logo kilitli' }));
+      assert.deepEqual([siparisi(await acilistaki(s.id), a).logo?.bekletmeDurumu, siparisi(await acilistaki(s.id), a).logo?.bekletmeHata], ['hata', 'Logo kilitli']);
+      assert.equal((await bekletmeKuyrugu([ia])).length, 1, 'hata kuyrukta kalır');
+      await vt().tx((db) => siparisLogoBekletmeSonucu(db, ia, 'beklet', { tamam: true }));
+      let u = await acilistaki(s.id);
+      assert.deepEqual([siparisi(u, a).logo?.bekletmeDurumu, await bekletmeKuyrugu([ia])], ['gonderildi', []]);
+      assert.match((await beklet(u, a, 'beklet')).body, /zaten bekletiliyor/);
+      u = tamam<Talep>(await beklet(u, a, 'serbest'));
+      assert.deepEqual([siparisi(u, a).logo?.bekletmeIstegi, siparisi(u, a).logo?.bekletmeDurumu], ['serbest', 'bekliyor']);
+      await vt().tx((db) => siparisLogoBekletmeSonucu(db, ia, 'serbest', { tamam: true }));
+      assert.match((await beklet(await acilistaki(s.id), a, 'serbest')).body, /bekletilmiyor/);
+      // Sırada düzenleme varken bekletme gitmez (yeni satır iki kez eklenmesin); düzenleme gidince kuyruğa döner.
+      tamam<Talep>(await beklet(await acilistaki(s.id), a, 'beklet'));
+      await ortam!.sahip.sorgu("UPDATE satin_alma_siparis SET logo_guncelleme_durumu = 'bekliyor' WHERE id = $1", [ia]);
+      assert.deepEqual(await bekletmeKuyrugu([ia]), []);
+      await ortam!.sahip.sorgu("UPDATE satin_alma_siparis SET logo_guncelleme_durumu = 'gonderildi' WHERE id = $1", [ia]);
+      assert.equal((await bekletmeKuyrugu([ia])).length, 1);
+      // Talep iptal edilince sıradaki bekletme düşer, iptal gider; geç gelen sonuç yazılmaz.
+      const ip = tamam<Talep>(await kaydet(c.sa, { ...govde(await acilistaki(s.id)), durum: 'iptal', iptalNedeni: 'Deneme iptal' }));
+      assert.deepEqual([siparisi(ip, a).logo?.bekletmeIstegi, siparisi(ip, a).logo?.bekletmeDurumu, siparisi(ip, a).logo?.iptalDurumu], [null, null, 'bekliyor']);
+      await vt().tx((db) => siparisLogoBekletmeSonucu(db, ia, 'beklet', { tamam: true }));
+      assert.equal(siparisi(await acilistaki(s.id), a).logo?.bekletmeDurumu, null);
+    } finally {
+      tamam(await logoAnahtari('logo.siparis-bekletme-gonderimi', false));
+      tamam(await logoAnahtari('logo.satin-alma-gonderimi', false));
+    }
+  });
+
+  test('2966-1 b Logo\'da beklet: kalanı kapatılan ya da iptal edilen siparişte doğru ileti; kapatma sıradaki bekletmeyi düşürür', async () => {
+    const { s, a } = await bolunmusSiparis();
+    const ia = await siparisNo(s.id, a);
+    await logoSonucu(ia, { kayitNo: '9700', satirlar: [{ satirId: siparisi(s, a).satirlar[0]!.id, logoSatirRef: '9701' }] });
+    tamam(await logoAnahtari('logo.siparis-bekletme-gonderimi', true));
+    tamam(await logoAnahtari('logo.satin-alma-gonderimi', true));
+    try {
+      tamam<Talep>(await beklet(await acilistaki(s.id), a, 'beklet'));
+      const k = tamam<Talep>(await kapat(await acilistaki(s.id), a));
+      assert.deepEqual([siparisi(k, a).logo?.bekletmeIstegi, siparisi(k, a).logo?.bekletmeDurumu, siparisi(k, a).logo?.kapatmaDurumu], [null, null, 'bekliyor']);
+      assert.deepEqual(await bekletmeKuyrugu([ia]), []);
+      for (const istek_ of ['beklet', 'serbest'] as const) {
+        const r = await beklet(k, a, istek_);
+        assert.equal(r.statusCode, 422);
+        assert.match(r.body, /Kalanı kapatılmış ya da iptal edilmiş sipariş Logo'da bekletilmez/);
+      }
+      const ip = tamam<Talep>(await kaydet(c.sa, { ...govde(await acilistaki(s.id)), durum: 'iptal', iptalNedeni: 'Deneme iptal' }));
+      const r = await beklet(ip, a, 'beklet');
+      assert.equal(r.statusCode, 422);
+      assert.match(r.body, /Yalnız siparişi verilmiş talebin siparişi/);
+    } finally {
+      tamam(await logoAnahtari('logo.siparis-bekletme-gonderimi', false));
+      tamam(await logoAnahtari('logo.satin-alma-gonderimi', false));
+    }
   });
 
   test('B-5 (1404): kalanı kapatılmış siparişte mal kabul düzeltmesi aynı işlemde geri alıp yeniden yazar; geri almasız ya da ayrı işlemdeki yazım reddedilir', async () => {

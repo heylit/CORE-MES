@@ -35,7 +35,7 @@ const TALEP: Talep = {
     mod: 'bolunmus', teklifId: null, bolunme: [{ kalemId: K1, teklifId: QB }, { kalemId: K2, teklifId: QA }], gerekce: 'Termin', kararVerenKisiId: 7, kararVerenAdi: 'Deneme Karar Veren',
     kararTarihi: '2026-10-06', ogrenilenler: 'Ambalaj', sabitKurlar: [{ paraBirimi: 'USD', kur: '41.5' }],
     siparisler: [
-      { teklifId: QA, no: 'SP-2026-001', siparisNo: 'SA-1', siparisTarihi: '2026-10-07', beklenenTeslim: '2026-10-14', vadeBaslangici: 'teslim', teslimDurumu: 'tamam', kalite: 'kismi_sorun', logo: { durum: 'gonderildi', kayitNo: '4711', hata: null, iptalDurumu: null, iptalHata: null, guncellemeDurumu: null, guncellemeHata: null, kapatmaDurumu: null, kapatmaHata: null },
+      { teklifId: QA, no: 'SP-2026-001', siparisNo: 'SA-1', siparisTarihi: '2026-10-07', beklenenTeslim: '2026-10-14', vadeBaslangici: 'teslim', teslimDurumu: 'tamam', kalite: 'kismi_sorun', logo: { durum: 'gonderildi', kayitNo: '4711', hata: null, iptalDurumu: null, iptalHata: null, guncellemeDurumu: null, guncellemeHata: null, kapatmaDurumu: null, kapatmaHata: null, bekletmeIstegi: null, bekletmeDurumu: null, bekletmeHata: null },
         satirlar: [{ id: 11, kalemId: K2, miktar: '36.5', birim: 'kg', teslimAlinan: '36.5', sonTeslimTarihi: '2026-10-13', fazlaTeslim: null }] },
       { teklifId: QB, no: 'SP-2026-002', siparisNo: 'SA-2', siparisTarihi: '2026-10-07', beklenenTeslim: null, vadeBaslangici: 'teslim', teslimDurumu: 'bekleniyor', kalite: null, logo: null,
         satirlar: [{ id: 12, kalemId: K1, miktar: '40', birim: 'adet', teslimAlinan: null, sonTeslimTarihi: null, fazlaTeslim: null }] },
@@ -68,7 +68,7 @@ describe('TMI taşıyıcısı', () => {
     expect(r.award?.mode).toBe('split');
     expect(r.award?.orders?.[QA]).toEqual({
       orderNo: 'SP-2026-001', poNo: 'SA-1', orderDate: '2026-10-07', expectedDate: '2026-10-14', vadeBaslangici: 'teslim', deliveredDate: '2026-10-13', quality: 'partial', excess: [],
-      logo: { durum: 'gonderildi', kayitNo: '4711', hata: null, iptalDurumu: null, iptalHata: null, guncellemeDurumu: null, guncellemeHata: null, kapatmaDurumu: null, kapatmaHata: null },
+      logo: { durum: 'gonderildi', kayitNo: '4711', hata: null, iptalDurumu: null, iptalHata: null, guncellemeDurumu: null, guncellemeHata: null, kapatmaDurumu: null, kapatmaHata: null, bekletmeIstegi: null, bekletmeDurumu: null, bekletmeHata: null },
     });
     const tek = talepEkrana({ ...TALEP, karar: { ...TALEP.karar!, mod: 'tek', teklifId: QA, bolunme: [], siparisler: [TALEP.karar!.siparisler[0]!] } });
     expect([tek.award?.mode, tek.award?.orderNo, tek.award?.poNo, tek.award?.quality]).toEqual(['single', 'SP-2026-001', 'SA-1', 'partial']);

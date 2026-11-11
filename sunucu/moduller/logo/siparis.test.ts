@@ -19,7 +19,7 @@ import { sahteKopruAc } from './sahte-kopru.ts';
 import type { SahteKopru } from './sahte-kopru.ts';
 import { malzemeEslemesiYaz, malzemeTuru, satinAlmaTuru, yeniSurecBellegi } from './servis.ts';
 import type {
-  LogoyaGidecekKarsilama, LogoyaGidecekSiparis, LogoyaGuncellemeGidecekSiparis, LogoyaGuncellemeGidecekMalzeme, SatinAlmaKaynagi, SatirBaglari,
+  LogoyaBekletmeGidecekSiparis, LogoyaGidecekKarsilama, LogoyaGidecekSiparis, LogoyaGuncellemeGidecekSiparis, LogoyaGuncellemeGidecekMalzeme, SatinAlmaKaynagi, SatirBaglari,
   SatinAlmaTurOrtami, SiparisLogoSonucu, Tamam, TurOrtami, TurSonucu, TxAcan,
 } from './servis.ts';
 import type { GonderilecekTalep } from './kurallar.ts';
@@ -35,6 +35,7 @@ interface SahteKaynak extends SatinAlmaKaynagi {
   siparisler: Map<number, LogoyaGidecekSiparis & { kayitNo: string | null; satirRefleri: SatirBaglari | null; hata: string | null }>;
   guncellemeler: Map<number, LogoyaGuncellemeGidecekSiparis & Durum & { baglar: SatirBaglari | null }>;
   kapatmalar: Map<number, { no: string; logoKayitNo: string; satirRefleri: string[] } & Durum>;
+  bekletmeler: Map<number, LogoyaBekletmeGidecekSiparis & Durum>;
   iptaller: Map<number, { no: string; logoKayitNo: string } & Durum>;
   talepler: Map<number, GonderilecekTalep & { kayitNo: string | null; satirRefleri: SatirBaglari | null; hata: string | null }>;
   karsilamalar: Map<number, LogoyaGidecekKarsilama & Durum & { ref: string | null }>;
@@ -52,6 +53,7 @@ function sahteKaynak(): SahteKaynak {
     siparisler: new Map(),
     guncellemeler: new Map(),
     kapatmalar: new Map(),
+    bekletmeler: new Map(),
     iptaller: new Map(),
     talepler: new Map(),
     karsilamalar: new Map(),
@@ -80,6 +82,14 @@ function sahteKaynak(): SahteKaynak {
       return bekleyen(k.kapatmalar, sinir).map(([id, x]) => ({ id, no: x.no, logoKayitNo: x.logoKayitNo, satirRefleri: x.satirRefleri }));
     },
     async kapatmaSonucu(_db: Db, id: number, sonuc: Tamam) { durumYaz(k.kapatmalar.get(id), sonuc); },
+    async bekletmeGidecekler(_db: Db, sinir: number) {
+      return bekleyen(k.bekletmeler, sinir).map(([, x]) => x);
+    },
+    async bekletmeSonucu(_db: Db, id: number, istek: 'beklet' | 'serbest', sonuc: Tamam) {
+      const x = k.bekletmeler.get(id);
+      if (x?.istek !== istek) throw gecersiz('İstek değişti.');
+      durumYaz(x, sonuc);
+    },
     async iptalGidecekler(_db: Db, sinir: number) {
       return bekleyen(k.iptaller, sinir).map(([id, i]) => ({ id, no: i.no, logoKayitNo: i.logoKayitNo }));
     },
@@ -459,6 +469,61 @@ describe('Logo satın alma gönderimi (sipariş, talep, karşılama), sahte köp
     assert.deepEqual(await tur(ortami()), { tur: 'kapatma', no: 811, sonuc: 'reddedildi' });
     assert.equal(kopru.istekler.length, once);
     assert.match(kaynak.kapatmalar.get(811)?.hata ?? '', /Kapatılacak Logo satırı yok/);
+  });
+
+  test('LGS-25 (2966-1 b) bekletme: kendi anahtarı kapalıyken istek yok; açıkken satırlar okunur, düzenleme gövdesi durumla gider (beklet 1, serbest 4)', async () => {
+    const no = 'SP-2026-951';
+    const logo = logodakiSiparis(no, [952, 953]);
+    const sip = (istek: 'beklet' | 'serbest'): LogoyaBekletmeGidecekSiparis & Durum => ({
+      id: 951, no, tarih: '2026-10-12', firmaId, paraBirimi: 'TRY', kur: null, iskontoYuzdesi: '0', termin: null, durum: 'bekliyor', hata: null,
+      logoKayitNo: String(logo.ref), kaldirilanSatirRefleri: [], istek,
+      satirlar: [
+        { satirId: 9511, stokKodu: 'HM-DEN-00001', hizmet: false, miktar: '5', birim: 'kg', birimFiyat: '40', logoSatirRef: '952' },
+        { satirId: 9512, stokKodu: 'HM-DEN-00002', hizmet: false, miktar: '2', birim: 'adet', birimFiyat: '15.5', logoSatirRef: '953' },
+      ],
+    });
+    kaynak.bekletmeler.set(951, sip('beklet'));
+    assert.deepEqual(await tur(ortami()), { tur: 'bos' }, 'anahtar kapalı: kuyruk okunmaz');
+    assert.equal(kopru.istekler.length, 0);
+    await ayar('logo.siparis-bekletme-gonderimi', true);
+    try {
+      assert.deepEqual(await tur(ortami()), { tur: 'bekletme', no: 951, sonuc: 'gonderildi' });
+      assert.deepEqual(kopru.istekler.map((i) => `${i.yontem} ${i.yol}`), [`GET /api/PurchaseOrder/${no}/lines`, 'POST /api/PurchaseOrder/UpdateRich']);
+      const govde = kopru.istekler[1]?.govde as { logicalRef: number; orderStatus: number; lines: { logicalRef?: number }[] };
+      assert.equal(govde.orderStatus, 1);
+      assert.equal(govde.logicalRef, logo.ref);
+      assert.deepEqual(govde.lines.map((l) => l.logicalRef), [952, 953], 'bütün satırlar kaydıyla gider, yeni satır yok');
+      assert.equal(kaynak.bekletmeler.get(951)?.durum, 'gonderildi');
+      assert.equal((await giden('siparis-bekletme', 951))?.son_sonuc, 'gonderildi');
+      kaynak.bekletmeler.set(951, sip('serbest'));
+      simdi += 3600_000;
+      assert.deepEqual(await tur(ortami()), { tur: 'bekletme', no: 951, sonuc: 'gonderildi' });
+      assert.equal((kopru.istekler.at(-1)?.govde as { orderStatus: number }).orderStatus, 4);
+      // Logo'da CORE'un bildiği satır yoksa gövde gitmez: düzenleme gövdesi eksik satırı Logo'da kapatırdı.
+      kaynak.bekletmeler.set(951, { ...sip('beklet'), satirlar: [...sip('beklet').satirlar, { satirId: 9513, stokKodu: 'HM-DEN-00003', hizmet: false, miktar: '1', birim: 'adet', birimFiyat: '9', logoSatirRef: '999' }] });
+      simdi += 3600_000;
+      const once = kopru.istekler.length;
+      assert.deepEqual(await tur(ortami()), { tur: 'bekletme', no: 951, sonuc: 'reddedildi' });
+      assert.deepEqual(kopru.istekler.slice(once).map((i) => i.yol), [`/api/PurchaseOrder/${no}/lines`], 'UpdateRich gitmez');
+      assert.match(kaynak.bekletmeler.get(951)?.hata ?? '', /Logo'daki satırlar CORE'dakiyle tutmuyor/);
+      // Logo'da CORE'un bilmediği satır varsa (elle eklenmiş ya da önceden kapatılmış) gövde gitmez: elle eklenen açık satır kapanırdı.
+      logo.satirlar.push(954);
+      kaynak.bekletmeler.set(951, sip('beklet'));
+      simdi += 3600_000;
+      const once3 = kopru.istekler.length;
+      assert.deepEqual(await tur(ortami()), { tur: 'bekletme', no: 951, sonuc: 'reddedildi' });
+      assert.deepEqual(kopru.istekler.slice(once3).map((i) => i.yol), [`/api/PurchaseOrder/${no}/lines`], 'fazla Logo satırında UpdateRich gitmez');
+      assert.deepEqual(logo.satirlar, [952, 953, 954], 'Logo satırı değişmez');
+      logo.satirlar.pop();
+      // Numarasız satır (Logo'ya gitmemiş) varsa hiç istek gitmez.
+      kaynak.bekletmeler.set(951, { ...sip('beklet'), satirlar: [{ ...sip('beklet').satirlar[0]!, logoSatirRef: null }] });
+      simdi += 3600_000;
+      const once2 = kopru.istekler.length;
+      assert.deepEqual(await tur(ortami()), { tur: 'bekletme', no: 951, sonuc: 'reddedildi' });
+      assert.equal(kopru.istekler.length, once2);
+    } finally {
+      await ayar('logo.siparis-bekletme-gonderimi', false);
+    }
   });
 
   test('LGS-19 karşılama: önce liste okunur, yoksa yazılır; kaybolan cevaptan sonra ikinci karşılama açılmaz; iptal önce karşılamayı kaldırır', async () => {

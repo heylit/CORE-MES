@@ -17,7 +17,7 @@ import {
 import {
   $, $$, addDays, clamp, clone, dayDiff, deltaHTML, esc, fmtDate, isNum, money, nf0, nf2, nfx, norm, numIn, parseNum,
   nf1, pct, sum, todayStr, toCSV, uid, kokIcinde, type FormEl } from "./util.ts";
-import { kademeRozeti, labelTables, onAfterRender, PRESETS, rankHTML, readSplitAssign, render, summaryText, UI, updateSplitSum, verdictHTML } from "./views.ts";
+import { kademeRozeti, bekletmePenceresiSiparisleri, labelTables, onAfterRender, PRESETS, rankHTML, readSplitAssign, render, summaryText, UI, updateSplitSum, verdictHTML } from "./views.ts";
 import { basamakYazabilir, reportCSV, unlinkedItems } from "./memory.ts";
 import { partileriUnut } from "./partiler.ts";
 import { ODEME_SEKLI, siparisTakibi, takibiUnut, takipGuncelle } from "./takip.ts";
@@ -1319,6 +1319,27 @@ ACTIONS["order-close-save"] = (_el, r) => {
   if (!reason) { toast("Gerekçe yazın."); $("#cl-reason").focus(); return; }
   closeModal();
   void backend.siparisKapat(r.id, qid, reason).then(ok => { if (ok) toast("Siparişin kalanı kapatıldı, Logo'ya gidiyor"); });
+};
+// 2966-1 b: "Logo'da beklet" yalnız Logo'daki siparişi öneri durumuna çeker; CORE'da düzenleme ve mal kabul sürer (2972-2 a).
+function logoBekletPenceresi(r: PurchaseRequest, istek: "beklet" | "serbest"): void {
+  const secilen = bekletmePenceresiSiparisleri(awardOrders(r), istek);
+  if (!secilen.length) { toast(istek === "beklet" ? "Logo'da bekletilecek, Logo'ya gönderilmiş açık sipariş yok." : "Logo'da bekletilen sipariş yok."); return; }
+  const baslik = istek === "beklet" ? "Siparişi Logo'da beklet" : "Siparişi Logo'da serbest bırak";
+  const metin = istek === "beklet"
+    ? "Sipariş Logo'da öneri (kesinleşmemiş sipariş) durumuna çekilir. CORE MES'te sipariş aynen sürer: düzenleme ve mal kabul yapılabilir, siparişte \"Logo'da bekletiliyor\" işareti görünür."
+    : "Sipariş Logo'da yeniden sevk edilebilir durumuna döner; \"Logo'da bekletiliyor\" işareti kalkar.";
+  openModal(`<div class="mh"><h2>${baslik}</h2></div><div class="mb"><p class="small muted">${metin}</p>
+    <label class="f"><span>Sipariş</span><select id="lb-order">${secilen.map(o => `<option value="${o.qid}">${esc(siparisEtiketi(o))} · ${esc(supName(o.q))}</option>`).join("")}</select></label></div>
+    <div class="mf"><button class="btn primary" data-act="order-logo-hold-save" data-istek="${istek}">${istek === "beklet" ? "Logo'da beklet" : "Logo'da serbest bırak"}</button><button class="btn ghost" data-act="close">Vazgeç</button></div>`, true, true);
+}
+ACTIONS["order-logo-hold"] = (_el, r) => { if (r && canWrite()) logoBekletPenceresi(r, "beklet"); };
+ACTIONS["order-logo-release"] = (_el, r) => { if (r && canWrite()) logoBekletPenceresi(r, "serbest"); };
+ACTIONS["order-logo-hold-save"] = (el, r) => {
+  if (!r || !canWrite()) return;
+  const istek = el.dataset.istek === "serbest" ? "serbest" : "beklet";
+  const qid = $("#lb-order").value;
+  closeModal();
+  void backend.siparisLogoBeklet(r.id, qid, istek).then(ok => { if (ok) toast(istek === "beklet" ? "Logo'da bekletme sıraya alındı" : "Logo'da serbest bırakma sıraya alındı"); });
 };
 // Kart #1310: seçili yönteme yeniden basmak seçimi kaldırır (belirtilmedi).
 ACTIONS["teslim-yontemi"] = (el, r) => {

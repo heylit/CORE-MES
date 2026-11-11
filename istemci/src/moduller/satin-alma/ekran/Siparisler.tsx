@@ -25,6 +25,8 @@ function logoDurumu(s: SiparisSatiri): [RozetTonu, string, string] | null {
   if (l.iptalDurumu === 'gonderildi') return ['pasif', 'İptal edildi', l.kayitNo ?? ''];
   if (l.iptalDurumu === 'hata') return ['hata', 'İptal hatası', l.iptalHata ?? ''];
   if (l.kapatmaDurumu === 'gonderildi') return ['pasif', 'Kalanı kapatıldı', l.kayitNo ?? ''];
+  if (l.bekletmeDurumu === 'hata') return ['hata', l.bekletmeIstegi === 'beklet' ? 'Bekletme hatası' : 'Serbest bırakma hatası', l.bekletmeHata ?? ''];
+  if (l.bekletmeIstegi === 'beklet' && l.bekletmeDurumu === 'gonderildi') return ['uyari', "Logo'da bekletiliyor", l.kayitNo ?? ''];
   if (l.durum === 'gonderildi') return ['tamam', "Logo'da", l.kayitNo ?? ''];
   if (l.durum === 'hata') return ['hata', 'Hata', l.hata ?? ''];
   return ['uyari', 'Sırada', ''];
