@@ -87,3 +87,62 @@ describe('Tablo kabı ölçen işareti', () => {
     expect(document.querySelector('.tc-tablo-kap')?.hasAttribute('data-olcer')).toBe(true);
   });
 });
+
+// Kart 2905: kayan tablo sığmasa da kart kipine geçmez; sabit sütunlar yalnız bu kipte işaretlenir.
+describe('Tablo kayan kip', () => {
+  const SABITLI: readonly Sutun<Satir>[] = [{ ...SUTUNLAR[0]!, sabit: 'sol' }, SUTUNLAR[1]!, { ...SUTUNLAR[2]!, sabit: 'sag' }];
+  afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); });
+
+  it('sığmayan kayan tablo tablo kalır, kabı ölçülmez ve kaydırma işareti taşır', () => {
+    vi.stubGlobal('ResizeObserver', class { observe() {} disconnect() {} });
+    vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockImplementation(() => 300);
+    vi.spyOn(HTMLElement.prototype, 'scrollWidth', 'get').mockImplementation(() => 1200);
+    render(<Tablo etiket="Gider" kip="kaydir" sutunlar={SABITLI} satirlar={SATIRLAR} satirAnahtari={(s) => s.no} />);
+    const kap = screen.getByRole('table', { name: 'Gider' }).closest('.tc-tablo-kap')!;
+    expect(kap.hasAttribute('data-kip')).toBe(false);
+    expect(kap.hasAttribute('data-kaydir')).toBe(true);
+    expect(kap.hasAttribute('data-olcer')).toBe(false);
+  });
+
+  it('sabit sütunun başlığı ve hücreleri sol ya da sağ işareti alır; ortadaki almaz', () => {
+    render(<Tablo etiket="Gider" kip="kaydir" sutunlar={SABITLI} satirlar={[KIRA]} satirAnahtari={(s) => s.no} />);
+    const [ad, tutar, islem] = screen.getAllByRole('cell');
+    expect(ad?.classList.contains('tc-tablo-sabit-sol')).toBe(true);
+    expect(tutar?.className ?? '').not.toContain('tc-tablo-sabit');
+    expect(islem?.classList.contains('tc-tablo-sabit-sag')).toBe(true);
+    expect(screen.getByRole('columnheader', { name: 'Ad' }).classList.contains('tc-tablo-sabit-sol')).toBe(true);
+  });
+
+  it('uyarlanan tabloda sabit işareti yok sayılır', () => {
+    render(<Tablo etiket="Gider" sutunlar={SABITLI} satirlar={[KIRA]} satirAnahtari={(s) => s.no} />);
+    expect(document.querySelector('.tc-tablo-sabit-sol, .tc-tablo-sabit-sag')).toBeNull();
+    expect(document.querySelector('.tc-tablo-kap')?.hasAttribute('data-kaydir')).toBe(false);
+  });
+});
+
+// Kart 2938: tek satır listelerde uzun yazı kesilir; tam metin ipucunda kalır.
+describe('Tablo kesilen sütun', () => {
+  const KESEN: readonly Sutun<Satir>[] = [
+    { ...SUTUNLAR[0]!, sabit: 'sol', kes: true },
+    { anahtar: 'not', baslik: 'Not', kes: true, csv: (s) => `Not ${s.ad}`, hucre: (s) => <strong>{s.ad}</strong> },
+  ];
+
+  it('kayan tabloda kesilen hücre ipucunda yazının tamamını taşır; yazı değilse CSV değerini', () => {
+    render(<Tablo etiket="Gider" kip="kaydir" sutunlar={KESEN} satirlar={[KIRA]} satirAnahtari={(s) => s.no} />);
+    const kesilen = document.querySelectorAll('.tc-tablo-kes');
+    expect(kesilen).toHaveLength(2);
+    expect(kesilen[0]?.getAttribute('title')).toBe('Kira');
+    expect(kesilen[1]?.getAttribute('title')).toBe('Not Kira');
+  });
+
+  it('uyarlanan tabloda kesme işareti yok sayılır', () => {
+    render(<Tablo etiket="Gider" sutunlar={KESEN} satirlar={[KIRA]} satirAnahtari={(s) => s.no} />);
+    expect(document.querySelector('.tc-tablo-kes')).toBeNull();
+  });
+
+  it('boş hücre kesilmez, "yok" yazar', () => {
+    render(<Tablo etiket="Gider" kip="kaydir" sutunlar={[{ anahtar: 'b', baslik: 'Boş', kes: true, hucre: () => null }]} satirlar={[KIRA]} satirAnahtari={(s) => s.no} />);
+    expect(document.querySelector('.tc-tablo-kes')).toBeNull();
+    expect(screen.getByText('yok')).toBeTruthy();
+  });
+});

@@ -5,7 +5,7 @@ import { beklenenSurum, surumSemasi } from '../surum.ts';
 import { tarihSemasi, zamanSemasi } from '../zaman.ts';
 import { AZAMI_OGE, rafGovdesi, yerlesimGovdesi } from './atolye.ts';
 import { dosyaOzeti } from './dosya.ts';
-import { KATALOG_TURLERI } from './malzemeler.ts';
+import { KATALOG_KART_DURUMLARI, KATALOG_TURLERI } from './malzemeler.ts';
 import { IS_DURUMU, KALEM_KAYNAGI, TASIMA } from './sevkiyat.ts';
 import { refakatKartiCevabi } from './uretim-emirleri.ts';
 
@@ -374,11 +374,20 @@ export const malzemeStokSatiri = z.object({
   konumSayisi: z.number().int(),
   // En çok miktarlı üç konum (ekranda raf etiketi); kat raf gözü değilse null.
   konumlar: z.array(z.object({ kod: z.string(), katNo: z.number().int().nullable(), miktar: ondalikMetinSemasi })),
+  // Malzeme tablosu: kartın kategori adı ve onay durumu malzemelerden; varsayılan konum stok ayarından; son hareketin zamanı
+  // defterden. Yoksa null.
+  kategoriAdi: z.string().nullable(),
+  kartDurumu: z.enum(KATALOG_KART_DURUMLARI).nullable(),
+  varsayilanKonum: z.string().nullable(),
+  sonHareket: zamanSemasi.nullable(),
 });
 export type MalzemeStokSatiri = z.output<typeof malzemeStokSatiri>;
+// 'malzeme' kart numarasıdır (ad malzemeler modülündedir, stok ona göre sıralamaz).
+export const MALZEME_SIRALAMA_ALANLARI = ['malzeme', 'toplam', 'serbest', 'kritik', 'son'] as const;
+export type MalzemeSiralamaAlani = (typeof MALZEME_SIRALAMA_ALANLARI)[number];
 // metin: kart adı ya da stok kodu (malzemeler `malzemeAra`), konum kodu, parti no ya da kart numarası.
 export const malzemelerSorgusu = z.object({
-  ...listeSorguAlanlari(['malzeme', 'toplam']),
+  ...listeSorguAlanlari(MALZEME_SIRALAMA_ALANLARI),
   durum: z.enum(STOK_DURUMLARI).optional(),
   metin: z.string().trim().max(40).optional(),
   // 'kartlar': stoğu olmayanlar dahil bütün stoklanır malzeme kartları (#680); durum süzgeci ve sıralama uygulanmaz.

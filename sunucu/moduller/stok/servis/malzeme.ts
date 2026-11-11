@@ -37,6 +37,7 @@ function malzemeSatiri(h: sorgular.MalzemeStokHam, o: KatalogMalzemeOzeti | unde
     toplam: bindenMetin(binde(h.toplam)), serbest: bindenMetin(binde(h.serbest)), statude: bindenMetin(binde(h.statude)), kritikSeviye: h.kritikSeviye, durum: stokDurumu(h.serbest, h.kritikSeviye), konumSayisi: h.konumSayisi,
     rezerve: bindenMetin(rezerve),
     konumlar: h.konumlar.map((k) => ({ ...k, miktar: bindenMetin(binde(k.miktar)) })),
+    kategoriAdi: o?.kategoriAdi ?? null, kartDurumu: o?.onayDurumu ?? null, varsayilanKonum: h.varsayilanKonum, sonHareket: h.sonHareket,
   };
 }
 // Kart tablosu malzemelerindir: "bütün kartlar" sayfası malzemeAra ile gelir, stok sayıları o sayfanın kartları için okunur.

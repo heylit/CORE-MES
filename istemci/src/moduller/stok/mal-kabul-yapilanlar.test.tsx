@@ -46,7 +46,10 @@ describe('Mal kabulü yapılanlar (2890)', () => {
     expect(s.getByRole('link', { name: 'A-01-02' }).getAttribute('href')).toBe('/stok/konumlar/8');
     expect(s.getByText('Kısmen yerleşti')).toBeTruthy();
     expect(s.getByRole('link', { name: 'MK-000077' }).getAttribute('href')).toBe('/stok/mal-kabul/77');
-    expect(s.getByText('Sipariş SP-000041 · Deneme Tedarik')).toBeTruthy();
+    expect(s.getByText('SP-000041')).toBeTruthy();
+    expect(s.getByText('Deneme Tedarik')).toBeTruthy();
+    expect(s.getByText('TP-9')).toBeTruthy();
+    expect(s.getByText('IRS-1')).toBeTruthy();
     expect(s.getByRole('link', { name: 'LT-000012 etiketi' }).getAttribute('href')).toBe('/etiket-merkezi?tur=lot&id=12');
   });
 
@@ -54,7 +57,8 @@ describe('Mal kabulü yapılanlar (2890)', () => {
     sunucuKur(OKUYUCU, { 'GET /stok/mal-kabul-satirlari': () => json(200, cevap([{ ...SATIR, siparisNo: null, tedarikciAdi: null, partiId: null, lotNo: null, yerler: [], ilkKonumKod: null }])) });
     goster();
     const satir = within((await screen.findByText('Deneme sac')).closest('tr')!);
-    expect(satir.queryByText(/Sipariş/)).toBeNull();
+    expect(satir.queryByText('SP-000041')).toBeNull();
+    expect(satir.queryByText('Deneme Tedarik')).toBeNull();
     expect(satir.queryByRole('link', { name: /etiketi/ })).toBeNull();
     expect(satir.getByText('Hizmet: stoğa girmez')).toBeTruthy();
   });
@@ -73,6 +77,27 @@ describe('Mal kabulü yapılanlar (2890)', () => {
     expect(await screen.findByRole('table', { name: 'Mal kabulü yapılanlar' })).toBeTruthy();
     expect(screen.queryByRole('tab')).toBeNull();
     expect(screen.queryByRole('heading', { name: 'Yeni mal kabul' })).toBeNull();
+  });
+
+  // 2940 a: her kabul satırı tek satır, tablo yana kayar.
+  it('tablo yana kayar; Malzeme solda, Etiket sağda sabit; uzun ad kesilir ve ipucunda tam yazar', async () => {
+    sunucuKur(DEPOCU, { 'GET /stok/mal-kabul-satirlari': () => json(200, cevap([SATIR])) });
+    goster();
+    const tablo = await screen.findByRole('table', { name: 'Mal kabulü yapılanlar' });
+    expect(tablo.closest('.tc-tablo-kap')?.hasAttribute('data-kaydir')).toBe(true);
+    expect(within(tablo).getByRole('columnheader', { name: 'Malzeme' }).classList.contains('tc-tablo-sabit-sol')).toBe(true);
+    expect(within(tablo).getByRole('columnheader', { name: 'Etiket' }).classList.contains('tc-tablo-sabit-sag')).toBe(true);
+    expect((await within(tablo).findByText('Deneme sac')).closest('.tc-tablo-kes')?.getAttribute('title')).toBe('Deneme sac');
+  });
+
+  it('ikiden çok konumda ilk ikisi yazılır, kalanı +n olur; tamamı ipucunda', async () => {
+    const yer = (konumId: number, konumKod: string) => ({ konumId, konumKod, konumTur: 'raf_gozu' as const, miktar: '1', kaliteDurumu: 'serbest' as const });
+    sunucuKur(DEPOCU, { 'GET /stok/mal-kabul-satirlari': () => json(200, cevap([{ ...SATIR, yerler: [yer(8, 'A-01-02'), yer(9, 'A-01-03'), yer(10, 'A-01-04')] }])) });
+    goster();
+    const satir = (await screen.findByText('Deneme sac')).closest('tr')!;
+    expect(within(satir).queryByRole('link', { name: 'A-01-04' })).toBeNull();
+    expect(within(satir).getByText('+1')).toBeTruthy();
+    expect(satir.querySelector('[title="A-01-02 1 kg, A-01-03 1 kg, A-01-04 1 kg"]')).not.toBeNull();
   });
 
   it('durum lotun bakiyesinden türer', () => {

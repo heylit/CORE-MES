@@ -22,6 +22,10 @@ export interface Sutun<S> {
   sirala?: boolean;
   // CSV'deki değeri. Verilmezse hücre metin ya da sayıysa o yazılır, değilse boş kalır; false sütunu CSV'ye almaz (eylem sütunu).
   csv?: ((satir: S) => CsvDegeri) | false;
+  // Yalnız `kip="kaydir"` tabloda: sütun yatay kayarken yerinde kalır. 'sol' yalnız ilk sütunda, 'sag' yalnız son sütunda anlamlıdır.
+  sabit?: 'sol' | 'sag';
+  // Yalnız `kip="kaydir"` tabloda: uzun yazı tek satırda sütun genişliğinde "…" ile kesilir; tamamı imlecin ipucunda (CSV değeri).
+  kes?: boolean;
 }
 
 export interface TabloSuzgeci {
@@ -66,6 +70,9 @@ interface Ozellikler<S> {
   // Verilince satırlar seçilebilir ve seçim olunca tablonun altında toplu işlem çubuğu çıkar (kart 2092, karar 2081-24).
   // Hangi listede hangi eylemin olacağı bağlamada kararlaştırılır. Etki kapatıldıysa seçim sütunu çizilmez.
   toplu?: { eylemler: readonly TopluEylem<S>[] };
+  // 'kaydir': sığmayan tablo kart kipine geçmez, kendi kabında yatay ve dikey kayar; başlık kabın üstünde, `sabit` sütunlar
+  // yanlarda kalır. Çok sütunlu izleme listeleri içindir. Verilmezse uyarlanır (sığmayınca kart kipi).
+  kip?: 'uyarlanir' | 'kaydir';
 }
 
 export interface TopluEylem<S> {
@@ -95,6 +102,13 @@ const ISKELET_SATIRI = 5;
 // Kaydırma eşiği ve sürüklenme sayılan en az yol; sürüklenen satıra bırakınca gelen tıklama satırı açmaz.
 const KAYDIRMA_ESIGI_PX = 48;
 const SURUKLEME_PX = 8;
+
+// Kesilen hücrenin tam metni: yazı ya da sayıysa kendisi, değilse sütunun CSV değeri.
+function kesIpucu<S>(s: Sutun<S>, satir: S, icerik: ReactNode): string | undefined {
+  if (typeof icerik === 'string' || typeof icerik === 'number') return String(icerik);
+  const d = typeof s.csv === 'function' ? s.csv(satir) : null;
+  return d === null || d === undefined || d === '' ? undefined : String(d);
+}
 
 function csvHucresi<S>(s: Sutun<S>, satir: S): CsvDegeri {
   if (typeof s.csv === 'function') return s.csv(satir);
@@ -231,8 +245,9 @@ function useSatirKaydirma(etkin: boolean) {
 
 export function Tablo<S>({
   etiket, sutunlar, satirlar, satirAnahtari, satirSec, bosMesaj, siralama = null, siralamaDegistir, sayfalama, mesgul = false, arac,
-  yukleniyor = false, satirEylemi, toplu,
+  yukleniyor = false, satirEylemi, toplu, kip = 'uyarlanir',
 }: Ozellikler<S>) {
+  const kaydir = kip === 'kaydir';
   const kap = useRef<HTMLDivElement>(null);
   const [kart, kartYaz] = useState(false);
   const kaydirma = useSatirKaydirma(kart && satirEylemi !== undefined);
@@ -272,6 +287,7 @@ export function Tablo<S>({
 
   useLayoutEffect(() => {
     const el = kap.current;
+    if (kaydir) { kartYaz(false); return undefined; }
     if (!el || typeof ResizeObserver === 'undefined') return undefined;
     let sonEn = -1;
     // Sığma yalnız tablo kipinde ölçülür. Kart kipinden ölçüm için çıkmak sayfayı kısaltıp kaydırma yerini
@@ -295,7 +311,7 @@ export function Tablo<S>({
     let canli = true;
     void document.fonts?.ready.then(() => { if (canli) { sonEn = -1; olc(); } });
     return () => { canli = false; izleyen.disconnect(); };
-  }, [bos]);
+  }, [bos, kaydir]);
 
   const sayfaDegistir = (sayfa: number) => {
     sayfalama?.degistir(sayfa);
@@ -312,6 +328,7 @@ export function Tablo<S>({
   }
   if (bos) return <>{ust}<DurumKutusu durum="bos" mesaj={bosMesaj} />{alt}</>;
 
+  const sabitSinif = (s: Sutun<S>) => (kaydir && s.sabit ? `tc-tablo-sabit-${s.sabit}` : undefined);
   const siralanan = siralamaDegistir ? sutunlar.filter((s) => s.sirala) : [];
   const yon = (s: Sutun<S>) => (siralama?.alan === s.anahtar ? siralama.yon : null);
   const sirala = (s: Sutun<S>) => siralamaDegistir?.(sonrakiSiralama(siralama, s.anahtar));
@@ -324,7 +341,7 @@ export function Tablo<S>({
   return (
     <>
       {ust}
-      <div ref={kap} className="tc-tablo-kap" data-olcer="" data-kip={kart ? 'kart' : undefined} aria-busy={mesgul || undefined}>
+      <div ref={kap} className="tc-tablo-kap" data-olcer={kaydir ? undefined : ''} data-kaydir={kaydir ? '' : undefined} data-kip={kart ? 'kart' : undefined} aria-busy={mesgul || undefined}>
         {/* Kart kipinde sütun başlığı görünmez; sıralama düğmeleri kartların üstüne taşınır. */}
         {kart && siralanan.length > 0 && (
           <div className="tc-tablo-siralar" role="group" aria-label="Sıralama">
@@ -356,7 +373,7 @@ export function Tablo<S>({
                 const y = yon(s);
                 return (
                   <th
-                    key={s.anahtar} scope="col" className={s.hizala === 'sag' ? 'tc-tablo-sag' : undefined}
+                    key={s.anahtar} scope="col" className={[s.hizala === 'sag' && 'tc-tablo-sag', sabitSinif(s)].filter(Boolean).join(' ') || undefined}
                     aria-sort={siralanir ? (y ? ARIA_SIRA[y] : 'none') : undefined}
                   >
                     {siralanir && !kart
@@ -398,10 +415,11 @@ export function Tablo<S>({
                 )}
                 {sutunlar.map((s) => {
                   const icerik = s.hucre(satir);
-                  const sinif = [s.hizala === 'sag' && 'tc-tablo-sag', s.mono && 'mono', s.kirilmaz && 'tc-tablo-kirilmaz'].filter(Boolean).join(' ');
+                  const sinif = [s.hizala === 'sag' && 'tc-tablo-sag', s.mono && 'mono', s.kirilmaz && 'tc-tablo-kirilmaz', sabitSinif(s)].filter(Boolean).join(' ');
                   return (
                     <td key={s.anahtar} data-baslik={s.baslik} className={sinif || undefined}>
-                      {icerik === null || icerik === undefined || icerik === '' ? <span className="tc-tablo-yok">yok</span> : icerik}
+                      {icerik === null || icerik === undefined || icerik === '' ? <span className="tc-tablo-yok">yok</span>
+                        : kaydir && s.kes ? <span className="tc-tablo-kes" title={kesIpucu(s, satir, icerik)}>{icerik}</span> : icerik}
                     </td>
                   );
                 })}

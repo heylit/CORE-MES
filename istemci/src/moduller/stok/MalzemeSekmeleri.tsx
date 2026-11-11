@@ -17,11 +17,16 @@ const SEKMELER: readonly Sekme<MalzemeSekmesi>[] = [
   { anahtar: 'aparatlar', baslik: 'Aparatlar', simge: 'cube' },
 ];
 
-export function MalzemeSekmeleri({ secili }: { secili: MalzemeSekmesi }) {
+// Sekme değişince arama metni yeni sekmeye taşınır, sıfırlanmaz. Durum süzgeçleri sekmeye özgüdür, taşınmaz.
+export function MalzemeSekmeleri({ secili, metin = '' }: { secili: MalzemeSekmesi; metin?: string }) {
   const yonlendir = useNavigate();
+  const git = (s: MalzemeSekmesi) => {
+    const m = metin.trim();
+    void yonlendir(MALZEME_SEKME_YOLLARI[s] + (m ? `?metin=${encodeURIComponent(m)}` : ''));
+  };
   return (
     <div className="tc-stok-sekmeler-sar">
-      <Sekmeler etiket="Malzeme türü" sekmeler={SEKMELER} secili={secili} sec={(s) => { if (s !== secili) void yonlendir(MALZEME_SEKME_YOLLARI[s]); }} />
+      <Sekmeler etiket="Malzeme türü" sekmeler={SEKMELER} secili={secili} sec={(s) => { if (s !== secili) git(s); }} />
     </div>
   );
 }

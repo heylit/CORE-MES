@@ -9,7 +9,7 @@ import { ac, json, sunucuKur } from './test-ortak.tsx';
 const DEPOCU: Kullanici = { id: 5, ad: 'Deneme Depocu', islemler: ['sayfa.stok', 'stok.giris'] };
 const satir = (malzemeId: number, ad: string, ek: Partial<TurListesiSatiri>): TurListesiSatiri => ({
   malzemeId, ad, stokKodu: `KIM-${malzemeId}`, tur: 'sarf', birim: 'lt', toplam: '10', serbest: '10', statude: '0', rezerve: '0', kritikSeviye: null,
-  durum: 'tanimsiz', konumSayisi: 1, konumlar: [{ kod: 'A-01-1', katNo: 1, miktar: '10' }], alanlar: {}, sktTakipli: true, enYakinSkt: null, sktGecmisMiktar: '0', ...ek,
+  durum: 'tanimsiz', konumSayisi: 1, konumlar: [{ kod: 'A-01-1', katNo: 1, miktar: '10' }], alanlar: {}, kategoriAdi: null, kartDurumu: null, varsayilanKonum: null, sonHareket: null, sktTakipli: true, enYakinSkt: null, sktGecmisMiktar: '0', ...ek,
 });
 const KIMYASAL: TurListesiCevabi = {
   bugun: '2026-11-04',
@@ -31,7 +31,7 @@ describe('Stok tür listeleri (2099-6 a)', () => {
     expect(within(tablo).getByText('bidon')).toBeTruthy();
     expect(within(tablo).getByText(/Geçmiş: 4/)).toBeTruthy();
     expect(within(tablo).getByText('30 gün içinde')).toBeTruthy();
-    fireEvent.click(screen.getByRole('tab', { name: /SKT uyarısı 2/ }));
+    fireEvent.click(screen.getByRole('button', { name: /SKT uyarısı 2/ }));
     expect(within(tablo).queryByText('Deneme gres')).toBeNull();
     expect(within(tablo).getByText('Deneme bor yağı')).toBeTruthy();
   });
@@ -40,7 +40,7 @@ describe('Stok tür listeleri (2099-6 a)', () => {
     sunucuKur(DEPOCU, { 'GET /stok/tur-listeleri/takim': () => json(200, { bugun: '2026-11-04', satirlar: [] }) });
     ac('/stok/malzemeler/kesici-takimlar');
     expect(await screen.findByText(/"Kesici takım" kategorisiyle/)).toBeTruthy();
-    expect(screen.queryByRole('tab', { name: /SKT uyarısı/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: /SKT uyarısı/ })).toBeNull();
     expect(screen.queryByText('En yakın SKT')).toBeNull();
   });
 });

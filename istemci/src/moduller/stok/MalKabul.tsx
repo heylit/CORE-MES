@@ -353,24 +353,26 @@ export { bosSatir, type Satir };
 // Satın alma kabulünde açık sipariş satırları: seçilen satır malzemeyi, kalan miktarı ve bağı doldurur; sayılan miktar
 // depoda düzeltilir (kalanı aşan teslim reddedilmez, satın almada fazla teslim görünür).
 // Tek arama kutusu malzeme, tedarikçi, emir ve projede birden arar; dördü ayrı sütundur. Hizmet satırı fason dönüşüdür.
+// Her satır tek satırdır (2940 a): tablo yana kayar, Sipariş solda ve Seç sağda kalır.
 function AcikSiparisler({ sec }: { sec: (x: AcikSiparisSatiri) => void }) {
   const a = useQuery({ queryKey: anahtarlar.liste('acik-siparis-satirlari', {}), queryFn: () => api.get<AcikSiparisSatirlariCevabi>('/stok/acik-siparis-satirlari') });
   const [ara, araYaz] = useState('');
   const sutunlar: Sutun<AcikSiparisSatiri>[] = [
-    { anahtar: 'siparis', baslik: 'Sipariş', mono: true, kirilmaz: true, hucre: (x) => x.siparisNo || x.talepNo },
-    { anahtar: 'kalem', baslik: 'Malzeme', hucre: (x) => (x.malzemeTur === 'hizmet' ? <span className="tc-stok-ad"><strong>{x.kalemAdi}</strong>{hizmetRozeti(x)}</span> : x.kalemAdi) },
-    { anahtar: 'rev', baslik: 'Rev.', kirilmaz: true, hucre: (x) => (x.parcaRevizyonu ? <span className="tc-stok-ad">{x.parcaRevizyonu}{x.revizyonUyusmuyor === true && <Rozet ton="uyari">{`Yürürlükte ${x.yururlukRevizyonu ?? ''}`}</Rozet>}</span> : '—') },
-    { anahtar: 'tedarikci', baslik: 'Tedarikçi', hucre: (x) => x.tedarikciAdi },
-    { anahtar: 'emir', baslik: 'Üretim emri', mono: true, kirilmaz: true, hucre: (x) => x.emirNo ?? '—' },
-    { anahtar: 'proje', baslik: 'Proje', hucre: (x) => x.projeAdi ?? '—' },
-    { anahtar: 'miktar', baslik: 'Sipariş miktarı', hizala: 'sag', kirilmaz: true, hucre: (x) => birimliMiktar(x.miktar, x.birim) },
-    { anahtar: 'kalan', baslik: 'Kalan', hizala: 'sag', kirilmaz: true, hucre: (x) => birimliMiktar(x.kalanMiktar, x.birim) },
-    { anahtar: 'termin', baslik: 'Beklenen', kirilmaz: true, hucre: (x) => x.beklenenTeslim ?? '—' },
-    { anahtar: 'sec', baslik: '', hucre: (x) => <Dugme tur="ikincil" onClick={() => sec(x)}>Seç</Dugme> },
+    { anahtar: 'siparis', baslik: 'Sipariş', mono: true, sabit: 'sol', hucre: (x) => x.siparisNo || x.talepNo },
+    { anahtar: 'kalem', baslik: 'Malzeme', kes: true, hucre: (x) => x.kalemAdi },
+    { anahtar: 'hizmet', baslik: 'Hizmet', hucre: (x) => (x.malzemeTur === 'hizmet' ? hizmetRozeti(x) : null) },
+    { anahtar: 'rev', baslik: 'Rev.', hucre: (x) => (x.parcaRevizyonu ? <>{x.parcaRevizyonu}{x.revizyonUyusmuyor === true && <> <Rozet ton="uyari">{`Yürürlükte ${x.yururlukRevizyonu ?? ''}`}</Rozet></>}</> : '—') },
+    { anahtar: 'tedarikci', baslik: 'Tedarikçi', kes: true, hucre: (x) => x.tedarikciAdi },
+    { anahtar: 'emir', baslik: 'Üretim emri', mono: true, hucre: (x) => x.emirNo ?? '—' },
+    { anahtar: 'proje', baslik: 'Proje', kes: true, hucre: (x) => x.projeAdi ?? '—' },
+    { anahtar: 'miktar', baslik: 'Sipariş miktarı', hizala: 'sag', hucre: (x) => birimliMiktar(x.miktar, x.birim) },
+    { anahtar: 'kalan', baslik: 'Kalan', hizala: 'sag', hucre: (x) => birimliMiktar(x.kalanMiktar, x.birim) },
+    { anahtar: 'termin', baslik: 'Beklenen', hucre: (x) => x.beklenenTeslim ?? '—' },
+    { anahtar: 'sec', baslik: '', sabit: 'sag', hucre: (x) => <Dugme tur="ikincil" onClick={() => sec(x)}>Seç</Dugme> },
   ];
   if (a.isError) return <DurumKutusu durum="hata" mesaj={hataMetni(a.error)} yenile={() => void a.refetch()} />;
   return (
-    <Tablo etiket="Açık sipariş satırları" sutunlar={sutunlar} satirlar={acikSiparisAra(a.data?.satirlar ?? [], ara)} satirAnahtari={(x) => x.id} mesgul={a.isPending}
+    <Tablo etiket="Açık sipariş satırları" kip="kaydir" sutunlar={sutunlar} satirlar={acikSiparisAra(a.data?.satirlar ?? [], ara)} satirAnahtari={(x) => x.id} mesgul={a.isPending}
       bosMesaj={ara.trim() ? 'Aramaya uyan açık sipariş satırı yok.' : 'Teslim bekleyen sipariş yok.'}
       arac={{ arama: { deger: ara, degistir: araYaz, etiket: 'Açık siparişlerde ara', yerTutucu: 'Malzeme, tedarikçi, emir no ya da proje' } }} />
   );

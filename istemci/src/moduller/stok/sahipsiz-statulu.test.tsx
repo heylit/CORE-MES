@@ -34,7 +34,7 @@ describe('Sahipsiz statülü stok (2547 a)', () => {
   });
 
   it('rezerveyi kaldırma penceresi kaldırılanın sahipsiz kalacağını ve planın yeniden ihtiyaç göstereceğini söyler', async () => {
-    const satir: MalzemeStokSatiri = { malzemeId: 901, ad: 'Deneme sac', stokKodu: 'HM-001', tur: 'hammadde', birim: 'kg', toplam: '2', serbest: '0', statude: '2', rezerve: '1.5', kritikSeviye: null, durum: 'tanimsiz', konumSayisi: 1, konumlar: [{ kod: 'C-01-01', katNo: 1, miktar: '2' }] };
+    const satir: MalzemeStokSatiri = { malzemeId: 901, ad: 'Deneme sac', stokKodu: 'HM-001', tur: 'hammadde', birim: 'kg', toplam: '2', serbest: '0', statude: '2', rezerve: '1.5', kritikSeviye: null, durum: 'tanimsiz', konumSayisi: 1, konumlar: [{ kod: 'C-01-01', katNo: 1, miktar: '2' }], kategoriAdi: null, kartDurumu: null, varsayilanKonum: null, sonHareket: null };
     const bakiye = { id: 13, malzemeId: 901, malzemeAd: 'Deneme sac', konumId: 9, konumKod: 'C-01-01', partiId: 4, partiEtiketi: null, miktar: '2.000', ilkGiris: '2026-10-05T08:00:00+03:00', ambalaj: null, statuId: 7 } satisfies BakiyeSatiri;
     const ayrinti = {
       satir, bakiyeler: [bakiye], ayar: { kritikSeviye: null, varsayilanAmbalaj: null, varsayilanKonum: null, ambalajlar: [], surum: null }, sonHareketler: [],
