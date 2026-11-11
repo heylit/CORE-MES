@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { listeCevapSemasi, sayfaSorguAlanlari } from '../liste.ts';
 import { tarihSemasi, zamanSemasi } from '../zaman.ts';
+import { MENU_SIK_SINIRI } from '../rol-gorunumleri.ts';
 
 // Profil: her çalışanın kendi sayfası (İK bilgileri, izin, fazla mesai, şikayet/istek/öneri geçmişi) ve üst çubuktaki
 // şikayet/istek/öneri kutusu. Kişi her zaman oturumdan gelir: gövde ve adres başka kişiyi seçemez.
@@ -197,6 +198,20 @@ export const miniPanoSecGovdesi = z.object({
   surum: z.number().int().min(0),
 }).strict();
 
+// Menü sık kullanılanları (2951): kişi ana menünün üstünde duracak sayfaları kendi seçer ve sıralar; kaydı olmayan kişide
+// liste boş, sürüm 0. Yalnız görünürlüktür: sunucu bilinmeyen yolu reddeder, listeyi kişinin açabildiği sayfalara süzer;
+// yetki her sayfanın kendi işlemindedir.
+const menuSayfaYolu = z.string().regex(/^\/[a-z0-9-]+(?:\/[a-z0-9-]+)*$/).max(80);
+export const menuTercihiCevabi = z.object({
+  sayfalar: z.array(z.string()),
+  surum: z.number().int().min(0),
+});
+// surum okunan sürümdür; ilk seçimde 0.
+export const menuSecGovdesi = z.object({
+  sayfalar: z.array(menuSayfaYolu).max(MENU_SIK_SINIRI).refine((l) => new Set(l).size === l.length, 'Aynı sayfa iki kez seçilemez'),
+  surum: z.number().int().min(0),
+}).strict();
+
 export type GeriBildirimGonderGovdesi = z.input<typeof geriBildirimGonderGovdesi>;
 export type GeriBildirim = z.output<typeof geriBildirimSemasi>;
 export type GeriBildirimListeSorgusu = z.input<typeof geriBildirimListeSorgusu>;
@@ -217,4 +232,6 @@ export type ProfilCevabi = z.output<typeof profilCevabi>;
 export type TemaCevabi = z.output<typeof temaCevabi>;
 export type MiniPanoCevabi = z.output<typeof miniPanoCevabi>;
 export type MiniPanoSecGovdesi = z.output<typeof miniPanoSecGovdesi>;
+export type MenuTercihiCevabi = z.output<typeof menuTercihiCevabi>;
+export type MenuSecGovdesi = z.output<typeof menuSecGovdesi>;
 export type TemaSecGovdesi = z.input<typeof temaSecGovdesi>;

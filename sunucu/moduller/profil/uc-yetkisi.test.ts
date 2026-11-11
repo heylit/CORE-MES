@@ -32,6 +32,8 @@ const BEKLENEN: BeklenenYetkiler = {
   'POST /profil/tema-sec': 'oturum',
   'GET /profil/mini-pano': 'oturum',
   'POST /profil/mini-pano-sec': 'oturum',
+  'GET /profil/menu': 'oturum',
+  'POST /profil/menu-sec': 'oturum',
 };
 
 describe('profil uç yetkileri (gerçek giriş, gerçek PostgreSQL)', () => {

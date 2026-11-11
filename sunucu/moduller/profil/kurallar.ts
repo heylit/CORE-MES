@@ -1,4 +1,4 @@
-import type { GeriBildirimDurumu, GeriBildirimKonusu, MiniPanoCevabi, TemaCevabi, TemaTercihi } from '#paylasilan/sozlesme/profil.ts';
+import type { GeriBildirimDurumu, GeriBildirimKonusu, MenuTercihiCevabi, MiniPanoCevabi, TemaCevabi, TemaTercihi } from '#paylasilan/sozlesme/profil.ts';
 
 // PRF-1: kişinin profilinde son 50 geri bildirimi görünür; daha eskisi okuyanın listesindedir.
 export const PROFIL_GERI_BILDIRIM_SINIRI = 50;
@@ -32,6 +32,22 @@ export function miniPanoCevabiYap(satir: { kapali: readonly string[]; acilistaOn
   return satir === null
     ? { kapali: [], acilistaOner: false, surum: 0 }
     : { kapali: [...satir.kapali].sort(), acilistaOner: satir.acilistaOner, surum: satir.surum };
+}
+
+// PRF-7 (2951): kaydı olmayan kişinin sık kullanılanı yoktur, sürümü 0; liste kişinin seçtiği sırayla döner.
+export function menuCevabiYap(satir: { sayfalar: readonly string[]; surum: number } | null, acabildigi: ReadonlySet<string>): MenuTercihiCevabi {
+  return satir === null ? { sayfalar: [], surum: 0 } : { sayfalar: acabildigiSayfalar(satir.sayfalar, acabildigi), surum: satir.surum };
+}
+
+// PRF-8 (2951): seçilen her yol bilinen bir menü sayfası olmalı; bilinmeyenler döner.
+export function bilinmeyenMenuSayfalari(secilen: readonly string[], bilinen: ReadonlySet<string>): string[] {
+  return secilen.filter((yol) => !bilinen.has(yol));
+}
+
+// PRF-9 (2951): liste kişinin açabildiği sayfalara süzülür, sıra korunur. Yazarken açamadığı sayfa kaydedilmez; okurken
+// yetkisi sonradan kalkan sayfa dönmez. Yetki vermez, yalnız görünürlüktür.
+export function acabildigiSayfalar(sayfalar: readonly string[], acabildigi: ReadonlySet<string>): string[] {
+  return sayfalar.filter((yol) => acabildigi.has(yol));
 }
 
 // Geri Bildirim Merkezi (kart 2192).

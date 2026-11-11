@@ -177,3 +177,6 @@ export function seritRolGorunurMu(anahtar: string, roller: readonly string[] | u
   if (izinli === undefined) return true;
   return (roller ?? []).some((r) => r === YONETICI_ROLU || izinli.includes(r));
 }
+
+// Sık kullanılanların en çok sayısı (2951): kişinin kendi menüsü kısa kalsın; tablo kısıtı (profil_menu_tercihi) aynı sayıdır.
+export const MENU_SIK_SINIRI = 10;
