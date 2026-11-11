@@ -3,6 +3,7 @@ import type { KatalogTuru } from '#paylasilan/sozlesme/malzemeler.ts';
 import { ACIK_EMIR_DURUMLARI, type KapanisMaddeBilgisi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { kodTuru, okutmaDuzelt } from '#paylasilan/kod-sozlugu.ts';
 import { ELLE_KONUM_TURLERI, type FisGonderimSekli, type LogoFisDurumu, type MalzemeFisiTuru, type KaliteDurumu, type KoduDegisenKonum, type KonumTuru, type MalzemeIstegiDurumu, type TeslimDurumu } from '#paylasilan/sozlesme/stok.ts';
+import { FABRIKA_GENELI_ALAN_TURLERI, HARITA_ALAN_TURLERI, type HaritaAlanTuru } from '#paylasilan/sozlesme/stok-harita-sabitleri.ts';
 
 // ---- Miktar: numeric(14,3) metni binde tam sayıya çevrilir; ondalık hata payı olmaz ------------------------------
 const MIKTAR = /^(-)?(\d+)(?:\.(\d{1,3}))?$/;
@@ -615,9 +616,9 @@ export function alisFiyatlari(olaylar: readonly AlisOlayi[], kesimler: readonly 
 // değişmesin), bildirilir.
 // Haritadaki bütün kutular stok barındırır (QR teslim, karar 97): oda, cam oda, bölge, karantina, sevkiyat ve palet de konum olur;
 // karantina ve sevkiyat ayrılmış yerdir (AYRILMIS_KONUM_TURLERI). Yürüyüş yolu yer değil geçittir, konum olmaz.
-export const HARITA_ALAN_TURLERI = ['kabul', 'uretim_cikisi', 'depo_zemini', 'fason', 'ara_alan', 'hurda', 'oda', 'cam_oda', 'bolge', 'karantina', 'sevkiyat', 'palet'] as const;
-const FABRIKA_GENELI = new Set<string>(['fason', 'ara_alan', 'hurda', 'oda', 'cam_oda', 'bolge', 'karantina', 'sevkiyat', 'palet'] satisfies HaritaAlanTuru[]);
-export type HaritaAlanTuru = (typeof HARITA_ALAN_TURLERI)[number];
+// Tür listeleri istemcideki notla tek kaynak olsun diye sözleşmededir (2884).
+export { HARITA_ALAN_TURLERI, type HaritaAlanTuru };
+const FABRIKA_GENELI = new Set<string>(FABRIKA_GENELI_ALAN_TURLERI);
 export interface HaritaGozu { id: number; adres: string; salonId: number; salonKodu: string; bolme: number; kat: number; rafAktif: boolean }
 export interface HaritaAlani { id: number; salonId: number; tur: string; ad: string }
 export interface HaritaDeposu { id: number; kod: string; salonId: number | null; aktif: boolean }

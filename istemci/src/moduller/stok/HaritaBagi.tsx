@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
+import { FABRIKA_GENELI_ALAN_TURLERI, HARITA_ALAN_TURLERI } from '#paylasilan/sozlesme/stok-harita-sabitleri.ts';
 import type { BolumDeposuGovdesi, HaritaEslemeCevabi, HaritaOzetiCevabi, KoduDegisenKonum, TopluBolumDeposuCevabi } from '#paylasilan/sozlesme/stok.ts';
 import { Dugme, DurumKutusu, Kart, Tablo, useBildirim } from '../../ortak/arayuz/index.ts';
 import { api } from '../../ortak/veri/api.ts';
@@ -56,6 +57,11 @@ export function TopluDepoDugmesi({ deposuz }: { deposuz: number }) {
   );
 }
 
+// 2884: hangi harita alanının konum olduğu eşlemenin kullandığı listelerden yazılır; elle sayılan liste kuraldan geri kalıyordu.
+const etiketler = (turler: readonly (typeof HARITA_ALAN_TURLERI)[number][]): string => turler.map((t) => KONUM_ETIKETI[t].toLocaleLowerCase('tr-TR')).join(', ');
+export const HARITA_BAGI_NOTU = `Yalnız stok deposu olan bölümün raf gözleri stok konumu olur. Haritadaki şu alanlar da konum olur: ${etiketler(HARITA_ALAN_TURLERI)}. `
+  + `Bölümü stok deposu değilse ${etiketler(FABRIKA_GENELI_ALAN_TURLERI)} ANA depoya bağlanır; öbürleri konum olmaz.`;
+
 // Ayarlar'da eşleme özeti: hangi bölüm stok deposu (yalnız onun gözleri konum olur), bağlı göz ve alan sayısı, eşlenmemiş harita
 // yeri, haritada karşılığı olmayan açık konumlar.
 export function HaritaOzeti() {
@@ -79,7 +85,7 @@ export function HaritaOzeti() {
                   onClick={() => { setSecili(b.salonId); komut.mutate({ salonId: b.salonId, depo: b.depoKod === null }); }}>{b.depoKod ? 'Depodan çıkar' : 'Depo yap'}</Dugme>
               ) }] : []),
             ]} />
-          <p className="tc-stok-not">Yalnız stok deposu olan bölümün raf gözleri ve kabul, üretim çıkışı, depo zemini, fason alanları stok konumu olur. {o.data.bolum} bölüm, {o.data.goz} raf gözü ve {o.data.alan} alan bağlı.{o.data.eslenmemis > 0 ? ` Haritada stok konumu olmayan ${o.data.eslenmemis} yer var; "Haritadan eşle" ile eklenir.` : ''}{(o.data.deposuzYer ?? 0) > 0 ? ` Depo olmayan bölümlerde ${o.data.deposuzYer} yer stok konumu değil; "Bütün bölümleri depo yap" ile eklenir.` : ''}</p>
+          <p className="tc-stok-not">{HARITA_BAGI_NOTU} {o.data.bolum} bölüm, {o.data.goz} raf gözü ve {o.data.alan} alan bağlı.{o.data.eslenmemis > 0 ? ` Haritada stok konumu olmayan ${o.data.eslenmemis} yer var; "Haritadan eşle" ile eklenir.` : ''}{(o.data.deposuzYer ?? 0) > 0 ? ` Depo olmayan bölümlerde ${o.data.deposuzYer} yer stok konumu değil; "Bütün bölümleri depo yap" ile eklenir.` : ''}</p>
           {o.data.bagsizKonumlar.length > 0 && (
             <>
               <p className="tc-stok-not">Haritada karşılığı olmayan açık konumlar ({o.data.bagsizKonumlar.length}): bunları haritada çizin ya da stoğu taşıyıp kapatın.</p>
