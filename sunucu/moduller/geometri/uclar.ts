@@ -11,7 +11,7 @@ import type { MalzemeGeometrisi } from './servis.ts';
 // 1710: kartın ağırlık özeti; alan seçimidir, hesap ekranındadır.
 const agirlikOzeti = (g: MalzemeGeometrisi | null): AgirlikOzetiCevabi => {
   if (g === null) return { model: null, modelSayisi: 0, hacimMm3: null, neden: 'model-yok', kalite: null };
-  const model = { belgeAdi: g.belgeAdi, harf: g.harf, kapak: g.kapak };
+  const model = { belgeAdi: g.belgeAdi, harf: g.harf, revKodu: g.revKodu, kapak: g.kapak };
   const modelSayisi = g.modelSayisi;
   const a = g.analiz.analiz;
   const o = g.ham.oneriler[0];
