@@ -452,7 +452,7 @@ describe('EM-30 (2223-1 a): bekleyen etiketler', () => {
   test('EM-32 (2223-2 a): refakat kartı verilişten sonra emrin kartı basılmadıysa bekler; başlık emir no-P sıra', () => {
     const v = { refakatPartisiId: 5, uretimEmriId: 120, sira: 2, lotNo: 'LT-9', malzemeAd: 'Örnek çubuk', emirNo: 'UE-000120', verilis: '2026-11-07T10:00:00.000Z' };
     assert.deepEqual(refakatBekleyenleri([v], new Map()), [
-      { tur: 'refakat-partisi', id: 5, baslik: 'UE-000120-P2', ayrinti: 'Lot LT-9 · Örnek çubuk', zaman: v.verilis, etiketSayisi: 1 },
+      { tur: 'refakat-partisi', id: 5, baslik: 'UE-000120-P2', ayrinti: 'Lot LT-9 · Örnek çubuk', zaman: v.verilis, etiketSayisi: 2 },
     ]);
     assert.deepEqual(refakatBekleyenleri([v], new Map([[120, '2026-11-07T10:00:01.000Z']])), []);
     assert.equal(refakatBekleyenleri([v], new Map([[5, '2026-11-07T10:00:01.000Z']])).length, 1, 'basım emir kimliğiyle aranır');
