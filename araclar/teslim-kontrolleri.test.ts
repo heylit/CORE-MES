@@ -80,6 +80,12 @@ test('D1 kontrol: komşu modülün testi yoksa kırmızı; DEVIR satırı, VT-SO
   assert.equal(modulKosuldu('stok', ['npm run test:modul -- stok: Tests 321 passed (321)'], []), true);
   assert.equal(modulKosuldu('stok', ['npm run test:modul -- stok: 45/45'], []), true);
   assert.equal(modulKosuldu('stok', ['npm run test:modul -- stok: 44/45'], []), false);
+  // Türkçe sonuç sözcükleri: sıfırdan büyük kaldı/başarısız/hata koşu sayılmaz.
+  assert.equal(modulKosuldu('stok', ['npm run test:modul -- stok: 118 geçti, 2 kaldı'], []), false);
+  assert.equal(modulKosuldu('stok', ['npm run test:modul -- stok: GEÇTİ 118, başarısız: 1'], []), false);
+  assert.equal(modulKosuldu('stok', ['npm run test:modul -- stok: 118 geçti, 3 hata'], []), false);
+  assert.equal(modulKosuldu('stok', ['npm run test:modul -- stok: 118 geçti, 0 kaldı'], []), true);
+  assert.equal(modulKosuldu('stok', ['npm run test:modul -- stok: 118 geçti, hatasız'], []), true);
 });
 
 test('vtModulleri: VT-SONUC.md GEÇTİ satırlarından modül adları', () => {

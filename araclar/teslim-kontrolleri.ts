@@ -138,11 +138,13 @@ const MODUL_KELIMESI = (m: string) => new RegExp(`(?<![a-z0-9-])${m.replace(/[-]
 const OLUMSUZ = /ko[sş]ulmad|[cç]al[iı][sş]t[iı]r[iı]lmad|yap[iı]lmad/i;
 // Koşu sayılan satır yeşil sonucu yazar; kırmızı ya da sıfırdan büyük "fail" yazan satır koşu sayılmaz.
 const KIRMIZI_SONUC = /K[Iİ]RMIZI|\bnot ok\b|\bfail(?:ed|ures?)?\s*[:=]?\s*[1-9]|\b[1-9]\d*\s+(?:fail|failed)\b(?!\s*[:=]?\s*\d)/i;
+// Türkçe sonuç: "118 geçti, 2 kaldı", "başarısız: 1", "3 hata". "0 kaldı" ve "hatasız" kırmızı değildir.
+const KIRMIZI_TURKCE = /(?<![\d.,])[1-9]\d*\s+(?:kald[ıi]|ba[sş]ar[ıi]s[ıi]z|hata(?:l[ıi])?)(?![a-zçğıöşü])|(?:kald[ıi]|ba[sş]ar[ıi]s[ıi]z|hata(?:l[ıi])?)\s*[:=]\s*[1-9]/i;
 const YESIL_SONUC = /GE[CÇ]T[Iİ]|\bfail(?:ed)?\s*[:=]?\s*0\b|\b\d+\s+passed\b|\bpass(?:ed)?\s*[:=]?\s*\d+|\b\d+\s+pass\b|\b(\d+)\/\1\b/i;
 
 export function modulKosuldu(modul: string, testSatirlari: readonly string[], vtModuller: readonly string[]): boolean {
   if (vtModuller.includes(modul)) return true;
-  return testSatirlari.some((s) => !OLUMSUZ.test(s) && !KIRMIZI_SONUC.test(s) && YESIL_SONUC.test(s) && MODUL_KELIMESI(modul).test(s.slice(s.indexOf('test:modul'))));
+  return testSatirlari.some((s) => !OLUMSUZ.test(s) && !KIRMIZI_SONUC.test(s) && !KIRMIZI_TURKCE.test(s) && YESIL_SONUC.test(s) && MODUL_KELIMESI(modul).test(s.slice(s.indexOf('test:modul'))));
 }
 
 export const muafMi = (modul: string, muafSatirlari: readonly string[]): boolean => muafSatirlari.some((s) => MODUL_KELIMESI(modul).test(s));
