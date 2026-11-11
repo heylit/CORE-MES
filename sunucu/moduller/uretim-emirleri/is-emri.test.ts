@@ -649,6 +649,47 @@ describe('uretim-emirleri iş emirli emir (gerçek PostgreSQL)', () => {
     const e = await ayrinti(id);
     assert.deepEqual([c.govde.qr, c.govde.emirNo, c.govde.adet, c.govde.urun.ad], [`UE:${id}`, e.emirNo, 10, e.urun.ad]);
     assert.deepEqual(c.govde.parti, { ustEmirNo: null, bolunmeSira: null });
+    // 2907 D4: revizyon kodu ekranlardaki kodun aynısıdır (belge-merkezi revKodu: yayındaki resmin anteti, yoksa kartın revizyonu).
+    // Resimsiz üründe kod yoktur; rota harfi (ZZ) revizyon diye gelmez.
+    assert.equal(c.govde.revizyon, null, 'resimsiz üründe revizyon yok');
+    const kayit = (await o().sahip.tek<{ kayit: unknown }>('SELECT kayit FROM malzeme_katalog_karti WHERE no = $1', [urunNo]))!.kayit;
+    const kartRev = (rev: string | null) => o().sahip.sorgu(
+      `UPDATE malzeme_katalog_karti SET kayit = jsonb_set(kayit, '{g}', $2::jsonb) WHERE no = $1`, [urunNo, JSON.stringify(rev === null ? {} : { rev })]);
+    const resimEkle = async (tur: 'teknik-resim' | '3b-model', antet: string | null, yayinla: boolean) => {
+      const ozet = randomUUID().replaceAll('-', '').padEnd(64, '0');
+      const dosyaTuru = tur === '3b-model' ? 'step' : 'pdf';
+      await o().sahip.sorgu('INSERT INTO dosya (ozet, boyut, tur, ilk_yukleyen_id) VALUES ($1, 1, $2, $3)', [ozet, dosyaTuru, yoneticiId]);
+      const belge = (await o().sahip.tek<{ id: number }>('INSERT INTO belge_merkezi_belge (ad, tur, olusturan_id) VALUES ($1, $2, $3) RETURNING id', [`Deneme ${tur}`, tur, yoneticiId]))!.id;
+      const rev = (await o().sahip.tek<{ id: number }>(
+        `INSERT INTO belge_merkezi_revizyon (belge_id, sira, ozet, dosya_turu, "not", antet_rev, yukleyen_id) VALUES ($1, 1, $2, $3, NULL, $4, $5) RETURNING id`,
+        [belge, ozet, dosyaTuru, antet, yoneticiId]))!.id;
+      await o().sahip.sorgu('INSERT INTO belge_merkezi_onizleme (revizyon_id, kare, ozet, kisi_id) VALUES ($1, 0, $2, $3)', [rev, ozet, yoneticiId]);
+      if (yayinla) await o().sahip.sorgu("UPDATE belge_merkezi_revizyon SET durum = 'yayinda', yayinlayan_id = $2, yayinlandi = now() WHERE id = $1", [rev, yoneticiId]);
+      await o().sahip.sorgu("INSERT INTO belge_merkezi_bag (belge_id, hedef_modul, hedef_id, ekleyen_id) VALUES ($1, 'malzemeler', $2, $3)", [belge, urunNo, yoneticiId]);
+      return belge;
+    };
+    const belgeler: number[] = [];
+    try {
+      // Kalite K1: yayına girmiş resim yokken seçim 3B modelin taslağına düşer; taslağın anteti (X9) kâğıda basılmaz.
+      belgeler.push(await resimEkle('3b-model', 'X9', false));
+      await kartRev('C');
+      assert.equal((await kart(id)).govde.revizyon, 'C', 'taslak modelde kartın revizyonu');
+      await kartRev(null);
+      assert.equal((await kart(id)).govde.revizyon, null, 'taslak model ve revizyonsuz kartta boş');
+      // Yayındaki teknik resmin anteti ekrandaki koddur (dolu yol). Taslak model bağlı kalırsa ekran onu seçer; bağı kaldırılır.
+      await o().sahip.sorgu('DELETE FROM belge_merkezi_bag WHERE belge_id = $1', [belgeler[0]]);
+      belgeler.push(await resimEkle('teknik-resim', '03', true));
+      assert.equal((await kart(id)).govde.revizyon, '03', 'yayındaki resmin anteti (merkezin iç harfi A değil)');
+      // Antetsiz yayındaki resimde kod kartın revizyonuna düşer (ekrandaki gibi).
+      await o().sahip.sorgu('DELETE FROM belge_merkezi_bag WHERE belge_id = $1', [belgeler[1]]);
+      belgeler.push(await resimEkle('teknik-resim', null, true));
+      await kartRev('C');
+      assert.equal((await kart(id)).govde.revizyon, 'C', 'antetsiz resimde kartın revizyonu');
+    } finally {
+      await o().sahip.sorgu('DELETE FROM belge_merkezi_bag WHERE belge_id = ANY($1::int[])', [belgeler]);
+      await o().sahip.sorgu('UPDATE belge_merkezi_belge SET aktif = false WHERE id = ANY($1::int[])', [belgeler]);
+      await o().sahip.sorgu('UPDATE malzeme_katalog_karti SET kayit = $2 WHERE no = $1', [urunNo, JSON.stringify(kayit)]);
+    }
     assert.deepEqual(c.govde.adimlar.map((a) => [a.opNo, a.yer, a.fason]), [[10, `Deneme İstasyonu ${sayac - 1}`, false], [20, 'Deneme Fason', true]]);
     assert.equal((await kart(id, 'operator')).durum, 403, 'okuma yetkisi olmayan basamaz');
     assert.equal((await istek('depo', 'GET', `/adimli-emirler/${id}/refakat-karti`)).durum, 200, 'fason işlemli depo okur');

@@ -693,6 +693,9 @@ export const refakatKartiCevabi = z.object({
   qr: z.string(),
   emirNo: z.string(),
   urun: z.object({ kod: z.string(), ad: z.string() }),
+  // 2907 (2887 a): ürün kartının basım anındaki revizyon kodu (Çizim Merkezi'nin eşlediği değer); kodsuz kartta null. Ürünün yanında
+  // değil ayrı alandır: stokun refakat listesi `urun` şeklini paylaşır, revizyonu taşımaz.
+  revizyon: z.string().nullable(),
   adet: z.number().int().positive(),
   teslim: tarihSemasi.nullable(),
   // Ana emirde üst emir ve sıra boştur.

@@ -324,6 +324,8 @@ export function refakatDegerleri(k: RefakatKartiCevabi, basim: Date): AlanDegerl
     emirNo: k.emirNo,
     urunAd: k.urun.ad,
     urunKod: `Parça no: ${k.urun.kod}`,
+    // 2907 D4 (2887 a): ekranlardaki gibi "Rev <kod>", parça nodan ayrı kutuda (uzun parça no kısaltılsa da kod kaybolmaz); kodsuz kartta yok.
+    revizyon: k.revizyon === null ? null : `Rev ${k.revizyon}`,
     adetTermin: `Adet ${k.adet} · Termin ${k.teslim === null ? 'yok' : gunAyYil(k.teslim)}`,
     parti,
     basim: `Basım ${gunAyYil(tesisGunu(basim))}`,
