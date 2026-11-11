@@ -687,6 +687,21 @@ describe('cizimler malzeme resmi revizyonu (2138-1 a)', () => {
     expect((await screen.findByLabelText<HTMLInputElement>('Revizyon kodu')).value).toBe('00');
   });
 
+  it('listede merkezin harfi değil revizyon kodu görünür: antetsiz resimde kartın revizyonu, kodsuzda tire', async () => {
+    paneliAc(cevap(null));
+    const satir = (await screen.findByText('Deneme flanş')).closest('li');
+    expect(satir).toBeTruthy();
+    expect(within(satir!).getByText('00')).toBeTruthy();
+    expect(within(satir!).queryByText('A')).toBeNull();
+    cleanup();
+    const kodsuz = cevap(null);
+    kodsuz.belgeler[0]!.revizyonlar = kodsuz.belgeler[0]!.revizyonlar.map((r) => ({ ...r, revKodu: null }));
+    paneliAc(kodsuz);
+    const kodsuzSatir = (await screen.findByText('Deneme flanş')).closest('li');
+    expect(within(kodsuzSatir!).getByText('—')).toBeTruthy();
+    expect(within(kodsuzSatir!).queryByText('A')).toBeNull();
+  });
+
   it('uyarı merkezin harfini değil resmin revizyon kodunu ve kartın revizyonunu gösterir', async () => {
     paneliAc(cevap({ hedefId: 41, belgeId: 7, revizyonId: 11, harf: 'A', antetRev: '01', kareSayisi: 1, revUyumu: false }));
     const uyari = await screen.findByText(/revizyon kodu 01, kartın revizyonu 00/);

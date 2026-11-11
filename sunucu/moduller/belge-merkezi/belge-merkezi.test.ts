@@ -1017,6 +1017,16 @@ describe('çizim merkezi (gerçek PostgreSQL, gerçek giriş)', () => {
       assert.deepEqual(ayrinti.revizyonlar.map((r) => kodlar.get(`${ilk.id}:${r.ozet}`)), ['01', null], 'başka modülün aldığı revizyonun kodu belge ve özetle');
       assert.equal(kodlar.has(`${ilk.id}:${'f'.repeat(64)}`), false, 'belgede olmayan özet haritada yok');
 
+      const harita = await vt().tx((db) => kayitlaraBagliYayindakiBelgeler(db, 'malzemeler', ['pdf']));
+      assert.equal(harita.get(kart)?.find((b) => b.id === ilk.id)?.revKodu, '01', 'toplu okumada da yayındaki revizyonun kodu (geometri ağırlık özeti bunu kullanır)');
+
+      // Taslak yayındakinden farklı kodlu olunca liste ikisini ayrı gösterir.
+      const taslak = await gonder(yonetici, `/cizimler/${ilk.id}/revizyon-ekle`, { ozet: await yukle(yonetici, pdf()), dosyaAdi: 'c.pdf', antetRev: '02', surum: ayrinti.surum });
+      assert.equal(taslak.statusCode, 200, taslak.body);
+      assert.equal(taslak.json<BelgeAyrintisi>().revizyonlar[0]?.durum, 'taslak');
+      const liste = (await oku(yonetici, `/cizimler?tur=teknik-resim&ara=${encodeURIComponent(ilk.ad)}`)).json<{ satirlar: { id: number; yayindakiRevKodu: string | null; sonRevKodu: string | null }[] }>().satirlar.find((x) => x.id === ilk.id);
+      assert.deepEqual([liste?.yayindakiRevKodu, liste?.sonRevKodu], ['01', '02']);
+
       const kartsiz = await belgeAc(yonetici, 'teknik-resim', pdf(), 'Kartsız resim');
       assert.equal(kartsiz.revizyonlar[0]?.revKodu, null, 'antetsiz ve kartsız belgede kod yok, harf yerine geçmez');
     });
