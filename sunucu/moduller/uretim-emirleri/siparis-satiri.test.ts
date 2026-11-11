@@ -274,8 +274,11 @@ describe('UE-SS emir sipariş satırına (gerçek PostgreSQL)', () => {
       ($1, $2, $3, $5, now() - interval '600 seconds', now() - interval '400 seconds', 'duraklat'), ($1, $2, $3, $5, now() - interval '300 seconds', now() - interval '200 seconds', 'ayril'),
       ($1, $2, $4, $5, now() - interval '500 seconds', now() - interval '450 seconds', 'ayril')`, [id, ilk, yoneticiId, kisi2, ist]);
     const sure = await isEmriSureleri(o().vt, [ilk, ikinci, 2_000_000_000]);
+    // Açık kullanım aralığı sorgunun saatine (clock_timestamp) kadar ölçülür; `an` ile sorgu arası geçen süre kadar uzar.
+    // Alt sınır 600 (yuvarlama payı 1), üst sınır 600 + geçen süre: yavaş makinede oynamaz, açık aralık sayılmazsa (540) düşer.
+    const gecen = Number((await o().sahip.tek<{ sn: string }>('SELECT ceil(extract(epoch FROM clock_timestamp() - $1::timestamptz)) AS sn', [an]))!.sn);
     const a = sure.get(ilk)!;
-    assert.ok(Math.abs(a.islemeSn - 600) <= 2, String(a.islemeSn));
+    assert.ok(a.islemeSn >= 599 && a.islemeSn <= 600 + gecen + 1, `${a.islemeSn} (geçen ${gecen} sn)`);
     assert.equal(a.ayarSn, 100);
     assert.deepEqual(a.katilim, [{ kisiId: yoneticiId, saniye: 300 }, { kisiId: kisi2, saniye: 50 }].sort((x, y) => x.kisiId - y.kisiId));
     assert.deepEqual(sure.get(ikinci), { islemeSn: 0, ayarSn: null, katilim: [] }, 'çalışılmamış iş: sıfır kullanım, ayar bilinmiyor');
