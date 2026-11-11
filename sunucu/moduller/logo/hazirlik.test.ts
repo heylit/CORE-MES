@@ -160,7 +160,8 @@ describe('Logo hazırlık uçları (gerçek PostgreSQL)', () => {
     assert.equal(h.akislar.find((a) => a.anahtar === 'fatura')?.durum, 'ayar-eksik');
     assert.equal(h.akislar.find((a) => a.anahtar === 'satin-alma-siparisi')?.durum, 'ayar-eksik');
     assert.equal(h.akislar.find((a) => a.anahtar === 'malzeme-guncelleme')?.durum, 'ayar-eksik');
-    assert.ok(!h.akislar.some((a) => a.durum === 'kodda-yok'), 'kodu olmayan akış kalmadı');
+    assert.deepEqual(h.akislar.filter((a) => a.durum === 'kodda-yok').map((a) => a.anahtar).sort(),
+      ['malzeme-hareketleri', 'siparis-durumu', 'sozlukler', 'talep-iptali', 'teklif-kapatma'], 'yalnız planlanan Logo işleri kodda yok görünür');
     assert.deepEqual(['logo.mal-kabul-okumasi', 'logo.liste-okumasi', 'logo.fatura-okumasi', 'logo.malzeme-fisi-gonderimi', 'logo.malzeme-guncelleme-gonderimi']
       .map((k) => h.ayarlar.find((a) => a.anahtar === k)?.acik), [false, false, false, false, false], 'yeni akışlar kapalı gelir');
     assert.equal(h.akislar.find((a) => a.anahtar === 'mal-kabul')?.hatali, null, 'okuma akışının hatalı sayısı yoktur');
