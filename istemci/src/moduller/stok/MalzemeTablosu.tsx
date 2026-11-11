@@ -63,7 +63,7 @@ export const kullanilamaz = (m: MalzemeStokSatiri): number => Number(m.toplam) -
 export function malzemeSutunlari<S extends MalzemeStokSatiri>(secenek: { gizli: ReadonlySet<string>; ek?: readonly Sutun<S>[]; eylem: (m: S) => ReactNode }): Sutun<S>[] {
   const { gizli, ek = [], eylem } = secenek;
   const tum: (Sutun<S> & { gizlenir?: GizlenebilirSutun })[] = [
-    { anahtar: 'malzeme', baslik: 'Malzeme', sirala: true, sabit: 'sol', csv: (m) => m.ad ?? `Kart ${m.malzemeId}`, hucre: (m) => (
+    { anahtar: 'malzeme', baslik: 'Malzeme', sirala: true, sabit: 'sol', kes: true, csv: (m) => m.ad ?? `Kart ${m.malzemeId}`, hucre: (m) => (
       <span className="tc-stok-ad"><strong>{m.ad ?? `Kart ${m.malzemeId}`}</strong>
         <span>Kart no {m.malzemeId}{m.konumSayisi > 0 ? ` · ${m.konumSayisi} konum` : ''}</span></span>
     ) },

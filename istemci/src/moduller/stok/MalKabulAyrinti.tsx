@@ -13,21 +13,19 @@ import { SayfaBasi, hataMetni, korumaliPost, useIslem, useStokKomutu } from './o
 import './stok.css';
 
 type Satiri = MalKabulAyrintiCevabi['satirlar'][number];
+// Her satır tek satır (2940 a): bilgiler ayrı sütunda, uzun ad kesilir; tablo yana kayar, Malzeme solda kalır.
 const SUTUNLAR: Sutun<Satiri>[] = [
+  { anahtar: 'malzeme', baslik: 'Malzeme', sabit: 'sol', kes: true, csv: (s) => s.malzemeAd ?? `Kart ${s.malzemeId}`, hucre: (s) => (
+    <Link to={`/stok/malzemeler/${s.malzemeId}`}>{s.malzemeAd ?? `Kart ${s.malzemeId}`}</Link>
+  ) },
   { anahtar: 'sira', baslik: '#', hizala: 'sag', hucre: (s) => s.sira },
-  { anahtar: 'malzeme', baslik: 'Malzeme', hucre: (s) => (
-    <span className="tc-stok-ad"><Link to={`/stok/malzemeler/${s.malzemeId}`}>{s.malzemeAd ?? `Kart ${s.malzemeId}`}</Link>
-      {s.fason && <span>Fasondan dönüş · giden {s.fason.malzemeAd ?? `Kart ${s.fason.malzemeId}`} × {miktarMetni(s.fason.miktar)} ({s.fason.konumKod})</span>}</span>
-  ) },
   { anahtar: 'miktar', baslik: 'Sayılan', hizala: 'sag', hucre: (s) => miktarMetni(s.sayilanMiktar) },
-  { anahtar: 'parti', baslik: 'Parti', hucre: (s) => (s.hareketId === null ? '—' : (
-    <span className="tc-stok-ad">{s.partiEtiketi ?? 'Parti bilinmiyor'}{s.partiId !== null && <PartiBelgeleri partiId={s.partiId} belgeler={s.partiBelgeleri} />}</span>
-  )) },
+  { anahtar: 'parti', baslik: 'Parti', kes: true, hucre: (s) => (s.hareketId === null ? '—' : s.partiEtiketi ?? 'Parti bilinmiyor') },
+  { anahtar: 'belgeler', baslik: 'Belgeler', hucre: (s) => (s.partiId === null || s.partiBelgeleri.length === 0 ? null : <PartiBelgeleri partiId={s.partiId} belgeler={s.partiBelgeleri} />) },
   { anahtar: 'konum', baslik: 'Konum', mono: true, hucre: (s) => s.konumKod ?? 'Hizmet: stoğa girmez' },
-  { anahtar: 'logo', baslik: 'Logo irsaliyesi', hucre: (s) => (
-    <><Rozet ton={LOGO_ETIKETI[s.logoDurumu].ton}>{LOGO_ETIKETI[s.logoDurumu].etiket}</Rozet>
-      {s.logoIrsaliyeMiktari !== null && <span className="tc-stok-not"> irsaliyede {miktarMetni(s.logoIrsaliyeMiktari)}</span>}</>
-  ) },
+  { anahtar: 'fason', baslik: 'Fasondan dönüş', kes: true, hucre: (s) => (s.fason ? `Giden ${s.fason.malzemeAd ?? `Kart ${s.fason.malzemeId}`} × ${miktarMetni(s.fason.miktar)} (${s.fason.konumKod})` : null) },
+  { anahtar: 'logo', baslik: 'Logo irsaliyesi', hucre: (s) => <Rozet ton={LOGO_ETIKETI[s.logoDurumu].ton}>{LOGO_ETIKETI[s.logoDurumu].etiket}</Rozet> },
+  { anahtar: 'irsaliyede', baslik: 'İrsaliyede', hizala: 'sag', hucre: (s) => (s.logoIrsaliyeMiktari === null ? null : miktarMetni(s.logoIrsaliyeMiktari)) },
 ];
 
 export function MalKabulAyrinti() {
@@ -58,7 +56,7 @@ export function MalKabulAyrinti() {
         </>} />
       {belge.duzeltenId !== null && <p className="tc-stok-not">Bu belge düzeltildi: <Link to={`/stok/mal-kabul/${belge.duzeltenId}`}>düzeltme belgesine git</Link>. Hareketleri ters çevrildi.</p>}
       {belge.duzeltilenId !== null && <p className="tc-stok-not">Bu belge <Link to={`/stok/mal-kabul/${belge.duzeltilenId}`}>önceki belgeyi</Link> düzeltir.</p>}
-      <Kart baslik="Satırlar"><Tablo etiket="Mal kabul satırları" sutunlar={SUTUNLAR} satirlar={b.data.satirlar} satirAnahtari={(s) => s.sira} /></Kart>
+      <Kart baslik="Satırlar"><Tablo etiket="Mal kabul satırları" kip="kaydir" sutunlar={SUTUNLAR} satirlar={b.data.satirlar} satirAnahtari={(s) => s.sira} /></Kart>
       <Pencere acik={acik} kapat={() => setAcik(false)} baslik={`${belge.no} düzeltmesi`} tur="yan"
         alt={<>
           <Dugme tur="tehlike" simge="trash" yukleniyor={komut.isPending} onClick={() => komut.mutate({ satirlar: [] })}>Belgeyi tamamen iptal et</Dugme>

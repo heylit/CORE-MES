@@ -137,6 +137,14 @@ describe('Malzemeler', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Eksi bakiye 1' }));
     await waitFor(() => expect(istekler.some((i) => i.yol.includes('durum=eksi'))).toBe(true));
   });
+  it('uzun malzeme adı tek satırda kesilir; tamamı ipucunda', async () => {
+    const ad = 'Deneme alüminyum çubuk Ø50, 6082 T6, çekme, üç metre boy';
+    sunucuKur(OKUYUCU, { 'GET /stok/malzemeler': () => json(200, { satirlar: [{ ...SATIR, ad }], toplam: 1, sayfa: 1, sayfaBoyu: 50 } satisfies MalzemelerCevabi), 'GET /stok/panel': () => json(200, PANEL) });
+    ac('/stok/malzemeler');
+    const kes = (await screen.findByText(ad)).closest('.tc-tablo-kes');
+    expect(kes?.closest('td')?.classList.contains('tc-tablo-sabit-sol')).toBe(true);
+    expect(kes?.getAttribute('title')).toBe(ad);
+  });
   it('satırın yanında taşı, çıkış, sepete ve QR: ayrıntıya girmeden; tek gözde form doğrudan açılır, satır seçilmez', async () => {
     const istekler = sunucuKur(DEPOCU, {
       'GET /stok/malzemeler': () => json(200, { satirlar: [SATIR], toplam: 1, sayfa: 1, sayfaBoyu: 50 } satisfies MalzemelerCevabi), 'GET /stok/panel': () => json(200, PANEL),
@@ -677,7 +685,8 @@ describe('Mal kabul', () => {
       'POST /stok/mal-kabuller/4/duzelt': () => json(200, { belge: { ...belge, id: 5, no: 'MK-000005', duzeltilenId: 4 }, hareketIdler: [] }),
     });
     ac('/stok/mal-kabul/4');
-    expect(await screen.findByText(/Fasondan dönüş · giden Deneme mil ham × 20 \(FSN-01\)/)).toBeTruthy();
+    expect(await screen.findByText('Giden Deneme mil ham × 20 (FSN-01)')).toBeTruthy();
+    expect(screen.getByRole('columnheader', { name: 'Fasondan dönüş' })).toBeTruthy();
     expect(screen.getByText('Hizmet: stoğa girmez')).toBeTruthy();
     expect(screen.getByRole('link', { name: /Sertifika S-1 \(HM-001\) \(A\)/ }).getAttribute('href')).toBe('/api/stok/partiler/12/belgeler/70');
     fireEvent.click(screen.getByRole('button', { name: 'Düzelt' }));

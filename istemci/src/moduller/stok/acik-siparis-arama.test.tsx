@@ -60,6 +60,11 @@ describe('mal kabul ekranında açık sipariş araması', () => {
     expect(within(tablo).getByText('UE-2026-0007')).toBeTruthy();
     expect(within(tablo).getAllByText('Deneme Işık Projesi')).toHaveLength(2);
     expect(within(tablo).getByText('Fason dönüşü')).toBeTruthy();
+    // 2940 a: tek satır, yana kayar; Sipariş solda, Seç sağda sabit; fason işareti kendi sütununda.
+    expect(tablo.closest('.tc-tablo-kap')?.hasAttribute('data-kaydir')).toBe(true);
+    expect(within(tablo).getByRole('columnheader', { name: 'Sipariş' }).classList.contains('tc-tablo-sabit-sol')).toBe(true);
+    expect(within(tablo).getByText('Fason dönüşü').closest('td')?.getAttribute('data-baslik')).toBe('Hizmet');
+    expect(within(tablo).getAllByRole('button', { name: 'Seç' })[0]?.closest('td')?.classList.contains('tc-tablo-sabit-sag')).toBe(true);
 
     const kutu = screen.getByLabelText('Açık siparişlerde ara');
     fireEvent.change(kutu, { target: { value: 'fasoncu' } });

@@ -585,11 +585,9 @@ li[data-tur="bilinmiyor"] > .tc-stok-seri-tur { color: var(--stop); }
 .tc-stok-soluk { color: var(--faint); }
 .tc-tablo-sabit-sag .tc-stok-dugmeler { flex-wrap: nowrap; gap: var(--b-1); }
 .tc-tablo-sabit-sag .tc-stok-dugmeler .tc-dugme { padding-inline: 0; min-inline-size: var(--dokunma); }
-/* Uzun ad ya da çok konum sütunu kabın genişliğini aşmasın: içerik sarar, sütun dar ekranda da bir bakışta görünür. */
-.tc-tablo-sabit-sol .tc-stok-ad { inline-size: max-content; max-inline-size: var(--acilir-encok); white-space: normal; overflow-wrap: anywhere; }
-@media (max-width: 1023px) {
-  .tc-tablo-sabit-sol .tc-stok-ad { max-inline-size: var(--menu-sabit); }
-}
+/* Kesilen ad hücresi (ad + alt satır) tek satır kalır; her satır kendi genişliğinde "…" ile biter, tamamı ipucunda. */
+.tc-tablo-kes .tc-stok-ad { inline-size: auto; max-inline-size: none; white-space: nowrap; }
+.tc-tablo-kes .tc-stok-ad > * { display: block; overflow: hidden; text-overflow: ellipsis; }
 @media (max-width: 767px) {
   .tc-tablo-kap[data-kaydir] .tc-stok-etiketler { max-inline-size: var(--menu-sabit); }
 }
