@@ -104,7 +104,7 @@ afterEach(() => { ekranKaldir(); S.ready = false; document.body.innerHTML = ''; 
 
 describe('satın alma ekranları kötü niyetli metni etiket olarak ayrıştırmaz (2201a)', () => {
   const sayfalar: [Page, string | null][] = [
-    ['requests', null], ['materials', null], ['material', MAT], ['suppliers', null], ['supplier', SUP_A], ['reports', null], ['settings', null],
+    ['requests', null], ['materials', null], ['material', MAT], ['suppliers', null], ['supplier', SUP_A], ['settings', null],
   ];
   it.each(sayfalar)('%s sayfası', (page, id) => {
     const ana = ciz(page, id);

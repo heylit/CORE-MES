@@ -4,15 +4,13 @@ import type { PurchaseRequest, Quote, RequestItem, Settings } from "./tipler.ts"
 import { CRIT, KART_SAYFASI, OPEN, SUP_STATUS } from "./constants.ts";
 import { S, V, nameOf, settings } from "./store.ts";
 import {
-  budgetUse, isCommitted, matOf, matStats, payText, perfDesc, perfScore, quoteCalc, supRating, savingsOf, spendLines,
-  supplierStats, EMPTY_STATS, type QuoteCalc,
+  isCommitted, matOf, matStats, payText, perfScore, quoteCalc, supRating, supplierStats, EMPTY_STATS, type QuoteCalc,
 } from "./calc.ts";
 import {
-  addDays, dayDiff, deltaHTML, esc, fmtDate, isNum, money, MONTHS, nf0, nf1, nf2, nfx, norm, numIn, pad, parseNum, pct,
-  short, sum, todayStr, toCSV, tsDate, SYM,
+  deltaHTML, esc, fmtDate, isNum, money, nf0, nf1, nfx, norm, numIn, parseNum, pct, short, sum, SYM,
 } from "./util.ts";
 import { partilerPaneli } from "./partiler.ts";
-import { empty, hbars, matLink, priceChart, reqTable, stars, supLink, vbars, type BarDatum } from "./views.ts";
+import { empty, matLink, priceChart, reqTable, stars, supLink } from "./views.ts";
 import { CURRENCIES as CURS } from "./tipler.ts";
 /* ================= malzemeler ================= */
 export function unlinkedItems(): { r: PurchaseRequest; it: RequestItem }[] {
@@ -127,72 +125,6 @@ export function viewSupplier(): string {
     <section class="panel"><div class="panel-h"><h2>Değerlendirmeler</h2><span class="spacer"></span><button class="btn sm" data-act="add-eval">Ekle</button></div><div class="panel-b">${evals.length ? `<ul class="log">${evals.map(e => `<li><time>${fmtDate(e.date)}</time><span>${stars(e.rating)} ${esc(e.text || "")}<span class="by"> ${esc(e.name || nameOf(e.by))}</span></span></li>`).join("")}</ul>` : '<p class="small muted">Görüşme, ziyaret veya sorun sonrası kısa notlar ekleyin; puan ortalaması karneye yansır.</p>'}</div></section>
     <section class="panel"><div class="panel-h"><h2>Alımlardan öğrenilenler</h2></div><div class="panel-b stack" data-sa-y="7">${s.notes ? `<div class="note">${esc(s.notes)}</div>` : ""}${lessons.length ? lessons.map(h => `<div class="note"><span class="xs muted">${esc(h.r.no)}, ${esc(h.r.title)}</span><br>${esc(h.r.award!.lessons)}</div>`).join("") : '<p class="small muted">Teslim sonrası yazılan notlar burada birikir.</p>'}</div></section>
   </div>`;
-}
-
-/* ================= raporlar ================= */
-function periodStart(): string {
-  const t = todayStr();
-  if (V.period === "ytd") return t.slice(0, 4) + "-01-01";
-  if (V.period === "12m") return addDays(t, -365);
-  return "0000-00-00";
-}
-export function viewReports(): string {
-  const from = periodStart();
-  const sl = spendLines().filter(l => l.date >= from);
-  const total = sum(sl.map(l => l.amount));
-  const reqIds = new Set(sl.map(l => l.reqId));
-  const reqs = [...reqIds].map(id => S.requests[id]).filter((r): r is PurchaseRequest => r !== undefined);
-  let sAvg = 0, sNeg = 0; reqs.forEach(r => { const s = savingsOf(r); sAvg += s.avg; sNeg += s.neg; });
-  const cycles = reqs.filter(r => r.award && r.award.orderDate && r.createdAt).map(r => dayDiff(tsDate(r.createdAt), r.award!.orderDate!)).filter(d => d >= 0);
-  const qcount = reqs.map(r => (r.quotes || []).length);
-  const sst = supplierStats();
-  const dl = sum(Object.values(sst).map(s => s.deliveries)), ot = sum(Object.values(sst).map(s => s.onTime));
-  // aylık
-  const months: string[] = []; const now = new Date(); const n = 12;
-  for (let i = n - 1; i >= 0; i--) { const d = new Date(now.getFullYear(), now.getMonth() - i, 1); months.push(d.getFullYear() + "-" + pad(d.getMonth() + 1)); }
-  const mv = months.map(m => ({ label: MONTHS[+m.slice(5) - 1] ?? "", value: sum(sl.filter(l => l.month === m).map(l => l.amount)), cur: m === todayStr().slice(0, 7) }));
-  const group = (key: "category" | "supplierId", name?: (k: string) => string): BarDatum[] => { const o: Record<string, number> = {}; sl.forEach(l => { const k = l[key] || "–"; o[k] = (o[k] || 0) + l.amount; }); return Object.entries(o).map(([k, v]) => ({ k, label: name ? name(k) : k, value: v })).sort((a, b) => b.value - a.value); };
-  const byCat = group("category");
-  const bySup = group("supplierId", k => (S.suppliers[k] || {}).name || "Bilinmeyen");
-  const top1 = bySup[0]; const conc = total && top1 ? top1.value / total * 100 : null;
-  const top3 = total ? sum(bySup.slice(0, 3).map(x => x.value)) / total * 100 : null;
-  const year = todayStr().slice(0, 4);
-  const depts = (settings().departments || []).map(d => ({ d, u: budgetUse(d.name, year) })).filter(x => x.u.budget || x.u.used);
-  const priceRows = Object.values(S.materials).map(m => ({ m, st: matStats(m.id) })).filter(x => x.st.count >= 2 && isNum(x.st.change)).sort((a, b) => (b.st.change ?? 0) - (a.st.change ?? 0));
-  const single = Object.values(S.materials).map(m => ({ m, st: matStats(m.id) })).filter(x => x.st.count >= 1 && x.st.suppliers.length <= 1);
-  const supRank = Object.values(S.suppliers).map(s => ({ s, st: sst[s.id] || EMPTY_STATS, p: perfScore(s.id) })).filter((x): x is typeof x & { p: number } => x.st.quotes > 0 && x.p !== null).sort((a, b) => perfDesc(a.p, b.p));
-  const pl = { ytd: "bu yıl", "12m": "son 12 ay", all: "tüm zamanlar" }[V.period];
-  return `<div class="phead"><div><h1>Raporlar</h1><p class="lead">Siparişe dönmüş alımlardan hesaplanır (KDV hariç, sipariş günündeki kurla). Veri biriktikçe harcama dağılımı, fiyat değişimi ve tedarik riskleri netleşir.</p></div><span class="spacer"></span>
-    <div class="seg" role="group" aria-label="Dönem">${[["ytd", "Bu yıl"], ["12m", "Son 12 ay"], ["all", "Tümü"]].map(([k, l]) => `<button data-act="period" data-v="${k}" aria-pressed="${V.period === k}">${l}</button>`).join("")}</div>
-    <button class="btn" data-act="export-report">Raporu indir (CSV)</button></div>
-  <div class="strip">
-    <div><div class="v">${short(total)}</div><div class="k">Sipariş hacmi</div><div class="d">${reqs.length} sipariş, ${pl}</div></div>
-    <div><div class="v">${short(sAvg + sNeg)}</div><div class="k">Tasarruf</div><div class="d">${short(sAvg)} seçim + ${short(sNeg)} pazarlık</div></div>
-    <div><div class="v">${cycles.length ? nf0.format(sum(cycles) / cycles.length) + " gün" : "–"}</div><div class="k">Talepten siparişe</div><div class="d">ortalama süre</div></div>
-    <div><div class="v">${qcount.length ? nf1.format(sum(qcount) / qcount.length) : "–"}</div><div class="k">Talep başına teklif</div><div class="d">hedef en az ${settings().minQuotes}</div></div>
-    <div><div class="v">${dl ? pct(ot / dl * 100) : "–"}</div><div class="k">Zamanında teslim</div><div class="d">${dl} teslimat</div></div>
-  </div>
-  <div class="stack">
-    <section class="panel"><div class="panel-h"><h2>Aylık sipariş hacmi</h2><span class="sub">son 12 ay</span></div><div class="panel-b">${vbars(mv)}</div></section>
-    <div class="cols">
-      <section class="panel"><div class="panel-h"><h2>Kategoriye göre</h2></div><div class="panel-b">${hbars(byCat.slice(0, 10), { empty: "Bu dönemde sipariş yok." })}</div></section>
-      <section class="panel"><div class="panel-h"><h2>Tedarikçiye göre</h2>${isNum(conc) ? `<span class="sub">en büyük tedarikçi ${pct(conc)}, ilk üç ${pct(top3)}</span>` : ""}</div><div class="panel-b">${hbars(bySup.slice(0, 10).map(x => Object.assign(x, { html: S.suppliers[x.k!] ? supLink(x.k, x.label) : esc(x.label) })), { empty: "Bu dönemde sipariş yok." })}${isNum(conc) && conc > 40 ? '<p class="small" data-sa-y="14"><span class="flag warn">yoğunlaşma</span> Harcamanın büyük kısmı tek tedarikçide; alternatif kaynak geliştirmeyi düşünün.</p>' : ""}</div></section>
-    </div>
-    <div class="cols">
-      <section class="panel"><div class="panel-h"><h2>Bütçe kullanımı</h2><span class="sub">${year}</span></div><div class="panel-b">${hbars(depts.map(x => ({ label: x.d.name, value: x.u.used, max: Math.max(x.u.budget, x.u.used), over: !!x.u.budget && x.u.used > x.u.budget, text: x.u.budget ? `${short(x.u.used)} / ${short(x.u.budget)} (${pct(x.u.used / x.u.budget * 100)})` : short(x.u.used) + ", bütçe yok" })), { empty: "Birim bütçesi Sistem Ayarları'nda tanımlanır." })}</div></section>
-      <section class="panel"><div class="panel-h"><h2>Tedarikçi sıralaması</h2><span class="sub">performans puanına göre</span></div>${supRank.length ? `<div class="tw"><table class="rt"><thead><tr><th>Tedarikçi</th><th class="r">Puan</th><th class="r">Seçildi</th><th class="r">Zamanında</th><th class="r">En iyiye uzaklık</th></tr></thead><tbody>${supRank.slice(0, 10).map(x => `<tr class="click" data-act="open-sup" data-id="${x.s.id}"><td class="lead">${esc(x.s.name)}</td><td class="r num">${nf0.format(x.p)}</td><td class="r num">${x.st.wins}/${x.st.quotes}</td><td class="r num">${x.st.deliveries ? pct(x.st.onTimeRate) : "–"}</td><td class="r num">${isNum(x.st.avgGap) ? "+" + pct(x.st.avgGap, 1) : "–"}</td></tr>`).join("")}</tbody></table></div>` : '<div class="panel-b small muted">Teklif kaydı oluştukça dolar.</div>'}</section>
-    </div>
-    <div class="cols">
-      <section class="panel"><div class="panel-h"><h2>Fiyat değişimi</h2><span class="sub">en az iki kez alınan malzemeler, ilk ve son alış</span></div>${priceRows.length ? `<div class="tw"><table class="rt"><thead><tr><th>Malzeme</th><th class="r">İlk</th><th class="r">Son</th><th class="r">Değişim</th></tr></thead><tbody>${priceRows.slice(0, 15).map(x => `<tr class="click" data-act="open-mat" data-id="${x.m.id}"><td class="lead">${esc(x.m.name)}<span class="sub">${fmtDate(x.st.first!.date)} → ${fmtDate(x.st.last!.date)}</span></td><td class="r num">${money(x.st.first!.unitTRY)}</td><td class="r num">${money(x.st.last!.unitTRY)}</td><td class="r">${deltaHTML(x.st.change)}</td></tr>`).join("")}</tbody></table></div>` : '<div class="panel-b small muted">Aynı malzeme ikinci kez alındığında burada görünür.</div>'}</section>
-      <section class="panel"><div class="panel-h"><h2>Tek kaynak riski</h2><span class="sub">hiç alternatif teklif alınmamış malzemeler</span></div>${single.length ? `<div class="tw"><table class="rt"><thead><tr><th>Malzeme</th><th>Tek tedarikçi</th><th class="r">Alım</th></tr></thead><tbody>${single.slice(0, 15).map(x => `<tr class="click" data-act="open-mat" data-id="${x.m.id}"><td class="lead">${esc(x.m.name)}</td><td>${esc(x.st.suppliers[0] ? x.st.suppliers[0].name : "–")}</td><td class="r num">${x.st.count}</td></tr>`).join("")}</tbody></table></div>` : '<div class="panel-b small muted">Tek kaynağa bağlı malzeme yok.</div>'}</section>
-    </div>
-  </div>`;
-}
-export function reportCSV(): string {
-  const from = periodStart();
-  const rows: (string | number)[][] = [["Tarih", "Talep", "Birim", "Kategori", "Malzeme", "Tedarikçi", "Tutar TL"]];
-  spendLines().filter(l => l.date >= from).forEach(l => rows.push([fmtDate(l.date), l.no, l.department, l.category, (l.materialId ? S.materials[l.materialId]?.name ?? "" : ""), (S.suppliers[l.supplierId] || {}).name || "", nf2.format(l.amount)]));
-  return toCSV(rows);
 }
 
 /* ================= ayarlar ================= */

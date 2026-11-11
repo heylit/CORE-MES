@@ -1,7 +1,7 @@
 import {
-  SATIN_ALMA_ANALIZI_GUVENLIK_EN_AZ, SATIN_ALMA_ANALIZI_SURE_EN_AZ, SATIN_ALMA_ANALIZI_TAHMIN_EN_AZ_AY, SATIN_ALMA_ASAMALARI, SATIN_ALMA_SAPMA_ILK,
+  SATIN_ALMA_ANALIZI_GUVENLIK_EN_AZ, SATIN_ALMA_ANALIZI_SURE_EN_AZ, SATIN_ALMA_ANALIZI_TAHMIN_EN_AZ_AY, SATIN_ALMA_ASAMALARI, SATIN_ALMA_SAPMA_ILK, SATIN_ALMA_TEK_KAYNAK_ILK,
   type SatinAlmaAnaliziCevabi, type SatinAlmaAsamaOzeti, type SatinAlmaAsamasi, type SatinAlmaKuralDisiDonemi, type SatinAlmaSapmaDonemi,
-  type SatinAlmaTuketimMalzemesi, type SatinAlmaTutarOlcusu,
+  type SatinAlmaHarcamaDagilimi, type SatinAlmaTedarikRiski, type SatinAlmaTuketimMalzemesi, type SatinAlmaTutarOlcusu,
 } from '#paylasilan/sozlesme/satin-alma-analiz.ts';
 
 // 2151: Satın alma analizinin saf hesapları. Bilinmeyen değer null döner; eşik altında istatistik verilmez.
@@ -424,4 +424,99 @@ export function kuralDisiAlim(
     azTeklif: topla(l.filter((g) => g.az)), talepOncesi: topla(l.filter((g) => g.once)),
     payYuzde: harcamaTl === null || !(harcamaTl > 0) ? null : bir(Math.min(100, (ikisi / harcamaTl) * 100)),
   };
+}
+
+// ---- 2477: Raporlar'dan taşınan dağılımlar. Tutar KDV ve masraf hariç, iskonto dahil, sipariş günü kuruyla; kuru bilinmeyen satır girmez.
+export interface DokumSatiri {
+  siparisTarihi: string; talepId: string; kalemId: string; kategori: string; ad: string; katalogId: string | null; firmaId: number | null;
+  tedarikciAdi: string; paraBirimi: string; kur: string | null; genelIskonto: string; birimFiyat: string | null; satirIskonto: string | null; miktar: string;
+}
+export function satirTutariTl(s: Pick<DokumSatiri, 'paraBirimi' | 'kur' | 'birimFiyat' | 'satirIskonto' | 'genelIskonto' | 'miktar'>): number | null {
+  const k = satirKuru(s), f = netBirimFiyat(s);
+  return k === null || f === null ? null : f * k * Number(s.miktar);
+}
+export const tedarikciAnahtari = (s: Pick<DokumSatiri, 'firmaId' | 'tedarikciAdi'>): string =>
+  (s.firmaId !== null ? `f:${String(s.firmaId)}` : `ad:${s.tedarikciAdi.trim().toLocaleLowerCase('tr')}`);
+const kalemAnahtari = (s: Pick<DokumSatiri, 'katalogId' | 'ad'>): string => s.katalogId ?? `ad:${s.ad.trim().toLocaleLowerCase('tr')}`;
+
+// SA-2477-1: aylık harcama. Satırların ilk siparişinin ayından önceki ay null (veri yok); sonraki siparişsiz ay 0.
+export function aylikHarcama(satirlar: readonly AnalizSatiri[], aylar: readonly string[]): SatinAlmaHarcamaDagilimi['aylar'] {
+  const toplam = new Map<string, number>();
+  let ilk: string | null = null;
+  for (const s of satirlar) {
+    const ay = s.siparisTarihi.slice(0, 7);
+    if (ilk === null || ay < ilk) ilk = ay;
+    const t = satirTutariTl(s);
+    if (t !== null) toplam.set(ay, (toplam.get(ay) ?? 0) + t);
+  }
+  return aylar.map((ay) => ({ ay, tutarTl: ilk === null || ay < ilk ? null : iki(toplam.get(ay) ?? 0) }));
+}
+
+// SA-2477-2: dönemde anahtara göre harcama dağılımı, büyükten küçüğe; pay dönemin kuru bilinen toplamına göre.
+export function harcamaDagilimi(
+  satirlar: readonly DokumSatiri[], anahtar: (s: DokumSatiri) => string, ad: (s: DokumSatiri, anahtar: string) => string, bas: string, bit: string,
+): SatinAlmaHarcamaDagilimi['kategoriler'] {
+  const g = new Map<string, { ad: string; tutar: number }>();
+  for (const s of satirlar) {
+    if (!icinde(s, bas, bit)) continue;
+    const t = satirTutariTl(s);
+    if (t === null) continue;
+    const a = anahtar(s);
+    const x = g.get(a) ?? { ad: ad(s, a), tutar: 0 };
+    x.tutar += t;
+    g.set(a, x);
+  }
+  const toplam = [...g.values()].reduce((t, x) => t + x.tutar, 0);
+  return [...g].map(([a, x]) => ({ anahtar: a, ad: x.ad, tutarTl: iki(x.tutar), pay: toplam > 0 ? bir((x.tutar / toplam) * 100) : 0 }))
+    .sort((a, b) => b.tutarTl - a.tutarTl || a.ad.localeCompare(b.ad, 'tr'));
+}
+
+// SA-2477-3: en büyük bir ve üç tedarikçinin payı; harcama yoksa null.
+export function yogunlasma(tedarikciler: readonly { tutarTl: number }[]): { ilkBirPay: number | null; ilkUcPay: number | null } {
+  const toplam = tedarikciler.reduce((t, x) => t + x.tutarTl, 0);
+  if (!(toplam > 0)) return { ilkBirPay: null, ilkUcPay: null };
+  const sirali = tedarikciler.map((x) => x.tutarTl).sort((a, b) => b - a);
+  const pay = (n: number) => bir(Math.min(100, (sirali.slice(0, n).reduce((t, x) => t + x, 0) / toplam) * 100));
+  return { ilkBirPay: pay(1), ilkUcPay: pay(3) };
+}
+
+// SA-2477-4: dönemde siparişe dönen taleplerin teklif sayısı ortancası ve ayardaki en az teklifin altında kalan talep.
+export function teklifOzeti(
+  satirlar: readonly KimlikliSatir[], baglar: ReadonlyMap<number, SiparisBagi>, enAzTeklif: number, bas: string, bit: string,
+): SatinAlmaTedarikRiski['teklif'] {
+  const talepler = new Map<string, number>();
+  for (const s of satirlar) {
+    const b = baglar.get(s.id);
+    if (b && icinde(s, bas, bit)) talepler.set(b.talepId, b.teklifSayisi);
+  }
+  const l = sirala([...talepler.values()]);
+  return { talep: l.length, ortanca: ortanca(l), hedefAlti: l.filter((n) => n < enAzTeklif).length };
+}
+
+// SA-2477-5: tek kaynak riski. Dönemde alınan kalemin (katalog, katalogsuzsa ad) aldığı her talepte fiyat veren tedarikçiler birleşir;
+// hepsi tek tedarikçiyse kalem tek kaynaktır. Fiyat veren kaydı yoksa siparişin tedarikçisi sayılır. Tutar kuru bilinen satırların toplamı.
+export function tekKaynak(
+  satirlar: readonly DokumSatiri[], verenler: readonly { talepId: string; kalemId: string; tedarikci: string }[], tedarikciAdi: (anahtar: string) => string,
+  bas: string, bit: string, ilk = SATIN_ALMA_TEK_KAYNAK_ILK,
+): SatinAlmaTedarikRiski['tekKaynak'] {
+  const fiyatVeren = new Map<string, Set<string>>();
+  for (const v of verenler) {
+    const k = `${v.talepId}|${v.kalemId}`;
+    fiyatVeren.set(k, (fiyatVeren.get(k) ?? new Set()).add(v.tedarikci));
+  }
+  const kalemler = new Map<string, { ad: string; tedarikciler: Set<string>; satir: number; tutar: number; kursuz: boolean }>();
+  for (const s of satirlar) {
+    if (!icinde(s, bas, bit)) continue;
+    const a = kalemAnahtari(s);
+    const x = kalemler.get(a) ?? { ad: s.ad, tedarikciler: new Set<string>(), satir: 0, tutar: 0, kursuz: false };
+    for (const t of fiyatVeren.get(`${s.talepId}|${s.kalemId}`) ?? [tedarikciAnahtari(s)]) x.tedarikciler.add(t);
+    x.satir += 1;
+    const t = satirTutariTl(s);
+    if (t === null) x.kursuz = true; else x.tutar += t;
+    kalemler.set(a, x);
+  }
+  const tek = [...kalemler].filter(([, x]) => x.tedarikciler.size === 1).map(([anahtar, x]) => ({
+    anahtar, ad: x.ad, tedarikci: tedarikciAdi([...x.tedarikciler][0]!), siparisSatiri: x.satir, tutarTl: x.kursuz && x.tutar === 0 ? null : iki(x.tutar),
+  })).sort((a, b) => (b.tutarTl ?? -1) - (a.tutarTl ?? -1) || a.ad.localeCompare(b.ad, 'tr'));
+  return { kalemSayisi: tek.length, kalemler: tek.slice(0, ilk) };
 }

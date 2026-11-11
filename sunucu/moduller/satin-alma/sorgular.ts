@@ -1529,6 +1529,44 @@ export function analizTeklifFiyatlari(db: Db, talepIdler: readonly string[]): Pr
   );
 }
 
+// 2477: verilen taleplerde fiyat veren tedarikçiler (kalem başına), tek kaynak riski için. Firmasız teklif adıyla ayrılır.
+export function analizTeklifVerenler(db: Db, talepIdler: readonly string[]): Promise<{ talepId: string; kalemId: string; tedarikci: string }[]> {
+  if (talepIdler.length === 0) return Promise.resolve([]);
+  return db.sorgu(
+    `SELECT DISTINCT f.talep_id AS "talepId", f.kalem_id AS "kalemId",
+            coalesce('f:' || q.firma_id::text, 'ad:' || lower(btrim(q.tedarikci_adi))) AS tedarikci
+       FROM satin_alma_teklif_satiri f JOIN satin_alma_teklif q ON q.talep_id = f.talep_id AND q.id = f.teklif_id
+      WHERE f.talep_id = ANY($1::uuid[]) AND f.birim_fiyat IS NOT NULL`,
+    [talepIdler],
+  );
+}
+
+// 2477: sipariş satırı dökümü (Raporlar ve Analiz dağılımları). Süzgeç analizSiparisSatirlari ile aynı; harcama birimi kalemin kaynak
+// birimi, yoksa talebin birimi (2414 V4 a).
+export interface AnalizDokumSatiri {
+  id: number; siparisTarihi: string; talepId: string; kalemId: string; talepNo: string; birim: string | null; kategori: string; ad: string;
+  katalogId: string | null; firmaId: number | null; tedarikciAdi: string; paraBirimi: string; kur: string | null; genelIskonto: string;
+  birimFiyat: string | null; satirIskonto: string | null; miktar: string;
+}
+export function analizSiparisDokumu(db: Db, basTarih: string, bitTarih: string): Promise<AnalizDokumSatiri[]> {
+  return db.sorgu<AnalizDokumSatiri>(
+    `SELECT r.id, s.siparis_tarihi::text AS "siparisTarihi", r.talep_id AS "talepId", r.kalem_id AS "kalemId", tl.no AS "talepNo",
+            coalesce(k.kaynak_birim, tl.birim) AS birim, k.kategori, k.ad, k.katalog_id::text AS "katalogId",
+            q.firma_id AS "firmaId", q.tedarikci_adi AS "tedarikciAdi", trim(q.para_birimi) AS "paraBirimi", q.kur::text AS kur,
+            q.iskonto_yuzdesi::text AS "genelIskonto", f.birim_fiyat::text AS "birimFiyat", f.iskonto_yuzdesi::text AS "satirIskonto",
+            r.miktar::text AS miktar
+       FROM satin_alma_siparis_satiri r
+       JOIN satin_alma_siparis s ON s.talep_id = r.talep_id AND s.teklif_id = r.teklif_id
+       JOIN satin_alma_talep tl ON tl.id = r.talep_id AND tl.durum <> 'iptal'
+       JOIN satin_alma_teklif q ON q.talep_id = r.talep_id AND q.id = r.teklif_id
+       JOIN satin_alma_talep_kalemi k ON k.talep_id = r.talep_id AND k.id = r.kalem_id
+       LEFT JOIN satin_alma_teklif_satiri f ON f.talep_id = r.talep_id AND f.teklif_id = r.teklif_id AND f.kalem_id = r.kalem_id
+      WHERE s.siparis_tarihi BETWEEN $1::date AND $2::date
+      ORDER BY s.siparis_tarihi, r.id`,
+    [basTarih, bitTarih],
+  );
+}
+
 // 2426: fason iş emrinin hizmet sipariş satırı (iptal olmayan talep). Birden çoksa teslimi tamamlanmamış en yenisi, hepsi tamamsa en yenisi.
 export function fasonSiparisSatirlari(db: Db, isEmriIdleri: readonly number[]): Promise<{ isEmriId: number; id: number }[]> {
   if (isEmriIdleri.length === 0) return Promise.resolve([]);

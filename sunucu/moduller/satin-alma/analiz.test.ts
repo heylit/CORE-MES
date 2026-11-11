@@ -5,14 +5,14 @@ import type { FastifyInstance } from 'fastify';
 import { testVeritabaniKur } from '#cekirdek/test-vt.ts';
 import type { TestVeritabani } from '#cekirdek/test-vt.ts';
 import { uygulamaKur } from '#cekirdek/uygulama.ts';
-import { satinAlmaAnaliziCevabi } from '#paylasilan/sozlesme/satin-alma-analiz.ts';
+import { satinAlmaAnaliziCevabi, satinAlmaSiparisDokumu } from '#paylasilan/sozlesme/satin-alma-analiz.ts';
 import { tesisGunBasi } from '#paylasilan/zaman.ts';
 import { denetimYaz } from '../denetim/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
 import { tuketimSerisi } from '../stok/disari.ts';
-import { satinAlmaAnalizi, tuketimSerisiCozucusuKaydet } from './analiz.ts';
+import { satinAlmaAnalizi, siparisDokumu, tuketimSerisiCozucusuKaydet } from './analiz.ts';
 
 const PAROLA = 'dogru-parola-1';
 
@@ -182,6 +182,28 @@ describe('satın alma analizi (gerçek PostgreSQL)', () => {
     assert.equal(r.fiyatSapmasi.esikYuzde, 10);
     assert.equal(r.kuralDisi.enAzTeklif, 3);
     assert.deepEqual([r.kuralDisi.donem.simdi.azTeklif.siparis, r.kuralDisi.donem.simdi.talepOncesi.siparis], [4, 0]);
+  });
+
+  test('2477: kategori ve tedarikçi dağılımı, aylık seri, teklif sayısı ve tek kaynak; sipariş satırları dökümü', async () => {
+    const r = satinAlmaAnaliziCevabi.parse(await o().vt.tx((db) => satinAlmaAnalizi(db, simdi)));
+    const d = r.harcamaDagilimi;
+    assert.equal(d.aylar.length, 12);
+    assert.equal(d.aylar.at(-1)!.ay, '2026-11');
+    assert.equal(d.aylar.find((a) => a.ay === '2026-09')!.tutarTl! >= 200, true);
+    assert.ok(d.kategoriler.some((k) => k.anahtar === 'Hizmet' && k.tutarTl === 200));
+    assert.ok(d.tedarikciler.length >= 1 && d.ilkBirPay !== null && d.ilkUcPay !== null && d.ilkUcPay >= d.ilkBirPay);
+    assert.ok(r.tedarikRiski.teklif.talep >= 1);
+    // İki teklif aynı firmadan: kalem tek kaynaktır.
+    assert.ok(r.tedarikRiski.tekKaynak.kalemler.some((k) => k.ad === 'Deneme hizmet' && k.tutarTl === 200));
+
+    const dk = satinAlmaSiparisDokumu.parse(await o().vt.tx((db) => siparisDokumu(db, simdi)));
+    assert.deepEqual([dk.basTarih, dk.bitTarih], ['2025-11-05', '2026-11-04']);
+    assert.ok(dk.satirlar.some((x) => x.malzeme === 'Deneme hizmet' && x.kategori === 'Hizmet' && x.tutarTl === 200 && /^ST-2026-/.test(x.talepNo)));
+    const yanit = await app.inject({ method: 'GET', url: '/api/satin-alma-analiz/siparis-satirlari', headers: { cookie: await giris('yonetici') } });
+    assert.equal(yanit.statusCode, 200, yanit.body);
+    satinAlmaSiparisDokumu.parse(yanit.json());
+    const operator = await app.inject({ method: 'GET', url: '/api/satin-alma-analiz/siparis-satirlari', headers: { cookie: await giris('operator') } });
+    assert.equal(operator.statusCode, 403, operator.body);
   });
 
   test('uç: satın almayı okuyan görür, yetkisiz 403', async () => {

@@ -40,7 +40,7 @@ afterEach(() => { ekranKaldir(); S.ready = false; setRole('buyer'); document.bod
 describe('satın alma ekran çizimi', () => {
   const sayfalar: [Page, string | null][] = [
     ['dash', null], ['requests', null], ['orders', null], ['request', 't2'], ['request', 't1'], ['materials', null], ['material', 'm1'],
-    ['suppliers', null], ['supplier', 'f1'], ['reports', null], ['settings', null],
+    ['suppliers', null], ['supplier', 'f1'], ['settings', null],
   ];
   for (const [sayfa, id] of sayfalar) {
     it(`${sayfa}${id ? ` (${id})` : ''} çizilir`, () => {

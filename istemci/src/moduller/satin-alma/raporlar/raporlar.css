@@ -1,0 +1,34 @@
+/* Satın Alma > Raporlar (2477). Renk ve ölçü tasarım değişkenlerinden; baskıda yalnız rapor sayfası basılır. */
+.sa-rapor-izgara { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr)); gap: var(--b-4); }
+.sa-rapor-aciklama { margin: 0 0 var(--b-2); }
+.sa-rapor-dipnot { margin: var(--b-2) 0; font-size: var(--yazi-xs); color: var(--muted); }
+.sa-rapor-dugmeler { display: flex; flex-wrap: wrap; gap: var(--b-2); }
+.sa-rapor-araclar { display: flex; flex-wrap: wrap; gap: var(--b-2); align-items: center; margin-bottom: var(--b-3); }
+.sa-rapor-bosluk { flex: 1; }
+.sa-rapor-sayfa { background: var(--panel); border: var(--cizgi-ince) solid var(--edge); border-radius: var(--yari-3); padding: var(--b-4); }
+.sa-rapor-baslik { margin: 0; font-size: var(--yazi-l); }
+.sa-rapor-alt { margin: var(--b-1) 0 var(--b-3); font-size: var(--yazi-xs); color: var(--muted); }
+.sa-rapor-bolum + .sa-rapor-bolum { margin-top: var(--b-4); }
+.sa-rapor-bolum h3 { margin: 0 0 var(--b-2); font-size: var(--yazi-s); }
+.sa-rapor-kaydir { overflow-x: auto; }
+.sa-rapor-tablo { width: 100%; border-collapse: collapse; font-size: var(--yazi-s); }
+.sa-rapor-tablo th, .sa-rapor-tablo td { text-align: left; padding: var(--b-1) var(--b-2); border-bottom: var(--cizgi-ince) solid var(--edge); }
+.sa-rapor-tablo th { font-weight: 600; color: var(--muted); }
+.sa-rapor-tablo [data-sayi] { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.sa-rapor-not { margin: var(--b-2) 0 0; font-size: var(--yazi-xs); color: var(--muted); }
+/* Baskı yalnız rapor açıkken değişir (body:has); öteki sayfaların baskısına dokunulmaz. Rapor dışı her şey gizlenir, raporu taşıyan
+   kaplar sadeleşir. */
+@media print {
+  html:has(.sa-rapor-sayfa), body:has(.sa-rapor-sayfa) { background: Canvas; }
+  body:has(.sa-rapor-sayfa) *:not(:has(.sa-rapor-sayfa)):not(.sa-rapor-sayfa):not(.sa-rapor-sayfa *) { display: none; }
+  body:has(.sa-rapor-sayfa) *:has(.sa-rapor-sayfa) {
+    display: block; position: static; overflow: visible; margin: 0; padding: 0; border: 0; background: none; box-shadow: none; width: auto; height: auto;
+  }
+  /* Başka modüllerin baskı kuralı (body * gizli) raporu da gizlemesin. */
+  .sa-rapor-sayfa, .sa-rapor-sayfa * { visibility: visible; }
+  .sa-rapor-sayfa { background: Canvas; color: CanvasText; border: 0; padding: 0; }
+  .sa-rapor-sayfa .sa-rapor-alt, .sa-rapor-sayfa .sa-rapor-not, .sa-rapor-sayfa th { color: CanvasText; }
+  .sa-rapor-kaydir { overflow: visible; }
+  .sa-rapor-tablo th, .sa-rapor-tablo td { border-color: CanvasText; }
+  .sa-rapor-bolum { break-inside: avoid-page; }
+}

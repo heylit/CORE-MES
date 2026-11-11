@@ -33,10 +33,10 @@ export type Page = "dash" | "requests" | "orders" | "request" | "materials" | "m
 export interface ViewState {
   page: Page; id: string | null; tab: string | null;
   q: string; status: string; view: "list" | "board"; prio: string; dept: string;
-  mq: string; mcat: string; sq: string; period: "ytd" | "12m" | "all";
+  mq: string; mcat: string; sq: string;
   sort: string; dir: 1 | -1;
 }
-export const V: ViewState = { page: "dash", id: null, tab: null, q: "", status: "open", view: "list", prio: "", dept: "", mq: "", mcat: "", sq: "", period: "12m", sort: "", dir: 1 };
+export const V: ViewState = { page: "dash", id: null, tab: null, q: "", status: "open", view: "list", prio: "", dept: "", mq: "", mcat: "", sq: "", sort: "", dir: 1 };
 
 export function settings(): Settings {
   const s = S.settings ?? DEFAULT_SETTINGS;

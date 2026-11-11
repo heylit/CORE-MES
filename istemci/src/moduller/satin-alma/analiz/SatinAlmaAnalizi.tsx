@@ -15,6 +15,7 @@ import {
   XYZ_ACIKLAMA, ayEtiketi, bayesMetni, gecikmeMetni, guvenlikMetni, gunMetni, harcamaAltMetni, isaretliBirimTl, isaretliYuzde, karneMetni, miktarMetni,
   sureMetni, tahminMetni, tlMetni, yuzdeMetni,
 } from './kurallar.ts';
+import { AylikHarcama, HarcamaDagilimi, TedarikRiski } from './Dagilim.tsx';
 import { FiyatSapmasi, KuralDisiAlim, Ozet, SurecSureleri } from './Olculer.tsx';
 import './analiz.css';
 
@@ -107,6 +108,7 @@ function Rapor({ c }: { c: SatinAlmaAnaliziCevabi }) {
             </p>
           </Kart>
           <KuralDisiAlim c={c} />
+          <TedarikRiski c={c} />
         </>
       )}
       {sekme === 'tuketim' && <Tuketim c={c} />}
@@ -117,14 +119,18 @@ function Rapor({ c }: { c: SatinAlmaAnaliziCevabi }) {
 function Harcama({ c }: { c: SatinAlmaAnaliziCevabi }) {
   const h = c.harcama;
   return (
-    <div className="tc-pano-izgara">
-      <SayiKarti baslik="Harcama (12 ay)" simge="lira" metin={h.toplamTl === null ? 'Veri yok' : tlMetni(h.toplamTl)} altMetin={harcamaAltMetni(h)} />
-      <SayiKarti baslik="Tedarikçi" simge="truck" sayi={c.tedarikciler.length}
-        altMetin={c.firmasizSatir > 0 ? `Firmaya bağlı olmayan ${String(c.firmasizSatir)} sipariş satırı karneye girmez.` : 'Son 24 ayda siparişi olan firmalar.'} />
-      <YatayCubukKarti baslik="En çok harcanan kalemler" simge="chart" yuklendi bicim={(n) => tlMetni(n)}
-        satirlar={h.kalemler.slice(0, 8).map((k) => ({ etiket: `${k.ad} (${k.sinif})`, deger: k.tutarTl }))}
-        alt={`${h.basTarih} - ${h.bitTarih}. A: harcamanın ilk %80'i, B: sonraki %15, C: kalan.`} />
-    </div>
+    <>
+      <div className="tc-pano-izgara">
+        <SayiKarti baslik="Harcama (12 ay)" simge="lira" metin={h.toplamTl === null ? 'Veri yok' : tlMetni(h.toplamTl)} altMetin={harcamaAltMetni(h)} />
+        <SayiKarti baslik="Tedarikçi" simge="truck" sayi={c.tedarikciler.length}
+          altMetin={c.firmasizSatir > 0 ? `Firmaya bağlı olmayan ${String(c.firmasizSatir)} sipariş satırı karneye girmez.` : 'Son 24 ayda siparişi olan firmalar.'} />
+        <YatayCubukKarti baslik="En çok harcanan kalemler" simge="chart" yuklendi bicim={(n) => tlMetni(n)}
+          satirlar={h.kalemler.slice(0, 8).map((k) => ({ etiket: `${k.ad} (${k.sinif})`, deger: k.tutarTl }))}
+          alt={`${h.basTarih} - ${h.bitTarih}. A: harcamanın ilk %80'i, B: sonraki %15, C: kalan.`} />
+        <HarcamaDagilimi c={c} />
+      </div>
+      <AylikHarcama c={c} />
+    </>
   );
 }
 

@@ -7,9 +7,9 @@ import {
   butceKullanimiCevabi, butceKullanimiSorgusu, kgFiyatiEkleGovdesi, kgFiyatiIptalGovdesi, kgFiyatiParametresi, kgFiyatiGecmisiCevabi, kgFiyatiGecmisiSorgusu, kgFiyatlariCevabi, malzemeKgFiyatlariCevabi, malzemeKgFiyatlariSorgusu,
   faturaEslemesiCevabi, faturaEslemesiKaydetGovdesi, faturaEslemesiParametresi,
 } from '#paylasilan/sozlesme/satin-alma.ts';
-import { satinAlmaAnaliziCevabi } from '#paylasilan/sozlesme/satin-alma-analiz.ts';
+import { satinAlmaAnaliziCevabi, satinAlmaSiparisDokumu } from '#paylasilan/sozlesme/satin-alma-analiz.ts';
 import { z } from 'zod';
-import { satinAlmaAnalizi } from './analiz.ts';
+import { satinAlmaAnalizi, siparisDokumu } from './analiz.ts';
 import * as servis from './servis.ts';
 
 const katalogParametresi = z.object({ id: z.guid() });
@@ -42,6 +42,11 @@ export const uclar = [
   uc({
     yontem: 'GET', yol: '/satin-alma-analiz', yetki: { biri: ['satin-alma.oku', 'satin-alma.yaz'] }, cevap: satinAlmaAnaliziCevabi,
     isle: ({ db }) => satinAlmaAnalizi(db),
+  }),
+  // 2477 (2467 a): Raporlar > Sipariş satırları dökümü; Analiz'le aynı yetki.
+  uc({
+    yontem: 'GET', yol: '/satin-alma-analiz/siparis-satirlari', yetki: { biri: ['satin-alma.oku', 'satin-alma.yaz'] }, cevap: satinAlmaSiparisDokumu,
+    isle: ({ db }) => siparisDokumu(db),
   }),
   // Fason süre ve termin grafikleri: dış operasyonlar sayfasıyla aynı yetki.
   uc({
