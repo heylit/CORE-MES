@@ -11,8 +11,14 @@ export function parcaMetni(it: RequestItem): string | null {
 export function uygulananOzeti(r: PurchaseRequest): string | null {
   const nolar = [...new Map((r.items || []).flatMap((it) => (it.parca ? [[it.parca.no, it.parca] as const] : []))).values()];
   if (!nolar.length) return null;
-  return `Uygulanacak: ${parcaAdi(nolar[0]!)}${nolar.length > 1 ? ` +${nolar.length - 1}` : ""}`;
+  return `Uygulanacak malzeme: ${parcaAdi(nolar[0]!)}${nolar.length > 1 ? ` +${nolar.length - 1}` : ""}`;
 }
+// 2875: karşılaştırmada kalemin alt satırı, sipariş bölümünde kalem adının yanında.
+export function parcaAltSatiri(it: RequestItem): string {
+  const t = parcaMetni(it);
+  return t ? `<span class="sub" data-sa-uygulanan="">${esc(t)}</span>` : "";
+}
+export const kalemAdiParcayla = (it: RequestItem): string => (it.parca ? `${it.name} (${parcaAdi(it.parca)})` : it.name);
 export function uygulananSatiri(r: PurchaseRequest, cls: string): string {
   const t = uygulananOzeti(r);
   return t ? `<span class="${cls}" data-sa-uygulanan="">${esc(t)}</span>` : "";

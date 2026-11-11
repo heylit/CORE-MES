@@ -16,7 +16,7 @@ import { viewMaterial, viewMaterials, viewReports, viewSettings, viewSupplier, v
 import { tabSim } from "./sim.ts";
 import { siparisTakibiHTML } from "./takip.ts";
 import { inlineBulkHTML } from "./ui.ts";
-import { kalemBagMetinleri, uygulananSatiri } from "./kalem-bagi.ts";
+import { kalemAdiParcayla, kalemBagMetinleri, parcaAltSatiri, uygulananSatiri } from "./kalem-bagi.ts";
 import { getRole, onaylayabilir, viewApproval, viewApprovals, viewRequesterHome, viewRequestRequester } from "./roles.ts";
 /* ================= render çekirdeği ================= */
 // Ortak parçalarla çizilen ekranlar (iş kutusu, Talepler, talep ayrıntısı; 2412-2) merkezin durumunu her çizimde yeniden okur.
@@ -257,7 +257,7 @@ export function filteredRequests(): PurchaseRequest[] {
   if (V.prio) list = list.filter(r => (r.priority || "normal") === V.prio);
   if (V.dept) list = list.filter(r => norm(r.department) === norm(V.dept));
   const q = norm(V.q);
-  if (q) list = list.filter(r => norm([r.no, r.title, r.department, r.requester, r.uretimEmriNo ?? "", ...(r.items || []).map(i => i.name), ...(r.quotes || []).map(supName)].join(" ")).includes(q));
+  if (q) list = list.filter(r => norm([r.no, r.title, r.department, r.requester, r.uretimEmriNo ?? "", ...(r.items || []).map(i => i.name), ...(r.items || []).flatMap(i => (i.parca ? [i.parca.kod ?? "", i.parca.ad ?? ""] : [])), ...(r.quotes || []).map(supName)].join(" ")).includes(q));
   const po: Record<Priority, number> = { urgent: 0, normal: 1, low: 2 };
   const key = SORTS[V.sort];
   if (key) return list.sort((a, b) => { const x = key(a), y = key(b); return (x < y ? -1 : x > y ? 1 : 0) * V.dir; });
@@ -620,7 +620,7 @@ function matrixHTML(r: PurchaseRequest, ev: Evaluation): string {
   items.forEach(it => {
     const vals = cols.map(x => x.c.lines[it.id] ? x.c.lines[it.id]!.unit * x.c.unitTRY : null);
     const any = vals.find(isNum); const vl = isNum(any) ? vsLast(r, it, any) : null;
-    h += row(`${esc(it.name)}<span class="sub">${numIn(parseNum(it.qty))} ${esc(it.unit)}${vl ? `, son alış ${money(vl.last.unitTRY)}` : ""}</span>`,
+    h += row(`${esc(it.name)}<span class="sub">${numIn(parseNum(it.qty))} ${esc(it.unit)}${vl ? `, son alış ${money(vl.last.unitTRY)}` : ""}</span>${parcaAltSatiri(it)}`,
       cols.map(x => { const l = x.c.lines[it.id]; if (!l) return '<span class="faint">teklif yok</span>'; const d = vsLast(r, it, l.unit * x.c.unitTRY); return `${money(l.unit, x.q.currency)}<span class="sub">${money(l.line, x.q.currency)}${d ? " " + deltaHTML(d.pct) : ""}</span>`; }), vals, "min");
   });
   h += sec("Ticari şartlar");
@@ -775,7 +775,7 @@ export function singleOrderHTML(r: PurchaseRequest, a: Partial<Award>): string {
 /* kalem bazlı kararda her tedarikçiye ayrı sipariş satırı */
 function ordersFormHTML(r: PurchaseRequest, orders: OrderInfo[]): string {
   return `<div class="tw"><table class="itbl rt" id="orders-form"><thead><tr><th>Tedarikçi</th><th>Sipariş no</th><th>Logo / tedarikçi no</th><th>Sipariş tarihi</th><th>Beklenen teslim</th><th></th></tr></thead><tbody>
-  ${orders.map(o => { const ld = parseNum(o.q.leadDays); return `<tr data-order="${o.qid}"><td class="lead"><b>${esc(supName(o.q))}</b><span class="sub">${o.items.map(it => esc(it.name)).join(", ")}${ld !== null ? `, termin ${ld} gün` : ""}</span></td>
+  ${orders.map(o => { const ld = parseNum(o.q.leadDays); return `<tr data-order="${o.qid}"><td class="lead"><b>${esc(supName(o.q))}</b><span class="sub">${o.items.map(it => esc(kalemAdiParcayla(it))).join(", ")}${ld !== null ? `, termin ${ld} gün` : ""}</span></td>
     <td class="num">${o.orderNo ? esc(o.orderNo) : '<span class="muted">sipariş verilince</span>'}${logoRozeti(o.logo)}</td>
     <td><input type="text" data-of="poNo" value="${esc(o.poNo)}"></td>
     <td><input type="date" data-of="orderDate" value="${esc(o.orderDate || todayStr())}"></td>
