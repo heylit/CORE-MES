@@ -145,8 +145,9 @@ a.tc-stok-kpi:hover, a.tc-stok-kpi:focus-visible { background: var(--panel2); }
 .tc-stok-qr-zemin { fill: var(--panel-solid); }
 .tc-stok-qr-kare { fill: var(--ink); }
 @media (max-width: 767px) { .tc-stok-sepet { grid-template-columns: 1fr; } }
+/* Gizleme yalnız fiş ya da komut kartı sayfadayken (stil yüklü kalır, başka sayfaların baskısı boş çıkmasın); :where özgüllüğü body * düzeyinde tutar ki görünür kuralı ezilmesin. */
 @media print {
-  body * { visibility: hidden; }
+  body:where(:has(.tc-stok-yazdir)) * { visibility: hidden; }
   .tc-stok-yazdir, .tc-stok-yazdir * { visibility: visible; }
   .tc-stok-yazdir { position: absolute; inset: 0; }
   .tc-stok-yazdir button { display: none; }

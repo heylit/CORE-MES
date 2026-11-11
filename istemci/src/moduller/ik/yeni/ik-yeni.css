@@ -26,9 +26,9 @@
   .tc-ik-yeni { padding: var(--b-3); }
   .tc-ik-imza { grid-template-columns: 1fr; }
 }
-/* Yazdırmada yalnız belge çıkar. */
+/* Yazdırmada yalnız belge çıkar; gizleme yalnız belge sayfadayken, yoksa stil yüklü kaldığı için başka sayfaların baskısı boş çıkar. :where özgüllüğü body * düzeyinde tutar ki görünür kuralı ezilmesin. */
 @media print {
-  body * { visibility: hidden; }
+  body:where(:has(.tc-ik-belge)) * { visibility: hidden; }
   .tc-ik-belge, .tc-ik-belge * { visibility: visible; }
   .tc-ik-belge { position: absolute; inset: 0; max-width: none; padding: 0; }
 }
