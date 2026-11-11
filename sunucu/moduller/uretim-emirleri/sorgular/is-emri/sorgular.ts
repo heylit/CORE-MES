@@ -13,6 +13,8 @@ export interface IsEmriSatiri {
   makineId: number | null;
   kisiId: number | null;
   fasonFirmaId: number | null;
+  // 2874: fason adım, firması henüz seçilmedi (kaynak ve istasyon boş).
+  fasonFirmasiz: boolean;
   istasyonId: number | null;
   ayarSuresiDk: string | null;
   birimSureDk: string | null;
@@ -39,7 +41,7 @@ export interface IsEmriSatiri {
 }
 
 const IS_EMRI = `i.id, i.uretim_emri_id AS "uretimEmriId", i.sira, i.op_no AS "opNo", i.operasyon_tipi_id AS "operasyonTipiId", i.ad,
-  i.makine_id AS "makineId", i.kisi_id AS "kisiId", i.fason_firma_id AS "fasonFirmaId", i.istasyon_id AS "istasyonId",
+  i.makine_id AS "makineId", i.kisi_id AS "kisiId", i.fason_firma_id AS "fasonFirmaId", i.fason_firmasiz AS "fasonFirmasiz", i.istasyon_id AS "istasyonId",
   i.ayar_suresi_dk::text AS "ayarSuresiDk", i.birim_sure_dk::text AS "birimSureDk", i.termin_gun AS "terminGun", i.bagimlilik,
   i.devir_adedi AS "devirAdedi", i.fire_payi_yuzde::text AS "firePayiYuzde", i.makine_kullanimi AS "makineKullanimi",
   i.en_kucuk_parca AS "enKucukParca", i.yeniden_ayar AS "yenidenAyar", i.talimat_surumu AS "talimatSurumu", i.tur, i.ek_aciklama AS "ekAciklama", i.durum,
@@ -73,7 +75,7 @@ export function isEmriAyrimBilgileri(db: Db, idler: readonly number[]): Promise<
 // Plan için: verilen iş emirlerinden var olanların emir no'su, op no'su, durumu ve fasonda olup olmadığı (silinen iş emri listede yoktur).
 export function isEmriVarliklari(db: Db, idler: readonly number[]): Promise<{ id: number; emirNo: string; opNo: number; durum: string; fason: boolean }[]> {
   return db.sorgu(
-    `SELECT i.id, e.emir_no AS "emirNo", i.op_no AS "opNo", i.durum, i.fason_firma_id IS NOT NULL AS fason
+    `SELECT i.id, e.emir_no AS "emirNo", i.op_no AS "opNo", i.durum, (i.fason_firma_id IS NOT NULL OR i.fason_firmasiz) AS fason
        FROM uretim_emirleri_is_emri i JOIN uretim_emri e ON e.id = i.uretim_emri_id WHERE i.id = ANY($1::int[])`,
     [[...idler]],
   );
@@ -135,7 +137,7 @@ export function planlanacakIsEmirleriGetir(db: Db, taslakDahil: boolean): Promis
               'baslamis', EXISTS (SELECT 1 FROM uretim_emirleri_is_emri b WHERE b.uretim_emri_id = e.id AND b.durum <> 'bekliyor')) AS emir
        FROM uretim_emirleri_is_emri i JOIN uretim_emri e ON e.id = i.uretim_emri_id
       WHERE NOT e.arsiv AND e.malzeme_no IS NOT NULL AND (e.durum IN ('planli', 'basladi') OR ($1 AND e.durum = 'taslak'))
-        AND i.durum <> 'tamam' AND i.fason_firma_id IS NULL
+        AND i.durum <> 'tamam' AND i.fason_firma_id IS NULL AND NOT i.fason_firmasiz
       ORDER BY e.id, i.sira`,
     [taslakDahil],
   );
@@ -149,6 +151,8 @@ export interface IsEmriYazisi {
   makineId: number | null;
   kisiId: number | null;
   fasonFirmaId: number | null;
+  // 2874: fason adım, firması henüz seçilmedi (kaynak ve istasyon boş).
+  fasonFirmasiz?: boolean;
   istasyonId: number | null;
   ayarSuresiDk: string | null;
   birimSureDk: string | null;
@@ -169,15 +173,15 @@ export interface IsEmriYazisi {
 
 const IS_EMRI_DEGERLERI = (y: IsEmriYazisi) => [
   y.sira, y.opNo, y.operasyonTipiId, y.ad, y.makineId, y.kisiId, y.fasonFirmaId, y.istasyonId, y.ayarSuresiDk, y.birimSureDk, y.terminGun,
-  y.bagimlilik, y.devirAdedi, y.firePayiYuzde, y.makineKullanimi, y.enKucukParca, y.yenidenAyar, y.talimatSurumu,
+  y.bagimlilik, y.devirAdedi, y.firePayiYuzde, y.makineKullanimi, y.enKucukParca, y.yenidenAyar, y.talimatSurumu, y.fasonFirmasiz ?? false,
 ];
 
 export async function isEmriEkle(db: Db, emirId: number, y: IsEmriYazisi): Promise<number> {
   const satir = await db.tek<{ id: number }>(
     `INSERT INTO uretim_emirleri_is_emri (uretim_emri_id, sira, op_no, operasyon_tipi_id, ad, makine_id, kisi_id, fason_firma_id, istasyon_id,
        ayar_suresi_dk, birim_sure_dk, termin_gun, bagimlilik, devir_adedi, fire_payi_yuzde, makine_kullanimi, en_kucuk_parca, yeniden_ayar,
-       talimat_surumu, tur, ek_aciklama, dugum, dugum_malzeme_id, kaynak_op_no, birim_carpani)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25::numeric) RETURNING id`,
+       talimat_surumu, fason_firmasiz, tur, ek_aciklama, dugum, dugum_malzeme_id, kaynak_op_no, birim_carpani)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26::numeric) RETURNING id`,
     [emirId, ...IS_EMRI_DEGERLERI(y), y.tur ?? 'rota', y.ekAciklama ?? null,
       y.dugum?.ad ?? null, y.dugum?.malzemeNo ?? null, y.dugum?.kaynakOpNo ?? null, y.dugum?.birimCarpani ?? null],
   );
@@ -215,12 +219,14 @@ export async function isaretliListeVar(db: Db, isEmriId: number): Promise<boolea
   return satir?.var === true;
 }
 
-// Yalnız bekleyen iş emri güncellenir; adayları ve bileşenleri yeniden yazılır (çağıran ekler).
+// Yalnız bekleyen iş emri güncellenir; adayları ve bileşenleri yeniden yazılır (çağıran ekler). Rota adımı hâlâ firmasızken emirde
+// seçilmiş firma silinmez (2874).
 export async function bekleyenIsEmriniGuncelle(db: Db, id: number, y: IsEmriYazisi): Promise<void> {
   await db.sorgu(
     `UPDATE uretim_emirleri_is_emri SET sira = $2, op_no = $3, operasyon_tipi_id = $4, ad = $5, makine_id = $6, kisi_id = $7,
-            fason_firma_id = $8, istasyon_id = $9, ayar_suresi_dk = $10, birim_sure_dk = $11, termin_gun = $12, bagimlilik = $13,
-            devir_adedi = $14, fire_payi_yuzde = $15, makine_kullanimi = $16, en_kucuk_parca = $17, yeniden_ayar = $18, talimat_surumu = $19,
+            fason_firma_id = CASE WHEN $20 AND fason_firma_id IS NOT NULL THEN fason_firma_id ELSE $8 END, istasyon_id = $9, ayar_suresi_dk = $10,
+            birim_sure_dk = $11, termin_gun = $12, bagimlilik = $13, devir_adedi = $14, fire_payi_yuzde = $15, makine_kullanimi = $16,
+            en_kucuk_parca = $17, yeniden_ayar = $18, talimat_surumu = $19, fason_firmasiz = $20 AND fason_firma_id IS NULL,
             surum = surum + 1
       WHERE id = $1 AND durum = 'bekliyor'`,
     [id, ...IS_EMRI_DEGERLERI(y)],
@@ -295,7 +301,7 @@ export function isEmriKaynagiYaz(
     `UPDATE uretim_emirleri_is_emri SET makine_id = $2, kisi_id = $3, istasyon_id = $4, surum = surum + 1,
             ayar_suresi_dk = CASE WHEN $6::boolean THEN $7::numeric ELSE ayar_suresi_dk END,
             birim_sure_dk = CASE WHEN $6::boolean THEN $8::numeric ELSE birim_sure_dk END
-      WHERE id = $1 AND durum = 'bekliyor' AND fason_firma_id IS NULL AND ($5::int IS NULL OR surum = $5) RETURNING id`,
+      WHERE id = $1 AND durum = 'bekliyor' AND fason_firma_id IS NULL AND NOT fason_firmasiz AND ($5::int IS NULL OR surum = $5) RETURNING id`,
     [id, k.makineId, k.kisiId, k.istasyonId, surum, sure !== null, sure?.ayarSuresiDk ?? null, sure?.birimSureDk ?? null],
   );
 }
@@ -317,7 +323,7 @@ export interface UretimYeriYazisi {
 export function uretimYeriYaz(db: Db, id: number, y: UretimYeriYazisi): Promise<{ id: number } | null> {
   return db.tek(
     `UPDATE uretim_emirleri_is_emri i SET makine_id = $2, kisi_id = $3, fason_firma_id = $4, istasyon_id = $5, ayar_suresi_dk = $6,
-            birim_sure_dk = $7, termin_gun = $8, surum = surum + 1
+            birim_sure_dk = $7, termin_gun = $8, fason_firmasiz = false, surum = surum + 1
       WHERE i.id = $1 AND i.durum = 'bekliyor' AND NOT EXISTS (SELECT 1 FROM uretim_emirleri_fason_hareketi f WHERE f.is_emri_id = i.id)
       RETURNING i.id`,
     [id, y.makineId, y.kisiId, y.fasonFirmaId, y.istasyonId, y.ayarSuresiDk, y.birimSureDk, y.terminGun],
@@ -329,12 +335,13 @@ export interface UretimYeriDegisimiSatiri {
   eskiMakineId: number | null; eskiKisiId: number | null; eskiFasonFirmaId: number | null; eskiIstasyonId: number | null;
   eskiAyarSuresiDk: string | null; eskiBirimSureDk: string | null; eskiTerminGun: number | null;
   yeniFasonFirmaId: number | null; yeniTerminGun: number | null; kisiId: number; zaman: string;
+  eskiFasonFirmasiz: boolean;
 }
 
 const URETIM_YERI = `d.id, d.is_emri_id AS "isEmriId", d.eski_makine_id AS "eskiMakineId", d.eski_kisi_id AS "eskiKisiId",
   d.eski_fason_firma_id AS "eskiFasonFirmaId", d.eski_istasyon_id AS "eskiIstasyonId", d.eski_ayar_suresi_dk::text AS "eskiAyarSuresiDk",
   d.eski_birim_sure_dk::text AS "eskiBirimSureDk", d.eski_termin_gun AS "eskiTerminGun", d.yeni_fason_firma_id AS "yeniFasonFirmaId",
-  d.yeni_termin_gun AS "yeniTerminGun", d.kisi_id AS "kisiId", ${ISO('d.zaman')} AS zaman`;
+  d.yeni_termin_gun AS "yeniTerminGun", d.kisi_id AS "kisiId", ${ISO('d.zaman')} AS zaman, d.eski_fason_firmasiz AS "eskiFasonFirmasiz"`;
 
 // İş emri başına değişimler, eskiden yeniye.
 export function uretimYeriDegisimleriGetir(db: Db, isEmriIdleri: readonly number[]): Promise<UretimYeriDegisimiSatiri[]> {
@@ -346,13 +353,14 @@ export function uretimYeriDegisimleriGetir(db: Db, isEmriIdleri: readonly number
 
 export async function uretimYeriDegisimiEkle(
   db: Db, isEmriId: number, eski: UretimYeriYazisi, yeni: { fasonFirmaId: number | null; terminGun: number | null }, kisiId: number, an: string,
+  eskiFirmasiz = false,
 ): Promise<void> {
   await db.sorgu(
     `INSERT INTO uretim_emirleri_uretim_yeri_degisimi (is_emri_id, eski_makine_id, eski_kisi_id, eski_fason_firma_id, eski_istasyon_id,
-       eski_ayar_suresi_dk, eski_birim_sure_dk, eski_termin_gun, yeni_fason_firma_id, yeni_termin_gun, kisi_id, zaman)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12::timestamptz)`,
+       eski_ayar_suresi_dk, eski_birim_sure_dk, eski_termin_gun, yeni_fason_firma_id, yeni_termin_gun, kisi_id, zaman, eski_fason_firmasiz)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12::timestamptz, $13)`,
     [isEmriId, eski.makineId, eski.kisiId, eski.fasonFirmaId, eski.istasyonId, eski.ayarSuresiDk, eski.birimSureDk, eski.terminGun,
-      yeni.fasonFirmaId, yeni.terminGun, kisiId, an],
+      yeni.fasonFirmaId, yeni.terminGun, kisiId, an, eskiFirmasiz],
   );
 }
 
@@ -360,7 +368,7 @@ export async function uretimYeriDegisimiEkle(
 export function kisiAdimiIstasyonunuYaz(db: Db, id: number, istasyonId: number): Promise<{ id: number } | null> {
   return db.tek(
     `UPDATE uretim_emirleri_is_emri SET istasyon_id = $2, surum = surum + 1
-      WHERE id = $1 AND durum = 'bekliyor' AND istasyon_id IS NULL AND kisi_id IS NOT NULL AND makine_id IS NULL AND fason_firma_id IS NULL
+      WHERE id = $1 AND durum = 'bekliyor' AND istasyon_id IS NULL AND kisi_id IS NOT NULL AND makine_id IS NULL AND fason_firma_id IS NULL AND NOT fason_firmasiz
       RETURNING id`,
     [id, istasyonId],
   );
@@ -420,7 +428,7 @@ export function fasonIsEmirleri(db: Db): Promise<FasonIsEmri[]> {
          (sum(f.adet) FILTER (WHERE f.yon = 'donus'))::int AS donen, (sum(f.hurda_adet) FILTER (WHERE f.yon = 'donus'))::int AS hurda
        FROM uretim_emirleri_fason_hareketi f WHERE f.is_emri_id = i.id
      ) h ON true
-     WHERE i.fason_firma_id IS NOT NULL AND i.durum <> 'tamam' AND e.durum NOT IN ('iptal', 'bitti') AND NOT e.arsiv
+     WHERE (i.fason_firma_id IS NOT NULL OR i.fason_firmasiz) AND i.durum <> 'tamam' AND e.durum NOT IN ('iptal', 'bitti') AND NOT e.arsiv
      ORDER BY e.id, i.sira`,
   );
 }

@@ -1100,7 +1100,7 @@ describe('rotalar (gerçek PostgreSQL)', () => {
     assert.deepEqual([ba.adimlar[1]?.terminGun, ba.ozet.fasonTerminGunu], [null, null]);
   });
 
-  test('RT-82 (2681, 2682 a): firması seçilmemiş fason adım kaydedilir, onaya gider ve revizyonla kopyalanır; emre kopyalanmaz', async () => {
+  test('RT-82 (2681, 2682 a, 2874): firması seçilmemiş fason adım kaydedilir, onaya gider, revizyonla kopyalanır ve emre firmasız gelir', async () => {
     const urun = await mamulAc();
     const { id } = (await taslakAc(urun)).json<KomutCevabi>();
     const firmasiz = (p: Partial<AdimGirdisi> = {}) =>
@@ -1134,19 +1134,22 @@ describe('rotalar (gerçek PostgreSQL)', () => {
     // Veri V1: revizyondan açılan taslak bayrağı taşır.
     const b = (await taslakAc(urun, { tur: 'revizyon', revizyonId: id })).json<KomutCevabi>().id;
     assert.deepEqual((await ayrinti(b)).adimlar[1]?.kaynak, { tur: 'fason', id: null });
-    // Mimar K3: emre kopya alanıyla ve OP numarasıyla reddedilir; iş emri açılmaz.
-    const once = (await vt().tx((db) => db.tek<{ n: number }>('SELECT count(*)::int AS n FROM uretim_emirleri_is_emri')))!.n;
+    // 2874: emir firmasız da açılır; adım firmasız fason iş emri olur (kaynak, istasyon ve süre boş, termin rotadaki).
     for (const cokKatmanli of [false, true]) {
-      const red = await istek(c.planlama, 'POST', `/rota/revizyonlar/${id}/emre-kopyala`, { projeId: denemeProjeId, adet: 2, teslim: null, cokKatmanli });
-      assert.equal(red.statusCode, 400, red.body);
-      const govde = red.json<{ alan: string; ayrinti: { opNo: number }; mesaj?: string }>();
-      assert.deepEqual([govde.alan, govde.ayrinti], ['adimlar.1.kaynak', { opNo: a.adimlar[1]!.opNo }]);
-      assert.match(red.body, /fason firma seçilmedi/);
+      const k = await istek(c.planlama, 'POST', `/rota/revizyonlar/${id}/emre-kopyala`, { projeId: denemeProjeId, adet: 2, teslim: null, cokKatmanli });
+      assert.equal(k.statusCode, 200, k.body);
+      const emir = k.json<{ uretimEmriId: number }>().uretimEmriId;
+      const satir = await vt().tx((db) => db.tek<{ f: boolean; firma: number | null; makine: number | null; istasyon: number | null; termin: number | null }>(
+        `SELECT fason_firmasiz AS f, fason_firma_id AS firma, makine_id AS makine, istasyon_id AS istasyon, termin_gun AS termin
+           FROM uretim_emirleri_is_emri WHERE uretim_emri_id = $1 AND op_no = $2`, [emir, a.adimlar[1]!.opNo]));
+      assert.deepEqual(satir, { f: true, firma: null, makine: null, istasyon: null, termin: 5 });
+      const e = await vt().tx((db) => adimliEmirAyrintisi(db, emir));
+      const adim = e.isEmirleri.find((i) => i.opNo === a.adimlar[1]!.opNo);
+      assert.deepEqual([adim?.fasonFirmasiz, adim?.kaynak, adim?.fason?.gonderilen], [true, null, 0]);
     }
-    assert.equal((await vt().tx((db) => db.tek<{ n: number }>('SELECT count(*)::int AS n FROM uretim_emirleri_is_emri')))!.n, once);
-    // Önizleme düğümleri çizer, emri engel olarak gösterir.
+    // Önizleme artık engel göstermez.
     const on = await tamam<{ engel: string | null; dugumler: unknown[] }>(c.planlama, 'GET', `/rota/revizyonlar/${id}/patlatma-onizleme`);
-    assert.match(on.engel ?? '', /fason firma seçilmedi/);
+    assert.equal(on.engel, null);
   });
 
   test('RT-65: yeni kayıt açan komutlar (taslak aç, kopyala) istek kimliği ister; aynı kimlikle yinelenen istek ikinci kayıt açmaz', async () => {
@@ -1428,19 +1431,19 @@ describe('rotalar (gerçek PostgreSQL)', () => {
     assert.equal(e.kaynakRotaRevizyonId, b);
     assert.equal(e.isEmirleri.length, 3);
   });
-  test('RT-82 (2681, Mimar notu): firmasız fason adımlı yürürlükteki rota açık emre uygulanmaz; emir eski revizyonunda kalır', async () => {
+  test('RT-82 (2874): firmasız fason adımlı yürürlükteki rota açık emre uygulanır; yeni adım firmasız fason gelir', async () => {
     const urun = await mamulAc();
     const a = await yururlugeAlinmisRota(urun, [yeniAdim(), yeniAdim()]);
     const k = await istek(c.planlama, 'POST', `/rota/revizyonlar/${a}/emre-kopyala`, { projeId: denemeProjeId, adet: 5, teslim: null });
     assert.equal(k.statusCode, 200, k.body);
     const emir = k.json<{ uretimEmriId: number }>().uretimEmriId;
-    await yururlugeAlinmisRota(urun, [yeniAdim(), yeniAdim({ ad: 'Kaplama', kaynak: { tur: 'fason', id: null }, ayarSuresiDk: null, birimSureDk: null, terminGun: 3 })]);
-    const red = await istek(c.planlama, 'POST', `/rota/emirler/${emir}/yururlukteki-rotayi-uygula`, {});
-    assert.equal(red.statusCode, 400, red.body);
-    assert.deepEqual(red.json<{ alan: string }>().alan, 'adimlar.1.kaynak');
-    assert.match(red.body, /fason firma seçilmedi/);
+    const b = await yururlugeAlinmisRota(urun, [yeniAdim(), yeniAdim(), yeniAdim({ ad: 'Kaplama', kaynak: { tur: 'fason', id: null }, ayarSuresiDk: null, birimSureDk: null, terminGun: 3 })]);
+    const u = await istek(c.planlama, 'POST', `/rota/emirler/${emir}/yururlukteki-rotayi-uygula`, {});
+    assert.equal(u.statusCode, 200, u.body);
     const e = await vt().tx((db) => adimliEmirAyrintisi(db, emir));
-    assert.deepEqual([e.kaynakRotaRevizyonId, e.isEmirleri.length], [a, 2]);
+    assert.equal(e.kaynakRotaRevizyonId, b);
+    const son = e.isEmirleri.at(-1);
+    assert.deepEqual([e.isEmirleri.length, son?.fasonFirmasiz, son?.kaynak, son?.istasyon, son?.terminGun], [3, true, null, null, 3]);
   });
   test('#1185: emir yalnız yürürlükteki revizyondan açılır; onaylı ama yürürlükte olmayan revizyon reddedilir, yürürlükteki kabul edilir', async () => {
     const urun = await mamulAc();

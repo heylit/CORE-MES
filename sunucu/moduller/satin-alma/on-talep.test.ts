@@ -262,4 +262,22 @@ describe('satin-alma fason ön talep (898 a, gerçek PostgreSQL)', () => {
     const kutu = (await sahip.tek<{ id: number }>("INSERT INTO stok_konum (depo_id, kod, tur, ad, firma_id) VALUES ($1, 'FSN-D2426', 'fason', 'Deneme fason', $2) RETURNING id", [depo, firmaId]))!.id;
     assert.equal((await satir()).fasonKonumId, kutu);
   });
+
+  test('2874: firması seçilmemiş fason adım ön talepte ve dış operasyonlarda "firma bekleniyor" olarak görünür; firma uydurulmaz', async () => {
+    const sahip = ortam!.sahip;
+    const e = (await sahip.tek<{ id: number }>(
+      `INSERT INTO uretim_emri (parca_no, parca_ad, adet, istasyon_id, acan_id, durum, malzeme_no, teslim)
+       VALUES ('P-OT', 'Deneme parça', 12, $1, $2, 'planli', $3, '2026-12-01') RETURNING id`, [istasyonId, yoneticiId, parcaNo]))!;
+    const ie = (await sahip.tek<{ id: number }>(
+      "INSERT INTO uretim_emirleri_is_emri (uretim_emri_id, sira, op_no, operasyon_tipi_id, ad, fason_firmasiz) VALUES ($1, 1, 30, $2, 'Firmasız fason', true) RETURNING id",
+      [e.id, tipId]))!;
+    const ot = (await onTalepler()).onTalepler.find((x) => x.isEmriId === ie.id);
+    assert.deepEqual(ot && [ot.firmaAdi, ot.firmaBekleniyor, ot.terminGun, ot.gerekenTarih], [null, true, null, '2026-12-01']);
+    assert.equal((await onTalepler()).onTalepler.find((x) => x.isEmriId === acik)?.firmaBekleniyor, undefined, 'firmalı satırda alan yok');
+    const d = await istek(cerezYonetici, 'GET', '/satin-alma-dis-operasyonlar');
+    assert.equal(d.statusCode, 200, d.body);
+    const satir = (d.json() as DisOperasyonlarCevabi).operasyonlar.find((x) => x.isEmriId === ie.id);
+    assert.deepEqual(satir && [satir.firmaId, satir.firmaAdi, satir.firmaBekleniyor, satir.fasonKonumId], [null, null, true, null]);
+    await sahip.sorgu("UPDATE uretim_emri SET durum = 'iptal', iptal = now() WHERE id = $1", [e.id]);
+  });
 });

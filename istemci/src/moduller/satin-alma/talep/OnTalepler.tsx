@@ -85,7 +85,7 @@ function Satir({ o, secili, sec, cevir, yoksay, bugun }: {
         <div className="sa-ot-bilgi">
           <span><Simge ad="building" boyut="k" /> <span className="sa-talep-no">{o.emirNo}</span> · Op {o.opNo}</span>
           <span>Parça: {o.parca ? `${o.parca.kod} ${o.parca.ad}` : (o.urun ?? '—')}</span>
-          <span>Firma: {o.firmaAdi ?? 'rotada yok'}</span>
+          <span>Firma: {o.firmaBekleniyor === true ? 'bekleniyor (siparişte seçilir)' : (o.firmaAdi ?? 'rotada yok')}</span>
           {o.terminGun !== null && <span>Firma süresi ~{o.terminGun} gün</span>}
         </div>
       </div>

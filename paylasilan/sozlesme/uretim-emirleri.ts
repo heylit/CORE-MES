@@ -535,6 +535,8 @@ const fasonAdedi = (ad: string) => z.number().int(`${ad} tam sayı olmalı.`).no
 export const siradakiFasonCevabi = z.object({
   fason: z.object({
     uretimEmriId: KIMLIK, emirNo: z.string(), isEmriId: KIMLIK, opNo: z.number().int(), ad: z.string(), firma: z.string().nullable(),
+    // 2874: sıradaki fason adımın firması seçilmedi; gönderim satın alma firmayı seçince açılır. İsteğe bağlı: sunucu her zaman yazar.
+    firmaBekleniyor: z.boolean().optional(),
     gonderilen: z.number().int().nonnegative(), donenSaglam: z.number().int().nonnegative(), donenHurda: z.number().int().nonnegative(),
     gonderilebilir: z.number().int(),
   }).nullable(),
@@ -593,6 +595,8 @@ export const isEmriSemasi = z.object({
   // İsteğe bağlı: sunucu her zaman yazar, bu alandan önce yazılmış istemci verisi geçerli kalır.
   tur: z.enum(IS_EMRI_TURLERI).optional(),
   ekAciklama: z.string().nullable().optional(),
+  // 2874: fason adım, firması henüz seçilmedi (kaynak boş). İsteğe bağlı: sunucu her zaman yazar.
+  fasonFirmasiz: z.boolean().optional(),
   kaynak: isEmriKaynagi.nullable(),
   istasyon: kodluKayit.nullable(),
   ayarSuresiDk: ondalikMetinSemasi.nullable(),

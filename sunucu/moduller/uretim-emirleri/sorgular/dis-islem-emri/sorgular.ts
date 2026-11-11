@@ -145,9 +145,10 @@ export function dieIptal(db: Db, id: number, kisiId: number, surum: number): Pro
 }
 
 // Elle açmada adımın emir ve kaynak bilgisi; kilit sırası emir, sonra iş emri (terminal komutlarıyla aynı).
-export function isEmriFasonBilgisi(db: Db, isEmriId: number): Promise<{ id: number; uretimEmriId: number; fasonFirmaId: number | null } | null> {
+export function isEmriFasonBilgisi(db: Db, isEmriId: number): Promise<{ id: number; uretimEmriId: number; fasonFirmaId: number | null; fasonFirmasiz: boolean } | null> {
   return db.tek(
-    'SELECT i.id, i.uretim_emri_id AS "uretimEmriId", i.fason_firma_id AS "fasonFirmaId" FROM uretim_emirleri_is_emri i WHERE i.id = $1',
+    `SELECT i.id, i.uretim_emri_id AS "uretimEmriId", i.fason_firma_id AS "fasonFirmaId", i.fason_firmasiz AS "fasonFirmasiz"
+       FROM uretim_emirleri_is_emri i WHERE i.id = $1`,
     [isEmriId],
   );
 }

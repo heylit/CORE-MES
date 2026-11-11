@@ -221,6 +221,7 @@ export function baslatanIstasyonuGerekirMi(a: { durum: IsEmriDurumu; kisiId: num
 export const IS_EMIRSIZ = 'Üretim emrinde en az bir iş emri olmalı.';
 export const OP_YINELENDI = 'Aynı operasyon numarası iki iş emrinde olamaz.';
 export const SIRA_YINELENDI = 'Aynı sıra iki iş emrinde olamaz.';
+export const FIRMASIZ_KAYNAKLI = 'Firması seçilmemiş fason adımın kaynağı olmaz.';
 export const FASON_TERMINSIZ = 'Fason iş emrinin termin günü olmalı; süresi olmaz.';
 export const TERMIN_FASON_DISI = 'Termin günü yalnız fason iş emrinde olur.';
 export const DEVIR_TUTARSIZ = 'Devir adedi yalnız akışlı iş emrinde ve sıfırdan büyük olur.';
@@ -245,6 +246,9 @@ export const ONCELIK_BASLAMIS = 'Yalnız başlamamış (taslak ya da planlı) em
 export const KAYNAK_BEKLEYENDE = 'Yalnız bekleyen iş emrinin kaynağı değişir.';
 export const FASON_KAYNAGI_SABIT = 'Fason iş emrinin kaynağı rotadan gelir; plan ya da ekran makine ya da kişi atayamaz.';
 export const KAYNAK_YOK = 'Kaynak bulunamadı ya da pasif.';
+// 2874: firması seçilmemiş fason adım da fasondur (operatörle başlamaz, planda iç adım sayılmaz); gidiş, dönüş ve belge firma ister.
+export const fasonMu = (a: { fasonFirmaId: number | null; fasonFirmasiz?: boolean }): boolean => a.fasonFirmaId !== null || a.fasonFirmasiz === true;
+export const FASON_FIRMA_BEKLENIYOR = 'Firma bekleniyor: bu fason adımın firması seçilmeden gidiş, dönüş ve dış işlem emri yazılmaz.';
 export const FASON_DEGIL = 'Bu iş emri fason değil; gidiş ve dönüş yalnız fason iş emrinde yazılır.';
 export const FASON_SIRASI_DEGIL = 'Önceki iş emirleri bitmeden fasona gönderilmez.';
 export const FASON_BITTI = 'Bu fason iş emri tamamlandı; gidiş ve dönüş yazılmaz.';
@@ -301,6 +305,8 @@ export interface IsEmriGirdisiOzeti {
   sira: number;
   opNo: number;
   kaynakTuru: IsEmriKaynakTuru | null;
+  // 2874: firması seçilmemiş fason adım; kaynağı boştur.
+  fasonFirmasiz?: boolean;
   ayarSuresiDk: string | null;
   birimSureDk: string | null;
   terminGun: number | null;
@@ -314,7 +320,11 @@ export function isEmirleriIhlali(isEmirleri: readonly IsEmriGirdisiOzeti[]): str
   if (new Set(isEmirleri.map((i) => i.opNo)).size !== isEmirleri.length) return OP_YINELENDI;
   if (new Set(isEmirleri.map((i) => i.sira)).size !== isEmirleri.length) return SIRA_YINELENDI;
   for (const i of isEmirleri) {
-    if (i.kaynakTuru === 'fason') {
+    if (i.fasonFirmasiz === true) {
+      // Firmasız adımın termini isteğe bağlıdır (rotadaki gibi); boşsa plan varsayılan süreyi kullanır.
+      if (i.kaynakTuru !== null) return FIRMASIZ_KAYNAKLI;
+      if (i.ayarSuresiDk !== null || i.birimSureDk !== null) return FASON_TERMINSIZ;
+    } else if (i.kaynakTuru === 'fason') {
       if (i.terminGun === null || i.ayarSuresiDk !== null || i.birimSureDk !== null) return FASON_TERMINSIZ;
     } else if (i.terminGun !== null) {
       return TERMIN_FASON_DISI;
@@ -479,10 +489,13 @@ export interface FasonDurumu {
   gonderilebilir: number;
   // 1207 c: arkadaki GKK adımında Firmada hurda ya da Firmadan gelmedi diye hatalı sayılan; dönmemiş ama hesabı kapanmış adet.
   firmadaHatali?: number;
+  // 2874: fason ama firması seçilmedi.
+  firmaBekleniyor?: boolean;
 }
 
 function fasonOrtak(f: FasonDurumu): string | null {
   if (!f.fason) return FASON_DEGIL;
+  if (f.firmaBekleniyor === true) return FASON_FIRMA_BEKLENIYOR;
   if (f.durum === 'tamam') return FASON_BITTI;
   return f.siradaki ? null : FASON_SIRASI_DEGIL;
 }
@@ -1051,7 +1064,7 @@ const GUN_MS = 24 * 60 * 60_000;
 // bekleyeni bekler. Listesi olmayan eski emirde zincir sıradır.
 export function fasonBeklemesi(
   emrinIsEmirleri: readonly {
-    id?: number; sira: number; fasonFirmaId: number | null; terminGun: number | null; durum: string; baslama?: string | null; tur?: string;
+    id?: number; sira: number; fasonFirmaId: number | null; fasonFirmasiz?: boolean; terminGun: number | null; durum: string; baslama?: string | null; tur?: string;
     ekAciklama?: string | null; onculler?: readonly { id: number }[] | null;
   }[], sira: number,
   tahmin: (x: { sira: number; fasonFirmaId: number }) => number | null = () => null, simdi?: number,
@@ -1060,9 +1073,9 @@ export function fasonBeklemesi(
   const bekleme = (a: Pick<Adim, 'sira' | 'onculler'>): number => Math.max(0, ...adetOnculleri(emrinIsEmirleri, a).map((x) => {
     // Otomatik GKK plana girmez (süresiz, kaynaksız): fasonun beklemesi arkasındaki adıma geçer.
     if (x.tur !== undefined && otomatikGkkMi({ tur: x.tur, ekAciklama: x.ekAciklama ?? null })) return bekleme(x);
-    if (x.fasonFirmaId === null) return 0;
+    if (!fasonMu(x)) return 0;
     if (x.durum === 'tamam') return bekleme(x);
-    const sure = x.terminGun ?? tahmin({ sira: x.sira, fasonFirmaId: x.fasonFirmaId }) ?? FASON_VARSAYILAN_GUN;
+    const sure = x.terminGun ?? (x.fasonFirmaId === null ? null : tahmin({ sira: x.sira, fasonFirmaId: x.fasonFirmaId })) ?? FASON_VARSAYILAN_GUN;
     const gecen = simdi !== undefined && x.baslama ? Math.max(0, (simdi - Date.parse(x.baslama)) / GUN_MS) : 0;
     return Math.max(0, sure - gecen) + bekleme(x);
   }));
@@ -1238,8 +1251,8 @@ export function fasonSirasindaMi<T extends OnculluAdim & { durum: IsEmriDurumu }
 }
 
 // Okutulan emrin gidişe sırası gelmiş ilk fason adımı (sıra numarasıyla); yoksa null.
-export function siradakiFasonAdimi<T extends OnculluAdim & { durum: IsEmriDurumu; fasonFirmaId: number | null }>(adimlar: readonly T[]): T | null {
-  return [...adimlar].sort((a, b) => a.sira - b.sira).find((a) => a.fasonFirmaId !== null && fasonSirasindaMi(adimlar, a)) ?? null;
+export function siradakiFasonAdimi<T extends OnculluAdim & { durum: IsEmriDurumu; fasonFirmaId: number | null; fasonFirmasiz?: boolean }>(adimlar: readonly T[]): T | null {
+  return [...adimlar].sort((a, b) => a.sira - b.sira).find((a) => fasonMu(a) && fasonSirasindaMi(adimlar, a)) ?? null;
 }
 
 export const ONCUL_GECERSIZ = 'Öncül adım aynı emirde, kendinden önce gelen bir op olmalı; akışlı öncülün devir adedi artı, bekleyenin boş olur.';
@@ -1327,8 +1340,8 @@ export function oncekiParalelAdim<T extends ParalelAdim>(adimlar: readonly T[], 
 
 // Komutun adımı verilmezse: terminalde açık (çalışan ya da duraklamış) adım tekse odur, yoksa sıradaki; birden çoksa adım sorulur.
 // Fasondaki adım terminal komutu almaz, açık sayılmaz.
-export function varsayilanAdim<T extends ParalelAdim & { fasonFirmaId: number | null }>(adimlar: readonly T[]): T | null | typeof ADIM_SECILMELI {
-  const acik = adimlar.filter((a) => a.durum === 'calisiyor' && a.fasonFirmaId === null);
+export function varsayilanAdim<T extends ParalelAdim & { fasonFirmaId: number | null; fasonFirmasiz?: boolean }>(adimlar: readonly T[]): T | null | typeof ADIM_SECILMELI {
+  const acik = adimlar.filter((a) => a.durum === 'calisiyor' && !fasonMu(a));
   if (acik.length > 1) return ADIM_SECILMELI;
   return acik[0] ?? siradakiIsEmri(adimlar);
 }
@@ -1357,11 +1370,11 @@ export function siraDisiBaslatmaUyarisi<T extends ParalelAdim>(adimlar: readonly
 
 // Kuralı tutan, şimdi başlatılabilecek adımlar: bekleyen, istasyonlu ve fason olmayan; sıra dışı uyarısı vermeyenler.
 // oncekiSaglam(adim, oncul): adımın o öncülünden gelen sağlam.
-export function baslatilabilirAdimlar<T extends ParalelAdim & { istasyonId: number | null; fasonFirmaId: number | null }>(
+export function baslatilabilirAdimlar<T extends ParalelAdim & { istasyonId: number | null; fasonFirmaId: number | null; fasonFirmasiz?: boolean }>(
   adimlar: readonly T[], oncekiSaglam: (adim: T, oncul: T) => number,
 ): number[] {
   return adimlar
-    .filter((a) => a.durum === 'bekliyor' && a.istasyonId !== null && a.fasonFirmaId === null)
+    .filter((a) => a.durum === 'bekliyor' && a.istasyonId !== null && !fasonMu(a))
     .filter((a) => siraDisiBaslatmaUyarisi(adimlar, a, (o) => oncekiSaglam(a, o)) === null)
     .map((a) => a.id);
 }

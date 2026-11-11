@@ -1745,6 +1745,46 @@ describe('satin-alma sürüm 6 (gerçek PostgreSQL)', () => {
     assert.equal(await ortam!.sahip.tek('SELECT id FROM uretim_emirleri_is_emri WHERE id = $1', [ie]), null);
   });
 
+  // Firma adları "deneme" geçmez: SAT-41 firma araması "deneme" ile yalnız fikstür firmalarını bekler.
+  test('2874-1 a: sipariş verilince firması seçilmemiş fason adıma siparişin tedarikçisi yazılır; fason işaretsiz tedarikçiyle sipariş durur', async () => {
+    const emir = await emirAc();
+    // İş emirli (adımlı) emir mamul kartı taşır.
+    await ortam!.sahip.sorgu('UPDATE uretim_emri SET malzeme_no = (SELECT min(no) FROM malzeme_katalog_karti) WHERE id = $1', [emir]);
+    const tip = (await ortam!.sahip.tek<{ id: number }>('SELECT id FROM istasyonlar_operasyon_tipi ORDER BY id LIMIT 1'))!.id;
+    const ie = (await ortam!.sahip.tek<{ id: number }>(
+      "INSERT INTO uretim_emirleri_is_emri (uretim_emri_id, sira, op_no, operasyon_tipi_id, ad, fason_firmasiz, termin_gun) VALUES ($1, 1, 10, $2, 'Deneme fason', true, 5) RETURNING id",
+      [emir, tip]))!.id;
+    const adim = async () => (await ortam!.sahip.tek<{ firma: number | null; firmasiz: boolean }>(
+      'SELECT fason_firma_id AS firma, fason_firmasiz AS firmasiz FROM uretim_emirleri_is_emri WHERE id = $1', [ie]))!;
+    const siparisVer = async (firmaId: number, ad: string) => {
+      const { onayli, siparis } = await kararliOnayli(firmaId, ad);
+      await ortam!.sahip.sorgu('UPDATE satin_alma_talep_kalemi SET is_emri_id = $2 WHERE talep_id = $1', [onayli.id, ie]);
+      return kaydet(c.sa, { ...govde(onayli), durum: 'siparis_verildi', karar: { ...onayli.karar!, siparisler: [siparis] } });
+    };
+
+    const isaretsiz = await tedarikciFirma('Tedarik 2874 işaretsiz');
+    const red = await siparisVer(isaretsiz.id, 'Tedarik 2874 işaretsiz');
+    assert.notEqual(red.statusCode, 200, red.body);
+    assert.deepEqual(await adim(), { firma: null, firmasiz: true }, 'reddedilen sipariş adıma firma yazmaz');
+
+    const fasoncu = await tedarikciFirma('Fasoncu 2874');
+    await ortam!.sahip.sorgu('UPDATE musteri_tedarikci_firma SET fason = true WHERE id = $1', [fasoncu.id]);
+    const s = tamam<Talep>(await siparisVer(fasoncu.id, 'Fasoncu 2874'));
+    assert.equal(s.durum, 'siparis_verildi');
+    assert.deepEqual(await adim(), { firma: fasoncu.id, firmasiz: false });
+    const degisim = await ortam!.sahip.sorgu<{ eskiFirmasiz: boolean; eski: number | null; yeni: number | null }>(
+      'SELECT eski_fason_firmasiz AS "eskiFirmasiz", eski_fason_firma_id AS eski, yeni_fason_firma_id AS yeni FROM uretim_emirleri_uretim_yeri_degisimi WHERE is_emri_id = $1', [ie]);
+    assert.deepEqual(degisim, [{ eskiFirmasiz: true, eski: null, yeni: fasoncu.id }], 'firma seçimi üretim yeri değişimi olarak kayda girer');
+    const belge = await ortam!.sahip.sorgu('SELECT id FROM uretim_emirleri_dis_islem_emri WHERE is_emri_id = $1', [ie]);
+    assert.equal(belge.length, 1, 'firma yazılınca dış işlem emri açılır');
+
+    // Firması olan adıma ikinci sipariş dokunmaz.
+    const baska = await tedarikciFirma('Fasoncu 2874 B');
+    await ortam!.sahip.sorgu('UPDATE musteri_tedarikci_firma SET fason = true WHERE id = $1', [baska.id]);
+    tamam<Talep>(await siparisVer(baska.id, 'Fasoncu 2874 B'));
+    assert.deepEqual(await adim(), { firma: fasoncu.id, firmasiz: false });
+  });
+
   test('197 a: iş emrinin fason tutarı bağlı sipariş satırlarından, para birimi başına, iskontolu ve KDV hariç; iptal talep sayılmaz', async () => {
     const { s, a, b } = await bolunmusSiparis();
     const satirA = siparisi(s, a).satirlar[0]!.id;

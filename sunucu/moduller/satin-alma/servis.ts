@@ -24,7 +24,7 @@ import { firmaAra, firmaOzeti, firmaOzetleri, tedarikciOlabilirMi, tumFirmalar, 
 import { kullanilanKaliteler, malzemeAra, malzemeMaliyetBilgileri, malzemeOzetleri, malzemeSatinAlmaAyrintilari } from '../malzemeler/disari.ts';
 import { belgeAcVeBagla, kaydaBagliBelgeler, kayitlaraBagliBelgeler, kayittakiBelgeDosyasi, kayittanKaldir, type BagliBelge } from '../belge-merkezi/disari.ts';
 import {
-  acikEmirler, dieAc, dieListesi, dieOku, emirDurumlari, emirlerinProjeleri, emirNolari, fasonGecmisi, fasonGonderimleri, fasonIsEmirleri, isEmriOzetleri,
+  acikEmirler, dieAc, dieListesi, dieOku, emirDurumlari, emirlerinProjeleri, emirNolari, fasonFirmasiniSiparistenYaz, fasonGecmisi, fasonGonderimleri, fasonIsEmirleri, isEmriOzetleri,
 } from '../uretim-emirleri/disari.ts';
 import { operasyonTipleri } from '../istasyonlar/disari.ts';
 import { bildirimGonder, bildirimKapat } from '../bildirim/disari.ts';
@@ -501,7 +501,7 @@ async function acikFasonlar(db: Db) {
 }
 
 // 898 a: fason ön talepler (açık, bağsız, yoksayılmamış, gönderilmemiş) ve hâlâ açık adımların yoksayma kararları. Talep açabilen herkes
-// görür (903 a: yeni işlem yok); fiyat ve tedarikçi seçimi yoktur, firma rotadakidir. Dal 2: plan ihtiyacı fason adımların ardından gelir.
+// görür (903 a: yeni işlem yok); fiyat ve tedarikçi seçimi yoktur, firma rotadakidir; firmasız adım (2874) firma bekler. Dal 2: plan ihtiyacı fason adımların ardından gelir.
 export async function onTalepleri(db: Db): Promise<OnTalepleriCevabi> {
   const adaylar = await acikFasonlar(db);
   const acik = new Map(adaylar.map((x) => [x.isEmriId, x]));
@@ -522,7 +522,7 @@ export async function onTalepleri(db: Db): Promise<OnTalepleriCevabi> {
           kaynak: 'fason' as const, isEmriId: x.isEmriId, uretimEmriId: x.uretimEmriId, emirNo: x.emirNo, opNo: x.opNo, adim: x.adim,
           parca: kart && x.malzemeNo !== null ? { no: x.malzemeNo, kod: kart.kod, ad: kart.ad ?? '' } : null, urun: x.urun,
           miktar: x.adet, birim: 'adet', gerekenTarih: x.teslim, terminGun: x.terminGun,
-          firmaAdi: x.firmaId === null ? null : (firmalar.get(x.firmaId)?.ad ?? null),
+          firmaAdi: x.firmaId === null ? null : (firmalar.get(x.firmaId)?.ad ?? null), ...(x.firmaId === null ? { firmaBekleniyor: true } : {}),
         };
       }),
       ...plan.onTalepler,
@@ -579,6 +579,16 @@ export async function onTalepYoksay(db: Db, k: Kullanici, g: OnTalepYoksayYazimi
 export async function onTalepGeriAl(db: Db, id: number): Promise<{ tamam: true }> {
   if (!(await s.onTalepYoksaySil(db, id))) throw bulunamadi(ILETILER.onTalepYoksayYok);
   return { tamam: true };
+}
+
+// 2874-1 a: sipariş verilince firması seçilmemiş fason adımın firması siparişin tedarikçisidir. Bir adıma iki tedarikçiden sipariş
+// verildiyse firma seçilmez (hangisi olduğu uydurulmaz); adım "firma bekleniyor" kalır, emir ekranından seçilir.
+async function fasonFirmalariniYaz(db: Db, k: Kullanici, talepId: string): Promise<void> {
+  const satirlar = await s.siparisFasonFirmalari(db, talepId);
+  for (const x of satirlar) {
+    if (satirlar.filter((y) => y.isEmriId === x.isEmriId).length !== 1) continue;
+    await fasonFirmasiniSiparistenYaz(db, k.id, x.isEmriId, x.firmaId);
+  }
 }
 
 // 898 a: talebe çevrilen fason adım açık, bağsız olmalı; denetim ile yazma arası iş emri başına kilitlidir. Uygulanan kart fiziksel karttır.
@@ -782,6 +792,7 @@ export async function talepKaydet(db: Db, k: Kullanici, id: string, g: TalepKayd
   if (siparisteMi(yazilacak.durum) && !siparisteMi(eski.durum)) {
     await s.siparisleriLogoyaIsaretle(db, id, ILETILER.logoKayitsizTedarikci);
     await varsayilanPlanlariYaz(db, k, id);
+    await fasonFirmalariniYaz(db, k, id);
   } else if (siparisteMi(yazilacak.durum)) await otomatikPlanlariYenile(db, k, id);
   if (yazilacak.durum === 'iptal' && eski.durum !== 'iptal') {
     await s.siparisIptaliniLogoyaIsaretle(db, id);
@@ -1490,7 +1501,7 @@ export async function disOperasyonlar(db: Db): Promise<DisOperasyonlarCevabi> {
       const kalan = fasonKalani(x.adet, x.gonderilen, x.donen, x.hurda);
       const belge = emirBelgesi.get(x.isEmriId);
       return {
-        ...x, gerceklesenGidis: ilkGidis, firmaAdi: x.firmaId === null ? null : (firmalar.get(x.firmaId)?.ad ?? null),
+        ...x, gerceklesenGidis: ilkGidis, firmaAdi: x.firmaId === null ? null : (firmalar.get(x.firmaId)?.ad ?? null), ...(x.firmaId === null ? { firmaBekleniyor: true } : {}),
         planlananGidis: plan.get(x.isEmriId) ?? null, siparisSatirId: satirlar.get(x.isEmriId) ?? null,
         fasonKonumId: x.firmaId === null ? null : (kutular.get(x.firmaId) ?? null),
         gecikmeGun: gecikmeGunu(x.termin, x.ilkDonus, gun), gecikmeSonDonus: sonDonusGecikmesi(x.termin, x.sonDonus, kalan, gun),

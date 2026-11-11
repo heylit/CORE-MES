@@ -469,6 +469,8 @@ export const fasonDonusuKaydet = isEmri.fasonDonusuKaydet;
 export const fasonGidisYaz = isEmri.fasonGidisYaz;
 // Satın alma dış operasyonlar (#542 U3); yetki denetlemez, çağıran korur.
 export const fasonIsEmirleri = isEmri.fasonIsEmirleri;
+// 2874-1 a: fason siparişi verilince tedarikçi firmasız fason adıma yazılır; yetki denetlemez, çağıran (satın alma sipariş yazması) korur.
+export const fasonFirmasiniSiparistenYaz = isEmri.fasonFirmasiniSiparistenYaz;
 export type { FasonIsEmri } from './is-emri-servis.ts';
 // Sevkiyat Tüm işler (960): fason adımının sırası ve gidebilecek adedi; yetki denetlemez, çağıran korur.
 export const fasonGonderimleri = isEmri.fasonGonderimleri;

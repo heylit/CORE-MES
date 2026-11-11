@@ -66,7 +66,7 @@ describe('dış işlem emri göçleri dolu tabloda (gerçek PostgreSQL)', () => 
     const bitmisEmirAdim = await adim(await emir('bitti'), 10, true);
     await sahip.sorgu("INSERT INTO uretim_emirleri_fason_hareketi (is_emri_id, yon, adet, kisi_id) VALUES ($1, 'gidis', 3, $2)", [acikFason, kisi]);
 
-    const isEmirleri = () => sahip.sorgu('SELECT * FROM uretim_emirleri_is_emri ORDER BY id');
+    const isEmirleri = () => sahip.sorgu<Record<string, unknown>>('SELECT * FROM uretim_emirleri_is_emri ORDER BY id');
     const hareketler = () => sahip.sorgu('SELECT id, is_emri_id, yon, adet, hurda_adet, kisi_id, zaman FROM uretim_emirleri_fason_hareketi ORDER BY id');
     const onceIs = await isEmirleri();
     const onceHareket = await hareketler();
@@ -78,7 +78,9 @@ describe('dış işlem emri göçleri dolu tabloda (gerçek PostgreSQL)', () => 
     assert.deepEqual(belgeler.map((b) => [b.isEmriId, b.acilis, b.kisi]), [[acikFason, 'goc', null]]);
     assert.match(belgeler[0]!.no, /^DIE-\d{6}$/);
     for (const yok of [icAdim, bitmisAdim, iptalAdim, bitmisEmirAdim]) assert.ok(!belgeler.some((b) => b.isEmriId === yok), String(yok));
-    assert.deepEqual(await isEmirleri(), onceIs);
+    // Sonraki göçler sütun ekleyebilir; değişmemesi gereken, göç öncesi sütunlardır.
+    const sutunlar = Object.keys(onceIs[0] ?? {});
+    assert.deepEqual((await isEmirleri()).map((r) => Object.fromEntries(sutunlar.map((k) => [k, r[k]]))), onceIs);
     assert.deepEqual(await hareketler(), onceHareket);
   });
 });

@@ -12,7 +12,7 @@ import { cokKatmanaCevir, emreKopyalanabilirMi, girdiEksigi, oncullerCikar } fro
 import type { Oncul } from '../kurallar.ts';
 import * as s from '../sorgular.ts';
 import type { AdimKaynagi, Icerik, Kaynak, RevizyonSatiri } from '../sorgular.ts';
-import { ARAMA_SAYFA_BOYU, firmasizFasonuReddet, icerikYazimlari, isEmirlerineSabitle, isEmriGirdileri, patlat, revizyonuAl, urunOzetiAl, urunOzetine } from './ortak.ts';
+import { ARAMA_SAYFA_BOYU, icerikYazimlari, isEmirlerineSabitle, isEmriGirdileri, patlat, revizyonuAl, urunOzetiAl, urunOzetine } from './ortak.ts';
 import { agac } from './agac.ts';
 
 /* ---------------- başka modüllere ---------------- */
@@ -243,7 +243,6 @@ export async function emreKopyala(db: Db, kullanici: Kullanici, id: number, g: {
   const rota = await revizyonGetir(db, id);
   const ret = emreKopyalanabilirMi({ durum: r.durum, adimSayisi: rota?.adimlar.length ?? 0 });
   if (ret || !rota) throw gecersiz(ret ?? 'Rota bulunamadı.');
-  firmasizFasonuReddet(rota);
   const baslik = {
     malzemeNo: r.malzemeId, adet: g.adet, teslim: g.teslim, oncelik: g.oncelik, baslangic: g.baslangic ?? null, aciklama: g.aciklama ?? null,
     ...(g.taslak ? { taslak: true } : {}), ...(g.stoktanRezerve ? { stoktanRezerve: true } : {}), ...(g.emirTuru ? { emirTuru: g.emirTuru } : {}), projeId: g.projeId ?? null, siparisSatiriId: g.siparisSatiriId ?? null, kaynakRotaRevizyonId: r.id,
@@ -272,7 +271,6 @@ async function cokKatmanliAc(
   for (const d of dugumler) {
     const rota = d.dugum === '0' ? kokRota : await revizyonGetir(db, d.revizyonId);
     if (rota === null) throw gecersiz('Alt parçanın rotası bulunamadı.');
-    firmasizFasonuReddet(rota);
     girdiler.set(d.dugum, await isEmriGirdileri(db, d.malzemeId, rota));
   }
   const c = cokKatmanaCevir(p.satirlar, girdiler, stoktan);
@@ -300,7 +298,6 @@ export async function emreUygula(db: Db, kullanici: Kullanici, emirId: number) {
   const rota = await revizyonGetir(db, yid);
   const ret = emreKopyalanabilirMi({ durum: r.durum, adimSayisi: rota?.adimlar.length ?? 0 });
   if (ret || !rota) throw gecersiz(ret ?? 'Rota bulunamadı.');
-  firmasizFasonuReddet(rota);
   const { degisenler } = await isEmirleriniYenile(db, kullanici, emirId, { kaynakRotaRevizyonId: yid, isEmirleri: await isEmriGirdileri(db, r.malzemeId, rota) });
   // Yenilenen (başlamamış) iş emirleri yeni revizyonun şartnamelerini alır; değiştirilmeyen parti (kaynak revizyonu eski kalır) dokunulmaz.
   const sonra = await adimliEmirAyrintisi(db, emirId);
