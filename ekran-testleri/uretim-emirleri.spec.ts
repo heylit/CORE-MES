@@ -55,9 +55,9 @@ test.describe('refakat kartları', () => {
   test('ayrıntıda emrin refakat kartları bölümü görünür, eski kart düğmesi yok', async ({ page, ag, ac }) => {
     await ac('/uretim-emirleri/2');
     const bolum = page.getByRole('region', { name: 'Refakat kartları' });
-    await expect(bolum.getByRole('heading', { name: 'Refakat kartları' })).toBeVisible();
-    // Örnek veride depo bu emre lot ayırmamıştır: bölüm kartın nerede açıldığını söyler.
-    await expect(bolum.getByText('Kart depoda, lot emre ayrılınca açılır.', { exact: false })).toBeVisible();
+    // Örnek veride depo bu emre lot ayırmamıştır: bölüm tek satırdır, kartın nerede açıldığını söyler; başlık ve tablo yok (2907).
+    await expect(bolum.getByText('Refakat kartı yok · lot emre ayrılınca depoda açılır.')).toBeVisible();
+    await expect(bolum.getByRole('heading')).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Refakat kartı bas' })).toHaveCount(0);
     expect(ag.hatalar).toEqual([]);
     expect(ag.yazmalar, 'kart listesi yazmaz').toEqual([]);
