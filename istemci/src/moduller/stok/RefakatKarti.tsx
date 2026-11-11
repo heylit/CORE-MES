@@ -22,7 +22,7 @@ export const refakatMalzemeSatiri = (r: RefakatPartisi): string =>
 
 // Kartın izi (kart #126): üst, alt ve birleşen kartlar, aynı lotun kartları, kartla üretilen partiler ve sevkler. Kart adına
 // basınca pencere o kartı gösterir.
-function RefakatIzi({ id, git }: { id: number; git: (id: number) => void }) {
+export function RefakatIzi({ id, git }: { id: number; git: (id: number) => void }) {
   const q = useQuery({ queryKey: [...anahtarlar.hepsi, 'refakat-izi', id], queryFn: () => api.get<RefakatIziCevabi>(`/stok/refakat-partileri/${id}/iz`) });
   if (q.isPending) return <DurumKutusu durum="yukleniyor" />;
   if (q.isError) return <DurumKutusu durum="hata" mesaj={hataMetni(q.error)} yenile={() => void q.refetch()} />;
@@ -90,6 +90,42 @@ function LotaBagla({ r, bagladi }: { r: RefakatPartisi; bagladi: (id: number) =>
       {komut.komut.isError && <p className="tc-stok-bilgi tc-stok-bilgi-uyari" role="alert">{hataMetni(komut.komut.error)}</p>}
       <div><Dugme simge="tag" disabled={kod.trim() === ''} yukleniyor={komut.komut.isPending} onClick={() => komut.komut.mutate({ kod: kod.trim(), surum: r.surum })}>Lota bağla</Dugme></div>
     </section>
+  );
+}
+
+// Kart sayfasının panelindeki işlemler (2907, 2912 a): kart penceresinin işlemleri ayrı pencere açmadan panelin başındadır;
+// lota bağlama ve alt parti formu düğmeyle açılır. Yeni kart doğunca (alt parti, lota bağlanan kart) sayfa onu seçer.
+export function KartIslemleri({ id, sec }: { id: number; sec: (id: number) => void }) {
+  const [form, setForm] = useState<'lot' | 'alt' | null>(null);
+  const q = useQuery({ queryKey: [...anahtarlar.hepsi, 'refakat-karti', id], queryFn: () => api.get<RefakatPartisiKartiCevabi>(`/stok/refakat-partileri/${id}/kart`) });
+  const iptal = useStokKomutu((g: { surum: number }) => api.post<RefakatPartisiCevabi>(`/stok/refakat-partileri/${id}/iptal-et`, g), 'Refakat kartı iptal edildi.');
+  const merkez = useIslem('sayfa.etiket-merkezi');
+  const depocu = useIslem('stok.transfer');
+  const yonlendir = useNavigate();
+  if (q.isPending) return <DurumKutusu durum="yukleniyor" />;
+  if (q.isError) return <DurumKutusu durum="hata" mesaj={hataMetni(q.error)} yenile={() => void q.refetch()} />;
+  const r = q.data.refakat;
+  const acik = r.durum === 'acik' && r.birlestigi === null;
+  const sonra = (yeni: number) => { setForm(null); sec(yeni); };
+  const ac = (f: 'lot' | 'alt') => setForm(form === f ? null : f);
+  return (
+    <div className="tc-refakat-islemler">
+      <div className="tc-refakat-dugmeler">
+        {merkez && acik && r.partiId !== null && (
+          <Dugme tur="birincil" simge="printer" onClick={() => { void yonlendir(`/etiket-merkezi?tur=refakat-partisi&id=${String(id)}`); }}>Etiket Merkezi&apos;nde bas</Dugme>
+        )}
+        {depocu && acik && r.partiId === null && <Dugme simge="tag" aria-expanded={form === 'lot'} onClick={() => ac('lot')}>Lota bağla</Dugme>}
+        {acik && r.partiId !== null && <Dugme simge="route" aria-expanded={form === 'alt'} onClick={() => ac('alt')}>Alt parti kartı</Dugme>}
+        {r.durum === 'acik' && Number(r.verilen) === 0 && (
+          <Dugme simge="x" yukleniyor={iptal.komut.isPending} onClick={() => iptal.komut.mutate({ surum: r.surum })}>Kartı iptal et</Dugme>
+        )}
+      </div>
+      {r.lotaBaglanmaZamani && <p className="tc-stok-not">İstisna kartıydı; {zamanMetni(r.lotaBaglanmaZamani)} lota bağlandı.</p>}
+      {r.birlestigi && <p className="tc-stok-not">{r.birlestigi.etiket} kartına birleşti; okutulunca o kart açılır.</p>}
+      {r.durum === 'iptal' && <p className="tc-stok-not">Kart iptal edildi.</p>}
+      {form === 'lot' && <LotaBagla r={r} bagladi={sonra} />}
+      {form === 'alt' && <AltPartiKartiAc r={r} ac={sonra} />}
+    </div>
   );
 }
 

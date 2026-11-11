@@ -1,5 +1,6 @@
 import { useMemo, useState, type KeyboardEvent, type ReactElement } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { useSearchParams } from 'react-router-dom';
 import type { KartAkisiCevabi, KartOzetleriCevabi } from '#paylasilan/sozlesme/akis.ts';
 import type { RefakatKartlariCevabi, RefakatKartlariSatiri } from '#paylasilan/sozlesme/stok.ts';
 import { Dugme, DurumKutusu, Qr, Rozet, Sekmeler, Simge } from '../../ortak/arayuz/index.ts';
@@ -7,18 +8,19 @@ import { api } from '../../ortak/veri/api.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { SayfaBasi, hataMetni, useIslem } from './ortak.tsx';
 import {
-  DAGILIM, KONUM, adimSatirlari, anSatirlari, aralikMetni, asamalar, cycleSatirlari, gunBasligi, kartAdedi, kisaZaman, leadDagilimi, miniRota, ondalik, odakAdimi,
-  ozetKutulari, saat, sonAnMetni, sureMetni, sureOzetiSatirlari, tarihSaat, tekliCubuklar, type Asama, type DagilimTuru, type Ton,
+  DAGILIM, KONUM, YER_KUMELERI, adimSatirlari, anSatirlari, aralikMetni, asamalar, cycleSatirlari, gunBasligi, kartAdedi, kisaZaman, leadDagilimi, ondalik,
+  odakAdimi, ozetKutulari, rotaAdimlari, rotaAltMetni, rotaZamani, saat, siradakiMetni, sonAnMetni, sureMetni, sureOzetiSatirlari, tarihSaat, tekliCubuklar,
+  type Asama, type DagilimTuru, type Ton,
 } from './refakat-akisi.ts';
-import { RefakatKartPenceresi } from './RefakatKarti.tsx';
+import { KartIslemleri, RefakatIzi, RefakatKartPenceresi } from './RefakatKarti.tsx';
 import './stok.css';
 
 export { sureMetni } from './refakat-akisi.ts';
 
-// Refakat kartları (kart #708): solda kartlar (küçük rota, son an, lead), sağda seçili kartın akışı. Kart rotayı taşır; stokta ya
-// da operasyonda her anı, giren ve çıkanıyla gösterir. Süre karşılaştırması iki görünümde de üstte: lead dağılımı, cycle plan ve
-// gerçek, adımın süre özeti (bu kart ve emrin tamamı). Akış ve süreler Akış Süresi'nin hesabıdır (708-1); yetkisi olmayan
-// listeyi görür, karta basınca kart penceresi (lot, iz, baskı) açılır.
+// Refakat kartları (kart #708, sade düzen 2907 / 2912 a): solda kartlar (yeri, son anı, sıradaki adımı; yere göre süzülür), sağda
+// seçili kart: kimlik, kart işlemleri, rota adımları. Süre analizi (lead, cycle, süre özeti, akış ve tablo) ve kartın izi istenince
+// açılır. Akış ve süreler Akış Süresi'nin hesabıdır (708-1); yetkisi olmayan listeyi görür, karta basınca kart penceresi açılır.
+// `?kart=<id>` kartı seçili açar (emir ayrıntısından gelinir).
 type Durum = 'acik' | 'tumu';
 type Gorunum = 'akis' | 'tablo';
 type KartOzeti = KartOzetleriCevabi['kartlar'][number];
@@ -44,21 +46,15 @@ function ListeDurumu({ k, ozet }: { k: RefakatKartlariSatiri; ozet: KartOzeti | 
   return <Hap ton={y.ton}>{y.metin}</Hap>;
 }
 
-function MiniRota({ ozet }: { ozet: KartOzeti }) {
-  return (
-    <span className="tc-refakat-mini" role="img" aria-label={`Rota: ${miniRota(ozet).map((n, i) => `${i === 0 ? 'lot' : `OP${String(ozet.rota[i - 1]?.opNo ?? '')}`} ${n === 'gecti' ? 'geçti' : n === 'simdi' ? 'şimdi' : 'sırada'}`).join(', ')}`}>
-      {miniRota(ozet).map((n, i) => (
-        <span key={i} className="tc-refakat-mini-adim" data-durum={n}>
-          <span className="tc-refakat-mini-cizgi" /><span className="tc-refakat-mini-dugum" />
-        </span>
-      ))}
-    </span>
-  );
-}
-
-function KartListesi({ kartlar, ozetler, secili, sec, durum, setDurum }: {
+function KartListesi({ kartlar, ozetler, secili, sec, durum, setDurum, kume, setKume }: {
   kartlar: RefakatKartlariSatiri[]; ozetler: Map<number, KartOzeti>; secili: number | null; sec: (id: number) => void; durum: Durum; setDurum: (d: Durum) => void;
+  kume: string | null; setKume: (k: string | null) => void;
 }) {
+  const kumeDe = (k: RefakatKartlariSatiri, anahtar: string) => {
+    const o = ozetler.get(k.refakat.id);
+    return o !== undefined && (YER_KUMELERI.find((y) => y.anahtar === anahtar)?.durumlar.includes(o.konum.durum) ?? false);
+  };
+  const gorunen = kume === null ? kartlar : kartlar.filter((k) => kumeDe(k, kume));
   return (
     <section className="tc-refakat-panel tc-refakat-liste" aria-label="Kartlar">
       <div className="tc-refakat-liste-bas">
@@ -68,10 +64,22 @@ function KartListesi({ kartlar, ozetler, secili, sec, durum, setDurum }: {
           <span className="tc-refakat-soluk">Son an önce</span>
         </span>
       </div>
-      {kartlar.length === 0 && <p className="tc-refakat-bos">Kart yok.</p>}
+      {ozetler.size > 0 && (
+        <div className="tc-refakat-kumeler" role="group" aria-label="Yere göre süz">
+          <button type="button" className="tc-refakat-kume" aria-pressed={kume === null} onClick={() => setKume(null)}>Hepsi <b className="mono">{kartlar.length}</b></button>
+          {YER_KUMELERI.map((y) => (
+            <button key={y.anahtar} type="button" className="tc-refakat-kume" aria-pressed={kume === y.anahtar} onClick={() => setKume(kume === y.anahtar ? null : y.anahtar)}>
+              {y.ad} <b className="mono">{kartlar.filter((k) => kumeDe(k, y.anahtar)).length}</b>
+            </button>
+          ))}
+        </div>
+      )}
+      {gorunen.length === 0 && <p className="tc-refakat-bos">Kart yok.</p>}
       <ul className="tc-refakat-kartlar">
-        {kartlar.map((k) => {
+        {gorunen.map((k) => {
+
           const o = ozetler.get(k.refakat.id);
+          const sira = o === undefined ? null : siradakiMetni(o);
           return (
             <li key={k.refakat.id}>
               <button type="button" className="tc-refakat-satir" aria-pressed={secili === k.refakat.id} onClick={() => sec(k.refakat.id)}>
@@ -79,10 +87,9 @@ function KartListesi({ kartlar, ozetler, secili, sec, durum, setDurum }: {
                   <span className="tc-refakat-satir-ad"><span className="mono">{k.refakat.etiket}</span> <span className="tc-refakat-soluk">· {k.urun.ad}</span></span>
                   <ListeDurumu k={k} ozet={o} />
                 </span>
-                {o && <MiniRota ozet={o} />}
                 <span className="tc-refakat-satir-alt">
                   <span>{o ? sonAnMetni(o) : `${k.adimSayisi} adım · ${k.refakat.lotNo ?? 'lotsuz'}`}</span>
-                  {o && <span className="mono">lead {sureMetni(o.lead.dk)}</span>}
+                  {sira !== null && <span>Sıradaki <b className="mono">{sira}</b></span>}
                 </span>
               </button>
             </li>
@@ -315,9 +322,28 @@ function TabloGorunumu({ d, liste, urun }: { d: KartAkisiCevabi; liste: Asama[];
   );
 }
 
-export function KartAkisi({ k, pencereAc }: { k: RefakatKartlariSatiri; pencereAc: () => void }) {
+function RotaAdimlari({ liste }: { liste: Asama[] }) {
+  return (
+    <ol className="tc-refakat-rota" aria-label="Kartın rotası">
+      {rotaAdimlari(liste).map((s) => (
+        <li key={s.anahtar} className="tc-refakat-rota-adim" data-durum={s.durum}>
+          <span className="tc-refakat-rota-dugum mono" aria-hidden="true">{s.durum === 'gecti' ? <Simge ad="check" boyut="k" /> : s.kod}</span>
+          <span className="tc-refakat-rota-govde">
+            <b>{s.baslik}</b>
+            <span className="tc-refakat-soluk">{rotaAltMetni(s)}</span>
+          </span>
+          <span className={`tc-refakat-rota-zaman mono ${s.durum === 'simdi' ? 'tc-refakat-ton-bekle' : 'tc-refakat-soluk'}`}>{rotaZamani(s)}</span>
+        </li>
+      ))}
+    </ol>
+  );
+}
+
+export function KartAkisi({ k, sec }: { k: RefakatKartlariSatiri; sec: (id: number) => void }) {
   const id = k.refakat.id;
   const [gorunum, setGorunum] = useState<Gorunum>('akis');
+  const [analiz, setAnaliz] = useState(false);
+  const [iz, setIz] = useState(false);
   const q = useQuery({ queryKey: [...anahtarlar.hepsi, 'kart-akisi', id], queryFn: () => api.get<KartAkisiCevabi>(`/akis/refakat-kartlari/${String(id)}`) });
   const d = q.data;
   const liste = useMemo(() => (d ? asamalar(d, { urun: k.urun.ad }) : []), [d, k.urun.ad]);
@@ -330,13 +356,25 @@ export function KartAkisi({ k, pencereAc }: { k: RefakatKartlariSatiri; pencereA
           <div className="tc-refakat-soluk">
             {k.urun.ad} · emir {k.adet} adet{adet !== null && `, bu kart ${String(adet)} parça`} · Emir <span className="mono">{k.refakat.emirNo ?? '—'}</span> · lot <span className="mono">{k.refakat.lotNo ?? '—'}</span>
           </div>
-          <Dugme simge="tag" onClick={pencereAc}>Kart penceresi</Dugme>
         </div>
         <Qr metin={k.refakat.qr} boyut={72} />
+      </div>
+      <div className="tc-refakat-bolum">
+        <KartIslemleri id={id} sec={sec} />
       </div>
       {q.isPending && <DurumKutusu durum="yukleniyor" />}
       {q.isError && <DurumKutusu durum="hata" mesaj={hataMetni(q.error)} yenile={() => void q.refetch()} />}
       {d && (
+        <div className="tc-refakat-bolum">
+          <RotaAdimlari liste={liste} />
+        </div>
+      )}
+      <div className="tc-refakat-bolum tc-refakat-ac-kapa">
+        <Dugme simge="gantt" aria-expanded={analiz} onClick={() => setAnaliz(!analiz)}>Süre analizi</Dugme>
+        <Dugme simge="list" aria-expanded={iz} onClick={() => setIz(!iz)}>Bağlı kartlar ve sevkler</Dugme>
+      </div>
+      {iz && <div className="tc-refakat-bolum"><RefakatIzi id={id} git={sec} /></div>}
+      {d && analiz && (
         <>
           <OzetBolumu d={d} />
           <div className="tc-refakat-sekmeler">
@@ -353,14 +391,18 @@ export function KartAkisi({ k, pencereAc }: { k: RefakatKartlariSatiri; pencereA
 }
 
 export function RefakatKartlari() {
+  const [adres] = useSearchParams();
+  const istenen = Number(adres.get('kart'));
+  const ilk = Number.isInteger(istenen) && istenen > 0 ? istenen : null;
   const [durum, setDurum] = useState<Durum>('acik');
+  const [kume, setKume] = useState<string | null>(null);
   const [arama, setArama] = useState('');
-  const [secili, setSecili] = useState<number | null>(null);
-  const [pencere, setPencere] = useState<number | null>(null);
+  const [secili, setSecili] = useState<number | null>(ilk);
   // Kartın akışını Akış Süresi sayfası ya da yalnız kartı gören dar işlem açar (AKS-5 a, 1870).
   const sayfaOkur = useIslem('sayfa.akis');
   const kartOkur = useIslem('akis.kart-oku');
   const akisOkur = sayfaOkur || kartOkur;
+  const [pencere, setPencere] = useState<number | null>(akisOkur ? null : ilk);
   const sec = (id: number) => { if (akisOkur) setSecili(id); else setPencere(id); };
   const l = useQuery({
     queryKey: anahtarlar.liste('refakat-kartlari', { durum }),
@@ -393,7 +435,7 @@ export function RefakatKartlari() {
     <section className="tc-stok tc-refakat">
       <SayfaBasi
         baslik="Refakat kartları"
-        alt="Kart rotayı taşır; stokta ya da operasyonda her anı, giren ve çıkanıyla kaydeder."
+        alt="Kart nerede, hangi adımda, sırada ne var; kartı okutun ya da listeden seçin."
         sag={(
           <label className="tc-refakat-okut">
             <Simge ad="scan" boyut="k" />
@@ -407,8 +449,8 @@ export function RefakatKartlari() {
       {l.data?.sinirda && <p className="tc-stok-not">Yalnız en yeni kartlar gösteriliyor; arama bu kartlarda yapılır.</p>}
       {l.data && (
         <div className="tc-refakat-govde">
-          <KartListesi kartlar={kartlar} ozetler={ozetler} secili={seciliKart?.refakat.id ?? null} sec={sec} durum={durum} setDurum={setDurum} />
-          {akisOkur && seciliKart && <KartAkisi key={seciliKart.refakat.id} k={seciliKart} pencereAc={() => setPencere(seciliKart.refakat.id)} />}
+          <KartListesi kartlar={kartlar} ozetler={ozetler} secili={seciliKart?.refakat.id ?? null} sec={sec} durum={durum} setDurum={setDurum} kume={kume} setKume={setKume} />
+          {akisOkur && seciliKart && <KartAkisi key={seciliKart.refakat.id} k={seciliKart} sec={sec} />}
         </div>
       )}
       {pencere !== null && <RefakatKartPenceresi id={pencere} kapat={() => setPencere(null)} />}

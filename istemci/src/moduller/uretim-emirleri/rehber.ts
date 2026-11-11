@@ -8,6 +8,7 @@ export const rehber: readonly SayfaRehberi[] = [
       '"Açık emirler" ya da "Bitenler" sekmesini seçin, "Durum" listesiyle süzün.',
       'Satıra ya da emir numarasına basın; emrin ayrıntısı açılır.',
       'Ayrıntıdaki "Refakat kartları" bölümünde depoda lotla açılan kartları görün; "Etiket Merkezi\'nde bas" ile kartı basın.',
+      'Refakat kartının satırına basın; kart Stok › Refakat kartları\'nda seçili açılır (yeri, sıradaki adımı ve işlemleri orada).',
       'Biten emirde sarfı ve çıktıyı görün; eksik varsa "Eksikleri teslim al". Stoğa işleme Reçete ve Rota\'daki emirdedir.',
       'Yeni emir için "Reçete ve Rota\'da emir aç" düğmesini kullanın.',
     ],
