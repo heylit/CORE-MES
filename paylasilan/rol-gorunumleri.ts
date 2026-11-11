@@ -3,10 +3,11 @@
 // yine görünmez (süzgeç işlem süzgecinden sonra uygulanır).
 // Listesi olmayan rol (yönetici, sonradan açılan özel rol) bugünkü tam görünümde kalır: yeni modül önce yöneticide görünür.
 
-// Menü en çok 8 sayfadır; Akış Süresi için müdür ve planlamada 9 (1851 a). Telefon alt çubuğu ilk dört maddeyi aldığı için değişmez.
+// Menü en çok 8 sayfadır; Akış Süresi için müdür ve planlamada 9 (1851 a), Adım Durumu için bir fazlası (2945 a): kalitede 9,
+// müdür ve planlamada 10.
 export const MENU_SINIRI = 8;
 export const GENIS_MENU: Readonly<Record<string, number>> = {
-  mudur: 9, planlama_proje: 9, genel_mudur: 9, genel_mudur_yardimcisi: 9, planlama_muduru: 9,
+  mudur: 10, planlama_proje: 10, genel_mudur: 10, genel_mudur_yardimcisi: 10, planlama_muduru: 10, kalite: 9,
 };
 
 export interface RolGorunumu {
@@ -29,7 +30,7 @@ const TEMEL_GORUNUMLER: Readonly<Record<string, RolGorunumu>> = {
   },
   vardiya_sorumlusu: {
     // Adım Durumu'nun işlemi vardiya sorumlusunda yok; satır bu görünümü alan üretim müdüründe çizilir.
-    sayfalar: ['/uretim-terminali', '/kuyruk', '/arkon', '/vardiya', '/istasyonlar', '/cnc-kurulum', '/adim-durumu', KISISEL],
+    sayfalar: ['/uretim-terminali', '/kuyruk', '/arkon', '/vardiya', '/adim-durumu', '/istasyonlar', '/cnc-kurulum', KISISEL],
     kartlar: [
       'arkon-ozetim', 'uretim-emirleri-kuyrugum', 'vardiya-secilmeyen', 'vardiya-bugun', 'vardiya-planli-durus',
       'istasyonlar-duran-makine', 'istasyonlar-calisan-makine', 'istasyonlar-personel', 'oee-tesis',
@@ -37,7 +38,7 @@ const TEMEL_GORUNUMLER: Readonly<Record<string, RolGorunumu>> = {
     kaynaklar: ['uretim-emirleri-kuyrugum-is', 'istasyonlar-duran-is', 'vardiya-vardiyasiz-is', 'istasyonlar-makine-olcu', 'arkon-gunum-olcu'],
   },
   planlama_proje: {
-    sayfalar: ['/plan', '/recete-rota', '/uretim-emirleri', '/kuyruk', '/arkon', '/siparisler', '/malzemeler', '/akis', KISISEL],
+    sayfalar: ['/plan', '/recete-rota', '/uretim-emirleri', '/adim-durumu', '/kuyruk', '/arkon', '/siparisler', '/malzemeler', '/akis', KISISEL],
     kartlar: [
       'uretim-emirleri-planlanacak', 'uretim-emirleri-acik', 'plan-geciken-emir', 'plan-girmeyen-emir', 'plan-istasyon-dolulugu',
       'rota-acik-revizyon', 'rota-onay-bekleyen', 'siparisler-geciken', 'siparisler-yaklasan-termin', 'stok-eksik-emir',
@@ -45,7 +46,7 @@ const TEMEL_GORUNUMLER: Readonly<Record<string, RolGorunumu>> = {
     ],
   },
   kalite: {
-    sayfalar: ['/kalite-merkezi', '/kalibrasyon', '/denetim-hazirlik', '/cizimler', '/recete-rota', '/uretim-emirleri', '/malzemeler', KISISEL],
+    sayfalar: ['/kalite-merkezi', '/kalibrasyon', '/denetim-hazirlik', '/cizimler', '/recete-rota', '/uretim-emirleri', '/adim-durumu', '/malzemeler', KISISEL],
     kartlar: [
       'kalite-merkezi-ilk-parca', 'kalite-merkezi-uygunsuzluk', 'kalibrasyon-vadesi-gecen', 'arkon-kalite', 'rota-onay-bekleyen',
       'malzemeler-onay-bekleyen',
@@ -107,7 +108,7 @@ const TEMEL_GORUNUMLER: Readonly<Record<string, RolGorunumu>> = {
   // Müdür (kart 1773, 1772 ikisi birden): yönlendirme, bir bakışta, işler ve açık grafik bölgesi; ayrıntı Yönetim panosunda.
   // Kart süzgeci yok: kaynağı henüz olmayan modülün iş ve uyarı kartları eski bölümleriyle kalır, şirket özeti altta kapalı (1593 c).
   mudur: {
-    sayfalar: ['/uretim-emirleri', '/plan', '/recete-rota', '/siparisler', '/satin-alma', '/stok', '/kalite-merkezi', '/finans', '/akis'],
+    sayfalar: ['/uretim-emirleri', '/adim-durumu', '/plan', '/recete-rota', '/siparisler', '/satin-alma', '/stok', '/kalite-merkezi', '/finans', '/akis'],
     kartlar: [],
     kaynaklar: [
       'istasyonlar-duran-is', 'siparisler-termin-is', 'uretim-emirleri-planlanacak-is', 'sevkiyat-is', 'malzemeler-onay-is', 'kalibrasyon-is',
