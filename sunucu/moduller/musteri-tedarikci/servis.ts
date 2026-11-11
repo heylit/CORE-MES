@@ -7,11 +7,11 @@ import { surumluGuncelle } from '#cekirdek/surum.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
 import type { KayitAramaKaynagi } from '#paylasilan/kayit-aramasi.ts';
 import {
-  DEGERLENDIRME_SINIRI, HIZMET_PUANI_SINIRI, KARNE_AGIRLIK_GECMISI_SINIRI, KARNE_ONCEKI_DONEM_GUNU, YILLIK_KARNE_SINIRI, karneOlayKaynagi,
+  DEGERLENDIRME_SINIRI, TEDARIKCI_KATEGORI_SINIRI, HIZMET_PUANI_SINIRI, KARNE_AGIRLIK_GECMISI_SINIRI, KARNE_ONCEKI_DONEM_GUNU, YILLIK_KARNE_SINIRI, karneOlayKaynagi,
   karneOlayi,
 } from '#paylasilan/sozlesme/musteri-tedarikci.ts';
 import type {
-  DegerlendirmeCevabi, EllePuanTuru, HizmetPuaniGovdesi, KarneAgirlikCevabi, KarneAgirlikGovdesi, KarneAgirlikSurumu, KarneCevabi,
+  DegerlendirmeCevabi, DegerlendirmeKategorisi, EllePuanTuru, HizmetPuaniGovdesi, KarneAgirlikCevabi, KarneAgirlikGovdesi, KarneAgirlikSurumu, KarneCevabi,
   KarneOlayKaynagi, KarneOlayi, KarneOzeti, LotKarari, YillikKarneGovdesi,
 } from '#paylasilan/sozlesme/musteri-tedarikci.ts';
 import { TESIS_SAAT_DILIMI, tesisGunu } from '#paylasilan/zaman.ts';
@@ -459,6 +459,17 @@ export async function karneAgirlikDegistir(db: Db, kullanici: Kullanici, g: Karn
 }
 
 // Matris: aktif tedarikçi ve "ikisi" türündeki firmalar; puana göre değil ada göre sıralı gelir, ekran sıralar.
+// 2475: tedarikçinin malzeme kategorileri satın almadadır; satın alma bu modülü ithal ettiği için okuma ters yöndedir ve
+// sunucu/kablolama.ts bağlar. Bağlı değilse matris kategorisiz döner (kategoriAcik false). Haritada olmayan firma kategorisizdir.
+export type TedarikciKategoriCozucusu = (db: Db, firmaIdleri: readonly number[]) => Promise<ReadonlyMap<number, readonly DegerlendirmeKategorisi[]>>;
+let tedarikciKategorileri: TedarikciKategoriCozucusu | null = null;
+// Önceki çözücüyü döner: testler geçici çözücü kurup kablolamanın bağını geri koyabilsin.
+export function tedarikciKategoriCozucusuKaydet(c: TedarikciKategoriCozucusu | null): TedarikciKategoriCozucusu | null {
+  const onceki = tedarikciKategorileri;
+  tedarikciKategorileri = c;
+  return onceki;
+}
+
 export async function degerlendirmeMatrisi(db: Db, an: number = Date.now()): Promise<DegerlendirmeCevabi> {
   const firmalar = await sorgular.degerlendirilecekFirmalar(db, DEGERLENDIRME_SINIRI + 1);
   const kesildi = firmalar.length > DEGERLENDIRME_SINIRI;
@@ -467,10 +478,15 @@ export async function degerlendirmeMatrisi(db: Db, an: number = Date.now()): Pro
   const idler = liste.map((f) => f.id);
   const simdi = idler.length === 0 ? new Map<number, KarneOzeti>() : await karneHesapla2(db, idler, an, agirlik);
   const onceki = idler.length === 0 ? new Map<number, KarneOzeti>() : await karneHesapla2(db, idler, an - KARNE_ONCEKI_DONEM_GUNU * 86_400_000, agirlik);
+  const kategoriler = tedarikciKategorileri !== null && idler.length > 0 ? await tedarikciKategorileri(db, idler) : new Map<number, readonly DegerlendirmeKategorisi[]>();
   return {
-    satirlar: liste.map((f) => ({ firmaId: f.id, kod: f.kod, ad: f.ad, fason: f.fason, karne: simdi.get(f.id)!, oncekiPuan: onceki.get(f.id)?.puan ?? null })),
+    satirlar: liste.map((f) => ({
+      firmaId: f.id, kod: f.kod, ad: f.ad, fason: f.fason, karne: simdi.get(f.id)!, oncekiPuan: onceki.get(f.id)?.puan ?? null,
+      kategoriler: (kategoriler.get(f.id) ?? []).slice(0, TEDARIKCI_KATEGORI_SINIRI),
+    })),
     agirliklar: await agirlikSurumu(db, agirlik),
     kesildi,
+    kategoriAcik: tedarikciKategorileri !== null,
   };
 }
 

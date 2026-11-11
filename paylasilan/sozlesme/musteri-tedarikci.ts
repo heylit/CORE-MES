@@ -356,6 +356,13 @@ export const karneAgirlikGovdesi = z.object({
 export type KarneAgirlikGovdesi = z.input<typeof karneAgirlikGovdesi>;
 
 // Değerlendirme matrisi: aktif tedarikçi ve "ikisi" türündeki firmaların karnesi; öncekiPuan aynı ağırlıklarla 91 gün önceki kayan karne.
+// Tedarikçinin malzeme kategorileri (2475, 2473-2 a): satın alma verir. aldik: siparişi var; verebilir: satın almadaki beyan.
+// tur ve kod Malzemeler kategori ağacındaki anahtardır, ad oradaki addır.
+export const TEDARIKCI_KATEGORI_SINIRI = 50;
+export const degerlendirmeKategorisi = z.object({
+  tur: z.string().min(1).max(40), kod: z.string().min(1).max(80), ad: z.string().min(1).max(200), aldik: z.boolean(), verebilir: z.boolean(),
+});
+export type DegerlendirmeKategorisi = z.output<typeof degerlendirmeKategorisi>;
 export const degerlendirmeSatiri = z.object({
   firmaId: z.number().int().positive(),
   kod: z.string().nullable(),
@@ -363,6 +370,7 @@ export const degerlendirmeSatiri = z.object({
   fason: z.boolean(),
   karne: karneOzetiSemasi,
   oncekiPuan: yuzluk,
+  kategoriler: z.array(degerlendirmeKategorisi).max(TEDARIKCI_KATEGORI_SINIRI),
 });
 export type DegerlendirmeSatiri = z.output<typeof degerlendirmeSatiri>;
 export const degerlendirmeCevabi = z.object({
@@ -370,6 +378,8 @@ export const degerlendirmeCevabi = z.object({
   agirliklar: karneAgirlikSurumu,
   // Sınırı aşan tedarikçi sayısı varsa true; ekran "ilk N" yazar.
   kesildi: z.boolean(),
+  // Kategori kaynağı (satın alma) bağlı değilse false; ekran kategori süzgecini göstermez.
+  kategoriAcik: z.boolean(),
 });
 export type DegerlendirmeCevabi = z.output<typeof degerlendirmeCevabi>;
 

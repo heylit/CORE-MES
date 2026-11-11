@@ -12,7 +12,7 @@ import { denetimYaz } from '../denetim/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
-import { karneOlayiYaz, karneOzetleri } from './disari.ts';
+import { karneOlayiYaz, karneOzetleri, tedarikciKategoriCozucusuKaydet } from './disari.ts';
 
 // Örnek firmalar uydurmadır. Olaylar satın alma ve Kalite Merkezi'nin disari.ts çağrısının yerine doğrudan yazılır.
 const PAROLA = 'dogru-parola-1';
@@ -225,18 +225,46 @@ describe('tedarikçi karnesi (gerçek PostgreSQL, 1259 c, 1260 a)', () => {
     const musteri = await firma('musteri');
     const pasif = await firma('tedarikci');
     await vt().sorgu('UPDATE musteri_tedarikci_firma SET aktif = false WHERE id = $1', [pasif]);
-    assert.equal((await matris(null)).durum, 401);
-    assert.equal((await matris('rolsuz')).durum, 403);
-    const m = await matris('okuyan');
-    assert.equal(m.durum, 200, JSON.stringify(m.govde));
-    const idler = new Set(m.govde.satirlar.map((s) => s.firmaId));
-    assert.equal(idler.has(tedarikci) && idler.has(ikisi), true);
-    assert.equal(idler.has(musteri) || idler.has(pasif), false);
-    const satir = m.govde.satirlar.find((s) => s.firmaId === tedarikci)!;
-    assert.equal(satir.karne.puan, null);
-    assert.equal(satir.oncekiPuan, null);
-    assert.equal(m.govde.agirliklar.surum, satir.karne.hesapSurumu);
-    assert.equal(m.govde.kesildi, false);
+    const bag = tedarikciKategoriCozucusuKaydet(null);
+    try {
+      assert.equal((await matris(null)).durum, 401);
+      assert.equal((await matris('rolsuz')).durum, 403);
+      const m = await matris('okuyan');
+      assert.equal(m.durum, 200, JSON.stringify(m.govde));
+      const idler = new Set(m.govde.satirlar.map((s) => s.firmaId));
+      assert.equal(idler.has(tedarikci) && idler.has(ikisi), true);
+      assert.equal(idler.has(musteri) || idler.has(pasif), false);
+      const satir = m.govde.satirlar.find((s) => s.firmaId === tedarikci)!;
+      assert.equal(satir.karne.puan, null);
+      assert.equal(satir.oncekiPuan, null);
+      assert.equal(m.govde.agirliklar.surum, satir.karne.hesapSurumu);
+      assert.equal(m.govde.kesildi, false);
+      assert.equal(m.govde.kategoriAcik, false);
+      assert.deepEqual(satir.kategoriler, []);
+    } finally {
+      tedarikciKategoriCozucusuKaydet(bag);
+    }
+  });
+
+  test('2475: kategori çözücüsü bağlıysa matris satır başına kategorileri ve kategoriAcik taşır; haritada olmayan firma kategorisiz', async () => {
+    const a = await firma('tedarikci');
+    const b = await firma('tedarikci');
+    const istenen: number[][] = [];
+    const bag = tedarikciKategoriCozucusuKaydet(async (_db, idler) => {
+      istenen.push([...idler]);
+      return new Map([[a, [{ tur: 'hammadde', kod: 'K1', ad: 'Deneme kategori', aldik: true, verebilir: false }]]]);
+    });
+    try {
+      const m = await matris('okuyan');
+      assert.equal(m.durum, 200, JSON.stringify(m.govde));
+      assert.equal(m.govde.kategoriAcik, true);
+      assert.deepEqual(m.govde.satirlar.find((s) => s.firmaId === a)!.kategoriler, [{ tur: 'hammadde', kod: 'K1', ad: 'Deneme kategori', aldik: true, verebilir: false }]);
+      assert.deepEqual(m.govde.satirlar.find((s) => s.firmaId === b)!.kategoriler, []);
+      assert.equal(istenen.length, 1);
+      assert.equal(istenen[0]!.includes(a) && istenen[0]!.includes(b), true);
+    } finally {
+      tedarikciKategoriCozucusuKaydet(bag);
+    }
   });
 
   // Son test: ağırlığı değiştirir; öteki testler sürüm 2'ye bağlı değil ama sıra korunur.

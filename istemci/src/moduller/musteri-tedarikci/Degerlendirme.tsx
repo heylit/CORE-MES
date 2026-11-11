@@ -3,10 +3,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type {
-  DegerlendirmeCevabi, DegerlendirmeSatiri, KarneAgirlikCevabi, KarneAgirlikGovdesi, KarneAgirliklari, KarneAgirlikSurumu, KarneBileseni,
+  DegerlendirmeCevabi, DegerlendirmeKategorisi, DegerlendirmeSatiri, KarneAgirlikCevabi, KarneAgirlikGovdesi, KarneAgirliklari, KarneAgirlikSurumu, KarneBileseni,
   KarneBilesenGrubu, KarneSinifi,
 } from '#paylasilan/sozlesme/musteri-tedarikci.ts';
-import { Dugme, DurumKutusu, Girdi, Kart, Rozet, Simge, Tablo, useBildirim, type Sutun, type TabloSuzgeci } from '../../ortak/arayuz/index.ts';
+import { Dugme, DurumKutusu, Girdi, Kart, Rozet, Secim, Simge, Tablo, useBildirim, type Sutun, type TabloSuzgeci } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { csvIndir } from '../../ortak/veri/csv.ts';
 import { useForm, type AlanHatalari } from '../../ortak/veri/form.ts';
@@ -78,11 +78,43 @@ function GrupHucresi({ s, g, a }: { s: DegerlendirmeSatiri; g: KarneBilesenGrubu
 
 // CSV ekrandaki grup özetini değil her bileşeni ayrı sütunda verir (tabloda bileşenler grup hücresinin içindedir).
 function csvAktar(a: KarneAgirliklari, satirlar: readonly DegerlendirmeSatiri[]): void {
-  const basliklar = ['Tedarikçi', 'Kod', ...BILESENLER.map((b) => `${KISA_AD[b]} %${a[b]}`), ...GRUPLAR.map((g) => `${GRUP_ADI[g]} grup puanı`), 'Toplam', 'Önceki puan', 'Sınıf'];
+  const basliklar = ['Tedarikçi', 'Kod', ...BILESENLER.map((b) => `${KISA_AD[b]} %${a[b]}`), ...GRUPLAR.map((g) => `${GRUP_ADI[g]} grup puanı`), 'Toplam', 'Önceki puan', 'Sınıf', 'Kategoriler'];
   csvIndir('tedarikci-degerlendirme', basliklar, satirlar.map((s) => [
     s.ad, s.kod, ...BILESENLER.map((b) => deger(s, b)), ...GRUPLAR.map((g) => s.karne.gruplar[g]), s.karne.puan, s.oncekiPuan,
     s.karne.yetersizVeri ? 'az veri' : s.karne.sinif,
+    s.kategoriler.map((k) => (k.aldik ? k.ad : `${k.ad} (beyan)`)).join('; '),
   ]));
+}
+
+// Kategori süzgeci (2475, 2473-2 a). "Aldık" siparişten, "Verebilir" satın almadaki beyandır; beyan alınmış gibi okunmasın diye etiketi ayrıdır.
+type KategoriKipi = 'ikisi' | 'aldik' | 'verebilir';
+const KATEGORI_YOK = 'yok';
+const KATEGORI_GOSTERILEN = 2;
+const kategoriAnahtari = (k: DegerlendirmeKategorisi): string => `${k.tur}:${k.kod}`;
+const kategoriMetni = (k: DegerlendirmeKategorisi): string => (k.aldik ? k.ad : `${k.ad} (beyan)`);
+function kategoriUyar(s: DegerlendirmeSatiri, kategori: string, kip: KategoriKipi): boolean {
+  if (kategori === '') return true;
+  if (kategori === KATEGORI_YOK) return s.kategoriler.length === 0;
+  return s.kategoriler.some((k) => kategoriAnahtari(k) === kategori && (kip === 'aldik' ? k.aldik : kip === 'verebilir' ? k.verebilir : k.aldik || k.verebilir));
+}
+function KategoriEtiketleri({ s }: { s: DegerlendirmeSatiri }) {
+  if (s.kategoriler.length === 0) return null;
+  const gorunen = s.kategoriler.slice(0, KATEGORI_GOSTERILEN);
+  const gizli = s.kategoriler.slice(KATEGORI_GOSTERILEN);
+  return (
+    <span className="tc-mt-kategoriler">
+      {gorunen.map((k) => (
+        <span key={kategoriAnahtari(k)} className="tc-mt-etiket tc-mt-kategori" data-beyan={k.aldik ? undefined : ''}>
+          <Simge ad={k.aldik ? 'cart' : 'tag'} boyut="k" />{kategoriMetni(k)}
+        </span>
+      ))}
+      {gizli.length > 0 && (
+        <span className="tc-mt-etiket" title={gizli.map(kategoriMetni).join(', ')}>
+          +{gizli.length}<span className="tc-mt-gizli">: {gizli.map(kategoriMetni).join(', ')}</span>
+        </span>
+      )}
+    </span>
+  );
 }
 
 function sutunlar(a: KarneAgirliklari, secili: number | null): Sutun<DegerlendirmeSatiri>[] {
@@ -95,6 +127,7 @@ function sutunlar(a: KarneAgirliklari, secili: number | null): Sutun<Degerlendir
           <strong>{s.ad}</strong>
           {s.kod !== null && <span className="tc-mt-yok">{s.kod}</span>}
           {s.fason && <Rozet ton="uyari">Fason</Rozet>}
+          <KategoriEtiketleri s={s} />
         </span>
       ),
     },
@@ -231,6 +264,8 @@ export function Degerlendirme() {
   const [arama, aramaYaz] = useState('');
   const [sinif, sinifYaz] = useState('');
   const [secili, seciliYaz] = useState<number | null>(null);
+  const [kategori, kategoriYaz] = useState('');
+  const [kip, kipYaz] = useState<KategoriKipi>('ikisi');
   const sorgu = useQuery({
     queryKey: anahtarlar.degerlendirme(),
     queryFn: () => api.get<DegerlendirmeCevabi>('/musteri-tedarikci/degerlendirme'),
@@ -238,9 +273,17 @@ export function Degerlendirme() {
   const satirlar = useMemo(() => {
     const ara = arama.trim().toLocaleLowerCase('tr');
     return [...(sorgu.data?.satirlar ?? [])]
-      .filter((s) => sinifUyar(s, sinif) && (ara === '' || s.ad.toLocaleLowerCase('tr').includes(ara) || (s.kod ?? '').toLocaleLowerCase('tr').includes(ara)))
+      .filter((s) => sinifUyar(s, sinif) && kategoriUyar(s, kategori, kip) && (ara === '' || s.ad.toLocaleLowerCase('tr').includes(ara) || (s.kod ?? '').toLocaleLowerCase('tr').includes(ara)))
       .sort(sirala);
-  }, [sorgu.data, arama, sinif]);
+  }, [sorgu.data, arama, sinif, kategori, kip]);
+  const kategoriSecenekleri = useMemo(() => {
+    const harita = new Map<string, string>();
+    for (const r of sorgu.data?.satirlar ?? []) for (const k of r.kategoriler) harita.set(kategoriAnahtari(k), k.ad);
+    return [
+      ...[...harita].map(([deger, baslik]) => ({ deger, baslik })).sort((x, y) => x.baslik.localeCompare(y.baslik, 'tr')),
+      { deger: KATEGORI_YOK, baslik: 'Kategori yok' },
+    ];
+  }, [sorgu.data]);
   const sayilar = useMemo(() => {
     const s: Record<KarneSinifi | 'az', number> = { A: 0, B: 0, C: 0, D: 0, az: 0 };
     for (const r of sorgu.data?.satirlar ?? []) {
@@ -286,7 +329,22 @@ export function Degerlendirme() {
           arac={{
             arama: { deger: arama, degistir: aramaYaz, etiket: 'Tedarikçi ara', yerTutucu: 'Ad ya da kod' },
             suzgec: { etiket: 'Sınıf', secenekler: SINIF_SUZGECI, secili: sinif, sec: sinifYaz },
-            sag: <Dugme simge="download" disabled={satirlar.length === 0} onClick={() => { csvAktar(sorgu.data.agirliklar.agirliklar, satirlar); }}>CSV</Dugme>,
+            sag: (
+              <>
+                {sorgu.data.kategoriAcik && (
+                  <span className="tc-mt-kategori-suzgec">
+                    <Secim etiket="Kategori" secenekler={kategoriSecenekleri} bosSecenek="Tümü" value={kategori} onChange={(o) => { kategoriYaz(o.target.value); }} />
+                    {kategori !== '' && kategori !== KATEGORI_YOK && (
+                      <Secim
+                        etiket="Kaynak" value={kip} onChange={(o) => { kipYaz(o.target.value as KategoriKipi); }}
+                        secenekler={[{ deger: 'ikisi', baslik: 'İkisi' }, { deger: 'aldik', baslik: 'Aldık' }, { deger: 'verebilir', baslik: 'Verebilir (beyan)' }]}
+                      />
+                    )}
+                  </span>
+                )}
+                <Dugme simge="download" disabled={satirlar.length === 0} onClick={() => { csvAktar(sorgu.data.agirliklar.agirliklar, satirlar); }}>CSV</Dugme>
+              </>
+            ),
           }}
         />
         {sorgu.data.kesildi && <p className="tc-mt-yok">Liste ilk {sorgu.data.satirlar.length} tedarikçiyle sınırlı.</p>}
