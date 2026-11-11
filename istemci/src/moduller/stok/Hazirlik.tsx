@@ -2,11 +2,11 @@ import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { Link, Navigate, useNavigate, useParams } from 'react-router-dom';
 import type {
-  AdimToplaGovdesi, CikisOnerisiCevabi, KodCozCevabi, IstekTeslimGovdesi, LotBekleyenKartlarCevabi, MalzemeIstegi, RefakatPartileriCevabi, MalzemeIstegiDurumu, MalzemeIstekleriCevabi, TeslimGonderGovdesi, TeslimKutusuCevabi, ToplamaAcGovdesi,
+  AdimToplaGovdesi, CikisOnerisiCevabi, KodCozCevabi, IstekTeslimGovdesi, LotBekleyenKartlarCevabi, MalzemeIstegi, MalzemeIstegiDurumu, MalzemeIstekleriCevabi, TeslimGonderGovdesi, TeslimKutusuCevabi, ToplamaAcGovdesi,
   ToplamaAyrintiCevabi, ToplamaKapatGovdesi, ToplamalarCevabi, YerdekiStokCevabi,
 } from '#paylasilan/sozlesme/stok.ts';
 import {
-  Dugme, DurumKutusu, Girdi, KodOkuyucu, Kart, Pencere, Rozet, Sayfalama, Secim, Sekmeler, Simge, Tablo, useBildirim, useOkutmaGecmisi,
+  Dugme, DurumKutusu, Girdi, KodOkuyucu, Kart, Pencere, Rozet, Sayfalama, Secim, Sekmeler, Simge, Tablo, useOkutmaGecmisi,
   type KomutIsleyici, type OkutmaGecmisi, type OkutmaTonu, type RozetTonu, type Sutun,
 } from '../../ortak/arayuz/index.ts';
 import type { SimgeAdi } from '../../ortak/tasarim/simgeler.ts';
@@ -18,6 +18,7 @@ import { RefakatKartPenceresi } from './RefakatKarti.tsx';
 import { KonumSecici, type KonumSecimi } from './KonumSecici.tsx';
 import { MalzemeSecici } from './MalzemeSecici.tsx';
 import { hataMetni, korumaliPost, SayfaBasi, useIslem, useStokKomutu } from './ortak.tsx';
+import { useKartBildirimi } from './kart-bildirimi.tsx';
 import { useStatuAdi } from './statu.ts';
 import { DENETIM_BASI, lotSonucu, okutmaEngeli, toplamaOkutmasi, type Denetim, type ToplamaDenetimi } from './toplama-okutmasi.ts';
 import './stok.css';
@@ -183,26 +184,6 @@ function IstenenFazlaNotu({ istenen, girilen }: { istenen: string; girilen: stri
   const g = Number(miktarGirdisi(girilen));
   if (!Number.isFinite(g) || g <= Number(istenen)) return null;
   return <p className="tc-stok-not" role="status">İstenenden ({miktarMetni(istenen)}) fazla; teslim kaydına "istenenden fazla" yazılır.</p>;
-}
-
-// 2931 a: emre giden teslimde kart sunucuda kendiliğinden açılır (pencere sorulmaz). Kâğıt şimdilik kendiliğinden basılmaz (kullanıcı,
-// kart 2944'e yazılı yanıt): depocuya kart söylenir ve bildirimdeki düğme Etiket Merkezi'ni o kart seçili açar; kopya sayısı oradadır.
-// Kart emir ve lotla bulunur; lotsuz teslimde aynı malzemenin istisna kartıdır. Kart okunamazsa sessiz kalınmaz.
-type KartTeslimi = { uretimEmriId: number | null; partiId: number | null; malzemeId: number };
-function useKartBildirimi(): (t: KartTeslimi) => Promise<void> {
-  const { bildir } = useBildirim();
-  const git = useNavigate();
-  const merkez = useIslem('sayfa.etiket-merkezi');
-  return async (t) => {
-    if (t.uretimEmriId === null) return;
-    const c = await api.get<RefakatPartileriCevabi>(`/stok/uretim-emirleri/${t.uretimEmriId}/refakat-partileri`).catch(() => null);
-    if (c === null) { bildir('hata', "Refakat kartı okunamadı; kâğıdı Etiket Merkezi'nin bekleyenlerinden basın."); return; }
-    const kart = c.partiler.find((p) => p.durum === 'acik' && p.birlestigi === null
-      && (t.partiId === null ? p.partiId === null && p.malzemeId === t.malzemeId : p.partiId === t.partiId));
-    if (!kart) return;
-    bildir('bilgi', `Refakat kartı ${kart.etiket} bu teslimle gidiyor; kâğıdı Etiket Merkezi'nden basın.`,
-      merkez ? { eylem: { etiket: 'Etiketlere git', yap: () => { void git(`/etiket-merkezi?tur=refakat-partisi&id=${kart.id}`); } } } : undefined);
-  };
 }
 
 // İstasyonsuz istek kişiye verilir: malzeme kişinin bulunduğu istasyona taşınır ve istek kapanır.

@@ -1313,7 +1313,10 @@ export const teslim = z.object({
 });
 export type Teslim = z.output<typeof teslim>;
 // 1229 a: parti seçilmeden gönderilen miktar aynı statüdeki partilere en eskiden bölünürse ilk kayıt `teslim`, kalanlar `ekTeslimler`'dedir.
-export const teslimCevabi = z.object({ teslim, ekTeslimler: z.array(teslim).optional() });
+// 2931 a, 2944: bu istekle açılan refakat kartları (yalnız kimlik ve etiket); kâğıt Etiket Merkezi'nden basılır. Yoksa alan gelmez.
+export const acilanKart = z.object({ id: z.number().int(), etiket: z.string() }).strict();
+export type AcilanKart = z.output<typeof acilanKart>;
+export const teslimCevabi = z.object({ teslim, ekTeslimler: z.array(teslim).optional(), acilanKartlar: z.array(acilanKart).optional() });
 export type TeslimCevabi = z.output<typeof teslimCevabi>;
 // Panelin tek okuması: bana gelenler (kapsamımdaki istasyonlara; depo işlemi olana depo konumlarına), gönderdiklerim ve isteklerim.
 export const teslimKutusuCevabi = z.object({
@@ -1479,6 +1482,7 @@ export const isMalzemeleriCevabi = z.object({
       istek: uretimHazirligiCevabi.shape.eksikler.element.shape.istek,
     })),
   })),
+  acilanKartlar: z.array(acilanKart).optional(),
 });
 export type IsMalzemeleriCevabi = z.output<typeof isMalzemeleriCevabi>;
 // İşin malzemesini tek dokunuşla iste (kart #1418): kaynak verilmezse ya da depo konumuysa eksik miktarla depodan istek açılır;

@@ -244,11 +244,11 @@ describe('Hazırlık: emre giden teslimde refakat kartı bildirimi', () => {
     await waitFor(() => expect(screen.queryByText('MI-000031')).toBeNull());
   });
 
-  it('Etiket Merkezi\'ni açamayan depocuya düğme gösterilmez (yasak)', async () => {
+  it('Etiket Merkezi\'ni açamayan depocuya düğme gösterilmez, kâğıdı yetkilinin bastığı söylenir (yasak)', async () => {
     kur(DEPOCU, EMRIN);
     ac('/stok/hazirlik');
     await teslimEt();
-    expect(await screen.findByText(ILETI)).toBeTruthy();
+    expect(await screen.findByText('Refakat kartı UE-000077-P1 bu teslimle gidiyor; kâğıdı Depo ya da Vardiya Sorumlusu basar.')).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Etiketlere git' })).toBeNull();
   });
 
