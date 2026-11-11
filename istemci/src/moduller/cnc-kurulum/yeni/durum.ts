@@ -66,6 +66,8 @@ export const LIFE_DEF: Readonly<OmurAyari> = lifeDef();
 
 // Prototipin betik yüklenirken duruma uyguladığı varsayılanlar, prototipteki sırayla (satır 18517-18518, 19069-19071, 19646-19647).
 // Kayıt yüklendikten hemen sonra bir kez uygulanır. Oto-CAM kalktı (1399): kayıttaki `cam` ve `suProf` alanlarına dokunulmaz.
+const ESKI_SIM_ALANLARI = ['gsimOpt', 'gtools', 'gstock', 'gstockMan'] as const;
+
 export function acilisVarsayimlari(s: CncDurumu): void {
   s.stock = Object.assign({}, STOCK_DEF, s.stock || {});
   if (s.stock.axV !== 3) { s.stock.axis = 'auto'; s.stock.axV = 3; }
@@ -73,6 +75,8 @@ export function acilisVarsayimlari(s: CncDurumu): void {
   if (!s.life.cal) s.life.cal = {};
   s['wear'] = s['wear'] || {};
   s['wearLog'] = s['wearLog'] || [];
+  // G-Kod Sim. kalktı (2488); ayarları kayıttan atılır, kayıt bir sonraki kaydetmede temizlenir (2514 b). `gsimText` ve `gsim` Hazırlık'ındır.
+  for (const ad of ESKI_SIM_ALANLARI) delete s[ad];
 }
 
 export function defaults(): CncDurumu {
