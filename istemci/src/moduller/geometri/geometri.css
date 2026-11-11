@@ -87,6 +87,8 @@ span.tc-g3b-mo-ac { cursor: default; }
 @media (max-width: 519px) { .tc-g3b-mo-olcu { display: none; } }
 /* Patlatma çubuğu (2139): dar ekranda görüntünün altında, genişte görüntünün sol alt köşesinde. */
 .tc-g3b-sahne-kap { position: relative; display: grid; gap: var(--b-2); min-width: 0; }
+/* Üste binen araçlar (fırça, bilgi satırı, patlatma) görüntünün kenarına göre durur; görünüm çubuğu bu alanın dışında, altta kalır. */
+.tc-g3b-sahne-alan { position: relative; display: grid; gap: var(--b-2); min-width: 0; }
 .tc-g3b-patlat {
   display: flex; align-items: center; gap: var(--b-2); flex-wrap: wrap; padding: var(--b-1) var(--b-2);
   border-radius: var(--yari-1); background: var(--panel-solid); border: var(--cizgi-ince) solid var(--edge2);
@@ -173,11 +175,11 @@ span.tc-g3b-mo-ac { cursor: default; }
 .tc-g3b-sahne-arac { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-start; gap: var(--b-2); }
 .tc-g3b-yz-firca { display: flex; flex-wrap: wrap; gap: var(--b-1); }
 .tc-g3b-sahne-bilgi { margin: 0; color: var(--muted); font-size: var(--yazi-s); overflow-wrap: anywhere; }
-.tc-g3b-seciyor > .tc-g3b-sahne { cursor: crosshair; }
+.tc-g3b-seciyor .tc-g3b-sahne { cursor: crosshair; }
 @media (min-width: 520px) {
   .tc-g3b-sahne-arac { position: absolute; inset-block-start: var(--b-2); inset-inline: var(--b-2); pointer-events: none; }
   .tc-g3b-sahne-arac > * { pointer-events: auto; }
-  .tc-g3b-sahne-kap:not(.tc-g3b-patlatmali) > .tc-g3b-sahne-bilgi {
+  .tc-g3b-sahne-kap:not(.tc-g3b-patlatmali) .tc-g3b-sahne-bilgi {
     position: absolute; inset-inline: var(--b-2); inset-block-end: var(--b-2); padding: var(--b-1) var(--b-2);
     border-radius: var(--yari-1); background: var(--panel-solid);
   }

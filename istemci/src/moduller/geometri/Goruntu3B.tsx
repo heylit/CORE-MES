@@ -532,12 +532,14 @@ export default function Goruntu3B({ veri, bicim, vurgu = null, kutular = null, y
   const seciyor = yuzDurumu === 'hazir' && yuzBoyasi?.sec != null;
   return (
     <div className={`tc-g3b-sahne-kap${seciyor ? ' tc-g3b-seciyor' : ''}${parcaSayisi >= 2 ? ' tc-g3b-patlatmali' : ''}`}>
-      <div className="tc-g3b-sahne" ref={kap} aria-label="3B model görüntüsü" role="img">
-        {hata && <DurumKutusu durum="hata" mesaj={hata} />}
+      <div className="tc-g3b-sahne-alan">
+        <div className="tc-g3b-sahne" ref={kap} aria-label="3B model görüntüsü" role="img">
+          {hata && <DurumKutusu durum="hata" mesaj={hata} />}
+        </div>
+        {arac !== null && <div className="tc-g3b-sahne-arac">{arac}</div>}
+        {bilgi !== null && <p className="tc-g3b-sahne-bilgi">{bilgi}</p>}
+        {parcaSayisi >= 2 && <PatlatmaCubugu oran={oran} oranYaz={oranYaz} />}
       </div>
-      {arac !== null && <div className="tc-g3b-sahne-arac">{arac}</div>}
-      {bilgi !== null && <p className="tc-g3b-sahne-bilgi">{bilgi}</p>}
-      {parcaSayisi >= 2 && <PatlatmaCubugu oran={oran} oranYaz={oranYaz} />}
       <GorunumCubugu bak={bak} sigdir={() => bak(null)} doner={doner} donerYaz={donerYaz}
         onizleme={onizleme?.etiket ?? null} onizlemeAcik={onizlemeAcik} onizlemeYaz={onizlemeYaz} />
     </div>
