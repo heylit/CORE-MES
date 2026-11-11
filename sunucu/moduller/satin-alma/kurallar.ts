@@ -147,6 +147,7 @@ export const ILETILER = {
   askidakiTedarikci: (adlar: readonly string[]): string => `Kalite Merkezi'nde onayı Aday ya da Askıda olan tedarikçiye sipariş verilmez: ${adlar.join(', ')}. Kalite Merkezi'nde durumunu değiştirin ya da başka teklife karar verin.`,
   onayliKararDegismez: 'Onaylanmış karar değişmez; değişmesi için önce reddedilmelidir.',
   kilitliBasamak: 'Onaydaki ya da siparişi verilmiş talepte kademeli fiyat değişmez.',
+  basamakEnAz: 'Üst basamağın eşiği 1. basamaktan (en az miktar) büyük olur.',
   kartsizSiparis: (adlar: readonly string[]): string => `Kart bekleyen kalemle sipariş verilmez; önce kalemi malzeme kartına bağlayın: ${adlar.join(', ')}. Malzemeler bölümünde kartı "Kataloğa ekle" ile ekleyin, sonra "Kataloğa bağla" ile kalemi seçin.`,
   siparisliKalem: (adlar: readonly string[]): string => `Siparişi verilmiş kalemin miktarı ve birimi kaydetle değişmez, kalem silinmez: ${adlar.join(', ')}. Siparişteki "Kalemi değiştir" ile gerekçe yazarak değiştirin (onay yetkisi gerekir).`,
   faturaSiparisDurumu: 'Fatura yalnız siparişi verilmiş talepte bağlanır.',
@@ -358,6 +359,13 @@ export function kalemAyrintisiniKoru<T extends Pick<TalepYazimi, 'teklifler'>>(e
 // sessizce değişir. Eşik ve fiyat birlikte karşılaştırılır, sıra önemsizdir.
 const basamakIzi = (t: Pick<TalepYazimi, 'teklifler'>): string =>
   JSON.stringify(t.teklifler.flatMap((q) => q.fiyatlar.flatMap((f) => (f.basamaklar ?? []).map((b) => `${q.id}/${f.kalemId}/${Number(b.esik)}/${Number(b.birimFiyat)}`))).sort());
+// 2974-1 a: ilk basamak satırın kendisidir ve eşiği en az miktardır; üst basamak onun altında ya da eşitinde olursa hiç seçilmez
+// ama toplamı değiştirir. Ekranla aynı kural sunucuda da: korunan (gönderilmeyen) en az miktar dahil.
+export function basamakEsigiReddi(t: Pick<TalepYazimi, 'teklifler'>): string | null {
+  const ihlal = t.teklifler.some((q) => q.fiyatlar.some((f) =>
+    f.enAzMiktar != null && (f.basamaklar ?? []).some((b) => ondalikKiyas(b.esik, f.enAzMiktar!) <= 0)));
+  return ihlal ? ILETILER.basamakEnAz : null;
+}
 export function basamakKilidiReddi(eskiDurum: TalepDurumu, eski: Pick<TalepYazimi, 'teklifler'>, yeni: Pick<TalepYazimi, 'teklifler'>): string | null {
   return kilitliDurum(eskiDurum) && basamakIzi(eski) !== basamakIzi(yeni) ? ILETILER.kilitliBasamak : null;
 }
@@ -463,6 +471,21 @@ export function fiyatIzleri(eski: TeklifFiyatlari | null, yeni: TeklifFiyatlari)
       satirlar.push({
         teklifId, firmaId: (sonra ?? once)!.firmaId, kalemId, miktar: miktarlar.get(kalemId) ?? null, paraBirimi,
         ...(birimDegisti ? { oncekiParaBirimi: once!.paraBirimi } : {}), onceki, yeni: yeniDeger,
+      });
+    }
+    // 2975 (Güvenlik N1): üst basamak da fiyattır; eklenen, değişen ve silinen her basamak ayrı satır (eşik sayı olarak eşlenir).
+    const basamaklar = (q: typeof once) => new Map((q?.fiyatlar ?? []).flatMap((f) =>
+      (f.basamaklar ?? []).map((b) => [`${f.kalemId}/${Number(b.esik)}`, { kalemId: f.kalemId, esik: b.esik, fiyat: b.birimFiyat }] as const)));
+    const onceB = basamaklar(once);
+    const sonraB = basamaklar(sonra);
+    for (const anahtar of new Set([...sonraB.keys(), ...onceB.keys()])) {
+      const o = onceB.get(anahtar);
+      const y = sonraB.get(anahtar);
+      if (o !== undefined && y !== undefined && Number(o.fiyat) === Number(y.fiyat)) continue;
+      const b = (y ?? o)!;
+      satirlar.push({
+        teklifId, firmaId: (sonra ?? once)!.firmaId, kalemId: b.kalemId, miktar: miktarlar.get(b.kalemId) ?? null,
+        paraBirimi: (sonra ?? once)!.paraBirimi, basamakEsigi: b.esik, onceki: o?.fiyat ?? null, yeni: y?.fiyat ?? null,
       });
     }
   }
