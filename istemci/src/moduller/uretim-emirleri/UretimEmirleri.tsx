@@ -24,8 +24,8 @@ const GORUNUMLER = [{ anahtar: 'acik', baslik: 'Açık emirler', simge: 'list' }
 
 // Parça adının yanında malzeme kartının küçük resmi (kart #688); resim çizim merkezinden tek istekte gelir.
 const sutunlar = (resimler: ReadonlyMap<number, KucukResim>): Sutun<IzlemeEmri>[] => [
-  { anahtar: 'emirNo', baslik: 'Emir no', hucre: (e) => <Link to={`/uretim-emirleri/${e.id}`} className="tc-emir-kod">{e.emirNo}</Link> },
-  { anahtar: 'parcaNo', baslik: 'Parça no', hucre: (e) => e.parcaNo },
+  { anahtar: 'emirNo', baslik: 'Emir no', sabit: 'sol', kirilmaz: true, hucre: (e) => <Link to={`/uretim-emirleri/${e.id}`} className="tc-emir-kod">{e.emirNo}</Link> },
+  { anahtar: 'parcaNo', baslik: 'Parça no', kirilmaz: true, hucre: (e) => e.parcaNo },
   { anahtar: 'parcaAd', baslik: 'Parça adı', hucre: (e) => (e.malzemeNo == null ? e.parcaAd : (
     <span className="tc-emir-parca">
       <KucukResimKutusu resim={resimler.get(e.malzemeNo)} ad={e.parcaAd} />
@@ -102,7 +102,7 @@ export function UretimEmirleri() {
       {gorunum === 'acik' && liste.data && (
         <>
           <p className="tc-emir-sayac" role="status">{emirler.length} açık emir</p>
-          <Tablo etiket="Üretim emirleri" sutunlar={SUTUNLAR} satirlar={emirler} satirAnahtari={(e) => e.id}
+          <Tablo etiket="Üretim emirleri" kip="kaydir" sutunlar={SUTUNLAR} satirlar={emirler} satirAnahtari={(e) => e.id}
             satirSec={(e) => { void yonlendir(`/uretim-emirleri/${e.id}`); }} bosMesaj="Açık emir yok" />
           {ara !== '' && emirler.length === 0 && (
             <Dugme simge="search" onClick={() => gorunumSec('bitenler')}>Bitenlerde ara</Dugme>
@@ -110,7 +110,7 @@ export function UretimEmirleri() {
         </>
       )}
       {gorunum === 'bitenler' && bitenler.data && (
-        <Tablo etiket="Biten üretim emirleri" sutunlar={SUTUNLAR} satirlar={bitenler.data.satirlar} satirAnahtari={(e) => e.id}
+        <Tablo etiket="Biten üretim emirleri" kip="kaydir" sutunlar={SUTUNLAR} satirlar={bitenler.data.satirlar} satirAnahtari={(e) => e.id}
           satirSec={(e) => { void yonlendir(`/uretim-emirleri/${e.id}`); }} bosMesaj="Biten emir yok" mesgul={bitenler.isPlaceholderData}
           sayfalama={{ sayfa: bitenler.data.sayfa, sayfaBoyu: bitenler.data.sayfaBoyu, toplam: bitenler.data.toplam, degistir: setSayfa, etiket: 'Biten emir sayfaları' }} />
       )}
