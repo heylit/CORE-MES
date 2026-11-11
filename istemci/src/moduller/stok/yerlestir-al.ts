@@ -20,6 +20,9 @@ export function yerlestirOkut(d: YerlestirDurumu, kod: string, c: KodCozCevabi):
     if (d.satirlar.length > 0 && d.goz?.id !== c.konum.id) return { durum: d, sonuc: { ton: 'uyari', baslik: 'Önce bu gözü kaydet', alt: `${d.satirlar.length} satır ${d.goz?.kod ?? ''} gözüne bekliyor; Kaydet ya da sil.` } };
     return { durum: { ...d, goz: { id: c.konum.id, kod: c.konum.kod } }, sonuc: { ton: 'tamam', baslik: `Göz ${c.konum.kod}`, alt: 'Şimdi bu göze konanları okut.' } };
   }
+  // Raf etiketi stok yeri değildir ve bu çözücüde tanınmaz; kullanıcıya gözü okutması söylenir.
+  const t = kodTuru(kod);
+  if (t.tur === 'raf') return { durum: d, sonuc: { ton: 'uyari', baslik: `Raf ${t.deger}`, alt: 'Raf etiketi; rafın gözündeki etiketi okut.' } };
   if (c.tur !== 'lot' && c.tur !== 'malzeme') return { durum: d, sonuc: { ton: 'hata', baslik: 'Göz, lot ya da malzeme okut', alt: kod } };
   if (!d.goz) return { durum: d, sonuc: { ton: 'uyari', baslik: 'Önce gözü okut', alt: 'Bu modda ilk adım: göz' } };
   const i = d.satirlar.findIndex((s) => s.malzemeId === c.ozet.id && (c.tur === 'lot' ? s.lot && s.partiId === c.parti.id : !s.lot));

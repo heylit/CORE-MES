@@ -31,8 +31,10 @@ export const OKUT_BASI: OkutDurumu = { adim: 'ne', ileti: null };
 
 // Kişiye teslim (299 b) kişinin bulunduğu istasyona ve o kişiye yazılır. Kişi kaynak olmaz; ilk okutmada panel Teslim et'i açar (panelOkutuldu).
 const KISI_ILETISI = 'Kişinin kodu kaynak olmaz; önce malzemeyi okut, kişiyi nereye adımında okut.';
-// 614 3a: emir kimliğini taşıyan eski kart teslimde geçmez; malzeme depodan verilen refakat kartıyla gider.
-export const ESKI_KART_ILETISI = 'Eski refakat kartı; teslimde geçmez. Depodan bu emrin refakat kartını isteyin.';
+// 614 3a: emir kimliğini (UE:) taşıyan etiket teslimde geçmez; malzeme depodan verilen refakat kartıyla gider. Aynı QR'ı emrin kartı,
+// sevk kolisi, hatalı parça etiketi ve fason belgesi taşır; ileti hangisi olduğunu bilmediği için hepsini sayar.
+export const EMIR_ETIKETI_ILETISI = (emirId: number): string =>
+  `Üretim emri etiketi (Emir #${emirId}: emir kartı, koli, hatalı parça ya da fason). Okut'ta taşınmaz; lot etiketini ya da depodan verilen refakat kartını okut.`;
 // Raf stok yeri değildir: göz seçilir (panel rafın gözlerini düğme olarak gösterir) ya da gözün etiketi okutulur.
 export const RAF_ILETISI = (kod: string): string => `Raf ${kod}: gözü seç ya da gözün etiketini okut.`;
 const yerAdi = (y: OkutYeri): string => (y.ad ? `${y.ad} (${y.kod})` : y.kod);
@@ -40,7 +42,7 @@ const yerAdi = (y: OkutYeri): string => (y.ad ? `${y.ad} (${y.kod})` : y.kod);
 function kaynaklar(c: OkutCozCevabi): OkutKaynagi[] | string {
   if (c.tur === 'bilinmiyor') return `Kod tanınmadı: ${c.kod}`;
   if (c.tur === 'kisi') return KISI_ILETISI;
-  if (c.tur === 'eski-kart') return ESKI_KART_ILETISI;
+  if (c.tur === 'eski-kart') return EMIR_ETIKETI_ILETISI(c.uretimEmriId);
   if (c.tur === 'raf') return RAF_ILETISI(c.raf.kod);
   if (c.tur === 'malzeme') {
     const ad = c.malzeme.ad ?? c.malzeme.kod ?? `Malzeme #${c.malzeme.id}`;

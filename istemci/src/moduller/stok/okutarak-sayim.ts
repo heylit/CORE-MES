@@ -1,4 +1,5 @@
 import type { BakiyeSatiri, KodCozCevabi, SayimGovdesi } from '#paylasilan/sozlesme/stok.ts';
+import { kodTuru } from '#paylasilan/kod-sozlugu.ts';
 
 // Okutarak sayım (1905): göz okutulur, sonra o gözün lot ya da malzeme etiketleri. Kör sayımdır (1279 a): gözün sistem satırları
 // yalnız hangi satırın okutulmadığını bulmak için tutulur, miktarları ekrana çıkmaz. Saf: okutmanın çözümünü duruma uygular.
@@ -35,6 +36,11 @@ export function okutmaUygula(d: SayimDurumu, kod: string, c: KodCozCevabi): { du
     const sistem = c.bakiyeler.map((b: BakiyeSatiri) => ({ malzemeId: b.malzemeId, partiId: b.partiId }));
     const gozler = var_ ? d.gozler : [...d.gozler, { konumId: c.konum.id, kod: c.konum.kod, sistem, satirlar: [] }];
     return { durum: { gozler, acik: c.konum.id }, sonuc: sonuc('tamam', `Göz ${c.konum.kod}`, 'Şimdi bu gözdeki lot ya da malzeme etiketlerini okut.') };
+  }
+  // Raf etiketi stok yeri değildir ve bu çözücüde tanınmaz; sayım gözün etiketiyle yapılır.
+  if (c.tur === 'bilinmiyor') {
+    const t = kodTuru(kod);
+    if (t.tur === 'raf') return { durum: d, sonuc: sonuc('uyari', `Raf ${t.deger}`, 'Raf etiketi; sayım gözün etiketiyle yapılır, rafın gözündeki etiketi okut.') };
   }
   if (c.tur === 'bilinmiyor') return { durum: d, sonuc: sonuc('hata', 'Tanınmayan kod', `${kod}: sayımda göz, lot ya da malzeme etiketi okutulur.`) };
   const goz = d.gozler.find((g) => g.konumId === d.acik);

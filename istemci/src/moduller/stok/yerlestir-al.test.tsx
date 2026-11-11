@@ -47,6 +47,15 @@ describe('Yerlestir', () => {
   });
 });
 
+describe('Yerlestir raf', () => {
+  it('raf etiketi gozun etiketini ister, durumu degistirmez (reddedilen)', () => {
+    const d = uygula(YERLESTIR_BASI, ['LOC:A-01-1', goz(41, 'A-01-1')]);
+    const r = yerlestirOkut(d, 'RAF:A12', { tur: 'bilinmiyor', kod: 'RAF:A12' });
+    expect(r.sonuc).toMatchObject({ ton: 'uyari', baslik: 'Raf A12' });
+    expect(r.durum).toBe(d);
+  });
+});
+
 describe('Al', () => {
   it('malzeme ya da lot etiketi ne, baska etiket nereden; yeni malzeme yeri korur', () => {
     let k = alOkutmasi({ kod: '', yerKodu: '' }, 'LOT:LT-7');

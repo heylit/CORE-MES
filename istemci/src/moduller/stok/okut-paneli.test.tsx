@@ -181,7 +181,7 @@ describe('Okutma sonucu', () => {
     fireEvent.click(within(goz2).getByRole('button', { name: 'A1-02-01' }));
     await waitFor(() => expect(istekler.some((i) => i.yol === `/stok/teslim-kutusu/kod-coz?kod=${encodeURIComponent('LOC:A1-02-01')}`)).toBe(true));
     await okut(panel, 'UE:7');
-    expect(await within(panel).findByText('Eski refakat kartı; teslimde geçmez. Depodan bu emrin refakat kartını isteyin.')).toBeTruthy();
+    expect((await within(panel).findAllByText(/Üretim emri etiketi \(Emir #7/)).length).toBeGreaterThan(0);
     // 1906: son okutmalar şeridi; raf doğru okutmadır, eski kart uyarıdır. Seçilen göz bu örnekte tanımsızdır, yanlıştır.
     const serit = within(panel).getByRole('list', { name: 'Son okutmalar' });
     expect([...serit.querySelectorAll('li')].map((l) => [l.querySelector('b')?.textContent, l.getAttribute('data-ton')])).toEqual([['UE:7', 'uyari'], ['LOC:A1-02-01', 'hata'], ['RAF:A1', 'tamam']]);
