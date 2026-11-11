@@ -64,7 +64,8 @@ export function poText(r: PurchaseRequest, o: OrderInfo): string {
     const p = o.q.prices[it.id] ?? 0, qty = parseNum(it.qty) || 0; total += p * qty;
     L.push(`${i + 1}. ${it.name}${it.spec ? ` (${it.spec})` : ""}: ${numIn(qty)} ${it.unit} × ${money(p, o.q.currency)} = ${money(p * qty, o.q.currency)}`);
     // 2875: fason firması hangi parçaya hangi işlemi yapacağını siparişte de görür; teklif isteme metniyle aynı satırlar.
-    for (const t of teklifMetniSatirlari(it)) L.push(`   ${t}`);
+    const satir = (r.award?.lines ?? []).find((l) => l.itemId === it.id && l.quoteId === o.qid);
+    for (const t of teklifMetniSatirlari(it, satir?.parcaRevizyonu ?? null)) L.push(`   ${t}`);
   });
   const disc = (parseNum(o.q.discountPct) || 0) / 100;
   if (disc) { L.push(`İskonto %${numIn(disc * 100)}: −${money(total * disc, o.q.currency)}`); total *= 1 - disc; }

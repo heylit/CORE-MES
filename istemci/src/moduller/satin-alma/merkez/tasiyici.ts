@@ -92,6 +92,7 @@ export function talepEkrana(t: Talep): PurchaseRequest {
     } : {}),
     lines: k.siparisler.flatMap((x) => x.satirlar.map((r) => ({
       id: r.id, itemId: r.kalemId, quoteId: x.teklifId, qty: Number(r.miktar), unit: r.birim, received: r.teslimAlinan === null ? null : Number(r.teslimAlinan),
+      parcaRevizyonu: r.parcaRevizyonu ?? null,
     }))),
     ...(k.mod === 'bolunmus' ? {
       orders: Object.fromEntries(k.siparisler.map((s): [string, AwardOrder] => [s.teklifId, {
