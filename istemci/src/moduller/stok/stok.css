@@ -580,3 +580,17 @@ a.tc-stok-kpi:hover, a.tc-stok-kpi:focus-visible { background: var(--panel2); }
 @media (max-width: 767px) {
   .tc-tablo-kap[data-kaydir] .tc-stok-etiketler { max-inline-size: var(--menu-sabit); }
 }
+
+/* Telefon: tek sütun 360'a sığar; alttaki Okut/Taşı/Hazırlık çubuğu genişliği aşınca bütün sayfa 8 px taşıyordu.
+   İş kutusu kısayolları iki sütunlu kısa kutulardır, Okut iki sütunu kaplar; dev başlık bir boy küçülür. */
+@media (max-width: 767px) {
+  .tc-stok { grid-template-columns: minmax(0, 1fr); gap: var(--b-4); }
+  .tc-stok-baslik { font-size: var(--yazi-xl); }
+  .tc-stok-depocu { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--b-2); }
+  .tc-stok-depocu-kutu { padding: var(--b-3); }
+  .tc-stok-depocu-kutu strong { font-size: var(--yazi-l); }
+  .tc-stok-depocu-ana { grid-column: 1 / -1; }
+  .tc-stok-depocu-cubuk { gap: var(--b-1); padding: var(--b-1); box-shadow: var(--shadow); }
+  .tc-stok-depocu-cubuk > * { flex: 1 1 0; min-width: 0; }
+  .tc-stok-depocu-cubuk .tc-dugme { inline-size: 100%; min-inline-size: 0; padding-inline: var(--b-2); justify-content: center; }
+}

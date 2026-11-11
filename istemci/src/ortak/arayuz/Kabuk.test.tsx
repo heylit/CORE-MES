@@ -142,12 +142,40 @@ describe('Kabuk', () => {
     expect(screen.queryByRole('button', { name: 'Ne oldu? Kayıt gir' })).toBeNull();
     yetkisiz.unmount();
     kur(['sayfa.stok', 'stok.giris']);
-    fireEvent.click(screen.getByRole('button', { name: 'Ne oldu? Kayıt gir' }));
+    // Telefonda aynı düğme alt çubuğun ortasındadır; iki yerde de bir tane vardır.
+    expect(within(screen.getByRole('navigation', { name: 'Alt gezinme' })).getAllByRole('button', { name: 'Ne oldu? Kayıt gir' })).toHaveLength(1);
+    fireEvent.click(within(screen.getByRole('banner')).getByRole('button', { name: 'Ne oldu? Kayıt gir' }));
     const panel = within(screen.getByRole('dialog', { name: 'Ne oldu?' }));
     expect(panel.getByRole('heading', { name: 'Stok' })).toBeTruthy();
     fireEvent.click(panel.getByRole('button', { name: /Malzeme geldi/ }));
     expect(screen.queryByRole('dialog', { name: 'Ne oldu?' })).toBeNull();
     expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Stok Merkezi');
+  });
+
+  it('telefonun Tumu penceresinde ad yazilinca yalniz eslesen sayfalar kalir; eslesme yoksa bunu soyler', () => {
+    ciz();
+    fireEvent.click(within(screen.getByRole('navigation', { name: 'Alt gezinme' })).getByRole('button', { name: 'Tümü' }));
+    const pencere = within(screen.getByRole('dialog', { name: 'Tüm sayfalar' }));
+    fireEvent.change(pencere.getByRole('searchbox', { name: 'Sayfa ara' }), { target: { value: 'STOK' } });
+    const bulunan = within(pencere.getByRole('group', { name: 'Bulunan sayfalar' }));
+    expect(bulunan.getByRole('link', { name: 'Stok Merkezi' })).toBeTruthy();
+    const stokGrubu = new Set<string>(SAYFALAR.filter((x) => (x.grup ?? '').toLocaleLowerCase('tr').includes('stok')).map((x) => x.baslik));
+    expect(bulunan.getAllByRole('link').every((a) => (a.textContent ?? '').toLocaleLowerCase('tr').includes('stok') || stokGrubu.has(a.getAttribute('aria-label') ?? a.textContent ?? ''))).toBe(true);
+    fireEvent.change(pencere.getByRole('searchbox', { name: 'Sayfa ara' }), { target: { value: 'yokboylebirsayfa' } });
+    expect(pencere.getByText('Bu adla sayfa yok')).toBeTruthy();
+  });
+
+  it('telefonun Tumu aramasi grup adini da eslestirir: grubun butun sayfalari cikar', () => {
+    const gruplar = [...new Set(SAYFALAR.filter(menudeGorunur).map((x) => x.grup as string | undefined).filter((g): g is string => g !== undefined))];
+    const grup = gruplar.find((g) => SAYFALAR.some((x) => x.grup === g && menudeGorunur(x) && !x.baslik.toLocaleLowerCase('tr').includes(g.toLocaleLowerCase('tr'))));
+    expect(grup).toBeDefined();
+    if (grup === undefined) return;
+    ciz();
+    fireEvent.click(within(screen.getByRole('navigation', { name: 'Alt gezinme' })).getByRole('button', { name: 'Tümü' }));
+    const pencere = within(screen.getByRole('dialog', { name: 'Tüm sayfalar' }));
+    fireEvent.change(pencere.getByRole('searchbox', { name: 'Sayfa ara' }), { target: { value: grup } });
+    const bulunan = within(pencere.getByRole('group', { name: 'Bulunan sayfalar' }));
+    for (const x of SAYFALAR.filter((y) => y.grup === grup && menudeGorunur(y))) expect(bulunan.getByRole('link', { name: x.baslik })).toBeTruthy();
   });
 
   it('SAYFALAR listesindeki her sayfanin ana menude baglantisi var', () => {
@@ -344,7 +372,7 @@ describe('Kabuk', () => {
     for (const s of gorunen) expect(liste.getByRole('link', { name: s.baslik })).toBeTruthy();
   });
 
-  it('sik kullanilanlar menunun ustunde kisinin sirasiyla durur, gruplarda da kalir; acamadigi sayfa cikmaz; alt cubuk ilk ucunu alir (2951)', () => {
+  it('sik kullanilanlar menunun ustunde kisinin sirasiyla durur, gruplarda da kalir; acamadigi sayfa cikmaz; Kayit gir olmayan kiside alt cubuk ilk ucunu alir (2951)', () => {
     const gorunen = SAYFALAR.filter((s) => ['/arkon', '/kuyruk', '/stok', '/plan'].includes(s.yol));
     const istemci = new QueryClient();
     istemci.setQueryData(menuTercihiAnahtari, { sayfalar: ['/plan', '/cnc-kurulum', '/kuyruk', '/arkon', '/stok'], surum: 3 });

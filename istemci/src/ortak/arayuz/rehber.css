@@ -74,7 +74,11 @@
 
 @media (max-width: 767px) {
   /* Alt gezinme çubuğunun üstünde durur. */
-  .tc-tanitim-davet { inset-inline: var(--b-3); inset-block-end: calc(var(--dokunma-ana) + var(--b-4)); max-inline-size: none; }
+  .tc-tanitim-davet { inset-inline: var(--b-3); inset-block-end: calc(var(--alt-cubuk) + env(safe-area-inset-bottom, 0px) + var(--b-3)); max-inline-size: none; }
+  /* Telefonda davet ekranın üçte birini örtüyordu: açıklama satırı düşer (Yardım'dadır), düğmeler satırı eşit paylaşır. */
+  .tc-tanitim-davet { gap: var(--b-2); padding: var(--b-3); }
+  .tc-tanitim-davet-metin > span { display: none; }
+  .tc-tanitim-davet-dugmeler > * { flex: 1 1 0; }
 }
 
 .tc-kitapcik {
