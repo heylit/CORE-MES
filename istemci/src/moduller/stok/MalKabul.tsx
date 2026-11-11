@@ -25,6 +25,8 @@ interface Satir {
   ambalajTur: '' | AmbalajTuru; ambalajOlcu: string; ozelL: string; ozelW: string; ozelH: string; ambalajSayisi: string; ambalajIci: string; elleMiktar: boolean;
   // Satın alma kabulünde seçilen sipariş satırı (boşsa bağsız); etiket ekranda gösterilir.
   siparisSatirId: string; siparisEtiketi: string;
+  // 2877: sipariş satırının parça revizyonu ve yürürlükteki revizyon ('' bilinmiyor); uyuşmazlık sunucudan gelir.
+  siparisRevizyonu: string; yururlukRevizyonu: string; revizyonUyusmuyor: boolean;
   // Hizmet siparişi (K-080 c): fasondan malzeme döndüyse satırın kartı dönen malzemedir, giden fason kutusundan düşer;
   // dönmediyse satır hizmet kartıyla yalnız teslim verir.
   hizmetKarti: string; donus: 'fason' | 'hizmet'; gidenKart: string; fasonKonumId: string; gidenMiktar: string;
@@ -43,6 +45,7 @@ interface Satir {
 }
 let sayac = 0;
 const bosSatir = (): Satir => ({ anahtar: ++sayac, kart: '', miktar: '', konumId: '', tedarikciPartiNo: '', dokumNo: '', sertifikaNo: '', ambalajTur: '', ambalajOlcu: '', ozelL: '', ozelW: '', ozelH: '', ambalajSayisi: '', ambalajIci: '', elleMiktar: false, siparisSatirId: '', siparisEtiketi: '',
+  siparisRevizyonu: '', yururlukRevizyonu: '', revizyonUyusmuyor: false,
   hizmetKarti: '', donus: 'fason', gidenKart: '', fasonKonumId: '', gidenMiktar: '', gidenParti: '', fasonIsEmriId: '', fasonIsEtiketi: '', bekleyenFasonIsi: '',
   sertifikaOzet: '', sertifikaAdi: '', sertifikaYukleniyor: false, sevkKalemiId: '', sevkEtiketi: '', sonKullanma: '' });
 // Hiç dokunulmamış satır (kart, miktar, sipariş ve hizmet boş); emirden dolumda yerini doldurulan satırlara bırakır.
@@ -205,6 +208,18 @@ export function MalzemeResmi({ id, ad }: { id: number; ad: string }) {
   return <div className="tc-stok-tam"><KucukResimKutusu resim={resim} ad={ad} boy="orta" /></div>;
 }
 
+const SIPARIS_REVIZYONSUZ = { siparisRevizyonu: '', yururlukRevizyonu: '', revizyonUyusmuyor: false } as const;
+
+// 2877: parti sipariş satırının revizyonuyla açılır, resim ise kartın yürürlükteki revizyonunu gösterir. Eski revizyonla verilmiş
+// sipariş dönerse depocu farkı satırda görür.
+export function RevizyonUyarisi({ siparis, yururlukte }: { siparis: string; yururlukte: string }) {
+  return (
+    <p className="tc-stok-tam tc-stok-bilgi tc-stok-bilgi-uyari" role="alert">
+      Sipariş <strong>{siparis}</strong> revizyonuyla verildi; yürürlükteki revizyon <strong>{yururlukte}</strong>. Parçayı siparişteki revizyona göre kontrol edin; resim yürürlükteki revizyonu gösterebilir.
+    </p>
+  );
+}
+
 function SatirGirdisi({ s, konumlar, degistir, sil }: { s: Satir; konumlar: { deger: string; baslik: string }[]; degistir: (d: Partial<Satir>) => void; sil?: () => void }) {
   const o = useMalzemeOzeti(s.kart);
   const id = o.data?.ozet.id ?? 0;
@@ -226,9 +241,10 @@ function SatirGirdisi({ s, konumlar, degistir, sil }: { s: Satir; konumlar: { de
       <legend>Satır</legend>
       {id > 0 && <MalzemeResmi id={id} ad={o.data?.ozet.ad ?? o.data?.ozet.kod ?? ''} />}
       {s.siparisSatirId && (
-        <p className="tc-stok-tam tc-stok-bilgi">Sipariş satırı: <strong>{s.siparisEtiketi}</strong>{' '}
-          <Dugme tur="ikincil" onClick={() => degistir({ siparisSatirId: '', siparisEtiketi: '', hizmetKarti: '', ...(s.hizmetKarti ? { kart: '' } : {}) })}>Bağı kaldır</Dugme></p>
+        <p className="tc-stok-tam tc-stok-bilgi">Sipariş satırı: <strong>{s.siparisEtiketi}</strong>{s.siparisRevizyonu && <> · Rev. <strong>{s.siparisRevizyonu}</strong></>}{' '}
+          <Dugme tur="ikincil" onClick={() => degistir({ siparisSatirId: '', siparisEtiketi: '', ...SIPARIS_REVIZYONSUZ, hizmetKarti: '', ...(s.hizmetKarti ? { kart: '' } : {}) })}>Bağı kaldır</Dugme></p>
       )}
+      {s.siparisSatirId && s.revizyonUyusmuyor && <RevizyonUyarisi siparis={s.siparisRevizyonu} yururlukte={s.yururlukRevizyonu} />}
       {s.sevkKalemiId && (
         <p className="tc-stok-tam tc-stok-bilgi">Sevkiyat kalemi: <strong>{s.sevkEtiketi}</strong>{' '}
           <Dugme tur="ikincil" onClick={() => degistir({ sevkKalemiId: '', sevkEtiketi: '' })}>Bağı kaldır</Dugme></p>
@@ -353,7 +369,8 @@ function AcikSiparisler({ sec }: { sec: (x: AcikSiparisSatiri) => void }) {
   const [ara, araYaz] = useState('');
   const sutunlar: Sutun<AcikSiparisSatiri>[] = [
     { anahtar: 'siparis', baslik: 'Sipariş', mono: true, kirilmaz: true, hucre: (x) => x.siparisNo || x.talepNo },
-    { anahtar: 'kalem', baslik: 'Malzeme', hucre: (x) => (x.malzemeTur === 'hizmet' ? <span className="tc-stok-ad"><strong>{x.kalemAdi}</strong><Rozet ton="bilgi">Fason dönüşü</Rozet></span> : x.kalemAdi) },
+    { anahtar: 'kalem', baslik: 'Malzeme', hucre: (x) => (x.malzemeTur === 'hizmet' ? <span className="tc-stok-ad"><strong>{x.kalemAdi}</strong>{hizmetRozeti(x)}</span> : x.kalemAdi) },
+    { anahtar: 'rev', baslik: 'Rev.', kirilmaz: true, hucre: (x) => (x.parcaRevizyonu ? <span className="tc-stok-ad">{x.parcaRevizyonu}{x.revizyonUyusmuyor === true && <Rozet ton="uyari">{`Yürürlükte ${x.yururlukRevizyonu ?? ''}`}</Rozet>}</span> : '—') },
     { anahtar: 'tedarikci', baslik: 'Tedarikçi', hucre: (x) => x.tedarikciAdi },
     { anahtar: 'emir', baslik: 'Üretim emri', mono: true, kirilmaz: true, hucre: (x) => x.emirNo ?? '—' },
     { anahtar: 'proje', baslik: 'Proje', hucre: (x) => x.projeAdi ?? '—' },
@@ -370,10 +387,14 @@ function AcikSiparisler({ sec }: { sec: (x: AcikSiparisSatiri) => void }) {
   );
 }
 // Hizmet siparişinde satırın kartı varsayılan olarak dönen malzemedir (fason); "Malzeme dönmedi" hizmet kartını koyar.
+// 2877: fason dönüşü yalnız iş emrine bağlı hizmet satırıdır; iş emrisiz hizmet (kalibrasyon gibi) yalnız hizmettir.
+export const hizmetRozeti = (x: Pick<AcikSiparisSatiri, 'isEmriId'>) =>
+  (x.isEmriId != null ? <Rozet ton="bilgi">Fason dönüşü</Rozet> : <Rozet ton="pasif">Hizmet</Rozet>);
 const siparistenSatir = (s: Satir, x: AcikSiparisSatiri): Satir => ({
   ...s, ...(x.malzemeTur === 'hizmet' ? { kart: '', hizmetKarti: String(x.malzemeId), donus: 'fason' as const } : { kart: x.malzemeId === null ? s.kart : String(x.malzemeId), hizmetKarti: '' }),
   miktar: miktarMetni(x.kalanMiktar).replace(/\./g, ''), elleMiktar: true,
   siparisSatirId: String(x.id), siparisEtiketi: [x.siparisNo || x.talepNo, x.tedarikciAdi, x.kalemAdi].filter(Boolean).join(' · '),
+  siparisRevizyonu: x.parcaRevizyonu ?? '', yururlukRevizyonu: x.yururlukRevizyonu ?? '', revizyonUyusmuyor: x.revizyonUyusmuyor === true,
 });
 
 // Emrin eksikleri ("Eksikleri teslim al", kullanıcı kararı a): emir ekranı `?emir=<kimlik>` ile açar; eksik malzemeler satır olarak

@@ -22,6 +22,9 @@ export const belgeNo = (db: Db, anahtar: NumaraAnahtari, tablo: BelgeTablosu): P
 export type ParcaRevizyonuCozucusu = (db: Db, malzemeIdleri: readonly number[]) => Promise<Map<number, string>>;
 let parcaRevizyonuCozucu: ParcaRevizyonuCozucusu = async () => new Map();
 export function parcaRevizyonuCozucusuKaydet(cozucu: ParcaRevizyonuCozucusu): void { parcaRevizyonuCozucu = cozucu; }
+// Mal kabul (2877): sipariş satırının revizyonu yürürlüktekiyle aynı kaynaktan karşılaştırılır.
+export const yururluktekiRevizyonlar = (db: Db, malzemeIdleri: readonly number[]): Promise<Map<number, string>> =>
+  malzemeIdleri.length === 0 ? Promise.resolve(new Map()) : parcaRevizyonuCozucu(db, [...new Set(malzemeIdleri)]);
 const partiRevizyonu = async (db: Db, malzemeId: number): Promise<string | null> => (await parcaRevizyonuCozucu(db, [malzemeId])).get(malzemeId) ?? null;
 
 // Her mal kabul gelişi ayrı lottur, aynı tedarikçi parti/döküm no gelse de (#124); yalnız üretim girişi emrin partisine eklenir.
