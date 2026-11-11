@@ -144,9 +144,9 @@ test.describe('yönetici', () => {
       });
     }
 
-    test('ölçüm cihazları Kalibrasyon sayfasına götürür', async ({ page, ac }) => {
+    test('ölçüm cihazları Ölçü Aletleri sayfasına götürür', async ({ page, ac }) => {
       await ac('/kalite-merkezi/cihazlar');
-      await page.getByRole('button', { name: 'Kalibrasyon sayfasına git' }).click();
+      await page.getByRole('button', { name: "Ölçü Aletleri'ne git" }).click();
       await expect(page).toHaveURL(/\/kalibrasyon$/);
     });
   });

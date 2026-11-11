@@ -5,7 +5,7 @@ export interface OlcumAleti { id: string; no: string; type?: string; status?: st
 export interface OlcumAletDamgasi { gid: string; gno: string }
 
 export const ALET_ZORUNLU_ILETISI = 'Ölçü aleti seçilmeden ölçüm kaydedilmez.';
-export const ALET_YOK_ILETISI = 'Kalibrasyonu geçerli ölçü aleti yok · Kalibrasyon sayfasına bakın.';
+export const ALET_YOK_ILETISI = 'Kalibrasyonu geçerli ölçü aleti yok · Ölçü Aletleri sayfasına bakın.';
 
 const GUN_MS = 864e5;
 const kucuk = (m: unknown): string => String(m ?? '').toLocaleLowerCase('tr-TR').trim();

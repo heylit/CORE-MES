@@ -15,13 +15,13 @@ const t = bugunTarihi();
 const aletler = [alet('OC-1', ayEkle(gunEkle(t, -10), -12)), alet('OC-2', ayEkle(gunEkle(t, 10), -12)), alet('OC-3', gunEkle(t, -30)), alet('OC-4', '', 'disi')];
 
 describe('Kalibrasyon (salt okunur, 329 a)', () => {
-  it('cihazlar Kalibrasyondan gelir; yazma düğmesi yok, satırda Kalibrasyonda aç', async () => {
+  it('cihazlar Kalibrasyondan gelir; yazma düğmesi yok, satırda Ölçü Aletleri bağlantısı', async () => {
     sahteSunucu({ depo: ornekDepo(), aletler });
     await baglamlaAc(<Kalibrasyon />, 'kalib');
     const tablo = await screen.findByRole('table', { name: 'Cihazlar' });
     expect(within(tablo).getAllByRole('row')).toHaveLength(5);
     for (const ad of [/^Kalibre edildi$/, /^Sil$/, /^Düzenle$/, /Excel'den yapıştır/]) expect(screen.queryByRole('button', { name: ad })).toBeNull();
-    const baglanti = within(tablo).getAllByRole('link', { name: 'Kalibrasyonda aç' })[0];
+    const baglanti = within(tablo).getAllByRole('link', { name: "Ölçü Aletleri'nde aç" })[0];
     expect(baglanti?.getAttribute('href')).toBe('/kalibrasyon');
     expect(screen.getByText('10 gün gecikti')).toBeTruthy();
   });
@@ -52,6 +52,6 @@ describe('Kalibrasyon (salt okunur, 329 a)', () => {
     sahteSunucu({ depo: ornekDepo(), yazabilir: false, yonetici: false });
     await baglamlaAc(<Kalibrasyon />, 'kalib');
     expect(await screen.findByText('Cihaz listesi boş')).toBeTruthy();
-    expect(screen.getByRole('link', { name: 'Kalibrasyona git' }).getAttribute('href')).toBe('/kalibrasyon');
+    expect(screen.getByRole('link', { name: "Ölçü Aletleri'ne git" }).getAttribute('href')).toBe('/kalibrasyon');
   });
 });

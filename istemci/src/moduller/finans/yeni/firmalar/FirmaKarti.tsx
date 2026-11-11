@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { Firma, FirmaAyrintiCevabi, FirmaCevabi } from '#paylasilan/sozlesme/musteri-tedarikci.ts';
 import { Dugme, DurumKutusu, Kart, useBildirim } from '../../../../ortak/arayuz/index.ts';
@@ -7,11 +8,11 @@ import { YOK } from '../bicim.ts';
 import { firmaEtiketi } from '../donustur.ts';
 import type { EkranOzellikleri } from '../sekmeler.ts';
 import { CariHesap } from './CariHesap.tsx';
-import { FirmaFormu } from './FirmaFormu.tsx';
 import { FIRMA_TUR_ADI, firmaTarafi, LOGO_DURUM_ADI, pasifOnKontrol } from './kurallar.ts';
 
 // Firma kartı (prototipte VIEWS.firmad; tam kipte altında cari hesap). Kart musteri-tedarikci'den okunur; aktiflik geçişi
-// finansın ucundadır (FNS-60: açık kayıt varken pasife alınmaz). Düzenleme ve durum düğmeleri musteri-tedarikci.yaz ister.
+// finansın ucundadır (FNS-60: açık kayıt varken pasife alınmaz). Kartın ana yeri Müşteriler ve Tedarikçiler'dir: burada
+// kart salt okunur, düzenleme oraya götürür. Düzenleme bağlantısı ve durum düğmesi musteri-tedarikci.yaz ister.
 
 const kartAnahtari = (id: number) => ['finans', 'yeni', 'firma', id] as const;
 
@@ -27,7 +28,7 @@ function Alan({ ad, deger }: { ad: string; deger: string | number | null | undef
 export function FirmaKarti({ id, finans, yetki, kayitGir, geri }: EkranOzellikleri & { id: number; geri: () => void }) {
   const istemci = useQueryClient();
   const { bildir } = useBildirim();
-  const [duzenle, duzenleYaz] = useState(false);
+  const git = useNavigate();
   const [soruyor, soruyorYaz] = useState(false);
   const [uyari, uyariYaz] = useState<string | null>(null);
   const kart = useQuery({ queryKey: kartAnahtari(id), queryFn: () => api.get<FirmaAyrintiCevabi>(`/musteri-tedarikci/firmalar/${id}`) });
@@ -79,7 +80,7 @@ export function FirmaKarti({ id, finans, yetki, kayitGir, geri }: EkranOzellikle
         baslik={f.ad}
         sag={yetki.firmaYaz ? (
           <div className="tc-fk-dugmeler">
-            <Dugme simge="edit" onClick={() => duzenleYaz(true)}>Düzenle</Dugme>
+            <Dugme simge="edit" onClick={() => { void git(`/musteri-tedarikci?firma=${f.id}`); }}>Müşteriler ve Tedarikçiler&apos;de düzenle</Dugme>
             {soruyor
               ? <Dugme {...(f.aktif ? { tur: 'tehlike' as const } : {})} yukleniyor={durum.isPending} onClick={durumDegistir}>{f.aktif ? 'Pasife almayı onayla' : 'Aktif yapmayı onayla'}</Dugme>
               : <Dugme simge={f.aktif ? 'lock' : 'check'} onClick={durumIste}>{f.aktif ? 'Pasife al' : 'Aktif yap'}</Dugme>}
@@ -122,13 +123,6 @@ export function FirmaKarti({ id, finans, yetki, kayitGir, geri }: EkranOzellikle
       </div>
       <p className="tc-fk-not">Açılış {tarih(f.olusturma)}{f.guncelleme ? ` · son değişiklik ${tarih(f.guncelleme)}` : ''}</p>
       {finans && etiket && <CariHesap finans={finans} yetki={yetki} kayitGir={kayitGir} party={etiket} side={firmaTarafi(f.tur)} />}
-      {duzenle && (
-        <FirmaFormu
-          firma={f} kapat={() => duzenleYaz(false)}
-          kaydedildi={(yeni) => { duzenleYaz(false); istemci.setQueryData(kartAnahtari(id), { ...kart.data, firma: yeni }); }}
-          yenile={async () => { const r = await kart.refetch(); return r.data?.firma ?? null; }}
-        />
-      )}
     </div>
   );
 }

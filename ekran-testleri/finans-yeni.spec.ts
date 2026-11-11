@@ -174,12 +174,13 @@ test.describe('F1 kayıtlar ve firmalar', () => {
     const tur = ekran.getByRole('group', { name: 'Firma türü' });
     await expect(tur).toBeVisible({ timeout: 15_000 });
     await tur.getByRole('button', { name: 'Tümü' }).click();
-    await expect(ekran.getByRole('button', { name: /Yeni firma/ })).toBeVisible();
+    await expect(ekran.getByRole('button', { name: "Müşteriler ve Tedarikçiler'de ekle" })).toBeVisible();
     expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0);
     const satir = ekran.getByRole('table', { name: 'Firmalar' }).getByRole('row').nth(1);
     if (await satir.isVisible()) {
       await satir.click();
       await expect(ekran.getByRole('heading', { name: 'Kimlik' })).toBeVisible();
+      await expect(ekran.getByRole('button', { name: 'Düzenle', exact: true })).toHaveCount(0);
       expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0);
       await ekran.getByRole('button', { name: 'Firmalar', exact: true }).click();
       await expect(tur).toBeVisible();
@@ -188,11 +189,13 @@ test.describe('F1 kayıtlar ve firmalar', () => {
     expect(ag.hatalar).toEqual([]);
   });
 
-  test('Firmalar: yeni firma formu açılır, Vazgeç ile kapanır, yazma gitmez', async ({ page, ag, ac }) => {
+  // Firma kartının ana yeri Müşteriler ve Tedarikçiler'dir (3002 a); Finans'ta form açılmaz, düğme oraya götürür.
+  test('Firmalar: ekle düğmesi Müşteriler ve Tedarikçiler\'de yeni firma formunu açar, yazma gitmez', async ({ page, ag, ac }) => {
     await ac('/finans/firmalar');
-    await page.locator('.tc-fy').getByRole('button', { name: /Yeni firma/ }).click();
+    await page.locator('.tc-fy').getByRole('button', { name: "Müşteriler ve Tedarikçiler'de ekle" }).click();
+    await expect(page).toHaveURL(/\/musteri-tedarikci(\?|$)/);
     const form = page.getByRole('dialog', { name: 'Yeni firma' });
-    await expect(form.getByLabel('Vergi no')).toBeVisible();
+    await expect(form.getByLabel('Vergi no')).toBeVisible({ timeout: 15_000 });
     expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0);
     await form.getByRole('button', { name: 'Vazgeç' }).click();
     await expect(form).toBeHidden();

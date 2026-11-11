@@ -1,7 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import type { Kullanici } from '#paylasilan/kullanici.ts';
-import { ISTEK_KIMLIGI_BASLIGI } from '#paylasilan/istek-kimligi.ts';
 import { ornekHamVeri } from '../ornek-ham-veri.ts';
 import { FIRMACI, finansAc, json, OKUYAN, sunucuKur, YAZAN, type Istek } from '../test-ortak.tsx';
 import { ornekFirma } from './test-veri.ts';
@@ -39,25 +38,12 @@ describe('Firmalar listesi', () => {
     await waitFor(() => expect(istekler.filter((i) => i.yol === '/musteri-tedarikci/firmalar').length).toBeGreaterThan(ilk));
   });
 
-  it('musteri-tedarikci.yaz ile yeni firma açılır: tek uca, istek kimliğiyle; sonra kart açılır', async () => {
-    const basliklar: (string | null)[] = [];
-    const istekler = sunucuKur(KART_YAZAN, {
-      'POST /musteri-tedarikci/firmalar/ekle': () => json(200, { firma: ornekFirma({ id: 9, ad: 'Yeni Firma' }) }),
-      'GET /musteri-tedarikci/firmalar/9': kartCevabi({ id: 9, ad: 'Yeni Firma' }),
-    });
-    const asil = globalThis.fetch as unknown as (a: string, s?: RequestInit) => Promise<Response>;
-    vi.stubGlobal('fetch', vi.fn((a: string, s?: RequestInit) => { basliklar.push(new Headers(s?.headers).get(ISTEK_KIMLIGI_BASLIGI)); return asil(a, s); }));
+  it('musteri-tedarikci.yaz ile ekleme Müşteriler ve Tedarikçiler formuna götürür; burada yazma yok', async () => {
+    const istekler = sunucuKur(KART_YAZAN, {});
     finansAc(LISTE);
-    fireEvent.click(await screen.findByRole('button', { name: /Yeni firma/ }));
-    const form = await screen.findByRole('dialog', { name: 'Yeni firma' });
-    fireEvent.change(within(form).getByLabelText(/^Ad\s*\*?$/), { target: { value: 'Yeni Firma' } });
-    fireEvent.click(within(form).getByRole('button', { name: 'Kaydet' }));
-    await screen.findByRole('heading', { name: 'Yeni Firma' });
-    const yazma = istekler.filter(kayitYazmasi);
-    expect(yazma).toHaveLength(1);
-    expect(yazma[0]!.yol).toBe('/musteri-tedarikci/firmalar/ekle');
-    expect(yazma[0]!.govde).toMatchObject({ ad: 'Yeni Firma', tur: 'musteri', ulkeKodu: 'TR', paraBirimi: 'TRY', vadeGunu: null });
-    expect(basliklar.some((b) => b !== null)).toBe(true);
+    fireEvent.click(await screen.findByRole('button', { name: "Müşteriler ve Tedarikçiler'de ekle" }));
+    await waitFor(() => expect(screen.getByTestId('adres').textContent).toBe('/musteri-tedarikci?yeni=1'));
+    expect(istekler.filter(kayitYazmasi)).toHaveLength(0);
   });
 });
 
@@ -128,20 +114,13 @@ describe('Firma kartı', () => {
     await screen.findByText('Firmanın kapanmamış faturası var.');
   });
 
-  it("düzenleme Logo'ya gönderilmiş kartta kodu kilitler ve sürümle günceller", async () => {
-    const istekler = sunucuKur(KART_YAZAN, {
-      'GET /musteri-tedarikci/firmalar/1': kartCevabi({ logoKayitNo: 5, logoCariKodu: 'L-1' }),
-      'POST /musteri-tedarikci/firmalar/1/guncelle': () => json(200, { firma: ornekFirma({ ad: 'Yeni ad', logoKayitNo: 5, logoCariKodu: 'L-1', surum: 4 }) }),
-    });
+  it('kart salt okunur: düzenleme Müşteriler ve Tedarikçiler kartına götürür', async () => {
+    const istekler = sunucuKur(KART_YAZAN, { 'GET /musteri-tedarikci/firmalar/1': kartCevabi() });
     finansAc(`${LISTE}?firma=1`);
-    fireEvent.click(await screen.findByRole('button', { name: /Düzenle/ }));
-    const form = await screen.findByRole('dialog', { name: 'Firmayı düzenle' });
-    expect((within(form).getByLabelText('Kod') as HTMLInputElement).disabled).toBe(true);
-    fireEvent.change(within(form).getByLabelText(/^Ad\s*\*?$/), { target: { value: 'Yeni ad' } });
-    fireEvent.click(within(form).getByRole('button', { name: 'Kaydet' }));
-    await screen.findByRole('heading', { name: 'Yeni ad' });
-    const yazma = istekler.find(kayitYazmasi)!;
-    expect(yazma.yol).toBe('/musteri-tedarikci/firmalar/1/guncelle');
-    expect(yazma.govde).toMatchObject({ ad: 'Yeni ad', kod: 'M1', logoCariKodu: 'L-1', surum: 3 });
+    await screen.findByRole('heading', { name: 'Deneme Musteri' });
+    expect(screen.queryByRole('button', { name: 'Düzenle' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: "Müşteriler ve Tedarikçiler'de düzenle" }));
+    await waitFor(() => expect(screen.getByTestId('adres').textContent).toBe('/musteri-tedarikci?firma=1'));
+    expect(istekler.filter(kayitYazmasi)).toHaveLength(0);
   });
 });

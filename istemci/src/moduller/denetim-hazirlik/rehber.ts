@@ -12,7 +12,7 @@ export const rehber: readonly SayfaRehberi[] = [
     ],
     sinirlar: [
       'Kayıt girmek denetim hazırlığı yazma yetkisi ister; ilk kurulum, örnek firma ve silme işlemleri yalnız yöneticidedir.',
-      'Ölçü aletleri Kalibrasyon sayfasında yönetilir; burada yalnız okunur.',
+      'Ölçü aletleri Ölçü Aletleri sayfasında yönetilir; burada yalnız okunur.',
       'Aynı anda değişiklik olursa "Başka biri değiştirdi" uyarısı çıkar; son hâli okuyup yeniden girin.',
     ],
     sozcukler: ['iso', '9001', 'as9100', 'eydep', 'denetim', 'öz değerlendirme', 'bulgu', 'aksiyon', 'kys'],
