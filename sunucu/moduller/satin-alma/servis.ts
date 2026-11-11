@@ -1376,7 +1376,9 @@ export async function talepSil(db: Db, k: Kullanici, id: string, surum: number):
   if ((eski.kaynaklar ?? []).length > 0) throw gecersiz(ILETILER.birlesikSilinmez);
   // Tetikleyici yine son sözdür; burada açık ileti verilir, tetikleyicinin genel 422 iletisi kullanıcıya yol göstermez.
   if (eski.durum !== 'taslak') throw gecersiz(ILETILER.yalnizTaslakSilinir);
-  await surumluGuncelle({ guncelle: () => s.talepSil(db, id, surum), varMi: () => s.talepVarMi(db, id), bulunamadiIletisi: ILETILER.talepYok });
+  // 2876 (Veri): güncelleme talebinin kökü silinmez (RESTRICT); kök taslağa dönemez, kısıt yine de açık iletiyle karşılanır.
+  await kisitKorumali({ satin_alma_talep_guncellenen: ILETILER.guncellemesiOlanSilinmez },
+    () => surumluGuncelle({ guncelle: () => s.talepSil(db, id, surum), varMi: () => s.talepVarMi(db, id), bulunamadiIletisi: ILETILER.talepYok }));
   return { tamam: true };
 }
 
@@ -2159,7 +2161,10 @@ export async function iptaliGeriAl(db: Db, k: Kullanici, id: string, g: IptaliGe
   const kayitli = await s.iptalOncesiDurum(db, id);
   const durum = kayitli ?? iptalOncesiTuret(eski);
   const hareket = { id: randomUUID(), zaman: '', kisiId: null, kisiAdi: null, metin: iptalGeriAlmaHareketi(eski.iptalNedeni, g.gerekce, kayitli === null) };
-  const talep = await talepKaydet(db, k, id, { ...eski, durum, iptalNedeni: '', hareketler: [...eski.hareketler, hareket], surum: g.surum }, izYaz, durum);
+  // 2876 (Maliyet N1): grubun başka talebi siparişteyse geri alma serbesttir (2871-2 a) ama ikinci alım olabilir; geçmişe uyarı yazılır.
+  const siparisteki = (await s.guncellemeGruplariOku(db, [id])).filter((x) => x.id !== id && x.durum === 'siparis_verildi').map((x) => x.no);
+  const uyari = siparisteki.length === 0 ? [] : [{ id: randomUUID(), zaman: '', kisiId: null, kisiAdi: null, metin: ILETILER.grupSipariste(siparisteki) }];
+  const talep = await talepKaydet(db, k, id, { ...eski, durum, iptalNedeni: '', hareketler: [...eski.hareketler, hareket, ...uyari], surum: g.surum }, izYaz, durum);
   return { talep, durum, turetildi: kayitli === null };
 }
 

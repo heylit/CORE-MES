@@ -1369,12 +1369,17 @@ export function planIhtiyaclariOku(db: Db): Promise<PlanIhtiyaciSatiri[]> {
   );
 }
 // Sipariş verilmemiş açık talepteki miktar, malzeme ve birim başına (siparişe geçen talep sipariş satırıyla sayılır).
+// 2876 (Maliyet E1): güncelleme grubunda aynı ihtiyacın birden çok açık talebi olabilir; grubun yalnız en yeni açık talebi sayılır.
 export function acikTalepMiktarlari(db: Db, malzemeNolar: readonly number[]): Promise<{ malzemeNo: number; birim: string; miktar: string }[]> {
   if (malzemeNolar.length === 0) return Promise.resolve([]);
   return db.sorgu(
-    `SELECT c.malzeme_no AS "malzemeNo", k.birim, sum(k.miktar)::text AS miktar
-       FROM satin_alma_talep_kalemi k JOIN satin_alma_talep t ON t.id = k.talep_id JOIN satin_alma_katalog c ON c.id = k.katalog_id
-      WHERE c.malzeme_no = ANY($1::int[]) AND k.miktar IS NOT NULL AND t.durum IN ('taslak', 'teklif_isteniyor', 'degerlendirme', 'onayda')
+    `WITH sayilan AS (
+       SELECT DISTINCT ON (coalesce(guncellenen_talep_id, id)) id FROM satin_alma_talep
+        WHERE durum IN ('taslak', 'teklif_isteniyor', 'degerlendirme', 'onayda')
+        ORDER BY coalesce(guncellenen_talep_id, id), olusturma DESC, id DESC)
+     SELECT c.malzeme_no AS "malzemeNo", k.birim, sum(k.miktar)::text AS miktar
+       FROM satin_alma_talep_kalemi k JOIN sayilan t ON t.id = k.talep_id JOIN satin_alma_katalog c ON c.id = k.katalog_id
+      WHERE c.malzeme_no = ANY($1::int[]) AND k.miktar IS NOT NULL
       GROUP BY c.malzeme_no, k.birim`,
     [[...malzemeNolar]],
   );

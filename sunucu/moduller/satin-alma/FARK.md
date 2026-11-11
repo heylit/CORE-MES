@@ -501,6 +501,9 @@ Kullanıcı: "yaz" (13.10.2026). Finans ve stok tarafı aynı dalda (yalnız yen
 - Talep ve Taleplerim cevabı `guncellemeGrubu` (kök önce; no, durum) taşır; Taleplerim `guncellenebilir` taşır. Fiyat yok.
 - SAT-81 (2871-2 a): gruptaki bir talep siparişe geçince öteki açık talepler aynı işlemde iptal olur (iptal nedeni "Güncellemeyle karşılandı: <no>
   siparişe geçti."); "İptali geri al" ile döner. Siparişteki talep iptal edilmez.
+- Plan ön talebi (acikTalepMiktarlari): güncelleme grubunun yalnız en yeni açık talebi sayılır (aynı ihtiyaç iki kez düşülmez).
+- İptali geri alınan talebin grubunda siparişteki talep varsa geçmişe "ikinci alım olabilir" uyarısı yazılır. Güncellemesi olan kök talep silinmez
+  (kısıt açık iletiyle 409; kök zaten taslağa dönemez).
 - Ekran: Taleplerim'de teklif toplanan talepte "Güncelleme talebi aç" (Yeni talep formu güncelleme kipinde) ve satırda grup. Satın alma merkezinde
   grup gösterimi ayrı adımda (merkez kilidi).
 

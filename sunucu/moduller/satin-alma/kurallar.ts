@@ -100,6 +100,8 @@ export const ILETILER = {
   guncellemeAsamasi: 'Güncelleme talebi yalnız teklif toplanırken (teklif isteniyor ya da değerlendirmede) açılır; taslağı düzenleyin, sonrası için satın almaya iletin.',
   guncellemeBirlesik: 'Birleştirilmiş talep için güncelleme talebi açılmaz; değişikliği satın almaya iletin.',
   guncellemeBagli: 'Fason adıma ya da parçaya bağlı kalemi olan talep için güncelleme talebi açılmaz; değişikliği satın almaya iletin.',
+  guncellemesiOlanSilinmez: 'Bu talebe bağlı güncelleme talebi var; silinemez, gerekirse iptal edin.',
+  grupSipariste: (nolar: readonly string[]): string => `Uyarı: güncelleme grubunda ${nolar.join(', ')} siparişte; aynı ihtiyaç için ikinci alım olabilir.`,
   guncellemeIptali: (no: string): string => `Güncellemeyle karşılandı: ${no} siparişe geçti.`,
   talebimKalemYok: 'Düzenlenen kalem bu talepte yok.',
   talebimBagliKalem: 'Fason adıma ya da parçaya bağlı kalem buradan değişmez; değişikliği satın almaya iletin.',
