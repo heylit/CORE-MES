@@ -417,6 +417,17 @@ describe('planlama değerlendirmesi ucu (gerçek PostgreSQL)', () => {
     assert.equal(degerlendirmeDurumu(yoneticiId, yeni).durum, 'hata');
   });
 
+  // Hesap enjekte edilir: sonuç sabittir, uç yetkiye göre süzme kararını ölçer.
+  async function enjekteOku(surum: number, islemler: Kullanici['islemler'], sonuc: DegerlendirmeSonucu): Promise<DegerlendirmeSonucu> {
+    const k: Kullanici = { id: yoneticiId, ad: 'Deneme', islemler };
+    const yap = () => Promise.resolve({ dataVer: 1, baslangic: null, simdi: 0, sonuc } as DegerlendirmeZarfi);
+    const { is } = await vt().tx((db) => degerlendirmeBaslat(db, k, { surum, istek: { tur: sonuc.tur } as DegerlendirmeIstegi }, Date.now(), yap));
+    await new Promise((coz) => setImmediate(coz));
+    const d = degerlendirmeDurumu(yoneticiId, is);
+    if (d.durum !== 'bitti') return assert.fail(JSON.stringify(d));
+    return d.cevap.sonuc;
+  }
+
   // 2918: sipariş fiyatı (siparisler 180: yalnız siparisler.fiyat-oku) ve ondan türeyen kâr, maliyeti görüp fiyatı görmeyene gitmez. TL
   // alanları maliyettir, maliyet-oku ile kalır. Hesap enjekte edilir: sonuç sabittir, süzme kararını ölçer. Rakamlar uydurmadır.
   test('PD-22: fiyatı görmeyen maliyetçide kâr alanları ve sipariş tutarı null; TL kalır; iki yetkili hepsini görür', async () => {
@@ -432,15 +443,7 @@ describe('planlama değerlendirmesi ucu (gerçek PostgreSQL)', () => {
       { tur: 'parti-bolme', siparisId: 'O2', darbogaz: null,
         sonuc: { partiler: [], gecikmeOnce: 1, gecikmeSonra: 0, bitisSonra: null, tl: 650, siparisler: [], plan } },
     ].map((x) => degerlendirmeSonucu.parse(x));
-    const oku = async (islemler: Kullanici['islemler'], sonuc: DegerlendirmeSonucu): Promise<DegerlendirmeSonucu> => {
-      const k: Kullanici = { id: yoneticiId, ad: 'Deneme', islemler };
-      const yap = () => Promise.resolve({ dataVer: 1, baslangic: null, simdi: 0, sonuc } as DegerlendirmeZarfi);
-      const { is } = await vt().tx((db) => degerlendirmeBaslat(db, k, { surum, istek: { tur: sonuc.tur } as DegerlendirmeIstegi }, Date.now(), yap));
-      await new Promise((coz) => setImmediate(coz));
-      const d = degerlendirmeDurumu(yoneticiId, is);
-      if (d.durum !== 'bitti') return assert.fail(JSON.stringify(d));
-      return d.cevap.sonuc;
-    };
+    const oku = (islemler: Kullanici['islemler'], sonuc: DegerlendirmeSonucu) => enjekteOku(surum, islemler, sonuc);
     const fiyatsiz: Kullanici['islemler'] = ['plan.planlama-oku', 'finans.maliyet-oku'];
     const ikiYetki: Kullanici['islemler'] = [...fiyatsiz, 'siparisler.fiyat-oku'];
     const [ps, ts, tu, pb] = sonuclar;
@@ -454,4 +457,33 @@ describe('planlama değerlendirmesi ucu (gerçek PostgreSQL)', () => {
     assert.deepEqual(u, { ...tu, satirlar: [{ ...tu.satirlar[0]!, netKarFarki: null }] });
     assert.deepEqual(await oku(fiyatsiz, pb), pb);
   });
+
+  // 2934 (Güvenlik C6): planın TL toplamı (ozet.tl) maliyeti görmeyene hiçbir türde gitmez; plan taşıyan her tür taranır. Rakamlar uydurmadır.
+  // Ekran önceki özeti planın oncekiOzet alanına koyar; o da TL taşır.
+  const plan = { ops: {}, J: { O1: { C: 10, T: 0 } }, ozet: { wT: 0, n: 1, tl: 777 }, oncekiOzet: { wT: 1, n: 1, tl: 555 } };
+  const degisen = [{ siparisId: 'O1', once: 12, sonra: 10, durum: 'ayni' }];
+  const sonuclar = [
+    { tur: 'plan-kur', plan },
+    { tur: 'plan-uygula', plan },
+    { tur: 'plan-iyilestir', plan, gecikmeOnce: 2, gecikmeSonra: 0, degisen },
+    { tur: 'one-al', siparisId: 'O1', plan, yol: null, neden: null, bitisOnce: 12, bitisSonra: 10, gecikmeOnce: 2, gecikmeSonra: 0, degisen },
+    { tur: 'sira-degistir', tezgah: 'T1', sira: ['O1.10'], plan, neden: null, gecikmeOnce: 2, gecikmeSonra: 0, degisen },
+    { tur: 'parti-bolme', siparisId: 'O1', darbogaz: null,
+      sonuc: { partiler: [], gecikmeOnce: 1, gecikmeSonra: 0, bitisSonra: null, tl: 650, siparisler: [], plan } },
+    { tur: 'plan-secenekleri', bedeliBilinmeyenEkMesai: false,
+      secenekler: [{ denge: 50, carpan: 1, ekMesai: [], ekMesaiTl: 0, geciken: 0, isSayisi: 1, gecikmeSaat: 0, netKar: null, eksik: 0, plan }] },
+  ].map((x) => degerlendirmeSonucu.parse(x));
+  const doluTl = (x: unknown, yol = ''): string[] => {
+    if (Array.isArray(x)) return x.flatMap((v, i) => doluTl(v, `${yol}[${String(i)}]`));
+    if (x === null || typeof x !== 'object') return [];
+    return Object.entries(x).flatMap(([a, v]) => [...(/tl$/i.test(a) && v !== null && v !== 0 ? [`${yol}.${a}`] : []), ...doluTl(v, `${yol}.${a}`)]);
+  };
+  for (const s of sonuclar) {
+    test(`PD-23 ${s.tur}: maliyeti görmeyenin cevabında dolu tl alanı yok (ozet, oncekiOzet); maliyeti gören aynen alır`, async () => {
+      const surum = await calismaYaz(planli());
+      assert.deepEqual(doluTl(s).sort(), [...(s.tur === 'parti-bolme' ? ['.sonuc.tl'] : []), ...['ozet', 'oncekiOzet'].map((o) => `${s.tur === 'parti-bolme' ? '.sonuc' : s.tur === 'plan-secenekleri' ? '.secenekler[0]' : ''}.plan.${o}.tl`)].sort(), 'örnek tl taşımalı');
+      assert.deepEqual(doluTl(await enjekteOku(surum, ['plan.planlama-oku'], s)), []);
+      assert.deepEqual(await enjekteOku(surum, ['plan.planlama-oku', 'finans.maliyet-oku', 'siparisler.fiyat-oku'], s), s);
+    });
+  }
 });

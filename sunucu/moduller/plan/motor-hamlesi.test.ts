@@ -126,6 +126,17 @@ describe('planlama hamlesi: ret ve sözleşme', () => {
     assert.ok(!degerlendirmeGovdesi.safeParse({ surum: 1, istek: { tur: 'one-al' } }).success);
     assert.ok(degerlendirmeGovdesi.safeParse({ surum: 1, istek: { tur: 'one-al', siparisId: 'O1' } }).success);
     const s = sonuc(await dene({ tur: 'plan-iyilestir' }));
-    assert.deepEqual(maliyetsiz(s), s);
+    const m = maliyetsiz(s);
+    if (m.tur !== 'plan-iyilestir' || s.tur !== 'plan-iyilestir') return assert.fail(m.tur);
+    // Planın işleri ve sonucun öteki alanları aynen kalır; yalnız TL toplamları (ozet.tl, oncekiOzet.tl) maliyeti görmeyene gitmez (2934).
+    const tlsiz = (p: Record<string, unknown> | null) => {
+      if (p === null) return null;
+      const { ozet, oncekiOzet, ...geri } = p as { ozet?: Record<string, unknown>; oncekiOzet?: Record<string, unknown> };
+      return { ...geri, ozet: ozet && { ...ozet, tl: undefined }, oncekiOzet: oncekiOzet && { ...oncekiOzet, tl: undefined } };
+    };
+    assert.deepEqual({ ...m, plan: tlsiz(m.plan) }, { ...s, plan: tlsiz(s.plan) });
+    assert.ok(s.plan !== null && (s.plan['ozet'] as { tl?: unknown }).tl != null, 'örnek plan TL taşımalı');
+    assert.deepEqual(m.plan?.['ops'], s.plan['ops']);
+    for (const o of ['ozet', 'oncekiOzet']) if (m.plan?.[o] !== undefined) assert.equal((m.plan[o] as { tl?: unknown }).tl, null, o);
   });
 });
