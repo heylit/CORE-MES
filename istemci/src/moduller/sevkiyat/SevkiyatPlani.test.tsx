@@ -64,6 +64,29 @@ describe('SevkiyatPlani', () => {
     expect(screen.getByText(/iş yerleşti/).textContent).toBe(`${GUN_PLANI.isler.length - GUN_PLANI.bekleyen.length}/${GUN_PLANI.isler.length} iş yerleşti`);
   });
 
+  it('boş günde tek birincil "İlk işi ekle"dir; Otomatik dağıt ikincil kalır; iş yazamayan planlayıcıda dağıt birincil, okuyucuda birincil yok', async () => {
+    const bos: GunPlaniCevabi = { ...GUN_PLANI, isler: [], bekleyen: [], rotalar: GUN_PLANI.rotalar.map((r) => ({ ...r, ogeler: [], hesap: null })) };
+    sunucuKur(PLANCI, undefined, bos);
+    ac();
+    const ilk = await screen.findByRole('button', { name: 'İlk işi ekle' });
+    expect(ilk.className).toContain('tc-dugme-birincil');
+    expect(screen.getByRole('button', { name: 'Otomatik dağıt' }).className).not.toContain('tc-dugme-birincil');
+    expect(document.querySelectorAll('.tc-dugme-birincil')).toHaveLength(1);
+    cleanup();
+    sunucuKur({ ...PLANCI, islemler: PLANCI.islemler.filter((i) => i !== 'sevkiyat.is-yaz') }, undefined, bos);
+    ac();
+    const dagit = await screen.findByRole('button', { name: 'Otomatik dağıt' });
+    expect(screen.queryByRole('button', { name: 'İlk işi ekle' })).toBeNull();
+    expect(dagit.className).toContain('tc-dugme-birincil');
+    expect(document.querySelectorAll('.tc-dugme-birincil')).toHaveLength(1);
+    cleanup();
+    sunucuKur(OKUYUCU, undefined, bos);
+    ac();
+    await screen.findAllByText('Bu gün için sevkiyat yok.');
+    expect(screen.queryByRole('button', { name: /İlk işi ekle|Otomatik dağıt/ })).toBeNull();
+    expect(document.querySelectorAll('.tc-dugme-birincil')).toHaveLength(0);
+  });
+
   it('liste önce gelir: atanmamış iş satırındaki Araç seçimiyle araca verilir; akışta etkin adım dağıtmadır; tek birincil eylem onaydır', async () => {
     const istekler = sunucuKur(PLANCI);
     ac();
