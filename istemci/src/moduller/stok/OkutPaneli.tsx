@@ -25,7 +25,8 @@ function okutmaAdi(c: OkutCozCevabi): string {
     case 'raf': return `Raf ${c.raf.kod}`;
     case 'malzeme': return c.malzeme.ad ?? c.malzeme.kod ?? `Malzeme #${c.malzeme.id}`;
     case 'kisi': return c.kisi.ad ?? 'Kişi kodu';
-    case 'eski-kart': return 'Eski refakat kartı';
+    // UE: kodu emir kartında, sevk kolisinde, hatalı parça ve fason belgesinde de durur; ortak olan emirdir.
+    case 'eski-kart': return `Emir #${String(c.uretimEmriId)}`;
     case 'bilinmiyor': return 'Kod tanınmadı';
   }
 }
