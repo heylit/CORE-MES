@@ -42,3 +42,11 @@ dosyalarında `../istemci/src/...` ithali geçen her dosyanın klasörü. Elle l
 - Bedel: ana dal kırmızıya dönerse bozan birleşme, son yeşil koşudan bu yana birleşenlerin arasındadır; tek commit'e inmez. Birleştirici her birleşmeden sonra değil, son koşuya bakar.
 - Elle koşuda grup koşuya özgüdür ve hiçbir şey iptal edilmez.
 - Ana dalda yalnız son koşu yeniden koşulur. Eski bir koşunun yeniden denenmesi de push olayıdır ve aynı gruba girer; yeni koşunun ağır işlerini iptal eder. Eski commit'i denemek gerekiyorsa elle koşu (`workflow_dispatch`) kullanılır.
+
+## Windows yeşili etiketi (2964)
+
+- Ana dalda (gönderim ya da elle koşu) `windows` ve `kontrol` işleri yeşil biterse `windows-yesil` işi o commit'e kalıcı etiket koyar: `windows-yesil/<commit zamanı UTC, YYYYAAGG-SSDD>-<sha ilk 8>`. Etiket açıklamasında koşunun bağlantısı vardır.
+- İptal edilen ya da kırmızı koşuda iş atlanır, etiket konmaz. Etiketi olmayan commit "Windows yeşili değil ya da koşusu iptal edildi" demektir; onun testleri sonraki koşudadır.
+- Etiket commit başına ayrıdır ve taşınmaz: zorla gönderme ya da silme yoktur. Aynı commit'in yeniden koşusu ikinci etiket açmaz.
+- Son Windows yeşili: `git fetch --tags && git describe --tags --abbrev=0 --first-parent --match 'windows-yesil/*' origin/main`. Hepsi: `git tag -l 'windows-yesil/*'` (ad sırası zaman sırasıdır). Canlı ve güncelleme paketi yalnız etiketli commit'ten çıkar.
+- Dosyanın üst düzey yetkisi yalnız okumadır (`contents: read`, `pull-requests: read`); yazma (`contents: write`) yalnız bu iştedir.

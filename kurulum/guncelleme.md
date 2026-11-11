@@ -115,7 +115,9 @@ ve lock değişmişse internet arar. İlk kurulum klasörü bir kez elle yenilen
 Yönetici yetkisi gerekmez; komutlar sunucuyu açan kullanıcıyla koşulur.
 
 Paketi hazırlayan (internetli) bilgisayarda:
-1. Depoyu güncel ana dala alın: `git pull`, sonra `npm.cmd ci`.
+1. Depoyu son Windows yeşili commit'e alın (belgeler/ci/kapsam.md): `git fetch --tags origin`, etiketi
+   `git describe --tags --abbrev=0 --first-parent --match "windows-yesil/*" origin/main` ile bulun,
+   `git checkout <etiket>`, sonra `npm.cmd ci`. Etiketsiz commit'ten paket çıkmaz.
 2. Paketi ve açık klasörünü üretin (klasör yok ya da boş olmalı):
    `npm.cmd run paket -- --anahtar <gizli.pem> --cikti D:\aktar\<sürüm>.tmip --klasor D:\aktar\tmiv2-<sürüm>`
    Çıktıda `npm: ... paket (win32-x64)` ve `Yük açıldı: ...` satırları görünür.
