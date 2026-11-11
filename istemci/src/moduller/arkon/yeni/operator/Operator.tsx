@@ -545,25 +545,26 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
   // Atölye N1: kapasite kaynağı terminal verisinde yok; istasyonda bitmemiş montaj işi varsa istasyon insanlı sayılır.
   const kartOkutma = useTerminalKartOkutmasi(pv ? null : MACHINE);
   // Adaylar iş anahtarıyla tutulur: pencere açıkken iş listesi yeniden okunup sırası değişse de aynı işler gösterilir.
-  const [kartSecim, kartSecimYaz] = useState<{ kart: Pick<RefakatKarti, 'id' | 'etiket'>; alinan: number; neden: KartSecimNedeni; adaylar: string[] } | null>(null);
+  const [kartSecim, kartSecimYaz] = useState<{ kart: Pick<RefakatKarti, 'id' | 'etiket'>; alinan: string | null; neden: KartSecimNedeni; adaylar: string[] } | null>(null);
   const isSirasi = (emirId: number, opNo: number): number => isler.findIndex((x) => {
     const tmi = (x.pkg as { tmi?: { emirId?: unknown; opNo?: unknown } } | undefined)?.tmi;
     return x.state !== 'done' && !!x.pkg && ((tmi?.emirId === emirId && tmi?.opNo === opNo) || x.pkg.id === `tmi-ue-${emirId}`);
   });
-  const kartKarari = (kart: Pick<RefakatKarti, 'id' | 'etiket'>, emirId: number, alinan: number, buradakiMalzemeler: readonly number[]) => {
+  // alinan: kartla alınan miktar birimiyle ("40 adet"); teslim alınmadıysa null.
+  const kartKarari = (kart: Pick<RefakatKarti, 'id' | 'etiket'>, emirId: number, alinan: string | null, buradakiMalzemeler: readonly number[]) => {
     const girdiler = (kartOkutma.isGirdileri ?? []).flatMap((x) => {
       const sira = x.uretimEmriId === emirId ? -1 : isSirasi(x.uretimEmriId, x.opNo);
       return sira < 0 ? [] : [{ sira, malzemeIdler: x.malzemeIdler }];
     });
     const insanli = isler.some((x) => x.state !== 'done' && isTuru(x.pkg) === 'montaj');
     const r = kartOkutmaKarari(emirId, isler, Object.values(pkgsRef.current), { acikSira: ai, insanli, girdiAdaylari: girdiAdaylari(buradakiMalzemeler, girdiler) });
-    const alindi = alinan > 0 ? `${alinan} teslim alındı · ` : '';
+    const alindi = alinan !== null ? `${alinan} alındı · ` : '';
     if (r.tur === 'ac') { bip('ok'); if (ov === 'done') ovYaz(null); kartlaAc(r.sira, kart, alindi); return; }
     if (r.tur === 'sec') { bip('ok'); kartSecimYaz({ kart, alinan, neden: r.neden, adaylar: r.adaylar.map((i) => siraAnahtari(isler[i]!)) }); ovYaz('kartsec'); return; }
-    if (alinan > 0) {
+    if (alinan !== null) {
       bip('ok');
       const neden = r.tur === 'yalniz-teslim' && r.istasyon ? `bu emrin burada işi yok, sıradaki adım: ${r.istasyon}` : insanli ? 'montaj işi bulunamadı' : 'bu emrin burada işi yok';
-      say(`${kart.etiket}: ${alinan} teslim alındı · ${neden}`, 'check', 'hold');
+      say(`${kart.etiket}: ${alinan} alındı · ${neden}`, 'check', 'hold');
       return;
     }
     bip('nok');
@@ -576,8 +577,8 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
     const k = kartSecim;
     ovYaz(null); kartSecimYaz(null);
     if (!k) return;
-    if (k.neden !== 'montaj-girdisi') { kartlaAc(i, k.kart, k.alinan > 0 ? `${k.alinan} teslim alındı · ` : ''); return; }
-    isGecIste(i, () => { mvYaz('prod'); say(`Montaj işi açıldı: ${isler[i]!.no}${k.alinan > 0 ? ` · ${k.kart.etiket} ${k.alinan} teslim alındı` : ''}`, 'check', 'run'); });
+    if (k.neden !== 'montaj-girdisi') { kartlaAc(i, k.kart, k.alinan !== null ? `${k.alinan} alındı · ` : ''); return; }
+    isGecIste(i, () => { mvYaz('prod'); say(`Montaj işi açıldı: ${isler[i]!.no}${k.alinan !== null ? ` · ${k.kart.etiket} ${k.alinan} alındı` : ''}`, 'check', 'run'); });
   };
   const kartOkutuldu = (kod: string): boolean => {
     const t = terminalOkutmasi(kod);
@@ -588,17 +589,17 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
     const yerel = kartlar.find((x) => x.id === t.kartId);
     const yerelde = () => {
       if (!yerel) { bip('nok'); say(KART_YOK_ILETISI, 'alert', 'stop'); return; }
-      kartKarariRef.current(yerel, yerel.uretimEmriId, 0, []);
+      kartKarariRef.current(yerel, yerel.uretimEmriId, null, []);
     };
     if (!kartOkutma.yetkili) { yerelde(); return true; }
     kartOkutma.kartiAl(`RP:${t.kartId}`).then((c) => {
       if (c === null) { yerelde(); return; }
       if (c.hatalar.length > 0) {
         bip('nok');
-        say(`${c.kart.etiket}: ${c.alinan} teslim alındı, ${c.hatalar.length} alınamadı; iş açılmadı. ${c.hatalar.join(' · ')}`, 'alert', 'stop');
+        say(`${c.kart.etiket}: ${c.alinanMiktar === null ? 'hiçbir teslim alınmadı' : `${c.alinanMiktar} alındı`}, ${c.hatalar.length} teslim alınamadı; iş açılmadı. ${c.hatalar.join(' · ')}`, 'alert', 'stop');
         return;
       }
-      kartKarariRef.current(c.kart, c.kart.uretimEmriId, c.alinan, c.buradakiMalzemeler);
+      kartKarariRef.current(c.kart, c.kart.uretimEmriId, c.alinanMiktar, c.buradakiMalzemeler);
     }, yerelde);
     return true;
   };

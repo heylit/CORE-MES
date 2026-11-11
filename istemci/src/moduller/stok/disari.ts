@@ -4,6 +4,7 @@ import type { IsMalzemeleriCevabi, OkutCozCevabi, Teslim, TeslimKutusuCevabi } f
 import { api } from '../../ortak/veri/api.ts';
 import { useOturum } from '../../ortak/veri/oturum.ts';
 import { TESLIM_KUTUSU, isMalzemeleriAnahtari } from './is-malzeme-durumu.ts';
+import { birimliMiktar } from './gorunum.ts';
 import { hataMetni } from './ortak.tsx';
 // Başlatırken girdi eksikse operatör ekranı Malzeme · Teslim panelini o malzemeyle açtırır (kart #1289); panel bu modüldedir.
 export const MALZEME_TESLIM_AC = 'tmi:malzeme-teslim-ac';
@@ -48,6 +49,8 @@ export const okutulanKoduCoz = (kod: string): Promise<OkutCozCevabi> => api.get<
 export interface KartTeslimi {
   kart: { id: number; etiket: string; uretimEmriId: number };
   alinan: number; alinmayan: number; hatalar: string[]; buradakiMalzemeler: number[];
+  // Alınan toplam miktar birimiyle ("40 adet"); hiçbiri alınmadıysa null.
+  alinanMiktar: string | null;
 }
 export interface TerminalKartOkutmasi {
   yetkili: boolean;
@@ -55,6 +58,9 @@ export interface TerminalKartOkutmasi {
   // null: kod bir refakat kartı değil (eski kart, lot, bilinmeyen).
   kartiAl: (kod: string) => Promise<KartTeslimi | null>;
 }
+// Toplam binde birlikle tutulur: ondalıklı metinlerin kayan nokta toplamı 0,1 + 0,2 gibi artık bırakmasın.
+const binlik = (m: string): number => Math.round(Number(m) * 1000);
+const binlikMetin = (n: number): string => (n / 1000).toFixed(3);
 export function useTerminalKartOkutmasi(istasyonKodu: string | null): TerminalKartOkutmasi {
   const yetkili = (useOturum().data?.islemler ?? []).includes('stok.istek');
   const istemci = useQueryClient();
@@ -89,6 +95,7 @@ export function useTerminalKartOkutmasi(istasyonKodu: string | null): TerminalKa
     return {
       kart: { id: c.refakat.id, etiket: c.refakat.etiket, uretimEmriId: c.refakat.uretimEmriId },
       alinan: alinanlar.length, alinmayan: gelenler.length - alinanlar.length, hatalar,
+      alinanMiktar: alinanlar.length === 0 ? null : birimliMiktar(binlikMetin(alinanlar.reduce((t, x) => t + binlik(x.miktar), 0)), c.malzeme.birim),
       buradakiMalzemeler: [...new Set([...alinanlar.map((t) => t.malzemeId), ...burada])],
     };
   };
