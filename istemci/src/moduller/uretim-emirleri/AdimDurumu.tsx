@@ -40,10 +40,11 @@ const OBEK: Readonly<Record<AdimStatusu, Obek>> = {
   program: 'bekliyor', cizim: 'bekliyor', yayin: 'bekliyor', makine: 'bekliyor', talep: 'bekliyor', siparis: 'bekliyor', malzeme: 'bekliyor',
   firma: 'bekliyor', onceki: 'bekliyor', diger: 'bekliyor',
 };
-const OBEKLER: readonly { obek: Obek; ad: string; simge: SimgeAdi; ton: RozetTonu }[] = [
+// Başlayabilir, Bitti ile aynı yeşildir; çizgi görünümle ayrılır (bitmiş adım dolu, başlamayı bekleyen boş).
+const OBEKLER: readonly { obek: Obek; ad: string; simge: SimgeAdi; ton: RozetTonu; cizgi?: true }[] = [
   { obek: 'bitti', ad: 'Bitti', simge: 'check', ton: 'tamam' },
   { obek: 'calisiyor', ad: 'Üretimde', simge: 'play', ton: 'bilgi' },
-  { obek: 'baslayabilir', ad: 'Başlayabilir', simge: 'next', ton: 'tamam' },
+  { obek: 'baslayabilir', ad: 'Başlayabilir', simge: 'next', ton: 'tamam', cizgi: true },
   { obek: 'bekliyor', ad: 'Bekliyor', simge: 'clock', ton: 'uyari' },
   { obek: 'durdu', ad: 'Durdu', simge: 'stop', ton: 'hata' },
 ];
@@ -182,7 +183,7 @@ function EmrinAdimDurumu({ id, yazar, geri }: { id: number; yazar: boolean; geri
         <ul className="tc-ad-sayaclar" aria-label="Adım özeti">
           {OBEKLER.map((o) => (
             <li key={o.obek} className={sayac(o.obek) === 0 ? 'tc-ad-sifir' : undefined}>
-              <Rozet ton={sayac(o.obek) === 0 ? 'pasif' : o.ton}><Simge ad={o.simge} boyut="k" />{o.ad}</Rozet><b>{sayac(o.obek)}</b>
+              <Rozet ton={sayac(o.obek) === 0 ? 'pasif' : o.ton} gorunum={o.cizgi ? 'cizgi' : 'dolu'}><Simge ad={o.simge} boyut="k" />{o.ad}</Rozet><b>{sayac(o.obek)}</b>
             </li>
           ))}
           {elleSayisi > 0 && <li><Rozet ton="uyari" gorunum="cizgi"><Simge ad="edit" boyut="k" />Elle</Rozet><b>{elleSayisi}</b></li>}
@@ -334,7 +335,8 @@ function AdimAyrintisi({ emirId, adim, yazar }: { emirId: number; adim: Adim; ya
               secenekler={ELLE_YAZILIR.map((s) => ({ deger: s, baslik: STATU[s].ad }))} />
             <CokSatir etiket="Not" placeholder="İsteğe bağlı" rows={2} value={not} onChange={(e) => notYaz(e.target.value)} />
             <div className="tc-emir-ust">
-              <Dugme tur="birincil" simge="check" disabled={statu === '' || komut.isPending}
+              {/* Pencerede tek birincil eylem kalır: hazırlık onayı işi başlatır, elle statü yalnız bilgi yazar. */}
+              <Dugme simge="check" disabled={statu === '' || komut.isPending}
                 onClick={() => komut.mutate({ yol: 'statu-yaz', govde: { statu, not: not.trim() === '' ? null : not.trim(), sistemStatusu: adim.sistemStatusu } })}>Yaz</Dugme>
               {adim.elle !== null && <Dugme simge="x" disabled={komut.isPending} onClick={() => komut.mutate({ yol: 'statu-kaldir', govde: {} })}>Elle statüyü kaldır</Dugme>}
             </div>
