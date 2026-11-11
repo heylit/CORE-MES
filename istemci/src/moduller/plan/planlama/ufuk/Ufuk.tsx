@@ -27,7 +27,7 @@ export function Ufuk({ calisma, komut, yetki, git }: PlanlamaEkranOzellikleri) {
   if (calisma === null) return <div className="tc-pyu"><DurumKutusu durum="bos" mesaj="Planlama çalışması yok. Çalışma kurulunca ufuk burada görünür." /></div>;
   if (z === null) return <div className="tc-pyu"><DurumKutusu durum="hata" mesaj="Planın başlangıç günü okunamadı; ufuk kurulamıyor." /></div>;
   if (v === null) {
-    return <div className="tc-pyu" data-parca="P5"><Kart baslik="Ufuk"><p className="tc-pyu-not">Önce plan kurulmalı.</p></Kart></div>;
+    return <div className="tc-pyu" data-parca="P5"><Kart baslik="Yük haritası"><p className="tc-pyu-not">Önce plan kurulmalı.</p></Kart></div>;
   }
   const A = ufukAyarOku(calisma.D);
   const yaz = komut !== null;
@@ -38,7 +38,7 @@ export function Ufuk({ calisma, komut, yetki, git }: PlanlamaEkranOzellikleri) {
   const notlar = ufukNotlari(calisma, v, ongoru);
   return (
     <div className="tc-pyu" data-parca="P5">
-      <Kart baslik="Ufuk" baslikEki={<span className="tc-pyu-kucuk">{v.H[0]?.ad} – {gunAy(z, v.son - 1)} · {A.hafta} hafta · Atölyedeki plan</span>}>
+      <Kart baslik="Yük haritası" baslikEki={<span className="tc-pyu-kucuk">{v.H[0]?.ad} – {gunAy(z, v.son - 1)} · {A.hafta} hafta · Atölyedeki plan</span>}>
         <div className="tc-pyu-sira">
           <SecimDugmeleri etiket="Görünüm" secili={gor} sec={gorYaz} secenekler={[['yuk', 'Yük', 'gauge'], ['malzeme', 'Malzeme', 'box']]} />
           <SecimDugmeleri etiket="Ufuk" kapali={!yaz} secili={String(A.hafta) as '26' | '52'} secenekler={[['26', '26 hafta'], ['52', '52 hafta']]}
@@ -81,8 +81,8 @@ function ufukNotlari(c: PlanlamaCalismasi, v: UfukVerisi, ongoru: boolean): stri
     v.failJ.size ? `Planda adımı planlanamayan ${v.failJ.size} sipariş var; o adımlar yüke girmedi.` : '',
     v.fasN ? `Fason işlemler (${v.fasN}) tezgâh yükü değildir, sayılmadı.` : '',
     !ongoru ? 'Öngörü gizli.'
-      : Y.tahmin === 'elle' ? 'Öngörü: elle girilen aylık aile tahmini, ürüne sipariş payıyla bölündü; aynı ay ve üründeki sipariş tahmini tüketir. Ayarı Yıllık plan sayfasındadır.'
-      : v.gec.hiz ? `Öngörü: kapanmış ve açık siparişlerin ${v.gec.dusuk ? `${sayi(v.gec.hafta, 0)} haftalık girişi, en az ${TALEP_GECMIS_ENAZ} haftaya bölündü (düşük güven, giriş geldikçe düzelir)` : `son ${sayi(v.gec.hafta, 0)} haftalık giriş hızı`}, yıllık büyüme %${sayi(Y.buyume || 0, 0)}; aynı ay ve üründeki sipariş tahmini tüketir. Termin ve plan hız sayılmaz. Ayarı Yıllık plan sayfasındadır.`
+      : Y.tahmin === 'elle' ? 'Öngörü: elle girilen aylık aile tahmini, ürüne sipariş payıyla bölündü; aynı ay ve üründeki sipariş tahmini tüketir. Ayarı Yıllık plan sekmesindedir.'
+      : v.gec.hiz ? `Öngörü: kapanmış ve açık siparişlerin ${v.gec.dusuk ? `${sayi(v.gec.hafta, 0)} haftalık girişi, en az ${TALEP_GECMIS_ENAZ} haftaya bölündü (düşük güven, giriş geldikçe düzelir)` : `son ${sayi(v.gec.hafta, 0)} haftalık giriş hızı`}, yıllık büyüme %${sayi(Y.buyume || 0, 0)}; aynı ay ve üründeki sipariş tahmini tüketir. Termin ve plan hız sayılmaz. Ayarı Yıllık plan sekmesindedir.`
       : 'Öngörü yok: sipariş girişi yok. Termin ve plan hız sayılmaz. Yıllık plan sayfasında "Elle" seçip aylık tahmin girin.',
   ].filter(Boolean).join(' ');
 }
