@@ -1,21 +1,21 @@
 import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import type {
   AcikSiparisSatiri, AcikSiparisSatirlariCevabi, AmbalajTuru, DepoSevkSatiri, EmirTamamlamaCevabi, FasonIsleriCevabi, GozOnerisiCevabi, KonumAyrintiCevabi, KonumlarCevabi, MalKabulCevabi, MalKabulGovdesi, MalKabullerCevabi, MalKabulOzeti, MalzemeAyrintiCevabi,
 } from '#paylasilan/sozlesme/stok.ts';
-import { Dugme, DurumKutusu, Girdi, Kart, Rozet, Secim, Tablo, type Sutun } from '../../ortak/arayuz/index.ts';
+import { Dugme, DurumKutusu, Girdi, Kart, Rozet, Secim, Sekmeler, Tablo, type Sutun } from '../../ortak/arayuz/index.ts';
 import { api } from '../../ortak/veri/api.ts';
 import { useGonderimKilidi } from '../../ortak/veri/korumali-komut.ts';
 import { DosyaHatasi, dosyaYukle, KucukResimKutusu, useKucukResimler } from '../belge-merkezi/disari.ts';
-import { sorguMetni, useListeDurumu } from '../../ortak/veri/liste-durumu.ts';
 import { AMBALAJ_KATALOGU, olcuBul, olcuMetni, sigma } from './ambalaj.ts';
 import { AmbalajIkonu } from './AmbalajIkonu.tsx';
 import { acikSiparisAra } from './acik-siparis-arama.ts';
 import { useDepoSevk } from './depo-sevk.ts';
 import { anahtarlar } from './anahtarlar.ts';
-import { AMBALAJ_TURLERI, LOGO_ESLESME_DURUMLARI, LOGO_ETIKETI, MAL_KABUL_TURLERI, MAL_KABUL_TURU, birimliMiktar, miktarGirdisi, miktarMetni, partiAlinirMi, lotluMu, LOT_IPUCU, zamanMetni } from './gorunum.ts';
+import { AMBALAJ_TURLERI, MAL_KABUL_TURLERI, MAL_KABUL_TURU, birimliMiktar, miktarGirdisi, miktarMetni, partiAlinirMi, lotluMu, LOT_IPUCU } from './gorunum.ts';
 import { EtiketMerkeziDugmesi } from './Etiketler.tsx';
+import { MalKabulYapilanlar } from './MalKabulYapilanlar.tsx';
 import { MalzemeSecici, useMalzemeOzeti } from './MalzemeSecici.tsx';
 import { hataMetni, korumaliPost, SayfaBasi, useIslem, useStokKomutu } from './ortak.tsx';
 import './stok.css';
@@ -350,17 +350,6 @@ export function SatirListesi({ satirlar, setSatirlar }: { satirlar: Satir[]; set
 }
 export { bosSatir, type Satir };
 
-const SUTUNLAR: Sutun<MalKabulOzeti>[] = [
-  { anahtar: 'no', baslik: 'Belge', mono: true, kirilmaz: true, hucre: (b) => b.no },
-  { anahtar: 'zaman', baslik: 'Zaman', kirilmaz: true, sirala: true, hucre: (b) => zamanMetni(b.zaman) },
-  { anahtar: 'tur', baslik: 'Tür', hucre: (b) => MAL_KABUL_TURU[b.tur] },
-  { anahtar: 'irsaliye', baslik: 'İrsaliye', hucre: (b) => b.irsaliyeNo ?? '—' },
-  { anahtar: 'satir', baslik: 'Satır', hizala: 'sag', hucre: (b) => b.satirSayisi },
-  { anahtar: 'logo', baslik: 'Logo', hucre: (b) => (b.farkSayisi > 0 ? <Rozet ton="hata">{b.farkSayisi} fark</Rozet> : <span />) },
-  { anahtar: 'durum', baslik: '', hucre: (b) => (b.duzeltenId !== null ? <Rozet ton="pasif">Düzeltildi</Rozet> : b.duzeltilenId !== null ? <Rozet ton="bilgi">Düzeltme</Rozet> : <span />) },
-  { anahtar: 'kisi', baslik: 'Teslim alan', hucre: (b) => b.kisiAd ?? '—' },
-];
-
 // Satın alma kabulünde açık sipariş satırları: seçilen satır malzemeyi, kalan miktarı ve bağı doldurur; sayılan miktar
 // depoda düzeltilir (kalanı aşan teslim reddedilmez, satın almada fazla teslim görünür).
 // Tek arama kutusu malzeme, tedarikçi, emir ve projede birden arar; dördü ayrı sütundur. Hizmet satırı fason dönüşüdür.
@@ -469,13 +458,15 @@ function EmirEksikleri({ emirId, doldur }: { emirId: number; doldur: (l: Satir[]
 
 export function MalKabul() {
   const yazabilir = useIslem('stok.giris');
-  const yonlendir = useNavigate();
   const [tur, setTur] = useState<(typeof MAL_KABUL_TURLERI)[number]>('satin_alma');
   const [irsaliye, setIrsaliye] = useState('');
   // Uyarı yazarken değil, alandan çıkınca aranır.
   const [arananIrsaliye, setArananIrsaliye] = useState('');
   const [satirlar, setSatirlar] = useState<Satir[]>(() => [bosSatir()]);
-  const [adres] = useSearchParams();
+  const [adres, setAdres] = useSearchParams();
+  // 2890: iki sekme; seçim adreste durur. Teslim alamayan kişi formu görmez, doğrudan yapılanları görür.
+  const sekme: 'kabul' | 'yapilanlar' = yazabilir && adres.get('sekme') !== 'yapilanlar' ? 'kabul' : 'yapilanlar';
+  const sekmeSec = (s: 'kabul' | 'yapilanlar') => setAdres((o) => { const y = new URLSearchParams(o); if (s === 'kabul') y.delete('sekme'); else y.set('sekme', s); return y; }, { replace: true });
   const emirId = Number(adres.get('emir'));
   const sevkKalemi = Number(adres.get('sevkKalemi'));
   const fasonIsEmri = Number(adres.get('fasonIsEmri'));
@@ -489,13 +480,12 @@ export function MalKabul() {
   }), 'Mal kabul kaydedildi.', () => { setSatirlar([bosSatir()]); setIrsaliye(''); setArananIrsaliye(''); });
   // Çift tık tek istek ve tek bildirim (STK-7).
   const kilitli = useGonderimKilidi();
-  const liste = useListeDurumu({ suzgecler: { logoDurumu: '' as '' | (typeof LOGO_ESLESME_DURUMLARI)[number] }, suzgecDegerleri: { logoDurumu: LOGO_ESLESME_DURUMLARI }, siralamaAlanlari: ['zaman'], adres: true });
-  const l = useQuery({ queryKey: anahtarlar.liste('mal-kabuller', liste.sorgu), queryFn: () => api.get<MalKabullerCevabi>(`/stok/mal-kabuller${sorguMetni(liste.sorgu)}`) });
-  useEffect(() => { if (l.data) liste.sayfaEsitle(l.data.sayfa, liste.sorgu.sayfa); }, [l.data]);
   return (
     <section className="tc-stok">
       <SayfaBasi baslik="Mal kabul" alt="Depo malı sayarak teslim alır; hammaddede parti o anda girilir. Fasondan dönen malzeme hizmet siparişiyle alınır. Logo irsaliyesiyle eşleme ayrıca yapılır." />
-      {yazabilir && (
+      {yazabilir && <Sekmeler etiket="Mal kabul görünümü" secili={sekme} sec={sekmeSec}
+        sekmeler={[{ anahtar: 'kabul', baslik: 'Mal kabul', simge: 'truck' }, { anahtar: 'yapilanlar', baslik: 'Mal kabulü yapılanlar', simge: 'list' }]} />}
+      {sekme === 'kabul' && (
         <Kart baslik="Yeni mal kabul">
           <form className="tc-stok-form" onSubmit={(e) => { e.preventDefault(); const g = { tur, irsaliyeNo: irsaliye, satirlar: satirlar.map((s) => satirGovdesi(tur === 'satin_alma' ? s : { ...s, siparisSatirId: '', hizmetKarti: '' })) }; kilitli(() => komut.mutateAsync(g)); }}>
             <div className="tc-stok-iki">
@@ -523,17 +513,7 @@ export function MalKabul() {
           </form>
         </Kart>
       )}
-      <Kart baslik="Mal kabul belgeleri" sag={
-        <Secim etiket="Logo durumu" value={liste.suzgecler.logoDurumu} onChange={(e) => liste.suzgecDegistir({ logoDurumu: e.target.value as '' })}
-          secenekler={LOGO_ESLESME_DURUMLARI.map((d) => ({ deger: d, baslik: LOGO_ETIKETI[d].etiket }))} bosSecenek="Hepsi" />
-      }>
-        {l.isError ? <DurumKutusu durum="hata" mesaj={hataMetni(l.error)} yenile={() => void l.refetch()} /> : (
-          <Tablo etiket="Mal kabul belgeleri" sutunlar={SUTUNLAR} satirlar={l.data?.satirlar ?? []} satirAnahtari={(b) => b.id} mesgul={l.isPending}
-            satirSec={(b) => { void yonlendir(`/stok/mal-kabul/${b.id}`); }} bosMesaj="Henüz mal kabul yok."
-            siralama={liste.siralama} siralamaDegistir={liste.siralamaDegistir}
-            {...(l.data ? { sayfalama: { sayfa: l.data.sayfa, sayfaBoyu: l.data.sayfaBoyu, toplam: l.data.toplam, degistir: liste.sayfaDegistir } } : {})} />
-        )}
-      </Kart>
+      {sekme === 'yapilanlar' && <MalKabulYapilanlar />}
       {onayPenceresi}
     </section>
   );
