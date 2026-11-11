@@ -13,7 +13,7 @@ export type Cozunurluk = (typeof COZUNURLUKLER)[number];
 export const SABLON_TURLERI = ['konum', 'raf', 'malzeme', 'lot', 'refakat', 'istasyon', 'kalite-durum', 'hatali-parca', 'sevk-koli', 'deneme'] as const;
 export type SablonTuru = (typeof SABLON_TURLERI)[number];
 export const SABLON_TURU_ADLARI: Record<SablonTuru, string> = {
-  konum: 'Konum ve harita kutusu', raf: 'Raf', malzeme: 'Malzeme kartı', lot: 'Lot', refakat: 'Refakat kartı', istasyon: 'İstasyon', 'kalite-durum': 'Kalite durumu', 'hatali-parca': 'Hatalı parça', 'sevk-koli': 'Sevk kolisi', deneme: 'Yazıcı denemesi',
+  konum: 'Yer', raf: 'Raf', malzeme: 'Malzeme kartı', lot: 'Lot', refakat: 'Refakat kartı', istasyon: 'Yer · teslim yeri', 'kalite-durum': 'Kalite durumu', 'hatali-parca': 'Hatalı parça', 'sevk-koli': 'Sevk kolisi', deneme: 'Yazıcı denemesi',
 };
 
 export const EN_COK_ADET = 500;

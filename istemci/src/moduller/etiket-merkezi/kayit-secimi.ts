@@ -7,7 +7,7 @@ export const KAYIT_TURLERI: readonly KayitTuru[] = ['konum', 'raf', 'lot', 'ista
 const EN_COK_KAYIT = 200;
 export const secimSiniri = EN_COK_KAYIT;
 export const KAYIT_BASLIKLARI: Record<KayitTuru, string> = {
-  konum: 'Konum etiketleri', raf: 'Raf etiketleri', lot: 'Lot etiketleri', istasyon: 'İstasyon etiketleri', 'refakat-partisi': 'Refakat kartları', malzeme: 'Malzeme etiketleri',
+  konum: 'Yer etiketleri', raf: 'Raf etiketleri', lot: 'Lot etiketleri', istasyon: 'Yer etiketleri · teslim yeri', 'refakat-partisi': 'Refakat kartları', malzeme: 'Malzeme etiketleri',
   'mal-kabul': 'Mal kabul lot etiketleri', 'kalite-durum': 'Kalite durum etiketleri', 'hatali-parca': 'Hatalı parça etiketleri', 'sevk-koli': 'Sevk koli etiketleri',
 };
 // Mal kabul seçimi o kabulün lotlarını lot şablonuyla basar (sunucudaki kayitSablonTuru ile aynı).

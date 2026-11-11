@@ -50,6 +50,22 @@ describe('etiket-merkezi kuralları', () => {
     }
   });
 
+  test('2922 a: istasyon etiketi yer etiketinin teslim yeri boyudur; anahtar, tür ve QR (LOC) değişmez', () => {
+    const yer = HAZIR_SABLONLAR.filter((s) => s.tur === 'konum' || s.tur === 'istasyon').map((s) => [s.anahtar, s.ad, s.tur]);
+    assert.deepEqual(yer, [['konum-50x25', 'Yer 50x25', 'konum'], ['konum-100x50', 'Yer 100x50', 'konum'], ['istasyon-100x50', 'Yer 100x50 · Teslim yeri', 'istasyon']]);
+    const istasyon = HAZIR_SABLONLAR.find((s) => s.anahtar === 'istasyon-100x50')!;
+    const metinler = istasyon.ogeler.flatMap((o) => (o.tur === 'metin' && o.alan.startsWith('=') ? [o.alan.slice(1)] : []));
+    assert.ok(metinler.includes('TESLİM') && metinler.includes('TESLİM YERİ · İSTASYON'), metinler.join(', '));
+    assert.ok(istasyon.ogeler.some((o) => o.tur === 'qr' && o.alan === 'qr'));
+  });
+
+  test('2922 a: yer etiketlerinin sabit yazıları örnek değerlerle kesilmeden basılır', () => {
+    for (const s of HAZIR_SABLONLAR.filter((x) => x.tur === 'konum' || x.tur === 'istasyon')) {
+      const kesik = yerlesim(s, ORNEK_DEGERLER[s.tur], false).flatMap((o) => (o.tur === 'metin' ? o.satirlar.filter((x) => x.endsWith('...')) : []));
+      assert.deepEqual(kesik, [], s.anahtar);
+    }
+  });
+
   test('EM-2: milimetre yazıcı noktasına yuvarlanır', () => {
     assert.equal(noktaya(25.4, 203), 203);
     assert.equal(noktaya(100, 203), 799);
@@ -116,7 +132,7 @@ describe('etiket-merkezi kuralları', () => {
   });
 
   test('kod satıra sığmazsa ortadan bölünmez: yazı küçülür, o da yetmezse ayıraçtan bölünür', () => {
-    // Konum 50x25'te kod 24,5 mm, 4 mm yazıyla 10 harf alır; 11 harflik kod küçülen yazıyla tek satırdır.
+    // Yer 50x25'te kod 24,5 mm, 4 mm yazıyla 10 harf alır; 11 harflik kod küçülen yazıyla tek satırdır.
     const konum = HAZIR_SABLONLAR.find((s) => s.anahtar === 'konum-50x25');
     assert.ok(konum);
     const kod = yerlesim(konum, { qr: 'LOC:ORN-ZEMIN-1', kod: 'ORN-ZEMIN-1' }, false).find((o) => o.tur === 'metin' && o.satirlar.join('').startsWith('ORN'));

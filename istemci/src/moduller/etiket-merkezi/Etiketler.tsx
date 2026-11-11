@@ -143,6 +143,20 @@ function HepsiniBas({ tur, kayitlar }: { tur: Bekleyen['tur']; kayitlar: Bekleye
   return <Link to={basmaAdresi(tur, idler)}><Dugme tur="birincil" simge="printer">{metin}</Dugme></Link>;
 }
 
+// 2922 a: konum ve istasyon etiketi tek "Yer etiketi"dir; istasyon onun teslim yeri boyudur. Katalog satırları (tablo) değişmez,
+// liste ikisini tek satırda gösterir.
+export function yerGrubu(etiketler: readonly Etiket[]): Etiket[] {
+  const konum = etiketler.find((e) => e.kod === 'konum');
+  const istasyon = etiketler.find((e) => e.kod === 'istasyon');
+  if (!konum || !istasyon) return [...etiketler];
+  const yer: Etiket = {
+    ...konum, ad: 'Yer etiketi', tetik: `${konum.tetik}; teslim yeri boyu: ${istasyon.tetik}`,
+    kayitTurleri: [...konum.kayitTurleri, ...istasyon.kayitTurleri.filter((t) => !konum.kayitTurleri.includes(t))],
+    sablonlar: [...konum.sablonlar, ...istasyon.sablonlar],
+  };
+  return etiketler.flatMap((e) => (e === konum ? [yer] : e === istasyon ? [] : [e]));
+}
+
 function TurListesi() {
   const liste = useQuery({ queryKey: anahtarlar.etiketler, queryFn: () => api.get<EtiketlerCevabi>('/etiket-merkezi/etiketler') });
   if (liste.isPending) return <DurumKutusu durum="yukleniyor" />;
@@ -150,7 +164,7 @@ function TurListesi() {
   return (
     <>
       <p className="tc-etk-not">Sistemdeki etiket türleri, ne zaman basıldıkları ve hangi ölçülerde basılabildikleri.</p>
-      <Tablo etiket="Etiket türleri" sutunlar={TUR_SUTUNLARI} satirlar={liste.data.etiketler} satirAnahtari={(e) => e.kod} bosMesaj="Etiket türü yok." />
+      <Tablo etiket="Etiket türleri" sutunlar={TUR_SUTUNLARI} satirlar={yerGrubu(liste.data.etiketler)} satirAnahtari={(e) => e.kod} bosMesaj="Etiket türü yok." />
     </>
   );
 }

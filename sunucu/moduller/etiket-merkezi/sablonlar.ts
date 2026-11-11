@@ -76,10 +76,10 @@ const refakatAdimi = (i: number) => {
 const DENEME_SIMGELERI = ['konum', 'raf', 'malzeme', 'lot', 'refakat', 'tezgah', 'kalite', 'hatali', 'koli', 'kumpas'];
 
 export const HAZIR_SABLONLAR: readonly Sablon[] = [
-  { anahtar: 'konum-50x25', ad: 'Konum 50x25', tur: 'konum', genislik: 50, yukseklik: 25, ogeler: [
+  { anahtar: 'konum-50x25', ad: 'Yer 50x25', tur: 'konum', genislik: 50, yukseklik: 25, ogeler: [
     ...kucukUst('konum', 'KONUM', '=LOC'), metin(24.5, 10.8, 24.5, 9.8, 4, 'kod', true), metin(24.5, 21, 24.5, 3.6, 2.2, 'yer'),
   ] },
-  { anahtar: 'konum-100x50', ad: 'Konum 100x50', tur: 'konum', genislik: 100, yukseklik: 50, ogeler: [
+  { anahtar: 'konum-100x50', ad: 'Yer 100x50', tur: 'konum', genislik: 100, yukseklik: 50, ogeler: [
     ...buyukUst('konum', 'KONUM', '=STOK KONUMU'), metin(50, 21.5, 48, 17, 7, 'kod', true),
     baslik(50, 39, 48, 'AD', 'ad'), metin(50, 41.4, 48, 3.6, 3.2, 'ad', true), metin(50, 45.4, 48, 3.2, 2.6, 'yer'),
   ] },
@@ -114,8 +114,10 @@ export const HAZIR_SABLONLAR: readonly Sablon[] = [
     ...Array.from({ length: REFAKAT_ADIM_SAYISI }, (_, i) => refakatAdimi(i + 1)).flat(),
     kutu(1.5, 137.4, 97, 0.3), metin(4, 138.8, 58, 3, 2.4, 'parti'), metin(64, 138.8, 32, 3, 2.4, 'basim'),
   ] },
-  { anahtar: 'istasyon-100x50', ad: 'İstasyon 100x50', tur: 'istasyon', genislik: 100, yukseklik: 50, ogeler: [
-    ...buyukUst('tezgah', 'İSTASYON', '=LOC'), metin(50, 21.5, 48, 17, 7, 'kod', true), baslik(50, 39, 48, 'AD', 'ad'), metin(50, 41.4, 48, 7, 4, 'ad', true),
+  // 2922 a: istasyon etiketi yer etiketinin bir boyudur; QR aynı konum kodudur (LOC), üstte "Teslim yeri" yazar. Anahtar ve tür
+  // adları değişmez: basılı etiketler ve cihaz varsayılanları geçerli kalır. Üst yazı tek sözcüktür: 28 mm kutuda boşluklu metin küçülmez.
+  { anahtar: 'istasyon-100x50', ad: 'Yer 100x50 · Teslim yeri', tur: 'istasyon', genislik: 100, yukseklik: 50, ogeler: [
+    ...buyukUst('tezgah', 'TESLİM', '=TESLİM YERİ · İSTASYON'), metin(50, 21.5, 48, 17, 7, 'kod', true), baslik(50, 39, 48, 'AD', 'ad'), metin(50, 41.4, 48, 7, 4, 'ad', true),
   ] },
   // Lot etiketiyle aynı rulo (100x50); QR bugünkü boyutunda (2168-2 b).
   { anahtar: 'kalite-durum-100x50', ad: 'Kalite durumu 100x50', tur: 'kalite-durum', genislik: 100, yukseklik: 50, ogeler: [

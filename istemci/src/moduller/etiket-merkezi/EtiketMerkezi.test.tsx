@@ -9,7 +9,8 @@ import type { BaskilarCevabi, BekleyenlerCevabi, CiktiCevabi, EtiketlerCevabi, K
 import { BildirimSaglayici } from '../../ortak/arayuz/index.ts';
 import { Baskilar } from './Baskilar.tsx';
 import { cihazYazicilari, cihazYazicisiKaydet } from './cihaz-yazicisi.ts';
-import { Etiketler } from './Etiketler.tsx';
+import { Etiketler, yerGrubu } from './Etiketler.tsx';
+import { KAYIT_BASLIKLARI } from './kayit-secimi.ts';
 import { HazirSablonlar, SablonKatalogu, YaziciDenemesi } from './EtiketMerkezi.tsx';
 import { Yazicilar } from './Yazicilar.tsx';
 
@@ -95,7 +96,7 @@ const KONUMLAR: Record<number, string> = { 11: 'R1-01-1-1', 12: 'R1-01-1-2' };
 
 interface Gonderilen { yol: string; govde: unknown; kimlik: string | null }
 
-function sunucuKur(secenek: { islemler?: Islem[]; yazicilar?: YazicilarCevabi; bekleyenler?: BekleyenlerCevabi } = {}) {
+function sunucuKur(secenek: { islemler?: Islem[]; yazicilar?: YazicilarCevabi; bekleyenler?: BekleyenlerCevabi; etiketler?: EtiketlerCevabi } = {}) {
   const istekler: string[] = [];
   const gonderilenler: Gonderilen[] = [];
   vi.stubGlobal('fetch', vi.fn(async (adres: string, init?: RequestInit) => {
@@ -125,7 +126,7 @@ function sunucuKur(secenek: { islemler?: Islem[]; yazicilar?: YazicilarCevabi; b
     if (yol === '/etiket-merkezi/sablonlar') return json(200, SABLONLAR);
     if (yol === '/etiket-merkezi/yazicilar') return json(200, secenek.yazicilar ?? YAZICILAR);
     if (yol === '/etiket-merkezi/baskilar') return json(200, BASKILAR);
-    if (yol === '/etiket-merkezi/etiketler') return json(200, ETIKETLER);
+    if (yol === '/etiket-merkezi/etiketler') return json(200, secenek.etiketler ?? ETIKETLER);
     if (yol === '/etiket-merkezi/bekleyenler') return json(200, secenek.bekleyenler ?? BEKLEYENLER);
     if (yol === '/etiket-merkezi/raflar') {
       return json(200, { raflar: [{ id: 21, kod: 'A1', ad: 'Palet rafı', salonKodu: 'DEPO' }, { id: 22, kod: 'A2', ad: 'A2', salonKodu: 'DEPO' }, { id: 23, kod: 'B1', ad: 'Konsol', salonKodu: 'URETIM' }] });
@@ -390,7 +391,7 @@ describe('EtiketMerkezi', () => {
     const istekler = sunucuKur({ islemler: ['sayfa.etiket-merkezi', 'etiket-merkezi.oku'] });
     ac(<HazirSablonlar />, '/etiket-merkezi?tur=konum&id=11,12,99');
     expect(await screen.findByText('R1-01-1-1')).toBeTruthy();
-    expect(screen.getByText('Konum etiketleri')).toBeTruthy();
+    expect(screen.getByText('Yer etiketleri')).toBeTruthy();
     expect(screen.getByText('R1-01-1-2')).toBeTruthy();
     expect(screen.getByText('1 kayıt bulunamadı')).toBeTruthy();
     expect(screen.queryByText('Lot 100x50')).toBeNull();
@@ -494,7 +495,7 @@ describe('EtiketMerkezi', () => {
     const istekler = sunucuKur();
     ac(<HazirSablonlar />, '/etiket-merkezi?tur=konum&id=11,abc');
     expect(await screen.findByRole('heading', { name: '3. Ölçü' })).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Konum etiketleri' }).getAttribute('aria-pressed')).toBe('true');
+    expect(screen.getByRole('button', { name: 'Yer etiketleri' }).getAttribute('aria-pressed')).toBe('true');
     await screen.findByText('LT-000123');
     expect(istekler.some((i) => i.includes('kayit-cikti'))).toBe(false);
   });
@@ -716,5 +717,41 @@ describe('EtiketMerkezi cihaz varsayılanı', () => {
     expect(await screen.findByText('MK-000012')).toBeTruthy();
     expect(screen.queryByRole('button', { name: /· Zebra depo$/ })).toBeNull();
     expect(istekler.gonderilenler).toHaveLength(0);
+  });
+});
+
+// 2922 a: konum ve istasyon etiketi tek "Yer etiketi"; istasyon onun teslim yeri boyu. Katalog satırları değişmez.
+describe('Yer etiketi grubu', () => {
+  const satir = (kod: string, ad: string, sablon: { anahtar: string; ad: string }): EtiketlerCevabi['etiketler'][number] => ({
+    kod, ad, sahipModul: 'stok', tetik: `${ad} açılınca`, alanlar: 'QR (LOC)', sablonTuru: kod === 'istasyon' ? 'istasyon' : 'konum',
+    kayitTurleri: [kod === 'istasyon' ? 'istasyon' : 'konum'], durum: 'hazir', disaridakiYol: null, sablonlar: [sablon],
+  });
+  const KONUM = satir('konum', 'Konum etiketi', { anahtar: 'konum-50x25', ad: 'Yer 50x25' });
+  const ISTASYON = satir('istasyon', 'İstasyon etiketi', { anahtar: 'istasyon-100x50', ad: 'Yer 100x50 · Teslim yeri' });
+  const LOT = ETIKETLER.etiketler[0]!;
+
+  it('konum ve istasyon tek satırdır; istasyon ölçüsü yer etiketinin boyudur, öteki türler aynen kalır', () => {
+    const g = yerGrubu([LOT, KONUM, ISTASYON]);
+    expect(g.map((e) => e.kod)).toEqual(['lot', 'konum']);
+    expect(g[1]).toMatchObject({ ad: 'Yer etiketi', kayitTurleri: ['konum', 'istasyon'] });
+    expect(g[1]!.sablonlar.map((s) => s.ad)).toEqual(['Yer 50x25', 'Yer 100x50 · Teslim yeri']);
+    expect(g[1]!.tetik).toContain('teslim yeri boyu');
+  });
+
+  it('kayıt seçiminde iki tür de yer etiketi başlığıyla görünür', () => {
+    expect([KAYIT_BASLIKLARI.konum, KAYIT_BASLIKLARI.istasyon]).toEqual(['Yer etiketleri', 'Yer etiketleri · teslim yeri']);
+  });
+
+  it('ikisinden biri yoksa liste değişmez', () => {
+    expect(yerGrubu([LOT, KONUM])).toEqual([LOT, KONUM]);
+    expect(yerGrubu([ISTASYON])).toEqual([ISTASYON]);
+  });
+
+  it('Etiket türleri sekmesinde tek "Yer etiketi" satırı görünür', async () => {
+    sunucuKur({ islemler: ['sayfa.etiket-merkezi', 'etiket-merkezi.oku'], etiketler: { etiketler: [LOT, KONUM, ISTASYON] } });
+    ac(<Etiketler />, '/etiket-merkezi/etiketler?sekme=turler');
+    expect(await screen.findByText('Yer etiketi')).toBeTruthy();
+    expect(screen.queryByText('İstasyon etiketi')).toBeNull();
+    expect(screen.getByText('Yer 50x25, Yer 100x50 · Teslim yeri')).toBeTruthy();
   });
 });
