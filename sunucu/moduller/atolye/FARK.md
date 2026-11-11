@@ -426,3 +426,14 @@ npm ls occt-import-js three pdfjs-dist → occt-import-js@0.0.23, three@0.186.1,
   Veri çağırandan gelir (stok kendi ucundan, #115). Yer ve boyut yalnız Fabrika Haritası'nda, `atolye.yaz` ile düzenlenir; yetki değişmedi.
 - Sahne3B'nin iki boyutlu planındaki taslak, görünüm kutusu ve anahtar çevirisi `zemin-plani.ts`'e alındı; ikisi aynısını kullanır (davranış aynı).
 - Sunucu `disari.ts`: `fabrikaPlani(db)` (GET /atolye/fabrika ile aynı cevap); okuma yetkisini çağıran denetler.
+
+## Harita kaydından sonra stok eşlemesi (kart 2884, 11.11.2026)
+- Fabrika Haritası kaydından sonra (fabrika planı ya da tek bölüm yerleşimi) kişide `stok.tanim` varsa istemci `POST /stok/konumlar/haritadan-esle`
+  çağırır; çizilen raf gözü ve alan ayrı düğmeye basmadan stok konumu olur. Stok Merkezi'nden raf kaydı (stok `Depo.tsx`) eşlemeyi kendisi koştuğu
+  için ikinci kez çağrılmaz. Yetki ayrımı sunucudadır: eşleme ucu `stok.tanim` ister; atölye yazabilen ama stok tanımı olmayan kişi konum açamaz.
+- Yol seçimi (seçenek a, istemci): atölye sunucusunun stok `disari.ts`'ini çağırması (seçenek b) döngü kurardı; stok sunucusu haritayı
+  `atolye/disari.ts`'ten okur. Bedeli: harita kaydı ve eşleme iki istektir, aynı işlem değildir. Eşleme düşerse harita kaydı kalır, kişiye hata
+  ("Stok konumları eşlenemedi; Stok > Ayarlar'da Haritadan eşle ile yeniden deneyin.") ve ardından eşlenmemiş yer sayısı gösterilir. Eşleme tekrar
+  güvenlidir (değişiklik yoksa sıfır); sonraki kayıt ya da Ayarlar düğmesi tamamlar.
+- ATL-5 bilgisi yerini doğru söyler: düğme Stok > Ayarlar'dadır. Stok tanımı olmayan kişiye "Stok yetkilisi Stok > Ayarlar'dan eşlemeli".
+  Stok okuma yetkisi yoksa stok isteği atılmaz, bilgi çıkmaz. Sunucu, uç, yetki ve göç değişmedi.
