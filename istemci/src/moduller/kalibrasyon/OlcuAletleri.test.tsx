@@ -110,7 +110,7 @@ describe('Ölçü aletleri listesi', () => {
     expect(hucre(gecmis, 'Vade')).toBe('10.01.2026');
     expect(hucre(yaklasan, 'Durum')).toBe('14 gün kaldı');
     expect(hucre(kayitsiz, 'Durum')).toBe('Kalibrasyon kaydı yok');
-    expect(hucre(kayitsiz, 'Vade')).toBe('yok');
+    expect(hucre(kayitsiz, 'Vade')).toBe('—Girilmemiş');
     expect(screen.getByText('Kalibrasyonu geçmiş: 1')).toBeTruthy();
     expect(screen.getByText('30 gün içinde: 1')).toBeTruthy();
   });
@@ -125,7 +125,7 @@ describe('Ölçü aletleri listesi', () => {
     await listeBekle();
     const [satir] = satirlar() as [HTMLElement];
     const hucre = (baslik: string) => within(satir).getAllByRole('cell').find((h) => h.getAttribute('data-baslik') === baslik)?.textContent;
-    expect(hucre('Vade')).toBe('yok');
+    expect(hucre('Vade')).toBe('—Girilmemiş');
     expect(hucre('Son kalibrasyon')).toBe('02.11.2026');
   });
 
@@ -342,7 +342,7 @@ describe('alet ayrıntısı', () => {
     await listeBekle();
     fireEvent.click(satirlar()[2] as HTMLElement);
     await screen.findByRole('button', { name: 'Sil' });
-    expect(screen.getAllByText('yok').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Girilmemiş').length).toBeGreaterThan(0);
   });
 });
 

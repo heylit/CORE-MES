@@ -528,6 +528,9 @@ button.tc-ay1-kadran-cekirdek { cursor: pointer; }
 .tc-ay1-genis .tc-ay1-sayac .tc-ay1-tuslar { flex: none; grid-template-columns: repeat(2, calc(var(--dokunma-x20) + var(--b-2))); inline-size: auto; gap: var(--b-2); }
 .tc-ay1-genis .tc-ay1-sayac .tc-ay1-tus { flex-direction: column; gap: var(--b-1); min-block-size: var(--orb-2); padding: 0 var(--b-1); border-radius: var(--yari-3); font-size: var(--yazi-s); }
 .tc-ay1-genis .tc-ay1-sag .tc-ay1-bolme { flex: 1 1 auto; grid-template-rows: minmax(0, 1fr); }
+/* Sekme şeridi yatay kaydığı için (overflow-x) esnek sütunda en küçük yüksekliği sıfırdır; uzun bölme (Hazırlık listesi) onu
+   çizgi kalınlığına ezer, öteki sekmeler görünmez olur. Şerit büzülmez; uzun içerik sütunun kendi kaydırmasıyla okunur. */
+.tc-ay1-genis .tc-ay1-sag > .tc-sekmeler { flex: none; }
 .tc-ay1-genis .tc-ay1-resim { min-block-size: 0; }
 .tc-ay1-genis .tc-ay1-aktif { flex-wrap: nowrap; }
 .tc-ay1-genis .tc-ay1-aktif > div:first-child { flex: 1 1 0; }

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { OranOzeti } from '#paylasilan/sozlesme/finans.ts';
@@ -28,13 +28,13 @@ const OZET: OranOzeti = {
 };
 
 type Istek = { yontem: string; yol: string; govde: unknown; kimlik: string | null };
-function sunucuKur(islemler: string[], faizYanit?: () => Response | Promise<Response>) {
+function sunucuKur(islemler: string[], faizYanit?: () => Response | Promise<Response>, ozet: OranOzeti = OZET) {
   const istekler: Istek[] = [];
   vi.stubGlobal('fetch', vi.fn(async (adres: string, secenek?: RequestInit) => {
     const yol = adres.replace('/api', '');
     istekler.push({ yontem: secenek?.method ?? 'GET', yol, govde: secenek?.body ? JSON.parse(String(secenek.body)) : undefined, kimlik: new Headers(secenek?.headers).get(ISTEK_KIMLIGI_BASLIGI) });
     if (yol === '/oturum') return json(200, { kullanici: { id: 9, ad: 'Deneme', islemler } });
-    if (yol === '/finans/oran-ozeti') return json(200, OZET);
+    if (yol === '/finans/oran-ozeti') return json(200, ozet);
     if (yol.startsWith('/finans/oran-araligi')) {
       return json(200, { kurlar: [{ paraBirimi: 'USD', tarih: '2026-10-10', alis: '41.200000', satis: '41.300000' }, { paraBirimi: 'USD', tarih: '2026-10-13', alis: '41.500000', satis: '41.600000' }], faizler: [] });
     }
@@ -165,6 +165,21 @@ describe('Ortak kur ve faiz şeridi (939, 952 a, 953 a; 2238)', () => {
     const [ilk, yineleme] = yazmalar(istekler).map((i) => i.kimlik);
     expect(ilk).toMatch(/^[0-9a-f-]{36}$/);
     expect(yineleme).toBe(ilk);
+  });
+
+  it('2996 a: hiç kur ve faiz yokken tek satır; "Kur gir" yalnız finans.kur-yaz olana, tıklayınca giriş formu açılır', async () => {
+    const BOS: OranOzeti = { ...OZET, kurlar: [], faizler: [], sonGiris: null, gecmis: [] };
+    sunucuKur([], undefined, BOS);
+    ac();
+    const serit = await screen.findByRole('region', { name: 'Kur ve faiz' });
+    expect(await within(serit).findByText('Bugünün kuru girilmedi')).toBeTruthy();
+    expect(within(serit).queryByText('yok')).toBeNull();
+    expect(within(serit).queryByText('Kur gir')).toBeNull();
+    cleanup();
+    sunucuKur(['finans.kur-yaz'], undefined, BOS);
+    ac();
+    fireEvent.click(await screen.findByText('Kur gir'));
+    expect(await screen.findByRole('form', { name: 'Bugünün kuru' })).toBeTruthy();
   });
 
   it('özet okunamazsa şerit çizilmez', async () => {

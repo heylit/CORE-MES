@@ -28,7 +28,7 @@ describe('Malzeme tablosu (2905)', () => {
     expect(hucre('Kategori')?.textContent).toBe('Deneme kategori');
     expect(hucre('Kart durumu')?.textContent).toBe('Onayda');
     expect(hucre('Varsayılan konum')?.textContent).toBe('A-01-01');
-    expect(hucre('Son hareket')?.textContent).not.toBe('yok');
+    expect(hucre('Son hareket')?.textContent).not.toBe('—Girilmemiş');
     expect(hucre('Kabul / karantina')?.textContent).toBe('2');
   });
 
@@ -39,7 +39,7 @@ describe('Malzeme tablosu (2905)', () => {
     });
     ac('/stok/malzemeler');
     await screen.findByText('Deneme sac');
-    for (const b of ['Kategori', 'Kart durumu', 'Varsayılan konum', 'Son hareket', 'Kritik seviye']) expect(hucre(b)?.textContent).toBe('yok');
+    for (const b of ['Kategori', 'Kart durumu', 'Varsayılan konum', 'Son hareket', 'Kritik seviye']) expect(hucre(b)?.textContent).toBe('—Girilmemiş');
   });
 
   it('gizlenen sütun tablodan kalkar ve seçim yeniden açılışta korunur; Malzeme gizlenemez', async () => {

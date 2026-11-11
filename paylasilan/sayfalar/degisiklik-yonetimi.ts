@@ -13,7 +13,7 @@ export const DEGISIKLIK_YONETIMI_IKINCI_MENU = {
   gruplar: [
     {
       maddeler: [
-        { anahtar: 'gorevlerim', baslik: 'Görevlerim', yol: '/degisiklik-yonetimi', simge: 'bell', islem: 'sayfa.degisiklik-yonetimi' },
+        { anahtar: 'gorevlerim', baslik: 'Bugün', yol: '/degisiklik-yonetimi', simge: 'bell', islem: 'sayfa.degisiklik-yonetimi' },
         { anahtar: 'konfigurasyon', baslik: 'Konfigürasyon', yol: '/degisiklik-yonetimi/konfigurasyon', simge: 'layers', islem: 'sayfa.degisiklik-yonetimi' },
         { anahtar: 'degisiklikler', baslik: 'Değişiklikler', yol: '/degisiklik-yonetimi/degisiklikler', simge: 'list', islem: 'sayfa.degisiklik-yonetimi' },
       ],

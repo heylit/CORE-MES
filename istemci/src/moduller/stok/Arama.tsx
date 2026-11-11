@@ -12,7 +12,7 @@ import { RAF_TURU, miktarMetni } from './gorunum.ts';
 // paletidir (karar 102 a); konum, raf ve parti orada da aranır (kart 1234). Pencerenin kalkması prototip değişikliğidir, sorulur (UYUM-BORCU 46).
 // Malzeme adıyla arama malzemeler modülünün arama işlevi gelince eklenir; bugün kart numarası, konum, raf ve parti no.
 const SAYFALAR = [
-  ['İş kutusu', '/stok', 'panel ana'], ['Transfer', '/stok/sepet', 'taşı taşıma sepet teslim fiş çıkış'], ['Malzeme istekleri', '/stok/hazirlik', 'hazırlık toplama sipariş rota liste istek'],
+  ['Bugün', '/stok', 'iş kutusu panel ana'], ['Transfer', '/stok/sepet', 'taşı taşıma sepet teslim fiş çıkış'], ['Malzeme istekleri', '/stok/hazirlik', 'hazırlık toplama sipariş rota liste istek'],
   ['Mal kabul', '/stok/mal-kabul', 'giriş irsaliye'], ['Malzemeler', '/stok/malzemeler', 'ürün stok'], ['Hareketler', '/stok/hareketler', 'giriş çıkış geçmiş'],
   ['Depo', '/stok/depo', 'raf bölme göz harita'], ['Fabrika Haritası', '/atolye', 'plan raf ekle yerleşim düzenleyici göz'], ['Konumlar', '/stok/konumlar', 'dama tahtası kare zemin'],
   ['Ayarlar', '/stok/ayarlar', 'etiket depocu'],

@@ -89,6 +89,8 @@ export function KurFaizSeridi() {
   const kur = (p: string) => o.kurlar.find((k) => k.paraBirimi === p);
   const faiz = (t: FaizTuru) => o.faizler.find((f) => f.tur === t && f.paraBirimi === 'TRY');
   const bugunEksik = KUR_BIRIMLERI.some((p) => kur(p)?.tarih !== o.bugun);
+  // 2996 a: hiç kur ve faiz girilmemişken altı "yok" yerine tek satır; kur girebilene giriş bağlantısı. Şerit herkese görünmeye devam eder (952 a).
+  const hicGirilmedi = KUR_BIRIMLERI.every((p) => !kur(p)) && FAIZ_TURLERI.every((t) => !faiz(t));
   const sonGiris = o.sonGiris
     ? `Son ${TUR_ADI[o.sonGiris.tur]} girişi: ${girisMetni(o.sonGiris.giris, o.bugun)}, ${o.sonGiris.girenAd ?? 'bilinmiyor'}`
     : 'Kur ve faiz ayrıntısı';
@@ -97,6 +99,13 @@ export function KurFaizSeridi() {
       <div className="tc-kfs-satir">
         {/* Şeridin tek eylemi kendisidir: yazabilene panel formla açılır, ayrı düğme renk ve yer kalabalığı yapar (2344).
             Son giriş ipucunda ve paneldeki "Son girişler"dedir. */}
+        {hicGirilmedi ? (
+          <button type="button" className="tc-kfs-ozet" aria-expanded={acik} onClick={() => acikYaz((a) => !a)}>
+            <Simge ad="rotate" boyut="k" />
+            <span className="tc-kfs-bos">Bugünün kuru girilmedi</span>
+            {yazabilir && <span className="tc-kfs-gir">Kur gir</span>}
+          </button>
+        ) : (
         <button type="button" className="tc-kfs-ozet" aria-expanded={acik} onClick={() => acikYaz((a) => !a)} title={sonGiris}>
           <Simge ad="rotate" boyut="k" />
           {KUR_BIRIMLERI.map((p) => {
@@ -124,6 +133,7 @@ export function KurFaizSeridi() {
           })}
           {yazabilir && bugunEksik && <span className="tc-kfs-uyari"><span className="tc-kfs-isaret" aria-hidden="true" />Bugün girilmedi</span>}
         </button>
+        )}
       </div>
       {acik && <Panel o={o} yazabilir={yazabilir} kapat={() => acikYaz(false)} />}
     </section>

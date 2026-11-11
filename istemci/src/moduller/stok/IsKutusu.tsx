@@ -133,7 +133,7 @@ export function IsKutusu() {
   return (
     <section className="tc-stok">
       <SayfaBasi
-        baslik="İş kutusu"
+        baslik="Bugün"
         alt={s.data ? `${bugunMetni()}. ${l.length ? `Sizi bekleyen ${l.length} iş var.` : 'Bekleyen iş yok.'}` : bugunMetni()}
         sag={<>
           {malKabulYetkisi && <Link to="/stok/mal-kabul"><Dugme simge="truck">Mal kabul</Dugme></Link>}

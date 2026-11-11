@@ -5,7 +5,7 @@ export const rehber: readonly SayfaRehberi[] = [
     yol: '/stok',
     ozet: 'Depodaki malzemeyi okutur, teslim alır, taşır, hazırlar, stoktan düşer ve hareketleri izler.',
     nasil: [
-      '"İş kutusu"nda bekleyen işleri, kritik stoku ve son hareketleri görün.',
+      '"Bugün"de bekleyen işleri, kritik stoku ve son hareketleri görün.',
       '"Okut"ta ürün ya da raf kodunu okutun (kamera, fotoğraf ya da el okuyucu); "Sepete ekle" ya da "Stoktan düş".',
       '"Mal kabul"de malı sayıp "Teslim al"a, ardından "Etiket bas"a basın.',
       '"Malzeme istekleri"nde üretimden gelen istekleri görün: tek isteği "Teslim et" ile götürün ya da birkaçını seçip "Liste aç"ın, raf sırasıyla toplayıp "Bitir"e basın.',

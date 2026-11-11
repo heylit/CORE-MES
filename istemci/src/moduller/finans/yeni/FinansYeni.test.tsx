@@ -39,7 +39,7 @@ const kayitYazmalari = (istekler: readonly Istek[]) => istekler.filter((i) => i.
 // Finans verisinin son okuması şirket adıdır; okununca bölüm veriyle çizilir.
 const okundu = async (istekler: readonly Istek[]) => {
   await waitFor(() => expect(istekler.some((i) => i.yol === '/kurum')).toBe(true));
-  await acikBolum('Ana sayfa');
+  await acikBolum('Pano');
 };
 
 describe('finans ekranı: adresler ve açılış', () => {

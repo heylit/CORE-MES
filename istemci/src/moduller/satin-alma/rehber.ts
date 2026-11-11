@@ -20,7 +20,7 @@ export const rehber: readonly SayfaRehberi[] = [
     yol: '/satin-alma',
     ozet: 'Gelen talepler için teklif toplar, karşılaştırır, onaya gönderir ve siparişi izler.',
     nasil: [
-      'Talepleri "İş kutusu" ya da "Talepler"de görün.',
+      'Talepleri "Bugün" ya da "Talepler"de görün.',
       '"Teklif iste", sonra "Teklifleri gir" (ya da "Excel\'den yapıştır").',
       '"Karşılaştır ve karar ver" ile teklifi seçin; onaylayan "Onaylar"da "Onayla" ya da "Reddet".',
       'Fason işleri "Dış operasyonlar"da izleyin.',

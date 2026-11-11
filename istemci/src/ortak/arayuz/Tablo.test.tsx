@@ -140,9 +140,9 @@ describe('Tablo kesilen sütun', () => {
     expect(document.querySelector('.tc-tablo-kes')).toBeNull();
   });
 
-  it('boş hücre kesilmez, "yok" yazar', () => {
+  it('boş hücre kesilmez, "—" ve gizli "Girilmemiş" yazar', () => {
     render(<Tablo etiket="Gider" kip="kaydir" sutunlar={[{ anahtar: 'b', baslik: 'Boş', kes: true, hucre: () => null }]} satirlar={[KIRA]} satirAnahtari={(s) => s.no} />);
     expect(document.querySelector('.tc-tablo-kes')).toBeNull();
-    expect(screen.getByText('yok')).toBeTruthy();
+    expect(screen.getByText('Girilmemiş')).toBeTruthy();
   });
 });

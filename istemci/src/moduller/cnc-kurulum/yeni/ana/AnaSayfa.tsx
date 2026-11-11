@@ -87,7 +87,7 @@ export function AnaSayfa() {
       <header className="tc-cl-ana-ust">
         <div>
           <small>CNC ATÖLYE · GENEL BAKIŞ</small>
-          <h2>Ana sayfa</h2>
+          <h2>Pano</h2>
           <span>{tarih}</span>
         </div>
         <div className="tc-cl-ana-hizli">

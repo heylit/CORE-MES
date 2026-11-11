@@ -18,7 +18,7 @@ export const SATIN_ALMA_IKINCI_MENU = {
   gruplar: [
     {
       maddeler: [
-        { anahtar: 'is-kutusu', baslik: 'İş kutusu', yol: '/satin-alma', simge: 'bell', islem: 'satin-alma.yaz' },
+        { anahtar: 'is-kutusu', baslik: 'Bugün', yol: '/satin-alma', simge: 'bell', islem: 'satin-alma.yaz' },
         { anahtar: 'talepler', baslik: 'Talepler', yol: '/satin-alma/talepler', simge: 'list', islem: 'satin-alma.oku' },
         // 2430: tedarikçiye verilen her sipariş bir satır; veri merkezin açılış verisinden.
         { anahtar: 'siparisler', baslik: 'Siparişler', yol: '/satin-alma/siparisler', simge: 'cart', islem: 'satin-alma.oku' },
