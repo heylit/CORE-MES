@@ -18,7 +18,9 @@ import { elleOnayliMaddeler, emirBaslat, uretimEmriAc } from './disari.ts';
 import type { IsEmriGirdisi } from './disari.ts';
 import { hazirlikCozucusuKaydet } from './hazirlik.ts';
 import type { HazirlikCozucusu } from './hazirlik.ts';
+import { ADIM_KAPALI_EMIR } from './kurallar.ts';
 import type { HazirlikBilgisi } from './kurallar.ts';
+import { isEmriKilitle } from './sorgular.ts';
 
 const PAROLA = 'dogru-parola-1';
 interface Cevap<T = unknown> { durum: number; govde: T }
@@ -147,6 +149,9 @@ describe('uretim-emirleri adım durumu (2893, gerçek PostgreSQL)', () => {
       assert.equal((await yaz(govde, 'kalite')).durum, 403, 'kalite yazmaz (2893-1 a)');
       assert.equal((await yaz({ ...govde, sistemStatusu: 'baslayabilir' })).durum, 409, 'eski görüntüye göre yazılmaz');
       assert.equal((await yaz({ ...govde, statu: 'yok' })).durum, 400);
+      for (const statu of ['bitti', 'uretimde', 'duraklatildi', 'durdu', 'baslayabilir']) {
+        assert.equal((await yaz({ ...govde, statu }, 'mudur')).durum, 400, `${statu} sistemden gelir, elle yazılmaz`);
+      }
       assert.equal((await yaz(govde, 'planlama_proje', 2_000_000_000)).durum, 404, 'başka emrin iş emri');
       const yazildi = await yaz(govde, 'mudur');
       assert.equal(yazildi.durum, 200, JSON.stringify(yazildi.govde));
@@ -166,6 +171,9 @@ describe('uretim-emirleri adım durumu (2893, gerçek PostgreSQL)', () => {
       assert.equal((await istek(`planlama_proje`, 'POST', `/adimli-emirler/${id}/is-emirleri/${ie1}/statu-kaldir`, {})).durum, 409, 'açık elle statü yok');
 
       assert.equal((await yaz({ statu: 'talep', not: null, sistemStatusu: 'onceki' }, 'planlama_proje', ie2)).durum, 200);
+      for (const kisi of ['operator', 'kalite']) {
+        assert.equal((await istek(kisi, 'POST', `/adimli-emirler/${id}/is-emirleri/${ie2}/statu-kaldir`, {})).durum, 403, `${kisi} kaldırmaz`);
+      }
       const kaldir = await istek<AdimDurumuCevabi>('planlama_proje', 'POST', `/adimli-emirler/${id}/is-emirleri/${ie2}/statu-kaldir`, {});
       assert.equal(kaldir.durum, 200, JSON.stringify(kaldir.govde));
       assert.equal(kaldir.govde.adimlar[1]?.elle, null);
@@ -212,6 +220,9 @@ describe('uretim-emirleri adım durumu (2893, gerçek PostgreSQL)', () => {
       assert.equal((await oku(id)).adimlar[0]?.maddeler.find((m) => m.madde === 'cizim')?.hal, 'eksik');
       durumlar.set('cizim', { durum: 'suruyor', secildi: true, surum: '7@a' });
 
+      for (const kisi of ['operator', 'kalite']) {
+        assert.equal((await istek(kisi, 'POST', `/adimli-emirler/${id}/is-emirleri/${ie1}/hazirlik-onay-kaldir`, { madde: 'cnc' })).durum, 403, `${kisi} onay kaldırmaz`);
+      }
       const kaldir = await istek<AdimDurumuCevabi>('planlama_proje', 'POST', `/adimli-emirler/${id}/is-emirleri/${ie1}/hazirlik-onay-kaldir`, { madde: 'cnc' });
       assert.equal(kaldir.durum, 200, JSON.stringify(kaldir.govde));
       assert.equal(kaldir.govde.adimlar[0]?.maddeler.find((m) => m.madde === 'cnc')?.hal, 'eksik', 'onay kalkınca yeniden eksik');
@@ -234,10 +245,26 @@ describe('uretim-emirleri adım durumu (2893, gerçek PostgreSQL)', () => {
     try {
       const r = await istek<AdimDurumuCevabi>('planlama_proje', 'POST', `/adimli-emirler/${id}/is-emirleri/${ie1}/hazirlik-onayla`, { madde: 'malzeme', gerekce: null, sistemHali: 'eksik' });
       assert.equal(r.durum, 200, JSON.stringify(r.govde));
+      // Güncel sistem statüsüyle gönderilir: 409 yalnız kapalı emir korumasından gelebilir.
+      const sistemStatusu = r.govde.adimlar[0]?.sistemStatusu;
+      assert.equal(sistemStatusu, 'baslayabilir');
       await o().sahip.sorgu("UPDATE uretim_emri SET durum = 'iptal', iptal = now() WHERE id = $1", [id]);
-      assert.equal((await istek('planlama_proje', 'POST', `/adimli-emirler/${id}/is-emirleri/${ie1}/statu-yaz`, { statu: 'talep', not: null, sistemStatusu: 'malzeme' })).durum, 409);
+      const kapali = await istek<Hata>('planlama_proje', 'POST', `/adimli-emirler/${id}/is-emirleri/${ie1}/statu-yaz`, { statu: 'talep', not: null, sistemStatusu });
+      assert.deepEqual([kapali.durum, kapali.govde.mesaj], [409, ADIM_KAPALI_EMIR]);
+      const onayKapali = await istek<Hata>('planlama_proje', 'POST', `/adimli-emirler/${id}/is-emirleri/${ie1}/hazirlik-onay-kaldir`, { madde: 'malzeme' });
+      assert.deepEqual([onayKapali.durum, onayKapali.govde.mesaj], [409, ADIM_KAPALI_EMIR]);
     } finally {
       hazirlikCozucusuKaydet('malzeme', onceki);
     }
+  });
+
+  test('isEmriKilitle yalnız emrin kendi iş emrini bulur', async () => {
+    const a = await ac();
+    const b = await ac();
+    const [a1 = 0] = a.ie;
+    const [b1 = 0] = b.ie;
+    assert.equal(await o().vt.tx((db) => isEmriKilitle(db, a1, a.id)), true);
+    assert.equal(await o().vt.tx((db) => isEmriKilitle(db, b1, a.id)), false, 'başka emrin iş emri');
+    assert.equal(await o().vt.tx((db) => isEmriKilitle(db, 2_000_000_000, a.id)), false);
   });
 });

@@ -17,6 +17,9 @@ describe('uretim-emirleri adım durumu kuralları (2893)', () => {
     assert.equal(adimSistemStatusu(g({ durum: 'calisiyor', calisma: 'durakli' })).statu, 'duraklatildi');
     assert.equal(adimSistemStatusu(g({ durum: 'calisiyor', calisma: 'durdu' })).statu, 'durdu');
     assert.equal(adimSistemStatusu(g({ fasonda: true }, [['cnc', 'eksik']])).statu, 'fasonda');
+    assert.equal(adimSistemStatusu(g({ durum: 'calisiyor', calisma: 'calisiyor', fasonda: true })).statu, 'uretimde', 'çalışma fasondan önce gelir');
+    assert.equal(adimSistemStatusu(g({ durum: 'calisiyor', calisma: 'durakli', fasonda: true })).statu, 'duraklatildi');
+    assert.equal(adimSistemStatusu(g({ durum: 'tamam', fasonda: true })).statu, 'bitti');
     assert.deepEqual(adimSistemStatusu(g({ oncekiBekleniyor: true }, [['malzeme', 'eksik'], ['cnc', 'eksik']])),
       { statu: 'program', nedenler: ['CNC kurulumu (NC) eksik', 'Malzeme eksik', 'Önceki adım bitmedi'] });
     assert.equal(adimSistemStatusu(g({}, [['cizim', 'eksik'], ['makine', 'eksik']])).statu, 'cizim');

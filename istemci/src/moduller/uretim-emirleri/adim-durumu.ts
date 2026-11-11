@@ -1,4 +1,4 @@
-import type { AdimStatusu } from '#paylasilan/sozlesme/uretim-emirleri.ts';
+import type { AdimStatusu, ElleYazilanStatu } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import type { RozetTonu } from '../../ortak/arayuz/index.ts';
 import type { SimgeAdi } from '../../ortak/tasarim/simgeler.ts';
 
@@ -24,8 +24,8 @@ export const STATU: Readonly<Record<AdimStatusu, StatuGorunumu>> = {
   diger: { ad: 'Diğer', ton: 'pasif', simge: 'help' },
 };
 
-// Elle yazılabilen statüler: çalışma ve bitiş sistemden gelir, elle yazılmaz (yanlış "Bitti" ya da "Üretimde" planı yanıltır).
-export const ELLE_YAZILIR: readonly AdimStatusu[] = ['program', 'cizim', 'yayin', 'makine', 'talep', 'siparis', 'malzeme', 'firma', 'fasonda', 'onceki', 'diger'];
+// Elle yazılabilen statüler; sunucu aynı listeyi sözleşmede zorlar (ElleYazilanStatu), burada yalnız seçenek sırasıdır.
+export const ELLE_YAZILIR: readonly ElleYazilanStatu[] = ['program', 'cizim', 'yayin', 'makine', 'talep', 'siparis', 'malzeme', 'firma', 'fasonda', 'onceki', 'diger'];
 
 export const ADIM_DURUMU_YAZ = 'uretim-emirleri.adim-durumu-yaz';
 export const adimDurumuUcu = (emirId: number): string => `/adimli-emirler/${String(emirId)}/adim-durumu`;

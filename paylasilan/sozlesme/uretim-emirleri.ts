@@ -1033,11 +1033,15 @@ export const ADIM_STATULERI = [
   'baslayabilir', 'onceki', 'diger',
 ] as const;
 export const adimStatusu = z.enum(ADIM_STATULERI);
+// Elle yazılabilen statüler: çalışma, bitiş ve "Başlayabilir" sistemden gelir; yanlış "Bitti" ya da "Üretimde" planı yanıltır.
+export const ELLE_YAZILAN_STATULER = [
+  'program', 'cizim', 'yayin', 'makine', 'talep', 'siparis', 'malzeme', 'firma', 'fasonda', 'onceki', 'diger',
+] as const satisfies readonly (typeof ADIM_STATULERI)[number][];
 export const ADIM_DURUMU_OLAYLARI = ['statu', 'statu-kaldir', 'onay', 'onay-kaldir'] as const;
 // Durduran maddede gerekçe zorunlu; uyaran maddede boş olabilir (sunucu kuralı, kurallar.ts).
 const kisaNot = z.string().trim().max(500).nullable();
 export const elleStatuGovdesi = z.object({
-  statu: adimStatusu,
+  statu: z.enum(ELLE_YAZILAN_STATULER),
   not: kisaNot,
   // İstemcinin gördüğü sistem statüsü; sunucudakiyle aynı değilse yazılmaz (409), kişi güncel durumu görüp yeniden karar verir.
   sistemStatusu: adimStatusu,
@@ -1095,6 +1099,7 @@ export const adimDurumuTerminalCevabi = z.object({
   })),
 });
 export type AdimStatusu = z.output<typeof adimStatusu>;
+export type ElleYazilanStatu = (typeof ELLE_YAZILAN_STATULER)[number];
 export type ElleStatuGovdesi = z.output<typeof elleStatuGovdesi>;
 export type HazirlikOnayiGovdesi = z.output<typeof hazirlikOnayiGovdesi>;
 export type HazirlikOnayiKaldirGovdesi = z.output<typeof hazirlikOnayiKaldirGovdesi>;
