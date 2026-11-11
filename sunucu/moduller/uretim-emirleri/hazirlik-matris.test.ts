@@ -82,7 +82,7 @@ describe('uretim-emirleri hazırlık matrisi (2060, gerçek PostgreSQL)', () => 
       const v = hazirlikCevabi.parse(await o().vt.okumaTx((db) => hazirlik(db, id)));
       // Özel proses matristen çıktı (2146-1 a); uyaran maddelerin hâli kendi testinde (hazirlik-uyari.test.ts), çözücüleri kablolamaya bağlı.
       assert.deepEqual(v.maddeler.map((m) => [m.madde, m.isEmriDuzeyi]), [
-        ['cnc', true], ['cizim', false], ['yayin', true], ['rota', false], ['malzeme', true], ['takim-omru', true], ['makine', true], ['talimat', true], ['ek-madde', true],
+        ['cnc', true], ['cizim', false], ['yayin', true], ['rota', false], ['malzeme', true], ['takim-omru', true], ['makine', true], ['talimat', true], ['ek-madde', true], ['aparat', true], ['olcu-aleti', true],
       ]);
       assert.deepEqual(v.maddeler.slice(0, 2).map((m) => [m.madde, m.durum]), [['cnc', 'eksik'], ['cizim', 'eksik']]);
       assert.deepEqual(v.isEmirleri.map((s) => [s.isEmriId, s.opNo, s.bitti, s.maddeler.filter((m) => m.madde === 'cnc').map((m) => [m.madde, m.durum])]), [

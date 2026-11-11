@@ -23,7 +23,7 @@ import {
   logoBirimSetiCozucusu, logoEslemeYaziciCozucusu, logoKartAynasiCozucusu, logoKodCozucusu, logoTmiKodCozucusu, rotaRevizyonlariCozucusu, kartIzleriCozucusu,
 } from './moduller/malzemeler/disari.ts';
 import { firmaDegistiDinle, logoCariCozuculeriKaydet } from './moduller/musteri-tedarikci/disari.ts';
-import { araHalCozucusuKaydet as rotaAraHalCozucusu, durumRevizyonlari, emirBittiYansit as rotaEmirBittiYansit, adimBittiYansit as rotaAdimBittiYansit, emirRotaHazirliklari, isEmriKopyalandiYansit, malzemeKartiIzleri as rotaKartIzleri, yuzeyIslemiAdimlari } from './moduller/rota/disari.ts';
+import { araHalCozucusuKaydet as rotaAraHalCozucusu, durumRevizyonlari, emirBittiYansit as rotaEmirBittiYansit, adimBittiYansit as rotaAdimBittiYansit, emirRotaHazirliklari, isEmriAparatHazirliklari, isEmriKopyalandiYansit, isEmriOlcuAletiHazirliklari, malzemeKartiIzleri as rotaKartIzleri, yuzeyIslemiAdimlari } from './moduller/rota/disari.ts';
 import { yuzeyAdimlariCozucusu } from './moduller/geometri/disari.ts';
 import * as sevkiyat from './moduller/sevkiyat/disari.ts';
 import { bagliEmirCozucusu, malzemeKartiIzleri as siparisKartIzleri, siparisAyrintisi, siparisListesi, siparisOnaylandiDinle, teklifDenemeCozucusu } from './moduller/siparisler/disari.ts';
@@ -186,6 +186,8 @@ export function sunucununBaglari(): Bag[] {
     bag('paket yayını -> hazırlık matrisi', uretimEmirleri.yayinHazirlikCozucusu, arkon.isEmriYayinDurumlari),
     bag('ek hazırlık maddesi -> hazırlık matrisi', uretimEmirleri.ekMaddeHazirlikCozucusu, arkon.isEmriEkMaddeDurumlari),
     bag('rota revizyonu -> hazırlık uyarısı', uretimEmirleri.rotaHazirlikCozucusu, emirRotaHazirliklari),
+    bag('aparat (rota adımı, stok) -> hazırlık uyarısı', uretimEmirleri.aparatHazirlikCozucusu, (db: Db, idler: readonly number[]) => isEmriAparatHazirliklari(db, idler, stok.malzemeStokDurumlari)),
+    bag('ölçü aleti (rota adımı, kalibrasyon) -> hazırlık uyarısı', uretimEmirleri.olcuAletiHazirlikCozucusu, isEmriOlcuAletiHazirliklari),
     bag('girdi stoğu -> hazırlık uyarısı', uretimEmirleri.malzemeHazirlikCozucusu, stok.isEmriMalzemeHazirliklari),
     bag('takım ömrü -> hazırlık uyarısı', uretimEmirleri.takimHazirlikCozucusu, cncKurulum.isEmriTakimHazirliklari),
     // Onaylı kapanışın dış maddeleri (1074 a): sahipler üretim emirlerini okur, çözücüleri ters yönde kaydedilir.

@@ -1,6 +1,6 @@
 // Modülün servis girişi: işlevler alana göre servis/ altındadır. Uçlar, işler ve disari.ts yalnız bu dosyayı ithal eder.
 export { ROTALI_TURLER, secenekler, acikRevizyonSayisi, rotaListesi, revizyonOzeti, urunRevizyonlari, revizyonAyrintisi, hamOnerisi, opNumaralari } from './servis/liste.ts';
-export { fark, taslakAc, karttanTaslaklar, kaydet, onayaGonder, geriGonder, onayla, yururlugeAl, iptal, kopyala, kopyaIste } from './servis/revizyon.ts';
+export { adimEkipmaniKaydet, fark, taslakAc, karttanTaslaklar, kaydet, onayaGonder, geriGonder, onayla, yururlugeAl, iptal, kopyala, kopyaIste } from './servis/revizyon.ts';
 export {
   talimatListesi, talimatMedyasi, talimatYaz, adimliTalimatYaz, talimatTaslakKaydet, talimatYayinla, talimatTaslakSil, talimatSurumuAdimlari,
   talimatSablonlari, talimatSablonu, talimatSablonKopyalari, talimatSablonEkle, talimatSablonKaydet, talimatSablonDurumuYaz,
@@ -10,7 +10,7 @@ export { sureler, gerceklesenSureYaz, gerceklesenKabulEt, emirBittiYansit, adimE
 export {
   type RotaAdimi, type RotaRevizyonu, girdisiEksikRevizyonlar, revizyonGetir, revizyonlar, type DurumRotaAdimi, type DurumRotaRevizyonu, durumRevizyonlari,
   adimIlkParcaSecimleri, yururluktekiRevizyon, adimBilesenleri, gecerliTalimat, gecerliTalimatlarToplu, urunAgaci, malzemeKullanimi, emreKopyala, emreUygula, revizyonKunyeleri,
-  malzemeAra,
+  malzemeAra, olcuAletiTurleri,
 } from './servis/okuma.ts';
 export { emreKopyalaToplu } from './servis/emir-toplu.ts';
 export { rotaAdimlariToplu } from './servis/adim-toplu.ts';

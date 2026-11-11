@@ -23,6 +23,7 @@ export const AZAMI_ADIM = 60;
 export const AZAMI_BILESEN = 30;
 export const AZAMI_YAN_URUN = 10;
 export const AZAMI_ADAY = 10;
+export const AZAMI_EKIPMAN = 20;
 export const AZAMI_TALIMAT = 4000;
 // Ağaç açılırken derinlik sınırı: döngü onayda reddedilir, bu sınır yalnız bozuk veriye karşı korumadır.
 export const AZAMI_AGAC_DERINLIGI = 12;
@@ -102,6 +103,14 @@ export const yanUrunGirdisi = z.object({
   miktar: z.number().positive('Miktar sıfırdan büyük olmalı.').max(1_000_000),
 });
 
+// Adım ekipmanı (2893-4 a): aparat bir malzeme kartıdır (adet ve yer Stok'ta), ölçü aleti kalibrasyondaki alet türüdür.
+export const EKIPMAN_TURLERI = ['aparat', 'olcu_aleti'] as const;
+const ekipmanAciklamasi = z.string().trim().max(200, 'Açıklama en çok 200 karakter.').nullable().transform((x) => (x === '' ? null : x));
+export const ekipmanGirdisi = z.discriminatedUnion('tur', [
+  z.object({ tur: z.literal('aparat'), malzemeId: MALZEME_KIMLIGI, aciklama: ekipmanAciklamasi }),
+  z.object({ tur: z.literal('olcu_aleti'), aletTuruId: KIMLIK, aciklama: ekipmanAciklamasi }),
+]);
+
 // OP numarasını sunucu verir: yeni adım null gelir; dolu gelen numara taslakta zaten olan adımındır.
 export const adimGirdisi = z.object({
   opNo: KIMLIK.nullable(),
@@ -134,6 +143,8 @@ export const adimGirdisi = z.object({
   adaylar: z.array(adayGirdisi).max(AZAMI_ADAY),
   bilesenler: z.array(bilesenGirdisi).max(AZAMI_BILESEN),
   yanUrunler: z.array(yanUrunGirdisi).max(AZAMI_YAN_URUN),
+  // Gelmeyen liste (alanı bilmeyen eski görünüm) adımın kayıtlı ekipmanını korur; boş liste kaldırır.
+  ekipman: z.array(ekipmanGirdisi).max(AZAMI_EKIPMAN).optional(),
 });
 
 export const kaydetGovdesi = z.object({
@@ -245,6 +256,10 @@ export const adimSemasi = z.object({
   // miktar bir adet içindir; toplamMiktar istenen ürün miktarı için (adım miktarı x miktar x (1 + fire)).
   bilesenler: z.array(z.object({ malzeme: urunOzeti, miktar: ondalikMetinSemasi, fireYuzde: ondalikMetinSemasi, toplamMiktar: ondalikMetinSemasi })),
   yanUrunler: z.array(z.object({ malzeme: urunOzeti, miktar: ondalikMetinSemasi })),
+  // Aparatta malzeme, ölçü aletinde alet türü dolu; öteki null.
+  ekipman: z.array(z.object({
+    tur: z.enum(EKIPMAN_TURLERI), malzeme: urunOzeti.nullable(), aletTuru: z.object({ id: KIMLIK, ad: z.string() }).nullable(), aciklama: z.string().nullable(),
+  })),
   akis: akisSemasi,
   // İstenen ürün miktarı için: fire payıyla büyümüş adım miktarı ve teorik süre (dk); süre eksikse ya da adım fasonsa null.
   adimMiktari: ondalikMetinSemasi,
@@ -511,6 +526,8 @@ export type UrunOzeti = z.output<typeof urunOzeti>;
 export type RevizyonOzeti = z.output<typeof revizyonOzeti>;
 export type Adim = z.output<typeof adimSemasi>;
 export type AdimGirdisi = z.output<typeof adimGirdisi>;
+export type EkipmanGirdisi = z.output<typeof ekipmanGirdisi>;
+export type EkipmanTuru = (typeof EKIPMAN_TURLERI)[number];
 export type KaydetGovdesiCikti = z.output<typeof kaydetGovdesi>;
 export type KaydetGovdesi = z.input<typeof kaydetGovdesi>;
 export type TaslakAcGovdesi = z.input<typeof taslakAcGovdesi>;
@@ -815,6 +832,13 @@ export const adimSartnameleriGovdesi = z.object({
   opNo: KIMLIK,
   sartnameler: z.array(z.object({ sartnameId: KIMLIK, degerler: parametreDegerleri })).max(AZAMI_ADIM_SARTNAMESI),
 });
+
+// Adımın ekipman listesi (2893-4 a) şartname listesi gibi OP numarasıyla bütün olarak yazılır; yalnız taslakta.
+export const adimEkipmaniGovdesi = z.object({ surum: KIMLIK, opNo: KIMLIK, ekipman: z.array(ekipmanGirdisi).max(AZAMI_EKIPMAN) });
+export type AdimEkipmaniGovdesi = z.output<typeof adimEkipmaniGovdesi>;
+// Adımda seçilebilen ölçü aleti türleri (kalibrasyonun açık türleri); rota yazan rol kalibrasyon sayfasını görmeyebilir.
+export const olcuAletiTurleriCevabi = z.object({ turler: z.array(z.object({ id: KIMLIK, ad: z.string() })) });
+export type OlcuAletiTurleriCevabi = z.output<typeof olcuAletiTurleriCevabi>;
 
 const parametreSemasi = parametreGirdisi.extend({ sira: KIMLIK, birim: z.string().nullable(), ipucu: z.string().nullable(), ad: z.string(), secenekler: z.array(z.string()).nullable() });
 const standartSemasi = z.object({ id: KIMLIK, numara: z.string(), kisaAciklama: z.string() });

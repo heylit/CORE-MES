@@ -706,7 +706,8 @@ export const refakatKartiCevabi = z.object({
 // Uyaran maddeler (2146-1 a) eksikken de iş emri başlar; matris ve terminal yalnız uyarır.
 // Paket yayını (2227, 2189-1 a): iş emri Üretim Hazırlık'ta yayınlanmadan terminalde başlamaz; reddi Arkon verir, matris yalnız gösterir.
 export const DURDURAN_HAZIRLIK_MADDELERI = ['cnc', 'cizim', 'yayin'] as const;
-export const UYARAN_HAZIRLIK_MADDELERI = ['rota', 'malzeme', 'takim-omru', 'makine', 'talimat', 'ek-madde'] as const;
+// aparat ve olcu-aleti (2893-4 a): liste rota adımında, emir kopyalar; aparat Stok'tan, ölçü aleti Kalibrasyon'dan okunur.
+export const UYARAN_HAZIRLIK_MADDELERI = ['rota', 'malzeme', 'takim-omru', 'makine', 'talimat', 'ek-madde', 'aparat', 'olcu-aleti'] as const;
 export const HAZIRLIK_MADDELERI = [...DURDURAN_HAZIRLIK_MADDELERI, ...UYARAN_HAZIRLIK_MADDELERI] as const;
 export const hazirlikUyarirMi = (m: string): boolean => (UYARAN_HAZIRLIK_MADDELERI as readonly string[]).includes(m);
 // Başlatma kancasında sorulmayan durduran madde: kuralı sahibi kendi uygular (yayın: Arkon kayıt kapısı); emirden başka yoldan başlatma değişmez.

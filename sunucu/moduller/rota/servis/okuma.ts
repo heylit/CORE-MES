@@ -7,6 +7,7 @@ import type { KatalogTuru } from '#paylasilan/sozlesme/malzemeler.ts';
 import type { EmirTuru } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import type { AgacCevabi, Bagimlilik, IlkParcaSecimi, KullanimCevabi, MakineKullanimi, RevizyonDurumu, UrunOzeti } from '#paylasilan/sozlesme/rota.ts';
 import { malzemeAra as kartAra } from '../../malzemeler/disari.ts';
+import { aletTurleri } from '../../kalibrasyon/disari.ts';
 import { adimliEmirAyrintisi, isEmirleriniYenile, uretimEmriAc } from '../../uretim-emirleri/disari.ts';
 import { cokKatmanaCevir, emreKopyalanabilirMi, girdiEksigi, oncullerCikar } from '../kurallar.ts';
 import type { Oncul } from '../kurallar.ts';
@@ -329,4 +330,9 @@ export async function gecerliTalimatlarToplu(db: Db, anahtarlar: readonly { malz
   if (anahtarlar.length === 0) return new Map();
   const satirlar = await s.gecerliTalimatlarToplu(db, anahtarlar.map((a) => a.malzemeId), anahtarlar.map((a) => a.opNo));
   return new Map(satirlar.map((t) => [`${String(t.malzemeId)}:${String(t.opNo)}`, { surum: t.surum, metin: t.metin }]));
+}
+
+// Adım ekipmanında seçilebilen ölçü aleti türleri (2893-4 a).
+export async function olcuAletiTurleri(db: Db): Promise<{ turler: { id: number; ad: string }[] }> {
+  return { turler: (await aletTurleri(db)).map((t) => ({ id: t.id, ad: t.ad })) };
 }

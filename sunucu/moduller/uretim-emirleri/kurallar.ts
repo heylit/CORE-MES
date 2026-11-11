@@ -1086,7 +1086,7 @@ export function fasonBeklemesi(
 // başlamaz. Çizim muaf tutulamaz (121 a).
 export const HAZIRLIK_ADI: Readonly<Record<HazirlikMaddesi, string>> = {
   cnc: 'CNC kurulumu (NC)', cizim: 'Çizim revizyonu', rota: 'Rota yürürlükte', malzeme: 'Malzeme', 'takim-omru': 'Takım ömrü', makine: 'Makine durumu', yayin: 'Paket yayını',
-  talimat: 'Hazırlık talimatı', 'ek-madde': 'Ek hazırlık maddesi',
+  talimat: 'Hazırlık talimatı', 'ek-madde': 'Ek hazırlık maddesi', aparat: 'Aparat', 'olcu-aleti': 'Ölçü aleti',
 };
 // Muafiyet yalnız matristeki durduran maddeye verilir; özel proses matristen çıktı (2146-1 a), uyaran madde zaten durdurmaz.
 export const MUAF_TUTULUR: ReadonlySet<HazirlikMaddesi> = new Set(

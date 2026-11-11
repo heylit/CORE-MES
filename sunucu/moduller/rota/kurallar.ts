@@ -1341,3 +1341,15 @@ export function excelDayanagiTutar(
   if (dayanak === null || simdiki === null) return dayanak === simdiki;
   return dayanak.revizyonId === simdiki.id && dayanak.surum === simdiki.surum;
 }
+
+// Hazırlık matrisinin aparat ve ölçü aleti maddeleri (2893-4 a): iş emrinin listesi boşsa madde gerekmez; listedeki her öğe hazırsa tamam,
+// biri hazır değilse eksik ('yok'). Hazır olmayı çağıran söyler (aparat stokta, ölçü aleti türünde geçerli alet).
+export interface EkipmanHazirligi { durum: 'yok' | 'tamam'; secildi: boolean }
+export function ekipmanHazirliklari(
+  isEmriIdleri: readonly number[], gerekli: readonly { isEmriId: number; kimlik: number }[], hazir: (kimlik: number) => boolean,
+): Map<number, EkipmanHazirligi> {
+  return new Map([...new Set(isEmriIdleri)].map((i) => {
+    const liste = gerekli.filter((g) => g.isEmriId === i);
+    return [i, liste.length === 0 ? { durum: 'yok', secildi: false } : { durum: liste.every((g) => hazir(g.kimlik)) ? 'tamam' : 'yok', secildi: true }];
+  }));
+}

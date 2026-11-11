@@ -7,6 +7,7 @@ import { sistemAyariOku } from '../../ayarlar/disari.ts';
 import { firmaOzetleri } from '../../musteri-tedarikci/disari.ts';
 import { aktifIstasyonlar, istasyonKisiAtamalari, istasyonlar as istasyonListesi, istasyondakiMakineler, makineGetir, operasyonTipleri as katalogTipleri } from '../../istasyonlar/disari.ts';
 import { kisiAdlari, kisileriListele } from '../../kisiler/disari.ts';
+import { aletTurleri } from '../../kalibrasyon/disari.ts';
 import { malzemeOperasyonlari, malzemeOzetleri } from '../../malzemeler/disari.ts';
 import { PATLATMA_AZAMI_KATMAN, patlatmaOzeti, rotaPatlat, isEmriKaynagi, karttanAdimlar, kisiIstasyonlari, adimMiktarlari, kontrolListesi, akisiCikar, donguBul, komutDenetle, ondalikMetin, isEmriBagimliligi, oncullerCikar, opNolariVer, revizyonHarfi, sayiyaCevir, teorikSure, bekleyenOlcum, degisenTurler, degisimOrani, teorikAyrim, cozulmusDegerler, eksikZorunlular, kapsamUyarMi, sartnameOnayEngeli, adimliKontrolListesi, kontrolKur } from '../kurallar.ts';
 import type { AdimSureleri, GerceklesenSatiri, PatlamisSatir, PatlatmaRotasi } from '../kurallar.ts';
@@ -142,6 +143,7 @@ interface AdimGorunumuBaglami {
   kaynaklar: Map<string, AdimKaynakOzeti>;
   urunler: Map<number, UrunOzeti>;
   talimatlar: Map<number, { surum: number; metin: string }>;
+  aletTurleri: Map<number, string>;
 }
 
 export function adimlariKur(b: AdimGorunumuBaglami, urunMiktari = 1): RevizyonAyrintisi['adimlar'] {
@@ -180,6 +182,10 @@ export function adimlariKur(b: AdimGorunumuBaglami, urunMiktari = 1): RevizyonAy
           toplamMiktar: ondalikMetin(mamulMiktari * sayi(x.miktar) * (1 + sayi(x.fireYuzde) / 100)),
         })),
       yanUrunler: icerik.yanUrunler.filter((x) => x.adimId === a.id).map((x) => ({ malzeme: urun(x.malzemeId), miktar: x.miktar })),
+      ekipman: (icerik.ekipman ?? []).filter((x) => x.adimId === a.id).map((x) => ({
+        tur: x.tur, malzeme: x.malzemeId === null ? null : urun(x.malzemeId), aciklama: x.aciklama,
+        aletTuru: x.aletTuruId === null ? null : { id: x.aletTuruId, ad: b.aletTurleri.get(x.aletTuruId) ?? 'Kullanım dışı alet türü' },
+      })),
       akis: { tuketir: akisi.tuketir, cikti: akisi.cikti },
       adimMiktari: ondalikMetin(miktar),
       teorikSureDk: sure === null ? null : ondalikMetin(sure),
@@ -198,8 +204,11 @@ export async function gorunumBaglami(db: Db, malzemeId: number, icerik: Icerik):
     icerik,
     tipler: new Map((await operasyonTipleri(db)).map((t) => [t.id, { id: t.id, kod: t.kod, ad: t.ad, kisaltma: t.kisaltma, aktif: t.aktif }])),
     kaynaklar,
-    urunler: await urunOzetleri(db, [...icerik.bilesenler.map((x) => x.malzemeId), ...icerik.yanUrunler.map((x) => x.malzemeId)]),
+    urunler: await urunOzetleri(db, [
+      ...icerik.bilesenler.map((x) => x.malzemeId), ...icerik.yanUrunler.map((x) => x.malzemeId), ...(icerik.ekipman ?? []).flatMap((x) => (x.malzemeId === null ? [] : [x.malzemeId])),
+    ]),
     talimatlar: new Map((await s.gecerliTalimatlar(db, malzemeId)).map((t) => [t.opNo, { surum: t.surum, metin: t.metin }])),
+    aletTurleri: (icerik.ekipman ?? []).some((x) => x.aletTuruId !== null) ? new Map((await aletTurleri(db)).map((t) => [t.id, t.ad])) : new Map(),
   };
 }
 
@@ -311,6 +320,7 @@ export function icerikYazimlari(icerik: Icerik): (YeniAdim & { opNo: number })[]
       .map(({ kaynak, ayarSuresiDk, birimSureDk, islemSuresiDk, degisimSuresiDk }) => ({ kaynak, ayarSuresiDk, birimSureDk, islemSuresiDk, degisimSuresiDk })),
     bilesenler: icerik.bilesenler.filter((x) => x.adimId === a.id).map(({ malzemeId, miktar, fireYuzde }) => ({ malzemeId, miktar, fireYuzde })),
     yanUrunler: icerik.yanUrunler.filter((x) => x.adimId === a.id).map(({ malzemeId, miktar }) => ({ malzemeId, miktar })),
+    ekipman: (icerik.ekipman ?? []).filter((x) => x.adimId === a.id).map(({ tur, malzemeId, aletTuruId, aciklama }) => ({ tur, malzemeId, aletTuruId, aciklama })),
     hazirlikDk: a.hazirlikDk, ayar: a.ayar, ayarDk: a.ayarDk, dal: a.dal, birlesen: a.birlesen, adetCarpani: a.adetCarpani,
   }));
 }
@@ -538,6 +548,7 @@ export function adimSabitleri(b: Awaited<ReturnType<typeof sartnameBaglami>>, ba
 }
 
 export async function isEmirlerineSabitle(db: Db, kisiId: number, revizyonId: number, isEmirleri: readonly { id: number; opNo: number }[]): Promise<void> {
+  await isEmirlerineEkipmanYaz(db, revizyonId, isEmirleri);
   const baglar = await s.adimSartnameleri(db, [revizyonId]);
   if (baglar.length === 0) return;
   const b = await sartnameBaglami(db, baglar.map((x) => x.sartnameId));
@@ -545,5 +556,18 @@ export async function isEmirlerineSabitle(db: Db, kisiId: number, revizyonId: nu
     const r = adimSabitleri(b, baglar, ie.opNo);
     if ('hata' in r) throw gecersiz(r.hata);
     if (r.sabitler.length > 0) await s.isEmriSabitle(db, ie.id, r.sabitler, kisiId);
+  }
+}
+
+// Adım ekipmanı (2893-4 a) emir açılırken rota adımından iş emrine kopyalanır; revizyon sonradan değişse de iş emrinin listesi kalır.
+async function isEmirlerineEkipmanYaz(db: Db, revizyonId: number, isEmirleri: readonly { id: number; opNo: number }[]): Promise<void> {
+  const icerik = await s.icerikOku(db, revizyonId);
+  const ekipman = icerik.ekipman ?? [];
+  if (ekipman.length === 0) return;
+  const adimi = new Map(icerik.adimlar.map((a) => [a.opNo, a.id]));
+  for (const ie of isEmirleri) {
+    const adimId = adimi.get(ie.opNo);
+    if (adimId === undefined) continue;
+    await s.isEmriEkipmaniYaz(db, ie.id, ekipman.filter((x) => x.adimId === adimId).map(({ tur, malzemeId, aletTuruId, aciklama }) => ({ tur, malzemeId, aletTuruId, aciklama })));
   }
 }
