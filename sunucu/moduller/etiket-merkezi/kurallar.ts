@@ -7,6 +7,7 @@ import type { KaliteDurumu } from '#paylasilan/sozlesme/stok.ts';
 import type { Bekleyen, Koli } from '#paylasilan/sozlesme/etiket-merkezi.ts';
 import type { HataliKaydiOzeti, RefakatKartiCevabi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { EN_COK_ADET, QR_KENAR_MODUL, SATIR_ARALIGI, type KayitTuru, type OnizlemeOgesi, type Sablon, type SablonTuru, type SablonOgesi } from '#paylasilan/sozlesme/etiket-merkezi.ts';
+import { REFAKAT_KOPYA_SAYISI } from '#paylasilan/etiket-sabitleri.ts';
 import { simgeCoz } from '#paylasilan/etiket-piktogramlari.ts';
 import { YAZICI_AGI_DEGISKENI } from './ag.ts';
 
@@ -501,7 +502,7 @@ export function refakatBekleyenleri(
 ): Bekleyen[] {
   return verilisler.flatMap((v) => (sonra(emirBasimlari.get(v.uretimEmriId), v.verilis) || sonra(atlamalar.get(v.refakatPartisiId), v.verilis) ? [] : [{
     tur: 'refakat-partisi' as const, id: v.refakatPartisiId, baslik: `${v.emirNo ?? `Emir #${String(v.uretimEmriId)}`}-P${String(v.sira)}`,
-    ayrinti: [`Lot ${v.lotNo}`, v.malzemeAd].filter(Boolean).join(' · '), zaman: v.verilis, etiketSayisi: 1,
+    ayrinti: [`Lot ${v.lotNo}`, v.malzemeAd].filter(Boolean).join(' · '), zaman: v.verilis, etiketSayisi: REFAKAT_KOPYA_SAYISI,
   }]));
 }
 

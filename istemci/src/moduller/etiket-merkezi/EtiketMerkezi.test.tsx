@@ -451,6 +451,9 @@ describe('EtiketMerkezi', () => {
     expect(await screen.findByText(/depodan verilen lot basılır/)).toBeTruthy();
     expect(screen.queryByText('Lot 100x50')).toBeNull();
     await waitFor(() => expect(istekler).toContain('/etiket-merkezi/sablonlar/refakat-100x150/kayit-cikti?dil=zpl&dpi=203&adet=2&sade=false&tur=refakat-partisi&id=12'));
+    // Kartta büyük basılan miktar (ADET) ile karışmasın diye alan "Kopya sayısı" adını taşır.
+    expect((screen.getByLabelText('Kopya sayısı') as HTMLInputElement).value).toBe('2');
+    expect(screen.queryByLabelText('Kayıt başına adet')).toBeNull();
   });
 
   it('mal kabul adresi lot şablonlarını açar, kabulün lotlarını çip olarak gösterir ve tek lot çıkarılamaz', async () => {
@@ -708,6 +711,25 @@ describe('EtiketMerkezi cihaz varsayılanı', () => {
     await waitFor(() => expect(istekler.gonderilenler).toHaveLength(1));
     const govde = istekler.gonderilenler[0]!.govde as { kayit: { idler: number[] } };
     expect(govde.kayit.idler).toHaveLength(200);
+  });
+
+  it('refakat kartı iki kopya sayılır: 5 kart (10 etiket) onaysız, 6 kart (12 etiket) onayla basılır; her kart iki kopya gider', async () => {
+    cihazYazicisiKaydet('refakat', { yaziciId: 1, yaziciAd: 'Zebra depo', sablonAnahtar: 'refakat-100x150', sablonAd: 'Refakat kartı 100x150' });
+    const kartlar = (n: number): BekleyenlerCevabi => ({
+      gun: 30,
+      bekleyenler: Array.from({ length: n }, (_, i) => ({ tur: 'refakat-partisi' as const, id: i + 1, baslik: `UE-DENEME-P${String(i + 1)}`, ayrinti: '', zaman: '2026-11-07T08:00:00.000Z', etiketSayisi: 2 })),
+    });
+    const bes = sunucuKur({ islemler: BASAN, bekleyenler: kartlar(5) });
+    ac(<Etiketler />, '/etiket-merkezi/etiketler');
+    fireEvent.click(await screen.findByRole('button', { name: /hepsini bas \(5\) · Zebra depo$/ }));
+    await waitFor(() => expect(bes.gonderilenler).toHaveLength(1));
+    expect(bes.gonderilenler[0]).toMatchObject({ yol: '/etiket-merkezi/sablonlar/refakat-100x150/bas', govde: { adet: 2, kayit: { tur: 'refakat-partisi' } } });
+    cleanup();
+    const alti = sunucuKur({ islemler: BASAN, bekleyenler: kartlar(6) });
+    ac(<Etiketler />, '/etiket-merkezi/etiketler');
+    fireEvent.click(await screen.findByRole('button', { name: /hepsini bas \(6\) · Zebra depo$/ }));
+    expect(await screen.findByText('12 etiket Zebra depo yazıcısına basılsın mı?')).toBeTruthy();
+    expect(alti.gonderilenler).toHaveLength(0);
   });
 
   it('basma yetkisi olmayan varsayılan olsa da hepsini bas ile Etiket bas sayfasına gider, baskı isteği gitmez (yasak)', async () => {

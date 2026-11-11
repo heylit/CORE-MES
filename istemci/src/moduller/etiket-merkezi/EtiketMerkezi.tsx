@@ -6,6 +6,7 @@ import { TUM_SAYFALAR } from '#paylasilan/sayfalar.ts';
 import type {
   BasCevabi, CiktiCevabi, IndirCevabi, KayitCiktiCevabi, KayitSecimi, KayitTuru, Sablon, SablonlarCevabi, YaziciDili, YazicilarCevabi,
 } from '#paylasilan/sozlesme/etiket-merkezi.ts';
+import { REFAKAT_KOPYA_SAYISI } from '#paylasilan/etiket-sabitleri.ts';
 import { Dugme, DurumKutusu, Girdi, IsaretKutusu, Kart, Rozet, Secim, useBildirim } from '../../ortak/arayuz/index.ts';
 import { api, ApiHatasi, hataIletisi } from '../../ortak/veri/api.ts';
 import { yeniIstekKimligi } from '../../ortak/veri/istek-kimligi.ts';
@@ -147,7 +148,7 @@ function Cikti({ sablon, secenekler, basabilir, kayit, kayitCikar }: {
   const [dil, setDil] = useState<YaziciDili>('zpl');
   const [dpi, setDpi] = useState<string>('203');
   // 2929 a: refakat kartı varsayılan iki kopya basılır (her biri Kopya n/N); kişi adedi değiştirir.
-  const [adet, setAdet] = useState(() => (kayit?.tur === 'refakat-partisi' ? '2' : '1'));
+  const [adet, setAdet] = useState(() => (kayit?.tur === 'refakat-partisi' ? String(REFAKAT_KOPYA_SAYISI) : '1'));
   const [sade, setSade] = useState(false);
   const [gercek, setGercek] = useState(gercekBoyutOku);
   const [olcek, setOlcek] = useState(olcekOku);
@@ -193,7 +194,7 @@ function Cikti({ sablon, secenekler, basabilir, kayit, kayitCikar }: {
               ipucu="Boş bırakılırsa kalemin adedi basılır." hata={iciGecerli ? undefined : 'Koli içi adet sıfırdan büyük bir sayı olur.'} />
           </>
         )}
-        <Girdi etiket={kayit ? 'Kayıt başına adet' : 'Adet'} inputMode="numeric" value={adet} onChange={(e) => setAdet(e.target.value)} hata={adetHatasi} />
+        <Girdi etiket={kayit?.tur === 'refakat-partisi' ? 'Kopya sayısı' : kayit ? 'Kayıt başına adet' : 'Adet'} inputMode="numeric" value={adet} onChange={(e) => setAdet(e.target.value)} hata={adetHatasi} />
       </div>
       {c.isPending && <DurumKutusu durum="yukleniyor" />}
       {c.isError && <DurumKutusu durum="hata" mesaj={hataIletisi(c.error, 'Önizleme alınamadı.')} yenile={kaliciHata ? undefined : () => { void c.refetch(); }} />}
