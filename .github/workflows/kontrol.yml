@@ -17,6 +17,12 @@ concurrency:
   group: kontrol-${{ github.ref == 'refs/heads/main' && github.sha || github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
+# Belirteç varsayılan olarak yalnız okur; depo ayarı değişse de böyle kalır. Çekme isteği okuması başlıktaki kart numarası
+# denetimi içindir. Yazma yalnız `windows-yesil` işindedir (2964).
+permissions:
+  contents: read
+  pull-requests: read
+
 env:
   TMIV2_ORTAM: test
   TMIV2_PORT: 4100
@@ -537,3 +543,41 @@ jobs:
           echo "$SONUCLAR" | jq -e '.kapsam.result == "success" and .tip.result == "success" and .denetim.result == "success"
             and .lint.result == "success"
             and all(.[]; .result == "success" or .result == "skipped")' > /dev/null
+
+  # Windows dahil bütün işleri yeşil biten ana dal commit'i etiketlenir (2964): canlı ve güncelleme paketi yalnız etiketli
+  # commit'ten çıkar. Etiket commit başına ayrıdır ve hiç taşınmaz, zorla gönderme gerekmez; var olan etiket yeniden yazılmaz.
+  # İptal edilen ya da kırmızı koşuda iş atlanır, etiket konmaz. Son yeşil (belgeler/ci/kapsam.md):
+  # git fetch --tags && git describe --tags --abbrev=0 --first-parent --match 'windows-yesil/*' origin/main
+  windows-yesil:
+    needs: [windows, kontrol]
+    if: >-
+      needs.windows.result == 'success' && needs.kontrol.result == 'success' && github.ref == 'refs/heads/main'
+      && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    # Yalnız bu iş etiket yazar; öteki işler üst düzeydeki okuma yetkisiyle kalır.
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Commit'e Windows yeşili etiketi
+        env:
+          SHA: ${{ github.sha }}
+          KOSU: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}/attempts/${{ github.run_attempt }}
+        run: |
+          set -euo pipefail
+          # Aynı commit'in yeniden koşusu ikinci etiket açmaz. Liste önce değişkene alınır: borudaki `grep -q` erken çıkınca
+          # ls-remote SIGPIPE ile düşer ve pipefail altında koşul yanlış olurdu (etiket çoğaldıkça).
+          etiketler=$(git ls-remote --tags origin 'refs/tags/windows-yesil/*')
+          if grep -q "^$SHA"$'\t'"refs/tags/windows-yesil/.*\^{}$" <<< "$etiketler"; then
+            echo "Bu commit zaten etiketli: $SHA"
+            exit 0
+          fi
+          # Ad commit zamanından (UTC) ve sha'dan: yeniden koşuda aynı ad çıkar, adla sıralama zamanla sıralamadır.
+          tarih=$(TZ=UTC git show -s --format=%cd --date=format-local:%Y%m%d-%H%M "$SHA")
+          ad="windows-yesil/$tarih-${SHA:0:8}"
+          git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
+            tag -a "$ad" "$SHA" -m "Windows dahil bütün işler yeşil" -m "Koşu: $KOSU"
+          # Yeni etiket gönderilir; aynı adda etiket varsa git reddeder, üstüne yazılmaz.
+          git push origin "refs/tags/$ad"
+          echo "Etiket: $ad" | tee -a "$GITHUB_STEP_SUMMARY"
