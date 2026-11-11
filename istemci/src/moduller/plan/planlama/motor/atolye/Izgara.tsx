@@ -226,7 +226,8 @@ export function Izgara({ ort, pano, parla }: { ort: Ortam; pano: MutableRefObjec
     const seri = o.seri;
     o.zaman = window.setTimeout(() => {
       // Sunucu kayıtlı çalışmayla hesaplar: sürükleme başına bir kez bekleyen değişiklik yazılır (bırakınca taşıma da yazar), sürümü
-      // tutmayan hesap eskidir ve gösterilmez.
+      // tutmayan hesap eskidir ve gösterilmez. Esc ile vazgeçilse de yazılmış kalır: yazılan yalnız kullanıcının zaten yaptığı bekleyen
+      // değişikliktir (kendiliğinden yazma da birazdan aynısını yapardı), sürükleme kendisi bir şey yazmaz.
       if (itmeSurumu.current.s !== s) itmeSurumu.current = { s, soz: ort.o.komut?.kaydet() ?? Promise.resolve(null) };
       const soz = itmeSurumu.current.soz;
       void soz.then(async (surum) => [surum, await isTasiOnizle({ isId: s.id, tezgah: m, baslangic: S })] as const).then(([surum, c]) => {

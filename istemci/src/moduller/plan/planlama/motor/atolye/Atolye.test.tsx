@@ -516,6 +516,19 @@ describe('PlanlamaAtolyesi', () => {
     post.mockRestore();
   });
 
+  it('2791: taşıma komutu düşerse komutDustu çağrılır, geri alma adımı bırakmaz; sayfa yenilenmez', async () => {
+    const post = vi.spyOn(api, 'post').mockRejectedValue(new ApiHatasi(409, { kod: 'CAKISMA', mesaj: 'Başlamış iş taşınamaz.' }));
+    const c = ornekCalisma(); const { komut } = komutKur(c);
+    const { yenile } = ac({ c, komut });
+    fireEvent.click(document.querySelector('[data-id="2.40"]') as HTMLElement);
+    fireEvent.click(within(kart()).getByRole('button', { name: '+1 sa' }));
+    await waitFor(() => expect(komut.komutDustu).toHaveBeenCalledTimes(1));
+    expect(komut.komutBasladi).toHaveBeenCalledWith('İş taşındı');
+    expect(vi.mocked(komut.komutBasladi!).mock.invocationCallOrder[0]).toBeLessThan(vi.mocked(komut.komutDustu!).mock.invocationCallOrder[0]!);
+    expect(yenile).not.toHaveBeenCalled();
+    post.mockRestore();
+  });
+
   it('sürükle-bırak taşır, kısa dokunuş kartı açar; sunucu reddederse iletisi gösterilir, sayfa yenilenmez', async () => {
     const post = vi.spyOn(api, 'post').mockRejectedValue(new ApiHatasi(409, { kod: 'CAKISMA', mesaj: 'Başlamış iş taşınamaz.' }));
     const { yenile } = ac();

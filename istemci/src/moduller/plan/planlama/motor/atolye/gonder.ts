@@ -2,7 +2,7 @@ import type { CanliDegistiAyrintisi, DortSaatAyrintisi, PlanSurumCevabi, Senaryo
 import type { EskiSurumAyrintisi } from '#paylasilan/hata.ts';
 import type { CalismaGeriAlCevabi, CalismaTaslagiCevabi, TaslaktanCalismayaCevabi } from '#paylasilan/sozlesme/planlama.ts';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import type { AtolyeKomutuCevabi, AtolyeOlayi, EkMesaiEkleGovdesi, IsTasiGovdesi } from '#paylasilan/sozlesme/planlama-atolye.ts';
+import type { AtolyeKomutuCevabi, AtolyeOlayi, EkMesaiEkleGovdesi, IsTasiGovdesi, IsTasiOnizlemesiCevabi } from '#paylasilan/sozlesme/planlama-atolye.ts';
 import { useBildirim } from '../../../../../ortak/arayuz/index.ts';
 import { api, ApiHatasi, hataIletisi } from '../../../../../ortak/veri/api.ts';
 import { tekrarKorumaliGonder } from '../../../../../ortak/veri/istek-kimligi.ts';
@@ -208,7 +208,7 @@ export function useAtolyeKomutlari(o: Pick<PlanlamaEkranOzellikleri, 'komut' | '
     setIsleniyor(true);
     komut?.komutBasladi?.(ne);
     // Taşıma aynı emrin adımlarını ittiyse ya da taşınanı öncülünün arkasına kaydırdıysa sunucu nedeni tek satır yazar (2794 3/3 b).
-    try { const r = await is(); otomatikUygulaIste(r); const ileti = (r as AtolyeKomutuCevabi & { ileti?: string | null }).ileti; bildir('tamam', ileti ? `${tamam} ${ileti}` : tamam); yenile(); return true; } catch (h) { komut?.komutDustu?.(); bildir('hata', gonderHataIletisi(h)); return false; } finally { setIsleniyor(false); }
+    try { const r = await is(); otomatikUygulaIste(r); const ileti = r.ileti; bildir('tamam', ileti ? `${tamam} ${ileti}` : tamam); yenile(); return true; } catch (h) { komut?.komutDustu?.(); bildir('hata', gonderHataIletisi(h)); return false; } finally { setIsleniyor(false); }
   }, [bildir, yenile, komut]);
   const simdi = c ? simdiSaati(c, Date.now()) : 0;
   const tasi = useMemo(() => (yaz && komut ? (id: string, m: string, S: number): void => {
@@ -222,15 +222,8 @@ export function useAtolyeKomutlari(o: Pick<PlanlamaEkranOzellikleri, 'komut' | '
 }
 
 // Elle taşımanın önizlemesi (2790 a, 2794): bırakılınca yazılacak yerler; aynı emrin adımları rotadaki bağa göre itilir ya da çekilir.
-// Sözleşme sunucu yamasındadır (2790); bu parça ona derlemeyle bağlı olmasın diye cevap burada yerel tiptir. Uç yoksa (sunucu eski) ya da
-// okunamazsa null: sürükleme önizlemesiz sürer, taşımayı sunucu yine denetler.
-export interface IsTasiOnizlemesi {
-  gecerli: boolean;
-  ileti: string | null;
-  // Hesabın yapıldığı kayıtlı çalışma sürümü; eski sunucuda yok.
-  calismaSurumu?: number | null;
-  isler: { isId: string; tezgah: string; S: number; C: number; eskiTezgah: string; eskiS: number; tur: 'tasinan' | 'itilen' | 'cekilen' }[];
-}
+// Uç okunamazsa null: sürükleme önizlemesiz sürer, taşımayı sunucu yine denetler.
+export type IsTasiOnizlemesi = IsTasiOnizlemesiCevabi;
 export const IS_TASI_ONIZLEME_YOLU = '/plan/planlama-calismasi/is-tasi-onizlemesi';
 export function isTasiOnizle(g: { isId: string; tezgah: string; baslangic: number }): Promise<IsTasiOnizlemesi | null> {
   const q = new URLSearchParams({ isId: g.isId, tezgah: g.tezgah, baslangic: String(g.baslangic) });
