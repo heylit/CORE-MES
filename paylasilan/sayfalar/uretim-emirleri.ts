@@ -5,7 +5,7 @@ export const URETIM_EMIRLERI_SAYFALARI = [
   { yol: '/uretim-emirleri', islem: 'sayfa.uretim-emirleri', baslik: 'Üretim Emirleri', simge: 'list', grup: 'Üretim', sira: 10, aramaUcu: '/uretim-emirleri/ara', aramaIslemi: 'uretim-emirleri.ara-istasyon' },
   // Adım Durumu (2893, 2893-5 a): ana menüde ayrı sayfa; açık emirlerin adım statüsü, rota şeması ve hazırlık matrisi yan yana.
   // Sayfayı Üretim Emirleri'ni gören roller görür; elle yazma ayrı işlemdedir (uretim-emirleri.adim-durumu-yaz).
-  { yol: '/adim-durumu', islem: 'sayfa.adim-durumu', baslik: 'Adım Durumu', simge: 'flag', grup: 'Üretim', sira: 11 },
+  { yol: '/adim-durumu', islem: 'sayfa.adim-durumu', baslik: 'Adım Durumu', simge: 'kanban', grup: 'Üretim', sira: 11 },
 ] as const satisfies readonly SayfaTanimi[];
 
 // Kapanış onayları (1081 b, 1073 a): ayrı sayfa; emir ayrıntısı değişmez. Kuyruğu kalite, müdür ve planlama görür (1078 teyit).
