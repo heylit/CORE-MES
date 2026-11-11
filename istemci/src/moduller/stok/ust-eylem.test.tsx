@@ -167,7 +167,7 @@ describe('Malzeme · Teslim üst çubuk düğmesi', () => {
     istasyon: { id: 2, kod: 'F2', ad: 'Freze 2' }, emirler: [{ id: 70, emirNo: 'UE-70' }],
     satirlar: [
       { malzemeId: 901, kod: 'YM-1', ad: 'Deneme mil', partiId: 4, partiEtiketi: 'TP-4', statuId: 7, miktar: '5.000', yolda: '0', uretimEmriId: 70,
-        getiren: 'Deneme Usta', gelis: '2026-10-14T08:00:00+03:00', sonraki: { istasyonId: 1, kod: 'T1', ad: 'Torna 1', opNo: 30 }, sonrakiYok: null },
+        getiren: 'Deneme Usta', gelis: '2026-10-14T08:00:00+03:00', koken: 'uretim', sonraki: { istasyonId: 1, kod: 'T1', ad: 'Torna 1', opNo: 30 }, sonrakiYok: null },
       { malzemeId: 902, kod: 'HM-2', ad: 'Deneme cubuk', partiId: 8, partiEtiketi: 'LT-8', statuId: null, miktar: '6.000', yolda: '2.000', uretimEmriId: null,
         getiren: 'Deneme Depocu', gelis: '2026-10-14T07:00:00+03:00', sonraki: null, sonrakiYok: 'rota-disi' },
     ],
@@ -297,6 +297,18 @@ describe('Malzeme · Teslim üst çubuk düğmesi', () => {
     await screen.findByRole('list', { name: 'Freze 2 sepeti' });
     expect(screen.queryByRole('button', { name: /Rotaya göre gönder/ })).toBeNull();
     expect(istekler.some((i) => i.yontem === 'POST')).toBe(false);
+  });
+
+  it('2920 a: depodan gelen ya da kokeni bilinmeyen satirda tekli "Sonraki istasyona" da cikmaz (yasak)', async () => {
+    const bilinmeyen = { ...ROTALI.satirlar[0]!, koken: null, malzemeId: 905, kod: 'YM-5', ad: 'Deneme pul' };
+    ciz({ 'GET /stok/teslim-kutusu/sepet': () => json(200, { ...ROTALI, satirlar: [...ROTALI.satirlar, bilinmeyen] }) }, KUTU_ISTASYONLU);
+    fireEvent.click(await screen.findByRole('button', { name: /^Okut(,|$)/ }));
+    fireEvent.click(await screen.findByRole('button', { name: /^Elimdekiler/ }));
+    const liste = await screen.findByRole('list', { name: 'Freze 2 sepeti' });
+    const satir = (ad: string) => within(liste).getByText(new RegExp(ad)).closest('li')!;
+    expect(within(satir('Deneme cubuk girdi')).queryByRole('button', { name: /Sonraki istasyona/ })).toBeNull();
+    expect(within(satir('Deneme pul')).queryByRole('button', { name: /Sonraki istasyona/ })).toBeNull();
+    expect(within(satir('Deneme flans')).getByRole('button', { name: 'Sonraki istasyona: Taşlama 3 (OP 40)' })).toBeTruthy();
   });
 
   it('2920 a: rotasi belli tek satirda toplu dugme cikmaz, satir dugmesi yeter', async () => {

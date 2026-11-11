@@ -108,7 +108,7 @@ export function SepetSatiri({ istasyonId, x, emirli = false, kilitli = false }: 
         <span>{statuAdi(x.statuId)}{x.partiEtiketi ? ` · ${x.partiEtiketi}` : ''}</span>
         {Number(x.yolda) > 0 && <span>{miktarMetni(x.yolda)} yolda; alan onaylayınca düşer</span>}
         {x.getiren && <span>{x.getiren}{x.gelis ? ` · ${zamanMetni(x.gelis)}` : ''}</span>}
-        {x.sonraki && serbestVar && (
+        {x.sonraki && serbestVar && x.koken === 'uretim' && (
           <div className="tc-stok-dugmeler">
             <Dugme tur="birincil" simge="upload" disabled={kilitli} yukleniyor={gonder.komut.isPending} onClick={() => gonder.komut.mutate({
               malzemeId: x.malzemeId, miktar: x.miktar, partiId: x.partiId, statuId: x.statuId, kaynak: { istasyonId }, hedef: { istasyonId: x.sonraki!.istasyonId },
