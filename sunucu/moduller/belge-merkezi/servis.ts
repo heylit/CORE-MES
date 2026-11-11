@@ -332,7 +332,7 @@ export async function menuSayaclari(db: Db): Promise<Record<string, number>> {
 export async function revizyonDosyasiIndir(db: Db, kullanici: Kullanici, id: number, revizyonId: number): Promise<IkiliCevap> {
   const r = await sorgular.revizyon(db, id, revizyonId);
   if (r === null) throw bulunamadi('Revizyon bulunamadı.');
-  const ret = indirmeReddi(r.durum, islemVarMi(kullanici, 'belge-merkezi.yaz') || islemVarMi(kullanici, 'belge-merkezi.yayinla'));
+  const ret = indirmeReddi(r.durum, taslagiGorur(kullanici));
   if (ret !== null) throw yetkiYok(ILETILER[ret]);
   return revizyonDosyasi(db, id, revizyonId);
 }
@@ -570,6 +570,35 @@ export async function kayitlaraBagliYayindakiBelgeler(
   for (const b of satirlar) {
     const liste = sonuc.get(b.hedefId) ?? [];
     liste.push({ id: b.id, ad: b.ad, tur: b.tur, revizyonId: b.yayindakiRevizyonId, harf: revizyonHarfi(b.yayindakiSira), revKodu: kod(b.id, b.yayindakiSira), dosyaTuru: b.dosyaTuru, ozet: b.ozet, kapak: b.kapak });
+    sonuc.set(b.hedefId, liste);
+  }
+  return sonuc;
+}
+
+// 1885 b: yayında olmayan revizyonu yalnız yazan ve yayıncı görür; başka modül taslak gösterirken aynı kuralı buradan alır.
+export const taslagiGorur = (kullanici: Kullanici): boolean =>
+  islemVarMi(kullanici, 'belge-merkezi.yaz') || islemVarMi(kullanici, 'belge-merkezi.yayinla');
+
+export interface BagliTaslakBelge {
+  id: number;
+  ad: string;
+  tur: BelgeTuru;
+  revizyonId: number;
+  harf: string;
+  revKodu: string | null;
+  dosyaTuru: BagliDosya['tur'];
+}
+
+// Kayıt başına bağlı, hiç yayınlanmamış belgelerin son taslağı. Kimin görebileceğini çağıran `taslagiGorur` ile denetler.
+export async function kayitlaraBagliTaslakBelgeler(
+  db: Db, hedefModul: BagModulu, dosyaTurleri: readonly BagliDosya['tur'][],
+): Promise<Map<number, BagliTaslakBelge[]>> {
+  const sonuc = new Map<number, BagliTaslakBelge[]>();
+  const satirlar = await sorgular.bagliTaslakBelgeler(db, hedefModul, dosyaTurleri);
+  const kod = await revizyonKodcusu(db, satirlar.map((b) => b.id));
+  for (const b of satirlar) {
+    const liste = sonuc.get(b.hedefId) ?? [];
+    liste.push({ id: b.id, ad: b.ad, tur: b.tur, revizyonId: b.taslakRevizyonId, harf: revizyonHarfi(b.taslakSira), revKodu: kod(b.id, b.taslakSira), dosyaTuru: b.dosyaTuru });
     sonuc.set(b.hedefId, liste);
   }
   return sonuc;

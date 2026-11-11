@@ -4,7 +4,7 @@ import type {
 import type { RozetTonu } from '../../ortak/arayuz/index.ts';
 
 export const DURUM_ADI: Readonly<Record<GeometriDurumu, string>> = {
-  yok: 'Sırada değil', bekliyor: 'Kuyrukta', calisiyor: 'Hesaplanıyor', bitti: 'Hesaplandı', hata: 'Hata',
+  yok: 'Sıraya alınıyor', bekliyor: 'Kuyrukta', calisiyor: 'Hesaplanıyor', bitti: 'Hesaplandı', hata: 'Hata',
 };
 export const DURUM_TONU: Readonly<Record<GeometriDurumu, RozetTonu>> = {
   yok: 'pasif', bekliyor: 'bilgi', calisiyor: 'bilgi', bitti: 'tamam', hata: 'hata',

@@ -4,10 +4,10 @@ import { cizimAra } from './servis.ts';
 
 // Belgeyi gösteren modül (malzemeler, istasyonlar, atölye, Arkon, kalibrasyon) bağı kendi yazma ucundan kurar ve kaldırır,
 // dosyayı kendi okuma ucundan verir: okuma yetkisi ve veri kapsamı bağlayan modülündür. Merkez o modülleri ithal etmez.
-export type { BagliBelge, KayitBelgesiTuru, YayindakiBelge, YayindakiBelgeDosyasi, YayindakiOnizleme } from './servis.ts';
+export type { BagliBelge, BagliTaslakBelge, KayitBelgesiTuru, YayindakiBelge, YayindakiBelgeDosyasi, YayindakiOnizleme } from './servis.ts';
 export {
   alinanRevizyonDosyasi, belgeAcVeBagla, kaydaBagla, kaydaBagliBelgeler, kayitlaraBagliBelgeler, kayitlaraBagliYayindakiBelgeler, kayittakiBelgeDosyasi,
-  kayittanKaldir, revizyonKodlari, yayindakiBelgeDosyasi, yayindakiBelgeler,
+  kayitlaraBagliTaslakBelgeler, kayittanKaldir, revizyonKodlari, taslagiGorur, yayindakiBelgeDosyasi, yayindakiBelgeler,
   yayindakiOnizleme, yayindakiOnizlemeKaresi,
 } from './servis.ts';
 // Arkon (2520-3): Çizim Merkezi'nden eklenen dosyanın okunması; özet yayındaki bir belgenin dosyası mı. Yetki denetlemez.

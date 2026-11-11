@@ -709,6 +709,47 @@ describe('cizimler malzeme resmi revizyonu (2138-1 a)', () => {
   });
 });
 
+describe('cizimler malzeme kartında 3B model (3028 b)', () => {
+  const REV = AYRINTI.revizyonlar[0]!;
+  const model = (durum: 'taslak' | 'yayinda'): MalzemeBelgeleriCevabi => ({
+    belgeler: [{ id: 9, ad: 'Deneme braket', tur: '3b-model', resimNo: null, surum: 4, kapak: false, revizyonlar: [{ ...REV, id: 90, durum, dosyaTuru: 'step', dosyaAdi: 'braket.step' }] }],
+    oneriler: [], kucukResim: null, kartRevizyon: '00',
+  });
+  function paneliAc(islemler: string[], govde: MalzemeBelgeleriCevabi) {
+    const istekler: { yol: string; govde: unknown }[] = [];
+    vi.stubGlobal('fetch', vi.fn(async (adres: string, secenek?: RequestInit) => {
+      const yol = adres.replace('/api', '');
+      if (secenek?.method === 'POST') istekler.push({ yol, govde: JSON.parse(String(secenek.body)) });
+      if (yol === '/oturum') return json(200, { kullanici: { id: 4, ad: 'Deneme Kişi', islemler } } as OturumCevabi);
+      if (yol === '/cizimler/malzemeler/41/belgeler') return json(200, govde);
+      if (yol === '/cizimler/9/revizyonlar/90/yayinla') return json(200, AYRINTI);
+      return json(404, { kod: 'BULUNAMADI', mesaj: 'Adres bulunamadı.' });
+    }));
+    const istemci = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(<QueryClientProvider client={istemci}><BildirimSaglayici><MemoryRouter><ResimPaneli malzemeNo={41} /></MemoryRouter></BildirimSaglayici></QueryClientProvider>);
+    return istekler;
+  }
+
+  it('taslak modeli yayınlama yetkisi olan kartta yayınlar; belgenin sürümüyle gider', async () => {
+    const istekler = paneliAc(['malzemeler.yaz', 'belge-merkezi.yayinla'], model('taslak'));
+    fireEvent.click(await screen.findByRole('button', { name: 'Deneme braket yayınla' }));
+    await waitFor(() => expect(istekler).toEqual([{ yol: '/cizimler/9/revizyonlar/90/yayinla', govde: { surum: 4 } }]));
+  });
+
+  it('yayınlama yetkisi yoksa "Yayınla" yok; yayındaki STEP model 3D Atölyesi görene bağlantı olur, görmeyene olmaz', async () => {
+    paneliAc(['malzemeler.yaz'], model('taslak'));
+    expect(await screen.findByText('Deneme braket')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Deneme braket yayınla' })).toBeNull();
+    cleanup();
+    paneliAc(['malzemeler.yaz', 'sayfa.geometri'], model('yayinda'));
+    expect((await screen.findByRole('link', { name: /3D Atölyesi'nde aç/ })).getAttribute('href')).toBe('/geometri?rev=90');
+    cleanup();
+    paneliAc(['malzemeler.yaz'], model('yayinda'));
+    expect(await screen.findByText('Deneme braket')).toBeTruthy();
+    expect(screen.queryByRole('link', { name: /3D Atölyesi'nde aç/ })).toBeNull();
+  });
+});
+
 describe('cizimler PDF düzenleme (2123)', () => {
   // 1x1 beyaz PNG (sentetik).
   const BEYAZ_PNG = Uint8Array.from(atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg=='), (c) => c.charCodeAt(0));

@@ -111,6 +111,34 @@ test.describe('3D Atölyesi', () => {
     expect(beklenmeyen(ag.hatalar)).toEqual([]);
   });
 
+  test('taslak model (3028 b): "Taslak" rozetli satır, seçilince adı ve "Yayınla"; yayın sürümle gider; "Model ekle" yan pencereyi açar', async ({ page, ac, ag }) => {
+    await sunucu(page);
+    const taslak = { ...satir(4, 'MM-ORN-00004', 'Örnek braket', 6, 'Model taslak', 60, 'A', null, 'yok'), yayinda: false };
+    await page.route('**/api/geometri/modeller?*', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ...LISTE, satirlar: [taslak, ...LISTE.satirlar], toplam: 4 }) }));
+    const yayinlar: unknown[] = [];
+    await page.route('**/api/cizimler/6**', async (r) => {
+      if (r.request().method() === 'POST') yayinlar.push(r.request().postDataJSON());
+      await r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ id: 6, surum: 2 }) });
+    });
+    await ac('/geometri');
+    const s = page.locator('.tc-g3b-satir', { hasText: 'MM-ORN-00004' });
+    await expect(s.locator('.tc-rozet', { hasText: 'Taslak' })).toBeVisible();
+    await s.click();
+    const ayrinti = page.getByRole('region', { name: 'Model ayrıntısı' });
+    await expect(ayrinti.getByText('Kodsuz revizyon · Model taslak')).toBeVisible();
+    await expect(ayrinti.getByText(/Bu model taslak/)).toBeVisible();
+    expect((await tasmaOlc(page)).belge).toBe(0);
+    // Yayından sonra seçili model ölçüm sırasına girer: analiz henüz yok, dosya boş.
+    await page.route('**/api/geometri/analizler/60', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ...ANALIZ, revizyonId: 60, belgeId: 6, durum: 'yok', is: null, analiz: null }) }));
+    await page.route('**/api/geometri/modeller/60/dosya', (r) => r.fulfill({ status: 200, contentType: 'application/octet-stream', body: Buffer.alloc(0) }));
+    await ayrinti.getByRole('button', { name: 'Yayınla' }).click();
+    await expect(page.getByText(/Model yayınlandı/)).toBeVisible();
+    expect(yayinlar).toEqual([{ surum: 2 }]);
+    await page.getByRole('button', { name: 'Model ekle' }).click();
+    await expect(page.getByRole('dialog').getByText('3B model ekle')).toBeVisible();
+    expect(beklenmeyen(ag.hatalar)).toEqual([]);
+  });
+
   test('süzgeç boş bırakınca listede model olmadığı değil, uyan olmadığı yazılır', async ({ page, ac }) => {
     await page.route('**/api/geometri/modeller?*', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(
       new URL(r.request().url()).searchParams.has('durum') ? { satirlar: [], toplam: 0, sayfa: 1, sayfaBoyu: 50 } : LISTE,

@@ -125,6 +125,8 @@ describe('geometri: yüzey işaretleri (gerçek PostgreSQL, gerçek giriş, ger�
     await islemliKisi('boyaci', ['sayfa.geometri', 'geometri.oku', 'geometri.yuzey-yaz']);
     await islemliKisi('yazarokumaz', ['geometri.yuzey-yaz']);
     await islemliKisi('yetkisiz', ['sayfa.geometri']);
+    await islemliKisi('taslakci', ['sayfa.geometri', 'geometri.oku', 'belge-merkezi.yaz']);
+    await islemliKisi('yayinci', ['sayfa.geometri', 'geometri.oku', 'belge-merkezi.yayinla']);
     surec = geometriSureciKur();
     oncekiCozucu = yuzeyAdimlariCozucusu(null);
   });
@@ -278,5 +280,42 @@ describe('geometri: yüzey işaretleri (gerçek PostgreSQL, gerçek giriş, ger�
     const onceki = izler[0]!.govde as typeof ilk;
     const geri = geometriYuzeyCevabi.parse(tamam(await kaydet(rev, { surum: 2, isaretler: onceki.isaretler }, 'r-cam')));
     assert.deepEqual(geri.isaretler.map((x) => x.yuzSira).sort(), ilk.isaretler.map((x) => x.yuzSira).sort(), 'önceki hâl denetim kaydından geri yazıldı');
+  });
+  test('GEO-YZ-A6 taslak model (3028 b): listede yalnız yazana ve yayıncıya "yayinda: false" satırıdır; ölçülmez, hiçbir geometri ucu vermez; yayınlanınca herkese ve ölçüme açılır', async () => {
+    const mil = await o().vt.tx(async (db) => (await ornekMalzemeNo(db, 'mil'))!);
+    const ozet = await yukle(Buffer.from(kutuStep(35, 25, 15)));
+    const ad = 'Model taslak-a6';
+    const c = tamam(await istek('yonetici', 'POST', `/cizimler/malzemeler/${String(mil)}/belge-ekle`, { ad, tur: '3b-model', ozet, dosyaAdi: 'taslak-a6.step' })) as
+      { belgeler: { id: number; ad: string; surum: number; revizyonlar: { id: number; durum: string }[] }[] };
+    const b = c.belgeler.find((x) => x.ad === ad)!;
+    const rev = b.revizyonlar[0]!.id;
+    assert.equal(b.revizyonlar[0]!.durum, 'taslak');
+    const satir = async (kim: string, sorgu = ''): Promise<{ yayinda?: boolean | undefined; durum: string } | undefined> =>
+      geometriModelListeCevabi.parse(tamam(await istek(kim, 'GET', `/geometri/modeller${sorgu}`))).satirlar.find((x) => x.revizyonId === rev);
+
+    for (const kim of ['taslakci', 'yayinci', 'yonetici']) {
+      const t = await satir(kim);
+      assert.deepEqual([t?.yayinda, t?.durum], [false, 'yok'], `${kim} taslağı görür`);
+      assert.equal((await satir(kim, '?ara=taslak-a6'))?.yayinda, false, `${kim} aramada taslağı bulur`);
+      assert.equal(await satir(kim, '?durum=yok'), undefined, 'durum süzgecinde taslak yok');
+    }
+    for (const kim of ['okur', 'boyaci']) assert.equal(await satir(kim), undefined, `${kim} taslağı görmez`);
+
+    await tur();
+    for (const yol of [
+      `/geometri/modeller/${String(rev)}/dosya`, `/geometri/analizler/${String(rev)}`, `/geometri/ozellikler/${String(rev)}`,
+      `/geometri/montaj/${String(rev)}`, `/geometri/saglik/${String(rev)}`, `/geometri/yuzey/${String(rev)}`, `/geometri/ham-onerisi/${String(rev)}`,
+    ]) assert.equal((await istek('yonetici', 'GET', yol)).statusCode, 404, `taslakta ${yol} boş`);
+    assert.equal((await istek('yonetici', 'POST', `/geometri/analizler/${String(rev)}/yeniden-hesapla`, { surum: null })).statusCode, 404);
+    assert.equal((await kaydet(rev, { surum: null, isaretler: [] }, 'yonetici')).statusCode, 404);
+    const iz = await o().vt.tek<{ sayi: number }>('SELECT count(*)::int AS sayi FROM geometri_is WHERE revizyon_id = $1', [rev]);
+    assert.equal(iz?.sayi, 0, 'taslak kuyruğa girmez');
+
+    const belge = tamam(await istek('yonetici', 'GET', `/cizimler/${String(b.id)}`)) as { surum: number };
+    tamam(await istek('yayinci', 'POST', `/cizimler/${String(b.id)}/revizyonlar/${String(rev)}/yayinla`, { surum: belge.surum }));
+    assert.equal((await satir('okur'))?.yayinda, true, 'yayınlanınca okur da görür');
+    await tur();
+    const a = geometriAnalizCevabi.parse(tamam(await istek('okur', 'GET', `/geometri/analizler/${String(rev)}`)));
+    assert.equal(a.durum, 'bitti', 'yayından sonra ölçülür');
   });
 });
