@@ -37,3 +37,28 @@ test('emir seçilir, adımlar ve sayaç görünür, adım ayrıntısı yan pence
   expect(ag.hatalar).toEqual([]);
   expect(ag.yazmalar, 'okuma ve seçim yazmaz').toEqual([]);
 });
+
+// Uzun emir no kartın dışına taşmaz ve durum etiketiyle üst üste binmez; kısaltılmaz (tamamı okunur).
+test('uzun emir no listede tam okunur, kart dışına taşmaz, etiketle çakışmaz', async ({ page, ag, ac }) => {
+  const uzun = 'ORN-000000-XX-ORN-00001-26-11-002';
+  await page.route('**/api/adimli-emirler', async (r) => {
+    const c = await r.fetch();
+    const g = (await c.json()) as { emirler: { emirNo: string }[] };
+    await r.fulfill({ response: c, json: { ...g, emirler: g.emirler.map((e) => ({ ...e, emirNo: uzun })) } });
+  });
+  await ac('/adim-durumu');
+  const liste = page.getByRole('list', { name: 'Açık emirler' });
+  const kart = liste.getByRole('button').first();
+  await expect(kart).toBeVisible();
+  const kod = kart.locator('.tc-emir-kod');
+  await expect(kod).toHaveText(uzun);
+  const k = await kart.boundingBox();
+  const n = await kod.boundingBox();
+  const r = await kart.locator('.tc-rozet').first().boundingBox();
+  if (!k || !n || !r) throw new Error('kutu yok');
+  expect(n.x + n.width).toBeLessThanOrEqual(k.x + k.width);
+  expect(r.x + r.width).toBeLessThanOrEqual(k.x + k.width);
+  const cakisir = n.x < r.x + r.width && r.x < n.x + n.width && n.y < r.y + r.height && r.y < n.y + n.height;
+  expect(cakisir, 'emir no ile durum etiketi üst üste').toBe(false);
+  expect(ag.hatalar).toEqual([]);
+});
