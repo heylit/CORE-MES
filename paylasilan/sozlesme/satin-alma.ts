@@ -554,6 +554,8 @@ const fasonOnTalepSemasi = z.object({
   gerekenTarih: z.string().nullable(),
   terminGun: z.number().int().nullable(),
   firmaAdi: z.string().nullable(),
+  // 2874: fason adımın firması seçilmedi; satın alma siparişle seçer. İsteğe bağlı: sunucu her zaman yazar.
+  firmaBekleniyor: z.boolean().optional(),
 });
 // Plan ihtiyacı (898 a, Dal 2): canlı planın stokla karşılanamayan malzemesinden açık sipariş, açık talep ve yoksayılan düşülmüş kalan.
 // Hesap satırı ekranda gösterilir; miktarlar kartın stok birimindedir.
@@ -781,6 +783,8 @@ export const disOperasyonSemasi = z.object({
   adim: z.string().nullable(),
   firmaId: z.number().int().nullable(),
   firmaAdi: z.string().nullable(),
+  // 2874: fason adımın firması seçilmedi; satın alma siparişle seçer. İsteğe bağlı: sunucu her zaman yazar.
+  firmaBekleniyor: z.boolean().optional(),
   planlananGidis: tarih.nullable(),
   gerceklesenGidis: z.string().nullable(),
   termin: tarih.nullable(),

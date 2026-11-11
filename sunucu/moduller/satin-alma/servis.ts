@@ -501,7 +501,7 @@ async function acikFasonlar(db: Db) {
 }
 
 // 898 a: fason ön talepler (açık, bağsız, yoksayılmamış, gönderilmemiş) ve hâlâ açık adımların yoksayma kararları. Talep açabilen herkes
-// görür (903 a: yeni işlem yok); fiyat ve tedarikçi seçimi yoktur, firma rotadakidir. Dal 2: plan ihtiyacı fason adımların ardından gelir.
+// görür (903 a: yeni işlem yok); fiyat ve tedarikçi seçimi yoktur, firma rotadakidir; firmasız adım (2874) firma bekler. Dal 2: plan ihtiyacı fason adımların ardından gelir.
 export async function onTalepleri(db: Db): Promise<OnTalepleriCevabi> {
   const adaylar = await acikFasonlar(db);
   const acik = new Map(adaylar.map((x) => [x.isEmriId, x]));
@@ -522,7 +522,7 @@ export async function onTalepleri(db: Db): Promise<OnTalepleriCevabi> {
           kaynak: 'fason' as const, isEmriId: x.isEmriId, uretimEmriId: x.uretimEmriId, emirNo: x.emirNo, opNo: x.opNo, adim: x.adim,
           parca: kart && x.malzemeNo !== null ? { no: x.malzemeNo, kod: kart.kod, ad: kart.ad ?? '' } : null, urun: x.urun,
           miktar: x.adet, birim: 'adet', gerekenTarih: x.teslim, terminGun: x.terminGun,
-          firmaAdi: x.firmaId === null ? null : (firmalar.get(x.firmaId)?.ad ?? null),
+          firmaAdi: x.firmaId === null ? null : (firmalar.get(x.firmaId)?.ad ?? null), ...(x.firmaId === null ? { firmaBekleniyor: true } : {}),
         };
       }),
       ...plan.onTalepler,
@@ -1490,7 +1490,7 @@ export async function disOperasyonlar(db: Db): Promise<DisOperasyonlarCevabi> {
       const kalan = fasonKalani(x.adet, x.gonderilen, x.donen, x.hurda);
       const belge = emirBelgesi.get(x.isEmriId);
       return {
-        ...x, gerceklesenGidis: ilkGidis, firmaAdi: x.firmaId === null ? null : (firmalar.get(x.firmaId)?.ad ?? null),
+        ...x, gerceklesenGidis: ilkGidis, firmaAdi: x.firmaId === null ? null : (firmalar.get(x.firmaId)?.ad ?? null), ...(x.firmaId === null ? { firmaBekleniyor: true } : {}),
         planlananGidis: plan.get(x.isEmriId) ?? null, siparisSatirId: satirlar.get(x.isEmriId) ?? null,
         fasonKonumId: x.firmaId === null ? null : (kutular.get(x.firmaId) ?? null),
         gecikmeGun: gecikmeGunu(x.termin, x.ilkDonus, gun), gecikmeSonDonus: sonDonusGecikmesi(x.termin, x.sonDonus, kalan, gun),

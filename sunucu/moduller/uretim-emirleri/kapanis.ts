@@ -14,7 +14,7 @@ import { hataliDurdu } from './hatali-parca.ts';
 import { bekleyeniSil } from './is-emri-servis.ts';
 import {
   EMIR_YOK, KAPANIS_YOK, KAPAT_DURMADI, gerekmeyenKapanisMaddeleri, kapanisAcikIhlali, kapanisAsamasi, kapanisGeriAcIhlali, kapanisMaddeHali,
-  kapanisMuafIhlali, kapanisOnayIhlali, kapanisSonucu,
+  kapanisMuafIhlali, kapanisOnayIhlali, kapanisSonucu, fasonMu,
 } from './kurallar.ts';
 import { kararSayaclari } from './servis.ts';
 import * as s from './sorgular.ts';
@@ -59,7 +59,7 @@ async function kendiMaddeleri(db: Db, id: number): Promise<Map<KapanisMaddesi, K
 async function maddeler(db: Db, e: KapanisEmirSatiri): Promise<Madde[]> {
   const muaf = new Set((await s.kapanisMuafiyetleri(db, e.uretimEmriId, e.tur)).map((m) => m.madde));
   const adimlar = await s.isEmirleriGetir(db, [e.uretimEmriId]);
-  const gerekmez = gerekmeyenKapanisMaddeleri({ saglamAdet: e.saglamAdet, emirTuru: e.emirTuru, fasonVar: adimlar.some((a) => a.fasonFirmaId !== null) });
+  const gerekmez = gerekmeyenKapanisMaddeleri({ saglamAdet: e.saglamAdet, emirTuru: e.emirTuru, fasonVar: adimlar.some(fasonMu) });
   const bilgiler = await kendiMaddeleri(db, e.uretimEmriId);
   for (const m of DIS_KAPANIS_MADDELERI) {
     const c = cozuculer.get(m);

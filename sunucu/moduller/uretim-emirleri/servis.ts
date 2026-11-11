@@ -14,7 +14,7 @@ import {
 } from '../istasyonlar/disari.ts';
 import { kisiBayrakliMi, kisileriListele } from '../kisiler/disari.ts';
 import {
-  ADIM_YOK, DEVRAL_DEGISTI, DEVRAL_DURUMU, EKIP_DISI, EMIR_YOK, IS_EMRI_YOK, ISTASYONDA_TEK, ISTASYONSUZ_ADIM, ISTASYON_DOLU, KAPSAM_DISI, KATILIM_ACIK, KATILIM_TEK_ACIK, KATILIM_YOK, MAKINEDE_AYNI_IS, MAKINEDE_TEK, MAKINE_DOLU, MAKINE_SECILEMEZ, MAKINE_SECILMELI, TERMINAL_FASON, acmaIstasyonIhlali,
+  ADIM_YOK, DEVRAL_DEGISTI, DEVRAL_DURUMU, EKIP_DISI, EMIR_YOK, IS_EMRI_YOK, ISTASYONDA_TEK, ISTASYONSUZ_ADIM, ISTASYON_DOLU, KAPSAM_DISI, KATILIM_ACIK, KATILIM_TEK_ACIK, KATILIM_YOK, MAKINEDE_AYNI_IS, MAKINEDE_TEK, MAKINE_DOLU, MAKINE_SECILEMEZ, MAKINE_SECILMELI, TERMINAL_FASON, acmaIstasyonIhlali, fasonMu,
   adimDegisiyorMu, adimIhlali, adimNotuIhlali, NOT_ROTASIZ, ayarIhlali, baslatmaIhlali, baslatmaIstasyonIhlali, baslatmaYetkinlikIhlali, bitirmeIhlali, kendiligindenMakine, makineYetkinlikIhlali, calisilacakMakineler, calismaDurumu, devamIhlali,
   duraklatmaIhlali, durdurmaIhlali, durusNedeniIhlali, hurdaNedeniIhlali, hurdaToplamIhlali, HURDA_NEDENI_YOK, katilimUyarisi, katilmaIhlali, makineDoluIhlali, saglamToplamIhlali,
   adimlardanGorunum, isEmriSureOzeti as sureOzetiHesapla, kayitAniIhlali, sayimIhlali, sayimYetkiIhlali, siradakiIsEmri, toplamAsimiIhlali,
@@ -320,7 +320,7 @@ async function komutAdimi(db: Db, emir: EmirSatiri, isEmriId: number | undefined
 // Adımı verilen komutta kapsam ve kayıt adımın istasyonundadır; verilmeyende emrin istasyonunda (bugünkü kural).
 function komutIstasyonu(emir: EmirSatiri, adim: IsEmriSatiri | null, isEmriId: number | undefined): number {
   if (isEmriId === undefined || adim === null) return istasyonu(emir);
-  if (adim.fasonFirmaId !== null) throw cakisma(TERMINAL_FASON);
+  if (fasonMu(adim)) throw cakisma(TERMINAL_FASON);
   if (adim.istasyonId === null) throw cakisma(ISTASYONSUZ_ADIM);
   return adim.istasyonId;
 }
@@ -625,7 +625,7 @@ export async function emirBaslat(
   if (durumIhlali !== null) throw cakisma(durumIhlali);
   if (isEmriId !== undefined && isEmri?.durum !== 'bekliyor') throw cakisma(ADIM_BASLAMIS);
   if (emir.malzemeNo !== null && isEmri === null) throw cakisma(ISTASYONSUZ_ADIM);
-  if (isEmri !== null && isEmri.fasonFirmaId !== null) throw cakisma(TERMINAL_FASON);
+  if (isEmri !== null && fasonMu(isEmri)) throw cakisma(TERMINAL_FASON);
   if (isEmri !== null) {
     const ust = await sorgular.ustEmirBul(db, id);
     if (ust !== null) await kolAdimiBaslarMi(db, ust, isEmri);
@@ -683,7 +683,7 @@ export async function emirAyar(db: Db, kisiId: number, id: number, isEmriId?: nu
   await kapsaminda(db, kisiId, istasyonId);
   await istasyonYetkinliginiDenetle(db, kisiId, istasyonId);
   if (emir.malzemeNo !== null && isEmri === null) throw cakisma(ISTASYONSUZ_ADIM);
-  if (isEmri !== null && isEmri.fasonFirmaId !== null) throw cakisma(TERMINAL_FASON);
+  if (isEmri !== null && fasonMu(isEmri)) throw cakisma(TERMINAL_FASON);
   if (isEmriId !== undefined && isEmri?.durum !== 'bekliyor') throw cakisma(ADIM_BASLAMIS);
   const durum = isEmriId !== undefined && emir.durum === 'basladi' ? 'planli' : emir.durum;
   const ihlal = ayarIhlali(durum, await sorgular.ayarVarMi(db, id, isEmri?.id ?? null));
@@ -754,7 +754,7 @@ export async function emirBitir(
     await adimBittiBildir(db, { isEmriId: calisan.id, uretimEmriId: id, kisiId });
     const guncel = await sorgular.isEmirleriGetir(db, [id]);
     // Terminalde çalışan başka adım: emir başlamış kalır, istasyonu en küçük sıralı çalışan adıma geçer.
-    const suren = guncel.filter((i) => i.durum === 'calisiyor' && i.fasonFirmaId === null && i.istasyonId !== null).sort((a, b) => a.sira - b.sira)[0];
+    const suren = guncel.filter((i) => i.durum === 'calisiyor' && !fasonMu(i) && i.istasyonId !== null).sort((a, b) => a.sira - b.sira)[0];
     if (suren?.istasyonId != null) {
       if (suren.istasyonId !== emir.istasyonId) await sorgular.emirIstasyonunuYaz(db, id, suren.istasyonId);
       return { ...(await emirdenCevap(db, id, istasyonId)), uyari: uyarilariBirlestir(...uyarilar) };

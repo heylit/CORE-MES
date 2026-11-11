@@ -29,7 +29,7 @@ import {
   ekAdimKaldirIhlali, kartAdimi, kartSiniri, kolBaslamaIhlali, kolEmirNo, refakatIhlali, refakatQrMetni,
   BILESEN_GECERSIZ, IS_EMRI_BAGLI_KAYIT, IS_EMRI_MALIYETI_DONDURULMUS, IS_EMRI_SIPARISE_BAGLI, IS_EMRI_STOK_HAREKETLI, ROTASIZ_EMIR_KAPALI, PROJE_GECERSIZ, PROJE_ZORUNLU, adaySatirlar, bilesenOlabilirMi, kendiligindenSatir, projeZorunluMu, rotasizAdimDegisimIhlali, rotasizAdimEkleIhlali, URETIM_YERI_BASLAMIS, uretimYeriIhlali, fasonBeklemesi, adimAdetleri,
   adimEksigi, adimTuketimi, reworkAdimiIhlali, reworkTermini, adimOnculleri, fasonSirasindaMi, kolAdimlari, onculdenGelen, onculGirdisiIhlali, dugumGirdisiIhlali,
-  GKK_TIPI, OTOMATIK_GKK, OTOMATIK_GKK_ADI, fasonKarneOlayi, gkkFasonu, gkkTipiSec, kaliteIstasyonuSec, otomatikGkkMi, otomatikGkkYerleri,
+  FASON_FIRMA_BEKLENIYOR, GKK_TIPI, OTOMATIK_GKK, OTOMATIK_GKK_ADI, fasonKarneOlayi, fasonMu, gkkFasonu, gkkTipiSec, kaliteIstasyonuSec, otomatikGkkMi, otomatikGkkYerleri,
 } from './kurallar.ts';
 import { emirAcildiBildir, emirBirlestiBildir, emirBittiBildir, emirIptalBildir, fasonHareketiBildir, isEmirleriDegistiBildir, isEmriKopyalandiBildir } from './emir-olaylari.ts';
 import type { AdimOnculu, BolmeDurumu, FasonDurumu, IsEmriKaynakTuru, KolDurumu, OnculTuru, UretimYeri } from './kurallar.ts';
@@ -63,6 +63,8 @@ export interface IsEmriGirdisi {
   operasyonTipiId: number;
   // Fason adımda kaynak finansın firmasıdır, süre yerine termin günü gelir; iş emri operatörle başlamaz (UE3).
   kaynak: { tur: IsEmriKaynakTuru; id: number } | null;
+  // 2874: fason adım, firması henüz seçilmedi (rotada firmasız fason, 2682 a); kaynak ve istasyon boştur.
+  fasonFirmasiz?: boolean;
   // Kaynağı atanmamış adımın istasyonu (rota adımı istasyona bağlıysa); kaynak varsa istasyon ondan çözülür.
   istasyonId?: number | null;
   ayarSuresiDk: string | null;
@@ -138,8 +140,8 @@ async function kaynakCoz(db: Db, k: { tur: IsEmriKaynakTuru; id: number } | null
   return { makineId: null, kisiId: null, fasonFirmaId: f.id, istasyonId: null };
 }
 
-const kaynakTuru = (i: Pick<IsEmriSatiri, 'makineId' | 'kisiId' | 'fasonFirmaId'>): IsEmriKaynakTuru | null => {
-  if (i.fasonFirmaId !== null) return 'fason';
+const kaynakTuru = (i: Pick<IsEmriSatiri, 'makineId' | 'kisiId' | 'fasonFirmaId' | 'fasonFirmasiz'>): IsEmriKaynakTuru | null => {
+  if (fasonMu(i)) return 'fason';
   if (i.makineId !== null) return 'makine';
   return i.kisiId !== null ? 'kisi' : null;
 };
@@ -151,7 +153,8 @@ async function yaziyaCevir(db: Db, g: IsEmriGirdisi, sira: number, tipler: Set<n
   }
   const k = await kaynakCoz(db, g.kaynak);
   return {
-    sira, opNo: g.opNo, operasyonTipiId: g.operasyonTipiId, ad: g.ad, ...k, istasyonId: k.istasyonId ?? g.istasyonId ?? null, ayarSuresiDk: g.ayarSuresiDk, birimSureDk: g.birimSureDk,
+    sira, opNo: g.opNo, operasyonTipiId: g.operasyonTipiId, ad: g.ad, ...k, fasonFirmasiz: g.fasonFirmasiz === true,
+    istasyonId: g.fasonFirmasiz === true ? null : (k.istasyonId ?? g.istasyonId ?? null), ayarSuresiDk: g.ayarSuresiDk, birimSureDk: g.birimSureDk,
     terminGun: g.terminGun, bagimlilik: g.bagimlilik, devirAdedi: g.devirAdedi, firePayiYuzde: g.firePayiYuzde ?? '0',
     makineKullanimi: g.makineKullanimi ?? 'tek', enKucukParca: g.enKucukParca ?? null, yenidenAyar: g.yenidenAyar ?? true,
     talimatSurumu: g.talimatSurumu, dugum: g.dugum ?? null,
@@ -240,7 +243,7 @@ async function eklerYaz(db: Db, emirId: number, isEmriId: number, g: IsEmriGirdi
 
 function girdiDenetle(isEmirleri: readonly IsEmriGirdisi[]): void {
   const ihlal = isEmirleriIhlali(isEmirleri.map((i) => ({
-    sira: i.sira, opNo: i.opNo, kaynakTuru: i.kaynak?.tur ?? null, ayarSuresiDk: i.ayarSuresiDk, birimSureDk: i.birimSureDk,
+    sira: i.sira, opNo: i.opNo, kaynakTuru: i.kaynak?.tur ?? null, fasonFirmasiz: i.fasonFirmasiz === true, ayarSuresiDk: i.ayarSuresiDk, birimSureDk: i.birimSureDk,
     terminGun: i.terminGun, bagimlilik: i.bagimlilik, devirAdedi: i.devirAdedi,
   })));
   const oncul = onculGirdisiIhlali(isEmirleri);
@@ -656,7 +659,7 @@ export async function adimliAyrinti(db: Db, id: number): Promise<AdimliEmirAyrin
     const sonYer = yerDegisimleri.filter((d) => d.isEmriId === i.id).at(-1);
     return {
       id: i.id, opNo: i.opNo, sira: i.sira, tip: ad.tip.get(i.operasyonTipiId) ?? { id: i.operasyonTipiId, ad: `#${i.operasyonTipiId}`, kod: '' }, ad: i.ad,
-      tur: i.tur, ekAciklama: i.ekAciklama,
+      tur: i.tur, ekAciklama: i.ekAciklama, fasonFirmasiz: i.fasonFirmasiz,
       kaynak: kaynakAdi(ad, i), istasyon: istasyonAdi(ad, i.istasyonId), ayarSuresiDk: i.ayarSuresiDk, birimSureDk: i.birimSureDk,
       terminGun: i.terminGun, bagimlilik: i.bagimlilik, devirAdedi: i.devirAdedi, talimatSurumu: i.talimatSurumu, durum: i.durum,
       baslama: i.baslama, bitis: i.bitis, saglamAdet: i.saglamAdet, eksik: eksikler.get(i.id) ?? null,
@@ -667,7 +670,7 @@ export async function adimliAyrinti(db: Db, id: number): Promise<AdimliEmirAyrin
         const k = kaynakAdi(ad, a);
         return k === null ? [] : [{ kaynak: k, ayarSuresiDk: a.ayarSuresiDk, birimSureDk: a.birimSureDk }];
       }),
-      fason: i.fasonFirmaId === null ? null : {
+      fason: !fasonMu(i) ? null : {
         ...fasonOzeti(kendiHareketleri),
         hareketler: kendiHareketleri.map((h) => ({
           id: h.id, yon: h.yon, adet: h.adet, hurdaAdet: h.hurdaAdet, kisi: { id: h.kisiId, ad: kisi.get(h.kisiId) ?? `#${h.kisiId}` }, zaman: h.zaman,
@@ -811,7 +814,7 @@ export async function fasonFirmalari(db: Db): Promise<{ id: number; kod: string 
 }
 
 async function icHali(db: Db, isEmri: IsEmriSatiri): Promise<s.UretimYeriYazisi> {
-  const sonFasonaAlis = (await s.uretimYeriDegisimleriGetir(db, [isEmri.id])).filter((d) => d.yeniFasonFirmaId !== null && d.eskiFasonFirmaId === null).at(-1);
+  const sonFasonaAlis = (await s.uretimYeriDegisimleriGetir(db, [isEmri.id])).filter((d) => d.yeniFasonFirmaId !== null && d.eskiFasonFirmaId === null && !d.eskiFasonFirmasiz).at(-1);
   if (sonFasonaAlis !== undefined) {
     return {
       makineId: sonFasonaAlis.eskiMakineId, kisiId: sonFasonaAlis.eskiKisiId, fasonFirmaId: null, istasyonId: sonFasonaAlis.eskiIstasyonId,
@@ -848,11 +851,11 @@ export async function uretimYeriDegistir(
     yeni = { ...k, ayarSuresiDk: null, birimSureDk: null, terminGun: g.terminGun };
     if (eski.fasonFirmaId === yeni.fasonFirmaId && eski.terminGun === yeni.terminGun) return;
   } else {
-    if (eski.fasonFirmaId === null) return;
+    if (!fasonMu(isEmri)) return;
     yeni = await icHali(db, isEmri);
   }
   if ((await s.uretimYeriYaz(db, isEmri.id, yeni)) === null) throw cakisma(URETIM_YERI_BASLAMIS);
-  await s.uretimYeriDegisimiEkle(db, isEmri.id, eski, { fasonFirmaId: yeni.fasonFirmaId, terminGun: yeni.terminGun }, kisiId, await s.anAl(db));
+  await s.uretimYeriDegisimiEkle(db, isEmri.id, eski, { fasonFirmaId: yeni.fasonFirmaId, terminGun: yeni.terminGun }, kisiId, await s.anAl(db), isEmri.fasonFirmasiz);
   if ((await s.surumArtir(db, id, e.surum)) === null) throw eskiSurum();
   if (g.yer === 'fason') await otomatikGkkKoy(db, kisiId, id);
   await siradakiIstasyonuYaz(db, id);
@@ -874,7 +877,7 @@ async function fasonBaglami(db: Db, emirId: number, isEmriId: number, donus = fa
   const ozetler = fasonOzeti(await s.fasonHareketleriGetir(db, [isEmriId]));
   const gkk = hepsi.filter((i) => i.sira > isEmri.sira).sort((a, b) => a.sira - b.sira)[0];
   const durum: FasonDurumu = {
-    durum: isEmri.durum, fason: isEmri.fasonFirmaId !== null, siradaki: fasonSirasindaMi(hepsi, isEmri), ...ozetler,
+    durum: isEmri.durum, fason: fasonMu(isEmri), firmaBekleniyor: isEmri.fasonFirmasiz, siradaki: fasonSirasindaMi(hepsi, isEmri), ...ozetler,
     gonderilebilir: (await adimaGiren(db, emirId, hepsi, isEmri)) ?? dalBasiAdedi(e.adet, isEmri),
     firmadaHatali: gkk === undefined ? 0 : (await gkkHesabi(db, hepsi, gkk))?.firmadaHatali ?? 0,
   };
@@ -925,11 +928,11 @@ export async function siradakiFason(db: Db, emirId: number): Promise<SiradakiFas
   if (acikEmirIhlali(e.durum, e.arsiv) !== null || e.durum === 'taslak') return null;
   const hepsi = await s.isEmirleriGetir(db, [emirId]);
   const sira = siradakiFasonAdimi(hepsi);
-  if (sira === null || sira.fasonFirmaId === null) return null;
+  if (sira === null) return null;
   const ozet = fasonOzeti(await s.fasonHareketleriGetir(db, [sira.id]));
-  const firma = (await firmaOzetleri(db, [sira.fasonFirmaId])).get(sira.fasonFirmaId);
+  const firma = sira.fasonFirmaId === null ? undefined : (await firmaOzetleri(db, [sira.fasonFirmaId])).get(sira.fasonFirmaId);
   return {
-    uretimEmriId: e.id, emirNo: e.emirNo, isEmriId: sira.id, opNo: sira.opNo, ad: sira.ad, firma: firma?.ad ?? null,
+    uretimEmriId: e.id, emirNo: e.emirNo, isEmriId: sira.id, opNo: sira.opNo, ad: sira.ad, firma: firma?.ad ?? null, ...(sira.fasonFirmasiz ? { firmaBekleniyor: true } : {}),
     gonderilen: ozet.gonderilen, donenSaglam: ozet.donenSaglam, donenHurda: ozet.donenHurda,
     gonderilebilir: (await adimaGiren(db, emirId, hepsi, sira)) ?? dalBasiAdedi(e.adet, sira),
   };
@@ -1027,7 +1030,7 @@ async function birlesenGelen(db: Db, emirId: number, adim: { sira: number; opNo:
 
 const isEmriYazisi = (i: IsEmriSatiri, kaynaksiz: boolean, sira = i.sira): IsEmriYazisi => ({
   sira, opNo: i.opNo, operasyonTipiId: i.operasyonTipiId, ad: i.ad,
-  makineId: kaynaksiz ? null : i.makineId, kisiId: kaynaksiz ? null : i.kisiId, fasonFirmaId: i.fasonFirmaId, istasyonId: kaynaksiz ? null : i.istasyonId,
+  makineId: kaynaksiz ? null : i.makineId, kisiId: kaynaksiz ? null : i.kisiId, fasonFirmaId: i.fasonFirmaId, fasonFirmasiz: i.fasonFirmasiz, istasyonId: kaynaksiz ? null : i.istasyonId,
   ayarSuresiDk: i.ayarSuresiDk, birimSureDk: i.birimSureDk, terminGun: i.terminGun, bagimlilik: i.bagimlilik, devirAdedi: i.devirAdedi,
   firePayiYuzde: i.firePayiYuzde, makineKullanimi: i.makineKullanimi, enKucukParca: i.enKucukParca, yenidenAyar: i.yenidenAyar, talimatSurumu: i.talimatSurumu,
   tur: i.tur, ekAciklama: i.ekAciklama,
@@ -1040,7 +1043,7 @@ async function adimlariKopyala(db: Db, kisiId: number, kolId: number, kaynak: re
   const [adaylar, bilesenler, liste] = [await s.adaylariGetir(db, idler), await s.bilesenleriGetir(db, idler), await s.kontrolListesiGetir(db, idler)];
   const kopyalar: { kaynak: IsEmriSatiri; yeniId: number }[] = [];
   for (const [n, i] of kaynak.entries()) {
-    const yeni = await s.isEmriEkle(db, kolId, isEmriYazisi(i, n === 0 && i.fasonFirmaId === null, ilkSira + n));
+    const yeni = await s.isEmriEkle(db, kolId, isEmriYazisi(i, n === 0 && !fasonMu(i), ilkSira + n));
     for (const a of adaylar.filter((x) => x.isEmriId === i.id)) await s.adayEkle(db, yeni, a);
     for (const b of bilesenler.filter((x) => x.isEmriId === i.id)) await s.bilesenEkle(db, yeni, b);
     for (const m of liste.filter((x) => x.isEmriId === i.id)) await s.adimEkle(db, kolId, m.sira, m.ad, m.aciklama, yeni, m.asama);
@@ -1904,6 +1907,7 @@ export interface FasonIsEmriBelgesi {
 }
 export async function fasonIsEmriBelgesi(db: Db, isEmriId: number): Promise<FasonIsEmriBelgesi | null> {
   const isEmri = await s.isEmriBul(db, isEmriId);
+  if (isEmri?.fasonFirmasiz === true) throw cakisma(FASON_FIRMA_BEKLENIYOR);
   if (isEmri === null || isEmri.fasonFirmaId === null) return null;
   const e = await s.ustEmirBul(db, isEmri.uretimEmriId);
   if (e === null) return null;

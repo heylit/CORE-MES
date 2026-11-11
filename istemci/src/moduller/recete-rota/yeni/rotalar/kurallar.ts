@@ -324,7 +324,7 @@ export function rotaSorunlari(adimlar: readonly Adim[], malzemeVar: (id: string)
     const ek = [
       ...(islemSuresiBos(a) ? ['işlem süresi yok'] : []),
       ...(!fasonMu(a) && !a.stationId ? ['istasyon yok'] : []),
-      // Kaydı ve onayı durdurmaz; emir açılmadan önce seçilmeli (sunucu emre kopyalamayı reddeder).
+      // Kaydı, onayı ve emir açılışını durdurmaz (2874): emir "firma bekleniyor" olarak açılır.
       ...(fasonMu(a) && !a.fasonId ? ['fason firma seçilmedi'] : []),
     ];
     const m = eksik.get(a.id) ?? [];

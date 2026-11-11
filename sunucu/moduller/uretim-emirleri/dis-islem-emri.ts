@@ -12,6 +12,7 @@ import {
   diePartiGirdisiIhlali, dieTamamIhlali,
 } from './dis-islem-emri-kurallar.ts';
 import { adimaGiren, dalBasiAdedi, gkkHesabi } from './is-emri-servis.ts';
+import { FASON_FIRMA_BEKLENIYOR } from './kurallar.ts';
 import { isEmirleriGetir } from './sorgular.ts';
 import * as s from './sorgular/dis-islem-emri/sorgular.ts';
 
@@ -122,6 +123,7 @@ export async function dieAc(db: Db, kisiId: number, g: DieAcGirdisi, secenek: { 
   if (g.kaynak === 'emir') {
     const adim = await s.isEmriFasonBilgisi(db, g.isEmriId);
     if (adim === null) throw bulunamadi(ADIM_YOK);
+    if (adim.fasonFirmasiz) throw cakisma(FASON_FIRMA_BEKLENIYOR);
     if (adim.fasonFirmaId === null) throw cakisma(DIE_ADIM_FASON_DEGIL);
     const var_ = await s.dieIsEmrindenGetir(db, g.isEmriId);
     if (var_ !== null) {

@@ -133,7 +133,7 @@ function UretimYeri({ r, s, a, duzen }: { r: RotaEkrani; s: { urunId: string }; 
             yaz={(v) => { yaz((x) => ({ ...x, terminGun: v === null || v <= 0 ? null : Math.round(v) }), 'Termin değişti'); }} />
           {firmasiz && (
             <p className="tc-rr1-warnbox tc-rr1-genis" role="status">
-              Fason firma seçilmedi. Rota böyle kaydedilir ve onaya gider; emir açılmadan önce firma seçilmeli.
+              Fason firma seçilmedi. Rota böyle kaydedilir ve onaya gider; emir "firma bekleniyor" olarak açılır, firmayı satın alma siparişte seçer.
               {firmalar.length === 0 && ' Fason işaretli firma yok: Müşteri ve Tedarikçi sayfasında firmayı fason işaretleyin.'}
             </p>
           )}

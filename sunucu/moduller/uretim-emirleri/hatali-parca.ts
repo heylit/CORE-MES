@@ -14,7 +14,7 @@ import {
 import type { EklenenAdim } from './is-emri-servis.ts';
 import {
   ADIM_ACIK_DEGIL, ADIM_SECILMELI, EMIR_YOK, FIRMA_HATALISI_GKK_DISI, firmaHatalisiIhlali, HATALI_ADET, HATALI_ADIMSIZ, HATALI_EMIR_DURDU, HATALI_KALITE_ADIMI, HATALI_KALITE_TIPI_YOK, HATALI_KAYIT_YOK,
-  HATALI_NEDEN_YOK, HATALI_OP_YERI, IS_EMRI_YOK, ISTASYONSUZ_ADIM, KAPSAM_DISI, TERMINAL_FASON, adetOnculleri, araOpNolari, calismaDurumu, hataliDurduMu, hataliIhlali,
+  HATALI_NEDEN_YOK, HATALI_OP_YERI, IS_EMRI_YOK, ISTASYONSUZ_ADIM, KAPSAM_DISI, TERMINAL_FASON, adetOnculleri, fasonMu, araOpNolari, calismaDurumu, hataliDurduMu, hataliIhlali,
   hataliArsivdeMi, hataliKarariIhlali, hataliKararNotuIhlali, hataliYolu, kabulKarariMi, kaliteIstasyonuSec, kaliteTipiSec, sayimIhlali, siradakiIsEmri,
 } from './kurallar.ts';
 import { hurdaSayimiBildir, saglamSayimiBildir } from './sayim-olayi.ts';
@@ -45,7 +45,7 @@ function hataliAdim(hepsi: readonly IsEmriSatiri[], isEmriId: number | undefined
     if (adim === undefined) throw bulunamadi(IS_EMRI_YOK);
     return adim;
   }
-  const calisan = hepsi.filter((i) => i.durum === 'calisiyor' && i.fasonFirmaId === null);
+  const calisan = hepsi.filter((i) => i.durum === 'calisiyor' && !fasonMu(i));
   if (calisan.length > 1) throw cakisma(ADIM_SECILMELI);
   if (calisan[0] === undefined) throw cakisma(ADIM_ACIK_DEGIL);
   return calisan[0];
@@ -67,7 +67,7 @@ export async function hataliKaydet(db: Db, kisiId: number, emirId: number, g: Ha
   if (e.malzemeNo === null) throw cakisma(HATALI_ADIMSIZ);
   const hepsi = await s.isEmirleriGetir(db, [emirId]);
   const adim = hataliAdim(hepsi, g.isEmriId);
-  if (adim.fasonFirmaId !== null) throw cakisma(TERMINAL_FASON);
+  if (fasonMu(adim)) throw cakisma(TERMINAL_FASON);
   if (adim.istasyonId === null) throw cakisma(ISTASYONSUZ_ADIM);
   await kapsamDenetle(db, kisiId, adim.istasyonId);
   const calisma = adim.durum === 'calisiyor' ? sayimIhlali(e.durum, calismaDurumu((await s.adimSonOlayi(db, emirId, adim.id))?.olay ?? null)) : null;

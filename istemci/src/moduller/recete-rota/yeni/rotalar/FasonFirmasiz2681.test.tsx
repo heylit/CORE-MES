@@ -4,7 +4,7 @@ import { json, rrAc, sunucuKur, YONETICI } from '../test-ortak.tsx';
 import { fasonaCevir, fasonMu, istasyonYaz, kaydetGovdesi, rotaFarki, rotaSorunlari, yeniAdim, type Adim, type Operasyon } from './kurallar.ts';
 import { adimOrnegi, revizyonOrnegi, rotaDurumu } from './test-veri.ts';
 
-// 2681 (2682 a): fason adım firma seçilmeden kaydedilir; firma sonra seçilir, emir açılmadan önce seçilmelidir. Veri uydurmadır.
+// 2681 (2682 a): fason adım firma seçilmeden kaydedilir; firma sonra seçilir; emir firmasız da açılır (2874). Veri uydurmadır.
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); try { localStorage.clear(); } catch { /* depo kapalı */ } });
 
 const op = { id: '21', code: 'TOR', name: 'Tornalama', stationId: '31', setup: 30, cycle: 5 } as unknown as Operasyon;

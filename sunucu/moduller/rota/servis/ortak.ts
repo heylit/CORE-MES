@@ -8,7 +8,7 @@ import { firmaOzetleri } from '../../musteri-tedarikci/disari.ts';
 import { aktifIstasyonlar, istasyonKisiAtamalari, istasyonlar as istasyonListesi, istasyondakiMakineler, makineGetir, operasyonTipleri as katalogTipleri } from '../../istasyonlar/disari.ts';
 import { kisiAdlari, kisileriListele } from '../../kisiler/disari.ts';
 import { malzemeOperasyonlari, malzemeOzetleri } from '../../malzemeler/disari.ts';
-import { FIRMASIZ_FASON_ILETISI, firmasizFasonAdimi, PATLATMA_AZAMI_KATMAN, patlatmaOzeti, rotaPatlat, isEmriKaynagi, karttanAdimlar, kisiIstasyonlari, adimMiktarlari, kontrolListesi, akisiCikar, donguBul, komutDenetle, ondalikMetin, isEmriBagimliligi, oncullerCikar, opNolariVer, revizyonHarfi, sayiyaCevir, teorikSure, bekleyenOlcum, degisenTurler, degisimOrani, teorikAyrim, cozulmusDegerler, eksikZorunlular, kapsamUyarMi, sartnameOnayEngeli, adimliKontrolListesi, kontrolKur } from '../kurallar.ts';
+import { PATLATMA_AZAMI_KATMAN, patlatmaOzeti, rotaPatlat, isEmriKaynagi, karttanAdimlar, kisiIstasyonlari, adimMiktarlari, kontrolListesi, akisiCikar, donguBul, komutDenetle, ondalikMetin, isEmriBagimliligi, oncullerCikar, opNolariVer, revizyonHarfi, sayiyaCevir, teorikSure, bekleyenOlcum, degisenTurler, degisimOrani, teorikAyrim, cozulmusDegerler, eksikZorunlular, kapsamUyarMi, sartnameOnayEngeli, adimliKontrolListesi, kontrolKur } from '../kurallar.ts';
 import type { AdimSureleri, GerceklesenSatiri, PatlamisSatir, PatlatmaRotasi } from '../kurallar.ts';
 import * as s from '../sorgular.ts';
 import type { AdimKaynagi, Icerik, Kaynak, RevizyonSatiri } from '../sorgular.ts';
@@ -435,11 +435,6 @@ export async function olcumleriBosalt(db: Db, kisiId: number, malzemeId: number,
   }
 }
 
-// 2681 (Mimar K3): emir açan ve emre uygulayan her yol önce bunu çağırır; firması seçilmemiş fason adımlı rota emre gitmez.
-export function firmasizFasonuReddet(rota: { adimlar: readonly { opNo: number; fason: { firmaId: number | null } | null }[] }): void {
-  const f = firmasizFasonAdimi(rota.adimlar);
-  if (f !== null) throw dogrulama(FIRMASIZ_FASON_ILETISI(f.opNo), `adimlar.${String(f.sira)}.kaynak`, { opNo: f.opNo });
-}
 
 // Emre kopya ve emirlere uygula aynı girdiyi kurar: her rota adımı bir iş emri, talimatın o anki metni kontrol listesi.
 export async function isEmriGirdileri(db: Db, malzemeId: number, rota: NonNullable<Awaited<ReturnType<typeof revizyonGetir>>>) {

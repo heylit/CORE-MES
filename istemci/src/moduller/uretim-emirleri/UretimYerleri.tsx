@@ -27,7 +27,12 @@ export function saglamMetni(a: Pick<IsEmri, 'saglamAdet' | 'kararBekliyor'>): st
   return a.kararBekliyor ? `${saglam} · karar bekleyen ${String(a.kararBekliyor)}` : saglam;
 }
 
-const yerMetni = (a: IsEmri): string => (a.kaynak?.tur === 'fason' ? `Dış üretim: ${a.kaynak.kod ? `${a.kaynak.kod} ` : ''}${a.kaynak.ad}` : 'İç üretim');
+// 2874: firması seçilmemiş fason adım da dış üretimdir; firmayı satın alma siparişle seçer.
+const fasonMu = (a: Pick<IsEmri, 'kaynak' | 'fasonFirmasiz'>): boolean => a.kaynak?.tur === 'fason' || a.fasonFirmasiz === true;
+const yerMetni = (a: IsEmri): string => {
+  if (a.fasonFirmasiz === true) return 'Dış üretim: firma bekleniyor';
+  return a.kaynak?.tur === 'fason' ? `Dış üretim: ${a.kaynak.kod ? `${a.kaynak.kod} ` : ''}${a.kaynak.ad}` : 'İç üretim';
+};
 
 // Üretim Emirleri salt okumadır (1391 a): değiştirme yalnız emrin evinde (Reçete ve Rota) açılır; orası `duzenlenir` verir.
 export function UretimYerleri({ emir, duzenlenir = false }: { emir: { id: number; malzemeNo?: number | null }; duzenlenir?: boolean }) {
@@ -68,8 +73,8 @@ function Adimlar({ emirId, yazar, evdeYazilir, izleme }: { emirId: number; yazar
     {
       anahtar: 'yer', baslik: 'Nerede yapılır', hucre: (a) => (
         <>
-          <Rozet ton={a.kaynak?.tur === 'fason' ? 'uyari' : 'bilgi'}>{yerMetni(a)}</Rozet>
-          {a.kaynak?.tur === 'fason' && a.terminGun !== null && <small> termin {a.terminGun} gün</small>}
+          <Rozet ton={fasonMu(a) ? 'uyari' : 'bilgi'}>{yerMetni(a)}</Rozet>
+          {fasonMu(a) && a.terminGun !== null && <small> termin {a.terminGun} gün</small>}
         </>
       ),
     },
@@ -81,8 +86,8 @@ function Adimlar({ emirId, yazar, evdeYazilir, izleme }: { emirId: number; yazar
       anahtar: 'eylem', baslik: '', hucre: (a: IsEmri) => {
         const engel = degisimEngeli(a);
         return engel !== null ? <small className="tc-emir-not">{engel}</small> : (
-          <Dugme simge={a.kaynak?.tur === 'fason' ? 'wrench' : 'truck'} onClick={() => seciliYaz(a)}>
-            {a.kaynak?.tur === 'fason' ? 'Değiştir' : 'Fasona al'}
+          <Dugme simge={fasonMu(a) ? 'wrench' : 'truck'} onClick={() => seciliYaz(a)}>
+            {a.fasonFirmasiz === true ? 'Firma seç' : fasonMu(a) ? 'Değiştir' : 'Fasona al'}
           </Dugme>
         );
       },
@@ -108,9 +113,9 @@ function Adimlar({ emirId, yazar, evdeYazilir, izleme }: { emirId: number; yazar
 function YerPenceresi({ emirId, surum, adim, kapat }: { emirId: number; surum: number; adim: IsEmri; kapat: () => void }) {
   const istemci = useQueryClient();
   const { bildir } = useBildirim();
-  const fasonda = adim.kaynak?.tur === 'fason';
+  const fasonda = fasonMu(adim);
   const [yer, yerYaz] = useState<UretimYeri>(fasonda ? 'fason' : 'ic');
-  const [firma, firmaYaz] = useState(fasonda && adim.kaynak ? String(adim.kaynak.id) : '');
+  const [firma, firmaYaz] = useState(adim.kaynak?.tur === 'fason' ? String(adim.kaynak.id) : '');
   const [termin, terminYaz] = useState(adim.terminGun === null ? '' : String(adim.terminGun));
   const firmalar = useQuery({
     queryKey: anahtarlar.fasonFirmalari,

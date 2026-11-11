@@ -42,7 +42,8 @@ function Gonderim({ f }: { f: NonNullable<SiradakiFasonCevabi['fason']> }) {
       <p className="tc-emir-not">
         {f.emirNo}, adım {f.opNo} {f.ad}{f.firma ? `, ${f.firma}` : ''}. Giden {f.gonderilen} / {f.gonderilebilir}, dönen {f.donenSaglam}, hurda {f.donenHurda}.
       </p>
-      {kalan === 0 ? <p className="tc-emir-not">Gönderilebilecek adedin hepsi gönderildi.</p> : (
+      {f.firmaBekleniyor === true ? <p className="tc-emir-not" role="status">Firma bekleniyor: satın alma firmayı seçmeden fasona gönderilmez.</p>
+        : kalan === 0 ? <p className="tc-emir-not">Gönderilebilecek adedin hepsi gönderildi.</p> : (
         <div className="tc-emir-ust">
           <Girdi etiket="Gönderilen adet" inputMode="numeric" value={adet} onChange={(e) => setAdet(e.target.value)} required />
           <Dugme tur="birincil" simge="truck" type="submit" yukleniyor={gonder.isPending}>Fasona gönder</Dugme>

@@ -49,7 +49,7 @@ const SUTUNLAR: Sutun<DisOperasyon>[] = [
   { anahtar: 'emir', baslik: 'Emir, ürün ve adım', sirala: true,
     hucre: (x) => ikili(<span className="sa-mono sa-nowrap">{x.emirNo}</span>, [x.urun, `Op ${x.opNo}${x.adim ? ` ${x.adim}` : ''}`].filter(Boolean).join(' · ')),
     csv: (x) => [x.emirNo, x.urun, `Op ${x.opNo}`, x.adim].filter(Boolean).join(' / ') },
-  { anahtar: 'firma', baslik: 'Firma', sirala: true, hucre: (x) => x.firmaAdi ?? 'Seçilmedi' },
+  { anahtar: 'firma', baslik: 'Firma', sirala: true, hucre: (x) => (x.firmaBekleniyor === true ? 'Firma bekleniyor' : (x.firmaAdi ?? 'Seçilmedi')) },
   { anahtar: 'gidis', baslik: 'Gidiş', sirala: true, hucre: (x) => (x.gerceklesenGidis ? <span title={zaman(x.gerceklesenGidis)}>{gun(x.gerceklesenGidis)}</span> : ikili('—', x.planlananGidis ? `plan ${gun(x.planlananGidis)}` : null)) },
   { anahtar: 'termin', baslik: 'Termin', sirala: true, hucre: (x) => ikili(gun(x.termin), x.ilkDonus ? `ilk dönüş ${gun(x.ilkDonus)}` : null) },
   { anahtar: 'adet', baslik: 'Dönen / giden', hucre: adetMetni, csv: (x) => `${x.gonderilen ?? ''}/${x.donen ?? ''}/${x.hurda ?? ''}` },
