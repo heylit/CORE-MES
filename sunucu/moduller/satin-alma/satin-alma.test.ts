@@ -3190,6 +3190,14 @@ describe('satin-alma sürüm 6 (gerçek PostgreSQL)', () => {
     assert.equal((await liste(c.sa, 2147483000)).statusCode, 404);
     assert.equal((await istek(c.sa, 'POST', '/satin-alma-siparis-satirlari/2147483000/belge-ekle', govde)).statusCode, 404);
 
+    // Merkezde antet kodlu revizyon yayınlanınca satırın belgesi o kodu taşır (aktarım sınanır).
+    type Merkez = { surum: number; revizyonlar: { id: number; antetRev: string | null }[] };
+    const merkez = tamam<Merkez>(await istek(c.yonetici, 'GET', `/cizimler/${belgeId}`));
+    const eklendi = tamam<Merkez>(await istek(c.yonetici, 'POST', `/cizimler/${belgeId}/revizyon-ekle`, { ozet: (await belgeYukle(c.yonetici)).ozet, dosyaAdi: 'sertifika-b.pdf', antetRev: '03', surum: merkez.surum }));
+    const kodlu = eklendi.revizyonlar.find((x) => x.antetRev === '03');
+    tamam(await istek(c.yonetici, 'POST', `/cizimler/${belgeId}/revizyonlar/${kodlu?.id}/yayinla`, { surum: eklendi.surum }));
+    assert.deepEqual(tamam<SiparisBelgeleriCevabi>(await liste(c.mudur, satirA)).belgeler.map((x) => [x.harf, x.revKodu]), [['B', '03']]);
+
     // Kaldırılan belge satırdan düşer; ikinci kaldırma ve dosyası 404.
     const kaldir = () => istek(c.sa, 'POST', `/satin-alma-siparis-satirlari/${satirA}/belgeler/${belgeId}/kaldir`);
     assert.deepEqual(tamam<SiparisBelgeleriCevabi>(await kaldir()).belgeler, []);
