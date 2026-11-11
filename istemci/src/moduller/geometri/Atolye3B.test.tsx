@@ -161,6 +161,22 @@ describe('3D Atölyesi', () => {
     expect(await screen.findByText('Pozitif bir sayı yazın.')).toBeTruthy();
   });
 
+  it('2138-2: seçili model başlığı revizyon kodunu yazar; kodsuz modelde harf değil "Kodsuz revizyon"', async () => {
+    sunucuKur({
+      'GET /geometri/modeller': () => json(200, LISTE),
+      'GET /geometri/analizler/41': () => json(200, ANALIZ),
+      'GET /geometri/analizler/42': () => json(200, { ...ANALIZ, revizyonId: 42 }),
+      'GET /geometri/modeller/41/dosya': DOSYA,
+      'GET /geometri/modeller/42/dosya': DOSYA,
+    });
+    ac();
+    fireEvent.click(await screen.findByRole('button', { name: /MLZ-0007/ }));
+    expect(await screen.findByText('Rev 03 · Model mil.step')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: /MLZ-0008/ }));
+    expect(await screen.findByText('Kodsuz revizyon · Model flanş.step')).toBeTruthy();
+    expect(screen.queryByText(/Rev [AB]\b/)).toBeNull();
+  });
+
   it('yeniden hesapla okunan sürümle ve istek kimliğiyle gider; kuyruğa alınınca durum değişir', async () => {
     const istekler = sunucuKur({
       'GET /geometri/modeller': () => json(200, LISTE),

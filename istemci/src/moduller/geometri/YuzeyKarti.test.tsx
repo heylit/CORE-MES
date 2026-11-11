@@ -155,6 +155,16 @@ describe('3D Atölyesi boya ve maske kartı (2144, prototip v3)', () => {
     });
   });
 
+  it('2138-2: listeden seçilen modelde kart rozeti revizyon kodunu yazar, merkezin harfini değil', async () => {
+    sunucuKur(temel(() => json(200, YUZEY)));
+    ac();
+    await kart();
+    fireEvent.click(await screen.findByRole('button', { name: /MLZ-0007/ }));
+    const k = await kart();
+    expect(await within(k).findByText('Rev 03')).toBeTruthy();
+    expect(within(k).queryByText(/Rev B/)).toBeNull();
+  });
+
   it('gruplar yönden: üst ve alt (oturma) yüz ayrı; Oturma yüzünü maskele alt yüzü maskeler, Hepsini temizle hepsini kaldırır', async () => {
     sunucuKur(temel(() => json(200, YUZEY)));
     ac();
