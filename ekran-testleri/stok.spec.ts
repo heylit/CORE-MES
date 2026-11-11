@@ -1,5 +1,4 @@
 import { expect, test } from './ortak.ts';
-import type { Locator, Page } from '@playwright/test';
 
 // Kaynak: kayit/stok/ozellikler.md:128 (depocu çubuğu sayfalamayı örtmez) ve :71 (Durum ve teslim paneli sekmeleri kesilmez).
 test.use({ hesap: 'ornek.depo' });
@@ -7,22 +6,6 @@ test.use({ hesap: 'ornek.depo' });
 type Kutu = { x: number; y: number; width: number; height: number };
 const kesisir = (a: Kutu, b: Kutu): boolean =>
   Math.min(a.x + a.width, b.x + b.width) - Math.max(a.x, b.x) > 1 && Math.min(a.y + a.height, b.y + b.height) - Math.max(a.y, b.y) > 1;
-
-// Şeritteki her sekme görünür alanın içindedir: şerit gizli kaydırmayla kesmez, sekme ekrandan taşmaz.
-async function sekmelerTam(page: Page, serit: Locator): Promise<void> {
-  await expect(serit).toBeVisible();
-  const genislik = page.viewportSize()?.width ?? 0;
-  expect(await serit.evaluate((e) => e.scrollWidth - e.clientWidth), 'sekme şeridinde gizli kaydırma').toBeLessThanOrEqual(0);
-  const sekmeler = serit.getByRole('tab');
-  expect(await sekmeler.count()).toBeGreaterThan(1);
-  for (const s of await sekmeler.all()) {
-    const k = await s.boundingBox();
-    expect(k, `${await s.innerText()} sekmesi çizilmedi`).not.toBeNull();
-    if (k === null) continue;
-    expect(k.x, `${await s.innerText()} sekmesi solda kesik`).toBeGreaterThanOrEqual(0);
-    expect(k.x + k.width, `${await s.innerText()} sekmesi sağda kesik`).toBeLessThanOrEqual(genislik);
-  }
-}
 
 test('Hareketler: kayarken depocu çubuğu sayfalamayı örtmez', async ({ page, ag, ac }) => {
   // Sayfalama yalnız satır varken çizilir; stok modülünün örnek verisi yok (sunucu/moduller/stok/ornek-veri.ts).
@@ -42,9 +25,23 @@ test('Hareketler: kayarken depocu çubuğu sayfalamayı örtmez', async ({ page,
   expect(ag.hatalar).toEqual([]);
 });
 
-test('Malzemeler: Durum sekmelerinin hepsi görünür', async ({ page, ag, ac }) => {
+// 2905: Durum süzgeci tablonun araç çubuğunda çip grubudur (tür sekmeleriyle iki sekme satırı olmasın); çipler sarar, kesilmez.
+test('Malzemeler: Durum çiplerinin hepsi görünür', async ({ page, ag, ac }) => {
   await ac('/stok/malzemeler');
-  await sekmelerTam(page, page.getByRole('tablist', { name: 'Durum' }));
+  const grup = page.getByRole('group', { name: 'Durum' });
+  await expect(grup).toBeVisible();
+  const genislik = page.viewportSize()?.width ?? 0;
+  expect(await grup.evaluate((e) => e.scrollWidth - e.clientWidth), 'çip grubunda gizli kaydırma').toBeLessThanOrEqual(0);
+  const cipler = grup.getByRole('button');
+  expect(await cipler.count()).toBeGreaterThan(1);
+  for (const c of await cipler.all()) {
+    const k = await c.boundingBox();
+    expect(k, `${await c.innerText()} çipi çizilmedi`).not.toBeNull();
+    if (k === null) continue;
+    expect(k.x, `${await c.innerText()} çipi solda kesik`).toBeGreaterThanOrEqual(0);
+    expect(k.x + k.width, `${await c.innerText()} çipi sağda kesik`).toBeLessThanOrEqual(genislik);
+  }
+  await expect(cipler.filter({ hasText: 'Tümü' })).toHaveAttribute('aria-pressed', 'true');
   expect(ag.hatalar).toEqual([]);
 });
 
