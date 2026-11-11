@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { AZAMI_KART_EMRI, istasyondakiKartlar, kartDoldu, kartEmirleri, refakatIsi, sayimKartAlani, sinirMetni } from '../../../../arkon/web/src/data/refakat-karti.ts';
+import { AZAMI_KART_EMRI, istasyondakiKartlar, kartDoldu, kartEmirleri, kartOkutmaKarari, refakatIsi, sayimKartAlani, sinirMetni } from '../../../../arkon/web/src/data/refakat-karti.ts';
 import type { RefakatKarti } from '../../../../arkon/web/src/data/refakat-karti.ts';
 
 // Kart #156 (Soru 134): Arkon'da okutma yok; iş, işin altındaki refakat kartından "Aç" ile ya da Malzeme Teslim'den kartla açılır.
@@ -68,5 +68,55 @@ describe('kartla iş açma', () => {
     const once = JSON.stringify([isler, pkler]);
     refakatIsi(7, isler, pkler);
     expect(JSON.stringify([isler, pkler])).toBe(once);
+  });
+});
+
+// 2928 a: okutulan kart işi yalnız belirsizlik yoksa açar; aksi halde aday listesi, emrin burada işi yoksa yalnız teslim.
+describe('kart okutma kararı', () => {
+  const a10 = pk(1, 7, 10, 'TZG-04'), a20 = pk(2, 7, 20, 'TZG-04'), b30 = pk(3, 7, 30, 'FRZ-02'), baska = pk(4, 8, 10, 'TZG-04');
+  const makineli = { acikSira: -1, insanli: false };
+
+  it('tek bitmemiş iş, çalışan başka iş yok, makineli istasyon: iş açılır', () => {
+    expect(kartOkutmaKarari(7, [is(baska), is(a10, 'done'), is(a20)], [a10, a20, b30, baska], makineli)).toEqual({ tur: 'ac', sira: 2 });
+  });
+
+  it('emrin burada iki bitmemiş işi varsa ilki açılmaz, ikisi de listelenir', () => {
+    expect(kartOkutmaKarari(7, [is(a10), is(baska), is(a20)], [a10, a20, b30, baska], makineli)).toEqual({ tur: 'sec', adaylar: [0, 2], neden: 'cok-is' });
+  });
+
+  it('başka iş çalışırken iş kendiliğinden açılmaz; çalışan iş listede değildir', () => {
+    expect(kartOkutmaKarari(7, [is(baska, 'running'), is(a20)], [a20, baska], makineli)).toEqual({ tur: 'sec', adaylar: [1], neden: 'calisan-is' });
+  });
+
+  it('duraklatılmış başka iş belirsizlik sayılmaz', () => {
+    expect(kartOkutmaKarari(7, [is(baska, 'paused'), is(a20)], [a20, baska], makineli)).toEqual({ tur: 'ac', sira: 1 });
+  });
+
+  it('kartın işi zaten açıksa (çalışıyor olsa da) yine o iş', () => {
+    expect(kartOkutmaKarari(7, [is(baska, 'running'), is(a20, 'running')], [a20, baska], { acikSira: 1, insanli: false })).toEqual({ tur: 'ac', sira: 1 });
+  });
+
+  it('insanlı istasyonda (montaj) tek eşleşme de tek dokunuşla onaylanır', () => {
+    expect(kartOkutmaKarari(7, [is(baska), is(a20)], [a20, baska], { acikSira: -1, insanli: true })).toEqual({ tur: 'sec', adaylar: [1], neden: 'insanli' });
+  });
+
+  it('emrin burada işi yoksa kart yalnız teslim alınır, sıradaki adımın istasyonu söylenir', () => {
+    expect(kartOkutmaKarari(7, [is(baska)], [a10, a20, b30, baska], makineli)).toEqual({ tur: 'yalniz-teslim', istasyon: 'TZG-04' });
+    expect(kartOkutmaKarari(7, [is(a10, 'done'), is(a20, 'done')], [a10, a20, b30, baska], makineli)).toEqual({ tur: 'yalniz-teslim', istasyon: 'FRZ-02' });
+  });
+
+  it('montaj tek emirle: aynı emrin iki düğümünün işi montaj masasında açıksa liste gelir, iş seçilmeden açılmaz', () => {
+    const dugumA = pk(11, 20, 10, 'MNT-01'), dugumB = pk(12, 20, 20, 'MNT-01'), kok = pk(13, 20, 30, 'MNT-01');
+    expect(kartOkutmaKarari(20, [is(dugumA, 'running'), is(dugumB), is(kok)], [dugumA, dugumB, kok], { acikSira: -1, insanli: true }))
+      .toEqual({ tur: 'sec', adaylar: [0, 1, 2], neden: 'cok-is' });
+  });
+
+  it('montaj ayrı emirlerle: alt parça emrinin montaj masasında işi yoksa kart yalnız teslim alınır, montaj işi açılmaz', () => {
+    const altParca = pk(21, 30, 10, 'TZG-04'), montaj = pk(22, 31, 10, 'MNT-01');
+    expect(kartOkutmaKarari(30, [is(montaj)], [altParca, montaj], { acikSira: -1, insanli: true })).toEqual({ tur: 'yalniz-teslim', istasyon: 'TZG-04' });
+  });
+
+  it('emir bu cihazda hiç bilinmiyorsa yok', () => {
+    expect(kartOkutmaKarari(99, [is(baska)], [a10, baska], makineli)).toEqual({ tur: 'yok' });
   });
 });

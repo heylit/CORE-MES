@@ -54,3 +54,29 @@ export function refakatIsi(emirId: number, isler: readonly RefakatIsi[], paketle
     .sort((a, b) => (a.tmi?.opNo ?? 0) - (b.tmi?.opNo ?? 0))[0];
   return { tur: 'baska-istasyon', istasyon: sonraki?.machine ?? null };
 }
+
+// 2928 a: terminalde okutulan kart işi yalnız belirsizlik yoksa açar. Belirsiz: emrin burada birden çok bitmemiş işi var, başka iş
+// çalışıyor ya da istasyon insanlı (montaj gibi; Atölye görüşü: tek eşleşmede de tek dokunuşla onay). Seçimde çalışan iş kendiliğinden
+// durmaz; geçiş penceresi yine sorar. Emrin burada işi yoksa (montaja gelen alt parça karti) kart yalnız teslim alınır.
+export type KartSecimNedeni = 'cok-is' | 'calisan-is' | 'insanli';
+export type KartOkutmaKarari =
+  | { tur: 'ac'; sira: number }
+  | { tur: 'sec'; adaylar: number[]; neden: KartSecimNedeni }
+  | { tur: 'yalniz-teslim'; istasyon: string | null }
+  | { tur: 'yok' };
+export function kartOkutmaKarari(
+  emirId: number, isler: readonly RefakatIsi[], paketler: readonly RefakatPaketi[], g: { acikSira: number; insanli: boolean },
+): KartOkutmaKarari {
+  const emrin = (p: RefakatPaketi | null | undefined): boolean => !!p && (p.tmi?.emirId === emirId || p.id === `tmi-ue-${emirId}`);
+  const adaylar = isler.flatMap((x, i) => (emrin(x.pkg) && x.state !== 'done' ? [i] : []));
+  if (adaylar.length === 0) {
+    const r = refakatIsi(emirId, isler, paketler);
+    return r.tur === 'yok' ? r : { tur: 'yalniz-teslim', istasyon: r.tur === 'baska-istasyon' ? r.istasyon : null };
+  }
+  if (adaylar.length > 1) return { tur: 'sec', adaylar, neden: 'cok-is' };
+  const sira = adaylar[0]!;
+  if (sira === g.acikSira) return { tur: 'ac', sira };
+  if (isler.some((x, i) => i !== sira && x.state === 'running')) return { tur: 'sec', adaylar, neden: 'calisan-is' };
+  if (g.insanli) return { tur: 'sec', adaylar, neden: 'insanli' };
+  return { tur: 'ac', sira };
+}
