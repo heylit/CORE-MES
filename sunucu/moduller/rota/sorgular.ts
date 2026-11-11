@@ -1186,6 +1186,10 @@ export async function isEmriSabitKilidi(db: Db, isEmriId: number): Promise<void>
 export async function isEmriSabitleriniSil(db: Db, isEmriIdleri: readonly number[]): Promise<void> {
   await db.sorgu('DELETE FROM rota_is_emri_sartnamesi WHERE is_emri_id = ANY($1::int[])', [[...isEmriIdleri]]);
 }
+// Rota yeniden uygulanınca bekleyen iş emrinin aparat/ölçü aleti kopyası silinip yeni revizyondan yazılır (kopya UPDATE almaz; silme serbest).
+export async function isEmriEkipmaniniSil(db: Db, isEmriIdleri: readonly number[]): Promise<void> {
+  await db.sorgu('DELETE FROM rota_is_emri_ekipmani WHERE is_emri_id = ANY($1::int[])', [[...isEmriIdleri]]);
+}
 
 export interface SabitSatiri {
   isEmriId: number; sira: number; surumId: number; sartnameId: number; kod: string; ad: string; degerler: ParametreDegerleri;

@@ -201,4 +201,51 @@ describe('rota adım ekipmanı (2893-4 a, gerçek PostgreSQL)', () => {
     assert.deepEqual(kolListe.map((x) => [x.tur, x.malzemeId, x.aletTuruId]), [['aparat', aparat, null], ['olcu_aleti', null, mikrometre]]);
     await assert.rejects(ortam!.sahip.sorgu('UPDATE rota_is_emri_ekipmani SET aciklama = $1', ['x']), /yalnız ekleme/);
   });
+
+  // Test 2 B1 (2893-D5): "yürürlükteki rotayı uygula" iş emri kimliklerini korur; bekleyen iş emrinin listesi yeni revizyondan yazılır.
+  test('rota uygulanınca bekleyen iş emrinin listesi yeni revizyondan; eski satır kalmaz', async () => {
+    const { id, surum, urun } = await taslak();
+    const y = await yaz(id, surum, 10, [{ tur: 'aparat', malzemeId: aparat, aciklama: null }, { tur: 'olcu_aleti', aletTuruId: mikrometre, aciklama: null }]);
+    await yururlugeAl(id, y.json<KomutCevabi>().surum);
+    const { uretimEmriId } = await emirAc(id);
+    const b = await tamam<KomutCevabi>(c.planlama, 'POST', `/rota/urunler/${urun}/taslak-ac`, { kaynak: { tur: 'revizyon', revizyonId: id } });
+    const y2 = await yaz(b.id, (await oku(b.id)).revizyon.surum, 10, [{ tur: 'olcu_aleti', aletTuruId: kumpas, aciklama: null }]);
+    assert.equal(y2.statusCode, 200, y2.body);
+    await yururlugeAl(b.id, y2.json<KomutCevabi>().surum);
+    const once = await vt().tx((db) => adimliEmirAyrintisi(db, uretimEmriId));
+    await tamam(c.planlama, 'POST', `/rota/emirler/${uretimEmriId}/yururlukteki-rotayi-uygula`, {});
+    const sonra = await vt().tx((db) => adimliEmirAyrintisi(db, uretimEmriId));
+    assert.deepEqual(sonra.isEmirleri.map((i) => i.id), once.isEmirleri.map((i) => i.id), 'iş emri kimlikleri aynı (senaryonun koşulu)');
+    const op10 = sonra.isEmirleri.find((i) => i.opNo === 10)!.id;
+    const liste = await vt().tx((db) => isEmriEkipmanlari(db, [op10]));
+    assert.deepEqual(liste.map((x) => [x.tur, x.malzemeId, x.aletTuruId]), [['olcu_aleti', null, kumpas]]);
+  });
+
+  test('hazırlık tamam yolu: aparat stokta varsa, türde kalibrasyonu geçerli alet varsa tamam', async () => {
+    const { id, surum } = await taslak();
+    const y = await yaz(id, surum, 10, [{ tur: 'aparat', malzemeId: aparat, aciklama: null }, { tur: 'olcu_aleti', aletTuruId: kumpas, aciklama: null }]);
+    await yururlugeAl(id, y.json<KomutCevabi>().surum);
+    const { uretimEmriId } = await emirAc(id);
+    const op10 = (await vt().tx((db) => adimliEmirAyrintisi(db, uretimEmriId))).isEmirleri.find((i) => i.opNo === 10)!.id;
+    const stok = (toplam: string) => async (_db: unknown, idler: number[]) => new Map(idler.map((m) => [m, { toplam }]));
+    assert.deepEqual((await vt().tx((db) => isEmriAparatHazirliklari(db, [op10], stok('1')))).get(op10), { durum: 'tamam', secildi: true });
+    assert.deepEqual((await vt().tx((db) => isEmriAparatHazirliklari(db, [op10], stok('0')))).get(op10), { durum: 'yok', secildi: true });
+    assert.deepEqual((await vt().tx((db) => isEmriOlcuAletiHazirliklari(db, [op10]))).get(op10), { durum: 'yok', secildi: true });
+    const alet = (await ortam!.sahip.tek<{ id: number }>("INSERT INTO olcu_aleti (no, tur_id, ad) VALUES ('EK-KMP-1', $1, 'Deneme kumpas') RETURNING id", [kumpas]))!.id;
+    await ortam!.sahip.sorgu("INSERT INTO kalibrasyon_kaydi (alet_id, tarih, kisi_id, sonuc) VALUES ($1, current_date, $2, 'uygun')", [alet, yoneticiId]);
+    assert.deepEqual((await vt().tx((db) => isEmriOlcuAletiHazirliklari(db, [op10]))).get(op10), { durum: 'tamam', secildi: true });
+  });
+
+  test('kullanımda olmayan aparat kartı ve kapalı alet türü yeni satırda reddedilir (adım ekipmanı ve kaydet)', async () => {
+    const pasifKart = await kartAc('hammadde');
+    await ortam!.sahip.sorgu("UPDATE malzeme_katalog_karti SET onay_durumu = 'pasif' WHERE no = $1", [pasifKart]);
+    const kapali = (await ortam!.sahip.tek<{ id: number }>("INSERT INTO olcu_aleti_turu (ad, aktif) VALUES ('Deneme kapalı tür', false) RETURNING id"))!.id;
+    const { id, surum } = await taslak();
+    await red(c.planlama, `/rota/revizyonlar/${id}/adim-ekipmani`, { surum, opNo: 10, ekipman: [{ tur: 'aparat', malzemeId: pasifKart, aciklama: null }] }, 400, /kullanımda değil/);
+    await red(c.planlama, `/rota/revizyonlar/${id}/adim-ekipmani`, { surum, opNo: 10, ekipman: [{ tur: 'olcu_aleti', aletTuruId: kapali, aciklama: null }] }, 400);
+    const adimlar = (ekipman: unknown[]) => [icAdim({ opNo: 10, ekipman: ekipman as AdimGirdisi['ekipman'] }), icAdim({ opNo: 20, ad: 'Frezeleme', bilesenler: [] })];
+    await red(c.planlama, `/rota/revizyonlar/${id}/kaydet`, { surum, aciklama: null, adimlar: adimlar([{ tur: 'aparat', malzemeId: pasifKart, aciklama: null }]) }, 400, /kullanımda değil/);
+    await red(c.planlama, `/rota/revizyonlar/${id}/kaydet`, { surum, aciklama: null, adimlar: adimlar([{ tur: 'olcu_aleti', aletTuruId: kapali, aciklama: null }]) }, 400);
+    assert.deepEqual((await oku(id)).adimlar.map((a) => a.ekipman), [[], []], 'hiçbiri yazılmadı');
+  });
 });

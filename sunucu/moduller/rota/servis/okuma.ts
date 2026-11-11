@@ -305,6 +305,7 @@ export async function emreUygula(db: Db, kullanici: Kullanici, emirId: number) {
   if (sonra.kaynakRotaRevizyonId === yid) {
     const bekleyen = sonra.isEmirleri.filter((i) => i.tur === 'rota' && i.durum === 'bekliyor');
     await s.isEmriSabitleriniSil(db, bekleyen.map((i) => i.id));
+    await s.isEmriEkipmaniniSil(db, bekleyen.map((i) => i.id));
     await isEmirlerineSabitle(db, kullanici.id, yid, bekleyen);
   }
   return { degisenler, kaynakRevizyon: { id: r.id, harf: r.harf } };
