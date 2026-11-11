@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { MALZEME_ALANLARI, SAYFA_ALANLARI, SIPARIS_ALANLARI, TEZGAH_ALANLARI } from './girdi/tipler.ts';
+import {
+  FASONCU_ALANLARI, KISI_ALANLARI, MALZEME_ALANLARI, ROTA_ADIMI_ALANLARI, SAYFA_ALANLARI, SIPARIS_ALANLARI, TEZGAH_ALANLARI,
+} from './girdi/tipler.ts';
 import { IC_PARA_ALANLARI, maliyetiGeriKoy, maliyetsizCalisma, UST_PARA_ALANLARI, VARLIK_PARA_ALANLARI } from './maliyet-gizleme.ts';
 
 type Nesne = Record<string, unknown>;
@@ -17,14 +19,28 @@ test('para alanı listesi alan kaynak tablosuyla uyuşur', () => {
   assert.deepEqual(finans, [...VARLIK_PARA_ALANLARI[0].alanlar].sort());
 });
 
+// Kara listenin ödünü: kaynak tablolarına adı para söyleyen yeni alan eklenirse listeye de girmesi istenir. Sayfanın kendi para alanları
+// (fasoncu fiyatı gibi) tabloda yoktur; onlar elle eklenir ve aşağıdaki örnek çalışmada ölçülür.
+test('kaynak tablolarındaki adı para söyleyen her alan listededir', () => {
+  const PARA_ADI = /fiyat|ucret|gelir|ceza|maliyet|tutar|bedel/i;
+  const tablolar: Record<string, Record<string, unknown>> = {
+    tezgahlar: TEZGAH_ALANLARI, malzemeler: MALZEME_ALANLARI, siparisler: SIPARIS_ALANLARI, fasoncular: FASONCU_ALANLARI,
+    personel: KISI_ALANLARI, rotaAdimi: ROTA_ADIMI_ALANLARI,
+  };
+  const liste = new Map<string, readonly string[]>(VARLIK_PARA_ALANLARI.map((v) => [v.dizi, v.alanlar]));
+  for (const [dizi, tablo] of Object.entries(tablolar)) {
+    for (const a of Object.keys(tablo).filter((x) => PARA_ADI.test(x))) assert.ok(liste.get(dizi)?.includes(a), `${dizi}.${a} para alanı listesinde yok`);
+  }
+});
+
 const ornek = (): Nesne => ({
   surum: 2,
   D: {
     tezgahlar: [{ id: 'm1', ucret: 450, ucretIst: 450, verim: 0.9 }],
     malzemeler: [{ kod: '7', birimFiyat: 12, kgRef: { kgFiyati: 3 }, stok: 5 }],
-    siparisler: [{ id: 'e1', gelir: 9000, cezaGun: 40, adet: 3 }],
+    siparisler: [{ id: 'e1', gelir: 9000, cezaGun: 40, cezaOran: 0.5, cezaTavan: 8, adet: 3 }],
     mesaiSis: { gunlukSinir: 11, ucret: { 1: { brut: 50000 } } },
-    planTL: { amac: 'tl', operatorUcret: 200, genelGider: 1000, risk: 0.25 },
+    planTL: { amac: 'tl', operatorUcret: 200, genelGider: null, genelGiderGizli: true, risk: 0.25 },
     ayarlar: { ayarciUcret: 300, mesaiUcret: 250, tasimaSaat: 0.5 },
     fasoncular: [{ id: 'f1', ad: 'Fasoncu', fiyat: 5, saatFiyat: 6, tasima: 7, sureGun: 2 }],
     maliyetSis: { kwh: 3 }, talasFiyat: [{ fiyat: 1 }], kgFiyat: [{ fiyat: 2 }],
@@ -32,6 +48,7 @@ const ornek = (): Nesne => ({
   iz: [
     { t: 1, kim: 'Deneme', rol: '', sayfa: 'Maliyet', ne: 'Tezgâh saat maliyeti değişti', ayrinti: 'm1: 450 → 500 TL/sa' },
     { t: 2, kim: 'Deneme', rol: '', sayfa: 'Atölye', ne: 'İş taşındı', ayrinti: 'e1 m1' },
+    { t: 3, kim: 'Deneme', rol: '', sayfa: 'Maliyet', ne: 'Gider tutarı', ayrinti: 'Kira: 1.000 TL → 1.200 TL' },
   ],
   senaryolar: [{ id: 's1', D: { tezgahlar: [{ id: 'm1', ucret: 450 }] } }, { id: 's2', hafif: true }],
   bekleyen: [{ id: 'b1', geri: [{ yol: ['D', 'tezgahlar', 'ucret'], id: 'm1', once: 400 }, { yol: ['D', 'tezgahlar', 'verim'], id: 'm1', once: 1 }] }],
@@ -47,7 +64,7 @@ test('maliyetsiz çalışma para alanlarını düşürür, planlama girdisini b�
   assert.deepEqual(D['malzemeler'], [{ kod: '7', stok: 5 }]);
   assert.deepEqual(D['siparisler'], [{ id: 'e1', adet: 3 }]);
   assert.deepEqual(D['mesaiSis'], { gunlukSinir: 11 });
-  assert.deepEqual(D['planTL'], { amac: 'tl', risk: 0.25 });
+  assert.deepEqual(D['planTL'], { amac: 'tl', genelGider: null, genelGiderGizli: true, risk: 0.25 });
   assert.deepEqual(D['ayarlar'], { tasimaSaat: 0.5 });
   assert.deepEqual(D['fasoncular'], [{ id: 'f1', ad: 'Fasoncu', sureGun: 2 }]);
   const iz = y['iz'] as Nesne[];
@@ -55,6 +72,7 @@ test('maliyetsiz çalışma para alanlarını düşürür, planlama girdisini b�
   assert.equal(iz[0]!['ne'], 'Tezgâh saat maliyeti değişti', 'iz satırı kalır');
   assert.equal(JSON.stringify(y).includes('450 → 500'), false);
   assert.equal(iz[1]!['ayrinti'], 'e1 m1');
+  assert.equal(iz[2]!['ayrinti'], '', 'gider kalemi tutarı (maliyet/yazmalar.ts kalemYaz) düşer');
   for (const a of ['maliyetSis', 'talasFiyat', 'kgFiyat']) assert.equal(D[a], undefined, a);
   assert.deepEqual((y['senaryolar'] as Nesne[])[0], { id: 's1', D: { tezgahlar: [{ id: 'm1' }] } });
   assert.deepEqual((y['senaryolar'] as Nesne[])[1], { id: 's2', hafif: true });

@@ -34,6 +34,7 @@ describe('2498: planlama çalışmasında maliyet ve ücret sunucuda süzülür 
   let maliyetci = '';
   let kaynakOkur = '';
   let kaynakMaliyetci = '';
+  let kaynakFiyatOkur = '';
   let makineId = '';
   const vt = (): TestVeritabani['vt'] => { if (!ortam) throw new Error('Test veritabanı açılamadı.'); return ortam.vt; };
   async function girisCerezi(kullaniciAdi: string): Promise<string> {
@@ -89,6 +90,9 @@ describe('2498: planlama çalışmasında maliyet ve ücret sunucuda süzülür 
     calisma.D.ayarlar = { ...(calisma.D.ayarlar ?? {}), ayarciUcret: 300, tasimaSaat: 0.5 };
     (calisma as unknown as Nesne)['iz'] = [{ t: 1, kim: 'Deneme', rol: '', sayfa: 'Maliyet', ne: 'Tezgâh saat maliyeti değişti', ayrinti: `${makineId}: 450 → 500 TL/sa` }];
     calisma.senaryolar = [{ id: 's1', ad: 'Deneme', D: { tezgahlar: [{ id: makineId, ucret: 450 }], maliyetSis: { kwh: 3.2 } } }];
+    calisma.D['fasoncular'] = [{ id: 'f1', ad: 'Deneme fasoncu', fiyat: 5, saatFiyat: 6, tasima: 7, sureGun: 2 }];
+    // Listede olmayan sayfa siparişi kayıttaki gibi kalır (siparis-bedeli-girdi.test.ts); malzeme kaynaktan yeniden kurulur, birim testte.
+    calisma.D['siparisler'] = [{ id: 'MG-S1', urun: 'MG-U', adet: 3, gelir: 9000, cezaGun: 40, cezaOran: 0.5, cezaTavan: 8 }];
     await yaz(tam, calisma, surum);
     return kayitli();
   }
@@ -105,6 +109,13 @@ describe('2498: planlama çalışmasında maliyet ve ücret sunucuda süzülür 
     const s = c.senaryolar.find((x) => x['id'] === 's1');
     assert.equal(((s?.['D'] as Nesne).tezgahlar as Nesne[])[0]?.['ucret'], undefined, `${ad}: senaryo kopyası`);
     assert.equal(JSON.stringify(c).includes('450 → 500'), false, `${ad}: değişiklik izindeki tutar`);
+    const f = (c.D['fasoncular'] as Nesne[] | undefined)?.find((x) => x['id'] === 'f1');
+    assert.ok(f, `${ad}: fasoncu kalır`);
+    for (const a of ['fiyat', 'saatFiyat', 'tasima']) assert.equal(f[a], undefined, `${ad}: fason ${a}`);
+    assert.equal(f['sureGun'], 2, `${ad}: fason süresi kalır`);
+    const sp = (c.D['siparisler'] as Nesne[] | undefined)?.find((x) => x['id'] === 'MG-S1');
+    // Birleşmiş çalışma kaynakta olmayan siparişi düşürebilir; ham kayıtta kalır (MG-02 varlığını ölçer).
+    if (sp) for (const a of ['gelir', 'cezaGun', 'cezaOran', 'cezaTavan']) assert.equal(sp[a], undefined, `${ad}: sipariş ${a}`);
   };
 
   before(async () => {
@@ -117,9 +128,11 @@ describe('2498: planlama çalışmasında maliyet ve ücret sunucuda süzülür 
     maliyetci = await islemliKisi('maliyetci', [...planlama, 'finans.maliyet-oku']);
     kaynakOkur = await islemliKisi('kaynakokur', ['recete-rota.oku']);
     kaynakMaliyetci = await islemliKisi('kaynakmaliyetci', ['recete-rota.oku', 'finans.maliyet-oku']);
+    kaynakFiyatOkur = await islemliKisi('kaynakfiyatokur', ['recete-rota.oku', 'siparisler.fiyat-oku']);
     const s = ortam.sahip;
     const im = await s.tek<{ id: number }>("INSERT INTO is_merkezi (kod, ad) VALUES ('MG-IM', 'Deneme merkezi') RETURNING id");
     const istasyonId = (await s.tek<{ id: number }>("INSERT INTO istasyon (kod, ad, is_merkezi_id, aktif) VALUES ('MG-IS', 'Deneme torna', $1, true) RETURNING id", [im!.id]))!.id;
+    await s.sorgu("INSERT INTO finans_istasyon_maliyet (istasyon_id, saat_maliyeti, para_birimi, guncelleyen_id) VALUES ($1, 450, 'TRY', $2)", [istasyonId, yoneticiId]);
     makineId = String((await s.tek<{ id: number }>("INSERT INTO makine (kod, ad, istasyon_id, aktif) VALUES ('MG-M1', 'Deneme torna 1', $1, true) RETURNING id", [istasyonId]))!.id);
     await ortam.vt.tx((db) => receteRotaKaydiEkle(db, { version: 7, savedAt: 9, items: [], opdefs: [], machines: [], routes: {}, orders: [] }, yoneticiId));
   });
@@ -130,17 +143,31 @@ describe('2498: planlama çalışmasında maliyet ve ücret sunucuda süzülür 
     paraYok((await oku(planlamaci)).calisma, 'planlamacı');
     const m = (await oku(maliyetci)).calisma;
     assert.equal(m.D.tezgahlar.find((x) => x['id'] === makineId)?.['ucret'], 450);
-    assert.deepEqual((m.D['maliyetSis'] as Nesne)['dolayli'], [{ id: 'd1', gorev: 'Deneme', brut: 40000 }]);
+    // 2728 a: brüt kayda hiç girmez; gider tablosunun brütsüz satırı maliyet okuyana gider.
+    assert.deepEqual((m.D['maliyetSis'] as Nesne)['dolayli'], [{ id: 'd1', gorev: 'Deneme' }]);
     assert.equal(((m.D['mesaiSis'] as Nesne)['ucret'] as Nesne)[String(yoneticiId)] !== undefined, true);
     assert.equal(m.D.ayarlar?.['ayarciUcret'], 300);
+    assert.equal((m.D['fasoncular'] as Nesne[]).find((x) => x['id'] === 'f1')?.['fiyat'], 5);
   });
 
   test('MG-02: ham kayıt okuması (planlama-kayitlari) aynı süzgeçten geçer: maliyet okumayan kaynak okuyan görmez, maliyet okuyan görür', async () => {
     await paraliCalisma();
-    paraYok(await kayitlariOku(kaynakOkur), 'kaynak okuyan');
+    const k = await kayitlariOku(kaynakOkur);
+    paraYok(k, 'kaynak okuyan');
+    assert.equal((k.D['siparisler'] as Nesne[]).find((x) => x['id'] === 'MG-S1')?.['adet'], 3, 'ham kayıtta sipariş kalır, tutarsız');
     const m = await kayitlariOku(kaynakMaliyetci);
     assert.equal(m.D.tezgahlar.find((x) => x['id'] === makineId)?.['ucret'], 450);
     assert.equal(m.D['talasFiyat'] !== undefined, true);
+    assert.equal((m.D['siparisler'] as Nesne[]).find((x) => x['id'] === 'MG-S1')?.['gelir'], 9000);
+  });
+
+  // Süzgeç yalnız finans.maliyet-oku'ya bakar (223 a): sipariş fiyatını okuyabilen ama maliyet okumayan da çalışmadaki para alanlarını
+  // almaz. Daha dar olan budur; siparisler.fiyat-oku'ya sipariş gelirini açmak ayrı karardır.
+  test('MG-05: sipariş fiyatını okuyan ama maliyet okumayan ham kayıtta sipariş gelirini ve tezgâh ücretini almaz', async () => {
+    await paraliCalisma();
+    const k = await kayitlariOku(kaynakFiyatOkur);
+    paraYok(k, 'fiyat okuyan');
+    assert.equal((k.D['siparisler'] as Nesne[]).find((x) => x['id'] === 'MG-S1')?.['adet'], 3);
   });
 
   test('MG-03: maliyet okumayan planlamacı okuduğunu geri yazınca kayıttaki para alanları silinmez; değiştirdiği öteki alan yazılır', async () => {

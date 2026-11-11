@@ -1,7 +1,8 @@
 // Planlama çalışmasının para alanları yalnız maliyet okuyana gider (223 a: fiyat ve maliyet görünümü finans.maliyet-oku). Ekran bu
 // alanları zaten gizler; burası veriyi de vermez. Liste adlıdır (kara liste): planlama sayfası çalışmanın neredeyse tamamını okur, beyaz
 // liste sayfayı kırardı. Ödünü: çalışmaya sonradan eklenen para alanı kendiliğinden düşmez; maliyet-gizleme.test.ts alan kaynak
-// tablosundaki para alanlarının bu listede olduğunu ölçer.
+// tablosundaki para alanlarının ve adı para söyleyen kaynak alanlarının bu listede olduğunu ölçer. Sayfanın kendi para alanları (fasoncu
+// fiyatı gibi) kaynak tablosunda yoktur; yenisi eklenirse buraya elle eklenir.
 // Maliyet okumayan planlamacı da çalışmayı yazar (plan.yaz). Yazdığı çalışmada düşen alanlar yoktur; kayıttaki değerleri geri konur ki
 // planlamacının kaydı ücretleri, gelirleri ve gider tablolarını silmesin. Yeni varlığın değeri yoktur, uydurulmaz.
 
@@ -12,15 +13,17 @@ const nesneMi = (v: unknown): v is Nesne => typeof v === 'object' && v !== null 
 export const VARLIK_PARA_ALANLARI = [
   { dizi: 'tezgahlar', kimlik: 'id', alanlar: ['ucret', 'ucretIst'] },
   { dizi: 'malzemeler', kimlik: 'kod', alanlar: ['birimFiyat', 'fiyatTahmini', 'kgRef'] },
-  { dizi: 'siparisler', kimlik: 'id', alanlar: ['gelir', 'cezaGun'] },
+  { dizi: 'siparisler', kimlik: 'id', alanlar: ['gelir', 'cezaGun', 'cezaOran', 'cezaTavan'] },
   { dizi: 'fasoncular', kimlik: 'id', alanlar: ['saatFiyat', 'fiyat', 'tasima'] },
 ] as const;
 // Çalışmanın (D) üst alanları: fiyat listeleri ve gider tablosu bütünüyle düşer.
 export const UST_PARA_ALANLARI = ['talasFiyat', 'kgFiyat', 'maliyetSis'] as const;
 // Üst alanın içindeki para alanları: alanın geri kalanı (mesai sınırları, plan amacı) planlamanın girdisidir, kalır.
+// planTL.genelGider burada değildir: kayda hiç girmez ve okuyamayana null ile genelGiderGizli gider (2601 a, 2668 a, Güvenlik K1;
+// motor-ayari-kurallar.ts genelGiderAlanlariniCikar). Ekran "gizli" yazısını o null'dan çizer, alan düşerse ayrım kaybolurdu.
 export const IC_PARA_ALANLARI = [
   { ust: 'mesaiSis', alanlar: ['ucret'] },
-  { ust: 'planTL', alanlar: ['operatorUcret', 'genelGider'] },
+  { ust: 'planTL', alanlar: ['operatorUcret'] },
   { ust: 'ayarlar', alanlar: ['mesaiUcret', 'ayarciUcret'] },
 ] as const;
 
@@ -29,7 +32,7 @@ export const IC_PARA_ALANLARI = [
 export const IZ_PARA_OLAYLARI: readonly string[] = [
   'Tezgâh saat maliyeti değişti', 'Maliyet ayarı değişti', 'Ücret değişti', 'Fason fiyatı değişti', 'Talaş satış fiyatı değişti',
   'Sipariş fiyatı değişti', 'Kişi ücreti', 'Mesai bedeli', 'Dolaylı personel eklendi', 'Dolaylı personel silindi', 'Elektrik birim fiyatı',
-  'Gider kalemi eklendi', 'Gider kalemi silindi', 'Genel gider hesabı', 'Makine saat maliyeti hesaptan', 'Tezgâh maliyet bilgisi',
+  'Gider kalemi eklendi', 'Gider kalemi silindi', 'Gider tutarı', 'Genel gider hesabı', 'Makine saat maliyeti hesaptan', 'Tezgâh maliyet bilgisi',
   'Gecikme bedeli verisi değişti',
 ];
 const izParaMi = (x: unknown): x is Nesne => nesneMi(x) && typeof x['ne'] === 'string' && IZ_PARA_OLAYLARI.includes(x['ne']);
