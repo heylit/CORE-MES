@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { PiktogramAdi } from '#paylasilan/etiket-piktogramlari.ts';
@@ -19,6 +19,7 @@ import { Kalibrasyon } from './Kalibrasyon.tsx';
 import { KayitSecici } from './KayitSecici.tsx';
 import { Onizleme, Simge } from './Onizleme.tsx';
 import { VektorelYazdir } from './Yazdir.tsx';
+import { eslesmisYazici, usbDestekli, usbHatasi, usbyeGonder, yaziciEsle, type UsbAygit } from './web-usb.ts';
 import './etiket-merkezi.css';
 
 // Basılı etiketin sağ üst karosundaki piktogram; tür kartında ilk bakışta tanınır.
@@ -85,6 +86,44 @@ function YaziciyaGonder({ sablon, adet, kayit }: { sablon: Sablon; adet: number 
     },
     onError: hataGoster,
   });
+  // Kart 2954: USB yolu indirmeyle aynı ucu kullanır (yetki, adet sınırı, defter sunucuda); tarayıcı yalnız dönen komutu aktarır.
+  const usbAcik = liste.data?.usbBaski === true && usbDestekli();
+  const [usb, setUsb] = useState<UsbAygit | null>(null);
+  useEffect(() => {
+    if (!usbAcik) return;
+    let gecerli = true;
+    void eslesmisYazici().then((a) => { if (gecerli) setUsb(a); }, () => undefined);
+    return () => { gecerli = false; };
+  }, [usbAcik]);
+  const esle = useMutation({
+    mutationFn: yaziciEsle,
+    onSuccess: (a) => { if (a) setUsb(a); },
+    onError: (h) => setSonuc({ ton: 'hata', metin: `USB yazıcı eşleştirilemedi: ${usbHatasi(h).message}` }),
+  });
+  const usbBas = useMutation({
+    mutationFn: async (g: { yaziciId: number; adet: number; kayit?: KayitSecimi }) => {
+      const c = await api.post<IndirCevabi>(`/etiket-merkezi/sablonlar/${sablon.anahtar}/indir`, g, { istekKimligi: kimlik });
+      bitti();
+      if (!usb) return { c, hata: 'USB yazıcı eşleşmesi kalktı.' };
+      try {
+        await usbyeGonder(usb, c.komut);
+        return { c, hata: null };
+      } catch (h) {
+        return { c, hata: usbHatasi(h).message };
+      }
+    },
+    onSuccess: ({ c, hata }) => {
+      if (hata === null) {
+        bildir('tamam', 'Etiket USB yazıcıya aktarıldı.');
+        setSonuc({ ton: 'tamam', metin: 'USB yazıcıya aktarıldı ve deftere yazıldı. Etiketin çıktığını yazıcının başında kontrol edin.' });
+        return;
+      }
+      // Defter yazıldı; komut kaybolmasın diye dosya iner, kişi yazıcının kendi aracıyla gönderebilir.
+      komutuIndir(c);
+      setSonuc({ ton: 'hata', metin: `USB yazıcıya aktarılamadı: ${hata} Komut dosyası indirildi (${c.dosyaAdi}).` });
+    },
+    onError: hataGoster,
+  });
   if (liste.isPending) return <DurumKutusu durum="yukleniyor" />;
   if (liste.isError) return null;
   const { dogrudanBaski } = liste.data;
@@ -102,10 +141,22 @@ function YaziciyaGonder({ sablon, adet, kayit }: { sablon: Sablon; adet: number 
         secenekler={yazicilar.map((y) => ({ deger: String(y.id), baslik: `${y.ad} · ${y.dpi} dpi · ${y.baglanti === 'ag' ? 'ağ' : 'dosya'}` }))} />
       <div className="tc-etk-dugmeler">
         {secili?.baglanti === 'dosya' ? (
-          <Dugme tur="birincil" simge="download" disabled={govde === null} yukleniyor={indir.isPending}
-            onClick={() => { if (govde) { setSonuc(null); indir.mutate(govde); } }}>
-            Yazıcı için indir
-          </Dugme>
+          <>
+            {usbAcik && (usb ? (
+              <Dugme tur="birincil" simge="printer" disabled={govde === null} yukleniyor={usbBas.isPending}
+                onClick={() => { if (govde) { setSonuc(null); usbBas.mutate(govde); } }}>
+                USB yazıcıya bas
+              </Dugme>
+            ) : (
+              <Dugme tur="birincil" simge="laptop" yukleniyor={esle.isPending} onClick={() => { setSonuc(null); esle.mutate(); }}>
+                Bu bilgisayara USB yazıcı bağla
+              </Dugme>
+            ))}
+            <Dugme tur={usbAcik ? 'ikincil' : 'birincil'} simge="download" disabled={govde === null} yukleniyor={indir.isPending}
+              onClick={() => { if (govde) { setSonuc(null); indir.mutate(govde); } }}>
+              Yazıcı için indir
+            </Dugme>
+          </>
         ) : (
           <Dugme tur="birincil" simge="upload" disabled={govde === null} yukleniyor={gonder.isPending}
             onClick={() => { if (govde) { setSonuc(null); gonder.mutate(govde); } }}>
@@ -113,6 +164,7 @@ function YaziciyaGonder({ sablon, adet, kayit }: { sablon: Sablon; adet: number 
           </Dugme>
         )}
       </div>
+      {usbAcik && usb && secili?.baglanti === 'dosya' && <p className="tc-etk-not">USB: {usb.productName ?? 'yazıcı'} bu bilgisayarda bağlı.</p>}
       {sonuc && <p className={sonuc.ton === 'hata' ? 'tc-etk-hata' : 'tc-etk-not'} role={sonuc.ton === 'hata' ? 'alert' : 'status'}>{sonuc.metin}</p>}
       {kayit && secili?.baglanti === 'ag' && <CihazVarsayilani sablon={sablon} yazici={secili} />}
     </div>

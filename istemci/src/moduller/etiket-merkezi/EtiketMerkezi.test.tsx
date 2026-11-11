@@ -57,6 +57,7 @@ const YAZICILAR: YazicilarCevabi = {
     { id: 2, ad: 'Argox masa', dil: 'pplb', dpi: 203, baglanti: 'dosya', adres: null, sade: true, aktif: true, surum: 3 },
   ],
   dogrudanBaski: { acik: true, neden: null },
+  usbBaski: false,
 };
 
 const BASKILAR: BaskilarCevabi = {
@@ -588,7 +589,7 @@ describe('EtiketMerkezi vektörel yazdırma', () => {
       };
     });
     vi.stubGlobal('print', yazdir);
-    const istekler = sunucuKur({ islemler: BAS, yazicilar: { yazicilar: [], dogrudanBaski: { acik: false, neden: 'Kapalı.' } } });
+    const istekler = sunucuKur({ islemler: BAS, yazicilar: { yazicilar: [], dogrudanBaski: { acik: false, neden: 'Kapalı.' }, usbBaski: false } });
     ac(<HazirSablonlar />, '/etiket-merkezi?tur=konum&id=11,12');
     fireEvent.change(await screen.findByLabelText('Kayıt başına adet'), { target: { value: '3' } });
     fireEvent.click(await screen.findByRole('button', { name: 'Vektörel yazdır' }));
@@ -775,5 +776,104 @@ describe('Yer etiketi grubu', () => {
     expect(await screen.findByText('Yer etiketi')).toBeTruthy();
     expect(screen.queryByText('İstasyon etiketi')).toBeNull();
     expect(screen.getByText('Yer 50x25, Yer 100x50 · Teslim yeri')).toBeTruthy();
+  });
+});
+
+describe('USB yazıcıya basım (2954)', () => {
+  const BAS = ['sayfa.etiket-merkezi', 'etiket-merkezi.oku', 'etiket-merkezi.bas'] satisfies Islem[];
+  const USB_ACIK = { ...YAZICILAR, usbBaski: true };
+  const aygit = (durum: 'ok' | 'stall' = 'ok') => {
+    const giden: string[] = [];
+    return {
+      giden,
+      productName: 'Deneme yazıcısı', opened: false,
+      configuration: { interfaces: [{ interfaceNumber: 0, alternate: { interfaceClass: 7, endpoints: [{ endpointNumber: 1, direction: 'out' as const, type: 'bulk' as const }] } }] },
+      open: async () => undefined, close: async () => undefined, selectConfiguration: async () => undefined,
+      claimInterface: async () => undefined, releaseInterface: async () => undefined,
+      transferOut: async (_uc: number, veri: BufferSource) => { giden.push(new TextDecoder().decode(veri)); return { status: durum }; },
+    };
+  };
+  const usbKur = (eslesmis: ReturnType<typeof aygit>[], secilecek = aygit()) => {
+    vi.stubGlobal('isSecureContext', true);
+    const usb = { getDevices: vi.fn(async () => eslesmis), requestDevice: vi.fn(async () => secilecek) };
+    Object.defineProperty(navigator, 'usb', { value: usb, configurable: true });
+    return usb;
+  };
+  const argoxSec = async () => fireEvent.change(await screen.findByLabelText('Yazıcı'), { target: { value: '2' } });
+  afterEach(() => { Reflect.deleteProperty(navigator, 'usb'); });
+
+  it('eşleşme yokken yalnız bağlama düğmesi çıkar; eşleşince komut indirme ucundan alınıp USB yazıcıya aktarılır ve deftere yazılır', async () => {
+    const secilen = aygit();
+    const usb = usbKur([], secilen);
+    const istekler = sunucuKur({ islemler: BAS, yazicilar: USB_ACIK });
+    ac(<YaziciDenemesi />);
+    await argoxSec();
+    expect(screen.queryByRole('button', { name: 'USB yazıcıya bas' })).toBeNull();
+    fireEvent.click(await screen.findByRole('button', { name: 'Bu bilgisayara USB yazıcı bağla' }));
+    await waitFor(() => expect(usb.requestDevice).toHaveBeenCalledWith({ filters: [{ classCode: 7 }] }));
+    fireEvent.click(await screen.findByRole('button', { name: 'USB yazıcıya bas' }));
+    expect(await screen.findByText(/USB yazıcıya aktarıldı ve deftere yazıldı/)).toBeTruthy();
+    const [g] = istekler.gonderilenler;
+    expect(g?.yol).toBe('/etiket-merkezi/sablonlar/deneme-50x25/indir');
+    expect(g?.govde).toEqual({ yaziciId: 2, adet: 1 });
+    expect(istekKimligiMi(g?.kimlik)).toBe(true);
+    expect(secilen.giden).toEqual(['\nN\nP1\n']);
+    expect(screen.getByRole('button', { name: 'Yazıcı için indir' })).toBeTruthy();
+  });
+
+  it('cihaz başına kapalı: sistem ayarı kapalıyken eşleşmiş aygıt olsa da USB düğmesi yoktur; ayar açık ama eşleşme yoksa basılmaz', async () => {
+    const eslesmis = aygit();
+    usbKur([eslesmis]);
+    sunucuKur({ islemler: BAS });
+    ac(<YaziciDenemesi />);
+    await argoxSec();
+    expect(screen.getByRole('button', { name: 'Yazıcı için indir' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /USB/ })).toBeNull();
+    cleanup();
+    usbKur([]);
+    sunucuKur({ islemler: BAS, yazicilar: USB_ACIK });
+    ac(<YaziciDenemesi />);
+    await argoxSec();
+    expect(await screen.findByRole('button', { name: 'Bu bilgisayara USB yazıcı bağla' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'USB yazıcıya bas' })).toBeNull();
+  });
+
+  it('HTTPS değilse ya da tarayıcıda USB yoksa ekran bugünkü indirme yolunda kalır', async () => {
+    sunucuKur({ islemler: BAS, yazicilar: USB_ACIK });
+    ac(<YaziciDenemesi />);
+    await argoxSec();
+    expect(screen.getByRole('button', { name: 'Yazıcı için indir' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /USB/ })).toBeNull();
+  });
+
+  it.each([
+    ['claimInterface', 'Unable to claim interface.'],
+    ['open', 'Access denied.'],
+  ] as const)('E1: %s reddinde ham İngilizce metin değil Türkçe ve eylemli metin görünür; komut dosyası iner', async (adim, ham) => {
+    const indirilen = vi.fn();
+    vi.stubGlobal('URL', Object.assign(URL, { createObjectURL: () => 'blob:yerel', revokeObjectURL: () => undefined }));
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (this: HTMLAnchorElement) { indirilen(this.download); });
+    const tutulan = { ...aygit(), [adim]: async () => { throw new DOMException(ham, 'SecurityError'); } };
+    usbKur([tutulan]);
+    sunucuKur({ islemler: BAS, yazicilar: USB_ACIK });
+    ac(<YaziciDenemesi />);
+    await argoxSec();
+    fireEvent.click(await screen.findByRole('button', { name: 'USB yazıcıya bas' }));
+    expect(await screen.findByText(/USB yazıcıya aktarılamadı: Yazıcıya erişilemedi\. Yazıcıyı kullanan başka bir program varsa kapatın; Windows'ta yazıcının sürücüsü WinUSB olmalı/)).toBeTruthy();
+    expect(screen.queryByText(new RegExp(ham))).toBeNull();
+    expect(indirilen).toHaveBeenCalledWith('deneme-50x25-203.prn');
+  });
+
+  it('USB aktarımı başarısızsa komut dosyası iner ve neden yazılır', async () => {
+    const indirilen = vi.fn();
+    vi.stubGlobal('URL', Object.assign(URL, { createObjectURL: () => 'blob:yerel', revokeObjectURL: () => undefined }));
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (this: HTMLAnchorElement) { indirilen(this.download); });
+    usbKur([aygit('stall')]);
+    sunucuKur({ islemler: BAS, yazicilar: USB_ACIK });
+    ac(<YaziciDenemesi />);
+    await argoxSec();
+    fireEvent.click(await screen.findByRole('button', { name: 'USB yazıcıya bas' }));
+    expect(await screen.findByText(/USB yazıcıya aktarılamadı: Yazıcı veriyi kabul etmedi\. Komut dosyası indirildi/)).toBeTruthy();
+    expect(indirilen).toHaveBeenCalledWith('deneme-50x25-203.prn');
   });
 });

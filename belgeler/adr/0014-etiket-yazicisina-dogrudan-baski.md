@@ -40,4 +40,30 @@ yavaştır ve yanlış yazıcıya basılmasına yol açar. Kullanıcı kararı 9
 sürücüsüyle vektörel baskı yapılır: etiket gerçek mm ölçüsünde SVG sayfası olarak tarayıcının yazdırma penceresinden basılır, yazıcı
 seçimi Windows'tadır. Sunucu ağa yeni istek atmaz; yalnız etiketin yerleşimini verir ve 6. maddedeki deftere yazıcısız satır yazar.
 Kırmızı çizgideki "yalnız TCP 9100" kuralı yalnız sunucudan gönderim içindir ve değişmez. Sunucuda Windows yazıcı kuyruğu ya da sürücü
-kullanımı yoktur ("Vazgeçilenler"); WebUSB ve yerel yardımcı program da yoktur.
+kullanımı yoktur ("Vazgeçilenler"); yerel yardımcı program da yoktur. WebUSB için aşağıdaki 2954 ekine bakın.
+
+## Ek: tarayıcıdan USB yazıcıya baskı (11.11.2026, kullanıcı kararı 2953 c, kart 2954)
+
+Bağlam: Argox CP-2140'ın ağ girişi yok, tek bilgisayara USB ile bağlı; kullanıcı canlının HTTPS olduğunu bildirdi (Güvenlik kaydında
+aksi yazıyor; denemede doğrulanacak). 2904 ekindeki "WebUSB yoktur" cümlesi bu ekle değişir.
+
+Karar:
+1. Yazıcı Etiket Merkezi'nde "dosya" türüyle tanımlanır; yeni bağlantı türü, göç ve uç yoktur. "USB yazıcıya bas" indirme ucunu
+   (`POST /etiket-merkezi/sablonlar/:anahtar/indir`) çağırır: yetki (`etiket-merkezi.bas`), adet ve toplam etiket sınırı, kayıt uyumu ve
+   baskı defteri değişmeden sunucudadır. Komutu (PPLB ya da ZPL) sunucu üretir; tarayıcı yalnız dönen komutu UTF-8 bayt olarak
+   (ağ yoluyla aynı kodlama) eşleşmiş USB aygıtının yazıcı arayüzüne (sınıf 7, bulk çıkış) aktarır. Sunucu ağa yeni istek atmaz.
+2. Defter sınırı: kayıt komut kişiye verildiğinde, USB aktarımından önce `indirildi` sonucuyla yazılır. Tarayıcının "basıldı"
+   bildirimi alınmaz; defter "bu komut bu kişiye verildi" demektir, kağıda çıktığı doğrulanmaz (dosya indirme ve vektörel yazdırmayla
+   aynı sınır). Aktarım başarısız olursa komut dosyası iner ve neden ekranda yazılır.
+3. İki kat kapı, varsayılan kapalı: sistem ayarı `etiket-merkezi.usb-baski` (sistem geneli, varsayılan kapalı) ve cihaz başına
+   tarayıcı eşleşmesi. Ayar açık olsa da yazıcıyı o tarayıcıda izin penceresinden eşleştirmemiş bilgisayar USB ile basamaz; eşleşme
+   tarayıcıdadır, sunucuda tutulmaz.
+4. Yalnız güvenli bağlamda (HTTPS) ve WebUSB'li tarayıcıda (Chrome, Edge) çalışır; değilse ya da ayar kapalıysa ekran bugünkü
+   "Yazıcı için indir" ve "Vektörel yazdır" yollarıyla aynen kalır. Kod yalnız Etiket Merkezi'ndedir (`web-usb.ts`); yeni paket yoktur.
+
+Sonuçlar ve sınırlar:
+- Windows'ta tarayıcının aygıta erişmesi için aygıtın WinUSB sürücüsüne geçmesi gerekir (doğrulanmadı; deneme tarifi kart 2954
+  teslimindedir). Geçince o bilgisayarda yazıcının kendi programı ve Windows yazdırma bu yazıcıyı görmez; geri alma sürücüyü geri
+  kurmaktır.
+- Yazıcının dili (PPLB) bu modelde doğrulanmadı; tanımdaki dil yanlışsa yazıcı komutu basmaz.
+- Kırmızı çizgi metnine (CLAUDE.md) Web USB istisnası ayrı kartla yazılır; bu ek onu değiştirmez.
