@@ -32,10 +32,15 @@ export function YuklemeCizgisi() {
       durumYaz((d) => (d === 'suruyor' ? 'bitti' : d));
       sondur ??= setTimeout(() => { sondur = null; durumYaz('yok'); }, GECIKME_MS * 2);
     };
-    const birak1 = istemci.getQueryCache().subscribe(bak);
-    const birak2 = istemci.getMutationCache().subscribe(bak);
+    // Önbellek bildirimi başka bir bileşenin çizimi sırasında gelir (sorgu çizimde önbelleğe eklenir); durum orada yazılırsa React
+    // "Cannot update a component while rendering" uyarır. Bakış çizimden sonraya ertelenir.
+    let acik = true;
+    const ertele = () => { queueMicrotask(() => { if (acik) bak(); }); };
+    const birak1 = istemci.getQueryCache().subscribe(ertele);
+    const birak2 = istemci.getMutationCache().subscribe(ertele);
     bak();
     return () => {
+      acik = false;
       birak1();
       birak2();
       if (gecikme) clearTimeout(gecikme);
