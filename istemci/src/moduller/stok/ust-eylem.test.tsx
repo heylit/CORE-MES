@@ -201,6 +201,19 @@ describe('Malzeme · Teslim üst çubuk düğmesi', () => {
     }));
   });
 
+  it('sepet: sonraki istasyona gönderimin açtığı refakat kartı gönderene söylenir (2944)', async () => {
+    const istekler = ciz({
+      'GET /stok/teslim-kutusu/sepet': () => json(200, SEPET),
+      'POST /stok/teslimler/gonder': () => json(200, { teslim: GELEN, acilanKartlar: [{ id: 82, etiket: 'UE-70-P2' }] }),
+    }, KUTU_ISTASYONLU);
+    fireEvent.click(await screen.findByRole('button', { name: /^Okut(,|$)/ }));
+    fireEvent.click(await screen.findByRole('button', { name: /^Elimdekiler/ }));
+    const liste = await screen.findByRole('list', { name: 'Freze 2 sepeti' });
+    fireEvent.click(within(liste).getByRole('button', { name: 'Sonraki istasyona: Torna 1 (OP 30)' }));
+    expect(await screen.findByText('Refakat kartı UE-70-P2 açıldı ve bu teslimle gidiyor; kâğıdı Depo ya da Vardiya Sorumlusu basar.')).toBeTruthy();
+    expect(istekler.some((i) => i.yol.includes('refakat-partileri'))).toBe(false);
+  });
+
   // 2920 a: rotası belli satırlar tek dokunuşla sonraki istasyona; onay isteyen satır nedeniyle sepette kalır, rotasız satır gitmez.
   const ROTALI: IstasyonSepetiCevabi = {
     ...SEPET,
@@ -426,13 +439,16 @@ describe('Malzeme · Teslim üst çubuk düğmesi', () => {
         yerler: [{ konum: 'R-01', miktar: '40.000', konumId: 11, istasyonId: null, buEmrin: false }, { konum: 'T1', miktar: '5.000', konumId: 12, istasyonId: 1, buEmrin: true },
           { konum: 'T1', miktar: '2.000', konumId: 12, istasyonId: 1, buEmrin: false }], istek: null }],
     }] };
-    const istekler = ciz({ 'GET /stok/teslim-kutusu/is-malzemeleri': () => json(200, liste), 'POST /stok/teslim-kutusu/is-malzemeleri/iste': () => json(200, liste) }, { ...KUTU_ISTASYONLU, gelenler: [] });
+    const istekler = ciz({ 'GET /stok/teslim-kutusu/is-malzemeleri': () => json(200, liste), 'POST /stok/teslim-kutusu/is-malzemeleri/iste': () => json(200, { ...liste, acilanKartlar: [{ id: 81, etiket: 'UE-70-P1' }] }) }, { ...KUTU_ISTASYONLU, gelenler: [] });
     window.dispatchEvent(new CustomEvent(MALZEME_TESLIM_AC, { detail: { istasyonId: 2, uretimEmriId: 70, malzemeId: 902 } }));
     const satir = within(await screen.findByRole('list', { name: 'Bu işin malzemeleri' })).getAllByRole('listitem')[0]!;
     expect(within(satir).getByText(/R-01 depo · emirsiz \(40\).*T1 istasyon · bu emrin \(5\).*T1 istasyon · emirsiz \(2\)/)).toBeTruthy();
     expect(within(satir).getByRole('button', { name: /T1 istasyonundan al · emirsiz/ })).toBeTruthy();
     fireEvent.click(within(satir).getByRole('button', { name: /T1 istasyonundan al · bu emrin/ }));
     await waitFor(() => expect(istekler.find((i) => i.yontem === 'POST')?.govde).toMatchObject({ istasyonId: 2, uretimEmriId: 70, opNo: 20, malzemeId: 902, kaynakKonumId: 12, buEmrin: true }));
+    // 2944: almayla açılan kart cevapta gelir ve söylenir; operatör kartları okuyamaz, okuma da yapılmaz.
+    expect(await screen.findByText('Refakat kartı UE-70-P1 açıldı ve bu teslimle geliyor; kâğıdı Depo ya da Vardiya Sorumlusu basar.')).toBeTruthy();
+    expect(istekler.some((i) => i.yol.includes('refakat-partileri'))).toBe(false);
     fireEvent.click(within(satir).getByRole('button', { name: /Depodan iste/ }));
     await waitFor(() => expect(istekler.filter((i) => i.yontem === 'POST')[1]?.govde).toMatchObject({ malzemeId: 902, kaynakKonumId: 11 }));
   });

@@ -24,6 +24,7 @@ import { AlinanSatir, IstasyonIstekleri } from './IstasyonIstekleri.tsx';
 import { OkutarakAl } from './OkutarakAl.tsx';
 import { OkutmaSonucu, type Okunan, type SonucEylemi } from './OkutmaSonucu.tsx';
 import { hataMetni, korumaliPost, useIslem, useStokKomutu } from './ortak.tsx';
+import { useAcilanKartBildirimi } from './kart-bildirimi.tsx';
 import { bekleyenPanelIstegi, MALZEME_PANELI_AC, type PanelIstegi } from './panel-olayi.ts';
 import { PanelMalKabul } from './PanelMalKabul.tsx';
 import { PanelSevk } from './PanelSevk.tsx';
@@ -497,7 +498,13 @@ function IsMalzemesiSatiri({ istasyonId, is, m, secili }: { istasyonId: number; 
 // Eksik malzemeyi tek dokunuşla iste (kart #1418): depodaysa eksik miktarla istek açılır, emrin rotasındaki başka istasyondaysa oradan alınır.
 function IsMalzemesiIste({ istasyonId, is, m }: { istasyonId: number; is: IsMalzemeleriCevabi['isler'][number]; m: IsMalzemeleriCevabi['isler'][number]['malzemeler'][number] }) {
   const [kimlik, setKimlik] = useState(yeniKimlik);
-  const iste = useStokKomutu((g: IsMalzemesiIsteGovdesi) => korumaliPost('/stok/teslim-kutusu/is-malzemeleri/iste', g), 'Malzeme istendi.', () => setKimlik(yeniKimlik()));
+  const kartiSoyle = useAcilanKartBildirimi('geliyor');
+  // Başka istasyondan alma teslim kaydıdır ve emrin kartını açabilir (2931 a); açılan kart cevapta gelir.
+  const iste = useStokKomutu(async (g: IsMalzemesiIsteGovdesi) => {
+    const c = await korumaliPost<IsMalzemeleriCevabi>('/stok/teslim-kutusu/is-malzemeleri/iste', g);
+    kartiSoyle(c.acilanKartlar);
+    return c;
+  }, 'Malzeme istendi.', () => setKimlik(yeniKimlik()));
   if (Number(m.gereken) <= Number(m.istasyonda)) return null;
   const istekAcik = m.istek !== null && m.istek.durum !== 'teslim' && m.istek.durum !== 'iptal';
   const depo = m.yerler.find((y) => y.istasyonId === null) ?? null;

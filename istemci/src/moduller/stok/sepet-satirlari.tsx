@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../ortak/veri/api.ts';
 import type {
-  GelecekSepetCevabi, IstasyonSepetiCevabi, IstasyonSepetiSatiri, SepettenCekGovdesi, Teslim, TeslimAlGovdesi, TeslimGonderGovdesi, TeslimReddetGovdesi,
+  GelecekSepetCevabi, IstasyonSepetiCevabi, IstasyonSepetiSatiri, SepettenCekGovdesi, Teslim, TeslimAlGovdesi, TeslimCevabi, TeslimGonderGovdesi, TeslimReddetGovdesi,
 } from '#paylasilan/sozlesme/stok.ts';
 import { Dugme, Girdi, useBildirim } from '../../ortak/arayuz/index.ts';
 import { ApiHatasi } from '../../ortak/veri/api.ts';
@@ -10,6 +10,7 @@ import { anahtarlar } from './anahtarlar.ts';
 import { yeniIstekKimligi } from '../../ortak/veri/istek-kimligi.ts';
 import { miktarGirdisi, miktarMetni, zamanMetni } from './gorunum.ts';
 import { hataMetni, korumaliPost, useStokKomutu } from './ortak.tsx';
+import { useAcilanKartBildirimi } from './kart-bildirimi.tsx';
 import { useStatuAdi } from './statu.ts';
 import { TeslimSatiri } from './TeslimSatiri.tsx';
 
@@ -97,7 +98,13 @@ export function SepetSatiri({ istasyonId, x, emirli = false, kilitli = false }: 
 }) {
   const statuAdi = useStatuAdi();
   const [kimlik, setKimlik] = useState(yeniKimlik);
-  const gonder = useStokKomutu((g: TeslimGonderGovdesi) => korumaliPost('/stok/teslimler/gonder', g),
+  const kartiSoyle = useAcilanKartBildirimi('gidiyor');
+  // Emirli gönderim emrin kartını açabilir (2931 a); açılan kart cevapta gelir.
+  const gonder = useStokKomutu(async (g: TeslimGonderGovdesi) => {
+    const c = await korumaliPost<TeslimCevabi>('/stok/teslimler/gonder', g);
+    kartiSoyle(c.acilanKartlar);
+    return c;
+  },
     x.sonraki ? `${x.sonraki.ad} istasyonuna gönderildi; alan taraf onaylayınca stok taşınır.` : 'Gönderildi.', () => setKimlik(yeniKimlik()));
   const not = x.sonrakiYok ? SONRAKI_YOK[x.sonrakiYok] : null;
   const serbestVar = Number(x.miktar) > 0;
