@@ -41,8 +41,9 @@ export function HareketTablosu({ satirlar, geriAl, saatle }: { satirlar: Hareket
       {h.onayliEksi && <Rozet ton="hata">Onaylı eksi</Rozet>}{h.geriAlindi && <Rozet ton="pasif">Geri alındı</Rozet>}
     </> },
     { anahtar: 'miktar', baslik: 'Miktar', hizala: 'sag', hucre: (h) => { const y = hareketIsareti(h); return <strong className={y.eksi ? 'tc-stok-eksi' : ''}>{y.isaret === '⇄' ? '⇄ ' : y.isaret}{miktarMetni(h.miktar)}</strong>; } },
-    { anahtar: 'parti', baslik: 'Parti', kes: true, hucre: (h) => h.partiEtiketi ?? '—' },
     { anahtar: 'yer', baslik: 'Yer', mono: true, hucre: yer },
+    { anahtar: 'kisi', baslik: 'Kim', kes: true, hucre: (h) => h.kisiAd ?? '—' },
+    { anahtar: 'parti', baslik: 'Parti', kes: true, hucre: (h) => h.partiEtiketi ?? '—' },
     { anahtar: 'statu', baslik: 'Statü', kes: true, hucre: (h) => hareketStatusu(h, statuAdi) ?? '—' },
     { anahtar: 'not', baslik: 'Not', kes: true, hucre: (h) => not(h) || '—' },
     { anahtar: 'fis', baslik: 'Belge', hucre: (h) => (h.fisId === null && h.hareketFisiNo == null ? '—' : <>
@@ -50,7 +51,6 @@ export function HareketTablosu({ satirlar, geriAl, saatle }: { satirlar: Hareket
       {h.fisId !== null && h.hareketFisiNo != null && ' · '}
       {h.hareketFisiNo != null && <Link to={`/stok/hareketler?metin=${encodeURIComponent(h.hareketFisiNo)}`}>{h.hareketFisiNo}</Link>}
     </>) },
-    { anahtar: 'kisi', baslik: 'Kim', kes: true, hucre: (h) => h.kisiAd ?? '—' },
     ...(geriAl ? [{ anahtar: 'eylem', baslik: '', sabit: 'sag' as const, hucre: (h: Hareket) => (h.tur !== 'geri_alma' && !h.geriAlindi && h.girisKaynagi !== 'mal_kabul' && h.otomatik !== true ? <Dugme onClick={() => geriAl(h)}>Geri al</Dugme> : <span />) }] : []),
   ];
   return <Tablo etiket="Hareketler" kip="kaydir" sutunlar={sutunlar} satirlar={satirlar} satirAnahtari={(h) => h.id} bosMesaj="Hareket yok." />;

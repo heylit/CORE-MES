@@ -49,6 +49,16 @@ describe('Stok mini panosu (3016 a)', () => {
     expect(kutucuk('Malzeme isteği').querySelector('.tc-mp-kutu-sayi')?.textContent).toBe('5');
   });
 
+  it('Düzeltilecek defter farkını da sayar; üçü sıfırsa 0 yazar', async () => {
+    sunucuKur(DEPOCU, { 'GET /stok/is-kutusu': () => json(200, { ...KUTU, defterFarki: 4 }), 'GET /stok/depo-sevk': () => json(200, SEVK) });
+    ac();
+    await waitFor(() => expect(kutucuk('Düzeltilecek').querySelector('.tc-mp-kutu-sayi')?.textContent).toBe('7'));
+    cleanup();
+    sunucuKur(DEPOCU, { 'GET /stok/is-kutusu': () => json(200, { ...KUTU, eksiBakiye: 0, logoHatasi: 0, defterFarki: 0 }), 'GET /stok/depo-sevk': () => json(200, SEVK) });
+    ac();
+    await waitFor(() => expect(kutucuk('Düzeltilecek').querySelector('.tc-mp-kutu-sayi')?.textContent).toBe('0'));
+  });
+
   it('kutucuğa tıklayınca ana pencere o listeye gider', async () => {
     sunucuKur(DEPOCU, { 'GET /stok/is-kutusu': () => json(200, KUTU), 'GET /stok/depo-sevk': () => json(200, SEVK) });
     ac();

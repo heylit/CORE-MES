@@ -154,10 +154,11 @@ describe('Malzemeler', () => {
       'POST /stok/cikis': () => json(200, { hareketIdler: [99], onayliEksi: false }),
     });
     ac('/stok/malzemeler');
-    fireEvent.click(await screen.findByRole('button', { name: 'Çıkış: Deneme sac' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Deneme sac: diğer işlemler' }));
+    expect(screen.getByRole('menuitem', { name: 'Transfer sepetine ekle' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Çıkış' }));
     expect(await screen.findByText('Çıkış: A-01-02')).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Taşı: Deneme sac' })).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Sepete ekle: Deneme sac' })).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'QR etiketi: Deneme sac' })).toBeNull();
     fireEvent.change(screen.getByLabelText(/^Miktar/), { target: { value: '2' } });
     fireEvent.click(screen.getByRole('button', { name: 'Stoktan düş' }));
@@ -745,6 +746,8 @@ describe('Hareketler', () => {
     expect(tablo.closest('.tc-tablo-kap')?.hasAttribute('data-kaydir')).toBe(true);
     expect(within(tablo).getByRole('columnheader', { name: 'Malzeme' }).classList.contains('tc-tablo-sabit-sol')).toBe(true);
     expect(screen.getByRole('button', { name: 'Geri al' }).closest('td')?.classList.contains('tc-tablo-sabit-sag')).toBe(true);
+    // 3026 a: Yer ve Kim miktarın yanında; Parti, Statü, Not ve Belge sağda.
+    expect(within(tablo).getAllByRole('columnheader').map((h) => h.textContent?.trim())).toEqual(['Malzeme', 'Saat', 'Tür', 'Miktar', 'Yer', 'Kim', 'Parti', 'Statü', 'Not', 'Belge', '']);
   });
   it('emre bağlı hareket notunda emir numarasını yazar; numara yoksa kimliği yedek gösterir', async () => {
     const numarali = { ...H, id: 8, cikisNedeni: 'uretime_sarf', uretimEmriId: 41, emirNo: 'UE-0041' } as const;

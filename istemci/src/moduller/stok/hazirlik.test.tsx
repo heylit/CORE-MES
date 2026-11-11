@@ -209,21 +209,23 @@ describe('Hazırlık: malzeme istekleri', () => {
     const tablo = await screen.findByRole('table', { name: 'Malzeme istekleri' });
     expect(tablo.closest('.tc-tablo-kap')?.hasAttribute('data-kaydir')).toBe(true);
     expect(within(tablo).getAllByRole('columnheader').map((h) => h.textContent?.trim())).toEqual(
-      ['', 'İstek', 'Malzeme', 'Açıklama', 'Miktar', 'Karşılanan', 'Nereye', 'İsteyen', 'Açılış', 'Durum', 'Toplama listesi', '']);
+      ['', 'İstek', 'Malzeme', 'Miktar', 'Karşılanan', 'Durum', 'Nereye', 'İsteyen', 'Açılış', 'Açıklama', 'Toplama listesi', '']);
     const [, ilk, ikinci] = within(tablo).getAllByRole('row');
     const h = within(ilk!).getAllByRole('cell');
     expect(within(h[0]!).getByRole('checkbox', { name: 'MI-000031 seç' })).toBeTruthy();
     expect(h[1]!.classList.contains('tc-tablo-sabit-sol')).toBe(true);
     expect(h[1]!.textContent).toBe('MI-000031');
     expect(h[2]!.querySelector('.tc-tablo-kes')?.getAttribute('title')).toBe('Deneme sac');
-    expect(h[3]!.textContent).toBe('Yarın ilk iş');
-    expect(h[5]!.textContent).toBe('1');
+    expect(h[3]!.textContent).toBe('3');
+    expect(h[4]!.textContent).toBe('1');
+    expect(h[5]!.textContent).toBe('Stokta yok');
+    expect(h[9]!.textContent).toBe('Yarın ilk iş');
     expect(h[11]!.classList.contains('tc-tablo-sabit-sag')).toBe(true);
     expect(within(h[11]!).queryByRole('checkbox')).toBeNull();
     expect(within(h[11]!).getByRole('button', { name: 'Teslim et' })).toBeTruthy();
     const h2 = within(ikinci!).getAllByRole('cell');
     expect(within(h2[0]!).queryByRole('checkbox')).toBeNull();
-    expect(h2[5]!.textContent).toBe('—');
+    expect(h2[4]!.textContent).toBe('—');
     expect(within(h2[10]!).getByRole('link', { name: 'TL-000003' })).toBeTruthy();
     const listeler = await screen.findByRole('table', { name: 'Toplama listeleri' });
     expect(listeler.closest('.tc-tablo-kap')?.hasAttribute('data-kaydir')).toBe(true);

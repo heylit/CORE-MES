@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import type { BakiyeSatiri, MalzemeAyrintiCevabi, MalzemeStokSatiri } from '#paylasilan/sozlesme/stok.ts';
-import { Dugme, DurumKutusu, Pencere } from '../../ortak/arayuz/index.ts';
+import { Dugme, DurumKutusu, Menu, Pencere, type MenuOgesi } from '../../ortak/arayuz/index.ts';
 import { api } from '../../ortak/veri/api.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { miktarMetni } from './gorunum.ts';
@@ -21,15 +21,18 @@ export function SatirEylemleri({ m, sec }: { m: MalzemeStokSatiri; sec: (t: Hizl
   const stoklu = Number(m.toplam) > 0;
   const tikla = (t: HizliIslemTuru) => (e: { stopPropagation: () => void }) => { e.stopPropagation(); sec(t); };
   const ad = m.ad ?? `Kart ${m.malzemeId}`;
+  const git = useNavigate();
+  // Sık iş (taşı, etiket) görünür kalır; öteki işler "Diğer" menüsündedir: sabit sütun dar kalır, miktar sütunları görünür.
+  const diger: MenuOgesi[] = [
+    ...(cikabilir && stoklu ? [{ anahtar: 'cikis', baslik: 'Çıkış', simge: 'truck' as const, sec: () => sec('cikis') }] : []),
+    ...(tasiyabilir && stoklu ? [{ anahtar: 'sepet', baslik: 'Transfer sepetine ekle', simge: 'box' as const, sec: () => sec('sepet') }] : []),
+    { anahtar: 'hareketler', baslik: 'Hareketler', simge: 'list', sec: () => { void git(`/stok/hareketler?malzemeId=${m.malzemeId}`); } },
+  ];
   return (
-    <span className="tc-stok-dugmeler">
+    <span className="tc-stok-dugmeler" onClick={(e) => e.stopPropagation()}>
       {tasiyabilir && stoklu && <Dugme simge="sort" aria-label={`Taşı: ${ad}`} title="Taşı" onClick={tikla('tasima')} />}
-      {cikabilir && stoklu && <Dugme simge="truck" aria-label={`Çıkış: ${ad}`} title="Çıkış" onClick={tikla('cikis')} />}
-      {tasiyabilir && stoklu && <Dugme simge="box" aria-label={`Sepete ekle: ${ad}`} title="Sepete ekle" onClick={tikla('sepet')} />}
       <span title="QR etiketi"><EtiketMerkeziDugmesi tur="malzeme" simge="scan" ad={`QR etiketi: ${ad}`} idler={[m.malzemeId]}>{null}</EtiketMerkeziDugmesi></span>
-      <Link to={`/stok/hareketler?malzemeId=${m.malzemeId}`} aria-label={`Hareketler: ${ad}`} onClick={(e) => e.stopPropagation()}>
-        <Dugme simge="list" aria-label={`Hareketler: ${ad}`} title="Hareketler" />
-      </Link>
+      <Menu etiket={`${ad}: diğer işlemler`} ipucu="Diğer işlemler" ogeler={diger} />
     </span>
   );
 }

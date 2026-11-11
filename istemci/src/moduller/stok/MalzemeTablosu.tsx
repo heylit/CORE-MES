@@ -5,7 +5,7 @@ import { ondalik } from '../../ortak/veri/csv.ts';
 import { DURUM_ETIKETI, MALZEME_TURU, birimliMiktar, miktarMetni, zamanMetni } from './gorunum.ts';
 
 // Malzemeler ve tür listeleri aynı tabloyu kullanır: her malzeme tek satır, sütunlar yana kayar; Malzeme solda, işlemler
-// sağda sabit. Gizlenebilir sütunların seçimi kişinin tarayıcısında durur (sunucuda kişi ayarı yok).
+// sağda sabit. Depocunun ilk baktığı miktar ve durum adın hemen yanındadır: yana kaydırmadan görünür. Gizlenebilir sütunların seçimi kişinin tarayıcısında durur (sunucuda kişi ayarı yok).
 
 const KART_DURUMU: Record<NonNullable<MalzemeStokSatiri['kartDurumu']>, { etiket: string; ton: RozetTonu }> = {
   taslak: { etiket: 'Taslak', ton: 'pasif' }, onayda: { etiket: 'Onayda', ton: 'uyari' }, aktif: { etiket: 'Onaylı', ton: 'tamam' },
@@ -14,10 +14,10 @@ const KART_DURUMU: Record<NonNullable<MalzemeStokSatiri['kartDurumu']>, { etiket
 
 // Gizlenebilir sütunlar, tablodaki sırasıyla. Malzeme ve İşlemler hep görünür; türe özel sütunlar türün ekranındadır.
 export const GIZLENEBILIR = [
-  { anahtar: 'kod', baslik: 'Stok kodu' }, { anahtar: 'tur', baslik: 'Tür' }, { anahtar: 'kategori', baslik: 'Kategori' },
-  { anahtar: 'birim', baslik: 'Birim' }, { anahtar: 'serbest', baslik: 'Serbest' }, { anahtar: 'statude', baslik: 'Statüde' },
-  { anahtar: 'rezerve', baslik: 'Rezerve' }, { anahtar: 'disi', baslik: 'Kabul / karantina' }, { anahtar: 'toplam', baslik: 'Toplam' },
-  { anahtar: 'kritik', baslik: 'Kritik seviye' }, { anahtar: 'durum', baslik: 'Durum' }, { anahtar: 'konum', baslik: 'Konumlar' },
+  { anahtar: 'serbest', baslik: 'Serbest' }, { anahtar: 'toplam', baslik: 'Toplam' }, { anahtar: 'birim', baslik: 'Birim' },
+  { anahtar: 'durum', baslik: 'Durum' }, { anahtar: 'konum', baslik: 'Konumlar' }, { anahtar: 'kod', baslik: 'Stok kodu' },
+  { anahtar: 'tur', baslik: 'Tür' }, { anahtar: 'kategori', baslik: 'Kategori' }, { anahtar: 'statude', baslik: 'Statüde' },
+  { anahtar: 'rezerve', baslik: 'Rezerve' }, { anahtar: 'disi', baslik: 'Kabul / karantina' }, { anahtar: 'kritik', baslik: 'Kritik seviye' },
   { anahtar: 'varsayilan', baslik: 'Varsayılan konum' }, { anahtar: 'son', baslik: 'Son hareket' }, { anahtar: 'kart', baslik: 'Kart durumu' },
 ] as const;
 export type GizlenebilirSutun = (typeof GIZLENEBILIR)[number]['anahtar'];
@@ -67,22 +67,11 @@ export function malzemeSutunlari<S extends MalzemeStokSatiri>(secenek: { gizli: 
       <span className="tc-stok-ad"><strong>{m.ad ?? `Kart ${m.malzemeId}`}</strong>
         <span>Kart no {m.malzemeId}{m.konumSayisi > 0 ? ` · ${m.konumSayisi} konum` : ''}</span></span>
     ) },
-    { anahtar: 'kod', gizlenir: 'kod', baslik: 'Stok kodu', mono: true, hucre: (m) => m.stokKodu },
-    { anahtar: 'tur', gizlenir: 'tur', baslik: 'Tür', hucre: (m) => (m.tur ? MALZEME_TURU[m.tur] : null) },
-    { anahtar: 'kategori', gizlenir: 'kategori', baslik: 'Kategori', hucre: (m) => m.kategoriAdi ?? null },
-    ...ek,
-    { anahtar: 'birim', gizlenir: 'birim', baslik: 'Birim', hucre: (m) => m.birim },
     { anahtar: 'serbest', gizlenir: 'serbest', baslik: 'Serbest', hizala: 'sag', sirala: true, csv: (m) => ondalik(m.serbest), hucre: (m) => (
       <strong className={`tc-stok-buyuk-miktar ${m.durum === 'eksi' ? 'tc-stok-eksi' : m.durum === 'kritik' ? 'tc-stok-uyari-yazi' : ''}`}>{birimliMiktar(m.serbest, m.birim)}</strong>
     ) },
-    { anahtar: 'statude', gizlenir: 'statude', baslik: 'Statüde', hizala: 'sag', mono: true, csv: (m) => ondalik(m.statude), hucre: (m) => sayiHucresi(m.statude) },
-    { anahtar: 'rezerve', gizlenir: 'rezerve', baslik: 'Rezerve', hizala: 'sag', mono: true, csv: (m) => ondalik(m.rezerve), hucre: (m) => sayiHucresi(m.rezerve) },
-    { anahtar: 'disi', gizlenir: 'disi', baslik: 'Kabul / karantina', hizala: 'sag', mono: true, csv: (m) => kullanilamaz(m), hucre: (m) => {
-      const k = kullanilamaz(m);
-      return <span className={k === 0 ? 'tc-stok-soluk' : 'tc-stok-uyari-yazi'}>{miktarMetni(String(k))}</span>;
-    } },
     { anahtar: 'toplam', gizlenir: 'toplam', baslik: 'Toplam', hizala: 'sag', mono: true, sirala: true, csv: (m) => ondalik(m.toplam), hucre: (m) => miktarMetni(m.toplam) },
-    { anahtar: 'kritik', gizlenir: 'kritik', baslik: 'Kritik seviye', hizala: 'sag', mono: true, sirala: true, csv: (m) => ondalik(m.kritikSeviye), hucre: (m) => (m.kritikSeviye === null ? null : miktarMetni(m.kritikSeviye)) },
+    { anahtar: 'birim', gizlenir: 'birim', baslik: 'Birim', hucre: (m) => m.birim },
     { anahtar: 'durum', gizlenir: 'durum', baslik: 'Durum', csv: (m) => DURUM_ETIKETI[m.durum].etiket, hucre: (m) => <Rozet ton={DURUM_ETIKETI[m.durum].ton}>{DURUM_ETIKETI[m.durum].etiket}</Rozet> },
     { anahtar: 'konum', gizlenir: 'konum', baslik: 'Konumlar', csv: (m) => m.konumlar.map((k) => k.kod).join(' '), hucre: (m) => (m.konumlar.length === 0 ? null : (
       <span className="tc-stok-etiketler">
@@ -92,6 +81,17 @@ export function malzemeSutunlari<S extends MalzemeStokSatiri>(secenek: { gizli: 
         {m.konumSayisi > m.konumlar.length && <span className="tc-stok-etiket">+{m.konumSayisi - m.konumlar.length}</span>}
       </span>
     )) },
+    { anahtar: 'kod', gizlenir: 'kod', baslik: 'Stok kodu', mono: true, hucre: (m) => m.stokKodu },
+    { anahtar: 'tur', gizlenir: 'tur', baslik: 'Tür', hucre: (m) => (m.tur ? MALZEME_TURU[m.tur] : null) },
+    { anahtar: 'kategori', gizlenir: 'kategori', baslik: 'Kategori', hucre: (m) => m.kategoriAdi ?? null },
+    ...ek,
+    { anahtar: 'statude', gizlenir: 'statude', baslik: 'Statüde', hizala: 'sag', mono: true, csv: (m) => ondalik(m.statude), hucre: (m) => sayiHucresi(m.statude) },
+    { anahtar: 'rezerve', gizlenir: 'rezerve', baslik: 'Rezerve', hizala: 'sag', mono: true, csv: (m) => ondalik(m.rezerve), hucre: (m) => sayiHucresi(m.rezerve) },
+    { anahtar: 'disi', gizlenir: 'disi', baslik: 'Kabul / karantina', hizala: 'sag', mono: true, csv: (m) => kullanilamaz(m), hucre: (m) => {
+      const k = kullanilamaz(m);
+      return <span className={k === 0 ? 'tc-stok-soluk' : 'tc-stok-uyari-yazi'}>{miktarMetni(String(k))}</span>;
+    } },
+    { anahtar: 'kritik', gizlenir: 'kritik', baslik: 'Kritik seviye', hizala: 'sag', mono: true, sirala: true, csv: (m) => ondalik(m.kritikSeviye), hucre: (m) => (m.kritikSeviye === null ? null : miktarMetni(m.kritikSeviye)) },
     { anahtar: 'varsayilan', gizlenir: 'varsayilan', baslik: 'Varsayılan konum', mono: true, hucre: (m) => m.varsayilanKonum ?? null },
     { anahtar: 'son', gizlenir: 'son', baslik: 'Son hareket', sirala: true, kirilmaz: true, csv: (m) => m.sonHareket, hucre: (m) => (m.sonHareket ? zamanMetni(m.sonHareket) : null) },
     { anahtar: 'kart', gizlenir: 'kart', baslik: 'Kart durumu', csv: (m) => (m.kartDurumu ? KART_DURUMU[m.kartDurumu].etiket : null), hucre: (m) => (!m.kartDurumu ? null : <Rozet ton={KART_DURUMU[m.kartDurumu].ton}>{KART_DURUMU[m.kartDurumu].etiket}</Rozet>) },
