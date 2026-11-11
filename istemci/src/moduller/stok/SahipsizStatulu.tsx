@@ -20,9 +20,10 @@ export function SahipsizStatulu() {
   if (liste.isError) return <DurumKutusu durum="hata" mesaj={hataMetni(liste.error)} yenile={() => void liste.refetch()} />;
   const { satirlar } = liste.data;
   const sutunlar: Sutun<Satir>[] = [
-    { anahtar: 'malzeme', baslik: 'Malzeme', kirilmaz: true, hucre: (s) => <span className="tc-stok-ad"><Link to={`/stok/malzemeler/${s.malzemeId}`}>{s.malzemeAd ?? `Kart ${s.malzemeId}`}</Link><span>{s.malzemeKod ?? ''}</span></span> },
-    { anahtar: 'statu', baslik: 'Statü', hucre: (s) => <><Rozet ton="bilgi">{statuAdi(s.statuId)}</Rozet> <KaliteRozeti durum={s.kaliteDurumu} /></> },
-    { anahtar: 'konum', baslik: 'Konum', hucre: (s) => (s.konumlar.length === 0 ? '—' : s.konumlar.join(', ')) },
+    { anahtar: 'malzeme', baslik: 'Malzeme', sabit: 'sol', kes: true, hucre: (s) => <Link to={`/stok/malzemeler/${s.malzemeId}`}>{s.malzemeAd ?? `Kart ${s.malzemeId}`}</Link>, csv: (s) => s.malzemeAd ?? `Kart ${s.malzemeId}` },
+    { anahtar: 'kod', baslik: 'Stok kodu', mono: true, hucre: (s) => s.malzemeKod ?? '—' },
+    { anahtar: 'statu', baslik: 'Statü', hucre: (s) => <><Rozet ton="bilgi">{statuAdi(s.statuId)}</Rozet> <KaliteRozeti durum={s.kaliteDurumu} /></>, csv: (s) => statuAdi(s.statuId) },
+    { anahtar: 'konum', baslik: 'Konum', kes: true, hucre: (s) => (s.konumlar.length === 0 ? '—' : s.konumlar.join(', ')) },
     { anahtar: 'miktar', baslik: 'Statüde', hizala: 'sag', hucre: (s) => miktarMetni(s.miktar) },
     { anahtar: 'ayrilan', baslik: 'Emre ayrılan', hizala: 'sag', hucre: (s) => miktarMetni(s.ayrilan) },
     { anahtar: 'sahipsiz', baslik: 'Sahipsiz', hizala: 'sag', hucre: (s) => <strong>{miktarMetni(s.sahipsiz)}</strong> },
@@ -32,7 +33,7 @@ export function SahipsizStatulu() {
       <SayfaBasi baslik="Sahipsiz statülü stok" alt="Statüde duran ama açık hiçbir emre ayrılmamış malzeme. Aynı ürün ve OP'nin herhangi bir emri kullanabilir; bir emre ayırmak için malzeme ayrıntısında Rezerve et. Red stok burada görünmez; plan karar bekleyeni saymaz." />
       <Kart baslik={satirlar.length === 0 ? 'Sahipsiz statülü stok yok' : `${satirlar.length} satır sahipsiz`}>
         {satirlar.length > 0 && <Rozet ton="uyari">Plan bu stoğu bir emrin zincirinde görmez</Rozet>}
-        <Tablo etiket="Sahipsiz statülü stok" sutunlar={sutunlar} satirlar={satirlar} satirAnahtari={(s) => `${s.malzemeId}-${s.statuId}-${s.kaliteDurumu}`}
+        <Tablo etiket="Sahipsiz statülü stok" kip="kaydir" sutunlar={sutunlar} satirlar={satirlar} satirAnahtari={(s) => `${s.malzemeId}-${s.statuId}-${s.kaliteDurumu}`}
           bosMesaj="Statüdeki bütün stok açık emirlere ayrılı." />
       </Kart>
     </section>

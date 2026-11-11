@@ -56,6 +56,9 @@ describe('Kör sayım ve sayım onayları (1279 a)', () => {
     });
     ac('/stok/sayim-onaylari');
     const bekleyen = await screen.findByRole('table', { name: 'Onay bekleyen sayım farkları' });
+    expect(bekleyen.closest('.tc-tablo-kap')?.hasAttribute('data-kaydir')).toBe(true);
+    expect(within(bekleyen).getByRole('columnheader', { name: 'Konum' }).classList.contains('tc-tablo-sabit-sol')).toBe(true);
+    expect(within(bekleyen).getByRole('columnheader', { name: 'Sayım zamanı' })).toBeTruthy();
     expect(within(bekleyen).getAllByText('-3')).toHaveLength(2);
     expect(within(bekleyen).getByText('Kendi sayımınız')).toBeTruthy();
     expect(within(bekleyen).getAllByRole('button', { name: /Onayla/ })).toHaveLength(1);

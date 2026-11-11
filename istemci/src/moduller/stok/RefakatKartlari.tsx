@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useSearchParams } from 'react-router-dom';
 import type { KartAkisiCevabi, KartOzetleriCevabi } from '#paylasilan/sozlesme/akis.ts';
 import type { RefakatKartlariCevabi, RefakatKartlariSatiri } from '#paylasilan/sozlesme/stok.ts';
-import { Dugme, DurumKutusu, Qr, Rozet, Sekmeler, Simge } from '../../ortak/arayuz/index.ts';
+import { Dugme, DurumKutusu, Qr, Rozet, Sekmeler, Simge, Tablo, type Sutun } from '../../ortak/arayuz/index.ts';
 import { api } from '../../ortak/veri/api.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { SayfaBasi, hataMetni, useIslem } from './ortak.tsx';
@@ -55,6 +55,16 @@ function KartListesi({ kartlar, ozetler, secili, sec, durum, setDurum, kume, set
     return o !== undefined && (YER_KUMELERI.find((y) => y.anahtar === anahtar)?.durumlar.includes(o.konum.durum) ?? false);
   };
   const gorunen = kume === null ? kartlar : kartlar.filter((k) => kumeDe(k, kume));
+  const sutunlar: Sutun<RefakatKartlariSatiri>[] = [
+    { anahtar: 'kart', baslik: 'Kart', sabit: 'sol', csv: (k) => k.refakat.etiket, hucre: (k) => (
+      <Dugme aria-pressed={secili === k.refakat.id} onClick={(o) => { o.stopPropagation(); sec(k.refakat.id); }}><span className="mono">{k.refakat.etiket}</span></Dugme>
+    ) },
+    { anahtar: 'durum', baslik: 'Şimdi', csv: false, hucre: (k) => <ListeDurumu k={k} ozet={ozetler.get(k.refakat.id)} /> },
+    { anahtar: 'sira', baslik: 'Sıradaki', mono: true, hucre: (k) => { const o = ozetler.get(k.refakat.id); return (o === undefined ? null : siradakiMetni(o)) ?? '—'; } },
+    { anahtar: 'urun', baslik: 'Ürün', kes: true, hucre: (k) => k.urun.ad },
+    { anahtar: 'emir', baslik: 'Üretim emri', mono: true, hucre: (k) => k.refakat.emirNo ?? '—' },
+    { anahtar: 'son', baslik: 'Son an', kes: true, hucre: (k) => { const o = ozetler.get(k.refakat.id); return o ? sonAnMetni(o) : `${k.adimSayisi} adım · ${k.refakat.lotNo ?? 'lotsuz'}`; } },
+  ];
   return (
     <section className="tc-refakat-panel tc-refakat-liste" aria-label="Kartlar">
       <div className="tc-refakat-liste-bas">
@@ -75,27 +85,7 @@ function KartListesi({ kartlar, ozetler, secili, sec, durum, setDurum, kume, set
         </div>
       )}
       {gorunen.length === 0 && <p className="tc-refakat-bos">Kart yok.</p>}
-      <ul className="tc-refakat-kartlar">
-        {gorunen.map((k) => {
-
-          const o = ozetler.get(k.refakat.id);
-          const sira = o === undefined ? null : siradakiMetni(o);
-          return (
-            <li key={k.refakat.id}>
-              <button type="button" className="tc-refakat-satir" aria-pressed={secili === k.refakat.id} onClick={() => sec(k.refakat.id)}>
-                <span className="tc-refakat-satir-ust">
-                  <span className="tc-refakat-satir-ad"><span className="mono">{k.refakat.etiket}</span> <span className="tc-refakat-soluk">· {k.urun.ad}</span></span>
-                  <ListeDurumu k={k} ozet={o} />
-                </span>
-                <span className="tc-refakat-satir-alt">
-                  <span>{o ? sonAnMetni(o) : `${k.adimSayisi} adım · ${k.refakat.lotNo ?? 'lotsuz'}`}</span>
-                  {sira !== null && <span>Sıradaki <b className="mono">{sira}</b></span>}
-                </span>
-              </button>
-            </li>
-          );
-        })}
-      </ul>
+      {gorunen.length > 0 && <Tablo etiket="Kart listesi" kip="kaydir" sutunlar={sutunlar} satirlar={gorunen} satirAnahtari={(k) => k.refakat.id} satirSec={(k) => sec(k.refakat.id)} />}
     </section>
   );
 }

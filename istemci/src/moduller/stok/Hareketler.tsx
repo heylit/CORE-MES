@@ -34,20 +34,26 @@ function gunBasligi(iso: string): string {
 export function HareketTablosu({ satirlar, geriAl, saatle }: { satirlar: Hareket[]; geriAl?: (h: Hareket) => void; saatle?: boolean }) {
   const statuAdi = useStatuAdi();
   const sutunlar: Sutun<Hareket>[] = [
+    { anahtar: 'malzeme', baslik: 'Malzeme', sabit: 'sol', kes: true, hucre: (h) => <strong>{h.malzemeAd ?? `Kart ${h.malzemeId}`}</strong>, csv: (h) => h.malzemeAd ?? `Kart ${h.malzemeId}` },
     { anahtar: 'zaman', baslik: saatle ? 'Saat' : 'Zaman', kirilmaz: true, hucre: (h) => (saatle ? SAAT.format(new Date(h.zaman)) : zamanMetni(h.zaman)) },
     { anahtar: 'tur', baslik: 'Tür', hucre: (h) => <>
       <Rozet ton={HAREKET_TONU[h.tur]}>{HAREKET_ETIKETI[h.tur]}</Rozet>
       {h.onayliEksi && <Rozet ton="hata">Onaylı eksi</Rozet>}{h.geriAlindi && <Rozet ton="pasif">Geri alındı</Rozet>}
     </> },
-    { anahtar: 'malzeme', baslik: 'Malzeme', hucre: (h) => <span className="tc-stok-ad"><strong>{h.malzemeAd ?? `Kart ${h.malzemeId}`}</strong><span>{not(h)}{h.fisId !== null && <> · <Link to={`/stok/fisler/${h.fisId}`}>Fiş {h.fisNo}</Link></>}{h.hareketFisiNo != null && <> · <Link to={`/stok/hareketler?metin=${encodeURIComponent(h.hareketFisiNo)}`}>{h.hareketFisiNo}</Link></>}</span></span> },
-    { anahtar: 'parti', baslik: 'Parti', hucre: (h) => h.partiEtiketi ?? '—' },
-    { anahtar: 'yer', baslik: 'Yer', mono: true, hucre: yer },
-    { anahtar: 'statu', baslik: 'Statü', hucre: (h) => hareketStatusu(h, statuAdi) ?? '—' },
     { anahtar: 'miktar', baslik: 'Miktar', hizala: 'sag', hucre: (h) => { const y = hareketIsareti(h); return <strong className={y.eksi ? 'tc-stok-eksi' : ''}>{y.isaret === '⇄' ? '⇄ ' : y.isaret}{miktarMetni(h.miktar)}</strong>; } },
-    { anahtar: 'kisi', baslik: 'Kim', hucre: (h) => h.kisiAd ?? '—' },
-    ...(geriAl ? [{ anahtar: 'eylem', baslik: '', hucre: (h: Hareket) => (h.tur !== 'geri_alma' && !h.geriAlindi && h.girisKaynagi !== 'mal_kabul' && h.otomatik !== true ? <Dugme onClick={() => geriAl(h)}>Geri al</Dugme> : <span />) }] : []),
+    { anahtar: 'parti', baslik: 'Parti', kes: true, hucre: (h) => h.partiEtiketi ?? '—' },
+    { anahtar: 'yer', baslik: 'Yer', mono: true, hucre: yer },
+    { anahtar: 'statu', baslik: 'Statü', kes: true, hucre: (h) => hareketStatusu(h, statuAdi) ?? '—' },
+    { anahtar: 'not', baslik: 'Not', kes: true, hucre: (h) => not(h) || '—' },
+    { anahtar: 'fis', baslik: 'Belge', hucre: (h) => (h.fisId === null && h.hareketFisiNo == null ? '—' : <>
+      {h.fisId !== null && <Link to={`/stok/fisler/${h.fisId}`}>Fiş {h.fisNo}</Link>}
+      {h.fisId !== null && h.hareketFisiNo != null && ' · '}
+      {h.hareketFisiNo != null && <Link to={`/stok/hareketler?metin=${encodeURIComponent(h.hareketFisiNo)}`}>{h.hareketFisiNo}</Link>}
+    </>) },
+    { anahtar: 'kisi', baslik: 'Kim', kes: true, hucre: (h) => h.kisiAd ?? '—' },
+    ...(geriAl ? [{ anahtar: 'eylem', baslik: '', sabit: 'sag' as const, hucre: (h: Hareket) => (h.tur !== 'geri_alma' && !h.geriAlindi && h.girisKaynagi !== 'mal_kabul' && h.otomatik !== true ? <Dugme onClick={() => geriAl(h)}>Geri al</Dugme> : <span />) }] : []),
   ];
-  return <Tablo etiket="Hareketler" sutunlar={sutunlar} satirlar={satirlar} satirAnahtari={(h) => h.id} bosMesaj="Hareket yok." />;
+  return <Tablo etiket="Hareketler" kip="kaydir" sutunlar={sutunlar} satirlar={satirlar} satirAnahtari={(h) => h.id} bosMesaj="Hareket yok." />;
 }
 
 // CSV süzgece uyan bütün satırları alır, yalnız ekrandaki sayfayı değil: sayfalar sunucunun üst sınır boyuyla (200) sırayla

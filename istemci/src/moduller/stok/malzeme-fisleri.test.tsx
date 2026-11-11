@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import type { LogoFisBilgisi, MalzemeFisiAyrintiCevabi, MalzemeFisiListeSatiri, MalzemeFisiOzeti, MalzemeFisleriCevabi } from '#paylasilan/sozlesme/stok.ts';
 import type { Kullanici } from '#paylasilan/kullanici.ts';
 import { DEPOCU, OKUYUCU, ac, json, sunucuKur } from './test-ortak.tsx';
@@ -34,6 +34,10 @@ describe('Malzeme fişleri', () => {
     expect(screen.getAllByText('Bekliyor').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Gönderilmez').length).toBe(2);
     expect(screen.getByText('Boş')).toBeTruthy();
+    for (const tablo of screen.getAllByRole('table', { name: 'Belgeler' })) {
+      expect(tablo.closest('.tc-tablo-kap')?.hasAttribute('data-kaydir')).toBe(true);
+      expect(within(tablo).getByRole('columnheader', { name: 'Belge no' }).classList.contains('tc-tablo-sabit-sol')).toBe(true);
+    }
     fireEvent.click(screen.getByRole('tab', { name: 'Fire' }));
     await waitFor(() => expect(istekler.some((i) => i.yol.includes('tur=fire'))).toBe(true));
     fireEvent.change(screen.getByRole('combobox', { name: /Logo durumu/ }), { target: { value: 'hata' } });

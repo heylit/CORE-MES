@@ -337,15 +337,6 @@ a.tc-stok-kpi:hover, a.tc-stok-kpi:focus-visible { background: var(--panel2); }
 .tc-refakat-liste-ek { display: inline-flex; gap: var(--b-3); align-items: center; font-size: var(--yazi-xs); }
 .tc-refakat-baglanti { background: none; border: 0; padding: 0; font: inherit; color: var(--done); cursor: pointer; min-block-size: var(--b-6); }
 .tc-refakat-bos { padding: var(--b-4); margin: 0; color: var(--muted); }
-.tc-refakat-kartlar { list-style: none; margin: 0; padding: 0; }
-.tc-refakat-satir { display: flex; flex-direction: column; gap: var(--b-2); inline-size: 100%; text-align: start; font: inherit; color: var(--ink); cursor: pointer;
-  background: none; border: 0; border-block-end: var(--cizgi-ince) solid var(--edge); padding: var(--b-3) var(--b-4); }
-.tc-refakat-satir:hover { background: var(--panel2); }
-.tc-refakat-satir[aria-pressed="true"] { background: var(--hi); box-shadow: inset var(--kayma) 0 0 var(--hazard); }
-.tc-refakat-satir:focus-visible { outline: var(--cizgi) solid var(--done); outline-offset: calc(var(--cizgi) * -1); }
-.tc-refakat-satir-ust { display: flex; justify-content: space-between; gap: var(--b-3); align-items: center; }
-.tc-refakat-satir-ad { min-inline-size: 0; overflow-wrap: anywhere; }
-.tc-refakat-satir-alt { display: flex; justify-content: space-between; gap: var(--b-2); font-size: var(--yazi-xs); color: var(--muted); }
 .tc-refakat-hap { display: inline-flex; align-items: center; gap: var(--b-1); font-size: var(--yazi-xs); font-weight: 600; padding: var(--pay-ince) var(--b-2);
   border-radius: var(--yari-tam); background: var(--panel2); white-space: nowrap; }
 .tc-refakat-nokta { inline-size: var(--nokta); block-size: var(--nokta); border-radius: 50%; background: var(--ton); }
@@ -516,11 +507,6 @@ a.tc-stok-kpi:hover, a.tc-stok-kpi:focus-visible { background: var(--panel2); }
 .tc-stok-seri-ozet { display: flex; flex-wrap: wrap; gap: var(--b-2); align-items: center; justify-content: space-between; font-size: var(--yazi-s); }
 .tc-stok-seri-ozet > strong { display: inline-flex; gap: var(--b-2); align-items: center; }
 .tc-stok-seri-duzen { display: grid; grid-template-columns: minmax(14rem, 18rem) minmax(0, 1fr); gap: var(--b-4); align-items: start; }
-.tc-stok-seri-listeler { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--b-2); }
-.tc-stok-seri-listeler button { inline-size: 100%; display: grid; gap: var(--b-1); padding: var(--b-2) var(--b-3); text-align: start; font: inherit; color: var(--ink);
-  border: var(--cizgi) solid var(--edge2); border-radius: var(--yari-1); background: var(--bg); cursor: pointer; }
-.tc-stok-seri-listeler button[aria-current="true"] { border-color: var(--hazard); box-shadow: inset var(--b-1) 0 0 var(--hazard); }
-.tc-stok-seri-listeler button:focus-visible { outline: var(--cizgi) solid var(--hazard); }
 .tc-stok-seri-blok { border: var(--cizgi) solid var(--edge); border-radius: var(--yari-2); overflow: hidden; margin-block-end: var(--b-3); }
 .tc-stok-seri-blok-bas { display: flex; flex-wrap: wrap; gap: var(--b-2) var(--b-3); align-items: center; justify-content: space-between; padding: var(--b-2) var(--b-3); background: var(--panel2); }
 .tc-stok-seri-blok-bas strong { display: inline-flex; gap: var(--b-2); align-items: center; min-inline-size: 0; overflow-wrap: anywhere; }
@@ -528,21 +514,24 @@ a.tc-stok-kpi:hover, a.tc-stok-kpi:focus-visible { background: var(--panel2); }
 .tc-stok-seri-satirlar { list-style: none; margin: 0; padding: 0; }
 .tc-stok-seri-satirlar li { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; gap: var(--b-2); align-items: center; padding: var(--b-2) var(--b-3); border-top: var(--cizgi) solid var(--edge); }
 .tc-stok-seri-satirlar li:first-child { border-top: 0; }
-.tc-stok-seri-blok .tc-stok-seri-satirlar li { grid-template-columns: auto auto minmax(0, 1fr) auto auto; }
 .tc-stok-seri-satirlar li > div { display: grid; min-inline-size: 0; overflow-wrap: anywhere; }
 .tc-stok-seri-satirlar li[data-islendi] strong { color: var(--muted); text-decoration: line-through; }
 .tc-stok-seri-tur { display: inline-grid; place-items: center; inline-size: 1.75rem; block-size: 1.75rem; border-radius: var(--yari-tam); background: var(--panel2); color: var(--idle); }
-li[data-tur="goz"] > .tc-stok-seri-tur { color: var(--hazard); }
-li[data-tur="lot"] > .tc-stok-seri-tur { color: var(--run); }
-li[data-tur="kart"] > .tc-stok-seri-tur { color: var(--done); }
-li[data-tur="bilinmiyor"] > .tc-stok-seri-tur { color: var(--stop); }
+[data-tur="goz"] > .tc-stok-seri-tur { color: var(--hazard); }
+[data-tur="lot"] > .tc-stok-seri-tur { color: var(--run); }
+[data-tur="kart"] > .tc-stok-seri-tur { color: var(--done); }
+[data-tur="bilinmiyor"] > .tc-stok-seri-tur { color: var(--stop); }
+/* Listede seçili kart ya da seri liste: birincil düğme sayfada tek kalsın diye seçim çerçeveyle gösterilir. */
+.tc-refakat-liste .tc-dugme[aria-pressed="true"], .tc-stok-seri-duzen .tc-dugme[aria-current="true"] { border-color: var(--hazard); box-shadow: inset var(--b-1) 0 0 var(--hazard); }
+/* Kesilen "Okunan" hücresinde seçim ve simge sabit kalır, ad küçülüp "…" ile biter. */
+.tc-tablo-kes .tc-stok-ambalaj-hucre { display: flex; min-inline-size: 0; }
+.tc-tablo-kes .tc-stok-ambalaj-hucre > :is(strong, s) { min-inline-size: 0; overflow: hidden; text-overflow: ellipsis; }
 .tc-stok-seri-adet { inline-size: 6rem; text-align: end; font-variant-numeric: tabular-nums; }
 .tc-stok-seri-eylem { display: flex; flex-wrap: wrap; gap: var(--b-2); align-items: center; padding: var(--b-3); border: var(--cizgi) solid var(--edge2); border-radius: var(--yari-2); background: var(--panel-solid); }
 .tc-stok-seri-eylem > strong { margin-inline-end: auto; }
 .tc-stok-seri-karar { display: grid; gap: var(--b-3); padding: var(--b-3); border: var(--cizgi) solid var(--hazard); border-radius: var(--yari-2); background: var(--panel-solid); }
 @media (max-width: 1023px) { .tc-stok-seri-duzen { grid-template-columns: minmax(0, 1fr); } }
 @media (max-width: 479px) {
-  .tc-stok-seri-blok .tc-stok-seri-satirlar li { grid-template-columns: auto minmax(0, 1fr) auto auto; padding-inline: var(--b-2); }
   .tc-stok-seri-blok .tc-stok-seri-tur { display: none; }
   .tc-stok-seri-adet { inline-size: 4rem; }
 }

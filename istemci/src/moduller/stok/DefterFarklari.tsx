@@ -21,9 +21,11 @@ export function DefterFarklari() {
   if (liste.isError) return <DurumKutusu durum="hata" mesaj={hataMetni(liste.error)} yenile={() => void liste.refetch()} />;
   const { karsilastirma, farklar } = liste.data;
   const sutunlar: Sutun<DefterFarki>[] = [
-    { anahtar: 'konum', baslik: 'Konum', kirilmaz: true, hucre: (f) => <Link to={`/stok/konumlar/${f.konumId}`}>{f.konumKod ?? `Konum ${f.konumId}`}</Link> },
-    { anahtar: 'malzeme', baslik: 'Malzeme', hucre: (f) => <span className="tc-stok-ad"><Link to={`/stok/malzemeler/${f.malzemeId}`}>{f.malzemeAd ?? `Kart ${f.malzemeId}`}</Link><span>{f.lotNo ?? 'Partisiz'}</span></span> },
-    { anahtar: 'durum', baslik: 'Durum', hucre: (f) => <span className="tc-stok-ad"><span>{f.kaliteDurumu}</span>{f.statuId !== null && <span>Statü {f.statuId}</span>}</span> },
+    { anahtar: 'konum', baslik: 'Konum', mono: true, sabit: 'sol', hucre: (f) => <Link to={`/stok/konumlar/${f.konumId}`}>{f.konumKod ?? `Konum ${f.konumId}`}</Link>, csv: (f) => f.konumKod ?? `Konum ${f.konumId}` },
+    { anahtar: 'malzeme', baslik: 'Malzeme', kes: true, hucre: (f) => <Link to={`/stok/malzemeler/${f.malzemeId}`}>{f.malzemeAd ?? `Kart ${f.malzemeId}`}</Link>, csv: (f) => f.malzemeAd ?? `Kart ${f.malzemeId}` },
+    { anahtar: 'parti', baslik: 'Parti', hucre: (f) => f.lotNo ?? 'Partisiz' },
+    { anahtar: 'durum', baslik: 'Durum', hucre: (f) => f.kaliteDurumu },
+    { anahtar: 'statu', baslik: 'Statü', hucre: (f) => (f.statuId === null ? '—' : `Statü ${f.statuId}`) },
     { anahtar: 'bakiye', baslik: 'Bakiye', hizala: 'sag', hucre: (f) => miktarMetni(f.bakiye) },
     { anahtar: 'defter', baslik: 'Defter', hizala: 'sag', hucre: (f) => miktarMetni(f.defter) },
     { anahtar: 'fark', baslik: 'Fark', hizala: 'sag', hucre: (f) => <strong>{farkMetni(f)}</strong> },
@@ -35,7 +37,7 @@ export function DefterFarklari() {
         {karsilastirma !== null && (karsilastirma.farkSayisi === 0
           ? <Rozet ton="tamam">Bakiye defterle tutuyor</Rozet>
           : <Rozet ton="uyari">{`${karsilastirma.farkSayisi} eksende fark var`}</Rozet>)}
-        <Tablo etiket="Bakiye ve defter farkları" sutunlar={sutunlar} satirlar={farklar} satirAnahtari={(f) => `${f.malzemeId}-${f.konumId}-${f.partiId ?? 0}-${f.statuId ?? 0}-${f.kaliteDurumu}`}
+        <Tablo etiket="Bakiye ve defter farkları" kip="kaydir" sutunlar={sutunlar} satirlar={farklar} satirAnahtari={(f) => `${f.malzemeId}-${f.konumId}-${f.partiId ?? 0}-${f.statuId ?? 0}-${f.kaliteDurumu}`}
           bosMesaj={karsilastirma === null ? 'İlk karşılaştırma gece yapılacak.' : 'Fark yok.'} />
       </Kart>
     </section>

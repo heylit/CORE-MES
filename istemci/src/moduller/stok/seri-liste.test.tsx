@@ -68,7 +68,7 @@ describe('seri-liste kurallari', () => {
 });
 
 const ozet = { id: 3, kaynak: 'okutma' as const, acilis: '2026-11-03T09:00:00+03:00', degisim: '2026-11-03T09:05:00+03:00', kapanis: null, satirSayisi: 4, acikSatir: 4 };
-function kur(kullanici: Kullanici, satirlar: SeriSatiri[]) {
+function kur(kullanici: Kullanici, satirlar: SeriSatiri[], ekListeler: SeriListeCevabi['liste'][] = []) {
   let liste: SeriListeCevabi = { liste: ozet, satirlar };
   const istekler = sunucuKur(kullanici, {});
   vi.mocked(fetch).mockImplementation(async (adres, secenek) => {
@@ -81,8 +81,10 @@ function kur(kullanici: Kullanici, satirlar: SeriSatiri[]) {
       const kod = decodeURIComponent(yol.split('kod=')[1] ?? '');
       return json(200, COZ[kod] ?? { tur: 'bilinmiyor', kod });
     }
-    if (yol === '/stok/seri-listeler') return json(200, { listeler: [liste.liste] });
+    if (yol === '/stok/seri-listeler') return json(200, { listeler: [liste.liste, ...ekListeler] });
     if (yol === '/stok/seri-listeler/3') return json(200, liste);
+    const ek = ekListeler.find((l) => yol === `/stok/seri-listeler/${l.id}`);
+    if (ek) return json(200, { liste: ek, satirlar: [] });
     if (yol === '/stok/seri-listeler/3/islendi') {
       const ids = (govde?.satirIdler ?? []) as number[];
       liste = { ...liste, satirlar: liste.satirlar.map((s) => (ids.includes(s.id) ? { ...s, islendi: '2026-11-03T10:00:00+03:00' } : s)) };
@@ -103,12 +105,29 @@ const SATIRLAR = [satir(1, 'LOT:LT-8', '2'), satir(2, 'LOC:A-01-1'), satir(3, 'L
 describe('Seri listeler ekrani (1915)', () => {
   afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
+  it('acik listelerde satira basmak o listeyi acar; secili liste birincil degil, aria-current tasir', async () => {
+    kur(DEPOCU, SATIRLAR, [{ ...ozet, id: 4, acilis: '2026-11-03T08:00:00+03:00', satirSayisi: 0, acikSatir: 0 }]);
+    ac('/stok/seri-listeler');
+    const tablo = await screen.findByRole('table', { name: 'Açık listeler' });
+    await screen.findByRole('region', { name: 'Göz A-01-1' });
+    fireEvent.click(within(tablo).getAllByRole('row')[2]!.querySelector('td[data-baslik="Kaynak"]')!);
+    expect(await screen.findByText('Liste boş.')).toBeTruthy();
+    expect(within(tablo).getAllByRole('row')[2]!.querySelector('[aria-current="true"]')).not.toBeNull();
+    expect(tablo.querySelector('.tc-dugme-birincil')).toBeNull();
+  });
+
   it('bloklar gozle ayrilir; secilenler gozdeki goze tasinir, cok yerli satir atlanip listede kalir', async () => {
     const istekler = kur(DEPOCU, SATIRLAR);
     ac('/stok/seri-listeler');
     const blok = await screen.findByRole('region', { name: 'Göz A-01-1' });
     expect(await within(blok).findByText(/Bir kısmı başka yerde kayıtlı/)).toBeTruthy();
     expect(await screen.findByRole('region', { name: 'Göz okutulmadan' })).toBeTruthy();
+    // Bloklar ve açık listeler tek satırlı kayan tablodur; okunan satırın adı solda yapışık.
+    const satirlar = within(blok).getByRole('table', { name: 'Göz A-01-1' });
+    expect(satirlar.closest('.tc-tablo-kap')?.hasAttribute('data-kaydir')).toBe(true);
+    expect(within(satirlar).getByRole('columnheader', { name: 'Okunan' }).classList.contains('tc-tablo-sabit-sol')).toBe(true);
+    expect(screen.getByRole('table', { name: 'Açık listeler' }).closest('.tc-tablo-kap')?.hasAttribute('data-kaydir')).toBe(true);
+    expect((await screen.findByLabelText('Seç Deneme 2 · LT-8')).closest('[data-tur]')?.getAttribute('data-tur')).toBe('lot');
     fireEvent.click(await screen.findByLabelText('Seç Deneme 2 · LT-8'));
     fireEvent.click(screen.getByLabelText('Seç Deneme 3 · LT-9'));
     fireEvent.click(screen.getByRole('button', { name: /Taşı…/ }));

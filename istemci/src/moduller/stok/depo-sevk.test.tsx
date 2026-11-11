@@ -39,7 +39,10 @@ describe('Depo sevk', () => {
     ac('/stok/depo-sevk');
     const cikacak = await screen.findByRole('table', { name: 'Son çıkış bekleyen' });
     expect(within(cikacak).getByText('Erken çıkış')).toBeTruthy();
-    expect(within(cikacak).getByText('Fason gidişi · DENEME-UE-12 · OP 40')).toBeTruthy();
+    expect(within(cikacak).getByText('Fason gidişi')).toBeTruthy();
+    expect(within(cikacak).getByText('DENEME-UE-12 · OP 40')).toBeTruthy();
+    expect(cikacak.closest('.tc-tablo-kap')?.hasAttribute('data-kaydir')).toBe(true);
+    expect(within(cikacak).getByRole('columnheader', { name: 'Kalem' }).classList.contains('tc-tablo-sabit-sol')).toBe(true);
     fireEvent.click(within(cikacak).getByRole('button', { name: 'Çıkışı yap' }));
     await waitFor(() => expect(istekler.some((i) => i.yontem === 'POST' && i.yol === '/stok/depo-sevk/31/cikis')).toBe(true));
     expect(await screen.findByText('Eldeki kadar çıktı; 2 adet eksik.')).toBeTruthy();
@@ -47,6 +50,9 @@ describe('Depo sevk', () => {
     const girecek = screen.getByRole('table', { name: 'Kabul bekleyen' });
     expect(within(girecek).getByText('Firma getirir')).toBeTruthy();
     expect(within(girecek).getByText('10 / 25')).toBeTruthy();
+    expect(girecek.closest('.tc-tablo-kap')?.hasAttribute('data-kaydir')).toBe(true);
+    expect(within(girecek).getByRole('columnheader', { name: 'Kalem' }).classList.contains('tc-tablo-sabit-sol')).toBe(true);
+    expect(within(girecek).getByRole('button', { name: 'Kabul et' }).closest('td')?.classList.contains('tc-tablo-sabit-sag')).toBe(true);
     fireEvent.click(within(girecek).getByRole('button', { name: 'Kabul et' }));
     expect(await screen.findByText(/^Sevkiyat kalemi:/)).toBeTruthy();
     await waitFor(() => expect((screen.getAllByLabelText(/Sayılan miktar/) as HTMLInputElement[]).map((k) => k.value)).toEqual(['15']));

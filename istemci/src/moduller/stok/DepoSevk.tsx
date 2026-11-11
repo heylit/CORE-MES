@@ -18,15 +18,8 @@ const KABUL_FISI: Record<KalemKaynagi, string> = {
   urun: '', fason: '', 'fason-donus': 'Karantinaya giriş; kararı GKK verir', alim: 'Sipariş satırına giriş fişi', elle: 'Giriş fişi',
 };
 
-function isHucresi(s: DepoSevkSatiri) {
-  const no = [s.emirNo, s.opNo === null ? null : `OP ${s.opNo}`].filter(Boolean).join(' · ');
-  return (
-    <span className="tc-stok-ad">
-      <strong>{s.malzemeAd ?? (s.malzemeId === null ? 'Malzeme' : `#${s.malzemeId}`)}</strong>
-      <span>{[KAYNAK_ADI[s.kaynak], no].filter(Boolean).join(' · ')}</span>
-    </span>
-  );
-}
+const kalemAdi = (s: DepoSevkSatiri): string => s.malzemeAd ?? (s.malzemeId === null ? 'Malzeme' : `#${s.malzemeId}`);
+const emirMetni = (s: DepoSevkSatiri): string => [s.emirNo, s.opNo === null ? null : `OP ${s.opNo}`].filter(Boolean).join(' · ');
 
 export function DepoSevk() {
   const cikisYapar = useIslem('stok.cikis');
@@ -45,23 +38,26 @@ export function DepoSevk() {
     });
   };
   const sutunlar = (tur: 'cikis' | 'kabul'): Sutun<DepoSevkSatiri>[] => [
-    { anahtar: 'is', baslik: 'Kalem', hucre: isHucresi },
+    { anahtar: 'is', baslik: 'Kalem', sabit: 'sol', kes: true, csv: kalemAdi, hucre: (s) => <strong>{kalemAdi(s)}</strong> },
+    { anahtar: 'kaynak', baslik: 'Kaynak', hucre: (s) => KAYNAK_ADI[s.kaynak] || '—' },
+    { anahtar: 'emir', baslik: 'Emir', mono: true, hucre: (s) => emirMetni(s) || '—' },
     {
       anahtar: 'adet', baslik: 'Adet', hizala: 'sag', kirilmaz: true,
       hucre: (s) => (s.adet === null ? '—' : s.kabulAdet === null ? miktarMetni(s.adet) : `${miktarMetni(s.kabulAdet)} / ${miktarMetni(s.adet)}`),
     },
-    { anahtar: 'firma', baslik: 'Firma', hucre: (s) => s.firmaAd ?? '—' },
+    { anahtar: 'firma', baslik: 'Firma', kes: true, hucre: (s) => s.firmaAd ?? '—' },
     {
       anahtar: 'tasima', baslik: 'Taşıma',
       hucre: (s) => (s.tasima === 'firma' ? <Rozet ton="pasif">{tur === 'cikis' ? 'Firma alır' : 'Firma getirir'}</Rozet> : <Rozet ton="bilgi">Sevkiyat aracı</Rozet>),
     },
     {
       anahtar: 'tetik', baslik: 'Düştü', kirilmaz: true,
-      hucre: (s) => <span className="tc-stok-ad"><span>{zamanMetni(s.tetiklendi)}</span>{s.erken && <Rozet ton="uyari">Erken çıkış</Rozet>}</span>,
+      hucre: (s) => zamanMetni(s.tetiklendi),
     },
-    { anahtar: 'ne', baslik: tur === 'cikis' ? 'Stok' : 'Fiş', hucre: (s) => (tur === 'cikis' ? CIKIS_YERI[s.kaynak] : KABUL_FISI[s.kaynak]) || '—' },
+    { anahtar: 'erken', baslik: 'Erken', csv: (s) => (s.erken ? 'Erken çıkış' : ''), hucre: (s) => (s.erken ? <Rozet ton="uyari">Erken çıkış</Rozet> : '—') },
+    { anahtar: 'ne', baslik: tur === 'cikis' ? 'Stok' : 'Fiş', kes: true, hucre: (s) => (tur === 'cikis' ? CIKIS_YERI[s.kaynak] : KABUL_FISI[s.kaynak]) || '—' },
     {
-      anahtar: 'eylem', baslik: '', hizala: 'sag',
+      anahtar: 'eylem', baslik: '', hizala: 'sag', sabit: 'sag',
       hucre: (s) => (tur === 'cikis'
         ? cikisYapar && <Dugme tur="birincil" simge="upload" yukleniyor={cikis.isPending && cikis.variables === s.kalemId} onClick={() => cikisYap(s)}>Çıkışı yap</Dugme>
         : kabulYapar && <Dugme tur="birincil" simge="download" onClick={() => { void yonlendir(kabulYolu(s.kalemId)); }}>Kabul et</Dugme>),
@@ -75,10 +71,10 @@ export function DepoSevk() {
     <section className="tc-stok">
       <SayfaBasi baslik="Depo sevk" alt="Sevkiyatın tetiklediği gidişler son çıkış, gelişler kabul bekler. Firma kendisi alıyor ya da getiriyorsa kalem serbest bırakılınca düşer." />
       <Kart baslik={`Son çıkış bekleyen · ${cikacak.length}`}>
-        <Tablo etiket="Son çıkış bekleyen" sutunlar={sutunlar('cikis')} satirlar={cikacak} satirAnahtari={(s) => s.kalemId} mesgul={liste.isPending} bosMesaj="Son çıkış bekleyen kalem yok." />
+        <Tablo etiket="Son çıkış bekleyen" kip="kaydir" sutunlar={sutunlar('cikis')} satirlar={cikacak} satirAnahtari={(s) => s.kalemId} mesgul={liste.isPending} bosMesaj="Son çıkış bekleyen kalem yok." />
       </Kart>
       <Kart baslik={`Kabul bekleyen · ${girecek.length}`}>
-        <Tablo etiket="Kabul bekleyen" sutunlar={sutunlar('kabul')} satirlar={girecek} satirAnahtari={(s) => s.kalemId} mesgul={liste.isPending} bosMesaj="Kabul bekleyen kalem yok." />
+        <Tablo etiket="Kabul bekleyen" kip="kaydir" sutunlar={sutunlar('kabul')} satirlar={girecek} satirAnahtari={(s) => s.kalemId} mesgul={liste.isPending} bosMesaj="Kabul bekleyen kalem yok." />
       </Kart>
     </section>
   );

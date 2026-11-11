@@ -12,12 +12,12 @@ import { SayfaBasi, hataMetni, useIslem } from './ortak.tsx';
 import './stok.css';
 
 const satirSutunlari = (ambar: boolean): Sutun<MalzemeFisiSatiri>[] => [
+  { anahtar: 'ad', baslik: 'Malzeme', sabit: 'sol', kes: true, hucre: (s) => s.malzemeAd ?? `Kart ${s.malzemeId}` },
   { anahtar: 'kod', baslik: 'Stok kodu', mono: true, hucre: (s) => s.stokKodu ?? <Rozet ton="hata">Kart kodu yok</Rozet> },
-  { anahtar: 'ad', baslik: 'Malzeme', hucre: (s) => s.malzemeAd ?? `Kart ${s.malzemeId}` },
   ...(ambar ? [{ anahtar: 'ambar', baslik: 'Ambar', mono: true, hucre: (s: MalzemeFisiSatiri) => `${s.kaynakAmbarNo ?? '—'} → ${s.hedefAmbarNo ?? '—'}` }] : []),
   { anahtar: 'miktar', baslik: 'Miktar', hizala: 'sag', hucre: (s) => <strong>{miktarMetni(s.miktar)}</strong> },
   { anahtar: 'birim', baslik: 'Birim', hucre: (s) => s.birim ?? <Rozet ton="hata">Birim yok</Rozet> },
-  { anahtar: 'aciklama', baslik: 'Açıklama', hucre: (s) => s.aciklama ?? '—' },
+  { anahtar: 'aciklama', baslik: 'Açıklama', kes: true, hucre: (s) => s.aciklama ?? '—' },
 ];
 
 // Fişin Logo durumu Logo modülündedir; ekran gösterir. Gönder yalnız elle türde bekleyen ya da hatalı fişte görünür (295 a).
@@ -53,7 +53,7 @@ export function MalzemeFisi() {
         </div>
       </Kart>
       <Kart baslik="Satırlar">
-        <Tablo etiket="Fiş satırları" sutunlar={satirSutunlari(x.tur === 'ambar')} satirlar={f.data.satirlar} satirAnahtari={(s) => `${s.malzemeId}-${s.aciklama ?? ''}-${s.kaynakAmbarNo ?? ''}-${s.hedefAmbarNo ?? ''}`} bosMesaj="Fişte satır yok; boş fiş Logo'ya gitmez." />
+        <Tablo etiket="Fiş satırları" kip="kaydir" sutunlar={satirSutunlari(x.tur === 'ambar')} satirlar={f.data.satirlar} satirAnahtari={(s) => `${s.malzemeId}-${s.aciklama ?? ''}-${s.kaynakAmbarNo ?? ''}-${s.hedefAmbarNo ?? ''}`} bosMesaj="Fişte satır yok; boş fiş Logo'ya gitmez." />
       </Kart>
       <Kart baslik="Hareketler">
         <HareketTablosu satirlar={f.data.hareketler} />

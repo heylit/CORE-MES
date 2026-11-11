@@ -20,6 +20,9 @@ describe('Defter farkları (1692 a)', () => {
     sunucuKur(DENETCI, { 'GET /stok/defter-farklari': () => json(200, LISTE) });
     ac('/stok/defter-farklari');
     const tablo = await screen.findByRole('table', { name: 'Bakiye ve defter farkları' });
+    expect(tablo.closest('.tc-tablo-kap')?.hasAttribute('data-kaydir')).toBe(true);
+    expect(within(tablo).getByRole('columnheader', { name: 'Konum' }).classList.contains('tc-tablo-sabit-sol')).toBe(true);
+    expect(within(tablo).getByRole('columnheader', { name: 'Parti' })).toBeTruthy();
     expect(within(tablo).getByText('Deneme flanş')).toBeTruthy();
     expect(within(tablo).getByText('+2,5')).toBeTruthy();
     expect(screen.getByText('1 eksende fark var')).toBeTruthy();
