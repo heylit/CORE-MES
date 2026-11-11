@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import type { MalzemelerCevabi, MalzemeStokSatiri, TurListesiCevabi } from '#paylasilan/sozlesme/stok.ts';
 import { DEPOCU, OKUYUCU, ac, json, sunucuKur } from './test-ortak.tsx';
@@ -14,7 +14,7 @@ const cevap = (satirlar: MalzemeStokSatiri[]): MalzemelerCevabi => ({ satirlar, 
 const hucre = (baslik: string) => document.querySelector(`td[data-baslik="${baslik}"]`);
 
 beforeEach(() => { localStorage.clear(); });
-afterEach(() => { cleanup(); });
+afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
 describe('Malzeme tablosu (2905)', () => {
   it('kayan tablo: Malzeme solda, işlemler sağda sabit; yeni dört alan kendi sütununda', async () => {
@@ -71,7 +71,10 @@ describe('Malzeme tablosu (2905)', () => {
     sunucuKur(DEPOCU, { 'GET /stok/malzemeler': () => json(200, cevap([SATIR])), 'GET /stok/panel': () => json(200, PANEL) });
     ac('/stok/malzemeler');
     await screen.findByText('Deneme sac');
-    expect(screen.getByRole('link', { name: 'Hareketler: Deneme sac' }).getAttribute('href')).toBe('/stok/hareketler?malzemeId=901');
+    fireEvent.click(screen.getByRole('button', { name: 'Deneme sac: diğer işlemler' }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Hareketler' }));
+    expect(await screen.findByRole('heading', { name: 'Hareketler' })).toBeTruthy();
+    expect(screen.queryByRole('table', { name: 'Malzeme stokları' })).toBeNull();
   });
 
   it('tür sekmesine geçince arama metni taşınır ve tür listesini süzer', async () => {
@@ -104,7 +107,8 @@ describe('Malzeme tablosu işlem sütunu', () => {
     await screen.findByText('Deneme sac');
     const hucre = document.querySelector('td.tc-tablo-sabit-sag')!;
     expect(hucre.textContent).toBe('');
-    for (const ad of ['Taşı: Deneme sac', 'Çıkış: Deneme sac', 'Sepete ekle: Deneme sac']) {
+    // Sık iş (taşı) görünür; çıkış, sepete ekleme ve hareketler "diğer işlemler" menüsündedir (3026 a).
+    for (const ad of ['Taşı: Deneme sac', 'Deneme sac: diğer işlemler']) {
       const d = within(hucre as HTMLElement).getByRole('button', { name: ad });
       expect(d.getAttribute('title')).toBeTruthy();
     }
@@ -118,5 +122,35 @@ describe('Malzeme tablosu işlem sütunu', () => {
     expect(hucre.textContent).toBe('');
     expect(within(hucre).getByRole('button', { name: 'QR etiketi: Deneme sac' })).toBeTruthy();
     expect(within(hucre).getByRole('link', { name: 'QR etiketi: Deneme sac' }).getAttribute('href')).toContain('901');
+  });
+});
+
+// 3026 a: depocunun ilk baktığı miktar adın hemen yanında; kod, tür ve kategori sağda. İşlemler sabit sütunu en sonda.
+describe('Stok listelerinde miktar önce (3026)', () => {
+  it('Malzemeler: Serbest, Toplam, Birim, Durum ve Konumlar adın yanında; Stok kodu, Tür, Kategori sonra', async () => {
+    sunucuKur(DEPOCU, { 'GET /stok/malzemeler': () => json(200, cevap([SATIR])), 'GET /stok/panel': () => json(200, PANEL) });
+    ac('/stok/malzemeler');
+    const tablo = await screen.findByRole('table', { name: 'Malzeme stokları' });
+    const basliklar = within(tablo).getAllByRole('columnheader').map((h) => h.textContent?.trim() ?? '');
+    const sira = (ad: string) => basliklar.findIndex((b) => b.startsWith(ad));
+    const m = sira('Malzeme');
+    expect(['Serbest', 'Toplam', 'Birim', 'Durum', 'Konumlar', 'Stok kodu', 'Tür', 'Kategori'].map(sira)).toEqual([m + 1, m + 2, m + 3, m + 4, m + 5, m + 6, m + 7, m + 8]);
+    expect(basliklar.at(-1)).toBe('İşlemler');
+  });
+
+  it('alt şerit menüdeki adları taşır; dar ekranda "İstekler" görünür, erişilebilir ad tam kalır', async () => {
+    sunucuKur(DEPOCU, { 'GET /stok/malzemeler': () => json(200, cevap([SATIR])), 'GET /stok/panel': () => json(200, PANEL) });
+    ac('/stok/malzemeler');
+    const serit = await screen.findByRole('navigation', { name: 'Depocu kısayolları' });
+    await waitFor(() => expect(within(serit).getAllByRole('button').map((d) => d.textContent?.trim())).toEqual(['Okut', 'Transfer', 'Malzeme istekleri']));
+    cleanup();
+    vi.stubGlobal('matchMedia', (q: string) => ({ matches: q.includes('767'), media: q, addEventListener: () => undefined, removeEventListener: () => undefined }));
+    sunucuKur(DEPOCU, { 'GET /stok/malzemeler': () => json(200, cevap([SATIR])), 'GET /stok/panel': () => json(200, PANEL) });
+    ac('/stok/malzemeler');
+    const dar = await screen.findByRole('navigation', { name: 'Depocu kısayolları' });
+    const istek = await within(dar).findByRole('button', { name: 'Malzeme istekleri' });
+    expect(istek.textContent?.trim()).toBe('İstekler');
+    expect(within(dar).queryByText('Taşı')).toBeNull();
+    expect(within(dar).queryByText('Hazırlık')).toBeNull();
   });
 });

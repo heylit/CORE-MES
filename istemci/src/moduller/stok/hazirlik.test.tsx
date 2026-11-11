@@ -209,21 +209,23 @@ describe('Hazırlık: malzeme istekleri', () => {
     const tablo = await screen.findByRole('table', { name: 'Malzeme istekleri' });
     expect(tablo.closest('.tc-tablo-kap')?.hasAttribute('data-kaydir')).toBe(true);
     expect(within(tablo).getAllByRole('columnheader').map((h) => h.textContent?.trim())).toEqual(
-      ['', 'İstek', 'Malzeme', 'Açıklama', 'Miktar', 'Karşılanan', 'Nereye', 'İsteyen', 'Açılış', 'Durum', 'Toplama listesi', '']);
+      ['', 'İstek', 'Malzeme', 'Miktar', 'Karşılanan', 'Durum', 'Nereye', 'İsteyen', 'Açılış', 'Açıklama', 'Toplama listesi', '']);
     const [, ilk, ikinci] = within(tablo).getAllByRole('row');
     const h = within(ilk!).getAllByRole('cell');
     expect(within(h[0]!).getByRole('checkbox', { name: 'MI-000031 seç' })).toBeTruthy();
     expect(h[1]!.classList.contains('tc-tablo-sabit-sol')).toBe(true);
     expect(h[1]!.textContent).toBe('MI-000031');
     expect(h[2]!.querySelector('.tc-tablo-kes')?.getAttribute('title')).toBe('Deneme sac');
-    expect(h[3]!.textContent).toBe('Yarın ilk iş');
-    expect(h[5]!.textContent).toBe('1');
+    expect(h[3]!.textContent).toBe('3');
+    expect(h[4]!.textContent).toBe('1');
+    expect(h[5]!.textContent).toBe('Stokta yok');
+    expect(h[9]!.textContent).toBe('Yarın ilk iş');
     expect(h[11]!.classList.contains('tc-tablo-sabit-sag')).toBe(true);
     expect(within(h[11]!).queryByRole('checkbox')).toBeNull();
     expect(within(h[11]!).getByRole('button', { name: 'Teslim et' })).toBeTruthy();
     const h2 = within(ikinci!).getAllByRole('cell');
     expect(within(h2[0]!).queryByRole('checkbox')).toBeNull();
-    expect(h2[5]!.textContent).toBe('—');
+    expect(h2[4]!.textContent).toBe('—');
     expect(within(h2[10]!).getByRole('link', { name: 'TL-000003' })).toBeTruthy();
     const listeler = await screen.findByRole('table', { name: 'Toplama listeleri' });
     expect(listeler.closest('.tc-tablo-kap')?.hasAttribute('data-kaydir')).toBe(true);
@@ -355,5 +357,55 @@ describe('Hazırlık: lot bekleyen kartlar (kart #154)', () => {
     ac('/stok/hazirlik');
     await screen.findByText(/Üretimin istediği malzemeyi/);
     await waitFor(() => expect(screen.queryByRole('table', { name: 'Lot bekleyen kartlar' })).toBeNull());
+  });
+});
+
+// 3033 a: iptal satırda değil "diğer işlemler" menüsünde ve onay sorar; sekmeler bekleyen sayıyı söyler; akış anlatımı kapalı gelir.
+describe('Malzeme istekleri sade düzen (3033)', () => {
+  const ACIK: MalzemeIstegi = { ...ISTEK, id: 40, no: 'MI-000040', durum: 'acik', surum: 3 };
+  const kur = () => sunucuKur(DEPOCU, {
+    'GET /stok/malzeme-istekleri': () => json(200, liste([ACIK])),
+    'GET /stok/malzeme-istekleri?durum=acik&sayfaBoyu=1': () => json(200, { ...liste([ACIK]), toplam: 3 }),
+    'GET /stok/malzeme-istekleri?durum=stok_yok&sayfaBoyu=1': () => json(200, { ...liste([]), toplam: 2 }),
+    'GET /stok/malzeme-istekleri?durum=hazirlaniyor&sayfaBoyu=1': () => json(200, { ...liste([]), toplam: 0 }),
+    'GET /stok/toplamalar': () => json(200, BOS_LISTELER),
+    'POST /stok/malzeme-istekleri/40/iptal-et': () => json(200, {}),
+  });
+
+  it('satırda kırmızı İptal yok; menüden seçilince onay sorar, Vazgeç bir şey göndermez, onay sürümle gönderir', async () => {
+    const istekler = kur();
+    ac('/stok/hazirlik');
+    const tablo = await screen.findByRole('table', { name: 'Malzeme istekleri' });
+    expect(within(tablo).queryByRole('button', { name: 'İptal' })).toBeNull();
+    fireEvent.click(within(tablo).getByRole('button', { name: 'MI-000040: diğer işlemler' }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'İsteği iptal et' }));
+    const pencere = await screen.findByRole('dialog', { name: 'MI-000040 iptal edilsin mi?' });
+    expect(pencere.textContent).toContain('Deneme sac');
+    fireEvent.click(within(pencere).getByRole('button', { name: 'Vazgeç' }));
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'MI-000040 iptal edilsin mi?' })).toBeNull());
+    expect(istekler.some((i) => i.yontem === 'POST')).toBe(false);
+    fireEvent.click(within(tablo).getByRole('button', { name: 'MI-000040: diğer işlemler' }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'İsteği iptal et' }));
+    fireEvent.click(within(await screen.findByRole('dialog', { name: 'MI-000040 iptal edilsin mi?' })).getByRole('button', { name: 'İsteği iptal et' }));
+    await waitFor(() => expect(istekler.find((i) => i.yontem === 'POST')).toMatchObject({ yol: '/stok/malzeme-istekleri/40/iptal-et', govde: { surum: 3 } }));
+  });
+
+  it('bekleyen sekmeler sayıyı söyler; sıfır sayı rozet çizmez', async () => {
+    kur();
+    ac('/stok/hazirlik');
+    const sekmeler = await screen.findByRole('tablist', { name: 'Durum' });
+    await waitFor(() => expect(within(sekmeler).getByRole('tab', { name: /^Açık/ }).textContent).toContain('3'));
+    expect(within(sekmeler).getByRole('tab', { name: /^Stokta yok/ }).textContent).toContain('2');
+    expect(within(sekmeler).getByRole('tab', { name: /^Hazırlanıyor/ }).querySelector('.tc-sekme-sayi')).toBeNull();
+  });
+
+  it('"Nasıl çalışır" kapalı gelir, düğmeyle açılır', async () => {
+    kur();
+    ac('/stok/hazirlik');
+    const dugme = await screen.findByRole('button', { name: 'Nasıl çalışır' });
+    expect(screen.queryByRole('list', { name: 'Nasıl çalışır' })).toBeNull();
+    expect(dugme.getAttribute('aria-expanded')).toBe('false');
+    fireEvent.click(dugme);
+    expect(within(screen.getByRole('list', { name: 'Nasıl çalışır' })).getAllByRole('listitem')).toHaveLength(4);
   });
 });

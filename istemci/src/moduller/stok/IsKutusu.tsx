@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { Link, useSearchParams } from 'react-router-dom';
-import type { DegerlemeYontemi, HaritaOzetiCevabi, IsKutusuCevabi, PanelCevabi, SayimBekleyenlerCevabi, SepetCevabi, StokDegeriCevabi, ToplamalarCevabi } from '#paylasilan/sozlesme/stok.ts';
+import type { DegerlemeYontemi, HaritaOzetiCevabi, IsKutusuCevabi, PanelCevabi, SayimBekleyenlerCevabi, StokDegeriCevabi } from '#paylasilan/sozlesme/stok.ts';
 import { Dugme, DurumKutusu, Kart } from '../../ortak/arayuz/index.ts';
 import { api } from '../../ortak/veri/api.ts';
 import { anahtarlar } from './anahtarlar.ts';
@@ -105,21 +105,6 @@ function SayimBekleyenler() {
   );
 }
 
-// Depocu açılışı herkesin açılışıdır: okut, sepet ve toplama öne alınır, kutucuklar yetkiyle süzülür.
-function DepocuAcilis() {
-  const sepetYetki = useIslem('stok.transfer'), toplamaYetki = useIslem('stok.toplama'), girisYetki = useIslem('stok.giris');
-  const sepet = useQuery({ queryKey: [...anahtarlar.hepsi, 'sepet'], queryFn: () => api.get<SepetCevabi>('/stok/sepet'), enabled: sepetYetki });
-  const toplama = useQuery({ queryKey: anahtarlar.liste('toplamalar-acik', {}), queryFn: () => api.get<ToplamalarCevabi>('/stok/toplamalar?durum=topluyor&sayfaBoyu=5'), enabled: toplamaYetki });
-  return (
-    <div className="tc-stok-depocu">
-      <button type="button" className="tc-stok-depocu-kutu tc-stok-depocu-ana" onClick={() => paneliAc({ sekme: 'sepet', depoSepeti: true })}><strong>Okut</strong><span>Ürün ya da raf kodunu okut</span></button>
-      {sepetYetki && <Link to="/stok/sepet" className="tc-stok-depocu-kutu"><strong>Transfer</strong><span>{sepet.data ? `${sepet.data.satirlar.length} kalem` : '—'}</span></Link>}
-      {toplamaYetki && <Link to={toplama.data?.satirlar[0] ? `/stok/hazirlik/${toplama.data.satirlar[0].id}` : '/stok/hazirlik'} className="tc-stok-depocu-kutu"><strong>Malzeme istekleri</strong><span>{toplama.data ? `${toplama.data.toplam ?? toplama.data.satirlar.length} açık toplama listesi` : '—'}</span></Link>}
-      {girisYetki && <button type="button" className="tc-stok-depocu-kutu" onClick={() => paneliAc({ sekme: 'okut' })}><strong>Mal kabul</strong><span>Okutarak teslim al</span></button>}
-    </div>
-  );
-}
-
 export function IsKutusu() {
   const tanimlar = useIslem('stok.tanim');
   const malKabulYetkisi = useIslem('stok.giris');
@@ -141,20 +126,8 @@ export function IsKutusu() {
           <Link to="/malzemeler"><Dugme simge="layers">Malzeme kartları</Dugme></Link>
         </>}
       />
-      <DepocuAcilis />
       {(s.isPending || p.isPending) && <DurumKutusu durum="yukleniyor" />}
       {s.isError && <DurumKutusu durum="hata" mesaj={hataMetni(s.error)} yenile={() => void s.refetch()} />}
-      {d && (
-        <div className="tc-stok-kpiler">
-          <Link to="/stok/malzemeler" className="tc-stok-kpi"><strong>{d.malzemeCesidi}</strong><span>Malzeme çeşidi</span></Link>
-          <StokDegeriKarti />
-          <Link to="/stok/raflar" className="tc-stok-kpi"><strong>%{d.gozToplam ? Math.round((d.gozDolu / d.gozToplam) * 100) : 0}</strong><span>Raf doluluğu ({d.gozDolu}/{d.gozToplam})</span></Link>
-          <Link to="/stok/malzemeler?durum=kritik" className={`tc-stok-kpi ${d.kritik + d.eksi ? 'tc-stok-kpi-uyari' : ''}`}><strong>{d.kritik + d.eksi}</strong><span>Kritik ya da eksi</span></Link>
-          <Link to="/stok/malzemeler?durum=kabulde" className="tc-stok-kpi"><strong>{d.kabulde}</strong><span>Mal kabul bekleyen</span></Link>
-          <Link to="/stok/hazirlik" className="tc-stok-kpi"><strong>{d.toplamaBekleyen}</strong><span>Toplama bekleyen</span></Link>
-          <div className={`tc-stok-kpi ${s.data?.sayimBekleyen ? 'tc-stok-kpi-uyari' : ''}`}><strong>{s.data?.sayimBekleyen ?? '—'}</strong><span>Sayım bekleyen konum</span></div>
-        </div>
-      )}
       {s.data && (
         <Kart baslik="Bekleyen işler">
           <div className="tc-stok-isler">
@@ -167,6 +140,16 @@ export function IsKutusu() {
             ))}
           </div>
         </Kart>
+      )}
+      {d && (
+        <div className="tc-stok-kpiler">
+          <Link to="/stok/malzemeler" className="tc-stok-kpi"><strong>{d.malzemeCesidi}</strong><span>Malzeme çeşidi</span></Link>
+          <StokDegeriKarti />
+          <Link to="/stok/raflar" className="tc-stok-kpi"><strong>%{d.gozToplam ? Math.round((d.gozDolu / d.gozToplam) * 100) : 0}</strong><span>Raf doluluğu ({d.gozDolu}/{d.gozToplam})</span></Link>
+          <Link to="/stok/malzemeler?durum=kritik" className={`tc-stok-kpi ${d.kritik + d.eksi ? 'tc-stok-kpi-uyari' : ''}`}><strong>{d.kritik + d.eksi}</strong><span>Kritik ya da eksi</span></Link>
+          <Link to="/stok/malzemeler?durum=kabulde" className="tc-stok-kpi"><strong>{d.kabulde}</strong><span>Mal kabul bekleyen</span></Link>
+          <Link to="/stok/hazirlik" className="tc-stok-kpi"><strong>{d.toplamaBekleyen}</strong><span>Açık toplama listesi</span></Link>
+        </div>
       )}
       {d && (
         <div className="tc-stok-izgara">

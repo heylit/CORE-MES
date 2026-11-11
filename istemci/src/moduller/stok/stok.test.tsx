@@ -87,8 +87,17 @@ describe('İş kutusu', () => {
     ac('/stok');
     const kabul = (await screen.findByText('Mal kabul bekleyen')).closest('a')!;
     expect([kabul.textContent, kabul.getAttribute('href')]).toEqual(['2Mal kabul bekleyen', '/stok/malzemeler?durum=kabulde']);
-    const toplama = screen.getByText('Toplama bekleyen').closest('a')!;
-    expect([toplama.textContent, toplama.getAttribute('href')]).toEqual(['3Toplama bekleyen', '/stok/hazirlik']);
+    const toplama = screen.getByText('Açık toplama listesi').closest('a')!;
+    expect([toplama.textContent, toplama.getAttribute('href')]).toEqual(['3Açık toplama listesi', '/stok/hazirlik']);
+  });
+  it('İş kutusu: Bekleyen işler sayı şeridinin üstündedir; sayım KPI ve büyük kısayol kutucukları yoktur (3034)', async () => {
+    sunucuKur(DEPOCU, { 'GET /stok/is-kutusu': () => json(200, { ...BOS_KUTU, eksiBakiye: 2 } satisfies IsKutusuCevabi), 'GET /stok/panel': () => json(200, PANEL) });
+    ac('/stok');
+    const baslik = await screen.findByText('Bekleyen işler');
+    const serit = (await screen.findByText('Mal kabul bekleyen')).closest('.tc-stok-kpiler')!;
+    expect(baslik.compareDocumentPosition(serit) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(Array.from(serit.querySelectorAll('.tc-stok-kpi span'), (e) => e.textContent)).not.toContain('Sayım bekleyen konum');
+    expect(screen.queryByText('Ürün ya da raf kodunu okut')).toBeNull();
   });
   it('veri olan işleri satır olarak gösterir; mal kabul düğmesi yalnız giriş işlemiyle', async () => {
     sunucuKur(DEPOCU, { 'GET /stok/is-kutusu': () => json(200, { ...BOS_KUTU, eksiBakiye: 2, logoFarki: 1 } satisfies IsKutusuCevabi) });
@@ -154,10 +163,11 @@ describe('Malzemeler', () => {
       'POST /stok/cikis': () => json(200, { hareketIdler: [99], onayliEksi: false }),
     });
     ac('/stok/malzemeler');
-    fireEvent.click(await screen.findByRole('button', { name: 'Çıkış: Deneme sac' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Deneme sac: diğer işlemler' }));
+    expect(screen.getByRole('menuitem', { name: 'Transfer sepetine ekle' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Çıkış' }));
     expect(await screen.findByText('Çıkış: A-01-02')).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Taşı: Deneme sac' })).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Sepete ekle: Deneme sac' })).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'QR etiketi: Deneme sac' })).toBeNull();
     fireEvent.change(screen.getByLabelText(/^Miktar/), { target: { value: '2' } });
     fireEvent.click(screen.getByRole('button', { name: 'Stoktan düş' }));
@@ -745,6 +755,8 @@ describe('Hareketler', () => {
     expect(tablo.closest('.tc-tablo-kap')?.hasAttribute('data-kaydir')).toBe(true);
     expect(within(tablo).getByRole('columnheader', { name: 'Malzeme' }).classList.contains('tc-tablo-sabit-sol')).toBe(true);
     expect(screen.getByRole('button', { name: 'Geri al' }).closest('td')?.classList.contains('tc-tablo-sabit-sag')).toBe(true);
+    // 3026 a: Yer ve Kim miktarın yanında; Parti, Statü, Not ve Belge sağda.
+    expect(within(tablo).getAllByRole('columnheader').map((h) => h.textContent?.trim())).toEqual(['Malzeme', 'Saat', 'Tür', 'Miktar', 'Yer', 'Kim', 'Parti', 'Statü', 'Not', 'Belge', '']);
   });
   it('emre bağlı hareket notunda emir numarasını yazar; numara yoksa kimliği yedek gösterir', async () => {
     const numarali = { ...H, id: 8, cikisNedeni: 'uretime_sarf', uretimEmriId: 41, emirNo: 'UE-0041' } as const;
@@ -1188,8 +1200,7 @@ describe('Arama, depocu modu, etiketler', () => {
   it.each([['depocu', DEPOCU], ['müdür', MUDUR]])('Stok Merkezi %s için de depocu açılışıyla gelir; alt çubuk durur, mod seçimi yoktur', async (_ad, kisi) => {
     sunucuKur(kisi, { 'GET /stok/is-kutusu': () => json(200, BOS_KUTU), 'GET /stok/panel': () => json(200, PANEL), 'GET /stok/sepet': () => json(200, { satirlar: [] }), 'GET /stok/toplamalar': () => json(200, { satirlar: [], toplam: 0, sayfa: 1, sayfaBoyu: 5 }) });
     ac('/stok');
-    expect(await screen.findByText('Ürün ya da raf kodunu okut')).toBeTruthy();
-    expect(screen.getByRole('navigation', { name: 'Depocu kısayolları' })).toBeTruthy();
+    expect(await screen.findByRole('navigation', { name: 'Depocu kısayolları' })).toBeTruthy();
     expect(screen.queryByRole('group', { name: 'Ekran modu' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Yönetici' })).toBeNull();
   });

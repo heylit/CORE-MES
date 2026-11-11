@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
-import { useMutation, useQuery } from '@tanstack/react-query';
+import { useMutation, useQueries, useQuery } from '@tanstack/react-query';
 import { Link, Navigate, useNavigate, useParams } from 'react-router-dom';
 import type {
   AdimToplaGovdesi, CikisOnerisiCevabi, KodCozCevabi, IstekTeslimGovdesi, LotBekleyenKartlarCevabi, MalzemeIstegi, MalzemeIstegiDurumu, MalzemeIstekleriCevabi, TeslimGonderGovdesi, TeslimKutusuCevabi, ToplamaAcGovdesi,
   ToplamaAyrintiCevabi, ToplamaKapatGovdesi, ToplamalarCevabi, YerdekiStokCevabi,
 } from '#paylasilan/sozlesme/stok.ts';
 import {
-  Dugme, DurumKutusu, Girdi, KodOkuyucu, Kart, Pencere, Rozet, Sayfalama, Secim, Sekmeler, Simge, Tablo, useOkutmaGecmisi,
+  Dugme, DurumKutusu, Girdi, KodOkuyucu, Kart, Menu, OnayPenceresi, Pencere, Rozet, Sayfalama, Secim, Sekmeler, Simge, Tablo, useOkutmaGecmisi,
   type KomutIsleyici, type OkutmaGecmisi, type OkutmaTonu, type RozetTonu, type Sutun,
 } from '../../ortak/arayuz/index.ts';
 import type { SimgeAdi } from '../../ortak/tasarim/simgeler.ts';
@@ -45,6 +45,19 @@ const HAZIRLIK_AKISI: readonly AkisAdimi[] = [
   { simge: 'route', baslik: 'Raf sırasıyla topla', alt: 'Liste gözleri yürüme sırasına dizer' },
   { simge: 'truck', baslik: 'Bitir', alt: 'Toplanan teslim yerine gider, istekler kapanır' },
 ];
+
+// Akış her gün aynıdır; ilk açılışta yer kaplamasın diye düğmeyle açılır.
+function NasilCalisir() {
+  const [acik, setAcik] = useState(false);
+  return (
+    <>
+      <div className="tc-stok-eylem">
+        <Dugme tur="ikincil" simge="help" aria-expanded={acik} onClick={() => setAcik((a) => !a)}>{acik ? 'Nasıl çalışır: gizle' : 'Nasıl çalışır'}</Dugme>
+      </div>
+      {acik && <AkisSeridi etiket="Nasıl çalışır" adimlar={HAZIRLIK_AKISI} />}
+    </>
+  );
+}
 
 const LISTE_DURUMU = { topluyor: { etiket: 'Topluyor', ton: 'bilgi' }, bitti: { etiket: 'Bitti', ton: 'tamam' }, iptal: { etiket: 'İptal', ton: 'pasif' } } as const;
 
@@ -263,7 +276,11 @@ function Istekler() {
   const [teslim, setTeslim] = useState<MalzemeIstegi | null>(null);
   const sorgu = new URLSearchParams({ sayfa: String(sayfa), ...(durum === '' ? {} : { durum }) });
   const l = useQuery({ queryKey: anahtarlar.liste('malzeme-istekleri', { durum, sayfa }), queryFn: () => api.get<MalzemeIstekleriCevabi>(`/stok/malzeme-istekleri?${sorgu}`) });
-  const iptal = useStokKomutu((g: { id: number; surum: number }) => api.post(`/stok/malzeme-istekleri/${g.id}/iptal-et`, { surum: g.surum }), 'İstek iptal edildi.');
+  const sayilar = useBekleyenSayilari();
+  const sekmeler = SEKMELER.map((k) => (k.anahtar in sayilar ? { ...k, sayi: sayilar[k.anahtar as BekleyenDurum] } : k));
+  const [iptalEdilecek, setIptalEdilecek] = useState<MalzemeIstegi | null>(null);
+  const iptal = useStokKomutu((g: { id: number; surum: number }) => api.post(`/stok/malzeme-istekleri/${g.id}/iptal-et`, { surum: g.surum }), 'İstek iptal edildi.',
+    () => setIptalEdilecek(null));
   const secilebilir = (i: MalzemeIstegi) => yazabilir && ACIK.includes(i.durum) && i.toplamaId === null && !i.yoldaTeslim;
   const secililer = Object.values(secim);
   const degistir = (i: MalzemeIstegi) => setSecim((s) => { const y = { ...s }; if (y[i.id]) delete y[i.id]; else y[i.id] = i; return y; });
@@ -275,20 +292,21 @@ function Istekler() {
       ? <input type="checkbox" aria-label={`${i.no} seç`} checked={secim[i.id] !== undefined} onChange={() => degistir(i)} /> : <span />) }] : []),
     { anahtar: 'no', baslik: 'İstek', mono: true, kirilmaz: true, sabit: 'sol', hucre: (i) => i.no },
     { anahtar: 'malzeme', baslik: 'Malzeme', kes: true, csv: malzemeAdi, hucre: (i) => <strong>{malzemeAdi(i)}</strong> },
-    { anahtar: 'aciklama', baslik: 'Açıklama', kes: true, hucre: (i) => i.aciklama ?? '—' },
     { anahtar: 'miktar', baslik: 'Miktar', hizala: 'sag', hucre: (i) => miktarMetni(i.miktar) },
     { anahtar: 'karsilanan', baslik: 'Karşılanan', hizala: 'sag', hucre: (i) => (i.karsilanan === null ? '—' : miktarMetni(i.karsilanan)) },
+    { anahtar: 'durum', baslik: 'Durum', csv: (i) => istekDurumu(i).etiket, hucre: (i) => <Rozet ton={istekDurumu(i).ton}>{istekDurumu(i).etiket}</Rozet> },
     { anahtar: 'yer', baslik: 'Nereye', kes: true, hucre: yerAdi },
     { anahtar: 'kim', baslik: 'İsteyen', kes: true, hucre: (i) => i.kisiAd ?? '—' },
     { anahtar: 'acilis', baslik: 'Açılış', hucre: (i) => zamanMetni(i.acilis) },
-    { anahtar: 'durum', baslik: 'Durum', csv: (i) => istekDurumu(i).etiket, hucre: (i) => <Rozet ton={istekDurumu(i).ton}>{istekDurumu(i).etiket}</Rozet> },
+    { anahtar: 'aciklama', baslik: 'Açıklama', kes: true, hucre: (i) => i.aciklama ?? '—' },
     { anahtar: 'toplama', baslik: 'Toplama listesi', mono: true, csv: (i) => i.toplamaNo ?? '',
       hucre: (i) => (i.toplamaId !== null ? <Link to={`/stok/hazirlik/${i.toplamaId}`}>{i.toplamaNo}</Link> : '—') },
     ...(yazabilir ? [{
       anahtar: 'eylem', baslik: '', hizala: 'sag' as const, sabit: 'sag' as const, csv: false as const, hucre: (i: MalzemeIstegi) => (secilebilir(i) ? (
         <span className="tc-stok-dugmeler">
           <Dugme simge="truck" onClick={() => setTeslim(i)}>Teslim et</Dugme>
-          <Dugme tur="tehlike" onClick={() => iptal.komut.mutate({ id: i.id, surum: i.surum })}>İptal</Dugme>
+          <Menu etiket={`${i.no}: diğer işlemler`} ipucu="Diğer işlemler"
+            ogeler={[{ anahtar: 'iptal', baslik: 'İsteği iptal et', simge: 'x', ton: 'tehlike', sec: () => setIptalEdilecek(i) }]} />
         </span>
       ) : <span />),
     }] : []),
@@ -296,7 +314,7 @@ function Istekler() {
   return (
     <Kart baslik="Bekleyen istekler">
       <div className="tc-stok-form">
-        <Sekmeler etiket="Durum" sekmeler={SEKMELER} secili={durum} sec={(d) => { setDurum(d); setSayfa(1); setSecim({}); }} />
+        <Sekmeler etiket="Durum" sekmeler={sekmeler} secili={durum} sec={(d) => { setDurum(d); setSayfa(1); setSecim({}); }} />
         {yazabilir && <p className="tc-stok-not">Tek isteği hemen götürecekseniz satırdaki "Teslim et". Birkaç isteği aynı turda toplamak için kutucukla seçip "Liste aç".</p>}
         {secililer.length > 0 && (
           <div className="tc-stok-eylem">
@@ -315,8 +333,28 @@ function Istekler() {
         ? <KisiyeTeslim istek={teslim} kapat={() => setTeslim(null)} />
         : <IstasyonaTeslim istek={teslim} istasyonId={teslim.istasyonId} kapat={() => setTeslim(null)} />)}
       {iptal.onayPenceresi}
+      <OnayPenceresi acik={iptalEdilecek !== null} tehlikeli baslik={`${iptalEdilecek?.no ?? ''} iptal edilsin mi?`} onayMetni="İsteği iptal et" yukleniyor={iptal.komut.isPending}
+        onayla={() => { if (iptalEdilecek) iptal.komut.mutate({ id: iptalEdilecek.id, surum: iptalEdilecek.surum }); }} vazgec={() => setIptalEdilecek(null)}>
+        <p>{iptalEdilecek ? `${malzemeAdi(iptalEdilecek)}, miktar ${miktarMetni(iptalEdilecek.miktar)}. ` : ''}İstek kapanır; malzeme yine gerekirse isteyen kişi yeni istek açar.</p>
+      </OnayPenceresi>
     </Kart>
   );
+}
+
+// Sekmelerdeki sayı, o sekmede görünecek satır sayısıdır: üç bekleyen durum için birer küçük sorgu (yalnız toplam okunur).
+const BEKLEYEN_DURUMLAR = ['acik', 'stok_yok', 'hazirlaniyor'] as const;
+type BekleyenDurum = (typeof BEKLEYEN_DURUMLAR)[number];
+function useBekleyenSayilari(): Partial<Record<BekleyenDurum, number>> {
+  const sonuc = useQueries({
+    queries: BEKLEYEN_DURUMLAR.map((d) => ({
+      queryKey: anahtarlar.liste('malzeme-istekleri', { durum: d, sayi: true }),
+      queryFn: () => api.get<MalzemeIstekleriCevabi>(`/stok/malzeme-istekleri?durum=${d}&sayfaBoyu=1`),
+    })),
+  });
+  return Object.fromEntries(BEKLEYEN_DURUMLAR.flatMap((d, n) => {
+    const t = sonuc[n]?.data?.toplam;
+    return typeof t === 'number' ? [[d, t]] : [];
+  }));
 }
 
 function Listeler() {
@@ -556,7 +594,7 @@ export function Hazirlik() {
   return (
     <section className="tc-stok">
       <SayfaBasi baslik="Malzeme istekleri" aciklama="Üretimin istediği malzemeyi raftan toplayıp istasyona ya da kişiye götürün. İstek olmadan yer değiştirmek için Transfer." />
-      <AkisSeridi etiket="Nasıl çalışır" adimlar={HAZIRLIK_AKISI} />
+      <NasilCalisir />
       <Istekler />
       <Listeler />
       {/* Refakat kartı işi; isteklerle ilgisi yok, sayfayı o açmasın diye en altta. */}

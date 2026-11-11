@@ -1,4 +1,4 @@
-import { useId, useLayoutEffect, useRef, useState } from 'react';
+import { useId, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react';
 import type { Islem } from '#paylasilan/islemler.ts';
 import type { STOK_ISLEMLERI } from '#paylasilan/islemler/stok.ts';
 import type { KaliteDurumu } from '#paylasilan/sozlesme/stok.ts';
@@ -47,15 +47,25 @@ export function useStokOkur(): boolean {
   return stokOkumaTam && islemler.some((i) => (STOK_OKUMA as readonly string[]).includes(i));
 }
 
-// Stok Merkezi herkese depocu düzeniyle açılır (kart #1225): her stok ekranının altında Okut, Taşı, Hazırlık çubuğu durur;
+// Stok Merkezi herkese depocu düzeniyle açılır (kart #1225): her stok ekranının altında Okut, Transfer, Malzeme istekleri çubuğu durur;
 // yönetici görünümü ve mod seçimi yoktur, maddeler yetkiyle süzülür.
+// Telefonda üç düğme eşit bölünür; menüdeki uzun ad 360 px'te sığmaz. Kısa ad yalnız görünen metindir, erişilebilir ad menüdekiyle aynı kalır.
+// Eşik stok.css'teki telefon düzeniyle (767 px) aynıdır.
+const DAR_EKRAN = '(max-width: 767px)';
+const darEkranDinle = (bildir: () => void) => {
+  const m = typeof window.matchMedia === 'function' ? window.matchMedia(DAR_EKRAN) : null;
+  m?.addEventListener('change', bildir);
+  return () => m?.removeEventListener('change', bildir);
+};
+const darEkranMi = () => typeof window.matchMedia === 'function' && window.matchMedia(DAR_EKRAN).matches;
 function DepocuCubugu() {
   const tasi = useIslem('stok.transfer'), toplama = useIslem('stok.toplama');
+  const dar = useSyncExternalStore(darEkranDinle, darEkranMi, () => false);
   return (
     <nav className="tc-stok-depocu-cubuk" aria-label="Depocu kısayolları">
       <Dugme tur="birincil" simge="scan" onClick={() => paneliAc({ sekme: 'sepet', depoSepeti: true })}>Okut</Dugme>
-      {tasi && <Link to="/stok/sepet"><Dugme simge="box">Taşı</Dugme></Link>}
-      {(tasi || toplama) && <Link to="/stok/hazirlik"><Dugme simge="list">Hazırlık</Dugme></Link>}
+      {tasi && <Link to="/stok/sepet"><Dugme simge="box">Transfer</Dugme></Link>}
+      {(tasi || toplama) && <Link to="/stok/hazirlik"><Dugme simge="list" aria-label="Malzeme istekleri">{dar ? 'İstekler' : 'Malzeme istekleri'}</Dugme></Link>}
     </nav>
   );
 }

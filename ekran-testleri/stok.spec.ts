@@ -82,3 +82,20 @@ test('Okut paneli: kamera önce, kutucuklar görünür ve ekranlarını açar', 
   expect(ag.hatalar.filter((h) => !h.includes('/api/recete-rota/statuler') && !h.includes('status of 403'))).toEqual([]);
   expect(ag.yazmalar, 'paneli açmak ve sekme değiştirmek yazmaz').toEqual([]);
 });
+
+// 3026 a: alt şerit menüdeki adları taşır; telefonda "Malzeme istekleri" kısa adla ("İstekler") sığar, sayfa yana taşmaz.
+test('Depocu şeridi: Transfer ve Malzeme istekleri; dar ekranda kısa ad, taşma yok', async ({ page, ag, ac }) => {
+  await ac('/stok/malzemeler');
+  const cubuk = page.getByRole('navigation', { name: 'Depocu kısayolları' });
+  await expect(cubuk).toBeVisible();
+  const istek = cubuk.getByRole('button', { name: 'Malzeme istekleri' });
+  await expect(cubuk.getByRole('button', { name: 'Transfer' })).toBeVisible();
+  await expect(istek).toBeVisible();
+  const genislik = page.viewportSize()?.width ?? 0;
+  await expect(istek).toHaveText(genislik < 768 ? 'İstekler' : 'Malzeme istekleri');
+  for (const d of await cubuk.getByRole('button').all()) {
+    expect(await d.evaluate((e) => e.scrollWidth - e.clientWidth), `${await d.innerText()} düğmesinde metin taşıyor`).toBeLessThanOrEqual(1);
+  }
+  expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth), 'sayfa yana taşıyor').toBeLessThanOrEqual(0);
+  expect(ag.hatalar).toEqual([]);
+});
