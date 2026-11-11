@@ -2626,6 +2626,30 @@ describe('satin-alma sürüm 6 (gerçek PostgreSQL)', () => {
   const kgListe = async (kalite: string) => tamam<KgFiyatlariCevabi>(await istek(c.sa, 'GET', '/satin-alma-kg-fiyatlari')).fiyatlar.filter((f) => f.kaliteKodu === kalite);
   const gunOnce = (g: string, n: number) => new Date(Date.parse(`${g}T12:00:00Z`) - n * 86400000).toISOString().slice(0, 10);
 
+  test('2891-1: birim fiyat kg fiyatı x parça ağırlığı; metre ve metrekare stoklu kartta karşılık yok (boş), adet stoklu kartta dolu', async () => {
+    const g = await bugun();
+    const kart = async (kimlik: string, kod: string, birim: string, d: number): Promise<number> => {
+      tamam(await istek(c.yonetici, 'POST', `/malzeme-katalogu-kartlari/${kimlik}/kaydet`, {
+        kayit: { id: kimlik, tur: 'hammadde', fam: 'metal', grade: 'DENEME-OL', form: 'cubuk', dims: { d, l: 6000 }, com: { kod, ad: `Deneme ${kod}`, birim }, onay: { durum: 'aktif' } },
+        ozet: { benzersiz_anahtar: `hammadde|satin-alma|${kimlik}`, mukerrer_gerekcesi: null, birim_agirlik_kg: 2 }, surum: null,
+      }));
+      return (await ortam!.sahip.tx((db) => db.tek<{ no: number }>('SELECT no FROM malzeme_katalog_karti WHERE kimlik = $1', [kimlik])))!.no;
+    };
+    const adet = await kart('sa-ol-1', 'HM-SAT-00011', 'adet', 21);
+    const metre = await kart('sa-ol-2', 'HM-SAT-00012', 'm', 22);
+    const alan = await kart('sa-ol-3', 'HM-SAT-00013', 'm²', 23);
+    tamam(await istek(c.sa, 'POST', '/satin-alma-kg-fiyatlari/ekle', { satirlar: [
+      { kaliteKodu: 'DENEME-OL', form: 'cubuk', kgFiyati: '50', talasKgFiyati: '10', paraBirimi: 'TRY', gecerlilik: g }] }));
+    const m = await vt().tx((db) => servis.malzemeKgFiyatlari(db, [adet, metre, alan]));
+    assert.deepEqual([Number(m.get(adet)?.kgFiyati), Number(m.get(adet)?.birimFiyati), Number(m.get(adet)?.tryBirimFiyati)], [50, 100, 100]);
+    for (const no of [metre, alan]) {
+      assert.deepEqual([Number(m.get(no)?.kgFiyati), m.get(no)?.birimFiyati, m.get(no)?.tryBirimFiyati], [50, null, null], String(no));
+    }
+    const gun = await vt().tx((db) => servis.degerlemeKgFiyatlari(db, [adet, metre, alan], g));
+    assert.deepEqual([gun.get(adet), gun.get(metre), gun.get(alan)], [
+      { tryBirimFiyati: '100', tryTalasBirimFiyati: '20' }, { tryBirimFiyati: null, tryTalasBirimFiyati: null }, { tryBirimFiyati: null, tryTalasBirimFiyati: null }]);
+  });
+
   test('2455-2 a: kartlarda olmayan kalite + form satır numarasıyla 422 alır ve hiçbir satır yazılmaz; formsuz satır kalitenin her formuna uyar; kaynak yazılır', async () => {
     const g = await bugun();
     await kaliteKarti('DENEME-DG', 'cubuk');

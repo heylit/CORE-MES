@@ -434,6 +434,29 @@ describe('proje-maliyet (gerçek PostgreSQL, gerçek giriş)', () => {
     assert.equal((await vt().tx((db) => uretimEmriMalzemeMaliyetleri(db, []))).size, 0);
   });
 
+  test('2891-1: metre stoklu hammaddede kg fiyatından birim fiyat yok, emrin malzeme maliyeti bilinmez (null); adet stoklu kartta kg fiyatı x parça ağırlığı', async () => {
+    // Kart fikstürü (mamulAc gibi doğrudan): hammadde, kalite + form, stok birimi ve parça ağırlığı.
+    const kart = async (birim: string): Promise<number> => {
+      const kimlik = `pm-dnm-${(sayac += 1)}`;
+      await ortam!.sahip.sorgu("INSERT INTO malzeme_katalog_kod_sirasi (onek, son_sira) VALUES ('PM-DNM-', 0) ON CONFLICT (onek) DO NOTHING");
+      return (await ortam!.sahip.tek<{ no: number }>(
+        `INSERT INTO malzeme_katalog_karti (kimlik, tur, onek, sira_no, onay_durumu, kayit, birim_agirlik_kg, acan_kisi_id, guncelleyen_kisi_id)
+         VALUES ($1, 'hammadde', 'PM-DNM-', $2, 'aktif', $3, 2, $4, $4) RETURNING no`,
+        [kimlik, sayac, JSON.stringify({ id: kimlik, tur: 'hammadde', grade: 'DENEME-PMO', form: 'cubuk', com: { ad: 'Deneme hammadde', birim } }), yoneticiId],
+      ))!.no;
+    };
+    await ortam!.sahip.sorgu("INSERT INTO satin_alma_kg_fiyati (kalite_kodu, form, kg_fiyati, para_birimi, gecerlilik, kisi_id) VALUES ('DENEME-PMO', 'cubuk', 50, 'TRY', current_date, $1)", [yoneticiId]);
+    const emirMaliyeti = async (malzemeNo: number): Promise<number | null | undefined> => {
+      const { isEmriId } = await isEmriAc(null, { adet: 1 });
+      const emir = (await vt().tek<{ id: number }>('SELECT uretim_emri_id AS id FROM uretim_emirleri_is_emri WHERE id = $1', [isEmriId]))!.id;
+      await ortam!.sahip.sorgu('INSERT INTO uretim_emirleri_is_emri_bileseni (is_emri_id, malzeme_no, miktar, fire_yuzde) VALUES ($1, $2, 2, 0)', [isEmriId, malzemeNo]);
+      return (await vt().tx((db) => uretimEmriMalzemeMaliyetleri(db, [emir]))).get(emir);
+    };
+    // Tek adetlik emir, 2 birim bileşen: 2 x (50 TL/kg x 2 kg) = 200; ürünün net ağırlığı yok, talaş düşülmez.
+    assert.equal(await emirMaliyeti(await kart('adet')), 200);
+    assert.equal(await emirMaliyeti(await kart('m')), null);
+  });
+
   test('PM-34 kâr riski oranı (227 a): plan bedel ayarından okunur; müdür değiştirince proje maliyeti de değişir', async () => {
     await ortam!.sahip.sorgu('UPDATE plan_ayari SET kar_riski_orani_gun = 0.5');
     const c = await vt().tx((db) => projeMaliyeti(db, kullanici(['finans.maliyet-oku', FIYAT_ISLEMI]), siparisli.id, SIMDI));

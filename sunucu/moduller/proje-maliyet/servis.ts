@@ -14,7 +14,7 @@ import type { BirimMaliyeti } from '../finans/disari.ts';
 import { canliSira, karRiskiOraniGun } from '../plan/disari.ts';
 import { projeGetir } from '../projeler/disari.ts';
 import { malzemeMaliyetBilgileri } from '../malzemeler/disari.ts';
-import { isEmriFasonTutarlari, malzemeKgFiyatlari, siparisBirimFiyatlari } from '../satin-alma/disari.ts';
+import { isEmriFasonTutarlari, malzemeKgFiyatlari, siparisBirimFiyatlari, stokBirimiBasinaKg } from '../satin-alma/disari.ts';
 import { emirSarfSonAlisTutarlari } from '../stok/disari.ts';
 import { siparisAyrintisi, siparisSatiriOzetleri } from '../siparisler/disari.ts';
 import { bitenIsEmirleri, emirlerinMalzemeIhtiyaci, emirlerinProjeleri, isEmriPlanBilgileri, isEmriSureleri, projeninIsEmirleri, uretimEmriOzeti } from '../uretim-emirleri/disari.ts';
@@ -159,10 +159,9 @@ async function malzemeHazirla(db: Db, emirIdleri: readonly number[], ekNolar: re
     satirlar.filter((b) => !icUrunler.has(b.malzemeNo)).map((b) => {
       const bilgi = bilgiler.get(b.malzemeNo);
       const fiyat = fiyatlar.get(b.malzemeNo);
-      const kgMi = bilgi?.stokBirimi?.trim().toLocaleLowerCase('tr-TR') === 'kg';
       return {
         malzemeNo: b.malzemeNo, brut: b.miktar, tryBirimFiyati: sayi(fiyat?.tryBirimFiyati), hammadde: (bilgi?.kaliteKodu ?? null) !== null,
-        kgBasina: kgMi ? 1 : bilgi?.birimKg ?? null, tryTalasKgFiyati: sayi(fiyat?.tryTalasKgFiyati),
+        kgBasina: stokBirimiBasinaKg(bilgi?.stokBirimi ?? null, bilgi?.birimKg ?? null), tryTalasKgFiyati: sayi(fiyat?.tryTalasKgFiyati),
       };
     });
   const netKg = (emirId: number): number | null => {

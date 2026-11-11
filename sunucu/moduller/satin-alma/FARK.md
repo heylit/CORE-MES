@@ -508,3 +508,9 @@ Kullanıcı: "yaz" (13.10.2026). Finans ve stok tarafı aynı dalda (yalnız yen
   (2. kısım) Talepler listesinde ve talep başlığında grup satırı ("Güncellemeleri: ..." / "Güncelleme grubu: ... (ilk talep) ..."), aramada öteki
   üyenin numarası; iptal talepte grubun başka talebi siparişte ya da teslim alınmışsa "İptali geri al"ın yanında ikinci alım uyarısı.
 
+# FARK: satin-alma, uzunluk ve alan stoklu kartta kg fiyatından birim fiyat yok (kart 2891-1; 11.11.2026)
+
+- `birim_agirlik_kg` bütün parça ya da ambalaj başınadır (2871 Maliyet E1). Önce birim fiyat (SAT-77) metre ya da metrekare stoklu kartta kg fiyatını
+  bu ağırlıkla çarpıyordu; stok değeri, plan birim fiyatı ve proje maliyeti yanlış olabiliyordu. Artık tek kural `stokBirimiBasinaKg` (kurallar.ts,
+  disari.ts ile dışarı verilir): kg 1; OLCULU_STOK_BIRIMLERI boş; öteki birim parça ağırlığı. birimFiyati, birimKarsiligi (SAT-78, davranış aynı) ve
+  proje-maliyet bileşeninin kg başına değeri bunu kullanır. Boş birim fiyat fiyatsız sayılır (sıfır uydurulmaz). Kayıtlı veri, göç, uç, yetki değişmedi.

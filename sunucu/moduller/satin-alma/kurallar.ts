@@ -999,11 +999,20 @@ export function talebimKalemReddi(
 export const OLCULU_STOK_BIRIMLERI: readonly string[] = ['mm', 'cm', 'm', 'mt', 'metre', 'mm2', 'mm²', 'cm2', 'cm²', 'm2', 'm²', 'metrekare'];
 export interface BirimKarsiligi { miktar: string; birim: string }
 const birimAdi = (b: string | null): string => (b ?? '').trim().toLocaleLowerCase('tr-TR');
+// 2891-1: stok biriminin bir birimi kaç kg. birim_agirlik_kg bütün parça ya da ambalaj başınadır; uzunluk ve alan stoklu kartta karşılığı yoktur
+// (metre ağırlığı sunucuda yok). Birim fiyat (SAT-77), kg karşılığı (SAT-78) ve proje maliyeti aynı kuralı kullanır.
+export function stokBirimiBasinaKg(stokBirimi: string | null, birimKg: number | null): number | null {
+  const stok = birimAdi(stokBirimi);
+  if (stok === 'kg') return 1;
+  if (OLCULU_STOK_BIRIMLERI.includes(stok)) return null;
+  return birimKg === null || !(birimKg > 0) ? null : birimKg;
+}
 export function birimKarsiligi(miktar: string | null, birim: string, kart: { stokBirimi: string | null; birimKg: number | null } | undefined): BirimKarsiligi | null {
-  if (miktar === null || kart === undefined || kart.birimKg === null || !(kart.birimKg > 0)) return null;
+  if (miktar === null || kart === undefined) return null;
   const stok = birimAdi(kart.stokBirimi);
-  if (stok === '' || stok === 'kg' || OLCULU_STOK_BIRIMLERI.includes(stok)) return null;
-  const kg = kart.birimKg.toFixed(OLCEK);
+  const kgBasina = stokBirimiBasinaKg(kart.stokBirimi, kart.birimKg);
+  if (stok === '' || stok === 'kg' || kgBasina === null) return null;
+  const kg = kgBasina.toFixed(OLCEK);
   if (birimAdi(birim) === 'kg') {
     const m = ondalikBol(miktar, kg);
     return m === null ? null : { miktar: m, birim: kart.stokBirimi!.trim() };
@@ -1151,8 +1160,9 @@ export function stokTutari(kalemler: readonly { miktar: string; tryBirimFiyati: 
 // Stok birimi başına fiyat: birim kg ise kg fiyatı; değilse kartın birim ağırlığıyla; ağırlık bilinmiyorsa boş (uydurulmaz).
 export function birimFiyati(kgFiyati: string | null, stokBirimi: string | null, birimKg: number | null): string | null {
   if (kgFiyati === null) return null;
-  if (stokBirimi !== null && stokBirimi.trim().toLocaleLowerCase('tr-TR') === 'kg') return kgFiyati;
-  return birimKg === null || !(birimKg > 0) ? null : ondalikCarp(kgFiyati, birimKg.toFixed(OLCEK));
+  if (birimAdi(stokBirimi) === 'kg') return kgFiyati;
+  const kgBasina = stokBirimiBasinaKg(stokBirimi, birimKg);
+  return kgBasina === null ? null : ondalikCarp(kgFiyati, kgBasina.toFixed(OLCEK));
 }
 
 // 2455-A: kg fiyatı girişinin denetimi ve izlenmesi. Bölme yarım yukarı yuvarlanır; bölen sıfırsa boş.
