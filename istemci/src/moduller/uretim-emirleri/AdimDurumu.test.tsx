@@ -119,6 +119,8 @@ describe('Adım Durumu (2893, düzen 2955)', () => {
     fireEvent.click(onayla);
     await waitFor(() => expect(istekler.some((i) => i.yontem === 'POST')).toBe(true));
     expect(istekler.find((i) => i.yontem === 'POST')?.govde).toEqual({ madde: 'cnc', gerekce: 'Program elde denendi', sistemHali: 'eksik' });
+    // Uç tekrar korumalıdır: kimliksiz istek 400 "Bu komut istek kimliği ister." alır.
+    expect(istekler.find((i) => i.yontem === 'POST')?.kimlik).toMatch(/^[0-9a-f-]{36}$/);
   });
 
   it('yetkili statüyü notla elle yazar; statü seçilmeden Yaz kapalı; elle statüyü kaldır kendi ucuna gider', async () => {
@@ -143,6 +145,9 @@ describe('Adım Durumu (2893, düzen 2955)', () => {
     fireEvent.click(within(pencere).getByRole('button', { name: 'Elle statüyü kaldır' }));
     await waitFor(() => expect(istekler.some((i) => i.yontem === 'POST' && i.yol.endsWith('/statu-kaldir'))).toBe(true));
     expect(istekler.find((i) => i.yol.endsWith('/statu-kaldir'))?.govde).toEqual({});
+    const kimlikler = istekler.filter((i) => i.yontem === 'POST').map((i) => i.kimlik);
+    expect(kimlikler.every((k) => typeof k === 'string' && k.length === 36)).toBe(true);
+    expect(new Set(kimlikler).size).toBe(kimlikler.length);
   });
 
   it('yetkili elle onayı kaldırır; istek yalnız maddeyi taşır', async () => {
@@ -158,6 +163,7 @@ describe('Adım Durumu (2893, düzen 2955)', () => {
     const istek = istekler.find((i) => i.yontem === 'POST');
     expect(istek?.yol.endsWith('/is-emirleri/52/hazirlik-onay-kaldir')).toBe(true);
     expect(istek?.govde).toEqual({ madde: 'malzeme' });
+    expect(istek?.kimlik).toMatch(/^[0-9a-f-]{36}$/);
   });
 
   it('kapalı emirde yetkili de yazma alanı görmez', async () => {

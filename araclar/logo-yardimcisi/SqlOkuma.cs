@@ -14,7 +14,7 @@ namespace LogoYardimcisi
     {
         public readonly string MalzemeRef, Malzeme, MalzemeRefIle, HizmetRefIle, MalzemeKodlari, MalzemeKartlari, StokToplamlari, CariAra, Cari, BirimSetleri, Ambarlar, Cariler, CariRef, Hizmet, Siparis, SiparisRefIle, SiparisSatirlari,
             MalKabul, Faturalar, Talep, TalepSatirlari, Karsilamalar, KarsilamaBul, SatisMusterisi, Teklif, TeklifRefIle, TeklifSatirlari,
-            MalzemeFisi, MalzemeFisiSatirlari, MalzemeHareketleri, SonAlisFiyatlari, SiparisIcerikBasligi, SiparisIcerikSatirlari;
+            MalzemeFisi, MalzemeFisiSatirlari, MalzemeHareketleri, SonAlisFiyatlari, SiparisIcerikBasligi, SiparisIcerikSatirlari, SiparisSatirBirimleri;
 
         // Rehberde kolon olarak geçmeyen, Logo'nun genel adlandırmasından alınanlar (VARSAYIM).
         public static readonly string[] Dogrulanmadi =
@@ -26,6 +26,7 @@ namespace LogoYardimcisi
             "LG_<f>_SRVCARD.ACTIVE (0 kullanımda) ve Logo Objects ACTIVE alanı (malzeme ve hizmet kartı) kart pasife almada",
             "LG_<f>_<d>_STLINE.DATE_, TRCODE (1 alış), IOCODE (1, 2 giriş; 3, 4 çıkış), CANCELLED, SOURCEINDEX, PRICE, PRCURR, PRPRICE, CLIENTREF (2961-D4 okumaları)",
             "LG_<f>_<d>_ORFICHE.DATE_; LG_<f>_<d>_ORFLINE.PRICE, PRPRICE, VAT, UOMREF, DUEDATE, LINEEXP; LG_<f>_SRVCARD.DEFINITION_ satır adı (2987 sipariş içeriği; ölçüm bekliyor, kart 2980 b)",
+            "LG_<f>_<d>_ORFLINE.UOMREF -> LG_<f>_UNITSETL.CODE satır birimi (3007: düzenleme birimi yalnız değiştiyse yazar; ölçüm bekliyor, kart 2980 b)",
         };
 
         public Sorgular(int firma, int donem)
@@ -96,6 +97,9 @@ namespace LogoYardimcisi
             SiparisIcerikSatirlari = "SELECT L.LOGICALREF, L.LINETYPE, " + satirKodu + ", CASE WHEN L.LINETYPE = 4 THEN S.DEFINITION_ ELSE I.NAME END, L.AMOUNT, U.CODE,"
                 + " L.PRICE, L.PRPRICE, L.VAT, L.DUEDATE, L.LINEEXP, L.CLOSED FROM " + d("ORFLINE") + " L" + kodBirlesimi + " LEFT JOIN " + f("UNITSETL")
                 + " U ON U.LOGICALREF = L.UOMREF WHERE L.ORDFICHEREF = @ref ORDER BY L.LOGICALREF";
+            // 3007: satır birimi; birimi okunamayan satır listede yoktur (Logo'da açılmış siparişte düzenleme reddeder, CORE siparişinde birim yazılır).
+            SiparisSatirBirimleri = "SELECT L.LOGICALREF, U.CODE FROM " + d("ORFLINE") + " L JOIN " + f("UNITSETL")
+                + " U ON U.LOGICALREF = L.UOMREF WHERE L.ORDFICHEREF = @ref";
             MalzemeFisiSatirlari = "SELECT L.LOGICALREF, L.LINETYPE, I.CODE, L.AMOUNT FROM " + d("STLINE") + " L LEFT JOIN " + f("ITEMS")
                 + " I ON I.LOGICALREF = L.STOCKREF WHERE L.STFICHEREF = @ref ORDER BY L.LOGICALREF";
         }
@@ -461,6 +465,17 @@ namespace LogoYardimcisi
                 l.Add(x);
             }
             return l;
+        }
+
+        public Dictionary<int, string> SiparisSatirBirimleri(int fisRef)
+        {
+            var d = new Dictionary<int, string>();
+            foreach (var s in Sorgula(q.SiparisSatirBirimleri, P("@ref", fisRef)))
+            {
+                var kod = Metin(s[1]);
+                if (!string.IsNullOrEmpty(kod)) d[Tam(s[0])] = kod;
+            }
+            return d;
         }
 
         public List<MalKabulSatiri> MalKabul(int sonGorulen, int enCok)

@@ -264,6 +264,9 @@ namespace LogoYardimcisi
         FisBasligi Siparis(string no, int trcode);
         FisBasligi SiparisRefIle(int kayit, int trcode);
         List<FisSatiri> SiparisSatirlari(int fisRef);
+        // Kart 3007: satırın Logo'daki birim kodu (satır ref -> kod; birimi okunamayan satır listede yok). Düzenleme birimi yalnız değiştiyse yazar;
+        // birim okunamazsa Logo'da açılmış siparişte (externalOrder) reddeder, CORE siparişinde yazar.
+        Dictionary<int, string> SiparisSatirBirimleri(int fisRef);
         List<MalKabulSatiri> MalKabul(int sonGorulen, int enCok);
         List<FaturaOzeti> Faturalar(int siparisRef);
         FisBasligi Talep(string no);

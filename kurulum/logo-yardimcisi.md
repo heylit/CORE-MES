@@ -113,6 +113,10 @@ yalnız bu koşuda açılan ve numarası SQL'den yeniden okunup önekle başlad�
 - İskonto Logo'da ayrı alan değildir: birim fiyata yedirilir, satır açıklamasına "(isk. %n)" yazılır. Nakliye ve diğer masraf Logo'ya gitmez.
 - Düzenleme `POST /api/PurchaseOrder/UpdateRich` (Read+Modify+Post); kapatma `POST /{no}/close {lineRefs}`; iptal önce talep karşılamasını kaldırır
   (`DELETE /api/DemandFiche/peg/byOrder/{ref}`), sonra `POST /{no}/cancel` (Logo'da fiş silinmez, iptal görünür).
+- Düzenlemede var olan satırın Logo'daki değeri korunur (kart 3007 a): birim ve çevrim katsayıları yalnız birim değiştiyse yazılır (birim harf
+  duyarsız karşılaştırılır), ilk termin (`ORG_DUE_DATE`) yalnız yeni satırda yazılır. Logo'daki birim okunamazsa: Logo'da açılmış siparişin
+  düzeltmesinde (gövdede `externalOrder: true`, D7) "Logo'ya yazılmadı" reddi döner; CORE'un kendi siparişinde birim eskisi gibi yazılır.
+  Satır birimi okuması (`ORFLINE.UOMREF` -> `UNITSETL.CODE`) ölçülmedi (kart 2980 b); D7 anahtarı açılmadan önce ölçülür.
 - Onaylı talep Logo talep fişi olur (`POST /api/DemandFiche/AddRich`, onaylı açılır); siparişe bağlanan talep kalemi karşılama olur
   (`POST /api/DemandFiche/peg`, önce `GET peg/byOrder/{ref}` ile okunur). Talep fişini numarayla bulma ucu yok (TMI tarafında): sonucu bilinmeyen gönderim
   kendiliğinden yinelenmez, "Logo'da kontrol edin" hatası görünür.

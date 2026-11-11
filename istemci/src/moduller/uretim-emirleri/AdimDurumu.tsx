@@ -5,6 +5,7 @@ import type { AdimDurumuCevabi, AdimliListeCevabi, AdimStatusu, AdimTedariki, Ha
 import { CokSatir, Dugme, DurumKutusu, Girdi, Kart, Pencere, Rozet, Secim, Simge, Tablo, useBildirim, type RozetTonu, type Sutun } from '../../ortak/arayuz/index.ts';
 import type { SimgeAdi } from '../../ortak/tasarim/simgeler.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
+import { yeniIstekKimligi } from '../../ortak/veri/istek-kimligi.ts';
 import { tarihMetni } from '../../ortak/veri/zaman-metni.ts';
 import { useOturum } from '../../ortak/veri/oturum.ts';
 import { ADIM_DURUMU_YAZ, ELLE_YAZILIR, STATU, adimDurumuUcu, isEmriKomutu } from './adim-durumu.ts';
@@ -17,6 +18,7 @@ import './adim-durumu.css';
 type Adim = AdimDurumuCevabi['adimlar'][number];
 type Emir = AdimliListeCevabi['emirler'][number];
 type AdimMaddesi = Adim['maddeler'][number];
+type Komut = { yol: Parameters<typeof isEmriKomutu>[2]; govde: Record<string, unknown> };
 const ACIK = new Set(['taslak', 'planli', 'basladi']);
 // Sunucu kuralıyla aynı sınır (uretim-emirleri kurallar.ts GEREKCE_EN_AZ); sunucu kısa gerekçeyi 400 ile reddeder.
 const GEREKCE_EN_AZ = 5;
@@ -279,8 +281,8 @@ function AdimAyrintisi({ emirId, adim, yazar }: { emirId: number; adim: Adim; ya
   const [madde, maddeYaz] = useState<HazirlikMaddesi | ''>('');
   const [gerekce, gerekceYaz] = useState('');
   const komut = useMutation({
-    mutationFn: ({ yol, govde }: { yol: Parameters<typeof isEmriKomutu>[2]; govde: Record<string, unknown> }) =>
-      api.post<AdimDurumuCevabi>(isEmriKomutu(emirId, adim.isEmriId, yol), govde),
+    mutationFn: ({ yol, govde, istekKimligi }: Komut & { istekKimligi: string }) =>
+      api.post<AdimDurumuCevabi>(isEmriKomutu(emirId, adim.isEmriId, yol), govde, { istekKimligi }),
     onSuccess: (c) => {
       istemci.setQueryData(anahtarlar.adimDurumu(emirId), c);
       bildir('tamam', 'Kaydedildi.');
@@ -288,6 +290,8 @@ function AdimAyrintisi({ emirId, adim, yazar }: { emirId: number; adim: Adim; ya
     },
     onError: async (x) => { bildir('hata', hataIletisi(x, 'Kaydedilemedi.')); await istemci.invalidateQueries({ queryKey: anahtarlar.adimDurumu(emirId) }); },
   });
+  // Kimlik tıklamada üretilir: sunucu aynı tıklamanın yeniden gönderimini ikinci kez uygulamaz (tekrarKorumali uçlar).
+  const yap = (k: Komut) => komut.mutate({ ...k, istekKimligi: yeniIstekKimligi() });
   const onaylanir = adim.maddeler.filter((m) => (m.hal === 'eksik' || m.hal === 'bilinmiyor') && !adim.onaylar.some((o) => o.madde === m.madde));
   const seciliMadde = adim.maddeler.find((m) => m.madde === madde);
   const gerekceGerek = madde !== '' && !MADDE[madde].uyarir;
@@ -337,8 +341,8 @@ function AdimAyrintisi({ emirId, adim, yazar }: { emirId: number; adim: Adim; ya
             <div className="tc-emir-ust">
               {/* Pencerede tek birincil eylem kalır: hazırlık onayı işi başlatır, elle statü yalnız bilgi yazar. */}
               <Dugme simge="check" disabled={statu === '' || komut.isPending}
-                onClick={() => komut.mutate({ yol: 'statu-yaz', govde: { statu, not: not.trim() === '' ? null : not.trim(), sistemStatusu: adim.sistemStatusu } })}>Yaz</Dugme>
-              {adim.elle !== null && <Dugme simge="x" disabled={komut.isPending} onClick={() => komut.mutate({ yol: 'statu-kaldir', govde: {} })}>Elle statüyü kaldır</Dugme>}
+                onClick={() => yap({ yol: 'statu-yaz', govde: { statu, not: not.trim() === '' ? null : not.trim(), sistemStatusu: adim.sistemStatusu } })}>Yaz</Dugme>
+              {adim.elle !== null && <Dugme simge="x" disabled={komut.isPending} onClick={() => yap({ yol: 'statu-kaldir', govde: {} })}>Elle statüyü kaldır</Dugme>}
             </div>
           </section>
           <section className="tc-kapanis-onay" aria-label="Hazırlığı elle onayla">
@@ -351,7 +355,7 @@ function AdimAyrintisi({ emirId, adim, yazar }: { emirId: number; adim: Adim; ya
                   rows={2} value={gerekce} onChange={(e) => gerekceYaz(e.target.value)} />
                 <div className="tc-emir-ust">
                   <Dugme tur="birincil" simge="check" disabled={seciliMadde === undefined || (gerekceGerek && gerekce.trim().length < GEREKCE_EN_AZ) || komut.isPending}
-                    onClick={() => { if (seciliMadde) komut.mutate({ yol: 'hazirlik-onayla', govde: { madde: seciliMadde.madde, gerekce: gerekce.trim() === '' ? null : gerekce.trim(), sistemHali: seciliMadde.hal } }); }}>
+                    onClick={() => { if (seciliMadde) yap({ yol: 'hazirlik-onayla', govde: { madde: seciliMadde.madde, gerekce: gerekce.trim() === '' ? null : gerekce.trim(), sistemHali: seciliMadde.hal } }); }}>
                     Onayla
                   </Dugme>
                 </div>
@@ -368,7 +372,7 @@ function AdimAyrintisi({ emirId, adim, yazar }: { emirId: number; adim: Adim; ya
               <li key={o.madde}>
                 <time dateTime={o.zaman}>{zamanMetni(o.zaman)}</time>
                 {MADDE[o.madde].ad} · {o.kisiAdi ?? 'Kişi'}{o.gerekce === null ? '' : ` · ${o.gerekce}`}
-                {yazar && <> <Dugme simge="x" disabled={komut.isPending} onClick={() => komut.mutate({ yol: 'hazirlik-onay-kaldir', govde: { madde: o.madde } })}>Onayı kaldır</Dugme></>}
+                {yazar && <> <Dugme simge="x" disabled={komut.isPending} onClick={() => yap({ yol: 'hazirlik-onay-kaldir', govde: { madde: o.madde } })}>Onayı kaldır</Dugme></>}
               </li>
             ))}
           </ul>

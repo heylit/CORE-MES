@@ -606,7 +606,9 @@ namespace LogoYardimcisi
 
         // Satır alanları (rehber §5). İskonto TMI'de fiyata yedirilmiştir: DISCPER yazılmaz (tuzak 3). Termin satırdadır (tuzak 4).
         // Dövizde PRICE = EDT_PRICE * kur. yeni: XML ya da AppendLine ile açılan satır (ambar ve tutarlar da yazılır).
-        AlanListesi SiparisSatiriAlanlari(SiparisSatiri x, Doviz d, bool yeni)
+        // Kart 3007 a: var olan satırda Logo'daki değer korunur. Birim ve çevrim (UNIT_CONV1/2) yalnız birim değiştiyse yazılır; Logo'daki
+        // birim bilinmiyorsa CORE'un siparişinde yazılır, Logo'da açılmış siparişte satır SiparisGuncelle'de reddedilir; ilk termin (ORG_DUE_DATE) yalnız yeni satırda yazılır, var olan satırda yalnız termin (DUE_DATE) değişir.
+        AlanListesi SiparisSatiriAlanlari(SiparisSatiri x, Doviz d, bool yeni, string logoBirimi = null)
         {
             var a = new AlanListesi();
             a.Ekle("TYPE", x.Tur).Ekle("MASTER_CODE", x.Kod).Ekle("QUANTITY", x.Miktar);
@@ -614,8 +616,12 @@ namespace LogoYardimcisi
             a.Ekle("PRICE", tlFiyat);
             if (d != null) a.Ekle("EDT_PRICE", x.Fiyat).Ekle("EDT_CURR", d.Tur).Ekle("RC_XRATE", d.Kur);
             if (x.Kdv != null) a.Ekle("VAT_RATE", x.Kdv.Value);
-            a.Ekle("UNIT_CODE", x.Birim).Ekle("UNIT_CONV1", 1).Ekle("UNIT_CONV2", 1);
-            if (x.Termin != null) a.Ekle("DUE_DATE", x.Termin).Ekle("ORG_DUE_DATE", x.Termin);
+            if (yeni || !AyniBirim(logoBirimi, x.Birim)) a.Ekle("UNIT_CODE", x.Birim).Ekle("UNIT_CONV1", 1).Ekle("UNIT_CONV2", 1);
+            if (x.Termin != null)
+            {
+                a.Ekle("DUE_DATE", x.Termin);
+                if (yeni) a.Ekle("ORG_DUE_DATE", x.Termin);
+            }
             if (x.Aciklama != null) a.Ekle("TRANS_DESCRIPTION", x.Aciklama);
             if (yeni)
             {
@@ -624,6 +630,12 @@ namespace LogoYardimcisi
                 a.Ekle("TOTAL", tutar).Ekle("VAT_BASE", tutar).Ekle("VAT_AMOUNT", Bicim.Yuvarla(tutar * (x.Kdv ?? 0) / 100, 2));
             }
             return a;
+        }
+
+        // Birim kodu büyük-küçük harf ve baştaki/sondaki boşluk gözetmeden karşılaştırılır (VARSAYIM: Logo birim kodu harf duyarsız).
+        static bool AyniBirim(string logo, string gelen)
+        {
+            return logo != null && gelen != null && string.Equals(logo.Trim(), gelen.Trim(), StringComparison.OrdinalIgnoreCase);
         }
 
         // Satırın kodu Logo'da var mı: malzeme satırı ITEMS, hizmet satırı alınan/verilen hizmet kartı.
@@ -768,6 +780,11 @@ namespace LogoYardimcisi
             var tarih = Bicim.TarihDenetle(Json.Metin(g, "date", true), "date");
             var cari = Json.Metin(g, "arpCode", true);
             int? durum = g.ContainsKey("orderStatus") ? Secenek(g, "orderStatus", new[] { 1, 4 }) : (int?)null;
+            // externalOrder: CORE MES dışında, Logo'da açılmış siparişin düzeltmesi (D7). Orada Logo'daki birim okunamazsa yazılmaz.
+            object disDeger;
+            var disarida = g.TryGetValue("externalOrder", out disDeger);
+            if (disarida && !(disDeger is bool)) throw new GecersizIstek("externalOrder true ya da false olmalı.");
+            disarida = disarida && (bool)disDeger;
             var d = DovizCoz(g);
             var satirlar = new List<SiparisSatiri>();
             foreach (var s in Satirlar(g, "lines")) satirlar.Add(SiparisSatiriCoz(s));
@@ -781,6 +798,19 @@ namespace LogoYardimcisi
             var mevcut = oku.SiparisSatirlari(kayit);
             var mevcutRef = new Dictionary<int, FisSatiri>();
             foreach (var s in mevcut) mevcutRef[s.Ref] = s;
+            // Satır birimi okuması ölçülmedi (2980 b). Logo'da açılmış siparişte (externalOrder) okunamayan birim ret verir, Logo'ya hiçbir şey
+            // gitmez: 1/1 çevrimi yazmak Logo'daki gerçek çevrimi sessizce ezerdi (3007 Güvenlik K2, K3). CORE'un kendi siparişinde birimi CORE
+            // yazmıştır; okuma hatası bugün çalışan düzenlemeyi durdurmasın diye birim eskisi gibi yazılır (Test D1).
+            Dictionary<int, string> birimler;
+            try { birimler = oku.SiparisSatirBirimleri(kayit); }
+            catch (LogoBaglanamadi) { throw; }
+            catch (LogoOturumKoptu) { throw; }
+            catch (GecersizIstek) { throw; }
+            catch (Exception e)
+            {
+                if (disarida) return Cevap.Ret("Sipariş satırlarının Logo'daki birimi okunamadı (" + e.GetType().Name + "); Logo'ya yazılmadı.");
+                birimler = null;
+            }
 
             var degisen = new Dictionary<int, AlanListesi>();
             var yeniler = new List<AlanListesi>();
@@ -801,7 +831,10 @@ namespace LogoYardimcisi
                 if (!mevcutRef.TryGetValue(s.Ref.Value, out m)) return Cevap.Ret("Satır " + (i + 1) + ": Logo satırı " + s.Ref + " bu siparişte yok.");
                 if (m.Kapali) return Cevap.Ret("Satır " + (i + 1) + ": Logo'da kapalı satır değiştirilmez.");
                 if (!govdedeki.Add(s.Ref.Value)) return Cevap.Ret("Satır " + (i + 1) + ": aynı Logo satırı iki kez verilmiş.");
-                degisen[s.Ref.Value] = SiparisSatiriAlanlari(s, d, false);
+                string logoBirimi = null;
+                if ((birimler == null || !birimler.TryGetValue(s.Ref.Value, out logoBirimi)) && disarida)
+                    return Cevap.Ret("Satır " + (i + 1) + ": Logo satırı " + s.Ref + " biriminin Logo'daki değeri okunamadı; Logo'ya yazılmadı.");
+                degisen[s.Ref.Value] = SiparisSatiriAlanlari(s, d, false, logoBirimi);
             }
             var kapanan = new List<int>();
             foreach (var m in mevcut)
