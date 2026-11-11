@@ -4,6 +4,7 @@ import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { arkonuSun } from '../arkon/sun.ts';
+import { derlemeBilgisi } from './derleme-bilgisi.ts';
 import { CERCEVE_ILKESI, EK_GUVENLIK_BASLIKLARI, EVAL_ISTEYEN_CALISANLAR, ICERIK_ILKESI, ILKE_BASLIGI, ilkeSec } from './src/ortak/pwa/icerik-ilkesi.ts';
 import { webUygulamasi } from './src/ortak/pwa/vite-eklentisi.ts';
 import { tembelRotalar } from './src/ortak/rota/tembel-rotalar.ts';
@@ -11,19 +12,15 @@ import { tembelRotalar } from './src/ortak/rota/tembel-rotalar.ts';
 const kok = fileURLToPath(new URL('.', import.meta.url));
 const paylasilan = fileURLToPath(new URL('../paylasilan', import.meta.url));
 
-// Kabuk ve Sistem Ayarları'ndaki sürüm satırı: sürüm package.json'dan, tarih derleme anından, commit ortamdan ya da git'ten.
-function derlemeBilgisi(): { surum: string; tarih: string; commit: string | null } {
-  const paket = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')) as { version: string };
-  let commit = process.env['TMIV2_COMMIT']?.trim() || null;
-  if (commit === null) {
-    try {
-      commit = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: kok, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim() || null;
-    } catch { /* git yoksa commit bilinmez */ }
+function git(argumanlar: string[]): string | null {
+  try {
+    return execFileSync('git', argumanlar, { cwd: kok, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+  } catch {
+    return null;
   }
-  // Güncelleyici kurduğu yayının adını verir (araclar/guncelleyici.ts derlemeOrtami); elle kurulumda package.json sürümü kalır.
-  const surum = process.env['TMIV2_SURUM']?.trim() || paket.version;
-  return { surum, tarih: new Date().toISOString(), commit };
 }
+
+const paketSurumu = (JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')) as { version: string }).version;
 
 // Uygulama başka bir sitenin sayfasına gömülemez; kendi çerçeveleri (Arkon, prototip sayfaları) aynı kökendir ya da srcdoc'tur.
 // Derlenmiş sürüm tam ilkeyle sunulur (icerik-ilkesi.ts); Arkon sayfası ve STEP çalışanı bunu kendi ilkeleriyle değiştirir (arkon/sun.ts).
@@ -58,7 +55,7 @@ export default {
   root: kok,
   plugins: [tembelRotalar(), react(), arkonuSun(), webUygulamasi(), calisanIlkesi()],
   resolve: { alias: { '#paylasilan': paylasilan } },
-  define: { __TMI_DERLEME__: JSON.stringify(derlemeBilgisi()) },
+  define: { __TMI_DERLEME__: JSON.stringify(derlemeBilgisi({ env: process.env, paketSurumu, git, simdi: () => new Date() })) },
   server: {
     port: 4101,
     strictPort: true,
@@ -78,7 +75,7 @@ export default {
     // CI'da da düşmesin diye 15 saniye.
     testTimeout: 15_000,
     globals: true,
-    include: ['src/**/*.test.ts', 'src/**/*.test.tsx'],
+    include: ['src/**/*.test.ts', 'src/**/*.test.tsx', 'derleme-bilgisi.test.ts'],
     // Yalnız tema değişkenleri sayfaya işlenir: web uygulaması bildiriminin rengi tema zeminiyle hesaplanan stilden karşılaştırılır.
     css: { include: [/ortak\/tasarim\/tokens\.css$/] },
   },
