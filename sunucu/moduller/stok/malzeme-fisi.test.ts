@@ -99,7 +99,12 @@ describe('stok malzeme fişleri (gerçek PostgreSQL)', () => {
     assert.equal(c.durum, 200, JSON.stringify(c.govde));
     malzemeFisleriCevabi.parse(c.govde);
     assert.deepEqual(c.govde.satirlar.map((f) => f.tur).sort(), ['fire', 'sarf', 'uretim_girisi']);
-    assert.ok(c.govde.satirlar.every((f) => f.satirSayisi === 0 && f.emirNo !== null && f.no === f.emirNo));
+    const onek = { sarf: 'SR', uretim_girisi: 'UG', fire: 'FR' } as Record<string, string>;
+    assert.ok(c.govde.satirlar.every((f) => f.satirSayisi === 0 && f.emirNo !== null && f.no === `${onek[f.tur]}-${String(f.id).padStart(6, '0')}`));
+    // 2948: listedeki fiş numarasıyla arama aynı fişi bulur.
+    const sarf = c.govde.satirlar.find((f) => f.tur === 'sarf')!;
+    const bulunan = await fisler(`metin=${encodeURIComponent(sarf.no.toLowerCase())}`);
+    assert.deepEqual(bulunan.govde.satirlar.map((f) => f.id), [sarf.id]);
     // Logo modülü kablolamayla bağlı (kart #493): sarf ve giriş otomatik türde sıraya girecek, fire kapalı; hiçbiri elle gönderilemez.
     assert.deepEqual(Object.fromEntries(c.govde.satirlar.map((f) => [f.tur, f.logo.durum])), { sarf: 'bekliyor', uretim_girisi: 'bekliyor', fire: 'gonderilmez' });
     assert.ok(c.govde.satirlar.every((f) => !f.gonderilebilir));

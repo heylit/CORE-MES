@@ -837,11 +837,18 @@ describe('malzeme fişi kuralları (kart #492)', () => {
     assert.equal(hareketinFisBagi(h('cikis', { cikisNedeni: 'sevk', uretimEmriId: 3 })), null);
     assert.equal(hareketinFisBagi(h('giris', { girisKaynagi: 'mal_kabul', uretimEmriId: 3 })), null);
   });
-  test('fiş numarası: emir fişi emir no, yoksa emir kimliği; sayım ve ambar önekli; arama yalnız önekli numarayı çözer', () => {
-    assert.equal(malzemeFisiNo({ id: 9, tur: 'sarf', uretimEmriId: 4 }, 'UE-1'), 'UE-1');
-    assert.equal(malzemeFisiNo({ id: 9, tur: 'fire', uretimEmriId: 4 }, null), '#4');
-    assert.equal(malzemeFisiNo({ id: 12, tur: 'sayim_eksigi', uretimEmriId: null }, null), 'SE-000012');
-    assert.equal(malzemeFisiNo({ id: 12, tur: 'ambar', uretimEmriId: null }, null), 'AF-000012');
+  test('fiş numarası: her tür önek ve kimlik, Logo sınırına (16) sığar; emir numarası numaraya girmez; arama önekli numarayı çözer', () => {
+    assert.equal(malzemeFisiNo({ id: 4, tur: 'sarf' }), 'SR-000004');
+    assert.equal(malzemeFisiNo({ id: 5, tur: 'uretim_girisi' }), 'UG-000005');
+    assert.equal(malzemeFisiNo({ id: 6, tur: 'fire' }), 'FR-000006');
+    assert.equal(malzemeFisiNo({ id: 12, tur: 'sayim_eksigi' }), 'SE-000012');
+    assert.equal(malzemeFisiNo({ id: 12, tur: 'ambar' }), 'AF-000012');
+    for (const tur of ['sarf', 'uretim_girisi', 'fire', 'sayim_fazlasi', 'sayim_eksigi', 'ambar'] as const) {
+      assert.ok(malzemeFisiNo({ id: 2147483647, tur }).length <= 16, `${tur}: en büyük kimlik 16 karaktere sığar`);
+    }
+    assert.deepEqual(fisNoKimligi('sr-000004'), { tur: 'sarf', id: 4 });
+    assert.deepEqual(fisNoKimligi('UG-5'), { tur: 'uretim_girisi', id: 5 });
+    assert.deepEqual(fisNoKimligi('FR-000006'), { tur: 'fire', id: 6 });
     assert.deepEqual(fisNoKimligi('se-000012'), { tur: 'sayim_eksigi', id: 12 });
     assert.deepEqual(fisNoKimligi(' AF-7 '), { tur: 'ambar', id: 7 });
     assert.deepEqual(fisNoKimligi('mk-000031'), { tur: 'mal_kabul', id: 31 });

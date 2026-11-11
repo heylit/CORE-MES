@@ -1439,19 +1439,18 @@ export function hareketinFisBagi(h: { tur: string; cikisNedeni: string | null; g
   return null;
 }
 
-// Emir fişinin numarası emir numarasıdır (üç türde aynı; Logo türleri ayrı numaralar). Sayım ve ambar fişi önek ve kimlikle numaralanır
-// (VARSAYIM: Logo fiş numarası en çok 16 karakter, bu biçim sığar). Emir numarası okunamazsa emir kimliği yazılır, numara uydurulmaz.
-const FIS_ONEKLERI = { sayim_fazlasi: 'SF', sayim_eksigi: 'SE', ambar: 'AF' } as const;
-export function malzemeFisiNo(f: { id: number; tur: MalzemeFisiTuru; uretimEmriId: number | null }, emirNo: string | null): string {
-  if (f.tur === 'sarf' || f.tur === 'uretim_girisi' || f.tur === 'fire') return emirNo ?? `#${f.uretimEmriId ?? f.id}`;
+// Fiş numarası tür öneki ve fiş kimliğidir; Logo fiş numarası (FICHENO) olarak da gider ve en çok 16 karakterdir (öneki 2, kimlik en çok
+// 10 hane). Emir numarası Logo'nun sınırına sığmadığı için numara olamaz; emir fişinin emri ayrı alanda (emirNo) ve Logo satır açıklamasında taşınır.
+const FIS_ONEKLERI = { sarf: 'SR', uretim_girisi: 'UG', fire: 'FR', sayim_fazlasi: 'SF', sayim_eksigi: 'SE', ambar: 'AF' } as const satisfies Record<MalzemeFisiTuru, string>;
+export function malzemeFisiNo(f: { id: number; tur: MalzemeFisiTuru }): string {
   return `${FIS_ONEKLERI[f.tur]}-${String(f.id).padStart(6, '0')}`;
 }
 // Fiş numarası aramada kimliğe çözülür; biçime uymayan metin null. MK- mal kabul belgesidir (listede görünür, 515 a).
-export function fisNoKimligi(metin: string): { tur: 'sayim_fazlasi' | 'sayim_eksigi' | 'ambar' | 'mal_kabul'; id: number } | null {
-  const m = /^(SF|SE|AF|MK)-0*(\d{1,9})$/i.exec(metin.trim());
+const ONEK_TURU = { SR: 'sarf', UG: 'uretim_girisi', FR: 'fire', SF: 'sayim_fazlasi', SE: 'sayim_eksigi', AF: 'ambar', MK: 'mal_kabul' } as const;
+export function fisNoKimligi(metin: string): { tur: MalzemeFisiTuru | 'mal_kabul'; id: number } | null {
+  const m = /^(SR|UG|FR|SF|SE|AF|MK)-0*(\d{1,9})$/i.exec(metin.trim());
   if (!m) return null;
-  const onek = m[1]!.toUpperCase();
-  const tur = onek === 'SF' ? 'sayim_fazlasi' : onek === 'SE' ? 'sayim_eksigi' : onek === 'MK' ? 'mal_kabul' : 'ambar';
+  const tur = ONEK_TURU[m[1]!.toUpperCase() as keyof typeof ONEK_TURU];
   const id = Number(m[2]);
   return id >= 1 && id <= 2147483647 ? { tur, id } : null;
 }
