@@ -40,3 +40,39 @@ test.describe('2079-1 b terminal hazırlık listesi', () => {
     expect(ag.yazmalar.filter((y) => !y.includes('/arkon/iletiler'))).toEqual([]);
   });
 });
+
+// Uzun hazırlık listesi (bütün maddeler) genişte sağ sütunun sekme şeridini ezmez: öteki sekmeler görünür ve tıklanır kalır.
+test.describe('terminal hazırlık sekmesi uzun listede', () => {
+  test.use({ hesap: 'ornek.operator1' });
+  const maddeler = ['rota', 'cizim', 'yayin', 'malzeme', 'makine', 'cnc', 'takim-omru', 'talimat', 'aparat', 'olcu-aleti', 'ek-madde'];
+  const uzun = {
+    maddeler: maddeler.map((madde, i) => ({ madde, durum: i === 0 ? 'eksik' : i < 5 ? 'tamam' : 'gerekmez', muafTutulur: false, isEmriDuzeyi: false })),
+    muafiyetler: [],
+    isEmirleri: [{ isEmriId: 99010, opNo: 10, ad: 'Torna', bitti: false, maddeler: [] }],
+  };
+  test('Hazırlık açıkken öteki sekmeler görünür; sekmeler arası geçilir; listenin sonu kaydırılarak okunur', async ({ page, ag, ac }, bilgi) => {
+    test.skip(bilgi.project.name !== 'g1280', 'darda liste pencerede açılır; sağ sütun yalnız genişte');
+    await page.route('**/api/arkon/belgeler/pkgs', (r) => r.fulfill({ json: { belgeler: [{ kimlik: paket.id, surum: 1, govde: paket }] } }));
+    await page.route('**/api/adimli-emirler/9901/hazirlik', (r) => r.fulfill({ json: uzun }));
+    await ac('/uretim-terminali');
+    await page.getByRole('button', { name: /^Hazırlık listesi:/ }).click({ timeout: 15_000 });
+    const sekmeler = page.getByRole('tablist', { name: 'İş ayrıntısı' });
+    const hz = sekmeler.getByRole('tab', { name: /^Hazırlık/ });
+    await expect(hz).toHaveAttribute('aria-selected', 'true');
+    const liste = page.getByRole('region', { name: 'Hazırlık' });
+    await expect(liste.getByRole('listitem')).toHaveCount(maddeler.length);
+    const adimlar = sekmeler.getByRole('tab', { name: /^Adımlar/ });
+    for (const s of [hz, adimlar, sekmeler.getByRole('tab', { name: 'Analiz' })]) await expect(s).toBeInViewport({ ratio: 1 });
+    const serit = await sekmeler.boundingBox();
+    const sekme = await adimlar.boundingBox();
+    expect(serit!.height).toBeGreaterThanOrEqual(sekme!.height);
+    await liste.getByRole('listitem').last().scrollIntoViewIfNeeded();
+    await expect(liste.getByRole('listitem').last()).toBeInViewport();
+    await adimlar.click();
+    await expect(adimlar).toHaveAttribute('aria-selected', 'true');
+    await expect(liste).toHaveCount(0);
+    await hz.click();
+    await expect(page.getByRole('region', { name: 'Hazırlık' })).toBeVisible();
+    expect(ag.yazmalar.filter((y) => !y.includes('/arkon/iletiler'))).toEqual([]);
+  });
+});
