@@ -72,4 +72,16 @@ describe('Emir ayrıntısında ilerleme (1944)', () => {
     expect(await screen.findByText('EM-4')).toBeTruthy();
     expect(screen.queryByRole('region', { name: 'İlerleme' })).toBeNull();
   });
+
+  it('2907: refakat kartları bölümü ilerlemenin hemen altında, üretim yerlerinden ve kayıt defterinden önce gelir', async () => {
+    sunucuKur({ ...OKUYUCU, islemler: [...OKUYUCU.islemler, 'sayfa.stok'] }, yollar(ILERLEME));
+    ac(ekran, '/uretim-emirleri/4');
+    const ilerleme = await screen.findByRole('region', { name: 'İlerleme' });
+    const kartlar = await screen.findByRole('region', { name: 'Refakat kartları' });
+    const defter = screen.getByRole('heading', { name: 'Kayıt defteri' });
+    expect(ilerleme.compareDocumentPosition(kartlar) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(kartlar.compareDocumentPosition(defter) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    const arada = [...document.querySelectorAll('section, h3')].filter((e) => (ilerleme.compareDocumentPosition(e) & Node.DOCUMENT_POSITION_FOLLOWING) && (e.compareDocumentPosition(kartlar) & Node.DOCUMENT_POSITION_FOLLOWING) && !ilerleme.contains(e));
+    expect(arada).toEqual([]);
+  });
 });

@@ -114,6 +114,8 @@ export function EmirAyrintisi() {
             {emir.durum === 'iptal' && <Satir ad="İptal" deger={zamanMetni(emir.iptal)} />}
           </dl>
           <Ilerleme emir={emir} ilerleme={ayrinti.data.ilerleme ?? null} />
+          {/* 2907 (2912 a): kartlar emrin nerede olduğunu söyler; ilerlemenin hemen altında, uzun bölümlerden önce. */}
+          {emir.malzemeNo != null && <RefakatKartlari emirId={emir.id} />}
           <HazirlikListesi emir={emir} />
           {iplikAcik && (
             <section className="tc-emir-bolum-iplik" aria-label="Parçanın konum akışı">
@@ -147,7 +149,6 @@ export function EmirAyrintisi() {
             </div>
           )}
           <UretimYerleri emir={emir} />
-          {emir.malzemeNo != null && <RefakatKartlari emirId={emir.id} />}
           <StokTamamlama emir={emir} />
           <h3 className="tc-emir-bolum">Kayıt defteri</h3>
           <Tablo etiket="Kayıt defteri" sutunlar={KAYIT_SUTUNLARI} satirlar={ayrinti.data.kayitlar}
