@@ -491,3 +491,16 @@ Kullanıcı: "yaz" (13.10.2026). Finans ve stok tarafı aynı dalda (yalnız yen
   kayıt değişmez; gördüğü gibi kaydetmek serbesttir. Önce: taslak ya da teklif isteniyor durumunda değiştirebiliyordu (2871-1 a ile çelişki,
   Güvenlik 2871 ön bakışı N1). Teklif toplanırken değişiklik güncelleme talebiyle gelir (kart 2876).
 - `satin-alma.yaz` taşıyan satın alma etkilenmez. Uç, işlem, rol x işlem, göç değişmedi.
+
+# FARK: satin-alma, teklif toplanırken güncelleme talebi (SAT-80, SAT-81, kart 2876; 11.11.2026)
+
+- Yeni uç `POST /satin-alma-talepleri/:id/guncelleme-ac` (var olan `satin-alma.talep-ac`, tekrar korumalı): sahibi, teklif isteniyor ya da değerlendirmedeki
+  talebi için güncelleme talebi açar. Eski talep, teklifleri ve tedarikçiye giden istekler değişmez; yeni talep taslak açılır, eski talebin birim, emir,
+  proje, öncelik ve talep edenini alır, kök talebe bağlanır (`satin_alma_talep.guncellenen_talep_id`, göç 20261111080314). İki talebin geçmişine
+  birbirinin numarası yazılır.
+- Talep ve Taleplerim cevabı `guncellemeGrubu` (kök önce; no, durum) taşır; Taleplerim `guncellenebilir` taşır. Fiyat yok.
+- SAT-81 (2871-2 a): gruptaki bir talep siparişe geçince öteki açık talepler aynı işlemde iptal olur (iptal nedeni "Güncellemeyle karşılandı: <no>
+  siparişe geçti."); "İptali geri al" ile döner. Siparişteki talep iptal edilmez.
+- Ekran: Taleplerim'de teklif toplanan talepte "Güncelleme talebi aç" (Yeni talep formu güncelleme kipinde) ve satırda grup. Satın alma merkezinde
+  grup gösterimi ayrı adımda (merkez kilidi).
+

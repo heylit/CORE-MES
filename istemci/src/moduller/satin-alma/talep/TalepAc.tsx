@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState, type KeyboardEvent } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { HizliAcGovdesi, MalzemeSecenekleriCevabi, OnTalep, Talebim, TalebimiDuzenleYazimi, TalepTuru } from '#paylasilan/sozlesme/satin-alma.ts';
+import type { HizliAcGovdesi, MalzemeSecenekleriCevabi, OnTalep, Talebim, TalebimGuncellemeYazimi, TalebimiDuzenleYazimi, TalepTuru } from '#paylasilan/sozlesme/satin-alma.ts';
 import { CokSatir, Dugme, Girdi, Kart, Rozet, Secim, useBildirim } from '../../../ortak/arayuz/index.ts';
 import { ApiHatasi } from '../../../ortak/veri/api.ts';
 import { BELIRSIZ_MIKTAR, belirsizMiktarVar, miktarGirdisi } from '../../../ortak/veri/miktar.ts';
@@ -167,8 +167,10 @@ function KalemSatiri({ tur, k, degistir, kaldir }: { tur: TalepTuru; k: KalemTas
 
 // Ana sayfadan satın alma talebi (kart #375): talep oturumdaki kişi adına açılır; fiyat, teklif ve tedarikçi burada yoktur.
 // 2871-1 a: `duzenlenen` verilirse form o talebin taslağını düzenler (tür ve emir değişmez); kayıt talebimi-duzenle ucuna sürümle gider.
-export function TalepAc({ taslak = null, taslakBitti, duzenlenen = null, duzenlemeBitti }: {
+// 2876: `guncelleme` ile aynı form teklif toplanan talebin güncelleme talebini açar; eski talep değişmez, yeni talep ona bağlanır.
+export function TalepAc({ taslak = null, taslakBitti, duzenlenen = null, duzenlemeBitti, guncelleme = false }: {
   taslak?: readonly OnTalep[] | null; taslakBitti?: (gonderildi: boolean) => void; duzenlenen?: Talebim | null; duzenlemeBitti?: () => void;
+  guncelleme?: boolean;
 } = {}) {
   const istemci = useQueryClient();
   const { bildir } = useBildirim();
@@ -202,10 +204,12 @@ export function TalepAc({ taslak = null, taslakBitti, duzenlenen = null, duzenle
   }, [duzenlenen]);
   const temizle = () => { kalemlerYaz([bosKalem()]); tarihYaz(''); aciklamaYaz(''); emirIdYaz(''); hataYaz(null); };
   const duzenleme = useMutation({
-    mutationFn: ({ id, govde }: { id: string; govde: TalebimiDuzenleYazimi }) =>
-      cagri.post('/satin-alma-talepleri/:id/talebimi-duzenle', { parametre: { id }, govde, ...SURE }),
+    mutationFn: ({ id, govde }: { id: string; govde: TalebimiDuzenleYazimi }) => (guncelleme
+      ? tekrarKorumaliGonder((deneme) => cagri.post('/satin-alma-talepleri/:id/guncelleme-ac', { parametre: { id }, govde: { ...govde, id: kimlik } satisfies TalebimGuncellemeYazimi, ...deneme, ...SURE }),
+        { ...SURE, istekKimligi: kimlik })
+      : cagri.post('/satin-alma-talepleri/:id/talebimi-duzenle', { parametre: { id }, govde, ...SURE })),
     onSuccess: (t) => {
-      bildir('tamam', `${t.no} güncellendi.`);
+      bildir('tamam', guncelleme && duzenlenen !== null ? `${t.no} güncelleme talebi olarak açıldı; ${duzenlenen.no} yerinde duruyor.` : `${t.no} güncellendi.`);
       temizle();
       void istemci.invalidateQueries({ queryKey: anahtarlar.taleplerimHepsi });
       void istemci.invalidateQueries({ queryKey: anahtarlar.ozet });
@@ -260,7 +264,7 @@ export function TalepAc({ taslak = null, taslakBitti, duzenlenen = null, duzenle
   };
 
   return (
-    <Kart baslik={duzenlenen === null ? 'Satın alma talebi' : `Talebi düzenle: ${duzenlenen.no}`}>
+    <Kart baslik={duzenlenen === null ? 'Satın alma talebi' : guncelleme ? `Güncelleme talebi: ${duzenlenen.no}` : `Talebi düzenle: ${duzenlenen.no}`}>
       <form className="sa-talep" onSubmit={(e) => { e.preventDefault(); gonderTikla(); }} noValidate>
         <p className="sa-talep-not">İhtiyacınızı yazın; satın alma teklif toplar ve size durumunu bildirir.</p>
         {duzenlenen === null && <div className="sa-talep-tur" role="group" aria-label="Talep türü">
@@ -287,7 +291,7 @@ export function TalepAc({ taslak = null, taslakBitti, duzenlenen = null, duzenle
           {bagli && duzenlenen === null && (
             <Dugme onClick={() => { kalemlerYaz([bosKalem()]); tarihYaz(''); emirIdYaz(''); hataYaz(null); taslakBitti?.(false); }}>Vazgeç</Dugme>
           )}
-          <Dugme tur="birincil" simge="check" type="submit" yukleniyor={gonder.isPending || duzenleme.isPending}>{duzenlenen === null ? 'Talebi gönder' : 'Değişiklikleri kaydet'}</Dugme>
+          <Dugme tur="birincil" simge="check" type="submit" yukleniyor={gonder.isPending || duzenleme.isPending}>{duzenlenen === null ? 'Talebi gönder' : guncelleme ? 'Güncelleme talebini gönder' : 'Değişiklikleri kaydet'}</Dugme>
         </div>
       </form>
     </Kart>

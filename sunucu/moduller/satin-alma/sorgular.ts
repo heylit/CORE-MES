@@ -22,13 +22,13 @@ export interface TalepSatiri {
   ihtiyacTarihi: string | null; notlar: string; durum: string; iptalNedeni: string;
   agirlikMaliyet: number | null; agirlikTermin: number | null; agirlikTedarikci: number | null; agirlikGaranti: number | null;
   teslimYontemi: 'firma_getirir' | 'biz_alacagiz' | null; uretimEmriId: number | null; surum: number; olusturma: string; guncelleme: string;
-  birlesenTalepId: string | null; projeId: number | null; idariTalepId: number | null;
+  birlesenTalepId: string | null; projeId: number | null; idariTalepId: number | null; guncellenenTalepId: string | null;
 }
 const TALEP = `id, no, baslik, birim, talep_eden_kisi_id AS "talepEdenKisiId", acan_kisi_id AS "acanKisiId", oncelik,
   ihtiyac_tarihi AS "ihtiyacTarihi", notlar, durum, iptal_nedeni AS "iptalNedeni", agirlik_maliyet AS "agirlikMaliyet",
   agirlik_termin AS "agirlikTermin", agirlik_tedarikci AS "agirlikTedarikci", agirlik_garanti AS "agirlikGaranti", teslim_yontemi AS "teslimYontemi", uretim_emri_id AS "uretimEmriId", surum,
   ${ISO('olusturma')} AS olusturma, ${ISO('guncelleme')} AS guncelleme, birlesen_talep_id AS "birlesenTalepId",
-  proje_id AS "projeId", idari_talep_id AS "idariTalepId"`;
+  proje_id AS "projeId", idari_talep_id AS "idariTalepId", guncellenen_talep_id AS "guncellenenTalepId"`;
 
 // kisiId verilirse yalnız o kişinin açtığı ya da adına açılan talepler.
 export function talepSatirlariOku(db: Db, kisiId: number | null, id: string | null = null): Promise<TalepSatiri[]> {
@@ -156,6 +156,24 @@ export async function talepEdenGecmisi(db: Db, talepId: string): Promise<number[
 }
 
 // Sürüm tutmazsa satır dönmez; çağıran çekirdeğin surumluGuncelle'si ile 404/409 ayırır.
+// 2876: güncelleme talebi açılışta kök talebe bağlanır (açılışın parçası; aynı işlemde, sürüm değişmez).
+export async function guncellenenTalepYaz(db: Db, id: string, kokId: string): Promise<void> {
+  await db.sorgu('UPDATE satin_alma_talep SET guncellenen_talep_id = $2 WHERE id = $1', [id, kokId]);
+}
+
+// 2876: verilen taleplerin güncelleme grupları (kök ve köke bağlı talepler). Tek üyeli grup (güncellemesiz talep) dönmez.
+export interface GuncellemeUyesi { kokId: string; id: string; no: string; durum: string; surum: number }
+export function guncellemeGruplariOku(db: Db, idler: readonly string[]): Promise<GuncellemeUyesi[]> {
+  return db.sorgu(
+    `WITH kokler AS (SELECT DISTINCT coalesce(guncellenen_talep_id, id) AS kok FROM satin_alma_talep WHERE id = ANY($1::uuid[])),
+          uyeler AS (SELECT k.kok, t.id, t.no, t.durum, t.surum, t.olusturma FROM kokler k JOIN satin_alma_talep t ON t.id = k.kok OR t.guncellenen_talep_id = k.kok)
+     SELECT kok AS "kokId", id, no, durum, surum FROM uyeler
+      WHERE kok IN (SELECT kok FROM uyeler GROUP BY kok HAVING count(*) > 1)
+      ORDER BY kok, id <> kok, olusturma, no`,
+    [idler],
+  );
+}
+
 export async function talepGuncelle(db: Db, t: TalepYazimi, talepEden: number, surum: number): Promise<{ id: string } | null> {
   const satir = await db.tek<{ id: string }>(
     `UPDATE satin_alma_talep SET baslik = $3, birim = $4, talep_eden_kisi_id = $5, oncelik = $6, ihtiyac_tarihi = $7, notlar = $8, durum = $9,

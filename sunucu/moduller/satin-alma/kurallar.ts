@@ -96,7 +96,11 @@ export const ILETILER = {
   yetkiYok: 'Bu değişiklik için yetkiniz yok.',
   gecisYok: 'Talep bu durumdan istenen duruma geçemez.',
   talebimSahibiDegil: 'Yalnız kendi açtığınız ya da adınıza açılan talebi düzenleyebilirsiniz.',
-  talebimDuzenlenmez: 'Talep teklif istendikten sonra düzenlenemez; değişikliği satın almaya iletin.',
+  talebimDuzenlenmez: 'Talep teklif istendikten sonra düzenlenemez; teklif toplanırken güncelleme talebi açın, sonrasında değişikliği satın almaya iletin.',
+  guncellemeAsamasi: 'Güncelleme talebi yalnız teklif toplanırken (teklif isteniyor ya da değerlendirmede) açılır; taslağı düzenleyin, sonrası için satın almaya iletin.',
+  guncellemeBirlesik: 'Birleştirilmiş talep için güncelleme talebi açılmaz; değişikliği satın almaya iletin.',
+  guncellemeBagli: 'Fason adıma ya da parçaya bağlı kalemi olan talep için güncelleme talebi açılmaz; değişikliği satın almaya iletin.',
+  guncellemeIptali: (no: string): string => `Güncellemeyle karşılandı: ${no} siparişe geçti.`,
   talebimKalemYok: 'Düzenlenen kalem bu talepte yok.',
   talebimBagliKalem: 'Fason adıma ya da parçaya bağlı kalem buradan değişmez; değişikliği satın almaya iletin.',
   iptalDegil: 'Yalnız iptal edilmiş talebin iptali geri alınır.',
@@ -945,6 +949,8 @@ export function talebim(t: Talep, baglar: ReadonlyMap<string, KalemBagi> = new M
     id: t.id, no: t.no, baslik: t.baslik, durum: t.durum, ihtiyacTarihi: t.ihtiyacTarihi, olusturma: t.olusturma,
     uretimEmriNo: t.uretimEmriNo, birlesme: t.birlesme ?? null,
     surum: t.surum, aciklama: t.notlar, duzenlenebilir: talebimDuzenlenirMi(t),
+    guncellenebilir: guncellemeReddi(t, t.kalemler.some((k) => bag(k.id).uygulanan !== null || bag(k.id).fasonAdim !== null)) === null,
+    ...(t.guncellemeGrubu === undefined ? {} : { guncellemeGrubu: t.guncellemeGrubu }),
     kaynak: t.kalemler.some((k) => bag(k.id).fasonAdim !== null) ? 'fason' : 'elle',
     kalemler: t.kalemler.map((k) => ({ id: k.id, aciklama: k.ozellik, ad: k.ad, miktar: k.miktar, birim: k.birim, kartBekliyor: k.katalogId === null, ...bag(k.id), karsilik: karsiliklar.get(k.id) ?? null })),
   };
@@ -953,6 +959,19 @@ export function talebim(t: Talep, baglar: ReadonlyMap<string, KalemBagi> = new M
 // SAT-79 (2871-1 a): talep eden kendi talebini yalnız teklif istenmeden önce (taslak) düzenler; birleştirilmiş kaynak talep düzenlenmez
 // (kalemleri birleşik taleptedir). Sahiplik servis denetler. Teklif toplanırken güncelleme ayrı talep olarak açılır (kart 2876).
 export const talebimDuzenlenirMi = (t: Pick<Talep, 'durum' | 'birlesme'>): boolean => t.durum === 'taslak' && t.birlesme == null;
+// SAT-80 (2876, 2871-1 b): teklif toplanırken (teklif isteniyor, değerlendirme) sahibi asıl talebi bozmadan güncelleme talebi açar.
+// Birleştirilmiş ya da birleşik talepte ve bağlı (fason adım, uygulanan parça) kalemi olan talepte açılmaz: bağ ikinci kez kurulmasın.
+// Sahiplik servis denetler.
+export function guncellemeReddi(t: Pick<Talep, 'durum' | 'birlesme' | 'kaynaklar'>, bagliKalemVar: boolean): string | null {
+  if (t.durum !== 'teklif_isteniyor' && t.durum !== 'degerlendirme') return ILETILER.guncellemeAsamasi;
+  if (t.birlesme != null || (t.kaynaklar ?? []).length > 0) return ILETILER.guncellemeBirlesik;
+  return bagliKalemVar ? ILETILER.guncellemeBagli : null;
+}
+// SAT-81 (2871-2 a): gruptaki bir talep siparişe geçince öteki açık talepler (siparişte ya da iptal olmayan) kendiliğinden iptal olur;
+// iptal geri alınabilir. Siparişteki talep iptal edilmez (satın alma bilerek ikinci alımı yapmıştır).
+export function guncellemeIptalleri<T extends { id: string; durum: string }>(grup: readonly T[], siparisteki: string): T[] {
+  return grup.filter((x) => x.id !== siparisteki && !['siparis_verildi', 'teslim_alindi', 'iptal'].includes(x.durum));
+}
 // Gelen kalemler: kimlikli olan var olan kalemdir (tekrarsız); bağlı kalem (fason adım, uygulanan parça) çıkarılamaz, miktarı değişmez.
 export function talebimKalemReddi(
   eski: readonly { id: string; miktar: string | null; bagli: boolean }[], gelen: readonly { id: string | null; miktar: string }[],

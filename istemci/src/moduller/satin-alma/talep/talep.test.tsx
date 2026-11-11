@@ -172,6 +172,37 @@ describe('Ana sayfadan talep (#375)', () => {
     });
   });
 
+  it('SAT-80 (2876): teklif toplanırken "Güncelleme talebi aç" formu doldurur; yeni kimlikle güncelleme ucuna gider; grup satırda görünür', async () => {
+    const kok = talep(1, { durum: 'teklif_isteniyor', surum: 5, aciklama: 'Eski not', guncellenebilir: true, ihtiyacTarihi: '2026-12-01',
+      guncellemeGrubu: [{ id: '00000000-0000-4000-8000-000000000001', no: 'ST-2026-001', durum: 'teklif_isteniyor', kok: true }, { id: '00000000-0000-4000-8000-000000000009', no: 'ST-2026-009', durum: 'taslak', kok: false }],
+      kalemler: [{ id: '00000000-0000-4000-8000-0000000000a1', aciklama: '', ad: 'Deneme rulman', miktar: '3', birim: 'adet', kartBekliyor: false, uygulanan: null, fasonAdim: null }] });
+    const cagrilar: { yol: string; govde: unknown }[] = [];
+    vi.stubGlobal('fetch', vi.fn(async (adres: string, istek?: RequestInit) => {
+      const yol = adres.replace('/api', '');
+      cagrilar.push({ yol, govde: istek?.body ? JSON.parse(String(istek.body)) : null });
+      if (yol.startsWith('/satin-alma-taleplerim?')) return json(200, { talepler: [kok], toplam: 1 } satisfies TaleplerimCevabi);
+      if (yol.endsWith('/guncelleme-ac')) return json(200, talep(9, { durum: 'taslak' }));
+      if (yol === '/satin-alma-on-talepleri') return json(200, onListe);
+      if (yol === '/satin-alma-acik-emirler') return json(200, EMIRLER);
+      return json(404, { kod: 'BULUNAMADI', mesaj: 'Adres bulunamadı.' });
+    }));
+    sar(<TaleplerimSayfasi />, '/taleplerim?bolum=liste');
+    expect((await screen.findByText(/Güncellemeleri:/)).textContent).toContain('ST-2026-009 satın almada');
+    fireEvent.click(screen.getByText('Deneme talep 1'));
+    expect(screen.queryByRole('button', { name: 'Düzenle' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Güncelleme talebi aç' }));
+    expect(await screen.findByText(`Güncelleme talebi: ${kok.no}`)).toBeTruthy();
+    fireEvent.change(screen.getByLabelText(/^Miktar \(adet\)/), { target: { value: '6' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Güncelleme talebini gönder' }));
+    await waitFor(() => expect(cagrilar.some((c) => c.yol === `/satin-alma-talepleri/${kok.id}/guncelleme-ac`)).toBe(true));
+    const govde = cagrilar.find((c) => c.yol.endsWith('/guncelleme-ac'))!.govde as Record<string, unknown>;
+    expect(typeof govde.id).toBe('string');
+    expect({ ...govde, id: undefined }).toEqual({
+      id: undefined, surum: 5, ihtiyacTarihi: '2026-12-01', aciklama: 'Eski not',
+      kalemler: [{ id: '00000000-0000-4000-8000-0000000000a1', malzemeNo: null, ad: '', birim: '', miktar: '6', aciklama: '' }],
+    });
+  });
+
   it('#1192: kalem alanı odaklanınca açılır liste olur; ok ve Enter ile seçilir, satırda kategori ve birim görünür', async () => {
     const cagrilar = sunucuKur();
     sar(<TalepAc />);
