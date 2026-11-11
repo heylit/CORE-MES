@@ -456,6 +456,18 @@ namespace LogoYardimcisi
             Esit(once, s.Cagrilar.Count(x => !x.StartsWith("SiparisIcerigi")), "okuma Logo'ya yazmaz");
         }
 
+        static void T_2987_ayni_numarada_iki_satin_alma_siparisi_varsa_okuma_durur()
+        {
+            var s = Logo();
+            DisSiparis(s, "LG-DIS-CIFT");
+            var ikinci = DisSiparis(s, "LG-DIS-CIFT");
+            ikinci.Ref = 7201;
+            var c = Icerik(s, "LG-DIS-CIFT");
+            Esit(409, c.Durum, "hangisi olduğu bilinmez");
+            Icerir(Hata(c), "birden çok");
+            Icermez(Json.Yaz(c.Govde), "300");
+        }
+
         static void T_2987_core_mes_acilmis_ve_duzenlenmis_siparisin_icerigi_yazilanla_ayni()
         {
             var s = Logo();

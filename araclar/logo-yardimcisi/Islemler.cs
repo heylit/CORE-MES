@@ -718,7 +718,9 @@ namespace LogoYardimcisi
         Cevap SiparisIcerigiOku(string no)
         {
             if (!ayar.SiparisIcerigi) return Cevap.Hata(404, "Not found");
-            var b = oku.SatinAlmaSiparisiIcerigi(no);
+            SiparisIcerigi b;
+            try { b = oku.SatinAlmaSiparisiIcerigi(no); }
+            catch (BirdenCokKayit e) { return Cevap.Hata(409, e.Message); }
             if (b == null) return Cevap.Hata(404, "Order not found");
             var o = new Dictionary<string, object>();
             o["logicalRef"] = b.Ref;

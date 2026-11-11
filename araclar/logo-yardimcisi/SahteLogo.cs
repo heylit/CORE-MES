@@ -604,8 +604,10 @@ namespace LogoYardimcisi
         public SiparisIcerigi SatinAlmaSiparisiIcerigi(string no)
         {
             Cagrilar.Add("SiparisIcerigi " + no);
-            var f = Fisler.FirstOrDefault(x => x.Nesne == Nesne.SatinAlmaSiparisi && x.No == no);
-            if (f == null) return null;
+            var bulunan = Fisler.Where(x => x.Nesne == Nesne.SatinAlmaSiparisi && x.No == no).ToList();
+            if (bulunan.Count == 0) return null;
+            if (bulunan.Count > 1) throw new BirdenCokKayit(no);
+            var f = bulunan[0];
             var b = new SiparisIcerigi();
             b.Ref = f.Ref;
             b.No = f.No;

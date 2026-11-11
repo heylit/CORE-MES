@@ -309,6 +309,7 @@ namespace LogoYardimcisi
         {
             var b = Sorgula(q.SiparisIcerikBasligi, P("@no", no));
             if (b.Count == 0) return null;
+            if (b.Count > 1) throw new BirdenCokKayit(no);
             var h = b[0];
             var x = new SiparisIcerigi();
             x.Ref = Tam(h[0]);

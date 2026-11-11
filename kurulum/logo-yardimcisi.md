@@ -118,7 +118,7 @@ yalnız bu koşuda açılan ve numarası SQL'den yeniden okunup önekle başlad�
   kendiliğinden yinelenmez, "Logo'da kontrol edin" hatası görünür.
 - Sipariş içeriği (kart 2987, yalnız okuma): `GET /api/PurchaseOrder/{no}/content` başlığı (kayıt no, tarih, cari, döviz, kur, durum, iptal) ve
   satırları (kayıt no, tür, kod, ad, miktar, birim, fiyat, döviz fiyatı, KDV, termin, açıklama, kapalı) döner. Yalnız satın alma siparişi
-  (TRCODE 2, sorguda sabit); ayar `siparis_icerigi=acik` olmadan 404. Logo'da TMI dışında açılmış siparişi düzeltme ekranı (D7) bunu kullanır;
+  (TRCODE 2, sorguda sabit); ayar `siparis_icerigi=acik` olmadan 404. Aynı numarada birden çok satın alma siparişi varsa 409 (hangisi olduğu bilinmez). Logo'da TMI dışında açılmış siparişi düzeltme ekranı (D7) bunu kullanır;
   TMI tarafı ayrı karttır. Satır sütunları ölçülmedi (aşağıda madde 9).
 
 ## Satış teklifi ve siparişi (portal, kart #777)
