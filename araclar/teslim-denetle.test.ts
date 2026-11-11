@@ -23,7 +23,7 @@ const yama = (...yollar: string[]) => yollar.map((y) => `diff --git a/${y} b/${y
 function devir(ek: Partial<Devir> = {}): Devir {
   return {
     taban: 'abc1234', shalar: [SHA], kilit: ['sunucu/moduller/stok/'], baslikVar: true, ustune: null, sade: true, onaySatiri: false,
-    taramaSatiri: true, testSatiri: true, tamTest: false, ...ek,
+    taramaSatiri: true, testSatiri: true, tamTest: false, testSatirlari: [], komsuMuafSatirlari: [], yetkiMuaf: false, onizlemeFarki: null, ...ek,
   };
 }
 

@@ -5,6 +5,9 @@ import { basename, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { sonucuKaydet, sonucuYukle, vtDenemesi, vtDenetle } from './teslim-vt.ts';
 import type { VtSonuc } from './teslim-vt.ts';
+import { SONUC_DOSYASI } from './teslim-vt.ts';
+import { depoKaynaklari, kontrolEt, komsuModuller, onizlemeFarkiOku, vtModulleri, yamaAyrintisi, yetkiDegisimi } from './teslim-kontrolleri.ts';
+import type { Komsu, OnizlemeFarki } from './teslim-kontrolleri.ts';
 
 // Yazarın bıraktığı yama klasörünü (format-patch + DEVIR.md) kapının beş maddesine göre tek seferde denetler.
 // Aynı denetim yazar, koordinatör ve Birleştirici'de elle üç kez yapılıyordu ve maddeler yine kaçıyordu;
@@ -43,6 +46,11 @@ export interface Devir {
   taramaSatiri: boolean;
   testSatiri: boolean;
   tamTest: boolean;
+  // 3041 a: koşulan modül testleri, komşu testi ve yetkisiz test için gerekçe satırları, ön izlemeden farklar.
+  testSatirlari: string[];
+  komsuMuafSatirlari: string[];
+  yetkiMuaf: boolean;
+  onizlemeFarki: OnizlemeFarki | null;
 }
 
 export type Duzey = 'kirmizi' | 'uyari';
@@ -98,6 +106,10 @@ export function devirOku(metin: string): Devir {
     testSatiri: /#\s*pass\s+\d|passed|\bpass\s+\d|\d+\s*ihlal|\d+\/\d+|hatas[ıi]z|ok\b/i.test(metin),
     // Satır bazında: "Koşulmadı: tam test:sunucu" ya da "test:sunucu yerelde koşulmadı" koşu sayılmaz.
     tamTest: metin.split('\n').some((s) => /tam\s+test:sunucu|npm run test:sunucu\b|npm run kontrol\b/i.test(s) && !/ko[sş]ulmad|çalıştırılmad|calistirilmad/i.test(s)),
+    testSatirlari: metin.split('\n').filter((s) => s.includes('test:modul')),
+    komsuMuafSatirlari: metin.split('\n').filter((s) => /kom[sş]u test gerekmez\s*:/i.test(s)).map((s) => s.replace(/^[\s\S]*?gerekmez\s*:/i, '')),
+    yetkiMuaf: /yetki d[uü][gğ]mesi de[gğ]i[sş]medi\s*:/i.test(metin),
+    onizlemeFarki: onizlemeFarkiOku(metin),
   };
 }
 
@@ -133,6 +145,8 @@ export interface TeslimGirdisi {
   anaDaldakiGocler: string[];
   // Klasördeki VT-SONUC.md; yoksa null.
   vtSonuc: VtSonuc | null;
+  // 3041 a kontrollerinin yama ve depodan okunan girdisi; verilmezse o üç madde koşmaz (birim testleri).
+  ek?: { yamaTarihi: number | null; komsular: Komsu[]; vtModuller: string[]; yetkiKapilari: string[]; yetkisizTestler: string[] };
 }
 
 export function denetle(g: TeslimGirdisi): Bulgu[] {
@@ -182,6 +196,9 @@ export function denetle(g: TeslimGirdisi): Bulgu[] {
   if (!d.taramaSatiri) k('tarama', 'açık depo taraması satırı yok');
   if (!d.testSatiri) k('test', 'koşulan komutların son satırı yok');
   for (const x of vtDenetle(g.vtSonuc, g.yamalar.map((y) => y.sha256))) b.push(x);
+  if (g.ek) {
+    for (const x of kontrolEt({ ...g.ek, dosyalar, testSatirlari: d.testSatirlari, komsuMuafSatirlari: d.komsuMuafSatirlari, yetkiMuaf: d.yetkiMuaf, onizlemeFarki: d.onizlemeFarki })) b.push(x);
+  }
   if (d.tamTest) u('tam-test', 'yerelde tam sunucu testi ya da kontrol koşulmuş görünüyor; talimat: yerelde modül ve bağımlıları, tam test CI\'da');
   return b;
 }
@@ -262,14 +279,29 @@ export function yamaSirasi(a: string, b: string): number {
 export function klasorOku(kok: string, klasor: string, dal: string): TeslimGirdisi {
   const devirYolu = join(klasor, 'DEVIR.md');
   const devir = existsSync(devirYolu) ? devirOku(readFileSync(devirYolu, 'utf8')) : null;
+  const metinler: string[] = [];
   const yamalar = readdirSync(klasor).filter((a) => a.endsWith('.patch') && statSync(join(klasor, a)).isFile()).sort(yamaSirasi).map((ad) => {
     const icerik = readFileSync(join(klasor, ad));
+    metinler.push(icerik.toString('utf8'));
     return { ad, sha256: createHash('sha256').update(icerik).digest('hex'), dosyalar: yamaDosyalari(icerik.toString('utf8')) };
   });
   const gocler = anaDalGocleri(kok, dal);
+  const ayrintilar = metinler.map(yamaAyrintisi);
+  const tarihler = ayrintilar.map((a) => a.tarih);
+  const dosyaOku = (y: string) => (existsSync(join(kok, y)) ? readFileSync(join(kok, y), 'utf8') : null);
+  const { kapilar, yetkisizTestler } = yetkiDegisimi(ayrintilar, dosyaOku);
+  const vtYolu = join(klasor, SONUC_DOSYASI);
   return {
     klasor, devir, yamalar, tabanGeride: tabanGeride(kok, devir?.taban ?? null, dal), enBuyukGoc: enBuyukGoc(gocler), anaDaldakiGocler: gocler,
     vtSonuc: sonucuYukle(klasor),
+    ek: {
+      // Bir yama bile tarihsizse ya da karardan sonra yazıldıysa geçiş sayılmaz.
+      yamaTarihi: tarihler.some((t) => t === null) ? null : tarihler.length ? Math.max(...(tarihler as number[])) : null,
+      komsular: komsuModuller([...new Set(yamalar.flatMap((y) => y.dosyalar))], depoKaynaklari(kok)),
+      vtModuller: vtModulleri(existsSync(vtYolu) ? readFileSync(vtYolu, 'utf8') : null),
+      yetkiKapilari: kapilar,
+      yetkisizTestler,
+    },
   };
 }
 
