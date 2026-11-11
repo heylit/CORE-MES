@@ -126,7 +126,7 @@ test.describe('planlama rolünde maliyet görünümleri (ornek.planlama)', () =>
 
   test('menüde yok, adresle açılınca görme yetkisi yok der', async ({ page, ag, ac }) => {
     await ac('/plan');
-    await expect(page.locator('[data-gorunum]')).toBeVisible();
+    await expect(page.locator('.tc-py[data-gorunum]')).toBeVisible();
     for (const yol of MALIYET_GORUNUMLERI) await expect(page.locator(`a[href="${yol}"]`), `${yol} menüde`).toHaveCount(0);
     for (const yol of MALIYET_GORUNUMLERI) {
       await ac(yol);
