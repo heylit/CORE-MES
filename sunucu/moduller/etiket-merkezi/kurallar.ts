@@ -311,9 +311,10 @@ export function istasyonDegerleri(kod: string, ad: string | null): AlanDegerleri
 const gunAyYil = (gun: string): string => gun.split('-').reverse().join('.');
 
 // EM-17: refakat kartı etiketi stoktaki refakat kartıyla aynı satırları basar (stok/RefakatKarti.tsx); işlem tablosu tek metinde sıralanır.
+// 2907 (2912 a): "Parti" yalnız tedarikçi partisidir; bölünmüş emrin satırı "Alt parti N · üst UE-…" diye, yalnız alt partide basılır.
 export function refakatDegerleri(k: RefakatKartiCevabi, basim: Date): AlanDegerleri {
   const { ustEmirNo, bolunmeSira } = k.parti;
-  const parti = ustEmirNo === null ? 'Ana emir' : `${bolunmeSira === null ? 'Alt parti' : `Alt parti ${bolunmeSira}`} · üst ${ustEmirNo}`;
+  const parti = ustEmirNo === null ? null : `${bolunmeSira === null ? 'Alt parti' : `Alt parti ${bolunmeSira}`} · üst ${ustEmirNo}`;
   const adim = (a: RefakatKartiCevabi['adimlar'][number]): string => {
     const yer = [a.yer, a.fason && 'fason'].filter(Boolean).join(', ');
     return yer === '' ? `${a.opNo} ${a.ad}` : `${a.opNo} ${a.ad} (${yer})`;
@@ -324,20 +325,25 @@ export function refakatDegerleri(k: RefakatKartiCevabi, basim: Date): AlanDegerl
     urunAd: k.urun.ad,
     urunKod: `Parça no: ${k.urun.kod}`,
     adetTermin: `Adet ${k.adet} · Termin ${k.teslim === null ? 'yok' : gunAyYil(k.teslim)}`,
-    parti: `Parti: ${parti}`,
+    parti,
     basim: `Basım ${gunAyYil(tesisGunu(basim))}`,
     adimlar: k.adimlar.length === 0 ? null : k.adimlar.map(adim).join(' · '),
     rota: k.adimlar.length === 0 ? null : k.adimlar.map(adim).join(SATIR_BASI),
     lot: null,
+    lotNo: null,
+    lotEk: null,
     adet: String(k.adet),
     termin: k.teslim === null ? null : gunAyYil(k.teslim),
     ...refakatAdimlari(k.adimlar),
   };
 }
 
-// EM-27 (kart 2168): refakat kartında her işlem kendi satırındadır (no, ad, yer, piktogram, imza kutusu). Kartta REFAKAT_ADIM_SAYISI
-// satır vardır; daha çok işlem varsa son satır kalan işlem sayısını yazar. Fason işlem kamyon, diğerleri tezgâh piktogramıyla.
-export const REFAKAT_ADIM_SAYISI = 7;
+// EM-27 (kart 2168, sade düzen 2907 / 2907-1 a): refakat kartında her işlem kendi satırındadır (no, ad, yer, işaret); adım başına imza
+// kutusu yoktur, kayıt okutmadır. Kartta REFAKAT_ADIM_SAYISI satır vardır; daha çok işlem varsa son satır kalan işlem sayısını yazar.
+// Fason işlem kamyon, diğerleri tezgâh piktogramıyla (Simge); İşaret yalnız fason işlemde ve son işlemden sonraki çıkış satırındadır.
+// Boş satır kaldıysa son işlemin altına çıkış satırı ("Mamul deposu / sevk") yazılır.
+export const REFAKAT_ADIM_SAYISI = 10;
+export const REFAKAT_CIKIS_SATIRI = 'Mamul deposu / sevk';
 export function refakatAdimlari(adimlar: RefakatKartiCevabi['adimlar']): Record<string, string | null> {
   const sonuc: Record<string, string | null> = {};
   const tasan = adimlar.length > REFAKAT_ADIM_SAYISI;
@@ -348,6 +354,11 @@ export function refakatAdimlari(adimlar: RefakatKartiCevabi['adimlar']): Record<
     sonuc[`adim${i}Ad`] = a === undefined ? null : ozet ? `+${adimlar.length - REFAKAT_ADIM_SAYISI + 1} işlem daha` : a.ad;
     sonuc[`adim${i}Yer`] = a === undefined || ozet ? null : [a.yer, a.fason && 'fason'].filter(Boolean).join(' · ') || null;
     sonuc[`adim${i}Simge`] = a === undefined || ozet ? null : a.fason ? 'siyah:fason' : 'siyah:tezgah';
+    sonuc[`adim${i}Isaret`] = a === undefined || ozet || !a.fason ? null : 'siyah:fason';
+  }
+  if (!tasan && adimlar.length > 0 && adimlar.length < REFAKAT_ADIM_SAYISI) {
+    sonuc[`adim${adimlar.length + 1}Ad`] = REFAKAT_CIKIS_SATIRI;
+    sonuc[`adim${adimlar.length + 1}Isaret`] = 'siyah:bayrak';
   }
   return sonuc;
 }
@@ -362,6 +373,8 @@ export function refakatPartisiDegerleri(
     qr: r.qr,
     emirNo: r.etiket,
     lot: birlestir([`Lot ${lot.lotNo}`, lot.tedarikciPartiNo && `Parti ${lot.tedarikciPartiNo}`, lot.dokumNo && `Döküm ${lot.dokumNo}`, lot.sertifikaNo && `Sertifika ${lot.sertifikaNo}`]),
+    lotNo: lot.lotNo,
+    lotEk: birlestir([lot.dokumNo && `Döküm ${lot.dokumNo}`, lot.sertifikaNo && `Sertifika ${lot.sertifikaNo}`, lot.tedarikciPartiNo && `Tedarikçi partisi ${lot.tedarikciPartiNo}`]),
   };
 }
 

@@ -5,7 +5,7 @@ import { kodTuru } from '#paylasilan/kod-sozlugu.ts';
 import { QR_KENAR_MODUL, type Sablon } from '#paylasilan/sozlesme/etiket-merkezi.ts';
 import { yaziciAgiOku } from './ag.ts';
 import { QR_ALTI_EN_KUCUK_YAZI, qrAltiYeri } from './kurallar.ts';
-import { BEKLEYEN_GUN, HATALI_KARAR_SIMGESI, KALITE_KARAR_SIMGESI, REFAKAT_ADIM_SAYISI, bekleyenBaslangici, bekleyenSirasi, kaliteBekleyenleri, kaliteDurumDegerleri, hataliBekleyenleri, malKabulBekleyenleri, refakatBekleyenleri } from './kurallar.ts';
+import { BEKLEYEN_GUN, HATALI_KARAR_SIMGESI, KALITE_KARAR_SIMGESI, REFAKAT_ADIM_SAYISI, REFAKAT_CIKIS_SATIRI, bekleyenBaslangici, bekleyenSirasi, kaliteBekleyenleri, kaliteDurumDegerleri, hataliBekleyenleri, malKabulBekleyenleri, refakatBekleyenleri } from './kurallar.ts';
 import { alanDegeri, baskiEngeli, dogrudanBaskiDurumu, indirmeEngeli, istasyonDegerleri, kayitUyumHatasi, konumDegerleri, lotDegerleri, kayitSablonTuru, malzemeDegerleri, noktaya, rafDegerleri, refakatDegerleri, refakatPartisiDegerleri, toplamEtiketHatasi, yaziciAdresHatasi, qrDikdortgenleri, qrMatrisi, sablonHatalari, sadelestir, SATIR_BASI, satirlaraBol, sigdirilmisYazi, yerlesim } from './kurallar.ts';
 import { HAZIR_SABLONLAR, ORNEK_DEGERLER } from './sablonlar.ts';
 import { pplb, pplbKacir, pplbYaziSecimi, zpl, zplKacir } from './yazici-dili.ts';
@@ -267,35 +267,63 @@ describe('etiket-merkezi kuralları', () => {
     const tam = refakatDegerleri(k, new Date('2026-10-18T22:30:00.000Z'));
     assert.deepEqual(Object.fromEntries(Object.entries(tam).filter(([a]) => !/^adim\d/.test(a) && a !== 'adet' && a !== 'termin')), {
       qr: 'UE:4512', emirNo: 'UE-004512', urunAd: 'Örnek flanş', urunKod: 'Parça no: ORN-FL-01', adetTermin: 'Adet 40 · Termin 30.10.2026',
-      parti: 'Parti: Ana emir', basim: 'Basım 19.10.2026', adimlar: '10 Torna (Deneme tezgâhı) · 20 Kaplama (Deneme Fason, fason) · 30 Kontrol',
-      rota: ['10 Torna (Deneme tezgâhı)', '20 Kaplama (Deneme Fason, fason)', '30 Kontrol'].join(SATIR_BASI), lot: null,
+      parti: null, basim: 'Basım 19.10.2026', adimlar: '10 Torna (Deneme tezgâhı) · 20 Kaplama (Deneme Fason, fason) · 30 Kontrol',
+      rota: ['10 Torna (Deneme tezgâhı)', '20 Kaplama (Deneme Fason, fason)', '30 Kontrol'].join(SATIR_BASI), lot: null, lotNo: null, lotEk: null,
     });
     // EM-27: işlem satırları ayrı alanlarda; fason işlem kamyon piktogramıyla; adet ve termin ayrı.
     assert.deepEqual([tam['adet'], tam['termin'], tam['adim1No'], tam['adim1Ad'], tam['adim1Yer'], tam['adim1Simge']], ['40', '30.10.2026', '10', 'Torna', 'Deneme tezgâhı', 'siyah:tezgah']);
-    assert.deepEqual([tam['adim2Yer'], tam['adim2Simge'], tam['adim3Yer'], tam['adim4Ad'], tam['adim4Simge']], ['Deneme Fason · fason', 'siyah:fason', null, null, null]);
+    assert.deepEqual([tam['adim2Yer'], tam['adim2Simge'], tam['adim3Yer'], tam['adim4No'], tam['adim4Simge']], ['Deneme Fason · fason', 'siyah:fason', null, null, null]);
+    // 2907: işaret yalnız fason işlemde; son işlemin altında çıkış satırı (no ve yer yok, bayrak işareti).
+    assert.deepEqual([tam['adim1Isaret'], tam['adim2Isaret'], tam['adim3Isaret'], tam['adim4Ad'], tam['adim4Isaret'], tam['adim5Ad']],
+      [null, 'siyah:fason', null, REFAKAT_CIKIS_SATIRI, 'siyah:bayrak', null]);
     const alt = refakatDegerleri({ ...k, teslim: null, parti: { ustEmirNo: 'UE-004500', bolunmeSira: 2 }, adimlar: [] }, new Date('2026-10-19T08:00:00.000Z'));
-    assert.deepEqual([alt['adetTermin'], alt['parti'], alt['adimlar'], alt['termin'], alt['adim1Ad']], ['Adet 40 · Termin yok', 'Parti: Alt parti 2 · üst UE-004500', null, null, null]);
+    assert.deepEqual([alt['adetTermin'], alt['parti'], alt['adimlar'], alt['termin'], alt['adim1Ad']], ['Adet 40 · Termin yok', 'Alt parti 2 · üst UE-004500', null, null, null]);
     // Kartta REFAKAT_ADIM_SAYISI satır var: fazla işlemde son satır kalanları sayar, no ve piktogram basılmaz.
-    const cok = refakatDegerleri({ ...k, adimlar: Array.from({ length: 9 }, (_, i) => ({ opNo: (i + 1) * 10, ad: `İş ${i + 1}`, yer: null, fason: false })) }, new Date());
+    const cok = refakatDegerleri({ ...k, adimlar: Array.from({ length: 12 }, (_, i) => ({ opNo: (i + 1) * 10, ad: `İş ${i + 1}`, yer: null, fason: false })) }, new Date());
     assert.deepEqual([cok[`adim${REFAKAT_ADIM_SAYISI - 1}Ad`], cok[`adim${REFAKAT_ADIM_SAYISI}Ad`], cok[`adim${REFAKAT_ADIM_SAYISI}No`], cok[`adim${REFAKAT_ADIM_SAYISI}Simge`]],
-      [`İş ${REFAKAT_ADIM_SAYISI - 1}`, `+${9 - REFAKAT_ADIM_SAYISI + 1} işlem daha`, null, null]);
-    assert.equal(refakatDegerleri({ ...k, parti: { ustEmirNo: 'UE-004500', bolunmeSira: null } }, new Date())['parti'], 'Parti: Alt parti · üst UE-004500');
+      [`İş ${REFAKAT_ADIM_SAYISI - 1}`, `+${12 - REFAKAT_ADIM_SAYISI + 1} işlem daha`, null, null]);
+    assert.equal(Object.values(cok).filter((v) => v === REFAKAT_CIKIS_SATIRI).length, 0, 'satırlar dolunca çıkış satırı basılmaz');
+    const onBir = refakatDegerleri({ ...k, adimlar: Array.from({ length: REFAKAT_ADIM_SAYISI + 1 }, (_, i) => ({ opNo: (i + 1) * 10, ad: `İş ${i + 1}`, yer: null, fason: false })) }, new Date());
+    assert.equal(onBir[`adim${REFAKAT_ADIM_SAYISI}Ad`], '+2 işlem daha', 'on bir işlemde son satır iki işlemi sayar');
+    const tamDolu = refakatDegerleri({ ...k, adimlar: Array.from({ length: REFAKAT_ADIM_SAYISI }, (_, i) => ({ opNo: (i + 1) * 10, ad: `İş ${i + 1}`, yer: null, fason: false })) }, new Date());
+    assert.deepEqual([tamDolu[`adim${REFAKAT_ADIM_SAYISI}Ad`], Object.values(tamDolu).includes(REFAKAT_CIKIS_SATIRI)], [`İş ${REFAKAT_ADIM_SAYISI}`, false]);
+    assert.equal(refakatDegerleri({ ...k, parti: { ustEmirNo: 'UE-004500', bolunmeSira: null } }, new Date())['parti'], 'Alt parti · üst UE-004500');
     // EM-20 (kart #127): refakat partisinin kartı aynı emir satırlarını, partinin QR'ını ve etiketini, lot satırını basar.
     const rp = refakatPartisiDegerleri(k, { qr: 'RP:7', etiket: 'UE-004512-P2' }, { lotNo: 'LT-000123', tedarikciPartiNo: null, dokumNo: 'D-01', sertifikaNo: 'S-01' }, new Date('2026-10-18T22:30:00.000Z'));
     assert.deepEqual([rp['qr'], rp['emirNo'], rp['lot'], rp['urunAd'], rp['adimlar']], ['RP:7', 'UE-004512-P2', 'Lot LT-000123 · Döküm D-01 · Sertifika S-01', 'Örnek flanş', refakatDegerleri(k, new Date())['adimlar']]);
-    assert.equal(refakatPartisiDegerleri(k, { qr: 'RP:7', etiket: 'x' }, { lotNo: 'LT-1', tedarikciPartiNo: 'P-9', dokumNo: null, sertifikaNo: null }, new Date())['lot'], 'Lot LT-1 · Parti P-9');
+    assert.deepEqual([rp['lotNo'], rp['lotEk']], ['LT-000123', 'Döküm D-01 · Sertifika S-01']);
+    const p9 = refakatPartisiDegerleri(k, { qr: 'RP:7', etiket: 'x' }, { lotNo: 'LT-1', tedarikciPartiNo: 'P-9', dokumNo: null, sertifikaNo: null }, new Date());
+    assert.deepEqual([p9['lot'], p9['lotNo'], p9['lotEk']], ['Lot LT-1 · Parti P-9', 'LT-1', 'Tedarikçi partisi P-9']);
+    assert.equal(refakatPartisiDegerleri(k, { qr: 'RP:7', etiket: 'x' }, { lotNo: 'LT-1', tedarikciPartiNo: null, dokumNo: null, sertifikaNo: null }, new Date())['lotEk'], null);
     assert.deepEqual([kayitSablonTuru('refakat-partisi'), kayitSablonTuru('mal-kabul')], ['refakat', 'lot']);
     assert.equal(kayitUyumHatasi('refakat', 'refakat-partisi'), null, 'refakat partisi refakat şablonuyla basılır');
   });
 
-  test('Kart #707, EM-27: refakat şablonu her işlemi kendi satırında basar, boş satır basılmaz; QR çevresinde dört modülden az boşluk kalmaz', () => {
+  test('Kart #707, EM-27, 2907: refakat şablonu her işlemi kendi satırında basar, boş satır basılmaz, adım başına imza yok; QR çevresinde dört modülden az boşluk kalmaz', () => {
     const s = HAZIR_SABLONLAR.find((x) => x.anahtar === 'refakat-100x150')!;
     const ogeler = yerlesim(s, ORNEK_DEGERLER.refakat, false);
     const metinler = ogeler.flatMap((o) => (o.tur === 'metin' ? [o.satirlar.join(' ')] : []));
-    for (const m of ['10', 'Torna', 'Örnek tezgâh', '20', 'Kaplama', 'Örnek fason · fason', '30', 'Son kontrol']) assert.ok(metinler.includes(m), m);
-    assert.equal(metinler.filter((m) => m === 'İMZA · TARİH').length, 3, 'imza kutusu yalnız dolu işlem satırında');
-    // İşlem no halka içinde; boş satırın halkası basılmaz.
-    assert.deepEqual(ogeler.filter((o) => o.tur === 'simge').map((o) => o.tur === 'simge' && `${o.karo}:${o.ad}`), ['siyah:refakat', 'yok:lot', 'yok:halka', 'siyah:tezgah', 'yok:halka', 'siyah:fason', 'yok:halka', 'siyah:tezgah', 'siyah:bayrak']);
+    for (const m of ['10', 'Torna', 'Örnek tezgâh', '20', 'Kaplama', 'Örnek fason · fason', '30', 'Son kontrol', REFAKAT_CIKIS_SATIRI, 'LT-000123', 'Döküm D-01 · Sertifika S-01']) {
+      assert.ok(metinler.includes(m), m);
+    }
+    // 2907-1 a: adım başına imza kutusu yok; 2932: elle kayıt kutusu da yok. "Parti" sözcüğü ana emirde basılmaz.
+    assert.equal(metinler.filter((m) => m.includes('İMZA')).length, 0);
+    assert.equal(metinler.filter((m) => m.startsWith('ELLE KAYIT')).length, 0);
+    assert.equal(metinler.filter((m) => m.includes('Parti')).length, 0);
+    // Atölye D1: adet kutusu emrin adedidir.
+    assert.ok(metinler.includes('EMİR ADEDİ'));
+    // 2932: on işlem satırı; QR boyutu okutma mesafesi için sabit. On satır alt çizginin (137,4 mm) üstünde biter.
+    assert.equal(REFAKAT_ADIM_SAYISI, 10);
+    const satirAd = s.ogeler.find((o) => o.tur === 'metin' && o.alan === `adim${REFAKAT_ADIM_SAYISI}Ad`);
+    assert.ok(satirAd?.tur === 'metin' && satirAd.y + 5.4 < 137.4);
+    assert.equal(ogeler.find((o) => o.tur === 'qr')?.boyut, 37.5);
+    // İşaret yalnız fason satırında ve çıkış satırında; boş satırın çizgisi basılmaz.
+    assert.deepEqual(ogeler.filter((o) => o.tur === 'simge').map((o) => o.tur === 'simge' && `${o.karo}:${o.ad}`), ['siyah:refakat', 'siyah:fason', 'siyah:bayrak']);
+    assert.equal(ogeler.filter((o) => o.tur === 'kutu' && o.yukseklik === 0.2).length, 4, 'dolu üç işlem ve çıkış satırının çizgisi');
+    // Lotsuz kart (emrin kendi kartı): siyah lot bandı ve LOT başlığı basılmaz.
+    const lotsuz = yerlesim(s, { ...ORNEK_DEGERLER.refakat, lotNo: null, lotEk: null }, false);
+    assert.equal(lotsuz.filter((o) => o.tur === 'kutu' && o.genislik === 100).length, 0);
+    assert.ok(!lotsuz.some((o) => o.tur === 'metin' && o.satirlar.join(' ') === 'LOT'));
     const qr = ogeler.find((o) => o.tur === 'qr');
     assert.ok(qr?.tur === 'qr');
     const modul = qr.boyut / (qr.kareler.length + 2 * QR_KENAR_MODUL);

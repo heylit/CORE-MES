@@ -177,8 +177,8 @@ describe('atolye (gerçek PostgreSQL)', () => {
     }
     return o;
   }
-  async function merkezKrokisiAc(icerik: Buffer, ad = 'Merkez krokisi'): Promise<number> {
-    const b = await merkezKomutu<MerkezBelgesi>('/cizimler', { ad, tur: 'kroki', ozet: await merkezDosyasi(icerik), dosyaAdi: 'kroki.pdf' });
+  async function merkezKrokisiAc(icerik: Buffer, ad = 'Merkez krokisi', antetRev?: string): Promise<number> {
+    const b = await merkezKomutu<MerkezBelgesi>('/cizimler', { ad, tur: 'kroki', ozet: await merkezDosyasi(icerik), dosyaAdi: 'kroki.pdf', antetRev });
     assert.equal(b.durum, 200, JSON.stringify(b.govde));
     const y = await merkezKomutu(`/cizimler/${b.govde.id}/revizyonlar/${b.govde.revizyonlar[0]?.id}/yayinla`, { surum: b.govde.surum });
     assert.equal(y.durum, 200, JSON.stringify(y.govde));
@@ -1249,9 +1249,13 @@ describe('atolye (gerçek PostgreSQL)', () => {
     assert.deepEqual(taze.govde.hizalama, h.govde.hizalama);
 
     // Başka belge seçilince hizalama sıfırlanır ve eski belgenin bağı kalkar.
-    const baska = await merkezKrokisiAc(pdf(50), 'Salon A yeni pafta');
+    // Antette kodu olan belge: seçici ve kroki harfi değil revizyon kodunu taşır (2138-2).
+    const baska = await merkezKrokisiAc(pdf(50), 'Salon A yeni pafta', '03');
+    const kodlu = (await oku<MerkezKrokileriCevabi>('/atolye/cizim-merkezi/krokiler')).govde.belgeler.find((x) => x.id === baska);
+    assert.deepEqual([kodlu?.harf, kodlu?.revKodu], ['A', '03']);
     const degisti = await yaz<Kroki>(`${yol}/merkezden`, { belgeId: baska });
     assert.equal(degisti.durum, 200, JSON.stringify(degisti.govde));
+    assert.deepEqual([degisti.govde.merkez?.harf, degisti.govde.merkez?.revKodu], ['A', '03']);
     assert.equal(degisti.govde.hizalama, null);
     assert.deepEqual((await oku<{ baglar: unknown[] }>(`/cizimler/${belge}`)).govde.baglar, []);
 

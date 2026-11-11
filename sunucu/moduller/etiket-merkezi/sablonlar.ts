@@ -20,6 +20,7 @@ export const ALANLAR: Record<SablonTuru, { anahtar: string; ad: string }[]> = {
     { anahtar: 'adetTermin', ad: 'Adet ve termin' }, { anahtar: 'parti', ad: 'Parti' }, { anahtar: 'basim', ad: 'Basım tarihi' },
     { anahtar: 'adimlar', ad: 'İşlem sırası' }, { anahtar: 'rota', ad: 'Rota (adım başına satır)' }, { anahtar: 'lot', ad: 'Lot, parti, döküm, sertifika' },
     { anahtar: 'adet', ad: 'Adet' }, { anahtar: 'termin', ad: 'Termin' }, { anahtar: 'adim1Ad', ad: 'İşlem satırları (no, ad, yer, piktogram)' },
+    { anahtar: 'lotNo', ad: 'Lot no' }, { anahtar: 'lotEk', ad: 'Döküm, sertifika, tedarikçi partisi' },
   ],
   istasyon: [{ anahtar: 'qr', ad: 'QR (LOC)' }, { anahtar: 'kod', ad: 'İstasyon kodu' }, { anahtar: 'ad', ad: 'İstasyon adı' }],
   'kalite-durum': [
@@ -62,14 +63,14 @@ const durumUst = (piktogram: string, ad: string) => [
   simge(77, 2, 21, 'kararSimge'), metin(3, 2.4, 72, 8.6, 8, 'durum', true), kutu(3, 11.4, 72, 0.6, 0.6),
   simge(39, 13.2, 4.2, `=yok:${piktogram}`), metin(44.6, 13.8, 30, 2.6, 2.1, `=${ad}`), qr(3, 13.2, 34), kutu(0, 0, 100, 50, 2.4, 'redCerceve'),
 ];
-// Refakat kartında işlem satırı: no halkası, piktogram, ad ve yer, imza kutusu (EM-27).
+// Refakat kartında işlem satırı (EM-27, 2907): no, ad, yer ve işaret (fason ya da çıkış); satır altında ince çizgi. İmza kutusu yok
+// (2907-1 a), elle kayıt kutusu da yok (2932: kullanıcı kaldırdı). Satır aralığı 7 mm: on satır işlem başlığından alt çizgiye yayılır.
 const refakatAdimi = (i: number) => {
-  const y = 62 + (i - 1) * 8.6;
-  const no = `adim${i}No`;
+  const y = 65 + (i - 1) * 7;
+  const ad = `adim${i}Ad`;
   return [
-    simge(4.9, y - 0.6, 8.2, '=yok:halka', no), metin(7.2, y + 2, 5.4, 3.4, 3, no, true), simge(14.2, y, 7, `adim${i}Simge`),
-    metin(23, y + 0.2, 40, 4, 3.4, `adim${i}Ad`, true), metin(23, y + 4.4, 40, 2.8, 2.2, `adim${i}Yer`),
-    kutu(64, y, 32, 7.4, 0.35, no), baslik(65.5, y + 0.8, 28, 'İMZA · TARİH', no),
+    metin(4, y, 9, 3.6, 3.2, `adim${i}No`, true), metin(14, y, 37, 3.6, 3.2, ad, true), metin(52, y + 0.4, 36, 3, 2.4, `adim${i}Yer`),
+    simge(90.5, y - 0.3, 4.4, `adim${i}Isaret`), kutu(4, y + 5.2, 92, 0.2, 0.2, ad),
   ];
 };
 const DENEME_SIMGELERI = ['konum', 'raf', 'malzeme', 'lot', 'refakat', 'tezgah', 'kalite', 'hatali', 'koli', 'kumpas'];
@@ -99,16 +100,19 @@ export const HAZIR_SABLONLAR: readonly Sablon[] = [
     baslik(50, 43, 48, 'GİRİŞ', 'giris'), metin(50, 45.2, 48, 3, 2.6, 'giris'),
   ] },
   // Kart #707: QR'ın çevresinde motorun iki modülüne ek en az üç mm boş alan kalır (sessiz bölge dört modülü geçer).
+  // 2907 (2912 a): QR sol üstte büyük (kodu altında, EM-34); kart no en büyük yazı; adet ve termin yan yana; lot siyah bantta; işlem
+  // sırası adım başına tek satır, on satır; elle kayıt kutusu yok (2932).
   { anahtar: 'refakat-100x150', ad: 'Refakat kartı 100x150', tur: 'refakat', genislik: 100, yukseklik: 150, ogeler: [
-    simge(72, 3, 25, '=siyah:refakat'), metin(4, 3.4, 66, 6.4, 5.6, '=REFAKAT KARTI', true), metin(4, 10.2, 66, 2.6, 2, '=HER İŞLEMDE OKUTUN'), kutu(4, 14.6, 64, 0.6, 0.6),
-    metin(4, 17, 64, 10, 9, 'emirNo', true), metin(4, 28, 36, 5, 4.2, 'urunAd', true), metin(4, 33.4, 36, 3.4, 2.8, 'urunKod'),
-    kutu(41, 28, 24, 12, 0.4), baslik(43, 29.4, 10, 'ADET'), metin(43, 32, 10, 6.5, 5.4, 'adet', true), baslik(54, 29.4, 10, 'TERMİN'), metin(54, 32.4, 10, 3.4, 2.6, 'termin', true),
-    qr(69.5, 31.5, 27.5), kutu(1.5, 42, 64, 0.9, 0.9),
-    simge(4, 45, 6, '=yok:lot', 'lot'), baslik(12, 45, 54, 'LOT · DÖKÜM · SERTİFİKA', 'lot'), metin(12, 47.4, 54, 6.8, 2.8, 'lot', true),
-    baslik(4, 57.5, 60, 'İŞLEM SIRASI', 'adim1Ad'),
+    // Sağ üst karo bütün hazır şablonlardadır (2168-1 a); burada küçüktür, yer kart no ve QR'ındır.
+    qr(3.5, 3.5, 37.5), simge(87, 2.5, 10.5, '=siyah:refakat'), metin(45, 3.4, 40, 3.6, 3, '=REFAKAT KARTI', true), metin(45, 7.6, 40, 2.4, 1.9, '=HER İŞLEMDE OKUTUN'),
+    metin(45, 14, 52, 8.6, 7.4, 'emirNo', true), metin(45, 23.4, 52, 4.2, 3.6, 'urunAd', true), metin(45, 28, 52, 3.2, 2.6, 'urunKod'),
+    kutu(45, 32, 52, 12.5, 0.4), kutu(71, 32, 0.4, 12.5, 0.4),
+    baslik(47, 33.2, 22, 'EMİR ADEDİ'), metin(47, 35.6, 22, 7.2, 6.6, 'adet', true), baslik(73, 33.2, 22, 'TERMİN'), metin(73, 36.8, 22, 4.6, 4, 'termin', true),
+    kutu(0, 47, 100, 11, 11, 'lotNo'), metin(4, 48.2, 38, 2.2, 1.9, '=LOT', false, { ters: true, kosul: 'lotNo' }), metin(4, 50.6, 38, 6, 5, 'lotNo', true, { ters: true }),
+    metin(45, 49.2, 52, 7.4, 2.3, 'lotEk', false, { ters: true }),
+    baslik(4, 61, 60, 'İŞLEM SIRASI', 'adim1Ad'),
     ...Array.from({ length: REFAKAT_ADIM_SAYISI }, (_, i) => refakatAdimi(i + 1)).flat(),
-    simge(4.5, 125, 9, '=siyah:bayrak'), metin(16, 125.6, 60, 4, 3.4, '=Mamul deposu / sevk', true), metin(16, 130, 60, 3, 2.4, '=Son işlemden sonra'),
-    kutu(1.5, 135.5, 97, 0.3), metin(4, 137.6, 60, 3, 2.4, 'parti'), metin(64, 137.6, 32, 3, 2.4, 'basim'),
+    kutu(1.5, 137.4, 97, 0.3), metin(4, 138.8, 58, 3, 2.4, 'parti'), metin(64, 138.8, 32, 3, 2.4, 'basim'),
   ] },
   { anahtar: 'istasyon-100x50', ad: 'İstasyon 100x50', tur: 'istasyon', genislik: 100, yukseklik: 50, ogeler: [
     ...buyukUst('tezgah', 'İSTASYON', '=LOC'), metin(50, 21.5, 48, 17, 7, 'kod', true), baslik(50, 39, 48, 'AD', 'ad'), metin(50, 41.4, 48, 7, 4, 'ad', true),
@@ -158,9 +162,10 @@ export const ORNEK_DEGERLER: Record<SablonTuru, AlanDegerleri> = {
   },
   refakat: {
     qr: `${KOD_ONEKI['uretim-emri']}:4512`, emirNo: 'UE-004512', urunAd: 'Örnek flanş', urunKod: 'Parça no: ORN-FL-01',
-    adetTermin: 'Adet 40 · Termin 30.10.2026', parti: 'Parti: Ana emir', basim: 'Basım 18.10.2026',
+    adetTermin: 'Adet 40 · Termin 30.10.2026', parti: null, basim: 'Basım 18.10.2026',
     adimlar: '10 Torna (Örnek tezgâh) · 20 Kaplama (Örnek fason, fason) · 30 Son kontrol',
     rota: ['10 Torna (Örnek tezgâh)', '20 Kaplama (Örnek fason, fason)', '30 Son kontrol'].join(SATIR_BASI), lot: 'Lot LT-000123 · Döküm D-01 · Sertifika S-01',
+    lotNo: 'LT-000123', lotEk: 'Döküm D-01 · Sertifika S-01',
     adet: '40', termin: '30.10.2026',
     ...refakatAdimlari([{ opNo: 10, ad: 'Torna', yer: 'Örnek tezgâh', fason: false }, { opNo: 20, ad: 'Kaplama', yer: 'Örnek fason', fason: true }, { opNo: 30, ad: 'Son kontrol', yer: null, fason: false }]),
   },
