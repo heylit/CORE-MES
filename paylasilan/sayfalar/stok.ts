@@ -14,7 +14,7 @@ export const STOK_IKINCI_MENU = {
   gruplar: [
     {
       maddeler: [
-        { anahtar: 'is-kutusu', baslik: 'İş kutusu', yol: '/stok', simge: 'dash', islem: 'sayfa.stok' },
+        { anahtar: 'is-kutusu', baslik: 'Bugün', yol: '/stok', simge: 'dash', islem: 'sayfa.stok' },
         { anahtar: 'mal-kabul', baslik: 'Mal kabul', yol: '/stok/mal-kabul', simge: 'truck', islem: 'stok.giris' },
         // Sevkiyatın tetiklediği son çıkış ve kabuller (960); çıkış stok.cikis, kabul stok.giris ister.
         { anahtar: 'depo-sevk', baslik: 'Depo sevk', yol: '/stok/depo-sevk', simge: 'route', islem: 'stok.cikis', veya: ['stok.giris'] },

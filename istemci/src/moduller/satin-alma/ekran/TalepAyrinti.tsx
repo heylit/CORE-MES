@@ -18,7 +18,7 @@ const ADIM_SIMGESI: Record<string, SimgeAdi> = {
 const ISLEM_SIMGESI: Record<string, SimgeAdi> = {
   'req-edit': 'edit', rfq: 'tag', 'approval-form': 'file', 'req-uncancel': 'rotate', 'req-cancel': 'x', 'req-delete': 'trash',
 };
-const DONUS: Record<string, string> = { dash: 'İş kutusuna dön', requests: 'Taleplere dön', orders: 'Siparişlere dön' };
+const DONUS: Record<string, string> = { dash: "Bugün'e dön", requests: 'Taleplere dön', orders: 'Siparişlere dön' };
 
 // Merkezin metinleri kaçırılmış HTML'dir (b, span); başlık satırında düz metin gerekir.
 function duzMetin(html: string): string {

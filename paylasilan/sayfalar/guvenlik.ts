@@ -16,7 +16,7 @@ export const GUVENLIK_IKINCI_MENU = {
   anaMenuSayaci: 'alarmlar',
   gruplar: [
     { baslik: 'İzleme', maddeler: [
-      { anahtar: 'durum', baslik: 'Genel bakış', yol: '/guvenlik', simge: 'gauge', islem: 'guvenlik.oku' },
+      { anahtar: 'durum', baslik: 'Pano', yol: '/guvenlik', simge: 'gauge', islem: 'guvenlik.oku' },
       { anahtar: 'alarmlar', baslik: 'Alarmlar', yol: '/guvenlik/alarmlar', simge: 'bell', islem: 'guvenlik.oku' },
     ] },
     { baslik: 'Takip', maddeler: [

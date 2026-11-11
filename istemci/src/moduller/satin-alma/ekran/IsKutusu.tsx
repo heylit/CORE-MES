@@ -69,7 +69,7 @@ export function IsKutusu() {
   const onayda = (jobs().approval ?? []).length;
   return (
     <div className="sa-ekran">
-      <SayfaBasligi baslik="İş kutusu" simge="cart" alt={alt} />
+      <SayfaBasligi baslik="Bugün" simge="cart" alt={alt} />
       {kartlar.length > 0 && <div className="sa-ekran-sayilar" aria-label="Özet">{kartlar}</div>}
       {Object.keys(S.requests).length === 0
         ? <DurumKutusu durum="bos" mesaj="Henüz talep yok. Talepler Taleplerim sayfasından açılır; satın alma burada teklif toplar, karar verir ve sipariş geçer." />

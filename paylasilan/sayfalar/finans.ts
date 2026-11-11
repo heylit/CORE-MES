@@ -18,7 +18,7 @@ export const FINANS_IKINCI_MENU = {
   sayacUcu: '/finans/menu-sayaclari',
   gruplar: [
     { maddeler: [
-      { anahtar: 'ana-sayfa', baslik: 'Ana sayfa', yol: '/finans', simge: 'gauge', islem: 'finans.oku' },
+      { anahtar: 'ana-sayfa', baslik: 'Pano', yol: '/finans', simge: 'gauge', islem: 'finans.oku' },
       { anahtar: 'kayitlar', baslik: 'Kayıtlar', yol: '/finans/kayitlar', simge: 'list', islem: 'finans.oku' },
       { anahtar: 'firmalar', baslik: 'Firmalar', yol: '/finans/firmalar', simge: 'user', islem: 'musteri-tedarikci.oku' },
       { anahtar: 'cekler', baslik: 'Çek ve senet', yol: '/finans/cekler', simge: 'layers', islem: 'finans.oku' },

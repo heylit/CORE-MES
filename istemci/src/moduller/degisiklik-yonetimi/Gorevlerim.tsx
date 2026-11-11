@@ -65,7 +65,7 @@ export function Gorevlerim() {
   return (
     <section className="tc-dy">
       <SayfaBasligi
-        baslik="Görevlerim" simge="bell" alt={alt}
+        baslik="Bugün" simge="bell" alt={alt}
         birincil={talepAcabilir ? { etiket: 'Yeni değişiklik talebi', simge: 'plus', yap: () => { yeniYaz(true); } } : undefined}
       />
       {s.isError && <DurumKutusu durum="hata" mesaj={hataIletisi(s.error, 'Görevler alınamadı')} yenile={() => { void s.refetch(); }} />}

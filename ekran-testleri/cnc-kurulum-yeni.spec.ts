@@ -45,7 +45,7 @@ const kayitYazan = test.extend<{ kayitSirasi: undefined }>({
   }, { auto: true }],
 });
 
-const GORUNUMLER = ['Ana Sayfa', 'Kurulum', 'Hazırlık', 'Kütüphane', 'Ham Malzeme', 'Takım Ömrü'];
+const GORUNUMLER = ['Pano', 'Kurulum', 'Hazırlık', 'Kütüphane', 'Ham Malzeme', 'Takım Ömrü'];
 
 test.describe('iskelet', () => {
   test('görünüm şeridi tam, her görünüm adresiyle açılır, sayfa yatay taşmaz', async ({ page, ac }) => {
@@ -215,7 +215,7 @@ test.describe('P2 Kütüphane, Tanımlar, Ana Sayfa', () => {
 
   test('Ana Sayfa: sayı kartları, tezgâh kartları ve görünümlere geçiş', async ({ page, ac }) => {
     await ac('/cnc-kurulum/yeni/ana-sayfa');
-    await expect(page.getByRole('heading', { name: 'Ana sayfa' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Pano' })).toBeVisible();
     for (const baslik of ['Tezgâhlar', 'Ömrü dolan takım', 'Yakında değişecek', 'Depo uyarısı', 'Bugünkü üretim']) {
       await expect(page.getByText(baslik, { exact: true }).first()).toBeVisible();
     }

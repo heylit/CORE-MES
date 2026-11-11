@@ -11,7 +11,7 @@ export const ISTASYONLAR_IKINCI_MENU = {
   simge: 'cpu',
   gruplar: [
     { maddeler: [
-      { anahtar: 'genel', baslik: 'Genel bakış', yol: '/istasyonlar', simge: 'grid', islem: 'sayfa.istasyonlar' },
+      { anahtar: 'genel', baslik: 'Pano', yol: '/istasyonlar', simge: 'grid', islem: 'sayfa.istasyonlar' },
       { anahtar: 'is-merkezleri', baslik: 'İş merkezleri ve istasyonlar', yol: '/istasyonlar/is-merkezleri', simge: 'layers', islem: 'sayfa.istasyonlar' },
       { anahtar: 'makineler', baslik: 'Makineler', yol: '/istasyonlar/makineler', simge: 'cpu', islem: 'sayfa.istasyonlar' },
       { anahtar: 'personel', baslik: 'Personel', yol: '/istasyonlar/personel', simge: 'user', islem: 'sayfa.istasyonlar' },

@@ -15,7 +15,7 @@ const parca = <M extends Record<string, unknown>>(yukle: () => Promise<M>, ad: k
   lazy(async () => ({ default: (await yukle())[ad] as ComponentType }));
 
 export const GORUNUM_KAYITLARI: readonly GorunumKaydi[] = [
-  { anahtar: 'home', baslik: 'Ana Sayfa', simge: 'home', bilesen: parca(() => import('./ana/index.tsx'), 'AnaSayfa') },
+  { anahtar: 'home', baslik: 'Pano', simge: 'home', bilesen: parca(() => import('./ana/index.tsx'), 'AnaSayfa') },
   { anahtar: 'setup', baslik: 'Kurulum', simge: 'gear', bilesen: parca(() => import('./kurulum/index.tsx'), 'Kurulum') },
   { anahtar: 'prep', baslik: 'Hazırlık', simge: 'clipboard-check', bilesen: parca(() => import('./kurulum/index.tsx'), 'Hazirlik') },
   { anahtar: 'lib', baslik: 'Kütüphane', simge: 'layers', bilesen: parca(() => import('./kutuphane/index.tsx'), 'Kutuphane') },

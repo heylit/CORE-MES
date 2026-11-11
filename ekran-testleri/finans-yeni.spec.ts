@@ -5,7 +5,7 @@ test.describe('F0 iskelet', () => {
   test('yönetici açar: başlık, sekmeler ve Kayıt gir; yatay taşma yok', async ({ page, ag, ac }) => {
     await ac('/finans');
     const ekran = page.locator('.tc-fy');
-    await expect(ekran.getByRole('heading', { name: 'Ana sayfa', level: 2 })).toBeVisible();
+    await expect(ekran.getByRole('heading', { name: 'Pano', level: 2 })).toBeVisible();
     const sekmeler = page.getByRole('tablist', { name: 'Finans bölümleri' });
     await expect(sekmeler).toBeVisible();
     await expect(ekran.getByRole('button', { name: 'Kayıt gir' })).toBeEnabled({ timeout: 15_000 });

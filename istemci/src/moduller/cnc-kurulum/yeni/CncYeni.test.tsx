@@ -65,10 +65,10 @@ describe('CncYeni', () => {
   it('kök adres Ana Sayfa görünümüne düşer; görünüm şeridi prototipin sırasıyla gelir, kayıt duruma kurulur', async () => {
     sunucuKur(YONETICI, [{ anahtar: 'cnc-kurulum-motoru.v1', bicim: 'json', deger: { machine: 't2' }, surum: 4 }]);
     ac('/cnc-kurulum/yeni');
-    expect(await screen.findByRole('tab', { name: 'Ana Sayfa', selected: true }, { timeout: 10000 })).toBeTruthy();
+    expect(await screen.findByRole('tab', { name: 'Pano', selected: true }, { timeout: 10000 })).toBeTruthy();
     expect(screen.getByTestId('adres').textContent).toBe('/cnc-kurulum/yeni/ana-sayfa');
     expect(screen.getAllByRole('tab').map((s) => s.textContent)).toEqual(
-      ['Ana Sayfa', 'Kurulum', 'Hazırlık', 'Kütüphane', 'Ham Malzeme', 'Takım Ömrü'],
+      ['Pano', 'Kurulum', 'Hazırlık', 'Kütüphane', 'Ham Malzeme', 'Takım Ömrü'],
     );
     expect(screen.getByRole('button', { name: /Tanımlar/ })).toBeTruthy();
     expect(state.machine).toBe('t2');
@@ -98,7 +98,7 @@ describe('CncYeni', () => {
     cleanup();
     sunucuKur({ ...KULLANICI, islemler: ['sayfa.cnc-kurulum', 'cnc-kurulum.yaz'] });
     ac('/cnc-kurulum/yeni/ana-sayfa');
-    expect(await screen.findByRole('tab', { name: 'Ana Sayfa', selected: true }, { timeout: 10000 })).toBeTruthy();
+    expect(await screen.findByRole('tab', { name: 'Pano', selected: true }, { timeout: 10000 })).toBeTruthy();
     expect(screen.queryByRole('button', { name: /Geçmiş/ })).toBeNull();
   }, 20000);
 
@@ -114,7 +114,7 @@ describe('CncYeni', () => {
   it('menünün kökü yönlenmeden Ana Sayfa görünümünü açar; görünüme geçince ekran yeniden kurulmaz', async () => {
     const istekler = sunucuKur(KULLANICI);
     ac('/cnc-kurulum');
-    expect(await screen.findByRole('tab', { name: 'Ana Sayfa', selected: true }, { timeout: 10000 })).toBeTruthy();
+    expect(await screen.findByRole('tab', { name: 'Pano', selected: true }, { timeout: 10000 })).toBeTruthy();
     expect(screen.getByTestId('adres').textContent).toBe('/cnc-kurulum');
     fireEvent.click(screen.getByRole('tab', { name: 'Takım Ömrü' }));
     expect(await screen.findByRole('tab', { name: 'Takım Ömrü', selected: true }, { timeout: 10000 })).toBeTruthy();
@@ -125,7 +125,7 @@ describe('CncYeni', () => {
   it('yeni ekran kapısı istemez: sayfa yetkisi olan yönetici olmayan kişide de açılır (1272 a)', async () => {
     const istekler = sunucuKur(KULLANICI);
     ac('/cnc-kurulum/yeni/ana-sayfa');
-    expect(await screen.findByRole('tab', { name: 'Ana Sayfa', selected: true }, { timeout: 10000 })).toBeTruthy();
+    expect(await screen.findByRole('tab', { name: 'Pano', selected: true }, { timeout: 10000 })).toBeTruthy();
     expect(screen.queryByText(YENI_EKRAN_ILETISI)).toBeNull();
     expect(istekler.some((i) => i.includes('/cnc-kurulum/'))).toBe(true);
   }, 20000);
@@ -148,7 +148,7 @@ describe('CncYeni', () => {
     sunucuKur(YONETICI, [], undefined, null);
     ac('/cnc-kurulum/yeni/ana-sayfa');
     expect(await screen.findByText(/Sunucu hatası/, {}, { timeout: 10000 })).toBeTruthy();
-    expect(screen.queryByRole('tab', { name: 'Ana Sayfa' })).toBeNull();
+    expect(screen.queryByRole('tab', { name: 'Pano' })).toBeNull();
   }, 20000);
 
   it('okuma işlemi olmayan kişide yetki iletisi gösterir', async () => {
