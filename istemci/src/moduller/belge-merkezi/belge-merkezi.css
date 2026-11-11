@@ -88,7 +88,8 @@
   display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2);
   padding: var(--b-2) 0; border-bottom: 1px solid var(--edge);
 }
-.tc-cz-rp-ad { display: inline-flex; align-items: center; gap: var(--b-2); min-width: 0; overflow-wrap: anywhere; flex: 1; }
+.tc-cz-rp-ad { display: inline-flex; align-items: center; gap: var(--b-2); min-width: 0; overflow-wrap: anywhere; flex: 1 1 auto; }
+.tc-cz-rp-atolye { display: inline-flex; align-items: center; gap: var(--b-1); font-size: var(--yazi-s); font-weight: 600; }
 
 /* PDF düzenleyici (kart 2123): sayfa ve üstündeki düzenleme katmanı aynı ölçüde üst üste durur. */
 .tc-cz-dz-duzen { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--b-4); }

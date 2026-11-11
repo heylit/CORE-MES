@@ -76,6 +76,8 @@ export const geometriModelSatiri = z.object({
   dosyaTuru: z.enum(GEOMETRI_DOSYA_TURLERI),
   durum: z.enum(GEOMETRI_DURUMLARI),
   hataMetni: z.string().nullable(),
+  // Malzeme kartına bağlı ama Çizim Merkezi'nde yayınlanmamış model: listede "Taslak" görünür, ölçülmez. Yoksa yayındadır.
+  yayinda: z.boolean().optional(),
 });
 export type GeometriModelSatiri = z.output<typeof geometriModelSatiri>;
 export const geometriModelListeCevabi = listeCevapSemasi(geometriModelSatiri);

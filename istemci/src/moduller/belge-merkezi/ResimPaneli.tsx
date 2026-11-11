@@ -30,8 +30,13 @@ export function useMalzemeResimYetkisi() {
   return {
     yazar: islemler.includes('malzemeler.yaz') || islemler.includes('belge-merkezi.yaz'),
     merkezGorur: islemler.includes('sayfa.cizimler'),
+    yayinlar: islemler.includes('belge-merkezi.yayinla'),
+    atolyeGorur: islemler.includes('sayfa.geometri'),
   };
 }
+
+// 3D Atölyesi yalnız ölçülebilen biçimleri (STEP, IGES) listeler; bağlantı yalnız onlarda çıkar.
+const OLCULEN = new Set(['step', 'iges']);
 
 const adindan = (ad: string): string => (ad.replace(/\.[^.]+$/, '').replace(/_+/g, ' ').trim() || 'Belge').slice(0, 120);
 
@@ -221,7 +226,7 @@ const gosterilenRevizyon = (b: MalzemeBelgesi): Revizyon | undefined => b.revizy
 export function ResimPaneli({ malzemeNo }: { malzemeNo: number }) {
   const istemci = useQueryClient();
   const { bildir } = useBildirim();
-  const { yazar, merkezGorur } = useMalzemeResimYetkisi();
+  const { yazar, merkezGorur, yayinlar, atolyeGorur } = useMalzemeResimYetkisi();
   const [acik, acikYaz] = useState<'ekle' | { revizyon: MalzemeBelgesi } | null>(null);
   const [isleyen, isleyenYaz] = useState<number | null>(null);
   const sorgu = useQuery({
@@ -255,7 +260,7 @@ export function ResimPaneli({ malzemeNo }: { malzemeNo: number }) {
                   Resim kartla uyuşmuyor: resmin revizyon kodu {veri.kucukResim.antetRev ?? 'yok'}, kartın revizyonu {veri.kartRevizyon ?? 'yok'}. Teknik resim numarasını da denetleyin.
                 </p>
               )}
-              {veri.kucukResim?.taslak === true && <p className="tc-cz-ipucu" role="status">Resim taslak 3B modelden; model çizim merkezinde yayınlanınca atölyeye gider.</p>}
+              {veri.kucukResim?.taslak === true && <p className="tc-cz-ipucu" role="status">Resim taslak 3B modelden; model yayınlanınca ölçülür ve atölyeye gider.</p>}
               {veri.kucukResim === null && <p className="tc-cz-ipucu">Küçük resim yok. Foto, teknik resim ya da 3B model ekleyin.</p>}
             </div>
             {veri.belgeler.length === 0
@@ -266,6 +271,8 @@ export function ResimPaneli({ malzemeNo }: { malzemeNo: number }) {
                     const r = gosterilenRevizyon(b);
                     const karesiz = karesizYayinda(b);
                     const yayinlanmis = b.revizyonlar.some((x) => x.durum !== 'taslak');
+                    const yayindaki = b.revizyonlar.find((x) => x.durum === 'yayinda');
+                    const taslakModel = b.tur === '3b-model' && yayindaki === undefined ? b.revizyonlar.find((x) => x.durum === 'taslak') : undefined;
                     return (
                       <li key={b.id}>
                         <span className="tc-cz-rp-ad">
@@ -275,6 +282,17 @@ export function ResimPaneli({ malzemeNo }: { malzemeNo: number }) {
                         {r && <span className="mono">{revKoduMetni(r.revKodu)}</span>}
                         {r && <Rozet ton={DURUM_TONU[r.durum]}>{DURUM_ADI[r.durum]}</Rozet>}
                         {b.kapak && <Rozet ton="bilgi">Kapak</Rozet>}
+                        {b.tur === '3b-model' && atolyeGorur && yayindaki && OLCULEN.has(yayindaki.dosyaTuru) && (
+                          <Link className="tc-cz-rp-atolye" to={`/geometri?rev=${String(yayindaki.id)}`}><Simge ad="expand" />3D Atölyesi'nde aç</Link>
+                        )}
+                        {taslakModel && yayinlar && (
+                          <Dugme
+                            simge="check" tur="birincil" yukleniyor={isleyen === b.id} disabled={isleyen !== null} aria-label={`${b.ad} yayınla`}
+                            onClick={() => { void islem(b.id, async () => { await api.post(`/cizimler/${String(b.id)}/revizyonlar/${String(taslakModel.id)}/yayinla`, { surum: b.surum }); bildir('bilgi', 'Model yayınlandı; 3D Atölyesi yarım dakika içinde ölçer.'); }, 'Yayınlanamadı'); }}
+                          >
+                            Yayınla
+                          </Dugme>
+                        )}
                         {yazar && (
                           <span className="tc-cz-rev-arac">
                             {!b.kapak && yayinlanmis && (

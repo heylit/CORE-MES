@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useEffect } from 'react';
 import { Link, MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
@@ -31,7 +31,12 @@ afterEach(() => { cleanup(); vi.unstubAllGlobals(); sessionStorage.clear(); kuru
 const json = (durum: number, govde: unknown) => new Response(JSON.stringify(govde), { status: durum });
 interface Istek { yontem: string; yol: string; govde: unknown; basliklar: Record<string, string> }
 
-function sunucuKur(yollar: Record<string, (govde: unknown, yol: string) => Response>) {
+const oturum = (islemler: string[]) => () => json(200, { kullanici: { id: 9, kullaniciAdi: 'deneme', adSoyad: 'Deneme', roller: [], islemler } });
+const TUM_ISLEMLER = ['sayfa.geometri', 'geometri.oku', 'geometri.hesapla', 'geometri.yuzey-yaz'];
+
+// Oturum verilmezse kişi 3D Atölyesi'nin bütün işlemlerine sahiptir; yetki testi kendi oturumunu verir.
+function sunucuKur(verilen: Record<string, (govde: unknown, yol: string) => Response>) {
+  const yollar: Record<string, (govde: unknown, yol: string) => Response> = { 'GET /oturum': oturum(TUM_ISLEMLER), ...verilen };
   const istekler: Istek[] = [];
   vi.stubGlobal('fetch', vi.fn(async (adres: string, secenek?: RequestInit) => {
     const yol = adres.replace('/api', '');
@@ -190,6 +195,65 @@ describe('3D Atölyesi', () => {
     const post = istekler.find((i) => i.yontem === 'POST');
     expect(post?.govde).toEqual({ surum: 3 });
     expect(post?.basliklar['istek-kimligi']).toBeTruthy();
+  });
+
+  it('3030: "Yeniden hesapla" yalnız geometri.hesapla işlemi olana görünür; okuyan ölçüleri görür, düğmeyi görmez', async () => {
+    sunucuKur({
+      'GET /oturum': oturum(['sayfa.geometri', 'geometri.oku']),
+      'GET /geometri/modeller': () => json(200, LISTE),
+      'GET /geometri/analizler/41': () => json(200, ANALIZ),
+      'GET /geometri/modeller/41/dosya': DOSYA,
+    });
+    ac('/geometri?rev=41');
+    expect(await screen.findByText('Analiz (yaklaşık)')).toBeTruthy();
+    await waitFor(() => expect(screen.queryByText('Hacim')).toBeTruthy());
+    expect(screen.queryByRole('button', { name: /Yeniden hesapla/ })).toBeNull();
+  });
+
+  it('3028: taslak model "Taslak" rozetiyle listelenir; seçilince adı ve "Yayınla" görünür, yayın belgenin sürümüyle gider', async () => {
+    const TASLAK = { ...LISTE.satirlar[0]!, malzemeKodu: 'MLZ-0009', malzemeAdi: 'Deneme braket', belgeId: 9, belgeAdi: 'Model braket.step', revizyonId: 90, revKodu: null, durum: 'yok' as const, yayinda: false };
+    const istekler = sunucuKur({
+      'GET /oturum': oturum([...TUM_ISLEMLER, 'belge-merkezi.yaz', 'belge-merkezi.yayinla']),
+      'GET /geometri/modeller': () => json(200, { ...LISTE, satirlar: [TASLAK, ...LISTE.satirlar], toplam: (LISTE.toplam ?? 0) + 1 }),
+      'GET /cizimler/9': () => json(200, { id: 9, surum: 6 }),
+      'POST /cizimler/9/revizyonlar/90/yayinla': () => json(200, { id: 9, surum: 7 }),
+    });
+    ac();
+    expect(await screen.findByRole('button', { name: /Model ekle/ })).toBeTruthy();
+    const satir = await screen.findByRole('button', { name: /MLZ-0009/ });
+    expect(within(satir).getByText('Taslak')).toBeTruthy();
+    fireEvent.click(satir);
+    expect(await screen.findByText('Bu model taslak. Yayınlanınca ölçülür, atölyede ve rotada geçerli olur.')).toBeTruthy();
+    const ayrinti = screen.getByRole('region', { name: 'Model ayrıntısı' });
+    expect(within(ayrinti).getByText('Kodsuz revizyon · Model braket.step')).toBeTruthy();
+    expect(istekler.some((i) => i.yol.startsWith('/geometri/analizler/90'))).toBe(false);
+    fireEvent.click(within(ayrinti).getByRole('button', { name: /Yayınla/ }));
+    await waitFor(() => expect(istekler.find((i) => i.yontem === 'POST')?.govde).toEqual({ surum: 6 }));
+  });
+
+  it('3028: yayınlama yetkisi olmayan taslağı seçince düğme değil "Yayınlama yetkisi olan kişi yayınlar." görür; yazma yetkisi yoksa "Model ekle" yok', async () => {
+    const TASLAK = { ...LISTE.satirlar[0]!, malzemeKodu: 'MLZ-0009', belgeId: 9, belgeAdi: 'Model braket.step', revizyonId: 90, durum: 'yok' as const, yayinda: false };
+    sunucuKur({
+      'GET /oturum': oturum(['sayfa.geometri', 'geometri.oku']),
+      'GET /geometri/modeller': () => json(200, { ...LISTE, satirlar: [TASLAK, ...LISTE.satirlar], toplam: (LISTE.toplam ?? 0) + 1 }),
+    });
+    ac();
+    fireEvent.click(await screen.findByRole('button', { name: /MLZ-0009/ }));
+    const ayrinti = screen.getByRole('region', { name: 'Model ayrıntısı' });
+    expect(await within(ayrinti).findByText('Yayınlama yetkisi olan kişi yayınlar.')).toBeTruthy();
+    expect(within(ayrinti).queryByRole('button', { name: /Yayınla/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Model ekle/ })).toBeNull();
+  });
+
+  it('3028: "Model ekle" malzeme seçicisinin istediği belge-merkezi.yaz ile görünür; yalnız malzemeler.yaz olana görünmez', async () => {
+    sunucuKur({ 'GET /oturum': oturum(['sayfa.geometri', 'geometri.oku', 'malzemeler.yaz']), 'GET /geometri/modeller': () => json(200, LISTE) });
+    ac();
+    expect(await screen.findByRole('button', { name: /MLZ-0007/ })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /Model ekle/ })).toBeNull();
+    cleanup();
+    sunucuKur({ 'GET /oturum': oturum(['sayfa.geometri', 'geometri.oku', 'belge-merkezi.yaz']), 'GET /geometri/modeller': () => json(200, LISTE) });
+    ac();
+    expect(await screen.findByRole('button', { name: /Model ekle/ })).toBeTruthy();
   });
 
   it('GEO-1: ikinci "Yeniden hesapla" yeni kimlikle gider; çift tık tek istek', async () => {

@@ -8,6 +8,7 @@ import type {
 import { DurumKutusu, Dugme, Girdi, Kart, Rozet, SayfaBasligi, Sayfalama, Secim, Simge, useBildirim } from '../../ortak/arayuz/index.ts';
 import { api, ApiHatasi, hataIletisi, OTURUM_BITTI } from '../../ortak/veri/api.ts';
 import { useKorumaliKomut } from '../../ortak/veri/korumali-komut.ts';
+import { Yetkili } from '../../ortak/veri/yetki.ts';
 import { KucukResimKutusu, useKucukResimler } from '../belge-merkezi/disari.ts';
 import { yerlesikKaliteYogunlugu } from '../malzemeler/disari.ts';
 import { anahtarlar } from './anahtarlar.ts';
@@ -17,6 +18,7 @@ import {
   uzunluk, yogunlukBicimi, yogunlukOku, type Yon3,
 } from './gorunum.ts';
 import type { Onizleme, ParcaKutusu, ResimAl, Vurgu, YuzDurumu } from './Goruntu3B.tsx';
+import { ModelEkle, TaslakModel, useModelYetkisi } from './ModelEkle.tsx';
 import { MontajKarti } from './MontajKarti.tsx';
 import { YuzeyKarti, type YuzeySahnesi } from './YuzeyKarti.tsx';
 import './geometri.css';
@@ -66,7 +68,7 @@ function ModelListesi({ secili, sec }: { secili: number | null; sec: (s: Geometr
           : sorgu.data.satirlar.length === 0
             ? <DurumKutusu durum="bos" mesaj={ara.trim() !== '' || durum !== ''
               ? 'Aramaya ya da süzgece uyan model yok.'
-              : "3B modeli olan malzeme yok. Malzeme kartına STEP ya da IGES ekleyip Çizim Merkezi'nde yayınlayın."} />
+              : '3B modeli olan malzeme yok. Sağ üstteki "Model ekle" ile STEP ya da IGES yükleyin.'} />
             : (
               <>
                 <ul className="tc-g3b-satirlar">
@@ -79,7 +81,7 @@ function ModelListesi({ secili, sec }: { secili: number | null; sec: (s: Geometr
                           <span>{s.malzemeAdi ?? s.belgeAdi}</span>
                           <span className="tc-g3b-soluk">{s.revKodu ? `Rev ${s.revKodu}` : 'Kodsuz revizyon'} · {s.dosyaTuru.toUpperCase()}{s.malzemeAdi === null ? '' : ` · ${s.belgeAdi}`}</span>
                         </span>
-                        <Rozet ton={DURUM_TONU[s.durum]}>{DURUM_ADI[s.durum]}</Rozet>
+                        {s.yayinda === false ? <Rozet ton="uyari">Taslak</Rozet> : <Rozet ton={DURUM_TONU[s.durum]}>{DURUM_ADI[s.durum]}</Rozet>}
                       </button>
                     </li>
                   ))}
@@ -113,10 +115,10 @@ function AnalizKarti({ cevap, yeniden }: { cevap: GeometriAnalizCevabi; yeniden:
   const surer = suruyorMu(cevap.durum);
   return (
     <Kart baslik="Analiz (yaklaşık)" simge="ruler" baslikEki={<Rozet ton={DURUM_TONU[cevap.durum]}>{DURUM_ADI[cevap.durum]}</Rozet>}
-      sag={<Dugme tur="ikincil" simge="rotate" yukleniyor={yeniden.bekliyor} disabled={surer} onClick={yeniden.calistir}>Yeniden hesapla</Dugme>}>
+      sag={<Yetkili islem="geometri.hesapla"><Dugme tur="ikincil" simge="rotate" yukleniyor={yeniden.bekliyor} disabled={surer} onClick={yeniden.calistir}>Yeniden hesapla</Dugme></Yetkili>}>
       {cevap.durum === 'hata' && <p className="tc-g3b-hata">{cevap.is?.hataMetni}</p>}
       {a === null ? (
-        <p className="tc-g3b-soluk">{surer ? 'Hesap sürüyor; sonuç gelince burada görünür.' : 'Analiz yok.'}</p>
+        <p className="tc-g3b-soluk">{surer ? 'Hesap sürüyor; sonuç genellikle yarım dakika içinde burada görünür.' : 'Analiz yok.'}</p>
       ) : (
         <dl className="tc-g3b-degerler">
           <div><dt>Dış kutu</dt><dd>{kutuMetni(a.kutu.x, a.kutu.y, a.kutu.z)}</dd></div>
@@ -470,6 +472,8 @@ export function Atolye3B() {
   const [bosaldi, bosaldiYaz] = useState(false);
   const revizyonId = adrestekiRev ?? (bosaldi ? null : sonRevOku());
   const [satir, satirYaz] = useState<GeometriModelSatiri | null>(null);
+  const { ekler } = useModelYetkisi();
+  const [ekleAcik, ekleAcikYaz] = useState(false);
   const sec = (s: GeometriModelSatiri) => { bosaldiYaz(false); satirYaz(s); adresYaz({ rev: String(s.revizyonId) }); };
   const yonlendir = useCallback((rev: number) => { satirYaz(null); adresYaz({ rev: String(rev) }, { replace: true }); }, [adresYaz]);
   useEffect(() => {
@@ -479,16 +483,21 @@ export function Atolye3B() {
   }, [revizyonId, adrestekiRev, adresYaz]);
   if (calisma === null) return <Navigate to={`${KOK}${search}`} replace />;
   const c = CALISMALAR[calisma];
+  const taslak = satir !== null && satir.revizyonId === revizyonId && satir.yayinda === false ? satir : null;
   return (
     <div className="tc-g3b">
-      <SayfaBasligi baslik="3D Atölyesi" simge="expand" alt={`${c.baslik}: ${c.alt}`} />
+      <SayfaBasligi baslik="3D Atölyesi" simge="expand" alt={`${c.baslik}: ${c.alt}`}
+        {...(ekler ? { birincil: { etiket: 'Model ekle', simge: 'plus' as const, yap: () => { ekleAcikYaz(true); } } } : {})} />
+      {ekleAcik && <ModelEkle kapat={() => { ekleAcikYaz(false); }} eklendi={() => undefined} />}
       <div className={`tc-g3b-izgara${revizyonId === null ? '' : ' tc-g3b-secili'}`}>
         <ModelListesi secili={revizyonId} sec={sec} />
         <section className="tc-g3b-sag" aria-label="Model ayrıntısı">
           {revizyonId === null ? <DurumKutusu durum="bos" mesaj="Soldan bir model seçin." /> : (
             <>
               <Dugme tur="ikincil" simge="chev-left" className="tc-g3b-geri" onClick={() => { sonRevYaz(null); bosaldiYaz(true); satirYaz(null); adresYaz({}); }}>Listeye dön</Dugme>
-              <ModelAyrintisi key={revizyonId} revizyonId={revizyonId} satir={satir?.revizyonId === revizyonId ? satir : null} yonlendir={yonlendir} calisma={calisma} />
+              {taslak !== null
+                ? <TaslakModel satir={taslak} yayinlandi={() => { satirYaz({ ...taslak, yayinda: true, durum: 'yok' }); }} />
+                : <ModelAyrintisi key={revizyonId} revizyonId={revizyonId} satir={satir?.revizyonId === revizyonId ? satir : null} yonlendir={yonlendir} calisma={calisma} />}
             </>
           )}
         </section>

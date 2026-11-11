@@ -26,7 +26,7 @@ export const uclar = [
   uc({
     yontem: 'GET', yol: '/geometri/modeller', yetki: 'geometri.oku',
     sorgu: geometriModelListeSorgusu, cevap: geometriModelListeCevabi,
-    isle: ({ db, sorgu }) => modelListesi(db, sorgu),
+    isle: ({ db, kullanici, sorgu }) => modelListesi(db, kullanici, sorgu),
   }),
   uc({
     yontem: 'GET', yol: '/geometri/modeller/:revizyonId/dosya', yetki: 'geometri.oku',

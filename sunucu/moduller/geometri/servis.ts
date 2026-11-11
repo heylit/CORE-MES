@@ -9,7 +9,7 @@ import type {
   GeometriYuzeyAdimi, GeometriYuzeyCevabi, GeometriYuzeyKaydetGovdesi,
 } from '#paylasilan/sozlesme/geometri.ts';
 import type { Kullanici } from '#paylasilan/kullanici.ts';
-import { alinanRevizyonDosyasi, kayitlaraBagliYayindakiBelgeler } from '../belge-merkezi/disari.ts';
+import { alinanRevizyonDosyasi, kayitlaraBagliTaslakBelgeler, kayitlaraBagliYayindakiBelgeler, taslagiGorur } from '../belge-merkezi/disari.ts';
 import { sistemAyariOku } from '../ayarlar/disari.ts';
 import { kisiAdlari } from '../kisiler/disari.ts';
 import { hammaddeStokOlculeri, malzemeOzetleri } from '../malzemeler/disari.ts';
@@ -58,11 +58,25 @@ async function model(db: Db, revizyonId: number): Promise<Model> {
 const durumu = (is: sorgular.IsSatiri | undefined | null): GeometriDurumu => is?.durum ?? 'yok';
 const kucuk = (s: string): string => s.toLocaleLowerCase('tr-TR');
 
+// Malzeme kartına bağlı, hiç yayınlanmamış STEP/IGES modeller (3028 b). Ölçülmez; yalnız listede "Taslak" satırıdır.
+async function taslakModeller(db: Db): Promise<Omit<Model, 'ozet' | 'kapak'>[]> {
+  const sonuc: Omit<Model, 'ozet' | 'kapak'>[] = [];
+  for (const [malzemeNo, belgeler] of await kayitlaraBagliTaslakBelgeler(db, 'malzemeler', DOSYA_TURLERI)) {
+    for (const b of belgeler) {
+      if (!geometriTuruMu(b.dosyaTuru)) continue;
+      sonuc.push({ malzemeNo, belgeId: b.id, belgeAdi: b.ad, revizyonId: b.revizyonId, harf: b.harf, revKodu: b.revKodu, dosyaTuru: b.dosyaTuru });
+    }
+  }
+  return sonuc;
+}
+
+// Taslak satırlar yalnız yazana ve yayıncıya döner (1885 b); durum süzgecinde yer almazlar, listenin başındadırlar.
 export async function modelListesi(
-  db: Db, s: { sayfa: number; sayfaBoyu?: number | undefined; ara?: string | undefined; durum?: GeometriDurumu | undefined },
+  db: Db, kullanici: Kullanici, s: { sayfa: number; sayfaBoyu?: number | undefined; ara?: string | undefined; durum?: GeometriDurumu | undefined },
 ): Promise<SayfaliListe<GeometriModelSatiri>> {
   const liste = await modeller(db);
-  const malzemeler = await malzemeOzetleri(db, liste.map((m) => m.malzemeNo));
+  const taslaklar = s.durum === undefined && taslagiGorur(kullanici) ? await taslakModeller(db) : [];
+  const malzemeler = await malzemeOzetleri(db, [...liste, ...taslaklar].map((m) => m.malzemeNo));
   const isler = new Map((await sorgular.isler(db, [...new Set(liste.map((m) => m.revizyonId))])).map((i) => [i.revizyonId, i]));
   const ara = s.ara ? kucuk(s.ara) : null;
   const satirlar: GeometriModelSatiri[] = [];
@@ -72,13 +86,26 @@ export async function modelListesi(
     const is = isler.get(m.revizyonId);
     const satir: GeometriModelSatiri = {
       malzemeNo: m.malzemeNo, malzemeKodu: mz.kod, malzemeAdi: mz.ad, belgeId: m.belgeId, belgeAdi: m.belgeAdi, revizyonId: m.revizyonId,
-      harf: m.harf, revKodu: m.revKodu, dosyaTuru: m.dosyaTuru, durum: durumu(is), hataMetni: is?.hataMetni ?? null,
+      harf: m.harf, revKodu: m.revKodu, dosyaTuru: m.dosyaTuru, durum: durumu(is), hataMetni: is?.hataMetni ?? null, yayinda: true,
     };
     if (s.durum !== undefined && satir.durum !== s.durum) continue;
     if (ara !== null && ![satir.malzemeKodu, satir.malzemeAdi ?? '', satir.belgeAdi].some((x) => kucuk(x).includes(ara))) continue;
     satirlar.push(satir);
   }
-  satirlar.sort((a, b) => a.malzemeKodu.localeCompare(b.malzemeKodu, 'tr') || a.revizyonId - b.revizyonId);
+  const sira = (a: GeometriModelSatiri, b: GeometriModelSatiri): number => a.malzemeKodu.localeCompare(b.malzemeKodu, 'tr') || a.revizyonId - b.revizyonId;
+  satirlar.sort(sira);
+  const taslakSatirlar: GeometriModelSatiri[] = [];
+  for (const m of taslaklar) {
+    const mz = malzemeler.get(m.malzemeNo);
+    if (mz === undefined) continue;
+    const satir: GeometriModelSatiri = {
+      malzemeNo: m.malzemeNo, malzemeKodu: mz.kod, malzemeAdi: mz.ad, belgeId: m.belgeId, belgeAdi: m.belgeAdi, revizyonId: m.revizyonId,
+      harf: m.harf, revKodu: m.revKodu, dosyaTuru: m.dosyaTuru, durum: 'yok', hataMetni: null, yayinda: false,
+    };
+    if (ara !== null && ![satir.malzemeKodu, satir.malzemeAdi ?? '', satir.belgeAdi].some((x) => kucuk(x).includes(ara))) continue;
+    taslakSatirlar.push(satir);
+  }
+  satirlar.unshift(...taslakSatirlar.sort(sira));
   return sayfaliListe(s, { say: () => Promise.resolve(satirlar.length), satirlar: (d) => Promise.resolve(satirlar.slice(d.atla, d.atla + d.sinir)) });
 }
 

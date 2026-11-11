@@ -315,6 +315,33 @@ export function bagliYayindakiBelgeler(
   );
 }
 
+export interface TaslakBelgeSatiri {
+  hedefId: number;
+  id: number;
+  ad: string;
+  tur: BelgeTuru;
+  taslakRevizyonId: number;
+  taslakSira: number;
+  dosyaTuru: DosyaTuru;
+}
+
+// Kayıtlara bağlı, hiç yayında revizyonu olmayan etkin belgelerin son taslağı (3028 b: taslak model 3D Atölyesi'nde görünür).
+export function bagliTaslakBelgeler(db: Db, hedefModul: BagModulu, dosyaTurleri: readonly DosyaTuru[]): Promise<TaslakBelgeSatiri[]> {
+  return db.sorgu<TaslakBelgeSatiri>(
+    `SELECT g.hedef_id AS "hedefId", b.id, b.ad, b.tur, y.id AS "taslakRevizyonId", y.sira AS "taslakSira", y.dosya_turu AS "dosyaTuru"
+       FROM belge_merkezi_bag g
+       JOIN belge_merkezi_belge b ON b.id = g.belge_id AND b.aktif
+       JOIN LATERAL (
+         SELECT r.id, r.sira, r.dosya_turu FROM belge_merkezi_revizyon r
+          WHERE r.belge_id = b.id AND r.durum = 'taslak' ORDER BY r.sira DESC LIMIT 1
+       ) y ON true
+      WHERE g.hedef_modul = $1 AND y.dosya_turu = ANY($2::text[])
+        AND NOT EXISTS (SELECT 1 FROM belge_merkezi_revizyon x WHERE x.belge_id = b.id AND x.durum = 'yayinda')
+      ORDER BY g.hedef_id, b.ad, b.id`,
+    [hedefModul, [...dosyaTurleri]],
+  );
+}
+
 export interface AramaSatiri {
   id: number;
   ad: string;
