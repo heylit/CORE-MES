@@ -197,7 +197,8 @@ test.describe('P2 Kütüphane, Tanımlar, Ana Sayfa', () => {
   // ayarı bilerek eksiktir. Ayar yazılmaz (ortak örnek veride öteki testlerin tezgâh listesini değiştirirdi); yazma birim ve sunucu testlerindedir.
   test('Tanımlar: makineler İstasyonlar\'dan gelir, ayarı eksik olan işaretlenir, yeni tezgâh eklenmez', async ({ page, ac }) => {
     await ac('/cnc-kurulum/yeni/kutuphane');
-    await page.getByRole('button', { name: 'Tanımlar' }).click();
+    // Ana menüde de "Tanımlar" adlı grup başlığı vardır (2951); sayfanın düğmesi içerik alanındadır.
+    await page.getByRole('main').getByRole('button', { name: 'Tanımlar' }).click();
     const pencere = page.getByRole('dialog', { name: 'Tanımlar' });
     await expect(pencere.getByRole('button', { name: 'Yeni tezgâh' })).toHaveCount(0);
     await expect(pencere.locator('tr').filter({ hasText: 'ORN-CNC-T1' }).getByText('ayarı eksik')).toHaveCount(0);

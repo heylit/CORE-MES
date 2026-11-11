@@ -297,4 +297,20 @@ describe('profil ve şikayet/istek/öneri kutusu (gerçek PostgreSQL, gerçek gi
       /profil_menu_tercihi_sayfalar_sinir/,
     );
   });
+  test('PRF-7: iki uç yalnız oturumdaki kişinin kaydını okur ve yazar; başkasının kimliği yolda, sorguda ya da gövdede seçilemez', async () => {
+    const camOnce = await menu('cam');
+    const satir = (ad: string) => o().sahip.tek<{ sayfalar: string[]; surum: number }>('SELECT sayfalar, surum FROM profil_menu_tercihi WHERE kisi_id = $1', [kisiler.get(ad)]);
+    const camSatiri = await satir('cam');
+    const camId = String(kisiler.get('cam'));
+    const sorgulu = await istek<unknown>('operator', 'GET', `/profil/menu?kisiId=${camId}&kisi=${camId}`);
+    assert.deepEqual(sorgulu, { durum: 200, govde: { sayfalar: [], surum: 0 } });
+    assert.equal((await istek('operator', 'GET', `/profil/menu/${camId}`)).durum, 404);
+    assert.equal((await menuSec('operator', { sayfalar: ['/stok'], surum: camOnce.surum, kisiId: kisiler.get('cam') })).durum, 400);
+    const sorguluYazma = await istek<unknown>('operator', 'POST', `/profil/menu-sec?kisiId=${camId}`, { sayfalar: [], surum: 0 });
+    assert.deepEqual(sorguluYazma, { durum: 200, govde: { sayfalar: [], surum: 1 } });
+    assert.deepEqual(await menu('cam'), camOnce);
+    assert.deepEqual(await satir('cam'), camSatiri);
+    assert.deepEqual(await satir('operator'), { sayfalar: [], surum: 1 });
+    await o().sahip.sorgu('DELETE FROM profil_menu_tercihi WHERE kisi_id = $1', [kisiler.get('operator')]);
+  });
 });
