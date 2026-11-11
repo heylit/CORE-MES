@@ -92,7 +92,7 @@ export function AdimDurumu() {
   const [adres, adresYaz] = useSearchParams();
   const secili = Number(adres.get('emir')) || null;
   const [arama, aramaYaz] = useState('');
-  const liste = useQuery({ queryKey: anahtarlar.liste(''), queryFn: () => api.get<AdimliListeCevabi>('/adimli-emirler') });
+  const liste = useQuery({ queryKey: anahtarlar.adimliListe, queryFn: () => api.get<AdimliListeCevabi>('/adimli-emirler') });
   const acik = (liste.data?.emirler ?? []).filter((e) => ACIK.has(e.durum));
   const aranan = arama.trim().toLocaleLowerCase('tr');
   const emirler = aranan === '' ? acik

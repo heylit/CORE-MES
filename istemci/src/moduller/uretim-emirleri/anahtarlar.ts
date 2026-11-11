@@ -3,6 +3,9 @@ import type { EmirDurumu, KapanisAsamasi } from '#paylasilan/sozlesme/uretim-emi
 export const anahtarlar = {
   hepsi: ['uretim-emirleri'] as const,
   liste: (durum: EmirDurumu | '') => ['uretim-emirleri', 'liste', durum] as const,
+  // Adım Durumu'nun listesi başka uçtan, başka biçimde gelir; Üretim Emirleri listesiyle aynı anahtarı paylaşırsa önbellekteki
+  // öbür cevap okunur ve ekran çöker.
+  adimliListe: ['uretim-emirleri', 'adimli-liste'] as const,
   bitenler: (durum: EmirDurumu | '', ara: string, sayfa: number) => ['uretim-emirleri', 'bitenler', durum, ara, sayfa] as const,
   ayrinti: (id: number) => ['uretim-emirleri', 'ayrinti', id] as const,
   ozet: ['uretim-emirleri', 'ozet'] as const,
