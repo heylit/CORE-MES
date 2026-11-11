@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import { GENIS_MENU, MENU_SINIRI, ROL_GORUNUMLERI, etkinGorunum, seritRolGorunurMu } from './rol-gorunumleri.ts';
 import { SAYFALAR, menudeGorunur } from './sayfalar.ts';
+import { rolunIslemleri, type RolKodu } from '../araclar/yetki-beklentisi.ts';
 
 describe('rol görünümleri (1390 a)', () => {
   test('her rolün menüsü en çok 8 sayfadır (müdür ve planlamada 9, 1851 a), tekrarsızdır ve yalnız menüde görünen kayıtlı sayfaları içerir', () => {
@@ -16,6 +17,18 @@ describe('rol görünümleri (1390 a)', () => {
 
   test('1851 a: Akış Süresi müdür ve planlama menüsünde, telefon alt çubuğunun (ilk dört) dışında', () => {
     for (const rol of ['mudur', 'planlama_proje']) assert.ok((ROL_GORUNUMLERI[rol]?.sayfalar.indexOf('/akis') ?? -1) >= 4, rol);
+  });
+
+  // Rol menüsü kişinin göremediği sayfayı çizmez (Kabuk); burada aynı süzgeç rolün beklenen yetkisiyle uygulanır.
+  const menusu = (rol: RolKodu): readonly string[] => {
+    const islemler: readonly string[] = rolunIslemleri(rol);
+    const gorur = new Set(SAYFALAR.filter((s) => islemler.includes(s.islem)).map((s) => s.yol as string));
+    return etkinGorunum([rol]).sayfaSirasi.filter((yol) => gorur.has(yol));
+  };
+
+  test('2893-5 a: Adım Durumu yetkili rolün ana menüsünde görünür, yetkisiz rolde görünmez', () => {
+    for (const rol of ['cam', 'muhasebe_finans', 'uretim_muduru'] as const) assert.ok(menusu(rol).includes('/adim-durumu'), rol);
+    for (const rol of ['operator', 'vardiya_sorumlusu', 'depo', 'satis'] as const) assert.equal(menusu(rol).includes('/adim-durumu'), false, rol);
   });
 
   test('operatör CNC Kurulum görmez (1393 c+); yönetici rol listesinde yoktur, tam görünümdedir', () => {

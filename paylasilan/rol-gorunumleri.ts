@@ -28,7 +28,8 @@ const TEMEL_GORUNUMLER: Readonly<Record<string, RolGorunumu>> = {
     kaynaklar: ['uretim-emirleri-kuyrugum-is', 'istasyonlar-duran-is', 'arkon-gunum-olcu'],
   },
   vardiya_sorumlusu: {
-    sayfalar: ['/uretim-terminali', '/kuyruk', '/arkon', '/vardiya', '/istasyonlar', '/cnc-kurulum', KISISEL],
+    // Adım Durumu'nun işlemi vardiya sorumlusunda yok; satır bu görünümü alan üretim müdüründe çizilir.
+    sayfalar: ['/uretim-terminali', '/kuyruk', '/arkon', '/vardiya', '/istasyonlar', '/cnc-kurulum', '/adim-durumu', KISISEL],
     kartlar: [
       'arkon-ozetim', 'uretim-emirleri-kuyrugum', 'vardiya-secilmeyen', 'vardiya-bugun', 'vardiya-planli-durus',
       'istasyonlar-duran-makine', 'istasyonlar-calisan-makine', 'istasyonlar-personel', 'oee-tesis',
@@ -65,7 +66,7 @@ const TEMEL_GORUNUMLER: Readonly<Record<string, RolGorunumu>> = {
     ],
   },
   muhasebe_finans: {
-    sayfalar: ['/finans', '/musteri-tedarikci', '/satin-alma', '/siparisler', '/stok', KISISEL],
+    sayfalar: ['/finans', '/musteri-tedarikci', '/satin-alma', '/siparisler', '/stok', '/adim-durumu', KISISEL],
     kartlar: [
       'finans-geciken-tahsilat', 'finans-yaklasan-odeme', 'finans-nakit', 'finans-portfoy-cek', 'finans-kur-usd', 'finans-kur-eur',
       'satin-alma-onay-bekleyen', 'siparisler-geciken',
@@ -80,7 +81,7 @@ const TEMEL_GORUNUMLER: Readonly<Record<string, RolGorunumu>> = {
     kartlar: ['sevkiyat-bekleyen', 'sevkiyat-gecikmis', 'siparisler-geciken', 'siparisler-yaklasan-termin'],
   },
   cam: {
-    sayfalar: ['/cnc-kurulum', '/cizimler', '/recete-rota', '/malzemeler', '/arkon', '/uretim-emirleri', KISISEL],
+    sayfalar: ['/cnc-kurulum', '/cizimler', '/recete-rota', '/malzemeler', '/arkon', '/uretim-emirleri', '/adim-durumu', KISISEL],
     kartlar: [
       'rota-acik-revizyon', 'rota-onay-bekleyen', 'arkon-hazirlik', 'uretim-emirleri-acik', 'malzemeler-onay-bekleyen',
     ],
