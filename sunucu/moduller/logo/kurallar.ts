@@ -991,18 +991,22 @@ export interface StokFisi {
   no: string;
   tarih: string;
   saat: string;
+  // Emir fişinin emir numarası; Logo fiş numarasına sığmadığı için satır açıklamasının başında gider.
+  emirNo?: string | null;
   satirlar: readonly StokFisSatiri[];
 }
 export interface StokFisSatiri { stokKodu: string | null; birim: string | null; miktar: string; aciklama: string | null; kaynakAmbarNo: number | null; hedefAmbarNo: number | null }
 
 // Kartı ya da birimi olmayan satır boş metinle kalır: gövde kuralı fişi nedeniyle reddeder, sessizce düşmez. Satırı olmayan fiş null
-// (gönderilecek bir şey yok; Logo'da açıksa silinir).
+// (gönderilecek bir şey yok; Logo'da açıksa silinir). Emir numarası açıklamanın başındadır: açıklama sınırda kesilirse emir no kalır.
+const emirliAciklama = (emirNo: string | null, aciklama: string | null): string | null =>
+  [emirNo?.trim(), aciklama?.trim()].filter((x) => x).join(' ') || null;
 export function stokFisindenLogoFisi(f: StokFisi, ekSatirlar: readonly StokFisSatiri[] = []): GonderilecekMalzemeFisi | null {
   const ambar = f.tur === 'ambar';
   const satirlar = [...f.satirlar, ...ekSatirlar]
     .filter((k) => !ONDALIK.test(k.miktar) || olcekli(k.miktar) !== 0n)
     .map((k, i) => ({
-      satirId: i + 1, stokKodu: k.stokKodu ?? '', miktar: k.miktar, birim: k.birim ?? '', aciklama: k.aciklama,
+      satirId: i + 1, stokKodu: k.stokKodu ?? '', miktar: k.miktar, birim: k.birim ?? '', aciklama: emirliAciklama(f.emirNo ?? null, k.aciklama),
       ...(ambar ? { kaynakAmbarNo: k.kaynakAmbarNo, hedefAmbarNo: k.hedefAmbarNo } : {}),
     }));
   if (satirlar.length === 0) return null;
