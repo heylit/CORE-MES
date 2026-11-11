@@ -52,7 +52,10 @@ const ISTASYONLAR: IstasyonSecimiCevabi = {
   }],
 };
 
-function sunucuKur(kullanici: Kullanici, birimDurumu: MarkalamaBirimi['durum'] = 'saglam', istasyonlar: IstasyonSecimiCevabi = ISTASYONLAR) {
+function sunucuKur(
+  kullanici: Kullanici, birimDurumu: MarkalamaBirimi['durum'] = 'saglam', istasyonlar: IstasyonSecimiCevabi = ISTASYONLAR,
+  modelBelgeleri: MalzemeBelgeleriCevabi['belgeler'] = [],
+) {
   const cagrilar: Cagri[] = [];
   vi.stubGlobal('fetch', vi.fn(async (adres: string, secenek?: RequestInit) => {
     const yol = adres.replace('/api', '');
@@ -87,7 +90,7 @@ function sunucuKur(kullanici: Kullanici, birimDurumu: MarkalamaBirimi['durum'] =
     if (yol.startsWith('/hurda-nedenleri')) {
       return json(200, { nedenler: [{ id: 9, kod: 'H-01', ad: 'Deneme hurda', aktif: true, sira: 1, surum: 1 }], onerilenKod: 'H-02' } satisfies HurdaNedenleriCevabi);
     }
-    if (yol === '/cizimler/malzemeler/11/belgeler') return json(200, { belgeler: [], oneriler: [], kucukResim: null } satisfies MalzemeBelgeleriCevabi);
+    if (yol === '/cizimler/malzemeler/11/belgeler') return json(200, { belgeler: modelBelgeleri, oneriler: [], kucukResim: null } satisfies MalzemeBelgeleriCevabi);
     return json(404, { kod: 'BULUNAMADI', mesaj: 'Adres bulunamadı.' } satisfies HataGovdesi);
   }));
   return cagrilar;
@@ -119,6 +122,22 @@ describe('Markalama tanımları', () => {
     const govde = cagrilar.find((c) => c.yol === '/markalama/tanimlar/7/kaydet')!.govde as { surum: number; alanlar: { icerik: string; yontem: string; sabitMetin: string | null }[] };
     expect(govde.surum).toBe(3);
     expect(govde.alanlar.map((a) => [a.icerik, a.yontem, a.sabitMetin])).toEqual([['seri', 'lazer', null], ['sabit', 'nokta_vurus', 'C']]);
+  });
+
+  it('2138-2: model seçeneği merkezin harfini değil revizyon kodunu yazar; kodsuz revizyon adıyla', async () => {
+    const rev = (id: number, sira: number, harf: string, revKodu: string | null, durum: 'yayinda' | 'taslak') => ({
+      id, sira, harf, durum, ozet: 'a'.repeat(64), dosyaAdi: 'deneme.step', dosyaTuru: 'step' as const, boyut: 10, not: null, yukleyenAd: null,
+      yuklendi: '2026-10-27T08:00:00Z', yayinlayanAd: null, yayinlandi: null, onizlemeKareSayisi: 0, antetRev: revKodu, revKodu,
+    });
+    sunucuKur(YONETICI, 'saglam', ISTASYONLAR, [{
+      id: 5, ad: 'Deneme model', tur: '3b-model', resimNo: null, surum: 1, kapak: true,
+      revizyonlar: [rev(52, 2, 'B', null, 'taslak'), rev(51, 1, 'A', '03', 'yayinda')],
+    }]);
+    ac(<Tanimlar />);
+    fireEvent.click(await screen.findByText('{PARCA}-{SEQ:5}'));
+    const secim = await screen.findByLabelText<HTMLSelectElement>('3B model');
+    await waitFor(() => { expect(secim.options.length).toBe(3); });
+    expect([...secim.options].map((o) => o.textContent)).toEqual(['Model yok', 'Deneme model · Kodsuz revizyon (taslak)', 'Deneme model · Rev 03']);
   });
 
   it('kayıtlı tanım pasif yapılır; listede durum rozeti görünür', async () => {
