@@ -16,7 +16,7 @@ import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { degerlendirmeBaslat, degerlendirmeDurumu, degerlendirmeYap, maliyetsiz, MESGUL, SONUC_OMRU_MS, type DegerlendirmeZarfi } from './degerlendirme.ts';
 import { DURUM_ANAHTARI } from '../recete-rota/disari.ts';
 import { PLANLAMA_ANAHTARI } from './disari.ts';
-import { planGirdisi } from './plan-girdisi.ts';
+import { planGirdisi, type KaynakOkumasi } from './plan-girdisi.ts';
 import { motorYukle } from './plan-motoru.ts';
 import * as sorgular from './sorgular.ts';
 
@@ -136,6 +136,48 @@ describe('planlama değerlendirmesi: hesap', () => {
     assert.deepEqual(await dene({ tur: 'termin-secenekleri', siparisId: 'YOK' }), { hata: 'siparis-yok' });
     assert.deepEqual(await dene({ tur: 'malzeme-terminleri' }, calismaKur()), { hata: 'plan-yok' });
     assert.equal(await dene({ tur: 'plan-secenekleri' }, null), null);
+  });
+
+  // 2947: parti bölmenin bölünmüş sipariş kayıtları geliri payıyla taşır (motor siparisParcasi). Gelir girdiye yalnız kaynaktaki sipariş
+  // bedelinden girer; fiyatı görmeyenin kaynağında bedeller null'dır (siparis-bedeli-girdi.test.ts). Kayıttaki değer, sayfanın kendi
+  // siparişi ve acil olayı bu yoldan gelir taşımaz. Sızma yok; test bunu korur.
+  test('PD-24: parti bölmede sipariş geliri yalnız kaynak bedelinden; fiyatı görmeyenin kaynağıyla bölünen kayıtlarda gelir null', async () => {
+    const bos = { gelir: null, cezaOran: null, cezaTavan: null };
+    const kaynakIle = (siparisBedelleri: unknown): KaynakOkumasi => ({ ...KAYNAK, ek: { ...KAYNAK.ek, siparisBedelleri } }) as unknown as KaynakOkumasi;
+    const bol = async (kaynak: KaynakOkumasi, calisma: Record<string, unknown>, siparisId: string, adetler: number[]) => {
+      const g = planGirdisi({ calisma, kayit: KAYIT, kaynak, bugun: '2026-10-19' });
+      assert.ok(g);
+      const m = motorYukle(); const p = m.schedule(g.st, 'dagit', null);
+      const e = m.evaluate(p, g.st, null, false) as { J: Record<string, { C: number; T: number }> };
+      const J = Object.fromEntries(Object.entries(e.J).map(([k, x]) => [k, { C: x.C, T: x.T }]));
+      const r = await degerlendirmeYap({ calisma: { ...calisma, plan: { ops: p.ops, fail: [], J, dataVer: 1 } }, kayit: KAYIT, kaynak, bugun: '2026-10-19',
+        istek: { tur: 'parti-bolme', siparisId, dagitim: 'ayni', adetler } }, AN);
+      if (r === null || 'hata' in r) return r;
+      const s = degerlendirmeSonucu.parse(r.sonuc);
+      if (s.tur !== 'parti-bolme') return assert.fail(s.tur);
+      return s.sonuc?.siparisler.map((x) => [x['id'], x['gelir']]);
+    };
+    const c = calismaKur();
+    const D = c['D'] as Record<string, unknown>;
+    // Denetim: fiyatı gören okuyucunun kaynağıyla gelir payıyla bölünür (alan gerçekten gelir taşır).
+    assert.deepEqual(await bol(kaynakIle({ O1: { ...bos, gelir: 5000 }, O2: { ...bos, gelir: 8000 } }), c, 'O2', [8, 8]), [['O2/1', 4000], ['O2/2', 4000]]);
+    assert.deepEqual(await bol(kaynakIle({ O1: bos, O2: bos }), c, 'O2', [8, 8]), [['O2/1', null], ['O2/2', null]]);
+    assert.deepEqual(await bol(kaynakIle(null), c, 'O2', [8, 8]), [['O2/1', null], ['O2/2', null]], 'emirleri okuyamayan');
+    const kayitta = { ...c, D: { ...D, siparisler: [{ id: 'O2', ad: 'E-2', urun: '50', adet: 16, termin: '2026-10-20', oncelik: 2, gelir: 7777 }] } };
+    assert.deepEqual(await bol(kaynakIle({ O1: bos, O2: bos }), kayitta, 'O2', [8, 8]), [['O2/1', null], ['O2/2', null]], 'kayıttaki gelir taşınmaz');
+    const sayfada = { ...c, D: { ...D, siparisler: [{ id: 'S9', ad: 'Deneme', urun: '50', adet: 10, termin: '2026-10-21', oncelik: 1, gelir: 9999 }] } };
+    assert.deepEqual(await bol(kaynakIle({ O1: bos, O2: bos }), sayfada, 'S9', [5, 5]), { hata: 'siparis-yok' }, 'sayfanın siparişi girdiye girmez');
+    // Güvenlik (2947): kaynakta olmayan bölünmüş sipariş (önceki bölmenin kaydı) gelirle kayıtlıysa fiyatsız kaynakla ya girdiye girmez ya geliri boştur.
+    const bolunmus = { ...c, D: { ...D, siparisler: ['O2/1', 'O2/2'].map((id) => ({ id, ad: 'E-2', urun: '50', adet: 8, termin: '2026-10-20', oncelik: 2, gelir: 4000, cezaOran: 1, cezaTavan: 10 })) } };
+    const gb = planGirdisi({ calisma: bolunmus, kayit: KAYIT, kaynak: kaynakIle({ O1: bos, O2: bos }), bugun: '2026-10-19' });
+    assert.ok(gb);
+    const girdiSip = (gb.S as { D: { siparisler: { id: string; gelir?: unknown; cezaOran?: unknown; cezaTavan?: unknown }[] } }).D.siparisler;
+    assert.deepEqual(girdiSip.map((x) => x.id), ['O1', 'O2'], 'kaynakta olmayan bölünmüş kayıt birleşmede düşer');
+    assert.deepEqual(girdiSip.filter((x) => x.gelir != null || x.cezaOran != null || x.cezaTavan != null).map((x) => x.id), [], 'girdide gelir yok');
+    const r = await bol(kaynakIle({ O1: bos, O2: bos }), bolunmus, 'O2/1', [4, 4]);
+    assert.ok(Array.isArray(r) ? r.every(([, g]) => g === null) : r?.hata === 'siparis-yok', JSON.stringify(r));
+    const acil = { ...c, olaylar: [{ tip: 'acil', urun: '50', adet: 10, termin: '2026-10-21', gelir: 6666 }] };
+    assert.deepEqual(await bol(kaynakIle({ O1: bos, O2: bos }), acil, 'SP-901', [5, 5]), { hata: 'siparis-yok' }, 'acil olay sipariş eklemez');
   });
 
   test('PD-08: maliyeti görmeyende TL alanları null, saat ve plan kalır', async () => {
@@ -417,6 +459,17 @@ describe('planlama değerlendirmesi ucu (gerçek PostgreSQL)', () => {
     assert.equal(degerlendirmeDurumu(yoneticiId, yeni).durum, 'hata');
   });
 
+  // Hesap enjekte edilir: sonuç sabittir, uç yetkiye göre süzme kararını ölçer.
+  async function enjekteOku(surum: number, islemler: Kullanici['islemler'], sonuc: DegerlendirmeSonucu): Promise<DegerlendirmeSonucu> {
+    const k: Kullanici = { id: yoneticiId, ad: 'Deneme', islemler };
+    const yap = () => Promise.resolve({ dataVer: 1, baslangic: null, simdi: 0, sonuc } as DegerlendirmeZarfi);
+    const { is } = await vt().tx((db) => degerlendirmeBaslat(db, k, { surum, istek: { tur: sonuc.tur } as DegerlendirmeIstegi }, Date.now(), yap));
+    await new Promise((coz) => setImmediate(coz));
+    const d = degerlendirmeDurumu(yoneticiId, is);
+    if (d.durum !== 'bitti') return assert.fail(JSON.stringify(d));
+    return d.cevap.sonuc;
+  }
+
   // 2918: sipariş fiyatı (siparisler 180: yalnız siparisler.fiyat-oku) ve ondan türeyen kâr, maliyeti görüp fiyatı görmeyene gitmez. TL
   // alanları maliyettir, maliyet-oku ile kalır. Hesap enjekte edilir: sonuç sabittir, süzme kararını ölçer. Rakamlar uydurmadır.
   test('PD-22: fiyatı görmeyen maliyetçide kâr alanları ve sipariş tutarı null; TL kalır; iki yetkili hepsini görür', async () => {
@@ -432,15 +485,7 @@ describe('planlama değerlendirmesi ucu (gerçek PostgreSQL)', () => {
       { tur: 'parti-bolme', siparisId: 'O2', darbogaz: null,
         sonuc: { partiler: [], gecikmeOnce: 1, gecikmeSonra: 0, bitisSonra: null, tl: 650, siparisler: [], plan } },
     ].map((x) => degerlendirmeSonucu.parse(x));
-    const oku = async (islemler: Kullanici['islemler'], sonuc: DegerlendirmeSonucu): Promise<DegerlendirmeSonucu> => {
-      const k: Kullanici = { id: yoneticiId, ad: 'Deneme', islemler };
-      const yap = () => Promise.resolve({ dataVer: 1, baslangic: null, simdi: 0, sonuc } as DegerlendirmeZarfi);
-      const { is } = await vt().tx((db) => degerlendirmeBaslat(db, k, { surum, istek: { tur: sonuc.tur } as DegerlendirmeIstegi }, Date.now(), yap));
-      await new Promise((coz) => setImmediate(coz));
-      const d = degerlendirmeDurumu(yoneticiId, is);
-      if (d.durum !== 'bitti') return assert.fail(JSON.stringify(d));
-      return d.cevap.sonuc;
-    };
+    const oku = (islemler: Kullanici['islemler'], sonuc: DegerlendirmeSonucu) => enjekteOku(surum, islemler, sonuc);
     const fiyatsiz: Kullanici['islemler'] = ['plan.planlama-oku', 'finans.maliyet-oku'];
     const ikiYetki: Kullanici['islemler'] = [...fiyatsiz, 'siparisler.fiyat-oku'];
     const [ps, ts, tu, pb] = sonuclar;
@@ -454,4 +499,33 @@ describe('planlama değerlendirmesi ucu (gerçek PostgreSQL)', () => {
     assert.deepEqual(u, { ...tu, satirlar: [{ ...tu.satirlar[0]!, netKarFarki: null }] });
     assert.deepEqual(await oku(fiyatsiz, pb), pb);
   });
+
+  // 2934 (Güvenlik C6): planın TL toplamı (ozet.tl) maliyeti görmeyene hiçbir türde gitmez; plan taşıyan her tür taranır. Rakamlar uydurmadır.
+  // Ekran önceki özeti planın oncekiOzet alanına koyar; o da TL taşır.
+  const plan = { ops: {}, J: { O1: { C: 10, T: 0 } }, ozet: { wT: 0, n: 1, tl: 777 }, oncekiOzet: { wT: 1, n: 1, tl: 555 } };
+  const degisen = [{ siparisId: 'O1', once: 12, sonra: 10, durum: 'ayni' }];
+  const sonuclar = [
+    { tur: 'plan-kur', plan },
+    { tur: 'plan-uygula', plan },
+    { tur: 'plan-iyilestir', plan, gecikmeOnce: 2, gecikmeSonra: 0, degisen },
+    { tur: 'one-al', siparisId: 'O1', plan, yol: null, neden: null, bitisOnce: 12, bitisSonra: 10, gecikmeOnce: 2, gecikmeSonra: 0, degisen },
+    { tur: 'sira-degistir', tezgah: 'T1', sira: ['O1.10'], plan, neden: null, gecikmeOnce: 2, gecikmeSonra: 0, degisen },
+    { tur: 'parti-bolme', siparisId: 'O1', darbogaz: null,
+      sonuc: { partiler: [], gecikmeOnce: 1, gecikmeSonra: 0, bitisSonra: null, tl: 650, siparisler: [], plan } },
+    { tur: 'plan-secenekleri', bedeliBilinmeyenEkMesai: false,
+      secenekler: [{ denge: 50, carpan: 1, ekMesai: [], ekMesaiTl: 0, geciken: 0, isSayisi: 1, gecikmeSaat: 0, netKar: null, eksik: 0, plan }] },
+  ].map((x) => degerlendirmeSonucu.parse(x));
+  const doluTl = (x: unknown, yol = ''): string[] => {
+    if (Array.isArray(x)) return x.flatMap((v, i) => doluTl(v, `${yol}[${String(i)}]`));
+    if (x === null || typeof x !== 'object') return [];
+    return Object.entries(x).flatMap(([a, v]) => [...(/tl$/i.test(a) && v !== null && v !== 0 ? [`${yol}.${a}`] : []), ...doluTl(v, `${yol}.${a}`)]);
+  };
+  for (const s of sonuclar) {
+    test(`PD-23 ${s.tur}: maliyeti görmeyenin cevabında dolu tl alanı yok (ozet, oncekiOzet); maliyeti gören aynen alır`, async () => {
+      const surum = await calismaYaz(planli());
+      assert.deepEqual(doluTl(s).sort(), [...(s.tur === 'parti-bolme' ? ['.sonuc.tl'] : []), ...['ozet', 'oncekiOzet'].map((o) => `${s.tur === 'parti-bolme' ? '.sonuc' : s.tur === 'plan-secenekleri' ? '.secenekler[0]' : ''}.plan.${o}.tl`)].sort(), 'örnek tl taşımalı');
+      assert.deepEqual(doluTl(await enjekteOku(surum, ['plan.planlama-oku'], s)), []);
+      assert.deepEqual(await enjekteOku(surum, ['plan.planlama-oku', 'finans.maliyet-oku', 'siparisler.fiyat-oku'], s), s);
+    });
+  }
 });

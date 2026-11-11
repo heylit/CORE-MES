@@ -218,10 +218,18 @@ export function fiyatsiz(s: DegerlendirmeSonucu): DegerlendirmeSonucu {
   return k.tur === 'termin-secenekleri' ? { ...k, satirlar: k.satirlar.map((x) => ({ ...x, tutar: null })) } : k;
 }
 
-// Seçeneğin planı İK değeriyle seçilmiş ek mesaiyle kurulur (2760 b); planın TL toplamı (ozet.tl) görmeyene gitmez (Güvenlik C6).
-function tlsizPlan(plan: Record<string, unknown>): Record<string, unknown> {
-  const ozet = plan['ozet'];
-  return ozet !== null && typeof ozet === 'object' ? { ...plan, ozet: { ...(ozet as Record<string, unknown>), tl: null } } : plan;
+// Planın TL toplamı (ozet.tl, ekranın koyduğu oncekiOzet.tl) maliyeti görmeyene gitmez (Güvenlik C6, 2934): plan taşıyan her türde. Maliyeti okuyamayanın girdisinde tezgâh
+// ücreti kayıttaki gibi kalır (motor/girdi.js ucretIzle), toplam gerçek maliyettir.
+function tlsizPlan(plan: Record<string, unknown>): Record<string, unknown>;
+function tlsizPlan(plan: Record<string, unknown> | null): Record<string, unknown> | null;
+function tlsizPlan(plan: Record<string, unknown> | null): Record<string, unknown> | null {
+  if (plan === null) return null;
+  const y = { ...plan };
+  for (const a of ['ozet', 'oncekiOzet']) {
+    const o = y[a];
+    if (o !== null && typeof o === 'object' && !Array.isArray(o)) y[a] = { ...(o as Record<string, unknown>), tl: null };
+  }
+  return y;
 }
 
 // 180 a, 200 a: tutar, maliyet, kâr ve TL farkı yalnız maliyeti görene. Saat, adet ve plan kaydı kalır (plan kaydı çalışmaya geri yazılır,
@@ -237,13 +245,15 @@ export function maliyetsiz(s: DegerlendirmeSonucu): DegerlendirmeSonucu {
     case 'malzeme-one-cekme':
       return { ...s, taban: { ...s.taban, tl: null }, satirlar: s.satirlar.map((x) => ({ ...x, kazanc: x.kazanc.map((z) => ({ ...z, tl: null })) })) };
     case 'parti-bolme':
-      return s.sonuc === null ? s : { ...s, sonuc: { ...s.sonuc, tl: null } };
-    case 'malzeme-terminleri':
+      return s.sonuc === null ? s : { ...s, sonuc: { ...s.sonuc, tl: null, plan: tlsizPlan(s.sonuc.plan) } };
     case 'plan-kur':
     case 'plan-uygula':
+      return { ...s, plan: tlsizPlan(s.plan) };
     case 'plan-iyilestir':
     case 'one-al':
     case 'sira-degistir':
+      return { ...s, plan: tlsizPlan(s.plan) };
+    case 'malzeme-terminleri':
       return s;
   }
 }
