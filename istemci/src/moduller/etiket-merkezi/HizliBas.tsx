@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { REFAKAT_KOPYA_SAYISI } from '#paylasilan/etiket-sabitleri.ts';
-import type { BasCevabi, KayitTuru } from '#paylasilan/sozlesme/etiket-merkezi.ts';
+import type { BasCevabi, IndirCevabi, KayitTuru } from '#paylasilan/sozlesme/etiket-merkezi.ts';
 import { useBildirim } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { yeniIstekKimligi } from '../../ortak/veri/istek-kimligi.ts';
@@ -8,6 +8,7 @@ import { useOturum } from '../../ortak/veri/oturum.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { kayitYazicisi, type CihazYazicisi } from './cihaz-yazicisi.ts';
 import { secimSiniri } from './kayit-secimi.ts';
+import { eslesmisYazici, usbHatasi, usbyeGonder } from './web-usb.ts';
 
 // 2916 a: olay ekranı (mal kabul, konum, refakat...) etiketi Etiket Merkezi'ne gitmeden bu cihazın varsayılan yazıcısına basar.
 // Baskı Etiket Merkezi'nin kendi ucundan geçer: yetki (etiket-merkezi.bas), yazıcı ve doğrudan baskı denetimi ve defter kaydı aynıdır.
@@ -24,10 +25,17 @@ export function useDogrudanBasim(kayitTuru: KayitTuru): {
   const yazici = izin ? kayitYazicisi(kayitTuru) : null;
   const { bildir } = useBildirim();
   const istemci = useQueryClient();
+  // USB varsayılanı (2953 c) indirme ucundan komutu alır (yetki, defter sunucuda) ve bu bilgisayarda eşleşmiş aygıta aktarır.
   const m = useMutation({
-    mutationFn: ({ y, idler }: { y: CihazYazicisi; idler: number[] }) =>
-      api.post<BasCevabi>(`/etiket-merkezi/sablonlar/${encodeURIComponent(y.sablonAnahtar)}/bas`,
-        { yaziciId: y.yaziciId, adet: kayitTuru === 'refakat-partisi' ? REFAKAT_KOPYA_SAYISI : 1, kayit: { tur: kayitTuru, idler }, ...(y.olcu ? { olcu: y.olcu } : {}) }, { istekKimligi: yeniIstekKimligi(), zamanAsimiMs: 15000 }),
+    mutationFn: async ({ y, idler }: { y: CihazYazicisi; idler: number[] }): Promise<Pick<BasCevabi, 'sonuc' | 'ileti'>> => {
+      const govde = { yaziciId: y.yaziciId, adet: kayitTuru === 'refakat-partisi' ? REFAKAT_KOPYA_SAYISI : 1, kayit: { tur: kayitTuru, idler }, ...(y.olcu ? { olcu: y.olcu } : {}) };
+      const yol = `/etiket-merkezi/sablonlar/${encodeURIComponent(y.sablonAnahtar)}`;
+      if (y.baglanti !== 'usb') return api.post<BasCevabi>(`${yol}/bas`, govde, { istekKimligi: yeniIstekKimligi(), zamanAsimiMs: 15000 });
+      const aygit = await eslesmisYazici();
+      if (aygit === null) return { sonuc: 'hata', ileti: 'Bu bilgisayarda eşleşmiş USB yazıcı yok.' };
+      const c = await api.post<IndirCevabi>(`${yol}/indir`, govde, { istekKimligi: yeniIstekKimligi() });
+      try { await usbyeGonder(aygit, c.komut); return { sonuc: 'gonderildi', ileti: null }; } catch (h) { return { sonuc: 'hata', ileti: usbHatasi(h).message }; }
+    },
     onSuccess: (c, { y }) => {
       if (c.sonuc === 'hata') bildir('hata', `${c.ileti ?? 'Yazıcı hata verdi.'} ${YAZICI_HATASI}`);
       else bildir('tamam', `Etiketler gönderildi: ${y.yaziciAd}.`);
