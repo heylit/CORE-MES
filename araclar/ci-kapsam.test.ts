@@ -62,20 +62,27 @@ test('ci-kapsam: taşımada eski ve yeni yol birlikte gelir, kontrol.yml farkı 
   assert.match(is, /degisenler=\$\(git diff --name-only --no-renames "\$taban" HEAD\)/);
 });
 
-test('kontrol.yml: ana dalda yalnız ağır test işleri iptal edilir, gruplar parçaya göre (2705 a)', () => {
-  const is = readFileSync(`${KOK}.github/workflows/kontrol.yml`, 'utf8');
+test('kontrol.yml: ana dalda hiçbir iş iptal edilmez; ana dal ilerlemişse ağır işler atlanır, kontrol kırmızı (3045 a)', () => {
+  const is = readFileSync(`${KOK}.github/workflows/kontrol.yml`, 'utf8').replaceAll('\r\n', '\n');
   assert.match(is, /^concurrency:\n {2}group: kontrol-\$\{\{ github\.ref == 'refs\/heads\/main' && github\.sha \|\| github\.ref \}\}\n {2}cancel-in-progress: \$\{\{ github\.event_name == 'pull_request' \}\}$/m);
-  for (const [ad, matris] of [['istemci-test', true], ['sunucu-test', true], ['ekran', true]] as const) {
-    const parca = matris ? '-\\$\\{\\{ matrix\\.parca \\}\\}' : '';
-    assert.match(is, new RegExp(`\\n {2}${ad}:\\n(?: {4}.*\\n)*? {4}concurrency:\\n {6}group: kontrol-${ad}${parca}-\\$\\{\\{ github\\.event_name == 'push' && github\\.ref \\|\\| github\\.run_id \\}\\}\\n {6}cancel-in-progress: \\$\\{\\{ github\\.event_name == 'push' \\}\\}\\n`), ad);
+  for (const ad of ['kapsam', 'tip', 'denetim', 'lint', 'istemci-test', 'sunucu-test', 'ekran', 'windows', 'windows-butunluk', 'kontrol']) {
+    assert.ok(!isBlogu(is, ad).includes('concurrency:'), `${ad} iş düzeyinde iptal grubu taşımamalı`);
   }
-  const blok = (ad: string): string => {
-    const bas = is.indexOf(`\n  ${ad}:\n`);
-    assert.ok(bas >= 0, `${ad} işi yok`);
-    const sonraki = is.slice(bas + 1).search(/\n {2}[a-z-]+:\n/);
-    return sonraki === -1 ? is.slice(bas) : is.slice(bas, bas + 1 + sonraki);
-  };
-  for (const ad of ['kapsam', 'tip', 'denetim', 'lint', 'kontrol', 'windows']) assert.ok(!blok(ad).includes('concurrency:'), `${ad} iptal edilmemeli`);
+  const kapsam = isBlogu(is, 'kapsam');
+  assert.match(kapsam, /\n {6}eski: \$\{\{ steps\.uc\.outputs\.eski \}\}\n/, 'kapsam eski çıktısını verir');
+  assert.match(kapsam, /- id: uc\n {8}if: github\.event_name == 'push'\n/, 'uç denetimi yalnız ana dal gönderiminde');
+  assert.match(kapsam, /uc=\$\(git ls-remote origin refs\/heads\/main \| cut -f1\)\n {10}\[ -n "\$uc" \] \|\| \{/, 'uç okunamazsa iş düşer');
+  assert.match(kapsam, /if \[ "\$uc" = "\$SHA" \]; then\n {12}echo 'eski=false' >> "\$GITHUB_OUTPUT"\n {10}else\n[^\n]*\n {12}echo 'eski=true' >> "\$GITHUB_OUTPUT"\n/, 'uç bu commit değilse eski');
+  assert.match(kapsam, /\n {10}SHA: \$\{\{ github\.sha \}\}\n/);
+  for (const [ad, cikti] of [['istemci-test', 'istemci'], ['sunucu-test', 'sunucu'], ['ekran', 'ekran']] as const) {
+    assert.match(isBlogu(is, ad), new RegExp(`\\n {4}if: needs\\.kapsam\\.outputs\\.${cikti} == 'true' && needs\\.kapsam\\.outputs\\.eski != 'true'\\n`), ad);
+  }
+  // Windows ana dal ilerlese de koşar: her commit'in kendi Windows sonucu vardır (3018 a).
+  assert.ok(!isBlogu(is, 'windows').includes('outputs.eski'), 'windows atlanmamalı');
+  const kontrol = isBlogu(is, 'kontrol');
+  assert.match(kontrol, /\n {10}ESKI: \$\{\{ needs\.kapsam\.outputs\.eski \}\}\n/);
+  assert.match(kontrol, /if \[ "\$ESKI" = "true" \]; then\n {12}echo "::error::[^\n]*"\n {12}exit 1\n {10}fi\n/, 'atlanan ağır iş yeşil sayılmaz');
+  assert.match(kontrol, /any\(\.\[\]; \.result == "cancelled"\)/, 'elle iptal de kırmızı');
 });
 
 test('kontrol.yml: Windows dört parçalı, parçalar test kümesinin tamamını sayarak alır (3018 a)', () => {

@@ -9,10 +9,10 @@ on:
   # Ana dalda ya da bir dalda elle yeniden koşu: boş commit ya da istek kapatıp açma gerekmez.
   workflow_dispatch:
 
-# Çekme isteğinde yeni gönderim eski koşuyu iptal eder. Ana dalda koşu bütünüyle iptal edilmez: her commit kendi grubundadır,
-# hızlı işler (kapsam, tip, denetim ve göç damgası, lint) her birleşmede koşar. Yalnız Linux'taki ağır test işleri (istemci,
-# sunucu, ekran) iş düzeyindeki grupla yeni birleşmeye yer açar (2705 a); Windows iptal edilmez (3018 a); ana dal gönderiminde kapsam daraltılmadığı için
-# son koşu ondan önceki iptal edilen birleşmelerin testlerini de koşar. Elle koşu iptal etmez.
+# Çekme isteğinde yeni gönderim eski koşuyu iptal eder. Ana dalda hiçbir koşu iptal edilmez: her commit kendi grubundadır,
+# hızlı işler (kapsam, tip, denetim ve göç damgası, lint) ve Windows (3018 a) her birleşmede koşar. Linux'taki ağır test işleri
+# (istemci, sunucu, ekran), koşu açılırken ana dal ilerlemişse atlanır (3045 a); ana dal gönderiminde kapsam daraltılmadığı için
+# son koşu ondan önceki atlanan birleşmelerin testlerini de koşar. Elle koşu iptal etmez.
 concurrency:
   group: kontrol-${{ github.ref == 'refs/heads/main' && github.sha || github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
@@ -58,17 +58,36 @@ jobs:
       sunucu: ${{ steps.sec.outputs.sunucu }}
       istemci: ${{ steps.sec.outputs.istemci }}
       ekran: ${{ steps.sec.outputs.ekran }}
+      eski: ${{ steps.uc.outputs.eski }}
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 2
+      # Ana dalda koşular birbirini iptal etmez (3045 a): iptal grubu sırayı commit'e göre değil gruba giriş anına göre kurar,
+      # aynı anda açılan eski koşu yeniyi iptal edebilir. Koşu açılırken ana dalın ucu bu commit değilse (arkadan birleşme
+      # geldiyse) ağır işler atlanır, testlerini yeni koşu taşır. Yarışta karar zararsız yöndedir: eski koşu ucu göremezse iki
+      # koşu da tam koşar; yeni koşu, ondan da yeni bir birleşme yoksa atlanmaz.
+      - id: uc
+        if: github.event_name == 'push'
+        shell: bash
+        env:
+          SHA: ${{ github.sha }}
+        run: |
+          uc=$(git ls-remote origin refs/heads/main | cut -f1)
+          [ -n "$uc" ] || { echo '::error::Ana dalın ucu okunamadı'; exit 1; }
+          if [ "$uc" = "$SHA" ]; then
+            echo 'eski=false' >> "$GITHUB_OUTPUT"
+          else
+            echo "Ana dal ilerlemiş ($uc); bu koşunun ağır test işleri atlanır."
+            echo 'eski=true' >> "$GITHUB_OUTPUT"
+          fi
       - id: sec
         shell: bash
         env:
           OLAY: ${{ github.event_name }}
         run: |
           hepsi() { printf 'sunucu=true\nistemci=true\nekran=true\n' | tee -a "$GITHUB_OUTPUT"; exit 0; }
-          # Ana dalda daraltılmaz: önceki birleşmenin ağır işleri iptal edilmiş olabilir, testleri bu koşu taşır (2705 a).
+          # Ana dalda daraltılmaz: önceki birleşmenin ağır işleri atlanmış olabilir, testleri bu koşu taşır (2705 a, 3045 a).
           case "$OLAY" in
             pull_request) taban=HEAD^1 ;;
             *) hepsi ;;
@@ -217,11 +236,7 @@ jobs:
 
   istemci-test:
     needs: kapsam
-    if: needs.kapsam.outputs.istemci == 'true'
-    # Ana dal gönderiminde yeni birleşme bu işin eski koşusunu iptal eder (2705 a); başka olayda grup koşuya özgüdür.
-    concurrency:
-      group: kontrol-istemci-test-${{ matrix.parca }}-${{ github.event_name == 'push' && github.ref || github.run_id }}
-      cancel-in-progress: ${{ github.event_name == 'push' }}
+    if: needs.kapsam.outputs.istemci == 'true' && needs.kapsam.outputs.eski != 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     strategy:
@@ -253,11 +268,7 @@ jobs:
   # uzunu ötekilerin ~1,25 katı). Sekiz parçada en uzun parçanın payı ~%30 azalır (1913 ölçümü). Parça sayısı değişirse süreler yeniden ölçülür.
   sunucu-test:
     needs: kapsam
-    if: needs.kapsam.outputs.sunucu == 'true'
-    # Ana dal gönderiminde yeni birleşme bu işin eski koşusunu iptal eder (2705 a); başka olayda grup koşuya özgüdür.
-    concurrency:
-      group: kontrol-sunucu-test-${{ matrix.parca }}-${{ github.event_name == 'push' && github.ref || github.run_id }}
-      cancel-in-progress: ${{ github.event_name == 'push' }}
+    if: needs.kapsam.outputs.sunucu == 'true' && needs.kapsam.outputs.eski != 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 25
     strategy:
@@ -351,11 +362,7 @@ jobs:
   # Parça sayısı değişirse süreler yeniden ölçülür.
   ekran:
     needs: kapsam
-    if: needs.kapsam.outputs.ekran == 'true'
-    # Ana dal gönderiminde yeni birleşme bu işin eski koşusunu iptal eder (2705 a); başka olayda grup koşuya özgüdür.
-    concurrency:
-      group: kontrol-ekran-${{ matrix.parca }}-${{ github.event_name == 'push' && github.ref || github.run_id }}
-      cancel-in-progress: ${{ github.event_name == 'push' }}
+    if: needs.kapsam.outputs.ekran == 'true' && needs.kapsam.outputs.eski != 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     strategy:
@@ -604,9 +611,15 @@ jobs:
       - name: Bütün işler yeşil
         env:
           SONUCLAR: ${{ toJSON(needs) }}
+          ESKI: ${{ needs.kapsam.outputs.eski }}
         run: |
           echo "$SONUCLAR" | jq -r 'to_entries[] | "\(.key): \(.value.result)"'
-          # Ana dalda iptal edilen ağır iş yeşil sayılmaz: bu commit'in testleri bir sonraki birleşmenin koşusundadır (2705 a).
+          # Ana dal ilerlediği için atlanan ağır iş yeşil sayılmaz: bu commit'in testleri sonraki koşudadır (3045 a).
+          if [ "$ESKI" = "true" ]; then
+            echo "::error::Bu koşu açılırken ana dal ilerlemişti; ağır testler atlandı. Bu commit'in testleri ana daldaki sonraki koşudadır. O koşunun sonucuna bakın."
+            exit 1
+          fi
+          # Elle iptal edilen ağır iş de yeşil sayılmaz.
           if echo "$SONUCLAR" | jq -e 'any(.[]; .result == "cancelled")' > /dev/null; then
             echo "::error::Ağır test işi iptal edildi; bu commit'in testleri ana daldaki sonraki koşudadır. O koşunun sonucuna bakın."
             exit 1

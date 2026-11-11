@@ -30,19 +30,19 @@ dosyalarında `../istemci/src/...` ithali geçen her dosyanın klasörü. Elle l
 
 ## Daraltılmayan durumlar
 
-- Ana dala gönderim: her iş koşar, yalnız belge değişse de. Önceki birleşmenin ağır işleri iptal edilmiş olabilir; onların testlerini bu koşu taşır (2705 a).
+- Ana dala gönderim: her iş koşar, yalnız belge değişse de. Önceki birleşmenin ağır işleri atlanmış olabilir; onların testlerini bu koşu taşır (2705 a, 3045 a).
 - Elle koşu (`workflow_dispatch`) ve boş fark: her iş koşar.
 
 ## Eski koşunun iptali
 
 - Çekme isteği: koşunun tamamı iptal edilir. `concurrency.group` ref'tir; `cancel-in-progress` yalnız `pull_request` olayında açıktır.
-- Ana dal (2705 a): koşu bütünüyle iptal edilmez. Koşu düzeyindeki grup commit sha'sıdır. `kapsam`, `tip`, `denetim` (göç damgası dahil), `lint` ve `kontrol` her birleşmede koşar.
-- Linux'taki ağır işler (`istemci-test`, `sunucu-test`, `ekran`) iş düzeyinde `kontrol-<iş>-<parça>-refs/heads/main` grubundadır. Yeni birleşme bu işlerin eski koşusunu iptal eder; matris parçaları birbirini iptal etmez.
+- Ana dal (3045 a): hiçbir koşu ve hiçbir iş iptal edilmez. Koşu düzeyindeki grup commit sha'sıdır; iş düzeyinde iptal grubu yoktur. `kapsam`, `tip`, `denetim` (göç damgası dahil), `lint` ve `kontrol` her birleşmede koşar.
+- Linux'taki ağır işler (`istemci-test`, `sunucu-test`, `ekran`): `kapsam` koşu açılırken `git ls-remote` ile ana dalın ucuna bakar. Uç bu commit değilse (arkadan birleşme geldiyse) `eski=true` verir ve ağır işler atlanır. Karar açılış anındadır: yeni koşu, ondan da yeni bir birleşme yoksa atlanmaz; eski koşu ucu göremezse iki koşu da tam koşar. İş düzeyindeki iptal grubu kaldırıldı, çünkü sırayı commit'e göre değil gruba giriş anına göre kuruyordu; aynı anda açılan eski koşu yeniyi iptal edebiliyordu (11.11, cfa82dcb).
 - `windows` (3018 a) dört parçalıdır ve iptal edilmez: her ana dal commit'inin kendi Windows sonucu vardır. Dosyalar ad sırasıyla dönüşümlü dağılır; her parça node'a verdiği dosya listesini günlüğe yazar ve yalnız testleri yeşil bitince yükler; `windows-butunluk` dört listeyi arar, birleşimini aynı desenlerin bulduğu tam kümeyle karşılaştırır (eksik, fazla ya da iki parçada koşan dosya kırmızı). Etiket `windows-butunluk` yeşilken konur. Kırmızı Windows'ta bozan birleşme, son yeşilden sonraki ilk kırmızı koşunun commit'idir; aynı kırmızı parçayı yerelde koşmak için o parçanın günlüğündeki dosya listesi kullanılır.
-- İptal edilen ağır işi olan koşuda `kontrol` kırmızıdır ve "testleri sonraki koşuda" iletisini yazar. O commit'in sonucu ana daldaki sonraki koşudur.
+- Ağır işleri ana dal ilerlediği için atlanan (ya da elle iptal edilen) koşuda `kontrol` kırmızıdır ve "testleri sonraki koşuda" iletisini yazar. O commit'in sonucu ana daldaki sonraki koşudur.
 - Bedel: ana dal kırmızıya dönerse bozan birleşme, son yeşil koşudan bu yana birleşenlerin arasındadır; tek commit'e inmez. Birleştirici her birleşmeden sonra değil, son koşuya bakar.
 - Elle koşuda grup koşuya özgüdür ve hiçbir şey iptal edilmez.
-- Ana dalda yalnız son koşu yeniden koşulur. Eski bir koşunun yeniden denenmesi de push olayıdır ve aynı gruba girer; yeni koşunun ağır işlerini iptal eder. Eski commit'i denemek gerekiyorsa elle koşu (`workflow_dispatch`) kullanılır.
+- Ana dalda yalnız son koşu yeniden koşulur. Eski bir koşu yeniden denenirse `kapsam` ana dalı ilerlemiş bulur ve ağır işleri atlar; yeni koşuya dokunmaz. Eski commit'i denemek gerekiyorsa elle koşu (`workflow_dispatch`) kullanılır.
 
 ## Windows yeşili etiketi (2964)
 
