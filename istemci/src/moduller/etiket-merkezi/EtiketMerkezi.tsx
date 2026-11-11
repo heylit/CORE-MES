@@ -11,6 +11,7 @@ import { api, ApiHatasi, hataIletisi } from '../../ortak/veri/api.ts';
 import { yeniIstekKimligi } from '../../ortak/veri/istek-kimligi.ts';
 import { useOturum } from '../../ortak/veri/oturum.ts';
 import { anahtarlar } from './anahtarlar.ts';
+import { cihazYazicilari, cihazYazicisiKaydet } from './cihaz-yazicisi.ts';
 import { KAYIT_BASLIKLARI, KAYIT_NOTLARI, KAYIT_TURLERI, kayitSablonTuru, kayitSecimiOku, kayitSecimiYaz } from './kayit-secimi.ts';
 import { gercekBoyutOku, gercekBoyutYaz, olcekOku, olcekYaz } from './gercek-boyut.ts';
 import { Kalibrasyon } from './Kalibrasyon.tsx';
@@ -50,7 +51,8 @@ function YaziciyaGonder({ sablon, adet, kayit }: { sablon: Sablon; adet: number 
   const istemci = useQueryClient();
   const { bildir } = useBildirim();
   const liste = useQuery({ queryKey: anahtarlar.yazicilar, queryFn: () => api.get<YazicilarCevabi>('/etiket-merkezi/yazicilar') });
-  const [yaziciId, setYaziciId] = useState('');
+  // Bu cihazda bu tür için varsayılan varsa seçili gelir; seçim yine değiştirilebilir.
+  const [yaziciId, setYaziciId] = useState(() => (kayit ? String(cihazYazicilari()[sablon.tur]?.yaziciId ?? '') : ''));
   // Kimlik başarıya ya da seçim değişene kadar korunur: elle yeniden gönderilen baskı ikinci kez basılmaz.
   const [kimlik, setKimlik] = useState(yeniIstekKimligi);
   const [sonuc, setSonuc] = useState<{ ton: 'tamam' | 'hata'; metin: string } | null>(null);
@@ -111,6 +113,29 @@ function YaziciyaGonder({ sablon, adet, kayit }: { sablon: Sablon; adet: number 
         )}
       </div>
       {sonuc && <p className={sonuc.ton === 'hata' ? 'tc-etk-hata' : 'tc-etk-not'} role={sonuc.ton === 'hata' ? 'alert' : 'status'}>{sonuc.metin}</p>}
+      {kayit && secili?.baglanti === 'ag' && <CihazVarsayilani sablon={sablon} yazici={secili} />}
+    </div>
+  );
+}
+
+// 2916 a: olay ekranındaki etiket düğmesi bu türü Etiket Merkezi'ne gitmeden buradaki yazıcıya ve ölçüye basar. Yalnız ağ yazıcısı:
+// dosya yazıcısının dosyasını kişi kendi aracıyla gönderir. Seçim bu cihazda kalır (yazıcı cihazın yanındadır).
+function CihazVarsayilani({ sablon, yazici }: { sablon: Sablon; yazici: { id: number; ad: string } }) {
+  const [varsayilan, setVarsayilan] = useState(() => cihazYazicilari()[sablon.tur] ?? null);
+  const bu = varsayilan?.yaziciId === yazici.id && varsayilan.sablonAnahtar === sablon.anahtar;
+  const degistir = (acik: boolean) => {
+    const yeni = acik ? { yaziciId: yazici.id, yaziciAd: yazici.ad, sablonAnahtar: sablon.anahtar, sablonAd: sablon.ad } : null;
+    cihazYazicisiKaydet(sablon.tur, yeni);
+    setVarsayilan(yeni);
+  };
+  return (
+    <div className="tc-etk-form">
+      <IsaretKutusu etiket="Bu cihazda varsayılan yap" checked={bu} onChange={(e) => degistir(e.target.checked)} />
+      <p className="tc-etk-not">
+        {bu ? `Bu cihazdaki etiket düğmeleri bu türü doğrudan ${yazici.ad} yazıcısına, ${sablon.ad} ölçüsünde basar.`
+          : varsayilan ? `Bu cihazda şu an varsayılan: ${varsayilan.yaziciAd} · ${varsayilan.sablonAd}.`
+          : 'Varsayılan yoksa etiket düğmeleri Etiket Merkezi\'ni açar.'}
+      </p>
     </div>
   );
 }

@@ -8,6 +8,7 @@ import { ISTEK_KIMLIGI_BASLIGI, istekKimligiMi } from '#paylasilan/istek-kimligi
 import type { BaskilarCevabi, BekleyenlerCevabi, CiktiCevabi, EtiketlerCevabi, KayitCiktiCevabi, SablonlarCevabi, YazdirCevabi, YazicilarCevabi } from '#paylasilan/sozlesme/etiket-merkezi.ts';
 import { BildirimSaglayici } from '../../ortak/arayuz/index.ts';
 import { Baskilar } from './Baskilar.tsx';
+import { cihazYazicilari, cihazYazicisiKaydet } from './cihaz-yazicisi.ts';
 import { Etiketler } from './Etiketler.tsx';
 import { HazirSablonlar, SablonKatalogu, YaziciDenemesi } from './EtiketMerkezi.tsx';
 import { Yazicilar } from './Yazicilar.tsx';
@@ -630,5 +631,60 @@ describe('EtiketMerkezi vektörel yazdırma', () => {
     ac(<HazirSablonlar />, '/etiket-merkezi?tur=konum&id=11,12');
     expect(await screen.findByText(/2 etiket, önizleme ilk kayıt/)).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Vektörel yazdır' })).toBeNull();
+  });
+});
+
+// 2916 a: olay ekranındaki etiket düğmesi bu cihazın varsayılan yazıcısına basar; varsayılan Etiket bas'ta seçilir, bekleyenlerde
+// türün hepsi Etiket Merkezi'ne gitmeden oraya gider.
+describe('EtiketMerkezi cihaz varsayılanı', () => {
+  afterEach(() => { localStorage.clear(); });
+  const BASAN: Islem[] = ['sayfa.etiket-merkezi', 'etiket-merkezi.oku', 'etiket-merkezi.bas'];
+
+  it('ağ yazıcısı seçilince bu cihazda varsayılan yapılır; sonraki açılışta seçili gelir; kaldırılınca düşer', async () => {
+    sunucuKur({ islemler: BASAN });
+    ac(<HazirSablonlar />, '/etiket-merkezi?tur=konum&id=11');
+    fireEvent.change(await screen.findByLabelText('Yazıcı'), { target: { value: '1' } });
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Bu cihazda varsayılan yap' }));
+    expect(cihazYazicilari().konum).toEqual({ yaziciId: 1, yaziciAd: 'Zebra depo', sablonAnahtar: 'konum-50x25', sablonAd: 'Konum 50x25' });
+    expect(screen.getByText(/doğrudan Zebra depo yazıcısına, Konum 50x25 ölçüsünde basar/)).toBeTruthy();
+    cleanup();
+    ac(<HazirSablonlar />, '/etiket-merkezi?tur=konum&id=11');
+    expect(((await screen.findByLabelText('Yazıcı')) as HTMLSelectElement).value).toBe('1');
+    const kutu = screen.getByRole('checkbox', { name: 'Bu cihazda varsayılan yap' }) as HTMLInputElement;
+    expect(kutu.checked).toBe(true);
+    fireEvent.click(kutu);
+    expect(cihazYazicilari().konum).toBeUndefined();
+  });
+
+  it('dosya yazıcısında ve kayıtsız yazıcı denemesinde varsayılan seçeneği yoktur (yasak)', async () => {
+    sunucuKur({ islemler: BASAN });
+    ac(<HazirSablonlar />, '/etiket-merkezi?tur=konum&id=11');
+    fireEvent.change(await screen.findByLabelText('Yazıcı'), { target: { value: '2' } });
+    expect(screen.queryByRole('checkbox', { name: 'Bu cihazda varsayılan yap' })).toBeNull();
+    cleanup();
+    ac(<YaziciDenemesi />, '/etiket-merkezi/yazici-denemesi');
+    fireEvent.change(await screen.findByLabelText('Yazıcı'), { target: { value: '1' } });
+    expect(screen.queryByRole('checkbox', { name: 'Bu cihazda varsayılan yap' })).toBeNull();
+  });
+
+  it('bekleyenlerde varsayılanı olan türün hepsi o yazıcıya kayıtlarla basılır; varsayılanı olmayan tür Etiket bas sayfasını açar', async () => {
+    cihazYazicisiKaydet('lot', { yaziciId: 1, yaziciAd: 'Zebra depo', sablonAnahtar: 'lot-100x50', sablonAd: 'Lot 100x50' });
+    const istekler = sunucuKur({ islemler: BASAN });
+    ac(<Etiketler />, '/etiket-merkezi/etiketler');
+    fireEvent.click(await screen.findByRole('button', { name: /hepsini bas \(1\) · Zebra depo$/ }));
+    await waitFor(() => expect(istekler.gonderilenler).toHaveLength(1));
+    expect(istekler.gonderilenler[0]).toMatchObject({ yol: '/etiket-merkezi/sablonlar/lot-100x50/bas', govde: { yaziciId: 1, adet: 1, kayit: { tur: 'mal-kabul', idler: [12] } } });
+    expect(istekler.gonderilenler[0]!.kimlik).not.toBeNull();
+    expect(await screen.findByText('Etiketler gönderildi: Zebra depo.')).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'Kalite durum etiketleri: hepsini bas (2)' }).getAttribute('href')).toBe('/etiket-merkezi?tur=kalite-durum&id=41%2C40');
+  });
+
+  it('basma yetkisi olmayan varsayılan olsa da hepsini bas ile Etiket bas sayfasına gider, baskı isteği gitmez (yasak)', async () => {
+    cihazYazicisiKaydet('lot', { yaziciId: 1, yaziciAd: 'Zebra depo', sablonAnahtar: 'lot-100x50', sablonAd: 'Lot 100x50' });
+    const istekler = sunucuKur({ islemler: ['sayfa.etiket-merkezi', 'etiket-merkezi.oku'] });
+    ac(<Etiketler />, '/etiket-merkezi/etiketler');
+    expect(await screen.findByText('MK-000012')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /· Zebra depo$/ })).toBeNull();
+    expect(istekler.gonderilenler).toHaveLength(0);
   });
 });

@@ -9,6 +9,7 @@ import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { yeniIstekKimligi } from '../../ortak/veri/istek-kimligi.ts';
 import { useOturum } from '../../ortak/veri/oturum.ts';
 import { anahtarlar } from './anahtarlar.ts';
+import { useDogrudanBasim } from './HizliBas.tsx';
 import { KAYIT_BASLIKLARI, kayitSecimiYaz, secimSiniri } from './kayit-secimi.ts';
 import { Simge } from './Onizleme.tsx';
 import './etiket-merkezi.css';
@@ -104,20 +105,27 @@ function BekleyenListesi() {
       </p>
       {turler.length > 0 && (
         <div className="tc-etk-dugmeler">
-          {turler.map((t) => {
-            const idler = bekleyenler.filter((b) => b.tur === t).map((b) => b.id);
-            return (
-              <Link key={t} to={basmaAdresi(t, idler.slice(0, secimSiniri))}>
-                <Dugme tur="birincil" simge="printer">{KAYIT_BASLIKLARI[t]}: hepsini bas ({Math.min(idler.length, secimSiniri)})</Dugme>
-              </Link>
-            );
-          })}
+          {turler.map((t) => <HepsiniBas key={t} tur={t} idler={bekleyenler.filter((b) => b.tur === t).map((b) => b.id).slice(0, secimSiniri)} />)}
         </div>
       )}
       <Tablo etiket="Bekleyen etiketler" sutunlar={sutunlar} satirlar={bekleyenler} satirAnahtari={(b) => `${b.tur}-${String(b.id)}`}
         bosMesaj="Basılmayı bekleyen etiket yok." />
     </>
   );
+}
+
+// 2916 a: bu cihazda türün varsayılan yazıcısı varsa hepsi Etiket Merkezi'ne gitmeden oraya basılır; yoksa seçili olarak Etiket bas açılır.
+function HepsiniBas({ tur, idler }: { tur: Bekleyen['tur']; idler: number[] }) {
+  const dogrudan = useDogrudanBasim(tur);
+  const metin = `${KAYIT_BASLIKLARI[tur]}: hepsini bas (${idler.length})`;
+  const y = dogrudan.yazici;
+  if (y) {
+    return (
+      <Dugme tur="birincil" simge="printer" aria-label={`${metin} · ${y.yaziciAd}`} title={`Varsayılan yazıcı: ${y.yaziciAd} (${y.sablonAd})`}
+        yukleniyor={dogrudan.basiyor} onClick={() => dogrudan.bas(idler)}>{metin}</Dugme>
+    );
+  }
+  return <Link to={basmaAdresi(tur, idler)}><Dugme tur="birincil" simge="printer">{metin}</Dugme></Link>;
 }
 
 function TurListesi() {

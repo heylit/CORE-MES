@@ -39,7 +39,7 @@ describe('stok etiket düğmesi, doğrudan basım', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Lot etiketlerini bas · Depo yazıcısı' }));
     await waitFor(() => expect(istekler.some((i) => i.yol === '/etiket-merkezi/sablonlar/lot-100x50/bas')).toBe(true));
     expect(istekler.find((i) => i.yontem === 'POST')?.govde).toEqual({ yaziciId: 3, adet: 1, kayit: { tur: 'mal-kabul', idler: [41] } });
-    expect(await screen.findByText('Etiketler Depo yazıcısı yazıcısına gönderildi.')).toBeTruthy();
+    expect(await screen.findByText('Etiketler gönderildi: Depo yazıcısı.')).toBeTruthy();
     expect(screen.getByTestId('adres').textContent).toBe('/stok');
   });
 
@@ -48,7 +48,7 @@ describe('stok etiket düğmesi, doğrudan basım', () => {
     sunucuKur(BASAN, { 'POST /etiket-merkezi/sablonlar/lot-100x50/bas': () => json(200, { baskiId: 2, sonuc: 'hata', ileti: 'Yazıcıya ulaşılamadı.' }) });
     ciz();
     fireEvent.click(await screen.findByRole('button', { name: 'Lot etiketlerini bas · Depo yazıcısı' }));
-    expect(await screen.findByText("Yazıcıya ulaşılamadı. Etiket Merkezi'nden basın.")).toBeTruthy();
+    expect(await screen.findByText("Yazıcıya ulaşılamadı. Yazıcıyı kontrol edin ya da Etiket Merkezi'nden başka yazıcıya basın.")).toBeTruthy();
   });
 
   it('basma işlemi yoksa varsayılan olsa da Etiket Merkezi açılır, baskı isteği gitmez (yasak)', async () => {
