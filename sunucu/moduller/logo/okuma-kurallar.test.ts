@@ -3,7 +3,7 @@ import { describe, test } from 'node:test';
 import { LOGO_AYARLARI } from '#paylasilan/ayarlar/logo.ts';
 import {
   faturalariAyikla, FIS_GONDERIM_AYARI, listeKayitlariniAyikla, LOGO_AKISLARI, LOGO_FIS_TURLERI, logoFisDurumu, malKabulSatirlariniAyikla, malzemeFisiGovdesi,
-  malzemeFisiOzeti, MALZEME_FISI_TURU, MALZEME_FISI_UCU, stokFisindenLogoFisi,
+  eskiEmirFisiNo, logoFisNumarasi, malzemeFisiOzeti, MALZEME_FISI_TURU, MALZEME_FISI_UCU, stokFisindenLogoFisi,
 } from './kurallar.ts';
 import type { FisGidenDurumu, GonderilecekMalzemeFisi, StokFisi } from './kurallar.ts';
 
@@ -113,7 +113,7 @@ describe('LOGO-O3 akış tanımları ve ayarlar tutarlıdır', () => {
 
 describe('LOGO-O16 stoktaki fişten Logo fişi (293 a, 294 c)', () => {
   const stokFisi = (ek: Partial<StokFisi> = {}): StokFisi => ({
-    id: 7, tur: 'sarf', no: 'UE-DENEME-1', tarih: '2026-10-20', saat: '14:05:00',
+    id: 7, tur: 'sarf', no: 'SR-000007', tarih: '2026-10-20', saat: '14:05:00',
     satirlar: [
       { stokKodu: 'HM-DEN-00001', birim: 'kg', miktar: '3.25', aciklama: null, kaynakAmbarNo: null, hedefAmbarNo: null },
       { stokKodu: 'HM-DEN-00002', birim: 'adet', miktar: '0', aciklama: null, kaynakAmbarNo: null, hedefAmbarNo: null },
@@ -136,15 +136,53 @@ describe('LOGO-O16 stoktaki fişten Logo fişi (293 a, 294 c)', () => {
 
   test('sıfır satır düşer; numara stoğun fiş numarasıdır; fire kapalıyken eklenen fire satırları sarf fişinde gider', () => {
     assert.deepEqual(stokFisindenLogoFisi(stokFisi()), {
-      id: 7, tur: 'sarf-fisi', no: 'UE-DENEME-1', tarih: '2026-10-20', saat: '14:05:00', projeKodu: null,
+      id: 7, tur: 'sarf-fisi', no: 'SR-000007', tarih: '2026-10-20', saat: '14:05:00', projeKodu: null,
       satirlar: [{ satirId: 1, stokKodu: 'HM-DEN-00001', miktar: '3.25', birim: 'kg', aciklama: null }],
     });
     const fire = [{ stokKodu: 'HM-DEN-00001', birim: 'kg', miktar: '0.5', aciklama: null, kaynakAmbarNo: null, hedefAmbarNo: null }];
     assert.deepEqual(stokFisindenLogoFisi(stokFisi(), fire)?.satirlar.map((x) => x.miktar), ['3.25', '0.5']);
-    const r = malzemeFisiGovdesi(stokFisindenLogoFisi(stokFisi({ tur: 'fire', no: 'UE-DENEME-1' }))!);
+    const r = malzemeFisiGovdesi(stokFisindenLogoFisi(stokFisi({ tur: 'fire', no: 'FR-000007' }))!);
     assert.ok('govde' in r);
     assert.equal(r.govde['TYPE'], 11);
     assert.equal(stokFisindenLogoFisi(stokFisi({ satirlar: [] })), null, 'satırı olmayan fiş null');
+  });
+
+  // 2948: emir numarası Logo fiş numarasına (16) sığmaz; numara stoğun önekli numarasıdır, emir no satır açıklamasının başında gider.
+  test('emir fişi: Logo NUMBER önekli fiş no; uzun emir no satır açıklamasında, açıklama sınırda sondan kesilir', () => {
+    const emirNo = 'ORN-00001_2026-ORN-AA-00001-26-11-002/1';
+    const satir = (aciklama: string | null) => ({ stokKodu: 'HM-DEN-00001', birim: 'kg', miktar: '1', aciklama, kaynakAmbarNo: null, hedefAmbarNo: null });
+    const govde = (f: StokFisi): Record<string, unknown> => {
+      const r = malzemeFisiGovdesi(stokFisindenLogoFisi(f)!);
+      assert.ok('govde' in r, 'hata' in r ? r.hata : '');
+      return r.govde;
+    };
+    const aciklamalar = (g: Record<string, unknown>) => (g['TRANSACTIONS'] as Record<string, unknown>[]).map((x) => x['DESCRIPTION']);
+    for (const [tur, no] of [['sarf', 'SR-000004'], ['uretim_girisi', 'UG-000005'], ['fire', 'FR-000006']] as const) {
+      const g = govde(stokFisi({ tur, no, emirNo, satirlar: [satir(null), satir('Hurda')] }));
+      assert.equal(g['NUMBER'], no, tur);
+      assert.deepEqual(aciklamalar(g), [emirNo, `${emirNo} Hurda`], tur);
+    }
+    const uzun = `${'E'.repeat(48)}-1`;
+    assert.deepEqual(aciklamalar(govde(stokFisi({ emirNo: uzun, satirlar: [satir('Hurda')] }))), [uzun.slice(0, 50)], '50 karakterden sonrası kesilir');
+    assert.equal(aciklamalar(govde(stokFisi({ emirNo: null, satirlar: [satir(null)] })))[0], undefined, 'emirsiz ve açıklamasız satırda alan yok');
+    const eski = malzemeFisiGovdesi(stokFisindenLogoFisi(stokFisi({ no: emirNo }))!);
+    assert.match('hata' in eski ? eski.hata : '', /Fiş numarası 1-16/, 'emir numarası fiş numarası olarak istek öncesi reddedilir');
+  });
+
+  test('2948 K1: köprüye gitmiş olabilecek fiş sığan eski numarasını korur; kayıtlı numara önce; hiç gitmemiş ya da sığmayan yeni numarayı alır', () => {
+    const g = (ek: Partial<{ numara: string | null; denemeSayisi: number; niyetZamani: Date | null; logoKayitNo: string | null }> = {}) =>
+      ({ numara: null, denemeSayisi: 0, niyetZamani: null, logoKayitNo: null, ...ek });
+    assert.equal(eskiEmirFisiNo({ id: 9, tur: 'sarf', uretimEmriId: 4, emirNo: ' UE-1 ' }), 'UE-1');
+    assert.equal(eskiEmirFisiNo({ id: 9, tur: 'fire', uretimEmriId: 4, emirNo: null }), '#4');
+    assert.equal(eskiEmirFisiNo({ id: 9, tur: 'ambar', uretimEmriId: null }), null);
+    assert.equal(logoFisNumarasi('SR-000009', 'UE-1', g({ numara: 'SR-000009', logoKayitNo: '5' })), 'SR-000009', 'kayıtlı numara');
+    assert.equal(logoFisNumarasi('SR-000009', 'UE-1', g({ logoKayitNo: '5' })), 'UE-1', 'Logo\'da kayıt no var');
+    assert.equal(logoFisNumarasi('SR-000009', 'UE-1', g({ niyetZamani: new Date() })), 'UE-1', 'niyet yazılmış');
+    assert.equal(logoFisNumarasi('SR-000009', 'UE-1', g({ denemeSayisi: 1 })), 'UE-1', 'denenmiş');
+    assert.equal(logoFisNumarasi('SR-000009', 'UE-1', g()), 'SR-000009', 'hiç denenmemiş');
+    assert.equal(logoFisNumarasi('SR-000009', 'UE-1', null), 'SR-000009', 'satır yok');
+    assert.equal(logoFisNumarasi('SR-000009', 'X'.repeat(17), g({ denemeSayisi: 297 })), 'SR-000009', 'sığmayan eski numara hiç gitmemiştir');
+    assert.equal(logoFisNumarasi('SR-000009', null, g({ logoKayitNo: '5' })), 'SR-000009', 'emir fişi değil');
   });
 
   test('(ret) kartı ya da birimi olmayan satır düşmez; gövde kuralı fişi nedeniyle reddeder', () => {

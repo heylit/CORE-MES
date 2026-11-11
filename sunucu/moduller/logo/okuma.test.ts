@@ -82,7 +82,7 @@ describe('Logo okuma akışları ve malzeme fişi, sahte köprüyle (gerçek Pos
   const fisOrtami = (bellek = yeniSurecBellegi(), sureMs = TEST_ISTEK_SURESI_MS): MalzemeFisiTurOrtami => ({ ...ortami(bellek, sureMs), kaynak: fisKaynagi });
 
   // Stoğun sahte fişleri: değişiklik sayacı, zamanı ve elle istek stoktaki gibi; satır değişince sayaç artar.
-  interface SahteStokFisi { id: number; tur: MalzemeFisiTuru; no: string; uretimEmriId: number | null; degisiklik: number; zaman: string; istek: string | null; satirlar: { stokKodu: string | null; birim: string | null; miktar: string }[] }
+  interface SahteStokFisi { id: number; tur: MalzemeFisiTuru; no: string; emirNo?: string | null; uretimEmriId: number | null; degisiklik: number; zaman: string; istek: string | null; satirlar: { stokKodu: string | null; birim: string | null; miktar: string }[] }
   const stokFisleri = new Map<number, SahteStokFisi>();
   let stokSaati = Date.parse('2026-10-24T08:00:00Z');
   const stokDegistir = (id: number, ek: Partial<SahteStokFisi> = {}): SahteStokFisi => {
@@ -106,7 +106,7 @@ describe('Logo okuma akışları ve malzeme fişi, sahte köprüyle (gerçek Pos
         const f = stokFisleri.get(id);
         if (!f) return [];
         const satirlar = f.satirlar.map((x) => ({ ...x, aciklama: null, kaynakAmbarNo: null, hedefAmbarNo: null }));
-        return [[id, { id, tur: f.tur, no: f.no, tarih: '2026-10-24', saat: '11:00:00', uretimEmriId: f.uretimEmriId, satirlar }]];
+        return [[id, { id, tur: f.tur, no: f.no, emirNo: f.emirNo ?? null, tarih: '2026-10-24', saat: '11:00:00', uretimEmriId: f.uretimEmriId, satirlar }]];
       }));
     },
     async emirFisleri(_db, emirIdler) {
@@ -509,6 +509,83 @@ describe('Logo okuma akışları ve malzeme fişi, sahte köprüyle (gerçek Pos
     assert.equal((await kos()).tur, 'malzeme-fisi-niyet');
     assert.deepEqual(await kos(), { tur: 'malzeme-fisi', no: ID, sonuc: 'gonderildi' });
     assert.equal((await durum(ID)).durum, 'gonderildi');
+  });
+
+  // 2948: emir numarası fiş numarasıyken fiş istek öncesi reddedilir ve kuyrukta kalır; numara düzelince geri çekilme dolunca kendiliğinden
+  // gider (elle istek gerekmez), emir no satır açıklamasındadır.
+  test('LOGO-O21 emir numarasıyla takılan emir fişi istek göndermeden reddedilir; önekli numarayla kendiliğinden gider', async () => {
+    const ID = 301;
+    const emirNo = 'ORN-00001_2026-ORN-AA-00001-26-11-002';
+    await ayar('logo.malzeme-fisi-gonderimi', true);
+    const bellek = yeniSurecBellegi();
+    const kos = (): Promise<TurSonucu> => malzemeFisiTuru(vt(), { ...ortami(bellek), kaynak: stokKaynagi });
+    const once = istekSayisi();
+    stokDegistir(ID, { tur: 'sarf', no: emirNo, emirNo, satirlar: [{ stokKodu: 'HM-DEN-00001', birim: 'kg', miktar: '2' }] });
+    assert.deepEqual(await kos(), { tur: 'malzeme-fisi', no: ID, sonuc: 'reddedildi' });
+    assert.equal(istekSayisi(), once, 'köprüye istek çıkmadı');
+    assert.match((await durum(ID)).neden ?? '', /Fiş numarası 1-16/);
+    simdi += 31 * 60_000;
+    assert.deepEqual(await kos(), { tur: 'malzeme-fisi', no: ID, sonuc: 'reddedildi' }, 'düzeltmeden önce her turda yine istek öncesi reddedilir');
+    assert.equal(istekSayisi(), once);
+
+    // Düzeltme: stokta değişiklik ya da "Yeniden gönder" olmadan yalnız numara değişir (yeni sürüm).
+    stokFisleri.set(ID, { ...stokFisleri.get(ID)!, no: 'SR-000301' });
+    assert.deepEqual(await kos(), { tur: 'bos' }, 'geri çekilme dolmadan istek yok');
+    simdi += 31 * 60_000;
+    assert.deepEqual(await kos(), { tur: 'malzeme-fisi-niyet', no: ID });
+    assert.deepEqual(await kos(), { tur: 'malzeme-fisi', no: ID, sonuc: 'gonderildi' });
+    assert.deepEqual(kopru.istekler.slice(once).map((i) => `${i.yontem} ${i.yol}`), ['POST /api/MaterialSlip/AddConsumption']);
+    const govde = kopru.malzemeFisleri.at(-1)?.govde as { NUMBER?: string; TRANSACTIONS?: { DESCRIPTION?: string }[] };
+    assert.equal(govde.NUMBER, 'SR-000301');
+    assert.equal(govde.TRANSACTIONS?.[0]?.DESCRIPTION, emirNo);
+    assert.equal((await durum(ID)).durum, 'gonderildi');
+    assert.deepEqual(await kos(), { tur: 'bos' }, 'bir kez gider');
+    const kayitli = await vt().tek<{ numara: string | null }>("SELECT numara FROM logo_malzeme_fisi_giden WHERE belge_turu = 'sarf-fisi' AND belge_no = $1", [ID]);
+    assert.equal(kayitli?.numara, 'SR-000301', 'sığmayan eski numara hiç gitmemiştir; yeni numara yazılır');
+  });
+
+  // 2948 K1: kural değişmeden önce Logo'ya gitmiş (ya da gitmiş olabilecek) emir fişi eski numarasıyla silinir ve açılır; yeni numarayla
+  // ikinci fiş açılmaz. Yardımcının "zaten var" cevabı TMI'de başarı değil hatadır.
+  test('LOGO-O22 eski numarayla Logo\'da duran fiş eski numarasını korur; aynı numarada fiş varsa yardımcının reddi hata sayılır, çift açılmaz', async () => {
+    await ayar('logo.malzeme-fisi-gonderimi', true);
+    kopru.fisNumaraKalkani = true;
+    const bellek = yeniSurecBellegi();
+    const kos = (): Promise<TurSonucu> => malzemeFisiTuru(vt(), { ...ortami(bellek), kaynak: stokKaynagi });
+    const numara = async (id: number) => (await vt().tek<{ numara: string | null }>(
+      "SELECT numara FROM logo_malzeme_fisi_giden WHERE belge_turu = 'sarf-fisi' AND belge_no = $1", [id]))?.numara ?? null;
+    const sarflar = () => kopru.malzemeFisleri.filter((f) => f.uc === 'AddConsumption').map((f) => f.no).sort();
+
+    // Eski kuralla gönderilmiş fiş: Logo'da emir numarasıyla duruyor, numara sütunu boş (göç doldurmaz).
+    const ESKI = 401;
+    stokDegistir(ESKI, { tur: 'sarf', no: 'SR-000401', emirNo: 'UE-ESKI-401', uretimEmriId: 41, satirlar: [{ stokKodu: 'HM-DEN-00001', birim: 'kg', miktar: '3' }] });
+    await vt().tx((db) => fisDegisiklikleriniAl(db, stokKaynaklari));
+    await vt().sorgu(
+      `UPDATE logo_malzeme_fisi_giden SET logo_kayit_no = '900', son_sonuc = 'gonderildi', son_deneme = now(), deneme_sayisi = 1, son_satir_ozeti = '[]'
+        WHERE belge_turu = 'sarf-fisi' AND belge_no = $1`, [ESKI]);
+    kopru.malzemeFisleri.push({ uc: 'AddConsumption', no: 'UE-ESKI-401', ref: 900, govde: {} });
+    const once = istekSayisi();
+    assert.deepEqual(await kos(), { tur: 'malzeme-fisi', no: ESKI, sonuc: 'silindi' });
+    assert.equal(`${kopru.istekler.at(-1)?.yontem} ${kopru.istekler.at(-1)?.yol}`, 'DELETE /api/MaterialSlip/Consumption/UE-ESKI-401');
+    assert.equal(await numara(ESKI), 'UE-ESKI-401');
+    assert.deepEqual(await kos(), { tur: 'malzeme-fisi-niyet', no: ESKI });
+    assert.deepEqual(await kos(), { tur: 'malzeme-fisi', no: ESKI, sonuc: 'gonderildi' });
+    assert.deepEqual(sarflar(), ['UE-ESKI-401'], 'Logo\'da tek fiş, eski numarayla');
+    assert.equal(kopru.istekler.length - once, 2);
+
+    // Yeni numara Logo'da elle açılmış: yardımcı "zaten var" der; TMI başarı saymaz, hata gösterir, ikinci fiş açılmaz.
+    const VAR = 402;
+    kopru.malzemeFisleri.push({ uc: 'AddConsumption', no: 'SR-000402', ref: 901, govde: {} });
+    stokDegistir(VAR, { tur: 'sarf', no: 'SR-000402', emirNo: 'UE-YENI-402', uretimEmriId: 42, satirlar: [{ stokKodu: 'HM-DEN-00001', birim: 'kg', miktar: '1' }] });
+    assert.deepEqual(await kos(), { tur: 'malzeme-fisi-niyet', no: VAR });
+    assert.deepEqual(await kos(), { tur: 'malzeme-fisi', no: VAR, sonuc: 'reddedildi' });
+    const d = await durum(VAR);
+    assert.equal(d.durum, 'hata');
+    assert.equal(d.kayitNo, null);
+    assert.match(d.neden ?? '', /zaten var/);
+    assert.equal(await numara(VAR), 'SR-000402', 'hiç denenmemiş fiş yeni numarayı alır');
+    assert.deepEqual(sarflar(), ['SR-000402', 'UE-ESKI-401'], 'çift açılmadı');
+    await assert.rejects(vt().sorgu("UPDATE logo_malzeme_fisi_giden SET numara = $2 WHERE belge_no = $1", [VAR, 'X'.repeat(17)]), /logo_malzeme_fisi_giden_numara/);
+    await assert.rejects(vt().sorgu("UPDATE logo_malzeme_fisi_giden SET numara = ' A' WHERE belge_no = $1", [VAR]), /logo_malzeme_fisi_giden_numara/);
   });
 
   test('LOGO-O20 gerçek stok akışıyla: imleç ilerler, yeni fiş sıraya girer, imleçten eski ve hiç değişmemiş fiş gönderilmez görünür', async () => {

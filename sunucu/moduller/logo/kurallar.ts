@@ -991,22 +991,43 @@ export interface StokFisi {
   no: string;
   tarih: string;
   saat: string;
+  // Emir fişinin emir numarası; Logo fiş numarasına sığmadığı için satır açıklamasının başında gider.
+  emirNo?: string | null;
   satirlar: readonly StokFisSatiri[];
 }
 export interface StokFisSatiri { stokKodu: string | null; birim: string | null; miktar: string; aciklama: string | null; kaynakAmbarNo: number | null; hedefAmbarNo: number | null }
 
 // Kartı ya da birimi olmayan satır boş metinle kalır: gövde kuralı fişi nedeniyle reddeder, sessizce düşmez. Satırı olmayan fiş null
-// (gönderilecek bir şey yok; Logo'da açıksa silinir).
+// (gönderilecek bir şey yok; Logo'da açıksa silinir). Emir numarası açıklamanın başındadır: açıklama sınırda kesilirse emir no kalır.
+const emirliAciklama = (emirNo: string | null, aciklama: string | null): string | null =>
+  [emirNo?.trim(), aciklama?.trim()].filter((x) => x).join(' ') || null;
 export function stokFisindenLogoFisi(f: StokFisi, ekSatirlar: readonly StokFisSatiri[] = []): GonderilecekMalzemeFisi | null {
   const ambar = f.tur === 'ambar';
   const satirlar = [...f.satirlar, ...ekSatirlar]
     .filter((k) => !ONDALIK.test(k.miktar) || olcekli(k.miktar) !== 0n)
     .map((k, i) => ({
-      satirId: i + 1, stokKodu: k.stokKodu ?? '', miktar: k.miktar, birim: k.birim ?? '', aciklama: k.aciklama,
+      satirId: i + 1, stokKodu: k.stokKodu ?? '', miktar: k.miktar, birim: k.birim ?? '', aciklama: emirliAciklama(f.emirNo ?? null, k.aciklama),
       ...(ambar ? { kaynakAmbarNo: k.kaynakAmbarNo, hedefAmbarNo: k.hedefAmbarNo } : {}),
     }));
   if (satirlar.length === 0) return null;
   return { id: f.id, tur: STOK_FISI_LOGO_TURU[f.tur], no: f.no, tarih: f.tarih, saat: f.saat, projeKodu: null, satirlar };
+}
+
+// 2948: emir fişinin eski numarası emir numarasıydı (yoksa "#<emir kimliği>"). Logo'ya hiç ulaşmamış olabilecek satırda değil, köprüye
+// gitmiş olabilecek satırda (deneme, niyet ya da kayıt no var) ve numara 16'ya sığıyorsa eski numara korunur: fiş Logo'da o numarayla
+// duruyor olabilir; yeni numarayla açmak ikinci fiş (çift stok hareketi) olur. Kayıtlı numara her zaman önce gelir.
+export function eskiEmirFisiNo(f: { id: number; tur: MalzemeFisiTuru; uretimEmriId: number | null; emirNo?: string | null }): string | null {
+  if (f.tur !== 'sarf' && f.tur !== 'uretim_girisi' && f.tur !== 'fire') return null;
+  return (f.emirNo ?? `#${f.uretimEmriId ?? f.id}`).trim();
+}
+export function logoFisNumarasi(
+  yeni: string, eski: string | null,
+  g: { numara: string | null; denemeSayisi: number; niyetZamani: Date | null; logoKayitNo: string | null } | null,
+): string {
+  if (g?.numara) return g.numara;
+  const gitmisOlabilir = g !== null && (g.denemeSayisi > 0 || g.niyetZamani !== null || g.logoKayitNo !== null);
+  if (gitmisOlabilir && eski !== null && eski !== '' && eski.length <= FIS_NO_EN_COK) return eski;
+  return yeni.trim();
 }
 
 // 233: Logo'daki fişin satırlarının özeti; aynı özet yeniden gönderilmez. Miktar ölçekli sayıyla karşılaştırılır ("2.50" ile "2.5" aynı).

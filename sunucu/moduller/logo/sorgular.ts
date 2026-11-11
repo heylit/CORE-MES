@@ -395,6 +395,14 @@ export async function fisGidenDurumlari(db: Db, fisler: readonly { tur: FisTuru;
   return new Map(satirlar.map(({ tur, id, ...d }) => [`${tur}:${id}`, d]));
 }
 
+// 2948: fişin Logo'ya giden numarası; boşsa kural koddadır (kurallar.ts logoFisNumarasi). Satır kuyruktan gelir, yoksa yazılmaz.
+export async function fisNumarasi(db: Db, tur: FisTuru, id: number): Promise<string | null> {
+  return (await db.tek<{ numara: string | null }>('SELECT numara FROM logo_malzeme_fisi_giden WHERE belge_turu = $1 AND belge_no = $2', [tur, id]))?.numara ?? null;
+}
+export async function fisNumarasiYaz(db: Db, tur: FisTuru, id: number, numara: string): Promise<void> {
+  await db.sorgu('UPDATE logo_malzeme_fisi_giden SET numara = $3 WHERE belge_turu = $1 AND belge_no = $2 AND numara IS NULL', [tur, id, numara]);
+}
+
 export interface EsitlemeDurumu { bekleyen: number; sonSatirOzeti: string | null }
 export function esitlemeDurumu(db: Db, tur: FisTuru, id: number): Promise<EsitlemeDurumu | null> {
   return db.tek<EsitlemeDurumu>(

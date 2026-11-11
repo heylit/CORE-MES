@@ -92,6 +92,8 @@ export interface SahteKopru {
   ambarlar: unknown;
   faturalar: Map<string, unknown[]>;
   malzemeFisleri: { uc: string; no: string; ref: number; govde: unknown }[];
+  // Açıkken aynı türde aynı numaralı fiş yardımcı gibi reddedilir (Islemler.cs MalzemeFisiEkle "zaten var").
+  fisNumaraKalkani: boolean;
   // 2116 ve 2118 okumaları (yardımcının sözleşmesi): Logo malzeme kartları ve stok satırları kayıt sırasıyla sayfa sayfa (sayfaBoyu),
   // cariler. Okuma istekleri `istekler`de görünür; Logo'ya yazmazlar.
   logoKartlari: Record<string, unknown>[];
@@ -162,6 +164,7 @@ export async function sahteKopruAc(secenek: { anahtar?: string; port?: number } 
     ambarlar: [{ nr: 0, name: 'Merkez' }],
     faturalar: new Map(),
     malzemeFisleri: [],
+    fisNumaraKalkani: false,
     logoKartlari: [],
     logoStoklari: [],
     logoCarileri: [],
@@ -275,6 +278,11 @@ export async function sahteKopruAc(secenek: { anahtar?: string; port?: number } 
         if (kopru.senaryo === 'dogrulama') { json(cevap, 200, { success: false, logicalRef: 0, error: 'Validation failed', validate: ['ITEM_CODE gecersiz'] }); return; }
         if (kopru.senaryo === 'zaman-asimi') { bekleyenler.add(cevap); return; }
         const fisNo = typeof (govde as Record<string, unknown> | null)?.['NUMBER'] === 'string' ? String((govde as Record<string, unknown>)['NUMBER']) : '';
+        const varolan = kopru.fisNumaraKalkani ? kopru.malzemeFisleri.find((f) => f.uc === (fis[1] ?? '') && f.no === fisNo) : undefined;
+        if (varolan) {
+          json(cevap, 200, { success: false, logicalRef: 0, error: `Bu numarada malzeme fişi zaten var (logicalRef ${varolan.ref}); yeniden yazılmadı, Logo'da denetleyin.`, validate: null });
+          return;
+        }
         const ref = (sonRef += 1);
         kopru.malzemeFisleri.push({ uc: fis[1] ?? '', no: fisNo, ref, govde });
         if (kopru.senaryo === 'cevap-kayboldu') { istek.socket.destroy(); return; }

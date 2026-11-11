@@ -77,7 +77,7 @@ async function ozetler(db: Db, fisler: readonly MalzemeFisiHam[]): Promise<{ oze
     const l = logo.get(f.id) ?? BILINMIYOR;
     const satirSayisi = satirlar.get(f.id)?.length ?? 0;
     return {
-      id: f.id, no: malzemeFisiNo(f, emirNo), tur: f.tur, acilis: f.acilis, uretimEmriId: f.uretimEmriId, emirNo, satirSayisi, gonderimIstegi: f.gonderimIstegi,
+      id: f.id, no: malzemeFisiNo(f), tur: f.tur, acilis: f.acilis, uretimEmriId: f.uretimEmriId, emirNo, satirSayisi, gonderimIstegi: f.gonderimIstegi,
       logo: l, gonderilebilir: malzemeFisiGonderilebilir(l, satirSayisi > 0), surum: f.surum,
     };
   });
@@ -136,8 +136,8 @@ async function listeSatirlari(db: Db, anahtarlar: readonly sorgular.ListeFisiAna
 
 export async function malzemeFisiListesi(db: Db, s: MalzemeFisleriListesi): Promise<SayfaliListe<MalzemeFisiListeSatiri>> {
   const no = s.metin ? fisNoKimligi(s.metin) : null;
-  // Arama sayım, ambar ve mal kabul numarasını önekten çözer; teslim fişi, toplama ve hareket fişi numarasıyla bulunur. Emir fişi emirden
-  // (uretimEmriId) süzülür. Çözülemeyen metin boş liste verir, uydurulmaz.
+  // Arama malzeme fişi ve mal kabul numarasını önekten çözer; teslim fişi, toplama ve hareket fişi numarasıyla bulunur. Emir fişi ayrıca
+  // emirden (uretimEmriId) süzülür. Çözülemeyen metin boş liste verir, uydurulmaz.
   if (s.metin && no === null) {
     if (s.logoDurumu !== undefined || s.uretimEmriId !== undefined) return bosListe(s);
     const bulunan = (await sorgular.belgeNoBul(db, s.metin)).filter((a) => s.tur === undefined || a.kaynak === s.tur);
@@ -193,7 +193,7 @@ export async function malzemeFisiGonder(db: Db, kisiId: number, id: number, g: M
 
 // ---- Logo modülüne (disari.ts) ------------------------------------------------------------------------------------------------------
 export interface LogoIcinFis {
-  id: number; tur: MalzemeFisiTuru; no: string; uretimEmriId: number | null;
+  id: number; tur: MalzemeFisiTuru; no: string; uretimEmriId: number | null; emirNo: string | null;
   // Fişin açıldığı an, tesis saatiyle (Logo fiş tarihi ve saati).
   tarih: string; saat: string;
   degisiklik: number; gonderimIstegi: string | null;
@@ -207,7 +207,7 @@ export async function logoIcinFisler(db: Db, idler: readonly number[]): Promise<
   return new Map(fisler.map((f) => {
     const an = new Date(f.acilis);
     return [f.id, {
-      id: f.id, tur: f.tur, no: malzemeFisiNo(f, f.uretimEmriId === null ? null : (nolar.get(f.uretimEmriId) ?? null)), uretimEmriId: f.uretimEmriId,
+      id: f.id, tur: f.tur, no: malzemeFisiNo(f), uretimEmriId: f.uretimEmriId, emirNo: f.uretimEmriId === null ? null : (nolar.get(f.uretimEmriId) ?? null),
       tarih: tesisGunu(an), saat: saatBicimi.format(an), degisiklik: f.degisiklik, gonderimIstegi: f.gonderimIstegi,
       satirlar: (satirlar.get(f.id) ?? []).map(({ stokKodu, birim, miktar, aciklama, kaynakAmbarNo, hedefAmbarNo }) => ({ stokKodu, birim, miktar, aciklama, kaynakAmbarNo, hedefAmbarNo })),
     }];
