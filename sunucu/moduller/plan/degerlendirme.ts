@@ -99,6 +99,7 @@ function calistir(girdi: DegerlendirmeGirdisi, simdi: number, sureMs: number): P
 }
 
 const MALIYET_ISLEMI = 'finans.maliyet-oku';
+const FIYAT_ISLEMI = 'siparisler.fiyat-oku';
 const CALISMA_YOK = 'Planlama çalışması yok; planlama sayfasını açıp bir kez kaydedin.';
 const HATALAR: Record<DegerlendirmeHatasi, () => Error> = {
   'plan-yok': () => cakisma('Önce plan kurulmalı.'),
@@ -125,6 +126,7 @@ export async function degerlendirmeBaslat(
   db: Db, kullanici: Kullanici, g: { surum: number; istek: DegerlendirmeIstegi }, simdi: number = Date.now(), yap: typeof degerlendirmeYap = degerlendirmeYap,
 ): Promise<{ is: string }> {
   const maliyetGorunur = islemVarMi(kullanici, MALIYET_ISLEMI);
+  const fiyatGorunur = islemVarMi(kullanici, FIYAT_ISLEMI);
   temizle(simdi);
   if ([...isler.values()].some((i) => i.durum === 'suruyor' && i.kisi === kullanici.id)) throw cokIstek('Önceki planlama değerlendirmeniz sürüyor; bitince yeniden deneyin.');
   // İş, girdi okunmadan yer tutar: aynı kişinin eşzamanlı ikinci başlatması okuma sürerken de reddedilir.
@@ -149,7 +151,7 @@ export async function degerlendirmeBaslat(
     if (r === null) throw cakisma(CALISMA_YOK);
     if ('hata' in r) throw HATALAR[r.hata]();
     const sonuc = r.sonuc as DegerlendirmeSonucu;
-    const gorunen = !maliyetGorunur ? maliyetsiz(sonuc) : karGizli ? karsiz(sonuc) : sonuc;
+    const gorunen = !maliyetGorunur ? maliyetsiz(sonuc) : !fiyatGorunur ? fiyatsiz(sonuc) : karGizli ? karsiz(sonuc) : sonuc;
     const cevap = { calismaSurumu: surum, dataVer: r.dataVer, baslangic: r.baslangic, simdi: r.simdi, maliyetGorunur, sonuc: gorunen };
     isler.set(is, { kisi, durum: 'bitti', cevap, bitis: Date.now() });
   }).catch((e: unknown) => {
@@ -207,6 +209,13 @@ export function karsiz(s: DegerlendirmeSonucu): DegerlendirmeSonucu {
     case 'sira-degistir':
       return s;
   }
+}
+
+// 2918: sipariş fiyatı yalnız siparisler.fiyat-oku ile okunur (siparisler 180); maliyeti görüp fiyatı görmeyene fiyat ve ondan türeyen kâr
+// gitmez. Termin seçeneklerinin tutarı siparişin gelirinin kendisidir (motor/degerlendir.js). TL alanları maliyettir, kalır.
+export function fiyatsiz(s: DegerlendirmeSonucu): DegerlendirmeSonucu {
+  const k = karsiz(s);
+  return k.tur === 'termin-secenekleri' ? { ...k, satirlar: k.satirlar.map((x) => ({ ...x, tutar: null })) } : k;
 }
 
 // Seçeneğin planı İK değeriyle seçilmiş ek mesaiyle kurulur (2760 b); planın TL toplamı (ozet.tl) görmeyene gitmez (Güvenlik C6).

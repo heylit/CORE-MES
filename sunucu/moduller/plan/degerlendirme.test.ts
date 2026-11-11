@@ -416,4 +416,42 @@ describe('planlama değerlendirmesi ucu (gerçek PostgreSQL)', () => {
     await new Promise((coz) => setImmediate(coz));
     assert.equal(degerlendirmeDurumu(yoneticiId, yeni).durum, 'hata');
   });
+
+  // 2918: sipariş fiyatı (siparisler 180: yalnız siparisler.fiyat-oku) ve ondan türeyen kâr, maliyeti görüp fiyatı görmeyene gitmez. TL
+  // alanları maliyettir, maliyet-oku ile kalır. Hesap enjekte edilir: sonuç sabittir, süzme kararını ölçer. Rakamlar uydurmadır.
+  test('PD-22: fiyatı görmeyen maliyetçide kâr alanları ve sipariş tutarı null; TL kalır; iki yetkili hepsini görür', async () => {
+    const surum = await calismaYaz(planli());
+    const plan = { ozet: { tl: 777 } };
+    const sonuclar = [
+      { tur: 'plan-secenekleri', bedeliBilinmeyenEkMesai: false,
+        secenekler: [{ denge: 50, carpan: 1, ekMesai: [{ makineId: 'T1', gun: 1, vardiya: '3', tl: 400 }], ekMesaiTl: 400, geciken: 1, isSayisi: 2, gecikmeSaat: 3, netKar: 1234, eksik: 0, plan }] },
+      { tur: 'termin-secenekleri', siparisId: 'O1', havuz: false, taban: 'girilen-termin', yerlesti: true,
+        satirlar: [{ secenek: 'en-erken', termin: '2026-10-21', bitis: 30, gecikmeSaat: 0, tutar: 5000, netKar: 900, digerKarFarki: -50, digerGecikmeFarki: 2, toplamKar: 850 }] },
+      { tur: 'termin-uzatma', gun: 2,
+        satirlar: [{ siparisId: 'O1', yeniTermin: '2026-10-22', gecikmeSimdi: 5, gecikmeUzatinca: 0, netKarFarki: 300, gecikmeSaatFarki: -5, gecikenFarki: -1 }] },
+      { tur: 'parti-bolme', siparisId: 'O2', darbogaz: null,
+        sonuc: { partiler: [], gecikmeOnce: 1, gecikmeSonra: 0, bitisSonra: null, tl: 650, siparisler: [], plan } },
+    ].map((x) => degerlendirmeSonucu.parse(x));
+    const oku = async (islemler: Kullanici['islemler'], sonuc: DegerlendirmeSonucu): Promise<DegerlendirmeSonucu> => {
+      const k: Kullanici = { id: yoneticiId, ad: 'Deneme', islemler };
+      const yap = () => Promise.resolve({ dataVer: 1, baslangic: null, simdi: 0, sonuc } as DegerlendirmeZarfi);
+      const { is } = await vt().tx((db) => degerlendirmeBaslat(db, k, { surum, istek: { tur: sonuc.tur } as DegerlendirmeIstegi }, Date.now(), yap));
+      await new Promise((coz) => setImmediate(coz));
+      const d = degerlendirmeDurumu(yoneticiId, is);
+      if (d.durum !== 'bitti') return assert.fail(JSON.stringify(d));
+      return d.cevap.sonuc;
+    };
+    const fiyatsiz: Kullanici['islemler'] = ['plan.planlama-oku', 'finans.maliyet-oku'];
+    const ikiYetki: Kullanici['islemler'] = [...fiyatsiz, 'siparisler.fiyat-oku'];
+    const [ps, ts, tu, pb] = sonuclar;
+    if (ps?.tur !== 'plan-secenekleri' || ts?.tur !== 'termin-secenekleri' || tu?.tur !== 'termin-uzatma' || pb?.tur !== 'parti-bolme') return assert.fail();
+    for (const s of sonuclar) assert.deepEqual(await oku(ikiYetki, s), s);
+    const p = await oku(fiyatsiz, ps);
+    assert.deepEqual(p, { ...ps, secenekler: [{ ...ps.secenekler[0]!, netKar: null }] });
+    const t = await oku(fiyatsiz, ts);
+    assert.deepEqual(t, { ...ts, satirlar: [{ ...ts.satirlar[0]!, tutar: null, netKar: null, digerKarFarki: null, toplamKar: null }] });
+    const u = await oku(fiyatsiz, tu);
+    assert.deepEqual(u, { ...tu, satirlar: [{ ...tu.satirlar[0]!, netKarFarki: null }] });
+    assert.deepEqual(await oku(fiyatsiz, pb), pb);
+  });
 });
