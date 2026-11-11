@@ -76,7 +76,12 @@ const adresTurIster = {
   kosul: (m: { baglantiAdresi: string | null; baglantiTuru: string | null }) => m.baglantiAdresi === null || m.baglantiTuru !== null,
   ileti: { message: 'Bağlantı adresi yalnız bağlantı türü seçiliyken girilir.', path: ['baglantiAdresi'] },
 };
-export const makineGovdesi = makineAlanlari.refine(adresTurIster.kosul, adresTurIster.ileti);
+// 2902 (madde 6): istasyon seçilmeyen yeni makine için, verilen iş merkezinde makinenin kodu ve adıyla istasyon açılır (kapasite kaynağı
+// makine) ve makine ona bağlanır; ikisi tek işlemde. Boşsa makine bugünkü gibi istasyonsuz kalır. Yalnız eklemede.
+const yeniIstasyonIleti = { message: 'İstasyon seçiliyken yeni istasyon açılmaz.', path: ['yeniIstasyonIsMerkeziId'] };
+export const makineGovdesi = makineAlanlari.extend({ yeniIstasyonIsMerkeziId: kimlik.nullish() })
+  .refine(adresTurIster.kosul, adresTurIster.ileti)
+  .refine((m) => m.istasyonId === null || m.yeniIstasyonIsMerkeziId == null, yeniIstasyonIleti);
 
 // Güncelleme, istemcinin okuduğu sürümü taşır; arada başkası yazdıysa komut 409 alır, üstüne yazmaz (IS9).
 export const isMerkeziGuncellemeGovdesi = isMerkeziGovdesi.extend(beklenenSurum);
@@ -409,7 +414,8 @@ export const makineTopluDurumGovdesi = z.object({
 export const COKLU_EN_COK = 200;
 const cokluKayitlar = z.array(z.object({ kod: kodSemasi, ad: adSemasi })).min(1).max(COKLU_EN_COK)
   .refine((k) => new Set(k.map((x) => x.kod)).size === k.length, 'Aynı kod listede iki kez var.');
-export const makineCokluEkleGovdesi = z.object({ kayitlar: cokluKayitlar, tur: istegeBagliMetin, istasyonId: kimlik.nullable() });
+export const makineCokluEkleGovdesi = z.object({ kayitlar: cokluKayitlar, tur: istegeBagliMetin, istasyonId: kimlik.nullable(), yeniIstasyonIsMerkeziId: kimlik.nullish() })
+  .refine((g) => g.istasyonId === null || g.yeniIstasyonIsMerkeziId == null, yeniIstasyonIleti);
 export const istasyonCokluEkleGovdesi = z.object({
   kayitlar: cokluKayitlar,
   isMerkeziId: kimlik,
@@ -445,7 +451,7 @@ const istasyonTopluSatiri = z.discriminatedUnion('islem', [
 ]);
 const { istasyonId: _istasyonId, ...makineYeniAlanlari } = makineAlanlari.shape;
 const makineTopluSatiri = z.discriminatedUnion('islem', [
-  topluSatir('makine', 'ekle', { ...makineYeniAlanlari, istasyonKodu: kodSemasi.nullish().transform((k) => k ?? null) }),
+  topluSatir('makine', 'ekle', { ...makineYeniAlanlari, istasyonKodu: kodSemasi.nullish().transform((k) => k ?? null), yeniIstasyonIsMerkeziKodu: kodSemasi.nullish() }),
   topluSatir('makine', 'guncelle', {
     ...topluGuncelleme, kod: kodSemasi.optional(), ad: adSemasi.optional(), tur: doluMetin.optional(), markaModel: doluMetin.optional(), seriNo: doluMetin.optional(),
     istasyonKodu: kodSemasi.optional(), baglantiTuru: baglantiTuru.optional(), baglantiAdresi: doluMetin.optional(), aktif: z.boolean().optional(),

@@ -191,7 +191,15 @@ export async function istasyonSil(db: Db, id: number): Promise<void> {
   await silmeKorumali(() => sorgular.istasyonSil(db, id), 'İstasyon bulunamadı.');
 }
 
-export async function makineEkle(db: Db, kayit: MakineKaydi): Promise<Makine> {
+export async function makineEkle(db: Db, { yeniIstasyonIsMerkeziId, ...gelen }: MakineKaydi): Promise<Makine> {
+  let kayit = gelen;
+  if (yeniIstasyonIsMerkeziId != null) {
+    if (kayit.istasyonId !== null) throw dogrulama('İstasyon seçiliyken yeni istasyon açılmaz.', 'yeniIstasyonIsMerkeziId');
+    const ist = await istasyonEkle(db, {
+      kod: kayit.kod, ad: kayit.ad, isMerkeziId: yeniIstasyonIsMerkeziId, tip: 'talasli', sorumluKisiId: null, kapasiteKaynagi: 'makine', uretimAlani: false, aktif: kayit.aktif,
+    });
+    kayit = { ...kayit, istasyonId: ist.id };
+  }
   await istasyonAktifOlmali(db, null, kayit);
   return varOlan(await kodKorumali(() => sorgular.makineEkle(db, kayit)), 'Makine bulunamadı.');
 }
@@ -298,6 +306,7 @@ export async function makineleriEkle(db: Db, g: MakineCokluEkleGovdesi): Promise
   for (const k of g.kayitlar) {
     sonuc.push(await kayittaReddet(k.kod, null, () => makineEkle(db, {
       kod: k.kod, ad: k.ad, tur: g.tur ?? null, markaModel: null, seriNo: null, istasyonId: hedef, baglantiTuru: null, baglantiAdresi: null, aktif: true,
+      yeniIstasyonIsMerkeziId: g.yeniIstasyonIsMerkeziId ?? null,
     })));
   }
   return sonuc;
@@ -372,8 +381,9 @@ export async function topluKaydet(db: Db, g: IstasyonTopluKaydetGirdisi): Promis
       return;
     }
     if (s.islem === 'ekle') {
-      const { kayit: _k, islem: _i, satir: _s, istasyonKodu, ...kayit } = s;
-      await makineEkle(db, { ...kayit, istasyonId: istasyonKodu === null ? null : istasyonId(istasyonKodu) });
+      const { kayit: _k, islem: _i, satir: _s, istasyonKodu, yeniIstasyonIsMerkeziKodu, ...kayit } = s;
+      const yeniMerkez = yeniIstasyonIsMerkeziKodu == null ? null : kodlaBul(merkezKodlari, yeniIstasyonIsMerkeziKodu, 'yeniIstasyonIsMerkeziKodu', `İş merkezi kodu bulunamadı: ${yeniIstasyonIsMerkeziKodu}`);
+      await makineEkle(db, { ...kayit, istasyonId: istasyonKodu === null ? null : istasyonId(istasyonKodu), yeniIstasyonIsMerkeziId: yeniMerkez });
       eklenen += 1;
       return;
     }
