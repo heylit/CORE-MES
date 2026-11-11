@@ -100,8 +100,8 @@ interface Ozellikler {
   rehberler?: readonly SayfaRehberi[];
   // Verilirse ilk girişte tanıtım önerilir; görüldü bilgisi kişiye göre tutulur.
   kisiId?: number;
-  // Rolün varsayılan menüsü (1390 a), sırasıyla sayfa yolları. Verilirse ana menü ve telefonun alt çubuğu yalnız bunları
-  // gösterir, öteki sayfalar "Tüm sayfalar" altında kalır; yetki değildir. Verilmezse tam menü.
+  // Rolün varsayılan menüsü (1390 a), sırasıyla sayfa yolları. Verilirse ana menü ve telefonun alt çubuğu önce bunları
+  // gösterir, öteki sayfalar altta açılır gruplarda kalır (2946); yetki değildir. Verilmezse tam menü.
   menuSirasi?: readonly string[];
   children: ReactNode;
 }
@@ -258,7 +258,8 @@ export function Kabuk({
     () => (menuSirasi === undefined ? null : menuSirasi.flatMap((yol) => menudekiler.filter((s) => s.yol === yol))),
     [menuSirasi, menudekiler],
   );
-  // Açılan liste rol menüsündekileri yinelemez; geriye sayfa kalmayan rolde "Tüm sayfalar" çizilmez.
+  // Rol menüsü olan kişide menüde olmayan sayfalar ana menünün gruplarıyla, açılır başlıklar olarak altta durur (2946); rol menüsündekiler
+  // yinelenmez. Kişinin açabildiği her sayfa ya rol menüsünde ya bir grupta görünür.
   const kalanGruplar = useMemo(() => {
     if (rolMenusu === null) return gruplar;
     const menude = new Set(rolMenusu.map((s) => s.yol));
@@ -266,7 +267,15 @@ export function Kabuk({
       .map((g) => ({ ...g, sayfalar: g.sayfalar.filter((s) => !menude.has(s.yol)) }))
       .filter((g) => g.sayfalar.length > 0);
   }, [gruplar, rolMenusu]);
-  const [tumMenuAcik, tumMenuYaz] = useState(false);
+  const [acikGruplar, acikGruplarYaz] = useState<ReadonlySet<string>>(() => new Set());
+  const grubuAcKapa = useCallback((grup: string) => {
+    acikGruplarYaz((o) => {
+      const yeni = new Set(o);
+      if (yeni.has(grup)) yeni.delete(grup);
+      else yeni.add(grup);
+      return yeni;
+    });
+  }, []);
   // Geçici (308 d): yeni ekran satırları yalnız yöneticide, ayrı grupta; bağlamada kalkar.
   const yeniEkranlar = useMemo(() => yeniEkranBaglantilari(menudekiler, islemler), [menudekiler, islemler]);
   const olayGruplari = useMemo(
@@ -467,21 +476,23 @@ export function Kabuk({
           {rolMenusu !== null && (
             <div className="tc-kabuk-grup">
               {rolMenusu.map((s) => <Baglanti key={s.yol} sayfa={s} />)}
-              {kalanGruplar.length > 0 && (
-                <button
-                  type="button"
-                  className="tc-kabuk-bag"
-                  onClick={() => tumMenuYaz((a) => !a)}
-                  aria-expanded={tumMenuAcik}
-                  title="Tüm sayfalar"
-                >
-                  <Simge ad="dash" />
-                  <span className="tc-kabuk-bag-metin">Tüm sayfalar</span>
-                </button>
-              )}
             </div>
           )}
-          {(rolMenusu === null || tumMenuAcik) && kalanGruplar.map((g) => (
+          {rolMenusu !== null && kalanGruplar.map((g) => {
+            // Açık sayfanın grubu kapanmaz: kişi nerede olduğunu menüde görür.
+            const acik = acikGruplar.has(g.grup) || g.sayfalar.some((s) => konum.pathname === s.yol || konum.pathname.startsWith(`${s.yol}/`));
+            return (
+              <div className="tc-kabuk-grup tc-kabuk-acilir" key={g.grup} data-acik={acik ? '' : undefined}>
+                <button type="button" className="tc-kabuk-bag tc-kabuk-acilir-bas" aria-expanded={acik} onClick={() => grubuAcKapa(g.grup)}>
+                  <span className="tc-kabuk-bag-metin">{g.grup}</span>
+                  <span className="tc-kabuk-acilir-sayi">{g.sayfalar.length}</span>
+                  <span className="tc-kabuk-ac-ok"><Simge ad="chev-right" boyut="k" /></span>
+                </button>
+                {g.sayfalar.map((s) => <Baglanti key={s.yol} sayfa={s} />)}
+              </div>
+            );
+          })}
+          {rolMenusu === null && kalanGruplar.map((g) => (
             <div className="tc-kabuk-grup" key={g.grup}>
               <p className="tc-kabuk-grup-ad">{g.grup}</p>
               {g.sayfalar.map((s) => <Baglanti key={s.yol} sayfa={s} />)}

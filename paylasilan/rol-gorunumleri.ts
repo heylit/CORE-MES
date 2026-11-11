@@ -1,5 +1,5 @@
 // Rol başına varsayılan görünüm (1390 a): ana menüde öne çıkan sayfalar ve ana sayfa kartları. Yalnız görünürlüktür; yetki
-// değişmez. Listede olmayan sayfa adresle, aramayla ve "Tüm sayfalar"dan açılır; listede olup işlemi olmayan sayfa ya da kart
+// değişmez. Listede olmayan sayfa menünün altındaki açılır gruplardan, aramayla ve adresle açılır; listede olup işlemi olmayan sayfa ya da kart
 // yine görünmez (süzgeç işlem süzgecinden sonra uygulanır).
 // Listesi olmayan rol (yönetici, sonradan açılan özel rol) bugünkü tam görünümde kalır: yeni modül önce yöneticide görünür.
 

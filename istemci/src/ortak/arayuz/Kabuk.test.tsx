@@ -6,6 +6,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { anahtarlar } from '../veri/anahtarlar.ts';
 import { SAYFALAR, menudeGorunur, type Sayfa } from '#paylasilan/sayfalar.ts';
 import { Kabuk, KabukUstYuvasi } from './Kabuk.tsx';
+import { ROL_GORUNUMLERI } from '#paylasilan/rol-gorunumleri.ts';
 import { TEMA_ANAHTARI } from '../veri/tema.ts';
 import { cihazTercihiAnahtari, cihazTercihleriniSifirla } from '../veri/cihaz-tercihi.ts';
 import { YENI_EKRAN_ISLEMI } from '../rota/yeni-ekran.tsx';
@@ -315,7 +316,7 @@ describe('Kabuk', () => {
     expect(cikis).toHaveBeenCalledTimes(1);
   });
 
-  it('rol menusu verilince ana menu ve alt cubuk rol sirasiyla yalniz onu gosterir; gorunmeyen sayfa listede olsa da cikmaz; Tum sayfalar gerisini acar (1390 a)', () => {
+  it('rol menusu verilince ana menu ve alt cubuk rol sirasiyla once onu gosterir; gorunmeyen sayfa listede olsa da cikmaz; gerisi acilir gruplarda (1390 a, 2946)', () => {
     const gorunen = SAYFALAR.filter((s) => ['/arkon', '/kuyruk', '/stok', '/plan'].includes(s.yol));
     render(
       <MemoryRouter>
@@ -324,15 +325,21 @@ describe('Kabuk', () => {
     );
     const menu = within(screen.getByRole('navigation', { name: 'Ana menü' }));
     const baglantilar = () => menu.getAllByRole('link').map((b) => b.getAttribute('href'));
-    expect(baglantilar()).toEqual(['/', '/stok', '/kuyruk']);
+    expect(baglantilar().slice(0, 3)).toEqual(['/', '/stok', '/kuyruk']);
+    expect(menu.queryByRole('button', { name: 'Tüm sayfalar' })).toBeNull();
     const alt = within(screen.getByRole('navigation', { name: 'Alt gezinme' }));
     expect(alt.getAllByRole('link').map((b) => b.getAttribute('href'))).toEqual(['/', '/stok', '/kuyruk']);
-    const tum = menu.getByRole('button', { name: 'Tüm sayfalar' });
-    expect(tum.getAttribute('aria-expanded')).toBe('false');
-    fireEvent.click(tum);
-    expect(tum.getAttribute('aria-expanded')).toBe('true');
-    expect(baglantilar()).toEqual(expect.arrayContaining(['/arkon', '/plan']));
-    // Açılan liste rol menüsündekileri yinelemez (1932).
+    // Kalanlar kendi grubunda, kapalı başlıkla; başlık açılınca kapanır ve yeniden açılır.
+    for (const yol of ['/arkon', '/plan']) {
+      const sayfa = gorunen.find((s) => s.yol === yol);
+      const grup = menu.getByRole('button', { name: new RegExp(`^${sayfa?.grup ?? ''}`) });
+      expect(grup.getAttribute('aria-expanded')).toBe('false');
+      fireEvent.click(grup);
+      expect(grup.getAttribute('aria-expanded')).toBe('true');
+      fireEvent.click(grup);
+      expect(grup.getAttribute('aria-expanded')).toBe('false');
+    }
+    // Rol menüsündekiler gruplarda yinelenmez (1932).
     expect(baglantilar().filter((y) => y === '/stok' || y === '/kuyruk')).toEqual(['/stok', '/kuyruk']);
     // Telefondaki Tümü listesi her zaman bütün sayfalardır.
     fireEvent.click(screen.getByRole('button', { name: 'Tümü' }));
@@ -340,7 +347,34 @@ describe('Kabuk', () => {
     for (const s of gorunen) expect(liste.getByRole('link', { name: s.baslik })).toBeTruthy();
   });
 
-  it('rol menusu kisinin butun sayfalarini kapsiyorsa Tum sayfalar dugmesi cizilmez; telefondaki Tumu kalir (1932)', () => {
+  it('her rol menusunde kisinin acabildigi her sayfa ana menude tam bir kez: ya rol menusunde ya bir grupta (2946)', () => {
+    const gorunen = SAYFALAR.filter(menudeGorunur);
+    for (const [rol, g] of Object.entries(ROL_GORUNUMLERI)) {
+      const { unmount } = render(
+        <MemoryRouter>
+          <Kabuk sayfalar={gorunen} kullaniciAdi="Deneme Kişi" cikis={() => undefined} menuSirasi={g.sayfalar}><p>icerik</p></Kabuk>
+        </MemoryRouter>,
+      );
+      const menu = within(screen.getByRole('navigation', { name: 'Ana menü' }));
+      const yollar = menu.getAllByRole('link').map((b) => b.getAttribute('href'));
+      for (const s of gorunen) expect(yollar.filter((y) => y === s.yol), `${rol} ${s.yol}`).toHaveLength(1);
+      unmount();
+    }
+  });
+
+  it('acik sayfanin grubu acik gelir (2946)', () => {
+    const gorunen = SAYFALAR.filter((s) => ['/kuyruk', '/stok', '/plan'].includes(s.yol));
+    const plan = gorunen.find((s) => s.yol === '/plan');
+    render(
+      <MemoryRouter initialEntries={['/plan']}>
+        <Kabuk sayfalar={gorunen} kullaniciAdi="Deneme Kişi" cikis={() => undefined} menuSirasi={['/stok', '/kuyruk']}><p>icerik</p></Kabuk>
+      </MemoryRouter>,
+    );
+    const menu = within(screen.getByRole('navigation', { name: 'Ana menü' }));
+    expect(menu.getByRole('button', { name: new RegExp(`^${plan?.grup ?? ''}`) }).getAttribute('aria-expanded')).toBe('true');
+  });
+
+  it('rol menusu kisinin butun sayfalarini kapsiyorsa grup cizilmez; telefondaki Tumu kalir (1932)', () => {
     const gorunen = SAYFALAR.filter((s) => ['/kuyruk', '/stok'].includes(s.yol));
     render(
       <MemoryRouter>
@@ -348,7 +382,7 @@ describe('Kabuk', () => {
       </MemoryRouter>,
     );
     const menu = within(screen.getByRole('navigation', { name: 'Ana menü' }));
-    expect(menu.queryByRole('button', { name: 'Tüm sayfalar' })).toBeNull();
+    expect(menu.queryAllByRole('button', { expanded: false })).toHaveLength(0);
     expect(menu.getAllByRole('link').map((b) => b.getAttribute('href'))).toEqual(['/', '/stok', '/kuyruk']);
     expect(screen.getByRole('button', { name: 'Tümü' })).toBeTruthy();
   });
