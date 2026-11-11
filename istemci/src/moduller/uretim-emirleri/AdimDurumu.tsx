@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useSearchParams } from 'react-router-dom';
-import type { AdimDurumuCevabi, AdimliListeCevabi, AdimStatusu, HazirlikMaddesi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
+import type { AdimDurumuCevabi, AdimliListeCevabi, AdimStatusu, AdimTedariki, HazirlikMaddesi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { CokSatir, Dugme, DurumKutusu, Kart, Rozet, Secim, Simge, Tablo, useBildirim, type Sutun } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
+import { tarihMetni } from '../../ortak/veri/zaman-metni.ts';
 import { useOturum } from '../../ortak/veri/oturum.ts';
 import { ADIM_DURUMU_YAZ, ELLE_YAZILIR, STATU, adimDurumuUcu, isEmriKomutu } from './adim-durumu.ts';
 import { anahtarlar } from './anahtarlar.ts';
@@ -15,6 +16,9 @@ type Adim = AdimDurumuCevabi['adimlar'][number];
 const ACIK = new Set(['taslak', 'planli', 'basladi']);
 // Sunucu kuralıyla aynı sınır (uretim-emirleri kurallar.ts GEREKCE_EN_AZ); sunucu kısa gerekçeyi 400 ile reddeder.
 const GEREKCE_EN_AZ = 5;
+const tedarikMetni = (t: AdimTedariki): string => t.asama === 'talep'
+  ? `${t.fason ? 'Fason talebi' : 'Talep'} ${t.talepNo} siparişe dönmedi`
+  : `Sipariş ${t.siparisNo ?? t.talepNo} bekleniyor${t.termin === null ? '' : ` · termin ${tarihMetni(t.termin)}`}`;
 
 function Statu({ statu, elle }: { statu: AdimStatusu; elle: boolean }) {
   const g = STATU[statu];
@@ -129,6 +133,7 @@ function AdimAyrintisi({ emirId, adim, yazar }: { emirId: number; adim: Adim; ya
       <dl className="tc-emir-liste">
         <dt>Sistemin dediği</dt><dd>{STATU[adim.sistemStatusu].ad}</dd>
         <dt>Nedenler</dt><dd>{adim.nedenler.length === 0 ? 'Yok' : adim.nedenler.join(', ')}</dd>
+        {adim.tedarik.length > 0 && <><dt>Tedarik</dt><dd>{adim.tedarik.map(tedarikMetni).join(', ')}</dd></>}
         <dt>Sağlam / hedef</dt><dd>{adim.yapilan} / {adim.hedef}</dd>
         {adim.elle !== null && (
           <><dt>Elle statü</dt><dd>{STATU[adim.elle.statu].ad} · {adim.elle.kisiAdi ?? 'Kişi'} · {zamanMetni(adim.elle.zaman)}{adim.elle.not === null ? '' : ` · ${adim.elle.not}`}</dd></>
