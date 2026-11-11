@@ -1160,7 +1160,7 @@ export const LOGO_AKISLARI: readonly LogoAkisTanimi[] = [
   { anahtar: 'siparis-durumu', yon: 'tmi-logo', baslik: 'Siparişi Logo\'da beklet', kaynak: 'kodda-yok', ayarlar: ['logo.siparis-bekletme-gonderimi'],
     belgeTurleri: [], aciklama: 'Satın alma siparişindeki "Logo\'da beklet" siparişi Logo\'da öneri (kesinleşmemiş) durumuna çeker, "Logo\'da serbest bırak" geri alır.' },
   { anahtar: 'talep-iptali', yon: 'tmi-logo', baslik: 'Talep fişi iptali', kaynak: 'kodda-yok', ayarlar: ['logo.talep-iptali-gonderimi'], belgeTurleri: [],
-    aciklama: 'CORE\'da iptal edilen talep Logo\'da da kapanır; iptal geri alınınca yeniden açılır.' },
+    aciklama: 'CORE\'da iptal edilen talebin Logo fişi öneriye geri alınır (Logo\'da iptal durumu yok); iptal geri alınınca yeniden onaylanır.' },
   { anahtar: 'teklif-kapatma', yon: 'tmi-logo', baslik: 'Satış teklifi kapatma', kaynak: 'kodda-yok', ayarlar: ['logo.teklif-kapatma-gonderimi'], belgeTurleri: [],
     aciklama: 'Reddedilen teklif ve yeni sürümü gelen teklifin eskisi Logo\'da kapanır.' },
   { anahtar: 'malzeme-hareketleri', yon: 'logo-tmi', baslik: 'Malzeme hareketleri', kaynak: 'kodda-yok', ayarlar: ['logo.malzeme-hareketleri-okumasi'], belgeTurleri: [],

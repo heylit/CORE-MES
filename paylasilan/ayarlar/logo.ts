@@ -172,7 +172,7 @@ export const LOGO_AYARLARI = {
     tur: 'boolean',
     varsayilan: false,
     baslik: 'Logo: talep fişi iptali',
-    aciklama: 'Açıkken CORE\'da iptal edilen talebin Logo\'daki fişi de kapanır, iptal geri alınınca yeniden açılır. "Logo: satın alma gönderimi" de açık olmalı.',
+    aciklama: 'Açıkken CORE\'da iptal edilen talebin Logo\'daki fişi öneriye geri alınır (Logo\'da iptal durumu yok), iptal geri alınınca yeniden onaylanır. "Logo: satın alma gönderimi" de açık olmalı.',
   },
   'logo.teklif-kapatma-gonderimi': {
     modul: 'logo',
