@@ -40,6 +40,23 @@ const MESAI_CARPANI=1.5;
 const FASON_VARSAYILAN_GUN=7;
 function mesaiCarpani(D){const c=D&&D.planTL?+D.planTL.mesaiCarpan:NaN;return c>0?c:MESAI_CARPANI;}
 /* B-2483-12: ek mesai haftası pazartesi başlar (sunucu kurallar.ts haftaBasi ile aynı); gün plan başlangıcından sayılır */
+/* 2524 b: elle bölme kaydını doğrular; geçerliyse [{adet, m}] (adet tamsayı, toplamı adım adedi), değilse null. Adet toplamı adım adedini
+   tutmuyorsa (önceki adımın hurdası adedi değiştirdi) adetler orana göre yeniden dağıtılır, kalan ilk paylara; bu da uyarılır. */
+function elleBolCoz(l,adaylar,ad0,sabit,id,uyari){
+  if(!Array.isArray(l)||!l.length)return null;
+  if(sabit){uyari.push({id,txt:`${id}: kilitli, başlamış, yeri sabit ya da fason adım elle bölünmez; elle bölme uygulanmadı`});return null;}
+  const tz=new Set(adaylar.map(t=>String(t.id)));const y=l.map(x=>({adet:x&&isFinite(+x.adet)?Math.floor(+x.adet):NaN,m:x&&x.m!=null?String(x.m):''}));
+  if(y.some(x=>!tz.has(x.m))){uyari.push({id,txt:`${id}: elle bölmedeki tezgâh adımın adayı değil; elle bölme uygulanmadı`});return null;}
+  if(y.length>1&&new Set(y.map(x=>x.m)).size<y.length){uyari.push({id,txt:`${id}: elle bölmede iki pay aynı tezgâhta; elle bölme uygulanmadı`});return null;}
+  if(y.length===1)return [{adet:ad0,m:y[0].m}];
+  const top=y.reduce((t,x)=>t+(x.adet>0?x.adet:0),0);
+  if(y.some(x=>!(x.adet>0))||top<=0||ad0<y.length){uyari.push({id,txt:`${id}: elle bölmenin pay adetleri geçersiz; elle bölme uygulanmadı`});return null;}
+  if(top===ad0)return y;
+  const a=y.map(x=>Math.max(1,Math.floor(ad0*x.adet/top)));let k=ad0-a.reduce((t,v)=>t+v,0);
+  for(let i=0;k!==0&&i<a.length*ad0;i++){const j=i%a.length;if(k>0){a[j]++;k--;}else if(a[j]>1){a[j]--;k++;}}
+  uyari.push({id,txt:`${id}: adım adedi ${ad0}, elle bölmenin toplamı ${top}; paylar orana göre ${a.join(' + ')} yapıldı`});
+  return y.map((x,i)=>({adet:a[i],m:x.m}));
+}
 function haftaNo(D,gun){return Math.floor((gun+GUN.indexOf(wdOf(D,0)))/7);}
 
 /* ---- pencereler ---- */
@@ -58,6 +75,7 @@ function mask(W){const m=new Uint8Array(NS);for(const [a,b] of W){const k0=Math.
     @property {any} [w]
     @property {any} [now]
     @property {any} [locks]
+    @property {any} [elleBol]
     @property {any} [down]
     @property {any} [plan]
     @property {any} [gercek]
@@ -109,7 +127,8 @@ function mask(W){const m=new Uint8Array(NS);for(const [a,b] of W){const k0=Math.
     @property {Record<string, any>} jobs
     @property {Record<string, any>} succ
     @property {{ res: Record<string, any>, summ: Record<string, any>, po: any[] }} mat
-    @property {any} progRel */
+    @property {any} progRel
+    @property {any} [bolUyari] */
 /** @param {MotorDurumu} st @returns {Derleme} */
 function compile(st){olcekKur(st.w);
   const D=st.D,A=D.ayarlar;
@@ -174,7 +193,7 @@ function compile(st){olcekKur(st.w);
   const FS=Object.fromEntries((D.fasoncular||[]).map(f=>[f.id,f]));
   const AP=Object.fromEntries((D.aparatlar||[]).map(a=>[a.id,a]));
   // işlemler
-  const ops=[],jobs={},bolunen={};
+  const ops=[],jobs={},bolunen={},bolUyari=[];
   const urun=Object.fromEntries(D.urunler.map(u=>[u.id,u]));
   const bitti=st.bitti||{};
   for(const [sira,j] of D.siparisler.entries()){const u=urun[j.urun];if(!u)continue;
@@ -191,14 +210,18 @@ function compile(st){olcekKur(st.w);
          ve yeri sabit adım bölünmez: yeri tek kaynaktadır. Paylar ayrı işlemdir (ilk pay adımın kimliğini, ötekiler "~2", "~3" ekini taşır); hepsi
          adımın öncüllerini bekler, ardıl hepsini bekler. Adet eşit bölünür, kalan ilk paylara. */
       const sabit=(st.locks&&st.locks[id])||(st.gercek&&st.gercek[id])||(st.sabitYer&&st.sabitYer[id]);
-      const N=st.w.bol&&o.bol&&!o.fason&&!sabit?Math.max(1,Math.min(adaylar.length,Math.floor(ad0/Math.max(1,+o.minParti||1)),Math.max(1,+st.w.bolMaks||1))):1;
+      /* 2524 b: elle bölme (st.elleBol[adım] = [{adet, m}]) motorun kuralından önce gelir: pay sayısı, adetler ve tezgâhlar ondandır; bölme
+         ayarı kapalı ya da rota "tek makinede" olsa da uygulanır. Tek eleman elle birleştirmedir: adım o tezgâhta tek iştir. Kilitli, çalışan,
+         yeri sabit ve fason adımda ya da tezgâhı aday değilse yok sayılır, uyarılır. */
+      const elle=elleBolCoz(st.elleBol&&st.elleBol[id],adaylar,ad0,!!(o.fason||sabit),id,bolUyari);
+      const N=elle?elle.length:st.w.bol&&o.bol&&!o.fason&&!sabit?Math.max(1,Math.min(adaylar.length,Math.floor(ad0/Math.max(1,+o.minParti||1)),Math.max(1,+st.w.bolMaks||1))):1;
       if(N>1)bolunen[id]=[];
       for(let p=0;p<N;p++){
-      const pid=p===0?id:id+'~'+(p+1),ad=N>1?Math.floor(ad0/N)+(p<ad0%N?1:0):ad0;
+      const pid=p===0?id:id+'~'+(p+1),ad=elle?elle[p].adet:N>1?Math.floor(ad0/N)+(p<ad0%N?1:0):ad0;
       const tb=Math.max(1,Math.min(ad,o.transfer||Math.ceil(ad*(A.transferOran||.25))));
       const c=[];
       if(o.fason){c.push({m:'@'+o.fason,fas:1});}
-      else for(const t of adaylar){const mm=M[t.id];const cyc=(+t.cevrim||0)/60*x/(1-mm.pay);
+      else for(const t of elle?adaylar.filter(t=>String(t.id)===elle[p].m):adaylar){const mm=M[t.id];const cyc=(+t.cevrim||0)/60*x/(1-mm.pay);
         c.push({m:t.id,run:ad*cyc/mm.verim,cyc:cyc/mm.verim,su:(+t.ayar||0)/60,tbRun:tb*cyc/mm.verim,pay:mm.pay});}
       if(o.fasonIzin&&A.fasonTalas&&FS[A.fasonTalas])c.push({m:'@'+A.fasonTalas,fas:1,opt:1});
       const lr=(st.ogren||{})[j.urun+' '+o.k];const sig=lr&&lr.n>=3&&lr.v!=null?Math.sqrt(lr.v)/Math.max(.3,lr.f):(+st.w.mcSigma||0);
@@ -221,7 +244,7 @@ function compile(st){olcekKur(st.w);
   const mat=matAlloc(st,jobs);
   // program
   const progRel=A.programSaat?adv(gen,openAt(gen,st.now),A.programSaat):st.now;
-  return {st,D,A,M,days,gen,capTot,capAyar,capG,PK,FS,AP,ops,byId,jobs,succ,mat,progRel};
+  return {st,D,A,M,days,gen,capTot,capAyar,capG,PK,FS,AP,ops,byId,jobs,succ,mat,progRel,bolUyari};
 }
 /** @param {MotorDurumu} [st] @param {any} [jobs] */
 function matAlloc(st,jobs){
@@ -370,6 +393,9 @@ function tMach(o,c,cx,ctx,b,fast){
   let su=c.su;
   const mx=cx.D.ayarMatrisi;
   if(lf!=null&&o.aile&&mx){const e=mx.find(x=>x.den===lf&&x.ye===o.aile);if(e)su=(+e.dk)/60;else if(famHit)su=c.su*w.famK;}
+  /* B-2482-7: motorun böldüğü adımın payı, kardeşinin hemen ardından aynı tezgâha düşerse aynı bağlamanın devamıdır, ikinci kez ayar almaz
+     (pay seçimi bitişe göredir; hızlı tezgâh iki payı da alabilir) */
+  const lo=o.asil&&cx.byId[ctx.lastId[c.m]];if(lo&&lo.asil===o.asil&&ctx.av[c.m]>=b.s-1e-9)su=0;
   else if(famHit)su=c.su*w.famK;
   /* sunucu (A4 3b): önüne iş konan çalışan iş kaldığı yerden sürer, ayarı yapılmıştır */
   if(st.ayarsiz&&st.ayarsiz[o.id])su=0;
@@ -641,6 +667,7 @@ function evaluate(plan,st,ref,fast){
   /* 1459 a: stoku bilinmeyen malzeme dağıtımda 0 sayılır; plana gerçekten girdiyse söylenir */
   if(!fast)for(const m of cx.D.malzemeler||[])if(m.stok==null&&cx.mat.summ[m.kod])warn.push({t:'malzeme',txt:`${m.kod}: stok bilinmiyor; 0 sayıldı`});
   if(st.ayarciYok)warn.push({t:'Ayarcı',txt:'Vardiyası olan ayarcı yok; ayarcı sınırı uygulanmadı. Ayarcılara vardiya verince sınır yeniden uygulanır.'});
+  for(const b of cx.bolUyari||[])warn.push({t:'bol',j:b.id.split('.')[0],id:b.id,txt:b.txt});
   for(const id of plan.fail||[])warn.push({t:'plan',j:id.split('.')[0],id,txt:`${id} planlanamadı: ${failNedenMetni((plan.failNeden||{})[id])}`});
   return {Z,lex,tl,wB,bufN,J,rev,cost,pen,hold,onT,late,yerlesmeyenSip:yerN,n:Object.keys(cx.jobs).length,sumT,wT,suH,suN,famN,Cmax,chg,stab,idle,fas,unk,warn,mesaiH,mesaiTL,util,score,amac:w.amac};
 }
