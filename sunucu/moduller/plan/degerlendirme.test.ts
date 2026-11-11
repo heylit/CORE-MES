@@ -168,14 +168,17 @@ describe('planlama değerlendirmesi: hesap', () => {
     const sayfada = { ...c, D: { ...D, siparisler: [{ id: 'S9', ad: 'Deneme', urun: '50', adet: 10, termin: '2026-10-21', oncelik: 1, gelir: 9999 }] } };
     assert.deepEqual(await bol(kaynakIle({ O1: bos, O2: bos }), sayfada, 'S9', [5, 5]), { hata: 'siparis-yok' }, 'sayfanın siparişi girdiye girmez');
     // Güvenlik (2947): kaynakta olmayan bölünmüş sipariş (önceki bölmenin kaydı) gelirle kayıtlıysa fiyatsız kaynakla ya girdiye girmez ya geliri boştur.
-    const bolunmus = { ...c, D: { ...D, siparisler: ['O2/1', 'O2/2'].map((id) => ({ id, ad: 'E-2', urun: '50', adet: 8, termin: '2026-10-20', oncelik: 2, gelir: 4000, cezaOran: 1, cezaTavan: 10 })) } };
-    const gb = planGirdisi({ calisma: bolunmus, kayit: KAYIT, kaynak: kaynakIle({ O1: bos, O2: bos }), bugun: '2026-10-19' });
-    assert.ok(gb);
-    const girdiSip = (gb.S as { D: { siparisler: { id: string; gelir?: unknown; cezaOran?: unknown; cezaTavan?: unknown }[] } }).D.siparisler;
-    assert.deepEqual(girdiSip.map((x) => x.id), ['O1', 'O2'], 'kaynakta olmayan bölünmüş kayıt birleşmede düşer');
-    assert.deepEqual(girdiSip.filter((x) => x.gelir != null || x.cezaOran != null || x.cezaTavan != null).map((x) => x.id), [], 'girdide gelir yok');
-    const r = await bol(kaynakIle({ O1: bos, O2: bos }), bolunmus, 'O2/1', [4, 4]);
-    assert.ok(Array.isArray(r) ? r.every(([, g]) => g === null) : r?.hata === 'siparis-yok', JSON.stringify(r));
+    // İki kurulum: rrSavedAt 5 kayıttan eski (girdi kayıttan yeniden kurulur), 9 kayıtla aynı (sayfanın kaydettiği çalışma, birleşme yolu).
+    for (const rrSavedAt of [5, 9]) {
+      const bolunmus = { ...c, rrSavedAt, D: { ...D, siparisler: ['O2/1', 'O2/2'].map((id) => ({ id, ad: 'E-2', urun: '50', adet: 8, termin: '2026-10-20', oncelik: 2, gelir: 4000, cezaOran: 1, cezaTavan: 10 })) } };
+      const gb = planGirdisi({ calisma: bolunmus, kayit: KAYIT, kaynak: kaynakIle({ O1: bos, O2: bos }), bugun: '2026-10-19' });
+      assert.ok(gb);
+      const girdiSip = (gb.S as { D: { siparisler: { id: string; gelir?: unknown; cezaOran?: unknown; cezaTavan?: unknown }[] } }).D.siparisler;
+      assert.deepEqual(girdiSip.map((x) => x.id), ['O1', 'O2'], `rrSavedAt ${String(rrSavedAt)}: kaynakta olmayan bölünmüş kayıt birleşmede düşer`);
+      assert.deepEqual(girdiSip.filter((x) => x.gelir != null || x.cezaOran != null || x.cezaTavan != null).map((x) => x.id), [], `rrSavedAt ${String(rrSavedAt)}: girdide gelir yok`);
+      const r = await bol(kaynakIle({ O1: bos, O2: bos }), bolunmus, 'O2/1', [4, 4]);
+      assert.ok(Array.isArray(r) ? r.every(([, g]) => g === null) : r?.hata === 'siparis-yok', JSON.stringify(r));
+    }
     const acil = { ...c, olaylar: [{ tip: 'acil', urun: '50', adet: 10, termin: '2026-10-21', gelir: 6666 }] };
     assert.deepEqual(await bol(kaynakIle({ O1: bos, O2: bos }), acil, 'SP-901', [5, 5]), { hata: 'siparis-yok' }, 'acil olay sipariş eklemez');
   });
