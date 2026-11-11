@@ -40,7 +40,7 @@ const YAYINCI: Kullanici = { id: 2, ad: 'Deneme Şef', islemler: ['sayfa.cizimle
 const OKUR: Kullanici = { id: 3, ad: 'Deneme Operatör', islemler: ['sayfa.cizimler'] };
 
 const SATIR: BelgeSatiri = {
-  id: 7, ad: 'Deneme flanş', tur: 'teknik-resim', aktif: true, yayindakiHarf: 'A', sonHarf: 'B', dosyaTuru: 'pdf', bagSayisi: 1,
+  id: 7, ad: 'Deneme flanş', tur: 'teknik-resim', aktif: true, yayindakiHarf: 'A', sonHarf: 'B', yayindakiRevKodu: '00', sonRevKodu: '01', dosyaTuru: 'pdf', bagSayisi: 1,
   guncellendi: '2026-10-01T08:00:00.000Z', surum: 3,
 };
 const LISTE: BelgeListesiCevabi = { satirlar: [SATIR], toplam: 1, sayfa: 1, sayfaBoyu: 50 };
@@ -52,12 +52,12 @@ const AYRINTI: BelgeAyrintisi = {
   revizyonlar: [
     {
       id: 12, sira: 2, harf: 'B', durum: 'taslak', ozet: OZET_B, dosyaAdi: 'flans-b.pdf', dosyaTuru: 'pdf', boyut: 2048, not: 'Delik çapı',
-      yukleyenAd: 'Deneme Teknik', yuklendi: '2026-10-01T08:00:00.000Z', yayinlayanAd: null, yayinlandi: null, onizlemeKareSayisi: 0, antetRev: null,
+      yukleyenAd: 'Deneme Teknik', yuklendi: '2026-10-01T08:00:00.000Z', yayinlayanAd: null, yayinlandi: null, onizlemeKareSayisi: 0, antetRev: '01', revKodu: '01',
     },
     {
       id: 11, sira: 1, harf: 'A', durum: 'yayinda', ozet: OZET_A, dosyaAdi: 'flans-a.pdf', dosyaTuru: 'pdf', boyut: 1024, not: null,
       yukleyenAd: 'Deneme Teknik', yuklendi: '2026-09-01T08:00:00.000Z', yayinlayanAd: 'Deneme Şef', yayinlandi: '2026-09-02T08:00:00.000Z', onizlemeKareSayisi: 0,
-      antetRev: null,
+      antetRev: null, revKodu: '00',
     },
   ],
   baglar: [
@@ -224,7 +224,9 @@ describe('cizimler ekranları', () => {
     sunucuKur(OKUR);
     ac('/cizimler');
     expect(await screen.findByText('Deneme flanş')).toBeTruthy();
-    expect(screen.getByText('Taslak B')).toBeTruthy();
+    expect(screen.getByText('Taslak 01')).toBeTruthy();
+    expect(screen.getByText('00')).toBeTruthy();
+    expect(screen.queryByText('Taslak B')).toBeNull();
     expect(screen.queryByRole('button', { name: /Yeni belge/ })).toBeNull();
   });
 
@@ -296,6 +298,23 @@ describe('cizimler ekranları', () => {
     expect(screen.getByText('#42')).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Yayınla' })).toBeNull();
     expect(screen.getByRole('button', { name: 'Sil' })).toBeTruthy();
+  });
+
+  it('2138-2: revizyon listesinde merkezin harfi değil revizyon kodu görünür; kodsuz revizyon harf almaz', async () => {
+    const kodsuz = { ...AYRINTI, revizyonlar: AYRINTI.revizyonlar.map((r) => (r.id === 12 ? { ...r, antetRev: null, revKodu: null } : r)) };
+    vi.stubGlobal('fetch', vi.fn(async (adres: string) => {
+      const yol = adres.replace('/api', '');
+      if (yol === '/oturum') return json(200, { kullanici: YAYINCI } satisfies OturumCevabi);
+      if (yol === '/cizimler/7') return json(200, kodsuz);
+      return json(404, { kod: 'BULUNAMADI', mesaj: 'Adres bulunamadı.' });
+    }));
+    ac('/cizimler/belge/7');
+    expect(await screen.findByRole('button', { name: 'Revizyon 00 dosyasını indir' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Kodsuz revizyon dosyasını indir' })).toBeTruthy();
+    expect(screen.getByText('00').getAttribute('title')).toBe('Malzeme kartının revizyonu');
+    expect(screen.getByText('—').getAttribute('title')).toBe('Revizyon kodu girilmemiş');
+    expect(screen.queryByText('A')).toBeNull();
+    expect(screen.queryByText('B')).toBeNull();
   });
 
   it('yayınlama onayla gider ve belgenin sürümünü taşır', async () => {
@@ -535,7 +554,7 @@ describe('cizimler önizleme akışı', () => {
     ac('/cizimler/belge/7');
     await yayinla();
 
-    expect(await screen.findByText('Revizyon B önizlemesi hazır.')).toBeTruthy();
+    expect(await screen.findByText('Revizyon 01 önizlemesi hazır.')).toBeTruthy();
     expect(onizlemeKareleri).toHaveBeenCalledTimes(1);
     expect(Array.from(onizlemeKareleri.mock.calls[0]![0] as Uint8Array)).toEqual([1, 2, 3]);
     expect(onizlemeKareleri.mock.calls[0]![1]).toBe('step');
@@ -560,11 +579,11 @@ describe('cizimler önizleme akışı', () => {
 
     expect((await screen.findByRole('alert')).textContent).toContain('Model 25 MB sınırından büyük');
     expect(yazilar()).toEqual(['/cizimler/7/revizyonlar/12/yayinla']);
-    const dugme = await screen.findByRole('button', { name: 'Revizyon B için önizleme üret' });
+    const dugme = await screen.findByRole('button', { name: 'Revizyon 01 için önizleme üret' });
 
     onizlemeKareleri.mockResolvedValueOnce(KARELER);
     fireEvent.click(dugme);
-    expect(await screen.findByText('Revizyon B önizlemesi hazır.')).toBeTruthy();
+    expect(await screen.findByText('Revizyon 01 önizlemesi hazır.')).toBeTruthy();
     expect(yazilar().at(-1)).toBe('/cizimler/7/revizyonlar/12/onizleme');
   });
 
@@ -603,7 +622,7 @@ describe('cizimler önizleme akışı', () => {
 
     sunucu(YAYINCI, yayinda(0));
     ac('/cizimler/belge/7');
-    expect(await screen.findByRole('button', { name: 'Revizyon B için önizleme üret' })).toBeTruthy();
+    expect(await screen.findByRole('button', { name: 'Revizyon 01 için önizleme üret' })).toBeTruthy();
   });
 });
 
@@ -653,7 +672,7 @@ describe('cizimler malzeme resmi revizyonu (2138-1 a)', () => {
   it('antet revizyonu karttan dolu açılır; fotoğrafta boş, elle yazılan tür değişince korunur', async () => {
     paneliAc(cevap(null));
     fireEvent.click(await screen.findByRole('button', { name: 'Ekle' }));
-    const antet = await screen.findByLabelText<HTMLInputElement>('Antet revizyonu');
+    const antet = await screen.findByLabelText<HTMLInputElement>('Revizyon kodu');
     expect(antet.value).toBe('');
     fireEvent.change(screen.getByLabelText('Tür'), { target: { value: 'teknik-resim' } });
     expect(antet.value).toBe('00');
@@ -665,12 +684,12 @@ describe('cizimler malzeme resmi revizyonu (2138-1 a)', () => {
   it('yeni revizyon penceresinde antet kartın revizyonuyla dolu gelir', async () => {
     paneliAc(cevap(null));
     fireEvent.click(await screen.findByRole('button', { name: /yeni revizyon/i }));
-    expect((await screen.findByLabelText<HTMLInputElement>('Antet revizyonu')).value).toBe('00');
+    expect((await screen.findByLabelText<HTMLInputElement>('Revizyon kodu')).value).toBe('00');
   });
 
-  it('uyarı merkezin harfini değil resmin antet revizyonunu ve kartın revizyonunu gösterir', async () => {
+  it('uyarı merkezin harfini değil resmin revizyon kodunu ve kartın revizyonunu gösterir', async () => {
     paneliAc(cevap({ hedefId: 41, belgeId: 7, revizyonId: 11, harf: 'A', antetRev: '01', kareSayisi: 1, revUyumu: false }));
-    const uyari = await screen.findByText(/antet revizyonu 01, kartın revizyonu 00/);
+    const uyari = await screen.findByText(/revizyon kodu 01, kartın revizyonu 00/);
     expect(uyari.textContent).not.toContain('(A)');
   });
 });
@@ -729,9 +748,9 @@ describe('cizimler PDF düzenleme (2123)', () => {
     cleanup();
     await pdfSunucusu(YAZAR);
     ac('/cizimler/belge/7');
-    fireEvent.click(await screen.findByRole('button', { name: "Revizyon A PDF'ini düzenle" }));
+    fireEvent.click(await screen.findByRole('button', { name: "Revizyon 00 PDF'ini düzenle" }));
     expect(await screen.findByRole('heading', { name: /PDF düzenle/ })).toBeTruthy();
-    expect(screen.getByText('Kaynak: Revizyon A · Yayında')).toBeTruthy();
+    expect(screen.getByText('Kaynak: Revizyon 00 · Yayında')).toBeTruthy();
   });
 
   it('reddedilen: belge-merkezi.yaz taşımayan düzenleyici adresini açsa da düzenleyemez', async () => {
@@ -804,7 +823,7 @@ describe('cizimler PDF düzenleme (2123)', () => {
     await waitFor(() => { expect(cagrilar.some((c) => c.yontem === 'POST' && c.yol === '/cizimler')).toBe(true); });
     expect(yuklenen(cagrilar)).toMatchObject({
       ad: 'Deneme flanş (düzenlenmiş)', tur: 'teknik-resim', dosyaAdi: 'flans-a-duzenlenmis.pdf',
-      not: "Düzenlendi: Deneme flanş Rev A. PDF'ten silinen: 1 yazı. Gerekçe: Kurum anteti",
+      not: "Düzenlendi: Deneme flanş Rev 00. PDF'ten silinen: 1 yazı. Gerekçe: Kurum anteti",
     });
     expect(cagrilar.some((c) => c.yontem === 'POST' && c.yol.startsWith('/cizimler/7'))).toBe(false);
   });
@@ -817,7 +836,7 @@ describe('cizimler PDF düzenleme (2123)', () => {
     fireEvent.change(within(pencere).getByLabelText(/Gerekçe/), { target: { value: 'Kurum anteti' } });
     fireEvent.click(within(pencere).getByRole('button', { name: 'Kaydet' }));
     await waitFor(() => { expect(yuklenen(cagrilar)).toBeDefined(); });
-    expect(yuklenen(cagrilar)?.not).toBe('Düzenlendi: Deneme flanş Rev A. Gerekçe: Kurum anteti');
+    expect(yuklenen(cagrilar)?.not).toBe('Düzenlendi: Deneme flanş Rev 00. Gerekçe: Kurum anteti');
   });
 
   it('alanın dışına taşan resim silinmez; kullanıcıya söylenir ve yükleme ikinci basışa kalır', async () => {

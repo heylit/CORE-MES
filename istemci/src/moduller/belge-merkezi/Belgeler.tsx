@@ -6,6 +6,7 @@ import { Dugme, DurumKutusu, Girdi, Kart, Rozet, Sekmeler, Simge, Tablo, type Se
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { sorguMetni, useListeDurumu } from '../../ortak/veri/liste-durumu.ts';
 import { anahtarlar } from './anahtarlar.ts';
+import { revKoduMetni } from './revizyon-kodu.ts';
 import { useYetki } from './komut.ts';
 import { useMenuSayaclari } from './menu-sayaclari.ts';
 import { YeniBelge } from './formlar.tsx';
@@ -22,8 +23,8 @@ const SUTUNLAR: Sutun<BelgeSatiri>[] = [
   {
     anahtar: 'revizyon', baslik: 'Revizyon', kirilmaz: true,
     hucre: (b) => (b.yayindakiHarf === null
-      ? <Rozet ton="uyari">Taslak {b.sonHarf}</Rozet>
-      : <span className="tc-cz-rev"><Rozet ton="tamam">{b.yayindakiHarf}</Rozet>{b.sonHarf !== b.yayindakiHarf && <Rozet ton="uyari">Taslak {b.sonHarf}</Rozet>}</span>),
+      ? <Rozet ton="uyari">Taslak {revKoduMetni(b.sonRevKodu)}</Rozet>
+      : <span className="tc-cz-rev"><Rozet ton="tamam">{revKoduMetni(b.yayindakiRevKodu)}</Rozet>{b.sonHarf !== b.yayindakiHarf && <Rozet ton="uyari">Taslak {revKoduMetni(b.sonRevKodu)}</Rozet>}</span>),
   },
   { anahtar: 'bag', baslik: 'Bağ', hizala: 'sag', mono: true, hucre: (b) => b.bagSayisi },
   { anahtar: 'guncellendi', baslik: 'Güncellendi', sirala: true, kirilmaz: true, mono: true, hucre: (b) => zamanMetni(b.guncellendi) },

@@ -5,6 +5,7 @@ import type { Bag, BelgeAyrintisi, Revizyon } from '#paylasilan/sozlesme/belge-m
 import { Dugme, DurumKutusu, Kart, OnayPenceresi, Rozet, Simge } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { anahtarlar } from './anahtarlar.ts';
+import { revKoduMetni, revizyonAdi } from './revizyon-kodu.ts';
 import { ikiliOku, kaydet } from './dosya-aktarimi.ts';
 import { BelgeDuzenle, IstasyonaBagla, MalzemeBagla, RevizyonEkle } from './formlar.tsx';
 import { BAG_ADI, DURUM_ADI, DURUM_TONU, TUR_ADI, TUR_SIMGESI, boyutMetni, zamanMetni } from './gosterim.ts';
@@ -45,9 +46,9 @@ function Onay({ belge, acik, kapat, yayinlandi }: OnayOzellikleri) {
       ? [`/cizimler/${belge.id}/arsivle`, 'Belgeyi arşivle', 'Belge listeden kalkar; dosyaları ve bağları korunur, arşivden geri alınabilir.', 'Arşivle', surum, true]
       : [`/cizimler/${belge.id}/arsivden-cikar`, 'Arşivden çıkar', 'Belge yeniden listede görünür.', 'Arşivden çıkar', surum, false]
     : 'sil' in acik
-      ? [`/cizimler/${belge.id}/revizyonlar/${acik.sil.id}/sil`, `Revizyon ${acik.sil.harf} silinsin mi?`, 'Taslak revizyon ve dosya bağı silinir. Bu işlem geri alınamaz.', 'Sil', surum, true]
+      ? [`/cizimler/${belge.id}/revizyonlar/${acik.sil.id}/sil`, `${revizyonAdi(acik.sil)} silinsin mi?`, 'Taslak revizyon ve dosya bağı silinir. Bu işlem geri alınamaz.', 'Sil', surum, true]
       : 'yayinla' in acik
-        ? [`/cizimler/${belge.id}/revizyonlar/${acik.yayinla.id}/yayinla`, `Revizyon ${acik.yayinla.harf} yayınlansın mı?`, 'Yayındaki revizyon eskiye düşer; bu belgeyi gösteren ekranlar yeni revizyonu gösterir.', 'Yayınla', surum, false]
+        ? [`/cizimler/${belge.id}/revizyonlar/${acik.yayinla.id}/yayinla`, `${revizyonAdi(acik.yayinla)} yayınlansın mı?`, 'Yayındaki revizyon eskiye düşer; bu belgeyi gösteren ekranlar yeni revizyonu gösterir.', 'Yayınla', surum, false]
         : [`/cizimler/${belge.id}/bag-kaldir`, 'Bağı kaldır', `${BAG_ADI[acik.bagKaldir.hedefModul]} ${bagHedefi(acik.bagKaldir)} ile bağ kaldırılır.`, 'Kaldır',
           { hedefModul: acik.bagKaldir.hedefModul, hedefId: acik.bagKaldir.hedefId, ...surum }, true];
   const komut = useKomut(yol, (cevap) => {
@@ -74,7 +75,7 @@ function IndirDugmesi({ belgeId, r }: { belgeId: number; r: Revizyon }) {
   };
   return (
     <>
-      <Dugme simge="download" yukleniyor={inen} onClick={indir} aria-label={`Revizyon ${r.harf} dosyasını indir`}>İndir</Dugme>
+      <Dugme simge="download" yukleniyor={inen} onClick={indir} aria-label={`${revizyonAdi(r)} dosyasını indir`}>İndir</Dugme>
       {hata !== null && <span className="tc-cz-hata" role="alert">{hata}</span>}
     </>
   );
@@ -126,7 +127,7 @@ export function BelgeSayfasi() {
       </header>
 
       <div className="tc-cz-duzen">
-        <Kart baslik={gosterilen ? `Revizyon ${gosterilen.harf} · ${gosterilen.dosyaAdi}` : 'Görüntü'}>
+        <Kart baslik={gosterilen ? `${revizyonAdi(gosterilen)} · ${gosterilen.dosyaAdi}` : 'Görüntü'}>
           {gosterilen
             ? (
               <Suspense fallback={<DurumKutusu durum="yukleniyor" mesaj="Görüntüleyici açılıyor" />}>
@@ -151,8 +152,7 @@ export function BelgeSayfasi() {
               {belge.revizyonlar.map((r) => (
                 <li key={r.id} className={r.id === gosterilen?.id ? 'tc-cz-secili' : undefined}>
                   <div className="tc-cz-rev-ust">
-                    <b className="mono">{r.harf}</b>
-                    {r.antetRev !== null && r.antetRev !== r.harf && <span className="tc-cz-ipucu mono" title="Antet revizyonu">Antet {r.antetRev}</span>}
+                    <b className="mono" title={r.antetRev !== null ? 'Resmin revizyon kodu' : r.revKodu ? 'Malzeme kartının revizyonu' : 'Revizyon kodu girilmemiş'}>{revKoduMetni(r.revKodu)}</b>
                     <Rozet ton={DURUM_TONU[r.durum]}>{DURUM_ADI[r.durum]}</Rozet>
                     <span className="tc-cz-dosya">{r.dosyaAdi}</span>
                     <span className="tc-cz-ipucu mono">{r.dosyaTuru.toUpperCase()} · {boyutMetni(r.boyut)}</span>
@@ -166,13 +166,13 @@ export function BelgeSayfasi() {
                     {r.id !== gosterilen?.id && <Dugme simge="eye" onClick={() => { seciliYaz(r.id); }}>Görüntüle</Dugme>}
                     <IndirDugmesi belgeId={belge.id} r={r} />
                     {degisir && r.dosyaTuru === 'pdf' && (
-                      <Dugme simge="edit" onClick={() => { void yonlendir(`/cizimler/belge/${belge.id}/duzenle/${r.id}`); }} aria-label={`Revizyon ${r.harf} PDF'ini düzenle`}>PDF düzenle</Dugme>
+                      <Dugme simge="edit" onClick={() => { void yonlendir(`/cizimler/belge/${belge.id}/duzenle/${r.id}`); }} aria-label={`${revizyonAdi(r)} PDF'ini düzenle`}>PDF düzenle</Dugme>
                     )}
                     {yayinlar && belge.aktif && r.durum !== 'yayinda' && <Dugme tur="birincil" simge="check" onClick={() => { acikYaz({ yayinla: r }); }}>Yayınla</Dugme>}
                     {yayinlar && belge.aktif && r.durum === 'yayinda' && onizlemeTuruMu(r.dosyaTuru) && r.onizlemeKareSayisi === 0 && (
                       <Dugme
                         simge="scan" yukleniyor={onizleme.uretilen === r.id} disabled={onizleme.uretilen !== null}
-                        onClick={() => { void onizleme.uret(belge.id, r); }} aria-label={`Revizyon ${r.harf} için önizleme üret`}
+                        onClick={() => { void onizleme.uret(belge.id, r); }} aria-label={`${revizyonAdi(r)} için önizleme üret`}
                       >
                         Önizleme üret
                       </Dugme>

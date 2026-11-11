@@ -5,10 +5,11 @@ import type { DosyaTuru } from '#paylasilan/sozlesme/dosya.ts';
 import { useBildirim } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { anahtarlar } from './anahtarlar.ts';
+import { revizyonAdi } from './revizyon-kodu.ts';
 import { dosyaYukle, ikiliOku } from './dosya-aktarimi.ts';
 import { AZAMI_MODEL_BAYT, OnizlemeAtlandi, kareKaynagi, webglVarMi } from './onizleme-kurallari.ts';
 
-type UretilecekRevizyon = Pick<Revizyon, 'id' | 'harf' | 'dosyaTuru' | 'boyut' | 'onizlemeKareSayisi'>;
+type UretilecekRevizyon = Pick<Revizyon, 'id' | 'revKodu' | 'dosyaTuru' | 'boyut' | 'onizlemeKareSayisi'>;
 
 // Revizyon dosyasından kareleri üretir: 3B modelde dönen kareler, PDF ve fotoda tek kare. Ağır kütüphaneler yalnız burada iner.
 async function kareleriUret(veri: Uint8Array, tur: DosyaTuru): Promise<Uint8Array[]> {
@@ -27,7 +28,7 @@ async function kareleriUret(veri: Uint8Array, tur: DosyaTuru): Promise<Uint8Arra
 export function onizlemeEngeli(r: UretilecekRevizyon): string | null {
   const kaynak = kareKaynagi(r.dosyaTuru);
   if (kaynak === null) return 'Bu dosya türünden önizleme üretilmez.';
-  if (kaynak === 'model' && r.boyut > AZAMI_MODEL_BAYT) return `Revizyon ${r.harf} 25 MB sınırından büyük; önizleme üretilmedi.`;
+  if (kaynak === 'model' && r.boyut > AZAMI_MODEL_BAYT) return `${revizyonAdi(r)} 25 MB sınırından büyük; önizleme üretilmedi.`;
   if (kaynak === 'model' && !webglVarMi()) return 'Bu cihazda üç boyutlu çizim yok; önizleme üretilmedi.';
   return null;
 }
@@ -63,7 +64,7 @@ export function useOnizleme() {
         dosyaYolu: `/cizimler/${belgeId}/revizyonlar/${r.id}/dosya`, yazmaYolu: `/cizimler/${belgeId}/revizyonlar/${r.id}/onizleme`,
       });
       await istemci.invalidateQueries({ queryKey: anahtarlar.kok });
-      bildir('tamam', `Revizyon ${r.harf} önizlemesi hazır.`);
+      bildir('tamam', `${revizyonAdi(r)} önizlemesi hazır.`);
     } catch (e) {
       bildir('hata', e instanceof OnizlemeAtlandi ? e.message : hataIletisi(e, 'Önizleme üretilemedi; belge etkilenmedi.'));
     } finally {
