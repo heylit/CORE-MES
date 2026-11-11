@@ -235,12 +235,13 @@ export async function acikSiparisSatirlari(db: Db): Promise<AcikSiparisSatirlari
   const nolar = await emirNoHaritasi(db, emirler);
   const projesi = await emirlerinProjeleri(db, emirler.filter((e): e is number => e !== null));
   const projeAdi = await projeAdlari(db, [...new Set(projesi.values())]);
-  const yururlukte = await yururluktekiRevizyonlar(db, l.flatMap((x) => (x.malzemeNo === null || x.parcaRevizyonu === null ? [] : [x.malzemeNo])));
+  // 2881: revizyonun kartı fasonda uygulanacak parçadır (satın almanın revizyonMalzemeNo'su); eşleşme malzemeNo ile kalır.
+  const yururlukte = await yururluktekiRevizyonlar(db, l.flatMap((x) => (x.revizyonMalzemeNo === null || x.parcaRevizyonu === null ? [] : [x.revizyonMalzemeNo])));
   return { satirlar: l.map((x, i) => {
     const emirId = emirler[i] ?? null;
     const projeId = emirId === null ? null : projesi.get(emirId) ?? null;
     // Siparişte revizyon yoksa karşılaştırılacak bir şey yoktur; yürürlükteki de yazılmaz.
-    const yur = x.malzemeNo === null || x.parcaRevizyonu === null ? null : yururlukte.get(x.malzemeNo) ?? null;
+    const yur = x.revizyonMalzemeNo === null || x.parcaRevizyonu === null ? null : yururlukte.get(x.revizyonMalzemeNo) ?? null;
     return {
       id: x.id, siparisNo: x.siparisNo, talepNo: x.talepNo, tedarikciAdi: x.tedarikciAdi, malzemeId: x.malzemeNo,
       malzemeTur: (x.malzemeNo === null ? null : (kartlar.get(x.malzemeNo)?.tur as MalzemeTuru | undefined)) ?? null, kalemAdi: x.kalemAdi,

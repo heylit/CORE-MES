@@ -64,7 +64,7 @@ describe('stok açık sipariş satırlarında emir ve proje (gerçek PostgreSQL)
        VALUES ($1, $2, 'ASA-DNM-', $3, 'aktif', $4, $5, $5, $6) RETURNING no`,
       [`asa-dnm-${kartSira}`, tur, kartSira, JSON.stringify({ id: `asa-dnm-${kartSira}`, com: { ad: `Deneme ${tur} ${kartSira}` } }), kisi, tur === 'hizmet' ? 'alinan' : null]))!.no;
   }
-  async function siparisSatiri(x: { kalem: string; tedarikci: string; talepEmri?: number; kaynakEmri?: number; isEmri?: number; malzemeNo?: number; revizyon?: string }): Promise<number> {
+  async function siparisSatiri(x: { kalem: string; tedarikci: string; talepEmri?: number; kaynakEmri?: number; isEmri?: number; malzemeNo?: number; revizyon?: string; uygulanan?: number }): Promise<number> {
     const [t, kl, tk] = [await talep(x.talepEmri ?? null), randomUUID(), randomUUID()];
     const kaynak = x.kaynakEmri === undefined ? null : await talep(x.kaynakEmri);
     const s = o().sahip;
@@ -73,8 +73,8 @@ describe('stok açık sipariş satırlarında emir ve proje (gerçek PostgreSQL)
       katalog = randomUUID();
       await s.sorgu('INSERT INTO satin_alma_katalog (id, malzeme_no) VALUES ($1, $2)', [katalog, x.malzemeNo]);
     }
-    await s.sorgu('INSERT INTO satin_alma_talep_kalemi (talep_id, id, sira, ad, kaynak_talep_id, kaynak_sira, katalog_id) VALUES ($1, $2, 1, $3, $4, $5, $6)',
-      [t, kl, x.kalem, kaynak, kaynak === null ? null : 1, katalog]);
+    await s.sorgu('INSERT INTO satin_alma_talep_kalemi (talep_id, id, sira, ad, kaynak_talep_id, kaynak_sira, katalog_id, uygulanan_malzeme_no) VALUES ($1, $2, 1, $3, $4, $5, $6, $7)',
+      [t, kl, x.kalem, kaynak, kaynak === null ? null : 1, katalog, x.uygulanan ?? null]);
     await s.sorgu("INSERT INTO satin_alma_teklif (talep_id, id, para_birimi, teklif_tarihi, tedarikci_adi) VALUES ($1, $2, 'TRY', current_date, $3)", [t, tk, x.tedarikci]);
     await s.sorgu("INSERT INTO satin_alma_karar (talep_id, mod, karar_tarihi) VALUES ($1, 'bolunmus', current_date)", [t]);
     await s.sorgu('INSERT INTO satin_alma_siparis (talep_id, teklif_id) VALUES ($1, $2)', [t, tk]);
@@ -179,6 +179,28 @@ describe('stok açık sipariş satırlarında emir ve proje (gerçek PostgreSQL)
     assert.ok(!istenen[0]!.includes(revsiz));
     assert.equal(l.find((y) => y.id === id.fason)!.isEmriId !== null, true);
     assert.equal(l.find((y) => y.id === id.hizmet)!.isEmriId, null);
+  });
+
+  // 2881: fason dönüşünde revizyon uygulanacak parçanındır; yürürlükteki revizyon hizmet kartından değil parçadan sorulur, satır
+  // eşleşmesi (malzemeId) hizmet kartında kalır.
+  test('2881: fason satırında yürürlükteki revizyon uygulanacak parçadan', async () => {
+    const [parca, hizmet] = [await kart('yarimamul'), await kart('hizmet')];
+    const isEmri = await fasonIsi(await emir(null));
+    const id = {
+      eski: await siparisSatiri({ kalem: 'Deneme kaplama', tedarikci: 'Deneme Fasoncu', malzemeNo: hizmet, isEmri, uygulanan: parca, revizyon: 'A' }),
+      ayni: await siparisSatiri({ kalem: 'Deneme taslama', tedarikci: 'Deneme Fasoncu', malzemeNo: hizmet, isEmri, uygulanan: parca, revizyon: 'B' }),
+    };
+    const istenen: number[][] = [];
+    parcaRevizyonuCozucusu(async (_db, idler) => {
+      istenen.push([...idler]);
+      return new Map<number, string>([[parca, 'B'], [hizmet, 'HZ']]);
+    });
+    let l: AcikSiparisSatiri[];
+    try { l = await satirlar(); } finally { parcaRevizyonuCozucusu(async () => new Map()); }
+    const al = (x: number) => { const r = l.find((y) => y.id === x)!; return [r.malzemeId, r.parcaRevizyonu, r.yururlukRevizyonu, r.revizyonUyusmuyor]; };
+    assert.deepEqual(al(id.eski), [hizmet, 'A', 'B', true]);
+    assert.deepEqual(al(id.ayni), [hizmet, 'B', 'B', false]);
+    assert.ok(!istenen.flat().includes(hizmet), 'hizmet kartının revizyonu istenmez');
   });
 
   test('2877: revizyon karşılaştırma kuralı', () => {
