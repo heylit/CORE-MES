@@ -390,6 +390,7 @@ describe('Kabuk', () => {
     fireEvent.click(pencere.getByRole('checkbox', { name: ad('/plan') }));
     fireEvent.click(pencere.getByRole('button', { name: `${ad('/kuyruk')} yukarı` }));
     expect(sira()).toEqual([ad('/kuyruk'), ad('/stok'), ad('/plan')]);
+    expect(pencere.queryByRole('status')).toBeNull();
     await act(async () => { fireEvent.click(pencere.getByRole('button', { name: 'Kaydet' })); });
     expect(post).toHaveBeenCalledWith('/profil/menu-sec', { sayfalar: ['/kuyruk', '/stok', '/plan'], surum: 2 }, expect.objectContaining({ istekKimligi: expect.any(String) }));
     expect(screen.queryByRole('dialog', { name: 'Menüyü düzenle' })).toBeNull();
@@ -457,6 +458,8 @@ describe('Kabuk', () => {
     );
     const grup = within(screen.getByRole('navigation', { name: 'Ana menü' })).getByRole('button', { name: plan?.grup ?? '' });
     expect(grup.getAttribute('title')).toBe(plan?.grup);
+    // Görünen sayı ekran okuyucuya açıklama olarak gider; ad grup adıdır.
+    expect(within(screen.getByRole('navigation', { name: 'Ana menü' })).getByRole('button', { name: plan?.grup ?? '', description: '1 sayfa' })).toBe(grup);
     expect(grup.querySelector('.tc-kabuk-acilir-simge svg')).not.toBeNull();
   });
 

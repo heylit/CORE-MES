@@ -61,6 +61,9 @@ export function MenuDuzenle({ kapat, gruplar, secili, surum, oneri }: Ozellikler
             <h3 id="tc-md-sik">Sık kullanılanlar</h3>
             <span className="tc-md-sayi">{liste.length} / {MENU_SIK_SINIRI}</span>
           </div>
+          {/* Hata seçimin hemen altında çizilir: uzun listede Kaydet'e basan kişi pencerenin neden kapanmadığını görür. */}
+          {sec.isError && <DurumKutusu durum="hata" hata={sec.error} mesaj="Menü kaydedilemedi." />}
+          {dolu && <p className="tc-md-bos" role="status">En çok {MENU_SIK_SINIRI} sayfa seçilir; yenisini eklemek için birini çıkarın.</p>}
           {liste.length === 0
             ? <p className="tc-md-bos">Henüz seçim yok. Aşağıdan en çok açtığınız sayfaları işaretleyin; menünün en üstünde dururlar.</p>
             : (
@@ -95,7 +98,6 @@ export function MenuDuzenle({ kapat, gruplar, secili, surum, oneri }: Ozellikler
             })}
           </fieldset>
         ))}
-        {sec.isError && <DurumKutusu durum="hata" hata={sec.error} mesaj="Menü kaydedilemedi." />}
       </div>
     </Pencere>
   );

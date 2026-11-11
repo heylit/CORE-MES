@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { QueryClientContext } from '@tanstack/react-query';
@@ -282,6 +282,7 @@ export function Kabuk({
     [menuTercihi, menudekiler],
   );
   // Kişinin açıp kapadığı gruplar; dokunulmamış grup, açık sayfayı içeriyorsa açık gelir.
+  const grupKimligi = useId();
   const [grupSecimleri, grupSecimleriYaz] = useState<ReadonlyMap<string, boolean>>(() => new Map());
   const grubuAcKapa = useCallback((grup: string, acik: boolean) => {
     grupSecimleriYaz((o) => new Map(o).set(grup, !acik));
@@ -496,15 +497,17 @@ export function Kabuk({
               {sikKullanilanlar.map((s) => <Baglanti key={s.yol} sayfa={s} />)}
             </div>
           )}
-          {gruplar.map((g) => {
+          {gruplar.map((g, i) => {
             const acik = grupSecimleri.get(g.grup) ?? g.sayfalar.some((s) => konum.pathname === s.yol || konum.pathname.startsWith(`${s.yol}/`));
             return (
               <div className="tc-kabuk-grup tc-kabuk-acilir" key={g.grup} data-acik={acik ? '' : undefined}>
-                <button type="button" className="tc-kabuk-bag tc-kabuk-acilir-bas" aria-expanded={acik} aria-label={g.grup} title={g.grup} onClick={() => grubuAcKapa(g.grup, acik)}>
+                <button type="button" className="tc-kabuk-bag tc-kabuk-acilir-bas" aria-expanded={acik} aria-label={g.grup} aria-describedby={`${grupKimligi}-${String(i)}`} title={g.grup} onClick={() => grubuAcKapa(g.grup, acik)}>
                   <span className="tc-kabuk-acilir-simge"><Simge ad={GRUP_SIMGELERI[g.grup]} /></span>
                   <span className="tc-kabuk-bag-metin">{g.grup}</span>
                   <span className="tc-kabuk-acilir-sayi">{g.sayfalar.length}</span>
                   <span className="tc-kabuk-ac-ok"><Simge ad="chev-right" boyut="k" /></span>
+                  {/* Görünen sayı erişilebilir ada girmez (ad grup adıdır); ekran okuyucu onu açıklama olarak duyar. */}
+                  <span id={`${grupKimligi}-${String(i)}`} hidden>{g.sayfalar.length} sayfa</span>
                 </button>
                 {g.sayfalar.map((s) => <Baglanti key={s.yol} sayfa={s} />)}
               </div>
