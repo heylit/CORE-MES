@@ -54,7 +54,7 @@ describe('yetki matrisi komutu (gerçek PostgreSQL)', () => {
 
   test('genel görünüm rolleri, yalnız yöneticide olanları ve ek işlemli kişiyi sayar; --kisi ve --rol ayrıntı verir', () => {
     const metin = matrisMetni(matris, { tur: 'hepsi' });
-    assert.match(metin, /yonetici \(Yönetici\): bütün sayfa ve işlemler/);
+    assert.match(metin, /yonetici \(Sistem Yöneticisi\): bütün sayfa ve işlemler/);
     assert.match(metin, /# Yalnız yöneticide: .*kisiler\.rol-yonet/);
     assert.match(metin, /ornek\.op \(Örnek Operatör\): operator \+ ek: arkon\.planlama/);
     assert.match(metin, /ek işlem verilmiş kişi: 1/);

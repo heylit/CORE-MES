@@ -114,6 +114,12 @@ describe('P1 personel listesi', () => {
     expect(gonderilen[0]).toMatchObject({ rolId: 7, kartNo: '0000123456' });
   });
 
+  it('2899-2 a: rol alanı tam yetkili rolün nereden ve kimce verildiğini söyler', async () => {
+    iseAlimFormu([...IK_YONETICI.islemler, 'ik.hesap-ac']);
+    const pencere = await doldur();
+    expect(within(pencere).getByText(/Sistem Yöneticisi rolü Kişiler > Personel > Roller'den, yalnız Sistem Yöneticisi tarafından verilir\./)).toBeTruthy();
+  });
+
   it('1925 a: kart boşsa kart gönderilmez; seçilen rol gider', async () => {
     const gonderilen = iseAlimFormu([...IK_YONETICI.islemler, 'ik.hesap-ac']);
     const pencere = await doldur();

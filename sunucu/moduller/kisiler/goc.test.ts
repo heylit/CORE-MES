@@ -203,7 +203,7 @@ describe('roller göçü var olan veritabanında (gerçek PostgreSQL)', () => {
       [
         { kullanici_adi: 'eski-operator', kod: 'operator', ad: 'Operatör' },
         { kullanici_adi: 'eski-planlamaci', kod: 'planlama_proje', ad: 'Planlama ve Proje' },
-        { kullanici_adi: 'eski-yonetici', kod: 'yonetici', ad: 'Yönetici' },
+        { kullanici_adi: 'eski-yonetici', kod: 'yonetici', ad: 'Sistem Yöneticisi' },
       ],
     );
     assert.deepEqual(
