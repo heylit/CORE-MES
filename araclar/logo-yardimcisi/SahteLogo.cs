@@ -97,6 +97,9 @@ namespace LogoYardimcisi
         public List<KodAd> Birimler = new List<KodAd>();
         public List<MalKabulSatiri> MalKabulSatirlari = new List<MalKabulSatiri>();
         public List<StokToplami> Stoklar = new List<StokToplami>();
+        // 2961-D4: malzeme kaydına göre hareket ve alış satırları (Tuple: malzeme kaydı, satır).
+        public List<Tuple<int, MalzemeHareketi>> Hareketler = new List<Tuple<int, MalzemeHareketi>>();
+        public List<Tuple<int, AlisFiyati>> AlisSatirlari = new List<Tuple<int, AlisFiyati>>();
         public List<CariKaydi> CariDetaylari = new List<CariKaydi>();
         public Dictionary<int, List<FaturaOzeti>> FaturaListesi = new Dictionary<int, List<FaturaOzeti>>();
 
@@ -489,6 +492,16 @@ namespace LogoYardimcisi
         public List<MalzemeKaydi> MalzemeKartlari(int sonGorulen, int enCok)
         {
             return Kartlar.Where(x => x.Ref > sonGorulen).OrderBy(x => x.Ref).Take(enCok).ToList();
+        }
+
+        public List<MalzemeHareketi> MalzemeHareketleri(int malzemeRef, int sonGorulen, int enCok)
+        {
+            return Hareketler.Where(x => x.Item1 == malzemeRef && x.Item2.Ref > sonGorulen).Select(x => x.Item2).OrderBy(x => x.Ref).Take(enCok).ToList();
+        }
+
+        public List<AlisFiyati> SonAlisFiyatlari(int malzemeRef, int enCok)
+        {
+            return AlisSatirlari.Where(x => x.Item1 == malzemeRef).Select(x => x.Item2).OrderByDescending(x => x.Tarih).ThenByDescending(x => x.Ref).Take(enCok).ToList();
         }
 
         public List<StokToplami> StokToplamlari(int sonGorulen, int enCok)

@@ -17,6 +17,9 @@ namespace LogoYardimcisi
         public const int KartSayfasi = 500;
         public const int CariAramaEnCok = 20;
         public const int CariAramaEnAz = 3;
+        // 2961-D4: hareket sayfası ve son alış satırı sayısı.
+        public const int HareketSayfasi = 500;
+        public const int SonAlisEnCok = 10;
         // 4 (sabit kıymet) DEPREC_TYPE, REVAL_FLAG ister; değerleri ölçülmedi, gönderilmez.
         static readonly int[] KartTurleri = { 1, 10, 11, 12, 13 };
         const string OzelKod = "TMI";
@@ -36,6 +39,7 @@ namespace LogoYardimcisi
         }
 
         static readonly Regex MalzemeVarMi = new Regex("^/api/Material/exists/([^/]+)$");
+        static readonly Regex MalzemeOkumasi = new Regex("^/api/Material/([^/]+)/(movements|lastPurchases)$");
         static readonly Regex CariBul = new Regex("^/api/Arp/find/([^/]+)$");
         static readonly Regex CariKarti = new Regex("^/api/Arp/card/([^/]+)$");
         static readonly Regex HizmetVarMi = new Regex("^/api/(Purchase|Sales)Service/exists/([^/]+)$");
@@ -90,6 +94,8 @@ namespace LogoYardimcisi
                 if ((m = MalzemeVarMi.Match(yol)).Success) return MalzemeVarMiOku(Coz(m, 1));
                 if (yol == "/api/Material/codes") return new Cevap(200, new List<object>(oku.MalzemeKodlari()));
                 if (yol == "/api/Material/list") return MalzemeListesi(sorgu);
+                if ((m = MalzemeOkumasi.Match(yol)).Success)
+                    return m.Groups[2].Value == "movements" ? MalzemeHareketleri(Coz(m, 1), sorgu) : SonAlisFiyatlari(Coz(m, 1));
                 if (yol == "/api/Stock/totals") return StokToplamlari(sorgu);
                 if (yol == "/api/Arp/search") return CariAra(sorgu);
                 if ((m = CariKarti.Match(yol)).Success) return CariOku(Coz(m, 1));
@@ -331,6 +337,55 @@ namespace LogoYardimcisi
             var son = 0;
             foreach (var k in kartlar) if (k.Ref > son) son = k.Ref;
             return new Cevap(200, Sayfa(l, son, kartlar.Count >= KartSayfasi));
+        }
+
+        // 2961-D4: malzeme hareketleri, kayıt sırasıyla sayfa sayfa. Kart yoksa 404.
+        Cevap MalzemeHareketleri(string kod, Dictionary<string, string> sorgu)
+        {
+            var since = Imlec(sorgu);
+            var kart = oku.MalzemeRef(kod);
+            if (kart == 0) return Cevap.Hata(404, "Material not found");
+            var hareketler = oku.MalzemeHareketleri(kart, since, HareketSayfasi);
+            var l = new List<object>();
+            var son = 0;
+            foreach (var x in hareketler)
+            {
+                var o = new Dictionary<string, object>();
+                o["logicalRef"] = x.Ref;
+                o["date"] = x.Tarih.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+                o["trCode"] = x.FisTuru;
+                o["ioCode"] = x.GirisCikis;
+                o["ficheNo"] = x.FisNo;
+                o["quantity"] = x.Miktar;
+                o["warehouseNr"] = x.AmbarNo;
+                o["unitCode"] = x.Birim;
+                l.Add(o);
+                if (x.Ref > son) son = x.Ref;
+            }
+            return new Cevap(200, Sayfa(l, son, hareketler.Count >= HareketSayfasi));
+        }
+
+        // 2961-D4: en yeni alış faturası satırları (en çok SonAlisEnCok). Kart yoksa 404; alışı olmayan kart boş liste.
+        Cevap SonAlisFiyatlari(string kod)
+        {
+            var kart = oku.MalzemeRef(kod);
+            if (kart == 0) return Cevap.Hata(404, "Material not found");
+            var l = new List<object>();
+            foreach (var x in oku.SonAlisFiyatlari(kart, SonAlisEnCok))
+            {
+                var o = new Dictionary<string, object>();
+                o["logicalRef"] = x.Ref;
+                o["date"] = x.Tarih.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+                o["arpCode"] = x.CariKod;
+                o["invoiceNo"] = x.FaturaNo;
+                o["quantity"] = x.Miktar;
+                o["unitCode"] = x.Birim;
+                o["price"] = x.Fiyat;
+                o["currencyType"] = x.DovizTuru;
+                o["currencyPrice"] = x.DovizFiyati;
+                l.Add(o);
+            }
+            return new Cevap(200, l);
         }
 
         static Dictionary<string, object> CariNesnesi(CariKaydi c)
