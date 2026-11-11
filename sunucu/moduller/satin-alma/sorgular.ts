@@ -1804,3 +1804,8 @@ export function emirTedarikDurumlariOku(db: Db, uretimEmriIdleri: readonly numbe
     [uretimEmriIdleri, isEmriIdleri],
   );
 }
+
+// D7: numarası ya da Logo kayıt numarası CORE MES siparişine ait mi (Logo'daki sipariş düzeltmesi bunu düzeltmez, G3).
+export async function coreSiparisiMi(db: Db, no: string, logoKayitNo: string): Promise<boolean> {
+  return (await db.tek('SELECT 1 FROM satin_alma_siparis WHERE no = $1 OR logo_kayit_no = $2 LIMIT 1', [no, logoKayitNo])) !== null;
+}

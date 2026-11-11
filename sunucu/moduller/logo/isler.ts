@@ -7,12 +7,16 @@ import {
 } from '../satin-alma/disari.ts';
 import { logoyaGidecekSatisSiparisleri, logoyaGidecekSatisTeklifleri, satisSiparisiLogoSonucu, satisTeklifiLogoSonucu } from '../siparisler/disari.ts';
 import { emirlerinMalzemeFisleri, logoIcinMalzemeFisleri, malzemeFisiDegisiklikleri } from '../stok/disari.ts';
-import { ortamKoprusu } from './baglanti.ts';
+import { disDuzeltmeAcik, ortamKoprusu } from './baglanti.ts';
+import { disDuzeltmeTuru, disSiparisOku } from './dis-siparis.ts';
+import type { DisDuzeltmeOrtami } from './dis-siparis.ts';
+import type { KopruIstemcisi } from './kopru.ts';
 import { IS_ARALIGI_MS, OKUMA_ISI_ARALIGI_MS } from './kurallar.ts';
 import { BEKLEME_NEDENLERI, faturaTuru, listeOkumaTuru, malKabulTuru, malzemeFisiTuru, malzemeKartiOkumaTuru, malzemeKoduTuru, malzemeTuru, stokOkumaTuru, satinAlmaTuru, satisTuru, stokMalzemeFisiKaynagi, yeniSurecBellegi } from './servis.ts';
 import { logoCariAra, logoCariOku } from './servis.ts';
 import type { CariOkumasi, MalzemeFisiKaynagi, SatinAlmaKaynagi, SatisKaynagi, TurSonucu, TxAcan } from './servis.ts';
 import type { LogoCari } from './kurallar.ts';
+import type { DisSiparisCevabi } from '#paylasilan/sozlesme/logo.ts';
 
 // İş her zaman koşar; istek ancak "Logo bağlantısı" ayarı açık ve köprü değişkenleri varken çıkar (malzemeTuru).
 const bellek = yeniSurecBellegi();
@@ -29,12 +33,12 @@ function sirali<T>(is: () => Promise<T>): Promise<T> {
 function beklemeyeCevir(sonuc: TurSonucu): IsBekliyor | undefined {
   switch (sonuc.tur) {
     case 'kapali': case 'ortam-degiskeni-yok': case 'satin-alma-kapali': case 'satis-kapali':
-    case 'mal-kabul-kapali': case 'liste-kapali': case 'fatura-kapali': case 'malzeme-fisi-kapali': case 'malzeme-karti-kapali': case 'stok-kapali':
+    case 'mal-kabul-kapali': case 'liste-kapali': case 'fatura-kapali': case 'malzeme-fisi-kapali': case 'malzeme-karti-kapali': case 'stok-kapali': case 'dis-duzeltme-kapali':
       return isBekliyor(BEKLEME_NEDENLERI[sonuc.tur]);
     case 'bos': case 'gonderim': case 'guncelleme': case 'pasif': case 'pasif-niyet': case 'iptal': case 'kapatma': case 'bekletme': case 'karsilama': case 'liste':
     case 'malzeme-fisi-niyet': case 'malzeme-fisi': case 'niyet': case 'okuma': case 'siparisler-siparisi-niyet':
     case 'siparisler-siparisi': case 'siparisler-teklifi-niyet': case 'siparisler-teklifi': case 'talep-niyet':
-    case 'talep':
+    case 'talep': case 'dis-duzeltme':
     default:
       return undefined;
   }
@@ -67,6 +71,9 @@ export function malzemeFisiIsi(kaynak: MalzemeFisiKaynagi): IsTanimi {
 // Okuma işleri (logo -> TMI): ayrı bellek; her biri kendi anahtarı açıkken istek atar, okunanı yalnız saklar.
 const okumaBellegi = yeniSurecBellegi();
 const okumaOrtami = () => ({ kopru: ortamKoprusu, bellek: okumaBellegi, saat: () => new Date() });
+
+// Kayıtlı işin ortamı; testte köprü sahtesiyle kurulur, anahtar bağlantısı ise burada kalır (anahtar kuyruğa girmiş işi de durdurur).
+export const disDuzeltmeIsOrtami = (kopru: KopruIstemcisi | null = ortamKoprusu): DisDuzeltmeOrtami => ({ kopru, acik: disDuzeltmeAcik, saat: () => new Date() });
 
 export const isler = [
   kopruIsi('logo-malzeme-gonderimi', IS_ARALIGI_MS, (vt) =>
@@ -108,8 +115,13 @@ export const isler = [
   // 2116: Logo malzeme kartı ve stok toplamı aynası (yalnız okunur).
   kopruIsi('logo-malzeme-karti-okumasi', OKUMA_ISI_ARALIGI_MS, (vt) => malzemeKartiOkumaTuru(vt, okumaOrtami())),
   kopruIsi('logo-stok-okumasi', OKUMA_ISI_ARALIGI_MS, (vt) => stokOkumaTuru(vt, okumaOrtami())),
+  // D7: Logo'da açılmış siparişin düzeltmesi; istek ancak TMIV2_LOGO_SIPARIS_DUZELTME=acik ve "Logo bağlantısı" açıkken çıkar.
+  kopruIsi('logo-dis-siparis-duzeltme', IS_ARALIGI_MS, (vt) => disDuzeltmeTuru(vt, disDuzeltmeIsOrtami())),
 ];
 
 // 2118: cari arama kullanıcı isteğiyle gelir; köprüye zamanlanmış işlerle aynı sıradan gider (tek oturum). Uç transaction dışında çağırır.
 export const logodaCariAra = (vt: TxAcan, metin: string): Promise<CariOkumasi<LogoCari[]>> => sirali(() => logoCariAra(vt, ortamKoprusu, metin));
 export const logodanCariOku = (vt: TxAcan, kod: string): Promise<CariOkumasi<LogoCari | null>> => sirali(() => logoCariOku(vt, ortamKoprusu, kod));
+// D7: Logo'daki siparişi okuma kullanıcı isteğiyle gelir; köprüye zamanlanmış işlerle aynı sıradan gider. Uç transaction dışında çağırır.
+export const logodanDisSiparisOku = (vt: TxAcan, kisiId: number, no: string): Promise<DisSiparisCevabi> =>
+  sirali(() => disSiparisOku(vt, ortamKoprusu, kisiId, no));

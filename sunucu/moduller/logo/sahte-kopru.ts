@@ -102,6 +102,11 @@ export interface SahteKopru {
   sayfaBoyu: number;
   // 2114b: Logo'da kullanım dışı bırakılan kart kodları (istek sırasıyla; kart haritada kalır).
   pasifKartlar: string[];
+  // D7: Logo'da CORE MES dışında açılmış satın alma siparişleri (numara -> yardımcının içerik cevabı biçimi). GET {no}/content bunu döner;
+  // UpdateRich kaydı logicalRef ile bulur ve yardımcı gibi uygular (gönderilen alan yazılır, gövdede olmayan açık satır kapanır,
+  // kayıtsız satır eklenir). Gelen düzeltme gövdeleri sırayla `disGuncellemeler`de.
+  disSiparisler: Map<string, Record<string, unknown>>;
+  disGuncellemeler: Record<string, unknown>[];
   kapat(): Promise<void>;
 }
 
@@ -143,6 +148,8 @@ export async function sahteKopruAc(secenek: { anahtar?: string; port?: number } 
     hizmetKartlari: new Map(),
     hizmetAcilan: new Map(),
     siparisler: new Map(),
+    disSiparisler: new Map(),
+    disGuncellemeler: [],
     siparisAcilan: new Map(),
     iptaller: new Map(),
     cariler: new Set(),
@@ -308,6 +315,13 @@ export async function sahteKopruAc(secenek: { anahtar?: string; port?: number } 
         else json(cevap, 404, { success: false, logicalRef: 0, error: 'Order not found', validate: null });
         return;
       }
+      const icerik = /^\/api\/PurchaseOrder\/(.+)\/content$/.exec(yol);
+      if (istek.method === 'GET' && icerik) {
+        const kayit = kopru.disSiparisler.get(icerik[1] ?? '');
+        if (kayit) json(cevap, 200, kayit);
+        else json(cevap, 404, { success: false, logicalRef: 0, error: 'Order not found', validate: null });
+        return;
+      }
       const siparisSatirlari = /^\/api\/PurchaseOrder\/(.+)\/lines$/.exec(yol);
       if (istek.method === 'GET' && siparisSatirlari) {
         const kayit = kopru.siparisler.get(siparisSatirlari[1] ?? '');
@@ -336,6 +350,43 @@ export async function sahteKopruAc(secenek: { anahtar?: string; port?: number } 
       const nesne = govde !== null && typeof govde === 'object' ? (govde as Record<string, unknown>) : {};
       const ret = (): void => json(cevap, 200, { success: false, logicalRef: 0, error: 'Validation failed', validate: ['Kayit kilitli'] });
       const basari = (ref: number, ek: Record<string, unknown> = {}): void => json(cevap, 200, { success: true, logicalRef: ref, error: null, validate: null, ...ek });
+      const dis = istek.method === 'POST' && yol === '/api/PurchaseOrder/UpdateRich'
+        ? [...kopru.disSiparisler.values()].find((k) => k['logicalRef'] === nesne['logicalRef']) : undefined;
+      if (dis) {
+        if (kopru.senaryo === 'dogrulama') { ret(); return; }
+        if (nesne['arpCode'] !== dis['arpCode']) { json(cevap, 200, { success: false, logicalRef: 0, error: 'Cari değişikliği Logo\'ya yazılmaz.', validate: null }); return; }
+        kopru.disGuncellemeler.push(nesne);
+        const isoya = (d: unknown): unknown => (typeof d === 'string' && /^\d{2}\.\d{2}\.\d{4}$/.test(d) ? `${d.slice(6)}-${d.slice(3, 5)}-${d.slice(0, 2)}` : d);
+        if (nesne['date'] !== undefined) dis['date'] = isoya(nesne['date']);
+        const kur = typeof dis['rate'] === 'number' ? dis['rate'] : 0;
+        const dovizli = typeof dis['currencyType'] === 'number' && dis['currencyType'] > 0;
+        const mevcut = dis['lines'] as Record<string, unknown>[];
+        const gelen = Array.isArray(nesne['lines']) ? (nesne['lines'] as Record<string, unknown>[]) : [];
+        const fiyatla = (hedef: Record<string, unknown>, fiyat: unknown): void => {
+          if (typeof fiyat !== 'number') return;
+          if (dovizli) { hedef['currencyPrice'] = fiyat; hedef['price'] = fiyat * kur; } else hedef['price'] = fiyat;
+        };
+        for (const s of mevcut) if (s['closed'] !== true && !gelen.some((g) => g['logicalRef'] === s['logicalRef'])) s['closed'] = true;
+        for (const g of gelen) {
+          const s = typeof g['logicalRef'] === 'number' ? mevcut.find((m) => m['logicalRef'] === g['logicalRef']) : undefined;
+          if (s) {
+            if (g['quantity'] !== undefined) s['quantity'] = g['quantity'];
+            fiyatla(s, g['price']);
+            if (g['dueDate'] !== undefined) s['dueDate'] = isoya(g['dueDate']);
+            if (g['description'] !== undefined) s['description'] = g['description'];
+          } else {
+            const yeni: Record<string, unknown> = {
+              logicalRef: (sonRef += 1), type: g['type'], code: g['masterCode'], name: null, quantity: g['quantity'], unitCode: g['unitCode'],
+              vatRate: g['vatRate'] ?? null, dueDate: isoya(g['dueDate'] ?? null), description: g['description'] ?? null, closed: false,
+            };
+            fiyatla(yeni, g['price']);
+            mevcut.push(yeni);
+          }
+        }
+        if (kopru.senaryo === 'cevap-kayboldu') { istek.socket.destroy(); return; }
+        basari(dis['logicalRef'] as number);
+        return;
+      }
       if (istek.method === 'POST' && yol === '/api/PurchaseOrder/UpdateRich') {
         const kayit = [...kopru.siparisler.entries()].find(([, k]) => k.ref === nesne['logicalRef']);
         if (!kayit) { json(cevap, 200, { success: false, logicalRef: 0, error: 'Order not found', validate: null }); return; }

@@ -1,4 +1,4 @@
-import { logoAyariOku } from './ayar.ts';
+import { logoAyariOku, siparisDuzeltmeAcikMi } from './ayar.ts';
 import { HIZMET_VAR_MI_YOLU, kopruIstemcisiKur } from './kopru.ts';
 import type { KopruIstemcisi } from './kopru.ts';
 
@@ -9,3 +9,6 @@ export const ortamKoprusu: KopruIstemcisi | null = ortamAyari === null ? null : 
 
 // Hazırlık ekranı için: adres yereldir (127.0.0.1) ve yöneticiye gösterilir; anahtarın yalnız tanımlı olduğu söylenir.
 export const ortamOzeti = { adres: ortamAyari?.adres ?? null, anahtarTanimli: ortamAyari !== null };
+
+// D7 anahtarı her çağrıda okunur: yalnız "acik" açar; sunucu yeniden başlatılmadan kapatılabilsin diye açılışta sabitlenmez.
+export const disDuzeltmeAcik = (): boolean => siparisDuzeltmeAcikMi(process.env);

@@ -1,6 +1,6 @@
 import type { LogoAyari } from './ayar.ts';
-import { agHatasiniYorumla, alisFiyatlariniAyikla, malzemeHareketleriniAyikla, cariKaydiniAyikla, cariListesiniAyikla, cevabiYorumla, faturalariAyikla, malzemeKartlariniAyikla, stokToplamlariniAyikla, ISTEK_SURESI_MS, listeKayitlariniAyikla, malKabulSatirlariniAyikla, MALZEME_FISI_UCU, malzemeKodlariniAyikla, varMiAdi } from './kurallar.ts';
-import type { LogoAlisFiyati, LogoMalzemeHareketi, FaturaKaydi, HizmetYonu, KopruSonucu, LogoCari, LogoFisTuru, LogoMalzemeKarti, LogoStokSatiri, KopruZarfi, ListeKaydi, MalKabulSatiri, MalzemeEklemeGovdesi, Sayfa } from './kurallar.ts';
+import { agHatasiniYorumla, alisFiyatlariniAyikla, malzemeHareketleriniAyikla, cariKaydiniAyikla, cariListesiniAyikla, cevabiYorumla, faturalariAyikla, malzemeKartlariniAyikla, stokToplamlariniAyikla, ISTEK_SURESI_MS, listeKayitlariniAyikla, malKabulSatirlariniAyikla, MALZEME_FISI_UCU, malzemeKodlariniAyikla, siparisIcerigiAyikla, varMiAdi } from './kurallar.ts';
+import type { LogoAlisFiyati, LogoMalzemeHareketi, FaturaKaydi, HizmetYonu, KopruSonucu, LogoCari, LogoFisTuru, LogoMalzemeKarti, LogoStokSatiri, KopruZarfi, ListeKaydi, MalKabulSatiri, MalzemeEklemeGovdesi, LogoSiparisIcerigi, Sayfa } from './kurallar.ts';
 
 // Logo yardımcısıyla yalnız bu dosya konuşur (kart #207, ADR 0017; yardımcı araclar/logo-yardimcisi). Adres ve anahtar ayardan gelir; hata metnine girmez.
 export interface KopruIstemcisi {
@@ -55,6 +55,8 @@ export interface KopruIstemcisi {
   // 2118: kullanımdaki carilerde arama (en çok 20) ve tek cari; olmayan cari null.
   cariAra(metin: string): Promise<OkumaSonucu<LogoCari[]>>;
   cariOku(kod: string): Promise<OkumaSonucu<LogoCari | null>>;
+  // D7 (2987 a): Logo'daki satın alma siparişinin başlığı ve satırları; sipariş yoksa null. Fiyat taşır: yalnız düzeltme yetkisiyle çağrılır.
+  siparisIcerigiOku(no: string): Promise<OkumaSonucu<LogoSiparisIcerigi | null>>;
   // Malzeme fişi (türler ve uçlar kurallar.ts MALZEME_FISI_TURU, MALZEME_FISI_UCU). Açmada kalkan yalnız niyettir (yardımcının numarayla
   // bulma ucu TMI'de kullanılmıyor).
   malzemeFisiEkle(tur: LogoFisTuru, govde: Record<string, unknown>): Promise<KopruSonucu>;
@@ -210,6 +212,7 @@ export function kopruIstemcisiKur(ayar: LogoAyari, secenek: KopruSecenegi = {}):
     sonAlisFiyatlariOku: (kod) => oku<LogoAlisFiyati[] | null>(`/api/Material/${encodeURIComponent(kod)}/lastPurchases`, alisFiyatlariniAyikla, null),
     cariAra: (metin) => oku(`/api/Arp/search?q=${encodeURIComponent(metin)}`, cariListesiniAyikla),
     cariOku: (kod) => oku<LogoCari | null>(`/api/Arp/card/${encodeURIComponent(kod)}`, (g) => cariKaydiniAyikla(g), null),
+    siparisIcerigiOku: (no) => oku<LogoSiparisIcerigi | null>(`/api/PurchaseOrder/${encodeURIComponent(no)}/content`, siparisIcerigiAyikla, null),
     async malzemeFisiEkle(tur, govde) {
       return yorumla(await istek('POST', `/api/MaterialSlip/Add${MALZEME_FISI_UCU[tur]}`, govde));
     },

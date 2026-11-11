@@ -564,3 +564,80 @@ export async function malzemeKartiIzleri(db: Db, kartlar: readonly MalzemeKartiA
     [...malzemeKartiIzParametreleri(kartlar), MALZEME_KARTI_IZ_YOLU],
   );
 }
+
+/* ---------------- D7: Logo'da CORE MES dışında açılmış siparişin düzeltme işi ---------------- */
+
+export type DisDuzeltmeDurumu = 'bekliyor' | 'gonderildi' | 'reddedildi' | 'hata';
+
+export interface DisDuzeltmeKaydi {
+  id: number;
+  fisNo: string;
+  durum: DisDuzeltmeDurumu;
+  hata: string | null;
+  ozet: unknown;
+  kisiId: number;
+  olusturma: string;
+  sonucZamani: string | null;
+}
+
+export interface BekleyenDisDuzeltme {
+  id: number;
+  fisNo: string;
+  iz: string;
+  duzeltme: unknown;
+}
+
+// Aynı fişte bekleyen düzeltme varsa null (tekil kısmi dizin): çağıran "bekleyen düzeltme var" der.
+export async function disDuzeltmeEkle(db: Db, k: { fisNo: string; iz: string; duzeltme: unknown; kisiId: number }): Promise<number | null> {
+  const r = await db.tek<{ id: number }>(
+    `INSERT INTO logo_dis_siparis_duzeltme (fis_no, iz, duzeltme, kisi_id) VALUES ($1, $2, $3, $4)
+     ON CONFLICT (fis_no) WHERE durum = 'bekliyor' DO NOTHING RETURNING id`,
+    [k.fisNo, k.iz, JSON.stringify(k.duzeltme), k.kisiId],
+  );
+  return r?.id ?? null;
+}
+
+const DIS_DUZELTME_ALANLARI = () => `id, fis_no AS "fisNo", durum, hata, ozet, kisi_id AS "kisiId", ${zamanMetni('olusturma')} AS olusturma,
+  ${zamanMetni('sonuc_zamani')} AS "sonucZamani"`;
+
+// Gövde (fiyat) dönmez; liste yalnız özet ve sonuç taşır.
+export async function disDuzeltmeleri(db: Db, fisNo: string, sinir: number): Promise<DisDuzeltmeKaydi[]> {
+  return db.sorgu<DisDuzeltmeKaydi>(
+    `SELECT ${DIS_DUZELTME_ALANLARI()} FROM logo_dis_siparis_duzeltme WHERE fis_no = $1 ORDER BY id DESC LIMIT $2`, [fisNo, sinir],
+  );
+}
+
+export async function disDuzeltmeKaydi(db: Db, id: number): Promise<DisDuzeltmeKaydi | null> {
+  return db.tek<DisDuzeltmeKaydi>(`SELECT ${DIS_DUZELTME_ALANLARI()} FROM logo_dis_siparis_duzeltme WHERE id = $1`, [id]);
+}
+
+// Kuyruğun en eskisi; iş turda bir düzeltme gönderir (köprü tek oturum).
+export async function siradakiDisDuzeltme(db: Db): Promise<BekleyenDisDuzeltme | null> {
+  return db.tek<BekleyenDisDuzeltme>(
+    `SELECT id, fis_no AS "fisNo", iz, duzeltme FROM logo_dis_siparis_duzeltme
+      WHERE durum = 'bekliyor' ORDER BY id LIMIT 1`,
+  );
+}
+
+// Yalnız bekleyen kayıt sonuçlanır: aynı işin iki kez sonuçlanması ikinciyi yazmaz. Gövde kurulduysa (gönderildi ya da sonucu belirsiz) kayıt
+// numarası, gövde ve özet de yazılır.
+export async function disDuzeltmeSonucu(
+  db: Db, id: number, durum: Exclude<DisDuzeltmeDurumu, 'bekliyor'>, hata: string | null, zaman: Date,
+  gonderilen: { logoKayitNo: number; govde: Record<string, unknown>; ozet: unknown } | null,
+): Promise<void> {
+  await db.sorgu(
+    `UPDATE logo_dis_siparis_duzeltme SET durum = $2, hata = $3, sonuc_zamani = $4, logo_kayit_no = $5, govde = $6, ozet = $7
+      WHERE id = $1 AND durum = 'bekliyor'`,
+    [id, durum, hata === null ? null : hata.slice(0, 500), zaman, gonderilen?.logoKayitNo ?? null,
+      gonderilen === null ? null : JSON.stringify(gonderilen.govde), gonderilen === null ? null : JSON.stringify(gonderilen.ozet)],
+  );
+}
+
+// Logo kuyruğunun bildiği CORE MES siparişi: gönderilmiş sipariş belgesinin kaydı ya da fatura okumasının sipariş numarası.
+export async function coreSiparisiLogodaMi(db: Db, no: string, logoKayitNo: number): Promise<boolean> {
+  return (await db.tek(
+    `SELECT 1 WHERE EXISTS (SELECT 1 FROM logo_giden WHERE belge_turu = 'siparis' AND logo_kayit_no = $2)
+        OR EXISTS (SELECT 1 FROM logo_siparis_no WHERE siparis_no = $1)`,
+    [no, String(logoKayitNo)],
+  )) !== null;
+}
