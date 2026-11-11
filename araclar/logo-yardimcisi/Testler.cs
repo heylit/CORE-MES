@@ -494,6 +494,60 @@ namespace LogoYardimcisi
             Esit("2026-10-25", l2[0]["dueDate"], "düzenlenen termin");
         }
 
+        // D7 A2: Logo'da açılmış siparişin düzenlemesi yalnız sözleşmedeki alanları yazar; proje, ambar, ödeme ve masraf merkezi gibi
+        // gövdede olmayan alanlar Logo Objects'e hiç verilmez (Read+Modify+Post: verilmeyen alan Logo'daki değerini korur).
+        static void T_d7_dis_siparis_duzenlemesi_gondermedigi_alanlari_logoya_vermez()
+        {
+            var s = Logo();
+            var f = DisSiparis(s, "LG-DIS-A2");
+            f.DovizTuru = 0;
+            f.Kur = 0;
+            var satir = SiparisSatiri(Malzeme, 5);
+            satir["logicalRef"] = 7002;
+            satir["price"] = 280m;
+            satir.Remove("dueDate");
+            satir.Remove("description");
+            var g = Siparis("LG-DIS-A2", satir, SiparisSatiri("TMI-ERP-TEST-002", 1));
+            g["logicalRef"] = 7001;
+            g["date"] = "30.09.2026";
+            g.Remove("orderStatus");
+            var u = C(s, "POST", "/api/PurchaseOrder/UpdateRich", g);
+            Dogru(Basari(u), Json.Yaz(u.Govde));
+            var baslikCagrisi = s.Cagrilar.Last(x => x.StartsWith("Guncelle " + Nesne.SatinAlmaSiparisi));
+            foreach (var yasak in new[] { "PROJECT_CODE", "SOURCE_WH", "PAYMENT_CODE", "OHP_CODE", "DOC_NUMBER", "ORDER_STATUS", "CANCELLED" })
+                Icermez(baslikCagrisi, yasak);
+            var izinli = new HashSet<string> { "TYPE", "MASTER_CODE", "QUANTITY", "PRICE", "VAT_RATE", "UNIT_CODE", "UNIT_CONV1", "UNIT_CONV2" };
+            var degisen = s.SonGuncellenenSatirlar[7002];
+            foreach (var a in degisen) Dogru(izinli.Contains(a.Key), "var olan satıra beklenmeyen alan: " + a.Key);
+            // Birim ve çevrim katsayıları var olan satıra her düzenlemede yeniden yazılır (1/1). TMI'nin açtığı siparişte değer aynıdır;
+            // Logo'da başka çevrimle açılmış satırda değişir. D7 bu yüzden yazma değişikliği ister (ayrı kart); test bugünkü davranışı sabitler.
+            Esit("ADET", degisen.Deger("UNIT_CODE"), "birim yazılır");
+            Esit(1, Convert.ToInt32(degisen.Deger("UNIT_CONV1")), "çevrim 1 yazılır");
+            Dogru(!s.SonGuncellenenSatirlar.ContainsKey(7003), "kapalı satıra dokunulmaz");
+            var sonra = s.SatinAlmaSiparisiIcerigi("LG-DIS-A2");
+            Esit(new DateTime(2026, 10, 15), sonra.Satirlar[0].Termin, "gönderilmeyen termin korunur");
+            Esit("Deneme açıklama", sonra.Satirlar[0].Aciklama, "gönderilmeyen açıklama korunur");
+            Esit(280m, sonra.Satirlar[0].Fiyat, "fiyat yazılır");
+            Esit(5m, sonra.Satirlar[0].Miktar, "miktar yazılır");
+            Esit(3, sonra.Satirlar.Count, "yeni satır eklenir");
+            Dogru(s.SonYeniSatirlar[0].Var("SOURCE_WH"), "yeni satır ayarın ambarıyla açılır (bugünkü düzen)");
+        }
+
+        static void T_d7_dis_siparis_duzenlemesi_cari_ve_dovizi_degistiremez()
+        {
+            var s = Logo();
+            DisSiparis(s, "LG-DIS-A3");
+            var satir = SiparisSatiri(Malzeme, 3);
+            satir["logicalRef"] = 7002;
+            var g = Siparis("LG-DIS-A3", satir);
+            g["logicalRef"] = 7001;
+            Icerir(Hata(C(s, "POST", "/api/PurchaseOrder/UpdateRich", g)), "Döviz türü değişikliği");
+            g["currencyCode"] = 1;
+            g["rate"] = 30m;
+            g["arpCode"] = Alici;
+            Icerir(Hata(C(s, "POST", "/api/PurchaseOrder/UpdateRich", g)), "Cari değişikliği");
+        }
+
         static void T_siparis_duzenlemesi_durum_gelmezse_logodaki_durumu_korur()
         {
             var s = Logo();

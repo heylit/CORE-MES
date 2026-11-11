@@ -109,6 +109,9 @@ namespace LogoYardimcisi
         public string SonXml;
         public AlanListesi SonBaslik, SonSon;
         public List<AlanListesi> SonSatirlar;
+        // Son Guncelle çağrısının satır değişiklikleri (satır kaydı -> alanlar) ve yeni satırları.
+        public Dictionary<int, AlanListesi> SonGuncellenenSatirlar;
+        public List<AlanListesi> SonYeniSatirlar;
         public bool BaglantiYok, Kopsun, SatirlariDusur;
         int sonRef = 1000;
 
@@ -406,6 +409,8 @@ namespace LogoYardimcisi
         public LogoHatasi Guncelle(int nesne, int kayit, AlanListesi baslik, Dictionary<int, AlanListesi> satirlar, List<AlanListesi> yeniSatirlar)
         {
             Giris();
+            SonGuncellenenSatirlar = satirlar;
+            SonYeniSatirlar = yeniSatirlar;
             Cagrilar.Add("Guncelle " + nesne + " " + kayit + " " + string.Join(",", baslik.Select(a => a.Key + "=" + Convert.ToString(a.Value, CultureInfo.InvariantCulture)).ToArray()));
             var h = AlanDenetle(AlanBaslik[nesne], baslik);
             if (h != null) return h;
