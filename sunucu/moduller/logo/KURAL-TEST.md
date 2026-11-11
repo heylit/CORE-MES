@@ -42,6 +42,7 @@ Kırmızı: kod testlerle aynı turda yazıldı; kırmızı her kural için kodu
 | LGS-19 karşılama önce listeyi okur, varsa yazmaz; iptal önce karşılamayı kaldırır | `LGS-19` | görüldü: liste denetimi ve karşılama kaldırma atlanınca kırmızı |
 | LGS-20 malzeme ve hizmet kartı adı UpdateRich ile (açma kuyruğu boşken); Logo'da olmayan kart "hata" | `LGS-20` | görüldü değil |
 | LGS-21 niyet saati bir kez okunur; ilerleyen gerçek saatle talep ve sipariş bir sonraki turda beklemeden gider (KD-040) | `LGS-21` | görüldü değil |
+| LGS-24 düzenleme gövdesi sipariş durumunu (orderStatus) taşımaz; yardımcı durum gelmezse ORDER_STATUS yazmaz, Logo'daki durum korunur (kart 2961) | `siparis-kurallar.test.ts` `LGS-24`, `siparis.test.ts` `LGS-17`, yardımcı `T_siparis_duzenlemesi_durum_gelmezse_logodaki_durumu_korur` | görüldü: düzeltmeden önce yardımcı testi kırmızı |
 | LGT-1..3 satış teklifi gövdesi: not 2.6 adları, iskonto ayrı alan, döviz, kurallar | `satis-kurallar.test.ts` `LGT-1..3` | görüldü değil (ilk yazım) |
 | LGT-4..5 tekliften sipariş: satır bağı teklif satırı, teklifi Logo'da olmayan gönderilmez | `LGT-4`, `LGT-5`, `satis.test.ts` `LGT-10` | görüldü değil |
 | LGT-6 "satış gönderimi" kapalıyken istek yok | `LGT-6` | görüldü: anahtar denetimi kaldırılınca kırmızı |

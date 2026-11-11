@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import { satirRefleriniAyikla } from './kopru.ts';
 import {
-  FIS_NO_EN_COK, iskontoAciklamasi, iskontoluFiyat, logoBirimKodu, logoTarihi, satirEslemesi, SIPARIS_ALANLARI, SIPARIS_LOGO_DURUMU, siparisGovdesi,
+  FIS_NO_EN_COK, iskontoAciklamasi, iskontoluFiyat, logoBirimKodu, logoTarihi, satirEslemesi, SIPARIS_ALANLARI, SIPARIS_LOGO_DURUMU, siparisGovdesi, siparisGuncellemeGovdesi,
 } from './kurallar.ts';
 import type { GonderilecekSiparis, SiparisGovdeSecenegi } from './kurallar.ts';
 
@@ -112,5 +112,16 @@ describe('Logo satın alma siparişi gövdesi (kullanıcının köprü notu 2.3)
     assert.equal(logoTarihi('05.01.2026'), null);
     assert.equal(logoBirimKodu(' adet '), 'ADET');
     assert.equal(logoBirimKodu('litre'), 'LİTRE');
+  });
+  test('LGS-24: düzenleme gövdesinde durum (orderStatus) yok, açma gövdesinde var; Logo\'daki durum düzenlemeyle ezilmez (kart 2961)', () => {
+    const s = siparis();
+    const acma = siparisGovdesi(s, secenek);
+    assert.ok('govde' in acma);
+    assert.equal(acma.govde[SIPARIS_ALANLARI.durum], SIPARIS_LOGO_DURUMU);
+    const r = siparisGuncellemeGovdesi({ ...s, logoKayitNo: '90', satirlar: s.satirlar.map((x, i) => ({ ...x, logoSatirRef: i === 0 ? '91' : null })) }, secenek);
+    assert.ok('govde' in r);
+    assert.equal(SIPARIS_ALANLARI.durum in r.govde, false);
+    assert.equal(r.govde['logicalRef'], 90);
+    assert.equal((r.govde['lines'] as Record<string, unknown>[])[0]!['logicalRef'], 91);
   });
 });

@@ -419,6 +419,7 @@ export function satirEslemesi(tmi: readonly { satirId: number }[], logo: readonl
 
 // Düzenleme gövdesi AddRich gövdesiyle aynı + başlıkta ve satırda logicalRef (not 2.3: "gövde AddRich ile aynı + logicalRef; satırda
 // logicalRef = ORFLINE.LOGICALREF"). Kaydı olmayan satır yeni satırdır (köprü ekler); gövdede olmayan Logo satırını köprü kapatır.
+// Durum (orderStatus) gönderilmez: CORE'da siparişin Logo durumu karşılığı yok; Logo'da elle değiştirilen durum düzenlemeyle ezilmesin (kart 2961).
 export const KAYIT_ALANI = 'logicalRef';
 
 export interface GuncellenecekSiparisSatiri extends GonderilecekSiparisSatiri {
@@ -439,7 +440,8 @@ export function siparisGuncellemeGovdesi(
     if (!Number.isSafeInteger(ref) || ref <= 0) return { hata: `Satır ${i + 1}: Logo satır kayıt numarası geçersiz.` };
     satirlar[i]![KAYIT_ALANI] = ref;
   }
-  return { govde: { [KAYIT_ALANI]: kayit, ...r.govde } };
+  const { [SIPARIS_ALANLARI.durum]: _durum, ...durumsuz } = r.govde;
+  return { govde: { [KAYIT_ALANI]: kayit, ...durumsuz } };
 }
 
 // Düzenlemeden sonra Logo satırlarının TMI satırlarına eşlenmesi: kaydı bilinen satır kendi numarasını korur; Logo'daki yeni numaralar

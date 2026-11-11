@@ -713,13 +713,14 @@ namespace LogoYardimcisi
 
         // Read+Modify+Post (tuzak 2). Gövdede olmayan açık satır kapatılır (ORDER_CLOSED, tuzak 5); kayıtsız satır eklenir.
         // Ölçülen başlık alanları DATE ve ORDER_STATUS'tur; cari ve döviz türü değişikliği yazılmaz.
+        // orderStatus gelmezse ORDER_STATUS yazılmaz: Logo'da elle değiştirilen durum düzenlemeyle ezilmez (kart 2961).
         Cevap SiparisGuncelle(Dictionary<string, object> g)
         {
             var kayit = Json.Tam(g, "logicalRef", true).Value;
             var no = Kod(g, "number", FisNoEnCok);
             var tarih = Bicim.TarihDenetle(Json.Metin(g, "date", true), "date");
             var cari = Json.Metin(g, "arpCode", true);
-            var durum = Secenek(g, "orderStatus", new[] { 1, 4 });
+            int? durum = g.ContainsKey("orderStatus") ? Secenek(g, "orderStatus", new[] { 1, 4 }) : (int?)null;
             var d = DovizCoz(g);
             var satirlar = new List<SiparisSatiri>();
             foreach (var s in Satirlar(g, "lines")) satirlar.Add(SiparisSatiriCoz(s));
@@ -762,7 +763,9 @@ namespace LogoYardimcisi
                 degisen[m.Ref] = new AlanListesi().Ekle("ORDER_CLOSED", 1);
                 kapanan.Add(m.Ref);
             }
-            var h = yaz.Guncelle(Nesne.SatinAlmaSiparisi, kayit, new AlanListesi().Ekle("DATE", tarih).Ekle("ORDER_STATUS", durum), degisen, yeniler);
+            var baslik = new AlanListesi().Ekle("DATE", tarih);
+            if (durum != null) baslik.Ekle("ORDER_STATUS", durum.Value);
+            var h = yaz.Guncelle(Nesne.SatinAlmaSiparisi, kayit, baslik, degisen, yeniler);
             if (h != null) return Cevap.Ret(h);
 
             var sonra = oku.SiparisSatirlari(kayit);

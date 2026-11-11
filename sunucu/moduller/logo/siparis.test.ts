@@ -442,6 +442,7 @@ describe('Logo satın alma gönderimi (sipariş, talep, karşılama), sahte köp
     ]);
     const govde = kopru.istekler[once + 1]?.govde as { logicalRef: number; lines: { logicalRef?: number }[] };
     assert.equal(govde.logicalRef, logo.ref);
+    assert.equal('orderStatus' in govde, false, 'düzenleme Logo\'daki sipariş durumunu ezmez (kart 2961)');
     assert.deepEqual(govde.lines.map((l) => l.logicalRef), [702, yeni], 'önceki denemede eklenen satır kaydıyla gider');
     assert.deepEqual(kaynak.guncellemeler.get(sip.id)?.baglar, [{ satirId: 7011, logoSatirRef: '702' }, { satirId: 7013, logoSatirRef: String(yeni) }]);
   });
