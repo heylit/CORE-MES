@@ -6,7 +6,7 @@
 import type { Award, PurchaseRequest, RequestItem, SimScenario } from "./tipler.ts";
 import { OPEN } from "./constants.ts";
 import { S, V, saveRequest } from "./store.ts";
-import { evaluate, itemCost, miktarSayisi, optimalSplit, supName, payText, type EvalRow, type Evaluation } from "./calc.ts";
+import { basamakFiyati, evaluate, itemCost, miktarSayisi, optimalSplit, supName, payText, type EvalRow, type Evaluation } from "./calc.ts";
 import { BELIRSIZ_MIKTAR } from "../../../ortak/veri/miktar.ts";
 import { $, $$, addDays, clamp, clone, dayDiff, esc, fmtDate, money, nf0, numIn, parseNum, pct, sum, todayStr, uid, kokIcinde, type FormEl } from "./util.ts";
 import { empty, render } from "./views.ts";
@@ -141,7 +141,8 @@ function kpiOf(r: PurchaseRequest, ev: Evaluation, alloc: Alloc): SimKpi {
   for (const x of ev.elig) {
     const lines = (r.items ?? []).map((it) => ({ it, qty: alloc[it.id]?.[x.q.id] ?? 0 })).filter((l) => l.qty > 0);
     if (!lines.length) continue;
-    const goods = sum(lines.map((l) => l.qty * (itemCost(x, l.it) ?? 0)));
+    // Kademeli fiyat (2975): paylaştırılan miktarın basamağı (ve en az miktarı) geçerlidir, talebin tamamınınki değil.
+    const goods = sum(lines.map((l) => (basamakFiyati(x.q, l.it.id, l.qty)?.line ?? 0) * x.c.unitFactorTRY));
     const extras = (x.c.ship + x.c.other) * x.c.rate * x.c.factor; // sipariş başına tam masraf
     const lead = parseNum(x.q.leadDays);
     const late = r.needDate && lead !== null ? Math.max(0, dayDiff(r.needDate, addDays(today, lead))) || null : null;

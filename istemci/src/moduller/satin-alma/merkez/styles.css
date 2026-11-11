@@ -781,3 +781,5 @@
 .sa-kok .itbl tr.basamak td{ border-bottom-style:dashed; }
 .sa-kok .basamak-esik{ display:inline-flex; align-items:center; gap:var(--b-1); flex-wrap:wrap; justify-content:flex-end; }
 .sa-kok .basamak-esik.ilk{ display:flex; margin-top:var(--b-1); font-weight:400; }
+.sa-kok .fiyat-hucre .btn{ min-width:var(--dokunma-yogun); min-height:var(--dokunma-yogun); justify-content:center; }
+@media (max-width:640px){ .sa-kok .fiyat-hucre .btn{ min-width:var(--dokunma); min-height:var(--dokunma); } }

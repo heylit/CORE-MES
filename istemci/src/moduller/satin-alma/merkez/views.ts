@@ -23,12 +23,12 @@ import { getRole, onaylayabilir, viewApproval, viewApprovals, viewRequesterHome,
 // Ortak parçalarla çizilen ekranlar (iş kutusu, Talepler, talep ayrıntısı; 2412-2) merkezin durumunu her çizimde yeniden okur.
 let cizimSurumu = 0;
 const DINLEYICILER = new Set<() => void>();
-/** Kademeli fiyat (2975): basamaklı hücrede rozet; üzerine gelince ve ekran okuyucuda basamak listesi. */
+/** Kademeli fiyat (2975): basamaklı hücrede rozet; liste üzerine gelince görünür, ekran okuyucuya görünmez metinle okunur. */
 export function kademeRozeti(q: Pick<Quote, "prices" | "tiers" | "currency">, it: RequestItem): string {
   const t = (q.tiers?.[it.id] ?? []).filter(b => isNum(b.min) && isNum(b.price)).sort((a, b) => a.min - b.min);
   if (!t.length) return "";
   const liste = [`taban ${money(q.prices[it.id] ?? 0, q.currency)}`, ...t.map(b => `${numIn(b.min)}+ ${money(b.price, q.currency)}`)].join(", ");
-  return ` <span class="flag info" title="${esc(liste)}" aria-label="Kademeli fiyat: ${esc(liste)}">kademeli</span>`;
+  return ` <span class="flag info" title="${esc(liste)}" aria-hidden="true">kademeli</span><span class="sr-only">Kademeli fiyat: ${esc(liste)}</span>`;
 }
 
 export function merkezAbone(f: () => void): () => void { DINLEYICILER.add(f); return () => { DINLEYICILER.delete(f); }; }

@@ -212,6 +212,7 @@ function eksiAlanVar(alanlar: readonly (HTMLInputElement | null | undefined)[]):
 }
 const yuzdeAlaniMi = (i: HTMLInputElement): boolean => i.id === "q-disc" || i.id === "q-adv" || i.dataset.bf === "discountPct" || i.dataset.bf === "advancePct";
 const BASAMAK_SINIRI = 4;
+const KALDIR_SIMGESI = `<svg class="tc-simge tc-simge-k" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="${SIMGELER.trash}"/></svg>`;
 const BASAMAK_SIMGESI = `<svg class="tc-simge tc-simge-k" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="${SIMGELER.plus}"/></svg>`;
 /** Teklif formunun kalem satırları; kademeli fiyat (2975) basamakları kalemin altında "eşik ve üstü" satırı olarak durur. */
 function fiyatSatirlari(r: PurchaseRequest, q: Quote): string {
@@ -219,7 +220,7 @@ function fiyatSatirlari(r: PurchaseRequest, q: Quote): string {
     const tiers = q.tiers?.[it.id] ?? [];
     const ekle = tiers.length < BASAMAK_SINIRI ? `<button type="button" class="btn sm ghost" data-act="add-tier" data-k="${it.id}" aria-label="${esc(it.name)} için basamak ekle" title="Basamak ekle">${BASAMAK_SIMGESI}</button>` : "";
     const ana = `<tr><td class="lead"><b>${esc(it.name)}</b>${it.spec ? `<span class="sub">${esc(it.spec)}</span>` : ""}</td><td class="r num">${numIn(parseNum(it.qty))} ${esc(it.unit)}${tiers.length || isNum(q.minQty?.[it.id]) ? `<span class="basamak-esik ilk"><span class="muted small">1. basamak</span><input class="qty" type="text" inputmode="decimal" data-tmin0="${it.id}" value="${numIn(q.minQty?.[it.id] ?? null)}" placeholder="0" aria-label="${esc(it.name)} 1. basamak eşiği (en az miktar)"><span class="muted small">ve üstü</span></span>` : ""}</td><td class="r"><span class="fiyat-hucre"><input class="price" type="text" inputmode="decimal" data-price="${it.id}" value="${numIn(q.prices[it.id])}" aria-label="${esc(it.name)} birim fiyatı">${ekle}</span></td><td class="r num" data-line="${it.id}"></td><td class="small" data-vs="${it.id}"></td></tr>`;
-    const alt = tiers.map((t, i) => `<tr class="basamak"><td class="lead"><span class="sub">${i + 2}. basamak</span></td><td class="r"><span class="basamak-esik"><input class="qty" type="text" inputmode="decimal" data-tmin="${it.id}" data-ti="${i}" value="${numIn(t.min)}" aria-label="${esc(it.name)} ${i + 2}. basamak eşik miktarı"><span class="muted small">${esc(it.unit)} ve üstü</span></span></td><td class="r"><input class="price" type="text" inputmode="decimal" data-tprice="${it.id}" data-ti="${i}" value="${numIn(t.price)}" aria-label="${esc(it.name)} ${i + 2}. basamak birim fiyatı"></td><td></td><td><button type="button" class="btn sm ghost danger" data-act="rm-tier" data-k="${it.id}" data-ti="${i}" aria-label="${esc(it.name)} ${i + 2}. basamağı kaldır">Kaldır</button></td></tr>`).join("");
+    const alt = tiers.map((t, i) => `<tr class="basamak"><td class="lead"><span class="sub">${i + 2}. basamak</span></td><td class="r"><span class="basamak-esik"><input class="qty" type="text" inputmode="decimal" data-tmin="${it.id}" data-ti="${i}" value="${numIn(t.min)}" aria-label="${esc(it.name)} ${i + 2}. basamak eşik miktarı"><span class="muted small">${esc(it.unit)} ve üstü</span></span></td><td class="r"><span class="fiyat-hucre"><input class="price" type="text" inputmode="decimal" data-tprice="${it.id}" data-ti="${i}" value="${numIn(t.price)}" aria-label="${esc(it.name)} ${i + 2}. basamak birim fiyatı"><button type="button" class="btn sm ghost danger" data-act="rm-tier" data-k="${it.id}" data-ti="${i}" aria-label="${esc(it.name)} ${i + 2}. basamağı kaldır" title="Basamağı kaldır">${KALDIR_SIMGESI}</button></span></td><td></td><td></td></tr>`).join("");
     return ana + alt;
   }).join("");
 }
@@ -266,7 +267,7 @@ function updateQuoteLive(): void {
       const l = c.lines[it.id];
       cell.innerHTML = l ? esc(money(l.line, draftQ.currency))
         + (l.alinan !== undefined ? `<span class="sub">en az ${esc(numIn(l.alinan))} ${esc(it.unit)} alınır</span>` : "")
-        + (l.tier !== undefined ? `<span class="sub">${esc(numIn(l.tier))}+ basamağı, birim ${esc(money(l.unit, draftQ.currency))}</span>` : "")
+        + (l.tier !== undefined ? `<span class="sub">${esc(numIn(l.tier))} ${esc(it.unit)} ve üstü fiyatı, birim ${esc(money(l.unit, draftQ.currency))}</span>` : "")
         + (l.ust ? `<span class="sub"><span class="flag info">${esc(numIn(l.ust.min))} ${esc(it.unit)} alınırsa toplam ${esc(money(l.ust.line, draftQ.currency))}</span></span>` : "") : "–";
     }
     const vs = $(`[data-vs="${it.id}"]`);
