@@ -83,4 +83,31 @@ describe('sipariş satırına sertifika ve rapor', () => {
     expect(istekler.some((x) => x.yontem === 'POST' && x.yol === '/satin-alma-siparis-satirlari/41/belgeler/77/kaldir')).toBe(true);
     kapat();
   });
+
+  it('revizyon kodu metin olarak yazılır: koddaki HTML çizilmez', async () => {
+    const kod = '<img src=x onerror=alert(1)>';
+    const belgeler: SiparisBelgeleriCevabi = { belgeler: [{ id: 78, ad: 'Deneme sertifika', tur: 'sertifika', harf: 'B', revKodu: kod }] };
+    vi.stubGlobal('fetch', vi.fn(async (adres: string) => {
+      const yol = String(adres).replace('/api', '');
+      if (yol === '/dosyalar/eksikler') return json({ eksikler: [] });
+      if (yol === '/satin-alma-siparis-satirlari/41/belgeler') return json(belgeler);
+      return json(ACILIS);
+    }));
+    const kok = document.createElement('div');
+    document.body.append(kok);
+    const kapat = ekranliBagla(kok, { rol: 'buyer', sayfa: 'requests', yol: '/satin-alma/talepler', git: () => {} });
+    await vi.waitFor(() => expect(sekme(kok, 'ordered')).not.toBeNull());
+    sekme(kok, 'ordered')!.click();
+    await vi.waitFor(() => expect(talepSatiri(kok, TALEP.id)).not.toBeNull());
+    talepSatiri(kok, TALEP.id)!.click();
+    await vi.waitFor(() => expect(sekme(kok, 'order')).not.toBeNull());
+    sekme(kok, 'order')!.click();
+    await vi.waitFor(() => expect(kok.querySelector('[data-act="order-certs"]')).not.toBeNull());
+    kok.querySelector<HTMLElement>('[data-act="order-certs"]')!.click();
+    await vi.waitFor(() => expect(document.querySelector('[data-cert-line="41"] a')).not.toBeNull());
+    const a = document.querySelector('[data-cert-line="41"] a')!;
+    expect(a.textContent).toBe(`Deneme sertifika (Rev ${kod})`);
+    expect(document.querySelector('[data-cert-line="41"] img')).toBeNull();
+    kapat();
+  });
 });

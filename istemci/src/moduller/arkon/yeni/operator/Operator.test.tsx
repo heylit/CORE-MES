@@ -528,7 +528,7 @@ describe('A1 Üretim Terminali kart okutma: teslim al ve iş aç (2928 a)', () =
   const okut = (kod: string) => { for (const c of [...kod, 'Enter']) fireEvent.keyDown(document.body, { key: c }); };
   const STOKLU: Deneme = { ...ISTASYONLU, kullanici: { ...ISTASYONLU.kullanici, islemler: [...ISTASYONLU.kullanici.islemler, 'stok.istek'] } };
   const paket = (id: string, no: string, emirId: number, opNo: number, ek: Record<string, unknown> = {}) => ({ ...PAKET, id, no, tmi: { emirId, opNo }, ...ek });
-  const teslim = (malzemeId: number, id = 70, istasyonId = 4) => ({ id, no: `TS-0000${id}`, malzemeId, miktar: '5', surum: 1, hedef: { konumId: 1, kod: `IST-${istasyonId}`, ad: null, istasyonId } });
+  const teslim = (malzemeId: number, id = 70, istasyonId = 4, miktar = '5') => ({ id, no: `TS-0000${id}`, malzemeId, miktar, surum: 1, hedef: { konumId: 1, kod: `IST-${istasyonId}`, ad: null, istasyonId } });
   const kart = (id: number, emirId: number, etiket: string) => ({ id, qr: `RP:${id}`, etiket, uretimEmriId: emirId });
   const kur = (o: {
     paketler: Record<string, unknown>[]; coz: Record<string, unknown> | (() => Record<string, unknown>); girdiler?: { uretimEmriId: number; opNo: number; malzemeler: { malzemeId: number }[] }[];
@@ -560,7 +560,7 @@ describe('A1 Üretim Terminali kart okutma: teslim al ve iş aç (2928 a)', () =
     await waitFor(() => { expect(istekler.some((i) => i.yol === '/arkon/belgeler/pkgs')).toBe(true); }, { timeout: 10000 });
     await new Promise((r) => setTimeout(r, 1200));
   };
-  const coz = (k: Record<string, unknown>, malzemeId: number, gelenler = [teslim(malzemeId)]) => ({ tur: 'malzeme', malzeme: { id: 1, kod: null, ad: null, birim: 'adet' }, parti: null, yerler: [], refakat: k, gelenler, kartSatirlari: [] });
+  const coz = (k: Record<string, unknown>, malzemeId: number, gelenler = [teslim(malzemeId)], birim = 'adet') => ({ tur: 'malzeme', malzeme: { id: 1, kod: null, ad: null, birim }, parti: null, yerler: [], refakat: k, gelenler, kartSatirlari: [] });
 
   it('tek işte kart gelen teslimi alır ve işi o kartla açar, başlatmaz', async () => {
     const istekler = kur({ paketler: [paket('tmi-ie-80', 'UE-DENEME-8', 8, 20)], coz: coz(kart(4, 8, 'UE-DENEME-8-P4'), 500) });
@@ -641,6 +641,21 @@ describe('A1 Üretim Terminali kart okutma: teslim al ve iş aç (2928 a)', () =
     expect(await screen.findByText(/5 adet alındı · İş emri açıldı: UE-DENEME-8 · UE-DENEME-8-P4/, {}, { timeout: 10000 })).toBeTruthy();
     expect(istekler.filter((i) => i.yol === '/stok/teslimler/70/teslim-al')).toHaveLength(1);
     expect(istekler.filter((i) => i.yol === '/stok/teslimler/72/teslim-al')).toHaveLength(2);
+  }, 40000);
+
+  it('iki teslim birlikte alınınca iletide toplam miktar söylenir', async () => {
+    const istekler = kur({ paketler: [paket('tmi-ie-80', 'UE-DENEME-8', 8, 20)], coz: coz(kart(4, 8, 'UE-DENEME-8-P4'), 500, [teslim(500, 70, 4, '10'), teslim(500, 73, 4, '30')]) });
+    await hazir(istekler);
+    okut('RP:4');
+    expect(await screen.findByText(/40 adet alındı · İş emri açıldı: UE-DENEME-8 · UE-DENEME-8-P4/, {}, { timeout: 10000 })).toBeTruthy();
+    expect(istekler.filter((i) => /^\/stok\/teslimler\/(70|73)\/teslim-al$/.test(i.yol))).toHaveLength(2);
+  }, 40000);
+
+  it('ondalıklı teslimlerin toplamı artıksız yazılır (0,1 + 0,2 = 0,3)', async () => {
+    const istekler = kur({ paketler: [paket('tmi-ie-80', 'UE-DENEME-8', 8, 20)], coz: coz(kart(4, 8, 'UE-DENEME-8-P4'), 500, [teslim(500, 70, 4, '0.1'), teslim(500, 73, 4, '0.2')], 'kg') });
+    await hazir(istekler);
+    okut('RP:4');
+    expect(await screen.findByText(/0,3 kg alındı · İş emri açıldı: UE-DENEME-8 · UE-DENEME-8-P4/, {}, { timeout: 10000 })).toBeTruthy();
   }, 40000);
 
   it('kartın kendi emrinin işi montaj adayı sayılmaz; kendi işi kartla açılır', async () => {

@@ -135,6 +135,10 @@ describe('etiket-merkezi (gerçek PostgreSQL)', () => {
     const liste = (await al(okuyan, '/etiket-merkezi/yazicilar')).json() as YazicilarCevabi;
     assert.equal(liste.yazicilar.some((x) => x.id === y.id), true);
     assert.equal(liste.dogrudanBaski.acik, false);
+    assert.equal(liste.usbBaski, false);
+    assert.equal((await yaz(yonetici, '/ayarlar/etiket-merkezi.usb-baski/degistir', { deger: true })).statusCode, 200);
+    assert.equal(((await al(okuyan, '/etiket-merkezi/yazicilar')).json() as YazicilarCevabi).usbBaski, true);
+    assert.equal((await yaz(yonetici, '/ayarlar/etiket-merkezi.usb-baski/degistir', { deger: false })).statusCode, 200);
     const guncel = await yaz(yonetici, `/etiket-merkezi/yazicilar/${String(y.id)}/guncelle`, { ...DOSYA, sade: true, aktif: true, surum: 1 });
     assert.equal(guncel.statusCode, 200, guncel.body);
     assert.equal((guncel.json() as Yazici).surum, 2);

@@ -168,7 +168,7 @@ export type Yazici = z.infer<typeof yaziciSemasi>;
 export const dogrudanBaskiSemasi = z.object({ acik: z.boolean(), neden: z.string().nullable() });
 export type DogrudanBaski = z.infer<typeof dogrudanBaskiSemasi>;
 
-export const yazicilarCevabi = z.object({ yazicilar: z.array(yaziciSemasi), dogrudanBaski: dogrudanBaskiSemasi });
+export const yazicilarCevabi = z.object({ yazicilar: z.array(yaziciSemasi), dogrudanBaski: dogrudanBaskiSemasi, usbBaski: z.boolean() });
 export type YazicilarCevabi = z.infer<typeof yazicilarCevabi>;
 
 const yaziciAlanlari = z.object({

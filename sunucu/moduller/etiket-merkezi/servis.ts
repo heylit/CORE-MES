@@ -211,7 +211,7 @@ async function dogrudanBaski(db: Db): Promise<DogrudanBaski> {
 }
 
 export async function yazicilar(db: Db): Promise<YazicilarCevabi> {
-  return { yazicilar: await yazicilariOku(db), dogrudanBaski: await dogrudanBaski(db) };
+  return { yazicilar: await yazicilariOku(db), dogrudanBaski: await dogrudanBaski(db), usbBaski: await sistemAyariOku(db, 'etiket-merkezi.usb-baski') };
 }
 
 function yaziciYazimi(g: YaziciAcGovdesi): YaziciYazimi {

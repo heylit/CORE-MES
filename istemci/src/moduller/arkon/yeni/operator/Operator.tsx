@@ -553,7 +553,7 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
   // alinan: kartla alınan miktar birimiyle ("40 adet"); teslim alınmadıysa null.
   const kartKarari = (kart: Pick<RefakatKarti, 'id' | 'etiket'>, emirId: number, alinan: string | null, buradakiMalzemeler: readonly number[]) => {
     const girdiler = (kartOkutma.isGirdileri ?? []).flatMap((x) => {
-      const sira = x.uretimEmriId === emirId ? -1 : isSirasi(x.uretimEmriId, x.opNo);
+      const sira = isSirasi(x.uretimEmriId, x.opNo);
       return sira < 0 ? [] : [{ sira, malzemeIdler: x.malzemeIdler }];
     });
     const insanli = isler.some((x) => x.state !== 'done' && isTuru(x.pkg) === 'montaj');
