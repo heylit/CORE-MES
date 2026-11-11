@@ -36,22 +36,55 @@ const yollar = {
 const ekran = [{ yol: '/adim-durumu', ekran: AdimDurumu }];
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
-describe('Adım Durumu (2893)', () => {
-  it('adımlar rota sırasıyla, son durum ve elle işaretiyle; okuyucu yazma alanı görmez', async () => {
+describe('Adım Durumu (2893, düzen 2955)', () => {
+  it('açık emirler listede; seçilen emrin adımları rota sırasıyla, sayaç, neden ve yalnız sorunlu maddelerle', async () => {
     sunucuKur({ ...OKUYUCU, islemler: [...OKUYUCU.islemler, 'sayfa.adim-durumu'] }, yollar);
     ac(ekran, '/adim-durumu?emir=5');
-    const tablo = await screen.findByRole('table', { name: 'Adımlar ve hazırlık' });
-    const satirlar = within(tablo).getAllByRole('row').slice(1);
+    const liste = await screen.findByRole('list', { name: 'Açık emirler' });
+    expect(within(liste).getByRole('button', { current: true }).textContent).toContain('UE-0005');
+    const adimlar = await screen.findByRole('list', { name: 'Adımlar' });
+    const satirlar = within(adimlar).getAllByRole('listitem');
     expect(within(satirlar[0]!).getByText('Bitti')).toBeTruthy();
+    expect(within(satirlar[0]!).getByText('Hazırlık tamam')).toBeTruthy();
     expect(within(satirlar[1]!).getByText('Sipariş bekliyor')).toBeTruthy();
     expect(within(satirlar[1]!).getByText('Elle')).toBeTruthy();
+    expect(within(satirlar[1]!).getByText('CNC kurulumu (NC) eksik (+2)')).toBeTruthy();
+    expect(within(satirlar[1]!).getByText(/CNC · eksik/)).toBeTruthy();
+    expect(within(satirlar[1]!).getByText(/Malzeme · elle onay/)).toBeTruthy();
+    const ozet = screen.getByRole('list', { name: 'Adım özeti' });
+    expect(within(ozet).getByText('Bitti').closest('li')?.textContent).toContain('1');
+    expect(within(ozet).getByText('Bekliyor').closest('li')?.textContent).toContain('1');
+  });
+
+  it('adıma tıklayınca yan pencerede nedenler ve tedarik; okuyucu yazma alanı görmez', async () => {
+    sunucuKur({ ...OKUYUCU, islemler: [...OKUYUCU.islemler, 'sayfa.adim-durumu'] }, yollar);
+    ac(ekran, '/adim-durumu?emir=5');
+    fireEvent.click(await screen.findByRole('button', { name: /OP 20 CNC freze/ }));
+    const pencere = await screen.findByRole('dialog', { name: 'OP 20 · CNC freze' });
+    expect(within(pencere).getByText('CNC kurulumu (NC) eksik')).toBeTruthy();
+    expect(within(pencere).getByText('Program hazır değil')).toBeTruthy();
+    expect(within(pencere).getByText('Sipariş SP-2099-001 bekleniyor · termin 01.03.2099')).toBeTruthy();
+    expect(within(pencere).getByText('Sipariş SP-2099-002 bekleniyor · termin 02.01.2020 · gecikti')).toBeTruthy();
+    expect(within(pencere).queryByRole('button', { name: 'Yaz' })).toBeNull();
+    expect(within(pencere).queryByRole('button', { name: 'Onayı kaldır' })).toBeNull();
+  });
+
+  it('matris görünümünde her madde simge hücresi, adı ekran okuyucuda', async () => {
+    sunucuKur({ ...OKUYUCU, islemler: [...OKUYUCU.islemler, 'sayfa.adim-durumu'] }, yollar);
+    ac(ekran, '/adim-durumu?emir=5');
+    fireEvent.click(await screen.findByRole('button', { name: 'Matris' }));
+    const tablo = await screen.findByRole('table', { name: 'Hazırlık matrisi' });
+    const satirlar = within(tablo).getAllByRole('row').slice(1);
     expect(within(satirlar[1]!).getByText('Elle onay')).toBeTruthy();
-    fireEvent.click(within(satirlar[1]!).getByText('CNC freze'));
-    expect(await screen.findByText('CNC kurulumu (NC) eksik')).toBeTruthy();
-    expect(screen.getByText('Program hazır değil')).toBeTruthy();
-    expect(screen.getByText('Sipariş SP-2099-001 bekleniyor · termin 01.03.2099, Sipariş SP-2099-002 bekleniyor · termin 02.01.2020 · gecikti')).toBeTruthy();
-    expect(screen.queryByRole('button', { name: 'Yaz' })).toBeNull();
-    expect(screen.queryByRole('button', { name: 'Onayı kaldır' })).toBeNull();
+    expect(within(satirlar[1]!).getByText('Eksik')).toBeTruthy();
+  });
+
+  it('aramaya uymayan emir listeden düşer', async () => {
+    sunucuKur({ ...OKUYUCU, islemler: [...OKUYUCU.islemler, 'sayfa.adim-durumu'] }, yollar);
+    ac(ekran, '/adim-durumu');
+    await screen.findByRole('list', { name: 'Açık emirler' });
+    fireEvent.change(screen.getByLabelText('Ara'), { target: { value: 'yok-boyle' } });
+    expect(await screen.findByText('Aramaya uyan emir yok.')).toBeTruthy();
   });
 
   it('yetkili durduran maddeyi gerekçeyle onaylar; gerekçesiz düğme kapalı; istek gördüğü hâli taşır', async () => {
@@ -60,8 +93,7 @@ describe('Adım Durumu (2893)', () => {
       'POST /adimli-emirler/5/is-emirleri/52/hazirlik-onayla': () => json(200, CEVAP),
     });
     ac(ekran, '/adim-durumu?emir=5');
-    const tablo = await screen.findByRole('table', { name: 'Adımlar ve hazırlık' });
-    fireEvent.click(within(tablo).getByText('CNC freze'));
+    fireEvent.click(await screen.findByRole('button', { name: /OP 20 CNC freze/ }));
     fireEvent.change(await screen.findByLabelText('Madde'), { target: { value: 'cnc' } });
     const onayla = screen.getByRole('button', { name: 'Onayla' });
     expect((onayla as HTMLButtonElement).disabled).toBe(true);
@@ -69,5 +101,56 @@ describe('Adım Durumu (2893)', () => {
     fireEvent.click(onayla);
     await waitFor(() => expect(istekler.some((i) => i.yontem === 'POST')).toBe(true));
     expect(istekler.find((i) => i.yontem === 'POST')?.govde).toEqual({ madde: 'cnc', gerekce: 'Program elde denendi', sistemHali: 'eksik' });
+  });
+
+  it('yetkili statüyü notla elle yazar; statü seçilmeden Yaz kapalı; elle statüyü kaldır kendi ucuna gider', async () => {
+    const istekler = sunucuKur({ ...OKUYUCU, islemler: [...OKUYUCU.islemler, 'sayfa.adim-durumu', 'uretim-emirleri.adim-durumu-yaz'] }, {
+      ...yollar,
+      'POST /adimli-emirler/5/is-emirleri/52/statu-yaz': () => json(200, CEVAP),
+      'POST /adimli-emirler/5/is-emirleri/52/statu-kaldir': () => json(200, CEVAP),
+    });
+    ac(ekran, '/adim-durumu?emir=5');
+    fireEvent.click(await screen.findByRole('button', { name: /OP 20 CNC freze/ }));
+    const pencere = await screen.findByRole('dialog', { name: 'OP 20 · CNC freze' });
+    const yaz = within(pencere).getByRole('button', { name: 'Yaz' });
+    expect((yaz as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.change(within(pencere).getByLabelText('Statü'), { target: { value: 'malzeme' } });
+    fireEvent.change(within(pencere).getByLabelText('Not'), { target: { value: ' Depo teyit etti ' } });
+    fireEvent.click(yaz);
+    await waitFor(() => expect(istekler.some((i) => i.yontem === 'POST' && i.yol.endsWith('/statu-yaz'))).toBe(true));
+    expect(istekler.find((i) => i.yol.endsWith('/statu-yaz'))?.govde).toEqual({ statu: 'malzeme', not: 'Depo teyit etti', sistemStatusu: 'program' });
+    fireEvent.click(within(pencere).getByRole('button', { name: 'Elle statüyü kaldır' }));
+    await waitFor(() => expect(istekler.some((i) => i.yontem === 'POST' && i.yol.endsWith('/statu-kaldir'))).toBe(true));
+    expect(istekler.find((i) => i.yol.endsWith('/statu-kaldir'))?.govde).toEqual({});
+  });
+
+  it('yetkili elle onayı kaldırır; istek yalnız maddeyi taşır', async () => {
+    const istekler = sunucuKur({ ...OKUYUCU, islemler: [...OKUYUCU.islemler, 'sayfa.adim-durumu', 'uretim-emirleri.adim-durumu-yaz'] }, {
+      ...yollar,
+      'POST /adimli-emirler/5/is-emirleri/52/hazirlik-onay-kaldir': () => json(200, CEVAP),
+    });
+    ac(ekran, '/adim-durumu?emir=5');
+    fireEvent.click(await screen.findByRole('button', { name: /OP 20 CNC freze/ }));
+    const pencere = await screen.findByRole('dialog', { name: 'OP 20 · CNC freze' });
+    fireEvent.click(within(pencere).getByRole('button', { name: 'Onayı kaldır' }));
+    await waitFor(() => expect(istekler.some((i) => i.yontem === 'POST')).toBe(true));
+    const istek = istekler.find((i) => i.yontem === 'POST');
+    expect(istek?.yol.endsWith('/is-emirleri/52/hazirlik-onay-kaldir')).toBe(true);
+    expect(istek?.govde).toEqual({ madde: 'malzeme' });
+  });
+
+  it('kapalı emirde yetkili de yazma alanı görmez', async () => {
+    sunucuKur({ ...OKUYUCU, islemler: [...OKUYUCU.islemler, 'sayfa.adim-durumu', 'uretim-emirleri.adim-durumu-yaz'] }, {
+      ...yollar,
+      'GET /adimli-emirler/5/adim-durumu': () => json(200, { ...CEVAP, durum: 'bitti' }),
+    });
+    ac(ekran, '/adim-durumu?emir=5');
+    fireEvent.click(await screen.findByRole('button', { name: /OP 20 CNC freze/ }));
+    const pencere = await screen.findByRole('dialog', { name: 'OP 20 · CNC freze' });
+    expect(within(pencere).getByText('CNC kurulumu (NC) eksik')).toBeTruthy();
+    expect(within(pencere).queryByRole('button', { name: 'Yaz' })).toBeNull();
+    expect(within(pencere).queryByRole('button', { name: 'Onayla' })).toBeNull();
+    expect(within(pencere).queryByRole('button', { name: 'Elle statüyü kaldır' })).toBeNull();
+    expect(within(pencere).queryByRole('button', { name: 'Onayı kaldır' })).toBeNull();
   });
 });
