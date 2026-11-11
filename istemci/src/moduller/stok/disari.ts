@@ -58,9 +58,8 @@ export interface TerminalKartOkutmasi {
   // null: kod bir refakat kartı değil (eski kart, lot, bilinmeyen).
   kartiAl: (kod: string) => Promise<KartTeslimi | null>;
 }
-// Toplam binde birlikle tutulur: ondalıklı metinlerin kayan nokta toplamı 0,1 + 0,2 gibi artık bırakmasın.
-const binlik = (m: string): number => Math.round(Number(m) * 1000);
-const binlikMetin = (n: number): string => (n / 1000).toFixed(3);
+// Miktarlar üç ondalıklıdır; toplam üç ondalığa yuvarlanır ki 0,1 + 0,2 gibi kayan nokta artığı iletiye çıkmasın.
+const toplamMiktar = (ms: readonly string[]): string => ms.reduce((t, m) => t + Number(m), 0).toFixed(3);
 export function useTerminalKartOkutmasi(istasyonKodu: string | null): TerminalKartOkutmasi {
   const yetkili = (useOturum().data?.islemler ?? []).includes('stok.istek');
   const istemci = useQueryClient();
@@ -95,7 +94,7 @@ export function useTerminalKartOkutmasi(istasyonKodu: string | null): TerminalKa
     return {
       kart: { id: c.refakat.id, etiket: c.refakat.etiket, uretimEmriId: c.refakat.uretimEmriId },
       alinan: alinanlar.length, alinmayan: gelenler.length - alinanlar.length, hatalar,
-      alinanMiktar: alinanlar.length === 0 ? null : birimliMiktar(binlikMetin(alinanlar.reduce((t, x) => t + binlik(x.miktar), 0)), c.malzeme.birim),
+      alinanMiktar: alinanlar.length === 0 ? null : birimliMiktar(toplamMiktar(alinanlar.map((x) => x.miktar)), c.malzeme.birim),
       buradakiMalzemeler: [...new Set([...alinanlar.map((t) => t.malzemeId), ...burada])],
     };
   };
