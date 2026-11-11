@@ -12,7 +12,7 @@ const BEKLE = { timeout: 4000 };
 const ONERI_YOLU = '/rota/urunler/11/ham-onerisi';
 const kayitlar = (istekler: readonly Istek[]) => istekler.filter((i) => i.yontem === 'POST' && i.yol === '/rota/revizyonlar/72/kaydet');
 const ONERI: HamOnerisiCevabi = {
-  model: { belgeAdi: 'Model mil.step', harf: 'A' }, payMm: 2, neden: null,
+  model: { belgeAdi: 'Model mil.step', harf: 'A', revKodu: '07' }, payMm: 2, neden: null,
   oneriler: [{ malzemeNo: 12, kod: 'HM-0012', ad: null, kalite: 'C45', form: 'cubuk', olcu: { d: 30, l: 3000 }, aile: 'metal', kaliteKodu: 'C45', yogunluk: 7.85, kesimBoyuMm: 44, hamHacimMm3: 100_000 }],
 };
 
@@ -42,13 +42,23 @@ describe('1709 rota bileşeninde hammadde önerisi', () => {
     const panel = await adimPaneli();
     const grup = await within(panel).findByRole('group', { name: 'Önerilen hammadde' });
     expect(within(grup).getByText('0,785 kg')).toBeTruthy();
-    expect(within(grup).getByText(/Model mil.step \(A\)/)).toBeTruthy();
+    // 2138-2: merkezin harfi değil revizyon kodu.
+    expect(within(grup).getByText(/Model mil.step \(Rev 07\)/)).toBeTruthy();
     fireEvent.click(within(grup).getByRole('button', { name: 'HM-0012 önerisini giren olarak ekle' }));
     await within(panel).findByText('Girenler (1)');
     // Ham girdi eklenince öneri kalkar (sunucu taklidi kayıttan sonra eski durumu döndürdüğü için kayıttan önce bakılır).
     expect(within(panel).queryByRole('group', { name: 'Önerilen hammadde' })).toBeNull();
     await waitFor(() => { expect(kayitlar(istekler)).toHaveLength(1); }, BEKLE);
     expect(kayitlar(istekler)[0]?.govde).toMatchObject({ adimlar: [{ bilesenler: [{ malzemeId: 12, miktar: 0.785 }] }] });
+  });
+
+  it('2138-2: kodsuz modelde yalnız model adı yazılır, merkezin harfi görünmez', async () => {
+    kur([], YONETICI, { ...ONERI, model: { ...ONERI.model!, revKodu: null } });
+    rrAc('/recete-rota/schema');
+    const panel = await adimPaneli();
+    const grup = await within(panel).findByRole('group', { name: 'Önerilen hammadde' });
+    const ipucu = within(grup).getByText(/Önerilen hammadde: Model mil.step/);
+    expect(ipucu.textContent).toBe('Önerilen hammadde: Model mil.step 3B analizinden, en az talaş önce.');
   });
 
   it('rotada ham girdi varken öneri istenmez ve görünmez', async () => {

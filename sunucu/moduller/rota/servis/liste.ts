@@ -130,7 +130,7 @@ export async function hamOnerisi(db: Db, urunId: number): Promise<HamOnerisiCeva
   const g = await malzemeGeometrisi(db, urunId);
   if (g === null) return { model: null, payMm: null, oneriler: [], neden: 'model-yok' };
   return {
-    model: { belgeAdi: g.belgeAdi, harf: g.harf },
+    model: { belgeAdi: g.belgeAdi, harf: g.harf, revKodu: g.revKodu },
     payMm: g.ham.payMm,
     oneriler: g.ham.oneriler.slice(0, HAM_ONERI_SAYISI),
     neden: g.ham.neden,
