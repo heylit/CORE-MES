@@ -48,7 +48,7 @@ export function Ufuk({ calisma, komut, yetki, git }: PlanlamaEkranOzellikleri) {
         {gor === 'yuk' ? <YukGorunumu v={v} elle={yillikAyarOku(calisma.D).tahmin === 'elle'} ongoru={ongoru} sec={sec} secYaz={secYaz} /> : <MalzemeGorunumu v={v} z={z} calisma={calisma} fg={fg} ongoru={ongoru} />}
         <p className="tc-pyu-not">{notlar}</p>
       </Kart>
-      {gor === 'yuk' && sec && <HaftaSecimi v={v} calisma={calisma} sec={sec} kapat={() => { secYaz(null); }} ongoru={ongoru} />}
+      {gor === 'yuk' && sec && <HaftaSecimi v={v} calisma={calisma} sec={sec} kapat={() => { secYaz(null); }} ongoru={ongoru} git={git} />}
       <Kart baslik="Varsayımlar" sag={<Dugme simge="chart" onClick={() => { git('yillik'); }}>Yıllık plan</Dugme>}>
         <div className="tc-pyu-alanlar">
           <label className="tc-pyu-alan">
@@ -161,7 +161,7 @@ function YukGorunumu({ v, elle, ongoru, sec, secYaz }: { v: UfukVerisi; elle: bo
 
 interface IsSatiri { kat: UfukKatmani; j: string; h: number; adim: Set<string> }
 
-function HaftaSecimi({ v, calisma, sec, kapat, ongoru }: { v: UfukVerisi; calisma: PlanlamaCalismasi; sec: { g: string; w: number }; kapat: () => void; ongoru: boolean }) {
+function HaftaSecimi({ v, calisma, sec, kapat, ongoru, git }: { v: UfukVerisi; calisma: PlanlamaCalismasi; sec: { g: string; w: number }; kapat: () => void; ongoru: boolean; git: PlanlamaEkranOzellikleri['git'] }) {
   const r = v.sat.find((x) => x.g === sec.g);
   const c = r?.w[sec.w]; const w = v.H[sec.w];
   if (!r || !c || !w) return null;
@@ -192,6 +192,11 @@ function HaftaSecimi({ v, calisma, sec, kapat, ongoru }: { v: UfukVerisi; calism
       {satirlar.length ? <Tablo etiket="Haftanın işleri" sutunlar={sutun} satirlar={satirlar} satirAnahtari={(x) => `${x.kat}|${x.j}`} />
         : <p className="tc-pyu-not">Bu hafta bu grupta iş yok.</p>}
       {gec.length > 0 && <Not ton="uyari">Termine yetişmeyen plan dışı sipariş: {gec.map((x) => `${x.s.id} (${sayi(x.gec / 24, 1)} gün)`).join(', ')}.</Not>}
+      {c.kap > 0 && c.top > c.kap && <p className="tc-pyu-not">Kapasite {sayi(c.top - c.kap, 0)} sa aşılıyor. Seçenekler: ek vardiya ya da uygun işi fasona vermek.</p>}
+      <div className="tc-pyu-sira">
+        <Dugme simge="clock" onClick={() => { git('mesaiplan'); }}>Ek mesai planında aç</Dugme>
+        <Dugme simge="truck" onClick={() => { git('fasonplan'); }}>Fason planında aç</Dugme>
+      </div>
     </Kart>
   );
 }
