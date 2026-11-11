@@ -20,13 +20,9 @@ const BORC: Readonly<Record<string, number>> = {
   '/plan/denge': 3,
   '/plan/maliyet': 2,
   '/plan/giderler': 2,
-  '/plan/mesaiplan': 2,
-  '/plan/fasonplan': 2,
   '/plan/malzplan': 2,
-  // Planlama çalışması varken motor şeridindeki "Planı kur" üçüncü birincildir ("Yıllık planı çöz" iki kez + "Planı kur").
-  // Planlama yeni düzeni (kart 3038) şeritte tek birincil bırakınca bu borç kapanır.
-  '/plan/yillik': 3,
-  '/plan/ufuk': 2,
+  // Ek mesai, Fason, Yıllık plan ve Ufuk tek Kapasite sayfasıdır (3038); açılış bölümü Yük haritası, bugünkü Ufuk borcuyla aynı.
+  '/plan/kapasite': 2,
   '/plan/sevkiyat': 2,
   '/recete-rota/plan': 3,
   '/ik': 3,
