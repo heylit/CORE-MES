@@ -2,6 +2,8 @@ import type { Db } from '#cekirdek/db.ts';
 import { VARSAYILAN_ONAY_LIMITLERI } from './kurallar.ts';
 import * as servis from './servis.ts';
 import * as sorgu from './sorgular.ts';
+import { tedarikAsamasi } from './kurallar.ts';
+import type { TedarikAsamasi } from './kurallar.ts';
 // 1237: Ctrl K genel aramasının talep ve sipariş kaynakları; çekirdek ad kuralıyla bulur (1233).
 export { kayitAramaKaynaklari } from './arama/kaynaklar.ts';
 // Stok modülünün mal kabul belgesi teslim bekleyen sipariş satırlarını buradan okur (fiyatsız; SAT-37).
@@ -115,3 +117,19 @@ export const planlananGidisCozucusu = (cozucu: servis.PlanlananGidisCozucusu): v
 // Takvim (891): beklenen teslim günündeki siparişler. Yetki denetlemez; çağıran satin-alma.oku'yu denetler.
 export { takvimKayitlari } from './servis.ts';
 export { malzemeKartiIzleri } from './sorgular.ts';
+
+// 2893 D2: Adım Durumu'nun okuduğu açık tedarik: emre ya da fason iş emrine bağlı, beklenen (talep ya da sipariş aşamasındaki) kalemler.
+// Yalnız numara, aşama ve beklenen teslim döner; fiyat ve tedarikçi dönmez (operatör terminali de okur, 2893-3 b).
+export interface EmirTedariki {
+  uretimEmriId: number | null; isEmriId: number | null; malzemeNo: number | null; asama: TedarikAsamasi; talepNo: string; siparisNo: string | null; termin: string | null;
+}
+export async function emirTedarikDurumlari(db: Db, uretimEmriIdleri: readonly number[], isEmriIdleri: readonly number[]): Promise<EmirTedariki[]> {
+  if (uretimEmriIdleri.length === 0 && isEmriIdleri.length === 0) return [];
+  return (await sorgu.emirTedarikDurumlariOku(db, uretimEmriIdleri, isEmriIdleri)).flatMap((s) => {
+    const asama = tedarikAsamasi(s);
+    return asama === null ? [] : [{
+      uretimEmriId: s.uretimEmriId, isEmriId: s.isEmriId, malzemeNo: s.malzemeNo, asama, talepNo: s.talepNo, siparisNo: asama === 'siparis' ? s.siparisNo : null,
+      termin: asama === 'siparis' ? s.beklenenTeslim : null,
+    }];
+  });
+}

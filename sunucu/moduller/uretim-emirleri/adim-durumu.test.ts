@@ -14,7 +14,8 @@ import { denetimYaz } from '../denetim/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { kullaniciYukle, rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
-import { elleOnayliMaddeler, emirBaslat, uretimEmriAc } from './disari.ts';
+import { adimTedarikCozucusu, elleOnayliMaddeler, emirBaslat, uretimEmriAc } from './disari.ts';
+import type { EmirTedarikSatiri } from './disari.ts';
 import type { IsEmriGirdisi } from './disari.ts';
 import { hazirlikCozucusuKaydet } from './hazirlik.ts';
 import type { HazirlikCozucusu } from './hazirlik.ts';
@@ -256,6 +257,44 @@ describe('uretim-emirleri adım durumu (2893, gerçek PostgreSQL)', () => {
       assert.deepEqual([onayKapali.durum, onayKapali.govde.mesaj], [409, ADIM_KAPALI_EMIR]);
     } finally {
       hazirlikCozucusuKaydet('malzeme', onceki);
+    }
+  });
+
+  test('D2: girdisine açık talep olan adım "talep", fason talebi bekleyen adım "talep"; terminal no ve termini okur, fiyat yok', async () => {
+    const { id, ie } = await ac();
+    const [ie1 = 0, ie2 = 0] = ie;
+    await o().sahip.sorgu('INSERT INTO uretim_emirleri_is_emri_bileseni (is_emri_id, malzeme_no, miktar) VALUES ($1, $2, 2)', [ie1, urunNo]);
+    const cagri: [number[], number[]][] = [];
+    const satirlar: EmirTedarikSatiri[] = [
+      { uretimEmriId: id, isEmriId: null, malzemeNo: urunNo, asama: 'talep', talepNo: 'ST-2099-001', siparisNo: null, termin: null },
+      { uretimEmriId: id, isEmriId: null, malzemeNo: urunNo, asama: 'siparis', talepNo: 'ST-2099-002', siparisNo: 'SP-2099-001', termin: '2099-03-01' },
+      { uretimEmriId: id, isEmriId: null, malzemeNo: urunNo + 999_999, asama: 'talep', talepNo: 'ST-2099-003', siparisNo: null, termin: null },
+      { uretimEmriId: null, isEmriId: ie2, malzemeNo: null, asama: 'talep', talepNo: 'ST-2099-004', siparisNo: null, termin: null },
+    ];
+    const oncekiTedarik = adimTedarikCozucusu(async (_db, emirler, isEmirleri) => { cagri.push([[...emirler], [...isEmirleri]]); return satirlar; });
+    const oncekiMalzeme = hazirlikCozucusuKaydet('malzeme', async (_db, idler) => new Map(idler.filter((x) => x === ie1).map((x) => [x, { durum: 'yok' as const, secildi: true }])));
+    try {
+      const d = await oku(id);
+      assert.deepEqual(cagri.at(-1), [[id], [ie1, ie2]]);
+      assert.deepEqual(d.adimlar.map((a) => [a.opNo, a.sistemStatusu]), [[10, 'talep'], [20, 'talep']]);
+      assert.deepEqual(d.adimlar[0]?.tedarik.map((x) => x.talepNo), ['ST-2099-001', 'ST-2099-002'], 'başka malzemenin talebi adıma eşlenmez');
+      assert.deepEqual(d.adimlar[0]?.nedenler, ['Malzeme eksik', 'Talep ST-2099-001 siparişe dönmedi', 'Sipariş SP-2099-001 bekleniyor (termin 2099-03-01)']);
+      assert.deepEqual(d.adimlar[1]?.tedarik, [{ asama: 'talep', fason: true, talepNo: 'ST-2099-004', siparisNo: null, termin: null }]);
+      const t = await istek<AdimDurumuTerminalCevabi>('operator', 'GET', `/adimli-emirler/${id}/adim-durumu/terminal`);
+      assert.equal(t.durum, 200, JSON.stringify(t.govde));
+      const terminal = adimDurumuTerminalCevabi.parse(t.govde);
+      assert.deepEqual(terminal.adimlar[0]?.tedarik.map((x) => [x.talepNo, x.siparisNo, x.termin]), [['ST-2099-001', null, null], ['ST-2099-002', 'SP-2099-001', '2099-03-01']]);
+      assert.equal(/fiyat|tutar|tedarikci/i.test(JSON.stringify(t.govde)), false, 'terminalde fiyat ve tedarikçi yok');
+
+      satirlar.splice(0, 1);
+      assert.equal((await oku(id)).adimlar[0]?.sistemStatusu, 'siparis', 'yalnız sipariş bekleniyor');
+      satirlar.splice(0, 1);
+      assert.equal((await oku(id)).adimlar[0]?.sistemStatusu, 'malzeme', 'açık tedarik yok');
+      adimTedarikCozucusu(null);
+      assert.deepEqual((await oku(id)).adimlar.map((a) => [a.sistemStatusu, a.tedarik]), [['malzeme', []], ['onceki', []]], 'satın alma bağlı değilse tedarik boş');
+    } finally {
+      adimTedarikCozucusu(oncekiTedarik);
+      hazirlikCozucusuKaydet('malzeme', oncekiMalzeme);
     }
   });
 

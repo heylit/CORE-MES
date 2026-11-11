@@ -1635,3 +1635,13 @@ export function eslemeListesiHatasi(liste: readonly { siparisSatiriId: number; t
   const toplam = liste.reduce((t, x) => t + Math.round(Number(x.tutar) * 100), 0);
   return toplam > Math.round(Number(belgeTutari) * 100) ? ILETILER.eslemeAsim : null;
 }
+
+// 2893 D2: talep kaleminin tedarik aşaması. Siparişi yoksa talep aşamasındadır (taslaktan onaya kadar); sipariş satırı açıksa ve net
+// teslim sipariş miktarına ulaşmadıysa sipariş bekleniyordur. Teslim alınan, tamamı gelen ya da kapatılan sipariş beklenmez (null).
+export type TedarikAsamasi = 'talep' | 'siparis';
+export function tedarikAsamasi(s: { talepDurumu: string; miktar: string | null; teslim: string; kapali: boolean }): TedarikAsamasi | null {
+  if (s.talepDurumu === 'teslim_alindi' || s.talepDurumu === 'iptal') return null;
+  if (s.miktar === null) return s.talepDurumu === 'siparis_verildi' ? null : 'talep';
+  if (s.kapali || Number(s.teslim) >= Number(s.miktar)) return null;
+  return 'siparis';
+}

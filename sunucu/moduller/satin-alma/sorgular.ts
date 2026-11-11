@@ -1733,3 +1733,29 @@ export async function kalemsizTalebiIptalEt(db: Db, id: string, neden: string): 
     [id, neden],
   );
 }
+
+// 2893 D2: Adım Durumu için emre (KALEM_EMRI) ya da fason iş emrine (sipariş satırının ya da kalemin iş emri) bağlı talep kalemleri;
+// sipariş satırı varsa sipariş no, beklenen teslim ve net teslim. Fiyat ve tedarikçi okunmaz. İptal talep ve birleşmiş kaynak gelmez
+// (kalemi birleşik taleptedir).
+export interface EmirTedarikSatiri {
+  uretimEmriId: number | null; isEmriId: number | null; malzemeNo: number | null; talepNo: string; talepDurumu: string;
+  siparisNo: string | null; beklenenTeslim: string | null; miktar: string | null; teslim: string; kapali: boolean;
+}
+export function emirTedarikDurumlariOku(db: Db, uretimEmriIdleri: readonly number[], isEmriIdleri: readonly number[]): Promise<EmirTedarikSatiri[]> {
+  return db.sorgu<EmirTedarikSatiri>(
+    `SELECT ${KALEM_EMRI} AS "uretimEmriId", coalesce(s.is_emri_id, k.is_emri_id) AS "isEmriId", c.malzeme_no AS "malzemeNo",
+            t.no AS "talepNo", t.durum AS "talepDurumu", coalesce(p.no, nullif(p.siparis_no, '')) AS "siparisNo", p.beklenen_teslim::text AS "beklenenTeslim",
+            s.miktar::text AS miktar, coalesce(m.toplam, 0)::text AS teslim, (p.logo_kapatma_durumu IS NOT NULL) AS kapali
+       FROM satin_alma_talep_kalemi k
+       JOIN satin_alma_talep t ON t.id = k.talep_id
+       LEFT JOIN satin_alma_talep kt ON kt.id = k.kaynak_talep_id
+       LEFT JOIN satin_alma_katalog c ON c.id = k.katalog_id
+       LEFT JOIN satin_alma_siparis_satiri s ON s.talep_id = k.talep_id AND s.kalem_id = k.id
+       LEFT JOIN satin_alma_siparis p ON p.talep_id = s.talep_id AND p.teklif_id = s.teklif_id
+       LEFT JOIN LATERAL (SELECT sum(x.miktar) AS toplam FROM satin_alma_teslim x WHERE x.siparis_satiri_id = s.id) m ON true
+      WHERE t.durum <> 'iptal' AND t.birlesen_talep_id IS NULL
+        AND (${KALEM_EMRI} = ANY($1::int[]) OR coalesce(s.is_emri_id, k.is_emri_id) = ANY($2::int[]))
+      ORDER BY t.yil, t.sira, k.sira`,
+    [uretimEmriIdleri, isEmriIdleri],
+  );
+}

@@ -17,7 +17,7 @@ import * as logo from './moduller/logo/disari.ts';
 import * as projeler from './moduller/projeler/disari.ts';
 import { acilSiparisOnaylandi, bakimCozucusu as planBakimCozucusu, bayatAdimBittiYansit, bayatEmirBittiYansit, bayatEmirIptalYansit, bayatFasonHareketiYansit, bayatIsEmirleriDegistiYansit, canliMakineAyrimlari, canliPaylar, canliPlan, malzemeKartiIzleri as planKartIzleri, malzemeMaliyetiCozucusu, planMotoruCozucusu, sunucuPlanCozucusu, tahminiMaliyetCozucusu, teklifDene } from './moduller/plan/disari.ts';
 import { isEmriTahminiMaliyetleri, projedeSayilanBelgeler, uretimEmriMalzemeMaliyetleri } from './moduller/proje-maliyet/disari.ts';
-import { alimDinle, belgeGenelGiderOranlari, kaliteDurumuCozucusu, malzemeKartiIzleri as satinAlmaKartIzleri, parcaRevizyonuCozucusu as siparisParcaRevizyonuCozucusu, fasonKonumuCozucusu, planlananGidisCozucusu, stokMiktariCozucusu, stokYokCozucusu, tuketimSerisiCozucusu } from './moduller/satin-alma/disari.ts';
+import { alimDinle, belgeGenelGiderOranlari, emirTedarikDurumlari, kaliteDurumuCozucusu, malzemeKartiIzleri as satinAlmaKartIzleri, parcaRevizyonuCozucusu as siparisParcaRevizyonuCozucusu, fasonKonumuCozucusu, planlananGidisCozucusu, stokMiktariCozucusu, stokYokCozucusu, tuketimSerisiCozucusu } from './moduller/satin-alma/disari.ts';
 import * as receteRota from './moduller/recete-rota/disari.ts';
 import {
   logoBirimSetiCozucusu, logoEslemeYaziciCozucusu, logoKartAynasiCozucusu, logoKodCozucusu, logoTmiKodCozucusu, rotaRevizyonlariCozucusu, kartIzleriCozucusu,
@@ -187,6 +187,7 @@ export function sunucununBaglari(): Bag[] {
     bag('ek hazırlık maddesi -> hazırlık matrisi', uretimEmirleri.ekMaddeHazirlikCozucusu, arkon.isEmriEkMaddeDurumlari),
     bag('rota revizyonu -> hazırlık uyarısı', uretimEmirleri.rotaHazirlikCozucusu, emirRotaHazirliklari),
     bag('aparat (rota adımı, stok) -> hazırlık uyarısı', uretimEmirleri.aparatHazirlikCozucusu, (db: Db, idler: readonly number[]) => isEmriAparatHazirliklari(db, idler, stok.malzemeStokDurumlari)),
+    bag('açık tedarik (satın alma) -> adım durumu', uretimEmirleri.adimTedarikCozucusu, emirTedarikDurumlari),
     bag('ölçü aleti (rota adımı, kalibrasyon) -> hazırlık uyarısı', uretimEmirleri.olcuAletiHazirlikCozucusu, isEmriOlcuAletiHazirliklari),
     bag('girdi stoğu -> hazırlık uyarısı', uretimEmirleri.malzemeHazirlikCozucusu, stok.isEmriMalzemeHazirliklari),
     bag('takım ömrü -> hazırlık uyarısı', uretimEmirleri.takimHazirlikCozucusu, cncKurulum.isEmriTakimHazirliklari),

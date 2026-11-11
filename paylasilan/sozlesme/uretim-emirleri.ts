@@ -1055,6 +1055,11 @@ export const hazirlikOnayiGovdesi = z.object({
   sistemHali: hazirlikHaliSemasi,
 }).strict();
 export const hazirlikOnayiKaldirGovdesi = z.object({ madde: hazirlikMaddesi }).strict();
+// 2893 D2: adımı bekleten açık tedarik satırı (hammadde talebi ya da siparişi, fason talebi). Yalnız numara, aşama ve beklenen teslim;
+// fiyat ve tedarikçi yok (operatör terminali de okur, 2893-3 b). Sipariş no ve termin yalnız sipariş aşamasında dolu.
+export const adimTedarikSemasi = z.object({
+  asama: z.enum(['talep', 'siparis']), fason: z.boolean(), talepNo: z.string(), siparisNo: z.string().nullable(), termin: tarihSemasi.nullable(),
+});
 export const adimDurumuCevabi = z.object({
   emirId: KIMLIK,
   emirNo: z.string(),
@@ -1082,6 +1087,7 @@ export const adimDurumuCevabi = z.object({
     nedenler: z.array(z.string()),
     // Adımın madde hâlleri (emir düzeyindeki madde emrin bilgisi, onay adımın); ham onaysız hâldir: elle onayın neyi açtığını gösterir.
     maddeler: z.array(z.object({ madde: hazirlikMaddesi, hal: hazirlikHaliSemasi, ham: hazirlikHaliSemasi })),
+    tedarik: z.array(adimTedarikSemasi),
     elle: z.object({ statu: adimStatusu, not: z.string().nullable(), kisiAdi: z.string().nullable(), zaman: zamanSemasi }).nullable(),
     onaylar: z.array(z.object({
       madde: hazirlikMaddesi, gerekce: z.string().nullable(), sistemHali: hazirlikHaliSemasi, kisiAdi: z.string().nullable(), zaman: zamanSemasi,
@@ -1097,8 +1103,10 @@ export const adimDurumuTerminalCevabi = z.object({
   adimlar: z.array(z.object({
     isEmriId: KIMLIK, opNo: z.number().int(), ad: z.string(), statu: adimStatusu, elle: z.boolean(), yuzde: yuzdeSemasi,
     nedenler: z.array(z.string()),
+    tedarik: z.array(adimTedarikSemasi),
   })),
 });
+export type AdimTedariki = z.output<typeof adimTedarikSemasi>;
 export type AdimStatusu = z.output<typeof adimStatusu>;
 export type ElleYazilanStatu = (typeof ELLE_YAZILAN_STATULER)[number];
 export type ElleStatuGovdesi = z.output<typeof elleStatuGovdesi>;

@@ -1,7 +1,7 @@
 import { KOD_ONEKI } from '#paylasilan/kod-sozlugu.ts';
 import { HAZIRLIK_MADDELERI, MUAF_TUTULABILEN_MADDELER, hazirlikUyarirMi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import type {
-  AdimStatusu, CalismaDurumu, EmirDurumu, EmirIlerlemesi, EmirTuru, HataliKarari, HazirlikMaddesi, IlerlemeEsasi, KapanisAsamasi, KapanisMaddeBilgisi, KapanisMaddeHali, KapanisMaddesi, KapanisOnayi,
+  AdimStatusu, AdimTedariki, CalismaDurumu, EmirDurumu, EmirIlerlemesi, EmirTuru, HataliKarari, HazirlikMaddesi, IlerlemeEsasi, KapanisAsamasi, KapanisMaddeBilgisi, KapanisMaddeHali, KapanisMaddesi, KapanisOnayi,
 } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import type { Islem } from '#paylasilan/islemler.ts';
 import type { TalimatAsamasi } from '#paylasilan/sozlesme/talimat-asamasi.ts';
@@ -1695,15 +1695,20 @@ export function sayimMakinesi(
 
 // Adım Durumu (2893). Sistem statüsü öncelik sırasıyla seçilir: bitmiş, çalışan (duruş ve duraklama dahil) ve fasondaki adım kendi
 // hâlini söyler; bekleyen adımda önce durduran eksikler (program, çizim, yayın), sonra uyaranlar (makine, malzeme), sonra önceki adım.
-// Muaf ya da elle onaylı madde eksik sayılmaz. Talep, sipariş ve firma statülerini satın alma okuması verir (D2, 2893); o gelene kadar
-// malzeme eksiği "malzeme" görünür.
+// Muaf ya da elle onaylı madde eksik sayılmaz. Malzeme eksikse adımın girdisine açık talep varsa "talep", yalnız sipariş bekleniyorsa
+// "siparis" görünür (D2, 2893); hiçbiri yoksa "malzeme". Fason adımın talebi siparişe dönmediyse "talep". Firma statüsü türetilmez.
 export interface AdimStatuGirdisi {
   durum: 'bekliyor' | 'calisiyor' | 'tamam';
   calisma: CalismaDurumu | null;
   fasonda: boolean;
   hal: ReadonlyMap<HazirlikMaddesi, HazirlikHali>;
   oncekiBekleniyor: boolean;
+  // Adımın girdilerine (fason değil) ve fason iş emrine bağlı açık tedarik.
+  tedarik: readonly AdimTedariki[];
 }
+const tedarikNedeni = (t: AdimTedariki): string => t.asama === 'talep'
+  ? `${t.fason ? 'Fason talebi' : 'Talep'} ${t.talepNo} siparişe dönmedi`
+  : `Sipariş ${t.siparisNo ?? t.talepNo} bekleniyor${t.termin === null ? '' : ` (termin ${t.termin})`}`;
 const EKSIK_STATUSU: readonly [HazirlikMaddesi, AdimStatusu][] = [['cnc', 'program'], ['cizim', 'cizim'], ['yayin', 'yayin'], ['makine', 'makine'], ['malzeme', 'malzeme']];
 export function adimSistemStatusu(g: AdimStatuGirdisi): { statu: AdimStatusu; nedenler: string[] } {
   const eksikler = HAZIRLIK_MADDELERI.filter((m) => g.hal.get(m) === 'eksik');
@@ -1714,9 +1719,18 @@ export function adimSistemStatusu(g: AdimStatuGirdisi): { statu: AdimStatusu; ne
     return { statu, nedenler };
   }
   if (g.fasonda) return { statu: 'fasonda', nedenler };
+  const hammadde = g.tedarik.filter((t) => !t.fason);
+  const fasonTalebi = g.tedarik.filter((t) => t.fason && t.asama === 'talep');
+  if (eksikler.includes('malzeme')) nedenler.push(...hammadde.map(tedarikNedeni));
+  nedenler.push(...fasonTalebi.map(tedarikNedeni));
   if (g.oncekiBekleniyor) nedenler.push('Önceki adım bitmedi');
   const ilk = EKSIK_STATUSU.find(([m]) => eksikler.includes(m));
+  if (ilk && ilk[0] === 'malzeme') {
+    const asama = hammadde.some((t) => t.asama === 'talep') ? 'talep' : hammadde.length > 0 ? 'siparis' : 'malzeme';
+    return { statu: fasonTalebi.length > 0 ? 'talep' : asama, nedenler };
+  }
   if (ilk) return { statu: ilk[1], nedenler };
+  if (fasonTalebi.length > 0) return { statu: 'talep', nedenler };
   return { statu: g.oncekiBekleniyor ? 'onceki' : 'baslayabilir', nedenler };
 }
 
