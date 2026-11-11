@@ -73,8 +73,8 @@ function AdimBasligi({ no, children }: { no: number; children: ReactNode }) {
 // ve ayrıntı listesinden. İşlem listesi yürürlükteki rotadandır (2140-3); bir yüz tek işleme atanır, maske "işlem uygulanmaz"
 // demektir (2144-1 a). Önceki revizyondan taşınan işaretler öneridir, onaylanana kadar maske resmine girmez (2140-4 a). Hesap
 // kaydedilmez; kalınlık, yoğunluk ve verim adımın şartnamesinden gelir, yoksa elle yazılır. Sunucuya yalnız Kaydet gider.
-export function YuzeyKarti({ revizyonId, durum, harf, yuzDurumu, yuzNormalleri, sahneYaz, resimAl }: {
-  revizyonId: number; durum: GeometriDurumu; harf: string | null; yuzDurumu: YuzDurumu; yuzNormalleri: readonly (Yon3 | null)[] | null;
+export function YuzeyKarti({ revizyonId, durum, revKodu, yuzDurumu, yuzNormalleri, sahneYaz, resimAl }: {
+  revizyonId: number; durum: GeometriDurumu; revKodu: string | null; yuzDurumu: YuzDurumu; yuzNormalleri: readonly (Yon3 | null)[] | null;
   sahneYaz: (s: YuzeySahnesi | null) => void; resimAl: ResimAl | null;
 }) {
   const surer = suruyorMu(durum);
@@ -239,7 +239,7 @@ export function YuzeyKarti({ revizyonId, durum, harf, yuzDurumu, yuzNormalleri, 
       const adres = URL.createObjectURL(resim);
       const a = document.createElement('a');
       a.href = adres;
-      a.download = `maske-${harf === null ? '' : `rev-${harf}-`}${String(revizyonId)}.png`;
+      a.download = `maske-${revKodu === null ? '' : `rev-${revKodu}-`}${String(revizyonId)}.png`;
       a.click();
       URL.revokeObjectURL(adres);
     } finally {
@@ -249,7 +249,7 @@ export function YuzeyKarti({ revizyonId, durum, harf, yuzDurumu, yuzNormalleri, 
 
   const rozetler = (
     <>
-      {harf !== null && <Rozet ton={c?.tasima ? 'uyari' : 'pasif'}>Rev {harf}</Rozet>}
+      {revKodu !== null && <Rozet ton={c?.tasima ? 'uyari' : 'pasif'}>Rev {revKodu}</Rozet>}
       <Rozet ton="uyari">Öneri</Rozet>
     </>
   );

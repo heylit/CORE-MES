@@ -74,8 +74,8 @@ function ac(adres = '/geometri') {
 
 const LISTE: GeometriModelListeCevabi = {
   satirlar: [
-    { malzemeNo: 7, malzemeKodu: 'MLZ-0007', malzemeAdi: 'Deneme mil', belgeId: 3, belgeAdi: 'Model mil.step', revizyonId: 41, harf: 'B', dosyaTuru: 'step', durum: 'bitti', hataMetni: null },
-    { malzemeNo: 8, malzemeKodu: 'MLZ-0008', malzemeAdi: null, belgeId: 4, belgeAdi: 'Model flanş.step', revizyonId: 42, harf: 'A', dosyaTuru: 'step', durum: 'hata', hataMetni: 'Model okunamadı.' },
+    { malzemeNo: 7, malzemeKodu: 'MLZ-0007', malzemeAdi: 'Deneme mil', belgeId: 3, belgeAdi: 'Model mil.step', revizyonId: 41, harf: 'B', revKodu: '03', dosyaTuru: 'step', durum: 'bitti', hataMetni: null },
+    { malzemeNo: 8, malzemeKodu: 'MLZ-0008', malzemeAdi: null, belgeId: 4, belgeAdi: 'Model flanş.step', revizyonId: 42, harf: 'A', revKodu: null, dosyaTuru: 'step', durum: 'hata', hataMetni: 'Model okunamadı.' },
   ],
   toplam: 2, sayfa: 1, sayfaBoyu: 50,
 };
@@ -124,8 +124,9 @@ describe('3D Atölyesi', () => {
     expect(screen.getAllByText('Hesaplandı').length).toBeGreaterThan(0);
     expect(screen.getByText('Model flanş.step')).toBeTruthy();
     // Aynı malzemede birden çok model ayırt edilsin: malzeme adı varken belge adı da satırda.
-    expect(screen.getByText('Rev B · STEP · Model mil.step')).toBeTruthy();
-    expect(screen.getByText('Rev A · STEP')).toBeTruthy();
+    // 2138-2: merkezin harfi değil revizyon kodu; kodsuz modelde harf yazılmaz.
+    expect(screen.getByText('Rev 03 · STEP · Model mil.step')).toBeTruthy();
+    expect(screen.getByText('Kodsuz revizyon · STEP')).toBeTruthy();
     expect(screen.getByText(/STL, GLB ve GLTF yüzey ağıdır/)).toBeTruthy();
     expect(screen.getByText('Soldan bir model seçin.')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: /MLZ-0007/ }));

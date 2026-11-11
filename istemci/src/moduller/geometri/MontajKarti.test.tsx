@@ -43,7 +43,7 @@ function ac() {
 }
 
 const LISTE: GeometriModelListeCevabi = {
-  satirlar: [{ malzemeNo: 7, malzemeKodu: 'MLZ-0007', malzemeAdi: 'Deneme montaj', belgeId: 3, belgeAdi: 'Model govde.step', revizyonId: 41, harf: 'A', dosyaTuru: 'step', durum: 'bitti', hataMetni: null }],
+  satirlar: [{ malzemeNo: 7, malzemeKodu: 'MLZ-0007', malzemeAdi: 'Deneme montaj', belgeId: 3, belgeAdi: 'Model govde.step', revizyonId: 41, harf: 'A', revKodu: null, dosyaTuru: 'step', durum: 'bitti', hataMetni: null }],
   toplam: 1, sayfa: 1, sayfaBoyu: 50,
 };
 const ANALIZ: GeometriAnalizCevabi = {

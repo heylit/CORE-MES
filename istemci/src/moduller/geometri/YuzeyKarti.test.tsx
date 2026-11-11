@@ -60,7 +60,7 @@ function ac() {
 }
 
 const LISTE: GeometriModelListeCevabi = {
-  satirlar: [{ malzemeNo: 7, malzemeKodu: 'MLZ-0007', malzemeAdi: 'Deneme flanş', belgeId: 3, belgeAdi: 'Model flans.step', revizyonId: 41, harf: 'B', dosyaTuru: 'step', durum: 'bitti', hataMetni: null }],
+  satirlar: [{ malzemeNo: 7, malzemeKodu: 'MLZ-0007', malzemeAdi: 'Deneme flanş', belgeId: 3, belgeAdi: 'Model flans.step', revizyonId: 41, harf: 'B', revKodu: '03', dosyaTuru: 'step', durum: 'bitti', hataMetni: null }],
   toplam: 1, sayfa: 1, sayfaBoyu: 50,
 };
 const ANALIZ: GeometriAnalizCevabi = {
@@ -126,6 +126,8 @@ describe('3D Atölyesi boya ve maske kartı (2144, prototip v3)', () => {
     ac();
     const k = await kart();
     expect(await within(k).findByText('Son kayıt: 05.11.2026 14:10, Deneme Kişi')).toBeTruthy();
+    // 2138-2: sayfada merkezin harfi değil revizyon kodu görünür.
+    expect(document.body.textContent?.match(/Rev [^ ·]+/g)).toEqual(['Rev 03']);
     expect(await screen.findByText('renk 1=--grafik')).toBeTruthy();
     expect(await screen.findByText(/Fırça: Adım 40 · Toz boya\. Modelde yüze tıklayın/)).toBeTruthy();
     expect(kaydetDugmesi(k).hasAttribute('disabled')).toBe(true);
