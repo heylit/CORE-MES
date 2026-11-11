@@ -1107,6 +1107,14 @@ describe('stok (gerçek PostgreSQL)', () => {
     assert.equal(ara.govde.satirlar[0]?.konumlar[0]?.kod, 'P-02-01');
     const har = await depo<{ satirlar: { malzemeId: number }[]; toplam: number | null }>('GET', '/stok/hareketler?metin=P-02-01');
     assert.equal(har.govde.toplam, 1);
+    // Hareketler'de malzeme adıyla arama: o kartın hareketi gelir; gelen her satırın kartı adı içerir.
+    const ad = kartAdlari.get(k)!;
+    const adla = await depo<{ satirlar: { malzemeId: number }[]; toplam: number | null }>('GET', `/stok/hareketler?metin=${encodeURIComponent(ad)}`);
+    assert.ok(adla.govde.satirlar.some((x) => x.malzemeId === k));
+    assert.ok(adla.govde.satirlar.every((x) => kartAdlari.get(x.malzemeId)?.includes(ad)));
+    assert.equal(adla.govde.toplam, adla.govde.satirlar.length);
+    const yok = await depo<{ satirlar: unknown[]; toplam: number | null }>('GET', '/stok/hareketler?metin=hic-olmayan-malzeme-adi');
+    assert.equal(yok.govde.toplam, 0);
     const p = await depo<{ gunluk: { giris: number }[]; gozToplam: number; gozDolu: number; malzemeCesidi: number; raflar: { kod: string }[]; sonHareketler: unknown[] }>('GET', '/stok/panel');
     assert.equal(p.durum, 200, JSON.stringify(p.govde));
     panelCevabi.parse(p.govde);

@@ -251,7 +251,14 @@ export async function aylikStokDegeri(db: Db, islemler: readonly string[], ay: n
 
 // ---- Hareket listesi: süzgeçsiz istekte sayım yok (defter büyür) ----------------------------------------------------------------
 export async function hareketListesi(db: Db, s: HareketlerListesi): Promise<SayfaliListe<Hareket>> {
-  const suzgec: sorgular.HareketSuzgeci = { malzemeId: s.malzemeId, konumId: s.konumId, partiId: s.partiId, tur: s.tur, uretimEmriId: s.uretimEmriId, baslangic: s.baslangic, bitis: s.bitis, metin: s.metin };
+  // Depocunun en sık sorusu "bu malzeme ne oldu": metin konum, parti, açıklama ve fiş noya ek olarak malzeme adı ve stok kodunda da aranır.
+  // Kart aramanın üst sınırı kadardır (200); daha geniş metinde ilk 200 kart.
+  const metinMalzemeleri = s.metin == null ? undefined
+    : (await malzemeAra(db, { metin: s.metin, sayfa: 1, sayfaBoyu: 200 })).satirlar.map((m) => m.id);
+  const suzgec: sorgular.HareketSuzgeci = {
+    malzemeId: s.malzemeId, konumId: s.konumId, partiId: s.partiId, tur: s.tur, uretimEmriId: s.uretimEmriId, baslangic: s.baslangic, bitis: s.bitis, metin: s.metin,
+    metinMalzemeleri,
+  };
   const l = await sayfaliListe(s, {
     ...(sorgular.suzgecVarMi(suzgec) ? { say: () => sorgular.hareketSay(db, suzgec) } : {}),
     satirlar: (d) => sorgular.hareketler(db, suzgec, s, d),
