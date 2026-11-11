@@ -37,7 +37,8 @@ dosyalarında `../istemci/src/...` ithali geçen her dosyanın klasörü. Elle l
 
 - Çekme isteği: koşunun tamamı iptal edilir. `concurrency.group` ref'tir; `cancel-in-progress` yalnız `pull_request` olayında açıktır.
 - Ana dal (2705 a): koşu bütünüyle iptal edilmez. Koşu düzeyindeki grup commit sha'sıdır. `kapsam`, `tip`, `denetim` (göç damgası dahil), `lint` ve `kontrol` her birleşmede koşar.
-- Ağır işler (`istemci-test`, `sunucu-test`, `ekran`, `windows`) iş düzeyinde `kontrol-<iş>-<parça>-refs/heads/main` grubundadır. Yeni birleşme bu işlerin eski koşusunu iptal eder; matris parçaları birbirini iptal etmez.
+- Linux'taki ağır işler (`istemci-test`, `sunucu-test`, `ekran`) iş düzeyinde `kontrol-<iş>-<parça>-refs/heads/main` grubundadır. Yeni birleşme bu işlerin eski koşusunu iptal eder; matris parçaları birbirini iptal etmez.
+- `windows` (3018 a) dört parçalıdır ve iptal edilmez: her ana dal commit'inin kendi Windows sonucu vardır. Dosyalar ad sırasıyla dönüşümlü dağılır; her parça node'a verdiği dosya listesini günlüğe yazar ve yalnız testleri yeşil bitince yükler; `windows-butunluk` dört listeyi arar, birleşimini aynı desenlerin bulduğu tam kümeyle karşılaştırır (eksik, fazla ya da iki parçada koşan dosya kırmızı). Etiket `windows-butunluk` yeşilken konur. Kırmızı Windows'ta bozan birleşme, son yeşilden sonraki ilk kırmızı koşunun commit'idir; aynı kırmızı parçayı yerelde koşmak için o parçanın günlüğündeki dosya listesi kullanılır.
 - İptal edilen ağır işi olan koşuda `kontrol` kırmızıdır ve "testleri sonraki koşuda" iletisini yazar. O commit'in sonucu ana daldaki sonraki koşudur.
 - Bedel: ana dal kırmızıya dönerse bozan birleşme, son yeşil koşudan bu yana birleşenlerin arasındadır; tek commit'e inmez. Birleştirici her birleşmeden sonra değil, son koşuya bakar.
 - Elle koşuda grup koşuya özgüdür ve hiçbir şey iptal edilmez.
@@ -45,7 +46,7 @@ dosyalarında `../istemci/src/...` ithali geçen her dosyanın klasörü. Elle l
 
 ## Windows yeşili etiketi (2964)
 
-- Ana dalda (gönderim ya da elle koşu) `windows` ve `kontrol` işleri yeşil biterse `windows-yesil` işi o commit'e kalıcı etiket koyar: `windows-yesil/<commit zamanı UTC, YYYYAAGG-SSDD>-<sha ilk 8>`. Etiket açıklamasında koşunun bağlantısı vardır.
+- Ana dalda (gönderim ya da elle koşu) `windows`, `windows-butunluk` ve `kontrol` işleri yeşil biterse `windows-yesil` işi o commit'e kalıcı etiket koyar: `windows-yesil/<commit zamanı UTC, YYYYAAGG-SSDD>-<sha ilk 8>`. Etiket açıklamasında koşunun bağlantısı vardır.
 - İptal edilen ya da kırmızı koşuda iş atlanır, etiket konmaz. Etiketi olmayan commit "Windows yeşili değil ya da koşusu iptal edildi" demektir; onun testleri sonraki koşudadır.
 - Etiket commit başına ayrıdır ve taşınmaz: zorla gönderme ya da silme yoktur. Aynı commit'in yeniden koşusu ikinci etiket açmaz.
 - Son Windows yeşili: `git fetch --tags && git describe --tags --abbrev=0 --first-parent --match 'windows-yesil/*' origin/main`. Hepsi: `git tag -l 'windows-yesil/*'` (ad sırası zaman sırasıdır). Canlı ve güncelleme paketi yalnız etiketli commit'ten çıkar.

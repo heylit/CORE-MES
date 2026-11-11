@@ -65,7 +65,7 @@ test('ci-kapsam: taşımada eski ve yeni yol birlikte gelir, kontrol.yml farkı 
 test('kontrol.yml: ana dalda yalnız ağır test işleri iptal edilir, gruplar parçaya göre (2705 a)', () => {
   const is = readFileSync(`${KOK}.github/workflows/kontrol.yml`, 'utf8');
   assert.match(is, /^concurrency:\n {2}group: kontrol-\$\{\{ github\.ref == 'refs\/heads\/main' && github\.sha \|\| github\.ref \}\}\n {2}cancel-in-progress: \$\{\{ github\.event_name == 'pull_request' \}\}$/m);
-  for (const [ad, matris] of [['istemci-test', true], ['sunucu-test', true], ['ekran', true], ['windows', false]] as const) {
+  for (const [ad, matris] of [['istemci-test', true], ['sunucu-test', true], ['ekran', true]] as const) {
     const parca = matris ? '-\\$\\{\\{ matrix\\.parca \\}\\}' : '';
     assert.match(is, new RegExp(`\\n {2}${ad}:\\n(?: {4}.*\\n)*? {4}concurrency:\\n {6}group: kontrol-${ad}${parca}-\\$\\{\\{ github\\.event_name == 'push' && github\\.ref \\|\\| github\\.run_id \\}\\}\\n {6}cancel-in-progress: \\$\\{\\{ github\\.event_name == 'push' \\}\\}\\n`), ad);
   }
@@ -75,7 +75,26 @@ test('kontrol.yml: ana dalda yalnız ağır test işleri iptal edilir, gruplar p
     const sonraki = is.slice(bas + 1).search(/\n {2}[a-z-]+:\n/);
     return sonraki === -1 ? is.slice(bas) : is.slice(bas, bas + 1 + sonraki);
   };
-  for (const ad of ['kapsam', 'tip', 'denetim', 'lint', 'kontrol']) assert.ok(!blok(ad).includes('concurrency:'), `${ad} iptal edilmemeli`);
+  for (const ad of ['kapsam', 'tip', 'denetim', 'lint', 'kontrol', 'windows']) assert.ok(!blok(ad).includes('concurrency:'), `${ad} iptal edilmemeli`);
+});
+
+test('kontrol.yml: Windows dört parçalı, parçalar test kümesinin tamamını sayarak alır (3018 a)', () => {
+  const blok = isBlogu(readFileSync(`${KOK}.github/workflows/kontrol.yml`, 'utf8').replaceAll('\r\n', '\n'), 'windows');
+  assert.match(blok, /\n {4}strategy:\n {6}fail-fast: false\n {6}matrix:\n {8}parca: \[1, 2, 3, 4\]\n/);
+  assert.match(blok, /p=\$\(\( k % 4 \+ 1 \)\)/, 'dönüşümlü dağıtım');
+  assert.match(blok, /parcalar\[0\] \+ parcalar\[1\] \+ parcalar\[2\] \+ parcalar\[3\] \)\) -eq "\$toplam"/, 'toplam denetimi');
+  assert.match(blok, /--test-reporter=tap "\$\{benim\[@\]\}"/, 'parça yalnız kendi dosyalarını koşar');
+  assert.match(blok, /\n {10}PARCA: \$\{\{ matrix\.parca \}\}\n/, 'PARCA matris parçasından gelir');
+  assert.match(blok, /\n {12}\[ "\$p" -eq "\$PARCA" \] && benim\+=\("\$\{sirali\[\$k\]\}"\)\n/, 'parça yalnız kendi sırasındaki dosyayı seçer');
+  assert.match(blok, /printf '%s\\n' "\$\{benim\[@\]\}" > "windows-parca-\$PARCA\.txt"/, 'koşan liste dosyaya yazılır');
+  assert.match(blok, /name: windows-parca-\$\{\{ matrix\.parca \}\}\n {10}path: windows-parca-\$\{\{ matrix\.parca \}\}\.txt\n {10}if-no-files-found: error\n/);
+  assert.ok(!/- name: Parçanın koştuğu dosya listesi\n {8}if:/.test(blok), 'liste yalnız yeşil parçada yüklenir (varsayılan koşul)');
+  const butun = isBlogu(readFileSync(`${KOK}.github/workflows/kontrol.yml`, 'utf8').replaceAll('\r\n', '\n'), 'windows-butunluk');
+  assert.match(butun, /for p in 1 2 3 4; do\n {12}\[ -s "parcalar\/windows-parca-\$p\.txt" \] \|\| \{/, 'dört liste aranır');
+  assert.match(butun, /tekrar=\$\(uniq -d kosan\.txt\)/, 'iki parçada koşan dosya kırmızı');
+  assert.match(butun, /diff tam\.txt kosan\.txt \|\|/, 'birleşim tam kümeye eşit');
+  assert.match(butun, /sunucu\/cekirdek\/\*\*\/\*\.test\.ts' 'sunucu\/moduller\/stok\/\*\*\/\*\.test\.ts'\n {12}'sunucu\/moduller\/uretim-emirleri\/\*\*\/\*\.test\.ts' 'sunucu\/moduller\/plan\/\*\*\/\*\.test\.ts'\)/, 'aynı desenler');
+  assert.match(blok, /grep -qx '# skipped 0'[^\n]*grep -qx '# todo 0'/, 'atlanan test kırmızı');
 });
 
 function isBlogu(is: string, ad: string): string {
@@ -88,8 +107,8 @@ function isBlogu(is: string, ad: string): string {
 test('kontrol.yml: Windows yeşili etiketi yalnız ana dalda, Windows ve kontrol yeşilken, zorlamasız (2964)', () => {
   const is = readFileSync(`${KOK}.github/workflows/kontrol.yml`, 'utf8').replaceAll('\r\n', '\n');
   const blok = isBlogu(is, 'windows-yesil');
-  assert.match(blok, /\n {4}needs: \[windows, kontrol\]\n/);
-  for (const kosul of ["needs.windows.result == 'success'", "needs.kontrol.result == 'success'", "github.ref == 'refs/heads/main'",
+  assert.match(blok, /\n {4}needs: \[windows, windows-butunluk, kontrol\]\n/);
+  for (const kosul of ["needs.windows.result == 'success'", "needs['windows-butunluk'].result == 'success'", "needs.kontrol.result == 'success'", "github.ref == 'refs/heads/main'",
     "(github.event_name == 'push' || github.event_name == 'workflow_dispatch')"]) assert.ok(blok.includes(kosul), kosul);
   assert.ok(!/always\(\)|failure\(\)|cancelled\(\)/.test(blok), 'iptal ya da kırmızı koşuda iş açılmamalı');
   assert.match(blok, /\n {4}permissions:\n {6}contents: write\n {4}steps:/);
