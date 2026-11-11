@@ -19,7 +19,7 @@ import { emirNolari, hataliKaydi, hataliKayitlari, refakatKarti, uretimEmriOzeti
 import { yaziciAgiOku } from './ag.ts';
 import { tcpGonder, type Gonderici } from './gonderici.ts';
 import {
-  BEKLEYEN_GUN, baskiEngeli, bekleyenBaslangici, bekleyenSirasi, dogrudanBaskiDurumu, hataliBekleyenleri, kaliteBekleyenleri, malKabulBekleyenleri, refakatBekleyenleri, hataliParcaDegerleri, kaliteDurumDegerleri, koliHatasi, sevkKoliDegerleri, indirmeEngeli, istasyonDegerleri, kayitSablonTuru, kayitUyumHatasi, konumDegerleri, lotDegerleri, malzemeDegerleri, rafDegerleri, refakatPartisiDegerleri, sablonHatalari, toplamEtiketHatasi, yaziciAdresHatasi, yerlesim, type AlanDegerleri,
+  BEKLEYEN_GUN, baskiEngeli, bekleyenBaslangici, bekleyenSirasi, dogrudanBaskiDurumu, hataliBekleyenleri, kaliteBekleyenleri, malKabulBekleyenleri, refakatBekleyenleri, hataliParcaDegerleri, kaliteDurumDegerleri, koliHatasi, kopyaDegerleri, sevkKoliDegerleri, indirmeEngeli, istasyonDegerleri, kayitSablonTuru, kayitUyumHatasi, konumDegerleri, lotDegerleri, malzemeDegerleri, rafDegerleri, refakatPartisiDegerleri, sablonHatalari, toplamEtiketHatasi, yaziciAdresHatasi, yerlesim, type AlanDegerleri,
 } from './kurallar.ts';
 import { ALANLAR, HAZIR_SABLONLAR, ORNEK_DEGERLER } from './sablonlar.ts';
 import {
@@ -188,8 +188,12 @@ export async function kayitCiktisi(db: Db, anahtar: string, k: KayitSecimi, sece
   // Mal kabul birden çok lot, sevk kolisi koli sayısı kadar etiket verir; sınır basılacak etiket sayısıyla yeniden denetlenir.
   const basilacak = toplamEtiketHatasi(bulunan.length, secenek.adet);
   if (basilacak !== null) throw dogrulama(basilacak, 'adet');
+  // Refakat kartında her kopya ayrı değer kümesiyle (Kopya n/N) ve tek adetle üretilir; öteki türlerde adeti yazıcı çoğaltır.
+  const kopyali = k.tur === 'refakat-partisi';
+  const degerler = kopyali ? kopyaDegerleri(bulunan.map((b) => b.degerler), secenek.adet) : bulunan.map((b) => b.degerler);
   return {
-    ...cikti(sablon, bulunan.map((b) => b.degerler), secenek),
+    ...cikti(sablon, degerler, kopyali ? { ...secenek, adet: 1 } : secenek),
+    adet: secenek.adet,
     kayitlar: bulunan.map(({ id, baslik }) => ({ id, baslik })),
     eksikler,
   };
@@ -285,7 +289,7 @@ export async function yazdir(db: Db, kullanici: Kullanici, anahtar: string, g: Y
     if (okunan.bulunan.length === 0) throw bulunamadi('Seçilen kayıtlar bulunamadı.');
     const basilacak = toplamEtiketHatasi(okunan.bulunan.length, g.adet);
     if (basilacak !== null) throw dogrulama(basilacak, 'adet');
-    degerler = okunan.bulunan.map((b) => b.degerler);
+    degerler = g.kayit.tur === 'refakat-partisi' ? kopyaDegerleri(okunan.bulunan.map((b) => b.degerler), g.adet) : okunan.bulunan.map((b) => b.degerler);
     kayitlar = okunan.bulunan.map(({ id, baslik }) => ({ id, baslik }));
     eksikler = okunan.eksikler;
   } else {
@@ -297,7 +301,8 @@ export async function yazdir(db: Db, kullanici: Kullanici, anahtar: string, g: Y
   return {
     baskiId,
     sablon: { anahtar: sablon.anahtar, ad: sablon.ad, genislik: sablon.genislik, yukseklik: sablon.yukseklik },
-    adet: g.adet,
+    // Refakat kartının kopyaları ayrı sayfadır (Kopya n/N); sayfa başına adet 1 olur.
+    adet: g.kayit?.tur === 'refakat-partisi' ? 1 : g.adet,
     sayfalar: degerler.map((d) => yerlesim(sablon, d, false)),
     kayitlar,
     eksikler,

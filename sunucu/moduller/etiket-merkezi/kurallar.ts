@@ -378,6 +378,13 @@ export function refakatPartisiDegerleri(
   };
 }
 
+// 2929 a: refakat kartı varsayılan iki kopya basılır. Kopyalar aynı kartın (QR aynı) ayrı kâğıtlarıdır; bölünen teslimde hangi kâğıdın
+// hangisi olduğu görünsün diye her biri "Kopya n/N" taşır. Tek kopyada yazı yoktur. Öteki türlerde adet kopyası özdeştir (yazıcı çoğaltır).
+export function kopyaDegerleri(degerler: readonly AlanDegerleri[], adet: number): AlanDegerleri[] {
+  if (adet <= 1) return [...degerler];
+  return degerler.flatMap((d) => Array.from({ length: adet }, (_, i) => ({ ...d, kopya: `Kopya ${i + 1}/${adet}` })));
+}
+
 // EM-21 (1285 a): hatalı parça etiketi Üretim Emirleri'nin hatalı kaydını basar. Durum karardan gelir, elle seçilmez; karar yoksa
 // "Karar bekliyor". QR parçanın bulunduğu emri gösterir (kol ya da emrin kendisi); yeni kod öneki açılmaz.
 export const HATALI_DURUM_ADLARI: Record<NonNullable<HataliKaydiOzeti['karar']>, string> = {

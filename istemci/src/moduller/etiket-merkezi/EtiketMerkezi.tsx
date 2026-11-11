@@ -146,7 +146,8 @@ function Cikti({ sablon, secenekler, basabilir, kayit, kayitCikar }: {
   const enCokAdet = secenekler.enCokAdet;
   const [dil, setDil] = useState<YaziciDili>('zpl');
   const [dpi, setDpi] = useState<string>('203');
-  const [adet, setAdet] = useState('1');
+  // 2929 a: refakat kartı varsayılan iki kopya basılır (her biri Kopya n/N); kişi adedi değiştirir.
+  const [adet, setAdet] = useState(() => (kayit?.tur === 'refakat-partisi' ? '2' : '1'));
   const [sade, setSade] = useState(false);
   const [gercek, setGercek] = useState(gercekBoyutOku);
   const [olcek, setOlcek] = useState(olcekOku);
