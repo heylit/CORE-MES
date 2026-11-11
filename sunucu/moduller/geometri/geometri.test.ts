@@ -334,6 +334,8 @@ describe('geometri: model listesi, analiz kuyruğu ve ayrı hesap süreci (gerç
     const dk = geometriOzellikCevabi.parse(tamam(await istek('okur', 'GET', `/geometri/ozellikler/${String(delikli.revizyonId)}`))).ozellikler;
     assert.deepEqual(dk?.map((o) => [o.tur, o.capMm, o.derinlikMm, o.gecis]), [['delik', 10, 10, true]], 'delikli kutuda yalnız geçiş deliği');
     const an = await analiz(s.revizyonId);
+    assert.equal(an.analiz?.kapali, true, 'matkap uçlu kör delikli katı kapalıdır');
+    assert.ok(an.analiz?.hacimMm3 !== null && an.analiz!.hacimMm3 > 0, 'hacim hesaplanır (ağırlık bundan çıkar)');
     tamam(await istek('hesaplar', 'POST', `/geometri/analizler/${String(s.revizyonId)}/yeniden-hesapla`, { surum: an.is?.surum ?? null }));
     await tur();
     const say = await o().vt.sorgu<{ n: number }>('SELECT count(*)::int AS n FROM geometri_ozellik WHERE revizyon_id = $1', [s.revizyonId]);

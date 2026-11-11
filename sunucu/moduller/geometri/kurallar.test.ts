@@ -50,6 +50,18 @@ describe('geometri kuralları', () => {
     assert.equal(o.alanMm2, 500);
   });
 
+  test('G-K3b bir kenarı dört üçgende olan kapalı ağ (iki katı bir kenarda buluşur, matkap ucu tepesi gibi): kapalı, hacim iki katının toplamı', () => {
+    // İki dörtyüzlü yalnız (0,0,0)-(0,0,1) kenarını paylaşır: o kenar dört üçgende, ötekiler ikide.
+    const konum = [0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 1, 0, -1, 0, 0, 0, -1, 0];
+    const dortyuzlu = (a: number, b: number, c: number, d: number) => [a, c, b, a, b, d, a, d, c, b, c, d];
+    const o = agOlcumu([{ konum, indeks: [...dortyuzlu(0, 2, 3, 1), ...dortyuzlu(0, 4, 5, 1)] }])!;
+    assert.equal(o.kapali, true);
+    assert.ok(Math.abs(o.hacimMm3! - 2 / 6) < 1e-3, String(o.hacimMm3));
+    const acik = agOlcumu([{ konum, indeks: [...dortyuzlu(0, 2, 3, 1), ...dortyuzlu(0, 4, 5, 1)].slice(0, -3) }])!;
+    assert.equal(acik.kapali, false, 'bir üçgen eksilince kenarlar tek sayıda kalır');
+    assert.equal(acik.hacimMm3, null);
+  });
+
   test('G-K4 iki gövde: hacimler toplanır, kutu ikisini kapsar; boş ağ null', () => {
     const o = agOlcumu([kutu(10, 10, 10), kutu(10, 10, 10, [20, 0, 0])])!;
     assert.equal(o.govdeSayisi, 2);
