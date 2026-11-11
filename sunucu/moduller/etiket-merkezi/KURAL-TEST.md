@@ -55,3 +55,4 @@
 | EM-31 (2223-4 a): basılmayacak işareti (`etiket_merkezi_atlanan`, yalnız ekleme, kişi ve zamanla) olaydan sonra verildiyse kayıt Basılacaklar'dan düşer; olay işaretten sonraysa yeniden bekler; `bas` ister | `kurallar.test.ts` EM-31, `EM-U22` |
 | EM-32 (2223-2 a): depodan emre verilen lotun refakat kartı (açık, birleşmemiş, lotlu refakat partisi; olay lota bağlanma ya da açılış) emrin kartı o andan sonra basılmadıysa bekler; başlık emir no-P sıra | `kurallar.test.ts` EM-32, `EM-U23` |
 | EM-33 (2223-2 a): hatalı parça ayrılınca ve rework, hurda ya da red kararıyla bekler; kabul ve şartlı kabul beklemez; olay karar anı yoksa ayrılma anı; Üretim Emirleri'nin son kayıt listesinden süzülür | `kurallar.test.ts` EM-33, `EM-U23` |
+| EM-34 (2885, 2885-1 a): QR'ın taşıdığı kod bütün etiketlerde QR'ın altına okunur yazı olarak basılır (elle giriş için); altında boş yer varsa QR boyutu değişmez, yoksa QR kendi kutusunda yazı satırı kadar küçülür | `kurallar.test.ts` EM-34 |
