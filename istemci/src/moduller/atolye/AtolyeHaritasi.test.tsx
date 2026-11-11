@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ReactElement } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { MemoryRouter } from 'react-router-dom';
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { MemoryRouter, useLocation, useNavigate } from 'react-router-dom';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import type { Kullanici } from '#paylasilan/kullanici.ts';
 import type {
   AramaCevabi, FabrikaKayitGovdesi, GozKalemi, GozKalemleriCevabi, GozlerCevabi, KalemGorunumleriCevabi, KayitCevabi, MerkezModelleriCevabi, SalonlarCevabi, YerlesmemisIstasyonlarCevabi, YerlesimCevabi, YerlesimGovdesi,
@@ -195,7 +195,7 @@ function goster(ekran: ReactElement, adres = '/atolye') {
 
 // 2142-1 a: makine listesi kapalı gelir; araç sütunundaki düğmeyle açılır.
 async function listeyiAc() {
-  fireEvent.click(await screen.findByRole('button', { name: 'Makine listesini göster' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Makine listesi' }));
 }
 
 afterEach(() => {
@@ -410,7 +410,7 @@ describe('fabrika haritası', () => {
     fireEvent.click(screen.getByRole('button', { name: /Tam ekran/ }));
     expect(container.querySelector('.tc-atolye-tam')).not.toBeNull();
     expect(screen.getByRole('button', { name: /Otomatik tur/ })).toBeTruthy();
-    expect(screen.getByRole('button', { name: /Makine listesini/ })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Makine listesi' })).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: /Otomatik tur/ }));
     // Tur sorunlu istasyondan başlar: duran CNC-01 seçilir, kartı açılır.
     expect(await screen.findByRole('region', { name: 'CNC-01 ayrıntısı' })).toBeTruthy();
@@ -424,16 +424,34 @@ describe('fabrika haritası', () => {
     sunucuKur(OKUYAN);
     goster(<AtolyeHaritasi />);
     await screen.findByRole('img', { name: 'Atölye planı' });
-    const dugme = screen.getByRole('button', { name: /Hafif görünüm/ });
+    const dugme = screen.getByRole('button', { name: 'Hafif görünüm' });
     expect(dugme.getAttribute('aria-pressed')).toBe('false');
     fireEvent.click(dugme);
-    const acik = screen.getByRole('button', { name: /Tam görünüm/ });
+    const acik = screen.getByRole('button', { name: 'Hafif görünüm' });
     expect(acik.getAttribute('aria-pressed')).toBe('true');
+    expect(acik.getAttribute('title')).toMatch(/^Tam görünüm/);
     expect(localStorage.getItem('tmiv2.atolye.hafif')).toBe('acik');
     fireEvent.click(acik);
-    expect(screen.getByRole('button', { name: /Hafif görünüm/ }).getAttribute('aria-pressed')).toBe('false');
+    expect(screen.getByRole('button', { name: 'Hafif görünüm' }).getAttribute('aria-pressed')).toBe('false');
     expect(localStorage.getItem('tmiv2.atolye.hafif')).toBe('kapali');
     localStorage.removeItem('tmiv2.atolye.hafif');
+  });
+
+  it('aç/kapa düğmelerinin adı durumla değişmez, durum aria-pressed ile okunur; ipucu yapılacak işi söyler', async () => {
+    sunucuKur(OKUYAN);
+    goster(<AtolyeHaritasi />);
+    await screen.findByRole('img', { name: 'Atölye planı' });
+    const yazilar = screen.getByRole('button', { name: 'Yazılar' });
+    expect(yazilar.getAttribute('aria-pressed')).toBe('true');
+    expect(yazilar.getAttribute('title')).toMatch(/^Yazıları gizle/);
+    fireEvent.click(yazilar);
+    expect(screen.getByRole('button', { name: 'Yazılar' }).getAttribute('aria-pressed')).toBe('false');
+    expect(screen.getByRole('button', { name: 'Yazılar' }).getAttribute('title')).toBe('Yazıları göster');
+    const liste = screen.getByRole('button', { name: 'Makine listesi' });
+    expect(liste.getAttribute('aria-pressed')).toBe('false');
+    fireEvent.click(liste);
+    expect(screen.getByRole('button', { name: 'Makine listesi' }).getAttribute('aria-pressed')).toBe('true');
+    expect(screen.getByRole('button', { name: 'Tam ekran' }).getAttribute('aria-pressed')).toBe('false');
   });
 
   it('okuma yetkisiyle düzenleme ve salon ekleme düğmesi görünmez', async () => {
@@ -477,6 +495,32 @@ describe('fabrika haritası', () => {
     const s1 = await screen.findByRole('img', { name: 'Atölye planı' });
     expect(within(s1).getByText('CNC-01')).toBeTruthy();
     expect(within(s1).queryByText('R5')).toBeNull();
+  });
+
+  it('bölüm seçimi adreste bölüm koduyla durur; adresteki bölüm açılır, bilinmeyen kod varsayılana düşer', async () => {
+    sunucuKur(OKUYAN, { bolumler: [YERLESIM, YERLESIM_B] });
+    let arama = '';
+    function AdresGozu() { arama = useLocation().search; return null; }
+    goster(<><AtolyeHaritasi /><AdresGozu /></>, '/atolye/depo?bolum=S2');
+    await waitFor(() => expect((screen.getByLabelText('Bölüm') as HTMLSelectElement).value).toBe('2'));
+    fireEvent.change(screen.getByLabelText('Bölüm'), { target: { value: '1' } });
+    await waitFor(() => expect(new URLSearchParams(arama).get('bolum')).toBe('S1'));
+    fireEvent.change(screen.getByLabelText('Bölüm'), { target: { value: 'fabrika' } });
+    await waitFor(() => expect(new URLSearchParams(arama).get('bolum')).toBe('fabrika'));
+    cleanup();
+    // İkinci menü bağlantısı sorguyu taşımaz: aynı ekranda kalan seçim adrese geri yazılır.
+    sunucuKur(OKUYAN, { bolumler: [YERLESIM, YERLESIM_B] });
+    let git: ((yol: string) => void) | null = null;
+    function Gezgin() { const n = useNavigate(); git = (y) => { void n(y); }; arama = useLocation().search; return null; }
+    goster(<><AtolyeHaritasi /><Gezgin /></>, '/atolye?bolum=S2');
+    await waitFor(() => expect((screen.getByLabelText('Bölüm') as HTMLSelectElement).value).toBe('2'));
+    act(() => { git?.('/atolye/ikiz'); });
+    await waitFor(() => expect(new URLSearchParams(arama).get('bolum')).toBe('S2'));
+    expect((screen.getByLabelText('Bölüm') as HTMLSelectElement).value).toBe('2');
+    cleanup();
+    sunucuKur(OKUYAN, { bolumler: [YERLESIM, YERLESIM_B] });
+    goster(<AtolyeHaritasi />, '/atolye?bolum=YOK');
+    expect(await screen.findByRole('img', { name: 'Fabrika planı' })).toBeTruthy();
   });
 
   it('fabrika düzenleyici: bölüm içindekilerle taşınır, istasyon bölümden bölüme geçer; bütün bölümler tek komutla kaydedilir', async () => {

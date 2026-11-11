@@ -28,6 +28,8 @@ interface Ozellikler {
 interface Arac {
   a: HaritaAraci;
   ad: string;
+  // Aç/kapa düğmesinin ekran okuyucu adı durumla değişmez; durum aria-pressed'dedir. İpucu (ad) yapılacak işi söyler.
+  durumAdi?: string;
   simge: SimgeAdi;
   basili?: boolean;
 }
@@ -41,7 +43,7 @@ export function HaritaAraclari(o: Ozellikler) {
     ],
     [
       { a: 'izgara', ad: 'Hücre ızgarası', simge: 'grid', basili: o.izgara },
-      { a: 'etiket', ad: o.etiketler ? 'Yazıları gizle (seçili ve bölüm adı kalır)' : 'Yazıları göster', simge: 'scan', basili: o.etiketler },
+      { a: 'etiket', ad: o.etiketler ? 'Yazıları gizle (seçili ve bölüm adı kalır)' : 'Yazıları göster', durumAdi: 'Yazılar', simge: 'scan', basili: o.etiketler },
       // Düğme hep görünür: makinelerde 3B modeli olan iş yokken basılınca neden boş olduğu söylenir.
       { a: 'parca', ad: o.parcaVar ? 'İşlenen parçalar' : 'İşlenen parçalar (şu an 3B modeli olan iş yok)', simge: 'layers', basili: o.parcaGoster },
     ],
@@ -52,12 +54,12 @@ export function HaritaAraclari(o: Ozellikler) {
     [
       ...(o.yazabilir ? [{ a: 'duzenle' as const, ad: o.fabrika ? 'Fabrika planını düzenle (bütün bölümler)' : 'Bölümün yerleşimini düzenle', simge: 'edit' as const }] : []),
       ...(o.tamEkran ? [
-        { a: 'tur' as const, ad: o.tur ? 'Otomatik turu durdur' : 'Otomatik tur (sorunlu istasyon önce)', simge: (o.tur ? 'pause' : 'play') as SimgeAdi, basili: o.tur },
+        { a: 'tur' as const, ad: o.tur ? 'Otomatik turu durdur' : 'Otomatik tur (sorunlu istasyon önce)', durumAdi: 'Otomatik tur', simge: (o.tur ? 'pause' : 'play') as SimgeAdi, basili: o.tur },
       ] : []),
       // Liste haritanın üstünde açılır (2142-1 a); tam ekranda da aynı düğme.
-      { a: 'liste' as const, ad: o.listeAcik ? 'Makine listesini gizle' : 'Makine listesini göster', simge: 'list' as const, basili: o.listeAcik },
-      { a: 'hafif', ad: o.hafif ? 'Tam görünüm (gölge, yansıma ve makine hareketi)' : 'Hafif görünüm (zayıf cihaz ve atölye ekranı için: gölgesiz, hareketsiz)', simge: 'gauge', basili: o.hafif },
-      { a: 'tam', ad: o.tamEkran ? 'Tam ekrandan çık' : 'Tam ekran (atölye ekranı)', simge: o.tamEkran ? 'x' : 'expand', basili: o.tamEkran },
+      { a: 'liste' as const, ad: o.listeAcik ? 'Makine listesini gizle' : 'Makine listesini göster', durumAdi: 'Makine listesi', simge: 'list' as const, basili: o.listeAcik },
+      { a: 'hafif', ad: o.hafif ? 'Tam görünüm (gölge, yansıma ve makine hareketi)' : 'Hafif görünüm (zayıf cihaz ve atölye ekranı için: gölgesiz, hareketsiz)', durumAdi: 'Hafif görünüm', simge: 'gauge', basili: o.hafif },
+      { a: 'tam', ad: o.tamEkran ? 'Tam ekrandan çık' : 'Tam ekran (atölye ekranı)', durumAdi: 'Tam ekran', simge: o.tamEkran ? 'x' : 'expand', basili: o.tamEkran },
     ],
   ];
   return (
@@ -68,7 +70,7 @@ export function HaritaAraclari(o: Ozellikler) {
             <Dugme
               key={d.a}
               simge={d.simge}
-              aria-label={d.ad}
+              aria-label={d.durumAdi ?? d.ad}
               title={d.ad}
               aria-pressed={d.basili === undefined ? undefined : d.basili}
               data-arac={d.a}

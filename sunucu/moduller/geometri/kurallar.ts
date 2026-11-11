@@ -102,7 +102,9 @@ const cikar = (a: V3, b: V3): V3 => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
 const capraz = (a: V3, b: V3): V3 => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
 const ic = (a: V3, b: V3): number => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 
-// Ağ kapalıysa her kenarı tam iki üçgen paylaşır. Konum aynı olan köşeler birleştirilir (OCCT yüz başına köşe çoğaltır).
+// Ağ kapalıysa her kenarı çift sayıda üçgen paylaşır. Konum aynı olan köşeler birleştirilir (OCCT yüz başına köşe çoğaltır). Çoğu kenar
+// iki üçgendedir; matkap ucunun tepesi gibi birden çok yüzün bir noktada buluştuğu yerde aynı kenar dört üçgende olur ve katı yine
+// kapalıdır. Tek sayıda üçgende kalan kenar açık sınırdır.
 function kapaliMi(ag: UcgenAgi, anahtar: (i: number) => string): boolean {
   const sayac = new Map<string, number>();
   const ix = ag.indeks;
@@ -116,7 +118,7 @@ function kapaliMi(ag: UcgenAgi, anahtar: (i: number) => string): boolean {
     }
   }
   if (sayac.size === 0) return false;
-  for (const n of sayac.values()) if (n !== 2) return false;
+  for (const n of sayac.values()) if (n % 2 !== 0) return false;
   return true;
 }
 
