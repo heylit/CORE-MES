@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { kodTuru } from '#paylasilan/kod-sozlugu.ts';
 import { Dugme, KodOkuyucu, Pencere } from '../../../../ortak/arayuz/index.ts';
 import { KatalogSimgesi } from '../ortak/KatalogSimgesi.tsx';
 import { kgFmt } from '../bicim.ts';
@@ -11,19 +12,27 @@ import { kartStandardi, standartAdlari, standartEtiketi } from '../standart-adla
 import { kimlikOf, yerineOf } from './liste.ts';
 import { OnayRozeti } from './paneller.tsx';
 
-// Okunan metin karta çevrilir (kart kodu, MK: öneki, ERP kodu ya da QR bağlantısı); bulunamazsa metin gösterilir.
+// Etiket Merkezi'nin malzeme etiketi MLZ:<kart no> taşır; kart no kaydın içinde değil, listedeki karttadır. Öteki metinler
+// (kart kodu, MK: öneki, ERP kodu, QR bağlantısı) kural çekirdeğinde aranır.
+export function okunanKart(metin: string, kartlar: readonly KatalogKarti[], b: KuralBaglami): KartKaydi | null {
+  const t = kodTuru(metin);
+  if (t.tur === 'malzeme') return kartlar.find((k) => k.no === Number(t.deger))?.kayit ?? null;
+  return K.qrKartBul(metin, kartlar.map((k) => k.kayit), b);
+}
+
+// Okunan metin karta çevrilir; bulunamazsa metin gösterilir.
 export function QrPenceresi({ kartlar, b, kapat, bulundu }: {
   kartlar: readonly KatalogKarti[]; b: KuralBaglami; kapat: () => void; bulundu: (kimlik: string) => void;
 }) {
   const [eslesmedi, eslesmediYaz] = useState<string | null>(null);
   const oku = (metin: string) => {
-    const x = K.qrKartBul(metin, kartlar.map((k) => k.kayit), b);
+    const x = okunanKart(metin, kartlar, b);
     if (x) bulundu(kimlikOf(x)); else eslesmediYaz(metin.slice(0, 80));
   };
   return (
     <Pencere acik kapat={kapat} baslik="QR okut" tur="orta" alt={<Dugme onClick={kapat}>Kapat</Dugme>}>
       <p className="tc-mk-ipucu">Etiketteki QR kodunu okut; kartın saha görünümü açılır. Kamera açılamazsa fotoğraf çek ya da kodu yaz.</p>
-      <KodOkuyucu okundu={oku} ipucu="ör. HM-PAS-00001 ya da ERP kodu" />
+      <KodOkuyucu okundu={oku} ipucu="ör. MLZ:12, HM-PAS-00001 ya da ERP kodu" />
       {eslesmedi !== null && (
         <p className="tc-mk-uyari" data-ton="hata" role="status">Bu QR bir kartla eşleşmedi: <code>{eslesmedi}</code></p>
       )}
