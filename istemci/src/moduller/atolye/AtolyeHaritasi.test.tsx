@@ -547,6 +547,24 @@ describe('fabrika haritası', () => {
     expect(yollar(cagrilar)).not.toContain('POST /stok/konumlar/haritadan-esle');
   });
 
+  it('bölüm yerleşimi kaydından sonra da eşleme koşar; stok tanımı yoksa koşmaz (2884)', async () => {
+    for (const [islemler, beklenen] of [[['sayfa.stok', 'stok.tanim'], true], [['sayfa.stok'], false]] as const) {
+      const cagrilar = sunucuKur({ ...YAZAN, islemler: [...YAZAN.islemler, ...islemler] });
+      goster(<AtolyeHaritasi />);
+      fireEvent.click(await screen.findByRole('button', { name: 'Bölümün yerleşimini düzenle' }));
+      const duzen = await screen.findByRole('dialog', { name: 'Yerleşimi düzenle' });
+      fireEvent.click(within(duzen).getByRole('button', { name: 'Ekle' }));
+      fireEvent.click(within(duzen).getByRole('button', { name: 'Palet rafı' }));
+      fireEvent.click(within(duzen).getByRole('button', { name: 'Kaydet' }));
+      await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Yerleşimi düzenle' })).toBeNull());
+      await waitFor(() => expect(yollar(cagrilar)).toContain('GET /stok/harita-ozeti'));
+      const l = yollar(cagrilar);
+      if (beklenen) expect(l.indexOf('POST /atolye/salonlar/1/yerlesim-kaydet')).toBeLessThan(l.indexOf('POST /stok/konumlar/haritadan-esle'));
+      else expect(l).not.toContain('POST /stok/konumlar/haritadan-esle');
+      cleanup();
+    }
+  });
+
   it('stok okuyamayan kişide kayıttan sonra stok isteği atılmaz (2884)', async () => {
     const cagrilar = sunucuKur(YAZAN, { bolumler: [YERLESIM, YERLESIM_B], haritaOzeti: HARITA_OZETI(3) });
     await fabrikayiKaydet();
