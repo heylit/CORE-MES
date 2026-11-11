@@ -45,7 +45,7 @@ namespace LogoYardimcisi
         static readonly Regex HizmetVarMi = new Regex("^/api/(Purchase|Sales)Service/exists/([^/]+)$");
         static readonly Regex HizmetYaz = new Regex("^/api/(Purchase|Sales)Service/(AddRich|UpdateRich)$");
         static readonly Regex SiparisBul = new Regex("^/api/PurchaseOrder/find/([^/]+)$");
-        static readonly Regex SiparisAlt = new Regex("^/api/PurchaseOrder/([^/]+)/(lines|invoices|cancel|close)$");
+        static readonly Regex SiparisAlt = new Regex("^/api/PurchaseOrder/([^/]+)/(lines|invoices|cancel|close|content)$");
         static readonly Regex KarsilamaSiparis = new Regex("^/api/DemandFiche/peg/byOrder/([0-9]+)$");
         static readonly Regex SatisMusterisi = new Regex("^/api/SalesOffer/customer/([^/]+)$");
         static readonly Regex TeklifOku = new Regex("^/api/SalesOffer/([0-9]+)$");
@@ -112,6 +112,7 @@ namespace LogoYardimcisi
                 }
                 if ((m = SiparisAlt.Match(yol)).Success && m.Groups[2].Value == "lines") return SiparisSatirlari(Coz(m, 1));
                 if (m.Success && m.Groups[2].Value == "invoices") return Faturalar(Coz(m, 1));
+                if (m.Success && m.Groups[2].Value == "content") return SiparisIcerigiOku(Coz(m, 1));
                 if ((m = KarsilamaSiparis.Match(yol)).Success) return KarsilamalariOku(RefCoz(m));
                 if ((m = SatisMusterisi.Match(yol)).Success) return SatisMusterisiOku(Coz(m, 1));
                 if ((m = TeklifOku.Match(yol)).Success) return TeklifSatirlari(RefCoz(m));
@@ -709,6 +710,52 @@ namespace LogoYardimcisi
             var b = oku.Siparis(no, 2);
             if (b == null) return Cevap.Hata(404, "Order not found");
             return new Cevap(200, SatirListesi(Refler(oku.SiparisSatirlari(b.Ref))));
+        }
+
+        // Kart 2987: Logo'da CORE MES dışında açılmış satın alma siparişini düzeltmeden önce okuma (D7). Yalnız okur; tür sabit TRCODE 2
+        // (satış siparişi ya da başka fiş bu yoldan okunmaz). Fiyat taşıdığı için ayarla açılır; kapalıyken uç yokmuş gibi 404 döner.
+        // Kayıt numarası (logicalRef) Logo'dan gelir; düzeltme yazımı bu numarayı kullanır, istemcinin verdiği numara kullanılmaz.
+        Cevap SiparisIcerigiOku(string no)
+        {
+            if (!ayar.SiparisIcerigi) return Cevap.Hata(404, "Not found");
+            SiparisIcerigi b;
+            try { b = oku.SatinAlmaSiparisiIcerigi(no); }
+            catch (BirdenCokKayit e) { return Cevap.Hata(409, e.Message); }
+            if (b == null) return Cevap.Hata(404, "Order not found");
+            var o = new Dictionary<string, object>();
+            o["logicalRef"] = b.Ref;
+            o["number"] = b.No;
+            o["date"] = TarihMetni(b.Tarih);
+            o["arpCode"] = b.CariKod;
+            o["currencyType"] = b.DovizTuru;
+            o["rate"] = b.Kur;
+            o["status"] = b.Durum;
+            o["cancelled"] = b.Iptal;
+            var l = new List<object>();
+            foreach (var x in b.Satirlar)
+            {
+                var r = new Dictionary<string, object>();
+                r["logicalRef"] = x.Ref;
+                r["type"] = x.SatirTuru;
+                r["code"] = x.Kod;
+                r["name"] = x.Ad;
+                r["quantity"] = x.Miktar;
+                r["unitCode"] = x.Birim;
+                r["price"] = x.Fiyat;
+                r["currencyPrice"] = x.DovizFiyati;
+                r["vatRate"] = x.Kdv;
+                r["dueDate"] = TarihMetni(x.Termin);
+                r["description"] = x.Aciklama;
+                r["closed"] = x.Kapali;
+                l.Add(r);
+            }
+            o["lines"] = l;
+            return new Cevap(200, o);
+        }
+
+        static string TarihMetni(DateTime? t)
+        {
+            return t == null ? null : t.Value.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
         }
 
         // Read+Modify+Post (tuzak 2). Gövdede olmayan açık satır kapatılır (ORDER_CLOSED, tuzak 5); kayıtsız satır eklenir.

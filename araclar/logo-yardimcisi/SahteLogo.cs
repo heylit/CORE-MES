@@ -73,8 +73,9 @@ namespace LogoYardimcisi
         public sealed class Satir
         {
             public int Ref, Tur, Durum, TeklifSatirRef, DovizTuru;
-            public string Kod, Birim;
+            public string Kod, Birim, Aciklama;
             public decimal Miktar, Fiyat, Kdv, Iskonto, Karsilanan, SipariseDonen, DovizFiyati;
+            public DateTime? Termin;
             public bool Kapali;
             public Fis Ust;
         }
@@ -85,6 +86,7 @@ namespace LogoYardimcisi
             public string No, Cari;
             public bool Iptal;
             public decimal Net, Kur;
+            public DateTime? Tarih;
             public List<Satir> Satirlar = new List<Satir>();
         }
 
@@ -160,6 +162,22 @@ namespace LogoYardimcisi
         static int I(string m) { return int.Parse(m, CultureInfo.InvariantCulture); }
         static decimal D(object o) { return Convert.ToDecimal(o, CultureInfo.InvariantCulture); }
         static int I(object o) { return Convert.ToInt32(o, CultureInfo.InvariantCulture); }
+        static DateTime LogoTarihi(object o) { return DateTime.ParseExact(Convert.ToString(o, CultureInfo.InvariantCulture), "dd.MM.yyyy", CultureInfo.InvariantCulture); }
+
+        // 2987: satın alma siparişi satırının okunan alanları (XML ya da Logo Objects alanı; gelmeyen alan değişmez).
+        static void SiparisSatiriYaz(Satir x, Func<string, object> al)
+        {
+            object v;
+            if ((v = al("PRICE")) != null) x.Fiyat = D(v);
+            if ((v = al("EDT_PRICE")) != null) x.DovizFiyati = D(v);
+            if ((v = al("VAT_RATE")) != null) x.Kdv = D(v);
+            if ((v = al("UNIT_CODE")) != null) x.Birim = Convert.ToString(v, CultureInfo.InvariantCulture);
+            if ((v = al("DUE_DATE")) != null) x.Termin = LogoTarihi(v);
+            if ((v = al("TRANS_DESCRIPTION")) != null) x.Aciklama = Convert.ToString(v, CultureInfo.InvariantCulture);
+        }
+
+        static Func<string, object> Sozlukten(Dictionary<string, string> d) { return k => { string m; return d.TryGetValue(k, out m) ? m : null; }; }
+        static Func<string, object> Alanlardan(AlanListesi a) { return k => a.Var(k) ? a.Deger(k) : null; }
 
         static Dictionary<string, string> Cocuklar(XmlElement e)
         {
@@ -232,6 +250,7 @@ namespace LogoYardimcisi
                 string c;
                 f.DovizTuru = b.TryGetValue("CURR_TRANSACTIN", out c) ? I(c) : 0;
                 f.Kur = b.TryGetValue("TC_RATE", out c) ? D(c) : 0;
+                f.Tarih = LogoTarihi(b["DATE"]);
                 foreach (var s in satirlar)
                 {
                     var x = new Satir();
@@ -239,7 +258,7 @@ namespace LogoYardimcisi
                     x.Tur = I(s["TYPE"]);
                     x.Kod = s["MASTER_CODE"];
                     x.Miktar = D(s["QUANTITY"]);
-                    x.Fiyat = D(s["PRICE"]);
+                    SiparisSatiriYaz(x, Sozlukten(s));
                     x.Ust = f;
                     f.Net += x.Miktar * x.Fiyat;
                     f.Satirlar.Add(x);
@@ -430,6 +449,8 @@ namespace LogoYardimcisi
             if (baslik.Var("ORDER_STATUS")) f.Durum = I(baslik.Deger("ORDER_STATUS"));
             if (baslik.Var("STATUS")) f.Durum = I(baslik.Deger("STATUS"));
             if (baslik.Var("CANCELLED")) f.Iptal = I(baslik.Deger("CANCELLED")) == 1;
+            var siparis = nesne == Nesne.SatinAlmaSiparisi;
+            if (siparis && baslik.Var("DATE")) f.Tarih = LogoTarihi(baslik.Deger("DATE"));
             foreach (var x in f.Satirlar)
             {
                 AlanListesi a;
@@ -437,6 +458,7 @@ namespace LogoYardimcisi
                 if (a.Var("ORDER_CLOSED")) x.Kapali = I(a.Deger("ORDER_CLOSED")) == 1;
                 if (a.Var("QUANTITY")) x.Miktar = D(a.Deger("QUANTITY"));
                 if (a.Var("MASTER_CODE")) x.Kod = (string)a.Deger("MASTER_CODE");
+                if (siparis) SiparisSatiriYaz(x, Alanlardan(a));
             }
             foreach (var a in yeniSatirlar)
             {
@@ -445,6 +467,7 @@ namespace LogoYardimcisi
                 x.Tur = I(a.Deger("TYPE"));
                 x.Kod = (string)a.Deger("MASTER_CODE");
                 x.Miktar = D(a.Deger("QUANTITY"));
+                if (siparis) SiparisSatiriYaz(x, Alanlardan(a));
                 x.Ust = f;
                 f.Satirlar.Add(x);
             }
@@ -576,6 +599,51 @@ namespace LogoYardimcisi
         {
             var f = Fisler.FirstOrDefault(x => x.Ref == fisRef);
             return f == null ? new List<FisSatiri>() : f.Satirlar.Select(Satiri).ToList();
+        }
+
+        public SiparisIcerigi SatinAlmaSiparisiIcerigi(string no)
+        {
+            Cagrilar.Add("SiparisIcerigi " + no);
+            var bulunan = Fisler.Where(x => x.Nesne == Nesne.SatinAlmaSiparisi && x.No == no).ToList();
+            if (bulunan.Count == 0) return null;
+            if (bulunan.Count > 1) throw new BirdenCokKayit(no);
+            var f = bulunan[0];
+            var b = new SiparisIcerigi();
+            b.Ref = f.Ref;
+            b.No = f.No;
+            b.Tarih = f.Tarih;
+            b.CariKod = f.Cari;
+            b.DovizTuru = f.DovizTuru;
+            b.Kur = f.Kur;
+            b.Durum = f.Durum;
+            b.Iptal = f.Iptal;
+            foreach (var s in f.Satirlar)
+            {
+                var r = new SiparisIcerikSatiri();
+                r.Ref = s.Ref;
+                r.SatirTuru = s.Tur;
+                r.Kod = s.Kod;
+                if (s.Tur == 4)
+                {
+                    var h = Hizmetler.FirstOrDefault(x => x.Item1.Kod == s.Kod && x.Item2 == 1);
+                    r.Ad = h == null ? null : h.Item1.Ad;
+                }
+                else
+                {
+                    var k = Kartlar.FirstOrDefault(x => x.Kod == s.Kod);
+                    r.Ad = k == null ? null : k.Ad;
+                }
+                r.Miktar = s.Miktar;
+                r.Birim = s.Birim;
+                r.Fiyat = s.Fiyat;
+                r.DovizFiyati = s.DovizFiyati;
+                r.Kdv = s.Kdv;
+                r.Termin = s.Termin;
+                r.Aciklama = s.Aciklama;
+                r.Kapali = s.Kapali;
+                b.Satirlar.Add(r);
+            }
+            return b;
         }
 
         public List<MalKabulSatiri> MalKabul(int sonGorulen, int enCok)
