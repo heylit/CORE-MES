@@ -2,6 +2,7 @@ import { useState, type ReactNode } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import type { KoduDegisenKonum } from '#paylasilan/sozlesme/stok.ts';
 import { Dugme, Pencere, useBildirim } from '../../ortak/arayuz/index.ts';
+import { useDogrudanBasim } from '../etiket-merkezi/disari.ts';
 import { hataMetni, useIslem } from './ortak.tsx';
 import './stok.css';
 
@@ -18,6 +19,7 @@ export const etiketMerkeziAdresi = (tur: EtiketKaynagi, idler: readonly number[]
 export const useEtiketMerkezi = (): boolean => useIslem('sayfa.etiket-merkezi');
 
 // Kimlikler önceden biliniyorsa bağlantı; bilinmiyorsa (örnek: bütün raf gözleri) `idler` tıklanınca okunur.
+// 2916 a: bu cihazda bu etiket türünün varsayılan yazıcısı varsa düğme Etiket Merkezi'ni açmadan oraya basar.
 export function EtiketMerkeziDugmesi({ tur, idler, children, simge = 'tag', tursu = 'ikincil', disabled, ad }: {
   tur: EtiketKaynagi; idler: readonly number[] | (() => Promise<readonly number[]>); children: ReactNode;
   simge?: 'tag' | 'scan'; tursu?: 'birincil' | 'ikincil'; disabled?: boolean; ad?: string;
@@ -26,7 +28,22 @@ export function EtiketMerkeziDugmesi({ tur, idler, children, simge = 'tag', turs
   const git = useNavigate();
   const { bildir } = useBildirim();
   const [okunuyor, setOkunuyor] = useState(false);
+  const dogrudan = useDogrudanBasim(tur);
   if (!merkez) return null;
+  const y = dogrudan.yazici;
+  if (y !== null) {
+    const etiket = `${ad ?? (typeof children === 'string' ? children : 'Etiket bas')} · ${y.yaziciAd}`;
+    return (
+      <Dugme tur={tursu} simge={simge} aria-label={etiket} title={`Varsayılan yazıcı: ${y.yaziciAd} (${y.sablonAd})`}
+        disabled={disabled || (typeof idler !== 'function' && idler.length === 0)} yukleniyor={okunuyor || dogrudan.basiyor} onClick={(e) => {
+          e.stopPropagation();
+          if (typeof idler !== 'function') { dogrudan.bas(idler); return; }
+          setOkunuyor(true);
+          void idler().then((l) => { if (l.length > 0) dogrudan.bas(l); else bildir('bilgi', 'Basılacak etiket yok.'); },
+            (h: unknown) => bildir('hata', hataMetni(h))).finally(() => setOkunuyor(false));
+        }}>{children}</Dugme>
+    );
+  }
   if (typeof idler !== 'function') {
     if (disabled || idler.length === 0) return <Dugme tur={tursu} simge={simge} aria-label={ad} disabled>{children}</Dugme>;
     // Satır içindeki düğme satırın kendi tıklamasını (ayrıntıya gitme) tetiklemez.

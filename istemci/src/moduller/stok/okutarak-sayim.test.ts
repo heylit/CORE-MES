@@ -59,6 +59,13 @@ describe('okutarak sayım', () => {
     expect(okutmaUygula(uygula(SAYIM_BASI, konum(41, 'A-01-1', [])), 'MLZ:1', malzeme(1)).durum.gozler[0]!.satirlar[0]!.partiId).toBeNull();
   });
 
+  it('raf etiketi gözün etiketini ister, durumu değiştirmez (reddedilen)', () => {
+    const d = uygula(SAYIM_BASI, konum(41, 'A-01-1', []));
+    const r = okutmaUygula(d, 'RAF:A12', { tur: 'bilinmiyor', kod: 'RAF:A12' });
+    expect(r.sonuc).toMatchObject({ ton: 'uyari', baslik: 'Raf A12' });
+    expect(r.durum).toBe(d);
+  });
+
   it('tanınmayan kod durumu değiştirmez (reddedilen)', () => {
     const d = uygula(SAYIM_BASI, konum(41, 'A-01-1', []));
     const r = okutmaUygula(d, 'XYZ:1', { tur: 'bilinmiyor', kod: 'XYZ:1' });
