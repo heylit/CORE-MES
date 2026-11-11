@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useCallback, useMemo } from 'react';
 import { keepPreviousData, useQueries, useQuery } from '@tanstack/react-query';
 import type {
   AramaCevabi, FabrikaCevabi, FabrikaKayitCevabi, FabrikaKayitGovdesi, Kroki, KrokiCevabi, KrokiHizalaGovdesi, GozKalemi, GozKalemiGovdesi, GozKalemleriCevabi, GozlerCevabi, Model, ModelGovdesi, ModelParcaCevabi, ModelParcaYazCevabi, KalemGorunumleriCevabi, KalemGorunumuGovdesi, MerkezKrokileriCevabi, MerkezModeli, MerkezModeliBaglaCevabi, MerkezModeliBaglaGovdesi, MerkezModelleriCevabi, MalzemeModelleriCevabi, ModellerCevabi, YerlesmemisIstasyonlarCevabi, RotaCevabi,
@@ -135,22 +135,39 @@ export function useGozler(rafId: number | null, sayfa: number, bolme: number | n
 // Stok okuma yetkisi: stok sayfası ya da bir stok işlemi (sunucu aynısını ister).
 export const stokOkurMu = (i: string): boolean => i === 'sayfa.stok' || i.startsWith('stok.');
 
-// ATL-3: bölmenin stoğu olan gözleri (hücre anahtarı: bölme-kat-göz). Doluluk elle girilir; stoğu olan ama doluluğu
-// girilmemiş göz cephede "boş" görünmesin diye. Stok okuma yetkisi yoksa istek atılmaz, küme boştur.
-export function useBolmeStoklari(rafId: number | null, bolme: number | null): ReadonlySet<string> {
+// 3012 a: rafın doluluğu Stok'tandır. Raf başına stoklu gözler (hücre anahtarı -> kalem sayısı); göz kimlikleri rafın göz
+// listesinden, stok konum eşleşmesi stok modülünün okuma ucundan. Stok okuma yetkisi yoksa hiç istek atılmaz: okur false,
+// raflar boş (ekran doluluk göstermez, "boş" da demez).
+export interface RafStoklari { okur: boolean; raflar: ReadonlyMap<number, ReadonlyMap<string, number>> }
+
+async function rafStoguOku(rafId: number): Promise<ReadonlyMap<string, number>> {
+  const satirlar: GozlerCevabi['satirlar'] = [];
+  for (let sayfa = 1; ; sayfa++) {
+    const c = await api.get<GozlerCevabi>(`/atolye/raflar/${rafId}/gozler?sayfa=${sayfa}`);
+    satirlar.push(...c.satirlar);
+    if (c.satirlar.length < c.sayfaBoyu || satirlar.length >= c.toplam) break;
+  }
+  const kalem = new Map<number, number>();
+  for (let i = 0; i < satirlar.length; i += 500) {
+    const idler = satirlar.slice(i, i + 500).map((g) => g.id).join(',');
+    for (const g of (await api.get<GozStoklariCevabi>(`/stok/goz-stoklari?gozIdler=${idler}`)).gozler) kalem.set(g.gozId, g.kalemSayisi);
+  }
+  return new Map(satirlar.filter((g) => (kalem.get(g.id) ?? 0) > 0).map((g) => [hucreAnahtari(g.bolme, g.kat, g.goz), kalem.get(g.id) ?? 0]));
+}
+
+export function useRafStoklari(rafIdler: readonly number[]): RafStoklari {
   const oturum = useOturum();
   const okur = oturum.data?.islemler.some(stokOkurMu) === true;
-  const gozler = useGozler(okur ? rafId : null, 1, bolme);
-  const idler = (gozler.data?.satirlar ?? []).map((s) => s.id).slice(0, 500).join(',');
-  const stok = useQuery({
-    queryKey: anahtarlar.bolmeStoklari(idler),
-    queryFn: async () => (await api.get<GozStoklariCevabi>(`/stok/goz-stoklari?gozIdler=${idler}`)).gozler,
-    enabled: okur && idler !== '',
+  const anahtar = rafIdler.join(',');
+  const birlestir = useCallback((sonuclar: { data?: ReadonlyMap<string, number> }[]): RafStoklari => {
+    const raflar = new Map<number, ReadonlyMap<string, number>>();
+    anahtar.split(',').forEach((id, i) => { const v = sonuclar[i]?.data; if (v) raflar.set(Number(id), v); });
+    return { okur, raflar };
+  }, [anahtar, okur]);
+  return useQueries({
+    queries: rafIdler.map((id) => ({ queryKey: anahtarlar.rafStogu(id), queryFn: () => rafStoguOku(id), enabled: okur })),
+    combine: birlestir,
   });
-  return useMemo(() => {
-    const stoklu = new Set((stok.data ?? []).filter((g) => g.kalemSayisi > 0).map((g) => g.gozId));
-    return new Set((gozler.data?.satirlar ?? []).filter((s) => stoklu.has(s.id)).map((s) => hucreAnahtari(s.bolme, s.kat, s.goz)));
-  }, [stok.data, gozler.data]);
 }
 
 // ATL-5: harita kaydından sonra stok tarafında bekleyen iş. Eşleme Stok Merkezi'ndedir (stok.tanim); harita yalnız haber verir.

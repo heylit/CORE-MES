@@ -82,19 +82,16 @@ describe('göz panelinde stok', () => {
     expect(screen.queryByRole('button', { name: 'S2 kalemini gözden kaldır' })).toBeNull();
   });
 
-  it('ATL-3 cephede doluluğu girilmemiş stoklu göz "stokta" yazar', () => {
-    render(
-      <BolmeCephesi
-        raf={{ kod: 'R1', bolmeSayisi: 1, katSayisi: 2, gozSayisi: 1 }}
-        bolme={1}
-        ozetler={new Map()}
-        stoklu={new Set(['1-1-1'])}
-        secili={null}
-        sec={() => undefined}
-      />,
-    );
-    expect(screen.getByRole('button', { name: 'Kat 1 göz 1: stokta, doluluk girilmedi' })).toBeTruthy();
+  it('3012 a: cephede göz durumu Stok\'tan; stok bilgisi yoksa (yetki yok) "boş" değil "—"', () => {
+    const raf = { kod: 'R1', bolmeSayisi: 1, katSayisi: 2, gozSayisi: 1 };
+    render(<BolmeCephesi raf={raf} bolme={1} stok={new Map([['1-1-1', 2]])} secili={null} sec={() => undefined} />);
+    expect(screen.getByRole('button', { name: 'Kat 1 göz 1: stokta 2 kalem' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Kat 2 göz 1: boş' })).toBeTruthy();
+    cleanup();
+    render(<BolmeCephesi raf={raf} bolme={1} stok={null} secili={null} sec={() => undefined} />);
+    expect(screen.getByRole('button', { name: 'Kat 1 göz 1: stok bilgisi yok' })).toBeTruthy();
+    expect(screen.queryByText('boş')).toBeNull();
+    expect(screen.getAllByText('—')).toHaveLength(2);
   });
 
   it('stoksuz gözde "Stokta yok" yazar', async () => {

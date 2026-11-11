@@ -476,7 +476,9 @@ export function AtolyeHaritasi() {
               {sonuclarAcik && (
                 <div id="tc-atolye-sonuclar" className="tc-atolye-sonuclar" role="listbox" aria-label="Arama sonuçları">
                   {aramaSorgusu.isError && <p className="tc-atolye-hata">{hataIletisi(aramaSorgusu.error, 'Arama yapılamadı')}</p>}
-                  {aramaSorgusu.data?.sonuclar.length === 0 && (stokAramasi.data?.length ?? 0) === 0 && <p className="tc-atolye-ipucu">Sonuç yok.</p>}
+                  {aramaSorgusu.data?.sonuclar.length === 0 && (stokAramasi.data?.length ?? 0) === 0 && (
+                    <p className="tc-atolye-ipucu">{stokOkur ? 'Sonuç yok.' : 'Sonuç yok. Malzeme araması için stok görme yetkisi gerekir.'}</p>
+                  )}
                   {aramaSorgusu.data?.sonuclar.map((s) => (
                     <Dugme key={`${s.tur}:${s.kimlik}`} className="tc-atolye-sonuc" role="option" aria-selected={false} onClick={() => aramaSec(s)}>
                       <span className="mono">{s.etiket}</span>

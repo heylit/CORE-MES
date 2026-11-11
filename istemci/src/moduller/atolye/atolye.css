@@ -393,7 +393,7 @@
 .tc-atolye-serit-bolme[data-secili] .tc-atolye-serit-zemin { stroke: var(--hazard); stroke-width: 1.2; }
 .tc-atolye-serit-bolme:focus-visible .tc-atolye-serit-zemin { stroke: var(--hazard); stroke-width: 1.2; stroke-dasharray: var(--kesik-nokta); }
 .tc-atolye-hucre { fill: var(--kademe); fill-opacity: var(--saydam-85); }
-.tc-atolye-hucre[data-kademe="bos"] { fill: var(--panel2); }
+.tc-atolye-hucre[data-kademe="bos"], .tc-atolye-hucre:not([data-kademe]) { fill: var(--panel2); }
 .tc-atolye-serit-no { fill: var(--muted); font-size: 4px; text-anchor: middle; display: none; }
 .tc-atolye-cephe { display: block; width: 100%; max-height: var(--ekran-boy-52); font-family: var(--font-mono); }
 .tc-atolye-cephe-dikme { fill: var(--sahne-raf); }
@@ -402,7 +402,9 @@
 .tc-atolye-cephe-kat { fill: var(--muted); font-size: 12px; font-weight: 700; text-anchor: middle; dominant-baseline: middle; }
 .tc-atolye-cephe-goz { cursor: pointer; outline: none; }
 .tc-atolye-cephe-bosluk { fill: var(--panel-solid); fill-opacity: var(--saydam-55); }
-.tc-atolye-cephe-dolu { fill: var(--kademe); fill-opacity: var(--saydam-55); }
+.tc-atolye-cephe-dolu { fill: var(--kademe); fill-opacity: var(--saydam-28); }
+/* Stok bilgisi yoksa (yetki yok) göz renk almaz ve "—" soluk yazar. */
+.tc-atolye-cephe-goz:not([data-kademe]) .tc-atolye-cephe-yuzde { fill: var(--muted); font-weight: 400; }
 .tc-atolye-cephe-kod { fill: var(--ink); font-size: 13px; font-weight: 800; text-anchor: middle; }
 .tc-atolye-cephe-yuzde { fill: var(--ink); font-size: 12px; font-weight: 600; text-anchor: middle; }
 .tc-atolye-cephe-goz[data-kademe="bos"] .tc-atolye-cephe-yuzde { fill: var(--muted); font-weight: 400; }

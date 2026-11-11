@@ -8,9 +8,9 @@ import { RAF_TURU_ADI, gozOzetleri, hucreAnahtari, sayiMetni } from './kurallar.
 import type { GozOzeti } from './kurallar.ts';
 import { OgeSimgesi, rafSimgesi } from './plan-simgeleri.tsx';
 import { BolmeCephesi, RafSeridi } from './RafCephesi.tsx';
-import { useBolmeStoklari } from './veri.ts';
+import { useRafStoklari } from './veri.ts';
 
-// Depo: raflar, bölmeler ve gözler; gözün içi (kalem ve doluluk) burada düzenlenir. Raf listeden seçilir, şeritten
+// Depo: raflar, bölmeler ve gözler; gözün içi ve doluluk Stok'tan (3012 a), burada salt okunur. Raf listeden seçilir, şeritten
 // bölme seçilir; bölme önden çizilir, göze basınca içi açılır. "3B" düğmesi aynı bölmeyi sahnede tam karşıdan gösterir.
 
 export interface DepoSecimi {
@@ -40,15 +40,13 @@ export function rafOzetleri(kalemler: readonly GozKalemi[], rafId: number): Map<
 
 export function DepoGorunumu({ raflar: hamRaflar, bolumKodlari, gozKalemleri, hata, yenile, yazabilir, secim, secimYaz, ucBoyut }: Ozellikler) {
   const raflar = useMemo(() => [...hamRaflar].sort((a, b) => a.kod.localeCompare(b.kod, 'tr')), [hamRaflar]);
-  const doluGoz = useMemo(() => {
-    const m = new Map<number, Set<number>>();
-    for (const k of gozKalemleri ?? []) m.set(k.raf.id, (m.get(k.raf.id) ?? new Set()).add(k.gozId));
-    return m;
-  }, [gozKalemleri]);
+  const rafIdler = useMemo(() => raflar.map((r) => r.id), [raflar]);
+  const stok = useRafStoklari(rafIdler);
   const raf = raflar.find((r) => r.id === secim?.rafId) ?? raflar[0];
   const ozetler = useMemo(() => (raf ? rafOzetleri(gozKalemleri ?? [], raf.id) : new Map<string, GozOzeti>()), [gozKalemleri, raf]);
-  const stoklu = useBolmeStoklari(raf?.id ?? null, raf ? Math.min(raf.bolmeSayisi, Math.max(1, secim?.rafId === raf.id ? secim.bolme : 1)) : null);
-
+  // Stok görme yetkisi yoksa ya da raf henüz okunmadıysa doluluk bilinmez (null): sayaç ve renk gösterilmez.
+  const rafStogu = (id: number) => (stok.okur ? stok.raflar.get(id) ?? null : null);
+  const stokluSayi = (id: number): string | null => { const m = rafStogu(id); return m === null ? null : sayiMetni(m.size); };
   if (raflar.length === 0) return <DurumKutusu durum="bos" mesaj="Bu bölümde raf yok. Rafı yerleşim düzenleyicisinde ekleyin." />;
   if (!raf) return null;
   const bolme = Math.min(raf.bolmeSayisi, Math.max(1, secim?.rafId === raf.id ? secim.bolme : 1));
@@ -62,7 +60,8 @@ export function DepoGorunumu({ raflar: hamRaflar, bolumKodlari, gozKalemleri, ha
     <div className="tc-atolye-depo">
       <nav className="tc-atolye-depo-raflar" aria-label="Raflar">
         {raflar.map((r) => {
-          const dolu = doluGoz.get(r.id)?.size ?? 0;
+          const dolu = stokluSayi(r.id);
+          const toplam = sayiMetni(r.bolmeSayisi * r.katSayisi * r.gozSayisi);
           return (
             <Dugme
               key={r.id}
@@ -72,7 +71,7 @@ export function DepoGorunumu({ raflar: hamRaflar, bolumKodlari, gozKalemleri, ha
             >
               <OgeSimgesi ad={rafSimgesi(r.tur)} />
               <span><b className="mono">{r.kod}</b> {r.ad}</span>
-              <small>{bolumKodlari?.get(r.id) ? `${bolumKodlari.get(r.id) ?? ''} · ` : ''}{sayiMetni(dolu)}/{sayiMetni(r.bolmeSayisi * r.katSayisi * r.gozSayisi)} göz{r.aktif ? '' : ' · pasif'}</small>
+              <small>{bolumKodlari?.get(r.id) ? `${bolumKodlari.get(r.id) ?? ''} · ` : ''}{dolu === null ? `${toplam} göz` : `${dolu}/${toplam} göz stokta`}{r.aktif ? '' : ' · pasif'}</small>
             </Dugme>
           );
         })}
@@ -84,7 +83,7 @@ export function DepoGorunumu({ raflar: hamRaflar, bolumKodlari, gozKalemleri, ha
             <p className="tc-atolye-ust-baslik">{RAF_TURU_ADI[raf.tur]} · Hücre {raf.hucre} · {raf.bolmeSayisi} bölme × {raf.katSayisi} kat × {raf.gozSayisi} göz</p>
             <h3><span className="mono">{raf.kod}</span> · {raf.ad} {!raf.aktif && <Rozet ton="pasif">Pasif</Rozet>}</h3>
           </div>
-          <span className="tc-atolye-ipucu">{sayiMetni(doluGoz.get(raf.id)?.size ?? 0)} / {sayiMetni(toplamGoz)} göz dolu</span>
+          <span className="tc-atolye-ipucu">{stokluSayi(raf.id) === null ? `${sayiMetni(toplamGoz)} göz` : `${stokluSayi(raf.id) ?? ''} / ${sayiMetni(toplamGoz)} göz stokta`}</span>
         </header>
 
         {hata && <DurumKutusu durum="hata" mesaj={hata} yenile={yenile} />}
@@ -101,7 +100,7 @@ export function DepoGorunumu({ raflar: hamRaflar, bolumKodlari, gozKalemleri, ha
           {ucBoyut && <Dugme simge="cube" onClick={() => ucBoyut(raf.id, bolme)}>3B karşıdan bak</Dugme>}
         </div>
         <div className="tc-atolye-depo-serit">
-          <RafSeridi raf={raf} ozetler={ozetler} bolme={bolme} sec={bolmeSec} />
+          <RafSeridi raf={raf} stok={rafStogu(raf.id)} bolme={bolme} sec={bolmeSec} />
         </div>
 
         <div className="tc-atolye-depo-govde">
@@ -109,14 +108,15 @@ export function DepoGorunumu({ raflar: hamRaflar, bolumKodlari, gozKalemleri, ha
             <BolmeCephesi
               raf={raf}
               bolme={bolme}
-              ozetler={ozetler}
-              stoklu={stoklu}
+              stok={rafStogu(raf.id)}
               secili={kat !== null && goz !== null ? { kat, goz } : null}
               sec={(k, g) => secimYaz({ rafId: raf.id, bolme, kat: k, goz: g })}
             />
-            <p className="tc-atolye-gosterge-acik" aria-hidden="true">
-              <i data-kademe="bos" />boş <i data-kademe="az" />%1-60 <i data-kademe="dolu" />%61-90 <i data-kademe="tam" />%91-100
-            </p>
+            {stok.okur ? (
+              <p className="tc-atolye-gosterge-acik" aria-hidden="true"><i data-kademe="bos" />boş <i data-kademe="az" />stokta</p>
+            ) : (
+              <p className="tc-atolye-ipucu">Gözlerin doluluğu Stok'tan gelir; görmek için stok görme yetkisi gerekir.</p>
+            )}
           </div>
           {kat !== null && goz !== null ? (
             <GozPaneli

@@ -152,6 +152,7 @@ function sunucuKur(kullanici: Kullanici, ek: Ek = {}): Cagri[] {
     }
     if (yol.startsWith('/uretim-emirleri')) return Promise.resolve(cevap(ek.emirler ?? EMIRLER));
     if (yol.startsWith('/atolye/arama')) return Promise.resolve(cevap(ARAMA));
+    if (yol.startsWith('/stok/goz-stoklari')) return Promise.resolve(cevap({ gozler: [{ gozId: 100, konumId: 55, kalemSayisi: 3, ilkMalzemeAd: 'Çelik çubuk' }] }));
     if (yol.startsWith('/stok/malzemeler?')) return Promise.resolve(cevap({ satirlar: [{ malzemeId: 4, ad: 'Çelik çubuk', stokKodu: 'S2', birim: 'kg' }], toplam: 1, sayfa: 1, sayfaBoyu: 50 }));
     if (yol.startsWith('/stok/konum-malzemeleri')) {
       return Promise.resolve(cevap({ satirlar: [{ id: 9, malzemeId: 4, malzemeAd: 'Çelik çubuk', konumId: 55, konumKod: 'R1-02-3-1', partiId: 1, partiEtiketi: 'LT-000001', miktar: '120.000' }], toplam: 1, sayfa: 1, sayfaBoyu: 50 }));
@@ -361,12 +362,31 @@ describe('fabrika haritası', () => {
     const cagrilar = sunucuKur(YAZAN);
     goster(<AtolyeHaritasi />, '/atolye/depo');
     const cephe = await screen.findByRole('group', { name: 'R1 bölme 1 önden' });
-    fireEvent.click(within(cephe).getByRole('button', { name: /Kat 1 göz 1: DENEME-1 %40, DENEME-2 %30/ }));
+    fireEvent.click(within(cephe).getByRole('button', { name: 'Kat 1 göz 1: stok bilgisi yok' }));
     const panel = await screen.findByRole('region', { name: 'Göz R1-01-1-1' });
     expect(cagrilar.some((c) => c.yol === '/atolye/raflar/7/gozler?sayfa=1&bolme=1')).toBe(true);
     expect(within(panel).getByText('Eski elle yazılan kayıtlar (2) · %70')).toBeTruthy();
     expect(within(panel).queryByRole('button', { name: 'Kalem koy' })).toBeNull();
     expect(cagrilar.some((c) => c.yol === '/atolye/goz-kalemleri/yaz')).toBe(false);
+  });
+
+  it('3012 a: depoda raf sayacı ve göz durumu Stok\'tan; stok yetkisi yoksa sayaç ve renk yok, göz "—"', async () => {
+    sunucuKur({ ...OKUYAN, islemler: ['sayfa.atolye', 'sayfa.stok'] });
+    goster(<AtolyeHaritasi />, '/atolye/depo');
+    const cephe = await screen.findByRole('group', { name: 'R1 bölme 1 önden' });
+    expect(await within(cephe).findByRole('button', { name: 'Kat 1 göz 1: stokta 3 kalem' })).toBeTruthy();
+    expect(within(cephe).getByRole('button', { name: 'Kat 1 göz 2: boş' })).toBeTruthy();
+    expect(screen.getByText('1 / 24 göz stokta')).toBeTruthy();
+    cleanup();
+
+    const cagrilar = sunucuKur(OKUYAN);
+    goster(<AtolyeHaritasi />, '/atolye/depo');
+    const cephe2 = await screen.findByRole('group', { name: 'R1 bölme 1 önden' });
+    expect(within(cephe2).getByRole('button', { name: 'Kat 1 göz 1: stok bilgisi yok' })).toBeTruthy();
+    expect(within(cephe2).queryByText('boş')).toBeNull();
+    expect(screen.queryByText(/göz stokta|göz dolu/)).toBeNull();
+    expect(screen.getByText("Gözlerin doluluğu Stok'tan gelir; görmek için stok görme yetkisi gerekir.")).toBeTruthy();
+    expect(cagrilar.some((c) => c.yol.startsWith('/stok/'))).toBe(false);
   });
 
   it('parçalar: kod başına satır, nerede durduğu ve hangi makinede üretildiği; "Rafta göster" depoya götürür', async () => {
@@ -393,7 +413,7 @@ describe('fabrika haritası', () => {
     fireEvent.keyDown(window, { key: 'ArrowRight' });
     expect(await within(cubuk).findByText('Bölme 02/03')).toBeTruthy();
     const cephe = screen.getByRole('group', { name: 'R1 bölme 2 önden' });
-    fireEvent.click(within(cephe).getByRole('button', { name: /Kat 3 göz 1: DENEME-3 %80/ }));
+    fireEvent.click(within(cephe).getByRole('button', { name: 'Kat 3 göz 1: stok bilgisi yok' }));
     expect(await screen.findByRole('region', { name: 'Göz R1-02-3-1' })).toBeTruthy();
     fireEvent.keyDown(window, { key: 'Escape' });
     await waitFor(() => expect(screen.queryByRole('region', { name: 'Göz R1-02-3-1' })).toBeNull());
