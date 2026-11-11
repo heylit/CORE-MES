@@ -1,7 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render, screen } from '@testing-library/react';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
+import { IKINCI_MENULER } from '#paylasilan/sayfalar.ts';
 import { rotalariTopla } from '../../ortak/rota/kesif.ts';
+import { yeniEkranAdresiMi } from '../../ortak/rota/yeni-ekran-menusu.ts';
+import { GORUNUMLER } from './yeni/gorunumler.ts';
 
 vi.mock('./yeni/IkYeni.tsx', () => ({ IkYeniIk: () => <p>ik ekranı</p>, IkYeniIslemlerim: () => <p>ik işlemlerim</p> }));
 vi.mock('../nizamiye/disari.ts', () => ({ PdksDosyaAktar: () => <p>pdks aktar</p> }));
@@ -44,5 +47,17 @@ describe('İK rotaları', () => {
     ac('/ik-islemlerim/yeni/izinlerim?ay=2026-10');
     expect(await screen.findByText('ik işlemlerim')).toBeTruthy();
     expect(screen.getByRole('status').textContent).toBe('/ik-islemlerim/izinlerim?ay=2026-10');
+  });
+
+  // İK ekranı yalnız kendi görünümlerinin sekmesini çizer; başka modülün ekranına giden maddede kabuk şeridi durmazsa sayfada
+  // hiç ikinci menü kalmaz (2525: Vardiyalar ve tatiller).
+  it('İK ekranı olmayan her menü maddesinde kabuğun ikinci menüsü durur', () => {
+    const maddeler: readonly { anahtar: string; yol: string }[] = IKINCI_MENULER
+      .filter((m) => m.kok === '/ik' || m.kok === '/ik-islemlerim')
+      .flatMap((m) => m.gruplar.flatMap((g) => g.maddeler as readonly { anahtar: string; yol: string }[]));
+    const disarida = maddeler.filter((m) => !Object.hasOwn(GORUNUMLER, m.anahtar));
+    expect(disarida.map((m) => m.yol)).toEqual(['/ik/pdks', '/ik/vardiya']);
+    for (const m of disarida) expect(yeniEkranAdresiMi(m.yol), m.yol).toBe(false);
+    for (const m of maddeler.filter((x) => Object.hasOwn(GORUNUMLER, x.anahtar))) expect(yeniEkranAdresiMi(m.yol), m.yol).toBe(true);
   });
 });
