@@ -39,13 +39,15 @@ describe('karantina alanı eşlemesi ve mal kabul iletisi (gerçek PostgreSQL)',
       [`kre-dnm-${sira}`, sira, JSON.stringify({ id: `kre-dnm-${sira}`, com: { ad: `Deneme hammadde ${sira}` } }), yoneticiId],
     ))!.no;
   }
-  async function siparisSatiri(miktar: string): Promise<number> {
+  async function siparisSatiri(miktar: string, malzemeNo: number | null = null): Promise<number> {
     sira += 1;
     const [t, kl, tk] = [randomUUID(), randomUUID(), randomUUID()];
     const s = o().sahip;
     await s.sorgu("INSERT INTO satin_alma_talep (id, yil, sira, baslik, talep_eden_kisi_id, acan_kisi_id, durum) VALUES ($1, 2099, $2, 'Deneme talep', $3, $3, 'siparis_verildi')",
       [t, 81000 + sira, yoneticiId]);
-    await s.sorgu("INSERT INTO satin_alma_talep_kalemi (talep_id, id, sira, ad) VALUES ($1, $2, 1, 'Deneme kalem')", [t, kl]);
+    const katalog = malzemeNo === null ? null : randomUUID();
+    if (katalog !== null) await s.sorgu('INSERT INTO satin_alma_katalog (id, malzeme_no) VALUES ($1, $2)', [katalog, malzemeNo]);
+    await s.sorgu("INSERT INTO satin_alma_talep_kalemi (talep_id, id, sira, ad, katalog_id) VALUES ($1, $2, 1, 'Deneme kalem', $3)", [t, kl, katalog]);
     await s.sorgu("INSERT INTO satin_alma_teklif (talep_id, id, para_birimi, teklif_tarihi, tedarikci_adi) VALUES ($1, $2, 'TRY', current_date, 'Deneme Tedarikçi')", [t, tk]);
     await s.sorgu("INSERT INTO satin_alma_karar (talep_id, mod, karar_tarihi) VALUES ($1, 'bolunmus', current_date)", [t]);
     await s.sorgu('INSERT INTO satin_alma_siparis (talep_id, teklif_id) VALUES ($1, $2)', [t, tk]);
@@ -66,9 +68,43 @@ describe('karantina alanı eşlemesi ve mal kabul iletisi (gerçek PostgreSQL)',
   });
   after(async () => { await app?.close(); await ortam?.kaldir(); });
 
-  test('haritada alan yok: bugünkü ileti; alan çizilmiş ama eşlenmemiş: eşleme iletisi; eşlemeden sonra kabul karantinaya girer', async () => {
+  test('alanı olmayan kapalı karantina konumu haritada yok sayılır; karantinaya dönen alanın konumu başka türde stok tutuyorsa neden stok', async () => {
     await o().sahip.sorgu("UPDATE stok_konum SET aktif = false WHERE tur = 'karantina'");
     await o().sahip.sorgu("DELETE FROM atolye_alan WHERE tur = 'karantina'");
+    const kart = await gkkKarti();
+    // Kapalı karantina konumu var ama haritada karantina alanı yok: bugünkü ileti.
+    const pasif = await malKabul(kart, '1');
+    assert.equal(pasif.statusCode, 400, pasif.body);
+    assert.match(pasif.json().mesaj, /^Karantina konumu yok; giriş kalite kontrolü için Depo haritasına karantina alanı ekleyin\.$/);
+
+    const salon = await o().sahip.tek<{ id: number }>(
+      "INSERT INTO atolye_salon (kod, ad, genislik, derinlik, hucre_boyu, fabrika_x, fabrika_z, kaydeden_kisi_id) VALUES ('KRE-2', 'Deneme bölüm 2', 20, 20, 4, 500, 500, $1) RETURNING id", [yoneticiId]);
+    const alan = await o().sahip.tek<{ id: number }>(
+      "INSERT INTO atolye_alan (salon_id, tur, ad, x, z, donus, genislik, derinlik) VALUES ($1, 'bolge', 'Deneme bölge', 2, 2, 0, 2, 2) RETURNING id", [salon!.id]);
+    assert.equal((await istek('POST', '/stok/konumlar/haritadan-esle')).statusCode, 200);
+    const bolge = await o().sahip.tek<{ id: number }>("SELECT id FROM stok_konum WHERE atolye_alan_id = $1 AND tur = 'bolge'", [alan!.id]);
+    // Serbest kart KABUL'e girer, bölgeye taşınır; sonra alan karantinaya döner: stoklu konumun türü eşlemede değişmez.
+    sira += 1;
+    const serbest = (await o().sahip.tek<{ no: number }>(
+      `INSERT INTO malzeme_katalog_karti (kimlik, tur, onek, sira_no, onay_durumu, kayit, acan_kisi_id, guncelleyen_kisi_id)
+       VALUES ($1, 'sarf', 'KRE-DNM-', $2, 'aktif', $3, $4, $4) RETURNING no`,
+      [`kre-dnm-${sira}`, sira, JSON.stringify({ id: `kre-dnm-${sira}`, com: { ad: `Deneme sarf ${sira}` } }), yoneticiId]))!.no;
+    const giris = await istek('POST', '/stok/mal-kabul', { tur: 'diger', satirlar: [{ malzemeId: serbest, miktar: '2' }] });
+    assert.equal(giris.statusCode, 200, giris.body);
+    const kabul = await o().sahip.tek<{ id: number }>("SELECT id FROM stok_konum WHERE kod = 'KABUL'");
+    const tasi = await istek('POST', '/stok/tasima', { malzemeId: serbest, kaynakKonumId: kabul!.id, hedefKonumId: bolge!.id, miktar: '2' });
+    assert.equal(tasi.statusCode, 200, tasi.body);
+    await o().sahip.sorgu("UPDATE atolye_alan SET tur = 'karantina' WHERE id = $1", [alan!.id]);
+    assert.equal((await istek('POST', '/stok/konumlar/haritadan-esle')).statusCode, 200);
+    const stoklu = await malKabul(kart, '1');
+    assert.equal(stoklu.statusCode, 400, stoklu.body);
+    assert.match(stoklu.json().mesaj, /^Karantina alanının stok konumunda başka türde stok var; .*stoğu taşıyın/);
+  });
+
+  test('haritada alan yok: bugünkü ileti; alan çizilmiş ama eşlenmemiş: eşleme iletisi; eşlemeden sonra kabul karantinaya girer', async () => {
+    await o().sahip.sorgu("UPDATE stok_konum SET aktif = false WHERE tur = 'karantina'");
+    // Önceki testin stoklu alanı haritadan karantina olmaktan çıkar (stoklu konum silinemez).
+    await o().sahip.sorgu("UPDATE atolye_alan SET tur = 'bolge' WHERE tur = 'karantina'");
     const kart = await gkkKarti();
 
     const yok = await malKabul(kart, '5');
@@ -84,6 +120,15 @@ describe('karantina alanı eşlemesi ve mal kabul iletisi (gerçek PostgreSQL)',
     assert.equal(eslenmemis.statusCode, 400, eslenmemis.body);
     assert.match(eslenmemis.json().mesaj, /^Karantina alanı haritada var ama stok konumu değil; .*"Haritadan eşle"/);
     assert.doesNotMatch(eslenmemis.json().mesaj, /alanı ekleyin/);
+    // Fason dönüşü de aynı nedeni kendi amacıyla söyler; karantina konumu iş emrinden önce aranır.
+    sira += 1;
+    const hizmet = (await o().sahip.tek<{ no: number }>(
+      `INSERT INTO malzeme_katalog_karti (kimlik, tur, onek, sira_no, onay_durumu, kayit, acan_kisi_id, guncelleyen_kisi_id, hizmet_yonu)
+       VALUES ($1, 'hizmet', 'KRE-DNM-', $2, 'aktif', $3, $4, $4, 'alinan') RETURNING no`,
+      [`kre-dnm-${sira}`, sira, JSON.stringify({ id: `kre-dnm-${sira}`, com: { ad: `Deneme kaplama ${sira}` } }), yoneticiId]))!.no;
+    const fason = await istek('POST', '/stok/mal-kabul', { tur: 'satin_alma', satirlar: [{ malzemeId: kart, miktar: '1', siparisSatirId: await siparisSatiri('1', hizmet), fasonIsi: { isEmriId: 999999 } }] });
+    assert.equal(fason.statusCode, 400, fason.body);
+    assert.match(fason.json().mesaj, /^Karantina alanı haritada var ama stok konumu değil; fason dönüşü için /);
 
     assert.equal((await istek('POST', '/stok/konumlar/haritadan-esle')).statusCode, 200);
     const konum = async () => o().sahip.tek<{ id: number; tur: string; aktif: boolean }>('SELECT id, tur, aktif FROM stok_konum WHERE atolye_alan_id = $1', [alan!.id]);
