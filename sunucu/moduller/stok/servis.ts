@@ -9,3 +9,4 @@ export * from './servis/toplama.ts';
 export * from './servis/uretim.ts';
 export * from './servis/dis-akis.ts';
 export * from './servis/refakat.ts';
+export * from './servis/kabul-satirlari.ts';

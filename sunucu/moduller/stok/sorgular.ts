@@ -78,3 +78,4 @@ export {
   type SeriListeHam, type SeriSatirHam, seriAcikListeler, seriListe, seriListeKilitle, seriListeAc, seriSatirlari, seriSatirEkle, seriAdetYaz, seriSatirSil,
   seriIslendi, seriDegisti, seriListeKapat,
 } from './sorgular/seri/sorgular.ts';
+export { type MalKabulSatirSuzgeci, MAL_KABUL_SATIRI_SIRALAMASI, malKabulSatiriSay, type MalKabulListeSatiriHam, malKabulListeSatirlari, type LotYeriHam, lotYerleri } from './sorgular/kabul/sorgular.ts';
