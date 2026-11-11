@@ -77,7 +77,7 @@ function ModelListesi({ secili, sec }: { secili: number | null; sec: (s: Geometr
                         <span className="tc-g3b-satir-metin">
                           <strong>{s.malzemeKodu}</strong>
                           <span>{s.malzemeAdi ?? s.belgeAdi}</span>
-                          <span className="tc-g3b-soluk">Rev {s.harf} · {s.dosyaTuru.toUpperCase()}{s.malzemeAdi === null ? '' : ` · ${s.belgeAdi}`}</span>
+                          <span className="tc-g3b-soluk">{s.revKodu ? `Rev ${s.revKodu}` : 'Kodsuz revizyon'} · {s.dosyaTuru.toUpperCase()}{s.malzemeAdi === null ? '' : ` · ${s.belgeAdi}`}</span>
                         </span>
                         <Rozet ton={DURUM_TONU[s.durum]}>{DURUM_ADI[s.durum]}</Rozet>
                       </button>
@@ -412,7 +412,7 @@ function ModelAyrintisi({ satir, revizyonId, yonlendir, calisma }: {
     <div className="tc-g3b-ayrinti">
       {satir && (
         <p className="tc-g3b-baslik">
-          <strong>{satir.malzemeKodu}</strong> {satir.malzemeAdi ?? ''} <span className="tc-g3b-soluk">Rev {satir.harf} · {satir.belgeAdi}</span>
+          <strong>{satir.malzemeKodu}</strong> {satir.malzemeAdi ?? ''} <span className="tc-g3b-soluk">{satir.revKodu ? `Rev ${satir.revKodu}` : 'Kodsuz revizyon'} · {satir.belgeAdi}</span>
         </p>
       )}
       {dosya.isPending ? <div className="tc-g3b-sahne"><DurumKutusu durum="yukleniyor" mesaj="Model indiriliyor" /></div>
@@ -433,7 +433,7 @@ function ModelAyrintisi({ satir, revizyonId, yonlendir, calisma }: {
         )}
         {calisma === 'ozellikler' && <OzellikKarti revizyonId={revizyonId} durum={analiz.data.durum} secili={secili?.sira ?? null} sec={seciliYaz} />}
         {calisma === 'yuzey' && (
-          <YuzeyKarti revizyonId={revizyonId} durum={analiz.data.durum} harf={satir?.harf ?? null} yuzDurumu={yuzDurumu} yuzNormalleri={yuzNormalleri}
+          <YuzeyKarti revizyonId={revizyonId} durum={analiz.data.durum} revKodu={satir?.revKodu ?? null} yuzDurumu={yuzDurumu} yuzNormalleri={yuzNormalleri}
             sahneYaz={yuzeySahnesiYaz} resimAl={resimAl} />
         )}
         {calisma === 'montaj' && <MontajKarti revizyonId={revizyonId} durum={analiz.data.durum} vurgula={kutularYaz} yenidenHesapla={yeniden} />}
