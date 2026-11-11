@@ -92,6 +92,15 @@ describe('Okut paneli modlari (1912)', () => {
     expect(localStorage.getItem('tmiv2.okut-modu')).toBe('bilgi');
   });
 
+  it('Bilgi UE etiketini emir numarasiyla adlandirir, eski refakat karti demez', async () => {
+    panel(DEPO, { 'GET /stok/teslim-kutusu/kod-coz': () => json(200, { tur: 'eski-kart', kod: 'UE:7', uretimEmriId: 7 }) });
+    const p = await panelAc();
+    fireEvent.click(within(p).getByRole('radio', { name: 'Bilgi' }));
+    okut(p, 'UE:7');
+    expect((await within(p).findAllByText('Emir #7')).length).toBeGreaterThan(0);
+    expect(within(p).queryByText(/Eski refakat/)).toBeNull();
+  });
+
   it('mod komut barkoduyla secilir ve cihazda kalir; yetkisiz mod acilmaz', async () => {
     panel(OPERATOR);
     let p = await panelAc();

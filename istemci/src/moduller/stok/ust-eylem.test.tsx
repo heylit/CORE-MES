@@ -167,7 +167,7 @@ describe('Malzeme · Teslim üst çubuk düğmesi', () => {
     istasyon: { id: 2, kod: 'F2', ad: 'Freze 2' }, emirler: [{ id: 70, emirNo: 'UE-70' }],
     satirlar: [
       { malzemeId: 901, kod: 'YM-1', ad: 'Deneme mil', partiId: 4, partiEtiketi: 'TP-4', statuId: 7, miktar: '5.000', yolda: '0', uretimEmriId: 70,
-        getiren: 'Deneme Usta', gelis: '2026-10-14T08:00:00+03:00', sonraki: { istasyonId: 1, kod: 'T1', ad: 'Torna 1', opNo: 30 }, sonrakiYok: null },
+        getiren: 'Deneme Usta', gelis: '2026-10-14T08:00:00+03:00', koken: 'uretim', sonraki: { istasyonId: 1, kod: 'T1', ad: 'Torna 1', opNo: 30 }, sonrakiYok: null },
       { malzemeId: 902, kod: 'HM-2', ad: 'Deneme cubuk', partiId: 8, partiEtiketi: 'LT-8', statuId: null, miktar: '6.000', yolda: '2.000', uretimEmriId: null,
         getiren: 'Deneme Depocu', gelis: '2026-10-14T07:00:00+03:00', sonraki: null, sonrakiYok: 'rota-disi' },
     ],
@@ -299,6 +299,18 @@ describe('Malzeme · Teslim üst çubuk düğmesi', () => {
     expect(istekler.some((i) => i.yontem === 'POST')).toBe(false);
   });
 
+  it('2920 a: depodan gelen ya da kokeni bilinmeyen satirda tekli "Sonraki istasyona" da cikmaz (yasak)', async () => {
+    const bilinmeyen = { ...ROTALI.satirlar[0]!, koken: null, malzemeId: 905, kod: 'YM-5', ad: 'Deneme pul' };
+    ciz({ 'GET /stok/teslim-kutusu/sepet': () => json(200, { ...ROTALI, satirlar: [...ROTALI.satirlar, bilinmeyen] }) }, KUTU_ISTASYONLU);
+    fireEvent.click(await screen.findByRole('button', { name: /^Okut(,|$)/ }));
+    fireEvent.click(await screen.findByRole('button', { name: /^Elimdekiler/ }));
+    const liste = await screen.findByRole('list', { name: 'Freze 2 sepeti' });
+    const satir = (ad: string) => within(liste).getByText(new RegExp(ad)).closest('li')!;
+    expect(within(satir('Deneme cubuk girdi')).queryByRole('button', { name: /Sonraki istasyona/ })).toBeNull();
+    expect(within(satir('Deneme pul')).queryByRole('button', { name: /Sonraki istasyona/ })).toBeNull();
+    expect(within(satir('Deneme flans')).getByRole('button', { name: 'Sonraki istasyona: Taşlama 3 (OP 40)' })).toBeTruthy();
+  });
+
   it('2920 a: rotasi belli tek satirda toplu dugme cikmaz, satir dugmesi yeter', async () => {
     ciz({ 'GET /stok/teslim-kutusu/sepet': () => json(200, SEPET) }, KUTU_ISTASYONLU);
     fireEvent.click(await screen.findByRole('button', { name: /^Okut(,|$)/ }));
@@ -313,14 +325,31 @@ describe('Malzeme · Teslim üst çubuk düğmesi', () => {
       { ...KUTU, gelenler: [GELEN, IKINCI] });
     fireEvent.click(await screen.findByRole('button', { name: /^Okut(,|$)/ }));
     const kart = await screen.findByRole('group', { name: 'Yoldaki teslimler' });
-    expect(within(kart).getByText('2 teslim seni bekliyor')).toBeTruthy();
+    expect(within(kart).getByText('2 teslim yolda')).toBeTruthy();
     expect(within(kart).getByText(/Deneme mil · 3, Deneme flans · 1/)).toBeTruthy();
-    fireEvent.click(within(kart).getByRole('button', { name: 'Hepsini al' }));
+    fireEvent.click(within(kart).getByRole('button', { name: 'Hepsini al (2)' }));
+    const pencere = await screen.findByRole('dialog', { name: '2 teslim gönderilen miktarlarla alınsın mı?' });
+    fireEvent.click(within(pencere).getByRole('button', { name: 'Hepsini al' }));
     await waitFor(() => expect(istekler.filter((i) => i.yontem === 'POST')).toHaveLength(2));
     expect(istekler.filter((i) => i.yontem === 'POST').map((i) => [i.yol, i.govde])).toEqual([
       ['/stok/teslimler/41/teslim-al', { surum: 1, alinan: '3.000' }], ['/stok/teslimler/42/teslim-al', { surum: 2, alinan: '1.000' }],
     ]);
     expect(await screen.findByText('2 teslim alındı.')).toBeTruthy();
+  });
+
+  it('2920 a: ilk ekranda gorunmeyen teslimler de alinmadan once tek pencerede miktarlariyla gosterilir; vazgecilirse istek gitmez', async () => {
+    const gelenler: Teslim[] = [1, 2, 3, 4, 5].map((n) => ({ ...GELEN, id: 40 + n, no: `TS-00004${String(n)}`, malzemeAd: `Deneme ${String(n)}`, miktar: `${String(n)}.000` }));
+    const istekler = ciz({}, { ...KUTU, gelenler });
+    fireEvent.click(await screen.findByRole('button', { name: /^Okut(,|$)/ }));
+    const kart = await screen.findByRole('group', { name: 'Yoldaki teslimler' });
+    expect(within(kart).getByText(/ve 2 teslim daha/)).toBeTruthy();
+    fireEvent.click(within(kart).getByRole('button', { name: 'Hepsini al (5)' }));
+    const pencere = await screen.findByRole('dialog', { name: '5 teslim gönderilen miktarlarla alınsın mı?' });
+    const liste = within(pencere).getByRole('list', { name: 'Alınacak teslimler' });
+    expect(within(liste).getAllByRole('listitem').map((l) => l.textContent)).toEqual([1, 2, 3, 4, 5].map((n) => `Deneme ${String(n)} · ${String(n)} · Torna 1`));
+    fireEvent.click(within(pencere).getByRole('button', { name: 'Vazgeç' }));
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: /alınsın mı/ })).toBeNull());
+    expect(istekler.some((i) => i.yontem === 'POST')).toBe(false);
   });
 
   it('2920 a: yolda teslim yoksa kart cikmaz; tek tek bak Bana gelen ekranini acar', async () => {
