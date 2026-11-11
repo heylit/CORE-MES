@@ -66,7 +66,7 @@ describe('Refakat kartları sayfası (kart #708)', () => {
     expect(istekler.some((i) => i.yol === '/akis/refakat-kartlari?idler=12')).toBe(true);
   });
 
-  it('Akış Süresi okuyan: listede küçük rota, son an ve lead; ayrıntıda özet, lead dağılımı, cycle, süre özeti, rota aşamaları ve iki tablo', async () => {
+  it('Akış Süresi okuyan (2907): listede yer, son an ve sıradaki adım, yere göre süzgeç; panelde işlemler ve rota adımları; süre analizi ve iz istenince açılır', async () => {
     const istekler = sunucuKur({ ...OKUYUCU, islemler: ['sayfa.stok', 'sayfa.akis'] }, {
       'GET /stok/refakat-kartlari': () => json(200, { kartlar: [satir(KART, { kod: 'P-1', ad: 'Mil 40 (örnek)' })], sinirda: false }),
       'GET /akis/refakat-kartlari': () => json(200, { kartlar: [ORNEK_OZET] }),
@@ -78,12 +78,29 @@ describe('Refakat kartları sayfası (kart #708)', () => {
     const liste = await screen.findByRole('region', { name: 'Kartlar' });
     expect(await within(liste).findByText('Stokta · yolda')).toBeTruthy();
     expect(within(liste).getByText('Torna 2 → Freze 1 yolunda')).toBeTruthy();
-    expect(within(liste).getByText('lead 8 sa 08 dk')).toBeTruthy();
-    expect(within(liste).getByRole('img', { name: /Rota: lot geçti, OP10 geçti, OP20 şimdi/ })).toBeTruthy();
+    expect(within(liste).getByText(/^Sıradaki/).textContent).toBe('Sıradaki OP20');
+    expect(within(liste).queryByText(/^lead /)).toBeNull();
     expect(istekler.some((i) => i.yol === '/akis/refakat-kartlari?idler=12')).toBe(true);
+    const kumeler = within(liste).getByRole('group', { name: 'Yere göre süz' });
+    expect(within(kumeler).getByRole('button', { name: 'Yolda 1' }).getAttribute('aria-pressed')).toBe('false');
+    fireEvent.click(within(kumeler).getByRole('button', { name: 'Fasonda 0' }));
+    expect(await within(liste).findByText('Kart yok.')).toBeTruthy();
+    fireEvent.click(within(kumeler).getByRole('button', { name: 'Yolda 1' }));
+    expect(await within(liste).findByText('Stokta · yolda')).toBeTruthy();
 
     const ayrinti = await screen.findByRole('article', { name: 'Kart ayrıntısı' });
     expect(within(ayrinti).getByRole('heading', { name: 'UE-000001-P1' })).toBeTruthy();
+    expect(await within(ayrinti).findByRole('button', { name: 'Alt parti kartı' })).toBeTruthy();
+    expect(within(ayrinti).queryByRole('button', { name: 'Kart penceresi' })).toBeNull();
+    const rota = await within(ayrinti).findByRole('list', { name: 'Kartın rotası' });
+    const adimlar0 = within(rota).getAllByRole('listitem');
+    expect(adimlar0.map((a) => a.getAttribute('data-durum'))).toEqual(['gecti', 'gecti', 'simdi', 'sirada', 'sirada', 'sirada', 'sirada']);
+    expect(within(adimlar0[2]!).getByText('Torna 2 → Freze 1')).toBeTruthy();
+    expect(within(ayrinti).queryByRole('img', { name: /Lead time dağılımı/ })).toBeNull();
+
+    fireEvent.click(within(ayrinti).getByRole('button', { name: 'Bağlı kartlar ve sevkler' }));
+    expect(await within(ayrinti).findByText('Bu kartla henüz üretim, sevk ya da bağlı kart yok.')).toBeTruthy();
+    fireEvent.click(within(ayrinti).getByRole('button', { name: 'Süre analizi' }));
     expect(await within(ayrinti).findByText('8 sa 08 dk (sürüyor)')).toBeTruthy();
     expect(within(ayrinti).getByText('plan 1 g 8 sa · 1 g 0 sa kaldı')).toBeTruthy();
     expect(within(ayrinti).getByRole('img', { name: /Lead time dağılımı/ })).toBeTruthy();
@@ -110,7 +127,18 @@ describe('Refakat kartları sayfası (kart #708)', () => {
     expect(within(anlar).getAllByRole('row')).toHaveLength(12);
     expect(within(anlar).getByText('OP10 durdu · Takım değişimi')).toBeTruthy();
 
-    fireEvent.click(within(ayrinti).getByRole('button', { name: 'Kart penceresi' }));
+    fireEvent.click(within(ayrinti).getByRole('button', { name: 'Alt parti kartı' }));
+    expect(await within(ayrinti).findByRole('region', { name: 'Alt parti kartı' })).toBeTruthy();
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
+  it('?kart= ile gelinince (emir ayrıntısından) kart seçili açılır; akış yetkisi yoksa kart penceresi açılır', async () => {
+    sunucuKur(OKUYUCU, {
+      'GET /stok/refakat-kartlari': () => json(200, { kartlar: LISTE, sinirda: false }),
+      'GET /stok/refakat-partileri/12/kart': () => json(200, { refakat: KART, kart: BAS }),
+      'GET /stok/refakat-partileri/12/iz': () => json(200, { refakat: KART, ustler: [], altlar: [], birlesenler: [], ayniLot: [], ciktilar: [], sevkler: [] }),
+    });
+    ac('/stok/refakat-kartlari?kart=12');
     expect(await screen.findByRole('dialog', { name: 'Refakat kartı UE-000001-P1' })).toBeTruthy();
   });
 });

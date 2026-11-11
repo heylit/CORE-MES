@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   adimSatirlari, anSatirlari, asamalar, cycleSatirlari, islemPlaniDk, kartAdedi, leadDagilimi, miniRota, odakAdimi, ozetKutulari, planLeadDk, saat, sonAnMetni,
-  sureMetni, sureOzetiSatirlari, tarihSaat, tekliCubuklar,
+  siradakiMetni, sureMetni, sureOzetiSatirlari, tarihSaat, tekliCubuklar,
 } from './refakat-akisi.ts';
 import { ORNEK_AKIS, ORNEK_OZET, t } from './test-refakat.ts';
 
@@ -122,5 +122,35 @@ describe('refakat kartının rotası (kart #708)', () => {
     expect(sonAnMetni(ORNEK_OZET)).toBe('Torna 2 → Freze 1 yolunda');
     expect(miniRota({ ...ORNEK_OZET, konum: { ...ORNEK_OZET.konum, durum: 'depoda' }, rota: ORNEK_OZET.rota.map((r) => ({ ...r, durum: 'sirada' as const })) }))
       .toEqual(['simdi', 'sirada', 'sirada', 'sirada', 'sirada']);
+  });
+});
+
+describe('listede sıradaki adım (2907)', () => {
+  const durumlu = (durumlar: ('gecti' | 'simdi' | 'sirada')[], konum: typeof ORNEK_OZET.konum.durum) => ({
+    ...ORNEK_OZET, konum: { ...ORNEK_OZET.konum, durum: konum }, rota: ORNEK_OZET.rota.map((r, i) => ({ ...r, durum: durumlar[i] ?? 'sirada' })),
+  });
+  it('kart bir adımdayken o adımdan sonraki ilk adım; yoldayken ya da depodayken sıradaki ilk adım', () => {
+    const op = ORNEK_OZET.rota.map((r) => `OP${String(r.opNo)}`);
+    expect(op.length).toBeGreaterThanOrEqual(3);
+    expect(siradakiMetni(durumlu(['gecti', 'simdi'], 'uretimde'))).toBe(op[2]);
+    expect(siradakiMetni(durumlu(['simdi'], 'ayarda'))).toBe(op[1]);
+    expect(siradakiMetni(durumlu(['gecti'], 'yolda'))).toBe(op[1]);
+    expect(siradakiMetni(durumlu([], 'depoda'))).toBe(op[0]);
+  });
+  it('son adımdayken çıkış; sevke hazırda sevk; kapanan ya da sevk edilen kartta yok', () => {
+    const son = ORNEK_OZET.rota.map((_, i, l) => (i === l.length - 1 ? 'simdi' as const : 'gecti' as const));
+    expect(siradakiMetni(durumlu(son, 'uretimde'))).toBe('Mamul deposu ya da sevk');
+    expect(siradakiMetni(durumlu(ORNEK_OZET.rota.map(() => 'gecti' as const), 'sevke_hazir'))).toBe('Sevk');
+    expect(siradakiMetni(durumlu([], 'kapandi'))).toBeNull();
+    expect(siradakiMetni(durumlu([], 'sevk_edildi'))).toBeNull();
+  });
+  it('sıra dışı başlatmada (sonraki adım başlamış, önceki yapılmamış) atlanan ilk adım gösterilir', () => {
+    const op = ORNEK_OZET.rota.map((r) => `OP${String(r.opNo)}`);
+    expect(siradakiMetni(durumlu(['gecti', 'sirada', 'simdi'], 'uretimde'))).toBe(`${op[1]!} atlandı`);
+    expect(siradakiMetni(durumlu(['sirada', 'gecti', 'simdi'], 'uretimde'))).toBe(`${op[0]!} atlandı`);
+    expect(siradakiMetni(durumlu(['gecti', 'sirada', 'gecti'], 'bekliyor'))).toBe(`${op[1]!} atlandı`);
+    // Sevke hazır kartta atlanan adım "Sevk"ten önce gelir: yapılmamış adım sevkten önce görülmelidir.
+    const sevkte = ORNEK_OZET.rota.map((_, i) => (i === 1 ? 'sirada' as const : 'gecti' as const));
+    expect(siradakiMetni(durumlu(sevkte, 'sevke_hazir'))).toBe(`${op[1]!} atlandı`);
   });
 });

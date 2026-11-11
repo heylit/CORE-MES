@@ -29,7 +29,10 @@ function Adres() {
   const l = useLocation();
   return <p>{l.pathname + l.search}</p>;
 }
-const ekran = [{ yol: '/uretim-emirleri/:id', ekran: EmirAyrintisi }, { yol: '/etiket-merkezi', ekran: Adres }];
+const ekran = [{ yol: '/uretim-emirleri/:id', ekran: EmirAyrintisi }, { yol: '/etiket-merkezi', ekran: Adres }, { yol: '/stok/refakat-kartlari', ekran: Adres }];
+const yer = (id: number, durum: 'yolda' | 'uretimde', opNo: number | null) => ({
+  id, konum: { durum, isEmriId: null, opNo, yer: null, beri: '2026-10-25T09:00:00+00:00' }, rota: [], sonAn: null, lead: { dk: null, acik: true },
+});
 const yollar = (emir: Emir = EMIR) => ({
   'GET /uretim-emirleri/12': () => json(200, { emir, kayitlar: [], adimlar: [] } satisfies EmirAyrintiCevabi),
   'GET /stok/uretim-emirleri/12/refakat-partileri': () => json(200, { partiler: KARTLAR }),
@@ -38,12 +41,12 @@ const satir = async (etiket: string) => (await screen.findByText(etiket)).closes
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
 describe('Refakat kartları (Soru 586)', () => {
-  it('stok okuması olana emrin depoda açılmış kartları lot, verilen ve durumla listelenir; eski emir kartı düğmesi yok', async () => {
+  it('stok okuması olana emrin depoda açılmış kartları lot ve durumla listelenir (2907: malzeme ve verilen kart sayfasında); eski emir kartı düğmesi yok', async () => {
     sunucuKur(STOKCU, yollar());
     ac(ekran, '/uretim-emirleri/12');
     const ilk = await satir('UE-000012-P1');
     expect(within(ilk).getByText('LT-00001')).toBeTruthy();
-    expect(within(ilk).getByText('2,5 kg')).toBeTruthy();
+    expect(within(ilk).queryByText('2,5 kg')).toBeNull();
     expect(within(ilk).getByText('Açık')).toBeTruthy();
     expect(within(await satir('UE-000012-P2')).getByText('Lot bekliyor')).toBeTruthy();
     expect(within(await satir('UE-000012-P3')).getByText('İptal')).toBeTruthy();
@@ -83,5 +86,29 @@ describe('Refakat kartları (Soru 586)', () => {
     sunucuKur(STOKCU, { ...yollar(), 'GET /stok/uretim-emirleri/12/refakat-partileri': () => json(200, { partiler: [] }) });
     ac(ekran, '/uretim-emirleri/12');
     expect(await screen.findByText(/Kart depoda, lot emre ayrılınca açılır/)).toBeTruthy();
+  });
+
+  it('2907: akış okuyana açık kartın yeri görünür (yalnız açık, lotlu kartlar sorulur); stok sayfası olana satır kartı kart sayfasında açar', async () => {
+    const istekler = sunucuKur({ ...STOKCU, islemler: [...STOKCU.islemler, 'sayfa.stok', 'akis.kart-oku'] }, {
+      ...yollar(),
+      'GET /akis/refakat-kartlari': () => json(200, { kartlar: [yer(1, 'uretimde', 20)] }),
+    });
+    ac(ekran, '/uretim-emirleri/12');
+    const ilk = await satir('UE-000012-P1');
+    expect(await within(ilk).findByText('OP20 · Operasyonda')).toBeTruthy();
+    expect(within(await satir('UE-000012-P2')).getByText('Lot bekliyor')).toBeTruthy();
+    expect(istekler.filter((i) => i.yol.startsWith('/akis/')).map((i) => i.yol)).toEqual(['/akis/refakat-kartlari?idler=1']);
+    fireEvent.click(ilk);
+    expect(await screen.findByText('/stok/refakat-kartlari?kart=1')).toBeTruthy();
+  });
+
+  it('2907: akış okuması yoksa yer sorulmaz, durum görünür; stok sayfası yoksa satır bir yere götürmez', async () => {
+    const istekler = sunucuKur(STOKCU, yollar());
+    ac(ekran, '/uretim-emirleri/12');
+    const ilk = await satir('UE-000012-P1');
+    expect(within(ilk).getByText('Açık')).toBeTruthy();
+    expect(istekler.some((i) => i.yol.startsWith('/akis/'))).toBe(false);
+    fireEvent.click(ilk);
+    expect(screen.queryByText(/^\/stok\/refakat-kartlari/)).toBeNull();
   });
 });

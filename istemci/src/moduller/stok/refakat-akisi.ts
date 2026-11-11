@@ -716,3 +716,37 @@ export function sonAnMetni(o: KartOzetleriCevabi['kartlar'][number]): string {
   return `${a.opNo === null ? '' : `${opKodu(a.opNo)} `}${AN[a.tur].ad.toLocaleLowerCase('tr-TR')}${a.yer && a.opNo !== null ? ` · ${a.yer}` : ''}`
     .replace(/^./, (h) => h.toLocaleUpperCase('tr-TR'));
 }
+
+// 2907 (2912 a): listede kartın sıradaki adımı. Kart bir adımdaysa ondan sonraki ilk adım, değilse (depoda, yolda, önünde bekliyor)
+// sıradaki ilk adım; adım kalmadıysa çıkış. Kapanan ya da sevk edilen kartta yoktur. Sıra dışı başlatmada (sonraki adım başlamış,
+// önceki yapılmamış) atlanan ilk adım "atlandı" diye gösterilir: yapılmadan kalmasın.
+export function siradakiMetni(o: KartOzetleriCevabi['kartlar'][number]): string | null {
+  const d = o.konum.durum;
+  if (d === 'kapandi' || d === 'sevk_edildi') return null;
+  const simdi = o.rota.findIndex((r) => r.durum === 'simdi');
+  const atlanan = o.rota.find((r, i) => r.durum === 'sirada' && o.rota.slice(i + 1).some((x) => x.durum !== 'sirada'));
+  if (atlanan !== undefined) return `${opKodu(atlanan.opNo)} atlandı`;
+  if (d === 'sevke_hazir') return 'Sevk';
+  const sonraki = o.rota.find((r, i) => i > simdi && r.durum === 'sirada');
+  return sonraki === undefined ? 'Mamul deposu ya da sevk' : opKodu(sonraki.opNo);
+}
+
+// Liste süzgeci: kartın yeri beş kümede; küme dışındaki kart (kapanan, lotu bekleyen, birleşen) yalnız "Hepsi"nde görünür.
+export const YER_KUMELERI: readonly { anahtar: string; ad: string; durumlar: readonly KartKonumuTuru[] }[] = [
+  { anahtar: 'depoda', ad: 'Depoda', durumlar: ['depoda'] },
+  { anahtar: 'yolda', ad: 'Yolda', durumlar: ['yolda'] },
+  { anahtar: 'atolyede', ad: 'Atölyede', durumlar: ['bekliyor', 'ayarda', 'uretimde', 'duraklatildi', 'durdu'] },
+  { anahtar: 'fasonda', ad: 'Fasonda', durumlar: ['fasonda'] },
+  { anahtar: 'sevke-hazir', ad: 'Sevke hazır', durumlar: ['sevke_hazir'] },
+];
+
+// Paneldeki rota: lot, adımlar ve çıkış; aradaki stok aşaması (teslim yolu, önünde bekleme) yalnız kart şimdi oradaysa görünür.
+export function rotaAdimlari(liste: readonly Asama[]): Asama[] {
+  return liste.filter((s) => s.tur !== 'stok' || s.durum === 'simdi');
+}
+export function rotaZamani(s: Asama): string {
+  if (s.tur === 'son') return s.bit !== null ? tarihSaat(s.bit) : s.plan?.metin ?? '';
+  if (s.durum === 'sirada') return s.plan ? `plan ${s.plan.metin}` : '';
+  return aralikMetni(s.bas, s.bit, s.acik);
+}
+export const rotaAltMetni = (s: Asama): string => (s.tur === 'op' && s.durum !== 'sirada' && s.cikan.length > 0 ? s.cikan.map((c) => `${c.miktar} ${c.ad}`).join(' · ') : s.alt);
