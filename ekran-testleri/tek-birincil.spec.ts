@@ -1,4 +1,5 @@
-import { expect, test } from './ortak.ts';
+import { randomUUID } from 'node:crypto';
+import { ADRES, expect, test } from './ortak.ts';
 
 // Her sayfada en çok bir birincil (sarı) düğme (kullanıcı kararı 2155-9 a, 06.11.2026): ikincisi çizgili olur, izleme sayfası
 // birincil taşımaz. Menüdeki bütün sayfalar gezilir; içerikteki görünür birincil düğmeler sayılır (kabuk sayılmaz).
@@ -22,7 +23,9 @@ const BORC: Readonly<Record<string, number>> = {
   '/plan/mesaiplan': 2,
   '/plan/fasonplan': 2,
   '/plan/malzplan': 2,
-  '/plan/yillik': 2,
+  // Planlama çalışması varken motor şeridindeki "Planı kur" üçüncü birincildir ("Yıllık planı çöz" iki kez + "Planı kur").
+  // Planlama yeni düzeni (kart 3038) şeritte tek birincil bırakınca bu borç kapanır.
+  '/plan/yillik': 3,
   '/plan/ufuk': 2,
   '/plan/sevkiyat': 2,
   '/recete-rota/plan': 3,
@@ -48,9 +51,14 @@ test('her sayfada en çok bir birincil düğme; bugünkü aşımlar borç listes
     [...document.querySelectorAll('a[href^="/"]')].map((a) => (a.getAttribute('href') ?? '').split(/[?#]/)[0] ?? ''),
   )].filter((y) => y !== '' && !/cikis|oturum/.test(y)));
   expect(yollar.length).toBeGreaterThan(20);
+  // Planlama sayfalarındaki birincil sayısı çalışma olup olmamasına bağlıdır: sonuç veritabanındaki duruma ve spec sırasına bağlı
+  // kalmasın diye çalışma her koşuda açılır (var olan çalışmaya dokunmaz).
+  const calisma = await page.request.post(`${ADRES}/api/plan/planlama-calismasi/olustur`, { headers: { 'istek-kimligi': randomUUID() } });
+  expect(calisma.status()).toBe(200);
   // Planlama'nın alt görünümleri yalnız ikinci menüdedir (B-2483-48): menüden toplanır, kök sayfayla birlikte ölçülür.
   await ac('/plan');
-  await expect(page.locator('[data-gorunum]')).toBeVisible();
+  // Planlama kabı (.tc-py) da, içindeki motor tahtası (.tc-pym) da data-gorunum taşır; yalnız kap beklenir.
+  await expect(page.locator('.tc-py[data-gorunum]')).toBeVisible();
   const planlama = await page.evaluate(() => [...new Set(
     [...document.querySelectorAll('a[href^="/plan/"]')].map((a) => (a.getAttribute('href') ?? '').split(/[?#]/)[0] ?? ''),
   )]);
