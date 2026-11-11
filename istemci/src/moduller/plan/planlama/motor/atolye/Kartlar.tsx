@@ -8,7 +8,7 @@ import type { AtolyeOlayi } from '#paylasilan/sozlesme/planlama-atolye.ts';
 import type { PlanlamaCalismasi } from '../../tipler.ts';
 import { degisken } from '../ortak.tsx';
 import { hamleYapisi, useHamleci } from '../hamle/hamle.ts';
-import { elleSayilari, simdiSaati } from '../kurallar.ts';
+import { elleSayilari, saatYazi, simdiSaati } from '../kurallar.ts';
 import { mesaiAdaylari } from '../secim/kurallar.ts';
 import { gunDondurmasiniKaldir, gunuDondur, sabitleriKaldir } from '../cizelge/kurallar.ts';
 import { Kararlar } from './Bugun.tsx';
@@ -159,7 +159,7 @@ function kartGovdesi(ort: Ortam, kart: AcikKart, bildir: Bildir): Govde | null {
               <>
                 <Satir a="Canlı sürüm" b={canli} />
                 <Satir a={<span title={GOSTERGE_GECIKEN_IPUCU}>Geciken emir</span>} b={`${sv ? sv.canli.geciken : '—'} → ${gostergeGecikenSay(ort.liste)}`} />
-                <Satir a="Toplam gecikme" b={`— → ${sure(p.ozet.wT)}`} />
+                <Satir a={<span title="Öncelik ağırlıklı gecikme: geciken saat, öncelik 1 için 4, öncelik 2 için 2 katıyla sayılır.">Ağırlıklı gecikme</span>} b={`— → ${saatYazi(p.ozet.wT)}`} />
               </>
             ) : <Not>Henüz canlı plan yok; bu plan ilk canlı plan olarak onaya gider.</Not>}
             {engel && <Not uyari>{engel}</Not>}
@@ -421,7 +421,7 @@ function gunOzeti(ort: Ortam): Govde {
         <div className="tc-pym-tp-karsi">
           <span /><b>Gün başı</b><b>Şimdi</b>
           <span>Geciken</span><b>{basi ? basi.e.late : '—'}</b><b>{p.ozet.late}</b>
-          <span>Toplam gecikme</span><b>{basi ? sure(basi.e.wT) : '—'}</b><b>{sure(p.ozet.wT)}</b>
+          <span title="Öncelik ağırlıklı gecikme: geciken saat, öncelik 1 için 4, öncelik 2 için 2 katıyla sayılır.">Ağırlıklı gecikme</span><b>{basi ? saatYazi(basi.e.wT) : '—'}</b><b>{saatYazi(p.ozet.wT)}</b>
           <span>Canlı plan</span><b>{basi ? `sürüm ${basi.surum}` : '—'}</b><b>{`sürüm ${canli ?? 0}`}</b>
         </div>
         {!basi && <Not>Bugünün gün başı kaydı yok.</Not>}
@@ -439,7 +439,7 @@ function gunOzeti(ort: Ortam): Govde {
             <details key={x.gun} className="tc-pym-tp-gecmis">
               <summary>
                 <b>{d.toLocaleDateString('tr-TR', { day: 'numeric', month: 'short', weekday: 'short' })}</b>
-                <span>{`gecikme ${sure(x.sabah.wT)} → ${sure(x.son.wT)} `}<span className={dw > 0.1 ? 'tc-pym-tp-kotu' : dw < -0.1 ? 'tc-pym-tp-iyi' : undefined}>{Math.abs(dw) < 0.1 ? '' : `${dw > 0 ? '+' : '−'}${sure(dw)}`}</span>{` · ${x.kararlar.length} karar`}</span>
+                <span>{`ağırlıklı gecikme ${saatYazi(x.sabah.wT)} → ${saatYazi(x.son.wT)} `}<span className={dw > 0.1 ? 'tc-pym-tp-kotu' : dw < -0.1 ? 'tc-pym-tp-iyi' : undefined}>{Math.abs(dw) < 0.1 ? '' : `${dw > 0 ? '+' : '−'}${saatYazi(Math.abs(dw))}`}</span>{` · ${x.kararlar.length} karar`}</span>
               </summary>
               {x.kararlar.length ? x.kararlar.map((k, i) => <Satir key={i} a={`${saatTr(k.t)} · ${k.ad}`} b="" />) : <Not>Karar yok.</Not>}
               {x.onaylar.map((k, i) => <Satir key={`o${i}`} a={`${saatTr(k.t)} · ${k.ad}`} b="" />)}

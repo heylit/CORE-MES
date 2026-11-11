@@ -80,7 +80,7 @@ function PlanGovdesi({ b }: { b: KartBaglami }) {
   const { c, p, cx } = b; const k = useMemo(() => planKarti(c, p, cx), [c, p, cx]);
   return (
     <>
-      <header className="tc-pyt-ust"><small>PLAN</small><b>Bütün atölye</b><small>{k.late}/{k.n} sipariş geç · toplam gecikme {saatYazi(k.wT)}</small></header>
+      <header className="tc-pyt-ust"><small>PLAN</small><b>Bütün atölye</b><small>{k.late}/{k.n} sipariş geç · <span title="Öncelik ağırlıklı gecikme: geciken saat, öncelik 1 için 4, öncelik 2 için 2 katıyla sayılır.">ağırlıklı gecikme</span> {saatYazi(k.wT)}</small></header>
       {k.en && (
         <p className="tc-pyt-yorum"><Simge ad="chart" boyut="k" />
           <span>Geç siparişleri en çok <button type="button" className="tc-pym-link tc-pym-mono" onClick={() => b.tezSec(k.en?.m ?? '')}>{k.en.m}</button> bekletiyor: {k.en.n} sipariş, toplam {saatYazi(k.en.v)}.

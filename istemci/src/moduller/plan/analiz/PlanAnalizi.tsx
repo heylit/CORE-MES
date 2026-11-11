@@ -17,7 +17,7 @@ export function PlanAnalizi() {
   const yenile = () => { void q.refetch(); };
   return (
     <div>
-      <SayfaBasligi baslik="Planlama analizi" simge="chart" alt="Tezgâh doluluğu: 8 hafta gerçek, 8 hafta canlı plan; plan güvenilirliğinin eğilimi."
+      <SayfaBasligi baslik="Planlama analizi" simge="chart" alt="Canlı plan: tezgâh doluluğu 8 hafta gerçek, 8 hafta plan; plan güvenilirliğinin eğilimi. Atölyedeki taslak plan canlıya alınınca burada görünür."
         birincil={{ etiket: 'Yenile', simge: 'rotate', yap: yenile, yukleniyor: q.isFetching }} />
       {q.isPending ? <DurumKutusu durum="yukleniyor" />
         : q.isError ? <DurumKutusu durum="hata" mesaj="Planlama analizi alınamadı" hata={q.error} yenile={yenile} />

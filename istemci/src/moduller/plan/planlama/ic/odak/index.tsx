@@ -101,7 +101,7 @@ export function OdakTahtasi(o: OdakOzellikleri) {
       </header>
       <p className="tc-pyo-etki" role="status">
         <Simge ad="gauge" boyut="k" />
-        <span>Planın şu hâli: toplam gecikme <b className="tc-pym-mono">{saatYazi(ozet.wT)}</b>, geç sipariş <b className="tc-pym-mono">{ozet.late}</b>.</span>
+        <span>Planın şu hâli: <span title="Öncelik ağırlıklı gecikme: geciken saat, öncelik 1 için 4, öncelik 2 için 2 katıyla sayılır.">ağırlıklı gecikme</span> <b className="tc-pym-mono">{saatYazi(ozet.wT)}</b>, geç sipariş <b className="tc-pym-mono">{ozet.late}</b>.</span>
         <span className="tc-pyo-ipucu">{`${dar ? 'Bir işe dokunun' : 'Bir işe basın'}; ayrıntısı ve sırası ${dar ? 'aşağıda' : 'yanda'} açılır. Sürükleyip taşımak: ${MOTOR_NOTU}`}</span>
       </p>
       <div className="tc-pyo-govde">

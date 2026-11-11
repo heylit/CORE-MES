@@ -47,7 +47,7 @@ export async function planKur(a: PlanKurmaAyari): Promise<string | null> {
     const ozet = plan.ozet as { wT?: number; late?: number; n?: number } | undefined;
     let alindi = false;
     a.komut.degistir('Plan çözüldü', (t) => (alindi = kurulanPlaniAl(t, plan, c.dataVer, a.kim, (a.simdi ?? Date.now)())), {
-      ayrinti: ozet?.wT != null ? `Sıfırdan kur · gecikme ${ozet.wT.toFixed(1)} sa, geciken ${String(ozet.late ?? 0)}/${String(ozet.n ?? 0)}` : 'Sıfırdan kur',
+      ayrinti: ozet?.wT != null ? `Sıfırdan kur · ağırlıklı gecikme ${ozet.wT.toFixed(1)} sa, geciken ${String(ozet.late ?? 0)}/${String(ozet.n ?? 0)}` : 'Sıfırdan kur',
       planKoru: true,
     });
     return alindi ? null : VERI_DEGISTI;

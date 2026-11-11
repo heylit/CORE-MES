@@ -86,6 +86,8 @@ describe('hamle önizlemesi (2129-1 b)', () => {
     expect(bolge.textContent).toContain('Plan iyileştirildi');
     expect(bolge.textContent).toContain('Sip O1');
     expect(bolge.textContent).toContain('zamanına girdi');
+    // 2999 a: motorun ölçüsü öncelik ağırlıklıdır; ağırlıksız toplamla karışmasın diye adıyla yazılır.
+    expect(bolge.textContent).toContain('Ağırlıklı gecikme');
     fireEvent.click(screen.getByRole('button', { name: 'Uygula' }));
     fireEvent.click(screen.getByRole('button', { name: 'Vazgeç' }));
     expect(uygula).toHaveBeenCalledOnce(); expect(vazgec).toHaveBeenCalledOnce();

@@ -60,6 +60,8 @@ describe('plan sağlığı', () => {
     expect(screen.getAllByText('%75').length).toBeGreaterThan(0);
     expect(screen.getByText('Veri eksikleri')).toBeTruthy();
     expect(screen.getByText(/yerleşmedi$/)).toBeTruthy();
+    // 2999 a: sayfa canlı planı ölçer; taslak plan canlıya alınmadan görünmez.
+    expect(screen.getByText(/^Canlı plan:.*canlıya alınınca burada görünür\.$/)).toBeTruthy();
   });
 
   it('müdür yalnız kartları görür', async () => {

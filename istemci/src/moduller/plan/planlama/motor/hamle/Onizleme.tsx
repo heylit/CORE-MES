@@ -4,7 +4,7 @@ import { saatYaz, saatYazi } from '../kurallar.ts';
 import type { DegisenSiparis, Hamleci } from './hamle.ts';
 import './hamle.css';
 
-// 2129-1 b: önizlenen hamlenin şeridi (eski c-masa hamle önizlemesi): ne değişti, toplam gecikme önce ve sonra, bitişi değişen siparişler;
+// 2129-1 b: önizlenen hamlenin şeridi (eski c-masa hamle önizlemesi): ne değişti, ağırlıklı gecikme önce ve sonra, bitişi değişen siparişler;
 // Uygula çalışmaya yazar (Geri al ile döner), Vazgeç atar. Önizleme yokken çizilmez.
 const DEGISEN_GORUNEN = 6;
 const DURUM: Record<DegisenSiparis['durum'], { ad: string; ton: 'tamam' | 'hata' | 'bilgi' }> = {
@@ -23,7 +23,7 @@ export function HamleOnizlemesi({ h, D, ad }: { h: Hamleci | null; D: PlanVerisi
         <Simge ad="eye" boyut="k" />
         <b>{o.ad}</b>
         <span className="tc-pym-hm-ozet">
-          Toplam gecikme <b className="tc-pym-mono">{saatYazi(once)}</b> → <b className="tc-pym-mono">{saatYazi(sonra)}</b>
+          <span title="Öncelik ağırlıklı gecikme: geciken saat, öncelik 1 için 4, öncelik 2 için 2 katıyla sayılır.">Ağırlıklı gecikme</span> <b className="tc-pym-mono">{saatYazi(once)}</b> → <b className="tc-pym-mono">{saatYazi(sonra)}</b>
           {fark !== null && <Rozet ton={fark < -0.05 ? 'tamam' : fark > 0.05 ? 'uyari' : 'bilgi'}>{fark < 0 ? `${saatYazi(-fark)} az` : fark > 0 ? `${saatYazi(fark)} fazla` : 'aynı'}</Rozet>}
         </span>
         {o.siparisId !== null && (

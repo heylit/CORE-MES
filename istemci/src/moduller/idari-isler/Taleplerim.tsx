@@ -72,7 +72,11 @@ export function Taleplerim() {
         ) : talepler.isPending ? (
           <DurumKutusu durum="yukleniyor" />
         ) : talepler.data.satirlar.length === 0 ? (
-          <DurumKutusu durum="bos" mesaj="Bu süzgece uyan talebin yok." />
+          <DurumKutusu durum="bos" mesaj={liste.suzulu ? 'Bu süzgece uyan talebin yok.' : 'Henüz talebin yok.'}>
+            {liste.suzulu
+              ? <Dugme simge="x" onClick={liste.suzgecleriTemizle}>Süzgeci temizle</Dugme>
+              : acabilir && <Dugme simge="plus" onClick={() => { void gezin('/idari-isler/talep-ac'); }}>Talep aç</Dugme>}
+          </DurumKutusu>
         ) : (
           <>
             <ul className="tc-ii-liste">
