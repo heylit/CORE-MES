@@ -8,8 +8,9 @@
 import type { PurchaseRequest } from "./tipler.ts";
 import { COMMITTED, FLOW, OPEN, PRIO, stLabel } from "./constants.ts";
 import { S, settings } from "./store.ts";
-import { approvalState, awardOrders, awardTotals, budgetUse, evaluate, orderDue, panoSayilari, payText, requiredApprover, supName, teslimBasarimi } from "./calc.ts";
+import { approvalState, awardOrders, awardTotals, evaluate, orderDue, panoSayilari, payText, requiredApprover, supName, teslimBasarimi } from "./calc.ts";
 import { addDays, dayDiff, esc, fmtDate, fmtTs, money, nf0, parseNum, pct, todayStr } from "./util.ts";
+import { butceHTML } from "./butce.ts";
 import { empty, headerFacts, prioDot, reqChip, tabItems, tabLog, verdictReasons } from "./views.ts";
 import { nameOf } from "./store.ts";
 import { geriDugmesiHTML } from "./ui.ts";
@@ -199,7 +200,6 @@ export function viewApproval(r: PurchaseRequest): string {
   if (!r.award || !tt) return back + head + `<div class="panel">${empty("Bu talepte henüz karar yok", "Satın alma karar verip onaya gönderdiğinde burada görünür.")}</div>`;
   const ev = tt.ev, top = ev.ranking[0];
   const req = requiredApprover(tt.totalTRY);
-  const bu = r.department ? budgetUse(r.department, todayStr().slice(0, 4)) : null;
   const orders = awardOrders(r);
   const chosenIsTop = r.award.mode === "single" && top && r.award.quoteId === top.q.id;
   const status = aps.state === "approved" ? '<div class="nextline done"><span class="nd"></span><span class="nt"><b>Onaylandı</b> <span>' + esc(aps.last?.name || "") + ", " + fmtTs(aps.last?.at ?? 0) + "</span></span></div>"
@@ -222,7 +222,7 @@ export function viewApproval(r: PurchaseRequest): string {
     </div></section>
     <section class="panel"><div class="panel-b kv">
       <div><div class="k">Gereken onay</div><div class="v" data-sa-y="22">${esc(req?.role || "–")}</div></div>
-      <div><div class="k">${esc(r.department || "Birim")} bütçesi</div><div class="v">${bu && bu.budget ? pct((bu.used + (r.status === "approval" ? tt.totalTRY : 0)) / bu.budget * 100) : "–"}</div><div class="d">${bu && bu.budget ? "bu alımla birlikte" : "bütçe tanımlı değil"}</div></div>
+      ${butceHTML(r, "onay")}
       <div><div class="k">Değerlendirilen</div><div class="v">${ev.elig.length} teklif</div><div class="d">${(r.rfqs || []).length} tedarikçiden istendi</div></div>
     </div></section>
   </div>

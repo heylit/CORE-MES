@@ -3,7 +3,7 @@ import type { Award, ExcessLine, Priority, PurchaseRequest, Quality, RequestStat
 import { CRIT, FLOW, OPEN, COMMITTED, PRIO, QUALITY, stLabel } from "./constants.ts";
 import { S, V, memo, nameOf, settings, type Page } from "./store.ts";
 import {
-  awardTotals, budgetUse, evaluate, lateBy, matOf, matStats, payText, priceHistory, quoteCalc, requiredApprover,
+  awardTotals, evaluate, lateBy, matOf, matStats, payText, priceHistory, quoteCalc, requiredApprover,
   savingsOf, spendLines, supName, supplierStats, validity, vsLast, fiyatUyarisi, type EvalRow, type Evaluation, type PriceEntry,
   awardOrders, orderDue, itemCost, planCost, type OrderInfo,
   approvalState, durumEtiketi, gecikenSiparisSayisi, siparisEtiketi,
@@ -15,6 +15,7 @@ import {
 import { viewMaterial, viewMaterials, viewReports, viewSettings, viewSupplier, viewSuppliers } from "./memory.ts";
 import { tabSim } from "./sim.ts";
 import { siparisTakibiHTML } from "./takip.ts";
+import { butceAbone, butceBaslik, butceHTML } from "./butce.ts";
 import { inlineBulkHTML } from "./ui.ts";
 import { kalemBagMetinleri } from "./kalem-bagi.ts";
 import { getRole, onaylayabilir, viewApproval, viewApprovals, viewRequesterHome, viewRequestRequester } from "./roles.ts";
@@ -24,6 +25,7 @@ let cizimSurumu = 0;
 const DINLEYICILER = new Set<() => void>();
 export function merkezAbone(f: () => void): () => void { DINLEYICILER.add(f); return () => { DINLEYICILER.delete(f); }; }
 export const merkezSurumu = (): number => cizimSurumu;
+butceAbone(() => { cizimSurumu++; for (const f of DINLEYICILER) f(); });
 /** Bu sayfanın başlığını, listesini ve adım şeridini ortak parçalar çizer; merkez yalnız gövdeyi (ya da hiçbir şeyi) yazar. */
 export const ortakEkranMi = (): boolean => getRole() === "buyer" && (V.page === "dash" || V.page === "requests" || V.page === "orders" || V.page === "request");
 export function render(): void {
@@ -409,8 +411,8 @@ export function headerFacts(r: PurchaseRequest): string[] {
     const est = sum((r.items || []).map(it => { const mid = matOf(it); const st = mid ? matStats(mid) : null; return st && st.last ? st.last.unitTRY * (parseNum(it.qty) || 0) : 0; }));
     if (est) out.push(`tahmini <b class="num">${money(est, "TRY", 0)}</b>`);
   }
-  const bu = r.department ? budgetUse(r.department, todayStr().slice(0, 4)) : null;
-  if (bu && bu.budget) out.push(`${esc(r.department)} bütçesi ${pct(bu.used / bu.budget * 100)}`);
+  const bu = butceBaslik(r);
+  if (bu) out.push(bu);
   return out;
 }
 /** Talep işlemleri menüsü: işlem adı, başlık, tehlikeli mi. */
@@ -664,7 +666,6 @@ export function tabDecision(r: PurchaseRequest, part: "select" | "split" | "appr
   // Sunucu durum dışı onay ve siparişi zaten reddeder; düğme yalnız işlem geçerliyken görünür (SA4).
   const canApprove = aps.state === "pending" && r.status === "approval" && onaylayabilir();
   const baskasiOnaylar = aps.state === "pending" && r.status === "approval" && !onaylayabilir();
-  const bu = r.department && tt ? budgetUse(r.department, todayStr().slice(0, 4)) : null;
   const decided = !!r.award;
   const ordered = COMMITTED.includes(r.status);
   const isSplit = decided && a.mode === "split";
@@ -719,7 +720,7 @@ export function tabDecision(r: PurchaseRequest, part: "select" | "split" | "appr
     <div class="kv">
       <div><div class="k">Tutar</div><div class="v">${tt ? money(tt.totalTRY, "TRY", 0) : "–"}</div><div class="d">KDV hariç${isSplit ? ", nakliye dahil" : ""}</div></div>
       <div><div class="k">Gereken onay</div><div class="v" data-sa-y="22">${ap ? esc(ap.role) : "Limit tanımlı değil"}</div><div class="d">${ap ? "Ayarlar'daki limitlere göre" : "Ayarlar'da onay limiti girilince yazılır"}</div></div>
-      ${bu && tt ? `<div><div class="k">${esc(r.department)} bütçesi</div><div class="v">${bu.budget ? pct((bu.used + (ordered ? 0 : tt!.totalTRY)) / bu.budget * 100) : "–"}</div><div class="d">${bu.budget ? `bu alımla ${short(bu.used + (ordered ? 0 : tt!.totalTRY))} / ${short(bu.budget)}` : "bütçe tanımlı değil"}</div></div>` : ""}
+      ${tt ? butceHTML(r, "karar") : ""}
     </div>
     ${approvals.length ? `<ul class="log">${approvals.map(x => `<li><time>${fmtTs(x.at)}</time><span><b>${x.decision === "approved" ? "Onaylandı" : "Reddedildi"}</b>, ${esc(x.name || nameOf(x.by))}${x.note ? `: ${esc(x.note)}` : ""}</span></li>`).join("")}</ul>` : ""}
     ${canApprove ? `<label class="f"><span>Not</span><input type="text" id="ap-note" placeholder="İsteğe bağlı"></label>

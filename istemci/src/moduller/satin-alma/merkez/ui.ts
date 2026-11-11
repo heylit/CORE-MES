@@ -21,6 +21,7 @@ import { labelTables, onAfterRender, PRESETS, rankHTML, readSplitAssign, render,
 import { basamakYazabilir, reportCSV, unlinkedItems } from "./memory.ts";
 import { partileriUnut } from "./partiler.ts";
 import { ODEME_SEKLI, siparisTakibi, takibiUnut, takipGuncelle } from "./takip.ts";
+import { butceyiUnut } from "./butce.ts";
 import { approvalFormHTML, poText, printDoc } from "./docs.ts";
 import { onaylayabilir, setRole, type Role } from "./roles.ts";
 import type { OdemePlaniSatiri, SiparisBelgesi } from "#paylasilan/sozlesme/satin-alma.ts";
@@ -815,7 +816,7 @@ export function eylemCalistir(act: string, veri: Record<string, string> = {}): v
   const r = V.page === "request" && V.id ? S.requests[V.id] ?? null : null;
   ACTIONS[act]?.(el, r);
 }
-export function go(page: Page, id?: string | null, tab?: string | null): void { partileriUnut(); takibiUnut(); V.page = page; V.id = id || null; V.tab = tab || null; UI.wDraft = null; $("#gres").hidden = true; render(); window.scrollTo(0, 0); }
+export function go(page: Page, id?: string | null, tab?: string | null): void { partileriUnut(); takibiUnut(); butceyiUnut(); V.page = page; V.id = id || null; V.tab = tab || null; UI.wDraft = null; $("#gres").hidden = true; render(); window.scrollTo(0, 0); }
 document.addEventListener("click", (e) => {
   if (!kokIcinde(e)) return;
   const target = e.target as HTMLElement;
