@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useId, useLayoutEffect, useRef, useState } from 'react';
 import type { Islem } from '#paylasilan/islemler.ts';
 import type { STOK_ISLEMLERI } from '#paylasilan/islemler/stok.ts';
 import type { KaliteDurumu } from '#paylasilan/sozlesme/stok.ts';
@@ -70,7 +70,36 @@ export function KaliteRozeti({ durum }: { durum: KaliteDurumu | undefined }) {
   return <Rozet ton={KALITE_ROZETI[durum].ton}>{KALITE_ROZETI[durum].etiket}</Rozet>;
 }
 
-export function SayfaBasi({ baslik, alt, sag }: { baslik: string; alt?: ReactNode; sag?: ReactNode }) {
+// Sabit sayfa açıklaması telefonda iki satırda kesilir (stok.css); içinde iş kuralı olduğundan "Devamı" tamamını açar.
+// Düğme yalnız metin gerçekten kesildiyse çıkar. Kaydın kendi bilgisi (miktar, irsaliye no) `alt`ta kalır ve kesilmez.
+function Aciklama({ metin }: { metin: ReactNode }) {
+  const p = useRef<HTMLParagraphElement>(null);
+  const kimlik = useId();
+  const [acik, setAcik] = useState(false);
+  const [kesik, setKesik] = useState(false);
+  useLayoutEffect(() => {
+    const e = p.current;
+    if (!e || acik) return;
+    const olc = () => setKesik(e.scrollHeight > e.clientHeight + 1);
+    olc();
+    if (typeof ResizeObserver === 'undefined') return;
+    const g = new ResizeObserver(olc);
+    g.observe(e);
+    return () => g.disconnect();
+  }, [acik, metin]);
+  return (
+    <>
+      <p ref={p} id={kimlik} className="tc-stok-alt tc-stok-aciklama" data-acik={acik || undefined}>{metin}</p>
+      {(kesik || acik) && (
+        <button type="button" className="tc-stok-bag tc-stok-aciklama-dugme" aria-expanded={acik} aria-controls={kimlik} onClick={() => setAcik(!acik)}>
+          {acik ? 'Kısalt' : 'Devamı'}
+        </button>
+      )}
+    </>
+  );
+}
+
+export function SayfaBasi({ baslik, alt, aciklama, sag }: { baslik: string; alt?: ReactNode; aciklama?: ReactNode; sag?: ReactNode }) {
   const [arama, setArama] = useState(false);
   useAramaKisayolu(() => setArama(true));
   return (
@@ -79,6 +108,7 @@ export function SayfaBasi({ baslik, alt, sag }: { baslik: string; alt?: ReactNod
         <div>
           <h2 className="tc-stok-baslik">{baslik}</h2>
           {alt !== undefined && <p className="tc-stok-alt">{alt}</p>}
+          {aciklama !== undefined && <Aciklama metin={aciklama} />}
         </div>
         <div className="tc-stok-eylem">{sag}<AraDugmesi ac={() => setArama(true)} /></div>
       </div>

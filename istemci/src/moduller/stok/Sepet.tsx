@@ -178,7 +178,7 @@ export function Sepet() {
   ];
   return (
     <section className="tc-stok">
-      <SayfaBasi baslik="Transfer" alt="Taşıyacağınız malzemeleri sepete ekleyin, her birine yer seçin, hepsini tek seferde taşıyın. Üretimden gelen istek için Malzeme istekleri."
+      <SayfaBasi baslik="Transfer" aciklama="Taşıyacağınız malzemeleri sepete ekleyin, her birine yer seçin, hepsini tek seferde taşıyın. Üretimden gelen istek için Malzeme istekleri."
         sag={<Dugme tur="birincil" simge="scan" onClick={() => paneliAc({ sekme: 'sepet', depoSepeti: true })}>Okutarak ekle</Dugme>} />
       <AkisSeridi etiket="Nasıl çalışır" adimlar={TRANSFER_AKISI} />
       {s.isError && <DurumKutusu durum="hata" mesaj={hataMetni(s.error)} yenile={() => void s.refetch()} />}

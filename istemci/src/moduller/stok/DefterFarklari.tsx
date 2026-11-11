@@ -32,7 +32,7 @@ export function DefterFarklari() {
   ];
   return (
     <section className="tc-stok">
-      <SayfaBasi baslik="Defter farkları" alt="Her gece bakiye, hareket defterinin toplamıyla karşılaştırılır. Fark burada görünür; düzeltme sayım ya da geri almayla yapılır." />
+      <SayfaBasi baslik="Defter farkları" aciklama="Her gece bakiye, hareket defterinin toplamıyla karşılaştırılır. Fark burada görünür; düzeltme sayım ya da geri almayla yapılır." />
       <Kart baslik={karsilastirma === null ? 'Henüz karşılaştırma yapılmadı' : `Son karşılaştırma · ${zamanMetni(karsilastirma.zaman)}`}>
         {karsilastirma !== null && (karsilastirma.farkSayisi === 0
           ? <Rozet ton="tamam">Bakiye defterle tutuyor</Rozet>

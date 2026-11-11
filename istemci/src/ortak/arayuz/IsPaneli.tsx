@@ -7,23 +7,33 @@ import './is-paneli.css';
 
 // Üst çubuktaki "Ne oldu?" düğmesi: kişi olayı seçer, panel onu işin yapıldığı ekrana götürür (finanstaki "Kayıt gir" gibi).
 // Olaysız kişide düğme çizilmez.
-export function IsPaneli({ gruplar }: { gruplar: readonly HizliIsGrubu[] }) {
+// Telefonda düğme üst çubuktan alt çubuğun ortasına iner (`altta`): başparmağın eriştiği yerdedir, üst çubukta başlığa yer kalır.
+export function IsPaneli({ gruplar, altta = false }: { gruplar: readonly HizliIsGrubu[]; altta?: boolean }) {
   const [acik, setAcik] = useState(false);
   const git = useNavigate();
   if (gruplar.length === 0) return null;
   return (
     <>
-      <button
-        type="button"
-        className="tc-kabuk-tema tc-is-paneli-dugme"
-        onClick={() => setAcik(true)}
-        aria-haspopup="dialog"
-        aria-label="Ne oldu? Kayıt gir"
-        title="Ne oldu? Kayıt gir"
-      >
-        <Simge ad="plus" />
-        <span className="tc-kabuk-dugme-ad" aria-hidden="true">Kayıt gir</span>
-      </button>
+      {altta
+        ? (
+          <button type="button" className="tc-kabuk-bag tc-kabuk-alt-kayit" onClick={() => setAcik(true)} aria-haspopup="dialog" aria-label="Ne oldu? Kayıt gir">
+            <span className="tc-kabuk-alt-kayit-daire"><Simge ad="plus" /></span>
+            <span className="tc-kabuk-bag-metin" aria-hidden="true">Kayıt gir</span>
+          </button>
+        )
+        : (
+          <button
+            type="button"
+            className="tc-kabuk-tema tc-is-paneli-dugme"
+            onClick={() => setAcik(true)}
+            aria-haspopup="dialog"
+            aria-label="Ne oldu? Kayıt gir"
+            title="Ne oldu? Kayıt gir"
+          >
+            <Simge ad="plus" />
+            <span className="tc-kabuk-dugme-ad" aria-hidden="true">Kayıt gir</span>
+          </button>
+        )}
       <Pencere acik={acik} kapat={() => setAcik(false)} baslik="Ne oldu?" tur="yan">
         <p className="tc-is-paneli-alt">Olayı seçin; sizi işin yapıldığı ekrana götürür.</p>
         {gruplar.map((g) => (

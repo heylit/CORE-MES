@@ -69,7 +69,7 @@ export function Konumlar() {
   useEffect(() => { if (l.data) liste.sayfaEsitle(l.data.sayfa, liste.sorgu.sayfa); }, [l.data]);
   return (
     <section className="tc-stok">
-      <SayfaBasi baslik="Konumlar" alt="Fabrika zemini (harita kareleri), raf gözleri, mal kabul alanı, üretim çıkışı ve fason kutuları." sag={tanimlar && <><HaritaEsleDugmesi /><Dugme tur="birincil" simge="plus" onClick={() => setAc('depo_zemini')}>Konum aç</Dugme></>} />
+      <SayfaBasi baslik="Konumlar" aciklama="Fabrika zemini (harita kareleri), raf gözleri, mal kabul alanı, üretim çıkışı ve fason kutuları." sag={tanimlar && <><Dugme tur="birincil" simge="plus" onClick={() => setAc('depo_zemini')}>Konum aç</Dugme><HaritaEsleDugmesi /></>} />
       <Sekmeler etiket="Konum görünümü" secili={gorunum} sec={setGorunum} sekmeler={[{ anahtar: 'zemin', baslik: 'Fabrika zemini' }, { anahtar: 'malzemeler', baslik: 'Konumdaki malzemeler' }, { anahtar: 'fason', baslik: 'Fason kutuları' }, { anahtar: 'liste', baslik: 'Bütün konumlar' }]} />
       {gorunum === 'zemin' && <ZeminIzgarasi />}
       {gorunum === 'malzemeler' && <KonumMalzemeleri />}

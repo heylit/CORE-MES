@@ -19,7 +19,7 @@ interface Ozellikler {
 }
 
 // Sık kullanılanları seçme ve sıralama (2951). Seçim kaydedilince menünün üstünde, bu sırayla durur; telefonun alt çubuğu
-// ilk üçünü alır. Yetki değişmez: listede kişinin zaten açabildiği sayfalar vardır.
+// ilk ikisini alır (Kayıt gir olmayan kişide ilk üçünü). Yetki değişmez: listede kişinin zaten açabildiği sayfalar vardır.
 export function MenuDuzenle({ kapat, gruplar, secili, surum, oneri }: Ozellikler) {
   const tumu = gruplar.flatMap((g) => g.sayfalar);
   const gorunur = (yol: string) => tumu.some((s) => s.yol === yol);

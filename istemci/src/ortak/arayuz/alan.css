@@ -23,3 +23,8 @@
 @media (max-width: 767px) {
   .tc-form { grid-template-columns: minmax(0, 1fr); }
 }
+
+/* Telefon: 16 px'ten küçük yazılı alana dokununca iOS sayfayı büyütüyor, kişi geri küçültmek zorunda kalıyordu. */
+@media (max-width: 767px) {
+  :is(input:not([type="checkbox"], [type="radio"], [type="range"], [type="color"]), select, textarea) { font-size: max(1em, var(--yazi-m)); }
+}

@@ -69,7 +69,7 @@ export function DepoSevk() {
   const girecek = satirlar.filter((s) => s.is === 'kabul');
   return (
     <section className="tc-stok">
-      <SayfaBasi baslik="Depo sevk" alt="Sevkiyatın tetiklediği gidişler son çıkış, gelişler kabul bekler. Firma kendisi alıyor ya da getiriyorsa kalem serbest bırakılınca düşer." />
+      <SayfaBasi baslik="Depo sevk" aciklama="Sevkiyatın tetiklediği gidişler son çıkış, gelişler kabul bekler. Firma kendisi alıyor ya da getiriyorsa kalem serbest bırakılınca düşer." />
       <Kart baslik={`Son çıkış bekleyen · ${cikacak.length}`}>
         <Tablo etiket="Son çıkış bekleyen" kip="kaydir" sutunlar={sutunlar('cikis')} satirlar={cikacak} satirAnahtari={(s) => s.kalemId} mesgul={liste.isPending} bosMesaj="Son çıkış bekleyen kalem yok." />
       </Kart>

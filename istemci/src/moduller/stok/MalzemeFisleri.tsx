@@ -85,7 +85,7 @@ export function MalzemeFisleri() {
   }
   return (
     <section className="tc-stok">
-      <SayfaBasi baslik="Belgeler" alt="Stoğun bütün belgeleri tek listede: malzeme fişleri, mal kabul, teslim fişi ve toplama listesi; hareket fişleri kendi sekmesinde. Belge stok hareketinden oluşur; elle düzenlenmez."
+      <SayfaBasi baslik="Belgeler" aciklama="Stoğun bütün belgeleri tek listede: malzeme fişleri, mal kabul, teslim fişi ve toplama listesi; hareket fişleri kendi sekmesinde. Belge stok hareketinden oluşur; elle düzenlenmez."
         sag={<Dugme simge="download" disabled={!l.data?.satirlar.length} onClick={() => l.data && csvIndir(l.data.satirlar)}>CSV indir</Dugme>} />
       <div className="tc-stok-arac">
         <Girdi etiket="Ara" placeholder="Belge no" value={arama} onChange={(e) => setArama(e.target.value)} />

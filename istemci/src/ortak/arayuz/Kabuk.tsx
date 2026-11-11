@@ -262,6 +262,7 @@ export function Kabuk({
   const [performans, performansDegistir] = usePerformans();
   const performansEtiketi = performans ? 'Performans modunu kapat' : 'Performans modunu aç';
   const [tumuAcik, tumuYaz] = useState(false);
+  const [tumAramasi, tumAramasiYaz] = useState('');
   const [parolaAcik, parolaYaz] = useState(false);
   const [tamEkran, tamEkranYaz] = useState(false);
   // Ana menünün daraltılmışlığı tarayıcıya aittir: aynı bilgisayarda çalışan herkes aynı genişlikte bulur (karar 682 a).
@@ -357,6 +358,7 @@ export function Kabuk({
   }, [menuDar, menuDarYaz]);
 
   useEffect(() => { tumuYaz(false); }, [konum.pathname]);
+  useEffect(() => { if (!tumuAcik) tumAramasiYaz(''); }, [tumuAcik]);
 
   // Takılma koruması (kart 2092, karar 2081-29): kare hızı düşünce bu oturumda sade kipe geçilir ve bir kez söylenir.
   const [sadelesti, sadelestiYaz] = useState(false);
@@ -434,6 +436,17 @@ export function Kabuk({
   });
   // Yalnız kişinin gördüğü sayfaların sayısı okunur: görmediği sayfanın ucunu yoklamaz.
   const anaMenuSayaclari = ikinciMenuler.filter((m) => m.anaMenuSayaci !== undefined && m.sayacUcu !== undefined && sayfalar.some((p) => p.yol === m.kok));
+  const altSayfalar = (sikKullanilanlar.length > 0 ? sikKullanilanlar : rolMenusu ?? menudekiler)
+    .slice(0, ALT_CUBUK_SAYISI - (olayGruplari.length > 0 ? 2 : 1));
+  // Telefonda "Tümü" elli sayfaya yakın listedir: ad yazılınca gruplar yerine yalnız eşleşen sayfalar kalır.
+  const tumSorgu = tumAramasi.trim().toLocaleLowerCase('tr');
+  // Grup adı da eşleşir: "stok" yazan kişi Stok grubunun bütün sayfalarını bulur.
+  const tumBulunanlar = tumSorgu === ''
+    ? null
+    : [...new Map([
+      ...gruplar.flatMap((g) => (g.grup.toLocaleLowerCase('tr').includes(tumSorgu) ? g.sayfalar : g.sayfalar.filter((s) => s.baslik.toLocaleLowerCase('tr').includes(tumSorgu)))),
+      ...yeniEkranlar.filter((s) => s.baslik.toLocaleLowerCase('tr').includes(tumSorgu)),
+    ].map((s) => [s.yol, s] as const)).values()];
   return (
     <AnaMenuSayacBaglami.Provider value={anaMenuSayilari}>
     <HesapMaddesiBaglami.Provider value={maddeDurumuYaz}>
@@ -614,7 +627,10 @@ export function Kabuk({
 
         <nav className="tc-kabuk-alt" aria-label="Alt gezinme">
           <Baglanti sayfa={anaBaglanti} tam />
-          {(sikKullanilanlar.length > 0 ? sikKullanilanlar : rolMenusu ?? menudekiler).slice(0, ALT_CUBUK_SAYISI - 1).map((s) => <Baglanti key={s.yol} sayfa={s} />)}
+          {/* Kayıt gir olan kişide orta yuva onundur; sık kullanılanların ikisi onun iki yanında durur. */}
+          {altSayfalar.slice(0, 1).map((s) => <Baglanti key={s.yol} sayfa={s} />)}
+          {olayGruplari.length > 0 && <IsPaneli gruplar={olayGruplari} altta />}
+          {altSayfalar.slice(1).map((s) => <Baglanti key={s.yol} sayfa={s} />)}
           <button type="button" className="tc-kabuk-bag" onClick={() => tumuYaz(true)} aria-haspopup="dialog">
             <Simge ad="dash" />
             <span className="tc-kabuk-bag-metin">Tümü</span>
@@ -655,16 +671,42 @@ export function Kabuk({
               </button>
             </div>
             <p className="tc-kabuk-tum-kisi"><Simge ad="user" boyut="k" />{kullaniciAdi}</p>
+            <label className="tc-kabuk-tum-ara">
+              <Simge ad="search" boyut="k" />
+              <input
+                className="tc-alan-kutu"
+                type="search"
+                value={tumAramasi}
+                onChange={(o) => tumAramasiYaz(o.target.value)}
+                placeholder="Sayfa ara"
+                aria-label="Sayfa ara"
+                enterKeyHint="search"
+              />
+            </label>
+            {tumBulunanlar !== null ? (
+              <div className="tc-kabuk-grup tc-kabuk-tum-izgara" role="group" aria-label="Bulunan sayfalar">
+                {tumBulunanlar.length === 0
+                  ? <p className="tc-kabuk-tum-yok">Bu adla sayfa yok</p>
+                  : tumBulunanlar.map((s) => <Baglanti key={s.yol} sayfa={s} kapat={() => tumuYaz(false)} />)}
+              </div>
+            ) : (
+              <>
             <Baglanti sayfa={anaBaglanti} tam kapat={() => tumuYaz(false)} />
-            {/* Telefonda ana menü yoktur; sık kullanılanlar buradan seçilir, alt çubuk ilk üçünü alır. */}
+            {/* Telefonda ana menü yoktur; sık kullanılanlar buradan seçilir, alt çubuk ilk ikisini alır (Kayıt gir olmayan kişide ilk üçünü). */}
             {sorguVar && (
               <button type="button" className="tc-kabuk-bag" onClick={() => { tumuYaz(false); menuDuzenleYaz(true); }} aria-haspopup="dialog">
                 <Simge ad="edit" />
                 <span className="tc-kabuk-bag-metin">Menüyü düzenle</span>
               </button>
             )}
+            {sikKullanilanlar.length > 0 && (
+              <div className="tc-kabuk-grup tc-kabuk-tum-izgara" role="group" aria-label="Sık kullanılanlar">
+                <p className="tc-kabuk-grup-ad">Sık kullanılanlar</p>
+                {sikKullanilanlar.map((s) => <Baglanti key={s.yol} sayfa={s} kapat={() => tumuYaz(false)} />)}
+              </div>
+            )}
             {gruplar.map((g) => (
-              <div className="tc-kabuk-grup" key={g.grup}>
+              <div className="tc-kabuk-grup tc-kabuk-tum-izgara" key={g.grup}>
                 <p className="tc-kabuk-grup-ad">{g.grup}</p>
                 {g.sayfalar.map((s) => <Baglanti key={s.yol} sayfa={s} kapat={() => tumuYaz(false)} />)}
               </div>
@@ -674,6 +716,8 @@ export function Kabuk({
                 <p className="tc-kabuk-grup-ad">{YENI_EKRAN_GRUBU}</p>
                 {yeniEkranlar.map((s) => <Baglanti key={s.yol} sayfa={s} kapat={() => tumuYaz(false)} />)}
               </div>
+            )}
+              </>
             )}
           </div>
         )}

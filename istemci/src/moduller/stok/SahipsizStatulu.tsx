@@ -30,7 +30,7 @@ export function SahipsizStatulu() {
   ];
   return (
     <section className="tc-stok">
-      <SayfaBasi baslik="Sahipsiz statülü stok" alt="Statüde duran ama açık hiçbir emre ayrılmamış malzeme. Aynı ürün ve OP'nin herhangi bir emri kullanabilir; bir emre ayırmak için malzeme ayrıntısında Rezerve et. Red stok burada görünmez; plan karar bekleyeni saymaz." />
+      <SayfaBasi baslik="Sahipsiz statülü stok" aciklama="Statüde duran ama açık hiçbir emre ayrılmamış malzeme. Aynı ürün ve OP'nin herhangi bir emri kullanabilir; bir emre ayırmak için malzeme ayrıntısında Rezerve et. Red stok burada görünmez; plan karar bekleyeni saymaz." />
       <Kart baslik={satirlar.length === 0 ? 'Sahipsiz statülü stok yok' : `${satirlar.length} satır sahipsiz`}>
         {satirlar.length > 0 && <Rozet ton="uyari">Plan bu stoğu bir emrin zincirinde görmez</Rozet>}
         <Tablo etiket="Sahipsiz statülü stok" kip="kaydir" sutunlar={sutunlar} satirlar={satirlar} satirAnahtari={(s) => `${s.malzemeId}-${s.statuId}-${s.kaliteDurumu}`}

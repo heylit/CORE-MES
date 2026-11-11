@@ -555,7 +555,7 @@ export function Hazirlik() {
   if (id) return <ListeAyrintisi id={Number(id)} />;
   return (
     <section className="tc-stok">
-      <SayfaBasi baslik="Malzeme istekleri" alt="Üretimin istediği malzemeyi raftan toplayıp istasyona ya da kişiye götürün. İstek olmadan yer değiştirmek için Transfer." />
+      <SayfaBasi baslik="Malzeme istekleri" aciklama="Üretimin istediği malzemeyi raftan toplayıp istasyona ya da kişiye götürün. İstek olmadan yer değiştirmek için Transfer." />
       <AkisSeridi etiket="Nasıl çalışır" adimlar={HAZIRLIK_AKISI} />
       <Istekler />
       <Listeler />

@@ -425,7 +425,7 @@ export function RefakatKartlari() {
     <section className="tc-stok tc-refakat">
       <SayfaBasi
         baslik="Refakat kartları"
-        alt="Kart nerede, hangi adımda, sırada ne var; kartı okutun ya da listeden seçin."
+        aciklama="Kart nerede, hangi adımda, sırada ne var; kartı okutun ya da listeden seçin."
         sag={(
           <label className="tc-refakat-okut">
             <Simge ad="scan" boyut="k" />

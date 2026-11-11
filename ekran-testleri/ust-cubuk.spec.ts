@@ -31,17 +31,17 @@ for (const genislik of GENISLIKLER) {
   });
 }
 
-// Telefonda düğmeler bir satırı doldurur; sayfa adı onların altındaki kendi satırında tam okunur.
-test('360 genişlikte sayfa adı düğmelerin altında kendi satırında kesilmeden okunur', async ({ page, ac }, bilgi) => {
+// Telefonda üst çubuk tek satırdır: sayfa adı Geri ile arama arasında durur, uzun ad kesilmez, satıra bölünür.
+test('360 genişlikte sayfa adı düğmelerle aynı satırda kesilmeden okunur', async ({ page, ac }, bilgi) => {
   test.skip(bilgi.project.name !== 'g1280', 'genişliği test kurar');
   await page.setViewportSize({ width: 360, height: 800 });
-  // Uzun adlar 360'ta tek satıra sığmaz; ad üç noktayla kesilmez, iki satıra iner (borç #322).
+  // Uzun adlar 360'ta tek satıra sığmaz; ad üç noktayla kesilmez, satıra bölünür (borç #322).
   const uzun = [{ yol: '/malzemeler', baslik: 'Malzemeler ve Hizmetler' }, { yol: '/musteri-tedarikci', baslik: 'Müşteriler ve Tedarikçiler' }];
   for (const s of [...SAYFALAR, ...uzun, { yol: '/stok', baslik: 'Stok Merkezi' }, { yol: '/uretim-terminali', baslik: 'Üretim Terminali' }]) {
     await ac(s.yol);
     const baslik = page.locator('h1.tc-kabuk-baslik');
     await expect(baslik).toHaveText(s.baslik);
-    // Yetkiye bağlı üst eylemler (Okut gibi) oturum işlemleri gelince eklenir ve başlığı alt satıra iter; tek anlık ölçüm o
+    // Yetkiye bağlı üst eylemler (Okut gibi) oturum işlemleri gelince eklenir ve başlığı daraltır; tek anlık ölçüm o
     // ekleme öncesine denk gelirse düşüyordu. Düzen oturana kadar yeniden ölçülür; kalıcı bozukluk yine düşer.
     await expect(async () => {
       const olcu = await baslik.evaluate((e) => ({ yatay: e.scrollWidth - e.clientWidth, dikey: e.scrollHeight - e.clientHeight, en: e.clientWidth }));
@@ -50,7 +50,7 @@ test('360 genişlikte sayfa adı düğmelerin altında kendi satırında kesilme
       expect(olcu.dikey, `${s.yol} başlık dikeyde kesiliyor`).toBeLessThanOrEqual(0);
       const b = await baslik.boundingBox();
       const geri = await page.locator('.tc-kabuk-ust > .tc-arama').boundingBox();
-      expect(b !== null && geri !== null && b.y >= geri.y + geri.height, `${s.yol} başlık düğmelerin altında değil`).toBe(true);
+      expect(b !== null && geri !== null && b.y < geri.y + geri.height && b.y + b.height > geri.y, `${s.yol} başlık düğmelerle aynı satırda değil`).toBe(true);
       expect(await ustCubukCakisanlar(page), `${s.yol} üst çubukta üst üste binen düğmeler`).toEqual([]);
     }).toPass({ timeout: 10_000 });
   }

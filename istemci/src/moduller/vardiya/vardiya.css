@@ -63,6 +63,12 @@
   .tc-vr-haftalik .tc-vr-hafta { text-align: left; }
   .tc-vr-haftalik .tc-vr-kopya { text-align: right; }
 }
+/* Telefon: uzun iş merkezi adı satırı 360'tan taşırıyordu; gün düğmeleri parmakla basılacak boyda (44 px) ve sütunu doldurur. */
+@media (max-width: 767px) {
+  .tc-vr-haftalik tbody th { white-space: normal; overflow-wrap: anywhere; }
+  .tc-vr-haftalik .tc-vr-hucre { align-items: stretch; }
+  .tc-vr-haftalik .tc-vr-vd { min-block-size: var(--dokunma); min-inline-size: 0; inline-size: 100%; }
+}
 
 /* Günlük mesai */
 .tc-vr-ozet { display: grid; gap: var(--b-3); grid-template-columns: repeat(auto-fill, minmax(min(100%, var(--pano-kart-enaz)), 1fr)); }
