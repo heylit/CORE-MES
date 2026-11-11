@@ -5,7 +5,7 @@ import { surumluGuncelle } from '#cekirdek/surum.ts';
 import type { SayfaliListe } from '#paylasilan/liste.ts';
 import type {
   DepolarCevabi, Konum, KonumAyrintiCevabi, KonumlarListesi, Raf, RafAcKomutu, RafDuzenleKomutu, RafDuzenleCevabi, KonumDuzenleCevabi, RafMatrisiCevabi, RaflarListesi, YerlesimCevabi,
-  YerlesimKaydetKomutu, HaritaEslemeCevabi, HaritaOzetiCevabi, GozStoklariCevabi, KonumMalzemesi, KonumMalzemeleriListesi,
+  YerlesimKaydetKomutu, HaritaEslemeCevabi, HaritaOzetiCevabi, TopluBolumDeposuCevabi, GozStoklariCevabi, KonumMalzemesi, KonumMalzemeleriListesi,
 } from '#paylasilan/sozlesme/stok.ts';
 import type { GozKalemi, GozKalemiKaydi, KayitCevabi, RafKaydi } from '#paylasilan/sozlesme/atolye.ts';
 import { type ElleKonumTuru, type ZeminCevabi } from '#paylasilan/sozlesme/stok.ts';
@@ -13,7 +13,7 @@ import {
   alanlar as haritaAlanlari, gozAdresi as haritaGozAdresi, gozKaleminBolumu, gozKalemiSil as haritaGozKalemiSil, gozKalemiYaz as haritaGozKalemiYaz, gozler as haritaGozleri, rafYerlesimiKaydet,
   zemin as haritaZemini,
 } from '../../atolye/disari.ts';
-import { bolmeNo, rafGozleri, haritaPlani, haritaAlaniMi, depoKoduOner, konumTurDegisimEngeli, koduDegisenler } from '../kurallar.ts';
+import { bolmeNo, rafGozleri, haritaPlani, haritaAlaniMi, depoKoduOner, deposuzBolumler, konumTurDegisimEngeli, koduDegisenler } from '../kurallar.ts';
 import * as sorgular from '../sorgular.ts';
 import { korumali, adlar, emirNoHaritasi, bakiyeSatiri } from './ortak.ts';
 
@@ -130,7 +130,8 @@ export async function haritaOzeti(db: Db): Promise<HaritaOzetiCevabi> {
   for (const a of alanlar) if (haritaAlaniMi(a.tur) && !bolumler.has(a.salonId)) bolumler.set(a.salonId, { salonId: a.salonId, kod: `Bölüm ${a.salonId}`, gozSayisi: 0 });
   const depo = new Map(depolar.flatMap((d) => (d.salonId !== null && d.aktif ? [[d.salonId, d.kod] as const] : [])));
   return {
-    ...(await sorgular.haritaBagSayilari(db)), eslenmemis: plan.ekle.length + plan.atlanan.length, bagsizKonumlar: await sorgular.haritasizKonumlar(db),
+    ...(await sorgular.haritaBagSayilari(db)), eslenmemis: plan.ekle.length + plan.atlanan.length,
+    deposuzYer: deposuzBolumler({ gozler, alanlar, depolar }).reduce((t, b) => t + b.yer, 0), bagsizKonumlar: await sorgular.haritasizKonumlar(db),
     bolumler: [...bolumler.values()].sort((x, y) => x.kod.localeCompare(y.kod, 'tr')).map((b) => ({ ...b, depoKod: depo.get(b.salonId) ?? null })),
   };
 }
@@ -182,6 +183,22 @@ export async function bolumDeposu(db: Db, salonId: number, depoOlsun: boolean): 
   }
   await haritadanEsle(db);
   return haritaOzeti(db);
+}
+
+// 2902: deposu olmayan bütün bölümler (depodan çıkarılmış olan da) depo olur, sonra eşleme koşar. Uç tek transaction'dır: bir bölümde
+// kod çakışması ya da eşleme hatası olursa hiçbir depo ve konum yazılmaz.
+export async function topluBolumDeposu(db: Db): Promise<TopluBolumDeposuCevabi> {
+  const { gozler, alanlar, depolar } = await haritaDurumu(db);
+  const kodlar = new Set(depolar.map((d) => d.kod));
+  const bolumler = deposuzBolumler({ gozler, alanlar, depolar });
+  for (const b of bolumler) {
+    if (b.depoId !== null) { await sorgular.depoAktifligi(db, b.depoId, true); continue; }
+    const kod = depoKoduOner(b.kod, kodlar);
+    kodlar.add(kod);
+    await korumali(() => sorgular.haritaDeposuAc(db, { salonId: b.salonId, kod, ad: b.kod }));
+  }
+  const e = await haritadanEsle(db);
+  return { acilanDepo: bolumler.length, eklenen: e.eklenen, atlanan: e.atlanan, koduDegisenler: e.koduDegisenler, ozet: await haritaOzeti(db) };
 }
 
 // ---- Raf -------------------------------------------------------------------------------------------------------------------

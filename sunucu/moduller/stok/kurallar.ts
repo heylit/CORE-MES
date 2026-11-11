@@ -699,6 +699,28 @@ export function haritaPlani(g: { gozler: readonly HaritaGozu[]; alanlar: readonl
   return plan;
 }
 
+// 2902: stok deposu olmayan (hiç depo kaydı olmayan ya da depodan çıkarılmış) bölümler ve orada stok konumu olamayan yer sayısı.
+// Bölüm listesi eşleme özetindekidir: gözü ya da stok alanı olan bölüm. Fabrika geneli alan deposuz bölümde de ANA'ya bağlandığı için
+// sayılmaz; kabul, üretim çıkışı ve depo zemini ile raf gözleri sayılır. Kod, tek tek "Depo yap" ile aynı kaynaktan gelir.
+export interface DeposuzBolum { salonId: number; kod: string; depoId: number | null; yer: number }
+export function deposuzBolumler(g: { gozler: readonly HaritaGozu[]; alanlar: readonly HaritaAlani[]; depolar: readonly HaritaDeposu[] }): DeposuzBolum[] {
+  const aktif = new Set(g.depolar.flatMap((d) => (d.salonId !== null && d.aktif ? [d.salonId] : [])));
+  const pasif = new Map(g.depolar.flatMap((d) => (d.salonId !== null && !d.aktif ? [[d.salonId, d.id] as const] : [])));
+  const bolumler = new Map<number, DeposuzBolum>();
+  const bolum = (salonId: number, kod: string): DeposuzBolum => {
+    const b = bolumler.get(salonId) ?? { salonId, kod, depoId: pasif.get(salonId) ?? null, yer: 0 };
+    bolumler.set(salonId, b);
+    return b;
+  };
+  for (const z of g.gozler) if (!aktif.has(z.salonId)) bolum(z.salonId, z.salonKodu).yer += 1;
+  for (const a of g.alanlar) {
+    if (aktif.has(a.salonId) || !haritaAlaniMi(a.tur)) continue;
+    const b = bolum(a.salonId, `BOLUM${a.salonId}`);
+    if (!FABRIKA_GENELI.has(a.tur)) b.yer += 1;
+  }
+  return [...bolumler.values()].sort((x, y) => x.salonId - y.salonId);
+}
+
 // DEP-62 (kart #1304): türü yalnız elle açılan konumda değişir. Haritaya bağlı konumun türü alanın türünden gelir; stoklu konumun
 // türü değişmez (kullanılabilir stok yalnız taşımayla değişsin); sabit konum (KABUL, URETIM) kendi türünde kalır.
 export function konumTurDegisimEngeli(k: { kod: string; tur: KonumTuru; haritaGozId: number | null; haritaAlanId: number | null; satirSayisi: number }, yeni: KonumTuru): string | null {

@@ -570,3 +570,10 @@ Lotun son kullanma tarihi (SKT) yeni `stok_parti_son_kullanma` tablosundadır (2
 ## Emir sarfının son alış tutarı (kart 2727-1; 2613-3 a)
 
 `disari.ts` `emirSarfSonAlisTutarlari(db, emirIdler)`: emirlerinNetSarfi ile aynı (emir, malzeme) çifti ve net miktarı; tutar geri alınmamış her sarf ve emirli fire çıkışının miktarı x çıkış anındaki son alış (emirsizCikisTutari ile aynı fiyat yolu), TL kuruşlu metin. Geri alınan çıkış ile geri alması birlikte dışarıdadır; kısmi geri almada kalan miktar yeni çıkış olarak kendi anının fiyatıyla sayılır. Fire de son alışla sayılır (talaş fiyatı değil). Çiftte son alışı bilinmeyen çıkış varsa tutar null. `ilkZaman` (2739-2, 2733 a): çiftin geri alınmamış ilk sarf ya da fire çıkışının anı, yoksa null; proje siparişinin net teslimi emirlere bu sırayla dağılır. Uç ve yetki yok.
+
+## Bütün bölümleri depo yap (kart 2902, D1)
+
+- Yeni uç `POST /stok/harita-bolumleri/toplu-depo` (`stok.tanim`, tekrar korumalı, gövdesiz): deposu olmayan bütün bölümler (pasif depo kaydı varsa o açılır, yoksa `depoKoduOner` ile yeni) depo olur, ardından `haritadanEsle` koşar. Cevap `{ acilanDepo, eklenen, atlanan, koduDegisenler, ozet }`.
+- `GET /stok/harita-ozeti` cevabına `deposuzYer` (boş olabilir): depo olmayan bölümdeki raf gözü ve kabul, üretim çıkışı, depo zemini alanı.
+- Ayarlar > "Fabrika Haritası eşlemesi" kartında "Bütün bölümleri depo yap" düğmesi (yalnız `stok.tanim`, yalnız deposuz bölüm varken); sonuç sayılarla bildirilir. Eşleme kuralı (`haritaPlani`) ve konum türleri değişmedi; göç yok.
+- VARSAYIM: elle "Depodan çıkar" yapılmış bölüm de toplu komutla yeniden depo olur (istek: "deposu olmayan bütün bölümler"). Geri alma ucuz (tek süzgeç).

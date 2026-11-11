@@ -158,3 +158,7 @@ Kart #99 (soru 104 a): `POST /stok/mal-kabul` (`stok.giris`) satın alma satır�
 | `GET /stok/tur-listeleri/:liste` (stok okuma) | yalnız okuma; liste adı üç değerden biri | `skt.test.ts` kimyasal ve takım listesi 200 | bilinmeyen liste 400, oturumsuz 401 |
 | `POST /stok/partiler/:id/son-kullanma` (`stok.skt-onayla`) | sürüm; tekrar korumalı; yalnız SKT takipli kartın lotu; eski ve yeni tarih, kişiyle değişiklik defterinde | müdür ilk düzeltme 200; aynı istek kimliği ilk cevabı döner | depocu 403, eski ya da boş sürüm 409, takipsiz kart 422, kimliksiz 400 |
 | `POST /stok/cikis` `sktOnay` | SKT'si geçmiş lot onaysız ONAY_GEREKLI; onay yalnız `stok.skt-onayla` ile; not harekette | müdür onayı 200 | onaysız 409, depocunun onayı 403 |
+
+| Uç (kart 2902) | Sunucudaki kurallar | İzinli test | Reddeden test |
+|---|---|---|---|
+| `POST /stok/harita-bolumleri/toplu-depo` (`stok.tanim`) | tekrar korumalı; tek transaction (hata olursa hiçbir depo ve konum kalmaz); yalnız haritadaki bölüm; kod sunucuda `depoKoduOner` ile; gövde yok | depo rolü 200, sayılar | oturumsuz 401, kalite rolü 403 (yazım olmaz), veritabanı reddinde hiçbiri kalmaz |
