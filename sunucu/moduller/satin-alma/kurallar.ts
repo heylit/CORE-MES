@@ -95,6 +95,10 @@ export const ILETILER = {
   katalogYok: 'Katalog kalemi bulunamadı.',
   yetkiYok: 'Bu değişiklik için yetkiniz yok.',
   gecisYok: 'Talep bu durumdan istenen duruma geçemez.',
+  talebimSahibiDegil: 'Yalnız kendi açtığınız ya da adınıza açılan talebi düzenleyebilirsiniz.',
+  talebimDuzenlenmez: 'Talep teklif istendikten sonra düzenlenemez; değişikliği satın almaya iletin.',
+  talebimKalemYok: 'Düzenlenen kalem bu talepte yok.',
+  talebimBagliKalem: 'Fason adıma ya da parçaya bağlı kalem buradan değişmez; değişikliği satın almaya iletin.',
   iptalDegil: 'Yalnız iptal edilmiş talebin iptali geri alınır.',
   birlesmis: (no: string): string => `Bu talep ${no} talebine birleştirildi; değişiklik birleşik talepte yapılır.`,
   birlesikSilinmez: 'Birleşik talep kaynakları ayrılmadan silinemez; önce kaynakları ayırın.',
@@ -932,14 +936,50 @@ export function fasonTerminUyumu(gecmis: readonly FasonGecmisiSatiri[]): FasonTe
 
 // 898 a: kalemin bağları (uygulanan parça ve fason adım) ayrı okunur; tam talep görünümüne girmez. Bağı olmayan kalemde ikisi de null.
 export interface KalemBagi { uygulanan: string | null; fasonAdim: string | null }
-export function talebim(t: Talep, baglar: ReadonlyMap<string, KalemBagi> = new Map()): Talebim {
+export function talebim(t: Talep, baglar: ReadonlyMap<string, KalemBagi> = new Map(), karsiliklar: ReadonlyMap<string, BirimKarsiligi> = new Map()): Talebim {
   const bag = (id: string): KalemBagi => baglar.get(id) ?? { uygulanan: null, fasonAdim: null };
   return {
     id: t.id, no: t.no, baslik: t.baslik, durum: t.durum, ihtiyacTarihi: t.ihtiyacTarihi, olusturma: t.olusturma,
     uretimEmriNo: t.uretimEmriNo, birlesme: t.birlesme ?? null,
+    surum: t.surum, aciklama: t.notlar, duzenlenebilir: talebimDuzenlenirMi(t),
     kaynak: t.kalemler.some((k) => bag(k.id).fasonAdim !== null) ? 'fason' : 'elle',
-    kalemler: t.kalemler.map((k) => ({ ad: k.ad, miktar: k.miktar, birim: k.birim, kartBekliyor: k.katalogId === null, ...bag(k.id) })),
+    kalemler: t.kalemler.map((k) => ({ id: k.id, aciklama: k.ozellik, ad: k.ad, miktar: k.miktar, birim: k.birim, kartBekliyor: k.katalogId === null, ...bag(k.id), karsilik: karsiliklar.get(k.id) ?? null })),
   };
+}
+
+// SAT-79 (2871-1 a): talep eden kendi talebini yalnız teklif istenmeden önce (taslak) düzenler; birleştirilmiş kaynak talep düzenlenmez
+// (kalemleri birleşik taleptedir). Sahiplik servis denetler. Teklif toplanırken güncelleme ayrı talep olarak açılır (kart 2876).
+export const talebimDuzenlenirMi = (t: Pick<Talep, 'durum' | 'birlesme'>): boolean => t.durum === 'taslak' && t.birlesme == null;
+// Gelen kalemler: kimlikli olan var olan kalemdir (tekrarsız); bağlı kalem (fason adım, uygulanan parça) çıkarılamaz, miktarı değişmez.
+export function talebimKalemReddi(
+  eski: readonly { id: string; miktar: string | null; bagli: boolean }[], gelen: readonly { id: string | null; miktar: string }[],
+): string | null {
+  const ids = gelen.flatMap((x) => (x.id === null ? [] : [x.id]));
+  if (new Set(ids).size !== ids.length || ids.some((id) => !eski.some((e) => e.id === id))) return ILETILER.talebimKalemYok;
+  for (const e of eski.filter((x) => x.bagli)) {
+    const g = gelen.find((x) => x.id === e.id);
+    if (g === undefined || e.miktar === null || ondalikKiyas(g.miktar, e.miktar) !== 0) return ILETILER.talebimBagliKalem;
+  }
+  return null;
+}
+
+// SAT-78 (2871): kalemin kg ile kartın stok birimi arasındaki karşılığı. Kartın birim ağırlığı bütün parça ya da ambalaj başına kg'dır
+// (yalnız hammaddede; çubuk, bobin, rulo). Kalem kg ise stok birimine, stok biriminde ise kg'a çevrilir; başka birimde, ağırlık bilinmiyorsa,
+// stok birimi kg ya da uzunluk/alan birimiyse karşılık yoktur (uydurulmaz): metre ağırlığı sunucuda yoktur.
+// İstemci talep/ortak.ts aynı listeyi taşır (istemci paylaşılan sözleşmeden değer ithal etmez).
+export const OLCULU_STOK_BIRIMLERI: readonly string[] = ['mm', 'cm', 'm', 'mt', 'metre', 'mm2', 'mm²', 'cm2', 'cm²', 'm2', 'm²', 'metrekare'];
+export interface BirimKarsiligi { miktar: string; birim: string }
+const birimAdi = (b: string | null): string => (b ?? '').trim().toLocaleLowerCase('tr-TR');
+export function birimKarsiligi(miktar: string | null, birim: string, kart: { stokBirimi: string | null; birimKg: number | null } | undefined): BirimKarsiligi | null {
+  if (miktar === null || kart === undefined || kart.birimKg === null || !(kart.birimKg > 0)) return null;
+  const stok = birimAdi(kart.stokBirimi);
+  if (stok === '' || stok === 'kg' || OLCULU_STOK_BIRIMLERI.includes(stok)) return null;
+  const kg = kart.birimKg.toFixed(OLCEK);
+  if (birimAdi(birim) === 'kg') {
+    const m = ondalikBol(miktar, kg);
+    return m === null ? null : { miktar: m, birim: kart.stokBirimi!.trim() };
+  }
+  return birimAdi(birim) === stok ? { miktar: ondalikCarp(miktar, kg), birim: 'kg' } : null;
 }
 
 // 898 a: fason ön talep. Bitmemiş fason iş emirlerinden siparişe ya da açık talebe bağlanmamış, yoksayılmamış ve henüz firmaya gönderilmemiş

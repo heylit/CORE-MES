@@ -9,12 +9,12 @@ import { BELIRSIZ_MIKTAR } from '../../../ortak/veri/miktar.ts';
 import { TalepAc } from './TalepAc.tsx';
 import { Taleplerim } from './Taleplerim.tsx';
 import { TaleplerimSayfasi } from './TaleplerimSayfasi.tsx';
-import { anahtarlar } from './ortak.ts';
+import { anahtarlar, karsilikYaz, kartKarsiligi } from './ortak.ts';
 import { rotalar } from '../rotalar.tsx';
 import { SAYFALAR } from '#paylasilan/sayfalar.ts';
 
 const json = (durum: number, govde: unknown) => new Response(JSON.stringify(govde), { status: durum });
-const KARTLAR = { malzemeler: [{ no: 7, kod: 'HM-00007', ad: 'Deneme rulman', birim: 'adet', kategori: 'Rulman', katalogId: null }] } satisfies MalzemeSecenekleriCevabi;
+const KARTLAR = { malzemeler: [{ no: 7, kod: 'HM-00007', ad: 'Deneme rulman', birim: 'adet', kategori: 'Rulman', katalogId: null, stokBirimi: 'adet', birimKg: 2.5 }] } satisfies MalzemeSecenekleriCevabi;
 const HIZMETLER = { malzemeler: [{ no: 11, kod: 'HZ-00011', ad: 'Deneme kaplama', birim: 'saat', kategori: null, katalogId: null }] } satisfies MalzemeSecenekleriCevabi;
 const EMIRLER = { emirler: [{ id: 31, emirNo: 'UE-000031', parcaNo: 'P-31', parcaAd: 'Deneme parça' }] } satisfies AcikEmirlerCevabi;
 const talep = (n: number, ek: Partial<Talebim> = {}): Talebim => ({
@@ -110,6 +110,66 @@ describe('Ana sayfadan talep (#375)', () => {
     vi.stubGlobal('fetch', vi.fn(async () => json(200, { talepler: [talep(1, { uretimEmriNo: 'UE-000031' })], toplam: 1 } satisfies TaleplerimCevabi)));
     sar(<Taleplerim />);
     expect((await screen.findByText(/üretim emri UE-000031/)).textContent).toContain('UE-000031');
+  });
+
+  it('SAT-78 (2871): Taleplerim kalemi kg karşılığını gösterir; karşılığı olmayan kalemde gösterilmez', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => json(200, { talepler: [talep(1, { kalemler: [
+      { ad: 'Deneme çubuk', miktar: '4', birim: 'adet', kartBekliyor: false, uygulanan: null, fasonAdim: null, karsilik: { miktar: '10.25', birim: 'kg' } },
+      { ad: 'Deneme levha', miktar: '3', birim: 'adet', kartBekliyor: false, uygulanan: null, fasonAdim: null, karsilik: null },
+    ] })], toplam: 1 } satisfies TaleplerimCevabi)));
+    sar(<Taleplerim />);
+    const satir = await screen.findByText(/Deneme çubuk 4 adet/);
+    expect(satir.textContent).toContain('Deneme çubuk 4 adet (≈ 10,25 kg), Deneme levha 3 adet');
+    expect(satir.textContent).not.toContain('Deneme levha 3 adet (');
+  });
+
+  it('SAT-78 (2871): yeni talepte kartın birim ağırlığı ve girilen miktarın kg karşılığı görünür', async () => {
+    sunucuKur();
+    sar(<TalepAc />);
+    const kutu = screen.getByRole('combobox', { name: 'Malzeme' });
+    fireEvent.focus(kutu);
+    fireEvent.click(await screen.findByRole('option', { name: /HM-00007/ }));
+    expect(screen.getByText('1 adet ≈ 2,5 kg')).toBeTruthy();
+    fireEvent.change(screen.getByLabelText(/^Miktar/), { target: { value: '4' } });
+    expect(screen.getByText('≈ 10 kg (1 adet ≈ 2,5 kg)')).toBeTruthy();
+  });
+
+  it('SAT-78 (2871): birim ağırlık parça başınadır; metre ya da alan stoklu kartta karşılık yok; 0,01 altı sıfır yazılmaz', () => {
+    for (const b of ['m', 'M', 'mm', 'm²', 'm2']) expect(kartKarsiligi({ birim: b, stokBirimi: b, birimKg: 2.466 }, '1.5')).toBeNull();
+    expect(kartKarsiligi({ birim: 'rulo', stokBirimi: 'rulo', birimKg: 12.5 }, '2')).toBe('≈ 25 kg (1 rulo ≈ 12,5 kg)');
+    expect(karsilikYaz({ miktar: '0.004', birim: 'kg' })).toBe('< 0,01 kg');
+    expect(karsilikYaz({ miktar: '0', birim: 'kg' })).toBe('≈ 0 kg');
+  });
+
+  it('SAT-79 (2871-1 a): taslak talepte Düzenle formu doldurur; kayıt sürümle düzenleme ucuna gider, var olan kalem kimliğiyle', async () => {
+    const duzenlenen = talep(1, { surum: 3, aciklama: 'Eski not', duzenlenebilir: true, ihtiyacTarihi: '2026-12-01',
+      kalemler: [{ id: '00000000-0000-4000-8000-0000000000a1', aciklama: '', ad: 'Deneme rulman', miktar: '3', birim: 'adet', kartBekliyor: false, uygulanan: null, fasonAdim: null }] });
+    const cagrilar: { yol: string; govde: unknown }[] = [];
+    vi.stubGlobal('fetch', vi.fn(async (adres: string, istek?: RequestInit) => {
+      const yol = adres.replace('/api', '');
+      cagrilar.push({ yol, govde: istek?.body ? JSON.parse(String(istek.body)) : null });
+      if (yol.startsWith('/satin-alma-taleplerim?')) return json(200, { talepler: [duzenlenen, talep(2, { durum: 'teklif_isteniyor', duzenlenebilir: false })], toplam: 2 } satisfies TaleplerimCevabi);
+      if (yol.endsWith('/talebimi-duzenle')) return json(200, { ...duzenlenen, surum: 4 });
+      if (yol === '/satin-alma-on-talepleri') return json(200, onListe);
+      if (yol === '/satin-alma-acik-emirler') return json(200, EMIRLER);
+      return json(404, { kod: 'BULUNAMADI', mesaj: 'Adres bulunamadı.' });
+    }));
+    sar(<TaleplerimSayfasi />, '/taleplerim?bolum=liste');
+    fireEvent.click(await screen.findByText('Deneme talep 2'));
+    expect(screen.queryByRole('button', { name: 'Düzenle' })).toBeNull();
+    fireEvent.click(screen.getByText('Deneme talep 1'));
+    fireEvent.click(screen.getByRole('button', { name: 'Düzenle' }));
+    expect(await screen.findByText(`Talebi düzenle: ${duzenlenen.no}`)).toBeTruthy();
+    expect(screen.queryByRole('group', { name: 'Talep türü' })).toBeNull();
+    const miktar = screen.getByLabelText(/^Miktar \(adet\)/) as HTMLInputElement;
+    expect(miktar.value).toBe('3');
+    fireEvent.change(miktar, { target: { value: '5' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Değişiklikleri kaydet' }));
+    await waitFor(() => expect(cagrilar.some((c) => c.yol === `/satin-alma-talepleri/${duzenlenen.id}/talebimi-duzenle`)).toBe(true));
+    expect(cagrilar.find((c) => c.yol.endsWith('/talebimi-duzenle'))!.govde).toEqual({
+      surum: 3, ihtiyacTarihi: '2026-12-01', aciklama: 'Eski not',
+      kalemler: [{ id: '00000000-0000-4000-8000-0000000000a1', malzemeNo: null, ad: '', birim: '', miktar: '5', aciklama: '' }],
+    });
   });
 
   it('#1192: kalem alanı odaklanınca açılır liste olur; ok ve Enter ile seçilir, satırda kategori ve birim görünür', async () => {
@@ -335,7 +395,7 @@ describe('Planlama menüsünde Taleplerim sayfası (12.10.2026)', () => {
     const satir = screen.getByRole('button', { name: /ST-2026-001/ });
     expect(screen.getByText('Fason adım')).toBeTruthy();
     fireEvent.click(satir);
-    expect(screen.getByText('Parça: MM-00009 · Deneme flanş · Fason: UE-000031 · Op 30')).toBeTruthy();
+    expect(screen.getByText('Uygulanacak malzeme: MM-00009 · Deneme flanş · Fason: UE-000031 · Op 30')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Hepsi' }));
     fireEvent.change(screen.getByLabelText('Ara'), { target: { value: 'talep 12' } });
     await waitFor(() => expect(screen.getAllByRole('button', { name: /ST-2026-0/ })).toHaveLength(1));

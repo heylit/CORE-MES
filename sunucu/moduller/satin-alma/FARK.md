@@ -1,3 +1,23 @@
+# FARK: satin-alma, talepte kg ile stok birimi karşılığı (SAT-78, kart 2871; 11.11.2026)
+
+- Taleplerim cevabında her kalem `karsilik` taşır (boş olabilir): kartın birim ağırlığıyla (malzemeler `malzemeMaliyetBilgileri.birimKg`,
+  parça ya da ambalaj başına kg, yalnız hammadde) kg girilen miktar stok birimine, stok biriminde girilen miktar kg'a çevrilir. Uzunluk ya da
+  alan stoklu kartta (m, mm, m² ...) karşılık yok: metre ağırlığı sunucuda yoktur.
+- Kart seçenekleri (`GET /satin-alma-malzeme-secenekleri`) `stokBirimi` ve `birimKg` taşır (boş olabilir); yeni talep formu miktarın kg karşılığını ve
+  "1 <birim> ≈ <kg> kg" bilgisini gösterir. Taleplerim satırında ve kalem ayrıntısında "≈ ... kg" görünür.
+- Ağırlığı bilinmeyen kartta, kartsız kalemde, stok birimi kg olan kartta ve başka birimdeki kalemde karşılık yoktur (uydurulmaz).
+  Metre stoklu çubukta adet karşılığı kesim boyu ister, kartta yoktur; yalnız kg ile metre arasında gösterilir.
+- Uç, işlem, rol x işlem, göç ve paket değişmedi. Fiyat alanı eklenmedi.
+
+# FARK: satin-alma, talep eden taslağını Taleplerim'den düzenler (SAT-79, kart 2871-1 a; 11.11.2026)
+
+- Yeni uç `POST /satin-alma-talepleri/:id/talebimi-duzenle`, var olan `satin-alma.talep-ac` işlemiyle (yeni işlem, rol x işlem değişikliği yok).
+  Bugünkü kaydet ucu (`talep-ac`) talep edenin taslak ve teklif istenen talebini zaten değiştirebiliyordu (kurallar `degisiklikReddi`,
+  `talepEdenDurumu`); yeni uç bunun dar alt kümesidir: yalnız sahibi, yalnız taslak (teklif istenmeden önce), birleştirilmiş kaynak talep hariç.
+- Taleplerim cevabı `surum`, `aciklama`, `duzenlenebilir` ve kalemde `id`, `aciklama` taşır. Ekranda açılan talep ayrıntısında "Düzenle";
+  Yeni talep formu düzenleme kipinde açılır (tür ve emir seçimi gizli, var olan kalemin adı ve birimi sabit).
+- Teklif toplanırken güncelleme ayrı talep olarak açılır: kart 2876 (2871-1 cevabı, 2871-2 a).
+
 # FARK: satin-alma, değere dahil olmayan stok Stok'un değer gruplarıyla (228 a; 19.10.2026)
 
 - Kg stok değeri bakiyeyi stok/disari degerGrubuToplamlari'ndan alır (kablolama çözücüsü); kullanılabilir grubu değeri verir.
