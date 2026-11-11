@@ -970,21 +970,22 @@ describe('Depo', () => {
     expect(screen.queryByRole('button', { name: 'Raf ekle ve düzenle' })).toBeNull();
     expect(istekler.some((i) => i.yol === '/atolye/goz-kalemleri?salonId=2')).toBe(true);
   });
-  it('DEP-61 harita yetkisi olmayan tanım yetkilisi depo gözüne kalemi stok ucuyla koyar', async () => {
-    const istekler = sunucuKur({ ...MUDUR, islemler: [...MUDUR.islemler, 'sayfa.atolye'] }, haritaYollari());
+  it('DEP-61 depo gözünün içi Stok\'tan salt okunur gelir (3012 a); elle kalem koyma yok, yazma ucu çağrılmaz', async () => {
+    const istekler = sunucuKur({ ...MUDUR, islemler: [...MUDUR.islemler, 'sayfa.atolye'] }, {
+      ...haritaYollari(),
+      'GET /stok/goz-stoklari': () => json(200, { gozler: [{ gozId: 200, konumId: 55, kalemSayisi: 1, ilkMalzemeAd: 'Deneme çubuk' }] }),
+      'GET /stok/konumlar/55': () => json(200, { bakiyeler: [{ id: 9, malzemeId: 4, malzemeAd: 'Deneme çubuk', konumId: 55, konumKod: 'D1-01-1-1', partiId: 1, partiEtiketi: 'LT-000001 · S1', miktar: '12.000', ilkGiris: '2026-11-01T08:00:00.000Z', ambalaj: null, statuId: null, kaliteDurumu: 'serbest', sonKullanma: null, konumaGelis: null }] }),
+      'GET /stok/malzemeler/4': () => json(200, { id: 4, birim: 'kg' }),
+    });
     ac('/stok/depo');
     expect(await screen.findByRole('button', { name: 'Raf ekle ve düzenle' })).toBeTruthy();
     const cephe = await screen.findByRole('group', { name: 'D1 bölme 1 önden' });
-    fireEvent.click(within(cephe).getByRole('button', { name: 'Kat 1 göz 1: boş' }));
+    fireEvent.click(await within(cephe).findByRole('button', { name: 'Kat 1 göz 1: stokta 1 kalem' }));
     const panel = await screen.findByRole('region', { name: 'Göz D1-01-1-1' });
-    fireEvent.click(within(panel).getByRole('button', { name: 'Kalem koy' }));
-    fireEvent.change(within(panel).getByLabelText('Kod (parça no ya da malzeme kodu)'), { target: { value: 'DENEME-9' } });
-    fireEvent.change(within(panel).getByLabelText('Ad'), { target: { value: 'Deneme kalem' } });
-    fireEvent.change(within(panel).getByLabelText('Doluluk %'), { target: { value: '30' } });
-    fireEvent.click(within(panel).getByRole('button', { name: 'Göze koy' }));
-    await waitFor(() => expect(istekler.some((i) => i.yol === '/stok/depo-goz-kalemleri/yaz')).toBe(true));
-    expect(istekler.find((i) => i.yol === '/stok/depo-goz-kalemleri/yaz')?.govde).toEqual({ gozId: 200, kod: 'DENEME-9', ad: 'Deneme kalem', doluluk: 30 });
-    expect(istekler.some((i) => i.yol === '/atolye/goz-kalemleri/yaz')).toBe(false);
+    const liste = await within(panel).findByRole('region', { name: 'Stoktaki malzemeler' });
+    expect(within(liste).getByText('Deneme çubuk')).toBeTruthy();
+    expect(within(panel).queryByRole('button', { name: 'Kalem koy' })).toBeNull();
+    expect(istekler.some((i) => i.yontem === 'POST' && /goz-kalemleri\/yaz$/.test(i.yol))).toBe(false);
   });
   it('DEP-61 depo kipinde düzenleyici yalnız raf ekler ve yalnız rafları stok ucuna gönderir', async () => {
     const istekler = sunucuKur({ ...MUDUR, islemler: [...MUDUR.islemler, 'sayfa.atolye'] }, {
