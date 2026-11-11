@@ -31,7 +31,12 @@ afterEach(() => { cleanup(); vi.unstubAllGlobals(); sessionStorage.clear(); kuru
 const json = (durum: number, govde: unknown) => new Response(JSON.stringify(govde), { status: durum });
 interface Istek { yontem: string; yol: string; govde: unknown; basliklar: Record<string, string> }
 
-function sunucuKur(yollar: Record<string, (govde: unknown, yol: string) => Response>) {
+const oturum = (islemler: string[]) => () => json(200, { kullanici: { id: 9, kullaniciAdi: 'deneme', adSoyad: 'Deneme', roller: [], islemler } });
+const TUM_ISLEMLER = ['sayfa.geometri', 'geometri.oku', 'geometri.hesapla', 'geometri.yuzey-yaz'];
+
+// Oturum verilmezse kişi 3D Atölyesi'nin bütün işlemlerine sahiptir; yetki testi kendi oturumunu verir.
+function sunucuKur(verilen: Record<string, (govde: unknown, yol: string) => Response>) {
+  const yollar: Record<string, (govde: unknown, yol: string) => Response> = { 'GET /oturum': oturum(TUM_ISLEMLER), ...verilen };
   const istekler: Istek[] = [];
   vi.stubGlobal('fetch', vi.fn(async (adres: string, secenek?: RequestInit) => {
     const yol = adres.replace('/api', '');
@@ -190,6 +195,19 @@ describe('3D Atölyesi', () => {
     const post = istekler.find((i) => i.yontem === 'POST');
     expect(post?.govde).toEqual({ surum: 3 });
     expect(post?.basliklar['istek-kimligi']).toBeTruthy();
+  });
+
+  it('3030: "Yeniden hesapla" yalnız geometri.hesapla işlemi olana görünür; okuyan ölçüleri görür, düğmeyi görmez', async () => {
+    sunucuKur({
+      'GET /oturum': oturum(['sayfa.geometri', 'geometri.oku']),
+      'GET /geometri/modeller': () => json(200, LISTE),
+      'GET /geometri/analizler/41': () => json(200, ANALIZ),
+      'GET /geometri/modeller/41/dosya': DOSYA,
+    });
+    ac('/geometri?rev=41');
+    expect(await screen.findByText('Analiz (yaklaşık)')).toBeTruthy();
+    await waitFor(() => expect(screen.queryByText('Hacim')).toBeTruthy());
+    expect(screen.queryByRole('button', { name: /Yeniden hesapla/ })).toBeNull();
   });
 
   it('GEO-1: ikinci "Yeniden hesapla" yeni kimlikle gider; çift tık tek istek', async () => {

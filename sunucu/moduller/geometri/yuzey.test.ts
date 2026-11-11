@@ -7,7 +7,7 @@ import { testVeritabaniKur } from '#cekirdek/test-vt.ts';
 import type { TestVeritabani } from '#cekirdek/test-vt.ts';
 import { uygulamaKur } from '#cekirdek/uygulama.ts';
 import { ISTEK_KIMLIGI_BASLIGI } from '#paylasilan/istek-kimligi.ts';
-import { geometriModelListeCevabi, geometriYuzeyCevabi } from '#paylasilan/sozlesme/geometri.ts';
+import { geometriAnalizCevabi, geometriModelListeCevabi, geometriYuzeyCevabi } from '#paylasilan/sozlesme/geometri.ts';
 import type { GeometriYuzeyAdimi, GeometriYuzeyCevabi } from '#paylasilan/sozlesme/geometri.ts';
 import { denetimYaz } from '../denetim/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
@@ -65,6 +65,19 @@ describe('geometri: yüzey işaretleri (gerçek PostgreSQL, gerçek giriş, ger�
       await rolAl(db, yonId, yeni, yonRolu);
     });
     await giris(kullaniciAdi);
+  }
+  // Gerçek rol (3030 a): kişi yalnız o rolle girer; işlem listesi rol göçünden gelir.
+  async function rolluKisi(kullaniciAdi: string, rolKodu: string): Promise<number> {
+    const rol = (await o().vt.tek<{ id: number }>('SELECT id FROM rol WHERE kod = $1', [rolKodu]))!.id;
+    const yonRolu = (await o().vt.tek<{ id: number }>("SELECT id FROM rol WHERE kod = 'yonetici'"))!.id;
+    const id = await o().vt.tx(async (db) => {
+      const yeni = await yoneticiOlustur(db, { ad: `Deneme ${kullaniciAdi}`, kullaniciAdi, parola: PAROLA });
+      await rolAta(db, yonId, yeni, rol);
+      await rolAl(db, yonId, yeni, yonRolu);
+      return yeni;
+    });
+    await giris(kullaniciAdi);
+    return id;
   }
   const yukle = async (icerik: Buffer): Promise<string> => {
     const ozet = createHash('sha256').update(icerik).digest('hex');
@@ -220,5 +233,50 @@ describe('geometri: yüzey işaretleri (gerçek PostgreSQL, gerçek giriş, ger�
     assert.equal(say[0]!.n, 0, 'öneri okumada yazılmaz');
     const onay = geometriYuzeyCevabi.parse(tamam(await kaydet(rev2, { surum: null, isaretler: c.isaretler.map((x) => ({ yuzSira: x.yuzSira, islem: x.islem, oneri: false })) })));
     assert.deepEqual([onay.tasima, onay.surum, onay.isaretler.length, onay.isaretler.some((x) => x.oneri)], [null, 1, c.tasima.eslesen, false]);
+  });
+  test('GEO-YZ-A5 roller (3030 a): CAM ve Kalite yeniden hesaplatır, Planlama ve Müdür hesaplatamaz; boya kaydı yalnız CAM\'da; Müdür görür', async () => {
+    const camId = await rolluKisi('r-cam', 'cam');
+    await rolluKisi('r-kalite', 'kalite');
+    await rolluKisi('r-mudur', 'mudur');
+    await rolluKisi('r-planlama', 'planlama_proje');
+    const mil = await o().vt.tx(async (db) => (await ornekMalzemeNo(db, 'mil'))!);
+    const { revizyonId: rev } = await modelEkle(mil, Buffer.from(kutuStep(45, 20, 10)), 'yuzey-a5.step');
+    await tur();
+
+    for (const ad of ['r-cam', 'r-kalite', 'r-mudur', 'r-planlama']) {
+      assert.equal((await istek(ad, 'GET', '/geometri/modeller')).statusCode, 200, `${ad} listeyi görür`);
+      assert.equal((await istek(ad, 'GET', `/geometri/analizler/${String(rev)}`)).statusCode, 200, `${ad} analizi görür`);
+      assert.equal((await istek(ad, 'GET', `/geometri/yuzey/${String(rev)}`)).statusCode, 200, `${ad} yüzeyleri görür`);
+    }
+
+    const hesapYolu = `/geometri/analizler/${String(rev)}/yeniden-hesapla`;
+    const isSurumu = async (): Promise<number> => geometriAnalizCevabi.parse(tamam(await istek('r-cam', 'GET', `/geometri/analizler/${String(rev)}`))).is!.surum;
+    for (const ad of ['r-mudur', 'r-planlama']) {
+      assert.equal((await istek(ad, 'POST', hesapYolu, { surum: await isSurumu() })).statusCode, 403, `${ad} hesaplatamaz`);
+    }
+    for (const ad of ['r-cam', 'r-kalite']) {
+      const r = geometriAnalizCevabi.parse(tamam(await istek(ad, 'POST', hesapYolu, { surum: await isSurumu() })));
+      assert.equal(r.durum, 'bekliyor', `${ad} hesaplatır`);
+      await tur();
+    }
+
+    const c = await yuzey(rev, 'r-cam');
+    const ilk = { surum: null, isaretler: c.yuzler.slice(0, 2).map((y) => ({ yuzSira: y.sira, islem: maske, oneri: false })) };
+    for (const ad of ['r-kalite', 'r-mudur', 'r-planlama']) assert.equal((await kaydet(rev, ilk, ad)).statusCode, 403, `${ad} boya kaydı yazamaz`);
+    assert.equal((await yuzey(rev)).surum, null, 'reddedilen kayıt iz bırakmaz');
+    assert.equal(geometriYuzeyCevabi.parse(tamam(await kaydet(rev, ilk, 'r-cam'))).surum, 1, 'CAM boya kaydı yazar');
+
+    // Güvenlik K2: her kayıt gövdesiyle tam olarak denetim kaydına girer; önceki hâl oradan okunup geri yazılabilir.
+    const ikinci = { surum: 1, isaretler: c.yuzler.slice(2, 3).map((y) => ({ yuzSira: y.sira, islem: maske, oneri: false })) };
+    tamam(await kaydet(rev, ikinci, 'r-cam'));
+    const izler = await o().vt.sorgu<{ kisi_id: number; govde: unknown; yetki: string | null }>(
+      "SELECT kisi_id, govde, yetki FROM denetim_kaydi WHERE yol = '/geometri/yuzey/:revizyonId/kaydet' AND parametre->>'revizyonId' = $1 ORDER BY id",
+      [String(rev)],
+    );
+    assert.deepEqual(izler.map((x) => [x.kisi_id, x.yetki]), [[camId, 'geometri.yuzey-yaz'], [camId, 'geometri.yuzey-yaz']], 'reddedilenler yazmadı, iki kayıt CAM adına');
+    assert.deepEqual(izler.map((x) => x.govde), [ilk, ikinci], 'gövde kısaltılmadan yazılır');
+    const onceki = izler[0]!.govde as typeof ilk;
+    const geri = geometriYuzeyCevabi.parse(tamam(await kaydet(rev, { surum: 2, isaretler: onceki.isaretler }, 'r-cam')));
+    assert.deepEqual(geri.isaretler.map((x) => x.yuzSira).sort(), ilk.isaretler.map((x) => x.yuzSira).sort(), 'önceki hâl denetim kaydından geri yazıldı');
   });
 });

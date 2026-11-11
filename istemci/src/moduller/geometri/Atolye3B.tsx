@@ -8,6 +8,7 @@ import type {
 import { DurumKutusu, Dugme, Girdi, Kart, Rozet, SayfaBasligi, Sayfalama, Secim, Simge, useBildirim } from '../../ortak/arayuz/index.ts';
 import { api, ApiHatasi, hataIletisi, OTURUM_BITTI } from '../../ortak/veri/api.ts';
 import { useKorumaliKomut } from '../../ortak/veri/korumali-komut.ts';
+import { Yetkili } from '../../ortak/veri/yetki.ts';
 import { KucukResimKutusu, useKucukResimler } from '../belge-merkezi/disari.ts';
 import { yerlesikKaliteYogunlugu } from '../malzemeler/disari.ts';
 import { anahtarlar } from './anahtarlar.ts';
@@ -113,7 +114,7 @@ function AnalizKarti({ cevap, yeniden }: { cevap: GeometriAnalizCevabi; yeniden:
   const surer = suruyorMu(cevap.durum);
   return (
     <Kart baslik="Analiz (yaklaşık)" simge="ruler" baslikEki={<Rozet ton={DURUM_TONU[cevap.durum]}>{DURUM_ADI[cevap.durum]}</Rozet>}
-      sag={<Dugme tur="ikincil" simge="rotate" yukleniyor={yeniden.bekliyor} disabled={surer} onClick={yeniden.calistir}>Yeniden hesapla</Dugme>}>
+      sag={<Yetkili islem="geometri.hesapla"><Dugme tur="ikincil" simge="rotate" yukleniyor={yeniden.bekliyor} disabled={surer} onClick={yeniden.calistir}>Yeniden hesapla</Dugme></Yetkili>}>
       {cevap.durum === 'hata' && <p className="tc-g3b-hata">{cevap.is?.hataMetni}</p>}
       {a === null ? (
         <p className="tc-g3b-soluk">{surer ? 'Hesap sürüyor; sonuç gelince burada görünür.' : 'Analiz yok.'}</p>

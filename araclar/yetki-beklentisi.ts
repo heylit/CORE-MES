@@ -27,7 +27,7 @@ export const ROL_MATRISI = {
     ad: 'CAM',
     islemler: [
       'arkon.hazirlik', 'arkon.kuyruk-sirala', 'belge-merkezi.oku', 'belge-merkezi.yaz', 'cnc-kurulum.oku', 'cnc-kurulum.takim-degistir',
-      'cnc-kurulum.yaz', 'geometri.oku', 'idari-isler.arac-talebi-ac', 'idari-isler.talep-ac', 'ik.bordro-gordum', 'ik.izin-talep',
+      'cnc-kurulum.yaz', 'geometri.hesapla', 'geometri.oku', 'geometri.yuzey-yaz', 'idari-isler.arac-talebi-ac', 'idari-isler.talep-ac', 'ik.bordro-gordum', 'ik.izin-talep',
       'malzemeler.yaz', 'mesaj.oku', 'mesaj.yaz', 'plan.oku', 'projeler.oku', 'recete-rota.oku', 'rota.talimat-yaz', 'satin-alma.talep-ac',
       'sayfa.adim-durumu', 'sayfa.arkon', 'sayfa.atolye', 'sayfa.cizimler', 'sayfa.cnc-kurulum', 'sayfa.emirler', 'sayfa.geometri', 'sayfa.idari-isler',
       'sayfa.ik-islemlerim', 'sayfa.istasyonlar', 'sayfa.malzemeler', 'sayfa.mesaj', 'sayfa.ortak-dosyalar', 'sayfa.profil',
@@ -136,7 +136,7 @@ export const ROL_MATRISI = {
     ad: 'Kalite',
     islemler: [
       'arkon.kalite', 'belge-merkezi.oku', 'belge-merkezi.yayinla', 'cnc-kurulum.oku', 'denetim-hazirlik.oku', 'denetim-hazirlik.yaz',
-      'etiket-merkezi.bas', 'etiket-merkezi.oku', 'geometri.oku', 'idari-isler.arac-talebi-ac', 'idari-isler.talep-ac', 'ik.bordro-gordum',
+      'etiket-merkezi.bas', 'etiket-merkezi.oku', 'geometri.hesapla', 'geometri.oku', 'idari-isler.arac-talebi-ac', 'idari-isler.talep-ac', 'ik.bordro-gordum',
       'ik.izin-talep', 'kalibrasyon.yaz', 'kalite-merkezi.oku', 'kalite-merkezi.onayla', 'kalite-merkezi.yaz', 'malzemeler.onayla',
       'malzemeler.yaz', 'mesaj.oku', 'mesaj.yaz', 'musteri-tedarikci.oku', 'plan.oku', 'portal.kalite', 'portal.oku', 'portal.yaz',
       'projeler.oku', 'recete-rota.oku', 'rota.sartname-yayinla', 'rota.sartname-yaz', 'saat.uyari-ustlen', 'satin-alma.talep-ac', 'sayfa.adim-durumu', 'sayfa.arkon', 'sayfa.atolye', 'sayfa.cizimler',
@@ -160,7 +160,7 @@ export const ROL_MATRISI = {
     islemler: [
       'arkon.amir', 'arkon.yansima-oku', 'arkon.yansima-yeniden', 'belge-merkezi.oku', 'cnc-kurulum.oku', 'cnc-kurulum.takim-degistir',
       'cnc-kurulum.yaz', 'denetim-hazirlik.oku', 'denetim-hazirlik.yaz', 'denetim.oku', 'durus-nedenleri.yaz', 'etiket-merkezi.bas',
-      'etiket-merkezi.oku', 'etiket-merkezi.sablon-yaz', 'etiket-merkezi.yazici-yaz', 'finans.maliyet-oku', 'finans.oku',
+      'etiket-merkezi.oku', 'etiket-merkezi.sablon-yaz', 'etiket-merkezi.yazici-yaz', 'finans.maliyet-oku', 'finans.oku', 'geometri.oku',
       'idari-isler.arac-talebi-ac', 'idari-isler.oku', 'idari-isler.talep-ac', 'ik.bordro-gordum', 'ik.devam-onay', 'ik.izin-onay',
       'ik.izin-talep', 'ik.pozisyon-onay', 'istasyonlar.makine-durumu', 'istasyonlar.yaz', 'kalite-merkezi.oku', 'kalite-merkezi.onayla',
       'kisiler.oku', 'malzemeler.onayla', 'malzemeler.tanim-yaz', 'malzemeler.yaz', 'mesaj.oku', 'mesaj.yaz', 'musteri-tedarikci.oku',
@@ -171,7 +171,7 @@ export const ROL_MATRISI = {
       'recete-rota.oku', 'recete-rota.yaz', 'rota.emre-kopyala', 'rota.onayla', 'saat.uyari-ustlen', 'satin-alma.oku', 'satin-alma.onayla',
       'satin-alma.talep-ac', 'sayfa.adim-durumu', 'sayfa.akis', 'sayfa.arkon', 'sayfa.atolye', 'sayfa.cizelge', 'sayfa.cizimler', 'sayfa.cnc-kurulum',
       'sayfa.denetim', 'sayfa.denetim-hazirlik', 'sayfa.durus-nedenleri', 'sayfa.emirler', 'sayfa.etiket-merkezi', 'sayfa.finans',
-      'sayfa.geri-bildirim', 'sayfa.idari-isler', 'sayfa.ik-islemlerim', 'sayfa.istasyonlar', 'sayfa.kalibrasyon', 'sayfa.kalite-merkezi',
+      'sayfa.geometri', 'sayfa.geri-bildirim', 'sayfa.idari-isler', 'sayfa.ik-islemlerim', 'sayfa.istasyonlar', 'sayfa.kalibrasyon', 'sayfa.kalite-merkezi',
       'sayfa.kuyruk', 'sayfa.malzemeler', 'sayfa.matris', 'sayfa.mesai', 'sayfa.mesaj', 'sayfa.musteri-tedarikci', 'sayfa.nizamiye',
       'sayfa.oee', 'sayfa.ortak-dosyalar', 'sayfa.personel', 'sayfa.plan', 'sayfa.portal', 'sayfa.profil', 'sayfa.projeler',
       'sayfa.recete-rota', 'sayfa.rota', 'sayfa.satin-alma', 'sayfa.sevkiyat', 'sayfa.siparisler', 'sayfa.smartes', 'sayfa.stok',
