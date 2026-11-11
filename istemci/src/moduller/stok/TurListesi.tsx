@@ -6,6 +6,7 @@ import { DurumKutusu, Dugme, Girdi, Kart, Rozet, Sekmeler, Tablo, type Sutun } f
 import { api } from '../../ortak/veri/api.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { DURUM_ETIKETI, birimliMiktar } from './gorunum.ts';
+import { MalzemeSekmeleri, type MalzemeSekmesi } from './MalzemeSekmeleri.tsx';
 import { SayfaBasi, hataMetni, useIslem } from './ortak.tsx';
 import './stok.css';
 
@@ -21,6 +22,7 @@ const ALANLAR: Record<StokTurListesi, readonly AlanSutunu[]> = {
 // Boş listede kullanıcıya kartın hangi kategoriyle açılacağı söylenir (malzemeler kategori adları).
 // Başlık sözleşmedeki STOK_TUR_LISTELERI ile aynıdır; istemci paylaşılanı yalnız tip olarak ithal eder.
 const BASLIK: Record<StokTurListesi, string> = { kimyasal: 'Kimyasallar', takim: 'Kesici takımlar', aparat: 'Aparatlar' };
+const SEKME: Record<StokTurListesi, MalzemeSekmesi> = { kimyasal: 'kimyasallar', takim: 'kesici-takimlar', aparat: 'aparatlar' };
 const KATEGORI_ADI: Record<StokTurListesi, string> = { kimyasal: 'Yağ ve kimyasal', takim: 'Kesici takım', aparat: 'Kalıp ve aparat' };
 // Yaklaşan SKT uyarısı (gün). VARSAYIM: 30 gün; ayar gelirse oradan okunur.
 const YAKLASAN_GUN = 30;
@@ -100,6 +102,7 @@ function TurListesi({ liste }: { liste: StokTurListesi }) {
           {malKabul && <Link to="/stok/mal-kabul"><Dugme tur="birincil" simge="truck">Mal kabul</Dugme></Link>}
           <Link to="/malzemeler/yeni"><Dugme simge="layers">Malzeme kartı aç</Dugme></Link>
         </>} />
+      <MalzemeSekmeleri secili={SEKME[liste]} />
       <div className="tc-stok-arac">
         <Girdi etiket="Ara" placeholder="Ad, stok kodu ya da alan değeri" value={arama} onChange={(e) => setArama(e.target.value)} />
       </div>
