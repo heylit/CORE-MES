@@ -32,7 +32,7 @@ describe('UretimEmirleri liste', () => {
     const satirlar = screen.getAllByRole('row');
     const planli = satirlar.find((s) => within(s).queryByText('EM-1'))!;
     const bitmis = satirlar.find((s) => within(s).queryByText('EM-3'))!;
-    expect(planli.querySelector('td[data-baslik="Sağlam adet"]')?.textContent).toBe('yok');
+    expect(planli.querySelector('td[data-baslik="Sağlam adet"]')?.textContent).toBe('—Girilmemiş');
     expect(bitmis.querySelector('td[data-baslik="Sağlam adet"]')?.textContent).toBe('8');
     expect(within(bitmis).getByText('Üretimi bitti')).toBeTruthy();
     expect(within(planli).getByText('DNM-001')).toBeTruthy();
@@ -130,7 +130,7 @@ describe('EmirAyrintisi', () => {
     expect(await screen.findByText('Emir adedinden 2 eksik')).toBeTruthy();
     const kayit = within(screen.getByRole('table', { name: 'Kayıt defteri' }));
     const baslat = kayit.getByText('Başlatıldı').closest('tr')!;
-    expect(baslat.querySelector('td[data-baslik="Adet"]')?.textContent).toBe('yok');
+    expect(baslat.querySelector('td[data-baslik="Adet"]')?.textContent).toBe('—Girilmemiş');
     const bitir = kayit.getByText('Bitirildi').closest('tr')!;
     expect(bitir.querySelector('td[data-baslik="Adet"]')?.textContent).toBe('8');
     expect(within(bitir).getByText('Deneme Operator')).toBeTruthy();

@@ -245,6 +245,12 @@ function useSatirKaydirma(etkin: boolean) {
   return olaylar;
 }
 
+// 2993 a: girilmemiş değer soluk çizgiyle görünür ("yok" sıfır ya da "hayır" gibi okunuyordu); ipucu ve ekran okuyucu "Girilmemiş" der.
+export const BOS_HUCRE_METNI = 'Girilmemiş';
+function BosHucre() {
+  return <span className="tc-tablo-yok" title={BOS_HUCRE_METNI}><span aria-hidden="true">—</span><span className="tc-gizli-etiket">{BOS_HUCRE_METNI}</span></span>;
+}
+
 export function Tablo<S>({
   etiket, sutunlar, satirlar, satirAnahtari, satirSec, bosMesaj, bosEylem, siralama = null, siralamaDegistir, sayfalama, mesgul = false, arac,
   yukleniyor = false, satirEylemi, toplu, kip = 'uyarlanir',
@@ -420,7 +426,7 @@ export function Tablo<S>({
                   const sinif = [s.hizala === 'sag' && 'tc-tablo-sag', s.mono && 'mono', s.kirilmaz && 'tc-tablo-kirilmaz', sabitSinif(s)].filter(Boolean).join(' ');
                   return (
                     <td key={s.anahtar} data-baslik={s.baslik} className={sinif || undefined}>
-                      {icerik === null || icerik === undefined || icerik === '' ? <span className="tc-tablo-yok">yok</span>
+                      {icerik === null || icerik === undefined || icerik === '' ? <BosHucre />
                         : kaydir && s.kes ? <span className="tc-tablo-kes" title={kesIpucu(s, satir, icerik)}>{icerik}</span> : icerik}
                     </td>
                   );

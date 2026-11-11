@@ -38,7 +38,7 @@ describe('Tablo', () => {
   it('bos hucreye sifir degil yok yazar ve basligi karta tasir', () => {
     render(<Tablo etiket="Liste" sutunlar={SUTUNLAR} satirlar={[{ no: 1, ad: 'A', adet: null }, { no: 2, ad: 'B', adet: 0 }]} satirAnahtari={(s) => s.no} />);
     const hucreler = screen.getAllByRole('cell');
-    expect(hucreler.map((h) => h.textContent)).toEqual(['A', 'yok', 'B', '0']);
+    expect(hucreler.map((h) => h.textContent)).toEqual(['A', '—Girilmemiş', 'B', '0']);
     expect(hucreler[1]?.getAttribute('data-baslik')).toBe('Adet');
   });
 

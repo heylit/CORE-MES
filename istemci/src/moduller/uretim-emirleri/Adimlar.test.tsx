@@ -113,11 +113,11 @@ describe('Ayrıntı: canlı durum, adımlar, yeni defter olayları', () => {
     expect(hucre('Hurda', 'Neden')).toBe('Ölçü dışı');
     expect(hucre('Düzeltme', 'Adet', 0)).toBe('-3');
     expect(hucre('Düzeltme', 'Adet', 1)).toBe('+5');
-    expect(hucre('Düzeltme', 'Neden')).toBe('yok');
+    expect(hucre('Düzeltme', 'Neden')).toBe('—Girilmemiş');
     expect(hucre('Durduruldu', 'Neden')).toBe('Takım kırıldı');
-    expect(hucre('Durduruldu', 'Adet')).toBe('yok');
+    expect(hucre('Durduruldu', 'Adet')).toBe('—Girilmemiş');
     expect(hucre('Bitirildi', 'Adet')).toBe('9');
-    expect(hucre('Başlatıldı', 'Adet')).toBe('yok');
+    expect(hucre('Başlatıldı', 'Adet')).toBe('—Girilmemiş');
   });
 });
 

@@ -15,7 +15,8 @@ interface Ozellikler {
   children?: ReactNode;
 }
 
-const VARSAYILAN = { yukleniyor: 'Yükleniyor', bos: 'Kayıt yok', hata: 'Veri alınamadı' } as const;
+// 2993 a: boş ekran "Henüz ... yok" der; süzgeç yüzünden boşsa ekran kendi iletisini verir.
+const VARSAYILAN = { yukleniyor: 'Yükleniyor', bos: 'Henüz kayıt yok', hata: 'Veri alınamadı' } as const;
 
 function hataMetni(hata: unknown, mesaj: string | undefined): string {
   if (hata instanceof ApiHatasi && hata.durum === 404) return hata.sunucuIletisi ?? 'Kayıt bulunamadı';
