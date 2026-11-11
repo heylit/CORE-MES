@@ -17,6 +17,9 @@ describe('Sahipsiz statülü stok (2547 a)', () => {
     sunucuKur(OKUYUCU, { 'GET /stok/sahipsiz-statulu': () => json(200, LISTE), 'GET /stok/statuler': () => json(200, STATULER) });
     ac('/stok/sahipsiz-statulu');
     const tablo = await screen.findByRole('table', { name: 'Sahipsiz statülü stok' });
+    expect(tablo.closest('.tc-tablo-kap')?.hasAttribute('data-kaydir')).toBe(true);
+    expect(within(tablo).getByRole('columnheader', { name: 'Malzeme' }).classList.contains('tc-tablo-sabit-sol')).toBe(true);
+    expect(within(tablo).getByRole('columnheader', { name: 'Stok kodu' })).toBeTruthy();
     const [satir, bekleyen] = within(tablo).getAllByText('Deneme sac').map((x) => x.closest('tr')!) as [HTMLTableRowElement, HTMLTableRowElement];
     expect(await within(satir).findByText('YM-900 (MM-950 · Rev B · OP 10 Tornalama)')).toBeTruthy();
     expect(within(satir).getByText('IST-01')).toBeTruthy();

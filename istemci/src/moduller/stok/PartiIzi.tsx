@@ -12,10 +12,10 @@ const SEVK_DURUMU: Record<Sevk['durum'], string> = { havuzda: 'Havuzda', planlan
 const GUN = new Intl.DateTimeFormat('tr-TR', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'UTC' });
 
 const SEVK_SUTUNLARI: Sutun<Sevk>[] = [
-  { anahtar: 'gun', baslik: 'Gün', hucre: (x) => GUN.format(new Date(`${x.gun}T00:00:00Z`)) },
+  { anahtar: 'gun', baslik: 'Gün', sabit: 'sol', hucre: (x) => GUN.format(new Date(`${x.gun}T00:00:00Z`)) },
   { anahtar: 'is', baslik: 'Sevk işi', mono: true, hucre: (x) => `#${x.isId}` },
   { anahtar: 'emir', baslik: 'Emir', mono: true, hucre: (x) => <Link to={`/uretim-emirleri/${x.emirId}`}>#{x.emirId}</Link> },
-  { anahtar: 'musteri', baslik: 'Müşteri', hucre: (x) => x.firmaAdi ?? '—' },
+  { anahtar: 'musteri', baslik: 'Müşteri', kes: true, hucre: (x) => x.firmaAdi ?? '—' },
   { anahtar: 'adet', baslik: 'Adet', hucre: (x) => miktarMetni(x.adet) },
   { anahtar: 'durum', baslik: 'Durum', hucre: (x) => SEVK_DURUMU[x.durum] },
 ];
@@ -23,23 +23,23 @@ const SEVK_SUTUNLARI: Sutun<Sevk>[] = [
 const kartDurumu = (k: RefakatPartisi): string =>
   (k.durum === 'iptal' ? 'İptal' : k.birlestigi ? `${k.birlestigi.etiket} kartına birleşti` : k.partiId === null ? 'Lot bekliyor' : 'Açık');
 const KART_SUTUNLARI: Sutun<RefakatPartisi>[] = [
-  { anahtar: 'kart', baslik: 'Kart', mono: true, hucre: (k) => k.etiket },
+  { anahtar: 'kart', baslik: 'Kart', mono: true, sabit: 'sol', hucre: (k) => k.etiket },
   { anahtar: 'emir', baslik: 'Emir', mono: true, hucre: (k) => <Link to={`/uretim-emirleri/${k.uretimEmriId}`}>{k.emirNo ?? `#${k.uretimEmriId}`}</Link> },
   { anahtar: 'ust', baslik: 'Üst kart', mono: true, hucre: (k) => k.ust?.etiket ?? '—' },
   { anahtar: 'verilen', baslik: 'Verilen', hucre: (k) => birimliMiktar(k.verilen, k.birim) },
-  { anahtar: 'durum', baslik: 'Durum', hucre: kartDurumu },
+  { anahtar: 'durum', baslik: 'Durum', kes: true, hucre: kartDurumu },
 ];
 const malzemeAdi = (x: { malzemeId: number; malzemeKod: string | null; malzemeAd: string | null }): string => x.malzemeAd ?? x.malzemeKod ?? `Kart ${x.malzemeId}`;
 const ciktiSutunlari = (etiket: (id: number) => string): Sutun<RefakatCiktisi>[] => [
-  { anahtar: 'lot', baslik: 'Lot', mono: true, hucre: (c) => <Link to={`/stok/hareketler?partiId=${c.partiId}`}>{c.lotNo}</Link> },
-  { anahtar: 'malzeme', baslik: 'Malzeme', hucre: malzemeAdi },
+  { anahtar: 'lot', baslik: 'Lot', mono: true, sabit: 'sol', hucre: (c) => <Link to={`/stok/hareketler?partiId=${c.partiId}`}>{c.lotNo}</Link>, csv: (c) => c.lotNo },
+  { anahtar: 'malzeme', baslik: 'Malzeme', kes: true, hucre: malzemeAdi },
   { anahtar: 'kart', baslik: 'Kart', mono: true, hucre: (c) => etiket(c.refakatPartisiId) },
   { anahtar: 'eldeki', baslik: 'Elde', hucre: (c) => birimliMiktar(c.eldeki, c.birim) },
 ];
 const CIKIS_SUTUNLARI: Sutun<RefakatSevki>[] = [
+  { anahtar: 'lot', baslik: 'Lot', mono: true, sabit: 'sol', hucre: (x) => x.lotNo },
   { anahtar: 'zaman', baslik: 'Zaman', hucre: (x) => zamanMetni(x.zaman) },
-  { anahtar: 'lot', baslik: 'Lot', mono: true, hucre: (x) => x.lotNo },
-  { anahtar: 'malzeme', baslik: 'Malzeme', hucre: malzemeAdi },
+  { anahtar: 'malzeme', baslik: 'Malzeme', kes: true, hucre: malzemeAdi },
   { anahtar: 'miktar', baslik: 'Miktar', hucre: (x) => birimliMiktar(x.miktar, x.birim) },
   { anahtar: 'emir', baslik: 'Emir', mono: true, hucre: (x) => x.emirNo ?? '—' },
 ];
@@ -55,15 +55,15 @@ export function PartiIziPenceresi({ partiId, lotNo, kapat }: { partiId: number; 
       {iz.isError ? <DurumKutusu durum="hata" mesaj={hataMetni(iz.error)} yenile={() => void iz.refetch()} /> : (
         <>
           <Kart baslik="Refakat kartları">
-            <Tablo etiket="Refakat kartları" sutunlar={KART_SUTUNLARI} satirlar={kartlar} satirAnahtari={(k) => k.id}
+            <Tablo kip="kaydir" etiket="Refakat kartları" sutunlar={KART_SUTUNLARI} satirlar={kartlar} satirAnahtari={(k) => k.id}
               mesgul={iz.isPending} bosMesaj="Bu lotla açılmış refakat kartı yok." />
           </Kart>
           <Kart baslik="Üretilen partiler">
-            <Tablo etiket="Üretilen partiler" sutunlar={ciktiSutunlari(etiket)} satirlar={iz.data?.ciktilar ?? []} satirAnahtari={(c) => c.partiId}
+            <Tablo kip="kaydir" etiket="Üretilen partiler" sutunlar={ciktiSutunlari(etiket)} satirlar={iz.data?.ciktilar ?? []} satirAnahtari={(c) => c.partiId}
               mesgul={iz.isPending} bosMesaj="Bu lotun kartlarıyla sayılmış parça yok." />
           </Kart>
           <Kart baslik="Sevk çıkışları">
-            <Tablo etiket="Sevk çıkışları" sutunlar={CIKIS_SUTUNLARI} satirlar={iz.data?.sevkCikislari ?? []} satirAnahtari={(x) => x.hareketId}
+            <Tablo kip="kaydir" etiket="Sevk çıkışları" sutunlar={CIKIS_SUTUNLARI} satirlar={iz.data?.sevkCikislari ?? []} satirAnahtari={(x) => x.hareketId}
               mesgul={iz.isPending} bosMesaj="Bu lotun kartlarıyla üretilen partilerden sevk çıkışı yok." />
           </Kart>
           <Kart baslik="Üretim emirleri">
@@ -72,7 +72,7 @@ export function PartiIziPenceresi({ partiId, lotNo, kapat }: { partiId: number; 
               : <p>{iz.data?.emirler.map((id, i) => <span key={id}>{i > 0 && ', '}<Link to={`/uretim-emirleri/${id}`}>#{id}</Link></span>)}</p>}
           </Kart>
           <Kart baslik="Sevkler">
-            <Tablo etiket="Sevkler" sutunlar={SEVK_SUTUNLARI} satirlar={iz.data?.sevkler ?? []} satirAnahtari={(x) => `${x.isId}-${x.emirId}`}
+            <Tablo kip="kaydir" etiket="Sevkler" sutunlar={SEVK_SUTUNLARI} satirlar={iz.data?.sevkler ?? []} satirAnahtari={(x) => `${x.isId}-${x.emirId}`}
               mesgul={iz.isPending} bosMesaj="Bu partinin emirleri için sevk yok." />
           </Kart>
         </>

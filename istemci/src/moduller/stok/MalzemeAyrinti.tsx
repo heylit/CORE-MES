@@ -25,8 +25,8 @@ type Islem = { tur: 'cikis' | 'tasima'; b: BakiyeSatiri } | { tur: 'uretim' } | 
 
 type SonParti = SonPartilerCevabi['partiler'][number];
 const PARTI_SUTUNLARI: Sutun<SonParti>[] = [
-  { anahtar: 'lot', baslik: 'Lot no', mono: true, hucre: (p) => <Link to={`/stok/hareketler?partiId=${p.partiId}`}>{p.lotNo}</Link> },
-  { anahtar: 'parti', baslik: 'Tedarikçi parti', hucre: (p) => p.tedarikciPartiNo ?? '—' },
+  { anahtar: 'lot', baslik: 'Lot no', mono: true, sabit: 'sol', hucre: (p) => <Link to={`/stok/hareketler?partiId=${p.partiId}`}>{p.lotNo}</Link>, csv: (p) => p.lotNo },
+  { anahtar: 'parti', baslik: 'Tedarikçi parti', kes: true, hucre: (p) => p.tedarikciPartiNo ?? '—' },
   { anahtar: 'dokum', baslik: 'Döküm no', mono: true, hucre: (p) => p.dokumNo ?? '—' },
   { anahtar: 'sertifikaNo', baslik: 'Sertifika no', mono: true, hucre: (p) => p.sertifikaNo ?? '—' },
   { anahtar: 'zaman', baslik: 'Geliş', hucre: (p) => zamanMetni(p.kayitZamani) },
@@ -38,7 +38,7 @@ function SonPartiler({ malzemeId }: { malzemeId: number }) {
   const p = useQuery({ queryKey: [...anahtarlar.hepsi, 'son-partiler', malzemeId], queryFn: () => api.get<SonPartilerCevabi>(`/stok/malzemeler/${malzemeId}/son-partiler`) });
   // Kaybolan ya da yıpranan etiket buradan yeniden basılır (#1060).
   const [iz, setIz] = useState<SonParti | null>(null);
-  const sutunlar: Sutun<SonParti>[] = [...PARTI_SUTUNLARI, { anahtar: 'etiket', baslik: '', hucre: (x) => <>
+  const sutunlar: Sutun<SonParti>[] = [...PARTI_SUTUNLARI, { anahtar: 'etiket', baslik: '', sabit: 'sag', hucre: (x) => <>
     <Dugme tur="ikincil" simge="truck" onClick={() => setIz(x)}>İz</Dugme>
     <EtiketMerkeziDugmesi tur="lot" idler={[x.partiId]}>Lot etiketi</EtiketMerkeziDugmesi>
   </> }];
@@ -46,7 +46,7 @@ function SonPartiler({ malzemeId }: { malzemeId: number }) {
   if (p.data && p.data.partiler.length === 0) return null;
   return (
     <Kart baslik="Partiler ve sertifikalar">
-      <Tablo etiket="Partiler ve sertifikalar" sutunlar={sutunlar} satirlar={p.data?.partiler ?? []} satirAnahtari={(x) => x.partiId} mesgul={p.isPending} />
+      <Tablo etiket="Partiler ve sertifikalar" kip="kaydir" sutunlar={sutunlar} satirlar={p.data?.partiler ?? []} satirAnahtari={(x) => x.partiId} mesgul={p.isPending} />
       {iz && <PartiIziPenceresi partiId={iz.partiId} lotNo={iz.lotNo} kapat={() => setIz(null)} />}
     </Kart>
   );
@@ -199,33 +199,34 @@ export function MalzemeAyrinti() {
   const kirilim: Kirilim[] = [...m.data.statuKirilimi, ...m.data.tanimliStatuler.map((t) => ({ statuId: t.statuId, miktar: null, ilkGiris: null }))];
   const statuluVar = kirilim.some((k) => k.statuId !== null);
   const kirilimSutunlari: Sutun<Kirilim>[] = [
-    { anahtar: 'statu', baslik: 'Statü', hucre: (k) => (k.statuId === null ? 'Serbest' : <Rozet ton={k.miktar === null ? 'pasif' : 'bilgi'}>{statuAdi(k.statuId)}</Rozet>) },
+    { anahtar: 'statu', baslik: 'Statü', sabit: 'sol', hucre: (k) => (k.statuId === null ? 'Serbest' : <Rozet ton={k.miktar === null ? 'pasif' : 'bilgi'}>{statuAdi(k.statuId)}</Rozet>) },
     { anahtar: 'giris', baslik: 'Statüye giriş', kirilmaz: true, hucre: (k) => (k.ilkGiris === null ? '—' : zamanMetni(k.ilkGiris)) },
     { anahtar: 'miktar', baslik: 'Miktar', hizala: 'sag', hucre: (k) => (k.miktar === null ? <span className="tc-stok-alt">Tanımlı, stok yok</span> : <strong>{miktarMetni(k.miktar)}</strong>) },
     { anahtar: 'rezerve', baslik: 'Rezerve', hizala: 'sag', hucre: (k) => (k.miktar === null ? '—' : miktarMetni(String(rezerveToplami(m.data.rezerveler, k.statuId)))) },
   ];
   const rezerveSutunlari: Sutun<Rezerve>[] = [
-    { anahtar: 'statu', baslik: 'Statü', hucre: (r) => <Rozet>{statuAdi(r.statuId)}</Rozet> },
+    { anahtar: 'statu', baslik: 'Statü', sabit: 'sol', hucre: (r) => <Rozet>{statuAdi(r.statuId)}</Rozet>, csv: (r) => statuAdi(r.statuId) },
     { anahtar: 'emir', baslik: 'Üretim emri', mono: true, hucre: (r) => r.emirNo ?? `#${r.uretimEmriId}` },
     { anahtar: 'miktar', baslik: 'Ayrılan', hizala: 'sag', hucre: (r) => <strong>{miktarMetni(r.miktar)}</strong> },
-    ...(ayirabilir ? [{ anahtar: 'eylem', baslik: '', hucre: (r: Rezerve) => <Dugme simge="x" onClick={() => setIslem({ tur: 'rezerve-kaldir', r })}>Rezerveyi kaldır</Dugme> }] : []),
+    ...(ayirabilir ? [{ anahtar: 'eylem', baslik: '', sabit: 'sag' as const, hucre: (r: Rezerve) => <Dugme simge="x" onClick={() => setIslem({ tur: 'rezerve-kaldir', r })}>Rezerveyi kaldır</Dugme> }] : []),
   ];
   const bekleyenSutunlari: Sutun<MalzemeAyrintiCevabi['bekleyenler'][number]>[] = [
+    { anahtar: 'emir', baslik: 'Üretim emri', mono: true, sabit: 'sol', hucre: (e) => e.emirNo },
     { anahtar: 'sira', baslik: 'Sıra', hizala: 'sag', hucre: (e) => String(m.data.bekleyenler.indexOf(e) + 1) },
-    { anahtar: 'emir', baslik: 'Üretim emri', mono: true, hucre: (e) => e.emirNo },
     { anahtar: 'miktar', baslik: 'Bekliyor', hizala: 'sag', hucre: (e) => <strong>{miktarMetni(e.miktar)}</strong> },
   ];
   const rezerveVar = statuluVar || m.data.rezerveler.length > 0 || m.data.bekleyenler.length > 0;
   const sutunlar: Sutun<BakiyeSatiri>[] = [
-    { anahtar: 'konum', baslik: 'Konum', mono: true, hucre: (b) => <Link to={`/stok/konumlar/${b.konumId}`}>{b.konumKod}</Link> },
+    { anahtar: 'konum', baslik: 'Konum', mono: true, sabit: 'sol', hucre: (b) => <Link to={`/stok/konumlar/${b.konumId}`}>{b.konumKod}</Link>, csv: (b) => b.konumKod },
     { anahtar: 'zemin', baslik: 'Zemin', mono: true, hucre: (b) => b.zemin ?? '—' },
     ...(statuluVar ? [{ anahtar: 'statu', baslik: 'Statü', hucre: (b: BakiyeSatiri) => (b.statuId === null ? 'Serbest' : <Rozet>{statuAdi(b.statuId)}</Rozet>) }] : []),
-    { anahtar: 'parti', baslik: 'Parti', hucre: (b) => <>{b.partiId === null ? 'Parti bilinmiyor' : <Link to={`/stok/hareketler?partiId=${b.partiId}`}>{b.partiEtiketi}</Link>}<KaliteRozeti durum={b.kaliteDurumu} /></> },
+    { anahtar: 'parti', baslik: 'Parti', kes: true, hucre: (b) => (b.partiId === null ? 'Parti bilinmiyor' : <Link to={`/stok/hareketler?partiId=${b.partiId}`}>{b.partiEtiketi}</Link>), csv: (b) => (b.partiId === null ? 'Parti bilinmiyor' : b.partiEtiketi) },
+    { anahtar: 'kalite', baslik: 'Kalite', hucre: (b) => <KaliteRozeti durum={b.kaliteDurumu} />, csv: false },
     { anahtar: 'giris', baslik: 'İlk giriş', kirilmaz: true, hucre: (b) => zamanMetni(b.ilkGiris) },
     { anahtar: 'ambalaj', baslik: 'Ambalaj', hucre: (b) => (b.ambalaj ? <span className="tc-stok-ambalaj-hucre"><AmbalajIkonu tur={b.ambalaj.tur} />{`${b.ambalaj.olcu}${b.ambalaj.adet ? ` × ${b.ambalaj.adet}` : ''}`}</span> : '—') },
     { anahtar: 'miktar', baslik: 'Miktar', hizala: 'sag', hucre: (b) => <strong className={b.miktar.startsWith('-') ? 'tc-stok-eksi' : ''}>{miktarMetni(b.miktar)}</strong> },
-    { anahtar: 'eylem', baslik: '', hucre: (b) => (b.statuId !== null || (b.kaliteDurumu ?? 'serbest') !== 'serbest' ? <span /> :
-      <span className="tc-stok-dugmeler">
+    { anahtar: 'eylem', baslik: '', sabit: 'sag', hucre: (b) => (b.statuId !== null || (b.kaliteDurumu ?? 'serbest') !== 'serbest' ? <span /> :
+      <span className="tc-stok-eylem">
         {tasiyabilir && <Dugme onClick={() => setIslem({ tur: 'tasima', b })}>Taşı</Dugme>}
         {cikabilir && <Dugme onClick={() => setIslem({ tur: 'cikis', b })}>Çıkış</Dugme>}
         {sepetYetkisi && !b.miktar.startsWith('-') && <Dugme onClick={() => setIslem({ tur: 'sepet', konumId: b.konumId })}>Sepete</Dugme>}
@@ -243,13 +244,13 @@ export function MalzemeAyrinti() {
           {tanimlar && <Dugme simge="tool" onClick={() => setIslem({ tur: 'ayar' })}>Stok ayarı</Dugme>}
           <GecmisDugmesi kayitlar={[{ tablo: 'stok_malzeme_ayari', anahtar: { malzeme_id: s.malzemeId } }]} />
         </>} />
-      <Kart baslik="Bakiye satırları"><Tablo etiket="Bakiye satırları" sutunlar={sutunlar} satirlar={m.data.bakiyeler} satirAnahtari={(b) => b.id} bosMesaj="Bu malzemenin stoğu yok." /></Kart>
-      {statuluVar && <Kart baslik="Statü kırılımı"><Tablo etiket="Statü kırılımı" sutunlar={kirilimSutunlari} satirlar={kirilim} satirAnahtari={(k) => k.statuId ?? 0} /></Kart>}
+      <Kart baslik="Bakiye satırları"><Tablo etiket="Bakiye satırları" kip="kaydir" sutunlar={sutunlar} satirlar={m.data.bakiyeler} satirAnahtari={(b) => b.id} bosMesaj="Bu malzemenin stoğu yok." /></Kart>
+      {statuluVar && <Kart baslik="Statü kırılımı"><Tablo etiket="Statü kırılımı" kip="kaydir" sutunlar={kirilimSutunlari} satirlar={kirilim} satirAnahtari={(k) => k.statuId ?? 0} /></Kart>}
       {rezerveVar && (
         <Kart baslik="Rezerve" sag={ayirabilir ? <Dugme simge="lock" onClick={() => setIslem({ tur: 'rezerve-et' })}>Rezerve et</Dugme> : undefined}>
           <p className="tc-stok-not">Emir açılırken ya da statüye geçerken ayrılan malzeme yalnız o emirde kullanılır. Emir kapanınca ya da iptal edilince ayrılan kalkar.</p>
-          <Tablo etiket="Rezerve" sutunlar={rezerveSutunlari} satirlar={m.data.rezerveler} satirAnahtari={(r) => `${r.statuId}-${r.uretimEmriId}`} bosMesaj="Bu malzemede emre ayrılmış stok yok." />
-          {m.data.bekleyenler.length > 0 && <Tablo etiket="Malzeme bekleyen emirler" sutunlar={bekleyenSutunlari} satirlar={m.data.bekleyenler} satirAnahtari={(e) => e.uretimEmriId} />}
+          <Tablo etiket="Rezerve" kip="kaydir" sutunlar={rezerveSutunlari} satirlar={m.data.rezerveler} satirAnahtari={(r) => `${r.statuId}-${r.uretimEmriId}`} bosMesaj="Bu malzemede emre ayrılmış stok yok." />
+          {m.data.bekleyenler.length > 0 && <Tablo etiket="Malzeme bekleyen emirler" kip="kaydir" sutunlar={bekleyenSutunlari} satirlar={m.data.bekleyenler} satirAnahtari={(e) => e.uretimEmriId} />}
         </Kart>
       )}
       <Kart baslik="Çıkış önerisi">

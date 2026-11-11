@@ -20,6 +20,18 @@ const LISTE = [
 const BAS = { emirId: 1, qr: 'UE:1', emirNo: 'UE-000001', urun: { kod: 'P-1', ad: 'Deneme mil' }, adet: 10, teslim: null, parti: { ustEmirNo: null, bolunmeSira: null }, adimlar: [] };
 
 describe('Refakat kartları sayfası (kart #708)', () => {
+  it('satırın herhangi bir yerine basmak kartı açar (yalnız Kart düğmesi değil)', async () => {
+    sunucuKur(OKUYUCU, {
+      'GET /stok/refakat-kartlari': () => json(200, { kartlar: LISTE, sinirda: false }),
+      'GET /stok/refakat-partileri/12/kart': () => json(200, { refakat: KART, kart: BAS }),
+      'GET /stok/refakat-partileri/12/iz': () => json(200, { refakat: KART, ustler: [], altlar: [], birlesenler: [], ayniLot: [], ciktilar: [], sevkler: [] }),
+    });
+    ac('/stok/refakat-kartlari');
+    const tablo = await screen.findByRole('table', { name: 'Kart listesi' });
+    fireEvent.click(within(tablo).getAllByRole('row')[1]!.querySelector('td[data-baslik="Ürün"]')!);
+    expect(await screen.findByRole('dialog', { name: 'Refakat kartı UE-000001-P1' })).toBeTruthy();
+  });
+
   it('menüden açılır; kartları durumuyla listeler, okutma alanında süzer, tümü iptali de ister; Akış Süresi yetkisi yoksa kart penceresi açılır', async () => {
     const istekler = sunucuKur(OKUYUCU, {
       'GET /stok/refakat-kartlari': () => json(200, { kartlar: LISTE, sinirda: false }),
@@ -28,7 +40,7 @@ describe('Refakat kartları sayfası (kart #708)', () => {
     });
     ac('/stok/refakat-kartlari');
     const liste = await screen.findByRole('region', { name: 'Kartlar' });
-    expect(within(liste).getAllByRole('listitem').map((s) => s.textContent)).toEqual([
+    expect(within(liste).getAllByRole('row').slice(1).map((s) => s.textContent)).toEqual([
       expect.stringContaining('Açık'), expect.stringContaining('Lot bekliyor'), expect.stringContaining('UE-000001-P1 kartına birleşti'),
     ]);
     expect(istekler.some((i) => i.yol === '/stok/refakat-kartlari?durum=acik')).toBe(true);
@@ -36,9 +48,9 @@ describe('Refakat kartları sayfası (kart #708)', () => {
 
     const okut = screen.getByRole('searchbox', { name: 'Kart, emir ya da lot okutun' });
     fireEvent.change(okut, { target: { value: 'FLANŞ' } });
-    await waitFor(() => expect(within(liste).getAllByRole('listitem')).toHaveLength(1));
+    await waitFor(() => expect(within(liste).getAllByRole('row').slice(1)).toHaveLength(1));
     fireEvent.change(okut, { target: { value: 'LT-000040' } });
-    await waitFor(() => expect(within(liste).getAllByRole('listitem')).toHaveLength(2));
+    await waitFor(() => expect(within(liste).getAllByRole('row').slice(1)).toHaveLength(2));
 
     fireEvent.click(within(liste).getByRole('button', { name: 'Tümü' }));
     await waitFor(() => expect(istekler.some((i) => i.yol === '/stok/refakat-kartlari?durum=tumu')).toBe(true));
@@ -78,7 +90,12 @@ describe('Refakat kartları sayfası (kart #708)', () => {
     const liste = await screen.findByRole('region', { name: 'Kartlar' });
     expect(await within(liste).findByText('Stokta · yolda')).toBeTruthy();
     expect(within(liste).getByText('Torna 2 → Freze 1 yolunda')).toBeTruthy();
-    expect(within(liste).getByText(/^Sıradaki/).textContent).toBe('Sıradaki OP20');
+    expect(liste.querySelector('td[data-baslik="Sıradaki"]')?.textContent).toBe('OP20');
+    const tablo = within(liste).getByRole('table', { name: 'Kart listesi' });
+    expect(tablo.closest('.tc-tablo-kap')?.hasAttribute('data-kaydir')).toBe(true);
+    expect(within(tablo).getByRole('columnheader', { name: 'Kart' }).classList.contains('tc-tablo-sabit-sol')).toBe(true);
+    // Dar sol panelde Kart'tan hemen sonra kartın yeri ve sıradaki adımı gelir.
+    expect(within(tablo).getAllByRole('columnheader').map((h) => h.textContent)).toEqual(['Kart', 'Şimdi', 'Sıradaki', 'Ürün', 'Üretim emri', 'Son an']);
     expect(within(liste).queryByText(/^lead /)).toBeNull();
     expect(istekler.some((i) => i.yol === '/akis/refakat-kartlari?idler=12')).toBe(true);
     const kumeler = within(liste).getByRole('group', { name: 'Yere göre süz' });

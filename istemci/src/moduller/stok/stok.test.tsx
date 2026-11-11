@@ -740,6 +740,10 @@ describe('Hareketler', () => {
     expect(await screen.findByText('Onaylı eksi')).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Geri al' })).toBeTruthy();
     expect(screen.getByRole('link', { name: 'Fiş TF-000004' })).toBeTruthy();
+    const tablo = screen.getByRole('table', { name: 'Hareketler' });
+    expect(tablo.closest('.tc-tablo-kap')?.hasAttribute('data-kaydir')).toBe(true);
+    expect(within(tablo).getByRole('columnheader', { name: 'Malzeme' }).classList.contains('tc-tablo-sabit-sol')).toBe(true);
+    expect(screen.getByRole('button', { name: 'Geri al' }).closest('td')?.classList.contains('tc-tablo-sabit-sag')).toBe(true);
   });
   it('emre bağlı hareket notunda emir numarasını yazar; numara yoksa kimliği yedek gösterir', async () => {
     const numarali = { ...H, id: 8, cikisNedeni: 'uretime_sarf', uretimEmriId: 41, emirNo: 'UE-0041' } as const;

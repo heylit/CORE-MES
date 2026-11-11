@@ -69,8 +69,8 @@ export function MalzemeFisleri() {
   useEffect(() => { if (l.data) liste.sayfaEsitle(l.data.sayfa, liste.sorgu.sayfa); }, [l.data]);
   const sekmeler = [{ anahtar: '' as const, baslik: 'Tümü' }, ...LISTE_FISI_TURLERI.map((t) => ({ anahtar: t, baslik: LISTE_FISI_ETIKETI[t] }))];
   const sutunlar: Sutun<MalzemeFisiListeSatiri>[] = [
+    { anahtar: 'no', baslik: 'Belge no', mono: true, sabit: 'sol', hucre: (f) => <Link to={ayrintiYolu(f)}>{f.no}</Link>, csv: (f) => f.no },
     { anahtar: 'saat', baslik: 'Saat', kirilmaz: true, hucre: (f) => SAAT.format(new Date(f.acilis)) },
-    { anahtar: 'no', baslik: 'Belge no', mono: true, hucre: (f) => <Link to={ayrintiYolu(f)}>{f.no}</Link> },
     { anahtar: 'tur', baslik: 'Tür', hucre: (f) => <FisTuruRozeti tur={f.tur} /> },
     { anahtar: 'kaynak', baslik: 'Kaynak', hucre: kaynakMetni },
     { anahtar: 'satir', baslik: 'Satır', hizala: 'sag', hucre: (f) => f.satirSayisi },
@@ -99,7 +99,7 @@ export function MalzemeFisleri() {
       {l.data && l.data.satirlar.length === 0 && <DurumKutusu durum="bos" mesaj="Bu süzgece uyan belge yok." />}
       {gruplar.map((g) => (
         <Kart key={g.anahtar} baslik={g.baslik}>
-          <Tablo etiket="Belgeler" sutunlar={sutunlar} satirlar={g.satirlar} satirAnahtari={(f) => `${ayriKaynak.has(f.tur) ? f.tur : 'fis'}-${f.id}`} bosMesaj="Belge yok." />
+          <Tablo etiket="Belgeler" kip="kaydir" sutunlar={sutunlar} satirlar={g.satirlar} satirAnahtari={(f) => `${ayriKaynak.has(f.tur) ? f.tur : 'fis'}-${f.id}`} bosMesaj="Belge yok." />
         </Kart>
       ))}
       {l.data && l.data.satirlar.length > 0 && <Sayfalama sayfa={l.data.sayfa} sayfaBoyu={l.data.sayfaBoyu} toplam={l.data.toplam} degistir={liste.sayfaDegistir} satirSayisi={l.data.satirlar.length} />}

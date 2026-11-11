@@ -37,7 +37,7 @@ function EsikSatiri({ esik, yazabilir }: { esik: Esik; yazabilir: boolean }) {
   const { komut } = useStokKomutu((g: SayimEsigiGovdesi) => korumaliPost(`/stok/depolar/${esik.depoId}/sayim-esigi`, g), 'Sayım eşiği kaydedildi.');
   if (!yazabilir) return <span>%{miktarMetni(esik.esikYuzde)}</span>;
   return (
-    <span className="tc-stok-ad">
+    <span className="tc-stok-dugmeler">
       <Girdi etiket={`${esik.depoKod} sayım eşiği (%)`} inputMode="decimal" value={deger} onChange={(e) => setDeger(e.target.value)} />
       <Dugme simge="check" yukleniyor={komut.isPending} onClick={() => komut.mutate({ surum: esik.surum, esikYuzde: deger.replace(',', '.') })}>Kaydet</Dugme>
     </span>
@@ -55,20 +55,22 @@ export function SayimOnaylari() {
   const bekleyen = liste.data.farklar.filter((f) => f.durum === 'bekliyor');
   const kararli = liste.data.farklar.filter((f) => f.durum !== 'bekliyor');
   const ortak: Sutun<SayimFarki>[] = [
-    { anahtar: 'konum', baslik: 'Konum', kirilmaz: true, hucre: (f) => <Link to={`/stok/konumlar/${f.konumId}`}>{f.konumKod}</Link> },
-    { anahtar: 'malzeme', baslik: 'Malzeme', hucre: (f) => <span className="tc-stok-ad"><Link to={`/stok/malzemeler/${f.malzemeId}`}>{f.malzemeAd ?? `Kart ${f.malzemeId}`}</Link><span>{f.partiEtiketi ?? 'Parti bilinmiyor'}</span></span> },
+    { anahtar: 'konum', baslik: 'Konum', mono: true, sabit: 'sol', hucre: (f) => <Link to={`/stok/konumlar/${f.konumId}`}>{f.konumKod}</Link>, csv: (f) => f.konumKod },
+    { anahtar: 'malzeme', baslik: 'Malzeme', kes: true, hucre: (f) => <Link to={`/stok/malzemeler/${f.malzemeId}`}>{f.malzemeAd ?? `Kart ${f.malzemeId}`}</Link>, csv: (f) => f.malzemeAd ?? `Kart ${f.malzemeId}` },
+    { anahtar: 'parti', baslik: 'Parti', kes: true, hucre: (f) => f.partiEtiketi ?? 'Parti bilinmiyor' },
     { anahtar: 'sistem', baslik: 'Sayımda sistem', hizala: 'sag', hucre: (f) => miktarMetni(f.sistemMiktar) },
     { anahtar: 'sayilan', baslik: 'Sayılan', hizala: 'sag', hucre: (f) => miktarMetni(f.sayilanMiktar) },
     { anahtar: 'fark', baslik: 'Fark', hizala: 'sag', hucre: (f) => <strong>{farkMetni(f.fark)}</strong> },
-    { anahtar: 'sayan', baslik: 'Sayan', hucre: (f) => <span className="tc-stok-ad"><span>{f.sayanAd ?? '—'}</span><span>{zamanMetni(f.sayimZamani)}</span></span> },
+    { anahtar: 'sayan', baslik: 'Sayan', kes: true, hucre: (f) => f.sayanAd ?? '—' },
+    { anahtar: 'sayimZamani', baslik: 'Sayım zamanı', hucre: (f) => zamanMetni(f.sayimZamani) },
   ];
   const bekleyenSutunlari: Sutun<SayimFarki>[] = [
     ...ortak,
     { anahtar: 'guncel', baslik: 'Bugün sistemde', hizala: 'sag', hucre: (f) => miktarMetni(f.guncelMiktar) },
     {
-      anahtar: 'eylem', baslik: '', hizala: 'sag',
+      anahtar: 'eylem', baslik: '', hizala: 'sag', sabit: 'sag',
       hucre: (f) => (!onaylayabilir ? <Rozet ton="uyari">Onay bekliyor</Rozet> : f.sayanKisiId === ben ? <Rozet ton="pasif">Kendi sayımınız</Rozet> : (
-        <span className="tc-stok-ad">
+        <span className="tc-stok-dugmeler">
           <Dugme tur="birincil" simge="check" yukleniyor={onay.isPending && onay.variables?.id === f.id} onClick={() => onay.mutate(f)}>Onayla</Dugme>
           <Dugme simge="x" onClick={() => setRed(f)}>Reddet</Dugme>
         </span>
@@ -77,24 +79,27 @@ export function SayimOnaylari() {
   ];
   const kararSutunlari: Sutun<SayimFarki>[] = [
     ...ortak,
-    { anahtar: 'durum', baslik: 'Karar', hucre: (f) => <span className="tc-stok-ad"><Rozet ton={DURUM[f.durum].ton}>{DURUM[f.durum].ad}</Rozet><span>{[f.kararAd, zamanMetni(f.kararZamani), f.kararNotu].filter(Boolean).join(' · ')}</span></span> },
+    { anahtar: 'durum', baslik: 'Karar', hucre: (f) => <Rozet ton={DURUM[f.durum].ton}>{DURUM[f.durum].ad}</Rozet>, csv: (f) => DURUM[f.durum].ad },
+    { anahtar: 'karar', baslik: 'Karar veren', kes: true, hucre: (f) => f.kararAd ?? '—' },
+    { anahtar: 'kararZamani', baslik: 'Karar zamanı', hucre: (f) => (f.kararZamani ? zamanMetni(f.kararZamani) : '—') },
+    { anahtar: 'not', baslik: 'Not', kes: true, hucre: (f) => f.kararNotu ?? '—' },
   ];
   const esikSutunlari: Sutun<Esik>[] = [
-    { anahtar: 'depo', baslik: 'Depo', hucre: (e) => `${e.depoKod} · ${e.depoAd}` },
+    { anahtar: 'depo', baslik: 'Depo', sabit: 'sol', kes: true, hucre: (e) => `${e.depoKod} · ${e.depoAd}` },
     { anahtar: 'esik', baslik: 'Eşik', hucre: (e) => <EsikSatiri key={`${e.depoId}-${e.surum}`} esik={e} yazabilir={onaylayabilir} /> },
   ];
   return (
     <section className="tc-stok">
       <SayfaBasi baslik="Sayım onayları" alt="Kör sayımda deponun eşiğini aşan fark stoğa yazılmaz; sayandan başka yetkili onaylar ya da reddeder." />
       <Kart baslik={`Onay bekleyen · ${bekleyen.length}`}>
-        <Tablo etiket="Onay bekleyen sayım farkları" sutunlar={bekleyenSutunlari} satirlar={bekleyen} satirAnahtari={(f) => f.id} bosMesaj="Onay bekleyen sayım farkı yok." />
+        <Tablo etiket="Onay bekleyen sayım farkları" kip="kaydir" sutunlar={bekleyenSutunlari} satirlar={bekleyen} satirAnahtari={(f) => f.id} bosMesaj="Onay bekleyen sayım farkı yok." />
       </Kart>
       <Kart baslik="Sayım eşiği">
         <p className="tc-stok-not">Farkın sistem miktarına oranı eşiği aşarsa onaya gider. 0 her farkı onaya gönderir; sistemde stok yoksa fark her zaman onaya gider.</p>
-        <Tablo etiket="Sayım eşikleri" sutunlar={esikSutunlari} satirlar={liste.data.esikler} satirAnahtari={(e) => e.depoId} bosMesaj="Depo yok." />
+        <Tablo etiket="Sayım eşikleri" kip="kaydir" sutunlar={esikSutunlari} satirlar={liste.data.esikler} satirAnahtari={(e) => e.depoId} bosMesaj="Depo yok." />
       </Kart>
       <Kart baslik="Son kararlar">
-        <Tablo etiket="Karara bağlanan sayım farkları" sutunlar={kararSutunlari} satirlar={kararli} satirAnahtari={(f) => f.id} bosMesaj="Karara bağlanan sayım farkı yok." />
+        <Tablo etiket="Karara bağlanan sayım farkları" kip="kaydir" sutunlar={kararSutunlari} satirlar={kararli} satirAnahtari={(f) => f.id} bosMesaj="Karara bağlanan sayım farkı yok." />
       </Kart>
       {red && <RedPenceresi fark={red} kapat={() => setRed(null)} />}
     </section>

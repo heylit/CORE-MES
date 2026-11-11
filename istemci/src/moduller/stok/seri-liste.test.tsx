@@ -109,6 +109,12 @@ describe('Seri listeler ekrani (1915)', () => {
     const blok = await screen.findByRole('region', { name: 'Göz A-01-1' });
     expect(await within(blok).findByText(/Bir kısmı başka yerde kayıtlı/)).toBeTruthy();
     expect(await screen.findByRole('region', { name: 'Göz okutulmadan' })).toBeTruthy();
+    // Bloklar ve açık listeler tek satırlı kayan tablodur; okunan satırın adı solda yapışık.
+    const satirlar = within(blok).getByRole('table', { name: 'Göz A-01-1' });
+    expect(satirlar.closest('.tc-tablo-kap')?.hasAttribute('data-kaydir')).toBe(true);
+    expect(within(satirlar).getByRole('columnheader', { name: 'Okunan' }).classList.contains('tc-tablo-sabit-sol')).toBe(true);
+    expect(screen.getByRole('table', { name: 'Açık listeler' }).closest('.tc-tablo-kap')?.hasAttribute('data-kaydir')).toBe(true);
+    expect((await screen.findByLabelText('Seç Deneme 2 · LT-8')).closest('[data-tur]')?.getAttribute('data-tur')).toBe('lot');
     fireEvent.click(await screen.findByLabelText('Seç Deneme 2 · LT-8'));
     fireEvent.click(screen.getByLabelText('Seç Deneme 3 · LT-9'));
     fireEvent.click(screen.getByRole('button', { name: /Taşı…/ }));
