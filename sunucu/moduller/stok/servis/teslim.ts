@@ -455,7 +455,7 @@ export async function istekTeslimEt(db: Db, k: Kullanici, id: number, g: IstekTe
       const b = await sorgular.bakiyeKilitle(db, i.malzemeId, kaynak.id, partiId, statuId);
       if (binde(b?.miktar ?? '0') < binde(miktar)) throw dogrulama(`Konumda yeterli stok yok (mevcut ${bindenMetin(binde(b?.miktar ?? '0'))}).`, 'karsilanan');
       if (i.uretimEmriId !== null) await rezerveyiAsmasin(db, i.malzemeId, statuId, i.uretimEmriId, binde(miktar));
-      await emreKartiSagla(db, k.id, { uretimEmriId: i.uretimEmriId, partiId, malzemeId: i.malzemeId, miktar }, g.kartOnayi);
+      await emreKartiSagla(db, k.id, { uretimEmriId: i.uretimEmriId, partiId, malzemeId: i.malzemeId });
       await sorgular.hareketYaz(db, hareket({
         tur: 'transfer', malzemeId: i.malzemeId, miktar, kisiId: k.id, partiId, partiSecimi: partiId === null ? null : 'kisi', kaynakKonumId: kaynak.id, hedefKonumId: hedef,
         onayliEksi: false, uretimEmriId: i.uretimEmriId, kaynakStatuId: statuId, hedefStatuId: statuId,

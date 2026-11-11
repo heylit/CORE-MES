@@ -523,6 +523,96 @@ describe('A1 Üretim Terminali el okuyucu (1337 a)', () => {
   }, 40000);
 });
 
+// 2928 a, 2933 a: stok.istek olan operatörde okutulan kart önce bu istasyona gelen teslimleri alır; iş yalnız belirsizlik yoksa açılır.
+describe('A1 Üretim Terminali kart okutma: teslim al ve iş aç (2928 a)', () => {
+  const okut = (kod: string) => { for (const c of [...kod, 'Enter']) fireEvent.keyDown(document.body, { key: c }); };
+  const STOKLU: Deneme = { ...ISTASYONLU, kullanici: { ...ISTASYONLU.kullanici, islemler: [...ISTASYONLU.kullanici.islemler, 'stok.istek'] } };
+  const paket = (id: string, no: string, emirId: number, opNo: number, ek: Record<string, unknown> = {}) => ({ ...PAKET, id, no, tmi: { emirId, opNo }, ...ek });
+  const teslim = (malzemeId: number) => ({ id: 70, no: 'TS-000070', malzemeId, miktar: '5', surum: 1, hedef: { konumId: 1, kod: 'IST-1', ad: null, istasyonId: 4 } });
+  const kart = (id: number, emirId: number, etiket: string) => ({ id, qr: `RP:${id}`, etiket, uretimEmriId: emirId });
+  const kur = (o: {
+    paketler: Record<string, unknown>[]; coz: Record<string, unknown>; girdiler?: { uretimEmriId: number; opNo: number; malzemeler: { malzemeId: number }[] }[]; tesAlDurumu?: number;
+  }) => {
+    const istekler = sunucuKur(STOKLU, { belgeler: { pkgs: o.paketler.map((x) => ({ kimlik: x.id as string, surum: 1, govde: x })), kv: [{ kimlik: 'plant', surum: 1, govde: { v: TESIS } }] } });
+    const asil = globalThis.fetch;
+    const cevap = (durum: number, govde: unknown) => new Response(JSON.stringify(govde), { status: durum, headers: { 'Content-Type': 'application/json' } });
+    vi.stubGlobal('fetch', async (adres: string, istek?: RequestInit) => {
+      const yol = new URL(adres, 'http://tmi.yerel').pathname.replace(/^\/api/, '');
+      if (yol === '/arkon/refakat-kartlari') return cevap(200, { kartlar: [] });
+      if (yol === '/stok/teslim-kutusu') return cevap(200, { gelenler: [], gonderdiklerim: [], isteklerim: [], istasyonlar: [{ id: 4, kod: 'IST-1', ad: 'Deneme tezgah' }], hedefIstasyonlar: [] });
+      if (yol === '/stok/teslim-kutusu/is-malzemeleri') return cevap(200, { isler: (o.girdiler ?? []).map((x) => ({ ...x, emirNo: '', adimAd: '', calisiyor: false, kalanAdet: 1, malzemeler: x.malzemeler.map((m) => ({ ...m, kod: null, ad: null, birim: null, birAdet: '1', gereken: '1', istasyonda: '1', eksik: false, yerler: [], istek: null })) })) });
+      if (yol === '/stok/teslim-kutusu/kod-coz') { await asil(adres, istek); return cevap(200, o.coz); }
+      if (yol === '/stok/teslimler/70/teslim-al') {
+        await asil(adres, istek);
+        return o.tesAlDurumu ? cevap(o.tesAlDurumu, { kod: 'CAKISMA', mesaj: 'Teslim değişti.' }) : cevap(200, { teslim: teslim(700) });
+      }
+      return asil(adres, istek);
+    });
+    return istekler;
+  };
+  const hazir = async (istekler: Istek[]) => {
+    arkonAc('/uretim-terminali');
+    await ekran();
+    await waitFor(() => { expect(istekler.some((i) => i.yol === '/arkon/belgeler/pkgs')).toBe(true); }, { timeout: 10000 });
+    await new Promise((r) => setTimeout(r, 1200));
+  };
+  const coz = (k: Record<string, unknown>, malzemeId: number) => ({ tur: 'malzeme', malzeme: { id: 1, kod: null, ad: null, birim: null }, parti: null, yerler: [], refakat: k, gelenler: [teslim(malzemeId)], kartSatirlari: [] });
+
+  it('tek işte kart gelen teslimi alır ve işi o kartla açar, başlatmaz', async () => {
+    const istekler = kur({ paketler: [paket('tmi-ie-80', 'UE-DENEME-8', 8, 20)], coz: coz(kart(4, 8, 'UE-DENEME-8-P4'), 500) });
+    await hazir(istekler);
+    okut('RP:4');
+    expect(await screen.findByText(/1 teslim alındı · İş emri açıldı: UE-DENEME-8 · UE-DENEME-8-P4/, {}, { timeout: 10000 })).toBeTruthy();
+    expect(istekler.find((i) => i.yol === '/stok/teslimler/70/teslim-al')?.govde).toEqual({ surum: 1, alinan: '5' });
+    await new Promise((r) => setTimeout(r, 500));
+    expect(olaylar(istekler).some((e) => e.state === 'running')).toBe(false);
+  }, 40000);
+
+  it('emrin burada iki işi varsa sorar; en küçük OP önerilir, seçilen iş açılır', async () => {
+    const istekler = kur({ paketler: [paket('tmi-ie-82', 'UE-DENEME-8 OP20', 8, 20), paket('tmi-ie-83', 'UE-DENEME-8 OP10', 8, 10)], coz: coz(kart(4, 8, 'UE-DENEME-8-P4'), 500) });
+    await hazir(istekler);
+    okut('RP:4');
+    const pencere = await screen.findByRole('dialog', { name: 'Hangi iş açılsın?' }, { timeout: 10000 });
+    const satirlar = within(pencere).getAllByRole('listitem');
+    expect(within(satirlar[0]!).getByText('UE-DENEME-8 OP10')).toBeTruthy();
+    expect(within(satirlar[0]!).getByText('Önerilen')).toBeTruthy();
+    fireEvent.click(within(pencere).getByRole('button', { name: 'UE-DENEME-8 OP20 işini aç' }));
+    expect(await screen.findByText(/İş emri açıldı: UE-DENEME-8 OP20 · UE-DENEME-8-P4/, {}, { timeout: 10000 })).toBeTruthy();
+  }, 40000);
+
+  it('montaja gelen alt parça kartı teslimi alır, parçayı kullanan montaj işini önerir; iş kartsız açılır (2933 a)', async () => {
+    const istekler = kur({
+      paketler: [paket('tmi-ie-90', 'UE-MONTAJ-9', 9, 10, { opType: 'montaj' })], coz: coz(kart(5, 99, 'UE-ALT-99-P1'), 700),
+      girdiler: [{ uretimEmriId: 9, opNo: 10, malzemeler: [{ malzemeId: 700 }] }],
+    });
+    await hazir(istekler);
+    okut('RP:5');
+    const pencere = await screen.findByRole('dialog', { name: 'Montaj işini aç' }, { timeout: 10000 });
+    expect(within(pencere).getByText(/1 teslim alındı/)).toBeTruthy();
+    fireEvent.click(within(pencere).getByRole('button', { name: 'UE-MONTAJ-9 işini aç' }));
+    expect(await screen.findByText(/Montaj işi açıldı: UE-MONTAJ-9 · UE-ALT-99-P1 1 teslim alındı/, {}, { timeout: 10000 })).toBeTruthy();
+  }, 40000);
+
+  it('montajda parçayı kullanan iş yoksa teslim alınır ve "montaj işi bulunamadı" denir', async () => {
+    const istekler = kur({
+      paketler: [paket('tmi-ie-90', 'UE-MONTAJ-9', 9, 10, { opType: 'montaj' })], coz: coz(kart(5, 99, 'UE-ALT-99-P1'), 700),
+      girdiler: [{ uretimEmriId: 9, opNo: 10, malzemeler: [{ malzemeId: 701 }] }],
+    });
+    await hazir(istekler);
+    okut('RP:5');
+    expect(await screen.findByText('UE-ALT-99-P1: 1 teslim alındı · montaj işi bulunamadı', {}, { timeout: 10000 })).toBeTruthy();
+    expect(screen.queryByRole('dialog')).toBeNull();
+  }, 40000);
+
+  it('teslim alınamazsa iş açılmaz ve neden söylenir (reddedilen)', async () => {
+    const istekler = kur({ paketler: [paket('tmi-ie-80', 'UE-DENEME-8', 8, 20)], coz: coz(kart(4, 8, 'UE-DENEME-8-P4'), 500), tesAlDurumu: 409 });
+    await hazir(istekler);
+    okut('RP:4');
+    expect(await screen.findByText(/UE-DENEME-8-P4: 0 teslim alındı, 1 alınamadı; iş açılmadı\. TS-000070/, {}, { timeout: 10000 })).toBeTruthy();
+    expect(screen.queryByText(/İş emri açıldı/)).toBeNull();
+  }, 40000);
+});
+
 describe('A1 Üretim Terminali CORE reddi bildirimi', () => {
   const RET = 'Bu işte Deneme Kişi de çalışıyor.';
   const reddet = (durum: string, tmiDurum?: string) => (tur: string, satirlar: Record<string, unknown>[]) => {

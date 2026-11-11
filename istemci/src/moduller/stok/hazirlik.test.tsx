@@ -2,6 +2,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { focusManager } from '@tanstack/react-query';
 import type { CikisOnerisiCevabi, LotBekleyenKartlarCevabi, MalzemeIstegi, TeslimKutusuCevabi, YerdekiStokCevabi } from '#paylasilan/sozlesme/stok.ts';
+import type { Kullanici } from '#paylasilan/kullanici.ts';
+import type { RefakatPartisi } from '#paylasilan/sozlesme/stok.ts';
 import { DEPOCU, OKUYUCU, ac, json, sunucuKur } from './test-ortak.tsx';
 
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
@@ -201,6 +203,90 @@ describe('Hazırlık: malzeme istekleri', () => {
     sunucuKur(OKUYUCU, { 'GET /stok/malzeme-istekleri': () => json(200, liste([])), 'GET /stok/toplamalar': () => json(200, BOS_LISTELER) });
     ac('/stok/istekler');
     expect(await screen.findByRole('heading', { name: 'Malzeme istekleri' })).toBeTruthy();
+  });
+});
+
+// 2931 a, 2944 (kullanıcı yazılı yanıtı): kart sunucuda açılır; kâğıt kendiliğinden basılmaz, bildirim Etiket Merkezi'ne götürür.
+describe('Hazırlık: emre giden teslimde refakat kartı bildirimi', () => {
+  const EMRIN: MalzemeIstegi = { ...ISTEK, uretimEmriId: 77 };
+  const KART: RefakatPartisi = {
+    id: 51, qr: 'RP:51', etiket: 'UE-000077-P1', uretimEmriId: 77, emirNo: 'UE-000077', sira: 1, malzemeId: 901, malzemeKod: 'HM-1', malzemeAd: 'Deneme sac', birim: 'adet',
+    partiId: 8, lotNo: 'LT-8', tedarikciPartiNo: null, dokumNo: null, sertifikaNo: null, lotaBaglanmaZamani: null, verilen: '3', durum: 'acik', surum: 1,
+    kayitZamani: '2026-11-11T08:00:00Z', ust: null, birlestigi: null, birlesmeZamani: null,
+  };
+  const MERKEZLI: Kullanici = { ...DEPOCU, islemler: [...DEPOCU.islemler, 'sayfa.etiket-merkezi'] };
+  const kur = (kullanici: Kullanici, istek: MalzemeIstegi, kartlar = () => json(200, { partiler: [{ ...KART, id: 50, partiId: 9 }, KART] })) => sunucuKur(kullanici, {
+    'GET /stok/malzeme-istekleri': () => json(200, liste([istek])),
+    'GET /stok/toplamalar': () => json(200, BOS_LISTELER),
+    'GET /stok/ara': KABUL_ARA,
+    'GET /stok/teslim-kutusu': () => json(200, KUTU),
+    'GET /stok/teslim-kutusu/yerdeki-stok': () => json(200, { satirlar: [{ malzemeId: 901, kod: 'HM-1', ad: 'Deneme sac', partiId: 8, partiEtiketi: 'TP-8', statuId: null, miktar: '5' }] }),
+    'POST /stok/teslimler/gonder': () => json(200, {}),
+    'POST /stok/malzeme-istekleri/32/teslim-et': () => json(200, {}),
+    'GET /stok/uretim-emirleri/77/refakat-partileri': kartlar,
+  });
+  const teslimEt = async () => {
+    fireEvent.click(within((await screen.findByText('MI-000031')).closest('tr')!).getByRole('button', { name: 'Teslim et' }));
+    const pencere = await screen.findByRole('dialog');
+    await konumSec(pencere, 'Hangi konumdan', 'KAB', 'KABUL');
+    await waitFor(() => expect((within(pencere).getByRole('combobox', { name: /Parti ve statü/ }) as HTMLSelectElement).value).toBe('8:-'));
+    fireEvent.click(within(pencere).getByRole('button', { name: 'Teslim et' }));
+  };
+  const ILETI = "Refakat kartı UE-000077-P1 bu teslimle gidiyor; kâğıdı Etiket Merkezi'nden basın.";
+
+  it('teslimden sonra kart söylenir, kâğıt kendiliğinden basılmaz; düğme Etiket Merkezi\'ni açar', async () => {
+    const istekler = kur(MERKEZLI, EMRIN);
+    ac('/stok/hazirlik');
+    await teslimEt();
+    expect(await screen.findByText(ILETI)).toBeTruthy();
+    expect(istekler.some((i) => i.yol.startsWith('/etiket-merkezi/'))).toBe(false);
+    fireEvent.click(screen.getByRole('button', { name: 'Etiketlere git' }));
+    await waitFor(() => expect(screen.queryByText('MI-000031')).toBeNull());
+  });
+
+  it('Etiket Merkezi\'ni açamayan depocuya düğme gösterilmez (yasak)', async () => {
+    kur(DEPOCU, EMRIN);
+    ac('/stok/hazirlik');
+    await teslimEt();
+    expect(await screen.findByText(ILETI)).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Etiketlere git' })).toBeNull();
+  });
+
+  it('iptal ve birleşmiş kart seçilmez; emrin bu lottaki açık kartı söylenir', async () => {
+    kur(MERKEZLI, EMRIN, () => json(200, { partiler: [
+      { ...KART, id: 52, etiket: 'UE-000077-P2', durum: 'iptal' }, { ...KART, id: 53, etiket: 'UE-000077-P3', birlestigi: { id: 51, etiket: 'UE-000077-P1' } }, KART,
+    ] }));
+    ac('/stok/hazirlik');
+    await teslimEt();
+    expect(await screen.findByText(ILETI)).toBeTruthy();
+  });
+
+  it('kişiye teslimde de kart söylenir', async () => {
+    const istekler = kur(MERKEZLI, { ...KISIYE, uretimEmriId: 77 });
+    ac('/stok/hazirlik');
+    fireEvent.click(within((await screen.findByText('MI-000032')).closest('tr')!).getByRole('button', { name: 'Teslim et' }));
+    const pencere = await screen.findByRole('dialog');
+    await konumSec(pencere, 'Hangi konumdan', 'KAB', 'KABUL');
+    fireEvent.change(await within(pencere).findByRole('combobox', { name: /Parti ve statü/ }), { target: { value: '8:-' } });
+    fireEvent.click(within(pencere).getByRole('button', { name: 'Teslim edildi' }));
+    expect(await screen.findByText(ILETI)).toBeTruthy();
+    expect(istekler.some((i) => i.yol === '/stok/malzeme-istekleri/32/teslim-et')).toBe(true);
+  });
+
+  it('kart okunamazsa depocuya söylenir (reddedilen)', async () => {
+    kur(MERKEZLI, EMRIN, () => json(500, { kod: 'SUNUCU', mesaj: 'Hata.' }));
+    ac('/stok/hazirlik');
+    await teslimEt();
+    expect(await screen.findByText("Refakat kartı okunamadı; kâğıdı Etiket Merkezi'nin bekleyenlerinden basın.")).toBeTruthy();
+  });
+
+  it('emirsiz istekte kart aranmaz', async () => {
+    const istekler = kur(MERKEZLI, ISTEK);
+    ac('/stok/hazirlik');
+    await teslimEt();
+    await waitFor(() => expect(istekler.some((i) => i.yol === '/stok/teslimler/gonder')).toBe(true));
+    await new Promise((r) => setTimeout(r, 200));
+    expect(istekler.some((i) => i.yol.includes('refakat-partileri'))).toBe(false);
   });
 });
 

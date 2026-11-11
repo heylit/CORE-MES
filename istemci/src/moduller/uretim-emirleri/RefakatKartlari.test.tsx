@@ -82,10 +82,13 @@ describe('Refakat kartları (Soru 586)', () => {
     expect(within(await satir('UE-000012-P1')).queryByRole('button', { name: "Etiket Merkezi'nde bas" })).toBeNull();
   });
 
-  it('karta açılmamış emirde depoya yönlendiren boş mesaj görünür', async () => {
+  it('karta açılmamış emirde bölüm tek satırdır: depoya yönlendiren not, başlık ve tablo yok (2907 Atölye)', async () => {
     sunucuKur(STOKCU, { ...yollar(), 'GET /stok/uretim-emirleri/12/refakat-partileri': () => json(200, { partiler: [] }) });
     ac(ekran, '/uretim-emirleri/12');
-    expect(await screen.findByText(/Kart depoda, lot emre ayrılınca açılır/)).toBeTruthy();
+    const bolum = await screen.findByRole('region', { name: 'Refakat kartları' });
+    expect(await within(bolum).findByText('Refakat kartı yok · lot emre ayrılınca depoda açılır.')).toBeTruthy();
+    expect(within(bolum).queryByRole('heading')).toBeNull();
+    expect(within(bolum).queryByRole('table')).toBeNull();
   });
 
   it('2907: akış okuyana açık kartın yeri görünür (yalnız açık, lotlu kartlar sorulur); stok sayfası olana satır kartı kart sayfasında açar', async () => {

@@ -31,7 +31,9 @@ import {
 } from '../../../../../../arkon/web/src/data/makine-secimi.ts';
 import { retGerekcesiMetni, sonNumuneDurumu, yeniNumuneYamasi } from '../../../../../../arkon/web/src/data/numune.ts';
 import { kalanMetni, vardiyaKalanDk, vardiyaUretimi } from '../../../../../../arkon/web/src/data/operator-ozeti.ts';
-import { KART_YENILEME_MS, kartEmirleri, refakatIsi, sayimKartAlani, type RefakatKarti } from '../../../../../../arkon/web/src/data/refakat-karti.ts';
+import {
+  KART_YENILEME_MS, girdiAdaylari, kartEmirleri, kartOkutmaKarari, refakatIsi, sayimKartAlani, type KartSecimNedeni, type RefakatKarti,
+} from '../../../../../../arkon/web/src/data/refakat-karti.ts';
 import type { AdimPaylariCevabi, HataliCevabi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { tmiEmirId } from '../../../../../../arkon/web/src/data/tmi-adim.ts';
 import { ISLERIM_YENILEME_MS, isimDurumu, isimEtiketi, isimSuresi, isimYeri, type IslerimSatiri } from '../../../../../../arkon/web/src/data/islerim.ts';
@@ -90,7 +92,8 @@ import { EylemCubugu } from './EylemCubugu.tsx';
 import { MalzemeCipi } from './MalzemeCipi.tsx';
 import { EmrinAdimlari, useEmrinAdimlari } from './EmrinAdimlari.tsx';
 import { lotEslesmesi } from './lot-eslesmesi.ts';
-import { okutulanKoduCoz, useIsGirdileri } from '../../../stok/disari.ts';
+import { okutulanKoduCoz, useIsGirdileri, useTerminalKartOkutmasi } from '../../../stok/disari.ts';
+import { KartSecimi } from './KartSecimi.tsx';
 import { BitenSepet, Sepetler } from './Sepetler.tsx';
 import { UzakMod } from './UzakMod.tsx';
 import { baytiVar, hazirPdfGoruntusu, useCozulmus } from '../veri/dosyalar.ts';
@@ -111,7 +114,7 @@ const baytli = (l: readonly NonNullable<Is['pkg']>['files'][number][]): TeknikRe
 // Üretim Terminali (operator.ts App) ve "Operatör gözüyle" önizleme. Davranış eski ekranın aynısıdır; farklar DEVIR'dedir.
 // Açılışta kayıt yazılmaz: sonuç ve durum kaydı yalnız operatörün ya da makinenin değiştirdiği işte gider. Önizlemede yazma düğmesi yoktur.
 
-type Pencereler = 'hazirlik' | 'station' | 'numune' | 'scrap' | 'reason' | 'num' | 'call' | 'calltrack' | 'prepnext' | 'shift' | 'ozetim' | 'done' | 'menu' | 'gecis' | 'toplu' | 'isler' | 'bitir';
+type Pencereler = 'hazirlik' | 'station' | 'numune' | 'scrap' | 'reason' | 'num' | 'call' | 'calltrack' | 'prepnext' | 'shift' | 'ozetim' | 'done' | 'menu' | 'gecis' | 'toplu' | 'isler' | 'bitir' | 'kartsec';
 type Gorunum = EkranSekmesi['id'];
 interface UyariGosterimi { list: Uyari[]; title?: string; then?: () => void }
 interface Okutma { baslik: string; ipucu?: string; okundu: (kod: string) => void }
@@ -516,11 +519,11 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
     return () => { bitti = true; clearInterval(t); };
   }, [kartAnahtari, MACHINE, depo]);
   // "Aç": iş o kartla açılır (başlatılmaz); aynı işte başka kart seçilirse iş o kartla sürer.
-  const kartlaAc = (i: number, k: RefakatKarti) => {
+  const kartlaAc = (i: number, k: Pick<RefakatKarti, 'id' | 'etiket'>, onEk = '') => {
     isGecIste(i, () => {
       islerYaz((l) => l.map((x, j) => (j === i ? { ...x, kart: k.id, fresh: false } : x)));
       mvYaz('prod');
-      say(`İş emri açıldı: ${isler[i]!.no} · ${k.etiket}`, 'check', 'run');
+      say(`${onEk}İş emri açıldı: ${isler[i]!.no} · ${k.etiket}`, 'check', 'run');
     });
   };
   // 1337 a: el okuyucuyla okutulan refakat kartı işi o kartla açar, başlatmaz (1062). Özet açıksa kapanır; başka pencere açıkken dinlenmez.
@@ -535,19 +538,68 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
       () => { bip('nok'); say('Etiket çözülemedi; bağlantıyı denetle', 'alert', 'stop'); },
     );
   };
+  // 2928 a: okutulan kart önce karta bağlı, bu istasyona yoldaki teslimleri alır; iş yalnız belirsizlik yoksa açılır, belirsizse operatör
+  // seçer. Teslimlerden biri alınamazsa iş açılmaz, alınamayanlar söylenir (alınanlar alınmış kalır). 2933 a: kartın emrinin burada işi
+  // yoksa parçayı rota girdisi olarak kullanan işler önerilir; o iş kartsız açılır (kart alt parçanın emrinindir, montajın sayımına yazılmaz).
+  // Stok okuması yoksa ya da çözüm alınamazsa bugünkü gibi yalnız bu istasyonun kartları tanınır.
+  // Atölye N1: kapasite kaynağı terminal verisinde yok; istasyonda bitmemiş montaj işi varsa istasyon insanlı sayılır.
+  const kartOkutma = useTerminalKartOkutmasi(pv ? null : MACHINE);
+  // Adaylar iş anahtarıyla tutulur: pencere açıkken iş listesi yeniden okunup sırası değişse de aynı işler gösterilir.
+  const [kartSecim, kartSecimYaz] = useState<{ kart: Pick<RefakatKarti, 'id' | 'etiket'>; alinan: number; neden: KartSecimNedeni; adaylar: string[] } | null>(null);
+  const isSirasi = (emirId: number, opNo: number): number => isler.findIndex((x) => {
+    const tmi = (x.pkg as { tmi?: { emirId?: unknown; opNo?: unknown } } | undefined)?.tmi;
+    return x.state !== 'done' && !!x.pkg && ((tmi?.emirId === emirId && tmi?.opNo === opNo) || x.pkg.id === `tmi-ue-${emirId}`);
+  });
+  const kartKarari = (kart: Pick<RefakatKarti, 'id' | 'etiket'>, emirId: number, alinan: number, buradakiMalzemeler: readonly number[]) => {
+    const girdiler = (kartOkutma.isGirdileri ?? []).flatMap((x) => {
+      const sira = x.uretimEmriId === emirId ? -1 : isSirasi(x.uretimEmriId, x.opNo);
+      return sira < 0 ? [] : [{ sira, malzemeIdler: x.malzemeIdler }];
+    });
+    const insanli = isler.some((x) => x.state !== 'done' && isTuru(x.pkg) === 'montaj');
+    const r = kartOkutmaKarari(emirId, isler, Object.values(pkgsRef.current), { acikSira: ai, insanli, girdiAdaylari: girdiAdaylari(buradakiMalzemeler, girdiler) });
+    const alindi = alinan > 0 ? `${alinan} teslim alındı · ` : '';
+    if (r.tur === 'ac') { bip('ok'); if (ov === 'done') ovYaz(null); kartlaAc(r.sira, kart, alindi); return; }
+    if (r.tur === 'sec') { bip('ok'); kartSecimYaz({ kart, alinan, neden: r.neden, adaylar: r.adaylar.map((i) => siraAnahtari(isler[i]!)) }); ovYaz('kartsec'); return; }
+    if (alinan > 0) {
+      bip('ok');
+      const neden = r.tur === 'yalniz-teslim' && r.istasyon ? `bu emrin burada işi yok, sıradaki adım: ${r.istasyon}` : insanli ? 'montaj işi bulunamadı' : 'bu emrin burada işi yok';
+      say(`${kart.etiket}: ${alinan} teslim alındı · ${neden}`, 'check', 'hold');
+      return;
+    }
+    bip('nok');
+    if (r.tur === 'yok') { say(KART_YOK_ILETISI, 'alert', 'stop'); return; }
+    say(`Bu emrin bu istasyonda işi yok${r.istasyon ? `, sıradaki adım: ${r.istasyon}` : ''}`, 'alert', 'stop');
+  };
+  const kartKarariRef = useRef(kartKarari);
+  kartKarariRef.current = kartKarari;
+  const kartSecildi = (i: number) => {
+    const k = kartSecim;
+    ovYaz(null); kartSecimYaz(null);
+    if (!k) return;
+    if (k.neden !== 'montaj-girdisi') { kartlaAc(i, k.kart, k.alinan > 0 ? `${k.alinan} teslim alındı · ` : ''); return; }
+    isGecIste(i, () => { mvYaz('prod'); say(`Montaj işi açıldı: ${isler[i]!.no}${k.alinan > 0 ? ` · ${k.kart.etiket} ${k.alinan} teslim alındı` : ''}`, 'check', 'run'); });
+  };
   const kartOkutuldu = (kod: string): boolean => {
     const t = terminalOkutmasi(kod);
     if (t.tur !== 'kart' && kartNumarasiGibi(kod)) return false;
     awayYaz(false);
     if (t.tur === 'etiket') { etiketOkutuldu(t.kod); return true; }
     if (t.tur !== 'kart') { bip('nok'); say(KART_DEGIL_ILETISI, 'alert', 'hold'); return true; }
-    const k = kartlar.find((x) => x.id === t.kartId);
-    if (!k) { bip('nok'); say(KART_YOK_ILETISI, 'alert', 'stop'); return true; }
-    const r = refakatIsi(k.uretimEmriId, isler, Object.values(pkgsRef.current));
-    if (r.tur !== 'ac') { bip('nok'); say(`Bu emrin bu istasyonda işi yok${r.tur === 'baska-istasyon' && r.istasyon ? `, sıradaki adım: ${r.istasyon}` : ''}`, 'alert', 'stop'); return true; }
-    bip('ok');
-    if (ov === 'done') ovYaz(null);
-    kartlaAc(r.sira, k);
+    const yerel = kartlar.find((x) => x.id === t.kartId);
+    const yerelde = () => {
+      if (!yerel) { bip('nok'); say(KART_YOK_ILETISI, 'alert', 'stop'); return; }
+      kartKarariRef.current(yerel, yerel.uretimEmriId, 0, []);
+    };
+    if (!kartOkutma.yetkili) { yerelde(); return true; }
+    kartOkutma.kartiAl(`RP:${t.kartId}`).then((c) => {
+      if (c === null) { yerelde(); return; }
+      if (c.hatalar.length > 0) {
+        bip('nok');
+        say(`${c.kart.etiket}: ${c.alinan} teslim alındı, ${c.hatalar.length} alınamadı; iş açılmadı. ${c.hatalar.join(' · ')}`, 'alert', 'stop');
+        return;
+      }
+      kartKarariRef.current(c.kart, c.kart.uretimEmriId, c.alinan, c.buradakiMalzemeler);
+    }, yerelde);
     return true;
   };
   useElOkuyucu(!pv && scan === null && (ov === null || ov === 'done'), kartOkutuldu);
@@ -1387,6 +1439,10 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
         buyukDegisim={(v) => (Math.abs(v - o.good) > Math.max(20, o.good * 0.1) ? `Büyük değişiklik: ${sayi(o.good)} → ${sayi(v)} · doğruysa yeniden onayla` : null)}
         kapat={() => ovYaz(null)}
         onayla={(v) => { if (v > o.good && !sayimOk('prod.fix', iyiArtiNedeni(v - o.good))) return; ovYaz(null); undoable(`Sayaç güncellendi · ${sayi(v)}`, 'check', 'run', () => patch({ good: v })); }} />
+      {ov === 'kartsec' && kartSecim ? (
+        <KartSecimi kart={kartSecim.kart.etiket} alinan={kartSecim.alinan} neden={kartSecim.neden} adaylar={kartSecim.adaylar.map((k) => isler.findIndex((x) => x.state !== 'done' && siraAnahtari(x) === k)).filter((i) => i >= 0)} isler={isler}
+          sec={kartSecildi} kapat={() => { ovYaz(null); kartSecimYaz(null); }} />
+      ) : null}
       {ov === 'gecis' && gecis ? (
         <GecisPenceresi calisanlar={gecisteDuraklatilacaklar(isler, gecis.i).map((j) => isler[j]!.no)} hedef={isler[gecis.i]?.no ?? ''}
           kapat={() => { ovYaz(null); gecisYaz(null); }} devam={() => gecisiBitir(false)} duraklat={() => gecisiBitir(true)} />

@@ -82,6 +82,14 @@ function Liste({ emirId }: { emirId: number }) {
       ),
     },
   ];
+  // Kartı olmayan emirde bölüm tek satırdır: başlamamış emirde boş tablo alttaki bölümleri aşağı itmesin.
+  if (l.isSuccess && l.data.partiler.length === 0) {
+    return (
+      <section className="tc-emir-bolum-adim" aria-label="Refakat kartları">
+        <p className="tc-emir-not">Refakat kartı yok · lot emre ayrılınca depoda açılır.</p>
+      </section>
+    );
+  }
   return (
     <section className="tc-emir-bolum-adim" aria-label="Refakat kartları">
       <h3 className="tc-emir-bolum">Refakat kartları</h3>
@@ -89,8 +97,7 @@ function Liste({ emirId }: { emirId: number }) {
       {l.isError && <p className="tc-emir-not">{hataIletisi(l.error, 'Refakat kartları okunamadı.')}</p>}
       {l.isSuccess && (
         <Tablo etiket="Refakat kartları" sutunlar={sutunlar} satirlar={l.data.partiler} satirAnahtari={(r) => r.id}
-          satirSec={stokSayfasi ? (r) => { void yonlendir(`/stok/refakat-kartlari?kart=${String(r.id)}`); } : undefined}
-          bosMesaj="Bu emre henüz refakat kartı açılmadı. Kart depoda, lot emre ayrılınca açılır." />
+          satirSec={stokSayfasi ? (r) => { void yonlendir(`/stok/refakat-kartlari?kart=${String(r.id)}`); } : undefined} />
       )}
     </section>
   );
