@@ -19,6 +19,10 @@ interface Ozellikler {
   yerlesim: YerlesimCevabi;
   anahtar: string;
   emirler: ReadonlyMap<number, Emir>;
+  // İstasyon kimliği -> bütün başlamış emirleri (sorunlu önce); kartta "Bu istasyonda N iş" listesi.
+  gruplar: ReadonlyMap<number, readonly Emir[]>;
+  // Kuyruğunda planlı emri olan istasyonlar ("Sırada"); öbür emirsiz istasyon "Boş".
+  siradaIstasyonlar: ReadonlySet<number>;
   // Nesne anahtarı -> canlı hal (makine kartı: kendi iş emri, arıza ve bakım).
   canli: ReadonlyMap<string, NesneCanli>;
   // İstasyon kimliği -> işlenen (ya da sıradaki) parçanın modeli.
@@ -109,6 +113,30 @@ function parcaModeliMetni(p: ParcaModeli | undefined): string {
 }
 
 // Sıradaki planlı iş soluk yazılır; makinede başlamış emir yoksa sahnedeki parça önizlemesi de onundur.
+// Aynı istasyonda süren öbür işler: gösterilen emir dışındakiler, kod, parça, adet ve durum.
+function OburIsler({ emirler, gosterilen }: { emirler: readonly Emir[] | undefined; gosterilen: Emir | undefined }) {
+  const obur = (emirler ?? []).filter((e) => e.id !== gosterilen?.id);
+  if (obur.length === 0) return null;
+  return (
+    <section className="tc-atolye-obur-isler" aria-label="Bu istasyondaki öbür işler">
+      <h4>Bu istasyonda {sayiMetni(obur.length + (gosterilen ? 1 : 0))} iş</h4>
+      <ul>
+        {obur.map((e) => {
+          const g = istasyonGorunumu({ aktif: true }, e);
+          return (
+            <li key={e.id}>
+              <span className="mono">{e.emirNo}</span>
+              <span>{e.parcaAd}</span>
+              <span className="mono">{e.canli ? sayiMetni(e.canli.saglam) : '—'} / {sayiMetni(e.adet)}</span>
+              <DurumRozeti durum={g.durum}>{g.metin}</DurumRozeti>
+            </li>
+          );
+        })}
+      </ul>
+    </section>
+  );
+}
+
 function SiradakiIs({ emir, parca }: { emir: Emir | undefined; parca: ParcaModeli | undefined }) {
   if (!emir) return null;
   return (
@@ -144,7 +172,7 @@ function UretilenParcalar({ istasyonId, emirler }: { istasyonId: number; emirler
 }
 
 export function OgeKarti({
-  yerlesim: y, anahtar, emirler, canli, parcalar, siradakiler, gozKalemleri, tumEmirler, yazabilir, depodaAc, ucBoyut, vurguAdres, kapat, yolGoster, yakinlas, girisVar,
+  yerlesim: y, anahtar, emirler, gruplar, siradaIstasyonlar, canli, parcalar, siradakiler, gozKalemleri, tumEmirler, yazabilir, depodaAc, ucBoyut, vurguAdres, kapat, yolGoster, yakinlas, girisVar,
 }: Ozellikler) {
   const [tur, kimlikMetni] = anahtar.split(':');
   const kimlik = Number(kimlikMetni);
@@ -187,7 +215,7 @@ export function OgeKarti({
     const yer = y.istasyonYerleri.find((i) => i.istasyonId === kimlik);
     if (!yer) return null;
     const emir = emirler.get(yer.istasyonId);
-    const g = istasyonGorunumu(yer, emir);
+    const g = istasyonGorunumu(yer, emir, siradaIstasyonlar.has(yer.istasyonId));
     return (
       <section className="tc-atolye-kart" aria-label={`${yer.kod} ayrıntısı`}>
         {ust(makineCinsi(yer.tip, yer.ad), `${ISTASYON_TIPI_ADI[yer.tip]} · Hücre ${yer.hucre}`, yer.kod, <DurumRozeti durum={g.durum}>{g.metin}</DurumRozeti>)}
@@ -203,6 +231,7 @@ export function OgeKarti({
             <><dt>Emir</dt><dd>{yer.aktif ? 'Başlamış emir yok' : 'Makine pasif'}</dd></>
           )}
         </dl>
+        <OburIsler emirler={gruplar.get(yer.istasyonId)} gosterilen={emir} />
         {kisaEylem(yer.x, yer.z)}
         {ayrinti && (
           <div className="tc-atolye-kart-ayrinti">
@@ -234,7 +263,7 @@ export function OgeKarti({
     // Canlı durum makinenin kendisinindir: iş emrinin makinesi ya da istasyonun ilk makinesi; arıza ve bakım üstündedir.
     const c = canli.get(anahtar);
     const emir = c?.emir ?? undefined;
-    const g = c ?? istasyonGorunumu({ aktif: mk.aktif && (ist?.aktif ?? true) }, undefined);
+    const g = c ?? istasyonGorunumu({ aktif: mk.aktif && (ist?.aktif ?? true) }, undefined, ist ? siradaIstasyonlar.has(ist.id) : false);
     const tip = ist?.tip ?? 'talasli';
     return (
       <section className="tc-atolye-kart" aria-label={`${mk.kod} ayrıntısı`}>
@@ -252,6 +281,7 @@ export function OgeKarti({
             <><dt>Emir</dt><dd>{!mk.aktif ? 'Makine pasif' : ist ? 'Bu makinede başlamış emir yok' : 'Bilinmiyor (istasyona bağlı değil)'}</dd></>
           )}
         </dl>
+        {ist && <OburIsler emirler={gruplar.get(ist.id)} gosterilen={emir} />}
         {kisaEylem(mk.x, mk.z)}
         {ayrinti && (
           <div className="tc-atolye-kart-ayrinti">

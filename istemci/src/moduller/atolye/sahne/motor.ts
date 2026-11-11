@@ -206,7 +206,7 @@ const EN_AZ_PIKSEL_ORANI = 0.75;
 const AYRINTI_EKRAN_PAYI = 0.15;
 const AYRINTI_UCGEN = 1_500_000;
 const BINA_YUKSEKLIGI = 8;
-const BEKLIYOR: IstasyonCanli = { durum: 'sirada', metin: 'Bekliyor', sayac: null, oran: null, emirNo: null, parca: null, neden: null };
+const BEKLIYOR: IstasyonCanli = { durum: 'sirada', metin: 'Boş', sayac: null, oran: null, emirNo: null, parca: null, neden: null };
 
 const kaba = (): boolean => typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
 const azHareket = (): boolean => typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;

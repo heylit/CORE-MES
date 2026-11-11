@@ -26,9 +26,10 @@ export interface IstasyonGorunumu {
 
 // Gösterim: istasyonun rengi, üretim emirleri modülünün verdiği başlamış emrin canlı halidir; başlamış emir yoksa bekliyor.
 // Durumu hesaplayan sunucudur (emir modülü); burada yalnız ekran adına çevrilir. Pasif istasyonun durumu gösterilmez.
-export function istasyonGorunumu(yer: Pick<IstasyonYeri, 'aktif'>, emir: Emir | undefined): IstasyonGorunumu {
+// Başlamış emri olmayan istasyon: kuyrukta planlı emri varsa "Sırada", yoksa "Boş" (boş makine iş bekliyor sayılmaz).
+export function istasyonGorunumu(yer: Pick<IstasyonYeri, 'aktif'>, emir: Emir | undefined, siraVar = false): IstasyonGorunumu {
   if (!yer.aktif) return { durum: 'sirada', metin: 'Pasif' };
-  if (!emir) return { durum: 'sirada', metin: 'Bekliyor' };
+  if (!emir) return siraVar ? { durum: 'sirada', metin: 'Sırada' } : { durum: 'sirada', metin: 'Boş' };
   const calisma = emir.canli?.calisma ?? null;
   if (calisma === 'durdu') return { durum: 'durdu', metin: 'Durdu' };
   if (calisma === 'durakli') return { durum: 'durakli', metin: 'Duraklatıldı' };
@@ -44,8 +45,8 @@ export interface IstasyonCanli extends IstasyonGorunumu {
   neden: string | null;
 }
 
-export function istasyonCanli(yer: Pick<IstasyonYeri, 'aktif'>, emir: Emir | undefined): IstasyonCanli {
-  const g = istasyonGorunumu(yer, emir);
+export function istasyonCanli(yer: Pick<IstasyonYeri, 'aktif'>, emir: Emir | undefined, siraVar = false): IstasyonCanli {
+  const g = istasyonGorunumu(yer, emir, siraVar);
   const e = yer.aktif ? emir : undefined;
   return {
     ...g,
@@ -78,6 +79,8 @@ export function nesneCanlilari(
   bolumler: readonly Pick<YerlesimCevabi, 'istasyonYerleri' | 'makineYerleri'>[],
   emirler: readonly Emir[],
   arizalar: ReadonlyMap<number, MakineArizasi>,
+  // Kuyruğunda planlı emri olan istasyonlar: emirsiz nesne "Sırada", öbürü "Boş" yazar.
+  siradaIstasyonlar: ReadonlySet<number> = new Set(),
 ): Map<string, NesneCanli> {
   const makineler = new Map(bolumler.flatMap((b) => b.makineYerleri).map((m) => [m.makineId, m]));
   const istasyonlar = new Map(bolumler.flatMap((b) => b.istasyonYerleri).map((i) => [i.istasyonId, i]));
@@ -90,7 +93,8 @@ export function nesneCanlilari(
     return istasyonlar.get(Number(no))?.aktif ?? false;
   };
   const sonuc = new Map<string, NesneCanli>();
-  const baslamis = emirler.filter((e) => e.durum === 'basladi');
+  // Aynı nesneye birden çok emir düşerse sorunlu olan (durdu, duraklatıldı) önce yazılır; liste ve kart aynı emri gösterir.
+  const baslamis = emirler.filter((e) => e.durum === 'basladi').sort((a, b) => emirOnceligi(a) - emirOnceligi(b));
   const makinesi = (e: Emir): number | null => {
     const id = e.canli?.isEmri?.makineId ?? null;
     return id !== null && makineler.has(id) ? id : null;
@@ -107,7 +111,8 @@ export function nesneCanlilari(
   for (const [makineId, ariza] of arizalar) {
     const anahtar = `makine:${makineId}`;
     if (!makineler.has(makineId) || !aktifMi(anahtar)) continue;
-    const var_ = sonuc.get(anahtar) ?? { ...istasyonCanli({ aktif: true }, undefined), emir: null, isEmri: null, ariza: null };
+    const istasyonId = makineler.get(makineId)?.istasyon?.id;
+    const var_ = sonuc.get(anahtar) ?? { ...istasyonCanli({ aktif: true }, undefined, istasyonId !== undefined && siradaIstasyonlar.has(istasyonId)), emir: null, isEmri: null, ariza: null };
     sonuc.set(anahtar, {
       ...var_,
       durum: ariza.durum === 'ariza' ? 'durdu' : 'ayar',
@@ -116,6 +121,12 @@ export function nesneCanlilari(
       ariza,
     });
   }
+  // Emirsiz ve arızasız nesnenin yazısı da canlıdan gelir (sahnede "Sırada" / "Boş").
+  for (const i of istasyonlar.values()) {
+    if (!i.aktif || !siradaIstasyonlar.has(i.istasyonId)) continue;
+    const anahtar = istasyonNesnesi(bolumler, i.istasyonId);
+    if (!sonuc.has(anahtar) && aktifMi(anahtar)) sonuc.set(anahtar, { ...istasyonCanli({ aktif: true }, undefined, true), emir: null, isEmri: null, ariza: null });
+  }
   return sonuc;
 }
 
@@ -123,22 +134,32 @@ export interface Ozet {
   calisiyor: number;
   durakli: number;
   durdu: number;
-  bekliyor: number;
+  // Emirsiz istasyon: kuyrukta planlı emri olan "sırada", olmayan "boş".
+  sirada: number;
+  bos: number;
   // Başlamış emirlerin sağlam sayaçları toplamı; başlamış emir yoksa null (sıfır uydurulmaz).
   saglam: number | null;
 }
 
-export function ozetle(yerler: readonly IstasyonYeri[], emirler: ReadonlyMap<number, Emir>): Ozet {
-  const ozet: Ozet = { calisiyor: 0, durakli: 0, durdu: 0, bekliyor: 0, saglam: null };
+// Süren işler kendi durumuyla sayılır: iki işli istasyonda biri durmuş, öbürü çalışıyorsa ikisi de sayılır
+// (kartta görünen ikinci iş özette kaybolmaz). Emirsiz istasyon bir kez "Sırada" ya da "Boş" sayılır.
+export function ozetle(yerler: readonly IstasyonYeri[], gruplar: ReadonlyMap<number, readonly Emir[]>, siradaIstasyonlar: ReadonlySet<number> = new Set()): Ozet {
+  const ozet: Ozet = { calisiyor: 0, durakli: 0, durdu: 0, sirada: 0, bos: 0, saglam: null };
   for (const y of yerler) {
     if (!y.aktif) continue;
-    const emir = emirler.get(y.istasyonId);
-    const { durum } = istasyonGorunumu(y, emir);
-    if (durum === 'calisiyor') ozet.calisiyor += 1;
-    else if (durum === 'durakli') ozet.durakli += 1;
-    else if (durum === 'durdu') ozet.durdu += 1;
-    else ozet.bekliyor += 1;
-    if (emir?.canli) ozet.saglam = (ozet.saglam ?? 0) + emir.canli.saglam;
+    const grup = gruplar.get(y.istasyonId) ?? [];
+    if (grup.length === 0) {
+      if (siradaIstasyonlar.has(y.istasyonId)) ozet.sirada += 1;
+      else ozet.bos += 1;
+      continue;
+    }
+    for (const e of grup) {
+      const { durum } = istasyonGorunumu(y, e);
+      if (durum === 'calisiyor') ozet.calisiyor += 1;
+      else if (durum === 'durakli') ozet.durakli += 1;
+      else if (durum === 'durdu') ozet.durdu += 1;
+      if (e.canli) ozet.saglam = (ozet.saglam ?? 0) + e.canli.saglam;
+    }
   }
   return ozet;
 }
@@ -149,8 +170,27 @@ export function ilerleme(emir: Emir | undefined): number | null {
   return Math.min(1, emir.canli.saglam / emir.adet);
 }
 
+// Sorunlu emir önce: durdu, duraklatıldı, sonra öbürleri (eşitlikte gelen sıra korunur).
+export function emirOnceligi(e: Emir): number {
+  const c = e.canli?.calisma ?? null;
+  return c === 'durdu' ? 0 : c === 'durakli' ? 1 : 2;
+}
+
+// İstasyondaki bütün başlamış emirler, sorunlu önce. Aynı istasyonda birden çok iş olağandır (çok makineli istasyon).
+export function istasyonEmirGruplari(emirler: readonly Emir[]): Map<number, Emir[]> {
+  const sonuc = new Map<number, Emir[]>();
+  for (const e of emirler) {
+    if (e.durum !== 'basladi') continue;
+    const g = sonuc.get(e.istasyon.id);
+    if (g) g.push(e); else sonuc.set(e.istasyon.id, [e]);
+  }
+  for (const g of sonuc.values()) g.sort((a, b) => emirOnceligi(a) - emirOnceligi(b));
+  return sonuc;
+}
+
+// İstasyonun gösterilen emri: grubun ilki (sorunlu önce). Öbürleri kartta ve listede "+N iş" olarak görünür.
 export function emirlerIstasyonaGore(emirler: readonly Emir[]): Map<number, Emir> {
-  return new Map(emirler.filter((e) => e.durum === 'basladi').map((e) => [e.istasyon.id, e]));
+  return new Map([...istasyonEmirGruplari(emirler)].flatMap(([id, g]) => (g[0] ? [[id, g[0]] as const] : [])));
 }
 
 // Örnek veri istasyonları ORN- koduyla gelir (sunucu/moduller/istasyonlar/ornek-veri.ts).

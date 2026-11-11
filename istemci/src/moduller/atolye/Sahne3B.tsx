@@ -10,9 +10,8 @@ import { SahneMotoru, webglVarMi } from './sahne/motor.ts';
 import type { BolumYerlesimi, Gorunum, KameraYeri } from './sahne/motor.ts';
 import { KucukHarita } from './KucukHarita.tsx';
 import { gozOzetleri, hucreAnahtari } from './kurallar.ts';
-import { malzemeModelDosyasi, merkezModelDosyasi, modelDosyasi, useBolmeStoklari } from './veri.ts';
+import { malzemeModelDosyasi, merkezModelDosyasi, modelDosyasi, useRafStoklari } from './veri.ts';
 import type { IstasyonCanli, ParcaModeli, RafYuku } from './kurallar.ts';
-import { rafOzetleri } from './DepoGorunumu.tsx';
 import { BolmeCephesi } from './RafCephesi.tsx';
 import type { RafOdakSecimi } from './RafOdagi.tsx';
 
@@ -74,16 +73,15 @@ function IkiBoyut(o: SahneOzellikleri) {
 }
 
 // WebGL yoksa bölmeye bakış iki boyutlu cepheyle: aynı göz seçimi, aynı gezinme.
-function IkiBoyutOdak({ rafOdak, rafOdakYaz, raf, gozKalemleri }: SahneOzellikleri & { rafOdak: RafOdakSecimi; raf: YerlesimCevabi['raflar'][number] }) {
-  const ozetler = useMemo(() => rafOzetleri(gozKalemleri ?? [], raf.id), [gozKalemleri, raf.id]);
-  const stoklu = useBolmeStoklari(raf.id, rafOdak.bolme);
+function IkiBoyutOdak({ rafOdak, rafOdakYaz, raf }: SahneOzellikleri & { rafOdak: RafOdakSecimi; raf: YerlesimCevabi['raflar'][number] }) {
+  const rafIdler = useMemo(() => [raf.id], [raf.id]);
+  const stok = useRafStoklari(rafIdler);
   return (
     <div className="tc-atolye-sahne-plan tc-atolye-sahne-odak">
       <BolmeCephesi
         raf={raf}
         bolme={rafOdak.bolme}
-        ozetler={ozetler}
-        stoklu={stoklu}
+        stok={stok.okur ? stok.raflar.get(raf.id) ?? null : null}
         secili={rafOdak.kat !== null && rafOdak.goz !== null ? { kat: rafOdak.kat, goz: rafOdak.goz } : null}
         sec={(kat, goz) => rafOdakYaz({ ...rafOdak, kat, goz })}
       />
