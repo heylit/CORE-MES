@@ -66,6 +66,15 @@ describe('Ham Malzeme gorunumu', () => {
     expect(screen.getByText(/Ölçü analizden alındı: Model kup.step \(Rev 02\)/)).toBeTruthy();
   });
 
+  it('analizden al: kodsuz modelde kaynak yalniz model adidir, harf yazilmaz (2138-2)', async () => {
+    analizKopru({ ...OLCU, model: { ...OLCU.model!, revKodu: null } });
+    ac();
+    fireEvent.click(screen.getByRole('button', { name: 'Analizden al' }));
+    await waitFor(() => { expect(state.stock.mz).toBe(120); });
+    const ileti = screen.getByText(/Ölçü analizden alındı: Model kup.step/);
+    expect(ileti.textContent).not.toMatch(/\(A\)|Rev/);
+  });
+
   it('analizden al: yuklu model onaysiz kaldirilmaz; vazgecince model kalir, onaylaninca olcu gelir', async () => {
     analizKopru(OLCU);
     ac();
