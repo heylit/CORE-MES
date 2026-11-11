@@ -5,7 +5,7 @@ import {
   pinVerGovdesi, rolIslemiGovdesi, sinirliHesapGovdesi, rolIslemleriCevabi, rolParametresi, rollerCevabi, surumGovdesi, tamamCevabi,
 } from '#paylasilan/sozlesme/kisiler.ts';
 import {
-  baskasinaPinVer, baskasininParolasiniDegistir, eksikBilgiOzeti, hesapAc, kisiAktifYap, kisiDuzenle, kisiEkIslemiDegistir, kisiEkIslemleriGetir, kisiEkleGetir, kisileriGetir, kisiTopluKaydet, kisiSecimAra,
+  baskasinaPinVer, baskasininOturumlariniKapat, baskasininParolasiniDegistir, eksikBilgiOzeti, hesapAc, kisiAktifYap, kisiDuzenle, kisiEkIslemiDegistir, kisiEkIslemleriGetir, kisiEkleGetir, kisileriGetir, kisiTopluKaydet, kisiSecimAra,
   icHesapYap, kisiPasifeAl, sinirliHesapYap, rolAl, rolAta, rolIslemiDegistir, rolIslemleriGetir, rolleriGetir,
 } from './servis.ts';
 
@@ -121,6 +121,18 @@ export const uclar = [
     cevap: tamamCevabi,
     isle: async ({ db, kullanici, parametre, govde }) => {
       await baskasininParolasiniDegistir(db, kullanici.id, parametre.id, govde.yeniParola, govde.surum);
+      return { tamam: true as const };
+    },
+  }),
+  uc({
+    yontem: 'POST',
+    yol: '/kisiler/:id/oturumlari-kapat',
+    yetki: 'kisiler.oturum-kapat',
+    parametre: kisiParametresi,
+    govde: surumGovdesi,
+    cevap: tamamCevabi,
+    isle: async ({ db, kullanici, parametre, govde }) => {
+      await baskasininOturumlariniKapat(db, kullanici.id, parametre.id, govde.surum);
       return { tamam: true as const };
     },
   }),

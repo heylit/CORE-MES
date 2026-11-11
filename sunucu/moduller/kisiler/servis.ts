@@ -12,7 +12,7 @@ import { KISI_SECIM_SAYFA_BOYU } from '#paylasilan/sozlesme/kisiler.ts';
 import type { EksikBilgiOzetiCevabi, KisiEkIslemleriCevabi, KisiTopluKaydetCevabi, KisiTopluKaydetGirdisi, KisiOzeti, KisiSecimCevabi, RolIslemleriCevabi, RolOzeti } from '#paylasilan/sozlesme/kisiler.ts';
 import {
   DEVREDILMEZ_ISLEMLER, ILETILER, korumaliMi, almaReddi, atamaReddi, ekIslemReddi, bayrakliKisiReddi, hesapAcmaReddi, islemDegistirmeReddi, islemleriBirlestir, kisiAlanlariniDuzelt, kullaniciAdiHatasi, kullaniciAdiniDuzelt,
-  girisYontemi, parolaBaskasiReddi, parolaHatasi, pasifeAlmaReddi, pinHatasi, pinVermeReddi,
+  girisYontemi, oturumKapatmaReddi, parolaBaskasiReddi, parolaHatasi, pasifeAlmaReddi, pinHatasi, pinVermeReddi,
   cikisliAktiflikReddi, cikisPasifiReddi, icHesapReddi, sinirliHesapReddi, sinirliRolReddi, ozlukDuzenlemeReddi, ozlukItmeReddi, bosKullaniciAdi, ikRolVerebilirMi, kullaniciAdiKoku, rastgelePin,
 } from './kurallar.ts';
 import type { KisiAlanlari, Ret } from './kurallar.ts';
@@ -557,6 +557,24 @@ export async function baskasininParolasiniDegistir(
   if (!hedef.giris_var) throw gecersiz(ILETILER.girisYok);
   yeniParolaDenetle(yeniParola);
   if (!(await parolaYaz(db, kisiId, await parolaOzetle(yeniParola)))) throw gecersiz(ILETILER.girisYok);
+  await oturumlariGecersizKil(db, kisiId);
+}
+
+// 2288-1 a (kayıp telefon, ayrılan kişi): kişiyi pasife almadan bütün oturumları düşer. Tek yol oturumlariGecersizKil;
+// kimlik çözümü her oturumu açılış zamanıyla bu zamana göre düşürür (kullaniciYukle). Giriş bilgisi değişmez.
+export async function baskasininOturumlariniKapat(
+  db: Db, aktorId: number, kisiId: number, beklenen: number | null = null,
+): Promise<void> {
+  await surumDenetle(db, kisiId, beklenen);
+  const [hedef] = await kisiSatirlari(db, kisiId);
+  if (hedef === undefined) throw bulunamadi(ILETILER.kisiYok);
+  const ret = oturumKapatmaReddi({
+    kendiKendine: aktorId === kisiId,
+    hedefBayrakli: hedef.roller.some((r) => r.yonetici),
+    aktorBayrakli: await kisiBayrakliMi(db, aktorId),
+  });
+  if (ret !== null) reddet(ret);
+  if (!hedef.giris_var) throw gecersiz(ILETILER.girisYok);
   await oturumlariGecersizKil(db, kisiId);
 }
 

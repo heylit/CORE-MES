@@ -356,4 +356,34 @@ describe('Personel: kişi, hesap ve parola işlemleri', () => {
     expect((await screen.findByRole('alert')).textContent).toBe(red.mesaj);
     expect(screen.getByRole('dialog', { name: 'Düzenle: Veli Deneme' })).toBeTruthy();
   });
+  it('bütün oturumları kapatma (2288-1 a): düğme yalnız işlem sahibine ve başkasının girişli satırında; onaysız istek gitmez', async () => {
+    const yonetici: Kullanici = { ...TAM, islemler: [...TAM.islemler, 'kisiler.oturum-kapat'] };
+    const ben = kisi({ id: yonetici.id, ad: yonetici.ad });
+    const istekler = sunucuKur(yonetici, [AYSE, MEHMET, ben], () => json(200, { tamam: true }));
+    ac();
+    const ad = 'Ayşe Deneme bütün oturumlarını kapat';
+    fireEvent.click(await screen.findByRole('button', { name: ad }));
+    expect(screen.queryByRole('button', { name: 'Mehmet Deneme bütün oturumlarını kapat' })).toBeNull();
+    expect(screen.queryByRole('button', { name: `${yonetici.ad} bütün oturumlarını kapat` })).toBeNull();
+
+    const baslik = 'Bütün oturumlar kapatılsın mı?';
+    fireEvent.click(within(await screen.findByRole('dialog', { name: baslik })).getByRole('button', { name: 'Vazgeç' }));
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: baslik })).toBeNull());
+    expect(komutlar(istekler)).toHaveLength(0);
+
+    fireEvent.click(screen.getByRole('button', { name: ad }));
+    fireEvent.click(within(await screen.findByRole('dialog', { name: baslik })).getByRole('button', { name: 'Oturumları kapat' }));
+    expect(await screen.findByText('Ayşe Deneme için bütün oturumlar kapatıldı.')).toBeTruthy();
+    expect(komutlar(istekler)).toEqual([{ yol: '/kisiler/10/oturumlari-kapat', govde: { surum: 1 } }]);
+  });
+
+  it('bütün oturumları kapatma düğmesi işlemsiz kişide (kisiler.yaz taşıyan İK, parola değiştiren) yok', async () => {
+    for (const kullanici of [IK, TAM]) {
+      sunucuKur(kullanici, [AYSE]);
+      ac();
+      expect(await screen.findByText('Ayşe Deneme')).toBeTruthy();
+      expect(screen.queryByRole('button', { name: 'Ayşe Deneme bütün oturumlarını kapat' })).toBeNull();
+      cleanup();
+    }
+  });
 });

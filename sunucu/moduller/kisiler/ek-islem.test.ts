@@ -78,7 +78,7 @@ describe('kişiye ek işlem: GET /kisi-ek-islemleri, POST /kisiler/:id/ek-islem-
     assert.match(satir?.kullaniciAdi ?? '', /^e\d+-depo$/, 'kişi seçiminde kullanıcı adı görünür');
     assert.ok(satir?.roldenGelen.includes('stok.giris'));
     assert.ok(!satir?.roldenGelen.includes('ayarlar.yaz'), 'rolden gelen ek işlemi içermez');
-    assert.deepEqual(cevap.devredilmez, ['kisiler.rol-yonet', 'kisiler.parola-degistir', 'guvenlik.oku', 'guvenlik.yonet']);
+    assert.deepEqual(cevap.devredilmez, ['kisiler.rol-yonet', 'kisiler.parola-degistir', 'kisiler.oturum-kapat', 'guvenlik.oku', 'guvenlik.yonet']);
     assert.ok((await oturumIslemleri(depocu.cerez)).includes('sayfa.ayarlar'));
     assert.equal((await app.inject({ method: 'GET', url: '/api/ayarlar', headers: { cookie: depocu.cerez } })).statusCode, 200);
     assert.ok((await vt().tx((db) => kisilerinIslemleri(db))).get(depocu.id)?.includes('ayarlar.yaz'), 'dışa açık işlem haritası da ek işlemi taşır');
@@ -101,7 +101,7 @@ describe('kişiye ek işlem: GET /kisi-ek-islemleri, POST /kisiler/:id/ek-islem-
     const kisi = await girisYap('operator');
     const kayitsiz = await degistir(yoneticiCerezi, kisi.id, 'yok.boyle', true);
     assert.deepEqual({ durum: kayitsiz.statusCode, mesaj: kayitsiz.json().mesaj }, { durum: 422, mesaj: ILETILER.islemKayitsiz });
-    for (const islem of ['kisiler.rol-yonet', 'kisiler.parola-degistir', 'guvenlik.oku', 'guvenlik.yonet']) {
+    for (const islem of ['kisiler.rol-yonet', 'kisiler.parola-degistir', 'kisiler.oturum-kapat', 'guvenlik.oku', 'guvenlik.yonet']) {
       const c = await degistir(yoneticiCerezi, kisi.id, islem, true);
       assert.deepEqual({ durum: c.statusCode, mesaj: c.json().mesaj }, { durum: 422, mesaj: ILETILER.devredilmezIslem }, islem);
       assert.equal(await satirSayisi(islem), 0);

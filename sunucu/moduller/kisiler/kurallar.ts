@@ -39,6 +39,7 @@ export const ILETILER = {
   girisVar: 'Kişinin giriş hesabı zaten var.',
   girisYok: 'Kişinin giriş hesabı yok.',
   kendiParolaYolu: 'Kendi parolanızı eski parolanızla birlikte kendi hesabınızdan değiştirin.',
+  kendiOturumYolu: 'Kendi oturumlarınızı Profil > Oturumlar\'dan kapatın.',
   kendiPin: 'Kendinize PIN veremezsiniz; başka bir yetkili vermeli.',
   kendiRol: 'Kendinize rol atayamazsınız; başka bir yetkili atamalı.',
   bayrakliPin: 'Tüm yetkileri veren role sahip kişi parolayla girer; PIN verilmez.',
@@ -205,6 +206,13 @@ export function parolaBaskasiReddi(girdi: { kendiKendine: boolean; hedefBayrakli
   return bayrakliKisiReddi(girdi);
 }
 
+// 2288-1 a: başkasının bütün oturumları ayrı işlemle kapanır. Kişi kendi oturumlarını bu yoldan kapatmaz: bu yol çağıranın
+// oturumunu da düşürürdü; kendisi için o anki oturumu koruyan Profil yolu vardır.
+export function oturumKapatmaReddi(girdi: { kendiKendine: boolean; hedefBayrakli: boolean; aktorBayrakli: boolean }): Ret | null {
+  if (girdi.kendiKendine) return { tur: 'gecersiz', ileti: ILETILER.kendiOturumYolu };
+  return bayrakliKisiReddi(girdi);
+}
+
 // Rolün işlemini yalnız bayraklı kişi değiştirir (kullanıcı kararı 12.10.2026, kart #684): rol yöneten ama bayraksız kişi
 // kendi rolüne işlem ekleyip yetkisini büyütemez. Bayraklı rol zaten bütün işlemleri verir; satırı anlamsızdır.
 export function islemDegistirmeReddi(girdi: { aktorBayrakli: boolean; rolBayrakli: boolean; islemKayitli: boolean }): Ret | null {
@@ -217,7 +225,10 @@ export function islemDegistirmeReddi(girdi: { aktorBayrakli: boolean; rolBayrakl
 // Kişiye ek verilemeyen işlemler (kart #1233): rol yönetimi ve başkasının parolası, yönetici olmayanın hesapları ele geçirmesine
 // yol açar; Güvenlik Merkezi yalnız yöneticinindir (kullanıcı kararı 14.10.2026, "Verilemesin"). Bunlar yalnız bayraklı rolde
 // kalır; daha önce verilmiş satır alınabilir.
-export const DEVREDILMEZ_ISLEMLER: readonly Islem[] = ['kisiler.rol-yonet', 'kisiler.parola-degistir', 'guvenlik.oku', 'guvenlik.yonet'];
+// Başkasının bütün oturumlarını kapatmak da yalnız yöneticinindir (2288-1 a).
+export const DEVREDILMEZ_ISLEMLER: readonly Islem[] = [
+  'kisiler.rol-yonet', 'kisiler.parola-degistir', 'kisiler.oturum-kapat', 'guvenlik.oku', 'guvenlik.yonet',
+];
 
 // KS-4 (kart #1233): kişiye rolünün üstüne ek işlemi yalnız bayraklı kişi verir ve alır; bayraklı kişiye ek işlem anlamsızdır;
 // kayıtsız ve devredilmez işlem verilmez. Pasif ya da girişsiz kişiye verilmez: ekran onu listelemez, verilen görünmez kalırdı.
@@ -259,7 +270,7 @@ export function cikisPasifiReddi(girdi: { hedefSayiliyor: boolean; kalanBayrakli
 
 // 1925 a: İK'nın açtığı hesaba verebileceği rol. Tüm yetkileri veren rol ve yetki dağıtan işlem taşıyan rol İK'ya kapalıdır:
 // İK kendine ya da başkasına rol yönetme, parola değiştirme ya da yeni hesap açma yetkisi veremez.
-export const IK_VEREMEZ_ISLEMLER = ['kisiler.rol-yonet', 'kisiler.parola-degistir', 'ik.hesap-ac'] as const satisfies readonly Islem[];
+export const IK_VEREMEZ_ISLEMLER = ['kisiler.rol-yonet', 'kisiler.parola-degistir', 'kisiler.oturum-kapat', 'ik.hesap-ac'] as const satisfies readonly Islem[];
 
 export function ikRolVerebilirMi(rol: { yonetici: boolean; islemler: readonly unknown[] }): boolean {
   return !rol.yonetici && !IK_VEREMEZ_ISLEMLER.some((islem) => rol.islemler.includes(islem));
