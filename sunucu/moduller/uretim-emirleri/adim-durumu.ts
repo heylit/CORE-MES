@@ -97,14 +97,16 @@ export async function adimDurumu(db: Db, emirId: number): Promise<AdimDurumuCeva
   };
 }
 
-// 2893-3 b: operatör statüyü, nedenleri ve statünün elle yazıldığını görür; kişi, gerekçe ve geçmiş gitmez.
+// 2893-3 b: operatör statüyü, nedenleri ve statünün elle yazıldığını görür; kişi, gerekçe ve geçmiş gitmez. Tedarik satırı yalnız adım
+// malzeme, talep ya da sipariş beklerken gider: malzeme yerindeyken başka miktar için açık talep "malzeme yok" sanılmasın (Atölye N1).
+const TEDARIK_GORUNEN = new Set<AdimStatusu>(['talep', 'siparis', 'malzeme']);
 export async function adimDurumuTerminal(db: Db, emirId: number): Promise<AdimDurumuTerminalCevabi> {
   const d = await adimDurumu(db, emirId);
   return {
     emirId,
     adimlar: d.adimlar.map((a) => ({
       isEmriId: a.isEmriId, opNo: a.opNo, ad: a.ad, statu: a.elle?.statu ?? a.sistemStatusu, elle: a.elle !== null, yuzde: a.yuzde, nedenler: a.nedenler,
-      tedarik: a.tedarik,
+      tedarik: TEDARIK_GORUNEN.has(a.elle?.statu ?? a.sistemStatusu) ? a.tedarik : [],
     })),
   };
 }

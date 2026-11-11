@@ -286,6 +286,13 @@ describe('uretim-emirleri adım durumu (2893, gerçek PostgreSQL)', () => {
       assert.deepEqual(terminal.adimlar[0]?.tedarik.map((x) => [x.talepNo, x.siparisNo, x.termin]), [['ST-2099-001', null, null], ['ST-2099-002', 'SP-2099-001', '2099-03-01']]);
       assert.equal(/fiyat|tutar|tedarikci/i.test(JSON.stringify(t.govde)), false, 'terminalde fiyat ve tedarikçi yok');
 
+      // Atölye N1: malzeme yerindeyken açık talep ayrıntıda görünür, terminalde görünmez.
+      hazirlikCozucusuKaydet('malzeme', async (_db, idler) => new Map(idler.map((x) => [x, { durum: 'tamam' as const, secildi: true }])));
+      assert.deepEqual((await oku(id)).adimlar.map((a) => [a.sistemStatusu, a.tedarik.length]), [['baslayabilir', 2], ['talep', 1]]);
+      const malzemeli = adimDurumuTerminalCevabi.parse((await istek('operator', 'GET', `/adimli-emirler/${id}/adim-durumu/terminal`)).govde);
+      assert.deepEqual(malzemeli.adimlar.map((a) => [a.statu, a.tedarik.length]), [['baslayabilir', 0], ['talep', 1]]);
+      hazirlikCozucusuKaydet('malzeme', async (_db, idler) => new Map(idler.filter((x) => x === ie1).map((x) => [x, { durum: 'yok' as const, secildi: true }])));
+
       satirlar.splice(0, 1);
       assert.equal((await oku(id)).adimlar[0]?.sistemStatusu, 'siparis', 'yalnız sipariş bekleniyor');
       satirlar.splice(0, 1);

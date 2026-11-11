@@ -5,6 +5,7 @@ import { testVeritabaniKur } from '#cekirdek/test-vt.ts';
 import type { TestVeritabani } from '#cekirdek/test-vt.ts';
 import { yoneticiOlustur } from '../kisiler/disari.ts';
 import { emirTedarikDurumlari } from './disari.ts';
+import { kalemleriBirlesenTalebeTasi } from './sorgular.ts';
 import { tedarikAsamasi } from './kurallar.ts';
 
 // 2893 D2: Adım Durumu'nun okuduğu tedarik aşaması.
@@ -73,7 +74,7 @@ describe('satin-alma emir tedarik okuması (2893 D2, gerçek PostgreSQL)', () =>
     const fason = await talep('degerlendirme', { isEmri: ie });
     await talep('iptal', { emir: e1, malzeme: m1 });
     await talep('teslim_alindi', { emir: e1, malzeme: m1 });
-    await talep('taslak', { emir: e2, malzeme: m1 });
+    const baska = await talep('taslak', { emir: e2, malzeme: m1 });
     const kaynak = await talep('taslak', { emir: e1, malzeme: m1 });
     await s.sorgu('UPDATE satin_alma_talep SET birlesen_talep_id = $1 WHERE id = $2', [acik.id, kaynak.id]);
 
@@ -84,5 +85,15 @@ describe('satin-alma emir tedarik okuması (2893 D2, gerçek PostgreSQL)', () =>
       { uretimEmriId: null, isEmriId: ie, malzemeNo: null, asama: 'talep', talepNo: fason.no, siparisNo: null, termin: null },
     ]);
     assert.deepEqual(await ortam.vt.okumaTx((db) => emirTedarikDurumlari(db, [], [])), []);
+
+    // Atölye N3: birleştirilen talepte kalem birleşik talebe taşınır; emir bağı kaynak talepten (KALEM_EMRI) gelir, numara birleşik talebin.
+    const kaynak2 = await talep('onayda', { emir: e2, malzeme: m2 });
+    const birlesik = await talep('taslak', {});
+    await s.sorgu('DELETE FROM satin_alma_talep_kalemi WHERE talep_id = $1', [birlesik.id]);
+    await ortam.vt.tx((db) => kalemleriBirlesenTalebeTasi(db, birlesik.id, [kaynak2.id]));
+    assert.deepEqual(await ortam.vt.okumaTx((db) => emirTedarikDurumlari(db, [e2], [])), [
+      { uretimEmriId: e2, isEmriId: null, malzemeNo: m1, asama: 'talep', talepNo: baska.no, siparisNo: null, termin: null },
+      { uretimEmriId: e2, isEmriId: null, malzemeNo: m2, asama: 'talep', talepNo: birlesik.no, siparisNo: null, termin: null },
+    ]);
   });
 });

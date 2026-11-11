@@ -19,10 +19,16 @@ export function useEmrinAdimlari(emirId: number | null, yenidenSor: unknown): Ad
   return v;
 }
 
+// Termin bir gündür ('GGGG-AA-GG'); bugünden önceyse gecikmiştir (Atölye N2). Bugün tarayıcının yerel günüdür.
+const bugun = (): string => {
+  const d = new Date();
+  return `${String(d.getFullYear())}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
+const terminMetni = (termin: string | null): string => (termin === null ? '' : ` · termin ${tarihMetni(termin)}${termin < bugun() ? ' · gecikti' : ''}`);
 // 2893-3 b: adımı bekleten talep ve sipariş numarası ile beklenen teslim; fiyat ve tedarikçi gelmez.
 const tedarikMetni = (t: AdimDurumuTerminalCevabi['adimlar'][number]['tedarik'][number]): string => t.asama === 'talep'
   ? `${t.fason ? 'Fason talebi' : 'Talep'} ${t.talepNo}`
-  : `Sipariş ${t.siparisNo ?? t.talepNo}${t.termin === null ? '' : ` · termin ${tarihMetni(t.termin)}`}`;
+  : `Sipariş ${t.siparisNo ?? t.talepNo}${terminMetni(t.termin)}`;
 
 export function EmrinAdimlari({ v, isEmriId }: { v: AdimDurumuTerminalCevabi | null; isEmriId: number | null }) {
   if (v === null || v.adimlar.length === 0) return null;

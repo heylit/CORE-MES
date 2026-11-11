@@ -12,6 +12,7 @@ const V: AdimDurumuTerminalCevabi = {
     { isEmriId: 53, opNo: 30, ad: 'Kaplama', statu: 'siparis', elle: true, yuzde: 0, nedenler: ['Önceki adım bitmedi'], tedarik: [
       { asama: 'talep', fason: true, talepNo: 'ST-2099-004', siparisNo: null, termin: null },
       { asama: 'siparis', fason: false, talepNo: 'ST-2099-002', siparisNo: 'SP-2099-001', termin: '2099-03-01' },
+      { asama: 'siparis', fason: false, talepNo: 'ST-2099-005', siparisNo: 'SP-2099-002', termin: '2020-01-02' },
     ] },
   ],
 };
@@ -21,7 +22,7 @@ describe('Üretim Terminali emrin adımları (2893-3 b)', () => {
   it('ilk adım üstte; kendi adımı işaretli; elle statü işaretli; yazma düğmesi yok', () => {
     render(<EmrinAdimlari v={V} isEmriId={52} />);
     const l = within(screen.getByRole('region', { name: 'Emrin adımları' })).getAllByRole('listitem');
-    expect(l.map((x) => x.textContent)).toEqual(['OP 10Testere kesimBitti', 'OP 20CNC torna · bu adımÜretimde', 'OP 30KaplamaElleFason talebi ST-2099-004 · Sipariş SP-2099-001 · termin 01.03.2099Sipariş bekliyor']);
+    expect(l.map((x) => x.textContent)).toEqual(['OP 10Testere kesimBitti', 'OP 20CNC torna · bu adımÜretimde', 'OP 30KaplamaElleFason talebi ST-2099-004 · Sipariş SP-2099-001 · termin 01.03.2099 · Sipariş SP-2099-002 · termin 02.01.2020 · geciktiSipariş bekliyor']);
     expect(l[1]?.getAttribute('aria-current')).toBe('step');
     expect(screen.queryByRole('button')).toBeNull();
   });

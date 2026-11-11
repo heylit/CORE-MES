@@ -16,9 +16,15 @@ type Adim = AdimDurumuCevabi['adimlar'][number];
 const ACIK = new Set(['taslak', 'planli', 'basladi']);
 // Sunucu kuralıyla aynı sınır (uretim-emirleri kurallar.ts GEREKCE_EN_AZ); sunucu kısa gerekçeyi 400 ile reddeder.
 const GEREKCE_EN_AZ = 5;
+// Termin bir gündür ('GGGG-AA-GG'); bugünden önceyse gecikmiştir (Atölye N2). Bugün tarayıcının yerel günüdür.
+const bugun = (): string => {
+  const d = new Date();
+  return `${String(d.getFullYear())}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
+const terminMetni = (termin: string | null): string => (termin === null ? '' : ` · termin ${tarihMetni(termin)}${termin < bugun() ? ' · gecikti' : ''}`);
 const tedarikMetni = (t: AdimTedariki): string => t.asama === 'talep'
   ? `${t.fason ? 'Fason talebi' : 'Talep'} ${t.talepNo} siparişe dönmedi`
-  : `Sipariş ${t.siparisNo ?? t.talepNo} bekleniyor${t.termin === null ? '' : ` · termin ${tarihMetni(t.termin)}`}`;
+  : `Sipariş ${t.siparisNo ?? t.talepNo} bekleniyor${terminMetni(t.termin)}`;
 
 function Statu({ statu, elle }: { statu: AdimStatusu; elle: boolean }) {
   const g = STATU[statu];
