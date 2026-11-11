@@ -54,6 +54,9 @@ describe('Adım Durumu (2893, düzen 2955)', () => {
     const ozet = screen.getByRole('list', { name: 'Adım özeti' });
     expect(within(ozet).getByText('Bitti').closest('li')?.textContent).toContain('1');
     expect(within(ozet).getByText('Bekliyor').closest('li')?.textContent).toContain('1');
+    // Başlayabilir, Bitti ile aynı yeşildir; çizgi görünümle ayrılır.
+    expect(within(ozet).getByText('Başlayabilir').closest('.tc-rozet')?.className).toContain('tc-rozet-cizgi');
+    expect(within(ozet).getByText('Bitti').closest('.tc-rozet')?.className).not.toContain('tc-rozet-cizgi');
   });
 
   it('adıma tıklayınca yan pencerede nedenler ve tedarik; okuyucu yazma alanı görmez', async () => {
@@ -114,6 +117,9 @@ describe('Adım Durumu (2893, düzen 2955)', () => {
     const pencere = await screen.findByRole('dialog', { name: 'OP 20 · CNC freze' });
     const yaz = within(pencere).getByRole('button', { name: 'Yaz' });
     expect((yaz as HTMLButtonElement).disabled).toBe(true);
+    // Pencerede tek birincil eylem: elle statü ikincildir, hazırlık onayı birincil.
+    expect(yaz.className).not.toContain('tc-dugme-birincil');
+    expect(pencere.querySelectorAll('.tc-dugme-birincil')).toHaveLength(1);
     fireEvent.change(within(pencere).getByLabelText('Statü'), { target: { value: 'malzeme' } });
     fireEvent.change(within(pencere).getByLabelText('Not'), { target: { value: ' Depo teyit etti ' } });
     fireEvent.click(yaz);
