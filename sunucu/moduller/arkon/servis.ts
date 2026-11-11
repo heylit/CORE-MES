@@ -47,6 +47,7 @@ import {
   calismaDevral, hataliAdimToplamlari, makineDevral, partiKomutuReddi, planlanacakIsEmirleri, rotasizIsEmirleri, uretimEmriOzeti, aralikAdetleri, katilimSureleri, sonGirisler,
   bitenIsEmirleri, gunlukAralikAdetleri, isEmriPlanBilgileri, kisininGunlukIsEmirleri, kisininHurdaNedenleri, kisininIsEmirleri, komutOnbellegiyle, standartSureler,
   makineAyrimlari as emrinMakineAyrimlari, kisininAcikIsleri, emirlerinMalzemeIhtiyaci, adimliEmirAyrintisi, emirlerinProjeleri, isEmriDugumleri, kararliSayimiSonuclandir, isEmriZamanlari,
+  elleOnayliMaddeler,
 } from '../uretim-emirleri/disari.ts';
 import type { Emir, Katilim } from '../uretim-emirleri/disari.ts';
 import { planliDuruslarinHepsi, planliDurusSilArkon, planliDurusYaz } from '../vardiya/disari.ts';
@@ -54,7 +55,7 @@ import type { ArkonDurusHedefi, PlanliDurusKaydi } from '../vardiya/disari.ts';
 import {
   ILETILER, ILETI_YENIDEN_YUKLE, cagriBildirimi, belgedenDurusa, durusBelgeKimligi, durusBelgeKimligindenId, durustenBelgeye, iletiBasi, iletiKacirildi, KONUMLU_DEPOLAR, KONUMLU_KAYITLAR, KONUMSUZ, arkonRoluSec, belgeBicimiHatasi, belgeKonumu, kayitBicimiHatasi, durusNedenleriniCevir,
   adimEmirDurumu, emirPaketKimligi, hazirlikEksigi, parcaPaketKimligi, paketParcasi, butunPaketSablonu, parcaYayini, parcaSayimReddi, parcaOlayKarari, emirdenTaslakPaket, isEmriPaketKimligi, isEmrindenTaslakPaket, paketinEmri, paketIsEmri, PAKET_ADIM_SIRASI, ROTALI_EMIR_PAKETI,
-  ADIMSIZ_YAYIN, ISTASYONSUZ_YAYIN, PLANSIZ, partiKomutu, planBaslatmaReddi, yayinDenetlenir, yayinlanmamis, planDurumlari, planSiralayabilirMi, planSirasiReddi, planSirasiTasinacaklar, siraOnaylari, siraOnayiniYaz,
+  ADIMSIZ_YAYIN, ISTASYONSUZ_YAYIN, PLANSIZ, partiKomutu, planBaslatmaReddi, yayinDenetlenir, yayinlanmamis, cizimOnayiGecer, planDurumlari, planSiralayabilirMi, planSirasiReddi, planSirasiTasinacaklar, siraOnaylari, siraOnayiniYaz,
   KUYRUK_ILETILERI, eksiAlaniniEkle, hataliAlaniniEkle, kuyrukAlanlariniEkle, kuyrukSirasiReddi, planSaatleri,
   plansizKaynak, rotaAnahtari, sablonPaket, tabanCoz, tmiAlanlariniYaz, tmiBirlesikSurum, hurdaNedenleriniCevir, stokaBagliMi, stokDurumuyla, stokIstegiKaynagi, stokIstegiKarari, numuneTeslimGirdisi, numuneTesliminiKoru, kaliteIstasyonuSec, tekKaliteIstasyonu, lotKarariGirdisi, lotKarariKoru, lotPaketi, lotKarariDamgala, KALITE_KARARI_ROLLERI,
   icerikSurumu, planYokDamgala, uyariBirlestir, guvensizCizimleriAyikla, acikIstekMi, alanOku, istekKmPlani, istekKarari, kmKarariniAynala, periyodikNumuneler, periyodikRetAcik, numuneTeslimKaynagi, kmOlcumGruplari, kmUyarisiniYaz, KM_UYARILARI, ilkParcaGereksinimi, tmiAqlPlani, iletiKonumu, kapsamdaMiKisitli, konumBosMu, kayitKonumu, kayitSutunlari, konumKimlikleri, ikinciKontrolEksik, ilkParcaOlculeri, gizliYansimaTuru, gecikmeliSayimReddi, tmiRetIletisi, ilkParcaSayimiAsildi, kararBekleyenAdet, KARAR_BEKLIYOR_ALANI, yenidenIlkParcaTabani, ILK_PARCA_ADEDI, ilkParcaYenidenSorulur, yenidenIlkParcaAcik, yenidenKarariDamgala, yenidenKarariDegisti, kodlarAyir, konumCoz, okuyabilirMi, paketEmri, paketIstasyonuReddi, paketKonumu, paketMakinesi, tesisHaritasiKur, kayitGovdesi, kayitReddi, gunlukSatirlari, paketSuzgeciVar, silmeCakisiyorMu, sunucuIletisiMi, tesisKur, tmiAyariMi, yazimCakisiyorMu, arkonVardiyalari, arkonTatilleri, arkonAletleri, TMI_AYARLARI,
@@ -1916,7 +1917,9 @@ async function ilkParcaKapisi(db: Db, satir: Readonly<Record<string, unknown>>, 
 
 // Denetim #34: pakette kayıtlı merkez çizimi yayında yeni revizyona geçtiyse ya da yayından kalktıysa iş başlatılmaz ve sürdürülmez;
 // duraklatma, durdurma ve bitirme serbesttir (yarım işi kapatmak kayıp üretir). Yerel dosya merkeze bağlı olmadığından sorulmaz.
-async function cizimRevizyonuKapisi(db: Db, satir: Readonly<Record<string, unknown>>, onbellek: OkumaOnbellegi): Promise<void> {
+// Elle onay (2893-2 b, onay: onaylanan sürüm; onay yoksa undefined) başlatmayı ve sürdürmeyi açar; onaydan sonra yeni revizyon
+// yayınlanırsa geçmez (Atölye, 2893). Onay kaldırılınca sonraki sürdürme reddedilir; çalışan iş kesilmez (kapı yalnız 'running'te).
+async function cizimRevizyonuKapisi(db: Db, satir: Readonly<Record<string, unknown>>, onbellek: OkumaOnbellegi, onay?: string | null): Promise<void> {
   const paketId = satir['pkgId'];
   if (satir['state'] !== 'running' || typeof paketId !== 'string' || paketId === '') return;
   const paket = await onbellek.oku(`belge:pkgs:${paketId}`, () => sorgular.belge(db, 'pkgs', paketId));
@@ -1926,6 +1929,7 @@ async function cizimRevizyonuKapisi(db: Db, satir: Readonly<Record<string, unkno
   for (const { belgeId } of dosyalar) {
     if (!yayinda.has(belgeId)) yayinda.set(belgeId, (await yayindakiBelgeDosyasi(db, belgeId))?.ozet ?? null);
   }
+  if (onay !== undefined && cizimOnayiGecer(onay, dosyalar, yayinda)) return;
   const ret = cizimRevizyonuReddi(dosyalar, yayinda);
   if (ret !== null) throw cakisma(ret);
 }
@@ -2017,7 +2021,9 @@ export async function kayitEkle(
     const parca = paketParcasi(satir['pkgId']);
     const plan = parca?.no == null ? planlar.get(isEmriId ?? -1) : parcaPlanlari.get(String(satir['pkgId'])) ?? planlar.get(parca.isEmriId);
     if (isEmriId !== null && planBaslatmaReddi(tur, satir, bag?.durum ?? null, plan, planZorunlu)) throw dogrulama(ILETILER.planCanliDegil, `satirlar.${sira}.state`);
-    if (isEmriId !== null && yayinDenetlenir(tur, satir, bag?.durum ?? null) && yayinlanmamis(await parcalar.durum(String(satir['pkgId'])))) {
+    // 2893-2 b: iş emrinin elle onaylı maddeleri (madde -> onaylanan sürüm) yayın ve çizim kapısını açar; iş emri başına bir okuma.
+    const elleOnay = isEmriId === null ? undefined : await onbellek.oku(`elle-onay:${isEmriId}`, async () => (await elleOnayliMaddeler(db, [isEmriId])).get(isEmriId));
+    if (isEmriId !== null && yayinDenetlenir(tur, satir, bag?.durum ?? null, elleOnay?.has('yayin')) && yayinlanmamis(await parcalar.durum(String(satir['pkgId'])))) {
       throw dogrulama(ILETILER.paketYayinlanmadi, `satirlar.${sira}.state`);
     }
     const parcaBilgisi = parca?.no == null ? null : await parcalar.bilgi(String(satir['pkgId']));
@@ -2031,7 +2037,7 @@ export async function kayitEkle(
     const partiRet = parti === null || isEmriId === null ? null : await partiKomutuReddi(db, isEmriId, parti);
     if (partiRet !== null) throw cakisma(partiRet);
     if (sinir !== null) await sinir.reddet(kayitKonumu(satir));
-    if (tur === 'events') await cizimRevizyonuKapisi(db, satir, onbellek);
+    if (tur === 'events') await cizimRevizyonuKapisi(db, satir, onbellek, elleOnay?.get('cizim'));
     const kararBekleyen = tur === 'counts' ? await sayimKapisi(db, satir, onbellek) : 0;
     const sutunlar = tumSutunlar[sira] ?? null;
     if (sutunlar === null) throw dogrulama('Kayıt kimliği (cid) yok.', `satirlar.${sira}.cid`);

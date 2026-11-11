@@ -88,6 +88,7 @@ import { KaliteGorunumu } from './KaliteGorunumu.tsx';
 import { Ozetim, ozetimGorunur } from './Ozetim.tsx';
 import { EylemCubugu } from './EylemCubugu.tsx';
 import { MalzemeCipi } from './MalzemeCipi.tsx';
+import { EmrinAdimlari, useEmrinAdimlari } from './EmrinAdimlari.tsx';
 import { lotEslesmesi } from './lot-eslesmesi.ts';
 import { okutulanKoduCoz, useIsGirdileri } from '../../../stok/disari.ts';
 import { BitenSepet, Sepetler } from './Sepetler.tsx';
@@ -1172,6 +1173,7 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
   const pdSonra = pdSimdi ? null : siradakiDurus(MACHINE, simdi, ayarlar.planliDuruslar, tesis, 30 * 60e3);
 
   const hz = useHazirlik(pv ? null : tmiEmirId(o.pkg), o.state);
+  const emrinAdimlari = useEmrinAdimlari(pv ? null : tmiEmirId(o.pkg), o.state);
   /* ekran parçaları */
   const uyarili = RL.warns.some((w) => w.t);
   const panelSimgesi = OT.simge;
@@ -1198,7 +1200,7 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
   const panel = Panel ? <Panel key={siraAnahtari(o)} api={stApi} kurallar={RL} /> : null;
   const adimlar = b
     ? <Adimlar key={'oniz:' + siraAnahtari(b)} adimlar={b.pkg && b.pkg.steps} emirId={tmiEmirId(b.pkg)} onizleme />
-    : <Adimlar key={siraAnahtari(o)} adimlar={o.pkg && o.pkg.steps} emirId={tmiEmirId(o.pkg)} onizleme={pv} />;
+    : <><EmrinAdimlari v={emrinAdimlari} isEmriId={tmiIsEmriId(o.pkg)} /><Adimlar key={siraAnahtari(o)} adimlar={o.pkg && o.pkg.steps} emirId={tmiEmirId(o.pkg)} onizleme={pv} /></>;
   const onizBandi = b ? (
     <div className="tc-ay1-onizleme-bandi" role="status">
       <Simge ad="eye" boyut="k" /><span>Önizleme · {b.no} · teknik resim ve adımlar salt okunur</span>

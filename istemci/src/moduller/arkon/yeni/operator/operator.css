@@ -768,3 +768,12 @@ button.tc-ay1-kadran-cekirdek { cursor: pointer; }
 /* Kabuk menüsü açıkken 1600 px altında vardiya satırı sığmaz; bugünkü dar şerit gibi yalnız saat kalır. */
 @media (max-width: 1599px) { .tc-ay1-kabukta .tc-ay1-saat small { display: none; } }
 .tc-ay1-genis:not(:has(> .tc-ay1-ust)) { grid-template-rows: minmax(0, 1fr); }
+/* Emrin adımları (2893-3 b): ilk adım üstte; kendi adımı sol çizgiyle işaretli; çip hazırlık çipiyle aynı görünüştedir. */
+.tc-ay1-adim-durumu h3 { display: flex; align-items: center; gap: var(--b-2); margin: 0 0 var(--b-2); font-size: var(--yazi-s); color: var(--muted); }
+.tc-ay1-adim-durumu ol { list-style: none; margin: 0; padding: 0; display: grid; }
+.tc-ay1-adim-durumu li { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2); min-height: var(--dokunma); border-bottom: thin solid var(--edge); }
+.tc-ay1-adim-durumu li:last-child { border-bottom: 0; }
+.tc-ay1-adim-durumu li[aria-current='step'] { box-shadow: inset var(--b-1) 0 0 var(--hazard); padding-inline-start: var(--b-2); }
+.tc-ay1-adim-op { font-family: var(--font-mono); font-size: var(--yazi-s); color: var(--muted); }
+.tc-ay1-adim-ad { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.tc-ay1-adim-ad em { font-style: normal; font-size: var(--yazi-xs); font-weight: 700; margin-inline-start: var(--b-2); padding: 0 var(--b-1); border: thin solid var(--hazard); border-radius: var(--yari-1); }

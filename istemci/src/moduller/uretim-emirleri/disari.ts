@@ -11,3 +11,5 @@ export { CALISMA_DURUMU, EMIR_DURUMU, IS_EMRI_DURUMU, KAPANIS_SONUCU, emirDurumu
 export { KAPANIS_EVI, KapanisOnaylari } from './KapanisOnaylari.tsx';
 // Hazırlık maddelerinin adı ve sahibi, iş emri hücresinin hâli (2057 a: emir ayrıntısı ve Üretim Terminali aynı listeyi okur).
 export { MADDE as HAZIRLIK_MADDE_BILGISI, hucreHali as hazirlikHucreHali } from './HazirlikListesi.tsx';
+// Adım Durumu (2893-3 b): statünün adı, tonu ve simgesi; Üretim Terminali emrin adımlarını sayfayla aynı sözlükle gösterir.
+export { STATU as ADIM_STATUSU } from './adim-durumu.ts';

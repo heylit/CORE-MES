@@ -6,7 +6,7 @@ import { makineDurumlari, makineler } from '../istasyonlar/disari.ts';
 import type { HazirlikCevabi, HazirlikMaddesi, HazirlikMuafiyetiGovdesi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { kisiAdlari } from '../kisiler/disari.ts';
 import type { BaslatmaOlayi } from './baslatma-denetimi.ts';
-import { EMIR_YOK, MUAF_IS_EMRI_YOK, MUAF_KAPALI_EMIR, MUAF_MADDE_YOK, MUAF_TUTULUR, MUAF_ZATEN, hazirlikEngeli, hazirlikHali, makineHazirligi, talimatHazirligi } from './kurallar.ts';
+import { EMIR_YOK, MUAF_IS_EMRI_YOK, MUAF_KAPALI_EMIR, MUAF_MADDE_YOK, MUAF_TUTULUR, MUAF_ZATEN, hazirlikEngeli, hazirlikHali, acikOnaylar, makineHazirligi, onayGecerliMi, talimatHazirligi } from './kurallar.ts';
 import type { HazirlikBilgisi, HazirlikHali } from './kurallar.ts';
 import * as s from './sorgular.ts';
 import { talimatHazirlikSayilari } from './sorgular/adim/sorgular.ts';
@@ -28,6 +28,22 @@ export function hazirlikCozucusuKaydet(madde: HazirlikMaddesi, cozucu: HazirlikC
 const muafMi = (l: readonly s.MuafiyetSatiri[], madde: HazirlikMaddesi, isEmriId: number | null) =>
   l.some((x) => x.madde === madde && (x.isEmriId === null || x.isEmriId === isEmriId));
 
+// Elle onay (2893-2 b) muafiyet gibi sayılır: başlatmayı açar. Onay iş emri başınadır; onaylanan sürüm biliniyorsa ve madde başka
+// sürüme geçtiyse onay geçmez (Atölye, 2893). Emir düzeyindeki madde, açık iş emirlerinin hepsi onaylıysa emirde onaylı görünür.
+type Onaylar = ReadonlyMap<number, ReadonlyMap<string, s.HazirlikOnaySatiri>>;
+export async function elleOnaylar(db: Db, isEmriIdleri: readonly number[]): Promise<Map<number, Map<string, s.HazirlikOnaySatiri>>> {
+  const idler = [...new Set(isEmriIdleri)];
+  if (idler.length === 0) return new Map();
+  const defter = await s.hazirlikOnayDefteri(db, idler);
+  return new Map(idler.map((i) => [i, acikOnaylar(defter.filter((x) => x.isEmriId === i))]));
+}
+const onayliMi = (o: Onaylar, madde: HazirlikMaddesi, isEmriId: number, surum: string | null | undefined) => {
+  const x = o.get(isEmriId)?.get(madde);
+  return x !== undefined && onayGecerliMi(x.onaylananSurum, surum);
+};
+const hepsiOnayli = (o: Onaylar, madde: HazirlikMaddesi, isEmirleri: readonly number[], surum: string | null | undefined) =>
+  isEmirleri.length > 0 && isEmirleri.every((i) => onayliMi(o, madde, i, surum));
+
 // Emir görünümünde iş emri düzeyindeki madde en kötü iş emrinin hâlini alır.
 const HAL_SIRASI: readonly HazirlikHali[] = ['eksik', 'bilinmiyor', 'muaf', 'tamam', 'gerekmez'];
 const enKotu = (l: readonly HazirlikHali[]): HazirlikHali => HAL_SIRASI.find((h) => l.includes(h)) ?? 'gerekmez';
@@ -35,17 +51,20 @@ const enKotu = (l: readonly HazirlikHali[]): HazirlikHali => HAL_SIRASI.find((h)
 // isEmriId verilirse yalnız o iş emri ve yalnız durduran maddeler (başlatma), verilmezse emrin bitmemiş iş emirleri (görünüm) sorulur.
 async function maddeler(db: Db, uretimEmriId: number, isEmriId: number | null, muaf: readonly s.MuafiyetSatiri[]): Promise<Map<HazirlikMaddesi, HazirlikHali>> {
   const sonuc = new Map<HazirlikMaddesi, HazirlikHali>();
-  let isEmirleri: number[] | null = isEmriId === null ? null : [isEmriId];
+  const isEmirleri = isEmriId === null
+    ? (await s.isEmirleriGetir(db, [uretimEmriId])).filter((i) => i.durum !== 'tamam').map((i) => i.id)
+    : [isEmriId];
+  const onay = await elleOnaylar(db, isEmirleri);
   for (const m of HAZIRLIK_MADDELERI) {
     if (isEmriId !== null && (hazirlikUyarirMi(m) || BASLATMADA_SORULMAZ.has(m))) continue;
     const c = cozuculer.get(m);
     if (!IS_EMRI_DUZEYI.has(m)) {
-      sonuc.set(m, hazirlikHali(c ? (await c(db, [uretimEmriId])).get(uretimEmriId) : undefined, muafMi(muaf, m, isEmriId)));
+      const bilgi = c ? (await c(db, [uretimEmriId])).get(uretimEmriId) : undefined;
+      sonuc.set(m, hazirlikHali(bilgi, muafMi(muaf, m, isEmriId) || hepsiOnayli(onay, m, isEmirleri, bilgi?.surum)));
       continue;
     }
-    isEmirleri ??= (await s.isEmirleriGetir(db, [uretimEmriId])).filter((i) => i.durum !== 'tamam').map((i) => i.id);
     const durum = c ? await c(db, isEmirleri) : null;
-    sonuc.set(m, enKotu(isEmirleri.map((i) => hazirlikHali(durum?.get(i), muafMi(muaf, m, i)))));
+    sonuc.set(m, enKotu(isEmirleri.map((i) => hazirlikHali(durum?.get(i), muafMi(muaf, m, i) || onayliMi(onay, m, i, durum?.get(i)?.surum)))));
   }
   return sonuc;
 }
@@ -83,6 +102,7 @@ export async function hazirliklar(db: Db, uretimEmriIdleri: readonly number[]): 
     const idler = IS_EMRI_DUZEYI.has(m) ? isEmriIdleri : emirIdleri;
     durumlar.set(m, c && idler.length > 0 ? await c(db, idler) : null);
   }
+  const onay = await elleOnaylar(db, isEmriIdleri);
   const adlar = await kisiAdlari(db, [...new Set(emirler.flatMap((e) => e.muaf.map((x) => x.kisiId)))]);
   for (const { id, muaf } of emirler) {
     const kendi = isEmirleri.filter((i) => i.uretimEmriId === id);
@@ -91,15 +111,18 @@ export async function hazirliklar(db: Db, uretimEmriIdleri: readonly number[]): 
       maddeler: HAZIRLIK_MADDELERI.map((madde) => {
         const d = durumlar.get(madde) ?? null;
         const durum = IS_EMRI_DUZEYI.has(madde)
-          ? enKotu(acik.map((i) => hazirlikHali(d?.get(i), muafMi(muaf, madde, i))))
-          : hazirlikHali(d?.get(id), muafMi(muaf, madde, null));
+          ? enKotu(acik.map((i) => hazirlikHali(d?.get(i), muafMi(muaf, madde, i) || onayliMi(onay, madde, i, d?.get(i)?.surum))))
+          : hazirlikHali(d?.get(id), muafMi(muaf, madde, null) || hepsiOnayli(onay, madde, acik, d?.get(id)?.surum));
         return { madde, durum, muafTutulur: MUAF_TUTULUR.has(madde), isEmriDuzeyi: IS_EMRI_DUZEYI.has(madde) };
       }),
       muafiyetler: muaf.map((x) => ({ ...x, kisiAdi: adlar.get(x.kisiId) ?? null })),
       isEmirleri: kendi.map((i) => ({
         isEmriId: i.id, opNo: i.opNo, ad: i.ad, bitti: i.durum === 'tamam',
         maddeler: HAZIRLIK_MADDELERI.filter((m) => IS_EMRI_DUZEYI.has(m))
-          .map((madde) => ({ madde, durum: hazirlikHali(durumlar.get(madde)?.get(i.id), muafMi(muaf, madde, i.id)) })),
+          .map((madde) => {
+            const b = durumlar.get(madde)?.get(i.id);
+            return { madde, durum: hazirlikHali(b, muafMi(muaf, madde, i.id) || onayliMi(onay, madde, i.id, b?.surum)) };
+          }),
       })),
     });
   }
@@ -148,3 +171,27 @@ export async function talimatHazirlikDurumlari(db: Db, isEmriIdleri: readonly nu
   return new Map(idler.map((i) => [i, talimatHazirligi(sayilar.get(i))]));
 }
 hazirlikCozucusuKaydet('talimat', talimatHazirlikDurumlari);
+
+// Adım Durumu (2893): her iş emri için madde hâli. Emir düzeyindeki madde (çizim, rota) emrin bilgisini, onayı iş emrinin kaydını
+// alır. "ham" onaysız hâldir: elle onayın neyi açtığını göstermek ve yazmada eskime denetimi için.
+export interface IsEmriMaddeHali { hal: HazirlikHali; ham: HazirlikHali; surum: string | null }
+export async function isEmriHazirliklari(db: Db, uretimEmriId: number, isEmriIdleri: readonly number[]): Promise<Map<number, Map<HazirlikMaddesi, IsEmriMaddeHali>>> {
+  const muaf = await s.muafiyetler(db, uretimEmriId);
+  const onay = await elleOnaylar(db, isEmriIdleri);
+  const sonuc = new Map(isEmriIdleri.map((i) => [i, new Map<HazirlikMaddesi, IsEmriMaddeHali>()]));
+  for (const m of HAZIRLIK_MADDELERI) {
+    const c = cozuculer.get(m);
+    const emirde = !IS_EMRI_DUZEYI.has(m);
+    const durum = c && isEmriIdleri.length > 0 ? await c(db, emirde ? [uretimEmriId] : isEmriIdleri) : null;
+    for (const i of isEmriIdleri) {
+      const b = durum?.get(emirde ? uretimEmriId : i);
+      const muafMu = muafMi(muaf, m, emirde ? null : i) || (emirde && muafMi(muaf, m, i));
+      sonuc.get(i)?.set(m, {
+        hal: hazirlikHali(b, muafMu || onayliMi(onay, m, i, b?.surum)),
+        ham: hazirlikHali(b, muafMu),
+        surum: b?.surum ?? null,
+      });
+    }
+  }
+  return sonuc;
+}

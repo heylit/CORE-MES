@@ -494,8 +494,9 @@ export function planBaslatmaReddi(
 // 2189-1 a: Hazırlık'ta yayınlanmamış (taslak) iş emri paketi başlatılmaz; terminal ekranı taslağı göstermez (tmi-plan.ts `operatoreAcik`),
 // sunucu da aynı kuralla reddeder ki ekranı atlayan istek taslak işi üretime sokmasın. Ayardan bağımsızdır; başlamış işin devamı bakmaz.
 // Paketin durumu yalnız `yayinDenetlenir` doğruysa okunur (istek başına paket okuması pahalıdır).
-export const yayinDenetlenir = (tur: ArkonKayitTuru, satir: Readonly<Record<string, unknown>>, isEmriDurumu: string | null): boolean =>
-  tur === 'events' && satir['state'] === 'running' && paketIsEmri(satir['pkgId']) !== null && isEmriDurumu === 'bekliyor';
+// 2893-2 b: iş emrinde yayın maddesi elle onaylıysa (elleOnayli) taslak paket de başlatılır.
+export const yayinDenetlenir = (tur: ArkonKayitTuru, satir: Readonly<Record<string, unknown>>, isEmriDurumu: string | null, elleOnayli = false): boolean =>
+  !elleOnayli && tur === 'events' && satir['state'] === 'running' && paketIsEmri(satir['pkgId']) !== null && isEmriDurumu === 'bekliyor';
 export const yayinlanmamis = (paketDurumu: unknown): boolean => paketDurumu === 'draft';
 // Hazırlık matrisinde iş emrinin yayını (2227): bütün paketin kaydı varsa o, yoksa bölünmüş işin kayıtlı parçaları; hiç kayıt yoksa
 // TMI taslağıdır, yayınlanmamış.
@@ -781,15 +782,27 @@ export function cizimRevizyonuReddi(dosyalar: readonly { belgeId: number; ozet: 
 // Emrin çizim durumu (Üretim emirleri hazırlık durdurucusu okur; `cnc-kurulum` EmirHazirlikDurumu biçimi). secildi: emrin bir paketinde
 // Çizim Merkezi'nden alınmış çizim var; yok: hiç yok; suruyor: biri yeni revizyona geçti ya da yayından kalktı (paket yenilenmeli);
 // tamam: hepsi yayındaki revizyonda, zaman o paketlerin son değişikliği.
-export interface EmirCizimDurumu { durum: 'yok' | 'suruyor' | 'tamam'; zaman: string | null; secildi: boolean }
+// surum (2893): yayındaki revizyonlar; çizim maddesinin elle onayı bununla yazılır, yeni revizyon yayınlanınca onay geçmez.
+export interface EmirCizimDurumu { durum: 'yok' | 'suruyor' | 'tamam'; zaman: string | null; secildi: boolean; surum?: string }
 export function emirCizimDurumu(
   paketler: readonly { dosyalar: readonly { belgeId: number; ozet: string; ad: string }[]; degisti: string }[], yayinda: ReadonlyMap<number, string | null>,
 ): EmirCizimDurumu {
   const cizimli = paketler.filter((p) => p.dosyalar.length > 0);
   if (cizimli.length === 0) return { durum: 'yok', zaman: null, secildi: false };
-  if (cizimli.some((p) => cizimRevizyonuReddi(p.dosyalar, yayinda) !== null)) return { durum: 'suruyor', zaman: null, secildi: true };
+  const surum = cizimSurumu(cizimli.flatMap((p) => p.dosyalar), yayinda);
+  if (cizimli.some((p) => cizimRevizyonuReddi(p.dosyalar, yayinda) !== null)) return { durum: 'suruyor', zaman: null, secildi: true, surum };
   const zaman = cizimli.map((p) => p.degisti).reduce((a, b) => (Date.parse(b) > Date.parse(a) ? b : a));
-  return { durum: 'tamam', zaman, secildi: true };
+  return { durum: 'tamam', zaman, secildi: true, surum };
+}
+const cizimSurumParcalari = (dosyalar: readonly { belgeId: number }[], yayinda: ReadonlyMap<number, string | null>): string[] =>
+  [...new Set(dosyalar.map((d) => d.belgeId))].sort((a, b) => a - b).map((b) => `${b}@${yayinda.get(b) ?? '-'}`);
+export const cizimSurumu = (dosyalar: readonly { belgeId: number }[], yayinda: ReadonlyMap<number, string | null>): string =>
+  cizimSurumParcalari(dosyalar, yayinda).join(',');
+// Kayıt kapısı (2893-2 b): paketin çizimleri onaylanan sürümdeki revizyonlardaysa elle onay geçer; sürümsüz onay her zaman geçer.
+export function cizimOnayiGecer(onaylanan: string | null, dosyalar: readonly { belgeId: number }[], yayinda: ReadonlyMap<number, string | null>): boolean {
+  if (onaylanan === null) return true;
+  const kume = new Set(onaylanan.split(','));
+  return cizimSurumParcalari(dosyalar, yayinda).every((p) => kume.has(p));
 }
 
 // Ekranda kaçışsız basılan ya da hazır sonuç olarak güvenilen alanların biçimi. Arkon belge gövdesini yorumlamaz ama şu alanlar
