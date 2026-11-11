@@ -862,6 +862,27 @@ export async function uretimYeriDegistir(
   await isEmirleriDegistiBildir(db, { uretimEmriId: id, kisiId });
 }
 
+// 2874-1 a: firması seçilmemiş fason adımın firması, o adım için verilen fason siparişinin tedarikçisidir; sipariş verilirken aynı
+// işlemde yazılır ve üretim yeri değişimi olarak kayda girer. Firması zaten olan, başlamış, gönderilmiş ya da kapalı emrin adımına dokunulmaz
+// (false döner). Tedarikçi fason işaretli değilse sipariş durur: firma uydurulmaz, işaretsiz firmaya fason gönderilmez.
+// Yetki denetlemez: çağıran satın almanın sipariş yazmasıdır.
+export async function fasonFirmasiniSiparistenYaz(db: Db, kisiId: number, isEmriId: number, firmaId: number): Promise<boolean> {
+  const ilk = await s.isEmriBul(db, isEmriId);
+  if (ilk === null || !ilk.fasonFirmasiz) return false;
+  const e = await kilitliUstEmir(db, ilk.uretimEmriId);
+  const isEmri = await s.isEmriBul(db, isEmriId, true);
+  if (isEmri === null || !isEmri.fasonFirmasiz || isEmri.durum !== 'bekliyor' || acikEmirIhlali(e.durum, e.arsiv) !== null) return false;
+  const k = await kaynakCoz(db, { tur: 'fason', id: firmaId });
+  const eski: s.UretimYeriYazisi = {
+    makineId: null, kisiId: null, fasonFirmaId: null, istasyonId: null, ayarSuresiDk: null, birimSureDk: null, terminGun: isEmri.terminGun,
+  };
+  if ((await s.uretimYeriYaz(db, isEmri.id, { ...k, ayarSuresiDk: null, birimSureDk: null, terminGun: isEmri.terminGun })) === null) return false;
+  await s.uretimYeriDegisimiEkle(db, isEmri.id, eski, { fasonFirmaId: k.fasonFirmaId, terminGun: isEmri.terminGun }, kisiId, await s.anAl(db), true);
+  await s.emirSurumunuArtir(db, e.id);
+  await isEmirleriDegistiBildir(db, { uretimEmriId: e.id, kisiId });
+  return true;
+}
+
 /* ---------------- fason (UE3; kullanıcı kararı c: her gidiş ve dönüş ayrı satır) ---------------- */
 
 // 2721 2/3 b: arşive alınan emrin fasondaki parçası açık kalır; yalnız dönüşü yazılır (gidiş ve tamamlama açık emirde).

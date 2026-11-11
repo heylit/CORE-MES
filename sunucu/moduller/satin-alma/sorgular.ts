@@ -1530,6 +1530,17 @@ export function analizTeklifFiyatlari(db: Db, talepIdler: readonly string[]): Pr
 }
 
 // 2426: fason iş emrinin hizmet sipariş satırı (iptal olmayan talep). Birden çoksa teslimi tamamlanmamış en yenisi, hepsi tamamsa en yenisi.
+// 2874-1 a: talebin siparişe geçen fason satırları, bağlı iş emri ve siparişin tedarikçisiyle (kalem bağı ya da satır bağı).
+export function siparisFasonFirmalari(db: Db, talepId: string): Promise<{ isEmriId: number; firmaId: number }[]> {
+  return db.sorgu<{ isEmriId: number; firmaId: number }>(
+    `SELECT DISTINCT COALESCE(s.is_emri_id, k.is_emri_id) AS "isEmriId", q.firma_id AS "firmaId"
+       FROM satin_alma_siparis_satiri s
+       JOIN satin_alma_talep_kalemi k ON k.talep_id = s.talep_id AND k.id = s.kalem_id
+       JOIN satin_alma_teklif q ON q.talep_id = s.talep_id AND q.id = s.teklif_id
+      WHERE s.talep_id = $1 AND COALESCE(s.is_emri_id, k.is_emri_id) IS NOT NULL AND q.firma_id IS NOT NULL
+      ORDER BY 1, 2`,
+    [talepId]);
+}
 export function fasonSiparisSatirlari(db: Db, isEmriIdleri: readonly number[]): Promise<{ isEmriId: number; id: number }[]> {
   if (isEmriIdleri.length === 0) return Promise.resolve([]);
   return db.sorgu<{ isEmriId: number; id: number }>(

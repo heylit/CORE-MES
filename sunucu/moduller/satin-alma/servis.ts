@@ -24,7 +24,7 @@ import { firmaAra, firmaOzeti, firmaOzetleri, tedarikciOlabilirMi, tumFirmalar, 
 import { kullanilanKaliteler, malzemeAra, malzemeMaliyetBilgileri, malzemeOzetleri, malzemeSatinAlmaAyrintilari } from '../malzemeler/disari.ts';
 import { belgeAcVeBagla, kaydaBagliBelgeler, kayitlaraBagliBelgeler, kayittakiBelgeDosyasi, kayittanKaldir, type BagliBelge } from '../belge-merkezi/disari.ts';
 import {
-  acikEmirler, dieAc, dieListesi, dieOku, emirDurumlari, emirlerinProjeleri, emirNolari, fasonGecmisi, fasonGonderimleri, fasonIsEmirleri, isEmriOzetleri,
+  acikEmirler, dieAc, dieListesi, dieOku, emirDurumlari, emirlerinProjeleri, emirNolari, fasonFirmasiniSiparistenYaz, fasonGecmisi, fasonGonderimleri, fasonIsEmirleri, isEmriOzetleri,
 } from '../uretim-emirleri/disari.ts';
 import { operasyonTipleri } from '../istasyonlar/disari.ts';
 import { bildirimGonder, bildirimKapat } from '../bildirim/disari.ts';
@@ -581,6 +581,16 @@ export async function onTalepGeriAl(db: Db, id: number): Promise<{ tamam: true }
   return { tamam: true };
 }
 
+// 2874-1 a: sipariş verilince firması seçilmemiş fason adımın firması siparişin tedarikçisidir. Bir adıma iki tedarikçiden sipariş
+// verildiyse firma seçilmez (hangisi olduğu uydurulmaz); adım "firma bekleniyor" kalır, emir ekranından seçilir.
+async function fasonFirmalariniYaz(db: Db, k: Kullanici, talepId: string): Promise<void> {
+  const satirlar = await s.siparisFasonFirmalari(db, talepId);
+  for (const x of satirlar) {
+    if (satirlar.filter((y) => y.isEmriId === x.isEmriId).length !== 1) continue;
+    await fasonFirmasiniSiparistenYaz(db, k.id, x.isEmriId, x.firmaId);
+  }
+}
+
 // 898 a: talebe çevrilen fason adım açık, bağsız olmalı; denetim ile yazma arası iş emri başına kilitlidir. Uygulanan kart fiziksel karttır.
 async function hizliBaglariDenetle(db: Db, g: HizliAcYazimi): Promise<void> {
   const isler = g.kalemler.flatMap((x) => (x.isEmriId === null ? [] : [x.isEmriId]));
@@ -782,6 +792,7 @@ export async function talepKaydet(db: Db, k: Kullanici, id: string, g: TalepKayd
   if (siparisteMi(yazilacak.durum) && !siparisteMi(eski.durum)) {
     await s.siparisleriLogoyaIsaretle(db, id, ILETILER.logoKayitsizTedarikci);
     await varsayilanPlanlariYaz(db, k, id);
+    await fasonFirmalariniYaz(db, k, id);
   } else if (siparisteMi(yazilacak.durum)) await otomatikPlanlariYenile(db, k, id);
   if (yazilacak.durum === 'iptal' && eski.durum !== 'iptal') {
     await s.siparisIptaliniLogoyaIsaretle(db, id);
