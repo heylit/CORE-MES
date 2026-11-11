@@ -606,6 +606,18 @@ namespace LogoYardimcisi
             return f == null ? new List<FisSatiri>() : f.Satirlar.Select(Satiri).ToList();
         }
 
+        // Doluyken satır birimi okuması bu hatayı atar (SQL hatası benzetimi).
+        public Exception BirimOkumaHatasi;
+
+        public Dictionary<int, string> SiparisSatirBirimleri(int fisRef)
+        {
+            if (BirimOkumaHatasi != null) throw BirimOkumaHatasi;
+            var f = Fisler.FirstOrDefault(x => x.Ref == fisRef);
+            var d = new Dictionary<int, string>();
+            if (f != null) foreach (var s in f.Satirlar) if (!string.IsNullOrEmpty(s.Birim)) d[s.Ref] = s.Birim;
+            return d;
+        }
+
         public SiparisIcerigi SatinAlmaSiparisiIcerigi(string no)
         {
             Cagrilar.Add("SiparisIcerigi " + no);
