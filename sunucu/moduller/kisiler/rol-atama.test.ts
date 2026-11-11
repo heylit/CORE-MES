@@ -347,7 +347,7 @@ describe('rol atama (gerçek PostgreSQL, gerçek giriş)', () => {
     assert.deepEqual(alma.json(), { kod: 'YETKI_YOK', mesaj: ILETILER.bayrakliYetkisiz });
     const yoneticiCerezi = await o.cerez('yonetici');
     assert.deepEqual(await roller(yoneticiCerezi, hedef), ['Depo']);
-    assert.deepEqual(await roller(yoneticiCerezi, baskasi), ['Yönetici']);
+    assert.deepEqual(await roller(yoneticiCerezi, baskasi), ['Sistem Yöneticisi']);
 
     // Bayraksız rol aynı kişiyle atanır ve alınır.
     const operatorRolu = await o.rolId('operator');

@@ -11,7 +11,7 @@ export interface BeklenenRol {
 }
 
 // Bayraklı rol satır taşımaz, kayıtlı her işlemi alır.
-export const YONETICI_ROLU = { kod: 'yonetici', ad: 'Yönetici' } as const;
+export const YONETICI_ROLU = { kod: 'yonetici', ad: 'Sistem Yöneticisi' } as const;
 
 export const ROL_MATRISI = {
   bakim: {

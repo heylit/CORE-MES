@@ -191,7 +191,7 @@ export function PersonelFormPenceresi({ acik, depo, motor, kayit, bolum, onDolu 
               etiket="Rol" required value={rolId === null ? '' : String(rolId)} bosSecenek={roller.data ? 'Seçiniz' : 'Yükleniyor'}
               secenekler={(roller.data?.roller ?? []).map((r) => ({ deger: String(r.id), baslik: r.ad }))}
               onChange={(o) => { rolSecimiYaz(o.target.value === '' ? null : Number(o.target.value)); }}
-              ipucu="Hesap kayıtla açılır; kullanıcı adı ve geçici PIN sistemce verilir. Yetki dağıtan roller burada yoktur."
+              ipucu="Hesap kayıtla açılır; kullanıcı adı ve geçici PIN sistemce verilir. Yetki dağıtan roller burada yoktur. Sistem Yöneticisi rolü Kişiler > Personel > Roller'den, yalnız Sistem Yöneticisi tarafından verilir."
             />
             <Secim
               etiket="İlk istasyon" value={secilenIstasyon === null ? '' : String(secilenIstasyon)}

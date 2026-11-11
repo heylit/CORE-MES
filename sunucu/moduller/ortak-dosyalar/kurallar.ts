@@ -13,7 +13,7 @@ export const ILETILER = {
   klasorAdiVar: 'Bu klasörde aynı adlı bir klasör var.',
   dosyaAdiVar: 'Bu klasörde aynı adlı etkin bir dosya var; önce onu arşive kaldırın ya da yeni sürüm yükleyin.',
   kokOzelOlmali: 'Üst düzey klasör yetkisini kendisi taşır; üst klasöre bağlanamaz.',
-  yoneticiSatiri: 'Yönetici rolü her klasörü yönetir; satırı yazılmaz.',
+  yoneticiSatiri: 'Sistem Yöneticisi rolü her klasörü yönetir; satırı yazılmaz.',
   rolYok: 'Rol bulunamadı.',
   zatenArsivde: 'Dosya zaten arşivde.',
   arsivdeDegil: 'Dosya arşivde değil.',
