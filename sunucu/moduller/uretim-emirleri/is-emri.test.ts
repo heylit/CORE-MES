@@ -670,6 +670,9 @@ describe('uretim-emirleri iş emirli emir (gerçek PostgreSQL)', () => {
     };
     const belgeler: number[] = [];
     try {
+      // Resmi bağlanmamış üründe kartta revizyon yazılı olsa da kod basılmaz (ekran da göstermez; Kalite N1, Atölye TAMAM).
+      await kartRev('C');
+      assert.equal((await kart(id)).govde.revizyon, null, 'resimsiz üründe kartın revizyonu basılmaz');
       // Kalite K1: yayına girmiş resim yokken seçim 3B modelin taslağına düşer; taslağın anteti (X9) kâğıda basılmaz.
       belgeler.push(await resimEkle('3b-model', 'X9', false));
       await kartRev('C');
