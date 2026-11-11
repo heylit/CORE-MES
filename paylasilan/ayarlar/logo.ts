@@ -159,4 +159,47 @@ export const LOGO_AYARLARI = {
     baslik: 'Logo: malzeme adı güncellemesi',
     aciklama: 'Açıkken Logo\'ya gitmiş malzeme ve hizmet kartlarının değişen adı Logo\'ya gönderilir. Kapalıyken güncellemeler "bekliyor" olarak birikir; kart açma etkilenmez. "Logo bağlantısı" da açık olmalı.',
   },
+  // 2971 (kullanıcı 11.11.2026 14:47Z): yeni eklenen her Logo işi kendi anahtarıyla, varsayılan kapalı gelir; gönderim anahtarı açık olsa da kendiliğinden başlamaz.
+  'logo.siparis-bekletme-gonderimi': {
+    modul: 'logo',
+    tur: 'boolean',
+    varsayilan: false,
+    baslik: 'Logo: siparişi Logo\'da beklet',
+    aciklama: 'Açıkken satın alma siparişindeki "Logo\'da beklet" ve "Logo\'da serbest bırak" Logo\'daki sipariş durumunu değiştirir. "Logo: satın alma gönderimi" de açık olmalı.',
+  },
+  'logo.talep-iptali-gonderimi': {
+    modul: 'logo',
+    tur: 'boolean',
+    varsayilan: false,
+    baslik: 'Logo: talep fişi iptali',
+    aciklama: 'Açıkken CORE\'da iptal edilen talebin Logo\'daki fişi de kapanır, iptal geri alınınca yeniden açılır. "Logo: satın alma gönderimi" de açık olmalı.',
+  },
+  'logo.teklif-kapatma-gonderimi': {
+    modul: 'logo',
+    tur: 'boolean',
+    varsayilan: false,
+    baslik: 'Logo: satış teklifi kapatma',
+    aciklama: 'Açıkken reddedilen teklif ve yeni sürümü gelen teklifin eskisi Logo\'da kapanır. "Logo: satış gönderimi" de açık olmalı.',
+  },
+  'logo.malzeme-hareketleri-okumasi': {
+    modul: 'logo',
+    tur: 'boolean',
+    varsayilan: false,
+    baslik: 'Logo: malzeme hareketleri okuması',
+    aciklama: 'Açıkken malzeme kartında Logo\'daki giriş ve çıkışlar istenince okunur. "Logo bağlantısı" da açık olmalı.',
+  },
+  'logo.son-alis-fiyatlari-okumasi': {
+    modul: 'logo',
+    tur: 'boolean',
+    varsayilan: false,
+    baslik: 'Logo: son alış fiyatları okuması',
+    aciklama: 'Açıkken malzemenin son alış faturası fiyatları istenince okunur; yalnız fiyat görene açılır. "Logo bağlantısı" da açık olmalı.',
+  },
+  'logo.sozluk-okumasi': {
+    modul: 'logo',
+    tur: 'boolean',
+    varsayilan: false,
+    baslik: 'Logo: ödeme planı, masraf merkezi, proje, kur okuması',
+    aciklama: 'Açıkken formlardaki seçim listeleri ve günün kurları Logo\'dan okunur. "Logo bağlantısı" da açık olmalı.',
+  },
 } as const satisfies Record<string, AyarTanimi>;

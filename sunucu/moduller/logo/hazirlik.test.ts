@@ -30,6 +30,18 @@ describe('LOGO-H1 akış durumu', () => {
     assert.equal(logoAkisDurumu({ kaynak: 'baglanmadi', ayarlar: ['logo.satin-alma-gonderimi'] }, { ortamVar: true, ayarlar: acik }), 'baglanmadi');
     assert.equal(logoAkisDurumu({ kaynak: 'kodda-yok', ayarlar: [] }, { ortamVar: true, ayarlar: acik }), 'kodda-yok');
   });
+  test('2971: yeni Logo işi kendi anahtarı kapalıyken, gönderim anahtarı açık olsa da çalışmaz; yeni anahtarların hepsi varsayılan kapalı', () => {
+    const iptal = { kaynak: 'bagli' as const, ayarlar: [...LOGO_AKISLARI.find((x) => x.anahtar === 'talep-iptali')!.ayarlar] };
+    const temel = { 'logo.baglanti': true, 'logo.satin-alma-gonderimi': true };
+    assert.equal(logoAkisDurumu(iptal, { ortamVar: true, ayarlar: temel }), 'kapali');
+    assert.equal(logoAkisDurumu(iptal, { ortamVar: true, ayarlar: { ...temel, 'logo.talep-iptali-gonderimi': true } }), 'hazir');
+    const yeniler = LOGO_AKISLARI.filter((a) => a.kaynak === 'kodda-yok');
+    assert.equal(yeniler.length, 6);
+    for (const a of yeniler) {
+      assert.equal(a.ayarlar.length, 1, `${a.anahtar} yalnız kendi anahtarını taşır`);
+      assert.equal((LOGO_AYARLARI as Record<string, { varsayilan: unknown }>)[a.ayarlar[0]!]?.varsayilan, false, `${a.ayarlar[0]} varsayılan kapalı`);
+    }
+  });
   test('iki anahtarlı akışta (hizmet kartı) biri açıksa yeter', () => {
     const t = LOGO_AKISLARI.find((a) => a.anahtar === 'hizmet-karti');
     assert.ok(t);
@@ -164,6 +176,9 @@ describe('Logo hazırlık uçları (gerçek PostgreSQL)', () => {
       ['malzeme-hareketleri', 'siparis-durumu', 'son-alis-fiyatlari', 'sozlukler', 'talep-iptali', 'teklif-kapatma'], 'yalnız planlanan Logo işleri kodda yok görünür');
     assert.deepEqual(['logo.mal-kabul-okumasi', 'logo.liste-okumasi', 'logo.fatura-okumasi', 'logo.malzeme-fisi-gonderimi', 'logo.malzeme-guncelleme-gonderimi']
       .map((k) => h.ayarlar.find((a) => a.anahtar === k)?.acik), [false, false, false, false, false], 'yeni akışlar kapalı gelir');
+    const yeniIsler = ['logo.siparis-bekletme-gonderimi', 'logo.talep-iptali-gonderimi', 'logo.teklif-kapatma-gonderimi', 'logo.malzeme-hareketleri-okumasi',
+      'logo.son-alis-fiyatlari-okumasi', 'logo.sozluk-okumasi'];
+    assert.deepEqual(yeniIsler.map((k) => h.ayarlar.find((a) => a.anahtar === k)?.acik), yeniIsler.map(() => false), '2971: yeni Logo işleri kapalı gelir');
     assert.equal(h.akislar.find((a) => a.anahtar === 'mal-kabul')?.hatali, null, 'okuma akışının hatalı sayısı yoktur');
     assert.equal(h.akislar.find((a) => a.anahtar === 'mal-kabul')?.gonderilen, 0);
     assert.ok(h.ayarlar.some((a) => a.anahtar === 'logo.baglanti' && a.acik === false));
