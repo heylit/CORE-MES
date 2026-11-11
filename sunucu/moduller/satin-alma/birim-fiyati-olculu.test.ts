@@ -4,12 +4,14 @@ import { birimFiyati, birimKarsiligi, stokBirimiBasinaKg } from './kurallar.ts';
 
 // 2891-1: birim_agirlik_kg bütün parça ya da ambalaj başınadır; uzunluk ve alan stoklu kartta kg fiyatından birim fiyat çıkmaz.
 describe('2891-1: stok biriminin bir birimi kaç kg (saf)', () => {
-  test('kg 1; adet, rulo ve birimsiz kartta parça ağırlığı; ağırlıksız ya da sıfır null', () => {
+  test('kg 1; adet ve rulo kartta parça ağırlığı; stok birimi boş, ağırlıksız ya da sıfır null', () => {
     assert.equal(stokBirimiBasinaKg('kg', null), 1);
     assert.equal(stokBirimiBasinaKg(' KG ', 3), 1);
     assert.equal(stokBirimiBasinaKg('adet', 2.5), 2.5);
     assert.equal(stokBirimiBasinaKg('rulo', 12.5), 12.5);
-    assert.equal(stokBirimiBasinaKg(null, 4), 4);
+    assert.equal(stokBirimiBasinaKg(null, 4), null);
+    assert.equal(stokBirimiBasinaKg('  ', 4), null);
+    assert.equal(birimFiyati('50', null, 4), null);
     assert.equal(stokBirimiBasinaKg('adet', null), null);
     assert.equal(stokBirimiBasinaKg('adet', 0), null);
   });
@@ -27,5 +29,7 @@ describe('2891-1: stok biriminin bir birimi kaç kg (saf)', () => {
     assert.equal(birimKarsiligi('4', 'm', { stokBirimi: 'm', birimKg: 2.5 }), null);
     assert.equal(birimKarsiligi('4', 'kg', { stokBirimi: 'kg', birimKg: 1 }), null);
     assert.equal(birimKarsiligi('4', 'adet', { stokBirimi: null, birimKg: 2.5 }), null);
+    // Test N2: stok birimi boş kartta kg girişi de karşılık vermez (null birim üzerinde patlamaz).
+    assert.equal(birimKarsiligi('1', 'kg', { stokBirimi: null, birimKg: 4 }), null);
   });
 });

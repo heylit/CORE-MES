@@ -1004,7 +1004,8 @@ const birimAdi = (b: string | null): string => (b ?? '').trim().toLocaleLowerCas
 export function stokBirimiBasinaKg(stokBirimi: string | null, birimKg: number | null): number | null {
   const stok = birimAdi(stokBirimi);
   if (stok === 'kg') return 1;
-  if (OLCULU_STOK_BIRIMLERI.includes(stok)) return null;
+  // Stok birimi bilinmeyen kartta ağırlığın neye göre olduğu bilinmez (Maliyet 2891-1 notu).
+  if (stok === '' || OLCULU_STOK_BIRIMLERI.includes(stok)) return null;
   return birimKg === null || !(birimKg > 0) ? null : birimKg;
 }
 export function birimKarsiligi(miktar: string | null, birim: string, kart: { stokBirimi: string | null; birimKg: number | null } | undefined): BirimKarsiligi | null {

@@ -512,5 +512,5 @@ Kullanıcı: "yaz" (13.10.2026). Finans ve stok tarafı aynı dalda (yalnız yen
 
 - `birim_agirlik_kg` bütün parça ya da ambalaj başınadır (2871 Maliyet E1). Önce birim fiyat (SAT-77) metre ya da metrekare stoklu kartta kg fiyatını
   bu ağırlıkla çarpıyordu; stok değeri, plan birim fiyatı ve proje maliyeti yanlış olabiliyordu. Artık tek kural `stokBirimiBasinaKg` (kurallar.ts,
-  disari.ts ile dışarı verilir): kg 1; OLCULU_STOK_BIRIMLERI boş; öteki birim parça ağırlığı. birimFiyati, birimKarsiligi (SAT-78, davranış aynı) ve
+  disari.ts ile dışarı verilir): kg 1; stok birimi boş ya da OLCULU_STOK_BIRIMLERI ise boş; öteki birim parça ağırlığı. birimFiyati, birimKarsiligi (SAT-78, davranış aynı) ve
   proje-maliyet bileşeninin kg başına değeri bunu kullanır. Boş birim fiyat fiyatsız sayılır (sıfır uydurulmaz). Kayıtlı veri, göç, uç, yetki değişmedi.
