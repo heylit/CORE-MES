@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import type { AdimDurumuCevabi, AdimliListeCevabi, HazirlikCevabi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { AdimDurumu } from './AdimDurumu.tsx';
+import { UretimEmirleri } from './UretimEmirleri.tsx';
 import { OKUYUCU, ac, json, sunucuKur } from './test-ortak.tsx';
 
 const EMIR = {
@@ -37,6 +38,20 @@ const ekran = [{ yol: '/adim-durumu', ekran: AdimDurumu }];
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
 describe('Adım Durumu (2893, düzen 2955)', () => {
+  it('Üretim Emirleri listesi önbellekteyken açılır; iki liste birbirinin cevabını okumaz', async () => {
+    const IZLEME = {
+      id: 9, emirNo: 'EM-9', durum: 'planli', parcaNo: 'DNM-009', parcaAd: 'Deneme burç', adet: 5, istasyon: null, acan: null,
+      acilma: '2026-11-11T08:00:00+00:00', baslama: null, bitis: null, iptal: null, saglamAdet: null,
+    };
+    sunucuKur({ ...OKUYUCU, islemler: [...OKUYUCU.islemler, 'sayfa.adim-durumu'] }, { ...yollar, 'GET /uretim-emirleri': () => json(200, { emirler: [IZLEME] }) });
+    const Ikisi = () => <><UretimEmirleri /><AdimDurumu /></>;
+    ac([{ yol: '/ikisi', ekran: Ikisi }], '/ikisi');
+    const liste = await screen.findByRole('list', { name: 'Açık emirler' });
+    expect(within(liste).getByText('Deneme flanş')).toBeTruthy();
+    expect(within(liste).queryByText('EM-9')).toBeNull();
+    expect(await screen.findByText('EM-9')).toBeTruthy();
+  });
+
   it('açık emirler listede; seçilen emrin adımları rota sırasıyla, sayaç, neden ve yalnız sorunlu maddelerle', async () => {
     sunucuKur({ ...OKUYUCU, islemler: [...OKUYUCU.islemler, 'sayfa.adim-durumu'] }, yollar);
     ac(ekran, '/adim-durumu?emir=5');
