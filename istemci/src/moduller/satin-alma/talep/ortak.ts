@@ -46,3 +46,21 @@ export const ADIM_SIRASI: Record<Talebim['durum'], number | null> = {
   taslak: 0, teklif_isteniyor: 1, degerlendirme: 1, onayda: 2, siparis_verildi: 3, teslim_alindi: 5, iptal: null,
 };
 export const gunYaz = (t: string | null) => (t === null ? null : new Date(`${t.slice(0, 10)}T00:00:00`).toLocaleDateString('tr-TR'));
+
+// SAT-78 (2871): kg ile stok birimi karşılığı ekranda yaklaşık gösterilir; hesap sunucunun (Taleplerim) ya da kartın birim ağırlığıyladır.
+// SAT-78: birim ağırlık parça ya da ambalaj başına kg'dır; uzunluk ve alan stok biriminde metre ağırlığı gerekir, yoktur (sunucu kurallar.ts ile aynı liste).
+const OLCULU_STOK_BIRIMLERI: readonly string[] = ['mm', 'cm', 'm', 'mt', 'metre', 'mm2', 'mm²', 'cm2', 'cm²', 'm2', 'm²', 'metrekare'];
+// 0,01'in altı "≈ 0" yazılmaz; küçük sarfta yanıltır.
+const sayiYaz = (n: number) => (n > 0 && n < 0.01 ? '< 0,01' : n.toLocaleString('tr-TR', { maximumFractionDigits: 2 }));
+const yaklasik = (n: number) => { const y = sayiYaz(n); return y.startsWith('<') ? y : `≈ ${y}`; };
+export const karsilikYaz = (c: { miktar: string; birim: string } | null | undefined): string | null =>
+  (c == null ? null : `${yaklasik(Number(c.miktar))} ${c.birim}`);
+// Yeni talep formu: kartın stok biriminde girilen miktarın kg karşılığı ve birim ağırlık. Ağırlık bilinmiyorsa ya da birim kg ise yok.
+export function kartKarsiligi(kart: { birim: string | null; stokBirimi?: string | null; birimKg?: number | null }, miktar: string | null): string | null {
+  const stok = (kart.stokBirimi ?? '').trim();
+  const kucuk = stok.toLocaleLowerCase('tr-TR');
+  if (kart.birimKg == null || !(kart.birimKg > 0) || kucuk === '' || kucuk === 'kg' || OLCULU_STOK_BIRIMLERI.includes(kucuk)) return null;
+  const birim = `1 ${stok} ${yaklasik(kart.birimKg)} kg`;
+  const ayni = (kart.birim ?? '').trim().toLocaleLowerCase('tr-TR') === kucuk;
+  return miktar === null || !ayni ? birim : `${yaklasik(Number(miktar) * kart.birimKg)} kg (${birim})`;
+}

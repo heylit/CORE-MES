@@ -83,3 +83,4 @@
   .sa-ot-eylem { grid-column: auto; flex-wrap: nowrap; }
   .sa-ot-yoksay .sa-ot { grid-template-columns: minmax(0, 1fr) auto; }
 }
+.sa-talep-duzenle { display: flex; justify-content: flex-end; padding-top: var(--b-2); }

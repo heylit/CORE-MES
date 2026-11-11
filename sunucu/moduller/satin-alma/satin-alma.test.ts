@@ -381,7 +381,8 @@ describe('satin-alma sürüm 6 (gerçek PostgreSQL)', () => {
     assert.deepEqual([tam.teklifler.map((q) => q.id), tam.notlar], [[a.id], 'Deneme düzeltme']);
     // Kart arama, katalog kaydı ve menü sayaçları fiyat, tedarikçi ve ayar taşımaz.
     const sec = tamam<MalzemeSecenekleriCevabi>(await istek(c.talep, 'GET', '/satin-alma-malzeme-secenekleri?ara=HM-SAT'));
-    assert.deepEqual(Object.keys(sec.malzemeler[0]!).sort(), ['ad', 'birim', 'katalogId', 'kategori', 'kod', 'no']);
+    // SAT-78 (2871): stok birimi ve birim ağırlık kartın fiziksel bilgisidir, fiyat değildir.
+    assert.deepEqual(Object.keys(sec.malzemeler[0]!).sort(), ['ad', 'birim', 'birimKg', 'katalogId', 'kategori', 'kod', 'no', 'stokBirimi']);
     const kat = tamam<KatalogKaydi>(await istek(c.talep, 'POST', '/satin-alma-katalogu/kaydet', {
       id: randomUUID(), malzemeNo: await kartNo('HM-SAT-00002'), ozellik: '', notlar: '', takmaAdlari: [], surum: null,
     }));

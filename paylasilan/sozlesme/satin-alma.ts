@@ -493,6 +493,8 @@ export const malzemeSecenekleriSorgusu = z.object({ ara: z.string().trim().max(8
 export const malzemeSecenekleriCevabi = z.object({
   malzemeler: z.array(z.object({
     no: z.number().int(), kod: z.string(), ad: z.string(), birim: z.string().nullable(), kategori: z.string().nullable(), katalogId: uuid.nullable(),
+    // 2871: hammadde kartının stok birimi başına kg'ı (kart ekranının yoğunluk ve ölçüden hesapladığı); bilinmiyorsa null.
+    stokBirimi: z.string().nullable().optional(), birimKg: z.number().nullable().optional(),
   })),
 });
 
@@ -531,9 +533,25 @@ export const talebimSemasi = z.object({
   // 898 a: fason ön talepten açılan talep "fason", gerisi "elle". Kalemde uygulanan parça ("kod · ad") ve fason adım ("emir no · Op n").
   kaynak: z.enum(['elle', 'fason']),
   birlesme: birlesmeSemasi.nullable().optional(),
+  // 2871-1 a: sahibi teklif istenmeden önce (taslak) düzenler; sürüm ve açıklama düzenleme formu içindir.
+  surum: z.number().int().optional(),
+  aciklama: z.string().optional(),
+  duzenlenebilir: z.boolean().optional(),
   kalemler: z.array(z.object({
+    id: uuid.optional(), aciklama: z.string().optional(),
     ad: z.string(), miktar: z.string().nullable(), birim: z.string(), kartBekliyor: z.boolean(), uygulanan: z.string().nullable(), fasonAdim: z.string().nullable(),
+    // 2871: kg ile kartın stok birimi arasındaki karşılık (kartın birim ağırlığıyla); hesaplanamıyorsa null, uydurulmaz.
+    karsilik: z.object({ miktar: z.string(), birim: z.string() }).nullable().optional(),
   })),
+});
+// 2871-1 a: talep edenin kendi taslağını düzenlemesi. Var olan kalem kimliğiyle gelir (yalnız miktar ve açıklama değişir); kimliksiz kalem
+// yeni kalemdir (karttan ya da adıyla); gelmeyen kalem çıkar. Kişi, durum, teklif ve fiyat alanı yoktur.
+export const talebimiDuzenleGovdesi = z.object({
+  ihtiyacTarihi: tarih.nullable().prefault(null),
+  aciklama: metin(4000),
+  kalemler: z.array(hizliKalemSemasi.pick({ malzemeNo: true, ad: true, birim: true, miktar: true, aciklama: true })
+    .extend({ id: uuid.nullable().prefault(null) })).min(1, 'En az bir kalem girin.').max(50),
+  ...beklenenSurum,
 });
 export const taleplerimSorgusu = z.object({ sinir: z.coerce.number<number>().int().min(1).max(500).prefault(10) });
 export const taleplerimCevabi = z.object({ talepler: z.array(talebimSemasi), toplam: z.number().int() });
@@ -626,6 +644,7 @@ export type HizliAcYazimi = z.output<typeof hizliAcGovdesi>;
 export type HizliAcGovdesi = z.input<typeof hizliAcGovdesi>;
 export type HizliKalem = z.output<typeof hizliKalemSemasi>;
 export type Talebim = z.output<typeof talebimSemasi>;
+export type TalebimiDuzenleYazimi = z.output<typeof talebimiDuzenleGovdesi>;
 export type TaleplerimCevabi = z.output<typeof taleplerimCevabi>;
 
 // Ekranın tipli çağrısı (istemci/src/ortak/veri/uc-cagrisi.ts).
@@ -644,6 +663,7 @@ export interface SatinAlmaUclari {
   'POST /satin-alma-on-talepleri/yoksay': { govde: z.input<typeof onTalepYoksayGovdesi>; cevap: { tamam: true } };
   'POST /satin-alma-on-talepleri/geri-al': { govde: z.input<typeof onTalepGeriAlGovdesi>; cevap: { tamam: true } };
   'POST /satin-alma-talepleri/:id/kaydet': { govde: z.input<typeof talepKaydetGovdesi>; cevap: Talep };
+  'POST /satin-alma-talepleri/:id/talebimi-duzenle': { govde: z.input<typeof talebimiDuzenleGovdesi>; cevap: Talebim };
   'POST /satin-alma-talepleri/:id/iptali-geri-al': { govde: z.input<typeof iptaliGeriAlGovdesi>; cevap: IptaliGeriAlCevabi };
   'POST /satin-alma-talepleri/birlestir': { govde: z.input<typeof talepBirlestirGovdesi>; cevap: Talep };
   'POST /satin-alma-talepleri/:id/ayir': { govde: z.input<typeof talepAyirGovdesi>; cevap: Talep };

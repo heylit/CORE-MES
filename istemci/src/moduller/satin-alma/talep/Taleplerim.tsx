@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import type { Talebim } from '#paylasilan/sozlesme/satin-alma.ts';
 import { Dugme, DurumKutusu, Girdi, Kart, Rozet, Simge } from '../../../ortak/arayuz/index.ts';
-import { ADIMLAR, ADIM_SIRASI, DURUM, KAYNAK, SURE, anahtarlar, cagri, gunYaz } from './ortak.ts';
+import { ADIMLAR, ADIM_SIRASI, DURUM, KAYNAK, SURE, anahtarlar, cagri, gunYaz, karsilikYaz } from './ortak.ts';
 import './talep.css';
 
 const SON = 10;
@@ -31,7 +31,7 @@ function Adimlar({ t }: { t: Talebim }) {
   );
 }
 
-function Satir({ t, tam }: { t: Talebim; tam: boolean }) {
+function Satir({ t, tam, duzenle }: { t: Talebim; tam: boolean; duzenle: ((t: Talebim) => void) | undefined }) {
   const [acik, acikYaz] = useState(false);
   const d = DURUM[t.durum];
   const bekleyen = t.kalemler.filter((k) => k.kartBekliyor).length;
@@ -47,7 +47,7 @@ function Satir({ t, tam }: { t: Talebim; tam: boolean }) {
       </div>
       <div><b>{t.baslik}</b></div>
       <div className="sa-talep-not">
-        {tam ? `${t.kalemler.length} kalem` : t.kalemler.map((x) => `${x.ad}${x.miktar === null ? '' : ` ${x.miktar} ${x.birim}`}`).join(', ')}
+        {tam ? `${t.kalemler.length} kalem` : t.kalemler.map((x) => `${x.ad}${x.miktar === null ? '' : ` ${x.miktar} ${x.birim}`}${x.karsilik ? ` (${karsilikYaz(x.karsilik)})` : ''}`).join(', ')}
         {t.ihtiyacTarihi && <> · istenen {gunYaz(t.ihtiyacTarihi)}</>}
         {t.uretimEmriNo && <> · üretim emri {t.uretimEmriNo}</>}
       </div>
@@ -66,6 +66,7 @@ function Satir({ t, tam }: { t: Talebim; tam: boolean }) {
             <li key={i}>
               <span>{x.ad}</span>
               <span className="sa-talep-no">{x.miktar === null ? '—' : `${x.miktar} ${x.birim}`}</span>
+              {x.karsilik && <span className="sa-talep-not">{karsilikYaz(x.karsilik)}</span>}
               {(x.uygulanan || x.fasonAdim) && (
                 <span className="sa-talep-not">{[x.uygulanan && `Parça: ${x.uygulanan}`, x.fasonAdim && `Fason: ${x.fasonAdim}`].filter(Boolean).join(' · ')}</span>
               )}
@@ -73,13 +74,19 @@ function Satir({ t, tam }: { t: Talebim; tam: boolean }) {
           ))}
         </ul>
       )}
+      {acik && t.duzenlenebilir && duzenle && (
+        <div className="sa-talep-duzenle"><Dugme simge="edit" onClick={() => duzenle(t)}>Düzenle</Dugme></div>
+      )}
     </li>
   );
 }
 
 // Kişinin kendi talepleri ve durumu (kart #375); fiyat, teklif ve tedarikçi sunucudan zaten gelmez. Ana sayfada son on talep;
 // Taleplerim sayfasında (898 a) arama, durum süzgeci, ilerleme ve kalem ayrıntısıyla.
-export function Taleplerim({ tam = false, suzgec, suzgecYaz }: { tam?: boolean; suzgec?: DurumSuzgeci; suzgecYaz?: (s: DurumSuzgeci) => void } = {}) {
+// 2871-1 a: `duzenle` verilirse teklif istenmemiş kendi talebinin ayrıntısında "Düzenle" çıkar.
+export function Taleplerim({ tam = false, suzgec, suzgecYaz, duzenle }: {
+  tam?: boolean; suzgec?: DurumSuzgeci; suzgecYaz?: (s: DurumSuzgeci) => void; duzenle?: (t: Talebim) => void;
+} = {}) {
   const [hepsi, hepsiYaz] = useState(false);
   const [ara, araYaz] = useState('');
   const [yerelSuzgec, yerelSuzgecYaz] = useState<DurumSuzgeci>('acik');
@@ -111,7 +118,7 @@ export function Taleplerim({ tam = false, suzgec, suzgecYaz }: { tam?: boolean; 
         : liste.isError ? <DurumKutusu durum="hata" mesaj="Talepler okunamadı." yenile={() => void liste.refetch()} />
           : liste.data.talepler.length === 0 ? <DurumKutusu durum="bos" mesaj="Henüz talebiniz yok." />
             : gorunen.length === 0 ? <DurumKutusu durum="bos" mesaj="Bu süzgeçle talep yok." />
-              : <ul className="sa-talep-liste">{gorunen.map((t) => <Satir key={t.id} t={t} tam={tam} />)}</ul>}
+              : <ul className="sa-talep-liste">{gorunen.map((t) => <Satir key={t.id} t={t} tam={tam} duzenle={duzenle} />)}</ul>}
     </Kart>
   );
 }

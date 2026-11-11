@@ -1,11 +1,11 @@
 import { useEffect, useId, useRef, useState, type KeyboardEvent } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { HizliAcGovdesi, MalzemeSecenekleriCevabi, OnTalep, TalepTuru } from '#paylasilan/sozlesme/satin-alma.ts';
+import type { HizliAcGovdesi, MalzemeSecenekleriCevabi, OnTalep, Talebim, TalebimiDuzenleYazimi, TalepTuru } from '#paylasilan/sozlesme/satin-alma.ts';
 import { CokSatir, Dugme, Girdi, Kart, Rozet, Secim, useBildirim } from '../../../ortak/arayuz/index.ts';
 import { ApiHatasi } from '../../../ortak/veri/api.ts';
 import { BELIRSIZ_MIKTAR, belirsizMiktarVar, miktarGirdisi } from '../../../ortak/veri/miktar.ts';
 import { tekrarKorumaliGonder, yeniIstekKimligi } from '../../../ortak/veri/istek-kimligi.ts';
-import { KART_SAYFASI, SURE, anahtarlar, cagri } from './ortak.ts';
+import { KART_SAYFASI, SURE, anahtarlar, cagri, kartKarsiligi } from './ortak.ts';
 import './talep.css';
 
 type KartSecenegi = MalzemeSecenekleriCevabi['malzemeler'][number];
@@ -16,10 +16,16 @@ interface Uygulanan { no: number; kod: string; ad: string }
 interface KalemTaslagi {
   anahtar: string; kart: KartSecenegi | null; serbest: boolean; ad: string; birim: string; miktar: string; aciklama: string;
   uygulanan: Uygulanan | null; isEmriId: number | null; kaynak: string | null;
+  // 2871-1 a: düzenlenen talepte var olan kalem; kartı, adı ve birimi değişmez. Bağlı (fason, parça) kalemin miktarı da değişmez.
+  mevcut: { id: string; bagli: boolean } | null;
 }
 const TUR_ADI: Record<TalepTuru, string> = { malzeme: 'Malzeme', hizmet: 'Hizmet', fason: 'Fason' };
 const bosKalem = (): KalemTaslagi => ({
-  anahtar: yeniIstekKimligi(), kart: null, serbest: false, ad: '', birim: '', miktar: '', aciklama: '', uygulanan: null, isEmriId: null, kaynak: null,
+  anahtar: yeniIstekKimligi(), kart: null, serbest: false, ad: '', birim: '', miktar: '', aciklama: '', uygulanan: null, isEmriId: null, kaynak: null, mevcut: null,
+});
+const mevcutKalem = (x: Talebim['kalemler'][number]): KalemTaslagi => ({
+  ...bosKalem(), ad: x.ad, birim: x.birim, miktar: (x.miktar ?? '').replace('.', ','), aciklama: x.aciklama ?? '',
+  mevcut: { id: x.id!, bagli: x.uygulanan !== null || x.fasonAdim !== null },
 });
 // Ön talepten kalem: fason adımın adı kalem adıdır (hizmet kartı seçilene kadar kart bekler), miktar emrin adedi. Plan ihtiyacında kalem
 // malzeme kartıdır, miktar kalan eksik.
@@ -117,7 +123,12 @@ function KalemSatiri({ tur, k, degistir, kaldir }: { tur: TalepTuru; k: KalemTas
           <span className="sa-talep-not">{k.isEmriId !== null ? 'Bağ talebe taşınır; talep açılınca ön talep listeden düşer.' : 'Talep açılınca miktarı ön talepten düşer; plan değişirse kalan yeniden hesaplanır.'}</span>
         </p>
       )}
-      {k.kart !== null ? (
+      {k.mevcut !== null ? (
+        <div className="sa-talep-secili">
+          <span><b>{k.ad}</b> <span className="sa-talep-not">{k.birim}</span></span>
+          {k.mevcut.bagli && <Rozet ton="uyari" gorunum="cizgi">Bağlı kalem</Rozet>}
+        </div>
+      ) : k.kart !== null ? (
         <div className="sa-talep-secili">
           <span><b>{k.kart.ad}</b> <span className="sa-talep-not">{k.kart.kod}</span></span>
           <Dugme simge="edit" onClick={() => degistir({ kart: null })}>Değiştir</Dugme>
@@ -131,7 +142,7 @@ function KalemSatiri({ tur, k, degistir, kaldir }: { tur: TalepTuru; k: KalemTas
       ) : (
         <KartArama tur={tur} sec={(kart) => degistir({ kart })} serbesteGec={() => degistir({ serbest: true })} />
       )}
-      {tur === 'hizmet' && (
+      {tur === 'hizmet' && k.mevcut === null && (
         <div className="sa-talep-uygulanan">
           {k.uygulanan !== null ? (
             <div className="sa-talep-secili">
@@ -145,7 +156,8 @@ function KalemSatiri({ tur, k, degistir, kaldir }: { tur: TalepTuru; k: KalemTas
         </div>
       )}
       <div className="sa-talep-miktar">
-        <Girdi etiket={`Miktar${k.kart?.birim ? ` (${k.kart.birim})` : ''}`} inputMode="decimal" placeholder="Ondalık için virgül: 2,5" value={k.miktar} onChange={(e) => degistir({ miktar: e.target.value })} required />
+        <Girdi etiket={`Miktar${k.kart?.birim ? ` (${k.kart.birim})` : k.mevcut ? ` (${k.birim})` : ''}`} inputMode="decimal" placeholder="Ondalık için virgül: 2,5" value={k.miktar} onChange={(e) => degistir({ miktar: e.target.value })} required disabled={k.mevcut?.bagli === true} />
+        {k.kart !== null && kartKarsiligi(k.kart, miktarOku(k.miktar)) !== null && <p className="sa-talep-not" aria-live="polite">{kartKarsiligi(k.kart, miktarOku(k.miktar))}</p>}
         <Girdi etiket="Açıklama" value={k.aciklama} onChange={(e) => degistir({ aciklama: e.target.value })} maxLength={500} placeholder="Ölçü, marka, kullanım yeri" />
       </div>
       {kaldir && <Dugme simge="trash" onClick={kaldir}>Kalemi kaldır</Dugme>}
@@ -154,7 +166,10 @@ function KalemSatiri({ tur, k, degistir, kaldir }: { tur: TalepTuru; k: KalemTas
 }
 
 // Ana sayfadan satın alma talebi (kart #375): talep oturumdaki kişi adına açılır; fiyat, teklif ve tedarikçi burada yoktur.
-export function TalepAc({ taslak = null, taslakBitti }: { taslak?: readonly OnTalep[] | null; taslakBitti?: (gonderildi: boolean) => void } = {}) {
+// 2871-1 a: `duzenlenen` verilirse form o talebin taslağını düzenler (tür ve emir değişmez); kayıt talebimi-duzenle ucuna sürümle gider.
+export function TalepAc({ taslak = null, taslakBitti, duzenlenen = null, duzenlemeBitti }: {
+  taslak?: readonly OnTalep[] | null; taslakBitti?: (gonderildi: boolean) => void; duzenlenen?: Talebim | null; duzenlemeBitti?: () => void;
+} = {}) {
   const istemci = useQueryClient();
   const { bildir } = useBildirim();
   const [tur, turYaz] = useState<TalepTuru>('malzeme');
@@ -176,6 +191,28 @@ export function TalepAc({ taslak = null, taslakBitti }: { taslak?: readonly OnTa
     emirIdYaz(emirler.length === 1 && emirler[0] !== null ? String(emirler[0]) : '');
     hataYaz(null);
   }, [taslak]);
+  useEffect(() => {
+    if (duzenlenen === null) return;
+    turYaz(duzenlenen.kalemler.every((x) => x.uygulanan !== null || x.fasonAdim !== null) ? 'hizmet' : 'malzeme');
+    kalemlerYaz(duzenlenen.kalemler.map(mevcutKalem));
+    tarihYaz(duzenlenen.ihtiyacTarihi?.slice(0, 10) ?? '');
+    aciklamaYaz(duzenlenen.aciklama ?? '');
+    emirIdYaz('');
+    hataYaz(null);
+  }, [duzenlenen]);
+  const temizle = () => { kalemlerYaz([bosKalem()]); tarihYaz(''); aciklamaYaz(''); emirIdYaz(''); hataYaz(null); };
+  const duzenleme = useMutation({
+    mutationFn: ({ id, govde }: { id: string; govde: TalebimiDuzenleYazimi }) =>
+      cagri.post('/satin-alma-talepleri/:id/talebimi-duzenle', { parametre: { id }, govde, ...SURE }),
+    onSuccess: (t) => {
+      bildir('tamam', `${t.no} güncellendi.`);
+      temizle();
+      void istemci.invalidateQueries({ queryKey: anahtarlar.taleplerimHepsi });
+      void istemci.invalidateQueries({ queryKey: anahtarlar.ozet });
+      duzenlemeBitti?.();
+    },
+    onError: (h) => hataYaz(h instanceof ApiHatasi && h.sunucuIletisi ? h.sunucuIletisi : 'Talep kaydedilemedi; yeniden deneyin.'),
+  });
   const bagli = kalemler.some((k) => k.isEmriId !== null);
   const emirler = useQuery({ queryKey: anahtarlar.acikEmirler, queryFn: () => cagri.get('/satin-alma-acik-emirler', SURE) });
   const gonder = useMutation({
@@ -192,7 +229,7 @@ export function TalepAc({ taslak = null, taslakBitti }: { taslak?: readonly OnTa
     onError: (h) => hataYaz(h instanceof ApiHatasi && h.sunucuIletisi ? h.sunucuIletisi : 'Talep gönderilemedi; yeniden deneyin.'),
   });
   const degistir = (anahtar: string, d: Partial<KalemTaslagi>) => kalemlerYaz((l) => l.map((k) => (k.anahtar === anahtar ? { ...k, ...d } : k)));
-  const eksik = kalemler.some((k) => k.kart === null && (!k.serbest || k.ad.trim() === '' || k.birim.trim() === ''));
+  const eksik = kalemler.some((k) => k.mevcut === null && k.kart === null && (!k.serbest || k.ad.trim() === '' || k.birim.trim() === ''));
   const miktarsiz = kalemler.some((k) => miktarOku(k.miktar) === null);
   const belirsiz = kalemler.some((k) => belirsizMiktarVar(miktarGirdisi(k.miktar)));
   const eksiMiktar = kalemler.some((k) => /^-\s*\d/.test(miktarGirdisi(k.miktar)));
@@ -201,6 +238,16 @@ export function TalepAc({ taslak = null, taslakBitti }: { taslak?: readonly OnTa
     if (eksik || miktarsiz) {
       hataYaz(eksik ? `Her kalem için ${tur === 'hizmet' ? 'hizmeti' : 'malzemeyi'} seçin (ya da adını ve birimini yazın) ve miktarı girin.`
         : belirsiz ? BELIRSIZ_MIKTAR : eksiMiktar ? 'Miktar sıfırdan büyük olmalı.' : 'Miktarı sayı olarak yazın; ondalık için virgül, binlik için nokta (1.250,5).');
+      return;
+    }
+    if (duzenlenen !== null) {
+      duzenleme.mutate({ id: duzenlenen.id, govde: {
+        surum: duzenlenen.surum!, ihtiyacTarihi: tarih === '' ? null : tarih, aciklama: aciklama.trim(),
+        kalemler: kalemler.map((k) => ({
+          id: k.mevcut?.id ?? null, malzemeNo: k.kart?.no ?? null, ad: k.kart || k.mevcut ? '' : k.ad.trim(), birim: k.kart || k.mevcut ? '' : k.birim.trim(),
+          miktar: miktarOku(k.miktar)!, aciklama: k.aciklama.trim(),
+        })),
+      } });
       return;
     }
     gonder.mutate({
@@ -213,33 +260,34 @@ export function TalepAc({ taslak = null, taslakBitti }: { taslak?: readonly OnTa
   };
 
   return (
-    <Kart baslik="Satın alma talebi">
+    <Kart baslik={duzenlenen === null ? 'Satın alma talebi' : `Talebi düzenle: ${duzenlenen.no}`}>
       <form className="sa-talep" onSubmit={(e) => { e.preventDefault(); gonderTikla(); }} noValidate>
         <p className="sa-talep-not">İhtiyacınızı yazın; satın alma teklif toplar ve size durumunu bildirir.</p>
-        <div className="sa-talep-tur" role="group" aria-label="Talep türü">
+        {duzenlenen === null && <div className="sa-talep-tur" role="group" aria-label="Talep türü">
           {(['malzeme', 'hizmet'] as const).map((t) => (
             <Dugme key={t} simge={t === 'malzeme' ? 'box' : 'wrench'} tur={tur === t ? 'birincil' : 'ikincil'} aria-pressed={tur === t} disabled={bagli && t !== tur}
               onClick={() => { if (t !== tur) { turYaz(t); kalemlerYaz([bosKalem()]); } }}>{TUR_ADI[t]}</Dugme>
           ))}
-        </div>
+        </div>}
         {kalemler.map((k) => (
           <KalemSatiri key={k.anahtar} tur={tur} k={k} degistir={(d) => degistir(k.anahtar, d)}
-            kaldir={kalemler.length > 1 ? () => kalemlerYaz((l) => l.filter((x) => x.anahtar !== k.anahtar)) : null} />
+            kaldir={kalemler.length > 1 && k.mevcut?.bagli !== true ? () => kalemlerYaz((l) => l.filter((x) => x.anahtar !== k.anahtar)) : null} />
         ))}
         <div><Dugme simge="plus" onClick={() => kalemlerYaz((l) => [...l, bosKalem()])} disabled={kalemler.length >= 50}>Kalem ekle</Dugme></div>
         <div className="sa-talep-alt">
           <Girdi etiket="İstenen tarih" type="date" value={tarih} onChange={(e) => tarihYaz(e.target.value)} />
           <CokSatir etiket="Açıklama" value={aciklama} onChange={(e) => aciklamaYaz(e.target.value)} maxLength={4000} rows={2} placeholder="Nerede, ne için kullanılacak" />
         </div>
-        <Secim etiket="Üretim emri (isteğe bağlı)" value={emirId} onChange={(e) => emirIdYaz(e.target.value)} bosSecenek="Üretim emrine bağlı değil"
+        {duzenlenen === null && <Secim etiket="Üretim emri (isteğe bağlı)" value={emirId} onChange={(e) => emirIdYaz(e.target.value)} bosSecenek="Üretim emrine bağlı değil"
           secenekler={(emirler.data?.emirler ?? []).map((e) => ({ deger: String(e.id), baslik: `${e.emirNo} · ${e.parcaNo} ${e.parcaAd}` }))}
-          ipucu={emirler.isError ? 'Açık emirler okunamadı; emre bağlamadan gönderebilirsiniz.' : 'Malzeme bir emir için alınıyorsa seçin; yalnız planlı ve başlamış emirler listelenir.'} />
+          ipucu={emirler.isError ? 'Açık emirler okunamadı; emre bağlamadan gönderebilirsiniz.' : 'Malzeme bir emir için alınıyorsa seçin; yalnız planlı ve başlamış emirler listelenir.'} />}
         {hata && <p className="sa-talep-hata" role="alert">{hata}</p>}
         <div className="sa-talep-gonder">
-          {bagli && (
+          {duzenlenen !== null && <Dugme onClick={() => { temizle(); duzenlemeBitti?.(); }}>Vazgeç</Dugme>}
+          {bagli && duzenlenen === null && (
             <Dugme onClick={() => { kalemlerYaz([bosKalem()]); tarihYaz(''); emirIdYaz(''); hataYaz(null); taslakBitti?.(false); }}>Vazgeç</Dugme>
           )}
-          <Dugme tur="birincil" simge="check" type="submit" yukleniyor={gonder.isPending}>Talebi gönder</Dugme>
+          <Dugme tur="birincil" simge="check" type="submit" yukleniyor={gonder.isPending || duzenleme.isPending}>{duzenlenen === null ? 'Talebi gönder' : 'Değişiklikleri kaydet'}</Dugme>
         </div>
       </form>
     </Kart>
