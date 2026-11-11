@@ -4,6 +4,7 @@ import { Rozet, SayfaBasligi, Secim, Sekmeler, Simge, Tablo, type RozetTonu, typ
 import type { SimgeAdi } from '../../../ortak/tasarim/simgeler.ts';
 import { durumEtiketi } from '../merkez/calc.ts';
 import { PRIO } from '../merkez/constants.ts';
+import { grupMetni } from '../merkez/guncelleme-grubu.ts';
 import { S, V, settings } from '../merkez/store.ts';
 import type { PurchaseRequest, RequestStatus } from '../merkez/tipler.ts';
 import { go } from '../merkez/ui.ts';
@@ -57,6 +58,7 @@ export function Talepler() {
         <span className="sa-ekran-govde">
           <b>{r.priority === 'urgent' && <Rozet ton="hata">Acil</Rozet>} {r.title}</b>
           <small>{[r.department, `${(r.items || []).length} kalem`, r.uretimEmriNo ? `emir ${r.uretimEmriNo}` : ''].filter(Boolean).join(', ')}</small>
+          {grupMetni(r) && <small><Simge ad="layers" boyut="k" /> {grupMetni(r)}</small>}
         </span>
       ),
       csv: (r) => r.title,

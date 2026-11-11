@@ -347,6 +347,17 @@ describe('satin-alma sürüm 6 (gerçek PostgreSQL)', () => {
     assert.deepEqual(benim.guncellemeGrubu?.map((x) => [x.no, x.durum]), [[kok.no, 'siparis_verildi'], [g.no, 'iptal']]);
   });
 
+  test('2876 (Maliyet N1): grubun güncellemesi teslim alınmışsa iptali geri alınan eski talebin geçmişine ikinci alım uyarısı yazılır', async () => {
+    const kok = await teklifIste(tamam<Talep>(await istek(c.talep, 'POST', '/satin-alma-talepleri/ac', yeniTalep())));
+    const g = tamam<Talebim>(await guncellemeAc(c.talep, kok));
+    const siparisli = await siparise(await satinAlmaGorur(g.id), 'SA-GUNCEL-4');
+    let no = 8761;
+    for (const satir of siparisli.karar!.siparisler[0]!.satirlar) await teslimEt(satir.id, satir.miktar, no++);
+    assert.equal((await satinAlmaGorur(g.id)).durum, 'teslim_alindi');
+    const geri = tamam<{ talep: Talep }>(await iptalGeriAl(c.sa, await satinAlmaGorur(kok.id), 'Deneme ikinci alım bilerek'));
+    assert.equal(geri.talep.hareketler.at(-1)!.metin, ILETILER.grupSipariste([g.no]));
+  });
+
   test('SAT-70: talep bütün olarak eksiksiz kaydedilir ve açılışta aynı döner: kalem, istek, teklif ve fiyat, bölünmüş karar, sabit kur, sipariş, senaryo', async () => {
     const t = tamam<Talep>(await istek(c.sa, 'POST', '/satin-alma-talepleri/ac', yeniTalep()));
     const [k1, k2] = t.kalemler.map((k) => k.id) as [string, string];

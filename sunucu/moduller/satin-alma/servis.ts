@@ -33,7 +33,7 @@ import { projeGetir, projeSecenekleri } from '../projeler/disari.ts';
 import { islemVarMi } from '#cekirdek/yetki.ts';
 import {
   ILETILER, ISLEM, type KurKilidiIsi, emirAcikMi, kilitliDurum, tedarikciyeGidenAyrinti, kalemAyrintisiniKoru, kilittenSonraOnayliMi, kurKilidiIsi, kurKilidiReddi, degisiklikReddi, gecikmeGunu, fasonKalani, sonDonusGecikmesi, agirlikliGecikme, degisiklikTuru, dortGozSonucu, onayKademesiReddi, onayLimitRolleri, onayLimitleriDegistiMi, onayLimitiReddi, terminsizSiparisReddi, terminTakibi, fazlaTeslim, finanstanEklenenKurlar, aylikFaiz, fiyatIzleri, kullanilanParaBirimleri, gecisVarMi, gorunenDurum, kararDegistiMi, kararOnayliMi, talepFisiGiderMi,
-  KARTSIZ_KATEGORI, TALEP_TURU_KARTLARI, satinAlinabilirKartReddi, kartBirimiReddi, hizliBaslik, hizliKalemReddi, kartKopyasi, kartsizSiparisReddi, katalogKartiReddi, logoGuncellenecekSiparisler, logoIptalGeriAlmaReddi, logoSiparisDegisikligiReddi, siparisliKalemReddi, siparisDegisikligiMetni, siparisFaturaFirmasi, faturaEslesmeUyarilari, siparisKalemiDegisikligiReddi, siparisKapatmaReddi, talebinAlimlari, ondalikKiyas, siparisReddi, talebim, birimKarsiligi, talebimDuzenlenirMi, talebimKalemReddi, guncellemeReddi, guncellemeIptalleri,
+  KARTSIZ_KATEGORI, TALEP_TURU_KARTLARI, satinAlinabilirKartReddi, kartBirimiReddi, hizliBaslik, hizliKalemReddi, kartKopyasi, kartsizSiparisReddi, katalogKartiReddi, logoGuncellenecekSiparisler, logoIptalGeriAlmaReddi, logoSiparisDegisikligiReddi, siparisliKalemReddi, siparisDegisikligiMetni, siparisFaturaFirmasi, faturaEslesmeUyarilari, siparisKalemiDegisikligiReddi, siparisKapatmaReddi, talebinAlimlari, ondalikKiyas, siparisReddi, talebim, birimKarsiligi, talebimDuzenlenirMi, talebimKalemReddi, guncellemeReddi, guncellemeIptalleri, ikinciAlimRiski,
   fasonKalemReddi, fasonOnTalepAdaylari, hizliBagReddi, planOnTalepAdaylari, uygulananKartReddi, type KalemBagi,
   fasonKirilimlari, fasonSureOrnekleri, fasonSuresiTahmini, fasonTerminUyumu, talepEdenDurumu, talepEdenGovdeDurumu, talepEdenGorunumu, avansAsimi, gerceklesenKosul, planGerceklesenFarki, talepKartiReddi, tamGorurMu, teklifKuru, teslimDurumu, odemePlaniHedefi, varsayilanOdemePlani,
   askidakiTedarikciReddi, birimFiyati, kaliteSiparisReddi, karneTeslimOlayi, stokTutari, uygulananKgFiyati, yeniSiparisFirmalari,
@@ -2161,8 +2161,8 @@ export async function iptaliGeriAl(db: Db, k: Kullanici, id: string, g: IptaliGe
   const kayitli = await s.iptalOncesiDurum(db, id);
   const durum = kayitli ?? iptalOncesiTuret(eski);
   const hareket = { id: randomUUID(), zaman: '', kisiId: null, kisiAdi: null, metin: iptalGeriAlmaHareketi(eski.iptalNedeni, g.gerekce, kayitli === null) };
-  // 2876 (Maliyet N1): grubun başka talebi siparişteyse geri alma serbesttir (2871-2 a) ama ikinci alım olabilir; geçmişe uyarı yazılır.
-  const siparisteki = (await s.guncellemeGruplariOku(db, [id])).filter((x) => x.id !== id && x.durum === 'siparis_verildi').map((x) => x.no);
+  // 2876 (Maliyet N1): grubun başka talebi siparişte ya da teslim alınmışsa geri alma serbesttir (2871-2 a) ama ikinci alım olabilir; geçmişe uyarı yazılır.
+  const siparisteki = ikinciAlimRiski(await s.guncellemeGruplariOku(db, [id]), id);
   const uyari = siparisteki.length === 0 ? [] : [{ id: randomUUID(), zaman: '', kisiId: null, kisiAdi: null, metin: ILETILER.grupSipariste(siparisteki) }];
   const talep = await talepKaydet(db, k, id, { ...eski, durum, iptalNedeni: '', hareketler: [...eski.hareketler, hareket, ...uyari], surum: g.surum }, izYaz, durum);
   return { talep, durum, turetildi: kayitli === null };

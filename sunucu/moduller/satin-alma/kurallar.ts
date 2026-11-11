@@ -101,7 +101,7 @@ export const ILETILER = {
   guncellemeBirlesik: 'Birleştirilmiş talep için güncelleme talebi açılmaz; değişikliği satın almaya iletin.',
   guncellemeBagli: 'Fason adıma ya da parçaya bağlı kalemi olan talep için güncelleme talebi açılmaz; değişikliği satın almaya iletin.',
   guncellemesiOlanSilinmez: 'Bu talebe bağlı güncelleme talebi var; silinemez, gerekirse iptal edin.',
-  grupSipariste: (nolar: readonly string[]): string => `Uyarı: güncelleme grubunda ${nolar.join(', ')} siparişte; aynı ihtiyaç için ikinci alım olabilir.`,
+  grupSipariste: (nolar: readonly string[]): string => `Uyarı: güncelleme grubunda ${nolar.join(', ')} için sipariş verildi; aynı ihtiyaç için ikinci alım olabilir.`,
   guncellemeIptali: (no: string): string => `Güncellemeyle karşılandı: ${no} siparişe geçti.`,
   talebimKalemYok: 'Düzenlenen kalem bu talepte yok.',
   talebimBagliKalem: 'Fason adıma ya da parçaya bağlı kalem buradan değişmez; değişikliği satın almaya iletin.',
@@ -973,6 +973,10 @@ export function guncellemeReddi(t: Pick<Talep, 'durum' | 'birlesme' | 'kaynaklar
 // iptal geri alınabilir. Siparişteki talep iptal edilmez (satın alma bilerek ikinci alımı yapmıştır).
 export function guncellemeIptalleri<T extends { id: string; durum: string }>(grup: readonly T[], siparisteki: string): T[] {
   return grup.filter((x) => x.id !== siparisteki && !['siparis_verildi', 'teslim_alindi', 'iptal'].includes(x.durum));
+}
+// 2876 (Maliyet N1): iptali geri alınan talebin grubunda alımı yapılmış (siparişte ya da teslim alınmış) başka talep varsa ikinci alım olabilir.
+export function ikinciAlimRiski<T extends { id: string; no: string; durum: string }>(grup: readonly T[], id: string): string[] {
+  return grup.filter((x) => x.id !== id && (x.durum === 'siparis_verildi' || x.durum === 'teslim_alindi')).map((x) => x.no);
 }
 // Gelen kalemler: kimlikli olan var olan kalemdir (tekrarsız); bağlı kalem (fason adım, uygulanan parça) çıkarılamaz, miktarı değişmez.
 export function talebimKalemReddi(

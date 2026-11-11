@@ -502,8 +502,9 @@ Kullanıcı: "yaz" (13.10.2026). Finans ve stok tarafı aynı dalda (yalnız yen
 - SAT-81 (2871-2 a): gruptaki bir talep siparişe geçince öteki açık talepler aynı işlemde iptal olur (iptal nedeni "Güncellemeyle karşılandı: <no>
   siparişe geçti."); "İptali geri al" ile döner. Siparişteki talep iptal edilmez.
 - Plan ön talebi (acikTalepMiktarlari): güncelleme grubunun yalnız en yeni açık talebi sayılır (aynı ihtiyaç iki kez düşülmez).
-- İptali geri alınan talebin grubunda siparişteki talep varsa geçmişe "ikinci alım olabilir" uyarısı yazılır. Güncellemesi olan kök talep silinmez
+- İptali geri alınan talebin grubunda siparişte ya da teslim alınmış talep varsa geçmişe "ikinci alım olabilir" uyarısı yazılır (kurallar.ts ikinciAlimRiski). Güncellemesi olan kök talep silinmez
   (kısıt açık iletiyle 409; kök zaten taslağa dönemez).
 - Ekran: Taleplerim'de teklif toplanan talepte "Güncelleme talebi aç" (Yeni talep formu güncelleme kipinde) ve satırda grup. Satın alma merkezinde
-  grup gösterimi ayrı adımda (merkez kilidi).
+  (2. kısım) Talepler listesinde ve talep başlığında grup satırı ("Güncellemeleri: ..." / "Güncelleme grubu: ... (ilk talep) ..."), aramada öteki
+  üyenin numarası; iptal talepte grubun başka talebi siparişte ya da teslim alınmışsa "İptali geri al"ın yanında ikinci alım uyarısı.
 

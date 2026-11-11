@@ -17,6 +17,7 @@ import { tabSim } from "./sim.ts";
 import { siparisTakibiHTML } from "./takip.ts";
 import { inlineBulkHTML } from "./ui.ts";
 import { kalemAdiParcayla, kalemBagMetinleri, parcaAltSatiri, uygulananSatiri } from "./kalem-bagi.ts";
+import { grupMetni, ikinciAlimUyarisi } from "./guncelleme-grubu.ts";
 import { getRole, onaylayabilir, viewApproval, viewApprovals, viewRequesterHome, viewRequestRequester } from "./roles.ts";
 /* ================= render çekirdeği ================= */
 // Ortak parçalarla çizilen ekranlar (iş kutusu, Talepler, talep ayrıntısı; 2412-2) merkezin durumunu her çizimde yeniden okur.
@@ -245,7 +246,7 @@ export function reqTable(list: PurchaseRequest[], compact = false, sortable = fa
     const d = r.needDate ? dayDiff(t, r.needDate) : null;
     const nd = r.needDate ? `${fmtDate(r.needDate)}${OPEN.includes(r.status) && d !== null ? (d < 0 ? ' <span class="flag bad">geçti</span>' : d <= 7 ? ` <span class="flag warn">${d} gün</span>` : "") : ""}` : "–";
     const val = tt ? `${money(tt.totalTRY, "TRY", 0)}<span class="sub">${tt.x ? esc(supName(tt.x.q)) : "kalem bazlı"}</span>` : best ? `${money(best.c.pvTRY, "TRY", 0)}<span class="sub">${esc(supName(best.q))}</span>` : "–";
-    return `<tr class="click" data-act="open" data-id="${r.id}"><td class="num muted">${esc(r.no)}</td><td class="lead">${prioDot(r.priority)}<b>${esc(r.title)}</b><span class="sub">${esc([r.department, (r.items || []).length + " kalem"].filter(Boolean).join(", "))}</span>${uygulananSatiri(r, "sub")}</td><td>${reqChip(r)}${ilerlemeNoktalari(r)}</td>${compact ? "" : `<td class="r num">${(r.quotes || []).length}${(r.rfqs || []).length ? `<span class="sub">${(r.rfqs || []).length} istendi</span>` : ""}</td>`}<td class="r num">${val}</td>${compact ? "" : `<td class="num">${nd}</td>`}</tr>`;
+    return `<tr class="click" data-act="open" data-id="${r.id}"><td class="num muted">${esc(r.no)}</td><td class="lead">${prioDot(r.priority)}<b>${esc(r.title)}</b><span class="sub">${esc([r.department, (r.items || []).length + " kalem"].filter(Boolean).join(", "))}</span>${uygulananSatiri(r, "sub")}${grupMetni(r) ? `<span class="sub">${esc(grupMetni(r))}</span>` : ""}</td><td>${reqChip(r)}${ilerlemeNoktalari(r)}</td>${compact ? "" : `<td class="r num">${(r.quotes || []).length}${(r.rfqs || []).length ? `<span class="sub">${(r.rfqs || []).length} istendi</span>` : ""}</td>`}<td class="r num">${val}</td>${compact ? "" : `<td class="num">${nd}</td>`}</tr>`;
   }).join("")}</tbody></table></div>`;
 }
 export function filteredRequests(): PurchaseRequest[] {
@@ -257,7 +258,7 @@ export function filteredRequests(): PurchaseRequest[] {
   if (V.prio) list = list.filter(r => (r.priority || "normal") === V.prio);
   if (V.dept) list = list.filter(r => norm(r.department) === norm(V.dept));
   const q = norm(V.q);
-  if (q) list = list.filter(r => norm([r.no, r.title, r.department, r.requester, r.uretimEmriNo ?? "", ...(r.items || []).map(i => i.name), ...(r.items || []).flatMap(i => (i.parca ? [i.parca.kod ?? "", i.parca.ad ?? ""] : [])), ...(r.quotes || []).map(supName)].join(" ")).includes(q));
+  if (q) list = list.filter(r => norm([r.no, r.title, r.department, r.requester, r.uretimEmriNo ?? "", ...(r.guncellemeGrubu || []).map(x => x.no), ...(r.items || []).map(i => i.name), ...(r.items || []).flatMap(i => (i.parca ? [i.parca.kod ?? "", i.parca.ad ?? ""] : [])), ...(r.quotes || []).map(supName)].join(" ")).includes(q));
   const po: Record<Priority, number> = { urgent: 0, normal: 1, low: 2 };
   const key = SORTS[V.sort];
   if (key) return list.sort((a, b) => { const x = key(a), y = key(b); return (x < y ? -1 : x > y ? 1 : 0) * V.dir; });
@@ -353,7 +354,7 @@ export function talepBolumu(r: PurchaseRequest): string {
 /** Talep ayrıntısının seçili adımının içeriği; başlık, adım şeridi ve "Şimdi yapılacak" ortak parçalarla çizilir (2412-2, 2420 a). */
 export function talepGovdesi(r: PurchaseRequest): string {
   const sec = talepBolumu(r);
-  const iptal = r.status === "cancelled" ? `<div class="callout" data-sa-y="1">Bu talep iptal edildi${r.cancelReason ? ": " + esc(r.cancelReason) : "."} Kayıt ve teklifler hafızada kalır.</div>` : "";
+  const iptal = r.status === "cancelled" ? `<div class="callout" data-sa-y="1">Bu talep iptal edildi${r.cancelReason ? ": " + esc(r.cancelReason) : "."} Kayıt ve teklifler hafızada kalır.${ikinciAlimUyarisi(r) ? ` <b>Uyarı:</b> ${esc(ikinciAlimUyarisi(r))}` : ""}</div>` : "";
   let govde: string;
   if (sec === "items") govde = tabItems(r);
   else if (sec === "quotes") govde = tabQuotes(r);
@@ -411,6 +412,7 @@ export function headerFacts(r: PurchaseRequest): string[] {
   }
   const bu = r.department ? budgetUse(r.department, todayStr().slice(0, 4)) : null;
   if (bu && bu.budget) out.push(`${esc(r.department)} bütçesi ${pct(bu.used / bu.budget * 100)}`);
+  if (grupMetni(r)) out.push(esc(grupMetni(r)));
   return out;
 }
 /** Talep işlemleri menüsü: işlem adı, başlık, tehlikeli mi. */
@@ -431,7 +433,7 @@ export function nextStep(r: PurchaseRequest): { cls: string; t: string; s: strin
   const set = settings(), items = (r.items || []).length, q = (r.quotes || []).length, rfqs = r.rfqs || [];
   const pending = rfqs.filter(x => !(r.quotes || []).some(qq => qq.supplierId === x.supplierId));
   const a = r.award, ap = a && (a.approvals || []).slice(-1)[0];
-  if (r.status === "cancelled") return { cls: "done", t: "Talep iptal edildi", s: r.cancelReason || "Kayıt ve teklifler hafızada kalır.", b: [["req-uncancel", "İptali geri al", 1]] };
+  if (r.status === "cancelled") return { cls: "done", t: "Talep iptal edildi", s: [r.cancelReason || "Kayıt ve teklifler hafızada kalır.", ikinciAlimUyarisi(r) ? `Uyarı: ${ikinciAlimUyarisi(r)}` : ""].filter(Boolean).join(" "), b: [["req-uncancel", "İptali geri al", 1]] };
   if (!items) return { cls: "warn", t: "Kalemleri ekleyin", s: "Ne alınacağını miktar ve birimiyle girin.", b: [["edit-request", "Kalem ekle", 1]] };
   if (r.status === "received") return a && !a.lessons ? { cls: "done", t: "Alım tamamlandı", s: "Bir sonraki alıma not bırakın: neler iyi gitti, neye dikkat edilmeli?", b: [["tab", "Not ekle", 0, "decision"]] } : { cls: "done", t: "Alım tamamlandı", s: a && a.deliveredDate ? `Teslim ${fmtDate(a.deliveredDate)}${a.quality ? ", kalite: " + QUALITY[a.quality as Quality] : ""}` : "", b: [] };
   if (r.status === "ordered") {
