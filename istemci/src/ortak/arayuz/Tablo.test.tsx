@@ -119,3 +119,30 @@ describe('Tablo kayan kip', () => {
     expect(document.querySelector('.tc-tablo-kap')?.hasAttribute('data-kaydir')).toBe(false);
   });
 });
+
+// Kart 2938: tek satır listelerde uzun yazı kesilir; tam metin ipucunda kalır.
+describe('Tablo kesilen sütun', () => {
+  const KESEN: readonly Sutun<Satir>[] = [
+    { ...SUTUNLAR[0]!, sabit: 'sol', kes: true },
+    { anahtar: 'not', baslik: 'Not', kes: true, csv: (s) => `Not ${s.ad}`, hucre: (s) => <strong>{s.ad}</strong> },
+  ];
+
+  it('kayan tabloda kesilen hücre ipucunda yazının tamamını taşır; yazı değilse CSV değerini', () => {
+    render(<Tablo etiket="Gider" kip="kaydir" sutunlar={KESEN} satirlar={[KIRA]} satirAnahtari={(s) => s.no} />);
+    const kesilen = document.querySelectorAll('.tc-tablo-kes');
+    expect(kesilen).toHaveLength(2);
+    expect(kesilen[0]?.getAttribute('title')).toBe('Kira');
+    expect(kesilen[1]?.getAttribute('title')).toBe('Not Kira');
+  });
+
+  it('uyarlanan tabloda kesme işareti yok sayılır', () => {
+    render(<Tablo etiket="Gider" sutunlar={KESEN} satirlar={[KIRA]} satirAnahtari={(s) => s.no} />);
+    expect(document.querySelector('.tc-tablo-kes')).toBeNull();
+  });
+
+  it('boş hücre kesilmez, "yok" yazar', () => {
+    render(<Tablo etiket="Gider" kip="kaydir" sutunlar={[{ anahtar: 'b', baslik: 'Boş', kes: true, hucre: () => null }]} satirlar={[KIRA]} satirAnahtari={(s) => s.no} />);
+    expect(document.querySelector('.tc-tablo-kes')).toBeNull();
+    expect(screen.getByText('yok')).toBeTruthy();
+  });
+});

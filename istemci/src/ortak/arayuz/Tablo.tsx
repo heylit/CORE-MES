@@ -24,6 +24,8 @@ export interface Sutun<S> {
   csv?: ((satir: S) => CsvDegeri) | false;
   // Yalnız `kip="kaydir"` tabloda: sütun yatay kayarken yerinde kalır. 'sol' yalnız ilk sütunda, 'sag' yalnız son sütunda anlamlıdır.
   sabit?: 'sol' | 'sag';
+  // Yalnız `kip="kaydir"` tabloda: uzun yazı tek satırda sütun genişliğinde "…" ile kesilir; tamamı imlecin ipucunda (CSV değeri).
+  kes?: boolean;
 }
 
 export interface TabloSuzgeci {
@@ -100,6 +102,13 @@ const ISKELET_SATIRI = 5;
 // Kaydırma eşiği ve sürüklenme sayılan en az yol; sürüklenen satıra bırakınca gelen tıklama satırı açmaz.
 const KAYDIRMA_ESIGI_PX = 48;
 const SURUKLEME_PX = 8;
+
+// Kesilen hücrenin tam metni: yazı ya da sayıysa kendisi, değilse sütunun CSV değeri.
+function kesIpucu<S>(s: Sutun<S>, satir: S, icerik: ReactNode): string | undefined {
+  if (typeof icerik === 'string' || typeof icerik === 'number') return String(icerik);
+  const d = typeof s.csv === 'function' ? s.csv(satir) : null;
+  return d === null || d === undefined || d === '' ? undefined : String(d);
+}
 
 function csvHucresi<S>(s: Sutun<S>, satir: S): CsvDegeri {
   if (typeof s.csv === 'function') return s.csv(satir);
@@ -409,7 +418,8 @@ export function Tablo<S>({
                   const sinif = [s.hizala === 'sag' && 'tc-tablo-sag', s.mono && 'mono', s.kirilmaz && 'tc-tablo-kirilmaz', sabitSinif(s)].filter(Boolean).join(' ');
                   return (
                     <td key={s.anahtar} data-baslik={s.baslik} className={sinif || undefined}>
-                      {icerik === null || icerik === undefined || icerik === '' ? <span className="tc-tablo-yok">yok</span> : icerik}
+                      {icerik === null || icerik === undefined || icerik === '' ? <span className="tc-tablo-yok">yok</span>
+                        : kaydir && s.kes ? <span className="tc-tablo-kes" title={kesIpucu(s, satir, icerik)}>{icerik}</span> : icerik}
                     </td>
                   );
                 })}

@@ -140,13 +140,20 @@
 .tc-tablo-kap[data-kaydir] .tc-tablo thead th:is(.tc-tablo-sec, .tc-tablo-sabit-sol, .tc-tablo-sabit-sag) { z-index: 3; }
 .tc-tablo-kap[data-kaydir] .tc-tablo-secilir:hover > td { background: color-mix(in srgb, var(--panel-solid) 94%, var(--ink)); }
 .tc-tablo-kap[data-kaydir] .tc-tablo tr[data-secili] > td { background: color-mix(in srgb, var(--panel-solid) 90%, var(--hazard)); }
-/* Yapışık sütunlar kabın çoğunu tutunca aradaki sütunlar hiç tam görünmez: orta ekranda sağdaki, dar ekranda bütün yapışık
-   sütunlar satırla birlikte akar ve kaydırarak ulaşılır. Başlıkları yalnız üstte yapışık kalır. */
+/* Tek satır: uzun yazı sütun genişliğinde "…" ile biter. */
+.tc-tablo-kap[data-kaydir] .tc-tablo-kes { display: block; max-inline-size: var(--menu-genis); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Yapışık sütunlar kabın çoğunu tutunca aradaki sütunlar hiç tam görünmez: orta ekranda sağdaki sütun satırla birlikte akar
+   ve kaydırarak ulaşılır. Başlığı yalnız üstte yapışık kalır. */
 @media (max-width: 1023px) {
   .tc-tablo-kap[data-kaydir] .tc-tablo td.tc-tablo-sabit-sag { position: static; }
   .tc-tablo-kap[data-kaydir] .tc-tablo thead th.tc-tablo-sabit-sag { right: auto; z-index: 2; }
 }
+/* Dar ekranda seçim kutusu satırla akar; kimlik ('sol') sütunu yapışık kalır ki yana kayarken satırın ne olduğu görünsün.
+   Kesilen yazı daralır, kimlik sütunu kabın yarısını geçmez. */
 @media (max-width: 767px) {
-  .tc-tablo-kap[data-kaydir] .tc-tablo td:is(.tc-tablo-sec, .tc-tablo-sabit-sol) { position: static; }
-  .tc-tablo-kap[data-kaydir] .tc-tablo thead th:is(.tc-tablo-sec, .tc-tablo-sabit-sol) { left: auto; z-index: 2; }
+  .tc-tablo-kap[data-kaydir] .tc-tablo td.tc-tablo-sec { position: static; }
+  .tc-tablo-kap[data-kaydir] .tc-tablo thead th.tc-tablo-sec { left: auto; z-index: 2; }
+  .tc-tablo-kap[data-kaydir] .tc-tablo-sec ~ .tc-tablo-sabit-sol { left: 0; }
+  .tc-tablo-kap[data-kaydir] .tc-tablo-kes { max-inline-size: calc(var(--menu-sabit) * .5); }
+  .tc-tablo-kap[data-kaydir] .tc-tablo td.tc-tablo-sabit-sol { max-inline-size: calc(var(--menu-sabit) * .5); }
 }
