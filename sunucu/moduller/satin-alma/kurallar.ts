@@ -183,6 +183,13 @@ export const ILETILER = {
   kapatmaLogoda: 'Yalnız Logo\'ya gönderilmiş sipariş kapatılır; gönderilmemiş siparişi talepten çıkarın.',
   kapatmaVar: 'Siparişin kalanı zaten kapatıldı ya da sipariş iptal edildi.',
   kapatmaKalanYok: 'Siparişin bütün satırları teslim alındı; kapatılacak kalan yok.',
+  bekletmeSiparisYok: 'Logo\'da bekletilecek sipariş bu talepte yok.',
+  bekletmeDurumu: 'Yalnız siparişi verilmiş talebin siparişi Logo\'da bekletilir.',
+  bekletmeLogoda: 'Yalnız Logo\'ya gönderilmiş sipariş Logo\'da bekletilir.',
+  bekletmeKapali: 'Kalanı kapatılmış ya da iptal edilmiş sipariş Logo\'da bekletilmez.',
+  bekletmeSirada: 'Bu siparişin Logo\'da bekletme isteği zaten sırada.',
+  bekletmeZaten: 'Sipariş Logo\'da zaten bekletiliyor.',
+  serbestZaten: 'Sipariş Logo\'da bekletilmiyor; serbest bırakılacak bir şey yok.',
   numaraUzun: 'Numara kuralı çok uzun numara üretti; Sistem ayarlarındaki numara kuralını kısaltın.',
   bagYalnizHizmette: 'Uygulanan parça ve fason adım yalnız hizmet ve fason talebinde yazılır.',
   partiYalnizFasonda: 'Stoktaki parti yalnız fason talebinde seçilir.',
@@ -688,7 +695,7 @@ function logoIcerigi(t: LogoKiyas, teklifId: string): string {
   return JSON.stringify([sadeOndalik(q?.iskontoYuzdesi), termin, satirlar]);
 }
 type LogoSiparisi = {
-  teklifId: string; no: string | null; logo: { kayitNo: string | null; iptalDurumu: string | null; kapatmaDurumu?: string | null } | null;
+  teklifId: string; no: string | null; logo: { kayitNo: string | null; iptalDurumu: string | null; kapatmaDurumu?: string | null; bekletmeIstegi?: string | null; bekletmeDurumu?: string | null } | null;
   satirlar: readonly { miktar?: string; teslimAlinan: string | null }[];
 };
 const logodaMi = (x: LogoSiparisi) => (x.logo?.kayitNo ?? null) !== null;
@@ -720,6 +727,24 @@ export function siparisKapatmaReddi(eski: Pick<Talep, 'durum'> & { karar: { sipa
   if ((x.logo?.iptalDurumu ?? null) !== null || (x.logo?.kapatmaDurumu ?? null) !== null) return ILETILER.kapatmaVar;
   const kalanVar = x.satirlar.some((r) => r.miktar === undefined || ondalikKiyas(r.teslimAlinan ?? '0', r.miktar) < 0);
   return kalanVar ? null : ILETILER.kapatmaKalanYok;
+}
+// 2966-1 b, 2972-1 b: "Logo'da beklet" Logo'daki siparişi öneri durumuna çeker, "serbest bırak" geri alır; CORE'da sipariş sürer (2972-2 a).
+// Hatada kalan istek yeniden verilebilir; sıradaki istek değiştirilmez (önce gitsin ya da hatası görünsün).
+export function siparisBekletmeReddi(
+  eski: Pick<Talep, 'durum'> & { karar: { siparisler: readonly LogoSiparisi[] } | null }, teklifId: string, istek: 'beklet' | 'serbest',
+): string | null {
+  if (eski.durum !== 'siparis_verildi' && eski.durum !== 'teslim_alindi') return ILETILER.bekletmeDurumu;
+  const x = (eski.karar?.siparisler ?? []).find((y) => y.teklifId === teklifId);
+  if (x === undefined) return ILETILER.bekletmeSiparisYok;
+  if (!logodaMi(x)) return ILETILER.bekletmeLogoda;
+  const l = x.logo!;
+  if ((l.iptalDurumu ?? null) !== null || (l.kapatmaDurumu ?? null) !== null) return ILETILER.bekletmeKapali;
+  if (l.bekletmeDurumu === 'bekliyor') return ILETILER.bekletmeSirada;
+  const bekletiliyor = l.bekletmeIstegi === 'beklet' && l.bekletmeDurumu === 'gonderildi';
+  const serbestGitti = l.bekletmeIstegi === 'serbest' && l.bekletmeDurumu === 'gonderildi';
+  if (istek === 'beklet' && bekletiliyor) return ILETILER.bekletmeZaten;
+  if (istek === 'serbest' && (l.bekletmeIstegi == null || serbestGitti)) return ILETILER.serbestZaten;
+  return null;
 }
 // Logo'da kaydı olan sipariş iptal edilince Logo'ya iptal gider; talep iptalden geri dönerse Logo'daki iptalle ayrışır.
 export function logoIptalGeriAlmaReddi(eski: Pick<Talep, 'durum' | 'karar'>, yeniDurum: TalepDurumu): string | null {

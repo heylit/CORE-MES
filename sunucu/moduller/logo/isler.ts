@@ -3,7 +3,7 @@ import type { IsBekliyor, IsTanimi } from '#cekirdek/zamanlayici.ts';
 import { logoyaGuncellemeGidecekMalzemeler, logoyaPasifGidecekMalzemeler, malzemeLogoGuncellemeSonucu, malzemeLogoPasifSonucu } from '../malzemeler/disari.ts';
 import {
   karsilamaLogoSonucu, logoyaGidecekKarsilamalar, logoyaGidecekSiparisler, logoyaGidecekTalepler, logoyaGuncellemeGidecekSiparisler, logoyaIptalGidecekSiparisler,
-  logoyaKapatmaGidecekSiparisler, siparisLogoGuncellemeSonucu, siparisLogoIptalSonucu, siparisLogoKapatmaSonucu, siparisLogoSonucu, talepLogoSonucu,
+  logoyaBekletmeGidecekSiparisler, logoyaKapatmaGidecekSiparisler, siparisLogoBekletmeSonucu, siparisLogoGuncellemeSonucu, siparisLogoIptalSonucu, siparisLogoKapatmaSonucu, siparisLogoSonucu, talepLogoSonucu,
 } from '../satin-alma/disari.ts';
 import { logoyaGidecekSatisSiparisleri, logoyaGidecekSatisTeklifleri, satisSiparisiLogoSonucu, satisTeklifiLogoSonucu } from '../siparisler/disari.ts';
 import { emirlerinMalzemeFisleri, logoIcinMalzemeFisleri, malzemeFisiDegisiklikleri } from '../stok/disari.ts';
@@ -31,7 +31,7 @@ function beklemeyeCevir(sonuc: TurSonucu): IsBekliyor | undefined {
     case 'kapali': case 'ortam-degiskeni-yok': case 'satin-alma-kapali': case 'satis-kapali':
     case 'mal-kabul-kapali': case 'liste-kapali': case 'fatura-kapali': case 'malzeme-fisi-kapali': case 'malzeme-karti-kapali': case 'stok-kapali':
       return isBekliyor(BEKLEME_NEDENLERI[sonuc.tur]);
-    case 'bos': case 'gonderim': case 'guncelleme': case 'pasif': case 'pasif-niyet': case 'iptal': case 'kapatma': case 'karsilama': case 'liste':
+    case 'bos': case 'gonderim': case 'guncelleme': case 'pasif': case 'pasif-niyet': case 'iptal': case 'kapatma': case 'bekletme': case 'karsilama': case 'liste':
     case 'malzeme-fisi-niyet': case 'malzeme-fisi': case 'niyet': case 'okuma': case 'siparisler-siparisi-niyet':
     case 'siparisler-siparisi': case 'siparisler-teklifi-niyet': case 'siparisler-teklifi': case 'talep-niyet':
     case 'talep':
@@ -84,6 +84,8 @@ export const isler = [
     guncellemeSonucu: siparisLogoGuncellemeSonucu,
     kapatmaGidecekler: logoyaKapatmaGidecekSiparisler,
     kapatmaSonucu: siparisLogoKapatmaSonucu,
+    bekletmeGidecekler: logoyaBekletmeGidecekSiparisler,
+    bekletmeSonucu: siparisLogoBekletmeSonucu,
     iptalGidecekler: logoyaIptalGidecekSiparisler,
     iptalSonucu: siparisLogoIptalSonucu,
     talepGidecekler: logoyaGidecekTalepler,

@@ -742,7 +742,7 @@ export function tabDecision(r: PurchaseRequest, part: "select" | "split" | "appr
     <div class="row"><button class="btn good" data-act="approve">Onayla</button><button class="btn" data-act="approval-form">Onay formu</button><button class="btn bad" data-act="reject">Reddet ve değerlendirmeye geri gönder</button><span class="small muted">Onay özetini e-postayla göndermek için aşağıdaki karar özetini kopyalayın.</span></div>` : ordered ? "" : `<div class="row"><button class="btn" data-act="approval-form">Onay formu</button><span class="small muted">${aps.state === "rejected" ? "Karar reddedildi. Seçimi güncelleyip yeniden onaya gönderin." : approved ? "Karar onaylandı; sipariş verilebilir." : baskasiOnaylar ? "Onay, onay yetkisi olan kişide; Onaylar sayfasından verilir." : "Onay, karar onaya gönderildiğinde açılır."}</span></div>`}`, decided)}`;
   const p3 = `${panel(3, isSplit ? `Siparişler (${orders.length} tedarikçi)` : "Sipariş", ordered ? '<span class="flag good">sipariş verildi</span>' : '<span class="flag mute">onaydan sonra</span>', `
     ${approved || ordered ? `${isSplit ? ordersFormHTML(r, orders) : singleOrderHTML(r, a)}
-    <div class="row"><button class="btn primary" data-act="place-order">${ordered ? "Sipariş bilgisini güncelle" : isSplit ? "Siparişleri verildi olarak işaretle" : "Siparişi verildi olarak işaretle"}</button>${ordered ? '<button class="btn" data-act="order-item-change">Kalemi değiştir</button><button class="btn" data-act="order-close">Kalanı kapat</button><button class="btn" data-act="order-invoices">Faturalar</button><button class="btn" data-act="order-certs">Sertifikalar</button>' : ""}</div>
+    <div class="row"><button class="btn primary" data-act="place-order">${ordered ? "Sipariş bilgisini güncelle" : isSplit ? "Siparişleri verildi olarak işaretle" : "Siparişi verildi olarak işaretle"}</button>${ordered ? '<button class="btn" data-act="order-item-change">Kalemi değiştir</button><button class="btn" data-act="order-close">Kalanı kapat</button>' + logoBekletDugmeleri(orders) + '<button class="btn" data-act="order-invoices">Faturalar</button><button class="btn" data-act="order-certs">Sertifikalar</button>' : ""}</div>
     ${teslimYontemiHTML(r)}` : '<p class="small muted">Sipariş, karar onaylandıktan sonra verilir.</p>'}`, decided)}`;
   // Kart #1124: sipariş verilince üzerinde mal kabul ve finans takibi ile ödeme planı görünür.
   const pt = ordered ? `<section class="panel" data-sa-takip-paneli><div class="panel-h"><h2>Sipariş takibi</h2><span class="sub">mal kabul, fatura ve ödeme planı</span></div><div class="panel-b">${siparisTakibiHTML(r, orders)}</div></section>` : "";
@@ -766,11 +766,34 @@ export function logoRozeti(l: SiparisLogo | null | undefined): string {
   if (l.kapatmaDurumu === "gonderildi") return r("mute", `Logo: kalanı kapatıldı${l.kayitNo ? ` (${l.kayitNo})` : ""}`);
   if (l.kapatmaDurumu === "bekliyor") return r("warn", "Logo: kapatma bekliyor");
   if (l.kapatmaDurumu === "hata") return r("bad", "Logo: kapatma hatası", l.kapatmaHata ?? "");
+  const bekletme = logoBekletmeRozeti(l, r);
+  if (bekletme) return bekletme;
   if (l.guncellemeDurumu === "bekliyor") return r("warn", `Logo: düzenleme bekliyor${l.kayitNo ? ` (${l.kayitNo})` : ""}`);
   if (l.guncellemeDurumu === "hata") return r("bad", "Logo: düzenleme hatası", l.guncellemeHata ?? "");
   if (l.durum === "gonderildi") return r("good", `Logo: gönderildi${l.kayitNo ? ` (${l.kayitNo})` : ""}`);
   if (l.durum === "hata") return r("bad", `Logo hatası: ${l.hata ?? ""}`);
   return r("warn", "Logo: gönderim bekliyor");
+}
+export const BEKLETME_IPUCU = "Logo'da öneri (kesinleşmemiş sipariş) durumunda. CORE MES'te düzenleme ve mal kabul sürer.";
+function logoBekletmeRozeti(l: SiparisLogo, r: (ton: string, metin: string, baslik?: string) => string): string {
+  if (l.bekletmeDurumu === "hata") return r("bad", l.bekletmeIstegi === "beklet" ? "Logo: bekletme hatası" : "Logo: serbest bırakma hatası", l.bekletmeHata ?? "");
+  if (l.bekletmeDurumu === "bekliyor") return r("warn", l.bekletmeIstegi === "beklet" ? "Logo'da bekletme sırada" : "Logo'da serbest bırakma sırada");
+  if (l.bekletmeIstegi === "beklet" && l.bekletmeDurumu === "gonderildi") return r("warn", `Logo'da bekletiliyor${l.kayitNo ? ` (${l.kayitNo})` : ""}`, BEKLETME_IPUCU);
+  return "";
+}
+/** Beklet / serbest bırak yalnız Logo'ya gitmiş, iptal ya da kapatılmamış, sırada iş bekletmeyen siparişte. */
+export function logoBekletilebilir(l: SiparisLogo | null | undefined): l is SiparisLogo {
+  return !!l && l.durum === "gonderildi" && !!l.kayitNo && !l.iptalDurumu && !l.kapatmaDurumu && l.bekletmeDurumu !== "bekliyor";
+}
+export const logoBekletiliyor = (l: SiparisLogo): boolean => l.bekletmeIstegi === "beklet" && l.bekletmeDurumu !== "hata";
+/** Pencerede seçilebilen siparişler: "beklet"te bekletilmeyenler, "serbest"te bekletilenler. */
+export function bekletmePenceresiSiparisleri<T extends Pick<OrderInfo, "logo">>(orders: readonly T[], istek: "beklet" | "serbest"): T[] {
+  return orders.filter(o => logoBekletilebilir(o.logo) && logoBekletiliyor(o.logo) === (istek === "serbest"));
+}
+export function logoBekletDugmeleri(orders: readonly Pick<OrderInfo, "logo">[]): string {
+  const uygun = orders.filter(o => logoBekletilebilir(o.logo));
+  const bekleyen = bekletmePenceresiSiparisleri(orders, "serbest");
+  return `${uygun.length > bekleyen.length ? `<button class="btn" data-act="order-logo-hold" title="${esc(BEKLETME_IPUCU)}">Logo'da beklet</button>` : ""}${bekleyen.length ? '<button class="btn" data-act="order-logo-release">Logo\'da serbest bırak</button>' : ""}`;
 }
 /* Kart #1310: malzemeyi tedarikçi mi getirir, biz mi alırız; "biz alacağız" siparişi sevkiyat bekleme listesine alım olarak düşer */
 function teslimYontemiHTML(r: PurchaseRequest): string {

@@ -183,6 +183,7 @@ export interface Backend {
   siparisKalemiDegistir(talepId: string, kalemId: string, miktar: number, birim: string, gerekce: string): Promise<boolean>;
   /** #205 S2 b: Logo'daki siparişin kalanı gerekçeyle kapatılır; sunucu hareket yazar. Başarısızsa ileti gösterilir, false döner. */
   siparisKapat(talepId: string, teklifId: string, gerekce: string): Promise<boolean>;
+  siparisLogoBeklet(talepId: string, teklifId: string, istek: 'beklet' | 'serbest'): Promise<boolean>;
   /** 2413 a: iptal edilen talep gerekçeyle iptal öncesi durumuna döner; elle durum değiştirmenin tek yolu budur. Sunucu dönüşü
    * genel kayıt kurallarından geçirir ve hareket yazar. turetildi: önceki durum kayıtlı değildi, veriden bulundu. Başarısızsa ileti gösterilir, null döner. */
   iptaliGeriAl(talepId: string, gerekce: string): Promise<{ durum: RequestStatus; turetildi: boolean } | null>;

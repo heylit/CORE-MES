@@ -75,6 +75,7 @@ export interface AltKayitlar {
     logoIptalDurumu: 'bekliyor' | 'gonderildi' | 'hata' | null; logoIptalHata: string | null;
     logoGuncellemeDurumu: 'bekliyor' | 'gonderildi' | 'hata' | null; logoGuncellemeHata: string | null;
     logoKapatmaDurumu: 'bekliyor' | 'gonderildi' | 'hata' | null; logoKapatmaHata: string | null;
+    logoBekletmeIstegi: 'beklet' | 'serbest' | null; logoBekletmeDurumu: 'bekliyor' | 'gonderildi' | 'hata' | null; logoBekletmeHata: string | null;
   }[];
   siparisSatirlari: { talepId: string; teklifId: string; id: number; kalemId: string; miktar: string; birim: string; parcaRevizyonu: string | null }[];
   onaylar: (Omit<Onay, 'kisiAdi'> & { talepId: string })[];
@@ -115,7 +116,9 @@ export async function altKayitlariOku(db: Db, idler: readonly string[]): Promise
       beklenen_teslim AS "beklenenTeslim", vade_baslangici AS "vadeBaslangici", logo_gonderim_durumu AS "logoDurumu", logo_kayit_no AS "logoKayitNo", logo_hata AS "logoHata",
       logo_iptal_durumu AS "logoIptalDurumu", logo_iptal_hata AS "logoIptalHata",
       logo_guncelleme_durumu AS "logoGuncellemeDurumu", logo_guncelleme_hata AS "logoGuncellemeHata",
-      logo_kapatma_durumu AS "logoKapatmaDurumu", logo_kapatma_hata AS "logoKapatmaHata" FROM satin_alma_siparis WHERE talep_id = ANY($1::uuid[]) ORDER BY talep_id, id`),
+      logo_kapatma_durumu AS "logoKapatmaDurumu", logo_kapatma_hata AS "logoKapatmaHata",
+      logo_bekletme_istegi AS "logoBekletmeIstegi", logo_bekletme_durumu AS "logoBekletmeDurumu", logo_bekletme_hata AS "logoBekletmeHata"
+      FROM satin_alma_siparis WHERE talep_id = ANY($1::uuid[]) ORDER BY talep_id, id`),
     siparisSatirlari: await q(`SELECT s.talep_id AS "talepId", s.teklif_id AS "teklifId", s.id, s.kalem_id AS "kalemId", s.miktar, s.birim,
         s.parca_revizyonu AS "parcaRevizyonu"
       FROM satin_alma_siparis_satiri s JOIN satin_alma_talep_kalemi k ON k.talep_id = s.talep_id AND k.id = s.kalem_id
@@ -462,30 +465,41 @@ export async function siparisGuncellemesiniIsaretle(db: Db, talepId: string, tek
   await db.sorgu(`UPDATE satin_alma_siparis SET logo_guncelleme_durumu = 'bekliyor', logo_guncelleme_hata = NULL
     WHERE talep_id = $1 AND teklif_id = ANY($2::uuid[]) AND logo_kayit_no IS NOT NULL AND logo_iptal_durumu IS NULL`, [talepId, teklifIdler]);
 }
+// Sırada ya da hatada kalan bekletme isteği düşer; Logo'ya gitmiş son durum (bekletildi / serbest) kalır.
+const BEKLEYEN_BEKLETME_DUSER = `logo_bekletme_istegi = CASE WHEN logo_bekletme_durumu = 'gonderildi' THEN logo_bekletme_istegi END,
+      logo_bekletme_durumu = CASE WHEN logo_bekletme_durumu = 'gonderildi' THEN 'gonderildi' END, logo_bekletme_hata = NULL`;
 // Talep iptal edilince: Logo'da kaydı olan siparişin iptali kuyruğa girer (bekleyen düzenleme düşer), henüz gitmemiş sipariş kuyruktan çıkar.
 export async function siparisIptaliniLogoyaIsaretle(db: Db, talepId: string): Promise<void> {
   await db.sorgu(`UPDATE satin_alma_siparis SET logo_iptal_durumu = 'bekliyor', logo_iptal_hata = NULL, logo_guncelleme_durumu = NULL, logo_guncelleme_hata = NULL,
-      logo_kapatma_durumu = CASE WHEN logo_kapatma_durumu = 'gonderildi' THEN 'gonderildi' END, logo_kapatma_hata = NULL
+      logo_kapatma_durumu = CASE WHEN logo_kapatma_durumu = 'gonderildi' THEN 'gonderildi' END, logo_kapatma_hata = NULL, ${BEKLEYEN_BEKLETME_DUSER}
     WHERE talep_id = $1 AND logo_kayit_no IS NOT NULL AND logo_iptal_durumu IS NULL`, [talepId]);
   await db.sorgu(`UPDATE satin_alma_siparis SET logo_gonderim_durumu = NULL, logo_hata = NULL, logo_gonderim_zamani = NULL
     WHERE talep_id = $1 AND logo_kayit_no IS NULL`, [talepId]);
 }
 export interface LogoSiparisSatiri {
   id: number; no: string; tarih: string; firmaId: number; paraBirimi: string; kur: string | null; iskontoYuzdesi: string; termin: string | null;
-  durum: 'bekliyor' | 'hata'; logoKayitNo: string | null; kaldirilanSatirRefleri: string[];
+  durum: 'bekliyor' | 'hata'; logoKayitNo: string | null; kaldirilanSatirRefleri: string[]; bekletmeIstegi: 'beklet' | 'serbest' | null;
 }
 // Tarih sipariş tarihidir; girilmemişse Logo'ya gönderildiği gün (İstanbul). Kur siparişte sabitlenen, yoksa teklifin kuru; TRY'de boş.
 // Gönderim kuyruğu ilk kaydı, düzenleme kuyruğu Logo'da kaydı olanın değişikliğini taşır (iptali kuyrukta olan düzenlenmez).
-export function logoyaGidecekSiparislerOku(db: Db, sinir: number, kuyruk: 'gonderim' | 'guncelleme' = 'gonderim'): Promise<LogoSiparisSatiri[]> {
-  const kosul = kuyruk === 'gonderim' ? "p.logo_gonderim_durumu IN ('bekliyor', 'hata')"
-    : "p.logo_guncelleme_durumu IN ('bekliyor', 'hata') AND p.logo_iptal_durumu IS NULL";
-  const durum = kuyruk === 'gonderim' ? 'p.logo_gonderim_durumu' : 'p.logo_guncelleme_durumu';
+// Bekletme Logo'ya düzenleme gövdesiyle gider (Logo'da sipariş durumu yalnız düzenlemeyle yazılır): sırada düzenleme varken ya da
+// Logo'da numarası olmayan satır varken gitmez, yoksa yeni satır iki kez eklenirdi. Kapatılan ve iptal edilen sipariş bekletilmez.
+const KUYRUK_KOSULU = {
+  gonderim: "p.logo_gonderim_durumu IN ('bekliyor', 'hata')",
+  guncelleme: "p.logo_guncelleme_durumu IN ('bekliyor', 'hata') AND p.logo_iptal_durumu IS NULL",
+  bekletme: `p.logo_bekletme_durumu IN ('bekliyor', 'hata') AND p.logo_iptal_durumu IS NULL AND p.logo_kapatma_durumu IS NULL AND p.logo_kayit_no IS NOT NULL
+    AND p.logo_guncelleme_durumu IS DISTINCT FROM 'bekliyor' AND p.logo_guncelleme_durumu IS DISTINCT FROM 'hata'
+    AND NOT EXISTS (SELECT 1 FROM satin_alma_siparis_satiri x WHERE x.talep_id = p.talep_id AND x.teklif_id = p.teklif_id AND x.logo_satir_ref IS NULL)`,
+} as const;
+export function logoyaGidecekSiparislerOku(db: Db, sinir: number, kuyruk: keyof typeof KUYRUK_KOSULU = 'gonderim'): Promise<LogoSiparisSatiri[]> {
+  const kosul = KUYRUK_KOSULU[kuyruk];
+  const durum = kuyruk === 'gonderim' ? 'p.logo_gonderim_durumu' : kuyruk === 'guncelleme' ? 'p.logo_guncelleme_durumu' : 'p.logo_bekletme_durumu';
   return db.sorgu<LogoSiparisSatiri>(
     `SELECT p.id, coalesce(p.no, '') AS no, coalesce(p.siparis_tarihi, (now() AT TIME ZONE 'Europe/Istanbul')::date)::text AS tarih,
         q.firma_id AS "firmaId", q.para_birimi AS "paraBirimi",
         CASE WHEN q.para_birimi = 'TRY' THEN NULL ELSE coalesce(sk.kur, q.kur)::text END AS kur, q.iskonto_yuzdesi::text AS "iskontoYuzdesi",
         p.beklenen_teslim::text AS termin, ${durum} AS durum, p.logo_kayit_no AS "logoKayitNo",
-        p.logo_kaldirilan_satir_refleri AS "kaldirilanSatirRefleri"
+        p.logo_kaldirilan_satir_refleri AS "kaldirilanSatirRefleri", p.logo_bekletme_istegi AS "bekletmeIstegi"
        FROM satin_alma_siparis p
        JOIN satin_alma_teklif q ON q.talep_id = p.talep_id AND q.id = p.teklif_id
        LEFT JOIN satin_alma_sabit_kur sk ON sk.talep_id = p.talep_id AND sk.para_birimi = q.para_birimi
@@ -540,7 +554,7 @@ export function siparisLogoGuncellemeSonucuYaz(db: Db, id: number, hata: string 
 }
 // "Kalanı kapat": yalnız Logo'da kaydı olan, iptali ve kapatması kuyrukta olmayan sipariş kapatma kuyruğuna girer.
 export async function siparisiKapatmayaIsaretle(db: Db, talepId: string, teklifId: string): Promise<boolean> {
-  return (await db.tek(`UPDATE satin_alma_siparis SET logo_kapatma_durumu = 'bekliyor', logo_kapatma_hata = NULL
+  return (await db.tek(`UPDATE satin_alma_siparis SET logo_kapatma_durumu = 'bekliyor', logo_kapatma_hata = NULL, ${BEKLEYEN_BEKLETME_DUSER}
     WHERE talep_id = $1 AND teklif_id = $2 AND logo_kayit_no IS NOT NULL AND logo_iptal_durumu IS NULL AND logo_kapatma_durumu IS NULL RETURNING id`,
     [talepId, teklifId])) !== null;
 }
@@ -554,6 +568,20 @@ export function logoyaKapatmaGidecekSiparislerOku(db: Db, sinir: number): Promis
 export async function siparisLogoKapatmaSonucuYaz(db: Db, id: number, hata: string | null): Promise<void> {
   await db.sorgu(`UPDATE satin_alma_siparis SET logo_kapatma_durumu = CASE WHEN $2::text IS NULL THEN 'gonderildi' ELSE 'hata' END, logo_kapatma_hata = $2
     WHERE id = $1 AND logo_kapatma_durumu IN ('bekliyor', 'hata') AND logo_iptal_durumu IS NULL`, [id, hata]);
+}
+// 2966-1 b: istek kuyruğa girer; aynı istek zaten Logo'ya gitmişse ya da sırada iş varsa satır dönmez (kural önce söyler, bu yarışı kapatır).
+export async function siparisiBekletmeyeIsaretle(db: Db, talepId: string, teklifId: string, istek: 'beklet' | 'serbest'): Promise<boolean> {
+  return (await db.tek(`UPDATE satin_alma_siparis SET logo_bekletme_istegi = $3, logo_bekletme_durumu = 'bekliyor', logo_bekletme_hata = NULL
+    WHERE talep_id = $1 AND teklif_id = $2 AND logo_kayit_no IS NOT NULL AND logo_iptal_durumu IS NULL AND logo_kapatma_durumu IS NULL
+      AND logo_bekletme_durumu IS DISTINCT FROM 'bekliyor'
+      AND NOT (logo_bekletme_durumu IS NOT DISTINCT FROM 'gonderildi' AND logo_bekletme_istegi = $3)
+      AND ($3 = 'beklet' OR logo_bekletme_istegi IS NOT NULL) RETURNING id`, [talepId, teklifId, istek])) !== null;
+}
+// Sonuç yalnız kuyruktaki ve gönderilen istekle aynı isteğe yazılır: bu arada iptal, kapatma ya da yeni istek geldiyse yok sayılır.
+export async function siparisLogoBekletmeSonucuYaz(db: Db, id: number, istek: 'beklet' | 'serbest', hata: string | null): Promise<void> {
+  await db.sorgu(`UPDATE satin_alma_siparis SET logo_bekletme_durumu = CASE WHEN $3::text IS NULL THEN 'gonderildi' ELSE 'hata' END, logo_bekletme_hata = $3
+    WHERE id = $1 AND logo_bekletme_istegi = $2 AND logo_bekletme_durumu IN ('bekliyor', 'hata') AND logo_iptal_durumu IS NULL AND logo_kapatma_durumu IS NULL`,
+    [id, istek, hata]);
 }
 export function logoyaIptalGidecekSiparislerOku(db: Db, sinir: number): Promise<{ id: number; no: string; logoKayitNo: string }[]> {
   return db.sorgu(`SELECT id, coalesce(no, '') AS no, logo_kayit_no AS "logoKayitNo" FROM satin_alma_siparis

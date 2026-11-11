@@ -83,6 +83,17 @@
 .tc-ad-hucre-bilgi { --c: var(--done); }
 .tc-ad-hucre-uyari { --c: var(--hold); }
 .tc-ad-hucre-hata { --c: var(--stop); }
+/* Yetkiliye hücre düğmedir: dokunma alanı satır yüksekliğini aşmaz, odak halkası görünür. */
+.tc-ad-hucre-dugme {
+  justify-content: center; min-width: var(--dokunma); min-height: var(--dokunma); margin: calc(-1 * var(--b-2)) 0; padding: 0;
+  font: inherit; background: transparent; border: thin dashed var(--edge); border-radius: var(--yari-2); cursor: pointer;
+}
+.tc-ad-hucre-dugme:hover { border-style: solid; border-color: var(--c); background: var(--panel2); }
+.tc-ad-hucre-dugme:focus-visible { outline: var(--cizgi-orta) solid var(--done); outline-offset: var(--cizgi); }
+/* Dar ekranda sabit adım sütunu daralır; adım adı komşu hücreye taşmasın, sütun içinde sarsın. */
+.tc-ad-matris-adim { display: block; min-inline-size: min-content; white-space: normal; }
+.tc-ad-ipucu { display: flex; align-items: center; gap: var(--b-1); margin: var(--b-2) 0 0; font-size: var(--yazi-s); color: var(--muted); }
+.tc-ad-hucre-pencere { display: grid; gap: var(--b-3); }
 .tc-ad-lejant { display: flex; flex-wrap: wrap; gap: var(--b-2) var(--b-4); margin: var(--b-3) 0 0; font-size: var(--yazi-s); }
 
 /* Yan pencere */

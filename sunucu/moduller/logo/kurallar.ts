@@ -277,6 +277,8 @@ export function kartEylemi(g: GidenDurumu | null, simdi: Date, tazeNiyet: boolea
 export const FIS_NO_EN_COK = 16;
 // ORDER_STATUS: 1 öneri, 4 sevk edilebilir. TMI'de onaylanıp verilmiş sipariş Logo'da sevk edilebilir açılır (VARSAYIM).
 export const SIPARIS_LOGO_DURUMU = 4;
+// 2972-1 b: "Logo'da beklet" = 1 (öneri, kesinleşmemiş sipariş), "serbest bırak" = 4 (açılıştaki durum).
+export const SIPARIS_BEKLETME_DURUMLARI = { beklet: 1, serbest: SIPARIS_LOGO_DURUMU } as const;
 // Satır türü (TYPE): 0 malzeme, 4 hizmet (not 2.3).
 const SATIR_TURU = { malzeme: 0, hizmet: 4 } as const;
 // Logo döviz türü (CURTYPE): 1 USD, 20 EUR (not 2.3). TL için döviz alanı gönderilmez. Listede olmayan para birimi gönderilmez.
@@ -442,6 +444,16 @@ export function siparisGuncellemeGovdesi(
   }
   const { [SIPARIS_ALANLARI.durum]: _durum, ...durumsuz } = r.govde;
   return { govde: { [KAYIT_ALANI]: kayit, ...durumsuz } };
+}
+
+// Bekletme Logo'ya düzenleme gövdesiyle ve durumla gider (yardımcı ORDER_STATUS'u yalnız düzenlemede yazar). Kuyruk yalnız bütün satırları
+// Logo'da numaralı ve sırada düzenlemesi olmayan siparişi verir; burada yine de numarasız satır reddedilir, yoksa Logo'ya yeni satır eklenirdi.
+export function bekletmeGovdesi(
+  s: Parameters<typeof siparisGuncellemeGovdesi>[0], o: SiparisGovdeSecenegi, istek: keyof typeof SIPARIS_BEKLETME_DURUMLARI,
+): { govde: Record<string, unknown> } | { hata: string } {
+  if (s.satirlar.some((x) => x.logoSatirRef === null)) return { hata: 'Siparişte Logo\'ya henüz gitmemiş satır var; önce düzenleme gitmeli.' };
+  const r = siparisGuncellemeGovdesi(s, o);
+  return 'hata' in r ? r : { govde: { ...r.govde, [SIPARIS_ALANLARI.durum]: SIPARIS_BEKLETME_DURUMLARI[istek] } };
 }
 
 // Düzenlemeden sonra Logo satırlarının TMI satırlarına eşlenmesi: kaydı bilinen satır kendi numarasını korur; Logo'daki yeni numaralar
@@ -1159,8 +1171,8 @@ export const LOGO_AKISLARI: readonly LogoAkisTanimi[] = [
     aciklama: 'Stok\'taki malzeme fişleri (sarf, üretimden giriş, fire, sayım fazlası ve eksiği, ambar transferi) MaterialSlip uçlarıyla gider; her türün gönderim şekli (kapalı, otomatik, elle) ayrı ayardadır. Değişen fiş Logo\'da silinip aynı numarayla yeniden açılır.' },
   // 2971: 2961 ile gelen işler; her biri kendi anahtarıyla, varsayılan kapalı. Yazan iş bağlı olduğu gönderim anahtarını da taşır ve ikisi
   // birden açık olmalıdır; gönderim anahtarı açık olsa da iş kendiliğinden başlamaz. Kod bağlanınca rozet "kapalı" ile başlar.
-  { anahtar: 'siparis-durumu', yon: 'tmi-logo', baslik: 'Siparişi Logo\'da beklet', kaynak: 'kodda-yok', ayarlar: ['logo.siparis-bekletme-gonderimi', 'logo.satin-alma-gonderimi'], ayarKosulu: 'hepsi',
-    belgeTurleri: [], aciklama: 'Satın alma siparişindeki "Logo\'da beklet" siparişi Logo\'da öneri (kesinleşmemiş) durumuna çeker, "Logo\'da serbest bırak" geri alır.' },
+  { anahtar: 'siparis-durumu', yon: 'tmi-logo', baslik: 'Siparişi Logo\'da beklet', kaynak: 'bagli', ayarlar: ['logo.siparis-bekletme-gonderimi', 'logo.satin-alma-gonderimi'], ayarKosulu: 'hepsi',
+    belgeTurleri: ['siparis-bekletme'], aciklama: 'Satın alma siparişindeki "Logo\'da beklet" siparişi Logo\'da öneri (kesinleşmemiş) durumuna çeker, "Logo\'da serbest bırak" geri alır.' },
   { anahtar: 'talep-iptali', yon: 'tmi-logo', baslik: 'Talep fişi iptali', kaynak: 'kodda-yok', ayarlar: ['logo.talep-iptali-gonderimi', 'logo.satin-alma-gonderimi'], ayarKosulu: 'hepsi', belgeTurleri: [],
     aciklama: 'CORE\'da iptal edilen talebin Logo fişi öneriye geri alınır (Logo\'da iptal durumu yok); iptal geri alınınca yeniden onaylanır.' },
   { anahtar: 'teklif-kapatma', yon: 'tmi-logo', baslik: 'Satış teklifi kapatma', kaynak: 'kodda-yok', ayarlar: ['logo.teklif-kapatma-gonderimi', 'logo.satis-gonderimi'], ayarKosulu: 'hepsi', belgeTurleri: [],

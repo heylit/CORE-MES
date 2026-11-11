@@ -34,10 +34,10 @@ export type { MalzemeKgFiyati } from './servis.ts';
 export { stokBirimiBasinaKg } from './kurallar.ts';
 // #205 karar 1: Logo bağlantısı siparişi, düzenlemesini, kapatmasını ve iptalini buradan alır, sonucu buraya yazar. Yetki denetlemez, çağıranın işlemini kullanır.
 export {
-  logoyaGidecekSiparisler, logoyaGuncellemeGidecekSiparisler, logoyaIptalGidecekSiparisler, logoyaKapatmaGidecekSiparisler, siparisLogoGuncellemeSonucu,
-  siparisLogoIptalSonucu, siparisLogoKapatmaSonucu, siparisLogoSonucu,
+  logoyaBekletmeGidecekSiparisler, logoyaGidecekSiparisler, logoyaGuncellemeGidecekSiparisler, logoyaIptalGidecekSiparisler, logoyaKapatmaGidecekSiparisler,
+  siparisLogoBekletmeSonucu, siparisLogoGuncellemeSonucu, siparisLogoIptalSonucu, siparisLogoKapatmaSonucu, siparisLogoSonucu,
 } from './servis.ts';
-export type { LogoyaGidecekSiparis, LogoyaGuncellemeGidecekSiparis, LogoyaKapatmaGidecekSiparis } from './servis.ts';
+export type { LogoyaBekletmeGidecekSiparis, LogoyaGidecekSiparis, LogoyaGuncellemeGidecekSiparis, LogoyaKapatmaGidecekSiparis } from './servis.ts';
 // #205 S3 b (kart #790): Logo bağlantısı onaylı talep fişini ve sipariş satırının karşılamasını buradan alır, sonucu buraya yazar.
 export { karsilamaLogoSonucu, logoyaGidecekKarsilamalar, logoyaGidecekTalepler, talepLogoSonucu } from './servis.ts';
 export type { LogoyaGidecekKarsilama, LogoyaGidecekTalep } from './servis.ts';

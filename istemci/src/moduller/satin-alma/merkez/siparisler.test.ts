@@ -33,7 +33,7 @@ function kur(): void {
     t1: t('t1', 'ST-DEN-001', 'Deneme rulman', 'ordered', [kalem('k1', 'Deneme rulman 6204', 40)], [q1], {
       mode: 'single', quoteId: 'q1', reason: '', by: '', decidedAt: gun(-15), orderNo: 'SP-DEN-001', orderDate: gun(-13), expectedDate: gun(-3),
       lines: [{ id: 1, itemId: 'k1', quoteId: 'q1', qty: 40, unit: 'adet', received: 30 }],
-      logo: { durum: 'hata', kayitNo: null, hata: 'Deneme hata', iptalDurumu: null, iptalHata: null, kapatmaDurumu: null, kapatmaHata: null } as never,
+      logo: { durum: 'hata', kayitNo: null, hata: 'Deneme hata', iptalDurumu: null, iptalHata: null, kapatmaDurumu: null, kapatmaHata: null, bekletmeIstegi: null, bekletmeDurumu: null, bekletmeHata: null } as never,
     }),
     t2: t('t2', 'ST-DEN-002', 'Deneme bölünmüş', 'ordered', [kalem('k2', 'Deneme kayış', 2), kalem('k3', 'Deneme pim', 100)], [qa, qb], {
       mode: 'split', quoteId: null, splits: { k2: 'qa', k3: 'qb' }, reason: '', by: '', decidedAt: gun(-5),

@@ -10,7 +10,7 @@ import { logoBirimSetiKullaniliyorMu, logoyaGidecekMalzemeler, malzemeLogoSonucu
 import type { LogoyaGidecekMalzeme, MalzemeLogoSonucu } from '../malzemeler/disari.ts';
 import type { KopruIstemcisi, SatirliSonuc } from './kopru.ts';
 import {
-  BELIRSIZ_BEKLEME_MS, eklemeGovdesi, kodCakismasiMetni, guncellemeEslemesi, HIZMET_ALANLARI, kapatmaGovdesi, karsilamaGovdesi, karsilamaKaydiBul, malzemeGuncellemeGovdesi, siparisGuncellemeGovdesi, talepGovdesi, satirEslemesi, siparisGovdesi, gecerliBirimSetleri, geriCekilmeMs, hizmetGovdesi, HIZMET_AYARI, kartEylemi, kirp, KUYRUK_SINIRI,
+  BELIRSIZ_BEKLEME_MS, bekletmeGovdesi, eklemeGovdesi, kodCakismasiMetni, guncellemeEslemesi, HIZMET_ALANLARI, kapatmaGovdesi, karsilamaGovdesi, karsilamaKaydiBul, malzemeGuncellemeGovdesi, siparisGuncellemeGovdesi, talepGovdesi, satirEslemesi, siparisGovdesi, gecerliBirimSetleri, geriCekilmeMs, hizmetGovdesi, HIZMET_AYARI, kartEylemi, kirp, KUYRUK_SINIRI,
   FATURA_TUR_SINIRI, FATURA_YENIDEN_OKUMA_MS, FIS_GONDERIM_AYARI, gonderimSekli, LOGO_FIS_TURLERI, logoFisDurumu, STOK_FISI_LOGO_TURU, stokFisindenLogoFisi, kontrolAdiminiYorumla, listeOkunmaliMi, malzemeFisiGovdesi, malzemeFisiOzeti, eskiEmirFisiNo, FIS_NO_EN_COK, logoFisNumarasi, OKUMA_HATA_BEKLEME_MS, LOGO_AKISLARI, LOGO_KONTROL_ADIMLARI, logoAkisDurumu, satisSiparisiGovdesi, satisTeklifiGovdesi,
   belgeStokKodlari, CARI_ARAMA_EN_AZ, CARI_ARAMA_EN_COK, logoKodlarinaCevir, sayfaliOkumaSirasi,
 } from './kurallar.ts';
@@ -111,7 +111,7 @@ export type TurSonucu =
   | { tur: 'niyet'; no: number }
   | { tur: 'gonderim'; no: number; sonuc: GidenSonucu }
   | { tur: 'satin-alma-kapali' }
-  | { tur: 'guncelleme' | 'pasif' | 'kapatma' | 'iptal' | 'karsilama'; no: number; sonuc: GidenSonucu }
+  | { tur: 'guncelleme' | 'pasif' | 'kapatma' | 'bekletme' | 'iptal' | 'karsilama'; no: number; sonuc: GidenSonucu }
   | { tur: 'pasif-niyet'; no: number }
   | { tur: 'satis-kapali' }
   | { tur: 'mal-kabul-kapali' | 'liste-kapali' | 'fatura-kapali' | 'malzeme-fisi-kapali' | 'malzeme-karti-kapali' | 'stok-kapali' }
@@ -423,6 +423,7 @@ export type SatirBaglari = { satirId: number; logoSatirRef: string }[];
 export type SiparisLogoSonucu = { kayitNo: string; satirlar: SatirBaglari } | { hata: string };
 export interface LogoyaIptalGidecekSiparis { id: number; no: string; logoKayitNo: string }
 export interface LogoyaKapatmaGidecekSiparis extends LogoyaIptalGidecekSiparis { satirRefleri: readonly string[] }
+export interface LogoyaBekletmeGidecekSiparis extends LogoyaGuncellemeGidecekSiparis { istek: 'beklet' | 'serbest' }
 export type Tamam = { tamam: true } | { hata: string };
 export interface LogoyaGidecekKarsilama extends GonderilecekKarsilama { firmaId: number }
 
@@ -433,6 +434,8 @@ export interface SatinAlmaKaynagi {
   guncellemeSonucu(db: Db, id: number, sonuc: { satirlar: SatirBaglari } | { hata: string }): Promise<void>;
   kapatmaGidecekler(db: Db, sinir: number): Promise<LogoyaKapatmaGidecekSiparis[]>;
   kapatmaSonucu(db: Db, id: number, sonuc: Tamam): Promise<void>;
+  bekletmeGidecekler(db: Db, sinir: number): Promise<LogoyaBekletmeGidecekSiparis[]>;
+  bekletmeSonucu(db: Db, id: number, istek: 'beklet' | 'serbest', sonuc: Tamam): Promise<void>;
   iptalGidecekler(db: Db, sinir: number): Promise<LogoyaIptalGidecekSiparis[]>;
   iptalSonucu(db: Db, id: number, sonuc: Tamam): Promise<void>;
   talepGidecekler(db: Db, sinir: number): Promise<GonderilecekTalep[]>;
@@ -457,7 +460,7 @@ export function satinAlmaTuru(vt: TxAcan, o: SatinAlmaTurOrtami): Promise<TurSon
     if (o.kopru === null) return { tur: 'ortam-degiskeni-yok' };
     const kopru = o.kopru;
     return (await talepTuru(db, o, kopru)) ?? (await siparisAcmaTuru(db, o, kopru)) ?? (await siparisGuncellemeTuru(db, o, kopru))
-      ?? (await kapatmaTuru(db, o, kopru)) ?? (await iptalTuru(db, o, kopru)) ?? (await karsilamaTuru(db, o, kopru)) ?? { tur: 'bos' };
+      ?? (await kapatmaTuru(db, o, kopru)) ?? (await bekletmeTuru(db, o, kopru)) ?? (await iptalTuru(db, o, kopru)) ?? (await karsilamaTuru(db, o, kopru)) ?? { tur: 'bos' };
   });
 }
 
@@ -693,6 +696,36 @@ async function siparisGuncellemeTuru(db: Db, o: SatinAlmaTurOrtami, kopru: Kopru
     bildir: (yazDb, x) => o.kaynak.guncellemeSonucu(yazDb, sip.id, x),
   });
   return turla(adim, (sonuc) => ({ tur: 'guncelleme', no: sip.id, sonuc }));
+}
+
+// 2966-1 b: kendi anahtarı ("Logo: sipariş bekletme gönderimi") kapalıyken kuyruk okunmaz, istek atılmaz; istek CORE'da sırada kalır.
+// Önce Logo satırları okunur: CORE'un bildiği satır Logo'da yoksa gövde gönderilmez (düzenleme gövdesi eksik satırı kapatırdı).
+async function bekletmeTuru(db: Db, o: SatinAlmaTurOrtami, kopru: KopruIstemcisi): Promise<KopruAdimi | null> {
+  if (!(await sistemAyariOku(db, 'logo.siparis-bekletme-gonderimi'))) return null;
+  const sira = await sirasiGelen(db, o, 'siparis-bekletme', await o.kaynak.bekletmeGidecekler(db, KUYRUK_SINIRI));
+  if (sira === null) return null;
+  const { is: sip, g } = sira;
+  const kdv = await sistemAyariOku(db, 'logo.kdv-orani');
+  const hizmetKdv = await sistemAyariOku(db, 'logo.hizmet-kdv-orani');
+  const cariKodu = (await firmaOzeti(db, sip.firmaId))?.logoCariKodu ?? null;
+  const harita = await s.logoKodHaritasi(db, belgeStokKodlari(sip));
+  const ad = sip.istek === 'beklet' ? 'Bekletme' : 'Serbest bırakma';
+  const adim = tekAdim<Tamam>(o, g, {
+    belge: 'siparis-bekletme', id: sip.id,
+    calis: async () => {
+      const r = bekletmeGovdesi(logoKodlarinaCevir(sip, harita), { cariKodu, kdv, hizmetKdv }, sip.istek);
+      if ('hata' in r) return { sonuc: 'reddedildi', hata: `${ad}: ${r.hata}` };
+      const once = await kopru.siparisSatirlari(sip.no.trim());
+      if (once.tur !== 'basarili') return { sonuc: once.tur, hata: `Satır okuması: ${once.ileti}` };
+      if (once.satirRefleri === null || guncellemeEslemesi(sip.satirlar, once.satirRefleri, []) === null) {
+        return { sonuc: 'reddedildi', hata: `${ad}: Logo'daki satırlar CORE'dakiyle tutmuyor; Logo'da elle bakın.` };
+      }
+      const c = await kopru.siparisGuncelle(r.govde);
+      return c.tur === 'basarili' ? { tamam: true, kayitNo: sip.logoKayitNo, deger: { tamam: true } } : { sonuc: c.tur, hata: `${ad}: ${c.ileti}` };
+    },
+    bildir: (yazDb, x) => o.kaynak.bekletmeSonucu(yazDb, sip.id, sip.istek, x),
+  });
+  return turla(adim, (sonuc) => ({ tur: 'bekletme', no: sip.id, sonuc }));
 }
 
 async function kapatmaTuru(db: Db, o: SatinAlmaTurOrtami, kopru: KopruIstemcisi): Promise<KopruAdimi | null> {

@@ -7,7 +7,7 @@ import type { Islem } from '#paylasilan/islemler.ts';
 import type { DenetimSecimi, IkiliCevap } from '#cekirdek/uc.ts';
 import type { KmTedarikciDurumu } from '#paylasilan/sozlesme/kalite-merkezi.ts';
 import type {
-  AcilisCevabi, Ayarlar, ButceKullanimiCevabi, DegerlendirmeCevabi, DisOperasyonAyrintisiCevabi, KartAyrintilariCevabi, KartAyrintisi, DisOperasyonlarCevabi, FasonSureleriCevabi, SiparisBelgeleriCevabi, SiparisBelgesi, SiparisBelgesiYazimi, AyarlarKaydetYazimi, HizliAcYazimi, TalebimiDuzenleYazimi, TalebimGuncellemeYazimi, KatalogKaydetYazimi, KatalogKaydi, MalzemeSecenekleriCevabi, SatinAlmaOzetiCevabi, SiparisCikisi, SiparisFaturalariCevabi, SiparisFaturasiYazimi, SiparisKalemiDegistirYazimi, SiparisKapatYazimi, TeslimYontemiYazimi, OdemePlaniYazimi, SiparisTakibiCevabi, Talep, TalepDurumu, TalepKaydetYazimi, TalepTuru,
+  AcilisCevabi, Ayarlar, ButceKullanimiCevabi, DegerlendirmeCevabi, DisOperasyonAyrintisiCevabi, KartAyrintilariCevabi, KartAyrintisi, DisOperasyonlarCevabi, FasonSureleriCevabi, SiparisBelgeleriCevabi, SiparisBelgesi, SiparisBelgesiYazimi, AyarlarKaydetYazimi, HizliAcYazimi, TalebimiDuzenleYazimi, TalebimGuncellemeYazimi, KatalogKaydetYazimi, KatalogKaydi, MalzemeSecenekleriCevabi, SatinAlmaOzetiCevabi, SiparisCikisi, SiparisFaturalariCevabi, SiparisFaturasiYazimi, SiparisKalemiDegistirYazimi, SiparisKapatYazimi, SiparisLogoBekletYazimi, TeslimYontemiYazimi, OdemePlaniYazimi, SiparisTakibiCevabi, Talep, TalepDurumu, TalepKaydetYazimi, TalepTuru,
   IptaliGeriAlCevabi, IptaliGeriAlYazimi, ProjeSecenekleriCevabi, TalepAyirYazimi, TalepBirlestirYazimi, AcikEmirlerCevabi, Onay, OnTalepleriCevabi, OnTalepYoksayYazimi, TedarikTermini, TedarikTerminiKaydetYazimi, TedarikTerminleriCevabi, TerminTakipSatiri, GuncelKgFiyatiSatiri, KgFiyatiGecmisiCevabi, KgFiyatiIptalYazimi, KgFiyatiSatiri, KgFiyatlariCevabi, KgStokDegeri, StokAyriGrubu, StokYokIstekleriCevabi, TaleplerimCevabi, Talebim, TalepYazimi, Tedarikci, TedarikciKaydetYazimi,
 } from '#paylasilan/sozlesme/satin-alma.ts';
 import { STOK_AYRI_GRUPLARI } from '#paylasilan/sozlesme/satin-alma.ts';
@@ -33,7 +33,7 @@ import { projeGetir, projeSecenekleri } from '../projeler/disari.ts';
 import { islemVarMi } from '#cekirdek/yetki.ts';
 import {
   ILETILER, ISLEM, type KurKilidiIsi, emirAcikMi, kilitliDurum, basamakEsigiReddi, basamakKilidiReddi, tedarikciyeGidenAyrinti, kalemAyrintisiniKoru, kilittenSonraOnayliMi, kurKilidiIsi, kurKilidiReddi, degisiklikReddi, gecikmeGunu, fasonKalani, sonDonusGecikmesi, agirlikliGecikme, degisiklikTuru, dortGozSonucu, onayKademesiReddi, onayLimitRolleri, onayLimitleriDegistiMi, onayLimitiReddi, terminsizSiparisReddi, terminTakibi, fazlaTeslim, finanstanEklenenKurlar, aylikFaiz, fiyatIzleri, kullanilanParaBirimleri, gecisVarMi, gorunenDurum, kararDegistiMi, kararOnayliMi, talepFisiGiderMi,
-  KARTSIZ_KATEGORI, TALEP_TURU_KARTLARI, satinAlinabilirKartReddi, kartBirimiReddi, hizliBaslik, hizliKalemReddi, kartKopyasi, kartsizSiparisReddi, katalogKartiReddi, logoGuncellenecekSiparisler, logoIptalGeriAlmaReddi, logoSiparisDegisikligiReddi, siparisliKalemReddi, siparisDegisikligiMetni, siparisFaturaFirmasi, faturaEslesmeUyarilari, siparisKalemiDegisikligiReddi, siparisKapatmaReddi, talebinAlimlari, ondalikKiyas, siparisReddi, talebim, birimKarsiligi, talebimDuzenlenirMi, talebimKalemReddi, guncellemeReddi, guncellemeIptalleri, ikinciAlimRiski,
+  KARTSIZ_KATEGORI, TALEP_TURU_KARTLARI, satinAlinabilirKartReddi, kartBirimiReddi, hizliBaslik, hizliKalemReddi, kartKopyasi, kartsizSiparisReddi, katalogKartiReddi, logoGuncellenecekSiparisler, logoIptalGeriAlmaReddi, logoSiparisDegisikligiReddi, siparisliKalemReddi, siparisDegisikligiMetni, siparisFaturaFirmasi, faturaEslesmeUyarilari, siparisKalemiDegisikligiReddi, siparisKapatmaReddi, siparisBekletmeReddi, talebinAlimlari, ondalikKiyas, siparisReddi, talebim, birimKarsiligi, talebimDuzenlenirMi, talebimKalemReddi, guncellemeReddi, guncellemeIptalleri, ikinciAlimRiski,
   fasonKalemReddi, fasonOnTalepAdaylari, hizliBagReddi, planOnTalepAdaylari, uygulananKartReddi, type KalemBagi,
   fasonKirilimlari, fasonSureOrnekleri, fasonSuresiTahmini, fasonTerminUyumu, talepEdenDurumu, talepEdenGovdeDurumu, talepEdenGorunumu, avansAsimi, gerceklesenKosul, planGerceklesenFarki, talepKartiReddi, tamGorurMu, teklifKuru, teslimDurumu, odemePlaniHedefi, varsayilanOdemePlani,
   askidakiTedarikciReddi, birimFiyati, kaliteSiparisReddi, karneTeslimOlayi, stokTutari, uygulananKgFiyati, yeniSiparisFirmalari,
@@ -145,7 +145,8 @@ async function talepleriYalinKur(db: Db, satirlar: s.TalepSatiri[]): Promise<Tal
       satirlar, teslimDurumu: x.logoKapatmaDurumu === null ? teslimDurumu(satirlar) : 'tamam', kalite: null,
       logo: x.logoDurumu === null ? null
         : { durum: x.logoDurumu, kayitNo: x.logoKayitNo, hata: x.logoHata, iptalDurumu: x.logoIptalDurumu, iptalHata: x.logoIptalHata,
-          guncellemeDurumu: x.logoGuncellemeDurumu, guncellemeHata: x.logoGuncellemeHata, kapatmaDurumu: x.logoKapatmaDurumu, kapatmaHata: x.logoKapatmaHata },
+          guncellemeDurumu: x.logoGuncellemeDurumu, guncellemeHata: x.logoGuncellemeHata, kapatmaDurumu: x.logoKapatmaDurumu, kapatmaHata: x.logoKapatmaHata,
+          bekletmeIstegi: x.logoBekletmeIstegi, bekletmeDurumu: x.logoBekletmeDurumu, bekletmeHata: x.logoBekletmeHata },
     };
   };
   const at = <T extends { talepId: string }>({ talepId: _t, ...r }: T) => r;
@@ -1031,6 +1032,18 @@ export async function siparisKapat(db: Db, k: Kullanici, id: string, g: SiparisK
   await kapanisPlanNotlari(db, k, id, g.teklifId);
   return gorunen(k, (await talepOku(db, id))!);
 }
+// 2966-1 b, 2972-2 a: yalnız Logo'daki durum değişir, CORE'da sipariş sürer (düzenleme, mal kabul). İstek kuyruğa girer; Logo'ya ancak
+// iki anahtar açıkken gider. Talep kilitlenir (kapatma ve iptalle aynı sıraya girer).
+export async function siparisLogoBeklet(db: Db, k: Kullanici, id: string, g: SiparisLogoBekletYazimi): Promise<Talep> {
+  await surumluGuncelle({ guncelle: () => s.talepSurumuArttir(db, id, g.surum), varMi: () => s.talepVarMi(db, id), bulunamadiIletisi: ILETILER.talepYok });
+  const eski = (await talepOku(db, id))!;
+  const red = siparisBekletmeReddi(eski, g.teklifId, g.istek);
+  if (red !== null) throw gecersiz(red);
+  if (!(await s.siparisiBekletmeyeIsaretle(db, id, g.teklifId, g.istek))) throw gecersiz(ILETILER.bekletmeSirada);
+  const sip = eski.karar!.siparisler.find((x) => x.teklifId === g.teklifId)!;
+  await s.hareketEkle(db, id, randomUUID(), `Sipariş ${sip.no ?? sip.siparisNo}: ${g.istek === 'beklet' ? "Logo'da bekletme" : "Logo'da serbest bırakma"} istendi.`, k.id);
+  return gorunen(k, (await talepOku(db, id))!);
+}
 // 2472: avans gerçekleşen değeri aşarsa (M2: KDV dahil, sipariş dövizinde) ve değişmeyen (elle ya da faturalı) plan gerçekleşen değerden
 // farklıysa talebin geçmişine not düşer. Alacak kaydı finansındır; burada yazılmaz.
 async function kapanisPlanNotlari(db: Db, k: Kullanici, talepId: string, teklifId: string): Promise<void> {
@@ -1736,12 +1749,21 @@ export interface LogoyaGuncellemeGidecekSiparis extends Omit<LogoyaGidecekSipari
 }
 // Kuyruktaki (bekliyor ve hata) siparişler en eskiden; kayıtsız tedarikçinin siparişi gelmez. Stok kodu malzeme kartındandır.
 export async function logoyaGidecekSiparisler(db: Db, sinir: number): Promise<LogoyaGidecekSiparis[]> {
-  return (await logoKuyrugu(db, sinir, 'gonderim')).map(({ logoKayitNo: _k, kaldirilanSatirRefleri: _s, ...x }) => ({ ...x, satirlar: x.satirlar.map(({ logoSatirRef: _r, ...r }) => r) }));
+  return (await logoKuyrugu(db, sinir, 'gonderim')).map(({ logoKayitNo: _k, kaldirilanSatirRefleri: _s, bekletmeIstegi: _b, ...x }) => ({ ...x, satirlar: x.satirlar.map(({ logoSatirRef: _r, ...r }) => r) }));
 }
 export async function logoyaGuncellemeGidecekSiparisler(db: Db, sinir: number): Promise<LogoyaGuncellemeGidecekSiparis[]> {
-  return (await logoKuyrugu(db, sinir, 'guncelleme')).map((x) => ({ ...x, logoKayitNo: x.logoKayitNo! }));
+  return (await logoKuyrugu(db, sinir, 'guncelleme')).map(({ bekletmeIstegi: _b, ...x }) => ({ ...x, logoKayitNo: x.logoKayitNo! }));
 }
-async function logoKuyrugu(db: Db, sinir: number, kuyruk: 'gonderim' | 'guncelleme') {
+// 2966-1 b: Logo'da beklet / serbest bırak; gövde düzenlemeyle aynıdır, istek ayrıca gelir.
+export interface LogoyaBekletmeGidecekSiparis extends LogoyaGuncellemeGidecekSiparis { istek: 'beklet' | 'serbest' }
+export async function logoyaBekletmeGidecekSiparisler(db: Db, sinir: number): Promise<LogoyaBekletmeGidecekSiparis[]> {
+  return (await logoKuyrugu(db, sinir, 'bekletme')).flatMap(({ bekletmeIstegi, ...x }) =>
+    (bekletmeIstegi === null ? [] : [{ ...x, logoKayitNo: x.logoKayitNo!, istek: bekletmeIstegi }]));
+}
+export async function siparisLogoBekletmeSonucu(db: Db, id: number, istek: 'beklet' | 'serbest', sonuc: { tamam: true } | { hata: string }): Promise<void> {
+  await s.siparisLogoBekletmeSonucuYaz(db, id, istek, 'hata' in sonuc ? logoHatasi(sonuc.hata) : null);
+}
+async function logoKuyrugu(db: Db, sinir: number, kuyruk: 'gonderim' | 'guncelleme' | 'bekletme') {
   const siparisler = await s.logoyaGidecekSiparislerOku(db, sinir, kuyruk);
   const kalemler = await s.logoSiparisKalemleriOku(db, siparisler.map((x) => x.id));
   const kartlar = await malzemeOzetleri(db, kalemler.flatMap((k) => (k.malzemeNo === null ? [] : [k.malzemeNo])));

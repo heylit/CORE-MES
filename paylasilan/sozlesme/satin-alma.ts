@@ -124,6 +124,11 @@ export const siparisLogoSemasi = z.object({
   // "Kalanı kapat": Logo'daki siparişin teslim alınmamış kalanı kapatılır; kapatılan siparişe teslim yazılmaz. Açık siparişte boş.
   kapatmaDurumu: z.enum(LOGO_DURUMLARI).nullable(),
   kapatmaHata: z.string().nullable(),
+  // 2966-1 b, 2972-1 b, 2972-2 a: "Logo'da beklet" Logo'daki siparişi öneri (kesinleşmemiş) durumuna çeker, "Logo'da serbest bırak" geri alır.
+  // Yalnız Logo durumu değişir; CORE'da düzenleme ve mal kabul sürer. Hiç istenmediyse boş.
+  bekletmeIstegi: z.enum(['beklet', 'serbest']).nullable(),
+  bekletmeDurumu: z.enum(LOGO_DURUMLARI).nullable(),
+  bekletmeHata: z.string().nullable(),
 });
 export const siparisCikisSemasi = siparisSemasi.extend({
   // TMI'nin verdiği sipariş numarası (Sistem ayarlarındaki numara kuralı; kart #544); `siparisNo` Logo / tedarikçi numarasıdır. Sunucu yazar.
@@ -227,6 +232,11 @@ export const siparisKalemiDegistirGovdesi = z.object({
 // Logo'ya gitmiş siparişin kalanı satın almacının komutuyla, gerekçeyle kapatılır; gerekçe talebin hareketine yazılır.
 // "Biz alacağız" seçilen talebin siparişi sevkiyat bekleme listesine alım olarak düşer (kart #1310).
 export const teslimYontemiGovdesi = z.object({ teslimYontemi: z.enum(TESLIM_YONTEMLERI).nullable(), ...beklenenSurum });
+export const siparisLogoBekletGovdesi = z.object({
+  teklifId: uuid,
+  istek: z.enum(['beklet', 'serbest']),
+  ...beklenenSurum,
+});
 export const siparisKapatGovdesi = z.object({
   teklifId: uuid,
   gerekce: z.string().trim().min(1, 'Gerekçe zorunlu.').max(500),
@@ -636,6 +646,7 @@ export type TalepYazimi = z.output<typeof talepGovdesi>;
 export type TalepKaydetYazimi = z.output<typeof talepKaydetGovdesi>;
 export type SiparisKalemiDegistirYazimi = z.output<typeof siparisKalemiDegistirGovdesi>;
 export type SiparisKapatYazimi = z.output<typeof siparisKapatGovdesi>;
+export type SiparisLogoBekletYazimi = z.output<typeof siparisLogoBekletGovdesi>;
 export type TeslimYontemiYazimi = z.output<typeof teslimYontemiGovdesi>;
 export type TeslimYontemi = (typeof TESLIM_YONTEMLERI)[number];
 export type SiparisFaturasiYazimi = z.output<typeof siparisFaturasiGovdesi>;
@@ -692,6 +703,7 @@ export interface SatinAlmaUclari {
   'POST /satin-alma-talepleri/:id/sil': { govde: z.input<typeof talepSilGovdesi>; cevap: { tamam: true } };
   'POST /satin-alma-talepleri/:id/siparis-kalemi-degistir': { govde: z.input<typeof siparisKalemiDegistirGovdesi>; cevap: Talep };
   'POST /satin-alma-talepleri/:id/siparis-kapat': { govde: z.input<typeof siparisKapatGovdesi>; cevap: Talep };
+  'POST /satin-alma-talepleri/:id/siparis-logo-beklet': { govde: z.input<typeof siparisLogoBekletGovdesi>; cevap: Talep };
   'POST /satin-alma-talepleri/:id/teslim-yontemi': { govde: z.input<typeof teslimYontemiGovdesi>; cevap: Talep };
   'GET /satin-alma-talepleri/:id/siparis-takibi': { cevap: SiparisTakibiCevabi };
   'GET /satin-alma-talepleri/:id/degerlendirme': { cevap: DegerlendirmeCevabi };

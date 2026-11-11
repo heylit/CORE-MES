@@ -38,8 +38,10 @@ describe('LOGO-H1 akış durumu', () => {
     assert.equal(logoAkisDurumu(iptal, { ortamVar: true, ayarlar: { ...temel, 'logo.satin-alma-gonderimi': false, 'logo.talep-iptali-gonderimi': true } }), 'kapali',
       'kendi anahtarı açık, gönderim kapalı');
     assert.equal(logoAkisDurumu(iptal, { ortamVar: true, ayarlar: { ...temel, 'logo.talep-iptali-gonderimi': true } }), 'hazir');
-    const yeniler = LOGO_AKISLARI.filter((a) => a.kaynak === 'kodda-yok');
+    // 2984: siparis-durumu kodlandı ("bağlı"); kendi anahtarı ve gönderim anahtarı birlikte kuralı onda da sürer.
+    const yeniler = LOGO_AKISLARI.filter((a) => a.kaynak === 'kodda-yok' || a.anahtar === 'siparis-durumu');
     assert.equal(yeniler.length, 6);
+    assert.equal(LOGO_AKISLARI.find((a) => a.anahtar === 'siparis-durumu')?.kaynak, 'bagli');
     const eski = new Set(['logo.satin-alma-gonderimi', 'logo.satis-gonderimi']);
     for (const a of yeniler) {
       const kendi = a.ayarlar.filter((k) => !eski.has(k));
@@ -180,7 +182,8 @@ describe('Logo hazırlık uçları (gerçek PostgreSQL)', () => {
     assert.equal(h.akislar.find((a) => a.anahtar === 'satin-alma-siparisi')?.durum, 'ayar-eksik');
     assert.equal(h.akislar.find((a) => a.anahtar === 'malzeme-guncelleme')?.durum, 'ayar-eksik');
     assert.deepEqual(h.akislar.filter((a) => a.durum === 'kodda-yok').map((a) => a.anahtar).sort(),
-      ['malzeme-hareketleri', 'siparis-durumu', 'son-alis-fiyatlari', 'sozlukler', 'talep-iptali', 'teklif-kapatma'], 'yalnız planlanan Logo işleri kodda yok görünür');
+      ['malzeme-hareketleri', 'son-alis-fiyatlari', 'sozlukler', 'talep-iptali', 'teklif-kapatma'], 'yalnız planlanan Logo işleri kodda yok görünür');
+    assert.equal(h.akislar.find((a) => a.anahtar === 'siparis-durumu')?.durum, 'ayar-eksik');
     assert.deepEqual(['logo.mal-kabul-okumasi', 'logo.liste-okumasi', 'logo.fatura-okumasi', 'logo.malzeme-fisi-gonderimi', 'logo.malzeme-guncelleme-gonderimi']
       .map((k) => h.ayarlar.find((a) => a.anahtar === k)?.acik), [false, false, false, false, false], 'yeni akışlar kapalı gelir');
     const yeniIsler = ['logo.siparis-bekletme-gonderimi', 'logo.talep-iptali-gonderimi', 'logo.teklif-kapatma-gonderimi', 'logo.malzeme-hareketleri-okumasi',
