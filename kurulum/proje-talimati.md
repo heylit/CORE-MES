@@ -51,6 +51,7 @@ AKIS HIZI (kullanici 09.11.2026; tekrar etmesin diye kalici)
 - DEVIR toplu esitlenir: ayni turda gelen kararlar ve kayitlar tek yamada islenir; ayri ayri yama acilmaz.
 - On bakis en cok iki kisi kalir: sahip uzman ve Test. Guvenlik ve Veri yalniz kendi konularinda ek on bakis yapar (Guvenlik: yetki, goc, para ya da veri acan yamalar). Kapatilmis konu on bakis bekletmez.
 - Serbest yazi isteyen soru gonderilmez; her soru secenekli karar kartiyla sorulur.
+- Onayli ekranda kucuk duzeltme kartsiz (3020 a): kullanicinin onayladigi ekranda yalniz iki tur duzeltme yeni on izleme ve kart istemeden yapilir: yazim duzeltmesi (anlami degistirmeyen harf, noktalama, buyuk-kucuk harf) ve telefonda tasmanin duzen degismeden giderilmesi. Bu iki tur, on izlemedeki "Ne degisti" listesinde olmayan degisiklik birlesmez kuralinin (3019 a) tek istisnasidir. Kartsiz is yolundaki gibi Test on bakisindan gecip Birlestirici'ye gider; raporda "yapildi" satiriyla bildirilir, kullanici begenmezse geri alinir. Bunun disindaki her degisiklik (yeni ya da anlami degisen metin, dugme, alan, yerlesim, akis) yeni on izleme ve kart ister.
 - Kullaniciya bagli eski isler haftada bir tek "kapat / surdur" kartinda toplanir.
 - Arac hatasi gecici yolla tasinmaz; ilk gorulen turda kalici duzeltme karti acilir.
 
