@@ -44,5 +44,7 @@ describe('karantina konumu eksiğinin nedeni (2884)', () => {
     assert.equal(karantinaEksigi({ alanlar: [alan(1, 5)], depolar: [ANA], konumlar: [{ ...takili, satirSayisi: 0 }] }), 'eslenmemis');
     assert.equal(karantinaEksigi({ alanlar: [alan(1, 5), alan(2, 5)], depolar: [ANA], konumlar: [takili] }), 'eslenmemis');
     assert.match(karantinaYokIletisi('stoklu_tur', 'fason'), /stoğu taşıyın/);
+    // Konum zaten karantina türündeyse ama kapalıysa (stoklu da olsa) eşleme yeniden açar: neden stok değil, eşlemedir.
+    assert.equal(karantinaEksigi({ alanlar: [alan(1, 5)], depolar: [ANA], konumlar: [konum(1, { aktif: false, satirSayisi: 3 })] }), 'eslenmemis');
   });
 });

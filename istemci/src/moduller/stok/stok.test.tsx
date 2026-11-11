@@ -1077,7 +1077,9 @@ describe('Fabrika Haritası bağı (#686)', () => {
     sunucuKur(MUDUR, { 'GET /stok/harita-ozeti': () => json(200, { bolum: 1, goz: 0, alan: 0, eslenmemis: 0, bagsizKonumlar: [], bolumler: [] }), 'GET /stok/depolar': () => json(200, { depolar: [] }) });
     ac('/stok/ayarlar');
     const not = (await screen.findByText(/Haritadaki şu alanlar da konum olur/)).textContent ?? '';
-    for (const t of HARITA_ALAN_TURLERI) expect(not).toContain(KONUM_ETIKETI[t].toLocaleLowerCase('tr-TR'));
+    // Konum olan bütün türler ilk cümlede sayılır; ANA depo cümlesi yalnız fabrika geneli türleri tekrar eder.
+    const ilk = not.slice(0, not.indexOf('Bölümü stok deposu değilse'));
+    for (const t of HARITA_ALAN_TURLERI) expect(ilk).toContain(KONUM_ETIKETI[t].toLocaleLowerCase('tr-TR'));
     expect(not).toContain('karantina alanı');
     expect(not).toMatch(/ANA depoya bağlanır/);
   });
