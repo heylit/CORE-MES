@@ -684,8 +684,8 @@ describe('arkon (gerçek PostgreSQL)', () => {
       await merkez(`/dosyalar/${o}/parca`, { sira: 0, toplam: 1, veri: icerik.toString('base64') });
       return o;
     }
-    async function belgeAc(ad: string, icerik: Buffer, dosyaAdi: string, yayinla: boolean, tur = 'teknik-resim'): Promise<number> {
-      const b = await merkez<MerkezBelgesi>('/cizimler', { ad, tur, ozet: await merkezDosyasi(icerik), dosyaAdi });
+    async function belgeAc(ad: string, icerik: Buffer, dosyaAdi: string, yayinla: boolean, tur = 'teknik-resim', antetRev?: string): Promise<number> {
+      const b = await merkez<MerkezBelgesi>('/cizimler', { ad, tur, ozet: await merkezDosyasi(icerik), dosyaAdi, ...(antetRev === undefined ? {} : { antetRev }) });
       if (yayinla) await merkez(`/cizimler/${b.id}/revizyonlar/${b.revizyonlar[0]?.id}/yayinla`, { surum: b.surum });
       return b.id;
     }
@@ -699,6 +699,12 @@ describe('arkon (gerçek PostgreSQL)', () => {
       (await istek<MerkezBelgelerCevabi>(cerez, 'GET', '/arkon/cizim-merkezi/belgeler')).govde.belgeler;
     const kontrol = async (belgeId: number, ozet: string): Promise<MerkezKontrolCevabi['durumlar']> =>
       (await istek<MerkezKontrolCevabi>(yonetici, 'GET', `/arkon/cizim-merkezi/kontrol?dosyalar=${belgeId}:${ozet}`)).govde.durumlar;
+
+    test('2138-2: satırda merkezin harfi yanında belgenin revizyon kodu gelir', async () => {
+      const kodluId = await belgeAc('Merkez Kodlu', pdf('kodlu-a'), 'kodlu.pdf', true, 'teknik-resim', '03');
+      const satir = (await liste()).find((b) => b.id === kodluId);
+      assert.deepEqual([satir?.harf, satir?.revKodu], ['A', '03']);
+    });
 
     test('liste yalnız yayındaki ve Arkon\'un okuyabildiği belgeleri verir; ekleme dosyayı Arkon deposuna ve paket kaydına bağlı olarak alır', async () => {
       const yayinda = pdf('yayinda-a');
@@ -715,7 +721,7 @@ describe('arkon (gerçek PostgreSQL)', () => {
       const ids = gorunen.map((b) => b.id);
       assert.ok(ids.includes(pdfId) && ids.includes(modelId), 'yayındaki PDF ve model listede');
       for (const yok of [taslakId, resimId, arsivId]) assert.equal(ids.includes(yok), false, `listede olmamalı: ${yok}`);
-      assert.deepEqual(gorunen.find((b) => b.id === pdfId), { id: pdfId, ad: 'Merkez Flans', tur: 'teknik-resim', harf: 'A', tip: 'pdf', dosyaAdi: 'Merkez Flans.pdf', ozet: sha(yayinda) });
+      assert.deepEqual(gorunen.find((b) => b.id === pdfId), { id: pdfId, ad: 'Merkez Flans', tur: 'teknik-resim', harf: 'A', revKodu: null, tip: 'pdf', dosyaAdi: 'Merkez Flans.pdf', ozet: sha(yayinda) });
       assert.deepEqual([gorunen.find((b) => b.id === modelId)?.tip, gorunen.find((b) => b.id === modelId)?.dosyaAdi], ['model', 'Merkez Mil.step']);
 
       const once = (await istek(yonetici, 'GET', '/cizimler')).govde;

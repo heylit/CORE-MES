@@ -334,6 +334,8 @@ export const merkezModeliSemasi = z.object({
   belgeId: kimlik,
   ad: z.string(),
   harf: z.string(),
+  // 2138-2: gösterilen revizyon kodu (resmin kodu, yoksa bağlı malzeme kartının revizyonu); harf merkezin iç sırasıdır, gösterilmez.
+  revKodu: z.string().nullable().optional(),
   ozet: z.string(),
   dosyaTuru: z.enum(MERKEZ_MODEL_TURLERI),
 });
@@ -545,18 +547,18 @@ export const krokiSemasi = z.object({
   kaydedildi: zaman,
   // Bölüm krokisi Çizim Merkezi'ndeki belgeden geldiyse o belgenin yayındaki revizyonu; `ozet` krokininkinden farklıysa merkezde
   // yeni revizyon yayınlanmıştır. Fabrika krokisinde ve yerel yüklemede null.
-  merkez: z.object({ belgeId: kimlik, ad: z.string(), harf: z.string(), ozet: z.string() }).nullable(),
+  merkez: z.object({ belgeId: kimlik, ad: z.string(), harf: z.string(), revKodu: z.string().nullable().optional(), ozet: z.string() }).nullable(),
 });
 export const krokiCevabi = z.object({ kroki: krokiSemasi.nullable() });
 // Çizim Merkezi'nde yayında olan kroki belgeleri (bölüm krokisi seçicisi).
 export const merkezKrokileriCevabi = z.object({
-  belgeler: z.array(z.object({ id: kimlik, ad: z.string(), harf: z.string(), ozet: z.string() })),
+  belgeler: z.array(z.object({ id: kimlik, ad: z.string(), harf: z.string(), revKodu: z.string().nullable().optional(), ozet: z.string() })),
 });
 export const krokiMerkezdenGovdesi = z.object({ belgeId: z.number().int().min(1).max(TAM_SAYI_UST) });
 // İstasyonun Çizim Merkezi modeli (kart #921): seçici yayındaki, sahnede açılan 3B model belgelerini listeler.
 // `istasyonlar`: modeli olan aktif istasyonlar (kart #1196); "Ekle" listesi haritada olmayan istasyonu modeliyle gösterir.
 export const merkezModelleriCevabi = z.object({
-  belgeler: z.array(z.object({ id: kimlik, ad: z.string(), harf: z.string(), ozet: z.string(), dosyaTuru: z.enum(MERKEZ_MODEL_TURLERI) })),
+  belgeler: z.array(z.object({ id: kimlik, ad: z.string(), harf: z.string(), revKodu: z.string().nullable().optional(), ozet: z.string(), dosyaTuru: z.enum(MERKEZ_MODEL_TURLERI) })),
   istasyonlar: z.array(z.object({ istasyonId: kimlik, merkezModeli: merkezModeliSemasi })),
   // Çizim Merkezi'nde eşleşmiş ama yayında modeli olmayan istasyonlar (kart #1258): "Eklenecek makineler"de nedeniyle görünür.
   // İsteğe bağlı: bu alandan önce yazılmış istemci verisi geçerli kalır.

@@ -626,7 +626,7 @@ function merkezModeliSec(bagli: readonly BagliBelge[]): MerkezModeli | null {
   let secilen: MerkezModeli | null = null;
   for (const b of bagli) {
     if (b.tur !== '3b-model' || b.harf === null || b.ozet === null || !merkezTuruMu(b.dosyaTuru)) continue;
-    if (secilen === null || b.id < secilen.belgeId) secilen = { belgeId: b.id, ad: b.ad, harf: b.harf, ozet: b.ozet, dosyaTuru: b.dosyaTuru };
+    if (secilen === null || b.id < secilen.belgeId) secilen = { belgeId: b.id, ad: b.ad, harf: b.harf, revKodu: b.revKodu, ozet: b.ozet, dosyaTuru: b.dosyaTuru };
   }
   return secilen;
 }
@@ -636,7 +636,7 @@ export async function merkezModelleri(db: Db): Promise<MerkezModelleriCevabi> {
   const ids = (await istasyonListesi(db, { pasiflerDahil: false })).map((i) => i.id);
   const baglar = await kayitlaraBagliBelgeler(db, 'istasyonlar', ids);
   return {
-    belgeler: belgeler.flatMap(({ id, ad, harf, ozet: o, dosyaTuru }) => (merkezTuruMu(dosyaTuru) ? [{ id, ad, harf, ozet: o, dosyaTuru }] : [])),
+    belgeler: belgeler.flatMap(({ id, ad, harf, revKodu, ozet: o, dosyaTuru }) => (merkezTuruMu(dosyaTuru) ? [{ id, ad, harf, revKodu, ozet: o, dosyaTuru }] : [])),
     istasyonlar: ids.flatMap((istasyonId) => {
       const m = merkezModeliSec(baglar.get(istasyonId) ?? []);
       return m === null ? [] : [{ istasyonId, merkezModeli: m }];
@@ -932,7 +932,7 @@ async function krokiCevabi(db: Db, k: KrokiSatiri): Promise<Kroki> {
 // `krokiMerkezden` kurar; yerel yükleme ve kaldırma bağı çözer, böylece bölümde en çok bir kroki belgesi bağlı kalır.
 async function merkezKrokisi(db: Db, salonId: number): Promise<Kroki['merkez']> {
   const b = (await kaydaBagliBelgeler(db, 'atolye', salonId)).find((x) => x.tur === 'kroki');
-  return b && b.harf !== null && b.ozet !== null ? { belgeId: b.id, ad: b.ad, harf: b.harf, ozet: b.ozet } : null;
+  return b && b.harf !== null && b.ozet !== null ? { belgeId: b.id, ad: b.ad, harf: b.harf, revKodu: b.revKodu, ozet: b.ozet } : null;
 }
 
 async function merkezBaginiCoz(db: Db, salonId: number, kalan: number | null = null): Promise<void> {
@@ -942,7 +942,7 @@ async function merkezBaginiCoz(db: Db, salonId: number, kalan: number | null = n
 }
 
 export async function merkezKrokileri(db: Db): Promise<MerkezKrokileriCevabi> {
-  return { belgeler: (await yayindakiBelgeler(db, { tur: 'kroki' })).filter((b) => b.dosyaTuru === 'pdf').map(({ id, ad, harf, ozet: o }) => ({ id, ad, harf, ozet: o })) };
+  return { belgeler: (await yayindakiBelgeler(db, { tur: 'kroki' })).filter((b) => b.dosyaTuru === 'pdf').map(({ id, ad, harf, revKodu, ozet: o }) => ({ id, ad, harf, revKodu, ozet: o })) };
 }
 
 // Merkezdeki belgenin yayındaki PDF'i bölümün krokisi olur; önceki kroki yerini bırakır. Aynı belgenin yeni revizyonunda

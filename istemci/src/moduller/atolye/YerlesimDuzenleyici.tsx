@@ -309,7 +309,7 @@ export function YerlesimDuzenleyici({ salonId, bolumler, kapat, kaydedildi }: Oz
         key={i.id}
         className="tc-atolye-palet-oge"
         data-tur="istasyon"
-        title={[i.ad, ornek ? 'Örnek makine' : null, ISTASYON_TIPI_ADI[i.tip], MAKINE_CINSI_ADI[makineCinsi(i.tip, i.ad)], model ? `3B model: ${model.ad} (Rev ${model.harf})` : null, taslak ? `3B model: ${taslak} (taslak)` : null, model || taslak ? null : '3B model yok, kutu olarak çizilir'].filter(Boolean).join(' · ')}
+        title={[i.ad, ornek ? 'Örnek makine' : null, ISTASYON_TIPI_ADI[i.tip], MAKINE_CINSI_ADI[makineCinsi(i.tip, i.ad)], model ? `3B model: ${model.ad} (${model.revKodu ? `Rev ${model.revKodu}` : 'kodsuz revizyon'})` : null, taslak ? `3B model: ${taslak} (taslak)` : null, model || taslak ? null : '3B model yok, kutu olarak çizilir'].filter(Boolean).join(' · ')}
         onClick={() => {
           if (ciziliyor) {
             aracYaz({ tur: 'ciz', hedef: { istasyon: i }, ad: `${i.kod} · ${i.ad}` });

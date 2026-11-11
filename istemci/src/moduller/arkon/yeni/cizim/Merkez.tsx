@@ -82,7 +82,7 @@ export function MerkezSecici({ sec, kapat, malzeme = null }: { sec: (b: MerkezBe
               <li key={b.id}>
                 <button type="button" className="tc-ay5-satir" disabled={mesgul !== 0} onClick={() => tikla(b)}>
                   <span className={`tc-ay5-tur tc-ay5-tur-${b.tip === 'pdf' ? 'pdf' : 'model'}`}>{b.tip === 'pdf' ? 'PDF' : '3B'}</span>
-                  <span className="tc-ay5-metin"><b>{b.ad}</b><small>Rev {b.harf} · {b.dosyaAdi}{b.malzemeninMi === false ? ' · bu parçanın malzemesine bağlı değil' : ''}</small></span>
+                  <span className="tc-ay5-metin"><b>{b.ad}</b><small>{b.revKodu ? `Rev ${b.revKodu}` : 'Kodsuz revizyon'} · {b.dosyaAdi}{b.malzemeninMi === false ? ' · bu parçanın malzemesine bağlı değil' : ''}</small></span>
                   <Simge ad={mesgul === b.id ? 'rotate' : 'plus'} />
                 </button>
               </li>

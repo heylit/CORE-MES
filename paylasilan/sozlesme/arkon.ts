@@ -605,6 +605,8 @@ export const merkezBelgeSatiri = z.object({
   ad: z.string(),
   tur: z.string(),
   harf: z.string(),
+  // 2138-2: gösterilen revizyon kodu (resmin kodu, yoksa bağlı malzeme kartının revizyonu); harf merkezin iç sırasıdır, gösterilmez.
+  revKodu: z.string().nullable().optional(),
   tip: z.enum(MERKEZ_DOSYA_TIPLERI),
   dosyaAdi: z.string(),
   ozet,

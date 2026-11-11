@@ -32,7 +32,7 @@ const YERLESIM = {
     {
       istasyonId: 5, kod: 'CNC-01', ad: 'Deneme Tezgahı', tip: 'talasli', aktif: true, x: '5.00', z: '5.00', donus: '0.0',
       genislik: '3.00', derinlik: '2.00', hucre: 'B2', makineler: [{ id: 50, kod: 'M-01', ad: 'Deneme Makine', tur: null, markaModel: 'Deneme 500' }], model: null,
-      merkezModeli: { belgeId: 40, ad: 'Deneme tezgah modeli', harf: 'B', ozet: 'a'.repeat(64), dosyaTuru: 'stl' },
+      merkezModeli: { belgeId: 40, ad: 'Deneme tezgah modeli', harf: 'B', revKodu: '02', ozet: 'a'.repeat(64), dosyaTuru: 'stl' },
     },
     { istasyonId: 6, kod: 'CNC-02', ad: 'İkinci Tezgah', tip: 'talasli', aktif: true, x: '12.00', z: '5.00', donus: '0.0', genislik: '3.00', derinlik: '2.00', hucre: 'D2', makineler: [], model: null, merkezModeli: null },
   ],
@@ -97,8 +97,8 @@ const ISTASYONLAR = {
 
 const MERKEZ_MODELLERI = {
   belgeler: [
-    { id: 40, ad: 'Deneme tezgah modeli', harf: 'B', ozet: 'a'.repeat(64), dosyaTuru: 'stl' },
-    { id: 41, ad: 'Yeni tezgah modeli', harf: 'A', ozet: 'b'.repeat(64), dosyaTuru: 'step' },
+    { id: 40, ad: 'Deneme tezgah modeli', harf: 'B', revKodu: '02', ozet: 'a'.repeat(64), dosyaTuru: 'stl' },
+    { id: 41, ad: 'Yeni tezgah modeli', harf: 'A', revKodu: null, ozet: 'b'.repeat(64), dosyaTuru: 'step' },
   ],
   istasyonlar: [],
 } satisfies MerkezModelleriCevabi;
@@ -172,7 +172,7 @@ function sunucuKur(kullanici: Kullanici, ek: Ek = {}): Cagri[] {
     if (yol === '/atolye/istasyonlar/5/merkez-modeli-bagla' && yontem === 'POST') {
       const g = JSON.parse(String(secenek.body)) as { belgeId: number | null };
       const b = MERKEZ_MODELLERI.belgeler.find((x) => x.id === g.belgeId);
-      return Promise.resolve(cevap({ merkezModeli: b ? { belgeId: b.id, ad: b.ad, harf: b.harf, ozet: b.ozet, dosyaTuru: b.dosyaTuru } : null }));
+      return Promise.resolve(cevap({ merkezModeli: b ? { belgeId: b.id, ad: b.ad, harf: b.harf, revKodu: b.revKodu, ozet: b.ozet, dosyaTuru: b.dosyaTuru } : null }));
     }
     if (yol === '/stok/konumlar/haritadan-esle' && yontem === 'POST') {
       const k = ek.esleme ?? { durum: 200, govde: { eklenen: 1, guncellenen: 0, kapatilan: 0, atlanan: [], koduDegisenler: [] } };
@@ -335,7 +335,7 @@ describe('fabrika haritası', () => {
     expect(within(kart).getByText('UE-000030')).toBeTruthy();
     fireEvent.click(within(kart).getByRole('button', { name: 'Ayrıntı' }));
     expect(within(kart).getByText(/Deneme 500/)).toBeTruthy();
-    expect(within(kart).getByText('Deneme tezgah modeli (Çizim Merkezi, Rev B)')).toBeTruthy();
+    expect(within(kart).getByText('Deneme tezgah modeli (Çizim Merkezi, Rev 02)')).toBeTruthy();
   });
 
   it('raf kartında göz içeriği göz kalemlerinden; göze basınca içi açılır, okuyan düzenleyemez', async () => {
@@ -644,7 +644,7 @@ describe('fabrika haritası', () => {
 
   it('düzenleyici: Çizim Merkezi\'nde makineyle eşleştirilen model Ekle listesinde istasyonun yanında işaretli ve başta gelir (kart #1196)', async () => {
     const b = MERKEZ_MODELLERI.belgeler[1]!;
-    const merkezModeli = { belgeId: b.id, ad: b.ad, harf: b.harf, ozet: b.ozet, dosyaTuru: b.dosyaTuru };
+    const merkezModeli = { belgeId: b.id, ad: b.ad, harf: b.harf, revKodu: b.revKodu, ozet: b.ozet, dosyaTuru: b.dosyaTuru };
     sunucuKur(YAZAN, { merkezModelleri: { ...MERKEZ_MODELLERI, istasyonlar: [{ istasyonId: 8, merkezModeli }] } });
     goster(<AtolyeHaritasi />);
     fireEvent.click(await screen.findByRole('button', { name: 'Bölümün yerleşimini düzenle' }));
@@ -652,7 +652,7 @@ describe('fabrika haritası', () => {
     fireEvent.click(within(duzen).getByRole('button', { name: 'Ekle' }));
     const dugme = await within(duzen).findByRole('button', { name: /MON-01/ });
     await waitFor(() => expect(within(dugme).getByLabelText('3B modeli var')).toBeTruthy());
-    expect(dugme.getAttribute('title')).toContain('3B model: Yeni tezgah modeli (Rev A)');
+    expect(dugme.getAttribute('title')).toContain('3B model: Yeni tezgah modeli (kodsuz revizyon)');
     // Kart #1258: eşleşmiş ama haritada olmayan istasyon "Eklenecek makineler" başlığında bekler.
     expect(within(within(duzen).getByRole('region', { name: 'Eklenecek makineler' })).getByRole('button', { name: /MON-01/ })).toBe(dugme);
     // Haritada istasyon kaydı "Eklenecek makineler", istasyonun altındaki makine kayıtları "Ekipmanlar" başlığıyla görünür.
