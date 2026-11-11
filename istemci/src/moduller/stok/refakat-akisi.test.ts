@@ -149,5 +149,8 @@ describe('listede sıradaki adım (2907)', () => {
     expect(siradakiMetni(durumlu(['gecti', 'sirada', 'simdi'], 'uretimde'))).toBe(`${op[1]!} atlandı`);
     expect(siradakiMetni(durumlu(['sirada', 'gecti', 'simdi'], 'uretimde'))).toBe(`${op[0]!} atlandı`);
     expect(siradakiMetni(durumlu(['gecti', 'sirada', 'gecti'], 'bekliyor'))).toBe(`${op[1]!} atlandı`);
+    // Sevke hazır kartta atlanan adım "Sevk"ten önce gelir: yapılmamış adım sevkten önce görülmelidir.
+    const sevkte = ORNEK_OZET.rota.map((_, i) => (i === 1 ? 'sirada' as const : 'gecti' as const));
+    expect(siradakiMetni(durumlu(sevkte, 'sevke_hazir'))).toBe(`${op[1]!} atlandı`);
   });
 });
