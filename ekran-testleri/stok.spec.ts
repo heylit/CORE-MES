@@ -26,11 +26,27 @@ test('Hareketler: kayarken depocu çubuğu sayfalamayı örtmez', async ({ page,
 });
 
 // 2905: Durum süzgeci tablonun araç çubuğunda çip grubudur (tür sekmeleriyle iki sekme satırı olmasın); çipler sarar, kesilmez.
+// Telefonda (2997 a) çipler tek satırda yana kayar: her çip kaydırınca görünür, hiçbiri solda kesik başlamaz.
 test('Malzemeler: Durum çiplerinin hepsi görünür', async ({ page, ag, ac }) => {
   await ac('/stok/malzemeler');
   const grup = page.getByRole('group', { name: 'Durum' });
   await expect(grup).toBeVisible();
   const genislik = page.viewportSize()?.width ?? 0;
+  if (genislik < 768) {
+    const cipler = grup.getByRole('button');
+    expect(await cipler.count()).toBeGreaterThan(1);
+    for (const c of await cipler.all()) {
+      await c.scrollIntoViewIfNeeded();
+      const k = await c.boundingBox();
+      expect(k, `${await c.innerText()} çipi çizilmedi`).not.toBeNull();
+      if (k === null) continue;
+      expect(k.x, `${await c.innerText()} çipi solda kesik`).toBeGreaterThanOrEqual(0);
+      expect(k.x + k.width, `${await c.innerText()} çipi kaydırınca da sağda kesik`).toBeLessThanOrEqual(genislik);
+    }
+    await expect(cipler.filter({ hasText: 'Tümü' })).toHaveAttribute('aria-pressed', 'true');
+    expect(ag.hatalar).toEqual([]);
+    return;
+  }
   expect(await grup.evaluate((e) => e.scrollWidth - e.clientWidth), 'çip grubunda gizli kaydırma').toBeLessThanOrEqual(0);
   const cipler = grup.getByRole('button');
   expect(await cipler.count()).toBeGreaterThan(1);

@@ -157,3 +157,22 @@
   .tc-tablo-kap[data-kaydir] .tc-tablo-kes { max-inline-size: calc(var(--menu-sabit) * .5); }
   .tc-tablo-kap[data-kaydir] .tc-tablo td.tc-tablo-sabit-sol { max-inline-size: calc(var(--menu-sabit) * .5); }
 }
+
+/* Telefon: süzgeç çipleri alt alta dizilip listeyi ekranın altına itiyordu; tek satırda yana kayar. Yana kayan
+   tabloda modül sabit sütun vermediyse ilk sütun yerinde kalır: satırın hangi kayda ait olduğu kayarken görünür. */
+@media (max-width: 767px) {
+  .tc-tablo-cipler, .tc-tablo-siralar {
+    flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; overscroll-behavior-x: contain;
+    padding-inline-end: var(--b-6); mask-image: linear-gradient(to left, transparent, var(--ink) var(--b-6));
+  }
+  .tc-tablo-cipler > *, .tc-tablo-siralar > * { flex: none; }
+  .tc-tablo-arama { flex-basis: 100%; }
+  .tc-tablo-kap[data-kaydir]:not(:has(.tc-tablo-sabit-sol)) .tc-tablo tr > :is(th, td):first-child:not(.tc-tablo-sec) {
+    position: sticky; left: 0; z-index: 1; border-right: var(--cizgi-ince) solid var(--edge2);
+  }
+  /* Uzun ad yapışık kalınca öteki sütunlar altından geçer ve okunmaz; modül sabitinde olduğu gibi yarım menü genişliğinde "…". */
+  .tc-tablo-kap[data-kaydir]:not(:has(.tc-tablo-sabit-sol)) .tc-tablo tbody tr > td:first-child:not(.tc-tablo-sec) {
+    max-inline-size: calc(var(--menu-sabit) * .5); overflow: hidden; text-overflow: ellipsis;
+  }
+  .tc-tablo-kap[data-kaydir]:not(:has(.tc-tablo-sabit-sol)) .tc-tablo thead tr > th:first-child:not(.tc-tablo-sec) { z-index: 3; }
+}
