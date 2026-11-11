@@ -16,7 +16,7 @@ export function Ayarlar() {
   const d = useQuery({ queryKey: anahtarlar.depolar, queryFn: () => api.get<DepolarCevabi>('/stok/depolar') });
   return (
     <section className="tc-stok">
-      <SayfaBasi baslik="Ayarlar" alt="Raf ve konum tanımı, depolar ve Logo ambar karşılıkları." sag={<>
+      <SayfaBasi baslik="Ayarlar" aciklama="Raf ve konum tanımı, depolar ve Logo ambar karşılıkları." sag={<>
         <HaritaLinki metin="Raf ve gözler: Fabrika Haritası" />
         <Dugme simge="plus" onClick={() => setAc('konum')}>Konum aç</Dugme>
       </>} />

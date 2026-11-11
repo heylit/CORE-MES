@@ -52,7 +52,7 @@ export function Raflar() {
   const secili = id ? Number(id) : l.data?.satirlar[0]?.id;
   return (
     <section className="tc-stok">
-      <SayfaBasi baslik="Raflar" alt="Her rafın gözlerini kat × bölme matrisi olarak gör." sag={tanimlar && <HaritaLinki metin="Raf aç (Fabrika Haritası)" />} />
+      <SayfaBasi baslik="Raflar" aciklama="Her rafın gözlerini kat × bölme matrisi olarak gör." sag={tanimlar && <HaritaLinki metin="Raf aç (Fabrika Haritası)" />} />
       {l.isError && <DurumKutusu durum="hata" mesaj={hataMetni(l.error)} yenile={() => void l.refetch()} />}
       {l.isPending && <DurumKutusu durum="yukleniyor" />}
       {l.data && l.data.satirlar.length === 0 && <DurumKutusu durum="bos" mesaj="Henüz raf yok." />}

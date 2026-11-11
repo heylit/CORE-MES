@@ -594,3 +594,20 @@ a.tc-stok-kpi:hover, a.tc-stok-kpi:focus-visible { background: var(--panel2); }
   .tc-stok-depocu-cubuk > * { flex: 1 1 0; min-width: 0; }
   .tc-stok-depocu-cubuk .tc-dugme { inline-size: 100%; min-inline-size: 0; padding-inline: var(--b-2); justify-content: center; }
 }
+
+/* Telefon: sayfa başı ekranın yarısını tutuyordu. Sabit açıklama iki satırda kesilir ve "Devamı" ile açılır, kaydın kendi bilgisi
+   (alt) kesilmez; düğmeler tek satırda yana kayar, birincil eylem sayfada ilk yazılır. */
+@media (max-width: 767px) {
+  .tc-stok-bas { gap: var(--b-2); }
+  .tc-stok-bas > div:first-child { min-inline-size: 0; }
+  .tc-stok-bas .tc-stok-alt { font-size: var(--yazi-s); }
+  .tc-stok-aciklama:not([data-acik]) { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; }
+  .tc-stok-aciklama-dugme { min-block-size: var(--dokunma); font-size: var(--yazi-s); }
+  /* Sağ kenar solar: satırın yana kaydığı görünür; sondaki boşluk kaydırma bitince son düğmeyi solmanın dışına alır. */
+  .tc-stok-bas > .tc-stok-eylem {
+    inline-size: 100%; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; overscroll-behavior-x: contain;
+    padding-inline-end: var(--b-6); mask-image: linear-gradient(to left, transparent, var(--ink) var(--b-6));
+  }
+  .tc-stok-bas > .tc-stok-eylem > * { flex: none; }
+  .tc-stok-bas > .tc-stok-eylem > .tc-refakat-okut { flex: 1 0 calc(var(--b-6) * 7); }
+}

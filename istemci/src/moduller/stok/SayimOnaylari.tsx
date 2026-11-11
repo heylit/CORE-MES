@@ -90,7 +90,7 @@ export function SayimOnaylari() {
   ];
   return (
     <section className="tc-stok">
-      <SayfaBasi baslik="Sayım onayları" alt="Kör sayımda deponun eşiğini aşan fark stoğa yazılmaz; sayandan başka yetkili onaylar ya da reddeder." />
+      <SayfaBasi baslik="Sayım onayları" aciklama="Kör sayımda deponun eşiğini aşan fark stoğa yazılmaz; sayandan başka yetkili onaylar ya da reddeder." />
       <Kart baslik={`Onay bekleyen · ${bekleyen.length}`}>
         <Tablo etiket="Onay bekleyen sayım farkları" kip="kaydir" sutunlar={bekleyenSutunlari} satirlar={bekleyen} satirAnahtari={(f) => f.id} bosMesaj="Onay bekleyen sayım farkı yok." />
       </Kart>

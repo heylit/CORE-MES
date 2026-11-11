@@ -32,7 +32,7 @@ export function Depo() {
   const salonIdler = useMemo(() => o.data?.bolumler.filter((b) => b.depoKod !== null).map((b) => b.salonId), [o.data]);
   return (
     <section className="tc-stok">
-      <SayfaBasi baslik="Depo" alt="Raflar, bölmeler ve gözler. Göze basınca içindeki stok açılır." />
+      <SayfaBasi baslik="Depo" aciklama="Raflar, bölmeler ve gözler. Göze basınca içindeki stok açılır." />
       {o.isError && <DurumKutusu durum="hata" mesaj={hataMetni(o.error)} yenile={() => void o.refetch()} />}
       {o.isPending && <DurumKutusu durum="yukleniyor" />}
       {salonIdler && salonIdler.length === 0 && (

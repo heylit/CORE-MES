@@ -40,7 +40,7 @@ export function SeriListeler() {
   const id = secili !== null && acik.some((l) => l.id === secili) ? secili : acik[0]?.id ?? null;
   return (
     <section className="tc-stok">
-      <SayfaBasi baslik="Seri listeler" alt="Telefonda Seri modunda ya da okuyucu hafızasından toplananlar. Düzelt, seç, bir işe ver; kayıt yalnız işi onaylayınca yazılır."
+      <SayfaBasi baslik="Seri listeler" aciklama="Telefonda Seri modunda ya da okuyucu hafızasından toplananlar. Düzelt, seç, bir işe ver; kayıt yalnız işi onaylayınca yazılır."
         sag={<Dugme simge="list" onClick={() => setAktarim('')}>Hafızadan aktar</Dugme>} />
       {listeler.isError ? <DurumKutusu durum="hata" mesaj={hataMetni(listeler.error)} yenile={() => void listeler.refetch()} /> : (
         <div className="tc-stok-seri-duzen">

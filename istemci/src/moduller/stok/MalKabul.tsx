@@ -484,7 +484,7 @@ export function MalKabul() {
   const kilitli = useGonderimKilidi();
   return (
     <section className="tc-stok">
-      <SayfaBasi baslik="Mal kabul" alt="Depo malı sayarak teslim alır; hammaddede parti o anda girilir. Fasondan dönen malzeme hizmet siparişiyle alınır. Logo irsaliyesiyle eşleme ayrıca yapılır." />
+      <SayfaBasi baslik="Mal kabul" aciklama="Depo malı sayarak teslim alır; hammaddede parti o anda girilir. Fasondan dönen malzeme hizmet siparişiyle alınır. Logo irsaliyesiyle eşleme ayrıca yapılır." />
       {yazabilir && <Sekmeler etiket="Mal kabul görünümü" secili={sekme} sec={sekmeSec}
         sekmeler={[{ anahtar: 'kabul', baslik: 'Mal kabul', simge: 'truck' }, { anahtar: 'yapilanlar', baslik: 'Mal kabulü yapılanlar', simge: 'list' }]} />}
       {sekme === 'kabul' && (

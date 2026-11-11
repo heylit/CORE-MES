@@ -31,7 +31,7 @@ function Hucre({ kod, ad, not }: { kod: string; ad: string; not?: string }) {
 export function KomutKarti() {
   return (
     <section className="tc-stok">
-      <SayfaBasi baslik="Komut kartı" alt="El okuyucuyla okutulunca ekrandaki düğmeye basılmış olur. Yazdır, okuyucunun yanına as."
+      <SayfaBasi baslik="Komut kartı" aciklama="El okuyucuyla okutulunca ekrandaki düğmeye basılmış olur. Yazdır, okuyucunun yanına as."
         sag={<Dugme simge="printer" onClick={() => window.print()}>Yazdır</Dugme>} />
       <div className="tc-stok-yazdir tc-stok-komut-karti">
         <Kart baslik="İşler" simge="check">

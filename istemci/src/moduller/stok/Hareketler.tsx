@@ -150,7 +150,7 @@ export function Hareketler() {
   }
   return (
     <section className="tc-stok">
-      <SayfaBasi baslik="Hareketler" alt="Giriş, çıkış, taşıma, sayım ve geri almalar. Hareket silinmez; düzeltme ters harekettir."
+      <SayfaBasi baslik="Hareketler" aciklama="Giriş, çıkış, taşıma, sayım ve geri almalar. Hareket silinmez; düzeltme ters harekettir."
         sag={<Dugme simge="sort" disabled={!l.data?.satirlar.length} yukleniyor={indiriliyor} onClick={() => void indir()}>CSV indir</Dugme>} />
       <div className="tc-stok-iki">
         <Girdi etiket="Ara" placeholder="Konum, parti no ya da açıklama" value={arama} onChange={(e) => setArama(e.target.value)} />

@@ -170,7 +170,7 @@ export function OkutarakSayim({ gomulu = false, ustKomut }: { gomulu?: boolean; 
 
   return (
     <section className="tc-stok">
-      {gomulu ? <div className="tc-stok-eylem">{eylemler}</div> : <SayfaBasi baslik="Okutarak sayım" alt="Kör sayım · önce göz, sonra lot ya da malzeme okut" sag={eylemler} />}
+      {gomulu ? <div className="tc-stok-eylem">{eylemler}</div> : <SayfaBasi baslik="Okutarak sayım" aciklama="Kör sayım · önce göz, sonra lot ya da malzeme okut" sag={eylemler} />}
       <Kart>
         <KodOkuyucu sik okundu={okundu} bekliyor={cozuluyor} komut={komut} ipucu="Okuyucu alan seçmeden de çalışır. Komut kartıyla kaydet, geri al ve miktar yaz." />
         <div className={`tc-stok-is ${sonuc ? SONUC_SINIFI[sonuc.ton] : ''}`} role="status" aria-live="polite">

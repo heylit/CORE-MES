@@ -73,7 +73,7 @@ export function Malzemeler() {
   ];
   return (
     <section className="tc-stok" data-rahat={rahat ? '' : undefined}>
-      <SayfaBasi baslik="Malzemeler" alt={l.data?.toplam !== null && l.data ? (kartlar ? `${l.data.toplam} stoklanır malzeme kartı; stoğu olmayanlar 0 görünür.` : `${l.data.toplam} malzemenin stoğu ya da stok ayarı var. Stoğu olmayan kart için Bütün kartlar.`) : 'Malzeme başına stok.'}
+      <SayfaBasi baslik="Malzemeler" aciklama={l.data?.toplam !== null && l.data ? (kartlar ? `${l.data.toplam} stoklanır malzeme kartı; stoğu olmayanlar 0 görünür.` : `${l.data.toplam} malzemenin stoğu ya da stok ayarı var. Stoğu olmayan kart için Bütün kartlar.`) : 'Malzeme başına stok.'}
         sag={<>
           {malKabul && <Link to="/stok/mal-kabul"><Dugme tur="birincil" simge="truck">Mal kabul</Dugme></Link>}
           <EtiketMerkeziDugmesi tur="malzeme" simge="scan" idler={(l.data?.satirlar ?? []).map((m) => m.malzemeId)}>Etiketler</EtiketMerkeziDugmesi>

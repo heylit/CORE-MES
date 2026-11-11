@@ -117,7 +117,7 @@ function TurListesi({ liste }: { liste: StokTurListesi }) {
   ];
   return (
     <section className="tc-stok">
-      <SayfaBasi baslik={baslik} alt={l.data ? `${l.data.satirlar.length} kart; kart ve alanlar Malzemeler ve Hizmetler'den, miktar stoktan.` : 'Türe göre stok.'}
+      <SayfaBasi baslik={baslik} aciklama={l.data ? `${l.data.satirlar.length} kart; kart ve alanlar Malzemeler ve Hizmetler'den, miktar stoktan.` : 'Türe göre stok.'}
         sag={<>
           {malKabul && <Link to="/stok/mal-kabul"><Dugme tur="birincil" simge="truck">Mal kabul</Dugme></Link>}
           <Link to="/malzemeler/yeni"><Dugme simge="layers">Malzeme kartı aç</Dugme></Link>
