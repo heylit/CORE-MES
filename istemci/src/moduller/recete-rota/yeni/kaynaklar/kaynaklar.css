@@ -149,3 +149,11 @@
 .tc-rr2-bolmeli .tc-sekme[aria-selected="true"] { background: var(--ink); color: var(--panel); }
 .tc-rr2-matris-ust .tc-rr2-girdi { width: auto; font-weight: 400; }
 .tc-rr2-sure-tablo td:first-child b { white-space: nowrap; }
+
+/* Kutu köşe için taşanı kırpar; kayan kutuda bu, geniş malzeme tablosunu yana kaydırılamaz yapıyordu (telefonda 500 px tablo).
+   Konum: tablodaki gizli etiketler kutunun içinde kalır, sayfayı yana genişletmez. */
+.tc-rr2-kaydir.tc-rr2-kutu { overflow-x: auto; position: relative; }
+/* Telefon: dar sütunda ad dört satıra bölünüp satırı uzatıyordu; ad okunur genişlikte kalır, tablo yana kayar. */
+@media (max-width: 767px) {
+  .tc-rr2-malzeme-tablo td:nth-child(2) { min-inline-size: calc(var(--b-6) * 4); }
+}
