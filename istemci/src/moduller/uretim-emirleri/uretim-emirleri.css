@@ -120,3 +120,6 @@
   .tc-hz-hucre small, .tc-hz-baslar b { display: none; }
   .tc-hz-matris th, .tc-hz-matris td { padding: var(--b-1); }
 }
+/* Adım Durumu (2893): statü rozeti ile "Elle" işareti yan yana; dar ekranda alt satıra geçer. */
+.tc-adim-statu { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--b-1); }
+.tc-adim-statu .tc-rozet { display: inline-flex; align-items: center; gap: var(--b-1); }
