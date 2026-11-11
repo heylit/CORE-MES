@@ -296,6 +296,8 @@ export type HaritaOzetiCevabi = z.output<typeof haritaOzetiCevabi>;
 // 2902: "Bütün bölümleri depo yap": deposu olmayan bütün bölümler tek komutta depo olur, ardından eşleme koşar (tek transaction).
 export const topluBolumDeposuCevabi = z.object({
   acilanDepo: z.number().int(), eklenen: z.number().int(), atlanan: z.array(z.string()), koduDegisenler: z.array(koduDegisenKonum), ozet: haritaOzetiCevabi,
+  // Elle depodan çıkarılmış bölümlerin depo kodları: toplu komut bunları açmaz (bilerek kapatılmıştır); tek tek "Depo yap" açar.
+  atlananPasifDepolar: z.array(z.string()),
 });
 export type TopluBolumDeposuCevabi = z.output<typeof topluBolumDeposuCevabi>;
 export const surumGovdesi = z.object({ ...beklenenSurum });

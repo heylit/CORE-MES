@@ -162,7 +162,8 @@ export async function haritaOzeti(db: Db): Promise<HaritaOzetiCevabi> {
   const depo = new Map(depolar.flatMap((d) => (d.salonId !== null && d.aktif ? [[d.salonId, d.kod] as const] : [])));
   return {
     ...(await sorgular.haritaBagSayilari(db)), eslenmemis: plan.ekle.length + plan.atlanan.length,
-    deposuzYer: deposuzBolumler({ gozler, alanlar, depolar }).reduce((t, b) => t + b.yer, 0), bagsizKonumlar: await sorgular.haritasizKonumlar(db),
+    // Elle depodan çıkarılmış bölüm sayılmaz: bilerek kapatılmıştır ve toplu komut onu açmaz.
+    deposuzYer: deposuzBolumler({ gozler, alanlar, depolar }).filter((b) => b.depoId === null).reduce((t, b) => t + b.yer, 0), bagsizKonumlar: await sorgular.haritasizKonumlar(db),
     bolumler: [...bolumler.values()].sort((x, y) => x.kod.localeCompare(y.kod, 'tr')).map((b) => ({ ...b, depoKod: depo.get(b.salonId) ?? null })),
   };
 }
@@ -216,20 +217,23 @@ export async function bolumDeposu(db: Db, salonId: number, depoOlsun: boolean): 
   return haritaOzeti(db);
 }
 
-// 2902: deposu olmayan bütün bölümler (depodan çıkarılmış olan da) depo olur, sonra eşleme koşar. Uç tek transaction'dır: bir bölümde
-// kod çakışması ya da eşleme hatası olursa hiçbir depo ve konum yazılmaz.
+// 2902: depo kaydı hiç olmayan bütün bölümler depo olur, sonra eşleme koşar. Elle depodan çıkarılmış bölüm (pasif depo) bilerek
+// kapatılmıştır; açılmaz, cevapta ayrı listelenir. Uç tek transaction'dır: bir bölümde kod çakışması ya da eşleme hatası olursa hiçbir
+// depo ve konum yazılmaz.
 export async function topluBolumDeposu(db: Db): Promise<TopluBolumDeposuCevabi> {
   const { gozler, alanlar, depolar } = await haritaDurumu(db);
   const kodlar = new Set(depolar.map((d) => d.kod));
-  const bolumler = deposuzBolumler({ gozler, alanlar, depolar });
+  const depoKodu = new Map(depolar.map((d) => [d.id, d.kod]));
+  const hepsi = deposuzBolumler({ gozler, alanlar, depolar });
+  const bolumler = hepsi.filter((b) => b.depoId === null);
+  const atlananPasifDepolar = hepsi.flatMap((b) => (b.depoId === null ? [] : [depoKodu.get(b.depoId) ?? b.kod]));
   for (const b of bolumler) {
-    if (b.depoId !== null) { await sorgular.depoAktifligi(db, b.depoId, true); continue; }
     const kod = depoKoduOner(b.kod, kodlar);
     kodlar.add(kod);
     await korumali(() => sorgular.haritaDeposuAc(db, { salonId: b.salonId, kod, ad: b.kod }));
   }
   const e = await haritadanEsle(db);
-  return { acilanDepo: bolumler.length, eklenen: e.eklenen, atlanan: e.atlanan, koduDegisenler: e.koduDegisenler, ozet: await haritaOzeti(db) };
+  return { acilanDepo: bolumler.length, eklenen: e.eklenen, atlanan: e.atlanan, koduDegisenler: e.koduDegisenler, ozet: await haritaOzeti(db), atlananPasifDepolar };
 }
 
 // 2902 (madde 1): her bölüm varsayılan olarak stok deposudur. Yeni bölüm, açan kişide stok.tanim varsa deposuyla açılır; yoksa

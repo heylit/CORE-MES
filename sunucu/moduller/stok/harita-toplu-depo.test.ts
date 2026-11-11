@@ -91,7 +91,7 @@ describe('stok toplu bölüm deposu (gerçek PostgreSQL)', () => {
     const b = await salon('TD-B');
     await alan(b, 'depo_zemini');
     await alan(b, 'fason');
-    // Elle depodan çıkarılmış bölüm (pasif depo kaydı) de toplu komutla yeniden depo olur (VARSAYIM V1).
+    // Elle depodan çıkarılmış bölüm (pasif depo kaydı) bilerek kapatılmıştır: toplu komut açmaz, ayrı listeler (Güvenlik ve Atölye N1).
     const c = await salon('TD-C');
     await raf(c, 'TC', 1);
     assert.equal((await iste('depo', 'POST', `/stok/harita-bolumleri/${c}/depo`, { depo: true })).durum, 200);
@@ -102,23 +102,24 @@ describe('stok toplu bölüm deposu (gerçek PostgreSQL)', () => {
 
     const oz = await iste<HaritaOzetiCevabi>('depo', 'GET', '/stok/harita-ozeti');
     haritaOzetiCevabi.parse(oz.govde);
-    assert.equal(oz.govde.deposuzYer, 2 + 1 + 1 + 1, 'A: iki göz ve kabul; B: depo zemini; C: bir göz');
+    assert.equal(oz.govde.deposuzYer, 2 + 1 + 1, 'A: iki göz ve kabul; B: depo zemini; C pasif depolu, sayılmaz');
     const once = await konumSayisi();
 
     const t = await iste<TopluBolumDeposuCevabi>('depo', 'POST', '/stok/harita-bolumleri/toplu-depo');
     assert.equal(t.durum, 200, JSON.stringify(t.govde));
     topluBolumDeposuCevabi.parse(t.govde);
-    assert.equal(t.govde.acilanDepo, 3);
-    // C'nin gözü depodan çıkarılırken kapanmıştı; yeniden açılır (yeni konum sayılmaz), açık konum yine beş artar.
+    assert.equal(t.govde.acilanDepo, 2);
     assert.equal(t.govde.eklenen, 4, 'A: iki göz ve kabul; B: depo zemini');
     assert.deepEqual(t.govde.atlanan, []);
-    assert.equal(await konumSayisi(), once + 5);
+    assert.deepEqual(t.govde.atlananPasifDepolar, ['TDC']);
+    assert.equal(await konumSayisi(), once + 4);
     assert.deepEqual(await depoKodu(a), { kod: 'TDA', aktif: true });
     // Yalnız alanı olan bölümün kodu harita alanında yoktur; tek tek "Depo yap" gibi BOLUM<no> olur.
     assert.deepEqual(await depoKodu(b), { kod: `BOLUM${b}`, aktif: true });
-    assert.deepEqual(await depoKodu(c), { kod: 'TDC', aktif: true });
+    assert.deepEqual(await depoKodu(c), { kod: 'TDC', aktif: false });
     assert.equal(t.govde.ozet.deposuzYer, 0);
-    assert.ok(t.govde.ozet.bolumler.filter((x) => [a, b, c].includes(x.salonId)).every((x) => x.depoKod !== null));
+    assert.ok(t.govde.ozet.bolumler.filter((x) => [a, b].includes(x.salonId)).every((x) => x.depoKod !== null));
+    assert.equal(t.govde.ozet.bolumler.find((x) => x.salonId === c)?.depoKod, null);
     const fason = await o().vt.tek<{ depo: string }>(
       "SELECT d.kod AS depo FROM stok_konum k JOIN stok_depo d ON d.id = k.depo_id JOIN atolye_alan a ON a.id = k.atolye_alan_id WHERE a.salon_id = $1 AND a.tur = 'fason'", [b]);
     assert.equal(fason?.depo, `BOLUM${b}`);
@@ -126,6 +127,7 @@ describe('stok toplu bölüm deposu (gerçek PostgreSQL)', () => {
     const ikinci = await iste<TopluBolumDeposuCevabi>('depo', 'POST', '/stok/harita-bolumleri/toplu-depo');
     assert.equal(ikinci.durum, 200);
     assert.deepEqual([ikinci.govde.acilanDepo, ikinci.govde.eklenen, ikinci.govde.atlanan.length], [0, 0, 0]);
+    assert.deepEqual(ikinci.govde.atlananPasifDepolar, ['TDC']);
   });
 
   test('bir bölümde hata olursa hiçbir depo ve konum yazılmaz', async () => {

@@ -583,3 +583,4 @@ Lotun son kullanma tarihi (SKT) yeni `stok_parti_son_kullanma` tablosundadır (2
 - `haritadanEsle` önce konumsuz aktif istasyonların konumunu açar (cevap değişmedi). Kodu elle başka konuma verilmişse atlanır.
 - İstasyon silinirken kullanılmamış konumu kayıt noktasında silinir; hareketi ya da bakiyesi olan konumu yabancı anahtar korur, istasyon "kullanımda" kalır. Konumu olan istasyonun silinemez hale gelmemesi için.
 - Kart 2902 v2: istasyon konumu artık baştan açık olduğu için sayımdaki kalite uyarısı (135) her satırda emri ve adımı okuyordu (Arkon satır başına sorgu sınırı aşıldı). Uyarı önce istasyon konumunda red ya da karar bekleyen bakiye var mı diye tek sorguyla bakar (`kaliteBekleyenIstasyonKonumu`); yoksa emir okunmaz. Davranış aynı.
+- Kart 2902 ek (N1): toplu depo komutu elle depodan çıkarılmış bölümü artık yeniden açmaz; cevaba `atlananPasifDepolar` (depo kodları) eklendi, `deposuzYer` bu bölümleri saymaz. Düğme yalnız sayılan yer varken görünür.

@@ -41,7 +41,9 @@ export function TopluDepoDugmesi({ deposuz }: { deposuz: number }) {
   const [degisenler, setDegisenler] = useState<KoduDegisenKonum[]>([]);
   const { komut } = useStokKomutu(async () => {
     const c = await korumaliPost<TopluBolumDeposuCevabi>('/stok/harita-bolumleri/toplu-depo', {});
-    bildir('bilgi', `${c.acilanDepo} bölüm depo oldu, ${c.eklenen} konum eklendi${c.atlanan.length > 0 ? `, ${c.atlanan.length} yer atlandı: ${c.atlanan.slice(0, 5).join(', ')}` : ''}.`);
+    const pasif = c.atlananPasifDepolar.length > 0
+      ? ` Depodan çıkarılmış ${c.atlananPasifDepolar.length} bölüm açılmadı (${c.atlananPasifDepolar.slice(0, 5).join(', ')}); gerekirse tek tek "Depo yap".` : '';
+    bildir('bilgi', `${c.acilanDepo} bölüm depo oldu, ${c.eklenen} konum eklendi${c.atlanan.length > 0 ? `, ${c.atlanan.length} yer atlandı: ${c.atlanan.slice(0, 5).join(', ')}` : ''}.${pasif}`);
     setDegisenler(c.koduDegisenler);
     return c;
   }, 'Bütün bölümler stok deposu.');
@@ -62,7 +64,7 @@ export function HaritaOzeti() {
   const [secili, setSecili] = useState<number | null>(null);
   const { komut } = useStokKomutu(({ salonId, ...g }: BolumDeposuGovdesi & { salonId: number }) => api.post<HaritaOzetiCevabi>(`/stok/harita-bolumleri/${salonId}/depo`, g), 'Bölüm güncellendi.', () => setSecili(null));
   return (
-    <Kart baslik="Fabrika Haritası eşlemesi" sag={<><TopluDepoDugmesi deposuz={o.data?.bolumler.filter((b) => b.depoKod === null).length ?? 0} /><HaritaEsleDugmesi /></>}>
+    <Kart baslik="Fabrika Haritası eşlemesi" sag={<><TopluDepoDugmesi deposuz={o.data?.deposuzYer ?? 0} /><HaritaEsleDugmesi /></>}>
       {o.isError && <DurumKutusu durum="hata" mesaj={hataMetni(o.error)} yenile={() => void o.refetch()} />}
       {o.isPending && <DurumKutusu durum="yukleniyor" />}
       {o.data && (
