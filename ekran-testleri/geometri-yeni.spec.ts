@@ -5,14 +5,14 @@ import { expect, tasmaOlc, test } from './ortak.ts';
 // cevaplarla denenir (sunucu uçları modülün kendi testlerinde, geometri.test.ts). Görüntüleyici çizilmez: dosya boş döner.
 test.use({ hesap: 'ornek.yonetici' });
 
-const satir = (malzemeNo: number, kod: string, ad: string | null, belgeId: number, belgeAdi: string, revizyonId: number, harf: string, durum: string) => ({
-  malzemeNo, malzemeKodu: kod, malzemeAdi: ad, belgeId, belgeAdi, revizyonId, harf, dosyaTuru: 'step', durum, hataMetni: durum === 'hata' ? 'Model okunamadı.' : null,
+const satir = (malzemeNo: number, kod: string, ad: string | null, belgeId: number, belgeAdi: string, revizyonId: number, harf: string, revKodu: string | null, durum: string) => ({
+  malzemeNo, malzemeKodu: kod, malzemeAdi: ad, belgeId, belgeAdi, revizyonId, harf, revKodu, dosyaTuru: 'step', durum, hataMetni: durum === 'hata' ? 'Model okunamadı.' : null,
 });
 const LISTE = {
   satirlar: [
-    satir(1, 'MM-ORN-00001', 'Örnek mil', 1, 'Model kutu', 8, 'B', 'bitti'),
-    satir(1, 'MM-ORN-00001', 'Örnek mil', 2, 'Model ikinci', 9, 'A', 'bitti'),
-    satir(3, 'MM-ORN-00003', 'Örnek burç', 3, 'Model açık', 3, 'A', 'hata'),
+    satir(1, 'MM-ORN-00001', 'Örnek mil', 1, 'Model kutu', 8, 'B', '02', 'bitti'),
+    satir(1, 'MM-ORN-00001', 'Örnek mil', 2, 'Model ikinci', 9, 'A', null, 'bitti'),
+    satir(3, 'MM-ORN-00003', 'Örnek burç', 3, 'Model açık', 3, 'A', '00', 'hata'),
   ],
   toplam: 3, sayfa: 1, sayfaBoyu: 50,
 };
@@ -84,8 +84,9 @@ test.describe('3D Atölyesi', () => {
   test('liste: aynı malzemenin iki modeli belge adıyla ayrılır, desteklenen biçim yazılı, rozet satırda kalır, taşma yok', async ({ page, ac, ag }) => {
     await sunucu(page);
     await ac('/geometri');
-    await expect(page.getByText('Rev B · STEP · Model kutu')).toBeVisible();
-    await expect(page.getByText('Rev A · STEP · Model ikinci')).toBeVisible();
+    // 2138-2: satırda merkezin yükleme harfi değil revizyon kodu yazılır; kodsuz modelde harf gösterilmez.
+    await expect(page.getByText('Rev 02 · STEP · Model kutu')).toBeVisible();
+    await expect(page.getByText('Kodsuz revizyon · STEP · Model ikinci')).toBeVisible();
     await expect(page.getByText(/STL, GLB ve GLTF yüzey ağıdır/)).toBeVisible();
     const disariTasan = await page.locator('.tc-g3b-satir').evaluateAll((satirlar) => satirlar.flatMap((s) => {
       const r = s.getBoundingClientRect();
