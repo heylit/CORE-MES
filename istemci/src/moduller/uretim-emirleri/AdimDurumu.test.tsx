@@ -145,7 +145,10 @@ describe('Adım Durumu (2893, düzen 2955)', () => {
     expect(within(pencere).getByText('Uyarı')).toBeTruthy();
     fireEvent.click(within(pencere).getByRole('button', { name: 'Onayı kaldır' }));
     await waitFor(() => expect(istekler.some((i) => i.yontem === 'POST')).toBe(true));
-    expect(istekler.find((i) => i.yontem === 'POST')?.govde).toEqual({ madde: 'malzeme' });
+    const istek = istekler.find((i) => i.yontem === 'POST');
+    expect(istek?.yol.endsWith('/is-emirleri/52/hazirlik-onay-kaldir')).toBe(true);
+    expect(istek?.govde).toEqual({ madde: 'malzeme' });
+    expect(istek?.kimlik).toMatch(/^[0-9a-f-]{36}$/);
   });
 
   it('aramaya uymayan emir listeden düşer', async () => {
@@ -230,5 +233,17 @@ describe('Adım Durumu (2893, düzen 2955)', () => {
     expect(within(pencere).queryByRole('button', { name: 'Onayla' })).toBeNull();
     expect(within(pencere).queryByRole('button', { name: 'Elle statüyü kaldır' })).toBeNull();
     expect(within(pencere).queryByRole('button', { name: 'Onayı kaldır' })).toBeNull();
+  });
+
+  it('kapalı emirde yetkilinin matris hücresi de düğme değildir', async () => {
+    sunucuKur({ ...OKUYUCU, islemler: [...OKUYUCU.islemler, 'sayfa.adim-durumu', 'uretim-emirleri.adim-durumu-yaz'] }, {
+      ...yollar,
+      'GET /adimli-emirler/5/adim-durumu': () => json(200, { ...CEVAP, durum: 'bitti' }),
+    });
+    ac(ekran, '/adim-durumu?emir=5');
+    fireEvent.click(await screen.findByRole('button', { name: 'Matris' }));
+    const tablo = await screen.findByRole('table', { name: 'Hazırlık matrisi' });
+    expect(within(tablo).getByText('Eksik')).toBeTruthy();
+    expect(within(tablo).queryByRole('button', { name: /Elle onayla|Elle onayı aç/ })).toBeNull();
   });
 });
