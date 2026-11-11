@@ -353,21 +353,16 @@ describe('fabrika haritası', () => {
     expect(within(panel).queryByLabelText('Doluluk %')).toBeNull();
   });
 
-  it('depo: raf cephesinde göze basınca panel açılır; yazan kalem koyar (boş yer kadar)', async () => {
+  it('depo: raf cephesinde göze basınca panel açılır; 3012 a: elle kalem koyma yok, eski kayıtlar yalnız görünür', async () => {
     const cagrilar = sunucuKur(YAZAN);
     goster(<AtolyeHaritasi />, '/atolye/depo');
     const cephe = await screen.findByRole('group', { name: 'R1 bölme 1 önden' });
     fireEvent.click(within(cephe).getByRole('button', { name: /Kat 1 göz 1: DENEME-1 %40, DENEME-2 %30/ }));
     const panel = await screen.findByRole('region', { name: 'Göz R1-01-1-1' });
     expect(cagrilar.some((c) => c.yol === '/atolye/raflar/7/gozler?sayfa=1&bolme=1')).toBe(true);
-    fireEvent.click(within(panel).getByRole('button', { name: 'Kalem koy' }));
-    fireEvent.change(within(panel).getByLabelText('Kod (parça no ya da malzeme kodu)'), { target: { value: 'YENI-1' } });
-    fireEvent.change(within(panel).getByLabelText('Ad'), { target: { value: 'Yeni kalem' } });
-    expect(within(panel).getByText('Gözde %30 yer var.')).toBeTruthy();
-    fireEvent.change(within(panel).getByLabelText('Doluluk %'), { target: { value: '20' } });
-    fireEvent.click(within(panel).getByRole('button', { name: 'Göze koy' }));
-    await waitFor(() => expect(cagrilar.some((c) => c.yol === '/atolye/goz-kalemleri/yaz')).toBe(true));
-    expect(cagrilar.find((c) => c.yol === '/atolye/goz-kalemleri/yaz')?.govde).toEqual({ gozId: 100, kod: 'YENI-1', ad: 'Yeni kalem', doluluk: 20 });
+    expect(within(panel).getByText('Eski elle yazılan kayıtlar (2) · %70')).toBeTruthy();
+    expect(within(panel).queryByRole('button', { name: 'Kalem koy' })).toBeNull();
+    expect(cagrilar.some((c) => c.yol === '/atolye/goz-kalemleri/yaz')).toBe(false);
   });
 
   it('parçalar: kod başına satır, nerede durduğu ve hangi makinede üretildiği; "Rafta göster" depoya götürür', async () => {

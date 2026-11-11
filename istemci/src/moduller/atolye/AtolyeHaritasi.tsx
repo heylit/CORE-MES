@@ -1,11 +1,11 @@
 import { Suspense, lazy, useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
-import type { AramaSonucu, YerlesimCevabi } from '#paylasilan/sozlesme/atolye.ts';
+import type { AramaCevabi, AramaSonucu, YerlesimCevabi } from '#paylasilan/sozlesme/atolye.ts';
 import {
   Dugme, DurumKutusu, Girdi, Kart, KuyrukKarti, KuyrukListesi, Rozet, Secim, Simge, useBildirim,
 } from '../../ortak/arayuz/index.ts';
 import type { MakineDurumu } from '../../ortak/arayuz/index.ts';
-import { hataIletisi } from '../../ortak/veri/api.ts';
+import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { performansOku } from '../../ortak/veri/gorunum.ts';
 import { useOturum } from '../../ortak/veri/oturum.ts';
 import { HaritaAraclari } from './HaritaAraclari.tsx';
@@ -20,7 +20,7 @@ import { RafOdagi } from './RafOdagi.tsx';
 import type { RafOdakSecimi } from './RafOdagi.tsx';
 import { SalonPenceresi } from './SalonPenceresi.tsx';
 import { SonHareketler } from './SonHareketler.tsx';
-import { CANLI_ARALIK_MS, rotaGetir, useArama, useCanliDurum, useFabrika, useGozKalemleri, useKalemGorunumleri, useMakineArizalari, useMalzemeModelleri, useStokKonumuOlmayanYer, useTumEmirler, useYerlesmemisIstasyonlar } from './veri.ts';
+import { CANLI_ARALIK_MS, rotaGetir, stokOkurMu, useArama, useStokMalzemeAramasi, useCanliDurum, useFabrika, useGozKalemleri, useKalemGorunumleri, useMakineArizalari, useMalzemeModelleri, useStokKonumuOlmayanYer, useTumEmirler, useYerlesmemisIstasyonlar } from './veri.ts';
 import { SIFIR_KONUM, bolumeCevir, fabrikayaCevir, konumOku, ogeninBolumu } from './fabrika.ts';
 import type { BolumYerlesimi } from './sahne/motor.ts';
 import { YerlesimDuzenleyici } from './YerlesimDuzenleyici.tsx';
@@ -154,6 +154,9 @@ export function AtolyeHaritasi() {
     return () => clearTimeout(z);
   }, [arama]);
   const aramaSorgusu = useArama(gecikmeliArama, null);
+  // Malzeme arama (Stok'tan): stok görme yetkisi yoksa istek atılmaz, yer ve miktar görünmez.
+  const stokOkur = oturum.data?.islemler.some(stokOkurMu) === true;
+  const stokAramasi = useStokMalzemeAramasi(gecikmeliArama, stokOkur);
   // Görünmeyen bölümdeki sonuç seçilince seçim, o bölüm görünür olunca uygulanır.
   const [bekleyenSecim, bekleyenSecimYaz] = useState<AramaSonucu | null>(null);
 
@@ -261,6 +264,18 @@ export function AtolyeHaritasi() {
     seciliYaz(anahtar);
     vurguAdresYaz(adres);
     odakla(sayi(s.x), sayi(s.z), b.salon.id);
+  };
+
+  // Stoktaki yer seçilince gözü haritadaki aramayla bulur (stok konum kodu göz adresidir); haritada yoksa söyler.
+  const stokYeriSec = async (kod: string) => {
+    try {
+      const c = await api.get<AramaCevabi>(`/atolye/arama?metin=${encodeURIComponent(kod)}`);
+      const g = c.sonuclar.find((s) => s.tur === 'goz' && s.etiket === kod);
+      if (g) aramaSec(g);
+      else bildir('bilgi', `${kod} haritada çizili bir gözde değil.`);
+    } catch (hata) {
+      bildir('hata', hataIletisi(hata, 'Göz bulunamadı.'));
+    }
   };
 
   // Depoya git: yürüyüşte depoya (rafların ortasına en yakın rafa) yürür; değilse kamera rafların ortasına gider.
@@ -451,7 +466,7 @@ export function AtolyeHaritasi() {
               <Girdi
                 etiket="Ara"
                 type="search"
-                placeholder="Göz, raf, istasyon, alan (R1-02-3-1, CNC)"
+                placeholder={stokOkur ? 'Göz, raf, istasyon, malzeme (R1-02-3-1, CNC)' : 'Göz, raf, istasyon, alan (R1-02-3-1, CNC)'}
                 value={arama}
                 onChange={(o) => { aramaYaz(o.target.value); aramaAcikYaz(true); }}
                 onFocus={() => aramaAcikYaz(true)}
@@ -461,7 +476,7 @@ export function AtolyeHaritasi() {
               {sonuclarAcik && (
                 <div id="tc-atolye-sonuclar" className="tc-atolye-sonuclar" role="listbox" aria-label="Arama sonuçları">
                   {aramaSorgusu.isError && <p className="tc-atolye-hata">{hataIletisi(aramaSorgusu.error, 'Arama yapılamadı')}</p>}
-                  {aramaSorgusu.data?.sonuclar.length === 0 && <p className="tc-atolye-ipucu">Sonuç yok.</p>}
+                  {aramaSorgusu.data?.sonuclar.length === 0 && (stokAramasi.data?.length ?? 0) === 0 && <p className="tc-atolye-ipucu">Sonuç yok.</p>}
                   {aramaSorgusu.data?.sonuclar.map((s) => (
                     <Dugme key={`${s.tur}:${s.kimlik}`} className="tc-atolye-sonuc" role="option" aria-selected={false} onClick={() => aramaSec(s)}>
                       <span className="mono">{s.etiket}</span>
@@ -469,6 +484,18 @@ export function AtolyeHaritasi() {
                       <small>{s.salon.kod} · {s.hucre}</small>
                     </Dugme>
                   ))}
+                  {stokAramasi.data && stokAramasi.data.length > 0 && (
+                    <>
+                      <p className="tc-atolye-stok-sonuc-baslik">Stokta</p>
+                      {stokAramasi.data.map((y) => (
+                        <Dugme key={`stok:${String(y.malzemeId)}:${y.konumKod}:${y.partiEtiketi ?? ''}`} className="tc-atolye-sonuc" role="option" aria-selected={false} onClick={() => { void stokYeriSec(y.konumKod); }}>
+                          <span className="mono">{y.konumKod}</span>
+                          <span>{y.malzemeAd}</span>
+                          <small>{sayiMetni(Number(y.miktar))}{y.birim ? ` ${y.birim}` : ''}{y.partiEtiketi ? ` · ${y.partiEtiketi}` : ''}</small>
+                        </Dugme>
+                      ))}
+                    </>
+                  )}
                 </div>
               )}
             </div>

@@ -1,10 +1,10 @@
 import { useMemo } from 'react';
-import { keepPreviousData, useQuery } from '@tanstack/react-query';
+import { keepPreviousData, useQueries, useQuery } from '@tanstack/react-query';
 import type {
   AramaCevabi, FabrikaCevabi, FabrikaKayitCevabi, FabrikaKayitGovdesi, Kroki, KrokiCevabi, KrokiHizalaGovdesi, GozKalemi, GozKalemiGovdesi, GozKalemleriCevabi, GozlerCevabi, Model, ModelGovdesi, ModelParcaCevabi, ModelParcaYazCevabi, KalemGorunumleriCevabi, KalemGorunumuGovdesi, MerkezKrokileriCevabi, MerkezModeli, MerkezModeliBaglaCevabi, MerkezModeliBaglaGovdesi, MerkezModelleriCevabi, MalzemeModelleriCevabi, ModellerCevabi, YerlesmemisIstasyonlarCevabi, RotaCevabi,
   SalonlarCevabi, YerlesimCevabi, KrokiAyariCevabi, KrokiAyariGovdesi,
 } from '#paylasilan/sozlesme/atolye.ts';
-import type { GozStoklariCevabi, HaritaOzetiCevabi } from '#paylasilan/sozlesme/stok.ts';
+import type { GozStoklariCevabi, HaritaOzetiCevabi, KonumAyrintiCevabi, KonumMalzemeleriCevabi, MalzemeAyrintiCevabi, MalzemelerCevabi } from '#paylasilan/sozlesme/stok.ts';
 import type { SonOlaylarCevabi as ArkonSonOlaylarCevabi } from '#paylasilan/sozlesme/arkon.ts';
 import type { MakineDurumlariCevabi } from '#paylasilan/sozlesme/istasyonlar.ts';
 import type { Emir, EmirlerCevabi, SonOlaylarCevabi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
@@ -177,6 +177,48 @@ export function useGozStogu(gozId: number | null, acik: boolean) {
     queryKey: anahtarlar.gozStogu(gozId ?? 0),
     queryFn: async () => (await api.get<GozStoklariCevabi>(`/stok/goz-stoklari?gozIdler=${gozId ?? 0}`)).gozler.find((g) => g.gozId === gozId) ?? null,
     enabled: acik && gozId !== null,
+  });
+}
+
+// 3012 a: gözün içeriği Stok'tandır (salt okunur). Göz -> stok konumu useGozStogu'dan; içerik konumun bakiyeleri.
+// Stok okuma yetkisi yoksa istek atılmaz; miktar hiç gelmez.
+export function useGozMalzemeleri(konumId: number | null, acik: boolean) {
+  const icerik = useQuery({
+    queryKey: anahtarlar.gozMalzemeleri(konumId ?? 0),
+    queryFn: async () => (await api.get<KonumAyrintiCevabi>(`/stok/konumlar/${konumId ?? 0}`)).bakiyeler,
+    enabled: acik && konumId !== null,
+  });
+  const malzemeIdler = [...new Set((icerik.data ?? []).map((b) => b.malzemeId))];
+  // Bakiye satırı birim taşımaz; birim malzeme kartından (gözde çoğu zaman bir iki malzeme).
+  const birimler = useQueries({
+    queries: malzemeIdler.map((id) => ({
+      queryKey: anahtarlar.malzemeBirimi(id),
+      queryFn: async () => (await api.get<MalzemeAyrintiCevabi>(`/stok/malzemeler/${id}`)).satir.birim,
+      enabled: acik,
+      staleTime: 5 * 60_000,
+    })),
+  });
+  const birim = new Map(malzemeIdler.map((id, i) => [id, birimler[i]?.data ?? null]));
+  return { icerik, birim };
+}
+
+export interface StokYeri { malzemeId: number; malzemeAd: string; birim: string | null; konumKod: string; miktar: string; partiEtiketi: string | null }
+
+// Haritada malzeme arama: adı ya da kodu tutan ilk üç malzemenin raf gözlerindeki yerleri. Stok okuma yetkisi yoksa istek yok.
+export function useStokMalzemeAramasi(metin: string, acik: boolean) {
+  const temiz = metin.trim();
+  return useQuery({
+    queryKey: anahtarlar.stokMalzemeAramasi(temiz),
+    queryFn: async (): Promise<StokYeri[]> => {
+      const m = await api.get<MalzemelerCevabi>(`/stok/malzemeler?metin=${encodeURIComponent(temiz)}&sayfa=1`);
+      const ilk = m.satirlar.slice(0, 3);
+      const yerler = await Promise.all(ilk.map((s) => api.get<KonumMalzemeleriCevabi>(`/stok/konum-malzemeleri?tur=raf_gozu&malzemeId=${s.malzemeId}&sayfa=1`)));
+      return ilk.flatMap((s, i) => (yerler[i]?.satirlar ?? []).map((y) => ({
+        malzemeId: s.malzemeId, malzemeAd: s.ad ?? s.stokKodu ?? `Malzeme ${String(s.malzemeId)}`, birim: s.birim, konumKod: y.konumKod, miktar: y.miktar, partiEtiketi: y.partiEtiketi,
+      })));
+    },
+    enabled: acik && temiz.length >= 2,
+    placeholderData: keepPreviousData,
   });
 }
 
