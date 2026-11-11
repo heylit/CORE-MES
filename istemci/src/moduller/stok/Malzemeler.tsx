@@ -11,6 +11,7 @@ import { stokCsvAlani } from './csv-alani.ts';
 import { DURUM_ETIKETI, MALZEME_TURU, STOK_DURUMLARI, birimliMiktar } from './gorunum.ts';
 import { EtiketMerkeziDugmesi } from './Etiketler.tsx';
 import { CSV_AZAMI_SATIR, tumSatirlar } from './Hareketler.tsx';
+import { MalzemeSekmeleri } from './MalzemeSekmeleri.tsx';
 import { HizliIslem, SatirEylemleri, type HizliIslemTuru } from './HizliIslem.tsx';
 import { SayfaBasi, hataMetni, useIslem } from './ortak.tsx';
 import './stok.css';
@@ -103,6 +104,7 @@ export function Malzemeler() {
           <Dugme simge="download" disabled={!l.data?.satirlar.length} yukleniyor={indiriliyor} onClick={() => void indir()}>CSV</Dugme>
           <Link to="/malzemeler/yeni"><Dugme simge="layers">Malzeme kartı aç</Dugme></Link>
         </>} />
+      <MalzemeSekmeleri secili="malzemeler" />
       <div className="tc-stok-arac">
         <Girdi etiket="Ara" placeholder="Ad, stok kodu, statü, konum kodu, parti no ya da kart numarası" value={arama} onChange={(e) => setArama(e.target.value)} />
       </div>
