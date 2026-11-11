@@ -1129,6 +1129,8 @@ export interface LogoAkisTanimi {
   kaynak: AkisKaynagi;
   // "Logo bağlantısı"na ek olarak açık olması gereken anahtarlar; biri açıksa yeter (hizmet kartının iki yönü).
   ayarlar: readonly string[];
+  // 'hepsi': anahtarların hepsi açık olmalı (yeni Logo işi kendi anahtarı ve bağlı olduğu gönderim anahtarıyla, 2971).
+  ayarKosulu?: 'biri' | 'hepsi';
   // logo_giden belge türleri; sayılar bunlardan toplanır.
   belgeTurleri: readonly string[];
   // Okuma akışı (logo -> TMI): sayı giden kutusundan değil okunan satırlardan gelir; `gonderilen` okunan satır sayısıdır, `hatali` yoktur.
@@ -1155,6 +1157,20 @@ export const LOGO_AKISLARI: readonly LogoAkisTanimi[] = [
   { anahtar: 'malzeme-fisi', yon: 'tmi-logo', baslik: 'Malzeme fişi', kaynak: 'bagli', ayarlar: ['logo.malzeme-fisi-gonderimi'],
     belgeTurleri: [...LOGO_FIS_TURLERI],
     aciklama: 'Stok\'taki malzeme fişleri (sarf, üretimden giriş, fire, sayım fazlası ve eksiği, ambar transferi) MaterialSlip uçlarıyla gider; her türün gönderim şekli (kapalı, otomatik, elle) ayrı ayardadır. Değişen fiş Logo\'da silinip aynı numarayla yeniden açılır.' },
+  // 2971: 2961 ile gelen işler; her biri kendi anahtarıyla, varsayılan kapalı. Yazan iş bağlı olduğu gönderim anahtarını da taşır ve ikisi
+  // birden açık olmalıdır; gönderim anahtarı açık olsa da iş kendiliğinden başlamaz. Kod bağlanınca rozet "kapalı" ile başlar.
+  { anahtar: 'siparis-durumu', yon: 'tmi-logo', baslik: 'Siparişi Logo\'da beklet', kaynak: 'kodda-yok', ayarlar: ['logo.siparis-bekletme-gonderimi', 'logo.satin-alma-gonderimi'], ayarKosulu: 'hepsi',
+    belgeTurleri: [], aciklama: 'Satın alma siparişindeki "Logo\'da beklet" siparişi Logo\'da öneri (kesinleşmemiş) durumuna çeker, "Logo\'da serbest bırak" geri alır.' },
+  { anahtar: 'talep-iptali', yon: 'tmi-logo', baslik: 'Talep fişi iptali', kaynak: 'kodda-yok', ayarlar: ['logo.talep-iptali-gonderimi', 'logo.satin-alma-gonderimi'], ayarKosulu: 'hepsi', belgeTurleri: [],
+    aciklama: 'CORE\'da iptal edilen talebin Logo fişi öneriye geri alınır (Logo\'da iptal durumu yok); iptal geri alınınca yeniden onaylanır.' },
+  { anahtar: 'teklif-kapatma', yon: 'tmi-logo', baslik: 'Satış teklifi kapatma', kaynak: 'kodda-yok', ayarlar: ['logo.teklif-kapatma-gonderimi', 'logo.satis-gonderimi'], ayarKosulu: 'hepsi', belgeTurleri: [],
+    aciklama: 'Reddedilen teklif ve yeni sürümü gelen teklifin eskisi Logo\'da kapanır.' },
+  { anahtar: 'malzeme-hareketleri', yon: 'logo-tmi', baslik: 'Malzeme hareketleri', kaynak: 'kodda-yok', ayarlar: ['logo.malzeme-hareketleri-okumasi'], belgeTurleri: [],
+    aciklama: 'Malzeme kartında Logo\'daki giriş ve çıkışlar istenince okunur.' },
+  { anahtar: 'son-alis-fiyatlari', yon: 'logo-tmi', baslik: 'Son alış fiyatları', kaynak: 'kodda-yok', ayarlar: ['logo.son-alis-fiyatlari-okumasi'], belgeTurleri: [],
+    aciklama: 'Malzemenin son alış faturası fiyatları istenince okunur; yalnız fiyat görene açılır.' },
+  { anahtar: 'sozlukler', yon: 'logo-tmi', baslik: 'Ödeme planı, masraf merkezi, proje, kur', kaynak: 'kodda-yok', ayarlar: ['logo.sozluk-okumasi'], belgeTurleri: [],
+    aciklama: 'Formlardaki seçim listeleri ve günün kurları Logo\'dan okunur.' },
   { anahtar: 'birim-setleri', yon: 'logo-tmi', baslik: 'Birim seti listesi', kaynak: 'bagli', ayarlar: [], belgeTurleri: [],
     aciklama: 'Saatte bir Lookup/unitsets okunur; malzeme gönderiminde birim karşılığı buna göre denetlenir.' },
   { anahtar: 'mal-kabul', yon: 'logo-tmi', baslik: 'Mal kabul (irsaliye satırları)', kaynak: 'bagli', ayarlar: ['logo.mal-kabul-okumasi'], belgeTurleri: [], okuma: 'mal-kabul',
@@ -1174,11 +1190,12 @@ export const LOGO_AKISLARI: readonly LogoAkisTanimi[] = [
 export type LogoAkisDurumu = 'hazir' | 'kapali' | 'ayar-eksik' | 'baglanmadi' | 'kodda-yok';
 
 // LOGO-H1: akış ancak kodu bağlı, ortam değişkenleri tanımlı, "Logo bağlantısı" ve kendi anahtarı açıkken hazırdır.
-export function logoAkisDurumu(t: Pick<LogoAkisTanimi, 'kaynak' | 'ayarlar'>, d: { ortamVar: boolean; ayarlar: Readonly<Record<string, boolean>> }): LogoAkisDurumu {
+export function logoAkisDurumu(t: Pick<LogoAkisTanimi, 'kaynak' | 'ayarlar' | 'ayarKosulu'>, d: { ortamVar: boolean; ayarlar: Readonly<Record<string, boolean>> }): LogoAkisDurumu {
   if (t.kaynak !== 'bagli') return t.kaynak;
   if (!d.ortamVar) return 'ayar-eksik';
   if (d.ayarlar['logo.baglanti'] !== true) return 'kapali';
-  return t.ayarlar.length === 0 || t.ayarlar.some((a) => d.ayarlar[a] === true) ? 'hazir' : 'kapali';
+  const acik = (a: string) => d.ayarlar[a] === true;
+  return t.ayarlar.length === 0 || (t.ayarKosulu === 'hepsi' ? t.ayarlar.every(acik) : t.ayarlar.some(acik)) ? 'hazir' : 'kapali';
 }
 
 // Köprü notundaki deneme malzemesi; kontrol yalnız "var mı" diye okur, kart açmaz.

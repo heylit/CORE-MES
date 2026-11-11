@@ -42,7 +42,7 @@ export const LOGO_AYARLARI = {
     tur: 'boolean',
     varsayilan: false,
     baslik: 'Logo: satın alma gönderimi',
-    aciklama: 'Açıkken onaylı satın alma talepleri talep fişi, verilen siparişler satın alma siparişi olarak Logo\'ya gider; düzenleme, kapatma, iptal ve talep karşılaması da gider. "Logo bağlantısı" da açık olmalı. Kapalıyken "bekliyor" olarak birikir.',
+    aciklama: 'Açıkken onaylı satın alma talepleri talep fişi, verilen siparişler satın alma siparişi olarak Logo\'ya gider; düzenleme, kapatma, iptal ve talep karşılaması da gider. Sipariş bekletme ve talep fişi iptali ayrı anahtarla açılır. "Logo bağlantısı" da açık olmalı. Kapalıyken "bekliyor" olarak birikir.',
   },
   // Satış teklifi gövdesinin adları köprü notunda (2.6), tekliften sipariş ucu notta (2.7); gerçek köprüyle denenince açılır.
   'logo.satis-gonderimi': {
@@ -50,7 +50,7 @@ export const LOGO_AYARLARI = {
     tur: 'boolean',
     varsayilan: false,
     baslik: 'Logo: satış gönderimi',
-    aciklama: 'Açıkken Siparişler\'de müşteriye verilen teklif sürümleri Logo\'ya satış teklifi, onaylanan siparişler kabul edilen sürümün teklifinden satış siparişi olarak gider. "Logo bağlantısı" da açık olmalı. Kapalıyken "bekliyor" olarak birikir.',
+    aciklama: 'Açıkken Siparişler\'de müşteriye verilen teklif sürümleri Logo\'ya satış teklifi, onaylanan siparişler kabul edilen sürümün teklifinden satış siparişi olarak gider. Teklif kapatma ayrı anahtarla açılır. "Logo bağlantısı" da açık olmalı. Kapalıyken "bekliyor" olarak birikir.',
   },
   // Kullanıcı kararı 12.10.2026 (#777): hizmet kartı hazır dursun, gerçek köprüyle denenince açılır.
   'logo.hizmet-alinan-gonderimi': {
@@ -158,5 +158,48 @@ export const LOGO_AYARLARI = {
     varsayilan: false,
     baslik: 'Logo: malzeme adı güncellemesi',
     aciklama: 'Açıkken Logo\'ya gitmiş malzeme ve hizmet kartlarının değişen adı Logo\'ya gönderilir. Kapalıyken güncellemeler "bekliyor" olarak birikir; kart açma etkilenmez. "Logo bağlantısı" da açık olmalı.',
+  },
+  // 2971 (kullanıcı 11.11.2026 14:47Z): yeni eklenen her Logo işi kendi anahtarıyla, varsayılan kapalı gelir; gönderim anahtarı açık olsa da kendiliğinden başlamaz.
+  'logo.siparis-bekletme-gonderimi': {
+    modul: 'logo',
+    tur: 'boolean',
+    varsayilan: false,
+    baslik: 'Logo: sipariş bekletme gönderimi',
+    aciklama: 'Açıkken satın alma siparişindeki "Logo\'da beklet" ve "Logo\'da serbest bırak" Logo\'daki sipariş durumunu değiştirir. "Logo: satın alma gönderimi" ve "Logo bağlantısı" da açık olmalı.',
+  },
+  'logo.talep-iptali-gonderimi': {
+    modul: 'logo',
+    tur: 'boolean',
+    varsayilan: false,
+    baslik: 'Logo: talep fişi iptali gönderimi',
+    aciklama: 'Açıkken CORE\'da iptal edilen talebin Logo\'daki fişi öneriye geri alınır (Logo\'da iptal durumu yok), iptal geri alınınca yeniden onaylanır. "Logo: satın alma gönderimi" ve "Logo bağlantısı" da açık olmalı.',
+  },
+  'logo.teklif-kapatma-gonderimi': {
+    modul: 'logo',
+    tur: 'boolean',
+    varsayilan: false,
+    baslik: 'Logo: satış teklifi kapatma gönderimi',
+    aciklama: 'Açıkken reddedilen teklif ve yeni sürümü gelen teklifin eskisi Logo\'da kapanır. "Logo: satış gönderimi" ve "Logo bağlantısı" da açık olmalı.',
+  },
+  'logo.malzeme-hareketleri-okumasi': {
+    modul: 'logo',
+    tur: 'boolean',
+    varsayilan: false,
+    baslik: 'Logo: malzeme hareketleri okuması',
+    aciklama: 'Açıkken malzeme kartında Logo\'daki giriş ve çıkışlar istenince okunur. "Logo bağlantısı" da açık olmalı.',
+  },
+  'logo.son-alis-fiyatlari-okumasi': {
+    modul: 'logo',
+    tur: 'boolean',
+    varsayilan: false,
+    baslik: 'Logo: son alış fiyatları okuması',
+    aciklama: 'Açıkken malzemenin son alış faturası fiyatları istenince okunur; yalnız fiyat görene açılır. "Logo bağlantısı" da açık olmalı.',
+  },
+  'logo.sozluk-okumasi': {
+    modul: 'logo',
+    tur: 'boolean',
+    varsayilan: false,
+    baslik: 'Logo: ödeme planı, masraf merkezi, proje, kur okuması',
+    aciklama: 'Açıkken formlardaki seçim listeleri ve günün kurları Logo\'dan okunur. "Logo bağlantısı" da açık olmalı.',
   },
 } as const satisfies Record<string, AyarTanimi>;
