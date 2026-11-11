@@ -114,3 +114,4 @@ Her madde: kural / istisna / nerede / nasıl uyumlanır. İşaretler: DOĞRULAND
 ## Ekranı olmayan uçlar (kullanıcı kararı 139 a, 23.10.2026)
 - KAPANDI: üç uç da malzemelerin Logo gönderimi ekranından çağrılıyor (`istemci/src/moduller/malzemeler/LogoGonderimi.tsx`, "Logo birim setleri" kartı):
   `GET /logo/birim-setleri` (liste ve bağlantı notu), `POST /logo/birim-setleri/ekle`, `POST /logo/birim-setleri/:kod/kaldir`. Birimin sahibi malzemeler (144 a).
+- [bağlama] 2961-D4 okumaları (malzeme hareketleri, son alış fiyatları) köprüde var, çağıran yok (kart 2962 a: okumalar eklenir). Kullanan ekran (Malzemeler kartı, satın alma teklif karşılaştırması) bağlamada kendi ucunu yazar; yetki o uçta verilir. Sütunlar gerçek Logo'da ölçülmedi (yardımcı `Sorgular.Dogrulanmadi`).

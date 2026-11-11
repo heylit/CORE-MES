@@ -408,6 +408,45 @@ namespace LogoYardimcisi
 
         static Dictionary<string, object> D(object o) { return (Dictionary<string, object>)o; }
 
+        static void T_malzeme_hareketleri_imlecle_sayfalanir_olmayan_kart_404()
+        {
+            var s = Logo();
+            var k1 = s.Kartlar[0];
+            var k2 = s.Kartlar[1];
+            s.Hareketler.Add(Tuple.Create(k1.Ref, new MalzemeHareketi { Ref = 501, Tarih = new DateTime(2026, 10, 1), FisTuru = 1, GirisCikis = 1, FisNo = "IRS-1", Miktar = 4.5m, AmbarNo = 0, Birim = "ADET" }));
+            s.Hareketler.Add(Tuple.Create(k1.Ref, new MalzemeHareketi { Ref = 502, Tarih = new DateTime(2026, 10, 2), FisTuru = 12, GirisCikis = 4, Miktar = 1, AmbarNo = 1, Birim = "ADET" }));
+            s.Hareketler.Add(Tuple.Create(k2.Ref, new MalzemeHareketi { Ref = 503, Tarih = new DateTime(2026, 10, 3), FisTuru = 1, GirisCikis = 1, Miktar = 9 }));
+            var m = D(C(s, "GET", "/api/Material/" + k1.Kod + "/movements", null).Govde);
+            var l = (object[])m["data"];
+            Esit(2, l.Length, "yalnız bu kartın hareketleri");
+            Esit("2026-10-01", D(l[0])["date"], "tarih ISO");
+            Esit("IRS-1", D(l[0])["ficheNo"], "fiş no");
+            Esit(4.5m, Convert.ToDecimal(D(l[0])["quantity"], System.Globalization.CultureInfo.InvariantCulture), "miktar");
+            Esit(4, D(l[1])["ioCode"], "çıkış");
+            Esit(null, m["next"], "son sayfa");
+            var sonraki = (object[])D(C(s, "GET", "/api/Material/" + k1.Kod + "/movements", null, new Dictionary<string, string> { { "since", "501" } }).Govde)["data"];
+            Esit(1, sonraki.Length, "imleçten sonrası");
+            Esit(400, C(s, "GET", "/api/Material/" + k1.Kod + "/movements", null, new Dictionary<string, string> { { "since", "x" } }).Durum, "imleç sayı değil");
+            Esit(404, C(s, "GET", "/api/Material/YOK-1/movements", null).Durum, "olmayan kart");
+        }
+
+        static void T_son_alis_fiyatlari_en_yeniden_en_cok_on_satir()
+        {
+            var s = Logo();
+            var k1 = s.Kartlar[0];
+            for (var i = 1; i <= 12; i++)
+                s.AlisSatirlari.Add(Tuple.Create(k1.Ref, new AlisFiyati { Ref = 600 + i, Tarih = new DateTime(2026, 9, i), CariKod = Satici, FaturaNo = "FT-" + i, Miktar = i, Birim = "KG", Fiyat = 10 + i, DovizTuru = 20, DovizFiyati = 0.5m }));
+            var l = (object[])C(s, "GET", "/api/Material/" + k1.Kod + "/lastPurchases", null).Govde;
+            Esit(Islemler.SonAlisEnCok, l.Length, "en çok on satır");
+            Esit("2026-09-12", D(l[0])["date"], "en yeni önce");
+            Esit(Satici, D(l[0])["arpCode"], "cari");
+            Esit(22m, Convert.ToDecimal(D(l[0])["price"], System.Globalization.CultureInfo.InvariantCulture), "fiyat");
+            Esit(20, D(l[0])["currencyType"], "döviz türü");
+            Esit(0, ((object[])C(s, "GET", "/api/Material/" + s.Kartlar[1].Kod + "/lastPurchases", null).Govde).Length, "alışı olmayan kart boş");
+            Esit(404, C(s, "GET", "/api/Material/YOK-1/lastPurchases", null).Durum, "olmayan kart");
+            Esit(404, C(s, "POST", "/api/Material/" + k1.Kod + "/lastPurchases", N()).Durum, "yalnız GET");
+        }
+
         static void T_malzeme_listesi_ve_stok_toplamlari_imlecle_sayfalanir()
         {
             var s = Logo();
@@ -678,7 +717,7 @@ namespace LogoYardimcisi
         {
             var q = new Sorgular(7, 3);
             var hepsi = q.Hepsi().ToList();
-            Esit(29, hepsi.Count, "sorgu sayısı");
+            Esit(31, hepsi.Count, "sorgu sayısı");
             foreach (var m in hepsi) Sorgular.YalnizOkuma(string.Format(m, "@r0"));
             Icerir(q.MalzemeRef, "LG_007_ITEMS");
             Icerir(q.MalzemeKodlari, "SELECT CODE FROM LG_007_ITEMS");

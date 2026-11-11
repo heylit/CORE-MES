@@ -14,7 +14,7 @@ namespace LogoYardimcisi
     {
         public readonly string MalzemeRef, Malzeme, MalzemeRefIle, HizmetRefIle, MalzemeKodlari, MalzemeKartlari, StokToplamlari, CariAra, Cari, BirimSetleri, Ambarlar, Cariler, CariRef, Hizmet, Siparis, SiparisRefIle, SiparisSatirlari,
             MalKabul, Faturalar, Talep, TalepSatirlari, Karsilamalar, KarsilamaBul, SatisMusterisi, Teklif, TeklifRefIle, TeklifSatirlari,
-            MalzemeFisi, MalzemeFisiSatirlari;
+            MalzemeFisi, MalzemeFisiSatirlari, MalzemeHareketleri, SonAlisFiyatlari;
 
         // Rehberde kolon olarak geçmeyen, Logo'nun genel adlandırmasından alınanlar (VARSAYIM).
         public static readonly string[] Dogrulanmadi =
@@ -24,6 +24,7 @@ namespace LogoYardimcisi
             "LG_<f>_ITEMS.ACTIVE (0 kullanımda)", "LG_<f>_<d>_GNTOTST.STOCKREF, INVENNO (-1 bütün ambarların toplamı), ONHAND",
             "LG_<f>_CLCARD.CARDTYPE, TAXNR, TCKNO, TAXOFFICE, ADDR1, ADDR2, TOWN, CITY, POSTCODE, TELNRS1, EMAILADDR",
             "LG_<f>_SRVCARD.ACTIVE (0 kullanımda) ve Logo Objects ACTIVE alanı (malzeme ve hizmet kartı) kart pasife almada",
+            "LG_<f>_<d>_STLINE.DATE_, TRCODE (1 alış), IOCODE (1, 2 giriş; 3, 4 çıkış), CANCELLED, SOURCEINDEX, PRICE, PRCURR, PRPRICE, CLIENTREF (2961-D4 okumaları)",
         };
 
         public Sorgular(int firma, int donem)
@@ -80,6 +81,14 @@ namespace LogoYardimcisi
             TeklifSatirlari = "SELECT L.LOGICALREF, L.LINETYPE, " + satirKodu + ", L.AMOUNT, L.PRICE, L.VAT, L.DISCPER, U.CODE, L.ORDEREDAMOUNT, L.PRCURR, L.PRPRICE FROM "
                 + f("PURCHOFFERLN") + " L" + kodBirlesimi + " LEFT JOIN " + f("UNITSETL") + " U ON U.LOGICALREF = L.UOMREF WHERE L.ORDFICHEREF = @ref ORDER BY L.LOGICALREF";
             MalzemeFisi = "SELECT LOGICALREF, FICHENO FROM " + d("STFICHE") + " WHERE FICHENO = @no AND TRCODE = @tr";
+            // 2961-D4: iptal satır ve malzeme dışı satır (LINETYPE <> 0) gelmez; fişsiz satırın fiş numarası boş kalır.
+            MalzemeHareketleri = "SELECT TOP (@enCok) L.LOGICALREF, L.DATE_, L.TRCODE, L.IOCODE, F.FICHENO, L.AMOUNT, L.SOURCEINDEX, U.CODE FROM " + d("STLINE") + " L LEFT JOIN "
+                + d("STFICHE") + " F ON F.LOGICALREF = L.STFICHEREF LEFT JOIN " + f("UNITSETL") + " U ON U.LOGICALREF = L.UOMREF"
+                + " WHERE L.STOCKREF = @malzeme AND L.LINETYPE = 0 AND L.CANCELLED = 0 AND L.LOGICALREF > @son ORDER BY L.LOGICALREF";
+            SonAlisFiyatlari = "SELECT TOP (@enCok) L.LOGICALREF, L.DATE_, C.CODE, V.FICHENO, L.AMOUNT, U.CODE, L.PRICE, L.PRCURR, L.PRPRICE FROM " + d("STLINE") + " L JOIN "
+                + d("INVOICE") + " V ON V.LOGICALREF = L.INVOICEREF LEFT JOIN " + f("CLCARD") + " C ON C.LOGICALREF = L.CLIENTREF LEFT JOIN " + f("UNITSETL")
+                + " U ON U.LOGICALREF = L.UOMREF WHERE L.STOCKREF = @malzeme AND L.LINETYPE = 0 AND L.TRCODE = 1 AND L.CANCELLED = 0 AND L.INVOICEREF > 0"
+                + " ORDER BY L.DATE_ DESC, L.LOGICALREF DESC";
             MalzemeFisiSatirlari = "SELECT L.LOGICALREF, L.LINETYPE, I.CODE, L.AMOUNT FROM " + d("STLINE") + " L LEFT JOIN " + f("ITEMS")
                 + " I ON I.LOGICALREF = L.STOCKREF WHERE L.STFICHEREF = @ref ORDER BY L.LOGICALREF";
         }
@@ -236,6 +245,50 @@ namespace LogoYardimcisi
                 k.BirimSeti = Metin(s[7]);
                 k.Pasif = Bayrak(s[8]);
                 if (k.Kod != null) l.Add(k);
+            }
+            return l;
+        }
+
+        static DateTime Tarih(object o)
+        {
+            return o == null ? DateTime.MinValue : Convert.ToDateTime(o, CultureInfo.InvariantCulture);
+        }
+
+        public List<MalzemeHareketi> MalzemeHareketleri(int malzemeRef, int sonGorulen, int enCok)
+        {
+            var l = new List<MalzemeHareketi>();
+            foreach (var s in Sorgula(q.MalzemeHareketleri, P("@malzeme", malzemeRef), P("@son", sonGorulen), P("@enCok", enCok)))
+            {
+                var x = new MalzemeHareketi();
+                x.Ref = Tam(s[0]);
+                x.Tarih = Tarih(s[1]);
+                x.FisTuru = Tam(s[2]);
+                x.GirisCikis = Tam(s[3]);
+                x.FisNo = Metin(s[4]);
+                x.Miktar = Ondalik(s[5]);
+                x.AmbarNo = Tam(s[6]);
+                x.Birim = Metin(s[7]);
+                l.Add(x);
+            }
+            return l;
+        }
+
+        public List<AlisFiyati> SonAlisFiyatlari(int malzemeRef, int enCok)
+        {
+            var l = new List<AlisFiyati>();
+            foreach (var s in Sorgula(q.SonAlisFiyatlari, P("@malzeme", malzemeRef), P("@enCok", enCok)))
+            {
+                var x = new AlisFiyati();
+                x.Ref = Tam(s[0]);
+                x.Tarih = Tarih(s[1]);
+                x.CariKod = Metin(s[2]);
+                x.FaturaNo = Metin(s[3]);
+                x.Miktar = Ondalik(s[4]);
+                x.Birim = Metin(s[5]);
+                x.Fiyat = Ondalik(s[6]);
+                x.DovizTuru = Tam(s[7]);
+                x.DovizFiyati = Ondalik(s[8]);
+                l.Add(x);
             }
             return l;
         }

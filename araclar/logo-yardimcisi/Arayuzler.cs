@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 
 namespace LogoYardimcisi
@@ -71,6 +72,33 @@ namespace LogoYardimcisi
         public string MalzemeKodu;
         public int AmbarNo;
         public decimal Miktar;
+    }
+
+    // Malzeme hareketi (STLINE satırı, kart 2961-D4). Giriş/çıkış IOCODE'dan: 1, 2 giriş; 3, 4 çıkış (VARSAYIM; Sorgular.Dogrulanmadi).
+    public sealed class MalzemeHareketi
+    {
+        public int Ref;
+        public DateTime Tarih;
+        public int FisTuru;
+        public int GirisCikis;
+        public string FisNo;
+        public decimal Miktar;
+        public int AmbarNo;
+        public string Birim;
+    }
+
+    // Alış faturası satırı (son alış fiyatı, kart 2961-D4). Fiyat yerel para; döviz türü ve döviz fiyatı ayrı (PRCURR, PRPRICE).
+    public sealed class AlisFiyati
+    {
+        public int Ref;
+        public DateTime Tarih;
+        public string CariKod;
+        public string FaturaNo;
+        public decimal Miktar;
+        public string Birim;
+        public decimal Fiyat;
+        public int DovizTuru;
+        public decimal DovizFiyati;
     }
 
     // Cari kart (CLCARD). Alan adları Logo'nun genel adlandırmasından (VARSAYIM; Sorgular.Dogrulanmadi).
@@ -210,5 +238,8 @@ namespace LogoYardimcisi
         List<TeklifSatiri> TeklifSatirlari(int teklifRef);
         FisBasligi MalzemeFisi(string no, int trcode);
         List<FisSatiri> MalzemeFisiSatirlari(int fisRef);
+        // 2961-D4: malzemenin hareketleri kayıt sırasıyla (sonGorulen'den sonrası, en çok enCok) ve en yeni alış faturası satırları.
+        List<MalzemeHareketi> MalzemeHareketleri(int malzemeRef, int sonGorulen, int enCok);
+        List<AlisFiyati> SonAlisFiyatlari(int malzemeRef, int enCok);
     }
 }

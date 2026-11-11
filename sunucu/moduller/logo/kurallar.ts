@@ -1200,3 +1200,75 @@ export function kontrolAdiminiYorumla(c: { durum: number; govde: unknown } | Exc
   const r = cevabiYorumla(c.durum, zarf);
   return { sonuc: 'hata', ileti: r.tur === 'basarili' ? `Köprü ${c.durum} döndü.` : r.ileti, devam: true };
 }
+
+/* ---------------- 2961-D4: malzeme hareketleri ve son alış fiyatları (yalnız okuma) ---------------- */
+
+// Yardımcının GET /api/Material/{kod}/movements (sayfa) ve /lastPurchases (dizi) cevapları. Sütunlar gerçek Logo'da ölçülmedi (yardımcı
+// Sorgular.Dogrulanmadi); okunamayan satır atlanır, sayı uydurulmaz. Miktar ve fiyat ondalık metin kalır.
+export interface LogoMalzemeHareketi {
+  logoKayitNo: number;
+  // ISO tarih (YYYY-MM-DD).
+  tarih: string;
+  // STLINE.TRCODE ve IOCODE (1, 2 giriş; 3, 4 çıkış; VARSAYIM). Anlamlandırma kullanan ekranın işidir.
+  fisTuru: number;
+  girisCikis: number;
+  fisNo: string | null;
+  miktar: string;
+  ambarNo: number | null;
+  birim: string | null;
+}
+
+export interface LogoAlisFiyati {
+  logoKayitNo: number;
+  tarih: string;
+  cariKodu: string | null;
+  faturaNo: string | null;
+  miktar: string;
+  birim: string | null;
+  // Yerel para birim fiyatı; döviz türü 0 ise döviz fiyatı null.
+  fiyat: string;
+  dovizTuru: number | null;
+  dovizFiyati: string | null;
+}
+
+const ISO_TARIH = /^\d{4}-\d{2}-\d{2}$/;
+const tamSayi = (n: number | null): number | null => (n !== null && Number.isSafeInteger(n) ? n : null);
+
+function hareketSatiri(o: Record<string, unknown>): LogoMalzemeHareketi | null {
+  const logoKayitNo = kayitNumarasi(o, ['logicalRef']);
+  const tarih = ilkMetin(o, ['date'], 10);
+  const fisTuru = tamSayi(ilkSayi(o, ['trCode']));
+  const girisCikis = tamSayi(ilkSayi(o, ['ioCode']));
+  const miktar = ilkSayi(o, ['quantity']);
+  if (logoKayitNo === null || tarih === null || !ISO_TARIH.test(tarih) || fisTuru === null || girisCikis === null || miktar === null) return null;
+  const ambar = tamSayi(ilkSayi(o, ['warehouseNr']));
+  return {
+    logoKayitNo, tarih, fisTuru, girisCikis, fisNo: ilkMetin(o, ['ficheNo'], 40), miktar: String(miktar),
+    ambarNo: ambar !== null && ambar >= 0 ? ambar : null, birim: ilkMetin(o, ['unitCode'], 40),
+  };
+}
+
+export function malzemeHareketleriniAyikla(govde: unknown): Sayfa<LogoMalzemeHareketi> | null {
+  return sayfaAyikla(govde, hareketSatiri);
+}
+
+export function alisFiyatlariniAyikla(govde: unknown): LogoAlisFiyati[] | null {
+  if (!Array.isArray(govde)) return null;
+  const l: LogoAlisFiyati[] = [];
+  for (const o of govde) {
+    if (!kayitMi(o)) continue;
+    const logoKayitNo = kayitNumarasi(o, ['logicalRef']);
+    const tarih = ilkMetin(o, ['date'], 10);
+    const miktar = ilkSayi(o, ['quantity']);
+    const fiyat = ilkSayi(o, ['price']);
+    if (logoKayitNo === null || tarih === null || !ISO_TARIH.test(tarih) || miktar === null || fiyat === null) continue;
+    const tur = tamSayi(ilkSayi(o, ['currencyType']));
+    const dovizli = tur !== null && tur > 0;
+    const dovizFiyati = dovizli ? ilkSayi(o, ['currencyPrice']) : null;
+    l.push({
+      logoKayitNo, tarih, cariKodu: ilkMetin(o, ['arpCode'], 64), faturaNo: ilkMetin(o, ['invoiceNo'], 40), miktar: String(miktar),
+      birim: ilkMetin(o, ['unitCode'], 40), fiyat: String(fiyat), dovizTuru: dovizli ? tur : null, dovizFiyati: dovizFiyati === null ? null : String(dovizFiyati),
+    });
+  }
+  return l;
+}
