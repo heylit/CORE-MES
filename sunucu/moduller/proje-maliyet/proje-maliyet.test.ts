@@ -457,6 +457,49 @@ describe('proje-maliyet (gerçek PostgreSQL, gerçek giriş)', () => {
     assert.equal(await emirMaliyeti(await kart('m')), null);
   });
 
+  test('2891-1 (Test N1): gerçekleşen malzemede metre stoklu hammaddenin talaşı bilinmez ve bildirilir; adet stoklu kartta talaş hesaplanır', async () => {
+    const sh = ortam!.sahip;
+    await sh.sorgu("INSERT INTO satin_alma_kg_fiyati (kalite_kodu, form, kg_fiyati, talas_kg_fiyati, para_birimi, gecerlilik, kisi_id) VALUES ('DENEME-PMT', 'cubuk', 50, 10, 'TRY', current_date, $1)", [yoneticiId]);
+    let sira = 0;
+    const gercek = async (birim: string): Promise<[number | null | undefined, boolean]> => {
+      sira += 1;
+      const hedef = (await tamam<Proje>(gonder(yonetici, '/projeler', { kod: `PM.T${sira}`, ad: 'Talaşlı', siparisId: siparis.id }))).id;
+      const { isEmriId } = await isEmriAc(hedef, { adet: 1 });
+      const emir = (await vt().tek<{ id: number; urun: number }>('SELECT e.id, e.malzeme_no AS urun FROM uretim_emirleri_is_emri i JOIN uretim_emri e ON e.id = i.uretim_emri_id WHERE i.id = $1', [isEmriId]))!;
+      await sh.sorgu('UPDATE malzeme_katalog_karti SET net_agirlik_kg = 1 WHERE no = $1', [emir.urun]);
+      const kimlik = `pm-dnm-${(sayac += 1)}`;
+      await sh.sorgu("INSERT INTO malzeme_katalog_kod_sirasi (onek, son_sira) VALUES ('PM-DNM-', 0) ON CONFLICT (onek) DO NOTHING");
+      const bilesen = (await sh.tek<{ no: number }>(
+        `INSERT INTO malzeme_katalog_karti (kimlik, tur, onek, sira_no, onay_durumu, kayit, birim_agirlik_kg, acan_kisi_id, guncelleyen_kisi_id)
+         VALUES ($1, 'hammadde', 'PM-DNM-', $2, 'aktif', $3, 2, $4, $4) RETURNING no`,
+        [kimlik, sayac, JSON.stringify({ id: kimlik, tur: 'hammadde', grade: 'DENEME-PMT', form: 'cubuk', com: { ad: 'Deneme hammadde', birim } }), yoneticiId]))!.no;
+      await sh.sorgu('INSERT INTO uretim_emirleri_is_emri_bileseni (is_emri_id, malzeme_no, miktar, fire_yuzde) VALUES ($1, $2, 3, 0)', [isEmriId, bilesen]);
+      // Emre bağlı teslim alınmış sipariş (birim fiyat 40) ve emre 3 birim sarf (PM-51 fikstürü gibi).
+      const [t, kl, tk, katalog] = [randomUUID(), randomUUID(), randomUUID(), randomUUID()];
+      await sh.sorgu('INSERT INTO satin_alma_katalog (id, malzeme_no) VALUES ($1, $2)', [katalog, bilesen]);
+      await sh.sorgu("INSERT INTO satin_alma_talep (id, yil, sira, baslik, talep_eden_kisi_id, acan_kisi_id, durum, uretim_emri_id) VALUES ($1, 2099, $2, 'Deneme talep', $3, $3, 'siparis_verildi', $4)", [t, 95300 + sira, yoneticiId, emir.id]);
+      await sh.sorgu("INSERT INTO satin_alma_talep_kalemi (talep_id, id, sira, ad, katalog_id) VALUES ($1, $2, 1, 'Deneme kalem', $3)", [t, kl, katalog]);
+      await sh.sorgu("INSERT INTO satin_alma_teklif (talep_id, id, para_birimi, teklif_tarihi) VALUES ($1, $2, 'TRY', current_date)", [t, tk]);
+      await sh.sorgu('INSERT INTO satin_alma_teklif_satiri (talep_id, teklif_id, kalem_id, birim_fiyat) VALUES ($1, $2, $3, 40)', [t, tk, kl]);
+      await sh.sorgu("INSERT INTO satin_alma_karar (talep_id, mod, karar_tarihi) VALUES ($1, 'bolunmus', current_date)", [t]);
+      await sh.sorgu('INSERT INTO satin_alma_siparis (talep_id, teklif_id) VALUES ($1, $2)', [t, tk]);
+      const satir = (await sh.tek<{ id: number }>('INSERT INTO satin_alma_siparis_satiri (talep_id, teklif_id, kalem_id, miktar, birim) VALUES ($1, $2, $3, 10, $4) RETURNING id', [t, tk, kl, birim]))!.id;
+      await sh.sorgu('INSERT INTO satin_alma_teslim (siparis_satiri_id, mal_kabul_satiri_id, miktar, kisi_id) VALUES ($1, $2, 10, $3)', [satir, 953000 + sira, yoneticiId]);
+      const konum = (await sh.tek<{ id: number }>("INSERT INTO stok_konum (depo_id, kod, tur) SELECT id, $1, 'depo_zemini' FROM stok_depo ORDER BY id LIMIT 1 RETURNING id", [`PM-T${sira}`]))!.id;
+      await sh.sorgu(
+        `WITH f AS (INSERT INTO stok_hareket_fisi (tur, islem_kimligi, kisi_id) VALUES ('cikis', pg_current_xact_id(), $4) RETURNING id),
+           h AS (INSERT INTO stok_hareketi (tur, malzeme_id, kaynak_konum_id, miktar, cikis_nedeni, uretim_emri_id, kisi_id, onayli_eksi, eksi_onay_kaynagi)
+                 VALUES ('cikis', $1, $2, 3, 'uretime_sarf', $3, $4, true, 'kisi') RETURNING id)
+         INSERT INTO stok_hareket_fisi_satiri (hareket_id, fis_id) SELECT h.id, f.id FROM h, f`, [bilesen, konum, emir.id, yoneticiId]);
+      const c = await vt().tx((db) => projeMaliyeti(db, kullanici(['finans.maliyet-oku', FIYAT_ISLEMI]), hedef, SIMDI));
+      return [c.kalemler.find((x) => x.kalem === 'malzeme')!.gerceklesen, c.eksikler.includes('talas_dusulmedi')];
+    };
+    // Adet: 3 x 40 = 120 alış; kütük kg'i parça ağırlığından bilinir, talaş hesaplanır (bitmemiş emirde işlenen pay 0, düşülen 0), eksik yok.
+    assert.deepEqual(await gercek('adet'), [120, false]);
+    // Metre: parça ağırlığı metre başına değildir; kütük kg'i bilinmez, talaş düşülmedi diye bildirilir (önce 2 kg/m sayılıyordu).
+    assert.deepEqual(await gercek('m'), [120, true]);
+  });
+
   test('PM-34 kâr riski oranı (227 a): plan bedel ayarından okunur; müdür değiştirince proje maliyeti de değişir', async () => {
     await ortam!.sahip.sorgu('UPDATE plan_ayari SET kar_riski_orani_gun = 0.5');
     const c = await vt().tx((db) => projeMaliyeti(db, kullanici(['finans.maliyet-oku', FIYAT_ISLEMI]), siparisli.id, SIMDI));
