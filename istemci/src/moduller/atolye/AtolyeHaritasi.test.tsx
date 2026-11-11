@@ -195,7 +195,7 @@ function goster(ekran: ReactElement, adres = '/atolye') {
 
 // 2142-1 a: makine listesi kapalı gelir; araç sütunundaki düğmeyle açılır.
 async function listeyiAc() {
-  fireEvent.click(await screen.findByRole('button', { name: 'Makine listesini göster' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Makine listesi' }));
 }
 
 afterEach(() => {
@@ -410,7 +410,7 @@ describe('fabrika haritası', () => {
     fireEvent.click(screen.getByRole('button', { name: /Tam ekran/ }));
     expect(container.querySelector('.tc-atolye-tam')).not.toBeNull();
     expect(screen.getByRole('button', { name: /Otomatik tur/ })).toBeTruthy();
-    expect(screen.getByRole('button', { name: /Makine listesini/ })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Makine listesi' })).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: /Otomatik tur/ }));
     // Tur sorunlu istasyondan başlar: duran CNC-01 seçilir, kartı açılır.
     expect(await screen.findByRole('region', { name: 'CNC-01 ayrıntısı' })).toBeTruthy();
@@ -424,16 +424,34 @@ describe('fabrika haritası', () => {
     sunucuKur(OKUYAN);
     goster(<AtolyeHaritasi />);
     await screen.findByRole('img', { name: 'Atölye planı' });
-    const dugme = screen.getByRole('button', { name: /Hafif görünüm/ });
+    const dugme = screen.getByRole('button', { name: 'Hafif görünüm' });
     expect(dugme.getAttribute('aria-pressed')).toBe('false');
     fireEvent.click(dugme);
-    const acik = screen.getByRole('button', { name: /Tam görünüm/ });
+    const acik = screen.getByRole('button', { name: 'Hafif görünüm' });
     expect(acik.getAttribute('aria-pressed')).toBe('true');
+    expect(acik.getAttribute('title')).toMatch(/^Tam görünüm/);
     expect(localStorage.getItem('tmiv2.atolye.hafif')).toBe('acik');
     fireEvent.click(acik);
-    expect(screen.getByRole('button', { name: /Hafif görünüm/ }).getAttribute('aria-pressed')).toBe('false');
+    expect(screen.getByRole('button', { name: 'Hafif görünüm' }).getAttribute('aria-pressed')).toBe('false');
     expect(localStorage.getItem('tmiv2.atolye.hafif')).toBe('kapali');
     localStorage.removeItem('tmiv2.atolye.hafif');
+  });
+
+  it('aç/kapa düğmelerinin adı durumla değişmez, durum aria-pressed ile okunur; ipucu yapılacak işi söyler', async () => {
+    sunucuKur(OKUYAN);
+    goster(<AtolyeHaritasi />);
+    await screen.findByRole('img', { name: 'Atölye planı' });
+    const yazilar = screen.getByRole('button', { name: 'Yazılar' });
+    expect(yazilar.getAttribute('aria-pressed')).toBe('true');
+    expect(yazilar.getAttribute('title')).toMatch(/^Yazıları gizle/);
+    fireEvent.click(yazilar);
+    expect(screen.getByRole('button', { name: 'Yazılar' }).getAttribute('aria-pressed')).toBe('false');
+    expect(screen.getByRole('button', { name: 'Yazılar' }).getAttribute('title')).toBe('Yazıları göster');
+    const liste = screen.getByRole('button', { name: 'Makine listesi' });
+    expect(liste.getAttribute('aria-pressed')).toBe('false');
+    fireEvent.click(liste);
+    expect(screen.getByRole('button', { name: 'Makine listesi' }).getAttribute('aria-pressed')).toBe('true');
+    expect(screen.getByRole('button', { name: 'Tam ekran' }).getAttribute('aria-pressed')).toBe('false');
   });
 
   it('okuma yetkisiyle düzenleme ve salon ekleme düğmesi görünmez', async () => {
