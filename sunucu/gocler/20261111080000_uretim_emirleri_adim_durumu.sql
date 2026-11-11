@@ -1,5 +1,7 @@
--- Adım Durumu (2893): iş emrinin elle yazılan statüsü ve hazırlık maddesinin elle onayı. İki yeni ve boş tablo; kayıt silinmez,
--- değişmez: kaldırma da yeni satırdır (olay 'kaldir'). Açık kayıt iş emri (ve madde) başına en son satırdır; son satırı 'kaldir' olan açık değildir.
+-- Adım Durumu (2893): iş emrinin elle yazılan statüsü ve hazırlık maddesinin elle onayı. İki yeni ve boş tablo; satır güncellenmez,
+-- tablo boşaltılmaz: kaldırma da yeni satırdır (olay 'kaldir'). Açık kayıt iş emri (ve madde) başına en son satırdır; son satırı 'kaldir' olan açık değildir.
+-- Bekleyen iş emri silinince onun satırları da gider (ON DELETE CASCADE): silinen iş emrine ait statü ve onay
+-- başka iş emrine geçmez; başlamış iş emri silinmediği için üretimdeki adımın geçmişi kalır.
 -- Elle statü, yazıldığı andaki sistem statüsünü saklar: sistem statüsü değişince okuma onu görmez (geri alma yok, düşme okumada).
 -- Elle onay (2893-2 b) durduran maddede de başlatmayı açar; gerekçe orada zorunludur (sunucu kuralı). Onaylanan sürüm (çizim revizyonu
 -- gibi) biliniyorsa yazılır; madde sonradan değişirse onay geçmez (Atölye görüşü, 2893).

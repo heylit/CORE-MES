@@ -199,6 +199,7 @@ describe('uretim-emirleri adım durumu (2893, gerçek PostgreSQL)', () => {
       assert.equal((await baslat(id, ie1)).durum, 409);
       assert.equal((await onayla({ madde: 'cnc', gerekce: null, sistemHali: 'eksik' })).durum, 400, 'durduran maddede gerekçe zorunlu');
       assert.equal((await onayla({ madde: 'cnc', gerekce: '   ', sistemHali: 'eksik' })).durum, 400, 'boş gerekçe');
+      assert.equal((await onayla({ madde: 'cnc', gerekce: 'kısa', sistemHali: 'eksik' })).durum, 400, 'beş karakterden kısa gerekçe');
       assert.equal((await onayla({ madde: 'cnc', gerekce: 'Program elde denendi', sistemHali: 'tamam' })).durum, 409, 'eski hâl');
       assert.equal((await onayla({ madde: 'cnc', gerekce: 'Program elde denendi', sistemHali: 'eksik' }, 'kalite')).durum, 403);
       assert.equal((await onayla({ madde: 'rota', gerekce: null, sistemHali: 'eksik' })).durum, 409, 'çözücüsüz madde bilinmiyor: eksik görüntüye göre onaylanmaz');

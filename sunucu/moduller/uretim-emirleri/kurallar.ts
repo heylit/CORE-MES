@@ -1743,12 +1743,14 @@ export function acikOnaylar<T extends { madde: string; olay: 'onay' | 'kaldir' }
   for (const s of defter) son.set(s.madde, s);
   return new Map([...son].filter(([, s]) => s.olay === 'onay'));
 }
+// Sürümle yazılan onay yalnız aynı sürümde geçer: güncel sürüm okunamıyorsa (revizyon yayından kalktı, çizim çıkarıldı) madde değişmiş sayılır.
 export const onayGecerliMi = (onaylananSurum: string | null, guncelSurum: string | null | undefined): boolean =>
-  onaylananSurum === null || guncelSurum == null || onaylananSurum === guncelSurum;
+  onaylananSurum === null || onaylananSurum === guncelSurum;
 
 export const STATU_ESKIDI = 'Adımın durumu bu arada değişti. Güncel durumu görüp yeniden yazın.';
 export const HAL_ESKIDI = 'Maddenin hâli bu arada değişti. Güncel hâli görüp yeniden onaylayın.';
-export const GEREKCE_GEREK = 'Bu madde eksikken iş emrini durdurur; elle onay için gerekçe yazın.';
+export const GEREKCE_EN_AZ = 5;
+export const GEREKCE_GEREK = 'Bu madde eksikken iş emrini durdurur; elle onay için en az 5 karakterlik gerekçe yazın.';
 export const ONAY_GEREKSIZ = 'Madde tamam, muaf ya da gerekmiyor; onaya gerek yok.';
 export const ONAY_YOK = 'Bu maddede açık elle onay yok.';
 export const ELLE_STATU_YOK = 'Bu adımda elle yazılmış statü yok.';
@@ -1757,6 +1759,6 @@ export const IS_EMRI_EMIRDE_YOK = 'İş emri bu emirde yok.';
 // 2893-2 b: elle onay durduran maddede başlatmayı açar; bu yüzden gerekçe zorunludur. Tamam, muaf ya da gerekmeyen madde onaylanmaz.
 export function hazirlikOnayiReddi(madde: HazirlikMaddesi, hal: HazirlikHali, gerekce: string | null): string | null {
   if (hal === 'tamam' || hal === 'gerekmez' || hal === 'muaf') return ONAY_GEREKSIZ;
-  if (!hazirlikUyarirMi(madde) && (gerekce === null || gerekce === '')) return GEREKCE_GEREK;
+  if (!hazirlikUyarirMi(madde) && (gerekce?.trim().length ?? 0) < GEREKCE_EN_AZ) return GEREKCE_GEREK;
   return null;
 }

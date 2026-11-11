@@ -17,6 +17,7 @@ test('çizim sürümü yayındaki revizyonlardır; onay paketin revizyonları on
   assert.equal(cizimOnayiGecer('7@a,9@x', [{ belgeId: 7 }], yayinda), true, 'paket emrin çizimlerinden birini taşır');
   assert.equal(cizimOnayiGecer('7@a,9@x', [{ belgeId: 7 }], new Map([[7, 'b']])), false, 'onaydan sonra yeni revizyon yayınlandı');
   assert.equal(cizimOnayiGecer(null, [{ belgeId: 7 }], new Map([[7, 'b']])), true);
+  assert.equal(cizimOnayiGecer('7@a', [{ belgeId: 7 }], new Map([[7, null]])), false, 'onaylanan revizyon yayından kalktı');
 });
 
 test('emrin çizim durumu sürümü taşır; çizimsiz emirde sürüm yok', () => {

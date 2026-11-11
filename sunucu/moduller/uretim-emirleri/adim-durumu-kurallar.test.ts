@@ -52,7 +52,9 @@ describe('uretim-emirleri adım durumu kuralları (2893)', () => {
     ];
     assert.deepEqual([...acikOnaylar(d).keys()], ['cizim']);
     assert.equal(onayGecerliMi(null, 'r2'), true);
-    assert.equal(onayGecerliMi('r1', null), true);
+    assert.equal(onayGecerliMi('r1', null), false, 'onaylanan revizyon yayından kalktı');
+    assert.equal(onayGecerliMi('r1', undefined), false, 'çizim çıkarıldı, sürüm okunmuyor');
+    assert.equal(onayGecerliMi(null, null), true);
     assert.equal(onayGecerliMi('r1', 'r1'), true);
     assert.equal(onayGecerliMi('r1', 'r2'), false);
   });
@@ -60,6 +62,8 @@ describe('uretim-emirleri adım durumu kuralları (2893)', () => {
   test('2893-2 b: durduran maddede gerekçe zorunlu, uyaranda değil; tamam, muaf ve gerekmeyen madde onaylanmaz', () => {
     assert.equal(hazirlikOnayiReddi('cnc', 'eksik', null), GEREKCE_GEREK);
     assert.equal(hazirlikOnayiReddi('yayin', 'eksik', ''), GEREKCE_GEREK);
+    assert.equal(hazirlikOnayiReddi('cizim', 'eksik', ' ok  '), GEREKCE_GEREK, 'beş karakterden kısa');
+    assert.equal(hazirlikOnayiReddi('cizim', 'eksik', 'Rev onaylı'), null);
     assert.equal(hazirlikOnayiReddi('cizim', 'eksik', 'Müşteri onayı geldi'), null);
     assert.equal(hazirlikOnayiReddi('malzeme', 'eksik', null), null);
     assert.equal(hazirlikOnayiReddi('malzeme', 'bilinmiyor', null), null);

@@ -13,6 +13,8 @@ import './uretim-emirleri.css';
 
 type Adim = AdimDurumuCevabi['adimlar'][number];
 const ACIK = new Set(['taslak', 'planli', 'basladi']);
+// Sunucu kuralıyla aynı sınır (uretim-emirleri kurallar.ts GEREKCE_EN_AZ); sunucu kısa gerekçeyi 400 ile reddeder.
+const GEREKCE_EN_AZ = 5;
 
 function Statu({ statu, elle }: { statu: AdimStatusu; elle: boolean }) {
   const g = STATU[statu];
@@ -151,10 +153,10 @@ function AdimAyrintisi({ emirId, adim, yazar }: { emirId: number; adim: Adim; ya
               <>
                 <Secim etiket="Madde" bosSecenek="Seçiniz" value={madde} onChange={(e) => maddeYaz(e.target.value as HazirlikMaddesi | '')}
                   secenekler={onaylanir.map((m) => ({ deger: m.madde, baslik: MADDE[m.madde].ad }))} />
-                <CokSatir etiket="Gerekçe" placeholder={gerekceGerek ? 'Zorunlu: bu madde eksikken iş başlamaz, onay başlatmayı açar' : 'İsteğe bağlı'}
+                <CokSatir etiket="Gerekçe" placeholder={gerekceGerek ? 'Zorunlu, en az 5 karakter: bu madde eksikken iş başlamaz, onay başlatmayı açar' : 'İsteğe bağlı'}
                   rows={2} value={gerekce} onChange={(e) => gerekceYaz(e.target.value)} />
                 <div className="tc-emir-ust">
-                  <Dugme tur="birincil" simge="check" disabled={seciliMadde === undefined || (gerekceGerek && gerekce.trim() === '') || komut.isPending}
+                  <Dugme tur="birincil" simge="check" disabled={seciliMadde === undefined || (gerekceGerek && gerekce.trim().length < GEREKCE_EN_AZ) || komut.isPending}
                     onClick={() => { if (seciliMadde) komut.mutate({ yol: 'hazirlik-onayla', govde: { madde: seciliMadde.madde, gerekce: gerekce.trim() === '' ? null : gerekce.trim(), sistemHali: seciliMadde.hal } }); }}>
                     Onayla
                   </Dugme>
