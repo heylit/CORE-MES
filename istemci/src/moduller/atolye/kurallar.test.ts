@@ -325,9 +325,11 @@ describe('haritaya eklenebilen makineler', () => {
   });
 
   it('ATL-5 harita kaydından sonra stok eşleme iletisi yalnız iş varsa çıkar', () => {
-    expect(stokEslemeIletisi({ eslenmemis: 0, yetimStoklu: 0 })).toBeNull();
-    expect(stokEslemeIletisi({ eslenmemis: 2, yetimStoklu: 0 })).toBe('Stok: 2 göz ya da alanın stok konumu yok. Stok Merkezi > Konumlar\'da "Haritadan eşle" ile güncelleyin.');
-    expect(stokEslemeIletisi({ eslenmemis: 0, yetimStoklu: 1 })).toContain('1 stoklu konumun haritada yeri kalmadı');
+    expect(stokEslemeIletisi({ eslenmemis: 0, yetimStoklu: 0 }, true)).toBeNull();
+    expect(stokEslemeIletisi({ eslenmemis: 0, yetimStoklu: 0 }, false)).toBeNull();
+    expect(stokEslemeIletisi({ eslenmemis: 2, yetimStoklu: 0 }, true)).toBe('Stok: 2 yer henüz stok konumu değil. Stok > Ayarlar\'da "Haritadan eşle" ile güncelleyin.');
+    expect(stokEslemeIletisi({ eslenmemis: 2, yetimStoklu: 0 }, false)).toBe('Stok: 2 yer henüz stok konumu değil. Stok yetkilisi Stok > Ayarlar\'dan eşlemeli.');
+    expect(stokEslemeIletisi({ eslenmemis: 0, yetimStoklu: 1 }, true)).toContain('1 stoklu konumun haritada yeri kalmadı');
   });
 });
 

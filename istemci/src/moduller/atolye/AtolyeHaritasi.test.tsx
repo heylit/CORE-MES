@@ -8,6 +8,7 @@ import type {
   AramaCevabi, FabrikaKayitGovdesi, GozKalemi, GozKalemleriCevabi, GozlerCevabi, KalemGorunumleriCevabi, KayitCevabi, MerkezModelleriCevabi, SalonlarCevabi, YerlesmemisIstasyonlarCevabi, YerlesimCevabi, YerlesimGovdesi,
 } from '#paylasilan/sozlesme/atolye.ts';
 import type { IstasyonlarCevabi } from '#paylasilan/sozlesme/istasyonlar.ts';
+import type { HaritaOzetiCevabi } from '#paylasilan/sozlesme/stok.ts';
 import type { OturumCevabi } from '#paylasilan/sozlesme/oturum.ts';
 import type { EmirlerCevabi, SonOlaylarCevabi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import type { MakineDurumlariCevabi } from '#paylasilan/sozlesme/istasyonlar.ts';
@@ -112,7 +113,10 @@ interface Ek {
   arkonOlaylari?: { durum: number; govde: unknown };
   merkezModelleri?: MerkezModelleriCevabi;
   istasyonlar?: IstasyonlarCevabi;
+  esleme?: { durum: number; govde: unknown };
+  haritaOzeti?: HaritaOzetiCevabi;
 }
+const HARITA_OZETI = (eslenmemis: number): HaritaOzetiCevabi => ({ bolum: 1, goz: 0, alan: 1, eslenmemis, bagsizKonumlar: [], bolumler: [] });
 
 function sunucuKur(kullanici: Kullanici, ek: Ek = {}): Cagri[] {
   const cagrilar: Cagri[] = [];
@@ -170,6 +174,11 @@ function sunucuKur(kullanici: Kullanici, ek: Ek = {}): Cagri[] {
       const b = MERKEZ_MODELLERI.belgeler.find((x) => x.id === g.belgeId);
       return Promise.resolve(cevap({ merkezModeli: b ? { belgeId: b.id, ad: b.ad, harf: b.harf, ozet: b.ozet, dosyaTuru: b.dosyaTuru } : null }));
     }
+    if (yol === '/stok/konumlar/haritadan-esle' && yontem === 'POST') {
+      const k = ek.esleme ?? { durum: 200, govde: { eklenen: 1, guncellenen: 0, kapatilan: 0, atlanan: [], koduDegisenler: [] } };
+      return Promise.resolve(cevap(k.govde, k.durum));
+    }
+    if (yol === '/stok/harita-ozeti') return Promise.resolve(cevap(ek.haritaOzeti ?? HARITA_OZETI(0)));
     if (yol === '/atolye/salonlar/1/yerlesim-kaydet' && yontem === 'POST') {
       const k = ek.kayit ?? { durum: 200, govde: { ...YERLESIM, salon: { ...YERLESIM.salon, surum: 4 }, uyarilar: [] } satisfies KayitCevabi };
       return Promise.resolve(cevap(k.govde, k.durum));
@@ -497,6 +506,53 @@ describe('fabrika haritası', () => {
     expect(b?.fabrika).toEqual({ x: 72, z: 0, donus: 90 });
     expect(b?.yerlesim.raflar.map((r) => [r.id, r.x, r.z, r.donus])).toEqual([[8, 5, 5, 0]]);
     expect(b?.yerlesim.istasyonYerleri.map((i) => [i.istasyonId, i.x, i.z, i.donus])).toEqual([[6, 12, 6, 270]]);
+  });
+
+  // 2884: harita kaydından sonra stok tanımı olan kişide eşleme koşar; olmayan kişide koşmaz, eşlenmemiş yer bilgisi stok
+  // yetkilisine yönlendirir; stok okuyamayan kişiye stok isteği atılmaz.
+  async function fabrikayiKaydet() {
+    goster(<AtolyeHaritasi />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Fabrika planını düzenle (bütün bölümler)' }));
+    const duzen = await screen.findByRole('dialog', { name: 'Fabrika planını düzenle' });
+    fireEvent.click(within(duzen).getByRole('button', { name: 'S2 · İkinci bölüm' }));
+    fireEvent.change(within(duzen).getByLabelText('X (m)'), { target: { value: '72' } });
+    fireEvent.click(within(duzen).getByRole('button', { name: 'Kaydet' }));
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Fabrika planını düzenle' })).toBeNull());
+  }
+  const yollar = (c: Cagri[]) => c.map((x) => `${x.yontem} ${x.yol}`);
+
+  it('stok tanımı olan kişi haritayı kaydedince eşleme kayıttan sonra koşar (2884)', async () => {
+    const cagrilar = sunucuKur({ ...YAZAN, islemler: [...YAZAN.islemler, 'sayfa.stok', 'stok.tanim'] }, { bolumler: [YERLESIM, YERLESIM_B] });
+    await fabrikayiKaydet();
+    await waitFor(() => expect(yollar(cagrilar)).toContain('POST /stok/konumlar/haritadan-esle'));
+    const l = yollar(cagrilar);
+    expect(l.indexOf('POST /atolye/fabrika/kaydet')).toBeLessThan(l.indexOf('POST /stok/konumlar/haritadan-esle'));
+    await waitFor(() => expect(yollar(cagrilar)).toContain('GET /stok/harita-ozeti'));
+    expect(screen.queryByText(/henüz stok konumu değil/)).toBeNull();
+  });
+
+  it('eşleme düşerse harita kaydı kalır, hata ve eşlenmemiş yer bilgisi görünür (2884)', async () => {
+    sunucuKur({ ...YAZAN, islemler: [...YAZAN.islemler, 'sayfa.stok', 'stok.tanim'] }, {
+      bolumler: [YERLESIM, YERLESIM_B], esleme: { durum: 500, govde: { kod: 'SUNUCU', mesaj: 'hata' } }, haritaOzeti: HARITA_OZETI(2),
+    });
+    await fabrikayiKaydet();
+    expect(await screen.findByText(/Stok konumları eşlenemedi/)).toBeTruthy();
+    expect(await screen.findByText('Stok: 2 yer henüz stok konumu değil. Stok > Ayarlar\'da "Haritadan eşle" ile güncelleyin.')).toBeTruthy();
+  });
+
+  it('stok tanımı olmayan kişide eşleme koşmaz; eşlenmemiş yer stok yetkilisine yönlendirilir (2884)', async () => {
+    const cagrilar = sunucuKur({ ...YAZAN, islemler: [...YAZAN.islemler, 'sayfa.stok'] }, { bolumler: [YERLESIM, YERLESIM_B], haritaOzeti: HARITA_OZETI(1) });
+    await fabrikayiKaydet();
+    expect(await screen.findByText('Stok: 1 yer henüz stok konumu değil. Stok yetkilisi Stok > Ayarlar\'dan eşlemeli.')).toBeTruthy();
+    expect(yollar(cagrilar)).not.toContain('POST /stok/konumlar/haritadan-esle');
+  });
+
+  it('stok okuyamayan kişide kayıttan sonra stok isteği atılmaz (2884)', async () => {
+    const cagrilar = sunucuKur(YAZAN, { bolumler: [YERLESIM, YERLESIM_B], haritaOzeti: HARITA_OZETI(3) });
+    await fabrikayiKaydet();
+    expect(await screen.findByText('Fabrika planı kaydedildi.')).toBeTruthy();
+    expect(cagrilar.filter((c) => c.yol.startsWith('/stok/'))).toHaveLength(0);
+    expect(screen.queryByText(/stok konumu değil/)).toBeNull();
   });
 
   it('raf net ölçüleri: kat kat girilir, eksik kat uyarılır, kayıtta gövdeye gider', async () => {

@@ -3,6 +3,7 @@ import type { KeyboardEvent as ReactKeyboardEvent, PointerEvent as ReactPointerE
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { FabrikaKayitCevabi, IhlalAyrintisi, KayitCevabi, MerkezModeli, SurumCakismasi, YerlesimCevabi } from '#paylasilan/sozlesme/atolye.ts';
 import type { Istasyon, IstasyonTipi, IstasyonlarCevabi, Makine, MakinelerCevabi } from '#paylasilan/sozlesme/istasyonlar.ts';
+import type { HaritaEslemeCevabi } from '#paylasilan/sozlesme/stok.ts';
 import { Dugme, Girdi, IsaretKutusu, OnayPenceresi, Pencere, Secim, Simge, useBildirim } from '../../ortak/arayuz/index.ts';
 import { ApiHatasi, api, hataIletisi } from '../../ortak/veri/api.ts';
 import { useOturum } from '../../ortak/veri/oturum.ts';
@@ -91,6 +92,7 @@ export function YerlesimDuzenleyici({ salonId, bolumler, kapat, kaydedildi }: Oz
   const { bildir } = useBildirim();
   const oturum = useOturum();
   const stokOkur = oturum.data?.islemler.some(stokOkurMu) === true;
+  const stokTanimlar = oturum.data?.islemler.includes('stok.tanim') === true;
   const istemci = useQueryClient();
   const fabrikaMi = salonId === null;
   // Depo kipi (Stok Merkezi'nden, harita yetkisi olmadan): yalnız raflar eklenir, taşınır ve düzenlenir; kayıt yalnız rafları
@@ -334,6 +336,14 @@ export function YerlesimDuzenleyici({ salonId, bolumler, kapat, kaydedildi }: Oz
 
   // Bulgu anahtarları gönderilen gövdenin sırasına göredir; kayıt sürerken taslak değişse de o sırayla eşlenir.
   const gonderilenEslesme = useRef<Map<string, string>>(new Map());
+  // 2884: haritada çizilen raf gözü ve alan, stok tanımı olan kişide kayıttan sonra stok konumu olur (eşleme ucu stok.tanim ister;
+  // atölye yazabilen ama stok tanımı olmayan kişi konum açamaz). Harita kaydı ayrı istekte tamamlanmıştır; eşleme düşerse kayıt
+  // geri alınmaz, ardından okunan özet eşlenmemiş yeri bildirir ve eşleme tekrar güvenlidir.
+  const stokuEsle = async (): Promise<void> => {
+    if (!stokTanimlar) return;
+    await api.post<HaritaEslemeCevabi>('/stok/konumlar/haritadan-esle', {})
+      .catch(() => bildir('hata', 'Stok konumları eşlenemedi; Stok > Ayarlar\'da "Haritadan eşle" ile yeniden deneyin.'));
+  };
   // Fabrikada her öğe ortasının düştüğü bölüme yazılır; hiçbir bölümün içinde olmayan öğe gönderilmeden işaretlenir.
   const kaydet = useMutation({
     mutationFn: async (): Promise<{ uyarilar: KayitCevabi['uyarilar']; eslesme: Map<string, string> } | null> => {
@@ -347,6 +357,7 @@ export function YerlesimDuzenleyici({ salonId, bolumler, kapat, kaydedildi }: Oz
         gonderilenEslesme.current = h.eslesme;
         const c: FabrikaKayitCevabi = await fabrikaKaydet(h.govde);
         istemci.setQueryData(anahtarlar.fabrika, { bolumler: c.bolumler });
+        await stokuEsle();
         return { uyarilar: c.uyarilar, eslesme: h.eslesme };
       }
       const { govde, eslesme } = govdeyeCevir(t);
@@ -354,6 +365,8 @@ export function YerlesimDuzenleyici({ salonId, bolumler, kapat, kaydedildi }: Oz
       const c = depo && yalnizRaf
         ? await depo.rafKaydet(salonId, { surum: govde.surum, raflar: govde.raflar })
         : await api.post<KayitCevabi>(`/atolye/salonlar/${salonId}/yerlesim-kaydet`, govde);
+      // Stok Merkezi'nden raf kaydı eşlemeyi kendisi koşar (stok Depo.tsx).
+      if (!(depo && yalnizRaf)) await stokuEsle();
       istemci.setQueryData(anahtarlar.yerlesim(salonId), c);
       void istemci.invalidateQueries({ queryKey: anahtarlar.fabrika });
       return { uyarilar: c.uyarilar, eslesme };
@@ -367,7 +380,7 @@ export function YerlesimDuzenleyici({ salonId, bolumler, kapat, kaydedildi }: Oz
       bildir('tamam', fabrikaMi ? 'Fabrika planı kaydedildi.' : 'Yerleşim kaydedildi.');
       // Uyarı kaydı engellemez (giriş noktası, yürüyüş yolu); kullanıcı hangi öğe olduğunu görür.
       for (const u of uyarilar) bildir('bilgi', `${u.kural}: ${u.mesaj}`);
-      if (stokOkur) void stokEslemeDurumu().then((d) => { const m = d && stokEslemeIletisi(d); if (m) bildir('bilgi', m); });
+      if (stokOkur) void stokEslemeDurumu().then((d) => { const m = d && stokEslemeIletisi(d, stokTanimlar); if (m) bildir('bilgi', m); });
       kaydedildi();
     },
     onError: (hata) => {
