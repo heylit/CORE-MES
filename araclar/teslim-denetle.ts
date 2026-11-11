@@ -1,10 +1,10 @@
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
-import { basename, join, resolve } from 'node:path';
+import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { sonucuKaydet, sonucuYukle, vtDenemesi, vtDenetle } from './teslim-vt.ts';
-import type { VtSonuc } from './teslim-vt.ts';
+import type { VtSonuc, VtYamasi } from './teslim-vt.ts';
 import { SONUC_DOSYASI } from './teslim-vt.ts';
 import { depoKaynaklari, kontrolEt, komsuModuller, onizlemeFarkiOku, vtModulleri, yamaAyrintisi, yetkiDegisimi } from './teslim-kontrolleri.ts';
 import type { Komsu, OnizlemeFarki } from './teslim-kontrolleri.ts';
@@ -146,6 +146,8 @@ export interface TeslimGirdisi {
   // Klasördeki VT-SONUC.md; yoksa null.
   vtSonuc: VtSonuc | null;
   // 3041 a kontrollerinin yama ve depodan okunan girdisi; verilmezse o üç madde koşmaz (birim testleri).
+  // Başlıktaki `ustune:` zincirinin bugünkü yama sha'ları (en alttaki önce); zincir okunamazsa hata (3046 a).
+  dayanak?: { shalar: string[]; hata: string | null };
   ek?: { yamaTarihi: number | null; komsular: Komsu[]; vtModuller: string[]; yetkiKapilari: string[]; yetkisizTestler: string[] };
 }
 
@@ -163,8 +165,12 @@ export function denetle(g: TeslimGirdisi): Bulgu[] {
   for (const y of g.yamalar) if (!d.shalar.includes(y.sha256)) k('sha', `${y.ad}: sha256 DEVIR.md'de yok ya da tutmuyor (${y.sha256.slice(0, 12)}…)`);
 
   if (!d.taban) k('taban', 'DEVIR.md\'de taban commit yazılı değil');
-  else if (g.tabanGeride === null) k('taban', `taban ${d.taban} yerel depoda yok (git fetch?)`);
-  else if (g.tabanGeride < 0) k('taban', `taban ${d.taban} ana dalın atası değil`);
+  // Başka teslimin üstüne kurulan teslimin tabanı o teslimin commit'i olabilir; deneme zinciri ana dala kendisi uygular (3046 a).
+  else if (g.tabanGeride === null || g.tabanGeride < 0) {
+    const neden = g.tabanGeride === null ? 'yerel depoda yok (git fetch?)' : 'ana dalın atası değil';
+    if (g.dayanak?.shalar.length) u('taban-dayanak', `taban ${d.taban} ${neden}; teslim ${d.ustune ?? ''} üstüne kurulu, deneme zinciri ana dala uygular`);
+    else k('taban', `taban ${d.taban} ${neden}`);
+  }
   else if (g.tabanGeride > 0) u('taban-geride', `taban ${d.taban} ana dalın ${g.tabanGeride} commit gerisinde; git am -3 ile güncel ana dala uygulanmalı`);
 
   const dosyalar = [...new Set(g.yamalar.flatMap((y) => y.dosyalar))];
@@ -195,7 +201,8 @@ export function denetle(g: TeslimGirdisi): Bulgu[] {
 
   if (!d.taramaSatiri) k('tarama', 'açık depo taraması satırı yok');
   if (!d.testSatiri) k('test', 'koşulan komutların son satırı yok');
-  for (const x of vtDenetle(g.vtSonuc, g.yamalar.map((y) => y.sha256))) b.push(x);
+  if (g.dayanak?.hata) k('dayanak', g.dayanak.hata);
+  for (const x of vtDenetle(g.vtSonuc, g.yamalar.map((y) => y.sha256), g.dayanak?.shalar ?? [])) b.push(x);
   if (g.ek) {
     for (const x of kontrolEt({ ...g.ek, dosyalar, testSatirlari: d.testSatirlari, komsuMuafSatirlari: d.komsuMuafSatirlari, yetkiMuaf: d.yetkiMuaf, onizlemeFarki: d.onizlemeFarki })) b.push(x);
   }
@@ -276,6 +283,44 @@ export function yamaSirasi(a: string, b: string): number {
   return ka === kb ? na - nb : ka.localeCompare(kb, 'tr', { numeric: true });
 }
 
+export interface DayanakTeslimi { ad: string; klasor: string; yamalar: VtYamasi[] }
+
+// `ustune:` teslimin kardeş klasörünün adıdır; o da başka teslimin üstüne kurulmuş olabilir. En alttaki önce döner.
+export function dayanakZinciri(
+  klasor: string,
+  ustune: string | null,
+  oku: (klasor: string) => { ustune: string | null; yamalar: VtYamasi[] } | null,
+  enCok = 5,
+): { zincir: DayanakTeslimi[]; hata: string | null } {
+  const zincir: DayanakTeslimi[] = [];
+  const gorulen = new Set([basename(klasor)]);
+  for (let ad = ustune; ad; ) {
+    if (gorulen.has(ad)) return { zincir, hata: `ustune zinciri kendine dönüyor (${ad})` };
+    if (zincir.length >= enCok) return { zincir, hata: `ustune zinciri ${String(enCok)} teslimden uzun` };
+    gorulen.add(ad);
+    const yol = join(dirname(klasor), ad);
+    const d = oku(yol);
+    if (!d) return { zincir, hata: `dayanılan teslim klasörü yok: ${ad}` };
+    if (d.yamalar.length === 0) return { zincir, hata: `dayanılan teslimde yama yok: ${ad}` };
+    zincir.unshift({ ad, klasor: yol, yamalar: d.yamalar });
+    ad = d.ustune;
+  }
+  return { zincir, hata: null };
+}
+
+function yamalariOku(klasor: string): VtYamasi[] {
+  return readdirSync(klasor).filter((a) => a.endsWith('.patch') && statSync(join(klasor, a)).isFile()).sort(yamaSirasi).map((ad) => {
+    const icerik = readFileSync(join(klasor, ad));
+    return { ad, sha256: createHash('sha256').update(icerik).digest('hex'), dosyalar: yamaDosyalari(icerik.toString('utf8')) };
+  });
+}
+
+export function dayanakOku(klasor: string): { ustune: string | null; yamalar: VtYamasi[] } | null {
+  if (!existsSync(klasor) || !statSync(klasor).isDirectory()) return null;
+  const devirYolu = join(klasor, 'DEVIR.md');
+  return { ustune: existsSync(devirYolu) ? devirOku(readFileSync(devirYolu, 'utf8')).ustune : null, yamalar: yamalariOku(klasor) };
+}
+
 export function klasorOku(kok: string, klasor: string, dal: string): TeslimGirdisi {
   const devirYolu = join(klasor, 'DEVIR.md');
   const devir = existsSync(devirYolu) ? devirOku(readFileSync(devirYolu, 'utf8')) : null;
@@ -291,7 +336,9 @@ export function klasorOku(kok: string, klasor: string, dal: string): TeslimGirdi
   const dosyaOku = (y: string) => (existsSync(join(kok, y)) ? readFileSync(join(kok, y), 'utf8') : null);
   const { kapilar, yetkisizTestler } = yetkiDegisimi(ayrintilar, dosyaOku);
   const vtYolu = join(klasor, SONUC_DOSYASI);
+  const zincir = dayanakZinciri(klasor, devir?.ustune ?? null, dayanakOku);
   return {
+    dayanak: { shalar: zincir.zincir.flatMap((d) => d.yamalar.map((y) => y.sha256)), hata: zincir.hata },
     klasor, devir, yamalar, tabanGeride: tabanGeride(kok, devir?.taban ?? null, dal), enBuyukGoc: enBuyukGoc(gocler), anaDaldakiGocler: gocler,
     vtSonuc: sonucuYukle(klasor),
     ek: {
@@ -333,7 +380,12 @@ async function calistir(): Promise<number> {
       console.error('klasörde .patch dosyası yok');
       return 1;
     }
-    const { sonuc, satirlar } = await vtDenemesi({ kok, klasor, dal: secenek.dal, yamalar: g.yamalar });
+    const zincir = dayanakZinciri(klasor, g.devir?.ustune ?? null, dayanakOku);
+    if (zincir.hata) {
+      console.error(zincir.hata);
+      return 1;
+    }
+    const { sonuc, satirlar } = await vtDenemesi({ kok, klasor, dal: secenek.dal, yamalar: g.yamalar, dayanaklar: zincir.zincir });
     sonucuKaydet(klasor, sonuc, satirlar);
     console.log(`teslim-denetle --vt ${basename(klasor)}: ${sonuc.gecti ? 'GEÇTİ' : 'KIRMIZI'} (PostgreSQL ${sonuc.pg === null ? '?' : String(sonuc.pg)}), sonuç ${join(basename(klasor), 'VT-SONUC.md')}`);
     return sonuc.gecti ? 0 : 1;

@@ -1,4 +1,4 @@
-import { execFileSync, spawnSync } from 'node:child_process';
+import { execFileSync, spawn, spawnSync } from 'node:child_process';
 import { chmodSync, chownSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
@@ -18,6 +18,8 @@ export interface VtSonuc {
   pg: number | null;
   yamalar: string[];
   gecti: boolean;
+  // Teslim başka teslimin üstüne kurulduysa önce uygulanan teslimlerin yamaları (3046 a); yoksa boş ya da yok.
+  dayanak?: string[];
 }
 
 export interface VtBulgu { duzey: 'kirmizi' | 'uyari'; etiket: string; mesaj: string }
@@ -27,6 +29,7 @@ export function sonucMetni(s: VtSonuc, ayrinti: readonly string[]): string {
     '<!-- vt-sonuc',
     `pg: ${s.pg === null ? '?' : String(s.pg)}`,
     `yamalar: ${s.yamalar.join(', ')}`,
+    ...(s.dayanak?.length ? [`dayanak: ${s.dayanak.join(', ')}`] : []),
     `sonuc: ${s.gecti ? 'gecti' : 'kirmizi'}`,
     '-->',
     '',
@@ -42,22 +45,29 @@ export function sonucOku(metin: string): VtSonuc | null {
   if (blok === undefined) return null;
   const alan = (ad: string): string => new RegExp(`^[ \\t]*${ad}[ \\t]*:[ \\t]*(.*)$`, 'm').exec(blok)?.[1]?.trim() ?? '';
   const pg = Number.parseInt(alan('pg'), 10);
+  const dayanak = alan('dayanak').split(',').map((s) => s.trim()).filter(Boolean);
   return {
     pg: Number.isInteger(pg) ? pg : null,
     yamalar: alan('yamalar').split(',').map((s) => s.trim()).filter(Boolean),
     gecti: alan('sonuc') === 'gecti',
+    ...(dayanak.length ? { dayanak } : {}),
   };
 }
 
 // Yazar ortamında PostgreSQL 18 bulunmayabilir (2340: konteynerde kurulamıyor). Temiz küme zorunludur, sürüm farkı
 // uyarıdır; PG18 denetimi CI'daki Linux işindedir.
-export function vtDenetle(sonuc: VtSonuc | null, yamaShalari: readonly string[]): VtBulgu[] {
+export function vtDenetle(sonuc: VtSonuc | null, yamaShalari: readonly string[], dayanakShalari: readonly string[] = []): VtBulgu[] {
   const kos = 'npm run teslim-denetle -- --vt <klasör>';
   if (!sonuc) return [{ duzey: 'kirmizi', etiket: 'vt', mesaj: `${SONUC_DOSYASI} yok; temiz veritabanı denemesi koşulmamış (${kos})` }];
   const b: VtBulgu[] = [];
   const farkli = yamaShalari.length !== sonuc.yamalar.length || yamaShalari.some((s) => !sonuc.yamalar.includes(s));
   if (farkli) b.push({ duzey: 'kirmizi', etiket: 'vt', mesaj: `${SONUC_DOSYASI} bugünkü yamalarla koşulmamış (sha farklı); yeniden koşun (${kos})` });
   else if (!sonuc.gecti) b.push({ duzey: 'kirmizi', etiket: 'vt', mesaj: `temiz veritabanı denemesi kırmızı (${SONUC_DOSYASI})` });
+  // Dayanılan teslim yeniden yazıldıysa deneme eski hâliyle koşmuştur (3046 a).
+  const eski = sonuc.dayanak ?? [];
+  if (eski.length !== dayanakShalari.length || dayanakShalari.some((s) => !eski.includes(s))) {
+    b.push({ duzey: 'kirmizi', etiket: 'vt-dayanak', mesaj: `${SONUC_DOSYASI} dayanılan teslimin bugünkü yamalarıyla koşmamış; yeniden koşun (${kos})` });
+  }
   if (sonuc.pg !== HEDEF_PG) {
     b.push({ duzey: 'uyari', etiket: 'vt-pg', mesaj: `deneme PostgreSQL ${sonuc.pg === null ? '?' : String(sonuc.pg)} ile koştu; PG${String(HEDEF_PG)} farkı CI'da görülür` });
   }
@@ -194,11 +204,53 @@ function bosPort(): Promise<number> {
 
 const sonSatirlar = (metin: string, n = 6): string[] => metin.split('\n').filter((s) => s.trim() !== '').slice(-n);
 
+// Birleştirici yamaları commit olarak uygular (git am); ana dal sonradan aynı satırları değiştirse de yamanın patch-id'si
+// aynı kalır. Ters yönde uygulama denemesi bu durumda "birleşmemiş" der, patch-id demez.
+export function yamaKimlikleri(yama: string, cwd: string): string[] {
+  const r = spawnSync('git', ['patch-id', '--stable'], { cwd, input: yama, encoding: 'utf8', maxBuffer: 256 * 1024 * 1024 });
+  return (r.stdout ?? '').split('\n').map((s) => s.split(' ')[0] ?? '').filter(Boolean);
+}
+
+// Son commit'lerin patch-id'leri; birleşen dayanak teslim bu pencerenin içindedir.
+// Fark metni yüzlerce MB olabilir; dizgeye alınmaz, git log'dan git patch-id'ye akıtılır.
+export function anaDalYamaKimlikleri(cwd: string, taban: string, enCok = 2000): Promise<Set<string>> {
+  return new Promise((coz, reddet) => {
+    const log = spawn('git', ['log', '-p', '--no-merges', '-n', String(enCok), taban], { cwd, stdio: ['ignore', 'pipe', 'ignore'] });
+    const pid = spawn('git', ['patch-id', '--stable'], { cwd, stdio: ['pipe', 'pipe', 'ignore'] });
+    log.stdout.pipe(pid.stdin);
+    const kume = new Set<string>();
+    let artik = '';
+    pid.stdout.setEncoding('utf8');
+    pid.stdout.on('data', (parca: string) => {
+      const satirlar = (artik + parca).split('\n');
+      artik = satirlar.pop() ?? '';
+      for (const s of satirlar) if (s) kume.add(s.split(' ')[0] ?? '');
+    });
+    log.on('error', reddet);
+    pid.on('error', reddet);
+    pid.on('close', (kod) => {
+      if (artik) kume.add(artik.split(' ')[0] ?? '');
+      if (kod === 0) coz(kume);
+      else reddet(new Error(`git patch-id çıkış kodu ${String(kod)}`));
+    });
+  });
+}
+
+// Yama dosyası başına patch-id listesi: hepsi ana dalda ise birleşmiş, hiçbiri değilse uygulanır, kısmen ise karar verilmez.
+export function dayanakDurumu(dosyalar: readonly (readonly string[])[], ana: ReadonlySet<string>): 'birlesmis' | 'birlesmemis' | 'kismen' {
+  const var_ = dosyalar.map((k) => k.length > 0 && k.every((x) => ana.has(x)));
+  if (var_.length > 0 && var_.every(Boolean)) return 'birlesmis';
+  return var_.some(Boolean) ? 'kismen' : 'birlesmemis';
+}
+
+export interface VtYamasi { ad: string; sha256: string; dosyalar: string[] }
 export interface VtGirdisi {
   kok: string;
   klasor: string;
   dal: string;
-  yamalar: { ad: string; sha256: string; dosyalar: string[] }[];
+  yamalar: VtYamasi[];
+  // Teslimin dayandığı, henüz ana dalda olmayabilecek teslimler; en alttaki önce (3046 a).
+  dayanaklar?: { ad: string; klasor: string; yamalar: VtYamasi[] }[];
 }
 
 // Yerel ayarsız küme kabuğun LANG'ından C olur; C'de lower('Ç') = 'Ç' kalır ve Türkçe harf tekilliği CI'dan (en_US.utf8) farklı
@@ -222,10 +274,11 @@ export async function vtDenemesi(g: VtGirdisi): Promise<{ sonuc: VtSonuc; satirl
   const satirlar: string[] = [];
   const yaz = (s: string): void => { satirlar.push(s); console.log(s); };
   const shalar = g.yamalar.map((y) => y.sha256);
+  const dayanakShalari = (g.dayanaklar ?? []).flatMap((d) => d.yamalar.map((y) => y.sha256));
   const pg = pgBinBul();
   if (!pg) {
     yaz('KIRMIZI PostgreSQL ikilileri bulunamadı (initdb). TMIV2_TESLIM_PG_BIN ile bin klasörünü verin.');
-    return { sonuc: { pg: null, yamalar: shalar, gecti: false }, satirlar };
+    return { sonuc: { pg: null, yamalar: shalar, gecti: false, dayanak: dayanakShalari }, satirlar };
   }
   yaz(`PostgreSQL ${String(pg.ana)} (${pg.bin})${pg.ana === HEDEF_PG ? '' : `; hedef ${String(HEDEF_PG)} değil, uyarı`}`);
   const exe = process.platform === 'win32' ? '.exe' : '';
@@ -247,13 +300,34 @@ export async function vtDenemesi(g: VtGirdisi): Promise<{ sonuc: VtSonuc; satirl
     const tabanSha = execFileSync('git', ['rev-parse', `${g.dal}^{commit}`], { cwd: g.kok, encoding: 'utf8' }).trim();
     execFileSync('git', ['clone', '-q', '--shared', '--no-checkout', g.kok, agac], { stdio: 'pipe' });
     execFileSync('git', ['checkout', '-q', '--detach', tabanSha], { cwd: agac, stdio: 'pipe' });
-    const am = spawnSync('git', ['-c', 'user.name=teslim', '-c', 'user.email=teslim@yerel', 'am', '-q', '-3', ...g.yamalar.map((y) => join(g.klasor, y.ad))], { cwd: agac, encoding: 'utf8' });
+    const uygula = (yollar: string[]) => spawnSync('git', ['-c', 'user.name=teslim', '-c', 'user.email=teslim@yerel', 'am', '-q', '-3', ...yollar], { cwd: agac, encoding: 'utf8' });
+    const dayanakDosyalari: string[] = [];
+    let anaKume: Set<string> | null = null;
+    for (const d of g.dayanaklar ?? []) {
+      const yollar = d.yamalar.map((y) => join(d.klasor, y.ad));
+      anaKume ??= await anaDalYamaKimlikleri(agac, tabanSha);
+      const durum = dayanakDurumu(yollar.map((y) => yamaKimlikleri(readFileSync(y, 'utf8'), agac)), anaKume);
+      if (durum === 'birlesmis') { yaz(`Dayanılan teslim ${d.ad} ${g.dal} içinde (patch-id); yeniden uygulanmadı.`); continue; }
+      if (durum === 'kismen') {
+        yaz(`KIRMIZI dayanılan teslim ${d.ad} ${g.dal} içinde kısmen var; birleşen yamalar dayanak klasöründen çıkarılmalı.`);
+        return { sonuc: { pg: pg.ana, yamalar: shalar, gecti: false, dayanak: dayanakShalari }, satirlar };
+      }
+      const r = uygula(yollar);
+      if (r.status !== 0) {
+        yaz(`KIRMIZI dayanılan teslim ${d.ad} ${g.dal} (${tabanSha.slice(0, 7)}) üstüne uygulanmadı: ${sonSatirlar(`${r.stdout}${r.stderr}`, 3).join(' | ')}`);
+        return { sonuc: { pg: pg.ana, yamalar: shalar, gecti: false, dayanak: dayanakShalari }, satirlar };
+      }
+      dayanakDosyalari.push(...d.yamalar.flatMap((y) => y.dosyalar));
+      yaz(`Dayanılan teslim ${d.ad} uygulandı (${String(d.yamalar.length)} yama).`);
+    }
+    const am = uygula(g.yamalar.map((y) => join(g.klasor, y.ad)));
     if (am.status !== 0) {
       yaz(`KIRMIZI yama ${g.dal} (${tabanSha.slice(0, 7)}) üstüne uygulanmadı: ${sonSatirlar(`${am.stdout}${am.stderr}`, 3).join(' | ')}`);
-      return { sonuc: { pg: pg.ana, yamalar: shalar, gecti: false }, satirlar };
+      return { sonuc: { pg: pg.ana, yamalar: shalar, gecti: false, dayanak: dayanakShalari }, satirlar };
     }
     yaz(`Yama ${g.dal} (${tabanSha.slice(0, 7)}) üstüne uygulandı.`);
-    const dosyalar = [...new Set(g.yamalar.flatMap((y) => y.dosyalar))];
+    // Birleşik ağaç denenir: dayanılan teslimin değişen yerlerinin testleri de koşar.
+    const dosyalar = [...new Set([...dayanakDosyalari, ...g.yamalar.flatMap((y) => y.dosyalar)])];
     if (dosyalar.some((f) => /^package(-lock)?\.json$/.test(f))) yaz('UYARI paket dosyası değişti; deneme ana ağacın node_modules klasörüyle koştu.');
     symlinkSync(join(g.kok, 'node_modules'), join(agac, 'node_modules'), 'junction');
     writeFileSync(join(agac, VT_ISTEMCI_YAPILANDIRMASI), istemciSarmalayicisi([agac, realpathSync(join(g.kok, 'node_modules'))]));
@@ -306,7 +380,7 @@ export async function vtDenemesi(g: VtGirdisi): Promise<{ sonuc: VtSonuc; satirl
     if (kumeAcik) pgKos('pg_ctl', ['-D', join(kume, 'veri'), '-m', 'immediate', '-w', 'stop']);
     rmSync(gecici, { recursive: true, force: true });
   }
-  return { sonuc: { pg: pg.ana, yamalar: shalar, gecti }, satirlar };
+  return { sonuc: { pg: pg.ana, yamalar: shalar, gecti, ...(dayanakShalari.length ? { dayanak: dayanakShalari } : {}) }, satirlar };
 }
 
 export function sonucuKaydet(klasor: string, sonuc: VtSonuc, satirlar: readonly string[]): void {

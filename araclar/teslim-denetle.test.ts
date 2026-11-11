@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import {
-  argumanOku, ayriTurNedeni, denetle, devirOku, grupla, kilitIcinde, klasorOku, suslu, yamaDosyalari, yamaSirasi,
+  argumanOku, ayriTurNedeni, dayanakZinciri, denetle, devirOku, grupla, kilitIcinde, klasorOku, suslu, yamaDosyalari, yamaSirasi,
 } from './teslim-denetle.ts';
 import type { Devir, TeslimGirdisi } from './teslim-denetle.ts';
 import { sonucMetni } from './teslim-vt.ts';
@@ -208,4 +208,36 @@ test('yamaSirasi: ilk yama ek yamalardan önce, ekler sayı sırasıyla', () => 
   assert.deepEqual(['2584-2.patch', '2584-10.patch', '2584.patch', '2584-3.patch'].sort(yamaSirasi), ['2584.patch', '2584-2.patch', '2584-3.patch', '2584-10.patch']);
   assert.deepEqual(['0002.patch', '0010.patch', '0001.patch'].sort(yamaSirasi), ['0001.patch', '0002.patch', '0010.patch']);
   assert.deepEqual(['2618-2.patch', '2618-1.patch', '2618-3.patch'].sort(yamaSirasi), ['2618-1.patch', '2618-2.patch', '2618-3.patch']);
+});
+
+test('dayanakZinciri (3046 a): ustune zinciri en alttaki önce; eksik klasör, döngü ve uzun zincir hata', () => {
+  const y = (ad: string) => [{ ad: `${ad}.patch`, sha256: ad.repeat(64).slice(0, 64), dosyalar: [] }];
+  const klasorler: Record<string, { ustune: string | null; yamalar: ReturnType<typeof y> }> = {
+    '/d/3041': { ustune: null, yamalar: y('a') },
+    '/d/3041-ek': { ustune: '3041', yamalar: y('b') },
+    '/d/dongu-1': { ustune: 'dongu-2', yamalar: y('c') },
+    '/d/dongu-2': { ustune: 'dongu-1', yamalar: y('d') },
+    '/d/bos': { ustune: null, yamalar: [] },
+  };
+  const oku = (k: string) => klasorler[k] ?? null;
+  const z = dayanakZinciri('/d/3046', '3041-ek', oku);
+  assert.equal(z.hata, null);
+  assert.deepEqual(z.zincir.map((d) => d.ad), ['3041', '3041-ek']);
+  assert.equal(z.zincir[0]?.klasor, '/d/3041');
+  assert.deepEqual(dayanakZinciri('/d/3046', null, oku), { zincir: [], hata: null });
+  assert.match(dayanakZinciri('/d/3046', 'yok', oku).hata ?? '', /klasörü yok/);
+  assert.match(dayanakZinciri('/d/dongu-1', 'dongu-2', oku).hata ?? '', /kendine dönüyor/);
+  assert.match(dayanakZinciri('/d/3046', 'bos', oku).hata ?? '', /yama yok/);
+  assert.match(dayanakZinciri('/d/3046', '3041-ek', oku, 1).hata ?? '', /uzun/);
+});
+
+test('denetle: dayanak zinciri okunamazsa kırmızı; deneme dayanılan teslimin eski hâliyle koştuysa kırmızı (3046 a)', () => {
+  assert.deepEqual(etiketler(girdi({ dayanak: { shalar: [], hata: 'dayanılan teslim klasörü yok: x' } })), ['kirmizi:dayanak']);
+  assert.deepEqual(etiketler(girdi({ dayanak: { shalar: ['b'.repeat(64)], hata: null } })), ['kirmizi:vt-dayanak']);
+  const zincirli = { dayanak: { shalar: ['b'.repeat(64)], hata: null }, vtSonuc: { pg: 18, yamalar: [SHA], gecti: true, dayanak: ['b'.repeat(64)] } };
+  assert.deepEqual(etiketler(girdi(zincirli)), []);
+  // Tabanı dayanılan teslimin commit'i olan zincirli teslim kırmızı değil, uyarı; zincirsizde kırmızı kalır.
+  assert.deepEqual(etiketler(girdi({ ...zincirli, tabanGeride: -1 })), ['uyari:taban-dayanak']);
+  assert.deepEqual(etiketler(girdi({ ...zincirli, tabanGeride: null })), ['uyari:taban-dayanak']);
+  assert.deepEqual(etiketler(girdi({ tabanGeride: -1 })), ['kirmizi:taban']);
 });
