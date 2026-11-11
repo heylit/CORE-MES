@@ -28,14 +28,14 @@ const NEDEN_METNI: Readonly<Record<KartSecimNedeni, string>> = {
 };
 
 export function KartSecimi({ kart, alinan, neden, adaylar, isler, sec, kapat }: {
-  kart: string; alinan: number; neden: KartSecimNedeni; adaylar: readonly number[]; isler: readonly Is[];
+  kart: string; alinan: string | null; neden: KartSecimNedeni; adaylar: readonly number[]; isler: readonly Is[];
   sec: (i: number) => void; kapat: () => void;
 }) {
   const dizi = adayDizisi(adaylar, isler, neden);
   const baslik = neden === 'montaj-girdisi' ? 'Montaj işini aç' : 'Hangi iş açılsın?';
   return (
     <Pencere acik kapat={kapat} baslik={baslik} alt={<Dugme tur="ikincil" onClick={kapat}>Vazgeç</Dugme>}>
-      <p>{kart}{alinan > 0 ? ` · ${alinan} teslim alındı` : ''}</p>
+      <p>{kart}{alinan !== null ? ` · ${alinan} alındı` : ''}</p>
       <p className="tc-ay1-soluk">{NEDEN_METNI[neden]}</p>
       <div role="list" aria-label="Açılabilecek işler">
         {dizi.map((i, sira) => {
