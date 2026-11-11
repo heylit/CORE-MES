@@ -426,16 +426,16 @@ describe('688: çizim merkezinin resmi katalogda', () => {
     g: { ad: 'Deneme braket', tip: 'Talaşlı işlenmiş parça', resim: 'TR-1', rev: 'A' },
   });
 
-  test('liste küçük resmi yalnız görünen yarı mamul ve mamul kartları için ister; resimli satırda küçük resim, hammaddede simge', async () => {
+  test('liste küçük resmi görünen bütün kartlar için tek istekte ister (2872-1 a); hammaddede de küçük resim çizilir', async () => {
     resimIstekleri.length = 0;
     kur(OKUYAN, kartlar(satir('mym', 21, ym('mym', 'YM-DNM-00021')), satir('mhm', 22, ornekKayit('mhm', 'HM-DNM-00022', 'Çubuk'))));
     yeniEkranAc(KOK);
     await screen.findByText('YM-DNM-00021');
-    expect(resimIstekleri.at(-1)).toEqual([21]);
-    expect(screen.getAllByTestId('kucuk-resim').map((e) => [e.textContent, e.dataset['uyum']])).toEqual([['YM-DNM-00021 Deneme braket', 'false']]);
+    expect(resimIstekleri.at(-1)).toEqual([21, 22]);
+    expect(screen.getAllByTestId('kucuk-resim').map((e) => [e.textContent, e.dataset['uyum']])).toEqual([['YM-DNM-00021 Deneme braket', 'false'], ['HM-DNM-00022 Çubuk', 'false']]);
   });
 
-  test('kart penceresinde panel yarı mamulde kart no ile açılır (okuyan da görür, yazmayı panel denetler); hammadde kartında yok', async () => {
+  test('kart penceresinde panel kart no ile açılır, hammaddede de (2872-1 a; okuyan da görür, yazmayı panel denetler)', async () => {
     kur(OKUYAN, kartlar(satir('mym', 21, ym('mym', 'YM-DNM-00021')), satir('mhm', 22, ornekKayit('mhm', 'HM-DNM-00022', 'Çubuk'))));
     yeniEkranAc(KOK);
     const pencere = await kartiAc('YM-DNM-00021');
@@ -445,6 +445,6 @@ describe('688: çizim merkezinin resmi katalogda', () => {
     kur(OKUYAN, kartlar(satir('mym', 21, ym('mym', 'YM-DNM-00021')), satir('mhm', 22, ornekKayit('mhm', 'HM-DNM-00022', 'Çubuk'))));
     yeniEkranAc(KOK);
     const ikinci = await kartiAc('HM-DNM-00022');
-    expect(within(ikinci).queryByTestId('resim-paneli')).toBeNull();
+    expect(within(ikinci).getByTestId('resim-paneli').textContent).toBe('22');
   });
 });

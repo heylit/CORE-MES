@@ -269,7 +269,7 @@ describe('M1 yeni kart sihirbazı', () => {
     expect(istekler.indexOf(kopya!)).toBeGreaterThan(istekler.indexOf(kayit!));
   });
 
-  test('resim paneli (688): kayıtlı yarı mamulde Tanım adımında ve kayıttan sonra Özet adımında kart no ile; hammadde kartında yok', async () => {
+  test('resim paneli (688): kayıtlı yarı mamulde Tanım adımında ve kayıttan sonra Özet adımında kart no ile; teknik resim alanı olmayan hammaddenin Tanım adımında yok', async () => {
     const ymKarti = {
       ...ornekKayit('mym5', 'YM-DNM-00005', 'Deneme yarı mamul', 'yarimamul'), fam: null, cls: null, grade: null, form: null, dims: {},
       g: { ad: 'Deneme mil', tip: 'Talaşlı işlenmiş parça', resim: 'TR-1', rev: 'A' }, ops: [], onay: { durum: 'taslak' },
