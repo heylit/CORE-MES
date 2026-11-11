@@ -41,3 +41,8 @@ export function logoAyariOku(env: Ortamlar): LogoAyari | null {
   }
   return { adres: `${url.origin}${url.pathname.replace(/\/+$/, '')}`, anahtar };
 }
+
+// D7 (kullanıcının 14:47Z isteği: yeni Logo işi kendi anahtarıyla, varsayılan kapalı): yalnız "acik" açar; yoksa ya da başka değerse kapalı.
+// Açık olsa da "Logo bağlantısı" ayarı ve köprü değişkenleri olmadan istek atılmaz.
+export const SIPARIS_DUZELTME_DEGISKENI = 'TMIV2_LOGO_SIPARIS_DUZELTME';
+export const siparisDuzeltmeAcikMi = (env: Ortamlar): boolean => env[SIPARIS_DUZELTME_DEGISKENI]?.trim() === 'acik';

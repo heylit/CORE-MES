@@ -52,6 +52,8 @@ export async function talepNolari(db: Db, idler: readonly string[]): Promise<Map
   return new Map((await sorgu.talepNolari(db, [...new Set(idler)])).map((t) => [t.id, t.no]));
 }
 export type { AlimDinleyicisi, AlimOlayi, AlimTasimasi } from './alim-olayi.ts';
+// D7 (2986 a): Logo'da düzeltilmek istenen sipariş CORE MES'in kendi siparişi mi; yalnız evet/hayır döner, sipariş verisi çıkmaz (G3).
+export const coreSiparisiMi = (db: Db, no: string, logoKayitNo: number): Promise<boolean> => sorgu.coreSiparisiMi(db, no.trim(), String(logoKayitNo));
 // Stok mal kabulü: sipariş satırı kimliğinden talebin üretim emri; emre bağlı olmayan satır haritada yoktur (hata değil).
 export async function siparisSatirlarininEmri(db: Db, siparisSatirIdler: number[]): Promise<Map<number, number>> {
   const tekil = [...new Set(siparisSatirIdler)];

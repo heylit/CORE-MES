@@ -93,6 +93,7 @@ export const ISLEM_ADLARI: Readonly<Record<VeriIslemi, string>> = {
   'kisiler.parola-degistir': 'Başkasının parolasını değiştirme',
   'kisiler.oturum-kapat': 'Başkasının bütün oturumlarını kapatma',
   'logo.birim-seti-yaz': 'Logo birim setlerini düzenleme',
+  'logo.siparis-duzelt': 'Logo\'da açılmış satın alma siparişini düzeltme',
   'musteri-tedarikci.oku': 'Müşteri ve tedarikçi kartlarını görme',
   'musteri-tedarikci.yaz': 'Müşteri ve tedarikçi kartı ekleme ve düzenleme',
   'musteri-tedarikci.karne-agirlik': 'Tedarikçi karnesi ağırlıklarını değiştirme',

@@ -1303,3 +1303,222 @@ export function alisFiyatlariniAyikla(govde: unknown): LogoAlisFiyati[] | null {
   }
   return l;
 }
+
+/* ---------------- Logo'da CORE MES dışında açılmış satın alma siparişini düzeltme (D7; kararlar 2986 a, 2987 a) ---------------- */
+
+// Yardımcının GET /api/PurchaseOrder/{no}/content cevabı (araclar/logo-yardimcisi Islemler.cs). Sütunlar ölçülmedi (2980 b): alan adları
+// yardımcının kendi JSON adlarıdır, Logo sütunu değil; ölçüm yalnız yardımcının sorgusunu değiştirir.
+export interface LogoSiparisIcerikSatiri {
+  ref: number;
+  // Logo satır türü: 0 malzeme, 4 hizmet; başka tür (indirim, masraf satırı) okunur ama düzeltme gövdesi kurulmaz.
+  turKodu: number;
+  kod: string | null;
+  ad: string | null;
+  miktar: string;
+  birim: string | null;
+  // Yerel para birim fiyatı; dövizli siparişte döviz fiyatı ayrıca gelir. Fiyat gönderiminde siparişin kendi para birimi esastır.
+  fiyat: string | null;
+  dovizFiyati: string | null;
+  kdv: string | null;
+  termin: string | null;
+  aciklama: string | null;
+  kapali: boolean;
+}
+
+export interface LogoSiparisIcerigi {
+  ref: number;
+  no: string;
+  tarih: string | null;
+  cariKodu: string | null;
+  // 0 ya da null: yerel para (TL).
+  dovizTuru: number | null;
+  kur: string | null;
+  durum: number | null;
+  iptal: boolean;
+  satirlar: LogoSiparisIcerikSatiri[];
+}
+
+const sayiMetni = (n: number | null): string | null => (n === null ? null : String(n));
+const isoTarihMi = (d: string | null): d is string => d !== null && ISO_TARIH.test(d);
+
+// Biçimi tutmayan cevap (ref yok, satır dizisi yok, miktarsız satır) bütünüyle reddedilir: eksik okunan sipariş geri yazılırsa
+// okunmayan açık satır gövdede olmadığı için Logo'da kapanır.
+export function siparisIcerigiAyikla(govde: unknown): LogoSiparisIcerigi | null {
+  if (!kayitMi(govde)) return null;
+  const ref = kayitNumarasi(govde, ['logicalRef']);
+  const no = ilkMetin(govde, ['number'], FIS_NO_EN_COK);
+  const satirlar = govde['lines'];
+  if (ref === null || no === null || !Array.isArray(satirlar)) return null;
+  const okunan: LogoSiparisIcerikSatiri[] = [];
+  for (const o of satirlar) {
+    if (!kayitMi(o)) return null;
+    const satirRef = kayitNumarasi(o, ['logicalRef']);
+    const tur = tamSayi(ilkSayi(o, ['type']));
+    const miktar = ilkSayi(o, ['quantity']);
+    if (satirRef === null || tur === null || miktar === null || miktar < 0) return null;
+    const termin = ilkMetin(o, ['dueDate'], 10);
+    okunan.push({
+      ref: satirRef, turKodu: tur, kod: ilkMetin(o, ['code'], STOK_KODU_EN_COK), ad: ilkMetin(o, ['name'], 200), miktar: String(miktar),
+      birim: ilkMetin(o, ['unitCode'], 40), fiyat: sayiMetni(ilkSayi(o, ['price'])), dovizFiyati: sayiMetni(ilkSayi(o, ['currencyPrice'])),
+      kdv: sayiMetni(ilkSayi(o, ['vatRate'])), termin: isoTarihMi(termin) ? termin : null, aciklama: ilkMetin(o, ['description'], 250),
+      kapali: o['closed'] === true,
+    });
+  }
+  if (new Set(okunan.map((s) => s.ref)).size !== okunan.length) return null;
+  const tarih = ilkMetin(govde, ['date'], 10);
+  const doviz = tamSayi(ilkSayi(govde, ['currencyType']));
+  return {
+    ref, no, tarih: isoTarihMi(tarih) ? tarih : null, cariKodu: ilkMetin(govde, ['arpCode'], 64), dovizTuru: doviz !== null && doviz > 0 ? doviz : null,
+    kur: sayiMetni(ilkSayi(govde, ['rate'])), durum: tamSayi(ilkSayi(govde, ['status'])), iptal: govde['cancelled'] === true, satirlar: okunan,
+  };
+}
+
+// Okuma anının izi: kaydetmeden önce Logo yeniden okunur, iz tutmazsa yazılmaz (V3: Logo'da aynı anda yapılan elle düzeltme ezilmesin).
+// Yalnız düzeltmenin dayandığı alanlar ize girer; satır adı gibi gönderilmeyen alanın değişmesi düzeltmeyi durdurmaz.
+export function siparisIcerikIzi(i: LogoSiparisIcerigi): string {
+  const satirlar = [...i.satirlar].sort((a, b) => a.ref - b.ref)
+    .map((s) => [s.ref, s.turKodu, s.kod, s.miktar, s.birim, s.fiyat, s.dovizFiyati, s.termin, s.aciklama, s.kapali]);
+  const ham = JSON.stringify([i.ref, i.no, i.tarih, i.cariKodu, i.dovizTuru, i.kur, i.iptal, satirlar]);
+  return createHash('sha256').update(ham).digest('hex');
+}
+
+// Yardımcının UpdateRich gövdesindeki ayırıcı (araclar/logo-yardimcisi Islemler.cs SiparisGuncelle).
+export const DIS_SIPARIS_ALANI = 'externalOrder';
+
+export interface DisSiparisSatirDuzeltmesi {
+  ref: number;
+  miktar?: string;
+  // Siparişin kendi para biriminde birim fiyat (dövizli siparişte döviz fiyatı; yardımcı kurla çarpar).
+  fiyat?: string;
+  termin?: string;
+  aciklama?: string;
+  kapat?: boolean;
+}
+
+export interface DisSiparisYeniSatir {
+  hizmet: boolean;
+  kod: string;
+  miktar: string;
+  fiyat: string;
+  birim: string;
+  kdv: number;
+  termin?: string;
+  aciklama?: string;
+}
+
+export interface DisSiparisDuzeltmesi {
+  tarih?: string;
+  satirlar: readonly DisSiparisSatirDuzeltmesi[];
+  yeniSatirlar: readonly DisSiparisYeniSatir[];
+}
+
+// Değişikliğin fiyatsız özeti: iş kaydında ve listede görünür; fiyat yalnız gövdededir.
+export interface DisSiparisOzeti {
+  tarih: boolean;
+  degisen: number[];
+  kapanan: number[];
+  yeni: number;
+}
+
+const ACIKLAMA_EN_COK = 250;
+const ayniOndalik = (a: string | null, b: string): boolean => a !== null && ONDALIK.test(a) && olcekli(a) === olcekli(b);
+
+// Düzeltme gövdesi: başlık ve okunan satırlar okumadan gelir (G2: kayıt numarası istemciden alınmaz), değişen alan üstüne yazılır.
+// Cari ve döviz okunduğu gibi gider (yardımcı değişikliği reddeder); durum gönderilmez (2967 a). Okunan açık satırların hepsi geri gider:
+// gövdede olmayan açık satırı yardımcı kapatır, kapatma yalnız kullanıcının "kapat" dediği satırdır (2963 a: silme yok).
+// Var olan satıra KDV gönderilmez; termin ve açıklama yalnız değiştiyse gider (gönderilmeyen alanı yardımcı yazmaz, A2 testi).
+export function disSiparisDuzeltmeGovdesi(
+  i: LogoSiparisIcerigi, d: DisSiparisDuzeltmesi,
+): { govde: Record<string, unknown>; ozet: DisSiparisOzeti } | { hata: string } {
+  const a = SIPARIS_ALANLARI;
+  if (i.iptal) return { hata: 'İptal edilmiş sipariş düzeltilmez.' };
+  const cari = i.cariKodu ?? '';
+  if (cari === '') return { hata: 'Siparişin cari kodu okunamadı; düzeltilmez.' };
+  const yabanci = i.satirlar.find((s) => !s.kapali && s.turKodu !== SATIR_TURU.malzeme && s.turKodu !== SATIR_TURU.hizmet);
+  if (yabanci) return { hata: 'Siparişte malzeme ve hizmet dışında açık satır var (indirim, masraf); Logo\'da düzeltin.' };
+  const okunan = new Map(i.satirlar.map((s) => [s.ref, s]));
+  const duzeltme = new Map<number, DisSiparisSatirDuzeltmesi>();
+  for (const x of d.satirlar) {
+    const s = okunan.get(x.ref);
+    if (!s) return { hata: 'Düzeltilen satır siparişte yok.' };
+    if (s.kapali) return { hata: 'Kapalı satır düzeltilmez.' };
+    if (duzeltme.has(x.ref)) return { hata: 'Aynı satır iki kez verilmiş.' };
+    duzeltme.set(x.ref, x);
+  }
+  const tarihIso = d.tarih ?? i.tarih;
+  const tarih = tarihIso === null ? null : logoTarihi(tarihIso);
+  if (tarih === null) return { hata: 'Sipariş tarihi geçersiz.' };
+  const ozet: DisSiparisOzeti = { tarih: d.tarih !== undefined && d.tarih !== i.tarih, degisen: [], kapanan: [], yeni: d.yeniSatirlar.length };
+  const satirlar: Record<string, unknown>[] = [];
+  const dovizli = i.dovizTuru !== null;
+  for (const s of i.satirlar) {
+    if (s.kapali) continue;
+    const x = duzeltme.get(s.ref);
+    if (x?.kapat === true) { ozet.kapanan.push(s.ref); continue; }
+    const kod = s.kod ?? '';
+    const birim = s.birim ?? '';
+    const okunanFiyat = dovizli ? s.dovizFiyati : s.fiyat;
+    if (kod === '' || birim === '' || okunanFiyat === null) return { hata: `Satır ${s.ref}: kod, birim ya da fiyat okunamadı; Logo'da düzeltin.` };
+    let degisti = false;
+    let miktar = s.miktar;
+    if (x?.miktar !== undefined && !ayniOndalik(s.miktar, x.miktar)) {
+      if (!ONDALIK.test(x.miktar) || olcekli(x.miktar) === 0n) return { hata: `Satır ${s.ref}: miktar sıfırdan büyük olmalı.` };
+      miktar = x.miktar;
+      degisti = true;
+    }
+    let fiyat = okunanFiyat;
+    if (x?.fiyat !== undefined && !ayniOndalik(okunanFiyat, x.fiyat)) {
+      if (!ONDALIK.test(x.fiyat)) return { hata: `Satır ${s.ref}: birim fiyat geçersiz.` };
+      fiyat = x.fiyat;
+      degisti = true;
+    }
+    const satir: Record<string, unknown> = {
+      [KAYIT_ALANI]: s.ref, [a.tur]: s.turKodu, [a.kod]: kod, [a.miktar]: Number(miktar), [a.fiyat]: Number(fiyat), [a.birim]: birim,
+    };
+    if (x?.termin !== undefined && x.termin !== s.termin) {
+      const t = logoTarihi(x.termin);
+      if (t === null) return { hata: `Satır ${s.ref}: teslim tarihi geçersiz.` };
+      satir[a.termin] = t;
+      degisti = true;
+    }
+    if (x?.aciklama !== undefined && x.aciklama.trim() !== (s.aciklama ?? '')) {
+      if (x.aciklama.trim().length > ACIKLAMA_EN_COK) return { hata: `Satır ${s.ref}: açıklama ${ACIKLAMA_EN_COK} karakteri aşıyor.` };
+      satir[a.aciklama] = x.aciklama.trim();
+      degisti = true;
+    }
+    if (degisti) ozet.degisen.push(s.ref);
+    satirlar.push(satir);
+  }
+  for (const [n, x] of d.yeniSatirlar.entries()) {
+    const sira = `Yeni satır ${n + 1}`;
+    const kod = x.kod.trim();
+    if (kod === '' || kod.length > STOK_KODU_EN_COK) return { hata: `${sira}: stok kodu 1-${STOK_KODU_EN_COK} karakter olmalı.` };
+    if (!ONDALIK.test(x.miktar) || olcekli(x.miktar) === 0n) return { hata: `${sira}: miktar sıfırdan büyük olmalı.` };
+    if (!ONDALIK.test(x.fiyat)) return { hata: `${sira}: birim fiyat geçersiz.` };
+    if (x.birim.trim() === '') return { hata: `${sira}: birim yok.` };
+    if (!Number.isFinite(x.kdv) || x.kdv < 0 || x.kdv > 100) return { hata: `${sira}: KDV oranı 0-100 olmalı.` };
+    const satir: Record<string, unknown> = {
+      [a.tur]: x.hizmet ? SATIR_TURU.hizmet : SATIR_TURU.malzeme, [a.kod]: kod, [a.miktar]: Number(x.miktar), [a.fiyat]: Number(x.fiyat),
+      [a.birim]: logoBirimKodu(x.birim), [a.kdv]: x.kdv,
+    };
+    if (x.termin !== undefined) {
+      const t = logoTarihi(x.termin);
+      if (t === null) return { hata: `${sira}: teslim tarihi geçersiz.` };
+      satir[a.termin] = t;
+    }
+    const aciklama = x.aciklama?.trim() ?? '';
+    if (aciklama.length > ACIKLAMA_EN_COK) return { hata: `${sira}: açıklama ${ACIKLAMA_EN_COK} karakteri aşıyor.` };
+    if (aciklama !== '') satir[a.aciklama] = aciklama;
+    satirlar.push(satir);
+  }
+  if (satirlar.length === 0) return { hata: 'Siparişte en az bir açık satır kalmalı; siparişi kapatmak Logo\'da yapılır.' };
+  if (!ozet.tarih && ozet.degisen.length === 0 && ozet.kapanan.length === 0 && ozet.yeni === 0) return { hata: 'Değişiklik yok.' };
+  // Yardımcı bu alanla Logo'da açılmış siparişi ayırır: satırın Logo'daki birimi okunamazsa yazmaz (3007, Güvenlik K2).
+  const govde: Record<string, unknown> = { [KAYIT_ALANI]: i.ref, [a.no]: i.no, [a.tarih]: tarih, [a.cari]: cari, [DIS_SIPARIS_ALANI]: true };
+  if (dovizli) {
+    govde[a.doviz] = i.dovizTuru;
+    if (i.kur !== null && ONDALIK.test(i.kur) && olcekli(i.kur) > 0n) govde[a.kur] = Number(i.kur);
+  }
+  govde[a.satirlar] = satirlar;
+  return { govde, ozet };
+}

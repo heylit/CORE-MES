@@ -260,7 +260,7 @@ export const ROL_MATRISI = {
     ad: 'Satın Alma Müdürü',
     islemler: [
       'finans.kur-yaz', 'idari-isler.arac-talebi-ac', 'idari-isler.talep-ac', 'ik.bordro-gordum', 'ik.devam-onay', 'ik.izin-onay',
-      'ik.izin-talep', 'ik.pozisyon-onay', 'kisiler.oku', 'malzemeler.yaz', 'mesaj.oku', 'mesaj.yaz', 'musteri-tedarikci.oku',
+      'ik.izin-talep', 'ik.pozisyon-onay', 'kisiler.oku', 'logo.siparis-duzelt', 'malzemeler.yaz', 'mesaj.oku', 'mesaj.yaz', 'musteri-tedarikci.oku',
       'musteri-tedarikci.yaz', 'portal.oku', 'portal.satinalma', 'portal.yaz', 'projeler.oku', 'satin-alma.ayar',
       'satin-alma.fatura-bagla', 'satin-alma.oku', 'satin-alma.onayla', 'satin-alma.talep-ac', 'satin-alma.yaz', 'sayfa.finans',
       'sayfa.idari-isler', 'sayfa.ik-islemlerim', 'sayfa.malzemeler', 'sayfa.mesaj', 'sayfa.musteri-tedarikci', 'sayfa.ortak-dosyalar',

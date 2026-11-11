@@ -46,6 +46,7 @@ export const BEKLEME_NEDENLERI = {
   'malzeme-fisi-kapali': 'Logo malzeme fişi gönderimi Sistem Ayarları\'nda kapalı; fişler birikiyor, istek atılmıyor.',
   'malzeme-karti-kapali': 'Logo malzeme kartı okuması Sistem Ayarları\'nda kapalı; istek atılmıyor.',
   'stok-kapali': 'Logo stok okuması Sistem Ayarları\'nda kapalı; istek atılmıyor.',
+  'dis-duzeltme-kapali': 'Logo\'da açılmış siparişi düzeltme kapalı (TMIV2_LOGO_SIPARIS_DUZELTME); istek atılmıyor.',
   'ortam-degiskeni-yok': 'Logo bağlantısı açık ama TMIV2_LOGO_KOPRU_ADRESI ve TMIV2_LOGO_KOPRU_ANAHTARI tanımlı değil; istek atılmıyor.',
 } as const;
 
@@ -119,7 +120,9 @@ export type TurSonucu =
   | { tur: 'malzeme-fisi-niyet'; no: number }
   | { tur: 'malzeme-fisi'; no: number; sonuc: GidenSonucu }
   | { tur: `${NiyetliBelge}-niyet`; no: number }
-  | { tur: NiyetliBelge; no: number; sonuc: GidenSonucu };
+  | { tur: NiyetliBelge; no: number; sonuc: GidenSonucu }
+  | { tur: 'dis-duzeltme-kapali' }
+  | { tur: 'dis-duzeltme'; no: number; sonuc: 'gonderildi' | 'reddedildi' | 'hata' | 'bekliyor' };
 
 // "Var mı" okuması olmayan, yalnız niyetle açılan belgeler.
 type NiyetliBelge = 'talep' | 'siparisler-teklifi' | 'siparisler-siparisi';
