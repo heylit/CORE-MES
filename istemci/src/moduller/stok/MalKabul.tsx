@@ -11,6 +11,7 @@ import { DosyaHatasi, dosyaYukle } from '../belge-merkezi/disari.ts';
 import { sorguMetni, useListeDurumu } from '../../ortak/veri/liste-durumu.ts';
 import { AMBALAJ_KATALOGU, olcuBul, olcuMetni, sigma } from './ambalaj.ts';
 import { AmbalajIkonu } from './AmbalajIkonu.tsx';
+import { acikSiparisAra } from './acik-siparis-arama.ts';
 import { useDepoSevk } from './depo-sevk.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { AMBALAJ_TURLERI, LOGO_ESLESME_DURUMLARI, LOGO_ETIKETI, MAL_KABUL_TURLERI, MAL_KABUL_TURU, birimliMiktar, miktarGirdisi, miktarMetni, partiAlinirMi, lotluMu, LOT_IPUCU, zamanMetni } from './gorunum.ts';
@@ -337,18 +338,27 @@ const SUTUNLAR: Sutun<MalKabulOzeti>[] = [
 
 // Satın alma kabulünde açık sipariş satırları: seçilen satır malzemeyi, kalan miktarı ve bağı doldurur; sayılan miktar
 // depoda düzeltilir (kalanı aşan teslim reddedilmez, satın almada fazla teslim görünür).
+// Tek arama kutusu malzeme, tedarikçi, emir ve projede birden arar; dördü ayrı sütundur. Hizmet satırı fason dönüşüdür.
 function AcikSiparisler({ sec }: { sec: (x: AcikSiparisSatiri) => void }) {
   const a = useQuery({ queryKey: anahtarlar.liste('acik-siparis-satirlari', {}), queryFn: () => api.get<AcikSiparisSatirlariCevabi>('/stok/acik-siparis-satirlari') });
+  const [ara, araYaz] = useState('');
   const sutunlar: Sutun<AcikSiparisSatiri>[] = [
-    { anahtar: 'siparis', baslik: 'Sipariş', hucre: (x) => <span className="tc-stok-ad"><strong>{x.siparisNo || x.talepNo}</strong><span>{x.tedarikciAdi}</span></span> },
-    { anahtar: 'kalem', baslik: 'Kalem', hucre: (x) => x.kalemAdi },
+    { anahtar: 'siparis', baslik: 'Sipariş', mono: true, kirilmaz: true, hucre: (x) => x.siparisNo || x.talepNo },
+    { anahtar: 'kalem', baslik: 'Malzeme', hucre: (x) => (x.malzemeTur === 'hizmet' ? <span className="tc-stok-ad"><strong>{x.kalemAdi}</strong><Rozet ton="bilgi">Fason dönüşü</Rozet></span> : x.kalemAdi) },
+    { anahtar: 'tedarikci', baslik: 'Tedarikçi', hucre: (x) => x.tedarikciAdi },
+    { anahtar: 'emir', baslik: 'Üretim emri', mono: true, kirilmaz: true, hucre: (x) => x.emirNo ?? '—' },
+    { anahtar: 'proje', baslik: 'Proje', hucre: (x) => x.projeAdi ?? '—' },
     { anahtar: 'miktar', baslik: 'Sipariş miktarı', hizala: 'sag', kirilmaz: true, hucre: (x) => birimliMiktar(x.miktar, x.birim) },
     { anahtar: 'kalan', baslik: 'Kalan', hizala: 'sag', kirilmaz: true, hucre: (x) => birimliMiktar(x.kalanMiktar, x.birim) },
     { anahtar: 'termin', baslik: 'Beklenen', kirilmaz: true, hucre: (x) => x.beklenenTeslim ?? '—' },
     { anahtar: 'sec', baslik: '', hucre: (x) => <Dugme tur="ikincil" onClick={() => sec(x)}>Seç</Dugme> },
   ];
   if (a.isError) return <DurumKutusu durum="hata" mesaj={hataMetni(a.error)} yenile={() => void a.refetch()} />;
-  return <Tablo etiket="Açık sipariş satırları" sutunlar={sutunlar} satirlar={a.data?.satirlar ?? []} satirAnahtari={(x) => x.id} mesgul={a.isPending} bosMesaj="Teslim bekleyen sipariş yok." />;
+  return (
+    <Tablo etiket="Açık sipariş satırları" sutunlar={sutunlar} satirlar={acikSiparisAra(a.data?.satirlar ?? [], ara)} satirAnahtari={(x) => x.id} mesgul={a.isPending}
+      bosMesaj={ara.trim() ? 'Aramaya uyan açık sipariş satırı yok.' : 'Teslim bekleyen sipariş yok.'}
+      arac={{ arama: { deger: ara, degistir: araYaz, etiket: 'Açık siparişlerde ara', yerTutucu: 'Malzeme, tedarikçi, emir no ya da proje' } }} />
+  );
 }
 // Hizmet siparişinde satırın kartı varsayılan olarak dönen malzemedir (fason); "Malzeme dönmedi" hizmet kartını koyar.
 const siparistenSatir = (s: Satir, x: AcikSiparisSatiri): Satir => ({

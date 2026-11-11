@@ -12,7 +12,8 @@ import { kisiAdlari } from '../../kisiler/disari.ts';
 import { gkkGerekenKartlar, malzemeKullanilabilirMi, malzemeOzeti, malzemeOzetleri, sktTakipliKartlar } from '../../malzemeler/disari.ts';
 import { siparisSatirlari, siparisSatirlarininEmri, teslimGeriAl, teslimIsle } from '../../satin-alma/disari.ts';
 import { depoKabulunuGeriAl } from '../../sevkiyat/disari.ts';
-import { uretimEmriOzeti, emirDugumleri, kapanisSonuclari } from '../../uretim-emirleri/disari.ts';
+import { projeAdlari } from '../../projeler/disari.ts';
+import { uretimEmriOzeti, emirDugumleri, emirlerinProjeleri, isEmriOzetleri, kapanisSonuclari } from '../../uretim-emirleri/disari.ts';
 import {
   binde, bindenMetin, duzeltmeEngeli, partiDenetimi, partiEtiketi, partiGereksinimi, stoklanirMi, siparisBagiEngeli, siparisMalzemeEngeli, malKabulSatirTuru, fasonDonusKonumuEngeli,
   KARANTINA_KONUMU_YOK, gkkGirisKonumuEngeli, malKabulKonumuEngeli, GKK_KARANTINA_KONUMU_YOK, girisKontroluDuzeltmeEngeli, uretimGirisiEngeli, uretimGirisiDurumEngeli, uretimGirisiHedefi,
@@ -222,14 +223,28 @@ export async function malKabulDuzelt(db: Db, k: Kullanici, id: number, g: MalKab
   denetimiYaz(denetim, denetimEki);
   return { belge: await malKabulOzetiCevir(db, (await sorgular.malKabulBul(db, yeni))!), hareketIdler };
 }
+// Depocu tek kutudan malzeme, tedarikçi, emir ve projeyle arar. Emir talebin ya da kalemin kaynak talebinin emridir, fason
+// satırında iş emrinin emri. Satır sayısından bağımsız sabit sayıda toplu okuma (N+1 yok).
 export async function acikSiparisSatirlari(db: Db): Promise<AcikSiparisSatirlariCevabi> {
   const l = await siparisSatirlari(db);
   const kartlar = await malzemeOzetleri(db, [...new Set(l.flatMap((x) => (x.malzemeNo === null ? [] : [x.malzemeNo])))]);
-  return { satirlar: l.map((x) => ({
-    id: x.id, siparisNo: x.siparisNo, talepNo: x.talepNo, tedarikciAdi: x.tedarikciAdi, malzemeId: x.malzemeNo,
-    malzemeTur: (x.malzemeNo === null ? null : (kartlar.get(x.malzemeNo)?.tur as MalzemeTuru | undefined)) ?? null, kalemAdi: x.kalemAdi,
-    miktar: x.miktar, kalanMiktar: x.kalanMiktar, birim: x.birim, beklenenTeslim: x.beklenenTeslim,
-  })) };
+  const kalemEmri = await siparisSatirlarininEmri(db, l.map((x) => x.id));
+  const isEmirleri = await isEmriOzetleri(db, l.flatMap((x) => (x.isEmriId === null || kalemEmri.has(x.id) ? [] : [x.isEmriId])));
+  const emri = (x: (typeof l)[number]): number | null => kalemEmri.get(x.id) ?? (x.isEmriId === null ? null : isEmirleri.get(x.isEmriId)?.uretimEmriId ?? null);
+  const emirler = l.map(emri);
+  const nolar = await emirNoHaritasi(db, emirler);
+  const projesi = await emirlerinProjeleri(db, emirler.filter((e): e is number => e !== null));
+  const projeAdi = await projeAdlari(db, [...new Set(projesi.values())]);
+  return { satirlar: l.map((x, i) => {
+    const emirId = emirler[i] ?? null;
+    const projeId = emirId === null ? null : projesi.get(emirId) ?? null;
+    return {
+      id: x.id, siparisNo: x.siparisNo, talepNo: x.talepNo, tedarikciAdi: x.tedarikciAdi, malzemeId: x.malzemeNo,
+      malzemeTur: (x.malzemeNo === null ? null : (kartlar.get(x.malzemeNo)?.tur as MalzemeTuru | undefined)) ?? null, kalemAdi: x.kalemAdi,
+      miktar: x.miktar, kalanMiktar: x.kalanMiktar, birim: x.birim, beklenenTeslim: x.beklenenTeslim,
+      uretimEmriId: emirId, emirNo: emirNoDe(nolar, emirId), projeId, projeAdi: projeId === null ? null : projeAdi.get(projeId) ?? null,
+    };
+  }) };
 }
 export async function malKabulListesi(db: Db, s: MalKabullerListesi): Promise<SayfaliListe<MalKabulOzeti>> {
   const suzgec = { tur: s.tur, logoDurumu: s.logoDurumu, baslangic: s.baslangic, bitis: s.bitis, metin: s.metin };
