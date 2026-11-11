@@ -82,7 +82,8 @@ describe('çizim merkezi genel arama kaynağı (kart 1240, gerçek PostgreSQL)',
     const sonuc = await cizimAra('tr-ara-1', 5);
     assert.deepEqual(sonuc.map((s) => s.anahtar), [String(kapak.id), String(flans.id)]);
     assert.deepEqual(sonuc[0], {
-      anahtar: String(kapak.id), baslik: 'TR-ARA-1 Deneme kapak TR-ARA-1', aciklama: 'Sertifika · Rev A', yol: `/cizimler/belge/${kapak.id}`,
+      // 2138-2: merkezin harfi gösterilmez; antetsiz ve kartsız belgede revizyon yazılmaz.
+      anahtar: String(kapak.id), baslik: 'TR-ARA-1 Deneme kapak TR-ARA-1', aciklama: 'Sertifika', yol: `/cizimler/belge/${kapak.id}`,
     });
     assert.deepEqual((await cizimAra('FLANŞ KAPA', 5)).map((s) => s.anahtar), [String(flans.id)]);
     // Türkçe harf dil ayarına bırakılmaz: büyük İ/I ve ı/i, Ş/ş aynı sadeleşmeden geçer.

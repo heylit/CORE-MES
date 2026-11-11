@@ -21,6 +21,7 @@ import {
   silinenOzeti, sonrakiYakinlik, yakinlikSinirla,
 } from './duzenleme.ts';
 import type { DuzenlemeSonucu, ResimliOge, Silinen } from './pdf-yaz.ts';
+import { revKoduMetni, revizyonAdi } from '../revizyon-kodu.ts';
 
 // Çizim Merkezi PDF düzenleyicisi (kart 2123; kararlar 2123-1 b pdf-lib, 2123-2 b ayrı yeni belge, 2123-3 b belge-merkezi.yaz,
 // 2123-4 b dolgu, logo, yazı, renk ve çizgi; 2123-5 c alttaki nesnelerin PDF'ten silinmesi). Asıl belge değişmez; düzenlenen dosya yeni belge olarak yüklenir.
@@ -65,7 +66,7 @@ function KaydetPenceresi({ belge, revizyon, dolguVar, olustur, kapat }: {
     '/cizimler',
     (ozet): BelgeOlusturGovdesi => ({
       ad: ad.trim(), tur: belge.tur, aciklama: belge.aciklama ?? '', resimNo: belge.resimNo ?? '', antetRev,
-      not: duzenlemeNotu(belge.ad, revizyon.harf, gerekce, silinen.current), ozet, dosyaAdi: dosyaAdi.trim(),
+      not: duzenlemeNotu(belge.ad, revKoduMetni(revizyon.revKodu), gerekce, silinen.current), ozet, dosyaAdi: dosyaAdi.trim(),
     }),
     (c) => { kapat(); void yonlendir(`/cizimler/belge/${String(c.id)}`); },
     'Belge kaydedilemedi',
@@ -120,8 +121,8 @@ function KaydetPenceresi({ belge, revizyon, dolguVar, olustur, kapat }: {
           </>
         )}
         <Girdi etiket="Yeni belge adı" value={ad} maxLength={120} required onChange={(e) => { adYaz(e.target.value); }} />
-        <Girdi etiket="Kaynak" value={`${belge.ad} · Rev ${revizyon.harf}`} readOnly />
-        <Girdi etiket="Antet revizyonu" value={antetRev} maxLength={20} onChange={(e) => { antetRevYaz(e.target.value); }} />
+        <Girdi etiket="Kaynak" value={`${belge.ad} · Rev ${revKoduMetni(revizyon.revKodu)}`} readOnly />
+        <Girdi etiket="Revizyon kodu" value={antetRev} maxLength={20} onChange={(e) => { antetRevYaz(e.target.value); }} />
         <Girdi etiket="Dosya adı" value={dosyaAdi} maxLength={120} required onChange={(e) => { dosyaAdiYaz(e.target.value); }} />
         <CokSatir
           etiket="Gerekçe" value={gerekce} maxLength={200} required onChange={(e) => { gerekceYaz(e.target.value); }}
@@ -473,7 +474,7 @@ export function PdfDuzenleyici() {
         <Dugme simge="back" onClick={() => { if (degisti) vazgecAcikYaz(true); else cik(); }}>Geri</Dugme>
         <h1 className="tc-cz-baslik"><Simge ad="file" />PDF düzenle</h1>
         <Rozet ton="bilgi">{belge.ad}</Rozet>
-        <Rozet ton={DURUM_TONU[revizyon.durum]}>{`Kaynak: Revizyon ${revizyon.harf} · ${DURUM_ADI[revizyon.durum]}`}</Rozet>
+        <Rozet ton={DURUM_TONU[revizyon.durum]}>{`Kaynak: ${revizyonAdi(revizyon)} · ${DURUM_ADI[revizyon.durum]}`}</Rozet>
         <span className="tc-cz-ipucu">{TUR_ADI[belge.tur]}</span>
         <div className="tc-cz-bas-sag">
           <Dugme onClick={() => { if (degisti) vazgecAcikYaz(true); else cik(); }}>Vazgeç</Dugme>

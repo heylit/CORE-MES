@@ -82,6 +82,9 @@ export const belgeSatiri = z.object({
   // Yayındaki revizyon yoksa (yalnız taslak) null.
   yayindakiHarf: z.string().nullable(),
   sonHarf: z.string(),
+  // 2138-2: ekranda gösterilen revizyon kodu (antet, yoksa bağlı malzeme kartının revizyonu); bilinmiyorsa null. Harf yalnız iç sıradır.
+  yayindakiRevKodu: z.string().nullable().optional(),
+  sonRevKodu: z.string().nullable().optional(),
   dosyaTuru: z.enum(DOSYA_TURLERI),
   bagSayisi: z.number().int().min(0),
   guncellendi: zamanSemasi,
@@ -104,6 +107,8 @@ export const revizyonSemasi = z.object({
   yayinlandi: zamanSemasi.nullable(),
   onizlemeKareSayisi: z.number().int().min(0),
   antetRev: z.string().nullable(),
+  // 2138-2: ekranda gösterilen revizyon kodu: antet revizyonu, yoksa bağlı malzeme kartının revizyonu, o da yoksa null.
+  revKodu: z.string().nullable().optional(),
 });
 
 export const bagSemasi = z.object({
@@ -171,6 +176,8 @@ export const kucukResim = z.object({
   revizyonId: z.number().int(),
   harf: z.string(),
   antetRev: z.string().nullable().optional(),
+  // 2138-2: ekranda gösterilen revizyon kodu (antet, yoksa kartın revizyonu); bilinmiyorsa null.
+  revKodu: z.string().nullable().optional(),
   kareSayisi: z.number().int().min(1),
   revUyumu: z.boolean().nullable(),
   taslak: z.boolean().optional(),

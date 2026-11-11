@@ -9,6 +9,7 @@ import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { tekrarKorumaliGonder, yeniIstekKimligi } from '../../ortak/veri/istek-kimligi.ts';
 import { useOturum } from '../../ortak/veri/oturum.ts';
 import { anahtarlar } from './anahtarlar.ts';
+import { revKoduMetni } from './revizyon-kodu.ts';
 import { DosyaHatasi, dosyaYukle } from './dosya-aktarimi.ts';
 import { DURUM_ADI, DURUM_TONU, IZINLI_DOSYA_TURLERI, TUR_ADI, TUR_SIMGESI, boyutMetni, dosyaTuruBul, izinliMetni, kabulMetni } from './gosterim.ts';
 import { KucukResimKutusu } from './KucukResim.tsx';
@@ -41,7 +42,7 @@ function dosyaReddi(dosya: File | null, tur: MalzemeBelgeTuru): string | null {
 }
 
 // Yayında olup karesi olmayan revizyonun küçük resmini üretir; dosya elde varsa yeniden indirilmez.
-async function kareUret(no: number, belgeId: number, r: Pick<Revizyon, 'id' | 'harf' | 'dosyaTuru' | 'boyut' | 'onizlemeKareSayisi'>, veri?: Uint8Array) {
+async function kareUret(no: number, belgeId: number, r: Pick<Revizyon, 'id' | 'revKodu' | 'dosyaTuru' | 'boyut' | 'onizlemeKareSayisi'>, veri?: Uint8Array) {
   await onizlemeGonder(r, {
     dosyaYolu: `/cizimler/${belgeId}/revizyonlar/${r.id}/dosya`,
     yazmaYolu: `${kok(no)}/belgeler/${belgeId}/revizyonlar/${r.id}/onizleme`,
@@ -152,7 +153,7 @@ function BelgeEkle({ no, kartRev, kapat }: { no: number; kartRev: string | null;
         />
         <Girdi etiket="Belge adı" value={ad} maxLength={120} onChange={(e) => { adYaz(e.target.value); }} />
         <Girdi etiket="Teknik resim no" value={resimNo} maxLength={60} onChange={(e) => { resimNoYaz(e.target.value); }} ipucu="Kartın teknik resim numarasıyla karşılaştırılır." />
-        <Girdi etiket="Antet revizyonu" value={antetRev} maxLength={20} onChange={(e) => { antetRevYaz(e.target.value); antetElleYaz(true); }} ipucu="Resmin antetindeki revizyon; kartın revizyonuyla karşılaştırılır. Boşsa karşılaştırılmaz." />
+        <Girdi etiket="Revizyon kodu" value={antetRev} maxLength={20} onChange={(e) => { antetRevYaz(e.target.value); antetElleYaz(true); }} ipucu="Resmin antetindeki revizyon; kartın revizyonuyla karşılaştırılır. Boşsa kartın revizyonu gösterilir." />
         <Ilerleme oran={ilerleme} />
         {hata !== null && <p className="tc-cz-hata" role="alert">{hata}</p>}
       </div>
@@ -206,7 +207,7 @@ function RevizyonYukle({ no, belge, kartRev, kapat }: { no: number; belge: Malze
           ipucu={dosya ? `${dosya.name} · ${boyutMetni(dosya.size)}` : `${izinliMetni(tur)}; en çok 200 MB.`}
           {...(red ? { hata: red } : {})}
         />
-        <Girdi etiket="Antet revizyonu" value={antetRev} maxLength={20} onChange={(e) => { antetRevYaz(e.target.value); }} ipucu="Resmin antetindeki revizyon; kartın revizyonuyla karşılaştırılır." />
+        <Girdi etiket="Revizyon kodu" value={antetRev} maxLength={20} onChange={(e) => { antetRevYaz(e.target.value); }} ipucu="Resmin antetindeki revizyon; kartın revizyonuyla karşılaştırılır." />
         <Girdi etiket="Revizyon notu" value={not} maxLength={300} onChange={(e) => { notYaz(e.target.value); }} />
         {hata !== null && <p className="tc-cz-hata" role="alert">{hata}</p>}
       </div>
@@ -251,7 +252,7 @@ export function ResimPaneli({ malzemeNo }: { malzemeNo: number }) {
               <KucukResimKutusu resim={veri.kucukResim} ad="Malzeme resmi" boy="buyuk" />
               {veri.kucukResim?.revUyumu === false && (
                 <p className="tc-cz-uyari" role="status">
-                  Resim kartla uyuşmuyor: resmin antet revizyonu {veri.kucukResim.antetRev ?? 'yok'}, kartın revizyonu {veri.kartRevizyon ?? 'yok'}. Teknik resim numarasını da denetleyin.
+                  Resim kartla uyuşmuyor: resmin revizyon kodu {veri.kucukResim.antetRev ?? 'yok'}, kartın revizyonu {veri.kartRevizyon ?? 'yok'}. Teknik resim numarasını da denetleyin.
                 </p>
               )}
               {veri.kucukResim?.taslak === true && <p className="tc-cz-ipucu" role="status">Resim taslak 3B modelden; model çizim merkezinde yayınlanınca atölyeye gider.</p>}
@@ -271,7 +272,7 @@ export function ResimPaneli({ malzemeNo }: { malzemeNo: number }) {
                           <Simge ad={TUR_SIMGESI[b.tur]} />
                           {merkezGorur ? <Link to={`/cizimler/belge/${b.id}`}>{b.ad}</Link> : b.ad}
                         </span>
-                        {r && <span className="mono">{r.antetRev ?? r.harf}</span>}
+                        {r && <span className="mono">{revKoduMetni(r.revKodu)}</span>}
                         {r && <Rozet ton={DURUM_TONU[r.durum]}>{DURUM_ADI[r.durum]}</Rozet>}
                         {b.kapak && <Rozet ton="bilgi">Kapak</Rozet>}
                         {yazar && (

@@ -33,7 +33,7 @@ export function KucukResimKutusu({ resim, ad, boy = 'kucuk' }: { resim: KucukRes
   const goster = resim != null && bozuk !== resim.revizyonId;
   const uyumsuz = resim?.revUyumu === false;
   const taslak = goster && resim.taslak === true;
-  const baslik = uyumsuz ? `${ad}: resim kartla uyuşmuyor (antet revizyonu ${resim.antetRev ?? 'yok'})` : taslak ? `${ad}: taslak 3B model, yayınlanmadı` : ad;
+  const baslik = uyumsuz ? `${ad}: resim kartla uyuşmuyor (resmin revizyon kodu ${resim.antetRev ?? 'yok'})` : taslak ? `${ad}: taslak 3B model, yayınlanmadı` : ad;
   return (
     <span className={`tc-cz-kr tc-cz-kr-${boy}`} title={baslik}>
       {goster

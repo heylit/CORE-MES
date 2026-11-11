@@ -21,7 +21,7 @@ import { kisiAdlari } from '../kisiler/disari.ts';
 import { malzemeAra, malzemeOzetleri, malzemeResimAnahtarlari } from '../malzemeler/disari.ts';
 import {
   AZAMI_BAYT, ILETILER, IZINLI_DOSYA_TURLERI, ONIZLEME_KARE_TURLERI, indirmeReddi, kucukResimSec, malzemedenYayinda, menuAnahtari, merkezBagReddi, onizlemeBoyutReddi,
-  onizlemeKareReddi, onizlemeRevizyonReddi, revizyonHarfi, silmeReddi, yayinReddi,
+  kartRevizyonu, onizlemeKareReddi, onizlemeRevizyonReddi, revizyonHarfi, revizyonKodu, silmeReddi, yayinReddi,
 } from './kurallar.ts';
 import type { AdayBelge, KartAnahtari } from './kurallar.ts';
 import * as sorgular from './sorgular.ts';
@@ -235,6 +235,33 @@ async function bagHedefAdlari(db: Db, baglar: readonly { hedefModul: BagModulu; 
   };
 }
 
+// 2138-2: belge ve sıra başına gösterilen revizyon kodu (antet, yoksa bağlı malzeme kartlarının revizyonu), belgeler için tek seferde.
+async function revizyonKodcusu(db: Db, belgeIdler: readonly number[]): Promise<(belgeId: number, sira: number | null) => string | null> {
+  const benzersiz = [...new Set(belgeIdler)];
+  if (benzersiz.length === 0) return () => null;
+  const [antetler, baglar] = [await sorgular.antetRevizyonlari(db, benzersiz), await sorgular.malzemeBaglari(db, benzersiz)];
+  const kartlar = await malzemeResimAnahtarlari(db, baglar.map((g) => g.malzemeNo));
+  const kartRev = new Map(benzersiz.map((id) => [id, kartRevizyonu(baglar.filter((g) => g.belgeId === id).map((g) => kartlar.get(g.malzemeNo)?.revizyon ?? null))]));
+  const antet = new Map(antetler.map((a) => [`${a.belgeId}/${a.sira}`, a.antetRev]));
+  return (belgeId, sira) => (sira === null ? null : revizyonKodu(antet.get(`${belgeId}/${sira}`), kartRev.get(belgeId)));
+}
+
+// Başka modülün aldığı revizyonun (belge ve dosya özeti) gösterilen kodu: alan modül harfi kendi tablosunda tutmuş olsa da ekranda
+// merkezin güncel kodu görünür (2138-2). Anahtar `belgeId:ozet`; belgede o özetli revizyon yoksa anahtar haritada yoktur.
+export async function revizyonKodlari(db: Db, ciftler: readonly { belgeId: number; ozet: string }[]): Promise<Map<string, string | null>> {
+  const sonuc = new Map<string, string | null>();
+  const belgeIdler = [...new Set(ciftler.map((c) => c.belgeId))];
+  if (belgeIdler.length === 0) return sonuc;
+  const sira = new Map((await sorgular.antetRevizyonlari(db, belgeIdler)).map((r) => [`${r.belgeId}:${r.ozet}`, r.sira]));
+  const kod = await revizyonKodcusu(db, belgeIdler);
+  for (const c of ciftler) {
+    const anahtar = `${c.belgeId}:${c.ozet}`;
+    const s = sira.get(anahtar);
+    if (s !== undefined) sonuc.set(anahtar, kod(c.belgeId, s));
+  }
+  return sonuc;
+}
+
 export async function belgeAyrintisi(db: Db, id: number): Promise<BelgeAyrintisi> {
   const b = await sorgular.belge(db, id);
   if (b === null) throw bulunamadi('Belge bulunamadı.');
@@ -244,6 +271,7 @@ export async function belgeAyrintisi(db: Db, id: number): Promise<BelgeAyrintisi
   ];
   const dosya = new Map(dosyalar.map((d) => [d.ozet, d]));
   const hedefAdi = await bagHedefAdlari(db, baglar);
+  const kod = await revizyonKodcusu(db, [id]);
   const adlar = await kisiAdlari(db, [
     b.olusturanId, ...revizyonlar.flatMap((r) => [r.yukleyenId, ...(r.yayinlayanId === null ? [] : [r.yayinlayanId])]), ...baglar.map((g) => g.ekleyenId),
   ]);
@@ -258,7 +286,7 @@ export async function belgeAyrintisi(db: Db, id: number): Promise<BelgeAyrintisi
         id: r.id, sira: r.sira, harf: revizyonHarfi(r.sira), durum: r.durum, ozet: r.ozet, dosyaAdi: d.ad, dosyaTuru: r.dosyaTuru,
         boyut: d.boyut, not: r.not, yukleyenAd: adlar.get(r.yukleyenId) ?? null, yuklendi: r.yuklendi,
         yayinlayanAd: r.yayinlayanId === null ? null : adlar.get(r.yayinlayanId) ?? null, yayinlandi: r.yayinlandi,
-        onizlemeKareSayisi: kareler.get(r.id) ?? 0, antetRev: r.antetRev,
+        onizlemeKareSayisi: kareler.get(r.id) ?? 0, antetRev: r.antetRev, revKodu: kod(id, r.sira),
       };
     }),
     baglar: baglar.map((g) => ({
@@ -271,10 +299,15 @@ export async function belgeListesi(db: Db, sorgu: BelgeListesiSuzgeci): Promise<
   const suzgec = { ara: sorgu.ara ?? null, tur: sorgu.tur ?? null, aktif: sorgu.arsiv === 'hayir', makine: sorgu.makine === undefined ? null : sorgu.makine === 'evet' };
   return sayfaliListe(sorgu, {
     say: () => sorgular.belgeSay(db, suzgec),
-    satirlar: async (dilim) => (await sorgular.belgeSatirlari(db, suzgec, sorgu, dilim)).map((s) => ({
-      id: s.id, ad: s.ad, tur: s.tur, aktif: s.aktif, yayindakiHarf: s.yayindakiSira === null ? null : revizyonHarfi(s.yayindakiSira),
-      sonHarf: revizyonHarfi(s.sonSira), dosyaTuru: s.dosyaTuru, bagSayisi: s.bagSayisi, guncellendi: s.guncellendi, surum: s.surum,
-    })),
+    satirlar: async (dilim) => {
+      const satirlar = await sorgular.belgeSatirlari(db, suzgec, sorgu, dilim);
+      const kod = await revizyonKodcusu(db, satirlar.map((s) => s.id));
+      return satirlar.map((s) => ({
+        id: s.id, ad: s.ad, tur: s.tur, aktif: s.aktif, yayindakiHarf: s.yayindakiSira === null ? null : revizyonHarfi(s.yayindakiSira),
+        sonHarf: revizyonHarfi(s.sonSira), yayindakiRevKodu: kod(s.id, s.yayindakiSira), sonRevKodu: kod(s.id, s.sonSira),
+        dosyaTuru: s.dosyaTuru, bagSayisi: s.bagSayisi, guncellendi: s.guncellendi, surum: s.surum,
+      }));
+    },
   });
 }
 
@@ -407,6 +440,7 @@ export async function kayitlarinKucukResimleri(db: Db, hedefModul: BagModulu, he
   if (hedefIdler.length === 0) return sonuc;
   const adaylar = await sorgular.kucukResimAdaylari(db, hedefModul, hedefIdler);
   const kartlar = hedefModul === 'malzemeler' ? await malzemeResimAnahtarlari(db, [...new Set(adaylar.map((a) => a.hedefId))]) : new Map<number, KartAnahtari>();
+  const kod: (belgeId: number, sira: number | null) => string | null = hedefModul === 'malzemeler' ? () => null : await revizyonKodcusu(db, adaylar.map((a) => a.belgeId));
   const kayitlar = new Map<number, Map<number, AdayBelge>>();
   for (const a of adaylar) {
     const belgeler = kayitlar.get(a.hedefId) ?? new Map<number, AdayBelge>();
@@ -416,7 +450,10 @@ export async function kayitlarinKucukResimleri(db: Db, hedefModul: BagModulu, he
   }
   for (const [hedefId, belgeler] of kayitlar) {
     const s = kucukResimSec([...belgeler.values()], kartlar.get(hedefId) ?? null);
-    if (s !== null) sonuc.set(hedefId, { hedefId, belgeId: s.belgeId, revizyonId: s.revizyonId, harf: revizyonHarfi(s.sira), antetRev: s.antetRev, kareSayisi: s.kareSayisi, revUyumu: s.revUyumu, taslak: s.taslak });
+    if (s === null) continue;
+    // Malzemede kod o kartın revizyonuna düşer; öbür kayıtlarda belgenin bağlı kartlarına.
+    const revKodu = hedefModul === 'malzemeler' ? revizyonKodu(s.antetRev, kartlar.get(hedefId)?.revizyon) : kod(s.belgeId, s.sira);
+    sonuc.set(hedefId, { hedefId, belgeId: s.belgeId, revizyonId: s.revizyonId, harf: revizyonHarfi(s.sira), antetRev: s.antetRev, revKodu, kareSayisi: s.kareSayisi, revUyumu: s.revUyumu, taslak: s.taslak });
   }
   return sonuc;
 }
@@ -436,28 +473,34 @@ export interface BagliBelge {
   tur: BelgeTuru;
   // Yayındaki revizyon yoksa (yalnız taslak) null.
   revizyonId: number | null;
+  // Merkezin iç sırası; ekranda gösterilmez (2138-2). Gösterilen revKodu'dur: antet, yoksa bağlı malzeme kartının revizyonu, yoksa null.
   harf: string | null;
+  revKodu: string | null;
   dosyaTuru: BagliDosya['tur'] | null;
   // Yayındaki dosyanın özeti: kullanan modül kendi kopyasının ya da hizalamasının eskidiğini bununla anlar.
   ozet: string | null;
 }
 
-const bagliBelge = (s: sorgular.BagliBelgeSatiri): BagliBelge => ({
+const bagliBelge = (s: sorgular.BagliBelgeSatiri, kod: (belgeId: number, sira: number | null) => string | null): BagliBelge => ({
   id: s.id, ad: s.ad, tur: s.tur, revizyonId: s.yayindakiRevizyonId,
-  harf: s.yayindakiSira === null ? null : revizyonHarfi(s.yayindakiSira), dosyaTuru: s.dosyaTuru, ozet: s.ozet,
+  harf: s.yayindakiSira === null ? null : revizyonHarfi(s.yayindakiSira), revKodu: kod(s.id, s.yayindakiSira), dosyaTuru: s.dosyaTuru, ozet: s.ozet,
 });
 
 export async function kaydaBagliBelgeler(db: Db, hedefModul: BagModulu, hedefId: number): Promise<BagliBelge[]> {
-  return (await sorgular.bagliBelgeler(db, hedefModul, hedefId)).map(bagliBelge);
+  const satirlar = await sorgular.bagliBelgeler(db, hedefModul, hedefId);
+  const kod = await revizyonKodcusu(db, satirlar.map((s) => s.id));
+  return satirlar.map((s) => bagliBelge(s, kod));
 }
 
 // Liste ekranı (ör. fabrika yerleşimi) kayıt başına sorgu atmasın diye. Bağı olmayan kayıt haritada yoktur.
 export async function kayitlaraBagliBelgeler(db: Db, hedefModul: BagModulu, hedefIdler: readonly number[]): Promise<Map<number, BagliBelge[]>> {
   const sonuc = new Map<number, BagliBelge[]>();
   if (hedefIdler.length === 0) return sonuc;
-  for (const s of await sorgular.bagliBelgelerToplu(db, hedefModul, hedefIdler)) {
+  const satirlar = await sorgular.bagliBelgelerToplu(db, hedefModul, hedefIdler);
+  const kod = await revizyonKodcusu(db, satirlar.map((s) => s.id));
+  for (const s of satirlar) {
     const liste = sonuc.get(s.hedefId) ?? [];
-    liste.push(bagliBelge(s));
+    liste.push(bagliBelge(s, kod));
     sonuc.set(s.hedefId, liste);
   }
   return sonuc;
@@ -506,7 +549,9 @@ export interface YayindakiBelge {
   ad: string;
   tur: BelgeTuru;
   revizyonId: number;
+  // Merkezin iç sırası; ekranda gösterilmez (2138-2), gösterilen revKodu'dur.
   harf: string;
+  revKodu: string | null;
   dosyaTuru: BagliDosya['tur'];
   ozet: string;
 }
@@ -520,9 +565,11 @@ export async function kayitlaraBagliYayindakiBelgeler(
   db: Db, hedefModul: BagModulu, dosyaTurleri: readonly BagliDosya['tur'][],
 ): Promise<Map<number, BagliYayindakiBelge[]>> {
   const sonuc = new Map<number, BagliYayindakiBelge[]>();
-  for (const b of await sorgular.bagliYayindakiBelgeler(db, hedefModul, dosyaTurleri)) {
+  const satirlar = await sorgular.bagliYayindakiBelgeler(db, hedefModul, dosyaTurleri);
+  const kod = await revizyonKodcusu(db, satirlar.map((b) => b.id));
+  for (const b of satirlar) {
     const liste = sonuc.get(b.hedefId) ?? [];
-    liste.push({ id: b.id, ad: b.ad, tur: b.tur, revizyonId: b.yayindakiRevizyonId, harf: revizyonHarfi(b.yayindakiSira), dosyaTuru: b.dosyaTuru, ozet: b.ozet, kapak: b.kapak });
+    liste.push({ id: b.id, ad: b.ad, tur: b.tur, revizyonId: b.yayindakiRevizyonId, harf: revizyonHarfi(b.yayindakiSira), revKodu: kod(b.id, b.yayindakiSira), dosyaTuru: b.dosyaTuru, ozet: b.ozet, kapak: b.kapak });
     sonuc.set(b.hedefId, liste);
   }
   return sonuc;
@@ -534,8 +581,10 @@ const SECICI_SINIRI = 200;
 export async function yayindakiBelgeler(db: Db, s: { tur?: BelgeTuru; ara?: string; sinir?: number } = {}): Promise<YayindakiBelge[]> {
   const ara = s.ara?.trim() ? s.ara.trim() : null;
   const sinir = Math.min(Math.max(1, s.sinir ?? SECICI_SINIRI), SECICI_SINIRI);
-  return (await sorgular.yayindakiBelgeler(db, { tur: s.tur ?? null, ara, sinir })).map((b) => ({
-    id: b.id, ad: b.ad, tur: b.tur, revizyonId: b.yayindakiRevizyonId, harf: revizyonHarfi(b.yayindakiSira), dosyaTuru: b.dosyaTuru, ozet: b.ozet,
+  const satirlar = await sorgular.yayindakiBelgeler(db, { tur: s.tur ?? null, ara, sinir });
+  const kod = await revizyonKodcusu(db, satirlar.map((b) => b.id));
+  return satirlar.map((b) => ({
+    id: b.id, ad: b.ad, tur: b.tur, revizyonId: b.yayindakiRevizyonId, harf: revizyonHarfi(b.yayindakiSira), revKodu: kod(b.id, b.yayindakiSira), dosyaTuru: b.dosyaTuru, ozet: b.ozet,
   }));
 }
 
@@ -605,10 +654,15 @@ const ARAMA_TUR_ADI: Record<BelgeTuru, string> = {
 // Üst çubuktaki genel aramanın çizim kaynağı (kart 1240): yalnız yayında revizyonu olan etkin belge; arşiv ve yalnız taslak
 // bulunmaz (seçicinin kuralı). Okuma yetkisini çekirdek arama ucu kaynağın `yetki` listesiyle denetler (disari.ts).
 export async function cizimAra(db: Db, istek: KayitAramaIstegi): Promise<KayitAramaSonucu[]> {
-  return (await sorgular.aramaSatirlari(db, { sade: istek.sade, icinde: istek.icindeDeseni, bas: istek.basDeseni, sinir: istek.sinir })).map((b) => ({
-    anahtar: String(b.id),
-    baslik: b.resimNo === null ? b.ad : `${b.resimNo} ${b.ad}`,
-    aciklama: `${ARAMA_TUR_ADI[b.tur]} · Rev ${revizyonHarfi(b.yayindakiSira)}`,
-    yol: `/cizimler/belge/${b.id}` as const,
-  }));
+  const satirlar = await sorgular.aramaSatirlari(db, { sade: istek.sade, icinde: istek.icindeDeseni, bas: istek.basDeseni, sinir: istek.sinir });
+  const kod = await revizyonKodcusu(db, satirlar.map((b) => b.id));
+  return satirlar.map((b) => {
+    const k = kod(b.id, b.yayindakiSira);
+    return {
+      anahtar: String(b.id),
+      baslik: b.resimNo === null ? b.ad : `${b.resimNo} ${b.ad}`,
+      aciklama: k === null ? ARAMA_TUR_ADI[b.tur] : `${ARAMA_TUR_ADI[b.tur]} · Rev ${k}`,
+      yol: `/cizimler/belge/${b.id}` as const,
+    };
+  });
 }

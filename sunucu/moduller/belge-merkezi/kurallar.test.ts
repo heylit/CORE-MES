@@ -3,7 +3,7 @@ import { describe, test } from 'node:test';
 import { BELGE_TURLERI } from '#paylasilan/sozlesme/belge-merkezi.ts';
 import type { AdayBelge, AdayRevizyon } from './kurallar.ts';
 import {
-  ILETILER, IZINLI_DOSYA_TURLERI, anahtarMetni, kucukResimSec, malzemedenYayinda, merkezBagReddi, onizlemeBoyutReddi, onizlemeKareReddi, onizlemeRevizyonReddi, revizyonHarfi, silmeReddi, yayinReddi,
+  ILETILER, IZINLI_DOSYA_TURLERI, anahtarMetni, kartRevizyonu, kucukResimSec, malzemedenYayinda, merkezBagReddi, onizlemeBoyutReddi, onizlemeKareReddi, onizlemeRevizyonReddi, revizyonHarfi, revizyonKodu, silmeReddi, yayinReddi,
 } from './kurallar.ts';
 
 test('CZ-04 revizyon harfi sıradan türer: A..Z, sonra AA, AB; sıfır ve eksi reddedilir', () => {
@@ -161,5 +161,23 @@ describe('CZ-19/CZ-20 küçük resim seçimi', () => {
   test('uyan revizyonun karesi yoksa yayındaki gösterilir ve uyumsuz sayılır', () => {
     const b = belge(1, 'teknik-resim', [rev(11, 1, 'eski', 0, 'A'), rev(12, 2, 'yayinda', 1, 'B')]);
     assert.deepEqual(kucukResimSec([b], { resimNo: null, revizyon: 'A' }), { belgeId: 1, revizyonId: 12, sira: 2, antetRev: 'B', kareSayisi: 1, revUyumu: false, taslak: false });
+  });
+});
+
+describe('2138-2 gösterilen revizyon kodu', () => {
+  test('antet önce gelir, boşsa kartın revizyonu, ikisi de yoksa null; merkezin harfi kullanılmaz', () => {
+    assert.equal(revizyonKodu(' 01 ', '00'), '01');
+    assert.equal(revizyonKodu(null, ' 00 '), '00');
+    assert.equal(revizyonKodu('  ', '00'), '00');
+    assert.equal(revizyonKodu(undefined, null), null);
+    assert.equal(revizyonKodu('', '  '), null);
+  });
+
+  test('bağlı kartların revizyonu tek ve ortaksa o, farklıysa ya da yoksa null', () => {
+    assert.equal(kartRevizyonu([' 00 ', null, '00']), '00');
+    assert.equal(kartRevizyonu(['a', 'A']), 'a', 'büyük-küçük harf aynı revizyon');
+    assert.equal(kartRevizyonu(['00', '01']), null);
+    assert.equal(kartRevizyonu([null, '  ']), null);
+    assert.equal(kartRevizyonu([]), null);
   });
 });

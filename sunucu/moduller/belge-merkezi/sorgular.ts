@@ -468,3 +468,19 @@ export function resimNoyaUyanBelgeler(
     [resimNo.trim(), hedefModul, hedefId],
   );
 }
+
+// 2138-2: revizyon kodunun kaynakları. Belgelerin bütün revizyonlarının antet revizyonu ve bağlı malzeme kartları.
+export function antetRevizyonlari(db: Db, belgeIdler: readonly number[]): Promise<{ belgeId: number; sira: number; ozet: string; antetRev: string | null }[]> {
+  return db.sorgu(
+    `SELECT r.belge_id AS "belgeId", r.sira, r.ozet, r.antet_rev AS "antetRev" FROM belge_merkezi_revizyon r WHERE r.belge_id = ANY($1::int[])`,
+    [belgeIdler],
+  );
+}
+
+export function malzemeBaglari(db: Db, belgeIdler: readonly number[]): Promise<{ belgeId: number; malzemeNo: number }[]> {
+  return db.sorgu(
+    `SELECT g.belge_id AS "belgeId", g.hedef_id AS "malzemeNo" FROM belge_merkezi_bag g
+      WHERE g.belge_id = ANY($1::int[]) AND g.hedef_modul = 'malzemeler'`,
+    [belgeIdler],
+  );
+}

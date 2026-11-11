@@ -76,7 +76,7 @@ export function YeniBelge({ ilkTur, kapat }: { ilkTur: BelgeTuru; kapat: () => v
         <Girdi etiket="Belge adı" value={ad} maxLength={120} onChange={(e) => { adYaz(e.target.value); }} required />
         <CokSatir etiket="Açıklama" value={aciklama} maxLength={500} onChange={(e) => { aciklamaYaz(e.target.value); }} />
         <Girdi etiket="Teknik resim no" value={resimNo} maxLength={60} onChange={(e) => { resimNoYaz(e.target.value); }} ipucu="Malzeme kartının teknik resim numarasıyla eşleşir." />
-        <Girdi etiket="Antet revizyonu" value={antetRev} maxLength={20} onChange={(e) => { antetRevYaz(e.target.value); }} ipucu="Örn. A ya da 00. Boşsa merkezin harfi (A) kullanılır." />
+        <Girdi etiket="Revizyon kodu" value={antetRev} maxLength={20} onChange={(e) => { antetRevYaz(e.target.value); }} ipucu="Resmin antetindeki revizyon, örn. A ya da 00. Boşsa bağlı malzeme kartının revizyonu gösterilir." />
         <Girdi etiket="Revizyon notu" value={not} maxLength={300} onChange={(e) => { notYaz(e.target.value); }} ipucu="İlk revizyon (A) taslak olarak açılır; yayınlanınca kullanan ekranlarda görünür." />
         <Ilerleme oran={komut.ilerleme} />
         {komut.hata !== null && <p className="tc-cz-hata" role="alert">{komut.hata}</p>}
@@ -106,7 +106,7 @@ export function RevizyonEkle({ belge, kapat }: { belge: BelgeAyrintisi; kapat: (
     >
       <div className="tc-cz-form">
         <DosyaAlani tur={belge.tur} dosya={dosya} sec={dosyaYaz} hata={red} />
-        <Girdi etiket="Antet revizyonu" value={antetRev} maxLength={20} onChange={(e) => { antetRevYaz(e.target.value); }} ipucu="Örn. B ya da 01. Boşsa merkezin harfi kullanılır." />
+        <Girdi etiket="Revizyon kodu" value={antetRev} maxLength={20} onChange={(e) => { antetRevYaz(e.target.value); }} ipucu="Resmin antetindeki revizyon, örn. B ya da 01. Boşsa bağlı malzeme kartının revizyonu gösterilir." />
         <Girdi etiket="Revizyon notu" value={not} maxLength={300} onChange={(e) => { notYaz(e.target.value); }} ipucu="Ne değişti? Yeni revizyon taslak açılır; yayınlanana kadar eskisi geçerlidir." />
         <Ilerleme oran={komut.ilerleme} />
         {komut.hata !== null && <p className="tc-cz-hata" role="alert">{komut.hata}</p>}
