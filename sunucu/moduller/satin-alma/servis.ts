@@ -35,7 +35,7 @@ import {
   ILETILER, ISLEM, type KurKilidiIsi, emirAcikMi, kilitliDurum, tedarikciyeGidenAyrinti, kalemAyrintisiniKoru, kilittenSonraOnayliMi, kurKilidiIsi, kurKilidiReddi, degisiklikReddi, gecikmeGunu, fasonKalani, sonDonusGecikmesi, agirlikliGecikme, degisiklikTuru, dortGozSonucu, onayKademesiReddi, onayLimitRolleri, onayLimitleriDegistiMi, onayLimitiReddi, terminsizSiparisReddi, terminTakibi, fazlaTeslim, finanstanEklenenKurlar, aylikFaiz, fiyatIzleri, kullanilanParaBirimleri, gecisVarMi, gorunenDurum, kararDegistiMi, kararOnayliMi, talepFisiGiderMi,
   KARTSIZ_KATEGORI, TALEP_TURU_KARTLARI, satinAlinabilirKartReddi, kartBirimiReddi, hizliBaslik, hizliKalemReddi, kartKopyasi, kartsizSiparisReddi, katalogKartiReddi, logoGuncellenecekSiparisler, logoIptalGeriAlmaReddi, logoSiparisDegisikligiReddi, siparisliKalemReddi, siparisDegisikligiMetni, siparisFaturaFirmasi, faturaEslesmeUyarilari, siparisKalemiDegisikligiReddi, siparisKapatmaReddi, talebinAlimlari, ondalikKiyas, siparisReddi, talebim, birimKarsiligi, talebimDuzenlenirMi, talebimKalemReddi,
   fasonKalemReddi, fasonOnTalepAdaylari, hizliBagReddi, planOnTalepAdaylari, uygulananKartReddi, type KalemBagi,
-  fasonKirilimlari, fasonSureOrnekleri, fasonSuresiTahmini, fasonTerminUyumu, talepEdenDurumu, talepEdenGorunumu, avansAsimi, gerceklesenKosul, planGerceklesenFarki, talepKartiReddi, tamGorurMu, teklifKuru, teslimDurumu, odemePlaniHedefi, varsayilanOdemePlani,
+  fasonKirilimlari, fasonSureOrnekleri, fasonSuresiTahmini, fasonTerminUyumu, talepEdenDurumu, talepEdenGovdeDurumu, talepEdenGorunumu, avansAsimi, gerceklesenKosul, planGerceklesenFarki, talepKartiReddi, tamGorurMu, teklifKuru, teslimDurumu, odemePlaniHedefi, varsayilanOdemePlani,
   askidakiTedarikciReddi, birimFiyati, kaliteSiparisReddi, karneTeslimOlayi, stokTutari, uygulananKgFiyati, yeniSiparisFirmalari,
   iptalOncesiTuret, iptalGeriAlmaHareketi, bilinmeyenKgSatirlari, kgEskimeHatirlatmalari, kgFiyatiEskiMi, kgFiyatiKartta, kgFiyatiYasi, kgSapanMi, kgSapmasi, kgSonAlislari, ondalikCarp, birlestirmeReddi, birlesmeProjesiReddi, birlesikTalep, emirHareketi, projeHareketi, projeReddi, siparisDagilimi, type SiparisDagilimi, type DagilimSatiri, genelGiderOrani, satirYolu, type SatirYolu, belgeGenelGiderOrani, eslemeListesiHatasi, eslemeSurumu, type EslemeDurumu, ayirmaReddi, kaynakKalemiReddi, BIRLESIK_KALEM_SINIRI, KUR_KILIDI, HATIRLATMA_ADLARI, type HatirlatmaAyarlari, type HatirlatmaTalebi, haftaIciGunleri, hatirlatmaAnahtari, hatirlatmaFarki, hatirlatmalar,
 } from './kurallar.ts';
@@ -786,7 +786,7 @@ export async function talepKaydet(db: Db, k: Kullanici, id: string, g: TalepKayd
   const yeni = kalemAyrintisiniKoru(eski, { ...gelen, projeId: gelen.projeId === undefined ? eski.projeId ?? null : gelen.projeId });
   const kaynakRed = kaynakKalemiReddi(eski, yeni.kalemler);
   if (kaynakRed !== null) throw gecersiz(kaynakRed);
-  const kendiTaslagi = (eski.acanKisiId === k.id || eski.talepEdenKisiId === k.id) && talepEdenDurumu(eski.durum) && talepEdenDurumu(yeni.durum);
+  const kendiTaslagi = (eski.acanKisiId === k.id || eski.talepEdenKisiId === k.id) && talepEdenGovdeDurumu(eski.durum, yeni.durum);
   // Talep eden adsız teklifleri görür; değişikliği kendi gördüğü hâlle karşılaştırılır (SAT-53).
   const kiyas = tamGorurMu(k.islemler) ? eski : talepEdenGorunumu(eski, k.id);
   const red = degisiklikReddi(degisiklikTuru(kiyas, yeni), k.islemler, kendiTaslagi);

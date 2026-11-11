@@ -355,7 +355,7 @@ export function degisiklikTuru(eski: TalepYazimi, yeni: TalepYazimi): Degisiklik
   return { onay, govde, satinAlma: satinAlmaIzi(eski) !== satinAlmaIzi(yeni) };
 }
 
-// Gereken işlemleri kullanıcının işlemleriyle karşılaştırır. Kendi taslağını (ya da teklif istenen talebini) düzenleyen talep eden `talep-ac` ile yetinir.
+// Gereken işlemleri kullanıcının işlemleriyle karşılaştırır. Kendi taslağını düzenleyen talep eden `talep-ac` ile yetinir (SAT-82: yalnız taslak).
 export function degisiklikReddi(d: Degisiklik, islemler: readonly string[], kendiTaslagi: boolean): string | null {
   if (d.onay && !islemler.includes(ISLEM.onayla)) return ILETILER.yetkiYok;
   if (d.satinAlma && !islemler.includes(ISLEM.yaz)) return ILETILER.yetkiYok;
@@ -363,8 +363,11 @@ export function degisiklikReddi(d: Degisiklik, islemler: readonly string[], kend
   return null;
 }
 
-// Talep eden yalnız taslak ya da teklif istenen talebi düzenler (prototip: talep eden talebi gönderir).
+// Talep eden taslak ya da teklif istenen talebi açar (prototip: talep eden talebi gönderir).
 export const talepEdenDurumu = (d: TalepDurumu): boolean => d === 'taslak' || d === 'teklif_isteniyor';
+// SAT-82 (2883; 2871-1 a): talep eden talebin kendisini yalnız teklif istenmeden önce (taslak) değiştirir, teklif istemeye de taslaktan gönderir.
+// Teklif toplanırken asıl talep bozulmaz; değişiklik güncelleme talebiyle gelir (2876).
+export const talepEdenGovdeDurumu = (eski: TalepDurumu, yeni: TalepDurumu): boolean => eski === 'taslak' && talepEdenDurumu(yeni);
 
 // SAT-30: ayar açıkken kararı veren onaylayamaz; kapalıyken onay dört gözsüz işaretlenir.
 // 2398 a: ayar açıkken talebi açan ya da talep eden de onaylayamaz (görevler ayrılığı). Ret serbesttir: talebi durdurur, harcama açmaz.
