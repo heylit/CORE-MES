@@ -1,8 +1,9 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { QueryClientContext } from '@tanstack/react-query';
 import { SAYFALAR, menudeGorunur, yolKapaliMi, type Sayfa } from '#paylasilan/sayfalar.ts';
+import type { SayfaGrubu } from '#paylasilan/sayfa-tanimi.ts';
 import { UYGULAMA_ADI, birlesikAd } from '#paylasilan/uygulama.ts';
 import type { SayfaTanimi } from '#paylasilan/sayfa-tanimi.ts';
 import type { CerceveSayaclari } from '../rota/cerceve-iletisi.ts';
@@ -26,6 +27,8 @@ import { hareketliEtki } from '../veri/etki.ts';
 import { takilmaIzle } from '../veri/takilma.ts';
 import { DERLEME, derlemeTarihi } from '../veri/surum.ts';
 import { useKurumAdi } from '../veri/kurum.ts';
+import { useMenuTercihi } from '../veri/menu-tercihi.ts';
+import type { MenuTercihiCevabi } from '#paylasilan/sozlesme/profil.ts';
 import { tanitimGoruldu, tanitimGorulduMu } from '../veri/tanitim.ts';
 import { useTema } from '../veri/tema.ts';
 import type { SimgeAdi } from '../tasarim/simgeler.ts';
@@ -40,6 +43,7 @@ import { IkinciMenu } from './IkinciMenu.tsx';
 import { IsPaneli } from './IsPaneli.tsx';
 import { Menu } from './Menu.tsx';
 import { ParolaPenceresi } from './ParolaPenceresi.tsx';
+import { MenuDuzenle } from './MenuDuzenle.tsx';
 import { RehberPenceresi } from './Rehber.tsx';
 import { Simge } from './Simge.tsx';
 import { TanitimDaveti, TanitimPenceresi } from './Tanitim.tsx';
@@ -100,8 +104,8 @@ interface Ozellikler {
   rehberler?: readonly SayfaRehberi[];
   // Verilirse ilk girişte tanıtım önerilir; görüldü bilgisi kişiye göre tutulur.
   kisiId?: number;
-  // Rolün varsayılan menüsü (1390 a), sırasıyla sayfa yolları. Verilirse ana menü ve telefonun alt çubuğu yalnız bunları
-  // gösterir, öteki sayfalar "Tüm sayfalar" altında kalır; yetki değildir. Verilmezse tam menü.
+  // Rolün önerdiği kısa liste (1390 a), sırasıyla sayfa yolları; yetki değildir. Menüde ayrı durmaz (2951): "Menüyü düzenle"de
+  // öneri olarak çıkar, kişi sık kullanılan seçmemişse telefonun alt çubuğu bunu kullanır.
   menuSirasi?: readonly string[];
   children: ReactNode;
 }
@@ -126,6 +130,11 @@ function kapaliMaddeleriSuz(menuler: readonly IkinciMenuTanimi[], kapali: readon
 }
 
 // Logo da ana sayfaya gider ama düğme olduğu anlaşılmıyor; ana sayfa her menüde ilk maddedir.
+// Simgeli şeritte (tablet, daraltılmış menü) grup başlığının adı görünmez; başlık bu simgeyle çizilir, adı ipucudur.
+const GRUP_SIMGELERI: Readonly<Record<SayfaGrubu, SimgeAdi>> = {
+  'Üretim': 'tool', 'Planlama': 'gantt', 'Stok': 'pallet', 'Satın Alma': 'cart', 'Kalite': 'clipboard-check', 'Tanımlar': 'list', 'Yönetim': 'building',
+};
+
 interface BaglantiSayfasi { yol: string; baslik: string; simge: SimgeAdi }
 const ANA_SAYFA_BASLIGI = 'Ana sayfa';
 
@@ -203,6 +212,13 @@ const TELEFONDA_SERITSIZ: ReadonlySet<string> = new Set(['/uretim-terminali', '/
 
 // Firma adı (kabuk.kurum-adi) kabuğa buradan gelir; sekme başlığı "<Firma> CORE" olur, girilmemişse yalnız "CORE".
 // Kurulu uygulamanın adı (PWA) kurulumda sabitlenir; o yalnız CORE kalır.
+// Kişinin sık kullanılanları (2951) kabuğa buradan gelir; sorgu sağlayıcısı yoksa okunmaz, menü yalnız gruplarla çizilir.
+function MenuTercihiOku({ yaz }: { yaz: (t: MenuTercihiCevabi | null) => void }) {
+  const { data } = useMenuTercihi();
+  useEffect(() => { yaz(data ?? null); }, [data, yaz]);
+  return null;
+}
+
 function KurumAdiOku({ yaz }: { yaz: (ad: string | null) => void }) {
   const ad = useKurumAdi();
   useEffect(() => {
@@ -218,6 +234,8 @@ export function Kabuk({
   // Kabuk sorgu sağlayıcısı olmadan da çizilir (bileşen testleri); o zaman firma adı sorulmaz.
   const sorguVar = useContext(QueryClientContext) !== undefined;
   const [kurumAdi, kurumAdiYaz] = useState<string | null>(null);
+  const [menuTercihi, menuTercihiYaz] = useState<MenuTercihiCevabi | null>(null);
+  const [menuDuzenleAcik, menuDuzenleYaz] = useState(false);
   const [ustYuvaYeri, ustYuvaYeriYaz] = useState<HTMLDivElement | null>(null);
   const [ustYuvaSayisi, ustYuvaSayisiYaz] = useState(0);
   const ustYuvaDoldur = useCallback((dolu: boolean) => { ustYuvaSayisiYaz((n) => Math.max(0, n + (dolu ? 1 : -1))); }, []);
@@ -253,20 +271,22 @@ export function Kabuk({
   // Bekletilen sayfanın bağlantısı çizilmez; adresi açılır ve başlığı görünür.
   const menudekiler = useMemo(() => sayfalar.filter(menudeGorunur), [sayfalar]);
   const gruplar = useMemo(() => grupla(menudekiler), [menudekiler]);
-  // Rol menüsü kişinin gördüğü sayfalardan, rol listesinin sırasıyla; işlemi olmayan sayfa listede olsa da çıkmaz.
+  // Rol listesi (1390 a) artık menüde ayrı durmaz (2951); telefon çubuğunun yedeği ve "Rolümün önerisi"dir.
   const rolMenusu = useMemo(
     () => (menuSirasi === undefined ? null : menuSirasi.flatMap((yol) => menudekiler.filter((s) => s.yol === yol))),
     [menuSirasi, menudekiler],
   );
-  // Açılan liste rol menüsündekileri yinelemez; geriye sayfa kalmayan rolde "Tüm sayfalar" çizilmez.
-  const kalanGruplar = useMemo(() => {
-    if (rolMenusu === null) return gruplar;
-    const menude = new Set(rolMenusu.map((s) => s.yol));
-    return gruplar
-      .map((g) => ({ ...g, sayfalar: g.sayfalar.filter((s) => !menude.has(s.yol)) }))
-      .filter((g) => g.sayfalar.length > 0);
-  }, [gruplar, rolMenusu]);
-  const [tumMenuAcik, tumMenuYaz] = useState(false);
+  // Sık kullanılanlar kişinin seçtiği sırayla, yalnız açabildiği sayfalardan; yetkisi kalkan sayfa listede olsa da çıkmaz.
+  const sikKullanilanlar = useMemo(
+    () => (menuTercihi?.sayfalar ?? []).flatMap((yol) => menudekiler.filter((s) => s.yol === yol)),
+    [menuTercihi, menudekiler],
+  );
+  // Kişinin açıp kapadığı gruplar; dokunulmamış grup, açık sayfayı içeriyorsa açık gelir.
+  const grupKimligi = useId();
+  const [grupSecimleri, grupSecimleriYaz] = useState<ReadonlyMap<string, boolean>>(() => new Map());
+  const grubuAcKapa = useCallback((grup: string, acik: boolean) => {
+    grupSecimleriYaz((o) => new Map(o).set(grup, !acik));
+  }, []);
   // Geçici (308 d): yeni ekran satırları yalnız yöneticide, ayrı grupta; bağlamada kalkar.
   const yeniEkranlar = useMemo(() => yeniEkranBaglantilari(menudekiler, islemler), [menudekiler, islemler]);
   const olayGruplari = useMemo(
@@ -464,29 +484,35 @@ export function Kabuk({
             <span className="tc-kabuk-bag-metin">Menüyü daralt</span>
           </button>
           <Baglanti sayfa={anaBaglanti} tam />
-          {rolMenusu !== null && (
-            <div className="tc-kabuk-grup">
-              {rolMenusu.map((s) => <Baglanti key={s.yol} sayfa={s} />)}
-              {kalanGruplar.length > 0 && (
-                <button
-                  type="button"
-                  className="tc-kabuk-bag"
-                  onClick={() => tumMenuYaz((a) => !a)}
-                  aria-expanded={tumMenuAcik}
-                  title="Tüm sayfalar"
-                >
-                  <Simge ad="dash" />
-                  <span className="tc-kabuk-bag-metin">Tüm sayfalar</span>
-                </button>
-              )}
+          {/* Menüyü düzenle bir sayfa satırı gibi Ana sayfa'nın altında durur (2952-1); sık kullanılanlar onun altındadır. */}
+          {sorguVar && (
+            <button type="button" className="tc-kabuk-bag" onClick={() => menuDuzenleYaz(true)} aria-haspopup="dialog" title="Menüyü düzenle">
+              <Simge ad="edit" />
+              <span className="tc-kabuk-bag-metin">Menüyü düzenle</span>
+            </button>
+          )}
+          {sorguVar && sikKullanilanlar.length > 0 && (
+            <div className="tc-kabuk-grup tc-kabuk-sik" aria-label="Sık kullanılanlar" role="group">
+              <p className="tc-kabuk-grup-ad">Sık kullanılanlar</p>
+              {sikKullanilanlar.map((s) => <Baglanti key={s.yol} sayfa={s} />)}
             </div>
           )}
-          {(rolMenusu === null || tumMenuAcik) && kalanGruplar.map((g) => (
-            <div className="tc-kabuk-grup" key={g.grup}>
-              <p className="tc-kabuk-grup-ad">{g.grup}</p>
-              {g.sayfalar.map((s) => <Baglanti key={s.yol} sayfa={s} />)}
-            </div>
-          ))}
+          {gruplar.map((g, i) => {
+            const acik = grupSecimleri.get(g.grup) ?? g.sayfalar.some((s) => konum.pathname === s.yol || konum.pathname.startsWith(`${s.yol}/`));
+            return (
+              <div className="tc-kabuk-grup tc-kabuk-acilir" key={g.grup} data-acik={acik ? '' : undefined}>
+                <button type="button" className="tc-kabuk-bag tc-kabuk-acilir-bas" aria-expanded={acik} aria-label={g.grup} aria-describedby={`${grupKimligi}-${String(i)}`} title={g.grup} onClick={() => grubuAcKapa(g.grup, acik)}>
+                  <span className="tc-kabuk-acilir-simge"><Simge ad={GRUP_SIMGELERI[g.grup]} /></span>
+                  <span className="tc-kabuk-bag-metin">{g.grup}</span>
+                  <span className="tc-kabuk-acilir-sayi">{g.sayfalar.length}</span>
+                  <span className="tc-kabuk-ac-ok"><Simge ad="chev-right" boyut="k" /></span>
+                  {/* Görünen sayı erişilebilir ada girmez (ad grup adıdır); ekran okuyucu onu açıklama olarak duyar. */}
+                  <span id={`${grupKimligi}-${String(i)}`} hidden>{g.sayfalar.length} sayfa</span>
+                </button>
+                {g.sayfalar.map((s) => <Baglanti key={s.yol} sayfa={s} />)}
+              </div>
+            );
+          })}
           {yeniEkranlar.length > 0 && (
             <div className="tc-kabuk-grup">
               <p className="tc-kabuk-grup-ad">{YENI_EKRAN_GRUBU}</p>
@@ -588,7 +614,7 @@ export function Kabuk({
 
         <nav className="tc-kabuk-alt" aria-label="Alt gezinme">
           <Baglanti sayfa={anaBaglanti} tam />
-          {(rolMenusu ?? menudekiler).slice(0, ALT_CUBUK_SAYISI - 1).map((s) => <Baglanti key={s.yol} sayfa={s} />)}
+          {(sikKullanilanlar.length > 0 ? sikKullanilanlar : rolMenusu ?? menudekiler).slice(0, ALT_CUBUK_SAYISI - 1).map((s) => <Baglanti key={s.yol} sayfa={s} />)}
           <button type="button" className="tc-kabuk-bag" onClick={() => tumuYaz(true)} aria-haspopup="dialog">
             <Simge ad="dash" />
             <span className="tc-kabuk-bag-metin">Tümü</span>
@@ -608,6 +634,16 @@ export function Kabuk({
         />
         <TanitimPenceresi acik={tanitimAcik} kapat={tanitimBitti} maddeler={rehber} kisayolVar={olayGruplari.length > 0} kurumAdi={kurumAdi} />
         {sorguVar && <KurumAdiOku yaz={kurumAdiYaz} />}
+        {sorguVar && <MenuTercihiOku yaz={menuTercihiYaz} />}
+        {menuDuzenleAcik && (
+          <MenuDuzenle
+            kapat={() => menuDuzenleYaz(false)}
+            gruplar={gruplar}
+            secili={menuTercihi?.sayfalar ?? []}
+            surum={menuTercihi?.surum ?? 0}
+            oneri={menuSirasi ?? []}
+          />
+        )}
         {davet && !tanitimAcik && <TanitimDaveti baslat={() => { davetYaz(false); tanitimYaz(true); }} vazgec={tanitimBitti} />}
 
         {tumuAcik && (
@@ -620,6 +656,13 @@ export function Kabuk({
             </div>
             <p className="tc-kabuk-tum-kisi"><Simge ad="user" boyut="k" />{kullaniciAdi}</p>
             <Baglanti sayfa={anaBaglanti} tam kapat={() => tumuYaz(false)} />
+            {/* Telefonda ana menü yoktur; sık kullanılanlar buradan seçilir, alt çubuk ilk üçünü alır. */}
+            {sorguVar && (
+              <button type="button" className="tc-kabuk-bag" onClick={() => { tumuYaz(false); menuDuzenleYaz(true); }} aria-haspopup="dialog">
+                <Simge ad="edit" />
+                <span className="tc-kabuk-bag-metin">Menüyü düzenle</span>
+              </button>
+            )}
             {gruplar.map((g) => (
               <div className="tc-kabuk-grup" key={g.grup}>
                 <p className="tc-kabuk-grup-ad">{g.grup}</p>

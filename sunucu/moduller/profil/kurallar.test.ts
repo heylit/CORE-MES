@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import {
-  anaKayitHatasi, gelenBildirimTuru, kapanisBildirilir, kategoriSecilebilir, kayitDurumu, mesaiToplami, miniPanoCevabiYap, ortanca, ozetAylari, profilAraliklari, temaCevabiYap, YONETIM_IMZASI,
+  anaKayitHatasi, acabildigiSayfalar, bilinmeyenMenuSayfalari, gelenBildirimTuru, menuCevabiYap, kapanisBildirilir, kategoriSecilebilir, kayitDurumu, mesaiToplami, miniPanoCevabiYap, ortanca, ozetAylari, profilAraliklari, temaCevabiYap, YONETIM_IMZASI,
   yanitImzasi, yanitSonrasiDurum,
 } from './kurallar.ts';
 
@@ -32,6 +32,24 @@ describe('profil kuralları', () => {
   test('PRF-6: kaydı olmayan kişide hepsi açık, öneri kapalı, sürüm 0; kapalı liste sıralı döner', () => {
     assert.deepEqual(miniPanoCevabiYap(null), { kapali: [], acilistaOner: false, surum: 0 });
     assert.deepEqual(miniPanoCevabiYap({ kapali: ['uretim', 'satin-alma'], acilistaOner: true, surum: 2 }), { kapali: ['satin-alma', 'uretim'], acilistaOner: true, surum: 2 });
+  });
+
+  test('PRF-7: kaydı olmayan kişinin sık kullanılanı yok, sürüm 0; kayıtlı liste seçilen sırayla döner', () => {
+    const hepsi = new Set(['/stok', '/kuyruk']);
+    assert.deepEqual(menuCevabiYap(null, hepsi), { sayfalar: [], surum: 0 });
+    assert.deepEqual(menuCevabiYap({ sayfalar: ['/stok', '/kuyruk'], surum: 3 }, hepsi), { sayfalar: ['/stok', '/kuyruk'], surum: 3 });
+  });
+
+  test('PRF-9: liste kişinin açabildiği sayfalara süzülür, sıra korunur; yetkisi kalkan sayfa okurken dönmez', () => {
+    const acabildigi = new Set(['/stok', '/kuyruk']);
+    assert.deepEqual(acabildigiSayfalar(['/kuyruk', '/finans', '/stok'], acabildigi), ['/kuyruk', '/stok']);
+    assert.deepEqual(menuCevabiYap({ sayfalar: ['/finans', '/stok'], surum: 2 }, acabildigi), { sayfalar: ['/stok'], surum: 2 });
+  });
+
+  test('PRF-8: bilinmeyen menü sayfaları ayıklanır', () => {
+    const bilinen = new Set(['/stok', '/kuyruk']);
+    assert.deepEqual(bilinmeyenMenuSayfalari(['/stok', '/yok', '/kuyruk'], bilinen), ['/yok']);
+    assert.deepEqual(bilinmeyenMenuSayfalari([], bilinen), []);
   });
 
   test('GBM-1: takip satırı olmayan kayıt yenidir; satır varsa durumu okunur', () => {

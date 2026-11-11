@@ -6,7 +6,7 @@ import { testVeritabaniKur } from '#cekirdek/test-vt.ts';
 import type { TestVeritabani } from '#cekirdek/test-vt.ts';
 import { uygulamaKur } from '#cekirdek/uygulama.ts';
 import { ISTEK_KIMLIGI_BASLIGI } from '#paylasilan/istek-kimligi.ts';
-import { geriBildirimListeCevabi, miniPanoCevabi, profilCevabi, temaCevabi } from '#paylasilan/sozlesme/profil.ts';
+import { geriBildirimListeCevabi, menuTercihiCevabi, miniPanoCevabi, profilCevabi, temaCevabi } from '#paylasilan/sozlesme/profil.ts';
 import type { ProfilCevabi } from '#paylasilan/sozlesme/profil.ts';
 import { denetimYaz } from '../denetim/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
@@ -245,5 +245,72 @@ describe('profil ve şikayet/istek/öneri kutusu (gerçek PostgreSQL, gerçek gi
       o().sahip.sorgu('INSERT INTO profil_mini_pano_tercihi (kisi_id, kapali) VALUES ($1, $2)', [kisiler.get('operator'), Array.from({ length: 51 }, (_, i) => `p${String(i)}`)]),
       /profil_mini_pano_tercihi_kapali_sinir/,
     );
+  });
+
+  const menuSec = (ad: string | null, govde: unknown) => istek<Record<string, unknown>>(ad, 'POST', '/profil/menu-sec', govde);
+  const menu = async (ad: string) => {
+    const c = await istek<unknown>(ad, 'GET', '/profil/menu');
+    assert.equal(c.durum, 200, JSON.stringify(c.govde));
+    return menuTercihiCevabi.parse(c.govde);
+  };
+
+  test('PRF-7: sık kullanılanlar oturum ister; kaydı olmayan kişide liste boş, sürüm 0', async () => {
+    assert.equal((await istek(null, 'GET', '/profil/menu')).durum, 401);
+    assert.equal((await menuSec(null, { sayfalar: ['/cizimler'], surum: 0 })).durum, 401);
+    assert.deepEqual(await menu('operator'), { sayfalar: [], surum: 0 });
+  });
+
+  test('PRF-7: sık kullanılanlar seçilen sırayla, sürümle yazılır; eski sürüm ve ikinci ilk seçim reddedilir, kişiler birbirini etkilemez', async () => {
+    const ilk = await menuSec('cam', { sayfalar: ['/cizimler', '/malzemeler'], surum: 0 });
+    assert.equal(ilk.durum, 200, JSON.stringify(ilk.govde));
+    assert.deepEqual(ilk.govde, { sayfalar: ['/cizimler', '/malzemeler'], surum: 1 });
+    assert.equal((await menuSec('cam', { sayfalar: [], surum: 0 })).durum, 409);
+    assert.deepEqual((await menuSec('cam', { sayfalar: ['/malzemeler', '/cizimler'], surum: 1 })).govde, { sayfalar: ['/malzemeler', '/cizimler'], surum: 2 });
+    assert.equal((await menuSec('cam', { sayfalar: [], surum: 1 })).durum, 409);
+    assert.deepEqual(await menu('cam'), { sayfalar: ['/malzemeler', '/cizimler'], surum: 2 });
+    assert.deepEqual(await menu('yonetici'), { sayfalar: [], surum: 0 });
+  });
+
+  test('PRF-9: liste kişinin açabildiği sayfalara süzülür; açamadığı sayfa kaydedilmez, yetkisi kalkan sayfa okurken dönmez', async () => {
+    const once = await menu('cam');
+    const c = await menuSec('cam', { sayfalar: ['/finans', '/recete-rota'], surum: once.surum });
+    assert.equal(c.durum, 200, JSON.stringify(c.govde));
+    assert.deepEqual(c.govde, { sayfalar: ['/recete-rota'], surum: once.surum + 1 });
+    const satir = await o().sahip.tek<{ sayfalar: string[] }>('SELECT sayfalar FROM profil_menu_tercihi WHERE kisi_id = $1', [kisiler.get('cam')]);
+    assert.deepEqual(satir?.sayfalar, ['/recete-rota']);
+    await o().sahip.sorgu("UPDATE profil_menu_tercihi SET sayfalar = '{/finans,/recete-rota}' WHERE kisi_id = $1", [kisiler.get('cam')]);
+    assert.deepEqual((await menu('cam')).sayfalar, ['/recete-rota']);
+  });
+
+  test('PRF-8: menü gövdesi başka kişiyi seçemez; bilinmeyen, biçimsiz, yinelenen ve sınırı aşan sayfa reddedilir', async () => {
+    const yanlis = async (govde: unknown) => assert.equal((await menuSec('operator', govde)).durum, 400, JSON.stringify(govde));
+    await yanlis({ sayfalar: [], surum: 0, kisiId: kisiler.get('cam') });
+    await yanlis({ sayfalar: ['/olmayan-sayfa'], surum: 0 });
+    await yanlis({ sayfalar: ['stok'], surum: 0 });
+    await yanlis({ sayfalar: ['/stok', '/stok'], surum: 0 });
+    await yanlis({ sayfalar: Array.from({ length: 11 }, (_, i) => `/s${String(i)}`), surum: 0 });
+    await yanlis({ sayfalar: [], surum: -1 });
+    await yanlis({ sayfalar: [] });
+    assert.deepEqual(await menu('operator'), { sayfalar: [], surum: 0 });
+    await assert.rejects(
+      o().sahip.sorgu('INSERT INTO profil_menu_tercihi (kisi_id, sayfalar) VALUES ($1, $2)', [kisiler.get('operator'), Array.from({ length: 11 }, (_, i) => `/s${String(i)}`)]),
+      /profil_menu_tercihi_sayfalar_sinir/,
+    );
+  });
+  test('PRF-7: iki uç yalnız oturumdaki kişinin kaydını okur ve yazar; başkasının kimliği yolda, sorguda ya da gövdede seçilemez', async () => {
+    const camOnce = await menu('cam');
+    const satir = (ad: string) => o().sahip.tek<{ sayfalar: string[]; surum: number }>('SELECT sayfalar, surum FROM profil_menu_tercihi WHERE kisi_id = $1', [kisiler.get(ad)]);
+    const camSatiri = await satir('cam');
+    const camId = String(kisiler.get('cam'));
+    const sorgulu = await istek<unknown>('operator', 'GET', `/profil/menu?kisiId=${camId}&kisi=${camId}`);
+    assert.deepEqual(sorgulu, { durum: 200, govde: { sayfalar: [], surum: 0 } });
+    assert.equal((await istek('operator', 'GET', `/profil/menu/${camId}`)).durum, 404);
+    assert.equal((await menuSec('operator', { sayfalar: ['/stok'], surum: camOnce.surum, kisiId: kisiler.get('cam') })).durum, 400);
+    const sorguluYazma = await istek<unknown>('operator', 'POST', `/profil/menu-sec?kisiId=${camId}`, { sayfalar: [], surum: 0 });
+    assert.deepEqual(sorguluYazma, { durum: 200, govde: { sayfalar: [], surum: 1 } });
+    assert.deepEqual(await menu('cam'), camOnce);
+    assert.deepEqual(await satir('cam'), camSatiri);
+    assert.deepEqual(await satir('operator'), { sayfalar: [], surum: 1 });
+    await o().sahip.sorgu('DELETE FROM profil_menu_tercihi WHERE kisi_id = $1', [kisiler.get('operator')]);
   });
 });

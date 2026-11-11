@@ -2,11 +2,11 @@ import { uc } from '#cekirdek/uc.ts';
 import {
   geriBildirimAyrintiCevabi, geriBildirimGonderCevabi, geriBildirimGonderGovdesi, geriBildirimIdParametresi, geriBildirimKategoriEkleGovdesi,
   geriBildirimKategoriGuncelleGovdesi, geriBildirimListeCevabi, geriBildirimListeSorgusu, geriBildirimNotGovdesi, geriBildirimOzetiCevabi,
-  geriBildirimSecenekleriCevabi, geriBildirimTakipGovdesi, geriBildirimYanitlaGovdesi, miniPanoCevabi, miniPanoSecGovdesi, profilCevabi, temaCevabi, temaSecGovdesi,
+  geriBildirimSecenekleriCevabi, geriBildirimTakipGovdesi, geriBildirimYanitlaGovdesi, menuSecGovdesi, menuTercihiCevabi, miniPanoCevabi, miniPanoSecGovdesi, profilCevabi, temaCevabi, temaSecGovdesi,
 } from '#paylasilan/sozlesme/profil.ts';
 import {
   geriBildirimAyrinti, geriBildirimGonder, geriBildirimKategoriEkle, geriBildirimKategoriGuncelle, geriBildirimListesi, geriBildirimNotEkle,
-  geriBildirimOzeti, geriBildirimSecenekleri, geriBildirimTakipDegistir, geriBildirimYanitla, miniPanoOku, miniPanoSec, profilOku, temaOku, temaSec,
+  geriBildirimOzeti, geriBildirimSecenekleri, geriBildirimTakipDegistir, geriBildirimYanitla, menuTercihiOku, menuTercihiSec, miniPanoOku, miniPanoSec, profilOku, temaOku, temaSec,
 } from './servis.ts';
 
 // Profil ve şikayet/istek/öneri kutusu her çalışanındır: okuma ve gönderme yalnız oturum ister, kişi her zaman oturumdan
@@ -76,5 +76,12 @@ export const uclar = [
     yontem: 'POST', yol: '/profil/mini-pano-sec', yetki: 'oturum', tekrarKorumali: true,
     govde: miniPanoSecGovdesi, cevap: miniPanoCevabi,
     isle: ({ db, kullanici, govde }) => miniPanoSec(db, kullanici, govde),
+  }),
+  // Sık kullanılanlar kişinin kendi menüsüdür (2951): yetki vermez, yalnız oturum ister; kişi oturumdan gelir.
+  uc({ yontem: 'GET', yol: '/profil/menu', yetki: 'oturum', cevap: menuTercihiCevabi, isle: ({ db, kullanici }) => menuTercihiOku(db, kullanici) }),
+  uc({
+    yontem: 'POST', yol: '/profil/menu-sec', yetki: 'oturum', tekrarKorumali: true,
+    govde: menuSecGovdesi, cevap: menuTercihiCevabi,
+    isle: ({ db, kullanici, govde }) => menuTercihiSec(db, kullanici, govde),
   }),
 ];

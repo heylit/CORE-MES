@@ -6,12 +6,15 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { anahtarlar } from '../veri/anahtarlar.ts';
 import { SAYFALAR, menudeGorunur, type Sayfa } from '#paylasilan/sayfalar.ts';
 import { Kabuk, KabukUstYuvasi } from './Kabuk.tsx';
+import { ROL_GORUNUMLERI } from '#paylasilan/rol-gorunumleri.ts';
 import { TEMA_ANAHTARI } from '../veri/tema.ts';
 import { cihazTercihiAnahtari, cihazTercihleriniSifirla } from '../veri/cihaz-tercihi.ts';
 import { YENI_EKRAN_ISLEMI } from '../rota/yeni-ekran.tsx';
 import { KaliciEkranlar } from '../rota/kalici.tsx';
 import type { IkinciMenu } from '../rota/ikinci-menu.ts';
 import { useHesapMaddesiDurumu } from '../rota/ust-eylemler.ts';
+import { api } from '../veri/api.ts';
+import { menuTercihiAnahtari } from '../veri/menu-tercihi.ts';
 
 function ciz(sayfalar: readonly Sayfa[] = SAYFALAR, cikis: () => void = () => undefined, yol = '/') {
   return render(
@@ -175,7 +178,7 @@ describe('Kabuk', () => {
     ciz(karisik);
     const menu = screen.getByRole('navigation', { name: 'Ana menü' });
     const altindakiler = (grup: string) =>
-      within(within(menu).getByText(grup).parentElement as HTMLElement).getAllByRole('link').map((b) => b.getAttribute('href'));
+      within(within(menu).getByRole('button', { name: grup }).parentElement as HTMLElement).getAllByRole('link').map((b) => b.getAttribute('href'));
     expect(altindakiler('Tanımlar')).toEqual(['/recete-rota', '/durus-nedenleri']);
     expect(altindakiler('Kalite')).toEqual(['/kalibrasyon']);
     expect(altindakiler('Üretim')).toEqual(['/arkon']);
@@ -190,7 +193,7 @@ describe('Kabuk', () => {
     const son = baglantilar.at(-1) as HTMLElement;
     expect(son.getAttribute('href')).toBe('/ayarlar');
     // Grup adı kullanıcı kararıdır; bağlantı o başlığın altındadır.
-    const grup = within(screen.getByRole('navigation', { name: 'Ana menü' })).getByText('Yönetim').parentElement as HTMLElement;
+    const grup = within(screen.getByRole('navigation', { name: 'Ana menü' })).getByRole('button', { name: 'Yönetim' }).parentElement as HTMLElement;
     expect(grup.contains(son)).toBe(true);
   });
 
@@ -315,7 +318,7 @@ describe('Kabuk', () => {
     expect(cikis).toHaveBeenCalledTimes(1);
   });
 
-  it('rol menusu verilince ana menu ve alt cubuk rol sirasiyla yalniz onu gosterir; gorunmeyen sayfa listede olsa da cikmaz; Tum sayfalar gerisini acar (1390 a)', () => {
+  it('rol listesi menude ayri durmaz: butun sayfalar acilir gruplardadir; sik kullanilan yoksa alt cubuk rol sirasini kullanir (1390 a, 2951)', () => {
     const gorunen = SAYFALAR.filter((s) => ['/arkon', '/kuyruk', '/stok', '/plan'].includes(s.yol));
     render(
       <MemoryRouter>
@@ -323,34 +326,141 @@ describe('Kabuk', () => {
       </MemoryRouter>,
     );
     const menu = within(screen.getByRole('navigation', { name: 'Ana menü' }));
-    const baglantilar = () => menu.getAllByRole('link').map((b) => b.getAttribute('href'));
-    expect(baglantilar()).toEqual(['/', '/stok', '/kuyruk']);
+    expect(menu.queryByRole('button', { name: 'Tüm sayfalar' })).toBeNull();
+    for (const s of gorunen) {
+      const grup = menu.getByRole('button', { name: s.grup });
+      expect(grup.getAttribute('aria-expanded')).toBe('false');
+      expect(within(grup.parentElement as HTMLElement).getByRole('link', { name: s.baslik })).toBeTruthy();
+      fireEvent.click(grup);
+      expect(grup.getAttribute('aria-expanded')).toBe('true');
+      fireEvent.click(grup);
+      expect(grup.getAttribute('aria-expanded')).toBe('false');
+    }
+    // Görünmeyen sayfa rol listesinde olsa da çıkmaz.
     const alt = within(screen.getByRole('navigation', { name: 'Alt gezinme' }));
     expect(alt.getAllByRole('link').map((b) => b.getAttribute('href'))).toEqual(['/', '/stok', '/kuyruk']);
-    const tum = menu.getByRole('button', { name: 'Tüm sayfalar' });
-    expect(tum.getAttribute('aria-expanded')).toBe('false');
-    fireEvent.click(tum);
-    expect(tum.getAttribute('aria-expanded')).toBe('true');
-    expect(baglantilar()).toEqual(expect.arrayContaining(['/arkon', '/plan']));
-    // Açılan liste rol menüsündekileri yinelemez (1932).
-    expect(baglantilar().filter((y) => y === '/stok' || y === '/kuyruk')).toEqual(['/stok', '/kuyruk']);
-    // Telefondaki Tümü listesi her zaman bütün sayfalardır.
     fireEvent.click(screen.getByRole('button', { name: 'Tümü' }));
     const liste = within(screen.getByRole('dialog', { name: 'Tüm sayfalar' }));
     for (const s of gorunen) expect(liste.getByRole('link', { name: s.baslik })).toBeTruthy();
   });
 
-  it('rol menusu kisinin butun sayfalarini kapsiyorsa Tum sayfalar dugmesi cizilmez; telefondaki Tumu kalir (1932)', () => {
-    const gorunen = SAYFALAR.filter((s) => ['/kuyruk', '/stok'].includes(s.yol));
+  it('sik kullanilanlar menunun ustunde kisinin sirasiyla durur, gruplarda da kalir; acamadigi sayfa cikmaz; alt cubuk ilk ucunu alir (2951)', () => {
+    const gorunen = SAYFALAR.filter((s) => ['/arkon', '/kuyruk', '/stok', '/plan'].includes(s.yol));
+    const istemci = new QueryClient();
+    istemci.setQueryData(menuTercihiAnahtari, { sayfalar: ['/plan', '/cnc-kurulum', '/kuyruk', '/arkon', '/stok'], surum: 3 });
+    render(
+      <QueryClientProvider client={istemci}>
+        <MemoryRouter>
+          <Kabuk sayfalar={gorunen} kullaniciAdi="Deneme Kişi" cikis={() => undefined} menuSirasi={['/stok']}><p>icerik</p></Kabuk>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+    const sik = within(screen.getByRole('group', { name: 'Sık kullanılanlar' }));
+    expect(sik.getAllByRole('link').map((b) => b.getAttribute('href'))).toEqual(['/plan', '/kuyruk', '/arkon', '/stok']);
+    const menu = within(screen.getByRole('navigation', { name: 'Ana menü' }));
+    for (const s of gorunen) expect(menu.getAllByRole('link', { name: s.baslik })).toHaveLength(2);
+    const alt = within(screen.getByRole('navigation', { name: 'Alt gezinme' }));
+    expect(alt.getAllByRole('link').map((b) => b.getAttribute('href'))).toEqual(['/', '/plan', '/kuyruk', '/arkon']);
+  });
+
+  it('Menuyu duzenle: secim, siralama ve rol onerisi; Kaydet secimi surumuyle gonderir; yalniz kisinin sayfalari listelenir (2951)', async () => {
+    const gorunen = SAYFALAR.filter((s) => ['/arkon', '/kuyruk', '/stok', '/plan'].includes(s.yol));
+    const istemci = new QueryClient();
+    istemci.setQueryData(menuTercihiAnahtari, { sayfalar: [], surum: 2 });
+    const post = vi.spyOn(api, 'post').mockResolvedValue({ sayfalar: ['/kuyruk', '/stok', '/plan'], surum: 3 });
+    render(
+      <QueryClientProvider client={istemci}>
+        <MemoryRouter>
+          <Kabuk sayfalar={gorunen} kullaniciAdi="Deneme Kişi" cikis={() => undefined} menuSirasi={['/stok', '/kuyruk', '/cnc-kurulum']}><p>icerik</p></Kabuk>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+    // Seçim yokken bölüm çizilmez; Menüyü düzenle Ana sayfa'nın hemen altında bir menü satırıdır (2952-1).
+    expect(screen.queryByRole('group', { name: 'Sık kullanılanlar' })).toBeNull();
+    const anaMenu = screen.getByRole('navigation', { name: 'Ana menü' });
+    const ana = within(anaMenu).getByRole('link', { name: 'Ana sayfa' });
+    expect(ana.nextElementSibling).toBe(within(anaMenu).getByRole('button', { name: 'Menüyü düzenle' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Menüyü düzenle' }));
+    const pencere = within(screen.getByRole('dialog', { name: 'Menüyü düzenle' }));
+    expect(pencere.getAllByRole('checkbox')).toHaveLength(gorunen.length);
+    fireEvent.click(pencere.getByRole('button', { name: 'Rolümün önerisi' }));
+    const sira = () => within(pencere.getByRole('list')).getAllByRole('listitem').map((l) => l.textContent);
+    const ad = (yol: string) => gorunen.find((s) => s.yol === yol)?.baslik ?? '';
+    expect(sira()).toEqual([ad('/stok'), ad('/kuyruk')]);
+    fireEvent.click(pencere.getByRole('checkbox', { name: ad('/plan') }));
+    fireEvent.click(pencere.getByRole('button', { name: `${ad('/kuyruk')} yukarı` }));
+    expect(sira()).toEqual([ad('/kuyruk'), ad('/stok'), ad('/plan')]);
+    expect(pencere.queryByRole('status')).toBeNull();
+    await act(async () => { fireEvent.click(pencere.getByRole('button', { name: 'Kaydet' })); });
+    expect(post).toHaveBeenCalledWith('/profil/menu-sec', { sayfalar: ['/kuyruk', '/stok', '/plan'], surum: 2 }, expect.objectContaining({ istekKimligi: expect.any(String) }));
+    expect(screen.queryByRole('dialog', { name: 'Menüyü düzenle' })).toBeNull();
+    const sik = within(screen.getByRole('group', { name: 'Sık kullanılanlar' }));
+    expect(sik.getAllByRole('link').map((b) => b.getAttribute('href'))).toEqual(['/kuyruk', '/stok', '/plan']);
+    post.mockRestore();
+  });
+
+  it('telefonda Menuyu duzenle Tumu listesindedir; secilince liste kapanir, duzenleme penceresi acilir (2951)', () => {
+    const istemci = new QueryClient();
+    istemci.setQueryData(menuTercihiAnahtari, { sayfalar: [], surum: 0 });
+    render(
+      <QueryClientProvider client={istemci}>
+        <MemoryRouter>
+          <Kabuk sayfalar={SAYFALAR.filter((s) => s.yol === '/stok')} kullaniciAdi="Deneme Kişi" cikis={() => undefined}><p>icerik</p></Kabuk>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Tümü' }));
+    fireEvent.click(within(screen.getByRole('dialog', { name: 'Tüm sayfalar' })).getByRole('button', { name: 'Menüyü düzenle' }));
+    expect(screen.queryByRole('dialog', { name: 'Tüm sayfalar' })).toBeNull();
+    expect(screen.getByRole('dialog', { name: 'Menüyü düzenle' })).toBeTruthy();
+  });
+
+  it('her rol gorunumunde kisinin acabildigi her sayfa gruplarda tam bir kez durur (2946, 2951)', () => {
+    const gorunen = SAYFALAR.filter(menudeGorunur);
+    for (const [rol, g] of Object.entries(ROL_GORUNUMLERI)) {
+      const { unmount } = render(
+        <MemoryRouter>
+          <Kabuk sayfalar={gorunen} kullaniciAdi="Deneme Kişi" cikis={() => undefined} menuSirasi={g.sayfalar}><p>icerik</p></Kabuk>
+        </MemoryRouter>,
+      );
+      const menu = within(screen.getByRole('navigation', { name: 'Ana menü' }));
+      const yollar = menu.getAllByRole('link').map((b) => b.getAttribute('href'));
+      for (const s of gorunen) expect(yollar.filter((y) => y === s.yol), `${rol} ${s.yol}`).toHaveLength(1);
+      unmount();
+    }
+  });
+
+  it('acik sayfanin grubu acik gelir (2946)', () => {
+    const gorunen = SAYFALAR.filter((s) => ['/kuyruk', '/stok', '/plan'].includes(s.yol));
+    const plan = gorunen.find((s) => s.yol === '/plan');
+    render(
+      <MemoryRouter initialEntries={['/plan']}>
+        <Kabuk sayfalar={gorunen} kullaniciAdi="Deneme Kişi" cikis={() => undefined} menuSirasi={['/stok', '/kuyruk']}><p>icerik</p></Kabuk>
+      </MemoryRouter>,
+    );
+    const menu = within(screen.getByRole('navigation', { name: 'Ana menü' }));
+    const grup = menu.getByRole('button', { name: plan?.grup ?? '' });
+    expect(grup.getAttribute('aria-expanded')).toBe('true');
+    // Kişi açık sayfanın grubunu da kapatabilir; başlık ölü düğme değildir.
+    fireEvent.click(grup);
+    expect(grup.getAttribute('aria-expanded')).toBe('false');
+    fireEvent.click(grup);
+    expect(grup.getAttribute('aria-expanded')).toBe('true');
+  });
+
+  it('grup basligi simgeli seritte de dugmedir: adi ipucu ve erisilebilir ad, grubun simgesiyle cizilir (2946)', () => {
+    const gorunen = SAYFALAR.filter((s) => ['/kuyruk', '/stok', '/plan'].includes(s.yol));
+    const plan = gorunen.find((s) => s.yol === '/plan');
     render(
       <MemoryRouter>
         <Kabuk sayfalar={gorunen} kullaniciAdi="Deneme Kişi" cikis={() => undefined} menuSirasi={['/stok', '/kuyruk']}><p>icerik</p></Kabuk>
       </MemoryRouter>,
     );
-    const menu = within(screen.getByRole('navigation', { name: 'Ana menü' }));
-    expect(menu.queryByRole('button', { name: 'Tüm sayfalar' })).toBeNull();
-    expect(menu.getAllByRole('link').map((b) => b.getAttribute('href'))).toEqual(['/', '/stok', '/kuyruk']);
-    expect(screen.getByRole('button', { name: 'Tümü' })).toBeTruthy();
+    const grup = within(screen.getByRole('navigation', { name: 'Ana menü' })).getByRole('button', { name: plan?.grup ?? '' });
+    expect(grup.getAttribute('title')).toBe(plan?.grup);
+    // Görünen sayı ekran okuyucuya açıklama olarak gider; ad grup adıdır.
+    expect(within(screen.getByRole('navigation', { name: 'Ana menü' })).getByRole('button', { name: plan?.grup ?? '', description: '1 sayfa' })).toBe(grup);
+    expect(grup.querySelector('.tc-kabuk-acilir-simge svg')).not.toBeNull();
   });
 
   it('Tumu listesi Esc ile kapanir ve odagi Tumu dugmesine geri verir', () => {

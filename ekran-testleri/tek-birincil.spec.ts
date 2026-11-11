@@ -44,8 +44,6 @@ test('her sayfada en çok bir birincil düğme; bugünkü aşımlar borç listes
   test.skip(bilgi.project.name !== 'g1280', 'düğme sayısı genişliğe bağlı değil; bir genişlikte sınanır');
   test.setTimeout(600_000);
   await ac('/');
-  const tumu = page.getByTitle('Tüm sayfalar');
-  if (await tumu.count()) await tumu.first().click();
   const yollar: string[] = await page.evaluate(() => [...new Set(
     [...document.querySelectorAll('a[href^="/"]')].map((a) => (a.getAttribute('href') ?? '').split(/[?#]/)[0] ?? ''),
   )].filter((y) => y !== '' && !/cikis|oturum/.test(y)));

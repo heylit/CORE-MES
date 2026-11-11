@@ -45,6 +45,14 @@
   color: var(--ink); font-weight: 600; cursor: pointer; min-width: 0;
 }
 .tc-kabuk-bag-acik { background: var(--secili-zemin); color: var(--secili-yazi); }
+/* Rol menüsünün altındaki gruplar (2946): başlık açılır, kapalı grubun sayfaları gizlidir. Simgeli şeritte (tablet, daraltılmış
+   menü) başlık grubun simgesiyle çizilir; geniş menüde simge yoktur, ad ve sayı yeter. */
+.tc-kabuk-acilir:not([data-acik]) > .tc-kabuk-bag:not(.tc-kabuk-acilir-bas) { display: none; }
+.tc-kabuk-acilir-simge { display: none; }
+.tc-kabuk-acilir-bas { font-size: var(--yazi-xs); font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+.tc-kabuk-acilir-sayi { flex: none; margin-inline-start: auto; color: var(--muted); font-variant-numeric: tabular-nums; }
+.tc-kabuk-ac-ok { display: inline-flex; flex: none; color: var(--muted); transition: transform var(--hareket-sure) var(--hareket-egri); }
+.tc-kabuk-acilir[data-acik] .tc-kabuk-ac-ok { transform: rotate(90deg); }
 /* Sabit ana menü sıkıdır: yirmiye yakın sayfa kaydırmadan sığsın diye satır ve yazı bir boy küçük. */
 .tc-kabuk-menu .tc-kabuk-bag { gap: var(--b-2); min-height: var(--menu-satir); padding: var(--pay-ince) var(--b-2); font-size: var(--yazi-s); }
 /* Uzun sayfa adı kesilmez, ikinci satıra iner; üçüncü satır gerektiren ad üç noktayla biter. */
@@ -149,6 +157,10 @@
   .tc-kabuk-marka:has(.tc-kabuk-marka-logo) { align-items: center; }
   .tc-kabuk-menu .tc-kabuk-bag { justify-content: center; width: var(--dokunma); min-height: var(--dokunma); padding: 0; }
   .tc-kabuk-grup + .tc-kabuk-grup { padding-top: var(--b-2); border-top: 1px solid var(--edge); }
+  .tc-kabuk-acilir-simge { display: inline-flex; }
+  .tc-kabuk-acilir-bas :is(.tc-kabuk-acilir-sayi, .tc-kabuk-ac-ok) { display: none; }
+  /* Şeritte ok ve sayı yoktur; açık grubun başlığı zemin tonu ve soldaki çubukla ayrılır (ton tek başına zemine karşı 3:1'e varmıyor). */
+  .tc-kabuk-acilir-bas[aria-expanded="true"] { background: var(--panel2); box-shadow: inset var(--b-1) 0 0 var(--muted); }
 }
 .tc-kabuk-daralt { color: var(--muted); }
 @media (max-width: 1023px) {
@@ -163,6 +175,9 @@
   .tc-kabuk[data-menu-dar] .tc-kabuk-marka:has(.tc-kabuk-marka-logo) { align-items: center; }
   .tc-kabuk[data-menu-dar] .tc-kabuk-menu .tc-kabuk-bag { justify-content: center; width: var(--dokunma); min-height: var(--dokunma); padding: 0; }
   .tc-kabuk[data-menu-dar] .tc-kabuk-grup + .tc-kabuk-grup { padding-top: var(--b-2); border-top: 1px solid var(--edge); }
+  .tc-kabuk[data-menu-dar] .tc-kabuk-acilir-simge { display: inline-flex; }
+  .tc-kabuk[data-menu-dar] .tc-kabuk-acilir-bas :is(.tc-kabuk-acilir-sayi, .tc-kabuk-ac-ok) { display: none; }
+  .tc-kabuk[data-menu-dar] .tc-kabuk-acilir-bas[aria-expanded="true"] { background: var(--panel2); box-shadow: inset var(--b-1) 0 0 var(--muted); }
 }
 /* Çerçeveli modül: içerik alanını çerçeve doldurur, kaydırmayı o yapar. Taşma gizlenmez: aynı kökte açılan doğal (TS) ekranın
    kendi kaydırması yoksa içerik alanı kaydırır; tam yükseklikteki çerçeve taşmadığından ikinci kaydırma çubuğu çıkmaz. */

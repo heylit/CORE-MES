@@ -1,22 +1,23 @@
 import type { Db } from '#cekirdek/db.ts';
 import { sayfaliListe } from '#cekirdek/liste.ts';
 import type { SayfaliListe } from '#paylasilan/liste.ts';
-import type { Kullanici } from '#cekirdek/yetki.ts';
+import { islemVarMi, type Kullanici } from '#cekirdek/yetki.ts';
 import { bulunamadi, dogrulama, eskiSurum } from '#cekirdek/hata.ts';
 import { GERI_BILDIRIM_DURUMLARI } from '#paylasilan/sozlesme/profil.ts';
 import type {
   GeriBildirim, GeriBildirimAyrintiCevabi, GeriBildirimDurumu, GeriBildirimGonderGovdesi, GeriBildirimKategoriEkleGovdesi,
   GeriBildirimKategoriGuncelleGovdesi, GeriBildirimKonusu, GeriBildirimListeSatiri, GeriBildirimNotGovdesi, GeriBildirimOzetiCevabi,
   GeriBildirimSecenekleriCevabi, GeriBildirimTakipGovdesi, GeriBildirimTuru, GeriBildirimYanitlaGovdesi, KendiGeriBildirimi,
-  MiniPanoCevabi, MiniPanoSecGovdesi, ProfilCevabi, TemaCevabi, TemaSecGovdesi,
+  MenuSecGovdesi, MenuTercihiCevabi, MiniPanoCevabi, MiniPanoSecGovdesi, ProfilCevabi, TemaCevabi, TemaSecGovdesi,
 } from '#paylasilan/sozlesme/profil.ts';
 import { tesisGunu } from '#paylasilan/tesis-zamani.ts';
+import { SAYFALAR } from '#paylasilan/sayfalar.ts';
 import { bildirimGonder } from '../bildirim/disari.ts';
 import { kisininFazlaMesaisi, kisininIzinleri, kisininKalanIzni, kisininPersonelKarti } from '../ik/disari.ts';
 import { kisiAdlari, kisiGorevi, kisilerinIslemleri, kisininRolleri, rollerVeBayraklari } from '../kisiler/disari.ts';
 import {
   anaKayitHatasi, gelenBildirimTuru, kapanisBildirilir, kategoriSecilebilir, kayitDurumu, mesaiToplami, ortanca, ozetAylari, PROFIL_GERI_BILDIRIM_SINIRI, profilAraliklari,
-  miniPanoCevabiYap, temaCevabiYap, yanitImzasi, yanitSonrasiDurum,
+  acabildigiSayfalar, bilinmeyenMenuSayfalari, menuCevabiYap, miniPanoCevabiYap, temaCevabiYap, yanitImzasi, yanitSonrasiDurum,
 } from './kurallar.ts';
 import * as s from './sorgular.ts';
 
@@ -263,4 +264,26 @@ export async function miniPanoSec(db: Db, kullanici: Kullanici, govde: MiniPanoS
     : await s.miniPanoGuncelle(db, kullanici.id, kapali, govde.acilistaOner, govde.surum);
   if (yazilan === null) throw eskiSurum();
   return miniPanoCevabiYap(yazilan);
+}
+
+const MENU_SAYFALARI: ReadonlySet<string> = new Set(SAYFALAR.map((sayfa) => sayfa.yol));
+// Kişinin bu oturumda açabildiği sayfalar: istemcinin menüsüyle aynı ölçü (sayfanın işlemi kişinin listesinde).
+const acabildigiYollar = (kullanici: Kullanici): ReadonlySet<string> =>
+  new Set(SAYFALAR.filter((sayfa) => islemVarMi(kullanici, sayfa.islem)).map((sayfa) => sayfa.yol));
+
+// Sık kullanılanlar kişinin kendi menüsüdür (2951): okuma ve seçme yalnız oturumdaki kişinin kendi kaydınadır; mini pano gibi
+// sürümle yazılır. Liste kişinin açabildiği sayfalara süzülür (PRF-9); yetki modeli değişmez.
+export async function menuTercihiOku(db: Db, kullanici: Kullanici): Promise<MenuTercihiCevabi> {
+  return menuCevabiYap(await s.menuTercihiOku(db, kullanici.id), acabildigiYollar(kullanici));
+}
+
+export async function menuTercihiSec(db: Db, kullanici: Kullanici, govde: MenuSecGovdesi): Promise<MenuTercihiCevabi> {
+  if (bilinmeyenMenuSayfalari(govde.sayfalar, MENU_SAYFALARI).length > 0) throw dogrulama('Seçilen sayfa menüde yok.', 'sayfalar');
+  const acabildigi = acabildigiYollar(kullanici);
+  const sayfalar = acabildigiSayfalar(govde.sayfalar, acabildigi);
+  const yazilan = govde.surum === 0
+    ? await s.menuTercihiEkle(db, kullanici.id, sayfalar)
+    : await s.menuTercihiGuncelle(db, kullanici.id, sayfalar, govde.surum);
+  if (yazilan === null) throw eskiSurum();
+  return menuCevabiYap(yazilan, acabildigi);
 }

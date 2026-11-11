@@ -324,3 +324,27 @@ export function miniPanoGuncelle(db: Db, kisiId: number, kapali: readonly string
     [kisiId, kapali, acilistaOner, surum],
   );
 }
+
+export interface MenuTercihiSatiri { sayfalar: string[]; surum: number }
+
+export function menuTercihiOku(db: Db, kisiId: number): Promise<MenuTercihiSatiri | null> {
+  return db.tek<MenuTercihiSatiri>('SELECT sayfalar, surum FROM profil_menu_tercihi WHERE kisi_id = $1', [kisiId]);
+}
+
+// İlk seçim: aynı anda gelen ikinci ilk seçim satır açmaz, null döner (sürüm çakışması).
+export function menuTercihiEkle(db: Db, kisiId: number, sayfalar: readonly string[]): Promise<MenuTercihiSatiri | null> {
+  return db.tek<MenuTercihiSatiri>(
+    `INSERT INTO profil_menu_tercihi (kisi_id, sayfalar) VALUES ($1, $2) ON CONFLICT (kisi_id) DO NOTHING
+      RETURNING sayfalar, surum`,
+    [kisiId, sayfalar],
+  );
+}
+
+// Okunan sürüm tutmazsa satır değişmez, null döner.
+export function menuTercihiGuncelle(db: Db, kisiId: number, sayfalar: readonly string[], surum: number): Promise<MenuTercihiSatiri | null> {
+  return db.tek<MenuTercihiSatiri>(
+    `UPDATE profil_menu_tercihi SET sayfalar = $2, surum = surum + 1, guncellendi = now()
+      WHERE kisi_id = $1 AND surum = $3 RETURNING sayfalar, surum`,
+    [kisiId, sayfalar, surum],
+  );
+}
