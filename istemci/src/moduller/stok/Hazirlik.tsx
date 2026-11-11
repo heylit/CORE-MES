@@ -2,11 +2,11 @@ import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { Link, Navigate, useNavigate, useParams } from 'react-router-dom';
 import type {
-  AdimToplaGovdesi, CikisOnerisiCevabi, KodCozCevabi, IstekTeslimGovdesi, LotBekleyenKartlarCevabi, MalzemeIstegi, MalzemeIstegiDurumu, MalzemeIstekleriCevabi, TeslimGonderGovdesi, TeslimKutusuCevabi, ToplamaAcGovdesi,
+  AdimToplaGovdesi, CikisOnerisiCevabi, KodCozCevabi, IstekTeslimGovdesi, LotBekleyenKartlarCevabi, MalzemeIstegi, RefakatPartileriCevabi, MalzemeIstegiDurumu, MalzemeIstekleriCevabi, TeslimGonderGovdesi, TeslimKutusuCevabi, ToplamaAcGovdesi,
   ToplamaAyrintiCevabi, ToplamaKapatGovdesi, ToplamalarCevabi, YerdekiStokCevabi,
 } from '#paylasilan/sozlesme/stok.ts';
 import {
-  Dugme, DurumKutusu, Girdi, KodOkuyucu, Kart, Pencere, Rozet, Sayfalama, Secim, Sekmeler, Simge, Tablo, useOkutmaGecmisi,
+  Dugme, DurumKutusu, Girdi, KodOkuyucu, Kart, Pencere, Rozet, Sayfalama, Secim, Sekmeler, Simge, Tablo, useBildirim, useOkutmaGecmisi,
   type KomutIsleyici, type OkutmaGecmisi, type OkutmaTonu, type RozetTonu, type Sutun,
 } from '../../ortak/arayuz/index.ts';
 import type { SimgeAdi } from '../../ortak/tasarim/simgeler.ts';
@@ -185,6 +185,26 @@ function IstenenFazlaNotu({ istenen, girilen }: { istenen: string; girilen: stri
   return <p className="tc-stok-not" role="status">İstenenden ({miktarMetni(istenen)}) fazla; teslim kaydına "istenenden fazla" yazılır.</p>;
 }
 
+// 2931 a: emre giden teslimde kart sunucuda kendiliğinden açılır (pencere sorulmaz). Kâğıt şimdilik kendiliğinden basılmaz (kullanıcı,
+// kart 2944'e yazılı yanıt): depocuya kart söylenir ve bildirimdeki düğme Etiket Merkezi'ni o kart seçili açar; kopya sayısı oradadır.
+// Kart emir ve lotla bulunur; lotsuz teslimde aynı malzemenin istisna kartıdır. Kart okunamazsa sessiz kalınmaz.
+type KartTeslimi = { uretimEmriId: number | null; partiId: number | null; malzemeId: number };
+function useKartBildirimi(): (t: KartTeslimi) => Promise<void> {
+  const { bildir } = useBildirim();
+  const git = useNavigate();
+  const merkez = useIslem('sayfa.etiket-merkezi');
+  return async (t) => {
+    if (t.uretimEmriId === null) return;
+    const c = await api.get<RefakatPartileriCevabi>(`/stok/uretim-emirleri/${t.uretimEmriId}/refakat-partileri`).catch(() => null);
+    if (c === null) { bildir('hata', "Refakat kartı okunamadı; kâğıdı Etiket Merkezi'nin bekleyenlerinden basın."); return; }
+    const kart = c.partiler.find((p) => p.durum === 'acik' && p.birlestigi === null
+      && (t.partiId === null ? p.partiId === null && p.malzemeId === t.malzemeId : p.partiId === t.partiId));
+    if (!kart) return;
+    bildir('bilgi', `Refakat kartı ${kart.etiket} bu teslimle gidiyor; kâğıdı Etiket Merkezi'nden basın.`,
+      merkez ? { eylem: { etiket: 'Etiketlere git', yap: () => { void git(`/etiket-merkezi?tur=refakat-partisi&id=${kart.id}`); } } } : undefined);
+  };
+}
+
 // İstasyonsuz istek kişiye verilir: malzeme kişinin bulunduğu istasyona taşınır ve istek kapanır.
 function KisiyeTeslim({ istek, kapat }: { istek: MalzemeIstegi; kapat: () => void }) {
   const [konum, setKonum] = useState<KonumSecimi | null>(null);
@@ -194,7 +214,9 @@ function KisiyeTeslim({ istek, kapat }: { istek: MalzemeIstegi; kapat: () => voi
   const kutu = useQuery({ queryKey: anahtarlar.liste('teslim-kutusu', {}), queryFn: () => api.get<TeslimKutusuCevabi>('/stok/teslim-kutusu') });
   const [denendi, setDenendi] = useState(false);
   const s = useKaynakSatiri(istek.malzemeId, konum, satir);
-  const teslim = useStokKomutu((g: IstekTeslimGovdesi) => api.post(`/stok/malzeme-istekleri/${istek.id}/teslim-et`, g), `${istek.no} teslim edildi; malzeme istasyona taşındı.`, kapat);
+  const kartiSoyle = useKartBildirimi();
+  const teslim = useStokKomutu((g: IstekTeslimGovdesi) => api.post(`/stok/malzeme-istekleri/${istek.id}/teslim-et`, g), `${istek.no} teslim edildi; malzeme istasyona taşındı.`,
+    () => { void kartiSoyle({ uretimEmriId: istek.uretimEmriId, partiId: s?.partiId ?? null, malzemeId: istek.malzemeId }).finally(kapat); });
   const gonder = (o: FormEvent) => {
     o.preventDefault();
     setDenendi(true);
@@ -225,7 +247,9 @@ function IstasyonaTeslim({ istek, istasyonId, kapat }: { istek: MalzemeIstegi; i
   const [kimlik] = useState(yeniIstekKimligi);
   const [denendi, setDenendi] = useState(false);
   const s = useKaynakSatiri(istek.malzemeId, konum, satir);
-  const gonderKomutu = useStokKomutu((g: TeslimGonderGovdesi) => korumaliPost('/stok/teslimler/gonder', g), `${istek.no} için teslim gönderildi; istasyon alınca kapanır.`, kapat);
+  const kartiSoyle = useKartBildirimi();
+  const gonderKomutu = useStokKomutu((g: TeslimGonderGovdesi) => korumaliPost('/stok/teslimler/gonder', g), `${istek.no} için teslim gönderildi; istasyon alınca kapanır.`,
+    () => { void kartiSoyle({ uretimEmriId: istek.uretimEmriId, partiId: s?.partiId ?? null, malzemeId: istek.malzemeId }).finally(kapat); });
   const gonder = (o: FormEvent) => {
     o.preventDefault();
     setDenendi(true);
