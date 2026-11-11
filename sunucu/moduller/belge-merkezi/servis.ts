@@ -246,6 +246,22 @@ async function revizyonKodcusu(db: Db, belgeIdler: readonly number[]): Promise<(
   return (belgeId, sira) => (sira === null ? null : revizyonKodu(antet.get(`${belgeId}/${sira}`), kartRev.get(belgeId)));
 }
 
+// Başka modülün aldığı revizyonun (belge ve dosya özeti) gösterilen kodu: alan modül harfi kendi tablosunda tutmuş olsa da ekranda
+// merkezin güncel kodu görünür (2138-2). Anahtar `belgeId:ozet`; belgede o özetli revizyon yoksa anahtar haritada yoktur.
+export async function revizyonKodlari(db: Db, ciftler: readonly { belgeId: number; ozet: string }[]): Promise<Map<string, string | null>> {
+  const sonuc = new Map<string, string | null>();
+  const belgeIdler = [...new Set(ciftler.map((c) => c.belgeId))];
+  if (belgeIdler.length === 0) return sonuc;
+  const sira = new Map((await sorgular.antetRevizyonlari(db, belgeIdler)).map((r) => [`${r.belgeId}:${r.ozet}`, r.sira]));
+  const kod = await revizyonKodcusu(db, belgeIdler);
+  for (const c of ciftler) {
+    const anahtar = `${c.belgeId}:${c.ozet}`;
+    const s = sira.get(anahtar);
+    if (s !== undefined) sonuc.set(anahtar, kod(c.belgeId, s));
+  }
+  return sonuc;
+}
+
 export async function belgeAyrintisi(db: Db, id: number): Promise<BelgeAyrintisi> {
   const b = await sorgular.belge(db, id);
   if (b === null) throw bulunamadi('Belge bulunamadı.');

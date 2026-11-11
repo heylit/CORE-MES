@@ -13,7 +13,7 @@ import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
 import {
-  belgeAcVeBagla, kaydaBagla, kaydaBagliBelgeler, kayitlaraBagliBelgeler, kayitlaraBagliYayindakiBelgeler, kayittakiBelgeDosyasi, kayittanKaldir, yayindakiBelgeDosyasi, yayindakiBelgeler,
+  belgeAcVeBagla, kaydaBagla, kaydaBagliBelgeler, kayitlaraBagliBelgeler, kayitlaraBagliYayindakiBelgeler, kayittakiBelgeDosyasi, kayittanKaldir, revizyonKodlari, yayindakiBelgeDosyasi, yayindakiBelgeler,
   kayitlarinKucukResimleri, yayindakiOnizleme, yayindakiOnizlemeKaresi,
 } from './disari.ts';
 import { ILETILER } from './kurallar.ts';
@@ -1012,6 +1012,10 @@ describe('çizim merkezi (gerçek PostgreSQL, gerçek giriş)', () => {
       assert.equal(bag.statusCode, 200, bag.body);
       ayrinti = bag.json<BelgeAyrintisi>();
       assert.deepEqual(ayrinti.revizyonlar.map((r) => [r.harf, r.revKodu]), [['B', '01'], ['A', null]]);
+
+      const kodlar = await vt().tx((db) => revizyonKodlari(db, ayrinti.revizyonlar.map((r) => ({ belgeId: ilk.id, ozet: r.ozet })).concat({ belgeId: ilk.id, ozet: 'f'.repeat(64) })));
+      assert.deepEqual(ayrinti.revizyonlar.map((r) => kodlar.get(`${ilk.id}:${r.ozet}`)), ['01', null], 'başka modülün aldığı revizyonun kodu belge ve özetle');
+      assert.equal(kodlar.has(`${ilk.id}:${'f'.repeat(64)}`), false, 'belgede olmayan özet haritada yok');
 
       const kartsiz = await belgeAc(yonetici, 'teknik-resim', pdf(), 'Kartsız resim');
       assert.equal(kartsiz.revizyonlar[0]?.revKodu, null, 'antetsiz ve kartsız belgede kod yok, harf yerine geçmez');
