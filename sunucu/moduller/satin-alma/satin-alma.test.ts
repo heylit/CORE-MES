@@ -208,6 +208,24 @@ describe('satin-alma sürüm 6 (gerçek PostgreSQL)', () => {
     assert.equal((await kaydet(c.talep2, { ...govde(duzen), baslik: 'Başkası' })).statusCode, 403);
   });
 
+  test('SAT-82 (2883, 2871-1 a): talep eden talebin kendisini yalnız taslakta değiştirir; teklif istendikten sonra 403, kayıt değişmez; satın alma değiştirir', async () => {
+    const t = tamam<Talep>(await istek(c.talep, 'POST', '/satin-alma-talepleri/ac', yeniTalep()));
+    // Taslakta değiştirip teklif istemeye göndermek serbesttir.
+    const gonder = tamam<Talep>(await kaydet(c.talep, { ...govde(t), baslik: 'Deneme taslak düzeltme', durum: 'teklif_isteniyor' }));
+    const kalem = { ...gonder.kalemler[0]!, miktar: '99' };
+    for (const degisik of [{ notlar: 'Deneme sonradan' }, { baslik: 'Deneme sonradan' }, { kalemler: [kalem, ...gonder.kalemler.slice(1)] }]) {
+      const red = await kaydet(c.talep, { ...govde(gonder), ...degisik });
+      assert.equal(red.statusCode, 403, red.body);
+    }
+    const satir = await ortam!.sahip.tek<{ surum: number; baslik: string }>('SELECT surum, baslik FROM satin_alma_talep WHERE id = $1', [t.id]);
+    assert.deepEqual([satir!.surum, satir!.baslik], [gonder.surum, 'Deneme taslak düzeltme']);
+    // Değişmeden kaydetmek serbesttir; satın alma (satin-alma.yaz) talebi düzeltir.
+    assert.equal((await kaydet(c.talep, govde(gonder))).statusCode, 200);
+    const tam = tamam<AcilisCevabi>(await istek(c.sa, 'GET', '/satin-alma-acilis')).talepler.find((x) => x.id === t.id)!;
+    const sa = tamam<Talep>(await kaydet(c.sa, { ...govde(tam), notlar: 'Deneme satın alma notu' }));
+    assert.equal(sa.notlar, 'Deneme satın alma notu');
+  });
+
   test('SAT-70: talep bütün olarak eksiksiz kaydedilir ve açılışta aynı döner: kalem, istek, teklif ve fiyat, bölünmüş karar, sabit kur, sipariş, senaryo', async () => {
     const t = tamam<Talep>(await istek(c.sa, 'POST', '/satin-alma-talepleri/ac', yeniTalep()));
     const [k1, k2] = t.kalemler.map((k) => k.id) as [string, string];
@@ -361,8 +379,8 @@ describe('satin-alma sürüm 6 (gerçek PostgreSQL)', () => {
     const t = tamam<Talep>(await istek(c.talep, 'POST', '/satin-alma-talepleri/ac', yeniTalep()));
     assert.doesNotMatch(JSON.stringify({ ...t, teklifler: undefined, teklifIstekleri: undefined, karar: undefined }), /Deneme Tedarik/);
     assert.deepEqual([t.teklifler, t.teklifIstekleri, t.karar], [[], [], null]);
-    // Satın alma teklif isterken teklifi girer; talep eden aynı durumda notunu düzeltir. Cevapta teklif ve karar yoktur;
-    // teklif istenen tedarikçi (2429-ekran b) görünür ve talep eden onu gördüğü gibi geri gönderir.
+    // Satın alma teklif isterken teklifi girer; talep eden aynı durumda talebi gördüğü gibi kaydeder. Cevapta teklif ve karar yoktur;
+    // teklif istenen tedarikçi (2429-ekran b) görünür ve talep eden onu gördüğü gibi geri gönderir. Notu değiştiremez (SAT-82).
     const [k1, k2] = t.kalemler.map((k) => k.id) as [string, string];
     const a = teklif(firmaA, [[k1, '10'], [k2, '5']]);
     const sa = tamam<Talep>(await kaydet(c.sa, {
@@ -370,15 +388,15 @@ describe('satin-alma sürüm 6 (gerçek PostgreSQL)', () => {
       hareketler: [...t.hareketler, { id: randomUUID(), zaman: '', kisiId: null, kisiAdi: null, metin: '1 tedarikçiden teklif istendi: Deneme Tedarik A' }],
     }));
     const benim = tamam<Talep>(await kaydet(c.talep, {
-      ...govde(t), durum: 'teklif_isteniyor', notlar: 'Deneme düzeltme', teklifIstekleri: sa.teklifIstekleri, surum: sa.surum,
+      ...govde(t), durum: 'teklif_isteniyor', teklifIstekleri: sa.teklifIstekleri, surum: sa.surum,
     }));
-    assert.equal(benim.notlar, 'Deneme düzeltme');
+    assert.equal((await kaydet(c.talep, { ...govde(t), durum: 'teklif_isteniyor', notlar: 'Deneme düzeltme', teklifIstekleri: sa.teklifIstekleri, surum: benim.surum })).statusCode, 403);
     assert.deepEqual([benim.teklifler, benim.teklifIstekleri.map((q) => q.firmaId), benim.karar, benim.hareketler.map((h) => h.metin)], [[], [firmaA], null, ['Talep açıldı']]);
     // Talep eden teklif istenen tedarikçiyi değiştiremez.
     assert.equal((await kaydet(c.talep, { ...govde(t), durum: 'teklif_isteniyor', teklifIstekleri: [], surum: benim.surum })).statusCode, 403);
     assert.doesNotMatch(JSON.stringify(benim.hareketler), /Deneme Tedarik/);
     const tam = tamam<AcilisCevabi>(await istek(c.sa, 'GET', '/satin-alma-acilis')).talepler.find((x) => x.id === t.id)!;
-    assert.deepEqual([tam.teklifler.map((q) => q.id), tam.notlar], [[a.id], 'Deneme düzeltme']);
+    assert.deepEqual([tam.teklifler.map((q) => q.id), tam.notlar], [[a.id], t.notlar]);
     // Kart arama, katalog kaydı ve menü sayaçları fiyat, tedarikçi ve ayar taşımaz.
     const sec = tamam<MalzemeSecenekleriCevabi>(await istek(c.talep, 'GET', '/satin-alma-malzeme-secenekleri?ara=HM-SAT'));
     // SAT-78 (2871): stok birimi ve birim ağırlık kartın fiziksel bilgisidir, fiyat değildir.
@@ -400,9 +418,10 @@ describe('satin-alma sürüm 6 (gerçek PostgreSQL)', () => {
       karar: { mod: 'tek', teklifId: a.id, bolunme: [], gerekce: 'Deneme gerekçe', kararVerenKisiId: kisi.sa!, kararTarihi: '2026-10-07', ogrenilenler: '', sabitKurlar: [], siparisler: [] },
     }));
     assert.equal(kararli.karar?.teklifId, a.id);
-    const benim = await kaydet(c.talep, { ...govde(t), durum: 'teklif_isteniyor', notlar: 'Deneme kararlı', surum: kararli.surum });
+    // SAT-82: teklif istendikten sonra talep eden talebi yalnız gördüğü gibi kaydedebilir.
+    const benim = await kaydet(c.talep, { ...govde(t), durum: 'teklif_isteniyor', surum: kararli.surum });
     const g = tamam<Talep>(benim);
-    assert.deepEqual([g.notlar, g.karar, g.teklifler, g.senaryolar, g.secilenTedarikciler], ['Deneme kararlı', null, [], [], [{ firmaId: firmaA, ad: 'Deneme Tedarik A' }]]);
+    assert.deepEqual([g.notlar, g.karar, g.teklifler, g.senaryolar, g.secilenTedarikciler], [t.notlar, null, [], [], [{ firmaId: firmaA, ad: 'Deneme Tedarik A' }]]);
     assert.doesNotMatch(benim.body, /"birimFiyat"|"teklifId"|"tlToplam"|Deneme gerekçe/);
     const liste = await istek(c.talep, 'GET', '/satin-alma-taleplerim?sinir=500');
     assert.ok(tamam<TaleplerimCevabi>(liste).talepler.some((x) => x.id === t.id));

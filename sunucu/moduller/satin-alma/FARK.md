@@ -6,7 +6,6 @@
 - Kart seçenekleri (`GET /satin-alma-malzeme-secenekleri`) `stokBirimi` ve `birimKg` taşır (boş olabilir); yeni talep formu miktarın kg karşılığını ve
   "1 <birim> ≈ <kg> kg" bilgisini gösterir. Taleplerim satırında ve kalem ayrıntısında "≈ ... kg" görünür.
 - Ağırlığı bilinmeyen kartta, kartsız kalemde, stok birimi kg olan kartta ve başka birimdeki kalemde karşılık yoktur (uydurulmaz).
-  Metre stoklu çubukta adet karşılığı kesim boyu ister, kartta yoktur; yalnız kg ile metre arasında gösterilir.
 - Uç, işlem, rol x işlem, göç ve paket değişmedi. Fiyat alanı eklenmedi.
 
 # FARK: satin-alma, talep eden taslağını Taleplerim'den düzenler (SAT-79, kart 2871-1 a; 11.11.2026)
@@ -485,3 +484,10 @@ Kullanıcı: "yaz" (13.10.2026). Finans ve stok tarafı aynı dalda (yalnız yen
 - Ekran: tedarikçi formundaki durum seçimi salt okunur "Kalite onayı" alanı oldu; liste ve kartta etiket Kalite Merkezi durumudur. Ekranın
   iç durumu kalite durumundan türer (Aday ve Askıda askıda işaretlenir). Göç, rol x işlem ve paket yok.
 
+# FARK: satin-alma, talep eden teklif istendikten sonra talebini kaydet ucundan değiştiremez (SAT-82, kart 2883; 11.11.2026)
+
+- `POST /satin-alma-talepleri/:id/kaydet`: yalnız `talep-ac` taşıyan sahip (açan ya da talep eden) talebin kendisini (başlık, kalem, not, tarih,
+  birim, emir, proje) yalnız taslakken değiştirir; taslaktan teklif istemeye göndermek serbesttir. Teklif istendikten sonra bu değişiklik 403'tür,
+  kayıt değişmez; gördüğü gibi kaydetmek serbesttir. Önce: taslak ya da teklif isteniyor durumunda değiştirebiliyordu (2871-1 a ile çelişki,
+  Güvenlik 2871 ön bakışı N1). Teklif toplanırken değişiklik güncelleme talebiyle gelir (kart 2876).
+- `satin-alma.yaz` taşıyan satın alma etkilenmez. Uç, işlem, rol x işlem, göç değişmedi.

@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
   aylikFaiz, degisiklikReddi, dortGozSonucu, fazlaTeslim, finanstanEklenenKurlar, gecikmeGunu, gecisVarMi, gkkKalitesi, gorunenDurum, hizliBaslik,
-  ondalikTopla, siparisReddi, talepEdenDurumu, teklifKuru, teslimDurumu, varsayilanOdemePlani,
+  ondalikTopla, siparisReddi, talepEdenDurumu, talepEdenGovdeDurumu, teklifKuru, teslimDurumu, varsayilanOdemePlani,
 } from './kurallar.ts';
 
 // Bugünkü davranışı sabitler (kayıt: hesaplar.md H5-H6); beklenen değerler kural metninden değil, bugünkü çıktıdan alınmıştır.
@@ -39,6 +39,14 @@ test('SA-HESAP H5: görünen durum, bütün siparişler tamamsa teslim_alindi t�
 test('SA-HESAP H5: talep edenin düzenleyebildiği durumlar', () => {
   // DEĞİŞECEK: talep durumu sunucu ile istemcide farklı gösteriliyor (RAPOR "Talep durumu iki yerde farklı").
   assert.deepEqual((['taslak', 'teklif_isteniyor', 'degerlendirme'] as const).map((d) => talepEdenDurumu(d)), [true, true, false]);
+});
+
+test('SAT-82 (2883): talep eden gövdeyi yalnız taslaktan değiştirir; teklif istendikten sonra değiştiremez', () => {
+  assert.deepEqual([
+    talepEdenGovdeDurumu('taslak', 'taslak'), talepEdenGovdeDurumu('taslak', 'teklif_isteniyor'),
+    talepEdenGovdeDurumu('teklif_isteniyor', 'teklif_isteniyor'), talepEdenGovdeDurumu('teklif_isteniyor', 'taslak'),
+    talepEdenGovdeDurumu('taslak', 'degerlendirme'), talepEdenGovdeDurumu('degerlendirme', 'degerlendirme'),
+  ], [true, true, false, false, false, false]);
 });
 
 test('SA-HESAP H5: değişiklik yetkisi [onay işlemsiz, kendi taslağı, başkasının taslağı]', () => {
