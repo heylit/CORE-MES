@@ -267,19 +267,25 @@ function Istekler() {
   const secilebilir = (i: MalzemeIstegi) => yazabilir && ACIK.includes(i.durum) && i.toplamaId === null && !i.yoldaTeslim;
   const secililer = Object.values(secim);
   const degistir = (i: MalzemeIstegi) => setSecim((s) => { const y = { ...s }; if (y[i.id]) delete y[i.id]; else y[i.id] = i; return y; });
+  const malzemeAdi = (i: MalzemeIstegi) => i.malzemeAd ?? `Kart ${i.malzemeId}`;
+  const yerAdi = (i: MalzemeIstegi) => i.istasyonAd ?? `${i.kisiAd ?? '—'} (kişiye)`;
+  // Seçim kutusu kendi ilk sütunundadır, yapışık değildir; yana kayınca İstek sütunu kabın solunda kalır.
   const sutunlar: Sutun<MalzemeIstegi>[] = [
-    ...(yazabilir ? [{ anahtar: 'sec', baslik: '', hucre: (i: MalzemeIstegi) => (secilebilir(i)
+    ...(yazabilir ? [{ anahtar: 'sec', baslik: '', csv: false as const, hucre: (i: MalzemeIstegi) => (secilebilir(i)
       ? <input type="checkbox" aria-label={`${i.no} seç`} checked={secim[i.id] !== undefined} onChange={() => degistir(i)} /> : <span />) }] : []),
-    { anahtar: 'no', baslik: 'İstek', mono: true, kirilmaz: true, hucre: (i) => i.no },
-    { anahtar: 'malzeme', baslik: 'Malzeme', hucre: (i) => <span className="tc-stok-ad"><strong>{i.malzemeAd ?? `Kart ${i.malzemeId}`}</strong>{i.aciklama && <span>{i.aciklama}</span>}</span> },
-    { anahtar: 'miktar', baslik: 'Miktar', hizala: 'sag', hucre: (i) => <>{miktarMetni(i.miktar)}{i.karsilanan !== null && <span className="tc-stok-not"> / {miktarMetni(i.karsilanan)}</span>}</> },
-    { anahtar: 'yer', baslik: 'Nereye', hucre: (i) => i.istasyonAd ?? `${i.kisiAd ?? '—'} (kişiye)` },
-    { anahtar: 'kim', baslik: 'İsteyen', hucre: (i) => <span className="tc-stok-ad"><span>{i.kisiAd ?? '—'}</span><span>{zamanMetni(i.acilis)}</span></span> },
-    { anahtar: 'durum', baslik: 'Durum', hucre: (i) => <span className="tc-stok-dugmeler">
-      <Rozet ton={istekDurumu(i).ton}>{istekDurumu(i).etiket}</Rozet>
-      {i.toplamaId !== null && <Link to={`/stok/hazirlik/${i.toplamaId}`}>{i.toplamaNo}</Link>}</span> },
+    { anahtar: 'no', baslik: 'İstek', mono: true, kirilmaz: true, sabit: 'sol', hucre: (i) => i.no },
+    { anahtar: 'malzeme', baslik: 'Malzeme', kes: true, csv: malzemeAdi, hucre: (i) => <strong>{malzemeAdi(i)}</strong> },
+    { anahtar: 'aciklama', baslik: 'Açıklama', kes: true, hucre: (i) => i.aciklama ?? '—' },
+    { anahtar: 'miktar', baslik: 'Miktar', hizala: 'sag', hucre: (i) => miktarMetni(i.miktar) },
+    { anahtar: 'karsilanan', baslik: 'Karşılanan', hizala: 'sag', hucre: (i) => (i.karsilanan === null ? '—' : miktarMetni(i.karsilanan)) },
+    { anahtar: 'yer', baslik: 'Nereye', kes: true, hucre: yerAdi },
+    { anahtar: 'kim', baslik: 'İsteyen', kes: true, hucre: (i) => i.kisiAd ?? '—' },
+    { anahtar: 'acilis', baslik: 'Açılış', hucre: (i) => zamanMetni(i.acilis) },
+    { anahtar: 'durum', baslik: 'Durum', csv: (i) => istekDurumu(i).etiket, hucre: (i) => <Rozet ton={istekDurumu(i).ton}>{istekDurumu(i).etiket}</Rozet> },
+    { anahtar: 'toplama', baslik: 'Toplama listesi', mono: true, csv: (i) => i.toplamaNo ?? '',
+      hucre: (i) => (i.toplamaId !== null ? <Link to={`/stok/hazirlik/${i.toplamaId}`}>{i.toplamaNo}</Link> : '—') },
     ...(yazabilir ? [{
-      anahtar: 'eylem', baslik: '', hucre: (i: MalzemeIstegi) => (secilebilir(i) ? (
+      anahtar: 'eylem', baslik: '', hizala: 'sag' as const, sabit: 'sag' as const, csv: false as const, hucre: (i: MalzemeIstegi) => (secilebilir(i) ? (
         <span className="tc-stok-dugmeler">
           <Dugme simge="truck" onClick={() => setTeslim(i)}>Teslim et</Dugme>
           <Dugme tur="tehlike" onClick={() => iptal.komut.mutate({ id: i.id, surum: i.surum })}>İptal</Dugme>
@@ -301,7 +307,7 @@ function Istekler() {
         )}
         {l.isError ? <DurumKutusu durum="hata" mesaj={hataMetni(l.error)} yenile={() => void l.refetch()} />
           : l.isPending ? <DurumKutusu durum="yukleniyor" />
-          : <Tablo etiket="Malzeme istekleri" sutunlar={sutunlar} satirlar={l.data.satirlar} satirAnahtari={(i) => i.id} bosMesaj={durum === 'acik' ? 'Bekleyen malzeme isteği yok. İstekler üretimden, Okut panelindeki "Malzeme iste" ile gelir.' : 'Bu durumda istek yok.'} />}
+          : <Tablo etiket="Malzeme istekleri" kip="kaydir" sutunlar={sutunlar} satirlar={l.data.satirlar} satirAnahtari={(i) => i.id} bosMesaj={durum === 'acik' ? 'Bekleyen malzeme isteği yok. İstekler üretimden, Okut panelindeki "Malzeme iste" ile gelir.' : 'Bu durumda istek yok.'} />}
         {l.data && l.data.satirlar.length > 0 && <Sayfalama sayfa={l.data.sayfa} sayfaBoyu={l.data.sayfaBoyu} toplam={l.data.toplam} degistir={setSayfa} satirSayisi={l.data.satirlar.length} />}
       </div>
       {liste && <ListeAcPenceresi istekler={secililer} kapat={() => { setListe(false); setSecim({}); }} />}
@@ -323,10 +329,10 @@ function Listeler() {
         <p className="tc-stok-not">Liste, seçilen malzemelerin raf sırasına dizilmiş toplama turudur; açık listeyi buradan sürdürün.</p>
         {yetkili && <div className="tc-stok-eylem"><Dugme tur="ikincil" simge="plus" onClick={() => setYeni(true)}>İsteksiz liste</Dugme></div>}
         {l.isError ? <DurumKutusu durum="hata" mesaj={hataMetni(l.error)} /> : (
-          <Tablo etiket="Toplama listeleri" satirlar={l.data?.satirlar ?? []} satirAnahtari={(t) => t.id} mesgul={l.isPending} bosMesaj='Henüz liste yok. İstekleri seçip "Liste aç" deyin.'
+          <Tablo etiket="Toplama listeleri" kip="kaydir" satirlar={l.data?.satirlar ?? []} satirAnahtari={(t) => t.id} mesgul={l.isPending} bosMesaj='Henüz liste yok. İstekleri seçip "Liste aç" deyin.'
             sutunlar={[
-              { anahtar: 'no', baslik: 'Liste', mono: true, hucre: (t) => <Link to={`/stok/hazirlik/${t.id}`}>{t.no}</Link> },
-              { anahtar: 'ad', baslik: 'Ad', hucre: (t) => t.ad },
+              { anahtar: 'no', baslik: 'Liste', mono: true, sabit: 'sol', csv: (t) => t.no, hucre: (t) => <Link to={`/stok/hazirlik/${t.id}`}>{t.no}</Link> },
+              { anahtar: 'ad', baslik: 'Ad', kes: true, hucre: (t) => t.ad },
               { anahtar: 'z', baslik: 'Açılış', hucre: (t) => zamanMetni(t.acilis) },
               { anahtar: 'i', baslik: 'İlerleme', hizala: 'sag', hucre: (t) => `${t.toplanan}/${t.adimSayisi}` },
               { anahtar: 'd', baslik: 'Durum', hucre: (t) => <><Rozet ton={LISTE_DURUMU[t.durum].ton}>{LISTE_DURUMU[t.durum].etiket}</Rozet>{t.eksikVar && <Rozet ton="uyari">Eksik</Rozet>}</> },
@@ -445,12 +451,12 @@ function ListeAyrintisi({ id }: { id: number }) {
       {acik && sira && yetkili && <SiradakiAdim key={sira.id} id={id} t={t.data} gecmis={gecmis} />}
       {acik && !sira && <DurumKutusu durum="bos" mesaj="Bütün adımlar toplandı; listeyi bitirebilirsin." />}
       <Kart baslik="Rota">
-        <Tablo etiket="Toplama adımları" satirlar={adimlar} satirAnahtari={(a) => a.id}
+        <Tablo etiket="Toplama adımları" kip="kaydir" satirlar={adimlar} satirAnahtari={(a) => a.id}
           sutunlar={[
             { anahtar: 's', baslik: '#', hizala: 'sag', hucre: (a) => a.sira },
             { anahtar: 'k', baslik: 'Konum', mono: true, hucre: (a) => <Link to={`/stok/konumlar/${a.konumId}`}>{a.konumKod}</Link> },
-            { anahtar: 'm', baslik: 'Malzeme', hucre: (a) => a.malzemeAd ?? `Kart ${a.malzemeId}` },
-            { anahtar: 'p', baslik: 'Parti', hucre: (a) => a.partiEtiketi ?? '—' },
+            { anahtar: 'm', baslik: 'Malzeme', kes: true, hucre: (a) => a.malzemeAd ?? `Kart ${a.malzemeId}` },
+            { anahtar: 'p', baslik: 'Parti', kes: true, hucre: (a) => a.partiEtiketi ?? '—' },
             { anahtar: 'q', baslik: 'Miktar', hizala: 'sag', hucre: (a) => <strong>{a.toplanan !== null && a.toplanan !== a.miktar ? `${miktarMetni(a.toplanan)} / ` : ''}{miktarMetni(a.miktar)}</strong> },
             { anahtar: 'd', baslik: '', hucre: (a) => (a.toplandi ? <Rozet ton="tamam">Toplandı</Rozet> : a.id === sira?.id ? <Rozet ton="bilgi">Sırada</Rozet> : <span />) },
           ]} />
@@ -530,13 +536,13 @@ function LotBekleyenKartlar() {
   return (
     <Kart baslik="Lot bekleyen kartlar">
       {l.isError ? <DurumKutusu durum="hata" mesaj={hataMetni(l.error)} yenile={() => void l.refetch()} /> : (
-        <Tablo etiket="Lot bekleyen kartlar" satirlar={l.data.kartlar} satirAnahtari={(x: Satir) => x.refakat.id} bosMesaj="Lot bekleyen kart yok."
+        <Tablo etiket="Lot bekleyen kartlar" kip="kaydir" satirlar={l.data.kartlar} satirAnahtari={(x: Satir) => x.refakat.id} bosMesaj="Lot bekleyen kart yok."
           sutunlar={[
-            { anahtar: 'kart', baslik: 'Kart', mono: true, kirilmaz: true, hucre: (x: Satir) => x.refakat.etiket },
-            { anahtar: 'malzeme', baslik: 'Malzeme', hucre: (x: Satir) => x.refakat.malzemeAd ?? x.refakat.malzemeKod ?? `Kart ${x.refakat.malzemeId}` },
+            { anahtar: 'kart', baslik: 'Kart', mono: true, sabit: 'sol', hucre: (x: Satir) => x.refakat.etiket },
+            { anahtar: 'malzeme', baslik: 'Malzeme', kes: true, hucre: (x: Satir) => x.refakat.malzemeAd ?? x.refakat.malzemeKod ?? `Kart ${x.refakat.malzemeId}` },
             { anahtar: 'bekleyen', baslik: 'Lotsuz düşülen', hizala: 'sag', hucre: (x: Satir) => birimliMiktar(x.bekleyen, x.refakat.birim) },
             { anahtar: 'zaman', baslik: 'Açıldı', hucre: (x: Satir) => zamanMetni(x.refakat.kayitZamani) },
-            { anahtar: 'eylem', baslik: '', hucre: (x: Satir) => <Dugme simge="tag" onClick={() => setAcik(x.refakat.id)}>Aç</Dugme> },
+            { anahtar: 'eylem', baslik: '', hizala: 'sag', sabit: 'sag', csv: false, hucre: (x: Satir) => <Dugme simge="tag" onClick={() => setAcik(x.refakat.id)}>Aç</Dugme> },
           ]} />
       )}
       {acik !== null && <RefakatKartPenceresi id={acik} kapat={() => { setAcik(null); void l.refetch(); }} />}

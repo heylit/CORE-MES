@@ -867,6 +867,15 @@ describe('Hazırlık listesi', () => {
     hedef: { konumId: 20, kod: 'IST-4', ad: 'Torna 1', istasyonId: 4 },
     istekler: [{ id: 31, no: 'MI-000031', malzemeId: 901, miktar: '5', karsilanan: null, durum: 'hazirlaniyor' }],
   } as const;
+  it('Toplama adımları tek satırlı kayan tablo: Malzeme ve Parti kesilir, tamamı ipucunda', async () => {
+    sunucuKur(DEPOCU, { 'GET /stok/toplamalar/3': () => json(200, T) });
+    ac('/stok/hazirlik/3');
+    const tablo = await screen.findByRole('table', { name: 'Toplama adımları' });
+    expect(tablo.closest('.tc-tablo-kap')?.hasAttribute('data-kaydir')).toBe(true);
+    const hucreler = within(within(tablo).getAllByRole('row')[1]!).getAllByRole('cell');
+    expect(hucreler[2]!.querySelector('.tc-tablo-kes')?.getAttribute('title')).toBe('Eldiven');
+    expect(hucreler[3]!.querySelector('.tc-tablo-kes')?.getAttribute('title')).toBe('LT-000041');
+  });
   it('sıradaki adımı büyük gösterir, eksiği ve teslim yerini söyler; Toplandı sürümle gönderilir', async () => {
     const istekler = sunucuKur(DEPOCU, { 'GET /stok/toplamalar/3': () => json(200, T), 'POST /stok/toplamalar/3/adimlar/11/topla': () => json(200, T) });
     ac('/stok/hazirlik/3');

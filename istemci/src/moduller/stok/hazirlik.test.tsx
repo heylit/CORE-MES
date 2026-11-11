@@ -199,6 +199,37 @@ describe('Hazırlık: malzeme istekleri', () => {
     expect(screen.queryByRole('button', { name: 'İsteksiz liste' })).toBeNull();
   });
 
+  it('istekler ve toplama listeleri tek satırlı kayan tablo: seçim kutusu ilk sütunda, kimlik solda, eylemler sağda yapışık', async () => {
+    const TOPLAMA = { id: 3, no: 'TL-000003', ad: 'Sabah turu', acilis: '2026-10-14T08:10:00+03:00', kisiAd: 'Deneme Depocu', durum: 'topluyor', toplanan: 1, adimSayisi: 2, eksikVar: false, surum: 1, hedefKonumId: null, hedefKonumKod: null };
+    sunucuKur(DEPOCU, {
+      'GET /stok/malzeme-istekleri': () => json(200, liste([{ ...ISTEK, aciklama: 'Yarın ilk iş', karsilanan: '1.000' }, LISTEDE])),
+      'GET /stok/toplamalar': () => json(200, { ...BOS_LISTELER, satirlar: [TOPLAMA], toplam: 1 }),
+    });
+    ac('/stok/hazirlik');
+    const tablo = await screen.findByRole('table', { name: 'Malzeme istekleri' });
+    expect(tablo.closest('.tc-tablo-kap')?.hasAttribute('data-kaydir')).toBe(true);
+    expect(within(tablo).getAllByRole('columnheader').map((h) => h.textContent?.trim())).toEqual(
+      ['', 'İstek', 'Malzeme', 'Açıklama', 'Miktar', 'Karşılanan', 'Nereye', 'İsteyen', 'Açılış', 'Durum', 'Toplama listesi', '']);
+    const [, ilk, ikinci] = within(tablo).getAllByRole('row');
+    const h = within(ilk!).getAllByRole('cell');
+    expect(within(h[0]!).getByRole('checkbox', { name: 'MI-000031 seç' })).toBeTruthy();
+    expect(h[1]!.classList.contains('tc-tablo-sabit-sol')).toBe(true);
+    expect(h[1]!.textContent).toBe('MI-000031');
+    expect(h[2]!.querySelector('.tc-tablo-kes')?.getAttribute('title')).toBe('Deneme sac');
+    expect(h[3]!.textContent).toBe('Yarın ilk iş');
+    expect(h[5]!.textContent).toBe('1');
+    expect(h[11]!.classList.contains('tc-tablo-sabit-sag')).toBe(true);
+    expect(within(h[11]!).queryByRole('checkbox')).toBeNull();
+    expect(within(h[11]!).getByRole('button', { name: 'Teslim et' })).toBeTruthy();
+    const h2 = within(ikinci!).getAllByRole('cell');
+    expect(within(h2[0]!).queryByRole('checkbox')).toBeNull();
+    expect(h2[5]!.textContent).toBe('—');
+    expect(within(h2[10]!).getByRole('link', { name: 'TL-000003' })).toBeTruthy();
+    const listeler = await screen.findByRole('table', { name: 'Toplama listeleri' });
+    expect(listeler.closest('.tc-tablo-kap')?.hasAttribute('data-kaydir')).toBe(true);
+    expect(within(listeler).getByRole('columnheader', { name: 'Liste' }).classList.contains('tc-tablo-sabit-sol')).toBe(true);
+  });
+
   it('eski malzeme istekleri adresi hazırlığa yönlenir', async () => {
     sunucuKur(OKUYUCU, { 'GET /stok/malzeme-istekleri': () => json(200, liste([])), 'GET /stok/toplamalar': () => json(200, BOS_LISTELER) });
     ac('/stok/istekler');
@@ -306,7 +337,12 @@ describe('Hazırlık: lot bekleyen kartlar (kart #154)', () => {
     });
     ac('/stok/hazirlik');
     const tablo = await screen.findByRole('table', { name: 'Lot bekleyen kartlar' });
+    expect(tablo.closest('.tc-tablo-kap')?.hasAttribute('data-kaydir')).toBe(true);
     const satir = within(tablo).getByText('UE-000001-P2').closest('tr')!;
+    const hucreler = within(satir).getAllByRole('cell');
+    expect(hucreler[0]!.classList.contains('tc-tablo-sabit-sol')).toBe(true);
+    expect(hucreler[1]!.querySelector('.tc-tablo-kes')?.getAttribute('title')).toBe('Deneme sac');
+    expect(hucreler[4]!.classList.contains('tc-tablo-sabit-sag')).toBe(true);
     expect(within(satir).getByText(/4/)).toBeTruthy();
     fireEvent.click(within(satir).getByRole('button', { name: 'Aç' }));
     expect(await screen.findByRole('region', { name: 'Lota bağla' })).toBeTruthy();
