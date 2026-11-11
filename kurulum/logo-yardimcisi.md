@@ -42,6 +42,7 @@ o Windows kullanıcısınca okunabilir olmalı; içinde Logo parolası ve SQL ba
 | `ambar_no`, `isyeri_no` | İsteğe bağlı, varsayılan 0. |
 | `deneme_satici`, `deneme_alici` | İsteğe bağlı, yalnız `--deneme` için test cari kodları. |
 | `deneme_hedef_ambar` | İsteğe bağlı, yalnız `--deneme` için ambar fişinin hedef ambar no'su (kaynak `ambar_no`); yoksa ambar fişi denenmez. |
+| `siparis_icerigi` | İsteğe bağlı, `acik` ya da `kapali` (varsayılan `kapali`). Açıkken satın alma siparişi içeriği okunur (`GET /api/PurchaseOrder/{no}/content`, kart 2987); fiyat taşıdığı için ayrıca açılır. Kapalıyken uç 404 döner ve Logo'ya sorulmaz. |
 
 ## Çalıştırma
 
@@ -115,6 +116,10 @@ yalnız bu koşuda açılan ve numarası SQL'den yeniden okunup önekle başlad�
 - Onaylı talep Logo talep fişi olur (`POST /api/DemandFiche/AddRich`, onaylı açılır); siparişe bağlanan talep kalemi karşılama olur
   (`POST /api/DemandFiche/peg`, önce `GET peg/byOrder/{ref}` ile okunur). Talep fişini numarayla bulma ucu yok (TMI tarafında): sonucu bilinmeyen gönderim
   kendiliğinden yinelenmez, "Logo'da kontrol edin" hatası görünür.
+- Sipariş içeriği (kart 2987, yalnız okuma): `GET /api/PurchaseOrder/{no}/content` başlığı (kayıt no, tarih, cari, döviz, kur, durum, iptal) ve
+  satırları (kayıt no, tür, kod, ad, miktar, birim, fiyat, döviz fiyatı, KDV, termin, açıklama, kapalı) döner. Yalnız satın alma siparişi
+  (TRCODE 2, sorguda sabit); ayar `siparis_icerigi=acik` olmadan 404. Logo'da TMI dışında açılmış siparişi düzeltme ekranı (D7) bunu kullanır;
+  TMI tarafı ayrı karttır. Satır sütunları ölçülmedi (aşağıda madde 9).
 
 ## Satış teklifi ve siparişi (portal, kart #777)
 
@@ -196,6 +201,8 @@ ile doğrulanır; fark çıkarsa yalnız yardımcı değişir:
 6. Malzeme fişi TRCODE'ları (sarf 12, giriş 13, fire 11, ambar 25, sayım fazlası 50, sayım eksiği 51) ve ambar fişinin `SOURCE_WH`/`DEST_WH` alanları.
 7. Malzeme fişi Logo Objects `Delete` ile silinir ve aynı numarayla yeniden açılabilir; fişe bağlı kayıt (maliyet dağıtımı, kapanmış dönem) varsa silme reddedilir ve TMI satırı "reddedildi" olur.
 8. Kartı pasife alma: Logo Objects'te malzeme ve hizmet kartının `ACTIVE` alanı (1 kullanım dışı) ve `SRVCARD.ACTIVE` sütunu.
+9. Sipariş içeriği (2987): `ORFICHE.DATE_`; `ORFLINE.PRICE`, `PRPRICE`, `VAT`, `UOMREF`, `DUEDATE`, `LINEEXP` sütun adları ve anlamları
+   ölçülmedi (Logo bilgisayarında ölçüm şimdilik yok). Anlam, Logo ekranındaki siparişle okunanın karşılaştırılmasıyla doğrulanır.
 
 TMI tarafındaki eski varsayımlar (cevap zarfı, 60 saniye, 5 dakika bekleme, kart türleri, sipariş alanları) yardımcının sözleşmesiyle aynıdır;
 yardımcı bunları `kopru.ts`'in beklediği biçimde döner (`Islemler.cs`).

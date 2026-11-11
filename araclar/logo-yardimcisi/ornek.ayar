@@ -24,3 +24,6 @@ sql_baglanti=Server=<sunucu>;Database=<veritabani>;User Id=<salt-okunur-kullanic
 # deneme_alici=<test-alici-cari-kodu>
 # Istege bagli, yalniz --deneme icin: ambar fisinin hedef ambar no'su (kaynak ambar_no); yoksa ambar fisi denenmez
 # deneme_hedef_ambar=<hedef-ambar-no>
+
+# Istege bagli: satin alma siparisi icerigi okumasi (kart 2987; fiyat tasir). Varsayilan kapali; acmak icin acik yazin.
+# siparis_icerigi=kapali

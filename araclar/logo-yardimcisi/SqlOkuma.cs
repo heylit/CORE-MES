@@ -14,7 +14,7 @@ namespace LogoYardimcisi
     {
         public readonly string MalzemeRef, Malzeme, MalzemeRefIle, HizmetRefIle, MalzemeKodlari, MalzemeKartlari, StokToplamlari, CariAra, Cari, BirimSetleri, Ambarlar, Cariler, CariRef, Hizmet, Siparis, SiparisRefIle, SiparisSatirlari,
             MalKabul, Faturalar, Talep, TalepSatirlari, Karsilamalar, KarsilamaBul, SatisMusterisi, Teklif, TeklifRefIle, TeklifSatirlari,
-            MalzemeFisi, MalzemeFisiSatirlari, MalzemeHareketleri, SonAlisFiyatlari;
+            MalzemeFisi, MalzemeFisiSatirlari, MalzemeHareketleri, SonAlisFiyatlari, SiparisIcerikBasligi, SiparisIcerikSatirlari;
 
         // Rehberde kolon olarak geçmeyen, Logo'nun genel adlandırmasından alınanlar (VARSAYIM).
         public static readonly string[] Dogrulanmadi =
@@ -25,6 +25,7 @@ namespace LogoYardimcisi
             "LG_<f>_CLCARD.CARDTYPE, TAXNR, TCKNO, TAXOFFICE, ADDR1, ADDR2, TOWN, CITY, POSTCODE, TELNRS1, EMAILADDR",
             "LG_<f>_SRVCARD.ACTIVE (0 kullanımda) ve Logo Objects ACTIVE alanı (malzeme ve hizmet kartı) kart pasife almada",
             "LG_<f>_<d>_STLINE.DATE_, TRCODE (1 alış), IOCODE (1, 2 giriş; 3, 4 çıkış), CANCELLED, SOURCEINDEX, PRICE, PRCURR, PRPRICE, CLIENTREF (2961-D4 okumaları)",
+            "LG_<f>_<d>_ORFICHE.DATE_; LG_<f>_<d>_ORFLINE.PRICE, PRPRICE, VAT, UOMREF, DUEDATE, LINEEXP; LG_<f>_SRVCARD.DEFINITION_ satır adı (2987 sipariş içeriği; ölçüm bekliyor, kart 2980 b)",
         };
 
         public Sorgular(int firma, int donem)
@@ -89,6 +90,12 @@ namespace LogoYardimcisi
                 + d("INVOICE") + " V ON V.LOGICALREF = L.INVOICEREF LEFT JOIN " + f("CLCARD") + " C ON C.LOGICALREF = L.CLIENTREF LEFT JOIN " + f("UNITSETL")
                 + " U ON U.LOGICALREF = L.UOMREF WHERE L.STOCKREF = @malzeme AND L.LINETYPE = 0 AND L.TRCODE = 1 AND L.CANCELLED = 0 AND L.INVOICEREF > 0"
                 + " ORDER BY L.DATE_ DESC, L.LOGICALREF DESC";
+            // 2987: yalnız satın alma siparişi (TRCODE 2, parametre değil sabit); satır adı hizmette hizmet kartından, malzemede malzeme kartından.
+            SiparisIcerikBasligi = "SELECT O.LOGICALREF, O.FICHENO, O.DATE_, C.CODE, O.TRCURR, O.TRRATE, O.STATUS, O.CANCELLED FROM " + d("ORFICHE")
+                + " O LEFT JOIN " + f("CLCARD") + " C ON C.LOGICALREF = O.CLIENTREF WHERE O.TRCODE = 2 AND O.FICHENO = @no";
+            SiparisIcerikSatirlari = "SELECT L.LOGICALREF, L.LINETYPE, " + satirKodu + ", CASE WHEN L.LINETYPE = 4 THEN S.DEFINITION_ ELSE I.NAME END, L.AMOUNT, U.CODE,"
+                + " L.PRICE, L.PRPRICE, L.VAT, L.DUEDATE, L.LINEEXP, L.CLOSED FROM " + d("ORFLINE") + " L" + kodBirlesimi + " LEFT JOIN " + f("UNITSETL")
+                + " U ON U.LOGICALREF = L.UOMREF WHERE L.ORDFICHEREF = @ref ORDER BY L.LOGICALREF";
             MalzemeFisiSatirlari = "SELECT L.LOGICALREF, L.LINETYPE, I.CODE, L.AMOUNT FROM " + d("STLINE") + " L LEFT JOIN " + f("ITEMS")
                 + " I ON I.LOGICALREF = L.STOCKREF WHERE L.STFICHEREF = @ref ORDER BY L.LOGICALREF";
         }
@@ -291,6 +298,45 @@ namespace LogoYardimcisi
                 l.Add(x);
             }
             return l;
+        }
+
+        static DateTime? TarihYa(object o)
+        {
+            return o == null ? (DateTime?)null : Convert.ToDateTime(o, CultureInfo.InvariantCulture);
+        }
+
+        public SiparisIcerigi SatinAlmaSiparisiIcerigi(string no)
+        {
+            var b = Sorgula(q.SiparisIcerikBasligi, P("@no", no));
+            if (b.Count == 0) return null;
+            var h = b[0];
+            var x = new SiparisIcerigi();
+            x.Ref = Tam(h[0]);
+            x.No = Metin(h[1]);
+            x.Tarih = TarihYa(h[2]);
+            x.CariKod = Metin(h[3]);
+            x.DovizTuru = Tam(h[4]);
+            x.Kur = Ondalik(h[5]);
+            x.Durum = Tam(h[6]);
+            x.Iptal = Tam(h[7]) != 0;
+            foreach (var s in Sorgula(q.SiparisIcerikSatirlari, P("@ref", x.Ref)))
+            {
+                var r = new SiparisIcerikSatiri();
+                r.Ref = Tam(s[0]);
+                r.SatirTuru = Tam(s[1]);
+                r.Kod = Metin(s[2]);
+                r.Ad = Metin(s[3]);
+                r.Miktar = Ondalik(s[4]);
+                r.Birim = Metin(s[5]);
+                r.Fiyat = Ondalik(s[6]);
+                r.DovizFiyati = Ondalik(s[7]);
+                r.Kdv = Ondalik(s[8]);
+                r.Termin = TarihYa(s[9]);
+                r.Aciklama = Metin(s[10]);
+                r.Kapali = Tam(s[11]) != 0;
+                x.Satirlar.Add(r);
+            }
+            return x;
         }
 
         public List<StokToplami> StokToplamlari(int sonGorulen, int enCok)

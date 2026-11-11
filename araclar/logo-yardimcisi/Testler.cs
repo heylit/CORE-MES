@@ -82,7 +82,12 @@ namespace LogoYardimcisi
 
         static Cevap C(SahteLogo s, string yontem, string yol, object govde, Dictionary<string, string> sorgu)
         {
-            var c = Isl(s).Isle(yontem, yol, sorgu, govde == null ? null : (govde as string ?? Json.Yaz(govde)));
+            return C(Isl(s), yontem, yol, govde, sorgu);
+        }
+
+        static Cevap C(Islemler isl, string yontem, string yol, object govde, Dictionary<string, string> sorgu)
+        {
+            var c = isl.Isle(yontem, yol, sorgu, govde == null ? null : (govde as string ?? Json.Yaz(govde)));
             // Cevap TMI'ye JSON olarak gider: testler de JSON'dan geri okunmuş halini görür.
             return new Cevap(c.Durum, Json.Yeni().DeserializeObject(Json.Yaz(c.Govde)));
         }
@@ -359,6 +364,122 @@ namespace LogoYardimcisi
             Esit("TMI-ERP-TEST-002", sonra[2].Kod, "yeni satır");
             g["arpCode"] = Alici;
             Icerir(Hata(C(s, "POST", "/api/PurchaseOrder/UpdateRich", g)), "Cari değişikliği");
+        }
+
+        /* ---------------- Kart 2987: satın alma siparişi içeriği ---------------- */
+
+        static Cevap Icerik(SahteLogo s, string no, bool acik = true, string yontem = "GET")
+        {
+            var a = TestAyari();
+            a.SiparisIcerigi = acik;
+            return C(new Islemler(s, s, a, () => new DateTime(2026, 10, 21, 9, 5, 7)), yontem, "/api/PurchaseOrder/" + Uri.EscapeDataString(no) + "/content", null,
+                new Dictionary<string, string>());
+        }
+
+        // Logo'da CORE MES dışında açılmış sipariş: yardımcı yazmadan, doğrudan Logo'ya girilmiş gibi.
+        static SahteLogo.Fis DisSiparis(SahteLogo s, string no)
+        {
+            var f = new SahteLogo.Fis { Ref = 7001, Nesne = Nesne.SatinAlmaSiparisi, Trcode = 2, No = no, Cari = Satici, Durum = 4, DovizTuru = 1, Kur = 30m,
+                Tarih = new DateTime(2026, 9, 30) };
+            f.Satirlar.Add(new SahteLogo.Satir { Ref = 7002, Tur = 0, Kod = Malzeme, Miktar = 3m, Birim = "ADET", Fiyat = 300m, DovizFiyati = 10m, Kdv = 20m,
+                Termin = new DateTime(2026, 10, 15), Aciklama = "Deneme açıklama", Ust = f });
+            f.Satirlar.Add(new SahteLogo.Satir { Ref = 7003, Tur = 4, Kod = "HZM-1", Miktar = 1m, Birim = "ADET", Fiyat = 60m, DovizFiyati = 2m, Kdv = 20m, Kapali = true, Ust = f });
+            s.Fisler.Add(f);
+            return f;
+        }
+
+        static void T_2987_siparis_icerigi_ayar_kapaliyken_yok_ve_logoya_sorulmaz()
+        {
+            var s = Logo();
+            DisSiparis(s, "LG-DIS-1");
+            Esit(false, TestAyari().SiparisIcerigi, "varsayılan kapalı");
+            var c = Icerik(s, "LG-DIS-1", false);
+            Esit(404, c.Durum, "kapalıyken uç yok");
+            Icermez(Json.Yaz(c.Govde), "300");
+            Dogru(!s.Cagrilar.Any(x => x.StartsWith("SiparisIcerigi")), "kapalıyken Logo okunmaz");
+            Esit(true, Ayar.Coz("port=4190\nanahtar=0123456789abcdef0123\nlogo_kullanici=x\nfirma_no=1\ndonem_no=1\nsql_baglanti=x\nsiparis_icerigi=acik").SiparisIcerigi, "açık");
+            var red = false;
+            try { Ayar.Coz("port=4190\nanahtar=0123456789abcdef0123\nlogo_kullanici=x\nfirma_no=1\ndonem_no=1\nsql_baglanti=x\nsiparis_icerigi=evet"); }
+            catch (GecersizIstek) { red = true; }
+            Dogru(red, "acik/kapali dışı değer reddedilir");
+        }
+
+        static void T_2987_logoda_acilmis_siparisin_basligi_ve_satirlari_okunur()
+        {
+            var s = Logo();
+            DisSiparis(s, "LG-DIS-2");
+            var c = Icerik(s, "LG-DIS-2");
+            Esit(200, c.Durum, "okuma");
+            var b = Z(c);
+            Esit(7001, b["logicalRef"], "kayıt Logo'dan");
+            Esit("LG-DIS-2", b["number"], "no");
+            Esit("2026-09-30", b["date"], "tarih");
+            Esit(Satici, b["arpCode"], "cari");
+            Esit(1, b["currencyType"], "döviz");
+            Esit(30, Convert.ToInt32(b["rate"]), "kur");
+            Esit(4, b["status"], "durum");
+            Esit(false, b["cancelled"], "iptal değil");
+            var l = ((object[])b["lines"]).Cast<Dictionary<string, object>>().ToList();
+            Esit(2, l.Count, "kapalı satır da gelir");
+            Esit(7002, l[0]["logicalRef"], "satır kaydı");
+            Esit(Malzeme, l[0]["code"], "kod");
+            Esit(Malzeme, l[0]["name"], "malzeme adı karttan");
+            Esit(3, Convert.ToInt32(l[0]["quantity"]), "miktar");
+            Esit("ADET", l[0]["unitCode"], "birim");
+            Esit(300, Convert.ToInt32(l[0]["price"]), "yerel fiyat");
+            Esit(10, Convert.ToInt32(l[0]["currencyPrice"]), "döviz fiyatı");
+            Esit(20, Convert.ToInt32(l[0]["vatRate"]), "KDV");
+            Esit("2026-10-15", l[0]["dueDate"], "termin");
+            Esit("Deneme açıklama", l[0]["description"], "açıklama");
+            Esit(false, l[0]["closed"], "açık satır");
+            Esit(4, l[1]["type"], "hizmet satırı");
+            Esit("HZM-1", l[1]["name"], "hizmet adı hizmet kartından");
+            Esit(null, l[1]["dueDate"], "terminsiz satır boş");
+            Esit(true, l[1]["closed"], "kapalı satır");
+        }
+
+        static void T_2987_yalniz_satin_alma_siparisi_okunur_ve_yalniz_get()
+        {
+            var s = Logo();
+            var satis = new SahteLogo.Fis { Ref = 7101, Nesne = Nesne.SatisSiparisi, Trcode = 1, No = "LG-SATIS-1", Cari = Alici };
+            s.Fisler.Add(satis);
+            var talep = new SahteLogo.Fis { Ref = 7102, Nesne = Nesne.TalepFisi, No = "LG-TALEP-1" };
+            s.Fisler.Add(talep);
+            Esit(404, Icerik(s, "LG-SATIS-1").Durum, "satış siparişi okunmaz");
+            Esit(404, Icerik(s, "LG-TALEP-1").Durum, "talep fişi okunmaz");
+            Esit(404, Icerik(s, "YOK-1").Durum, "olmayan sipariş");
+            DisSiparis(s, "LG-DIS-3");
+            Esit(404, Icerik(s, "LG-DIS-3", true, "POST").Durum, "yalnız GET");
+            Esit(404, C(s, "GET", "/api/PurchaseOrder/LG-DIS-3/content/x", null).Durum, "alt yol yok");
+            var once = s.Cagrilar.Count(x => !x.StartsWith("SiparisIcerigi"));
+            Icerik(s, "LG-DIS-3");
+            Esit(once, s.Cagrilar.Count(x => !x.StartsWith("SiparisIcerigi")), "okuma Logo'ya yazmaz");
+        }
+
+        static void T_2987_core_mes_acilmis_ve_duzenlenmis_siparisin_icerigi_yazilanla_ayni()
+        {
+            var s = Logo();
+            var c = C(s, "POST", "/api/PurchaseOrder/AddRich", Siparis("SP-ICERIK-1", SiparisSatiri(Malzeme, 4)));
+            Dogru(Basari(c), Json.Yaz(c.Govde));
+            var l = ((object[])Z(Icerik(s, "SP-ICERIK-1"))["lines"]).Cast<Dictionary<string, object>>().ToList();
+            Esit("2026-10-05", Z(Icerik(s, "SP-ICERIK-1"))["date"], "tarih");
+            Esit(10.8m, Convert.ToDecimal(l[0]["price"]), "fiyat");
+            Esit("2026-10-20", l[0]["dueDate"], "termin");
+            Esit("(isk. %10)", l[0]["description"], "açıklama");
+            Esit("ADET", l[0]["unitCode"], "birim");
+            var satir = SiparisSatiri(Malzeme, 4);
+            satir["logicalRef"] = Satirlar(c, "order")[0];
+            satir["price"] = 9.5m;
+            satir["dueDate"] = "25.10.2026";
+            var g = Siparis("SP-ICERIK-1", satir);
+            g["logicalRef"] = Ref(c);
+            g["date"] = "06.10.2026";
+            Dogru(Basari(C(s, "POST", "/api/PurchaseOrder/UpdateRich", g)), "düzenleme");
+            var sonra = Z(Icerik(s, "SP-ICERIK-1"));
+            var l2 = ((object[])sonra["lines"]).Cast<Dictionary<string, object>>().ToList();
+            Esit("2026-10-06", sonra["date"], "düzenlenen tarih");
+            Esit(9.5m, Convert.ToDecimal(l2[0]["price"]), "düzenlenen fiyat");
+            Esit("2026-10-25", l2[0]["dueDate"], "düzenlenen termin");
         }
 
         static void T_siparis_duzenlemesi_durum_gelmezse_logodaki_durumu_korur()
@@ -739,7 +860,11 @@ namespace LogoYardimcisi
         {
             var q = new Sorgular(7, 3);
             var hepsi = q.Hepsi().ToList();
-            Esit(31, hepsi.Count, "sorgu sayısı");
+            Esit(33, hepsi.Count, "sorgu sayısı");
+            Icerir(q.SiparisIcerikBasligi, "O.TRCODE = 2 AND O.FICHENO = @no");
+            Icerir(q.SiparisIcerikBasligi, "LG_007_03_ORFICHE");
+            Icerir(q.SiparisIcerikSatirlari, "LG_007_03_ORFLINE");
+            Icermez(q.SiparisIcerikBasligi, "@tr");
             foreach (var m in hepsi) Sorgular.YalnizOkuma(string.Format(m, "@r0"));
             Icerir(q.MalzemeRef, "LG_007_ITEMS");
             Icerir(q.MalzemeKodlari, "SELECT CODE FROM LG_007_ITEMS");

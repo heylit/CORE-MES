@@ -24,11 +24,13 @@ namespace LogoYardimcisi
         public string DenemeAlici;
         // Yalnız --deneme: ambar fişinin hedef ambarı (kaynak ambar_no); yoksa ambar fişi denenmez.
         public int? DenemeHedefAmbar;
+        // Kart 2987: satın alma siparişi içeriği okuması (fiyat taşır). Varsayılan kapalı; yalnız "siparis_icerigi=acik" açar.
+        public bool SiparisIcerigi;
 
         static readonly string[] Adlar =
         {
             "port", "anahtar", "logo_kullanici", "logo_parola", "firma_no", "donem_no", "sql_baglanti", "ambar_no", "isyeri_no",
-            "deneme_satici", "deneme_alici", "deneme_hedef_ambar",
+            "deneme_satici", "deneme_alici", "deneme_hedef_ambar", "siparis_icerigi",
         };
 
         public static Ayar DosyadanOku(string yol)
@@ -67,6 +69,9 @@ namespace LogoYardimcisi
             a.DenemeSatici = Metin(d, "deneme_satici", false);
             a.DenemeAlici = Metin(d, "deneme_alici", false);
             if (Metin(d, "deneme_hedef_ambar", false) != null) a.DenemeHedefAmbar = Tam(d, "deneme_hedef_ambar", 0, 9999, null);
+            var icerik = Metin(d, "siparis_icerigi", false) ?? "kapali";
+            if (icerik != "acik" && icerik != "kapali") throw new GecersizIstek("Ayar geçersiz: siparis_icerigi 'acik' ya da 'kapali' olmalı.");
+            a.SiparisIcerigi = icerik == "acik";
             return a;
         }
 
