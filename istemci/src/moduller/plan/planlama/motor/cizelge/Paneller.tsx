@@ -56,7 +56,7 @@ function Sepet({ p, planYaz }: SolOzellikleri) {
   return (
     <>
       <div className="tc-pym-sepet-toplam">
-        <div><small>Gecikme</small><b className="tc-pym-mono">{saatYazi(o.wT)}</b>{yok}</div>
+        <div><small>Ağırlıklı gecikme</small><b className="tc-pym-mono">{saatYazi(o.wT)}</b>{yok}</div>
         <div><small>Geciken</small><b className="tc-pym-mono">{o.late}/{o.n}</b>{yok}</div>
         <div><small>Başlangıç</small><b className="tc-pym-mono">{saatYazi(o.wT)}</b></div>
       </div>
