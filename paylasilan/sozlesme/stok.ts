@@ -562,7 +562,10 @@ export const partiSevki = z.object({
 });
 export type PartiSevki = z.output<typeof partiSevki>;
 // Partiye bağlı belge (Çizim merkezi kaydı); dosya stok'un `/stok/partiler/:id/belgeler/:belgeId` ucundan açılır.
-export const partiBelgesi = z.object({ id: z.number().int(), ad: z.string(), tur: z.string(), harf: z.string().nullable() });
+// 2138-2: revKodu gösterilen revizyon kodu (belgenin kodu, yoksa bağlı malzeme kartının revizyonu); harf merkezin iç sırasıdır, gösterilmez.
+export const partiBelgesi = z.object({
+  id: z.number().int(), ad: z.string(), tur: z.string(), harf: z.string().nullable(), revKodu: z.string().nullable().optional(),
+});
 export type PartiBelgesi = z.output<typeof partiBelgesi>;
 export const partiBelgeParametresi = z.object({ id: buyukKimlik, belgeId: kimlik });
 // Kartın son partileri ve bağlı sertifikaları (#960, #1001); satın alma da okur (Malzemeler'de hammadde sertifikası).

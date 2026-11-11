@@ -1428,7 +1428,7 @@ function satirBelgeleriHTML(satirId: number, liste: SiparisBelgesi[] | null): st
   if (liste === null) return '<span class="small muted">okunamadı</span>';
   if (!liste.length) return '<span class="small muted">belge yok</span>';
   return liste.map(b => `<span class="sa-belge"><span class="flag ${b.tur === "sertifika" ? "good" : "info"}">${b.tur === "sertifika" ? "sertifika" : "rapor"}</span>
-    <a href="${belgeAdresi(satirId, b)}" target="_blank" rel="noopener">${esc(b.ad)}${b.harf ? ` (${esc(b.harf)})` : ""}</a>
+    <a href="${belgeAdresi(satirId, b)}" target="_blank" rel="noopener">${esc(b.ad)}${b.revKodu ? ` (Rev ${esc(b.revKodu)})` : ""}</a>
     ${canWrite() ? `<button class="btn sm ghost" data-act="cert-remove" data-line="${satirId}" data-id="${b.id}">Kaldır</button>` : ""}</span>`).join("<br>");
 }
 async function sertifikalariYukle(r: PurchaseRequest): Promise<void> {

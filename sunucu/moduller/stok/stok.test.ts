@@ -631,7 +631,8 @@ describe('stok (gerçek PostgreSQL)', () => {
     const r = await malKabul(h, '4', { parti: { tedarikciPartiNo: 'TP-S', sertifikaNo: 'S-9' }, sertifika: { ozet, dosyaAdi: 'sertifika.pdf' } });
     assert.equal(r.durum, 200, JSON.stringify(r.govde));
     const [p] = await o().vt.tx((db) => sonPartiler(db, h));
-    assert.deepEqual(p?.belgeler.map((b) => [b.tur, b.harf]), [['sertifika', 'A']]);
+    // 2138-2: kodu olmayan sertifikada gösterilen revizyon boştur; harf yalnız merkezin iç sırasıdır.
+    assert.deepEqual(p?.belgeler.map((b) => [b.tur, b.harf, b.revKodu]), [['sertifika', 'A', null]]);
     assert.match(p?.belgeler[0]?.ad ?? '', /S-9/);
     // #1013: mal kabul ayrıntısı partinin sertifikasını taşır; dosya stok'un ucundan, yalnız o partiye bağlıysa verilir.
     const ayrinti = await depo<MalKabulAyrintiCevabi>('GET', `/stok/mal-kabuller/${r.govde.belge.id}`);
@@ -644,6 +645,17 @@ describe('stok (gerçek PostgreSQL)', () => {
     assert.equal((await depo('GET', `/stok/partiler/${p!.partiId}/belgeler/${belge.id + 999}`)).durum, 404);
     assert.equal((await istek('operator', 'GET', `/stok/partiler/${p!.partiId}/belgeler/${belge.id}`)).durum, 403);
 
+    // Merkezde antet kodlu revizyon yayınlanınca partinin belgesi o kodu taşır (aktarım sınanır).
+    const giris = await app.inject({ method: 'POST', url: '/api/oturum/giris', payload: { kullaniciAdi: 'yonetici', parola: PAROLA } });
+    cerezler.set('yonetici', String(giris.headers['set-cookie']).split(';')[0] ?? '');
+    const merkez = await istek<{ surum: number; revizyonlar: { id: number; antetRev: string | null }[] }>('yonetici', 'GET', `/cizimler/${p!.belgeler[0]!.id}`);
+    assert.equal(merkez.durum, 200, JSON.stringify(merkez.govde));
+    const eklendi = await istek<{ surum: number; revizyonlar: { id: number; antetRev: string | null }[] }>('yonetici', 'POST', `/cizimler/${p!.belgeler[0]!.id}/revizyon-ekle`, { ozet: await yukle('yonetici'), dosyaAdi: 'sertifika-b.pdf', antetRev: '03', surum: merkez.govde.surum });
+    assert.equal(eklendi.durum, 200, JSON.stringify(eklendi.govde));
+    const kodlu = eklendi.govde.revizyonlar.find((x) => x.antetRev === '03');
+    assert.equal((await istek('yonetici', 'POST', `/cizimler/${p!.belgeler[0]!.id}/revizyonlar/${kodlu?.id}/yayinla`, { surum: eklendi.govde.surum })).durum, 200);
+    const [yeni] = await o().vt.tx((db) => sonPartiler(db, h));
+    assert.deepEqual(yeni?.belgeler.map((b) => [b.harf, b.revKodu]), [['B', '03']]);
     const demirbas = await kart('demirbas');
     const partisiz = await malKabul(demirbas, '1', { sertifika: { ozet: await yukle('depo'), dosyaAdi: 'a.pdf' } });
     assert.equal(partisiz.durum, 400);

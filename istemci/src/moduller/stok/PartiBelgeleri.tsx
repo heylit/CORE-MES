@@ -8,7 +8,7 @@ export function PartiBelgeleri({ partiId, belgeler }: { partiId: number; belgele
     <span className="tc-stok-belgeler">
       {belgeler.map((b) => (
         <a key={b.id} href={`/api/stok/partiler/${partiId}/belgeler/${b.id}`} target="_blank" rel="noopener">
-          <Simge ad="download" boyut="k" />{b.ad}{b.harf ? ` (${b.harf})` : ''}
+          <Simge ad="download" boyut="k" />{b.ad}{b.revKodu ? ` (Rev ${b.revKodu})` : ''}
         </a>
       ))}
     </span>

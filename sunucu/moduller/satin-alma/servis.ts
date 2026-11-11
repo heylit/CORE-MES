@@ -1594,7 +1594,7 @@ export async function panoOzeti(db: Db, k: Kullanici): Promise<SatinAlmaOzetiCev
 const BELGE_HEDEFI = 'satin-alma';
 const SATIR_YOK = 'Sipariş satırı bulunamadı.';
 const BELGE_YOK = 'Belge bu sipariş satırına bağlı değil.';
-const belgeOzeti = ({ id, ad, tur, harf }: BagliBelge): SiparisBelgesi => ({ id, ad, tur, harf });
+const belgeOzeti = ({ id, ad, tur, harf, revKodu }: BagliBelge): SiparisBelgesi => ({ id, ad, tur, harf, revKodu });
 async function satirOlmali(db: Db, satirId: number): Promise<void> {
   if (!(await s.siparisSatiriVarMi(db, satirId))) throw bulunamadi(SATIR_YOK);
 }
