@@ -57,6 +57,12 @@ describe('1710 kartta 3B analizden net ağırlık', () => {
     expect(screen.queryByText(/3B model var/)).toBeNull();
   });
 
+  it('2138-2: kodsuz modelde yalnız model adı yazılır; merkezin harfi gösterilmez', async () => {
+    ac({ cevap: { ...OZET, model: { ...OZET.model!, revKodu: null, kapak: true }, modelSayisi: 2 } });
+    expect(await screen.findByText('Karta bağlı 2 3B model var; ağırlık kapak modelinden alındı: Model braket.step.')).toBeTruthy();
+    expect(screen.queryByText(/\(B\)|Rev B/)).toBeNull();
+  });
+
   it('kapalı olmayan modelde ağırlık hesaplanmaz, neden söylenir', async () => {
     ac({ cevap: { ...OZET, hacimMm3: null, neden: 'hacim-yok' } });
     expect(await screen.findByText(/kapalı bir katı değil/)).toBeTruthy();
