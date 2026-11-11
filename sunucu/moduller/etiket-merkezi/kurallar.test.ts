@@ -4,7 +4,7 @@ import { agAraliklariniCoz } from '#paylasilan/ag-araligi.ts';
 import { kodTuru } from '#paylasilan/kod-sozlugu.ts';
 import { QR_KENAR_MODUL, type Sablon } from '#paylasilan/sozlesme/etiket-merkezi.ts';
 import { yaziciAgiOku } from './ag.ts';
-import { QR_ALTI_EN_KUCUK_YAZI, qrAltiYeri } from './kurallar.ts';
+import { QR_ALTI_EN_KUCUK_YAZI, kopyaDegerleri, qrAltiYeri } from './kurallar.ts';
 import { BEKLEYEN_GUN, HATALI_KARAR_SIMGESI, KALITE_KARAR_SIMGESI, REFAKAT_ADIM_SAYISI, REFAKAT_CIKIS_SATIRI, bekleyenBaslangici, bekleyenSirasi, kaliteBekleyenleri, kaliteDurumDegerleri, hataliBekleyenleri, malKabulBekleyenleri, refakatBekleyenleri } from './kurallar.ts';
 import { alanDegeri, baskiEngeli, dogrudanBaskiDurumu, indirmeEngeli, istasyonDegerleri, kayitUyumHatasi, konumDegerleri, lotDegerleri, kayitSablonTuru, malzemeDegerleri, noktaya, rafDegerleri, refakatDegerleri, refakatPartisiDegerleri, toplamEtiketHatasi, yaziciAdresHatasi, qrDikdortgenleri, qrMatrisi, sablonHatalari, sadelestir, SATIR_BASI, satirlaraBol, sigdirilmisYazi, yerlesim } from './kurallar.ts';
 import { HAZIR_SABLONLAR, ORNEK_DEGERLER } from './sablonlar.ts';
@@ -47,6 +47,22 @@ describe('etiket-merkezi kuralları', () => {
       assert.ok(k?.tur === 'qr' && alt?.tur === 'metin' && alt.satirlar.join('') === k.veri, s.anahtar);
       assert.ok(alt.y >= k.y + k.boyut && alt.y + alt.yaziMm <= kutu.y + kutu.boyut + Math.max(0, qrAltiYeri(s, kutu)) + 0.15 + 1e-9, s.anahtar);
       assert.ok(k.boyut >= kutu.boyut - 2.5, s.anahtar);
+    }
+  });
+
+  test('2922 a: istasyon etiketi yer etiketinin teslim yeri boyudur; anahtar, tür ve QR (LOC) değişmez', () => {
+    const yer = HAZIR_SABLONLAR.filter((s) => s.tur === 'konum' || s.tur === 'istasyon').map((s) => [s.anahtar, s.ad, s.tur]);
+    assert.deepEqual(yer, [['konum-50x25', 'Yer 50x25', 'konum'], ['konum-100x50', 'Yer 100x50', 'konum'], ['istasyon-100x50', 'Yer 100x50 · Teslim yeri', 'istasyon']]);
+    const istasyon = HAZIR_SABLONLAR.find((s) => s.anahtar === 'istasyon-100x50')!;
+    const metinler = istasyon.ogeler.flatMap((o) => (o.tur === 'metin' && o.alan.startsWith('=') ? [o.alan.slice(1)] : []));
+    assert.ok(metinler.includes('TESLİM') && metinler.includes('TESLİM YERİ · İSTASYON'), metinler.join(', '));
+    assert.ok(istasyon.ogeler.some((o) => o.tur === 'qr' && o.alan === 'qr'));
+  });
+
+  test('2922 a: yer etiketlerinin sabit yazıları örnek değerlerle kesilmeden basılır', () => {
+    for (const s of HAZIR_SABLONLAR.filter((x) => x.tur === 'konum' || x.tur === 'istasyon')) {
+      const kesik = yerlesim(s, ORNEK_DEGERLER[s.tur], false).flatMap((o) => (o.tur === 'metin' ? o.satirlar.filter((x) => x.endsWith('...')) : []));
+      assert.deepEqual(kesik, [], s.anahtar);
     }
   });
 
@@ -116,7 +132,7 @@ describe('etiket-merkezi kuralları', () => {
   });
 
   test('kod satıra sığmazsa ortadan bölünmez: yazı küçülür, o da yetmezse ayıraçtan bölünür', () => {
-    // Konum 50x25'te kod 24,5 mm, 4 mm yazıyla 10 harf alır; 11 harflik kod küçülen yazıyla tek satırdır.
+    // Yer 50x25'te kod 24,5 mm, 4 mm yazıyla 10 harf alır; 11 harflik kod küçülen yazıyla tek satırdır.
     const konum = HAZIR_SABLONLAR.find((s) => s.anahtar === 'konum-50x25');
     assert.ok(konum);
     const kod = yerlesim(konum, { qr: 'LOC:ORN-ZEMIN-1', kod: 'ORN-ZEMIN-1' }, false).find((o) => o.tur === 'metin' && o.satirlar.join('').startsWith('ORN'));
@@ -464,5 +480,13 @@ describe('EM-30 (2223-1 a): bekleyen etiketler', () => {
     const b = (tur: 'mal-kabul' | 'kalite-durum', id: number, zaman: string) => ({ tur, id, baslik: '', ayrinti: '', zaman, etiketSayisi: 1 });
     const liste = [b('mal-kabul', 1, '2026-11-01T00:00:00Z'), b('mal-kabul', 2, '2026-11-02T00:00:00Z'), b('kalite-durum', 3, '2026-11-02T00:00:00Z')];
     assert.deepEqual(liste.sort(bekleyenSirasi).map((x) => x.id), [3, 2, 1]);
+  });
+});
+
+describe('2929 a: refakat kartı kopyaları', () => {
+  test('adet kadar değer kümesi, her biri Kopya n/N; tek kopyada alan eklenmez', () => {
+    const d = [{ qr: 'RP:1', emirNo: 'UE-1-P1' }, { qr: 'RP:2', emirNo: 'UE-2-P1' }];
+    assert.deepEqual(kopyaDegerleri(d, 1), d);
+    assert.deepEqual(kopyaDegerleri(d, 2).map((x) => [x.qr, x.kopya]), [['RP:1', 'Kopya 1/2'], ['RP:1', 'Kopya 2/2'], ['RP:2', 'Kopya 1/2'], ['RP:2', 'Kopya 2/2']]);
   });
 });

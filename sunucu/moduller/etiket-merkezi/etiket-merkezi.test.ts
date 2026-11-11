@@ -452,6 +452,32 @@ describe('etiket-merkezi (gerçek PostgreSQL)', () => {
       'SELECT kaynak_tur, kaynak_id FROM etiket_merkezi_baski_kaydi WHERE baski_id = $1', [(c.json() as IndirCevabi).baskiId],
     );
     assert.deepEqual(kayitlar, [{ kaynak_tur: 'refakat', kaynak_id: e.id }]);
+    assert.doesNotMatch((c.json() as IndirCevabi).komut, /Kopya/, 'tek kopyada kopya yazısı yok');
+
+    // 2929 a: adet 2 aynı kartın iki ayrı etiketidir; her biri "Kopya n/N" taşır, QR aynı, yazıcıya çoğaltma (PQ2) gitmez; defter tek satır.
+    const zpl = await al(yonetici, `${adres(String(acik))}&adet=2`);
+    assert.equal(zpl.statusCode, 200, zpl.body);
+    const zc = zpl.json() as KayitCiktiCevabi;
+    assert.equal(zc.adet, 2);
+    assert.equal(zc.komut.match(/\^XA/g)?.length, 2);
+    assert.match(zc.komut, /Kopya 1\/2[\s\S]*Kopya 2\/2/);
+    assert.ok(zc.komut.split('^XZ').slice(0, 2).every((et) => et.includes(`RP:${acik}`)), 'iki kopyada QR aynı');
+    assert.doesNotMatch(zc.komut, /\^PQ2/);
+    // Dosya yazıcısı PPLB konuşur: iki etiket, her biri P1; P2 yok.
+    const iki = await yaz(yonetici, '/etiket-merkezi/sablonlar/refakat-100x150/indir', { yaziciId: dosya.id, adet: 2, kayit: { tur: 'refakat-partisi', idler: [acik] } });
+    assert.equal(iki.statusCode, 200, iki.body);
+    const komut = (iki.json() as IndirCevabi).komut;
+    assert.equal(komut.match(/^P1$/gm)?.length, 2);
+    assert.doesNotMatch(komut, /^P2$/m);
+    assert.match(komut, /Kopya 1\/2[\s\S]*Kopya 2\/2/);
+    const ikiKayit = await ortam!.vt.sorgu<{ kaynak_id: number }>('SELECT kaynak_id FROM etiket_merkezi_baski_kaydi WHERE baski_id = $1', [(iki.json() as IndirCevabi).baskiId]);
+    assert.deepEqual(ikiKayit, [{ kaynak_id: e.id }]);
+    // Tarayıcıdan yazdırmada da kopyalar ayrı sayfadır, sayfa başına adet 1.
+    const y = await yaz(yonetici, '/etiket-merkezi/sablonlar/refakat-100x150/yazdir', { adet: 2, kayit: { tur: 'refakat-partisi', idler: [acik] } });
+    assert.equal(y.statusCode, 200, y.body);
+    const yc = (y.json() as YazdirCevabi);
+    assert.equal(yc.adet, 1);
+    assert.deepEqual(yc.sayfalar.map((sf) => sf.flatMap((o) => (o.tur === 'metin' ? o.satirlar : [])).find((t) => t.startsWith('Kopya'))), ['Kopya 1/2', 'Kopya 2/2']);
   });
 
   test('EM-U18 (1285 a): hatalı parça etiketi Üretim Emirleri kaydından çıkar; durum karardan gelir; QR parçanın emri; deftere kayıt olarak bağlanır; oku yetkisi olmayan göremez', async () => {

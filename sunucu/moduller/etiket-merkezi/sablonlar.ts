@@ -20,7 +20,7 @@ export const ALANLAR: Record<SablonTuru, { anahtar: string; ad: string }[]> = {
     { anahtar: 'adetTermin', ad: 'Adet ve termin' }, { anahtar: 'parti', ad: 'Parti' }, { anahtar: 'basim', ad: 'Basım tarihi' },
     { anahtar: 'adimlar', ad: 'İşlem sırası' }, { anahtar: 'rota', ad: 'Rota (adım başına satır)' }, { anahtar: 'lot', ad: 'Lot, parti, döküm, sertifika' },
     { anahtar: 'adet', ad: 'Adet' }, { anahtar: 'termin', ad: 'Termin' }, { anahtar: 'adim1Ad', ad: 'İşlem satırları (no, ad, yer, piktogram)' },
-    { anahtar: 'lotNo', ad: 'Lot no' }, { anahtar: 'lotEk', ad: 'Döküm, sertifika, tedarikçi partisi' },
+    { anahtar: 'lotNo', ad: 'Lot no' }, { anahtar: 'lotEk', ad: 'Döküm, sertifika, tedarikçi partisi' }, { anahtar: 'kopya', ad: 'Kopya sırası (n/N)' },
   ],
   istasyon: [{ anahtar: 'qr', ad: 'QR (LOC)' }, { anahtar: 'kod', ad: 'İstasyon kodu' }, { anahtar: 'ad', ad: 'İstasyon adı' }],
   'kalite-durum': [
@@ -76,10 +76,10 @@ const refakatAdimi = (i: number) => {
 const DENEME_SIMGELERI = ['konum', 'raf', 'malzeme', 'lot', 'refakat', 'tezgah', 'kalite', 'hatali', 'koli', 'kumpas'];
 
 export const HAZIR_SABLONLAR: readonly Sablon[] = [
-  { anahtar: 'konum-50x25', ad: 'Konum 50x25', tur: 'konum', genislik: 50, yukseklik: 25, ogeler: [
+  { anahtar: 'konum-50x25', ad: 'Yer 50x25', tur: 'konum', genislik: 50, yukseklik: 25, ogeler: [
     ...kucukUst('konum', 'KONUM', '=LOC'), metin(24.5, 10.8, 24.5, 9.8, 4, 'kod', true), metin(24.5, 21, 24.5, 3.6, 2.2, 'yer'),
   ] },
-  { anahtar: 'konum-100x50', ad: 'Konum 100x50', tur: 'konum', genislik: 100, yukseklik: 50, ogeler: [
+  { anahtar: 'konum-100x50', ad: 'Yer 100x50', tur: 'konum', genislik: 100, yukseklik: 50, ogeler: [
     ...buyukUst('konum', 'KONUM', '=STOK KONUMU'), metin(50, 21.5, 48, 17, 7, 'kod', true),
     baslik(50, 39, 48, 'AD', 'ad'), metin(50, 41.4, 48, 3.6, 3.2, 'ad', true), metin(50, 45.4, 48, 3.2, 2.6, 'yer'),
   ] },
@@ -105,6 +105,8 @@ export const HAZIR_SABLONLAR: readonly Sablon[] = [
   { anahtar: 'refakat-100x150', ad: 'Refakat kartı 100x150', tur: 'refakat', genislik: 100, yukseklik: 150, ogeler: [
     // Sağ üst karo bütün hazır şablonlardadır (2168-1 a); burada küçüktür, yer kart no ve QR'ındır.
     qr(3.5, 3.5, 37.5), simge(87, 2.5, 10.5, '=siyah:refakat'), metin(45, 3.4, 40, 3.6, 3, '=REFAKAT KARTI', true), metin(45, 7.6, 40, 2.4, 1.9, '=HER İŞLEMDE OKUTUN'),
+    // 2929 a: kopya sırası başlığın altında; tek kopyada değer yoktur, yazı basılmaz.
+    metin(45, 10.6, 40, 2.6, 2.2, 'kopya', true),
     metin(45, 14, 52, 8.6, 7.4, 'emirNo', true), metin(45, 23.4, 52, 4.2, 3.6, 'urunAd', true), metin(45, 28, 52, 3.2, 2.6, 'urunKod'),
     kutu(45, 32, 52, 12.5, 0.4), kutu(71, 32, 0.4, 12.5, 0.4),
     baslik(47, 33.2, 22, 'EMİR ADEDİ'), metin(47, 35.6, 22, 7.2, 6.6, 'adet', true), baslik(73, 33.2, 22, 'TERMİN'), metin(73, 36.8, 22, 4.6, 4, 'termin', true),
@@ -114,8 +116,10 @@ export const HAZIR_SABLONLAR: readonly Sablon[] = [
     ...Array.from({ length: REFAKAT_ADIM_SAYISI }, (_, i) => refakatAdimi(i + 1)).flat(),
     kutu(1.5, 137.4, 97, 0.3), metin(4, 138.8, 58, 3, 2.4, 'parti'), metin(64, 138.8, 32, 3, 2.4, 'basim'),
   ] },
-  { anahtar: 'istasyon-100x50', ad: 'İstasyon 100x50', tur: 'istasyon', genislik: 100, yukseklik: 50, ogeler: [
-    ...buyukUst('tezgah', 'İSTASYON', '=LOC'), metin(50, 21.5, 48, 17, 7, 'kod', true), baslik(50, 39, 48, 'AD', 'ad'), metin(50, 41.4, 48, 7, 4, 'ad', true),
+  // 2922 a: istasyon etiketi yer etiketinin bir boyudur; QR aynı konum kodudur (LOC), üstte "Teslim yeri" yazar. Anahtar ve tür
+  // adları değişmez: basılı etiketler ve cihaz varsayılanları geçerli kalır. Üst yazı tek sözcüktür: 28 mm kutuda boşluklu metin küçülmez.
+  { anahtar: 'istasyon-100x50', ad: 'Yer 100x50 · Teslim yeri', tur: 'istasyon', genislik: 100, yukseklik: 50, ogeler: [
+    ...buyukUst('tezgah', 'TESLİM', '=TESLİM YERİ · İSTASYON'), metin(50, 21.5, 48, 17, 7, 'kod', true), baslik(50, 39, 48, 'AD', 'ad'), metin(50, 41.4, 48, 7, 4, 'ad', true),
   ] },
   // Lot etiketiyle aynı rulo (100x50); QR bugünkü boyutunda (2168-2 b).
   { anahtar: 'kalite-durum-100x50', ad: 'Kalite durumu 100x50', tur: 'kalite-durum', genislik: 100, yukseklik: 50, ogeler: [
@@ -166,7 +170,7 @@ export const ORNEK_DEGERLER: Record<SablonTuru, AlanDegerleri> = {
     adimlar: '10 Torna (Örnek tezgâh) · 20 Kaplama (Örnek fason, fason) · 30 Son kontrol',
     rota: ['10 Torna (Örnek tezgâh)', '20 Kaplama (Örnek fason, fason)', '30 Son kontrol'].join(SATIR_BASI), lot: 'Lot LT-000123 · Döküm D-01 · Sertifika S-01',
     lotNo: 'LT-000123', lotEk: 'Döküm D-01 · Sertifika S-01',
-    adet: '40', termin: '30.10.2026',
+    adet: '40', termin: '30.10.2026', kopya: 'Kopya 1/2',
     ...refakatAdimlari([{ opNo: 10, ad: 'Torna', yer: 'Örnek tezgâh', fason: false }, { opNo: 20, ad: 'Kaplama', yer: 'Örnek fason', fason: true }, { opNo: 30, ad: 'Son kontrol', yer: null, fason: false }]),
   },
   istasyon: { qr: `${KOD_ONEKI.konum}:IST-CNC-01`, kod: 'IST-CNC-01', ad: 'Örnek CNC tezgâhı' },
