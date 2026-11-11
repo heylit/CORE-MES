@@ -62,3 +62,24 @@ test('uzun emir no listede tam okunur, kart dışına taşmaz, etiketle çakış
   expect(cakisir, 'emir no ile durum etiketi üst üste').toBe(false);
   expect(ag.hatalar).toEqual([]);
 });
+
+// Matris hücresi (müdür): eksik hücre düğmedir, pencerede gerekçe ister; Vazgeç yazmadan kapatır. Yazma bu testte yapılmaz.
+test.describe('müdür', () => {
+  test.use({ hesap: 'ornek.mudur' });
+  test('matriste eksik hücreye tıklanır, elle onay penceresi açılır, Vazgeç yazmaz', async ({ page, ag, ac }) => {
+    await ac('/adim-durumu');
+    await page.getByRole('list', { name: 'Açık emirler' }).getByRole('button').first().click();
+    await page.getByRole('button', { name: 'Matris' }).click();
+    const tablo = page.getByRole('table', { name: 'Hazırlık matrisi' });
+    const hucre = tablo.getByRole('button', { name: /Elle onayla$/ }).first();
+    await hucre.scrollIntoViewIfNeeded();
+    await hucre.click();
+    const pencere = page.getByRole('dialog');
+    await expect(pencere.getByText('Sistemin dediği', { exact: true })).toBeVisible();
+    await expect(pencere.getByRole('button', { name: 'Elle onayla' })).toBeDisabled();
+    await pencere.getByRole('button', { name: 'Vazgeç' }).click();
+    await expect(pencere).toBeHidden();
+    expect(ag.hatalar).toEqual([]);
+    expect(ag.yazmalar, 'Vazgeç yazmaz').toEqual([]);
+  });
+});

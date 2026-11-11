@@ -158,6 +158,7 @@ function EmrinAdimDurumu({ id, yazar, geri }: { id: number; yazar: boolean; geri
   const d = useQuery({ queryKey: anahtarlar.adimDurumu(id), queryFn: () => api.get<AdimDurumuCevabi>(adimDurumuUcu(id)) });
   const [seciliAdim, adimSec] = useState<number | null>(null);
   const [matris, matrisYaz] = useState(false);
+  const [hucre, hucreYaz] = useState<{ isEmriId: number; madde: HazirlikMaddesi } | null>(null);
   const geriDugmesi = <Dugme simge="chev-left" className="tc-ad-geri" onClick={geri}>Emirler</Dugme>;
   if (d.isPending) return <Kart>{geriDugmesi}<DurumKutusu durum="yukleniyor" /></Kart>;
   if (d.isError) return <Kart>{geriDugmesi}<DurumKutusu durum="hata" mesaj={hataIletisi(d.error, 'Adım durumu alınamadı.')} yenile={() => { void d.refetch(); }} /></Kart>;
@@ -166,6 +167,7 @@ function EmrinAdimDurumu({ id, yazar, geri }: { id: number; yazar: boolean; geri
   const sayac = (o: Obek) => v.adimlar.filter((a) => OBEK[gecerliStatu(a)] === o).length;
   const elleSayisi = v.adimlar.filter((a) => a.elle !== null).length;
   const emirAcik = ACIK.has(v.durum);
+  const hucreAdimi = hucre === null ? null : v.adimlar.find((a) => a.isEmriId === hucre.isEmriId) ?? null;
   return (
     <>
       <Kart baslik={v.emirNo} baslikEki={<Rozet ton="bilgi">{DURUM_ETIKETI[v.durum]}</Rozet>}
@@ -191,7 +193,7 @@ function EmrinAdimDurumu({ id, yazar, geri }: { id: number; yazar: boolean; geri
           {elleSayisi > 0 && <li><Rozet ton="uyari" gorunum="cizgi"><Simge ad="edit" boyut="k" />Elle</Rozet><b>{elleSayisi}</b></li>}
         </ul>
         {v.adimlar.length === 0 ? <DurumKutusu durum="bos" mesaj="Bu emrin adımı yok." />
-          : matris ? <Matris v={v} sec={adimSec} /> : (
+          : matris ? <Matris v={v} sec={adimSec} isaretle={yazar && emirAcik ? (a, madde) => hucreYaz({ isEmriId: a.isEmriId, madde }) : null} /> : (
             <ol className="tc-ad-adimlar" aria-label="Adımlar">
               {v.adimlar.map((a) => <AdimSatiri key={a.isEmriId} adim={a} sec={() => adimSec(a.isEmriId)} />)}
             </ol>
@@ -199,6 +201,12 @@ function EmrinAdimDurumu({ id, yazar, geri }: { id: number; yazar: boolean; geri
       </Kart>
       <Pencere acik={adim !== null} kapat={() => adimSec(null)} tur="yan" baslik={adim === null ? 'Adım' : `OP ${String(adim.opNo)} · ${adim.ad}`}>
         {adim !== null && <AdimAyrintisi emirId={id} adim={adim} yazar={yazar && emirAcik} />}
+      </Pencere>
+      <Pencere acik={hucreAdimi !== null && hucre !== null} kapat={() => hucreYaz(null)}
+        baslik={hucreAdimi === null || hucre === null ? 'Hazırlık' : `OP ${String(hucreAdimi.opNo)} · ${MADDE[hucre.madde].ad}`}>
+        {hucreAdimi !== null && hucre !== null && (
+          <HucreIsareti key={`${String(hucre.isEmriId)}-${hucre.madde}`} emirId={id} adim={hucreAdimi} madde={hucre.madde} kapat={() => hucreYaz(null)} />
+        )}
       </Pencere>
     </>
   );
@@ -236,7 +244,8 @@ function AdimSatiri({ adim, sec }: { adim: Adim; sec: () => void }) {
 }
 
 // Bütün maddeleri adım adım karşılaştırmak isteyen için: hücre yalnız simgedir, adı ipucunda ve ekran okuyucuda.
-function Matris({ v, sec }: { v: AdimDurumuCevabi; sec: (id: number) => void }) {
+// Yetkili kişi (adim-durumu-yaz) hücreye tıklayıp maddeyi elle onaylar ya da onayı kaldırır; hesaplanan hâl silinmez, onay yanında durur.
+function Matris({ v, sec, isaretle }: { v: AdimDurumuCevabi; sec: (id: number) => void; isaretle: ((a: Adim, madde: HazirlikMaddesi) => void) | null }) {
   // Sütunlar sunucunun madde sırasıyladır (sözleşmedeki liste); istemci listeyi ayrıca tutmaz.
   const maddeSutunlari: Sutun<Adim>[] = (v.adimlar[0]?.maddeler ?? []).map(({ madde }) => ({
     anahtar: madde, baslik: MADDE[madde].kisa, csv: false,
@@ -246,15 +255,24 @@ function Matris({ v, sec }: { v: AdimDurumuCevabi; sec: (id: number) => void }) 
       const g = halGorunumu(madde, m.hal);
       const elle = elleOnayli(a, m);
       const ad = elle ? 'Elle onay' : g.ad;
-      return (
-        <span className={`tc-ad-hucre tc-ad-hucre-${elle ? 'uyari' : g.ton}`} title={`${MADDE[madde].ad}: ${ad}`}>
-          <Simge ad={elle ? 'edit' : g.simge} boyut="k" /><span className="tc-gizli-etiket">{ad}</span>
-        </span>
-      );
+      const sinif = `tc-ad-hucre tc-ad-hucre-${elle ? 'uyari' : g.ton}`;
+      const ic = <><Simge ad={elle ? 'edit' : g.simge} boyut="k" /><span className="tc-gizli-etiket">{ad}</span></>;
+      const onayVar = a.onaylar.some((o) => o.madde === madde);
+      if (isaretle !== null && (onayVar || onaylanirMi(a, m))) {
+        const eylem = onayVar ? 'Elle onayı aç' : 'Elle onayla';
+        return (
+          <button type="button" className={`${sinif} tc-ad-hucre-dugme`} title={`${MADDE[madde].ad}: ${ad}. ${eylem}`}
+            aria-label={`OP ${String(a.opNo)} ${MADDE[madde].ad}: ${ad}. ${eylem}`}
+            onClick={(o) => { o.stopPropagation(); isaretle(a, madde); }}>
+            {ic}
+          </button>
+        );
+      }
+      return <span className={sinif} title={`${MADDE[madde].ad}: ${ad}`}>{ic}</span>;
     },
   }));
   const sutunlar: Sutun<Adim>[] = [
-    { anahtar: 'adim', baslik: 'Adım', sabit: 'sol', hucre: (a) => <><span className="tc-emir-kod">OP {a.opNo}</span> {a.ad}</> },
+    { anahtar: 'adim', baslik: 'Adım', sabit: 'sol', hucre: (a) => <span className="tc-ad-matris-adim"><span className="tc-emir-kod">OP {a.opNo}</span> {a.ad}</span> },
     { anahtar: 'statu', baslik: 'Son durum', hucre: (a) => <Statu statu={gecerliStatu(a)} elle={a.elle !== null} /> },
     ...maddeSutunlari,
   ];
@@ -269,30 +287,42 @@ function Matris({ v, sec }: { v: AdimDurumuCevabi; sec: (id: number) => void }) 
         <span className="tc-ad-hucre tc-ad-hucre-uyari"><Simge ad="alert" boyut="k" />Uyarı</span>
         <span className="tc-ad-hucre tc-ad-hucre-uyari"><Simge ad="edit" boyut="k" />Elle onay</span>
       </p>
+      {isaretle === null
+        ? <p className="tc-ad-ipucu"><Simge ad="lock" boyut="k" />Hücreyi elle işaretleme müdür ve planlama rollerindedir.</p>
+        : <p className="tc-ad-ipucu"><Simge ad="edit" boyut="k" />Eksik ya da bilinmeyen hücreye tıklayıp elle onaylayın; elle onaylı hücreye tıklayıp onayı kaldırın.</p>}
     </>
   );
 }
 
-function AdimAyrintisi({ emirId, adim, yazar }: { emirId: number; adim: Adim; yazar: boolean }) {
+// Yan pencere ve matris hücresi aynı komutları aynı yoldan gönderir.
+function useAdimKomutu(emirId: number, isEmriId: number, bitti: () => void) {
   const istemci = useQueryClient();
   const { bildir } = useBildirim();
-  const [statu, statuYaz] = useState<AdimStatusu | ''>('');
-  const [not, notYaz] = useState('');
-  const [madde, maddeYaz] = useState<HazirlikMaddesi | ''>('');
-  const [gerekce, gerekceYaz] = useState('');
   const komut = useMutation({
     mutationFn: ({ yol, govde, istekKimligi }: Komut & { istekKimligi: string }) =>
-      api.post<AdimDurumuCevabi>(isEmriKomutu(emirId, adim.isEmriId, yol), govde, { istekKimligi }),
+      api.post<AdimDurumuCevabi>(isEmriKomutu(emirId, isEmriId, yol), govde, { istekKimligi }),
     onSuccess: (c) => {
       istemci.setQueryData(anahtarlar.adimDurumu(emirId), c);
       bildir('tamam', 'Kaydedildi.');
-      statuYaz(''); notYaz(''); maddeYaz(''); gerekceYaz('');
+      bitti();
     },
     onError: async (x) => { bildir('hata', hataIletisi(x, 'Kaydedilemedi.')); await istemci.invalidateQueries({ queryKey: anahtarlar.adimDurumu(emirId) }); },
   });
   // Kimlik tıklamada üretilir: sunucu aynı tıklamanın yeniden gönderimini ikinci kez uygulamaz (tekrarKorumali uçlar).
   const yap = (k: Komut) => komut.mutate({ ...k, istekKimligi: yeniIstekKimligi() });
-  const onaylanir = adim.maddeler.filter((m) => (m.hal === 'eksik' || m.hal === 'bilinmiyor') && !adim.onaylar.some((o) => o.madde === m.madde));
+  return { mesgul: komut.isPending, yap };
+}
+
+// Elle onaylanabilen madde: eksik ya da bilinmiyor ve henüz açık onayı yok. Sunucu aynı kuralı ayrıca denetler.
+const onaylanirMi = (a: Adim, m: AdimMaddesi): boolean => (m.hal === 'eksik' || m.hal === 'bilinmiyor') && !a.onaylar.some((o) => o.madde === m.madde);
+
+function AdimAyrintisi({ emirId, adim, yazar }: { emirId: number; adim: Adim; yazar: boolean }) {
+  const [statu, statuYaz] = useState<AdimStatusu | ''>('');
+  const [not, notYaz] = useState('');
+  const [madde, maddeYaz] = useState<HazirlikMaddesi | ''>('');
+  const [gerekce, gerekceYaz] = useState('');
+  const { mesgul, yap } = useAdimKomutu(emirId, adim.isEmriId, () => { statuYaz(''); notYaz(''); maddeYaz(''); gerekceYaz(''); });
+  const onaylanir = adim.maddeler.filter((m) => onaylanirMi(adim, m));
   const seciliMadde = adim.maddeler.find((m) => m.madde === madde);
   const gerekceGerek = madde !== '' && !MADDE[madde].uyarir;
   const nedenler = [...adim.nedenler, ...adim.tedarik.map(tedarikMetni)];
@@ -340,9 +370,9 @@ function AdimAyrintisi({ emirId, adim, yazar }: { emirId: number; adim: Adim; ya
             <CokSatir etiket="Not" placeholder="İsteğe bağlı" rows={2} value={not} onChange={(e) => notYaz(e.target.value)} />
             <div className="tc-emir-ust">
               {/* Pencerede tek birincil eylem kalır: hazırlık onayı işi başlatır, elle statü yalnız bilgi yazar. */}
-              <Dugme simge="check" disabled={statu === '' || komut.isPending}
+              <Dugme simge="check" disabled={statu === '' || mesgul}
                 onClick={() => yap({ yol: 'statu-yaz', govde: { statu, not: not.trim() === '' ? null : not.trim(), sistemStatusu: adim.sistemStatusu } })}>Yaz</Dugme>
-              {adim.elle !== null && <Dugme simge="x" disabled={komut.isPending} onClick={() => yap({ yol: 'statu-kaldir', govde: {} })}>Elle statüyü kaldır</Dugme>}
+              {adim.elle !== null && <Dugme simge="x" disabled={mesgul} onClick={() => yap({ yol: 'statu-kaldir', govde: {} })}>Elle statüyü kaldır</Dugme>}
             </div>
           </section>
           <section className="tc-kapanis-onay" aria-label="Hazırlığı elle onayla">
@@ -354,7 +384,7 @@ function AdimAyrintisi({ emirId, adim, yazar }: { emirId: number; adim: Adim; ya
                 <CokSatir etiket="Gerekçe" placeholder={gerekceGerek ? 'Zorunlu, en az 5 karakter: bu madde eksikken iş başlamaz, onay başlatmayı açar' : 'İsteğe bağlı'}
                   rows={2} value={gerekce} onChange={(e) => gerekceYaz(e.target.value)} />
                 <div className="tc-emir-ust">
-                  <Dugme tur="birincil" simge="check" disabled={seciliMadde === undefined || (gerekceGerek && gerekce.trim().length < GEREKCE_EN_AZ) || komut.isPending}
+                  <Dugme tur="birincil" simge="check" disabled={seciliMadde === undefined || (gerekceGerek && gerekce.trim().length < GEREKCE_EN_AZ) || mesgul}
                     onClick={() => { if (seciliMadde) yap({ yol: 'hazirlik-onayla', govde: { madde: seciliMadde.madde, gerekce: gerekce.trim() === '' ? null : gerekce.trim(), sistemHali: seciliMadde.hal } }); }}>
                     Onayla
                   </Dugme>
@@ -372,7 +402,7 @@ function AdimAyrintisi({ emirId, adim, yazar }: { emirId: number; adim: Adim; ya
               <li key={o.madde}>
                 <time dateTime={o.zaman}>{zamanMetni(o.zaman)}</time>
                 {MADDE[o.madde].ad} · {o.kisiAdi ?? 'Kişi'}{o.gerekce === null ? '' : ` · ${o.gerekce}`}
-                {yazar && <> <Dugme simge="x" disabled={komut.isPending} onClick={() => yap({ yol: 'hazirlik-onay-kaldir', govde: { madde: o.madde } })}>Onayı kaldır</Dugme></>}
+                {yazar && <> <Dugme simge="x" disabled={mesgul} onClick={() => yap({ yol: 'hazirlik-onay-kaldir', govde: { madde: o.madde } })}>Onayı kaldır</Dugme></>}
               </li>
             ))}
           </ul>
@@ -388,6 +418,49 @@ function AdimAyrintisi({ emirId, adim, yazar }: { emirId: number; adim: Adim; ya
             </li>
           ))}
         </ol>
+      )}
+    </div>
+  );
+}
+
+function HucreIsareti({ emirId, adim, madde, kapat }: { emirId: number; adim: Adim; madde: HazirlikMaddesi; kapat: () => void }) {
+  const [gerekce, gerekceYaz] = useState('');
+  const { mesgul, yap } = useAdimKomutu(emirId, adim.isEmriId, kapat);
+  const m = adim.maddeler.find((x) => x.madde === madde);
+  const onay = adim.onaylar.find((o) => o.madde === madde) ?? null;
+  if (m === undefined) return <p className="tc-emir-not">Bu adımda madde yok.</p>;
+  const ham = halGorunumu(madde, m.ham);
+  const gerekceGerek = !MADDE[madde].uyarir;
+  return (
+    <div className="tc-ad-hucre-pencere">
+      <dl className="tc-emir-liste">
+        <dt>Adım</dt><dd>OP {adim.opNo} · {adim.ad}</dd>
+        <dt>Sistemin dediği</dt><dd><Rozet ton={ham.ton}><Simge ad={ham.simge} boyut="k" />{ham.ad}</Rozet></dd>
+        <dt>Sahibi</dt><dd>{MADDE[madde].sahip}</dd>
+      </dl>
+      {onay !== null ? (
+        <>
+          <p className="tc-emir-not"><Simge ad="edit" boyut="k" /> Elle onaylandı: {onay.kisiAdi ?? 'Kişi'} · {zamanMetni(onay.zaman)}{onay.gerekce === null ? '' : ` · ${onay.gerekce}`}</p>
+          <p className="tc-emir-not">Onay kaldırılınca hücre sistemin dediğine döner; kayıt geçmişte kalır.</p>
+          <div className="tc-emir-ust">
+            <Dugme simge="x" disabled={mesgul} onClick={() => yap({ yol: 'hazirlik-onay-kaldir', govde: { madde } })}>Onayı kaldır</Dugme>
+          </div>
+        </>
+      ) : (
+        <>
+          <p className="tc-emir-not">
+            Elle onay sistemin dediğini silmez, yanına işaret koyar; kim, ne zaman ve gerekçe kaydedilir, sonra kaldırılabilir.
+            {gerekceGerek ? ' Bu madde eksikken iş başlamaz; onay başlatmayı açar.' : ''}
+          </p>
+          <CokSatir etiket="Gerekçe" placeholder={gerekceGerek ? 'Zorunlu, en az 5 karakter' : 'İsteğe bağlı'} rows={2} value={gerekce} onChange={(e) => gerekceYaz(e.target.value)} />
+          <div className="tc-emir-ust">
+            <Dugme tur="birincil" simge="check" disabled={(gerekceGerek && gerekce.trim().length < GEREKCE_EN_AZ) || mesgul}
+              onClick={() => yap({ yol: 'hazirlik-onayla', govde: { madde, gerekce: gerekce.trim() === '' ? null : gerekce.trim(), sistemHali: m.hal } })}>
+              Elle onayla
+            </Dugme>
+            <Dugme onClick={kapat}>Vazgeç</Dugme>
+          </div>
+        </>
       )}
     </div>
   );

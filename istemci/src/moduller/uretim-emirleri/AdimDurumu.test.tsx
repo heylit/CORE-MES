@@ -97,6 +97,57 @@ describe('Adım Durumu (2893, düzen 2955)', () => {
     expect(within(satirlar[1]!).getByText('Eksik')).toBeTruthy();
   });
 
+  it('matriste okuyucu hücreye tıklayamaz; yetkisiz notu görür', async () => {
+    sunucuKur({ ...OKUYUCU, islemler: [...OKUYUCU.islemler, 'sayfa.adim-durumu'] }, yollar);
+    ac(ekran, '/adim-durumu?emir=5');
+    fireEvent.click(await screen.findByRole('button', { name: 'Matris' }));
+    const tablo = await screen.findByRole('table', { name: 'Hazırlık matrisi' });
+    expect(within(tablo).queryByRole('button', { name: /Elle onay/ })).toBeNull();
+    expect(screen.getByText(/Hücreyi elle işaretleme müdür ve planlama rollerindedir/)).toBeTruthy();
+  });
+
+  it('yetkili eksik hücreye tıklar, gerekçeyle elle onaylar; satır penceresi açılmaz; istek kimlik taşır', async () => {
+    const istekler = sunucuKur({ ...OKUYUCU, islemler: [...OKUYUCU.islemler, 'sayfa.adim-durumu', 'uretim-emirleri.adim-durumu-yaz'] }, {
+      ...yollar,
+      'POST /adimli-emirler/5/is-emirleri/52/hazirlik-onayla': () => json(200, CEVAP),
+    });
+    ac(ekran, '/adim-durumu?emir=5');
+    fireEvent.click(await screen.findByRole('button', { name: 'Matris' }));
+    const tablo = await screen.findByRole('table', { name: 'Hazırlık matrisi' });
+    // Tamam ve gerekmez hücreleri düğme değildir; yalnız onaylanabilen ve onaylı hücre tıklanır.
+    expect(within(tablo).queryByRole('button', { name: /OP 10/ })).toBeNull();
+    fireEvent.click(within(tablo).getByRole('button', { name: 'OP 20 CNC kurulumu: Eksik. Elle onayla' }));
+    const pencere = await screen.findByRole('dialog', { name: 'OP 20 · CNC kurulumu' });
+    expect(screen.queryByRole('dialog', { name: 'OP 20 · CNC freze' })).toBeNull();
+    const dugme = within(pencere).getByRole('button', { name: 'Elle onayla' });
+    expect((dugme as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.change(within(pencere).getByLabelText('Gerekçe'), { target: { value: 'Program elde denendi' } });
+    fireEvent.click(dugme);
+    await waitFor(() => expect(istekler.some((i) => i.yontem === 'POST')).toBe(true));
+    const istek = istekler.find((i) => i.yontem === 'POST');
+    expect(istek?.govde).toEqual({ madde: 'cnc', gerekce: 'Program elde denendi', sistemHali: 'eksik' });
+    expect(istek?.kimlik).toMatch(/^[0-9a-f-]{36}$/);
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'OP 20 · CNC kurulumu' })).toBeNull());
+  });
+
+  it('yetkili elle onaylı hücreye tıklar, kimin onayladığını görür ve onayı kaldırır', async () => {
+    const istekler = sunucuKur({ ...OKUYUCU, islemler: [...OKUYUCU.islemler, 'sayfa.adim-durumu', 'uretim-emirleri.adim-durumu-yaz'] }, {
+      ...yollar,
+      'POST /adimli-emirler/5/is-emirleri/52/hazirlik-onay-kaldir': () => json(200, CEVAP),
+    });
+    ac(ekran, '/adim-durumu?emir=5');
+    fireEvent.click(await screen.findByRole('button', { name: 'Matris' }));
+    const tablo = await screen.findByRole('table', { name: 'Hazırlık matrisi' });
+    fireEvent.click(within(tablo).getByRole('button', { name: /OP 20 Malzeme .*: Elle onay\. Elle onayı aç/ }));
+    const pencere = await screen.findByRole('dialog', { name: /OP 20 · Malzeme/ });
+    expect(within(pencere).getByText(/Elle onaylandı: Deneme Müdür/)).toBeTruthy();
+    // Sistemin dediği (ham) silinmez: malzeme uyaran maddedir, eksik hâli "Uyarı" görünür.
+    expect(within(pencere).getByText('Uyarı')).toBeTruthy();
+    fireEvent.click(within(pencere).getByRole('button', { name: 'Onayı kaldır' }));
+    await waitFor(() => expect(istekler.some((i) => i.yontem === 'POST')).toBe(true));
+    expect(istekler.find((i) => i.yontem === 'POST')?.govde).toEqual({ madde: 'malzeme' });
+  });
+
   it('aramaya uymayan emir listeden düşer', async () => {
     sunucuKur({ ...OKUYUCU, islemler: [...OKUYUCU.islemler, 'sayfa.adim-durumu'] }, yollar);
     ac(ekran, '/adim-durumu');
