@@ -88,7 +88,31 @@ export function AtolyeHaritasi() {
   const fabrika = useFabrika();
   const tumBolumler = useMemo(() => fabrika.data?.bolumler ?? [], [fabrika.data]);
   // Kapsam: 'fabrika' bütün bölümler birlikte, sayı tek bölüm. Seçilmediyse birden çok bölümde fabrika.
-  const [kapsamSecimi, kapsamSecimiYaz] = useState<number | 'fabrika' | null>(null);
+  // Seçim adreste bölüm koduyla durur (?bolum=<kod> ya da ?bolum=fabrika): yenileyince, sekme değişince ve paylaşılan
+  // bağlantıda aynı bölüm açılır. Kod benzersizdir ve adreste güvenli karakterlerdendir (atolye_salon_kod_bicimi).
+  // İkinci menü sekme bağlantısı adres sorgusunu taşımaz; son seçim bellekte de tutulur ve adrese geri yazılır.
+  const [adres, adresYaz] = useSearchParams();
+  const adrestekiBolum = adres.get('bolum');
+  const [sonBolum, sonBolumYaz] = useState<string | null>(adrestekiBolum);
+  const bolumAdresi = adrestekiBolum ?? sonBolum;
+  useEffect(() => { if (adrestekiBolum !== null) sonBolumYaz(adrestekiBolum); }, [adrestekiBolum]);
+  useEffect(() => {
+    if (adrestekiBolum !== null || sonBolum === null) return;
+    adresYaz((a) => { const yeni = new URLSearchParams(a); yeni.set('bolum', sonBolum); return yeni; }, { replace: true });
+  }, [adrestekiBolum, sonBolum, adresYaz]);
+  const kapsamSecimi: number | 'fabrika' | null = bolumAdresi === 'fabrika'
+    ? 'fabrika'
+    : tumBolumler.find((b) => b.salon.kod === bolumAdresi)?.salon.id ?? null;
+  // Yeni eklenen bölüm listede henüz yokken de seçilebilsin diye kod doğrudan da verilebilir.
+  const kapsamSecimiYaz = useCallback((secim: number | 'fabrika' | { kod: string }) => {
+    const kod = secim === 'fabrika' ? 'fabrika' : typeof secim === 'number' ? tumBolumler.find((b) => b.salon.id === secim)?.salon.kod : secim.kod;
+    sonBolumYaz(kod ?? null);
+    adresYaz((a) => {
+      const yeni = new URLSearchParams(a);
+      if (kod) yeni.set('bolum', kod); else yeni.delete('bolum');
+      return yeni;
+    }, { replace: true });
+  }, [adresYaz, tumBolumler]);
   const gecerliSecim = kapsamSecimi === 'fabrika' || tumBolumler.some((b) => b.salon.id === kapsamSecimi) ? kapsamSecimi : null;
   const kapsam = gecerliSecim ?? (tumBolumler.length > 1 ? 'fabrika' : tumBolumler[0]?.salon.id ?? null);
   const fabrikaGorunumu = kapsam === 'fabrika';
@@ -146,7 +170,6 @@ export function AtolyeHaritasi() {
   const arizaSayisi = useMemo(() => [...canliHaritasi.values()].filter((c) => c.ariza !== null).length, [canliHaritasi]);
   // Adres: /atolye?suzgec=yerlesmemis[&istasyon=<id>] yan listeyi "Yerleşmemiş makineler"de açar, verilen istasyonu vurgular
   // (İstasyonlar sayfasının "Haritada göster" bağlantısı, kart #1296).
-  const [adres] = useSearchParams();
   const vurguIstasyon = Number(adres.get('istasyon')) || null;
   const [yanListe, yanListeYaz] = useState<'istasyon' | 'hareket' | 'yerlesmemis'>(() => (adres.get('suzgec') === 'yerlesmemis' ? 'yerlesmemis' : 'istasyon'));
   const yerlesmemis = useYerlesmemisIstasyonlar(yanListe === 'yerlesmemis', fabrika.dataUpdatedAt);
@@ -204,7 +227,7 @@ export function AtolyeHaritasi() {
     const a = anahtar?.startsWith('giris') || anahtar?.startsWith('gecis') ? null : anahtar;
     seciliYaz(a);
     if (a === null || !a.startsWith('raf:')) vurguAdresYaz(null);
-  }, []);
+  }, [kapsamSecimiYaz]);
 
   const yolGoster = async (bolum: number, hedef: { x: number; z: number }) => {
     try {
@@ -312,7 +335,7 @@ export function AtolyeHaritasi() {
     <SalonPenceresi
       acik={salonPenceresi}
       kapat={() => salonPenceresiYaz(false)}
-      eklendi={(s) => { salonPenceresiYaz(false); kapsamSecimiYaz(s.id); bildir('tamam', `${s.kod} bölümü eklendi.`); }}
+      eklendi={(s) => { salonPenceresiYaz(false); kapsamSecimiYaz({ kod: s.kod }); bildir('tamam', `${s.kod} bölümü eklendi.`); }}
     />
   );
 

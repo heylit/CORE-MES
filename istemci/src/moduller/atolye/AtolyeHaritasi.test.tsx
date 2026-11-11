@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ReactElement } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { MemoryRouter } from 'react-router-dom';
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { MemoryRouter, useLocation, useNavigate } from 'react-router-dom';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import type { Kullanici } from '#paylasilan/kullanici.ts';
 import type {
   AramaCevabi, FabrikaKayitGovdesi, GozKalemi, GozKalemleriCevabi, GozlerCevabi, KalemGorunumleriCevabi, KayitCevabi, MerkezModelleriCevabi, SalonlarCevabi, YerlesmemisIstasyonlarCevabi, YerlesimCevabi, YerlesimGovdesi,
@@ -495,6 +495,32 @@ describe('fabrika haritası', () => {
     const s1 = await screen.findByRole('img', { name: 'Atölye planı' });
     expect(within(s1).getByText('CNC-01')).toBeTruthy();
     expect(within(s1).queryByText('R5')).toBeNull();
+  });
+
+  it('bölüm seçimi adreste bölüm koduyla durur; adresteki bölüm açılır, bilinmeyen kod varsayılana düşer', async () => {
+    sunucuKur(OKUYAN, { bolumler: [YERLESIM, YERLESIM_B] });
+    let arama = '';
+    function AdresGozu() { arama = useLocation().search; return null; }
+    goster(<><AtolyeHaritasi /><AdresGozu /></>, '/atolye/depo?bolum=S2');
+    await waitFor(() => expect((screen.getByLabelText('Bölüm') as HTMLSelectElement).value).toBe('2'));
+    fireEvent.change(screen.getByLabelText('Bölüm'), { target: { value: '1' } });
+    await waitFor(() => expect(new URLSearchParams(arama).get('bolum')).toBe('S1'));
+    fireEvent.change(screen.getByLabelText('Bölüm'), { target: { value: 'fabrika' } });
+    await waitFor(() => expect(new URLSearchParams(arama).get('bolum')).toBe('fabrika'));
+    cleanup();
+    // İkinci menü bağlantısı sorguyu taşımaz: aynı ekranda kalan seçim adrese geri yazılır.
+    sunucuKur(OKUYAN, { bolumler: [YERLESIM, YERLESIM_B] });
+    let git: ((yol: string) => void) | null = null;
+    function Gezgin() { const n = useNavigate(); git = (y) => { void n(y); }; arama = useLocation().search; return null; }
+    goster(<><AtolyeHaritasi /><Gezgin /></>, '/atolye?bolum=S2');
+    await waitFor(() => expect((screen.getByLabelText('Bölüm') as HTMLSelectElement).value).toBe('2'));
+    act(() => { git?.('/atolye/ikiz'); });
+    await waitFor(() => expect(new URLSearchParams(arama).get('bolum')).toBe('S2'));
+    expect((screen.getByLabelText('Bölüm') as HTMLSelectElement).value).toBe('2');
+    cleanup();
+    sunucuKur(OKUYAN, { bolumler: [YERLESIM, YERLESIM_B] });
+    goster(<AtolyeHaritasi />, '/atolye?bolum=YOK');
+    expect(await screen.findByRole('img', { name: 'Fabrika planı' })).toBeTruthy();
   });
 
   it('fabrika düzenleyici: bölüm içindekilerle taşınır, istasyon bölümden bölüme geçer; bütün bölümler tek komutla kaydedilir', async () => {
