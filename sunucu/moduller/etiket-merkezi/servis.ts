@@ -4,7 +4,7 @@ import { kisitKorumali } from '#cekirdek/kisit.ts';
 import { surumluGuncelle } from '#cekirdek/surum.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
 import {
-  COZUNURLUKLER, DOSYA_UZANTILARI, EN_COK_ADET, SABLON_TURU_ADLARI, YAZICI_DILLERI, YAZICI_DILI_ADLARI, type BasCevabi, type BasGovdesi, type BaskilarCevabi, type AtlaCevabi, type AtlaGovdesi, type BekleyenlerCevabi, type CiktiCevabi, type EtiketlerCevabi, type CiktiSecenekleri, type DogrudanBaski, type IndirCevabi,
+  COZUNURLUKLER, DOSYA_UZANTILARI, EN_COK_ADET, SABLON_TURU_ADLARI, YAZICI_DILLERI, YAZICI_DILI_ADLARI, type BasCevabi, type BasGovdesi, type BaskilarCevabi, type AtlaCevabi, type AtlaGovdesi, type BekleyenlerCevabi, type CiktiCevabi, type EtiketlerCevabi, type CiktiSecenekleri, type DogrudanBaski, type IndirCevabi, type YazdirCevabi, type YazdirGovdesi,
   type KayitCiktiCevabi, type KayitSecimi, type RaflarCevabi,
   type Sablon, type SablonlarCevabi, type Yazici, type YaziciAcGovdesi, type YaziciGuncelleGovdesi, type YazicilarCevabi,
 } from '#paylasilan/sozlesme/etiket-merkezi.ts';
@@ -266,6 +266,44 @@ export async function indir(db: Db, kullanici: Kullanici, anahtar: string, g: Ba
   return { baskiId, dosyaAdi: hazir.dosyaAdi, komut: hazir.komut };
 }
 
+// Kart 2904: tarayıcıdan vektörel yazdırma. Sunucu yazıcıya bağlanmaz; her etiketin yerleşimini (önizlemeyle aynı öğeler) verir, istemci
+// gerçek mm ölçüsünde sayfa olarak basar. Kurallar indirmeyle aynıdır (EM-11, EM-12); tarayıcı Türkçe harfi bastığından sadeleştirilmez.
+// Yazdırmanın yapıldığı bilinmez; defter kimin hangi etiketi yazdırmaya açtığını tutar.
+export async function yazdir(db: Db, kullanici: Kullanici, anahtar: string, g: YazdirGovdesi): Promise<YazdirCevabi> {
+  const sablon = sablonBul(anahtar);
+  const uyum = kayitUyumHatasi(sablon.tur, g.kayit?.tur ?? null);
+  if (uyum !== null) throw dogrulama(uyum);
+  let degerler: AlanDegerleri[];
+  let kayitlar: KayitCiktiCevabi['kayitlar'] | null = null;
+  let eksikler: number[] = [];
+  if (g.kayit) {
+    const koli = koliHatasi(g.kayit.tur, g.kayit.koli);
+    if (koli !== null) throw dogrulama(koli);
+    const toplam = toplamEtiketHatasi(g.kayit.idler.length * (g.kayit.koli?.sayi ?? 1), g.adet);
+    if (toplam !== null) throw dogrulama(toplam, 'adet');
+    const okunan = await kayitDegerleri(db, g.kayit);
+    if (okunan.bulunan.length === 0) throw bulunamadi('Seçilen kayıtlar bulunamadı.');
+    const basilacak = toplamEtiketHatasi(okunan.bulunan.length, g.adet);
+    if (basilacak !== null) throw dogrulama(basilacak, 'adet');
+    degerler = okunan.bulunan.map((b) => b.degerler);
+    kayitlar = okunan.bulunan.map(({ id, baslik }) => ({ id, baslik }));
+    eksikler = okunan.eksikler;
+  } else {
+    degerler = [sablon.tur === 'deneme' ? { ...ORNEK_DEGERLER.deneme, yazici: 'Tarayıcıdan vektörel' } : ORNEK_DEGERLER[sablon.tur]];
+  }
+  const baskiId = await baskiEkle(db, {
+    yaziciId: null, sablonAnahtar: anahtar, adet: g.adet, kisiId: kullanici.id, sonuc: 'yazdirildi', hata: null, kayit: basilanKayitlar(g, { kayitlar }),
+  });
+  return {
+    baskiId,
+    sablon: { anahtar: sablon.anahtar, ad: sablon.ad, genislik: sablon.genislik, yukseklik: sablon.yukseklik },
+    adet: g.adet,
+    sayfalar: degerler.map((d) => yerlesim(sablon, d, false)),
+    kayitlar,
+    eksikler,
+  };
+}
+
 // Yazıcı kendi dili, çözünürlüğü ve harf ayarıyla basar.
 function baskiCiktisi(db: Db, anahtar: string, yazici: Yazici, g: BasGovdesi): Promise<CiktiCevabi & { kayitlar: KayitCiktiCevabi['kayitlar'] | null }> {
   const secenek = { dil: yazici.dil, dpi: yazici.dpi === 300 ? 300 : 203, adet: g.adet, sade: yazici.sade } as const;
@@ -273,7 +311,7 @@ function baskiCiktisi(db: Db, anahtar: string, yazici: Yazici, g: BasGovdesi): P
 }
 
 // Defterde yalnız gerçekten komuta giren (bulunan) kayıtlar yer alır; koliler gibi bir kaydın birden çok etiketi tek satırdır.
-function basilanKayitlar(g: BasGovdesi, hazir: { kayitlar: KayitCiktiCevabi['kayitlar'] | null }): { tur: string; idler: number[] } | null {
+function basilanKayitlar(g: Pick<BasGovdesi, 'kayit'>, hazir: { kayitlar: KayitCiktiCevabi['kayitlar'] | null }): { tur: string; idler: number[] } | null {
   return g.kayit && hazir.kayitlar ? { tur: kayitSablonTuru(g.kayit.tur), idler: [...new Set(hazir.kayitlar.map((k) => k.id))] } : null;
 }
 

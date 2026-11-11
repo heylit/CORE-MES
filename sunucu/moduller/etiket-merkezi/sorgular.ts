@@ -33,7 +33,8 @@ export const yaziciGuncelle = (db: Db, id: number, y: YaziciYazimi & { aktif: bo
   );
 
 export interface BaskiYazimi {
-  yaziciId: number; sablonAnahtar: string; adet: number; kisiId: number; sonuc: BaskiSonucu; hata: string | null;
+  // Tarayıcıdan yazdırmada (yazdirildi) yazıcı tanımı yoktur.
+  yaziciId: number | null; sablonAnahtar: string; adet: number; kisiId: number; sonuc: BaskiSonucu; hata: string | null;
   kayit: { tur: string; idler: readonly number[] } | null;
 }
 
@@ -55,7 +56,7 @@ export async function baskiEkle(db: Db, b: BaskiYazimi): Promise<number> {
 }
 
 export interface BaskiSatiri {
-  id: number; zaman: string; yazici: string; sablonAnahtar: string; adet: number; kisiId: number; sonuc: BaskiSonucu; hata: string | null;
+  id: number; zaman: string; yazici: string | null; sablonAnahtar: string; adet: number; kisiId: number; sonuc: BaskiSonucu; hata: string | null;
   kayitSayisi: number;
 }
 
@@ -64,7 +65,7 @@ export const sonBaskilar = (db: Db, sinir: number): Promise<BaskiSatiri[]> =>
     `SELECT b.id, ${zamanMetni('b.zaman')} AS zaman, y.ad AS yazici, b.sablon_anahtar AS "sablonAnahtar", b.adet,
             b.kisi_id AS "kisiId", b.sonuc, b.hata,
             (SELECT count(*)::int FROM etiket_merkezi_baski_kaydi k WHERE k.baski_id = b.id) AS "kayitSayisi"
-       FROM etiket_merkezi_baski b JOIN etiket_merkezi_yazici y ON y.id = b.yazici_id
+       FROM etiket_merkezi_baski b LEFT JOIN etiket_merkezi_yazici y ON y.id = b.yazici_id
       ORDER BY b.zaman DESC, b.id DESC LIMIT $1`,
     [sinir],
   );
@@ -81,13 +82,13 @@ export const etiketTurleriOku = (db: Db): Promise<EtiketTuruSatiri[]> =>
        FROM etiket_merkezi_etiket_turu ORDER BY sira, kod`,
   );
 
-// Kaydın son başarılı basımı (gönderildi ya da deftere yazılan indirme); hiç basılmamış kayıt haritada yoktur.
+// Kaydın son başarılı basımı (gönderildi, deftere yazılan indirme ya da tarayıcıdan yazdırma); hiç basılmamış kayıt haritada yoktur.
 export async function sonBasimlar(db: Db, kaynakTur: string, idler: readonly number[]): Promise<Map<number, string>> {
   if (idler.length === 0) return new Map();
   const satirlar = await db.sorgu<{ id: number; zaman: string }>(
     `SELECT k.kaynak_id AS id, ${zamanMetni('max(b.zaman)')} AS zaman
        FROM etiket_merkezi_baski_kaydi k JOIN etiket_merkezi_baski b ON b.id = k.baski_id
-      WHERE k.kaynak_tur = $1 AND k.kaynak_id = ANY($2::int[]) AND b.sonuc IN ('gonderildi', 'indirildi')
+      WHERE k.kaynak_tur = $1 AND k.kaynak_id = ANY($2::int[]) AND b.sonuc IN ('gonderildi', 'indirildi', 'yazdirildi')
       GROUP BY k.kaynak_id`,
     [kaynakTur, idler],
   );

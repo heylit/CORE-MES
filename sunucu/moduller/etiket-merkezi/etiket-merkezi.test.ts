@@ -7,7 +7,7 @@ import { testVeritabaniKur } from '#cekirdek/test-vt.ts';
 import type { TestVeritabani } from '#cekirdek/test-vt.ts';
 import { uygulamaKur } from '#cekirdek/uygulama.ts';
 import { KAYIT_TURLERI, SABLON_TURLERI } from '#paylasilan/sozlesme/etiket-merkezi.ts';
-import type { BasCevabi, BaskilarCevabi, BekleyenlerCevabi, CiktiCevabi, EtiketlerCevabi, IndirCevabi, KayitCiktiCevabi, SablonlarCevabi, Yazici, YazicilarCevabi } from '#paylasilan/sozlesme/etiket-merkezi.ts';
+import type { BasCevabi, BaskilarCevabi, BekleyenlerCevabi, CiktiCevabi, EtiketlerCevabi, IndirCevabi, KayitCiktiCevabi, SablonlarCevabi, YazdirCevabi, Yazici, YazicilarCevabi } from '#paylasilan/sozlesme/etiket-merkezi.ts';
 import { ISTEK_KIMLIGI_BASLIGI } from '#paylasilan/istek-kimligi.ts';
 import { denetimYaz } from '../denetim/disari.ts';
 import { kullaniciYukle, rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
@@ -671,6 +671,74 @@ describe('etiket-merkezi (gerçek PostgreSQL)', () => {
     const serbest = (await bekleyen()).bekleyenler.find((b) => b.tur === 'kalite-durum' && b.ayrinti.startsWith('SERBEST'));
     assert.ok(serbest);
     assert.equal((await al(yetkisiz, '/etiket-merkezi/bekleyenler')).statusCode, 403);
+  });
+
+  test('EM-U24 (kart 2904): vektörel yazdırma yazıcısız her etiketin vektör öğelerini verir ve deftere "yazdirildi" yazar; bas ister; kurallar indirmeyle aynı', async () => {
+    const a = await konumAc('ETK-V01');
+    const b = await konumAc('ETK-V02');
+    const yok = 2147483003;
+    const basan = await tekIslemliKisi('yazdiran', ['etiket-merkezi.bas']);
+    const okuyan = await tekIslemliKisi('yazdiramaz', ['etiket-merkezi.oku']);
+    const yol = '/etiket-merkezi/sablonlar/konum-50x25/yazdir';
+    const govde = { adet: 3, kayit: { tur: 'konum', idler: [a, yok, b] } };
+    assert.equal((await yaz(okuyan, yol, govde)).statusCode, 403);
+    assert.equal((await yaz(yetkisiz, yol, govde)).statusCode, 403);
+    // EM-11: örnek değerli etiket yalnız denemede; şablon kayıt türünde olmalı. EM-12: en çok 500 etiket.
+    assert.equal((await yaz(basan, yol, { adet: 1 })).statusCode, 400);
+    assert.equal((await yaz(basan, '/etiket-merkezi/sablonlar/lot-100x50/yazdir', govde)).statusCode, 400);
+    assert.equal((await yaz(basan, yol, { adet: 251, kayit: { tur: 'konum', idler: [a, b] } })).statusCode, 400);
+
+    const kimlik = randomUUID();
+    const c = await yaz(basan, yol, govde, kimlik);
+    assert.equal(c.statusCode, 200, c.body);
+    const cevap = c.json() as YazdirCevabi;
+    assert.deepEqual(cevap.sablon, { anahtar: 'konum-50x25', ad: cevap.sablon.ad, genislik: 50, yukseklik: 25 });
+    assert.equal(cevap.adet, 3);
+    assert.deepEqual(cevap.kayitlar?.map((k) => k.baslik), ['ETK-V01', 'ETK-V02']);
+    assert.deepEqual(cevap.eksikler, [yok]);
+    assert.equal(cevap.sayfalar.length, 2, 'bulunan her kayıt bir etiket');
+    // Sayfa önizlemeyle aynı yerleşimdir: QR kare matrisiyle gelir (görüntü değil), metin satırları kaydın kodunu taşır.
+    for (const [i, sayfa] of cevap.sayfalar.entries()) {
+      const qr = sayfa.find((o) => o.tur === 'qr');
+      assert.ok(qr && qr.tur === 'qr' && qr.kareler.length > 0 && qr.kareler.every((s) => s.length === qr.kareler.length));
+      assert.ok(sayfa.some((o) => o.tur === 'metin' && o.satirlar.some((x) => x.includes(i === 0 ? 'ETK-V01' : 'ETK-V02'))));
+    }
+    const yineleme = await yaz(basan, yol, govde, kimlik);
+    assert.equal((yineleme.json() as YazdirCevabi).baskiId, cevap.baskiId);
+
+    const defter = (await al(yonetici, '/etiket-merkezi/baskilar')).json() as BaskilarCevabi;
+    const satir = defter.baskilar.find((x) => x.id === cevap.baskiId);
+    assert.deepEqual(satir && { yazici: satir.yazici, sonuc: satir.sonuc, adet: satir.adet, kayitSayisi: satir.kayitSayisi, hata: satir.hata },
+      { yazici: null, sonuc: 'yazdirildi', adet: 3, kayitSayisi: 2, hata: null });
+    assert.equal(defter.baskilar.filter((x) => x.sonuc === 'yazdirildi' && x.id === cevap.baskiId).length, 1, 'yineleme ikinci satır açmaz');
+
+    const deneme = await yaz(basan, '/etiket-merkezi/sablonlar/deneme-50x25/yazdir', { adet: 1 });
+    assert.equal(deneme.statusCode, 200, deneme.body);
+    const d = deneme.json() as YazdirCevabi;
+    assert.equal(d.kayitlar, null);
+    assert.equal(d.sayfalar.length, 1);
+  });
+
+  test('EM-U25 (kart 2904): defter kısıtı yazıcısız satırı yalnız "yazdirildi" sonucunda kabul eder; tarayıcıdan yazdırılan lot bekleyenden düşer', async () => {
+    const vt = ortam!.vt;
+    const ekle = (yazici: number | null, sonuc: string) => vt.sorgu(
+      "INSERT INTO etiket_merkezi_baski (yazici_id, sablon_anahtar, adet, kisi_id, sonuc) VALUES ($1, 'konum-50x25', 1, $2, $3)", [yazici, yoneticiId, sonuc],
+    );
+    const dosya = ((await al(yonetici, '/etiket-merkezi/yazicilar')).json() as YazicilarCevabi).yazicilar.find((x) => x.ad === DOSYA.ad);
+    assert.ok(dosya);
+    await assert.rejects(ekle(null, 'indirildi'), /etiket_merkezi_baski_yazici/);
+    await assert.rejects(ekle(dosya.id, 'yazdirildi'), /etiket_merkezi_baski_yazici/);
+
+    const parti = await partiAc('P-ETK-VY');
+    const kart = (await ortam!.sahip.tek<{ m: number }>('SELECT malzeme_id::int AS m FROM stok_parti WHERE id = $1', [parti]))!.m;
+    const kabul = await yaz(yonetici, '/stok/mal-kabul', { tur: 'diger', irsaliyeNo: 'IRS-VY-1', satirlar: [{ malzemeId: kart, miktar: '2', parti: { tedarikciPartiNo: 'VY-A' } }] });
+    assert.equal(kabul.statusCode, 200, kabul.body);
+    const mkId = (kabul.json() as { belge: { id: number } }).belge.id;
+    const bekliyor = async () => ((await al(yonetici, '/etiket-merkezi/bekleyenler')).json() as BekleyenlerCevabi).bekleyenler.some((x) => x.tur === 'mal-kabul' && x.id === mkId);
+    assert.equal(await bekliyor(), true);
+    const y = await yaz(yonetici, '/etiket-merkezi/sablonlar/lot-100x50/yazdir', { adet: 1, kayit: { tur: 'mal-kabul', idler: [mkId] } });
+    assert.equal(y.statusCode, 200, y.body);
+    assert.equal(await bekliyor(), false, 'yazdırılan kabul gönderilen gibi düşer');
   });
 
   test('EM-U23 (2223-2 a): depodan emre verilen lotun refakat kartı ve kararı rework/hurda/red olan hatalı parça bekler; basılınca ya da işaretlenince düşer; kabul kararı beklemez', async () => {
