@@ -383,3 +383,6 @@ export async function firmaFasonKonumlari(db: Db, firmaIdler: readonly number[])
   }
   return m;
 }
+
+// 2902: Fabrika Haritası'nda yeni bölüm açıldı (bağ sunucu/kablolama.ts'te): açan kişide stok.tanim varsa bölümün deposu açılır.
+export const bolumAcildiYansit = (db: Db, olay: { salonId: number; kod: string; islemler: readonly string[] }): Promise<void> => servis.bolumAcildiYansit(db, olay);

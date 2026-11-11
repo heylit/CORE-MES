@@ -168,7 +168,7 @@ export const uclar = [
     yetki: 'atolye.yaz',
     govde: salonGovdesi,
     cevap: salonOzetiSemasi,
-    isle: ({ db, govde, kullanici }) => servis.salonEkle(db, govde, kullanici.id),
+    isle: ({ db, govde, kullanici }) => servis.salonEkle(db, govde, kullanici.id, kullanici.islemler),
   }),
   uc({
     yontem: 'POST',
