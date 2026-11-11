@@ -19,7 +19,7 @@ import { Kalibrasyon } from './Kalibrasyon.tsx';
 import { KayitSecici } from './KayitSecici.tsx';
 import { Onizleme, Simge } from './Onizleme.tsx';
 import { VektorelYazdir } from './Yazdir.tsx';
-import { eslesmisYazici, usbDestekli, usbHatasi, usbyeGonder, yaziciEsle, type UsbAygit } from './web-usb.ts';
+import { eslesmeKaldirilabilir, eslesmeyiKaldir, eslesmisYazici, usbDestekli, usbHatasi, usbyeGonder, yaziciDegistir, yaziciEsle, type UsbAygit } from './web-usb.ts';
 import './etiket-merkezi.css';
 
 // Basılı etiketin sağ üst karosundaki piktogram; tür kartında ilk bakışta tanınır.
@@ -100,6 +100,16 @@ function YaziciyaGonder({ sablon, adet, kayit }: { sablon: Sablon; adet: number 
     onSuccess: (a) => { if (a) setUsb(a); },
     onError: (h) => setSonuc({ ton: 'hata', metin: `USB yazıcı eşleştirilemedi: ${usbHatasi(h).message}` }),
   });
+  const degistir = useMutation({
+    mutationFn: () => yaziciDegistir(usb),
+    onSuccess: (a) => { if (a) setUsb(a); },
+    onError: (h) => setSonuc({ ton: 'hata', metin: `USB yazıcı değiştirilemedi: ${usbHatasi(h).message}` }),
+  });
+  const kaldir = useMutation({
+    mutationFn: (a: UsbAygit) => eslesmeyiKaldir(a),
+    onSuccess: () => { setUsb(null); setSonuc({ ton: 'tamam', metin: 'USB yazıcı eşleşmesi bu bilgisayarda kaldırıldı.' }); },
+    onError: (h) => setSonuc({ ton: 'hata', metin: `Eşleşme kaldırılamadı: ${usbHatasi(h).message}` }),
+  });
   const usbBas = useMutation({
     mutationFn: async (g: { yaziciId: number; adet: number; kayit?: KayitSecimi }) => {
       const c = await api.post<IndirCevabi>(`/etiket-merkezi/sablonlar/${sablon.anahtar}/indir`, g, { istekKimligi: kimlik });
@@ -164,7 +174,15 @@ function YaziciyaGonder({ sablon, adet, kayit }: { sablon: Sablon; adet: number 
           </Dugme>
         )}
       </div>
-      {usbAcik && usb && secili?.baglanti === 'dosya' && <p className="tc-etk-not">USB: {usb.productName ?? 'yazıcı'} bu bilgisayarda bağlı.</p>}
+      {usbAcik && usb && secili?.baglanti === 'dosya' && (
+        <div className="tc-etk-dugmeler">
+          <p className="tc-etk-not">USB: {usb.productName ?? 'yazıcı'} bu bilgisayarda bağlı.</p>
+          <Dugme simge="rotate" yukleniyor={degistir.isPending} onClick={() => { setSonuc(null); degistir.mutate(); }}>Başka USB yazıcı seç</Dugme>
+          {eslesmeKaldirilabilir(usb) && (
+            <Dugme simge="x" yukleniyor={kaldir.isPending} onClick={() => { setSonuc(null); kaldir.mutate(usb); }}>Eşleşmeyi kaldır</Dugme>
+          )}
+        </div>
+      )}
       {sonuc && <p className={sonuc.ton === 'hata' ? 'tc-etk-hata' : 'tc-etk-not'} role={sonuc.ton === 'hata' ? 'alert' : 'status'}>{sonuc.metin}</p>}
       {kayit && secili?.baglanti === 'ag' && <CihazVarsayilani sablon={sablon} yazici={secili} />}
     </div>

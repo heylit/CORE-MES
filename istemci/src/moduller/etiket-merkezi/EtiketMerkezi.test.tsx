@@ -859,9 +859,36 @@ describe('USB yazıcıya basım (2954)', () => {
     ac(<YaziciDenemesi />);
     await argoxSec();
     fireEvent.click(await screen.findByRole('button', { name: 'USB yazıcıya bas' }));
-    expect(await screen.findByText(/USB yazıcıya aktarılamadı: Yazıcıya erişilemedi\. Yazıcıyı kullanan başka bir program varsa kapatın; Windows'ta yazıcının sürücüsü WinUSB olmalı/)).toBeTruthy();
+    expect(await screen.findByText(/USB yazıcıya aktarılamadı: Yazıcıya erişilemedi\. Yazıcıyı kullanan başka bir program varsa kapatın; Sorun sürerse bu bilgisayarın yazıcı sürücüsü tarayıcıdan basıma ayarlanmamıştır; sistem yöneticisine haber verin/)).toBeTruthy();
     expect(screen.queryByText(new RegExp(ham))).toBeNull();
     expect(indirilen).toHaveBeenCalledWith('deneme-50x25-203.prn');
+  });
+
+  it('ek (Arayüz N1): eşleşmiş yazıcı değiştirilir ve eşleşme kaldırılınca bağlama düğmesine dönülür', async () => {
+    const eski = Object.assign(aygit(), { productName: 'Eski yazıcı', forget: vi.fn(async () => undefined) });
+    const yeni = Object.assign(aygit(), { productName: 'Yeni yazıcı', forget: vi.fn(async () => undefined) });
+    usbKur([eski], yeni);
+    sunucuKur({ islemler: BAS, yazicilar: USB_ACIK });
+    ac(<YaziciDenemesi />);
+    await argoxSec();
+    expect(await screen.findByText('USB: Eski yazıcı bu bilgisayarda bağlı.')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Başka USB yazıcı seç' }));
+    expect(await screen.findByText('USB: Yeni yazıcı bu bilgisayarda bağlı.')).toBeTruthy();
+    expect(eski.forget).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByRole('button', { name: 'Eşleşmeyi kaldır' }));
+    expect(await screen.findByText('USB yazıcı eşleşmesi bu bilgisayarda kaldırıldı.')).toBeTruthy();
+    expect(yeni.forget).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole('button', { name: 'Bu bilgisayara USB yazıcı bağla' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'USB yazıcıya bas' })).toBeNull();
+  });
+
+  it('ek: tarayıcı izni kaldırmayı desteklemiyorsa "Eşleşmeyi kaldır" görünmez', async () => {
+    usbKur([aygit()]);
+    sunucuKur({ islemler: BAS, yazicilar: USB_ACIK });
+    ac(<YaziciDenemesi />);
+    await argoxSec();
+    expect(await screen.findByRole('button', { name: 'Başka USB yazıcı seç' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Eşleşmeyi kaldır' })).toBeNull();
   });
 
   it('USB aktarımı başarısızsa komut dosyası iner ve neden yazılır', async () => {

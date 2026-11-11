@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { eslesmisYazici, usbDestekli, usbHatasi, usbyeGonder, yaziciEsle, type UsbAygit } from './web-usb.ts';
+import { eslesmeKaldirilabilir, eslesmeyiKaldir, eslesmisYazici, usbDestekli, usbHatasi, usbyeGonder, yaziciDegistir, yaziciEsle, type UsbAygit } from './web-usb.ts';
 
 function sahteAygit(durum: 'ok' | 'stall' = 'ok') {
   const giden: Uint8Array[] = [];
@@ -81,7 +81,7 @@ describe('web-usb (2954)', () => {
     const ham = new DOMException('Unable to claim interface.', 'SecurityError');
     tutulan.claimInterface = vi.fn(async () => { throw ham; });
     const hata = await usbyeGonder(tutulan, 'P1').catch((h: unknown) => h);
-    expect((hata as Error).message).toMatch(/^Yazıcıya erişilemedi\. Yazıcıyı kullanan başka bir program varsa kapatın; Windows'ta yazıcının sürücüsü WinUSB olmalı/);
+    expect((hata as Error).message).toMatch(/^Yazıcıya erişilemedi\. Yazıcıyı kullanan başka bir program varsa kapatın; Sorun sürerse bu bilgisayarın yazıcı sürücüsü tarayıcıdan basıma ayarlanmamıştır; sistem yöneticisine haber verin/);
     expect((hata as Error).cause).toBe(ham);
     expect(usbHatasi(new DOMException('x', 'NetworkError')).message).toMatch(/^Yazıcıya erişilemedi/);
     expect(usbHatasi(new DOMException('x', 'NotFoundError')).message).toBe('USB yazıcı bulunamadı. Kabloyu takıp yeniden deneyin.');
@@ -94,5 +94,48 @@ describe('web-usb (2954)', () => {
     expect(await yaziciEsle()).toBeNull();
     usb.requestDevice.mockRejectedValueOnce(new DOMException('Access denied.', 'SecurityError'));
     await expect(yaziciEsle()).rejects.toThrow(/^Yazıcıya erişilemedi/);
+  });
+
+  it('ek: metin depocunun görmediği belgeye işaret etmez', () => {
+    expect(usbHatasi(new DOMException('x', 'SecurityError')).message).not.toMatch(/tarif|WinUSB/);
+  });
+
+  it('ek (Test 4 N3): claimInterface reddedilirse arayüz bırakılmaya çalışılmaz ama aygıt kapanır', async () => {
+    const a = sahteAygit();
+    a.claimInterface = vi.fn(async () => { a.cagrilar.push('claim red'); throw new DOMException('busy', 'NetworkError'); });
+    await expect(usbyeGonder(a, 'P1')).rejects.toThrow(/^Yazıcıya erişilemedi/);
+    expect(a.cagrilar).toEqual(['open', 'claim red', 'close']);
+    expect(a.opened).toBe(false);
+  });
+
+  it('ek: selectConfiguration reddedilirse de aygıt kapanır', async () => {
+    const a = sahteAygit();
+    a.configuration = null;
+    a.selectConfiguration = vi.fn(async () => { throw new DOMException('x', 'InvalidStateError'); });
+    await expect(usbyeGonder(a, 'P1')).rejects.toThrow(/^Yazıcıya erişilemedi/);
+    expect(a.cagrilar).toEqual(['open', 'close']);
+  });
+
+  it('ek (Arayüz N1): başka yazıcı seçilince eskisinin izni kaldırılır; aynısı seçilirse kaldırılmaz; vazgeçilirse null', async () => {
+    const eski = Object.assign(sahteAygit(), { forget: vi.fn(async () => undefined) });
+    const yeni = sahteAygit();
+    const usb = usbKur([eski]);
+    usb.requestDevice.mockResolvedValueOnce(yeni);
+    expect(await yaziciDegistir(eski)).toBe(yeni);
+    expect(eski.forget).toHaveBeenCalledTimes(1);
+    usb.requestDevice.mockResolvedValueOnce(eski);
+    expect(await yaziciDegistir(eski)).toBe(eski);
+    expect(eski.forget).toHaveBeenCalledTimes(1);
+    usb.requestDevice.mockRejectedValueOnce(new DOMException('No device selected.', 'NotFoundError'));
+    expect(await yaziciDegistir(eski)).toBeNull();
+    expect(eski.forget).toHaveBeenCalledTimes(1);
+  });
+
+  it('ek (Arayüz N1): eşleşme forget ile kaldırılır; forget yoksa kaldırılamaz sayılır', async () => {
+    const a = Object.assign(sahteAygit(), { forget: vi.fn(async () => undefined) });
+    expect(eslesmeKaldirilabilir(a)).toBe(true);
+    await eslesmeyiKaldir(a);
+    expect(a.forget).toHaveBeenCalledTimes(1);
+    expect(eslesmeKaldirilabilir(sahteAygit())).toBe(false);
   });
 });

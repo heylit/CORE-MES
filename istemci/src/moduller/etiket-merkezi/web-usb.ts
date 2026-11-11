@@ -16,6 +16,8 @@ export interface UsbAygit {
   claimInterface(no: number): Promise<void>;
   releaseInterface(no: number): Promise<void>;
   transferOut(uc: number, veri: BufferSource): Promise<{ status: 'ok' | 'stall' | 'babble' }>;
+  // Eski tarayıcılarda yoktur; yoksa izin tarayıcının site ayarlarından kaldırılır.
+  forget?(): Promise<void>;
 }
 interface UsbErisimi {
   getDevices(): Promise<UsbAygit[]>;
@@ -50,7 +52,7 @@ export function usbHatasi(h: unknown): UsbHatasi {
   if (h instanceof UsbHatasi) return h;
   const ad = h instanceof DOMException ? h.name : '';
   const metin = ad === 'SecurityError' || ad === 'NetworkError' || ad === 'InvalidStateError'
-    ? 'Yazıcıya erişilemedi. Yazıcıyı kullanan başka bir program varsa kapatın; Windows\'ta yazıcının sürücüsü WinUSB olmalı (deneme tarifindeki kurulum adımı).'
+    ? 'Yazıcıya erişilemedi. Yazıcıyı kullanan başka bir program varsa kapatın; Sorun sürerse bu bilgisayarın yazıcı sürücüsü tarayıcıdan basıma ayarlanmamıştır; sistem yöneticisine haber verin.'
     : ad === 'NotFoundError'
       ? 'USB yazıcı bulunamadı. Kabloyu takıp yeniden deneyin.'
       : 'Yazıcı yanıt vermedi. Kabloyu ve yazıcının açık olduğunu kontrol edin.';
@@ -65,6 +67,26 @@ export async function yaziciEsle(): Promise<UsbAygit | null> {
     return await usb.requestDevice({ filters: [{ classCode: YAZICI_SINIFI }] });
   } catch (h) {
     if (h instanceof DOMException && h.name === 'NotFoundError') return null;
+    throw usbHatasi(h);
+  }
+}
+
+// Yeni aygıt seçilirse eskisinin izni kaldırılır: açılışta getDevices tek yazıcı döner, iki yazıcı arasında yanlışına basılmaz.
+export async function yaziciDegistir(eski: UsbAygit | null): Promise<UsbAygit | null> {
+  const yeni = await yaziciEsle();
+  if (yeni && eski && yeni !== eski) await eski.forget?.().catch(() => undefined);
+  return yeni;
+}
+
+// Tarayıcı izni kaldırmayı desteklemiyorsa false: ekran düğmeyi göstermez.
+export function eslesmeKaldirilabilir(a: UsbAygit): boolean {
+  return typeof a.forget === 'function';
+}
+
+export async function eslesmeyiKaldir(a: UsbAygit): Promise<void> {
+  try {
+    await a.forget?.();
+  } catch (h) {
     throw usbHatasi(h);
   }
 }
@@ -87,16 +109,19 @@ export async function usbyeGonder(a: UsbAygit, komut: string): Promise<void> {
 
 async function aktar(a: UsbAygit, komut: string): Promise<void> {
   if (!a.opened) await a.open();
-  if (a.configuration === null) await a.selectConfiguration(1);
-  const hedef = yaziciArayuzu(a);
-  if (!hedef) throw new UsbHatasi('Seçilen aygıtta yazıcı çıkışı yok.');
-  await a.claimInterface(hedef.no);
+  let tutulan: number | null = null;
+  // Aygıt açıldıktan sonraki her hatada kapatılır; açık kalırsa sonraki denemede tarayıcı aygıtı meşgul sayar.
   try {
+    if (a.configuration === null) await a.selectConfiguration(1);
+    const hedef = yaziciArayuzu(a);
+    if (!hedef) throw new UsbHatasi('Seçilen aygıtta yazıcı çıkışı yok.');
+    await a.claimInterface(hedef.no);
+    tutulan = hedef.no;
     // Ağ yolu (gonderici.ts) ile aynı kodlama: yazıcıya giden bayt dizisi iki yolda da aynıdır.
     const sonuc = await a.transferOut(hedef.uc, new TextEncoder().encode(komut));
     if (sonuc.status !== 'ok') throw new UsbHatasi('Yazıcı veriyi kabul etmedi.');
   } finally {
-    await a.releaseInterface(hedef.no).catch(() => undefined);
+    if (tutulan !== null) await a.releaseInterface(tutulan).catch(() => undefined);
     await a.close().catch(() => undefined);
   }
 }
