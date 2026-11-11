@@ -33,3 +33,11 @@ yavaştır ve yanlış yazıcıya basılmasına yol açar. Kullanıcı kararı 9
 
 - **Yazıcı sürücüsü ya da baskı sunucusu (CUPS, Windows kuyruğu):** ikinci kurulum ve yeni bağımlılık.
 - **Ad ile adres:** DNS çözümü aralık denetimini aşmanın yolu olur.
+
+## Ek: tarayıcıdan vektörel baskı (11.11.2026, kullanıcı kararı, kart 2904)
+
+"Sonuçlar"daki "USB'deki yazıcıya sunucudan baskı yoktur" maddesine ek. USB ya da Windows yazıcısına tarayıcıdan, yazıcının Windows
+sürücüsüyle vektörel baskı yapılır: etiket gerçek mm ölçüsünde SVG sayfası olarak tarayıcının yazdırma penceresinden basılır, yazıcı
+seçimi Windows'tadır. Sunucu ağa yeni istek atmaz; yalnız etiketin yerleşimini verir ve 6. maddedeki deftere yazıcısız satır yazar.
+Kırmızı çizgideki "yalnız TCP 9100" kuralı yalnız sunucudan gönderim içindir ve değişmez. Sunucuda Windows yazıcı kuyruğu ya da sürücü
+kullanımı yoktur ("Vazgeçilenler"); WebUSB ve yerel yardımcı program da yoktur.

@@ -98,3 +98,13 @@ Değişen onaylı karar: QR teslim kurgusundaki varsayım 5 ("yazıcıya doğrud
 
 ## Kapanış göçü (kart 1525, 1531 a)
 - Göç `20261031212000_etiket_merkezi_kapanis.sql`: etiket listesinde `konum`, `lot`, `malzeme` ve `kalite-durum` satırlarının `disaridaki_yol` değeri boşalır (taşındılar: stok 1525 adım 1, malzemeler 1308, KF-19 1525 adım 3). `seri-no` dışarıda kalır (1309 c). Yalnız katalog satırı; defter ve gerçek veri değişmez.
+
+## Vektörel yazdırma (kart 2904, kullanıcı isteği 11.11.2026)
+- Yeni uç `POST /etiket-merkezi/sablonlar/:anahtar/yazdir` (`etiket-merkezi.bas`, tekrar korumalı; "Yazıcı için indir" ile aynı işlem, yeni işlem yok). Gövde `{ adet, kayit? }`, yazıcı yok. Cevap her etiketin önizleme öğeleri (`sayfalar`); istemci her birini adet kez ayrı sayfa basar.
+- Sunucu yazıcıya ve ağa yeni istek atmaz (gonderici.ts, ag.ts değişmedi). Yerleşim sadeleştirilmez: tarayıcı Türkçe harfi basar.
+- Göç `20261111074714_etiket_merkezi_yazdirma.sql`: sonuç listesine `yazdirildi` eklenir; `yazici_id` NOT NULL kalkar ve `etiket_merkezi_baski_yazici` kısıtı `(sonuc = 'yazdirildi') = (yazici_id IS NULL)` der. İstekten sapma: istek "göç yalnız CHECK'i genişletir" diyordu, ama defterde `yazici_id` NOT NULL olduğu için "yazıcı tanımı gerekmez" ile birlikte tutmuyordu. NOT NULL'un kalkması da kısıt genişletmesidir; var olan satır değişmez, öteki sonuçlarda yazıcı zorunlu kalır (koordinatör kararı, Veri ön bakışı bu noktaya bakar). Geri dönüş: `yazdirildi` satırı yazıldıktan sonra NOT NULL geri konamaz.
+- Defter satırı yazdırma penceresi açılmadan, uç çağrılınca yazılır (yazar kararı): tarayıcı baskının yapıldığını bildirmez; ileti ve rozet "yazdırma penceresi açıldı" der. Bekleyen etiket `yazdirildi` sonrası `gonderildi` ile aynı kuralla düşer (`sonBasimlar`).
+- Baskılar listesinde yazıcısız satır "Bu bilgisayar (tarayıcı)"; sözleşmede `baskiSemasi.yazici` boş olabilir.
+- İstemci `Yazdir.tsx`: baskı sayfaları gövdeye portal; gövde sınıfı `tc-etk-baskida` ve `@page { size: G mm H mm; margin: 0 }` stili yalnız yazdırma süresince (kalite-merkezi Önizleme kalıbı); renk `--qr-kare`/`--qr-zemin` (temadan bağımsız siyah-beyaz). Önizleme ile baskı aynı çizimi (`EtiketCizimi`) kullanır.
+- Yazı tipi: istek "tarayıcının yerleşik fontu" diyordu; baskı önizlemeyle aynı `--font-ana`'yı (uygulamayla gelen yerel yazı tipi, dış istek yok) kullanır ki önizleme ile kâğıt aynı satır kırılımını göstersin (yazar kararı).
+- Rehber üç yolu ve kurulum notunu yazar; eski "Yazıcıya doğrudan gönderim yoktur" ve "Şimdilik örnek değerlerle basılır" cümleleri kalktı (ikisi de eskimişti).

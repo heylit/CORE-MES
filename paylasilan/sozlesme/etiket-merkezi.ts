@@ -146,6 +146,7 @@ export const kayitCiktiCevabi = ciktiCevabi.extend({
 export type KayitCiktiCevabi = z.infer<typeof kayitCiktiCevabi>;
 
 // Yazıcı tanımı. "ag": sunucu yazıcının kurum içi adresine (TCP 9100) doğrudan gönderir; "dosya": komut dosyası indirilir.
+// Bu bilgisayara takılı yazıcıya tarayıcıdan vektörel yazdırma yazıcı tanımı istemez (yazdirGovdesi).
 export const BAGLANTI_TURLERI = ['ag', 'dosya'] as const;
 export type BaglantiTuru = (typeof BAGLANTI_TURLERI)[number];
 export const YAZICI_KAPISI = 9100;
@@ -199,13 +200,30 @@ export const indirGovdesi = basGovdesi;
 export const indirCevabi = z.object({ baskiId: z.number().int(), dosyaAdi: z.string(), komut: z.string() });
 export type IndirCevabi = z.infer<typeof indirCevabi>;
 
-export const BASKI_SONUCLARI = ['gonderildi', 'hata', 'indirildi'] as const;
+// Tarayıcıdan vektörel yazdırma (kart 2904): etiket gerçek mm ölçüsünde SVG sayfası olarak Windows sürücüsüyle basılır, yazıcı seçimi
+// Windows'tadır. Sunucu yazıcıya bağlanmaz; her etiketin yerleşimini verir ve deftere "yazdirildi" yazar (tarayıcı baskının yapıldığını
+// bildirmez: satır yazdırma penceresinin açıldığını gösterir).
+export const yazdirGovdesi = basGovdesi.omit({ yaziciId: true });
+export type YazdirGovdesi = z.output<typeof yazdirGovdesi>;
+export const yazdirCevabi = z.object({
+  baskiId: z.number().int(),
+  sablon: z.object({ anahtar: z.string(), ad: z.string(), genislik: mm, yukseklik: mm }),
+  adet: z.number().int(),
+  // Basılacak her etiketin öğeleri (sevk kolisinde her koli ayrı); her biri `adet` sayfa basılır.
+  sayfalar: z.array(z.array(onizlemeOgesiSemasi)),
+  kayitlar: z.array(z.object({ id: z.number().int(), baslik: z.string() })).nullable(),
+  eksikler: z.array(z.number().int()),
+});
+export type YazdirCevabi = z.infer<typeof yazdirCevabi>;
+
+export const BASKI_SONUCLARI = ['gonderildi', 'hata', 'indirildi', 'yazdirildi'] as const;
 export type BaskiSonucu = (typeof BASKI_SONUCLARI)[number];
 
 export const baskiSemasi = z.object({
   id: z.number().int(),
   zaman: z.string(),
-  yazici: z.string(),
+  // Tarayıcıdan yazdırmada yazıcı tanımı yoktur (null).
+  yazici: z.string().nullable(),
   sablonAnahtar: z.string(),
   adet: z.number().int(),
   kisi: z.string().nullable(),

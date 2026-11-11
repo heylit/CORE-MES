@@ -16,6 +16,7 @@ import { gercekBoyutOku, gercekBoyutYaz, olcekOku, olcekYaz } from './gercek-boy
 import { Kalibrasyon } from './Kalibrasyon.tsx';
 import { KayitSecici } from './KayitSecici.tsx';
 import { Onizleme, Simge } from './Onizleme.tsx';
+import { VektorelYazdir } from './Yazdir.tsx';
 import './etiket-merkezi.css';
 
 // Basılı etiketin sağ üst karosundaki piktogram; tür kartında ilk bakışta tanınır.
@@ -206,7 +207,8 @@ function Cikti({ sablon, secenekler, basabilir, kayit, kayitCikar }: {
           </p>
         </>
       )}
-      {/* Çıktı bloğunun dışında: adet değişip önizleme yeniden yüklenince seçilen yazıcı sıfırlanmaz. */}
+      {/* Çıktı bloğunun dışında: adet değişip önizleme yeniden yüklenince seçilen yazıcı sıfırlanmaz. Vektörel yazdırma yazıcı tanımı istemez (kart 2904). */}
+      {basabilir && <VektorelYazdir sablon={sablon} adet={adetGecerli && koliGecerli && !kaliciHata ? adetSayi : null} kayit={secim} />}
       {basabilir && <YaziciyaGonder sablon={sablon} adet={adetGecerli && koliGecerli && !kaliciHata ? adetSayi : null} kayit={secim} />}
       {/* 2223-3 a: yazıcı seçilince dil ve çözünürlük yazıcıdan gelir; elle seçim yalnız önizleme komutu ve deftere yazılmayan indirme içindir. */}
       <details className="tc-etk-gelismis">

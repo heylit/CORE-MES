@@ -5,7 +5,7 @@ import { MemoryRouter, useLocation } from 'react-router-dom';
 import type { HataGovdesi } from '#paylasilan/hata.ts';
 import type { Islem } from '#paylasilan/islemler.ts';
 import { ISTEK_KIMLIGI_BASLIGI, istekKimligiMi } from '#paylasilan/istek-kimligi.ts';
-import type { BaskilarCevabi, BekleyenlerCevabi, CiktiCevabi, EtiketlerCevabi, KayitCiktiCevabi, SablonlarCevabi, YazicilarCevabi } from '#paylasilan/sozlesme/etiket-merkezi.ts';
+import type { BaskilarCevabi, BekleyenlerCevabi, CiktiCevabi, EtiketlerCevabi, KayitCiktiCevabi, SablonlarCevabi, YazdirCevabi, YazicilarCevabi } from '#paylasilan/sozlesme/etiket-merkezi.ts';
 import { BildirimSaglayici } from '../../ortak/arayuz/index.ts';
 import { Baskilar } from './Baskilar.tsx';
 import { Etiketler } from './Etiketler.tsx';
@@ -61,6 +61,7 @@ const BASKILAR: BaskilarCevabi = {
   baskilar: [
     { id: 7, zaman: '2026-10-18T17:30:00.000Z', yazici: 'Zebra depo', sablonAnahtar: 'deneme-50x25', adet: 2, kisi: 'Örnek Kişi', sonuc: 'gonderildi', hata: null, kayitSayisi: 3 },
     { id: 8, zaman: '2026-10-18T17:40:00.000Z', yazici: 'Argox masa', sablonAnahtar: 'deneme-50x25', adet: 1, kisi: 'Örnek Kişi', sonuc: 'indirildi', hata: null, kayitSayisi: 0 },
+    { id: 5, zaman: '2026-10-18T17:10:00.000Z', yazici: null, sablonAnahtar: 'konum-50x25', adet: 1, kisi: 'Örnek Kişi', sonuc: 'yazdirildi', hata: null, kayitSayisi: 1 },
     { id: 6, zaman: '2026-10-18T17:20:00.000Z', yazici: 'Zebra depo', sablonAnahtar: 'deneme-50x25', adet: 1, kisi: null, sonuc: 'hata', hata: 'Yazıcıya ulaşılamadı.', kayitSayisi: 0 },
   ],
 };
@@ -105,6 +106,17 @@ function sunucuKur(secenek: { islemler?: Islem[]; yazicilar?: YazicilarCevabi } 
       gonderilenler.push({ yol, govde: JSON.parse(String(init.body)), kimlik: basliklar[ISTEK_KIMLIGI_BASLIGI] ?? null });
       if (yol.endsWith('/atla')) return json(200, { atlanan: 1 });
       if (yol.endsWith('/bas')) return json(200, { baskiId: 9, sonuc: 'gonderildi', ileti: null });
+      const yazdirEslesme = /^\/etiket-merkezi\/sablonlar\/([a-z0-9-]+)\/yazdir$/.exec(yol);
+      if (yazdirEslesme?.[1]) {
+        const g = JSON.parse(String(init.body)) as { adet: number; kayit?: { idler: number[] } };
+        const c = cikti(yazdirEslesme[1], new URLSearchParams());
+        const bulunan = g.kayit ? g.kayit.idler.filter((id) => KONUMLAR[id]) : [0];
+        const cevap: YazdirCevabi = {
+          baskiId: 11, sablon: c.sablon, adet: g.adet, sayfalar: bulunan.map(() => c.onizleme),
+          kayitlar: g.kayit ? bulunan.map((id) => ({ id, baslik: KONUMLAR[id]! })) : null, eksikler: [],
+        };
+        return json(200, cevap);
+      }
       if (yol.endsWith('/indir')) return json(200, { baskiId: 10, dosyaAdi: 'deneme-50x25-203.prn', komut: '\nN\nP1\n' });
       return json(200, { ...YAZICILAR.yazicilar[0], id: 3, ad: 'Yeni', surum: 1 });
     }
@@ -314,9 +326,12 @@ describe('EtiketMerkezi', () => {
     sunucuKur({ islemler: ['sayfa.etiket-merkezi', 'etiket-merkezi.oku'] });
     ac(<Baskilar />);
     expect(await screen.findByText('2026-10-18 20:30')).toBeTruthy();
-    expect(screen.getAllByText('Örnek Kişi')).toHaveLength(2);
+    expect(screen.getAllByText('Örnek Kişi')).toHaveLength(3);
     expect(screen.getByText(/Yazıcıya ulaşılamadı/)).toBeTruthy();
     expect(screen.getByText('İndirildi')).toBeTruthy();
+    // Kart 2904: tarayıcıdan yazdırmada yazıcı tanımı yoktur; rozet basıldı demez, pencerenin açıldığını söyler.
+    expect(screen.getByText('Yazdırma açıldı')).toBeTruthy();
+    expect(screen.getByText('Bu bilgisayar (tarayıcı)')).toBeTruthy();
   });
 
   it('oku yetkisi olmayan etiket listesinde yalnız türleri görür: sahip modülün menü adı, durum ve ölçüler', async () => {
@@ -550,5 +565,70 @@ describe('EtiketMerkezi', () => {
     expect(await screen.findByText('Konum 50x25')).toBeTruthy();
     expect(screen.getByText('Sevk kolisi 100x75')).toBeTruthy();
     expect(screen.queryByLabelText('Yazıcı')).toBeNull();
+  });
+});
+
+// Kart 2904: tarayıcıdan vektörel yazdırma. Baskı sayfası gövdenin doğrudan çocuğudur; yazdırma süresince gövde sınıfı ve şablon ölçülü
+// @page stili takılır, pencere kapanınca kalkar.
+describe('EtiketMerkezi vektörel yazdırma', () => {
+  const BAS = ['sayfa.etiket-merkezi', 'etiket-merkezi.oku', 'etiket-merkezi.bas'] satisfies Islem[];
+
+  it('yazıcı tanımı yokken de düğme vardır; seçili kayıtlar adet kadar mm ölçülü, vektör sayfa olarak basılır ve deftere yazılır', async () => {
+    let baskida: { sinif: boolean; stil: string | null; sayfalar: Element[] } | null = null;
+    const yazdir = vi.fn(() => {
+      baskida = {
+        sinif: document.body.classList.contains('tc-etk-baskida'),
+        stil: document.getElementById('tc-etk-sayfa')?.textContent ?? null,
+        sayfalar: [...document.querySelectorAll('body > .tc-etk-baski > .tc-etk-baski-sayfa')],
+      };
+    });
+    vi.stubGlobal('print', yazdir);
+    const istekler = sunucuKur({ islemler: BAS, yazicilar: { yazicilar: [], dogrudanBaski: { acik: false, neden: 'Kapalı.' } } });
+    ac(<HazirSablonlar />, '/etiket-merkezi?tur=konum&id=11,12');
+    fireEvent.change(await screen.findByLabelText('Kayıt başına adet'), { target: { value: '3' } });
+    fireEvent.click(await screen.findByRole('button', { name: 'Vektörel yazdır' }));
+    expect(await screen.findByText(/Yazdırma penceresi açıldı ve deftere yazıldı/)).toBeTruthy();
+    await waitFor(() => expect(yazdir).toHaveBeenCalledTimes(1));
+    const g = istekler.gonderilenler.find((x) => x.yol.endsWith('/yazdir'));
+    expect(g?.yol).toBe('/etiket-merkezi/sablonlar/konum-50x25/yazdir');
+    expect(g?.govde).toEqual({ adet: 3, kayit: { tur: 'konum', idler: [11, 12] } });
+    expect(istekKimligiMi(g?.kimlik)).toBe(true);
+    const b = baskida as { sinif: boolean; stil: string | null; sayfalar: Element[] } | null;
+    expect(b?.sinif).toBe(true);
+    expect(b?.stil).toBe('@page { size: 50mm 25mm; margin: 0; }');
+    expect(b?.sayfalar).toHaveLength(6);
+    for (const sayfa of b?.sayfalar ?? []) {
+      const svg = sayfa.querySelector('svg');
+      expect(svg?.getAttribute('width')).toBe('50mm');
+      expect(svg?.getAttribute('height')).toBe('25mm');
+      expect(svg?.getAttribute('viewBox')).toBe('0 0 50 25');
+      // QR kareleri yol olarak çizilir; görüntü ya da tuval yoktur.
+      expect(svg?.querySelector('path[aria-label="QR: LOT:LT-000123"]')?.getAttribute('d')).toMatch(/^M[\d.]+ [\d.]+h/);
+      expect(sayfa.querySelector('image, canvas, img')).toBeNull();
+    }
+    fireEvent(window, new Event('afterprint'));
+    await waitFor(() => expect(document.querySelector('.tc-etk-baski')).toBeNull());
+    expect(document.body.classList.contains('tc-etk-baskida')).toBe(false);
+    expect(document.getElementById('tc-etk-sayfa')).toBeNull();
+  });
+
+  it('ekran ölçeği baskıya uygulanmaz; deneme etiketi yazıcısız basılır', async () => {
+    localStorage.setItem('tc-etk-mm-olcek', '1.5');
+    const sayfa: { genislik: string | null }[] = [];
+    vi.stubGlobal('print', vi.fn(() => { sayfa.push({ genislik: document.querySelector('.tc-etk-baski svg')?.getAttribute('width') ?? null }); }));
+    const istekler = sunucuKur({ islemler: BAS });
+    ac(<YaziciDenemesi />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Vektörel yazdır' }));
+    await waitFor(() => expect(sayfa).toHaveLength(1));
+    expect(sayfa[0]?.genislik).toBe('50mm');
+    expect(istekler.gonderilenler.find((x) => x.yol.endsWith('/yazdir'))?.govde).toEqual({ adet: 1 });
+    localStorage.removeItem('tc-etk-mm-olcek');
+  });
+
+  it('basma yetkisi olmayan düğmeyi görmez', async () => {
+    sunucuKur({ islemler: ['sayfa.etiket-merkezi', 'etiket-merkezi.oku'] });
+    ac(<HazirSablonlar />, '/etiket-merkezi?tur=konum&id=11,12');
+    expect(await screen.findByText(/2 etiket, önizleme ilk kayıt/)).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Vektörel yazdır' })).toBeNull();
   });
 });

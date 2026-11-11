@@ -44,3 +44,19 @@
 .tc-etk-tur-karti[aria-pressed='true'] { border-color: var(--hazard); }
 .tc-etk-gelismis > summary { cursor: pointer; color: var(--muted); }
 .tc-etk-gelismis[open] { display: flex; flex-direction: column; gap: var(--b-3); }
+/* Kart 2904: vektörel yazdırma. Sayfalar yalnız baskıda görünür; sınıf gövdeye yalnız yazdırma süresince takılır. Renk temadan değil:
+   yazıcı tek renklidir, QR'daki gibi sabit siyah-beyaz (koyu kipte de). Ölçü SVG'nin mm özniteliğinden ve @page'den gelir. */
+.tc-etk-baski { display: none; }
+@media print {
+  body.tc-etk-baskida { margin: 0; padding: 0; background: var(--qr-zemin); }
+  body.tc-etk-baskida > :not(.tc-etk-baski) { display: none !important; }
+  body.tc-etk-baskida > .tc-etk-baski { display: block; }
+  .tc-etk-baski-sayfa { overflow: hidden; break-after: page; break-inside: avoid; }
+  .tc-etk-baski-sayfa:last-child { break-after: auto; }
+  .tc-etk-baski-etiket { display: block; }
+  .tc-etk-baski .tc-etk-kagit { fill: var(--qr-zemin); }
+  .tc-etk-baski .tc-etk-dolu, .tc-etk-baski .tc-etk-yazi { fill: var(--qr-kare); }
+  .tc-etk-baski .tc-etk-ters { fill: var(--qr-zemin); }
+  .tc-etk-baski .tc-etk-cizgi { stroke: var(--qr-kare); }
+  .tc-etk-baski .tc-etk-oyuk-cizgi { stroke: var(--qr-zemin); }
+}

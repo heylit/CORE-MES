@@ -1,9 +1,9 @@
 import { uc } from '#cekirdek/uc.ts';
 import {
   atlaCevabi, atlaGovdesi, basCevabi, basGovdesi, baskilarCevabi, bekleyenlerCevabi, ciktiCevabi, ciktiSorgusu, etiketlerCevabi, indirCevabi, indirGovdesi, kayitCiktiCevabi, kayitCiktiSorgusu, raflarCevabi, sablonParametresi, sablonlarCevabi,
-  yaziciAcGovdesi, yaziciGuncelleGovdesi, yaziciParametresi, yaziciSemasi, yazicilarCevabi,
+  yaziciAcGovdesi, yaziciGuncelleGovdesi, yaziciParametresi, yaziciSemasi, yazicilarCevabi, yazdirCevabi, yazdirGovdesi,
 } from '#paylasilan/sozlesme/etiket-merkezi.ts';
-import { atla, bas, baskilar, bekleyenler, etiketler, indir, kayitCiktisi, ornekCikti, rafSecenekleri, sablonlar, yaziciAc, yaziciDuzenle, yazicilar } from './servis.ts';
+import { atla, bas, baskilar, bekleyenler, etiketler, indir, kayitCiktisi, ornekCikti, rafSecenekleri, sablonlar, yaziciAc, yaziciDuzenle, yazicilar, yazdir } from './servis.ts';
 
 // Örnek değerli önizleme sayfayı görene açıktır; gerçek kayıt, yazıcı ve baskı kaydı ayrı işlemler ister (99 evet).
 const OKUMA = { biri: ['sayfa.etiket-merkezi'] } as const;
@@ -73,6 +73,17 @@ export const uclar = [
     govde: indirGovdesi,
     cevap: indirCevabi,
     isle: ({ db, kullanici, parametre, govde }) => indir(db, kullanici, parametre.anahtar, govde),
+  }),
+  // Tarayıcıdan vektörel yazdırma (kart 2904) "Yazıcı için indir" ile aynı işlemle açılır; yineleme ikinci defter satırı açmaz.
+  uc({
+    yontem: 'POST',
+    yol: '/etiket-merkezi/sablonlar/:anahtar/yazdir',
+    yetki: 'etiket-merkezi.bas',
+    tekrarKorumali: true,
+    parametre: sablonParametresi,
+    govde: yazdirGovdesi,
+    cevap: yazdirCevabi,
+    isle: ({ db, kullanici, parametre, govde }) => yazdir(db, kullanici, parametre.anahtar, govde),
   }),
   // Bekleyen etiketler gerçek kayıt okumasıdır (lot, durum, malzeme): kayıt çıktısıyla aynı işlem.
   uc({ yontem: 'GET', yol: '/etiket-merkezi/bekleyenler', yetki: 'etiket-merkezi.oku', cevap: bekleyenlerCevabi, isle: ({ db }) => bekleyenler(db) }),

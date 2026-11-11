@@ -83,7 +83,8 @@ export function Yazicilar() {
     <Kart baslik="Yazıcılar">
       <p className="tc-etk-not">
         <Rozet ton={dogrudanBaski.acik ? 'tamam' : 'pasif'}>{dogrudanBaski.acik ? 'Doğrudan baskı açık' : 'Doğrudan baskı kapalı'}</Rozet>{' '}
-        {dogrudanBaski.neden ?? 'Ağ yazıcısına sunucu doğrudan gönderir; dosya yazıcısında komut dosyası indirilir.'}
+        {dogrudanBaski.neden ?? 'Ağ yazıcısına sunucu doğrudan gönderir; dosya yazıcısında komut dosyası indirilir.'}{' '}
+        Bu bilgisayara takılı yazıcıya yazıcı tanımı gerekmeden Etiket bas sayfasındaki "Vektörel yazdır" ile basılır.
       </p>
       {form !== null && (
         <YaziciFormu key={form === 'yeni' ? 'yeni' : form.id} yazici={form === 'yeni' ? null : form} secenekler={secenekler.data.secenekler} kapat={() => setForm(null)} />
