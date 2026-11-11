@@ -120,3 +120,22 @@ export const LISTE_FISI_ETIKETI: Record<ListeFisiTuru, string> = {
 export const LISTE_FISI_SIMGESI: Record<ListeFisiTuru, SimgeAdi> = { ...MALZEME_FISI_SIMGESI, mal_kabul: 'truck', teslim_fisi: 'box', toplama: 'list', hareket_fisi: 'sort' };
 export const LISTE_FISI_TURLERI = anahtarlari(LISTE_FISI_ETIKETI);
 export const LOGO_FIS_SUZGECLERI = ['bekliyor', 'gonderildi', 'hata', 'gonderilmez'] as const satisfies readonly LogoFisDurumu[];
+
+// 2890: mal kabul satırının bugünkü durumu, lotun bakiyelerinden (sunucu ham bakiyeyi verir, etiket burada kurulur).
+interface KabulSatiriDurumu {
+  duzeltenId: number | null; ilkKonumKod: string | null;
+  yerler: readonly { konumTur: KonumTuru; kaliteDurumu: 'serbest' | 'karar_bekliyor' | 'sartli' | 'red' }[];
+}
+export function kabulSatiriDurumu(s: KabulSatiriDurumu): { etiket: string; ton: RozetTonu } {
+  if (s.duzeltenId !== null) return { etiket: 'Düzeltildi', ton: 'pasif' };
+  if (s.ilkKonumKod === null) return { etiket: 'Hizmet: stoğa girmez', ton: 'pasif' };
+  if (s.yerler.length === 0) return { etiket: 'Depoda kalmadı', ton: 'pasif' };
+  if (s.yerler.some((y) => y.kaliteDurumu === 'karar_bekliyor')) return { etiket: 'Giriş kontrolü bekliyor', ton: 'uyari' };
+  if (s.yerler.every((y) => y.kaliteDurumu === 'red')) return { etiket: 'Reddedildi', ton: 'hata' };
+  if (s.yerler.some((y) => y.kaliteDurumu === 'red')) return { etiket: 'Kısmen reddedildi', ton: 'hata' };
+  // Şartlı kabul edilmiş malzeme atölyede ayrı izlenir; yerleşmiş olsa da "Yerleşti" denmez.
+  if (s.yerler.some((y) => y.kaliteDurumu === 'sartli')) return { etiket: 'Şartlı kabul', ton: 'uyari' };
+  if (s.yerler.every((y) => y.konumTur === 'kabul')) return { etiket: 'Mal kabul alanında', ton: 'uyari' };
+  if (s.yerler.some((y) => y.konumTur === 'kabul')) return { etiket: 'Kısmen yerleşti', ton: 'bilgi' };
+  return { etiket: 'Yerleşti', ton: 'tamam' };
+}

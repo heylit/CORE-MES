@@ -23,6 +23,7 @@ import { lotBekleyenKartlarCevabi, refakatIziCevabi, refakatKartlariCevabi, refa
 import { statulerCevabi } from '#paylasilan/sozlesme/recete-rota.ts';
 import { STOK_ISLEMLERI } from '#paylasilan/islemler/stok.ts';
 import { defterFarklariCevabi, malzemeFisiAyrintiCevabi, malzemeFisiGonderGovdesi, malzemeFisiOzeti, malzemeFisleriCevabi, malzemeFisleriSorgusu } from '#paylasilan/sozlesme/stok.ts';
+import { malKabulSatirlariCevabi, malKabulSatirlariSorgusu } from '#paylasilan/sozlesme/stok-mal-kabul-satirlari.ts';
 import * as s from './servis.ts';
 import * as mf from './malzeme-fisi.ts';
 
@@ -97,6 +98,7 @@ export const uclar = [
     isle: ({ db, sorgu }) => s.siparisIrsaliyeleri(db, sorgu.siparisSatirlari) }),
   uc({ yontem: 'GET', yol: '/stok/mal-kabuller', yetki: OKUMA, sorgu: malKabullerSorgusu, cevap: malKabullerCevabi, isle: ({ db, sorgu }) => s.malKabulListesi(db, sorgu) }),
   uc({ yontem: 'GET', yol: '/stok/mal-kabuller/:id', yetki: OKUMA, parametre: kimlikParametresi, cevap: malKabulAyrintiCevabi, isle: ({ db, parametre }) => s.malKabulAyrintisi(db, parametre.id) }),
+  uc({ yontem: 'GET', yol: '/stok/mal-kabul-satirlari', yetki: OKUMA, sorgu: malKabulSatirlariSorgusu, cevap: malKabulSatirlariCevabi, isle: ({ db, kullanici, sorgu }) => s.malKabulSatirListesi(db, kullanici, sorgu) }),
   // Düzeltme hareketleri ters çevirir: geri alma işlemiyle korunur (DEP-53).
   uc({ yontem: 'POST', tekrarKorumali: true, kilitlenmedeYinele: true, yol: '/stok/mal-kabuller/:id/duzelt', yetki: 'stok.geri-al', parametre: kimlikParametresi, govde: malKabulDuzeltGovdesi, cevap: malKabulCevabi, isle: ({ db, kullanici, parametre, govde, denetimEki }) => { s.eksiOnayiDenetle(kullanici, govde); return s.malKabulDuzelt(db, kullanici, parametre.id, govde, denetimEki); } }),
   uc({ yontem: 'POST', kilitlenmedeYinele: true, tekrarKorumali: true, yol: '/stok/uretim-girisi', yetki: 'stok.giris', govde: uretimGirisiGovdesi, cevap: hareketCevabi, isle: ({ db, kullanici, govde }) => s.uretimGirisi(db, kullanici.id, govde) }),
