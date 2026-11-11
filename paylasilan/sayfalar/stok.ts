@@ -19,8 +19,8 @@ export const STOK_IKINCI_MENU = {
         // Sevkiyatın tetiklediği son çıkış ve kabuller (960); çıkış stok.cikis, kabul stok.giris ister.
         { anahtar: 'depo-sevk', baslik: 'Depo sevk', yol: '/stok/depo-sevk', simge: 'route', islem: 'stok.cikis', veya: ['stok.giris'] },
         // Malzeme istekleri ve toplama listeleri tek yerde: depocu aynı işi iki ekranda yapmaz.
-        { anahtar: 'hazirlik', baslik: 'Hazırlık', yol: '/stok/hazirlik', simge: 'list', islem: 'stok.transfer', veya: ['stok.toplama'] },
-        { anahtar: 'sepet', baslik: 'Taşı', yol: '/stok/sepet', simge: 'box', islem: 'stok.transfer' },
+        { anahtar: 'hazirlik', baslik: 'Malzeme istekleri', yol: '/stok/hazirlik', simge: 'list', islem: 'stok.transfer', veya: ['stok.toplama'] },
+        { anahtar: 'sepet', baslik: 'Transfer', yol: '/stok/sepet', simge: 'box', islem: 'stok.transfer' },
       ],
     },
     {

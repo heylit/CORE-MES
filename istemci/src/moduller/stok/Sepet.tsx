@@ -10,6 +10,7 @@ import { belirsizMiktarVar, CIKIS_NEDENI, CIKIS_NEDENLERI, miktarGirdisi, miktar
 import { EmirSecici } from './EmirSecici.tsx';
 import { KonumSecici, type KonumSecimi } from './KonumSecici.tsx';
 import { MalzemeSecici } from './MalzemeSecici.tsx';
+import { AkisSeridi, type AkisAdimi } from './Hazirlik.tsx';
 import { hataMetni, korumaliPost, SayfaBasi, useIslem, useStokKomutu } from './ortak.tsx';
 import { SepeteEklePenceresi } from './SepeteEkle.tsx';
 import { RefakatAcPenceresi } from './RefakatKarti.tsx';
@@ -132,6 +133,12 @@ export function tekilTasimalar(l: readonly Hareket[], sinir = 8): Hareket[] {
   return l.filter((x) => x.fisId === null && !x.otomatik && x.hareketFisiNo != null && x.kaynakKonumKod !== x.hedefKonumKod).slice(0, sinir);
 }
 
+const TRANSFER_AKISI: readonly AkisAdimi[] = [
+  { simge: 'scan', baslik: 'Ekle', alt: 'Okut ya da ara; Okut\'ta "Sepete ekle" dedikleriniz de buraya gelir' },
+  { simge: 'pin', baslik: 'Nereye', alt: 'Satıra ya da hepsine tek yer seçin' },
+  { simge: 'truck', baslik: 'Hepsini taşı', alt: 'Her yer için ayrı fiş yazılır' },
+];
+
 export function Sepet() {
   const yonlendir = useNavigate();
   const cikabilir = useIslem('stok.cikis');
@@ -171,14 +178,15 @@ export function Sepet() {
   ];
   return (
     <section className="tc-stok">
-      <SayfaBasi baslik="Taşı" alt="Malzemeyi okut ya da ara, her satıra nereye gideceğini seç, tek dokunuşla taşı. Bir istasyonun ya da siparişin malzemesini toplu hazırlamak için Hazırlık."
+      <SayfaBasi baslik="Transfer" alt="Taşıyacağınız malzemeleri sepete ekleyin, her birine yer seçin, hepsini tek seferde taşıyın. Üretimden gelen istek için Malzeme istekleri."
         sag={<Dugme tur="birincil" simge="scan" onClick={() => paneliAc({ sekme: 'sepet', depoSepeti: true })}>Okutarak ekle</Dugme>} />
+      <AkisSeridi etiket="Nasıl çalışır" adimlar={TRANSFER_AKISI} />
       {s.isError && <DurumKutusu durum="hata" mesaj={hataMetni(s.error)} yenile={() => void s.refetch()} />}
       <Kart baslik={`Taşınacaklar${satirlar.length ? ` (${satirlar.length})` : ''}`}>
         <div className="tc-stok-form">
           <MalzemeEkle />
           {s.isPending ? <DurumKutusu durum="yukleniyor" /> : satirlar.length === 0
-            ? <DurumKutusu durum="bos" mesaj="Liste boş. Okut ya da yukarıdan malzeme ekle." />
+            ? <DurumKutusu durum="bos" mesaj="Sepetiniz boş. Sepet size aittir ve kaydedilir; sayfadan çıksanız da kalır. Malzemeyi okutun ya da yukarıdan arayın." />
             : <Tablo etiket="Taşınacaklar" sutunlar={sutunlar} satirlar={satirlar} satirAnahtari={(x) => x.id} />}
         </div>
       </Kart>
@@ -192,8 +200,9 @@ export function Sepet() {
             <Girdi etiket="Not" value={aciklama} onChange={(e) => setAciklama(e.target.value)} />
             <div className="tc-stok-eylem">
               <Dugme tur="birincil" simge="truck" disabled={!hazir} yukleniyor={tasi.komut.isPending} onClick={gonder}>Hepsini taşı</Dugme>
-              {cikabilir && <Dugme tur="ikincil" onClick={() => setDus(true)}>Stoktan düş</Dugme>}
             </div>
+            {/* Stoktan düşmek taşıma değildir; ana düğmenin yanında durunca ekranın işini bulandırıyordu. */}
+            {cikabilir && <div className="tc-stok-eylem"><span className="tc-stok-not">Malzeme bir yere gitmiyor, tüketiliyorsa (sarf, hurda):</span><Dugme tur="ikincil" onClick={() => setDus(true)}>Stoktan düş</Dugme></div>}
             {!hazir && <p className="tc-stok-not">{hedefsiz} satırın yeri seçilmedi; satırda ya da "Hepsi nereye" alanında seçin.</p>}
             <p className="tc-stok-not">Bütün satırlar tek işlemde yazılır; biri karşılanamazsa hiçbiri yazılmaz. Her teslim yeri için ayrı fiş çıkar.</p>
           </div>

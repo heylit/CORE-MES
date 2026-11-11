@@ -6,9 +6,10 @@ import type {
   ToplamaAyrintiCevabi, ToplamaKapatGovdesi, ToplamalarCevabi, YerdekiStokCevabi,
 } from '#paylasilan/sozlesme/stok.ts';
 import {
-  Dugme, DurumKutusu, Girdi, KodOkuyucu, Kart, Pencere, Rozet, Sayfalama, Secim, Sekmeler, Tablo, useOkutmaGecmisi,
+  Dugme, DurumKutusu, Girdi, KodOkuyucu, Kart, Pencere, Rozet, Sayfalama, Secim, Sekmeler, Simge, Tablo, useOkutmaGecmisi,
   type KomutIsleyici, type OkutmaGecmisi, type OkutmaTonu, type RozetTonu, type Sutun,
 } from '../../ortak/arayuz/index.ts';
+import type { SimgeAdi } from '../../ortak/tasarim/simgeler.ts';
 import { api } from '../../ortak/veri/api.ts';
 import { yeniIstekKimligi } from '../../ortak/veri/istek-kimligi.ts';
 import { anahtarlar } from './anahtarlar.ts';
@@ -28,6 +29,22 @@ const SEKMELER: { anahtar: Suzgec; baslik: string }[] = [
   ...(['acik', 'stok_yok', 'hazirlaniyor', 'teslim', 'iptal'] as const).map((d) => ({ anahtar: d, baslik: ISTEK_DURUMU[d].etiket })),
   { anahtar: '', baslik: 'Tümü' },
 ];
+// Ekranın ne işe yaradığı ilk bakışta okunsun diye işin adımları sırasıyla, ikonla gösterilir; Taşı da aynı şeridi kullanır.
+export interface AkisAdimi { simge: SimgeAdi; baslik: string; alt: string }
+export function AkisSeridi({ etiket, adimlar }: { etiket: string; adimlar: readonly AkisAdimi[] }) {
+  return (
+    <ol className="tc-stok-akis" aria-label={etiket}>
+      {adimlar.map((a) => <li key={a.baslik}><Simge ad={a.simge} /><span><strong>{a.baslik}</strong><span>{a.alt}</span></span></li>)}
+    </ol>
+  );
+}
+const HAZIRLIK_AKISI: readonly AkisAdimi[] = [
+  { simge: 'list', baslik: 'İstek gelir', alt: 'Üretim, Okut panelinde "Malzeme iste" der' },
+  { simge: 'check', baslik: 'Seç', alt: 'Tek istek: "Teslim et". Birkaç istek: işaretle, "Liste aç"' },
+  { simge: 'route', baslik: 'Raf sırasıyla topla', alt: 'Liste gözleri yürüme sırasına dizer' },
+  { simge: 'truck', baslik: 'Bitir', alt: 'Toplanan teslim yerine gider, istekler kapanır' },
+];
+
 const LISTE_DURUMU = { topluyor: { etiket: 'Topluyor', ton: 'bilgi' }, bitti: { etiket: 'Bitti', ton: 'tamam' }, iptal: { etiket: 'İptal', ton: 'pasif' } } as const;
 
 type Hedef = { tur: 'istasyon'; istasyonId: string } | { tur: 'konum'; konum: KonumSecimi | null } | { tur: 'sevk' };
@@ -66,7 +83,7 @@ function ListeAcPenceresi({ istekler, kapat }: { istekler: MalzemeIstegi[]; kapa
   const tekIstasyon = istasyonlar.length === 1 && istasyonlar[0] !== null ? istasyonlar[0]! : null;
   const [ad, setAd] = useState(tekIstasyon !== null ? `${istekler[0]!.istasyonAd ?? 'İstasyon'} hazırlığı` : `${istekler.length} istek`);
   const [hedef, setHedef] = useState<Hedef>(tekIstasyon !== null ? { tur: 'istasyon', istasyonId: String(tekIstasyon) } : { tur: 'konum', konum: null });
-  const { komut, onayPenceresi } = useStokKomutu((g: ToplamaAcGovdesi) => korumaliPost<ToplamaAyrintiCevabi>('/stok/toplamalar', g).then((c) => { kapat(); void yonlendir(`/stok/hazirlik/${c.toplama.id}`); return c; }), 'Hazırlık listesi açıldı.');
+  const { komut, onayPenceresi } = useStokKomutu((g: ToplamaAcGovdesi) => korumaliPost<ToplamaAyrintiCevabi>('/stok/toplamalar', g).then((c) => { kapat(); void yonlendir(`/stok/hazirlik/${c.toplama.id}`); return c; }), 'Toplama listesi açıldı.');
   return (
     <Pencere acik kapat={kapat} baslik={`${istekler.length} istek için liste`} tur="yan"
       alt={<Dugme tur="birincil" disabled={!ad.trim() || !hedefHazir(hedef)} yukleniyor={komut.isPending} onClick={() => komut.mutate({ ad, istekIdler: istekler.map((i) => i.id), hedef: hedefGovdesi(hedef) })}>Listeyi aç</Dugme>}>
@@ -88,14 +105,15 @@ function YeniListePenceresi({ kapat }: { kapat: () => void }) {
   const [ad, setAd] = useState('');
   const [hedef, setHedef] = useState<Hedef>({ tur: 'sevk' });
   const [kalemler, setKalemler] = useState([{ k: 1, kart: '', miktar: '' }]);
-  const { komut, onayPenceresi } = useStokKomutu((g: ToplamaAcGovdesi) => korumaliPost<ToplamaAyrintiCevabi>('/stok/toplamalar', g).then((c) => { kapat(); void yonlendir(`/stok/hazirlik/${c.toplama.id}`); return c; }), 'Hazırlık listesi açıldı.');
+  const { komut, onayPenceresi } = useStokKomutu((g: ToplamaAcGovdesi) => korumaliPost<ToplamaAyrintiCevabi>('/stok/toplamalar', g).then((c) => { kapat(); void yonlendir(`/stok/hazirlik/${c.toplama.id}`); return c; }), 'Toplama listesi açıldı.');
   const gonder = (e: FormEvent) => {
     e.preventDefault();
     komut.mutate({ ad, hedef: hedefGovdesi(hedef), kalemler: kalemler.filter((x) => x.kart).map((x) => ({ malzemeId: Number(x.kart), miktar: miktarGirdisi(x.miktar) })) });
   };
   return (
-    <Pencere acik kapat={kapat} baslik="Yeni liste" tur="yan">
+    <Pencere acik kapat={kapat} baslik="İsteksiz liste" tur="yan">
       <form className="tc-stok-form" onSubmit={gonder}>
+        <p className="tc-stok-not">Üretimden istek gelmeden malzeme toplamak için, örneğin sipariş sevki.</p>
         <Girdi etiket="Liste adı" placeholder="Örn. Sipariş 7781, hat 2" value={ad} onChange={(e) => setAd(e.target.value)} required />
         {kalemler.map((x) => (
           <div key={x.k} className="tc-stok-iki">
@@ -265,9 +283,10 @@ function Istekler() {
     }] : []),
   ];
   return (
-    <Kart baslik="Malzeme istekleri">
+    <Kart baslik="Bekleyen istekler">
       <div className="tc-stok-form">
         <Sekmeler etiket="Durum" sekmeler={SEKMELER} secili={durum} sec={(d) => { setDurum(d); setSayfa(1); setSecim({}); }} />
+        {yazabilir && <p className="tc-stok-not">Tek isteği hemen götürecekseniz satırdaki "Teslim et". Birkaç isteği aynı turda toplamak için kutucukla seçip "Liste aç".</p>}
         {secililer.length > 0 && (
           <div className="tc-stok-eylem">
             <span className="tc-stok-not"><strong>{secililer.length}</strong> istek seçildi</span>
@@ -277,7 +296,7 @@ function Istekler() {
         )}
         {l.isError ? <DurumKutusu durum="hata" mesaj={hataMetni(l.error)} yenile={() => void l.refetch()} />
           : l.isPending ? <DurumKutusu durum="yukleniyor" />
-          : <Tablo etiket="Malzeme istekleri" sutunlar={sutunlar} satirlar={l.data.satirlar} satirAnahtari={(i) => i.id} bosMesaj="Bu durumda istek yok." />}
+          : <Tablo etiket="Malzeme istekleri" sutunlar={sutunlar} satirlar={l.data.satirlar} satirAnahtari={(i) => i.id} bosMesaj={durum === 'acik' ? 'Bekleyen malzeme isteği yok. İstekler üretimden, Okut panelindeki "Malzeme iste" ile gelir.' : 'Bu durumda istek yok.'} />}
         {l.data && l.data.satirlar.length > 0 && <Sayfalama sayfa={l.data.sayfa} sayfaBoyu={l.data.sayfaBoyu} toplam={l.data.toplam} degistir={setSayfa} satirSayisi={l.data.satirlar.length} />}
       </div>
       {liste && <ListeAcPenceresi istekler={secililer} kapat={() => { setListe(false); setSecim({}); }} />}
@@ -294,11 +313,12 @@ function Listeler() {
   const [yeni, setYeni] = useState(false);
   const l = useQuery({ queryKey: anahtarlar.liste('toplamalar', {}), queryFn: () => api.get<ToplamalarCevabi>('/stok/toplamalar?sayfaBoyu=20') });
   return (
-    <Kart baslik="Listeler">
+    <Kart baslik="Toplama listeleri">
       <div className="tc-stok-form">
-        {yetkili && <div className="tc-stok-eylem"><Dugme tur="ikincil" simge="plus" onClick={() => setYeni(true)}>Yeni liste</Dugme></div>}
+        <p className="tc-stok-not">Liste, seçilen malzemelerin raf sırasına dizilmiş toplama turudur; açık listeyi buradan sürdürün.</p>
+        {yetkili && <div className="tc-stok-eylem"><Dugme tur="ikincil" simge="plus" onClick={() => setYeni(true)}>İsteksiz liste</Dugme></div>}
         {l.isError ? <DurumKutusu durum="hata" mesaj={hataMetni(l.error)} /> : (
-          <Tablo etiket="Hazırlık listeleri" satirlar={l.data?.satirlar ?? []} satirAnahtari={(t) => t.id} mesgul={l.isPending} bosMesaj="Henüz liste yok."
+          <Tablo etiket="Toplama listeleri" satirlar={l.data?.satirlar ?? []} satirAnahtari={(t) => t.id} mesgul={l.isPending} bosMesaj='Henüz liste yok. İstekleri seçip "Liste aç" deyin.'
             sutunlar={[
               { anahtar: 'no', baslik: 'Liste', mono: true, hucre: (t) => <Link to={`/stok/hazirlik/${t.id}`}>{t.no}</Link> },
               { anahtar: 'ad', baslik: 'Ad', hucre: (t) => t.ad },
@@ -404,14 +424,14 @@ function ListeAyrintisi({ id }: { id: number }) {
   const acik = toplama.durum === 'topluyor';
   return (
     <section className="tc-stok">
-      <SayfaBasi baslik={`Hazırlık ${toplama.no}`} alt={`${toplama.ad} · ${zamanMetni(toplama.acilis)} · ${toplama.kisiAd ?? '—'}`}
+      <SayfaBasi baslik={`Toplama listesi ${toplama.no}`} alt={`${toplama.ad} · ${zamanMetni(toplama.acilis)} · ${toplama.kisiAd ?? '—'}`}
         sag={<>
           <Rozet ton={LISTE_DURUMU[toplama.durum].ton}>{LISTE_DURUMU[toplama.durum].etiket}</Rozet>
           {acik && yetkili && <Dugme tur="birincil" onClick={() => kapat.komut.mutate({ surum: toplama.surum, durum: 'bitti' })}>Bitir</Dugme>}
           {acik && yetkili && <Dugme onClick={() => kapat.komut.mutate({ surum: toplama.surum, durum: 'iptal' })}>İptal</Dugme>}
         </>} />
       <p className="tc-stok-not">Teslim yeri: <strong>{hedef ? (hedef.ad ? `${hedef.kod} · ${hedef.ad}` : hedef.kod) : 'Sevk çıkışı (toplanan stoktan düşer)'}</strong>
-        <Link to="/stok/hazirlik"> · Hazırlığa dön</Link></p>
+        <Link to="/stok/hazirlik"> · Malzeme isteklerine dön</Link></p>
       <div className="tc-stok-ilerleme" role="progressbar" aria-valuemin={0} aria-valuemax={toplama.adimSayisi} aria-valuenow={toplama.toplanan} aria-label="Toplanan adım">
         <svg viewBox="0 0 100 6" preserveAspectRatio="none" aria-hidden="true"><rect width="100" height="6" rx="3" className="tc-stok-cubuk-zemin" /><rect width={toplama.adimSayisi ? (toplama.toplanan / toplama.adimSayisi) * 100 : 0} height="6" rx="3" className="tc-stok-cubuk-dolu" /></svg>
         <span className="tc-stok-not">{toplama.toplanan} / {toplama.adimSayisi} adım</span>
@@ -455,10 +475,10 @@ export function ToplaModu({ ustKomut }: { ustKomut?: KomutIsleyici }) {
   if (l.isError) return <DurumKutusu durum="hata" mesaj={hataMetni(l.error)} yenile={() => void l.refetch()} />;
   const acik = l.data.satirlar.filter((x) => x.durum === 'topluyor');
   const id = secili ?? (acik.length === 1 ? acik[0]!.id : null);
-  if (acik.length === 0) return <DurumKutusu durum="bos" mesaj="Açık hazırlık listesi yok. Liste Hazırlık sayfasında açılır." />;
+  if (acik.length === 0) return <DurumKutusu durum="bos" mesaj="Açık toplama listesi yok. Liste Malzeme istekleri sayfasında açılır." />;
   if (id === null) {
     return (
-      <ul className="tc-stok-isler tc-stok-teslim-liste" aria-label="Açık hazırlık listeleri">
+      <ul className="tc-stok-isler tc-stok-teslim-liste" aria-label="Açık toplama listeleri">
         {acik.map((x) => (
           <li key={x.id} className="tc-stok-is">
             <div><strong className="tc-stok-mono">{x.no}</strong><span>{x.ad} · {x.toplanan}/{x.adimSayisi} adım</span></div>
@@ -491,7 +511,7 @@ function PaneldeListe({ id, ustKomut }: { id: number; ustKomut?: KomutIsleyici }
       <p className="tc-stok-not"><strong className="tc-stok-mono">{toplama.no}</strong> · {toplama.ad} · {toplama.toplanan} / {toplama.adimSayisi} adım</p>
       {toplama.durum === 'topluyor' && sira
         ? <SiradakiAdim key={sira.id} id={id} t={t.data} gecmis={gecmis} {...(ustKomut ? { ustKomut } : {})} />
-        : <DurumKutusu durum="bos" mesaj="Bütün adımlar toplandı; listeyi Hazırlık sayfasında bitir." />}
+        : <DurumKutusu durum="bos" mesaj="Bütün adımlar toplandı; listeyi Malzeme istekleri sayfasında bitir." />}
     </>
   );
 }
@@ -524,10 +544,12 @@ export function Hazirlik() {
   if (id) return <ListeAyrintisi id={Number(id)} />;
   return (
     <section className="tc-stok">
-      <SayfaBasi baslik="Hazırlık" alt="Üretimden gelen istekler ve toplama listeleri tek yerde. İstekleri seç, liste aç, raf sırasıyla topla; toplanan teslim yerine taşınır." />
-      <LotBekleyenKartlar />
+      <SayfaBasi baslik="Malzeme istekleri" alt="Üretimin istediği malzemeyi raftan toplayıp istasyona ya da kişiye götürün. İstek olmadan yer değiştirmek için Transfer." />
+      <AkisSeridi etiket="Nasıl çalışır" adimlar={HAZIRLIK_AKISI} />
       <Istekler />
       <Listeler />
+      {/* Refakat kartı işi; isteklerle ilgisi yok, sayfayı o açmasın diye en altta. */}
+      <LotBekleyenKartlar />
     </section>
   );
 }

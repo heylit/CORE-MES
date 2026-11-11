@@ -8,7 +8,8 @@ export const rehber: readonly SayfaRehberi[] = [
       '"İş kutusu"nda bekleyen işleri, kritik stoku ve son hareketleri görün.',
       '"Okut"ta ürün ya da raf kodunu okutun (kamera, fotoğraf ya da el okuyucu); "Sepete ekle" ya da "Stoktan düş".',
       '"Mal kabul"de malı sayıp "Teslim al"a, ardından "Etiket bas"a basın.',
-      '"Taşı"da her satıra hedef seçip "Hepsini taşı"; "Hazırlık"ta istekleri toplayıp "Teslim et".',
+      '"Malzeme istekleri"nde üretimden gelen istekleri görün: tek isteği "Teslim et" ile götürün ya da birkaçını seçip "Liste aç"ın, raf sırasıyla toplayıp "Bitir"e basın.',
+      '"Transfer" kişisel taşıma sepetidir: Okut\'ta "Sepete ekle" dedikleriniz buraya gelir; her satıra yer seçip "Hepsini taşı". İstek gerekmez.',
       'Üst çubuktaki "Okut" düğmesi teslim al, teslim et ve malzeme iste işlerini her sayfadan açar; modu (Otomatik, Bilgi, Taşı, Say, Topla) panelin üstünden ya da Komut kartından seçilir.',
     ],
     sinirlar: [
@@ -16,6 +17,6 @@ export const rehber: readonly SayfaRehberi[] = [
       'Hareketi geri almak ayrı yetkidir; yetkisi olmayana ekran "müdüre haber ver" der.',
       'Mal kabul hareketi Hareketler\'de geri alınamaz.',
     ],
-    sozcukler: ['depo', 'stok', 'mal kabul', 'teslim', 'raf', 'okut', 'barkod', 'qr', 'taşı', 'sepet', 'lot'],
+    sozcukler: ['depo', 'stok', 'mal kabul', 'teslim', 'raf', 'okut', 'barkod', 'qr', 'taşı', 'sepet', 'transfer', 'lot', 'malzeme isteği', 'toplama', 'hazırlık'],
   },
 ];

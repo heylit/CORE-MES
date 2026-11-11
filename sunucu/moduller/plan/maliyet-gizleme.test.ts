@@ -118,3 +118,40 @@ test('geri koyma: bekleyen geri yamasının para eski değeri kayıttakidir', ()
   const y = maliyetiGeriKoy(gelen, ornek()) as Nesne;
   assert.equal((((y['bekleyen'] as Nesne[])[0]!['geri'] as Nesne[])[0]!)['once'], 400);
 });
+
+// 2897: gelir kümesi (sipariş geliri ve cezası, mesai kararının neti, planın TL'si, nabız) maliyet ve sipariş fiyatı yetkisini birlikte ister.
+const planli = (): Nesne => ({
+  ...ornek(),
+  plan: { dataVer: 4, zaman: 10, ozet: { tl: 1234, wT: 2 }, oncekiOzet: { tl: 1100, wT: 3 }, ops: { a: { m: 'm1', S: 1 } } },
+  nabiz: [{ t: 1, ne: 'Plan', o: { tl: 280, wT: 28 }, imza: '2800|100' }],
+  nbSabit: { ad: 'Ref', o: { tl: 5 } },
+});
+
+test('gelir kümesi: yalnız maliyet gören gelir ve plan TL\'sini almaz, maliyet alanlarını alır', () => {
+  const S = planli();
+  ((S['D'] as Nesne)['mesaiKarar'] as unknown) = [{ m: 'm1', gun: 1, vardiya: 'A', karar: 'kabul', net: 777 }];
+  const y = maliyetsizCalisma(S, { maliyet: true, gelir: false }) as Nesne;
+  const D = y['D'] as Nesne;
+  assert.deepEqual(D['siparisler'], [{ id: 'e1', adet: 3 }]);
+  assert.deepEqual(D['mesaiKarar'], [{ m: 'm1', gun: 1, vardiya: 'A', karar: 'kabul' }]);
+  assert.deepEqual((D['tezgahlar'] as Nesne[])[0], { id: 'm1', ucret: 450, ucretIst: 450, verim: 0.9 });
+  assert.deepEqual((y['plan'] as Nesne)['ozet'], { wT: 2 });
+  assert.deepEqual((y['plan'] as Nesne)['oncekiOzet'], { wT: 3 });
+  assert.deepEqual(y['nabiz'], [{ t: 1, ne: 'Plan', o: { wT: 28 } }]);
+  assert.deepEqual(y['nbSabit'], { ad: 'Ref', o: {} });
+  const iz = y['iz'] as Nesne[];
+  assert.equal(iz[0]!['ayrinti'], 'm1: 450 → 500 TL/sa', 'maliyet izi kalır');
+  assert.deepEqual(maliyetsizCalisma(S, { maliyet: true, gelir: true }), S, 'iki yetki: dokunulmaz');
+});
+
+test('gelir kümesi: aynı planın TL\'si kayıttakidir, yeni planınki boş kalır (eski planın TL\'si yeni plana yazılmaz)', () => {
+  const g = { maliyet: true, gelir: false };
+  const ayni = maliyetiGeriKoy(maliyetsizCalisma(planli(), g), planli(), g) as Nesne;
+  assert.equal(((ayni['plan'] as Nesne)['ozet'] as Nesne)['tl'], 1234);
+  assert.equal(((ayni['nabiz'] as Nesne[])[0]!)['imza'], '2800|100');
+  assert.equal((((ayni['D'] as Nesne)['siparisler'] as Nesne[])[0]!)['gelir'], 9000);
+  const yeni = maliyetsizCalisma(planli(), g) as Nesne;
+  yeni['plan'] = { ...(yeni['plan'] as Nesne), zaman: 11, ozet: { tl: 1, wT: 1 } };
+  const y = maliyetiGeriKoy(yeni, planli(), g) as Nesne;
+  assert.deepEqual((y['plan'] as Nesne)['ozet'], { wT: 1 });
+});

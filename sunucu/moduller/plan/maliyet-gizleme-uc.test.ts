@@ -35,6 +35,8 @@ describe('2498: planlama çalışmasında maliyet ve ücret sunucuda süzülür 
   let kaynakOkur = '';
   let kaynakMaliyetci = '';
   let kaynakFiyatOkur = '';
+  let gelirsizMaliyetci = '';
+  let kaynakGelirsizMaliyetci = '';
   let makineId = '';
   const vt = (): TestVeritabani['vt'] => { if (!ortam) throw new Error('Test veritabanı açılamadı.'); return ortam.vt; };
   async function girisCerezi(kullaniciAdi: string): Promise<string> {
@@ -93,11 +95,28 @@ describe('2498: planlama çalışmasında maliyet ve ücret sunucuda süzülür 
     calisma.D['fasoncular'] = [{ id: 'f1', ad: 'Deneme fasoncu', fiyat: 5, saatFiyat: 6, tasima: 7, sureGun: 2 }];
     // Listede olmayan sayfa siparişi kayıttaki gibi kalır (siparis-bedeli-girdi.test.ts); malzeme kaynaktan yeniden kurulur, birim testte.
     calisma.D['siparisler'] = [{ id: 'MG-S1', urun: 'MG-U', adet: 3, gelir: 9000, cezaGun: 40, cezaOran: 0.5, cezaTavan: 8 }];
+    // Gelire dayanan türetilmiş alanlar (2897): planın TL özeti, nabız ölçüsü ve imzası, sabit referans, mesai kararının neti.
+    const c = calisma as unknown as Nesne;
+    c['plan'] = { dataVer: c['dataVer'], ops: {}, J: {}, ozet: { tl: 1234, wT: 2, late: 0 }, oncekiOzet: { tl: 1100, wT: 3 }, kim: 'Deneme' };
+    c['nabiz'] = [{ t: 1, ne: 'Deneme', o: { tl: 280, wT: 28 }, imza: '2800|100|150' }];
+    c['nbSabit'] = { ad: 'Referans', ops: {}, o: { tl: 5, wT: 1 }, ozet: { tl: 6, wT: 1 } };
+    calisma.D['mesaiKarar'] = [{ m: makineId, gun: 1, vardiya: 'A', karar: 'kabul', kim: 'Deneme', t: 1, net: 777 }];
+    calisma.senaryolar.push({ id: 's2', ad: 'Hafif', hafif: true, plan: { ozet: { tl: 99, wT: 1 } }, ozet: { tl: 98, wT: 1 } });
     await yaz(tam, calisma, surum);
     return kayitli();
   }
 
+  // Çalışmanın her yerinde tutar taşıyan anahtar: adı para söyleyen ve değeri boş olmayan (null tutar taşımaz, 69 a).
+  const GELIR_ANAHTARI = /^(tl|gelir|cezaGun|cezaOran|cezaTavan|net|imza)$/;
+  const PARA_ANAHTARI = /^(tl|gelir|cezaGun|cezaOran|cezaTavan|net|imza|ucret|ucretIst|birimFiyat|fiyatTahmini|saatFiyat|operatorUcret|mesaiUcret|ayarciUcret|brut)$/;
+  function tara(x: unknown, desen: RegExp, yol = ''): string[] {
+    if (Array.isArray(x)) return x.flatMap((v, i) => tara(v, desen, `${yol}[${i}]`));
+    if (x === null || typeof x !== 'object') return [];
+    return Object.entries(x).flatMap(([k, v]) => [...(desen.test(k) && v !== null && v !== undefined && typeof v !== 'object' ? [`${yol}.${k}`] : []), ...tara(v, desen, `${yol}.${k}`)]);
+  }
+
   const paraYok = (c: Calisma, ad: string): void => {
+    assert.deepEqual(tara(c, PARA_ANAHTARI), [], `${ad}: tutar taşıyan alan kalmadı`);
     assert.equal(c.D.tezgahlar.find((x) => x['id'] === makineId)?.['ucret'], undefined, `${ad}: tezgâh ücreti`);
     assert.equal(c.D['maliyetSis'], undefined, `${ad}: gider tablosu`);
     assert.equal(c.D['talasFiyat'], undefined, `${ad}: talaş fiyatı`);
@@ -125,9 +144,11 @@ describe('2498: planlama çalışmasında maliyet ve ücret sunucuda süzülür 
     tam = await girisCerezi('yonetici');
     const planlama = ['plan.yaz', 'plan.planlama-oku', 'sayfa.istasyonlar', 'kisiler.oku'];
     planlamaci = await islemliKisi('planlamaci', planlama);
-    maliyetci = await islemliKisi('maliyetci', [...planlama, 'finans.maliyet-oku']);
+    maliyetci = await islemliKisi('maliyetci', [...planlama, 'finans.maliyet-oku', 'siparisler.fiyat-oku']);
+    gelirsizMaliyetci = await islemliKisi('gelirsizmaliyetci', [...planlama, 'finans.maliyet-oku']);
     kaynakOkur = await islemliKisi('kaynakokur', ['recete-rota.oku']);
-    kaynakMaliyetci = await islemliKisi('kaynakmaliyetci', ['recete-rota.oku', 'finans.maliyet-oku']);
+    kaynakMaliyetci = await islemliKisi('kaynakmaliyetci', ['recete-rota.oku', 'finans.maliyet-oku', 'siparisler.fiyat-oku']);
+    kaynakGelirsizMaliyetci = await islemliKisi('kaynakgelirsizmaliyetci', ['recete-rota.oku', 'finans.maliyet-oku']);
     kaynakFiyatOkur = await islemliKisi('kaynakfiyatokur', ['recete-rota.oku', 'siparisler.fiyat-oku']);
     const s = ortam.sahip;
     const im = await s.tek<{ id: number }>("INSERT INTO is_merkezi (kod, ad) VALUES ('MG-IM', 'Deneme merkezi') RETURNING id");
@@ -168,6 +189,49 @@ describe('2498: planlama çalışmasında maliyet ve ücret sunucuda süzülür 
     const k = await kayitlariOku(kaynakFiyatOkur);
     paraYok(k, 'fiyat okuyan');
     assert.equal((k.D['siparisler'] as Nesne[]).find((x) => x['id'] === 'MG-S1')?.['adet'], 3);
+  });
+
+  // 2897: sipariş geliri, cezası ve gelirden türeyen TL (plan özeti, nabız, mesai kararı neti) maliyet ve sipariş fiyatı yetkisini birlikte
+  // ister. Yalnız maliyet okuyan tezgâh ücretini görür, geliri ve plan TL'sini görmez.
+  test('MG-06: maliyet okuyan ama sipariş fiyatını okumayan gelir ve plan TL\'sini almaz, maliyet alanlarını alır', async () => {
+    await paraliCalisma();
+    const k = await kayitlariOku(kaynakGelirsizMaliyetci);
+    assert.deepEqual(tara(k, GELIR_ANAHTARI), [], 'ham kayıtta gelir ve türevi yok');
+    assert.equal(k.D.tezgahlar.find((x) => x['id'] === makineId)?.['ucret'], 450, 'tezgâh ücreti maliyettir, gelir');
+    assert.equal((k.D['siparisler'] as Nesne[]).find((x) => x['id'] === 'MG-S1')?.['adet'], 3);
+    assert.equal(((k as unknown as Nesne)['plan'] as Nesne)['ozet'] !== undefined, true, 'plan özeti kalır, TL\'si düşer');
+    const c = (await oku(gelirsizMaliyetci)).calisma;
+    assert.deepEqual(tara(c, GELIR_ANAHTARI), [], 'çalışmada gelir ve türevi yok');
+    assert.equal(c.D.tezgahlar.find((x) => x['id'] === makineId)?.['ucret'], 450);
+  });
+
+  test('MG-07: iki yetkiyi de taşıyan gelir ve plan TL\'sini alır', async () => {
+    await paraliCalisma();
+    const k = await kayitlariOku(kaynakMaliyetci);
+    assert.equal((k.D['siparisler'] as Nesne[]).find((x) => x['id'] === 'MG-S1')?.['cezaOran'], 0.5);
+    const x = k as unknown as Nesne;
+    assert.equal(((x['plan'] as Nesne)['ozet'] as Nesne)['tl'], 1234);
+    assert.equal(((x['plan'] as Nesne)['oncekiOzet'] as Nesne)['tl'], 1100);
+    assert.equal(((x['nabiz'] as Nesne[])[0]!['o'] as Nesne)['tl'], 280);
+    assert.equal((k.D['mesaiKarar'] as Nesne[])[0]!['net'], 777);
+    const c = (await oku(maliyetci)).calisma as unknown as Nesne;
+    assert.equal(((c['plan'] as Nesne)['ozet'] as Nesne)['tl'], 1234);
+  });
+
+  test('MG-08: gelir göremeyenin yazması kayıttaki gelir ve plan TL\'sini silmez, kendi değerini yazamaz', async () => {
+    await paraliCalisma();
+    for (const kim of [gelirsizMaliyetci, planlamaci]) {
+      const p = await oku(kim);
+      const c = p.calisma as unknown as Nesne;
+      c['plan'] = { ...(c['plan'] as Nesne), ozet: { ...((c['plan'] as Nesne)['ozet'] as Nesne), tl: 1 } };
+      await yaz(kim, p.calisma, p.surum);
+      const r = (await kayitli()) as unknown as Nesne;
+      assert.equal(((r['plan'] as Nesne)['ozet'] as Nesne)['tl'], 1234);
+      assert.equal(((r['plan'] as Nesne)['oncekiOzet'] as Nesne)['tl'], 1100);
+      assert.equal(((r['nabiz'] as Nesne[])[0]!['o'] as Nesne)['tl'], 280);
+      assert.equal((r['nabiz'] as Nesne[])[0]!['imza'], '2800|100|150');
+      assert.equal((((r['D'] as Nesne)['mesaiKarar'] as Nesne[])[0]!)['net'], 777);
+    }
   });
 
   test('MG-03: maliyet okumayan planlamacı okuduğunu geri yazınca kayıttaki para alanları silinmez; değiştirdiği öteki alan yazılır', async () => {

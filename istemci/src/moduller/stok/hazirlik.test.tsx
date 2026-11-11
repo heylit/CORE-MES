@@ -184,7 +184,7 @@ describe('Hazırlık: malzeme istekleri', () => {
     const pencere = await screen.findByRole('dialog', { name: '2 istek için liste' });
     await waitFor(() => expect((within(pencere).getByRole('combobox', { name: /İstasyon/ }) as HTMLSelectElement).value).toBe('4'));
     fireEvent.click(within(pencere).getByRole('button', { name: 'Listeyi aç' }));
-    expect(await screen.findByRole('heading', { name: 'Hazırlık TL-000003' })).toBeTruthy();
+    expect(await screen.findByRole('heading', { name: 'Toplama listesi TL-000003' })).toBeTruthy();
     expect(istekler.find((i) => i.yol === '/stok/toplamalar' && i.yontem === 'POST')!.govde).toEqual({ ad: 'Torna 1 hazırlığı', istekIdler: [31, 34], hedef: { istasyonId: 4 } });
   });
 
@@ -194,13 +194,13 @@ describe('Hazırlık: malzeme istekleri', () => {
     expect(await screen.findByText('MI-000031')).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Teslim et' })).toBeNull();
     expect(screen.queryByRole('checkbox')).toBeNull();
-    expect(screen.queryByRole('button', { name: 'Yeni liste' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'İsteksiz liste' })).toBeNull();
   });
 
   it('eski malzeme istekleri adresi hazırlığa yönlenir', async () => {
     sunucuKur(OKUYUCU, { 'GET /stok/malzeme-istekleri': () => json(200, liste([])), 'GET /stok/toplamalar': () => json(200, BOS_LISTELER) });
     ac('/stok/istekler');
-    expect(await screen.findByRole('heading', { name: 'Hazırlık' })).toBeTruthy();
+    expect(await screen.findByRole('heading', { name: 'Malzeme istekleri' })).toBeTruthy();
   });
 });
 
@@ -231,7 +231,7 @@ describe('Hazırlık: lot bekleyen kartlar (kart #154)', () => {
       'GET /stok/toplamalar': () => json(200, BOS_LISTELER),
     });
     ac('/stok/hazirlik');
-    await screen.findByText(/Üretimden gelen istekler/);
+    await screen.findByText(/Üretimin istediği malzemeyi/);
     await waitFor(() => expect(screen.queryByRole('table', { name: 'Lot bekleyen kartlar' })).toBeNull());
   });
 });
