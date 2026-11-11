@@ -152,6 +152,10 @@ function sunucuKur(kullanici: Kullanici, ek: Ek = {}): Cagri[] {
     }
     if (yol.startsWith('/uretim-emirleri')) return Promise.resolve(cevap(ek.emirler ?? EMIRLER));
     if (yol.startsWith('/atolye/arama')) return Promise.resolve(cevap(ARAMA));
+    if (yol.startsWith('/stok/malzemeler?')) return Promise.resolve(cevap({ satirlar: [{ malzemeId: 4, ad: 'Çelik çubuk', stokKodu: 'S2', birim: 'kg' }], toplam: 1, sayfa: 1, sayfaBoyu: 50 }));
+    if (yol.startsWith('/stok/konum-malzemeleri')) {
+      return Promise.resolve(cevap({ satirlar: [{ id: 9, malzemeId: 4, malzemeAd: 'Çelik çubuk', konumId: 55, konumKod: 'R1-02-3-1', partiId: 1, partiEtiketi: 'LT-000001', miktar: '120.000' }], toplam: 1, sayfa: 1, sayfaBoyu: 50 }));
+    }
     if (yol.startsWith('/atolye/raflar/7/gozler')) return Promise.resolve(cevap(GOZLER));
     if (yol.startsWith('/istasyonlar')) return Promise.resolve(cevap(ek.istasyonlar ?? ISTASYONLAR));
     if (yol === '/makineler') {
@@ -685,6 +689,29 @@ describe('fabrika haritası', () => {
     expect(await within(kart).findByRole('table', { name: 'Raf gözleri' })).toBeTruthy();
     expect(within(kart).getAllByText('R1-02-3-1').length).toBeGreaterThan(0);
     expect(cagrilar.some((c) => c.yol === '/atolye/arama?metin=r1-02-3-1')).toBe(true);
+  });
+
+  it('3012 a: stok okuyan kişi aramada malzemenin raf gözlerini miktarıyla görür; seçince göz bulunur', async () => {
+    const cagrilar = sunucuKur({ ...OKUYAN, islemler: ['sayfa.atolye', 'sayfa.stok'] });
+    goster(<AtolyeHaritasi />);
+    await screen.findByRole('img', { name: 'Atölye planı' });
+    fireEvent.change(screen.getByLabelText('Ara'), { target: { value: 'celik' } });
+    const secenek = await screen.findByRole('option', { name: /R1-02-3-1 Çelik çubuk 120 kg · LT-000001/ });
+    expect(cagrilar.some((c) => c.yol === '/stok/konum-malzemeleri?tur=raf_gozu&malzemeId=4&sayfa=1')).toBe(true);
+    fireEvent.click(secenek);
+    expect(await screen.findByRole('region', { name: 'Raf R1 ayrıntısı' })).toBeTruthy();
+    expect(cagrilar.some((c) => c.yol === '/atolye/arama?metin=R1-02-3-1')).toBe(true);
+  });
+
+  it('3012 a: stok yetkisi olmayan kişinin aramasında stok isteği atılmaz, yer ve miktar görünmez', async () => {
+    const cagrilar = sunucuKur(OKUYAN);
+    goster(<AtolyeHaritasi />);
+    await screen.findByRole('img', { name: 'Atölye planı' });
+    fireEvent.change(screen.getByLabelText('Ara'), { target: { value: 'celik' } });
+    await waitFor(() => expect(cagrilar.some((c) => c.yol === '/atolye/arama?metin=celik')).toBe(true));
+    expect(screen.queryByText('Stokta')).toBeNull();
+    expect(screen.queryByText(/120 kg/)).toBeNull();
+    expect(cagrilar.some((c) => c.yol.startsWith('/stok/malzemeler') || c.yol.startsWith('/stok/konum-malzemeleri') || c.yol.startsWith('/stok/konumlar'))).toBe(false);
   });
 
   it('düzenleyici: paletten raf eklenir ve yerleşim tek komutla, açılan sürümle kaydedilir', async () => {

@@ -42,6 +42,9 @@
   white-space: normal; font-weight: 600; border-color: transparent;
 }
 .tc-atolye-sonuc small { color: var(--muted); }
+/* Stoktaki yer: miktar ve parti alt satırda (parti etiketi uzun; dar ekranda üç sütun sığmaz). */
+.tc-dugme.tc-atolye-sonuc.tc-atolye-stok-sonuc { grid-template-columns: minmax(0, auto) minmax(0, 1fr); }
+.tc-atolye-stok-sonuc small { grid-column: 1 / -1; overflow-wrap: anywhere; }
 
 /* Araç sütunu: sahnenin sağ üstünde, simge düğmeler; sığmazsa ikinci sütun. */
 .tc-atolye-arac {

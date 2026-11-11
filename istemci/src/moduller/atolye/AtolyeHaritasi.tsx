@@ -488,7 +488,7 @@ export function AtolyeHaritasi() {
                     <>
                       <p className="tc-atolye-stok-sonuc-baslik">Stokta</p>
                       {stokAramasi.data.map((y) => (
-                        <Dugme key={`stok:${String(y.malzemeId)}:${y.konumKod}:${y.partiEtiketi ?? ''}`} className="tc-atolye-sonuc" role="option" aria-selected={false} onClick={() => { void stokYeriSec(y.konumKod); }}>
+                        <Dugme key={`stok:${String(y.malzemeId)}:${y.konumKod}:${y.partiEtiketi ?? ''}`} className="tc-atolye-sonuc tc-atolye-stok-sonuc" role="option" aria-selected={false} onClick={() => { void stokYeriSec(y.konumKod); }}>
                           <span className="mono">{y.konumKod}</span>
                           <span>{y.malzemeAd}</span>
                           <small>{sayiMetni(Number(y.miktar))}{y.birim ? ` ${y.birim}` : ''}{y.partiEtiketi ? ` · ${y.partiEtiketi}` : ''}</small>

@@ -131,7 +131,7 @@ export function DepoGorunumu({ raflar: hamRaflar, bolumKodlari, gozKalemleri, ha
               kapat={() => secimYaz({ rafId: raf.id, bolme, kat: null, goz: null })}
             />
           ) : (
-            <p className="tc-atolye-ipucu tc-atolye-depo-bos">Gözün içini görmek ve düzenlemek için göze basın.</p>
+            <p className="tc-atolye-ipucu tc-atolye-depo-bos">Gözün içini görmek için göze basın.</p>
           )}
         </div>
       </section>
