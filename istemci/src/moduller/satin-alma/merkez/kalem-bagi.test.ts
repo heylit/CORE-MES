@@ -4,7 +4,7 @@ import type { Talep } from '#paylasilan/sozlesme/satin-alma.ts';
 import { S, bump } from './store.ts';
 import { DEFAULT_SETTINGS } from './constants.ts';
 import { talepEkrana, talepSunucuya } from './tasiyici.ts';
-import { tabItems } from './views.ts';
+import { boardHTML, reqTable, tabItems } from './views.ts';
 import { rfqText } from './ui.ts';
 
 const K1 = '00000000-0000-4000-8000-000000000011';
@@ -41,7 +41,7 @@ describe('kalem bağları (2429)', () => {
     const el = document.createElement('div');
     el.innerHTML = tabItems(talepEkrana(TALEP));
     const satirlar = [...el.querySelectorAll('tbody tr')].map((tr) => [...tr.querySelectorAll('[data-sa-kalem-bagi]')].map((s) => s.textContent));
-    expect(satirlar).toEqual([['Parça: DNM-7 Deneme flanş', 'Fason: UE-2026-001, Op 30 Kaplama, Deneme Kaplama'], []]);
+    expect(satirlar).toEqual([['Uygulanacak malzeme: DNM-7 Deneme flanş', 'Fason: UE-2026-001, Op 30 Kaplama, Deneme Kaplama'], []]);
   });
 
   it('teklif isteme metninde parça ve yapılacak işlem; fason firması, iç emir no ve silinmiş kart numarası gitmez', () => {
@@ -52,5 +52,45 @@ describe('kalem bağları (2429)', () => {
     expect(metin).not.toContain('Deneme Kaplama\n');
     const silinmis = { ...TALEP, kalemBaglari: [{ kalemId: K1, uygulanan: { no: 7, kod: null, ad: null }, fason: null }] };
     expect(rfqText(talepEkrana(silinmis), '', '2026-10-20')).toContain('1. Deneme kaplama hizmeti, 40 adet\n2. Deneme vida');
+  });
+});
+
+// 2873: satın alma fason hizmet talebinin hangi malzemeye uygulanacağını talebe girmeden, listede ve panoda görür.
+describe('uygulanacak malzeme listede (2873)', () => {
+  const ozet = (html: string) => {
+    const el = document.createElement('div');
+    el.innerHTML = html;
+    return [...el.querySelectorAll('[data-sa-uygulanan]')].map((s) => s.textContent);
+  };
+  const ikinci = { ...TALEP.kalemBaglari![0]!, kalemId: K2, uygulanan: { no: 8, kod: 'DNM-8', ad: 'Deneme mil' }, fason: null };
+
+  it('listede ve panoda tek malzeme kod ve adıyla', () => {
+    S.settings = { ...DEFAULT_SETTINGS }; S.ready = true;
+    const r = talepEkrana(TALEP);
+    S.requests = { [r.id]: r }; bump();
+    expect(ozet(reqTable([r]))).toEqual(['Uygulanacak: DNM-7 Deneme flanş']);
+    expect(ozet(boardHTML())).toEqual(['Uygulanacak: DNM-7 Deneme flanş']);
+  });
+
+  it('birden çok malzemede ilki ve kalan sayısı; aynı malzeme bir kez sayılır', () => {
+    S.settings = { ...DEFAULT_SETTINGS }; S.ready = true; bump();
+    expect(ozet(reqTable([talepEkrana({ ...TALEP, kalemBaglari: [...TALEP.kalemBaglari!, ikinci] })]))).toEqual(['Uygulanacak: DNM-7 Deneme flanş +1']);
+    const ayni = { ...ikinci, uygulanan: TALEP.kalemBaglari![0]!.uygulanan };
+    expect(ozet(reqTable([talepEkrana({ ...TALEP, kalemBaglari: [...TALEP.kalemBaglari!, ayni] })]))).toEqual(['Uygulanacak: DNM-7 Deneme flanş']);
+  });
+
+  it('bağsız talepte satır yok; silinmiş kart numarasıyla', () => {
+    S.settings = { ...DEFAULT_SETTINGS }; S.ready = true; bump();
+    expect(ozet(reqTable([talepEkrana({ ...TALEP, kalemBaglari: [] })]))).toEqual([]);
+    const silinmis = { ...TALEP, kalemBaglari: [{ kalemId: K1, uygulanan: { no: 7, kod: null, ad: null }, fason: null }] };
+    expect(ozet(reqTable([talepEkrana(silinmis)]))).toEqual(['Uygulanacak: kart 7']);
+  });
+
+  it('malzeme adı kaçırılarak basılır', () => {
+    S.settings = { ...DEFAULT_SETTINGS }; S.ready = true; bump();
+    const kotu = { ...TALEP, kalemBaglari: [{ kalemId: K1, uygulanan: { no: 9, kod: 'X', ad: '<img src=x onerror=alert(1)>' }, fason: null }] };
+    const el = document.createElement('div');
+    el.innerHTML = reqTable([talepEkrana(kotu)]);
+    expect(el.querySelector('img')).toBeNull();
   });
 });
