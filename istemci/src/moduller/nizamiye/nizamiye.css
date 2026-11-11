@@ -117,8 +117,9 @@ button.tc-nz-sayac { cursor: pointer; }
   .tc-nz-acil-sayfa { overflow-x: auto; }
 }
 
+/* Gizleme yalnız acil sayfası açıkken (stil yüklü kalır, başka sayfaların baskısı boş çıkmasın); :where özgüllüğü body * düzeyinde tutar ki görünür kuralı ezilmesin. */
 @media print {
-  body * { visibility: hidden; }
+  body:where(:has(.tc-nz-acil-sayfa)) * { visibility: hidden; }
   .tc-nz-acil-sayfa, .tc-nz-acil-sayfa * { visibility: visible; }
   .tc-nz-acil-sayfa { position: absolute; inset: 0; overflow: visible; }
   .tc-nz-acil-sayfa button { display: none; }
