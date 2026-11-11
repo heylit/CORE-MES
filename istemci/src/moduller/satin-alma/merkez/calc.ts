@@ -425,6 +425,8 @@ const zero = (): Record<CritKey, number> => ({ cost: 0, lead: 0, supplier: 0, wa
    Kalem maliyeti: birim fiyat × miktar; TL'ye çevrilmiş, iskonto ve vade sonrası.
    Kullanılan her teklifin nakliye ve diğer masrafları sipariş başına TAM eklenir. */
 export function itemCost(x: EvalRow, it: RequestItem): number | null { const l = x.c.lines[it.id]; return l ? l.unit * x.c.unitFactorTRY : null; }
+/** Kalemin tutarı: en az miktar alınacaksa birim × miktar değil, alınan miktarın tutarı. */
+export function itemLineCost(x: EvalRow, it: RequestItem): number | null { const l = x.c.lines[it.id]; return l ? l.line * x.c.unitFactorTRY : null; }
 const extrasPV = (x: EvalRow): number => (x.c.ship + x.c.other) * x.c.rate * x.c.factor;
 
 export function planCost(req: PurchaseRequest, rows: EvalRow[], assign: Record<string, string>): Plan {
@@ -433,9 +435,8 @@ export function planCost(req: PurchaseRequest, rows: EvalRow[], assign: Record<s
   for (const it of req.items ?? []) {
     const qid = assign[it.id];
     const x = rows.find((y) => y.q.id === qid);
-    const u = x ? itemCost(x, it) : null;
-    if (!x || u === null || !qid) { ok = false; continue; }
-    const amt = u * (parseNum(it.qty) || 0);
+    const amt = x ? itemLineCost(x, it) : null;
+    if (!x || amt === null || !qid) { ok = false; continue; }
     goods += amt;
     const g = (by[qid] ??= { x, items: [], goods: 0, extras: 0, late: null });
     g.items.push(it); g.goods += amt;
@@ -461,7 +462,7 @@ export function optimalSplit(req: PurchaseRequest, rows: EvalRow[]): Plan | null
     let ok = true;
     for (const it of items) {
       let bx: EvalRow | null = null, bu = Infinity;
-      for (const x of sub) { const u = itemCost(x, it); if (u !== null && u < bu) { bu = u; bx = x; } }
+      for (const x of sub) { const u = itemLineCost(x, it); if (u !== null && u < bu) { bu = u; bx = x; } }
       if (!bx) { ok = false; break; }
       assign[it.id] = bx.q.id;
     }

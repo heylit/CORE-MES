@@ -5,7 +5,7 @@ import { S, V, memo, nameOf, settings, type Page } from "./store.ts";
 import {
   awardTotals, budgetUse, evaluate, lateBy, matOf, matStats, payText, priceHistory, quoteCalc, requiredApprover,
   savingsOf, spendLines, supName, supplierStats, validity, vsLast, fiyatUyarisi, type EvalRow, type Evaluation, type PriceEntry,
-  awardOrders, orderDue, itemCost, planCost, type OrderInfo,
+  awardOrders, orderDue, itemCost, itemLineCost, planCost, type OrderInfo,
   approvalState, durumEtiketi, gecikenSiparisSayisi, siparisEtiketi,
 } from "./calc.ts";
 import {
@@ -827,8 +827,8 @@ export function updateSplitSum(): void {
   const r = S.requests[V.id ?? ""]; const box = $("#split-sum"); if (!r || !box) return;
   const ev = evaluate(r); if (!ev.split) return;
   const plan = planCost(r, ev.all, readSplitAssign());
-  (r.items || []).forEach(it => { const g = plan.groups.find(g => g.items.includes(it)); const u = g ? itemCost(g.x, it) : null;
-    const su = $(`[data-su="${it.id}"]`), st = $(`[data-st="${it.id}"]`); if (su) su.textContent = u === null ? "–" : money(u); if (st) st.textContent = u === null ? "–" : money(u * (parseNum(it.qty) || 0)); });
+  (r.items || []).forEach(it => { const g = plan.groups.find(g => g.items.includes(it)); const u = g ? itemCost(g.x, it) : null, t = g ? itemLineCost(g.x, it) : null;
+    const su = $(`[data-su="${it.id}"]`), st = $(`[data-st="${it.id}"]`); if (su) su.textContent = u === null ? "–" : money(u); if (st) st.textContent = t === null ? "–" : money(t); });
   const opt = ev.split.plan, best = ev.split.best;
   const diffOpt = plan.total - opt.total;
   box.innerHTML = `<div class="note">

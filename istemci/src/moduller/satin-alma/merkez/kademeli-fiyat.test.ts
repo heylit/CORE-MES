@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { basamakFiyati } from './calc.ts';
-import type { Quote } from './tipler.ts';
+import { basamakFiyati, planCost, type EvalRow } from './calc.ts';
+import type { PurchaseRequest, Quote } from './tipler.ts';
 
 const teklif = (tiers?: Quote['tiers']): Quote => ({
   id: 'q', supplierId: 'f1', supplierName: 'f1', date: '2026-11-01', validUntil: '', currency: 'TRY', fxRate: null, prices: { k1: 60 },
@@ -32,5 +32,13 @@ describe('kademeli teklif fiyatı (2975)', () => {
   it('eksik basamak yok sayılır; fiyatsız kalem teklif dışıdır', () => {
     expect(basamakFiyati(teklif({ k1: [{ min: Number.NaN, price: 10 }] }), 'k1', 80)).toEqual({ unit: 60, line: 4800 });
     expect(basamakFiyati(teklif(), 'k2', 80)).toBeNull();
+  });
+
+  it('kalemi tek tedarikçiye vermede tutar alınan miktardandır (en az miktar birim × talep değildir)', () => {
+    const satir = (id: string, unit: number, line: number) =>
+      ({ q: { id }, c: { lines: { k1: { unit, line } }, unitFactorTRY: 1, ship: 0, other: 0, rate: 1, factor: 1 }, late: 0 }) as unknown as EvalRow;
+    const talep = { items: [{ id: 'k1', qty: '80' }] } as unknown as PurchaseRequest;
+    const p = planCost(talep, [satir('a', 60, 6000), satir('b', 70, 5600)], { k1: 'a' });
+    expect(p.goods).toBe(6000);
   });
 });
