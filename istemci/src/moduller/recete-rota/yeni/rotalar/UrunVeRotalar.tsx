@@ -18,6 +18,7 @@ import { PanelTutamagi } from './PanelTutamagi.tsx';
 import { RevizyonCubugu } from './RevizyonCubugu.tsx';
 import { UrunListesi } from './UrunListesi.tsx';
 import { RotaExcelPenceresi } from './ExcelGirisi.tsx';
+import { useKalanBoy } from './kalanBoy.ts';
 
 // Ürün ve rotalar: ürün listesi, akış şeması ya da akış tablosu, revizyon çubuğu ve düzenleme paneli. Açılışta yazma yoktur; rota
 // değişikliği ilk düzenlemede taslağa yazılır.
@@ -67,9 +68,12 @@ export function UrunVeRotalar(o: EkranOzellikleri) {
     if (!g) return;
     if (panelGenis === null) g.style.removeProperty('--tc-rr1-panel'); else g.style.setProperty('--tc-rr1-panel', `${String(panelGenis)}px`);
   });
-  // Kap 1000 px'ten darsa (768, menü açık 1024) iki çekmece birlikte açılınca tuval okunmaz: biri açılınca öteki kapanır.
+  // Gövde sayfanın kalan boyunu alır; tam ekranda kaydıran kap değişir, ürün listesi ve patlamış rota gövdesizdir.
+  useKalanBoy(govdeRef, !liste && gorunum !== 'patlamis', `${gorunum}|${String(tamEkran)}|${kok ?? ''}`);
+  // Kap 1200 px'ten darsa iki çekmece birlikte açılınca şema ya da tablo okunmaz: biri açılınca öteki kapanır. 1000'de menü açık
+  // 1280 ekranda palet, şema ve panel birlikte kalıyor, ortadaki adım kartı taşıyordu (3095).
   const katmanli = () => typeof window.matchMedia === 'function' && window.matchMedia('(max-width: 1023px)').matches;
-  const darKap = () => (govdeRef.current?.clientWidth ?? 1280) < 1000;
+  const darKap = () => (govdeRef.current?.clientWidth ?? 1280) < 1200;
   const [odak, setOdak] = useState<{ urunId: string; adimId: string } | null>(null);
   const seciliyeDon = () => {
     window.requestAnimationFrame(() => { govdeRef.current?.querySelector<HTMLElement>('.tc-rr1-secili')?.focus(); });
@@ -249,6 +253,29 @@ export function UrunVeRotalar(o: EkranOzellikleri) {
     </div>
   ) : null;
 
+  // 3095: Düzenle ve Panel, düzenlenen rotanın revizyon satırındadır (revizyonun hemen yanında, Geri al ve Yinele ile); üst çubuğun sağında
+  // kaldığında kaydırınca görünmüyordu.
+  const panelDugmesi = (
+    <Dugme className="tc-rr1-kd" tur="ikincil" simge={panelDar ? 'chev-left' : 'chev-right'} aria-expanded={panelAcik} aria-controls="tc-rr1-duzen"
+      aria-label="Düzenleme paneli"
+      title={panelDar ? 'Düzenleme panelini aç' : 'Düzenleme panelini kapat; çalışma alanı genişler'} onClick={() => { panelAcYaz(!panelAcik); }}><span className="tc-rr1-dar-gizli">Panel</span></Dugme>
+  );
+  // Revizyon çubuğu yalnız seçili rota varken çizilir; yoksa (ilk rota) Panel üst çubukta kalır.
+  const revSatiri = !liste && kokId !== null && revId !== null;
+  const duzenDugmeleri = revSatiri && gorunum !== 'patlamis' ? (
+    <span className="tc-rr1-duzen-grup" role="group" aria-label="Rota düzenleme">
+      {o.yetki.rotaYaz && <Dugme className="tc-rr1-kd" tur="ikincil" simge={duzenKipi ? 'check' : 'wrench'} aria-pressed={duzenKipi}
+        title={duzenKipi ? 'Görüntülemeye dön; kayıtlar taslakta kalır' : 'Rotayı düzenle: ilk değişiklikte taslak açılır, yürürlükteki rota değişmez'}
+        onClick={() => { duzenKipiYaz(!duzenKipi); }}>{duzenKipi ? 'Düzenlemeyi bitir' : 'Düzenle'}</Dugme>}
+      {o.yetki.rotaYaz && duzenKipi && (
+        <Dugme className="tc-rr1-kd" tur="ikincil" simge="layers" aria-expanded={adimPaneli} aria-controls="tc-rr1-palet"
+          aria-label="Operasyon paleti" title={adimPaneli ? 'Operasyon paletini kapat' : 'Operasyon paletini aç'} onClick={() => { paletYaz(!adimPaneli); }}><span className="tc-rr1-dar-gizli">Palet</span></Dugme>
+      )}
+      {panelDugmesi}
+      {o.yetki.rotaYaz && taslakAcik && <span className="tc-rr1-kipmetni" data-parca="taslak-acik"><Simge ad="clock" boyut="k" /> Taslak açık</span>}
+    </span>
+  ) : null;
+
   return (
     <div className={`tc-rr1${tamEkran ? ' tc-rr1-tam' : ''}`} data-parca="R1" onKeyDown={tus}>
       <div className="tc-rr1-top">
@@ -298,23 +325,7 @@ export function UrunVeRotalar(o: EkranOzellikleri) {
           </span>
         )}
         <span className="tc-rr1-grow" />
-        {!liste && kokId && o.yetki.rotaYaz && gorunum !== 'patlamis' && (
-          <>
-            {taslakAcik && <span className="tc-rr1-kipmetni" data-parca="taslak-acik"><Simge ad="clock" boyut="k" /> Taslak açık</span>}
-            <Dugme className="tc-rr1-kd" tur="ikincil" simge={duzenKipi ? 'check' : 'wrench'} aria-pressed={duzenKipi}
-              title={duzenKipi ? 'Görüntülemeye dön; kayıtlar taslakta kalır' : 'Rotayı düzenle: ilk değişiklikte taslak açılır, yürürlükteki rota değişmez'}
-              onClick={() => { duzenKipiYaz(!duzenKipi); }}>{duzenKipi ? 'Düzenlemeyi bitir' : 'Düzenle'}</Dugme>
-          </>
-        )}
-        {!liste && kokId && duzenKipi && (
-          <Dugme className="tc-rr1-kd" tur="ikincil" simge="layers" aria-expanded={adimPaneli} aria-controls="tc-rr1-palet"
-            aria-label="Operasyon paleti" title={adimPaneli ? 'Operasyon paletini kapat' : 'Operasyon paletini aç'} onClick={() => { paletYaz(!adimPaneli); }}>Palet</Dugme>
-        )}
-        {!liste && gorunum !== 'patlamis' && (
-          <Dugme className="tc-rr1-kd" tur="ikincil" simge={panelDar ? 'chev-left' : 'chev-right'} aria-expanded={panelAcik} aria-controls="tc-rr1-duzen"
-            aria-label="Düzenleme paneli"
-            title={panelDar ? 'Düzenleme panelini aç' : 'Düzenleme panelini kapat; çalışma alanı genişler'} onClick={() => { panelAcYaz(!panelAcik); }}>Panel</Dugme>
-        )}
+        {!liste && gorunum !== 'patlamis' && !revSatiri && panelDugmesi}
         {/* Tam ekrandan çıkış kaydırmadan görünür kalır (B-2482-R3); girişi ⋯ menüsünde ve F tuşundadır. */}
         {tamEkran && (
           <Dugme className="tc-rr1-kd" simge="x" title="Tam ekrandan çık (Esc ya da F)" onClick={() => { setTamEkran(false); }}>Tam ekrandan çık</Dugme>
@@ -334,7 +345,7 @@ export function UrunVeRotalar(o: EkranOzellikleri) {
       </OnayPenceresi>
       {liste ? <UrunListesi duzen={duzen} ac={(id) => { kokSec(id); secimYaz(null); }} /> : (
         <>
-          {kokId && revId && <RevizyonCubugu r={r} agac={agac} urunId={revId} urunSec={setRevUrun} />}
+          {kokId && revId && <RevizyonCubugu r={r} agac={agac} urunId={revId} urunSec={setRevUrun} duzenDugmeleri={duzenDugmeleri} />}
           {gorunum === 'patlamis' && kokId ? (
             <PatlamisRota revizyonId={yururlukteRevizyon} miktar={miktar} baz={kip === 'baz'} />
           ) : (
