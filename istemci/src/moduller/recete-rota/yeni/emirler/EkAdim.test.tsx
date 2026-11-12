@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
-import { json, OKUYAN, ornekDurum, rrAc, sunucuKur, YONETICI } from '../test-ortak.tsx';
+import { emirSayfasiAc, json, OKUYAN, ornekDurum, sunucuKur, YONETICI } from '../test-ortak.tsx';
 
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
@@ -25,16 +25,19 @@ const isEmri = (sira: number, opNo: number) => ({
 });
 const sahip = { emir: { id: 61, isEmirleri: [isEmri(1, 10), isEmri(2, 20)] } };
 
+// 3039: emir Üretim Emirleri'nin emir sayfasında yönetilir; işlemler ve adımlar bu modülün oraya verdiği parçalardır.
 const ayrintiAc = async () => {
-  const b = await screen.findByRole('region', { name: 'Üretim emirleri' });
-  fireEvent.click((await within(b).findAllByRole('button', { name: /UE-0001(?!-)/ }))[0]!);
-  return within(b).getByLabelText('UE-0001 ayrıntısı');
+  emirSayfasiAc(61);
+  const a = await screen.findByRole('region', { name: 'Emir sayfası' });
+  await within(a).findByRole('list', { name: 'UE-0001 operasyonları' });
+  return a;
 };
 const panelAc = (a: HTMLElement) => {
-  fireEvent.click(within(a).getByRole('button', { name: 'UE-0001 için diğer işlemler' }));
-  fireEvent.click(screen.getByRole('menuitem', { name: 'Ek operasyon (rework, tamir, ek)' }));
+  fireEvent.click(within(a).getByRole('button', { name: 'UE-0001 işlemleri' }));
+  fireEvent.click(screen.getByRole('menuitem', { name: 'Adım ekle (ek, rework, tamir)' }));
   return within(a).getByRole('group', { name: 'Ek operasyon' });
 };
+const adimSatirlari = (liste: HTMLElement) => within(liste).getAllByRole('listitem').filter((li) => li.querySelector('.tc-rr3-op'));
 
 describe('R3 Üretim emirleri: emre özel ek operasyon (2530 a)', () => {
   it('bölünmemiş emre ek adım: seçilen adımın arkasına, op numarası komşuların ortasından, emrin ekrandaki sürümüyle gider (izinli)', async () => {
@@ -42,7 +45,6 @@ describe('R3 Üretim emirleri: emre özel ek operasyon (2530 a)', () => {
       durum: durum(),
       yazmalar: { 'GET /adimli-emirler/61': () => json(200, sahip), 'POST /adimli-emirler/61/ek-adim': () => json(200, sahip) },
     });
-    rrAc();
     const a = await ayrintiAc();
     const p = panelAc(a);
     expect(within(p).queryByRole('note')).toBeNull();
@@ -64,8 +66,7 @@ describe('R3 Üretim emirleri: emre özel ek operasyon (2530 a)', () => {
         durum: durum(),
         yazmalar: { 'GET /adimli-emirler/61': () => json(200, sahip), 'POST /adimli-emirler/61/ek-adim': () => json(200, sahip) },
       });
-      rrAc();
-      const p = panelAc(await ayrintiAc());
+        const p = panelAc(await ayrintiAc());
       fireEvent.change(within(p).getByLabelText('Yeri'), { target: { value: yer } });
       fireEvent.change(within(p).getByLabelText('Operasyon'), { target: { value: '21' } });
       fireEvent.click(within(p).getByRole('button', { name: 'Ek operasyonu ekle' }));
@@ -88,7 +89,6 @@ describe('R3 Üretim emirleri: emre özel ek operasyon (2530 a)', () => {
       durum: d,
       yazmalar: { 'GET /adimli-emirler/61': () => json(200, sahip), 'POST /adimli-emirler/61/ek-adim': () => json(409, { kod: 'CAKISMA', mesaj: ileti }) },
     });
-    rrAc();
     const p = panelAc(await ayrintiAc());
     expect(within(p).getByRole('note').textContent).toBe('Emrin açık alt partileri var (UE-0001-P1); ek adımı ilgili partiye ekleyin.');
     fireEvent.change(within(p).getByLabelText('Operasyon'), { target: { value: '21' } });
@@ -101,10 +101,9 @@ describe('R3 Üretim emirleri: emre özel ek operasyon (2530 a)', () => {
   it('ek adım op sırasıyla rota adımlarının arasında türüyle görünür; başlamamış olan onayla kaldırılır, okuyan kaldıramaz', async () => {
     const ekler: Ek[] = [{ opNo: 15, tur: 'rework', ad: 'Tekrar tornalama', opId: '21', durum: 'bekliyor', saglam: null }];
     const istekler = sunucuKur(YONETICI, { durum: durum(ekler), yazmalar: { 'POST /adimli-emirler/61/ek-adim-kaldir': () => json(200, sahip) } });
-    rrAc();
     await ayrintiAc();
     const liste = await screen.findByRole('list', { name: 'UE-0001 operasyonları' });
-    const satirlar = within(liste).getAllByRole('listitem');
+    const satirlar = adimSatirlari(liste);
     expect(satirlar.map((li) => li.querySelector('.tc-rr3-op')?.textContent)).toEqual(['10', '15', '20']);
     expect(satirlar[1]?.textContent).toContain('Rework · rotada yok');
     const cop = within(liste).getByRole('button', { name: 'OP 15 ek adımını kaldır' });
@@ -119,10 +118,31 @@ describe('R3 Üretim emirleri: emre özel ek operasyon (2530 a)', () => {
     cleanup();
     vi.unstubAllGlobals();
     sunucuKur(OKUYAN, { durum: durum(ekler) });
-    rrAc();
     const okuyan = await ayrintiAc();
     await screen.findByRole('list', { name: 'UE-0001 operasyonları' });
     expect(within(okuyan).queryByRole('button', { name: 'OP 15 ek adımını kaldır' })).toBeNull();
-    expect(within(okuyan).queryByRole('button', { name: 'UE-0001 için diğer işlemler' })).toBeNull();
+    expect(within(okuyan).queryByRole('button', { name: 'Buraya adım ekle' })).toBeNull();
+    fireEvent.click(within(okuyan).getByRole('button', { name: 'UE-0001 işlemleri' }));
+    expect(screen.queryByRole('menuitem', { name: 'Adım ekle (ek, rework, tamir)' })).toBeNull();
+  });
+
+  it('3039: "Buraya adım ekle" yalnız başlamamış adımın üstündedir; yer seçili açılır ve gövde o yeri taşır', async () => {
+    const d = durum();
+    d.emirler = { ...d.emirler!, opStatus: { '61|root|1': 'calisiyor' } };
+    const istekler = sunucuKur(YONETICI, {
+      durum: d,
+      yazmalar: { 'GET /adimli-emirler/61': () => json(200, sahip), 'POST /adimli-emirler/61/ek-adim': () => json(200, sahip) },
+    });
+    const a = await ayrintiAc();
+    const liste = within(a).getByRole('list', { name: 'UE-0001 operasyonları' });
+    const girisler = within(liste).getAllByRole('button', { name: 'Buraya adım ekle' });
+    expect(girisler).toHaveLength(1);
+    expect(girisler[0]?.getAttribute('title')).toBe('OP 10 ile OP 20 arasına');
+    fireEvent.click(girisler[0]!);
+    const p = within(liste).getByRole('group', { name: 'Ek operasyon' });
+    expect(within(p).getByRole('heading', { name: 'OP 10 sonrasına adım' })).toBeTruthy();
+    fireEvent.change(within(p).getByLabelText('Operasyon'), { target: { value: '21' } });
+    fireEvent.click(within(p).getByRole('button', { name: 'Ek operasyonu ekle' }));
+    await waitFor(() => { expect(istekler.find((i) => i.yol === '/adimli-emirler/61/ek-adim')?.govde).toMatchObject({ oncekiOpNo: 10, opNo: 15 }); });
   });
 });

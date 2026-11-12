@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import type { Islem } from '#paylasilan/islemler.ts';
 import type { AcilisSecenekleri } from '#paylasilan/sozlesme/uretim-emirleri.ts';
@@ -73,10 +73,11 @@ export function ReceteRotaYeni() {
 }
 
 interface Secim { secenekler: AcilisSecenekleri; coz: (s: EmirSecimi | null) => void }
+interface Bildirimler { motorOkunamadi: boolean; planVerisiEksik: boolean }
 
 // Köprü ekran başına bir kez kurulur: kaynak sürümleri onun içinde tutulur, komutlar sırayla gider. Proje seçimi (emir açılışı, 224)
-// bugünkü ekrandaki pencereyle sorulur.
-function VeriSaglayici() {
+// bugünkü ekrandaki pencereyle sorulur. Üretim Emirleri de emir açarken aynı sağlayıcıyı kullanır (3003 a); oturum hazır olmalıdır.
+export function RrSaglayici({ children }: { children: (b: Bildirimler) => ReactNode }) {
   const oturum = useOturum();
   const [motorOkunamadi, setMotorOkunamadi] = useState(false);
   const [planVerisiEksik, setPlanVerisiEksik] = useState(false);
@@ -96,10 +97,14 @@ function VeriSaglayici() {
 
   return (
     <RrBaglamKaynagi.Provider value={baglam}>
-      <Ekran motorOkunamadi={motorOkunamadi} planVerisiEksik={planVerisiEksik} />
+      {children({ motorOkunamadi, planVerisiEksik })}
       {secim && <EmirProjeSecimi secenekler={secim.secenekler} bitir={(s) => { setSecim(null); secim.coz(s); }} />}
     </RrBaglamKaynagi.Provider>
   );
+}
+
+function VeriSaglayici() {
+  return <RrSaglayici>{(b) => <Ekran motorOkunamadi={b.motorOkunamadi} planVerisiEksik={b.planVerisiEksik} />}</RrSaglayici>;
 }
 
 function Ekran({ motorOkunamadi, planVerisiEksik }: { motorOkunamadi: boolean; planVerisiEksik: boolean }) {

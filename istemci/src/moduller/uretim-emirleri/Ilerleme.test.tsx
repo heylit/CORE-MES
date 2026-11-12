@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, screen, within } from '@testing-library/react';
 import type { EmirTamamlamaCevabi } from '#paylasilan/sozlesme/stok.ts';
 import type { EmirAyrintiCevabi, EmirIlerlemesi, IzlemeEmri } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { EmirAyrintisi } from './EmirAyrintisi.tsx';
@@ -73,15 +73,13 @@ describe('Emir ayrıntısında ilerleme (1944)', () => {
     expect(screen.queryByRole('region', { name: 'İlerleme' })).toBeNull();
   });
 
-  it('2907: refakat kartları bölümü ilerlemenin hemen altında, üretim yerlerinden ve kayıt defterinden önce gelir', async () => {
+  it('3039: refakat kartları (2907) emrin "Malzeme" sekmesindedir; "Adımlar" sekmesi ilerlemeyi gösterir', async () => {
     sunucuKur({ ...OKUYUCU, islemler: [...OKUYUCU.islemler, 'sayfa.stok'] }, yollar(ILERLEME));
     ac(ekran, '/uretim-emirleri/4');
-    const ilerleme = await screen.findByRole('region', { name: 'İlerleme' });
-    const kartlar = await screen.findByRole('region', { name: 'Refakat kartları' });
-    const defter = screen.getByRole('heading', { name: 'Kayıt defteri' });
-    expect(ilerleme.compareDocumentPosition(kartlar) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(kartlar.compareDocumentPosition(defter) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    const arada = [...document.querySelectorAll('section, h3')].filter((e) => (ilerleme.compareDocumentPosition(e) & Node.DOCUMENT_POSITION_FOLLOWING) && (e.compareDocumentPosition(kartlar) & Node.DOCUMENT_POSITION_FOLLOWING) && !ilerleme.contains(e));
-    expect(arada).toEqual([]);
+    await screen.findByRole('region', { name: 'İlerleme' });
+    expect(screen.queryByRole('region', { name: 'Refakat kartları' })).toBeNull();
+    fireEvent.click(screen.getByRole('tab', { name: 'Malzeme' }));
+    expect(await screen.findByRole('region', { name: 'Refakat kartları' })).toBeTruthy();
+    expect(screen.queryByRole('region', { name: 'İlerleme' })).toBeNull();
   });
 });

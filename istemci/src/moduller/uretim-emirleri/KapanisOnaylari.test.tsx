@@ -25,8 +25,8 @@ const KAPANIS = {
 } satisfies KapanisCevabi;
 const kullanici = (...ek: Islem[]) => ({ ...OKUYUCU, islemler: [...OKUYUCU.islemler, 'uretim-emirleri.kapanis-oku' as const, ...ek] });
 const ekran = [{ yol: '/uretim-emirleri/kapanis', ekran: KapanisOnaylari }];
-// Onay emrin evinde verilir (1416 a): Reçete ve Rota aynı listeyi `duzenlenir` ile çizer.
-const ev = [{ yol: '/recete-rota/kapanis', ekran: () => <KapanisOnaylari duzenlenir /> }];
+// Onay emrin ana yerinde, Üretim Emirleri'nde verilir (3003 a).
+const ev = ekran;
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
 describe('Kapanış onayları', () => {
@@ -44,20 +44,14 @@ describe('Kapanış onayları', () => {
     expect(screen.queryByRole('button', { name: 'Geri gönder' })).toBeNull();
   });
 
-  it('1416 a: Üretim Emirleri listesi salt okumadır; kalite onay düğmesi görmez, seçili emirle emrin evine gider', async () => {
-    const istekler = sunucuKur(kullanici('uretim-emirleri.kapanis-kalite'), {
+  it("3003 a: onay Üretim Emirleri'nde verilir; Reçete ve Rota'ya yönlendiren düğme yoktur", async () => {
+    sunucuKur(kullanici('uretim-emirleri.kapanis-kalite'), {
       'GET /kapanislar': () => json(200, liste([SATIR, SADECE_MUDUR])),
       'GET /adimli-emirler/1/kapanis': () => json(200, KAPANIS),
     });
-    ac([...ekran, { yol: '/recete-rota/kapanis', ekran: () => <p>Emrin evi</p> }], '/uretim-emirleri/kapanis?emir=1');
-    const tablo = await screen.findByRole('table', { name: 'Onay kuyruğu' });
-    expect(within(tablo).queryByText('UE-0002')).toBeNull();
-    expect(await screen.findByText('Kapanışta: kalite ve müdür onayı')).toBeTruthy();
-    expect(screen.queryByRole('button', { name: 'Kaliteyi onayla' })).toBeNull();
-    expect(screen.queryByRole('button', { name: 'Geri gönder' })).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: "Reçete ve Rota'da onayla" }));
-    expect(await screen.findByText('Emrin evi')).toBeTruthy();
-    expect(istekler.some((i) => i.yontem === 'POST')).toBe(false);
+    ac(ekran, '/uretim-emirleri/kapanis?emir=1');
+    expect(await screen.findByRole('button', { name: 'Kaliteyi onayla' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: "Reçete ve Rota'da onayla" })).toBeNull();
   });
 
   it('kalite açılışta yalnız kendi onayını bekleyenleri görür ve onayı sürümle gönderir', async () => {
@@ -66,7 +60,7 @@ describe('Kapanış onayları', () => {
       'GET /adimli-emirler/1/kapanis': () => json(200, KAPANIS),
       'POST /adimli-emirler/1/kapanis/kalite-onay': () => json(200, { ...KAPANIS, surum: 4 }),
     });
-    ac(ev, '/recete-rota/kapanis?emir=1');
+    ac(ev, '/uretim-emirleri/kapanis?emir=1');
     const tablo = await screen.findByRole('table', { name: 'Onay kuyruğu' });
     expect(within(tablo).getByText('UE-0001')).toBeTruthy();
     expect(within(tablo).queryByText('UE-0002')).toBeNull();
@@ -83,7 +77,7 @@ describe('Kapanış onayları', () => {
       'GET /adimli-emirler/1/kapanis': () => json(200, KAPANIS),
       'POST /adimli-emirler/1/kapanis/kalite-ret': () => json(200, { ...KAPANIS, asama: 'belge', surum: 4 }),
     });
-    ac(ev, '/recete-rota/kapanis?emir=1');
+    ac(ev, '/uretim-emirleri/kapanis?emir=1');
     fireEvent.click(await screen.findByRole('button', { name: 'Geri gönder' }));
     expect(await screen.findByText('Gerekçe yaz.')).toBeTruthy();
     expect(istekler.some((i) => i.yontem === 'POST')).toBe(false);
@@ -97,7 +91,7 @@ describe('Kapanış onayları', () => {
       'GET /kapanislar': () => json(200, liste([SATIR])),
       'GET /adimli-emirler/1/kapanis': () => json(200, { ...KAPANIS, onaylar: { kalite: { kisiId: 9, kisiAdi: 'Deneme Okuyucu', zaman: '2026-10-28T09:10:00.000Z' }, mudur: null } }),
     });
-    ac(ev, '/recete-rota/kapanis?emir=1');
+    ac(ev, '/uretim-emirleri/kapanis?emir=1');
     expect(await screen.findByText(/Deneme Okuyucu onayladı/)).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Müdür olarak onayla' })).toBeTruthy();
   });
@@ -109,7 +103,7 @@ describe('Kapanış onayları', () => {
       'GET /adimli-emirler/1/kapanis': () => json(200, belge),
       'POST /adimli-emirler/1/kapanis/muaf': () => json(200, { ...KAPANIS, surum: 4 }),
     });
-    ac(ev, '/recete-rota/kapanis?emir=1');
+    ac(ev, '/uretim-emirleri/kapanis?emir=1');
     expect(await screen.findByText(/1 madde eksik: kapanış onaya açılmaz/)).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Müdür olarak onayla' })).toBeNull();
     const muaf = screen.getByRole('button', { name: 'Eksik maddeyi gerekçeyle muaf tut' }) as HTMLButtonElement;
@@ -128,7 +122,7 @@ describe('Kapanış onayları', () => {
     sunucuKur(kullanici('uretim-emirleri.kapanis-kalite'), {
       'GET /kapanislar': () => json(200, liste([])), 'GET /adimli-emirler/1/kapanis': () => json(200, belge),
     });
-    ac(ev, '/recete-rota/kapanis?emir=1');
+    ac(ev, '/uretim-emirleri/kapanis?emir=1');
     expect(await screen.findByText('Onayınızı bekleyen kapanış yok.')).toBeTruthy();
     expect((await screen.findAllByText('Maddeler tamamlanınca onaya açılır.')).length).toBe(2);
     expect(screen.queryByRole('button', { name: 'Eksik maddeyi gerekçeyle muaf tut' })).toBeNull();
@@ -143,7 +137,7 @@ describe('Kapanış onayları', () => {
       'GET /kapanislar': () => json(200, liste([])), 'GET /adimli-emirler/1/kapanis': () => json(200, tamam),
       'POST /adimli-emirler/1/kapanis/geri-ac': () => json(200, { ...KAPANIS, surum: 4 }),
     });
-    ac(ev, '/recete-rota/kapanis?emir=1');
+    ac(ev, '/uretim-emirleri/kapanis?emir=1');
     expect((await screen.findAllByText('Kapandı (sağlamsız)')).length).toBeGreaterThan(0);
     expect(screen.getByText(/Kişi 3 onayladı/)).toBeTruthy();
     fireEvent.change(screen.getByLabelText('Geri açma gerekçesi'), { target: { value: 'Ölçü yeniden alınacak' } });
@@ -158,7 +152,7 @@ describe('Kapanış onayları', () => {
       'GET /adimli-emirler/1/kapanis': () => { okuma += 1; return json(200, KAPANIS); },
       'POST /adimli-emirler/1/kapanis/kalite-onay': () => json(409, { kod: 'SURUM_CAKISMASI', mesaj: 'Kayıt başkası tarafından değiştirildi.' }),
     });
-    ac(ev, '/recete-rota/kapanis?emir=1');
+    ac(ev, '/uretim-emirleri/kapanis?emir=1');
     fireEvent.click(await screen.findByRole('button', { name: 'Kaliteyi onayla' }));
     expect(await screen.findByText('Kayıt başkası tarafından değiştirildi.')).toBeTruthy();
     await waitFor(() => { expect(okuma).toBe(2); });

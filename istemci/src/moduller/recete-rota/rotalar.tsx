@@ -3,6 +3,7 @@ import type { ModulRotasi } from '../../ortak/rota/kesif.ts';
 import { PLANLAMA_ANAHTARLARI } from './planlama-menusu.ts';
 import { ReceteRotaYeni } from './yeni/ReceteRotaYeni.tsx';
 import { SEKMELER } from './yeni/sekmeler.ts';
+import { EmirAyrintiSayfasi, UretimEmirleriSayfasi } from './UretimEmirleriSayfasi.tsx';
 
 // Reçete ve Rota maddeleri yeni ekranı açar (541, 527 1 a; eski çerçeve 805 ile kalktı). Planlama plan modülünün sayfasıdır (658 b):
 // eski planlama adresleri ve deneme ekranının adresi oraya yönlenir (kayıtlı bağlantılar kırılmasın).
@@ -16,4 +17,7 @@ export const rotalar: ModulRotasi[] = [
   ...PLANLAMA_ANAHTARLARI.map((a) => ({ yol: `/recete-rota/${a}`, ekran: () => <Navigate to={a === 'plan' ? '/plan' : `/plan/${a}`} replace /> })),
   { yol: '/recete-rota/planlama-yeni', ekran: PlanlamayaYonlen },
   { yol: '/recete-rota/planlama-yeni/:gorunum', ekran: PlanlamayaYonlen },
+  // Üretim Emirleri'nin liste ve ayrıntı adresleri (3003 a): ekran o modülün, açma ve işlemler buradan verilir (UretimEmirleriSayfasi).
+  { yol: '/uretim-emirleri', ekran: UretimEmirleriSayfasi },
+  { yol: '/uretim-emirleri/:id', ekran: EmirAyrintiSayfasi },
 ];

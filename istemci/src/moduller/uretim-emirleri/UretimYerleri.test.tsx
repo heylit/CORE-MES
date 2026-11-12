@@ -86,12 +86,11 @@ describe('Emirde iç ve dış üretim', () => {
     await waitFor(() => { expect(istekler.find((i) => i.yontem === 'POST')?.govde).toEqual({ opNo: 20, yer: 'ic', firmaId: null, terminGun: null, surum: 4 }); });
   });
 
-  it('1391 a: Üretim Emirleri salt okumadır; yazma yetkisi olana da düğme çıkmaz, yer Reçete ve Rota olarak söylenir', async () => {
+  it('3039: Reçete ve Rota\'yı okuyamayan kişinin emir sayfası salt okunurdur; yazma yetkisi olana da düğme çıkmaz', async () => {
     const istekler = sunucuKur(YAZAR, yollar([adim(10), FASONDA]));
     ac(ekran, '/uretim-emirleri/3');
     const tablo = await screen.findByRole('table', { name: 'Operasyon adımları' });
     expect(within(tablo).queryByRole('button')).toBeNull();
-    expect(screen.getByText("Üretim yeri Reçete ve Rota'daki emirde değiştirilir.")).toBeTruthy();
     expect(istekler.some((i) => i.yontem === 'POST')).toBe(false);
   });
 

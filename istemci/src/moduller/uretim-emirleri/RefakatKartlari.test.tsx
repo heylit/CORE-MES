@@ -43,7 +43,7 @@ afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 describe('Refakat kartları (Soru 586)', () => {
   it('stok okuması olana emrin depoda açılmış kartları lot ve durumla listelenir (2907: malzeme ve verilen kart sayfasında); eski emir kartı düğmesi yok', async () => {
     sunucuKur(STOKCU, yollar());
-    ac(ekran, '/uretim-emirleri/12');
+    ac(ekran, '/uretim-emirleri/12?sekme=malzeme');
     const ilk = await satir('UE-000012-P1');
     expect(within(ilk).getByText('LT-00001')).toBeTruthy();
     expect(within(ilk).queryByText('2,5 kg')).toBeNull();
@@ -57,7 +57,7 @@ describe('Refakat kartları (Soru 586)', () => {
   it('stok okuması olmayana bölüm çizilmez ve stok ucu çağrılmaz; ürün kartı olmayan emirde de çizilmez', async () => {
     for (const [kullanici, emir] of [[OKUYUCU, EMIR], [STOKCU, { ...EMIR, malzemeNo: null }]] as const) {
       const istekler = sunucuKur(kullanici, yollar(emir));
-      ac(ekran, '/uretim-emirleri/12');
+      ac(ekran, '/uretim-emirleri/12?sekme=malzeme');
       expect(await screen.findByText('UE-000012')).toBeTruthy();
       expect(screen.queryByRole('heading', { name: 'Refakat kartları' })).toBeNull();
       expect(istekler.some((i) => i.yol.startsWith('/stok/'))).toBe(false);
@@ -67,7 +67,7 @@ describe('Refakat kartları (Soru 586)', () => {
 
   it('Etiket Merkezi sayfası olana yalnız açık, lotlu ve birleşmemiş kartta düğme çıkar ve kartı lotlu refakat kartı olarak açar', async () => {
     sunucuKur({ ...STOKCU, islemler: [...STOKCU.islemler, 'sayfa.etiket-merkezi'] }, yollar());
-    ac(ekran, '/uretim-emirleri/12');
+    ac(ekran, '/uretim-emirleri/12?sekme=malzeme');
     for (const e of ['UE-000012-P2', 'UE-000012-P3', 'UE-000012-P4']) {
       expect(within(await satir(e)).queryByRole('button', { name: "Etiket Merkezi'nde bas" })).toBeNull();
     }
@@ -78,13 +78,13 @@ describe('Refakat kartları (Soru 586)', () => {
 
   it('Etiket Merkezi sayfası olmayana basım düğmesi görünmez; liste yine görünür', async () => {
     sunucuKur(STOKCU, yollar());
-    ac(ekran, '/uretim-emirleri/12');
+    ac(ekran, '/uretim-emirleri/12?sekme=malzeme');
     expect(within(await satir('UE-000012-P1')).queryByRole('button', { name: "Etiket Merkezi'nde bas" })).toBeNull();
   });
 
   it('karta açılmamış emirde bölüm tek satırdır: depoya yönlendiren not, başlık ve tablo yok (2907 Atölye)', async () => {
     sunucuKur(STOKCU, { ...yollar(), 'GET /stok/uretim-emirleri/12/refakat-partileri': () => json(200, { partiler: [] }) });
-    ac(ekran, '/uretim-emirleri/12');
+    ac(ekran, '/uretim-emirleri/12?sekme=malzeme');
     const bolum = await screen.findByRole('region', { name: 'Refakat kartları' });
     expect(await within(bolum).findByText('Refakat kartı yok · lot emre ayrılınca depoda açılır.')).toBeTruthy();
     expect(within(bolum).queryByRole('heading')).toBeNull();
@@ -96,7 +96,7 @@ describe('Refakat kartları (Soru 586)', () => {
       ...yollar(),
       'GET /akis/refakat-kartlari': () => json(200, { kartlar: [yer(1, 'uretimde', 20)] }),
     });
-    ac(ekran, '/uretim-emirleri/12');
+    ac(ekran, '/uretim-emirleri/12?sekme=malzeme');
     const ilk = await satir('UE-000012-P1');
     expect(await within(ilk).findByText('OP20 · Operasyonda')).toBeTruthy();
     expect(within(await satir('UE-000012-P2')).getByText('Lot bekliyor')).toBeTruthy();
@@ -107,7 +107,7 @@ describe('Refakat kartları (Soru 586)', () => {
 
   it('2907: akış okuması yoksa yer sorulmaz, durum görünür; stok sayfası yoksa satır bir yere götürmez', async () => {
     const istekler = sunucuKur(STOKCU, yollar());
-    ac(ekran, '/uretim-emirleri/12');
+    ac(ekran, '/uretim-emirleri/12?sekme=malzeme');
     const ilk = await satir('UE-000012-P1');
     expect(within(ilk).getByText('Açık')).toBeTruthy();
     expect(istekler.some((i) => i.yol.startsWith('/akis/'))).toBe(false);

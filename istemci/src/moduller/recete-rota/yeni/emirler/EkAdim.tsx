@@ -19,10 +19,12 @@ export function acikAltEmirler(d: RrDurumu, o: Emir): string[] {
   return (d.emirler?.orders ?? []).filter((x) => x.parentId === o.id && x.status !== 'iptal').map((x) => x.no);
 }
 
-export function EkAdimPaneli({ durum: d, emir: o, yerler, komut, kapat }: {
-  durum: RrDurumu; emir: Emir; yerler: readonly EkYeri[]; komut: ReturnType<typeof useEmirKomutu>; kapat: () => void;
+// `ilkYer` (3039): adım listesinde "sonrasına adım ekle" ile açılınca yer seçili gelir.
+export function EkAdimPaneli({ durum: d, emir: o, yerler, komut, kapat, ilkYer = null }: {
+  durum: RrDurumu; emir: Emir; yerler: readonly EkYeri[]; komut: ReturnType<typeof useEmirKomutu>; kapat: () => void; ilkYer?: number | null;
 }) {
-  const [f, setF] = useState<Form>(BOS);
+  // ilkYer 0: emrin başı (sunucuda "önceki adım yok").
+  const [f, setF] = useState<Form>(ilkYer === null ? BOS : { ...BOS, tur: 'ek', sonra: ilkYer === 0 ? '' : String(ilkYer) });
   const altlar = acikAltEmirler(d, o);
   const degistir = (p: Partial<Form>) => { setF({ ...f, ...p }); };
   const gonder = () => {
@@ -36,7 +38,7 @@ export function EkAdimPaneli({ durum: d, emir: o, yerler, komut, kapat }: {
   };
   return (
     <div className="tc-rr3-ek" role="group" aria-label="Ek operasyon">
-      <h4>Ek operasyon</h4>
+      <h4>{ilkYer === null ? 'Ek operasyon' : ilkYer === 0 ? 'Emrin başına adım' : `OP ${String(ilkYer)} sonrasına adım`}</h4>
       <p className="tc-rr3-ipucu">
         Bu emir rotada olmayan bir adım yapacaksa ekleyin; rota değişmez. Adı boşsa operasyonun adı kullanılır, açıklamayı operatör görür.
       </p>

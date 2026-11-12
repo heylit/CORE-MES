@@ -30,13 +30,14 @@ describe('Stoka tamamla', () => {
     expect(await screen.findByRole('button', { name: 'Stoka tamamla' })).toBeTruthy();
   });
 
-  it('1391 a: Üretim Emirleri ayrıntısı salt okumadır; yetkiliye de düğme yok, sarf görünür ve yer söylenir; istasyonsuz emir açılır', async () => {
+  it('3039: bitmiş emir sayfası "Stok ve kapanış" sekmesinde açılır; yetkiliye düğme ikincildir (ana iş başlıktaki kapanış), sarf görünür; istasyonsuz emir açılır', async () => {
     sunucuKur({ ...OKUYUCU, islemler: [...OKUYUCU.islemler, 'stok.giris', 'stok.cikis'] }, yollar);
     ac(ekran, '/uretim-emirleri/3');
-    expect(await screen.findByText("Stoğa işleme Reçete ve Rota'daki emirdedir.")).toBeTruthy();
-    expect(screen.getByRole('table', { name: 'EM-3 sarfı' })).toBeTruthy();
-    expect(screen.queryByRole('button', { name: 'Stoka tamamla' })).toBeNull();
-    expect(screen.getByText('İstasyon').nextElementSibling?.textContent).toBe('yok');
+    expect((await screen.findByRole('tab', { name: 'Stok ve kapanış' })).getAttribute('aria-selected')).toBe('true');
+    expect(await screen.findByRole('table', { name: 'EM-3 sarfı' })).toBeTruthy();
+    const dugme = await screen.findByRole('button', { name: 'Stoka tamamla' });
+    expect(dugme.classList.contains('tc-dugme-ikincil')).toBe(true);
+    expect(screen.getByText(/İstasyon atanmamış/)).toBeTruthy();
   });
 
   it('yetkisiz kullanıcıda düğme yok ve stok ucu çağrılmaz; yalnız giriş yetkisi yetmez', async () => {

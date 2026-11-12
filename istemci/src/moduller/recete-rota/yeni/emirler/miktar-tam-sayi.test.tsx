@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
-import { json, rrAc, sunucuKur, YONETICI } from '../test-ortak.tsx';
+import { json, sunucuKur, yeniEmirAc, YONETICI } from '../test-ortak.tsx';
 
 // 2565: yeni emir formunda Miktar tam sayıdır; kesirli adet gönderilmez, form söyler. Veriler uydurmadır.
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
@@ -14,21 +14,20 @@ async function formAc() {
       'POST /adimli-emirler/rotasiz': () => json(200, { uretimEmriId: 62 }),
     },
   });
-  rrAc();
-  const b = await screen.findByRole('region', { name: 'Üretim emirleri' });
-  fireEvent.click(await within(b).findByRole('button', { name: 'Yeni üretim emri' }));
-  return { istekler, form: within(b).getByRole('region', { name: 'Yeni üretim emri' }) };
+  // 3039: emir Üretim Emirleri'nin yeni emir penceresinde açılır.
+  yeniEmirAc();
+  return { istekler, form: await screen.findByRole('dialog', { name: 'Yeni üretim emri' }) };
 }
 
 describe('yeni emir miktarı (2565)', () => {
   it('Miktar kutusu sayı klavyesi ister', async () => {
     const { form } = await formAc();
-    expect(within(form).getByLabelText('Miktar').getAttribute('inputmode')).toBe('numeric');
+    expect((await within(form).findByLabelText('Miktar')).getAttribute('inputmode')).toBe('numeric');
   });
 
   it('kesirli miktar emir açmaz ve "Miktar tam sayı olmalı." der; tam sayı açar', async () => {
     const { istekler, form } = await formAc();
-    const miktar = within(form).getByLabelText('Miktar');
+    const miktar = await within(form).findByLabelText('Miktar');
     fireEvent.change(miktar, { target: { value: '12,5' } });
     fireEvent.click(within(form).getByRole('button', { name: 'Emri oluştur' }));
     expect(await within(form).findByText('Miktar tam sayı olmalı.')).toBeTruthy();

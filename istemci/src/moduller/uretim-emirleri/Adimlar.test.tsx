@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, screen, within } from '@testing-library/react';
 import type { Canli, Emir, EmirAyrintiCevabi, EmirlerCevabi, EmirAdimi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { EmirAyrintisi } from './EmirAyrintisi.tsx';
 import { UretimEmirleri } from './UretimEmirleri.tsx';
@@ -21,55 +21,56 @@ afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 describe('Ayrıntı: canlı durum, adımlar, yeni defter olayları', () => {
   const ayrinti = (emir: Emir, ek: Partial<EmirAyrintiCevabi> = {}) =>
     json(200, { emir, kayitlar: [], adimlar: [], ...ek } satisfies EmirAyrintiCevabi);
-  const deger = (ad: string) => screen.getByText(ad, { selector: 'dt' }).nextElementSibling?.textContent;
+  // 3039: emrin canlı hâli başlıktaki durum rozetinde ve dört özet kutusundadır (Sağlam / emir adedi, Rota ilerlemesi, Şu an, Son hareket).
+  const kutu = (baslik: string) => {
+    const k = within(screen.getByRole('group', { name: 'Emrin özeti' })).getByText(baslik).closest('.tc-emir-ozet')!;
+    return { deger: k.querySelector('.tc-emir-ozet-deger')?.textContent, alt: k.querySelector('.tc-emir-ozet-alt')?.textContent ?? null };
+  };
+  const saat = (z: string) => new Date(z).toLocaleString('tr-TR', { dateStyle: 'medium', timeStyle: 'short' });
+  const ilerleme = (durum: 'calisiyor' | 'bekliyor'): EmirAyrintiCevabi['ilerleme'] => ({
+    esas: 'adim', rota: 0, adimlar: [{ opNo: 10, ad: 'Tornalama', dal: null, durum, hedef: 10, yapilan: 4, yuzde: 40 }],
+  });
 
   async function ayrintiAc(emir: Emir, ek: Partial<EmirAyrintiCevabi> = {}) {
     sunucuKur(OKUYUCU, { [`GET /uretim-emirleri/${emir.id}`]: () => ayrinti(emir, ek) });
     ac(ekran, `/uretim-emirleri/${emir.id}`);
-    await screen.findByText(emir.emirNo);
+    await screen.findByRole('heading', { name: emir.emirNo });
   }
 
   it('çalışıyor: rozet, sayaçlar; duruş satırı yok', async () => {
-    await ayrintiAc(basladi(1, { ...CANLI, hurda: 2 }));
-    expect(deger('Durum')).toBe('Başladı · Çalışıyor');
-    expect(deger('Sağlam adet')).toBe('4');
-    expect(deger('Hurda')).toBe('2');
-    expect(screen.queryByText('Duruş nedeni')).toBeNull();
-    expect(screen.queryByText('Duruş başlangıcı')).toBeNull();
+    await ayrintiAc(basladi(1, { ...CANLI, hurda: 2 }), { ilerleme: ilerleme('calisiyor') });
+    expect(screen.getByText('Başladı · Çalışıyor')).toBeTruthy();
+    expect(kutu('Sağlam / emir adedi')).toEqual({ deger: '4 / 10', alt: 'Hurda 2' });
+    expect(kutu('Şu an')).toEqual({ deger: 'OP 10 Tornalama', alt: 'Çalışıyor · 4 / 10' });
+    expect(screen.queryByText(/Durdu:/)).toBeNull();
   });
 
-  it('duraklı: başlangıç saati ham, neden yok', async () => {
-    const saat = '2026-10-06T10:30:00+00:00';
-    await ayrintiAc(basladi(2, { ...CANLI, calisma: 'durakli', durusBaslangic: saat }));
-    expect(deger('Durum')).toBe('Başladı · Duraklı');
-    expect(deger('Duruş başlangıcı')).toBe(new Date(saat).toLocaleString('tr-TR', { dateStyle: 'medium', timeStyle: 'short' }));
-    expect(screen.queryByText('Duruş nedeni')).toBeNull();
+  it('duraklı: rozet duraklı; neden yok', async () => {
+    await ayrintiAc(basladi(2, { ...CANLI, calisma: 'durakli', durusBaslangic: '2026-10-06T10:30:00+00:00' }), { ilerleme: ilerleme('calisiyor') });
+    expect(screen.getByText('Başladı · Duraklı')).toBeTruthy();
+    expect(screen.queryByText(/Durdu:/)).toBeNull();
   });
 
   it('durdu: neden ve başlangıç görünür', async () => {
-    await ayrintiAc(basladi(3, {
-      ...CANLI, calisma: 'durdu', durusNedeni: { id: 1, ad: 'Takım kırıldı' }, durusBaslangic: '2026-10-06T10:30:00+00:00',
-    }));
-    expect(deger('Durum')).toBe('Başladı · Durdu');
-    expect(deger('Duruş nedeni')).toBe('Takım kırıldı');
-    expect(deger('Duruş başlangıcı')).toBe(new Date('2026-10-06T10:30:00+00:00').toLocaleString('tr-TR', { dateStyle: 'medium', timeStyle: 'short' }));
+    const z = '2026-10-06T10:30:00+00:00';
+    await ayrintiAc(basladi(3, { ...CANLI, calisma: 'durdu', durusNedeni: { id: 1, ad: 'Takım kırıldı' }, durusBaslangic: z }), { ilerleme: ilerleme('calisiyor') });
+    expect(screen.getByText('Başladı · Durdu')).toBeTruthy();
+    expect(kutu('Şu an').alt).toBe(`Durdu: Takım kırıldı · ${saat(z)}`);
   });
 
   it('bitmiş: sağlam adet, hurda ve fark; çalışma durumu yok', async () => {
     await ayrintiAc({
       ...basladi(4, { ...CANLI, calisma: null, saglam: 12, hurda: 3 }), durum: 'bitti', bitis: '2026-10-06T11:00:00+00:00', saglamAdet: 12,
     });
-    expect(deger('Durum')).toBe('Üretimi bitti');
-    expect(deger('Sağlam adet')).toBe('12');
-    expect(deger('Hurda')).toBe('3');
-    expect(deger('Fark')).toBe('Emir adedinden 2 fazla');
+    expect(screen.getByText('Üretimi bitti', { selector: '.tc-rozet' })).toBeTruthy();
+    expect(kutu('Sağlam / emir adedi')).toEqual({ deger: '12 / 10', alt: 'Hurda 3' });
+    expect(kutu('Şu an')).toEqual({ deger: 'Bütün adımlar bitti', alt: 'Emir adedinden 2 fazla' });
   });
 
-  it('planlı: sayaç ve duruş satırı yok, sağlam adet "yok"', async () => {
+  it('planlı: sayaç ve duruş yok, sağlam adet "—"', async () => {
     await ayrintiAc({ ...TEMEL, id: 5, emirNo: 'UE-000005', durum: 'planli' });
-    expect(deger('Durum')).toBe('Planlı');
-    expect(deger('Sağlam adet')).toBe('yok');
-    expect(screen.queryByText('Hurda', { selector: 'dt' })).toBeNull();
+    expect(screen.getByText('Planlı', { selector: '.tc-rozet' })).toBeTruthy();
+    expect(kutu('Sağlam / emir adedi')).toEqual({ deger: '— / 10', alt: null });
   });
 
   it('adımlar salt okunur gösterilir; tamamlayan ve saat notta; adımsız emirde bölüm yok', async () => {
@@ -106,6 +107,8 @@ describe('Ayrıntı: canlı durum, adımlar, yeni defter olayları', () => {
         k(6, 'bitir', { saglamAdet: 9 }),
       ],
     });
+    // 3039: kayıt defteri "Kayıtlar" sekmesindedir.
+    fireEvent.click(screen.getByRole('tab', { name: 'Kayıtlar' }));
     const defter = within(screen.getByRole('table', { name: 'Kayıt defteri' }));
     const hucre = (olay: string, baslik: string, sira = 0) =>
       defter.getAllByText(olay)[sira]!.closest('tr')!.querySelector(`td[data-baslik="${baslik}"]`)?.textContent;
@@ -133,10 +136,11 @@ describe('Liste: canlı sayaç ve çalışma rozeti', () => {
     ac(ekran, '/uretim-emirleri');
     await screen.findByText('UE-000001');
     const satir = (no: string) => screen.getByText(no).closest('tr')!;
-    const saglam = (no: string) => satir(no).querySelector('td[data-baslik="Sağlam adet"]')?.textContent;
-    expect(saglam('UE-000001')).toBe('4 (hurda 2)');
-    expect(saglam('UE-000002')).toBe('7');
-    expect(saglam('UE-000004')).toBe('9');
+    // 3039: liste "Sağlam / adet" sütunudur; hurda yanında.
+    const saglam = (no: string) => satir(no).querySelector('td[data-baslik="Sağlam / adet"]')?.textContent;
+    expect(saglam('UE-000001')).toBe('4 / 10 (hurda 2)');
+    expect(saglam('UE-000002')).toBe('7 / 10');
+    expect(saglam('UE-000004')).toBe('9 / 10');
     expect(within(satir('UE-000001')).getByText('Başladı · Çalışıyor')).toBeTruthy();
     expect(within(satir('UE-000002')).getByText('Başladı · Duraklı')).toBeTruthy();
     expect(within(satir('UE-000003')).getByText('Başladı · Durdu')).toBeTruthy();

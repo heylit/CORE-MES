@@ -1,6 +1,6 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { EMIR_TURU_ADLARI } from '#paylasilan/sozlesme/emir-turleri.ts';
 import type { AcilisSecenekleri } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { api } from '../../../../ortak/veri/api.ts';
@@ -11,7 +11,6 @@ import { RR_ANAHTARI, usePatlatmaOnizlemesi, type RrDurumu } from '../veri.ts';
 import { BolmePaneli, bolmeSonucu, bosBolme, type BolmeDurumu } from './Bolme.tsx';
 import { bosCokKatman, CokKatmanPaneli, type CokKatmanSecimi } from './CokKatman.tsx';
 import { EmirAyrintisi, PlanHucresi } from './EmirAyrintisi.tsx';
-import { EmirExcelMenusu } from './ExcelGirisi.tsx';
 import { planMetni, tamponRozeti, turAdi } from './gorunum.ts';
 import { acilanEmir, guncelSurum, useEmirKomutu } from './komut.ts';
 import {
@@ -24,8 +23,20 @@ const TUR_SECENEKLERI = Object.entries(EMIR_TURU_ADLARI).map(([deger, baslik]) =
 
 const URUN_ONEKI = 'urun:';
 
-export function UretimEmirleri({ veri, yetki, git, kimlik }: EkranOzellikleri) {
+// Emrin ana yeri Üretim Emirleri'dir (3003 a): burada rotanın emirleri salt okunur görünür; açma ve işlemler oradadır. Açabilen kişiye
+// "Yeni üretim emri" Üretim Emirleri'nin açma penceresini götürür, ürün seçili gelir.
+const UE_YENI = '/uretim-emirleri?yeni=1';
+const ueYeniAdresi = (urun: string | null) => (urun === null ? UE_YENI : `${UE_YENI}&urun=${encodeURIComponent(urun)}`);
+
+const saltOkunur = (y: EkranOzellikleri['yetki']): EkranOzellikleri['yetki'] => ({
+  ...y, yaz: false, rotaYaz: false, rotaOnayla: false, rotaEmreKopyala: false, emirYaz: false, stokStatuDegistir: false, stokSayim: false, stokGiris: false,
+  istasyonYaz: false, kisiYaz: false, planYaz: false, maliyetYaz: false, herhangiYazma: false,
+});
+
+export function UretimEmirleri({ veri, yetki: tamYetki, git, kimlik }: EkranOzellikleri) {
   const d = veri.durum;
+  const yetki = saltOkunur(tamYetki);
+  const yonlen = useNavigate();
   const [durumSuzgeci, setDurumSuzgeci] = useState<DurumSuzgeci>('aktif');
   const [turSuzgeci, setTurSuzgeci] = useState('tum');
   const [arama, setArama] = useState('');
@@ -34,9 +45,9 @@ export function UretimEmirleri({ veri, yetki, git, kimlik }: EkranOzellikleri) {
   const [acik, setAcik] = useState<string | null>(yeniUrun === null ? kimlik : null);
   const komut = useEmirKomutu();
   const emirler = useMemo(() => d.emirler?.orders ?? [], [d.emirler]);
-  const acabilir = yetki.emirYaz || yetki.rotaEmreKopyala;
-  const [sorgu] = useSearchParams();
-  const [yeniAcik, setYeniAcik] = useState((emirler.length === 0 || sorgu.get('yeni') === '1' || yeniUrun !== null) && acabilir);
+  const acabilir = tamYetki.oku && (tamYetki.emirYaz || tamYetki.rotaEmreKopyala);
+  // "Ürün ve rotalar"dan gelen "Üretim emri oluştur" emri açma penceresine gider.
+  useEffect(() => { if (yeniUrun !== null && acabilir) void yonlen(ueYeniAdresi(yeniUrun), { replace: true }); }, [yeniUrun, acabilir]);
 
   if (!d.emirler) {
     return (
@@ -64,7 +75,7 @@ export function UretimEmirleri({ veri, yetki, git, kimlik }: EkranOzellikleri) {
   return (
     <div className="tc-rry-bolum tc-rr3" data-parca="R3">
       <p className="tc-rr3-ipucu tc-rr3-ipucu-simge">
-        <Simge ad="help" boyut="k" />Emirler Üretim Emirleri sayfasıyla ortaktır; terminaldeki iş burada ilerleme olarak görünür.
+        <Simge ad="help" boyut="k" />Emirler Üretim Emirleri sayfasında açılır ve yönetilir; burada salt okunur görünür. Terminaldeki iş ilerleme olarak görünür.
       </p>
       {komut.uyari && (
         <div className="tc-rr3-uyari-kutu" role="alert">
@@ -84,22 +95,13 @@ export function UretimEmirleri({ veri, yetki, git, kimlik }: EkranOzellikleri) {
         <Secim etiket="Tür" value={turSuzgeci} secenekler={turSecenekleri} onChange={(o) => { setTurSuzgeci(o.target.value); }} />
         <Girdi etiket="Ara" type="search" placeholder="Emir no, ürün ya da not" value={arama} onChange={(o) => { setArama(o.target.value); }} />
         {acabilir && (
-          <Dugme tur={yeniAcik ? 'ikincil' : 'birincil'} simge={yeniAcik ? 'x' : 'plus'} aria-expanded={yeniAcik} onClick={() => { setYeniAcik(!yeniAcik); }}>
-            {yeniAcik ? 'Yeni emir formunu kapat' : 'Yeni üretim emri'}
-          </Dugme>
+          <Dugme tur="birincil" simge="plus" onClick={() => { void yonlen(UE_YENI); }}>Yeni üretim emri</Dugme>
         )}
-        {(yetki.rotaEmreKopyala || yetki.emirYaz) && <EmirExcelMenusu durum={d} acabilir={yetki.rotaEmreKopyala} guncelleyebilir={yetki.emirYaz} />}
       </div>
       {(durumSuzgeci === 'tamam' || durumSuzgeci === 'tum') && (
         <p className="tc-rr3-ipucu tc-rr3-ipucu-simge">
           <Simge ad="clock" boyut="k" />Kapanan emirlerden son 30 gündekiler ve plandakiler görünür; daha eskiler <Link to="/uretim-emirleri">Üretim Emirleri</Link> sayfasının biten listesindedir.
         </p>
-      )}
-      {acabilir && yeniAcik && (
-        <YeniEmirFormu
-          durum={d} yetki={yetki} komut={komut} git={git} ilkUrun={yeniUrun}
-          acildi={(id) => { setYeniAcik(false); setDurumSuzgeci('aktif'); setTurSuzgeci('tum'); setArama(''); setAcik(id); }}
-        />
       )}
       {/* 1100 B: liste solda, seçili emrin ayrıntısı sağ panelde; dar alanda liste ve ayrıntı ayrı görünür (CSS kap sorgusu). */}
       <div className="tc-rr3-cift" data-secili={acikEmir ? '' : undefined}>
@@ -181,7 +183,7 @@ export const gecmisTeslimMi = (teslim: string, bugunGun: string): boolean => /^\
 
 interface YeniFormDurumu { urun: string; miktar: string; baslangic: string; teslim: string; oncelik: string; durum: 'serbest' | 'taslak'; tur: string; not: string; rezerve: boolean }
 
-function YeniEmirFormu({ durum: d, yetki, komut, acildi, git, ilkUrun }: {
+export function YeniEmirFormu({ durum: d, yetki, komut, acildi, git, ilkUrun }: {
   durum: RrDurumu; yetki: EkranOzellikleri['yetki']; komut: ReturnType<typeof useEmirKomutu>; acildi: (id: string) => void; git: EkranOzellikleri['git'];
   ilkUrun: string | null;
 }) {
@@ -272,8 +274,7 @@ function YeniEmirFormu({ durum: d, yetki, komut, acildi, git, ilkUrun }: {
   };
 
   return (
-    <section className="tc-rr3-panel" aria-label="Yeni üretim emri">
-      <h3>Yeni üretim emri</h3>
+    <section className="tc-rr3-panel" data-pencerede="" aria-label="Yeni üretim emri">
       <div className="tc-rr3-form">
         <Secim
           etiket="Ürün" value={f.urun} onChange={(o) => { yaz({ urun: o.target.value }); setBolme(bosBolme(true)); setCok(bosCokKatman()); }}

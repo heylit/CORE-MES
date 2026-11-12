@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import type { Kullanici } from '#paylasilan/kullanici.ts';
-import { json, KAPI, rrAc, sunucuKur } from '../test-ortak.tsx';
+import { json, KAPI, sunucuKur, yeniEmirAc } from '../test-ortak.tsx';
 import { onizlemeOrnegi } from '../rotalar/onizleme-ornegi.ts';
 import { rotaDurumu } from '../rotalar/test-veri.ts';
 import { cokKatmanOzeti, stoktanCikar } from './kurallar.ts';
@@ -20,10 +20,11 @@ const sunucu = (islemler: string[], onizleme = onizlemeOrnegi()) => sunucuKur(ki
     [`POST ${KOPYA}`]: () => json(200, { uretimEmriId: 62, isEmriIdleri: [1, 2, 3] }),
   },
 });
+// 3039: emir Üretim Emirleri'nin yeni emir penceresinde açılır.
 const formAc = async () => {
-  const b = await screen.findByRole('region', { name: 'Üretim emirleri' });
-  fireEvent.click(await within(b).findByRole('button', { name: 'Yeni üretim emri' }));
-  return within(b).findByRole('region', { name: 'Yeni üretim emri' });
+  const p = await screen.findByRole('dialog', { name: 'Yeni üretim emri' });
+  await within(p).findByLabelText('Miktar');
+  return p;
 };
 
 describe('1476-F çok katmanlı seçim kuralları', () => {
@@ -40,7 +41,7 @@ describe('1476-F çok katmanlı seçim kuralları', () => {
 describe('1476-F emir açılışında çok katmanlı seçim: izinli', () => {
   it('işaretlenince bölme gizlenir, durum seçilebilir kalır; stoktan seçilen düğüm emre kopya gövdesine gider', async () => {
     const istekler = sunucu(['rota.emre-kopyala']);
-    rrAc();
+    yeniEmirAc();
     const form = await formAc();
     const kutu = await within(form).findByRole('checkbox', { name: 'Çok katmanlı: alt parçalar bu emirde üretilir' });
     expect((kutu as HTMLInputElement).checked).toBe(false);
@@ -57,7 +58,7 @@ describe('1476-F emir açılışında çok katmanlı seçim: izinli', () => {
 
   it('işaretlenmezse gövde bugünkü gibidir (çok katmanlı alanı yok)', async () => {
     const istekler = sunucu(['rota.emre-kopyala']);
-    rrAc();
+    yeniEmirAc();
     const form = await formAc();
     await within(form).findByRole('checkbox', { name: /Çok katmanlı/ });
     fireEvent.click(within(form).getByRole('button', { name: 'Emri oluştur' }));
@@ -67,7 +68,7 @@ describe('1476-F emir açılışında çok katmanlı seçim: izinli', () => {
 
   it('engel varsa kutu kapalıdır ve nedeni gösterilir', async () => {
     sunucu(['rota.emre-kopyala'], onizlemeOrnegi({ engel: 'Kök başına adet tam sayı olmalı.' }));
-    rrAc();
+    yeniEmirAc();
     const form = await formAc();
     const kutu = await within(form).findByRole('checkbox', { name: /Çok katmanlı/ });
     expect((kutu as HTMLInputElement).disabled).toBe(true);
@@ -78,9 +79,8 @@ describe('1476-F emir açılışında çok katmanlı seçim: izinli', () => {
 describe('1476-F emir açılışında çok katmanlı seçim: reddedilen', () => {
   it('rota.emre-kopyala olmayan seçimi görmez ve önizleme sorulmaz', async () => {
     const istekler = sunucu(['uretim-emirleri.yaz']);
-    rrAc();
-    const b = await screen.findByRole('region', { name: 'Üretim emirleri' });
-    fireEvent.click(await within(b).findByRole('button', { name: 'Yeni üretim emri' }));
+    yeniEmirAc();
+    const b = await screen.findByRole('dialog', { name: 'Yeni üretim emri' });
     await within(b).findByText(/Emir açmak için mamul ya da yarı mamul gerekli/);
     expect(within(b).queryByRole('checkbox', { name: /Çok katmanlı/ })).toBeNull();
     expect(istekler.some((i) => i.yol === ONIZLEME)).toBe(false);
