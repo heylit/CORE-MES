@@ -43,7 +43,7 @@ import { depoDolulugu, eksikDosyalar as kisininEksikDosyalari, modulDeposuTutama
 import type { BagSiniri, SaklananTur } from '../dosya/disari.ts';
 import { isEmriHazirlikDurumlari } from '../cnc-kurulum/disari.ts';
 import {
-  acikEmir, acikEmirler, emirAyar, emirBaslat, emirBitir, emirDevam, emirDurdur, emirDuraklat, emirDurumlari, emirOzeti, emirSayim, isEmriOzeti, katil, katilimAyril, katilimDuraklat, katilimlar,
+  acikEmir, acikEmirler, emirAyar, emirBaslat, emirBitir, emirDevam, emirDurdur, emirDuraklat, emirDurumlari, emirOzeti, emirSayim, isEmriOzeti, isEmriOzetleri, katil, katilimAyril, katilimDuraklat, katilimlar,
   calismaDevral, hataliAdimToplamlari, makineDevral, partiKomutuReddi, planlanacakIsEmirleri, rotasizIsEmirleri, uretimEmriOzeti, aralikAdetleri, katilimSureleri, sonGirisler,
   bitenIsEmirleri, gunlukAralikAdetleri, isEmriPlanBilgileri, kisininGunlukIsEmirleri, kisininHurdaNedenleri, kisininIsEmirleri, komutOnbellegiyle, standartSureler,
   makineAyrimlari as emrinMakineAyrimlari, kisininAcikIsleri, emirlerinMalzemeIhtiyaci, adimliEmirAyrintisi, emirlerinProjeleri, isEmriDugumleri, kararliSayimiSonuclandir, isEmriZamanlari,
@@ -624,6 +624,13 @@ async function iptalEmriMi(db: Db, paketId: unknown): Promise<boolean> {
   return emirId !== null && (await emirOzeti(db, emirId))?.durum === 'iptal';
 }
 
+// Emirden ya da plandan çıkarılan adımın iş emri silinir; Hazırlık'ta kaydedilmiş paketi tabloda kalır (aynı malzeme ve adımın şablonudur)
+// ama gösterilmez: Hazırlık'ta adımı olmayan iş görünmesin.
+async function silinmisAdimPaketiMi(db: Db, paketId: string): Promise<boolean> {
+  const isEmriId = paketIsEmri(paketId);
+  return isEmriId !== null && (await isEmriOzeti(db, isEmriId)) === null;
+}
+
 
 async function belgelerHam(db: Db, depo: ArkonDeposu) {
   if (depo === 'gauges') return tmiAletleri(db);
@@ -634,7 +641,10 @@ async function belgelerHam(db: Db, depo: ArkonDeposu) {
     // Açık emir iptal değildir: yalnız kapanmış emirlerin durumu tek sorguda okunur.
     const kapanmis = kayitli.map((b) => paketinEmri(b.kimlik, b.govde)).filter((id): id is number => id !== null && !acikKimlikler.has(id));
     const durumlar = await emirDurumlari(db, kapanmis);
+    const varOlanAdimlar = await isEmriOzetleri(db, kayitli.flatMap((b) => { const id = paketIsEmri(b.kimlik); return id === null ? [] : [id]; }));
     const gorunen = kayitli.filter((b) => {
+      const isEmriId = paketIsEmri(b.kimlik);
+      if (isEmriId !== null && !varOlanAdimlar.has(isEmriId)) return false;
       const emirId = paketinEmri(b.kimlik, b.govde);
       return emirId === null || durumlar.get(emirId) !== 'iptal';
     });
@@ -717,7 +727,7 @@ async function belgeBul(db: Db, depo: ArkonDeposu, kimlik: string) {
 export async function belge(db: Db, kullanici: Kullanici, depo: ArkonDeposu, kimlik: string) {
   await okuyabilir(db, kullanici, depo);
   let bulunan = await belgeBul(db, depo, kimlik);
-  if (bulunan === null || (depo === 'pkgs' && (await iptalEmriMi(db, kimlik)))) return null;
+  if (bulunan === null || (depo === 'pkgs' && ((await iptalEmriMi(db, kimlik)) || (await silinmisAdimPaketiMi(db, kimlik))))) return null;
   // Kayıtlı iş emri paketinin TMI alanları ekrana giden okumada yazılır; iç denetimler (ilk parça, istek) kayıtlı satırla yetinir.
   const isEmriId = depo === 'pkgs' ? paketIsEmri(kimlik) : null;
   const taslak = isEmriId === null ? null : await isEmriTaslagi(db, kimlik);
