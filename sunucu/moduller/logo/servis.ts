@@ -220,10 +220,11 @@ const SONUCU_BILINMIYOR = 'Önceki açma isteğinin sonucu bilinmiyor ve bu belg
 const LOGODAN_GELEN_KART = 'Kart Logo\'dan alındı ya da bağlandı; Logo\'ya pasife alma gönderilmedi. Gerekiyorsa Logo\'da elle bakın.';
 
 // Silinen Logo kartının Logo'da kullanım dışı bırakılması (2114b, 2114-7, ADR 0017 madde 8): açma kuyruğu boşken, güncellemeden önce tek kart.
-// İstek yalnız bağlantı açıkken alınır; tur da yalnız bağlantı açıkken koşar. Giden kutusunda kart belgesinin "pasif" satırıdır: önce niyet
+// İstek yalnız bağlantı ve kendi ayarı açıkken alınır; tur da yalnız ikisi açıkken koşar. Giden kutusunda kart belgesinin "pasif" satırıdır: önce niyet
 // kalıcı yazılır (tur biter), sonraki turda istek gider. Yineleme zararsızdır: zaten kullanım dışı kart yardımcıda başarıdır.
 async function pasifTuru(db: Db, o: TurOrtami, kopru: KopruIstemcisi): Promise<TurSonucu | KopruAdimi> {
-  if (!o.malzemePasif) return guncellemeTuru(db, o, kopru);
+  // 3073 a: kendi ayarı kapalıyken sıradaki istek gitmez, birikir (önceden alınmış istek de).
+  if (!o.malzemePasif || !(await sistemAyariOku(db, 'logo.malzeme-pasif-gonderimi'))) return guncellemeTuru(db, o, kopru);
   const kaynak = o.malzemePasif;
   for (const kart of await kaynak.gidecekler(db, KUYRUK_SINIRI)) {
     // Silmede yazılan ölçüt burada yeniden uygulanır: ölçütten önce kuyruğa girmiş istek de Logo'nun kendi kartına gitmez.

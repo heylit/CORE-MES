@@ -5,6 +5,7 @@ import { testVeritabaniKur } from '#cekirdek/test-vt.ts';
 import type { TestVeritabani } from '#cekirdek/test-vt.ts';
 import { uygulamaKur } from '#cekirdek/uygulama.ts';
 import type { ArsivKartlariCevabi, LogoDurumuCevabi } from '#paylasilan/sozlesme/malzemeler.ts';
+import { sistemAyariOku } from '../ayarlar/disari.ts';
 import { denetimYaz } from '../denetim/disari.ts';
 import { yoneticiOlustur } from '../kisiler/disari.ts';
 import { logoyaPasifGidecekMalzemeler, malzemeLogoPasifSonucu, malzemeLogoSonucu } from '../malzemeler/disari.ts';
@@ -29,6 +30,8 @@ describe('Logo\'ya gönderilmiş kartın Logo\'da pasife alınması (2114b, ger�
   let kopru: SahteKopru;
   let sayac = 0;
   let simdi = Date.parse('2026-11-05T10:00:00Z');
+  // Hiç değiştirilmemiş kurulumda ayarın değeri; before() sonra açar.
+  let ilkPasifAyari: unknown;
 
   const vt = (): TestVeritabani['vt'] => {
     if (!ortam) throw new Error('Test veritabanı açılamadı (TMIV2_PG_* ve TMIV2_PG_TEST_DATABASE ayarlarını denetleyin).');
@@ -86,6 +89,8 @@ describe('Logo\'ya gönderilmiş kartın Logo\'da pasife alınması (2114b, ger�
     await tamam('POST', '/logo/birim-setleri/ekle', { kod: '06', ad: null });
     await tamam('POST', '/malzeme-logo-karsiliklari/kaydet', { cesit: 'birim', tmiDegeri: 'kg', logoDegeri: '06' });
     await baglanti(true);
+    ilkPasifAyari = await vt().tx((db) => sistemAyariOku(db, 'logo.malzeme-pasif-gonderimi'));
+    await tamam('POST', '/ayarlar/logo.malzeme-pasif-gonderimi/degistir', { deger: true });
   });
   after(async () => { await app?.close(); await ortam?.kaldir(); });
   // Gün ilerler; birim seti listesi o saatte okunmuş sayılır ki tur liste okumadan kuyruğa geçsin.
@@ -179,6 +184,32 @@ describe('Logo\'ya gönderilmiş kartın Logo\'da pasife alınması (2114b, ger�
     const d = await durum(k.no);
     assert.deepEqual({ onay: d.onay, pasif: d.pasif, kayitNo: d.kayitNo }, { onay: 'pasif', pasif: 'reddedildi', kayitNo: String(k.ref) });
     assert.match(d.pasifHata ?? '', /Card not found/);
+  });
+
+  test('3073 a: kendi ayarı kapalıyken TMI\'nin açtığı kart silinmez (ileti ayarı söyler) ve sıradaki istek gitmez, birikir; açılınca gider', async () => {
+    const ayar = (deger: boolean) => tamam('POST', '/ayarlar/logo.malzeme-pasif-gonderimi/degistir', { deger });
+    assert.equal(ilkPasifAyari, false, 'yeni kurulumda kapalı başlar (3073 a)');
+    const k = await logodakiKart();
+    const sirada = await logodakiKart();
+    assert.deepEqual(await tamam('POST', `/malzeme-katalogu-kartlari/${sirada.kimlik}/iptal`), { id: sirada.kimlik, logodaPasifeAliniyor: true });
+    await ayar(false);
+    try {
+      const c = await istek('POST', `/malzeme-katalogu-kartlari/${k.kimlik}/iptal`);
+      assert.equal(c.statusCode, 422, c.body);
+      assert.match(c.json().mesaj as string, /Logo: silinen kartı Logo'da kullanım dışı bırakma/);
+      assert.deepEqual(await durum(k.no), { onay: 'aktif', gonderim: 'gonderildi', kayitNo: String(k.ref), pasif: null, pasifHata: null, silen: yoneticiId });
+      assert.deepEqual(await tur(), { tur: 'bos' }, 'kapalıyken sıradaki istek alınmaz');
+      assert.equal(deactivate().length, 0);
+      assert.equal((await durum(sirada.no)).pasif, 'bekliyor', 'istek birikir');
+      // Logo'dan gelen kart ayardan bağımsız yalnız TMI'de silinir.
+      const gelen = await logodakiKart(null);
+      assert.deepEqual(await tamam('POST', `/malzeme-katalogu-kartlari/${gelen.kimlik}/iptal`), { id: gelen.kimlik, logodaPasifeAliniyor: false });
+    } finally {
+      await ayar(true);
+    }
+    assert.deepEqual(await tur(), { tur: 'pasif-niyet', no: sirada.no });
+    assert.deepEqual(await tur(), { tur: 'pasif', no: sirada.no, sonuc: 'gonderildi' });
+    assert.deepEqual(deactivate().map((i) => i.yol), [`/api/Material/${sirada.ref}/deactivate`]);
   });
 
   test('3070: TMI\'nin açmadığı Logo kartı (izsiz ya da Logo\'da bulunmuş) silinince yalnız TMI\'de iptal olur; Logo\'ya istek gitmez', async () => {

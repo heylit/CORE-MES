@@ -688,12 +688,13 @@ async function kartOnayiBildir(db: Db, g: {
   }
 }
 
+const LOGO_PASIF_KAPALI = 'Logo\'da kullanım dışı bırakma Sistem Ayarları\'nda kapalı ("Logo: silinen kartı Logo\'da kullanım dışı bırakma"); Logo\'ya gönderilmiş kart şimdi silinemez, pasife alın.';
 const KART_KULLANIMDA = 'Kart başka kayıtlarda kullanılıyor; silinemez, pasife alın.';
 // Silme denemesinin başarı işareti: kayıt noktası bununla geri döner, kart satırı kalır.
 const DENEME_BITTI = gecersiz('Silme denemesi geri alındı.');
 
 // TMI'nin Logo'da açtığı kart Logo'dan silinmez, Logo'da kullanım dışı bırakılır (2114-7): istek kuyruğa girer, kart o sürede pasiftir; Logo
-// bağlantısı kapalıyken istek alınmaz. Logo onaylayınca kart iptal olur, reddederse pasif kalır (Logo işi, malzemeLogoPasifSonucu).
+// bağlantısı ya da kendi ayarı (3073 a, varsayılan kapalı) kapalıyken istek alınmaz. Logo onaylayınca kart iptal olur, reddederse pasif kalır (Logo işi, malzemeLogoPasifSonucu).
 // "Al" ya da "Bağla" ile Logo'dan gelen kart Logo'nun kendi kartıdır (2114b yalnız TMI'nin gönderdiği kart içindir): silinince yalnız TMI'de
 // iptal olur, Logo'ya istek yazılmaz. Hangisi olduğunu Logo bağlantısının gönderim izi söyler (çözücü yoksa istek yazılmaz).
 // Kullanılmamış kart silinir (2114-1 a): katalogdan ve seçimlerden kalkar, satırı iptal olarak kalır (2114-3 a). Kullanımı
@@ -713,6 +714,7 @@ export async function katalogKartiIptal(db: Db, kullanici: Kullanici, kimlik: st
   if (logoda && (kayitli.logoPasifDurumu === 'bekliyor' || kayitli.logoPasifDurumu === 'hata')) throw gecersiz('Kart Logo\'da pasife alınmayı bekliyor.');
   const logodaPasif = logoda && logoAcilisi !== null && (await logoAcilisi(db, kayitli.no));
   if (logodaPasif && !(await sistemAyariOku(db, 'logo.baglanti'))) throw gecersiz('Logo bağlantısı kapalı; Logo\'ya gönderilmiş kart şimdi silinemez, pasife alın.');
+  if (logodaPasif && !(await sistemAyariOku(db, 'logo.malzeme-pasif-gonderimi'))) throw gecersiz(LOGO_PASIF_KAPALI);
   if ((await aparatKapasiteleri(db)).some((a) => a.aparatKartiId === kayitli.no)) throw bagimliKayit(KART_KULLANIMDA);
   // Logo'daki kartın pasife alma isteği denemeden önce yazılır: tetik Logo kaydı olan kartın silme denemesine yalnız bekleyen istekte izin
   // verir. Kullanılan kartta hata transaction'ı, istekle birlikte geri alır. Logo'dan gelen kartta istek denemenin içindedir ve onunla geri alınır.

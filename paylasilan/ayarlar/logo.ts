@@ -181,6 +181,13 @@ export const LOGO_AYARLARI = {
     baslik: 'Logo: satış teklifi kapatma gönderimi',
     aciklama: 'Açıkken reddedilen teklif ve yeni sürümü gelen teklifin eskisi Logo\'da kapanır. "Logo: satış gönderimi" ve "Logo bağlantısı" da açık olmalı.',
   },
+  'logo.malzeme-pasif-gonderimi': {
+    modul: 'logo',
+    tur: 'boolean',
+    varsayilan: false,
+    baslik: 'Logo: silinen kartı Logo\'da kullanım dışı bırakma',
+    aciklama: 'Açıkken CORE\'un Logo\'ya gönderdiği malzeme ve hizmet kartı silinince Logo\'daki kart kullanım dışı bırakılır (Logo\'dan silinmez). Kapalıyken böyle kart silinemez; CORE\'da pasife alınabilir. Logo\'dan alınan ya da bağlanan kart her durumda yalnız CORE\'da silinir. "Logo bağlantısı" da açık olmalı.',
+  },
   'logo.malzeme-hareketleri-okumasi': {
     modul: 'logo',
     tur: 'boolean',
