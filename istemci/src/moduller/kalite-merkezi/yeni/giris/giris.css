@@ -13,8 +13,8 @@
   .tc-km-gkk-form > :first-child { grid-column: 1 / -1; }
 }
 .tc-km-gkk-sutun { display: grid; gap: var(--b-4); min-width: 0; align-content: start; }
-.tc-km-gkk-form-ust { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--b-3); }
-.tc-km-gkk-kimlik { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2); min-width: 0; }
+.tc-km-gkk-form-ust { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-3); }
+.tc-km-gkk-kimlik { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2); min-width: 0; margin-left: auto; }
 .tc-km-gkk-hata { margin: 0; color: var(--stop); font-size: var(--yazi-s); }
 .tc-km-gkk-ikili { display: grid; gap: var(--b-3); grid-template-columns: repeat(auto-fit, minmax(calc(var(--dokunma) * 3), 1fr)); align-items: end; }
 
