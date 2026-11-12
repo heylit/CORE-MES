@@ -616,3 +616,8 @@ a.tc-stok-kpi:hover, a.tc-stok-kpi:focus-visible { background: var(--panel2); }
   .tc-stok-bas > .tc-stok-eylem > * { flex: none; }
   .tc-stok-bas > .tc-stok-eylem > .tc-refakat-okut { flex: 1 0 calc(var(--b-6) * 7); }
 }
+
+/* Telefonda raf matrisi kendi kabında yana kayar; ızgara izi içeriğe göre büyürse matris kartın dışına taşar. */
+@media (max-width: 767px) {
+  .tc-stok-matris-kutu { grid-template-columns: minmax(0, 1fr); }
+}

@@ -51,3 +51,21 @@ test('Telefon: yapışık kimlik sütunundaki uzun kod komşu hücreye taşmaz, 
   }
   expect(ag.hatalar).toEqual([]);
 });
+
+// Raf matrisi telefonda kendi kabında yana kayar; ızgara içeriğe göre büyüyüp başlığı ve matrisi kartın dışına itmez.
+test('Telefon: raf matrisi kartın içinde kalır, kendi kabında yana kayar', async ({ page, ag, ac }) => {
+  test.skip((page.viewportSize()?.width ?? 0) >= 768, 'yalnız telefon genişliği');
+  await ac('/stok/raflar');
+  const kutu = page.locator('.tc-stok-matris-kutu').first();
+  await expect(kutu).toBeVisible();
+  const olcu = await kutu.evaluate((e) => {
+    const k = e.getBoundingClientRect();
+    const tasan = [...e.children].map((c) => c.getBoundingClientRect().right - k.right).filter((f) => f > 1);
+    const kap = e.querySelector('.tc-stok-kaydir');
+    return { tasan, kapKayar: kap !== null && kap.scrollWidth > kap.clientWidth, sayfa: document.documentElement.scrollWidth - document.documentElement.clientWidth };
+  });
+  expect(olcu.tasan, 'matris kutusunun çocukları kartın dışına taşıyor').toEqual([]);
+  expect(olcu.kapKayar, 'matris kendi kabında kaymıyor').toBe(true);
+  expect(olcu.sayfa).toBeLessThanOrEqual(0);
+  expect(ag.hatalar).toEqual([]);
+});
