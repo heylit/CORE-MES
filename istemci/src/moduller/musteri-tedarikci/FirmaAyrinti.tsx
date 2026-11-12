@@ -14,7 +14,7 @@ import { FirmaKarnesi } from './FirmaKarnesi.tsx';
 import { FirmaFormu } from './FirmaFormu.tsx';
 import { ADRES_TURU_ETIKETI, LOGO_DURUMU, SINIF_ETIKETI, TUR_ETIKETI } from './gorunum.ts';
 import { koordinatMetni } from './koordinat.ts';
-import { LogoCariArama } from './LogoCariArama.tsx';
+import { LogoBaglaPenceresi } from './LogoBaglaPenceresi.tsx';
 import { cevabiYaz, eskiyseYenile, useYazabilir, yazmaIletisi } from './yazma.ts';
 
 function Satir({ etiket, children }: { etiket: string; children: ReactNode }) {
@@ -204,10 +204,7 @@ export function FirmaAyrinti({ id, kapat }: Ozellikler) {
         <FirmaFormu firma={firma} kapat={kapatAcik} kaydedildi={kapatAcik} />
       )}
       {yazabilir && firma && acik?.tur === 'logo' && (
-        <Pencere acik kapat={kapatAcik} baslik={`Logo'ya bağla: ${firma.ad}`} alt={<Dugme onClick={kapatAcik}>Kapat</Dugme>}>
-          <p className="tc-mt-yok">Bağlama yalnız Logo cari kodunu ve kaydını yazar; firmanın öteki bilgileri değişmez.</p>
-          <LogoCariArama hedef={firma} baglandi={kapatAcik} />
-        </Pencere>
+        <LogoBaglaPenceresi id={firma.id} kapat={kapatAcik} />
       )}
       {yazabilir && firma && acik?.tur === 'adres' && (
         <AdresFormu firmaId={firma.id} kartSurumu={firma.surum} adres={acik.adres} kapat={kapatAcik} />

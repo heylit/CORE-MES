@@ -165,7 +165,7 @@ export const firmaAyrintiCevabi = z.object({ firma: firmaSemasi, adresler: z.arr
 export type FirmaAyrintiCevabi = z.output<typeof firmaAyrintiCevabi>;
 
 export const firmaSatiri = firmaSemasi.pick({
-  id: true, kod: true, ad: true, tur: true, fason: true, vergiNo: true, il: true, aktif: true, logoCariKodu: true,
+  id: true, kod: true, ad: true, tur: true, fason: true, vergiNo: true, il: true, aktif: true, logoCariKodu: true, logoKayitNo: true,
 }).extend({ adresSayisi: z.number().int().nonnegative(), koordinatli: z.boolean() });
 export type FirmaSatiri = z.output<typeof firmaSatiri>;
 

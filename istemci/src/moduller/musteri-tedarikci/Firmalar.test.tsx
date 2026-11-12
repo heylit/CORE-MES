@@ -20,11 +20,12 @@ const OKUYUCU: Kullanici = { id: 2, ad: 'Deneme Okuyucu', islemler: ['sayfa.must
 
 const SATIR_A = {
   id: 10, kod: 'M-001', ad: 'Ornek Musteri Ltd', tur: 'musteri', fason: false, vergiNo: '1111111111', il: 'Ornek Il', aktif: true,
-  logoCariKodu: null, adresSayisi: 2, koordinatli: true,
+  logoCariKodu: 'LOGO-1', logoKayitNo: 5, adresSayisi: 2, koordinatli: true,
 } satisfies FirmaSatiri;
 const SATIR_B = {
   id: 11, kod: null, ad: 'Ornek Fason Atolye', tur: 'tedarikci', fason: true, vergiNo: null, il: null, aktif: true,
-  logoCariKodu: null, adresSayisi: 0, koordinatli: false,
+  // Cari kodu elle yazılmış, Logo kaydına bağlanmamış: listede bağlı görünmez (3065).
+  logoCariKodu: 'ORN-CARI-9', logoKayitNo: null, adresSayisi: 0, koordinatli: false,
 } satisfies FirmaSatiri;
 
 const LISTE = { satirlar: [SATIR_A, SATIR_B], toplam: 2, sayfa: 1, sayfaBoyu: 50 } satisfies FirmaListesiCevabi;
@@ -41,6 +42,11 @@ const ADRES_1 = {
   enlem: 40.5, boylam: 28.5, olusturma: '2026-01-02T09:00:00+03:00', guncelleme: null,
 } satisfies Adres;
 const AYRINTI = { firma: FIRMA_A, adresler: [ADRES_1] } satisfies FirmaAyrintiCevabi;
+// Bağlı olmayan firma: cari kodu elle yazılmış olsa da Logo kaydı yoktur; listede "Bağlı" görünmez (3065).
+const AYRINTI_B = {
+  firma: { ...FIRMA_A, id: 11, kod: null, ad: 'Ornek Fason Atolye', tur: 'tedarikci', fason: true, logoCariKodu: 'ORN-CARI-9', logoKayitNo: null, logoGonderimDurumu: null, surum: 7 },
+  adresler: [],
+} satisfies FirmaAyrintiCevabi;
 
 const json = (durum: number, govde: unknown) => new Response(JSON.stringify(govde), { status: durum });
 
@@ -56,6 +62,7 @@ function sunucuKur(kullanici: Kullanici, yazma: (yol: string, govde: unknown) =>
     if (yol === '/oturum') return json(200, { kullanici } satisfies OturumCevabi);
     if (yontem === 'GET' && yol.startsWith('/musteri-tedarikci/firmalar?')) return json(200, LISTE);
     if (yontem === 'GET' && yol === '/musteri-tedarikci/firmalar/10') return json(200, AYRINTI);
+    if (yontem === 'GET' && yol === '/musteri-tedarikci/firmalar/11') return json(200, AYRINTI_B);
     if (yontem === 'POST') return yazma(yol, govde);
     return json(404, { kod: 'BULUNAMADI', mesaj: 'Adres bulunamadı.' });
   }));
@@ -368,5 +375,47 @@ describe('Yazma akışları', () => {
     const istek = istekler.find((i) => i.yontem === 'POST')!;
     expect(istek.yol).toBe('/finans/firmalar/10/pasif');
     expect(istek.govde).toEqual({ surum: 3 });
+  });
+});
+
+describe('Listede Logo bağı (3065)', () => {
+  const satiri = (ad: string) => within(screen.getAllByRole('row').find((r) => r.textContent?.includes(ad))!);
+
+  it('bağlı firmada "Bağlı" ve cari kodu, bağlı olmayanda yazabilene "Logo\'ya bağla" düğmesi görünür', async () => {
+    sunucuKur(YAZAR);
+    ac('/musteri-tedarikci');
+    await screen.findByText('Ornek Musteri Ltd');
+    const a = satiri('Ornek Musteri Ltd');
+    expect(a.getByText('Bağlı')).toBeTruthy();
+    expect(a.getByText('LOGO-1')).toBeTruthy();
+    expect(a.queryByRole('button', { name: /Logo'ya bağla/ })).toBeNull();
+    const b = satiri('Ornek Fason Atolye');
+    expect(b.queryByText('Bağlı')).toBeNull();
+    expect(b.queryByText('ORN-CARI-9')).toBeNull();
+    expect(b.getByRole('button', { name: "Ornek Fason Atolye firmasını Logo'ya bağla" })).toBeTruthy();
+  });
+
+  it('yazamayan bağlı olmayan firmada düğme görmez, "Bağlı değil" görür', async () => {
+    sunucuKur(OKUYUCU);
+    ac('/musteri-tedarikci');
+    await screen.findByText('Ornek Musteri Ltd');
+    expect(satiri('Ornek Musteri Ltd').getByText('Bağlı')).toBeTruthy();
+    const b = satiri('Ornek Fason Atolye');
+    expect(b.getByText('Bağlı değil')).toBeTruthy();
+    expect(b.queryByText('Bağlı')).toBeNull();
+    expect(screen.queryByRole('button', { name: /Logo'ya bağla/ })).toBeNull();
+  });
+
+  it('satırdaki düğme ayrıntıyı açmadan Logo penceresini o firma için açar', async () => {
+    const istekler = sunucuKur(YAZAR);
+    ac('/musteri-tedarikci');
+    await screen.findByText('Ornek Musteri Ltd');
+    fireEvent.click(satiri('Ornek Fason Atolye').getByRole('button', { name: /Logo'ya bağla/ }));
+    const pencere = await screen.findByRole('dialog', { name: "Logo'ya bağla: Ornek Fason Atolye" });
+    expect(await within(pencere).findByLabelText("Logo'da ara")).toBeTruthy();
+    expect(screen.queryByRole('dialog', { name: 'Ornek Fason Atolye' })).toBeNull();
+    expect(istekler.some((i) => i.yol === '/musteri-tedarikci/firmalar/11')).toBe(true);
+    fireEvent.click(within(pencere).getAllByRole('button', { name: 'Kapat' })[0]!);
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: "Logo'ya bağla: Ornek Fason Atolye" })).toBeNull());
   });
 });

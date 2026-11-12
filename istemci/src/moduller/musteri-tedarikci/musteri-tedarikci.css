@@ -64,3 +64,9 @@
 .tc-mt-ad[data-secili] { color: var(--secili-yazi); }
 tr:has(.tc-mt-ad[data-secili]) > td { background: var(--secili-zemin); color: var(--secili-yazi); }
 .tc-mt-secili-kart { scroll-margin-top: calc(var(--ust-cubuk) + var(--b-3)); }
+
+/* Yan kutu (3065): bölümler kutunun genişliğini aşmaz; adres tablosu sığmayınca kart kipine geçer. */
+.tc-mt-ayrinti > * { min-width: 0; }
+/* Liste Logo sütunu (3065) */
+.tc-mt-logo-bag { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--b-2); min-width: 0; }
+[data-kip="kart"] .tc-mt-logo-bag { justify-content: flex-end; }
