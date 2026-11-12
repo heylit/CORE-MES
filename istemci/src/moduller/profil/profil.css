@@ -110,3 +110,8 @@
 .tc-profil-mp-simge { display: grid; flex: none; place-items: center; inline-size: var(--dokunma); block-size: var(--dokunma); border-radius: var(--yari-1); background: var(--panel2); color: var(--hazard-ink); }
 .tc-profil-mp-ad { display: flex; flex: 1; flex-direction: column; min-width: 0; font-weight: 600; }
 .tc-profil-mp-ad .tc-profil-soluk { font-weight: 400; }
+
+/* Mini pano penceresi (3093 a): küçük pencerede tek kart. */
+.tc-profil-mps { max-width: 36rem; }
+.tc-profil-mps .tc-kart > p { margin: 0 0 var(--b-2); }
+.tc-profil-mps-durum { display: flex; align-items: center; gap: var(--b-1); font-weight: 600; }
