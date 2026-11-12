@@ -6,7 +6,7 @@ import { islemVarMi } from '#cekirdek/yetki.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
 import type { Islem } from '#paylasilan/islemler.ts';
 import type { SayfaliListe } from '#paylasilan/liste.ts';
-import { AZAMI_ADIM, EMIR_TURLERI } from '#paylasilan/sozlesme/uretim-emirleri.ts';
+import { AZAMI_ADIM, BEKLEME_NEDENI_ADLARI, EMIR_TURLERI } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import type { TalimatAsamasi } from '#paylasilan/sozlesme/talimat-asamasi.ts';
 import type { TakvimKaydi } from '#paylasilan/sozlesme/takvim.ts';
 import { tesisGunu } from '#paylasilan/zaman.ts';
@@ -556,6 +556,8 @@ export interface EmirDilimiSatiri {
   birlestigiEmirId: number | null;
   birlesmeOpNo: number | null;
   surum: number;
+  // 3050 a: emir bekletilmişse nedeninin adı (işaret, durum değil); plan bekleyen emri yerinde tutar.
+  bekletme: string | null;
   // saglamAdet: biten iş emrinin kapanış değeri. canliAdet: çalışan iş emrinin kendi sayacındaki net sağlam adet (sayım yoksa 0); çalışmayanda null.
   // Sayaç emrin değil adımındır: iki adım birlikte çalışabilir (paralel adım, çok katmanlı emirde alt düğüm ile kök).
   // ad'dan bilesenler'e kadar alanlar rotasız emrin adımlarını Reçete ve Rota'da göstermek içindir (B13); süreler numeric metindir.
@@ -601,6 +603,7 @@ export async function emirDilimi(db: Db, secim?: EmirDilimiSecimi): Promise<Emir
   const bilesenler = await s.bilesenleriGetir(db, isEmirleri.map((i) => i.id));
   const dugumler = new Map((await s.dugumleriGetir(db, emirler.map((e) => e.id))).map((d) => [d.isEmriId, d]));
   const opNolari = new Map(isEmirleri.map((i) => [i.id, i.opNo]));
+  const bekletmeler = new Map((await s.aktifBekletmeler(db, emirler.map((e) => e.id))).map((b) => [b.uretimEmriId, BEKLEME_NEDENI_ADLARI[b.neden]]));
   const dugumOf = (id: number): EmirDilimiSatiri['isEmirleri'][number]['dugum'] => {
     const d = dugumler.get(id);
     return d === undefined ? null : { ad: d.dugum, malzemeNo: d.malzemeNo, kaynakOpNo: d.kaynakOpNo, birimCarpani: d.birimCarpani };
@@ -610,6 +613,7 @@ export async function emirDilimi(db: Db, secim?: EmirDilimiSecimi): Promise<Emir
     kaynakRotaRevizyonId: e.kaynakRotaRevizyonId, emirTuru: e.emirTuru, acilma: e.acilma, bitis: e.bitis, ustEmirId: e.ustEmirId,
     durum: gorunenDurum(e.durum, (emreGore.get(e.id) ?? []).some((i) => i.durum !== 'bekliyor')),
     bolunmeSira: e.bolunmeSira, birlestigiEmirId: e.birlestigiEmirId, birlesmeOpNo: e.birlesmeOpNo, surum: e.surum,
+    bekletme: bekletmeler.get(e.id) ?? null,
     isEmirleri: (emreGore.get(e.id) ?? []).map((i) => ({
       sira: i.sira, opNo: i.opNo, durum: i.durum, saglamAdet: i.saglamAdet, canliAdet: i.durum === 'calisiyor' ? sayaclar.get(i.id) ?? 0 : null,
       ad: i.ad, operasyonTipiId: i.operasyonTipiId, kaynak: mevcutKaynak(i), istasyonId: i.istasyonId, ayarSuresiDk: i.ayarSuresiDk, birimSureDk: i.birimSureDk,

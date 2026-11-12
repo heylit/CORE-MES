@@ -13,6 +13,8 @@ export function hedef(tur: PlanlanamamaHedefi['tur'], id: unknown, ad: string | 
   return Number.isInteger(n) && n > 0 ? { tur, id: n, ad: ad ?? String(n) } : null;
 }
 
+// 3050 a: bekletme durum değil işarettir; bekleyen emrin yeri olan adımı yerinde kalır, yeri olmayanı motor yerleştirmez.
+export const EMIR_BEKLEMEDE = yerlesmemeNedeni('emir-beklemede', 'Emir beklemede; bekletme kaldırılınca motor yerleştirir.');
 export const NEDEN_OLCULEMEDI = yerlesmemeNedeni('bilinmiyor', 'Sunucu motoru yerleştiremedi; nedeni ölçülemedi.');
 export const sureBos = (istasyon: PlanlanamamaHedefi | null) =>
   yerlesmemeNedeni('sure-bos', `Adımın ${istasyon === null ? '' : `${istasyon.ad} istasyonundaki `}işlem süresi girilmemiş.`, istasyon);

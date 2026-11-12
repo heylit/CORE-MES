@@ -3,7 +3,7 @@ import { Simge } from '../../../../../ortak/arayuz/index.ts';
 import type { SimgeAdi } from '../../../../../ortak/tasarim/simgeler.ts';
 import type { CalismaKomutu } from '../../kayit.ts';
 import type { PlanlamaCalismasi } from '../../tipler.ts';
-import { saatYazi, saatYaz, type Derleme, type OkunanPlan } from '../kurallar.ts';
+import { bekleyenBaslik, saatYazi, saatYaz, type BekleyenSiparis, type Derleme, type OkunanPlan } from '../kurallar.ts';
 import { HAZIRLANIYOR, MOTOR_NOTU, degisken, yuzde } from '../ortak.tsx';
 import { siparisRengi } from '../harita/kurallar.ts';
 import { useIpucu } from './Ipucu.tsx';
@@ -17,6 +17,8 @@ interface Ozellikler {
   secili: string | null; secJob: string | null; isSec: (id: string) => void; tezSec: (m: string) => void; gunSec: (g: number) => void;
   // Sabitleme ve gün dondurma çalışmaya yazılır (İş kartındaki Burada sabitle ile aynı komut); komut yoksa düğmeler pasif kalır.
   komut?: CalismaKomutu | null;
+  // 3050 a: bekletilen emirler (sipariş kimliği -> no, neden); işi "Beklemede" deseniyle çizilir.
+  bekleyen?: ReadonlyMap<string, BekleyenSiparis>;
 }
 
 export function GunCizelgesi(o: Ozellikler) {
@@ -96,14 +98,15 @@ export function GunCizelgesi(o: Ozellikler) {
                   {s.erken && <i className="tc-pym-gy-erken" title={`${s.erken.ad}: ${saatYaz(D, s.erken.t)}`} ref={degisken({ '--x': '0%', '--w': yuzde(s.erken.w) })} />}
                   {s.erken?.cizgi != null && <i className="tc-pym-gy-cizgi-im" ref={degisken({ '--x': yuzde(s.erken.cizgi) })}><span>{s.erken.ad}</span></i>}
                   {s.bloklar.map((b) => (
-                    <button key={b.id} type="button" className="tc-pym-gy-blok" title={b.baslik} onClick={() => o.isSec(b.id)}
+                    <button key={b.id} type="button" className="tc-pym-gy-blok" title={bekleyenBaslik(o.bekleyen, b.job, b.baslik)} onClick={() => o.isSec(b.id)}
                       onPointerEnter={(e) => { if (e.pointerType === 'mouse') ip.ac(e.currentTarget, icerik(b.id), 250); }} onPointerLeave={ip.kapat}
                       onFocus={(e) => ip.ac(e.currentTarget, icerik(b.id))} onBlur={ip.kapat}
                       data-sol={b.sol ? '' : undefined} data-sag={b.sag ? '' : undefined} data-secili={b.secili ? '' : undefined}
                       data-soluk={b.soluk ? '' : undefined} data-gec={b.gec ? '' : undefined} data-risk={!b.gec && b.risk ? '' : undefined}
                       data-dondu={b.dondu ? '' : undefined} data-kilit={b.sabit ? (b.dondu ? 'gun' : 'elle') : undefined}
+                      data-bekle={o.bekleyen?.has(b.job) ? '' : undefined}
                       ref={degisken({ '--x': yuzde(b.x), '--w': yuzde(b.w), '--c': b.renk })}>
-                      {b.sabit && <Simge ad="lock" boyut="k" />}<b className="tc-pym-mono">{b.job}</b><small>{b.ad}</small>
+                      {o.bekleyen?.has(b.job) ? <Simge ad="pause" boyut="k" /> : b.sabit && <Simge ad="lock" boyut="k" />}<b className="tc-pym-mono">{b.job}</b><small>{b.ad}</small>
                     </button>
                   ))}
                 </div>
@@ -139,7 +142,7 @@ export function GunCizelgesi(o: Ozellikler) {
           ) : (
             <div className="tc-pym-gy-sec"><p className="tc-pym-kucuk-yazi">Bir iş seçin: yapabilen tezgâhlar yanar, saatine tıklayınca oraya taşınır ve sabitlenir. Shift ile birden çok iş seçip birlikte kaydırabilirsiniz. Soldaki havuzdan sipariş sürükleyip bir satıra bırakmak onu plana alır. Tezgâh adına basınca ayrıntısı sağda açılır.</p></div>
           )}
-          <p className="tc-pym-kucuk-yazi tc-pym-gy-lejant"><i className="tc-pym-gy-l-kapali" />kapalı <i className="tc-pym-gy-l-ariza" />arıza <i className="tc-pym-gy-l-gec" />geciken <Simge ad="lock" boyut="k" />sabit</p>
+          <p className="tc-pym-kucuk-yazi tc-pym-gy-lejant"><span><i className="tc-pym-gy-l-kapali" />kapalı</span> <span><i className="tc-pym-gy-l-ariza" />arıza</span> <span><i className="tc-pym-gy-l-gec" />geciken</span> <span><Simge ad="lock" boyut="k" />sabit</span>{o.bekleyen?.size ? <> <span><i className="tc-pym-gy-l-bekle" />beklemede</span></> : null}</p>
         </aside>
       </div>
       {ip.kutu}

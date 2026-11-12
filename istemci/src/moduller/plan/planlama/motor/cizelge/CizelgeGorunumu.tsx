@@ -5,7 +5,7 @@ import type { DonemOlcegi, PlanlamaSecimi } from '../../gorunumler.ts';
 import type { CalismaKomutu } from '../../kayit.ts';
 import type { PlanlamaCalismasi } from '../../tipler.ts';
 import type { Aralik } from '../harita/kurallar.ts';
-import type { Derleme, OkunanPlan, Sorun } from '../kurallar.ts';
+import type { BekleyenSiparis, Derleme, OkunanPlan, Sorun } from '../kurallar.ts';
 import { GunCizelgesi } from './GunCizelgesi.tsx';
 import { tezgahSirasi, type MatrisGorunumu } from './kurallar.ts';
 import { KuyrukCizelgesi } from './KuyrukCizelgesi.tsx';
@@ -31,6 +31,8 @@ interface Ozellikler {
   sor: Sorun[]; guncel: boolean; komut: CalismaKomutu | null; veriAc?: ((bolum: string) => void) | null; hesapAc?: (() => void) | null;
   tezStudyo?: ((m: string) => void) | null;
   tasi?: AtolyeKomutlari['tasi'] | undefined;
+  // 3050 a: bekletilen emirler (sipariş kimliği -> no, neden).
+  bekleyen?: ReadonlyMap<string, BekleyenSiparis>;
 }
 // Eski sayfanın geniş ekran sınırı (t-tekyer sagAcikMi: innerWidth >= 1280); çerçevenin yerine görünümün genişliği.
 const GENIS = 1280;
@@ -117,11 +119,11 @@ export function CizelgeGorunumu(o: Ozellikler) {
   const tezKapat = useCallback(() => { sec({ tezgah: null }); }, [sec]);
 
   let govde: ReactNode;
-  if (mercek === 'zaman') govde = <ZamanCizelgesi c={c} p={p} cx={cx} olcek={olcek} kayma={kayma} r={o.r} now={o.now} secili={secim.adim} secJob={secJob} planYaz={o.planYaz} opSec={opSec} komut={o.komut} />;
+  if (mercek === 'zaman') govde = <ZamanCizelgesi c={c} p={p} cx={cx} olcek={olcek} kayma={kayma} r={o.r} now={o.now} secili={secim.adim} secJob={secJob} planYaz={o.planYaz} opSec={opSec} komut={o.komut} bekleyen={o.bekleyen} />;
   else if (mercek === 'kuyruk') govde = <KuyrukCizelgesi c={c} p={p} cx={cx} planYaz={o.planYaz} gun={kGun} gunSec={setKGun} odak={kTez} masadaGor={masadaGor} />;
   else if (mercek === 'matris') govde = <MatrisCizelgesi c={c} p={p} cx={cx} olcek={olcek} gor={mGor} gorSec={setMGor} gun={mGun} gunSec={setMGun} kuyrukAc={kuyrukAc} sipSec={sipSec} />;
-  else if (olcek === 'gun') govde = <GunCizelgesi c={c} p={p} cx={cx} g={g} planYaz={o.planYaz} planKilitle={o.planKilitle} secili={gySecili} secJob={secJob} isSec={isSec} tezSec={tezSec} gunSec={gunSec} komut={o.planYaz ? o.komut : null} />;
-  else govde = <OlcekCizelgesi c={c} p={p} cx={cx} olcek={olcek} kayma={kayma} r={o.r} now={o.now} secili={secim.adim} isSec={isSec} tezSec={tezSec} gunAc={gunAc} kaydir={kaydir} />;
+  else if (olcek === 'gun') govde = <GunCizelgesi c={c} p={p} cx={cx} g={g} planYaz={o.planYaz} planKilitle={o.planKilitle} secili={gySecili} secJob={secJob} isSec={isSec} tezSec={tezSec} gunSec={gunSec} komut={o.planYaz ? o.komut : null} bekleyen={o.bekleyen} />;
+  else govde = <OlcekCizelgesi c={c} p={p} cx={cx} olcek={olcek} kayma={kayma} r={o.r} now={o.now} secili={secim.adim} isSec={isSec} tezSec={tezSec} gunAc={gunAc} kaydir={kaydir} bekleyen={o.bekleyen} />;
 
   return (
     <section ref={kok} className="tc-pym-tbk" data-tam={tam ? '' : undefined} aria-label="Çizelge">

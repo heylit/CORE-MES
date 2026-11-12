@@ -6,7 +6,7 @@ import type { PlanlamaCalismasi } from '../../tipler.ts';
 import type { PlanlamaYetkisi } from '../../yetki.ts';
 import type { CalismaKomutu } from '../../kayit.ts';
 import { useBekleyenUygula, usePlanKur } from '../coz.ts';
-import { bitenler, derle, girdiKur, planOku, plandanBitenler, type OkunanPlan } from '../kurallar.ts';
+import { bekleyenSiparisler, bitenler, derle, girdiKur, planOku, plandanBitenler, type OkunanPlan } from '../kurallar.ts';
 import { Cubuk } from './Cubuk.tsx';
 import { nabizDurumu, sabitReferans, type NabizDurumu } from './nabiz.ts';
 import '../motor.css';
@@ -35,7 +35,8 @@ export function PlanSeridi(o: PlanlamaEkranOzellikleri & { gorunum: PlanlamaGoru
   const p = useMemo(() => (c ? planOku(c) : null), [c]);
   const an = useAn();
   const cx = useMemo(() => (c ? derle(girdiKur(c, emirler ? bitenler(emirler, c.D) : plandanBitenler(c, p), an)) : null), [c, p, emirler, an]);
-  const nabiz = useMemo(() => (c && p && cx ? nabizDurumu(c, p, cx, donem, kayma) : null), [c, p, cx, donem, kayma]);
+  const bekleyen = useMemo(() => bekleyenSiparisler(emirler), [emirler]);
+  const nabiz = useMemo(() => (c && p && cx ? nabizDurumu(c, p, cx, donem, kayma, bekleyen) : null), [c, p, cx, donem, kayma, bekleyen]);
   const y = c ? nabizYazmalari(c, o.komut, o.yetki, p, nabiz) : { refSec: null, sabitle: null, sabitAd: null };
   const { bildir } = useBildirim();
   const hata = useCallback((ileti: string) => bildir('hata', ileti), [bildir]);

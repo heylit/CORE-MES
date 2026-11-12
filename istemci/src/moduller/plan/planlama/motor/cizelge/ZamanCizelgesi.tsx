@@ -4,7 +4,7 @@ import type { DonemOlcegi } from '../../gorunumler.ts';
 import type { CalismaKomutu } from '../../kayit.ts';
 import type { PlanlamaCalismasi } from '../../tipler.ts';
 import type { Aralik } from '../harita/kurallar.ts';
-import type { Derleme, OkunanPlan } from '../kurallar.ts';
+import { bekleyenBaslik, type BekleyenSiparis, type Derleme, type OkunanPlan } from '../kurallar.ts';
 import { degisken, MOTOR_NOTU } from '../ortak.tsx';
 import { zamanCizelgesi, type ZamanSatiri } from './kurallar.ts';
 
@@ -13,6 +13,8 @@ import { zamanCizelgesi, type ZamanSatiri } from './kurallar.ts';
 interface Ozellikler {
   c: PlanlamaCalismasi; p: OkunanPlan; cx: Derleme; olcek: DonemOlcegi; kayma: number; r: Aralik; now: number;
   secili: string | null; secJob: string | null; planYaz: boolean; opSec: (id: string) => void; komut?: CalismaKomutu | null;
+  // 3050 a: bekletilen emirler; işi "Beklemede" deseniyle çizilir.
+  bekleyen?: ReadonlyMap<string, BekleyenSiparis>;
 }
 
 // Planı geri al (2053): bu oturumda planı değiştiren son adıma (planı kur ya da bekleyen değişikliği uygula) döner. Ondan sonra yapılan
@@ -46,9 +48,10 @@ export function ZamanCizelgesi(o: Ozellikler) {
         {v.termin != null && <i className="tc-pym-g-termin" title={`Termin ${v.terminYazi ?? ''}`} ref={degisken({ '--x': v.termin })} />}
         {s.isler.map((i) => (
           <button key={i.id} type="button" className="tc-pym-g-is" data-job={i.job} data-gec={i.gec ? '' : undefined} data-soluk={i.soluk ? '' : undefined}
-            data-secili={o.secili === i.id ? '' : undefined} title={i.baslik} aria-label={i.baslik}
+            data-bekle={o.bekleyen?.has(i.job) ? '' : undefined}
+            data-secili={o.secili === i.id ? '' : undefined} title={bekleyenBaslik(o.bekleyen, i.job, i.baslik)} aria-label={bekleyenBaslik(o.bekleyen, i.job, i.baslik)}
             ref={degisken({ '--x': i.x, '--w': i.w, '--c': i.renk, '--a': `${(i.ayar * 100).toFixed(2)}%` })} onClick={() => o.opSec(i.id)}>
-            <i className="tc-pym-g-is-ayar" aria-hidden="true" />{i.kilit && <Simge ad="lock" boyut="k" />}{i.etiket && <span>{i.etiket}</span>}
+            <i className="tc-pym-g-is-ayar" aria-hidden="true" />{o.bekleyen?.has(i.job) ? <Simge ad="pause" boyut="k" /> : i.kilit && <Simge ad="lock" boyut="k" />}{i.etiket && <span>{i.etiket}</span>}
           </button>
         ))}
       </div>
@@ -97,6 +100,7 @@ export function ZamanCizelgesi(o: Ozellikler) {
       <div className="tc-pym-lejant">
         <span><i className="tc-pym-l-ayar" />Ayar</span><span><i className="tc-pym-l-gec" />Geciken sipariş</span><span><i className="tc-pym-l-kapali" />Tezgâh kapalı</span>
         <span><i className="tc-pym-l-ariza" />Arıza, bakım</span><span><Simge ad="lock" boyut="k" />Kilitli</span>
+        {o.bekleyen?.size ? <span><i className="tc-pym-l-bekle" />Beklemede</span> : null}
         {o.planYaz && <span className="tc-pym-l-genis">Bir işi sürükleyip başka tezgâha ya da saate bırakın; motor sonucu hesaplar, siz onaylarsınız.</span>}
         <span className={o.planYaz ? 'tc-pym-l-dar' : undefined}>Bir işe dokunun: ayrıntı ve hamleler sağda.</span>
       </div>

@@ -53,7 +53,7 @@ export function sabitleriKaldir(x: PlanlamaCalismasi): void {
 // --- hafta, ay, yıl: tezgâh satırlarında işler gün ızgarasında; yılda hafta başına doluluk ısısı ---
 export interface OlcekBasligi { t: number; x: number; w: number; ad: string; bugun: boolean; baslik: string }
 export interface OlcekIsi { x: number; w: number; d: 1 | 2 | 3; o: number; baslik: string }
-export interface OlcekIsi2 { id: string; x: number; w: number; renk: string; etiket: string | null; baslik: string; sabit: boolean }
+export interface OlcekIsi2 { id: string; job: string; x: number; w: number; renk: string; etiket: string | null; baslik: string; sabit: boolean }
 export interface OlcekSatiri { m: string; etiket: string; isi: OlcekIsi[]; isler: OlcekIsi2[] }
 export interface OlcekCizelgesi { basliklar: OlcekBasligi[]; satirlar: OlcekSatiri[]; simdi: number | null; ufuk: number | null }
 
@@ -81,7 +81,7 @@ export function olcekCizelgesi(c: PlanlamaCalismasi, p: OkunanPlan, cx: Derleme,
     }
     const isler = yil ? [] : l.sort((x, y) => x.S - y.S).map((q): OlcekIsi2 => {
       const s = Math.max(a, q.S), e = Math.min(b, q.C); const w = (e - s) / L;
-      return { id: q.id, x: (s - a) / L, w, renk: renk(D, q.job), etiket: olcek === 'hafta' && w > 0.035 ? q.job : null, baslik: `${q.id} · ${saatYaz(D, q.S)} → ${saatYaz(D, q.C)}`, sabit: !!kilitli(c, q.id) };
+      return { id: q.id, job: q.job, x: (s - a) / L, w, renk: renk(D, q.job), etiket: olcek === 'hafta' && w > 0.035 ? q.job : null, baslik: `${q.id} · ${saatYaz(D, q.S)} → ${saatYaz(D, q.C)}`, sabit: !!kilitli(c, q.id) };
     });
     return { m, etiket: tezEtiketi(m, kodlar), isi, isler };
   });

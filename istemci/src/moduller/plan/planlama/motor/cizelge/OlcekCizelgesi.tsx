@@ -3,7 +3,7 @@ import { Simge } from '../../../../../ortak/arayuz/index.ts';
 import type { DonemOlcegi } from '../../gorunumler.ts';
 import type { PlanlamaCalismasi } from '../../tipler.ts';
 import type { Aralik } from '../harita/kurallar.ts';
-import type { Derleme, OkunanPlan } from '../kurallar.ts';
+import { bekleyenBaslik, type BekleyenSiparis, type Derleme, type OkunanPlan } from '../kurallar.ts';
 import { degisken, yuzde } from '../ortak.tsx';
 import { gunAdi, olcekCizelgesi } from './kurallar.ts';
 import { useKaynakAdlari } from '../../kaynak-kodu.tsx';
@@ -16,6 +16,8 @@ const OLCEK_AD: Record<Exclude<DonemOlcegi, 'gun'>, string> = { hafta: 'hafta', 
 interface Ozellikler {
   c: PlanlamaCalismasi; p: OkunanPlan; cx: Derleme; olcek: Exclude<DonemOlcegi, 'gun'>; kayma: number; r: Aralik; now: number;
   secili: string | null; isSec: (id: string) => void; tezSec: (m: string) => void; gunAc: (t: number) => void; kaydir: (n: number) => void;
+  // 3050 a: bekletilen emirlerin işi "Beklemede" deseniyle çizilir.
+  bekleyen?: ReadonlyMap<string, BekleyenSiparis>;
 }
 
 export function OlcekCizelgesi(o: Ozellikler) {
@@ -50,7 +52,7 @@ export function OlcekCizelgesi(o: Ozellikler) {
                 {s.isi.map((h) => <i key={h.x} className="tc-pym-ol-isi" data-d={h.d} title={h.baslik} ref={degisken({ '--x': yuzde(h.x), '--w': yuzde(h.w), '--o': h.o.toFixed(2) })} />)}
                 {s.isler.map((i) => (
                   <button key={i.id} type="button" className="tc-pym-ol-is" data-secili={o.secili === i.id ? '' : undefined} data-sabit={i.sabit ? '' : undefined}
-                    title={i.baslik} ref={degisken({ '--x': yuzde(i.x), '--w': yuzde(i.w), '--c': i.renk })} onClick={() => o.isSec(i.id)}>
+                    data-bekle={o.bekleyen?.has(i.job) ? '' : undefined} title={bekleyenBaslik(o.bekleyen, i.job, i.baslik)} ref={degisken({ '--x': yuzde(i.x), '--w': yuzde(i.w), '--c': i.renk })} onClick={() => o.isSec(i.id)}>
                     {i.etiket ? <span className="tc-pym-mono">{emirKuyrugu(adlar.emir(i.etiket))}</span> : <span className="tc-gizli-etiket">{i.id}</span>}
                   </button>
                 ))}
