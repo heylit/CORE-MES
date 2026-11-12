@@ -33,7 +33,8 @@ import {
 import type { BirimDonusumu, KimlikliKartOperasyonu, LogoGuncellemeSonucu, OrnekMalzemeAnahtari } from './kurallar.ts';
 import { kartOperasyonKimlikleri, OPERASYON_AYARI_ILETISI } from './kurallar.ts';
 import { demirbasTeknikYazilabilirMi, demirbasTeknikYazimi, tekrarlananOzellik } from './kurallar.ts';
-import { katalogGeriCekildiMi, katalogKartAdi, kategoriAgaciKur } from './kurallar.ts';
+import { katalogGeriCekildiMi, katalogKartAdi, kategoriAgaciKur, olcuListesi, olcuMetni } from './kurallar.ts';
+import type { OlcuDegeri } from './kurallar.ts';
 import type { KategoriAgaciDugumu, KategoriAgaciTuru } from '#paylasilan/sozlesme/kategori-agaci-sabitleri.ts';
 import { arsivdenDonusDurumu, arsivIzAdetleri, arsivKaliciSilmeEngeli, type ArsivIzi } from './kurallar.ts';
 import type { MalzemeKartiAnahtari, MalzemeKartiIzi } from '#paylasilan/malzeme-karti-izi.ts';
@@ -120,11 +121,34 @@ export async function malzemeKategorileri(db: Db, malzemeIdler: readonly number[
 }
 
 // 1104 a: satın almanın kart ayrıntısı. Olmayan ve iptal kart haritada yok. Yetki denetlemez; neyin tedarikçiye gideceğine satın alma karar verir.
-export type MalzemeSatinAlmaAyrintisi = Omit<s.KatalogSatinAlmaSatiri, 'no'>;
+// 3121: işlem ve ölçü de taşınır (satın almanın sipariş kopyası bunlarla alınır; eski kopyada yoktur).
+export type MalzemeSatinAlmaAyrintisi = Omit<s.KatalogSatinAlmaSatiri, 'no'> & { islem: string | null; olcu: string | null };
 export async function malzemeSatinAlmaAyrintilari(db: Db, nolar: readonly number[]): Promise<Map<number, MalzemeSatinAlmaAyrintisi>> {
   const benzersiz = [...new Set(nolar)];
   if (benzersiz.length === 0) return new Map();
-  return new Map((await s.katalogSatinAlmaSatirlari(db, benzersiz)).map(({ no, ...r }) => [no, r]));
+  const ozellikler = await malzemeOzellikleri(db, benzersiz);
+  return new Map((await s.katalogSatinAlmaSatirlari(db, benzersiz)).map(({ no, ...r }) => {
+    const o = ozellikler.get(no);
+    return [no, { ...r, islem: o?.islem ?? null, olcu: o?.olcu ?? null }];
+  }));
+}
+
+// 3121: satın alma tablolarındaki kalite, durum, işlem ve ölçü sütunları; boş alan null, işlemler virgülle. Olmayan ya da iptal kart haritada yok.
+export interface MalzemeOzelligi { kalite: string | null; durum: string | null; islem: string | null; olcu: string | null }
+export async function malzemeOzellikleri(db: Db, nolar: readonly number[]): Promise<Map<number, MalzemeOzelligi>> {
+  const benzersiz = [...new Set(nolar)];
+  if (benzersiz.length === 0) return new Map();
+  return new Map((await s.katalogOzellikSatirlari(db, benzersiz)).map((r) => [r.no, {
+    kalite: r.kaliteAdi, durum: r.durum, islem: r.islemler.length ? [...new Set(r.islemler)].join(', ') : null,
+    olcu: r.tur === 'hammadde' ? olcuMetni(r.form, r.dims) : r.olcuAlani,
+  }]));
+}
+
+// 3118: GKK formunun ölçü satırları (ad ve birimli değer); hammadde dışı ya da ölçüsüz kartta boş liste. Olmayan ya da iptal kart haritada yok.
+export async function malzemeOlculeri(db: Db, nolar: readonly number[]): Promise<Map<number, OlcuDegeri[]>> {
+  const benzersiz = [...new Set(nolar)];
+  if (benzersiz.length === 0) return new Map();
+  return new Map((await s.katalogOzellikSatirlari(db, benzersiz)).map((r) => [r.no, r.tur === 'hammadde' ? olcuListesi(r.form, r.dims) : []]));
 }
 
 // Kart #688: çizim merkezinin resim eşleşmesi. Değer kırpılır, boş metin null; olmayan kart haritada yok. Yetki denetlemez.

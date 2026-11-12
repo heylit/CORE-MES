@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { Fragment, useState } from 'react';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import type { Talebim } from '#paylasilan/sozlesme/satin-alma.ts';
 import { Dugme, DurumKutusu, Girdi, Kart, Rozet, Simge } from '../../../ortak/arayuz/index.ts';
@@ -28,6 +28,25 @@ function Adimlar({ t }: { t: Talebim }) {
     <ol className="sa-talep-adimlar" aria-label={`İlerleme: ${DURUM[t.durum].metin}`}>
       {ADIMLAR.map((a, i) => <li key={a} data-durum={i < sira ? 'bitti' : i === sira ? 'simdi' : undefined}>{a}</li>)}
     </ol>
+  );
+}
+
+// 3121: kartın kalite, durum, işlem ve ölçüsü ayrı sütunlarda; dar ekranda sütunlar gizlenir, değerler kalem adının altında etiketli satırdır.
+type Ozellik = NonNullable<Talebim['kalemler'][number]['malzeme']>;
+type OzellikAlani = 'kalite' | 'durum' | 'islem' | 'olcu' | 'aciklama';
+const OZELLIKLER: readonly [OzellikAlani, string][] = [['kalite', 'Kalite'], ['durum', 'Durum'], ['islem', 'İşlem'], ['olcu', 'Ölçü'], ['aciklama', 'Açıklama']];
+function OzellikAlti({ m }: { m: Ozellik | null }) {
+  const dolu = OZELLIKLER.flatMap(([k, b]) => (m?.[k] ? [`${b}: ${m[k]}`] : []));
+  return dolu.length ? <span className="sa-talep-not sa-talep-oz-alt">{dolu.join(' · ')}</span> : null;
+}
+// 3133: malzeme kartının föyündeki ayrıntılar kalem hücresinde açılır.
+function KartAyrintisi({ m }: { m: Ozellik | null }) {
+  if (!m?.ayrinti.length) return null;
+  return (
+    <details className="sa-talep-ayrinti">
+      <summary><Simge ad="list" boyut="k" /> Kart ayrıntısı</summary>
+      <dl>{m.ayrinti.map((x) => <Fragment key={x.ad}><dt>{x.ad}</dt><dd>{x.deger}</dd></Fragment>)}</dl>
+    </details>
   );
 }
 
@@ -68,18 +87,33 @@ function Satir({ t, tam, duzenle }: { t: Talebim; tam: boolean; duzenle: ((t: Ta
         <Adimlar t={t} />
       </button>
       {acik && (
-        <ul className="sa-talep-kalemler">
-          {t.kalemler.map((x, i) => (
-            <li key={i}>
-              <span>{x.ad}</span>
-              <span className="sa-talep-no">{x.miktar === null ? '—' : `${x.miktar} ${x.birim}`}</span>
-              {x.karsilik && <span className="sa-talep-not">{karsilikYaz(x.karsilik)}</span>}
-              {(x.uygulanan || x.fasonAdim) && (
-                <span className="sa-talep-not">{[x.uygulanan && `Uygulanacak malzeme: ${x.uygulanan}`, x.fasonAdim && `Fason: ${x.fasonAdim}`].filter(Boolean).join(' · ')}</span>
-              )}
-            </li>
-          ))}
-        </ul>
+        <div className="sa-talep-kalem-tablo">
+          <table className="sa-talep-kt">
+            <thead>
+              <tr><th>Kalem</th>{OZELLIKLER.map(([, b]) => <th key={b} className="sa-talep-oz">{b}</th>)}<th className="sa-talep-sag">Miktar</th></tr>
+            </thead>
+            <tbody>
+              {t.kalemler.map((x, i) => (
+                <tr key={i}>
+                  <td>
+                    <span>{x.ad}</span>
+                    {(x.uygulanan || x.fasonAdim) && (
+                      <span className="sa-talep-not">{[x.uygulanan && `Uygulanacak malzeme: ${x.uygulanan}`, x.fasonAdim && `Fason: ${x.fasonAdim}`].filter(Boolean).join(' · ')}</span>
+                    )}
+                    {x.aciklama && <span className="sa-talep-not">{x.aciklama}</span>}
+                    <OzellikAlti m={x.malzeme ?? null} />
+                    <KartAyrintisi m={x.malzeme ?? null} />
+                  </td>
+                  {OZELLIKLER.map(([k, b]) => <td key={k} className={`sa-talep-oz sa-talep-oz-${k}`} data-etiket={b}>{x.malzeme?.[k] ?? <span className="sa-talep-bos">–</span>}</td>)}
+                  <td className="sa-talep-sag">
+                    <span className="sa-talep-no">{x.miktar === null ? '—' : `${x.miktar} ${x.birim}`}</span>
+                    {x.karsilik && <span className="sa-talep-not">{karsilikYaz(x.karsilik)}</span>}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
       {acik && t.duzenlenebilir && duzenle && (
         <div className="sa-talep-duzenle"><Dugme simge="edit" onClick={() => duzenle(t, 'duzenle')}>Düzenle</Dugme></div>

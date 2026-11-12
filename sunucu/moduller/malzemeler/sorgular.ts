@@ -415,6 +415,21 @@ export function katalogSatinAlmaSatirlari(db: Db, nolar: number[]): Promise<Kata
        FROM malzeme_katalog_karti k WHERE k.no = ANY($1::int[]) AND k.onay_durumu <> 'iptal'`, [nolar]);
 }
 
+// 3121: satın alma tablolarının kalite, durum, işlem ve ölçü sütunları. Ölçü metni kurallar.ts'te (`olcuMetni`) kurulur; form ve
+// ölçüler olduğu gibi döner. Hammadde dışında ölçü kartın genel "Ölçü" alanıdır. İptal kart dönmez.
+export interface KatalogOzellikSatiri {
+  no: number; tur: string; kaliteAdi: string | null; durum: string | null; islemler: string[]; form: string | null; dims: unknown; olcuAlani: string | null;
+}
+export function katalogOzellikSatirlari(db: Db, nolar: number[]): Promise<KatalogOzellikSatiri[]> {
+  return db.sorgu<KatalogOzellikSatiri>(
+    `SELECT k.no, k.tur,
+            COALESCE(NULLIF(btrim(k.kalite_adi), ''), CASE WHEN k.tur = 'hammadde' THEN ${KATALOG_KALITE} END) AS "kaliteAdi",
+            ${KATALOG_METIN('opts,durum')} AS durum,
+            ${KATALOG_DIZI('opts,islem')} || ARRAY(SELECT x FROM unnest(ARRAY[${KATALOG_METIN('opts,islem')}]) x WHERE x IS NOT NULL) AS islemler,
+            ${KATALOG_METIN('form')} AS form, k.kayit -> 'dims' AS dims, ${KATALOG_METIN('g,olcu')} AS "olcuAlani"
+       FROM malzeme_katalog_karti k WHERE k.no = ANY($1::int[]) AND k.onay_durumu <> 'iptal'`, [nolar]);
+}
+
 export interface KatalogResimSatiri { no: number; resimNo: string | null; revizyon: string | null }
 
 // Teknik resim no ve revizyon yalnız yarı mamul ve mamulde anlamlıdır; başka türde kart null'larla döner.

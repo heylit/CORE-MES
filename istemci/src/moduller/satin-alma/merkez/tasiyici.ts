@@ -94,6 +94,8 @@ export function talepEkrana(t: Talep): PurchaseRequest {
     lines: k.siparisler.flatMap((x) => x.satirlar.map((r) => ({
       id: r.id, itemId: r.kalemId, quoteId: x.teklifId, qty: Number(r.miktar), unit: r.birim, received: r.teslimAlinan === null ? null : Number(r.teslimAlinan),
       parcaRevizyonu: r.parcaRevizyonu ?? null,
+      ...((o) => (o ? { malzeme: { kalite: o.kalite, durum: o.durum, islem: o.islem, olcu: o.olcu, aciklama: o.aciklama, ayrinti: o.ayrinti, kayitsiz: o.kayitsiz } } : {}))(
+        t.siparisOzellikleri?.find((y) => y.kalemId === r.kalemId && y.teklifId === x.teklifId)),
     }))),
     ...(k.mod === 'bolunmus' ? {
       orders: Object.fromEntries(k.siparisler.map((s): [string, AwardOrder] => [s.teklifId, {
@@ -114,6 +116,7 @@ export function talepEkrana(t: Talep): PurchaseRequest {
         id: i.id, materialId: i.katalogId, name: i.ad, spec: i.ozellik, qty: sayi(i.miktar), unit: i.birim, category: i.kategori,
         ...(bag?.uygulanan ? { parca: bag.uygulanan } : {}),
         ...((k) => (k ? { karsilik: karsilikYaz(k) } : {}))(t.kalemKarsiliklari?.find((x) => x.kalemId === i.id)),
+        ...((o) => (o ? { malzeme: { kalite: o.kalite, durum: o.durum, islem: o.islem, olcu: o.olcu, aciklama: o.aciklama, ayrinti: o.ayrinti } } : {}))(t.kalemOzellikleri?.find((x) => x.kalemId === i.id)),
         ...(bag?.fason ? { fason: { emirNo: bag.fason.emirNo, opNo: bag.fason.opNo, adim: bag.fason.adim, firmaAdi: bag.fason.firmaAdi } } : {}),
       };
     }),

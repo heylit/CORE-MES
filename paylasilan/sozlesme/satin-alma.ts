@@ -297,6 +297,12 @@ export type KalemBagiCikisi = z.output<typeof kalemBagiCikisSemasi>;
 // 2414 a: birleştirilmiş kaynak talep, birleşik talebi gösterir; birleşik talep kaynaklarını alt dal olarak taşır. Yalnız çıkışta.
 export const birlesmeSemasi = z.object({ talepId: uuid, no: z.string(), durum: z.enum(TALEP_DURUMLARI) });
 // 2876 (2871-1 b): güncelleme grubu: kök talep ve ona bağlı güncelleme talepleri (kök önce, açılış sırasıyla). Yalnız çıkışta, grup varsa.
+// 3121: satın alma tablolarında ayrı sütun olan kart alanları; boş alan null.
+const malzemeOzelligiAlanlari = {
+  kalite: z.string().nullable(), durum: z.string().nullable(), islem: z.string().nullable(), olcu: z.string().nullable(),
+  // 3133: kartın açıklaması ve föydeki ayrıntılar (boş alan yazılmaz).
+  aciklama: z.string().nullable(), ayrinti: z.array(z.object({ ad: z.string(), deger: z.string() })),
+};
 export const guncellemeGrubuSemasi = z.array(z.object({ id: uuid, no: z.string(), durum: z.enum(TALEP_DURUMLARI), kok: z.boolean() }));
 export const talepKaynagiSemasi = z.object({
   talepId: uuid, no: z.string(), talepEdenAdi: z.string().nullable(), kalemIdleri: z.array(uuid), ihtiyacTarihi: z.string().nullable(),
@@ -314,6 +320,10 @@ export const talepSemasi = z.object({
   kalemBaglari: z.array(kalemBagiCikisSemasi).optional(),
   // 3100: kalemin yaklaşık karşılığı (kg ile stok birimi ya da kg stoklu kartta parça); hesaplanamayan kalem listede yoktur. Yalnız çıkışta.
   kalemKarsiliklari: z.array(z.object({ kalemId: uuid, miktar: z.string(), birim: z.string() })).optional(),
+  // 3121: kalemin kartından kalite, durum, işlem ve ölçü (ayrı sütunlar); kartsız kalem listede yoktur. Yalnız çıkışta.
+  kalemOzellikleri: z.array(z.object({ kalemId: uuid, ...malzemeOzelligiAlanlari })).optional(),
+  // 3121 (1105 a): sipariş satırında değerler siparişteki kart kopyasındandır; eski kopyada işlem ve ölçü kaydedilmemişse `kayitsiz`.
+  siparisOzellikleri: z.array(z.object({ kalemId: uuid, teklifId: uuid, ...malzemeOzelligiAlanlari, kayitsiz: z.boolean() })).optional(),
   // Yalnız talep edenin görünümünde (SAT-53 b): kararın seçtiği tedarikçiler; karar yoksa boş. Teklif ve fiyat taşımaz.
   secilenTedarikciler: z.array(z.object({ firmaId: z.number().int().nullable(), ad: z.string() })).optional(),
   karar: kararCikisSemasi.nullable(),
@@ -573,6 +583,8 @@ export const talebimSemasi = z.object({
     ad: z.string(), miktar: z.string().nullable(), birim: z.string(), kartBekliyor: z.boolean(), uygulanan: z.string().nullable(), fasonAdim: z.string().nullable(),
     // 2871: kg ile kartın stok birimi arasındaki karşılık (kartın birim ağırlığıyla); hesaplanamıyorsa null, uydurulmaz.
     karsilik: z.object({ miktar: z.string(), birim: z.string() }).nullable().optional(),
+    // 3121: kartın kalite, durum, işlem ve ölçüsü; kartsız kalemde null.
+    malzeme: z.object(malzemeOzelligiAlanlari).nullable().optional(),
   })),
 });
 // 2871-1 a: talep edenin kendi taslağını düzenlemesi. Var olan kalem kimliğiyle gelir (yalnız miktar ve açıklama değişir); kimliksiz kalem
@@ -796,6 +808,8 @@ export const kartAyrintisiSemasi = z.object({
   standartlar: z.array(z.string()), tolerans: z.string().nullable(), durum: z.string().nullable(), yuzey: z.string().nullable(),
   sertifikalar: z.array(z.string()), ureticiUrunKodu: z.string().nullable(), mensei: z.string().nullable(), gtip: z.string().nullable(),
   enAzSiparis: ondalikMetinSemasi.nullable(), tercihTedarikci: z.string().nullable(), not: z.string().nullable(),
+  // 3121: 12.11.2026'dan önce alınan sipariş kopyasında yoktur (geriye doldurulmaz).
+  islem: z.string().nullable().optional(), olcu: z.string().nullable().optional(),
 });
 export const kartAyrintilariCevabi = z.object({
   kalemler: z.array(z.object({

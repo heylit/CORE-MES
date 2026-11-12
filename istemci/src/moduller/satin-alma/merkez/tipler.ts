@@ -118,6 +118,15 @@ export interface RequestItem {
   fason?: { emirNo: string | null; opNo: number | null; adim: string | null; firmaAdi: string | null } | null;
   /** 3100: yaklaşık karşılık metni ("≈ 4 adet", "≈ 12,5 kg"); sunucu hesaplar, yalnız okunur, kayıtta gönderilmez. */
   karsilik?: string | null;
+  /** 3121: kartın kalite, durum, işlem ve ölçüsü (bugünkü hâli); kartsız kalemde yok. Yalnız okunur. */
+  malzeme?: MalzemeOzelligi;
+}
+
+/** 3121: satın alma tablolarında ayrı sütun olan kart alanları; `kayitsiz` sipariş kopyası işlem ve ölçüden önce alınmış demektir. */
+export interface MalzemeOzelligi {
+  kalite: string | null; durum: string | null; islem: string | null; olcu: string | null; aciklama: string | null;
+  /** 3133: kart föyündeki ayrıntılar, föy sırasıyla; boş alan yok. */
+  ayrinti: { ad: string; deger: string }[]; kayitsiz?: boolean;
 }
 
 export interface Rfq { supplierId: string; sentAt: DateStr; dueDate: DateStr }
@@ -212,7 +221,7 @@ export interface Award {
 
 /** Sipariş satırı; miktar ve stokta kabul edilen miktar Siparişler sayfası (2430) içindir, sunucuya geri gitmez. */
 /** parcaRevizyonu: sipariş anında sabitlenen parça revizyonu (2881); yalnız okunur. */
-export interface OrderLine { id: number; itemId: string; quoteId: string; qty?: number; unit?: string; received?: number | null; parcaRevizyonu?: string | null }
+export interface OrderLine { id: number; itemId: string; quoteId: string; qty?: number; unit?: string; received?: number | null; parcaRevizyonu?: string | null; malzeme?: MalzemeOzelligi }
 
 export interface LogEntry { id: string; at: number; by: string; t: string }
 

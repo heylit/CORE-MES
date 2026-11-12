@@ -1391,6 +1391,13 @@ export function kartKopyalariOku(db: Db, talepId: string): Promise<KartKopyasiSa
        FROM satin_alma_siparis_kart_kopyasi kk JOIN satin_alma_siparis_satiri ss ON ss.id = kk.siparis_satiri_id
       WHERE ss.talep_id = $1 ORDER BY ss.id`, [talepId]);
 }
+// 3121: sipariş satırlarının kart kopyası, talepler toplu (merkezin sipariş tablosu sütunları).
+export function kartKopyalariToplu(db: Db, talepIdleri: readonly string[]): Promise<{ talepId: string; kalemId: string; teklifId: string; ayrinti: Record<string, unknown> }[]> {
+  return db.sorgu(
+    `SELECT ss.talep_id AS "talepId", ss.kalem_id AS "kalemId", ss.teklif_id AS "teklifId", kk.ayrinti
+       FROM satin_alma_siparis_kart_kopyasi kk JOIN satin_alma_siparis_satiri ss ON ss.id = kk.siparis_satiri_id
+      WHERE ss.talep_id = ANY($1::uuid[]) ORDER BY ss.id`, [talepIdleri]);
+}
 // 898 a, Dal 2: planın malzeme eksiği. Plan canlıya alınınca tam liste yazılır; listede olmayan satır silinir, aynı satır yeniden yazılmaz.
 export interface PlanIhtiyaciSatiri { malzemeNo: number; miktar: string; gerekenTarih: string; emirler: string[]; stokBilinmiyor: boolean }
 export async function planIhtiyaclariYaz(db: Db, l: readonly { malzemeNo: number; miktar: number; gerekenTarih: string; emirler: readonly string[]; stokBilinmiyor: boolean }[]): Promise<void> {
