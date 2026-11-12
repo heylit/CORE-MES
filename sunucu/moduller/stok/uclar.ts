@@ -25,6 +25,7 @@ import { STOK_ISLEMLERI } from '#paylasilan/islemler/stok.ts';
 import { defterFarklariCevabi, malzemeFisiAyrintiCevabi, malzemeFisiGonderGovdesi, malzemeFisiOzeti, malzemeFisleriCevabi, malzemeFisleriSorgusu } from '#paylasilan/sozlesme/stok.ts';
 import { malKabulSatirlariCevabi, malKabulSatirlariSorgusu } from '#paylasilan/sozlesme/stok-mal-kabul-satirlari.ts';
 import { irsaliyeBelgeleriCevabi, irsaliyeBelgeParametresi, irsaliyeEkleGovdesi, irsaliyeParametresi } from '#paylasilan/sozlesme/stok-irsaliye.ts';
+import { malKabulTaslagiCevabi, malKabulTaslagiKaydetCevabi, malKabulTaslagiKaydetGovdesi, malKabulTaslagiSilGovdesi } from '#paylasilan/sozlesme/stok-mal-kabul-taslagi.ts';
 import * as s from './servis.ts';
 import * as mf from './malzeme-fisi.ts';
 
@@ -94,7 +95,20 @@ export const uclar = [
 
   uc({ yontem: 'GET', yol: '/stok/fason-isleri', yetki: 'stok.giris', sorgu: fasonIsleriSorgusu, cevap: fasonIsleriCevabi, isle: ({ db, sorgu }) => s.fasonIsleri(db, sorgu.konumId) }),
   uc({ yontem: 'GET', yol: '/stok/acik-siparis-satirlari', yetki: ACIK_SIPARIS_OKUMA, cevap: acikSiparisSatirlariCevabi, isle: ({ db }) => s.acikSiparisSatirlari(db) }),
-  uc({ yontem: 'POST', kilitlenmedeYinele: true, tekrarKorumali: true, yol: '/stok/mal-kabul', yetki: 'stok.giris', govde: malKabulGovdesi, cevap: malKabulCevabi, isle: ({ db, kullanici, govde, denetimEki }) => { s.eksiOnayiDenetle(kullanici, govde); return s.malKabulYap(db, kullanici, govde, denetimEki); } }),
+  uc({ yontem: 'POST', kilitlenmedeYinele: true, tekrarKorumali: true, yol: '/stok/mal-kabul', yetki: 'stok.giris', govde: malKabulGovdesi, cevap: malKabulCevabi, isle: async ({ db, kullanici, govde, denetimEki }) => {
+    s.eksiOnayiDenetle(kullanici, govde);
+    const c = await s.malKabulYap(db, kullanici, govde, denetimEki);
+    // 3091 a: form taslaktan devam ettiyse taslak aynı işlemde silinir; aynı teslim taslaktan ikinci kez yapılamaz.
+    if (govde.taslakSil === true) await s.teslimdeTaslagiSil(db, kullanici);
+    return c;
+  } }),
+  // 3087 a, 3091 a: yarım kalan mal kabul; yalnız kişinin kendi taslağı.
+  uc({ yontem: 'GET', yol: '/stok/mal-kabul-taslagi', yetki: 'stok.giris', cevap: malKabulTaslagiCevabi, isle: ({ db, kullanici }) => s.malKabulTaslagi(db, kullanici) }),
+  // Taslak 2 sn'de bir kaydedilir; gövdesi teslimde mal kabul kaydına zaten girer, deftere ikinci kopya gerekmez.
+  uc({ yontem: 'POST', tekrarKorumali: true, yol: '/stok/mal-kabul-taslagi/kaydet', yetki: 'stok.giris', denetim: 'govdesiz', govde: malKabulTaslagiKaydetGovdesi, cevap: malKabulTaslagiKaydetCevabi,
+    isle: ({ db, kullanici, govde }) => s.malKabulTaslagiKaydet(db, kullanici, govde) }),
+  uc({ yontem: 'POST', tekrarKorumali: true, yol: '/stok/mal-kabul-taslagi/sil', yetki: 'stok.giris', govde: malKabulTaslagiSilGovdesi, cevap: z.object({ silindi: z.boolean() }),
+    isle: ({ db, kullanici, govde }) => s.malKabulTaslagiSil(db, kullanici, govde) }),
   // Kart #1124: satın alma siparişinin irsaliye satırı.
   uc({ yontem: 'GET', yol: '/stok/siparis-irsaliyeleri', yetki: SON_PARTI_OKUMA, sorgu: siparisIrsaliyeleriSorgusu, cevap: siparisIrsaliyeleriCevabi,
     isle: ({ db, sorgu }) => s.siparisIrsaliyeleri(db, sorgu.siparisSatirlari) }),

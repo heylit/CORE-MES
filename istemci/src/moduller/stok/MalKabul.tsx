@@ -17,6 +17,7 @@ import { AMBALAJ_TURLERI, MAL_KABUL_TURLERI, MAL_KABUL_TURU, birimliMiktar, mikt
 import { EtiketMerkeziDugmesi } from './Etiketler.tsx';
 import { IrsaliyeSecici, irsaliyeEkle, type IrsaliyeSayfasi } from './IrsaliyeBelgesi.tsx';
 import { MalKabulYapilanlar } from './MalKabulYapilanlar.tsx';
+import { useMalKabulTaslagi } from './MalKabulTaslagi.tsx';
 import { MalzemeSecici, useMalzemeOzeti } from './MalzemeSecici.tsx';
 import { hataMetni, korumaliPost, SayfaBasi, useIslem, useStokKomutu } from './ortak.tsx';
 import './stok.css';
@@ -491,7 +492,9 @@ export function MalKabul() {
       }
     }
     return c;
-  }), 'Mal kabul kaydedildi.', () => { setSatirlar([bosSatir()]); setIrsaliye(''); setArananIrsaliye(''); setIrsaliyeSayfalari([]); });
+  }), 'Mal kabul kaydedildi.', () => { setSatirlar([bosSatir()]); setIrsaliye(''); setArananIrsaliye(''); setIrsaliyeSayfalari([]); taslak.temizle(); });
+  const taslak = useMalKabulTaslagi({ tur, irsaliye, satirlar: satirlar.map((s) => ({ ...s, sertifikaYukleniyor: false })) }, irsaliye === '' && satirlar.every(bosMu), komut.isPending,
+    (f) => { setTur(f.tur); setIrsaliye(f.irsaliye); setArananIrsaliye(f.irsaliye); setSatirlar(f.satirlar.length ? f.satirlar.map((s) => ({ ...s, anahtar: ++sayac })) : [bosSatir()]); });
   // Çift tık tek istek ve tek bildirim (STK-7).
   const kilitli = useGonderimKilidi();
   return (
@@ -501,7 +504,8 @@ export function MalKabul() {
         sekmeler={[{ anahtar: 'kabul', baslik: 'Mal kabul', simge: 'truck' }, { anahtar: 'yapilanlar', baslik: 'Mal kabulü yapılanlar', simge: 'list' }]} />}
       {sekme === 'kabul' && (
         <Kart baslik="Yeni mal kabul">
-          <form className="tc-stok-form" onSubmit={(e) => { e.preventDefault(); const g = { tur, irsaliyeNo: irsaliye, satirlar: satirlar.map((s) => satirGovdesi(tur === 'satin_alma' ? s : { ...s, siparisSatirId: '', hizmetKarti: '' })) }; kilitli(() => komut.mutateAsync(g)); }}>
+          {taslak.kutu}
+          <form className="tc-stok-form" onSubmit={(e) => { e.preventDefault(); const g = { tur, irsaliyeNo: irsaliye, taslakSil: taslak.silinsinMi(), satirlar: satirlar.map((s) => satirGovdesi(tur === 'satin_alma' ? s : { ...s, siparisSatirId: '', hizmetKarti: '' })) }; kilitli(() => komut.mutateAsync(g)); }}>
             <div className="tc-stok-iki">
               <Secim etiket="Tür" value={tur} onChange={(e) => setTur(e.target.value as typeof tur)} secenekler={MAL_KABUL_TURLERI.map((t) => ({ deger: t, baslik: MAL_KABUL_TURU[t] }))} />
               <Girdi etiket="İrsaliye no" value={irsaliye} onChange={(e) => setIrsaliye(e.target.value)} onBlur={() => setArananIrsaliye(irsaliye)} />
@@ -523,7 +527,7 @@ export function MalKabul() {
             {tur === 'satin_alma' && satirlar.some((s) => !bosMu(s) && !s.siparisSatirId) && (
               <p className="tc-stok-bilgi tc-stok-bilgi-uyari" role="alert">Satın alma kabulünde her satır bir sipariş satırına bağlanır. Siparişi olmayan malı "Diğer" türüyle ve açıklamayla alın.</p>
             )}
-            <div className="tc-stok-sag"><Dugme tur="birincil" type="submit" yukleniyor={komut.isPending} disabled={satirlar.some((s) => s.sertifikaYukleniyor)}>Teslim al</Dugme></div>
+            <div className="tc-stok-sag">{taslak.durumYazisi}<Dugme tur="birincil" type="submit" yukleniyor={komut.isPending} disabled={satirlar.some((s) => s.sertifikaYukleniyor)}>Teslim al</Dugme></div>
             {etiket && <p className="tc-stok-bilgi"><span>{etiket.no} kaydedildi.</span><EtiketMerkeziDugmesi tur="mal-kabul" idler={[etiket.id]}>Lot etiketlerini bas</EtiketMerkeziDugmesi></p>}
             {etiket && irsaliyeHatasi && (
               <p className="tc-stok-bilgi tc-stok-bilgi-uyari" role="alert">

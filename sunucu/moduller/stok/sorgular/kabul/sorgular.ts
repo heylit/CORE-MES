@@ -50,3 +50,36 @@ export const lotYerleri = (db: Db, partiIdler: readonly number[]): Promise<LotYe
      FROM stok_bakiye b JOIN stok_konum k ON k.id = b.konum_id
     WHERE b.parti_id = ANY($1::int[]) AND b.miktar > 0
     GROUP BY b.parti_id, k.id, k.kod, k.tur, b.kalite_durumu ORDER BY b.parti_id, k.kod, b.kalite_durumu`, [[...partiIdler]]);
+
+// 3087 a: kişinin yarım kalan mal kabul taslağı (kişi başına tek satır).
+export interface MalKabulTaslakHam { govde: Record<string, unknown>; surum: number; guncellendi: string }
+const TASLAK_ALANLARI = `govde, surum, ${zamanMetni('guncellendi')} AS guncellendi`;
+
+export function malKabulTaslagiOku(db: Db, kisiId: number): Promise<MalKabulTaslakHam | null> {
+  return db.tek<MalKabulTaslakHam>(`SELECT ${TASLAK_ALANLARI} FROM stok_mal_kabul_taslagi WHERE kisi_id = $1`, [kisiId]);
+}
+
+// İlk yazma: aynı anda gelen ikinci ilk yazma satır açmaz, null döner (sürüm çakışması).
+export function malKabulTaslagiAc(db: Db, kisiId: number, govde: unknown): Promise<MalKabulTaslakHam | null> {
+  return db.tek<MalKabulTaslakHam>(
+    `INSERT INTO stok_mal_kabul_taslagi (kisi_id, govde) VALUES ($1, $2) ON CONFLICT (kisi_id) DO NOTHING RETURNING ${TASLAK_ALANLARI}`,
+    [kisiId, JSON.stringify(govde)],
+  );
+}
+
+// Okunan sürüm tutmazsa satır değişmez, null döner.
+export function malKabulTaslagiGuncelle(db: Db, kisiId: number, govde: unknown, surum: number): Promise<MalKabulTaslakHam | null> {
+  return db.tek<MalKabulTaslakHam>(
+    `UPDATE stok_mal_kabul_taslagi SET govde = $2, surum = surum + 1, guncellendi = now() WHERE kisi_id = $1 AND surum = $3 RETURNING ${TASLAK_ALANLARI}`,
+    [kisiId, JSON.stringify(govde), surum],
+  );
+}
+
+// surum null: sürüme bakmadan siler (teslimde aynı işlemde). Silinen satır sayısını döner.
+export async function malKabulTaslagiSil(db: Db, kisiId: number, surum: number | null): Promise<number> {
+  const r = await db.sorgu<{ kisi_id: number }>(
+    'DELETE FROM stok_mal_kabul_taslagi WHERE kisi_id = $1 AND ($2::int IS NULL OR surum = $2) RETURNING kisi_id',
+    [kisiId, surum],
+  );
+  return r.length;
+}

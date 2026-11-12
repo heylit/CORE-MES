@@ -722,3 +722,10 @@ a.tc-stok-kpi:hover, a.tc-stok-kpi:focus-visible { background: var(--panel2); }
   .tc-stok-okut-sonuc-bas { position: relative; padding-inline-end: var(--dokunma-ana); }
   .tc-stok-okut-sonuc-bas > button:last-child { position: absolute; inset-block-start: 0; inset-inline-end: 0; }
 }
+/* 3087: yarım kalan mal kabul */
+.tc-stok-taslak { margin-block-end: var(--b-3); align-items: flex-start; }
+.tc-stok-taslak-metin { display: grid; gap: var(--b-1); flex: 1 1 16rem; min-inline-size: 0; }
+.tc-stok-taslak-not { color: var(--muted); }
+.tc-stok-taslak-dugmeler { display: flex; flex-wrap: wrap; gap: var(--b-2); }
+.tc-stok-taslak-durum { color: var(--muted); font-size: var(--yazi-s); align-self: center; margin-inline-end: var(--b-2); }
+@media (max-width: 767px) { .tc-stok-taslak-dugmeler { inline-size: 100%; } .tc-stok-taslak-dugmeler .tc-dugme { flex: 1 1 0; } }
