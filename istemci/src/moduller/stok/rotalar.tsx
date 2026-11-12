@@ -14,6 +14,7 @@ import { KonumAyrinti } from './KonumAyrinti.tsx';
 import { Konumlar } from './Konumlar.tsx';
 import { MalKabul } from './MalKabul.tsx';
 import { MalKabulAyrinti } from './MalKabulAyrinti.tsx';
+import { kuyrukDinleyicisiKur } from './irsaliye-kuyrugu.ts';
 import { MalzemeAyrinti } from './MalzemeAyrinti.tsx';
 import { OkutYonlendir } from './OkutYonlendir.tsx';
 import { Malzemeler } from './Malzemeler.tsx';
@@ -27,6 +28,9 @@ import { SahipsizStatulu } from './SahipsizStatulu.tsx';
 import { Sepet } from './Sepet.tsx';
 import { SeriListeler } from './SeriListeler.tsx';
 import { YerlesimDuzenleyici } from './YerlesimDuzenleyici.tsx';
+
+// 3063 dilim 2: cihazda bekleyen irsaliye, hangi sayfa açık olursa olsun bağlantı gelince gider.
+kuyrukDinleyicisiKur();
 
 const SayimYonlendir = () => <OkutYonlendir sabitKip="say" />;
 // Tür listelerinin eski adresleri (ikinci menü maddeleriydi, 2896'da Malzemeler sekmesi oldu): yer imi yeni adrese gider, sorgu korunur.

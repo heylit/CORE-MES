@@ -32,7 +32,10 @@ export async function irsaliyeEkle(
   db: Db, k: Kullanici, malKabulId: number, g: IrsaliyeEkleGovdesi, denetimEki: (satirlar: readonly DenetimSecimi[]) => void,
 ): Promise<IrsaliyeBelgeleriCevabi> {
   const b = await malKabulOlmali(db, malKabulId);
-  const sira = (await irsaliyeBelgeleri(db, malKabulId)).belgeler.length + 1;
+  const bagli = (await kaydaBagliBelgeler(db, HEDEF, malKabulId)).filter((x) => x.tur === 'irsaliye');
+  // Cihazda bekleyen irsaliye bağlantı gelince yeniden gönderilir; istek kimliğinin süresi geçmiş olabilir: aynı dosya ikinci kez bağlanmaz.
+  if (bagli.some((x) => x.ozet === g.ozet)) return irsaliyeBelgeleri(db, malKabulId);
+  const sira = bagli.length + 1;
   await belgeAcVeBagla(db, k, { ad: irsaliyeBelgeAdi(b.no, b.irsaliyeNo, sira), tur: 'irsaliye', ozet: g.ozet, dosyaAdi: g.dosyaAdi }, HEDEF, malKabulId, denetimEki);
   return irsaliyeBelgeleri(db, malKabulId);
 }
