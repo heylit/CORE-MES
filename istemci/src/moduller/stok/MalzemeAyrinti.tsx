@@ -14,6 +14,7 @@ import { GecmisDugmesi } from '../denetim/disari.ts';
 import { EtiketMerkeziDugmesi } from './Etiketler.tsx';
 import { AmbalajIkonu } from './AmbalajIkonu.tsx';
 import { EmirSecici } from './EmirSecici.tsx';
+import { MalzemeMalKabulleri } from './MalzemeMalKabulleri.tsx';
 import { PartiBelgeleri } from './PartiBelgeleri.tsx';
 import { PartiIziPenceresi } from './PartiIzi.tsx';
 import { useStatuAdi } from './statu.ts';
@@ -264,6 +265,7 @@ export function MalzemeAyrinti() {
         )}
       </Kart>
       <SonPartiler malzemeId={id} />
+      <MalzemeMalKabulleri malzemeId={id} />
       <Kart baslik="Son hareketler" sag={<Link to={`/stok/hareketler?malzemeId=${id}`}>Tümü</Link>}><HareketTablosu satirlar={m.data.sonHareketler} /></Kart>
       {islem?.tur === 'rezerve-et' && <RezerveEtFormu malzemeId={id} statuler={m.data.statuKirilimi.flatMap((k) => (k.statuId === null ? [] : [k.statuId]))} kapat={() => setIslem(null)} />}
       {islem?.tur === 'rezerve-kaldir' && <RezerveKaldirFormu malzemeId={id} r={islem.r} kapat={() => setIslem(null)} />}
