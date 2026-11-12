@@ -155,6 +155,39 @@ export const partiLotEtiketi = (db: Db, partiId: number): Promise<LotEtiketiHam 
        SELECT mk.zaman, s.sayilan_miktar::text AS miktar, mk.no FROM stok_mal_kabul_satiri s JOIN stok_mal_kabul mk ON mk.id = s.mal_kabul_id
         WHERE s.parti_id = p.id ORDER BY s.id LIMIT 1) k ON true
     WHERE p.id = $1`, [partiId]);
+// 3124 a: malzeme etiketi bakiye başınadır (lot, konum, kalite durumu); lotun mal kabul bilgisi ilk mal kabul satırından (mal kabul
+// seçiminde o satırdan). Boş bakiye etikete girmez; stoğu kalmamış lot durumsuz tek satır verir. Sıra istenen sıradır.
+export interface MalzemeEtiketiHam extends Omit<LotEtiketiHam, 'miktar' | 'sira'> {
+  bakiyeId: number | null; konumKod: string | null; miktar: string | null; kaliteDurumu: KaliteDurumu | null; girisMiktar: string | null;
+  malKabulSatirId: number | null; siparisSatirId: number | null;
+  // Mal kabul GKK'ya gönderdiyse giriş hareketi hedef kalite durumu taşır; kart ayarı sonradan değişse de girişte olan okunur.
+  gkkyeGirdi: boolean | null;
+}
+export type MalzemeEtiketiKaynagi = { partiId: number } | { malKabulId: number } | { bakiyeIdler: readonly number[] };
+const ILK_KABUL_SATIRI = (parti: string) => `(SELECT s.id FROM stok_mal_kabul_satiri s WHERE s.parti_id = ${parti} ORDER BY s.id LIMIT 1)`;
+export function malzemeEtiketleri(db: Db, a: MalzemeEtiketiKaynagi): Promise<MalzemeEtiketiHam[]> {
+  const [kaynak, parametre] = 'bakiyeIdler' in a
+    ? [`SELECT b.parti_id, b.id AS bakiye_id, ${ILK_KABUL_SATIRI('b.parti_id')} AS satir_id, array_position($1::int[], b.id::int) AS sira
+         FROM stok_bakiye b WHERE b.id = ANY($1::int[]) AND b.parti_id IS NOT NULL`, [...a.bakiyeIdler]]
+    : 'partiId' in a
+      ? [`SELECT p.id AS parti_id, NULL::bigint AS bakiye_id, ${ILK_KABUL_SATIRI('p.id')} AS satir_id, 1 AS sira FROM stok_parti p WHERE p.id = $1`, a.partiId]
+      // Aynı lot belgede birden çok satırdaysa (var olan lota giriş, başlangıç stoğu) lot bir kez, ilk satırıyla gelir: etiket bakiye başınadır.
+      : [`SELECT DISTINCT ON (s.parti_id) s.parti_id, NULL::bigint AS bakiye_id, s.id AS satir_id, s.sira
+           FROM stok_mal_kabul_satiri s WHERE s.mal_kabul_id = $1 AND s.parti_id IS NOT NULL ORDER BY s.parti_id, s.sira`, a.malKabulId];
+  return db.sorgu<MalzemeEtiketiHam>(
+    `WITH kaynak AS (${kaynak})
+     SELECT ${LOT_ETIKETI_SECIMI}, b.id::int AS "bakiyeId", k.kod AS "konumKod", b.miktar::text AS miktar, b.kalite_durumu AS "kaliteDurumu",
+            ${zamanMetni('COALESCE(mk.zaman, p.kayit_zamani)')} AS giris, s.sayilan_miktar::text AS "girisMiktar", mk.no AS "belgeNo",
+            s.id::int AS "malKabulSatirId", s.siparis_satir_id AS "siparisSatirId",
+            CASE WHEN s.id IS NULL THEN NULL ELSE h.hedef_kalite_durumu IS NOT NULL END AS "gkkyeGirdi"
+       FROM kaynak JOIN stok_parti p ON p.id = kaynak.parti_id
+       LEFT JOIN stok_mal_kabul_satiri s ON s.id = kaynak.satir_id LEFT JOIN stok_mal_kabul mk ON mk.id = s.mal_kabul_id
+       LEFT JOIN stok_hareketi h ON h.id = s.hareket_id
+       LEFT JOIN stok_bakiye b ON b.parti_id = p.id AND b.miktar > 0 AND (kaynak.bakiye_id IS NULL OR b.id = kaynak.bakiye_id)
+       LEFT JOIN stok_konum k ON k.id = b.konum_id
+      WHERE kaynak.bakiye_id IS NULL OR b.id IS NOT NULL
+      ORDER BY kaynak.sira, b.ilk_giris, b.id`, [parametre]);
+}
 export interface PartiAnahtari { malzemeId: number; tedarikciPartiNo: string | null; dokumNo: string | null; sertifikaNo: string | null; uretimEmriId: number | null; kisiId: number }
 // Var olan parti yalnız emirle bulunur; mal kabulün her gelişi yeni lottur (#124). Refakat kartının partisi emir partisi değildir (#126).
 export const emirPartisiBul = async (db: Db, malzemeId: number, uretimEmriId: number): Promise<number | null> =>

@@ -72,6 +72,9 @@ export const lotEtiketleri = (db: Db, a: { partiId: number } | { malKabulId: num
 // Kalite durum etiketi (kart 1525, Etiket Merkezi okur): kimlik bakiye satırıdır; durum satırdan okunur, elle seçilmez (1286 a).
 export type { KaliteEtiketi } from './servis.ts';
 export const kaliteEtiketleri = (db: Db, bakiyeIdler: readonly number[]) => servis.kaliteEtiketleri(db, bakiyeIdler);
+// Malzeme etiketi (3124 a, Etiket Merkezi okur): bakiye başına satır (lot, konum, kalite durumu, ilk mal kabul); fiyat taşımaz. Yetkiyi çağıran korur.
+export type { MalzemeEtiketi } from './servis.ts';
+export const malzemeEtiketleri = (db: Db, a: { partiId: number } | { malKabulId: number } | { bakiyeIdler: readonly number[] }) => servis.malzemeEtiketleri(db, a);
 // Etiket Merkezi'nin bekleyen listesi (2223-1 a): aralıktaki mal kabuller ve kalite durumunu değiştiren hareketler.
 export type { EtiketKaliteDegisimi, EtiketMalKabulu } from './sorgular/etiket/sorgular.ts';
 export const etiketMalKabulleri = (db: Db, baslangic: string) => etiket.etiketMalKabulleri(db, baslangic);
