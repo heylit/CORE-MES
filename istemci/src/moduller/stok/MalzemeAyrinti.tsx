@@ -17,7 +17,7 @@ import { EmirSecici } from './EmirSecici.tsx';
 import { MalzemeMalKabulleri } from './MalzemeMalKabulleri.tsx';
 import { PartiBelgeleri } from './PartiBelgeleri.tsx';
 import { PartiIziPenceresi } from './PartiIzi.tsx';
-import { useStatuAdi } from './statu.ts';
+import { useStatuAdi, useStatuParcalari } from './statu.ts';
 import './stok.css';
 
 type Rezerve = MalzemeAyrintiCevabi['rezerveler'][number];
@@ -184,6 +184,12 @@ export function MalzemeAyrinti() {
   const [islem, setIslem] = useState<Islem | null>(null);
   const [oneriMiktari, setOneriMiktari] = useState('');
   const statuAdi = useStatuAdi();
+  const statuParcalari = useStatuParcalari();
+  // Statü yapışık sütunda rozet yerine iki satırdır: uzun ad dar sütunda rozet içinde okunmaz.
+  const statuHucresi = (statuId: number) => {
+    const p = statuParcalari(statuId);
+    return <span className="tc-stok-statu"><strong>{p.ana}</strong>{p.alt !== null && <small>{p.alt}</small>}</span>;
+  };
   const m = useQuery({ queryKey: anahtarlar.ayrinti('malzeme', id), queryFn: () => api.get<MalzemeAyrintiCevabi>(`/stok/malzemeler/${id}`) });
   const oneriMetni = miktarGirdisi(oneriMiktari);
   const oneri = useQuery({
@@ -200,13 +206,13 @@ export function MalzemeAyrinti() {
   const kirilim: Kirilim[] = [...m.data.statuKirilimi, ...m.data.tanimliStatuler.map((t) => ({ statuId: t.statuId, miktar: null, ilkGiris: null }))];
   const statuluVar = kirilim.some((k) => k.statuId !== null);
   const kirilimSutunlari: Sutun<Kirilim>[] = [
-    { anahtar: 'statu', baslik: 'Statü', sabit: 'sol', hucre: (k) => (k.statuId === null ? 'Serbest' : <Rozet ton={k.miktar === null ? 'pasif' : 'bilgi'}>{statuAdi(k.statuId)}</Rozet>) },
+    { anahtar: 'statu', baslik: 'Statü', sabit: 'sol', csv: (k) => statuAdi(k.statuId), hucre: (k) => (k.statuId === null ? 'Serbest' : statuHucresi(k.statuId)) },
     { anahtar: 'giris', baslik: 'Statüye giriş', kirilmaz: true, hucre: (k) => (k.ilkGiris === null ? '—' : zamanMetni(k.ilkGiris)) },
     { anahtar: 'miktar', baslik: 'Miktar', hizala: 'sag', hucre: (k) => (k.miktar === null ? <span className="tc-stok-alt">Tanımlı, stok yok</span> : <strong>{miktarMetni(k.miktar)}</strong>) },
     { anahtar: 'rezerve', baslik: 'Rezerve', hizala: 'sag', hucre: (k) => (k.miktar === null ? '—' : miktarMetni(String(rezerveToplami(m.data.rezerveler, k.statuId)))) },
   ];
   const rezerveSutunlari: Sutun<Rezerve>[] = [
-    { anahtar: 'statu', baslik: 'Statü', sabit: 'sol', hucre: (r) => <Rozet>{statuAdi(r.statuId)}</Rozet>, csv: (r) => statuAdi(r.statuId) },
+    { anahtar: 'statu', baslik: 'Statü', sabit: 'sol', hucre: (r) => (r.statuId === null ? 'Serbest' : statuHucresi(r.statuId)), csv: (r) => statuAdi(r.statuId) },
     { anahtar: 'emir', baslik: 'Üretim emri', mono: true, hucre: (r) => r.emirNo ?? `#${r.uretimEmriId}` },
     { anahtar: 'miktar', baslik: 'Ayrılan', hizala: 'sag', hucre: (r) => <strong>{miktarMetni(r.miktar)}</strong> },
     ...(ayirabilir ? [{ anahtar: 'eylem', baslik: '', sabit: 'sag' as const, hucre: (r: Rezerve) => <Dugme simge="x" onClick={() => setIslem({ tur: 'rezerve-kaldir', r })}>Rezerveyi kaldır</Dugme> }] : []),

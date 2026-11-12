@@ -50,8 +50,8 @@ function StokDegeriKarti() {
   // Değer finans rakamıdır (#680): görmeyene kart çizilmez. Yöntem değişirken önceki yöntemin değeri gösterilmez.
   if (d?.degerGorunur !== true) return null;
   return (
-    <div className="tc-stok-kpi">
-      <strong>{q.isPlaceholderData ? '—' : d.stokDegeri === null ? 'Veri yok' : paraMetni(d.stokDegeri)}</strong>
+    <div className="tc-stok-kpi tc-stok-kpi-deger">
+      <strong data-bos={(!q.isPlaceholderData && d.stokDegeri === null) || undefined}>{q.isPlaceholderData ? '—' : d.stokDegeri === null ? 'Veri yok' : paraMetni(d.stokDegeri)}</strong>
       <span>Stok değeri</span>
       <select className="tc-alan-kutu" aria-label="Değerleme yöntemi" value={yontem} onChange={(e) => setYontem(e.target.value as DegerlemeYontemi)}>
         {YONTEMLER.map((y) => <option key={y} value={y}>{YONTEM_ADI[y]}</option>)}

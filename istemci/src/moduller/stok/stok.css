@@ -646,3 +646,23 @@ a.tc-stok-kpi:hover, a.tc-stok-kpi:focus-visible { background: var(--panel2); }
   .tc-stok-irsaliye-ust { display: grid; grid-template-columns: 1fr; }
   .tc-stok-irsaliye-ust .tc-dugme { inline-size: 100%; }
 }
+
+/* Statü iki satır: üstte mamül · OP, altta revizyon; dar sütunda kırılır, kesilmez. */
+.tc-stok-statu { display: grid; gap: var(--b-1); white-space: normal; overflow-wrap: anywhere; }
+.tc-stok-statu small { color: var(--muted); font-size: var(--yazi-xs); }
+
+/* Telefonda stok değeri kutusu satırın tamamını alır: para tutarı, yöntem seçimi ve ayrı değerler yarım genişliğe sığmaz.
+   Her genişlikte değer yoksa "Veri yok" sayı boyunda yazılmaz. */
+@media (max-width: 767px) {
+  .tc-stok-kpiler { grid-auto-flow: dense; }
+  .tc-stok-kpi-deger { grid-column: 1 / -1; border-right: 0; border-block: thin solid var(--edge); }
+}
+.tc-stok-kpi strong[data-bos] { font-size: var(--yazi-xl); color: var(--muted); }
+
+/* Telefonda Stok tablolarında kesilen malzeme adı iki satıra kadar kırılır, sonra "…" (tek satırda birkaç harften fazlası görünmez). */
+@media (max-width: 767px) {
+  .tc-stok .tc-tablo-kap[data-kaydir] .tc-tablo-kes:has(> strong:only-child) { max-inline-size: calc(var(--menu-sabit) * .6); white-space: normal; }
+  .tc-stok .tc-tablo-kap[data-kaydir] .tc-tablo-kes > strong:only-child {
+    display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; overflow-wrap: anywhere;
+  }
+}

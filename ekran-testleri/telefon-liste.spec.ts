@@ -69,3 +69,58 @@ test('Telefon: raf matrisi kartın içinde kalır, kendi kabında yana kayar', a
   expect(olcu.sayfa).toBeLessThanOrEqual(0);
   expect(ag.hatalar).toEqual([]);
 });
+
+// 3090 a: Stok tablolarında kesilen malzeme adı telefonda iki satıra kadar kırılır (tek satırda birkaç harf görünüyordu), sonra "…".
+test('Telefon: Stok tablosunda malzeme adı iki satıra kadar görünür, ikiden fazla satıra inmez', async ({ page, ag, ac }) => {
+  test.skip((page.viewportSize()?.width ?? 0) >= 768, 'yalnız telefon genişliği');
+  await ac('/stok/hareketler');
+  const ad = page.locator('.tc-tablo-kes > strong:only-child').first();
+  await expect(ad).toBeVisible();
+  const o = await ad.evaluate((e) => {
+    const s = getComputedStyle(e); const satir = parseFloat(s.lineHeight);
+    const td = e.closest('td')!; const r = document.createRange(); r.selectNodeContents(e);
+    return { clamp: s.webkitLineClamp, satir, yukseklik: e.getBoundingClientRect().height, tasma: r.getBoundingClientRect().right - td.getBoundingClientRect().right };
+  });
+  expect(o.clamp).toBe('2');
+  expect(o.yukseklik, 'ad ikiden fazla satıra iniyor').toBeLessThanOrEqual(o.satir * 2 + 1);
+  expect(o.tasma, 'ad yandaki hücreye biniyor').toBeLessThanOrEqual(1);
+  expect(ag.hatalar).toEqual([]);
+});
+
+test.describe('yönetici', () => {
+  test.use({ hesap: 'ornek.yonetici' });
+  // 3090 a: telefonda Stok değeri kutusu satırın tamamını alır; yöntem seçimi kesilmez.
+  test('Telefon: Stok değeri kutusu tam satır, yöntem seçimi kesilmez', async ({ page, ag, ac }) => {
+    test.skip((page.viewportSize()?.width ?? 0) >= 768, 'yalnız telefon genişliği');
+    await ac('/stok');
+    const kutu = page.locator('.tc-stok-kpi-deger');
+    await expect(kutu).toBeVisible();
+    const o = await kutu.evaluate((e) => {
+      const ust = e.parentElement!.getBoundingClientRect(); const k = e.getBoundingClientRect();
+      const secim = e.querySelector('select')!;
+      return { bosluk: Math.abs(ust.width - k.width), secim: secim.getBoundingClientRect().width, kutu: k.width };
+    });
+    expect(o.bosluk, 'kutu satırın tamamını almıyor').toBeLessThanOrEqual(2);
+    expect(o.secim, 'yöntem seçimi dar kalıyor').toBeGreaterThan(o.kutu / 2);
+    // Tam satır kutunun boşluğuna Raf doluluğu çıkar: ızgara boş hücre bırakmaz, Malzeme çeşidiyle aynı sıradadır.
+    const ust = (ad: string) => page.locator('.tc-stok-kpi').filter({ hasText: ad }).first().evaluate((e) => Math.round(e.getBoundingClientRect().top));
+    expect(await ust('Raf doluluğu'), 'Raf doluluğu Malzeme çeşidinin yanına çıkmıyor').toBe(await ust('Malzeme çeşidi'));
+    expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(0);
+    expect(ag.hatalar).toEqual([]);
+  });
+
+  // 3090 a: değer yoksa "Veri yok" her genişlikte sayı boyunda yazılmaz; yandaki kutunun sayısından küçüktür.
+  test('Stok değeri yoksa "Veri yok" yandaki kutunun sayısından küçük yazılır', async ({ page, ag, ac }) => {
+    await page.route('**/api/stok/deger**', async (r) => {
+      const c = await r.fetch(); const g = await c.json() as Record<string, unknown>;
+      await r.fulfill({ response: c, json: { ...g, stokDegeri: null } });
+    });
+    await ac('/stok');
+    const bos = page.locator('.tc-stok-kpi-deger strong[data-bos]');
+    await expect(bos).toHaveText('Veri yok');
+    const boy = (l: ReturnType<typeof page.locator>) => l.evaluate((e) => parseFloat(getComputedStyle(e).fontSize));
+    const yan = page.locator('.tc-stok-kpi').filter({ hasText: 'Malzeme çeşidi' }).locator('strong').first();
+    expect(await boy(bos), '"Veri yok" sayı boyunda').toBeLessThan(await boy(yan));
+    expect(ag.hatalar).toEqual([]);
+  });
+});
