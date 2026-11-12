@@ -111,6 +111,9 @@ yalnız bu koşuda açılan ve numarası SQL'den yeniden okunup önekle başlad�
   (`/{no}/lines`), yeni sipariş açılmaz; yoksa cari denetimi (`GET /api/Arp/find/{kod}`), sonra `POST /api/PurchaseOrder/AddRich`.
 - Numara TMI'nin sipariş numarasıdır (SP-yıl-sıra, en çok 16 karakter). Cari kodu finans firma kartındaki "Logo cari kodu"dur; boşsa sipariş gitmez.
 - İskonto Logo'da ayrı alan değildir: birim fiyata yedirilir, satır açıklamasına "(isk. %n)" yazılır. Nakliye ve diğer masraf Logo'ya gitmez.
+- Yeni siparişin XML'inde (kart 3066) eski satın alma programının Logo'da çalışan gönderimindeki alanlar da gider: `GL_CODE` (cari kodu), satırda `TOTAL_NET`,
+  `ORG_QUANTITY`; dövizli siparişte `CURRSEL_TOTAL` 2, satırda `EXCLINE_*`, fişte `EXCHINFO_*`; TL siparişin öteki alanları değişmez. Düzenlemede
+  eklenen satıra (Logo Objects) bu alanlar yazılmaz. Gerçek Logo'da denenmedi; deneme ayrı kartla.
 - Düzenleme `POST /api/PurchaseOrder/UpdateRich` (Read+Modify+Post); kapatma `POST /{no}/close {lineRefs}`; iptal önce talep karşılamasını kaldırır
   (`DELETE /api/DemandFiche/peg/byOrder/{ref}`), sonra `POST /{no}/cancel` (Logo'da fiş silinmez, iptal görünür).
 - Düzenlemede var olan satırın Logo'daki değeri korunur (kart 3007 a): birim ve çevrim katsayıları yalnız birim değiştiyse yazılır (birim harf

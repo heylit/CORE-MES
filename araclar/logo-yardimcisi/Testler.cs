@@ -303,12 +303,19 @@ namespace LogoYardimcisi
             Icerir(s.SonXml, "<TOTAL>43.2</TOTAL>");
             Icerir(s.SonXml, "<VAT_AMOUNT>8.64</VAT_AMOUNT>");
             foreach (var yasak in new[] { "DISCPER", "SOURCEINDEX", "BRANCH", "<CLOSED>", "UPD", "EDT_PRICE" }) Icermez(s.SonXml, yasak);
+            // Kart 3066: eski satın alma programının çalışan XML gönderimindeki alanlar (TL sipariş).
+            Icerir(s.SonXml, "<GL_CODE>" + Satici + "</GL_CODE>");
+            Icerir(s.SonXml, "<CURRSEL_TOTAL>1</CURRSEL_TOTAL>");
+            Icerir(s.SonXml, "<TOTAL_NET>43.2</TOTAL_NET>");
+            Icerir(s.SonXml, "<ORG_QUANTITY>4</ORG_QUANTITY>");
+            Icerir(s.SonXml, "<TOTAL_DISCOUNTED>0</TOTAL_DISCOUNTED>");
+            foreach (var yasak in new[] { "EXCLINE_", "EXCHINFO_", "ORG_PRICE", "<CURRSEL_TOTAL>2" }) Icermez(s.SonXml, yasak);
         }
 
         static void T_dovizli_sipariste_fiyat_kurla_carpilir_kursuz_doviz_reddedilir()
         {
             var s = Logo();
-            var g = Siparis("SP-2026-002", SiparisSatiri(Malzeme, 1));
+            var g = Siparis("SP-2026-002", SiparisSatiri(Malzeme, 3));
             g["currencyCode"] = 1;
             g["rate"] = 40m;
             var c = C(s, "POST", "/api/PurchaseOrder/AddRich", g);
@@ -317,6 +324,20 @@ namespace LogoYardimcisi
             Icerir(s.SonXml, "<EDT_PRICE>10.8</EDT_PRICE>");
             Icerir(s.SonXml, "<EDT_CURR>1</EDT_CURR>");
             Icerir(s.SonXml, "<PRICE>432</PRICE>");
+            // Kart 3066: döviz kullanımı ve döviz cinsi satır/fiş tutarları; miktar 3, KDV %20: 3 x 10.8 = 32.4, KDV 6.48.
+            Icerir(s.SonXml, "<CURRSEL_TOTAL>2</CURRSEL_TOTAL>");
+            Icerir(s.SonXml, "<EXCLINE_PRICE>10.8</EXCLINE_PRICE>");
+            Icerir(s.SonXml, "<EXCLINE_TOTAL>32.4</EXCLINE_TOTAL>");
+            Icerir(s.SonXml, "<EXCLINE_VAT_AMOUNT>6.48</EXCLINE_VAT_AMOUNT>");
+            Icerir(s.SonXml, "<EXCLINE_VAT_MATRAH>32.4</EXCLINE_VAT_MATRAH>");
+            Icerir(s.SonXml, "<EXCLINE_LINE_NET>32.4</EXCLINE_LINE_NET>");
+            Icerir(s.SonXml, "<EXCHINFO_GROSS_TOTAL>32.4</EXCHINFO_GROSS_TOTAL>");
+            Icerir(s.SonXml, "<EXCHINFO_TOTAL_DISCOUNTED>32.4</EXCHINFO_TOTAL_DISCOUNTED>");
+            Icerir(s.SonXml, "<EXCHINFO_TOTAL_VAT>6.48</EXCHINFO_TOTAL_VAT>");
+            Icerir(s.SonXml, "<TOTAL>1296</TOTAL>");
+            Icerir(s.SonXml, "<TOTAL_NET>1296</TOTAL_NET>");
+            Icerir(s.SonXml, "<TOTAL_DISCOUNTED>0</TOTAL_DISCOUNTED>");
+            Icermez(s.SonXml, "ORG_PRICE");
             g = Siparis("SP-2026-003", SiparisSatiri(Malzeme, 1));
             g["currencyCode"] = 20;
             Esit(400, C(s, "POST", "/api/PurchaseOrder/AddRich", g).Durum, "kursuz döviz");
@@ -362,6 +383,8 @@ namespace LogoYardimcisi
             Esit(5m, sonra[0].Miktar, "değişen miktar");
             Dogru(sonra[1].Kapali, "gövdede olmayan satır kapanmalı (ORDER_CLOSED)");
             Esit("TMI-ERP-TEST-002", sonra[2].Kod, "yeni satır");
+            // Kart 3066: XML'e özgü ek alanlar Logo Objects satırına (AppendLine) yazılmaz; orada denenmediler.
+            foreach (var ad in new[] { "TOTAL_NET", "ORG_QUANTITY", "EXCLINE_PRICE" }) Dogru(!s.SonYeniSatirlar[0].Var(ad), "eklenen satırda " + ad + " yok");
             g["arpCode"] = Alici;
             Icerir(Hata(C(s, "POST", "/api/PurchaseOrder/UpdateRich", g)), "Cari değişikliği");
         }
