@@ -153,6 +153,8 @@ const TAM_DENETLENMEYEN_UCLAR = [
   // CMM sonuç dosyası (1450 a): dosya metni deftere girmez; emir, resim ve (yazmada) resim sürümü ile onaylanan satır sayısı girer.
   'POST /kalite-merkezi/studyo/olcumler/cmm-onizle govdesiz+secim',
   'POST /kalite-merkezi/studyo/olcumler/cmm-yaz govdesiz+secim',
+  // Mal kabul taslağı 2 sn'de bir bütün formu yazar: gövde deftere girmez, kim ve ne zaman girer; teslimde mal kabul kaydı tamdır (3109 a).
+  'POST /stok/mal-kabul-taslagi/kaydet govdesiz',
   'POST /oturum/nabiz yok', // 1755 a: cihaz nabzı 5 dakikada bir gelir, izini kendi tablosunda bırakır (kart 1666).
 ];
 

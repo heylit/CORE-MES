@@ -16,7 +16,7 @@ export const json = (durum: number, govde: unknown) => new Response(JSON.stringi
 export interface Istek { yontem: string; yol: string; govde: unknown }
 
 // Yol → cevap; bilinmeyen yol 404. Gelen istekler sırasıyla kaydedilir.
-export function sunucuKur(kullanici: Kullanici, yollar: Record<string, (govde: unknown) => Response>) {
+export function sunucuKur(kullanici: Kullanici, yollar: Record<string, (govde: unknown) => Response | Promise<Response>>) {
   const istekler: Istek[] = [];
   vi.stubGlobal('fetch', vi.fn(async (adres: string, secenek?: RequestInit) => {
     const yol = adres.replace('/api', '');

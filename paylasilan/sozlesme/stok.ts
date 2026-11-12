@@ -626,6 +626,8 @@ export const malKabulGovdesi = z.object({
   satirlar: z.array(malKabulSatirGirdisi).min(1, 'En az bir satır girin.').max(50),
   // Fason konumunda giden yetmezse onayla eksiye düşülür (çıkıştaki gibi).
   eksiOnay: z.boolean().optional(),
+  // 3091 a: form taslaktan devam ettiyse ya da taslağı kendisi yazdıysa kişinin taslağı aynı işlemde silinir.
+  taslakSil: z.boolean().optional(),
 });
 export type MalKabulGovdesi = z.input<typeof malKabulGovdesi>;
 
