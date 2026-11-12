@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { cihazYazicilari, cihazYazicilariniCoz, cihazYazicisiKaydet, kayitYazicisi } from './cihaz-yazicisi.ts';
+import { cihazYazicilari, cihazYazicilariniCoz, cihazYazicisiKaydet, kayitYazicisi, sonYaziciOku, sonYaziciYaz } from './cihaz-yazicisi.ts';
 
 const LOT = { yaziciId: 3, yaziciAd: 'Depo yazıcısı', sablonAnahtar: 'lot-100x50', sablonAd: 'Lot 100x50' };
 
@@ -26,5 +26,25 @@ describe('cihaz yazıcısı (2916 a)', () => {
     expect(cihazYazicilariniCoz('[]')).toEqual({});
     expect(cihazYazicilariniCoz(JSON.stringify({ lot: { ...LOT, yaziciId: 0 }, konum: { yaziciAd: 'x' } }))).toEqual({});
     expect(cihazYazicilariniCoz(JSON.stringify({ lot: LOT }))).toEqual({ lot: LOT });
+  });
+});
+
+describe('bağlantı ve son seçilen yazıcı (3025)', () => {
+  it('bağlantı yalnız ağ ya da USB olur; eski kayıt (bağlantısız) ağ sayılır, bilinmeyen bağlantı reddedilir', () => {
+    expect(cihazYazicilariniCoz(JSON.stringify({ lot: { ...LOT, baglanti: 'usb' } }))).toEqual({ lot: { ...LOT, baglanti: 'usb' } });
+    expect(cihazYazicilariniCoz(JSON.stringify({ lot: { ...LOT, baglanti: 'tarayici' } }))).toEqual({});
+    expect(cihazYazicilariniCoz(JSON.stringify({ lot: LOT }))).toEqual({ lot: LOT });
+  });
+
+  it('son seçilen yazıcı tür başına tutulur; biçimi bozuk değer yok sayılır', () => {
+    expect(sonYaziciOku('lot')).toBeNull();
+    sonYaziciYaz('lot', 'usb:2');
+    sonYaziciYaz('konum', 'tarayici');
+    expect(sonYaziciOku('lot')).toBe('usb:2');
+    expect(sonYaziciOku('konum')).toBe('tarayici');
+    sonYaziciYaz('lot', 'ag:0');
+    expect(sonYaziciOku('lot')).toBeNull();
+    localStorage.setItem('coremes.etiket-merkezi.son-yazici', '{bozuk');
+    expect(sonYaziciOku('konum')).toBeNull();
   });
 });

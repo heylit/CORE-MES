@@ -61,3 +61,52 @@
   .tc-etk-baski .tc-etk-cizgi { stroke: var(--qr-kare); }
   .tc-etk-baski .tc-etk-oyuk-cizgi { stroke: var(--qr-zemin); }
 }
+/* Yeni düzen: Pano, üç bölümlü Etiket bas (geniş ekranda baskı paneli sağda sabit), gruplu Basılacaklar, Otomatik baskılar. */
+.tc-etk-pano { display: flex; flex-direction: column; gap: var(--b-4); min-width: 0; }
+.tc-etk-sayilar { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 14rem), 1fr)); gap: var(--b-3); }
+.tc-etk-pano-alt { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--b-4); }
+.tc-etk-kisa-liste { display: flex; flex-direction: column; margin: 0; padding: 0; list-style: none; }
+.tc-etk-kisa-satir { display: flex; align-items: center; gap: var(--b-3); min-block-size: var(--dokunma); padding-block: var(--b-2); border-block-end: thin solid var(--edge); }
+.tc-etk-kisa-satir:last-child { border-block-end: 0; }
+.tc-etk-kisa-govde { display: flex; flex: 1; flex-direction: column; gap: var(--b-1); min-width: 0; overflow-wrap: anywhere; }
+.tc-etk-tur-ad { flex: 1; min-width: 0; }
+.tc-etk-simgecik { display: inline-flex; inline-size: var(--b-4); block-size: var(--b-4); color: var(--hazard); }
+a.tc-etk-tur-karti { text-decoration: none; }
+.tc-etk-bas { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--b-4); align-items: start; min-width: 0; }
+.tc-etk-bas-sol, .tc-etk-bas-sag { display: flex; flex-direction: column; gap: var(--b-4); min-width: 0; }
+.tc-etk-bas .tc-etk-turler { grid-template-columns: repeat(auto-fill, minmax(min(100%, 13rem), 1fr)); }
+.tc-etk-panel { display: flex; flex-direction: column; gap: var(--b-4); min-width: 0; }
+.tc-etk-kagit-alani-sar { display: flex; flex-direction: column; gap: var(--b-2); min-width: 0; }
+.tc-etk-ozet { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2); }
+.tc-etk-bolum { display: flex; flex-direction: column; gap: var(--b-2); min-width: 0; padding-block-start: var(--b-3); border-block-start: thin solid var(--edge); }
+.tc-etk-bolum-baslik { margin: 0; font: inherit; font-weight: 700; }
+.tc-etk-olculer { display: flex; flex-wrap: wrap; gap: var(--b-2); }
+.tc-etk-olcu { min-block-size: var(--dokunma); padding: var(--b-1) var(--b-3); border: thin solid var(--edge); border-radius: var(--yari-tam); background: var(--panel); color: var(--ink); font: inherit; font-family: var(--font-mono); cursor: pointer; }
+.tc-etk-olcu[aria-checked='true'] { border-color: var(--hazard); font-weight: 700; }
+.tc-etk-adet { display: flex; align-items: end; gap: var(--b-2); max-inline-size: 20rem; }
+.tc-etk-adet > :nth-child(2) { flex: 1; }
+.tc-etk-bolum-yazici .tc-etk-secimler { grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr)); }
+.tc-etk-bas-cubuk { display: flex; flex-direction: column; gap: var(--b-2); }
+.tc-etk-bas-cubuk .tc-dugme { inline-size: 100%; justify-content: center; }
+.tc-etk-varsayilan { display: flex; flex-direction: column; gap: var(--b-1); }
+.tc-etk-bekleyen-secim { display: flex; flex-direction: column; gap: var(--b-1); max-block-size: 40vh; overflow: auto; margin: 0; padding: 0; list-style: none; }
+.tc-etk-grup { display: flex; flex-direction: column; gap: var(--b-2); min-width: 0; padding-block-start: var(--b-3); border-block-start: thin solid var(--edge); }
+.tc-etk-grup-basi { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2) var(--b-3); }
+.tc-etk-grup-basi > :first-child { flex: 1; font-weight: 700; }
+.tc-etk-hucre { display: flex; flex-direction: column; align-items: flex-start; gap: var(--b-1); }
+.tc-etk-serit { display: flex; align-items: flex-start; gap: var(--b-2); padding: var(--b-3); border: thin solid var(--edge); border-radius: var(--yari-1); background: var(--panel); }
+.tc-etk-yapilacak { display: flex; flex-direction: column; gap: var(--b-2); margin: 0; padding: 0; list-style: none; }
+@media (max-width: 1023px) {
+  /* Tek sütunda (telefon, tablet) önizleme kayıt kartlarının altında kalır: Bas düğmesi panelin sonuna alınır ve panel boyunca alt şeritte kalır;
+     yapışkanlık için kabı uzun panel olmalı. */
+  .tc-etk-bolum-yazici, .tc-etk-bolum-yazici > .tc-etk-gonder { display: contents; }
+  .tc-etk-bas-cubuk { order: 1; position: sticky; inset-block-end: 0; z-index: 1; padding-block: var(--b-2); background: var(--panel-solid); border-block-start: thin solid var(--edge); }
+}
+@media (min-width: 1024px) {
+  .tc-etk-bas { grid-template-columns: minmax(18rem, 2fr) minmax(0, 3fr); }
+  .tc-etk-bas .tc-etk-turler { grid-template-columns: minmax(0, 1fr); }
+  .tc-etk-bas-sag { position: sticky; inset-block-start: var(--b-3); }
+  /* Masaüstünde Bas düğmesi ilk ekranda kalsın diye önizleme küçük tutulur; gerçek boyut seçilirse sınır kalkar. */
+  .tc-etk-bas .tc-etk-kagit-alani:not(.tc-etk-kagit-alani-gercek) .tc-etk-onizleme { max-inline-size: 22rem; }
+  .tc-etk-pano-alt { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}

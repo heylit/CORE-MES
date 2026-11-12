@@ -50,3 +50,56 @@ describe('doğrudan basım adedi', () => {
     await waitFor(() => expect(govdeler).toEqual([{ yaziciId: 4, adet: 1, kayit: { tur: 'lot', idler: [7] } }]));
   });
 });
+
+// 2953 c + 2916 a: USB'ye atanmış tür indirme ucundan komutu alır (yetki ve defter sunucuda) ve bu bilgisayarda eşleşmiş aygıta aktarır.
+describe('doğrudan basım USB yolu (3025)', () => {
+  const ARGOX = { yaziciId: 2, yaziciAd: 'Argox masa', sablonAnahtar: 'lot-100x50', sablonAd: 'Lot 100x50', baglanti: 'usb' as const };
+  const usbKur = (aygitlar: unknown[]) => {
+    vi.stubGlobal('isSecureContext', true);
+    Object.defineProperty(navigator, 'usb', { value: { getDevices: async () => aygitlar, requestDevice: async () => null }, configurable: true });
+  };
+  const aygit = () => {
+    const giden: string[] = [];
+    return {
+      giden, productName: 'Deneme yazıcısı', opened: false,
+      configuration: { interfaces: [{ interfaceNumber: 0, alternate: { interfaceClass: 7, endpoints: [{ endpointNumber: 1, direction: 'out' as const, type: 'bulk' as const }] } }] },
+      open: async () => undefined, close: async () => undefined, selectConfiguration: async () => undefined,
+      claimInterface: async () => undefined, releaseInterface: async () => undefined,
+      transferOut: async (_uc: number, veri: BufferSource) => { giden.push(new TextDecoder().decode(veri)); return { status: 'ok' as const }; },
+    };
+  };
+  const indirSunucusu = () => {
+    const yollar: string[] = [];
+    vi.stubGlobal('fetch', vi.fn(async (adres: string, secenek?: RequestInit) => {
+      const yol = adres.replace('/api', '');
+      const cevap = (veri: unknown) => new Response(JSON.stringify(veri), { status: 200, headers: { 'content-type': 'application/json' } });
+      if (yol === '/oturum') return cevap({ kullanici: KULLANICI });
+      if (secenek?.method === 'POST') { yollar.push(yol); return cevap({ baskiId: 1, dosyaAdi: 'lot-100x50-203.prn', komut: '\nN\nP1\n' }); }
+      return new Response(JSON.stringify({ kod: 'BULUNAMADI', mesaj: 'Adres bulunamadı.' }), { status: 404 });
+    }));
+    return yollar;
+  };
+  afterEach(() => { Reflect.deleteProperty(navigator, 'usb'); });
+
+  it('komut indirme ucundan alınır ve eşleşmiş USB yazıcıya aktarılır; ağ ucu çağrılmaz', async () => {
+    cihazYazicisiKaydet('lot', ARGOX);
+    const a = aygit();
+    usbKur([a]);
+    const yollar = indirSunucusu();
+    ciz('mal-kabul');
+    fireEvent.click(await screen.findByRole('button', { name: 'Bas' }));
+    expect(await screen.findByText('Etiketler gönderildi: Argox masa.')).toBeTruthy();
+    expect(yollar).toEqual(['/etiket-merkezi/sablonlar/lot-100x50/indir']);
+    expect(a.giden).toEqual(['\nN\nP1\n']);
+  });
+
+  it('bu bilgisayarda eşleşme yoksa istek atılmaz ve neden yazılır', async () => {
+    cihazYazicisiKaydet('lot', ARGOX);
+    usbKur([]);
+    const yollar = indirSunucusu();
+    ciz('lot');
+    fireEvent.click(await screen.findByRole('button', { name: 'Bas' }));
+    expect(await screen.findByText(/Bu bilgisayarda eşleşmiş USB yazıcı yok\./)).toBeTruthy();
+    expect(yollar).toEqual([]);
+  });
+});

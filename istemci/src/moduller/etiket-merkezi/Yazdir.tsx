@@ -38,7 +38,9 @@ function baskiyiKaldir(): void {
 }
 
 // Defter satırı yazdırma penceresi açılmadan yazılır; tarayıcı etiketin basılıp basılmadığını uygulamaya bildirmez.
-export function VektorelYazdir({ sablon, adet, kayit, olcu = null }: { sablon: Sablon; adet: number | null; kayit: KayitSecimi | null; olcu?: OzelOlcu | null }) {
+export function VektorelYazdir({ sablon, adet, kayit, olcu = null, dugmeMetni = 'Vektörel yazdır', birincil = false }: {
+  sablon: Sablon; adet: number | null; kayit: KayitSecimi | null; olcu?: OzelOlcu | null; dugmeMetni?: string; birincil?: boolean;
+}) {
   const istemci = useQueryClient();
   const [kimlik, setKimlik] = useState(yeniIstekKimligi);
   const [baski, setBaski] = useState<YazdirCevabi | null>(null);
@@ -76,12 +78,12 @@ export function VektorelYazdir({ sablon, adet, kayit, olcu = null }: { sablon: S
   return (
     <div className="tc-etk-gonder">
       <div className="tc-etk-dugmeler">
-        <Dugme simge="printer" disabled={adet === null} yukleniyor={yazdir.isPending}
+        <Dugme tur={birincil ? 'birincil' : 'ikincil'} boyut={birincil ? 'ana' : undefined} simge="printer" disabled={adet === null} yukleniyor={yazdir.isPending}
           onClick={() => { if (adet !== null) { setSonuc(null); yazdir.mutate({ adet, ...(kayit ? { kayit } : {}), ...(olcu ? { olcu } : {}) }); } }}>
-          Vektörel yazdır
+          {dugmeMetni}
         </Dugme>
       </div>
-      <p className="tc-etk-not">Bu bilgisayara takılı yazıcıya Windows sürücüsüyle basar; yazıcıyı yazdırma penceresinde seçin.</p>
+      {!birincil && <p className="tc-etk-not">Bu bilgisayara takılı yazıcıya Windows sürücüsüyle basar; yazıcıyı yazdırma penceresinde seçin.</p>}
       {sonuc && <p className={sonuc.ton === 'hata' ? 'tc-etk-hata' : 'tc-etk-not'} role={sonuc.ton === 'hata' ? 'alert' : 'status'}>{sonuc.metin}</p>}
       {baski && createPortal(<BaskiSayfalari baski={baski} />, document.body)}
     </div>

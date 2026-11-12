@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { MemoryRouter, useLocation } from 'react-router-dom';
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import type { HataGovdesi } from '#paylasilan/hata.ts';
 import type { Islem } from '#paylasilan/islemler.ts';
 import { ISTEK_KIMLIGI_BASLIGI, istekKimligiMi } from '#paylasilan/istek-kimligi.ts';
@@ -9,9 +9,12 @@ import type { BaskilarCevabi, BekleyenlerCevabi, CiktiCevabi, EtiketlerCevabi, K
 import { BildirimSaglayici } from '../../ortak/arayuz/index.ts';
 import { Baskilar } from './Baskilar.tsx';
 import { cihazYazicilari, cihazYazicisiKaydet } from './cihaz-yazicisi.ts';
-import { Etiketler, yerGrubu } from './Etiketler.tsx';
+import { OtomatikBaskilar } from './Otomatik.tsx';
+import { OTOMATIK_ISLER } from './otomatik-isler.ts';
+import { Pano } from './Pano.tsx';
+import { Etiketler, TurListesi, yerGrubu } from './Etiketler.tsx';
 import { KAYIT_BASLIKLARI } from './kayit-secimi.ts';
-import { HazirSablonlar, SablonKatalogu, YaziciDenemesi } from './EtiketMerkezi.tsx';
+import { EskiBasAdresi, HazirSablonlar, SablonKatalogu, YaziciDenemesi } from './EtiketMerkezi.tsx';
 import { Yazicilar } from './Yazicilar.tsx';
 
 const json = (durum: number, govde: unknown) => new Response(JSON.stringify(govde), { status: durum });
@@ -168,6 +171,11 @@ function sunucuKur(secenek: { islemler?: Islem[]; yazicilar?: YazicilarCevabi; b
   return Object.assign(istekler, { gonderilenler });
 }
 
+// "Adet" ve "Yazıcı" aynı zamanda bölüm adıdır; alanlar rolüyle bulunur.
+const adetAlani = (ad = 'Adet') => screen.getByRole('textbox', { name: ad });
+const yaziciAlani = () => screen.findByRole('combobox', { name: 'Yazıcı' });
+const basDugmesi = () => screen.getByRole('button', { name: /^Bas · \d+ etiket$/ }) as HTMLButtonElement;
+
 function AdresGoster() {
   return <output data-testid="adres">{useLocation().search}</output>;
 }
@@ -230,7 +238,7 @@ describe('EtiketMerkezi', () => {
     fireEvent.click(screen.getByRole('button', { name: /Konum 50x25/ }));
     fireEvent.change(screen.getByLabelText('Yazıcı dili'), { target: { value: 'pplb' } });
     fireEvent.change(screen.getByLabelText('Çözünürlük'), { target: { value: '300' } });
-    fireEvent.change(screen.getByLabelText('Adet'), { target: { value: '4' } });
+    fireEvent.change(adetAlani(), { target: { value: '4' } });
     fireEvent.click(screen.getByLabelText('Türkçe harfleri sadeleştir (ş -> s)'));
     await waitFor(() => expect(istekler).toContain('/etiket-merkezi/sablonlar/konum-50x25/cikti?dil=pplb&dpi=300&adet=4&sade=true'));
     expect(await screen.findByRole('button', { name: /konum-50x25-300\.prn/ })).toBeTruthy();
@@ -240,7 +248,7 @@ describe('EtiketMerkezi', () => {
     sunucuKur();
     ac(<SablonKatalogu />);
     await screen.findByText('LT-000123');
-    fireEvent.change(screen.getByLabelText('Adet'), { target: { value: '501' } });
+    fireEvent.change(adetAlani(), { target: { value: '501' } });
     expect(screen.getByText('Adet 1 ile 500 arasında olur.')).toBeTruthy();
     expect((screen.getByRole('button', { name: /^Önizleme için indir \(.*, deftere yazılmaz\)$/ }) as HTMLButtonElement).disabled).toBe(true);
   });
@@ -255,12 +263,10 @@ describe('EtiketMerkezi', () => {
   it('basma yetkisi olan, deneme etiketini seçtiği ağ yazıcısına tekrar kimliğiyle gönderir', async () => {
     const istekler = sunucuKur({ islemler: ['sayfa.etiket-merkezi', 'etiket-merkezi.oku', 'etiket-merkezi.bas'] });
     ac(<YaziciDenemesi />);
-    const secim = await screen.findByLabelText('Yazıcı');
-    const gonder = screen.getByRole('button', { name: 'Yazıcıya gönder' }) as HTMLButtonElement;
-    expect(gonder.disabled).toBe(true);
-    fireEvent.change(secim, { target: { value: '1' } });
-    fireEvent.change(screen.getByLabelText('Adet'), { target: { value: '2' } });
-    fireEvent.click(gonder);
+    // Tek yazıcı listesi: ilk açılışta ilk ağ yazıcısı seçilidir.
+    expect(((await yaziciAlani()) as HTMLSelectElement).value).toBe('ag:1');
+    fireEvent.change(adetAlani(), { target: { value: '2' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Bas · 2 etiket' }));
     expect(await screen.findByText(/Gönderildi\. Etiketin çıktığını/)).toBeTruthy();
     const [g] = istekler.gonderilenler;
     expect(g?.yol).toBe('/etiket-merkezi/sablonlar/deneme-50x25/bas');
@@ -274,9 +280,9 @@ describe('EtiketMerkezi', () => {
     vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (this: HTMLAnchorElement) { indirilen(this.download); });
     const istekler = sunucuKur({ islemler: ['sayfa.etiket-merkezi', 'etiket-merkezi.oku', 'etiket-merkezi.bas'] });
     ac(<YaziciDenemesi />);
-    fireEvent.change(await screen.findByLabelText('Yazıcı'), { target: { value: '2' } });
-    expect(screen.queryByRole('button', { name: 'Yazıcıya gönder' })).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: 'Yazıcı için indir' }));
+    fireEvent.change(await yaziciAlani(), { target: { value: 'dosya:2' } });
+    expect(screen.queryByRole('button', { name: /^Bas · / })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'İndir · 1 etiket' }));
     expect(await screen.findByText(/İndirildi ve deftere yazıldı/)).toBeTruthy();
     const [g] = istekler.gonderilenler;
     expect(g?.yol).toBe('/etiket-merkezi/sablonlar/deneme-50x25/indir');
@@ -290,12 +296,13 @@ describe('EtiketMerkezi', () => {
     ac(<YaziciDenemesi />);
     expect(await screen.findByText('Ayar kapalı.')).toBeTruthy();
     expect(screen.queryByRole('option', { name: /Zebra depo/ })).toBeNull();
-    expect(screen.getByRole('option', { name: /Argox masa/ })).toBeTruthy();
+    expect(screen.getByRole('option', { name: 'Argox masa · komut dosyası' })).toBeTruthy();
+    expect(screen.getByRole('option', { name: 'Bu bilgisayar · Windows yazdırma' })).toBeTruthy();
     cleanup();
     const istekler = sunucuKur({ islemler: ['sayfa.etiket-merkezi'] });
     ac(<YaziciDenemesi />);
     await screen.findByText('Yazıcı denemesi 50x25');
-    expect(screen.queryByLabelText('Yazıcı')).toBeNull();
+    expect(screen.queryByRole('combobox', { name: 'Yazıcı' })).toBeNull();
     expect(istekler.some((i) => i.startsWith('/etiket-merkezi/yazicilar'))).toBe(false);
   });
 
@@ -344,7 +351,7 @@ describe('EtiketMerkezi', () => {
     expect(screen.getByText('İndirildi')).toBeTruthy();
     // Kart 2904: tarayıcıdan yazdırmada yazıcı tanımı yoktur; rozet basıldı demez, pencerenin açıldığını söyler.
     expect(screen.getByText('Yazdırma açıldı')).toBeTruthy();
-    expect(screen.getByText('Bu bilgisayar (tarayıcı)')).toBeTruthy();
+    expect(screen.getByText('Bu bilgisayar (Windows)')).toBeTruthy();
   });
 
   it('oku yetkisi olmayan etiket listesinde yalnız türleri görür: sahip modülün menü adı, durum ve ölçüler', async () => {
@@ -362,21 +369,25 @@ describe('EtiketMerkezi', () => {
     expect(document.querySelectorAll('svg.tc-etk-tur-simge[aria-hidden="true"]')).toHaveLength(2);
   });
 
-  it('2223: basılacaklar sekmesi bekleyen etiketleri listeler; Bas ve hepsini bas seçili kayıtlarla etiket sayfasına gider; türler sekmesi adreste', async () => {
+  it('2223: Basılacaklar bekleyen etiketleri türe göre gruplar; Bas ve hepsini bas seçili kayıtlarla Etiket bas sayfasına gider', async () => {
     const istekler = sunucuKur({ islemler: ['sayfa.etiket-merkezi', 'etiket-merkezi.oku'] });
     ac(<Etiketler />, '/etiket-merkezi/etiketler');
     expect(await screen.findByText('MK-000012')).toBeTruthy();
     expect(istekler.some((i) => i.startsWith('/etiket-merkezi/bekleyenler'))).toBe(true);
     expect(screen.getByText('2/2 lot etiketi basılmadı')).toBeTruthy();
     expect(screen.getByText('RED · Örnek mil')).toBeTruthy();
-    expect(screen.getByRole('link', { name: 'MK-000012 bas' }).getAttribute('href')).toBe('/etiket-merkezi?tur=mal-kabul&id=12');
-    expect(screen.getByRole('link', { name: 'Kalite durum etiketleri: hepsini bas (2)' }).getAttribute('href')).toBe('/etiket-merkezi?tur=kalite-durum&id=41%2C40');
+    expect(screen.getByRole('link', { name: 'MK-000012 bas' }).getAttribute('href')).toBe('/etiket-merkezi/bas?tur=mal-kabul&id=12');
+    expect(screen.getByRole('link', { name: 'Kalite durum etiketleri: hepsini bas (2)' }).getAttribute('href')).toBe('/etiket-merkezi/bas?tur=kalite-durum&id=41%2C40');
     // 2223-2 a: depodan emre veriliş refakat kartıyla, hatalı parça kendi etiketiyle basılır.
-    expect(screen.getByRole('link', { name: 'UE-000120-P1 bas' }).getAttribute('href')).toBe('/etiket-merkezi?tur=refakat-partisi&id=7');
-    expect(screen.getByRole('link', { name: 'UE-000121 OP 20 bas' }).getAttribute('href')).toBe('/etiket-merkezi?tur=hatali-parca&id=3');
-    fireEvent.click(screen.getByRole('tab', { name: 'Etiket türleri' }));
-    expect(await screen.findByText('Lot etiketi')).toBeTruthy();
-    expect(screen.getByTestId('adres').textContent).toBe('?sekme=turler');
+    expect(screen.getByRole('link', { name: 'UE-000120-P1 bas' }).getAttribute('href')).toBe('/etiket-merkezi/bas?tur=refakat-partisi&id=7');
+    expect(screen.getByRole('link', { name: 'UE-000121 OP 20 bas' }).getAttribute('href')).toBe('/etiket-merkezi/bas?tur=hatali-parca&id=3');
+    // Her tür kendi bölümündedir; başlıkta etiket sayısı yazar (kalite iki kayıt, iki etiket).
+    const kalite = screen.getByRole('region', { name: 'Kalite durum etiketleri' });
+    expect(kalite.textContent).toContain('2 etiket');
+    expect(kalite.textContent).toContain('LT-000041 KAR');
+    expect(kalite.textContent).not.toContain('MK-000012');
+    expect(document.querySelectorAll('section.tc-etk-grup')).toHaveLength(4);
+    expect(screen.queryByRole('tab')).toBeNull();
   });
 
   it('2223-4: basılmayacak düğmesi yalnız basma yetkisinde çıkar; satırın türü ve kimliği istek kimliğiyle gider, liste yenilenir', async () => {
@@ -407,8 +418,9 @@ describe('EtiketMerkezi', () => {
     expect(screen.getByText('1 kayıt bulunamadı')).toBeTruthy();
     expect(screen.queryByText('Lot 100x50')).toBeNull();
     expect(istekler).toContain('/etiket-merkezi/sablonlar/konum-50x25/kayit-cikti?dil=zpl&dpi=203&adet=1&sade=false&tur=konum&id=11%2C12%2C99');
-    // Basma yetkisi olmayana gönderme bölümü çıkmaz.
-    expect(screen.queryByLabelText('Yazıcı')).toBeNull();
+    // Basma yetkisi olmayana gönderme bölümü çıkmaz, yazıcı listesi de istenmez.
+    expect(screen.queryByRole('combobox', { name: 'Yazıcı' })).toBeNull();
+    expect(istekler.some((i) => i.startsWith('/etiket-merkezi/yazicilar'))).toBe(false);
   });
 
   it('seçimden çıkarılan konum adresten de düşer; seçim kaldırılınca tür kalır ve kayıt seçimi açılır', async () => {
@@ -429,7 +441,7 @@ describe('EtiketMerkezi', () => {
     sunucuKur({ islemler: ['sayfa.etiket-merkezi', 'etiket-merkezi.oku'] });
     ac(<HazirSablonlar />, '/etiket-merkezi?tur=konum&id=11,12');
     await screen.findByText('R1-01-1-1');
-    fireEvent.change(screen.getByLabelText('Kayıt başına adet'), { target: { value: '251' } });
+    fireEvent.change(adetAlani('Kayıt başına adet'), { target: { value: '251' } });
     expect(screen.getByText('Bir baskıda en çok 500 etiket (2 kayıt x 251).')).toBeTruthy();
     expect((screen.getByRole('button', { name: /^Önizleme için indir \(.*, deftere yazılmaz\)$/ }) as HTMLButtonElement).disabled).toBe(true);
   });
@@ -437,8 +449,8 @@ describe('EtiketMerkezi', () => {
   it('basma yetkisi olan seçili konumları ağ yazıcısına kayıt seçimiyle gönderir', async () => {
     const istekler = sunucuKur({ islemler: ['sayfa.etiket-merkezi', 'etiket-merkezi.oku', 'etiket-merkezi.bas'] });
     ac(<HazirSablonlar />, '/etiket-merkezi?tur=konum&id=11,12');
-    fireEvent.change(await screen.findByLabelText('Yazıcı'), { target: { value: '1' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Yazıcıya gönder' }));
+    fireEvent.change(await yaziciAlani(), { target: { value: 'ag:1' } });
+    fireEvent.click(await screen.findByRole('button', { name: 'Bas · 2 etiket' }));
     await waitFor(() => expect(istekler.gonderilenler).toHaveLength(1));
     expect(istekler.gonderilenler[0]).toMatchObject({
       yol: '/etiket-merkezi/sablonlar/konum-50x25/bas',
@@ -463,7 +475,7 @@ describe('EtiketMerkezi', () => {
     expect(screen.queryByText('Lot 100x50')).toBeNull();
     await waitFor(() => expect(istekler).toContain('/etiket-merkezi/sablonlar/refakat-100x150/kayit-cikti?dil=zpl&dpi=203&adet=2&sade=false&tur=refakat-partisi&id=12'));
     // Kartta büyük basılan miktar (ADET) ile karışmasın diye alan "Kopya sayısı" adını taşır.
-    expect((screen.getByLabelText('Kopya sayısı') as HTMLInputElement).value).toBe('2');
+    expect((adetAlani('Kopya sayısı') as HTMLInputElement).value).toBe('2');
     expect(screen.queryByLabelText('Kayıt başına adet')).toBeNull();
   });
 
@@ -481,11 +493,12 @@ describe('EtiketMerkezi', () => {
     sunucuKur({ islemler: ['sayfa.etiket-merkezi', 'etiket-merkezi.oku', 'etiket-merkezi.bas'] });
     ac(<HazirSablonlar />, '/etiket-merkezi?tur=mal-kabul&id=1,2');
     await screen.findByText('LT-000501');
-    fireEvent.change(screen.getByLabelText('Kayıt başına adet'), { target: { value: '120' } });
+    fireEvent.change(adetAlani('Kayıt başına adet'), { target: { value: '120' } });
     expect(await screen.findByText('Bir baskıda en çok 500 etiket basılır (5 kayıt x 120 adet).')).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Yeniden dene' })).toBeNull();
-    fireEvent.change(screen.getByLabelText('Yazıcı'), { target: { value: '2' } });
-    expect((screen.getByRole('button', { name: 'Yazıcı için indir' }) as HTMLButtonElement).disabled).toBe(true);
+    expect(basDugmesi().disabled).toBe(true);
+    fireEvent.change(await yaziciAlani(), { target: { value: 'dosya:2' } });
+    expect((screen.getByRole('button', { name: /^İndir · / }) as HTMLButtonElement).disabled).toBe(true);
   });
 
   it('sevk koli adresinde koli sayısı ve koli içi adet çıktı isteğine ve baskı gövdesine gider; koli sayısı sınırı denetlenir', async () => {
@@ -496,19 +509,20 @@ describe('EtiketMerkezi', () => {
     fireEvent.change(await screen.findByLabelText('Koli sayısı'), { target: { value: '4' } });
     fireEvent.change(screen.getByLabelText(/^Koli içi adet/), { target: { value: '12,5' } });
     await waitFor(() => expect(istekler).toContain('/etiket-merkezi/sablonlar/sevk-koli-100x75/kayit-cikti?dil=zpl&dpi=203&adet=1&sade=false&tur=sevk-koli&id=11&koliSayisi=4&koliIci=12.5'));
-    fireEvent.change(await screen.findByLabelText('Yazıcı'), { target: { value: '1' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Yazıcıya gönder' }));
+    fireEvent.change(await yaziciAlani(), { target: { value: 'ag:1' } });
+    await waitFor(() => expect(basDugmesi().disabled).toBe(false));
+    fireEvent.click(basDugmesi());
     await waitFor(() => expect(istekler.gonderilenler).toHaveLength(1));
     expect(istekler.gonderilenler[0]).toMatchObject({ govde: { yaziciId: 1, adet: 1, kayit: { tur: 'sevk-koli', idler: [11], koli: { sayi: 4, ici: 12.5 } } } });
     fireEvent.change(screen.getByLabelText('Koli sayısı'), { target: { value: '0' } });
     expect(screen.getByText('Koli sayısı 1 ile 500 arasında olur.')).toBeTruthy();
-    expect((screen.getByRole('button', { name: 'Yazıcıya gönder' }) as HTMLButtonElement).disabled).toBe(true);
+    expect(basDugmesi().disabled).toBe(true);
   });
 
   it('bozuk adres seçim sayılmaz: tür seçili, ölçü örnek değerlerle açılır', async () => {
     const istekler = sunucuKur();
     ac(<HazirSablonlar />, '/etiket-merkezi?tur=konum&id=11,abc');
-    expect(await screen.findByRole('heading', { name: '3. Ölçü' })).toBeTruthy();
+    expect(await screen.findByRole('heading', { name: '3. Önizleme' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Yer etiketleri' }).getAttribute('aria-pressed')).toBe('true');
     await screen.findByText('LT-000123');
     expect(istekler.some((i) => i.includes('kayit-cikti'))).toBe(false);
@@ -556,21 +570,21 @@ describe('EtiketMerkezi', () => {
     expect(screen.queryByText('Konum ve raf etiketleri')).toBeNull();
   });
 
-  it('2223-3 a: Etiket bas dört adımlıdır; tür seçilmeden ölçü yoktur; tür seçimi adrese yazılır; kaydı başka ekrandan gelen türde sahip ekran ve Basılacaklar bağlantısı; dil ve dpi Gelişmiş altında', async () => {
+  it('2223-3 a: Etiket bas üç adımlıdır; tür seçilmeden önizleme yoktur; tür seçimi adrese yazılır; kaydı başka ekrandan gelen türde sahip ekran bağlantısı; ölçü seçilir, dil ve dpi Gelişmiş altında', async () => {
     sunucuKur({ islemler: ['sayfa.etiket-merkezi', 'etiket-merkezi.oku'] });
     ac(<HazirSablonlar />);
     expect(await screen.findByRole('heading', { name: '1. Ne basılacak' })).toBeTruthy();
-    expect(screen.queryByRole('heading', { name: '3. Ölçü' })).toBeNull();
+    expect(screen.getByText('Soldan etiket türünü seçin.')).toBeTruthy();
     expect(screen.getAllByRole('button', { pressed: false }).length).toBeGreaterThanOrEqual(10);
     fireEvent.click(screen.getByRole('button', { name: 'Lot etiketleri' }));
     await waitFor(() => expect(screen.getByTestId('adres').textContent).toBe('?tur=lot'));
     expect(await screen.findByText('LT-000123')).toBeTruthy();
+    expect(screen.getByRole('heading', { name: '2. Hangi kayıtlar' })).toBeTruthy();
     expect(screen.getByRole('link', { name: 'Stok Merkezi' }).getAttribute('href')).toBe('/stok');
-    expect(screen.getByRole('link', { name: 'Basılacaklar' }).getAttribute('href')).toBe('/etiket-merkezi/etiketler');
-    expect(screen.getByRole('button', { name: /100x50 mm/ })).toBeTruthy();
+    expect(screen.getByRole('radio', { name: '100x50 mm' }).getAttribute('aria-checked')).toBe('true');
     expect(screen.getByText('Gelişmiş').closest('details')?.contains(screen.getByLabelText('Yazıcı dili'))).toBe(true);
     // Kayıt seçilmeden basılmaz.
-    expect(screen.queryByLabelText('Yazıcı')).toBeNull();
+    expect(screen.queryByRole('combobox', { name: 'Yazıcı' })).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Lot etiketleri' }));
     await waitFor(() => expect(screen.getByTestId('adres').textContent).toBe(''));
   });
@@ -580,7 +594,7 @@ describe('EtiketMerkezi', () => {
     ac(<SablonKatalogu />);
     expect(await screen.findByText('Konum 50x25')).toBeTruthy();
     expect(screen.getByText('Sevk kolisi 100x75')).toBeTruthy();
-    expect(screen.queryByLabelText('Yazıcı')).toBeNull();
+    expect(screen.queryByRole('combobox', { name: 'Yazıcı' })).toBeNull();
   });
 });
 
@@ -601,8 +615,11 @@ describe('EtiketMerkezi vektörel yazdırma', () => {
     vi.stubGlobal('print', yazdir);
     const istekler = sunucuKur({ islemler: BAS, yazicilar: { yazicilar: [], dogrudanBaski: { acik: false, neden: 'Kapalı.' }, usbBaski: false } });
     ac(<HazirSablonlar />, '/etiket-merkezi?tur=konum&id=11,12');
-    fireEvent.change(await screen.findByLabelText('Kayıt başına adet'), { target: { value: '3' } });
-    fireEvent.click(await screen.findByRole('button', { name: 'Vektörel yazdır' }));
+    await screen.findByText('R1-01-1-1');
+    // Yazıcı tanımı yokken listede yalnız Windows yazdırma vardır.
+    expect(((await yaziciAlani()) as HTMLSelectElement).value).toBe('tarayici');
+    fireEvent.change(adetAlani('Kayıt başına adet'), { target: { value: '3' } });
+    fireEvent.click(await screen.findByRole('button', { name: 'Bas · 6 etiket' }));
     expect(await screen.findByText(/Yazdırma penceresi açıldı ve deftere yazıldı/)).toBeTruthy();
     await waitFor(() => expect(yazdir).toHaveBeenCalledTimes(1));
     const g = istekler.gonderilenler.find((x) => x.yol.endsWith('/yazdir'));
@@ -634,7 +651,8 @@ describe('EtiketMerkezi vektörel yazdırma', () => {
     vi.stubGlobal('print', vi.fn(() => { sayfa.push({ genislik: document.querySelector('.tc-etk-baski svg')?.getAttribute('width') ?? null }); }));
     const istekler = sunucuKur({ islemler: BAS });
     ac(<YaziciDenemesi />);
-    fireEvent.click(await screen.findByRole('button', { name: 'Vektörel yazdır' }));
+    fireEvent.change(await yaziciAlani(), { target: { value: 'tarayici' } });
+    fireEvent.click(await screen.findByRole('button', { name: 'Bas · 1 etiket' }));
     await waitFor(() => expect(sayfa).toHaveLength(1));
     expect(sayfa[0]?.genislik).toBe('50mm');
     expect(istekler.gonderilenler.find((x) => x.yol.endsWith('/yazdir'))?.govde).toEqual({ adet: 1 });
@@ -645,7 +663,7 @@ describe('EtiketMerkezi vektörel yazdırma', () => {
     sunucuKur({ islemler: ['sayfa.etiket-merkezi', 'etiket-merkezi.oku'] });
     ac(<HazirSablonlar />, '/etiket-merkezi?tur=konum&id=11,12');
     expect(await screen.findByText(/2 etiket, önizleme ilk kayıt/)).toBeTruthy();
-    expect(screen.queryByRole('button', { name: 'Vektörel yazdır' })).toBeNull();
+    expect(screen.queryByRole('button', { name: /^Bas · / })).toBeNull();
   });
 });
 
@@ -654,18 +672,19 @@ describe('EtiketMerkezi vektörel yazdırma', () => {
 describe('EtiketMerkezi cihaz varsayılanı', () => {
   afterEach(() => { localStorage.clear(); });
   const BASAN: Islem[] = ['sayfa.etiket-merkezi', 'etiket-merkezi.oku', 'etiket-merkezi.bas'];
+  const TEK_DOKUNUS = 'Bu cihazda bu tür için tek dokunuşla bas';
 
   it('ağ yazıcısı seçilince bu cihazda varsayılan yapılır; sonraki açılışta seçili gelir; kaldırılınca düşer', async () => {
     sunucuKur({ islemler: BASAN });
     ac(<HazirSablonlar />, '/etiket-merkezi?tur=konum&id=11');
-    fireEvent.change(await screen.findByLabelText('Yazıcı'), { target: { value: '1' } });
-    fireEvent.click(screen.getByRole('checkbox', { name: 'Bu cihazda varsayılan yap' }));
-    expect(cihazYazicilari().konum).toEqual({ yaziciId: 1, yaziciAd: 'Zebra depo', sablonAnahtar: 'konum-50x25', sablonAd: 'Konum 50x25' });
-    expect(screen.getByText(/doğrudan Zebra depo yazıcısına, Konum 50x25 ölçüsünde basar/)).toBeTruthy();
+    fireEvent.change(await yaziciAlani(), { target: { value: 'ag:1' } });
+    fireEvent.click(await screen.findByRole('checkbox', { name: TEK_DOKUNUS }));
+    expect(cihazYazicilari().konum).toEqual({ yaziciId: 1, yaziciAd: 'Zebra depo', sablonAnahtar: 'konum-50x25', sablonAd: 'Konum 50x25', baglanti: 'ag' });
+    expect(screen.getByText('Bu cihazdaki etiket düğmeleri bu türü doğrudan şu yazıcıya basar: Zebra depo, Konum 50x25.')).toBeTruthy();
     cleanup();
     ac(<HazirSablonlar />, '/etiket-merkezi?tur=konum&id=11');
-    expect(((await screen.findByLabelText('Yazıcı')) as HTMLSelectElement).value).toBe('1');
-    const kutu = screen.getByRole('checkbox', { name: 'Bu cihazda varsayılan yap' }) as HTMLInputElement;
+    expect(((await yaziciAlani()) as HTMLSelectElement).value).toBe('ag:1');
+    const kutu = (await screen.findByRole('checkbox', { name: TEK_DOKUNUS })) as HTMLInputElement;
     expect(kutu.checked).toBe(true);
     fireEvent.click(kutu);
     expect(cihazYazicilari().konum).toBeUndefined();
@@ -674,12 +693,16 @@ describe('EtiketMerkezi cihaz varsayılanı', () => {
   it('dosya yazıcısında ve kayıtsız yazıcı denemesinde varsayılan seçeneği yoktur (yasak)', async () => {
     sunucuKur({ islemler: BASAN });
     ac(<HazirSablonlar />, '/etiket-merkezi?tur=konum&id=11');
-    fireEvent.change(await screen.findByLabelText('Yazıcı'), { target: { value: '2' } });
-    expect(screen.queryByRole('checkbox', { name: 'Bu cihazda varsayılan yap' })).toBeNull();
+    fireEvent.change(await yaziciAlani(), { target: { value: 'dosya:2' } });
+    expect(screen.queryByRole('checkbox', { name: TEK_DOKUNUS })).toBeNull();
+    expect(screen.getByText('Tek dokunuş ağ ya da USB yazıcıyla kurulur.')).toBeTruthy();
+    // Windows yazdırma da tek dokunuş olamaz: pencere her seferinde açılır.
+    fireEvent.change(await yaziciAlani(), { target: { value: 'tarayici' } });
+    expect(screen.queryByRole('checkbox', { name: TEK_DOKUNUS })).toBeNull();
     cleanup();
     ac(<YaziciDenemesi />, '/etiket-merkezi/yazici-denemesi');
-    fireEvent.change(await screen.findByLabelText('Yazıcı'), { target: { value: '1' } });
-    expect(screen.queryByRole('checkbox', { name: 'Bu cihazda varsayılan yap' })).toBeNull();
+    fireEvent.change(await yaziciAlani(), { target: { value: 'ag:1' } });
+    expect(screen.queryByRole('checkbox', { name: TEK_DOKUNUS })).toBeNull();
   });
 
   it('bekleyenlerde varsayılanı olan türün hepsi o yazıcıya kayıtlarla basılır; varsayılanı olmayan tür Etiket bas sayfasını açar', async () => {
@@ -691,16 +714,16 @@ describe('EtiketMerkezi cihaz varsayılanı', () => {
     expect(istekler.gonderilenler[0]).toMatchObject({ yol: '/etiket-merkezi/sablonlar/lot-100x50/bas', govde: { yaziciId: 1, adet: 1, kayit: { tur: 'mal-kabul', idler: [12] } } });
     expect(istekler.gonderilenler[0]!.kimlik).not.toBeNull();
     expect(await screen.findByText('Etiketler gönderildi: Zebra depo.')).toBeTruthy();
-    expect(screen.getByRole('link', { name: 'Kalite durum etiketleri: hepsini bas (2)' }).getAttribute('href')).toBe('/etiket-merkezi?tur=kalite-durum&id=41%2C40');
+    expect(screen.getByRole('link', { name: 'Kalite durum etiketleri: hepsini bas (2)' }).getAttribute('href')).toBe('/etiket-merkezi/bas?tur=kalite-durum&id=41%2C40');
   });
 
   it('başka ölçüde kayıtlı varsayılan bu şablonda işaretli görünmez; şu anki varsayılan yazılır', async () => {
     cihazYazicisiKaydet('konum', { yaziciId: 1, yaziciAd: 'Zebra depo', sablonAnahtar: 'konum-100x50', sablonAd: 'Konum 100x50' });
     sunucuKur({ islemler: BASAN });
     ac(<HazirSablonlar />, '/etiket-merkezi?tur=konum&id=11');
-    fireEvent.change(await screen.findByLabelText('Yazıcı'), { target: { value: '1' } });
-    expect((screen.getByRole('checkbox', { name: 'Bu cihazda varsayılan yap' }) as HTMLInputElement).checked).toBe(false);
-    expect(screen.getByText('Bu cihazda şu an varsayılan: Zebra depo · Konum 100x50.')).toBeTruthy();
+    fireEvent.change(await yaziciAlani(), { target: { value: 'ag:1' } });
+    expect(((await screen.findByRole('checkbox', { name: TEK_DOKUNUS })) as HTMLInputElement).checked).toBe(false);
+    expect(screen.getByText('Bu cihazda şu an tek dokunuş: Zebra depo · Konum 100x50.')).toBeTruthy();
   });
 
   it('yazıcı adı düğmede görünür; 10 etiketten çoğu tek onayla basılır, vazgeçilirse istek gitmez; tek basım en çok 200 kayıttır', async () => {
@@ -780,9 +803,9 @@ describe('Yer etiketi grubu', () => {
     expect(yerGrubu([ISTASYON])).toEqual([ISTASYON]);
   });
 
-  it('Etiket türleri sekmesinde tek "Yer etiketi" satırı görünür', async () => {
+  it('Etiket türleri listesinde tek "Yer etiketi" satırı görünür', async () => {
     sunucuKur({ islemler: ['sayfa.etiket-merkezi', 'etiket-merkezi.oku'], etiketler: { etiketler: [LOT, KONUM, ISTASYON] } });
-    ac(<Etiketler />, '/etiket-merkezi/etiketler?sekme=turler');
+    ac(<TurListesi />, '/etiket-merkezi/otomatik?sekme=turler');
     expect(await screen.findByText('Yer etiketi')).toBeTruthy();
     expect(screen.queryByText('İstasyon etiketi')).toBeNull();
     expect(screen.getByText('Yer 50x25, Yer 100x50 · Teslim yeri')).toBeTruthy();
@@ -809,7 +832,9 @@ describe('USB yazıcıya basım (2954)', () => {
     Object.defineProperty(navigator, 'usb', { value: usb, configurable: true });
     return usb;
   };
-  const argoxSec = async () => fireEvent.change(await screen.findByLabelText('Yazıcı'), { target: { value: '2' } });
+  // USB açık ve tarayıcı destekliyse dosya yazıcısı "USB, bu bilgisayar" olarak listelenir; değilse komut dosyasıdır.
+  const argoxSec = async (deger = 'usb:2') => fireEvent.change(await yaziciAlani(), { target: { value: deger } });
+  const BAGLA = 'USB yazıcıyı bu bilgisayara bağla';
   afterEach(() => { Reflect.deleteProperty(navigator, 'usb'); });
 
   it('eşleşme yokken yalnız bağlama düğmesi çıkar; eşleşince komut indirme ucundan alınıp USB yazıcıya aktarılır ve deftere yazılır', async () => {
@@ -818,17 +843,16 @@ describe('USB yazıcıya basım (2954)', () => {
     const istekler = sunucuKur({ islemler: BAS, yazicilar: USB_ACIK });
     ac(<YaziciDenemesi />);
     await argoxSec();
-    expect(screen.queryByRole('button', { name: 'USB yazıcıya bas' })).toBeNull();
-    fireEvent.click(await screen.findByRole('button', { name: 'Bu bilgisayara USB yazıcı bağla' }));
+    expect(screen.queryByRole('button', { name: /^Bas · / })).toBeNull();
+    fireEvent.click(await screen.findByRole('button', { name: BAGLA }));
     await waitFor(() => expect(usb.requestDevice).toHaveBeenCalledWith({ filters: [{ classCode: 7 }] }));
-    fireEvent.click(await screen.findByRole('button', { name: 'USB yazıcıya bas' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Bas · 1 etiket' }));
     expect(await screen.findByText(/USB yazıcıya aktarıldı ve deftere yazıldı/)).toBeTruthy();
     const [g] = istekler.gonderilenler;
     expect(g?.yol).toBe('/etiket-merkezi/sablonlar/deneme-50x25/indir');
     expect(g?.govde).toEqual({ yaziciId: 2, adet: 1 });
     expect(istekKimligiMi(g?.kimlik)).toBe(true);
     expect(secilen.giden).toEqual(['\nN\nP1\n']);
-    expect(screen.getByRole('button', { name: 'Yazıcı için indir' })).toBeTruthy();
   });
 
   it('cihaz başına kapalı: sistem ayarı kapalıyken eşleşmiş aygıt olsa da USB düğmesi yoktur; ayar açık ama eşleşme yoksa basılmaz', async () => {
@@ -836,23 +860,24 @@ describe('USB yazıcıya basım (2954)', () => {
     usbKur([eslesmis]);
     sunucuKur({ islemler: BAS });
     ac(<YaziciDenemesi />);
-    await argoxSec();
-    expect(screen.getByRole('button', { name: 'Yazıcı için indir' })).toBeTruthy();
+    await argoxSec('dosya:2');
+    expect(screen.getByRole('button', { name: 'İndir · 1 etiket' })).toBeTruthy();
+    expect(screen.queryByRole('option', { name: /USB/ })).toBeNull();
     expect(screen.queryByRole('button', { name: /USB/ })).toBeNull();
     cleanup();
     usbKur([]);
     sunucuKur({ islemler: BAS, yazicilar: USB_ACIK });
     ac(<YaziciDenemesi />);
     await argoxSec();
-    expect(await screen.findByRole('button', { name: 'Bu bilgisayara USB yazıcı bağla' })).toBeTruthy();
-    expect(screen.queryByRole('button', { name: 'USB yazıcıya bas' })).toBeNull();
+    expect(await screen.findByRole('button', { name: BAGLA })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /^Bas · / })).toBeNull();
   });
 
   it('HTTPS değilse ya da tarayıcıda USB yoksa ekran bugünkü indirme yolunda kalır', async () => {
     sunucuKur({ islemler: BAS, yazicilar: USB_ACIK });
     ac(<YaziciDenemesi />);
-    await argoxSec();
-    expect(screen.getByRole('button', { name: 'Yazıcı için indir' })).toBeTruthy();
+    await argoxSec('dosya:2');
+    expect(screen.getByRole('button', { name: 'İndir · 1 etiket' })).toBeTruthy();
     expect(screen.queryByRole('button', { name: /USB/ })).toBeNull();
   });
 
@@ -868,7 +893,7 @@ describe('USB yazıcıya basım (2954)', () => {
     sunucuKur({ islemler: BAS, yazicilar: USB_ACIK });
     ac(<YaziciDenemesi />);
     await argoxSec();
-    fireEvent.click(await screen.findByRole('button', { name: 'USB yazıcıya bas' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Bas · 1 etiket' }));
     expect(await screen.findByText(/USB yazıcıya aktarılamadı: Yazıcıya erişilemedi\. Yazıcıyı kullanan başka bir program varsa kapatın; Sorun sürerse bu bilgisayarın yazıcı sürücüsü tarayıcıdan basıma ayarlanmamıştır; sistem yöneticisine haber verin/)).toBeTruthy();
     expect(screen.queryByText(new RegExp(ham))).toBeNull();
     expect(indirilen).toHaveBeenCalledWith('deneme-50x25-203.prn');
@@ -888,8 +913,8 @@ describe('USB yazıcıya basım (2954)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Eşleşmeyi kaldır' }));
     expect(await screen.findByText('USB yazıcı eşleşmesi bu bilgisayarda kaldırıldı.')).toBeTruthy();
     expect(yeni.forget).toHaveBeenCalledTimes(1);
-    expect(screen.getByRole('button', { name: 'Bu bilgisayara USB yazıcı bağla' })).toBeTruthy();
-    expect(screen.queryByRole('button', { name: 'USB yazıcıya bas' })).toBeNull();
+    expect(screen.getByRole('button', { name: BAGLA })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /^Bas · / })).toBeNull();
   });
 
   it('ek: tarayıcı izni kaldırmayı desteklemiyorsa "Eşleşmeyi kaldır" görünmez', async () => {
@@ -909,9 +934,159 @@ describe('USB yazıcıya basım (2954)', () => {
     sunucuKur({ islemler: BAS, yazicilar: USB_ACIK });
     ac(<YaziciDenemesi />);
     await argoxSec();
-    fireEvent.click(await screen.findByRole('button', { name: 'USB yazıcıya bas' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Bas · 1 etiket' }));
     expect(await screen.findByText(/USB yazıcıya aktarılamadı: Yazıcı veriyi kabul etmedi\. Komut dosyası indirildi/)).toBeTruthy();
     expect(indirilen).toHaveBeenCalledWith('deneme-50x25-203.prn');
+  });
+});
+
+// Kart 3025: Etiket Merkezi Pano ile açılır; olaydan doğan etiketler ve bu cihazdaki tek dokunuş "Otomatik baskılar"da görünür.
+describe('Etiket Merkezi yeni düzen (3025)', () => {
+  const OKUR: Islem[] = ['sayfa.etiket-merkezi', 'etiket-merkezi.oku'];
+  const BASAN: Islem[] = [...OKUR, 'etiket-merkezi.bas'];
+  const ZEBRA_LOT = { yaziciId: 1, yaziciAd: 'Zebra depo', sablonAnahtar: 'lot-100x50', sablonAd: 'Lot 100x50', baglanti: 'ag' as const };
+  afterEach(() => { localStorage.clear(); vi.useRealTimers(); });
+
+  it('Pano bugünün sayılarını var olan uçlardan hesaplar; kartlar ilgili sayfaya gider; tek dokunuşlu türler işaretlidir', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-10-18T18:00:00.000Z'));
+    cihazYazicisiKaydet('lot', ZEBRA_LOT);
+    sunucuKur({ islemler: OKUR });
+    ac(<Pano />);
+    const bekleyen = await screen.findByRole('link', { name: /^Basılacak etiket/ });
+    expect(bekleyen.getAttribute('href')).toBe('/etiket-merkezi/etiketler');
+    await waitFor(() => expect(bekleyen.textContent).toContain('6'));
+    expect(bekleyen.textContent).toContain('5 kayıt');
+    // Hatasız baskılar: 3 kayıt x 2 + deneme 1 + 1 kayıt x 1 = 8 etiket; hatalı tek baskı.
+    const bugun = screen.getByRole('link', { name: /^Bugün basılan/ });
+    await waitFor(() => expect(bugun.textContent).toContain('8'));
+    expect(bugun.textContent).toContain('4 baskı');
+    const hatali = screen.getByRole('link', { name: /^Hatalı baskı/ });
+    expect(hatali.getAttribute('href')).toBe('/etiket-merkezi/baskilar?sonuc=hata');
+    expect(hatali.textContent).toContain('1');
+    // Lot varsayılanı mal kabul ve tek lot işlerini tek dokunuşa çevirir.
+    const tek = screen.getByRole('link', { name: /^Tek dokunuşla basan iş/ });
+    expect(tek.textContent).toContain('2');
+    expect(tek.textContent).toContain('bu cihazda · Zebra depo');
+    expect(screen.getAllByLabelText('Tek dokunuş açık')).toHaveLength(2);
+    expect(screen.getByRole('link', { name: /^Lot etiketleri/ }).getAttribute('href')).toBe('/etiket-merkezi/bas?tur=lot');
+    expect(screen.getByRole('link', { name: 'MK-000012 bas' }).getAttribute('href')).toBe('/etiket-merkezi/bas?tur=mal-kabul&id=12');
+  });
+
+  it('okuması olmayan Pano\'da yalnız hızlı basışı görür; bekleyen ve geçmiş istenmez', async () => {
+    const istekler = sunucuKur({ islemler: ['sayfa.etiket-merkezi'] });
+    ac(<Pano />);
+    expect(await screen.findByRole('link', { name: /^Tek dokunuşla basan iş/ })).toBeTruthy();
+    expect(screen.getByText('bu cihazda yazıcı atanmadı')).toBeTruthy();
+    expect(screen.queryByRole('link', { name: /^Basılacak etiket/ })).toBeNull();
+    expect(istekler.some((i) => i.startsWith('/etiket-merkezi/bekleyenler') || i.startsWith('/etiket-merkezi/baskilar'))).toBe(false);
+  });
+
+  it('eski adres (diğer modüllerin düğmeleri) seçimi bozmadan Etiket bas\'a gider; seçimsiz adres Pano\'yu açar', () => {
+    const kur = (adres: string) => ac((
+      <Routes>
+        <Route path="/etiket-merkezi" element={<EskiBasAdresi pano={() => <p>Pano açık</p>} />} />
+        <Route path="/etiket-merkezi/bas" element={<p>Etiket bas açık</p>} />
+      </Routes>
+    ), adres);
+    kur('/etiket-merkezi?tur=konum&id=11,12');
+    expect(screen.getByText('Etiket bas açık')).toBeTruthy();
+    expect(screen.getByTestId('adres').textContent).toBe('?tur=konum&id=11,12');
+    cleanup();
+    kur('/etiket-merkezi');
+    expect(screen.getByText('Pano açık')).toBeTruthy();
+  });
+
+  it('Otomatik baskılar her olayı, düğmenin ekranını ve tek dokunuş durumunu gösterir; etiketlerin kendiliğinden basılmadığını söyler', async () => {
+    sunucuKur({ islemler: OKUR });
+    ac(<OtomatikBaskilar />, '/etiket-merkezi/otomatik');
+    expect(await screen.findByText(/Etiketler kendiliğinden basılmaz/)).toBeTruthy();
+    for (const is of OTOMATIK_ISLER) expect(screen.getByText(is.olay)).toBeTruthy();
+    expect(screen.getAllByText('Etiket Merkezi\'ni açar')).toHaveLength(OTOMATIK_ISLER.filter((i) => i.tekDokunus === 'hayir').length);
+    expect(screen.getAllByText('Yazıcı atanmadı')).toHaveLength(OTOMATIK_ISLER.filter((i) => i.tekDokunus !== 'hayir').length);
+    expect(screen.getByRole('link', { name: 'Stok · Refakat kartları' }).getAttribute('href')).toBe('/stok/refakat-kartlari');
+    expect(screen.getByText('Kalibrasyon etiketi')).toBeTruthy();
+    // Yalnız okuyan yazıcı atayamaz.
+    expect(screen.queryByRole('button', { name: 'Yazıcı ata' })).toBeNull();
+    fireEvent.click(screen.getByRole('tab', { name: 'Etiket türleri' }));
+    expect(await screen.findByText('Lot etiketi')).toBeTruthy();
+    expect(screen.getByTestId('adres').textContent).toBe('?sekme=turler');
+  });
+
+  it('basabilen türe bu cihazda yazıcı atar: yalnız ağ yazıcısı sunulur (dosya ve Windows yazdırma tek dokunuş olmaz)', async () => {
+    sunucuKur({ islemler: BASAN });
+    ac(<OtomatikBaskilar />, '/etiket-merkezi/otomatik');
+    fireEvent.click((await screen.findAllByRole('button', { name: 'Yazıcı ata' }))[0]!);
+    expect(await screen.findByText('Mal kabul lot etiketleri: tek dokunuş yazıcısı')).toBeTruthy();
+    const secim = await screen.findByRole('combobox', { name: 'Yazıcı' });
+    await waitFor(() => expect(screen.getByRole('option', { name: 'Zebra depo · ağ' })).toBeTruthy());
+    expect(screen.queryByRole('option', { name: /Argox masa/ })).toBeNull();
+    expect(screen.queryByRole('option', { name: /Windows/ })).toBeNull();
+    fireEvent.change(secim, { target: { value: 'ag:1' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Bu cihazda kaydet' }));
+    expect(cihazYazicilari().lot).toEqual(ZEBRA_LOT);
+    // Lot şablonunu kullanan iki iş (mal kabul, tek lot) birlikte tek dokunuşa geçer.
+    expect(await screen.findAllByText('Tek dokunuş · Zebra depo')).toHaveLength(2);
+  });
+
+  it('USB açık ve tarayıcı destekliyken dosya yazıcısı USB olarak atanır ve öyle kaydedilir', async () => {
+    vi.stubGlobal('isSecureContext', true);
+    Object.defineProperty(navigator, 'usb', { value: { getDevices: async () => [], requestDevice: async () => null }, configurable: true });
+    sunucuKur({ islemler: BASAN, yazicilar: { ...YAZICILAR, usbBaski: true } });
+    ac(<OtomatikBaskilar />, '/etiket-merkezi/otomatik');
+    fireEvent.click((await screen.findAllByRole('button', { name: 'Yazıcı ata' }))[0]!);
+    const secim = await screen.findByRole('combobox', { name: 'Yazıcı' });
+    await waitFor(() => expect(screen.getByRole('option', { name: 'Argox masa · USB, bu bilgisayar' })).toBeTruthy());
+    fireEvent.change(secim, { target: { value: 'usb:2' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Bu cihazda kaydet' }));
+    expect(cihazYazicilari().lot).toMatchObject({ yaziciId: 2, yaziciAd: 'Argox masa', baglanti: 'usb' });
+    Reflect.deleteProperty(navigator, 'usb');
+  });
+
+  it('Basılacaklar satırındaki Bas, türün tek dokunuşu varsa Etiket bas\'ı açmadan o yazıcıya basar', async () => {
+    cihazYazicisiKaydet('lot', ZEBRA_LOT);
+    const istekler = sunucuKur({ islemler: BASAN });
+    ac(<Etiketler />, '/etiket-merkezi/etiketler');
+    fireEvent.click(await screen.findByRole('button', { name: 'MK-000012 bas' }));
+    await waitFor(() => expect(istekler.gonderilenler).toHaveLength(1));
+    expect(istekler.gonderilenler[0]).toMatchObject({ yol: '/etiket-merkezi/sablonlar/lot-100x50/bas', govde: { yaziciId: 1, adet: 1, kayit: { tur: 'mal-kabul', idler: [12] } } });
+    // Tek dokunuşu olmayan tür bağlantı olarak kalır.
+    expect(screen.getByRole('link', { name: 'UE-000121 OP 20 bas' })).toBeTruthy();
+  });
+
+  it('Baskı geçmişinde "Hatalı" yalnız yazıcıya ulaşmayan baskıları gösterir ve adreste kalır', async () => {
+    sunucuKur({ islemler: OKUR });
+    ac(<Baskilar />, '/etiket-merkezi/baskilar?sonuc=hata');
+    expect(await screen.findByText(/Yazıcıya ulaşılamadı/)).toBeTruthy();
+    expect(screen.queryByText('İndirildi')).toBeNull();
+    expect(screen.getByRole('tab', { name: 'Hatalı (1)' }).getAttribute('aria-selected')).toBe('true');
+    fireEvent.click(screen.getByRole('tab', { name: 'Tümü (4)' }));
+    expect(await screen.findByText('İndirildi')).toBeTruthy();
+    expect(screen.getByTestId('adres').textContent).toBe('');
+  });
+
+  it('Yazıcılar notu USB açıkken takılı yazıcının USB ile basıp tek dokunuşa atanabildiğini, kapalıyken Windows yazdırmanın atanamadığını söyler', async () => {
+    sunucuKur({ islemler: OKUR, yazicilar: { ...YAZICILAR, usbBaski: true } });
+    ac(<Yazicilar />);
+    expect(await screen.findByText(/USB ile takılı yazıcı Etiket bas'ta "USB, bu bilgisayar" ile basar ve tek dokunuşa atanabilir/)).toBeTruthy();
+    expect(screen.getByText('Dosya · USB ile basar')).toBeTruthy();
+    cleanup();
+    sunucuKur({ islemler: OKUR });
+    ac(<Yazicilar />);
+    expect(await screen.findByText(/"Windows yazdırma" ile basılır; bu tek dokunuşa atanamaz/)).toBeTruthy();
+    expect(screen.getByText('Dosya')).toBeTruthy();
+  });
+
+  it('Etiket bas son seçilen yazıcıyı bu cihazda tür başına hatırlar', async () => {
+    sunucuKur({ islemler: BASAN });
+    ac(<HazirSablonlar />, '/etiket-merkezi?tur=konum&id=11');
+    fireEvent.change(await yaziciAlani(), { target: { value: 'tarayici' } });
+    cleanup();
+    ac(<HazirSablonlar />, '/etiket-merkezi?tur=konum&id=11');
+    expect(((await yaziciAlani()) as HTMLSelectElement).value).toBe('tarayici');
+    cleanup();
+    ac(<HazirSablonlar />, '/etiket-merkezi?tur=lot&id=11');
+    expect(((await yaziciAlani()) as HTMLSelectElement).value).toBe('ag:1');
   });
 });
 
@@ -986,7 +1161,7 @@ describe('Standart dışı ölçü (3011)', () => {
     localStorage.setItem('coremes.etiket-merkezi.ozel-olcu', JSON.stringify({ 'konum-50x25': { genislik: 40, yukseklik: 20 } }));
     ac(<HazirSablonlar />, '/etiket-merkezi?tur=konum&id=11');
     await waitFor(() => expect(istekler.some((i) => i.includes('/konum-50x25/kayit-cikti?') && i.includes('en=40&boy=20'))).toBe(true));
-    fireEvent.click(await screen.findByRole('button', { name: 'Vektörel yazdır' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Bas · 1 etiket' }));
     await waitFor(() => expect(istekler.gonderilenler.find((x) => x.yol.endsWith('/yazdir'))?.govde).toEqual({ adet: 1, kayit: { tur: 'konum', idler: [11] }, olcu: { genislik: 40, yukseklik: 20 } }));
     await waitFor(() => expect(stil).toBe('@page { size: 40mm 20mm; margin: 0; }'));
     fireEvent(window, new Event('afterprint'));
@@ -996,8 +1171,8 @@ describe('Standart dışı ölçü (3011)', () => {
     const istekler = sunucuKur({ islemler: BAS });
     localStorage.setItem('coremes.etiket-merkezi.ozel-olcu', JSON.stringify({ 'konum-50x25': { genislik: 40, yukseklik: 20 } }));
     ac(<HazirSablonlar />, '/etiket-merkezi?tur=konum&id=11');
-    fireEvent.change(await screen.findByLabelText('Yazıcı'), { target: { value: '1' } });
-    fireEvent.click(await screen.findByRole('button', { name: /Yazıcıya gönder/ }));
+    fireEvent.change(await yaziciAlani(), { target: { value: 'ag:1' } });
+    fireEvent.click(await screen.findByRole('button', { name: 'Bas · 1 etiket' }));
     await waitFor(() => expect(istekler.gonderilenler.find((x) => x.yol.endsWith('/bas'))?.govde).toMatchObject({ yaziciId: 1, olcu: { genislik: 40, yukseklik: 20 } }));
   });
 });

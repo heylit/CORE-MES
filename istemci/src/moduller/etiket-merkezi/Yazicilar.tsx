@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { BaglantiTuru, SablonlarCevabi, Yazici, YaziciDili, YazicilarCevabi } from '#paylasilan/sozlesme/etiket-merkezi.ts';
 import { Dugme, DurumKutusu, Girdi, IsaretKutusu, Kart, Rozet, Secim, Tablo, useBildirim, type Sutun } from '../../ortak/arayuz/index.ts';
@@ -69,14 +70,23 @@ export function Yazicilar() {
   if (liste.isError || secenekler.isError) {
     return <Kart baslik="Yazıcılar"><DurumKutusu durum="hata" yenile={() => { void liste.refetch(); void secenekler.refetch(); }} /></Kart>;
   }
+  const usbAcik = liste.data.usbBaski;
   const dilAdi = (d: YaziciDili) => secenekler.data.secenekler.diller.find((x) => x.deger === d)?.ad ?? d;
   const sutunlar: Sutun<Yazici>[] = [
     { anahtar: 'ad', baslik: 'Ad', hucre: (y) => <strong>{y.ad}</strong> },
     { anahtar: 'dil', baslik: 'Dil', hucre: (y) => `${dilAdi(y.dil)} · ${y.dpi} dpi${y.sade ? ' · sade' : ''}` },
-    { anahtar: 'baglanti', baslik: 'Bağlantı', hucre: (y) => (y.baglanti === 'ag' ? 'Ağ' : 'Dosya') },
+    { anahtar: 'baglanti', baslik: 'Bağlantı', hucre: (y) => (y.baglanti === 'ag' ? 'Ağ' : usbAcik ? 'Dosya · USB ile basar' : 'Dosya') },
     { anahtar: 'adres', baslik: 'Adres', mono: true, kirilmaz: true, hucre: (y) => y.adres ?? '-' },
     { anahtar: 'aktif', baslik: 'Durum', hucre: (y) => <Rozet ton={y.aktif ? 'tamam' : 'pasif'}>{y.aktif ? 'Kullanımda' : 'Kapalı'}</Rozet> },
-    ...(yazabilir ? [{ anahtar: 'duzenle', baslik: '', hucre: (y: Yazici) => <Dugme simge="edit" onClick={() => setForm(y)}>Düzenle</Dugme> }] : []),
+    {
+      anahtar: 'islem', baslik: '', csv: () => '',
+      hucre: (y: Yazici) => (
+        <div className="tc-etk-dugmeler">
+          <Link to="/etiket-merkezi/deneme"><Dugme simge="printer">Deneme bas</Dugme></Link>
+          {yazabilir && <Dugme simge="edit" onClick={() => setForm(y)}>Düzenle</Dugme>}
+        </div>
+      ),
+    },
   ];
   const { dogrudanBaski } = liste.data;
   return (
@@ -84,7 +94,9 @@ export function Yazicilar() {
       <p className="tc-etk-not">
         <Rozet ton={dogrudanBaski.acik ? 'tamam' : 'pasif'}>{dogrudanBaski.acik ? 'Doğrudan baskı açık' : 'Doğrudan baskı kapalı'}</Rozet>{' '}
         {dogrudanBaski.neden ?? 'Ağ yazıcısına sunucu doğrudan gönderir; dosya yazıcısında komut dosyası indirilir.'}{' '}
-        Bu bilgisayara takılı yazıcıya yazıcı tanımı gerekmeden Etiket bas sayfasındaki "Vektörel yazdır" ile basılır.
+        {usbAcik
+          ? 'Bu bilgisayara USB ile takılı yazıcı Etiket bas\'ta "USB, bu bilgisayar" ile basar ve tek dokunuşa atanabilir; tanımı olmayan yazıcıya "Windows yazdırma" ile basılır.'
+          : 'Tanımı olmayan yazıcıya Etiket bas\'ta "Windows yazdırma" ile basılır; bu tek dokunuşa atanamaz.'}
       </p>
       {form !== null && (
         <YaziciFormu key={form === 'yeni' ? 'yeni' : form.id} yazici={form === 'yeni' ? null : form} secenekler={secenekler.data.secenekler} kapat={() => setForm(null)} />
