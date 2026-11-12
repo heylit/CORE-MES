@@ -6,7 +6,7 @@ import {
 } from './duzenleyici-durumu.ts';
 import type { GozKalemi } from '#paylasilan/sozlesme/atolye.ts';
 import {
-  depoMerkezi, dolulukKademesi, emirlerIstasyonaGore, istasyonEmirGruplari, gozKalemiYukleri, gozOzetleri, ilerleme, istasyonCanli, istasyonGorunumu, istasyonParcalari, parcaYerleri, siradakiEmirler, yerlesmemisCalisanlar,
+  depoMerkezi, dolulukKademesi, emirlerIstasyonaGore, istasyonEmirGruplari, gozKalemiYukleri, stokYukleri, STOKLU_GOZ_DOLULUGU, gozOzetleri, ilerleme, istasyonCanli, istasyonGorunumu, istasyonParcalari, parcaYerleri, siradakiEmirler, yerlesmemisCalisanlar,
   eklenebilirIstasyonlar, ornekIstasyonMu,
   istasyonunParcalari, ozetle, parcaListesi, stokEslemeIletisi, turSirasi, govdeGorunumu, sahneModelTurleri,
 } from './kurallar.ts';
@@ -211,6 +211,28 @@ describe('raf yükü (göz kalemleri)', () => {
       { bolme: 1, kat: 2, goz: 1, bicim: 'koli', doluluk: 0.4, model: null },
     ]);
     expect(y.get(2)?.[0]).toMatchObject({ bicim: 'cubuk', doluluk: 1 });
+  });
+
+  it('3012 a: 3B raf yükü Stok\'tan; stoklu göz yarım yükle, raf türünün biçimiyle; pasif, okunmamış ve boş göz yok', () => {
+    const raflar = [
+      { id: 1, tur: 'palet' as const, aktif: true },
+      { id: 2, tur: 'konsol' as const, aktif: true },
+      { id: 3, tur: 'palet' as const, aktif: false },
+      { id: 4, tur: 'zemin' as const, aktif: true },
+    ];
+    const stok = new Map([
+      [1, new Map([['2-1-1', 3], ['1-1-1', 1], ['1-2-1', 0]])],
+      [2, new Map([['1-1-1', 2]])],
+      [3, new Map([['1-1-1', 5]])],
+    ]);
+    const y = stokYukleri(raflar, stok);
+    expect([...y.keys()].sort()).toEqual([1, 2]);
+    expect(y.get(1)).toEqual([
+      { bolme: 1, kat: 1, goz: 1, bicim: 'koli', doluluk: STOKLU_GOZ_DOLULUGU, model: null },
+      { bolme: 2, kat: 1, goz: 1, bicim: 'koli', doluluk: STOKLU_GOZ_DOLULUGU, model: null },
+    ]);
+    expect(y.get(2)?.[0]).toMatchObject({ bicim: 'cubuk' });
+    expect(stokYukleri(raflar, new Map()).size).toBe(0);
   });
 
   it('göz özetinde çok dolduran kalem önce gelir', () => {

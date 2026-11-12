@@ -14,7 +14,7 @@ import { varsayilanAyar } from '../model-dosyasi.ts';
 import type { Nokta2 } from '../fabrika.ts';
 import { DIS, GECIS_TURU_ADI, acikliklar, bolumYolu, disYolu, distaSerbestMi, gecisOrtasi, kapiKusagindaMi, kapilar } from '../gecis.ts';
 import type { Aciklik, GecisliBolum, Kapi } from '../gecis.ts';
-import { dolulukKademesi, govdeGorunumu, hucreAnahtari, sahneModelTurleri, sayi } from '../kurallar.ts';
+import { govdeGorunumu, hucreAnahtari, sahneModelTurleri, sayi } from '../kurallar.ts';
 import type { IstasyonCanli, ParcaModeli, RafYuku } from '../kurallar.ts';
 import { modelDizisi, modelSahnesi, modelYerlestir, parcaOnizlemesi, vekilMi } from './model.ts';
 import type { ModelDizisi, ModelYerlesimi } from './model.ts';
@@ -125,7 +125,9 @@ export interface RafOdakIstegi {
   kat: number | null;
   goz: number | null;
   // Göz (hucreAnahtari) -> etiket: baskın kalemin kodu ve toplam doluluk.
-  etiketler: ReadonlyMap<string, { kod: string; yuzde: number }>;
+  // Hücre anahtarı -> stoktaki kalem sayısı (Depo cephesiyle aynı, 3012 a); stoksuz göz anahtarda yoktur. null: stok
+  // bilinmiyor (görme yetkisi yok ya da okunmadı); göz "—" yazar, "boş" demek yanlış bilgi olur.
+  etiketler: ReadonlyMap<string, number> | null;
   // Sahnenin üstünü ve sağını örten arayüzün ölçüsü (px): bölme kalan alana sığdırılır.
   ustBosluk: number;
   sagBosluk: number;
@@ -1401,13 +1403,11 @@ export class SahneMotoru {
       this.cizer.shadowMap.needsUpdate = true;
     }
 
-    // Göz etiketleri yalnız bakılan bölmede: baskın kalemin kodu ve doluluk.
+    // Göz etiketleri yalnız bakılan bölmede: göz adresi ve stoktaki kalem sayısı (Depo cephesiyle aynı yazı).
+    const stok = istek.etiketler;
     const bolmeEtiketleri: string[] = [];
     for (let k = 1; k <= olcu.kat; k++) {
-      for (let g = 1; g <= olcu.goz; g++) {
-        const e = istek.etiketler.get(hucreAnahtari(istek.bolme, k, g));
-        bolmeEtiketleri.push(e ? `${e.kod}:${e.yuzde}` : '-');
-      }
+      for (let g = 1; g <= olcu.goz; g++) bolmeEtiketleri.push(stok === null ? '?' : String(stok.get(hucreAnahtari(istek.bolme, k, g)) ?? 0));
     }
     const etiketImza = `${imza}|${istek.bolme}|${bolmeEtiketleri.join(',')}`;
     if (o.etiketImza !== etiketImza) {
@@ -1418,17 +1418,17 @@ export class SahneMotoru {
         for (let g = 1; g <= olcu.goz; g++) {
           const c = gozCephesi(olcu, { bolme: istek.bolme, kat: k, goz: g });
           if (!c) continue;
-          const bilgi = istek.etiketler.get(hucreAnahtari(istek.bolme, k, g));
+          const kalem = stok?.get(hucreAnahtari(istek.bolme, k, g)) ?? 0;
           const el = document.createElement('button');
           el.type = 'button';
           el.className = 'tc-sahne-etiket tc-atolye-goz-etiket';
-          el.dataset.kademe = dolulukKademesi(bilgi?.yuzde ?? 0);
-          el.setAttribute('aria-label', `Kat ${k} göz ${g}: ${bilgi ? `${bilgi.kod}, yüzde ${bilgi.yuzde}` : 'boş'}`);
+          if (stok !== null) el.dataset.kademe = kalem > 0 ? 'az' : 'bos';
+          el.setAttribute('aria-label', `Kat ${k} göz ${g}: ${stok === null ? 'stok bilgisi yok' : kalem > 0 ? `stokta ${kalem} kalem` : 'boş'}`);
           const ad = document.createElement('b');
-          ad.textContent = bilgi ? bilgi.kod : `K${k}·G${g}`;
+          ad.textContent = `K${k}·G${g}`;
           const ek = document.createElement('span');
           const sigmiyor = o.sigmayan.has(hucreAnahtari(istek.bolme, k, g));
-          ek.textContent = bilgi ? `%${bilgi.yuzde}${sigmiyor ? ' · sığmıyor' : ''}` : 'boş';
+          ek.textContent = `${stok === null ? '—' : kalem > 0 ? `${kalem} kalem` : 'boş'}${sigmiyor ? ' · sığmıyor' : ''}`;
           if (sigmiyor) {
             el.dataset.sigmiyor = 'true';
             el.title = 'Parça modeli bu göze hiçbir duruşta sığmıyor; küçültülerek gösteriliyor.';

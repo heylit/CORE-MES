@@ -365,19 +365,33 @@ describe('fabrika haritası', () => {
     expect(within(kart).getByText('Deneme tezgah modeli (Çizim Merkezi, Rev 02)')).toBeTruthy();
   });
 
-  it('raf kartında göz içeriği göz kalemlerinden; göze basınca içi açılır, okuyan düzenleyemez', async () => {
+  it('3012 a: raf kartında göz içeriği Stok\'tan; stok yetkisi yoksa "bilinmiyor"; göze basınca içi açılır, okuyan düzenleyemez', async () => {
     const cagrilar = sunucuKur(OKUYAN);
     goster(<AtolyeHaritasi />);
     const plan = await screen.findByRole('img', { name: 'Atölye planı' });
     await waitFor(() => expect(cagrilar.some((c) => c.yol === '/atolye/goz-kalemleri?salonId=1')).toBe(true));
     fireEvent.pointerDown(within(plan).getByText('R1').closest('g') as Element);
     const kart = await screen.findByRole('region', { name: 'Raf R1 ayrıntısı' });
-    expect(await within(kart).findByText('DENEME-1, DENEME-2 · %70')).toBeTruthy();
+    const satir = (await within(kart).findByText('R1-01-1-1')).closest('tr') as HTMLElement;
+    expect(within(satir).getByText('bilinmiyor')).toBeTruthy();
+    expect(within(kart).queryByText(/DENEME-1, DENEME-2/)).toBeNull();
+    expect(cagrilar.some((c) => c.yol.startsWith('/stok/'))).toBe(false);
     fireEvent.click(within(kart).getByText('R1-01-1-1'));
     const panel = await within(kart).findByRole('region', { name: 'Göz R1-01-1-1' });
     expect(within(panel).getByText('DENEME-1 adı')).toBeTruthy();
     expect(within(panel).queryByRole('button', { name: /Kalem koy/ })).toBeNull();
     expect(within(panel).queryByLabelText('Doluluk %')).toBeNull();
+    cleanup();
+
+    sunucuKur({ ...OKUYAN, islemler: ['sayfa.atolye', 'sayfa.stok'] });
+    goster(<AtolyeHaritasi />);
+    const plan2 = await screen.findByRole('img', { name: 'Atölye planı' });
+    fireEvent.pointerDown(within(plan2).getByText('R1').closest('g') as Element);
+    const kart2 = await screen.findByRole('region', { name: 'Raf R1 ayrıntısı' });
+    const dolu = (await within(kart2).findByText('R1-01-1-1')).closest('tr') as HTMLElement;
+    expect(await within(dolu).findByText('3 kalem')).toBeTruthy();
+    const bos = within(kart2).getByText('R1-02-3-1').closest('tr') as HTMLElement;
+    expect(within(bos).getByText('Boş')).toBeTruthy();
   });
 
   it('depo: raf cephesinde göze basınca panel açılır; 3012 a: elle kalem koyma yok, eski kayıtlar yalnız görünür', async () => {
@@ -409,6 +423,18 @@ describe('fabrika haritası', () => {
     expect(screen.queryByText(/göz stokta|göz dolu/)).toBeNull();
     expect(screen.getByText("Gözlerin doluluğu Stok'tan gelir; görmek için stok görme yetkisi gerekir.")).toBeTruthy();
     expect(cagrilar.some((c) => c.yol.startsWith('/stok/'))).toBe(false);
+  });
+
+  it('3012 a: haritadaki 3B raf yükü Stok\'tan okunur; stok yetkisi yoksa stok isteği atılmaz', async () => {
+    const cagrilar = sunucuKur({ ...OKUYAN, islemler: ['sayfa.atolye', 'sayfa.stok'] });
+    goster(<AtolyeHaritasi />, '/atolye');
+    await waitFor(() => expect(cagrilar.some((c) => c.yol.startsWith('/stok/goz-stoklari'))).toBe(true));
+    cleanup();
+
+    const cagrilar2 = sunucuKur(OKUYAN);
+    goster(<AtolyeHaritasi />, '/atolye');
+    await waitFor(() => expect(cagrilar2.some((c) => c.yol.startsWith('/atolye/goz-kalemleri'))).toBe(true));
+    expect(cagrilar2.some((c) => c.yol.startsWith('/stok/'))).toBe(false);
   });
 
   it('parçalar: kod başına satır, nerede durduğu ve hangi makinede üretildiği; "Rafta göster" depoya götürür', async () => {
