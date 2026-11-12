@@ -157,6 +157,10 @@ export const partiGirisZamanlari = (db: Db, partiIdler: number[]): Promise<{ par
   `SELECT p.id::int AS "partiId", p.lot_no AS "lotNo", ${zamanMetni('min(m.zaman)')} AS "malKabulZamani"
    FROM stok_parti p LEFT JOIN stok_mal_kabul_satiri s ON s.parti_id = p.id LEFT JOIN stok_mal_kabul m ON m.id = s.mal_kabul_id
    WHERE p.id = ANY($1::bigint[]) GROUP BY p.id, p.lot_no`, [partiIdler]);
+// 3118: partinin tedarikçi kimliği (GKK formu); olmayan parti dönmez.
+export const partiKimlikleri = (db: Db, partiIdler: readonly number[]): Promise<{ partiId: number; tedarikciPartiNo: string | null; dokumNo: string | null; sertifikaNo: string | null }[]> => db.sorgu(
+  `SELECT p.id::int AS "partiId", p.tedarikci_parti_no AS "tedarikciPartiNo", p.dokum_no AS "dokumNo", p.sertifika_no AS "sertifikaNo"
+   FROM stok_parti p WHERE p.id = ANY($1::bigint[])`, [[...partiIdler]]);
 // Tedarikçi partileri (üretim partisi değil), yeniden eskiye; liste ekranı için sınırlı.
 export const sonPartiler = (db: Db, malzemeId: number, sinir: number): Promise<{ partiId: number; lotNo: string; tedarikciPartiNo: string | null; dokumNo: string | null; sertifikaNo: string | null; kayitZamani: string }[]> => db.sorgu(
   `SELECT p.id::int AS "partiId", p.lot_no AS "lotNo", p.tedarikci_parti_no AS "tedarikciPartiNo", p.dokum_no AS "dokumNo", p.sertifika_no AS "sertifikaNo", ${zamanMetni('p.kayit_zamani')} AS "kayitZamani"

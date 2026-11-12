@@ -7,12 +7,38 @@
 .tc-km-gkk-aralik { display: flex; flex-wrap: wrap; gap: var(--b-3); align-items: flex-start; }
 
 .tc-km-gkk-form { display: grid; gap: var(--b-4); min-width: 0; align-items: start; }
-/* Geniş ekranda iki sütun: lot ile belge, GKK ile karar yan yana; dar ekranda alt alta. */
+/* Geniş ekranda iki sütun: solda lot, malzeme, ölçü; sağda kontrol, işlem, seri, sonuç. Dar ekranda alt alta. */
 @media (min-width: 1024px) {
   .tc-km-gkk-form { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
-  .tc-km-gkk-form > :first-child, .tc-km-gkk-form > p { grid-column: 1 / -1; }
+  .tc-km-gkk-form > :first-child { grid-column: 1 / -1; }
 }
-.tc-km-gkk-form-ust { display: flex; align-items: center; justify-content: space-between; gap: var(--b-3); }
+.tc-km-gkk-sutun { display: grid; gap: var(--b-4); min-width: 0; align-content: start; }
+.tc-km-gkk-form-ust { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--b-3); }
+.tc-km-gkk-kimlik { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2); min-width: 0; }
+.tc-km-gkk-hata { margin: 0; color: var(--stop); font-size: var(--yazi-s); }
+.tc-km-gkk-ikili { display: grid; gap: var(--b-3); grid-template-columns: repeat(auto-fit, minmax(calc(var(--dokunma) * 3), 1fr)); align-items: end; }
+
+.tc-km-gkk-maddeler, .tc-km-gkk-seriler { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--b-2); }
+.tc-km-gkk-madde { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--b-2);
+  padding-block: var(--b-2); border-bottom: var(--cizgi-ince) solid var(--edge); }
+.tc-km-gkk-madde:last-child { border-bottom: 0; }
+.tc-km-gkk-madde > span:first-child { flex: 1 1 calc(var(--dokunma) * 4); min-width: 0; }
+.tc-km-gkk-uclu { display: inline-flex; flex-wrap: wrap; gap: var(--b-1); }
+.tc-km-gkk-uclu-dugme { min-height: var(--dokunma); padding-inline: var(--b-3); border: var(--cizgi-ince) solid var(--edge); border-radius: var(--yari-2);
+  background: var(--panel); color: var(--ink); font: inherit; font-size: var(--yazi-s); cursor: pointer; }
+/* Seçili düğme metin kalınlığı ve çerçeveyle de ayrılır; renk tek başına anlam taşımaz. Bakılmadı sakin kalır (varsayılandır). */
+.tc-km-gkk-uclu-dugme[aria-pressed="true"] { border-color: var(--edge2); background: var(--panel2); font-weight: 700; }
+.tc-km-gkk-uclu-uygun[aria-pressed="true"] { border-color: var(--run); background: color-mix(in srgb, var(--run) 14%, transparent); }
+.tc-km-gkk-uclu-uygun_degil[aria-pressed="true"] { border-color: var(--stop); background: color-mix(in srgb, var(--stop) 14%, transparent); }
+.tc-km-gkk-uclu-dugme:focus-visible { outline: var(--cizgi-ince) solid var(--ink); outline-offset: var(--b-1); }
+
+.tc-km-gkk-olculer { display: grid; gap: var(--b-3); }
+.tc-km-gkk-olcu { display: grid; gap: var(--b-2); grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: end; }
+.tc-km-gkk-seri-ekle { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--b-2); margin-bottom: var(--b-3); }
+.tc-km-gkk-seri-ekle > :first-child { flex: 1 1 calc(var(--dokunma) * 4); }
+.tc-km-gkk-seri { display: flex; align-items: center; gap: var(--b-2); }
+.tc-km-gkk-seri > span:first-child { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
+.tc-km-gkk-seri-hatali > span:first-child { color: var(--stop); }
 .tc-km-gkk-bilgi { display: grid; gap: var(--b-3); grid-template-columns: repeat(auto-fit, minmax(calc(var(--dokunma) * 3.4), 1fr)); margin: 0; }
 .tc-km-gkk-bilgi div { display: grid; gap: var(--b-1); min-width: 0; }
 .tc-km-gkk-bilgi dt { color: var(--muted); font-size: var(--yazi-xs); }
@@ -23,4 +49,7 @@
 .tc-km-gkk-eylem { display: flex; justify-content: flex-end; }
 @media (max-width: 767px) {
   .tc-km-gkk-eylem .tc-dugme { flex: 1 1 auto; }
+}
+@media (max-width: 767px) {
+  .tc-km-gkk-uclu { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); width: 100%; }
 }

@@ -8,7 +8,7 @@ import { YOK, zamanKisa } from '../bicim.ts';
 import { GIRIS_ANAHTARI } from '../bugun/GirisKarari.tsx';
 import type { EkranOzellikleri, KmSayaci } from '../sekmeler.ts';
 import { GkkFormu } from './GkkFormu.tsx';
-import { DURUM_ADI, DURUM_TONU, GIRIS_KAYITLARI_ANAHTARI, girisAraniyor, miktarMetni, sonucMetni } from './ortak.ts';
+import { DURUM_ADI, DURUM_TONU, GIRIS_KAYITLARI_ANAHTARI, GKK_TURU_ADI, girisAraniyor, gkkSonucu, miktarMetni, sonucMetni } from './ortak.ts';
 import './giris.css';
 
 // Bekleyen sayısı sunucudan gelir (Bugün ve Üretim Terminali ile aynı sorgu); KmVerisi'nde olmadığından menü sayacı yoktur.
@@ -44,9 +44,15 @@ const KARAR_SUTUNLARI: Sutun<KmGirisKaydi>[] = [
   { anahtar: 'hatali', baslik: 'Hatalı', hizala: 'sag', hucre: (k) => miktarMetni(k.hataliMiktar) },
   { anahtar: 'gkk', baslik: 'GKK', hucre: (k) => <span className="tc-km-gkk-hucre"><span>{k.gkkKisiAd ?? YOK}</span><small>{zamanKisa(k.gkkZaman)}</small></span>, csv: (k) => k.gkkKisiAd ?? '' },
 ];
+const SONUC_TONU = { kabul: 'tamam', kismi: 'uyari', sartli: 'uyari', ret: 'hata' } as const;
 const YAPILAN_SUTUNLARI: Sutun<KmGirisKaydi>[] = [
+  {
+    anahtar: 'gkkNo', baslik: 'GKK no', kirilmaz: true,
+    hucre: (k) => <span className="tc-km-gkk-hucre"><b className="tc-km-gkk-mono">{k.gkkNo ?? YOK}</b><small>{GKK_TURU_ADI[k.gkkTuru]}</small></span>,
+    csv: (k) => k.gkkNo ?? '',
+  },
   ...ORTAK_SUTUNLAR,
-  { anahtar: 'sonuc', baslik: 'Sonuç', hucre: (k) => <Rozet ton={Number(k.hataliMiktar ?? 0) > 0 ? 'uyari' : 'tamam'}>{sonucMetni(k)}</Rozet>, csv: (k) => sonucMetni(k) },
+  { anahtar: 'sonuc', baslik: 'Sonuç', hucre: (k) => <Rozet ton={SONUC_TONU[gkkSonucu(k) ?? 'kabul']}>{sonucMetni(k)}</Rozet>, csv: (k) => sonucMetni(k) },
   { anahtar: 'ncr', baslik: 'NCR', mono: true, kirilmaz: true, hucre: (k) => k.ncrNo ?? YOK },
   { anahtar: 'gkk', baslik: 'GKK', hucre: (k) => <span className="tc-km-gkk-hucre"><span>{k.gkkKisiAd ?? YOK}</span><small>{zamanKisa(k.gkkZaman)}</small></span>, csv: (k) => k.gkkKisiAd ?? '' },
 ];
@@ -150,7 +156,7 @@ export function GirisKontrolu({ veri, yetki, gecis, gecisTamam, git }: EkranOzel
             bosEylem={sekme === 'bekleyen' && !arama.trim() && !bekleyenler.isPending
               ? <Dugme tur="ikincil" onClick={() => { sekmeYaz('yapilan'); }}>Yapılanlara bak</Dugme> : undefined}
             arac={{
-              arama: { deger: arama, degistir: aramaYaz, etiket: 'GKK ara', yerTutucu: 'Mal kabul, malzeme, lot, tedarikçi, sipariş' },
+              arama: { deger: arama, degistir: aramaYaz, etiket: 'GKK ara', yerTutucu: 'GKK no, mal kabul, malzeme, lot, tedarikçi, sipariş' },
               csv: { ad: `gkk-${sekme}` },
             }}
           />

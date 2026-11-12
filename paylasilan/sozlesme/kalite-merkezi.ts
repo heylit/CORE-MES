@@ -197,8 +197,30 @@ export const kmHataliBekleyenCevabi = z.object({ kayitlar: z.array(hataliKaydiSe
 export const KM_GIRIS_DURUMLARI = ['gkk_bekliyor', 'karar_bekliyor', 'kapandi'] as const;
 export const KM_GIRIS_KARARLARI = ['kabul', 'sartli_kabul', 'red'] as const;
 export type KmGirisKarari = (typeof KM_GIRIS_KARARLARI)[number];
+// 3118: GKK formu kartın türüne göre iki biçimdedir. Yarı mamul ve mamul parça formu (resim, işlemler, seri), gerisi hammadde formu.
+export const KM_GKK_TURLERI = ['hammadde', 'yari_mamul'] as const;
+export type KmGkkTuru = (typeof KM_GKK_TURLERI)[number];
+// Kontrol maddeleri forma göre sabittir; anahtar kayıtta durur, başlık ekranındır (istemci giris/ortak.ts).
+export const KM_GKK_MADDELERI = {
+  hammadde: ['irsaliye', 'sertifika', 'dokum', 'kimlik', 'olcu', 'miktar', 'gorsel', 'markalama'],
+  yari_mamul: ['irsaliye', 'resim', 'rapor', 'olcu', 'miktar', 'yuzey', 'ambalaj'],
+} as const satisfies Record<KmGkkTuru, readonly string[]>;
+export const KM_GKK_MADDE_SONUCLARI = ['uygun', 'uygun_degil', 'bakilmadi'] as const;
+export const KM_GKK_SERI_SINIRI = 500;
+const kisaMetin = (en: number) => z.string().trim().max(en).nullish().transform((d) => (d ? d : null));
+const maddeSonucu = z.enum(KM_GKK_MADDE_SONUCLARI);
+// Kontrol listesi GKK satırıyla bir kez yazılır. Seri numaraları yalnız bu kayıttadır; stoğa seri açılmaz (mal kabulde seri tutulmuyor).
+export const kmGkkKontrolu = z.object({
+  maddeler: z.array(z.object({ anahtar: z.string().min(1).max(20), sonuc: maddeSonucu })).max(20),
+  olcumler: z.array(z.object({ ad: z.string().trim().min(1).max(40), istenen: kisaMetin(40), olculen: kisaMetin(40) })).max(20),
+  islemler: z.array(z.object({ ad: z.string().trim().min(1).max(80), sonuc: maddeSonucu })).max(40),
+  seriler: z.array(z.object({ no: z.string().trim().min(1).max(40), hatali: z.boolean() })).max(KM_GKK_SERI_SINIRI),
+}).strict();
+export type KmGkkKontrolu = z.output<typeof kmGkkKontrolu>;
 export const kmGirisKaydi = z.object({
   malKabulSatirId: z.number().int(),
+  gkkNo: z.string().nullable(),
+  gkkTuru: z.enum(KM_GKK_TURLERI),
   malKabulNo: z.string(),
   zaman: zamanSemasi,
   malzemeId: z.number().int(),
@@ -232,11 +254,6 @@ export const kmGirisKayitlariSorgusu = z.object({ baslangic: tarihSemasi, bitis:
   .refine((s) => s.baslangic <= s.bitis, { message: 'Başlangıç bitişten sonra olamaz.', path: ['baslangic'] });
 export const kmGirisKayitlariCevabi = z.object({ kayitlar: z.array(kmGirisKaydi), sinirda: z.boolean() });
 export type KmGirisKayitlariCevabi = z.output<typeof kmGirisKayitlariCevabi>;
-export const kmGirisGkkGovdesi = z.object({
-  kabul: sifirOlabilirMiktar,
-  hatali: sifirOlabilirMiktar,
-  not: z.string().trim().max(500, 'Not en çok 500 karakter olur.').nullish().transform((d) => (d ? d : null)),
-}).strict();
 export const kmGirisKararGovdesi = z.object({
   karar: z.enum(KM_GIRIS_KARARLARI),
   ncrKimlik: kimlik,
@@ -244,7 +261,38 @@ export const kmGirisKararGovdesi = z.object({
   ciddiyet: z.enum(KM_CIDDIYETLER),
   not: z.string().trim().max(500, 'Gerekçe en çok 500 karakter olur.').nullish().transform((d) => (d ? d : null)),
 }).strict();
-export const kmGirisCevabi = z.object({ kayit: kmGirisKaydi });
+// 3118: GKK ve isteğe bağlı olarak hatalının kararı tek istekte yazılır (Kısmi kabul, Şartlı kabul, Ret aynı sayfada); karar
+// verilmezse hatalı Karar bekleyen'e düşer (1252). Sonuç adı miktar ve karardan çıkar, ayrı tutulmaz.
+export const kmGirisGkkGovdesi = z.object({
+  kabul: sifirOlabilirMiktar,
+  hatali: sifirOlabilirMiktar,
+  not: z.string().trim().max(500, 'Not en çok 500 karakter olur.').nullish().transform((d) => (d ? d : null)),
+  kontrol: kmGkkKontrolu.nullish().transform((d) => d ?? null),
+  karar: kmGirisKararGovdesi.nullish().transform((d) => d ?? null),
+}).strict();
+// Malzeme kartı ve lotun GKK'da görünen ayrıntısı (salt okuma; kartta yoksa null ya da boş dizi).
+export const kmGirisAyrintisi = z.object({
+  kartTuru: z.string().nullable(),
+  cinsi: z.string().nullable(),
+  kalite: z.string().nullable(),
+  form: z.string().nullable(),
+  durum: z.string().nullable(),
+  yuzey: z.string().nullable(),
+  standartlar: z.array(z.string()),
+  tolerans: z.string().nullable(),
+  istenenSertifikalar: z.array(z.string()),
+  mensei: z.string().nullable(),
+  olculer: z.array(z.object({ ad: z.string(), deger: z.string() })),
+  resimNo: z.string().nullable(),
+  revizyon: z.string().nullable(),
+  islemler: z.array(z.string()),
+  dokumNo: z.string().nullable(),
+  tedarikciPartiNo: z.string().nullable(),
+  sertifikaNo: z.string().nullable(),
+  kontrol: kmGkkKontrolu.nullable(),
+});
+export type KmGirisAyrintisi = z.output<typeof kmGirisAyrintisi>;
+export const kmGirisCevabi = z.object({ kayit: kmGirisKaydi, ayrinti: kmGirisAyrintisi });
 export type KmGirisBekleyenCevabi = z.output<typeof kmGirisBekleyenCevabi>;
 export type KmGirisGkkGovdesi = z.input<typeof kmGirisGkkGovdesi>;
 export type KmGirisKararGovdesi = z.input<typeof kmGirisKararGovdesi>;

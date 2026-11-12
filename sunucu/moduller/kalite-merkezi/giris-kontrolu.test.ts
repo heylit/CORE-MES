@@ -57,12 +57,12 @@ describe('Kalite Merkezi giriş kontrolü (gerçek PostgreSQL)', () => {
     ...(govde === undefined ? {} : { payload: govde as object }),
   });
 
-  async function kart(tur: 'hammadde' | 'sarf', gkk: boolean | null = null): Promise<number> {
+  async function kart(tur: 'hammadde' | 'sarf' | 'yarimamul', gkk: boolean | null = null, ek: Record<string, unknown> = {}): Promise<number> {
     sira += 1;
     return (await o().sahip.tek<{ no: number }>(
       `INSERT INTO malzeme_katalog_karti (kimlik, tur, onek, sira_no, onay_durumu, kayit, acan_kisi_id, guncelleyen_kisi_id, gkk_gerekli)
        VALUES ($1, $2, 'GKK-DNM-', $3, 'aktif', $4, $5, $5, $6) RETURNING no`,
-      [`gkk-dnm-${sira}`, tur, sira, JSON.stringify({ id: `gkk-dnm-${sira}`, com: { ad: `Deneme ${tur} ${sira}` } }), yoneticiId, gkk],
+      [`gkk-dnm-${sira}`, tur, sira, JSON.stringify({ id: `gkk-dnm-${sira}`, com: { ad: `Deneme ${tur} ${sira}` }, ...ek }), yoneticiId, gkk ?? (tur === 'yarimamul' ? true : null)],
     ))!.no;
   }
 
@@ -307,5 +307,54 @@ describe('Kalite Merkezi giriş kontrolü (gerçek PostgreSQL)', () => {
     assert.deepEqual([kmGirisCevabi.parse(tek.json()).kayit.durum, kmGirisCevabi.parse(tek.json()).kayit.hataliMiktar], ['karar_bekliyor', '1.000']);
     assert.equal((await istek('operator', 'GET', `/kalite-merkezi/giris/${acik.malKabulSatirId}`)).statusCode, 403);
     assert.equal((await istek('kaliteci', 'GET', '/kalite-merkezi/giris/2147483000')).statusCode, 404);
+  });
+
+  test('3118: GKK numara alır, kontrol listesi ve hatalının kararı tek istekte yazılır; ayrıntı karttan ve lottan gelir; yanlış madde ve karar reddedilir', async () => {
+    const hm = await kabulEt(await kart('hammadde', null, { form: 'cubuk', dims: { d: 40, l: 3000 }, grade: 'DNM-1' }), '4');
+    const oku = async (id: number) => kmGirisCevabi.parse((await istek('kaliteci', 'GET', `/kalite-merkezi/giris/${id}`)).json());
+    const once = await oku(hm.malKabulSatirId);
+    assert.equal(once.kayit.gkkTuru, 'hammadde');
+    assert.equal(once.kayit.gkkNo, null);
+    assert.deepEqual(once.ayrinti.olculer, [{ ad: 'Çap', deger: '40 mm' }, { ad: 'Boy', deger: '3.000 mm' }]);
+    assert.equal(once.ayrinti.kalite, 'DNM-1');
+    assert.equal(once.ayrinti.kontrol, null);
+
+    const yol = (id: number) => `/kalite-merkezi/giris/${id}/gkk`;
+    const kontrol = { maddeler: [{ anahtar: 'irsaliye', sonuc: 'uygun' }, { anahtar: 'olcu', sonuc: 'uygun_degil' }], olcumler: [{ ad: 'Çap', istenen: '40 mm', olculen: '40,3' }], islemler: [], seriler: [] };
+    const karar = { karar: 'red', ncrKimlik: `ncr-gkk-${hm.malKabulSatirId}`, ncrNo: `NCR-GKK-${hm.malKabulSatirId}`, ciddiyet: 'Majör', not: 'Çap dışı' };
+    const yanlis = await istek('kaliteci', 'POST', yol(hm.malKabulSatirId), { kabul: '3', hatali: '1', kontrol: { ...kontrol, maddeler: [{ anahtar: 'resim', sonuc: 'uygun' }] } });
+    assert.equal(yanlis.statusCode, 400, yanlis.body);
+    assert.equal(yanlis.json().alan, 'kontrol');
+    assert.equal((await istek('kaliteci', 'POST', yol(hm.malKabulSatirId), { kabul: '3', hatali: '1', kontrol: { ...kontrol, seriler: [{ no: 'S-1', hatali: false }] } })).statusCode, 400, 'hammaddede seri yok');
+    assert.equal((await istek('kaliteci', 'POST', yol(hm.malKabulSatirId), { kabul: '4', hatali: '0', karar })).statusCode, 400, 'hatalısız karar');
+    assert.equal((await sorgular.girisKararlari(o().sahip, [hm.malKabulSatirId])).length, 0, 'reddedilen istek iz bırakmaz');
+
+    const r = await istek('kaliteci', 'POST', yol(hm.malKabulSatirId), { kabul: '3', hatali: '1', kontrol, karar });
+    assert.equal(r.statusCode, 200, r.body);
+    const c = kmGirisCevabi.parse(r.json());
+    assert.match(c.kayit.gkkNo ?? '', new RegExp(`^GKK-${String(new Date().getFullYear())}-\\d{4}$`));
+    assert.deepEqual([c.kayit.durum, c.kayit.karar, c.kayit.ncrNo, c.kayit.kabulMiktar, c.kayit.hataliMiktar], ['kapandi', 'red', `NCR-GKK-${hm.malKabulSatirId}`, '3.000', '1.000']);
+    assert.deepEqual(c.ayrinti.kontrol, kontrol);
+    assert.deepEqual(await bakiye(hm.partiId), { 'kabul:serbest': '3.000' }, 'ret iade çıkışıyla düşer');
+
+    const s = o().sahip;
+    await assert.rejects(s.sorgu("INSERT INTO kalite_merkezi_giris_karari (mal_kabul_satiri_id, asama, karar, ncr_kimlik, ncr_no, kisi_id, gkk_no) VALUES ($1, 'karar', 'red', 'x', 'y', $2, 'GKK-X')",
+      [hm.malKabulSatirId, yoneticiId]), /kalite_merkezi_giris_karari_gkk_alanlari|kalite_merkezi_giris_karari_tek/);
+    await assert.rejects(s.sorgu("INSERT INTO kalite_merkezi_giris_karari (mal_kabul_satiri_id, asama, kabul_miktar, hatali_miktar, kisi_id, gkk_no) VALUES ($1, 'gkk', 1, 0, $2, $3)",
+      [(await kabulEt(await kart('hammadde'), '1')).malKabulSatirId, yoneticiId, c.kayit.gkkNo]), /kalite_merkezi_giris_karari_gkk_no_tek/);
+
+    const ayar = await istek('yonetici', 'POST', '/ayarlar/kalite-merkezi.gkk-no/degistir', { deger: 'G-{TUR}-{SAYAC:3}' });
+    assert.equal(ayar.statusCode, 200, ayar.body);
+    const ym = await kabulEt(await kart('yarimamul'), '2');
+    assert.equal((await oku(ym.malKabulSatirId)).kayit.gkkTuru, 'yari_mamul');
+    const ymKontrol = { maddeler: [{ anahtar: 'resim', sonuc: 'uygun' }], olcumler: [], islemler: [{ ad: 'OP10 Deneme', sonuc: 'uygun' }], seriler: [{ no: 'S-1', hatali: false }, { no: 'S-2', hatali: true }] };
+    assert.equal((await istek('kaliteci', 'POST', yol(ym.malKabulSatirId), { kabul: '1', hatali: '1', kontrol: { ...ymKontrol, seriler: [{ no: 'S-1', hatali: false }, { no: 'S-1', hatali: true }] } })).statusCode, 400, 'aynı seri iki kez');
+    const y = await istek('kaliteci', 'POST', yol(ym.malKabulSatirId), { kabul: '1', hatali: '1', kontrol: ymKontrol });
+    assert.equal(y.statusCode, 200, y.body);
+    const yc = kmGirisCevabi.parse(y.json());
+    assert.match(yc.kayit.gkkNo ?? '', /^G-YM-\d{3}$/);
+    assert.equal(yc.kayit.durum, 'karar_bekliyor', 'karar sonraya kaldı');
+    assert.deepEqual(yc.ayrinti.kontrol, ymKontrol);
+    assert.equal((await istek('kaliteci', 'POST', yol(ym.malKabulSatirId), { kabul: '1', hatali: '1' })).statusCode, 409);
   });
 });

@@ -7,9 +7,9 @@ import type { Kullanici } from '#cekirdek/yetki.ts';
 import { tesisGunu, tesisSaati } from '#paylasilan/tesis-zamani.ts';
 import type { Durum as AletDurumu } from '#paylasilan/sozlesme/kalibrasyon.ts';
 import type { KaliteKarari, KapanisMaddeBilgisi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
-import { KM_GECMIS_SINIRI, KM_GIRIS_KAYIT_SINIRI } from '#paylasilan/sozlesme/kalite-merkezi.ts';
+import { KM_GECMIS_SINIRI, KM_GIRIS_KAYIT_SINIRI, kmGkkKontrolu } from '#paylasilan/sozlesme/kalite-merkezi.ts';
 import type { KayitAramaKaynagi } from '#paylasilan/kayit-aramasi.ts';
-import type { KmGirisBekleyenCevabi, KmGirisCevabi, KmGirisKayitlariCevabi, KmGirisGkkIstegi, KmGirisKaydi, KmGirisKararIstegi, KmHataliBekleyenCevabi, KmHataliKararCevabi, KmHataliKararGovdesi, KmTedarikciDurumu, KmTedarikciFirmalariCevabi } from '#paylasilan/sozlesme/kalite-merkezi.ts';
+import type { KmGirisAyrintisi, KmGirisBekleyenCevabi, KmGirisCevabi, KmGirisKayitlariCevabi, KmGirisGkkIstegi, KmGirisKaydi, KmGirisKararIstegi, KmHataliBekleyenCevabi, KmHataliKararCevabi, KmHataliKararGovdesi, KmTedarikciDurumu, KmTedarikciFirmalariCevabi } from '#paylasilan/sozlesme/kalite-merkezi.ts';
 import type { KmEmirKaynagi, KmEmirKaynaklariCevabi, KmEslesmeSayimiCevabi, KmParcaKaynaklariCevabi } from '#paylasilan/sozlesme/kalite-merkezi.ts';
 import { ACIK_EMIR_DURUMLARI } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { siparisListesiSorgusu } from '#paylasilan/sozlesme/siparisler.ts';
@@ -19,11 +19,11 @@ import { numaraAl } from '../ayarlar/disari.ts';
 import { denetimSatiri, dosyaTutamagi } from '../dosya/disari.ts';
 import { aletlerVeKayitlari } from '../kalibrasyon/disari.ts';
 import { kisiAdlari, kisiBayrakliMi, kisileriListele } from '../kisiler/disari.ts';
-import { malzemeAra, malzemeNoKoddan, malzemeOzetleri } from '../malzemeler/disari.ts';
+import { malzemeAra, malzemeMaliyetBilgileri, malzemeNoKoddan, malzemeOlculeri, malzemeOperasyonlari, malzemeOzetleri, malzemeResimAnahtarlari, malzemeSatinAlmaAyrintilari } from '../malzemeler/disari.ts';
 import { firmaOzeti, karneOlayiYaz, tumFirmalar } from '../musteri-tedarikci/disari.ts';
 import { siparisSatirlari } from '../satin-alma/disari.ts';
 import { siparisAyrintisi, siparisinSatirOzetleri, siparisListesi } from '../siparisler/disari.ts';
-import { girisKontroluSatirlari, girisKontroluUygula, hareketPartileri, karantinadanBirak, karantinaDisiKonumlar, partiGirisZamanlari, partiKaliteDurumuYap, partileriBul, partilerinMalzemeleri, partilerinRedBakiyeleri, partilerinRedGirisleri } from '../stok/disari.ts';
+import { girisKontroluSatirlari, girisKontroluUygula, hareketPartileri, karantinadanBirak, karantinaDisiKonumlar, partiGirisZamanlari, partiKaliteDurumuYap, partiKimlikleri, partileriBul, partilerinMalzemeleri, partilerinRedBakiyeleri, partilerinRedGirisleri } from '../stok/disari.ts';
 import {
   acikEmirler, adimKararSayaclari, emirIdleri, emirNolari, hataliKarariVer, hataliKayitlari, isEmriOzeti, kararliSayimiSonuclandir, uretimEmriOzeti,
 } from '../uretim-emirleri/disari.ts';
@@ -36,7 +36,7 @@ import { TEDARIKCI_FIRMA_ALANI, tedarikciFirmaKimligi, tedarikciFirmalari, tedar
 import { hataliNcrGovdesi, numuneNcrGovdesi, numuneNcrKimligi, sonOlcumler } from './kurallar.ts';
 import { numuneKarari } from './studyo.ts';
 import type { KmNumune, KmNumuneKarari } from '#paylasilan/sozlesme/kalite-merkezi-studyo.ts';
-import { GIRIS_KARNE_ANAHTARI, girisDurumu, girisGkkEngeli, girisKarneKarari, girisNcrGovdesi } from './kurallar.ts';
+import { GIRIS_KARNE_ANAHTARI, GKK_NO_TURU, girisDurumu, girisGkkEngeli, girisKarneKarari, girisNcrGovdesi, gkkKontrolEngeli, gkkTuru } from './kurallar.ts';
 import { DOF_KOLEKSIYONU, dofDurumu, dofGovdesi, dofIstegiReddi, dofKimligi } from './kurallar.ts';
 import type { DofAcIstegi, DofDurumu, DofKaynagi } from './kurallar.ts';
 import { AQL_DURDURULDU, LOT_KOLEKSIYONU, lotAnahtari, lotGovdesi, lotIstegiReddi, lotKarari, lotKimligi, lotSikiligi, muayenePlani, siradakiLotNo, varsayilanAqlAyari } from './kurallar.ts';
@@ -521,8 +521,40 @@ export async function girisKayitlariListesi(db: Db, a: { baslangic: string; biti
 
 // 3117: GKK formu tek satırı açar; kapanmış satır da okunur (salt okunur görünüm).
 export async function girisKaydiOku(db: Db, id: number): Promise<KmGirisCevabi> {
-  return { kayit: await girisKaydi(db, id) };
+  return girisCevabi(db, id);
 }
+
+async function girisCevabi(db: Db, id: number): Promise<KmGirisCevabi> {
+  const kayit = await girisKaydi(db, id);
+  return { kayit, ayrinti: await girisAyrintisi(db, kayit) };
+}
+
+// 3118: malzeme kartının ve lotun GKK'da görünen ayrıntısı; kayıtlı kontrol listesi şemadan geçmezse (elle bozulmuş) yok sayılır.
+async function girisAyrintisi(db: Db, k: KmGirisKaydi): Promise<KmGirisAyrintisi> {
+  const no = k.malzemeId;
+  const satinAlma = await malzemeSatinAlmaAyrintilari(db, [no]);
+  const ozet = await malzemeOzetleri(db, [no]);
+  const maliyet = await malzemeMaliyetBilgileri(db, [no]);
+  const resim = await malzemeResimAnahtarlari(db, [no]);
+  const olculer = await malzemeOlculeri(db, [no]);
+  const parti = await partiKimlikleri(db, [k.partiId]);
+  const kararlar = await sorgular.girisKararlari(db, [k.malKabulSatirId]);
+  const sa = satinAlma.get(no);
+  const oz = ozet.get(no);
+  const r = resim.get(no);
+  const p = parti.get(k.partiId);
+  const islemler = k.gkkTuru === 'yari_mamul' ? ((await malzemeOperasyonlari(db, no)) ?? []).map((o) => `OP${String(o.no)} ${o.ad ?? o.kod}`) : [];
+  const kayitli = kmGkkKontrolu.safeParse(kararlar.find((x) => x.asama === 'gkk')?.kontrol ?? null);
+  return {
+    kartTuru: KART_TURU_ADI[oz?.tur ?? ''] ?? oz?.tur ?? null, cinsi: oz?.kategoriAdi ?? maliyet.get(no)?.aile ?? null,
+    kalite: sa?.kaliteAdi ?? null, form: sa?.formAdi ?? null, durum: sa?.durum ?? null, yuzey: sa?.yuzey ?? null,
+    standartlar: sa?.standartlar ?? [], tolerans: sa?.tolerans ?? null, istenenSertifikalar: sa?.sertifikalar ?? [], mensei: sa?.mensei ?? null,
+    olculer: olculer.get(no) ?? [], resimNo: r?.resimNo ?? null, revizyon: r?.revizyon ?? null, islemler,
+    dokumNo: p?.dokumNo ?? null, tedarikciPartiNo: p?.tedarikciPartiNo ?? null, sertifikaNo: p?.sertifikaNo ?? null,
+    kontrol: kayitli.success ? kayitli.data : null,
+  };
+}
+const KART_TURU_ADI: Record<string, string> = { hammadde: 'Hammadde', yarimamul: 'Yarı mamul', mamul: 'Mamul', sarf: 'Sarf', demirbas: 'Demirbaş', hizmet: 'Hizmet' };
 
 async function girisKayitlari(db: Db, idler: readonly number[]): Promise<KmGirisKaydi[]> {
   if (idler.length === 0) return [];
@@ -537,7 +569,7 @@ async function girisKayitlari(db: Db, idler: readonly number[]): Promise<KmGiris
     const m = malzemeler.get(s.malzemeId);
     const sp = s.siparisSatirId === null ? undefined : siparisler.get(s.siparisSatirId);
     return {
-      malKabulSatirId: s.malKabulSatirId, malKabulNo: s.malKabulNo, zaman: s.zaman, malzemeId: s.malzemeId, malzemeKod: m?.kod ?? null, malzemeAd: m?.ad ?? null,
+      malKabulSatirId: s.malKabulSatirId, gkkNo: gkk?.gkkNo ?? null, gkkTuru: gkkTuru(m?.tur ?? null), malKabulNo: s.malKabulNo, zaman: s.zaman, malzemeId: s.malzemeId, malzemeKod: m?.kod ?? null, malzemeAd: m?.ad ?? null,
       birim: m?.birim ?? null, partiId: s.partiId, partiEtiketi: s.partiEtiketi, sertifikaVar: s.sertifikaVar, tedarikciAdi: sp?.tedarikciAdi ?? null,
       siparisNo: sp?.siparisNo ?? null, miktar: s.miktar, durum: girisDurumu(gkk, karar),
       kabulMiktar: gkk?.kabulMiktar ?? null, hataliMiktar: gkk?.hataliMiktar ?? null,
@@ -570,7 +602,8 @@ async function girisKarnesiniYaz(db: Db, id: number, siparisSatirId: number | nu
 const girisAciklamasi = (k: KmGirisKaydi, ek: string, not: string | null): string => `${ek}: ${k.malKabulNo}${not === null ? '' : `. ${not}`}`;
 
 // 1252: GKK kabul ve hatalı verir; ikisi de karar bekleyeni kapatır. Kabul serbest olur ve mal kabul alanına geçer, hatalı karantinada
-// red kalır ve kalite kararını bekler. Kararın ikinci kez verilmesi çakışmadır.
+// red kalır ve kalite kararını bekler. Kararın ikinci kez verilmesi çakışmadır. 3118: GKK numarayı (kalite-merkezi.gkk-no) ve kontrol
+// listesini aynı satırda alır; hatalının kararı verildiyse (Kısmi kabul, Şartlı kabul, Ret) aynı işlemde yazılır, biri olmazsa hiçbiri olmaz.
 export async function girisGkk(db: Db, kullanici: Kullanici, id: number, g: KmGirisGkkIstegi): Promise<KmGirisCevabi> {
   await sorgular.girisKilidi(db, id);
   if ((await sorgular.girisKararlari(db, [id])).some((k) => k.asama === 'gkk')) throw cakisma('Bu lotun giriş kontrolü verilmiş.');
@@ -579,14 +612,22 @@ export async function girisGkk(db: Db, kullanici: Kullanici, id: number, g: KmGi
   const engel = girisGkkEngeli(s.bekleyen, g.kabul, g.hatali);
   if (engel) throw dogrulama(engel, 'kabul');
   const k = await girisKaydi(db, id);
+  if (g.kontrol !== null) {
+    const kontrolEngeli = gkkKontrolEngeli(k.gkkTuru, g.kontrol);
+    if (kontrolEngeli) throw dogrulama(kontrolEngeli, 'kontrol');
+  }
+  if (g.karar !== null && Number(g.hatali) <= 0) throw dogrulama('Hatalı miktar yokken kalite kararı verilmez.', 'karar');
   const aciklama = girisAciklamasi(k, 'Giriş kontrolü', g.not);
   if (Number(g.kabul) > 0) await girisKontroluUygula(db, kullanici.id, { malKabulSatirId: id, partiId: s.partiId, kaynak: 'karar_bekliyor', miktar: g.kabul, sonuc: 'serbest', aciklama });
   if (Number(g.hatali) > 0) await girisKontroluUygula(db, kullanici.id, { malKabulSatirId: id, partiId: s.partiId, kaynak: 'karar_bekliyor', miktar: g.hatali, sonuc: 'red', aciklama });
+  const gkkNo = await numaraAl(db, 'kalite-merkezi.gkk-no', { alanlar: { TUR: GKK_NO_TURU[k.gkkTuru] }, varMi: (n) => sorgular.gkkNoVarMi(db, n) });
   await sorgular.girisKarariYaz(db, {
     malKabulSatirId: id, asama: 'gkk', kabulMiktar: g.kabul, hataliMiktar: g.hatali, karar: null, ncrKimlik: null, ncrNo: null, aciklama: g.not, kisiId: kullanici.id,
+    gkkNo, kontrol: g.kontrol,
   });
+  if (g.karar !== null) return girisKarari(db, kullanici, id, g.karar);
   await girisKarnesiniYaz(db, id, s.siparisSatirId);
-  return { kayit: await girisKaydi(db, id) };
+  return girisCevabi(db, id);
 }
 
 // 1252, 1253 a: hatalının kalite kararı NCR açar (üretimdeki hatalı parça gibi). Kabul serbest, şartlı kabul şartlı olarak mal kabul
@@ -612,7 +653,7 @@ export async function girisKarari(db: Db, kullanici: Kullanici, id: number, g: K
     malKabulSatirId: id, asama: 'karar', kabulMiktar: null, hataliMiktar: null, karar: g.karar, ncrKimlik: g.ncrKimlik, ncrNo: g.ncrNo, aciklama: g.not, kisiId: kullanici.id,
   });
   await girisKarnesiniYaz(db, id, (await girisKontroluSatirlari(db, [id]))[0]?.siparisSatirId ?? null);
-  return { kayit: await girisKaydi(db, id) };
+  return girisCevabi(db, id);
 }
 
 // Ctrl K kayıt kaynakları (1238): NCR `kalite-merkezi.oku` ile, karar bekleyen hatalı parça karar yetkisiyle (`kalite-merkezi.onayla`,

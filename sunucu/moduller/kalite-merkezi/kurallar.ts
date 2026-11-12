@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
-import { KALITE_MERKEZI_KOLEKSIYONLARI, KM_EMIR_KIMLIGI, KM_TEDARIKCI_DURUMLARI } from '#paylasilan/sozlesme/kalite-merkezi.ts';
-import type { KaliteMerkeziKoleksiyonu, KmEmirKaynagi, KmEmirTipi, KmOnayReddiAlani, KmTedarikciDurumu } from '#paylasilan/sozlesme/kalite-merkezi.ts';
+import { KALITE_MERKEZI_KOLEKSIYONLARI, KM_EMIR_KIMLIGI, KM_GKK_MADDELERI, KM_TEDARIKCI_DURUMLARI } from '#paylasilan/sozlesme/kalite-merkezi.ts';
+import type { KaliteMerkeziKoleksiyonu, KmEmirKaynagi, KmEmirTipi, KmGkkKontrolu, KmGkkTuru, KmOnayReddiAlani, KmTedarikciDurumu } from '#paylasilan/sozlesme/kalite-merkezi.ts';
 import type { DosyaTuru } from '#paylasilan/sozlesme/dosya.ts';
 import type { LotKarari } from '#paylasilan/sozlesme/musteri-tedarikci.ts';
 import type { KatalogTuru } from '#paylasilan/sozlesme/malzemeler.ts';
@@ -1174,6 +1174,24 @@ export function girisGkkEngeli(bekleyen: string, kabul: string, hatali: string):
   const b = binde(bekleyen);
   if (b <= 0n) return 'Bu lotun karantinada giriş kontrolü bekleyen miktarı yok.';
   if (binde(kabul) + binde(hatali) !== b) return `Kabul ve hatalı toplamı bekleyen miktara eşit olmalı: ${bindenMetin(b)}.`;
+  return null;
+}
+
+// 3118: GKK formu kartın türündendir: yarı mamul ve mamul parça formu, gerisi (hammadde, sarf, kartı okunamayan) hammadde formu.
+export function gkkTuru(kartTuru: string | null): KmGkkTuru {
+  return kartTuru === 'yarimamul' || kartTuru === 'mamul' ? 'yari_mamul' : 'hammadde';
+}
+export const GKK_NO_TURU: Record<KmGkkTuru, string> = { hammadde: 'HM', yari_mamul: 'YM' };
+
+// Kontrol listesi formun maddeleriyle yazılır: başka formun maddesi, tekrar eden madde ya da seri, hammaddede işlem ve seri reddedilir.
+export function gkkKontrolEngeli(tur: KmGkkTuru, k: KmGkkKontrolu): string | null {
+  const izinli: readonly string[] = KM_GKK_MADDELERI[tur];
+  const anahtarlar = k.maddeler.map((m) => m.anahtar);
+  if (anahtarlar.some((a) => !izinli.includes(a))) return 'Kontrol maddesi bu GKK formunda yok.';
+  if (new Set(anahtarlar).size !== anahtarlar.length) return 'Kontrol maddesi iki kez yazılamaz.';
+  if (tur === 'hammadde' && (k.islemler.length > 0 || k.seriler.length > 0)) return 'Hammadde GKK\'sında işlem ve seri listesi yazılmaz.';
+  const seriler = k.seriler.map((x) => x.no);
+  if (new Set(seriler).size !== seriler.length) return 'Aynı seri numarası iki kez yazılamaz.';
   return null;
 }
 
