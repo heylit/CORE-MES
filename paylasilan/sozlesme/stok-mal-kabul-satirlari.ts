@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { listeCevapSemasi, listeSorguAlanlari } from '../liste.ts';
 import { ondalikMetinSemasi } from '../ondalik.ts';
 import { zamanSemasi } from '../zaman.ts';
+import { irsaliyeBelgesi } from './stok-irsaliye.ts';
 import { KALITE_DURUMLARI, KONUM_TURLERI, LOGO_ESLESME_DURUMLARI, MAL_KABUL_TURLERI, partiBelgesi } from './stok.ts';
 
 // 2890: "Mal kabulü yapılanlar" — mal kabul belgelerinin satırları tek listede, her satırın lotunun bugün nerede ve hangi kalitede
@@ -62,6 +63,8 @@ export const malKabulSatirOzeti = z.object({
   // Sipariş no ve tedarikçi yalnız stok.giris ya da satin-alma.oku taşıyana dolu gelir; öteki okuyana null (yetki genişlemez).
   siparisNo: z.string().nullable(),
   tedarikciAdi: z.string().nullable(),
+  // 3063: mal kabul belgesinin irsaliyeleri (satır değil belge düzeyi; aynı belgenin her satırında aynıdır).
+  irsaliyeBelgeleri: z.array(irsaliyeBelgesi),
 });
 export type MalKabulSatirOzeti = z.output<typeof malKabulSatirOzeti>;
 export const malKabulSatirlariCevabi = listeCevapSemasi(malKabulSatirOzeti);

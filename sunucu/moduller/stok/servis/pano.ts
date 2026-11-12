@@ -16,6 +16,7 @@ import { binde, bindenMetin, partiEtiketi, stokDegeri, alisFiyatlari, emirsizCik
 import * as sorgular from '../sorgular.ts';
 import { haritaOzeti, anaDepo } from './depo.ts';
 import { fasonYariParcasi } from './dis-akis.ts';
+import { malKabullerinIrsaliyeleri } from './irsaliye.ts';
 import { emirNoDe, emirNoHaritasi, hareketleriCevir } from './ortak.ts';
 import { kapsamOku, istasyonKapsamiIdleri } from './teslim.ts';
 import { type TamamlamaOnbellegi, onbellekliOzetler, kalanIhtiyacPlani, adimBilgisi } from './uretim.ts';
@@ -315,5 +316,7 @@ export async function partiBelgeDosyasi(db: Db, partiId: number, belgeId: number
 }
 
 export async function siparisIrsaliyeleri(db: Db, siparisSatirIdler: readonly number[]): Promise<SiparisIrsaliyeleriCevabi> {
-  return { irsaliyeler: await sorgular.siparisIrsaliyeleri(db, siparisSatirIdler) };
+  const l = await sorgular.siparisIrsaliyeleri(db, siparisSatirIdler);
+  const belgeler = await malKabullerinIrsaliyeleri(db, l.map((x) => x.malKabulId));
+  return { irsaliyeler: l.map((x) => ({ ...x, belgeler: belgeler.get(x.malKabulId) ?? [] })) };
 }

@@ -15,6 +15,7 @@ import { useDepoSevk } from './depo-sevk.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { AMBALAJ_TURLERI, MAL_KABUL_TURLERI, MAL_KABUL_TURU, birimliMiktar, miktarGirdisi, miktarMetni, partiAlinirMi, lotluMu, LOT_IPUCU } from './gorunum.ts';
 import { EtiketMerkeziDugmesi } from './Etiketler.tsx';
+import { IrsaliyeSecici, irsaliyeEkle, type IrsaliyeSayfasi } from './IrsaliyeBelgesi.tsx';
 import { MalKabulYapilanlar } from './MalKabulYapilanlar.tsx';
 import { MalzemeSecici, useMalzemeOzeti } from './MalzemeSecici.tsx';
 import { hataMetni, korumaliPost, SayfaBasi, useIslem, useStokKomutu } from './ortak.tsx';
@@ -476,10 +477,21 @@ export function MalKabul() {
   const fasonKonum = Number(adres.get('konum'));
   // Teslim alınınca lot etiketleri Etiket Merkezi'nde önerilir (1288).
   const [etiket, setEtiket] = useState<{ id: number; no: string } | null>(null);
-  const { komut, onayPenceresi } = useStokKomutu((g: MalKabulGovdesi) => korumaliPost<MalKabulCevabi>('/stok/mal-kabul', g).then((c) => {
+  // 3063: irsaliye belgesi mal kabul kaydedildikten sonra eklenir; eklenemezse mal kabul yine kayıtlıdır, ayrıntıdan yeniden eklenir.
+  const [irsaliyeSayfalari, setIrsaliyeSayfalari] = useState<IrsaliyeSayfasi[]>([]);
+  const [irsaliyeHatasi, setIrsaliyeHatasi] = useState<string | null>(null);
+  const { komut, onayPenceresi } = useStokKomutu((g: MalKabulGovdesi) => korumaliPost<MalKabulCevabi>('/stok/mal-kabul', g).then(async (c) => {
     setEtiket({ id: c.belge.id, no: c.belge.no });
+    setIrsaliyeHatasi(null);
+    if (irsaliyeSayfalari.length > 0) {
+      try {
+        await irsaliyeEkle(c.belge.id, irsaliyeSayfalari, () => undefined);
+      } catch (e) {
+        setIrsaliyeHatasi(e instanceof DosyaHatasi ? e.message : hataMetni(e));
+      }
+    }
     return c;
-  }), 'Mal kabul kaydedildi.', () => { setSatirlar([bosSatir()]); setIrsaliye(''); setArananIrsaliye(''); });
+  }), 'Mal kabul kaydedildi.', () => { setSatirlar([bosSatir()]); setIrsaliye(''); setArananIrsaliye(''); setIrsaliyeSayfalari([]); });
   // Çift tık tek istek ve tek bildirim (STK-7).
   const kilitli = useGonderimKilidi();
   return (
@@ -495,6 +507,7 @@ export function MalKabul() {
               <Girdi etiket="İrsaliye no" value={irsaliye} onChange={(e) => setIrsaliye(e.target.value)} onBlur={() => setArananIrsaliye(irsaliye)} />
             </div>
             <AyniIrsaliye irsaliye={arananIrsaliye} />
+            <IrsaliyeSecici sayfalar={irsaliyeSayfalari} degistir={setIrsaliyeSayfalari} kilitli={komut.isPending} />
             {Number.isInteger(sevkKalemi) && sevkKalemi > 0 && <SevkKalemi kalemId={sevkKalemi} doldur={(s, alim) => { setTur(alim ? 'satin_alma' : 'diger'); setSatirlar((m) => [...m.filter((x) => !bosMu(x)), s]); }} />}
             {Number.isInteger(fasonIsEmri) && fasonIsEmri > 0 && Number.isInteger(fasonSiparis) && fasonSiparis > 0 && (
               <FasonSiparisi siparisSatirId={fasonSiparis} konumId={Number.isInteger(fasonKonum) && fasonKonum > 0 ? fasonKonum : null} isEmriId={fasonIsEmri}
@@ -512,6 +525,11 @@ export function MalKabul() {
             )}
             <div className="tc-stok-sag"><Dugme tur="birincil" type="submit" yukleniyor={komut.isPending} disabled={satirlar.some((s) => s.sertifikaYukleniyor)}>Teslim al</Dugme></div>
             {etiket && <p className="tc-stok-bilgi"><span>{etiket.no} kaydedildi.</span><EtiketMerkeziDugmesi tur="mal-kabul" idler={[etiket.id]}>Lot etiketlerini bas</EtiketMerkeziDugmesi></p>}
+            {etiket && irsaliyeHatasi && (
+              <p className="tc-stok-bilgi tc-stok-bilgi-uyari" role="alert">
+                <span>İrsaliye belgesi eklenemedi: {irsaliyeHatasi}</span><Link to={`/stok/mal-kabul/${etiket.id}`}>Mal kabulden yeniden ekleyin</Link>
+              </p>
+            )}
           </form>
         </Kart>
       )}

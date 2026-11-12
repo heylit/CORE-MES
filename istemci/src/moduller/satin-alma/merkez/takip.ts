@@ -43,11 +43,15 @@ function satir(tamam: boolean, baslik: string, ayrinti: string): string {
   return `<li class="${tamam ? "" : "muted"}" data-sa-takip="${tamam ? "tamam" : "bekliyor"}"><span>${isaret(tamam)} <b>${esc(baslik)}</b></span><span class="small">${ayrinti}</span></li>`;
 }
 
+// 3063 (3057 a): mal kabule eklenen irsaliye belgesi Stok'un okuma ucundan açılır; fiyat taşımaz.
+const irsaliyeBaglantilari = (b: SiparisIrsaliyesi): string => b.belgeler.map(x =>
+  ` <a href="/api/stok/mal-kabuller/${b.malKabulId}/irsaliyeler/${x.id}" target="_blank" rel="noopener" title="${esc(x.ad)}">Belgeyi aç</a>`).join("");
+
 function siparisHTML(o: OrderInfo, t: SiparisTakibi, irsaliyeler: SiparisIrsaliyesi[] | null, tekil: boolean): string {
   const benim = irsaliyeler?.filter(x => t.satirIdleri.includes(x.siparisSatirId)) ?? null;
   const belgeler = benim === null ? null : [...new Map(benim.map(x => [x.malKabulId, x])).values()];
   const irsaliye = belgeler === null ? satir(false, "Mal kabul: irsaliye", '<span class="muted">okunamadı</span>')
-    : belgeler.length ? satir(true, "Mal kabul: irsaliye girildi", belgeler.map(b => `${b.irsaliyeNo ? `İrsaliye ${esc(b.irsaliyeNo)}` : "İrsaliye no girilmedi"}, ${zamanGunu(b.zaman)} <span class="muted">(${esc(b.malKabulNo)})</span>`).join("<br>"))
+    : belgeler.length ? satir(true, "Mal kabul: irsaliye girildi", belgeler.map(b => `${b.irsaliyeNo ? `İrsaliye ${esc(b.irsaliyeNo)}` : "İrsaliye no girilmedi"}, ${zamanGunu(b.zaman)} <span class="muted">(${esc(b.malKabulNo)})</span>${irsaliyeBaglantilari(b)}`).join("<br>"))
     : satir(false, "Mal kabul: irsaliye bekleniyor", "Stokta mal kabul yapılınca görünür");
   const fatura = t.faturalar.length
     ? satir(true, "Finans: fatura girildi", t.faturalar.map(f => `Fatura ${f.belgeNo ? esc(f.belgeNo) : "(no yok)"}, ${fmtDate(f.belgeTarihi)}, vade ${fmtDate(f.vade)}`).join("<br>"))

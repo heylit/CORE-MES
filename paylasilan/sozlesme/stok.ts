@@ -744,6 +744,8 @@ export const siparisIrsaliyeleriSorgusu = z.object({
 });
 export const siparisIrsaliyesi = z.object({
   siparisSatirId: z.number().int(), malKabulId: z.number().int(), malKabulNo: z.string(), irsaliyeNo: z.string().nullable(), zaman: zamanSemasi,
+  // 3063 (3057 a): mal kabulün irsaliye belgeleri; dosya `/stok/mal-kabuller/:id/irsaliyeler/:belgeId`'den iner.
+  belgeler: z.array(z.object({ id: z.number().int(), ad: z.string() })),
 });
 export type SiparisIrsaliyesi = z.output<typeof siparisIrsaliyesi>;
 export const siparisIrsaliyeleriCevabi = z.object({ irsaliyeler: z.array(siparisIrsaliyesi) });

@@ -15,7 +15,7 @@ afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 const SATIR: MalKabulSatirOzeti = {
   id: 501, malKabulId: 77, belgeNo: 'MK-000077', tur: 'satin_alma', irsaliyeNo: 'IRS-1', zaman: '2026-11-10T09:30:00+03:00', kisiAd: 'Deneme Depocu',
   sira: 1, malzemeId: 901, malzemeKod: 'HM-001', malzemeAd: 'Deneme sac', birim: 'kg', sayilanMiktar: '10',
-  partiId: 12, lotNo: 'LT-000012', tedarikciPartiNo: 'TP-9', partiBelgeleri: [], ilkKonumKod: 'KABUL',
+  partiId: 12, lotNo: 'LT-000012', tedarikciPartiNo: 'TP-9', partiBelgeleri: [], irsaliyeBelgeleri: [], ilkKonumKod: 'KABUL',
   yerler: [
     { konumId: 3, konumKod: 'KABUL', konumTur: 'kabul', miktar: '4', kaliteDurumu: 'serbest' },
     { konumId: 8, konumKod: 'A-01-02', konumTur: 'raf_gozu', miktar: '6', kaliteDurumu: 'serbest' },
