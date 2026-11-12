@@ -179,6 +179,8 @@ export function SevkiyatPlani() {
   const { geri, ileri } = gecmis.current;
   // Plan kurulduysa (en az bir araçta iş) asıl eylem onaydır; kurulmadıysa dağıtmaktır. Ekranda tek birincil düğme olur.
   const planKurulu = veri.rotalar.some((r) => r.ogeler.length > 0);
+  // Boş günde birincil "İlk işi ekle"dir; tek birincil kuralı (2155-9 a) gereği üstteki dağıtım ikincil kalır.
+  const bosGun = !toplamIs && !veri.isler.length;
   const toplam = veri.toplam;
   const farklar = toplam && yerlesen > 0 ? Object.fromEntries(veri.karsilastirma.map((k) => [k.amac,
     `${isaretli(k.kilometre - toplam.kilometre, kilometreMetni)} · ${isaretli(k.surusDakika - toplam.surusDakika, (v) => `${Math.round(v)} dk`)}${k.maliyet !== null && toplam.maliyet !== null ? ` · ${isaretli(k.maliyet - toplam.maliyet, paraMetni)}` : ''}`])) : undefined;
@@ -215,7 +217,7 @@ export function SevkiyatPlani() {
         <div className="tc-sevkiyat-eylemler">
           {yetki.isYaz && !onayli && <Dugme simge="plus" onClick={() => setForm({ is: null })}>Yeni iş</Dugme>}
           {yetki.planYaz && !onayli && (
-            <Dugme tur={planKurulu ? 'ikincil' : 'birincil'} simge="bolt" disabled={!duzenlenebilir || !veri.haritaVar || !veri.isler.length}
+            <Dugme tur={planKurulu || (bosGun && yetki.isYaz) ? 'ikincil' : 'birincil'} simge="bolt" disabled={!duzenlenebilir || !veri.haritaVar || !veri.isler.length}
               yukleniyor={komut.isPending && komut.variables?.tur === 'dagit'} onClick={() => dagit('dagit')}
               title="Kilitli araçlar dışında bütün işleri seçili önceliğe göre araçlara baştan dağıtır">Otomatik dağıt</Dugme>
           )}
@@ -296,7 +298,7 @@ export function SevkiyatPlani() {
             <span className="tc-sevkiyat-ince">Otomatik dağıtmada öncelik</span>
             <OncelikSecimi secili={amac} farklar={farklar} kapali={yetki.planYaz && !duzenlenebilir} sec={(a) => { if (!yetki.planYaz || duzenlenebilir) amacDegistir(a); }} />
           </div>
-          {!toplamIs && !veri.isler.length && (
+          {bosGun && (
             <div className="tc-sevkiyat-bos">
               <p>Bu gün için sevkiyat yok.</p>
               {yetki.isYaz && <Dugme tur="birincil" simge="plus" onClick={() => setForm({ is: null })}>İlk işi ekle</Dugme>}
