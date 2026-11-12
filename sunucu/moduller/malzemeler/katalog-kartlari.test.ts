@@ -258,6 +258,9 @@ describe('Malzeme Kataloğu kartları (gerçek PostgreSQL, gerçek giriş)', () 
     let r = await kaydet(onayci, lg, null, 'onayda');
     r = await kaydet(onayci2, lg, r.surum, 'aktif');
     await vt().sorgu("UPDATE malzeme_katalog_karti SET logo_gonderim_durumu = 'gonderildi', logo_kayit_no = 'L-2114', logo_gonderim_zamani = now() WHERE kimlik = $1", [lg.kimlik]);
+    // TMI'nin Logo'da açtığı kart: Logo bağlantısının gönderim izi de vardır (3070; izsiz kart Logo'dan gelmiştir, yalnız TMI'de silinir).
+    await vt().sorgu(`INSERT INTO logo_giden (belge_turu, belge_no, deneme_sayisi, son_deneme, son_sonuc, logo_kayit_no, islem)
+                      SELECT 'malzeme', no, 1, now(), 'gonderildi', 'L-2114', 'gonder' FROM malzeme_katalog_karti WHERE kimlik = $1`, [lg.kimlik]);
     await ret(422, 'GECERSIZ', onayci, 'POST', `/malzeme-katalogu-kartlari/${lg.kimlik}/iptal`);
     await assert.rejects(vt().sorgu('DELETE FROM malzeme_katalog_karti WHERE kimlik = $1', [lg.kimlik]), (e: { constraint?: string }) => e.constraint === 'malzeme_katalog_karti_silinmez');
     for (const k of [fk, ap, lg]) assert.ok(await vt().tek('SELECT 1 FROM malzeme_katalog_karti WHERE kimlik = $1', [k.kimlik]), 'reddedilen kart yerinde kalır');

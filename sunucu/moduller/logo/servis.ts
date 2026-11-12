@@ -217,6 +217,8 @@ async function malzemeHazirla(db: Db, o: TurOrtami): Promise<TurSonucu | KopruAd
 
 const SONUCU_BILINMIYOR = 'Önceki açma isteğinin sonucu bilinmiyor ve bu belge için Logo\'da "var mı" okunamıyor; Logo\'da kontrol edin. Kendiliğinden yeniden gönderilmez.';
 
+const LOGODAN_GELEN_KART = 'Kart Logo\'dan alındı ya da bağlandı; Logo\'ya pasife alma gönderilmedi. Gerekiyorsa Logo\'da elle bakın.';
+
 // Silinen Logo kartının Logo'da kullanım dışı bırakılması (2114b, 2114-7, ADR 0017 madde 8): açma kuyruğu boşken, güncellemeden önce tek kart.
 // İstek yalnız bağlantı açıkken alınır; tur da yalnız bağlantı açıkken koşar. Giden kutusunda kart belgesinin "pasif" satırıdır: önce niyet
 // kalıcı yazılır (tur biter), sonraki turda istek gider. Yineleme zararsızdır: zaten kullanım dışı kart yardımcıda başarıdır.
@@ -224,6 +226,11 @@ async function pasifTuru(db: Db, o: TurOrtami, kopru: KopruIstemcisi): Promise<T
   if (!o.malzemePasif) return guncellemeTuru(db, o, kopru);
   const kaynak = o.malzemePasif;
   for (const kart of await kaynak.gidecekler(db, KUYRUK_SINIRI)) {
+    // Silmede yazılan ölçüt burada yeniden uygulanır: ölçütten önce kuyruğa girmiş istek de Logo'nun kendi kartına gitmez.
+    if (!(await s.logodaTmiActi(db, kart.no))) {
+      await kaynak.sonuc(db, kart.no, { hata: LOGODAN_GELEN_KART, kalici: true });
+      return { tur: 'pasif', no: kart.no, sonuc: 'reddedildi' };
+    }
     const belge: BelgeTuru = kart.tur === 'hizmet' ? 'hizmet' : 'malzeme';
     const g = await s.gidenSatiri(db, belge, kart.no, 'pasif');
     if (g?.sonrakiDeneme && g.sonrakiDeneme.getTime() > o.saat().getTime()) continue;

@@ -91,6 +91,16 @@ export async function denemeYaz(db: Db, belgeTuru: BelgeTuru, no: number, d: Den
   );
 }
 
+// 3070: kartı Logo'da TMI mi açtı. Yalnız açma isteğinin kesin sonucu ("gonderildi") sayılır; "zaten-vardi" Logo'da bulunan karttır, "Al" ve
+// "Bağla" ile gelen kartın gönderim izi hiç yoktur. Belge no malzeme kartının numarasıdır (malzeme ya da hizmet).
+export async function logodaTmiActi(db: Db, kartNo: number): Promise<boolean> {
+  const r = await db.tek<{ var: boolean }>(
+    `SELECT EXISTS (SELECT 1 FROM logo_giden WHERE belge_turu IN ('malzeme', 'hizmet') AND belge_no = $1 AND islem = 'gonder' AND son_sonuc = 'gonderildi') AS var`,
+    [kartNo],
+  );
+  return r?.var === true;
+}
+
 /* ---------------- Birim seti listesi (LB6 c, LB11 a) ---------------- */
 
 export interface BirimSetiSatiri {

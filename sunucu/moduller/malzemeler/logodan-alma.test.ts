@@ -239,5 +239,30 @@ describe('Logo\'dan gelen kartlar: liste, alma, bağlama, Logo\'dakini alma (211
     await assert.rejects(vt().sorgu("UPDATE malzeme_katalog_karti SET onceki_kodlar = '{}' WHERE kimlik = $1", [t.kimlik]), /Önceki kodlar/);
     await assert.rejects(vt().sorgu('UPDATE malzeme_katalog_karti SET sira_no = 50 WHERE kimlik = $1', [t.kimlik]), (e: { constraint?: string }) => e.constraint === 'malzeme_katalog_karti_degismez');
   });
-});
 
+  test('LMA-10 (3070) "Al" ya da "Bağla" ile Logo\'dan gelen kart silinince yalnız TMI\'de iptal olur; Logo bağlantısı açık da kapalı da olsa pasife alma isteği yazılmaz', async () => {
+    const satir = (kimlik: string) => vt().tek<{ durum: string; pasif: string | null; logo: string | null; gonderim: string | null }>(
+      'SELECT onay_durumu AS durum, logo_pasif_durumu AS pasif, logo_kayit_no AS logo, logo_gonderim_durumu AS gonderim FROM malzeme_katalog_karti WHERE kimlik = $1', [kimlik]);
+    const sil = async (kimlik: string) => {
+      const c = await istek('POST', `/malzeme-katalogu-kartlari/${kimlik}/iptal`);
+      assert.equal(c.statusCode, 200, c.body);
+      return c.json() as { id: string; logodaPasifeAliniyor: boolean };
+    };
+    const baglanti = async (deger: boolean) => assert.equal((await istek('POST', '/ayarlar/logo.baglanti/degistir', { deger })).statusCode, 200);
+    ayna.push(kart(110, 'HM-SIL-00001'));
+    assert.equal((await istek('POST', '/malzeme-logo-kartlari/110/al', { tur: 'hammadde', birim: 'kg', onek: null })).statusCode, 200);
+    const t = await taslakAc('HM-SIB-00001');
+    ayna.push(kart(111, t.kod));
+    assert.equal((await istek('POST', '/malzeme-logo-kartlari/111/bagla', { surum: t.surum })).statusCode, 200);
+    await baglanti(true);
+    try {
+      assert.deepEqual(await sil('logo-110'), { id: 'logo-110', logodaPasifeAliniyor: false }, 'alınan kart');
+      assert.deepEqual(await satir('logo-110'), { durum: 'iptal', pasif: null, logo: '110', gonderim: 'gonderildi' });
+    } finally {
+      await baglanti(false);
+    }
+    assert.deepEqual(await sil(t.kimlik), { id: t.kimlik, logodaPasifeAliniyor: false }, 'bağlanan kart, bağlantı kapalıyken de silinir');
+    assert.deepEqual(await satir(t.kimlik), { durum: 'iptal', pasif: null, logo: '111', gonderim: 'gonderildi' });
+    assert.equal(await vt().tek('SELECT 1 FROM malzeme_katalog_karti WHERE logo_pasif_durumu IS NOT NULL'), null, 'kuyrukta pasife alma isteği yok');
+  });
+});
