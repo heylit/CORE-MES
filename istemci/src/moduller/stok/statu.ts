@@ -17,6 +17,18 @@ export function useStatuAdi(): (id: number | null) => string {
   return (id) => (id === null ? 'Serbest' : adlar.get(id) ?? `Statü #${id}`);
 }
 
+// Malzemenin kendi sayfasında statü satırları hangi mamül ve OP için olduklarıyla ayrılır: üstte mamül · OP, altta revizyon.
+// Malzeme no yazılmaz; sayfanın malzemesidir.
+export function useStatuParcalari(): (id: number) => { ana: string; alt: string | null } {
+  const q = useQuery({ queryKey: ['stok', 'statuler'], queryFn: () => api.get<StatulerCevabi>('/stok/statuler'), staleTime: 60_000, retry: false });
+  const statuler = new Map((q.data?.statuler ?? []).map((s) => [s.id, s]));
+  return (id) => {
+    const s = statuler.get(id);
+    if (!s) return { ana: `Statü #${id}`, alt: null };
+    return { ana: [s.urunKodu, s.ad].filter((x): x is string => x !== null).join(' · '), alt: s.revizyon === null ? null : `Rev ${s.revizyon}` };
+  };
+}
+
 // Hareketin statü değişimi: ikisi de serbestse boş; aynıysa tek ad; değiştiyse "kaynak → hedef".
 export function hareketStatusu(h: Pick<Hareket, 'kaynakStatuId' | 'hedefStatuId'>, ad: (id: number | null) => string): string | null {
   if (h.kaynakStatuId === null && h.hedefStatuId === null) return null;

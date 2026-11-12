@@ -49,7 +49,8 @@ describe('İş kutusu', () => {
     ac('/stok');
     expect(await screen.findByText('Malzeme çeşidi')).toBeTruthy();
     expect(screen.getByText('%21')).toBeTruthy();
-    expect(await screen.findByText('Veri yok')).toBeTruthy();
+    // 3090 a: değer yoksa "Veri yok" sayı boyunda yazılmaz (data-bos küçük ve soluk çizer).
+    expect((await screen.findByText('Veri yok')).hasAttribute('data-bos')).toBe(true);
     expect(screen.getByText('37 / 50')).toBeTruthy();
     expect(screen.getByText('Raf A')).toBeTruthy();
     expect(screen.getByRole('img', { name: /Son yedi günün/ })).toBeTruthy();
@@ -63,7 +64,7 @@ describe('İş kutusu', () => {
     });
     ac('/stok');
     const kutu = (await screen.findByText('Stok değeri')).closest('div')!;
-    expect(await within(kutu).findByText('600,00 ₺')).toBeTruthy();
+    expect((await within(kutu).findByText('600,00 ₺')).hasAttribute('data-bos')).toBe(false);
     expect(within(kutu).getByText('Yalnız kullanılabilir · 3 kartın fiyatı yok')).toBeTruthy();
     expect(within(kutu).getByText('Kalite bekleyen / red — · Hurda (talaş) — · Fason — · Yolda — · Üretimde ve diğer — · Toplam —')).toBeTruthy();
     const secici = within(kutu).getByRole('combobox', { name: 'Değerleme yöntemi' }) as HTMLSelectElement;
@@ -376,7 +377,7 @@ describe('Çıkış ve onaylı eksi', () => {
     ac('/stok/malzemeler/901');
     const kirilim = await screen.findByRole('table', { name: 'Statü kırılımı' });
     expect(within(kirilim).getByText('Serbest')).toBeTruthy();
-    expect(await within(kirilim).findByText('YM-900 (MM-950 · Rev B · OP 10 Tornalama)')).toBeTruthy();
+    expect(await within(kirilim).findByText('MM-950 · OP 10 Tornalama')).toBeTruthy();
     const bakiye = screen.getByRole('table', { name: 'Bakiye satırları' });
     const satir = within(bakiye).getByText('C-01-01').closest('tr')!;
     expect(within(satir).getByText('YM-900 (MM-950 · Rev B · OP 10 Tornalama)')).toBeTruthy();

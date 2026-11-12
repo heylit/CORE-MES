@@ -63,10 +63,29 @@ describe('Statü görünürlüğü', () => {
     });
     ac('/stok/malzemeler/901');
     const kirilim = await screen.findByRole('table', { name: 'Statü kırılımı' });
-    const satir = (await within(kirilim).findByText('YM-001 (MM-950 · Rev A · OP 20 Delik)')).closest('tr')!;
+    const satir = (await within(kirilim).findByText('MM-950 · OP 20 Delik')).closest('tr')!;
     expect(within(satir).getByText('Tanımlı, stok yok')).toBeTruthy();
     expect(within(satir).queryByRole('button')).toBeNull();
-    expect(within(kirilim).getByText('YM-001 (MM-950 · Rev A · OP 10 Torna)')).toBeTruthy();
+    expect(within(kirilim).getByText('MM-950 · OP 10 Torna')).toBeTruthy();
+  });
+  // 3090 a: malzemenin kendi sayfasında statü rozet değil iki satırdır; malzeme no yazılmaz, satırlar mamül ve OP ile ayrılır.
+  it('ayrıntıda statü üstte mamül · OP, altta revizyon; malzeme no yazılmaz, rozet yoktur', async () => {
+    sunucuKur(DEPOCU, {
+      'GET /stok/malzemeler/901': () => json(200, {
+        satir: SATIR, bakiyeler: [], ayar: { kritikSeviye: null, varsayilanAmbalaj: null, varsayilanKonum: null, ambalajlar: [], surum: null }, sonHareketler: [],
+        statuKirilimi: [{ statuId: 7, miktar: '3.000', ilkGiris: '2026-10-01T08:00:00+03:00' }], tanimliStatuler: [],
+        rezerveler: [{ statuId: 7, uretimEmriId: 55, emirNo: 'ORN-UE-1', miktar: '1.000' }], bekleyenler: [],
+      } satisfies MalzemeAyrintiCevabi),
+      'GET /stok/statuler': () => json(200, { statuler: STATULER }),
+    });
+    ac('/stok/malzemeler/901');
+    for (const ad of ['Statü kırılımı', 'Rezerve']) {
+      const tablo = await screen.findByRole('table', { name: ad });
+      const hucre = (await within(tablo).findByText('MM-950 · OP 10 Torna')).closest('td')!;
+      expect(hucre.querySelector('small')?.textContent).toBe('Rev A');
+      expect(hucre.textContent).not.toContain('YM-001');
+      expect(hucre.querySelector('.tc-rozet')).toBeNull();
+    }
   });
   it('yalnız tanımlı statüsü olan kartta da kırılım kartı çıkar', async () => {
     sunucuKur(DEPOCU, {
