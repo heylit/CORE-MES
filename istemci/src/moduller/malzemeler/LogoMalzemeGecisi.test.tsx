@@ -20,15 +20,18 @@ const KARSILIKLAR: LogoKarsiligi[] = [
   { cesit: 'birim', tmiDegeri: 'kg', logoDegeri: '06' },
 ];
 type Satir = LogoGecisCevabi['kartlar'][number];
-const ortak: Pick<Satir, 'birimSeti' | 'aktif' | 'stok' | 'farklar' | 'kararNedeni' | 'topluBaglanir' | 'topluAlinir'> = {
-  birimSeti: '06', aktif: true, stok: '12', farklar: [], kararNedeni: null, topluBaglanir: false, topluAlinir: false,
+const ortak: Pick<Satir, 'birimSeti' | 'aktif' | 'stok' | 'sonHareket' | 'kullanimNedenleri' | 'farklar' | 'kararNedeni' | 'topluBaglanir' | 'topluAlinir'> = {
+  birimSeti: '06', aktif: true, stok: '12', sonHareket: null, kullanimNedenleri: null, farklar: [], kararNedeni: null, topluBaglanir: false, topluAlinir: false,
 };
 const tmi = (kimlik: string, stokKodu: string, surum: number, logoKayitli = false) =>
   ({ kimlik, stokKodu, ad: 'CORE', birim: 'kg', onayDurumu: 'aktif' as const, surum, logoKayitli });
 const LISTE: LogoGecisCevabi = {
   baglanti: true,
   okuma: { acik: false, suruyor: false, okunan: 5, sonTamam: '2026-11-12T05:00:00+00:00' },
-  sayilar: { toplam: 9, stoklu: 5, yeni: 3, bagsiz: 2, bagli: 1, kullanimDisi: 1, kararBekleyen: 2 },
+  sayilar: { toplam: 9, stoklu: 5, yeni: 3, bagsiz: 2, bagli: 1, kullanimDisi: 1, kullanilan: null, kararBekleyen: 2 },
+  suzgec: 'stoklu',
+  kullanim: false,
+  canliArama: false,
   uyan: 5,
   kartlar: [
     { ...ortak, logoKayitNo: 1, kod: 'HM-DEN-00001', ad: 'Deneme yeni', kartTuru: '10', durum: 'yeni', koduUyar: true, topluAlinir: true, tmi: null },
@@ -54,6 +57,10 @@ function sunucuKur(kullanici: Kullanici, liste: LogoGecisCevabi = LISTE) {
     if (yol === '/oturum') return json(200, { kullanici } satisfies OturumCevabi);
     if (yol.startsWith('/malzeme-logo-gecisi?')) { istekler.push({ yol, govde: null }); return json(200, liste); }
     if (yol === '/malzeme-logo-durumu') return json(200, { kartlar: [], karsiliklar: KARSILIKLAR, kartTuruSecenekleri: [], karsilikYazabilir: false });
+    if (yol.startsWith('/logo-gecisi/malzeme-ara?')) {
+      istekler.push({ yol, govde: null });
+      return json(200, { durum: 'tamam', ileti: null, kartlar: [{ logoKayitNo: 9, kod: 'ORN-CANLI-9', ad: 'Deneme canli' }] });
+    }
     if (yol === '/malzeme-birimleri') return json(200, { birimler: [{ kod: 'kg', aktif: true }, { kod: 'adet', aktif: true }] });
     if (secenek?.method !== 'POST') return json(404, { kod: 'BULUNAMADI', mesaj: 'yok' });
     istekler.push({ yol, govde });
@@ -65,6 +72,7 @@ function sunucuKur(kullanici: Kullanici, liste: LogoGecisCevabi = LISTE) {
       } satisfies LogoTopluCevabi);
     }
     if (yol === '/malzeme-logo-gecisi/geri-al') return json(200, { geriAlinan: 1, atlanan: [] });
+    if (yol === '/logo-gecisi/malzeme-ekle') return json(200, { eklenen: 1 });
     if (yol.startsWith('/logo-gecisi/')) return json(200, { tamam: true });
     if (yol.endsWith('/al')) return json(200, { id: 'logo-1', stok_kodu: 'HM-DEN-00001', eslendi: false });
     if (yol.endsWith('/yeni-koda-gec')) return json(200, { id: 'k3', stok_kodu: 'HM-DEN-00007', eski_kod: 'HM-DEN-00003', surum: 5 });
@@ -82,18 +90,33 @@ const satir = (metin: string) => screen.getByText(metin).closest('tr')!;
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
 describe('LogoMalzemeGecisi (3068 a; satır işlemleri 2116)', () => {
-  it('açılışta stoğu olanlar istenir; süzgeçler sayısıyla görünür; karar isteyen satır nedeniyle işaretlenir', async () => {
+  it('açılışta süzgeci sunucu seçer (kullanım izi yoksa stoğu olanlar); süzgeçler sayısıyla görünür; karar isteyen satır nedeniyle işaretlenir', async () => {
     const istekler = sunucuKur(YAZAN);
     ac();
     await screen.findByText('HM-DEN-00001');
-    expect(istekler[0]?.yol).toBe('/malzeme-logo-gecisi?suzgec=stoklu&sayfa=0');
+    expect(istekler[0]?.yol).toBe('/malzeme-logo-gecisi?sayfa=0');
     expect(screen.getByText("CORE'da yok (3)")).toBeTruthy();
     expect(screen.getByText('Stoğu olanlar (5)')).toBeTruthy();
+    expect(screen.queryByText(/Kullanılanlar/)).toBeNull();
     expect(within(satir('150.01')).getByText('Kod eşlenecek')).toBeTruthy();
     expect(within(satir('Deneme birim')).getByText('Birim farklı')).toBeTruthy();
     expect(screen.getByText(/2 satır tek tek karar istiyor/)).toBeTruthy();
     fireEvent.click(screen.getByText('Bağlı (1)'));
     await waitFor(() => expect(istekler.some((i) => i.yol === '/malzeme-logo-gecisi?suzgec=bagli&sayfa=0')).toBe(true));
+  });
+
+  it('kullanım izi okunduysa Stoğu olanlar yerine Kullanılanlar; neden satırda yazar (3079 a)', async () => {
+    const kartlar = LISTE.kartlar.map((k, i) => (i === 0
+      ? { ...k, stok: '0', sonHareket: '2026-09-30', kullanimNedenleri: ['hareket', 'siparis'] as Satir['kullanimNedenleri'] }
+      : { ...k, kullanimNedenleri: ['stok'] as Satir['kullanimNedenleri'] }));
+    const istekler = sunucuKur(YAZAN, { ...LISTE, suzgec: 'kullanilan', kullanim: true, sayilar: { ...LISTE.sayilar, kullanilan: 7 }, kartlar });
+    ac();
+    await screen.findByText('HM-DEN-00001');
+    expect(screen.getByText('Kullanılanlar (7)')).toBeTruthy();
+    expect(screen.queryByText(/Stoğu olanlar/)).toBeNull();
+    expect(within(satir('Deneme yeni')).getByText(/son hareket 30\.09\.2026 · açık sipariş/)).toBeTruthy();
+    fireEvent.click(screen.getByText('Tümü (9)'));
+    await waitFor(() => expect(istekler.some((i) => i.yol === '/malzeme-logo-gecisi?suzgec=tumu&sayfa=0')).toBe(true));
   });
 
   it('satır işlemleri bugünkü gibi: yeni kartta Al, bağsızda Bağla ve Yeni koda geç, farklı bağlıda Logo\'dakini al', async () => {
@@ -167,6 +190,28 @@ describe('LogoMalzemeGecisi (3068 a; satır işlemleri 2116)', () => {
     fireEvent.change(await screen.findByLabelText(/Birim \(hepsine\)/), { target: { value: 'adet' } });
     fireEvent.click(screen.getByRole('button', { name: '1 taslak aç' }));
     await waitFor(() => expect(istekler.find((i) => i.yol === '/malzeme-logo-gecisi/toplu-al')?.govde).toEqual({ kartlar: [{ logoKayitNo: 1, surum: null }], tur: null, birim: 'adet' }));
+  });
+
+  it('listede yoksa Logo\'da canlı ara: açıkken arar, bulunanı ekler ve Tümü\'ne geçer; kapalıyken nedeniyle pasif (3080 a)', async () => {
+    const istekler = sunucuKur(YAZAN, { ...LISTE, canliArama: true, kartlar: [], uyan: 0 });
+    ac();
+    await screen.findByText(/Stoğu olanlar/);
+    fireEvent.change(screen.getByLabelText('Ara'), { target: { value: 'ORN-CANLI' } });
+    const dugme = await screen.findByRole('button', { name: "Logo'da canlı ara" });
+    expect((dugme as HTMLButtonElement).disabled).toBe(false);
+    fireEvent.click(dugme);
+    await waitFor(() => expect(istekler.find((i) => i.yol === '/logo-gecisi/malzeme-ekle')?.govde).toEqual({ kartlar: [9] }));
+    expect(istekler.some((i) => i.yol === '/logo-gecisi/malzeme-ara?q=ORN-CANLI')).toBe(true);
+    expect(await screen.findByText("Logo'da 1 kart bulundu ve listeye eklendi.")).toBeTruthy();
+    await waitFor(() => expect(istekler.some((i) => i.yol === '/malzeme-logo-gecisi?suzgec=tumu&sayfa=0&ara=ORN-CANLI')).toBe(true));
+    cleanup();
+    sunucuKur(YAZAN, { ...LISTE, canliArama: false, kartlar: [], uyan: 0 });
+    ac();
+    await screen.findByText(/Stoğu olanlar/);
+    fireEvent.change(screen.getByLabelText('Ara'), { target: { value: 'ORN-CANLI' } });
+    const kapali = await screen.findByRole('button', { name: "Logo'da canlı ara" });
+    expect((kapali as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getByText(/"Logo: malzeme araması" kapalı/)).toBeTruthy();
   });
 
   it('okuma: "Şimdi oku" ve onaylı "Geçişi bitir" yalnız ayar yazana; okuma sürerken boş arama okumanın sürdüğünü söyler', async () => {

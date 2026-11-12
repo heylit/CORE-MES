@@ -12,7 +12,7 @@ namespace LogoYardimcisi
     // Kolon adları rehberin veri sözlüğündendir (§2); sözlükte olmayanlar Sorgular.Dogrulanmadi'da listelenir ve --deneme ile denetlenir.
     public sealed class Sorgular
     {
-        public readonly string MalzemeRef, Malzeme, MalzemeRefIle, HizmetRefIle, MalzemeKodlari, MalzemeKartlari, StokToplamlari, CariAra, Cari, BirimSetleri, Ambarlar, Cariler, CariRef, Hizmet, Siparis, SiparisRefIle, SiparisSatirlari,
+        public readonly string MalzemeRef, Malzeme, MalzemeRefIle, HizmetRefIle, MalzemeKodlari, MalzemeKartlari, StokToplamlari, MalzemeKullanimlari, MalzemeAra, CariAra, Cari, BirimSetleri, Ambarlar, Cariler, CariRef, Hizmet, Siparis, SiparisRefIle, SiparisSatirlari,
             MalKabul, Faturalar, Talep, TalepSatirlari, Karsilamalar, KarsilamaBul, SatisMusterisi, Teklif, TeklifRefIle, TeklifSatirlari,
             MalzemeFisi, MalzemeFisiSatirlari, MalzemeHareketleri, SonAlisFiyatlari, SiparisIcerikBasligi, SiparisIcerikSatirlari, SiparisSatirBirimleri;
 
@@ -27,6 +27,7 @@ namespace LogoYardimcisi
             "LG_<f>_<d>_STLINE.DATE_, TRCODE (1 alış), IOCODE (1, 2 giriş; 3, 4 çıkış), CANCELLED, SOURCEINDEX, PRICE, PRCURR, PRPRICE, CLIENTREF (2961-D4 okumaları)",
             "LG_<f>_<d>_ORFICHE.DATE_; LG_<f>_<d>_ORFLINE.PRICE, PRPRICE, VAT, UOMREF, DUEDATE, LINEEXP; LG_<f>_SRVCARD.DEFINITION_ satır adı (2987 sipariş içeriği; ölçüm bekliyor, kart 2980 b)",
             "LG_<f>_<d>_ORFLINE.UOMREF -> LG_<f>_UNITSETL.CODE satır birimi (3007: düzenleme birimi yalnız değiştiyse yazar; ölçüm bekliyor, kart 2980 b)",
+            "LG_<f>_<d>_STLINE.DATE_ son hareket yalnız çalışılan dönemde; LG_<f>_<d>_ORFLINE.CLOSED (0 açık), LINETYPE, STOCKREF ve ORFICHE.CANCELLED açık sipariş (3079 kullanım okuması)",
         };
 
         public Sorgular(int firma, int donem)
@@ -44,9 +45,17 @@ namespace LogoYardimcisi
             MalzemeKodlari = "SELECT CODE FROM " + f("ITEMS") + " ORDER BY CODE";
             MalzemeKartlari = "SELECT TOP (@enCok) I.LOGICALREF, I.CODE, I.NAME, I.CARDTYPE, I.SPECODE, I.NAME3, I.NAME4, U.CODE, I.ACTIVE FROM " + f("ITEMS") + " I LEFT JOIN "
                 + f("UNITSETF") + " U ON U.LOGICALREF = I.UNITSETREF WHERE I.LOGICALREF > @son ORDER BY I.LOGICALREF";
+            // 3080 a: tek kart canlı araması; kullanım dışı kart gelmez. LIKE deseni parametredir (SqlOkuma.Desen kaçırır).
+            MalzemeAra = "SELECT TOP (@enCok) I.LOGICALREF, I.CODE, I.NAME, I.CARDTYPE, I.SPECODE, I.NAME3, I.NAME4, U.CODE, I.ACTIVE FROM " + f("ITEMS") + " I LEFT JOIN "
+                + f("UNITSETF") + " U ON U.LOGICALREF = I.UNITSETREF WHERE I.ACTIVE = 0 AND (I.CODE LIKE @desen ESCAPE '\\' OR I.NAME LIKE @desen ESCAPE '\\') ORDER BY I.CODE";
             StokToplamlari = "SELECT T.STOCKREF, I.CODE, T.INVENNO, T.ONHAND FROM " + d("GNTOTST") + " T JOIN " + f("ITEMS") + " I ON I.LOGICALREF = T.STOCKREF"
                 + " WHERE T.INVENNO >= 0 AND T.STOCKREF IN (SELECT TOP (@enCok) LOGICALREF FROM " + f("ITEMS") + " WHERE LOGICALREF > @son ORDER BY LOGICALREF)"
                 + " ORDER BY T.STOCKREF, T.INVENNO";
+            // 3079 a: kart başına son hareket tarihi ve açık sipariş (alış ya da satış, iptal değil, satırı kapanmamış). Sayfa kart sırasıyladır.
+            MalzemeKullanimlari = "SELECT TOP (@enCok) I.LOGICALREF, I.CODE, (SELECT MAX(L.DATE_) FROM " + d("STLINE") + " L WHERE L.STOCKREF = I.LOGICALREF AND L.LINETYPE = 0"
+                + " AND L.CANCELLED = 0), CASE WHEN EXISTS (SELECT 1 FROM " + d("ORFLINE") + " L JOIN " + d("ORFICHE") + " O ON O.LOGICALREF = L.ORDFICHEREF"
+                + " WHERE L.STOCKREF = I.LOGICALREF AND L.LINETYPE = 0 AND L.CLOSED = 0 AND O.CANCELLED = 0) THEN 1 ELSE 0 END FROM " + f("ITEMS") + " I"
+                + " WHERE I.LOGICALREF > @son ORDER BY I.LOGICALREF";
             var cariAlanlari = "SELECT TOP (@enCok) LOGICALREF, CODE, DEFINITION_, CARDTYPE, TAXNR, TCKNO, TAXOFFICE, ADDR1, ADDR2, TOWN, CITY, POSTCODE, TELNRS1, EMAILADDR, ACTIVE FROM "
                 + f("CLCARD");
             // LIKE deseni parametredir; %, _ ve [ yardımcıda kaçırılır (SqlOkuma.Desen).
@@ -242,8 +251,18 @@ namespace LogoYardimcisi
 
         public List<MalzemeKaydi> MalzemeKartlari(int sonGorulen, int enCok)
         {
+            return KartSatirlari(Sorgula(q.MalzemeKartlari, P("@son", sonGorulen), P("@enCok", enCok)));
+        }
+
+        public List<MalzemeKaydi> MalzemeAra(string metin, int enCok)
+        {
+            return KartSatirlari(Sorgula(q.MalzemeAra, P("@desen", Desen(metin)), P("@enCok", enCok)));
+        }
+
+        static List<MalzemeKaydi> KartSatirlari(List<object[]> satirlar)
+        {
             var l = new List<MalzemeKaydi>();
-            foreach (var s in Sorgula(q.MalzemeKartlari, P("@son", sonGorulen), P("@enCok", enCok)))
+            foreach (var s in satirlar)
             {
                 var k = new MalzemeKaydi();
                 k.Ref = Tam(s[0]);
@@ -354,6 +373,21 @@ namespace LogoYardimcisi
                 x.MalzemeKodu = Metin(s[1]);
                 x.AmbarNo = Tam(s[2]);
                 x.Miktar = Ondalik(s[3]);
+                if (x.MalzemeKodu != null) l.Add(x);
+            }
+            return l;
+        }
+
+        public List<MalzemeKullanimi> MalzemeKullanimlari(int sonGorulen, int enCok)
+        {
+            var l = new List<MalzemeKullanimi>();
+            foreach (var s in Sorgula(q.MalzemeKullanimlari, P("@son", sonGorulen), P("@enCok", enCok)))
+            {
+                var x = new MalzemeKullanimi();
+                x.MalzemeRef = Tam(s[0]);
+                x.MalzemeKodu = Metin(s[1]);
+                x.SonHareket = TarihYa(s[2]);
+                x.AcikSiparis = Tam(s[3]) == 1;
                 if (x.MalzemeKodu != null) l.Add(x);
             }
             return l;

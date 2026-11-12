@@ -12,7 +12,7 @@ import { yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
 import { logoAynaOzetiCozucusu, logoEslemeYaziciCozucusu, logoKartAynasiCozucusu, logoTmiKodCozucusu } from './disari.ts';
 import type { LogoAynaKarti } from './disari.ts';
-import { logoGecisAdayligi } from './kurallar.ts';
+import { logoGecisAdayligi, logoKullanimEsigi, logoKullanimNedenleri } from './kurallar.ts';
 import { tamGovde } from './test-kart.ts';
 
 const PAROLA = 'dogru-parola-1';
@@ -36,13 +36,29 @@ describe('Logo geçişi toplu adaylık kuralı (3068 a)', () => {
   });
 });
 
+describe('Logo geçişi kullanım ölçütü (3079 a)', () => {
+  test('LGG-8 eşik bugünden 12 ay önce, ay sonu taşmaz; nedenler stok > 0, eşikten bu yana hareket, açık sipariş; iz yoksa yalnız stok', () => {
+    assert.equal(logoKullanimEsigi('2026-11-12'), '2025-11-12');
+    assert.equal(logoKullanimEsigi('2024-02-29'), '2023-02-28');
+    assert.equal(logoKullanimEsigi('2026-01-31'), '2025-01-31');
+    const esik = '2025-11-12';
+    assert.deepEqual(logoKullanimNedenleri({ stok: '3', sonHareket: '2025-11-12', acikSiparis: true }, esik), ['stok', 'hareket', 'siparis']);
+    assert.deepEqual(logoKullanimNedenleri({ stok: '0', sonHareket: '2025-11-11', acikSiparis: false }, esik), []);
+    assert.deepEqual(logoKullanimNedenleri({ stok: '-1', sonHareket: null, acikSiparis: null }, esik), []);
+    assert.deepEqual(logoKullanimNedenleri({ stok: '0.5', sonHareket: null, acikSiparis: null }, esik), ['stok']);
+  });
+});
+
 describe('Logo geçişi: liste, toplu bağla ve al, geri al (3068 a; gerçek PostgreSQL, sahte ayna)', () => {
   let ortam: TestVeritabani | undefined;
   let app: FastifyInstance;
   let cerez = '';
   let okuyucuCerezi = '';
   let ikinciCerez = '';
-  const ayna: (LogoAynaKarti & { stok: string | null })[] = [];
+  type AynaSatiri = LogoAynaKarti & { stok: string | null; sonHareket: string | null; acikSiparis: boolean | null };
+  const ayna: AynaSatiri[] = [];
+  // 3079 a: kullanım izinin son tam turu; null iken izi okunmamış sayılır.
+  let kullanimTamam: string | null = null;
 
   const vt = (): TestVeritabani['vt'] => {
     if (!ortam) throw new Error('Test veritabanı açılamadı (TMIV2_PG_* ve TMIV2_PG_TEST_DATABASE ayarlarını denetleyin).');
@@ -55,9 +71,9 @@ describe('Logo geçişi: liste, toplu bağla ve al, geri al (3068 a; gerçek Pos
     assert.equal(r.statusCode, 200, `${yol}: ${r.body}`);
     return r.json() as T;
   };
-  const kart = (ref: number, kod: string, ek: Partial<LogoAynaKarti & { stok: string | null }> = {}) => ({
+  const kart = (ref: number, kod: string, ek: Partial<AynaSatiri> = {}): AynaSatiri => ({
     logoKayitNo: ref, kod, ad: `Logo ${kod}`, aciklama2: null, aciklama3: null, kartTuru: 10, birimSeti: '06', aktif: true,
-    sonOkuma: '2026-11-12T06:00:00.000Z', stok: '5', ...ek,
+    sonOkuma: '2026-11-12T06:00:00.000Z', stok: '5', sonHareket: null, acikSiparis: null, ...ek,
   });
   const kartSatiri = (kimlik: string) => vt().tek<{ kod: string; logo: string | null; gonderim: string | null; set: string | null; surum: number }>(
     `SELECT stok_kodu AS kod, logo_kayit_no AS logo, logo_gonderim_durumu AS gonderim, logo_birim_seti AS set, surum FROM malzeme_katalog_karti WHERE kimlik = $1`,
@@ -98,8 +114,10 @@ describe('Logo geçişi: liste, toplu bağla ve al, geri al (3068 a; gerçek Pos
       .sort((a, b) => a.logoKayitNo - b.logoKayitNo).slice(0, o.sinir));
     logoAynaOzetiCozucusu(async (_db, o) => ({
       kartlar: ayna.filter((k) => o.ara === undefined || k.kod.toLowerCase().includes(o.ara.toLowerCase()))
-        .map((k) => ({ logoKayitNo: k.logoKayitNo, kod: k.kod, aktif: k.aktif, stok: k.stok })),
+        .map((k) => ({ logoKayitNo: k.logoKayitNo, kod: k.kod, aktif: k.aktif, stok: k.stok, sonHareket: k.sonHareket, acikSiparis: k.acikSiparis })),
       okuma: { acik: false, suruyor: false, okunan: ayna.length, sonTamam: null },
+      kullanim: { acik: false, sonTamam: kullanimTamam },
+      arama: { acik: false },
     }));
     logoEslemeYaziciCozucusu(async () => { throw new Error('toplu işlem kod eşlemesi yazmaz'); });
     logoTmiKodCozucusu(async () => new Map());
@@ -114,7 +132,8 @@ describe('Logo geçişi: liste, toplu bağla ve al, geri al (3068 a; gerçek Pos
     ayna.push(kart(201, a.kod), kart(202, 'HM-LGY-00002', { stok: null }), kart(203, 'HM-LGY-00003', { aktif: false }));
     const l = await tamam<LogoGecisCevabi>('GET', '/malzeme-logo-gecisi', undefined, okuyucuCerezi);
     assert.deepEqual(l.kartlar.map((k) => [k.kod, k.durum, k.topluBaglanir, k.topluAlinir]), [[a.kod, 'bagsiz', true, false], ['HM-LGY-00003', 'yeni', false, false]]);
-    assert.deepEqual({ ...l.sayilar, kararBekleyen: undefined }, { toplam: 3, stoklu: 2, yeni: 2, bagsiz: 1, bagli: 0, kullanimDisi: 1, kararBekleyen: undefined });
+    assert.deepEqual({ ...l.sayilar, kararBekleyen: undefined }, { toplam: 3, stoklu: 2, yeni: 2, bagsiz: 1, bagli: 0, kullanimDisi: 1, kullanilan: null, kararBekleyen: undefined });
+    assert.deepEqual([l.suzgec, l.kullanim, l.kartlar[0]?.kullanimNedenleri], ['stoklu', false, null], 'kullanım izi okunmadan süzgeç stoğu olanlar');
     const yeni = await tamam<LogoGecisCevabi>('GET', '/malzeme-logo-gecisi?suzgec=yeni&ara=LGY-00002', undefined, okuyucuCerezi);
     assert.deepEqual(yeni.kartlar.map((k) => k.kod), ['HM-LGY-00002']);
     const r = await istek('POST', '/malzeme-logo-gecisi/toplu-bagla', { kartlar: [{ logoKayitNo: 201, surum: a.surum }] }, okuyucuCerezi);
@@ -187,5 +206,35 @@ describe('Logo geçişi: liste, toplu bağla ve al, geri al (3068 a; gerçek Pos
     assert.equal(r1.statusCode, 400, r1.body);
     const cok = Array.from({ length: 201 }, (_, i) => ({ logoKayitNo: 10_000 + i, surum: null }));
     assert.equal((await istek('POST', '/malzeme-logo-gecisi/toplu-al', { kartlar: cok, tur: null, birim: null })).statusCode, 400);
+  });
+
+  test('LGG-7 Kullanılanlar (3079 a): iz okununca açılış süzgeci; stok, son 12 ayda hareket ya da açık sipariş; neden satırda; 12 aydan eski hareket saymaz', async () => {
+    ayna.length = 0;
+    const bugun = new Date().toISOString().slice(0, 10);
+    const yil = Number(bugun.slice(0, 4));
+    const yeni = `${yil}-01-01` > bugun ? `${yil - 1}-12-31` : `${yil}-01-01`;
+    ayna.push(
+      kart(701, 'HM-LGK-00001', { stok: '0', sonHareket: yeni }),
+      kart(702, 'HM-LGK-00002', { stok: null, acikSiparis: true }),
+      kart(703, 'HM-LGK-00003', { stok: null, sonHareket: `${yil - 2}-01-01`, acikSiparis: false }),
+      kart(704, 'HM-LGK-00004', { stok: '2', sonHareket: null, acikSiparis: false }),
+      kart(705, 'HM-LGK-00005', { stok: null }),
+    );
+    kullanimTamam = '2026-11-12T07:00:00.000Z';
+    try {
+      const l = await tamam<LogoGecisCevabi>('GET', '/malzeme-logo-gecisi');
+      assert.deepEqual([l.suzgec, l.kullanim, l.sayilar.kullanilan, l.sayilar.stoklu], ['kullanilan', true, 3, 1]);
+      assert.deepEqual(l.kartlar.map((k) => [k.kod, k.kullanimNedenleri]), [
+        ['HM-LGK-00001', ['hareket']], ['HM-LGK-00002', ['siparis']], ['HM-LGK-00004', ['stok']],
+      ]);
+      assert.equal(l.kartlar[0]?.sonHareket, yeni);
+      const tumu = await tamam<LogoGecisCevabi>('GET', '/malzeme-logo-gecisi?suzgec=tumu');
+      assert.deepEqual(tumu.kartlar.find((k) => k.kod === 'HM-LGK-00003')?.kullanimNedenleri, [], '12 aydan eski hareket kullanım sayılmaz');
+      assert.equal(tumu.suzgec, 'tumu');
+      const stoklu = await tamam<LogoGecisCevabi>('GET', '/malzeme-logo-gecisi?suzgec=stoklu');
+      assert.deepEqual(stoklu.kartlar.map((k) => k.kod), ['HM-LGK-00004']);
+    } finally {
+      kullanimTamam = null;
+    }
   });
 });

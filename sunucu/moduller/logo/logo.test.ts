@@ -530,7 +530,7 @@ describe('Logo malzeme kartı gönderimi, sahte köprüyle uçtan uca (kart #207
   test('LGB-1 anahtar açık + değişken yok: istek çıkmaz, iş "bekliyor" döner; neden sağlık ayrıntısında görünür', async () => {
     const k = await aktifKart();
     assert.equal(process.env['TMIV2_LOGO_KOPRU_ADRESI'], undefined, 'test ortamında köprü değişkeni yok');
-    assert.deepEqual(isler.map((i) => i.ad), ['logo-malzeme-gonderimi', 'logo-satin-alma-gonderimi', 'logo-satis-gonderimi', 'logo-malzeme-fisi-gonderimi', 'logo-mal-kabul-okumasi', 'logo-liste-okumasi', 'logo-fatura-okumasi', 'logo-malzeme-kodu-okumasi', 'logo-malzeme-karti-okumasi', 'logo-stok-okumasi', 'logo-dis-siparis-duzeltme']);
+    assert.deepEqual(isler.map((i) => i.ad), ['logo-malzeme-gonderimi', 'logo-satin-alma-gonderimi', 'logo-satis-gonderimi', 'logo-malzeme-fisi-gonderimi', 'logo-mal-kabul-okumasi', 'logo-liste-okumasi', 'logo-fatura-okumasi', 'logo-malzeme-kodu-okumasi', 'logo-malzeme-karti-okumasi', 'logo-stok-okumasi', 'logo-kullanim-okumasi', 'logo-dis-siparis-duzeltme']);
     const { cagri } = await agsiz(async () => {
       assert.deepEqual(await tur({ kopru: null, bellek: yeniSurecBellegi(), saat: () => new Date(simdi) }), { tur: 'ortam-degiskeni-yok' });
       assert.equal(await isiBirKezCalistir(vt(), isler[0]!), 'bekliyor');

@@ -1,6 +1,6 @@
 import type { LogoAyari } from './ayar.ts';
-import { agHatasiniYorumla, alisFiyatlariniAyikla, malzemeHareketleriniAyikla, cariKaydiniAyikla, cariListesiniAyikla, cevabiYorumla, faturalariAyikla, malzemeKartlariniAyikla, stokToplamlariniAyikla, ISTEK_SURESI_MS, listeKayitlariniAyikla, malKabulSatirlariniAyikla, MALZEME_FISI_UCU, malzemeKodlariniAyikla, siparisIcerigiAyikla, varMiAdi } from './kurallar.ts';
-import type { LogoAlisFiyati, LogoMalzemeHareketi, FaturaKaydi, HizmetYonu, KopruSonucu, LogoCari, LogoFisTuru, LogoMalzemeKarti, LogoStokSatiri, KopruZarfi, ListeKaydi, MalKabulSatiri, MalzemeEklemeGovdesi, LogoSiparisIcerigi, Sayfa } from './kurallar.ts';
+import { agHatasiniYorumla, alisFiyatlariniAyikla, malzemeHareketleriniAyikla, cariKaydiniAyikla, cariListesiniAyikla, cevabiYorumla, faturalariAyikla, malzemeKartlariniAyikla, stokToplamlariniAyikla, kullanimlariAyikla, malzemeAramasiniAyikla, ISTEK_SURESI_MS, listeKayitlariniAyikla, malKabulSatirlariniAyikla, MALZEME_FISI_UCU, malzemeKodlariniAyikla, siparisIcerigiAyikla, varMiAdi } from './kurallar.ts';
+import type { LogoAlisFiyati, LogoMalzemeHareketi, FaturaKaydi, HizmetYonu, KopruSonucu, LogoCari, LogoFisTuru, LogoMalzemeKarti, LogoStokSatiri, LogoKullanimSatiri, KopruZarfi, ListeKaydi, MalKabulSatiri, MalzemeEklemeGovdesi, LogoSiparisIcerigi, Sayfa } from './kurallar.ts';
 
 // Logo yardımcısıyla yalnız bu dosya konuşur (kart #207, ADR 0017; yardımcı araclar/logo-yardimcisi). Adres ve anahtar ayardan gelir; hata metnine girmez.
 export interface KopruIstemcisi {
@@ -49,11 +49,15 @@ export interface KopruIstemcisi {
   // 2116: malzeme kartları ve ambar başına stok toplamı, kart kaydı sırasıyla sayfa sayfa (since = önceki sayfanın imleci).
   malzemeKartlariOku(since: number): Promise<OkumaSonucu<Sayfa<LogoMalzemeKarti>>>;
   stokToplamlariOku(since: number): Promise<OkumaSonucu<Sayfa<LogoStokSatiri>>>;
+  // 3079 a: kart başına son hareket ve açık sipariş, malzeme listesiyle aynı sayfalama.
+  kullanimlariOku(since: number): Promise<OkumaSonucu<Sayfa<LogoKullanimSatiri>>>;
   // 2961-D4: malzemenin hareketleri (kayıt sırasıyla sayfa) ve en yeni alış faturası satırları (en çok 10). Logo'da kart yoksa veri null.
   malzemeHareketleriOku(kod: string, since: number): Promise<OkumaSonucu<Sayfa<LogoMalzemeHareketi> | null>>;
   sonAlisFiyatlariOku(kod: string): Promise<OkumaSonucu<LogoAlisFiyati[] | null>>;
   // 2118: kullanımdaki carilerde arama (en çok 20) ve tek cari; olmayan cari null.
   cariAra(metin: string): Promise<OkumaSonucu<LogoCari[]>>;
+  // 3080 a: kullanımdaki malzeme kartlarında kod ya da adla arama (en çok 20).
+  malzemeAra(metin: string): Promise<OkumaSonucu<LogoMalzemeKarti[]>>;
   cariOku(kod: string): Promise<OkumaSonucu<LogoCari | null>>;
   // D7 (2987 a): Logo'daki satın alma siparişinin başlığı ve satırları; sipariş yoksa null. Fiyat taşır: yalnız düzeltme yetkisiyle çağrılır.
   siparisIcerigiOku(no: string): Promise<OkumaSonucu<LogoSiparisIcerigi | null>>;
@@ -207,10 +211,12 @@ export function kopruIstemcisiKur(ayar: LogoAyari, secenek: KopruSecenegi = {}):
     faturaOku: (no) => oku(`/api/PurchaseOrder/${encodeURIComponent(no)}/invoices`, faturalariAyikla, []),
     malzemeKartlariOku: (since) => oku(`/api/Material/list?since=${since}`, malzemeKartlariniAyikla),
     stokToplamlariOku: (since) => oku(`/api/Stock/totals?since=${since}`, stokToplamlariniAyikla),
+    kullanimlariOku: (since) => oku(`/api/Material/usage?since=${since}`, kullanimlariAyikla),
     malzemeHareketleriOku: (kod, since) =>
       oku<Sayfa<LogoMalzemeHareketi> | null>(`/api/Material/${encodeURIComponent(kod)}/movements?since=${since}`, malzemeHareketleriniAyikla, null),
     sonAlisFiyatlariOku: (kod) => oku<LogoAlisFiyati[] | null>(`/api/Material/${encodeURIComponent(kod)}/lastPurchases`, alisFiyatlariniAyikla, null),
     cariAra: (metin) => oku(`/api/Arp/search?q=${encodeURIComponent(metin)}`, cariListesiniAyikla),
+    malzemeAra: (metin) => oku(`/api/Material/search?q=${encodeURIComponent(metin)}`, malzemeAramasiniAyikla),
     cariOku: (kod) => oku<LogoCari | null>(`/api/Arp/card/${encodeURIComponent(kod)}`, (g) => cariKaydiniAyikla(g), null),
     siparisIcerigiOku: (no) => oku<LogoSiparisIcerigi | null>(`/api/PurchaseOrder/${encodeURIComponent(no)}/content`, siparisIcerigiAyikla, null),
     async malzemeFisiEkle(tur, govde) {

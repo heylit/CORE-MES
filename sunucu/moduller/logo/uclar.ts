@@ -2,10 +2,11 @@ import { bulunamadi } from '#cekirdek/hata.ts';
 import { uc } from '#cekirdek/uc.ts';
 import { disDuzeltmeCevabi, disDuzeltmelerCevabi, disSiparisCevabi, disSiparisDuzeltGovdesi, disSiparisSorgusu } from '#paylasilan/sozlesme/logo.ts';
 import { birimSetiCevabi, birimSetiEkleGovdesi, birimSetiParametresi, birimSetleriCevabi, logoGecisKomutuCevabi, logoHazirlikCevabi, logoKontrolCevabi } from '#paylasilan/sozlesme/logo.ts';
+import { logoMalzemeAramaCevabi, logoMalzemeAramaSorgusu, logoMalzemeEkleCevabi, logoMalzemeEkleGovdesi } from '#paylasilan/sozlesme/logo.ts';
 import { disDuzeltmeAcik, ortamKoprusu, ortamOzeti } from './baglanti.ts';
 import { disDuzeltmeleri, disSiparisDuzelt } from './dis-siparis.ts';
-import { logodanDisSiparisOku } from './isler.ts';
-import { birimSetiEkle, birimSetiKaldir, birimSetleriniGetir, gecisiBitir, gecisOkumasiIste, hazirlik, kontrol } from './servis.ts';
+import { logodaMalzemeAra, logodanDisSiparisOku } from './isler.ts';
+import { birimSetiEkle, birimSetiKaldir, birimSetleriniGetir, gecisiBitir, gecisOkumasiIste, hazirlik, kontrol, logoAramaSonucunuEkle } from './servis.ts';
 
 // Birim seti listesi: malzemelerin "Logo gönderimi" sayfası karşılık seçerken okur (LB9 a); elle ekleme ve kaldırma yalnız yöneticide (LB11 a).
 export const uclar = [
@@ -100,5 +101,30 @@ export const uclar = [
       if (!disDuzeltmeAcik()) throw bulunamadi();
       return { kayitlar: await disDuzeltmeleri(db, sorgu.no) };
     },
+  }),
+  // 3080 a: Logo geçişinde tek kart canlı araması; malzeme kartı açabilen arar ve bulduğunu listeye ekler. Arama köprüyü beklediği için
+  // transaction dışındadır ve yalnız okur; ekleme köprüye gitmez, aynı kişinin son aramasındaki kartı okunmuş kopyaya yazar.
+  uc({
+    yontem: 'GET',
+    yol: '/logo-gecisi/malzeme-ara',
+    yetki: 'malzemeler.yaz',
+    txDisi: true,
+    sorgu: logoMalzemeAramaSorgusu,
+    cevap: logoMalzemeAramaCevabi,
+    isle: async ({ db, kullanici, sorgu }) => {
+      const r = await logodaMalzemeAra({ tx: (f) => f(db) }, kullanici.id, sorgu.q);
+      return r.tur === 'tamam'
+        ? { durum: 'tamam' as const, ileti: r.veri.length === 0 ? 'Logo\'da bu metinle kullanımda kart yok.' : null, kartlar: r.veri.map((k) => ({ logoKayitNo: k.logoKayitNo, kod: k.kod, ad: k.ad })) }
+        : { durum: r.tur, ileti: r.ileti, kartlar: [] };
+    },
+  }),
+  uc({
+    yontem: 'POST',
+    yol: '/logo-gecisi/malzeme-ekle',
+    yetki: 'malzemeler.yaz',
+    tekrarKorumali: true,
+    govde: logoMalzemeEkleGovdesi,
+    cevap: logoMalzemeEkleCevabi,
+    isle: async ({ db, kullanici, govde }) => ({ eklenen: await logoAramaSonucunuEkle(db, kullanici.id, govde.kartlar, new Date()) }),
   }),
 ];

@@ -5,6 +5,7 @@ import type {
   LogoDurumuCevabi, LogoGecisCevabi, LogoGecisSuzgeci, LogodanAlCevabi, LogoGeriAlCevabi, LogoKarsiligi, LogoTopluCevabi, OlcuBirimleriCevabi,
 } from '#paylasilan/sozlesme/malzemeler.ts';
 import { LOGO_GECIS_SAYFA_BOYU, LOGO_TOPLU_AZAMI } from '#paylasilan/sozlesme/logo-gecisi-sabitleri.ts';
+import type { LogoMalzemeAramaCevabi, LogoMalzemeEkleCevabi } from '#paylasilan/sozlesme/logo.ts';
 import {
   Dugme, DurumKutusu, Girdi, Kart, OnayPenceresi, Pencere, Rozet, Secim, Simge, Tablo, useBildirim, type RozetTonu, type Sutun,
 } from '../../ortak/arayuz/index.ts';
@@ -22,10 +23,10 @@ type Satir = LogoGecisCevabi['kartlar'][number];
 type TekIslem = 'bagla' | 'farki-al' | 'yeni-koda-gec';
 
 const SUZGEC_ADLARI: Record<LogoGecisSuzgeci, string> = {
-  stoklu: 'Stoğu olanlar', tumu: 'Tümü', yeni: "CORE'da yok", bagsiz: 'Aynı kod var', bagli: 'Bağlı', 'kullanim-disi': 'Kullanım dışı',
+  kullanilan: 'Kullanılanlar', stoklu: 'Stoğu olanlar', tumu: 'Tümü', yeni: "CORE'da yok", bagsiz: 'Aynı kod var', bagli: 'Bağlı', 'kullanim-disi': 'Kullanım dışı',
 };
 const SUZGEC_SAYISI: Record<LogoGecisSuzgeci, keyof LogoGecisCevabi['sayilar']> = {
-  stoklu: 'stoklu', tumu: 'toplam', yeni: 'yeni', bagsiz: 'bagsiz', bagli: 'bagli', 'kullanim-disi': 'kullanimDisi',
+  kullanilan: 'kullanilan', stoklu: 'stoklu', tumu: 'toplam', yeni: 'yeni', bagsiz: 'bagsiz', bagli: 'bagli', 'kullanim-disi': 'kullanimDisi',
 };
 const DURUM: Record<Satir['durum'], { ad: string; ton: RozetTonu; simge: 'plus' | 'alert' | 'check' }> = {
   yeni: { ad: "CORE'da yok", ton: 'bilgi', simge: 'plus' },
@@ -50,6 +51,12 @@ export const TOPLU_AZAMI = LOGO_TOPLU_AZAMI;
 const sayi = (n: number): string => n.toLocaleString('tr-TR');
 const zamanMetni = (z: string): string => new Date(z).toLocaleString('tr-TR', { dateStyle: 'short', timeStyle: 'short' });
 const stokMetni = (s: string | null): string | null => (s === null ? null : Number(s).toLocaleString('tr-TR', { maximumFractionDigits: 3 }));
+const gunMetni = (g: string): string => new Date(`${g}T00:00:00`).toLocaleDateString('tr-TR');
+// 3079 a: "Kullanılanlar" nedeni satırda; stok zaten ayrı yazılır, hareket ve sipariş eklenir.
+const kullanimMetni = (k: Satir): (string | null)[] => [
+  k.kullanimNedenleri?.includes('hareket') && k.sonHareket !== null ? `son hareket ${gunMetni(k.sonHareket)}` : null,
+  k.kullanimNedenleri?.includes('siparis') ? 'açık sipariş' : null,
+];
 
 type TopluSonuc = LogoTopluCevabi;
 
@@ -59,7 +66,8 @@ interface Ozellikler {
 
 export function LogoMalzemeGecisi({ turAdlari }: Ozellikler) {
   const oturum = useOturum();
-  const [suzgec, suzgecYaz] = useState<LogoGecisSuzgeci>('stoklu');
+  // Boşken sunucu seçer: kullanım izi okunduysa "Kullanılanlar", okunmadıysa "Stoğu olanlar" (3079 a).
+  const [suzgec, suzgecYaz] = useState<LogoGecisSuzgeci | null>(null);
   const [ara, araYaz] = useState('');
   const [sayfa, sayfaYaz] = useState(1);
   const [toplu, topluYaz] = useState<{ tur: 'bagla' | 'al'; secili: readonly Satir[] } | null>(null);
@@ -82,7 +90,9 @@ export function LogoMalzemeGecisi({ turAdlari }: Ozellikler) {
   const aranan = ara.trim().length >= 2 ? ara.trim() : '';
   const liste = useQuery({
     queryKey: [...LOGO_GECIS_ANAHTARI, suzgec, aranan, sayfa],
-    queryFn: () => api.get<LogoGecisCevabi>(`/malzeme-logo-gecisi?${new URLSearchParams({ suzgec, sayfa: String(sayfa - 1), ...(aranan ? { ara: aranan } : {}) }).toString()}`),
+    queryFn: () => api.get<LogoGecisCevabi>(`/malzeme-logo-gecisi?${new URLSearchParams({
+      ...(suzgec ? { suzgec } : {}), sayfa: String(sayfa - 1), ...(aranan ? { ara: aranan } : {}),
+    }).toString()}`),
     placeholderData: (onceki) => onceki,
   });
   const durum = useQuery({ queryKey: ['malzemeler', 'logo-durumu'], queryFn: () => api.get<LogoDurumuCevabi>('/malzeme-logo-durumu') });
@@ -136,7 +146,7 @@ export function LogoMalzemeGecisi({ turAdlari }: Ozellikler) {
         <span className="tc-lg-taraf">
           <span className="tc-lg-kod">{k.kod}</span>
           <span>{k.ad ?? '—'}</span>
-          <span className="tc-lg-ek">{[k.birimSeti, k.stok === null ? null : `stok ${stokMetni(k.stok)}`].filter(Boolean).join(' · ') || null}</span>
+          <span className="tc-lg-ek">{[k.birimSeti, k.stok === null ? null : `stok ${stokMetni(k.stok)}`, ...kullanimMetni(k)].filter(Boolean).join(' · ') || null}</span>
         </span>
       ),
       csv: (k) => `${k.kod} ${k.ad ?? ''}`.trim(),
@@ -205,14 +215,18 @@ export function LogoMalzemeGecisi({ turAdlari }: Ozellikler) {
           satirAnahtari={(k) => k.logoKayitNo}
           mesgul={liste.isFetching}
           bosMesaj={bosMesaj}
-          {...(aranan && !okumaSuruyor && veri.kartlar.length === 0 ? { bosEylem: <CanliAramaDugmesi /> } : {})}
+          {...(aranan && !okumaSuruyor && veri.kartlar.length === 0
+            ? { bosEylem: <CanliAramaDugmesi metin={aranan} acik={veri.canliArama} yazabilir={yazabilir} bulundu={() => { suzgecYaz('tumu'); sayfaYaz(1); }} /> }
+            : {})}
           {...(topluEylemler.length > 0 ? { toplu: { eylemler: topluEylemler } } : {})}
           arac={{
             arama: { deger: ara, degistir: (d) => { araYaz(d); sayfaYaz(1); }, etiket: 'Ara', yerTutucu: 'Kod, ad ya da açıklama' },
             suzgec: {
               etiket: 'Süzgeç',
-              secenekler: (Object.keys(SUZGEC_ADLARI) as LogoGecisSuzgeci[]).map((d) => ({ deger: d, baslik: `${SUZGEC_ADLARI[d]} (${sayi(sayilar[SUZGEC_SAYISI[d]])})` })),
-              secili: suzgec,
+              // Kullanım izi okunduysa "Stoğu olanlar"ın yerini "Kullanılanlar" alır (3079 a).
+              secenekler: (Object.keys(SUZGEC_ADLARI) as LogoGecisSuzgeci[]).filter((d) => d !== (veri.kullanim ? 'stoklu' : 'kullanilan'))
+                .map((d) => ({ deger: d, baslik: `${SUZGEC_ADLARI[d]} (${sayi(sayilar[SUZGEC_SAYISI[d]] ?? 0)})` })),
+              secili: suzgec ?? veri.suzgec,
               sec: (d) => { suzgecYaz(d as LogoGecisSuzgeci); sayfaYaz(1); },
             },
             csv: { ad: 'logo-gecisi-malzemeler' },
@@ -264,12 +278,38 @@ export function LogoMalzemeGecisi({ turAdlari }: Ozellikler) {
   );
 }
 
-// Kopyada bulunamayan tek kartı Logo'da canlı aramak yardımcıya yeni bir okuma ister; ayrı işle gelir, o zamana dek düğme pasiftir.
-function CanliAramaDugmesi() {
+// 3080 a: okunmuş listede olmayan kart Logo'da o an aranır (kod ya da ad, en çok 20); bulunan kart listeye eklenir ve "Tümü"nde görünür,
+// oradan alınır ya da bağlanır. Logo'ya yazılmaz.
+function CanliAramaDugmesi({ metin, acik, yazabilir, bulundu }: { metin: string; acik: boolean; yazabilir: boolean; bulundu: () => void }) {
+  const istemci = useQueryClient();
+  const { bildir } = useBildirim();
+  const ekle = useKorumaliKomut({
+    gonder: (kartlar: number[], deneme) => api.post<LogoMalzemeEkleCevabi>('/logo-gecisi/malzeme-ekle', { kartlar }, deneme),
+    onSuccess: async (c) => {
+      bildir('tamam', `Logo'da ${sayi(c.eklenen)} kart bulundu ve listeye eklendi.`);
+      bulundu();
+      await istemci.invalidateQueries({ queryKey: LOGO_GECIS_ANAHTARI });
+    },
+    onError: (e) => bildir('hata', hataIletisi(e, 'Listeye eklenemedi')),
+  });
+  const ara = useTekGonderim({
+    mutationFn: () => api.get<LogoMalzemeAramaCevabi>(`/logo-gecisi/malzeme-ara?${new URLSearchParams({ q: metin }).toString()}`),
+    onSuccess: (r) => {
+      if (r.durum !== 'tamam') bildir('hata', r.ileti ?? 'Logo\'da aranamadı');
+      else if (r.kartlar.length === 0) bildir('bilgi', r.ileti ?? 'Logo\'da bulunamadı');
+      else ekle.mutate(r.kartlar.map((k) => k.logoKayitNo));
+    },
+    onError: (e) => bildir('hata', hataIletisi(e, 'Logo\'da aranamadı')),
+  });
+  const neden = !yazabilir ? 'Malzeme kartı açma yetkisi gerekir'
+    : !acik ? 'Sistem Ayarları\'nda "Logo: malzeme araması" kapalı'
+      : metin.length < 3 ? 'En az 3 karakter yazın' : null;
   return (
     <span className="tc-lg-canli">
-      <Dugme simge="search" disabled title="Logo yardımcısına canlı arama eklenince açılır">Logo'da canlı ara</Dugme>
-      <span className="tc-lg-not">Kopyada yok. Canlı arama ayrı işle gelecek.</span>
+      <Dugme simge="search" disabled={neden !== null} {...(neden ? { title: neden } : {})} yukleniyor={ara.isPending || ekle.isPending} onClick={() => ara.mutate()}>
+        Logo'da canlı ara
+      </Dugme>
+      <span className="tc-lg-not">{neden === null ? 'Okunan listede yok.' : `Okunan listede yok. ${neden}.`}</span>
     </span>
   );
 }

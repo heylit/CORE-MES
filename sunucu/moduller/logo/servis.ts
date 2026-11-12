@@ -3,6 +3,7 @@ import { kayitNoktasi } from '#cekirdek/db.ts';
 import { bulunamadi, gecersiz, UygulamaHatasi } from '#cekirdek/hata.ts';
 import { LOGO_AYARLARI } from '#paylasilan/ayarlar/logo.ts';
 import type { BirimSetleriCevabi, LogoBaglantiDurumu, LogoHazirlikCevabi, LogoKontrolCevabi } from '#paylasilan/sozlesme/logo.ts';
+import { LOGO_MALZEME_ARAMA_EN_AZ, LOGO_MALZEME_ARAMA_EN_COK, LOGO_MALZEME_ARAMA_SONUCU } from '#paylasilan/sozlesme/logo.ts';
 import type { FisGonderimSekli, LogoFisBilgisi, MalzemeFisiTuru } from '#paylasilan/sozlesme/stok.ts';
 import { modulAyariDegistir, sistemAyariOku } from '../ayarlar/disari.ts';
 import { firmaOzeti } from '../musteri-tedarikci/disari.ts';
@@ -14,7 +15,7 @@ import {
   FATURA_TUR_SINIRI, FATURA_YENIDEN_OKUMA_MS, FIS_GONDERIM_AYARI, gonderimSekli, LOGO_FIS_TURLERI, logoFisDurumu, STOK_FISI_LOGO_TURU, stokFisindenLogoFisi, kontrolAdiminiYorumla, listeOkunmaliMi, malzemeFisiGovdesi, malzemeFisiOzeti, eskiEmirFisiNo, FIS_NO_EN_COK, logoFisNumarasi, OKUMA_HATA_BEKLEME_MS, LOGO_AKISLARI, LOGO_KONTROL_ADIMLARI, logoAkisDurumu, satisSiparisiGovdesi, satisTeklifiGovdesi,
   belgeStokKodlari, CARI_ARAMA_EN_AZ, CARI_ARAMA_EN_COK, logoKodlarinaCevir, sayfaliOkumaSirasi,
 } from './kurallar.ts';
-import type { LogoCari, LogoMalzemeKarti, LogoStokSatiri, Sayfa } from './kurallar.ts';
+import type { LogoCari, LogoKullanimSatiri, LogoMalzemeKarti, LogoStokSatiri, Sayfa } from './kurallar.ts';
 import type { FisDurumSorusu, GonderilecekKarsilama, GonderilecekMalzemeFisi, StokFisi, StokFisSatiri, GonderilecekSatisSiparisi, GonderilecekSatisTeklifi, GonderilecekSiparis, GonderilecekTalep, GuncellenecekSiparisSatiri, HizmetYonu, KopruSonucu } from './kurallar.ts';
 import * as s from './sorgular.ts';
 import type { BelgeTuru, FisTuru, GidenIslemi, GidenSatiri, GidenSonucu } from './sorgular.ts';
@@ -46,6 +47,7 @@ export const BEKLEME_NEDENLERI = {
   'malzeme-fisi-kapali': 'Logo malzeme fişi gönderimi Sistem Ayarları\'nda kapalı; fişler birikiyor, istek atılmıyor.',
   'malzeme-karti-kapali': 'Logo malzeme kartı okuması Sistem Ayarları\'nda kapalı; istek atılmıyor.',
   'stok-kapali': 'Logo stok okuması Sistem Ayarları\'nda kapalı; istek atılmıyor.',
+  'kullanim-kapali': 'Logo malzeme kullanım okuması Sistem Ayarları\'nda kapalı; istek atılmıyor.',
   'dis-duzeltme-kapali': 'Logo\'da açılmış siparişi düzeltme kapalı (TMIV2_LOGO_SIPARIS_DUZELTME); istek atılmıyor.',
   'ortam-degiskeni-yok': 'Logo bağlantısı açık ama TMIV2_LOGO_KOPRU_ADRESI ve TMIV2_LOGO_KOPRU_ANAHTARI tanımlı değil; istek atılmıyor.',
 } as const;
@@ -115,8 +117,8 @@ export type TurSonucu =
   | { tur: 'guncelleme' | 'pasif' | 'kapatma' | 'bekletme' | 'iptal' | 'karsilama'; no: number; sonuc: GidenSonucu }
   | { tur: 'pasif-niyet'; no: number }
   | { tur: 'satis-kapali' }
-  | { tur: 'mal-kabul-kapali' | 'liste-kapali' | 'fatura-kapali' | 'malzeme-fisi-kapali' | 'malzeme-karti-kapali' | 'stok-kapali' }
-  | { tur: 'okuma'; akis: 'mal-kabul' | 'cari' | 'ambar' | 'fatura' | 'malzeme-kodu' | 'malzeme-karti' | 'stok'; sonuc: 'okundu' | Exclude<KopruSonucu, { tur: 'basarili' }>['tur']; sayi: number }
+  | { tur: 'mal-kabul-kapali' | 'liste-kapali' | 'fatura-kapali' | 'malzeme-fisi-kapali' | 'malzeme-karti-kapali' | 'stok-kapali' | 'kullanim-kapali' }
+  | { tur: 'okuma'; akis: 'mal-kabul' | 'cari' | 'ambar' | 'fatura' | 'malzeme-kodu' | 'malzeme-karti' | 'stok' | 'kullanim'; sonuc: 'okundu' | Exclude<KopruSonucu, { tur: 'basarili' }>['tur']; sayi: number }
   | { tur: 'malzeme-fisi-niyet'; no: number }
   | { tur: 'malzeme-fisi'; no: number; sonuc: GidenSonucu }
   | { tur: `${NiyetliBelge}-niyet`; no: number }
@@ -890,7 +892,7 @@ async function logoKoduyla<T extends Parameters<typeof logoKodlarinaCevir>[0]>(d
 // kendi anahtarı açık VE köprü değişkenleri varken çıkar. Turda en çok bir okuma isteği (fatura turu hariç: sınırlı sayıda sipariş, sıralı).
 async function okumaKapisi(
   db: Db, o: TurOrtami, ayar: LogoAyarAnahtari,
-  kapali: 'mal-kabul-kapali' | 'liste-kapali' | 'fatura-kapali' | 'malzeme-fisi-kapali' | 'malzeme-karti-kapali' | 'stok-kapali',
+  kapali: 'mal-kabul-kapali' | 'liste-kapali' | 'fatura-kapali' | 'malzeme-fisi-kapali' | 'malzeme-karti-kapali' | 'stok-kapali' | 'kullanim-kapali',
 ): Promise<TurSonucu | KopruIstemcisi> {
   if (!(await sistemAyariOku(db, 'logo.baglanti'))) return { tur: 'kapali' };
   if (!(await sistemAyariOku(db, ayar))) return { tur: kapali };
@@ -975,7 +977,7 @@ export function logodaKullanilanMalzemeKodlari(db: Db, kodlar: readonly string[]
 // 2116: malzeme kartı ve stok toplamı sayfa sayfa okunur (iş turunda tek sayfa); tam tur yalnız ilk açılışta ve istekle başlar (3077 a). Okunan yalnız logo
 // modülünün aynasına yazılır, TMI kartına ya da stoğuna işlenmez (2116-1 a, 2116-2 a); Logo'ya hiçbir şey gitmez.
 function sayfaliOkumaTuru<T>(
-  akis: s.SayfaliAkis, ayar: LogoAyarAnahtari, kapali: 'malzeme-karti-kapali' | 'stok-kapali',
+  akis: s.SayfaliAkis, ayar: LogoAyarAnahtari, kapali: 'malzeme-karti-kapali' | 'stok-kapali' | 'kullanim-kapali',
   oku: (kopru: KopruIstemcisi, since: number) => Promise<{ tur: 'basarili'; veri: Sayfa<T> } | Exclude<KopruSonucu, { tur: 'basarili' }>>,
   yaz: (db: Db, kayitlar: readonly T[], zaman: Date) => Promise<void>,
 ): (vt: TxAcan, o: TurOrtami) => Promise<TurSonucu> {
@@ -1010,6 +1012,10 @@ export const malzemeKartiOkumaTuru = sayfaliOkumaTuru<LogoMalzemeKarti>(
 export const stokOkumaTuru = sayfaliOkumaTuru<LogoStokSatiri>(
   'stok', 'logo.stok-okumasi', 'stok-kapali', (k, since) => k.stokToplamlariOku(since), s.stokToplamlariniYaz,
 );
+// 3079 a: kendi ayarıyla; "Şimdi oku" ayarı açmaz, açıksa turu birlikte ister. "Geçişi bitir" kapatır.
+export const kullanimOkumaTuru = sayfaliOkumaTuru<LogoKullanimSatiri>(
+  'kullanim', 'logo.kullanim-okumasi', 'kullanim-kapali', (k, since) => k.kullanimlariOku(since), s.kullanimlariYaz,
+);
 
 // Malzemeler "Logo'dan gelenler" listesini ve stok karşılaştırmasını bunlarla okur (sunucu/kablolama.ts bağlar). Yetki denetlemez; okuyan uç denetler.
 export function logodakiMalzemeKartlari(db: Db, o: { kodlar?: readonly string[]; ara?: string; sinir: number; sonra: number }): Promise<s.AynadakiKart[]> {
@@ -1023,12 +1029,19 @@ export function logodakiStokToplamlari(db: Db, malzemeKodlari: readonly string[]
 export interface LogoAynaOzeti {
   kartlar: s.AynaOzetSatiri[];
   okuma: { acik: boolean; suruyor: boolean; okunan: number | null; sonTamam: string | null };
+  // 3080 a: tek kart canlı araması açık mı (düğme buna göre).
+  arama: { acik: boolean };
+  // 3079 a: kullanım izi en az bir tam turda okunduysa "Kullanılanlar" süzgeci kurulur; okunmadıysa liste "Stoğu olanlar"la kalır.
+  kullanim: { acik: boolean; sonTamam: string | null };
 }
 export async function logodakiMalzemeOzeti(db: Db, o: { ara?: string }): Promise<LogoAynaOzeti> {
   const acik = (await sistemAyariOku(db, 'logo.baglanti')) === true && (await sistemAyariOku(db, 'logo.malzeme-okumasi')) === true;
   const i = await s.okumaImleci(db, 'malzeme-karti');
+  const u = await s.okumaImleci(db, 'kullanim');
   return {
     kartlar: await s.aynaOzeti(db, o),
+    kullanim: { acik: acik && (await sistemAyariOku(db, 'logo.kullanim-okumasi')) === true, sonTamam: u?.sonTamamMetni ?? null },
+    arama: { acik: (await sistemAyariOku(db, 'logo.baglanti')) === true && (await sistemAyariOku(db, 'logo.malzeme-aramasi')) === true },
     // İmleç başta değilse tur yarıdadır; hiç tam tur bitmemişse ya da istenen tur başlamadıysa da okuma sürüyor sayılır.
     okuma: { acik, suruyor: acik && sayfaliOkumaSirasi(i) !== 'bekle', okunan: i?.sayi ?? null, sonTamam: i?.sonTamamMetni ?? null },
   };
@@ -1047,7 +1060,7 @@ export async function gecisOkumasiIste(db: Db, kisiId: number): Promise<void> {
   await s.turIste(db);
 }
 export async function gecisiBitir(db: Db, kisiId: number): Promise<void> {
-  for (const a of GECIS_AYARLARI) {
+  for (const a of [...GECIS_AYARLARI, 'logo.kullanim-okumasi'] as const) {
     const simdi = (await sistemAyariOku(db, a)) === true;
     if (simdi) await modulAyariDegistir(db, kisiId, a, false, true, { ...GECIS_KAYNAGI, yol: '/logo-gecisi/bitir' });
   }
@@ -1091,6 +1104,34 @@ export async function logoCariOku(vt: TxAcan, kopru: KopruIstemcisi | null, kod:
   if ('tur' in k) return k;
   const r = await k.cariOku(kod.trim());
   return r.tur === 'basarili' ? { tur: 'tamam', veri: r.veri } : { tur: 'hata', ileti: r.ileti };
+}
+
+// 3080 a: Logo geçişinde tek kart canlı araması. Arama yalnız GET'tir ve transaction dışında beklenir; bulunanlar kişinin süreç belleğinde
+// tutulur (tek sunucu). "Ekle" köprüye gitmez: kişinin son aramasında gördüğü kartı okunmuş kopyaya yazar, başka kart yazılamaz.
+const ARAMA_BELLEGI_MS = 30 * 60_000;
+const aramaBellegi = new Map<number, { kartlar: Map<number, LogoMalzemeKarti>; zaman: number }>();
+export async function logoMalzemeAra(
+  vt: TxAcan, kopru: KopruIstemcisi | null, kisiId: number, metin: string, saat: () => number = Date.now,
+): Promise<CariOkumasi<LogoMalzemeKarti[]>> {
+  const q = metin.trim();
+  if (q.length < LOGO_MALZEME_ARAMA_EN_AZ || q.length > LOGO_MALZEME_ARAMA_EN_COK) {
+    throw gecersiz(`Arama metni ${LOGO_MALZEME_ARAMA_EN_AZ}-${LOGO_MALZEME_ARAMA_EN_COK} karakter olmalı.`);
+  }
+  const acik = await vt.tx(async (db) => (await sistemAyariOku(db, 'logo.baglanti')) === true && (await sistemAyariOku(db, 'logo.malzeme-aramasi')) === true);
+  if (!acik) return { tur: 'kapali', ileti: 'Logo\'da malzeme araması Sistem Ayarları\'nda kapalı ("Logo bağlantısı" ve "Logo: malzeme araması").' };
+  if (kopru === null) return { tur: 'ortam-degiskeni-yok', ileti: BEKLEME_NEDENLERI['ortam-degiskeni-yok'] };
+  const r = await kopru.malzemeAra(q);
+  if (r.tur !== 'basarili') return { tur: 'hata', ileti: r.ileti };
+  const kartlar = r.veri.slice(0, LOGO_MALZEME_ARAMA_SONUCU);
+  aramaBellegi.set(kisiId, { kartlar: new Map(kartlar.map((k) => [k.logoKayitNo, k])), zaman: saat() });
+  return { tur: 'tamam', veri: kartlar };
+}
+export async function logoAramaSonucunuEkle(db: Db, kisiId: number, refler: readonly number[], zaman: Date): Promise<number> {
+  const b = aramaBellegi.get(kisiId);
+  if (!b || zaman.getTime() - b.zaman > ARAMA_BELLEGI_MS) return 0;
+  const kartlar = [...new Set(refler)].map((r) => b.kartlar.get(r)).filter((k): k is LogoMalzemeKarti => k !== undefined);
+  await s.malzemeKartlariniYaz(db, kartlar, zaman);
+  return kartlar.length;
 }
 
 // Fatura: Logo'ya giden siparişlerin numarası logo_giden'den (kayıt) ve logo_siparis_no'dan gelir; okuması en eski sipariş önce, sıralı, turda
@@ -1425,6 +1466,8 @@ export async function hazirlik(db: Db, kopru: KopruIstemcisi | null, ortam: Logo
     fatura: { sayi: okumalar.fatura, son: okumalar.faturaSon },
     'malzeme-karti': await sayfaliOzet(db, 'malzeme-karti'),
     stok: await sayfaliOzet(db, 'stok'),
+    kullanim: await sayfaliOzet(db, 'kullanim'),
+    'malzeme-arama': { sayi: null, son: null },
     cari: { sayi: null, son: null },
   } as const;
   return {

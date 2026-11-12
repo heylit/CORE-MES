@@ -526,6 +526,12 @@ namespace LogoYardimcisi
             return Kartlar.Where(x => x.Ref > sonGorulen).OrderBy(x => x.Ref).Take(enCok).ToList();
         }
 
+        public List<MalzemeKaydi> MalzemeAra(string metin, int enCok)
+        {
+            Func<string, bool> icinde = a => a != null && a.IndexOf(metin, StringComparison.OrdinalIgnoreCase) >= 0;
+            return Kartlar.Where(k => !k.Pasif && (icinde(k.Kod) || icinde(k.Ad))).OrderBy(k => k.Kod, StringComparer.Ordinal).Take(enCok).ToList();
+        }
+
         public List<MalzemeHareketi> MalzemeHareketleri(int malzemeRef, int sonGorulen, int enCok)
         {
             return Hareketler.Where(x => x.Item1 == malzemeRef && x.Item2.Ref > sonGorulen).Select(x => x.Item2).OrderBy(x => x.Ref).Take(enCok).ToList();
@@ -540,6 +546,23 @@ namespace LogoYardimcisi
         {
             var refler = new HashSet<int>(MalzemeKartlari(sonGorulen, enCok).Select(x => x.Ref));
             return Stoklar.Where(x => refler.Contains(x.MalzemeRef) && x.AmbarNo >= 0).OrderBy(x => x.MalzemeRef).ThenBy(x => x.AmbarNo).ToList();
+        }
+
+        // Gerçek sorgunun eşi: son hareket kartın hareketlerinden; açık sipariş iptal olmayan alış ya da satış siparişinin kapanmamış malzeme satırından.
+        public List<MalzemeKullanimi> MalzemeKullanimlari(int sonGorulen, int enCok)
+        {
+            return MalzemeKartlari(sonGorulen, enCok).Select(k =>
+            {
+                var tarihler = Hareketler.Where(h => h.Item1 == k.Ref).Select(h => h.Item2.Tarih).ToList();
+                return new MalzemeKullanimi
+                {
+                    MalzemeRef = k.Ref,
+                    MalzemeKodu = k.Kod,
+                    SonHareket = tarihler.Count == 0 ? (DateTime?)null : tarihler.Max(),
+                    AcikSiparis = Fisler.Any(f => (f.Nesne == Nesne.SatinAlmaSiparisi || f.Nesne == Nesne.SatisSiparisi) && !f.Iptal
+                        && f.Satirlar.Any(s => s.Tur == 0 && !s.Kapali && s.Kod == k.Kod)),
+                };
+            }).ToList();
         }
 
         public List<CariKaydi> CariAra(string metin, int enCok)

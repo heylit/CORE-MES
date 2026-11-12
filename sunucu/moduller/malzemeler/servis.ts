@@ -37,7 +37,7 @@ import { katalogGeriCekildiMi, katalogKartAdi, kategoriAgaciKur } from './kurall
 import type { KategoriAgaciDugumu, KategoriAgaciTuru } from '#paylasilan/sozlesme/kategori-agaci-sabitleri.ts';
 import { arsivdenDonusDurumu, arsivIzAdetleri, arsivKaliciSilmeEngeli, type ArsivIzi } from './kurallar.ts';
 import type { MalzemeKartiAnahtari, MalzemeKartiIzi } from '#paylasilan/malzeme-karti-izi.ts';
-import { logoGecisAdayligi, logoGelenDurumu, logoKartFarklari, logoKodBicimi, logoKoduTureUyar } from './kurallar.ts';
+import { logoGecisAdayligi, logoGelenDurumu, logoKullanimEsigi, logoKullanimNedenleri, logoKartFarklari, logoKodBicimi, logoKoduTureUyar } from './kurallar.ts';
 import * as s from './sorgular.ts';
 
 // Dört göz ayarının tek kaynağı: Sistem Ayarları. Satır yokken ayar açıktır.
@@ -980,8 +980,10 @@ let logoTmiKodlari: LogoTmiKodCozucusu | null = null;
 export function logoKartAynasiKaydet(c: LogoKartAynasiCozucusu): void { logoKartAynasi = c; }
 // 3068: geçiş sayfası aynanın hafif özetini (süzgeç, sayaç) ve okuma durumunu logo modülünden alır; sunucu/kablolama.ts bağlar.
 export interface LogoAynaOzeti {
-  kartlar: { logoKayitNo: number; kod: string; aktif: boolean; stok: string | null }[];
+  kartlar: { logoKayitNo: number; kod: string; aktif: boolean; stok: string | null; sonHareket: string | null; acikSiparis: boolean | null }[];
   okuma: { acik: boolean; suruyor: boolean; okunan: number | null; sonTamam: string | null };
+  kullanim: { acik: boolean; sonTamam: string | null };
+  arama: { acik: boolean };
 }
 export type LogoAynaOzetiCozucusu = (db: Db, o: { ara?: string }) => Promise<LogoAynaOzeti>;
 let logoAynaOzeti: LogoAynaOzetiCozucusu | null = null;
@@ -1026,12 +1028,21 @@ const stokVar = (stok: string | null): boolean => stok !== null && Number(stok) 
 
 // 3068: Logo geçişi. Süzgeç ve sayaçlar bütün aynanın hafif özetinden, sayfa satırları yalnız o sayfanın kartlarından kurulur;
 // sayaçlar aramadan bağımsızdır (aynanın tamamı), süzgece uyan sayı aramayla birlikte.
-export async function logoGecisi(db: Db, q: z.output<typeof logoGecisSorgusu>): Promise<LogoGecisCevabi> {
-  const bos = { toplam: 0, stoklu: 0, yeni: 0, bagsiz: 0, bagli: 0, kullanimDisi: 0, kararBekleyen: 0 };
+export async function logoGecisi(db: Db, q: z.output<typeof logoGecisSorgusu>, bugun = new Date()): Promise<LogoGecisCevabi> {
+  const bos = { toplam: 0, stoklu: 0, yeni: 0, bagsiz: 0, bagli: 0, kullanimDisi: 0, kullanilan: null, kararBekleyen: 0 };
   if (!logoKartAynasi || !logoAynaOzeti) {
-    return { baglanti: false, okuma: { acik: false, suruyor: false, okunan: null, sonTamam: null }, sayilar: bos, uyan: 0, kartlar: [], sayfa: 0, sonrakiSayfa: null };
+    return {
+      baglanti: false, okuma: { acik: false, suruyor: false, okunan: null, sonTamam: null }, sayilar: bos, suzgec: q.suzgec ?? 'stoklu', kullanim: false, canliArama: false,
+      uyan: 0, kartlar: [], sayfa: 0, sonrakiSayfa: null,
+    };
   }
   const ozet = await logoAynaOzeti(db, {});
+  // 3079 a: kullanım izi bir tam turda okunduysa süzgeç ve nedenler kurulur; ayar sonradan kapansa da okunmuş iz geçerlidir.
+  const kullanim = ozet.kullanim.sonTamam !== null;
+  const suzgec = q.suzgec ?? (kullanim ? 'kullanilan' : 'stoklu');
+  const esik = logoKullanimEsigi(bugun.toISOString().slice(0, 10));
+  const nedenler = (k: { stok: string | null; sonHareket: string | null; acikSiparis: boolean | null }) =>
+    (kullanim ? logoKullanimNedenleri(k, esik) : null);
   const firma = katalogFirmaKodu(await katalogGenelAyari(db));
   const birimKarsiliklari = (await s.logoKarsiliklari(db)).filter((k) => k.cesit === 'birim');
   const tumKartlar = ozet.kartlar.map((k) => ({ ...k, ad: null, aciklama2: null, aciklama3: null, kartTuru: null, birimSeti: null, sonOkuma: '' }));
@@ -1040,9 +1051,10 @@ export async function logoGecisi(db: Db, q: z.output<typeof logoGecisSorgusu>): 
     const { durum, tmi } = logoGelenDurumu(k, refle, kodla, esleme);
     return { k, durum, tmi, koduUyar: logoKodBicimi(k.kod, firma) !== null };
   });
-  const sayilar = { ...bos, toplam: satirlar.length };
+  const sayilar: LogoGecisCevabi['sayilar'] = { ...bos, toplam: satirlar.length, kullanilan: kullanim ? 0 : null };
   for (const r of satirlar) {
     if (stokVar(r.k.stok)) sayilar.stoklu += 1;
+    if (sayilar.kullanilan !== null && nedenler(r.k)!.length > 0) sayilar.kullanilan += 1;
     if (!r.k.aktif) sayilar.kullanimDisi += 1;
     if (r.durum === 'yeni') sayilar.yeni += 1;
     else if (r.durum === 'bagsiz') sayilar.bagsiz += 1;
@@ -1050,10 +1062,11 @@ export async function logoGecisi(db: Db, q: z.output<typeof logoGecisSorgusu>): 
   }
   const arananlar = q.ara ? new Set((await logoAynaOzeti(db, { ara: q.ara })).kartlar.map((k) => k.logoKayitNo)) : null;
   const uyanlar = satirlar.filter((r) => (arananlar === null || arananlar.has(r.k.logoKayitNo)) && (
-    q.suzgec === 'tumu' ? true
-      : q.suzgec === 'stoklu' ? stokVar(r.k.stok)
-        : q.suzgec === 'kullanim-disi' ? !r.k.aktif
-          : r.durum === q.suzgec));
+    suzgec === 'tumu' ? true
+      : suzgec === 'stoklu' ? stokVar(r.k.stok)
+        : suzgec === 'kullanilan' ? (nedenler(r.k) ?? []).length > 0 || (!kullanim && stokVar(r.k.stok))
+          : suzgec === 'kullanim-disi' ? !r.k.aktif
+            : r.durum === suzgec));
   const sayfaSatirlari = uyanlar.slice(q.sayfa * LOGO_GECIS_SAYFA_BOYU, (q.sayfa + 1) * LOGO_GECIS_SAYFA_BOYU);
   const tam = new Map((sayfaSatirlari.length === 0 ? [] : await logoKartAynasi(db, {
     kodlar: sayfaSatirlari.map((r) => r.k.kod), sinir: sayfaSatirlari.length, sonra: 0,
@@ -1064,7 +1077,7 @@ export async function logoGecisi(db: Db, q: z.output<typeof logoGecisSorgusu>): 
     const aday = logoGecisAdayligi({ durum: r.durum, aktif: r.k.aktif, koduUyar: r.koduUyar, logoBirimSeti: birimSeti, tmi: r.tmi, birimKarsiliklari });
     return {
       logoKayitNo: r.k.logoKayitNo, kod: r.k.kod, ad: t?.ad ?? null, birimSeti, kartTuru: t?.kartTuru == null ? null : String(t.kartTuru),
-      aktif: r.k.aktif, stok: r.k.stok, durum: r.durum, koduUyar: r.koduUyar, ...aday,
+      aktif: r.k.aktif, stok: r.k.stok, sonHareket: r.k.sonHareket, kullanimNedenleri: nedenler(r.k), durum: r.durum, koduUyar: r.koduUyar, ...aday,
       tmi: r.tmi && {
         kimlik: r.tmi.kimlik, stokKodu: r.tmi.stokKodu, ad: r.tmi.ad, birim: r.tmi.birim, onayDurumu: r.tmi.onayDurumu, surum: r.tmi.surum, logoKayitli: r.tmi.logoKayitNo !== null,
       },
@@ -1075,7 +1088,7 @@ export async function logoGecisi(db: Db, q: z.output<typeof logoGecisSorgusu>): 
   sayilar.kararBekleyen = satirlar.filter((r) => r.k.aktif && ((r.durum === 'yeni' && !r.koduUyar) || (r.durum === 'bagsiz' && r.tmi?.onayDurumu === 'iptal'))).length
     + kartlar.filter((k) => k.kararNedeni === 'birim-farki').length;
   return {
-    baglanti: true, okuma: ozet.okuma, sayilar, uyan: uyanlar.length, kartlar, sayfa: q.sayfa,
+    baglanti: true, okuma: ozet.okuma, sayilar, suzgec, kullanim, canliArama: ozet.arama.acik, uyan: uyanlar.length, kartlar, sayfa: q.sayfa,
     sonrakiSayfa: (q.sayfa + 1) * LOGO_GECIS_SAYFA_BOYU < uyanlar.length ? q.sayfa + 1 : null,
   };
 }

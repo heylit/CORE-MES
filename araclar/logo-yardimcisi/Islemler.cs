@@ -97,6 +97,8 @@ namespace LogoYardimcisi
                 if ((m = MalzemeOkumasi.Match(yol)).Success)
                     return m.Groups[2].Value == "movements" ? MalzemeHareketleri(Coz(m, 1), sorgu) : SonAlisFiyatlari(Coz(m, 1));
                 if (yol == "/api/Stock/totals") return StokToplamlari(sorgu);
+                if (yol == "/api/Material/usage") return MalzemeKullanimlari(sorgu);
+                if (yol == "/api/Material/search") return MalzemeAra(sorgu);
                 if (yol == "/api/Arp/search") return CariAra(sorgu);
                 if ((m = CariKarti.Match(yol)).Success) return CariOku(Coz(m, 1));
                 if (yol == "/api/Lookup/unitsets") return BirimSetleri();
@@ -304,19 +306,37 @@ namespace LogoYardimcisi
             var son = 0;
             foreach (var k in kartlar)
             {
-                var o = new Dictionary<string, object>();
-                o["logicalRef"] = k.Ref;
-                o["code"] = k.Kod;
-                o["name"] = k.Ad;
-                o["name3"] = k.Aciklama2;
-                o["name4"] = k.Aciklama3;
-                o["cardType"] = k.KartTuru;
-                o["unitSetCode"] = k.BirimSeti;
-                o["active"] = !k.Pasif;
-                l.Add(o);
+                l.Add(KartNesnesi(k));
                 if (k.Ref > son) son = k.Ref;
             }
             return new Cevap(200, Sayfa(l, son, kartlar.Count >= KartSayfasi));
+        }
+
+        static Dictionary<string, object> KartNesnesi(MalzemeKaydi k)
+        {
+            var o = new Dictionary<string, object>();
+            o["logicalRef"] = k.Ref;
+            o["code"] = k.Kod;
+            o["name"] = k.Ad;
+            o["name3"] = k.Aciklama2;
+            o["name4"] = k.Aciklama3;
+            o["cardType"] = k.KartTuru;
+            o["unitSetCode"] = k.BirimSeti;
+            o["active"] = !k.Pasif;
+            return o;
+        }
+
+        // 3080 a: tek kart canlı araması; cari aramasıyla aynı sınırlar (3-100 karakter, en çok 20 sonuç), kullanım dışı kart gelmez.
+        Cevap MalzemeAra(Dictionary<string, string> sorgu)
+        {
+            string q;
+            if (!sorgu.TryGetValue("q", out q) || q == null || q.Trim().Length < CariAramaEnAz)
+                throw new GecersizIstek("q en az " + CariAramaEnAz + " karakter olmalı.");
+            q = q.Trim();
+            if (q.Length > 100) throw new GecersizIstek("q en çok 100 karakter olabilir.");
+            var l = new List<object>();
+            foreach (var k in oku.MalzemeAra(q, CariAramaEnCok)) l.Add(KartNesnesi(k));
+            return new Cevap(200, l);
         }
 
         // Stok satırı olmayan kart dönmez; sayfa kart sayısıyla ölçülür, sonraki imleç sayfadaki en büyük kart kaydıdır.
@@ -338,6 +358,25 @@ namespace LogoYardimcisi
             var son = 0;
             foreach (var k in kartlar) if (k.Ref > son) son = k.Ref;
             return new Cevap(200, Sayfa(l, son, kartlar.Count >= KartSayfasi));
+        }
+
+        // 3079 a: kart başına kullanım izi, malzeme listesiyle aynı sayfalama. Tarih gün olarak (yyyy-MM-dd), hareketsiz kartta null.
+        Cevap MalzemeKullanimlari(Dictionary<string, string> sorgu)
+        {
+            var satirlar = oku.MalzemeKullanimlari(Imlec(sorgu), KartSayfasi);
+            var l = new List<object>();
+            var son = 0;
+            foreach (var x in satirlar)
+            {
+                var o = new Dictionary<string, object>();
+                o["itemRef"] = x.MalzemeRef;
+                o["itemCode"] = x.MalzemeKodu;
+                o["lastMovement"] = x.SonHareket.HasValue ? x.SonHareket.Value.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) : null;
+                o["openOrder"] = x.AcikSiparis;
+                l.Add(o);
+                if (x.MalzemeRef > son) son = x.MalzemeRef;
+            }
+            return new Cevap(200, Sayfa(l, son, satirlar.Count >= KartSayfasi));
         }
 
         // 2961-D4: malzeme hareketleri, kayıt sırasıyla sayfa sayfa. Kart yoksa 404.

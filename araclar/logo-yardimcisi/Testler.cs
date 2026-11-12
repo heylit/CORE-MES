@@ -799,6 +799,58 @@ namespace LogoYardimcisi
             Esit(1, D(t[1])["warehouseNr"], "ambar no");
         }
 
+        static void T_malzeme_kullanimi_son_hareket_ve_acik_siparisi_kart_sirasiyla_doner()
+        {
+            var s = Logo();
+            var k1 = s.Kartlar[0];
+            var k2 = s.Kartlar[1];
+            s.Hareketler.Add(Tuple.Create(k1.Ref, new MalzemeHareketi { Ref = 601, Tarih = new DateTime(2026, 3, 4), FisTuru = 1, GirisCikis = 1, Miktar = 2, Birim = "ADET" }));
+            s.Hareketler.Add(Tuple.Create(k1.Ref, new MalzemeHareketi { Ref = 602, Tarih = new DateTime(2026, 9, 30), FisTuru = 12, GirisCikis = 4, Miktar = 1, Birim = "ADET" }));
+            var acik = new SahteLogo.Fis { Ref = 7100, Nesne = Nesne.SatinAlmaSiparisi, Trcode = 2, No = "ORN-SP-1" };
+            acik.Satirlar.Add(new SahteLogo.Satir { Ref = 7101, Tur = 0, Kod = k2.Kod, Miktar = 1, Ust = acik });
+            s.Fisler.Add(acik);
+            var oku = (Func<Dictionary<string, string>, object[]>)(q => (object[])D((q == null ? C(s, "GET", "/api/Material/usage", null) : C(s, "GET", "/api/Material/usage", null, q)).Govde)["data"]);
+            var l = oku(null);
+            Esit(2, l.Length, "her kart döner");
+            Esit(k1.Kod, D(l[0])["itemCode"], "kayıt sırası");
+            Esit("2026-09-30", D(l[0])["lastMovement"], "en son hareket");
+            Esit(false, D(l[0])["openOrder"], "siparişi yok");
+            Esit(null, D(l[1])["lastMovement"], "hareketsiz kartta tarih yok");
+            Esit(true, D(l[1])["openOrder"], "açık sipariş");
+            acik.Satirlar[0].Kapali = true;
+            Esit(false, D(oku(null)[1])["openOrder"], "kapanan satır açık sayılmaz");
+            acik.Satirlar[0].Kapali = false;
+            acik.Iptal = true;
+            Esit(false, D(oku(null)[1])["openOrder"], "iptal sipariş açık sayılmaz");
+            Esit(1, oku(new Dictionary<string, string> { { "since", k1.Ref.ToString(System.Globalization.CultureInfo.InvariantCulture) } }).Length, "imleçten sonrası");
+            Esit(400, C(s, "GET", "/api/Material/usage", null, new Dictionary<string, string> { { "since", "-1" } }).Durum, "imleç sayı değil");
+            Esit(404, C(s, "POST", "/api/Material/usage", N()).Durum, "yalnız GET");
+            Esit(0, s.Cagrilar.Count, "okuma Logo'ya yazmaz");
+        }
+
+        static void T_malzeme_aramasi_en_az_uc_karakter_kodda_ve_adda_kullanimdakini_bulur()
+        {
+            var s = Logo();
+            var a = s.KartEkle("ORN-ARA-002");
+            a.Ad = "Deneme Mil";
+            var b = s.KartEkle("ORN-ARA-001");
+            b.Ad = "Deneme Burc";
+            s.KartEkle("ORN-ARA-003").Pasif = true;
+            for (var i = 0; i < 25; i++) s.KartEkle("ORN-COK-" + i.ToString("00", System.Globalization.CultureInfo.InvariantCulture));
+            Func<string, object[]> ara = q => (object[])C(s, "GET", "/api/Material/search", null, new Dictionary<string, string> { { "q", q } }).Govde;
+            var l = ara("orn-ara");
+            Esit(2, l.Length, "kodda, büyük/küçük harf duyarsız; kullanım dışı gelmez");
+            Esit("ORN-ARA-001", D(l[0])["code"], "kod sırası");
+            Esit(true, D(l[0])["active"], "kullanımda");
+            Esit("05", D(l[0])["unitSetCode"], "birim seti");
+            Esit(1, ara("mil").Length, "adda");
+            Esit(20, ara("ORN-COK").Length, "en çok 20 sonuç");
+            Esit(400, C(s, "GET", "/api/Material/search", null, new Dictionary<string, string> { { "q", "ab" } }).Durum, "iki karakter reddedilir");
+            Esit(400, C(s, "GET", "/api/Material/search", null, new Dictionary<string, string> { { "q", new string('a', 101) } }).Durum, "101 karakter reddedilir");
+            Esit(400, C(s, "GET", "/api/Material/search", null).Durum, "metinsiz istek reddedilir");
+            Esit(0, s.Cagrilar.Count, "arama Logo'ya yazmaz");
+        }
+
         static void T_cari_arama_en_az_uc_karakter_kod_unvan_ve_vergi_noyla_bulur()
         {
             var s = Logo();
@@ -1046,7 +1098,7 @@ namespace LogoYardimcisi
         {
             var q = new Sorgular(7, 3);
             var hepsi = q.Hepsi().ToList();
-            Esit(34, hepsi.Count, "sorgu sayısı");
+            Esit(36, hepsi.Count, "sorgu sayısı");
             Icerir(q.SiparisIcerikBasligi, "O.TRCODE = 2 AND O.FICHENO = @no");
             Icerir(q.SiparisIcerikBasligi, "LG_007_03_ORFICHE");
             Icerir(q.SiparisIcerikSatirlari, "LG_007_03_ORFLINE");
@@ -1057,6 +1109,11 @@ namespace LogoYardimcisi
             Icerir(q.Siparis, "LG_007_03_ORFICHE");
             Icerir(q.Siparis, "O.TRCODE = @tr");
             Icerir(q.StokToplamlari, "LG_007_03_GNTOTST");
+            Icerir(q.MalzemeKullanimlari, "LG_007_03_STLINE");
+            Icerir(q.MalzemeKullanimlari, "LG_007_03_ORFLINE");
+            Icerir(q.MalzemeKullanimlari, "O.CANCELLED = 0");
+            Icerir(q.MalzemeAra, "I.ACTIVE = 0");
+            Icerir(q.MalzemeAra, "LG_007_ITEMS");
             Icerir(q.CariAra, "LG_007_CLCARD");
             Icerir(q.MalzemeRefIle, "I.ACTIVE");
             Icerir(q.HizmetRefIle, "LG_007_SRVCARD");

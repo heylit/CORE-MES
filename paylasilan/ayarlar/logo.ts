@@ -105,6 +105,22 @@ export const LOGO_AYARLARI = {
     baslik: 'Logo: stok okuması',
     aciklama: 'Açıkken Logo\'daki ambar başına stok miktarı saatte bir okunur; Stok\'ta TMI miktarıyla yan yana görünür. TMI stoğuna kendiliğinden yazılmaz. "Logo bağlantısı" da açık olmalı.',
   },
+  // 3079 a: Logo geçişinin "Kullanılanlar" süzgeci; yalnız GET, varsayılan kapalı. "Şimdi oku" bunu açmaz, açıksa birlikte okur.
+  'logo.kullanim-okumasi': {
+    modul: 'logo',
+    tur: 'boolean',
+    varsayilan: false,
+    baslik: 'Logo: malzeme kullanım okuması',
+    aciklama: 'Açıkken Logo geçişinde "Şimdi oku" malzeme kartlarının son hareket tarihini ve açık sipariş bilgisini de okur; "Kullanılanlar" süzgeci buradan beslenir. Logo\'ya yazılmaz. "Logo bağlantısı" da açık olmalı.',
+  },
+  // 3080 a: Logo geçişinde tek kart canlı araması; yalnız GET, varsayılan kapalı.
+  'logo.malzeme-aramasi': {
+    modul: 'logo',
+    tur: 'boolean',
+    varsayilan: false,
+    baslik: 'Logo: malzeme araması',
+    aciklama: 'Açıkken Logo geçişinde okunan listede olmayan kart Logo\'da kod ya da adla aranabilir (en çok 20 sonuç); bulunan kart listeye eklenir. Yalnız okur, Logo\'ya yazmaz. "Logo bağlantısı" da açık olmalı.',
+  },
   'logo.cari-aramasi': {
     modul: 'logo',
     tur: 'boolean',
