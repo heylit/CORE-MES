@@ -19,15 +19,19 @@ const SEPET_SECIMI = `SELECT s.id, s.malzeme_id AS "malzemeId", s.kaynak_konum_i
 export const sepetSatirlari = (db: Db, kisiId: number, kilit = false): Promise<SepetHam[]> =>
   db.sorgu(`${SEPET_SECIMI} WHERE s.kisi_id = $1 ORDER BY s.id${kilit ? ' FOR UPDATE OF s' : ''}`, [kisiId]);
 // Aynı satır yeniden eklenince miktar toplanır; yeni kart ve hedef verilmişse onlar geçer, verilmemişse eskisi kalır.
+// `tavan` (lotlu satır): lotun gözdeki serbest miktarı. Aynı etiket ikinci kez okutulunca toplam bunu aşmaz (lot iki kez sayılmaz);
+// satır zaten tavanın üstündeyse (stok sonradan azaldı) eski miktar kalır, bırakırken sunucu yeniden denetler. Boşsa sınır yok.
 export const sepeteEkle = async (db: Db, s: {
   kisiId: number; malzemeId: number; kaynakKonumId: number | null; partiId: number | null; miktar: string; refakatPartisiId?: number | null; hedefKonumId?: number | null;
+  tavan?: string | null;
 }): Promise<number> =>
   (await db.tek<{ id: number }>(
     `INSERT INTO stok_sepet_satiri (kisi_id, malzeme_id, kaynak_konum_id, parti_id, miktar, refakat_partisi_id, hedef_konum_id) VALUES ($1, $2, $3, $4, $5, $6, $7)
-     ON CONFLICT ON CONSTRAINT stok_sepet_satiri_tek DO UPDATE SET miktar = stok_sepet_satiri.miktar + EXCLUDED.miktar,
+     ON CONFLICT ON CONSTRAINT stok_sepet_satiri_tek DO UPDATE SET miktar = CASE WHEN $8::numeric IS NULL THEN stok_sepet_satiri.miktar + EXCLUDED.miktar
+         ELSE GREATEST(stok_sepet_satiri.miktar, LEAST(stok_sepet_satiri.miktar + EXCLUDED.miktar, $8::numeric)) END,
        refakat_partisi_id = COALESCE(EXCLUDED.refakat_partisi_id, stok_sepet_satiri.refakat_partisi_id),
        hedef_konum_id = COALESCE(EXCLUDED.hedef_konum_id, stok_sepet_satiri.hedef_konum_id) RETURNING id`,
-    [s.kisiId, s.malzemeId, s.kaynakKonumId, s.partiId, s.miktar, s.refakatPartisiId ?? null, s.hedefKonumId ?? null],
+    [s.kisiId, s.malzemeId, s.kaynakKonumId, s.partiId, s.miktar, s.refakatPartisiId ?? null, s.hedefKonumId ?? null, s.tavan ?? null],
   ))!.id;
 export const sepetMiktari = (db: Db, id: number, kisiId: number, miktar: string): Promise<{ id: number } | null> =>
   db.tek('UPDATE stok_sepet_satiri SET miktar = $3 WHERE id = $1 AND kisi_id = $2 RETURNING id', [id, kisiId, miktar]);
