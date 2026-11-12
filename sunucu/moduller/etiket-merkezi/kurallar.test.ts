@@ -6,7 +6,7 @@ import { QR_KENAR_MODUL, SATIR_ARALIGI, type Sablon } from '#paylasilan/sozlesme
 import { yaziciAgiOku } from './ag.ts';
 import { QR_ALTI_EN_KUCUK_YAZI, QR_KARE_EN_AZ_MM, YAZI_EN_AZ_MM, enKucukOlcu, kopyaDegerleri, okunurluk, olcekle, qrAltiYeri, qrKaresi } from './kurallar.ts';
 import { BEKLEYEN_GUN, HATALI_KARAR_SIMGESI, KALITE_KARAR_SIMGESI, REFAKAT_ADIM_SAYISI, REFAKAT_CIKIS_SATIRI, bekleyenBaslangici, bekleyenSirasi, kaliteBekleyenleri, kaliteDurumDegerleri, hataliBekleyenleri, malKabulBekleyenleri, refakatBekleyenleri } from './kurallar.ts';
-import { alanDegeri, baskiEngeli, dogrudanBaskiDurumu, indirmeEngeli, istasyonDegerleri, kayitUyumHatasi, konumDegerleri, lotDegerleri, kayitSablonTuru, malzemeDegerleri, noktaya, rafDegerleri, refakatDegerleri, refakatPartisiDegerleri, toplamEtiketHatasi, yaziciAdresHatasi, qrDikdortgenleri, qrMatrisi, sablonHatalari, sadelestir, SATIR_BASI, satirlaraBol, sigdirilmisYazi, yerlesim } from './kurallar.ts';
+import { alanDegeri, baskiEngeli, dogrudanBaskiDurumu, indirmeEngeli, istasyonDegerleri, kayitUyumHatasi, konumDegerleri, lotDegerleri, kayitSablonTuru, malzemeDegerleri, metinGenisligi, noktaya, rafDegerleri, refakatDegerleri, refakatPartisiDegerleri, toplamEtiketHatasi, yaziciAdresHatasi, qrDikdortgenleri, qrMatrisi, sablonHatalari, sadelestir, SATIR_BASI, satirlaraBol, sigdirilmisYazi, yerlesim } from './kurallar.ts';
 import { ALANLAR, HAZIR_SABLONLAR, ORNEK_DEGERLER } from './sablonlar.ts';
 import { pplb, pplbKacir, pplbYaziSecimi, zpl, zplKacir } from './yazici-dili.ts';
 
@@ -167,28 +167,85 @@ describe('etiket-merkezi kuralları', () => {
     assert.deepEqual(satirlaraBol('bir iki üç dört', 9, 10, 3), ['bir', 'ik...']);
     assert.deepEqual(satirlaraBol('bir iki üç', 18, 10, 3), ['bir iki üç']);
     assert.deepEqual(satirlaraBol('bir iki üç dört beş', 9, 3.6, 3), ['bi...']);
-    assert.deepEqual(satirlaraBol('ABCDEFGHIJ', 9, 20, 3), ['ABCDE', 'FGHIJ']);
-    // Kart #707: satır sonu zorunlu satır başıdır; sığmayan son satır yine kesilir.
+    // Kart #707: satır sonu zorunlu satır başıdır; sığmayan son satır yine kesilir ve sonraki adımla doldurulmaz.
     assert.deepEqual(satirlaraBol(`10 Torna${SATIR_BASI}20 Freze`, 18, 10, 3), ['10 Torna', '20 Freze']);
     assert.deepEqual(satirlaraBol(['a', 'b', 'c', 'd'].join(SATIR_BASI), 18, 7.2, 3), ['a', 'b...']);
     assert.deepEqual(satirlaraBol('10 Torna\n20 Freze', 36, 10, 3), ['10 Torna 20 Freze'], 'satır sonu satır başı değildir');
   });
 
-  test('kod satıra sığmazsa ortadan bölünmez: yazı küçülür, o da yetmezse ayıraçtan bölünür', () => {
-    // Yer 50x25'te kod 24,5 mm, 4 mm yazıyla 10 harf alır; 11 harflik kod küçülen yazıyla tek satırdır.
+  test('EM-39: sayı ile birimi satır sonunda ayrılmaz; öbek sığmıyorsa sözcüklerine bölünür', () => {
+    assert.deepEqual(satirlaraBol('SALON1 · 12 bölme × 6 kat', 30, 20, 3), ['SALON1 ·', '12 bölme × 6 kat']);
+    // "×" iki yanındaki sayı ve birimi tek öbekte tutar; kural olmasa satır "Raf 12 bölme ×" diye biterdi.
+    assert.deepEqual(satirlaraBol('Raf 12 bölme × 6 kat', 32, 20, 3), ['Raf', '12 bölme × 6 kat']);
+    assert.deepEqual(satirlaraBol('Toplam 1.250 kg kaldı', 25, 20, 3), ['Toplam', '1.250 kg', 'kaldı']);
+    assert.deepEqual(satirlaraBol('12 bölme', 12, 20, 3), ['12', 'bölme'], 'tek başına sığmayan öbek ayrılır');
+  });
+
+  test('EM-39: satır genişliği harf başına ölçülür; geniş büyük harf kutudan taşmaz, kesilen satır kalan yer kadar dolar', () => {
+    // 3 mm yazıda 0,6 oranla 20 mm'ye 11 harf sığardı; M kalın Archivo'da 0,87'dir, beşi sığar.
+    assert.deepEqual(satirlaraBol('MMMMMMMMMM', 20, 3.6, 3, true), ['MMMMM...']);
+    assert.ok(metinGenisligi('MMMMM...', 3, true) <= 20);
+    assert.ok(metinGenisligi('MALZEME', 3.2, true) > metinGenisligi('MALZEME', 3.2, false));
+    // Hiçbir harf 0,6'dan dar sayılmaz (PPLB sabit genişlikli yazıyı bu orana göre seçer); ölçülmemiş harf 1 sayılır.
+    assert.equal(metinGenisligi('iiii', 1), 4 * 0.6);
+    assert.equal(metinGenisligi('漢', 1), 1);
+    // Kesilen son satır, sonraki satıra kalan sözcüklerle doldurulur: "Örnek uzun" değil, sığan kadarı.
+    const kesik = satirlaraBol('Örnek uzun malzemeadıvetanımı', 30, 3.6, 3);
+    assert.equal(kesik.length, 1);
+    assert.ok(kesik[0]?.startsWith('Örnek uzun m') && kesik[0].endsWith('...'), 'yer varken "Örnek uzun..." diye erken kesilmez');
+  });
+
+  test('kutuya sığmayan metin önce küçülür (en çok %60); kod ortadan bölünmez', () => {
+    // Yer 50x25'te kod 24,5 mm; 11 harflik kod küçülen yazıyla tek satırdır.
     const konum = HAZIR_SABLONLAR.find((s) => s.anahtar === 'konum-50x25');
     assert.ok(konum);
     const kod = yerlesim(konum, { qr: 'LOC:ORN-ZEMIN-1', kod: 'ORN-ZEMIN-1' }, false).find((o) => o.tur === 'metin' && o.satirlar.join('').startsWith('ORN'));
     assert.equal(kod?.tur === 'metin' && kod.satirlar.join('|'), 'ORN-ZEMIN-1');
     assert.equal(kod?.tur === 'metin' && kod.yaziMm < 4 && kod.yaziMm >= 4 * 0.6, true);
     assert.match(zpl({ genislik: 50, yukseklik: 25, dpi: 203, adet: 1, ogeler: konum ? yerlesim(konum, { kod: 'ORN-ZEMIN-1' }, false) : [] }), /\^FDORN-ZEMIN-1\^FS/);
-    // Sığan kodun ve boşluklu metnin boyu değişmez.
-    assert.equal(sigdirilmisYazi('OA-01-01', 24, 4), 4);
-    assert.equal(sigdirilmisYazi('Örnek uzun malzeme adı', 24, 4), 4);
-    // Okunurluk sınırının altına inilmez: tasarım boyunda kalır ve son sığan ayıraçtan bölünür.
-    assert.equal(sigdirilmisYazi('ORN-DEPO-ZEMIN-0001', 24, 4), 4);
-    assert.deepEqual(satirlaraBol('ORN-DEPO-ZEMIN-0001', 24, 10, 4), ['ORN-DEPO-', 'ZEMIN-0001']);
-    assert.deepEqual(satirlaraBol('ABCDEFGHIJ', 9, 20, 3), ['ABCDE', 'FGHIJ'], 'ayıraç yoksa satır sonundan');
+    // Sığan kodun ve sığan boşluklu metnin boyu değişmez.
+    assert.equal(sigdirilmisYazi('OA-1-01', 24, 5, 4), 4);
+    assert.equal(sigdirilmisYazi('Örnek uzun malzeme adı', 30, 10, 4), 4);
+    // Tek satırlık kutudaki boşluklu başlık da küçülür (simgenin altına girmez).
+    assert.equal(sigdirilmisYazi('ÇOK UZUN BAŞLIK', 30, 3.6, 3, true), 2.8);
+    // Hiçbir boyda sığmayan ad tasarım boyunda kesilir; kod en küçük boyda daha çok harfi görünüyorsa o boyda kalır.
+    assert.equal(sigdirilmisYazi('Örnek çok uzun malzeme adı ve açıklaması', 24, 4, 4), 4);
+    assert.equal(sigdirilmisYazi('ORN-DEPO-ZEMIN-0001-UZUN-KOD', 24, 5, 4), 2.4);
+    // Tek satırlık kutudaki kod %60'ta da sığmıyorsa kesilmez, 1,5 mm sınırına kadar küçülür (Raf 50x25 kodu).
+    const raf = HAZIR_SABLONLAR.find((s) => s.anahtar === 'raf-50x25');
+    assert.ok(raf);
+    const rafKod = yerlesim(raf, { kod: 'ORN-RAF-A12' }, false).find((o) => o.tur === 'metin' && o.satirlar.join('').startsWith('ORN'));
+    assert.deepEqual(rafKod?.tur === 'metin' && rafKod.satirlar, ['ORN-RAF-A12']);
+    assert.deepEqual(satirlaraBol('ORN-DEPO-ZEMIN-0001', 24, 20, 4), ['ORN-', 'DEPO-', 'ZEMIN-', '0001'], 'son sığan ayıraçtan bölünür');
+    assert.deepEqual(satirlaraBol('ABCDEFGHIJ', 9, 20, 3), ['ABCD', 'EFGH', 'IJ'], 'ayıraç yoksa satır sonundan');
+  });
+
+  test('EM-39: hazır şablonlarda metin kutusundan taşmaz, simge ve QR ile çakışmaz (standart ve 100x100)', () => {
+    const uzun = (alan: string) => `ORN-${'ÖRNEK UZUN DEĞER WM '.repeat(4)}${alan}`;
+    for (const s of HAZIR_SABLONLAR) {
+      const ornek = ORNEK_DEGERLER[s.tur] ?? {};
+      const kimlik = new Set(s.ogeler.flatMap((o) => (o.tur === 'qr' || o.tur === 'simge' ? [o.alan] : [])));
+      const uzunDegerler = Object.fromEntries(Object.entries(ornek).map(([k, v]) => [k, kimlik.has(k) || v === null ? v : uzun(k)]));
+      for (const sablon of [s, olcekle(s, { genislik: 100, yukseklik: 100 }).sablon]) for (const veri of [ORNEK_DEGERLER[s.tur] ?? {}, uzunDegerler]) {
+        const ogeler = yerlesim(sablon, veri, false);
+        const engeller = ogeler.filter((o) => o.tur === 'simge' || o.tur === 'qr');
+        for (const o of ogeler) {
+          if (o.tur !== 'metin') continue;
+          for (const [i, satir] of o.satirlar.entries()) {
+            const sag = o.x + metinGenisligi(satir, o.yaziMm, o.kalin);
+            assert.ok(sag <= o.x + o.genislik + 1e-6, `${s.anahtar}: "${satir}" kutusundan taşıyor`);
+            assert.ok(sag <= sablon.genislik + 1e-6, `${s.anahtar}: "${satir}" etiketten taşıyor`);
+            const ust = o.y + i * o.yaziMm * SATIR_ARALIGI;
+            const alt = ust + o.yaziMm;
+            for (const e of engeller) {
+              const ex = e.tur === 'simge' || e.tur === 'qr' ? e.boyut : 0;
+              const cakisir = o.x < e.x + ex - 1e-6 && sag > e.x + 1e-6 && ust < e.y + ex - 1e-6 && alt > e.y + 1e-6;
+              assert.ok(!cakisir, `${s.anahtar}: "${satir}" ${e.tur} ile çakışıyor`);
+            }
+          }
+        }
+      }
+    }
   });
 
   test('PPLB yazı tipi istenen yüksekliği aşmaz', () => {

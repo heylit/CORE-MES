@@ -9,6 +9,7 @@ import type { HataliKaydiOzeti, RefakatKartiCevabi } from '#paylasilan/sozlesme/
 import { EN_COK_ADET, QR_KENAR_MODUL, SATIR_ARALIGI, type KayitTuru, type OnizlemeOgesi, type OzelOlcu, type Sablon, type SablonTuru, type SablonOgesi } from '#paylasilan/sozlesme/etiket-merkezi.ts';
 import { REFAKAT_KOPYA_SAYISI } from '#paylasilan/etiket-sabitleri.ts';
 import { simgeCoz } from '#paylasilan/etiket-piktogramlari.ts';
+import { KALIN_GENIS, NORMAL_GENIS, OLCULEN_HARFLER } from './harf-genislikleri.ts';
 import { YAZICI_AGI_DEGISKENI } from './ag.ts';
 
 // Saf kurallar: yerleşim (mm -> satır ve QR matrisi), sınır denetimi ve yazıcıya giden metnin arındırılması.
@@ -92,52 +93,111 @@ export const sadelestir = (metin: string): string => metin.replace(/[çÇğĞı�
 // Satır sonu ve denetim karakteri yazıcı komutunu böler; etikete giden her metinden önce atılır.
 export const tekSatir = (metin: string): string => metin.replace(/[\u0000-\u001f\u007f]+/g, ' ').trim();
 
-// Metin satırlara sözcük sınırından bölünür; sığmayan son satır "..." ile kesilir. Harf genişliği yazının yüksekliğine oranla tahmindir.
+// Metin satırlara sözcük sınırından bölünür; sığmayan son satır "..." ile kesilir. Satır genişliği harf başına ölçülür
+// (harf-genislikleri.ts): tek bir ortalama oran büyük ve kalın harfi dar sayıp yazıyı kutudan ve simgenin altına taşırıyordu.
 // SATIR_BASI zorunlu satır başıdır (refakat rotası adım başına satır basar, kart #707). Satır sonu karakteri değildir: tekSatir onu
 // atmaz, gelen veride satır sonu eskisi gibi boşluk olur.
 export const HARF_ORANI = 0.6;
-export const SATIR_BASI = '\u2028';
+export const SATIR_BASI = ' ';
+const OLCULEN = new Set(OLCULEN_HARFLER);
+export function harfGenisligi(harf: string, kalin: boolean): number {
+  return (kalin ? KALIN_GENIS : NORMAL_GENIS)[harf] ?? (OLCULEN.has(harf) ? HARF_ORANI : 1);
+}
+export function metinGenisligi(metin: string, yaziMm: number, kalin = false): number {
+  let toplam = 0;
+  for (const harf of metin) toplam += harfGenisligi(harf, kalin);
+  return toplam * yaziMm;
+}
+type Sigar = (metin: string) => boolean;
+const sigdiran = (genislikMm: number, yaziMm: number, kalin: boolean): Sigar => (metin) => metinGenisligi(metin, yaziMm, kalin) <= genislikMm + 1e-9;
 // Satıra sığmayan sözcük, satıra sığan son ayıraçtan (- / . _) sonra bölünür; ayıraç yoksa satır sonundan.
 const AYIRACLAR = new Set(['-', '/', '.', '_']);
-function kesimYeri(sozcuk: string, enCokHarf: number): number {
-  for (let i = Math.min(enCokHarf, sozcuk.length) - 1; i > 0; i--) if (AYIRACLAR.has(sozcuk[i] ?? '')) return i + 1;
-  return enCokHarf;
+function kesimYeri(harfler: readonly string[], sigar: Sigar): number {
+  let sigan = 1;
+  while (sigan < harfler.length && sigar(harfler.slice(0, sigan + 1).join(''))) sigan++;
+  for (let i = sigan - 1; i > 0; i--) if (AYIRACLAR.has(harfler[i] ?? '')) return i + 1;
+  return sigan;
 }
-function paragrafiBol(paragraf: string, enCokHarf: number): string[] {
-  const satirlar: string[] = [];
+// Satır, sonraki satırla aynı sözcüğün parçasıysa bitisik, aynı paragraftaysa devam taşır; kesilen son satır bunlarla doldurulur.
+type Satir = { metin: string; bitisik: boolean; devam: boolean };
+// Sayı ile birimi ("12 adet", "6 bölme × 4 kat") satır sonu ayırmaz: bu sözcükler bir öbek olur. Öbek satıra tek başına da
+// sığmıyorsa sözcüklerine ayrılır.
+const SAYI = /^[\d.,x×/-]*\d[\d.,x×/-]*$/;
+function obekler(sozcukler: readonly string[]): string[][] {
+  const sonuc: string[][] = [];
+  for (const [i, sozcuk] of sozcukler.entries()) {
+    const onceki = sozcukler[i - 1];
+    const son = sonuc[sonuc.length - 1];
+    if (son && onceki !== undefined && (SAYI.test(onceki) || onceki === '×' || sozcuk === '×')) son.push(sozcuk);
+    else sonuc.push([sozcuk]);
+  }
+  return sonuc;
+}
+function paragrafiBol(paragraf: string, sigar: Sigar): Satir[] {
+  const satirlar: Satir[] = [];
   let satir = '';
-  for (const sozcuk of paragraf.split(/\s+/).filter(Boolean)) {
-    let kalan = sozcuk;
+  const ekle = (sozcuk: string) => {
+    let kalan = [...sozcuk];
     while (kalan.length > 0) {
-      const aday = satir === '' ? kalan : `${satir} ${kalan}`;
-      if (aday.length <= enCokHarf) { satir = aday; kalan = ''; continue; }
-      if (satir !== '') { satirlar.push(satir); satir = ''; continue; }
-      const kesim = kesimYeri(kalan, enCokHarf);
-      satirlar.push(kalan.slice(0, kesim));
+      const aday = satir === '' ? kalan.join('') : `${satir} ${kalan.join('')}`;
+      if (sigar(aday)) { satir = aday; kalan = []; continue; }
+      if (satir !== '') { satirlar.push({ metin: satir, bitisik: false, devam: true }); satir = ''; continue; }
+      const kesim = kesimYeri(kalan, sigar);
+      satirlar.push({ metin: kalan.slice(0, kesim).join(''), bitisik: true, devam: true });
       kalan = kalan.slice(kesim);
     }
+  };
+  for (const obek of obekler(paragraf.split(/\s+/).filter(Boolean))) {
+    const metin = obek.join(' ');
+    if (obek.length === 1 || sigar(satir === '' ? metin : `${satir} ${metin}`)) { ekle(metin); continue; }
+    if (satir !== '' && sigar(metin)) { satirlar.push({ metin: satir, bitisik: false, devam: true }); satir = ''; ekle(metin); continue; }
+    for (const sozcuk of obek) ekle(sozcuk);
   }
-  if (satir !== '') satirlar.push(satir);
+  if (satir !== '') satirlar.push({ metin: satir, bitisik: false, devam: true });
+  const son = satirlar[satirlar.length - 1];
+  if (son) son.devam = false;
   return satirlar;
 }
-// EM-3: kod gibi boşluksuz tek sözcük satıra sığmıyorsa ortadan bölünmesin diye yazı küçülür; en çok tasarım boyunun
-// EN_KUCUK_YAZI_ORANI'na kadar (okunurluk). O da yetmezse tasarım boyunda kalır ve ayıraçtan bölünür.
+const satirSayisi = (yukseklikMm: number, yaziMm: number) => Math.max(1, Math.floor(yukseklikMm / (yaziMm * SATIR_ARALIGI) + 1e-9));
+const bol = (metin: string, genislikMm: number, yaziMm: number, kalin: boolean): Satir[] =>
+  metin.split(SATIR_BASI).flatMap((p) => paragrafiBol(p, sigdiran(genislikMm, yaziMm, kalin)));
+// EM-3: metin kutusunun satırlarına sözcük bölmeden sığmıyorsa yazı 0,1 mm adımlarla küçülür; en çok tasarım boyunun
+// EN_KUCUK_YAZI_ORANI'na kadar (okunurluk); kod daha da küçülebilir (aşağıda). O da yetmezse sözcük ayıraçtan bölünür, artan satır kesilir.
 export const EN_KUCUK_YAZI_ORANI = 0.6;
-export function sigdirilmisYazi(metin: string, genislikMm: number, yaziMm: number): number {
-  if (metin === '' || /\s/.test(metin)) return yaziMm;
-  if (Math.floor(genislikMm / (yaziMm * HARF_ORANI)) >= metin.length) return yaziMm;
-  const kucuk = Math.floor((genislikMm / (metin.length * HARF_ORANI)) * 10) / 10;
-  return kucuk >= yaziMm * EN_KUCUK_YAZI_ORANI && Math.floor(genislikMm / (kucuk * HARF_ORANI)) >= metin.length ? kucuk : yaziMm;
+export function sigdirilmisYazi(metin: string, genislikMm: number, yukseklikMm: number, yaziMm: number, kalin = false): number {
+  const sigar = (y: number) => { const b = bol(metin, genislikMm, y, kalin); return b.every((s) => !s.bitisik) && b.length <= satirSayisi(yukseklikMm, y); };
+  if (metin === '' || sigar(yaziMm)) return yaziMm;
+  for (let y = Math.floor(yaziMm * 10 - 1e-6) / 10; y >= yaziMm * EN_KUCUK_YAZI_ORANI - 1e-9; y = Math.round((y - 0.1) * 10) / 10) {
+    if (sigar(y)) return y;
+  }
+  // Hiçbir boyda sığmıyorsa ad tasarım boyunda kesilir. Boşluksuz kod kimliktir, kesilmesin: okunurluk uyarı sınırına
+  // (YAZI_UYARI_MM) kadar küçülmeye devam eder; o da yetmezse en küçük boyda daha çok harfi görünüyorsa o boyda kalır.
+  if (/\s/.test(metin)) return yaziMm;
+  const taban = Math.min(yaziMm, YAZI_UYARI_MM);
+  for (let y = Math.floor(yaziMm * EN_KUCUK_YAZI_ORANI * 10 - 1e-6) / 10; y >= taban - 1e-9; y = Math.round((y - 0.1) * 10) / 10) {
+    if (sigar(y)) return y;
+  }
+  const enKucuk = Math.ceil(yaziMm * EN_KUCUK_YAZI_ORANI * 10 - 1e-6) / 10;
+  const gorunen = (y: number) => satirlaraBol(metin, genislikMm, yukseklikMm, y, kalin).join('').replace(/\.\.\.$/, '').length;
+  return gorunen(enKucuk) > gorunen(yaziMm) ? enKucuk : yaziMm;
 }
-export function satirlaraBol(metin: string, genislikMm: number, yukseklikMm: number, yaziMm: number): string[] {
-  const enCokHarf = Math.max(1, Math.floor(genislikMm / (yaziMm * HARF_ORANI)));
-  const enCokSatir = Math.max(1, Math.floor(yukseklikMm / (yaziMm * SATIR_ARALIGI)));
-  const satirlar = metin.split(SATIR_BASI).flatMap((p) => paragrafiBol(p, enCokHarf));
-  if (satirlar.length <= enCokSatir) return satirlar;
-  const kesik = satirlar.slice(0, enCokSatir);
-  const son = kesik[enCokSatir - 1] ?? '';
-  kesik[enCokSatir - 1] = `${son.slice(0, Math.max(0, enCokHarf - 3))}...`;
-  return kesik;
+export function satirlaraBol(metin: string, genislikMm: number, yukseklikMm: number, yaziMm: number, kalin = false): string[] {
+  const enCokSatir = satirSayisi(yukseklikMm, yaziMm);
+  const satirlar = bol(metin, genislikMm, yaziMm, kalin);
+  if (satirlar.length <= enCokSatir) return satirlar.map((s) => s.metin);
+  // Son satır paragrafın kalanıyla doldurulup "..." sığana kadar kısaltılır; yer varken erken kesilmez.
+  let dolu = '';
+  for (let i = enCokSatir - 1; i < satirlar.length; i++) {
+    const s = satirlar[i];
+    if (!s) break;
+    dolu += s.metin;
+    if (!s.devam) break;
+    if (!s.bitisik) dolu += ' ';
+  }
+  const sigar = sigdiran(genislikMm, yaziMm, kalin);
+  let son = [...dolu];
+  while (son.length > 0 && !sigar(`${son.join('').trimEnd()}...`)) son = son.slice(0, -1);
+  return [...satirlar.slice(0, enCokSatir - 1).map((s) => s.metin), `${son.join('').trimEnd()}...`];
 }
 // QR bugünkü etiketlerle aynı düzeltme düzeyindedir (M); kenarda iki modül boşluk kalır.
 export function qrMatrisi(veri: string): boolean[][] {
@@ -199,9 +259,9 @@ function qrVeKodu(s: Sablon, o: SablonOgesi, qr: QrYerlesimi): OnizlemeOgesi[] {
   const yazi = disari ? Math.min(istenen, Math.floor(yer * 10) / 10) : istenen;
   const boyut = disari ? o.boyut : Math.round((o.boyut - yazi - QR_ALTI_ARALIK) * 100) / 100;
   const kare: QrYerlesimi = { ...qr, x: o.x + (o.boyut - boyut) / 2, boyut };
-  const yaziMm = sigdirilmisYazi(qr.veri, o.boyut, yazi);
-  // Yazıcının yerleşik yazı tipi ortalama komutu bilmez; harf genişliği tahminiyle ortalanır.
-  const genislik = Math.min(o.boyut, qr.veri.length * yaziMm * HARF_ORANI);
+  const yaziMm = sigdirilmisYazi(qr.veri, o.boyut, yazi, yazi);
+  // Yazıcının yerleşik yazı tipi ortalama komutu bilmez; ölçülen harf genişliğiyle ortalanır.
+  const genislik = Math.min(o.boyut, metinGenisligi(qr.veri, yaziMm));
   return [kare, {
     tur: 'metin', x: o.x + (o.boyut - genislik) / 2, y: Math.round((o.y + boyut + QR_ALTI_ARALIK) * 100) / 100, genislik, yaziMm, kalin: false,
     satirlar: satirlaraBol(qr.veri, o.boyut, yaziMm, yaziMm),
@@ -218,9 +278,9 @@ function ogeYerlesimi(o: SablonOgesi, veri: AlanDegerleri, sade: boolean): Onizl
   if (o.tur === 'qr') { const v = tekSatir(ham); return { tur: 'qr', x: o.x, y: o.y, boyut: o.boyut, veri: v, kareler: qrMatrisi(v) }; }
   if (o.tur === 'simge') { const c = simgeCoz(tekSatir(ham)); return c === null ? null : { tur: 'simge', x: o.x, y: o.y, boyut: o.boyut, ...c }; }
   const metin = tekSatir(sade ? sadelestir(ham) : ham);
-  const yaziMm = sigdirilmisYazi(metin, o.genislik, o.yaziMm);
+  const yaziMm = sigdirilmisYazi(metin, o.genislik, o.yukseklik, o.yaziMm, o.kalin);
   return {
-    tur: 'metin', x: o.x, y: o.y, genislik: o.genislik, yaziMm, kalin: o.kalin, satirlar: satirlaraBol(metin, o.genislik, o.yukseklik, yaziMm), ...(o.ters ? { ters: true } : {}),
+    tur: 'metin', x: o.x, y: o.y, genislik: o.genislik, yaziMm, kalin: o.kalin, satirlar: satirlaraBol(metin, o.genislik, o.yukseklik, yaziMm, o.kalin), ...(o.ters ? { ters: true } : {}),
   };
 }
 
