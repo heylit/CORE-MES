@@ -8,7 +8,8 @@ import { QR_ALTI_EN_KUCUK_YAZI, QR_KARE_EN_AZ_MM, YAZI_EN_AZ_MM, enKucukOlcu, ko
 import { BEKLEYEN_GUN, HATALI_KARAR_SIMGESI, KALITE_KARAR_SIMGESI, REFAKAT_ADIM_SAYISI, REFAKAT_CIKIS_SATIRI, bekleyenBaslangici, bekleyenSirasi, kaliteBekleyenleri, kaliteDurumDegerleri, hataliBekleyenleri, malKabulBekleyenleri, refakatBekleyenleri } from './kurallar.ts';
 import { alanDegeri, baskiEngeli, dogrudanBaskiDurumu, indirmeEngeli, istasyonDegerleri, kayitUyumHatasi, konumDegerleri, lotDegerleri, kayitSablonTuru, malzemeDegerleri, metinGenisligi, noktaya, rafDegerleri, refakatDegerleri, refakatPartisiDegerleri, toplamEtiketHatasi, yaziciAdresHatasi, qrDikdortgenleri, qrMatrisi, sablonHatalari, sadelestir, SATIR_BASI, satirlaraBol, sigdirilmisYazi, yerlesim } from './kurallar.ts';
 import { ALANLAR, HAZIR_SABLONLAR, ORNEK_DEGERLER } from './sablonlar.ts';
-import { pplb, pplbKacir, pplbYaziSecimi, zpl, zplKacir } from './yazici-dili.ts';
+import { DENEME_KOD_SAYFALARI, DENEME_TURKCE, kodSayfasinda, pplb, pplbDenemesi, pplbKacir, pplbYaziSecimi, zpl, zplKacir } from './yazici-dili.ts';
+import { komutBaytlari } from '#paylasilan/etiket-sabitleri.ts';
 
 const sablon = (ogeler: Sablon['ogeler'], genislik = 50, yukseklik = 25): Sablon => ({ anahtar: 't', ad: 'T', tur: 'malzeme', genislik, yukseklik, ogeler });
 const metin = (alan: string, x = 1, y = 1, genislik = 40, yukseklik = 5, yaziMm = 3) => ({ tur: 'metin' as const, x, y, genislik, yukseklik, yaziMm, kalin: false, alan });
@@ -246,6 +247,21 @@ describe('etiket-merkezi kuralları', () => {
         }
       }
     }
+  });
+
+  test('3074 a: kod sayfası seçen PPLB komutu tek baytla, diğer komut UTF-8 ile gider; deneme Türkçe satırı iki kod sayfasında', () => {
+    assert.deepEqual([...komutBaytlari('A0,0,0,1,1,1,N,"İ"\n')].slice(-4), [0xc4, 0xb0, 0x22, 0x0a], 'bugünkü gibi UTF-8');
+    assert.deepEqual([...komutBaytlari('I8,E,001\nA0,0,0,1,1,1,N,"\u00dd"\n')].slice(-4), [0x22, 0xdd, 0x22, 0x0a], 'I8 varsa karakter bayttır');
+    assert.equal(komutBaytlari('I8,E,001\n\u0130').at(-1), 0x3f, 'bayta sığmayan karakter ? olur');
+    assert.deepEqual([...komutBaytlari('A0,0,0,1,1,1,N,"İ"\nP1\nI8,E,001\nA0,0,0,1,1,1,N,"\u00dd"\n')],
+      [...new TextEncoder().encode('A0,0,0,1,1,1,N,"İ"\nP1\n'), ...Array.from('I8,E,001\nA0,0,0,1,1,1,N,"\u00dd"\n', (h) => h.charCodeAt(0))],
+      'ilk I8 satırından öncesi UTF-8 kalır');
+    const [cp857, cp1254] = DENEME_KOD_SAYFALARI;
+    assert.deepEqual([...kodSayfasinda(DENEME_TURKCE, cp1254.tablo)].map((h) => h.charCodeAt(0)), [0xc7, 0xd0, 0xdd, 0xd6, 0xde, 0xdc, 0x20, 0xe7, 0xf0, 0xfd, 0xf6, 0xfe, 0xfc]);
+    assert.deepEqual([...kodSayfasinda(DENEME_TURKCE, cp857.tablo)].map((h) => h.charCodeAt(0)), [0x80, 0xa6, 0x98, 0x99, 0x9e, 0x9a, 0x20, 0x87, 0xa7, 0x8d, 0x94, 0x9f, 0x81]);
+    // Ek etiketlerin her öğesi etiketin içindedir (50x25, 203 dpi).
+    const k = pplbDenemesi({ genislik: 50, yukseklik: 25, dpi: 203 });
+    for (const m of k.matchAll(/^(?:A|LO|LE|X)(\d+),(\d+)/gm)) assert.ok(Number(m[1]) < 400 && Number(m[2]) < 200, m[0]);
   });
 
   test('PPLB yazı tipi istenen yüksekliği aşmaz', () => {

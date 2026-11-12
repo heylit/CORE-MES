@@ -63,6 +63,12 @@ describe('web-usb (2954)', () => {
     expect(new TextDecoder().decode(a.giden[0])).toBe('\nN\nA10,10,0,3,1,1,N,"Ş"\nP1\n');
   });
 
+  it('3074 a: kod sayfası seçen komut (I8) tek baytla gider', async () => {
+    const a = sahteAygit();
+    await usbyeGonder(a, 'I8,E,001\nA10,10,0,3,1,1,N,"\u00de"\nP1\n');
+    expect([...(a.giden[0] ?? [])].slice(-7)).toEqual([0x22, 0xde, 0x22, 0x0a, 0x50, 0x31, 0x0a]);
+  });
+
   it('yazıcı veriyi kabul etmezse hata verir ve yine de aygıtı kapatır', async () => {
     const a = sahteAygit('stall');
     await expect(usbyeGonder(a, 'P1')).rejects.toThrow('Yazıcı veriyi kabul etmedi.');

@@ -9,10 +9,12 @@ import { uygulamaKur } from '#cekirdek/uygulama.ts';
 import { KAYIT_TURLERI, SABLON_TURLERI } from '#paylasilan/sozlesme/etiket-merkezi.ts';
 import type { BasCevabi, BaskilarCevabi, BekleyenlerCevabi, CiktiCevabi, EtiketlerCevabi, IndirCevabi, KayitCiktiCevabi, SablonlarCevabi, YazdirCevabi, Yazici, YazicilarCevabi } from '#paylasilan/sozlesme/etiket-merkezi.ts';
 import { ISTEK_KIMLIGI_BASLIGI } from '#paylasilan/istek-kimligi.ts';
+import { komutBaytlari } from '#paylasilan/etiket-sabitleri.ts';
 import { denetimYaz } from '../denetim/disari.ts';
 import { kullaniciYukle, rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
+import { tcpGonder } from './gonderici.ts';
 import { partiKaliteDurumuYap } from '../stok/disari.ts';
 import { uretimEmriAc } from '../uretim-emirleri/disari.ts';
 
@@ -52,11 +54,12 @@ describe('etiket-merkezi (gerçek PostgreSQL)', () => {
   }
 
   // Yazıcının yerine 127.0.0.1:9100'de dinleyen sahte yazıcı: gelen baytları toplar.
-  async function sahteYazici(): Promise<{ gelen: () => string; kapat: () => Promise<void> }> {
-    let veri = '';
-    const sunucu: Server = createServer((s) => { s.on('data', (p) => { veri += p.toString('utf8'); }); });
+  async function sahteYazici(): Promise<{ gelen: () => string; baytlar: () => Buffer; kapat: () => Promise<void> }> {
+    const parcalar: Buffer[] = [];
+    const sunucu: Server = createServer((s) => { s.on('data', (p) => { parcalar.push(p); }); });
     await new Promise<void>((coz, reddet) => { sunucu.once('error', reddet); sunucu.listen(9100, '127.0.0.1', () => coz()); });
-    return { gelen: () => veri, kapat: () => new Promise((coz) => { sunucu.close(() => coz()); }) };
+    const baytlar = () => Buffer.concat(parcalar);
+    return { gelen: () => baytlar().toString('utf8'), baytlar, kapat: () => new Promise((coz) => { sunucu.close(() => coz()); }) };
   }
   const bekle = async (kosul: () => boolean) => { for (let i = 0; i < 50 && !kosul(); i++) await new Promise((c) => setTimeout(c, 20)); };
 
@@ -111,6 +114,20 @@ describe('etiket-merkezi (gerçek PostgreSQL)', () => {
   test('EM-U3: deneme şablonu yazıcı dilini ve çözünürlüğü etikete yazar', async () => {
     const c = (await al(yonetici, '/etiket-merkezi/sablonlar/deneme-50x25/cikti?dil=pplb&dpi=203')).json() as CiktiCevabi;
     assert.equal(c.onizleme.some((o) => o.tur === 'metin' && o.satirlar.join(' ').includes('Argox (PPLB) · 203 dpi')), true);
+    // 3074 a: deneme ek etiketleri: iki kod sayfası, harf adımı cetveli, iki yoldan ters yazı; sonunda varsayılan kod sayfası.
+    for (const k of ['I8,6,001', 'I8,E,001', '"0123456789"', ',R,"TERS 1"', ',N,"TERS 2"', '\nLE']) assert.ok(c.komut.includes(k), k);
+    assert.ok(c.komut.endsWith('P1\nI8,0,001\n'));
+    assert.equal((c.komut.match(/^P\d+$/gm) ?? []).length, 5, 'ana deneme ve dört ek etiket');
+    const z = (await al(yonetici, '/etiket-merkezi/sablonlar/deneme-100x50/cikti?dil=zpl&dpi=203')).json() as CiktiCevabi;
+    assert.ok(z.komut.includes('^FD0123456789 (2 mm)^FS') && !z.komut.includes('I8,'));
+    const lot = (await al(yonetici, '/etiket-merkezi/sablonlar/lot-100x50/cikti?dil=pplb&dpi=203')).json() as CiktiCevabi;
+    assert.ok(!/^I8,/m.test(lot.komut), 'deneme dışındaki etiket kod sayfası seçmez, bugünkü gibi UTF-8 gider');
+    // Ana deneme etiketi bugünkü baskıyı gösterir: ilk I8 satırına kadar Türkçe satırı UTF-8 gider, sonrası tek bayttır.
+    const b = Buffer.from(komutBaytlari(c.komut));
+    const i8 = b.indexOf('\nI8,');
+    assert.ok(i8 > 0);
+    assert.ok(b.subarray(0, i8).includes(Buffer.from('ÇĞİÖŞÜ', 'utf8')), 'ana etiketin Türkçe satırı UTF-8');
+    assert.ok(b.subarray(i8).includes(Buffer.from([0xc7, 0xd0, 0xdd, 0xd6, 0xde, 0xdc])), 'CP1254 ek etiketi tek bayt');
   });
 
   test('EM-U4: bilinmeyen şablon 404, sınır dışı adet ve dil 400', async () => {
@@ -186,7 +203,8 @@ describe('etiket-merkezi (gerçek PostgreSQL)', () => {
       assert.equal(cevap.sonuc, 'gonderildi');
       await bekle(() => yazici.gelen().endsWith('^XZ\n'));
       assert.match(yazici.gelen(), /^\^XA\n\^CI28\n\^PW400\n\^LL200\n/);
-      assert.match(yazici.gelen(), /\^PQ2\n\^XZ\n$/);
+      assert.match(yazici.gelen(), /\^PQ2\n\^XZ\n/); // ardından 3074 a cetvel etiketi (^PQ1)
+      assert.match(yazici.gelen(), /\^FD0123456789 \(6 mm\)\^FS\n\^PQ1\n\^XZ\n$/);
       const yineleme = await yaz(basan, '/etiket-merkezi/sablonlar/deneme-50x25/bas', { yaziciId: ag.id, adet: 2 }, tekrarKimligi);
       assert.equal((yineleme.json() as BasCevabi).baskiId, cevap.baskiId);
     } finally {
@@ -194,6 +212,19 @@ describe('etiket-merkezi (gerçek PostgreSQL)', () => {
     }
     const kayitlar = await ortam!.vt.sorgu<{ sonuc: string }>("SELECT sonuc FROM etiket_merkezi_baski WHERE sonuc = 'gonderildi'");
     assert.equal(kayitlar.length, 1);
+  });
+
+  test('EM-U7b: ağ yolu yazıcıya komutBaytlari baytlarını gönderir (3074 a: I8 sonrası tek bayt, öncesi UTF-8)', async () => {
+    const c = (await al(yonetici, '/etiket-merkezi/sablonlar/deneme-50x25/cikti?dil=pplb&dpi=203')).json() as CiktiCevabi;
+    const yazici = await sahteYazici();
+    try {
+      await tcpGonder('127.0.0.1', c.komut);
+      await bekle(() => yazici.gelen().endsWith('I8,0,001\n'));
+      assert.deepEqual(yazici.baytlar(), Buffer.from(komutBaytlari(c.komut)));
+      assert.notDeepEqual(yazici.baytlar(), Buffer.from(c.komut, 'utf8'));
+    } finally {
+      await yazici.kapat();
+    }
   });
 
   test('EM-U8: ulaşılamayan yazıcı "hata" sonucuyla deftere yazılır, ileti adres taşımaz; defter değişmez ve okuma oku ister', async () => {

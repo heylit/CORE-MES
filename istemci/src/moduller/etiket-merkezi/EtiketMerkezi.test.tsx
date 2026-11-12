@@ -106,6 +106,10 @@ const KONUMLAR: Record<number, string> = { 11: 'R1-01-1-1', 12: 'R1-01-1-2' };
 
 interface Gonderilen { yol: string; govde: unknown; kimlik: string | null }
 
+// 3074 a: kod sayfası seçen PPLB deneme komutu; ana etiket UTF-8, I8 sonrası tek bayt iner.
+const INDIRILEN_KOMUT = '\nN\nA0,0,0,1,1,1,N,"Ş"\nP1\nI8,E,001\nA0,0,0,1,1,1,N,"\u00de"\nP1\nI8,0,001\n';
+const INDIRILEN_BAYTLAR = [...new TextEncoder().encode('\nN\nA0,0,0,1,1,1,N,"Ş"\nP1\n'), ...Array.from('I8,E,001\nA0,0,0,1,1,1,N,"\u00de"\nP1\nI8,0,001\n', (h) => h.charCodeAt(0))];
+
 function sunucuKur(secenek: { islemler?: Islem[]; yazicilar?: YazicilarCevabi; bekleyenler?: BekleyenlerCevabi; etiketler?: EtiketlerCevabi } = {}) {
   const istekler: string[] = [];
   const gonderilenler: Gonderilen[] = [];
@@ -130,7 +134,7 @@ function sunucuKur(secenek: { islemler?: Islem[]; yazicilar?: YazicilarCevabi; b
         };
         return json(200, cevap);
       }
-      if (yol.endsWith('/indir')) return json(200, { baskiId: 10, dosyaAdi: 'deneme-50x25-203.prn', komut: '\nN\nP1\n' });
+      if (yol.endsWith('/indir')) return json(200, { baskiId: 10, dosyaAdi: 'deneme-50x25-203.prn', komut: INDIRILEN_KOMUT });
       return json(200, { ...YAZICILAR.yazicilar[0], id: 3, ad: 'Yeni', surum: 1 });
     }
     if (yol === '/oturum') return json(200, { kullanici: { id: 1, ad: 'Örnek', islemler: secenek.islemler ?? [] } });
@@ -276,7 +280,8 @@ describe('EtiketMerkezi', () => {
 
   it('dosya yazıcısı seçilince komut dosyası yazıcının ayarıyla iner ve deftere yazılır', async () => {
     const indirilen = vi.fn();
-    vi.stubGlobal('URL', Object.assign(URL, { createObjectURL: () => 'blob:yerel', revokeObjectURL: () => undefined }));
+    let dosya: Blob | null = null;
+    vi.stubGlobal('URL', Object.assign(URL, { createObjectURL: (b: Blob) => { dosya = b; return 'blob:yerel'; }, revokeObjectURL: () => undefined }));
     vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (this: HTMLAnchorElement) { indirilen(this.download); });
     const istekler = sunucuKur({ islemler: ['sayfa.etiket-merkezi', 'etiket-merkezi.oku', 'etiket-merkezi.bas'] });
     ac(<YaziciDenemesi />);
@@ -289,6 +294,9 @@ describe('EtiketMerkezi', () => {
     expect(g?.govde).toEqual({ yaziciId: 2, adet: 1 });
     expect(istekKimligiMi(g?.kimlik)).toBe(true);
     expect(indirilen).toHaveBeenCalledWith('deneme-50x25-203.prn');
+    expect(dosya).not.toBeNull();
+    const okunan = await new Promise<ArrayBuffer>((coz) => { const r = new FileReader(); r.onload = () => coz(r.result as ArrayBuffer); r.readAsArrayBuffer(dosya as unknown as Blob); });
+    expect([...new Uint8Array(okunan)]).toEqual(INDIRILEN_BAYTLAR);
   });
 
   it('doğrudan baskı kapalıysa nedeni yazar ve ağ yazıcısı listede yoktur; dosya yazıcısı kalır; yetkisiz kullanıcıda bölüm hiç yoktur', async () => {
@@ -852,7 +860,7 @@ describe('USB yazıcıya basım (2954)', () => {
     expect(g?.yol).toBe('/etiket-merkezi/sablonlar/deneme-50x25/indir');
     expect(g?.govde).toEqual({ yaziciId: 2, adet: 1 });
     expect(istekKimligiMi(g?.kimlik)).toBe(true);
-    expect(secilen.giden).toEqual(['\nN\nP1\n']);
+    expect(secilen.giden).toEqual([new TextDecoder().decode(new Uint8Array(INDIRILEN_BAYTLAR))]);
   });
 
   it('cihaz başına kapalı: sistem ayarı kapalıyken eşleşmiş aygıt olsa da USB düğmesi yoktur; ayar açık ama eşleşme yoksa basılmaz', async () => {

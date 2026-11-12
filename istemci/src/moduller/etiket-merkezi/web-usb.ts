@@ -2,6 +2,8 @@
 // üretir ve deftere yazar (indirme ucu); burası yalnız o komutu eşleşmiş USB aygıtına aktarır. TypeScript'in DOM kütüphanesinde
 // WebUSB tipi olmadığından ve yeni paket alınmadığından yalnız kullanılan alanlar burada tanımlıdır.
 
+import { komutBaytlari } from '#paylasilan/etiket-sabitleri.ts';
+
 interface UsbUcNokta { endpointNumber: number; direction: 'in' | 'out'; type: 'bulk' | 'interrupt' | 'isochronous' }
 interface UsbAlternatif { interfaceClass: number; endpoints: UsbUcNokta[] }
 interface UsbArayuz { interfaceNumber: number; alternate: UsbAlternatif }
@@ -118,7 +120,7 @@ async function aktar(a: UsbAygit, komut: string): Promise<void> {
     await a.claimInterface(hedef.no);
     tutulan = hedef.no;
     // Ağ yolu (gonderici.ts) ile aynı kodlama: yazıcıya giden bayt dizisi iki yolda da aynıdır.
-    const sonuc = await a.transferOut(hedef.uc, new TextEncoder().encode(komut));
+    const sonuc = await a.transferOut(hedef.uc, komutBaytlari(komut));
     if (sonuc.status !== 'ok') throw new UsbHatasi('Yazıcı veriyi kabul etmedi.');
   } finally {
     if (tutulan !== null) await a.releaseInterface(tutulan).catch(() => undefined);
