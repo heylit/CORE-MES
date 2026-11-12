@@ -3112,6 +3112,14 @@ export function eksiAlaniniEkle(govde: Record<string, unknown>, eksik: number | 
   return { ...govde, tmi: { ...tmi, eksi: -eksik } };
 }
 
+// 3131: emir beklemedeyse (3050 a) nedenin adı paketin `tmi.bekletme` alanına yazılır. Yayın durumu değişmez; operatör ekranı başlamamış
+// işi listede göstermez, Hazırlık işaretler. Emir devam edince alan taslakta yoktur ve okumada kendiliğinden düşer.
+export function bekletmeAlaniniEkle(govde: Record<string, unknown>, neden: string | null | undefined): Record<string, unknown> {
+  if (typeof neden !== 'string' || neden === '') return govde;
+  const tmi = kayitMi(govde['tmi']) ? govde['tmi'] : {};
+  return { ...govde, tmi: { ...tmi, bekletme: neden } };
+}
+
 // 1188: adımda girilen hatalı parçaların toplamı (uretim-emirleri `hataliAdet`) paketin `tmi.hatali` alanına yazılır; terminal bunu hurda
 // yerine gösterir. Sıfır gerçek sıfırdır ve yazılır; alan gelmezse (eski veri) yazılmaz, ekran sayıyı bilmiyor sayar.
 export function hataliAlaniniEkle(govde: Record<string, unknown>, hataliAdet: number | null | undefined): Record<string, unknown> {

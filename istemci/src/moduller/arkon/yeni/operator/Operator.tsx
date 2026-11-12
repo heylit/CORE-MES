@@ -69,7 +69,7 @@ import { KART_DEGIL_ILETISI, KART_YOK_ILETISI, terminalOkutmasi, useElOkuyucu } 
 import { kartNumarasiGibi } from '../../../../ortak/veri/kart-degistir.ts';
 import {
   DURUM_ILETISI, DURUM_SIMGESI, EYLEM_DURUMU, URETIM_EYLEMLERI, baslangicUyarilari, bosIs, durusOnerileri, eksikTakimTabanlari, hazirlikSayisi,
-  ilkParcaKalemleri, ilkParcaKapisi, isSekmeleri, kararOzeti, kontrolTakvimi, mobilGorunumler, numuneAraligi, paketleriBirlestir, siradakiGorev, simgeSec, bekletmeGorevi, BEKLEMEDE_KAPALI,
+  ilkParcaKalemleri, ilkParcaKapisi, isSekmeleri, kararOzeti, kontrolTakvimi, mobilGorunumler, numuneAraligi, etkinIsSirasi, paketleriBirlestir, siradakiGorev, simgeSec, bekletmeGorevi, BEKLEMEDE_KAPALI,
   sonucBelgesi, takimUyarilari, tonAdi, uyariAnahtari, vardiyaHesabi, vardiyaOzeti, zamaniGelenUyarilar, hurdaUyarisi, bitisOzeti, bitirmeEksigi, tmiIlkParcaGerekli,
   type EkranSekmesi,
   hataliNedenleri, hataliUstSiniri,
@@ -286,8 +286,8 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
       const etkin = prev[aiRef.current];
       const etkinAnahtar = etkin ? siraAnahtari(etkin) : null;
       const nx = takimli(kmKararli(numuneli(paketleriBirlestir(prev, pk, rs, MACHINE, onizleme))));
-      const idx = pv ? 0 : nx.findIndex((x) => siraAnahtari(x) === etkinAnahtar);
-      if (idx >= 0 && idx !== aiRef.current) setTimeout(() => aiYaz(idx), 0);
+      const idx = pv ? 0 : etkinIsSirasi(nx, siraAnahtari, etkinAnahtar, aiRef.current);
+      if (idx !== aiRef.current) setTimeout(() => aiYaz(idx), 0);
       return nx;
     });
     if (msg && msg.type === 'pkg' && msg['machine'] === MACHINE && !operatoreAcik(pkgsRef.current[String(msg['id'])] as Parameters<typeof operatoreAcik>[0])) return;

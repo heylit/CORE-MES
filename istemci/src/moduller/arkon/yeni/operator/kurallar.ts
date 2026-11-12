@@ -1,4 +1,5 @@
 import { tmiBitti } from '../../../../../../arkon/web/src/data/biten-is.ts';
+import { operatordeGizli } from '../../../../../../arkon/web/src/data/bekleyen-emir.ts';
 import { ILK_PARCA_KARAR_BEKLIYOR_ILETISI, KALITE_MERKEZI_RET_UYARISI, ilkParcaKarari, kararBekleyenEki, yenidenIlkParcaAcik } from '../../../../../../arkon/web/src/data/ilk-parca.ts';
 import { kalanAdet } from '../../../../../../arkon/web/src/data/sayac-halkasi.ts';
 import { TEKRAR_OLCUM } from '../../../../../../arkon/web/src/data/otomatik-numune.ts';
@@ -66,9 +67,19 @@ export function paketleriBirlestir(liste: readonly Is[], paketler: readonly Pkg[
   }
   // TMI'de biten emrin işi terminalde de biter (kart #1194): sayaç kapanır, iş biten işlere geçer.
   cikti = cikti.map((x) => (tmiBitti(x.pkg as { tmi?: { bitti?: unknown } } | undefined) && x.state !== 'done' ? { ...x, state: 'done' } : x));
+  // 3131: bekletilen emrin başlamamış işi listede görünmez; emir devam edince paket yine gelir (önizleme gösterir).
+  if (!onizleme) cikti = cikti.filter((x) => !operatordeGizli(x));
   // Sıra: canlı plandaki TMI işleri plan sırasıyla, öteki işler Planlama'daki sırayla (pkg.seq).
   return cikti.map((x, i): [Is, number] => [x, x.pkg && x.pkg.seq != null ? x.pkg.seq : 1e9 + i])
     .sort((a, b) => planOnce(a[0].pkg, b[0].pkg) || a[1] - b[1]).map((x) => x[0]);
+}
+
+// Yenilemeden sonra ekrandaki işin yeni sırası. İş listeden düştüyse (emir bekletildi, paket geri çekildi) ekran sıradaki işe geçer:
+// eski sıra kısalan listede ya yoktur ya başka işi gösterir, şerit "Önizleme" derken düğmeler başka işe yazardı (3131 Test D1).
+export function etkinIsSirasi<T>(isler: readonly T[], anahtar: (x: T) => string, etkin: string | null, onceki: number): number {
+  if (etkin === null) return onceki;
+  const i = isler.findIndex((x) => anahtar(x) === etkin);
+  return i >= 0 ? i : 0;
 }
 
 /* ── numune planı ve kontrol takvimi (operator-parcalar.ts) ── */
