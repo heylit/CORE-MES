@@ -98,6 +98,7 @@ import { BitenSepet, Sepetler } from './Sepetler.tsx';
 import { UzakMod } from './UzakMod.tsx';
 import { baytiVar, hazirPdfGoruntusu, useCozulmus } from '../veri/dosyalar.ts';
 import { ikiliOku } from '../../baglanti.ts';
+import { useEkranGorunur } from '../../../../ortak/rota/kalici.tsx';
 import type { Cagri, DurumParcasi, Gorev, GorevEylemi, Is, KontrolTakvimi, Meas, Pkg, Result, SampleRequest, Ton } from './tipler.ts';
 import './operator.css';
 
@@ -953,7 +954,11 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
     window.addEventListener('keydown', f, true);
     return () => { window.removeEventListener('pointerdown', f, true); window.removeEventListener('keydown', f, true); };
   }, []);
-  useEffect(() => { if (kendiligindenUzak && !away && !ov && !odakKipi && Date.now() - lastAct.current > 45000) awayYaz(true); }, [simdi]);
+  // Terminal kalıcı rotadır: başka sayfadayken gizli kurulu kalır, uzak mod ise gövdeye açılır. Uzak mod yalnız terminal görünürken
+  // açılır; gizlenince kapanır, dönüşte 45 sn yeniden sayılır.
+  const gorunur = useEkranGorunur();
+  useEffect(() => { lastAct.current = Date.now(); if (!gorunur) awayYaz(false); }, [gorunur]);
+  useEffect(() => { if (gorunur && kendiligindenUzak && !away && !ov && !odakKipi && Date.now() - lastAct.current > 45000) awayYaz(true); }, [simdi]);
 
   const patch = (p: Partial<Is>) => islerYaz((l) => l.map((x, i) => (i === ai ? { ...x, ...p } : x)));
   const undoable = (label: string, icon: SimgeAdi, ton: Ton, f: () => void) => {
@@ -1474,7 +1479,7 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
         satirlar={bitisOzeti(o, hataliSayisi, sayi, ilk.kararBekleyen ?? 0)}
         {...(!pv && bitenEmir !== null ? { ek: <BitenSepet istasyon={MACHINE} emirId={bitenEmir} /> } : {})}
         {...(uretir ? { birincil: { metin: 'Sıradaki işe geç', simge: 'next' as SimgeAdi, tikla: () => act('next') } } : {})} />
-      {away ? <UzakMod is={o} gorev={task} D={D} since={since} istasyon={MACHINE} {...(hataliSayisi === undefined ? {} : { hatali: hataliSayisi })} uyan={() => { lastAct.current = Date.now(); awayYaz(false); }} /> : null}
+      {away && gorunur ? <UzakMod is={o} gorev={task} D={D} since={since} istasyon={MACHINE} {...(hataliSayisi === undefined ? {} : { hatali: hataliSayisi })} uyan={() => { lastAct.current = Date.now(); awayYaz(false); }} /> : null}
     </>
   );
 
