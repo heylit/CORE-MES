@@ -48,7 +48,7 @@
 }
 .tc-ay1-durum-adi > i { inline-size: var(--nokta); block-size: var(--nokta); border-radius: var(--yari-tam); background: var(--sig); flex: none; }
 .tc-ay1-durum-adi .tc-ay1-mono { color: var(--muted); font-weight: 700; letter-spacing: 0; }
-.tc-ay1-saat { display: grid; justify-items: end; line-height: 1.15; }
+.tc-ay1-saat { display: grid; justify-items: end; }
 .tc-ay1-saat b { font-family: var(--font-mono); font-size: var(--yazi-xl); }
 .tc-ay1-saat small { color: var(--muted); font-size: var(--yazi-xs); }
 .tc-ay1-saat-alt { display: flex; align-items: center; justify-content: flex-end; gap: var(--b-2); min-width: 0; }
@@ -729,10 +729,12 @@ button.tc-ay1-kadran-cekirdek { cursor: pointer; }
 .tc-ay1-genis .tc-ay1-sahne > .tc-orblar {
   position: sticky; inset-block-end: 0; z-index: 1; padding-block: var(--b-2); margin-block: calc(var(--b-2) * -1); background: var(--panel-solid);
 }
-/* 1070: kabuktaki 1000-1080 px pencerede sol sütun kaymadan sığar: iş kartının altı alanı tek sırada, Şimdi şeridinde görev başlığı
+/* 1070: kabuktaki 1000-1080 px pencerede sol sütun kaymadan sığar: iş kartının alanları yan yana, Şimdi şeridinde görev başlığı
    ve açıklaması üst üste, numune çizgisi yanlarında tek satırdır. */
 @media (max-height: 1199px) {
-  .tc-ay1-genis .tc-ay1-aktif .tc-ay1-is-alanlari { grid-template-columns: repeat(6, minmax(0, max-content)); justify-content: space-between; }
+  /* 3126: yedi alan (hedef eklendi) doğal genişliğinde yan yana, sığmayan alt satıra iner; emir no kesilmez. */
+  .tc-ay1-genis .tc-ay1-aktif .tc-ay1-is-alanlari { display: flex; flex-wrap: wrap; gap: var(--b-1) var(--b-4); }
+  .tc-ay1-genis .tc-ay1-aktif .tc-ay1-is-alan { max-inline-size: 100%; }
   .tc-ay1-genis .tc-ay1-aktif .tc-ay1-is-baslik { font-size: var(--yazi-m); }
   .tc-ay1-genis .tc-ay1-simdi .tc-ay1-gorev-metin > b { grid-area: 1 / 2; align-self: end; }
   .tc-ay1-genis .tc-ay1-simdi .tc-ay1-gorev-metin > small { grid-area: 2 / 2; align-self: start; margin-inline-end: var(--b-2); }
@@ -762,7 +764,7 @@ button.tc-ay1-kadran-cekirdek { cursor: pointer; }
 .tc-ay1-kabukta .tc-ay1-ust :is(.tc-ay1-istasyon small, .tc-ay1-kisi > span:last-child) { display: none; }
 .tc-ay1-kabukta .tc-ay1-durum-adi { white-space: nowrap; }
 /* Sayfa başlığı kesilmez; yer daralınca yalnız istasyon adı kısalır, öteki öğeler kısalmaz. */
-.tc-ay1-kabukta .tc-ay1-ust > :not(.tc-ay1-bosluk, .tc-ay1-istasyon) { flex: none; }
+.tc-ay1-kabukta .tc-ay1-ust > :not(.tc-ay1-bosluk, .tc-ay1-istasyon, .tc-ay1-yer) { flex: none; }
 .tc-ay1-kabukta .tc-ay1-istasyon { flex: 0 1 auto; min-width: var(--dokunma); }
 .tc-ay1-kabukta .tc-ay1-istasyon b { max-inline-size: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tc-ay1-kabukta .tc-ay1-saat small { white-space: nowrap; }
@@ -780,3 +782,402 @@ button.tc-ay1-kadran-cekirdek { cursor: pointer; }
 .tc-ay1-adim-op { font-family: var(--font-mono); font-size: var(--yazi-s); color: var(--muted); }
 .tc-ay1-adim-ad { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .tc-ay1-adim-ad em { font-style: normal; font-size: var(--yazi-xs); font-weight: 700; margin-inline-start: var(--b-2); padding: 0 var(--b-1); border: thin solid var(--hazard); border-radius: var(--yari-1); }
+
+/* 3126: üst şeritte istasyon ve makine iki kalem, tek satır (kabuğun üst çubuğu tek satırlıktır); kod hep tam, ad yer daralınca
+   kısalır. Seçilmemişse uyarı tonu. Kabukta kalemin adı (İstasyon, Makine) yalnız simgeyle kalır. */
+.tc-ay1-yer {
+  display: flex; align-items: center; gap: var(--b-2); min-width: var(--dokunma); flex: 0 1 auto; min-block-size: var(--dokunma); padding: 0 var(--b-3);
+  border: var(--cizgi-ince) solid var(--edge); border-radius: var(--yari-2); background: var(--panel2); color: var(--ink);
+}
+.tc-ay1-yer .tc-ay1-ust-yazi { display: inline-flex; align-items: center; gap: var(--b-1); flex: none; }
+.tc-ay1-kabukta .tc-ay1-yer-etiket { display: none; }
+.tc-ay1-yer b { font-family: var(--font-mono); font-size: var(--yazi-m); max-inline-size: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tc-ay1-yer b small { font-family: var(--font-ana); font-size: var(--yazi-s); font-weight: 600; color: var(--muted); }
+.tc-ay1-yer[data-uyari] { border-color: var(--hold); background: color-mix(in srgb, var(--hold) 14%, var(--panel2)); }
+.tc-ay1-yer[data-uyari] svg { color: var(--hold); }
+/* 3126: rota şeridi; her adım bir dilim, renk Adım Durumu statüsünün tonu, bu adım çerçeveli. */
+.tc-ay1-rota-seridi {
+  display: grid; gap: var(--b-1); inline-size: 100%; margin-block-start: var(--b-2); padding: var(--b-2); border: var(--cizgi-ince) solid var(--edge);
+  border-radius: var(--yari-2); background: var(--panel2); color: var(--ink); font: inherit; text-align: start; cursor: pointer;
+}
+p.tc-ay1-rota-seridi { display: flex; align-items: center; gap: var(--b-2); cursor: default; }
+.tc-ay1-rota-ust { display: inline-flex; align-items: center; gap: var(--b-1); font-size: var(--yazi-s); font-weight: 700; color: var(--muted); }
+.tc-ay1-rota-seridi ol { list-style: none; margin: 0; padding: 0; display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: var(--b-1); }
+.tc-ay1-rota-seridi li {
+  --c: var(--idle);
+  display: grid; justify-items: start; gap: 0; min-width: 0; padding: var(--b-1); border-radius: var(--yari-1);
+  border-block-start: var(--b-1) solid var(--c); background: color-mix(in srgb, var(--c) 12%, var(--panel2));
+}
+.tc-ay1-rota-seridi li svg { color: var(--c); }
+.tc-ay1-rota-seridi li span { font-family: var(--font-mono); font-size: var(--yazi-xs); font-weight: 700; }
+.tc-ay1-rota-seridi li small { max-inline-size: 100%; overflow-wrap: anywhere; hyphens: auto; font-size: var(--yazi-xs); color: var(--muted); }
+.tc-ay1-rota-seridi li[aria-current='step'] { outline: var(--cizgi) solid var(--hazard); outline-offset: calc(var(--cizgi-ince) * -1); }
+.tc-ay1-rota-seridi li[data-ton='tamam'] { --c: var(--run); }
+.tc-ay1-rota-seridi li[data-ton='bilgi'] { --c: var(--done); }
+.tc-ay1-rota-seridi li[data-ton='uyari'] { --c: var(--hold); }
+.tc-ay1-rota-seridi li[data-ton='hata'] { --c: var(--stop); }
+/* Çok adımlı rotada dilim daralır; durum adı ipucunda ve Adımlar listesinde kalır. */
+.tc-ay1-rota-seridi ol:has(> li:nth-child(9)) li small { display: none; }
+.tc-ay1-dar .tc-ay1-rota-seridi ol:has(> li:nth-child(5)) li small { display: none; }
+.tc-ay1-adim-toplam, .tc-ay1-adim-yuzde progress {
+  appearance: none; inline-size: 100%; block-size: var(--b-1); border: 0; border-radius: var(--yari-tam); overflow: hidden; background: var(--edge);
+}
+.tc-ay1-adim-toplam { margin-block-end: var(--b-2); }
+.tc-ay1-adim-toplam::-webkit-progress-bar, .tc-ay1-adim-yuzde progress::-webkit-progress-bar { background: var(--edge); }
+.tc-ay1-adim-toplam::-webkit-progress-value, .tc-ay1-adim-yuzde progress::-webkit-progress-value { background: var(--run); }
+.tc-ay1-adim-toplam::-moz-progress-bar, .tc-ay1-adim-yuzde progress::-moz-progress-bar { background: var(--run); }
+.tc-ay1-adim-yuzde { display: flex; align-items: center; gap: var(--b-2); flex: 1 0 100%; padding-block-end: var(--b-1); }
+.tc-ay1-adim-yuzde small { color: var(--muted); font-size: var(--yazi-xs); min-inline-size: 4ch; text-align: end; }
+p.tc-ay1-adim-durumu { display: flex; align-items: center; gap: var(--b-2); margin: 0 0 var(--b-2); }
+/* 3126: çark açıkken de iş alanları ve rota şeridi satırın tamamını alır (geniş iş kartının üç sütunu). */
+.tc-ay1-genis .tc-ay1-aktif[data-cark] > div:first-child > :is(.tc-ay1-is-alanlari, .tc-ay1-rota-seridi) { flex: 1 1 100%; }
+.tc-ay1-mobil-ust .tc-ay1-istasyon small[data-uyari] { display: inline-flex; align-items: center; gap: var(--b-1); color: var(--hold); font-size: var(--yazi-xs); font-weight: 700; white-space: nowrap; }
+.tc-ay1-mobil-ust .tc-ay1-istasyon small[data-uyari] svg { color: var(--hold); }
+/* 3126: bekleten talep ve sipariş satırı adın altında; bitişik yazılıyordu. */
+.tc-ay1-adim-ad small { display: block; color: var(--muted); font-size: var(--yazi-xs); }
+/* 3126 Ek 2: tek görünüş. Genişte iş kimliği sağ sütunun başındadır; sekme içeriği kalan boyu alır, uzun liste kendi kutusunda kayar. */
+.tc-ay1-genis .tc-ay1-sag > .tc-ay1-aktif { flex: none; }
+.tc-ay1-genis .tc-ay1-kimlik { padding: var(--b-2) var(--b-3); }
+.tc-ay1-kimlik-satiri { flex: 1 1 100%; min-width: 0; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--yazi-s); }
+.tc-ay1-kimlik-satiri > * + *::before { content: '·'; margin-inline: var(--b-1); color: var(--muted); }
+.tc-ay1-kimlik-satiri small { color: var(--muted); font-size: var(--yazi-xs); font-weight: 700; letter-spacing: var(--harf-aralik-06); text-transform: uppercase; }
+.tc-ay1-kimlik-satiri > b:first-child { font-size: var(--yazi-l); }
+.tc-ay1-genis .tc-ay1-aktif.tc-ay1-kimlik .tc-ay1-is-alanlari { display: none; }
+.tc-ay1-kimlik-alt { display: flex; flex: 1 1 100%; align-items: center; gap: var(--b-2); min-width: 0; }
+.tc-ay1-kimlik-alt:empty { display: none; }
+.tc-ay1-kimlik-alt > .tc-ay1-rota-seridi { flex: 1 1 auto; min-width: 0; margin: 0; }
+.tc-ay1-kimlik-alt > :not(.tc-ay1-rota-seridi) { flex: none; align-self: center; }
+/* İnce rota şeridi: başlık ve dilimler tek sırada; dilimde simge ve OP no. Yüksek geniş ekranda (>= 900) dilim adları geri gelir. */
+.tc-ay1-kimlik-alt > button.tc-ay1-rota-seridi { display: flex; align-items: center; gap: var(--b-2); min-block-size: var(--dokunma); padding: var(--b-1) var(--b-2); }
+.tc-ay1-rota-ust { flex: none; white-space: nowrap; }
+.tc-ay1-rota-ust b { color: var(--ink); }
+.tc-ay1-kimlik-alt .tc-ay1-rota-seridi ol { flex: 1 1 auto; min-width: 0; }
+.tc-ay1-kimlik-alt .tc-ay1-rota-seridi li { display: flex; align-items: center; gap: var(--b-1); overflow: hidden; white-space: nowrap; }
+.tc-ay1-kimlik-alt .tc-ay1-rota-seridi li small { display: none; }
+@media (min-height: 900px) {
+  .tc-ay1-genis .tc-ay1-aktif.tc-ay1-kimlik:not([data-bos]) .tc-ay1-is-alanlari { display: flex; }
+  .tc-ay1-genis .tc-ay1-kimlik .tc-ay1-kimlik-satiri { display: none; }
+  .tc-ay1-genis .tc-ay1-kimlik-alt > button.tc-ay1-rota-seridi { display: grid; }
+  .tc-ay1-genis .tc-ay1-kimlik-alt .tc-ay1-rota-seridi li { display: grid; white-space: normal; }
+  .tc-ay1-genis .tc-ay1-kimlik-alt .tc-ay1-rota-seridi ol:not(:has(> li:nth-child(9))) li small { display: block; }
+}
+.tc-ay1-uyari-seridi {
+  --c: var(--hazard);
+  display: flex; align-items: center; gap: var(--b-2); inline-size: 100%; min-block-size: var(--dokunma); padding: 0 var(--b-3); min-width: 0;
+  border: var(--cizgi-ince) solid var(--c); border-radius: var(--yari-2); background: color-mix(in srgb, var(--c) 14%, var(--panel)); color: var(--ink);
+  font: inherit; font-weight: 700; text-align: start; cursor: pointer;
+}
+.tc-ay1-uyari-seridi svg { flex: none; color: var(--c); }
+.tc-ay1-uyari-seridi span { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tc-ay1-uyari-seridi b { flex: none; padding: 0 var(--b-2); border-radius: var(--yari-tam); background: var(--c); color: var(--on-sig); font-size: var(--yazi-xs); }
+.tc-ay1-uyari-seridi[data-durum="durdu"] { --c: var(--stop); }
+.tc-ay1-uyari-seridi[data-durum="durakli"] { --c: var(--hold); }
+.tc-ay1-uyari-seridi[data-durum="sirada"] { --c: var(--idle); }
+.tc-ay1-bilgi-cipi {
+  display: inline-flex; align-items: center; gap: var(--b-1); min-block-size: var(--dokunma); padding: 0 var(--b-3);
+  border: var(--cizgi-ince) solid var(--edge); border-radius: var(--yari-tam); background: var(--panel2); color: var(--ink); font: inherit; font-weight: 700; white-space: nowrap; cursor: pointer;
+}
+.tc-ay1-bilgi-cipi b { padding: 0 var(--b-2); border-radius: var(--yari-tam); background: var(--sig); color: var(--on-sig); font-size: var(--yazi-xs); }
+.tc-ay1-bilgiler { display: grid; gap: var(--b-3); min-width: 0; }
+.tc-ay1-is-satiri {
+  display: flex; align-items: center; gap: var(--b-2); min-block-size: var(--dokunma-ana); padding: var(--b-2) var(--b-3); min-width: 0; text-align: start;
+  border: var(--cizgi-ince) solid var(--edge); border-radius: var(--yari-3); background: var(--panel); color: var(--ink); font: inherit; cursor: pointer;
+}
+.tc-ay1-is-satiri > span { display: grid; flex: 1 1 auto; min-width: 0; }
+.tc-ay1-is-satiri .tc-ay1-is-ozet-satir { font-family: var(--font-mono); font-size: var(--yazi-m); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tc-ay1-is-satiri > b { flex: none; color: var(--muted); font-size: var(--yazi-s); }
+/* Telefon ve dikey tablet: sayfa ekran boyundadır; üretim görünümü kaymaz, öteki görünümler (liste) kendi içinde kayar. Sayaç kalan boyu alır. */
+/* Kabuğun telefondaki alt menüsü (--tc-ay-alt) terminalin alt çubuğunun altında kalır: yükseklikten düşülür, çubuk payı o kadar azalır. */
+.tc-ay:has(.tc-ay1-dar) { min-block-size: calc(var(--tc-ay-vh, 100vh) - var(--tc-ay-alt, 0px)); }
+.tc-ay1-dar { box-sizing: border-box; display: flex; flex-direction: column; block-size: calc(var(--tc-ay-vh, 100vh) - var(--tc-ay-alt, 0px) - var(--b-4) * 2); overflow: hidden; }
+.tc-ay1-dar > .tc-ay1-mobil-ust { flex: none; }
+.tc-ay1-dar > .tc-ay1-gorunum { flex: 1 1 0; min-block-size: 0; overflow-y: auto; align-content: start; }
+.tc-ay1-dar .tc-ay1-uretim { block-size: 100%; min-block-size: 0; gap: var(--b-2); }
+.tc-ay1-dar .tc-ay1-uretim > * { flex: none; }
+.tc-ay1-dar .tc-ay1-kimlik-alt > button.tc-ay1-rota-seridi { display: grid; gap: var(--b-1); }
+.tc-ay1-dar .tc-ay1-uretim > .tc-ay1-sayac { flex: 1 1 0; min-block-size: 0; justify-content: center; gap: var(--b-2); container-type: size; }
+.tc-ay1-dar .tc-ay1-uretim .tc-ay1-kadran { flex: none; inline-size: min(100cqh - var(--dokunma) - var(--b-2), 100cqw - var(--dokunma-x20) * 2, var(--kadran-encok)); max-inline-size: none; margin-block-end: 0; }
+.tc-ay1-dar .tc-ay1-uretim .tc-ay1-kadran-yan { inset-block-start: auto; inset-block-end: 4%; }
+.tc-ay1-dar .tc-ay1-uretim .tc-ay1-kadran-sol { inset-inline-start: auto; inset-inline-end: calc(100% + var(--b-1)); text-align: end; }
+.tc-ay1-dar .tc-ay1-uretim .tc-ay1-tuslar { flex: none; grid-template-columns: repeat(auto-fit, minmax(0, 1fr)); }
+.tc-ay1-dar .tc-ay1-uretim .tc-ay1-tus { min-block-size: var(--dokunma); white-space: nowrap; }
+.tc-ay1-dar .tc-ay1-uretim .tc-orblar { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); align-items: stretch; gap: var(--b-2); }
+.tc-ay1-dar .tc-ay1-uretim .tc-orblar:empty { display: none; }
+.tc-ay1-dar .tc-ay1-uretim .tc-orb {
+  --s: var(--b-6);
+  display: flex; flex-direction: row; align-items: center; justify-content: center; gap: var(--b-2); min-block-size: var(--dokunma); padding: 0 var(--b-3);
+  border: var(--cizgi-ince) solid color-mix(in srgb, var(--c) 45%, transparent); border-radius: var(--yari-3); background: color-mix(in srgb, var(--c) 10%, var(--panel-solid));
+}
+.tc-ay1-dar .tc-ay1-uretim .tc-orb :is(.tc-orb-etiket, .tc-orb-ipucu) { margin: 0; white-space: nowrap; }
+.tc-ay1-dar > .tc-ay1-gorunum:has(> .tc-ay1-uretim) { grid-template-rows: minmax(0, 1fr); overflow: hidden; }
+.tc-ay1-kimlik-alt .tc-ay1-rota-seridi li em { display: none; }
+.tc-ay1-rota-seridi li em { font-style: normal; }
+@media (min-height: 900px) { .tc-ay1-genis .tc-ay1-kimlik-alt .tc-ay1-rota-seridi li em { display: inline; } }
+/* Telefonda Bilgiler yalnız simge ve sayı: rota şeridi OP numaralarıyla sığsın. */
+.tc-ay1-dar .tc-ay1-bilgi-cipi { justify-content: center; min-inline-size: var(--dokunma); padding: 0 var(--b-2); }
+.tc-ay1-dar .tc-ay1-bilgi-cipi > span { display: none; }
+.tc-ay1-dar .tc-ay1-uretim .tc-ay1-tus { gap: var(--b-1); padding: 0 var(--b-2); font-size: var(--yazi-s); }
+/* Alt bölge sabittir; görünüm onun hemen üstünde biter (fazla boşluk sayacın boyundan gidiyordu). */
+.tc-ay1-dar { padding-block-end: max(0px, calc(var(--dokunma-ana) + var(--b-2) * 2 - var(--b-4) + var(--b-2) - var(--tc-ay-alt, 0px))); }
+.tc-ay1-dar[data-cubuk] { padding-block-end: max(0px, calc(var(--dokunma-ana) * 2 + var(--b-2) * 2 - var(--b-4) + var(--b-2) - var(--tc-ay-alt, 0px))); }
+/* Alçak telefonda kadran ~150 px altına inmesin (Kurgu Ek 2, E2-2): iş satırının başlığı düşer; uyarı varken rota şeridi yalnız başlık ("bu adım") kalır. */
+@media (max-height: 760px) {
+  .tc-ay1-dar .tc-ay1-is-satiri { min-block-size: var(--dokunma); padding-block: var(--b-1); }
+  .tc-ay1-dar .tc-ay1-is-satiri .tc-ay1-ust-yazi { display: none; }
+  .tc-ay1-dar .tc-ay1-uretim:has(> .tc-ay1-uyari-seridi) .tc-ay1-kimlik-alt .tc-ay1-rota-seridi ol { display: none; }
+}
+/* Genişte ince şerit tek sıradır: başlıkta "k/n", ekrandaki adımın dilimi durum adını taşır; öteki dilimler simge ve OP no. */
+.tc-ay1-genis .tc-ay1-kimlik-alt .tc-ay1-rota-ust b { display: none; }
+.tc-ay1-genis .tc-ay1-kimlik-alt .tc-ay1-rota-seridi ol { display: flex; }
+.tc-ay1-genis .tc-ay1-kimlik-alt .tc-ay1-rota-seridi ol { overflow: hidden; }
+.tc-ay1-genis .tc-ay1-kimlik-alt .tc-ay1-rota-seridi li { flex: 1 0 auto; overflow: visible; }
+.tc-ay1-genis .tc-ay1-kimlik-alt .tc-ay1-rota-seridi li[aria-current='step'] { flex: 0 1 auto; min-width: 0; overflow: hidden; }
+.tc-ay1-genis .tc-ay1-kimlik-alt .tc-ay1-rota-seridi ol:has(> li:nth-child(9)) li[aria-current='step'] small { display: none; }
+.tc-ay1-genis .tc-ay1-kimlik-alt .tc-ay1-rota-seridi li[aria-current='step'] small { display: inline; overflow: hidden; text-overflow: ellipsis; color: var(--ink); font-weight: 700; }
+@media (min-height: 900px) {
+  .tc-ay1-genis .tc-ay1-kimlik-alt .tc-ay1-rota-ust b { display: inline; }
+  .tc-ay1-genis .tc-ay1-kimlik-alt .tc-ay1-rota-seridi ol { display: grid; }
+  .tc-ay1-genis .tc-ay1-kimlik-alt .tc-ay1-rota-seridi li[aria-current='step'] small { display: block; color: var(--muted); font-weight: 400; }
+}
+/* Dar geniş düzende (1024 gibi) sağ sütun dardır: Bilgiler yalnız simge ve sayı, bu adımın dilimi de yalnız simge ve OP no; alçak ekranda
+   sahnenin boşlukları daralır ki uyarı şeridiyle de sol sütun kaymasın. */
+.tc-ay1-yer [data-kisa] { display: none; }
+/* Arayüz K5: sağ sütun darken (1024) rota şeridi telefondaki biçimdedir: başlıkta "k/n · Bu adım", altında eşit dilimler. */
+@media (max-width: 1199px) {
+  .tc-ay1-genis .tc-ay1-kimlik-alt .tc-ay1-bilgi-cipi > span { display: none; }
+  .tc-ay1-genis .tc-ay1-kimlik-alt > button.tc-ay1-rota-seridi { display: grid; gap: var(--b-1); }
+  .tc-ay1-genis .tc-ay1-kimlik-alt .tc-ay1-rota-ust b { display: inline; }
+  .tc-ay1-genis .tc-ay1-kimlik-alt .tc-ay1-rota-seridi ol { display: grid; }
+  .tc-ay1-genis .tc-ay1-kimlik-alt .tc-ay1-rota-seridi li { min-width: 0; }
+  .tc-ay1-genis .tc-ay1-kimlik-alt .tc-ay1-rota-seridi li[aria-current='step'] small { display: none; }
+  .tc-ay1-yer [data-uzun] { display: none; }
+  .tc-ay1-yer [data-kisa] { display: inline; }
+}
+@media (max-height: 800px) {
+  .tc-ay1-genis .tc-ay1-sahne { gap: var(--b-2); padding-block: var(--b-2); }
+}
+/* Uyarıdaki makine kalemi kısalmaz; yer gerekirse istasyon adı kısalır. */
+/* N25: kabuğun üst çubuğundaki şerit de aynı kuralla: "Makine yok" ve istasyon kodu tam kalır, istasyon adı kısalır; 1280 altında ad ve Çağrı yazısı yer açmak için gizlenir (düğmenin adı aria-label'da). */
+:is(.tc-ay1-genis, .tc-ay1-kabukta) .tc-ay1-yer[data-uyari] { flex: none; }
+:is(.tc-ay1-genis, .tc-ay1-kabukta) .tc-ay1-yer[data-uyari] b { overflow: visible; }
+.tc-ay1-kabukta .tc-ay1-yer b:has(> .tc-ay1-yer-kod) { display: flex; column-gap: var(--b-1); min-width: 0; }
+.tc-ay1-kabukta .tc-ay1-yer-kod { flex: none; }
+.tc-ay1-kabukta .tc-ay1-yer b:has(> .tc-ay1-yer-kod) > small { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+@media (max-width: 1279px) {
+  .tc-ay1-kabukta .tc-ay1-yer b > small { display: none; }
+  .tc-ay1-kabukta .tc-ay1-yer:has(.tc-ay1-yer-kod) { flex: none; }
+  .tc-ay1-kabukta .tc-ay1-cagri-yazi { display: none; }
+  .tc-ay1-kabukta > .tc-ay1-ust { gap: var(--b-1); }
+  .tc-ay1-kabukta .tc-ay1-yer { padding-inline: var(--b-2); gap: var(--b-1); }
+}
+
+/* 3136 a: işin durumu renk, simge ve kelimeyle bir bakışta; terminalin en üstünde rota, rotanın bu adımında durum ve süre. */
+.tc-ay1-ds-unlem { display: inline-grid; place-items: center; inline-size: var(--b-5); block-size: var(--b-5); border-radius: var(--yari-tam); background: var(--hold); color: var(--on-hazard); font-style: normal; }
+/* Rota yokken (adım listesi okunamadı, işin önizlemesi) rotanın yerinde tam genişlik durum şeridi. */
+.tc-ay1-ds {
+
+  display: flex; align-items: center; gap: var(--b-3); min-width: 0; min-block-size: var(--dokunma-ana); padding: var(--b-2) var(--b-3);
+  border: var(--cizgi) solid var(--sig); border-radius: var(--yari-3); background: color-mix(in srgb, var(--sig) 24%, var(--panel)); color: var(--ink);
+}
+.tc-ay1-ds-durum { display: inline-flex; align-items: center; gap: var(--b-2); min-width: 0; flex: 1 1 auto; }
+.tc-ay1-ds-durum > svg { color: var(--sig-yazi); flex: none; }
+.tc-ay1-ds-durum b { font-size: var(--yazi-xl); font-weight: 900; letter-spacing: .02em; text-transform: uppercase; white-space: nowrap; }
+.tc-ay1-ds-durum small { font-size: var(--yazi-m); font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tc-ay1-ds-adim { font-size: var(--yazi-m); font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tc-ay1-ds-adet { display: grid; justify-items: end; line-height: 1.1; flex: none; }
+.tc-ay1-ds-adet b { font-size: var(--yazi-xl); font-variant-numeric: tabular-nums; }
+.tc-ay1-ds-adet small { font-size: var(--yazi-xs); color: var(--muted); }
+.tc-ay1-dar .tc-ay1-ds { gap: var(--b-2); padding: var(--b-1) var(--b-2); min-block-size: var(--dokunma); }
+.tc-ay1-dar .tc-ay1-ds-durum b { font-size: var(--yazi-l); }
+.tc-ay1-ds-adim [data-kisa] { display: none; }
+.tc-ay1-dar .tc-ay1-ds-adim { flex: none; font-size: var(--yazi-s); }
+.tc-ay1-dar .tc-ay1-ds-adim [data-uzun] { display: none; }
+.tc-ay1-dar .tc-ay1-ds-adim [data-kisa] { display: inline; }
+.tc-ay1-dar .tc-ay1-ds-durum .tc-ay1-mono { font-size: var(--yazi-s); }
+.tc-ay1-dar .tc-ay1-ds-adet b { font-size: var(--yazi-l); }
+/* Kadranın içindeki "İyi parça" ile üstteki durum tekrar olur: kadran sayıda kalır. */
+.tc-ay1 .tc-ay1-kadran-cekirdek .tc-ay1-ust-yazi { display: none; }
+/* Anlık durum (rotada bu adımın kartında ya da başlığında): simge, kelime, süre. */
+.tc-ay1-kd { display: inline-flex; align-items: center; justify-content: center; gap: var(--b-1); color: var(--sig-yazi); font-size: var(--yazi-s); font-weight: 900; letter-spacing: .04em; text-transform: uppercase; white-space: nowrap; }
+.tc-ay1-kd .tc-ay1-mono { color: var(--muted); font-weight: 700; letter-spacing: 0; }
+/* Alçak telefonda iş kartındaki küçük rota şeridi yalnız başlık kalır. */
+@media (max-height: 700px) {
+  .tc-ay1-dar .tc-ay1-kimlik-alt .tc-ay1-rota-seridi ol { display: none; }
+}
+/* Durum rotada (ya da durum şeridinde) yazılır: telefonun üst kutusundaki durum satırı tekrar olur, kutu iki satıra iner. */
+.tc-ay1-dar .tc-ay1-mobil-ust .tc-ay1-lambali { display: none; }
+.tc-ay1 :is(.tc-ay1-ds, .tc-ay1-kd) .tc-ay1-mono:not([title='Bu durumda geçen süre']) { display: none; }
+/* Alçak telefon (640): gösterge kaybolmasın; rota şeridi yalnız başlık ("1/6 · Bu adım"), Şimdi kartı tek satır (numune ayrıntısı kartın penceresinde). */
+.tc-ay1-is-baslik { display: flex; flex-wrap: wrap; gap: var(--b-2); min-width: 0; }
+.tc-ay1-is-baslik > .tc-ay1-is-satiri { flex: 1 1 0; min-width: 0; }
+.tc-ay1-is-baslik > .tc-ay1-kimlik-alt { flex: 1 1 100%; }
+@media (max-height: 700px) {
+  .tc-ay1-dar .tc-ay1-kimlik-alt .tc-ay1-rota-seridi { display: none; }
+  .tc-ay1-dar .tc-ay1-is-baslik > .tc-ay1-kimlik-alt { flex: none; }
+  .tc-ay1-dar .tc-ay1-mobil-ust .tc-ay1-istasyon { display: flex; flex-wrap: nowrap; align-items: center; gap: var(--b-2); min-block-size: var(--dokunma); }
+  .tc-ay1-dar .tc-ay1-simdi :is(.tc-ay1-gorev-metin > small, .tc-ay1-gorev-metin > .tc-ay1-ust-yazi, .tc-ay1-numune-serit) { display: none; }
+}
+.tc-ay1-ds > button.tc-ay1-ds-unlem { inline-size: var(--dokunma); block-size: var(--dokunma); border: 0; cursor: pointer; flex: none; }
+@media (max-height: 760px) {
+  .tc-ay1-dar .tc-ay1-uretim > .tc-ay1-uyari-seridi { display: none; }
+}
+.tc-ay1-kabukta .tc-ay1-lambali { display: none; }
+/* Kabuğun sol menüsüyle üst şerit 1440 altında dardır: makine kalemi kısa biçimde ("Makine yok"). */
+@media (max-width: 1439px) {
+  .tc-ay1-kabukta .tc-ay1-yer [data-uzun] { display: none; }
+  .tc-ay1-kabukta .tc-ay1-yer [data-kisa] { display: inline; }
+}
+/* Test N2: genişte sahnenin içi 800 boyda birkaç piksel taşıyordu (sol sütun kayıyordu); kadran sınırı bir aralık payı daha düşer. */
+.tc-ay1-genis .tc-ay1-kadran { --kadran-sinir: clamp(var(--kadran-enaz), calc(var(--tc-ay-vh, 100vh) - var(--kadran-dusey-pay) - var(--b-2)), var(--kadran-encok)); }
+/* Alçak telefonda üst kutu tek satır: istasyon kodu tam, makine uyarısı simgede; Şimdi kartı tek satır. */
+@media (max-height: 700px) {
+  .tc-ay1-dar .tc-ay1-mobil-ust .tc-ay1-istasyon b { flex: none; }
+  .tc-ay1-dar .tc-ay1-mobil-ust .tc-ay1-istasyon small { min-inline-size: 0; overflow: hidden; text-overflow: ellipsis; }
+  .tc-ay1-dar .tc-ay1-simdi > .tc-ay1-gorev { grid-template-columns: auto minmax(0, 1fr) auto auto auto; }
+  .tc-ay1-dar .tc-ay1-mobil-ust .tc-ay1-istasyon small[data-uyari] { font-size: 0; gap: 0; }
+}
+/* Dar kapta anlık durumun simgesi ve süresi düşer, kelime kalır. */
+@container (max-width: 130px) {
+  .tc-ay1-kd { font-size: var(--yazi-xs); letter-spacing: 0; }
+  .tc-ay1-kd > svg, .tc-ay1-kd .tc-ay1-mono { display: none; }
+}
+.tc-ay1-genis .tc-ay1-kadran { --kadran-sinir: clamp(calc(var(--kadran-enaz) * .75), calc(var(--tc-ay-vh, 100vh) - var(--kadran-dusey-pay) - var(--b-6) - var(--dokunma-ana)), var(--kadran-encok)); }
+/* Durum şeridi: durum kelimesinin yanında neden, süre ve bu adım; telefonda kelimenin altında ikinci satır. */
+.tc-ay1-ds-alt { display: inline-flex; align-items: center; gap: var(--b-2); min-width: 0; }
+.tc-ay1-ds-alt .tc-ay1-ds-adim { margin-inline-start: var(--b-2); }
+.tc-ay1-dar .tc-ay1-ds-durum { display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: var(--b-2); row-gap: 0; }
+.tc-ay1-dar .tc-ay1-ds-durum > svg { grid-row: 1 / 3; }
+.tc-ay1-dar .tc-ay1-ds-alt { gap: var(--b-1); font-size: var(--yazi-xs); }
+.tc-ay1-dar .tc-ay1-ds-alt :is(small, .tc-ay1-mono, .tc-ay1-ds-adim) { font-size: var(--yazi-xs); margin: 0; }
+.tc-ay1-dar .tc-ay1-ds-alt > * + *::before { content: '·'; margin-inline-end: var(--b-1); }
+/* Test N2: sahnenin içindeki ışık ve geçişler sol sütunu birkaç piksel kaydırıyordu; sahne kendi kenarında kırpar (gerçek taşmada sütun yine kayar). */
+.tc-ay1-genis .tc-ay1-sahne { overflow: clip; }
+/* Üstteki rota ya da şerit genişte bir satır alır: sağ sütunun sekme alanı kendi içinde kayar, sütunu taşırmaz. */
+.tc-ay1-genis .tc-ay1-sag > .tc-ay1-bolme { min-block-size: 0; }
+/* Arayüz K1: 1280 altında üst çubukta iki istasyon kutusu ve durum yan yana sığmıyor; üç lamba gizlenir, durum kelimesi ve süre kalır. */
+@media (max-width: 1279px) {
+  .tc-ay1-kabukta .tc-ay1-lambalar { display: none; }
+}
+/* Rota akışı terminalde (3136 a). Genişte rota ızgaranın üstünde: ızgara kalan boyu alır, kadran rota kadar küçülür. */
+.tc-ay1-genis:has(> .tc-ra) { display: flex; flex-direction: column; }
+.tc-ay1-genis:has(> .tc-ra) > * { flex: none; }
+.tc-ay1-genis:has(> .tc-ra) > .tc-ay1-izgara { flex: 1 1 0; min-block-size: 0; }
+.tc-ay1-genis:has(> .tc-ra) .tc-ay1-kadran { --kadran-sinir: clamp(calc(var(--kadran-enaz) * .6), calc(var(--tc-ay-vh, 100vh) - var(--kadran-dusey-pay) - var(--b-6) - var(--dokunma-ana) * 2.4), var(--kadran-encok)); }
+/* Telefonda: adlar gizlenir, OP, simge ve yüzde kalır. */
+.tc-ay1-dar .tc-ra { flex: none; gap: var(--b-1); padding: var(--b-1) var(--b-2); }
+.tc-ay1-dar .tc-ra-ust { font-size: var(--yazi-s); }
+.tc-ay1-dar .tc-ra .tc-ra-ad { display: none; }
+.tc-ay1-dar .tc-ra-dugum { inline-size: var(--b-5); block-size: var(--b-5); }
+.tc-ay1-dar .tc-ra-op { font-size: var(--yazi-xs); }
+.tc-ay1-dar .tc-ra-op em { display: none; }
+.tc-ay1-dar .tc-ra-yuzde small { font-size: var(--yazi-xs); }
+.tc-ay1-dar .tc-ra li { grid-template-columns: minmax(0, 1fr); justify-items: center; padding: var(--b-1); gap: 0; }
+.tc-ay1-dar .tc-ra .tc-ra-dugum { grid-row: auto; }
+.tc-ay1-dar .tc-ra .tc-ra-yuzde small { display: none; }
+.tc-ay1-dar .tc-ra .tc-ra-yuzde { inline-size: 100%; }
+.tc-ay1-dar .tc-ay1-uretim > .tc-ra { flex: none; }
+.tc-ay1-genis:has(> .tc-ra) .tc-ay1-sahne > .tc-ay1-sayac { min-block-size: 0; }
+.tc-ay1-uretim:has(> .tc-ra) .tc-ay1-is-baslik > .tc-ay1-kimlik-alt { flex: none; }
+/* Genişte tek sıra: başlık (Rota, biten adım, toplam yüzde) solda dikey, adımlar sağda; durum adı kartta yazmaz (simge ve renkte, üstüne gelince yazar). */
+.tc-ay1-genis .tc-ra { grid-template-columns: calc(var(--dokunma-ana) * 2.6) minmax(0, 1fr); align-items: center; column-gap: var(--b-3); }
+.tc-ay1-genis .tc-ra .tc-ra-ust { flex-wrap: wrap; column-gap: var(--b-1); row-gap: var(--b-1); }
+.tc-ay1-genis .tc-ra .tc-ra-ust > span:not(.tc-ra-toplam) { font-size: var(--yazi-s); }
+.tc-ay1-genis .tc-ra .tc-ra-toplam { flex: 1 1 100%; }
+.tc-ay1-genis .tc-ra .tc-ra-toplam { margin: 0; }
+.tc-ay1-genis .tc-ra li { grid-template-columns: auto minmax(0, 1fr); padding: var(--b-1) var(--b-2); }
+.tc-ay1-genis .tc-ra .tc-ra-dugum { grid-row: 1 / 3; }
+.tc-ay1-genis .tc-ra .tc-ra-op { grid-column: 2; }
+.tc-ay1-genis .tc-ra .tc-ra-ad { grid-column: 2; font-size: var(--yazi-s); }
+.tc-ay1-genis .tc-ra .tc-ra-yuzde { grid-column: 1 / -1; }
+/* 1024 tablette: sahne aralıkları daralır, Şimdi kartı tek satır (ayrıntı kartın penceresinde); adım kartı simge, OP ve çubuk. */
+@media (max-width: 1279px) {
+  .tc-ay1-genis:has(> .tc-ra) .tc-ay1-sahne { gap: var(--b-2); padding-block: var(--b-2); }
+  .tc-ay1-genis:has(> .tc-ra) .tc-ay1-simdi :is(.tc-ay1-gorev-metin > small, .tc-ay1-gorev-metin > .tc-ay1-ust-yazi, .tc-ay1-numune-serit) { display: none; }
+}
+@media (max-width: 1279px) {
+  .tc-ay1-genis .tc-ra li { grid-template-columns: auto auto minmax(0, 1fr); align-items: center; }
+  .tc-ay1-genis .tc-ra :is(.tc-ra-dugum, .tc-ra-op, .tc-ra-yuzde) { grid-row: auto; grid-column: auto; }
+  .tc-ay1-genis .tc-ra .tc-ra-ad { display: none; }
+  .tc-ay1-genis .tc-ra .tc-ra-dugum { inline-size: var(--b-5); block-size: var(--b-5); }
+  .tc-ay1-genis .tc-ra .tc-ra-op em { display: none; }
+  .tc-ay1-genis .tc-ra .tc-ra-yuzde small { display: none; }
+}
+@media (max-width: 1279px) {
+  .tc-ay1-genis .tc-ra { padding-block: var(--b-1); }
+}
+/* Alçak telefon (700 altı): rota tek satır; solda "Rota 1/6 %28", sağda adımların simgeleri (renk durum, dolu daire bu adım). OP ve yüzdeler Adımlar'da. */
+@media (max-height: 700px) {
+  .tc-ay1-dar .tc-ra { grid-template-columns: auto minmax(0, 1fr); align-items: center; column-gap: var(--b-2); }
+  .tc-ay1-dar .tc-ra-ust > span:not(.tc-ra-toplam) { display: none; }
+  .tc-ay1-dar .tc-ra-toplam { margin: 0; flex: none; }
+  .tc-ay1-dar .tc-ra-toplam progress { display: none; }
+  .tc-ay1-dar .tc-ra ol { display: grid; grid-template-columns: none; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: var(--b-1); }
+  .tc-ay1-dar .tc-ra li { display: grid; justify-items: center; padding: var(--b-1); border: 0; background: none; outline: 0; }
+  .tc-ay1-dar .tc-ra li > :not(.tc-ra-dugum) { display: none; }
+  .tc-ay1-dar .tc-ra li[aria-current='step'] { background: none; outline: 0; }
+}
+@media (max-height: 760px) {
+  .tc-ay1-dar .tc-ay1-uretim:has(> .tc-ra) > .tc-ay1-uyari-seridi { display: none; }
+}
+/* Genişte 900 boy altında: uyarı satırı sahnede yer almaz; uyarı iş kartındaki çipte (dokununca Bilgiler). */
+@media (max-height: 899px) {
+  .tc-ay1-genis:has(> .tc-ra) .tc-ay1-sahne > .tc-ay1-uyari-seridi { display: none; }
+}
+/* İşin anlık durumu ve süresi rotadaki bu adımın kartında (telefonda rota başlığında). */
+.tc-ra .tc-ay1-kd { justify-content: flex-start; font-size: var(--yazi-m); }
+.tc-ra .tc-ay1-kd svg { inline-size: var(--b-4); block-size: var(--b-4); }
+.tc-ay1-genis .tc-ra-ust > .tc-ra-canli { display: none; }
+.tc-ay1-genis .tc-ra li > .tc-ra-canli { grid-column: 1 / -1; }
+.tc-ay1-genis .tc-ra li[data-canli] { grid-column: span 2; }
+.tc-ay1-dar .tc-ra li > .tc-ra-canli { display: none; }
+.tc-ay1-dar .tc-ra-ust > .tc-ra-canli { flex: none; margin-inline-start: var(--b-1); }
+.tc-ay1-dar .tc-ra-ust:has(> .tc-ra-canli) > span:not(.tc-ra-toplam, .tc-ra-canli) { display: none; }
+.tc-ay1-dar .tc-ra .tc-ay1-kd { font-size: var(--yazi-s); }
+@media (max-height: 700px) {
+  .tc-ay1-dar .tc-ra-ust > span.tc-ra-canli { display: flex; }
+  .tc-ay1-dar .tc-ra:has(.tc-ra-canli) { grid-template-columns: minmax(0, 1fr); row-gap: var(--b-1); }
+}
+/* Tablette adım kartında yer yok: anlık durum ve süre soldaki rota başlığına geçer, "1/6 adım bitti" ve çubuk yerine yalnız toplam yüzde kalır. */
+@media (max-width: 1279px) {
+  .tc-ay1-genis .tc-ra li > .tc-ra-canli { display: none; }
+  .tc-ay1-genis .tc-ra li[data-canli] { grid-column: auto; }
+  .tc-ay1-genis .tc-ra-ust > span.tc-ra-canli { display: flex; flex: 1 1 100%; }
+  .tc-ay1-genis .tc-ra-ust:has(> .tc-ra-canli) > span:not(.tc-ra-toplam, .tc-ra-canli) { display: none; }
+  .tc-ay1-genis .tc-ra .tc-ay1-kd { font-size: var(--yazi-s); letter-spacing: 0; }
+  .tc-ay1-genis .tc-ra-ust:has(> .tc-ra-canli) > .tc-ra-toplam { flex: none; }
+  .tc-ay1-genis .tc-ra-ust:has(> .tc-ra-canli) > .tc-ra-toplam progress { display: none; }
+  .tc-ay1-genis .tc-ra:has(.tc-ra-canli) { grid-template-columns: auto minmax(0, 1fr); }
+}
+/* Bilgisayarda adım adı okunur kalsın: kısaltma yerine en çok iki satır. */
+@media (min-width: 1280px) {
+  .tc-ay1-genis .tc-ra .tc-ra-ad { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; white-space: normal; overflow-wrap: anywhere; }
+}
+/* Dokuz ve daha çok adımda kartlar sıkışır: bilgisayarda kart dikey (düğüm, OP, çubuk), ad yalnız üstüne gelince; telefonda yalnız düğüm ve çubuk.
+   Taşan yazı kartın dışına çıkmaz, yan kart üstüne binmez. */
+.tc-ra:has(li:nth-child(9)) li { overflow: hidden; }
+.tc-ay1-genis .tc-ra:has(li:nth-child(9)) li { grid-template-columns: minmax(0, 1fr); justify-items: center; padding-inline: var(--b-1); }
+.tc-ay1-genis .tc-ra:has(li:nth-child(9)) :is(.tc-ra-dugum, .tc-ra-op, .tc-ra-ad, .tc-ra-yuzde) { grid-row: auto; grid-column: auto; }
+.tc-ay1-genis .tc-ra:has(li:nth-child(9)) :is(.tc-ra-ad, .tc-ra-op em, .tc-ra-yuzde small) { display: none; }
+.tc-ay1-genis .tc-ra:has(li:nth-child(9)) .tc-ra-op { font-size: var(--yazi-xs); }
+.tc-ay1-genis .tc-ra:has(li:nth-child(9)) .tc-ra-yuzde { inline-size: 100%; }
+.tc-ay1-genis .tc-ra:has(li:nth-child(9)) ol { gap: var(--b-1); }
+@media (max-width: 1279px) {
+  .tc-ay1-genis .tc-ra:has(li:nth-child(9)) li { padding-block: 0 var(--b-1); }
+  .tc-ay1-genis .tc-ra:has(li:nth-child(9)) .tc-ra-op { line-height: 1; }
+}
+.tc-ay1-dar .tc-ra:has(li:nth-child(9)) .tc-ra-op { display: none; }
+.tc-ay1-dar .tc-ra:has(li:nth-child(9)) li { padding-inline: 0; }
+.tc-ay1-dar .tc-ra:has(li:nth-child(9)) .tc-ra-dugum { inline-size: 100%; max-inline-size: var(--b-5); block-size: auto; aspect-ratio: 1; }
+/* Sıkışık kartta anlık durum sığmaz: bilgisayarda da 1280 altındaki gibi rota başlığına geçer. */
+.tc-ay1-genis .tc-ra:has(li:nth-child(9)) li > .tc-ra-canli { display: none; }
+.tc-ay1-genis .tc-ra:has(li:nth-child(9)) li[data-canli] { grid-column: auto; }
+.tc-ay1-genis .tc-ra:has(li:nth-child(9)) .tc-ra-ust > span.tc-ra-canli { display: flex; flex: 1 1 100%; }
+.tc-ay1-genis .tc-ra:has(li:nth-child(9)) .tc-ra-ust:has(> .tc-ra-canli) > span:not(.tc-ra-toplam, .tc-ra-canli) { display: none; }
+.tc-ay1-genis .tc-ra:has(li:nth-child(9)) .tc-ra-ust:has(> .tc-ra-canli) > .tc-ra-toplam { flex: none; }
+.tc-ay1-genis .tc-ra:has(li:nth-child(9)) .tc-ra-ust:has(> .tc-ra-canli) > .tc-ra-toplam progress { display: none; }
+.tc-ay1-genis .tc-ra:has(li:nth-child(9)) .tc-ay1-kd { font-size: var(--yazi-s); letter-spacing: 0; }
+.tc-ay1-genis .tc-ra:has(li:nth-child(9)):has(.tc-ra-canli) { grid-template-columns: auto minmax(0, 1fr); }
+/* Rota boy alınca teknik resim araçları kendi içinde kaymasın: araçlar arasız ve biraz alçak. */
+.tc-ay1-genis:has(> .tc-ra) .tc-ay1-resim .tc-ay5-araclar { gap: 0; }
+.tc-ay1-genis:has(> .tc-ra) .tc-ay1-resim .tc-ay5-arac { block-size: calc(var(--dokunma) - var(--b-1)); }
+.tc-ay1-genis:has(> .tc-ra) .tc-ay1-resim .tc-ay5-ayrac { display: none; }

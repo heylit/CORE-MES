@@ -83,7 +83,7 @@ describe('Sayaç kadranı kalan ve boş istasyon', () => {
     const tam = render(<DurumDugmeleri durum="queued" eylem={() => {}} erken={() => {}} />);
     expect(tam.queryByRole('button', { name: /Resim/ })).toBeTruthy();
     cleanup();
-    const genis = render(<DurumDugmeleri durum="queued" gizle="drawing" eylem={() => {}} erken={() => {}} />);
+    const genis = render(<DurumDugmeleri durum="queued" gizle={['drawing']} eylem={() => {}} erken={() => {}} />);
     expect(genis.queryByRole('button', { name: /Resim/ })).toBeNull();
     cleanup();
     const eylemler: string[] = [];
@@ -140,14 +140,14 @@ describe('664: sayaç kadranı, numune çizgisi ve iş başlığı', () => {
     expect(zamani.container.querySelector('.tc-ay1-numune-cizgi')?.hasAttribute('data-dolu')).toBe(true);
   });
   it('iş başlığı etiketli alanlar sırasıyla; boş alan "—"; geniş düzende emir no başlıktır', () => {
-    const o = is({ empty: false, no: 'UE-DENEME-7', part: 'Deneme parça', op: 'Op 10 · Tornalama', pkg: { partNo: 'P-DENEME', rev: 'B', proje: 'Deneme proje' } as never });
+    const o = is({ empty: false, no: 'UE-DENEME-7', part: 'Deneme parça', op: 'Op 10 · Tornalama', target: 1200, pkg: { partNo: 'P-DENEME', rev: 'B', proje: 'Deneme proje' } as never });
     const { container, getByRole } = render(<IsAlanlari is={o} baslik />);
     const alanlar = Array.from(container.querySelectorAll('.tc-ay1-is-alan')).map((a) => a.textContent);
-    expect(alanlar).toEqual(['ProjeDeneme proje', 'Üretim emriUE-DENEME-7', 'OpOp 10 · Tornalama', 'Parça noP-DENEME', 'Parça adıDeneme parça', 'RevB']);
+    expect(alanlar).toEqual(['ProjeDeneme proje', 'Üretim emriUE-DENEME-7', 'OpOp 10 · Tornalama', 'MalzemeP-DENEME', 'Malzeme adıDeneme parça', 'RevB', 'Hedef1.200 adet']);
     expect(getByRole('heading', { name: 'UE-DENEME-7' })).toBeTruthy();
     cleanup();
     const bos = render(<IsAlanlari is={is({ empty: false, no: 'UE-8', part: 'X', op: '', pkg: { partNo: '', rev: '' } as never })} />);
-    expect(Array.from(bos.container.querySelectorAll('.tc-ay1-is-alan b')).map((b) => b.textContent)).toEqual(['—', 'UE-8', '—', '—', 'X', '—']);
+    expect(Array.from(bos.container.querySelectorAll('.tc-ay1-is-alan b')).map((b) => b.textContent)).toEqual(['—', 'UE-8', '—', '—', 'X', '—', '10 adet']);
     expect(bos.queryByRole('heading')).toBeNull();
     cleanup();
     const issiz = render(<IsAlanlari is={is({})} baslik />);
@@ -157,16 +157,16 @@ describe('664: sayaç kadranı, numune çizgisi ve iş başlığı', () => {
 });
 
 describe('685: telefonda iş özeti', () => {
-  it('kapalıyken emir · op · parça no tek satır; dokununca bütün alanlar açılır', () => {
+  it('kapalıyken emir · op · malzeme kodu · rev tek satır; dokununca bütün alanlar açılır', () => {
     let acik = false;
     const o = is({ empty: false, no: 'UE-DENEME-9', part: 'Deneme parça', op: 'Op 20', pkg: { partNo: 'P-DENEME', rev: 'C', proje: 'Deneme proje' } as never });
     const { container, rerender, getByRole } = render(<IsOzeti is={o} acik={acik} degistir={() => { acik = !acik; }} />);
-    expect(container.querySelector('.tc-ay1-is-ozet-satir')?.textContent).toBe('UE-DENEME-9 · Op 20 · P-DENEME');
+    expect(container.querySelector('.tc-ay1-is-ozet-satir')?.textContent).toBe('UE-DENEME-9 · Op 20 · P-DENEME · Rev C');
     expect(container.querySelector('.tc-ay1-is-alan')).toBeNull();
     fireEvent.click(getByRole('button', { expanded: false }));
     rerender(<IsOzeti is={o} acik={acik} degistir={() => { acik = !acik; }} />);
     expect(getByRole('button', { expanded: true })).toBeTruthy();
-    expect(container.querySelectorAll('.tc-ay1-is-alan').length).toBe(6);
+    expect(container.querySelectorAll('.tc-ay1-is-alan').length).toBe(7);
   });
   it('işsiz istasyonda açılıp kapanmaz', () => {
     const { container } = render(<IsOzeti is={bosIs({ l: 'Boş' })} acik={false} degistir={() => {}} />);

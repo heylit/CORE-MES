@@ -364,17 +364,21 @@ export const EYLEM_DURUMU: Readonly<Record<string, 'running' | 'paused' | 'setup
 export const URETIM_EYLEMLERI: readonly string[] = ['start', 'resume', 'restart', 'pause', 'setup', 'stop', 'finish'];
 
 /* ── sekmeler (operator.ts tabs, MV) ── */
-export interface EkranSekmesi { id: 'st' | 'hz' | 'draw' | 'steps' | 'ana' | 'ozet' | 'prod' | 'queue'; l: string; simge: SimgeAdi; n?: number | null }
+export interface EkranSekmesi { id: 'st' | 'hz' | 'draw' | 'steps' | 'ana' | 'ozet' | 'prod' | 'queue' | 'isler'; l: string; simge: SimgeAdi; n?: number | null }
 // 1354 a (kart #1358): Telefon profilinde sunucu çizim dosyası vermez; Resim sekmesi çizimsiz ölçü listesine döner. Sekme dosyaya değil
 // kontrol planına bağlıdır: dosyası olup planı boş işte telefonda açılacak bir şey yoktur.
 const resimSekmesiVar = (o: Is, panelVar: boolean, telefon: boolean): boolean => (telefon
   ? !!(o.pkg && o.pkg.plan.length)
   : !panelVar || !!(o.pkg && o.pkg.files && o.pkg.files.length));
-export function isSekmeleri(o: Is, panelVar: boolean, panelSekmesi: string, panelSimgesi: SimgeAdi, D: KontrolTakvimi, telefon = false): EkranSekmesi[] {
+export function isSekmeleri(
+  o: Is, panelVar: boolean, panelSekmesi: string, panelSimgesi: SimgeAdi, D: KontrolTakvimi, telefon = false, isSayisi: number | null = null,
+): EkranSekmesi[] {
   const l: EkranSekmesi[] = [];
   if (panelVar) l.push({ id: 'st', l: panelSekmesi, simge: panelSimgesi });
   if (resimSekmesiVar(o, panelVar, telefon)) l.push({ id: 'draw', l: telefon ? 'Ölçüler' : panelVar ? 'Resim' : 'Teknik Resim', simge: 'ruler', n: D.due.length || null });
   l.push({ id: 'steps', l: 'Adımlar', simge: 'list', n: o.pkg ? o.pkg.steps.filter((x) => x.r).length : null });
+  // 3126: istasyonun işleri sağ sütunda da liste; sıradaki ve sonraki işler buradan seçilir. Varsayılan sekme değişmez.
+  if (isSayisi !== null) l.push({ id: 'isler', l: 'İşler', simge: 'layers', n: isSayisi || null });
   l.push({ id: 'ana', l: 'Analiz', simge: 'chart' });
   return l;
 }

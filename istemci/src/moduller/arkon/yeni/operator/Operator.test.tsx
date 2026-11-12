@@ -449,8 +449,9 @@ describe('A1 Üretim Terminali hazırlık listesi (2079-1 b)', () => {
 
   it('eksik maddede çip ve sekme sayıyı gösterir; liste bu iş emrinin satırıdır; Başlat açık kalır; Sorumluya haber ver çağrı açar', async () => {
     const { istekler, okunan } = kur(cevap('eksik'));
-    const d = await ekran();
-    const cip = await within(d).findByRole('button', { name: 'Hazırlık listesi: Hazırlık · 1 eksik' }, { timeout: 10000 });
+    await ekran();
+    // 3126 Ek 2: eksik hazırlık sayacın üstündeki uyarı şerididir.
+    const cip = await screen.findByRole('button', { name: /^Hazırlık listesi: Hazırlık · 1 eksik/ }, { timeout: 10000 });
     expect(okunan.length).toBeGreaterThan(0);
     expect(within(screen.getByRole('group', { name: 'İş durumu' })).getByRole('button', { name: /Başlat/ }).getAttribute('aria-disabled')).not.toBe('true');
     fireEvent.click(cip);
@@ -470,11 +471,54 @@ describe('A1 Üretim Terminali hazırlık listesi (2079-1 b)', () => {
   it('muaf madde kişi, zaman ve gerekçeyle görünür; çip muafiyetle hazır der', async () => {
     kur(cevap('muaf', [{ madde: 'cnc', isEmriId: 90, kisiId: 3, kisiAdi: 'Deneme Müdür', gerekce: 'Program tezgâhta doğrulandı.', zaman: '2026-11-04T08:40:00.000Z' }]));
     const d = await ekran();
-    fireEvent.click(await within(d).findByRole('button', { name: 'Hazırlık listesi: Hazır · muafiyetle' }, { timeout: 10000 }));
+    // 3126 Ek 2: eksiksiz hazırlık uyarı değildir; çip Bilgiler penceresindedir.
+    fireEvent.click(await within(d).findByRole('button', { name: /^Bilgiler/ }, { timeout: 10000 }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Hazırlık listesi: Hazır · muafiyetle' }, { timeout: 10000 }));
     const l = await screen.findByRole('region', { name: 'Hazırlık' });
     expect(within(l).getByText(/Müdür muaf tuttu · Deneme Müdür/)).toBeTruthy();
     expect(within(l).getByText(/Gerekçe: Program tezgâhta doğrulandı\./)).toBeTruthy();
     expect(within(l).queryByRole('button', { name: /Sorumluya haber ver/ })).toBeNull();
+  }, 40000);
+});
+
+describe('A1 Üretim Terminali rota akışı (3136 a)', () => {
+  const ADIMLAR = { emirId: 8, adimlar: [
+    { isEmriId: 79, opNo: 10, ad: 'Testere kesim', statu: 'bitti', elle: false, yuzde: 100, nedenler: [], tedarik: [] },
+    { isEmriId: 80, opNo: 20, ad: 'CNC torna', statu: 'uretimde', elle: false, yuzde: 40, nedenler: [], tedarik: [] },
+  ] };
+  const kur = (adimCevabi: () => Response) => {
+    const tmi = { ...PAKET, id: 'tmi-ie-80', no: 'UE-DENEME-8', tmi: { emirId: 8, isEmriId: 80 } };
+    sunucuKur(ISTASYONLU, { belgeler: { pkgs: [{ kimlik: tmi.id, surum: 1, govde: tmi }], kv: [{ kimlik: 'plant', surum: 1, govde: { v: TESIS } }] } });
+    const asil = globalThis.fetch;
+    vi.stubGlobal('fetch', async (adres: string, istek?: RequestInit) => (String(adres).includes('/adimli-emirler/8/adim-durumu/terminal') ? adimCevabi() : asil(adres, istek)));
+  };
+
+  it('durum çubuğunun yerinde rota: bu adım işaretli; karta dokununca Adımlar açılır', async () => {
+    kur(() => new Response(JSON.stringify(ADIMLAR), { status: 200 }));
+    arkonAc('/uretim-terminali');
+    await ekran();
+    const rota = await screen.findByRole('region', { name: 'Rota: 1/2 adım bitti, toplam yüzde 70' }, { timeout: 10000 });
+    const kartlar = within(rota).getAllByRole('listitem');
+    expect(kartlar.map((x) => x.getAttribute('aria-current'))).toEqual([null, 'step']);
+    expect(screen.queryByRole('region', { name: 'Emrin adımları' })).toBeNull();
+    // jsdom kaydırmayı bilmez; açılan listede bu adıma kaydırma çağrısı düşmesin.
+    const kaydir = vi.fn();
+    Object.defineProperty(Element.prototype, 'scrollIntoView', { configurable: true, value: kaydir });
+    try {
+      fireEvent.click(kartlar[0]!);
+      expect(await screen.findByRole('region', { name: 'Emrin adımları' })).toBeTruthy();
+      await waitFor(() => { expect(kaydir).toHaveBeenCalled(); });
+    } finally {
+      delete (Element.prototype as { scrollIntoView?: unknown }).scrollIntoView;
+    }
+  }, 40000);
+
+  it('adımlar okunamazsa rota yerine durum şeridi kalır ve okunamadığı yazar', async () => {
+    kur(() => new Response(JSON.stringify({ hata: 'x' }), { status: 500 }));
+    arkonAc('/uretim-terminali');
+    await ekran();
+    expect(await screen.findByText('Rota adımları okunamadı', {}, { timeout: 10000 })).toBeTruthy();
+    expect(screen.queryByRole('region', { name: /^Rota:/ })).toBeNull();
   }, 40000);
 });
 
