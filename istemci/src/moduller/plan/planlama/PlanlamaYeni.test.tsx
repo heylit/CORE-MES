@@ -58,6 +58,20 @@ describe('PlanlamaYeni', () => {
     await waitFor(() => { expect(screen.getAllByRole('toolbar', { name: 'Plan çubuğu' })).toHaveLength(1); }, { timeout: 10000 });
   }, 20000);
 
+  it('3038: Kapasite tek menü maddesidir; eski Ek mesai, Fason, Ufuk ve Yıllık plan adresleri onun bölümünü açar, bölüm sekmeyle değişir', async () => {
+    expect(MENU.map((m) => m.anahtar)).toContain('kapasite');
+    for (const eski of ['mesaiplan', 'fasonplan', 'ufuk', 'yillik']) expect(MENU.map((m) => m.anahtar as string)).not.toContain(eski);
+    sunucuKur(YONETICI, [CALISMA_KAYDI]);
+    ac('/plan/mesaiplan');
+    await waitFor(() => { expect(screen.getByTestId('adres').textContent).toBe('/plan/kapasite'); }, { timeout: 10000 });
+    await waitFor(() => { expect(kap()?.getAttribute('data-gorunum')).toBe('mesaiplan'); }, { timeout: 10000 });
+    const sekmeler = await screen.findByRole('tablist', { name: 'Kapasite bölümleri' }, { timeout: 10000 });
+    fireEvent.click(within(sekmeler).getByRole('tab', { name: /Yük haritası/ }));
+    await waitFor(() => { expect(kap()?.getAttribute('data-gorunum')).toBe('ufuk'); });
+    fireEvent.click(within(sekmeler).getByRole('tab', { name: /Yıllık plan/ }));
+    await waitFor(() => { expect(kap()?.getAttribute('data-gorunum')).toBe('yillik'); });
+  }, 30000);
+
   it('bilinmeyen görünüm adresi kök görünüme döner', async () => {
     sunucuKur(YONETICI);
     ac('/plan/yok');

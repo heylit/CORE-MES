@@ -5,8 +5,8 @@ import { expect, test } from './ortak.ts';
 test.use({ hesap: 'ornek.yonetici' });
 
 // Şeridin son beş maddesi görünüm değil, ayrı sayfalardır: salt okunur raporlar (782, 1478, 2151, 1560) ve motor ayarları (811), menünün ikinci grubu.
-const GORUNUMLER = ['Planlama motoru', 'Planlama atölyesi', 'Siparişler', 'Maliyetler', 'Genel gider', 'Ek mesai planı', 'Fason planı',
-  'Malzeme satın alma planı', 'Terminler', 'Termin ve kâr', 'Yıllık plan', 'Ufuk', 'Sevkiyat', 'Veri sağlığı', 'Plan sağlığı', 'Planlama analizi', 'Malzeme ihtiyacı',
+const GORUNUMLER = ['Planlama motoru', 'Planlama atölyesi', 'Siparişler', 'Maliyetler', 'Genel gider', 'Kapasite',
+  'Malzeme satın alma planı', 'Terminler', 'Termin ve kâr', 'Sevkiyat', 'Veri sağlığı', 'Plan sağlığı', 'Planlama analizi', 'Malzeme ihtiyacı',
   'Motor ayarları'];
 
 test.describe('iskelet', () => {

@@ -3,8 +3,10 @@ import type { IkinciMenuTanimi } from '#paylasilan/sayfa-tanimi.ts';
 // Planlama plan modülünün sayfasıdır (658 b). Anahtar planlama görünümünün kimliğidir; eski `/recete-rota/<anahtar>` bağlantıları
 // Planlama'ya yönlenir (rotalar.tsx).
 export const PLANLAMA_ANAHTARLARI: readonly string[] = [
-  'plan', 'studio', 'kanban', 'ysiparis', 'maliyet', 'giderler', 'mesaiplan', 'fasonplan', 'malzplan', 'terminler', 'denge', 'yillik', 'ufuk', 'sevkiyat',
+  'plan', 'studio', 'kanban', 'ysiparis', 'maliyet', 'giderler', 'kapasite', 'mesaiplan', 'fasonplan', 'malzplan', 'terminler', 'denge', 'yillik', 'ufuk', 'sevkiyat',
 ];
+// Kapasite sayfasının bölümleridir (3038): menüde ayrı madde değiller, eski adresleri yine Planlama'ya yönlenir.
+export const KAPASITE_BOLUM_ANAHTARLARI: readonly string[] = ['mesaiplan', 'fasonplan', 'yillik', 'ufuk'];
 
 // Planlama sayfalarını görme işlemi; yönetici, müdür ve planlamadadır (195 a, 663 a).
 export const PLANLAMA_ISLEMI = 'plan.planlama-oku';

@@ -9,7 +9,7 @@ import { tekrarKorumaliGonder } from '../../../ortak/veri/istek-kimligi.ts';
 import { useOturum } from '../../../ortak/veri/oturum.ts';
 import { PLANLAMA_ISLEMI } from '../planlama-menusu.ts';
 import {
-  ACILIS, ACILIS_OLCEGI, KOK, altEkranAdresi, altEkranOku, BOS_SECIM, GORUNUM_KAYITLARI, gorunumAcik, gorunumAdresi, gorunumOku, PlanSeridi, studyoAdresi,
+  ACILIS, ACILIS_OLCEGI, KOK, altEkranAdresi, altEkranOku, BOS_SECIM, GORUNUM_KAYITLARI, gorunumAcik, gorunumAdresi, gorunumOku, kapasiteBolumuMu, kapasiteBolumuOku, menuGorunumu, PlanSeridi, studyoAdresi,
   studyoIstegiOku, TAHTA, type DonemOlcegi, type PlanlamaAltEkrani, type PlanlamaGorunumu, type PlanlamaOlcegi, type PlanlamaSecimi, type StudyoIstegi,
 } from './gorunumler.ts';
 import { CalismaYazici } from './kayit.ts';
@@ -76,7 +76,7 @@ function PlanlamaEkrani() {
     return y;
     // Yazıcı yalnız açılış okumasıyla yeniden kurulur; bildir ve kullanıcı nesnesi çizimler arasında değişebilir.
   }, [durum, yetki]);
-  sonGorunum.deger = gorunum;
+  sonGorunum.deger = gorunum === null ? null : menuGorunumu(gorunum);
   const calisma = useSyncExternalStore(
     yazici?.abone ?? bosAbone,
     () => yazici?.calisma ?? (durum.tur === 'hazir' ? durum.depo.calisma : null),
@@ -129,8 +129,12 @@ function PlanlamaEkrani() {
   if (durum.tur === 'yukleniyor' || yetki === null) return <div className="tc-py-durum"><DurumKutusu durum="yukleniyor" /></div>;
 
   if (gorunum === null) return <Navigate to={KOK} replace />;
+  // Eski Ek mesai, Fason, Ufuk ve Yıllık plan adresleri Kapasite'nin bölümüdür (3038).
+  if (kapasiteBolumuMu(parca)) return <Navigate to={gorunumAdresi(parca)} replace />;
   const kayitlar = GORUNUM_KAYITLARI.filter((k) => gorunumAcik(k.anahtar, yetki));
-  const etkin = kayitlar.find((k) => k.anahtar === gorunum);
+  const etkin = kayitlar.find((k) => k.anahtar === menuGorunumu(gorunum));
+  // Kapta görünümün kendi adı durur; Kapasite'de açık bölümün adı (eski sayfa testleri ve stilleri bölüm adını okur).
+  const kapAdi = gorunum === 'kapasite' ? kapasiteBolumuOku(sorgu) : gorunum;
   const gec = (g: PlanlamaGorunumu): void => { void git(gorunumAdresi(g)); };
   const alt = gorunum === 'plan' ? altEkranOku(sorgu) : TAHTA;
   const istek = gorunum === 'studio' ? studyoIstegiOku(sorgu) : null;
@@ -141,7 +145,7 @@ function PlanlamaEkrani() {
   const ust = serit || calismaYok || duzenleyen !== null;
 
   return (
-    <div className="tc-py" data-gorunum={gorunum} data-calisma-yok={calismaYok ? '' : undefined} data-serit={ust ? '' : undefined}>
+    <div className="tc-py" data-gorunum={kapAdi} data-calisma-yok={calismaYok ? '' : undefined} data-serit={ust ? '' : undefined}>
       {ust && (
         <div className="tc-py-ust">
           {duzenleyen && <DuzenleyenSeridi d={duzenleyen} yenile={yazTazele} />}

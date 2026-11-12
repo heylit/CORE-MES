@@ -11,7 +11,17 @@ import type { PlanlamaYetkisi } from './yetki.ts';
 export const KOK = '/plan';
 
 const PLANLAMA_GRUBU = ONERILEN_IKINCI_MENU.gruplar[0].maddeler;
-export type PlanlamaGorunumu = (typeof PLANLAMA_GRUBU)[number]['anahtar'];
+type MenuGorunumu = (typeof PLANLAMA_GRUBU)[number]['anahtar'];
+// Kapasite sayfasının bölümleri (3038): menüde tek "Kapasite" maddesi, bölüm adresin sorgusundadır (`kapasite?bolum=mesaiplan`). Bölüm
+// anahtarları eski sayfaların anahtarıdır: eski adresler (`/plan/mesaiplan`) ve `git('mesaiplan')` aynı bölümü açar.
+export const KAPASITE_BOLUMLERI = [['ufuk', 'Yük haritası', 'gauge'], ['mesaiplan', 'Ek mesai', 'clock'], ['fasonplan', 'Fason', 'truck'], ['yillik', 'Yıllık plan', 'chart']] as const;
+export type KapasiteBolumu = (typeof KAPASITE_BOLUMLERI)[number][0];
+export type PlanlamaGorunumu = MenuGorunumu | KapasiteBolumu;
+export const kapasiteBolumuMu = (x: string | undefined | null): x is KapasiteBolumu => KAPASITE_BOLUMLERI.some(([k]) => k === x);
+export function kapasiteBolumuOku(q: URLSearchParams): KapasiteBolumu {
+  const b = q.get('bolum');
+  return kapasiteBolumuMu(b) ? b : 'ufuk';
+}
 // Kök adres Planlama motoru'dur (ikinci menünün ilk maddesi, adresi `/plan`).
 export const ACILIS: PlanlamaGorunumu = 'plan';
 
@@ -94,7 +104,7 @@ export interface PlanlamaEkranOzellikleri {
 }
 
 export interface GorunumKaydi {
-  anahtar: PlanlamaGorunumu;
+  anahtar: MenuGorunumu;
   baslik: string;
   simge: SimgeAdi;
   parca: 'P1' | 'P2' | 'P3' | 'P4' | 'P5' | 'P6';
@@ -107,7 +117,7 @@ const parca = <M extends Record<string, unknown>>(yukle: () => Promise<M>, ad: k
 // Her sayfanın üstündeki plan çubuğu (Soru 497/10 a) P1'indir; motor sayfası kendi çubuğunu çizer, iskelet ötekilerin üstüne koyar.
 export const PlanSeridi = lazy(async () => ({ default: (await import('./motor/ust/PlanSeridi.tsx')).PlanSeridi }));
 
-const BILESENLER: Record<PlanlamaGorunumu, Pick<GorunumKaydi, 'parca' | 'bilesen'>> = {
+const BILESENLER: Record<MenuGorunumu, Pick<GorunumKaydi, 'parca' | 'bilesen'>> = {
   plan: { parca: 'P1', bilesen: parca(() => import('./motor/index.tsx'), 'PlanlamaMotoru') },
   studio: { parca: 'P1', bilesen: parca(() => import('./motor/index.tsx'), 'PlanlamaAtolyesi') },
   ysiparis: { parca: 'P2', bilesen: parca(() => import('./siparis/index.tsx'), 'Siparisler') },
@@ -115,11 +125,8 @@ const BILESENLER: Record<PlanlamaGorunumu, Pick<GorunumKaydi, 'parca' | 'bilesen
   denge: { parca: 'P2', bilesen: parca(() => import('./siparis/index.tsx'), 'TerminVeKar') },
   maliyet: { parca: 'P3', bilesen: parca(() => import('./maliyet/index.tsx'), 'Maliyetler') },
   giderler: { parca: 'P3', bilesen: parca(() => import('./maliyet/index.tsx'), 'GenelGider') },
-  mesaiplan: { parca: 'P3', bilesen: parca(() => import('./maliyet/index.tsx'), 'EkMesaiPlani') },
-  fasonplan: { parca: 'P3', bilesen: parca(() => import('./maliyet/index.tsx'), 'FasonPlani') },
+  kapasite: { parca: 'P5', bilesen: parca(() => import('./ufuk/index.tsx'), 'Kapasite') },
   malzplan: { parca: 'P4', bilesen: parca(() => import('./malzeme/index.tsx'), 'MalzemePlani') },
-  yillik: { parca: 'P5', bilesen: parca(() => import('./ufuk/index.tsx'), 'YillikPlan') },
-  ufuk: { parca: 'P5', bilesen: parca(() => import('./ufuk/index.tsx'), 'Ufuk') },
   sevkiyat: { parca: 'P6', bilesen: parca(() => import('./sevkiyat/index.tsx'), 'Sevkiyat') },
 };
 
@@ -128,11 +135,17 @@ export const GORUNUM_KAYITLARI: readonly GorunumKaydi[] = PLANLAMA_GRUBU.map((m)
 }));
 
 export function gorunumOku(parca: string | undefined): PlanlamaGorunumu | null {
+  if (kapasiteBolumuMu(parca)) return parca;
   return GORUNUM_KAYITLARI.find((k) => k.anahtar === parca)?.anahtar ?? null;
 }
+// Kapasite bölümü menüde Kapasite maddesidir (sayfa adı, iz satırı, yetki).
+export const menuGorunumu = (g: PlanlamaGorunumu): MenuGorunumu => (kapasiteBolumuMu(g) ? 'kapasite' : g);
 
 // Açılış görünümü menüdeki gibi kök adrestedir; `/plan/plan` eski bağlantılar için yine açılır.
-export function gorunumAdresi(g: PlanlamaGorunumu): string { return g === ACILIS ? KOK : `${KOK}/${g}`; }
+export function gorunumAdresi(g: PlanlamaGorunumu): string {
+  if (kapasiteBolumuMu(g)) return g === 'ufuk' ? `${KOK}/kapasite` : `${KOK}/kapasite?bolum=${g}`;
+  return g === ACILIS ? KOK : `${KOK}/${g}`;
+}
 
 // Maliyet ve kâr gösteren görünümler birim maliyet okumasını da ister (menüdeki gibi; planlama rolü maliyet görmez, 200 a).
 export function gorunumAcik(g: PlanlamaGorunumu, yetki: PlanlamaYetkisi): boolean {

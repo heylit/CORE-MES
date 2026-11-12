@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { IKINCI_MENU_TANIMLARI } from '../../ortak/rota/ikinci-menu.ts';
-import { MALIYET_ANAHTARLARI, MALIYET_ISLEMI, ONERILEN_IKINCI_MENU, PLANLAMA_ANAHTARLARI, PLANLAMA_ISLEMI } from './planlama-menusu.ts';
+import { KAPASITE_BOLUM_ANAHTARLARI, MALIYET_ANAHTARLARI, MALIYET_ISLEMI, ONERILEN_IKINCI_MENU, PLANLAMA_ANAHTARLARI, PLANLAMA_ISLEMI } from './planlama-menusu.ts';
 import { rotalar } from './rotalar.tsx';
 
 describe('planlama menüsü', () => {
@@ -16,7 +16,7 @@ describe('planlama menüsü', () => {
     // İlk grup Planlama görünümleridir; sonraki gruplar ayrı sayfalardır (782 veri sağlığı).
     const maddeler: ReadonlyArray<{ anahtar: string; islem: string }> = [...(planMenusu?.gruplar[0]?.maddeler ?? [])];
     expect(maddeler.filter((m) => m.islem === PLANLAMA_ISLEMI).map((m) => m.anahtar))
-      .toEqual(PLANLAMA_ANAHTARLARI.filter((a) => a !== 'kanban' && !MALIYET_ANAHTARLARI.includes(a)));
+      .toEqual(PLANLAMA_ANAHTARLARI.filter((a) => a !== 'kanban' && !MALIYET_ANAHTARLARI.includes(a) && !KAPASITE_BOLUM_ANAHTARLARI.includes(a)));
     expect(maddeler.filter((m) => m.islem === MALIYET_ISLEMI).map((m) => m.anahtar)).toEqual(MALIYET_ANAHTARLARI);
     expect(MALIYET_ANAHTARLARI.every((a) => PLANLAMA_ANAHTARLARI.includes(a))).toBe(true);
   });
