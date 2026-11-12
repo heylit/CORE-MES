@@ -180,6 +180,8 @@ Hepsi yalnız `GET` ve yalnız SQL `SELECT`; Logo'ya hiç yazmaz, COM oturumu ku
   `lastMovement` çalışılan dönemdeki son malzeme hareketinin günü (`STLINE.DATE_`, iptal ve malzeme dışı satır sayılmaz; hareketsiz kartta `null`),
   `openOrder` iptal olmayan alış ya da satış siparişinde kapanmamış malzeme satırı var mı (`ORFLINE.CLOSED = 0`). Her kart satır verir. Alanlar gerçek Logo'da
   doğrulanmadı.
+- `GET /api/Material/search?q={metin}`: tek kart canlı araması (3080 a): kullanımdaki (`ACTIVE = 0`) malzeme kartları kodda ya da adda (içinde, `LIKE` özel
+  karakterleri kaçırılır) aranır; en az 3, en çok 100 karakter, en çok 20 sonuç, kod sırasıyla. Satır `Material/list` ile aynı biçimdedir, cevap düz dizidir.
 - `GET /api/Arp/search?q={metin}`: kullanımdaki (`ACTIVE = 0`) cariler kodda ya da ünvanda (içinde, `LIKE` özel karakterleri kaçırılır) ya da vergi /
   T.C. kimlik numarasında (tam) aranır; en az 3, en çok 100 karakter, en çok 20 sonuç.
 - `GET /api/Arp/card/{kod}`: tek carinin alanları (`logicalRef, code, name, cardType, taxNr, tckNo, taxOffice, address1, address2, town, city,

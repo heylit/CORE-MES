@@ -20,7 +20,7 @@ import {
 import { sahteKopruAc } from './sahte-kopru.ts';
 import type { SahteKopru } from './sahte-kopru.ts';
 import {
-  kullanimOkumaTuru, logoCariAra, logoCariOku, logodakiMalzemeKartlari, logodakiMalzemeOzeti, logodakiStokToplamlari, malzemeEslemesiYaz, malzemeKartiOkumaTuru,
+  kullanimOkumaTuru, logoCariAra, logoCariOku, logoMalzemeAra, logodakiMalzemeKartlari, logodakiMalzemeOzeti, logodakiStokToplamlari, malzemeEslemesiYaz, malzemeKartiOkumaTuru,
   stokOkumaTuru, tmiStokKodlari,
   yeniSurecBellegi,
 } from './servis.ts';
@@ -174,7 +174,7 @@ describe('Logo\'dan malzeme kartı, stok ve cari okuması, sahte köprüyle (211
     kopru = await sahteKopruAc();
     simdi += 24 * 3600_000;
     for (const t of ['logo_malzeme_karti', 'logo_stok_toplami', 'logo_malzeme_kullanimi', 'logo_okuma_imleci']) await vt().sorgu(`DELETE FROM ${t}`);
-    for (const a of ['logo.malzeme-okumasi', 'logo.stok-okumasi', 'logo.kullanim-okumasi', 'logo.cari-aramasi']) await ayar(a, false);
+    for (const a of ['logo.malzeme-okumasi', 'logo.stok-okumasi', 'logo.kullanim-okumasi', 'logo.malzeme-aramasi', 'logo.cari-aramasi']) await ayar(a, false);
   });
   afterEach(async () => { await kopru.kapat(); });
 
@@ -414,6 +414,47 @@ describe('Logo\'dan malzeme kartı, stok ve cari okuması, sahte köprüyle (211
     assert.equal(await gecisiBitir(), 200);
     assert.notEqual(await vt().tx((db) => sistemAyariOku(db, 'logo.kullanim-okumasi')), true);
     assert.equal((await vt().tx((db) => logodakiMalzemeOzeti(db, {}))).kullanim.acik, false);
+    yazmaIstegiYok();
+  });
+
+  test('LGC-16 tek kart canlı araması (3080 a): kapalı gelir; açıkken yalnız GET, kullanımdakini kod ve adla bulur; ekleme yalnız kişinin son aramasındakini kopyaya yazar', async () => {
+    kopru.logoKartlari.push(kart(31, 'ORN-ARA-1', { name: 'Deneme Mil' }), kart(32, 'ORN-ARA-2', { active: false }), kart(33, 'ORN-BASKA-3'));
+    const ben = (await vt().tek<{ id: number }>("SELECT id FROM kisi WHERE kullanici_adi = 'lc-yonetici'"))!.id;
+    const ara = (q: string, kisi = ben) => logoMalzemeAra(vt(), ortami().kopru, kisi, q);
+    const ucla = async (q: string, c = cerez) => app.inject({ method: 'GET', url: `/api/logo-gecisi/malzeme-ara?q=${encodeURIComponent(q)}`, headers: { cookie: c } });
+    const ekle = async (kartlar: number[], c = cerez) => app.inject({
+      method: 'POST', url: '/api/logo-gecisi/malzeme-ekle', headers: { cookie: c, 'istek-kimligi': randomUUID() }, payload: { kartlar },
+    });
+    assert.equal(await vt().tx((db) => sistemAyariOku(db, 'logo.malzeme-aramasi')), false, 'varsayılan kapalı');
+    assert.equal((await ara('ORN-ARA')).tur, 'kapali');
+    assert.equal((await ucla('ORN-ARA')).json().durum, 'kapali');
+    assert.equal(kopru.istekler.length, 0, 'kapalıyken istek yok');
+    assert.equal((await ucla('OR')).statusCode, 400, 'iki karakter reddedilir');
+
+    await ayar('logo.malzeme-aramasi', true);
+    const r = await ara('orn-ara');
+    assert.deepEqual(r.tur === 'tamam' ? r.veri.map((k) => k.kod) : r, ['ORN-ARA-1'], 'kullanım dışı kart gelmez');
+    const ad = await ara('mil');
+    assert.equal(ad.tur === 'tamam' ? ad.veri.length : -1, 1, 'adda');
+    assert.deepEqual(kopru.istekler.map((i) => [i.yontem, i.yol]), [['GET', '/api/Material/search'], ['GET', '/api/Material/search']]);
+    assert.deepEqual(await kodlar(), [], 'arama kopyaya yazmaz');
+    // Uç ortamdaki köprüyü kullanır; testte tanımlı değil, neden döner.
+    assert.equal((await ucla('orn-ara')).json().durum, 'ortam-degiskeni-yok');
+
+    const kisiId = await vt().tx((db) => yoneticiOlustur(db, { ad: 'Deneme Arayan', kullaniciAdi: 'lc-arayan', parola: PAROLA }));
+    await vt().sorgu("INSERT INTO rol (kod, ad) VALUES ('lc_okuyan', 'Okuyan') ON CONFLICT DO NOTHING");
+    await vt().sorgu("INSERT INTO rol_islemi (rol_id, islem) SELECT id, 'sayfa.logo-gecisi' FROM rol WHERE kod = 'lc_okuyan' ON CONFLICT DO NOTHING");
+    await vt().sorgu("UPDATE kisi_rolu SET rol_id = (SELECT id FROM rol WHERE kod = 'lc_okuyan') WHERE kisi_id = $1", [kisiId]);
+    const g = await app.inject({ method: 'POST', url: '/api/oturum/giris', payload: { kullaniciAdi: 'lc-arayan', parola: PAROLA } });
+    const okuyan = String(g.headers['set-cookie']).split(';')[0] ?? '';
+    assert.equal((await ucla('orn-ara', okuyan)).statusCode, 403, 'malzeme kartı açamayan aramaz');
+    assert.equal((await ekle([31], okuyan)).statusCode, 403);
+
+    assert.equal((await ara('orn-ara')).tur, 'tamam');
+    const e = await ekle([31, 33]);
+    assert.equal(e.statusCode, 200, e.body);
+    assert.deepEqual(e.json(), { eklenen: 1 }, 'son aramada olmayan kart yazılmaz');
+    assert.deepEqual(await kodlar(), ['ORN-ARA-1']);
     yazmaIstegiYok();
   });
 });

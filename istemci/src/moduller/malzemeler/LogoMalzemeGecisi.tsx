@@ -5,6 +5,7 @@ import type {
   LogoDurumuCevabi, LogoGecisCevabi, LogoGecisSuzgeci, LogodanAlCevabi, LogoGeriAlCevabi, LogoKarsiligi, LogoTopluCevabi, OlcuBirimleriCevabi,
 } from '#paylasilan/sozlesme/malzemeler.ts';
 import { LOGO_GECIS_SAYFA_BOYU, LOGO_TOPLU_AZAMI } from '#paylasilan/sozlesme/logo-gecisi-sabitleri.ts';
+import type { LogoMalzemeAramaCevabi, LogoMalzemeEkleCevabi } from '#paylasilan/sozlesme/logo.ts';
 import {
   Dugme, DurumKutusu, Girdi, Kart, OnayPenceresi, Pencere, Rozet, Secim, Simge, Tablo, useBildirim, type RozetTonu, type Sutun,
 } from '../../ortak/arayuz/index.ts';
@@ -214,7 +215,9 @@ export function LogoMalzemeGecisi({ turAdlari }: Ozellikler) {
           satirAnahtari={(k) => k.logoKayitNo}
           mesgul={liste.isFetching}
           bosMesaj={bosMesaj}
-          {...(aranan && !okumaSuruyor && veri.kartlar.length === 0 ? { bosEylem: <CanliAramaDugmesi /> } : {})}
+          {...(aranan && !okumaSuruyor && veri.kartlar.length === 0
+            ? { bosEylem: <CanliAramaDugmesi metin={aranan} acik={veri.canliArama} yazabilir={yazabilir} bulundu={() => { suzgecYaz('tumu'); sayfaYaz(1); }} /> }
+            : {})}
           {...(topluEylemler.length > 0 ? { toplu: { eylemler: topluEylemler } } : {})}
           arac={{
             arama: { deger: ara, degistir: (d) => { araYaz(d); sayfaYaz(1); }, etiket: 'Ara', yerTutucu: 'Kod, ad ya da açıklama' },
@@ -275,12 +278,38 @@ export function LogoMalzemeGecisi({ turAdlari }: Ozellikler) {
   );
 }
 
-// Kopyada bulunamayan tek kartı Logo'da canlı aramak yardımcıya yeni bir okuma ister; ayrı işle gelir, o zamana dek düğme pasiftir.
-function CanliAramaDugmesi() {
+// 3080 a: okunmuş listede olmayan kart Logo'da o an aranır (kod ya da ad, en çok 20); bulunan kart listeye eklenir ve "Tümü"nde görünür,
+// oradan alınır ya da bağlanır. Logo'ya yazılmaz.
+function CanliAramaDugmesi({ metin, acik, yazabilir, bulundu }: { metin: string; acik: boolean; yazabilir: boolean; bulundu: () => void }) {
+  const istemci = useQueryClient();
+  const { bildir } = useBildirim();
+  const ekle = useKorumaliKomut({
+    gonder: (kartlar: number[], deneme) => api.post<LogoMalzemeEkleCevabi>('/logo-gecisi/malzeme-ekle', { kartlar }, deneme),
+    onSuccess: async (c) => {
+      bildir('tamam', `Logo'da ${sayi(c.eklenen)} kart bulundu ve listeye eklendi.`);
+      bulundu();
+      await istemci.invalidateQueries({ queryKey: LOGO_GECIS_ANAHTARI });
+    },
+    onError: (e) => bildir('hata', hataIletisi(e, 'Listeye eklenemedi')),
+  });
+  const ara = useTekGonderim({
+    mutationFn: () => api.get<LogoMalzemeAramaCevabi>(`/logo-gecisi/malzeme-ara?${new URLSearchParams({ q: metin }).toString()}`),
+    onSuccess: (r) => {
+      if (r.durum !== 'tamam') bildir('hata', r.ileti ?? 'Logo\'da aranamadı');
+      else if (r.kartlar.length === 0) bildir('bilgi', r.ileti ?? 'Logo\'da bulunamadı');
+      else ekle.mutate(r.kartlar.map((k) => k.logoKayitNo));
+    },
+    onError: (e) => bildir('hata', hataIletisi(e, 'Logo\'da aranamadı')),
+  });
+  const neden = !yazabilir ? 'Malzeme kartı açma yetkisi gerekir'
+    : !acik ? 'Sistem Ayarları\'nda "Logo: malzeme araması" kapalı'
+      : metin.length < 3 ? 'En az 3 karakter yazın' : null;
   return (
     <span className="tc-lg-canli">
-      <Dugme simge="search" disabled title="Logo yardımcısına canlı arama eklenince açılır">Logo'da canlı ara</Dugme>
-      <span className="tc-lg-not">Kopyada yok. Canlı arama ayrı işle gelecek.</span>
+      <Dugme simge="search" disabled={neden !== null} {...(neden ? { title: neden } : {})} yukleniyor={ara.isPending || ekle.isPending} onClick={() => ara.mutate()}>
+        Logo'da canlı ara
+      </Dugme>
+      <span className="tc-lg-not">{neden === null ? 'Okunan listede yok.' : `Okunan listede yok. ${neden}.`}</span>
     </span>
   );
 }

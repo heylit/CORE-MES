@@ -878,17 +878,23 @@ function sayfaAyikla<T>(govde: unknown, satir: (o: Record<string, unknown>) => T
 const aktifMi = (o: Record<string, unknown>): boolean => o['active'] !== false;
 
 // Kaydı ya da kodu olmayan satır atlanır (anahtarı yok); sayfa biçimi bozuksa null (imleç ilerlemez, satır yazılmaz).
+function malzemeKartiAyikla(o: Record<string, unknown>): LogoMalzemeKarti | null {
+  const logoKayitNo = kayitNumarasi(o, ['logicalRef']);
+  const kod = ilkMetin(o, ['code'], 64);
+  if (logoKayitNo === null || kod === null) return null;
+  const tur = ilkSayi(o, ['cardType']);
+  return {
+    logoKayitNo, kod, ad: ilkMetin(o, ['name'], 200), aciklama2: ilkMetin(o, ['name3'], 200), aciklama3: ilkMetin(o, ['name4'], 200),
+    kartTuru: tur !== null && Number.isSafeInteger(tur) ? tur : null, birimSeti: ilkMetin(o, ['unitSetCode'], 40), aktif: aktifMi(o),
+  };
+}
 export function malzemeKartlariniAyikla(govde: unknown): Sayfa<LogoMalzemeKarti> | null {
-  return sayfaAyikla(govde, (o) => {
-    const logoKayitNo = kayitNumarasi(o, ['logicalRef']);
-    const kod = ilkMetin(o, ['code'], 64);
-    if (logoKayitNo === null || kod === null) return null;
-    const tur = ilkSayi(o, ['cardType']);
-    return {
-      logoKayitNo, kod, ad: ilkMetin(o, ['name'], 200), aciklama2: ilkMetin(o, ['name3'], 200), aciklama3: ilkMetin(o, ['name4'], 200),
-      kartTuru: tur !== null && Number.isSafeInteger(tur) ? tur : null, birimSeti: ilkMetin(o, ['unitSetCode'], 40), aktif: aktifMi(o),
-    };
-  });
+  return sayfaAyikla(govde, malzemeKartiAyikla);
+}
+// 3080 a: arama cevabı düz dizidir; kullanım dışı satır yardımcıdan gelmez, gelse de alınmaz.
+export function malzemeAramasiniAyikla(govde: unknown): LogoMalzemeKarti[] | null {
+  if (!Array.isArray(govde)) return null;
+  return govde.map((o) => (kayitMi(o) ? malzemeKartiAyikla(o) : null)).filter((k): k is LogoMalzemeKarti => k !== null && k.aktif);
 }
 
 export function stokToplamlariniAyikla(govde: unknown): Sayfa<LogoStokSatiri> | null {
@@ -1166,7 +1172,7 @@ export interface LogoAkisTanimi {
   // logo_giden belge türleri; sayılar bunlardan toplanır.
   belgeTurleri: readonly string[];
   // Okuma akışı (logo -> TMI): sayı giden kutusundan değil okunan satırlardan gelir; `gonderilen` okunan satır sayısıdır, `hatali` yoktur.
-  okuma?: 'mal-kabul' | 'cari-ambar' | 'fatura' | 'malzeme-karti' | 'stok' | 'kullanim' | 'cari';
+  okuma?: 'mal-kabul' | 'cari-ambar' | 'fatura' | 'malzeme-karti' | 'stok' | 'kullanim' | 'malzeme-arama' | 'cari';
 }
 
 export const LOGO_AKISLARI: readonly LogoAkisTanimi[] = [
@@ -1217,6 +1223,8 @@ export const LOGO_AKISLARI: readonly LogoAkisTanimi[] = [
     aciklama: 'Logo\'daki ambar başına eldeki miktar (Stock/totals) en çok saatte bir okunur; yalnız TMI stoğuyla karşılaştırma ve bir kezlik açılış devri içindir, TMI stoğuna kendiliğinden yazılmaz. Sayı son turda okunan satır sayısıdır.' },
   { anahtar: 'kullanim-okuma', yon: 'logo-tmi', baslik: 'Malzeme kullanım okuması', kaynak: 'bagli', ayarlar: ['logo.kullanim-okumasi'], belgeTurleri: [], okuma: 'kullanim',
     aciklama: 'Logo malzeme kartlarının son hareket tarihi ve açık sipariş bilgisi (Material/usage) yalnız istekle, sayfa sayfa okunur; Logo geçişindeki "Kullanılanlar" süzgeci içindir. Logo\'ya hiçbir şey gitmez. Sayı son turda okunan kart sayısıdır.' },
+  { anahtar: 'malzeme-arama', yon: 'logo-tmi', baslik: 'Malzeme araması (Logo geçişi)', kaynak: 'bagli', ayarlar: ['logo.malzeme-aramasi'], belgeTurleri: [], okuma: 'malzeme-arama',
+    aciklama: 'Logo geçişinde okunan listede olmayan kart Logo\'da kod ya da adla aranır (Material/search, en çok 20) ve bulunan kart listeye eklenir; zamanlanmış okuma yoktur, Logo\'ya yazılmaz.' },
   { anahtar: 'cari-arama', yon: 'logo-tmi', baslik: 'Cari arama (müşteri ve tedarikçi)', kaynak: 'bagli', ayarlar: ['logo.cari-aramasi'], belgeTurleri: [], okuma: 'cari',
     aciklama: 'Müşteri-Tedarikçi\'de yeni firma açarken Logo carisi kod, ünvan ya da vergi numarasıyla aranır (Arp/search) ve seçilen cari forma doldurulur; zamanlanmış okuma yoktur, Logo\'ya yazılmaz.' },
 ];

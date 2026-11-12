@@ -828,6 +828,29 @@ namespace LogoYardimcisi
             Esit(0, s.Cagrilar.Count, "okuma Logo'ya yazmaz");
         }
 
+        static void T_malzeme_aramasi_en_az_uc_karakter_kodda_ve_adda_kullanimdakini_bulur()
+        {
+            var s = Logo();
+            var a = s.KartEkle("ORN-ARA-002");
+            a.Ad = "Deneme Mil";
+            var b = s.KartEkle("ORN-ARA-001");
+            b.Ad = "Deneme Burc";
+            s.KartEkle("ORN-ARA-003").Pasif = true;
+            for (var i = 0; i < 25; i++) s.KartEkle("ORN-COK-" + i.ToString("00", System.Globalization.CultureInfo.InvariantCulture));
+            Func<string, object[]> ara = q => (object[])C(s, "GET", "/api/Material/search", null, new Dictionary<string, string> { { "q", q } }).Govde;
+            var l = ara("orn-ara");
+            Esit(2, l.Length, "kodda, büyük/küçük harf duyarsız; kullanım dışı gelmez");
+            Esit("ORN-ARA-001", D(l[0])["code"], "kod sırası");
+            Esit(true, D(l[0])["active"], "kullanımda");
+            Esit("05", D(l[0])["unitSetCode"], "birim seti");
+            Esit(1, ara("mil").Length, "adda");
+            Esit(20, ara("ORN-COK").Length, "en çok 20 sonuç");
+            Esit(400, C(s, "GET", "/api/Material/search", null, new Dictionary<string, string> { { "q", "ab" } }).Durum, "iki karakter reddedilir");
+            Esit(400, C(s, "GET", "/api/Material/search", null, new Dictionary<string, string> { { "q", new string('a', 101) } }).Durum, "101 karakter reddedilir");
+            Esit(400, C(s, "GET", "/api/Material/search", null).Durum, "metinsiz istek reddedilir");
+            Esit(0, s.Cagrilar.Count, "arama Logo'ya yazmaz");
+        }
+
         static void T_cari_arama_en_az_uc_karakter_kod_unvan_ve_vergi_noyla_bulur()
         {
             var s = Logo();
@@ -1075,7 +1098,7 @@ namespace LogoYardimcisi
         {
             var q = new Sorgular(7, 3);
             var hepsi = q.Hepsi().ToList();
-            Esit(35, hepsi.Count, "sorgu sayısı");
+            Esit(36, hepsi.Count, "sorgu sayısı");
             Icerir(q.SiparisIcerikBasligi, "O.TRCODE = 2 AND O.FICHENO = @no");
             Icerir(q.SiparisIcerikBasligi, "LG_007_03_ORFICHE");
             Icerir(q.SiparisIcerikSatirlari, "LG_007_03_ORFLINE");
@@ -1089,6 +1112,8 @@ namespace LogoYardimcisi
             Icerir(q.MalzemeKullanimlari, "LG_007_03_STLINE");
             Icerir(q.MalzemeKullanimlari, "LG_007_03_ORFLINE");
             Icerir(q.MalzemeKullanimlari, "O.CANCELLED = 0");
+            Icerir(q.MalzemeAra, "I.ACTIVE = 0");
+            Icerir(q.MalzemeAra, "LG_007_ITEMS");
             Icerir(q.CariAra, "LG_007_CLCARD");
             Icerir(q.MalzemeRefIle, "I.ACTIVE");
             Icerir(q.HizmetRefIle, "LG_007_SRVCARD");

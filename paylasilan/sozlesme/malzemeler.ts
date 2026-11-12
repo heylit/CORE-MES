@@ -396,6 +396,8 @@ export const logoGecisCevabi = z.object({
   // Uygulanan süzgeç ve kullanım izinin (3079 a) en az bir tam turda okunup okunmadığı.
   suzgec: z.enum(LOGO_GECIS_SUZGECLERI),
   kullanim: z.boolean(),
+  // 3080 a: listede olmayan kart Logo'da aranabilir mi ("Logo: malzeme araması" ve bağlantı açık).
+  canliArama: z.boolean(),
   // Süzgece ve aramaya uyan satır sayısı ("süzgece uyan hepsini seç").
   uyan: z.number().int(),
   kartlar: z.array(z.object({

@@ -526,6 +526,12 @@ namespace LogoYardimcisi
             return Kartlar.Where(x => x.Ref > sonGorulen).OrderBy(x => x.Ref).Take(enCok).ToList();
         }
 
+        public List<MalzemeKaydi> MalzemeAra(string metin, int enCok)
+        {
+            Func<string, bool> icinde = a => a != null && a.IndexOf(metin, StringComparison.OrdinalIgnoreCase) >= 0;
+            return Kartlar.Where(k => !k.Pasif && (icinde(k.Kod) || icinde(k.Ad))).OrderBy(k => k.Kod, StringComparer.Ordinal).Take(enCok).ToList();
+        }
+
         public List<MalzemeHareketi> MalzemeHareketleri(int malzemeRef, int sonGorulen, int enCok)
         {
             return Hareketler.Where(x => x.Item1 == malzemeRef && x.Item2.Ref > sonGorulen).Select(x => x.Item2).OrderBy(x => x.Ref).Take(enCok).ToList();

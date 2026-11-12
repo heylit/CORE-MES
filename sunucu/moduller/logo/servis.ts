@@ -3,6 +3,7 @@ import { kayitNoktasi } from '#cekirdek/db.ts';
 import { bulunamadi, gecersiz, UygulamaHatasi } from '#cekirdek/hata.ts';
 import { LOGO_AYARLARI } from '#paylasilan/ayarlar/logo.ts';
 import type { BirimSetleriCevabi, LogoBaglantiDurumu, LogoHazirlikCevabi, LogoKontrolCevabi } from '#paylasilan/sozlesme/logo.ts';
+import { LOGO_MALZEME_ARAMA_EN_AZ, LOGO_MALZEME_ARAMA_EN_COK, LOGO_MALZEME_ARAMA_SONUCU } from '#paylasilan/sozlesme/logo.ts';
 import type { FisGonderimSekli, LogoFisBilgisi, MalzemeFisiTuru } from '#paylasilan/sozlesme/stok.ts';
 import { modulAyariDegistir, sistemAyariOku } from '../ayarlar/disari.ts';
 import { firmaOzeti } from '../musteri-tedarikci/disari.ts';
@@ -1028,6 +1029,8 @@ export function logodakiStokToplamlari(db: Db, malzemeKodlari: readonly string[]
 export interface LogoAynaOzeti {
   kartlar: s.AynaOzetSatiri[];
   okuma: { acik: boolean; suruyor: boolean; okunan: number | null; sonTamam: string | null };
+  // 3080 a: tek kart canlı araması açık mı (düğme buna göre).
+  arama: { acik: boolean };
   // 3079 a: kullanım izi en az bir tam turda okunduysa "Kullanılanlar" süzgeci kurulur; okunmadıysa liste "Stoğu olanlar"la kalır.
   kullanim: { acik: boolean; sonTamam: string | null };
 }
@@ -1038,6 +1041,7 @@ export async function logodakiMalzemeOzeti(db: Db, o: { ara?: string }): Promise
   return {
     kartlar: await s.aynaOzeti(db, o),
     kullanim: { acik: acik && (await sistemAyariOku(db, 'logo.kullanim-okumasi')) === true, sonTamam: u?.sonTamamMetni ?? null },
+    arama: { acik: (await sistemAyariOku(db, 'logo.baglanti')) === true && (await sistemAyariOku(db, 'logo.malzeme-aramasi')) === true },
     // İmleç başta değilse tur yarıdadır; hiç tam tur bitmemişse ya da istenen tur başlamadıysa da okuma sürüyor sayılır.
     okuma: { acik, suruyor: acik && sayfaliOkumaSirasi(i) !== 'bekle', okunan: i?.sayi ?? null, sonTamam: i?.sonTamamMetni ?? null },
   };
@@ -1100,6 +1104,34 @@ export async function logoCariOku(vt: TxAcan, kopru: KopruIstemcisi | null, kod:
   if ('tur' in k) return k;
   const r = await k.cariOku(kod.trim());
   return r.tur === 'basarili' ? { tur: 'tamam', veri: r.veri } : { tur: 'hata', ileti: r.ileti };
+}
+
+// 3080 a: Logo geçişinde tek kart canlı araması. Arama yalnız GET'tir ve transaction dışında beklenir; bulunanlar kişinin süreç belleğinde
+// tutulur (tek sunucu). "Ekle" köprüye gitmez: kişinin son aramasında gördüğü kartı okunmuş kopyaya yazar, başka kart yazılamaz.
+const ARAMA_BELLEGI_MS = 30 * 60_000;
+const aramaBellegi = new Map<number, { kartlar: Map<number, LogoMalzemeKarti>; zaman: number }>();
+export async function logoMalzemeAra(
+  vt: TxAcan, kopru: KopruIstemcisi | null, kisiId: number, metin: string, saat: () => number = Date.now,
+): Promise<CariOkumasi<LogoMalzemeKarti[]>> {
+  const q = metin.trim();
+  if (q.length < LOGO_MALZEME_ARAMA_EN_AZ || q.length > LOGO_MALZEME_ARAMA_EN_COK) {
+    throw gecersiz(`Arama metni ${LOGO_MALZEME_ARAMA_EN_AZ}-${LOGO_MALZEME_ARAMA_EN_COK} karakter olmalı.`);
+  }
+  const acik = await vt.tx(async (db) => (await sistemAyariOku(db, 'logo.baglanti')) === true && (await sistemAyariOku(db, 'logo.malzeme-aramasi')) === true);
+  if (!acik) return { tur: 'kapali', ileti: 'Logo\'da malzeme araması Sistem Ayarları\'nda kapalı ("Logo bağlantısı" ve "Logo: malzeme araması").' };
+  if (kopru === null) return { tur: 'ortam-degiskeni-yok', ileti: BEKLEME_NEDENLERI['ortam-degiskeni-yok'] };
+  const r = await kopru.malzemeAra(q);
+  if (r.tur !== 'basarili') return { tur: 'hata', ileti: r.ileti };
+  const kartlar = r.veri.slice(0, LOGO_MALZEME_ARAMA_SONUCU);
+  aramaBellegi.set(kisiId, { kartlar: new Map(kartlar.map((k) => [k.logoKayitNo, k])), zaman: saat() });
+  return { tur: 'tamam', veri: kartlar };
+}
+export async function logoAramaSonucunuEkle(db: Db, kisiId: number, refler: readonly number[], zaman: Date): Promise<number> {
+  const b = aramaBellegi.get(kisiId);
+  if (!b || zaman.getTime() - b.zaman > ARAMA_BELLEGI_MS) return 0;
+  const kartlar = [...new Set(refler)].map((r) => b.kartlar.get(r)).filter((k): k is LogoMalzemeKarti => k !== undefined);
+  await s.malzemeKartlariniYaz(db, kartlar, zaman);
+  return kartlar.length;
 }
 
 // Fatura: Logo'ya giden siparişlerin numarası logo_giden'den (kayıt) ve logo_siparis_no'dan gelir; okuması en eski sipariş önce, sıralı, turda
@@ -1435,6 +1467,7 @@ export async function hazirlik(db: Db, kopru: KopruIstemcisi | null, ortam: Logo
     'malzeme-karti': await sayfaliOzet(db, 'malzeme-karti'),
     stok: await sayfaliOzet(db, 'stok'),
     kullanim: await sayfaliOzet(db, 'kullanim'),
+    'malzeme-arama': { sayi: null, son: null },
     cari: { sayi: null, son: null },
   } as const;
   return {

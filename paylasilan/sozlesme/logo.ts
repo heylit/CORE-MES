@@ -169,3 +169,23 @@ export type DisDuzeltmeKaydi = z.output<typeof disDuzeltmeKaydi>;
 
 // 3077 a: "Logo geçişi" sayfasındaki "Şimdi oku" ve "Geçişi bitir" komutlarının cevabı.
 export const logoGecisKomutuCevabi = z.object({ tamam: z.literal(true) });
+
+// 3080 a: Logo geçişinde tek kart canlı araması. Arama yalnız okur ve sonucu kişinin süreç belleğinde tutar; "ekle" bulunan kartı
+// okunmuş kopyaya yazar (köprüye gitmez). Kapalıysa ya da köprü yoksa durum ve ileti döner, kart dönmez.
+export const LOGO_MALZEME_ARAMA_EN_AZ = 3;
+export const LOGO_MALZEME_ARAMA_EN_COK = 100;
+export const LOGO_MALZEME_ARAMA_SONUCU = 20;
+export const logoMalzemeAramaSorgusu = z.object({
+  q: z.string().trim().min(LOGO_MALZEME_ARAMA_EN_AZ, `En az ${LOGO_MALZEME_ARAMA_EN_AZ} karakter yazın.`).max(LOGO_MALZEME_ARAMA_EN_COK),
+});
+export const logoMalzemeAramaCevabi = z.object({
+  durum: z.enum(['tamam', 'kapali', 'ortam-degiskeni-yok', 'hata']),
+  ileti: z.string().nullable(),
+  kartlar: z.array(z.object({ logoKayitNo: z.number().int(), kod: z.string(), ad: z.string().nullable() })).max(LOGO_MALZEME_ARAMA_SONUCU),
+});
+export type LogoMalzemeAramaCevabi = z.output<typeof logoMalzemeAramaCevabi>;
+export const logoMalzemeEkleGovdesi = z.object({
+  kartlar: z.array(z.number().int().positive()).min(1).max(LOGO_MALZEME_ARAMA_SONUCU),
+}).strict();
+export const logoMalzemeEkleCevabi = z.object({ eklenen: z.number().int() });
+export type LogoMalzemeEkleCevabi = z.output<typeof logoMalzemeEkleCevabi>;

@@ -117,6 +117,7 @@ describe('Logo geçişi: liste, toplu bağla ve al, geri al (3068 a; gerçek Pos
         .map((k) => ({ logoKayitNo: k.logoKayitNo, kod: k.kod, aktif: k.aktif, stok: k.stok, sonHareket: k.sonHareket, acikSiparis: k.acikSiparis })),
       okuma: { acik: false, suruyor: false, okunan: ayna.length, sonTamam: null },
       kullanim: { acik: false, sonTamam: kullanimTamam },
+      arama: { acik: false },
     }));
     logoEslemeYaziciCozucusu(async () => { throw new Error('toplu işlem kod eşlemesi yazmaz'); });
     logoTmiKodCozucusu(async () => new Map());

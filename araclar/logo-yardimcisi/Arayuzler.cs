@@ -265,6 +265,8 @@ namespace LogoYardimcisi
         List<StokToplami> StokToplamlari(int sonGorulen, int enCok);
         // Kayıt sırasıyla sonGorulen'den sonraki en çok enCok kartın kullanım izi; her kart döner (hareketsiz kartta tarih null).
         List<MalzemeKullanimi> MalzemeKullanimlari(int sonGorulen, int enCok);
+        // 3080 a: kullanımdaki malzeme kartları kodda ya da adda (içinde) aranır, kod sırasıyla en çok enCok.
+        List<MalzemeKaydi> MalzemeAra(string metin, int enCok);
         // Kullanımdaki cariler kodda, ünvanda (içinde) ya da vergi / T.C. kimlik numarasında (tam) aranır (2118).
         List<CariKaydi> CariAra(string metin, int enCok);
         CariKaydi Cari(string kod);

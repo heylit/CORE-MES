@@ -12,7 +12,7 @@ namespace LogoYardimcisi
     // Kolon adları rehberin veri sözlüğündendir (§2); sözlükte olmayanlar Sorgular.Dogrulanmadi'da listelenir ve --deneme ile denetlenir.
     public sealed class Sorgular
     {
-        public readonly string MalzemeRef, Malzeme, MalzemeRefIle, HizmetRefIle, MalzemeKodlari, MalzemeKartlari, StokToplamlari, MalzemeKullanimlari, CariAra, Cari, BirimSetleri, Ambarlar, Cariler, CariRef, Hizmet, Siparis, SiparisRefIle, SiparisSatirlari,
+        public readonly string MalzemeRef, Malzeme, MalzemeRefIle, HizmetRefIle, MalzemeKodlari, MalzemeKartlari, StokToplamlari, MalzemeKullanimlari, MalzemeAra, CariAra, Cari, BirimSetleri, Ambarlar, Cariler, CariRef, Hizmet, Siparis, SiparisRefIle, SiparisSatirlari,
             MalKabul, Faturalar, Talep, TalepSatirlari, Karsilamalar, KarsilamaBul, SatisMusterisi, Teklif, TeklifRefIle, TeklifSatirlari,
             MalzemeFisi, MalzemeFisiSatirlari, MalzemeHareketleri, SonAlisFiyatlari, SiparisIcerikBasligi, SiparisIcerikSatirlari, SiparisSatirBirimleri;
 
@@ -45,6 +45,9 @@ namespace LogoYardimcisi
             MalzemeKodlari = "SELECT CODE FROM " + f("ITEMS") + " ORDER BY CODE";
             MalzemeKartlari = "SELECT TOP (@enCok) I.LOGICALREF, I.CODE, I.NAME, I.CARDTYPE, I.SPECODE, I.NAME3, I.NAME4, U.CODE, I.ACTIVE FROM " + f("ITEMS") + " I LEFT JOIN "
                 + f("UNITSETF") + " U ON U.LOGICALREF = I.UNITSETREF WHERE I.LOGICALREF > @son ORDER BY I.LOGICALREF";
+            // 3080 a: tek kart canlı araması; kullanım dışı kart gelmez. LIKE deseni parametredir (SqlOkuma.Desen kaçırır).
+            MalzemeAra = "SELECT TOP (@enCok) I.LOGICALREF, I.CODE, I.NAME, I.CARDTYPE, I.SPECODE, I.NAME3, I.NAME4, U.CODE, I.ACTIVE FROM " + f("ITEMS") + " I LEFT JOIN "
+                + f("UNITSETF") + " U ON U.LOGICALREF = I.UNITSETREF WHERE I.ACTIVE = 0 AND (I.CODE LIKE @desen ESCAPE '\\' OR I.NAME LIKE @desen ESCAPE '\\') ORDER BY I.CODE";
             StokToplamlari = "SELECT T.STOCKREF, I.CODE, T.INVENNO, T.ONHAND FROM " + d("GNTOTST") + " T JOIN " + f("ITEMS") + " I ON I.LOGICALREF = T.STOCKREF"
                 + " WHERE T.INVENNO >= 0 AND T.STOCKREF IN (SELECT TOP (@enCok) LOGICALREF FROM " + f("ITEMS") + " WHERE LOGICALREF > @son ORDER BY LOGICALREF)"
                 + " ORDER BY T.STOCKREF, T.INVENNO";
@@ -248,8 +251,18 @@ namespace LogoYardimcisi
 
         public List<MalzemeKaydi> MalzemeKartlari(int sonGorulen, int enCok)
         {
+            return KartSatirlari(Sorgula(q.MalzemeKartlari, P("@son", sonGorulen), P("@enCok", enCok)));
+        }
+
+        public List<MalzemeKaydi> MalzemeAra(string metin, int enCok)
+        {
+            return KartSatirlari(Sorgula(q.MalzemeAra, P("@desen", Desen(metin)), P("@enCok", enCok)));
+        }
+
+        static List<MalzemeKaydi> KartSatirlari(List<object[]> satirlar)
+        {
             var l = new List<MalzemeKaydi>();
-            foreach (var s in Sorgula(q.MalzemeKartlari, P("@son", sonGorulen), P("@enCok", enCok)))
+            foreach (var s in satirlar)
             {
                 var k = new MalzemeKaydi();
                 k.Ref = Tam(s[0]);

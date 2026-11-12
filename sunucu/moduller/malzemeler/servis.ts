@@ -983,6 +983,7 @@ export interface LogoAynaOzeti {
   kartlar: { logoKayitNo: number; kod: string; aktif: boolean; stok: string | null; sonHareket: string | null; acikSiparis: boolean | null }[];
   okuma: { acik: boolean; suruyor: boolean; okunan: number | null; sonTamam: string | null };
   kullanim: { acik: boolean; sonTamam: string | null };
+  arama: { acik: boolean };
 }
 export type LogoAynaOzetiCozucusu = (db: Db, o: { ara?: string }) => Promise<LogoAynaOzeti>;
 let logoAynaOzeti: LogoAynaOzetiCozucusu | null = null;
@@ -1031,7 +1032,7 @@ export async function logoGecisi(db: Db, q: z.output<typeof logoGecisSorgusu>, b
   const bos = { toplam: 0, stoklu: 0, yeni: 0, bagsiz: 0, bagli: 0, kullanimDisi: 0, kullanilan: null, kararBekleyen: 0 };
   if (!logoKartAynasi || !logoAynaOzeti) {
     return {
-      baglanti: false, okuma: { acik: false, suruyor: false, okunan: null, sonTamam: null }, sayilar: bos, suzgec: q.suzgec ?? 'stoklu', kullanim: false,
+      baglanti: false, okuma: { acik: false, suruyor: false, okunan: null, sonTamam: null }, sayilar: bos, suzgec: q.suzgec ?? 'stoklu', kullanim: false, canliArama: false,
       uyan: 0, kartlar: [], sayfa: 0, sonrakiSayfa: null,
     };
   }
@@ -1087,7 +1088,7 @@ export async function logoGecisi(db: Db, q: z.output<typeof logoGecisSorgusu>, b
   sayilar.kararBekleyen = satirlar.filter((r) => r.k.aktif && ((r.durum === 'yeni' && !r.koduUyar) || (r.durum === 'bagsiz' && r.tmi?.onayDurumu === 'iptal'))).length
     + kartlar.filter((k) => k.kararNedeni === 'birim-farki').length;
   return {
-    baglanti: true, okuma: ozet.okuma, sayilar, suzgec, kullanim, uyan: uyanlar.length, kartlar, sayfa: q.sayfa,
+    baglanti: true, okuma: ozet.okuma, sayilar, suzgec, kullanim, canliArama: ozet.arama.acik, uyan: uyanlar.length, kartlar, sayfa: q.sayfa,
     sonrakiSayfa: (q.sayfa + 1) * LOGO_GECIS_SAYFA_BOYU < uyanlar.length ? q.sayfa + 1 : null,
   };
 }

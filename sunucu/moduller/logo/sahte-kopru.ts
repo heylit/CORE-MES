@@ -16,7 +16,7 @@ import { MALZEME_FISI_UCU } from './kurallar.ts';
 // GET ve DELETE /api/DemandFiche/peg/byOrder/{ref}. Kart güncelleme: POST /api/Material/UpdateRich, /api/{Purchase|Sales}Service/UpdateRich.
 // Satış (not 2.6, 2.7): GET /api/SalesOffer/customer/{cari} (yoksa 404), POST /api/SalesOffer/AddRich (cevapta satır yok; satırlar
 // GET /api/SalesOffer/{ref} ile okunur, biçimi VARSAYIM), POST /api/SalesOffer/{ref}/toOrder (cevap order.lines).
-// Okuma: GET /api/PurchaseOrder/receipts?since=, GET /api/Arp/list, GET /api/PurchaseOrder/{no}/invoices (yoksa 404); 2116 ve 2118: GET /api/Material/list, /api/Stock/totals, /api/Material/usage (3079), /api/Arp/search, /api/Arp/card/{kod}. Malzeme fişi: POST
+// Okuma: GET /api/PurchaseOrder/receipts?since=, GET /api/Arp/list, GET /api/PurchaseOrder/{no}/invoices (yoksa 404); 2116 ve 2118: GET /api/Material/list, /api/Stock/totals, /api/Material/usage (3079), /api/Material/search (3080), /api/Arp/search, /api/Arp/card/{kod}. Malzeme fişi: POST
 // /api/MaterialSlip/Add{Consumption|ProductionEntry|Scrap|WarehouseTransfer|CountSurplus|CountShortage}, DELETE /api/MaterialSlip/{tür}/{no}. Kartı kullanım dışı bırakma (2114b):
 // POST /api/Material/{ref}/deactivate ve /api/{Purchase|Sales}Service/{ref}/deactivate (gövde { code }). Hepsinin cevap biçimi VARSAYIM.
 
@@ -259,6 +259,14 @@ export async function sahteKopruAc(secenek: { anahtar?: string; port?: number } 
         const data = yol === '/api/Material/list' ? kartlar
           : (yol === '/api/Stock/totals' ? kopru.logoStoklari : kopru.logoKullanimlari).filter((x) => refler.has(Number(x['itemRef'])));
         json(cevap, 200, { data, next: sonraki });
+        return;
+      }
+      if (istek.method === 'GET' && yol === '/api/Material/search') {
+        const q = (new URL(istek.url ?? '', 'http://sahte').searchParams.get('q') ?? '').trim();
+        if (q.length < 3 || q.length > 100) { json(cevap, 400, { success: false, logicalRef: 0, error: 'q', validate: null }); return; }
+        const icinde = (d: unknown): boolean => typeof d === 'string' && d.toLocaleLowerCase('tr').includes(q.toLocaleLowerCase('tr'));
+        json(cevap, 200, kopru.logoKartlari.filter((k) => k['active'] !== false && (icinde(k['code']) || icinde(k['name'])))
+          .sort((a, b) => String(a['code']).localeCompare(String(b['code']))).slice(0, 20));
         return;
       }
       if (istek.method === 'GET' && yol === '/api/Arp/search') {
