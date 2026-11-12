@@ -12,6 +12,8 @@
 .tc-stok-is div { display: grid; gap: var(--b-1); min-width: 0; }
 .tc-stok-is span { color: var(--muted); font-size: var(--yazi-s); }
 .tc-stok-isteklerim .tc-rozet { flex: none; }
+/* Telefonda dar satırda rozet daralıp yazısı zemininden taşıyordu; rozet kendi genişliğini korur, yazı sütunu daralır. */
+@media (max-width: 767px) { .tc-stok-is > .tc-rozet { flex: none; } }
 .tc-stok-is-bilgi { border-left-color: var(--sig); }
 .tc-stok-is-uyari { border-left-color: var(--hold); }
 .tc-stok-is-hata { border-left-color: var(--stop); }
