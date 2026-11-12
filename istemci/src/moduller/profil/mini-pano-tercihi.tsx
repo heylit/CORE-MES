@@ -8,7 +8,7 @@ import { useHesapMaddesiDurumu, type UstEylemOzellikleri } from '../../ortak/rot
 import { api } from '../../ortak/veri/api.ts';
 import { yeniIstekKimligi } from '../../ortak/veri/istek-kimligi.ts';
 import { useOturum } from '../../ortak/veri/oturum.ts';
-import { panoDenetiminiYaz, panoDurumuMu, panoKanali, panoPenceresiniAc, panoPenceresiniAcYaDaOneGetir, panoPenceresindeMi, type PanoDurumu } from './mini-pano-penceresi.ts';
+import { koseyeCekil, panoDenetiminiYaz, panoDurumuMu, panoKanali, panoPenceresiniAc, panoPenceresiniAcYaDaOneGetir, panoPenceresindeMi, yerineDon, type PanoDurumu } from './mini-pano-penceresi.ts';
 
 // Mini pano seçimi kişinin profilindedir (2425-3 a): kapatılan panolar tutulur, kaydı olmayan kişide hepsi açıktır.
 export const miniPanoAnahtari = (kisiId: number) => ['profil', 'mini-pano', kisiId] as const;
@@ -58,6 +58,12 @@ export function MiniPanoEylemi({ acmaIstegi = 0 }: UstEylemOzellikleri) {
   // Yalnız pano penceresinde üstteki panoyu tutar; ana sekme panoyu kendisi açmaz (3093 a).
   const ust = useMiniPanoPenceresi(burasi ? acik : BOS);
   useEffect(() => { if (burasi) panoDenetiminiYaz({ acik: ust.acik, ac: ust.ac }); }, [burasi, ust.acik, ust.ac]);
+  // Pano açıkken taşıyıcı pencere köşede küçük durur; pano kapanınca eski boyutuna ve yerine döner (3153 b).
+  useEffect(() => {
+    if (!burasi || !ust.acik) return undefined;
+    const onceki = koseyeCekil();
+    return () => { yerineDon(onceki); };
+  }, [burasi, ust.acik]);
   const istemci = useQueryClient();
   // Pano penceresi simge durumundayken tarayıcı onun zamanlayıcılarını yavaşlatabilir; üstteki pano görünür kaldığı için
   // yenileme onun zamanlayıcısıyla da tetiklenir.

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router-dom';
 import { BildirimSaglayici } from '../../ortak/arayuz/Bildirim.tsx';
@@ -11,6 +11,9 @@ const json = (govde: unknown) => new Response(JSON.stringify(govde), { status: 2
 afterEach(() => { window.name = ''; cleanup(); vi.unstubAllGlobals(); vi.restoreAllMocks(); document.querySelectorAll('iframe').forEach((f) => f.remove()); });
 
 function ortamKur() {
+  // jsdom pencere boyutlamayı yapmaz; varsayılanı sessiz, ölçen testler kendi taklidini kurar.
+  vi.spyOn(window, 'resizeTo').mockImplementation(() => undefined);
+  vi.spyOn(window, 'moveTo').mockImplementation(() => undefined);
   const iframe = document.createElement('iframe');
   document.body.appendChild(iframe);
   const ust = iframe.contentWindow as Window;
@@ -115,5 +118,45 @@ describe('Mini pano penceresi', () => {
     soran.postMessage('one-gel');
     await waitFor(() => expect(odak).toHaveBeenCalled());
     soran.close();
+  });
+
+  it('pano üstte açılınca taşıyıcı pencere köşeye küçülür, pano kapanınca eski boyutuna döner (3153)', async () => {
+    const { ust } = ortamKur();
+    window.name = 'tmi-mini-pano';
+    // jsdom'da ekran ve pencere konumu hep 0; köşe ve eski yer ayırt edilsin diye gerçekçi değerler.
+    vi.spyOn(window, 'screen', 'get').mockReturnValue({ availLeft: 0, availTop: 0, availWidth: 1920, availHeight: 1040 } as unknown as Screen);
+    vi.spyOn(window, 'screenX', 'get').mockReturnValue(100);
+    vi.spyOn(window, 'screenY', 'get').mockReturnValue(80);
+    vi.spyOn(window, 'outerWidth', 'get').mockReturnValue(428);
+    vi.spyOn(window, 'outerHeight', 'get').mockReturnValue(445);
+    const boyut = vi.spyOn(window, 'resizeTo').mockImplementation(() => undefined);
+    const yer = vi.spyOn(window, 'moveTo').mockImplementation(() => undefined);
+    ciz(<><MiniPanoEylemi /><MiniPanoSayfasi /></>);
+    fireEvent.click(await screen.findByRole('button', { name: 'Mini panoyu aç' }));
+    await waitFor(() => expect(boyut).toHaveBeenCalledWith(1, 1));
+    expect(yer.mock.calls[0]).toEqual([1920, 1040]);
+    act(() => { ust.dispatchEvent(new Event('pagehide')); });
+    await waitFor(() => expect(boyut).toHaveBeenLastCalledWith(428, 445));
+    expect(yer).toHaveBeenCalledTimes(2);
+    expect(yer).toHaveBeenLastCalledWith(100, 80);
+  });
+
+  it('tarayıcı küçültmeyi reddederse hata göstermez, pano açık kalır (3153)', async () => {
+    const { ust } = ortamKur();
+    window.name = 'tmi-mini-pano';
+    vi.spyOn(window, 'resizeTo').mockImplementation(() => { throw new Error('izin yok'); });
+    ciz(<><MiniPanoEylemi /><MiniPanoSayfasi /></>);
+    fireEvent.click(await screen.findByRole('button', { name: 'Mini panoyu aç' }));
+    expect(await screen.findByText(/Mini pano açık/)).toBeTruthy();
+    expect(ust.document.body.textContent).toContain('Stok ve sevk');
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+
+  it('ana sekmede pencere küçültülmez', async () => {
+    ortamKur();
+    const boyut = vi.spyOn(window, 'resizeTo').mockImplementation(() => undefined);
+    ciz(<MiniPanoEylemi />);
+    await waitFor(() => expect((fetch as ReturnType<typeof vi.fn>).mock.calls.some(([a]) => String(a).endsWith('/profil/mini-pano'))).toBe(true));
+    expect(boyut).not.toHaveBeenCalled();
   });
 });

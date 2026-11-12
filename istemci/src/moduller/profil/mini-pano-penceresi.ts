@@ -73,3 +73,26 @@ export async function panoPenceresiniAcYaDaOneGetir(): Promise<boolean> {
     return panoPenceresiniAc();
   } finally { kanal?.close(); }
 }
+
+// Pano üstte açılınca taşıyıcı pencere küçülüp ekranın köşesine çekilir (3153 b): pano onu açan pencere açık kaldıkça
+// yaşar, bu yüzden pencere kapatılamaz; sayfa kendini simge durumuna da küçültemez. Tarayıcı alt sınırda durdurur (Linux
+// Chromium'da 180x100 ölçüldü), reddederse pencere olduğu gibi kalır; hata gösterilmez.
+export interface PencereKonumu { genislik: number; yukseklik: number; x: number; y: number }
+
+export function koseyeCekil(pencere: Window = window): PencereKonumu | null {
+  try {
+    const onceki = { genislik: pencere.outerWidth, yukseklik: pencere.outerHeight, x: pencere.screenX, y: pencere.screenY };
+    const ekran = pencere.screen as Screen & { availLeft?: number; availTop?: number };
+    pencere.resizeTo(1, 1);
+    pencere.moveTo((ekran.availLeft ?? 0) + ekran.availWidth, (ekran.availTop ?? 0) + ekran.availHeight);
+    return onceki;
+  } catch { return null; }
+}
+
+export function yerineDon(onceki: PencereKonumu | null, pencere: Window = window): void {
+  if (onceki === null) return;
+  try {
+    pencere.resizeTo(onceki.genislik, onceki.yukseklik);
+    pencere.moveTo(onceki.x, onceki.y);
+  } catch { /* tarayıcı izin vermedi: pencere olduğu gibi kalır */ }
+}
