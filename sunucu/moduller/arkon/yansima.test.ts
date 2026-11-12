@@ -1972,6 +1972,30 @@ describe('arkon sayım ve olayları CORE üretim emrine yansır (gerçek Postgre
     assert.deepEqual(tek?.govde, p2);
   });
 
+  // 3115 (2166-2 a): taslak paketin iş türü adımın operasyon tipi grubundan gelir; talaşlı istasyondaki boya ve kalite adımı kendi görünümüyle
+  // açılır, kalite adımında alt görünüm kodu ve AQL lot planı gelir. Elle seçilip kaydedilen tür okumada korunur.
+  test('3115: talaşlı istasyonda boya ve kalite gruplu adımın taslağı boya ve kalite açılır; elle seçilen tür kalır', async () => {
+    const r = await rotaliEmirKur();
+    const [ie1, ie2] = await isEmriIdleri(r.emirId);
+    const sahip = ortam!.sahip;
+    const boya = (await sahip.tek<{ id: number }>('INSERT INTO istasyonlar_operasyon_tipi (kod, ad, grup) VALUES ($1, $2, $3) RETURNING id', [`YB${(sayac += 1)}`, 'Deneme boya', 'BOY']))!.id;
+    const gkk = (await sahip.tek<{ id: number }>("SELECT id FROM istasyonlar_operasyon_tipi WHERE kod = 'GKK'"))!.id;
+    await sahip.sorgu('UPDATE uretim_emirleri_is_emri SET operasyon_tipi_id = $2 WHERE id = $1', [ie1, boya]);
+    await sahip.sorgu('UPDATE uretim_emirleri_is_emri SET operasyon_tipi_id = $2 WHERE id = $1', [ie2, gkk]);
+    const liste = await paketler();
+    const p1 = liste.get(ieKimligi(ie1!))!.govde;
+    const p2 = liste.get(ieKimligi(ie2!))!.govde;
+    assert.equal(p1['opType'], 'boya', 'istasyon talaşlı, grup BOY');
+    assert.equal(p2['opType'], 'kalite', 'istasyon talaşlı, grup KAL');
+    const tmi2 = p2['tmi'] as Record<string, unknown>;
+    assert.equal(tmi2['opTipi'], 'GKK');
+    assert.ok(tmi2['aql'] !== undefined && tmi2['aql'] !== null, JSON.stringify(tmi2));
+    assert.equal('opTipi' in (p1['tmi'] as Record<string, unknown>), false);
+    const yaz = await paketYaz(ieKimligi(ie1!), null, { ...p1, opType: 'montaj' });
+    assert.equal(yaz.durum, 200, JSON.stringify(yaz.govde));
+    assert.equal((await paketler()).get(ieKimligi(ie1!))!.govde['opType'], 'montaj', 'elle seçilen tür TMI alanlarıyla yeniden yazılmaz');
+  });
+
   // Karar 732 a: kayıtsız iş emri paketi malzemenin Çizimler'deki yayında teknik resmini önerir; Hazırlık merkezden alınca dosya kopyalanmadan
   // Arkon deposuna bağlanır. Kayıtlı pakette öneri yoktur. Dosya ve belge adları uydurmadır.
   test('732 a: dosyasız iş emri taslağı malzemenin yayındaki çizimini önerir; merkezden alma kopyasız bağlar; kayıtlı pakette öneri yok', async () => {
