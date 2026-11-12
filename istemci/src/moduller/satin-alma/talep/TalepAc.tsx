@@ -129,14 +129,13 @@ function AdetAlani({ k, degistir }: { k: KalemTaslagi; degistir: (d: Partial<Kal
   const kesirli = k.adet !== '' && !/^\d+$/.test(k.adet.trim());
   return (
     <div className="sa-talep-adet">
-      <Girdi etiket="Adet" inputMode="numeric" value={k.adet} placeholder={yaklasik ?? 'Kaç parça'} disabled={k.mevcut?.bagli === true}
+      <Girdi etiket="Adet" inputMode="numeric" value={k.adet} hata={kesirli ? 'Adet tam sayı olur; kesirli miktarı kg olarak yazın.' : undefined} placeholder={yaklasik ?? 'Kaç parça'} disabled={k.mevcut?.bagli === true}
         onChange={(e) => {
           const adet = e.target.value;
-          degistir(/^\d+$/.test(adet.trim()) ? { adet, miktar: adettenKg(Number(adet.trim()), kg) } : { adet });
+          // Geçersiz adette kg boşalır: önceki tuşun hesapladığı kg kalıp sessizce gönderilmesin (Miktar zorunlu, form durur).
+          degistir(/^\d+$/.test(adet.trim()) ? { adet, miktar: adettenKg(Number(adet.trim()), kg) } : adet.trim() === '' ? { adet } : { adet, miktar: '' });
         }} />
-      {kesirli
-        ? <p className="sa-talep-not" role="alert">Adet tam sayı olur; kesirli miktarı kg olarak yazın.</p>
-        : <p className="sa-talep-not">1 parça ≈ {kg.toLocaleString('tr-TR', { maximumFractionDigits: 2 })} kg</p>}
+      {!kesirli && <p className="sa-talep-not">1 parça ≈ {kg.toLocaleString('tr-TR', { maximumFractionDigits: 2 })} kg</p>}
     </div>
   );
 }
