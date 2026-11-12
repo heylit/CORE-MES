@@ -1,13 +1,14 @@
-import { useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { MiniPanoCevabi, MiniPanoSecGovdesi } from '#paylasilan/sozlesme/profil.ts';
 import { miniPanoDestekli, useMiniPanoPenceresi } from '../../ortak/arayuz/MiniPano.tsx';
 import { useBildirim } from '../../ortak/arayuz/index.ts';
-import { gorunenMiniPanolar, miniPanolar } from '../../ortak/rota/mini-pano.ts';
+import { gorunenMiniPanolar, miniPanolar, type MiniPano } from '../../ortak/rota/mini-pano.ts';
 import { useHesapMaddesiDurumu, type UstEylemOzellikleri } from '../../ortak/rota/ust-eylemler.ts';
 import { api } from '../../ortak/veri/api.ts';
 import { yeniIstekKimligi } from '../../ortak/veri/istek-kimligi.ts';
 import { useOturum } from '../../ortak/veri/oturum.ts';
+import { panoDenetiminiYaz, panoKanali, panoPenceresiniAc, panoPenceresindeMi, type PanoDurumu } from './mini-pano-penceresi.ts';
 
 // Mini pano seçimi kişinin profilindedir (2425-3 a): kapatılan panolar tutulur, kaydı olmayan kişide hepsi açıktır.
 export const miniPanoAnahtari = (kisiId: number) => ['profil', 'mini-pano', kisiId] as const;
@@ -15,6 +16,10 @@ export const miniPanoAnahtari = (kisiId: number) => ['profil', 'mini-pano', kisi
 export const MINI_PANO_EYLEMI = 'mini-pano';
 
 const OTURUMSUZ: readonly string[] = [];
+const BOS: readonly MiniPano[] = [];
+const PANO_YENILEME_MS = 20_000;
+const ustPencere = (): Window | null =>
+  (globalThis as unknown as { documentPictureInPicture?: { window: Window | null } }).documentPictureInPicture?.window ?? null;
 
 // Kişinin yetkisiyle görebileceği panolar ve profildeki seçimi. Seçim okunamazsa hepsi açık sayılır: pano yine yetkiyle sınırlıdır.
 export function useMiniPanoTercihi() {
@@ -42,31 +47,64 @@ export function useMiniPanoSec(kisiId: number | null) {
 const ONERILDI = 'tmi-mini-pano-onerildi';
 
 // Hesap menüsünün "Mini pano" maddesi (2425, Arayüz kararı): kişinin açık panosu yoksa ya da tarayıcı pencereyi açamıyorsa
-// (telefon, Firefox, Safari) madde çizilmez; pencere açıkken madde bunu söyler. "Açılışta öner" seçiliyse oturumda bir kez
-// bildirim çıkar; pencere yalnız tıklamayla açıldığı için bildirimin "Aç" düğmesi açar.
+// (telefon, Firefox, Safari) madde çizilmez. Madde panoyu bu sekmede değil küçük pano penceresinde açtırır (3093 a); pano
+// oradayken madde bunu söyler. "Açılışta öner" seçiliyse oturumda bir kez bildirim çıkar; "Aç" düğmesi küçük pencereyi açar.
 export function MiniPanoEylemi({ acmaIstegi = 0 }: UstEylemOzellikleri) {
   const { acik, tercih } = useMiniPanoTercihi();
   const kullanilir = acik.length > 0 && miniPanoDestekli();
-  const penceresi = useMiniPanoPenceresi(acik);
+  const [panoAcik, panoAcikYaz] = useState(false);
   const { bildir } = useBildirim();
-  useHesapMaddesiDurumu(MINI_PANO_EYLEMI, !kullanilir, penceresi.acik ? 'Mini pano (açık)' : undefined);
-  const ac = useRef(penceresi.ac);
-  ac.current = penceresi.ac;
+  const burasi = panoPenceresindeMi();
+  // Yalnız pano penceresinde üstteki panoyu tutar; ana sekme panoyu kendisi açmaz (3093 a).
+  const ust = useMiniPanoPenceresi(burasi ? acik : BOS);
+  useEffect(() => { if (burasi) panoDenetiminiYaz({ acik: ust.acik, ac: ust.ac }); }, [burasi, ust.acik, ust.ac]);
+  const istemci = useQueryClient();
+  // Pano penceresi simge durumundayken tarayıcı onun zamanlayıcılarını yavaşlatabilir; üstteki pano görünür kaldığı için
+  // yenileme onun zamanlayıcısıyla da tetiklenir.
+  useEffect(() => {
+    const pencere = ust.acik ? ustPencere() : null;
+    if (pencere === null) return undefined;
+    const z = pencere.setInterval(() => { void istemci.refetchQueries({ type: 'active' }); }, PANO_YENILEME_MS);
+    return () => { pencere.clearInterval(z); };
+  }, [ust.acik, istemci]);
+  useHesapMaddesiDurumu(MINI_PANO_EYLEMI, !kullanilir, panoAcik || ust.acik ? 'Mini pano (açık)' : undefined);
+  // Pano penceresi durumunu duyurur, ana sekme açılışta sorar (Hesap menüsündeki "(açık)").
+  useEffect(() => {
+    const kanal = panoKanali();
+    if (kanal === null) return undefined;
+    if (burasi) {
+      const duyur = (a: boolean) => { kanal.postMessage({ acik: a } satisfies PanoDurumu); };
+      duyur(ust.acik);
+      kanal.onmessage = (o: MessageEvent<unknown>) => { if (o.data === 'sor') duyur(ust.acik); };
+      const kapanirken = () => { duyur(false); };
+      window.addEventListener('pagehide', kapanirken);
+      return () => { window.removeEventListener('pagehide', kapanirken); kanal.close(); };
+    }
+    kanal.onmessage = (o: MessageEvent<unknown>) => {
+      const d = o.data as Partial<PanoDurumu> | null;
+      if (typeof d === 'object' && d !== null && typeof d.acik === 'boolean') panoAcikYaz(d.acik);
+    };
+    kanal.postMessage('sor');
+    return () => { kanal.close(); };
+  }, [burasi, ust.acik]);
+  const ac = useCallback(() => {
+    if (!panoPenceresiniAc()) bildir('hata', 'Mini pano penceresi açılamadı; tarayıcının açılır pencere iznini verin.');
+  }, [bildir]);
   // Yeniden çizilen düğme eski isteği yeniden açmaz: yalnız menüden gelen yeni seçim açar.
   const gorulenIstek = useRef(acmaIstegi);
   useEffect(() => {
     if (acmaIstegi === gorulenIstek.current) return;
     gorulenIstek.current = acmaIstegi;
-    if (kullanilir) ac.current();
-  }, [acmaIstegi, kullanilir]);
-  const oner = kullanilir && tercih?.acilistaOner === true;
+    if (kullanilir) ac();
+  }, [acmaIstegi, kullanilir, ac]);
+  const oner = kullanilir && tercih?.acilistaOner === true && !panoAcik;
   useEffect(() => {
     if (!oner) return;
     try {
       if (sessionStorage.getItem(ONERILDI) !== null) return;
       sessionStorage.setItem(ONERILDI, '1');
     } catch { /* depolama kapalı: öneri bu açılışta bir kez çıkar */ }
-    bildir('bilgi', 'Mini pano hazır.', { eylem: { etiket: 'Aç', yap: () => { ac.current(); } } });
-  }, [oner, bildir]);
-  return penceresi.cizim;
+    bildir('bilgi', 'Mini pano hazır.', { eylem: { etiket: 'Aç', yap: ac } });
+  }, [oner, bildir, ac]);
+  return burasi ? ust.cizim : null;
 }
