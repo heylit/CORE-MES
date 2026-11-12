@@ -13,7 +13,7 @@ import { kopruIstemcisiKur } from './kopru.ts';
 import { sahteKopruAc } from './sahte-kopru.ts';
 import type { SahteKopru } from './sahte-kopru.ts';
 import { malzemeTuru, yeniSurecBellegi } from './servis.ts';
-import { kopruListesiniYaz } from './sorgular.ts';
+import { denemeYaz, kopruListesiniYaz } from './sorgular.ts';
 import type { TurOrtami, TurSonucu } from './servis.ts';
 
 const PAROLA = 'dogru-parola-1';
@@ -52,8 +52,9 @@ describe('Logo\'ya gönderilmiş kartın Logo\'da pasife alınması (2114b, ger�
             logo_pasif_hata AS "pasifHata", guncelleyen_kisi_id AS silen
        FROM malzeme_katalog_karti WHERE no = $1`, [no]))!;
 
-  // Onay akışı kapalı: kart doğrudan aktif açılır; Logo'da açılmış sayılır (sahte köprüde de kaydı vardır).
-  async function logodakiKart(): Promise<{ no: number; kimlik: string; kod: string; ref: number }> {
+  // Onay akışı kapalı: kart doğrudan aktif açılır; TMI'nin Logo'da açtığı sayılır (sahte köprüde de kaydı vardır, gönderim izi "gonderildi").
+  // `iz` başka verilirse kart Logo'da bulunmuş ("zaten-vardi") ya da izsiz (Logo'dan "Al"/"Bağla" ile gelmiş gibi) olur.
+  async function logodakiKart(iz: 'gonderildi' | 'zaten-vardi' | null = 'gonderildi'): Promise<{ no: number; kimlik: string; kod: string; ref: number }> {
     const kimlik = `lsl${++sayac}`;
     await tamam('POST', `/malzeme-katalogu-kartlari/${kimlik}/kaydet`, {
       kayit: { id: kimlik, tur: 'hammadde', fam: 'metal', com: { kod: 'HM-LSL-00001', ad: `Pasif deneme ${kimlik}`, birim: 'kg' }, onay: { durum: 'aktif' },
@@ -64,7 +65,12 @@ describe('Logo\'ya gönderilmiş kartın Logo\'da pasife alınması (2114b, ger�
     const k = (await vt().tek<{ no: number; kod: string }>('SELECT no, stok_kodu AS kod FROM malzeme_katalog_karti WHERE kimlik = $1', [kimlik]))!;
     const ref = 50_000 + sayac;
     kopru.kartlar.set(k.kod, ref);
-    await vt().tx((db) => malzemeLogoSonucu(db, k.no, { kayitNo: String(ref) }));
+    await vt().tx(async (db) => {
+      await malzemeLogoSonucu(db, k.no, { kayitNo: String(ref) });
+      if (iz !== null) {
+        await denemeYaz(db, 'malzeme', k.no, { zaman: new Date(simdi), sonuc: iz, hata: null, logoKayitNo: String(ref), niyetZamani: null, sonrakiDeneme: null, basarili: true });
+      }
+    });
     return { ...k, kimlik, ref };
   }
 
@@ -124,7 +130,7 @@ describe('Logo\'ya gönderilmiş kartın Logo\'da pasife alınması (2114b, ger�
       "SELECT son_sonuc, logo_kayit_no, niyet_zamani FROM logo_giden WHERE belge_turu = 'malzeme' AND belge_no = $1 AND islem = 'pasif'", [k.no]);
     assert.deepEqual(giden, { son_sonuc: 'gonderildi', logo_kayit_no: String(k.ref), niyet_zamani: null });
     const gonderim = await vt().tek<{ son_sonuc: string }>("SELECT son_sonuc FROM logo_giden WHERE belge_turu = 'malzeme' AND belge_no = $1 AND islem = 'gonder'", [k.no]);
-    assert.equal(gonderim, null, 'gönderim izi ayrı satırdır (bu testte kart doğrudan gönderilmiş sayıldı)');
+    assert.deepEqual(gonderim, { son_sonuc: 'gonderildi' }, 'gönderim izi ayrı satırdır ve değişmez');
     const arsiv = await tamam<ArsivKartlariCevabi>('GET', '/malzeme-arsivi');
     assert.equal(arsiv.kartlar.find((x) => x.kimlik === k.kimlik)?.logoyaGitti, true, 'Logo\'da duran kart kalıcı silinmez');
     assert.equal((await tamam<LogoDurumuCevabi>('GET', '/malzeme-logo-durumu')).kartlar.some((x) => x.id === k.no), false, 'silinen kart Logo durumunda görünmez');
@@ -175,6 +181,37 @@ describe('Logo\'ya gönderilmiş kartın Logo\'da pasife alınması (2114b, ger�
     assert.match(d.pasifHata ?? '', /Card not found/);
   });
 
+  test('3070: TMI\'nin açmadığı Logo kartı (izsiz ya da Logo\'da bulunmuş) silinince yalnız TMI\'de iptal olur; Logo\'ya istek gitmez', async () => {
+    for (const iz of [null, 'zaten-vardi'] as const) {
+      const k = await logodakiKart(iz);
+      assert.deepEqual(await tamam('POST', `/malzeme-katalogu-kartlari/${k.kimlik}/iptal`), { id: k.kimlik, logodaPasifeAliniyor: false }, String(iz));
+      assert.deepEqual(await durum(k.no), { onay: 'iptal', gonderim: 'gonderildi', kayitNo: String(k.ref), pasif: null, pasifHata: null, silen: yoneticiId });
+    }
+    assert.deepEqual(await tur(), { tur: 'bos' });
+    assert.equal(deactivate().length, 0, 'Logo\'ya pasife alma isteği yok');
+    // Aynı kart TMI'nin açtığı kartsa istek yazılır (sınır yalnız gönderim izidir).
+    const benim = await logodakiKart('gonderildi');
+    assert.deepEqual(await tamam('POST', `/malzeme-katalogu-kartlari/${benim.kimlik}/iptal`), { id: benim.kimlik, logodaPasifeAliniyor: true });
+    assert.equal((await durum(benim.no)).pasif, 'bekliyor');
+    assert.deepEqual(await tur(), { tur: 'pasif-niyet', no: benim.no });
+    assert.deepEqual(await tur(), { tur: 'pasif', no: benim.no, sonuc: 'gonderildi' });
+    assert.deepEqual(deactivate().map((i) => i.yol), [`/api/Material/${benim.ref}/deactivate`], 'yalnız TMI\'nin açtığı kart');
+  });
+
+  test('3070 v2: ölçütten önce kuyruğa girmiş istek Logo\'dan gelen kartta gönderilmez, kalıcı reddedilir', async () => {
+    const k = await logodakiKart('gonderildi');
+    assert.deepEqual(await tamam('POST', `/malzeme-katalogu-kartlari/${k.kimlik}/iptal`), { id: k.kimlik, logodaPasifeAliniyor: true });
+    // Ölçütten önce yazılmış istek: kartın gönderim izi yok (Logo'dan "Al"/"Bağla" ile gelmiş).
+    await vt().sorgu('DELETE FROM logo_giden WHERE belge_no = $1 AND islem = \'gonder\'', [k.no]);
+    const once = deactivate().length;
+    assert.deepEqual(await tur(), { tur: 'pasif', no: k.no, sonuc: 'reddedildi' });
+    assert.equal(deactivate().length, once, 'Logo\'ya pasife alma isteği gitmez');
+    const d = await durum(k.no);
+    assert.equal(d.pasif, 'reddedildi');
+    assert.match(d.pasifHata ?? '', /Logo'dan alındı ya da bağlandı/);
+    assert.deepEqual(await tur(), { tur: 'bos' }, 'yeniden denenmez');
+  });
+
   test('TMI\'de kullanılan Logo kartı silinmez ve pasife alma isteği yazılmaz', async () => {
     const k = await logodakiKart();
     await vt().sorgu('INSERT INTO satin_alma_tedarik_termini (malzeme_no) VALUES ($1)', [k.no]);
@@ -195,7 +232,10 @@ describe('Logo\'ya gönderilmiş kartın Logo\'da pasife alınması (2114b, ger�
     const k = (await vt().tek<{ no: number; kod: string }>('SELECT no, stok_kodu AS kod FROM malzeme_katalog_karti WHERE kimlik = $1', [kimlik]))!;
     assert.deepEqual(await tamam('POST', `/malzeme-katalogu-kartlari/${kimlik}/iptal`), { id: kimlik, logodaPasifeAliniyor: false });
     kopru.kartlar.set(k.kod, 60_001);
-    await vt().tx((db) => malzemeLogoSonucu(db, k.no, { kayitNo: '60001' }));
+    await vt().tx(async (db) => {
+      await malzemeLogoSonucu(db, k.no, { kayitNo: '60001' });
+      await denemeYaz(db, 'malzeme', k.no, { zaman: new Date(simdi), sonuc: 'gonderildi', hata: null, logoKayitNo: '60001', niyetZamani: null, sonrakiDeneme: null, basarili: true });
+    });
     assert.deepEqual(await durum(k.no), { onay: 'iptal', gonderim: 'gonderildi', kayitNo: '60001', pasif: 'bekliyor', pasifHata: null, silen: yoneticiId });
     assert.deepEqual(await tur(), { tur: 'pasif-niyet', no: k.no }, 'önce niyet');
     assert.deepEqual(await tur(), { tur: 'pasif', no: k.no, sonuc: 'gonderildi' });

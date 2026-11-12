@@ -21,7 +21,7 @@ import { isEmriTahminiMaliyetleri, projedeSayilanBelgeler, uretimEmriMalzemeMali
 import { alimDinle, belgeGenelGiderOranlari, emirTedarikDurumlari, kaliteDurumuCozucusu, malzemeKartiIzleri as satinAlmaKartIzleri, parcaRevizyonuCozucusu as siparisParcaRevizyonuCozucusu, fasonKonumuCozucusu, planlananGidisCozucusu, stokMiktariCozucusu, stokYokCozucusu, tuketimSerisiCozucusu } from './moduller/satin-alma/disari.ts';
 import * as receteRota from './moduller/recete-rota/disari.ts';
 import {
-  logoBirimSetiCozucusu, logoEslemeYaziciCozucusu, logoKartAynasiCozucusu, logoKodCozucusu, logoTmiKodCozucusu, rotaRevizyonlariCozucusu, kartIzleriCozucusu,
+  logoAcilisCozucusu, logoBirimSetiCozucusu, logoEslemeYaziciCozucusu, logoKartAynasiCozucusu, logoKodCozucusu, logoTmiKodCozucusu, rotaRevizyonlariCozucusu, kartIzleriCozucusu,
 } from './moduller/malzemeler/disari.ts';
 import { firmaDegistiDinle, logoCariCozuculeriKaydet } from './moduller/musteri-tedarikci/disari.ts';
 import { araHalCozucusuKaydet as rotaAraHalCozucusu, durumRevizyonlari, emirBittiYansit as rotaEmirBittiYansit, adimBittiYansit as rotaAdimBittiYansit, emirRotaHazirliklari, isEmriAparatHazirliklari, isEmriKopyalandiYansit, isEmriOlcuAletiHazirliklari, malzemeKartiIzleri as rotaKartIzleri, yuzeyIslemiAdimlari } from './moduller/rota/disari.ts';
@@ -105,6 +105,7 @@ export function sunucununBaglari(): Bag[] {
     bag('logo birim setleri -> malzemeler karşılık', logoBirimSetiCozucusu, logo.gecerliBirimSetiKodlari),
     bag('logo malzeme kodları -> malzemeler yeni stok kodu', logoKodCozucusu, logo.logodaKullanilanMalzemeKodlari),
     bag('logo malzeme aynası -> malzemeler Logo\'dan gelenler', logoKartAynasiCozucusu, logo.logodakiMalzemeKartlari),
+    bag('logo gönderim izi -> malzemeler Logo\'da pasife alma', logoAcilisCozucusu, logo.logodaTmiActi),
     bag('logo kod eşlemesi -> malzemeler Logo\'dan alma', logoEslemeYaziciCozucusu, logo.malzemeEslemesiYaz),
     bag('logo kodundan TMI kodu -> malzemeler', logoTmiKodCozucusu, logo.tmiStokKodlari),
     bag('logo cari okuması -> müşteri-tedarikçi', (ara: typeof cariAra) => logoCariCozuculeriKaydet({ ara, oku: cariOku }),

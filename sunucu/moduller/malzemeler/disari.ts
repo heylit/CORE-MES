@@ -62,7 +62,7 @@ export { logoBirimSetiCozucusuKaydet as logoBirimSetiCozucusu } from './servis.t
 // Ters yöndeki bağ (2089-2 a): yeni stok kodu Logo'da kullanılan numarayı atlar; sunucu/kablolama.ts logonun aynasını bağlar.
 export { logoKodCozucusuKaydet as logoKodCozucusu } from './servis.ts';
 // 2116: Logo'dan gelen kartlar logo modülünün aynasından okunur; Logo'dan alınan kartın kod eşlemesini logo yazar. Üçünü sunucu/kablolama.ts bağlar.
-export { logoKartAynasiKaydet as logoKartAynasiCozucusu, logoEslemeYaziciKaydet as logoEslemeYaziciCozucusu, logoTmiKodCozucusuKaydet as logoTmiKodCozucusu } from './servis.ts';
+export { logoAcilisCozucusuKaydet as logoAcilisCozucusu, logoKartAynasiKaydet as logoKartAynasiCozucusu, logoEslemeYaziciKaydet as logoEslemeYaziciCozucusu, logoTmiKodCozucusuKaydet as logoTmiKodCozucusu } from './servis.ts';
 export type { LogoAynaKarti, LogoEslemeYazici, LogoKartAynasiCozucusu, LogoTmiKodCozucusu } from './servis.ts';
 // 1104 a: satın almanın talep, teklif ve siparişte gösterdiği kart ayrıntısı (kalite, standart, tolerans, durum, yüzey, sertifikalar, en az sipariş ...).
 // Kartın sürümü de döner: satın alma siparişteki kopyanın karttan geri kaldığını bununla bilir (1105 a). İptal ve olmayan kart haritada yok.
