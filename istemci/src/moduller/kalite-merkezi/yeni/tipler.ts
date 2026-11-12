@@ -67,6 +67,8 @@ export interface FormKaydi extends KmKayit {
 
 export interface Sablon extends KmKayit {
   kod?: string; ad?: string; rev?: string; yurur?: string; kat?: string; std?: string; ne?: string; dsl?: string;
+  // 3118: GKK şablonunda varsayılan türler ve açık bölümler (paylasilan/gkk-sablonlari.ts GkkAyari).
+  gkk?: unknown;
 }
 
 export interface Balon { [alan: string]: unknown }
@@ -122,7 +124,7 @@ export interface KmKoleksiyonTipleri {
 
 // Görünüm anahtarı eski ikinci menü yolunun son parçasıdır (paylasilan/sayfalar/kalite-merkezi.ts); Bugün köktür.
 export const KM_GORUNUMLERI = [
-  'bugun', 'parcalar', 'resimler', 'kutuphane', 'muayeneler', 'lot-kabul', 'is-emirleri', 'olcum-analizi', 'uygunsuzluklar', 'dof',
+  'bugun', 'parcalar', 'resimler', 'kutuphane', 'muayeneler', 'giris-kontrolu', 'lot-kabul', 'is-emirleri', 'olcum-analizi', 'uygunsuzluklar', 'dof',
   'cihazlar', 'tedarikciler', 'belgeler', 'formlar', 'kullanicilar', 'terimler', 'gostergeler', 'degisiklik-izi', 'arsiv', 'ayarlar',
 ] as const;
 export type KmGorunum = (typeof KM_GORUNUMLERI)[number];

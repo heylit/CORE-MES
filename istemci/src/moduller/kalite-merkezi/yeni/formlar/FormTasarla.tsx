@@ -11,8 +11,12 @@ import type { Sablon } from '../tipler.ts';
 import { useKmKomutu, type KmVerisi } from '../veri.ts';
 import type { KmYetkisi } from '../yetki.ts';
 import { dslCoz } from './dsl.ts';
-import { BolumBaskisi } from './FormBelgesi.tsx';
+import { BolumBaskisi, GKK_YANIT_BASLIKLARI } from './FormBelgesi.tsx';
+import { GKK_KATEGORISI, GKK_TURU_ADLARI, GKK_TURU_SIRASI, type GkkAyari } from '#paylasilan/gkk-sablonlari.ts';
 import { FORM_KATEGORILERI, tasarimBaslangici, tasarimHatasi, type ListedekiForm, type SablonTaslagi } from './sablonlar.ts';
+
+const BOS_GKK: GkkAyari = { turler: [], olcu: false, islem: false, seri: false };
+const GKK_BOLUMLERI = [['olcu', 'Ölçüler (karttaki ölçüler)'], ['islem', 'İşlemler (karttaki operasyonlar)'], ['seri', 'Seri numaraları']] as const;
 
 const ZORUNLU: readonly (keyof SablonTaslagi)[] = ['kod', 'ad', 'rev', 'yurur'];
 const ADLAR: Partial<Record<keyof SablonTaslagi, string>> = { kod: 'Doküman no', ad: 'Form adı', rev: 'Revizyon', yurur: 'Yürürlük' };
@@ -29,6 +33,8 @@ export function FormTasarla({ veri, yetki, form, kapat }: { veri: KmVerisi; yetk
   const [kaydediliyor, kaydediliyorYaz] = useState(false);
   const yaz = <K extends keyof SablonTaslagi>(k: K, v: SablonTaslagi[K]) => tYaz((o) => ({ ...o, [k]: v }));
   const kirli = JSON.stringify(t) !== acilis;
+  const kategoriYaz = (kat: string) => tYaz((o) => ({ ...o, kat, gkk: kat === GKK_KATEGORISI ? (o.gkk ?? BOS_GKK) : null }));
+  const gkkYaz = (g: Partial<GkkAyari>) => tYaz((o) => ({ ...o, gkk: { ...(o.gkk ?? BOS_GKK), ...g } }));
   const kapatmayiDene = () => (kirli && !kaydediliyor ? soruyorYaz(true) : kapat());
 
   const kaydet = async () => {
@@ -67,19 +73,43 @@ export function FormTasarla({ veri, yetki, form, kapat }: { veri: KmVerisi; yetk
             <div className="tc-km-alan"><Girdi etiket="Yürürlük" type="date" required hata={hataOf('yurur')} value={t.yurur} onChange={(o) => yaz('yurur', o.target.value)} /></div>
             <div className="tc-km-alan"><Girdi etiket="Dayanak (standart / madde)" value={t.std} onChange={(o) => yaz('std', o.target.value)} /></div>
             <div className="tc-km-alan">
-              <Secim etiket="Kategori" value={t.kat} onChange={(o) => yaz('kat', o.target.value)} bosSecenek="—"
+              <Secim etiket="Kategori" value={t.kat} onChange={(o) => kategoriYaz(o.target.value)} bosSecenek="—"
                 secenekler={FORM_KATEGORILERI.map((k) => ({ deger: k, baslik: k }))} />
             </div>
             <div className="tc-km-alan tc-km-alan-tam"><Girdi etiket="Ne zaman kullanılır" value={t.ne} onChange={(o) => yaz('ne', o.target.value)} /></div>
-            <div className="tc-km-alan"><IsaretKutusu etiket="Etiket olarak yazdır" checked={t.etiket} onChange={(o) => yaz('etiket', o.target.checked)} /></div>
-            <div className="tc-km-alan"><IsaretKutusu etiket="Terminalde doldurulur" checked={t.terminal} onChange={(o) => yaz('terminal', o.target.checked)} /></div>
+            {t.gkk === null
+              ? (
+                <>
+                  <div className="tc-km-alan"><IsaretKutusu etiket="Etiket olarak yazdır" checked={t.etiket} onChange={(o) => yaz('etiket', o.target.checked)} /></div>
+                  <div className="tc-km-alan"><IsaretKutusu etiket="Terminalde doldurulur" checked={t.terminal} onChange={(o) => yaz('terminal', o.target.checked)} /></div>
+                </>
+              )
+              : (
+                <fieldset className="tc-km-alan tc-km-alan-tam tc-km3-gkk-ayari">
+                  <legend>Giriş kontrolü (GKK)</legend>
+                  <p className="tc-km-soluk">Bu form GKK sayfasında mal kabul satırından doldurulur. Aşağıdaki türlerde kendiliğinden açılır; öbür türlerde "Kontrol formu" seçiminden seçilir.</p>
+                  <div className="tc-km3-gkk-secimler" role="group" aria-label="Hangi kart türlerinde açılır">
+                    {GKK_TURU_SIRASI.map((tur) => (
+                      <IsaretKutusu
+                        key={tur} etiket={GKK_TURU_ADLARI[tur]} checked={t.gkk?.turler.includes(tur) ?? false}
+                        onChange={(o) => gkkYaz({ turler: o.target.checked ? [...(t.gkk?.turler ?? []), tur] : (t.gkk?.turler ?? []).filter((x) => x !== tur) })}
+                      />
+                    ))}
+                  </div>
+                  <div className="tc-km3-gkk-secimler" role="group" aria-label="Formdaki bölümler">
+                    {GKK_BOLUMLERI.map(([anahtar, baslik]) => (
+                      <IsaretKutusu key={anahtar} etiket={baslik} checked={t.gkk?.[anahtar] ?? false} onChange={(o) => gkkYaz({ [anahtar]: o.target.checked })} />
+                    ))}
+                  </div>
+                </fieldset>
+              )}
           </div>
           <div className="tc-km3-tasarim">
             <div className="tc-km3-dsl"><CokSatir etiket="Form içeriği" rows={18} spellCheck={false} value={t.dsl} onChange={(o) => yaz('dsl', o.target.value)} /></div>
             <div className="tc-km3-tasarim-yan">
               <p className="tc-km3-etiket">Önizleme</p>
               <div className="tc-km-onizleme">
-                <Belge>{bolumler.length ? bolumler.map((b, si) => <BolumBaskisi key={si} b={b} si={si} kayit={null} />) : <p className="tc-km-soluk">Boş</p>}</Belge>
+                <Belge>{bolumler.length ? bolumler.map((b, si) => <BolumBaskisi key={si} b={b} si={si} kayit={null} {...(t.gkk ? { yanitlar: GKK_YANIT_BASLIKLARI } : {})} />) : <p className="tc-km-soluk">Boş</p>}</Belge>
               </div>
               <div className="tc-km3-yardim">
                 <b>Yazım kuralları</b>
@@ -89,8 +119,8 @@ export function FormTasarla({ veri, yetki, form, kapat }: { veri: KmVerisi; yetk
                   <li><code>Alan | tarih</code>, <code>| sayı</code>, <code>| metin</code></li>
                   <li><code>Alan | seçim: A, B, C</code></li>
                   <li><code>Alan | çoklu: A, B, C</code></li>
-                  <li><code>? Madde</code> Evet / Hayır / UD</li>
-                  <li><code>[Tablo: Sütun 1, Sütun 2]</code></li>
+                  <li><code>? Madde</code> {t.gkk ? 'Uygun / Uygun değil / Bakılmadı' : 'Evet / Hayır / UD'}</li>
+                  {!t.gkk && <li><code>[Tablo: Sütun 1, Sütun 2]</code></li>}
                 </ul>
                 <p>"Karar", "Durum" veya "Sonuç" ile başlayan seçim alanı kaydın sonucunu belirler.</p>
               </div>

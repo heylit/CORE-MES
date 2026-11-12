@@ -239,6 +239,12 @@ export function kayitGecmisi(db: Db, koleksiyon: string, kimlik: string, sinir: 
   );
 }
 
+// 3118: form şablonlarının (tpl) dolu gövdeleri; GKK kaydı şablonunu bunlarla ve standart GKK şablonlarıyla denetler.
+export async function sablonKayitlari(db: Db): Promise<Record<string, unknown>[]> {
+  const satirlar = await db.sorgu<{ govde: Record<string, unknown> }>(`SELECT govde FROM kalite_merkezi_belge WHERE koleksiyon = 'tpl' AND govde IS NOT NULL`);
+  return satirlar.map((r) => r.govde);
+}
+
 // Koleksiyonda bu numarayı taşıyan dolu kayıt var mı (ortak sayaç dolu numarayı atlar).
 export async function noVarMi(db: Db, koleksiyon: string, no: string): Promise<boolean> {
   const satir = await db.tek<{ var: boolean }>(
@@ -639,10 +645,10 @@ export async function girisKilidi(db: Db, malKabulSatirId: number): Promise<void
 
 export interface GirisKarariSatiri {
   malKabulSatirId: number; asama: 'gkk' | 'karar'; kabulMiktar: string | null; hataliMiktar: string | null; karar: 'kabul' | 'sartli_kabul' | 'red' | null;
-  ncrNo: string | null; aciklama: string | null; kisiId: number; zaman: string;
+  ncrNo: string | null; aciklama: string | null; kisiId: number; zaman: string; gkkNo: string | null; kontrol: unknown;
 }
 const GIRIS_KARARI_SECIMI = `SELECT mal_kabul_satiri_id::int AS "malKabulSatirId", asama, kabul_miktar::text AS "kabulMiktar", hatali_miktar::text AS "hataliMiktar",
-  karar, ncr_no AS "ncrNo", aciklama, kisi_id AS "kisiId", ${zamanMetni('zaman')} AS zaman FROM kalite_merkezi_giris_karari`;
+  karar, ncr_no AS "ncrNo", aciklama, kisi_id AS "kisiId", ${zamanMetni('zaman')} AS zaman, gkk_no AS "gkkNo", kontrol FROM kalite_merkezi_giris_karari`;
 
 export function girisKararlari(db: Db, malKabulSatirIdleri: readonly number[]): Promise<GirisKarariSatiri[]> {
   return db.sorgu(`${GIRIS_KARARI_SECIMI} WHERE mal_kabul_satiri_id = ANY($1::bigint[]) ORDER BY id`, [[...malKabulSatirIdleri]]);
@@ -659,15 +665,32 @@ export async function kararBekleyenGirisler(db: Db): Promise<number[]> {
   return l.map((r) => r.id);
 }
 
+// 3117: GKK'sı gün aralığında verilmiş satırlar, en yeni GKK üstte. Gün tesis saatindedir (oturumun TimeZone ayarı, cekirdek/db.ts).
+export async function gkkVerilenGirisler(db: Db, a: { baslangic: string; bitis: string; sinir: number }): Promise<number[]> {
+  const l = await db.sorgu<{ id: number }>(
+    `SELECT mal_kabul_satiri_id::int AS id FROM kalite_merkezi_giris_karari
+      WHERE asama = 'gkk' AND zaman::date BETWEEN $1::date AND $2::date
+      ORDER BY zaman DESC, id DESC LIMIT $3`,
+    [a.baslangic, a.bitis, a.sinir],
+  );
+  return l.map((r) => r.id);
+}
+
 export async function girisKarariYaz(db: Db, k: {
   malKabulSatirId: number; asama: 'gkk' | 'karar'; kabulMiktar: string | null; hataliMiktar: string | null; karar: 'kabul' | 'sartli_kabul' | 'red' | null;
-  ncrKimlik: string | null; ncrNo: string | null; aciklama: string | null; kisiId: number;
+  ncrKimlik: string | null; ncrNo: string | null; aciklama: string | null; kisiId: number; gkkNo?: string | null; kontrol?: unknown;
 }): Promise<void> {
   await db.sorgu(
-    `INSERT INTO kalite_merkezi_giris_karari (mal_kabul_satiri_id, asama, kabul_miktar, hatali_miktar, karar, ncr_kimlik, ncr_no, aciklama, kisi_id)
-     VALUES ($1, $2, $3::numeric, $4::numeric, $5, $6, $7, $8, $9)`,
-    [k.malKabulSatirId, k.asama, k.kabulMiktar, k.hataliMiktar, k.karar, k.ncrKimlik, k.ncrNo, k.aciklama, k.kisiId],
+    `INSERT INTO kalite_merkezi_giris_karari (mal_kabul_satiri_id, asama, kabul_miktar, hatali_miktar, karar, ncr_kimlik, ncr_no, aciklama, kisi_id, gkk_no, kontrol)
+     VALUES ($1, $2, $3::numeric, $4::numeric, $5, $6, $7, $8, $9, $10, $11::jsonb)`,
+    [k.malKabulSatirId, k.asama, k.kabulMiktar, k.hataliMiktar, k.karar, k.ncrKimlik, k.ncrNo, k.aciklama, k.kisiId, k.gkkNo ?? null,
+      k.kontrol === undefined || k.kontrol === null ? null : JSON.stringify(k.kontrol)],
   );
+}
+
+export async function gkkNoVarMi(db: Db, no: string): Promise<boolean> {
+  const satir = await db.tek<{ var: boolean }>('SELECT EXISTS (SELECT 1 FROM kalite_merkezi_giris_karari WHERE gkk_no = $1) AS var', [no]);
+  return satir?.var ?? false;
 }
 
 // Arşivdeki silinmiş malzeme kartlarının bu modüldeki izi (2114c); malzemeler kablolamadan okur.

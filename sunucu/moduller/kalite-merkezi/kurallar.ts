@@ -1,12 +1,13 @@
 import { createHash } from 'node:crypto';
 import { KALITE_MERKEZI_KOLEKSIYONLARI, KM_EMIR_KIMLIGI, KM_TEDARIKCI_DURUMLARI } from '#paylasilan/sozlesme/kalite-merkezi.ts';
-import type { KaliteMerkeziKoleksiyonu, KmEmirKaynagi, KmEmirTipi, KmOnayReddiAlani, KmTedarikciDurumu } from '#paylasilan/sozlesme/kalite-merkezi.ts';
+import type { KaliteMerkeziKoleksiyonu, KmEmirKaynagi, KmEmirTipi, KmGkkKontrolu, KmOnayReddiAlani, KmTedarikciDurumu } from '#paylasilan/sozlesme/kalite-merkezi.ts';
 import type { DosyaTuru } from '#paylasilan/sozlesme/dosya.ts';
 import type { LotKarari } from '#paylasilan/sozlesme/musteri-tedarikci.ts';
 import type { KatalogTuru } from '#paylasilan/sozlesme/malzemeler.ts';
 import type { Durum as AletDurumu } from '#paylasilan/sozlesme/kalibrasyon.ts';
 import type { HataliKarari, HataliKaydiOzeti, KapanisMaddeBilgisi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { aramaSade } from '#paylasilan/kayit-aramasi.ts';
+import { numaraKur } from '#paylasilan/numara.ts';
 import type { KayitAramaSonucu } from '#paylasilan/sayfa-tanimi.ts';
 
 // Ortak dosya deposundaki bağların modül adı: bağ (modül, uygulamanın dosya kimliği) ile kurulur.
@@ -1175,6 +1176,25 @@ export function girisGkkEngeli(bekleyen: string, kabul: string, hatali: string):
   if (b <= 0n) return 'Bu lotun karantinada giriş kontrolü bekleyen miktarı yok.';
   if (binde(kabul) + binde(hatali) !== b) return `Kabul ve hatalı toplamı bekleyen miktara eşit olmalı: ${bindenMetin(b)}.`;
   return null;
+}
+
+// 3118: GKK formu kartın türündendir: yarı mamul ve mamul parça formu, gerisi (hammadde, sarf, kartı okunamayan) hammadde formu.
+// Kontrol listesi formun maddeleriyle yazılır: başka formun maddesi, tekrar eden madde ya da seri, hammaddede işlem ve seri reddedilir.
+export function gkkKontrolEngeli(k: KmGkkKontrolu): string | null {
+  for (const b of k.bolumler) {
+    const maddeler = b.maddeler.map((m) => m.metin);
+    if (new Set(maddeler).size !== maddeler.length) return 'Aynı bölümde bir kontrol maddesi iki kez yazılamaz.';
+    const alanlar = b.alanlar.map((x) => x.etiket);
+    if (new Set(alanlar).size !== alanlar.length) return 'Aynı bölümde bir alan iki kez yazılamaz.';
+  }
+  const seriler = k.seriler.map((x) => x.no);
+  if (new Set(seriler).size !== seriler.length) return 'Aynı seri numarası iki kez yazılamaz.';
+  return null;
+}
+
+// Kayıttan önce gösterilen numara örneği: Sistem Ayarları'ndaki kalıp birinci sırayla kurulur; sayaç okunmaz ve tüketilmez.
+export function gkkNoBicimi(kalip: string, g: { yil: number; ay: number; tur: string }): string {
+  return numaraKur(kalip, { yil: g.yil, ay: g.ay, sira: 1, alanlar: { TUR: g.tur } });
 }
 
 export type GirisDurumu = 'gkk_bekliyor' | 'karar_bekliyor' | 'kapandi';

@@ -1,6 +1,8 @@
 // Uygulamayla gelen standart formlar (uygulamanın BUILTIN listesi, metin olduğu gibi). Kullanıcı birini düzenlerse aynı koddaki
 // `tpl` kaydı bunun yerine geçer ("özelleştirildi"); kayıt silinince bu metne döner.
 
+import { GKK_KATEGORISI, GKK_STANDART_SABLONLARI, type GkkAyari } from '#paylasilan/gkk-sablonlari.ts';
+
 export interface YerlesikSablon {
   kod: string;
   ad: string;
@@ -9,9 +11,10 @@ export interface YerlesikSablon {
   ne: string;
   etiket?: boolean;
   dsl: string;
+  gkk?: GkkAyari;
 }
 
-export const YERLESIK_SABLONLAR: readonly YerlesikSablon[] = [
+const DSL_SABLONLARI: readonly YerlesikSablon[] = [
 {kod:'KF-08',ad:'FOD kontrol listesi',std:'SAE AS9146',kat:'Üretim ve proses',ne:'Vardiya başı ve sonu, montaj kapanmadan önce',dsl:`# Genel bilgiler
 Alan / hat *
 Vardiya | seçim: 1. vardiya, 2. vardiya, 3. vardiya
@@ -177,3 +180,6 @@ Proses akış referansı
 # Onay
 Hazırlayan ekip`}
 ];
+
+// 3118: standart GKK şablonları paylasilan'dadır (sunucu GKK kaydını onlarla denetler); Formlar'da öbürleri gibi düzenlenir.
+export const YERLESIK_SABLONLAR: readonly YerlesikSablon[] = [...DSL_SABLONLARI, ...GKK_STANDART_SABLONLARI.map((g) => ({ ...g, kat: GKK_KATEGORISI }))];

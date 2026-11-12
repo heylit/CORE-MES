@@ -29,7 +29,7 @@ export {
 export {
   isKutusuSayilari, stokMiktarlari, malzemeToplamlari, dusukStokSayisi, emirlerinNetSarfi, emirlerinSarfCikislari, emirlerinZincirdekiMiktari, statuluStoklar, statuSonHareketleri, emrinStatuAkisi, emirlerinFisHareketleri, emrinPartileri, type AkisHareketi,
   emrinAkisHareketleri, refakatCiktiPartiIdleri, type KartTeslimi, kartTeslimleri, type EmirTeslimSatiri, emirTeslimleri, type EmirIstekSatiri,
-  emirIstekleri, partiGirisZamanlari, sonPartiler, emirTamamlamaKilidi, emirUretimGirisi, konumKodlari, bakiyeDefterFarki,
+  emirIstekleri, partiGirisZamanlari, partiKimlikleri, sonPartiler, emirTamamlamaKilidi, emirUretimGirisi, konumKodlari, bakiyeDefterFarki,
 } from './sorgular/emir/sorgular.ts';
 export {
   type SepetHam, sepetSatirlari, sepeteEkle, lotunGozdekiSerbesti, sepetMiktari, sepettenSil, sepetiBosalt, fisAc, fisSatiriYaz, type FisHam, fisBul, FIS_SIRALAMASI, fisSay,

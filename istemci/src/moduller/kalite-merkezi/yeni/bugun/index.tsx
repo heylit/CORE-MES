@@ -41,7 +41,10 @@ export function Bugun({ veri, yetki, git, atolye }: EkranOzellikleri) {
   const kisayollar: { anahtar: string; baslik: string; alt: string; simge: SimgeAdi; yap: () => void }[] = [
     { anahtar: 'olcum', baslik: 'Ölçüm yap', alt: 'Resim veya model üzerinde adım adım', simge: 'ruler', yap: () => { void gezin(STUDYO_YOLU); } },
     { anahtar: 'lot', baslik: 'Lot kabul', alt: 'AQL ile numune ve karar', simge: 'box', yap: () => { git('lot-kabul', { ac: 'yeni' }); } },
-    { anahtar: 'giris', baslik: 'Giriş muayenesi', alt: 'Tedarikçiden gelen parça', simge: 'check', yap: () => { git('muayeneler', { ac: 'yeni', on: { tur: 'Giriş' } }); } },
+    // 3117: GKK onayı olan kişi giriş muayenesini mal kabul satırına bağlı GKK listesinden yapar; yalnız muayene yazan bugünkü boş formu açar.
+    yetki.onayla
+      ? { anahtar: 'giris', baslik: 'Giriş muayenesi', alt: 'GKK listesi: tedarikçiden gelen lotlar', simge: 'clipboard-check', yap: () => { git('giris-kontrolu'); } }
+      : { anahtar: 'giris', baslik: 'Giriş muayenesi', alt: 'Tedarikçiden gelen parça', simge: 'check', yap: () => { git('muayeneler', { ac: 'yeni', on: { tur: 'Giriş' } }); } },
     { anahtar: 'ncr', baslik: 'Uygunsuzluk bildir', alt: 'NCR aç', simge: 'alert', yap: () => { git('uygunsuzluklar', { ac: 'yeni' }); } },
     { anahtar: 'yukle', baslik: 'Resim / model yükle', alt: 'PDF, görüntü veya STEP', simge: 'cube', yap: () => { void gezin(STUDYO_YOLU); } },
   ];
@@ -54,7 +57,7 @@ export function Bugun({ veri, yetki, git, atolye }: EkranOzellikleri) {
       />
       {yetki.onayla && <IlkParcaKarari />}
       {yetki.onayla && <HataliKarari ncrler={veri.ncr} />}
-      {yetki.onayla && <GirisKarari ncrler={veri.ncr} />}
+      {yetki.onayla && <GirisKarari ac={(id) => { git('giris-kontrolu', { ac: String(id) }); }} tumu={() => { git('giris-kontrolu'); }} />}
       {yetki.yaz && (
         <section className="tc-km1-kisayollar" aria-label="Hızlı işler">
           {kisayollar.map((k) => (

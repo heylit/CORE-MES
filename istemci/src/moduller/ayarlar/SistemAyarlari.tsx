@@ -81,7 +81,7 @@ function SayiSatiri({ ayar, mesgul, degistir }: { ayar: SayiAyari; mesgul: boole
 }
 
 // Önizlemedeki belge alanı değerleri yer tutucudur; gerçek değeri numarayı isteyen modül verir.
-const ORNEK_ALANLAR: Readonly<Record<string, string>> = { FIRMA: 'FRM', PROJE: 'PRJ', PARCA: 'PRC' };
+const ORNEK_ALANLAR: Readonly<Record<string, string>> = { FIRMA: 'FRM', PROJE: 'PRJ', PARCA: 'PRC', TUR: 'HM' };
 
 export function numaraOnizlemesi(kalip: string, alanlar: readonly string[], tarih: Date): { ornek: string } | { hata: string } {
   const hata = kalipHatasi(kalip, alanlar);

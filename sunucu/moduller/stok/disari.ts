@@ -163,6 +163,13 @@ export async function partiGirisZamanlari(db: Db, partiIdler: number[]): Promise
   return new Map((await sorgular.partiGirisZamanlari(db, [...new Set(partiIdler)])).map(({ partiId, ...p }) => [partiId, p]));
 }
 
+// 3118: partinin tedarikçi parti no, döküm no ve sertifika no'su (Kalite Merkezi GKK formu). Olmayan parti haritada yoktur; yetki denetlemez.
+export interface PartiKimligi { tedarikciPartiNo: string | null; dokumNo: string | null; sertifikaNo: string | null }
+export async function partiKimlikleri(db: Db, partiIdler: readonly number[]): Promise<Map<number, PartiKimligi>> {
+  if (partiIdler.length === 0) return new Map();
+  return new Map((await sorgular.partiKimlikleri(db, [...new Set(partiIdler)])).map(({ partiId, ...p }) => [partiId, p]));
+}
+
 // Malzemenin son tedarikçi partileri ve partiye bağlı sertifika belgeleri (Satın Alma > Malzemeler); parti yoksa boş dizi.
 // Tarih partinin ilk kaydıdır. Belge Çizimler'de tutulur; dosyası Çizimler'in okuma ucundan verilir.
 export const sonPartiler = (db: Db, malzemeId: number, sinir = 10) => servis.sonPartiler(db, malzemeId, Math.min(Math.max(1, sinir), 50));

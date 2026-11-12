@@ -11,4 +11,9 @@ export const KALITE_MERKEZI_AYARLARI = {
     modul: 'kalite-merkezi', tur: 'numara', varsayilan: 'NCR-{YYYY}-{SAYAC:4}', alanlar: [], baslik: 'NCR numarası',
     aciklama: 'Sunucunun kendiliğinden açtığı NCR\'nin (numune reddi) numarası; var olan numaralar değişmez. Sayaç ay ya da yıl kalıpta varsa o dönemde sıfırlanır.',
   },
+  // 3118: GKK yazılınca verilen numara. {TUR} formun türüdür: HM hammadde, YM yarı mamul.
+  'kalite-merkezi.gkk-no': {
+    modul: 'kalite-merkezi', tur: 'numara', varsayilan: 'GKK-{YYYY}-{SAYAC:4}', alanlar: ['TUR'], baslik: 'GKK numarası',
+    aciklama: 'Giriş kontrolü (GKK) kaydedilince verilen numara. {TUR} alanı hammaddede HM, yarı mamulde YM olur. Var olan numaralar değişmez. Sayaç ay ya da yıl kalıpta varsa o dönemde sıfırlanır.',
+  },
 } as const satisfies Record<string, AyarTanimi>;

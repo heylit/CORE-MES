@@ -73,6 +73,7 @@ export function Formlar({ veri, yetki, gecis, gecisTamam, git }: EkranOzellikler
   const kapat = () => pencereYaz(null);
 
   const doldur = (f: ListedekiForm) => {
+    if (f.gkk) { git('giris-kontrolu'); return; }
     if (f.bagli) { git(f.bagli.gorunum as Parameters<typeof git>[0], { ac: YENI_KAYIT, ...(f.bagli.on ? { on: f.bagli.on } : {}) }); return; }
     const s = doldurulan(f, null);
     if (s) pencereYaz({ tur: 'doldur', sablon: s, rec: null });
@@ -213,12 +214,14 @@ export function Formlar({ veri, yetki, gecis, gecisTamam, git }: EkranOzellikler
                   <span className="tc-km3-kart-sayi" title="Kayıt sayısı">{kayitSayisi(veri, f)} kayıt</span>
                 </div>
                 <h4 className="tc-km3-kart-ad">
-                  {yetki.yaz ? <button type="button" className="tc-km3-kart-dugme" onClick={() => doldur(f)}>{f.ad}</button> : f.ad}
+                  {yetki.yaz || f.gkk ? <button type="button" className="tc-km3-kart-dugme" onClick={() => doldur(f)}>{f.ad}</button> : f.ad}
                 </h4>
                 {f.ne && <p className="tc-km3-kart-metin">{f.ne}</p>}
                 {f.std && <p className="tc-km-soluk tc-km-kucuk">{f.std}</p>}
                 <div className="tc-km3-eylemler">
-                  {yetki.yaz && <Dugme tur="birincil" simge="edit" onClick={() => doldur(f)}>Doldur</Dugme>}
+                  {f.gkk
+                    ? <Dugme tur="birincil" simge="clipboard-check" onClick={() => doldur(f)}>GKK listesi</Dugme>
+                    : yetki.yaz && <Dugme tur="birincil" simge="edit" onClick={() => doldur(f)}>Doldur</Dugme>}
                   <Dugme simge="printer" onClick={() => bosForm(f)}>Boş form</Dugme>
                   {f.tip === 'dsl' && yetki.kaynak('tpl') && <Dugme simge="tool" onClick={() => pencereYaz({ tur: 'tasarla', form: f })}>Düzenle</Dugme>}
                   {f.kayit && yetki.silebilir('tpl') && (
