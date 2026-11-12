@@ -34,6 +34,8 @@ export function beklemeMetni(gelis: string | null | undefined, simdi = Date.now(
   if (dk >= 60) return `${String(Math.floor(dk / 60))} sa`;
   return `${String(dk)} dk`;
 }
+// Tarih alanıyla karşılaştırmak için tesisin bugünü (YYYY-AA-GG).
+export const bugunGirdisi = (): string => new Intl.DateTimeFormat('sv-SE', { timeZone: 'Europe/Istanbul' }).format(new Date());
 export const bugunMetni = (): string => new Intl.DateTimeFormat('tr-TR', { day: 'numeric', month: 'long', weekday: 'long' }).format(new Date());
 
 export const HAREKET_ETIKETI: Record<HareketTuru, string> = {

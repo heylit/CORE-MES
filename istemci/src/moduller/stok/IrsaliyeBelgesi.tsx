@@ -8,7 +8,9 @@ import { useOturum } from '../../ortak/veri/oturum.ts';
 import { DosyaHatasi, dosyaYukle } from '../belge-merkezi/disari.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { zamanMetni } from './gorunum.ts';
-import { irsaliyePdfi, sayfaReddi } from './irsaliye-pdf.ts';
+import { belgeyiOkut, irsaliyePdfi, sayfaReddi } from './irsaliye-pdf.ts';
+import { ayniNo, bilgiVarMi, BOS_OKUMA, sayfalariBirlestir, tarihGirdisi, type OkunanBilgiler } from './irsaliye-okuma.ts';
+import { pdfMi, resimMi } from './irsaliye-okuyucu.ts';
 import { bekleyeniSil, irsaliyeyiSakla, kaliciRedMi, useBekleyenIrsaliyeler, yenidenDene, type BekleyenIrsaliye } from './irsaliye-kuyrugu.ts';
 import { hataMetni, korumaliPost, useIslem } from './ortak.tsx';
 
@@ -55,6 +57,71 @@ export async function irsaliyeEkleYaDaBeklet(
   }
 }
 
+type OkumaDurumu = 'okunuyor' | 'okundu' | 'okunamadi';
+
+// Fotoğraf sayfası eklenince cihazda okunur (3054 a); sonuç PDF yapılırken de kullanılır. Bilgiler sayfa sırasıyla birleşir.
+export function useSayfaOkumalari(sayfalar: readonly IrsaliyeSayfasi[]): { durumlar: ReadonlyMap<number, OkumaDurumu>; bilgiler: OkunanBilgiler } {
+  const [sonuclar, setSonuclar] = useState<ReadonlyMap<number, { durum: OkumaDurumu; bilgiler: OkunanBilgiler }>>(new Map());
+  useEffect(() => {
+    let acik = true;
+    for (const s of sayfalar) {
+      if (!(resimMi(s.dosya) || pdfMi(s.dosya))) continue;
+      // Süren okuma yeniden dinlenir (sayfa eklenince önceki dinleyici kapanır); okuma dosya başına tektir, yeniden başlamaz.
+      const onceki = sonuclar.get(s.anahtar);
+      if (onceki && onceki.durum !== 'okunuyor') continue;
+      if (!onceki) setSonuclar((m) => new Map(m).set(s.anahtar, { durum: 'okunuyor', bilgiler: BOS_OKUMA }));
+      void belgeyiOkut(s.dosya).then((o) => {
+        if (acik) setSonuclar((m) => new Map(m).set(s.anahtar, o ? { durum: 'okundu', bilgiler: o } : { durum: 'okunamadi', bilgiler: BOS_OKUMA }));
+      });
+    }
+    return () => { acik = false; };
+  }, [sayfalar]);
+  return useMemo(() => {
+    const durumlar = new Map<number, OkumaDurumu>();
+    for (const s of sayfalar) { const r = sonuclar.get(s.anahtar); if (r) durumlar.set(s.anahtar, r.durum); }
+    return { durumlar, bilgiler: sayfalariBirlestir(sayfalar.map((s) => sonuclar.get(s.anahtar)?.bilgiler ?? BOS_OKUMA)) };
+  }, [sayfalar, sonuclar]);
+}
+
+// Okunan değer yalnız öneridir: kişi "Kullan" demeden alana yazılmaz (3054 a). Sipariş no Satın almada açık siparişlerde aranır.
+export function OkunanBilgilerKutusu({ bilgiler, irsaliyeNo, kullan, siparisAra, irsaliyeTarihi, tarihKullan, kilitli = false }: {
+  bilgiler: OkunanBilgiler; irsaliyeNo: string; kullan: (no: string) => void; siparisAra?: (no: string) => void;
+  irsaliyeTarihi?: string; tarihKullan?: (tarih: string) => void; kilitli?: boolean;
+}) {
+  if (!bilgiVarMi(bilgiler)) return null;
+  const { irsaliyeNo: okunanNo, siparisNo, tarih } = bilgiler;
+  return (
+    <section className="tc-stok-bilgi tc-stok-okunan" aria-label="Okunan bilgiler">
+      <div className="tc-stok-okunan-ust"><Simge ad="scan" boyut="k" /><strong>Okunan bilgiler</strong></div>
+      <dl className="tc-stok-okunan-liste">
+        {okunanNo !== null && (
+          <div>
+            <dt>İrsaliye no</dt><dd className="mono">{okunanNo}</dd>
+            {ayniNo(irsaliyeNo, okunanNo)
+              ? <span className="tc-stok-okunan-ayni"><Simge ad="check" boyut="k" />Alanla aynı</span>
+              : <Dugme tur="ikincil" disabled={kilitli} aria-label="İrsaliye no'yu kullan" onClick={() => kullan(okunanNo)}>Kullan</Dugme>}
+          </div>
+        )}
+        {siparisNo !== null && (
+          <div>
+            <dt>Sipariş no</dt><dd className="mono">{siparisNo}</dd>
+            {siparisAra && <Dugme tur="ikincil" simge="search" disabled={kilitli} onClick={() => siparisAra(siparisNo)}>Siparişlerde ara</Dugme>}
+          </div>
+        )}
+        {tarih !== null && (
+          <div>
+            <dt>Tarih</dt><dd>{tarih}</dd>
+            {tarihKullan && (irsaliyeTarihi === tarihGirdisi(tarih)
+              ? <span className="tc-stok-okunan-ayni"><Simge ad="check" boyut="k" />Alanla aynı</span>
+              : <Dugme tur="ikincil" disabled={kilitli} aria-label="Tarihi kullan" onClick={() => tarihKullan(tarihGirdisi(tarih))}>Kullan</Dugme>)}
+          </div>
+        )}
+      </dl>
+      <p className="tc-stok-not">İrsaliyeden okundu; kontrol edin.</p>
+    </section>
+  );
+}
+
 // Fotoğraf çek ve Dosya seç aynı düzeyde ikincildir; formun birincil düğmesi çağıranındır (Arayüz notu, 3063).
 export function IrsaliyeSecici({ sayfalar, degistir, kilitli = false, sakla }: {
   sayfalar: IrsaliyeSayfasi[]; degistir: (s: IrsaliyeSayfasi[]) => void; kilitli?: boolean;
@@ -62,6 +129,7 @@ export function IrsaliyeSecici({ sayfalar, degistir, kilitli = false, sakla }: {
   sakla?: () => Promise<void>;
 }) {
   const { kopuk } = useBaglanti();
+  const { durumlar } = useSayfaOkumalari(sayfalar);
   const [saklaniyor, setSaklaniyor] = useState(false);
   const kamera = useRef<HTMLInputElement>(null);
   const dosya = useRef<HTMLInputElement>(null);
@@ -97,11 +165,14 @@ export function IrsaliyeSecici({ sayfalar, degistir, kilitli = false, sakla }: {
             <li key={s.anahtar}>
               {s.resim ? <img src={s.resim} alt={`Sayfa ${i + 1}`} /> : <span className="tc-stok-irsaliye-pdf"><Simge ad="file" />PDF</span>}
               <span className="tc-stok-irsaliye-no">{i + 1}</span>
+              {durumlar.get(s.anahtar) === 'okunuyor' && <span className="tc-stok-irsaliye-okunuyor" role="status">Okunuyor…</span>}
               <Dugme simge="x" aria-label={`Sayfa ${i + 1}'i çıkar`} disabled={kilitli} onClick={() => cikar(s.anahtar)} />
             </li>
           ))}
         </ol>
       ) : <p className="tc-stok-not">İsteğe bağlı. Sayfalar tek PDF olur ve mal kabulde saklanır.</p>}
+      {sayfalar.some((s) => resimMi(s.dosya) && durumlar.get(s.anahtar) === 'okunamadi') && <p className="tc-stok-not">Fotoğraf okunamadı; irsaliye görüntü olarak eklenir.</p>}
+      {sayfalar.some((s) => pdfMi(s.dosya) && durumlar.get(s.anahtar) === 'okunamadi') && <p className="tc-stok-not">PDF okunamadı; dosya olduğu gibi eklenir.</p>}
       {sakla && sayfalar.length > 0 && (
         <div className="tc-stok-irsaliye-sakla">
           {kopuk && <span className="tc-stok-not">Bağlantı yok. İrsaliyeyi bu cihazda saklayın; bağlantı gelince mal kabule ekleyin.</span>}

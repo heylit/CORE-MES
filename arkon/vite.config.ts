@@ -30,6 +30,7 @@ const KUTUPHANELER: readonly (readonly [string, string])[] = [
   ['tesseract.js-core/tesseract-core-simd-lstm.wasm', 'vendor/tesseract/tesseract-core-simd-lstm.wasm'],
   ['tesseract.js-core/LICENSE', 'vendor/licenses/tesseract-core.LICENSE'],
   ['@tesseract.js-data/eng/4.0.0_best_int/eng.traineddata.gz', 'vendor/tesseract/eng.traineddata.gz'],
+  ['@tesseract.js-data/tur/4.0.0_best_int/tur.traineddata.gz', 'vendor/tesseract/tur.traineddata.gz'],
   ['jsqr/dist/jsQR.js', 'vendor/qr/jsQR.js'],
   ['jsqr/LICENSE', 'vendor/licenses/jsqr.LICENSE'],
   ['qrcode-generator/qrcode.js', 'vendor/qr/qrcode.js'],

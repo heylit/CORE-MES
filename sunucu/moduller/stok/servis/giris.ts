@@ -180,7 +180,7 @@ function denetimiYaz(denetim: DenetimDefteri, denetimEki: (s: readonly DenetimSe
   if (denetim.length > 0) denetimEki(denetim);
 }
 export async function malKabulYap(db: Db, k: Kullanici, g: MalKabulKomutu, denetimEki: (s: readonly DenetimSecimi[]) => void): Promise<MalKabulCevabi> {
-  const id = await sorgular.malKabulAc(db, { no: await belgeNo(db, 'stok.mal-kabul-no', 'stok_mal_kabul'), tur: g.tur, irsaliyeNo: g.irsaliyeNo ?? null, duzeltilenId: null, kisiId: k.id });
+  const id = await sorgular.malKabulAc(db, { no: await belgeNo(db, 'stok.mal-kabul-no', 'stok_mal_kabul'), tur: g.tur, irsaliyeNo: g.irsaliyeNo ?? null, irsaliyeTarihi: g.irsaliyeTarihi ?? null, duzeltilenId: null, kisiId: k.id });
   const denetim: DenetimDefteri = [];
   const hareketIdler = await malKabulSatirlariniYaz(db, id, g.tur, g.satirlar, k, g.eksiOnay === true, denetim);
   // Gelen serbest malzeme bekleyen emirlere sırayla ayrılır (fason dönüşü emrin kendi parçasıdır, ayrılmaz); talepte seçilen emir öne geçer.
@@ -221,7 +221,7 @@ export async function malKabulDuzelt(db: Db, k: Kullanici, id: number, g: MalKab
   }
   // B-4 (1405 a): satırın kabul ettiği sevkiyat kalemi kabulü geri alır; kalem depoda yeniden bekler, yeni satır ona yeniden bağlanabilir.
   await depoKabulunuGeriAl(db, kisiId, satirlar.map((s) => s.id));
-  const yeni = await korumali(async () => sorgular.malKabulAc(db, { no: await belgeNo(db, 'stok.mal-kabul-no', 'stok_mal_kabul'), tur: eski.tur, irsaliyeNo: eski.irsaliyeNo, duzeltilenId: id, kisiId }));
+  const yeni = await korumali(async () => sorgular.malKabulAc(db, { no: await belgeNo(db, 'stok.mal-kabul-no', 'stok_mal_kabul'), tur: eski.tur, irsaliyeNo: eski.irsaliyeNo, irsaliyeTarihi: eski.irsaliyeTarihi, duzeltilenId: id, kisiId }));
   const denetim: DenetimDefteri = [];
   hareketIdler.push(...(await malKabulSatirlariniYaz(db, yeni, eski.tur, g.satirlar, k, g.eksiOnay === true, denetim)));
   denetimiYaz(denetim, denetimEki);

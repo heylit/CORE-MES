@@ -32,7 +32,7 @@ export const malzemeKaynagi = (ekKartlar = '') => `FROM (SELECT malzeme_id FROM 
       COALESCE(sum(b.miktar) FILTER (WHERE b.statu_id IS NOT NULL), 0) AS statude, count(DISTINCT b.konum_id)::int AS konumlar, bool_or(b.miktar < 0) AS eksi,
       bool_or(k.tur = 'kabul') AS kabulde, bool_or(b.statu_id IS NOT NULL AND b.miktar <> 0) AS statulu FROM stok_bakiye b JOIN stok_konum k ON k.id = b.konum_id WHERE b.malzeme_id = m.malzeme_id) t ON true`;
 export const MALZEME_KAYNAGI = malzemeKaynagi();
-export const MAL_KABUL_SECIMI = `SELECT m.id, m.no, m.tur, m.irsaliye_no AS "irsaliyeNo", ${zamanMetni('m.zaman')} AS zaman, m.kisi_id AS "kisiId",
+export const MAL_KABUL_SECIMI = `SELECT m.id, m.no, m.tur, m.irsaliye_no AS "irsaliyeNo", m.irsaliye_tarihi AS "irsaliyeTarihi", ${zamanMetni('m.zaman')} AS zaman, m.kisi_id AS "kisiId",
   (SELECT count(*)::int FROM stok_mal_kabul_satiri s WHERE s.mal_kabul_id = m.id) AS "satirSayisi",
   (SELECT count(*)::int FROM stok_mal_kabul_satiri s WHERE s.mal_kabul_id = m.id AND s.logo_durumu = 'fark_var') AS "farkSayisi",
   m.duzeltilen_id AS "duzeltilenId", (SELECT d.id FROM stok_mal_kabul d WHERE d.duzeltilen_id = m.id) AS "duzeltenId",

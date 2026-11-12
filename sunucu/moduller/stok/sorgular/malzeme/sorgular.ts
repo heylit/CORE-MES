@@ -134,8 +134,9 @@ export const girisKontroluSatirlari = (db: Db, idler: readonly number[] | null):
       AND ($1::int[] IS NOT NULL OR EXISTS (SELECT 1 FROM stok_bakiye b JOIN stok_konum k ON k.id = b.konum_id
             WHERE b.parti_id = s.parti_id AND k.tur = 'karantina' AND b.kalite_durumu = 'karar_bekliyor' AND b.miktar > 0))
     ORDER BY m.zaman, s.id`, [idler]);
-export const malKabulAc = async (db: Db, b: { no: string; tur: string; irsaliyeNo: string | null; duzeltilenId: number | null; kisiId: number }): Promise<number> =>
-  (await db.tek<{ id: number }>('INSERT INTO stok_mal_kabul (no, tur, irsaliye_no, duzeltilen_id, kisi_id) VALUES ($1, $2, $3, $4, $5) RETURNING id', [b.no, b.tur, b.irsaliyeNo, b.duzeltilenId, b.kisiId]))!.id;
+export const malKabulAc = async (db: Db, b: { no: string; tur: string; irsaliyeNo: string | null; irsaliyeTarihi?: string | null; duzeltilenId: number | null; kisiId: number }): Promise<number> =>
+  (await db.tek<{ id: number }>('INSERT INTO stok_mal_kabul (no, tur, irsaliye_no, irsaliye_tarihi, duzeltilen_id, kisi_id) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id',
+    [b.no, b.tur, b.irsaliyeNo, b.irsaliyeTarihi ?? null, b.duzeltilenId, b.kisiId]))!.id;
 export const malKabulBul = (db: Db, id: number, kilit = false): Promise<MalKabulHam | null> =>
   db.tek(`${MAL_KABUL_SECIMI} FROM stok_mal_kabul m WHERE m.id = $1${kilit ? ' FOR UPDATE OF m' : ''}`, [id]);
 export const malKabulSatiriYaz = async (db: Db, s: {

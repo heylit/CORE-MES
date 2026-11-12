@@ -633,6 +633,8 @@ export type FasonIsleriCevabi = z.output<typeof fasonIsleriCevabi>;
 export const malKabulGovdesi = z.object({
   tur: z.enum(MAL_KABUL_TURLERI),
   irsaliyeNo: bosOlabilir(30),
+  // 3142: irsaliyenin üstündeki tarih; mal kabul zamanından ayrıdır, boş olabilir.
+  irsaliyeTarihi: tarihSemasi.nullable().optional(),
   satirlar: z.array(malKabulSatirGirdisi).min(1, 'En az bir satır girin.').max(50),
   // Fason konumunda giden yetmezse onayla eksiye düşülür (çıkıştaki gibi).
   eksiOnay: z.boolean().optional(),
@@ -673,6 +675,7 @@ export const malKabulOzeti = z.object({
   no: z.string(),
   tur: z.enum(MAL_KABUL_BELGE_TURLERI),
   irsaliyeNo: z.string().nullable(),
+  irsaliyeTarihi: tarihSemasi.nullable(),
   zaman: zamanSemasi,
   kisiAd: z.string().nullable(),
   satirSayisi: z.number().int(),
