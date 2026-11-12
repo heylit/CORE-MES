@@ -617,6 +617,11 @@ a.tc-stok-kpi:hover, a.tc-stok-kpi:focus-visible { background: var(--panel2); }
   .tc-stok-bas > .tc-stok-eylem > .tc-refakat-okut { flex: 1 0 calc(var(--b-6) * 7); }
 }
 
+/* Telefonda raf matrisi kendi kabında yana kayar; ızgara izi içeriğe göre büyürse matris kartın dışına taşar. */
+@media (max-width: 767px) {
+  .tc-stok-matris-kutu { grid-template-columns: minmax(0, 1fr); }
+}
+
 /* 3063: irsaliye belgesi (seçici, sayfa küçük resimleri, ayrıntıdaki liste). Telefonda küçük resimler yana kayar. */
 .tc-stok-irsaliye { display: grid; gap: var(--b-2); min-width: 0; }
 .tc-stok-irsaliye-ust { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2); }
