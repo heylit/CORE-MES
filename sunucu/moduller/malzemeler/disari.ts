@@ -69,6 +69,12 @@ export type { LogoAynaKarti, LogoAynaOzeti, LogoAynaOzetiCozucusu, LogoEslemeYaz
 // Kartın sürümü de döner: satın alma siparişteki kopyanın karttan geri kaldığını bununla bilir (1105 a). İptal ve olmayan kart haritada yok.
 export { malzemeSatinAlmaAyrintilari } from './servis.ts';
 export type { MalzemeSatinAlmaAyrintisi } from './servis.ts';
+// 3121: satın alma ve Taleplerim tablolarının kalite, durum, işlem ve ölçü sütunları (kartın bugünkü hâli). Yetki denetlemez.
+export { malzemeOzellikleri } from './servis.ts';
+export type { MalzemeOzelligi } from './servis.ts';
+// 3118: GKK formunun ölçü satırları, ad ve birimli değerle ({ ad: 'Çap', deger: '40 mm' }). Yetki denetlemez.
+export { malzemeOlculeri } from './servis.ts';
+export type { OlcuDegeri } from './kurallar.ts';
 // 1469 a: 3D Atölyesi'nin ham önerisi için aktif hammadde kartlarının formu ve ölçüleri (`dims` olduğu gibi). Yetki denetlemez.
 export { hammaddeStokOlculeri } from './servis.ts';
 export type { HammaddeStokOlcusu } from './servis.ts';

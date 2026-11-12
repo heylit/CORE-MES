@@ -17,7 +17,7 @@ import {
 import {
   $, $$, addDays, clamp, clone, dayDiff, deltaHTML, esc, fmtDate, isNum, money, nf0, nf2, nfx, norm, numIn, parseNum,
   nf1, pct, sum, todayStr, toCSV, uid, kokIcinde, type FormEl } from "./util.ts";
-import { kademeRozeti, bekletmePenceresiSiparisleri, labelTables, onAfterRender, PRESETS, rankHTML, readSplitAssign, render, summaryText, UI, updateSplitSum, verdictHTML } from "./views.ts";
+import { kademeRozeti, bekletmePenceresiSiparisleri, labelTables, onAfterRender, ozellikAlti, ozellikBasliklari, ozellikHucreleri, PRESETS, rankHTML, readSplitAssign, render, summaryText, UI, updateSplitSum, verdictHTML } from "./views.ts";
 import { basamakYazabilir, reportCSV, unlinkedItems } from "./memory.ts";
 import { partileriUnut } from "./partiler.ts";
 import { ODEME_SEKLI, siparisTakibi, takibiUnut, takipGuncelle } from "./takip.ts";
@@ -1526,8 +1526,8 @@ ACTIONS["order-certs"] = (_el, r) => {
   const tedarikci = (qid: string) => { const q = (r.quotes || []).find(x => x.id === qid); return q ? supName(q) : "–"; };
   openModal(`<div class="mh"><h2>Sertifikalar ve raporlar</h2></div><div class="mb">
     <p class="small muted">Sertifika ve rapor sipariş satırına bağlanır; belge Çizim Merkezi'nde saklanır. Mal kabulde gelen partiye de bağlanabilir.</p>
-    <div class="tw"><table class="itbl rt"><thead><tr><th>Kalem</th><th>Tedarikçi</th><th>Belgeler</th></tr></thead><tbody>${satirlar.map(l => `<tr>
-      <td>${esc(kalemAdi(l.itemId))}</td><td>${esc(tedarikci(l.quoteId))}</td><td data-cert-line="${l.id}"><span class="small muted">Yükleniyor…</span></td></tr>`).join("")}</tbody></table></div>
+    <div class="tw"><table class="itbl rt"><thead><tr><th>Kalem</th>${ozellikBasliklari()}<th>Tedarikçi</th><th>Belgeler</th></tr></thead><tbody>${satirlar.map(l => `<tr>
+      <td class="lead"><b>${esc(kalemAdi(l.itemId))}</b>${ozellikAlti(l.malzeme)}</td>${ozellikHucreleri(l.malzeme)}<td>${esc(tedarikci(l.quoteId))}</td><td data-cert-line="${l.id}"><span class="small muted">Yükleniyor…</span></td></tr>`).join("")}</tbody></table></div>
     ${canWrite() ? `<div class="grid g2" data-sa-y="7">
       <label class="f"><span>Kalem</span><select id="ce-line">${satirlar.map(l => `<option value="${l.id}">${esc(kalemAdi(l.itemId))}, ${esc(tedarikci(l.quoteId))}</option>`).join("")}</select></label>
       <label class="f"><span>Tür</span><select id="ce-tur"><option value="sertifika">Sertifika</option><option value="rapor">Rapor</option></select></label>

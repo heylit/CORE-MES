@@ -341,6 +341,46 @@ const HAMMADDE_FORMLARI: Readonly<Record<string, { olculer: readonly string[]; s
   granul: { olculer: ['kg'] },
   kumas: { olculer: ['g', 'w', 'L'] },
 };
+// 3121: satın alma tablosunun ölçü sütunu, kart föyündeki yazımla (istemci `dimsStr`): mm ölçüler "×" ile, çapı olan formda başta
+// "Ø"; mm dışı ölçü birimiyle virgülden sonra. Bilinmeyen form ya da hiç sayı olmayan ölçü null (uydurulmaz).
+const OLCU_BIRIMLERI: Readonly<Record<string, Readonly<Record<string, string>>>> = {
+  tel: { L: 'm' }, kord: { L: 'm' }, rulo: { L: 'm' }, granul: { kg: 'kg' }, kumas: { g: 'g/m²', L: 'm' },
+};
+const CAPLI_FORMLAR = new Set(['cubuk', 'tel', 'kord', 'disk']);
+const olcuSayisi = (v: number): string => v.toLocaleString('tr-TR', { maximumFractionDigits: 3, useGrouping: false });
+export function olcuMetni(form: string | null, dims: unknown): string | null {
+  const f = form === null ? undefined : HAMMADDE_FORMLARI[form];
+  if (f === undefined || !nesneMi(dims)) return null;
+  const mm: string[] = [], diger: string[] = [];
+  for (const k of f.olculer) {
+    const v = dims[k];
+    if (typeof v !== 'number' || !Number.isFinite(v)) continue;
+    const birim = OLCU_BIRIMLERI[form!]?.[k];
+    if (birim === undefined) mm.push(olcuSayisi(v)); else diger.push(`${olcuSayisi(v)} ${birim}`);
+  }
+  const bas = mm.length ? `${CAPLI_FORMLAR.has(form!) ? 'Ø' : ''}${mm.join('×')} mm` : '';
+  const metin = [bas, ...diger].filter((x) => x !== '').join(', ');
+  return metin === '' ? null : metin;
+}
+// 3118 (GKK): ölçüler adıyla ve birimiyle, kart föyündeki sırayla; adlar istemcinin form tanımıyla aynıdır. Sayı olmayan ölçü yazılmaz.
+const OLCU_ADLARI: Readonly<Record<string, Readonly<Record<string, string>>>> = {
+  levha: { t: 'Kalınlık', w: 'En', l: 'Boy' }, cubuk: { d: 'Çap', l: 'Boy' }, altigen: { s: 'Anahtar ağzı', l: 'Boy' },
+  lama: { a: 'Genişlik', b: 'Kalınlık', l: 'Boy' }, boru: { D: 'Dış çap', t: 'Et kalınlığı', l: 'Boy' },
+  kutu: { a: 'Genişlik', b: 'Yükseklik', t: 'Et kalınlığı', l: 'Boy' }, kosebent: { a: 'Kol 1', b: 'Kol 2', t: 'Et kalınlığı', l: 'Boy' },
+  tel: { d: 'Çap', L: 'Uzunluk' }, kord: { d: 'Çap', L: 'Uzunluk' }, rulo: { t: 'Kalınlık', w: 'En', L: 'Rulo boyu' },
+  blok: { a: 'En', b: 'Boy', h: 'Yükseklik' }, disk: { d: 'Çap', t: 'Kalınlık' }, oring: { d1: 'İç çap', d2: 'Kesit çapı' },
+  granul: { kg: 'Ambalaj' }, kumas: { g: 'Gramaj', w: 'En', L: 'Rulo boyu' },
+};
+export interface OlcuDegeri { ad: string; deger: string }
+export function olcuListesi(form: string | null, dims: unknown): OlcuDegeri[] {
+  const f = form === null ? undefined : HAMMADDE_FORMLARI[form];
+  if (f === undefined || !nesneMi(dims)) return [];
+  return f.olculer.flatMap((k) => {
+    const v = dims[k];
+    if (typeof v !== 'number' || !Number.isFinite(v)) return [];
+    return [{ ad: OLCU_ADLARI[form!]?.[k] ?? k, deger: `${olcuSayisi(v)} ${OLCU_BIRIMLERI[form!]?.[k] ?? 'mm'}` }];
+  });
+}
 const hammaddeMi = (kayit: Nesne): boolean => kayit['tur'] === undefined || kayit['tur'] === null || kayit['tur'] === '' || kayit['tur'] === 'hammadde';
 const olcuBilgisi = (kayit: Nesne): string => kararliMetin({ form: kayit['form'] ?? null, dims: kayit['dims'] ?? null });
 function olcuHatasi(kayit: Nesne): string | null {

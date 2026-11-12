@@ -77,10 +77,10 @@ describe('Kg fiyatı için kalite, form ve stok birimi (satın alma isteği 19.1
     assert.deepEqual(a, {
       tur: 'hammadde', kaliteAdi: 'S235JR (1.0038)', formAdi: 'Yuvarlak çubuk', aciklamalar: ['Ø50'], standartlar: ['EN 10025-2'], tolerans: 'h9',
       durum: 'Normalize', yuzey: null, sertifikalar: ['EN 10204 3.1'], ureticiUrunKodu: null, mensei: null, gtip: null, enAzSiparis: '25',
-      tercihTedarikci: 'Deneme Tedarik', not: 'Deneme not',
+      tercihTedarikci: 'Deneme Tedarik', not: 'Deneme not', islem: null, olcu: 'Ø50×1001 mm',
     });
     const b = m.get(sarf)!;
-    assert.deepEqual([b.kaliteAdi, b.ureticiUrunKodu, b.mensei, b.gtip, b.enAzSiparis, b.sertifikalar, b.standartlar], [null, 'DNM-123', 'TR', '8207', null, [], []]);
+    assert.deepEqual([b.kaliteAdi, b.ureticiUrunKodu, b.mensei, b.gtip, b.enAzSiparis, b.sertifikalar, b.standartlar, b.islem, b.olcu], [null, 'DNM-123', 'TR', '8207', null, [], [], null, null]);
     assert.equal((await vt().tx((db) => malzemeSatinAlmaAyrintilari(db, []))).size, 0);
   });
 

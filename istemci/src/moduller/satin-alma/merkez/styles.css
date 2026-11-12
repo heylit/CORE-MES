@@ -783,3 +783,16 @@
 .sa-kok .basamak-esik.ilk{ display:flex; margin-top:var(--b-1); font-weight:400; }
 .sa-kok .fiyat-hucre .btn{ min-width:var(--dokunma-yogun); min-height:var(--dokunma-yogun); justify-content:center; }
 @media (max-width:640px){ .sa-kok .fiyat-hucre .btn{ min-width:var(--dokunma); min-height:var(--dokunma); } }
+/* 3121: kalite, durum, işlem, ölçü sütunları 1280 ve üstünde; altında kalem hücresinin altında etiketli tek satır. */
+.sa-kok .sa-oz-alt{ display:none; }
+.sa-kok .sa-oz-metin{ display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:2; line-clamp:2; overflow:hidden; }
+@media (max-width:1279px){ .sa-kok th.sa-oz, .sa-kok td.sa-oz{ display:none; } .sa-kok .sa-oz-alt{ display:block; } }
+/* Etiketli kart düzeninde dört bilgi kendi etiketli satırıdır (3090 kalıbı); boş olan gizlenir, alt satır tekrar etmez. */
+@container panel (max-width:880px){ .sa-kok table.rt td.sa-oz{ display:block; } .sa-kok table.rt td.sa-oz-bos{ display:none; } .sa-kok table.rt .sa-oz-alt{ display:none; } }
+@container modal (max-width:600px){ .sa-kok table.rt td.sa-oz{ display:block; } .sa-kok table.rt td.sa-oz-bos{ display:none; } .sa-kok table.rt .sa-oz-alt{ display:none; } }
+/* 3133: kart ayrıntısı kalem hücresinde açılır; dar ekranda da aynı. */
+.sa-kok .sa-oz-ayrinti{ margin-top:var(--b-1); }
+.sa-kok .sa-oz-ayrinti summary{ display:inline-flex; align-items:center; gap:var(--b-1); cursor:pointer; color:var(--muted); font-size:var(--yazi-s); }
+.sa-kok .sa-oz-ayrinti dl{ display:grid; grid-template-columns:max-content minmax(0,1fr); gap:var(--b-1) var(--b-2); margin:var(--b-1) 0 0; font-size:var(--yazi-s); }
+.sa-kok .sa-oz-ayrinti dt{ color:var(--muted); }
+.sa-kok .sa-oz-ayrinti dd{ margin:0; overflow-wrap:anywhere; }

@@ -39,7 +39,8 @@ import {
   askidakiTedarikciReddi, birimFiyati, kaliteSiparisReddi, karneTeslimOlayi, stokTutari, uygulananKgFiyati, yeniSiparisFirmalari,
   iptalOncesiTuret, iptalGeriAlmaHareketi, bilinmeyenKgSatirlari, kgEskimeHatirlatmalari, kgFiyatiEskiMi, kgFiyatiKartta, kgFiyatiYasi, kgSapanMi, kgSapmasi, kgSonAlislari, ondalikCarp, birlestirmeReddi, birlesmeProjesiReddi, birlesikTalep, emirHareketi, projeHareketi, projeReddi, siparisDagilimi, type SiparisDagilimi, type DagilimSatiri, genelGiderOrani, satirYolu, type SatirYolu, belgeGenelGiderOrani, eslemeListesiHatasi, eslemeSurumu, type EslemeDurumu, ayirmaReddi, kaynakKalemiReddi, BIRLESIK_KALEM_SINIRI, KUR_KILIDI, HATIRLATMA_ADLARI, type HatirlatmaAyarlari, type HatirlatmaTalebi, haftaIciGunleri, hatirlatmaAnahtari, hatirlatmaFarki, hatirlatmalar,
 } from './kurallar.ts';
-import type { BirimKarsiligi, FiyatIzi } from './kurallar.ts';
+import type { BirimKarsiligi, FiyatIzi, KalemOzelligi } from './kurallar.ts';
+import { kopyaOzelligi } from './kurallar.ts';
 import { butceKullanimi, butceSatirlari, degerlendir, esitVadeOrtami, gerekenBasamak, kalemHarcamalari, kararTutari, tedarikciBasarimi, teklifHesabi, type ButceSatiri } from './hesap-kurallar.ts';
 import * as s from './sorgular.ts';
 import { alimBildir } from './alim-olayi.ts';
@@ -152,6 +153,8 @@ async function talepleriYalinKur(db: Db, satirlar: s.TalepSatiri[]): Promise<Tal
   const at = <T extends { talepId: string }>({ talepId: _t, ...r }: T) => r;
   const baglar = await kalemBaglariKur(db, satirlar.map((t) => t.id));
   const karsiliklar = await kalemKarsiliklari(db, [{ kalemler: a.kalemler.map((k) => ({ ...k, miktar: sade(k.miktar) })) }]);
+  const ozellikler = await kalemOzellikleri(db, [{ kalemler: a.kalemler }]);
+  const kopyalar = satirlar.length === 0 ? [] : await s.kartKopyalariToplu(db, satirlar.map((t) => t.id));
   return satirlar.map((t) => {
     const k = a.kararlar.find((x) => x.talepId === t.id) ?? null;
     return {
@@ -168,6 +171,8 @@ async function talepleriYalinKur(db: Db, satirlar: s.TalepSatiri[]): Promise<Tal
       kalemler: grup(a.kalemler, t.id).map((k) => ({ ...at(k), miktar: sade(k.miktar) })),
       kalemBaglari: baglar.get(t.id) ?? [],
       kalemKarsiliklari: grup(a.kalemler, t.id).flatMap((k) => { const c = karsiliklar.get(k.id); return c === undefined ? [] : [{ kalemId: k.id, ...c }]; }),
+      kalemOzellikleri: grup(a.kalemler, t.id).flatMap((k) => { const o = ozellikler.get(k.id); return o === undefined ? [] : [{ kalemId: k.id, ...o }]; }),
+      siparisOzellikleri: kopyalar.filter((c) => c.talepId === t.id).map((c) => ({ kalemId: c.kalemId, teklifId: c.teklifId, ...kopyaOzelligi(c.ayrinti) })),
       teklifIstekleri: grup(a.istekler, t.id).map(at),
       teklifler: grup(a.teklifler, t.id).map((q) => ({
         ...at(q), kur: sade(q.kur), iskontoYuzdesi: sade(q.iskontoYuzdesi), nakliye: sade(q.nakliye), digerMasraf: sade(q.digerMasraf),
@@ -475,7 +480,8 @@ export async function taleplerim(db: Db, k: Kullanici, sinir: number): Promise<T
   const baglar = await kalemBagGorunumu(db, [...talepler.map((t) => t.id), ...birlesenler.keys()]);
   const gorunenler = talepler.map((t) => kaynakGorunumu(t, k.id, birlesenler));
   const karsiliklar = await kalemKarsiliklari(db, gorunenler);
-  return { talepler: gorunenler.map((t) => talebim(t, baglar, karsiliklar)), toplam: satirlar.length };
+  const ozellikler = await kalemOzellikleri(db, gorunenler);
+  return { talepler: gorunenler.map((t) => talebim(t, baglar, karsiliklar, ozellikler)), toplam: satirlar.length };
 }
 
 // SAT-79 (2871-1 a): talep eden kendi taslağını Taleplerim'den düzenler. Yalnız sahibi (açan ya da adına açılan) ve yalnız teklif istenmeden önce;
@@ -494,7 +500,7 @@ export async function talebimiDuzenle(db: Db, k: Kullanici, id: string, g: Taleb
   const taban = tamGorurMu(k.islemler) ? eski : talepEdenGorunumu(eski, k.id);
   await talepKaydet(db, k, id, { ...taban, baslik, ihtiyacTarihi: g.ihtiyacTarihi, notlar: g.aciklama, kalemler, surum: g.surum }, izYaz);
   const son = (await talepOku(db, id))!;
-  return talebim(gorunen(k, son), await kalemBagGorunumu(db, [id]), await kalemKarsiliklari(db, [son]));
+  return talebim(gorunen(k, son), await kalemBagGorunumu(db, [id]), await kalemKarsiliklari(db, [son]), await kalemOzellikleri(db, [son]));
 }
 
 // SAT-79, SAT-80: talep edenin gönderdiği kalemler. Kimlikli kalem eski talebin kalemidir: kartı, adı ve birimi eskiden alınır, miktar ve açıklama
@@ -559,7 +565,7 @@ export async function guncellemeAc(db: Db, k: Kullanici, id: string, g: TalebimG
   await s.hareketEkle(db, id, randomUUID(), `Güncelleme talebi açıldı: ${acilan.no}`, k.id);
   await s.hareketEkle(db, g.id, randomUUID(), `${eski.no} talebinin güncellemesi olarak açıldı.`, k.id);
   const son = (await talepOku(db, g.id))!;
-  return talebim(gorunen(k, son), await kalemBagGorunumu(db, [g.id]), await kalemKarsiliklari(db, [son]));
+  return talebim(gorunen(k, son), await kalemBagGorunumu(db, [g.id]), await kalemKarsiliklari(db, [son]), await kalemOzellikleri(db, [son]));
 }
 
 // SAT-81 (2871-2 a): gruptaki talep siparişe geçince öteki açık talepler aynı işlemde iptal olur; gerekçe iptal nedenine ve geçmişe yazılır.
@@ -586,6 +592,21 @@ async function kalemKarsiliklari(db: Db, talepler: readonly { kalemler: readonly
     const no = nolar.get(x.katalogId!);
     const c = kalemKarsiligi(x.miktar, x.birim, no == null ? undefined : bilgiler.get(no));
     return c === null ? [] : [[x.id, c] as const];
+  }));
+}
+
+// 3121: kalemin kartından kalite, durum, işlem ve ölçü (kartın bugünkü hâli); kartsız ya da iptal kartlı kalem haritada yok. İki sorgu.
+async function kalemOzellikleri(db: Db, talepler: readonly { kalemler: readonly { id: string; katalogId: string | null }[] }[]): Promise<Map<string, KalemOzelligi>> {
+  const kalemler = talepler.flatMap((t) => t.kalemler).filter((x) => x.katalogId !== null);
+  if (kalemler.length === 0) return new Map();
+  const nolar = new Map((await s.katalogMalzemeNolari(db, [...new Set(kalemler.map((x) => x.katalogId!))])).map((r) => [r.id, r.no]));
+  const kartlar = await malzemeSatinAlmaAyrintilari(db, [...nolar.values()].flatMap((n) => (n === null ? [] : [n])));
+  return new Map(kalemler.flatMap((x) => {
+    const no = nolar.get(x.katalogId!);
+    const a = no == null ? undefined : kartlar.get(no);
+    if (a === undefined) return [];
+    const { kayitsiz: _, ...o } = kopyaOzelligi(a);
+    return [[x.id, o] as const];
   }));
 }
 
@@ -820,7 +841,7 @@ export async function hizliAc(db: Db, k: Kullanici, g: HizliAcYazimi, izYaz: Fiy
   const dieler = g.tur === 'fason' ? await fasonDieleriAc(db, k, g) : g.kalemler.map(() => null);
   await s.kalemBaglariYaz(db, t.id, g.kalemler.flatMap((x, i) => (x.uygulananMalzemeNo === null && x.isEmriId === null && dieler[i] === null ? []
     : [{ kalemId: kalemler[i]!.id, uygulananMalzemeNo: x.uygulananMalzemeNo, isEmriId: x.isEmriId, dieId: dieler[i] ?? null }])));
-  return talebim(acilan, await kalemBagGorunumu(db, [t.id]), await kalemKarsiliklari(db, [acilan]));
+  return talebim(acilan, await kalemBagGorunumu(db, [t.id]), await kalemKarsiliklari(db, [acilan]), await kalemOzellikleri(db, [acilan]));
 }
 
 // E-13: Kalite Merkezi stok üzerinden satın almayı ithal eder; tedarikçi onay durumunu sunucu açılışında kablolama kaydeder (ADR 0006).

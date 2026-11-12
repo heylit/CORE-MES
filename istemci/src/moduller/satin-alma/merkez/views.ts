@@ -1,6 +1,7 @@
 import type { SiparisLogo } from "#paylasilan/sozlesme/satin-alma.ts";
-import type { Award, ExcessLine, Priority, PurchaseRequest, Quality, Quote, RequestItem, RequestStatus, Weights } from "./tipler.ts";
+import type { Award, ExcessLine, MalzemeOzelligi, Priority, PurchaseRequest, Quality, Quote, RequestItem, RequestStatus, Weights } from "./tipler.ts";
 import { CRIT, FLOW, OPEN, COMMITTED, PRIO, QUALITY, stLabel } from "./constants.ts";
+import { SIMGELER } from "../../../ortak/tasarim/simgeler.ts";
 import { S, V, memo, nameOf, settings, type Page } from "./store.ts";
 import {
   awardTotals, budgetUse, evaluate, lateBy, matOf, matStats, payText, priceHistory, quoteCalc, requiredApprover,
@@ -472,6 +473,29 @@ export function tabLog(r: PurchaseRequest): string {
   const log = (r.log || []).slice().reverse();
   return `<div class="panel"><div class="panel-b">${log.length ? `<ul class="log">${log.map(l => `<li><time>${fmtTs(l.at)}</time><span>${esc(l.t)}${l.by ? `<span class="by"> ${esc(nameOf(l.by))}</span>` : ""}</span></li>`).join("")}</ul>` : '<p class="muted">Bu talepte henüz kayıtlı hareket yok. Teklif, karar, onay ve teslimat adımları burada tarih ve kişiyle birlikte tutulur.</p>'}</div></div>`;
 }
+/* 3121: kalemin kalite, durum, işlem ve ölçüsü ayrı sütunlarda (1280 ve üstü); daha dar ekranda sütunlar gizlenir, aynı değerler kalem
+   hücresinin altında etiketli tek satırdır (tablo yatay kaymaz). Sipariş satırında değer siparişteki kart kopyasındandır (1105 a). */
+const OZ_ALANLARI = [["kalite", "Kalite"], ["durum", "Durum"], ["islem", "İşlem"], ["olcu", "Ölçü"], ["aciklama", "Açıklama"]] as const;
+const KAYITSIZ = "Sipariş verildiğinde kaydedilmemiş";
+export const ozellikBasliklari = (): string => OZ_ALANLARI.map(([, b]) => `<th class="sa-oz">${b}</th>`).join("");
+export function ozellikHucreleri(o: MalzemeOzelligi | undefined): string {
+  return OZ_ALANLARI.map(([k]) => {
+    const v = o?.[k] ?? null;
+    if (v !== null) return `<td class="sa-oz" data-sa-oz="${k}"><span class="sa-oz-metin" title="${esc(v)}">${esc(v)}</span></td>`;
+    const kayitsiz = o?.kayitsiz === true && (k === "islem" || k === "olcu");
+    return `<td class="sa-oz sa-oz-bos" data-sa-oz="${k}"><span class="faint"${kayitsiz ? ` title="${KAYITSIZ}"` : ""}>–</span></td>`;
+  }).join("");
+}
+export function ozellikAlti(o: MalzemeOzelligi | undefined): string {
+  const dolu = OZ_ALANLARI.flatMap(([k, b]) => { const v = o?.[k] ?? null; return v === null ? [] : [`${b}: ${esc(v)}`]; });
+  return (dolu.length ? `<span class="sub sa-oz-alt" data-sa-oz-alt="">${dolu.join(" · ")}</span>` : "") + ozellikAyrintisi(o);
+}
+const AYRINTI_SIMGESI = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="${SIMGELER.list}"/></svg>`;
+/** 3133: malzeme kartının föyündeki ayrıntılar kalem hücresinde açılır; her genişlikte aynı (betik gerekmez). */
+function ozellikAyrintisi(o: MalzemeOzelligi | undefined): string {
+  if (!o?.ayrinti.length) return "";
+  return `<details class="sa-oz-ayrinti" data-sa-oz-ayrinti=""><summary>${AYRINTI_SIMGESI}<span>Kart ayrıntısı</span></summary><dl>${o.ayrinti.map(x => `<dt>${esc(x.ad)}</dt><dd>${esc(x.deger)}</dd>`).join("")}</dl></details>`;
+}
 /** 3100: miktar hücresinde ikinci satır; ayrı sütun açılmaz. */
 const karsilikAlti = (it: RequestItem): string => (it.karsilik ? `<span class="sub" data-sa-karsilik="">${esc(it.karsilik)}</span>` : "");
 /** simple: talep eden ve onaylayan için sade liste (hafıza paneli ve satın alma düzenlemesi yok) */
@@ -487,7 +511,7 @@ export function tabItems(r: PurchaseRequest, simple = false): string {
     if (last) est += last.unitTRY * (parseNum(it.qty) || 0);
     if (st) st.suppliers.forEach(s => { prevSup[s.supplierId] = prevSup[s.supplierId] || { id: s.supplierId, name: s.name, items: new Set(), wins: 0 }; prevSup[s.supplierId]!.items.add(it.name); prevSup[s.supplierId]!.wins += s.wins; });
     if (mid) Object.values(S.requests).forEach(o => { if (o.id !== r.id && o.award && o.award.lessons && (o.items || []).some(x => matOf(x) === mid)) lessons.push({ r: o, t: o.award.lessons! }); });
-    return `<tr><td class="lead"><b>${m ? matLink(mid, it.name) : esc(it.name)}</b>${m ? `<span class="sub">${esc(m.code || "")}${m.category ? ", " + esc(m.category) : ""}</span>` : '<span class="sub">katalogda yok</span>'}${it.spec ? `<span class="sub">${esc(it.spec)}</span>` : ""}${kalemBagMetinleri(it).map(t => `<span class="sub" data-sa-kalem-bagi="">${esc(t)}</span>`).join("")}</td>
+    return `<tr><td class="lead"><b>${m ? matLink(mid, it.name) : esc(it.name)}</b>${m ? `<span class="sub">${esc(m.code || "")}${m.category ? ", " + esc(m.category) : ""}</span>` : '<span class="sub">katalogda yok</span>'}${it.spec ? `<span class="sub">${esc(it.spec)}</span>` : ""}${kalemBagMetinleri(it).map(t => `<span class="sub" data-sa-kalem-bagi="">${esc(t)}</span>`).join("")}${ozellikAlti(it.malzeme)}</td>${ozellikHucreleri(it.malzeme)}
       <td class="r num">${numIn(parseNum(it.qty))} ${esc(it.unit)}${karsilikAlti(it)}</td>
       <td class="r num">${last ? `${money(last.unitTRY)}<span class="sub">${esc(last.supplier)}, ${fmtDate(last.date)}</span>` : '<span class="faint">ilk alım</span>'}</td>
       <td class="r num">${st && isNum(st.avgTRY) ? money(st.avgTRY) : "–"}${st && st.quotes ? `<span class="sub">${st.quotes} teklif kaydı</span>` : ""}</td>
@@ -497,7 +521,7 @@ export function tabItems(r: PurchaseRequest, simple = false): string {
   const uniq: { r: PurchaseRequest; t: string }[] = []; const seen = new Set<string>(); lessons.forEach(l => { if (!seen.has(l.r.id)) { seen.add(l.r.id); uniq.push(l); } });
   return `<div class="stack">
   <div class="panel"><div class="panel-h"><h2>Kalemler</h2><span class="sub">${items.length} kalem${est ? ", son fiyatlarla tahmini " + money(est, "TRY", 0) : ""}</span><span class="spacer"></span>${simple && r.status !== "draft" ? "" : `<button class="btn sm" data-act="edit-request">Düzenle</button>`}</div>
-    <div class="tw"><table class="rt"><thead><tr><th>Kalem</th><th class="r">Miktar</th><th class="r">Son alış (birim)</th><th class="r">12 ay ort. teklif</th><th class="r">Tahmini tutar</th></tr></thead><tbody>${rows.join("")}</tbody></table></div>${r.notes ? `<div class="panel-f small"><span class="muted">Talep notu:</span> ${esc(r.notes)}</div>` : ""}</div>
+    <div class="tw"><table class="rt"><thead><tr><th>Kalem</th>${ozellikBasliklari()}<th class="r">Miktar</th><th class="r">Son alış (birim)</th><th class="r">12 ay ort. teklif</th><th class="r">Tahmini tutar</th></tr></thead><tbody>${rows.join("")}</tbody></table></div>${r.notes ? `<div class="panel-f small"><span class="muted">Talep notu:</span> ${esc(r.notes)}</div>` : ""}</div>
   ${!simple && (ps.length || uniq.length) ? `<div class="callout memory"><h3>Hafıza bu kalemler hakkında ne diyor</h3>
     ${ps.length ? `<p class="small" data-sa-y="5">Bu kalemler için daha önce teklif veren tedarikçiler:</p><div class="chips" data-sa-y="20">${ps.map(p => `<button class="chip" data-act="open-sup" data-id="${p.id}">${esc(p.name)}${p.wins ? ` <span class="faint">${p.wins} kez seçildi</span>` : ""}</button>`).join("")}</div>` : ""}
     ${uniq.length ? `<p class="small" data-sa-y="14">Önceki alımlardan notlar:</p>${uniq.slice(0, 4).map(l => `<div class="note" data-sa-y="20"><span class="xs muted">${esc(l.r.no)}, ${esc(l.r.title)}</span><br>${esc(l.t)}</div>`).join("")}` : ""}
@@ -839,9 +863,9 @@ function teslimBilgisiHTML(a: { deliveredDate?: string; quality?: Quality; expec
 function splitEditorHTML(r: PurchaseRequest, ev: Evaluation, assign: Record<string, string>, locked: boolean): string {
   const opt = ev.split!.plan.assign;
   return `<p class="small muted" data-sa-y="30">Her kalemi hangi tedarikçiden alacağınızı seçin. Başlangıçta nakliye dahil en uygun dağılım seçilidir. Her tedarikçinin nakliye ve diğer masrafları sipariş başına tam eklenir. Bir kalemin miktarını birden fazla tedarikçiye bölmek için yukarıdaki <button class="btn sm ghost" data-sa-y="51" data-act="paylastir-git">Paylaştırma</button> bölümünü kullanın.</p>
-  <div class="tw"><table class="itbl rt"><thead><tr><th>Kalem</th><th>Tedarikçi</th><th class="r">Birim (net)</th><th class="r">Tutar (net)</th></tr></thead><tbody>
+  <div class="tw"><table class="itbl rt"><thead><tr><th>Kalem</th>${ozellikBasliklari()}<th>Tedarikçi</th><th class="r">Birim (net)</th><th class="r">Tutar (net)</th></tr></thead><tbody>
   ${(r.items || []).map(it => { const opts = ev.elig.map(x => ({ x, u: itemCost(x, it) })).filter((o): o is { x: EvalRow; u: number } => o.u !== null).sort((a, b) => a.u - b.u);
-    return `<tr><td class="lead"><b>${esc(it.name)}</b><span class="sub">${numIn(parseNum(it.qty))} ${esc(it.unit)}${it.karsilik ? ` (${esc(it.karsilik)})` : ""}</span></td>
+    return `<tr><td class="lead"><b>${esc(it.name)}</b><span class="sub">${numIn(parseNum(it.qty))} ${esc(it.unit)}${it.karsilik ? ` (${esc(it.karsilik)})` : ""}</span>${ozellikAlti(it.malzeme)}</td>${ozellikHucreleri(it.malzeme)}
     <td><select data-split="${it.id}" ${locked ? "disabled" : ""} aria-label="${esc(it.name)} tedarikçisi">${opts.map(o => `<option value="${o.x.q.id}" ${assign[it.id] === o.x.q.id ? "selected" : ""}>${esc(supName(o.x.q))}, ${money(o.u)}${o.x.q.id === opt[it.id] ? " (en uygun dağılım)" : ""}</option>`).join("")}</select></td>
     <td class="r num" data-su="${it.id}"></td><td class="r num" data-st="${it.id}"></td></tr>`; }).join("")}
   </tbody></table></div>

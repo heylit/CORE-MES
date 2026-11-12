@@ -1005,7 +1005,30 @@ export function fasonTerminUyumu(gecmis: readonly FasonGecmisiSatiri[]): FasonTe
 
 // 898 a: kalemin bağları (uygulanan parça ve fason adım) ayrı okunur; tam talep görünümüne girmez. Bağı olmayan kalemde ikisi de null.
 export interface KalemBagi { uygulanan: string | null; fasonAdim: string | null }
-export function talebim(t: Talep, baglar: ReadonlyMap<string, KalemBagi> = new Map(), karsiliklar: ReadonlyMap<string, BirimKarsiligi> = new Map()): Talebim {
+// 3121: kalemin kartından kalite, durum, işlem ve ölçü; kartsız kalemde null.
+// 3133: kalem satırında kartın dört sütunu (kalite, durum, işlem, ölçü), açıklaması ve kart föyündeki ayrıntı listesi.
+export interface KalemOzelligi {
+  kalite: string | null; durum: string | null; islem: string | null; olcu: string | null; aciklama: string | null;
+  ayrinti: { ad: string; deger: string }[];
+}
+// Kart ayrıntısı (bugünkü hâl ya da siparişteki kopya, 1105 a) aynı biçimdedir. Ayrıntı listesi malzeme kartının föyündeki sırayla;
+// boş alan yazılmaz. Fiyat, en az sipariş, tercih edilen tedarikçi ve kart notu satın almanın iç alanıdır, listede yoktur.
+// 3121'den önce alınan kopyada işlem ve ölçü anahtarı yoktur (geriye doldurulmaz), satır `kayitsiz` döner.
+export function kopyaOzelligi(a: Record<string, unknown>): KalemOzelligi & { kayitsiz: boolean } {
+  const metin = (v: unknown): string | null => (typeof v === 'string' && v.trim() !== '' ? v : null);
+  const dizi = (v: unknown): string | null => (Array.isArray(v) ? metin(v.filter((x): x is string => typeof x === 'string' && x.trim() !== '').join(', ')) : null);
+  const o = { kalite: metin(a['kaliteAdi']), durum: metin(a['durum']), islem: metin(a['islem']), olcu: metin(a['olcu']), aciklama: dizi(a['aciklamalar']) };
+  const satirlar: [string, string | null][] = [
+    ['Kalite', o.kalite], ['Form', metin(a['formAdi'])], ['Ölçü', o.olcu], ['Açıklama', o.aciklama], ['Standart', dizi(a['standartlar'])],
+    ['Tolerans', metin(a['tolerans'])], ['Durum', o.durum], ['İşlem', o.islem], ['Yüzey', metin(a['yuzey'])],
+    ['İstenen sertifikalar', dizi(a['sertifikalar'])], ['Üretici ürün kodu', metin(a['ureticiUrunKodu'])], ['Menşei', metin(a['mensei'])], ['GTİP', metin(a['gtip'])],
+  ];
+  return { ...o, ayrinti: satirlar.flatMap(([ad, deger]) => (deger === null ? [] : [{ ad, deger }])), kayitsiz: !('islem' in a) || !('olcu' in a) };
+}
+export function talebim(
+  t: Talep, baglar: ReadonlyMap<string, KalemBagi> = new Map(), karsiliklar: ReadonlyMap<string, BirimKarsiligi> = new Map(),
+  ozellikler: ReadonlyMap<string, KalemOzelligi> = new Map(),
+): Talebim {
   const bag = (id: string): KalemBagi => baglar.get(id) ?? { uygulanan: null, fasonAdim: null };
   return {
     id: t.id, no: t.no, baslik: t.baslik, durum: t.durum, ihtiyacTarihi: t.ihtiyacTarihi, olusturma: t.olusturma,
@@ -1014,7 +1037,7 @@ export function talebim(t: Talep, baglar: ReadonlyMap<string, KalemBagi> = new M
     guncellenebilir: guncellemeReddi(t, t.kalemler.some((k) => bag(k.id).uygulanan !== null || bag(k.id).fasonAdim !== null)) === null,
     ...(t.guncellemeGrubu === undefined ? {} : { guncellemeGrubu: t.guncellemeGrubu }),
     kaynak: t.kalemler.some((k) => bag(k.id).fasonAdim !== null) ? 'fason' : 'elle',
-    kalemler: t.kalemler.map((k) => ({ id: k.id, aciklama: k.ozellik, ad: k.ad, miktar: k.miktar, birim: k.birim, kartBekliyor: k.katalogId === null, ...bag(k.id), karsilik: karsiliklar.get(k.id) ?? null })),
+    kalemler: t.kalemler.map((k) => ({ id: k.id, aciklama: k.ozellik, ad: k.ad, miktar: k.miktar, birim: k.birim, kartBekliyor: k.katalogId === null, ...bag(k.id), karsilik: karsiliklar.get(k.id) ?? null, malzeme: ozellikler.get(k.id) ?? null })),
   };
 }
 
