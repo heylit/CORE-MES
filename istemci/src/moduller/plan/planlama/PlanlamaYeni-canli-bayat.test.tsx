@@ -54,4 +54,11 @@ describe('PlanlamaYeni canlı plan bayat işareti', () => {
     await screen.findByRole('region', { name: 'Değişiklik akışı' }, { timeout: 10000 });
     expect(canliSatiri()).toBeNull();
   }, 20000);
+
+  it("Stüdyo'da değişiklik yoksa boş şerit çizilmez (öteki sayfalarda kalır, yukarıdaki test)", async () => {
+    sunucuKur(YONETICI, [PLANLI]);
+    ac('/plan/studio');
+    await screen.findByRole('toolbar', { name: 'Plan çubuğu' }, { timeout: 10000 });
+    expect(screen.queryByRole('region', { name: 'Değişiklik akışı' })).toBeNull();
+  }, 20000);
 });

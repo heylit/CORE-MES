@@ -3,13 +3,14 @@ import { Rozet } from '../../../../../ortak/arayuz/index.ts';
 import { VERI_NOTU } from '../../motor/ortak.tsx';
 import type { PlanlamaCalismasi, RotaAdimi } from '../../tipler.ts';
 import { adimEkleri, bagTuru } from './kurallar.ts';
+import { kaynakAdlariKur } from '../../kaynak-kodu.tsx';
 import { SahipDugmesi, SahipNotu, VeriKarti, VeriTablosu, sayiYazi } from './ortak.tsx';
 
 // Ürün ve rota (02-orta.betik sRotalar): solda ürünler, sağda seçili ürünün akışı ve adım tablosu. Ürün ve rota Reçete ve Rota'nındır (222 a):
 // adım, ürün ekleme ve silme yerinde ve pasif. Seçili ürün görünümün kendi durumudur (eski U.urun); ürün yoksa ilk ürün.
 
 export function Rotalar({ c }: { c: PlanlamaCalismasi }) {
-  const D = c.D;
+  const D = c.D; const ad = kaynakAdlariKur(D);
   const [sec, secYaz] = useState<string | null>(null);
   const u = D.urunler.find((x) => x.id === sec) ?? D.urunler[0] ?? null;
   const fasonAd = (id: string) => (D.fasoncular ?? []).find((f) => f.id === id)?.ad ?? id;
@@ -56,7 +57,7 @@ export function Rotalar({ c }: { c: PlanlamaCalismasi }) {
                 { anahtar: 'k', baslik: 'Sıra', hucre: (o) => <b className="mono">{o.k}</b> },
                 { anahtar: 'ad', baslik: 'Adım', hucre: (o) => o.ad ?? '—' },
                 { anahtar: 'tez', baslik: 'Tezgâh · çevrim · ayar', hucre: (o) => (o.fason ? <Rozet ton="uyari">{`Fason ${o.fason}`}</Rozet> : (
-                  <span className="tc-pyi-cipler">{(o.tezgahlar ?? []).map((t) => <span key={t.id} className="tc-pyi-cip">{t.id} · {sayiYazi(t.cevrim, 1)} dk · {sayiYazi(t.ayar)} dk</span>)}</span>
+                  <span className="tc-pyi-cipler">{(o.tezgahlar ?? []).map((t) => <span key={t.id} className="tc-pyi-cip">{ad.kaynak(t.id)} · {sayiYazi(t.cevrim, 1)} dk · {sayiYazi(t.ayar)} dk</span>)}</span>
                 )) },
                 { anahtar: 'bag', baslik: 'Öncül', hucre: (o) => (o.bag ?? []).map((b) => `${String(b[0])} ${bagTuru(b) === 'o' ? '(örtüşmeli)' : '(bitince)'}`).join(', ') || '—' },
                 { anahtar: 'aile', baslik: 'Aile', hucre: (o) => o.aile || '—' },

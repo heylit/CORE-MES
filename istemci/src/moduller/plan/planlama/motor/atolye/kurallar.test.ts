@@ -92,7 +92,9 @@ describe('atölye kuralları', () => {
     expect(cubukYazisi(r, '20', 'Freze', 30)).toEqual({ b: '012', ek: '', alt: '' });
     expect(cubukYazisi(r, '20', 'Freze', 10)).toBeNull();
     const no = emirNoOkuyucu({ orders: [{ id: 'IE-0012', no: 'MM-ORN-00012-26-11-012' }] });
-    expect(cubukYazisi(r, '20', 'Freze', 120, no)).toEqual({ b: 'MM-ORN-00012-26-11-012', ek: ' · 20', alt: 'Freze' });
+    expect(cubukYazisi(r, '20', 'Freze', 200, no)).toEqual({ b: 'MM-ORN-00012-26-11-012', ek: ' · 20', alt: 'Freze' });
+    // Sığmayan emir no sondan değil baştan kısalır: ayırt eden kuyruk kalır.
+    expect(cubukYazisi(r, '20', 'Freze', 120, no)).toEqual({ b: '…11-012', ek: ' · 20', alt: 'Freze' });
     expect(ilerleme(r, null, 10, 5)).toBe(0.5);
     expect(ilerleme(r, { S: 0, plan: 0, n: 4 }, 10, 5)).toBe(0.4);
     expect(ilerleme({ ...r, S: 6 }, null, 10, 5)).toBeNull();

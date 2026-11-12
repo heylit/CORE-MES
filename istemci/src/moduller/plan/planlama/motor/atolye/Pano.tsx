@@ -21,6 +21,7 @@ import { Ray } from './Ray.tsx';
 import { HamleOnizlemesi } from '../hamle/Onizleme.tsx';
 import { HamleBaglami, hamleYapisi, useHamle } from '../hamle/hamle.ts';
 import { useAn } from '../saat.ts';
+import { useKaynakAdlari, type KaynakAdlari } from '../../kaynak-kodu.tsx';
 
 // Tezgâh panosu (zz36 TP): üst çubuk, sipariş rayı, tezgâh çizelgesi, Bugün ve kartlar. Plan sunucuda çözülür (357 b); motor hamleleri (iyileştir,
 // öne al, kuyruk sırası) sunucuda aranır, önizlenir, kişi uygular (2129-1 b). Düzenle ve Yapılacaklar tahtadakiyle aynıdır (2531 a); taşı, olay
@@ -43,6 +44,8 @@ export interface Ortam {
   // 1982 a: sunucu komutları; yazamayan için null. `isleniyor` komut sürerken ikinci komutu engeller.
   tasi: ((id: string, m: string, S: number) => void) | null; olayEkle: ((olay: AtolyeOlayi) => Promise<boolean>) | null; isleniyor: boolean;
   ekMesai: ((m: string, gun: number, vardiya: string) => void) | null;
+  // Kaynak ve grup kimliğinin ekrandaki adı (tezgâh kodu, kişi ve fasoncu adı, grup kodu).
+  ad: KaynakAdlari;
 }
 
 interface Ozellikler {
@@ -62,6 +65,7 @@ export function kaydirici(k: HTMLElement): HTMLElement | null {
 }
 
 export function Pano({ o, c, p, cf: fark, sekSec, onayda, sen, senYaz }: Ozellikler) {
+  const ad = useKaynakAdlari();
   const { komut, yetki, secim, sec } = o;
   const emirler = o.depo.durum?.emirler ?? null;
   const an = useAn();
@@ -69,12 +73,18 @@ export function Pano({ o, c, p, cf: fark, sekSec, onayda, sen, senYaz }: Ozellik
   const hazir = useMemo(() => malzemeHazir(cx), [cx]);
   const liste = useMemo(() => siparisler(c, p, cx, hazir), [c, p, cx, hazir]);
   const bilgi = useMemo(() => new Map(liste.map((s) => [s.id, s])), [liste]);
-  const emirNo = useMemo(() => emirNoOkuyucu(o.depo.receteRotaKaydi), [o.depo.receteRotaKaydi]);
+  const emirNo = useMemo(() => emirNoOkuyucu(o.depo.receteRotaKaydi, o.depo.durum?.emirler), [o.depo.receteRotaKaydi, o.depo.durum?.emirler]);
   const now = simdiSaati(c, an);
   const donuk = Number(c.w.dondurma) || 0;
   const [olcek, setOlcek] = useState<AtolyeOlcegi>(() => ilkOlcek(typeof window === 'undefined' ? 1280 : window.innerWidth));
   const [suz, suzSec] = useState<Suzgec | null>(null);
   const [rayAcik, setRayAcik] = useState(false);
+  // Geniş ekranda sipariş listesi kapatılabilir; tercih tarayıcıda kalır (3042). Dar ekranda liste zaten açılır katmandır (rayAcik).
+  const [rayGizli, setRayGizli] = useState(rayGizliOku);
+  const rayDugmesi = (): void => {
+    if ((kap.current?.clientWidth ?? 0) < RAY_DAR) { setRayAcik((x) => !x); return; }
+    setRayGizli((x) => { rayGizliYaz(!x); return !x; });
+  };
   const [bugunAcik, setBugunAcik] = useState(false);
   const bugun = gunAnahtari(Date.now());
   // Brifing katlı başlar (2729 b); günün ilk açılışında üst çubuktaki düğmesi vurgulanır, açılınca o gün sönük kalır. Gün bu tarayıcıda
@@ -102,7 +112,7 @@ export function Pano({ o, c, p, cf: fark, sekSec, onayda, sen, senYaz }: Ozellik
   const hamle = useHamle(o, uyar);
   const iyiY = hamleYapisi(hamle, (h) => { h.iyilestir(); });
   const guncel = planGuncel(c);
-  const sor = useMemo(() => sorunlar(c, p, cx, guncel), [c, p, cx, guncel]);
+  const sor = useMemo(() => sorunlar(c, p, cx, guncel, emirNo), [c, p, cx, guncel, emirNo]);
   const { altSec } = o;
   const senaryolar = altSec ? () => altSec({ ekran: 'gecmis', bolum: 'senaryolar' }) : null;
   const veriAc = altSec ? (bolum: string) => altSec({ ekran: 'veri', bolum }) : null;
@@ -211,7 +221,7 @@ export function Pano({ o, c, p, cf: fark, sekSec, onayda, sen, senYaz }: Ozellik
   }, []);
 
   const ort: Ortam = {
-    c, p, cx, now, donuk, hazir, bilgi, liste, emirNo, suz, suzSec, secJob, secOp, yaz, o, opSec, sipSec, sipGoster, opGit, kartAc, kartKapat,
+    ad, c, p, cx, now, donuk, hazir, bilgi, liste, emirNo, suz, suzSec, secJob, secOp, yaz, o, opSec, sipSec, sipGoster, opGit, kartAc, kartKapat,
     olcek, olcekSec: setOlcek, sekSec, bugunAc: setBugunAcik, brifAc: () => { setBrif(true); setKart(null); }, atolyeAc: () => { setAtolye(true); setKart(null); }, sen, senYaz,
     tasi, olayEkle, isleniyor, ekMesai,
   };
@@ -222,7 +232,8 @@ export function Pano({ o, c, p, cf: fark, sekSec, onayda, sen, senYaz }: Ozellik
   const geriVar = yaz && !!komut?.geriAlinabilir();
   const ust = (
     <header className="tc-pym-tp-ust">
-      <button type="button" className="tc-dugme tc-pym-hayalet tc-pym-tp-dar" aria-label="Siparişler" aria-expanded={rayAcik} onClick={() => setRayAcik((x) => !x)}>
+      <button type="button" className="tc-dugme tc-pym-hayalet tc-pym-tp-ray-ac" aria-label="Siparişler" aria-expanded={rayAcik || !rayGizli}
+        title={rayGizli ? 'Sipariş listesini aç' : 'Sipariş listesini kapat: tahta tam genişlik'} onClick={rayDugmesi}>
         <Simge ad="list" boyut="k" /><span data-metin="">{`Siparişler · ${liste.length}`}</span>
       </button>
       {!fark ? (
@@ -258,10 +269,10 @@ export function Pano({ o, c, p, cf: fark, sekSec, onayda, sen, senYaz }: Ozellik
       </button>
       <button type="button" className="tc-dugme tc-pym-hayalet" data-suz={ns ? '' : undefined} aria-label="Süz: tezgâh, istasyon, üretim emri" title="Süz"
         onClick={(e) => kartAc({ tur: 'suz' }, ankraj(e))}>
-        <Simge ad="eye" boyut="k" />{ns > 0 && <span className="tc-pym-tp-tsay">{ns}</span>}
+        <Simge ad="eye" boyut="k" /><span data-ikincil="" data-metin="">Süz</span>{ns > 0 && <span className="tc-pym-tp-tsay">{ns}</span>}
       </button>
       <div className="tc-pym-tp-grup" data-geri="" role="group" aria-label="Geri al">
-        <button type="button" aria-label="Geri al" title="Geri al (Ctrl+Z)" aria-disabled={!geriVar} onClick={() => { if (geriVar) komut?.geriAl(); }}><Simge ad="back" boyut="k" /></button>
+        <button type="button" aria-label="Geri al" title="Geri al (Ctrl+Z)" aria-disabled={!geriVar} onClick={() => { if (geriVar) komut?.geriAl(); }}><Simge ad="back" boyut="k" /><span data-ikincil="" data-metin="">Geri al</span></button>
         <button type="button" aria-label="Karar geçmişi ve taslağı sıfırla" title="Karar geçmişi, taslağı sıfırla" onClick={(e) => kartAc({ tur: 'geri' }, ankraj(e))}><Simge ad="down" boyut="k" /></button>
       </div>
       <button type="button" className="tc-dugme" aria-disabled={senaryolar ? undefined : 'true'} aria-label="Şu olursa: denemeler"
@@ -281,7 +292,7 @@ export function Pano({ o, c, p, cf: fark, sekSec, onayda, sen, senYaz }: Ozellik
           <Simge ad="upload" boyut="k" /><span data-metin="">Onaya gönder</span>{fark && fark.say > 0 && <span className="tc-pym-tp-tsay">{fark.say}</span>}
         </button>
       )}
-      <button type="button" className="tc-dugme tc-pym-hayalet" aria-label="Diğer" onClick={(e) => kartAc({ tur: 'menu' }, ankraj(e))}><Simge ad="more" boyut="k" /></button>
+      <button type="button" className="tc-dugme tc-pym-hayalet" aria-label="Diğer" title="Diğer: ölçek, atölye ekranı, lejant" onClick={(e) => kartAc({ tur: 'menu' }, ankraj(e))}><Simge ad="more" boyut="k" /></button>
     </header>
   );
 
@@ -291,7 +302,7 @@ export function Pano({ o, c, p, cf: fark, sekSec, onayda, sen, senYaz }: Ozellik
       {ust}
       {brif && <Brif ort={ort} l={brifL} kapat={brifKapat} />}
       <HamleOnizlemesi h={hamle} D={c.D} ad={(j) => c.D.siparisler.find((x) => x.id === j)?.ad ?? j} />
-      <div className="tc-pym-tp-govde" data-ray={rayAcik ? '' : undefined}>
+      <div className="tc-pym-tp-govde" data-ray={rayAcik ? '' : undefined} data-ray-gizli={rayGizli ? '' : undefined}>
         <Ray ort={ort} />
         <Izgara ort={ort} pano={pano} parla={parla} />
         <Bugun ort={ort} acik={bugunAcik} />
@@ -307,6 +318,11 @@ export function Pano({ o, c, p, cf: fark, sekSec, onayda, sen, senYaz }: Ozellik
   );
 }
 
+// Kapsayıcı bu genişliğin altındayken liste açılır katmandır (atolye.css'teki 899px sınırıyla aynı).
+const RAY_DAR = 900;
+const RAY_ANAHTARI = 'tmi:planlama:ray-gizli';
+function rayGizliOku(): boolean { try { return localStorage.getItem(RAY_ANAHTARI) === '1'; } catch { return false; } }
+function rayGizliYaz(g: boolean): void { try { if (g) localStorage.setItem(RAY_ANAHTARI, '1'); else localStorage.removeItem(RAY_ANAHTARI); } catch { /* depo kapalıysa tercih bu açılışta kalır */ } }
 const BRIF_ANAHTARI = 'tmi:planlama:brif';
 function brifGunu(): string | null { try { return localStorage.getItem(BRIF_ANAHTARI); } catch { return null; } }
 function brifGunuYaz(g: string): void { try { localStorage.setItem(BRIF_ANAHTARI, g); } catch { /* depo kapalıysa brifing yeniden açılışta da görünür */ } }

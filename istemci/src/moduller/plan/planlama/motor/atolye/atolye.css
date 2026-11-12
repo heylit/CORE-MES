@@ -6,7 +6,7 @@
 .tc-pym-tp-baslik { margin: 0; display: flex; border-bottom: var(--cizgi-ince) solid var(--edge); font-size: var(--yazi-m); font-weight: 600; color: var(--ink); }
 .tc-pym-tp-baslik span { display: inline-flex; align-items: center; gap: var(--b-2); padding: var(--b-2) var(--b-3); border-bottom: var(--cizgi-kalin) solid var(--ink); margin-bottom: calc(-1 * var(--cizgi-ince)); }
 .tc-pym-tp-bas { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--b-2) var(--b-3); min-width: 0; }
-.tc-pym-tp-kimlik { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-1) var(--b-2); min-width: 0; flex: 1 1 100%; }
+.tc-pym-tp-kimlik { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-1) var(--b-2); min-width: 0; }
 .tc-pym-tp-surum, .tc-pym-tp-kip {
   display: inline-flex; align-items: center; gap: var(--b-1); padding: var(--pay-ince) var(--b-2); border: var(--cizgi-ince) solid var(--edge2);
   border-radius: var(--yari-tam); background: var(--panel2); white-space: nowrap;
@@ -74,7 +74,7 @@
 .tc-pym-tp-grup button[aria-pressed="true"] { background: var(--edge2); font-weight: 700; }
 .tc-pym-tp-grup[data-geri] button { min-width: calc(var(--dokunma) - var(--b-2)); }
 .tc-pym-tp-grup[data-geri] button + button { border-left: var(--cizgi-ince) solid var(--edge2); padding: 0 var(--b-1); }
-.tc-pym-tp-dar { display: none; }
+.tc-pym-tp-ray-ac[aria-expanded="true"] { background: var(--panel2); }
 
 /* gövde: sipariş rayı ve pano (tp-govde) */
 .tc-pym-tp-govde { flex: 1; display: grid; grid-template-columns: var(--tc-pym-tp-ray) 1fr; min-height: 0; position: relative; }
@@ -204,6 +204,10 @@
   display: flex; flex-direction: column; justify-content: center; padding: 0 var(--b-2); line-height: 1.15; cursor: pointer; text-align: left; color: var(--ink); font: inherit;
 }
 .tc-pym-tp-m b { font-family: var(--font-mono); font-size: var(--yazi-s); display: flex; justify-content: space-between; align-items: baseline; gap: var(--b-1); }
+/* Tezgâh kodu tek satır: dar sütunda harf harf kırılmaz, sığmayan kısım üç noktayla biter. */
+/* Kodun ayırt eden kısmı sondadır (ORN-CNC-T1): dar satırda baştan kırpılır; yön yalnız taşma tarafını çevirir, yazı soldan sağa kalır. */
+.tc-pym-tp-kod { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; direction: rtl; text-align: end; }
+.tc-pym-tp-yuzde { flex: none; }
 .tc-pym-tp-m small { color: var(--muted); font-size: var(--yazi-xs); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .tc-pym-tp-yuzde { font-size: var(--yazi-xs); font-weight: 500; color: var(--muted); display: inline-flex; align-items: center; gap: var(--pay-ince); }
 .tc-pym-tp-yuk { height: var(--pay-ince); background: var(--edge); border-radius: var(--yari-tam); margin-top: var(--pay-ince); overflow: hidden; }
@@ -376,7 +380,14 @@
 .tc-pym-tp-katman .tc-dugme { gap: var(--b-1); border-radius: var(--yari-1); font-weight: 600; }
 .tc-pym-tp-katman .tc-dugme[aria-disabled="true"]:active { transform: none; }
 
-@container tc-pym-tp (max-width: 1599px) { .tc-pym-tp-ust [data-ikincil] { display: none; } }
+/* Liste kapalıyken tahta tam genişlik (yalnız geniş kapta; dar kapta liste zaten açılır katmandır). */
+@container tc-pym-tp (min-width: 900px) {
+  .tc-pym-tp-govde[data-ray-gizli] { grid-template-columns: 1fr; }
+  .tc-pym-tp-govde[data-ray-gizli] .tc-pym-tp-ray { display: none; }
+  .tc-pym-tp-govde[data-ray-gizli] .tc-pym-tp-bugun { left: 0; }
+}
+/* Araç adları geniş kapta yazılı; daralınca yalnız ikon ve ipucu kalır (3042: adsız ikon okunmuyordu). */
+@container tc-pym-tp (max-width: 1099px) { .tc-pym-tp-ust [data-ikincil] { display: none; } }
 @container tc-pym-tp (max-width: 1199px) { .tc-pym-tp-olc [data-kar] { display: none; } }
 @container tc-pym-tp (max-width: 899px) {
   .tc-pym-tp-govde { grid-template-columns: 1fr; }
@@ -385,7 +396,6 @@
     transition: transform var(--hareket-panel) var(--hareket-egri-panel); box-shadow: var(--shadow);
   }
   .tc-pym-tp-govde[data-ray] .tc-pym-tp-ray { transform: none; }
-  .tc-pym-tp-dar { display: inline-flex; }
   .tc-pym-tp-bugun { left: 0; }
 }
 @container tc-pym-tp (max-width: 599px) {
@@ -395,6 +405,9 @@
   .tc-pym-tp-olc { margin-left: 0; gap: var(--b-2); }
   .tc-pym-tp-ust .tc-pym-tp-grup:not([data-geri]), .tc-pym-tp-ust .tc-pym-tp-bosluk { display: none; }
   .tc-pym-tp-m small, .tc-pym-tp-yuk { display: none; }
+  /* Telefonda kod ve doluluk alt alta: kod sütunun tamamını alır, kuyruğu (T1, T2) ayırt edilir. */
+  .tc-pym-tp-m b { flex-direction: column; align-items: flex-start; gap: 0; }
+  .tc-pym-tp-kod { max-width: 100%; }
   .tc-pym-tp-ray { width: 100%; }
   .tc-pym-tp-bugun-ic { grid-template-columns: 1fr; }
   .tc-pym-tp-bugun-bas [data-son] { display: none; }

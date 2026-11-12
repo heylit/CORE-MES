@@ -112,7 +112,7 @@ function SipAc({ ort, s }: { ort: Ortam; s: SiparisBilgisi }) {
               )}
               <button type="button" className="tc-pym-tp-akis-op" data-kritik={x.kritik ? '' : undefined} aria-current={ort.secOp === x.id} title="Çizelgede göster" onClick={() => ort.opGit(x.id)}>
                 <i>{x.k}</i>
-                <span><b>{x.ad}</b><small>{`${r.fas ? `Fason ${r.m.slice(1)}` : r.m} · ${tz(D, r.S)} → ${bitis} · ${sure(r.C - r.S)}`}</small></span>
+                <span><b>{x.ad}</b><small>{`${r.fas ? `Fason ${ort.ad.kaynak(r.m)}` : ort.ad.kaynak(r.m)} · ${tz(D, r.S)} → ${bitis} · ${sure(r.C - r.S)}`}</small></span>
                 {c.locks[x.id] ? <Simge ad="lock" boyut="k" /> : <span />}
               </button>
             </div>
@@ -170,8 +170,8 @@ function Detay({ ort, s }: { ort: Ortam; s: SiparisBilgisi }) {
     const k = a.id.slice(s.id.length + 1); const r = p.ops[a.id]; const l = c.locks[a.id] as { S?: unknown } | undefined;
     if (l) kis.push(`${k} kilitli ${typeof l.S === 'number' ? tz(D, l.S) : ''}`.trim());
     if (a.aparat) kis.push(`${k} aparat ${a.aparat}`);
-    if (r?.fas) kis.push(`${k} fason ${r.m.slice(1)}`);
-    const tz2 = a.c.filter((m) => !m.startsWith('@')); if (tz2.length > 1) kis.push(`${k} ${tz2.length} tezgâhta yapılabilir (${tz2.join(', ')})`);
+    if (r?.fas) kis.push(`${k} fason ${ort.ad.kaynak(r.m)}`);
+    const tz2 = a.c.filter((m) => !m.startsWith('@')); if (tz2.length > 1) kis.push(`${k} ${tz2.length} tezgâhta yapılabilir (${tz2.map(ort.ad.kaynak).join(', ')})`);
   }
   return (
     <details className="tc-pym-tp-detay">

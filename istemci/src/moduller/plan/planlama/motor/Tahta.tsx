@@ -35,6 +35,7 @@ import { useAtolyeKomutlari, useOtomatikUygula } from './atolye/gonder.ts';
 import { HamleOnizlemesi } from './hamle/Onizleme.tsx';
 import { HamleBaglami, siraAdimi, useHamle } from './hamle/hamle.ts';
 import { useAn } from './saat.ts';
+import { useEmirNo } from '../ortak/emir-no.ts';
 
 // Planlama motoru (eski sayfanın "tahta"sı): plan çubuğu, görünüm ve dönem çubuğu, seçili görünüm, Yapılacaklar. Plan sunucuda çözülür
 // (357 b, 576 coz.ts); ekran kayıttaki planı okur, çalışmaya yalnız `komut.degistir`le yazar. Dönem ve seçim iskeletin ortak durumundadır (görünümler arası).
@@ -101,15 +102,16 @@ function Tahta(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi }) {
   const [rotaUst, setRotaUst] = useState<{ k: string | null; m: string | null }>({ k: null, m: null });
 
   const emirler = o.depo.durum?.emirler ?? null;
+  const emirNo = useEmirNo(o.depo.receteRotaKaydi, o.depo.durum?.emirler);
   const p = useMemo(() => planOku(c), [c]);
   // Biten iş sunucunun iş emri durumundan; okunamazsa kayıtlı plandan.
   const an = useAn();
   const cx = useMemo(() => derle(girdiKur(c, emirler ? bitenler(emirler, c.D) : plandanBitenler(c, p), an)), [c, p, emirler, an]);
   const tezGrup = useMemo(() => { const m = new Map(c.D.tezgahlar.map((t) => [t.id, t.grup ?? 'diger'])); return (id: string) => (id.startsWith('@') ? 'fason' : m.get(id) ?? 'diger'); }, [c]);
   const guncel = planGuncel(c);
-  const v = useMemo(() => (p ? ozetVerisi(c, p, cx, donem, kayma) : null), [c, p, cx, donem, kayma]);
+  const v = useMemo(() => (p ? ozetVerisi(c, p, cx, donem, kayma, emirNo) : null), [c, p, cx, donem, kayma, emirNo]);
   const nabiz = useMemo(() => (p ? nabizDurumu(c, p, cx, donem, kayma) : null), [c, p, cx, donem, kayma]);
-  const sor = useMemo(() => (p ? sorunlar(c, p, cx, guncel) : []), [c, p, cx, guncel]);
+  const sor = useMemo(() => (p ? sorunlar(c, p, cx, guncel, emirNo) : []), [c, p, cx, guncel, emirNo]);
   const now = simdiSaati(c, an);
   const r = useMemo(() => aralik(now, donem, kayma), [now, donem, kayma]);
   // Zaman imleci şimdi ile dönemin sonu arasında kalır (rsT).
@@ -236,7 +238,7 @@ function Tahta(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi }) {
   const farkPlani = useMemo(() => (p && canliD.tur === 'tamam' && Object.keys(canliD.canli).length ? canliPlani(p, canliD.canli) : null), [p, canliD]);
   const d: OzetDurumu = { nasil, acikGrup, secJob, secTez: secim.tezgah, zaman };
   const cubukKur = (masa: boolean) => (
-    <Gorunum gorunum={gorunum} sec={gorunumSec} studyo={studyo} donem={donem} donemSec={o.olcekSec} kaydir={o.kaydir}
+    <Gorunum gorunum={gorunum} sec={gorunumSec} donem={donem} donemSec={o.olcekSec} kaydir={o.kaydir}
       donemYazi={nabiz?.donemYazi ?? ''} menuAcik={menuAcik} menuAc={menuAc} masa={masa}
       baska={{ mercek, mercekSec: () => setMercek((x) => (x === 'etki' ? 'durum' : 'etki')), fark, farkSec: () => setFark((x) => !x), kilavuz, kilavuzAc: () => kilavuzAc(!kilavuz), kisayolAc: () => panAc('kl'), planYaz: yetki.planYaz, sayfaAc,
         kartlar: p ? { acik: kartlar.map((k) => k.tur), hazir: HAZIR_KARTLAR, degistir: kartDegistir, diz: kartlariDiz } : null }} />

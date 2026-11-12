@@ -3,7 +3,7 @@ import type { CanliFarkiCevabi, TabanVeCanliCevabi } from '#paylasilan/sozlesme/
 import { tesisSaati } from '#paylasilan/tesis-zamani.ts';
 import type { PlanlamaCalismasi, PlanVerisi } from '../../tipler.ts';
 import { acikSaat, elleSayilari, saatOku, tabanMs, type Derleme, type FailNedeni, type OkunanPlan, type PlanIslemi } from '../kurallar.ts';
-import type { EmirNo } from '../../ortak/emir-no.ts';
+import { emirKuyrugu, type EmirNo } from '../../ortak/emir-no.ts';
 import { ufukGunu } from '../../ufuk-olcegi.ts';
 import { gunBaslayanlar, gunDonuk, gunNumarasi } from '../cizelge/kurallar.ts';
 
@@ -281,7 +281,8 @@ export const sabitMi = (r: PlanIslemi, now: number, donuk: number): boolean => r
 // etiket: çubuktaki sipariş adı (ekranda tam emir no, 2693 a); verilmezse kimlik.
 export function cubukYazisi(r: PlanIslemi, k: string, ad: string, w: number, etiket: EmirNo = (j) => j): { b: string; ek: string; alt: string } | null {
   const n = etiket(r.job);
-  if (w > 46) return { b: n, ek: w > 80 ? ` · ${k}` : '', alt: w > 110 ? ad : '' };
+  // Yazı yaklaşık 6,5 px/karakter; sığmayan emir no kuyruğuyla yazılır.
+  if (w > 46) return { b: n.length * 6.5 > w - 10 ? emirKuyrugu(n) : n, ek: w > 80 ? ` · ${k}` : '', alt: w > 110 ? ad : '' };
   if (w > 22) return { b: n.replace(/^\D+-?/, '').slice(-3), ek: '', alt: '' };
   return null;
 }

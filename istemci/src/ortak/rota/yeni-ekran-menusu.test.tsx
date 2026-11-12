@@ -93,7 +93,7 @@ describe('yeni ekranda kabuğun ikinci menü şeridi (soru 315 a)', () => {
     expect(serit('Reçete ve Rota')).toBeNull();
     const menu = serit('Planlama');
     expect(menu).not.toBeNull();
-    expect(within(menu as HTMLElement).getByRole('link', { name: /^Planlama atölyesi/ }).getAttribute('aria-current')).toBe('page');
+    expect(within(menu as HTMLElement).getByRole('link', { name: /^Stüdyo/ }).getAttribute('aria-current')).toBe('page');
   });
 
   it('kökün altındaki başka modül ekranında (PDKS aktar) şerit durur', () => {

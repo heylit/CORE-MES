@@ -128,21 +128,36 @@ export interface GunSatiri {
   kapali: GunAraligi[]; ariza: GunAraligi[]; bloklar: GunBlogu[]; erken: (GunAraligi & { ad: string; t: number; cizgi: number | null }) | null;
 }
 export interface GunCizelgesi {
-  a: number; gunler: { g: number; ad: string; dondu: boolean }[]; satirlar: GunSatiri[]; simdi: number | null;
+  a: number; saatler: { x: number; ad: string }[]; gunler: { g: number; ad: string; dondu: boolean }[]; satirlar: GunSatiri[]; simdi: number | null;
   cit: number | null; citBant: GunAraligi | null; erken: ErkenBaslama | null;
   kilit: { donukBu: number; donukTum: number; elle: number; cit: number | null };
 }
 const DONDURMA_SAATI: Record<string, number> = { elle: 72, dengeli: 24, otomatik: 0 };
 
+// Gün penceresi: ilk vardiyanın (ya da ilk işin) başladığı çift saatten son kapanışa; boş gece saatleri çizilmez (3042, M5).
+// Hiçbir tezgâh açık değilse ve iş yoksa bütün gün gösterilir.
+function gunPenceresi(cx: Derleme, ops: PlanIslemi[], gb: number): [number, number] {
+  const ge = gb + 24; let ilk = Infinity, son = -Infinity;
+  for (const M of Object.values(cx.M)) {
+    for (const [u, v] of M?.rw ?? []) { if (v <= gb || u >= ge) continue; ilk = Math.min(ilk, Math.max(u, gb)); son = Math.max(son, Math.min(v, ge)); }
+  }
+  for (const r of ops) { if (r.C <= gb || r.S >= ge) continue; ilk = Math.min(ilk, Math.max(r.S, gb)); son = Math.max(son, Math.min(r.C, ge)); }
+  if (!Number.isFinite(ilk) || son <= ilk) return [gb, ge];
+  const a = gb + Math.floor((ilk - gb) / 2) * 2; const b = Math.min(ge, gb + Math.ceil((son - gb) / 2) * 2);
+  return b - a >= 2 ? [a, b] : [gb, ge];
+}
+
 export function gunCizelgesi(c: PlanlamaCalismasi, p: OkunanPlan, cx: Derleme, g: number, secId: string | null, secJob: string | null): GunCizelgesi {
-  const D = c.D; const now = cx.now; const d0 = Math.floor(now / 24) * 24; const a = d0 + g * 24, b = a + 24;
+  const D = c.D; const now = cx.now; const d0 = Math.floor(now / 24) * 24;
+  const ops = yerlesen(p);
+  const [a, b] = gunPenceresi(cx, ops, d0 + g * 24);
+  const uzun = b - a;
   const kodlar = tezgahKodlari(D);
-  const x = (t: number) => (t - a) / 24; const w = (s: number, e: number) => (e - s) / 24;
+  const x = (t: number) => (t - a) / uzun; const w = (s: number, e: number) => (e - s) / uzun;
   const sec = secId ? p.ops[secId] ?? null : null; const secO = sec ? cx.byId[sec.id] : undefined;
   const uygun = new Set(secO ? secO.c : []); const yanan = !!sec;
   const erken = sec ? erkenBaslama(p, cx, sec.id) : null; const sJ = sec ? sec.job : secJob;
   const durus = c.down.flatMap((d) => (typeof d.m === 'string' && typeof d.from === 'number' && typeof d.to === 'number' ? [{ m: d.m, from: d.from, to: d.to }] : []));
-  const ops = yerlesen(p);
   const satirlar = tezgahSirasi(D, p, cx).map((m): GunSatiri => {
     const M = cx.M[m];
     const kapali: GunAraligi[] = [];
@@ -162,7 +177,7 @@ export function gunCizelgesi(c: PlanlamaCalismasi, p: OkunanPlan, cx: Derleme, g
         sol: r.S < a, sag: r.C > b, secili: sec?.id === r.id, soluk: !!sJ && r.job !== sJ, gec: (p.J[r.job]?.T ?? 0) > 0.05, risk: riskte(p.J[r.job]), sabit: !!kl, dondu: kl?.gun != null,
       };
     });
-    const acik = M ? M.rw.reduce((s, [u, v]) => s + Math.max(0, Math.min(v, b) - Math.max(u, a)), 0) : 24;
+    const acik = M ? M.rw.reduce((s, [u, v]) => s + Math.max(0, Math.min(v, b) - Math.max(u, a)), 0) : uzun;
     const oran = acik ? dolu / acik : null; const uy = yanan ? uygun.has(m) : null;
     const er = uy && erken && erken.t > a ? { x: 0, w: w(a, Math.min(b, erken.t)), ad: erken.ad, t: erken.t, cizgi: erken.t < b ? x(erken.t) : null } : null;
     return { m, etiket: tezgahKodu(m, kodlar), ad: tezgahAdi(D, m), oran, isi: isiSeviyesi(oran), uygun: uy, kapali, ariza, bloklar, erken: er };
@@ -172,7 +187,8 @@ export function gunCizelgesi(c: PlanlamaCalismasi, p: OkunanPlan, cx: Derleme, g
   const donukGunler = new Set(L.filter((v): v is number => typeof v === 'number'));
   const citU = DONDURMA_SAATI[String((c.w as Record<string, unknown>).denge ?? 'dengeli')] ?? 24; const cit = now + citU;
   return {
-    a, gunler: Array.from({ length: 7 }, (_, i) => ({ g: i, ad: gunAdi(D, d0 + i * 24), dondu: donukGunler.has(Math.floor(now / 24) + i) })),
+    a, saatler: Array.from({ length: Math.floor(uzun / 2) + 1 }, (_, i) => a + i * 2).filter((t) => t < b).map((t) => ({ x: x(t), ad: String(Math.round(t - (d0 + g * 24))).padStart(2, '0') })),
+    gunler: Array.from({ length: 7 }, (_, i) => ({ g: i, ad: gunAdi(D, d0 + i * 24), dondu: donukGunler.has(Math.floor(now / 24) + i) })),
     satirlar, simdi: now > a && now < b ? x(now) : null,
     cit: citU && cit > a && cit < b ? x(cit) : null, citBant: citU && now < b && cit > a ? { x: x(Math.max(a, now)), w: w(Math.max(a, now), Math.min(b, cit)) } : null,
     erken, kilit: { donukBu: L.filter((v) => v === gNo).length, donukTum: L.filter((v) => typeof v === 'number').length, elle: L.filter((v) => typeof v !== 'number').length, cit: citU ? cit : null },

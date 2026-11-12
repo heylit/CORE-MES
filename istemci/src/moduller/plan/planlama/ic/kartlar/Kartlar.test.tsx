@@ -115,7 +115,7 @@ function ac(yaz = true, komut: CalismaKomutu | null = null, git = vi.fn()) {
     yetki={yetkiKur([PLANLAMA_ISLEMI, ...(yaz ? ['plan.yaz'] : [])])} /></BildirimSaglayici>);
 }
 const menudenAc = (ad: RegExp) => {
-  fireEvent.click(screen.getByRole('button', { name: /Başka/ }));
+  fireEvent.click(screen.getByRole('button', { name: 'Kartlar' }));
   fireEvent.click(screen.getByRole('menuitemcheckbox', { name: ad }));
 };
 const kart = (ad: string) => screen.getByRole('region', { name: ad });
@@ -157,7 +157,7 @@ describe('Tahta kartları', () => {
     expect(kartlarOku(localStorage.getItem(KART_ANAHTARI)).map((k) => [k.tur, k.kucuk])).toEqual([['plan', true], ['siparis', false]]);
     fireEvent.click(within(kart('Plan')).getByRole('button', { name: 'Kartı kapat' }));
     expect(screen.queryByRole('region', { name: 'Plan' })).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: /Başka/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Kartlar' }));
     fireEvent.click(screen.getByRole('menuitem', { name: /Kartları bölgelere diz/ }));
     expect(kart('Siparişler')).toBeTruthy();
   });
@@ -251,7 +251,7 @@ describe('Tahta kartları', () => {
     expect(l.map((x) => x.querySelector('b')?.textContent)).toEqual(['Ek mesaisiz', 'Bakım ileri']);
     expect(l[1]?.querySelector('[data-ton="iyi"]')?.textContent).toBe(' −18 sa');
     expect(l[0]?.querySelector('[data-ton="kotu"]')?.textContent).toBe(' +21 sa');
-    fireEvent.click(within(k).getByRole('button', { name: 'Planlama atölyesi' }));
+    fireEvent.click(within(k).getByRole('button', { name: "Stüdyo'da aç" }));
     expect(git).toHaveBeenCalledWith('studio');
     expect(within(k).getByRole('button', { name: 'Yan yana karşılaştır' }).getAttribute('aria-disabled')).toBe('true');
   });

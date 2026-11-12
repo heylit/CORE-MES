@@ -62,16 +62,19 @@ describe('çizelge hesapları', () => {
     expect(x.locks).toEqual({ b: { m: '1', S: 2, gun: 7 } });
   });
 
-  it('saatlik gün: kapalı saatler, bloklar, doluluk ve en erken başlama eski gün katmanıyla aynı', () => {
+  it('saatlik gün: ilk vardiyadan başlar (boş gece çizilmez); kapalı saatler, bloklar ve doluluk (3042)', () => {
     const { c, p, cx } = kur();
     const g = gunCizelgesi(c, p, cx, 5, '3.10', null);
     const s1 = g.satirlar[0]; const s3 = g.satirlar[2]; const s4 = g.satirlar[3];
-    expect(s1?.kapali.map((k) => [yz(k.x), yz(k.w)])).toEqual([[0, 33.333], [50, 2.083], [66.667, 33.333]]);
-    expect(s1?.bloklar.map((b) => [b.id, yz(b.x), yz(b.w), b.secili])).toEqual([['3.10', 33.333, 8.315, true]]);
+    // Pencere 08:00-24:00: ilk vardiya 08:00'de açılır, son iş gece yarısına uzanır.
+    expect([g.a % 24, g.saatler.map((x) => x.ad)]).toEqual([8, ['08', '10', '12', '14', '16', '18', '20', '22']]);
+    expect(s1?.kapali.map((k) => [yz(k.x), yz(k.w)])).toEqual([[25, 3.125], [50, 50]]);
+    expect(s1?.bloklar.map((b) => [b.id, yz(b.x), yz(b.w), b.secili])).toEqual([['3.10', 0, 12.473, true]]);
     expect([s1?.oran != null ? Math.round(s1.oran * 100) : null, s1?.isi, s1?.uygun]).toEqual([27, 1, true]);
-    expect(s1?.erken && [yz(s1.erken.w), s1.erken.ad, yz(s1.erken.cizgi ?? -1)]).toEqual([33.333, 'Sipariş serbest bırakılır', 33.333]);
-    expect(s3?.bloklar.map((b) => [b.id, yz(b.x), yz(b.w), b.sag, b.gec, b.soluk])).toEqual([['2.20', 77.569, 22.431, true, true, true]]);
-    expect([s4?.bloklar[0]?.id, yz(s4?.bloklar[0]?.x ?? 0), yz(s4?.bloklar[0]?.w ?? 0), Math.round((s4?.oran ?? 0) * 100), s4?.uygun]).toEqual(['3.20', 41.648, 6.871, 22, false]);
+    // En erken başlama (08:00) pencerenin başıdır; önünde boş şerit çizilmez.
+    expect(s1?.erken).toBeNull();
+    expect(s3?.bloklar.map((b) => [b.id, yz(b.x), yz(b.w), b.sag, b.gec, b.soluk])).toEqual([['2.20', 66.354, 33.646, true, true, true]]);
+    expect([s4?.bloklar[0]?.id, yz(s4?.bloklar[0]?.x ?? 0), yz(s4?.bloklar[0]?.w ?? 0), Math.round((s4?.oran ?? 0) * 100), s4?.uygun]).toEqual(['3.20', 12.473, 10.307, 22, false]);
     expect(g.satirlar.map((s) => s.etiket)).toEqual(['1', '2', '3', '4', '5', 'Ornek Fason Isil Islem']);
     expect(g.gunler[5]?.ad).toBe('24.10 Cmt');
     expect(g.kilit).toMatchObject({ donukBu: 0, donukTum: 0, elle: 0 });

@@ -111,7 +111,7 @@ function TerminKarti({ c, L, y, kapali, emirNo }: { c: PlanlamaCalismasi; L: Fas
                   <td>
                     {kapali ? gunYaz(D, x.T) : (
                       <input
-                        key={gir(x.T)} className="tc-alan-kutu tc-pyk-tarih" type="date" defaultValue={gir(x.T)} aria-label={`${x.id} fason dönüş termini`}
+                        key={gir(x.T)} className="tc-alan-kutu tc-pyk-tarih" type="date" defaultValue={gir(x.T)} aria-label={`${isAdi(emirNo, x.id, x.r.job)} fason dönüş termini`}
                         onChange={(o) => { const v = o.currentTarget.value; if (v !== gir(x.T)) y((z) => fasonTerminYaz(z, x.id, v, Number.isFinite(x.r.C) ? isoSaat(D, x.r.C) : null)); }}
                       />
                     )}

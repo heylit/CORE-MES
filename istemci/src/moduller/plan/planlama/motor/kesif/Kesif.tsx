@@ -9,6 +9,8 @@ import {
   ANLAT_SURE_MS, anlatAdimlari, HAZIRLIK_YOK, hatDuzeni, KESIF_GORUNUMLERI, paySayilari, payDuzeni, payYazi, type AnlatAdimi, type KesifGorunumu, type Ton,
 } from './kurallar.ts';
 import './kesif.css';
+import { useKaynakAdlari } from '../../kaynak-kodu.tsx';
+import { emirKuyrugu } from '../../ortak/emir-no.ts';
 
 // Keşfet görünümü (zn-kesif.betik): tahtanın yerini tek büyük gösterim alır; Pay şeridi, Sipariş hatları, Hazırlık, Planı anlat. Siparişe
 // dokunmak onu seçer; seçim öteki gösterimlerde de vurgulu kalır. Sekme ve adım görünümler arası korunur (eski U.ksGor, U.ksAdim).
@@ -98,6 +100,7 @@ export function Kesif(o: Ozellikler) {
 
 // Pay şeridi (ksPay, ksPaySvg).
 function PaySeridi({ c, v, secJob, sipSec, w, kucuk }: Ozellikler & { w: number; kucuk?: boolean }) {
+  const adlar = useKaynakAdlari();
   const d = payDuzeni(v, w, !!kucuk, secJob);
   if (!d) return <p className="tc-pym-ks-not">Bu dönemde termini olan sipariş yok.</p>;
   const tikUst = d.ust - 8, tikAlt = d.H - 26;
@@ -123,7 +126,7 @@ function PaySeridi({ c, v, secJob, sipSec, w, kucuk }: Ozellikler & { w: number;
         </g>
       ))}
       <g className="tc-pym-ks-etiketler" aria-hidden="true">
-        {d.noktalar.filter((x) => d.etiketli.has(x.id)).map((x) => <text key={x.id} x={(x.x - d.r - 6).toFixed(1)} y={(x.y + 4).toFixed(1)} textAnchor="end">{x.id}</text>)}
+        {d.noktalar.filter((x) => d.etiketli.has(x.id)).map((x) => <text key={x.id} x={(x.x - d.r - 6).toFixed(1)} y={(x.y + 4).toFixed(1)} textAnchor="end">{emirKuyrugu(adlar.emir(x.id))}</text>)}
       </g>
     </svg>
   );
@@ -141,6 +144,7 @@ function PayGorunumu(o: Ozellikler & { w: number }) {
 
 // Sipariş hatları (ksHat).
 function HatGorunumu({ v, secJob, sipSec, w }: Ozellikler & { w: number }) {
+  const adlar = useKaynakAdlari();
   const d = hatDuzeni(v, w);
   return (
     <>
@@ -161,7 +165,7 @@ function HatGorunumu({ v, secJob, sipSec, w }: Ozellikler & { w: number }) {
               aria-label={`${s.id}: ${s.ad}`} onClick={() => sipSec(s.id)} onKeyDown={secTus(() => sipSec(s.id))}>
               <title>{`${s.id} · ${s.ad.split(', ').join(' › ')}`}</title>
               <rect className="tc-pym-ks-hat-zemin" x={0} y={s.y - d.ara / 2} width={d.W} height={d.ara} />
-              <text className="tc-pym-ks-hat-ad" x={d.sol - 14} y={s.y + 4} textAnchor="end">{s.id}</text>
+              <text className="tc-pym-ks-hat-ad" x={d.sol - 14} y={s.y + 4} textAnchor="end">{emirKuyrugu(adlar.emir(s.id))}</text>
               <path className="tc-pym-ks-hat-yol" d={s.yol} pathLength={1} />
               {s.duraklar.map((x) => <circle key={x.g} className="tc-pym-ks-durak" cx={x.x.toFixed(1)} cy={s.y} r={x.r.toFixed(1)}><title>{`${x.ad}: ${saKisa(x.bek)} bekleme`}</title></circle>)}
               <text className="tc-pym-ks-hat-son tc-pym-mono" x={d.W - d.sag + 16} y={s.y + 4} data-ton={s.ton}>{s.son}</text>

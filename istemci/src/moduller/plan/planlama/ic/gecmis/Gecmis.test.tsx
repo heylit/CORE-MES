@@ -105,7 +105,7 @@ describe('Geçmiş ekranı', () => {
     expect(within(screen.getByRole('table', { name: 'Bitişi değişen emirler' })).getAllByRole('row').map((r) => r.firstElementChild?.textContent)).toEqual(['Emir', 'E-1', 'E-2']);
     expect(screen.getByRole('table', { name: 'Yükü değişen istasyonlar' }).textContent).toContain('%80');
     expect(screen.getByRole('list', { name: 'Uyarılar' }).textContent).toContain('Canlıya alınamaz: Ek mesai kaldırma');
-    fireEvent.click(screen.getByRole('button', { name: 'Planlama atölyesi' }));
+    fireEvent.click(screen.getByRole('button', { name: "Stüdyo'da aç" }));
     expect(git).toHaveBeenCalledWith('studio');
     cleanup();
     ac(null, PLANCI, 'senaryolar', { ...SENARYOLAR, senaryolar: [] });
@@ -160,7 +160,7 @@ describe('Geçmiş planlama ekranında', () => {
     await waitFor(() => { expect(document.querySelector('[data-parca="gecmis"]')).not.toBeNull(); }, { timeout: 10000 });
     const ust = screen.getByRole('toolbar', { name: 'Plan çubuğu' });
     expect(within(ust).getByRole('button', { name: 'Geçmiş' }).getAttribute('aria-current')).toBe('page');
-    fireEvent.click(within(ust).getByRole('button', { name: 'Plan' }));
+    fireEvent.click(within(ust).getByRole('button', { name: 'Motor' }));
     await waitFor(() => { expect(document.querySelector('[data-parca="gecmis"]')).toBeNull(); });
     cleanup(); vi.unstubAllGlobals();
     sunucuKur(MALIYETSIZ, KAYIT);

@@ -37,7 +37,7 @@ describe('Veri ve kısıtlar ekranı', () => {
     fireEvent.click(within(screen.getByRole('navigation', { name: 'Veri ve kısıtlar' })).getByRole('button', { name: /^Kısıtlar/ }));
     await waitFor(() => { expect(veri()?.getAttribute('data-bolum')).toBe('kisitlar'); });
     expect(screen.getByTestId('adres').textContent).toBe('/plan');
-    fireEvent.click(within(await cubuk()).getByRole('button', { name: 'Plan' }));
+    fireEvent.click(within(await cubuk()).getByRole('button', { name: 'Motor' }));
     await waitFor(() => { expect(veri()).toBeNull(); });
     expect(within(await cubuk()).getByRole('button', { name: 'Veri' }).getAttribute('aria-current')).toBeNull();
   }, 30000);

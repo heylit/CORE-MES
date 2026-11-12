@@ -19,4 +19,11 @@ describe('emir no gösterimi (2693 a)', () => {
     expect(V.ust.metin).toContain('MM-ORN-00001-26-11-001');
     expect(V.satirlar.find((x) => x.k === 'S2')!.ad).toBe('S2');
   });
+  it('2693-1 a: Reçete ve Rota kaydında olmayan emir canlı planlama kaynağından numarasını alır; ikisinde de varsa canlı geçer', () => {
+    const okuyucu = emirNoOkuyucu({ orders: [{ id: 'S1', no: 'ESKI-1' }] }, { orders: [{ id: 'S1', no: 'YENI-1' }, { id: 5, no: 'ORN-0005' }] });
+    expect(okuyucu('5')).toBe('ORN-0005');
+    expect(okuyucu('5/2')).toBe('ORN-0005/2');
+    expect(okuyucu('S1')).toBe('YENI-1');
+    expect(emirNoOkuyucu(null, null)('11')).toBe('11');
+  });
 });

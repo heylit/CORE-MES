@@ -4,7 +4,7 @@ import type { SimgeAdi } from '../../../../../ortak/tasarim/simgeler.ts';
 import { KART_TURLERI, type KartTuru } from '../../ic/kartlar/kurallar.ts';
 import { HAZIRLANIYOR, YOK_NOTU } from '../ortak.tsx';
 
-// "Başka" menüsü (zj-gorunum sgMenu, zk-kabuk, zo-kontrol, zp-klavye): kartlar, tahtada gösterilenler, düzen ve sayfalar. Kartlar haritanın
+// "Kartlar" menüsü (eski adı "Başka"; yüzen kartlar menünün ilk bölümüdür ve adla bulunmalı, 3042) (zj-gorunum sgMenu, zk-kabuk, zo-kontrol, zp-klavye): kartlar, tahtada gösterilenler, düzen ve sayfalar. Kartlar haritanın
 // üstüne açılır (577d, zc-tahta), 1-8 tuşları da açıp kapatır; menü dışı sayfaların yeni ekranda karşılığı yoktur (459/5 a).
 interface Madde { ad: string; simge: SimgeAdi; not?: string; tus?: string; basili?: boolean; yap?: () => void; dugme?: boolean }
 // Haritanın katmanları menüden açılır: önceki planla fark (son canlı plan, 577c), gecikme kaynağı, kılavuz ve klavye kısayolları (P1b).
@@ -49,11 +49,11 @@ export function BaskaMenusu({ acik, ac, ...b }: { acik: boolean; ac: (v: boolean
   }, [acik, ac]);
   return (
     <>
-      <button ref={dugme} type="button" className="tc-pym-sg-baska" aria-label="Başka" aria-haspopup="menu" aria-expanded={acik} title="Kartlar ve başka görünümler" onClick={() => ac(!acik)}>
-        <Simge ad="layers" boyut="k" /><span>Başka</span><Simge ad="down" boyut="k" />
+      <button ref={dugme} type="button" className="tc-pym-sg-baska" aria-label="Kartlar" aria-haspopup="menu" aria-expanded={acik} title="Yüzen kartlar, tahtada gösterilenler ve sayfalar" onClick={() => ac(!acik)}>
+        <Simge ad="layers" boyut="k" /><span>Kartlar</span><Simge ad="down" boyut="k" />
       </button>
       {acik && (
-        <div ref={menu} className="tc-pym-sg-menu" role="menu" aria-label="Başka görünüm ve kartlar">
+        <div ref={menu} className="tc-pym-sg-menu" role="menu" aria-label="Kartlar ve görünümler">
           {bolumler(b).map((g) => (
             <div key={g.ad} role="group" aria-label={g.ad}>
               <small>{g.ad}</small>

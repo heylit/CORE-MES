@@ -12,7 +12,7 @@ import type { PlanlamaDeposu } from '../../veri.ts';
 import { yetkiKur } from '../../yetki.ts';
 import { PlanlamaAtolyesi } from '../index.tsx';
 import { HAZIRLANIYOR, MOTOR_NOTU } from '../ortak.tsx';
-import { planOku } from '../kurallar.ts';
+import { planOku, tabanMs } from '../kurallar.ts';
 import { ornekCalisma } from '../ornek.ts';
 import { planKurSifirla } from '../coz.ts';
 import { otomatikUygulaIste, otomatikUygulaSifirla } from './gonder.ts';
@@ -115,12 +115,12 @@ describe('PlanlamaAtolyesi', () => {
     expect(studyoAc).toHaveBeenCalledTimes(2);
   });
 
-  it('kimlik satırı, üç sekme ve onay sayısı; geri düğmesi motora döner', () => {
-    const { git } = ac();
+  it('tek baş satırı: üç sekme, onay sayısı ve canlı sürüm; ayrı başlık satırı ve geri düğmesi yok (motora plan çubuğundan gidilir)', () => {
+    ac();
     expect(screen.getByText('Canlı sürüm 3')).toBeTruthy();
     expect(screen.getAllByRole('tab').map((x) => x.textContent)).toEqual(['Plan', 'Onay ve canlı1', 'Plan ve gerçekleşen']);
-    fireEvent.click(screen.getByRole('button', { name: 'Planlama motoruna dön' }));
-    expect(git).toHaveBeenCalledWith('plan');
+    expect(screen.queryByRole('heading', { name: /Planlama stüdyosu/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Planlama motoruna dön' })).toBeNull();
   });
 
   it('Plan ve gerçekleşen: taban ve canlı sunucudan; okunana kadar hazırlanıyor, ret iletisi, canlı yoksa boş, varsa göstergeler; çalışmaya yazmaz', async () => {
@@ -796,7 +796,9 @@ describe('PlanlamaAtolyesi', () => {
     const { yenile } = ac();
     fireEvent.click(screen.getByRole('button', { name: /^Olay:/ }));
     const k = screen.getByRole('dialog', { name: 'Olay ekle' });
-    fireEvent.change(within(k).getByLabelText('Kaç saat sonra başlar'), { target: { value: '2' } });
+    // Başlangıç tarih ve saatle seçilir: plan saati 10 (şimdi 8 + 2).
+    const on = new Date((tabanMs(ornekCalisma().D) ?? 0) + 10 * 3_600_000).toISOString().slice(0, 16);
+    fireEvent.change(within(k).getByLabelText('Başlangıç (boşsa şimdi)'), { target: { value: on } });
     fireEvent.change(within(k).getByLabelText('Süre (saat)'), { target: { value: '6' } });
     fireEvent.click(within(k).getByRole('button', { name: 'Olayı ekle' }));
     await waitFor(() => expect(post).toHaveBeenCalledWith('/plan/planlama-calismasi/olay-ekle', { calismaSurumu: 8, olay: { tip: 'ariza', m: '5', bas: 10, saat: 6 } }, expect.anything()));
@@ -820,12 +822,25 @@ describe('PlanlamaAtolyesi', () => {
     post.mockRestore();
   });
 
+  it('geçmiş bir başlangıç seçilse de arıza şimdiden başlar (kart 3042 madde 5)', async () => {
+    const post = vi.spyOn(api, 'post').mockResolvedValue({ calismaSurumu: 9, oncekiSurum: 8 });
+    ac();
+    fireEvent.click(screen.getByRole('button', { name: /^Olay:/ }));
+    const k = screen.getByRole('dialog', { name: 'Olay ekle' });
+    // Plan saati 6, şimdi 8: geçmiş an.
+    const once = new Date((tabanMs(ornekCalisma().D) ?? 0) + 6 * 3_600_000).toISOString().slice(0, 16);
+    fireEvent.change(within(k).getByLabelText('Başlangıç (boşsa şimdi)'), { target: { value: once } });
+    fireEvent.change(within(k).getByLabelText('Süre (saat)'), { target: { value: '3' } });
+    fireEvent.click(within(k).getByRole('button', { name: 'Olayı ekle' }));
+    await waitFor(() => expect(post).toHaveBeenCalledWith('/plan/planlama-calismasi/olay-ekle', { calismaSurumu: 8, olay: { tip: 'ariza', m: '5', bas: 8, saat: 3 } }, expect.anything()));
+    post.mockRestore();
+  });
+
   it('saat ilerledikten sonra eklenen arıza yeni saatten başlar; şimdi sayfa açıkken donmaz (2506 a)', async () => {
     const post = vi.spyOn(api, 'post').mockResolvedValue({ calismaSurumu: 9, oncekiSurum: 8 });
     ac();
     fireEvent.click(screen.getByRole('button', { name: /^Olay:/ }));
     const k = screen.getByRole('dialog', { name: 'Olay ekle' });
-    fireEvent.change(within(k).getByLabelText('Kaç saat sonra başlar'), { target: { value: '0' } });
     fireEvent.change(within(k).getByLabelText('Süre (saat)'), { target: { value: '6' } });
     // Form açıkken üç saat geçer; olay gönderme anının saatine yazılır (8 → 11).
     vi.setSystemTime(Date.now() + 3 * 3_600_000);

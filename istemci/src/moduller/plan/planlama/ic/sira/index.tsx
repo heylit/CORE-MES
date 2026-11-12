@@ -4,6 +4,7 @@ import type { PlanlamaCalismasi } from '../../tipler.ts';
 import { saatYaz, type Derleme, type OkunanPlan } from '../../motor/kurallar.ts';
 import { hamleYapisi, useHamleci } from '../../motor/hamle/hamle.ts';
 import { siraDegisti, siraKur, siraTasi, siraTezgahlari, siraYon, type TezgahSirasi } from './kurallar.ts';
+import { kaynakAdlariKur } from '../../kaynak-kodu.tsx';
 import './sira.css';
 
 // Tezgâh sırası aracı (w-v20 v20SiraGovde): tezgâh seçilir, sıradaki işler tutup sürüklenir ya da oklarla taşınır. Uygula yeni sırayı motora
@@ -16,6 +17,7 @@ export function TezgahSirasiPaneli({ c, p, cx, m, yaz, kapat }: {
 }) {
   const { bildir } = useBildirim();
   const tez = siraTezgahlari(cx);
+  const ad = kaynakAdlariKur(c.D);
   const ilkM = m && tez.includes(m) ? m : tez[0] ?? null;
   const [q, setQ] = useState<TezgahSirasi | null>(() => (ilkM ? siraKur(p, cx, ilkM) : null));
   const [sonP, setSonP] = useState(p);
@@ -43,12 +45,12 @@ export function TezgahSirasiPaneli({ c, p, cx, m, yaz, kapat }: {
           <label className="tc-alan">
             <span className="tc-alan-etiket">Tezgâh</span>
             <select className="tc-alan-kutu" value={q.m} onChange={(e) => setQ(siraKur(p, cx, e.target.value))}>
-              {tez.map((x) => <option key={x} value={x}>{x}</option>)}
+              {tez.map((x) => <option key={x} value={x}>{ad.kaynak(x)}</option>)}
             </select>
           </label>
           <p className="tc-pym-kucuk-yazi">Sıradaki işleri tutup sürükleyin ya da oklarla taşıyın; sonra Uygula. Motor yeni sırayı korur, saatleri yeniden hesaplar. Sabit işin yeri değişmez.</p>
           {q.ids.length ? (
-            <ol className="tc-pyr-liste" aria-label={`${q.m} kuyruğu`}>
+            <ol className="tc-pyr-liste" aria-label={`${ad.kaynak(q.m)} kuyruğu`}>
               {q.ids.map((id, i) => {
                 const r = p.ops[id]; const s = sabit(id);
                 return (

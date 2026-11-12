@@ -46,7 +46,7 @@ export function PlanSeridi(o: PlanlamaEkranOzellikleri & { gorunum: PlanlamaGoru
     <div className="tc-pym" data-serit="">
       <Cubuk plan={!!p} guncel={c ? planGuncel(c) : false} planYaz={o.yetki.planYaz} nabiz={nabiz} nabizAcik={acik} nabizAc={setAcik}
         etkin={ekran === 'veri' ? 'veri' : ekran === 'gecmis' ? 'gecmis' : ekran !== null ? 'plan' : o.gorunum === 'studio' ? 'studyo' : null} planaGit={() => o.git('plan')} studyo={() => o.git('studio')} ozeteGit={() => o.git('plan')}
-        veri={o.altSec ? () => o.altSec?.({ ekran: 'veri', bolum: null }) : null} gecmis={o.altSec ? () => o.altSec?.({ ekran: 'gecmis', bolum: null }) : null} planKur={planKur} bekleyenUygula={bekleyenUygula} {...y} />
+        veri={o.altSec ? () => o.altSec?.({ ekran: 'veri', bolum: null }) : null} gecmis={o.altSec ? () => o.altSec?.({ ekran: 'gecmis', bolum: null }) : null} planKur={planKur} bekleyenUygula={bekleyenUygula} studyoda={o.gorunum === 'studio'} {...y} />
     </div>
   );
 }

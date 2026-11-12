@@ -7,7 +7,7 @@ import type { Aralik } from '../harita/kurallar.ts';
 import { HaritaOkuma } from '../harita/Okuma.tsx';
 import type { Derleme, OkunanPlan } from '../kurallar.ts';
 import { degisken } from '../ortak.tsx';
-import { Bekleme, Canli, Gostergeler, Pano, Sure, Yaris, Yorumlar, Yuk } from './bolumler.tsx';
+import { Bekleme, Canli, DarYorum, Gostergeler, Pano, Sure, Yaris, Yorumlar, Yuk } from './bolumler.tsx';
 import { cevap, gostergeler, konum, secim, yorumlar, type BolgeKimligi, type OzetVerisi, type Yorum } from './veri.ts';
 
 // Özet görünümü (zm-ozet.betik, zo-kontrol): altı bölüm ve tezgâh haritası bir ızgarada. Bölüm sırası ve ızgara yerleri eski sayfanınkidir;
@@ -31,6 +31,8 @@ export function Ozet(o: Ozellikler) {
   const yor = useMemo(() => yorumlar(c, v, o.tezGrup), [c, v, o.tezGrup]);
   const sec = useMemo(() => secim(v, d.secJob, d.secTez, o.tezGrup), [v, d.secJob, d.secTez, o.tezGrup]);
   const kpi = useMemo(() => gostergeler(c, v, o.tezGrup), [c, v, o.tezGrup]);
+  const [yorumDar, setYorumDar] = useState(yorumDarOku);
+  const yorumDarYap = (v: boolean) => { setYorumDar(v); yorumDarYaz(v); };
   const t = d.zaman; const gun = Math.min(v.gun - 1, Math.floor((t - v.T0) / 24 / v.kova));
   // "Yakından bak": bölüm görünür alana gelir ve odağı alır (eski sayfada tahtanın kamerası bölgeye uçardı).
   const yakindan = (el: HTMLElement | null) => { el?.scrollIntoView?.({ block: 'nearest', behavior: 'smooth' }); el?.querySelector<HTMLElement>('.tc-pym-br-soru')?.focus(); };
@@ -43,10 +45,12 @@ export function Ozet(o: Ozellikler) {
     return null;
   };
   return (
-    <div className="tc-pym-oz" data-vurgu={sec ? '' : undefined} ref={degisken({ '--f': konum(v, t).toFixed(4) })}>
+    <div className="tc-pym-oz" data-vurgu={sec ? '' : undefined} data-yorum-dar={yorumDar ? '' : undefined} ref={degisken({ '--f': konum(v, t).toFixed(4) })}>
       <Pano {...pano('ozet')} ek={<Canli c={c} v={v} t={t} />}><Gostergeler l={kpi} /></Pano>
       <Pano {...pano('bekle')}><Bekleme c={c} v={v} sec={sec} acikGrup={d.acikGrup} grupAc={o.grupAc} sipSec={o.sipSec} kartAc={o.kartAc} /></Pano>
-      <Pano {...pano('yorum')}><Yorumlar l={yor} eylem={eylem} /></Pano>
+      {yorumDar
+        ? <DarYorum l={yor} ac={() => yorumDarYap(false)} />
+        : <Pano {...pano('yorum')} daralt={() => yorumDarYap(true)}><Yorumlar l={yor} eylem={eylem} /></Pano>}
       <Pano {...pano('yuk')}><Yuk c={c} v={v} sec={sec} gun={gun} gunSec={o.gunSec} tezSec={o.tezSec} tezGrup={o.tezGrup} /></Pano>
       <Pano {...pano('yaris')}><Yaris c={c} v={v} sec={sec} sipSec={o.sipSec} /></Pano>
       <Pano {...pano('sure')}><Sure v={v} sipSec={o.sipSec} /></Pano>
@@ -54,6 +58,10 @@ export function Ozet(o: Ozellikler) {
     </div>
   );
 }
+
+const YORUM_ANAHTARI = 'tmi:planlama:yorum-dar';
+function yorumDarOku(): boolean { try { return localStorage.getItem(YORUM_ANAHTARI) === '1'; } catch { return false; } }
+function yorumDarYaz(v: boolean): void { try { if (v) localStorage.setItem(YORUM_ANAHTARI, '1'); else localStorage.removeItem(YORUM_ANAHTARI); } catch { /* depo kapalıysa tercih bu açılışta kalır */ } }
 
 // Tezgâh haritası hücresi (zm-ozet brKatman, zo-kontrol): başlık, yakınlık, Büyüt, okuma açıklaması ve tuval; oynatıcı yok, zaman imleci Özet'inki.
 function HaritaHucresi(o: Ozellikler) {

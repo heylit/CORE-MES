@@ -67,7 +67,7 @@ describe('planlama motoru hesapları', () => {
     const yor = yorumlar(c, v, tg);
     expect(yor.map((x) => [x.ton, html(x.m)])).toEqual([
       ['hata', "2 siparişin <b>1</b>'i zamanında, <b>1</b>'i geç. En çok geciken <b>2</b> (ORNEK Flanş), termininden <b>73 sa</b> sonra bitiyor."],
-      ['uyari', 'Geç siparişleri en çok <b>Fason · 5</b> bekletiyor: toplam <b>2,8 sa</b>. Bu kaynağı rahatlatmak gecikmeyi en çok azaltır.'],
+      ['uyari', 'Geç siparişleri en çok <b>Fason · Ornek Fason Isil Islem</b> bekletiyor: toplam <b>2,8 sa</b>. Bu kaynağı rahatlatmak gecikmeyi en çok azaltır.'],
       ['bilgi', "Bir sipariş atölyede geçirdiği sürenin yalnız <b>%3</b>'ünde işleniyor. En büyük pay <b>başlangıç koşulu (serbest, malzeme, nc programı, kilit)</b> (%74)."],
       ['bilgi', "En yoğun gün <b>Cmt</b> (24.10): tezgâhların ortalama <b>%12</b>'si dolu."],
       ['bilgi', 'En boş grup <b>3</b> (%0), en dolu <b>1</b> (%2). Dolu gruptaki adımlara boş gruptan alternatif tezgâh tanımlamak yükü dengeler.'],

@@ -8,6 +8,7 @@ import {
   GUNLER, GUN_AD, durusDenetle, duruslar, ekMesaiDenetle, ekMesailer, girdiSaati, girdidenSaat, gunSirasi, gunTarihi, vardiyalar, vardiyaSuresi,
   type Durus, type EkMesai, type Vardiya,
 } from './kurallar.ts';
+import { kaynakAdlariKur } from '../../kaynak-kodu.tsx';
 import { KucukDugme, SahipDugmesi, SahipNotu, VeriKarti, VeriTablosu, sayiYazi } from './ortak.tsx';
 
 // Takvim (02-orta.betik sTakvim): vardiyalar, çalışma günleri, arıza ve planlı bakım, tatiller, ek mesai. Vardiya, çalışma günü ve tatil
@@ -17,7 +18,7 @@ import { KucukDugme, SahipDugmesi, SahipNotu, VeriKarti, VeriTablosu, sayiYazi }
 const saat = (h: number) => `${sayiYazi(h, 1)} sa`;
 
 function DurusFormu({ c, komut }: { c: PlanlamaCalismasi; komut: CalismaKomutu }) {
-  const D = c.D;
+  const D = c.D; const ad = kaynakAdlariKur(D);
   const [m, mYaz] = useState(D.tezgahlar[0]?.id ?? '');
   const [bas, basYaz] = useState(() => girdiSaati(D, 31));
   const [bit, bitYaz] = useState(() => girdiSaati(D, 39));
@@ -27,12 +28,12 @@ function DurusFormu({ c, komut }: { c: PlanlamaCalismasi; komut: CalismaKomutu }
     const a = girdidenSaat(D, bas), b = girdidenSaat(D, bit);
     const h = durusDenetle(a, b); hataYaz(h);
     if (h || a === null || b === null) return;
-    komut.degistir('Arıza/bakım eklendi', (t) => { t.down = [...t.down, { m, from: a, to: b }].sort((x, y) => Number(x.from) - Number(y.from)); }, { ayrinti: `${m} ${saatYaz(D, a)} → ${saatYaz(D, b)}` });
+    komut.degistir('Arıza/bakım eklendi', (t) => { t.down = [...t.down, { m, from: a, to: b }].sort((x, y) => Number(x.from) - Number(y.from)); }, { ayrinti: `${ad.kaynak(m)} ${saatYaz(D, a)} → ${saatYaz(D, b)}` });
   };
   return (
     <form className="tc-form tc-pyi-satir-form" noValidate onSubmit={gonder} aria-label="Arıza ya da bakım ekle">
       <label className="tc-alan"><span className="tc-alan-etiket">Tezgâh</span>
-        <select className="tc-alan-kutu" value={m} onChange={(e) => { mYaz(e.target.value); }}>{D.tezgahlar.map((t) => <option key={t.id} value={t.id}>{t.id} · {t.ad}</option>)}</select>
+        <select className="tc-alan-kutu" value={m} onChange={(e) => { mYaz(e.target.value); }}>{D.tezgahlar.map((t) => <option key={t.id} value={t.id}>{ad.kaynak(t.id)} · {t.ad}</option>)}</select>
       </label>
       <label className="tc-alan"><span className="tc-alan-etiket">Başlangıç</span><input className="tc-alan-kutu" type="datetime-local" value={bas} onChange={(e) => { basYaz(e.target.value); }} /></label>
       <label className="tc-alan"><span className="tc-alan-etiket">Bitiş</span><input className="tc-alan-kutu" type="datetime-local" value={bit} onChange={(e) => { bitYaz(e.target.value); }} /></label>
@@ -43,7 +44,7 @@ function DurusFormu({ c, komut }: { c: PlanlamaCalismasi; komut: CalismaKomutu }
 }
 
 function MesaiFormu({ c, komut, vs }: { c: PlanlamaCalismasi; komut: CalismaKomutu; vs: Vardiya[] }) {
-  const D = c.D;
+  const D = c.D; const ad = kaynakAdlariKur(D);
   const [m, mYaz] = useState(D.tezgahlar[0]?.id ?? '');
   const [gun, gunYaz] = useState(() => gunTarihi(D, 5));
   const [vardiya, vardiyaYaz] = useState(vs[0]?.id ?? '');
@@ -53,12 +54,12 @@ function MesaiFormu({ c, komut, vs }: { c: PlanlamaCalismasi; komut: CalismaKomu
     const g = gunSirasi(D, gun);
     const h = ekMesaiDenetle(c, { m, gun: g, vardiya }); hataYaz(h);
     if (h || g === null) return;
-    komut.degistir('Ek mesai eklendi', (t) => { t.ekMesai = [...t.ekMesai, { m, gun: g, vardiya }]; }, { ayrinti: `${m} ${gun} ${vardiya}` });
+    komut.degistir('Ek mesai eklendi', (t) => { t.ekMesai = [...t.ekMesai, { m, gun: g, vardiya }]; }, { ayrinti: `${ad.kaynak(m)} ${gun} ${vardiya}` });
   };
   return (
     <form className="tc-form tc-pyi-satir-form" noValidate onSubmit={gonder} aria-label="Ek mesai ekle">
       <label className="tc-alan"><span className="tc-alan-etiket">Tezgâh</span>
-        <select className="tc-alan-kutu" value={m} onChange={(e) => { mYaz(e.target.value); }}>{D.tezgahlar.map((t) => <option key={t.id} value={t.id}>{t.id}</option>)}</select>
+        <select className="tc-alan-kutu" value={m} onChange={(e) => { mYaz(e.target.value); }}>{D.tezgahlar.map((t) => <option key={t.id} value={t.id}>{ad.kaynak(t.id)} · {t.ad}</option>)}</select>
       </label>
       <label className="tc-alan"><span className="tc-alan-etiket">Gün</span><input className="tc-alan-kutu" type="date" value={gun} onChange={(e) => { gunYaz(e.target.value); }} /></label>
       <label className="tc-alan"><span className="tc-alan-etiket">Vardiya</span>
@@ -72,7 +73,7 @@ function MesaiFormu({ c, komut, vs }: { c: PlanlamaCalismasi; komut: CalismaKomu
 }
 
 export function Takvim({ c, komut, planYaz }: { c: PlanlamaCalismasi; komut: CalismaKomutu | null; planYaz: boolean }) {
-  const D = c.D; const yaz = komut && planYaz ? komut : null;
+  const D = c.D; const yaz = komut && planYaz ? komut : null; const ad = kaynakAdlariKur(D);
   const vs = vardiyalar(D);
   const gunler = D.calismaGunleri ?? {};
   const tatiller = D.tatiller ?? [];
@@ -81,7 +82,7 @@ export function Takvim({ c, komut, planYaz }: { c: PlanlamaCalismasi; komut: Cal
   const durusSil = (d: Durus) => {
     yaz?.degistir('Arıza/bakım silindi', (t) => {
       const l = ilkiniSil(t.down, (x) => x.m === d.m && x.from === d.from && x.to === d.to); if (!l) return false; t.down = l;
-    }, { ayrinti: `${d.m} ${saatYaz(D, d.from)}` });
+    }, { ayrinti: `${ad.kaynak(d.m)} ${saatYaz(D, d.from)}` });
   };
   const mesaiSil = (e: EkMesai) => {
     yaz?.degistir('Ek mesai silindi', (t) => {
@@ -134,7 +135,7 @@ export function Takvim({ c, komut, planYaz }: { c: PlanlamaCalismasi; komut: Cal
           <VeriTablosu<Durus>
             etiket="Arıza ve planlı bakım" satirlar={durus} anahtar={(d, i) => `${d.m}|${d.from}|${i}`}
             sutunlar={[
-              { anahtar: 'm', baslik: 'Tezgâh', hucre: (d) => <b className="mono">{d.m}</b> }, { anahtar: 'a', baslik: 'Başlangıç', hucre: (d) => saatYaz(D, d.from) },
+              { anahtar: 'm', baslik: 'Tezgâh', hucre: (d) => <b className="mono">{ad.kaynak(d.m)}</b> }, { anahtar: 'a', baslik: 'Başlangıç', hucre: (d) => saatYaz(D, d.from) },
               { anahtar: 'b', baslik: 'Bitiş', hucre: (d) => saatYaz(D, d.to) }, { anahtar: 's', baslik: 'Süre', sag: true, hucre: (d) => saat(d.to - d.from) },
               islemSutunu<Durus>(yaz ? durusSil : null),
             ]}
@@ -155,7 +156,7 @@ export function Takvim({ c, komut, planYaz }: { c: PlanlamaCalismasi; komut: Cal
         <VeriTablosu<EkMesai>
           etiket="Ek mesai" bos="Ek mesai yok." satirlar={mesai} anahtar={(e, i) => `${e.m}|${e.gun}|${e.vardiya}|${i}`}
           sutunlar={[
-            { anahtar: 'm', baslik: 'Tezgâh', hucre: (e) => <b className="mono">{e.m}</b> }, { anahtar: 'g', baslik: 'Gün', hucre: (e) => saatYaz(D, e.gun * 24).slice(0, 9) },
+            { anahtar: 'm', baslik: 'Tezgâh', hucre: (e) => <b className="mono">{ad.kaynak(e.m)}</b> }, { anahtar: 'g', baslik: 'Gün', hucre: (e) => saatYaz(D, e.gun * 24).slice(0, 9) },
             { anahtar: 'v', baslik: 'Vardiya', hucre: (e) => e.vardiya }, islemSutunu<EkMesai>(yaz ? mesaiSil : null),
           ]}
         />

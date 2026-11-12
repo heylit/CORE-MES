@@ -8,7 +8,8 @@ import {
   satinalmalar, siparisDurumu, siparisSuz, silmeEngeli, tedarikciler, type Aparat, type Karsilama, type ListeTuru, type SatinAlma, type SiparisSuzgeci,
   type Tedarikci,
 } from './kurallar.ts';
-import { KucukDugme, SahipDugmesi, SahipNotu, VeriKarti, VeriTablosu, sayiYazi, type Sutun } from './ortak.tsx';
+import { useKaynakAdlari } from '../../kaynak-kodu.tsx';
+import { KucukDugme, SahipDugmesi, SahipNotu, VeriKarti, VeriTablosu, sayiYazi, terminYazi, type Sutun } from './ortak.tsx';
 
 // Sahibinden gelen kayıtların listeleri (02-orta.betik sSiparisler, sTezgahlar, sPersonel, sMalzeme, sFason; listeTablosu, TANIM). Kaynak verisi
 // (sipariş, tezgâh, personel, devamsızlık, malzeme, satın alma, fasoncu) her açılışta sahibinden yeniden kurulur ve burada yalnız okunur: Yeni,
@@ -33,14 +34,14 @@ const islem = <S,>(hucre: (s: S) => ReactNode): Sutun<S> => ({ anahtar: 'islem',
 export function SiparisListesi({ c, p, cizelgede }: ListeOzellikleri) {
   const [suz, suzYaz] = useState<SiparisSuzgeci>('hepsi');
   const [ara, araYaz] = useState('');
-  const D = c.D; const J = p?.J ?? null;
+  const D = c.D; const J = p?.J ?? null; const ad = useKaynakAdlari();
   const urunAd = (id: string) => D.urunler.find((u) => u.id === id)?.ad ?? id;
-  const l = siparisSuz(D.siparisler, J ?? {}, suz, ara, urunAd);
+  const l = siparisSuz(D.siparisler, J ?? {}, suz, ara, urunAd, ad.emir);
   const sutunlar: Sutun<Siparis>[] = [
-    { anahtar: 'id', baslik: 'Sipariş', hucre: (s) => mono(s.id) },
+    { anahtar: 'id', baslik: 'Sipariş', hucre: (s) => mono(ad.emir(s.id)) },
     { anahtar: 'urun', baslik: 'Ürün', hucre: (s) => urunAd(s.urun) },
     { anahtar: 'adet', baslik: 'Adet', sag: true, hucre: (s) => sayiYazi(s.adet) },
-    { anahtar: 'termin', baslik: 'Termin', kirilmaz: true, hucre: (s) => s.termin ?? '—' },
+    { anahtar: 'termin', baslik: 'Termin', kirilmaz: true, hucre: (s) => terminYazi(s.termin) },
     { anahtar: 'oncelik', baslik: 'Öncelik', hucre: (s) => { const o = ONCELIK[Number(s.oncelik)]; return o ? <Rozet ton={o[1]}>{o[0]}</Rozet> : '—'; } },
     { anahtar: 'serbest', baslik: 'Serbest', kirilmaz: true, hucre: (s) => s.serbest ?? 'hemen' },
     { anahtar: 'bitis', baslik: 'Planlanan bitiş', kirilmaz: true, hucre: (s) => (s.iptal !== true && J?.[s.id]?.C != null ? saatYaz(D, J[s.id]?.C) : '—') },
@@ -72,11 +73,11 @@ export function SiparisListesi({ c, p, cizelgede }: ListeOzellikleri) {
 
 // --- Tezgâhlar ---
 export function TezgahListesi({ c, maliyet }: ListeOzellikleri) {
-  const l = c.D.tezgahlar;
+  const l = c.D.tezgahlar; const ad = useKaynakAdlari();
   const sutunlar: Sutun<Tezgah>[] = [
-    { anahtar: 'id', baslik: 'Kod', hucre: (x) => mono(x.id) },
+    { anahtar: 'id', baslik: 'Kod', hucre: (x) => mono(ad.kaynak(x.id)) },
     { anahtar: 'ad', baslik: 'Ad', hucre: (x) => x.ad ?? '—' },
-    { anahtar: 'grup', baslik: 'Grup', hucre: (x) => <Rozet ton="pasif">{x.grup ?? '—'}</Rozet> },
+    { anahtar: 'grup', baslik: 'Grup', hucre: (x) => <Rozet ton="pasif">{x.grup == null ? '—' : ad.grup(String(x.grup))}</Rozet> },
     { anahtar: 'v', baslik: 'Vardiya', hucre: (x) => `${x.vardiyalar?.length ? x.vardiyalar.join(', ') : 'hepsi'}${x.isiksiz ? ' · ışıksız' : ''}` },
     { anahtar: 'verim', baslik: 'Verim', sag: true, hucre: (x) => sayiYazi(x.verim ?? 1, 2) },
     { anahtar: 'opOran', baslik: 'Operatör', sag: true, hucre: (x) => sayiYazi(x.opOran ?? 1, 2) },
@@ -97,7 +98,7 @@ export function TezgahListesi({ c, maliyet }: ListeOzellikleri) {
 
 // --- Personel ---
 export function PersonelListesi({ c }: ListeOzellikleri) {
-  const D = c.D; const mx = kapasiteMatrisi(D);
+  const D = c.D; const ad = useKaynakAdlari(); const mx = kapasiteMatrisi(D);
   const per = D.personel ?? [];
   const devam = devamsizliklar(D);
   return (
@@ -110,7 +111,7 @@ export function PersonelListesi({ c }: ListeOzellikleri) {
               <tbody>
                 {mx.gruplar.map((g) => (
                   <tr key={g}>
-                    <th scope="row">{g}</th>
+                    <th scope="row">{ad.grup(g)}</th>
                     {mx.vardiyalar.map((v) => {
                       const h = mx.hucre(g, v);
                       return (
@@ -147,7 +148,7 @@ export function PersonelListesi({ c }: ListeOzellikleri) {
           sutunlar={[
             { anahtar: 'id', baslik: 'Kod', hucre: (x) => mono(x.id) }, { anahtar: 'ad', baslik: 'Ad', hucre: (x) => x.ad ?? '—' },
             { anahtar: 'vardiya', baslik: 'Vardiya', hucre: (x) => x.vardiya ?? '—' },
-            { anahtar: 'gruplar', baslik: 'Yetkinlik', hucre: (x) => <span className="tc-pyi-cipler">{(x.gruplar ?? []).map((g) => <span key={g} className="tc-pyi-cip">{g}</span>)}</span> },
+            { anahtar: 'gruplar', baslik: 'Yetkinlik', hucre: (x) => <span className="tc-pyi-cipler">{(x.gruplar ?? []).map((g) => <span key={g} className="tc-pyi-cip">{ad.grup(g)}</span>)}</span> },
             { anahtar: 'ayar', baslik: 'Ayarcı', hucre: (x) => (x.ayar ? <Rozet ton="tamam">Ayarcı</Rozet> : '—') },
             islem(() => <SahipDugmesi ad="Sil" simge="trash" />),
           ]}

@@ -3,6 +3,7 @@ import {
   ayristir, donemAraligi, KATEGORI_AD, nabizOlc, saatYaz, saKisa, sayiEki, type Derleme, type Donem, type OkunanPlan, type PlanIslemi, type SureKategorisi,
 } from '../kurallar.ts';
 import { planDisi } from '../../tipler.ts';
+import type { EmirNo } from '../../ortak/emir-no.ts';
 
 // Özet'in hesabı (zf-resim.betik brVeri ve bölgeleri, zs-olcek-ortak dönem): bütün hesap tek yerde, seçili dönemle. Metin parçası
 // düz yazı ya da kalın (`{ b }`); eski sayfanın <b> vurgusu.
@@ -27,6 +28,13 @@ export const tezgahKodlari = (D: Pick<PlanVerisi, 'tezgahlar' | 'fasoncular'>): 
   ...(D.fasoncular ?? []).flatMap((f) => (f.ad ? [[`@${f.id}`, f.ad]] : [])),
 ]);
 export const tezgahKodu = (m: string, kodlar?: Adlar): string => kodlar?.[m] ?? (m.startsWith('@') ? m.slice(1) : m);
+// Bekleme kaynağının etiketi (motor ayristir): "Fason · <no>", "Operatör · <grup>", "Arıza · <tezgâh>" ya da tezgâh kimliği; ekranda ad ve kod.
+export function kaynakEtiketi(x: string, v: Pick<OzetVerisi, 'tezKod' | 'grupAd'>): string {
+  const m = /^(Fason|Operatör|Arıza) · (.*)$/.exec(x);
+  if (!m) return tezgahKodu(x, v.tezKod);
+  const [, tur = '', k = ''] = m;
+  return `${tur} · ${tur === 'Fason' ? tezgahKodu(`@${k}`, v.tezKod) : tur === 'Operatör' ? grupAdi(k, v.grupAd) : tezgahKodu(k, v.tezKod)}`;
+}
 
 export interface OzetAdimi { j: string; m: string; g: string; S: number; C: number; su: number; run: number; bek: number }
 export interface OzetSiparisi {
@@ -45,6 +53,8 @@ export interface OzetVerisi {
   ops: { m: string; job: string; S: number; C: number; su: number }[];
   oz: { suH: number | null; suN: number; famN: number | null; Cmax: number | null };
   grupAd: Adlar; tezKod: Adlar;
+  // Siparişin ekrandaki adı: emir no (verilmezse kimlik).
+  emir: EmirNo;
 }
 
 // Rotası olan ama kalan adımı olmayan sipariş bitmiştir (derleme biten adımı düşürür).
@@ -53,7 +63,7 @@ export function bitmisSiparisler(D: PlanVerisi, cx: Pick<Derleme, 'jobs'>): stri
   return D.siparisler.filter((s) => !planDisi(s) && rotali.has(s.urun) && cx.jobs[s.id]?.ops.length === 0).map((s) => s.id);
 }
 
-export function ozetVerisi(c: PlanlamaCalismasi, p: OkunanPlan, cx: Derleme, donem: Donem, kayma: number): OzetVerisi {
+export function ozetVerisi(c: PlanlamaCalismasi, p: OkunanPlan, cx: Derleme, donem: Donem, kayma: number, emir: EmirNo = (j) => j): OzetVerisi {
   const D = c.D; const now = cx.now;
   const tezGrup = new Map(D.tezgahlar.map((t) => [t.id, t.grup ?? 'diger']));
   const grup = (m: string) => (m.startsWith('@') ? 'fason' : tezGrup.get(m) ?? 'diger');
@@ -107,7 +117,7 @@ export function ozetVerisi(c: PlanlamaCalismasi, p: OkunanPlan, cx: Derleme, don
     u: Object.entries(w.util),
     ops: ops.map((o) => ({ m: o.m, job: o.job, S: o.S, C: o.C, su: o.su })),
     oz: { suH: w.suH, suN: ops.filter((o) => o.su > 0 && o.S >= r.a && o.S < r.b).length, famN: null, Cmax: p.ozet.Cmax },
-    grupAd: grupAdlari(D), tezKod: tezgahKodlari(D),
+    grupAd: grupAdlari(D), tezKod: tezgahKodlari(D), emir,
   };
 }
 export const ACIK_TEZGAH_YOK = 'Bu dönemde açık tezgâh yok.';
@@ -192,7 +202,7 @@ export interface Yorum { simge: 'alert' | 'check' | 'target' | 'clock' | 'grid' 
 export function yokMetni(v: OzetVerisi): Metin {
   if (!v.yok.length) return [];
   const l: Metin = [{ b: String(v.yok.length) }, ' siparişin ', { b: String(v.yokAdim) }, ' adımı yerleşmedi (kaynak ya da ufuk yetmedi): '];
-  v.yok.slice(0, 4).forEach((x, i) => { if (i) l.push(', '); l.push({ b: x.id }); });
+  v.yok.slice(0, 4).forEach((x, i) => { if (i) l.push(', '); l.push({ b: v.emir(x.id) }); });
   l.push(`${v.yok.length > 4 ? '…' : ''}. Bu siparişler bitmiş ya da zamanında sayılmaz.`);
   return l;
 }
@@ -204,7 +214,7 @@ export function yorumlar(c: PlanlamaCalismasi, v: OzetVerisi, tezGrup: (m: strin
   if (n) {
     l.push(g0 ? {
       simge: 'alert', ton: 'hata',
-      m: [`${olculen} siparişin `, { b: String(olculen - gec.length) }, `${sayiEki(olculen - gec.length, 'i')} zamanında, `, { b: String(gec.length) }, `${sayiEki(gec.length, 'i')} geç. En çok geciken `, { b: g0.id }, ` (${g0.urun}), termininden `, { b: saKisa(g0.T) }, ' sonra bitiyor.', ...terminsizMetni(v)],
+      m: [`${olculen} siparişin `, { b: String(olculen - gec.length) }, `${sayiEki(olculen - gec.length, 'i')} zamanında, `, { b: String(gec.length) }, `${sayiEki(gec.length, 'i')} geç. En çok geciken `, { b: v.emir(g0.id) }, ` (${g0.urun}), termininden `, { b: saKisa(g0.T) }, ' sonra bitiyor.', ...terminsizMetni(v)],
       eylem: { tur: 'br-git-sip', v: g0.id, ad: 'Tahtada göster' },
     } : olculen ? { simge: 'check', ton: 'tamam', m: [`${v.yok.length ? 'Yerleşen ' : ''}${olculen} siparişin hepsi termininden önce bitiyor.`, ...terminsizMetni(v)] }
       : { simge: 'flag', ton: 'bilgi', m: [`${v.yok.length ? 'Yerleşen ' : ''}${n} siparişin termini yok; zamanında olup olmadığı ölçülmez.`] });
@@ -217,7 +227,7 @@ export function yorumlar(c: PlanlamaCalismasi, v: OzetVerisi, tezGrup: (m: strin
     const tz = D.tezgahlar.find((t) => t.id === b0[0]);
     l.push({
       simge: 'target', ton: 'uyari',
-      m: ['Geç siparişleri en çok ', { b: tezgahKodu(b0[0], v.tezKod) }, ' bekletiyor: toplam ', { b: saKisa(b0[1]) }, `.${b1 ? ` Sonra ${tezgahKodu(b1[0], v.tezKod)} (${saKisa(b1[1])}).` : ''} Bu kaynağı rahatlatmak gecikmeyi en çok azaltır.`],
+      m: ['Geç siparişleri en çok ', { b: kaynakEtiketi(b0[0], v) }, ' bekletiyor: toplam ', { b: saKisa(b0[1]) }, `.${b1 ? ` Sonra ${kaynakEtiketi(b1[0], v)} (${saKisa(b1[1])}).` : ''} Bu kaynağı rahatlatmak gecikmeyi en çok azaltır.`],
       ...(tz ? { eylem: { tur: 'br-git-tez', v: tz.id, ad: 'Tezgâha git' } as const } : {}),
     });
   }
@@ -273,7 +283,7 @@ export function cevap(c: PlanlamaCalismasi, v: OzetVerisi, id: BolgeKimligi, yor
     case 'sure': return yor.find((x) => x.simge === 'clock')?.m ?? [];
     case 'yaris': {
       const g0 = gec[0];
-      return g0 ? [{ b: String(gec.length) }, ' sipariş geç; en çok geciken ', { b: g0.id }, `, termininden ${saKisa(g0.T)} sonra biter.`] : n === v.terminsiz ? ['Termini olan sipariş yok.'] : ['Termini olan bütün siparişler termininden önce biter.'];
+      return g0 ? [{ b: String(gec.length) }, ' sipariş geç; en çok geciken ', { b: v.emir(g0.id) }, `, termininden ${saKisa(g0.T)} sonra biter.`] : n === v.terminsiz ? ['Termini olan sipariş yok.'] : ['Termini olan bütün siparişler termininden önce biter.'];
     }
     case 'yorum': return ['Veriden çıkan ', { b: String(yor.length) }, ' gözlem; önce sorunlar.'];
   }

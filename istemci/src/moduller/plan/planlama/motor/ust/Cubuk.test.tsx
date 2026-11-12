@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { CALISMA_ACILINCA, MOTOR_NOTU, PLANDA_IYILESTIR } from '../ortak.tsx';
+import { OlayAcBaglami, type StudyoOlayTuru } from '../../gorunumler.ts';
 import { Cubuk } from './Cubuk.tsx';
 
 // B-2483-36/-37: motor sunucuda açıkken (576) çubuğun pasif düğmesi motoru neden göstermez; neden görünür kısa nottadır.
@@ -38,5 +39,28 @@ describe('plan çubuğunun pasif düğmeleri', () => {
     expect(d.getAttribute('aria-disabled')).toBe('true');
     expect(d.getAttribute('title')).toContain(PLANDA_IYILESTIR);
     expect(cubuk().getByText('Plan sayfasında')).toBeTruthy();
+  });
+});
+
+describe('Olay ekle ve iyileştirme plan çubuğunda yalnız Motor\'da (kart 3042 madde 3)', () => {
+  const cizOlayli = (studyoda: boolean, olayAc: (t: StudyoOlayTuru) => void) => render(
+    <OlayAcBaglami.Provider value={olayAc}>
+      <Cubuk plan guncel={false} planYaz nabiz={null} nabizAcik={false} nabizAc={() => {}} etkin={null} planaGit={() => {}}
+        studyo={() => {}} ozeteGit={() => {}} refSec={null} sabitle={null} sabitAd={null} studyoda={studyoda} />
+    </OlayAcBaglami.Provider>,
+  );
+
+  it('Motor\'da plan çubuğunda "Olay ekle" ve "Plan iyileştirme ara" vardır; Olay ekle olay penceresini açar', () => {
+    const olayAc = vi.fn();
+    cizOlayli(false, olayAc);
+    fireEvent.click(cubuk().getByRole('button', { name: 'Olay ekle' }));
+    expect(olayAc).toHaveBeenCalledWith('ariza');
+    expect(cubuk().getByRole('button', { name: 'Plan iyileştirme ara' })).toBeTruthy();
+  });
+
+  it('Stüdyo\'da ikisi de plan çubuğunda yoktur (tahtanın araç çubuğundadır)', () => {
+    cizOlayli(true, vi.fn());
+    expect(cubuk().queryByRole('button', { name: 'Olay ekle' })).toBeNull();
+    expect(cubuk().queryByRole('button', { name: 'Plan iyileştirme ara' })).toBeNull();
   });
 });

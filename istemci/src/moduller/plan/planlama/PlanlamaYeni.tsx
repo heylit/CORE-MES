@@ -10,14 +10,17 @@ import { useOturum } from '../../../ortak/veri/oturum.ts';
 import { PLANLAMA_ISLEMI } from '../planlama-menusu.ts';
 import {
   ACILIS, ACILIS_OLCEGI, KOK, altEkranAdresi, altEkranOku, BOS_SECIM, GORUNUM_KAYITLARI, gorunumAcik, gorunumAdresi, gorunumOku, kapasiteBolumuMu, kapasiteBolumuOku, menuGorunumu, PlanSeridi, studyoAdresi,
-  studyoIstegiOku, TAHTA, type DonemOlcegi, type PlanlamaAltEkrani, type PlanlamaGorunumu, type PlanlamaOlcegi, type PlanlamaSecimi, type StudyoIstegi,
+  OlayAcBaglami, studyoIstegiOku, TAHTA, type DonemOlcegi, type PlanlamaAltEkrani, type PlanlamaGorunumu, type PlanlamaOlcegi, type PlanlamaSecimi, type StudyoIstegi,
+  type StudyoOlayTuru,
 } from './gorunumler.ts';
 import { CalismaYazici } from './kayit.ts';
+import { KaynakAdlariBaglami, kaynakAdlariKur } from './kaynak-kodu.tsx';
 import { DegisiklikSeridi } from './ortak/degisiklik-seridi/DegisiklikSeridi.tsx';
-import { kaynakSatiri } from './ortak/degisiklik-seridi/kurallar.ts';
+import { canliBayatMetni, kaynakSatiri, seritListesi } from './ortak/degisiklik-seridi/kurallar.ts';
 import { DuzenleyenSeridi, useDuzenleyen } from './ortak/duzenleyen-seridi/DuzenleyenSeridi.tsx';
 import { usePlanlamaDeposu } from './veri.ts';
 import { yetkiKur } from './yetki.ts';
+import { useEmirNo } from './ortak/emir-no.ts';
 import './planlama-yeni.css';
 
 // Planlama'nın ekranı (soru 199 b, 270 a; 658 b, 659 a): plan modülünün sayfasıdır, planlama rolleri bunu açar. Eski çerçeve bir süre
@@ -122,6 +125,13 @@ function PlanlamaEkrani() {
   const altSec = useCallback((a: PlanlamaAltEkrani): void => { void git(altEkranAdresi(a)); }, [git]);
   const studyoAc = useCallback((i: StudyoIstegi | null): void => { void git(studyoAdresi(i), { replace: i === null }); }, [git]);
 
+  const planYazar = yetki?.planYaz === true;
+  // Üst şeritteki "Olay ekle" her sayfada atölyenin olay formunu açar (tahta dışında da); yazamayana null, düğme pasif kalır.
+  const olayAc = useMemo(() => (planYazar ? (t: StudyoOlayTuru) => { studyoAc({ tur: 'olay', v: t }); } : null), [planYazar, studyoAc]);
+  const rrKaydi = durum.tur === 'hazir' ? durum.depo.receteRotaKaydi : null;
+  const canliEmirler = durum.tur === 'hazir' ? durum.depo.durum?.emirler : null;
+  const emirNo = useEmirNo(rrKaydi, canliEmirler);
+  const adlar = useMemo(() => kaynakAdlariKur(calisma?.D, emirNo), [calisma?.D, emirNo]);
   if (oturum.isPending) return <div className="tc-py-durum"><DurumKutusu durum="yukleniyor" /></div>;
   if (!kullanici) return <div className="tc-py-durum"><DurumKutusu durum="hata" mesaj="Oturum bulunamadı." /></div>;
   if (!girebilir) return <div className="tc-py-durum"><DurumKutusu durum="hata" mesaj="Planlama sayfalarını görme yetkiniz yok." /></div>;
@@ -140,7 +150,11 @@ function PlanlamaEkrani() {
   const istek = gorunum === 'studio' ? studyoIstegiOku(sorgu) : null;
 
   const calismaYok = durum.depo.calisma === null && yetki.calismaYazabilir;
-  const serit = calisma !== null && calisma.plan !== null;
+  const canliBayat = ((b) => (b?.sayilar && b.olaylar ? { ...b, sayilar: b.sayilar, olaylar: b.olaylar } : null))(durum.depo.planSurumu?.bayat);
+  // Değişiklik satırı yalnız bekleyen değişiklik ya da eskiyen canlı plan varken yer kaplar (3042).
+  const motorEkrani = gorunum === 'plan' || gorunum === 'studio';
+  const serit = calisma !== null && calisma.plan !== null
+    && (!motorEkrani || seritListesi(calisma, disSatir).length > 0 || (canliBayat !== null && canliBayatMetni(canliBayat) !== null));
   // Üst alan tek satırdır (2320 S1 d): düzenleyen, değişiklik ve çalışma açma şeritleri aynı kapta alt alta.
   const ust = serit || calismaYok || duzenleyen !== null;
 
@@ -149,7 +163,7 @@ function PlanlamaEkrani() {
       {ust && (
         <div className="tc-py-ust">
           {duzenleyen && <DuzenleyenSeridi d={duzenleyen} yenile={yazTazele} />}
-          {serit && <DegisiklikSeridi calisma={calisma} dis={disSatir} canli={((b) => (b?.sayilar && b.olaylar ? { ...b, sayilar: b.sayilar, olaylar: b.olaylar } : null))(durum.depo.planSurumu?.bayat)} />}
+          {serit && <DegisiklikSeridi calisma={calisma} dis={disSatir} canli={canliBayat} bosGizle={motorEkrani} />}
           {calismaYok && (
             <div className="tc-py-calisma-yok" role="status">
               <span>Planlama çalışması henüz açılmadı; sayfa salt okunur.</span>
@@ -158,6 +172,8 @@ function PlanlamaEkrani() {
           )}
         </div>
       )}
+      <KaynakAdlariBaglami.Provider value={adlar}>
+      <OlayAcBaglami.Provider value={olayAc}>
       <div className="tc-py-gorunum">
         {etkin === undefined
           ? <div className="tc-py-durum"><DurumKutusu durum="hata" mesaj="Bu sayfayı görme yetkiniz yok." /></div>
@@ -180,6 +196,8 @@ function PlanlamaEkrani() {
             </>
           )}
       </div>
+      </OlayAcBaglami.Provider>
+      </KaynakAdlariBaglami.Provider>
     </div>
   );
 }

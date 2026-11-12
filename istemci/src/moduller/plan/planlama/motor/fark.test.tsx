@@ -59,7 +59,7 @@ function ac(yaz = true) {
     yetki={yetkiKur([PLANLAMA_ISLEMI, ...(yaz ? ['plan.yaz'] : [])])} /></BildirimSaglayici>);
 }
 const farkSec = () => {
-  fireEvent.click(screen.getByRole('button', { name: /Başka/ }));
+  fireEvent.click(screen.getByRole('button', { name: 'Kartlar' }));
   fireEvent.click(screen.getByRole('menuitemcheckbox', { name: /Önceki planla fark/ }));
 };
 const iso = (t: number) => new Date(Date.UTC(2026, 9, 19) - 3 * 3_600_000 + t * 3_600_000).toISOString();
@@ -78,9 +78,9 @@ describe('Önceki planla fark ekranda', () => {
     farkSec();
     expect(screen.getByText('Son canlı plan okunuyor.')).toBeTruthy();
     expect(get).toHaveBeenCalledWith('/plan/planlama-calismasi/taban-ve-canli');
-    fireEvent.click(screen.getByRole('button', { name: /Başka/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Kartlar' }));
     expect(screen.getByRole('menuitemcheckbox', { name: /Önceki planla fark/ }).getAttribute('aria-checked')).toBe('true');
-    fireEvent.click(screen.getByRole('button', { name: /Başka/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Kartlar' }));
     fireEvent.click(screen.getByRole('button', { name: 'Farkı kapat' }));
     expect(screen.queryByText(/Son canlı plan/)).toBeNull();
     cleanup();
@@ -103,7 +103,7 @@ describe('Önceki planla fark ekranda', () => {
     const gor = async (yaz: boolean) => {
       ac(yaz); farkSec();
       const s = (await screen.findByText(/^Son canlı plan ile:/)).textContent;
-      fireEvent.click(screen.getByRole('button', { name: /Başka/ }));
+      fireEvent.click(screen.getByRole('button', { name: 'Kartlar' }));
       const m = screen.getByRole('menuitemcheckbox', { name: /Önceki planla fark/ });
       const l = [s, m.getAttribute('aria-checked'), m.getAttribute('aria-disabled')];
       cleanup(); return l;
