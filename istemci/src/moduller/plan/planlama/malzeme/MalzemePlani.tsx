@@ -60,7 +60,7 @@ const Baslik = ({ simge, ad, ek }: { simge: SimgeAdi; ad: string; ek?: string })
 );
 
 export function MalzemePlani({ depo, calisma, yetki, yenile, sec, git }: PlanlamaEkranOzellikleri) {
-  const emirNo = useEmirNo(depo.receteRotaKaydi);
+  const emirNo = useEmirNo(depo.receteRotaKaydi, depo.durum?.emirler);
   return <MalzemePlaniGorunumu calisma={calisma} emirNo={emirNo} emirler={depo.durum?.emirler ?? depo.receteRotaKaydi} maliyetOku={yetki.maliyetOku} calismaSurumu={depo.calismaSurumu} terminYazar={yetki.planYaz} yenile={yenile}
     goster={(j) => { sec({ siparis: j, adim: null, tezgah: null }); git('plan'); }} />;
 }

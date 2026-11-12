@@ -22,7 +22,7 @@ export function Siparisler({ calisma, komut, yetki, git, depo, yenile }: Planlam
   const p = kayitliPlan(calisma);
   const fg = yetki.maliyetOku;
   const degerlendir = useGorunumDegerlendiricisi(depo, komut);
-  const emirNo = useEmirNo(depo.receteRotaKaydi);
+  const emirNo = useEmirNo(depo.receteRotaKaydi, depo.durum?.emirler);
 
   const tum = (
     <TumSatirlar>

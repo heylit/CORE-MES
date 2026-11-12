@@ -166,7 +166,7 @@ export function Terminler({ calisma, komut, yetki, git, depo, yenile }: Planlama
   const p = kayitliPlan(calisma);
   const L = calisma && p ? fasonSatirlari(calisma, p) : [];
   const degerlendir = useGorunumDegerlendiricisi(depo, komut);
-  const emirNo = useEmirNo(depo.receteRotaKaydi);
+  const emirNo = useEmirNo(depo.receteRotaKaydi, depo.durum?.emirler);
   const taban = calisma?.D.meta?.baslangic ? tabanMs(calisma.D.meta.baslangic) : null;
 
   const tum = calisma && (

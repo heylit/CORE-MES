@@ -6,7 +6,7 @@ describe('ısı haritası yardımcıları (zz30-isi)', () => {
     expect([null, 0, 0.05, 1, 8, 24, 72].map(saatKademesi)).toEqual([null, 0, 0, 1, 2, 3, 4]);
     const e = [50, 75, 90, 100] as const;
     expect([null, Number.NaN, 10, 50, 80, 95, 100, 140].map((x) => oranKademesi(x, e))).toEqual([null, null, 0, 1, 2, 3, 4, 4]);
-    expect([null, 3.4, 47.6, 72].map(kisaSure)).toEqual(['', '3s', '48s', '3g']);
+    expect([null, 3.4, 47.6, 72].map(kisaSure)).toEqual(['', '3 sa', '48 sa', '3 gün']);
   });
 
   it('hücre birleştirme kademeyi düşürmez, etiketleri ekler, tanımsızı atlar', () => {

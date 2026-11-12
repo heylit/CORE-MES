@@ -67,7 +67,7 @@ export function fasonIsisi(c: PlanlamaCalismasi, h: Hazirlik): IsiVerisi<Satir> 
 }
 
 export function FasonPlani(o: PlanlamaEkranOzellikleri) {
-  const emirNo = useEmirNo(o.depo.receteRotaKaydi);
+  const emirNo = useEmirNo(o.depo.receteRotaKaydi, o.depo.durum?.emirler);
   return <FasonPlaniGorunumu c={o.calisma} komut={o.komut} planYaz={o.yetki.planYaz} maliyetOku={o.yetki.maliyetOku} git={o.git} emirNo={emirNo} />;
 }
 

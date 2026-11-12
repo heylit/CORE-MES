@@ -63,7 +63,7 @@ export function TerminVeKar({ calisma, komut, yetki, git, depo, yenile }: Planla
   // Dengeyi eski sayfada müdür ve yönetici değiştirirdi (fiyat görür ve plan.kilitle); 223 a: fiyat görme maliyet okuma, sayfa içi kilit plan.yaz.
   const yazabilir = yetki.maliyetOku && yetki.planYaz;
   const degerlendir = useGorunumDegerlendiricisi(depo, komut);
-  const emirNo = useEmirNo(depo.receteRotaKaydi);
+  const emirNo = useEmirNo(depo.receteRotaKaydi, depo.durum?.emirler);
   const uzatma = useRef<HTMLDivElement>(null);
   const olc = () => {
     const el = uzatma.current; if (!el) return;

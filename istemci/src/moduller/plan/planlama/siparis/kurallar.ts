@@ -100,7 +100,7 @@ export interface UstDurum { ton: 'hata' | 'uyari' | 'tamam'; simge: 'alert' | 'c
 
 // Bekleme ya da gecikme saatinden kademe: sekiz saatlik bir vardiya, bir gün, üç gün.
 export const kademe = (h: number | null): Kademe | null => (h == null ? null : h <= 0.05 ? 0 : h < 8 ? 1 : h < 24 ? 2 : h < 72 ? 3 : 4);
-export const kisaSure = (h: number | null): string => (h == null ? '' : h < 48 ? `${Math.round(h)}s` : `${Math.round(h / 24)}g`);
+export const kisaSure = (h: number | null): string => (h == null ? '' : h < 48 ? `${Math.round(h)} sa` : `${Math.round(h / 24)} gün`);
 const gunNo = (t: number) => Math.floor(t / 24);
 
 // Hücre birleştirme: sonraki işaret öncekinin kademesini düşürmez, etiketler eklenir.

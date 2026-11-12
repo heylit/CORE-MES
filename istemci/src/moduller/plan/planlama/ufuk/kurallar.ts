@@ -44,6 +44,7 @@ export function saatOku(z: Zaman, s: unknown): number | null {
 const tarihAl = (z: Zaman, saat: number): Date => new Date(z.base + saat * 3600000);
 export const haftaGunu = (z: Zaman, gun: number): string => GUN[(new Date(z.base + gun * 86400000).getUTCDay() + 6) % 7] ?? 'pzt';
 // "GG.AA"
+export function gunAyYil(z: Zaman, saat: number): string { const d = tarihAl(z, saat); return `${iki(d.getUTCDate())}.${iki(d.getUTCMonth() + 1)}.${String(d.getUTCFullYear())}`; }
 export function gunAy(z: Zaman, saat: number): string { const d = tarihAl(z, saat); return `${iki(d.getUTCDate())}.${iki(d.getUTCMonth() + 1)}`; }
 // "GG.AA Gün" (eski sayfanın fmtDT(...).slice(0, 9))
 export function gunAyHafta(z: Zaman, saat: number): string {

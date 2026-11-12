@@ -2,6 +2,7 @@ import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react';
 import { Dugme, Simge } from '../../../../../ortak/arayuz/index.ts';
 import type { SimgeAdi } from '../../../../../ortak/tasarim/simgeler.ts';
 import { KADEME_ADI, hucreBos, type IsiGenisligi, type IsiHucresi, type IsiSatiri, type IsiSutunu, type IsiTonu, type IsiUstDurumu } from './kurallar.ts';
+import { OrtaKirpik } from '../OrtaKirpik.tsx';
 import './isi.css';
 
 // Bugünkü planlama çerçevesinin ısı haritası düzeni (zz30-isi; tasarım koruma): başlık ve durum satırı, lejant, satır × sütun ızgarası,
@@ -105,7 +106,7 @@ export function IsiIzgarasi<S extends IsiSatiri>({ etiket, satirAd, genis, sutun
               <div className="tc-isi-sat" data-secili={r.k === secim?.satir ? '' : undefined}>
                 <span className="tc-isi-ad" data-ton={r.ton || undefined}>
                   {r.simge && <Simge ad={r.simge} boyut="k" />}
-                  <span><b className="mono">{r.ad}</b>{r.alt && <small>{r.alt}</small>}</span>
+                  <span><b className="mono" title={r.ad}><OrtaKirpik metin={r.ad} /></b>{r.alt && <small>{r.alt}</small>}</span>
                 </span>
                 {sutunlar.map((c) => {
                   const secili = secim?.satir === r.k && secim.sutun === c.k;

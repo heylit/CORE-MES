@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { calismaOku } from '../durum.ts';
 import type { PlanlamaCalismasi } from '../tipler.ts';
 import {
-  DEGER_VARSAYILAN_TL, bedelsizGruplar, darbogazlar, geriIsGunu, geriZamanla, grupSaatTL, gunAyHafta, mesaiSaatTL, mesaiSiraKaynagi, mesaiTLKaynagi, SIRA_KATSAYI, pencereSaati, planUretimi, saatOku, simdiOku,
+  DEGER_VARSAYILAN_TL, bedelsizGruplar, darbogazlar, geriIsGunu, geriZamanla, grupSaatTL, gunAyHafta, gunAyYil, mesaiSaatTL, mesaiSiraKaynagi, mesaiTLKaynagi, SIRA_KATSAYI, pencereSaati, planUretimi, saatOku, simdiOku,
   talepHizi, tezgahPencereleri, ufukMalzemesi, ufukTakvimi, ufukVerisi, urunAileleri, yatirimTL, yillikAyarOku, yillikAyarYaz, yillikDonemler,
   yillikHedefKur, yillikModel, yillikOzet, yillikSonuc, yillikTalep, yillikVeri, zamanKur, type CozumCevabi, type Zaman,
 } from './kurallar.ts';
@@ -75,6 +75,7 @@ describe('zaman ve takvim', () => {
     expect(saatOku(z, '')).toBeNull();
     expect(saatOku(z, 'yarın')).toBeNull();
     expect(gunAyHafta(z, 32.5)).toBe('06.10 Sal');
+    expect(gunAyYil(z, 32.5)).toBe('06.10.2026');
     expect(zamanKur(calisma({ meta: {} }).D)).toBeNull();
     expect(simdiOku(c)).toBe(7);
     expect(simdiOku(calisma({}, { simdi: 50 }))).toBe(50);

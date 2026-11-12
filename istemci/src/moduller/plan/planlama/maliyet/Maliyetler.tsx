@@ -85,7 +85,7 @@ export function Maliyetler(o: PlanlamaEkranOzellikleri) {
   const yonlen = useNavigate();
   const emirler = o.depo.durum?.emirler ?? null;
   const b = useMemo(() => (o.yetki.maliyetOku ? maliyetBaglami(c, emirler) : null), [c, emirler, o.yetki.maliyetOku]);
-  const emirNo = useEmirNo(o.depo.receteRotaKaydi);
+  const emirNo = useEmirNo(o.depo.receteRotaKaydi, o.depo.durum?.emirler);
   const V = useMemo(() => (!o.yetki.maliyetOku ? PARA_KILIDI : b ? maliyetIsisi(b, emirNo) : { bos: 'Plan kurulunca her siparişin maliyeti kalem kalem burada görünür.' }), [b, o.yetki.maliyetOku, emirNo]);
   const yaz = yazici(o.komut);
   const yazabilir = o.komut !== null && o.yetki.maliyetOku;
