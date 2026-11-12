@@ -9,13 +9,13 @@ import '../../motor/cizelge/cizelge.css';
 import { useCanliFarki } from '../../motor/atolye/canli-farki.ts';
 import { usePlanKur } from '../../motor/coz.ts';
 import { eylemYapisi } from '../../motor/eylem.ts';
-import { bitenler, derle, girdiKur, planOku, plandanBitenler, saatYaz, simdiSaati, type OkunanPlan } from '../../motor/kurallar.ts';
+import { bekleyenSiparisler, bitenler, derle, girdiKur, planOku, plandanBitenler, saatYaz, sayiEki, simdiSaati, type OkunanPlan } from '../../motor/kurallar.ts';
 import { HAZIRLANIYOR, MetinYaz, MOTOR_NOTU } from '../../motor/ortak.tsx';
 import '../../motor/motor.css';
 import type { PlanlamaCalismasi } from '../../tipler.ts';
 import '../veri/veri.css';
 import {
-  BUGUN_ADIMLARI, BUGUN_YARDIM, dokum, dokumEtkisi, dokumOzeti, durumCumlesi, gelenler, gosterGunu, kabulYaz, kararlar, terminEtkili, tezAd,
+  BUGUN_ADIMLARI, BUGUN_YARDIM, dokum, dokumEtkisi, dokumOzeti, durumCumlesi, gecBekleyen, gelenler, gosterGunu, kabulYaz, kararlar, terminEtkili, tezAd,
   type BugunAdimi, type BugunEylemi, type BugunKarti, type DokumSatiri,
 } from './kurallar.ts';
 import './bugun.css';
@@ -46,7 +46,8 @@ function Bugun({ o, c }: { o: PlanlamaEkranOzellikleri; c: PlanlamaCalismasi }) 
   const [secAdim, setSecAdim] = useState<BugunAdimi | null>(null);
   const [g, setG] = useState(0);
   const now = simdiSaati(c, an); const guncel = planGuncel(c);
-  const gel = useMemo(() => gelenler(c, cx, guncel, now), [c, cx, guncel, now]);
+  const bek = useMemo(() => bekleyenSiparisler(emirler), [emirler]);
+  const gel = useMemo(() => gelenler(c, cx, guncel, now, bek, p), [c, cx, guncel, now, bek, p]);
   const kar = useMemo(() => (p ? kararlar(c, p, cx) : []), [c, p, cx]);
   const taban = useMemo(() => planOku(o.depo.calisma), [o.depo.calisma]);
   const dok = useMemo(() => (p ? dokum(taban, p, cx) : []), [taban, p, cx]);
@@ -78,7 +79,7 @@ function Bugun({ o, c }: { o: PlanlamaEkranOzellikleri; c: PlanlamaCalismasi }) 
     <div className="tc-pyi tc-pyb" data-parca="bugun" data-adim={adim}>
       <header className="tc-pyb-ust">
         <div className="tc-pyb-ust-satir">
-          <p className="tc-pyb-durum" data-ton={p.ozet.late ? 'hata' : 'tamam'}><Simge ad={p.ozet.late ? 'flag' : 'check'} boyut="k" /><span>{durumCumlesi(c, p, acik)}</span></p>
+          <p className="tc-pyb-durum" data-ton={p.ozet.late ? 'hata' : 'tamam'}><Simge ad={p.ozet.late ? 'flag' : 'check'} boyut="k" /><span>{durumCumlesi(c, p, acik, bek)}</span></p>
           <Dugme ad="Tur" simge="help" e={{ yap: null, not: HAZIRLANIYOR }} baslik="Bu ekranı adım adım tanıt" hayalet />
         </div>
         <ol className="tc-pyb-adimlar" role="tablist" aria-label="Günlük plan adımları">
@@ -98,7 +99,7 @@ function Bugun({ o, c }: { o: PlanlamaEkranOzellikleri; c: PlanlamaCalismasi }) 
           {adim === 'gelen' && (gel.length ? kartlar(gel) : <p className="tc-pyb-bos">Gelen yok: bütün siparişler planda, açık arıza ya da veri uyarısı yok.</p>)}
           {adim === 'karar' && (kar.length ? kartlar(kar) : <p className="tc-pyb-bos">Karar bekleyen yok: bütün siparişler termine yetişiyor.</p>)}
           {adim === 'gozden' && <GozdenGecir o={o} c={c} dok={dok} secJob={secJob} goster={goster} yaz={!!komut} />}
-          {adim === 'yayin' && <Yayin o={o} c={c} p={p} />}
+          {adim === 'yayin' && <Yayin o={o} c={c} p={p} gb={gecBekleyen(c, p, bek)} />}
           {sonraki && (
             <div className="tc-pyb-alt">
               <button type="button" className="tc-dugme tc-dugme-ikincil tc-pyi-kucuk" onClick={() => setSecAdim(sonraki[0])}><Simge ad="next" boyut="k" />{`Sonraki: ${sonraki[1]}`}</button>
@@ -106,7 +107,7 @@ function Bugun({ o, c }: { o: PlanlamaEkranOzellikleri; c: PlanlamaCalismasi }) 
           )}
         </section>
         <section className="tc-pym tc-pyb-plan" aria-label="Gün planı">
-          <GunCizelgesi c={c} p={p} cx={cx} g={g} planYaz={false} planKilitle={false} secili={secim.adim} secJob={secJob}
+          <GunCizelgesi c={c} p={p} cx={cx} g={g} planYaz={false} planKilitle={false} secili={secim.adim} secJob={secJob} bekleyen={bek}
             isSec={(id) => sec({ adim: secim.adim === id ? null : id, siparis: null, tezgah: null })}
             tezSec={(m) => sec({ tezgah: m, adim: null, siparis: null })} gunSec={setG} />
         </section>
@@ -205,7 +206,7 @@ function GozdenGecir({ o, c, dok, secJob, goster, yaz }: { o: PlanlamaEkranOzell
   );
 }
 
-function Yayin({ o, c, p }: { o: PlanlamaEkranOzellikleri; c: PlanlamaCalismasi; p: OkunanPlan }) {
+function Yayin({ o, c, p, gb }: { o: PlanlamaEkranOzellikleri; c: PlanlamaCalismasi; p: OkunanPlan; gb: number }) {
   const sen = o.depo.senaryolar;
   const cf = useCanliFarki(c, sen?.canliSurum ?? null);
   const onayda = sen?.senaryolar.filter((s) => s.durum === 'onayda') ?? [];
@@ -217,7 +218,7 @@ function Yayin({ o, c, p }: { o: PlanlamaEkranOzellikleri; c: PlanlamaCalismasi;
           : <p>{`Canlıdaki plan: sürüm ${sen?.canliSurum ?? '—'}.`}</p>}
       <ul className="tc-pyb-kiyas">
         <li><small>Canlıya göre yeri değişen iş</small><b className="tc-pym-mono">{cf?.var ? cf.say : '—'}</b></li>
-        <li><small>Geciken sipariş</small><b className="tc-pym-mono">{p.ozet.late}</b><span className="tc-pyb-k">{`${p.ozet.n} siparişte`}</span></li>
+        <li><small>Geciken sipariş</small><b className="tc-pym-mono">{p.ozet.late}</b><span className="tc-pyb-k">{`${p.ozet.n} siparişte${gb ? `, ${String(gb)}${sayiEki(gb, 'i')} beklemede` : ''}`}</span></li>
         <li><small>Onay bekleyen plan</small><b className="tc-pym-mono">{sen ? onayda.length : '—'}</b></li>
       </ul>
       {son && (

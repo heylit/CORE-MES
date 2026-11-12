@@ -1,7 +1,8 @@
 import type { SimgeAdi } from '../../../../../ortak/tasarim/simgeler.ts';
 import { gecMetin } from '../../motor/harita/kurallar.ts';
 import {
-  gecikmeKaynaklari, isAgirligi, kisitAdi, ONCELIK_AD, saatYaz, sayiYaz, veriDenetimi, type Derleme, type OkunanPlan, type PlanIslemi, type SorunEylemi,
+  gecikmeKaynaklari, isAgirligi, kisitAdi, ONCELIK_AD, saatYaz, sayiEki, sayiYaz, veriDenetimi, type BekleyenSiparis, type Derleme, type OkunanPlan, type PlanIslemi,
+  type SorunEylemi,
 } from '../../motor/kurallar.ts';
 import type { Metin } from '../../motor/ozet/veri.ts';
 import type { PlanlamaCalismasi, Siparis } from '../../tipler.ts';
@@ -45,7 +46,10 @@ export function kabulYaz(t: PlanlamaCalismasi, j: string, kabul: boolean): void 
   alanYaz(t, 'bkKarar', { dv: t.dataVer, m: Object.fromEntries([...l].map((x) => [x, 'kabul'])) });
 }
 
-export function gelenler(c: PlanlamaCalismasi, cx: Derleme, guncel: boolean, now: number): BugunKarti[] {
+// 3050 a: bekletilen emir planda yerinde kalır ve tezgâhını tutar; kart bunu söyler, taşımak planlamacının kararıdır.
+export function gelenler(
+  c: PlanlamaCalismasi, cx: Derleme, guncel: boolean, now: number, bekleyen: ReadonlyMap<string, BekleyenSiparis> = new Map(), p: OkunanPlan | null = null,
+): BugunKarti[] {
   const D = c.D; const out: BugunKarti[] = [];
   const ekle = (k: Omit<BugunKarti, 'kabul' | 'job'> & { job?: string }) => out.push({ job: null, ...k, kabul: false });
   if (!guncel) {
@@ -56,6 +60,15 @@ export function gelenler(c: PlanlamaCalismasi, cx: Derleme, guncel: boolean, now
       id: `h${s.id}`, job: s.id, ton: 'bilgi', simge: 'box', baslik: `${s.id} plana alınmadı`,
       metin: [`${urunAd(c, s)}, ${sayiYaz(Number(s.adet) || 0)} adet, termin ${terminKisa(s)}. Plana almadan önce söz tarihine bakabilirsiniz.`],
       eylemler: [eylem('Plana al', 'motor', s.id, true), eylem('Söz tarihi', 'motor', s.id), eylem('Planda göster', 'goster', s.id)],
+    });
+  }
+  for (const [job, b] of bekleyen) {
+    const tez = [...new Set(Object.values(p?.ops ?? {}).filter((x) => x.job === job && x.m && Number.isFinite(x.S) && (x.C == null || x.C > now)).map((x) => tezAd(x.m)))];
+    if (!tez.length) continue;
+    ekle({
+      id: `b${job}`, job, ton: 'uyari', simge: 'pause', baslik: `${b.no} beklemede`,
+      metin: [`${b.neden}. Planda yerinde kalıyor, ${tez.join(', ')} tezgâhını tutuyor. Taşımak sizin kararınız.`],
+      eylemler: [eylem('Planda göster', 'goster', job, true), eylem('Taşı', 'motor', job)],
     });
   }
   c.down.forEach((d, i) => {
@@ -104,11 +117,18 @@ export function kararlar(c: PlanlamaCalismasi, p: OkunanPlan, cx: Derleme): Bugu
   return out;
 }
 
-export function durumCumlesi(c: PlanlamaCalismasi, p: OkunanPlan, bekleyen: number): string {
+export function durumCumlesi(c: PlanlamaCalismasi, p: OkunanPlan, bekleyen: number, bekletilen: ReadonlyMap<string, unknown> = new Map()): string {
   const o = p.ozet;
-  const ilk = c.D.siparisler.filter((s) => !planDisi(s)).map((s) => ({ s, T: p.J[s.id]?.T ?? null })).filter((x): x is { s: Siparis; T: number } => x.T != null && x.T > 0.05).sort((a, b) => b.T - a.T)[0];
-  const plan = o.late ? `Plan ${o.n} siparişin ${o.late} tanesinde terminin gerisinde${ilk ? `; en çok ${ilk.s.id}, ${gecMetin(ilk.T)}` : ''}.` : 'Bütün siparişler termine yetişiyor.';
+  const gec = c.D.siparisler.filter((s) => !planDisi(s)).map((s) => ({ s, T: p.J[s.id]?.T ?? null })).filter((x): x is { s: Siparis; T: number } => x.T != null && x.T > 0.05);
+  const ilk = [...gec].sort((a, b) => b.T - a.T)[0];
+  const gb = gecBekleyen(c, p, bekletilen);
+  const plan = o.late ? `Plan ${o.n} siparişin ${o.late} tanesinde terminin gerisinde${gb ? ` (${String(gb)}${sayiEki(gb, 'i')} beklemede)` : ''}${ilk ? `; en çok ${ilk.s.id}, ${gecMetin(ilk.T)}` : ''}.` : 'Bütün siparişler termine yetişiyor.';
   return `${plan} ${bekleyen ? `${bekleyen} karar bekliyor.` : 'Bekleyen karar yok.'}`;
+}
+
+// 3050 a: geciken siparişlerden bekletilmiş olanların sayısı; geciken sayısı aynen kalır.
+export function gecBekleyen(c: PlanlamaCalismasi, p: OkunanPlan, bekletilen: ReadonlyMap<string, unknown>): number {
+  return c.D.siparisler.filter((s) => !planDisi(s) && bekletilen.has(s.id) && (p.J[s.id]?.T ?? 0) > 0.05).length;
 }
 
 // Siparişi gün planında göstermek için ilk planlı işinin günü (bg-goster U.agGun), bugünden sayılır; planlı işi yoksa null.

@@ -304,6 +304,8 @@ export interface EmirKaydi {
   birlestigiEmirId: number | null;
   birlesmeOpNo: number | null;
   surum: number;
+  // 3050 a: bekletilen emrin nedeninin adı (uretim-emirleri verir); yoksa null ya da yok.
+  bekletme?: string | null;
   // Adım alanları rotasız emrin adımlarını göstermek içindir (uretim-emirleri B13).
   isEmirleri: readonly {
     sira: number; opNo: number; durum: 'bekliyor' | 'calisiyor' | 'tamam'; saglamAdet: number | null; canliAdet: number | null;
@@ -464,6 +466,7 @@ export function emirleriCevir(emirler: readonly EmirKaydi[], kapanislar: Readonl
       ...(dugumler === undefined ? {} : { dugumler }),
       ...(ekAdimlar.length === 0 ? {} : { ekAdimlar }),
       ...(e.durum === 'bitti' ? { kapanisSonucu: kapanislar.get(e.id) ?? null } : {}),
+      ...(e.bekletme ? { bekletme: e.bekletme } : {}),
     };
   });
   return { orders, opStatus, opProg, opSaglam, opYer };

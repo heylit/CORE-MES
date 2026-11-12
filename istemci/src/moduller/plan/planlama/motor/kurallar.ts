@@ -213,6 +213,23 @@ interface Vardiya { bas: number; bit: number; mol: Pencere[] }
 // Biten iş (girdi.betik tmiBitenler): biten ve iptal emir plana girmez; biten adım düşer, ardılı onu beklemez. Kaynak sunucunun iş emri
 // durumu (`durum.emirler`): adım anahtarı "emir|root|sıra", sıra rotadaki yeri (1'den). Bütün adımı biten emir de düşer.
 export interface Bitenler { siparis: Set<string>; adim: Set<string> }
+// 3050 a: bekletilen emirler (sipariş kimliği emir kimliğidir): emir no ve nedenin adı. Bekletme durum değil işarettir; plan bekleyen emri
+// yerinde tutar, tezgâhını tutar. Emir durumu okunamazsa (emir yetkisi yok) boş.
+export interface BekleyenSiparis { no: string; neden: string }
+export function bekleyenSiparisler(emirler: unknown): Map<string, BekleyenSiparis> {
+  const h = new Map<string, BekleyenSiparis>();
+  if (!nesne(emirler)) return h;
+  for (const o of Array.isArray(emirler.orders) ? emirler.orders : []) {
+    if (nesne(o) && typeof o.bekletme === 'string' && o.bekletme !== '') h.set(String(o.id), { no: typeof o.no === 'string' ? o.no : String(o.id), neden: o.bekletme });
+  }
+  return h;
+}
+// Bekleyen işin ipucu nedenle başlar ("Beklemede: Malzeme bekleniyor. ...").
+export function bekleyenBaslik(bekleyen: ReadonlyMap<string, BekleyenSiparis> | undefined, job: string, baslik: string): string {
+  const b = bekleyen?.get(job);
+  return b ? `Beklemede: ${b.neden}. ${baslik}` : baslik;
+}
+
 export function bitenler(emirler: unknown, D: PlanVerisi): Bitenler {
   const y: Bitenler = { siparis: new Set(), adim: new Set() };
   if (!nesne(emirler)) return y;
@@ -464,15 +481,15 @@ export function donemKumesi(c: PlanlamaCalismasi, p: OkunanPlan, cx: Derleme, r:
   return k;
 }
 // Nabzın dönemlik ölçüsü (olOlc): kümedeki sipariş sayısı, geciken, toplam gecikme (ağırlıksız saat), darboğaz ve ayar.
-export interface NabizOlcusu { n: number; late: number; wT: number; zam: number | null; dar: number | null; suH: number | null; util: Record<string, number> }
+export interface NabizOlcusu { n: number; late: number; wT: number; zam: number | null; dar: number | null; suH: number | null; util: Record<string, number>; gecikenler: string[] }
 // Kısa kayıt: nabız tarihçesinde ops [tezgâh, başlangıç, bitiş, ayar], J [bitiş, gecikme] (nbOpsKisa, nbJKisa).
 export interface NabizKaynagi { J: Record<string, unknown>; ops: Record<string, unknown> }
 export function nabizOlc(src: NabizKaynagi, kume: Set<string>, cx: Derleme, r: DonemAraligi): NabizOlcusu {
-  let say = 0, late = 0, wT = 0;
+  let say = 0, late = 0, wT = 0; const gecikenler: string[] = [];
   for (const id of kume) {
     const x = src.J[id]; if (x == null) continue; say++;
     const T = Array.isArray(x) ? Number(x[1]) : nesne(x) ? Number(x.T) : 0;
-    if (T > 0.05) { late++; wT += T; }
+    if (T > 0.05) { late++; wT += T; gecikenler.push(id); }
   }
   const busy: Record<string, number> = {}; let suH = 0, tam = true;
   for (const r0 of Object.values(src.ops)) {
@@ -488,7 +505,7 @@ export function nabizOlc(src: NabizKaynagi, kume: Set<string>, cx: Derleme, r: D
   const util: Record<string, number> = {};
   for (const [m, v] of Object.entries(busy)) { const M = cx.M[m]; const ac = M ? acikSaat(M.rw, r.a, r.b) : r.b - r.a; if (ac > 0.5) util[m] = v / ac; }
   const u = Object.values(util);
-  return { n: say, late, wT, zam: say ? (say - late) / say * 100 : null, dar: tam && u.length ? Math.max(...u) * 100 : null, suH: tam ? suH : null, util };
+  return { n: say, late, wT, zam: say ? (say - late) / say * 100 : null, dar: tam && u.length ? Math.max(...u) * 100 : null, suH: tam ? suH : null, util, gecikenler };
 }
 export const NABIZ_ESIGI = { zam: 0.5, late: 0.5, wT: 0.05, dar: 0.5, suH: 0.05, deg: 0.5 } as const;
 export type NabizGostergesi = keyof typeof NABIZ_ESIGI;

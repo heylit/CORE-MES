@@ -26,8 +26,10 @@ export interface NabizDurumu {
   cur: Olcu; kar: Olcu | null; ozet: { metin: string; ton: '' | 'iyi' | 'kotu' };
   // Sürüm eğrisi yalnız bütün planı kapsayan dönemde (yıl, kaydırılmamış).
   egri: Partial<Record<NabizGostergesi, number[]>>;
+  // 3050 a: dönemde geciken siparişlerden bekletilmiş olanların sayısı (geciken sayısı aynen kalır, yanına "N'i beklemede" yazılır).
+  gecBekleyen: number;
 }
-export function nabizDurumu(c: PlanlamaCalismasi, p: OkunanPlan, cx: Derleme, donem: Donem, kayma: number): NabizDurumu {
+export function nabizDurumu(c: PlanlamaCalismasi, p: OkunanPlan, cx: Derleme, donem: Donem, kayma: number, bekleyen: ReadonlyMap<string, unknown> = new Map()): NabizDurumu {
   const r = donemAraligi(cx.now, donem, kayma); const kume = donemKumesi(c, p, cx, r);
   const o = nabizOlc({ J: p.J, ops: p.ops }, kume, cx, r);
   const ref = nabizReferansi(c);
@@ -47,7 +49,7 @@ export function nabizDurumu(c: PlanlamaCalismasi, p: OkunanPlan, cx: Derleme, do
     const v = cur[g.id]; if (v != null && Number.isFinite(v)) l.push(v);
     if (l.length >= 2) egri[g.id] = l;
   }
-  return { donemYazi: donemYaz(c.D, donem, r), etiket: donemEtiketi(donem, kayma), ref, surum: tarihce.length, cur, kar, ozet, egri };
+  return { donemYazi: donemYaz(c.D, donem, r), etiket: donemEtiketi(donem, kayma), ref, surum: tarihce.length, cur, kar, ozet, egri, gecBekleyen: o.gecikenler.filter((id) => bekleyen.has(id)).length };
 }
 
 // Sürüm eğrisinin noktaları (nbEgri): 64 x 18 kutu.
