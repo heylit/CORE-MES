@@ -4,7 +4,7 @@ import {
   belgeBicimiHatasi, bitenIsBeklenen, onayEskidiMi, onayIcerigi, onayOzetiDamgala,
   arkonRoluBul, arkonRoluSec, ILETILER, durusNedenleriniCevir, hurdaNedenleriniCevir, icerikSurumu, kayitSutunlari, silmeCakisiyorMu, tesisKur, yazimCakisiyorMu, yazmaReddi, yerelPaketReddi, yeniSurum,
   guvensizCizimleriAyikla, hizSiniriAsildi, kayitZamani, yuklemeKotasiHatasi, yansimaSirasi, yansimaNedeni, SAYIM_ERTELEME, GECICI_BEKLEME,
-  girenMetni, hazirlikEksigi, isEmrindenTaslakPaket, TMI_PAKET_ALANLARI, paketParcasi, parcaSayimReddi, parcaOlayKarari, parcaYayini, butunPaketSablonu, PARCA_PLANDA_YOK, PARCA_OTEKI_CALISIYOR, PARCA_OTEKILER_BITMEDI, paketinEmri, paketIsEmri, PLANSIZ, planBaslatmaReddi, yayinDenetlenir, yayinlanmamis, planDurumlari, plansizKaynak, planSiralayabilirMi, planSirasiReddi, planSirasiTasinacaklar, sablonPaket, siraOnaylari, siraOnayiniYaz, stokIstegiKarari, numuneTeslimGirdisi, numuneTesliminiKoru, tabanCoz, talimatAdimlari, tmiAlanlariniYaz, tmiBirlesikSurum, yansimaKarari,
+  girenMetni, hazirlikEksigi, isEmrindenTaslakPaket, paketTuru, TMI_PAKET_ALANLARI, paketParcasi, parcaSayimReddi, parcaOlayKarari, parcaYayini, butunPaketSablonu, PARCA_PLANDA_YOK, PARCA_OTEKI_CALISIYOR, PARCA_OTEKILER_BITMEDI, paketinEmri, paketIsEmri, PLANSIZ, planBaslatmaReddi, yayinDenetlenir, yayinlanmamis, planDurumlari, plansizKaynak, planSiralayabilirMi, planSirasiReddi, planSirasiTasinacaklar, sablonPaket, siraOnaylari, siraOnayiniYaz, stokIstegiKarari, numuneTeslimGirdisi, numuneTesliminiKoru, tabanCoz, talimatAdimlari, tmiAlanlariniYaz, tmiBirlesikSurum, yansimaKarari,
   planYokDamgala, yenidenDenemeReddi, YENIDEN_YALNIZ_HATALI, YENIDEN_SONRAKI_YAZILDI, yenidenIlkParcaAcik, ilkParcaOlculeri, ilkParcaSayimiAsildi, kararBekleyenAdet, periyodikNumuneler, periyodikRetAcik, KARAR_BEKLIYOR_ALANI, REFAKAT_KARTI_ALANI, uyariBirlestir, kayitGovdesi, yenidenIlkParcaTabani, yenidenKarariDamgala, ikinciKontrolEksik, okuyabilirMi, kayitReddi, iletiBasi, iletiKacirildi, yetkiMatrisi, arkonVardiyalari, arkonTatilleri, arkonAletleri,
   belgedenDurusa, ISTASYONSUZ_YAYIN, ROTA_EKSIK_YAYIN, yayinEksigi, SIFIR_SAYIM, katilimYolu, tmidekiDurum, makineSecimi, MAKINE_SECIMI_GECERSIZ,
   cagriBildirimi, olcumAletKimligi, olcumAletleri, islemImzasi, yoklamaDenetimiGecerli, YOKLAMA_DENETIM_SURESI_MS, donemBaslangici, donemBasarisi, ekipOrtalamasi, fazlaMesaiSaati, mesaiGunleri, ozetOranlari, ozetRozetleri, tarihEkle,
@@ -459,6 +459,31 @@ test('kalite istasyonunda adımın operasyon tipi kodu paketin tmi alanında', (
   assert.equal('opTipi' in tmi(girdi({ istasyon: kalite, opTipi: null })), false);
   assert.equal('opTipi' in tmi(girdi({ istasyon: kalite })), false);
   assert.equal('opTipi' in tmi(girdi({ opTipi: 'KMM' })), false);
+});
+
+// 2166-2 a, 2166-5 a: iş türü adımın operasyon tipi grubundan, karşılığı yoksa istasyon tipinden seçilir; kalite alt görünümü gruptan gelen
+// kalite türünde de yazılır. Elle seçilmiş tip kayıtlı paketindir: opType TMI'den yeniden yazılan alanlarda değildir.
+test('3115: terminal görünümü operasyon tipi grubundan, yoksa istasyon tipinden', () => {
+  const tur = (g: Parameters<typeof isEmrindenTaslakPaket>[0]) => isEmrindenTaslakPaket(g)['opType'];
+  assert.equal(tur(girdi({ opGrubu: 'BOY' })), 'boya');
+  assert.equal(tur(girdi({ opGrubu: 'KAP' })), 'boya');
+  assert.equal(tur(girdi({ opGrubu: 'KAL' })), 'kalite');
+  assert.equal(tur(girdi({ opGrubu: 'MRK' })), 'mark');
+  assert.equal(tur(girdi({ opGrubu: 'MON' })), 'montaj');
+  assert.equal(tur(girdi({ opGrubu: 'YZY' })), 'tesviye');
+  assert.equal(tur(girdi({ opGrubu: 'PAK' })), 'depo');
+  assert.equal(tur(girdi({ opGrubu: 'KES', istasyon: { ...ISTASYON!, tip: 'montaj' } })), 'cnc');
+  assert.equal(tur(girdi({ opGrubu: 'ISL', istasyon: { ...ISTASYON!, tip: 'boya' } })), 'boya');
+  assert.equal(tur(girdi({ opGrubu: 'FAS' })), 'cnc');
+  assert.equal(tur(girdi({ opGrubu: null, istasyon: { ...ISTASYON!, tip: 'kalite' } })), 'kalite');
+  assert.equal(tur(girdi({ opGrubu: 'MON', istasyon: null })), 'montaj');
+  assert.equal(paketTuru(undefined, null), 'cnc');
+  const tmi = isEmrindenTaslakPaket(girdi({ opGrubu: 'KAL', opTipi: 'GKK' }))['tmi'] as Record<string, unknown>;
+  assert.equal(tmi['opTipi'], 'GKK');
+  assert.equal('opTipi' in (isEmrindenTaslakPaket(girdi({ opGrubu: 'TAL', opTipi: 'TRN', istasyon: { ...ISTASYON!, tip: 'kalite' } }))['tmi'] as Record<string, unknown>), false);
+  assert.equal((TMI_PAKET_ALANLARI as readonly string[]).includes('opType'), false);
+  const elle = { opType: 'montaj', no: 'ORN-1' };
+  assert.equal((tmiAlanlariniYaz(elle, isEmrindenTaslakPaket(girdi({ opGrubu: 'BOY' }))) as Record<string, unknown>)['opType'], 'montaj');
 });
 
 // 744 a: rotadaki "yok" seçimi taslağın ilk parça kuralını kapatır (şablonun öteki kuralları kalır); "her kurulumda" kural yazmaz. TMI kilidi
