@@ -550,6 +550,64 @@ export function kaliteDurumDegerleri(e: {
   };
 }
 
+// EM-41 (3124 a): malzeme etiketi lot ve kalite durum etiketini tek etikette toplar. Durum bakiye satırınındır; üst bandın adı GKK ile
+// birlikte okunur: GKK'sı yazılmamış karar bekleyen mal kabul "MAL KABUL", GKK'da hatalı çıkıp karar bekleyen "HATALI" basılır. Hatalı
+// ve red etiketi kalın çerçeve alır. Stoğu kalmamış lotta durum bandı basılmaz. Alan adları eski lot ve kalite şablonlarıyla çakışmaz,
+// iki şablon da aynı değerlerle basılabilir. Saat etiketin basıldığı andır (eski etiket yenisinden ayrılsın).
+export interface MalzemeGirisOzeti {
+  gkkNo: string | null; gkkZaman: string | null; kabulMiktar: string | null; hataliMiktar: string | null;
+  karar: 'kabul' | 'sartli_kabul' | 'red' | null; ncrNo: string | null; not: string | null;
+}
+export interface MalzemeEtiketiGirdisi {
+  lotNo: string; malzemeId: number; malzemeAd: string | null; malzemeKod: string | null; malzemeTuru: KatalogTuru | null; birim: string | null;
+  tedarikciPartiNo: string | null; dokumNo: string | null; sertifikaNo: string | null; giris: string; girisMiktar: string | null; belgeNo: string | null;
+  konumKod: string | null; miktar: string | null; kaliteDurumu: KaliteDurumu | null; malKabulSatirId: number | null;
+  ozellik: { kalite: string | null; durum: string | null; islem: string | null; olcu: string | null } | null;
+  // gkkyeGirdi: mal kabul bu satırı GKK'ya gönderdi mi (girişte olan; ilk mal kabul satırı yoksa null).
+  tedarikci: string | null; gkkyeGirdi: boolean | null; gkk: MalzemeGirisOzeti | null;
+}
+type Bant = { ad: string; alt: string; simge: string; cerceve: boolean };
+const KULLANILAMAZ = 'kullanılamaz';
+export function malzemeBandi(kalite: KaliteDurumu | null, gkkyeGirdi: boolean, gkk: MalzemeGirisOzeti | null): Bant | null {
+  if (kalite === null) return null;
+  if (kalite === 'serbest') return { ad: 'SERBEST', alt: 'Kullanılabilir', simge: 'beyaz:onay', cerceve: false };
+  if (kalite === 'sartli') return { ad: 'ŞARTLI KABUL', alt: gkk?.karar === 'sartli_kabul' && gkk.not !== null ? `Şart: ${gkk.not}` : 'Şartla kullanılır', simge: 'siyah:uyari', cerceve: false };
+  if (kalite === 'red') return { ad: 'RED', alt: `${gkk?.karar === 'red' ? 'Tedarikçiye iade' : 'Red'} · ${KULLANILAMAZ}`, simge: 'siyah:red', cerceve: true };
+  if (gkk !== null) return { ad: 'HATALI', alt: `Kalite kararı bekliyor · ${KULLANILAMAZ}`, simge: 'siyah:hatali', cerceve: true };
+  if (gkkyeGirdi) return { ad: 'MAL KABUL', alt: `GKK bekliyor · ${KULLANILAMAZ}`, simge: 'cizgili:bekliyor', cerceve: false };
+  return { ad: KALITE_DURUM_ADLARI.karar_bekliyor, alt: `Kalite kararı bekliyor · ${KULLANILAMAZ}`, simge: 'cizgili:bekliyor', cerceve: false };
+}
+// 3118: kısmi kabul ve ret ayrı değer değildir, miktar ve karardan çıkar.
+export function gkkSonucu(g: MalzemeGirisOzeti, birim: string | null): string {
+  const m = (x: string | null) => [miktarYazisi(x ?? '0'), birim].filter(Boolean).join(' ');
+  const hatali = Number(g.hataliMiktar ?? '0'), kabul = Number(g.kabulMiktar ?? '0');
+  if (hatali <= 0) return `kabul ${m(g.kabulMiktar)}`;
+  if (g.karar === null) return `hatalı ${m(g.hataliMiktar)}`;
+  if (g.karar === 'sartli_kabul') return `şartlı ${m(g.hataliMiktar)}`;
+  if (g.karar === 'kabul') return `hatalı kabul ${m(g.hataliMiktar)}`;
+  return kabul > 0 ? `kısmi kabul ${miktarYazisi(g.kabulMiktar ?? '0')}/${m(String(kabul + hatali))}` : 'ret';
+}
+const buyukHarf = (m: string) => m.toLocaleUpperCase('tr-TR');
+export function malzemeEtiketiDegerleri(e: MalzemeEtiketiGirdisi, basim: Date): AlanDegerleri {
+  const bant = malzemeBandi(e.kaliteDurumu, e.gkkyeGirdi === true, e.gkk);
+  const miktar = (x: string | null) => (x === null ? null : [miktarYazisi(x), e.birim].filter(Boolean).join(' '));
+  const gkk = e.gkk === null
+    ? e.gkkyeGirdi === null ? null : e.gkkyeGirdi ? 'Bekliyor' : 'Gerekmez'
+    : birlestir([e.gkk.gkkNo, e.gkk.gkkZaman && gunAyYil(tesisGunu(new Date(e.gkk.gkkZaman))), gkkSonucu(e.gkk, e.birim), e.gkk.ncrNo]);
+  const [gun, saat] = tesisSaati(basim).split(' ');
+  return {
+    ...lotDegerleri({ ...e, miktar: e.girisMiktar }),
+    durumBant: bant?.ad ?? null, durumAlt: bant?.alt ?? null, bantSimge: bant?.simge ?? null, cerceve: bant?.cerceve ? 'evet' : null,
+    bakiye: birlestir([miktar(e.miktar), e.konumKod]), basimZamani: bant === null ? null : `${gunAyYil(gun ?? '')} ${saat ?? ''}`,
+    tur: e.malzemeTuru && buyukHarf(MALZEME_TURU_ADLARI[e.malzemeTuru]),
+    olcu: e.ozellik?.olcu ?? null, kalite: e.ozellik?.kalite ?? null, temper: e.ozellik?.durum ?? null, islem: e.ozellik?.islem ?? null,
+    tedarikci: e.tedarikci,
+    sertifika: birlestir([e.sertifikaNo, e.dokumNo && `Döküm ${e.dokumNo}`, e.tedarikciPartiNo && `Parti ${e.tedarikciPartiNo}`]),
+    girisSatiri: birlestir([gunAyYil(tesisGunu(new Date(e.giris))), miktar(e.girisMiktar), e.belgeNo]),
+    gkk,
+  };
+}
+
 // EM-23 (1287 a): sevk koli etiketi Sevkiyat'ın giden kalemini basar; her koli ayrı etikettir (n/N). Koli içi adet elle girilir;
 // girilmezse kalemin adedi basılır. QR kalemin emridir (`UE:`; 1287 a: QR yeter, yeni önek yok); emirsiz kalemde QR basılmaz.
 // İrsaliye no uydurulmaz: belge no işin belge numarasıdır, yoksa boş kalır.

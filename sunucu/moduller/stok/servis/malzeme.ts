@@ -216,6 +216,19 @@ export async function lotEtiketleri(db: Db, a: { partiId: number } | { malKabulI
   }
   return lotEtiketleriCevir(db, await sorgular.malKabulLotEtiketleri(db, a.malKabulId));
 }
+// 3124 a: Etiket Merkezi malzeme etiketi; satır başına malzeme adı, kodu, türü ve birimi eklenir. Olmayan kayıt boş liste verir.
+export interface MalzemeEtiketi extends sorgular.MalzemeEtiketiHam {
+  malzemeAd: string | null; malzemeKod: string | null; malzemeTuru: KatalogMalzemeOzeti['tur'] | null; birim: string | null;
+}
+export async function malzemeEtiketleri(db: Db, a: sorgular.MalzemeEtiketiKaynagi): Promise<MalzemeEtiketi[]> {
+  if ('bakiyeIdler' in a && a.bakiyeIdler.length === 0) return [];
+  const h = await sorgular.malzemeEtiketleri(db, a);
+  const ozet = await malzemeOzetleri(db, [...new Set(h.map((x) => x.malzemeId))]);
+  return h.map((x) => {
+    const o = ozet.get(x.malzemeId);
+    return { ...x, malzemeAd: o?.ad ?? null, malzemeKod: o?.kod ?? null, malzemeTuru: o?.tur ?? null, birim: o?.birim ?? null };
+  });
+}
 // Etiket Merkezi kalite durum etiketi (kart 1525): olmayan, lotsuz ya da boş satır listeye girmez; sıra istenen sıradır.
 export interface KaliteEtiketi { bakiyeId: number; lotNo: string; malzemeId: number; malzemeAd: string | null; malzemeKod: string | null; birim: string | null; konumKod: string; miktar: string; kaliteDurumu: KaliteDurumu }
 export async function kaliteEtiketleri(db: Db, bakiyeIdler: readonly number[]): Promise<KaliteEtiketi[]> {

@@ -13,7 +13,7 @@ export {
   bakiyeKilitle, partileriBul, partininBakiyeleri, partininKarantinaBakiyeleri, partilerinRedBakiyeleri, karantinaOncesiKonumu, karantinaDisiKonumlar,
   partilerinRedGirisleri, hareketPartileri, type BakiyeAnahtari, bakiyeleriKilitle, bakiyeOku, konumBakiyeleri, malzemeBakiyeleri, serbestBakiyeler,
   gozdekiPartiler, type BakiyeYeni, bakiyeEkle, bakiyeGuncelle, bakiyeSil, konumaGelisYenile, partiBul, lotNoylaParti, lotBakiyeleri, type LotEtiketiHam, malKabulLotEtiketleri,
-  partiLotEtiketi, type PartiAnahtari, emirPartisiBul, partiAc, refakatCiktiPartisiBul, refakatCiktiPartisiAc, refakatStokPartileri, partiKaynagi,
+  partiLotEtiketi, type MalzemeEtiketiHam, type MalzemeEtiketiKaynagi, malzemeEtiketleri, type PartiAnahtari, emirPartisiBul, partiAc, refakatCiktiPartisiBul, refakatCiktiPartisiAc, refakatStokPartileri, partiKaynagi,
   refakatUretimiVar, lotNoVarMi, type PartiSuzgeci, PARTI_SIRALAMASI, partiSay, partiler, type HareketYeni, hareketYaz, akisAyarla, hareketBul,
   type HareketSuzgeci, suzgecVarMi, HAREKET_SIRALAMASI, hareketSay, hareketler, partiSonKullanma, partiSonKullanmaKilitle, partiSonKullanmaYaz,
   partiSonKullanmaDuzelt, partiMalzemesi, kartSktOzetleri,

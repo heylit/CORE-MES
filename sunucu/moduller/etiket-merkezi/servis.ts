@@ -11,15 +11,16 @@ import {
 import { sistemAyariOku } from '../ayarlar/disari.ts';
 import { kisiAdlari } from '../kisiler/disari.ts';
 import { gozler, raflar } from '../atolye/disari.ts';
-import { malzemeOzetleri } from '../malzemeler/disari.ts';
+import { malzemeOzellikleri, malzemeOzetleri } from '../malzemeler/disari.ts';
+import { siparisSatirlari } from '../satin-alma/disari.ts';
 import { istasyonAdlari } from '../istasyonlar/disari.ts';
-import { etiketKaliteDegisimleri, etiketMalKabulleri, etiketRefakatVerilisleri, istasyonKonumlari, kaliteEtiketleri, konumAdlari, lotEtiketleri, refakatPartisi } from '../stok/disari.ts';
+import { etiketKaliteDegisimleri, etiketMalKabulleri, etiketRefakatVerilisleri, istasyonKonumlari, konumAdlari, lotEtiketleri, malzemeEtiketleri, refakatPartisi, type MalzemeEtiketi } from '../stok/disari.ts';
 import { koliKalemleri } from '../sevkiyat/disari.ts';
 import { emirNolari, hataliKaydi, hataliKayitlari, refakatKarti, uretimEmriOzeti } from '../uretim-emirleri/disari.ts';
 import { yaziciAgiOku } from './ag.ts';
 import { tcpGonder, type Gonderici } from './gonderici.ts';
 import {
-  BEKLEYEN_GUN, baskiEngeli, enKucukOlcu, okunurluk, olcekle, bekleyenBaslangici, bekleyenSirasi, dogrudanBaskiDurumu, hataliBekleyenleri, kaliteBekleyenleri, malKabulBekleyenleri, refakatBekleyenleri, hataliParcaDegerleri, kaliteDurumDegerleri, koliHatasi, kopyaDegerleri, sevkKoliDegerleri, indirmeEngeli, istasyonDegerleri, kayitSablonTuru, kayitUyumHatasi, konumDegerleri, lotDegerleri, malzemeDegerleri, rafDegerleri, refakatPartisiDegerleri, sablonHatalari, toplamEtiketHatasi, yaziciAdresHatasi, yerlesim, type AlanDegerleri,
+  BEKLEYEN_GUN, baskiEngeli, enKucukOlcu, okunurluk, olcekle, bekleyenBaslangici, bekleyenSirasi, dogrudanBaskiDurumu, hataliBekleyenleri, kaliteBekleyenleri, malKabulBekleyenleri, refakatBekleyenleri, hataliParcaDegerleri, kaliteDurumDegerleri, koliHatasi, kopyaDegerleri, sevkKoliDegerleri, indirmeEngeli, istasyonDegerleri, kayitSablonTuru, kayitUyumHatasi, konumDegerleri, lotDegerleri, malzemeDegerleri, malzemeEtiketiDegerleri, rafDegerleri, refakatPartisiDegerleri, sablonHatalari, toplamEtiketHatasi, yaziciAdresHatasi, yerlesim, type AlanDegerleri, type MalzemeGirisOzeti,
 } from './kurallar.ts';
 import { ALANLAR, HAZIR_SABLONLAR, ORNEK_DEGERLER } from './sablonlar.ts';
 import {
@@ -103,15 +104,15 @@ export function ornekCikti(anahtar: string, secenek: CiktiSecenekleri): CiktiCev
 type KayitDegeri = { id: number; baslik: string; degerler: AlanDegerleri };
 
 // Kayıt değerleri sahibi modülün disari.ts'inden okunur; istenen sırada döner, hiç etiket vermeyen kimlik `eksikler`e düşer.
-async function kayitDegerleri(db: Db, k: KayitSecimi): Promise<{ bulunan: KayitDegeri[]; eksikler: number[] }> {
-  const bulunanlar = await kaynaktanOku(db, k);
+async function kayitDegerleri(db: Db, k: KayitSecimi, anahtar: string): Promise<{ bulunan: KayitDegeri[]; eksikler: number[] }> {
+  const bulunanlar = await kaynaktanOku(db, k, anahtar);
   const bulunan = k.idler.flatMap((id) => bulunanlar.get(id) ?? []);
   return { bulunan, eksikler: k.idler.filter((id) => (bulunanlar.get(id) ?? []).length === 0) };
 }
 
 const tekli = (m: Map<number, KayitDegeri>): Map<number, KayitDegeri[]> => new Map([...m].map(([id, d]) => [id, [d]]));
 
-async function kaynaktanOku(db: Db, k: KayitSecimi): Promise<Map<number, KayitDegeri[]>> {
+async function kaynaktanOku(db: Db, k: KayitSecimi, anahtar: string): Promise<Map<number, KayitDegeri[]>> {
   if (k.tur === 'konum') {
     const kodlar = await konumAdlari(db, k.idler);
     return tekli(new Map([...kodlar].map(([id, kod]) => [id, { id, baslik: kod, degerler: konumDegerleri(kod) }])));
@@ -125,8 +126,12 @@ async function kaynaktanOku(db: Db, k: KayitSecimi): Promise<Map<number, KayitDe
   }
   if (k.tur === 'kalite-durum') {
     // Kimlik bakiye satırıdır; boş, lotsuz ya da olmayan satır eksik sayılır. Deftere de bakiye satırı yazılır.
-    const satirlar = await kaliteEtiketleri(db, k.idler);
-    return tekli(new Map(satirlar.map((e) => [e.bakiyeId, { id: e.bakiyeId, baslik: `${e.lotNo} ${e.konumKod}`, degerler: kaliteDurumDegerleri(e) }])));
+    // 3124 a: değerler malzeme etiketinin alanlarını da taşır; eski kalite şablonu kendi alanlarını basar.
+    const satirlar = await malzemeEtiketiDegerleriOku(db, { bakiyeIdler: k.idler });
+    return tekli(new Map(satirlar.flatMap(({ e, degerler }) => (e.bakiyeId === null || e.konumKod === null || e.miktar === null || e.kaliteDurumu === null ? [] : [[e.bakiyeId, {
+      id: e.bakiyeId, baslik: `${e.lotNo} ${e.konumKod}`,
+      degerler: { ...kaliteDurumDegerleri({ ...e, konumKod: e.konumKod, miktar: e.miktar, kaliteDurumu: e.kaliteDurumu }), ...degerler },
+    }] as const]))));
   }
   if (k.tur === 'sevk-koli') {
     // Kalem başına koli sayısı kadar etiket (n/N); deftere kalem bir kez yazılır. Emir no ve parça sahiplerinden okunur.
@@ -170,11 +175,51 @@ async function kaynaktanOku(db: Db, k: KayitSecimi): Promise<Map<number, KayitDe
     }
     return sonuc;
   }
+  // 3124 a: malzeme etiketi lotun her dolu bakiye satırı için ayrı basılır (durum bakiyenindir); eski lot şablonu lot başına bir etikettir.
+  // Deftere iki şablonda da lot yazılır.
+  const bakiyeBasina = anahtar === MALZEME_ETIKETI_ANAHTARI;
   for (const id of k.idler) {
-    const lotlar = await lotEtiketleri(db, k.tur === 'mal-kabul' ? { malKabulId: id } : { partiId: id });
+    const a = k.tur === 'mal-kabul' ? { malKabulId: id } : { partiId: id };
+    if (bakiyeBasina) {
+      const satirlar = await malzemeEtiketiDegerleriOku(db, a);
+      sonuc.set(id, satirlar.map(({ e, degerler }) => ({ id: e.partiId, baslik: e.konumKod === null ? e.lotNo : `${e.lotNo} ${e.konumKod}`, degerler })));
+      continue;
+    }
+    const lotlar = await lotEtiketleri(db, a);
     sonuc.set(id, lotlar.map((e) => ({ id: e.partiId, baslik: e.lotNo, degerler: lotDegerleri(e) })));
   }
   return sonuc;
+}
+
+const MALZEME_ETIKETI_ANAHTARI = 'malzeme-etiketi-100x50';
+// Kalite Merkezi bu modülle aynı kattadır (ADR 0006): GKK özeti ithalle değil, kablolamadaki bağla gelir. Bağsız süreç malzeme
+// etiketini basmaz; GKK'sı okunamayan etikete "Bekliyor" yazılmaz.
+export type GkkOzetiCozucusu = (db: Db, malKabulSatirIdleri: readonly number[]) => Promise<ReadonlyMap<number, MalzemeGirisOzeti>>;
+let gkkOzetiCozucusu: GkkOzetiCozucusu | null = null;
+export const gkkOzetiCozucusuKaydet = (c: GkkOzetiCozucusu | null): void => { gkkOzetiCozucusu = c; };
+function gkkOzetleri(db: Db, idler: readonly number[]): Promise<ReadonlyMap<number, MalzemeGirisOzeti>> {
+  if (gkkOzetiCozucusu === null) throw new Error('Etiket Merkezi GKK özeti çözücüsü bağlanmamış (kablolama).');
+  return gkkOzetiCozucusu(db, idler);
+}
+// 3124 a: malzeme etiketinin değerleri sahiplerinden okunur: stok (lot, bakiye, mal kabul ve GKK'ya girişi), malzemeler (kart özellikleri),
+// Kalite Merkezi (GKK özeti) ve satın alma (yalnız tedarikçi adı; fiyat okunmaz). Sorgular sırayla gider.
+async function malzemeEtiketiDegerleriOku(db: Db, a: Parameters<typeof malzemeEtiketleri>[1]): Promise<{ e: MalzemeEtiketi; degerler: AlanDegerleri }[]> {
+  const satirlar = await malzemeEtiketleri(db, a);
+  if (satirlar.length === 0) return [];
+  const kartlar = [...new Set(satirlar.map((e) => e.malzemeId))];
+  const ozellikler = await malzemeOzellikleri(db, kartlar);
+  const girisler = await gkkOzetleri(db, [...new Set(satirlar.flatMap((e) => (e.malKabulSatirId === null ? [] : [e.malKabulSatirId])))]);
+  const siparisIdleri = [...new Set(satirlar.flatMap((e) => (e.siparisSatirId === null ? [] : [e.siparisSatirId])))];
+  const tedarikciler = new Map((await siparisSatirlari(db, siparisIdleri)).map((r) => [r.id, r.tedarikciAdi]));
+  const basim = new Date();
+  return satirlar.map((e) => ({
+    e,
+    degerler: malzemeEtiketiDegerleri({
+      ...e, ozellik: ozellikler.get(e.malzemeId) ?? null,
+      gkk: e.malKabulSatirId === null ? null : girisler.get(e.malKabulSatirId) ?? null,
+      tedarikci: e.siparisSatirId === null ? null : tedarikciler.get(e.siparisSatirId) ?? null,
+    }, basim),
+  }));
 }
 
 // Raf Fabrika Haritası'ndan okunur; bölüm kodu ve bölme/kat sayısı rafın gözlerinden çıkar (gözü olmayan rafta boş kalır).
@@ -212,7 +257,7 @@ export async function kayitCiktisi(db: Db, anahtar: string, k: KayitSecimi, sece
   if (koli !== null) throw dogrulama(koli);
   const toplam = toplamEtiketHatasi(k.idler.length * (k.koli?.sayi ?? 1), secenek.adet);
   if (toplam !== null) throw dogrulama(toplam, 'adet');
-  const { bulunan, eksikler } = await kayitDegerleri(db, k);
+  const { bulunan, eksikler } = await kayitDegerleri(db, k, anahtar);
   if (bulunan.length === 0) throw bulunamadi('Seçilen kayıtlar bulunamadı.');
   // Mal kabul birden çok lot, sevk kolisi koli sayısı kadar etiket verir; sınır basılacak etiket sayısıyla yeniden denetlenir.
   const basilacak = toplamEtiketHatasi(bulunan.length, secenek.adet);
@@ -314,7 +359,7 @@ export async function yazdir(db: Db, kullanici: Kullanici, anahtar: string, g: Y
     if (koli !== null) throw dogrulama(koli);
     const toplam = toplamEtiketHatasi(g.kayit.idler.length * (g.kayit.koli?.sayi ?? 1), g.adet);
     if (toplam !== null) throw dogrulama(toplam, 'adet');
-    const okunan = await kayitDegerleri(db, g.kayit);
+    const okunan = await kayitDegerleri(db, g.kayit, anahtar);
     if (okunan.bulunan.length === 0) throw bulunamadi('Seçilen kayıtlar bulunamadı.');
     const basilacak = toplamEtiketHatasi(okunan.bulunan.length, g.adet);
     if (basilacak !== null) throw dogrulama(basilacak, 'adet');

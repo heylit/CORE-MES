@@ -123,7 +123,7 @@ test.describe('Standart dışı ölçü (3011)', () => {
     await expect(page.getByText(/Bu ölçüde (QR|yazı) okunmaz .* Bu etiket için en küçük ölçü \d+x\d+ mm\./)).toBeVisible();
     await expect(page.getByRole('button', { name: /Yeniden dene/ })).toHaveCount(0);
     // Yazarken geçen ara ölçüler de (20x50) reddedilir; beklenen yalnız bu ölçü isteklerinin 400'üdür.
-    const beklenen = (h: string) => /^400 GET \/api\/etiket-merkezi\/sablonlar\/lot-100x50\/cikti\?.*&en=20&boy=(10|50)$/.test(h)
+    const beklenen = (h: string) => /^400 GET \/api\/etiket-merkezi\/sablonlar\/malzeme-etiketi-100x50\/cikti\?.*&en=20&boy=(10|50)$/.test(h)
       || h === 'konsol: Failed to load resource: the server responded with a status of 400 (Bad Request)';
     expect(ag.hatalar.some((h) => h.endsWith('&en=20&boy=10'))).toBe(true);
     expect(ag.hatalar.filter((h) => !beklenen(h))).toEqual([]);

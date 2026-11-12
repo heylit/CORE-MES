@@ -5,6 +5,7 @@ import { dolayliPersonelCozucusu, emilmeyenDogrudanCozucusu, genelGiderOraniCozu
 import * as arkon from './moduller/arkon/disari.ts';
 import * as atolye from './moduller/atolye/disari.ts';
 import * as cncKurulum from './moduller/cnc-kurulum/disari.ts';
+import { gkkOzetiCozucusuKaydet } from './moduller/etiket-merkezi/disari.ts';
 import { malzemeKartiIzleri as degisiklikKartIzleri, yururluktekiParcaRevizyonlari } from './moduller/degisiklik-yonetimi/disari.ts';
 import { malzemeKartiIzleri as finansKartIzleri } from './moduller/finans/disari.ts';
 import { aktifIstasyonlar, istasyondakiKisiler, malzemeKartiIzleri as istasyonKartIzleri } from './moduller/istasyonlar/disari.ts';
@@ -198,6 +199,7 @@ export function sunucununBaglari(): Bag[] {
     bag('girdi stoğu -> hazırlık uyarısı', uretimEmirleri.malzemeHazirlikCozucusu, stok.isEmriMalzemeHazirliklari),
     bag('takım ömrü -> hazırlık uyarısı', uretimEmirleri.takimHazirlikCozucusu, cncKurulum.isEmriTakimHazirliklari),
     // Onaylı kapanışın dış maddeleri (1074 a): sahipler üretim emirlerini okur, çözücüleri ters yönde kaydedilir.
+    bag('GKK özeti -> malzeme etiketi', gkkOzetiCozucusuKaydet, kaliteMerkezi.girisOzetleri),
     bag('ölçüm -> kapanış', uretimEmirleri.olcumKapanisCozucusu, kaliteMerkezi.kapanisOlcumDurumu),
     bag('NCR -> kapanış', uretimEmirleri.ncrKapanisCozucusu, kaliteMerkezi.kapanisNcrDurumu),
     bag('izlenebilirlik -> kapanış', uretimEmirleri.izlenebilirlikKapanisCozucusu, stok.kapanisIzlenebilirlikDurumu),

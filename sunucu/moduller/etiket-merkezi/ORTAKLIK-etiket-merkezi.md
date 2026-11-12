@@ -7,6 +7,7 @@ Modülün tuttuğu ya da gösterdiği, başka modülde de olan kavramlar. Şablo
 | Konum, harita kutusu | stok (`stok_konum.kod`), atolye (`atolye_goz`, `atolye_alan`) | şablon alanı `kod` (ad, yer boş); QR `LOC:<kod>`; basılan konum `etiket_merkezi_baski_kaydi.kaynak_id` | stok `konumAdlari` (bağlandı) |
 | Malzeme | malzemeler (`malzeme_katalog_karti.no`) | `ad`, `kod`, `kart`; QR `MLZ:<no>` | malzemeler `malzemeOzetleri` |
 | Lot | stok (`stok_parti.lot_no`) | `lotNo`, `malzeme`, `parti`, `giris`; QR `LOT:<lot no>` | stok `lotEtiketleri` (parti ya da mal kabul) |
+| Malzeme etiketi değerleri (3124 a) | stok (lot, bakiye, mal kabul), malzemeler (`kalite`, `durum`, `islem`, ölçü), satın alma (tedarikçi adı), kalite-merkezi (GKK no, sonuç, NCR) | `durumBant`, `bakiye`, `olcu`, `kalite`, `temper`, `islem`, `tedarikci`, `sertifika`, `girisSatiri`, `gkk` | stok `malzemeEtiketleri`, malzemeler `malzemeOzellikleri`, satın alma `siparisSatirlari`, kalite-merkezi `girisOzetleri` (kablolama) |
 | Üretim emri, refakat kartı | uretim-emirleri | `emirNo`, `urunAd`, `urunKod`, `adetTermin`, `parti`, `adimlar`; QR `UE:<id>` | uretim-emirleri (`refakatKarti`) |
 | İstasyon | istasyonlar, stok (istasyonun konumu) | `kod`, `ad`; QR `LOC:<istasyon konum kodu>` | istasyonlar ve stok (istenecek) |
 | QR önekleri | paylasilan (`kod-sozlugu.ts` `KOD_ONEKI`) | yalnız okunur | aynı |

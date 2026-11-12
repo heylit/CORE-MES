@@ -8,9 +8,11 @@ import { QR_ALTI_EN_KUCUK_YAZI, QR_KARE_EN_AZ_MM, YAZI_EN_AZ_MM, enKucukOlcu, ko
 import { BEKLEYEN_GUN, HATALI_KARAR_SIMGESI, KALITE_KARAR_SIMGESI, REFAKAT_ADIM_SAYISI, REFAKAT_CIKIS_SATIRI, bekleyenBaslangici, bekleyenSirasi, kaliteBekleyenleri, kaliteDurumDegerleri, hataliBekleyenleri, malKabulBekleyenleri, refakatBekleyenleri } from './kurallar.ts';
 import { alanDegeri, baskiEngeli, dogrudanBaskiDurumu, indirmeEngeli, istasyonDegerleri, kayitUyumHatasi, konumDegerleri, lotDegerleri, kayitSablonTuru, malzemeDegerleri, metinGenisligi, noktaya, rafDegerleri, refakatDegerleri, refakatPartisiDegerleri, toplamEtiketHatasi, yaziciAdresHatasi, qrDikdortgenleri, qrMatrisi, sablonHatalari, sadelestir, SATIR_BASI, satirlaraBol, sigdirilmisYazi, yerlesim } from './kurallar.ts';
 import { ALANLAR, HAZIR_SABLONLAR, ORNEK_DEGERLER } from './sablonlar.ts';
+import { gkkSonucu, malzemeBandi, malzemeEtiketiDegerleri, type MalzemeEtiketiGirdisi, type MalzemeGirisOzeti } from './kurallar.ts';
 import { DENEME_KOD_SAYFALARI, DENEME_TURKCE, kodSayfasinda, pplb, pplbDenemesi, pplbKacir, pplbYaziSecimi, zpl, zplKacir } from './yazici-dili.ts';
 import { komutBaytlari } from '#paylasilan/etiket-sabitleri.ts';
 
+const MALZEME_ETIKETLERI = ['malzeme-etiketi-100x50', 'malzeme-durum-100x50'];
 const sablon = (ogeler: Sablon['ogeler'], genislik = 50, yukseklik = 25): Sablon => ({ anahtar: 't', ad: 'T', tur: 'malzeme', genislik, yukseklik, ogeler });
 const metin = (alan: string, x = 1, y = 1, genislik = 40, yukseklik = 5, yaziMm = 3) => ({ tur: 'metin' as const, x, y, genislik, yukseklik, yaziMm, kalin: false, alan });
 
@@ -519,8 +521,9 @@ describe('etiket-merkezi kuralları', () => {
     assert.equal(serbest.find((o) => o.tur === 'qr')?.tur === 'qr' && (serbest.find((o) => o.tur === 'qr') as { boyut: number }).boyut, 31.65);
   });
 
-  test('2168: her hazır şablonun sağ üst köşesinde piktogram var ve örnek değerle basılır', () => {
-    for (const s of HAZIR_SABLONLAR) {
+  test('2168: her hazır şablonun sağ üst köşesinde piktogram var ve örnek değerle basılır (malzeme etiketi hariç: 3124 a)', () => {
+    // 3124 a: kullanıcı ön izlemede durum piktogramı sol üstte, sağ üstte miktar ve konum olan düzeni seçti (2168-1 a'nın yerine).
+    for (const s of HAZIR_SABLONLAR.filter((x) => !MALZEME_ETIKETLERI.includes(x.anahtar))) {
       const ogeler = yerlesim(s, ORNEK_DEGERLER[s.tur], false);
       const sag = ogeler.filter((o) => o.tur === 'simge' && o.x + o.boyut >= s.genislik - 3 && o.y <= 3 && o.karo !== 'yok');
       assert.equal(sag.length, 1, s.anahtar);
@@ -629,5 +632,89 @@ describe('2907 D4: refakat kartında revizyon kodu', () => {
     assert.ok(ALANLAR.refakat.some((a) => a.anahtar === 'revizyon'), 'kullanıcı şablonu revizyon alanını seçebilir');
     const kodsuz = yerlesim(s, { ...ORNEK_DEGERLER.refakat, revizyon: null }, false);
     assert.ok(!kodsuz.some((o) => o.tur === 'metin' && o.satirlar.join(' ').startsWith('Rev')));
+  });
+});
+
+describe('EM-41 (3124 a): malzeme etiketi', () => {
+  const girdi = (ek: Partial<MalzemeEtiketiGirdisi> = {}): MalzemeEtiketiGirdisi => ({
+    lotNo: 'LT-000123', malzemeId: 42, malzemeAd: 'Örnek çubuk', malzemeKod: 'ORN-HM-01', malzemeTuru: 'hammadde', birim: 'kg',
+    tedarikciPartiNo: 'P-01', dokumNo: 'D-01', sertifikaNo: 'S-01', giris: '2026-11-12T06:15:00.000Z', girisMiktar: '120.000', belgeNo: 'MK-000045',
+    konumKod: 'ORN-KRN-01', miktar: '120.000', kaliteDurumu: 'karar_bekliyor', malKabulSatirId: 9,
+    ozellik: { kalite: '42CrMo4', durum: 'Islah (+QT)', islem: 'Gerilim giderme', olcu: 'Ø50×3000 mm' }, tedarikci: 'Örnek Çelik A.Ş.', gkkyeGirdi: true, gkk: null, ...ek,
+  });
+  const gkk = (ek: Partial<MalzemeGirisOzeti> = {}): MalzemeGirisOzeti => ({
+    gkkNo: 'GKK-2026-0007', gkkZaman: '2026-11-12T11:20:00.000Z', kabulMiktar: '117.000', hataliMiktar: '3.000', karar: null, ncrNo: null, not: null, ...ek,
+  });
+  const basim = new Date('2026-11-12T11:20:00.000Z');
+
+  test('durum bandı: GKK yazılmamış mal kabul MAL KABUL, GKK hatalısı karar bekliyorsa HATALI, mal kabulsüz karar bekleyen KARAR BEKLİYOR; hatalı ve red çerçeveli', () => {
+    assert.deepEqual(malzemeBandi('karar_bekliyor', true, null), { ad: 'MAL KABUL', alt: 'GKK bekliyor · kullanılamaz', simge: 'cizgili:bekliyor', cerceve: false });
+    assert.deepEqual(malzemeBandi('karar_bekliyor', true, gkk()), { ad: 'HATALI', alt: 'Kalite kararı bekliyor · kullanılamaz', simge: 'siyah:hatali', cerceve: true });
+    assert.equal(malzemeBandi('karar_bekliyor', false, null)?.ad, 'KARAR BEKLİYOR');
+    assert.deepEqual(malzemeBandi('serbest', true, gkk()), { ad: 'SERBEST', alt: 'Kullanılabilir', simge: 'beyaz:onay', cerceve: false });
+    assert.equal(malzemeBandi('sartli', true, gkk({ karar: 'sartli_kabul', not: 'yalnız kaba işlemede' }))?.alt, 'Şart: yalnız kaba işlemede');
+    assert.equal(malzemeBandi('sartli', false, null)?.alt, 'Şartla kullanılır');
+    assert.deepEqual(malzemeBandi('red', true, gkk({ karar: 'red' })), { ad: 'RED', alt: 'Tedarikçiye iade · kullanılamaz', simge: 'siyah:red', cerceve: true });
+    assert.equal(malzemeBandi('red', false, null)?.alt, 'Red · kullanılamaz');
+    assert.equal(malzemeBandi(null, true, null), null);
+  });
+
+  test('GKK sonucu miktar ve karardan çıkar (3118): kabul, hatalı, şartlı, hatalı kabul, kısmi kabul, ret', () => {
+    assert.equal(gkkSonucu(gkk({ kabulMiktar: '120.000', hataliMiktar: '0.000' }), 'kg'), 'kabul 120 kg');
+    assert.equal(gkkSonucu(gkk(), 'kg'), 'hatalı 3 kg');
+    assert.equal(gkkSonucu(gkk({ karar: 'sartli_kabul' }), 'kg'), 'şartlı 3 kg');
+    assert.equal(gkkSonucu(gkk({ karar: 'kabul' }), 'kg'), 'hatalı kabul 3 kg');
+    assert.equal(gkkSonucu(gkk({ karar: 'red' }), 'kg'), 'kısmi kabul 117/120 kg');
+    assert.equal(gkkSonucu(gkk({ kabulMiktar: '0.000', hataliMiktar: '5.000', karar: 'red' }), 'kg'), 'ret');
+  });
+
+  test('değerler: üst bant, bu etiketin miktarı ve konumu, kart özellikleri, tedarikçi, sertifika, giriş ve GKK; eski lot alanları da dolar', () => {
+    const d = malzemeEtiketiDegerleri(girdi(), basim);
+    assert.equal(d.qr, 'LOT:LT-000123');
+    assert.equal(d.durumBant, 'MAL KABUL');
+    assert.equal(d.cerceve, null);
+    assert.equal(d.bakiye, '120 kg · ORN-KRN-01');
+    assert.equal(d.basimZamani, '12.11.2026 14:20');
+    assert.equal(d.tur, 'HAMMADDE');
+    assert.deepEqual([d.olcu, d.kalite, d.temper, d.islem, d.tedarikci], ['Ø50×3000 mm', '42CrMo4', 'Islah (+QT)', 'Gerilim giderme', 'Örnek Çelik A.Ş.']);
+    assert.equal(d.sertifika, 'S-01 · Döküm D-01 · Parti P-01');
+    assert.equal(d.girisSatiri, '12.11.2026 · 120 kg · MK-000045');
+    assert.equal(d.gkk, 'Bekliyor');
+    assert.deepEqual([d.lotNo, d.malzeme, d.kart, d.parti, d.giris], ['LT-000123', 'Örnek çubuk · ORN-HM-01', 'Kart 42 · Hammadde', 'Parti P-01 · Döküm D-01 · Sertifika S-01', '12.11.2026 · 120 kg · MK-000045']);
+  });
+
+  test('GKK satırı: numara, gün, sonuç ve NCR; GKK istemeyen kart "Gerekmez"; mal kabulsüz lotta satır yok; hatalı çerçeve alır', () => {
+    assert.equal(malzemeEtiketiDegerleri(girdi({ gkkyeGirdi: false, kaliteDurumu: 'serbest' }), basim).gkk, 'Gerekmez');
+    assert.equal(malzemeEtiketiDegerleri(girdi({ malKabulSatirId: null, gkkyeGirdi: null, belgeNo: null, girisMiktar: null }), basim).gkk, null);
+    const h = malzemeEtiketiDegerleri(girdi({ gkk: gkk({ ncrNo: 'NCR-ORN-3' }), miktar: '3.000' }), basim);
+    assert.deepEqual([h.durumBant, h.cerceve, h.bakiye, h.gkk], ['HATALI', 'evet', '3 kg · ORN-KRN-01', 'GKK-2026-0007 · 12.11.2026 · hatalı 3 kg · NCR-ORN-3']);
+    assert.equal(malzemeEtiketiDegerleri(girdi({ gkk: gkk({ gkkNo: null, kabulMiktar: '120.000', hataliMiktar: '0.000' }), kaliteDurumu: 'serbest' }), basim).gkk, '12.11.2026 · kabul 120 kg');
+  });
+
+  test('stoğu kalmamış lot: durum bandı, miktar ve basım saati basılmaz; boş özellik satırları basılmaz', () => {
+    const d = malzemeEtiketiDegerleri(girdi({ kaliteDurumu: null, konumKod: null, miktar: null, ozellik: null, tedarikci: null }), basim);
+    assert.deepEqual([d.durumBant, d.bantSimge, d.bakiye, d.basimZamani, d.olcu, d.tedarikci], [null, null, null, null, null, null]);
+    const s = HAZIR_SABLONLAR.find((x) => x.anahtar === 'malzeme-etiketi-100x50')!;
+    const ogeler = yerlesim(s, d, false);
+    assert.equal(ogeler.some((o) => o.tur === 'simge'), false);
+    assert.equal(ogeler.filter((o) => o.tur === 'metin').some((o) => o.satirlar.join(' ').includes('ÖLÇÜ')), false);
+  });
+
+  test('yerleşim: iki türde aynı tasarım, ilk sırada; durum adları ve değerler küçülmeden sığar; kalın çerçeve yalnız hatalı ve redde', () => {
+    const lot = HAZIR_SABLONLAR.filter((x) => x.tur === 'lot')[0]!, kalite = HAZIR_SABLONLAR.filter((x) => x.tur === 'kalite-durum')[0]!;
+    assert.deepEqual([lot.anahtar, kalite.anahtar], ['malzeme-etiketi-100x50', 'malzeme-durum-100x50']);
+    assert.deepEqual(lot.ogeler, kalite.ogeler);
+    for (const durum of ['karar_bekliyor', 'serbest', 'sartli', 'red'] as const) {
+      const d = malzemeEtiketiDegerleri(girdi({ kaliteDurumu: durum, gkk: durum === 'karar_bekliyor' ? null : gkk({ karar: durum === 'sartli' ? 'sartli_kabul' : durum === 'red' ? 'red' : 'kabul', not: 'yalnız kaba işlemede' }) }), basim);
+      const ogeler = yerlesim(lot, d, false);
+      const bant = ogeler.find((o) => o.tur === 'metin' && o.satirlar[0] === d.durumBant);
+      assert.ok(bant && bant.tur === 'metin' && bant.yaziMm >= 6, durum);
+      const cerceve = ogeler.some((o) => o.tur === 'kutu' && o.genislik === 100 && o.yukseklik === 50);
+      assert.equal(cerceve, durum === 'red', durum);
+      for (const alan of ['olcu', 'tedarikci', 'girisSatiri']) {
+        const o = ogeler.find((x) => x.tur === 'metin' && x.satirlar.join(' ') === d[alan]);
+        assert.ok(o && o.tur === 'metin' && o.yaziMm === 2.5, `${durum} ${alan}`);
+      }
+    }
   });
 });
