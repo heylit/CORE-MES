@@ -121,6 +121,29 @@
   writing-mode: vertical-rl; transform: rotate(180deg); font-size: var(--yazi-s); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .tc-rr1-tam .tc-rr1-body { min-height: var(--ekran-boy-70); }
+/* 3095: 768 ve üstünde gövde kaydırma kabının kalan boyunu alır (--tc-rr1-govde-boy, kalanBoy.ts); sayfa ayrıca kaymaz, şema, tablo ve
+   çekmeceler kendi içinde kayar. Kısa ekranda en az boy korunur. */
+@media (min-width: 768px) {
+  .tc-rr1-body, .tc-rr1-tam .tc-rr1-body {
+    height: max(var(--ekran-boy-40), var(--tc-rr1-govde-boy, var(--ekran-boy-70))); min-height: 0; grid-template-rows: minmax(0, 1fr);
+  }
+  /* Lejant tuvalin altında akışta kalır; tuval kalan boyu alır. */
+  .tc-rr1-body .tc-rr1-canvas-kap { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+  .tc-rr1-body .tc-rr1-canvas { flex: 1 1 auto; height: auto; min-height: 0; }
+  /* Kendi içinde kayan kutular konumlu olur: içlerindeki gizli etiketler (mutlak konumlu) kutuyla kırpılır, sayfayı uzatmaz. */
+  .tc-rr1-body > .tc-rr1-rtab-wrap { position: relative; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+}
+@media (min-width: 1024px) {
+  .tc-rr1-body .tc-rr1-adimpanel, .tc-rr1-body .tc-rr1-insp, .tc-rr1-body .tc-rr1-insp-serit { max-height: 100%; }
+  .tc-rr1-body .tc-rr1-adimpanel, .tc-rr1-body .tc-rr1-insp { position: relative; }
+}
+.tc-rr1-duzen-grup { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--b-1) var(--b-2); }
+/* Revizyon satırı dar kalınca (küçük pencere, Geri al ve Yinele açık) Palet ve Panel yalnız simge olur; satır kırılıp çalışma alanını
+   kısaltmasın. Ad aria-label ve title'da kalır. */
+.tc-rr1-revbar > .tc-rr1-rv-row:not(.tc-rr1-rv-status) { container: rr1-rv / inline-size; }
+@container rr1-rv (max-width: 1080px) {
+  .tc-rr1-duzen-grup .tc-rr1-dar-gizli { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+}
 .tc-rr1-adimpanel, .tc-rr1-insp {
   min-width: 0; max-height: var(--ekran-boy-70); overflow: auto; background: var(--panel); border: 1px solid var(--edge);
   border-radius: var(--yari-1); padding: var(--b-3);
@@ -407,7 +430,7 @@
 /* Akış tablosu */
 .tc-rr1-rtab-wrap { display: flex; flex-direction: column; gap: var(--b-4); min-width: 0; }
 .tc-rr1-teylem { display: inline-flex; gap: var(--b-1); flex-wrap: wrap; }
-.tc-rr1-ftab { display: flex; flex-direction: column; gap: var(--b-1); min-width: 0; background: var(--panel); border: 1px solid var(--edge); border-radius: var(--yari-1); padding: var(--b-2) var(--b-3) var(--b-3); }
+.tc-rr1-ftab { container: rr1-ftab / inline-size; display: flex; flex-direction: column; gap: var(--b-1); min-width: 0; background: var(--panel); border: 1px solid var(--edge); border-radius: var(--yari-1); padding: var(--b-2) var(--b-3) var(--b-3); }
 .tc-rr1-ftab-kok { border-top: var(--b-1) solid var(--hazard); }
 .tc-rr1-ftab-hd { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-1) var(--b-2); margin-bottom: var(--b-2); }
 .tc-rr1-ftlink { text-align: center; font-weight: 700; color: var(--muted); font-size: var(--yazi-s); margin: calc(var(--b-2) * -1) 0; }
@@ -461,6 +484,14 @@
 .tc-rr1-fcin .tc-rr1-alan > span:first-child { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
 .tc-rr1-fcin .tc-rr1-sayi { width: calc(var(--b-6) * 2.3); }
 .tc-rr1-fcq { font-weight: 700; font-size: var(--yazi-s); white-space: nowrap; font-variant-numeric: tabular-nums; }
+
+/* 3095: tablo dar kaldığında (palet ve panel açık, küçük pencere) üç sütun tek sütuna iner; ekran 1024'ün altına inmeyi beklemez.
+   Yan sütunlar sıfıra iniyor, giren ve çıkan kartları adım kartının üstüne biniyordu. */
+@container rr1-ftab (max-width: 720px) {
+  .tc-rr1-frow { grid-template-columns: minmax(0, 1fr); }
+  .tc-rr1-fhead { display: none; }
+  .tc-rr1-fconnrow > div:not(.tc-rr1-fconn) { display: none; }
+}
 
 /* Ürün listesi: eski sayfanın sık tablosu */
 .tc-rr1-ul { display: flex; flex-direction: column; gap: var(--b-2); min-width: 0; }

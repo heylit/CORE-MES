@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { Dugme, OnayPenceresi, Tablo } from '../../../../ortak/arayuz/index.ts';
 import { GecmisDugmesi } from '../../../denetim/disari.ts';
 import { tarih } from '../bicim.ts';
@@ -42,8 +42,10 @@ function SonDegisiklik({ r }: { r: RotaEkrani }) {
 }
 
 // Revizyon çubuğu (bugünkü ekranın revBar'ı): gösterilen revizyon, onay akışı, fark, geçmiş ve kopyalama.
-export function RevizyonCubugu({ r, agac, urunId, urunSec }: {
+export function RevizyonCubugu({ r, agac, urunId, urunSec, duzenDugmeleri = null }: {
   r: RotaEkrani; agac: readonly string[]; urunId: string; urunSec: (id: string) => void;
+  // Düzenle ve Palet (UrunVeRotalar verir): düzenlenen revizyonun yanında durur.
+  duzenDugmeleri?: ReactNode;
 }) {
   const [panel, setPanel] = useState<Panel>(null);
   const [not, setNot] = useState('');
@@ -119,6 +121,7 @@ export function RevizyonCubugu({ r, agac, urunId, urunSec }: {
           ))}
           {taslak && !O && <span className="tc-rr1-rvtab tc-rr1-rv-taslak tc-rr1-on"><b>Yeni taslak</b><small>kaydediliyor</small></span>}
         </span>
+        {duzenDugmeleri}
         {duzen.duzenlenebilir(urunId) && gosterilenAcik && (
           <>
             <Dugme tur="ikincil" disabled={!duzen.geriAlinabilir(urunId)} title="Geri al (Ctrl+Z)" onClick={() => { duzen.geriAl(urunId, 'geri'); }}>Geri al</Dugme>
