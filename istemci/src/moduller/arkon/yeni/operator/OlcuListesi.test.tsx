@@ -35,6 +35,16 @@ describe('telefonda Resim sekmesi', () => {
     expect(isSekmeleri(o, true, 'Panel', 'gauge', BOS).find((s) => s.id === 'draw')?.l).toBe('Resim');
   });
 
+  // 3126: sağ sütunda İşler sekmesi; varsayılan (ilk) sekme değişmez, rozet bekleyen iş sayısı.
+  it('İşler sekmesi iş sayısı verilince Analizden önce gelir, ilk sekme değişmez', () => {
+    const o = paketli([]);
+    expect(isSekmeleri(o, true, 'Panel', 'gauge', BOS).some((s) => s.id === 'isler')).toBe(false);
+    const l = isSekmeleri(o, true, 'Panel', 'gauge', BOS, false, 3);
+    expect(l.map((s) => s.id)).toEqual(['st', 'steps', 'isler', 'ana']);
+    expect(l.find((s) => s.id === 'isler')?.n).toBe(3);
+    expect(isSekmeleri(o, true, 'Panel', 'gauge', BOS, false, 0).find((s) => s.id === 'isler')?.n).toBeNull();
+  });
+
   it('operatörün ölçtüğü ve sırası gelen önce gelir', () => {
     expect(olcuSatirlari(PLAN, [2, 3], [3], {}).map((x) => x.b.id)).toEqual([3, 2, 1]);
   });

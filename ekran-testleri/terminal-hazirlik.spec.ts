@@ -55,7 +55,10 @@ test.describe('terminal hazırlık sekmesi uzun listede', () => {
     await page.route('**/api/arkon/belgeler/pkgs', (r) => r.fulfill({ json: { belgeler: [{ kimlik: paket.id, surum: 1, govde: paket }] } }));
     await page.route('**/api/adimli-emirler/9901/hazirlik', (r) => r.fulfill({ json: uzun }));
     await ac('/uretim-terminali');
-    await page.getByRole('button', { name: /^Hazırlık listesi:/ }).click({ timeout: 15_000 });
+    // 3136: genişte iş kimliği tek satırdır; eksiği olmayan işin hazırlık çipi Bilgiler penceresindedir, dokununca pencere kapanır.
+    await page.getByRole('button', { name: /^Bilgiler/ }).click({ timeout: 15_000 });
+    await page.getByRole('dialog', { name: 'Bilgiler' }).getByRole('button', { name: /^Hazırlık listesi:/ }).click();
+    await expect(page.getByRole('dialog', { name: 'Bilgiler' })).toBeHidden();
     const sekmeler = page.getByRole('tablist', { name: 'İş ayrıntısı' });
     const hz = sekmeler.getByRole('tab', { name: /^Hazırlık/ });
     await expect(hz).toHaveAttribute('aria-selected', 'true');

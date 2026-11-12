@@ -38,14 +38,15 @@ function IsEtiketleri({ is }: { is: Is }) {
   );
 }
 export { IsEtiketleri };
+export const etiketSayisi = (is: Is): number => (parcaEtiketi(is.pkg) ? 1 : 0) + (adimTuru(is.pkg) ? 1 : 0);
 
-// 685: telefonda iş alanları tek satır özettir (emir · op · parça no); dokununca bütün alanlar açılır, sayaç ilk ekranda kalır.
+// 685: telefonda iş alanları tek satır özettir (emir · op · malzeme kodu · rev; 3126); dokununca bütün alanlar açılır, sayaç ilk ekranda kalır.
 export function IsOzeti({ is, acik, degistir }: { is: Is; acik: boolean; degistir: () => void }) {
   const ust = <span className="tc-ay1-ust-yazi">Aktif iş {is.urgent ? '· ACİL' : ''}</span>;
   if (is.empty) return <div className="tc-ay1-is-ozet"><span>{ust}<IsAlanlari is={is} /></span></div>;
   return (
     <button type="button" className="tc-ay1-is-ozet" aria-expanded={acik} onClick={degistir}>
-      <span>{ust}{acik ? <IsAlanlari is={is} /> : <b className="tc-ay1-is-ozet-satir">{[is.no, is.op, is.pkg?.partNo].filter(Boolean).join(' · ')}</b>}</span>
+      <span>{ust}{acik ? <IsAlanlari is={is} /> : <b className="tc-ay1-is-ozet-satir">{[is.no, is.op, is.pkg?.partNo, is.pkg?.rev ? `Rev ${is.pkg.rev}` : null].filter(Boolean).join(' · ')}</b>}</span>
       <Simge ad={acik ? 'up' : 'down'} boyut="k" />
     </button>
   );
@@ -70,9 +71,11 @@ export function IsAlanlari({ is, baslik = false }: { is: Is; baslik?: boolean })
         {baslik ? <h2 className="tc-ay1-is-baslik">{is.no}</h2> : <b className="tc-ay1-mono">{is.no}</b>}
       </span>
       {alan('Op', is.op)}
-      {alan('Parça no', pkg?.partNo, 'tc-ay1-mono')}
-      {alan('Parça adı', is.part)}
+      {/* 3126: emrin parça kodu ürünün malzeme kodudur (Adım Durumu'nda da ürün kodu); Rev rotanın revizyon harfidir. */}
+      {alan('Malzeme', pkg?.partNo, 'tc-ay1-mono')}
+      {alan('Malzeme adı', is.part)}
       {alan('Rev', pkg?.rev)}
+      {alan('Hedef', is.target > 0 ? `${sayi(is.target)} adet` : null, 'tc-ay1-mono')}
     </span>
   );
 }
@@ -212,7 +215,11 @@ export function IsKuyrugu({ isler, aktif, sec, siradaki, onde, kartlar, kartla }
         <span className="tc-ay1-is-govde">
           <span className="tc-ay1-is-no">{o.no}{o.pkg ? <span className="tc-ay1-rev">Rev {o.pkg.rev}</span> : null}{o.fresh ? <span className="tc-ay1-etiket" data-durum="ayar">Yeni</span> : null}</span>
           <span className="tc-ay1-is-parca">{o.part}{o.urgent ? <span className="tc-ay1-etiket" data-durum="durdu">Acil</span> : null}</span>
-          <span className="tc-ay1-is-ayrinti"><span>{o.op}</span><span>Termin {o.due}</span></span>
+          {/* 3126: satırda malzeme kodu, proje ve iyi / hedef adet de yazar; boş alan yazılmaz. */}
+          <span className="tc-ay1-is-ayrinti">
+            {[o.op, o.pkg?.partNo, o.pkg?.proje, o.empty ? null : `${sayi(o.good)} / ${sayi(o.target)} adet`, o.due ? `Termin ${o.due}` : null]
+              .filter((x): x is string => !!x).map((x) => <span key={x}>{x}</span>)}
+          </span>
           {pe ? <span className="tc-ay1-adimtur"><span className="tc-ay1-etiket">{pe}</span></span> : null}
           {at ? <span className="tc-ay1-adimtur"><span className="tc-ay1-etiket">{at.etiket}</span>{at.aciklama ? <span className="tc-ay1-soluk">{at.aciklama}</span> : null}</span> : null}
           <span className="tc-ay1-is-rozetler">
@@ -425,11 +432,11 @@ export function TopluGiris({ kalan, kapali, kaydet, nedenler, hurdaEtiketi = 'Hu
 
 /* ── durum düğmeleri: nedensiz Duraklat ve Bitir 1,2 sn basılı tutulur; Durdur dokunuşla neden sorar (2000 b) ── */
 export function DurumDugmeleri({ durum, eylem, erken, pasif = false, gizle, beklemede = false }: {
-  durum: string; eylem: (d: DurumDugmesi) => void; erken: (etiket: string) => void; pasif?: boolean; gizle?: string | undefined; beklemede?: boolean;
+  durum: string; eylem: (d: DurumDugmesi) => void; erken: (etiket: string) => void; pasif?: boolean; gizle?: readonly string[]; beklemede?: boolean;
 }) {
   return (
     <OrbGrubu etiket="İş durumu">
-      {durumDugmeleri(durum, beklemede).filter((d) => d.eylem !== gizle).map((d) => (
+      {durumDugmeleri(durum, beklemede).filter((d) => !gizle || !gizle.includes(d.eylem)).map((d) => (
         <Orb key={d.key} simge={d.simge} etiket={d.etiket} ton={tonDurumu(d.ton)} ana={!!d.ana} disabled={pasif || !!d.kapali} {...(d.tut ? { basiliTutMs: 1200 } : {})}
           tetikle={() => eylem(d)} erkenBirakinca={() => erken(d.etiket)} />
       ))}
@@ -453,3 +460,62 @@ export function Satir({ simge, baslik, alt, tikla }: { simge: 'chart' | 'user' |
 }
 
 export { durumAdi, durumRengi };
+
+/* ── 3126 Ek 2: tek görünüş parçaları ── */
+// İşin kimliği tek satırda: emir, op, malzeme kodu, Rev, proje, iyi/hedef adet. Tam metin (malzeme adı dahil) ipucundadır.
+export function kimlikMetni(is: Is): string {
+  const pkg = is.pkg;
+  return [is.no, is.op, pkg?.partNo, is.part, pkg?.rev ? `Rev ${pkg.rev}` : null, pkg?.proje, is.target > 0 ? `${sayi(is.good)} / ${sayi(is.target)} adet` : null]
+    .filter(Boolean).join(' · ');
+}
+export function KimlikSatiri({ is }: { is: Is }) {
+  if (is.empty) return null;
+  const pkg = is.pkg;
+  return (
+    <p className="tc-ay1-kimlik-satiri" title={kimlikMetni(is)}>
+      <b className="tc-ay1-mono">{is.no}</b>
+      {is.op ? <span>{is.op}</span> : null}
+      {pkg?.partNo ? <b className="tc-ay1-mono" title={is.part ? `Malzeme ${pkg.partNo} · ${is.part}` : `Malzeme ${pkg.partNo}`}>{pkg.partNo}</b> : null}
+      {pkg?.rev ? <span><small>Rev</small> <b>{pkg.rev}</b></span> : null}
+      {pkg?.proje ? <span>{pkg.proje}</span> : null}
+      {is.target > 0 ? <span className="tc-ay1-mono">{sayi(is.good)} / {sayi(is.target)} adet</span> : null}
+    </p>
+  );
+}
+
+export interface TerminalUyarisi {
+  anahtar: string; simge: SimgeAdi; metin: string; ton: 'durdu' | 'durakli' | 'ayar' | 'sirada';
+  // Uyarının kendi açtığı yer (ör. hazırlık listesi); yoksa Bilgiler penceresi açılır.
+  ac?: () => void; aria?: string;
+}
+// Sayacın üstünde tek satır: en öncelikli uyarı ve kalanların sayısı. Sıra çağıranın verdiği sıradır (Kurgu Ek 2 Soru 3).
+export function UyariSeridi({ uyarilar, ac }: { uyarilar: readonly TerminalUyarisi[]; ac: () => void }) {
+  const u = uyarilar[0];
+  if (!u) return null;
+  return (
+    <button type="button" className="tc-ay1-uyari-seridi" data-durum={u.ton} onClick={u.ac ?? ac} title={uyarilar.map((x) => x.metin).join('\n')}
+      aria-label={[u.aria ?? u.metin, uyarilar.length > 1 ? `${String(uyarilar.length - 1)} uyarı daha` : null].filter(Boolean).join(' · ')}>
+      <Simge ad={u.simge} boyut="k" /><span>{u.metin}</span>{uyarilar.length > 1 ? <b>+{uyarilar.length - 1}</b> : null}
+    </button>
+  );
+}
+export function BilgiCipi({ n, ac }: { n: number; ac: () => void }) {
+  return (
+    <button type="button" className="tc-ay1-bilgi-cipi" onClick={ac} aria-label={n ? `Bilgiler, ${String(n)}` : 'Bilgiler'}>
+      <Simge ad="clipboard-check" boyut="k" /><span>Bilgiler</span>{n ? <b>{n}</b> : null}
+    </button>
+  );
+}
+// Telefonda çarkın yerine tek satır: ekrandaki iş ve sırası; dokununca çark ve işin bütün alanları pencerede açılır.
+export function IsSatiri({ is, sira, ac }: { is: Is; sira: string | null; ac: () => void }) {
+  return (
+    <button type="button" className="tc-ay1-is-satiri" onClick={ac} aria-label={`Aktif iş: ${kimlikMetni(is) || is.no} · işleri ve makineleri aç`}>
+      <span>
+        <span className="tc-ay1-ust-yazi">Aktif iş {is.urgent ? '· ACİL' : ''}</span>
+        <b className="tc-ay1-is-ozet-satir">{[is.no, is.op, is.pkg?.partNo, is.pkg?.rev ? `Rev ${is.pkg.rev}` : null].filter(Boolean).join(' · ')}</b>
+      </span>
+      {sira ? <b className="tc-ay1-mono">{sira}</b> : null}
+      <Simge ad="layers" boyut="k" />
+    </button>
+  );
+}
