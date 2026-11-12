@@ -8,7 +8,7 @@ import { useHesapMaddesiDurumu, type UstEylemOzellikleri } from '../../ortak/rot
 import { api } from '../../ortak/veri/api.ts';
 import { yeniIstekKimligi } from '../../ortak/veri/istek-kimligi.ts';
 import { useOturum } from '../../ortak/veri/oturum.ts';
-import { panoDenetiminiYaz, panoKanali, panoPenceresiniAc, panoPenceresindeMi, type PanoDurumu } from './mini-pano-penceresi.ts';
+import { panoDenetiminiYaz, panoDurumuMu, panoKanali, panoPenceresiniAc, panoPenceresiniAcYaDaOneGetir, panoPenceresindeMi, type PanoDurumu } from './mini-pano-penceresi.ts';
 
 // Mini pano seçimi kişinin profilindedir (2425-3 a): kapatılan panolar tutulur, kaydı olmayan kişide hepsi açıktır.
 export const miniPanoAnahtari = (kisiId: number) => ['profil', 'mini-pano', kisiId] as const;
@@ -68,28 +68,31 @@ export function MiniPanoEylemi({ acmaIstegi = 0 }: UstEylemOzellikleri) {
     return () => { pencere.clearInterval(z); };
   }, [ust.acik, istemci]);
   useHesapMaddesiDurumu(MINI_PANO_EYLEMI, !kullanilir, panoAcik || ust.acik ? 'Mini pano (açık)' : undefined);
-  // Pano penceresi durumunu duyurur, ana sekme açılışta sorar (Hesap menüsündeki "(açık)").
+  // Pano penceresi durumunu duyurur, ana sekme açılışta sorar (Hesap menüsündeki "(açık)"); ana sekmeden "öne gel" alır.
   useEffect(() => {
     const kanal = panoKanali();
     if (kanal === null) return undefined;
     if (burasi) {
-      const duyur = (a: boolean) => { kanal.postMessage({ acik: a } satisfies PanoDurumu); };
-      duyur(ust.acik);
-      kanal.onmessage = (o: MessageEvent<unknown>) => { if (o.data === 'sor') duyur(ust.acik); };
-      const kapanirken = () => { duyur(false); };
+      const duyur = (a: boolean, v: boolean) => { kanal.postMessage({ acik: a, var: v } satisfies PanoDurumu); };
+      duyur(ust.acik, true);
+      kanal.onmessage = (o: MessageEvent<unknown>) => {
+        if (o.data === 'sor') duyur(ust.acik, true);
+        else if (o.data === 'one-gel') { window.focus(); if (ust.acik) ust.ac(); }
+      };
+      const kapanirken = () => { duyur(false, false); };
       window.addEventListener('pagehide', kapanirken);
       return () => { window.removeEventListener('pagehide', kapanirken); kanal.close(); };
     }
-    kanal.onmessage = (o: MessageEvent<unknown>) => {
-      const d = o.data as Partial<PanoDurumu> | null;
-      if (typeof d === 'object' && d !== null && typeof d.acik === 'boolean') panoAcikYaz(d.acik);
-    };
+    kanal.onmessage = (o: MessageEvent<unknown>) => { if (panoDurumuMu(o.data)) panoAcikYaz(o.data.acik); };
     kanal.postMessage('sor');
     return () => { kanal.close(); };
-  }, [burasi, ust.acik]);
+  }, [burasi, ust.acik, ust.ac]);
   const ac = useCallback(() => {
-    if (!panoPenceresiniAc()) bildir('hata', 'Mini pano penceresi açılamadı; tarayıcının açılır pencere iznini verin.');
-  }, [bildir]);
+    // Pano penceresinin kendisinde yeni pencere aranmaz: aynı adla kendisi döner.
+    void (burasi ? Promise.resolve(panoPenceresiniAc()) : panoPenceresiniAcYaDaOneGetir()).then((oldu) => {
+      if (!oldu) bildir('hata', 'Mini pano penceresi açılamadı; tarayıcının açılır pencere iznini verin.');
+    });
+  }, [bildir, burasi]);
   // Yeniden çizilen düğme eski isteği yeniden açmaz: yalnız menüden gelen yeni seçim açar.
   const gorulenIstek = useRef(acmaIstegi);
   useEffect(() => {

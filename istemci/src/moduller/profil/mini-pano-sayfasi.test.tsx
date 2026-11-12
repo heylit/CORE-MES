@@ -53,7 +53,7 @@ describe('Mini pano penceresi', () => {
     const ac = vi.spyOn(window, 'open').mockReturnValue(yeni as unknown as Window);
     ciz(<><MiniPanoEylemi /><MiniPanoSayfasi /></>);
     fireEvent.click(await screen.findByRole('button', { name: 'Mini pano penceresini aç' }));
-    expect(ac).toHaveBeenCalledWith('', 'tmi-mini-pano', expect.stringContaining('popup'));
+    await waitFor(() => expect(ac).toHaveBeenCalledWith('', 'tmi-mini-pano', expect.stringContaining('popup')));
     expect(requestWindow).not.toHaveBeenCalled();
   });
 
@@ -77,5 +77,43 @@ describe('Mini pano penceresi', () => {
     expect(panoPenceresiniAc()).toBe(true);
     expect(acikPencere.location.href).toBe(`${window.location.origin}/profil/mini-pano`);
     expect(acikPencere.focus).toHaveBeenCalled();
+  });
+
+  it('başka sekmenin açtığı pano penceresi açıksa ikincisi açılmaz, o pencere öne çağrılır (3116)', async () => {
+    ortamKur();
+    const ac = vi.spyOn(window, 'open');
+    // Başka sekmenin pano penceresi: soruya "var" der, "öne gel"i kaydeder.
+    const oteki = new BroadcastChannel('tmi-mini-pano');
+    const gelenler: unknown[] = [];
+    oteki.onmessage = (o) => { gelenler.push(o.data); if (o.data === 'sor') oteki.postMessage({ acik: true, var: true }); };
+    const { panoPenceresiniAcYaDaOneGetir } = await import('./mini-pano-penceresi.ts');
+    expect(await panoPenceresiniAcYaDaOneGetir()).toBe(true);
+    await waitFor(() => expect(gelenler).toContain('one-gel'));
+    expect(ac).not.toHaveBeenCalled();
+    oteki.close();
+  });
+
+  it('yanıt veren pano penceresi yoksa yenisini açar', async () => {
+    ortamKur();
+    const yeni = { location: { href: 'about:blank' }, focus: vi.fn() };
+    const ac = vi.spyOn(window, 'open').mockReturnValue(yeni as unknown as Window);
+    const { panoPenceresiniAcYaDaOneGetir } = await import('./mini-pano-penceresi.ts');
+    expect(await panoPenceresiniAcYaDaOneGetir()).toBe(true);
+    expect(ac).toHaveBeenCalledTimes(1);
+  });
+
+  it('pano penceresi kendi eylemiyle "sor"a var diye yanıt verir, "öne gel"de odaklanır (3116)', async () => {
+    ortamKur();
+    window.name = 'tmi-mini-pano';
+    const odak = vi.spyOn(window, 'focus').mockImplementation(() => undefined);
+    ciz(<MiniPanoEylemi />);
+    const soran = new BroadcastChannel('tmi-mini-pano');
+    const yanitlar: unknown[] = [];
+    soran.onmessage = (o) => { yanitlar.push(o.data); };
+    soran.postMessage('sor');
+    await waitFor(() => expect(yanitlar).toContainEqual({ acik: false, var: true }));
+    soran.postMessage('one-gel');
+    await waitFor(() => expect(odak).toHaveBeenCalled());
+    soran.close();
   });
 });

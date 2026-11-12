@@ -1,7 +1,7 @@
 import { useSyncExternalStore } from 'react';
 import { Dugme, Kart, Simge } from '../../ortak/arayuz/index.ts';
 import { miniPanoDestekli } from '../../ortak/arayuz/MiniPano.tsx';
-import { panoDenetimi, panoDenetimineAbone, panoPenceresindeMi, panoPenceresiniAc } from './mini-pano-penceresi.ts';
+import { panoDenetimi, panoDenetimineAbone, panoPenceresindeMi, panoPenceresiniAcYaDaOneGetir } from './mini-pano-penceresi.ts';
 import { useMiniPanoTercihi } from './mini-pano-tercihi.tsx';
 
 // Pano penceresinin sayfası (3093 a): üstteki panoyu Hesap menüsünün eylemi tutar; sayfa durumu gösterir ve açtırır.
@@ -14,7 +14,7 @@ export function MiniPanoSayfasi() {
       <div className="tc-profil-mps">
         <Kart baslik="Mini pano" simge="grid">
           <p className="tc-profil-soluk">Mini pano kendi küçük penceresinde açılır; böylece bu sayfayı yenileseniz de kapanmaz.</p>
-          <Dugme tur="birincil" simge="grid" onClick={() => { panoPenceresiniAc(); }}>Mini pano penceresini aç</Dugme>
+          <Dugme tur="birincil" simge="grid" onClick={() => { void panoPenceresiniAcYaDaOneGetir(); }}>Mini pano penceresini aç</Dugme>
         </Kart>
       </div>
     );
