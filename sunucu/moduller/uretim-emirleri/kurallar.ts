@@ -395,6 +395,17 @@ export const acikEmirIhlali = (durum: EmirDurumu, arsiv: boolean): string | null
 export const oncelikDegisimIhlali = (durum: EmirDurumu, arsiv: boolean): string | null =>
   !arsiv && (durum === 'taslak' || durum === 'planli') ? null : ONCELIK_BASLAMIS;
 
+// UE-TUR (3099): tür yalnız bölünmüş alt emirde ve açık emirde değişir (kapanış maddeleri türe bağlıdır); başlamış emirde de serbesttir.
+// Proje isteyen türe yalnız projeli emir geçer (224).
+export const TUR_ANA_EMIR = 'Ana emrin türü açılışta seçilir; yalnız partinin ya da kolun türü sonradan değişir.';
+export const TUR_PROJESIZ = 'Bu tür proje ister; projesiz emir bu türe geçmez.';
+export function turDegisimIhlali(e: { durum: EmirDurumu; arsiv: boolean; ustEmirId: number | null; projeId: number | null }, yeniTur: string): string | null {
+  if (e.ustEmirId === null) return TUR_ANA_EMIR;
+  const acik = acikEmirIhlali(e.durum, e.arsiv);
+  if (acik !== null) return acik;
+  return e.projeId === null && projeZorunluMu(yeniTur) ? TUR_PROJESIZ : null;
+}
+
 // 176 a: sipariş, proje, emir zinciri. Satır emrin projesinin siparişindendir, sipariş onaylıdır, malzeme aynıdır.
 export function siparisSatiriIhlali(
   satir: { siparisId: number; siparisDurumu: string; malzemeNo: number } | null, projeSiparisId: number | null | undefined, malzemeNo: number,

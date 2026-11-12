@@ -430,6 +430,95 @@ describe('R3 Üretim emirleri: Diğer menüsü ve stok (1102 a, 1106 a)', () => 
     expect(within(ayrinti).getByRole('group', { name: 'Bölme türü' })).toBeTruthy();
   });
 
+  it('3099: partilere bölerken her partinin türü seçilir; seçilen tür bölme isteğine girer, seçilmeyen parti türsüz gider (ana emrinki)', async () => {
+    const emir = {
+      id: 61, parti: { ustEmirId: null, bolunmeSira: null, altEmirIdleri: [], birlestigiEmirId: null, birlesmeOpNo: null },
+      isEmirleri: [{ id: 701, opNo: 10, sira: 1, durum: 'bekliyor' }], surum: 1,
+    };
+    const istekler = sunucuKur(YONETICI, {
+      durum: adimli('serbest'),
+      yazmalar: { 'GET /adimli-emirler/61': () => json(200, { emir }), 'POST /adimli-emirler/61/bol': () => json(200, { emir, altEmirId: 62 }) },
+    });
+    const ayrinti = await sayfa();
+    fireEvent.click(within(ayrinti).getByRole('button', { name: 'UE-0001 işlemleri' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Böl (parti ya da kol)' }));
+    fireEvent.click(within(ayrinti).getByRole('button', { name: 'Partilere böl' }));
+    const p1 = within(ayrinti).getByRole('group', { name: 'Parti 1 ve türü' });
+    const p2 = within(ayrinti).getByRole('group', { name: 'Parti 2 ve türü' });
+    const tur1 = within(p1).getByRole('combobox', { name: 'Parti 1 emir türü' });
+    expect((tur1 as HTMLSelectElement).value).toBe('');
+    expect(within(p1).getByRole('option', { name: 'Ana emirle aynı (Seri)' })).toBeTruthy();
+    fireEvent.change(within(p1).getByLabelText('Parti 1'), { target: { value: '2' } });
+    fireEvent.change(tur1, { target: { value: 'numune' } });
+    fireEvent.change(within(p2).getByLabelText('Parti 2'), { target: { value: '3' } });
+    expect(within(ayrinti).getByRole('table', { name: 'Bölme önizlemesi' }).textContent).toContain('Numune');
+    fireEvent.click(within(ayrinti).getByRole('button', { name: 'Partilere böl ve onaya gönder' }));
+    await waitFor(() => { expect(istekler.filter((i) => i.yol === '/adimli-emirler/61/bol')).toHaveLength(2); });
+    const [ilk, ikinci] = istekler.filter((i) => i.yol === '/adimli-emirler/61/bol');
+    expect(ilk?.govde).toMatchObject({ adet: 2, emirTuru: 'numune' });
+    expect(ikinci?.govde).toMatchObject({ adet: 3 });
+    expect(ikinci?.govde).not.toHaveProperty('emirTuru');
+  });
+
+  it('3099: çok partili bölmede bir parti reddedilirse ileti görünür, açılan parti formdan düşer ve yeniden gönderilmez', async () => {
+    const emir = {
+      id: 61, parti: { ustEmirId: null, bolunmeSira: null, altEmirIdleri: [], birlestigiEmirId: null, birlesmeOpNo: null },
+      isEmirleri: [{ id: 701, opNo: 10, sira: 1, durum: 'bekliyor' }], surum: 1,
+    };
+    let n = 0;
+    const istekler = sunucuKur(YONETICI, {
+      durum: adimli('serbest'),
+      yazmalar: {
+        'GET /adimli-emirler/61': () => json(200, { emir }),
+        'POST /adimli-emirler/61/bol': () => (++n === 1 ? json(200, { emir, altEmirId: 62 }) : json(409, { kod: 'CAKISMA', mesaj: 'Bu tür proje ister; projesiz emir bu türe geçmez.' })),
+      },
+    });
+    const ayrinti = await sayfa();
+    fireEvent.click(within(ayrinti).getByRole('button', { name: 'UE-0001 işlemleri' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Böl (parti ya da kol)' }));
+    fireEvent.click(within(ayrinti).getByRole('button', { name: 'Partilere böl' }));
+    fireEvent.change(within(ayrinti).getByLabelText('Parti 1'), { target: { value: '2' } });
+    fireEvent.change(within(ayrinti).getByLabelText('Parti 2'), { target: { value: '3' } });
+    fireEvent.change(within(ayrinti).getByRole('combobox', { name: 'Parti 2 emir türü' }), { target: { value: 'numune' } });
+    fireEvent.click(within(ayrinti).getByRole('button', { name: 'Partilere böl ve onaya gönder' }));
+    await waitFor(() => { expect(within(ayrinti).getAllByRole('alert').some((a) => a.textContent.includes('Bu tür proje ister'))).toBe(true); });
+    await waitFor(() => { expect((within(ayrinti).getByLabelText('Parti 1') as HTMLInputElement).value).toBe(''); });
+    expect((within(ayrinti).getByLabelText('Parti 2') as HTMLInputElement).value).toBe('3');
+    fireEvent.click(within(ayrinti).getByRole('button', { name: 'Partilere böl ve onaya gönder' }));
+    await waitFor(() => { expect(istekler.filter((i) => i.yol === '/adimli-emirler/61/bol')).toHaveLength(3); });
+    expect(istekler.filter((i) => i.yol === '/adimli-emirler/61/bol').map((i) => (i.govde as { adet: number }).adet)).toEqual([2, 3, 3]);
+  });
+
+  it('3099: emir türü yalnız alt emrin menüsünde değişir; ana emirde menü maddesi yok, seçilen tür sürümle gider', async () => {
+    const d = adimli('serbest');
+    const ana = d.emirler!.orders[0]!;
+    d.emirler = { ...d.emirler!, orders: [...d.emirler!.orders, { ...ana, id: '62', kayitNo: 62, no: 'UE-0001/1', qty: 2, parentId: ana.id, surum: 4 }] };
+    sunucuKur(YONETICI, { durum: d });
+    const anaSayfa = await sayfa();
+    fireEvent.click(within(anaSayfa).getByRole('button', { name: 'UE-0001 işlemleri' }));
+    expect(screen.queryByRole('menuitem', { name: 'Emir türünü değiştir' })).toBeNull();
+    cleanup();
+    const istekler = sunucuKur(YONETICI, { durum: d, yazmalar: { 'POST /adimli-emirler/62/emir-turu': () => json(200, { emir: {} }) } });
+    const alt = await sayfa(62);
+    fireEvent.click(within(alt).getByRole('button', { name: 'UE-0001/1 işlemleri' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Emir türünü değiştir' }));
+    const panel = await within(alt).findByRole('group', { name: 'Emir türünü değiştir' });
+    expect((within(panel).getByRole('button', { name: 'Kaydet' }) as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.change(within(panel).getByLabelText('Emir türü'), { target: { value: 'stok' } });
+    fireEvent.click(within(panel).getByRole('button', { name: 'Kaydet' }));
+    await waitFor(() => { expect(istekler.find((i) => i.yol === '/adimli-emirler/62/emir-turu')?.govde).toEqual({ emirTuru: 'stok', surum: 4 }); });
+    cleanup();
+    sunucuKur(YONETICI, { durum: d, yazmalar: { 'POST /adimli-emirler/62/emir-turu': () => json(409, { kod: 'CAKISMA', mesaj: 'Bu tür proje ister; projesiz emir bu türe geçmez.' }) } });
+    const alt2 = await sayfa(62);
+    fireEvent.click(within(alt2).getByRole('button', { name: 'UE-0001/1 işlemleri' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Emir türünü değiştir' }));
+    const panel2 = await within(alt2).findByRole('group', { name: 'Emir türünü değiştir' });
+    fireEvent.change(within(panel2).getByLabelText('Emir türü'), { target: { value: 'numune' } });
+    fireEvent.click(within(panel2).getByRole('button', { name: 'Kaydet' }));
+    await waitFor(() => { expect(within(alt2).getAllByRole('alert').some((a) => a.textContent.includes('Bu tür proje ister'))).toBe(true); });
+    expect(within(alt2).getByRole('group', { name: 'Emir türünü değiştir' })).toBeTruthy();
+  });
+
   it('stoktan düşme düğmesi yalnız stok tamamlama bölümündedir; üretimi biten emirde kapanış uyarısı, kapanınca yok (1391 a)', async () => {
     for (const [status, kapanis, uyari] of [['serbest', null, false], ['tamam', null, true], ['tamam', 'tamamlandi', false]] as const) {
       sunucuKur(YONETICI, { durum: adimli(status, kapanis) });

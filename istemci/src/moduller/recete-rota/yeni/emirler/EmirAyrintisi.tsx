@@ -5,9 +5,10 @@ import { Dugme, Girdi, Menu, OnayPenceresi, Rozet, Secim, Simge, Tablo, type Men
 import { miktar, sayi, tarih, YOK, zaman } from '../bicim.ts';
 import type { EkranOzellikleri } from '../sekmeler.ts';
 import { RR_ANAHTARI, useRrBaglami, type RrDurumu } from '../veri.ts';
-import { AdimSeridi, BolmePaneli, bolmeSonucu, bosBolme, EK_TURLERI, type BolmeDurumu } from './Bolme.tsx';
+import { AdimSeridi, altEmirTurleri, BolmePaneli, bolmeSonucu, bosBolme, EK_TURLERI, type BolmeDurumu } from './Bolme.tsx';
 import { guncelSurum, type useEmirKomutu } from './komut.ts';
 import { EkAdimPaneli, type EkYeri } from './EkAdim.tsx';
+import { EmirTuruPaneli } from './EmirTuru.tsx';
 import { ReworkSatirlari } from './ReworkAdimi.tsx';
 import { ArsivPenceresi, useArsivKapanisi } from './ArsiveAl.tsx';
 import { DalRozeti } from '../rotalar/PatlamisRota.tsx';
@@ -250,17 +251,24 @@ function EmirYapisi({ durum: d, emir: o, adimlar, yetki, komut, islem, islemKapa
       tur: e.tur, sonra: e.sonra, ad: e.ad.trim() || (d.opdefs?.find((x) => x.id === e.opId)?.name ?? ''), operasyonTipiId: e.opId,
       ayarSuresiDk: sureMetni(e.ayar), birimSureDk: sureMetni(e.birim), aciklama: e.aciklama.trim(),
     }));
+    const turler = altEmirTurleri(bolme, r.siralar, o.tur);
+    const turu = (i: number) => { const t = turler[i]; return t === undefined ? {} : { emirTuru: t }; };
     if (bolme.tur === 'kol') {
-      const c = await komut.calistir('emir-bol', { id: o.id, adet: r.partiler[0], kolN: bolme.n, kolM: bolme.m, surum: o.surum, ekAdimlar },
+      const c = await komut.calistir('emir-bol', { id: o.id, adet: r.partiler[0], kolN: bolme.n, kolM: bolme.m, surum: o.surum, ekAdimlar, ...turu(0) },
         `Kol ${sayi(r.partiler[0])} adetle ${String(bolme.n)}. adımdan sonra ayrıldı, ${String(bolme.m)}. adımda ${o.no} emrine yeniden bağlanır.`);
       if (c.tamam) { setBolme(bosBolme(false)); islemKapat(); }
       return;
     }
     if (ekAdimlar.length && r.partiler.length !== 1) { komut.bildir('hata', 'Rework, tamir ya da ek adım yalnız tek parti ayrılırken eklenir; partileri tek tek ayırın.'); return; }
     let surum: number | null = o.surum;
-    for (const q of r.partiler) {
-      const c = await komut.calistir('emir-bol', { id: o.id, adet: q, surum, ...(ekAdimlar.length ? { ekAdimlar } : {}) });
-      if (!c.tamam) return;
+    for (const [i, q] of r.partiler.entries()) {
+      const c = await komut.calistir('emir-bol', { id: o.id, adet: q, surum, ...(ekAdimlar.length ? { ekAdimlar } : {}), ...turu(i) });
+      if (!c.tamam) {
+        // Açılan partiler formdan düşer; "Böl" yeniden basılınca yalnız açılmayanlar gider, açılan parti ikinci kez açılmaz.
+        const acilan = new Set(r.siralar.slice(0, i));
+        if (acilan.size > 0) setBolme({ ...bolme, partiler: bolme.partiler.map((p, k) => (acilan.has(k) ? '' : p)), turler: bolme.turler.map((t, k) => (acilan.has(k) ? '' : t)) });
+        return;
+      }
       surum = guncelSurum(c.durum, o.id);
     }
     setBolme(bosBolme(false));
@@ -329,7 +337,7 @@ function EmirYapisi({ durum: d, emir: o, adimlar, yetki, komut, islem, islemKapa
         <div className="tc-rr3-bol">
           <h4>Böl</h4>
           <BolmePaneli
-            yeni={false} girdi={girdi} adimlar={adimlar} baslamis={baslamis} opdefs={d.opdefs} istasyonlar={d.stations} deger={bolme} degistir={setBolme}
+            yeni={false} anaTur={o.tur} girdi={girdi} adimlar={adimlar} baslamis={baslamis} opdefs={d.opdefs} istasyonlar={d.stations} deger={bolme} degistir={setBolme}
             gonder={() => { void bol(); }} vazgec={() => { setBolme(bosBolme(false)); islemKapat(); }} mesgul={komut.mesgul}
           />
         </div>
@@ -659,8 +667,8 @@ function PlanBolumu({ durum: d, emir: o, adimlar, yetki, komut, goster = 'hepsi'
 
 // Üretim Emirleri emir sayfasının parçaları (3039). Seçilen işlem adreste durur (`islem`, `yer`): üstteki "İşlemler" menüsü ve adım
 // listesindeki "sonrasına adım ekle" aynı formu açar; sayfa "Adımlar" sekmesine geçer. Yetki ve başlamışlık kuralları sahibin ucundadır.
-export type EmirIslemi = 'bol' | 'katil' | 'ek';
-const ISLEMLER: readonly EmirIslemi[] = ['bol', 'katil', 'ek'];
+export type EmirIslemi = 'bol' | 'katil' | 'ek' | 'tur';
+const ISLEMLER: readonly EmirIslemi[] = ['bol', 'katil', 'ek', 'tur'];
 
 export function useEmirIslemi() {
   const [adres, yaz] = useSearchParams();
@@ -699,6 +707,7 @@ export function EmirIslemDugmeleri({ durum: d, emir: o, yetki, git, komut, emirA
     ...(yaz && !o.rotasiz && adimlar.length > 0 ? [{ anahtar: 'ek', baslik: 'Adım ekle (ek, rework, tamir)', simge: 'plus' as const, sec: () => { isl.ac('ek'); } }] : []),
     ...(yaz && adimlar.length > 0 ? [{ anahtar: 'bol', baslik: 'Böl (parti ya da kol)', simge: 'layers' as const, sec: () => { isl.ac('bol'); } }] : []),
     ...ekOgeler,
+    ...(ana && yaz ? [{ anahtar: 'tur', baslik: 'Emir türünü değiştir', simge: 'tag' as const, sec: () => { isl.ac('tur'); } }] : []),
     ...(o.kol && yaz ? [{ anahtar: 'katil', baslik: 'Katılma ya da ayrı ilerleme', simge: 'route' as const, sec: () => { isl.ac('katil'); } }] : []),
     { anahtar: 'akis', baslik: 'Rotayı akışta aç', simge: 'route' as const, sec: () => { git('schema', o.itemId); } },
     ...(plandaMi(o) ? [{ anahtar: 'kanban', baslik: 'Kanbanda göster', simge: 'grid' as const, sec: () => { void yonlen(KANBAN_YOLU); } }] : []),
@@ -745,7 +754,8 @@ export function EmirAdimBolumu({ durum: d, emir: o, yetki, komut, satirEki }: Pa
   return (
     <div className="tc-rr3-sayfa-adim">
       <EmirUyarilari durum={d} emir={o} yetki={yetki} komut={komut} />
-      <EmirYapisi durum={d} emir={o} adimlar={adimlar} yetki={yetki} komut={komut} islem={isl.islem === 'ek' ? null : isl.islem} islemKapat={isl.kapat} />
+      {o.parentId !== null && acikMi(o) && yetki.emirYaz && isl.islem === 'tur' && <EmirTuruPaneli emir={o} komut={komut} kapat={isl.kapat} />}
+      <EmirYapisi durum={d} emir={o} adimlar={adimlar} yetki={yetki} komut={komut} islem={isl.islem === 'ek' || isl.islem === 'tur' ? null : isl.islem} islemKapat={isl.kapat} />
       {ekAcik && isl.islem === 'ek' && !yerde && (
         <EkAdimPaneli durum={d} emir={o} yerler={yerler} komut={komut} kapat={isl.kapat} />
       )}

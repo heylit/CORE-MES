@@ -5,7 +5,7 @@ import {
   emirParametresi, izlemeListeCevabi, bitenEmirlerCevabi, bitenEmirlerSorgusu, adimliBitenlerCevabi, adimliBitenlerSorgusu,
   emirlerSorgusu, emirTopluGuncelleCevabi, emirTopluGuncelleGovdesi,
   adimKaynagiGovdesi, uretimYeriGovdesi, fasonFirmalariCevabi, adimliEmirCevabi, adimliIptalGovdesi, adimliListeCevabi, adimliListeSorgusu, adimliOzetCevabi, fasonGidisGovdesi, siradakiFasonCevabi,
-  asimlarCevabi, fasonHareketiCevabi, isEmriParametresi, oncelikGovdesi, ozetCevabi, partiBirlestirGovdesi, partiBolCevabi, partiBolGovdesi, planaAlGovdesi,
+  asimlarCevabi, emirTuruGovdesi, fasonHareketiCevabi, isEmriParametresi, oncelikGovdesi, ozetCevabi, partiBirlestirGovdesi, partiBolCevabi, partiBolGovdesi, planaAlGovdesi,
   birlesmePlaniGovdesi, ekAdimGovdesi, ekAdimKaldirGovdesi, hazirlikCevabi, hazirlikMuafiyetiGovdesi, hazirlikOzetiCevabi, hazirlikOzetiSorgusu, refakatKartiCevabi, katilimCevabi, rotasizAdimDuzenleGovdesi, rotasizAdimEkleGovdesi, rotasizAdimSilGovdesi, rotasizEmirCevabi, rotasizEmirGovdesi, acilisSecenekleriCevabi, acilisSecenekleriSorgusu, makineDevralGovdesi, makineEkleGovdesi, adimPaylariCevabi, durusDagilimiCevabi, sonOlaylarCevabi, sonOlaylarSorgusu, gunlukUretimCevabi, panelSorgusu, sureOzetiCevabi,
   hataliCevabi, hataliGovdesi, hataliListeCevabi, hataliListeSorgusu, reworkAdimiGovdesi,
   disIslemEmriAcGovdesi, disIslemEmriCevabi, disIslemEmriIptalGovdesi, disIslemEmriParametresi,
@@ -400,6 +400,20 @@ const adimliUclar = [
     cevap: adimliEmirCevabi,
     isle: async ({ db, kullanici, parametre, govde }) => {
       await isEmri.oncelikDegistir(db, kullanici, parametre.id, govde.oncelik, govde.surum);
+      return { emir: await isEmri.adimliAyrinti(db, parametre.id) };
+    },
+  }),
+  // 3099: bölünmüş alt emrin türü sonradan değişir; eski ve yeni değer kim ve ne zamanla kayda girer.
+  uc({
+    yontem: 'POST',
+    yol: '/adimli-emirler/:id/emir-turu',
+    yetki: 'uretim-emirleri.yaz',
+    parametre: emirParametresi,
+    govde: emirTuruGovdesi,
+    cevap: adimliEmirCevabi,
+    tekrarKorumali: true,
+    isle: async ({ db, kullanici, parametre, govde }) => {
+      await isEmri.emirTuruDegistir(db, kullanici, parametre.id, govde.emirTuru, govde.surum);
       return { emir: await isEmri.adimliAyrinti(db, parametre.id) };
     },
   }),

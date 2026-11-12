@@ -238,6 +238,7 @@ describe('bölme', () => {
     expect(r.partiler).toEqual([30, 20.5]);
     expect(r.kalan).toBe(49.5);
     expect(r.satirlar.map((s) => s.ad)).toEqual(['UE-1', 'Parti 1', 'Parti 3']);
+    expect(r.siralar).toEqual([0, 2]);
     expect(r.satirlar[0]!.hucreler[0]).toEqual({ miktar: 49.5, bitti: true });
     expect(bolmeHesapla(g, { tur: 'parti', partiler: ['', ''] })).toMatchObject({ hazir: false, bilgi: true });
     expect(bolmeHesapla(g, { tur: 'parti', partiler: ['3x'] })).toMatchObject({ hazir: false, bilgi: false });

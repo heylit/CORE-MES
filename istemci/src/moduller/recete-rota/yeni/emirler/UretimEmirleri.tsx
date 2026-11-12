@@ -8,7 +8,7 @@ import { Dugme, DurumKutusu, Girdi, IsaretKutusu, Pencere, Secim, Simge } from '
 import { sayi, tarih } from '../bicim.ts';
 import type { EkranOzellikleri } from '../sekmeler.ts';
 import { RR_ANAHTARI, usePatlatmaOnizlemesi, type RrDurumu } from '../veri.ts';
-import { BolmePaneli, bolmeSonucu, bosBolme, type BolmeDurumu } from './Bolme.tsx';
+import { altEmirTurleri, BolmePaneli, bolmeSonucu, bosBolme, type BolmeDurumu } from './Bolme.tsx';
 import { bosCokKatman, CokKatmanPaneli, type CokKatmanSecimi } from './CokKatman.tsx';
 import { EmirAyrintisi, PlanHucresi } from './EmirAyrintisi.tsx';
 import { planMetni, tamponRozeti, turAdi } from './gorunum.ts';
@@ -258,14 +258,19 @@ export function YeniEmirFormu({ durum: d, yetki, komut, acildi, git, ilkUrun }: 
     let durum = c.durum;
     let tamam = true;
     // Bölme açılıştan sonra sahibinin bölme ucuyla yapılır; reddedilirse emir bölünmemiş kalır, iletisi uyarı satırındadır.
+    const turler = b ? altEmirTurleri(bolme, b.siralar, f.tur) : [];
     if (b && bolme.tur === 'parti') {
-      for (const q of b.partiler) {
-        const r = await komut.calistir('emir-bol', { id, adet: q, surum: guncelSurum(durum, id) });
+      for (const [i, q] of b.partiler.entries()) {
+        const tur = turler[i];
+        const r = await komut.calistir('emir-bol', { id, adet: q, surum: guncelSurum(durum, id), ...(tur === undefined ? {} : { emirTuru: tur }) });
         if (!r.tamam) { tamam = false; break; }
         durum = r.durum;
       }
     } else if (b && bolme.tur === 'kol') {
-      tamam = (await komut.calistir('emir-bol', { id, adet: b.partiler[0], kolN: bolme.n, kolM: bolme.m, surum: guncelSurum(durum, id) })).tamam;
+      const tur = turler[0];
+      tamam = (await komut.calistir('emir-bol', {
+        id, adet: b.partiler[0], kolN: bolme.n, kolM: bolme.m, surum: guncelSurum(durum, id), ...(tur === undefined ? {} : { emirTuru: tur }),
+      })).tamam;
     }
     acildi(id);
     if (!rotali) komut.bildir('tamam', 'Rotasız emir açıldı: adımlarını emrin içinden ekleyin.');
@@ -307,7 +312,7 @@ export function YeniEmirFormu({ durum: d, yetki, komut, acildi, git, ilkUrun }: 
       {rotali && cokAcik && <p className="tc-rr3-uyari" data-bilgi=""><Simge ad="alert" boyut="k" />Çok katmanlı emir açılırken bölünmez; sunucu bölmeyi bu emirde henüz kabul etmiyor.</p>}
       {rotali && !cokAcik && (
         <BolmePaneli
-          yeni girdi={girdi} adimlar={adimlar} baslamis={[]} opdefs={d.opdefs} istasyonlar={d.stations} deger={bolme} degistir={setBolme}
+          yeni anaTur={f.tur} girdi={girdi} adimlar={adimlar} baslamis={[]} opdefs={d.opdefs} istasyonlar={d.stations} deger={bolme} degistir={setBolme}
         />
       )}
       {rotasizKapali && (

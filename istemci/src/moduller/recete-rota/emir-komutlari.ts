@@ -256,10 +256,21 @@ export const EMIR_KOMUTLARI: Readonly<Record<string, EmirKomutu>> = {
         birlesmeOpNo = katilma.opNo;
       }
       const ekAdimlar = kolaEkAdimlar(girdi['ekAdimlar'], d, adimSira, birlesmeOpNo);
+      // Tür verilmezse alt emir üstün türünü alır (sahibinin kuralı); değerin geçerliliğine sahibinin şeması karar verir.
+      const emirTuru = typeof girdi['emirTuru'] === 'string' && girdi['emirTuru'] !== '' ? girdi['emirTuru'] : undefined;
       return {
-        yol: `/adimli-emirler/${String(id)}/bol`, govde: { adimSira, adet, surum: ekranSurumu(girdi), birlesmeOpNo, ...(ekAdimlar.length ? { ekAdimlar } : {}) },
+        yol: `/adimli-emirler/${String(id)}/bol`,
+        govde: { adimSira, adet, surum: ekranSurumu(girdi), birlesmeOpNo, ...(ekAdimlar.length ? { ekAdimlar } : {}), ...(emirTuru === undefined ? {} : { emirTuru }) },
         tekrarKorumali: true,
       };
+    },
+  },
+  // 3099: bölünmüş alt emrin türü sonradan değişir; açık emir ve proje şartı sahibinde denetlenir.
+  'emir-turu': {
+    hazirla: async (girdi) => {
+      const emirTuru = girdi['emirTuru'];
+      if (typeof emirTuru !== 'string' || emirTuru === '') throw hata(422, 'Emir türünü seçin.');
+      return { yol: `/adimli-emirler/${String(kimlik(girdi['id'], 'emir'))}/emir-turu`, govde: { emirTuru, surum: ekranSurumu(girdi) }, tekrarKorumali: true };
     },
   },
   // Kolun katılma adımını değiştirir (null: birleşme planı kalkar). Adım ana emrin adımıdır (op numarası ana emrin iş emrinden gelir).

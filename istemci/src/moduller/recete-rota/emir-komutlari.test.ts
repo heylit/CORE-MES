@@ -53,6 +53,18 @@ describe('Bölme komutu sahibinin adımına çevrilir; uygunluğa Üretim Emirle
     await expect(hazirla('emir-bol', { id: 1, adet: 2, surum: 3, kolN: 1, kolM: 9 })).rejects.toThrow('Kolun katılma adımı bu emirde yok.');
   });
 
+  it('3099: bölmede seçilen tür gövdeye girer; seçilmezse alan gitmez ve sahibi üstün türünü yazar', async () => {
+    oku([kur(['bekliyor', 'bekliyor', 'bekliyor'])]);
+    expect((await hazirla('emir-bol', { id: 1, adet: 2, surum: 3, emirTuru: 'numune' })).govde).toMatchObject({ adimSira: 1, emirTuru: 'numune' });
+    expect((await hazirla('emir-bol', { id: 1, adet: 2, surum: 3, kolN: 1, kolM: 3, emirTuru: 'fai' })).govde).toMatchObject({ birlesmeOpNo: 30, emirTuru: 'fai' });
+    expect((await hazirla('emir-bol', { id: 1, adet: 2, surum: 3, emirTuru: '' })).govde).not.toHaveProperty('emirTuru');
+  });
+
+  it('3099: alt emrin türü değişim komutu tür ve sürümle gider; tür seçilmeden gitmez', async () => {
+    expect(await hazirla('emir-turu', { id: 9, emirTuru: 'stok', surum: 4 })).toEqual({ yol: '/adimli-emirler/9/emir-turu', govde: { emirTuru: 'stok', surum: 4 }, tekrarKorumali: true });
+    await expect(hazirla('emir-turu', { id: 9, emirTuru: '', surum: 4 })).rejects.toThrow('Emir türünü seçin.');
+  });
+
   it('katılma adımı ana emrin adımıdır; başlamış adım ekranda engellenmez', async () => {
     const parti = { ustEmirId: 1, bolunmeSira: 2, altEmirIdleri: [], birlestigiEmirId: null, birlesmeOpNo: 30 };
     oku([kur(['tamam', 'calisiyor', 'bekliyor']), kur(['bekliyor'], { id: 9, parti })]);
