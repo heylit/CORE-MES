@@ -67,7 +67,9 @@ const SAYFALAR: Sayfa[] = [
   { modul: 'uretim-terminali', yol: '/uretim-terminali', hesap: 'ornek.yonetici', baslik: 'Üretim Terminali', bolum: 'Üretim Terminali', kabukBasligiGizli: true },
   { modul: 'stok', yol: '/stok', hesap: 'ornek.depo', baslik: 'Stok Merkezi' },
   { modul: 'stok', yol: '/stok/malzemeler', hesap: 'ornek.depo', baslik: 'Malzemeler' },
+  // 3068 a, 3078 b: Logo geçişi malzeme kartı açabilen rolde de görünür (planlama malzemeler.yaz taşır).
   { modul: 'malzemeler', yol: '/logo-gecisi', hesap: 'ornek.yonetici', baslik: 'Logo geçişi' },
+  { modul: 'malzemeler', yol: '/logo-gecisi', hesap: 'ornek.planlama', baslik: 'Logo geçişi' },
   ...ISTASYONLAR_BOLUMLERI.map((yol): Sayfa => ({ modul: 'istasyonlar', yol, hesap: 'ornek.planlama', baslik: 'İstasyonlar' })),
   ...VARDIYA_BOLUMLERI.map(([yol, baslik]): Sayfa => ({ modul: 'vardiya', yol, hesap: 'ornek.planlama', baslik })),
   ...PLAN_VERI_SAYFALARI.flatMap(([yol, baslik]): Sayfa[] => (['ornek.yonetici', 'ornek.planlama'] as const).map((hesap) => ({ modul: 'plan', yol, hesap, baslik }))),
