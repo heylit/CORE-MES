@@ -640,7 +640,9 @@ namespace LogoYardimcisi
             if (d == null) return;
             var dovizTutar = Bicim.Yuvarla(x.Miktar * x.Fiyat, 2);
             a.Ekle("EXCLINE_PRICE", x.Fiyat).Ekle("EXCLINE_TOTAL", dovizTutar).Ekle("EXCLINE_VAT_AMOUNT", Bicim.Yuvarla(dovizTutar * (x.Kdv ?? 0) / 100, 2))
-                .Ekle("EXCLINE_VAT_MATRAH", dovizTutar).Ekle("EXCLINE_LINE_NET", dovizTutar);
+                .Ekle("EXCLINE_VAT_MATRAH", dovizTutar).Ekle("EXCLINE_LINE_NET", dovizTutar)
+                // Kart 3072: ilk birim fiyatı döviz fiyatıdır (eski programda EDT_PRICE ve EXCLINE_PRICE ile aynı); TL satırda yazılmaz.
+                .Ekle("ORG_PRICE", x.Fiyat);
         }
 
         // Birim kodu büyük-küçük harf ve baştaki/sondaki boşluk gözetmeden karşılaştırılır (VARSAYIM: Logo birim kodu harf duyarsız).
@@ -694,7 +696,8 @@ namespace LogoYardimcisi
                 x.Ac("TRANSACTION").Alanlar(a).Kapat();
             }
             x.Kapat();
-            x.Alan("TOTAL_GROSS", brut).Alan("TOTAL_DISCOUNTED", 0m).Alan("TOTAL_VAT", kdvToplam).Alan("TOTAL_NET", brut + kdvToplam);
+            // Kart 3072: iskonto fiyata yedirili; iskontolu toplam brüte eşit (eski programın gönderdiği gibi).
+            x.Alan("TOTAL_GROSS", brut).Alan("TOTAL_DISCOUNTED", brut).Alan("TOTAL_VAT", kdvToplam).Alan("TOTAL_NET", brut + kdvToplam);
             if (d != null) x.Alan("EXCHINFO_GROSS_TOTAL", dovizBrut).Alan("EXCHINFO_TOTAL_DISCOUNTED", dovizBrut).Alan("EXCHINFO_TOTAL_VAT", dovizKdv);
             var h = yaz.XmlEkle(Nesne.SatinAlmaSiparisi, "PURCHASE_ORDERS", x.Bitir());
             if (h != null) return Cevap.Ret(h);

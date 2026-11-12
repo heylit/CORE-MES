@@ -308,7 +308,10 @@ namespace LogoYardimcisi
             Icerir(s.SonXml, "<CURRSEL_TOTAL>1</CURRSEL_TOTAL>");
             Icerir(s.SonXml, "<TOTAL_NET>43.2</TOTAL_NET>");
             Icerir(s.SonXml, "<ORG_QUANTITY>4</ORG_QUANTITY>");
-            Icerir(s.SonXml, "<TOTAL_DISCOUNTED>0</TOTAL_DISCOUNTED>");
+            // Kart 3072: iskonto fiyata yedirili; fişin iskontolu toplamı brütüne eşit.
+            var brut = System.Text.RegularExpressions.Regex.Match(s.SonXml, "<TOTAL_GROSS>([^<]+)</TOTAL_GROSS>").Groups[1].Value;
+            Dogru(brut != "" && brut != "0", "fiş brütü yazıldı");
+            Icerir(s.SonXml, "<TOTAL_DISCOUNTED>" + brut + "</TOTAL_DISCOUNTED>");
             foreach (var yasak in new[] { "EXCLINE_", "EXCHINFO_", "ORG_PRICE", "<CURRSEL_TOTAL>2" }) Icermez(s.SonXml, yasak);
         }
 
@@ -327,6 +330,7 @@ namespace LogoYardimcisi
             // Kart 3066: döviz kullanımı ve döviz cinsi satır/fiş tutarları; miktar 3, KDV %20: 3 x 10.8 = 32.4, KDV 6.48.
             Icerir(s.SonXml, "<CURRSEL_TOTAL>2</CURRSEL_TOTAL>");
             Icerir(s.SonXml, "<EXCLINE_PRICE>10.8</EXCLINE_PRICE>");
+            Icerir(s.SonXml, "<ORG_PRICE>10.8</ORG_PRICE>");
             Icerir(s.SonXml, "<EXCLINE_TOTAL>32.4</EXCLINE_TOTAL>");
             Icerir(s.SonXml, "<EXCLINE_VAT_AMOUNT>6.48</EXCLINE_VAT_AMOUNT>");
             Icerir(s.SonXml, "<EXCLINE_VAT_MATRAH>32.4</EXCLINE_VAT_MATRAH>");
@@ -336,8 +340,8 @@ namespace LogoYardimcisi
             Icerir(s.SonXml, "<EXCHINFO_TOTAL_VAT>6.48</EXCHINFO_TOTAL_VAT>");
             Icerir(s.SonXml, "<TOTAL>1296</TOTAL>");
             Icerir(s.SonXml, "<TOTAL_NET>1296</TOTAL_NET>");
-            Icerir(s.SonXml, "<TOTAL_DISCOUNTED>0</TOTAL_DISCOUNTED>");
-            Icermez(s.SonXml, "ORG_PRICE");
+            Icerir(s.SonXml, "<TOTAL_GROSS>1296</TOTAL_GROSS>");
+            Icerir(s.SonXml, "<TOTAL_DISCOUNTED>1296</TOTAL_DISCOUNTED>");
             g = Siparis("SP-2026-003", SiparisSatiri(Malzeme, 1));
             g["currencyCode"] = 20;
             Esit(400, C(s, "POST", "/api/PurchaseOrder/AddRich", g).Durum, "kursuz döviz");
@@ -384,7 +388,7 @@ namespace LogoYardimcisi
             Dogru(sonra[1].Kapali, "gövdede olmayan satır kapanmalı (ORDER_CLOSED)");
             Esit("TMI-ERP-TEST-002", sonra[2].Kod, "yeni satır");
             // Kart 3066: XML'e özgü ek alanlar Logo Objects satırına (AppendLine) yazılmaz; orada denenmediler.
-            foreach (var ad in new[] { "TOTAL_NET", "ORG_QUANTITY", "EXCLINE_PRICE" }) Dogru(!s.SonYeniSatirlar[0].Var(ad), "eklenen satırda " + ad + " yok");
+            foreach (var ad in new[] { "TOTAL_NET", "ORG_QUANTITY", "EXCLINE_PRICE", "ORG_PRICE" }) Dogru(!s.SonYeniSatirlar[0].Var(ad), "eklenen satırda " + ad + " yok");
             g["arpCode"] = Alici;
             Icerir(Hata(C(s, "POST", "/api/PurchaseOrder/UpdateRich", g)), "Cari değişikliği");
         }
