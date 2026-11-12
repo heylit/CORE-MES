@@ -8,6 +8,7 @@ import { anahtarlar } from './anahtarlar.ts';
 import { LOGO_ETIKETI, miktarMetni, zamanMetni } from './gorunum.ts';
 import { SatirListesi, bosSatir, satirGovdesi, type Satir } from './MalKabul.tsx';
 import { EtiketMerkeziDugmesi } from './Etiketler.tsx';
+import { IrsaliyeBelgeleri } from './IrsaliyeBelgesi.tsx';
 import { PartiBelgeleri } from './PartiBelgeleri.tsx';
 import { SayfaBasi, hataMetni, korumaliPost, useIslem, useStokKomutu } from './ortak.tsx';
 import './stok.css';
@@ -56,6 +57,7 @@ export function MalKabulAyrinti() {
         </>} />
       {belge.duzeltenId !== null && <p className="tc-stok-not">Bu belge düzeltildi: <Link to={`/stok/mal-kabul/${belge.duzeltenId}`}>düzeltme belgesine git</Link>. Hareketleri ters çevrildi.</p>}
       {belge.duzeltilenId !== null && <p className="tc-stok-not">Bu belge <Link to={`/stok/mal-kabul/${belge.duzeltilenId}`}>önceki belgeyi</Link> düzeltir.</p>}
+      <IrsaliyeBelgeleri malKabulId={id} />
       <Kart baslik="Satırlar"><Tablo etiket="Mal kabul satırları" kip="kaydir" sutunlar={SUTUNLAR} satirlar={b.data.satirlar} satirAnahtari={(s) => s.sira} /></Kart>
       <Pencere acik={acik} kapat={() => setAcik(false)} baslik={`${belge.no} düzeltmesi`} tur="yan"
         alt={<>

@@ -10,3 +10,4 @@ export * from './servis/uretim.ts';
 export * from './servis/dis-akis.ts';
 export * from './servis/refakat.ts';
 export * from './servis/kabul-satirlari.ts';
+export * from './servis/irsaliye.ts';

@@ -3,7 +3,7 @@ import { describe, test } from 'node:test';
 import { BELGE_TURLERI } from '#paylasilan/sozlesme/belge-merkezi.ts';
 import type { AdayBelge, AdayRevizyon } from './kurallar.ts';
 import {
-  ILETILER, IZINLI_DOSYA_TURLERI, anahtarMetni, kartRevizyonu, kucukResimSec, malzemedenYayinda, merkezBagReddi, onizlemeBoyutReddi, onizlemeKareReddi, onizlemeRevizyonReddi, revizyonHarfi, revizyonKodu, silmeReddi, yayinReddi,
+  ILETILER, IZINLI_DOSYA_TURLERI, anahtarMetni, kartRevizyonu, kucukResimSec, malzemedenYayinda, merkezAcmaReddi, merkezBagKaldirmaReddi, merkezBagReddi, onizlemeBoyutReddi, onizlemeKareReddi, onizlemeRevizyonReddi, revizyonHarfi, revizyonKodu, silmeReddi, yayinReddi,
 } from './kurallar.ts';
 
 test('CZ-04 revizyon harfi sıradan türer: A..Z, sonra AA, AB; sıfır ve eksi reddedilir', () => {
@@ -39,6 +39,14 @@ test('CZ-14 merkezden istasyona yalnız 3B model bağlanır; malzemeye her tür;
   assert.equal(merkezBagReddi('istasyonlar', 'teknik-resim'), ILETILER.istasyonaModelDisi);
   for (const t of BELGE_TURLERI) assert.equal(merkezBagReddi('malzemeler', t), null, t);
   assert.equal(merkezBagReddi('atolye', '3b-model'), ILETILER.malzemeDisi);
+});
+
+test('3063 irsaliye merkezde açılmaz ve bağı merkezden kaldırılmaz; öbür türler ve bağlar bundan etkilenmez', () => {
+  assert.equal(merkezAcmaReddi('irsaliye'), ILETILER.irsaliyeMalKabulden);
+  for (const t of BELGE_TURLERI.filter((x) => x !== 'irsaliye')) assert.equal(merkezAcmaReddi(t), null, t);
+  assert.equal(merkezBagKaldirmaReddi('stok-mal-kabul'), ILETILER.malKabulBagi);
+  assert.equal(merkezBagKaldirmaReddi('malzemeler'), null);
+  assert.equal(merkezBagReddi('stok-mal-kabul', 'irsaliye'), ILETILER.malzemeDisi);
 });
 
 test('CZ-15 önizleme yayındaki revizyona ve taslak 3B modele yazılır (1990 a); 3B model, PDF ve fotodan üretilir, DXF\'ten üretilmez', () => {

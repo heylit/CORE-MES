@@ -8,6 +8,7 @@ import { kisiAdlari } from '../../kisiler/disari.ts';
 import { malzemeOzetleri } from '../../malzemeler/disari.ts';
 import { siparisSatirlari } from '../../satin-alma/disari.ts';
 import * as sorgular from '../sorgular.ts';
+import { malKabullerinIrsaliyeleri } from './irsaliye.ts';
 import { partiBelgeleri } from './pano.ts';
 
 // 2890: Mal kabulü yapılanlar. Her satır kabul edilen malzemeyi, kimin ne zaman aldığını, lotunu ve lotun bugün durduğu konumları
@@ -25,6 +26,7 @@ export async function malKabulSatirListesi(db: Db, k: Kullanici, s: MalKabulSati
   const yerler = partiler.length === 0 ? [] : await sorgular.lotYerleri(db, partiler);
   const belgeler = await partiBelgeleri(db, partiler);
   const siparis = siparisler.length === 0 ? [] : await siparisSatirlari(db, siparisler);
+  const irsaliyeler = await malKabullerinIrsaliyeleri(db, l.satirlar.map((x) => x.malKabulId));
   const lotYerleri = new Map<number, MalKabulLotYeri[]>();
   for (const { partiId, ...y } of yerler) lotYerleri.set(partiId, [...(lotYerleri.get(partiId) ?? []), y]);
   const siparisi = new Map(siparis.map((x) => [x.id, x]));
@@ -40,7 +42,7 @@ export async function malKabulSatirListesi(db: Db, k: Kullanici, s: MalKabulSati
         ilkKonumKod: x.ilkKonumKod, yerler: x.partiId === null ? [] : lotYerleri.get(x.partiId) ?? [],
         fasonGidenAd: x.fasonMalzemeId === null ? null : kartlar.get(x.fasonMalzemeId)?.ad ?? null,
         gkk: x.gkk, logoDurumu: x.logoDurumu, duzeltenId: x.duzeltenId,
-        siparisNo: sp?.siparisNo ?? null, tedarikciAdi: sp?.tedarikciAdi ?? null,
+        siparisNo: sp?.siparisNo ?? null, tedarikciAdi: sp?.tedarikciAdi ?? null, irsaliyeBelgeleri: irsaliyeler.get(x.malKabulId) ?? [],
       };
     }),
   };

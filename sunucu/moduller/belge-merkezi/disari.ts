@@ -7,7 +7,7 @@ import { cizimAra } from './servis.ts';
 export type { BagliBelge, BagliTaslakBelge, KayitBelgesiTuru, YayindakiBelge, YayindakiBelgeDosyasi, YayindakiOnizleme } from './servis.ts';
 export {
   alinanRevizyonDosyasi, belgeAcVeBagla, kaydaBagla, kaydaBagliBelgeler, kayitlaraBagliBelgeler, kayitlaraBagliYayindakiBelgeler, kayittakiBelgeDosyasi,
-  kayitlaraBagliTaslakBelgeler, kayittanKaldir, revizyonKodlari, taslagiGorur, yayindakiBelgeDosyasi, yayindakiBelgeler,
+  kayitlaraBagliTaslakBelgeler, kayittanKaldir, kayittanKaldirVeArsivle, revizyonKodlari, taslagiGorur, yayindakiBelgeDosyasi, yayindakiBelgeler,
   yayindakiOnizleme, yayindakiOnizlemeKaresi,
 } from './servis.ts';
 // Arkon (2520-3): Çizim Merkezi'nden eklenen dosyanın okunması; özet yayındaki bir belgenin dosyası mı. Yetki denetlemez.

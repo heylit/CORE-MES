@@ -6,7 +6,7 @@ import type { SimgeAdi } from '../../ortak/tasarim/simgeler.ts';
 import type { ModelBicimi } from './goruntu/model.ts';
 
 // Sözleşme zod taşır, istemci ondan yalnız tip alır: değer listeleri burada tipe bağlı yazılır (eksik ya da fazla tür derlenmez).
-export const BELGE_TURLERI = ['teknik-resim', '3b-model', 'fotograf', 'makine', 'sertifika', 'rapor', 'kroki', 'diger'] as const satisfies readonly BelgeTuru[];
+export const BELGE_TURLERI = ['teknik-resim', '3b-model', 'fotograf', 'makine', 'sertifika', 'irsaliye', 'rapor', 'kroki', 'diger'] as const satisfies readonly BelgeTuru[];
 
 export const TUR_ADI: Record<BelgeTuru, string> = {
   'teknik-resim': 'Teknik resim',
@@ -14,13 +14,14 @@ export const TUR_ADI: Record<BelgeTuru, string> = {
   fotograf: 'Fotoğraf',
   makine: 'Makine dokümanı',
   sertifika: 'Sertifika',
+  irsaliye: 'İrsaliye',
   rapor: 'Rapor',
   kroki: 'Kroki',
   diger: 'Diğer',
 };
 
 export const TUR_SIMGESI: Record<BelgeTuru, SimgeAdi> = {
-  'teknik-resim': 'ruler', '3b-model': 'cube', fotograf: 'camera', makine: 'cpu', sertifika: 'check', rapor: 'lab', kroki: 'grid', diger: 'layers',
+  'teknik-resim': 'ruler', '3b-model': 'cube', fotograf: 'camera', makine: 'cpu', sertifika: 'check', irsaliye: 'truck', rapor: 'lab', kroki: 'grid', diger: 'layers',
 };
 
 export const DURUM_ADI: Record<RevizyonDurumu, string> = { taslak: 'Taslak', yayinda: 'Yayında', eski: 'Eski' };
@@ -36,6 +37,7 @@ export const BAG_ADI: Record<BagModulu, string> = {
   'uretim-emirleri': 'Üretim emri',
   stok: 'Stok partisi',
   'satin-alma': 'Satın alma siparişi',
+  'stok-mal-kabul': 'Mal kabul',
   'cnc-kurulum': 'CNC Kurulum',
 };
 
@@ -44,7 +46,7 @@ const RESIM: readonly DosyaTuru[] = ['pdf', 'png', 'jpeg', 'webp'];
 const FOTO: readonly DosyaTuru[] = ['png', 'jpeg', 'webp'];
 const MODEL: readonly DosyaTuru[] = ['step', 'stl', 'iges', 'glb', 'gltf'];
 export const IZINLI_DOSYA_TURLERI: Record<BelgeTuru, readonly DosyaTuru[]> = {
-  'teknik-resim': RESIM, '3b-model': MODEL, fotograf: FOTO, makine: [...RESIM, ...MODEL], sertifika: RESIM, rapor: RESIM, kroki: RESIM, diger: [...RESIM, ...MODEL],
+  'teknik-resim': RESIM, '3b-model': MODEL, fotograf: FOTO, makine: [...RESIM, ...MODEL], sertifika: RESIM, irsaliye: RESIM, rapor: RESIM, kroki: RESIM, diger: [...RESIM, ...MODEL],
 };
 
 const UZANTILAR: Record<DosyaTuru, readonly string[]> = {

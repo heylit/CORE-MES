@@ -71,7 +71,7 @@ export function YeniBelge({ ilkTur, kapat }: { ilkTur: BelgeTuru; kapat: () => v
       alt={<Dugme tur="birincil" simge="upload" yukleniyor={komut.yukleniyor} disabled={!dosya || red !== null} onClick={() => { if (dosya) komut.gonder(dosya); }}>Yükle</Dugme>}
     >
       <div className="tc-cz-form">
-        <Secim etiket="Tür" value={tur} onChange={(e) => { turYaz(e.target.value as BelgeTuru); }} secenekler={BELGE_TURLERI.map((t) => ({ deger: t, baslik: TUR_ADI[t] }))} />
+        <Secim etiket="Tür" value={tur} onChange={(e) => { turYaz(e.target.value as BelgeTuru); }} secenekler={BELGE_TURLERI.filter((t) => t !== 'irsaliye').map((t) => ({ deger: t, baslik: TUR_ADI[t] }))} />
         <DosyaAlani tur={tur} dosya={dosya} sec={(d) => { dosyaYaz(d); if (d && ad.trim() === '') adYaz(adindan(d.name)); }} hata={red} />
         <Girdi etiket="Belge adı" value={ad} maxLength={120} onChange={(e) => { adYaz(e.target.value); }} required />
         <CokSatir etiket="Açıklama" value={aciklama} maxLength={500} onChange={(e) => { aciklamaYaz(e.target.value); }} />

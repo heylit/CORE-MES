@@ -622,3 +622,28 @@ a.tc-stok-kpi:hover, a.tc-stok-kpi:focus-visible { background: var(--panel2); }
   .tc-stok-bas > .tc-stok-eylem > * { flex: none; }
   .tc-stok-bas > .tc-stok-eylem > .tc-refakat-okut { flex: 1 0 calc(var(--b-6) * 7); }
 }
+
+/* 3063: irsaliye belgesi (seçici, sayfa küçük resimleri, ayrıntıdaki liste). Telefonda küçük resimler yana kayar. */
+.tc-stok-irsaliye { display: grid; gap: var(--b-2); min-width: 0; }
+.tc-stok-irsaliye-ust { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2); }
+.tc-stok-irsaliye-baslik { font-weight: 600; margin-inline-end: auto; }
+.tc-stok-irsaliye-sayfalar { display: flex; gap: var(--b-2); overflow-x: auto; list-style: none; margin: 0; padding: 0 0 var(--b-1); }
+.tc-stok-irsaliye-sayfalar li { position: relative; flex: none; display: grid; place-items: center; inline-size: calc(var(--dokunma) * 2); aspect-ratio: 3 / 4;
+  border: thin solid var(--edge); border-radius: var(--yari-2); background: var(--panel-solid); overflow: hidden; }
+.tc-stok-irsaliye-sayfalar img { inline-size: 100%; block-size: 100%; object-fit: cover; }
+.tc-stok-irsaliye-sayfalar .tc-dugme { position: absolute; inset-block-start: var(--b-1); inset-inline-end: var(--b-1); }
+.tc-stok-irsaliye-no { position: absolute; inset-block-end: var(--b-1); inset-inline-start: var(--b-1); font-size: var(--yazi-xs); font-weight: 600;
+  background: var(--panel-solid); border-radius: var(--yari-1); padding-inline: var(--b-1); }
+.tc-stok-irsaliye-pdf { display: grid; justify-items: center; gap: var(--b-1); font-size: var(--yazi-s); color: var(--muted); }
+.tc-stok-irsaliye-belgeler { display: grid; gap: var(--b-2); list-style: none; margin: 0; padding: 0; }
+.tc-stok-irsaliye-belgeler li { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2) var(--b-3); }
+.tc-stok-irsaliye-ad { display: inline-flex; align-items: center; gap: var(--b-1); margin-inline-end: auto; overflow-wrap: anywhere; min-width: 0; }
+.tc-stok-irsaliye-eylem { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--b-2) var(--b-3); }
+.tc-stok-irsaliye-eylem a { display: inline-flex; align-items: center; gap: var(--b-1); min-block-size: var(--dokunma); }
+.tc-stok-irsaliye-hucre { display: inline-flex; align-items: center; gap: var(--b-1); }
+.tc-stok-irsaliye-kaldir { display: inline-flex; align-items: center; gap: var(--b-1); min-block-size: var(--dokunma); color: var(--muted); }
+/* Telefonda başlık kendi satırında, iki düğme altında alt alta (3063 Arayüz). */
+@media (max-width: 767px) {
+  .tc-stok-irsaliye-ust { display: grid; grid-template-columns: 1fr; }
+  .tc-stok-irsaliye-ust .tc-dugme { inline-size: 100%; }
+}

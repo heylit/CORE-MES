@@ -2,11 +2,12 @@ import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import type { MalKabulSatirlariCevabi, MalKabulSatirOzeti } from '#paylasilan/sozlesme/stok-mal-kabul-satirlari.ts';
-import { DurumKutusu, Girdi, Kart, Rozet, Secim, Tablo, type Sutun } from '../../ortak/arayuz/index.ts';
+import { DurumKutusu, Girdi, Kart, Rozet, Secim, Simge, Tablo, type Sutun } from '../../ortak/arayuz/index.ts';
 import { api } from '../../ortak/veri/api.ts';
 import { sorguMetni, useListeDurumu } from '../../ortak/veri/liste-durumu.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { EtiketMerkeziDugmesi } from './Etiketler.tsx';
+import { irsaliyeAdresi } from './IrsaliyeBelgesi.tsx';
 import { KONUM_ETIKETI, LOGO_ESLESME_DURUMLARI, LOGO_ETIKETI, MAL_KABUL_TURLERI, MAL_KABUL_TURU, kabulSatiriDurumu, miktarMetni, zamanMetni } from './gorunum.ts';
 import { KaliteRozeti, hataMetni } from './ortak.tsx';
 import { PartiBelgeleri } from './PartiBelgeleri.tsx';
@@ -47,7 +48,12 @@ const SUTUNLAR: Sutun<MalKabulSatirOzeti>[] = [
     <Link to={`/stok/mal-kabul/${s.malKabulId}`} onClick={(e) => e.stopPropagation()}>{s.belgeNo}</Link>
   ) },
   { anahtar: 'tur', baslik: 'Tür', hucre: (s) => MAL_KABUL_TURU[s.tur] },
-  { anahtar: 'irsaliye', baslik: 'İrsaliye', mono: true, hucre: (s) => s.irsaliyeNo },
+  // 3063: irsaliye belgesi varsa no'nun yanında belge simgesi; tıklayınca PDF açılır.
+  { anahtar: 'irsaliye', baslik: 'İrsaliye', mono: true, csv: (s) => s.irsaliyeNo ?? '', hucre: (s) => (
+    <span className="tc-stok-irsaliye-hucre">{s.irsaliyeNo}{s.irsaliyeBelgeleri.map((b) => (
+      <a key={b.id} href={irsaliyeAdresi(s.malKabulId, b.id)} target="_blank" rel="noopener" aria-label={`${b.ad} belgesini aç`} title={b.ad}><Simge ad="file" boyut="k" /></a>
+    ))}</span>
+  ) },
   { anahtar: 'siparis', baslik: 'Sipariş', mono: true, hucre: (s) => s.siparisNo },
   { anahtar: 'tedarikci', baslik: 'Tedarikçi', kes: true, hucre: (s) => s.tedarikciAdi },
   { anahtar: 'fason', baslik: 'Fasondan dönüş', kes: true, hucre: (s) => (s.fasonGidenAd ? `Giden ${s.fasonGidenAd}` : null) },

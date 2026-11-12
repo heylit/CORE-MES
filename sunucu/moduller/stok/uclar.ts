@@ -24,6 +24,7 @@ import { statulerCevabi } from '#paylasilan/sozlesme/recete-rota.ts';
 import { STOK_ISLEMLERI } from '#paylasilan/islemler/stok.ts';
 import { defterFarklariCevabi, malzemeFisiAyrintiCevabi, malzemeFisiGonderGovdesi, malzemeFisiOzeti, malzemeFisleriCevabi, malzemeFisleriSorgusu } from '#paylasilan/sozlesme/stok.ts';
 import { malKabulSatirlariCevabi, malKabulSatirlariSorgusu } from '#paylasilan/sozlesme/stok-mal-kabul-satirlari.ts';
+import { irsaliyeBelgeleriCevabi, irsaliyeBelgeParametresi, irsaliyeEkleGovdesi, irsaliyeParametresi } from '#paylasilan/sozlesme/stok-irsaliye.ts';
 import * as s from './servis.ts';
 import * as mf from './malzeme-fisi.ts';
 
@@ -98,6 +99,13 @@ export const uclar = [
   uc({ yontem: 'GET', yol: '/stok/siparis-irsaliyeleri', yetki: SON_PARTI_OKUMA, sorgu: siparisIrsaliyeleriSorgusu, cevap: siparisIrsaliyeleriCevabi,
     isle: ({ db, sorgu }) => s.siparisIrsaliyeleri(db, sorgu.siparisSatirlari) }),
   uc({ yontem: 'GET', yol: '/stok/mal-kabuller', yetki: OKUMA, sorgu: malKabullerSorgusu, cevap: malKabullerCevabi, isle: ({ db, sorgu }) => s.malKabulListesi(db, sorgu) }),
+  // 3063: irsaliye belgesi. Okuma stoğu gören ve satın alma (3057 a, siparişin irsaliyesi gibi); ekleme ve kaldırma mal kabul yapabilen (3058 c).
+  uc({ yontem: 'GET', yol: '/stok/mal-kabuller/:id/irsaliyeler', yetki: SON_PARTI_OKUMA, parametre: irsaliyeParametresi, cevap: irsaliyeBelgeleriCevabi, isle: ({ db, parametre }) => s.irsaliyeBelgeleri(db, parametre.id) }),
+  uc({ yontem: 'GET', yol: '/stok/mal-kabuller/:id/irsaliyeler/:belgeId', yetki: SON_PARTI_OKUMA, parametre: irsaliyeBelgeParametresi, cevap: ikiliCevap, isle: ({ db, parametre }) => s.irsaliyeDosyasi(db, parametre.id, parametre.belgeId) }),
+  uc({ yontem: 'POST', tekrarKorumali: true, yol: '/stok/mal-kabuller/:id/irsaliye-ekle', yetki: 'stok.giris', parametre: irsaliyeParametresi, govde: irsaliyeEkleGovdesi, cevap: irsaliyeBelgeleriCevabi,
+    isle: ({ db, kullanici, parametre, govde, denetimEki }) => s.irsaliyeEkle(db, kullanici, parametre.id, govde, denetimEki) }),
+  uc({ yontem: 'POST', tekrarKorumali: true, yol: '/stok/mal-kabuller/:id/irsaliyeler/:belgeId/kaldir', yetki: 'stok.giris', parametre: irsaliyeBelgeParametresi, cevap: irsaliyeBelgeleriCevabi,
+    isle: ({ db, parametre, denetimEki }) => s.irsaliyeKaldir(db, parametre.id, parametre.belgeId, denetimEki) }),
   uc({ yontem: 'GET', yol: '/stok/mal-kabuller/:id', yetki: OKUMA, parametre: kimlikParametresi, cevap: malKabulAyrintiCevabi, isle: ({ db, parametre }) => s.malKabulAyrintisi(db, parametre.id) }),
   uc({ yontem: 'GET', yol: '/stok/mal-kabul-satirlari', yetki: OKUMA, sorgu: malKabulSatirlariSorgusu, cevap: malKabulSatirlariCevabi, isle: ({ db, kullanici, sorgu }) => s.malKabulSatirListesi(db, kullanici, sorgu) }),
   // Düzeltme hareketleri ters çevirir: geri alma işlemiyle korunur (DEP-53).

@@ -692,6 +692,78 @@ describe('stok (gerçek PostgreSQL)', () => {
     assert.deepEqual(await o().vt.tx((db) => sonPartiler(db, h2)), []);
   });
 
+  test('3063 irsaliye belgesi: mal kabule eklenir, stoğu gören ve satın alma okur; kaldırılınca merkezde arşive iner, bağı merkezden kaldırılamaz', async () => {
+    const yukle = async (kim: string): Promise<string> => {
+      const icerik = Buffer.concat([Buffer.from('%PDF-1.7\n'), randomBytes(1500)]);
+      const ozet = createHash('sha256').update(icerik).digest('hex');
+      const c = await istek(kim, 'POST', `/dosyalar/${ozet}/parca`, { sira: 0, toplam: 1, veri: icerik.toString('base64') });
+      assert.equal(c.durum, 200, JSON.stringify(c.govde));
+      return ozet;
+    };
+    type Liste = { belgeler: { id: number; ad: string }[] };
+    const k = await kart('sarf');
+    const ss = await siparisSatiri('4');
+    const mk = await depo<MalKabulCevabi>('POST', '/stok/mal-kabul', { tur: 'satin_alma', irsaliyeNo: 'ORN-IRS-7', satirlar: [{ malzemeId: k, miktar: '4', siparisSatirId: ss }] });
+    assert.equal(mk.durum, 200, JSON.stringify(mk.govde));
+    const id = mk.govde.belge.id;
+    const yol = `/stok/mal-kabuller/${id}`;
+    assert.deepEqual((await depo<Liste>('GET', `${yol}/irsaliyeler`)).govde, { belgeler: [] });
+
+    const ozet = await yukle('depo');
+    assert.equal((await istek('operator', 'POST', `${yol}/irsaliye-ekle`, { ozet, dosyaAdi: 'irsaliye.pdf' })).durum, 403);
+    assert.equal((await istek('satin_alma', 'POST', `${yol}/irsaliye-ekle`, { ozet, dosyaAdi: 'irsaliye.pdf' })).durum, 403);
+    assert.equal((await depo('POST', `/stok/mal-kabuller/${id + 999}/irsaliye-ekle`, { ozet, dosyaAdi: 'irsaliye.pdf' })).durum, 404);
+    const eklendi = await depo<Liste>('POST', `${yol}/irsaliye-ekle`, { ozet, dosyaAdi: 'irsaliye.pdf' });
+    assert.equal(eklendi.durum, 200, JSON.stringify(eklendi.govde));
+    assert.deepEqual(eklendi.govde.belgeler.map((b) => b.ad), [`İrsaliye ORN-IRS-7 (${mk.govde.belge.no})`]);
+    const ikinci = await depo<Liste>('POST', `${yol}/irsaliye-ekle`, { ozet: await yukle('depo'), dosyaAdi: 'irsaliye.pdf' });
+    assert.deepEqual(ikinci.govde.belgeler.map((b) => b.ad), [`İrsaliye ORN-IRS-7 (${mk.govde.belge.no})`, `İrsaliye ORN-IRS-7 (${mk.govde.belge.no}) · 2`]);
+    const [b1, b2] = ikinci.govde.belgeler;
+    const tur = await o().vt.tek<{ tur: string }>('SELECT tur FROM belge_merkezi_belge WHERE id = $1', [b1!.id]);
+    assert.equal(tur?.tur, 'irsaliye');
+
+    // 3057 a: satın alma listeyi ve dosyayı okur; stoğu görmeyen okumaz.
+    assert.deepEqual((await istek<Liste>('satin_alma', 'GET', `${yol}/irsaliyeler`)).govde, ikinci.govde);
+    const dosya = await app.inject({ method: 'GET', url: `/api${yol}/irsaliyeler/${b1!.id}`, headers: { cookie: cerezler.get('satin_alma') ?? '' } });
+    assert.equal(dosya.statusCode, 200);
+    assert.equal(createHash('sha256').update(dosya.rawPayload).digest('hex'), ozet);
+    assert.equal((await istek('operator', 'GET', `${yol}/irsaliyeler`)).durum, 403);
+    assert.equal((await istek('operator', 'GET', `${yol}/irsaliyeler/${b1!.id}`)).durum, 403);
+    const baska = await malKabul(k, '1');
+    assert.equal((await depo('GET', `/stok/mal-kabuller/${baska.govde.belge.id}/irsaliyeler/${b1!.id}`)).durum, 404);
+
+    // Sipariş satırı ve mal kabul satırları listesi belgeleri taşır.
+    const sip = await istek<SiparisIrsaliyeleriCevabi>('satin_alma', 'GET', `/stok/siparis-irsaliyeleri?siparisSatirlari=${ss}`);
+    assert.deepEqual(sip.govde.irsaliyeler.map((x) => x.belgeler.map((b) => b.id)), [[b1!.id, b2!.id]]);
+    const satirlar = await depo<{ satirlar: { malKabulId: number; irsaliyeBelgeleri: { id: number }[] }[] }>('GET', '/stok/mal-kabul-satirlari?metin=ORN-IRS-7');
+    assert.equal(satirlar.durum, 200, JSON.stringify(satirlar.govde));
+    assert.deepEqual(satirlar.govde.satirlar.filter((s) => s.malKabulId === id).map((s) => s.irsaliyeBelgeleri.map((b) => b.id)), [[b1!.id, b2!.id]]);
+
+    // Bağ yalnız mal kabulden kalkar: merkezin genel bağ kaldırması reddedilir.
+    const giris = await app.inject({ method: 'POST', url: '/api/oturum/giris', payload: { kullaniciAdi: 'yonetici', parola: PAROLA } });
+    cerezler.set('yonetici', String(giris.headers['set-cookie']).split(';')[0] ?? '');
+    const merkez = await istek<{ surum: number }>('yonetici', 'GET', `/cizimler/${b1!.id}`);
+    assert.equal(merkez.durum, 200, JSON.stringify(merkez.govde));
+    const merkezRed = await istek<Hata>('yonetici', 'POST', `/cizimler/${b1!.id}/bag-kaldir`, { hedefModul: 'stok-mal-kabul', hedefId: id, surum: merkez.govde.surum });
+    assert.equal(merkezRed.durum, 400, JSON.stringify(merkezRed.govde));
+    const acma = await istek<Hata>('yonetici', 'POST', '/cizimler', { ad: 'ORN irsaliye', tur: 'irsaliye', ozet: await yukle('yonetici'), dosyaAdi: 'irsaliye.pdf' });
+    assert.equal(acma.durum, 400, JSON.stringify(acma.govde));
+
+    // 3058 c + 3062 a: kaldırma bağı siler, belgeyi arşive alır, denetime belge ve dosya özetini yazar.
+    assert.equal((await istek('satin_alma', 'POST', `${yol}/irsaliyeler/${b1!.id}/kaldir`, {})).durum, 403);
+    const kalkti = await depo<Liste>('POST', `${yol}/irsaliyeler/${b1!.id}/kaldir`, {});
+    assert.equal(kalkti.durum, 200, JSON.stringify(kalkti.govde));
+    assert.deepEqual(kalkti.govde.belgeler.map((b) => b.id), [b2!.id]);
+    assert.equal((await o().vt.tek<{ aktif: boolean }>('SELECT aktif FROM belge_merkezi_belge WHERE id = $1', [b1!.id]))?.aktif, false);
+    assert.equal((await o().vt.tek<{ n: number }>("SELECT count(*)::int AS n FROM belge_merkezi_bag WHERE belge_id = $1 AND hedef_modul = 'stok-mal-kabul'", [b1!.id]))?.n, 0);
+    const kayit = await o().vt.tek<{ kisi_id: number; ek: { belgeId: number; ozet: string }[] }>(
+      "SELECT kisi_id, govde->'_ek' AS ek FROM denetim_kaydi WHERE yol = '/stok/mal-kabuller/:id/irsaliyeler/:belgeId/kaldir' ORDER BY id DESC LIMIT 1");
+    assert.equal(kayit?.kisi_id, kisiler.get('depo'));
+    assert.deepEqual(kayit?.ek.map((e) => [e.belgeId, e.ozet]), [[b1!.id, ozet]]);
+    assert.equal((await depo('POST', `${yol}/irsaliyeler/${b1!.id}/kaldir`, {})).durum, 404);
+    assert.equal((await depo('GET', `${yol}/irsaliyeler/${b1!.id}`)).durum, 404);
+  });
+
   test('numara kuralları: mal kabul no ayardaki kalıpla sunucuda kurulur, dolu numara atlanır, numarasız ve tekrar eden kayıt reddedilir', async () => {
     const k = await kart('sarf');
     const ilk = await malKabul(k, '1');
