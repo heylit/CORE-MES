@@ -3,7 +3,7 @@ import type { FinansHamVerisi } from './donustur.ts';
 // Testlerin sunucu cevabı: bütün alanlar sözleşme biçimindedir (para ve kur metin). Firma adları uydurmadır.
 const Z = '2026-09-01T09:00:00.000Z';
 const firma = (id: number, ad: string, tur: 'musteri' | 'tedarikci' | 'ikisi', kod: string | null) => ({
-  id, kod, ad, tur, fason: false, vergiNo: null, il: null, aktif: true, logoCariKodu: null, adresSayisi: 0, koordinatli: false,
+  id, kod, ad, tur, fason: false, vergiNo: null, il: null, aktif: true, logoCariKodu: null, logoKayitNo: null, adresSayisi: 0, koordinatli: false,
 });
 const belge = (o: Partial<FinansHamVerisi['belgeler'][number]> & { id: number }): FinansHamVerisi['belgeler'][number] => ({
   yon: 'gelir', tur: 'fatura', kategori: 'urun_satisi', firmaId: 1, belgeNo: null, aciklama: null, belgeTarihi: '2026-09-10', vade: '2026-10-10',

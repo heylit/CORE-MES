@@ -6,7 +6,7 @@ import { testVeritabaniKur } from '#cekirdek/test-vt.ts';
 import type { TestVeritabani } from '#cekirdek/test-vt.ts';
 import { uygulamaKur } from '#cekirdek/uygulama.ts';
 import { ISTEK_KIMLIGI_BASLIGI } from '#paylasilan/istek-kimligi.ts';
-import type { Firma, FirmaCevabi, LogoCariAramaCevabi, LogoCariCevabi, LogodanFirmaAlGovdesi } from '#paylasilan/sozlesme/musteri-tedarikci.ts';
+import type { Firma, FirmaCevabi, FirmaListesiCevabi, LogoCariAramaCevabi, LogoCariCevabi, LogodanFirmaAlGovdesi } from '#paylasilan/sozlesme/musteri-tedarikci.ts';
 import { denetimYaz } from '../denetim/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
@@ -207,6 +207,12 @@ describe('Logo\'dan cari arama ve alma (gerçek PostgreSQL, sahte köprü)', () 
     assert.equal((await bagla('yazan', b.id, 'LCA6.001', b.surum)).durum, 422);
     assert.equal((await bagla('yazan', farkli.id, 'LCA6.001', farkli.surum)).durum, 422);
     assert.deepEqual(cagrilar, []);
+    // Liste satırı bağı kayıt numarasıyla taşır (3065): cari kodu elle yazılmış ama bağlanmamış firma bağlı görünmez.
+    const liste = await istek<FirmaListesiCevabi>('okuyan', 'GET', '/musteri-tedarikci/firmalar?ara=LCA6');
+    assert.equal(liste.durum, 200, JSON.stringify(liste.govde));
+    const satirlar = new Map(liste.govde.satirlar.map((r) => [r.id, r]));
+    assert.deepEqual([satirlar.get(b.id)?.logoKayitNo, satirlar.get(b.id)?.logoCariKodu], [601, 'LCA6.001']);
+    assert.deepEqual([satirlar.get(farkli.id)?.logoKayitNo, satirlar.get(farkli.id)?.logoCariKodu], [null, 'LCA6.FARKLI']);
   });
 
   test('LCA-7 kodu TMI\'ye sığmayan cari listede "alınamaz" görünür ve alınmaz', async () => {

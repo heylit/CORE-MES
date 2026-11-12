@@ -9,6 +9,7 @@ import { useOturum } from '../../ortak/veri/oturum.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { FirmaAyrinti } from './FirmaAyrinti.tsx';
 import { FirmaFormu } from './FirmaFormu.tsx';
+import { LogoBaglaPenceresi } from './LogoBaglaPenceresi.tsx';
 import { TUR_ETIKETI, menuSuzgeci } from './gorunum.ts';
 import { useYazabilir } from './yazma.ts';
 import './musteri-tedarikci.css';
@@ -19,6 +20,32 @@ const DURUM_SECENEKLERI = [
 ] as const;
 
 const SIRALAMA_ALANLARI = ['kod', 'ad'] as const;
+
+// Logo bağı: firma Logo kaydına bağlıysa (kayıt no var) cari koduyla "Bağlı"; değilse yazabilene satırda "Logo'ya bağla" (3065).
+// Ayrıntıdaki düğmeyle aynı pencere açılır; bağlama davranışı değişmez. Düğme satırı seçmez.
+function logoSutunu(bagla: ((f: FirmaSatiri) => void) | null): Sutun<FirmaSatiri> {
+  return {
+    anahtar: 'logo',
+    baslik: 'Logo',
+    csv: (f) => (f.logoKayitNo === null ? null : f.logoCariKodu),
+    hucre: (f) => {
+      if (f.logoKayitNo !== null) {
+        return (
+          <span className="tc-mt-logo-bag">
+            <Rozet ton="tamam">Bağlı</Rozet>
+            {f.logoCariKodu && <span className="mono">{f.logoCariKodu}</span>}
+          </span>
+        );
+      }
+      if (bagla === null) return <span className="tc-mt-yok">Bağlı değil</span>;
+      return (
+        <Dugme simge="search" aria-label={`${f.ad} firmasını Logo'ya bağla`} onClick={(o) => { o.stopPropagation(); bagla(f); }}>
+          Logo&apos;ya bağla
+        </Dugme>
+      );
+    },
+  };
+}
 
 const SUTUNLAR: Sutun<FirmaSatiri>[] = [
   { anahtar: 'kod', baslik: 'Kod', mono: true, sirala: true, hucre: (f) => f.kod },
@@ -60,12 +87,13 @@ export function Firmalar() {
   const [arama, aramaYaz] = useState(liste.suzgecler.ara);
   const [secili, seciliYaz] = useState<number | null>(null);
   const [yeni, yeniYaz] = useState(false);
+  const [baglanan, baglananYaz] = useState<number | null>(null);
 
   useEffect(() => {
     const sayac = setTimeout(() => { if (arama !== liste.suzgecler.ara) liste.suzgecDegistir({ ara: arama }); }, 300);
     return () => clearTimeout(sayac);
   }, [arama]);
-  useEffect(() => { seciliYaz(null); }, [yol]);
+  useEffect(() => { seciliYaz(null); baglananYaz(null); }, [yol]);
 
   // Ctrl K buraya `yeni=1` (komut: form açılır) ya da `firma=<id>` (kayıt sonucu: kart açılır) ile gelir. İstek bir kez
   // karşılanır ve adresten düşer: geri ya da yenileme formu yeniden açmaz. Yetki oturum gelince bilinir; o zamana kadar beklenir.
@@ -91,6 +119,9 @@ export function Firmalar() {
     queryFn: () => api.get<FirmaListesiCevabi>(`/musteri-tedarikci/firmalar${sorguMetni(sorgu)}`),
   });
   useEffect(() => { if (firmalar.data) liste.sayfaEsitle(firmalar.data.sayfa, liste.sorgu.sayfa); }, [firmalar.data]);
+
+  const logo = logoSutunu(yazabilir ? (f) => baglananYaz(f.id) : null);
+  const sutunlar = [...SUTUNLAR.slice(0, 4), logo, ...SUTUNLAR.slice(4)];
 
   return (
     <section className="tc-mt">
@@ -125,7 +156,7 @@ export function Firmalar() {
         ) : (
           <Tablo
             etiket="Firmalar"
-            sutunlar={SUTUNLAR}
+            sutunlar={sutunlar}
             satirlar={firmalar.data?.satirlar ?? []}
             satirAnahtari={(f) => f.id}
             satirSec={(f) => seciliYaz(f.id)}
@@ -140,6 +171,7 @@ export function Firmalar() {
         )}
       </Kart>
       {secili !== null && <FirmaAyrinti id={secili} kapat={() => seciliYaz(null)} />}
+      {yazabilir && baglanan !== null && <LogoBaglaPenceresi id={baglanan} kapat={() => baglananYaz(null)} />}
       {yazabilir && yeni && (
         <FirmaFormu
           firma={null}
