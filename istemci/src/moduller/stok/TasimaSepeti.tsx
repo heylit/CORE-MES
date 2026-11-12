@@ -9,6 +9,7 @@ import { KONUM_ETIKETI, miktarGirdisi, miktarMetni } from './gorunum.ts';
 import { birakmaHedefi, ELDEN_NOTU, kisiHedefiMi, sepetTasinir, type OkutHedefi } from './okut-akisi.ts';
 import { okutarakSec } from './birakma-secimi.ts';
 import { hataMetni, korumaliPost, useIslem, useStokKomutu } from './ortak.tsx';
+import type { IslemSonucu } from './OkutDuzeni.tsx';
 import './stok.css';
 
 // Taşıma sepeti (1338 a): kişinin sunucudaki sepetidir (Soru 133); depo sepetiyle aynı satırlar, aynı önbellek. Art arda okutulan
@@ -19,8 +20,9 @@ export function useTasimaSepeti(acik = true) {
 }
 // Sepet miktarı üç ondalıklıdır; kalan kayan nokta hatası taşımasın diye bindelikle hesaplanır.
 const kalanMiktar = (sepette: string, giden: string): string => String(Math.round(Number(sepette) * 1000 - Number(giden) * 1000) / 1000);
+// 3085 (Arayüz N1): sonucu okutulan kartı "Sepete eklendi · Geri al" ile söyler; ayrıca bildirim çıkmaz.
 export function useSepeteAt(sonra?: () => void) {
-  return useStokKomutu((g: SepetEkleGovdesi) => korumaliPost<SepetCevabi>('/stok/sepet/satir-ekle', g), 'Sepete atıldı.', sonra);
+  return useStokKomutu((g: SepetEkleGovdesi) => korumaliPost<SepetCevabi>('/stok/sepet/satir-ekle', g), null, sonra);
 }
 
 const satirAdi = (s: SepetSatiri): string => s.malzemeAd ?? s.malzemeKod ?? `Malzeme #${s.malzemeId}`;
@@ -40,6 +42,7 @@ export function SepetSeridi({ satirlar }: { satirlar: SepetSatiri[] }) {
         <Simge ad="cart" />
         <strong>Taşıma sepetim</strong>
         <span className="tc-stok-sepet-sayi">{satirlar.length}</span>
+        <span className="tc-stok-sepet-adlar">{satirlar.slice(0, 2).map(satirAdi).join(', ')}{satirlar.length > 2 ? ` +${satirlar.length - 2}` : ''}</span>
         <span className="tc-stok-not">{acik ? 'Kapat' : 'Bırakmak için yeri okut'}</span>
       </button>
       {acik && (
@@ -65,7 +68,7 @@ const tamMiktar = (s: SepetSatiri): string => miktarMetni(s.miktar).replace(/\./
 // `okutma` (1919 a): okutulan etiketin eşleştiği satırlar; ilk okutma "hepsi seçili"yi bırakır, sonrakiler ekler.
 // `gonder`: Kaydet komutu sayacı; arttıkça seçilenler bırakılır.
 export function Birakma({ hedef, satirlar, bitti, vazgec, okutma = null, gonder = 0 }: {
-  hedef: OkutHedefi; satirlar: SepetSatiri[]; bitti: (metin: string) => void; vazgec: () => void; okutma?: { ids: number[]; sira: number } | null; gonder?: number;
+  hedef: OkutHedefi; satirlar: SepetSatiri[]; bitti: (sonuc: IslemSonucu) => void; vazgec: () => void; okutma?: { ids: number[]; sira: number } | null; gonder?: number;
 }) {
   const depocu = useIslem('stok.transfer');
   const istemci = useQueryClient();
@@ -78,7 +81,7 @@ export function Birakma({ hedef, satirlar, bitti, vazgec, okutma = null, gonder 
   const birak = useMutation({
     mutationFn: async () => {
       const teslim: SepetTeslimEtGovdesi['satirlar'] = [];
-      const kayitlar: string[] = [], hatalar: string[] = [];
+      const kayitlar: string[] = [], hatalar: string[] = [], teslimNolari: string[] = [];
       for (const s of secilen) {
         const m = miktarGirdisi(secim[s.id]!.miktar);
         const tamami = m === miktarGirdisi(tamMiktar(s));
@@ -92,25 +95,35 @@ export function Birakma({ hedef, satirlar, bitti, vazgec, okutma = null, gonder 
           await korumaliPost('/stok/tasima', g);
           if (tamami) await api.post(`/stok/sepet/satirlar/${s.id}/sil`, {});
           else await api.post(`/stok/sepet/satirlar/${s.id}/degistir`, { miktar: kalanMiktar(s.miktar, m) });
-          kayitlar.push(satirAdi(s));
+          kayitlar.push(`${satirAdi(s)} · ${miktarMetni(m)}`);
         } catch (h) { hatalar.push(`${satirAdi(s)}: ${hataMetni(h)}`); }
       }
       if (teslim.length > 0) {
         const c = await korumaliPost<SepetTeslimEtCevabi>('/stok/sepet/gonder', {
           satirlar: teslim, kaynakKimligi: kimlik, aliciKodu: kisiHedefiMi(hedef) ? hedef.alici.kod : null,
         } satisfies SepetTeslimEtGovdesi);
-        for (const t of c.teslimler) kayitlar.push(t.teslimNo);
+        for (const t of c.teslimler) {
+          const s = satirlar.find((x) => x.id === t.satirId);
+          kayitlar.push(`${s ? satirAdi(s) : 'Kalem'} · ${t.teslimNo}`);
+          teslimNolari.push(t.teslimNo);
+        }
         for (const k of c.kalanlar) hatalar.push(`${satirAdi(satirlar.find((s) => s.id === k.satirId) ?? satirlar[0]!)}: ${k.neden}`);
       }
-      return { kayitlar, hatalar };
+      return { kayitlar, hatalar, teslimNolari };
     },
-    onSuccess: ({ kayitlar, hatalar }) => {
+    // 3085: sonuç kartı kalıcıdır; hiçbiri yazılamadıysa form açık kalır ve "Yapılmadı" nedeniyle burada görünür.
+    onSuccess: ({ kayitlar, hatalar, teslimNolari }) => {
       setKimlik(yeniIstekKimligi());
       setReddedilen(hatalar);
-      const metin = `${kayitlar.length} kalem ${hedefMetni(hedef)} yerine bırakıldı.`;
-      if (hatalar.length === 0) { bildir('tamam', metin); bitti(metin); } else bildir('hata', `${metin} ${hatalar.length} kalem bırakılamadı.`);
+      if (kayitlar.length === 0) { bildir('hata', 'Bırakılamadı.'); return; }
+      const kisiye = kisiHedefiMi(hedef);
+      // İstasyona bırakılan teslim karşı taraf alana kadar yoldadır; ara alan, depo içi taşıma ve elden teslim hemen yerindedir.
+      const yolda = !kisiye && hedef.tur === 'istasyon' && teslimNolari.length > 0;
+      const baslik = kisiye ? `Elden teslim edildi: ${hedefMetni(hedef)}` : yolda ? `Teslim edildi: ${hedefMetni(hedef)}` : `Bırakıldı: ${hedefMetni(hedef)}`;
+      bildir(hatalar.length === 0 ? 'tamam' : 'hata', baslik);
+      bitti({ ton: yolda ? 'yolda' : 'yapildi', baslik, satirlar: [...kayitlar, ...hatalar.map((h) => `Bırakılamadı: ${h}`)], teslimNolari });
     },
-    onError: (h) => bildir('hata', hataMetni(h)),
+    onError: (h) => { setReddedilen([hataMetni(h)]); bildir('hata', hataMetni(h)); },
     onSettled: () => istemci.invalidateQueries({ queryKey: anahtarlar.hepsi }),
   });
   // Hedef okutulunca form okuyucunun altında açılır; telefonda ekranın dışında kalıp "bir şey olmadı" sanılıyordu.
@@ -155,9 +168,15 @@ export function Birakma({ hedef, satirlar, bitti, vazgec, okutma = null, gonder 
           );
         })}
       </ul>
-      {reddedilen.length > 0 && <p className="tc-stok-bilgi tc-stok-bilgi-uyari" role="alert">{reddedilen.join(' · ')}</p>}
+      {reddedilen.length > 0 && (
+        <section className="tc-stok-sonuc-karti" data-ton="yapilmadi" role="alert" aria-label="İşlem sonucu">
+          <div className="tc-stok-sonuc-bas"><Simge ad="alert" boyut="b" /><div><span className="tc-stok-sonuc-etiket">Yapılmadı</span><strong>Bırakılamadı, stok yerinde</strong></div></div>
+          <ul className="tc-stok-sonuc-satirlar">{reddedilen.map((h) => <li key={h}>{h}</li>)}</ul>
+          <p className="tc-stok-not">Başka yer okutun ya da miktarı düzeltip yeniden deneyin.</p>
+        </section>
+      )}
       <div className="tc-stok-eylem">
-        <Dugme tur="birincil" type="submit" simge="check" yukleniyor={birak.isPending} disabled={secilen.length === 0}>{secilen.length} kalemi bırak</Dugme>
+        <Dugme tur="birincil" type="submit" simge="check" yukleniyor={birak.isPending} disabled={secilen.length === 0}>{secilen.length > 1 && secilen.length === satirlar.length ? `Hepsini buraya bırak (${secilen.length})` : `${secilen.length} kalemi bırak`}</Dugme>
         <Dugme simge="back" onClick={vazgec}>Başka yer okut</Dugme>
       </div>
     </form>

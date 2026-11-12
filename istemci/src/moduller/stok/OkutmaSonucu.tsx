@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import type { KodCozCevabi, OkutCozCevabi, SepetCevabi, Teslim, TeslimCevabi } from '#paylasilan/sozlesme/stok.ts';
 import { Dugme, Rozet, Tablo } from '../../ortak/arayuz/index.ts';
@@ -115,7 +115,11 @@ function KartlaGelenler({ gelenler }: { gelenler: Teslim[] }) {
 }
 
 // `salt` (1912, Bilgi modu): yalnız ne, nerede, ne kadar; iş düğmesi ve teslim alma yok.
-export function OkutmaSonucu({ okunan, sec, kapat, salt = false }: { okunan: Okunan; sec: (e: SonucEylemi) => void; kapat: () => void; salt?: boolean }) {
+// 3085: `ust` okutmadan sonraki akıştır (adım şeridi, "Sepete eklendi", ana eylem); başlığın hemen altına girer ve öteki işler
+// "Diğer işlemler" altına iner. `sepette`: okutulan zaten taşıma sepetinde; "Depo sepetine ekle" gösterilmez (B2).
+export function OkutmaSonucu({ okunan, sec, kapat, salt = false, ust = null, sepette = false }: {
+  okunan: Okunan; sec: (e: SonucEylemi) => void; kapat: () => void; salt?: boolean; ust?: ReactNode; sepette?: boolean;
+}) {
   const c = okunan.cevap;
   // Tam stok çözümü okutma cevabıyla gelir (tek istek); okuyucu onu Mal kabul ve Sevk bölümlerinin önbelleğine de yazar.
   const stokCevabi = c.tur === 'malzeme' || c.tur === 'yer' ? c.stok : undefined;
@@ -135,7 +139,7 @@ export function OkutmaSonucu({ okunan, sec, kapat, salt = false }: { okunan: Oku
   const baslik = malzeme ? malzeme.malzeme.ad ?? malzeme.malzeme.kod ?? `Malzeme #${malzeme.malzeme.id}` : c.tur === 'yer' ? c.yer.ad ?? c.yer.kod : '';
   // Tek kart (614 1a): refakat kartında ana eylem tek düğmedir; öteki işler ve kartın satırları "Başka işlem" altında kalır.
   const anaEylem = refakat ? malzeme?.anaEylem ?? null : null;
-  const tekKart = anaEylem !== null;
+  const tekKart = anaEylem !== null || ust !== null;
   // Lot etiketi tektir ve "kabulde" basılmaz; rafa kalkınca yanlış kalırdı (897 b). Kabul alanındaki miktar okutunca görünür.
   const parti = malzeme?.parti ?? null;
   const kabulde = malzeme && parti ? malzeme.yerler.filter((y) => y.tur === 'kabul' && y.partiId === parti.id) : [];
@@ -149,6 +153,13 @@ export function OkutmaSonucu({ okunan, sec, kapat, salt = false }: { okunan: Oku
           {kabulde.length > 0 && <Rozet ton="uyari">Kabulde</Rozet>}
           <Dugme simge="x" aria-label="Okutma sonucunu kapat" onClick={kapat} />
         </div>
+        {(c.tur === 'malzeme' && (stokCevabi?.tur === 'lot' || stokCevabi?.tur === 'malzeme')) && (
+          <p className="tc-stok-okut-ozet">
+            <span>{stokCevabi.tur === 'lot' ? 'Lotta' : 'Depoda'} <strong>{miktarMetni(stokCevabi.toplam)}</strong></span>
+            {stokCevabi.bakiyeler[0] && <span>· {stokCevabi.bakiyeler.map((b) => b.konumKod).slice(0, 2).join(', ')}{stokCevabi.bakiyeler.length > 2 ? ` +${stokCevabi.bakiyeler.length - 2}` : ''}</span>}
+          </p>
+        )}
+        {!salt && ust}
         {kabulde.length > 0 && (
           <p className="tc-stok-bilgi tc-stok-bilgi-uyari">
             Rafa kaldırılmadı: {kabulde.map((y) => `${y.ad ?? y.kod} ${miktarMetni(y.miktar)}`).join(', ')}.{depocu && stokCevabi ? ' Rafa kaldırmak için depo sepetine ekle.' : ''}
@@ -170,13 +181,13 @@ export function OkutmaSonucu({ okunan, sec, kapat, salt = false }: { okunan: Oku
             {digerleri.map((d) => <li key={d.istasyonId}><span>{d.ad} ({d.kod})</span><strong>{miktarMetni(d.miktar)}</strong></li>)}
           </ul>
         )}
-        {!salt && tekKart && <div className="tc-stok-eylem"><Dugme tur="ikincil" simge="list" aria-expanded={baskaAcik} onClick={() => setBaskaAcik((a) => !a)}>Başka işlem</Dugme></div>}
+        {!salt && tekKart && <div className="tc-stok-eylem"><Dugme tur="ikincil" simge="list" aria-expanded={baskaAcik} onClick={() => setBaskaAcik((a) => !a)}>{ust !== null ? 'Diğer işlemler' : 'Başka işlem'}</Dugme></div>}
         {!salt && (!tekKart || baskaAcik) && <div className="tc-stok-eylem">
           {refakat && anaEylem !== 'isi-ac' && <IsEmriniAc r={refakat} />}
-          {malzeme && giris && <Dugme tur="birincil" simge="download" onClick={() => sec('kabul')}>Mal kabul</Dugme>}
+          {malzeme && giris && <Dugme {...(ust === null ? { tur: 'birincil' as const } : {})} simge="download" onClick={() => sec('kabul')}>Mal kabul</Dugme>}
           {malzeme && sevkeder && <Dugme simge="truck" onClick={() => sec('sevk')}>Sevk</Dugme>}
           {(digerleri.length > 0 || uzakIstasyon) && <Dugme simge="scan" onClick={() => sec('okutarak-al')}>Okutarak al</Dugme>}
-          {depocu && stokCevabi && (stokCevabi.tur === 'malzeme' || stokCevabi.tur === 'lot') && <DepoSepetineEkle key={okunan.kod} c={stokCevabi} />}
+          {depocu && !sepette && stokCevabi && (stokCevabi.tur === 'malzeme' || stokCevabi.tur === 'lot') && <DepoSepetineEkle key={okunan.kod} c={stokCevabi} />}
           {depocu && malzeme?.parti && malzeme.parti.uretimEmriId == null && !refakat && <Dugme simge="tag" onClick={() => setKartAc(true)}>Refakat kartına geç</Dugme>}
           {depocu && refakat && <Dugme simge="tag" onClick={() => setKartAc(true)}>Refakat kartı</Dugme>}
           {okur && malzeme?.parti && <Dugme tur="ikincil" simge="truck" onClick={() => setIzAcik(true)}>Lot izi</Dugme>}

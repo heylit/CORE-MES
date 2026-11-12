@@ -666,3 +666,59 @@ a.tc-stok-kpi:hover, a.tc-stok-kpi:focus-visible { background: var(--panel2); }
     display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; overflow-wrap: anywhere;
   }
 }
+/* 3085: Okut paneli düzeni. Dar ekranda gelen + sepet, okuyucu + okutulan, kutucuklar + Son yaptıklarım alt alta; genişte iki sütun. */
+.tc-stok-okut-duzen { display: grid; gap: var(--b-4); }
+.tc-stok-okut-yan, .tc-stok-okut-ana, .tc-stok-okut-alt { display: grid; gap: var(--b-3); align-content: start; min-inline-size: 0; }
+.tc-stok-okut-yan .tc-stok-sepet-serit { position: static; }
+@media (min-width: 760px) {
+  .tc-stok-okut-duzen { grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); grid-template-areas: "ana yan" "ana alt"; align-items: start; }
+  .tc-stok-okut-duzen:not(:has(.tc-stok-okut-yan)) { grid-template-areas: "ana alt"; }
+  .tc-stok-okut-yan { grid-area: yan; }
+  .tc-stok-okut-ana { grid-area: ana; }
+  .tc-stok-okut-alt { grid-area: alt; }
+}
+.tc-stok-akis-adimlar { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--b-1); margin: 0; padding: 0; list-style: none; font-size: var(--yazi-s); color: var(--muted); }
+.tc-stok-akis-adimlar li { display: flex; align-items: center; justify-content: center; gap: var(--b-1); padding: var(--b-1) var(--b-2); border-block-end: var(--cizgi) solid var(--edge); }
+.tc-stok-akis-adimlar li[data-bitti] { color: var(--ink); border-color: var(--run); }
+.tc-stok-akis-adimlar li[aria-current="step"] { color: var(--ink); border-color: var(--hazard); font-weight: 600; }
+.tc-stok-akis-no { display: inline-grid; place-items: center; inline-size: 1.4em; block-size: 1.4em; border-radius: 50%; border: var(--cizgi-ince) solid currentColor; font-size: var(--yazi-xs); flex: none; }
+.tc-stok-akis { display: grid; gap: var(--b-3); }
+.tc-stok-sepette { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2); margin: 0; }
+.tc-stok-sepette > span { flex: 1 1 10rem; min-inline-size: 0; }
+.tc-stok-ana-eylem { display: grid; gap: var(--b-2); }
+.tc-stok-ana-eylem > button:first-child { min-block-size: var(--dokunma-ana); }
+.tc-stok-okut-ozet { display: flex; flex-wrap: wrap; gap: var(--b-1); margin: 0; font-size: var(--yazi-s); color: var(--muted); }
+.tc-stok-okut-ozet strong { color: var(--ink); }
+.tc-stok-hedef-listesi { display: grid; gap: var(--b-3); padding: var(--b-3); border: var(--cizgi-ince) solid var(--edge2); border-radius: var(--yari-2); background: var(--panel2); }
+.tc-stok-hedef-grup { display: grid; gap: var(--b-1); }
+.tc-stok-hedef-dugmeler { display: flex; flex-wrap: wrap; gap: var(--b-2); }
+.tc-stok-sonuc-karti { display: grid; gap: var(--b-3); padding: var(--b-4); border: var(--cizgi) solid var(--edge2); border-inline-start-width: var(--b-2); border-radius: var(--yari-2); background: var(--panel-solid); }
+.tc-stok-sonuc-karti[data-ton="yapildi"] { border-color: var(--run); background: color-mix(in srgb, var(--run) 10%, var(--panel-solid)); }
+.tc-stok-sonuc-karti[data-ton="yolda"] { border-color: var(--hold); background: color-mix(in srgb, var(--hold) 10%, var(--panel-solid)); }
+.tc-stok-sonuc-karti[data-ton="yapilmadi"] { border-color: var(--stop); background: color-mix(in srgb, var(--stop) 10%, var(--panel-solid)); }
+.tc-stok-sonuc-bas { display: flex; align-items: center; gap: var(--b-3); }
+.tc-stok-sonuc-bas > div { display: grid; gap: var(--b-1); min-inline-size: 0; }
+.tc-stok-sonuc-bas strong { font-size: var(--yazi-l); }
+.tc-stok-sonuc-etiket { font-size: var(--yazi-xs); font-weight: 700; text-transform: uppercase; color: var(--muted); }
+.tc-stok-sonuc-satirlar { margin: 0; padding-inline-start: var(--b-4); display: grid; gap: var(--b-1); font-size: var(--yazi-s); }
+.tc-stok-son-islemler { display: grid; gap: var(--b-2); }
+.tc-stok-son-liste { margin: 0; padding: 0; list-style: none; display: grid; }
+.tc-stok-son-satir { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: var(--b-2); align-items: center; padding-block: var(--b-2); border-block-end: var(--cizgi-ince) solid var(--edge); }
+.tc-stok-son-saat { font-variant-numeric: tabular-nums; color: var(--muted); font-size: var(--yazi-s); }
+.tc-stok-son-ne { display: grid; gap: var(--b-1); min-inline-size: 0; }
+.tc-stok-son-ne > * { overflow-wrap: anywhere; }
+.tc-stok-son-durum { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: var(--b-1); }
+.tc-stok-konum-satiri { display: flex; align-items: center; gap: var(--b-2); margin: 0; }
+.tc-stok-konum-satiri > div { flex: 1; min-inline-size: 0; }
+.tc-stok-sepet-adlar { min-inline-size: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--yazi-s); }
+.tc-stok-okut-yan .tc-stok-sepet-serit-bas { flex-wrap: wrap; }
+/* 3085 Arayüz K1: telefonda okutmadan sonra okutulan kart ve ana düğme ilk ekranda kalsın: mod çipleri tek satırda kayar,
+   ortak okuyucunun "Son okutmalar" listesi kapanır (son okutma kartta), kartın kapat düğmesi başlık satırına oturur (ortak parçaya dokunmadan). */
+@media (max-width: 767px) {
+  .tc-stok-mod-cipler { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+  .tc-stok-mod-cip { flex: none; }
+  .tc-stok-akis-adimlar li { padding-inline: 0; }
+  .tc-stok-okuyucu-kutusu[data-okuttu] .tc-kod-okuyucu-serit ol { display: none; }
+  .tc-stok-okut-sonuc-bas { position: relative; padding-inline-end: var(--dokunma-ana); }
+  .tc-stok-okut-sonuc-bas > button:last-child { position: absolute; inset-block-start: 0; inset-inline-end: 0; }
+}

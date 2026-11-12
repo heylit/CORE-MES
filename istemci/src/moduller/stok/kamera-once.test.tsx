@@ -42,7 +42,7 @@ function ciz(yollar: Record<string, (govde: unknown) => Response> = {}) {
 }
 
 describe('Malzeme · Teslim kamera önce (809)', () => {
-  it('açılınca kamera kendiliğinden istenir; sekme şeridi yok, kutucuklar sayıyla, istasyon başlıkta', async () => {
+  it('açılınca kamera kendiliğinden istenir; sekme şeridi yok, kutucuklar sayıyla, konum kutucukların üstünde', async () => {
     const getUserMedia = vi.fn(() => Promise.reject(new Error('izin yok')));
     vi.stubGlobal('navigator', { ...navigator, mediaDevices: { getUserMedia } });
     ciz({ 'GET /stok/teslim-kutusu/sepet/gelecek': () => json(200, { satirlar: [] }) });
@@ -52,7 +52,8 @@ describe('Malzeme · Teslim kamera önce (809)', () => {
     expect(within(panel).queryByRole('tablist')).toBeNull();
     expect(await within(panel).findByRole('button', { name: 'Bana gelen, 1' })).toBeTruthy();
     expect(await within(panel).findByRole('button', { name: 'Elimdekiler, 1' })).toBeTruthy();
-    expect(within(panel).getByText('Freze 2 istasyonundasın')).toBeTruthy();
+    // 3085 (B7): konum kutucukların üstünde tek satır.
+    expect(panel.querySelector('.tc-stok-konum-satiri')?.textContent).toContain('Konum: Freze 2');
     expect(within(panel).getByRole('button', { name: 'Malzeme iste' })).toBeTruthy();
     expect(within(panel).queryByRole('button', { name: /^Benden istenenler/ })).toBeNull();
   });

@@ -17,7 +17,7 @@ import {
   istasyonSepetiCevabi, istasyonSepetiSorgusu, istasyonSepetleriCevabi, istasyonSepetleriSorgusu, gelecekSepetCevabi, isMalzemeleriCevabi, isMalzemesiIsteGovdesi, sepettenCekGovdesi, uretimHazirligiCevabi, uretimHazirligiGovdesi, istekAcGovdesi, istekMalzemeleriCevabi, istekMalzemeSorgusu, teslimAlGovdesi, teslimCevabi, teslimGonderGovdesi, teslimKutusuCevabi, teslimReddetGovdesi, yerdekiStokCevabi, yerdekiStokSorgusu,
   istekKabulGovdesi, istekReddetGovdesi, malzemeYerleriSorgusu, malzemeYerleriCevabi, okutarakAlSorgusu, okutarakAlCevabi, okutarakAlGovdesi, itirazGovdesi,
 } from '#paylasilan/sozlesme/stok.ts';
-import { depoCikisCevabi, depoSevkCevabi } from '#paylasilan/sozlesme/stok.ts';
+import { depoCikisCevabi, depoSevkCevabi, sonIslemlerimCevabi } from '#paylasilan/sozlesme/stok.ts';
 import { seriAdetGovdesi, seriEkleGovdesi, seriIslendiGovdesi, seriListeCevabi, seriListelerCevabi, seriListeParametresi, seriSatirParametresi } from '#paylasilan/sozlesme/stok.ts';
 import { lotBekleyenKartlarCevabi, refakatIziCevabi, refakatKartlariCevabi, refakatKartlariSorgusu, refakatKolAcGovdesi, refakatLotaBaglaCevabi, refakatLotaBaglaGovdesi, refakatPartileriCevabi, refakatPartisiAcGovdesi, refakatPartisiCevabi, refakatPartisiKartiCevabi, refakatKartSatirlariCevabi, kartlaAlGovdesi, sepetTeslimEtGovdesi, sepetTeslimEtCevabi } from '#paylasilan/sozlesme/stok.ts';
 import { statulerCevabi } from '#paylasilan/sozlesme/recete-rota.ts';
@@ -194,6 +194,8 @@ export const uclar = [
   uc({ yontem: 'POST', yol: '/stok/malzeme-istekleri/:id/iptal-et', yetki: 'stok.transfer', parametre: kimlikParametresi, govde: surumGovdesi, cevap: malzemeIstegiCevabi, isle: ({ db, kullanici, parametre, govde }) => s.malzemeIstegiGecir(db, kullanici, parametre.id, 'iptal', govde) }),
   // Malzeme · Teslim (kart #1208): bütün sayfaların üst çubuğundan; okuma yalnız kişinin kendi kutusu ve istek seçicisidir.
   uc({ yontem: 'GET', yol: '/stok/teslim-kutusu', yetki: 'stok.istek', cevap: teslimKutusuCevabi, isle: ({ db, kullanici }) => s.teslimKutusu(db, kullanici) }),
+  // 3085: Okut panelinin "Son yaptıklarım"ı; yalnız kişinin kendi bugünkü teslim ve taşımaları.
+  uc({ yontem: 'GET', yol: '/stok/teslim-kutusu/son-islemlerim', yetki: 'stok.istek', cevap: sonIslemlerimCevabi, isle: ({ db, kullanici }) => s.sonIslemlerim(db, kullanici) }),
   uc({ yontem: 'GET', yol: '/stok/teslim-kutusu/sayac', yetki: 'stok.istek', cevap: z.object({ gelen: z.number().int() }), isle: async ({ db, kullanici }) => ({ gelen: await s.gelenTeslimSayisi(db, kullanici) }) }),
   uc({ yontem: 'GET', yol: '/stok/teslim-kutusu/yerdeki-stok', yetki: 'stok.istek', sorgu: yerdekiStokSorgusu, cevap: yerdekiStokCevabi, isle: ({ db, kullanici, sorgu }) => s.yerdekiStok(db, kullanici, sorgu.istasyonId !== undefined ? { istasyonId: sorgu.istasyonId } : { konumId: sorgu.konumId! }) }),
   uc({ yontem: 'GET', yol: '/stok/teslim-kutusu/kod-coz', yetki: 'stok.istek', sorgu: kodCozSorgusu, cevap: okutCozCevabi, isle: ({ db, kullanici, sorgu }) => s.okutCoz(db, kullanici, sorgu.kod) }),
