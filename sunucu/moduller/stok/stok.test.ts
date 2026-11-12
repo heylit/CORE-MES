@@ -231,6 +231,8 @@ describe('stok (gerçek PostgreSQL)', () => {
     assert.deepEqual(yeni.govde.koduDegisenler.map((d) => [d.eskiKod, d.yeniKod, d.tur, d.bolmeNo, d.katNo]), [
       ['A-01-01', 'AB-01-01', 'raf_gozu', 1, 1], ['A-01-02', 'AB-01-02', 'raf_gozu', 1, 2], ['A-02-01', 'AB-02-01', 'raf_gozu', 2, 1], ['A-02-02', 'AB-02-02', 'raf_gozu', 2, 2],
     ]);
+    // 3135 a: stoklu göz cevapta satır sayısıyla gelir; pencere "stok yerinde kalır" der.
+    assert.deepEqual(yeni.govde.koduDegisenler.map((d) => [d.yeniKod, d.satirSayisi]), [['AB-01-01', 0], ['AB-01-02', 0], ['AB-02-01', 0], ['AB-02-02', 1]]);
     const ayni = await mudur<KonumAyrintiCevabi>('GET', `/stok/konumlar/${goz.konumId}`);
     assert.equal(ayni.govde.konum.kod, 'AB-02-02');
     assert.equal(ayni.govde.bakiyeler[0]?.miktar, '5.000');
@@ -595,7 +597,7 @@ describe('stok (gerçek PostgreSQL)', () => {
     assert.equal(c.durum, 200, JSON.stringify(c.govde));
     const d = await mudur<KonumDuzenleCevabi>('POST', `/stok/konumlar/${c.govde.konum.id}/duzenle`, { surum: c.govde.konum.surum, kod: 'ARA-K2', ad: 'Bekleme' });
     assert.equal(d.durum, 200, JSON.stringify(d.govde));
-    assert.deepEqual(d.govde.koduDegisenler, [{ konumId: c.govde.konum.id, eskiKod: 'ARA-K1', yeniKod: 'ARA-K2', tur: 'ara_alan', ad: 'Bekleme', bolmeNo: null, katNo: null }]);
+    assert.deepEqual(d.govde.koduDegisenler, [{ konumId: c.govde.konum.id, eskiKod: 'ARA-K1', yeniKod: 'ARA-K2', tur: 'ara_alan', ad: 'Bekleme', bolmeNo: null, katNo: null, satirSayisi: 0 }]);
   });
 
   test('DEP-20/10/49 mal kabul: hammadde her girişte lot alır, aynı döküm no ikinci gelişte ayrı lottur, kullanılamaz kart reddedilir, demirbaş parti almaz', async () => {
@@ -2514,9 +2516,10 @@ describe('stok (gerçek PostgreSQL)', () => {
     await vt.sorgu("UPDATE atolye_raf SET kod = 'H2' WHERE id = $1", [raf!.id]);
     await vt.sorgu('DELETE FROM atolye_goz WHERE raf_id = $1 AND bolme = 2', [raf!.id]);
     // 94 a: raf kodu haritada değişince açık kalan gözün eski etiketi okunmaz; eşleme yeniden basılacakları döner.
+    // 3135 a: stok satırı sayısı da gelir (göz stoklu); stok yerinde kalır.
     assert.deepEqual((await mudur('POST', '/stok/konumlar/haritadan-esle')).govde, {
       eklenen: 0, guncellenen: 1, kapatilan: 1, atlanan: [],
-      koduDegisenler: [{ konumId: ilkGoz!.id, eskiKod: 'H1-01-1-1', yeniKod: 'H2-01-1-1', tur: 'raf_gozu', ad: null, bolmeNo: 1, katNo: 1 }],
+      koduDegisenler: [{ konumId: ilkGoz!.id, eskiKod: 'H1-01-1-1', yeniKod: 'H2-01-1-1', tur: 'raf_gozu', ad: null, bolmeNo: 1, katNo: 1, satirSayisi: 1 }],
     });
     assert.deepEqual((await konumlar()).map((k) => [k.kod, k.aktif]), [[`ALAN-${kabul!.id}`, true], ['H1-02-1-1', false], ['H2-01-1-1', true]]);
 

@@ -4,7 +4,7 @@ import type { AramaCevabi, AramaSonucu, YerlesimCevabi } from '#paylasilan/sozle
 import {
   Dugme, DurumKutusu, Girdi, Kart, KuyrukKarti, KuyrukListesi, Rozet, Secim, Simge, useBildirim,
 } from '../../ortak/arayuz/index.ts';
-import type { MakineDurumu } from '../../ortak/arayuz/index.ts';
+import { KodDegisimPenceresi, type KoduDegisenYer, type MakineDurumu } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { performansOku } from '../../ortak/veri/gorunum.ts';
 import { useOturum } from '../../ortak/veri/oturum.ts';
@@ -143,6 +143,8 @@ export function AtolyeHaritasi() {
   const [yuruyus, yuruyusYaz] = useState(false);
   const [rota, rotaYaz] = useState<{ salonId: number; noktalar: { x: number; z: number }[] } | null>(null);
   const [duzenleyici, duzenleyiciYaz] = useState(false);
+  // 3135 a: kayıttan sonra kodu değişen stok konumu varsa etiket penceresi açılır (düzenleyici kapanmış olur).
+  const [koduDegisenler, koduDegisenlerYaz] = useState<KoduDegisenYer[]>([]);
   const [salonPenceresi, salonPenceresiYaz] = useState(false);
   const [arama, aramaYaz] = useState('');
   const [aramaAcik, aramaAcikYaz] = useState(false);
@@ -711,8 +713,12 @@ export function AtolyeHaritasi() {
           salonId={salonId}
           bolumler={tumBolumler}
           kapat={() => duzenleyiciYaz(false)}
-          kaydedildi={() => { duzenleyiciYaz(false); seciliYaz(null); rotaYaz(null); }}
+          kaydedildi={(d) => { duzenleyiciYaz(false); seciliYaz(null); rotaYaz(null); koduDegisenlerYaz(d); }}
         />
+      )}
+      {koduDegisenler.length > 0 && (
+        <KodDegisimPenceresi degisenler={koduDegisenler} kapat={() => koduDegisenlerYaz([])}
+          etiketMerkezi={oturum.data?.islemler.includes('sayfa.etiket-merkezi') === true} />
       )}
       {salonEklendi}
     </Kart>

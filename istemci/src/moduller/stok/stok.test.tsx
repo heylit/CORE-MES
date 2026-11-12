@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
+import type { Islem } from '#paylasilan/islemler.ts';
 import type {
   AcikSiparisSatirlariCevabi, FasonIsleriCevabi, PartiIziCevabi, SonPartilerCevabi, BakiyeSatiri, EmirTamamlamaCevabi, KonumAyrintiCevabi, MalKabulAyrintiCevabi, HareketlerCevabi, IsKutusuCevabi, KonumlarCevabi, MalKabullerCevabi, MalzemeAyrintiCevabi, MalzemelerCevabi, MalzemeOzetiCevabi, MalzemeStokSatiri, PanelCevabi, StokDegeriCevabi, RafMatrisiCevabi, RaflarCevabi, ZeminCevabi,
 } from '#paylasilan/sozlesme/stok.ts';
@@ -1022,6 +1023,47 @@ describe('Depo', () => {
     expect(govde.raflar).toHaveLength(2);
     expect(istekler.some((i) => i.yontem === 'POST' && i.yol.startsWith('/atolye/'))).toBe(false);
   });
+  // 3135 a: Depo'dan raf kaydından sonra eşleme kodu değişen konumları döner; pencere hemen açılır, stoklu göz ayrıca söylenir.
+  async function depoRafiKaydet(islemler: Islem[], esleme: () => Response) {
+    const istekler = sunucuKur({ ...MUDUR, islemler: [...MUDUR.islemler, 'sayfa.atolye', ...islemler] }, {
+      ...haritaYollari(),
+      'POST /stok/depo-bolumleri/2/raflari-kaydet': () => json(200, { ...FABRIKA.bolumler[1], uyarilar: [] }),
+      'POST /stok/konumlar/haritadan-esle': esleme,
+    });
+    ac('/stok/depo');
+    fireEvent.click(await screen.findByRole('button', { name: 'Raf ekle ve düzenle' }));
+    const pencere = await screen.findByRole('dialog', { name: 'Yerleşimi düzenle' });
+    fireEvent.click(within(pencere).getByRole('button', { name: 'Ekle' }));
+    fireEvent.click(within(within(pencere).getByRole('complementary', { name: 'Öğe ekle' })).getByRole('button', { name: /Konsol raf/ }));
+    fireEvent.click(within(pencere).getByRole('button', { name: 'Kaydet' }));
+    await waitFor(() => expect(istekler.some((i) => i.yol === '/stok/konumlar/haritadan-esle')).toBe(true));
+    return istekler;
+  }
+  const degisen = (konumId: number, satirSayisi: number) =>
+    ({ konumId, eskiKod: `ORN-R1-01-1-${konumId}`, yeniKod: `ORN-R5-01-1-${konumId}`, tur: 'raf_gozu', ad: null, bolmeNo: 1, katNo: 1, satirSayisi });
+  it('3135 a Depo raf kaydından sonra kodu değişen konum varsa pencere açılır; Etiket Merkezi olan basar', async () => {
+    await depoRafiKaydet(['sayfa.etiket-merkezi'], () => json(200, { eklenen: 0, guncellenen: 2, kapatilan: 0, atlanan: [], koduDegisenler: [degisen(7, 3), degisen(8, 0)] }));
+    const p = await screen.findByRole('dialog', { name: 'Konum kodu değişti' });
+    expect(within(p).getByText(/2 konumun kodu değişti; eski etiketler artık okunmaz/)).toBeTruthy();
+    expect(within(p).getByText(/Bunlardan 1 konumda stok var; stok yerinde kalır, yalnız etiket değişir/)).toBeTruthy();
+    expect(within(p).getAllByLabelText('Stoklu')).toHaveLength(1);
+    expect(within(p).getByRole('link', { name: /Etiketleri bas/ }).getAttribute('href')).toBe('/etiket-merkezi?tur=konum&id=7,8');
+  });
+  it('3135 a Depo raf kaydında kod değişmediyse pencere açılmaz; Etiket Merkezi olmayan listeyi kopyalar', async () => {
+    await depoRafiKaydet([], () => json(200, { eklenen: 0, guncellenen: 0, kapatilan: 0, atlanan: [], koduDegisenler: [] }));
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Yerleşimi düzenle' })).toBeNull());
+    expect(screen.queryByRole('dialog', { name: 'Konum kodu değişti' })).toBeNull();
+    cleanup();
+    await depoRafiKaydet([], () => json(200, { eklenen: 0, guncellenen: 1, kapatilan: 0, atlanan: [], koduDegisenler: [degisen(7, 0)] }));
+    const p = await screen.findByRole('dialog', { name: 'Konum kodu değişti' });
+    expect(within(p).queryByRole('link', { name: /Etiketleri bas/ })).toBeNull();
+    expect(within(p).getByRole('button', { name: 'Listeyi kopyala' })).toBeTruthy();
+    expect(within(p).queryByText(/konumda stok var/)).toBeNull();
+  });
+  it('3135 a Depo raf kaydından sonra eşleme düşerse hata söylenir', async () => {
+    await depoRafiKaydet([], () => json(500, { kod: 'SUNUCU', mesaj: 'hata' }));
+    expect(await screen.findByText(/Stok konumları eşlenemedi; Stok > Ayarlar'da "Haritadan eşle" ile yeniden deneyin/)).toBeTruthy();
+  });
   it('depo bölümü yoksa söyler ve tanım yetkilisini Ayarlar\'a gönderir', async () => {
     sunucuKur(MUDUR, { 'GET /stok/harita-ozeti': () => json(200, HARITA_OZETI(false)) });
     ac('/stok/depo');
@@ -1069,6 +1111,7 @@ describe('Fabrika Haritası bağı (#686)', () => {
     expect(await screen.findByText(/Eşlenemeyen yer: A1-01-1-1/)).toBeTruthy();
     expect(istekler.filter((i) => i.yontem === 'POST' && i.yol === '/stok/konumlar/haritadan-esle')).toHaveLength(1);
     expect(screen.queryByText(/kodu değişti/)).toBeNull();
+    expect(await screen.findByText('Kodu değişen konum yok.')).toBeTruthy();
     cleanup();
     sunucuKur(MUDUR, { 'GET /stok/raflar': () => json(200, { satirlar: [], toplam: 0, sayfa: 1, sayfaBoyu: 200 }) });
     ac('/stok/raflar');
@@ -1079,7 +1122,7 @@ describe('Fabrika Haritası bağı (#686)', () => {
       'GET /stok/yerlesim': () => json(200, YERLESIM),
       'GET /stok/konumlar': () => json(200, { satirlar: [], toplam: 0, sayfa: 1, sayfaBoyu: 200 }),
       'POST /stok/konumlar/haritadan-esle': () => json(200, { eklenen: 0, guncellenen: 1, kapatilan: 0, atlanan: [],
-        koduDegisenler: [{ konumId: 7, eskiKod: 'H1-01-1-1', yeniKod: 'H2-01-1-1', tur: 'raf_gozu', ad: null, bolmeNo: 1, katNo: 1 }] }),
+        koduDegisenler: [{ konumId: 7, eskiKod: 'H1-01-1-1', yeniKod: 'H2-01-1-1', tur: 'raf_gozu', ad: null, bolmeNo: 1, katNo: 1, satirSayisi: 0 }] }),
     });
     ac('/stok/konumlar');
     fireEvent.click(await screen.findByRole('button', { name: /Haritadan eşle/ }));
@@ -1093,8 +1136,8 @@ describe('Fabrika Haritası bağı (#686)', () => {
       'GET /stok/yerlesim': () => json(200, YERLESIM),
       'GET /stok/konumlar': () => json(200, { satirlar: [], toplam: 0, sayfa: 1, sayfaBoyu: 200 }),
       'POST /stok/konumlar/haritadan-esle': () => json(200, { eklenen: 0, guncellenen: 2, kapatilan: 0, atlanan: [], koduDegisenler: [
-        { konumId: 7, eskiKod: 'H1-01-1-1', yeniKod: 'H2-01-1-1', tur: 'raf_gozu', ad: null, bolmeNo: 1, katNo: 1 },
-        { konumId: 8, eskiKod: 'H1-02-1-1', yeniKod: 'H2-02-1-1', tur: 'raf_gozu', ad: null, bolmeNo: 2, katNo: 1 },
+        { konumId: 7, eskiKod: 'H1-01-1-1', yeniKod: 'H2-01-1-1', tur: 'raf_gozu', ad: null, bolmeNo: 1, katNo: 1, satirSayisi: 0 },
+        { konumId: 8, eskiKod: 'H1-02-1-1', yeniKod: 'H2-02-1-1', tur: 'raf_gozu', ad: null, bolmeNo: 2, katNo: 1, satirSayisi: 0 },
       ] }),
     });
     ac('/stok/konumlar');

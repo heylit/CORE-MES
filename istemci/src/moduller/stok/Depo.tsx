@@ -1,13 +1,14 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import type { GozKalemi, KayitCevabi } from '#paylasilan/sozlesme/atolye.ts';
-import type { DepoRaflariGovdesi, HaritaEslemeCevabi, HaritaOzetiCevabi } from '#paylasilan/sozlesme/stok.ts';
-import { Dugme, DurumKutusu } from '../../ortak/arayuz/index.ts';
+import type { DepoRaflariGovdesi, HaritaEslemeCevabi, HaritaOzetiCevabi, KoduDegisenKonum } from '#paylasilan/sozlesme/stok.ts';
+import { Dugme, DurumKutusu, useBildirim } from '../../ortak/arayuz/index.ts';
 import { api } from '../../ortak/veri/api.ts';
 import { DepoPaneli } from '../atolye/disari.ts';
 import type { DepoYazimi } from '../atolye/disari.ts';
 import { anahtarlar } from './anahtarlar.ts';
+import { KodDegisimPenceresi } from './Etiketler.tsx';
 import { SayfaBasi, hataMetni, useIslem } from './ortak.tsx';
 import './stok.css';
 
@@ -16,18 +17,24 @@ import './stok.css';
 export function Depo() {
   const tanimlar = useIslem('stok.tanim');
   const istemci = useQueryClient();
+  const { bildir } = useBildirim();
+  // 3135 a: kayıttan sonraki eşleme kodu değişen konumları döner; eski etiket okunmaz, pencere yeniden basmayı önerir.
+  const [degisenler, setDegisenler] = useState<KoduDegisenKonum[]>([]);
   // Harita yetkisi olmayan tanım yetkilisi yalnız depo bölümünün rafını ve göz kalemini stok uçlarıyla yazar (DEP-61). Raf
   // kaydından sonra yeni gözler stok konumu olur (eşleme), stok ekranları tazelenir.
   const depoYazimi = useMemo<DepoYazimi | null>(() => (tanimlar ? {
     rafKaydet: async (salonId: number, govde: DepoRaflariGovdesi) => {
       const c = await api.post<KayitCevabi>(`/stok/depo-bolumleri/${salonId}/raflari-kaydet`, govde);
-      await api.post<HaritaEslemeCevabi>('/stok/konumlar/haritadan-esle', {}).catch(() => undefined);
+      await api.post<HaritaEslemeCevabi>('/stok/konumlar/haritadan-esle', {}).then(
+        (e) => { if (e.koduDegisenler.length > 0) setDegisenler(e.koduDegisenler); },
+        () => { bildir('hata', 'Stok konumları eşlenemedi; Stok > Ayarlar\'da "Haritadan eşle" ile yeniden deneyin.'); },
+      );
       void istemci.invalidateQueries({ queryKey: anahtarlar.hepsi });
       return c;
     },
     kalemYaz: (govde) => api.post<GozKalemi>('/stok/depo-goz-kalemleri/yaz', govde),
     kalemSil: async (id) => { await api.post<undefined>('/stok/depo-goz-kalemleri/sil', { id }); },
-  } : null), [tanimlar, istemci]);
+  } : null), [tanimlar, istemci, bildir]);
   const o = useQuery({ queryKey: [...anahtarlar.hepsi, 'harita-ozeti'], queryFn: () => api.get<HaritaOzetiCevabi>('/stok/harita-ozeti') });
   const salonIdler = useMemo(() => o.data?.bolumler.filter((b) => b.depoKod !== null).map((b) => b.salonId), [o.data]);
   return (
@@ -42,6 +49,7 @@ export function Depo() {
         </>
       )}
       {salonIdler && salonIdler.length > 0 && <DepoPaneli salonIdler={salonIdler} depoYazimi={depoYazimi} />}
+      {degisenler.length > 0 && <KodDegisimPenceresi degisenler={degisenler} kapat={() => setDegisenler([])} />}
     </section>
   );
 }

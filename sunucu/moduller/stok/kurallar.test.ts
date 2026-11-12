@@ -18,9 +18,9 @@ import {
 
 describe('stok kuralları (saf)', () => {
   test('94 a koduDegisenler: yalnız kodu değişip açık kalan konum yeniden basılır', () => {
-    const k = (id: number, kod: string, aktif = true) => ({ id, kod, tur: 'raf_gozu' as const, ad: null, bolmeNo: 1, katNo: id, aktif });
-    assert.deepEqual(koduDegisenler([k(1, 'A-01-01'), k(2, 'A-01-02'), k(3, 'A-01-03'), k(4, 'X-01')], [k(1, 'B-01-01'), k(2, 'B-01-02', false), k(3, 'A-01-03'), k(5, 'Y-01')]),
-      [{ konumId: 1, eskiKod: 'A-01-01', yeniKod: 'B-01-01', tur: 'raf_gozu', ad: null, bolmeNo: 1, katNo: 1 }]);
+    const k = (id: number, kod: string, aktif = true, satirSayisi = 0) => ({ id, kod, tur: 'raf_gozu' as const, ad: null, bolmeNo: 1, katNo: id, aktif, satirSayisi });
+    assert.deepEqual(koduDegisenler([k(1, 'A-01-01'), k(2, 'A-01-02'), k(3, 'A-01-03'), k(4, 'X-01')], [k(1, 'B-01-01', true, 2), k(2, 'B-01-02', false), k(3, 'A-01-03'), k(5, 'Y-01')]),
+      [{ konumId: 1, eskiKod: 'A-01-01', yeniKod: 'B-01-01', tur: 'raf_gozu', ad: null, bolmeNo: 1, katNo: 1, satirSayisi: 2 }]);
   });
   test('STK-H1 açık hazırlık listesindeki istek tek başına teslim edilmez; liste kapanınca engel kalkar', () => {
     assert.equal(istekListeEngeli({ toplamaNo: null, toplamaDurumu: null }), null);

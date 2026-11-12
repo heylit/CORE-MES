@@ -1230,13 +1230,13 @@ export const fasonGonderimiEksikMi = (beklenen: bigint, tasinan: bigint): boolea
 // 94 a: eski etiketin QR'ı eski kodu taşır; kodu değişip açık kalan konum yeniden basılır, kapanan konuma etiket gerekmez.
 export function koduDegisenler(
   onceki: readonly { id: number; kod: string }[],
-  sonraki: readonly { id: number; kod: string; tur: KonumTuru; ad: string | null; bolmeNo: number | null; katNo: number | null; aktif: boolean }[],
+  sonraki: readonly { id: number; kod: string; tur: KonumTuru; ad: string | null; bolmeNo: number | null; katNo: number | null; aktif: boolean; satirSayisi: number }[],
 ): KoduDegisenKonum[] {
   const eski = new Map(onceki.map((k) => [k.id, k.kod]));
   return sonraki.flatMap((k) => {
     const eskiKod = eski.get(k.id);
     return eskiKod === undefined || eskiKod === k.kod || !k.aktif ? []
-      : [{ konumId: k.id, eskiKod, yeniKod: k.kod, tur: k.tur, ad: k.ad, bolmeNo: k.bolmeNo, katNo: k.katNo }];
+      : [{ konumId: k.id, eskiKod, yeniKod: k.kod, tur: k.tur, ad: k.ad, bolmeNo: k.bolmeNo, katNo: k.katNo, satirSayisi: k.satirSayisi }];
   }).sort((a, b) => a.yeniKod.localeCompare(b.yeniKod, 'tr'));
 }
 

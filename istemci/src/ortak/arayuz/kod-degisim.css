@@ -1,0 +1,7 @@
+.tc-kod-degisim { display: grid; gap: var(--b-4); }
+.tc-kod-degisim-bilgi { margin: 0; padding: var(--b-2) var(--b-3); border-radius: var(--yari-1); background: var(--panel2); font-size: var(--yazi-s); display: flex; gap: var(--b-2); align-items: center; }
+.tc-kod-degisim-uyari { background: color-mix(in srgb, var(--hold) 16%, var(--panel-solid)); }
+.tc-kod-degisim-not { color: var(--muted); font-size: var(--yazi-s); margin: 0; }
+.tc-kod-degisim-liste { margin: 0; padding-left: var(--b-5); display: grid; gap: var(--b-2); color: var(--muted); }
+.tc-kod-degisim-satir { display: inline-flex; flex-wrap: wrap; gap: var(--b-1); align-items: center; }
+.tc-kod-degisim-dugmeler { display: flex; flex-wrap: wrap; gap: var(--b-2); }

@@ -1,20 +1,16 @@
 import { useState, type ReactNode } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import type { KoduDegisenKonum } from '#paylasilan/sozlesme/stok.ts';
-import { Dugme, Pencere, useBildirim } from '../../ortak/arayuz/index.ts';
+import { ETIKET_MERKEZI_SINIRI, etiketMerkeziAdresi, type EtiketKaynagi } from '#paylasilan/etiket-sabitleri.ts';
+import { Dugme, KodDegisimPenceresi as OrtakKodDegisimPenceresi, useBildirim } from '../../ortak/arayuz/index.ts';
 import { useDogrudanBasim } from '../etiket-merkezi/disari.ts';
 import { hataMetni, useIslem } from './ortak.tsx';
 import './stok.css';
 
 // 1288 (teyitli): stoktaki etiketler yalnız Etiket Merkezi'nden basılır; her baskı oranın defterine yazılır. Stok ekranı seçili
 // kayıtları adresle gönderir; Etiket Merkezi'ni açamayan kullanıcı düğmeyi görmez.
-export type EtiketKaynagi = 'konum' | 'lot' | 'mal-kabul' | 'malzeme';
-
-// Etiket Merkezi adresi en çok bu kadar kimlik kabul eder (sözleşmedeki EN_COK_KAYIT).
-export const MERKEZ_SINIRI = 200;
-
-export const etiketMerkeziAdresi = (tur: EtiketKaynagi, idler: readonly number[]): string =>
-  `/etiket-merkezi?tur=${tur}&id=${[...new Set(idler)].slice(0, MERKEZ_SINIRI).join(',')}`;
+export { etiketMerkeziAdresi, type EtiketKaynagi };
+export const MERKEZ_SINIRI = ETIKET_MERKEZI_SINIRI;
 
 export const useEtiketMerkezi = (): boolean => useIslem('sayfa.etiket-merkezi');
 
@@ -61,17 +57,11 @@ export function EtiketMerkeziDugmesi({ tur, idler, children, simge = 'tag', turs
   );
 }
 
-// 94 a: eski etiketin QR'ı eski kodu taşır ve artık okunmaz; kayıttan sonra kodu değişen konumların etiketi yeniden basılır.
+// 94 a, 3135 a: pencere ortaktır (atölye de açar); stokta tek parçalı basma varsayılan yazıcıya doğrudan basar.
 export function KodDegisimPenceresi({ degisenler, kapat }: { degisenler: KoduDegisenKonum[]; kapat: () => void }) {
   const merkez = useEtiketMerkezi();
   return (
-    <Pencere acik kapat={kapat} baslik="Konum kodu değişti" tur="yan"
-      alt={<EtiketMerkeziDugmesi tur="konum" tursu="birincil" idler={degisenler.map((d) => d.konumId)}>Etiketleri bas</EtiketMerkeziDugmesi>}>
-      <p className="tc-stok-bilgi tc-stok-bilgi-uyari" role="status">{degisenler.length} konumun kodu değişti; eski etiketler artık okunmaz. Yeniden basın.</p>
-      {!merkez && <p className="tc-stok-not">Etiketler Etiket Merkezi'nden basılır; o sayfayı açabilen birine bastırın.</p>}
-      {merkez && degisenler.length > MERKEZ_SINIRI && <p className="tc-stok-not">Etiket Merkezi ilk {MERKEZ_SINIRI} konumu açar; kalanları sonra basın.</p>}
-      <ul className="tc-stok-liste">{degisenler.slice(0, 60).map((d) => <li key={d.konumId}>{d.eskiKod} → <strong>{d.yeniKod}</strong></li>)}</ul>
-      {degisenler.length > 60 && <p className="tc-stok-not">ve {degisenler.length - 60} konum daha.</p>}
-    </Pencere>
+    <OrtakKodDegisimPenceresi degisenler={degisenler} kapat={kapat} etiketMerkezi={merkez}
+      basDugmesi={(idler) => <EtiketMerkeziDugmesi tur="konum" tursu="birincil" idler={idler}>Etiketleri bas</EtiketMerkeziDugmesi>} />
   );
 }

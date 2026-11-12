@@ -12,7 +12,7 @@ interface Ozellikler {
 const ONAY_MS = 1500;
 
 // Pano yazma izni yalnız güvenli bağlamdadır (https ya da localhost); kurum içi http sunucuda eski yol denenir.
-async function panoyaYaz(metin: string): Promise<boolean> {
+export async function panoyaYaz(metin: string): Promise<boolean> {
   try {
     if (window.isSecureContext && navigator.clipboard) {
       await navigator.clipboard.writeText(metin);
