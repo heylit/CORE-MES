@@ -18,7 +18,7 @@ import { haritaOzeti, anaDepo } from './depo.ts';
 import { fasonYariParcasi } from './dis-akis.ts';
 import { malKabullerinIrsaliyeleri } from './irsaliye.ts';
 import { emirNoDe, emirNoHaritasi, hareketleriCevir } from './ortak.ts';
-import { kapsamOku, istasyonKapsamiIdleri } from './teslim.ts';
+import { istekIstasyonlari } from './teslim.ts';
 import { type TamamlamaOnbellegi, onbellekliOzetler, kalanIhtiyacPlani, adimBilgisi } from './uretim.ts';
 
 // ---- İş kutusu ve menü sayaçları ------------------------------------------------------------------------------------
@@ -33,7 +33,7 @@ export async function isKutusu(db: Db, islemler: readonly string[], kisiId: numb
     fasonEksikGonderimi: await fasonEksikGonderimSayisi(db),
     // Akış A provası D1: teslimi bekleyen istek depo işidir; yolda teslimi olan istek bekleyen sayılmaz.
     teslimBekleyenIstek: islemler.includes('stok.transfer')
-      ? await sorgular.teslimBekleyenIstekSayisi(db, await istasyonKapsamiIdleri(db, await kapsamOku(db, kisiId))) : null,
+      ? await sorgular.teslimBekleyenIstekSayisi(db, await istekIstasyonlari(db, { id: kisiId, islemler })) : null,
     depoyaGelenTeslim: islemler.includes('stok.transfer') ? await sorgular.depoyaGelenTeslimSayisi(db) : null,
     defterFarki: islemler.includes('stok.eksi-onayla') ? (await sorgular.sonDefterKarsilastirmasi(db))?.farkSayisi ?? null : null,
   };
@@ -116,7 +116,7 @@ async function eksikEmirSayisi(db: Db): Promise<number> {
 // Sayaç ucu: madde anahtarı -> sayı. Yetkisi olmayan maddenin sayısı null (kabuk göstermez); sayılamayan madde null.
 export async function menuSayaclari(db: Db, islemler: readonly string[], kisiId: number): Promise<IkinciMenuSayaclari> {
   const k = await isKutusu(db, islemler, kisiId);
-  const kapsamliIstasyonlar = await istasyonKapsamiIdleri(db, await kapsamOku(db, kisiId));
+  const kapsamliIstasyonlar = await istekIstasyonlari(db, { id: kisiId, islemler });
   // İş kutusu ekranındaki satır sayısı: sıfır olmayan her iş türü bir satırdır (ekranla aynı sayı). Ekran tanım yetkilisine eşlenmemiş
   // harita yerini de iş olarak gösterir; sayaç da sayar.
   const eslenmemis = islemler.includes('stok.tanim') ? (await haritaOzeti(db)).eslenmemis : 0;

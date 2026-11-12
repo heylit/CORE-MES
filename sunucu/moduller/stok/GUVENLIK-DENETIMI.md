@@ -32,13 +32,13 @@ Eksiye düşüm onayı (1387 a, kart #1414): `eksiOnay: true` taşıyan yazma u�
 | `GET /stok/hareketler` (stok okuma ya da `sayfa.rota`) | süzgeçsiz istekte toplam null; Rota > Stok son hareketleri okur (746, 3 a) | hareket listesi sayfalı, "yetki (746, 3 a)" | yetki (K3) girişsiz 401; "yetki (746, 3 a)": yalnız `sayfa.rota` olan yazamaz |
 | `GET /stok/kod-coz` | bilinmeyen kod uydurulmaz (DEP-55) | DEP-55 | DEP-55 (bilinmeyen kod) |
 | `GET /stok/fisler`, `/:id` | fiş değişmez | DEP-54/40/41 | YOK |
-| `GET /stok/toplamalar`, `/:id` | kapsam: teslim yeri kapsam dışı istasyon olan liste listede yok, tekil 403; teslim yeri istasyon olmayan süzülmez | DEP-42/56, STK-K3 | STK-K3 (kapsam dışı 403, sınırsız hepsi) |
+| `GET /stok/toplamalar`, `/:id` | kapsam: teslim yeri kapsam dışı istasyon olan liste listede yok, tekil 403; teslim yeri istasyon olmayan süzülmez; `stok.transfer` olan süzülmez (3094 a) | DEP-42/56, STK-K3 | STK-K3 (toplama izniyle kapsam dışı 403, depocu hepsi) |
 | `GET /stok/yerlesim` | — | DEP-57 | YOK |
 | `GET /stok/ara` | bilinmeyen sonuç uydurulmaz | stok içi arama | YOK |
 | Genel arama kaynakları `parti`, `konum` (`disari.ts` `kayitAramaKaynaklari`, kart 1234) | çekirdek `/arama` kişide `sayfa.stok` ya da bir stok işlemi yoksa kaynağı çağırmaz; yalnız okur; joker karakter kaçırılır; pasif konum ve raf gelmez | `kayit-aramasi.test.ts` (gerçek PostgreSQL) | `kayit-aramasi.test.ts`: stok işlemi olmayan (ör. yalnız `uretim-emirleri.ara-istasyon`) ve işlemsiz kişi için kaynak çağrılmaz |
 | `GET /stok/sayim-bekleyenler` | süre deponun yerleşiminden (DEP-15) | DEP-15 | YOK |
 | `GET /stok/ozet` (oturum) | her alan kendi işlemiyle; yetkisize null, hesaplanmaz | stok özeti | stok özeti (girişsiz 401, operatörde hepsi null, satın almada istek ve sayım null) |
-| `GET /stok/malzeme-istekleri`, `/:id` | karşılanan teslimden önce null; kapsam: kapsam dışı istasyonun isteği listede yok, tekil 403; istasyonsuz istek süzülmez | malzeme isteği, STK-K1 | STK-K1 (kapsam dışı 403, sınırsız hepsi, sayaç) |
+| `GET /stok/malzeme-istekleri`, `/:id` | karşılanan teslimden önce null; kapsam: kapsam dışı istasyonun isteği listede yok, tekil 403; istasyonsuz istek süzülmez; `stok.transfer` olan süzülmez (3094 a), istasyondan istenen yine görünmez | malzeme isteği, STK-K1 | STK-K1 (toplama izniyle kapsam dışı 403, depocu hepsi, sayaç) |
 
 ## Yazma uçları
 
@@ -73,12 +73,12 @@ Eksiye düşüm onayı (1387 a, kart #1414): `eksiOnay: true` taşıyan yazma u�
 | `POST /stok/sepet/satirlar/:id/sil` | `stok.transfer` | yalnız kendi satırı (aynı) | DEP-54/40/41 | YOK |
 | `POST /stok/sepet/teslim-et` | `stok.transfer` | tek işlemde fiş; yetmezse onay ister ve hiçbir şey yazmaz (DEP-40/41) | DEP-54/40/41 | DEP-54/40/41 (onaysız ret, yazı yok) |
 | `POST /stok/sepet/stoktan-dus` | `stok.cikis` | aynı; emir var olmalı | DEP-54/40/41 | DEP-54/40/41 (kalite 403) |
-| `POST /stok/toplamalar` | `stok.toplama` | istek ve teslim yeri istasyonu kapsamda olmalı, değilse 403 (STK-K3); en eski girişten ayrılır, eksik söylenir (DEP-42) | DEP-42/56 | DEP-42/56 (kalite 403) |
+| `POST /stok/toplamalar` | `stok.toplama` | istek ve teslim yeri istasyonu kapsamda olmalı, değilse 403 (STK-K3; `stok.transfer` olan muaf, 3094 a); en eski girişten ayrılır, eksik söylenir (DEP-42) | DEP-42/56 | DEP-42/56 (kalite 403) |
 | `POST /stok/toplamalar/:id/adimlar/:adimId/topla` | `stok.toplama` | liste kapsam dışıysa 403 (STK-K3); sürüm; adım iki kez toplanmaz; kapalı liste toplanmaz (DEP-56) | DEP-42/56 | DEP-42/56 (409) |
 | `POST /stok/toplamalar/:id/kapat` | `stok.toplama` | liste kapsam dışıysa 403 (STK-K3); sürüm; açan ya da işlemi olan başkası kapatır, kapatan kişi kayıtta (ST4) | DEP-42/56 | ST4 (işlemsiz 403) |
 | `POST /stok/yerlesim/kaydet` | `stok.tanim` | tek işlem; stoklu raf kaldırılmaz; aynı adres ve eski sürüm 409 (DEP-57) | DEP-57 | DEP-57 (depo 403, 409) |
 | ~~`POST /stok/yerlesim/kare-adi`~~ kaldırıldı (borç #441) | `stok.tanim` | — | DEP-57 | YOK |
-| `POST /stok/malzeme-istekleri/:id/hazirla`, `/teslim-et`, `/iptal-et` | `stok.transfer` | kapsam dışı istasyonun isteği 403 (STK-K2); sürüm; geçiş yalnız ileri, kapanan değişmez (409); teslimde karşılanan pozitif | malzeme isteği | malzeme isteği (operatör 403, ikinci hazırla ve teslimden sonra iptal 409, eski sürüm 409, olmayan 404) |
+| `POST /stok/malzeme-istekleri/:id/hazirla`, `/teslim-et`, `/iptal-et` | `stok.transfer` | iş merkezi kapsamı uygulanmaz: depo bütün istasyonlara taşır (3094 a, STK-K2); sürüm; geçiş yalnız ileri, kapanan değişmez (409); teslimde karşılanan pozitif | malzeme isteği | malzeme isteği (operatör 403, ikinci hazırla ve teslimden sonra iptal 409, eski sürüm 409, olmayan 404) |
 | `disari.malzemeIstegiAc` (uç değil, çağıranın işleminde) | üretim işlemi (`uretim-emirleri` `KOMUT_ISLEMI`) servis içinde | istasyon kapsamı (DEP-36 gibi); hizmet kartı, olmayan ya da pasif istasyon, olmayan emir 400; kaynak kimliği tekil, eşzamanlıda tek kayıt | malzeme isteği | malzeme isteği (işlemsiz 403, kapsam dışı 403, 400'ler; satır yazılmaz) |
 
 ## Yalnız ekranda kalan kurallar

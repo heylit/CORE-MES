@@ -26,7 +26,7 @@ import { kisiAdlari } from '../../kisiler/disari.ts';
 import { malzemeAra, malzemeKullanilabilirMi, malzemeNoKoddan, malzemeOzeti, malzemeOzetleri } from '../../malzemeler/disari.ts';
 import { KOMUT_ISLEMI as URETIM_ISLEMI, acikIstasyon, adimliEmirAyrintisi, emirDilimi, uretimEmriOzeti, emirlerinAdimIstasyonlari } from '../../uretim-emirleri/disari.ts';
 import {
-  binde, bindenMetin, cikisOnerisi, partiEtiketi, stoklanirMi, partiSec, ISTEK_GECIS_KAYNAKLARI, istekGecisEngeli, buradakiIstasyon, istekAcilisDurumu, istekListeEngeli, serbestMiktarEngeli,
+  binde, bindenMetin, cikisOnerisi, partiEtiketi, stoklanirMi, partiSec, ISTEK_GECIS_KAYNAKLARI, istekGecisEngeli, buradakiIstasyon, istekAcilisDurumu, istekKapsamindanMuafMi, istekListeEngeli, serbestMiktarEngeli,
   istekKalani, istenenFazlaNotu, yoldaSureSonu, sonrakiIstasyon, type SepetAdimi, kisiKoduAyristir, kisiKoduEngeli, kisiKoduGovdesi, KISI_KODU_SURESI_SN, katalogEtiketiStokKodu, geriDusmeKodlari,
   istasyondanIstekEngeli, okutarakAlmaEngeli, itirazSonu, refakatEtiketi, refakatTeslimEngeli, refakatAnaEylemi, AYRILMIS_KONUM_TURLERI,
 } from '../kurallar.ts';
@@ -373,13 +373,13 @@ async function istekleriAdlandir(db: Db, satirlar: IstekHam[]): Promise<MalzemeI
     yoldaTeslim: yolda.get(i.id) ?? null,
   }));
 }
-export async function malzemeIstekleriListesi(db: Db, kisiId: number, s: MalzemeIstekleriListesi): Promise<SayfaliListe<MalzemeIstegi>> {
-  const istasyonlar = await istasyonKapsamiIdleri(db, await kapsamOku(db, kisiId));
+export async function malzemeIstekleriListesi(db: Db, k: IstekKisisi, s: MalzemeIstekleriListesi): Promise<SayfaliListe<MalzemeIstegi>> {
+  const istasyonlar = await istekIstasyonlari(db, k);
   const l = await sayfaliListe(s, { say: () => sorgular.istekSay(db, s.durum, istasyonlar), satirlar: (d) => sorgular.istekler(db, s.durum, s, d, istasyonlar) });
   return { ...l, satirlar: await istekleriAdlandir(db, l.satirlar) };
 }
-export async function malzemeIstegiGor(db: Db, kisiId: number, id: number): Promise<MalzemeIstegiCevabi> {
-  await istasyonKapsaminiDenetle(db, kisiId, (await sorgular.istekBul(db, id))?.istasyonId ?? null);
+export async function malzemeIstegiGor(db: Db, k: IstekKisisi, id: number): Promise<MalzemeIstegiCevabi> {
+  await istekKapsaminiDenetle(db, k, (await sorgular.istekBul(db, id))?.istasyonId ?? null);
   return malzemeIstegiOku(db, id);
 }
 export async function malzemeIstegiOku(db: Db, id: number): Promise<MalzemeIstegiCevabi> {
@@ -389,10 +389,10 @@ export async function malzemeIstegiOku(db: Db, id: number): Promise<MalzemeIsteg
 }
 export const ISTASYON_ISTEGI = 'Bu istek bir istasyondan istendi; o istasyon karşılar ya da reddeder.';
 // Hazırlama istek açık kalır; teslim ve iptal kapatır. Teslim stok hareketi yazmaz: malzeme sepetle ya da çıkışla düşülür.
-export async function malzemeIstegiGecir(db: Db, kisiId: number, id: number, gecis: IstekGecisi, g: { surum: number; karsilanan?: string }): Promise<MalzemeIstegiCevabi> {
+export async function malzemeIstegiGecir(db: Db, k: IstekKisisi, id: number, gecis: IstekGecisi, g: { surum: number; karsilanan?: string }): Promise<MalzemeIstegiCevabi> {
   const i = await sorgular.istekBul(db, id, true);
   if (i) {
-    await istasyonKapsaminiDenetle(db, kisiId, i.istasyonId);
+    await istekKapsaminiDenetle(db, k, i.istasyonId);
     // Teslim alınınca kapanış (teslimiKapat) bu işlevden geçmez; buradaki geçişler depo işidir.
     if (i.kaynakIstasyonId !== null) throw cakisma(ISTASYON_ISTEGI);
     const engel = istekGecisEngeli(i.durum, gecis);
@@ -403,7 +403,7 @@ export async function malzemeIstegiGecir(db: Db, kisiId: number, id: number, gec
   }
   const durum = ({ hazirla: 'hazirlaniyor', teslim: 'teslim', iptal: 'iptal' } as const)[gecis];
   await surumluGuncelle({
-    guncelle: () => sorgular.istekGecir(db, id, g.surum, { kaynaklar: ISTEK_GECIS_KAYNAKLARI[gecis], durum, karsilanan: gecis === 'teslim' ? g.karsilanan! : null, kapatanKisiId: gecis === 'hazirla' ? null : kisiId }),
+    guncelle: () => sorgular.istekGecir(db, id, g.surum, { kaynaklar: ISTEK_GECIS_KAYNAKLARI[gecis], durum, karsilanan: gecis === 'teslim' ? g.karsilanan! : null, kapatanKisiId: gecis === 'hazirla' ? null : k.id }),
     varMi: () => sorgular.istekVarMi(db, id),
     bulunamadiIletisi: 'Malzeme isteği bulunamadı.',
   });
@@ -427,7 +427,7 @@ export async function kalaniAc(db: Db, i: IstekHam, karsilanan: string): Promise
 // verilmezse kişinin bulunduğu istasyon (STK-T7); o da bilinmiyorsa depo seçer. İstasyonlu istek teslim kaydıyla taşınır, burada yalnız kapanır.
 export async function istekTeslimEt(db: Db, k: Kullanici, id: number, g: IstekTeslimGovdesi): Promise<MalzemeIstegiCevabi> {
   const i = await sorgular.istekBul(db, id, true);
-  if (i) await istasyonKapsaminiDenetle(db, k.id, i.istasyonId);
+  if (i) await istekKapsaminiDenetle(db, k, i.istasyonId);
   if (i?.kaynakIstasyonId != null) throw cakisma(ISTASYON_ISTEGI);
   const listede = i ? istekListeEngeli(i) : null;
   if (listede) throw cakisma(listede);
@@ -468,7 +468,7 @@ export async function istekTeslimEt(db: Db, k: Kullanici, id: number, g: IstekTe
       await bakiyeDegistir(db, { malzemeId: i.malzemeId, konumId: hedef, partiId, statuId, fark: binde(miktar), ilkGiris: b?.ilkGiris ?? null });
     });
   }
-  return malzemeIstegiGecir(db, k.id, id, 'teslim', g);
+  return malzemeIstegiGecir(db, k, id, 'teslim', g);
 }
 
 // Biten ya da iptal edilen emre istek açılmaz (kart #1413): kapanınca açık istekleri de iptal olur.
@@ -486,6 +486,14 @@ export const kapsamOku = (db: Db, kisiId: number): Promise<Kapsam> => kisininKap
 export async function istasyonKapsamiIdleri(db: Db, kapsam: Kapsam): Promise<number[] | null> {
   if (kapsamSuzgeci(kapsam) === null) return null;
   return (await tumIstasyonlar(db, { pasiflerDahil: true })).filter((i) => kapsamdaMi(kapsam, i.isMerkeziId)).map((i) => i.id);
+}
+// İstek ve toplama listelerinin kişisi: muafiyet (3094 a) işlem listesinden okunur.
+export interface IstekKisisi { id: number; islemler: readonly string[] }
+export async function istekIstasyonlari(db: Db, k: IstekKisisi): Promise<number[] | null> {
+  return istekKapsamindanMuafMi(k.islemler) ? null : istasyonKapsamiIdleri(db, await kapsamOku(db, k.id));
+}
+export async function istekKapsaminiDenetle(db: Db, k: IstekKisisi, istasyonId: number | null): Promise<void> {
+  if (!istekKapsamindanMuafMi(k.islemler)) await istasyonKapsaminiDenetle(db, k.id, istasyonId);
 }
 // Tekil kayıt ve komut: istasyonlu kaydın iş merkezi kişinin kapsamında olmalıdır; istasyonsuz kayıt geçer.
 export async function istasyonKapsaminiDenetle(db: Db, kisiId: number, istasyonId: number | null): Promise<void> {

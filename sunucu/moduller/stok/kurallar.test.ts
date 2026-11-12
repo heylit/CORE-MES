@@ -5,7 +5,7 @@ import {
   fisNoKimligi, hareketinFisBagi, malzemeFisiGonderilebilir, malzemeFisiNo,
   refakatBaglamaEngeli, refakatEtiketi, refakatIptalEngeli, refakatKolEngeli, refakatLotEngeli, refakatSayimEngeli, refakatTeslimEngeli, kartOnayiTuru, refakatAnaEylemi,
   sonrakiIstasyon, statuAramasi, statuKodlari, stoksuzStatuler,
-  baslatmaEksikleri, buradakiIstasyon, eksidenUyari, geriCevirmeKaliteleri, istekGecisEngeli, enKotuKalite, girdiSec, sayimArtisPlani, sayimAzalisPlani, istekAcilisDurumu, istekliTeslimEngeli, teslimAlimMiktariEngeli, teslimAlmaEngeli, teslimKapanisEngeli, yoldaSureSonu, kisiKoduAyristir, kisiKoduEngeli, kisiKoduGovdesi, KISI_KODU_SURESI_SN,
+  baslatmaEksikleri, buradakiIstasyon, eksidenUyari, geriCevirmeKaliteleri, istekGecisEngeli, enKotuKalite, girdiSec, sayimArtisPlani, sayimAzalisPlani, istekAcilisDurumu, istekKapsamindanMuafMi, istekliTeslimEngeli, teslimAlimMiktariEngeli, teslimAlmaEngeli, teslimKapanisEngeli, yoldaSureSonu, kisiKoduAyristir, kisiKoduEngeli, kisiKoduGovdesi, KISI_KODU_SURESI_SN,
   binde, bindenMetin, bolmeNo, cikisOnerisi, duzeltmeEngeli, dusumKarari, geriAlmaEngeli, gozKodu, ilkGirisBirlesik, kalanAmbalajAdedi, logoAmbari,
   logoEslesmeDurumu, logoyaGiderMi, malKabulGozOnerisi, malKabulSatirTuru, rotaSirala, partiDenetimi, partiGereksinimi, partiSec, rafGozleri, sayimBekliyorMu, sayimFarki, sayimKarariEngeli, sayimOnayaGiderMi, siparisMalzemeEngeli, stokDurumu, stoklanirMi, tersYon,
   ihtiyacToplami, kalanSarf, stokDegeri, alisFiyatlari, tamamlamaEngeli, depoKoduOner, haritaPlani, istekListeEngeli, adimMiktarEngeli, istekKarsilamalari,
@@ -992,5 +992,14 @@ describe('STK-3 a: göz tamamı sayılınca sayıldı', () => {
     assert.equal(irsaliyeBelgeAdi('MK-000001', null, 1), 'İrsaliye (MK-000001)');
     assert.equal(irsaliyeBelgeAdi('MK-000001', null, 3), 'İrsaliye (MK-000001) · 3');
     assert.ok(irsaliyeBelgeAdi('MK-000001', 'X'.repeat(200), 2).length <= 120);
+  });
+});
+
+describe('3094 a istek kapsamı', () => {
+  test('Stok transferi izni olan kişi istek ve toplama listelerinde kapsamdan muaftır; yalnız toplama ya da istek izni olan değildir', () => {
+    assert.equal(istekKapsamindanMuafMi(['stok.transfer']), true);
+    assert.equal(istekKapsamindanMuafMi(['stok.toplama', 'sayfa.stok']), false);
+    assert.equal(istekKapsamindanMuafMi(['stok.istek']), false);
+    assert.equal(istekKapsamindanMuafMi([]), false);
   });
 });
