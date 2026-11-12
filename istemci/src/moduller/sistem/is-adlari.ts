@@ -23,6 +23,7 @@ const IS_ADLARI: Readonly<Record<string, string>> = {
   'logo-fatura-okumasi': 'Logo: fatura okuması',
   'logo-malzeme-karti-okumasi': 'Logo: malzeme kartı okuması',
   'logo-stok-okumasi': 'Logo: stok okuması',
+  'logo-kullanim-okumasi': 'Logo: malzeme kullanım okuması',
   'nizamiye-pdks-ham-temizlik': 'Kart okuyucu ham kayıt temizliği',
   'oturum-cihaz-temizligi': 'Eski oturum cihaz bilgisi temizliği',
   'proje-maliyet-defteri': 'Proje maliyet defteri',

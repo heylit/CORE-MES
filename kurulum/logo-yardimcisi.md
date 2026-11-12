@@ -176,6 +176,10 @@ Hepsi yalnız `GET` ve yalnız SQL `SELECT`; Logo'ya hiç yazmaz, COM oturumu ku
   satır `logicalRef, code, name, name3, name4, cardType, unitSetCode, active`. `next` sayfa doluysa son kartın kaydıdır, son sayfada `null`.
 - `GET /api/Stock/totals?since={kayıt}`: aynı kart sayfasının ambar başına eldeki miktarı (`GNTOTST`, ambar no 0 ve üstü; -1 toplam satırı alınmaz).
   Satır `itemRef, itemCode, warehouseNr, onHand`; stoku olmayan kart satır vermez, `next` yine kart sayfasından gelir.
+- `GET /api/Material/usage?since={kayıt}`: aynı kart sayfasının kullanım izi (3079 a): satır `itemRef, itemCode, lastMovement, openOrder`.
+  `lastMovement` çalışılan dönemdeki son malzeme hareketinin günü (`STLINE.DATE_`, iptal ve malzeme dışı satır sayılmaz; hareketsiz kartta `null`),
+  `openOrder` iptal olmayan alış ya da satış siparişinde kapanmamış malzeme satırı var mı (`ORFLINE.CLOSED = 0`). Her kart satır verir. Alanlar gerçek Logo'da
+  doğrulanmadı.
 - `GET /api/Arp/search?q={metin}`: kullanımdaki (`ACTIVE = 0`) cariler kodda ya da ünvanda (içinde, `LIKE` özel karakterleri kaçırılır) ya da vergi /
   T.C. kimlik numarasında (tam) aranır; en az 3, en çok 100 karakter, en çok 20 sonuç.
 - `GET /api/Arp/card/{kod}`: tek carinin alanları (`logicalRef, code, name, cardType, taxNr, tckNo, taxOffice, address1, address2, town, city,

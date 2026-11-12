@@ -22,10 +22,10 @@ type Satir = LogoGecisCevabi['kartlar'][number];
 type TekIslem = 'bagla' | 'farki-al' | 'yeni-koda-gec';
 
 const SUZGEC_ADLARI: Record<LogoGecisSuzgeci, string> = {
-  stoklu: 'Stoğu olanlar', tumu: 'Tümü', yeni: "CORE'da yok", bagsiz: 'Aynı kod var', bagli: 'Bağlı', 'kullanim-disi': 'Kullanım dışı',
+  kullanilan: 'Kullanılanlar', stoklu: 'Stoğu olanlar', tumu: 'Tümü', yeni: "CORE'da yok", bagsiz: 'Aynı kod var', bagli: 'Bağlı', 'kullanim-disi': 'Kullanım dışı',
 };
 const SUZGEC_SAYISI: Record<LogoGecisSuzgeci, keyof LogoGecisCevabi['sayilar']> = {
-  stoklu: 'stoklu', tumu: 'toplam', yeni: 'yeni', bagsiz: 'bagsiz', bagli: 'bagli', 'kullanim-disi': 'kullanimDisi',
+  kullanilan: 'kullanilan', stoklu: 'stoklu', tumu: 'toplam', yeni: 'yeni', bagsiz: 'bagsiz', bagli: 'bagli', 'kullanim-disi': 'kullanimDisi',
 };
 const DURUM: Record<Satir['durum'], { ad: string; ton: RozetTonu; simge: 'plus' | 'alert' | 'check' }> = {
   yeni: { ad: "CORE'da yok", ton: 'bilgi', simge: 'plus' },
@@ -50,6 +50,12 @@ export const TOPLU_AZAMI = LOGO_TOPLU_AZAMI;
 const sayi = (n: number): string => n.toLocaleString('tr-TR');
 const zamanMetni = (z: string): string => new Date(z).toLocaleString('tr-TR', { dateStyle: 'short', timeStyle: 'short' });
 const stokMetni = (s: string | null): string | null => (s === null ? null : Number(s).toLocaleString('tr-TR', { maximumFractionDigits: 3 }));
+const gunMetni = (g: string): string => new Date(`${g}T00:00:00`).toLocaleDateString('tr-TR');
+// 3079 a: "Kullanılanlar" nedeni satırda; stok zaten ayrı yazılır, hareket ve sipariş eklenir.
+const kullanimMetni = (k: Satir): (string | null)[] => [
+  k.kullanimNedenleri?.includes('hareket') && k.sonHareket !== null ? `son hareket ${gunMetni(k.sonHareket)}` : null,
+  k.kullanimNedenleri?.includes('siparis') ? 'açık sipariş' : null,
+];
 
 type TopluSonuc = LogoTopluCevabi;
 
@@ -59,7 +65,8 @@ interface Ozellikler {
 
 export function LogoMalzemeGecisi({ turAdlari }: Ozellikler) {
   const oturum = useOturum();
-  const [suzgec, suzgecYaz] = useState<LogoGecisSuzgeci>('stoklu');
+  // Boşken sunucu seçer: kullanım izi okunduysa "Kullanılanlar", okunmadıysa "Stoğu olanlar" (3079 a).
+  const [suzgec, suzgecYaz] = useState<LogoGecisSuzgeci | null>(null);
   const [ara, araYaz] = useState('');
   const [sayfa, sayfaYaz] = useState(1);
   const [toplu, topluYaz] = useState<{ tur: 'bagla' | 'al'; secili: readonly Satir[] } | null>(null);
@@ -82,7 +89,9 @@ export function LogoMalzemeGecisi({ turAdlari }: Ozellikler) {
   const aranan = ara.trim().length >= 2 ? ara.trim() : '';
   const liste = useQuery({
     queryKey: [...LOGO_GECIS_ANAHTARI, suzgec, aranan, sayfa],
-    queryFn: () => api.get<LogoGecisCevabi>(`/malzeme-logo-gecisi?${new URLSearchParams({ suzgec, sayfa: String(sayfa - 1), ...(aranan ? { ara: aranan } : {}) }).toString()}`),
+    queryFn: () => api.get<LogoGecisCevabi>(`/malzeme-logo-gecisi?${new URLSearchParams({
+      ...(suzgec ? { suzgec } : {}), sayfa: String(sayfa - 1), ...(aranan ? { ara: aranan } : {}),
+    }).toString()}`),
     placeholderData: (onceki) => onceki,
   });
   const durum = useQuery({ queryKey: ['malzemeler', 'logo-durumu'], queryFn: () => api.get<LogoDurumuCevabi>('/malzeme-logo-durumu') });
@@ -136,7 +145,7 @@ export function LogoMalzemeGecisi({ turAdlari }: Ozellikler) {
         <span className="tc-lg-taraf">
           <span className="tc-lg-kod">{k.kod}</span>
           <span>{k.ad ?? '—'}</span>
-          <span className="tc-lg-ek">{[k.birimSeti, k.stok === null ? null : `stok ${stokMetni(k.stok)}`].filter(Boolean).join(' · ') || null}</span>
+          <span className="tc-lg-ek">{[k.birimSeti, k.stok === null ? null : `stok ${stokMetni(k.stok)}`, ...kullanimMetni(k)].filter(Boolean).join(' · ') || null}</span>
         </span>
       ),
       csv: (k) => `${k.kod} ${k.ad ?? ''}`.trim(),
@@ -211,8 +220,10 @@ export function LogoMalzemeGecisi({ turAdlari }: Ozellikler) {
             arama: { deger: ara, degistir: (d) => { araYaz(d); sayfaYaz(1); }, etiket: 'Ara', yerTutucu: 'Kod, ad ya da açıklama' },
             suzgec: {
               etiket: 'Süzgeç',
-              secenekler: (Object.keys(SUZGEC_ADLARI) as LogoGecisSuzgeci[]).map((d) => ({ deger: d, baslik: `${SUZGEC_ADLARI[d]} (${sayi(sayilar[SUZGEC_SAYISI[d]])})` })),
-              secili: suzgec,
+              // Kullanım izi okunduysa "Stoğu olanlar"ın yerini "Kullanılanlar" alır (3079 a).
+              secenekler: (Object.keys(SUZGEC_ADLARI) as LogoGecisSuzgeci[]).filter((d) => d !== (veri.kullanim ? 'stoklu' : 'kullanilan'))
+                .map((d) => ({ deger: d, baslik: `${SUZGEC_ADLARI[d]} (${sayi(sayilar[SUZGEC_SAYISI[d]] ?? 0)})` })),
+              secili: suzgec ?? veri.suzgec,
               sec: (d) => { suzgecYaz(d as LogoGecisSuzgeci); sayfaYaz(1); },
             },
             csv: { ad: 'logo-gecisi-malzemeler' },

@@ -838,6 +838,13 @@ export interface LogoStokSatiri {
   miktar: string;
 }
 
+// 3079 a: kartın kullanım izi; tarih gün metni (yyyy-mm-dd), hareketsiz kartta null.
+export interface LogoKullanimSatiri {
+  malzemeKodu: string;
+  sonHareket: string | null;
+  acikSiparis: boolean;
+}
+
 export interface LogoCari {
   logoKayitNo: number;
   kod: string;
@@ -891,6 +898,18 @@ export function stokToplamlariniAyikla(govde: unknown): Sayfa<LogoStokSatiri> | 
     const miktar = ilkSayi(o, ['onHand']);
     if (malzemeKodu === null || ambarNo === null || !Number.isSafeInteger(ambarNo) || ambarNo < 0 || miktar === null) return null;
     return { malzemeKodu, ambarNo, miktar: String(miktar) };
+  });
+}
+
+const GUN_METNI = /^\d{4}-\d{2}-\d{2}$/;
+export function kullanimlariAyikla(govde: unknown): Sayfa<LogoKullanimSatiri> | null {
+  return sayfaAyikla(govde, (o) => {
+    const malzemeKodu = ilkMetin(o, ['itemCode'], 64);
+    const tarih = o['lastMovement'];
+    const acik = o['openOrder'];
+    if (malzemeKodu === null || typeof acik !== 'boolean') return null;
+    if (tarih !== null && !(typeof tarih === 'string' && GUN_METNI.test(tarih) && !Number.isNaN(Date.parse(tarih)))) return null;
+    return { malzemeKodu, sonHareket: tarih, acikSiparis: acik };
   });
 }
 
@@ -1147,7 +1166,7 @@ export interface LogoAkisTanimi {
   // logo_giden belge türleri; sayılar bunlardan toplanır.
   belgeTurleri: readonly string[];
   // Okuma akışı (logo -> TMI): sayı giden kutusundan değil okunan satırlardan gelir; `gonderilen` okunan satır sayısıdır, `hatali` yoktur.
-  okuma?: 'mal-kabul' | 'cari-ambar' | 'fatura' | 'malzeme-karti' | 'stok' | 'cari';
+  okuma?: 'mal-kabul' | 'cari-ambar' | 'fatura' | 'malzeme-karti' | 'stok' | 'kullanim' | 'cari';
 }
 
 export const LOGO_AKISLARI: readonly LogoAkisTanimi[] = [
@@ -1196,6 +1215,8 @@ export const LOGO_AKISLARI: readonly LogoAkisTanimi[] = [
     aciklama: 'Logo malzeme kartları (Material/list) en çok saatte bir, sayfa sayfa okunur ve aynaya yazılır; Malzemeler\'de "Logo\'dan gelenler" listesi buradan beslenir. TMI kartı kendiliğinden değişmez, Logo\'ya hiçbir şey gitmez. Sayı son turda okunan kart sayısıdır.' },
   { anahtar: 'stok-okuma', yon: 'logo-tmi', baslik: 'Stok toplamı okuması', kaynak: 'bagli', ayarlar: ['logo.stok-okumasi'], belgeTurleri: [], okuma: 'stok',
     aciklama: 'Logo\'daki ambar başına eldeki miktar (Stock/totals) en çok saatte bir okunur; yalnız TMI stoğuyla karşılaştırma ve bir kezlik açılış devri içindir, TMI stoğuna kendiliğinden yazılmaz. Sayı son turda okunan satır sayısıdır.' },
+  { anahtar: 'kullanim-okuma', yon: 'logo-tmi', baslik: 'Malzeme kullanım okuması', kaynak: 'bagli', ayarlar: ['logo.kullanim-okumasi'], belgeTurleri: [], okuma: 'kullanim',
+    aciklama: 'Logo malzeme kartlarının son hareket tarihi ve açık sipariş bilgisi (Material/usage) yalnız istekle, sayfa sayfa okunur; Logo geçişindeki "Kullanılanlar" süzgeci içindir. Logo\'ya hiçbir şey gitmez. Sayı son turda okunan kart sayısıdır.' },
   { anahtar: 'cari-arama', yon: 'logo-tmi', baslik: 'Cari arama (müşteri ve tedarikçi)', kaynak: 'bagli', ayarlar: ['logo.cari-aramasi'], belgeTurleri: [], okuma: 'cari',
     aciklama: 'Müşteri-Tedarikçi\'de yeni firma açarken Logo carisi kod, ünvan ya da vergi numarasıyla aranır (Arp/search) ve seçilen cari forma doldurulur; zamanlanmış okuma yoktur, Logo\'ya yazılmaz.' },
 ];

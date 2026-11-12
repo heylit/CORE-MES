@@ -20,15 +20,17 @@ const KARSILIKLAR: LogoKarsiligi[] = [
   { cesit: 'birim', tmiDegeri: 'kg', logoDegeri: '06' },
 ];
 type Satir = LogoGecisCevabi['kartlar'][number];
-const ortak: Pick<Satir, 'birimSeti' | 'aktif' | 'stok' | 'farklar' | 'kararNedeni' | 'topluBaglanir' | 'topluAlinir'> = {
-  birimSeti: '06', aktif: true, stok: '12', farklar: [], kararNedeni: null, topluBaglanir: false, topluAlinir: false,
+const ortak: Pick<Satir, 'birimSeti' | 'aktif' | 'stok' | 'sonHareket' | 'kullanimNedenleri' | 'farklar' | 'kararNedeni' | 'topluBaglanir' | 'topluAlinir'> = {
+  birimSeti: '06', aktif: true, stok: '12', sonHareket: null, kullanimNedenleri: null, farklar: [], kararNedeni: null, topluBaglanir: false, topluAlinir: false,
 };
 const tmi = (kimlik: string, stokKodu: string, surum: number, logoKayitli = false) =>
   ({ kimlik, stokKodu, ad: 'CORE', birim: 'kg', onayDurumu: 'aktif' as const, surum, logoKayitli });
 const LISTE: LogoGecisCevabi = {
   baglanti: true,
   okuma: { acik: false, suruyor: false, okunan: 5, sonTamam: '2026-11-12T05:00:00+00:00' },
-  sayilar: { toplam: 9, stoklu: 5, yeni: 3, bagsiz: 2, bagli: 1, kullanimDisi: 1, kararBekleyen: 2 },
+  sayilar: { toplam: 9, stoklu: 5, yeni: 3, bagsiz: 2, bagli: 1, kullanimDisi: 1, kullanilan: null, kararBekleyen: 2 },
+  suzgec: 'stoklu',
+  kullanim: false,
   uyan: 5,
   kartlar: [
     { ...ortak, logoKayitNo: 1, kod: 'HM-DEN-00001', ad: 'Deneme yeni', kartTuru: '10', durum: 'yeni', koduUyar: true, topluAlinir: true, tmi: null },
@@ -82,18 +84,33 @@ const satir = (metin: string) => screen.getByText(metin).closest('tr')!;
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
 describe('LogoMalzemeGecisi (3068 a; satır işlemleri 2116)', () => {
-  it('açılışta stoğu olanlar istenir; süzgeçler sayısıyla görünür; karar isteyen satır nedeniyle işaretlenir', async () => {
+  it('açılışta süzgeci sunucu seçer (kullanım izi yoksa stoğu olanlar); süzgeçler sayısıyla görünür; karar isteyen satır nedeniyle işaretlenir', async () => {
     const istekler = sunucuKur(YAZAN);
     ac();
     await screen.findByText('HM-DEN-00001');
-    expect(istekler[0]?.yol).toBe('/malzeme-logo-gecisi?suzgec=stoklu&sayfa=0');
+    expect(istekler[0]?.yol).toBe('/malzeme-logo-gecisi?sayfa=0');
     expect(screen.getByText("CORE'da yok (3)")).toBeTruthy();
     expect(screen.getByText('Stoğu olanlar (5)')).toBeTruthy();
+    expect(screen.queryByText(/Kullanılanlar/)).toBeNull();
     expect(within(satir('150.01')).getByText('Kod eşlenecek')).toBeTruthy();
     expect(within(satir('Deneme birim')).getByText('Birim farklı')).toBeTruthy();
     expect(screen.getByText(/2 satır tek tek karar istiyor/)).toBeTruthy();
     fireEvent.click(screen.getByText('Bağlı (1)'));
     await waitFor(() => expect(istekler.some((i) => i.yol === '/malzeme-logo-gecisi?suzgec=bagli&sayfa=0')).toBe(true));
+  });
+
+  it('kullanım izi okunduysa Stoğu olanlar yerine Kullanılanlar; neden satırda yazar (3079 a)', async () => {
+    const kartlar = LISTE.kartlar.map((k, i) => (i === 0
+      ? { ...k, stok: '0', sonHareket: '2026-09-30', kullanimNedenleri: ['hareket', 'siparis'] as Satir['kullanimNedenleri'] }
+      : { ...k, kullanimNedenleri: ['stok'] as Satir['kullanimNedenleri'] }));
+    const istekler = sunucuKur(YAZAN, { ...LISTE, suzgec: 'kullanilan', kullanim: true, sayilar: { ...LISTE.sayilar, kullanilan: 7 }, kartlar });
+    ac();
+    await screen.findByText('HM-DEN-00001');
+    expect(screen.getByText('Kullanılanlar (7)')).toBeTruthy();
+    expect(screen.queryByText(/Stoğu olanlar/)).toBeNull();
+    expect(within(satir('Deneme yeni')).getByText(/son hareket 30\.09\.2026 · açık sipariş/)).toBeTruthy();
+    fireEvent.click(screen.getByText('Tümü (9)'));
+    await waitFor(() => expect(istekler.some((i) => i.yol === '/malzeme-logo-gecisi?suzgec=tumu&sayfa=0')).toBe(true));
   });
 
   it('satır işlemleri bugünkü gibi: yeni kartta Al, bağsızda Bağla ve Yeni koda geç, farklı bağlıda Logo\'dakini al', async () => {

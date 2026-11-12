@@ -14,13 +14,14 @@ import { kimlikCozucu } from '../oturum/disari.ts';
 import { isler } from './isler.ts';
 import { kopruIstemcisiKur } from './kopru.ts';
 import {
-  belgeStokKodlari, cariKaydiniAyikla, cariListesiniAyikla, logoKodlarinaCevir, malzemeKartlariniAyikla, sayfaliOkumaSirasi,
+  belgeStokKodlari, cariKaydiniAyikla, cariListesiniAyikla, kullanimlariAyikla, logoKodlarinaCevir, malzemeKartlariniAyikla, sayfaliOkumaSirasi,
   stokToplamlariniAyikla,
 } from './kurallar.ts';
 import { sahteKopruAc } from './sahte-kopru.ts';
 import type { SahteKopru } from './sahte-kopru.ts';
 import {
-  logoCariAra, logoCariOku, logodakiMalzemeKartlari, logodakiStokToplamlari, malzemeEslemesiYaz, malzemeKartiOkumaTuru, stokOkumaTuru, tmiStokKodlari,
+  kullanimOkumaTuru, logoCariAra, logoCariOku, logodakiMalzemeKartlari, logodakiMalzemeOzeti, logodakiStokToplamlari, malzemeEslemesiYaz, malzemeKartiOkumaTuru,
+  stokOkumaTuru, tmiStokKodlari,
   yeniSurecBellegi,
 } from './servis.ts';
 import type { TurOrtami } from './servis.ts';
@@ -66,6 +67,25 @@ describe('Logo\'dan okuma ayıklayıcıları ve kod eşlemesi kuralları (2116, 
       kayitlar: [{ malzemeKodu: 'LG-1', ambarNo: 0, miktar: '12.5' }, { malzemeKodu: 'LG-1', ambarNo: 3, miktar: '-2' }],
       sonraki: null,
     });
+  });
+
+  test('LGC-14 kullanım sayfası (3079 a): tarih gün metni ya da null; açık sipariş mantıksal değil ya da tarih bozuksa satır atlanır', () => {
+    assert.deepEqual(kullanimlariAyikla({
+      data: [
+        { itemCode: 'LG-1', lastMovement: '2026-09-30', openOrder: false },
+        { itemCode: 'LG-2', lastMovement: null, openOrder: true },
+        { itemCode: 'LG-3', lastMovement: '30.09.2026', openOrder: false },
+        { itemCode: 'LG-4', lastMovement: '2026-13-45', openOrder: false },
+        { itemCode: 'LG-5', openOrder: false },
+        { itemCode: 'LG-6', lastMovement: null, openOrder: 1 },
+        { lastMovement: null, openOrder: false },
+      ],
+      next: 7,
+    }), {
+      kayitlar: [{ malzemeKodu: 'LG-1', sonHareket: '2026-09-30', acikSiparis: false }, { malzemeKodu: 'LG-2', sonHareket: null, acikSiparis: true }],
+      sonraki: 7,
+    });
+    assert.equal(kullanimlariAyikla([]), null);
   });
 
   test('LGC-3 cari: adres iki satırdan birleşir, boş alan null; dizi değilse liste null', () => {
@@ -153,8 +173,8 @@ describe('Logo\'dan malzeme kartı, stok ve cari okuması, sahte köprüyle (211
   beforeEach(async () => {
     kopru = await sahteKopruAc();
     simdi += 24 * 3600_000;
-    for (const t of ['logo_malzeme_karti', 'logo_stok_toplami', 'logo_okuma_imleci']) await vt().sorgu(`DELETE FROM ${t}`);
-    for (const a of ['logo.malzeme-okumasi', 'logo.stok-okumasi', 'logo.cari-aramasi']) await ayar(a, false);
+    for (const t of ['logo_malzeme_karti', 'logo_stok_toplami', 'logo_malzeme_kullanimi', 'logo_okuma_imleci']) await vt().sorgu(`DELETE FROM ${t}`);
+    for (const a of ['logo.malzeme-okumasi', 'logo.stok-okumasi', 'logo.kullanim-okumasi', 'logo.cari-aramasi']) await ayar(a, false);
   });
   afterEach(async () => { await kopru.kapat(); });
 
@@ -351,6 +371,49 @@ describe('Logo\'dan malzeme kartı, stok ve cari okuması, sahte köprüyle (211
     assert.deepEqual(await malzemeKartiOkumaTuru(vt(), ortami(bellek)), { tur: 'malzeme-karti-kapali' });
     assert.deepEqual(await kodlar(), ['LG-1'], 'geçiş bitince okunmuş kopya silinmez');
     assert.equal(await gecisiBitir(), 200, 'kapalıyken bitirmek hata değil');
+    yazmaIstegiYok();
+  });
+
+  test('LGC-15 kullanım okuması (3079 a): kendi ayarıyla kapalı gelir; açıkken sayfa sayfa yazılır ve özete girer; "Şimdi oku" açmaz ama açıksa yeniden okutur; "Geçişi bitir" kapatır', async () => {
+    kopru.sayfaBoyu = 1;
+    kopru.logoKartlari.push(kart(1, 'LG-1'), kart(2, 'LG-2'), kart(3, 'LG-3'));
+    kopru.logoKullanimlari.push(
+      { itemRef: 1, itemCode: 'LG-1', lastMovement: '2026-09-30', openOrder: false },
+      { itemRef: 2, itemCode: 'LG-2', lastMovement: null, openOrder: true },
+    );
+    assert.equal(await vt().tx((db) => sistemAyariOku(db, 'logo.kullanim-okumasi')), false, 'varsayılan kapalı');
+    assert.deepEqual(await kullanimOkumaTuru(vt(), ortami()), { tur: 'kullanim-kapali' });
+    const is = isler.find((i) => i.ad === 'logo-kullanim-okumasi');
+    assert.ok(is);
+    assert.equal(await isiBirKezCalistir(vt(), is), 'bekliyor');
+    simdi += 60_000;
+    assert.equal(await simdiOku(), 200);
+    assert.notEqual(await vt().tx((db) => sistemAyariOku(db, 'logo.kullanim-okumasi')), true, '"Şimdi oku" kullanım okumasını açmaz');
+    assert.deepEqual(await kullanimOkumaTuru(vt(), ortami()), { tur: 'kullanim-kapali' });
+    assert.equal(kopru.istekler.filter((i) => i.yol === '/api/Material/usage').length, 0);
+
+    await ayar('logo.kullanim-okumasi', true);
+    const bellek = yeniSurecBellegi();
+    for (const sayi of [1, 1, 0, 0]) {
+      assert.deepEqual(await kullanimOkumaTuru(vt(), ortami(bellek)), { tur: 'okuma', akis: 'kullanim', sonuc: 'okundu', sayi });
+    }
+    assert.deepEqual(await kullanimOkumaTuru(vt(), ortami(bellek)), { tur: 'bos' }, 'tam tur bitti');
+    kopru.sayfaBoyu = 500;
+    for (let i = 0; i < 3; i++) await malzemeKartiOkumaTuru(vt(), ortami(bellek));
+    const ozet = await vt().tx((db) => logodakiMalzemeOzeti(db, {}));
+    assert.deepEqual(ozet.kartlar.map((k) => [k.kod, k.sonHareket, k.acikSiparis]), [['LG-1', '2026-09-30', false], ['LG-2', null, true], ['LG-3', null, null]]);
+    assert.equal(ozet.kullanim.acik, true);
+    assert.notEqual(ozet.kullanim.sonTamam, null);
+
+    simdi += 60_000;
+    assert.equal(await simdiOku(), 200);
+    kopru.logoKullanimlari.splice(0, 1);
+    assert.equal((await kullanimOkumaTuru(vt(), ortami(bellek))).tur, 'okuma', 'açıkken "Şimdi oku" yeniden okutur');
+    const sonra = await vt().tx((db) => logodakiMalzemeOzeti(db, {}));
+    assert.deepEqual(sonra.kartlar.map((k) => k.sonHareket), [null, null, null], 'Logo\'da izi kalmayan kart son tam turda düşer');
+    assert.equal(await gecisiBitir(), 200);
+    assert.notEqual(await vt().tx((db) => sistemAyariOku(db, 'logo.kullanim-okumasi')), true);
+    assert.equal((await vt().tx((db) => logodakiMalzemeOzeti(db, {}))).kullanim.acik, false);
     yazmaIstegiYok();
   });
 });

@@ -74,6 +74,16 @@ namespace LogoYardimcisi
         public decimal Miktar;
     }
 
+    // Kartın kullanım izi (3079 a): son malzeme hareketinin tarihi ve açık siparişte geçip geçmediği. Yalnız geçiş sayfasının
+    // "Kullanılanlar" süzgeci içindir; tarih yalnız çalışılan dönemin hareketlerinden gelir (VARSAYIM; Sorgular.Dogrulanmadi).
+    public sealed class MalzemeKullanimi
+    {
+        public int MalzemeRef;
+        public string MalzemeKodu;
+        public DateTime? SonHareket;
+        public bool AcikSiparis;
+    }
+
     // Malzeme hareketi (STLINE satırı, kart 2961-D4). Giriş/çıkış IOCODE'dan: 1, 2 giriş; 3, 4 çıkış (VARSAYIM; Sorgular.Dogrulanmadi).
     public sealed class MalzemeHareketi
     {
@@ -253,6 +263,8 @@ namespace LogoYardimcisi
         List<MalzemeKaydi> MalzemeKartlari(int sonGorulen, int enCok);
         // Kayıt sırasıyla sonGorulen'den sonraki en çok enCok kartın ambar başına stok toplamı; satırı olmayan kart dönmez.
         List<StokToplami> StokToplamlari(int sonGorulen, int enCok);
+        // Kayıt sırasıyla sonGorulen'den sonraki en çok enCok kartın kullanım izi; her kart döner (hareketsiz kartta tarih null).
+        List<MalzemeKullanimi> MalzemeKullanimlari(int sonGorulen, int enCok);
         // Kullanımdaki cariler kodda, ünvanda (içinde) ya da vergi / T.C. kimlik numarasında (tam) aranır (2118).
         List<CariKaydi> CariAra(string metin, int enCok);
         CariKaydi Cari(string kod);

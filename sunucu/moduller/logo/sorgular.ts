@@ -1,6 +1,6 @@
 import type { Db } from '#cekirdek/db.ts';
 import { LOGO_FIS_TURLERI } from './kurallar.ts';
-import type { FaturaKaydi, FisGidenDurumu, ListeKaydi, LogoFisTuru, LogoMalzemeKarti, LogoStokSatiri, MalKabulSatiri } from './kurallar.ts';
+import type { FaturaKaydi, FisGidenDurumu, ListeKaydi, LogoFisTuru, LogoKullanimSatiri, LogoMalzemeKarti, LogoStokSatiri, MalKabulSatiri } from './kurallar.ts';
 import { zamanMetni } from '#cekirdek/zaman.ts';
 import { icindeDeseni } from '#paylasilan/kayit-aramasi.ts';
 import { MALZEME_KARTI_IZ_YOLU, malzemeKartiIzParametreleri, type MalzemeKartiAnahtari, type MalzemeKartiIzi } from '#paylasilan/malzeme-karti-izi.ts';
@@ -452,7 +452,7 @@ export async function pasifHatasiYaz(db: Db, tur: FisTuru, id: number, d: { zama
 
 /* ---------------- 2116: Logo malzeme kartı ve stok toplamı aynası, kod eşlemesi ---------------- */
 
-export type SayfaliAkis = 'malzeme-karti' | 'stok';
+export type SayfaliAkis = 'malzeme-karti' | 'stok' | 'kullanim';
 export interface OkumaImleci {
   sonRef: number; turBasi: Date; sonTamam: Date | null; sonTamamMetni: string | null; sayi: number; turIstendi: boolean;
 }
@@ -466,9 +466,9 @@ export function okumaImleci(db: Db, akis: SayfaliAkis): Promise<OkumaImleci | nu
   );
 }
 
-// 3077 a: "Şimdi oku" iki sayfalı akışı baştan okutur. İmleç satırı yoksa yazılmaz: hiç okunmamış akış zaten baştan başlar.
+// 3077 a: "Şimdi oku" sayfalı akışları baştan okutur. İmleç satırı yoksa yazılmaz: hiç okunmamış akış zaten baştan başlar.
 export async function turIste(db: Db): Promise<void> {
-  await db.sorgu("UPDATE logo_okuma_imleci SET tur_istendi = true WHERE akis IN ('malzeme-karti', 'stok')");
+  await db.sorgu("UPDATE logo_okuma_imleci SET tur_istendi = true WHERE akis IN ('malzeme-karti', 'stok', 'kullanim')");
 }
 
 // Sayfa yazılır; son sayfada turda görülmeyen satırlar silinir ve imleç başa döner. Boş tam tur (okuma kazası olabilir) aynayı boşaltmaz.
@@ -480,7 +480,8 @@ export async function sayfaYaz(
   const onceki = await okumaImleci(db, akis);
   const sayi = (onceki && onceki.sonRef > 0 ? onceki.sayi : 0) + sayfaSayisi;
   if (sonraki === null && sayi > 0) {
-    await db.sorgu(akis === 'malzeme-karti' ? 'DELETE FROM logo_malzeme_karti WHERE son_okuma < $1' : 'DELETE FROM logo_stok_toplami WHERE son_okuma < $1', [turBasi]);
+    const tablo = { 'malzeme-karti': 'logo_malzeme_karti', stok: 'logo_stok_toplami', kullanim: 'logo_malzeme_kullanimi' }[akis];
+    await db.sorgu(`DELETE FROM ${tablo} WHERE son_okuma < $1`, [turBasi]);
   }
   await db.sorgu(
     `INSERT INTO logo_okuma_imleci (akis, son_ref, tur_basi, son_tamam, sayi) VALUES ($1, $2, $3, $4, $5)
@@ -517,6 +518,16 @@ export async function stokToplamlariniYaz(db: Db, satirlar: readonly LogoStokSat
   );
 }
 
+export async function kullanimlariYaz(db: Db, satirlar: readonly LogoKullanimSatiri[], zaman: Date): Promise<void> {
+  if (satirlar.length === 0) return;
+  await db.sorgu(
+    `INSERT INTO logo_malzeme_kullanimi (malzeme_kodu, son_hareket, acik_siparis, son_okuma)
+     SELECT k, h, a, $4 FROM unnest($1::text[], $2::date[], $3::boolean[]) AS t(k, h, a)
+     ON CONFLICT (malzeme_kodu) DO UPDATE SET son_hareket = EXCLUDED.son_hareket, acik_siparis = EXCLUDED.acik_siparis, son_okuma = EXCLUDED.son_okuma`,
+    [satirlar.map((x) => x.malzemeKodu), satirlar.map((x) => x.sonHareket), satirlar.map((x) => x.acikSiparis), zaman],
+  );
+}
+
 export interface AynadakiKart extends LogoMalzemeKarti { sonOkuma: string }
 
 // `ara` kod, ad ve açıklamaların içinde geçen parçadır; Türkçe harf sadeleştirmesiyle (public.arama_sade) büyük/küçük harf duyarsız.
@@ -537,13 +548,16 @@ export function aynadakiKartlar(
 }
 
 // Geçiş sayfası (3068): aynanın hafif özeti, süzgeç ve sayaçlar için; stok bütün ambarların toplamıdır (okunmamışsa null).
-export interface AynaOzetSatiri { logoKayitNo: number; kod: string; aktif: boolean; stok: string | null }
+// Kullanım izi (3079 a) okunmamış kartta sonHareket ve acikSiparis null.
+export interface AynaOzetSatiri { logoKayitNo: number; kod: string; aktif: boolean; stok: string | null; sonHareket: string | null; acikSiparis: boolean | null }
 export function aynaOzeti(db: Db, o: { ara?: string }): Promise<AynaOzetSatiri[]> {
   const ara = o.ara?.trim() ? icindeDeseni(o.ara) : null;
   return db.sorgu<AynaOzetSatiri>(
-    `SELECT k.logical_ref::float8 AS "logoKayitNo", k.kod, k.aktif, t.toplam::text AS stok
+    `SELECT k.logical_ref::float8 AS "logoKayitNo", k.kod, k.aktif, t.toplam::text AS stok,
+            u.son_hareket::text AS "sonHareket", u.acik_siparis AS "acikSiparis"
        FROM logo_malzeme_karti k
        LEFT JOIN (SELECT malzeme_kodu, sum(miktar) AS toplam FROM logo_stok_toplami GROUP BY malzeme_kodu) t ON t.malzeme_kodu = k.kod
+       LEFT JOIN logo_malzeme_kullanimi u ON u.malzeme_kodu = k.kod
       WHERE ($1::text IS NULL OR public.arama_sade(k.kod) LIKE $1 OR public.arama_sade(k.ad) LIKE $1
              OR public.arama_sade(k.aciklama_2) LIKE $1 OR public.arama_sade(k.aciklama_3) LIKE $1)
       ORDER BY k.logical_ref`,

@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { listeCevapSemasi, sayfaSorguAlanlari } from '../liste.ts';
-import { zamanSemasi } from '../zaman.ts';
+import { tarihSemasi, zamanSemasi } from '../zaman.ts';
 import { surumSemasi } from '../surum.ts';
 import { durumSemasi as aletDurumu } from './kalibrasyon.ts';
 import { LOGO_GECIS_SAYFA_BOYU, LOGO_TOPLU_AZAMI } from './logo-gecisi-sabitleri.ts';
@@ -367,18 +367,23 @@ export type LogoYeniKodCevabi = z.output<typeof logoYeniKodCevabi>;
 
 /* ---------------- Logo geçişi (3068): Logo kartları CORE karşılığıyla yan yana, süzgeç ve toplu işlem adaylığı ---------------- */
 // Süzgeçler sunucuda uygulanır: istemciye bütün ayna inmez. "stoklu" Logo stok toplamı sıfırdan büyük karttır (aynadaki stok okuması).
-export const LOGO_GECIS_SUZGECLERI = ['stoklu', 'tumu', 'yeni', 'bagsiz', 'bagli', 'kullanim-disi'] as const;
+// "kullanilan" (3079 a): stoklu, son 12 ayda hareketi olan ya da açık siparişte geçen; yalnız kullanım izi okunduysa anlamlıdır.
+export const LOGO_GECIS_SUZGECLERI = ['kullanilan', 'stoklu', 'tumu', 'yeni', 'bagsiz', 'bagli', 'kullanim-disi'] as const;
+export const LOGO_KULLANIM_NEDENLERI = ['stok', 'hareket', 'siparis'] as const;
 export type LogoGecisSuzgeci = (typeof LOGO_GECIS_SUZGECLERI)[number];
 // Toplu işleme girmeyen satırın nedeni: kullanıcı satırda tek tek karar verir.
 export const LOGO_GECIS_KARAR_NEDENLERI = ['birim-farki', 'kod-eslenecek', 'kullanim-disi', 'iptal-kart'] as const;
 export const logoGecisSorgusu = z.object({
-  suzgec: z.enum(LOGO_GECIS_SUZGECLERI).prefault('stoklu'),
+  // Boşsa sunucu seçer: kullanım izi okunduysa "kullanilan", okunmadıysa "stoklu" (cevaptaki suzgec).
+  suzgec: z.enum(LOGO_GECIS_SUZGECLERI).optional(),
   ara: z.string().trim().min(2, 'En az 2 karakter yazın.').max(100).optional(),
   sayfa: z.coerce.number<number>().int().min(0).max(100_000).prefault(0),
 });
 const logoGecisSayilari = z.object({
   toplam: z.number().int(), stoklu: z.number().int(), yeni: z.number().int(), bagsiz: z.number().int(), bagli: z.number().int(),
   kullanimDisi: z.number().int(),
+  // Kullanım izi okunmadıysa null.
+  kullanilan: z.number().int().nullable(),
   // Toplu işleme girmeyen, tek tek karar isteyen satırlar.
   kararBekleyen: z.number().int(),
 });
@@ -388,6 +393,9 @@ export const logoGecisCevabi = z.object({
   // Ayna okuması: açık mı, tur sürüyor mu (sayılar artabilir), okunan kart ve son tam tur.
   okuma: z.object({ acik: z.boolean(), suruyor: z.boolean(), okunan: z.number().int().nullable(), sonTamam: zamanSemasi.nullable() }),
   sayilar: logoGecisSayilari,
+  // Uygulanan süzgeç ve kullanım izinin (3079 a) en az bir tam turda okunup okunmadığı.
+  suzgec: z.enum(LOGO_GECIS_SUZGECLERI),
+  kullanim: z.boolean(),
   // Süzgece ve aramaya uyan satır sayısı ("süzgece uyan hepsini seç").
   uyan: z.number().int(),
   kartlar: z.array(z.object({
@@ -399,6 +407,9 @@ export const logoGecisCevabi = z.object({
     aktif: z.boolean(),
     // Logo stok toplamı (bütün ambarlar), ondalık metin; stok okuması yoksa null.
     stok: z.string().nullable(),
+    // 3079 a: son malzeme hareketi (gün) ve "Kullanılanlar" nedeni; kullanım izi okunmadıysa nedenler null.
+    sonHareket: tarihSemasi.nullable(),
+    kullanimNedenleri: z.array(z.enum(LOGO_KULLANIM_NEDENLERI)).nullable(),
     durum: z.enum(LOGO_GELEN_DURUMLARI),
     koduUyar: z.boolean(),
     topluBaglanir: z.boolean(),

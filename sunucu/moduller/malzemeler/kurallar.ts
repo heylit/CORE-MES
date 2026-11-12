@@ -1257,3 +1257,24 @@ export function logoGecisAdayligi(o: {
       || o.birimKarsiliklari.some((k) => k.tmiDegeri === tmiBirim && k.logoDegeri === o.logoBirimSeti));
   return tutar ? { ...yok, topluBaglanir: true, kararNedeni: null } : { ...yok, kararNedeni: 'birim-farki' };
 }
+
+// 3079 a: Logo geçişinde "Kullanılanlar": stoğu olan, son 12 ayda hareketi olan ya da açık siparişte geçen kart. Nedenler satırda yazar.
+// Kullanım izi okunmamış kartta yalnız stok bakılır. Tarihler gün metnidir (yyyy-mm-dd); karşılaştırma metinle, saat dilimi girmez.
+export const LOGO_KULLANIM_AY = 12;
+export type LogoKullanimNedeni = 'stok' | 'hareket' | 'siparis';
+export function logoKullanimEsigi(bugun: string): string {
+  const [y, a, g] = bugun.split('-').map(Number) as [number, number, number];
+  const esik = new Date(Date.UTC(y, a - 1 - LOGO_KULLANIM_AY, 1));
+  const ayinSonGunu = new Date(Date.UTC(esik.getUTCFullYear(), esik.getUTCMonth() + 1, 0)).getUTCDate();
+  esik.setUTCDate(Math.min(g, ayinSonGunu));
+  return esik.toISOString().slice(0, 10);
+}
+export function logoKullanimNedenleri(
+  k: { stok: string | null; sonHareket: string | null; acikSiparis: boolean | null }, esik: string,
+): LogoKullanimNedeni[] {
+  const n: LogoKullanimNedeni[] = [];
+  if (k.stok !== null && Number(k.stok) > 0) n.push('stok');
+  if (k.sonHareket !== null && k.sonHareket >= esik) n.push('hareket');
+  if (k.acikSiparis === true) n.push('siparis');
+  return n;
+}
