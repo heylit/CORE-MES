@@ -13,9 +13,9 @@ import { AmbalajIkonu } from './AmbalajIkonu.tsx';
 import { acikSiparisAra } from './acik-siparis-arama.ts';
 import { useDepoSevk } from './depo-sevk.ts';
 import { anahtarlar } from './anahtarlar.ts';
-import { AMBALAJ_TURLERI, ELLE_MAL_KABUL_TURLERI, MAL_KABUL_TURU, birimliMiktar, miktarGirdisi, miktarMetni, partiAlinirMi, lotluMu, LOT_IPUCU } from './gorunum.ts';
+import { AMBALAJ_TURLERI, ELLE_MAL_KABUL_TURLERI, MAL_KABUL_TURU, birimliMiktar, miktarGirdisi, miktarMetni, partiAlinirMi, lotluMu, LOT_IPUCU, bugunGirdisi } from './gorunum.ts';
 import { EtiketMerkeziDugmesi } from './Etiketler.tsx';
-import { BekleyenIrsaliyeler, IrsaliyeSecici, bekleyenSayfasi, irsaliyeEkleYaDaBeklet, type IrsaliyeSayfasi } from './IrsaliyeBelgesi.tsx';
+import { BekleyenIrsaliyeler, IrsaliyeSecici, OkunanBilgilerKutusu, bekleyenSayfasi, irsaliyeEkleYaDaBeklet, useSayfaOkumalari, type IrsaliyeSayfasi } from './IrsaliyeBelgesi.tsx';
 import { bekleyenDosyasi, bekleyeniSil, sayfalardanSakla, type BekleyenIrsaliye } from './irsaliye-kuyrugu.ts';
 import { useOturum } from '../../ortak/veri/oturum.ts';
 import { MalKabulYapilanlar } from './MalKabulYapilanlar.tsx';
@@ -358,9 +358,9 @@ export { bosSatir, type Satir };
 // depoda düzeltilir (kalanı aşan teslim reddedilmez, satın almada fazla teslim görünür).
 // Tek arama kutusu malzeme, tedarikçi, emir ve projede birden arar; dördü ayrı sütundur. Hizmet satırı fason dönüşüdür.
 // Her satır tek satırdır (2940 a): tablo yana kayar, Sipariş solda ve Seç sağda kalır.
-function AcikSiparisler({ sec }: { sec: (x: AcikSiparisSatiri) => void }) {
+// Arama kutusu formdadır: irsaliyeden okunan sipariş no "Siparişlerde ara" ile buraya yazılır (3063 dilim 3).
+function AcikSiparisler({ sec, ara, araYaz }: { sec: (x: AcikSiparisSatiri) => void; ara: string; araYaz: (s: string) => void }) {
   const a = useQuery({ queryKey: anahtarlar.liste('acik-siparis-satirlari', {}), queryFn: () => api.get<AcikSiparisSatirlariCevabi>('/stok/acik-siparis-satirlari') });
-  const [ara, araYaz] = useState('');
   const sutunlar: Sutun<AcikSiparisSatiri>[] = [
     { anahtar: 'siparis', baslik: 'Sipariş', mono: true, sabit: 'sol', hucre: (x) => x.siparisNo || x.talepNo },
     { anahtar: 'kalem', baslik: 'Malzeme', kes: true, hucre: (x) => x.kalemAdi },
@@ -466,6 +466,7 @@ export function MalKabul() {
   const yazabilir = useIslem('stok.giris');
   const [tur, setTur] = useState<(typeof ELLE_MAL_KABUL_TURLERI)[number]>('satin_alma');
   const [irsaliye, setIrsaliye] = useState('');
+  const [irsaliyeTarihi, setIrsaliyeTarihi] = useState('');
   // Uyarı yazarken değil, alandan çıkınca aranır.
   const [arananIrsaliye, setArananIrsaliye] = useState('');
   const [satirlar, setSatirlar] = useState<Satir[]>(() => [bosSatir()]);
@@ -487,6 +488,8 @@ export function MalKabul() {
   // 3063 dilim 2: forma eklenen bekleyen irsaliyeler; mal kabulle gidince (ya da yeniden bekletilince) cihazdan silinir.
   const [eklenenBekleyenler, setEklenenBekleyenler] = useState<string[]>([]);
   const kisiId = useOturum().data?.id ?? null;
+  const okuma = useSayfaOkumalari(irsaliyeSayfalari);
+  const [siparisAramasi, setSiparisAramasi] = useState('');
   const { komut, onayPenceresi } = useStokKomutu((g: MalKabulGovdesi) => korumaliPost<MalKabulCevabi>('/stok/mal-kabul', g).then(async (c) => {
     setEtiket({ id: c.belge.id, no: c.belge.no });
     setIrsaliyeHatasi(null);
@@ -502,9 +505,9 @@ export function MalKabul() {
     }
     setEklenenBekleyenler([]);
     return c;
-  }), 'Mal kabul kaydedildi.', () => { setSatirlar([bosSatir()]); setIrsaliye(''); setArananIrsaliye(''); setIrsaliyeSayfalari([]); taslak.temizle(); });
-  const taslak = useMalKabulTaslagi({ tur, irsaliye, satirlar: satirlar.map((s) => ({ ...s, sertifikaYukleniyor: false })) }, irsaliye === '' && satirlar.every(bosMu), komut.isPending,
-    (f) => { setTur(f.tur); setIrsaliye(f.irsaliye); setArananIrsaliye(f.irsaliye); setSatirlar(f.satirlar.length ? f.satirlar.map((s) => ({ ...s, anahtar: ++sayac })) : [bosSatir()]); });
+  }), 'Mal kabul kaydedildi.', () => { setSatirlar([bosSatir()]); setIrsaliye(''); setIrsaliyeTarihi(''); setArananIrsaliye(''); setIrsaliyeSayfalari([]); taslak.temizle(); });
+  const taslak = useMalKabulTaslagi({ tur, irsaliye, irsaliyeTarihi, satirlar: satirlar.map((s) => ({ ...s, sertifikaYukleniyor: false })) }, irsaliye === '' && irsaliyeTarihi === '' && satirlar.every(bosMu), komut.isPending,
+    (f) => { setTur(f.tur); setIrsaliye(f.irsaliye); setIrsaliyeTarihi(f.irsaliyeTarihi ?? ''); setArananIrsaliye(f.irsaliye); setSatirlar(f.satirlar.length ? f.satirlar.map((s) => ({ ...s, anahtar: ++sayac })) : [bosSatir()]); });
   // Çift tık tek istek ve tek bildirim (STK-7).
   const kilitli = useGonderimKilidi();
   return (
@@ -520,10 +523,12 @@ export function MalKabul() {
             setEklenenBekleyenler((e) => [...e, k.id]);
             if (irsaliye === '' && k.irsaliyeNo !== '') { setIrsaliye(k.irsaliyeNo); setArananIrsaliye(k.irsaliyeNo); }
           }} />
-          <form className="tc-stok-form" onSubmit={(e) => { e.preventDefault(); const g = { tur, irsaliyeNo: irsaliye, taslakSil: taslak.silinsinMi(), satirlar: satirlar.map((s) => satirGovdesi(tur === 'satin_alma' ? s : { ...s, siparisSatirId: '', hizmetKarti: '' })) }; kilitli(() => komut.mutateAsync(g)); }}>
+          <form className="tc-stok-form" onSubmit={(e) => { e.preventDefault(); const g = { tur, irsaliyeNo: irsaliye, irsaliyeTarihi: irsaliyeTarihi === '' ? null : irsaliyeTarihi, taslakSil: taslak.silinsinMi(), satirlar: satirlar.map((s) => satirGovdesi(tur === 'satin_alma' ? s : { ...s, siparisSatirId: '', hizmetKarti: '' })) }; kilitli(() => komut.mutateAsync(g)); }}>
             <div className="tc-stok-iki">
               <Secim etiket="Tür" value={tur} onChange={(e) => setTur(e.target.value as typeof tur)} secenekler={ELLE_MAL_KABUL_TURLERI.map((t) => ({ deger: t, baslik: MAL_KABUL_TURU[t] }))} />
               <Girdi etiket="İrsaliye no" value={irsaliye} onChange={(e) => setIrsaliye(e.target.value)} onBlur={() => setArananIrsaliye(irsaliye)} />
+              <Girdi etiket="İrsaliye tarihi" type="date" value={irsaliyeTarihi} onChange={(e) => setIrsaliyeTarihi(e.target.value)}
+                ipucu={irsaliyeTarihi > bugunGirdisi() ? 'Tarih bugünden sonra; kontrol edin.' : undefined} />
             </div>
             <AyniIrsaliye irsaliye={arananIrsaliye} />
             <IrsaliyeSecici sayfalar={irsaliyeSayfalari} kilitli={komut.isPending}
@@ -534,13 +539,15 @@ export function MalKabul() {
                 setEklenenBekleyenler([]);
                 setIrsaliyeSayfalari([]);
               }} />
+            <OkunanBilgilerKutusu bilgiler={okuma.bilgiler} irsaliyeNo={irsaliye} kilitli={komut.isPending}
+              kullan={(no) => { setIrsaliye(no); setArananIrsaliye(no); }} irsaliyeTarihi={irsaliyeTarihi} tarihKullan={setIrsaliyeTarihi} siparisAra={tur === 'satin_alma' ? setSiparisAramasi : undefined} />
             {Number.isInteger(sevkKalemi) && sevkKalemi > 0 && <SevkKalemi kalemId={sevkKalemi} doldur={(s, alim) => { setTur(alim ? 'satin_alma' : 'diger'); setSatirlar((m) => [...m.filter((x) => !bosMu(x)), s]); }} />}
             {Number.isInteger(fasonIsEmri) && fasonIsEmri > 0 && Number.isInteger(fasonSiparis) && fasonSiparis > 0 && (
               <FasonSiparisi siparisSatirId={fasonSiparis} konumId={Number.isInteger(fasonKonum) && fasonKonum > 0 ? fasonKonum : null} isEmriId={fasonIsEmri}
                 doldur={(s) => { setTur('satin_alma'); setSatirlar((m) => [...m.filter((x) => !bosMu(x)), s]); }} />
             )}
             {Number.isInteger(emirId) && emirId > 0 && <EmirEksikleri emirId={emirId} doldur={(l) => setSatirlar((m) => [...m.filter((x) => !bosMu(x)), ...l])} />}
-            {tur === 'satin_alma' && <AcikSiparisler sec={(x) => setSatirlar((l) => {
+            {tur === 'satin_alma' && <AcikSiparisler ara={siparisAramasi} araYaz={setSiparisAramasi} sec={(x) => setSatirlar((l) => {
               const bos = l.findIndex((s) => s.kart === '' && !s.siparisSatirId);
               return bos >= 0 ? l.map((s, i) => (i === bos ? siparistenSatir(s, x) : s)) : [...l, siparistenSatir(bosSatir(), x)];
             })} />}

@@ -421,9 +421,11 @@ describe('Mal kabul', () => {
     expect((screen.getByLabelText(/Sayılan miktar/) as HTMLInputElement).value).toBe('12,5');
     fireEvent.click(screen.getByRole('button', { name: 'Uygula' }));
     fireEvent.change(screen.getByLabelText('Döküm no'), { target: { value: 'D-7' } });
+    fireEvent.change(screen.getByLabelText('İrsaliye tarihi'), { target: { value: '2026-11-10' } });
     fireEvent.click(screen.getByRole('button', { name: 'Teslim al' }));
-    await waitFor(() => expect(istekler.some((i) => i.yontem === 'POST')).toBe(true));
-    const g = istekler.find((i) => i.yontem === 'POST')!.govde as { satirlar: { malzemeId: number; miktar: string; parti: { dokumNo: string } | null }[] };
+    await waitFor(() => expect(istekler.some((i) => i.yontem === 'POST' && i.yol === '/stok/mal-kabul')).toBe(true));
+    const g = istekler.find((i) => i.yontem === 'POST' && i.yol === '/stok/mal-kabul')!.govde as { irsaliyeTarihi: string | null; satirlar: { malzemeId: number; miktar: string; parti: { dokumNo: string } | null }[] };
+    expect(g.irsaliyeTarihi).toBe('2026-11-10');
     expect(g.satirlar[0]).toMatchObject({ malzemeId: 901, miktar: '12.5', konumId: 3, parti: { dokumNo: 'D-7' }, ambalaj: { tur: 'kasa', olcu: 'hop', adet: 5 } });
   });
 
@@ -687,7 +689,7 @@ describe('Mal kabul', () => {
     expect((istekler.find((i) => i.yontem === 'POST')!.govde as { satirlar: unknown[] }).satirlar[0]).toMatchObject({ malzemeId: 904, fason: { malzemeId: 905, konumId: 77, partiId: 8 } });
   });
   it('fason dönüşü belgesi giden malzemeyi ve fason kutusunu gösterir; düzeltme satırı hizmet bağı, giden kart ve kutuyla yeniden kurar', async () => {
-    const belge = { id: 4, no: 'MK-000004', tur: 'satin_alma', irsaliyeNo: null, zaman: '2026-10-09T09:00:00+03:00', kisiAd: 'Deneme Depocu', satirSayisi: 2, farkSayisi: 0, duzeltilenId: null, duzeltenId: null } as const;
+    const belge = { id: 4, no: 'MK-000004', tur: 'satin_alma', irsaliyeNo: null, irsaliyeTarihi: null, zaman: '2026-10-09T09:00:00+03:00', kisiAd: 'Deneme Depocu', satirSayisi: 2, farkSayisi: 0, duzeltilenId: null, duzeltenId: null } as const;
     const ayrinti = { belge, satirlar: [
       { sira: 1, malzemeId: 904, malzemeAd: 'Deneme mil kaplamalı', sayilanMiktar: '18.000', partiId: 12, partiEtiketi: 'KP-1', partiBelgeleri: [{ id: 70, ad: 'Sertifika S-1 (HM-001)', tur: 'sertifika', harf: 'A', revKodu: '02' }], konumKod: 'KABUL', hareketId: 31, siparisSatirId: 51,
         fason: { malzemeId: 905, malzemeAd: 'Deneme mil ham', miktar: '20.000', konumId: 77, konumKod: 'FSN-01', hareketId: 32, hizmetMalzemeId: 903 }, logoDurumu: 'irsaliye_bekleniyor', logoIrsaliyeSatirNo: null, logoIrsaliyeMiktari: null, gkk: false },
@@ -1316,7 +1318,7 @@ describe('KD-010 elle yeniden gönderim', () => {
 describe('Lot etiketi ve LOT okutma (#1060)', () => {
 
   it("1288: Etiket Merkezi'ni açamayan mal kabulde lot etiketi düğmesi görmez; stokta ayrı basım penceresi yok", async () => {
-    const belge = { id: 12, no: 'MK-000012', tur: 'satin_alma', irsaliyeNo: null, zaman: '2026-10-13T09:00:00+03:00', kisiAd: 'D', satirSayisi: 1, farkSayisi: 0, duzeltilenId: null, duzeltenId: null } as const;
+    const belge = { id: 12, no: 'MK-000012', tur: 'satin_alma', irsaliyeNo: null, irsaliyeTarihi: null, zaman: '2026-10-13T09:00:00+03:00', kisiAd: 'D', satirSayisi: 1, farkSayisi: 0, duzeltilenId: null, duzeltenId: null } as const;
     sunucuKur(DEPOCU, {
       'GET /stok/mal-kabuller/12': () => json(200, { belge, satirlar: [{ sira: 1, malzemeId: 901, malzemeAd: 'Deneme sac', sayilanMiktar: '12.000', partiId: 4, partiEtiketi: 'LT-000123 · döküm D-7', partiBelgeleri: [], konumKod: 'KABUL', hareketId: 31, siparisSatirId: null, fason: null, logoDurumu: 'irsaliye_bekleniyor', logoIrsaliyeSatirNo: null, logoIrsaliyeMiktari: null, gkk: false }] } satisfies MalKabulAyrintiCevabi),
     });
@@ -1325,7 +1327,7 @@ describe('Lot etiketi ve LOT okutma (#1060)', () => {
     expect(screen.queryByRole('button', { name: 'Lot etiketlerini bas' })).toBeNull();
   });
   it("270 a: Etiket Merkezi sayfası olan, mal kabulün bütün lot etiketlerini Etiket Merkezi'nde açar", async () => {
-    const belge = { id: 12, no: 'MK-000012', tur: 'satin_alma', irsaliyeNo: null, zaman: '2026-10-13T09:00:00+03:00', kisiAd: 'D', satirSayisi: 1, farkSayisi: 0, duzeltilenId: null, duzeltenId: null } as const;
+    const belge = { id: 12, no: 'MK-000012', tur: 'satin_alma', irsaliyeNo: null, irsaliyeTarihi: null, zaman: '2026-10-13T09:00:00+03:00', kisiAd: 'D', satirSayisi: 1, farkSayisi: 0, duzeltilenId: null, duzeltenId: null } as const;
     sunucuKur({ ...DEPOCU, islemler: [...DEPOCU.islemler, 'sayfa.etiket-merkezi'] }, {
       'GET /stok/mal-kabuller/12': () => json(200, { belge, satirlar: [{ sira: 1, malzemeId: 901, malzemeAd: 'Deneme sac', sayilanMiktar: '12.000', partiId: 4, partiEtiketi: 'LT-000123 · döküm D-7', partiBelgeleri: [], konumKod: 'KABUL', hareketId: 31, siparisSatirId: null, fason: null, logoDurumu: 'irsaliye_bekleniyor', logoIrsaliyeSatirNo: null, logoIrsaliyeMiktari: null, gkk: false }] } satisfies MalKabulAyrintiCevabi),
     });

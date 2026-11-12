@@ -11,6 +11,8 @@ export const TASLAK_AZAMI_BAYT = 256 * 1024;
 export const malKabulTaslakFormu = z.object({
   tur: z.enum(MAL_KABUL_TURLERI),
   irsaliye: z.string().max(30),
+  // 3142: formdaki irsaliye tarihi (GGGG-AA-GG ya da boş); eski taslakta yoktur.
+  irsaliyeTarihi: z.string().max(10).optional(),
   satirlar: z.array(z.record(z.string(), z.unknown())).max(TASLAK_AZAMI_SATIR),
 });
 export type MalKabulTaslakFormu = z.output<typeof malKabulTaslakFormu>;

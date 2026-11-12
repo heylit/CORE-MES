@@ -9,7 +9,7 @@ afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
 // 3129, 3134 a, 3144 a: Excel'den toplu başlangıç stoğu. Veriler uydurmadır (ORN-).
 const BELGE: MalKabulOzeti = {
-  id: 42, no: 'ORN-MK-0042', tur: 'baslangic', irsaliyeNo: null, zaman: '2026-11-12T14:05:00+03:00', kisiAd: 'ORN Depo Sorumlusu',
+  id: 42, no: 'ORN-MK-0042', tur: 'baslangic', irsaliyeNo: null, irsaliyeTarihi: null, zaman: '2026-11-12T14:05:00+03:00', kisiAd: 'ORN Depo Sorumlusu',
   satirSayisi: 2, farkSayisi: 0, duzeltilenId: null, duzeltenId: null, malzemeSayisi: 2,
 };
 const liste = (satirlar: MalKabulOzeti[]) => json(200, { satirlar, toplam: satirlar.length, sayfa: 1, sayfaBoyu: 50 });

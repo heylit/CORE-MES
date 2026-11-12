@@ -10,7 +10,7 @@ import type { MalKabulTuru } from '#paylasilan/sozlesme/stok.ts';
 
 // 3087 a: yarım kalan mal kabul kişinin hesabında taslak olarak durur; başka cihazda kalınan yerden sürer.
 // Kişi başına tek taslak; bu cihazdaki irsaliye fotoğrafları taslağa girmez (dosya cihazdadır).
-export interface TaslakFormu<S> { tur: MalKabulTuru; irsaliye: string; satirlar: S[] }
+export interface TaslakFormu<S> { tur: MalKabulTuru; irsaliye: string; irsaliyeTarihi?: string; satirlar: S[] }
 
 const BEKLE_MS = 2000;
 const ANAHTAR = [...anahtarlar.hepsi, 'mal-kabul-taslagi'] as const;

@@ -83,6 +83,7 @@
     "@axe-core/playwright": "4.14.0",
     "@playwright/test": "1.56.1",
     "@tesseract.js-data/eng": "1.0.0",
+    "@tesseract.js-data/tur": "1.0.0",
     "@testing-library/dom": "^10.4.0",
     "@testing-library/react": "^16.1.0",
     "@types/node": "^24.0.0",

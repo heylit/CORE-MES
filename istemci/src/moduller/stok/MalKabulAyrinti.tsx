@@ -6,6 +6,7 @@ import { Dugme, DurumKutusu, Kart, OnayPenceresi, Pencere, Rozet, Tablo, useBild
 import { api } from '../../ortak/veri/api.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { CIKIS_NEDENI, HAREKET_ETIKETI, LOGO_ETIKETI, miktarMetni, zamanMetni } from './gorunum.ts';
+import { tarihMetni } from '../../ortak/veri/zaman-metni.ts';
 import { SatirListesi, bosSatir, satirGovdesi, type Satir } from './MalKabul.tsx';
 import { EtiketMerkeziDugmesi } from './Etiketler.tsx';
 import { IrsaliyeBelgeleri } from './IrsaliyeBelgesi.tsx';
@@ -111,7 +112,7 @@ export function MalKabulAyrinti() {
             {duzeltebilir && <BaslangicGeriAl id={id} kapali={belge.duzeltenId !== null || belge.duzeltilenId !== null} />}
           </>} />
       ) : (
-        <SayfaBasi baslik={`Mal kabul ${belge.no}`} alt={`${zamanMetni(belge.zaman)} · ${belge.kisiAd ?? '—'}${belge.irsaliyeNo ? ` · irsaliye ${belge.irsaliyeNo}` : ''}`}
+        <SayfaBasi baslik={`Mal kabul ${belge.no}`} alt={`${zamanMetni(belge.zaman)} · ${belge.kisiAd ?? '—'}${belge.irsaliyeNo ? ` · irsaliye ${belge.irsaliyeNo}` : ''}${belge.irsaliyeTarihi ? ` · irsaliye tarihi ${tarihMetni(belge.irsaliyeTarihi)}` : ''}`}
           sag={<>
             {b.data.satirlar.some((s) => s.partiId !== null) && <EtiketMerkeziDugmesi tur="mal-kabul" idler={[id]}>Lot etiketlerini bas</EtiketMerkeziDugmesi>}
             {duzeltebilir && belge.duzeltenId === null && <Dugme simge="edit" onClick={duzeltAc}>Düzelt</Dugme>}

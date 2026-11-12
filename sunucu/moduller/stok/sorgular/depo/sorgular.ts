@@ -41,7 +41,7 @@ export interface PartiHam {
   uretimEmriId: number | null; kayitZamani: string; eldeki: string;
 }
 export interface MalKabulHam {
-  id: number; no: string; tur: MalKabulBelgeTuru; irsaliyeNo: string | null; zaman: string; kisiId: number;
+  id: number; no: string; tur: MalKabulBelgeTuru; irsaliyeNo: string | null; irsaliyeTarihi: string | null; zaman: string; kisiId: number;
   satirSayisi: number; farkSayisi: number; duzeltilenId: number | null; duzeltenId: number | null; malzemeSayisi: number;
 }
 

@@ -19,6 +19,7 @@ const YOLLAR = {
   tesscore: 'tesseract/tesseract-core-simd-lstm.js',
   tesswasm: 'tesseract/tesseract-core-simd-lstm.wasm',
   tesseng: 'tesseract/eng.traineddata.gz',
+  tesstur: 'tesseract/tur.traineddata.gz',
 } as const;
 export const vendorAdresi = (k: keyof typeof YOLLAR): string => new URL(VENDOR + YOLLAR[k], document.baseURI).href;
 

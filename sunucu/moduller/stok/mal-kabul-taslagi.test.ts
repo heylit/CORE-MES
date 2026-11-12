@@ -134,6 +134,22 @@ describe('stok: mal kabul taslağı (gerçek PostgreSQL)', () => {
     assert.notEqual(await oku('depo2'), null);
   });
 
+  test('3142: irsaliye tarihi belgeye yazılır, düzeltmede korunur, taslakta durur; geçersiz tarih reddedilir, verilmezse boştur', async () => {
+    const k = await kart();
+    const yeni = await istek<MalKabulCevabi>('depo', 'POST', '/stok/mal-kabul', { tur: 'diger', irsaliyeNo: 'ORN-IRS-T1', irsaliyeTarihi: '2026-11-10', satirlar: [{ malzemeId: k, miktar: '2' }] });
+    assert.equal(yeni.durum, 200, JSON.stringify(yeni.govde));
+    assert.equal(yeni.govde.belge.irsaliyeTarihi, '2026-11-10');
+    const duz = await istek<MalKabulCevabi>('depo', 'POST', `/stok/mal-kabuller/${yeni.govde.belge.id}/duzelt`, { satirlar: [{ malzemeId: k, miktar: '1' }] });
+    assert.equal(duz.durum, 200, JSON.stringify(duz.govde));
+    assert.equal(duz.govde.belge.irsaliyeTarihi, '2026-11-10');
+    assert.equal((await istek('depo', 'POST', '/stok/mal-kabul', { tur: 'diger', irsaliyeTarihi: '2026-02-30', satirlar: [{ malzemeId: k, miktar: '1' }] })).durum, 400);
+    const bos = await istek<MalKabulCevabi>('depo', 'POST', '/stok/mal-kabul', { tur: 'diger', satirlar: [{ malzemeId: k, miktar: '1' }] });
+    assert.equal(bos.govde.belge.irsaliyeTarihi, null);
+    const t = await oku('depo');
+    assert.equal((await istek('depo', 'POST', '/stok/mal-kabul-taslagi/kaydet', { govde: { ...form('ORN-IRS-T2'), irsaliyeTarihi: '2026-11-11' }, surum: t?.surum ?? null })).durum, 200);
+    assert.equal((await oku('depo'))?.govde.irsaliyeTarihi, '2026-11-11');
+  });
+
   test('kaydet deftere gövdesiz girer', async () => {
     const gizli = 'ORN-GOVDE-DEFTERE-GIRMEZ';
     const t = await oku('depo');
