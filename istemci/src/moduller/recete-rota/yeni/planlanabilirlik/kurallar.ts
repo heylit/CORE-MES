@@ -33,6 +33,7 @@ export const KONTROL_ADLARI: Readonly<Record<PlanlanamamaNedeni, string>> = {
   'ek-adaysiz': 'Ek adımın tezgâhı',
   'bagli-parti': 'Bağlı parti',
   'yetki-disi': 'Kaynak yetkinizde',
+  'emir-beklemede': 'Emir bekletilmemiş',
   bilinmiyor: 'Diğer',
 };
 
@@ -57,6 +58,7 @@ export const NEDEN_ADLARI: Readonly<Record<PlanlanamamaNedeni, string>> = {
   'ek-adaysiz': 'Ek adımın tezgâhı yok',
   'bagli-parti': 'Bağlı parti bekliyor',
   'yetki-disi': 'Yetki dışı kaynak',
+  'emir-beklemede': 'Emir beklemede',
   bilinmiyor: 'Neden ölçülemedi',
 };
 

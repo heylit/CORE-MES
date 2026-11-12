@@ -52,4 +52,35 @@ describe('plan (gerçek PostgreSQL): taslaktan sonra başlayan iş canlıya alma
     assert.ok(Date.parse(y2.baslangic) >= Date.now() + 5 * 3600_000, `e1 ${y1.baslangic}-${y1.bitis}, e2 ${y2.baslangic}`);
     assert.ok(Date.parse(y2.baslangic) >= Date.parse(y1.bitis) - 60_000, `e1 ${y1.baslangic}-${y1.bitis}, e2 ${y2.baslangic}`);
   });
+
+  // 3050 a: bekleyen emir planda yerinde kalır; çalışan iş sabitlenip makinesi yeniden dizilirken bekleyenin adımı kuyruğa girmez.
+  test('sabitle bekleyen emrin adımını yeniden dizmez; kayıtlı yerinde kalır', async () => {
+    const { makineB, istasyonB, operatorId } = durum();
+    const adim = () => yeniAdim({ kaynak: { tur: 'makine', id: makineB }, ayarSuresiDk: 30, birimSureDk: 30 });
+    const [e1] = await isEmirleriAc([adim()]);
+    const [e2] = await isEmirleriAc([adim()]);
+    const [e3] = await isEmirleriAc([adim()]);
+    const ilk = await canliyaAl(await taslaktaOner());
+    assert.equal(ilk.statusCode, 200, ilk.body);
+    await vt().tx((db) => db.sorgu("UPDATE plan_yerlesimi SET baslangic = baslangic + interval '1 day', bitis = bitis + interval '1 day' WHERE is_emri_id = ANY($1::int[])", [[e1, e2, e3]]));
+    const p0 = await planOku();
+    const k = await tamam<{ taslak: number }>(c.planlama, 'POST', '/plan/kuyruklari-yaz', {
+      planSurumu: p0.surum,
+      kuyruklar: [{ kaynak: { tur: 'makine', id: makineB }, baslangic: new Date().toISOString(), isler: [e2!, e1!, e3!].map((id) => ({ emirNo: yer(p0, id).emirNo, opNo: yer(p0, id).opNo, dondurulmus: false, elle: true })) }],
+    });
+    // e3 kuyruğun sonunda boşlukla durur: motor yeniden dizseydi onu öne çekerdi.
+    await vt().tx((db) => db.sorgu("UPDATE plan_senaryo_yerlesimi SET baslangic = baslangic + interval '2 days', bitis = bitis + interval '2 days' WHERE senaryo_id = $1 AND is_emri_id = $2", [k.taslak, e3]));
+    const emirOf = async (id: number) => (await vt().tx((db) => db.tek<{ u: number }>('SELECT uretim_emri_id AS u FROM uretim_emirleri_is_emri WHERE id = $1', [id])))!.u;
+    await tamam(c.yonetici, 'POST', `/uretim-emirleri/${String(await emirOf(e3!))}/beklet`, { neden: 'malzeme' });
+    const once = yer(await planOku(k.taslak), e3!);
+    await vt().tx((db) => db.sorgu('INSERT INTO istasyonlar_yetkinlik (kisi_id, istasyon_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [operatorId, istasyonB]));
+    const op = (await vt().tx((db) => kullaniciYukle(db, operatorId)))!;
+    await vt().tx(async (db) => emirBaslat(db, op, await emirOf(e1!)));
+
+    const cevap = await canliyaAl(await planOku(k.taslak), { baslayanlar: 'sabitle' });
+    assert.equal(cevap.statusCode, 200, cevap.body);
+    const sonra = yer(await planOku(), e3!);
+    assert.deepEqual([sonra.baslangic, sonra.bitis], [once.baslangic, once.bitis], 'bekleyen yerinde kaldı');
+    await tamam(c.yonetici, 'POST', `/uretim-emirleri/${String(await emirOf(e3!))}/bekletme-kaldir`, {});
+  });
 });

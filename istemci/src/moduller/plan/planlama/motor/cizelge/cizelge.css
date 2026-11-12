@@ -177,6 +177,10 @@
 .tc-pym-gy-blok[data-sol] { border-left-style: dashed; border-top-left-radius: 0; border-bottom-left-radius: 0; }
 .tc-pym-gy-blok[data-sag] { border-right-style: dashed; border-top-right-radius: 0; border-bottom-right-radius: 0; }
 .tc-pym-gy-blok[data-gec] { box-shadow: inset 0 calc(var(--kayma) * -1) 0 var(--stop); }
+/* 3050 a: bekletilen emrin işi yerinde kalır ve tezgâhı tutar. Dik çizgi deseni "Beklemede" der; çapraz desen kapalı saat ve arızanındır. */
+.tc-pym-gy-blok[data-bekle], .tc-pym-g-is[data-bekle], .tc-pym-ol-is[data-bekle], .tc-pym-gy-l-bekle, .tc-pym-l-bekle {
+  background-image: repeating-linear-gradient(90deg, color-mix(in oklab, var(--hold) 55%, transparent) 0 var(--kayma), transparent var(--kayma) var(--b-1));
+}
 .tc-pym-gy-blok[data-risk] { box-shadow: inset 0 calc(var(--kayma) * -1) 0 var(--hazard); }
 .tc-pym-gy-blok[data-soluk] { opacity: .55; }
 .tc-pym-gy-blok[data-dondu] { outline: var(--pay-ince) solid var(--grafik); outline-offset: calc(var(--pay-ince) * -1); }
@@ -198,9 +202,12 @@
 .tc-pym-gy-ac[open] summary { margin-bottom: var(--b-1); }
 .tc-pym-gy-erken-not { display: flex; align-items: flex-start; gap: var(--b-1); padding: var(--b-1) var(--b-2); border-radius: var(--yari-1); background: var(--panel2); font-size: var(--yazi-xs); }
 .tc-pym-gy-lejant { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-1); margin-top: auto !important; }
+/* Örnek ile adı birlikte kırılır; dar genişlikte yarım öğe kalmaz. */
+.tc-pym-gy-lejant > span { display: inline-flex; align-items: center; gap: var(--b-1); white-space: nowrap; }
 .tc-pym-gy-lejant i { display: inline-block; width: var(--b-3); height: var(--b-3); border-radius: var(--pay-ince); }
 .tc-pym-gy-l-kapali { border: var(--cizgi-ince) solid var(--edge); background: repeating-linear-gradient(135deg, var(--edge) 0 var(--kayma), transparent var(--kayma) var(--nokta)); }
 .tc-pym-gy-l-ariza { background: repeating-linear-gradient(135deg, var(--stop) 0 var(--kayma), transparent var(--kayma) var(--nokta)); }
+.tc-pym-gy-l-bekle { border: var(--cizgi-ince) solid var(--hold); }
 .tc-pym-gy-l-gec { border: var(--cizgi-ince) solid var(--edge); box-shadow: inset 0 calc(var(--kayma) * -1) 0 var(--stop); }
 @container tc-pym (max-width: 1023px) {
   .tc-pym-gy-govde { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) auto; }
@@ -309,6 +316,7 @@ button.tc-pym-g-grup { letter-spacing: .1em; cursor: pointer; }
 .tc-pym-l-kapali { background: repeating-linear-gradient(135deg, var(--edge2) 0 var(--kayma), transparent var(--kayma) var(--nokta)); }
 .tc-pym-l-gec { background: var(--grafik); box-shadow: inset 0 0 0 var(--pay-ince) var(--stop); }
 .tc-pym-l-ariza { border: var(--cizgi-ince) dashed var(--stop); }
+.tc-pym-l-bekle { border: var(--cizgi-ince) solid var(--hold); }
 .tc-pym-lejant > .tc-pym-l-dar { display: none; }
 @container tc-pym (max-width: 767px) {
   .tc-pym-tb-mercek { --pym-etiket: calc(var(--b-6) * 3); --pym-satir: var(--dokunma); }

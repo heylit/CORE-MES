@@ -18,7 +18,7 @@ import { BosCalisma, BosPlan } from './BosPlan.tsx';
 import { useBekleyenUygula, usePlanKur } from './coz.ts';
 import { canliPlani, useCanliPlan } from './fark.ts';
 import { FarkSeridi } from './ust/FarkSeridi.tsx';
-import { bitenler, derle, girdiKur, planOku, plandanBitenler, simdiSaati, sorunlar } from './kurallar.ts';
+import { bekleyenSiparisler, bitenler, derle, girdiKur, planOku, plandanBitenler, simdiSaati, sorunlar } from './kurallar.ts';
 import { Kesif, KESIF_ILK, type KesifDurumu } from './kesif/Kesif.tsx';
 import { Ozet, type OzetDurumu } from './ozet/Ozet.tsx';
 import { panelSecimi } from './secim/kurallar.ts';
@@ -110,7 +110,8 @@ function Tahta(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi }) {
   const tezGrup = useMemo(() => { const m = new Map(c.D.tezgahlar.map((t) => [t.id, t.grup ?? 'diger'])); return (id: string) => (id.startsWith('@') ? 'fason' : m.get(id) ?? 'diger'); }, [c]);
   const guncel = planGuncel(c);
   const v = useMemo(() => (p ? ozetVerisi(c, p, cx, donem, kayma, emirNo) : null), [c, p, cx, donem, kayma, emirNo]);
-  const nabiz = useMemo(() => (p ? nabizDurumu(c, p, cx, donem, kayma) : null), [c, p, cx, donem, kayma]);
+  const bekleyen = useMemo(() => bekleyenSiparisler(emirler), [emirler]);
+  const nabiz = useMemo(() => (p ? nabizDurumu(c, p, cx, donem, kayma, bekleyen) : null), [c, p, cx, donem, kayma, bekleyen]);
   const sor = useMemo(() => (p ? sorunlar(c, p, cx, guncel, emirNo) : []), [c, p, cx, guncel, emirNo]);
   const now = simdiSaati(c, an);
   const r = useMemo(() => aralik(now, donem, kayma), [now, donem, kayma]);
@@ -299,7 +300,7 @@ function Tahta(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi }) {
                 <CizelgeGorunumu c={c} p={p} cx={cx} olcek={donem} kayma={kayma} r={r} now={now} secim={secim} sec={sec} olcekSec={o.olcekSec} kaydir={o.kaydir}
                   planYaz={yetki.planYaz} planKilitle={yetki.planYaz} planCanliyaAl={yetki.planCanliyaAl} studyo={studyo} ust={cubukKur(true)}
                   sor={sor} guncel={guncel} komut={komut} veriAc={veriAc} hesapAc={sayfaAc && (() => sayfaAc('hesap'))}
-                  tezStudyo={o.studyoAc ? (m) => o.studyoAc?.({ tur: 'tez', v: m }) : null} tasi={tasi} />
+                  tezStudyo={o.studyoAc ? (m) => o.studyoAc?.({ tur: 'tez', v: m }) : null} tasi={tasi} bekleyen={bekleyen} />
               ) : gorunum === 'kesif' ? (
                 <Kesif c={c} v={v} secJob={secJob} tezGrup={tezGrup} durum={ks} durumDegis={setKs}
                   sipSec={sipSec} tezSec={tezSec} gunSec={gunSec} acikGrup={acikGrup} grupAc={grupAc} />

@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { Rozet, Simge } from '../../../../../ortak/arayuz/index.ts';
-import { nabizFarki, type NabizGostergesi } from '../kurallar.ts';
+import { nabizFarki, sayiEki, type NabizGostergesi } from '../kurallar.ts';
 import { KURULUYOR, type BekleyenUygulayici, type PlanKurucu } from '../coz.ts';
 import { CALISMA_ACILINCA, PLANDA_IYILESTIR, YOK_NOTU } from '../ortak.tsx';
 import { hamleYapisi, type Hamleci } from '../hamle/hamle.ts';
@@ -55,7 +55,8 @@ export function Cubuk(o: Ozellikler) {
             {KISA.map(([id, ad, ikincil]) => {
               const v = n.cur[id]; const g = NABIZ_GOSTERGELERI.find((x) => x.id === id);
               const f = n.kar && g ? nabizFarki(id, v, n.kar[id], g.kucukIyi) : { ton: '' as const, m: '' };
-              const etiket = id === 'late' ? `geciken · ${n.etiket}` : ad;
+              // 3050 a: geciken sayısı aynen kalır; bekletilen emir gecikiyorsa yanına "N'i beklemede" yazılır.
+              const etiket = id === 'late' ? `geciken${n.gecBekleyen ? `, ${String(n.gecBekleyen)}${sayiEki(n.gecBekleyen, 'i')} beklemede` : ''} · ${n.etiket}` : ad;
               const d = id === 'late' ? (v == null ? '—' : String(v)) : nabizDegeri(id, v);
               return (
                 <button key={id} type="button" className="tc-pym-sb-nb-k" data-ikincil={ikincil || undefined} data-ton={f.ton || undefined} aria-expanded={o.nabizAcik}

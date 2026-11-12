@@ -6,7 +6,7 @@ import { BildirimSaglayici } from '../../../../../ortak/arayuz/index.ts';
 import { api } from '../../../../../ortak/veri/api.ts';
 import { ACILIS_OLCEGI, BOS_SECIM, type PlanlamaEkranOzellikleri } from '../../gorunumler.ts';
 import type { CalismaKomutu, DegisiklikSecenegi } from '../../kayit.ts';
-import { derle, girdiKur, planOku } from '../../motor/kurallar.ts';
+import { bekleyenBaslik, bekleyenSiparisler, derle, girdiKur, planOku } from '../../motor/kurallar.ts';
 import { CALISMA_ACILINCA, MOTOR_NOTU } from '../../motor/ortak.tsx';
 import type { PlanlamaCalismasi } from '../../tipler.ts';
 import type { PlanlamaDeposu } from '../../veri.ts';
@@ -15,7 +15,7 @@ import { MALIYETSIZ, YONETICI, ac as sayfaAc, sunucuKur } from '../../test-ortak
 import { PLANLAMA_ANAHTARI } from '../../veri.ts';
 import { CALISMA_DEGERI, calismaKur, OKUYAN, PLANCI } from '../veri/test-veri.tsx';
 import { BugununKararlari } from './index.tsx';
-import { dokum, durumCumlesi, gelenler, gosterGunu, kabulEdilenler, kabulYaz, kararlar } from './kurallar.ts';
+import { dokum, durumCumlesi, gecBekleyen, gelenler, gosterGunu, kabulEdilenler, kabulYaz, kararlar } from './kurallar.ts';
 
 import { saatiSabitle } from '../../test-saati.ts';
 
@@ -54,6 +54,27 @@ describe('Bugünün kararları hesapları', () => {
     expect(kabulEdilenler({ ...t, dataVer: 4 })).toEqual(new Set());
     kabulYaz(t, 'S1', false);
     expect(kabulEdilenler(t).size).toBe(0);
+  });
+
+  // 3050 a: bekleyen emir planda yerinde kalır, tezgâhını tutar; geciken sayısı aynen kalır, yanına "N'i beklemede" yazılır.
+  it('bekletme: bekleyen sipariş gelenlerde kart olur; geciken sayısının yanına beklemede sayısı', () => {
+    const c = calismaKur(); const p = planOku(c); if (!p) throw new Error('plan');
+    const emirler = { orders: [{ id: 'S1', no: 'MM-ORN-1', bekletme: 'Malzeme bekleniyor' }, { id: 'S2', no: 'MM-ORN-2' }, { id: 'S9', no: 'MM-ORN-9', bekletme: '' }] };
+    const bek = bekleyenSiparisler(emirler);
+    expect([...bek]).toEqual([['S1', { no: 'MM-ORN-1', neden: 'Malzeme bekleniyor' }]]);
+    expect(bekleyenSiparisler(null).size).toBe(0);
+    const l = gelenler(c, cx(c), true, 7, bek, p);
+    const k = l.find((x) => x.id === 'bS1');
+    expect(k?.baslik).toBe('MM-ORN-1 beklemede');
+    expect(k?.metin[0]).toMatch(/^Malzeme bekleniyor\. Planda yerinde kalıyor, .+ tezgâhını tutuyor\. Taşımak sizin kararınız\.$/u);
+    expect(k?.eylemler.map((e) => [e.ad, e.tur])).toEqual([['Planda göster', 'goster'], ['Taşı', 'motor']]);
+    // Planda işi olmayan bekleyen siparişin kartı yok (gelenlerin geri kalanı aynen).
+    expect(gelenler(c, cx(c), true, 7, bekleyenSiparisler({ orders: [{ id: 'YOK', no: 'X', bekletme: 'Diğer' }] }), p).map((x) => x.id)).toEqual(['d0', 'kapali', 'den']);
+    expect(gecBekleyen(c, p, bek)).toBe(1);
+    expect(gecBekleyen(c, p, bekleyenSiparisler({ orders: [{ id: 'S2', no: 'MM-ORN-2', bekletme: 'Diğer' }] }))).toBe(0);
+    expect(durumCumlesi(c, p, 1, bek)).toBe("Plan 2 siparişin 1 tanesinde terminin gerisinde (1'i beklemede); en çok S1, 3 saat. 1 karar bekliyor.");
+    expect(bekleyenBaslik(bek, 'S1', 'S1.10')).toBe('Beklemede: Malzeme bekleniyor. S1.10');
+    expect(bekleyenBaslik(bek, 'S2', 'S2.10')).toBe('S2.10');
   });
 
   it('döküm: oturumun başındaki plana göre yeri değişen işler sipariş başına; ilk planlı işin günü', () => {

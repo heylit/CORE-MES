@@ -8,6 +8,7 @@ import { ACIK_EMIR_DURUMLARI } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { adimlardanGorunum, SAYIM_DUZELTME_ISLEMI } from './kurallar.ts';
 import * as isEmri from './is-emri-servis.ts';
 import * as servis from './servis.ts';
+import * as sorgularBekletme from './sorgular/bekletme/sorgular.ts';
 import { elleOnaylar, hazirlikCozucusuKaydet } from './hazirlik.ts';
 import type { HazirlikCozucusu } from './hazirlik.ts';
 import { kapanisCozucusuKaydet } from './kapanis.ts';
@@ -397,6 +398,9 @@ export const adimliEmirListesi = isEmri.adimliListe;
 export const adimliEmirAyrintisi = isEmri.adimliAyrinti;
 // Reçete ve Rota'nın emir ilerlemesi (kart #1185): iş emirlerinin durumu ve sağlam adedi; arşivdeki eski (adımsız) emir yoktur.
 export const emirDilimi = isEmri.emirDilimi;
+// 3050 a: verilen emirlerden bekletilmiş olanların kimlikleri (plan bekleyen emrin adımını yerinde tutar).
+export const bekleyenEmirler = async (db: Db, emirIdleri: readonly number[]): Promise<Set<number>> =>
+  new Set((await sorgularBekletme.aktifBekletmeler(db, emirIdleri)).map((b) => b.uretimEmriId));
 export type { EmirDilimiSatiri } from './is-emri-servis.ts';
 
 // Plan (UE4, UE5, P6): planlanacak iş emirleri; kaynak, plan bilgisi, plana alma ve iptal komutları.
