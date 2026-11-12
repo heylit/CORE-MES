@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
+import { IKINCI_MENULER } from '#paylasilan/sayfalar.ts';
+import type { IkinciMenuGrubu } from '#paylasilan/sayfa-tanimi.ts';
 import type { MalzemelerCevabi, MalzemeStokSatiri, TurListesiCevabi } from '#paylasilan/sozlesme/stok.ts';
 import { DEPOCU, OKUYUCU, ac, json, sunucuKur } from './test-ortak.tsx';
 
@@ -138,19 +140,15 @@ describe('Stok listelerinde miktar önce (3026)', () => {
     expect(basliklar.at(-1)).toBe('İşlemler');
   });
 
-  it('alt şerit menüdeki adları taşır; dar ekranda "İstekler" görünür, erişilebilir ad tam kalır', async () => {
+  it('alt kısayol çubuğu yoktur (3089); Transfer ve Malzeme istekleri ikinci menüde kalır', async () => {
     sunucuKur(DEPOCU, { 'GET /stok/malzemeler': () => json(200, cevap([SATIR])), 'GET /stok/panel': () => json(200, PANEL) });
     ac('/stok/malzemeler');
-    const serit = await screen.findByRole('navigation', { name: 'Depocu kısayolları' });
-    await waitFor(() => expect(within(serit).getAllByRole('button').map((d) => d.textContent?.trim())).toEqual(['Okut', 'Transfer', 'Malzeme istekleri']));
-    cleanup();
-    vi.stubGlobal('matchMedia', (q: string) => ({ matches: q.includes('767'), media: q, addEventListener: () => undefined, removeEventListener: () => undefined }));
-    sunucuKur(DEPOCU, { 'GET /stok/malzemeler': () => json(200, cevap([SATIR])), 'GET /stok/panel': () => json(200, PANEL) });
-    ac('/stok/malzemeler');
-    const dar = await screen.findByRole('navigation', { name: 'Depocu kısayolları' });
-    const istek = await within(dar).findByRole('button', { name: 'Malzeme istekleri' });
-    expect(istek.textContent?.trim()).toBe('İstekler');
-    expect(within(dar).queryByText('Taşı')).toBeNull();
-    expect(within(dar).queryByText('Hazırlık')).toBeNull();
+    await screen.findByRole('table', { name: 'Malzeme stokları' });
+    expect(screen.queryByRole('navigation', { name: 'Depocu kısayolları' })).toBeNull();
+    // Çubuğun götürdüğü iki sayfa aynı işlemle ikinci menüde durur; Okut üst çubuktadır.
+    const gruplar: readonly IkinciMenuGrubu[] = IKINCI_MENULER.find((m) => m.kok === '/stok')!.gruplar;
+    const maddeler = gruplar.flatMap((g) => g.maddeler).map((m) => [m.baslik, m.yol, m.islem]);
+    expect(maddeler).toContainEqual(['Transfer', '/stok/sepet', 'stok.transfer']);
+    expect(maddeler).toContainEqual(['Malzeme istekleri', '/stok/hazirlik', 'stok.transfer']);
   });
 });

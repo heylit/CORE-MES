@@ -106,8 +106,8 @@ describe('İş kutusu', () => {
     expect(screen.getByText(/Logo irsaliyesiyle fark var/)).toBeTruthy();
     expect(screen.getByText(/Sizi bekleyen 2 iş var/)).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Mal kabul' })).toBeTruthy();
-    // Okutma alt şeritte ve üst çubukta var; başlıkta bir kez daha yer almaz.
-    expect(screen.getAllByRole('button', { name: 'Okut' })).toHaveLength(1);
+    // Okutma üst çubuktadır; sayfada bir kez daha yer almaz (3089: alt kısayol çubuğu kalktı).
+    expect(screen.queryAllByRole('button', { name: 'Okut' })).toHaveLength(0);
   });
   it('Akış A provası D1: teslim bekleyen malzeme isteği iş satırıdır ve Hazırlık\'a götürür', async () => {
     sunucuKur(DEPOCU, { 'GET /stok/is-kutusu': () => json(200, { ...BOS_KUTU, teslimBekleyenIstek: 2 } satisfies IsKutusuCevabi) });
@@ -1197,10 +1197,11 @@ describe('Arama, depocu modu, etiketler', () => {
     kutu.remove();
     expect(screen.queryByRole('dialog', { name: 'Ara' })).toBeNull();
   });
-  it.each([['depocu', DEPOCU], ['müdür', MUDUR]])('Stok Merkezi %s için de depocu açılışıyla gelir; alt çubuk durur, mod seçimi yoktur', async (_ad, kisi) => {
+  it.each([['depocu', DEPOCU], ['müdür', MUDUR]])('Stok Merkezi %s için de depocu açılışıyla gelir; alt kısayol çubuğu ve mod seçimi yoktur', async (_ad, kisi) => {
     sunucuKur(kisi, { 'GET /stok/is-kutusu': () => json(200, BOS_KUTU), 'GET /stok/panel': () => json(200, PANEL), 'GET /stok/sepet': () => json(200, { satirlar: [] }), 'GET /stok/toplamalar': () => json(200, { satirlar: [], toplam: 0, sayfa: 1, sayfaBoyu: 5 }) });
     ac('/stok');
-    expect(await screen.findByRole('navigation', { name: 'Depocu kısayolları' })).toBeTruthy();
+    expect(await screen.findByRole('heading', { level: 2 })).toBeTruthy();
+    expect(screen.queryByRole('navigation', { name: 'Depocu kısayolları' })).toBeNull();
     expect(screen.queryByRole('group', { name: 'Ekran modu' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Yönetici' })).toBeNull();
   });
