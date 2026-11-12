@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { PointerEvent as ReactPointerEvent } from 'react';
-import type { GozKalemi, YerlesimCevabi } from '#paylasilan/sozlesme/atolye.ts';
+import type { YerlesimCevabi } from '#paylasilan/sozlesme/atolye.ts';
 import { Dugme, useBildirim } from '../../ortak/arayuz/index.ts';
 import type { MakineDurumu } from '../../ortak/arayuz/index.ts';
 import { fabrikayaCevir } from './fabrika.ts';
@@ -9,7 +9,6 @@ import { zeminPlaniKur } from './zemin-plani.ts';
 import { SahneMotoru, webglVarMi } from './sahne/motor.ts';
 import type { BolumYerlesimi, Gorunum, KameraYeri } from './sahne/motor.ts';
 import { KucukHarita } from './KucukHarita.tsx';
-import { gozOzetleri, hucreAnahtari } from './kurallar.ts';
 import { malzemeModelDosyasi, merkezModelDosyasi, modelDosyasi, useRafStoklari } from './veri.ts';
 import type { IstasyonCanli, ParcaModeli, RafYuku } from './kurallar.ts';
 import { BolmeCephesi } from './RafCephesi.tsx';
@@ -43,7 +42,6 @@ export interface SahneOzellikleri {
   // Bölmeye karşıdan bakış (null: salon görünümü) ve göz seçimi.
   rafOdak: RafOdakSecimi | null;
   rafOdakYaz: (s: RafOdakSecimi | null) => void;
-  gozKalemleri: readonly GozKalemi[] | undefined;
   // Hafif görünüm (gölgesiz, ortam ışığı ve hareket yok); iki boyutlu planda etkisizdir.
   hafif: boolean;
   // Bu cihazda kareler en düşük çözünürlükte de yavaş: çağıran hafif görünüme geçebilir.
@@ -117,7 +115,7 @@ function IkiBoyutPlan({ bolumler, canli, secili, sec, rota }: SahneOzellikleri) 
 }
 
 function UcBoyut(o: SahneOzellikleri) {
-  const { bolumler, canli, secili, sec, gorunum, odak, izgara, etiketler: etiketAcik, rota, yuruyus, yuruyusBitir, rotaIste, parcalar, parcaGoster, rafYukleri, hedef, rafOdak, rafOdakYaz, gozKalemleri } = o;
+  const { bolumler, canli, secili, sec, gorunum, odak, izgara, etiketler: etiketAcik, rota, yuruyus, yuruyusBitir, rotaIste, parcalar, parcaGoster, rafYukleri, hedef, rafOdak, rafOdakYaz } = o;
   const kap = useRef<HTMLDivElement>(null);
   const etiketler = useRef<HTMLDivElement>(null);
   const motor = useRef<SahneMotoru | null>(null);
@@ -169,16 +167,12 @@ function UcBoyut(o: SahneOzellikleri) {
   useEffect(() => { motor.current?.rafYukleriYaz(rafYukleri); }, [rafYukleri, bolumler]);
   useEffect(() => { if (hedef) motor.current?.git(hedef.anahtar); }, [hedef]);
 
-  // Bölmeye bakış: göz etiketleri göz kalemlerinden (baskın kalem ve toplam doluluk).
-  const odakEtiketleri = useMemo(() => {
-    const m = new Map<string, { kod: string; yuzde: number }>();
-    if (!rafOdak) return m;
-    for (const g of gozOzetleri((gozKalemleri ?? []).filter((k) => k.raf.id === rafOdak.rafId)).values()) {
-      const b = g.kalemler[0];
-      if (b) m.set(hucreAnahtari(g.bolme, g.kat, g.goz), { kod: g.kalemler.length > 1 ? `${b.kod} +${g.kalemler.length - 1}` : b.kod, yuzde: g.toplam });
-    }
-    return m;
-  }, [rafOdak, gozKalemleri]);
+  // Bölmeye bakış: göz yazıları Stok'tan, Depo cephesiyle aynı (3012 a): stokta kalem sayısı ya da boş; stok görme yetkisi
+  // yoksa ya da raf henüz okunmadıysa null (göz "—" yazar, renk almaz).
+  const odakRafId = rafOdak?.rafId ?? null;
+  const odakRafIdler = useMemo(() => (odakRafId === null ? [] : [odakRafId]), [odakRafId]);
+  const odakStogu = useRafStoklari(odakRafIdler);
+  const odakEtiketleri = rafOdak && odakStogu.okur ? odakStogu.raflar.get(rafOdak.rafId) ?? null : null;
   const gozAcik = rafOdak !== null && rafOdak.kat !== null;
   useEffect(() => {
     if (!rafOdak) { motor.current?.rafOdakYaz(null); return undefined; }

@@ -411,6 +411,18 @@ describe('fabrika haritası', () => {
     expect(cagrilar.some((c) => c.yol.startsWith('/stok/'))).toBe(false);
   });
 
+  it('3012 a: haritadaki 3B raf yükü Stok\'tan okunur; stok yetkisi yoksa stok isteği atılmaz', async () => {
+    const cagrilar = sunucuKur({ ...OKUYAN, islemler: ['sayfa.atolye', 'sayfa.stok'] });
+    goster(<AtolyeHaritasi />, '/atolye');
+    await waitFor(() => expect(cagrilar.some((c) => c.yol.startsWith('/stok/goz-stoklari'))).toBe(true));
+    cleanup();
+
+    const cagrilar2 = sunucuKur(OKUYAN);
+    goster(<AtolyeHaritasi />, '/atolye');
+    await waitFor(() => expect(cagrilar2.some((c) => c.yol.startsWith('/atolye/goz-kalemleri'))).toBe(true));
+    expect(cagrilar2.some((c) => c.yol.startsWith('/stok/'))).toBe(false);
+  });
+
   it('parçalar: kod başına satır, nerede durduğu ve hangi makinede üretildiği; "Rafta göster" depoya götürür', async () => {
     sunucuKur(OKUYAN);
     goster(<AtolyeHaritasi />, '/atolye/parcalar');

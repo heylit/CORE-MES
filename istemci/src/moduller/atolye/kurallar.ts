@@ -433,6 +433,33 @@ export function gozKalemiYukleri(
   return sonuc;
 }
 
+// 3012 a: 3B raf yükü Stok'tandır. Stok doluluk yüzdesi tutmaz, yalnız gözde kalem olup olmadığını söyler; stoklu göz
+// Depo cephesindeki "az" kademesiyle aynı, yarım yükle ve raf türünün olağan biçimiyle çizilir (yüzde gösterilmez).
+// Pasif, bilinmeyen ya da stoğu okunmamış raf atlanır.
+export const STOKLU_GOZ_DOLULUGU = 0.5;
+
+export function stokYukleri(
+  raflar: readonly Pick<Raf, 'id' | 'tur' | 'aktif'>[],
+  stoklar: ReadonlyMap<number, ReadonlyMap<string, number>>,
+): Map<number, RafYuku[]> {
+  const sonuc = new Map<number, RafYuku[]>();
+  for (const raf of raflar) {
+    const stok = stoklar.get(raf.id);
+    if (!raf.aktif || !stok) continue;
+    const bicim = RAF_VARSAYILAN_BICIM[raf.tur];
+    const liste: RafYuku[] = [];
+    for (const [anahtar, kalem] of stok) {
+      const [bolme, kat, goz] = anahtar.split('-').map(Number);
+      if (kalem <= 0 || !bolme || !kat || !goz) continue;
+      liste.push({ bolme, kat, goz, bicim, doluluk: STOKLU_GOZ_DOLULUGU, model: null });
+    }
+    if (liste.length === 0) continue;
+    liste.sort((a, b) => a.bolme - b.bolme || a.kat - b.kat || a.goz - b.goz);
+    sonuc.set(raf.id, liste);
+  }
+  return sonuc;
+}
+
 // Parça (kalem) listesi: göz kalemleri, kalem görünümleri ve üretim emirlerindeki parça numaralarının birleşimi.
 // Makine bilgisi emirlerden çıkar (ayrı tablo yok): süren emrin istasyonu ve geçmiş emirlerin istasyonları.
 export interface ParcaMakinesi {

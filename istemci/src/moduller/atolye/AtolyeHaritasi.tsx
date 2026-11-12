@@ -11,7 +11,7 @@ import { useOturum } from '../../ortak/veri/oturum.ts';
 import { HaritaAraclari } from './HaritaAraclari.tsx';
 import { useOtomatikTur, useTamEkran } from './tam-ekran.ts';
 import { useEkranaSigdir } from './sigdir.ts';
-import { ISTASYON_TIPI_ADI, istasyonNesnesi, nesneCanlilari, olayNesnesi, turSirasi, depoMerkezi, gozKalemiYukleri, ilerleme, istasyonGorunumu, istasyonParcalari, parcaYerleri, ozetle, sayi, sayiMetni, siradakiEmirler, yerlesmemisCalisanlar } from './kurallar.ts';
+import { ISTASYON_TIPI_ADI, istasyonNesnesi, nesneCanlilari, olayNesnesi, turSirasi, depoMerkezi, ilerleme, istasyonGorunumu, istasyonParcalari, parcaYerleri, ozetle, sayi, sayiMetni, siradakiEmirler, stokYukleri, yerlesmemisCalisanlar } from './kurallar.ts';
 import { DepoGorunumu } from './DepoGorunumu.tsx';
 import { DijitalIkiz } from './DijitalIkiz.tsx';
 import type { DepoSecimi } from './DepoGorunumu.tsx';
@@ -21,7 +21,7 @@ import { RafOdagi } from './RafOdagi.tsx';
 import type { RafOdakSecimi } from './RafOdagi.tsx';
 import { SalonPenceresi } from './SalonPenceresi.tsx';
 import { SonHareketler } from './SonHareketler.tsx';
-import { CANLI_ARALIK_MS, rotaGetir, stokOkurMu, useArama, useStokMalzemeAramasi, useCanliDurum, useFabrika, useGozKalemleri, useKalemGorunumleri, useMakineArizalari, useMalzemeModelleri, useStokKonumuOlmayanYer, useTumEmirler, useYerlesmemisIstasyonlar } from './veri.ts';
+import { CANLI_ARALIK_MS, rotaGetir, stokOkurMu, useArama, useStokMalzemeAramasi, useCanliDurum, useFabrika, useGozKalemleri, useKalemGorunumleri, useMakineArizalari, useMalzemeModelleri, useRafStoklari, useStokKonumuOlmayanYer, useTumEmirler, useYerlesmemisIstasyonlar } from './veri.ts';
 import { SIFIR_KONUM, bolumeCevir, fabrikayaCevir, konumOku, ogeninBolumu } from './fabrika.ts';
 import type { BolumYerlesimi } from './sahne/motor.ts';
 import { YerlesimDuzenleyici } from './YerlesimDuzenleyici.tsx';
@@ -210,7 +210,10 @@ export function AtolyeHaritasi() {
     () => istasyonParcalari(parcaYerleri(gorunen), canli.emirler, kalemler ?? [], malzemeModelleri, siradakiler),
     [gorunen, canli.emirler, kalemler, malzemeModelleri, siradakiler],
   );
-  const rafYukleri = useMemo(() => gozKalemiYukleri(raflar, gozKalemListesi ?? [], kalemler ?? []), [raflar, gozKalemListesi, kalemler]);
+  // 3012 a: 3B raf yükü Stok'tan (Depo sekmesiyle aynı okuma ve aynı yetki); stok görme yetkisi yoksa yük çizilmez.
+  const yukluRafIdler = useMemo(() => raflar.filter((r) => r.aktif).map((r) => r.id), [raflar]);
+  const rafStoklari = useRafStoklari(yukluRafIdler);
+  const rafYukleri = useMemo(() => stokYukleri(raflar, rafStoklari.raflar), [raflar, rafStoklari.raflar]);
   const canliTaze = !canli.hata && canli.guncellendi > 0 && Date.now() - canli.guncellendi < CANLI_ARALIK_MS * 3;
   // Seçili öğenin bölümü (kart, rota, yakınlaşma onun metresinde).
   const seciliBolum = secili ? ogeninBolumu(gorunen, secili) : undefined;
@@ -451,7 +454,6 @@ export function AtolyeHaritasi() {
               hedef={hedef}
               rafOdak={odakRafi && rafOdak ? rafOdak : null}
               rafOdakYaz={rafOdakYaz}
-              gozKalemleri={gozKalemListesi}
               hafif={hafif}
               yavasCizim={yavasCizim}
             />
