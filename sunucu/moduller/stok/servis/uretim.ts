@@ -379,7 +379,7 @@ export async function isMalzemeleri(db: Db, k: Kullanici, istasyonId: number): P
       const mevcut = istasyonda.get(anahtar)!;
       malzemeler.push({
         malzemeId, kod: kart?.kod ?? null, ad: kart?.ad ?? null, birim: kart?.birim ?? null, birAdet: bindenMetin(birAdet), gereken: bindenMetin(birAdet * kalan), istasyonda: bindenMetin(mevcut),
-        eksik: mevcut < birAdet, yerler: yerler.get(anahtar)!, istek: istek === null ? null : { id: istek.id, no: istek.no, durum: istek.durum },
+        eksik: mevcut < birAdet, yerler: yerler.get(anahtar)!, istek: istek === null ? null : { id: istek.id, no: istek.no, durum: istek.durum }, tasinan: false,
       });
     }
     for (const t of tasinanlar) {
@@ -388,7 +388,7 @@ export async function isMalzemeleri(db: Db, k: Kullanici, istasyonId: number): P
       const mevcut = istasyonda.get(anahtar)!;
       malzemeler.push({
         malzemeId: t.malzemeId, kod: kart?.kod ?? null, ad: kart?.ad ?? null, birim: kart?.birim ?? null, birAdet: bindenMetin(t.birAdet), gereken: bindenMetin(t.birAdet * kalan),
-        istasyonda: bindenMetin(mevcut), eksik: mevcut < t.birAdet, yerler: yerler.get(anahtar)!, istek: null,
+        istasyonda: bindenMetin(mevcut), eksik: mevcut < t.birAdet, yerler: yerler.get(anahtar)!, istek: null, tasinan: true,
       });
     }
     if (malzemeler.length > 0) isler.push({ uretimEmriId: e.id, emirNo: e.emirNo, opNo: i.opNo, adimAd: i.ad, calisiyor: i.durum === 'calisiyor', kalanAdet: Number(kalan), malzemeler });

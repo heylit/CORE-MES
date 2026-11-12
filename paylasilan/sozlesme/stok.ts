@@ -1480,6 +1480,8 @@ export const isMalzemeleriCevabi = z.object({
       birAdet: ondalikMetinSemasi, gereken: ondalikMetinSemasi, istasyonda: ondalikMetinSemasi, eksik: z.boolean(),
       yerler: uretimHazirligiCevabi.shape.eksikler.element.shape.yerler,
       istek: uretimHazirligiCevabi.shape.eksikler.element.shape.istek,
+      // Önceki adımın parçası: depodan istenmez, yalnız bulunduğu istasyondan alınır.
+      tasinan: z.boolean(),
     })),
   })),
   acilanKartlar: z.array(acilanKart).optional(),

@@ -4,7 +4,7 @@ import { durumMetni, isMalzemeDurumu } from './is-malzeme-durumu.ts';
 
 type Malzeme = IsMalzemeleriCevabi['isler'][number]['malzemeler'][number];
 const malzeme = (malzemeId: number, gereken: string, istasyonda: string, istek: Malzeme['istek'] = null): Malzeme => ({
-  malzemeId, kod: `HM-${malzemeId}`, ad: null, birim: null, birAdet: '1.000', gereken, istasyonda, eksik: Number(istasyonda) < 1, yerler: [], istek,
+  malzemeId, kod: `HM-${malzemeId}`, ad: null, birim: null, birAdet: '1.000', gereken, istasyonda, eksik: Number(istasyonda) < 1, tasinan: false, yerler: [], istek,
 });
 const is = (uretimEmriId: number, malzemeler: Malzeme[]): IsMalzemeleriCevabi['isler'][number] => ({
   uretimEmriId, emirNo: `UE-${uretimEmriId}`, opNo: 10, adimAd: 'Tornalama', calisiyor: false, kalanAdet: 10, malzemeler,
