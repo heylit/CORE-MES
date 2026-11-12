@@ -2622,6 +2622,36 @@ describe('arkon sayım ve olayları CORE üretim emrine yansır (gerçek Postgre
     assert.equal(yok.durum, 400, JSON.stringify(yok.govde));
   });
 
+  test('emirden çıkarılan adımın Hazırlık\'ta kaydedilmiş paketi listeden ve tek okumadan düşer; kayıt tabloda kalır; öteki adımın paketi durur (3105)', async () => {
+    const r = await rotaliEmirKur();
+    const [ie1] = await isEmriIdleri(r.emirId);
+    const tip = (await ortam!.sahip.tek<{ t: number }>('SELECT operasyon_tipi_id AS t FROM uretim_emirleri_is_emri WHERE id = $1', [ie1]))!.t;
+    const ek = {
+      oncekiOpNo: 10, opNo: 15, tur: 'ek', ad: 'Ek işlem', operasyonTipiId: tip, kaynak: await makinesi(ie1!),
+      ayarSuresiDk: '5', birimSureDk: '1', terminGun: null, aciklama: null,
+    };
+    const surum = () => adimliEmir(r.emirId).then((a) => (a as { emir: { surum: number } }).emir.surum);
+    const komut = async (yol: string, govde: unknown): Promise<void> => {
+      const c = await app.inject({ method: 'POST', url: `/api${yol}`, payload: govde as object, headers: { cookie: yonetici, [ISTEK_KIMLIGI_BASLIGI]: randomUUID() } });
+      assert.equal(c.statusCode, 200, c.body);
+    };
+    await komut(`/adimli-emirler/${r.emirId}/ek-adim`, { ...ek, surum: await surum() });
+    const idler = await isEmriIdleri(r.emirId);
+    assert.equal(idler.length, 3);
+    const ekAdim = idler[1]!;
+    for (const id of [ie1!, ekAdim]) {
+      const t = (await paketOku(ieKimligi(id)))!.govde;
+      assert.equal((await paketYaz(ieKimligi(id), null, { ...t, note: 'hazırlandı' })).durum, 200);
+    }
+    await komut(`/adimli-emirler/${r.emirId}/ek-adim-kaldir`, { opNo: 15, surum: await surum() });
+    const liste = await paketler();
+    assert.ok(!liste.has(ieKimligi(ekAdim)), 'çıkarılan adımın paketi listede');
+    assert.ok(liste.has(ieKimligi(ie1!)), 'öteki adımın paketi düştü');
+    assert.equal(await paketOku(ieKimligi(ekAdim)), null);
+    const satir = await ortam!.sahip.tek<{ n: number }>("SELECT count(*)::int AS n FROM arkon_belge WHERE depo = 'pkgs' AND kimlik = $1", [ieKimligi(ekAdim)]);
+    assert.equal(satir!.n, 1, 'kayıtlı paket silinmemeli');
+  });
+
   test('iş emri paketinde veri kapsamı: iş merkezi kısıtlı kişi yalnız kendi istasyonundaki adımın paketini görür ve yazar', async () => {
     const kisitli = await kisiKur('op9', ['arkon.operator', 'arkon.hazirlik', 'sayfa.arkon', 'terminal.uret']);
     const kisi = await vt().tek<{ id: number }>("SELECT id FROM kisi WHERE kullanici_adi = 'op9'");

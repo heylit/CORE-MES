@@ -143,10 +143,11 @@ describe('arkon PDF görüntüsü: iş ve okuma ucu (gerçek PostgreSQL)', () =>
     assert.equal(c.statusCode, 200, c.body);
     return ozet(icerik);
   }
+  // Arkon'un kendi paketi: iş emri paketi (tmi-ie-) iş emri yoksa gösterilmez, görüntü ucu dosyayı ancak görünen paketten verir.
   const paketYaz = (dosya: string): Promise<unknown> => o().sahip.sorgu(
-    `INSERT INTO arkon_belge (depo, kimlik, govde, surum, degistiren_id) VALUES ('pkgs', 'tmi-ie-1', $1, 1, $2)
+    `INSERT INTO arkon_belge (depo, kimlik, govde, surum, degistiren_id) VALUES ('pkgs', 'pdf-paket-1', $1, 1, $2)
      ON CONFLICT (depo, kimlik) DO UPDATE SET govde = EXCLUDED.govde, surum = arkon_belge.surum + 1`,
-    [JSON.stringify({ id: 'tmi-ie-1', no: 'IE-DENEME', status: 'published', readCfg: { res: 900 }, files: [{ kind: 'pdf', page: 1, bytes: { $blob: dosya, t: 'u8', n: 1 } }] }), yoneticiId],
+    [JSON.stringify({ id: 'pdf-paket-1', no: 'IE-DENEME', status: 'published', readCfg: { res: 900 }, files: [{ kind: 'pdf', page: 1, bytes: { $blob: dosya, t: 'u8', n: 1 } }] }), yoneticiId],
   );
   const goruntuAl = async (cerez: string, dosya: string, imza: string) => {
     const c = await app.inject({ method: 'GET', url: `/api/arkon/dosyalar/${dosya}/goruntu?sayfa=1&imza=${imza}`, headers: { cookie: cerez } });
