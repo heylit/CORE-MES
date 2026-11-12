@@ -108,3 +108,14 @@ Değişen onaylı karar: QR teslim kurgusundaki varsayım 5 ("yazıcıya doğrud
 - İstemci `Yazdir.tsx`: baskı sayfaları gövdeye portal; gövde sınıfı `tc-etk-baskida` ve `@page { size: G mm H mm; margin: 0 }` stili yalnız yazdırma süresince (kalite-merkezi Önizleme kalıbı); renk `--qr-kare`/`--qr-zemin` (temadan bağımsız siyah-beyaz). Önizleme ile baskı aynı çizimi (`EtiketCizimi`) kullanır.
 - Yazı tipi: istek "tarayıcının yerleşik fontu" diyordu; baskı önizlemeyle aynı `--font-ana`'yı (uygulamayla gelen yerel yazı tipi, dış istek yok) kullanır ki önizleme ile kâğıt aynı satır kırılımını göstersin (yazar kararı).
 - Rehber üç yolu ve kurulum notunu yazar; eski "Yazıcıya doğrudan gönderim yoktur" ve "Şimdilik örnek değerlerle basılır" cümleleri kalktı (ikisi de eskimişti).
+
+## Malzeme etiketi (3124 a, kullanıcı kararı 12.11.2026)
+- Kurgu ve onaylı ön izleme proje klasöründe (devir-heylit/3120/), depoda değil. Lot ve kalite durum etiketi tek "Malzeme etiketi"nde birleşir.
+- Yeni şablonlar `malzeme-etiketi-100x50` (tür `lot`, listede lot-100x50'den önce: Etiket bas ve Basılacaklar'ın varsayılanı) ve `malzeme-durum-100x50` (tür `kalite-durum`, kalite-durum-100x50'den önce). Eski iki şablon seçilebilir kalır; değerleri değişmedi.
+- Malzeme etiketi lot ve mal kabul seçiminde lotun her dolu bakiye satırı için ayrı etiket verir (durum bakiyenindir; kısmi kabulde iki etiket). Kayıt kimliği ve defter yine lottur; stoğu kalmamış lotta tek etiket, durum bandı yok.
+- Okumalar: stok `malzemeEtiketleri` (yeni, yalnız ekleme; lot, bakiye, ilk mal kabul satırı, girişin GKK'ya gidip gitmediği), malzemeler `malzemeOzellikleri` (ölçü, kalite, durum, işlem), satın alma `siparisSatirlari` (yalnız tedarikçi adı), Kalite Merkezi `girisOzetleri` (3148). Kalite Merkezi aynı kattadır (ADR 0006): ithal edilmez, `sunucu/kablolama.ts`'te `GKK özeti -> malzeme etiketi` bağıyla gelir.
+- GKK serbest notu ve kişi adları basılmaz (ön izlemede yok). Şartlı kabulde şart metni GKK notundan alt satıra yazılır (ön izlemedeki "Şart: ...").
+- 2168-1 a ile ayrım: hazır şablonlarda piktogram sağ üsttedir; malzeme etiketinde durum piktogramı onaylı ön izlemedeki gibi sol üstte, durum bandının başındadır. Test istisnası adıyla yazılı (`kurallar.test.ts`).
+- Demirbaş (lotsuz) mal kabul satırı bu işte basılmaz: defter lot kimliği tutar; karar 3149'dadır.
+- Göç yok, yeni işlem ve yetki yok (`etiket-merkezi.oku` / `.bas`).
+
