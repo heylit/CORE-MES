@@ -16,6 +16,8 @@ export const STOK_IKINCI_MENU = {
       maddeler: [
         { anahtar: 'is-kutusu', baslik: 'Bugün', yol: '/stok', simge: 'dash', islem: 'sayfa.stok' },
         { anahtar: 'mal-kabul', baslik: 'Mal kabul', yol: '/stok/mal-kabul', simge: 'truck', islem: 'stok.giris' },
+        // 3129: Excel'den toplu başlangıç stoğu (3134 a); yükleme mal kabulle aynı işlem.
+        { anahtar: 'baslangic-stogu', baslik: 'Başlangıç stoğu', yol: '/stok/baslangic-stogu', simge: 'upload', islem: 'stok.giris' },
         // Sevkiyatın tetiklediği son çıkış ve kabuller (960); çıkış stok.cikis, kabul stok.giris ister.
         { anahtar: 'depo-sevk', baslik: 'Depo sevk', yol: '/stok/depo-sevk', simge: 'route', islem: 'stok.cikis', veya: ['stok.giris'] },
         // Malzeme istekleri ve toplama listeleri tek yerde: depocu aynı işi iki ekranda yapmaz.

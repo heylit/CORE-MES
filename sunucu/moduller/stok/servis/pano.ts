@@ -124,6 +124,8 @@ export async function menuSayaclari(db: Db, islemler: readonly string[], kisiId:
   return {
     'is-kutusu': islemler.includes('sayfa.stok') ? isler : null,
     'mal-kabul': islemler.includes('stok.giris') ? k.logoFarki : null,
+    // Başlangıç stoğu (3129): iş listesi yok, sayaç yok.
+    'baslangic-stogu': null,
     // Hazırlık: bekleyen istekler ve açık listeler birlikte.
     hazirlik: islemler.includes('stok.transfer') || islemler.includes('stok.toplama')
       ? (islemler.includes('stok.transfer') ? await sorgular.acikIstekSayisi(db, kapsamliIstasyonlar) : 0) + await sorgular.toplamaSay(db, 'topluyor', kapsamliIstasyonlar) : null,
@@ -258,7 +260,7 @@ export async function hareketListesi(db: Db, s: HareketlerListesi): Promise<Sayf
     : (await malzemeAra(db, { metin: s.metin, sayfa: 1, sayfaBoyu: 200 })).satirlar.map((m) => m.id);
   const suzgec: sorgular.HareketSuzgeci = {
     malzemeId: s.malzemeId, konumId: s.konumId, partiId: s.partiId, tur: s.tur, uretimEmriId: s.uretimEmriId, baslangic: s.baslangic, bitis: s.bitis, metin: s.metin,
-    metinMalzemeleri,
+    kaynak: s.kaynak, metinMalzemeleri,
   };
   const l = await sayfaliListe(s, {
     ...(sorgular.suzgecVarMi(suzgec) ? { say: () => sorgular.hareketSay(db, suzgec) } : {}),

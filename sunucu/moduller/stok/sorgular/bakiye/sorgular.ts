@@ -249,18 +249,26 @@ export const hareketBul = (db: Db, id: number): Promise<HareketHam | null> => db
 export interface HareketSuzgeci {
   malzemeId?: number | undefined; konumId?: number | undefined; partiId?: number | undefined; tur?: string | undefined;
   uretimEmriId?: number | undefined; baslangic?: string | undefined; bitis?: string | undefined; metin?: string | undefined;
+  kaynak?: 'mal_kabul' | 'uretim' | 'baslangic' | undefined;
   // Metnin ad ya da stok kodunda geçtiği kartlar; malzeme tablosu malzemeler modülünündür, servis disari.ts ile bulup verir.
   metinMalzemeleri?: readonly number[] | undefined;
 }
+// 3129: hareket başlangıç stoğu belgesinin satırıdır ya da onun geri alınmasıdır.
+const BASLANGIC_HAREKETI = `EXISTS (SELECT 1 FROM stok_mal_kabul_satiri s JOIN stok_mal_kabul m ON m.id = s.mal_kabul_id
+              WHERE m.tur = 'baslangic' AND s.hareket_id IN (h.id, h.geri_alinan_id))`;
 const hareketSuzgeci = (s: HareketSuzgeci) => ({
   sql: `${HAREKET_BAGLARI} WHERE ($1::int IS NULL OR h.malzeme_id = $1) AND ($2::int IS NULL OR h.kaynak_konum_id = $2 OR h.hedef_konum_id = $2)
         AND ($3::bigint IS NULL OR h.parti_id = $3) AND ($4::text IS NULL OR h.tur = $4) AND ($5::int IS NULL OR h.uretim_emri_id = $5)
         AND ($6::timestamptz IS NULL OR h.zaman >= $6) AND ($7::timestamptz IS NULL OR h.zaman < $7)
         AND ($8::text IS NULL OR ${S('h.aciklama')} LIKE $8 OR ${S('kk.kod')} LIKE $8 OR ${S('hk.kod')} LIKE $8
           OR ${S('p.lot_no')} LIKE $8 OR ${S('p.tedarikci_parti_no')} LIKE $8 OR ${S('p.dokum_no')} LIKE $8
-          OR ${S('(SELECT f.no FROM stok_hareket_fisi f WHERE f.id = hs.fis_id)')} = $9 OR h.malzeme_id = ANY($10::int[]))`,
+          OR ${S('(SELECT f.no FROM stok_hareket_fisi f WHERE f.id = hs.fis_id)')} = $9 OR h.malzeme_id = ANY($10::int[]))
+        AND ($11::text IS NULL OR CASE $11
+              WHEN 'uretim' THEN h.giris_kaynagi = 'uretim'
+              WHEN 'mal_kabul' THEN h.giris_kaynagi = 'mal_kabul' AND NOT ${BASLANGIC_HAREKETI}
+              ELSE ${BASLANGIC_HAREKETI} END)`,
   p: [s.malzemeId ?? null, s.konumId ?? null, s.partiId ?? null, s.tur ?? null, s.uretimEmriId ?? null, s.baslangic ?? null, s.bitis ?? null,
-    icinde(s.metin), s.metin == null ? null : aramaSade(s.metin), s.metin == null ? null : [...(s.metinMalzemeleri ?? [])]],
+    icinde(s.metin), s.metin == null ? null : aramaSade(s.metin), s.metin == null ? null : [...(s.metinMalzemeleri ?? [])], s.kaynak ?? null],
 });
 export const suzgecVarMi = (s: HareketSuzgeci): boolean => Object.values(s).some((v) => v !== undefined);
 export const HAREKET_SIRALAMASI: SiralamaTanimi<'zaman'> = { sutunlar: { zaman: 'h.zaman' }, ikincil: 'h.id', varsayilan: { sutun: 'h.zaman', yon: 'azalan' } };
@@ -270,7 +278,7 @@ export async function hareketSay(db: Db, s: HareketSuzgeci): Promise<number> {
 }
 export function hareketler(db: Db, s: HareketSuzgeci, sira: SiralamaIstegi<'zaman'>, d: Dilim): Promise<HareketHam[]> {
   const f = hareketSuzgeci(s);
-  return db.sorgu(`${HAREKET_SECIMI} ${f.sql} ORDER BY ${siralamaSql(HAREKET_SIRALAMASI, sira)} LIMIT $11 OFFSET $12`, [...f.p, d.sinir, d.atla]);
+  return db.sorgu(`${HAREKET_SECIMI} ${f.sql} ORDER BY ${siralamaSql(HAREKET_SIRALAMASI, sira)} LIMIT $12 OFFSET $13`, [...f.p, d.sinir, d.atla]);
 }
 
 // ---- Son kullanma tarihi (2099-2 c) -------------------------------------------------------------------------------

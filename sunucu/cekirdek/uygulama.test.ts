@@ -155,6 +155,8 @@ const TAM_DENETLENMEYEN_UCLAR = [
   'POST /kalite-merkezi/studyo/olcumler/cmm-yaz govdesiz+secim',
   // Mal kabul taslağı 2 sn'de bir bütün formu yazar: gövde deftere girmez, kim ve ne zaman girer; teslimde mal kabul kaydı tamdır (3109 a).
   'POST /stok/mal-kabul-taslagi/kaydet govdesiz',
+  // Başlangıç stoğu denetimi yazmaz, ekran her düzeltmede çağırır: satırlar deftere girmez, satır sayısı ve dosya özeti girer (kullanıcı kararı 3150 a, 12.11.2026, "Yalnız özet yazılsın").
+  'POST /stok/baslangic-stogu/denetle govdesiz+secim',
   'POST /oturum/nabiz yok', // 1755 a: cihaz nabzı 5 dakikada bir gelir, izini kendi tablosunda bırakır (kart 1666).
 ];
 

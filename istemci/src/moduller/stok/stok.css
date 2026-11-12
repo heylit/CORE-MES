@@ -744,3 +744,18 @@ a.tc-stok-kpi:hover, a.tc-stok-kpi:focus-visible { background: var(--panel2); }
   .tc-stok-bekleyen-eylem .tc-dugme:not([aria-label]) { flex: 1 1 0; }
   .tc-stok-irsaliye-sakla .tc-dugme { inline-size: 100%; }
 }
+
+/* Başlangıç stoğu (3129): düzenleme tablosu, sayaçlar ve toplu eşleme paneli. */
+.tc-baslangic-ust { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--b-3); }
+.tc-baslangic-sayac { display: flex; flex-wrap: wrap; gap: var(--b-2); }
+.tc-baslangic-panel { display: grid; gap: var(--b-3); grid-template-columns: repeat(auto-fit, minmax(min(100%, 20rem), 1fr)); }
+.tc-baslangic-esle { display: grid; gap: var(--b-1); min-width: 0; }
+.tc-baslangic-kod { font-family: var(--font-mono); }
+.tc-baslangic-girdi { min-width: 8ch; width: 100%; }
+.tc-baslangic-hucre { display: inline-flex; align-items: center; gap: var(--b-1); }
+.tc-baslangic-hucre[data-degisti] { border-bottom: var(--cizgi) dashed var(--hold); }
+.tc-baslangic-aciklama { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--b-2); white-space: normal; }
+.tc-baslangic-taslak {
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-3);
+  border: thin solid var(--edge); border-radius: var(--yari-2); padding: var(--b-3); background: var(--panel-solid);
+}

@@ -1,5 +1,5 @@
 import type {
-  AmbalajTuru, CikisNedeni, ElleKonumTuru, FisGonderimSekli, HareketTuru, KonumTuru, ListeFisiTuru, LogoEslesmeDurumu, LogoFisDurumu, MalKabulTuru, MalzemeFisiTuru, MalzemeIstegiDurumu, MalzemeTuru, Numaralama, RafTuru,
+  AmbalajTuru, CikisNedeni, ElleKonumTuru, FisGonderimSekli, HareketKaynagi, HareketTuru, KonumTuru, ListeFisiTuru, LogoEslesmeDurumu, LogoFisDurumu, MalKabulBelgeTuru, MalKabulTuru, MalzemeFisiTuru, MalzemeIstegiDurumu, MalzemeTuru, Numaralama, RafTuru,
   StokDurumuSuzgeci, TeslimDurumu,
 } from '#paylasilan/sozlesme/stok.ts';
 import type { RozetTonu } from '../../ortak/arayuz/index.ts';
@@ -81,19 +81,25 @@ export const partiAlinirMi = (tur: MalzemeTuru | null): boolean => tur !== 'demi
 
 // İstemci sözleşmeden değer ithal etmez (zod pakete girmesin); listeler etiket tablosundan türer ve tip her değeri ister.
 const anahtarlari = <K extends string>(r: Record<K, unknown>): K[] => Object.keys(r) as K[];
-export const MAL_KABUL_TURU: Record<MalKabulTuru, string> = { satin_alma: 'Satın alma teslimi', iade: 'İade', diger: 'Diğer' };
+// Belge türü etiketleri; başlangıç stoğu (3129) yalnız toplu yüklemeyle açılır, mal kabul formunda seçilmez (ELLE_MAL_KABUL_TURLERI).
+export const MAL_KABUL_TURU: Record<MalKabulBelgeTuru, string> = { satin_alma: 'Satın alma teslimi', iade: 'İade', diger: 'Diğer', baslangic: 'Başlangıç stoğu' };
+const ELLE_MAL_KABUL_TURU: Record<MalKabulTuru, true> = { satin_alma: true, iade: true, diger: true };
 export const AMBALAJ_TURU: Record<AmbalajTuru, string> = { kasa: 'Plastik kasa', koli: 'Karton koli', palet: 'Palet', bidon: 'Bidon / varil', makara: 'Makara' };
 export const RAF_TURU: Record<RafTuru, string> = { palet: 'Palet rafı', celik: 'Hafif çelik raf', konsol: 'Konsol raf', zemin: 'Zemin istif alanı' };
 export const NUMARA: Record<Numaralama, string> = { sirali: 'Sıralı', tek: 'Tek (1, 3, 5…)', cift: 'Çift (2, 4, 6…)' };
 export const ELLE_KONUM: Record<ElleKonumTuru, string> = { kabul: 'Mal kabul alanı', depo_zemini: 'Depo zemini', fason: 'Fason kutusu', ara_alan: 'Ara alan (fabrika içi bekleme)', hurda: 'Hurda alanı' };
 export const STOK_SUZGECI: Record<StokDurumuSuzgeci, string> = { kritik: 'Kritik', eksi: 'Eksi bakiye', kabulde: 'Kabulde bekleyen', statulu: 'Statülü' };
 export const MAL_KABUL_TURLERI = anahtarlari(MAL_KABUL_TURU);
+export const ELLE_MAL_KABUL_TURLERI = anahtarlari(ELLE_MAL_KABUL_TURU);
 export const AMBALAJ_TURLERI = anahtarlari(AMBALAJ_TURU);
 export const RAF_TURLERI = anahtarlari(RAF_TURU);
 export const NUMARALAMALAR = anahtarlari(NUMARA);
 export const ELLE_KONUM_TURLERI = anahtarlari(ELLE_KONUM);
 export const KONUM_TURLERI = anahtarlari(KONUM_ETIKETI);
 export const HAREKET_TURLERI = anahtarlari(HAREKET_ETIKETI);
+// 3129: girişin kaynağı (Hareketler süzgeci); mal kabul başlangıç stoğunu içermez.
+export const HAREKET_KAYNAGI: Record<HareketKaynagi, string> = { mal_kabul: 'Mal kabul', uretim: 'Üretim', baslangic: 'Başlangıç stoğu' };
+export const HAREKET_KAYNAKLARI = anahtarlari(HAREKET_KAYNAGI);
 // Tedarikçiye iade yalnız giriş kontrolünün red kararıyla yazılır (1253 a); elle çıkışta seçilmez.
 export const CIKIS_NEDENLERI = anahtarlari(CIKIS_NEDENI).filter((n): n is Exclude<CikisNedeni, 'tedarikci_iade'> => n !== 'tedarikci_iade');
 export const LOGO_ESLESME_DURUMLARI = anahtarlari(LOGO_ETIKETI);

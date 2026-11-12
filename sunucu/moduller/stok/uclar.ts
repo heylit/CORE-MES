@@ -1,4 +1,5 @@
 import { ikiliCevap, uc } from '#cekirdek/uc.ts';
+import { baslangicDenetleCevabi, baslangicDenetleGovdesi, baslangicGeriAlmaDurumu, baslangicYukleCevabi, baslangicYukleGovdesi } from '#paylasilan/sozlesme/stok.ts';
 import {
   acikSiparisSatirlariCevabi, fasonIsleriCevabi, fasonIsleriSorgusu, cikisGovdesi, cikisOnerisiCevabi, emirTamamlaGovdesi, emirTamamlamaCevabi, cikisOnerisiSorgusu, depolarCevabi, geriAlGovdesi, topluGeriAlGovdesi, hareketCevabi, hareketlerCevabi, hareketlerSorgusu, isKutusuCevabi,
   depoRaflariGovdesi, gozOnerisiCevabi, haritaEslemeCevabi, haritaOzetiCevabi, topluBolumDeposuCevabi, zeminCevabi, bolumDeposuGovdesi, gozStoklariSorgusu, gozStoklariCevabi, kimlikParametresi, konumAcGovdesi, panelCevabi, aylikStokDegeriCevabi, aylikStokDegeriSorgusu, stokDegeriCevabi, stokDegeriSorgusu, konumAyrintiCevabi, konumCevabi, konumDuzenleCevabi, konumDuzenleGovdesi, konumlarCevabi, konumlarSorgusu, konumMalzemeleriCevabi, konumMalzemeleriSorgusu, malKabulAyrintiCevabi,
@@ -124,6 +125,17 @@ export const uclar = [
   uc({ yontem: 'GET', yol: '/stok/mal-kabul-satirlari', yetki: OKUMA, sorgu: malKabulSatirlariSorgusu, cevap: malKabulSatirlariCevabi, isle: ({ db, kullanici, sorgu }) => s.malKabulSatirListesi(db, kullanici, sorgu) }),
   // Düzeltme hareketleri ters çevirir: geri alma işlemiyle korunur (DEP-53).
   uc({ yontem: 'POST', tekrarKorumali: true, kilitlenmedeYinele: true, yol: '/stok/mal-kabuller/:id/duzelt', yetki: 'stok.geri-al', parametre: kimlikParametresi, govde: malKabulDuzeltGovdesi, cevap: malKabulCevabi, isle: ({ db, kullanici, parametre, govde, denetimEki }) => { s.eksiOnayiDenetle(kullanici, govde); return s.malKabulDuzelt(db, kullanici, parametre.id, govde, denetimEki); } }),
+  // 3129 (3134 a): başlangıç stoğu. Denetle yazmaz; ekran her düzeltmede çağırır, gövde 2000 satıra kadardır: deftere yalnız satır sayısı ve dosya özeti girer (3150 a).
+  // Stok modülünün her POST'u gibi tekrar korumalıdır (ADR 0025 kural 5). Yükleme tek seferdir: gövde deftere tam girer.
+  uc({ yontem: 'POST', tekrarKorumali: true, yol: '/stok/baslangic-stogu/denetle', yetki: 'stok.giris', denetim: 'govdesiz', govde: baslangicDenetleGovdesi, cevap: baslangicDenetleCevabi,
+    denetimOzeti: (g) => ({ satirSayisi: g.satirlar.length, dosyaOzeti: g.dosyaOzeti ?? null }),
+    isle: ({ db, govde }) => s.baslangicDenetle(db, govde) }),
+  uc({ yontem: 'POST', kilitlenmedeYinele: true, tekrarKorumali: true, yol: '/stok/baslangic-stogu', yetki: 'stok.giris', govde: baslangicYukleGovdesi,
+    cevap: baslangicYukleCevabi, isle: ({ db, kullanici, govde }) => s.baslangicYukle(db, kullanici, govde) }),
+  uc({ yontem: 'GET', yol: '/stok/baslangic-stogu/:id/geri-alma', yetki: OKUMA, parametre: kimlikParametresi, cevap: baslangicGeriAlmaDurumu,
+    isle: ({ db, parametre }) => s.baslangicGeriAlmaDurumu(db, parametre.id) }),
+  uc({ yontem: 'POST', kilitlenmedeYinele: true, tekrarKorumali: true, yol: '/stok/baslangic-stogu/:id/geri-al', yetki: 'stok.geri-al', parametre: kimlikParametresi, cevap: malKabulCevabi,
+    isle: ({ db, kullanici, parametre }) => s.baslangicGeriAl(db, kullanici, parametre.id) }),
   uc({ yontem: 'POST', kilitlenmedeYinele: true, tekrarKorumali: true, yol: '/stok/uretim-girisi', yetki: 'stok.giris', govde: uretimGirisiGovdesi, cevap: hareketCevabi, isle: ({ db, kullanici, govde }) => s.uretimGirisi(db, kullanici.id, govde) }),
 
   // Emir tamamlama: bitmiş emrin kalan sarfı ve çıktısı tek komutla (EK "Stok ve tamamlama"). Komut çıkış yetkisini ayrıca ister.

@@ -161,13 +161,13 @@ export const malKabulSatirlari = (db: Db, id: number): Promise<MalKabulSatirHam[
    FROM stok_mal_kabul_satiri s LEFT JOIN stok_konum k ON k.id = s.konum_id LEFT JOIN stok_parti p ON p.id = s.parti_id
      LEFT JOIN stok_hareketi f ON f.id = s.fason_cikis_hareket_id LEFT JOIN stok_konum fk ON fk.id = f.kaynak_konum_id
    WHERE s.mal_kabul_id = $1 ORDER BY s.sira`, [id]);
-export interface MalKabulSuzgeci { tur?: string | undefined; logoDurumu?: string | undefined; baslangic?: string | undefined; bitis?: string | undefined; metin?: string | undefined }
+export interface MalKabulSuzgeci { asil?: boolean | undefined; tur?: string | undefined; logoDurumu?: string | undefined; baslangic?: string | undefined; bitis?: string | undefined; metin?: string | undefined }
 const malKabulSuzgeci = (s: MalKabulSuzgeci) => ({
   sql: `FROM stok_mal_kabul m WHERE ($1::text IS NULL OR m.tur = $1)
         AND ($2::text IS NULL OR EXISTS (SELECT 1 FROM stok_mal_kabul_satiri s WHERE s.mal_kabul_id = m.id AND s.logo_durumu = $2))
         AND ($3::timestamptz IS NULL OR m.zaman >= $3) AND ($4::timestamptz IS NULL OR m.zaman < $4)
-        AND ($5::text IS NULL OR ${S('m.no')} LIKE $5 OR ${S('m.irsaliye_no')} LIKE $5)`,
-  p: [s.tur ?? null, s.logoDurumu ?? null, s.baslangic ?? null, s.bitis ?? null, icinde(s.metin)],
+        AND ($5::text IS NULL OR ${S('m.no')} LIKE $5 OR ${S('m.irsaliye_no')} LIKE $5) AND (NOT $6::boolean OR m.duzeltilen_id IS NULL)`,
+  p: [s.tur ?? null, s.logoDurumu ?? null, s.baslangic ?? null, s.bitis ?? null, icinde(s.metin), s.asil === true],
 });
 export const MAL_KABUL_SIRALAMASI: SiralamaTanimi<'zaman' | 'no'> = { sutunlar: { zaman: 'm.zaman', no: 'm.id' }, ikincil: 'm.id', varsayilan: { sutun: 'm.zaman', yon: 'azalan' } };
 export async function malKabulSay(db: Db, s: MalKabulSuzgeci): Promise<number> {
@@ -176,7 +176,7 @@ export async function malKabulSay(db: Db, s: MalKabulSuzgeci): Promise<number> {
 }
 export function malKabuller(db: Db, s: MalKabulSuzgeci, sira: SiralamaIstegi<'zaman' | 'no'>, d: Dilim): Promise<MalKabulHam[]> {
   const f = malKabulSuzgeci(s);
-  return db.sorgu(`${MAL_KABUL_SECIMI} ${f.sql} ORDER BY ${siralamaSql(MAL_KABUL_SIRALAMASI, sira)} LIMIT $6 OFFSET $7`, [...f.p, d.sinir, d.atla]);
+  return db.sorgu(`${MAL_KABUL_SECIMI} ${f.sql} ORDER BY ${siralamaSql(MAL_KABUL_SIRALAMASI, sira)} LIMIT $7 OFFSET $8`, [...f.p, d.sinir, d.atla]);
 }
 
 // ---- Göz önerisi ve konumun raf ölçüsü -------------------------------------------------------------------------------
