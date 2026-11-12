@@ -48,3 +48,6 @@ export { acikNcrPartileri } from './servis.ts';
 // yok). Yetkiyi çekirdek kaynağın `yetki` alanıyla denetler; sonuç kaydı açar, yazma ekrandadır.
 export { kayitAramaKaynaklari } from './servis.ts';
 export { malzemeKartiIzleri } from './sorgular.ts';
+// 3148: mal kabul satırlarının GKK özeti (GKK no, zaman, kabul/hatalı miktar, karar, NCR no, not); GKK'sız satır haritada yok. Yetki denetlemez.
+export { girisOzetleri } from './servis.ts';
+export type { GirisOzeti } from './servis.ts';
