@@ -278,10 +278,13 @@ export interface BolmeGirdisi {
   bitti: (sira: number) => boolean;
 }
 export type BolmeSecimi = { tur: 'parti'; partiler: readonly string[] } | { tur: 'kol'; n: number | null; m: number | null; miktar: string };
-export interface BolmeSonucu { hazir: boolean; ileti: string | null; bilgi: boolean; ipucu: string | null; kalan: number | null; satirlar: BolmeSatiri[]; partiler: number[] }
+// siralar: partiler[i]'nin seçimdeki yeri (boş parti atlanır; parti türü bu yerden okunur). Kolda [0].
+export interface BolmeSonucu {
+  hazir: boolean; ileti: string | null; bilgi: boolean; ipucu: string | null; kalan: number | null; satirlar: BolmeSatiri[]; partiler: number[]; siralar: number[];
+}
 
 export function bolmeHesapla(g: BolmeGirdisi, s: BolmeSecimi): BolmeSonucu {
-  const r: BolmeSonucu = { hazir: false, ileti: null, bilgi: false, ipucu: null, kalan: null, satirlar: [], partiler: [] };
+  const r: BolmeSonucu = { hazir: false, ileti: null, bilgi: false, ipucu: null, kalan: null, satirlar: [], partiler: [], siralar: [] };
   if (!(g.miktar > 0)) return { ...r, ileti: 'Emir miktarı sıfırdan büyük olmalı.', bilgi: true };
   const sutunlar = Array.from({ length: g.adimSayisi }, (_, i) => i + 1);
   const yukte = (kollar: readonly MevcutKol[], j: number) => kollar.filter((k) => j > k.n && j < k.m).reduce((t, k) => t + k.miktar, 0);
@@ -302,7 +305,7 @@ export function bolmeHesapla(g: BolmeGirdisi, s: BolmeSecimi): BolmeSonucu {
     const kol = satir('Yeni kol', 'kol', (j) => (j > s.n! && j < s.m! ? q : null), false);
     kol.bos = sutunlar.map((j) => (j <= s.n! ? 'ana emirde' : j >= s.m! ? 'katıldı' : null));
     return {
-      ...r, hazir: true, kalan: yuvarla6(g.miktar - yuk), partiler: [q],
+      ...r, hazir: true, kalan: yuvarla6(g.miktar - yuk), partiler: [q], siralar: [0],
       satirlar: [satir(g.anaAd, 'ana', (j) => (icinde(j) ? yuvarla6(g.miktar - yukte(tum, j)) : null), true), kol],
     };
   }
@@ -316,7 +319,7 @@ export function bolmeHesapla(g: BolmeGirdisi, s: BolmeSecimi): BolmeSonucu {
   if (partiler.length === 0) return { ...r, ileti: 'Alt emir miktarını girin.', bilgi: true };
   const kalan = yuvarla6(g.miktar - partiler.reduce((a, b) => a + b, 0));
   return {
-    ...r, hazir: true, kalan, partiler,
+    ...r, hazir: true, kalan, partiler, siralar: sira,
     satirlar: [
       satir(g.anaAd, 'ana', (j) => (icinde(j) ? yuvarla6(kalan - yukte(g.mevcutKollar, j)) : null), true),
       ...partiler.map((q, i) => satir(`Parti ${String((sira[i] ?? i) + 1)}`, 'parti', (j) => (icinde(j) ? q : null), true)),

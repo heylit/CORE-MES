@@ -441,6 +441,8 @@ export const partiBolCevabi = z.object({ emir: z.lazy(() => adimliEmirAyrintisi)
 
 export const planaAlGovdesi = z.object({ surum: surumSemasi }).strict();
 export const adimliIptalGovdesi = z.object({ surum: surumSemasi }).strict();
+// 3099: bölünmüş alt emrin (parti ya da kol) türü sonradan değişir; ana emrin türü açılıştaki kalır.
+export const emirTuruGovdesi = z.object({ emirTuru: z.enum(EMIR_TURLERI), surum: surumSemasi }).strict();
 export const oncelikGovdesi = z.object({ oncelik: z.number().int().min(1, 'Öncelik 1-4 olmalı.').max(4, 'Öncelik 1-4 olmalı.'), surum: surumSemasi }).strict();
 // Bekleyen iş emrine kaynak atanır ya da kaldırılır (null: atanmamış, ilk sistemdeki "Tezgahsız").
 export const adimKaynagiGovdesi = z.object({ opNo: KIMLIK, kaynak: atanabilirKaynak.nullable(), surum: surumSemasi }).strict();

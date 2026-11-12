@@ -25,7 +25,7 @@ import { projeGetir, projeSecenekleri } from '../projeler/disari.ts';
 import { siparisAyrintisi, siparisKilitliAyrinti, siparisSatiriOzetleri } from '../siparisler/disari.ts';
 import {
   EMIR_YOK, IS_EMRI_YOK, KAYNAK_YOK, acikEmirIhlali, arsivdeFasonDonusuAcik, adimliOzetSay, adimliIptalIhlali, hataliDurduMu, kaynakSuresi, fasonDonusIhlali, fasonGidisIhlali, fasonTamamIhlali,
-  gorunenDurum, guvenliUygula, isEmriFarki, oneDusenYeniAdimlar, yeniAdimOndeIletisi, isEmirleriIhlali, kaynakDegisimIhlali, kisininIstasyonu, siparisSatiriIhlali, oncelikDegisimIhlali, malzemeIhtiyaci, planaAlIhlali, siradakiFasonAdimi, siradakiIsEmri, teslimIhlali,
+  gorunenDurum, guvenliUygula, isEmriFarki, oneDusenYeniAdimlar, yeniAdimOndeIletisi, isEmirleriIhlali, kaynakDegisimIhlali, kisininIstasyonu, siparisSatiriIhlali, oncelikDegisimIhlali, turDegisimIhlali, TUR_PROJESIZ, malzemeIhtiyaci, planaAlIhlali, siradakiFasonAdimi, siradakiIsEmri, teslimIhlali,
   BIRLESME_ADIMI_YOK, BIRLESME_PLANI_KOLDA, BOLME_ADET, BOLME_BIRLESME_ADIMI, BOLME_URETILMIS, EK_ADIM_OP, birlesmeBeklemeIhlali, birlesmePlaniIhlali, birlesmePlaniKaldirIhlali, birlestirmeIhlali, bolmeIhlali, ekAdimIhlali,
   ekAdimKaldirIhlali, kartAdimi, kartSiniri, kolBaslamaIhlali, kolEmirNo, refakatIhlali, refakatQrMetni,
   BILESEN_GECERSIZ, IS_EMRI_BAGLI_KAYIT, IS_EMRI_MALIYETI_DONDURULMUS, IS_EMRI_SIPARISE_BAGLI, IS_EMRI_STOK_HAREKETLI, ROTASIZ_EMIR_KAPALI, PROJE_GECERSIZ, PROJE_ZORUNLU, adaySatirlar, bilesenOlabilirMi, kendiligindenSatir, projeZorunluMu, rotasizAdimDegisimIhlali, rotasizAdimEkleIhlali, URETIM_YERI_BASLAMIS, uretimYeriIhlali, fasonBeklemesi, adimAdetleri,
@@ -769,6 +769,18 @@ export async function oncelikDegistir(db: Db, kullanici: Kullanici, id: number, 
   await s.oncelikDegisimiEkle(db, id, e.oncelik, oncelik, kisiId, await s.anAl(db));
 }
 
+// UE-TUR (3099): alt emrin türü sonradan değişir; eski ve yeni değer kim ve ne zamanla kayda girer. Adım, adet ve plan değişmez.
+export async function emirTuruDegistir(db: Db, kullanici: Kullanici, id: number, emirTuru: EmirTuru, surum: number): Promise<void> {
+  const kisiId = islemDenetle(kullanici, ['uretim-emirleri.yaz']);
+  const e = await kilitliUstEmir(db, id);
+  surumDenetle(e, surum);
+  const ihlal = turDegisimIhlali(e, emirTuru);
+  if (ihlal !== null) throw cakisma(ihlal);
+  if (e.emirTuru === emirTuru) return;
+  if ((await s.emirTuruYaz(db, id, e.surum, emirTuru)) === null) throw eskiSurum();
+  await s.turDegisimiEkle(db, id, e.emirTuru, emirTuru, kisiId, await s.anAl(db));
+}
+
 // 1713 (1682 b, 1736): kaynak bir adaysa süre de o adayınkine geçer (kurallar.kaynakSuresi). Elle atama (UE-10) da plan da aynı yoldan yazar.
 async function kaynagiYaz(db: Db, e: UstEmirSatiri, isEmri: IsEmriSatiri, kaynak: AtanabilirKaynak | null): Promise<void> {
   const acik = acikEmirIhlali(e.durum, e.arsiv);
@@ -1141,6 +1153,8 @@ export async function partiyiBol(
   const e = await kilitliUstEmir(db, id);
   surumDenetle(e, g.surum);
   await cokKatmanliDegil(db, id, COK_KATMANLI_DEGISMEZ);
+  // 3099 (224): projesiz emirden proje isteyen türde parti açılmaz; türsüz bölme üstün türünü alır, denetim gerekmez.
+  if (g.emirTuru !== undefined && e.projeId === null && projeZorunluMu(g.emirTuru)) throw cakisma(TUR_PROJESIZ);
   const altEmirId = await kilitliEmriBol(db, acanId, e, g);
   const kol = await s.ustEmirBul(db, altEmirId);
   if (kol === null) throw bulunamadi(EMIR_YOK);

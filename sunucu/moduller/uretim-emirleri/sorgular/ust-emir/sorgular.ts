@@ -278,6 +278,17 @@ export function oncelikYaz(db: Db, id: number, surum: number, oncelik: number): 
   return db.tek('UPDATE uretim_emri SET oncelik = $3, surum = surum + 1 WHERE id = $1 AND surum = $2 RETURNING id', [id, surum, oncelik]);
 }
 
+export function emirTuruYaz(db: Db, id: number, surum: number, emirTuru: EmirTuru): Promise<{ id: number } | null> {
+  return db.tek('UPDATE uretim_emri SET emir_turu = $3, surum = surum + 1 WHERE id = $1 AND surum = $2 RETURNING id', [id, surum, emirTuru]);
+}
+
+export async function turDegisimiEkle(db: Db, emirId: number, eski: EmirTuru, yeni: EmirTuru, kisiId: number, an: string): Promise<void> {
+  await db.sorgu(
+    `INSERT INTO uretim_emirleri_tur_degisimi (uretim_emri_id, eski_tur, yeni_tur, kisi_id, zaman) VALUES ($1, $2, $3, $4, $5::timestamptz)`,
+    [emirId, eski, yeni, kisiId, an],
+  );
+}
+
 export async function oncelikDegisimiEkle(db: Db, emirId: number, eski: number, yeni: number, kisiId: number, an: string): Promise<void> {
   await db.sorgu(
     `INSERT INTO uretim_emirleri_oncelik_degisimi (uretim_emri_id, eski_oncelik, yeni_oncelik, kisi_id, zaman)

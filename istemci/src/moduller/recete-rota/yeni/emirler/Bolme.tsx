@@ -1,6 +1,8 @@
+import { EMIR_TURU_ADLARI } from '#paylasilan/sozlesme/emir-turleri.ts';
 import type { DurumCevabi } from '#paylasilan/sozlesme/planlama.ts';
 import { Dugme, Girdi, Secim, Simge } from '../../../../ortak/arayuz/index.ts';
 import { sayi } from '../bicim.ts';
+import { turAdi } from './gorunum.ts';
 import {
   AZAMI_EK_ADIM, AZAMI_PARTI, bolmeHesapla, esitBol, kolAdimiSec, kolOlur, type BolmeGirdisi, type BolmeSecimi, type BolmeSonucu, type EmirAdimi,
 } from './kurallar.ts';
@@ -9,8 +11,18 @@ import {
 // burası yalnız seçimi değiştirir ve önizlemeyi çizer. Geçerliliğe Üretim Emirleri'nin ucu karar verir.
 export type BolmeTuru = 'tek' | 'parti' | 'kol';
 export interface EkAdimSecimi { tur: 'rework' | 'tamir' | 'ek'; sonra: number | null; opId: string; ad: string; ayar: string; birim: string; aciklama: string }
-export interface BolmeDurumu { tur: BolmeTuru | null; partiler: string[]; n: number | null; m: number | null; kolMiktar: string; ekler: EkAdimSecimi[] }
-export const bosBolme = (yeni: boolean): BolmeDurumu => ({ tur: yeni ? 'tek' : null, partiler: ['', ''], n: null, m: null, kolMiktar: '', ekler: [] });
+// turler[i] Parti i+1'in emir türüdür, kolTuru kolun; boş metin ana emrin türünü alır (sunucu da türsüz bölmede üstün türünü yazar).
+export interface BolmeDurumu {
+  tur: BolmeTuru | null; partiler: string[]; turler: string[]; n: number | null; m: number | null; kolMiktar: string; kolTuru: string; ekler: EkAdimSecimi[];
+}
+export const bosBolme = (yeni: boolean): BolmeDurumu => ({ tur: yeni ? 'tek' : null, partiler: ['', ''], turler: ['', ''], n: null, m: null, kolMiktar: '', kolTuru: '', ekler: [] });
+
+// Açılacak alt emirlerin türleri, bolmeSonucu().partiler sırasıyla (boş bırakılan parti açılmaz); ana emrin türüyle aynıysa undefined.
+export function altEmirTurleri(b: BolmeDurumu, siralar: readonly number[], anaTur: string): (string | undefined)[] {
+  const sec = (t: string | undefined) => (t === undefined || t === '' || t === anaTur ? undefined : t);
+  return b.tur === 'kol' ? [sec(b.kolTuru)] : siralar.map((i) => sec(b.turler[i]));
+}
+const TUR_SECENEKLERI = Object.entries(EMIR_TURU_ADLARI).map(([deger, baslik]) => ({ deger, baslik }));
 
 export const EK_TURLERI = [{ deger: 'rework', baslik: 'Rework' }, { deger: 'tamir', baslik: 'Tamir' }, { deger: 'ek', baslik: 'Ek adım' }] as const;
 
@@ -24,6 +36,8 @@ export function bolmeSonucu(g: BolmeGirdisi, b: BolmeDurumu): BolmeSonucu | null
 
 interface Ozellikler {
   yeni: boolean;
+  // Ana emrin türü: parti ve kol türü seçilmezse bu tür kalır.
+  anaTur: string;
   girdi: BolmeGirdisi;
   adimlar: readonly EmirAdimi[];
   baslamis: readonly number[];
@@ -40,7 +54,7 @@ interface Ozellikler {
 const adimKisaltmasi = (opdefs: DurumCevabi['opdefs'], a: EmirAdimi | undefined): string =>
   (a ? opdefs?.find((d) => d.id === a.opId)?.abbr ?? a.ad : '?');
 
-export function BolmePaneli({ yeni, girdi, adimlar, baslamis, opdefs, istasyonlar, deger: b, degistir, gonder, vazgec, mesgul = false }: Ozellikler) {
+export function BolmePaneli({ yeni, anaTur, girdi, adimlar, baslamis, opdefs, istasyonlar, deger: b, degistir, gonder, vazgec, mesgul = false }: Ozellikler) {
   const az = !kolOlur(adimlar.length);
   const r = bolmeSonucu(girdi, b);
   const ad = (j: number) => `${String(j)} ${adimKisaltmasi(opdefs, adimlar[j - 1])}`;
@@ -55,6 +69,10 @@ export function BolmePaneli({ yeni, girdi, adimlar, baslamis, opdefs, istasyonla
     : adimlar.map((a) => a.sira).filter((j) => j >= girdi.aralik.ilk && j <= girdi.aralik.son && !baslamis.includes(j));
   const ekGorunur = !yeni && (b.tur === 'parti' || (b.tur === 'kol' && b.n !== null && b.m !== null));
   const ekDegistir = (i: number, alan: Partial<EkAdimSecimi>) => { degistir({ ...b, ekler: b.ekler.map((e, k) => (k === i ? { ...e, ...alan } : e)) }); };
+  const anaGibi = `Ana emirle aynı (${turAdi(anaTur)})`;
+  const turSecimi = (etiket: string, deger: string, sec: (t: string) => void, ad?: string) => (
+    <Secim etiket={etiket} aria-label={ad} value={deger} bosSecenek={anaGibi} secenekler={TUR_SECENEKLERI.filter((t) => t.deger !== anaTur)} onChange={(o) => { sec(o.target.value); }} />
+  );
 
   return (
     <div className="tc-rr3-bolme" role="group" aria-label={yeni ? 'Bölme' : 'Böl'}>
@@ -92,24 +110,28 @@ export function BolmePaneli({ yeni, girdi, adimlar, baslamis, opdefs, istasyonla
           />
           <div className="tc-rr3-satir">
             <Girdi etiket="Kol miktarı" inputMode="decimal" value={b.kolMiktar} onChange={(o) => { degistir({ ...b, kolMiktar: o.target.value }); }} />
+            {turSecimi('Kolun emir türü', b.kolTuru, (t) => { degistir({ ...b, kolTuru: t }); })}
             {kalan}
           </div>
         </>
       )}
       {b.tur === 'parti' && (
         <>
-          <div className="tc-rr3-satir">
-            {kalan}
+          <div className="tc-rr3-satir">{kalan}</div>
+          <div className="tc-rr3-partiler">
             {b.partiler.map((t, i) => (
-              <Girdi
-                key={i} etiket={`Parti ${String(i + 1)}`} inputMode="decimal" value={t}
-                onChange={(o) => { degistir({ ...b, partiler: b.partiler.map((x, k) => (k === i ? o.target.value : x)) }); }}
-              />
+              <div key={i} className="tc-rr3-parti" role="group" aria-label={`Parti ${String(i + 1)} ve türü`}>
+                <Girdi
+                  etiket={`Parti ${String(i + 1)}`} inputMode="decimal" value={t}
+                  onChange={(o) => { degistir({ ...b, partiler: b.partiler.map((x, k) => (k === i ? o.target.value : x)) }); }}
+                />
+                {turSecimi('Emir türü', b.turler[i] ?? '', (tur) => { degistir({ ...b, turler: b.partiler.map((_, k) => (k === i ? tur : b.turler[k] ?? '')) }); }, `Parti ${String(i + 1)} emir türü`)}
+              </div>
             ))}
           </div>
           <div className="tc-rr3-satir">
-            <Dugme simge="plus" disabled={b.partiler.length >= AZAMI_PARTI} onClick={() => { degistir({ ...b, partiler: [...b.partiler, ''] }); }}>Parti ekle</Dugme>
-            <Dugme simge="minus" disabled={b.partiler.length <= 1} onClick={() => { degistir({ ...b, partiler: b.partiler.slice(0, -1) }); }}>Son partiyi çıkar</Dugme>
+            <Dugme simge="plus" disabled={b.partiler.length >= AZAMI_PARTI} onClick={() => { degistir({ ...b, partiler: [...b.partiler, ''], turler: [...b.partiler.map((_, k) => b.turler[k] ?? ''), ''] }); }}>Parti ekle</Dugme>
+            <Dugme simge="minus" disabled={b.partiler.length <= 1} onClick={() => { degistir({ ...b, partiler: b.partiler.slice(0, -1), turler: b.turler.slice(0, b.partiler.length - 1) }); }}>Son partiyi çıkar</Dugme>
             <Dugme
               onClick={() => {
                 const pay = esitBol(girdi.miktar, b.partiler.length);
@@ -119,7 +141,7 @@ export function BolmePaneli({ yeni, girdi, adimlar, baslamis, opdefs, istasyonla
               Eşit böl
             </Dugme>
           </div>
-          <p className="tc-rr3-ipucu">Ana emirde kalan = emir miktarı − partiler. Boş bırakılan parti açılmaz.</p>
+          <p className="tc-rr3-ipucu">Ana emirde kalan = emir miktarı − partiler. Boş bırakılan parti açılmaz. Türü seçilmeyen parti ana emrin türüyle açılır.</p>
         </>
       )}
       {ekGorunur && (
@@ -165,7 +187,7 @@ export function BolmePaneli({ yeni, girdi, adimlar, baslamis, opdefs, istasyonla
           </div>
         </div>
       )}
-      {r && <BolmeOnizleme sonuc={r} adimlar={adimlar} opdefs={opdefs} yeni={yeni} />}
+      {r && <BolmeOnizleme sonuc={r} adimlar={adimlar} opdefs={opdefs} yeni={yeni} turler={[anaTur, ...altEmirTurleri(b, r.siralar, anaTur).map((t) => t ?? anaTur)]} />}
       {!yeni && (b.tur === 'parti' || b.tur === 'kol') && (
         <div className="tc-rr3-satir">
           <Dugme tur="birincil" simge={b.tur === 'kol' ? 'route' : 'layers'} yukleniyor={mesgul} onClick={gonder}>
@@ -178,7 +200,10 @@ export function BolmePaneli({ yeni, girdi, adimlar, baslamis, opdefs, istasyonla
   );
 }
 
-function BolmeOnizleme({ sonuc: r, adimlar, opdefs, yeni }: { sonuc: BolmeSonucu; adimlar: readonly EmirAdimi[]; opdefs: DurumCevabi['opdefs']; yeni: boolean }) {
+// turler: satırların emir türü, satirlar sırasıyla (ilk satır ana emir).
+function BolmeOnizleme({ sonuc: r, adimlar, opdefs, yeni, turler }: {
+  sonuc: BolmeSonucu; adimlar: readonly EmirAdimi[]; opdefs: DurumCevabi['opdefs']; yeni: boolean; turler: readonly string[];
+}) {
   return (
     <>
       {r.ipucu && <p className="tc-rr3-ipucu">{r.ipucu}</p>}
@@ -194,9 +219,9 @@ function BolmeOnizleme({ sonuc: r, adimlar, opdefs, yeni }: { sonuc: BolmeSonucu
                 <tr><th scope="col">Emir</th>{adimlar.map((a) => <th key={a.sira} scope="col">{a.sira} {adimKisaltmasi(opdefs, a)}</th>)}</tr>
               </thead>
               <tbody>
-                {r.satirlar.map((s) => (
+                {r.satirlar.map((s, k) => (
                   <tr key={s.ad}>
-                    <th scope="row">{s.ad}</th>
+                    <th scope="row">{s.ad}{turler[k] !== undefined && <small className="tc-rr3-bltur">{turAdi(turler[k])}</small>}</th>
                     {s.hucreler.map((c, i) => (
                       <td key={i}>
                         <span className="tc-rr3-bar" data-tur={c ? s.tur : 'bos'}>
