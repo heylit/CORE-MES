@@ -877,6 +877,10 @@ export function malzemeGelisleriOku(db: Db, malzemeNolar: readonly number[]): Pr
 // ne son alış ne ortalama sayılır.
 const ETKIN_TESLIM_FIYATI = etkin('f', 's.miktar');
 const NET_BIRIM_FIYAT = `${ETKIN_TESLIM_FIYATI} * (1 - COALESCE(f.iskonto_yuzdesi, 0) / 100) * (1 - COALESCE(q.iskonto_yuzdesi, 0) / 100)`;
+// 3143 a: sıfır fiyatlı (bedelsiz) teslim alış fiyatı değildir: müşteri malı sıfır fiyatlı siparişle girer (3139 b); sıfır sayılsaydı kendi
+// alışımızın ortalamasını ve son alışını düşürürdü. Ortalama, son alış ve stok değerlemesi için fiyatı yoktur (boş), bir önceki gerçek
+// alış geçer. Emrin ya da projenin sipariş fiyatı (siparisBirimFiyatlariOku) sıfırı korur: o emre gerçekten bedelsiz gelmiştir.
+const ALIS_BIRIM_FIYATI = `nullif(${NET_BIRIM_FIYAT}, 0)`;
 const TRY_KURU = "coalesce(sk.kur, q.kur, CASE WHEN q.para_birimi = 'TRY' THEN 1 END)";
 const TESLIM_FIYATI_BAGI = `
            JOIN satin_alma_siparis_satiri s ON s.id = m.siparis_satiri_id
@@ -892,7 +896,7 @@ export function ortalamaAlisFiyatlariOku(db: Db, malzemeNolar: readonly number[]
     `SELECT n.no AS "malzemeNo", (round(sum(x.tl * x.net) / nullif(sum(x.net), 0), 4))::text AS "tryBirimFiyat", count(x.net)::int AS "teslimSayisi"
        FROM unnest($1::int[]) AS n(no)
        LEFT JOIN (
-         SELECT c.malzeme_no, sum(m.miktar) AS net, ${NET_BIRIM_FIYAT} * ${TRY_KURU} AS tl
+         SELECT c.malzeme_no, sum(m.miktar) AS net, ${ALIS_BIRIM_FIYATI} * ${TRY_KURU} AS tl
            FROM satin_alma_teslim m ${TESLIM_FIYATI_BAGI}
           WHERE c.malzeme_no = ANY($1::int[])
           GROUP BY c.malzeme_no, m.mal_kabul_satiri_id, m.siparis_satiri_id, ${ETKIN_TESLIM_FIYATI}, f.iskonto_yuzdesi, q.iskonto_yuzdesi, sk.kur, q.kur, q.para_birimi
@@ -933,12 +937,13 @@ export function sonAlisFiyatlariOku(db: Db, malzemeNolar: readonly number[]): Pr
     `SELECT DISTINCT ON (x.malzeme_no) x.malzeme_no AS "malzemeNo", (round(x.net_fiyat, 4))::text AS "birimFiyat", x.para_birimi AS "paraBirimi",
         (round(x.net_fiyat * x.kur, 4))::text AS "tryBirimFiyat", ${ISO('x.zaman')} AS zaman
        FROM (
-         SELECT c.malzeme_no, ${NET_BIRIM_FIYAT} AS net_fiyat, q.para_birimi::text AS para_birimi, ${TRY_KURU} AS kur,
+         SELECT c.malzeme_no, ${ALIS_BIRIM_FIYATI} AS net_fiyat, q.para_birimi::text AS para_birimi, ${TRY_KURU} AS kur,
                 max(m.zaman) FILTER (WHERE m.miktar > 0) AS zaman, max(m.id) FILTER (WHERE m.miktar > 0) AS id
            FROM satin_alma_teslim m ${TESLIM_FIYATI_BAGI}
           WHERE c.malzeme_no = ANY($1::int[])
           GROUP BY c.malzeme_no, m.mal_kabul_satiri_id, m.siparis_satiri_id, ${ETKIN_TESLIM_FIYATI}, f.iskonto_yuzdesi, q.iskonto_yuzdesi, sk.kur, q.kur, q.para_birimi
          HAVING sum(m.miktar) > 0) x
+      WHERE x.net_fiyat IS NOT NULL
       ORDER BY x.malzeme_no, x.zaman DESC, x.id DESC`,
     [malzemeNolar],
   );
@@ -948,7 +953,7 @@ export interface MalKabulFiyatiSatiri { malKabulSatirId: number; tryBirimFiyat: 
 export function malKabulFiyatlariOku(db: Db, malKabulSatirIdler: readonly number[]): Promise<MalKabulFiyatiSatiri[]> {
   return db.sorgu<MalKabulFiyatiSatiri>(
     `SELECT DISTINCT ON (m.mal_kabul_satiri_id) m.mal_kabul_satiri_id::int AS "malKabulSatirId",
-        (round(${NET_BIRIM_FIYAT} * ${TRY_KURU}, 4))::text AS "tryBirimFiyat"
+        (round(${ALIS_BIRIM_FIYATI} * ${TRY_KURU}, 4))::text AS "tryBirimFiyat"
        FROM satin_alma_teslim m ${TESLIM_FIYATI_BAGI}
       WHERE m.mal_kabul_satiri_id = ANY($1::bigint[])
       ORDER BY m.mal_kabul_satiri_id, m.id`,
