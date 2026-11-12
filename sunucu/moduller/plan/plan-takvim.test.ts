@@ -133,19 +133,28 @@ describe('plan (gerçek PostgreSQL): personel, vardiya ve takvim', () => {
     const merkez = { id: await tamGunMerkezi('RT-IM3T', 'Tam gün merkezi') };
     const ist = (await tamam<{ id: number }>(c.yonetici, 'POST', '/istasyonlar', { kod: 'RT-DT', ad: 'Deneme DT', isMerkeziId: merkez.id })).id;
     const makine = (await tamam<{ id: number }>(c.yonetici, 'POST', '/makineler', { kod: 'RT-MDT', ad: 'Deneme makine DT', istasyonId: ist })).id;
-    const yarin = tesisGunu(tesisGunBasi(tesisGunu(Date.now())) + 36 * 3600_000);
+    // Plan saati tesiste yarının öğlesine sabitlenir: günün son yarım saatinde 30 dk ayar ertesi güne, tatile taşar ve iş tatilden sonra
+    // başlardı (saat 23:30'dan sonra koşan test düşerdi). Tatil ondan sonraki gündür.
+    const gun = tesisGunu(tesisGunBasi(tesisGunu(Date.now())) + 36 * 3600_000);
+    const simdi = tesisGunBasi(gun) + 12 * 3600_000;
+    const yarin = tesisGunu(tesisGunBasi(gun) + 36 * 3600_000);
     await tamam(c.yonetici, 'POST', '/takvim-gunleri', { tarih: yarin, tur: 'kapali', ad: 'Deneme tatil' });
     const [i0] = await isEmirleriAc([yeniAdim({ kaynak: { tur: 'makine', id: makineV } })]);
     const [i1] = await isEmirleriAc([yeniAdim({ kaynak: { tur: 'makine', id: makine } })], 1000);
-    const p = await taslaktaOner();
-    assert.equal(p.yerlesimler.find((x) => x.isEmriId === i0), undefined, 'vardiyasız merkezin işi yerleşmez');
-    assert.equal(p.yerlesmemis.find((x) => x.isEmriId === i0)?.neden, 'Tezgâhın vardiyası tanımsız.');
-    assert.ok(p.uyarilar.some((u) => /vardiya takvimi yok; işleri yerleşmedi/.test(u)), JSON.stringify(p.uyarilar));
-    const y = yer(p, i1!);
-    assert.ok(Date.parse(y.baslangic) < tesisGunBasi(yarin), 'bugün başlar');
-    assert.equal(Math.round((Date.parse(y.bitis) - Date.parse(y.baslangic)) / 60_000), 30 + 1000 * 2 + 24 * 60, 'tatil günü atlanır');
-    await tamam(c.planlama, 'POST', `/plan/senaryolar/${p.taslak!.id}/vazgec`, { surum: p.taslak!.surum });
-    await tamam(c.yonetici, 'POST', `/takvim-gunleri/${yarin}/kaldir`);
+    mock.timers.enable({ apis: ['Date'], now: simdi });
+    try {
+      const p = await taslaktaOner();
+      assert.equal(p.yerlesimler.find((x) => x.isEmriId === i0), undefined, 'vardiyasız merkezin işi yerleşmez');
+      assert.equal(p.yerlesmemis.find((x) => x.isEmriId === i0)?.neden, 'Tezgâhın vardiyası tanımsız.');
+      assert.ok(p.uyarilar.some((u) => /vardiya takvimi yok; işleri yerleşmedi/.test(u)), JSON.stringify(p.uyarilar));
+      const y = yer(p, i1!);
+      assert.ok(Date.parse(y.baslangic) < tesisGunBasi(yarin), 'tatilden önceki gün başlar');
+      assert.equal(Math.round((Date.parse(y.bitis) - Date.parse(y.baslangic)) / 60_000), 30 + 1000 * 2 + 24 * 60, 'tatil günü atlanır');
+      await tamam(c.planlama, 'POST', `/plan/senaryolar/${p.taslak!.id}/vazgec`, { surum: p.taslak!.surum });
+    } finally {
+      mock.timers.reset();
+      await tamam(c.yonetici, 'POST', `/takvim-gunleri/${yarin}/kaldir`);
+    }
   });
 
   test('P-B24: tesiste gece yarısı geçmiş, UTC\'de dünkü günken plan günü tesis günüdür; tam gün merkezin kapalı günü tesisin 00:00\'ında başlar', async () => {
