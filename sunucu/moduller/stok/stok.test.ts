@@ -718,6 +718,10 @@ describe('stok (gerçek PostgreSQL)', () => {
     assert.deepEqual(eklendi.govde.belgeler.map((b) => b.ad), [`İrsaliye ORN-IRS-7 (${mk.govde.belge.no})`]);
     const ikinci = await depo<Liste>('POST', `${yol}/irsaliye-ekle`, { ozet: await yukle('depo'), dosyaAdi: 'irsaliye.pdf' });
     assert.deepEqual(ikinci.govde.belgeler.map((b) => b.ad), [`İrsaliye ORN-IRS-7 (${mk.govde.belge.no})`, `İrsaliye ORN-IRS-7 (${mk.govde.belge.no}) · 2`]);
+    // 3063 dilim 2: cihazda bekleyen irsaliye aynı dosyayla yeniden gönderilirse ikinci bağ yazılmaz.
+    const yine = await depo<Liste>('POST', `${yol}/irsaliye-ekle`, { ozet, dosyaAdi: 'irsaliye.pdf' });
+    assert.equal(yine.durum, 200, JSON.stringify(yine.govde));
+    assert.deepEqual(yine.govde, ikinci.govde);
     const [b1, b2] = ikinci.govde.belgeler;
     const tur = await o().vt.tek<{ tur: string }>('SELECT tur FROM belge_merkezi_belge WHERE id = $1', [b1!.id]);
     assert.equal(tur?.tur, 'irsaliye');

@@ -15,7 +15,9 @@ import { useDepoSevk } from './depo-sevk.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { AMBALAJ_TURLERI, MAL_KABUL_TURLERI, MAL_KABUL_TURU, birimliMiktar, miktarGirdisi, miktarMetni, partiAlinirMi, lotluMu, LOT_IPUCU } from './gorunum.ts';
 import { EtiketMerkeziDugmesi } from './Etiketler.tsx';
-import { IrsaliyeSecici, irsaliyeEkle, type IrsaliyeSayfasi } from './IrsaliyeBelgesi.tsx';
+import { BekleyenIrsaliyeler, IrsaliyeSecici, bekleyenSayfasi, irsaliyeEkleYaDaBeklet, type IrsaliyeSayfasi } from './IrsaliyeBelgesi.tsx';
+import { bekleyenDosyasi, bekleyeniSil, sayfalardanSakla, type BekleyenIrsaliye } from './irsaliye-kuyrugu.ts';
+import { useOturum } from '../../ortak/veri/oturum.ts';
 import { MalKabulYapilanlar } from './MalKabulYapilanlar.tsx';
 import { useMalKabulTaslagi } from './MalKabulTaslagi.tsx';
 import { MalzemeSecici, useMalzemeOzeti } from './MalzemeSecici.tsx';
@@ -481,16 +483,24 @@ export function MalKabul() {
   // 3063: irsaliye belgesi mal kabul kaydedildikten sonra eklenir; eklenemezse mal kabul yine kayıtlıdır, ayrıntıdan yeniden eklenir.
   const [irsaliyeSayfalari, setIrsaliyeSayfalari] = useState<IrsaliyeSayfasi[]>([]);
   const [irsaliyeHatasi, setIrsaliyeHatasi] = useState<string | null>(null);
+  const [irsaliyeBekliyor, setIrsaliyeBekliyor] = useState<string | null>(null);
+  // 3063 dilim 2: forma eklenen bekleyen irsaliyeler; mal kabulle gidince (ya da yeniden bekletilince) cihazdan silinir.
+  const [eklenenBekleyenler, setEklenenBekleyenler] = useState<string[]>([]);
+  const kisiId = useOturum().data?.id ?? null;
   const { komut, onayPenceresi } = useStokKomutu((g: MalKabulGovdesi) => korumaliPost<MalKabulCevabi>('/stok/mal-kabul', g).then(async (c) => {
     setEtiket({ id: c.belge.id, no: c.belge.no });
     setIrsaliyeHatasi(null);
+    setIrsaliyeBekliyor(null);
     if (irsaliyeSayfalari.length > 0) {
       try {
-        await irsaliyeEkle(c.belge.id, irsaliyeSayfalari, () => undefined);
+        const sonuc = await irsaliyeEkleYaDaBeklet(kisiId, { id: c.belge.id, no: c.belge.no, irsaliyeNo: g.irsaliyeNo ?? '' }, irsaliyeSayfalari);
+        if (sonuc === 'bekliyor') setIrsaliyeBekliyor(c.belge.no);
+        for (const id of eklenenBekleyenler) await bekleyeniSil(id);
       } catch (e) {
         setIrsaliyeHatasi(e instanceof DosyaHatasi ? e.message : hataMetni(e));
       }
     }
+    setEklenenBekleyenler([]);
     return c;
   }), 'Mal kabul kaydedildi.', () => { setSatirlar([bosSatir()]); setIrsaliye(''); setArananIrsaliye(''); setIrsaliyeSayfalari([]); taslak.temizle(); });
   const taslak = useMalKabulTaslagi({ tur, irsaliye, satirlar: satirlar.map((s) => ({ ...s, sertifikaYukleniyor: false })) }, irsaliye === '' && satirlar.every(bosMu), komut.isPending,
@@ -505,13 +515,25 @@ export function MalKabul() {
       {sekme === 'kabul' && (
         <Kart baslik="Yeni mal kabul">
           {taslak.kutu}
+          <BekleyenIrsaliyeler eklenenler={eklenenBekleyenler} kilitli={komut.isPending} ekle={(k: BekleyenIrsaliye) => {
+            setIrsaliyeSayfalari((l) => [...l, bekleyenSayfasi(bekleyenDosyasi(k), k.id)]);
+            setEklenenBekleyenler((e) => [...e, k.id]);
+            if (irsaliye === '' && k.irsaliyeNo !== '') { setIrsaliye(k.irsaliyeNo); setArananIrsaliye(k.irsaliyeNo); }
+          }} />
           <form className="tc-stok-form" onSubmit={(e) => { e.preventDefault(); const g = { tur, irsaliyeNo: irsaliye, taslakSil: taslak.silinsinMi(), satirlar: satirlar.map((s) => satirGovdesi(tur === 'satin_alma' ? s : { ...s, siparisSatirId: '', hizmetKarti: '' })) }; kilitli(() => komut.mutateAsync(g)); }}>
             <div className="tc-stok-iki">
               <Secim etiket="Tür" value={tur} onChange={(e) => setTur(e.target.value as typeof tur)} secenekler={MAL_KABUL_TURLERI.map((t) => ({ deger: t, baslik: MAL_KABUL_TURU[t] }))} />
               <Girdi etiket="İrsaliye no" value={irsaliye} onChange={(e) => setIrsaliye(e.target.value)} onBlur={() => setArananIrsaliye(irsaliye)} />
             </div>
             <AyniIrsaliye irsaliye={arananIrsaliye} />
-            <IrsaliyeSecici sayfalar={irsaliyeSayfalari} degistir={setIrsaliyeSayfalari} kilitli={komut.isPending} />
+            <IrsaliyeSecici sayfalar={irsaliyeSayfalari} kilitli={komut.isPending}
+              degistir={(l) => { setIrsaliyeSayfalari(l); setEklenenBekleyenler((e) => e.filter((id) => l.some((s) => s.bekleyenId === id))); }}
+              sakla={kisiId === null ? undefined : async () => {
+                await sayfalardanSakla(kisiId, irsaliyeSayfalari.map((s) => s.dosya), irsaliye);
+                for (const id of eklenenBekleyenler) await bekleyeniSil(id);
+                setEklenenBekleyenler([]);
+                setIrsaliyeSayfalari([]);
+              }} />
             {Number.isInteger(sevkKalemi) && sevkKalemi > 0 && <SevkKalemi kalemId={sevkKalemi} doldur={(s, alim) => { setTur(alim ? 'satin_alma' : 'diger'); setSatirlar((m) => [...m.filter((x) => !bosMu(x)), s]); }} />}
             {Number.isInteger(fasonIsEmri) && fasonIsEmri > 0 && Number.isInteger(fasonSiparis) && fasonSiparis > 0 && (
               <FasonSiparisi siparisSatirId={fasonSiparis} konumId={Number.isInteger(fasonKonum) && fasonKonum > 0 ? fasonKonum : null} isEmriId={fasonIsEmri}
@@ -529,6 +551,9 @@ export function MalKabul() {
             )}
             <div className="tc-stok-sag">{taslak.durumYazisi}<Dugme tur="birincil" type="submit" yukleniyor={komut.isPending} disabled={satirlar.some((s) => s.sertifikaYukleniyor)}>Teslim al</Dugme></div>
             {etiket && <p className="tc-stok-bilgi"><span>{etiket.no} kaydedildi.</span><EtiketMerkeziDugmesi tur="mal-kabul" idler={[etiket.id]}>Lot etiketlerini bas</EtiketMerkeziDugmesi></p>}
+            {etiket && irsaliyeBekliyor && (
+              <p className="tc-stok-bilgi" role="status"><span>İrsaliye bu cihazda bekliyor; bağlantı gelince {irsaliyeBekliyor} numaralı mal kabule eklenecek.</span></p>
+            )}
             {etiket && irsaliyeHatasi && (
               <p className="tc-stok-bilgi tc-stok-bilgi-uyari" role="alert">
                 <span>İrsaliye belgesi eklenemedi: {irsaliyeHatasi}</span><Link to={`/stok/mal-kabul/${etiket.id}`}>Mal kabulden yeniden ekleyin</Link>
