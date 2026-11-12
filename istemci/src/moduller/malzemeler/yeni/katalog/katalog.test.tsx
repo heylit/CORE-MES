@@ -309,6 +309,8 @@ describe('M2 Katalog: kart penceresi ve yetki', () => {
     const p = within(await kartiAc('HM-T'));
     fireEvent.click(p.getByRole('button', { name: 'Sil' }));
     const soru = await screen.findByRole('dialog', { name: /silinsin mi/ });
+    // Kart 3084: Logo'da kullanım dışı bırakma kendi ayarına bağlı (3073); pencere ikisini de anar.
+    expect(within(soru).getByText(/Logo bağlantısı ya da "Logo: silinen kartı Logo'da kullanım dışı bırakma" ayarı kapalıyken silinmez\./)).toBeTruthy();
     fireEvent.click(within(soru).getByRole('button', { name: 'Sil' }));
     await waitFor(() => expect(istekler.some((i) => i.yol === '/malzeme-katalogu-kartlari/m1/iptal')).toBe(true));
   });

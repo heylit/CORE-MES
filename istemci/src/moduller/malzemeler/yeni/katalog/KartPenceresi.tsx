@@ -99,7 +99,7 @@ export function KartPenceresi({
         onayla={() => { void sil(kart).then((ok) => { silSorYaz(false); if (ok) kapat(); }); }}
       >
         <p>Kart katalogdan ve seçimlerden kalkar. Başka kayıtlarda kullanılan kart silinmez; onu pasife alın.</p>
-        <p>Logo'ya gönderilmiş kart Logo'dan silinmez, Logo'da kullanım dışı bırakılır; o sürede TMI'de pasif bekler. Logo reddederse pasif kalır, nedeni Logo gönderimi sayfasında görünür. Logo bağlantısı kapalıyken silinmez.</p>
+        <p>Logo'ya gönderilmiş kart Logo'dan silinmez, Logo'da kullanım dışı bırakılır; o sürede TMI'de pasif bekler. Logo reddederse pasif kalır, nedeni Logo gönderimi sayfasında görünür. Logo bağlantısı ya da "Logo: silinen kartı Logo'da kullanım dışı bırakma" ayarı kapalıyken silinmez.</p>
       </OnayPenceresi>
     </Pencere>
   );
