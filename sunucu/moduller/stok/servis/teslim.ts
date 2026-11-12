@@ -102,7 +102,10 @@ export async function sepeteEkle(db: Db, kisiId: number, g: SepetEkleKomutu): Pr
   }
   if (g.hedef) hedefKonumId = 'istasyonId' in g.hedef ? await istasyonKonumuBul(db, g.hedef.istasyonId, 'hedef') : (await aktifKonum(db, g.hedef.konumId, 'hedef')).id;
   if (hedefKonumId !== null && hedefKonumId === g.kaynakKonumId) hedefKonumId = null;
-  await korumali(() => sorgular.sepeteEkle(db, { kisiId, malzemeId: g.malzemeId, kaynakKonumId: g.kaynakKonumId ?? null, partiId, miktar: bindenMetin(binde(g.miktar)), refakatPartisiId, hedefKonumId }));
+  // 3088: lotlu satırda aynı etiketin ikinci okutması lotu iki kez saymaz; partisiz satır art arda sayılarak toplanır (1919 a).
+  const tavan = g.kaynakKonumId === undefined || partiId === null ? null
+    : (await sorgular.konumdakiPartiMiktarlari(db, g.malzemeId, g.kaynakKonumId, null, 'serbest')).find((x) => x.partiId === partiId)?.serbest ?? null;
+  await korumali(() => sorgular.sepeteEkle(db, { kisiId, malzemeId: g.malzemeId, kaynakKonumId: g.kaynakKonumId ?? null, partiId, miktar: bindenMetin(binde(g.miktar)), refakatPartisiId, hedefKonumId, tavan }));
   return sepet(db, kisiId);
 }
 // Herkese sepet (Soru 133): her satır kendi hedefine ayrı yoldaki teslim olur; bir satırın reddi ötekileri durdurmaz, satır sepette kalır ve nedeni döner.

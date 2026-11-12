@@ -355,6 +355,29 @@ describe('stok (gerçek PostgreSQL)', () => {
     assert.deepEqual((await o().vt.tx((db) => sorgular.bakiyeDefterFarki(db))).filter((f) => f.malzemeId === k), []);
   });
 
+  test('3088: aynı lot ikinci kez okutulunca sepetteki miktar lotun gözdeki serbest miktarını aşmaz', async () => {
+    const k = await kart('sarf');
+    assert.equal((await malKabul(k, '6')).durum, 200);
+    const kabul = await konumId('KABUL');
+    const p = (await o().vt.tek<{ id: number }>('SELECT parti_id AS id FROM stok_bakiye WHERE malzeme_id = $1', [k]))!.id;
+    const ekle = (miktar: string) => depo<Hata & { satirlar: { id: number; malzemeId: number; miktar: string }[] }>(
+      'POST', '/stok/sepet/satir-ekle', { malzemeId: k, kaynakKonumId: kabul, partiId: p, miktar });
+    const satir = async (miktar: string) => {
+      const c = await ekle(miktar);
+      assert.equal(c.durum, 200, JSON.stringify(c.govde));
+      return c.govde.satirlar.find((x) => x.malzemeId === k)!;
+    };
+    assert.equal((await satir('6')).miktar, '6');
+    assert.equal((await satir('6')).miktar, '6', 'ikinci okutma lotu iki kez saymaz');
+    const x = await satir('2');
+    assert.equal(x.miktar, '6');
+    // Kısmi eklemeler serbest miktara kadar toplanır.
+    assert.equal((await depo('POST', `/stok/sepet/satirlar/${String(x.id)}/degistir`, { miktar: '2' })).durum, 200);
+    assert.equal((await satir('3')).miktar, '5');
+    assert.equal((await satir('3')).miktar, '6');
+    assert.equal((await depo('POST', `/stok/sepet/satirlar/${String(x.id)}/sil`, {})).durum, 200);
+  });
+
   test('denetim #15: karantinadaki parça depoda yalnız hurdaya taşınır ya da fire çıkışıyla düşer; serbest bırakmayı Kalite Merkezi çağırır', async () => {
     const k = await kart('sarf');
     assert.equal((await malKabul(k, '6')).durum, 200);
