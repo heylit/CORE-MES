@@ -1,6 +1,7 @@
 export { Simge } from './Simge.tsx';
 export { Dugme } from './Dugme.tsx';
-export { Kopyala } from './Kopyala.tsx';
+export { Kopyala, panoyaYaz } from './Kopyala.tsx';
+export { KodDegisimPenceresi, kodDegisimMetni, type KoduDegisenYer } from './KodDegisimPenceresi.tsx';
 export { Rozet, type RozetTonu } from './Rozet.tsx';
 export { Qr } from './Qr.tsx';
 export { QR_SESSIZ_PAY, qrKareleri, qrSvgMetni } from './qr.ts';

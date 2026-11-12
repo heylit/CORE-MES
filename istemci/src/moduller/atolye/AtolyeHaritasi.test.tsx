@@ -663,6 +663,38 @@ describe('fabrika haritası', () => {
     expect(await screen.findByText('Stok: 2 yer henüz stok konumu değil. Stok > Ayarlar\'da "Haritadan eşle" ile güncelleyin.')).toBeTruthy();
   });
 
+  // 3135 a: düzenleyici kayıttan sonra kapanır; kodu değişen konum listesi haritaya gelir ve pencere orada açılır.
+  it('harita kaydından sonra kodu değişen konum varsa pencere açılır; Etiket Merkezi olmayan listeyi kopyalar (3135 a)', async () => {
+    const yaz = vi.fn(() => Promise.resolve());
+    vi.stubGlobal('isSecureContext', true);
+    vi.stubGlobal('navigator', { ...navigator, clipboard: { writeText: yaz } });
+    sunucuKur({ ...YAZAN, islemler: [...YAZAN.islemler, 'sayfa.stok', 'stok.tanim'] }, {
+      bolumler: [YERLESIM, YERLESIM_B], esleme: { durum: 200, govde: { eklenen: 0, guncellenen: 2, kapatilan: 0, atlanan: [], koduDegisenler: [
+        { konumId: 55, eskiKod: 'R1-02-3-1', yeniKod: 'R9-02-3-1', tur: 'raf_gozu', ad: null, bolmeNo: 2, katNo: 3, satirSayisi: 1 },
+        { konumId: 56, eskiKod: 'R1-02-3-2', yeniKod: 'R9-02-3-2', tur: 'raf_gozu', ad: null, bolmeNo: 2, katNo: 3, satirSayisi: 0 },
+      ] } },
+    });
+    await fabrikayiKaydet();
+    const p = await screen.findByRole('dialog', { name: 'Konum kodu değişti' });
+    expect(within(p).getByText(/2 konumun kodu değişti/)).toBeTruthy();
+    expect(within(p).getByText(/Bunlardan 1 konumda stok var/)).toBeTruthy();
+    expect(within(p).queryByRole('link', { name: /Etiketleri bas/ })).toBeNull();
+    fireEvent.click(within(p).getByRole('button', { name: 'Listeyi kopyala' }));
+    expect(await screen.findByText('Liste kopyalandı.')).toBeTruthy();
+    expect(yaz).toHaveBeenCalledWith('R1-02-3-1 -> R9-02-3-1\nR1-02-3-2 -> R9-02-3-2');
+  });
+
+  it('Etiket Merkezi olan kişi harita kaydından sonra kodu değişen konumları Etiket Merkezi\'nde açar (3135 a)', async () => {
+    sunucuKur({ ...YAZAN, islemler: [...YAZAN.islemler, 'sayfa.stok', 'stok.tanim', 'sayfa.etiket-merkezi'] }, {
+      bolumler: [YERLESIM, YERLESIM_B], esleme: { durum: 200, govde: { eklenen: 0, guncellenen: 1, kapatilan: 0, atlanan: [], koduDegisenler: [
+        { konumId: 55, eskiKod: 'R1-02-3-1', yeniKod: 'R9-02-3-1', tur: 'raf_gozu', ad: null, bolmeNo: 2, katNo: 3, satirSayisi: 0 },
+      ] } },
+    });
+    await fabrikayiKaydet();
+    const p = await screen.findByRole('dialog', { name: 'Konum kodu değişti' });
+    expect(within(p).getByRole('link', { name: /Etiketleri bas/ }).getAttribute('href')).toBe('/etiket-merkezi?tur=konum&id=55');
+  });
+
   it('stok tanımı olmayan kişide eşleme koşmaz; eşlenmemiş yer stok yetkilisine yönlendirilir (2884)', async () => {
     const cagrilar = sunucuKur({ ...YAZAN, islemler: [...YAZAN.islemler, 'sayfa.stok'] }, { bolumler: [YERLESIM, YERLESIM_B], haritaOzeti: HARITA_OZETI(1) });
     await fabrikayiKaydet();

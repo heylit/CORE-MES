@@ -3,6 +3,13 @@
 // Etiket bas aynı sayıyı kullanır.
 export const REFAKAT_KOPYA_SAYISI = 2;
 
+// Etiket Merkezi adresi en çok bu kadar kimlik kabul eder (sözleşmedeki EN_COK_KAYIT); fazlası parça parça açılır.
+export const ETIKET_MERKEZI_SINIRI = 200;
+export type EtiketKaynagi = 'konum' | 'lot' | 'mal-kabul' | 'malzeme';
+// Stok, atölye ve ortak arayüz Etiket Merkezi'ni aynı adresle açar: kayıtlar adresle gider, ekran kendi seçimini kurar.
+export const etiketMerkeziAdresi = (tur: EtiketKaynagi, idler: readonly number[]): string =>
+  `/etiket-merkezi?tur=${tur}&id=${[...new Set(idler)].slice(0, ETIKET_MERKEZI_SINIRI).join(',')}`;
+
 // 3011 a: standart dışı rulonun ölçü sınırı (mm). Ekran girişte, sözleşme sunucuda aynı sınırla denetler.
 export const OZEL_OLCU_SINIRI = { enAz: 10, enCokEn: 110, enCokBoy: 300 } as const;
 

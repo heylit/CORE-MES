@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Dugme, DurumKutusu, Secim } from '../../ortak/arayuz/index.ts';
+import { Dugme, DurumKutusu, KodDegisimPenceresi, Secim, type KoduDegisenYer } from '../../ortak/arayuz/index.ts';
 import { hataIletisi } from '../../ortak/veri/api.ts';
 import { useOturum } from '../../ortak/veri/oturum.ts';
 import { DepoYazimiBaglami } from './depo-yazimi.ts';
@@ -20,7 +20,8 @@ interface Ozellikler {
 }
 
 export function DepoPaneli({ salonIdler, depoYazimi }: Ozellikler) {
-  const haritaYazar = useOturum().data?.islemler.includes('atolye.yaz') === true;
+  const islemler = useOturum().data?.islemler;
+  const haritaYazar = islemler?.includes('atolye.yaz') === true;
   const yazim = haritaYazar ? null : depoYazimi;
   const yazabilir = haritaYazar || yazim !== null;
   const fabrika = useFabrika();
@@ -34,6 +35,8 @@ export function DepoPaneli({ salonIdler, depoYazimi }: Ozellikler) {
   const gozKalemleri = useGozKalemleri(salonId);
   const [secim, secimYaz] = useState<DepoSecimi | null>(null);
   const [duzenleyici, duzenleyiciYaz] = useState(false);
+  // 3135 a: Stok Merkezi'nden gelen raf kaydı pencereyi kendisi açar (liste burada boş gelir); haritadan kayıtta burada açılır.
+  const [koduDegisenler, koduDegisenlerYaz] = useState<KoduDegisenYer[]>([]);
 
   if (fabrika.isError) return <DurumKutusu durum="hata" mesaj={hataIletisi(fabrika.error, 'Fabrika Haritası alınamadı')} yenile={() => void fabrika.refetch()} />;
   if (fabrika.isPending) return <DurumKutusu durum="yukleniyor" />;
@@ -68,8 +71,12 @@ export function DepoPaneli({ salonIdler, depoYazimi }: Ozellikler) {
             salonId={bolum.salon.id}
             bolumler={fabrika.data.bolumler}
             kapat={() => duzenleyiciYaz(false)}
-            kaydedildi={() => duzenleyiciYaz(false)}
+            kaydedildi={(d) => { duzenleyiciYaz(false); koduDegisenlerYaz(d); }}
           />
+        )}
+        {koduDegisenler.length > 0 && (
+          <KodDegisimPenceresi degisenler={koduDegisenler} kapat={() => koduDegisenlerYaz([])}
+            etiketMerkezi={islemler?.includes('sayfa.etiket-merkezi') === true} />
         )}
       </div>
     </DepoYazimiBaglami.Provider>

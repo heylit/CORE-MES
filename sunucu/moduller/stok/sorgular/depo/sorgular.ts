@@ -136,9 +136,11 @@ export const haritaKonumuTuru = (db: Db, k: { id: number; tur: string; depoId: n
 export const haritaKonumlariniKapat = (db: Db, idler: number[]): Promise<unknown[]> =>
   db.sorgu(`UPDATE stok_konum k SET aktif = false, surum = surum + 1 WHERE k.id = ANY($1::int[]) AND k.aktif
               AND NOT EXISTS (SELECT 1 FROM stok_bakiye b WHERE b.konum_id = k.id) RETURNING k.id`, [idler]);
-export interface KonumKodu { id: number; kod: string; tur: KonumTuru; ad: string | null; bolmeNo: number | null; katNo: number | null; aktif: boolean }
+export interface KonumKodu { id: number; kod: string; tur: KonumTuru; ad: string | null; bolmeNo: number | null; katNo: number | null; aktif: boolean; satirSayisi: number }
 export const kodDurumlari = (db: Db, s: { idler?: number[]; rafId?: number }): Promise<KonumKodu[]> =>
-  db.sorgu(`SELECT id, kod, tur, ad, bolme_no AS "bolmeNo", kat_no AS "katNo", aktif FROM stok_konum WHERE id = ANY($1::int[]) OR raf_id = $2`,
+  db.sorgu(`SELECT k.id, k.kod, k.tur, k.ad, k.bolme_no AS "bolmeNo", k.kat_no AS "katNo", k.aktif,
+              (SELECT count(*)::int FROM stok_bakiye b WHERE b.konum_id = k.id) AS "satirSayisi"
+            FROM stok_konum k WHERE k.id = ANY($1::int[]) OR k.raf_id = $2`,
     [s.idler ?? [], s.rafId ?? null]);
 export const konumVarMi = async (db: Db, id: number): Promise<boolean> => (await db.tek('SELECT 1 FROM stok_konum WHERE id = $1', [id])) !== null;
 

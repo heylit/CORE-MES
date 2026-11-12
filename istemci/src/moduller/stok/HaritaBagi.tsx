@@ -23,6 +23,7 @@ export function HaritaEsleDugmesi() {
   const { komut } = useStokKomutu(async () => {
     const c = await api.post<HaritaEslemeCevabi>('/stok/konumlar/haritadan-esle', {});
     if (c.atlanan.length > 0) bildir('bilgi', `Eşlenemeyen yer: ${c.atlanan.slice(0, 5).join(', ')}${c.atlanan.length > 5 ? ` ve ${c.atlanan.length - 5} tane daha` : ''}.`);
+    if (c.koduDegisenler.length === 0) bildir('bilgi', 'Kodu değişen konum yok.');
     setDegisenler(c.koduDegisenler);
     return c;
   }, 'Konumlar Fabrika Haritası ile eşlendi.');

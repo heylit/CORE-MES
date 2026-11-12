@@ -244,6 +244,8 @@ export const konumCevabi = z.object({ konum });
 export const koduDegisenKonum = z.object({
   konumId: z.number().int(), eskiKod: z.string(), yeniKod: z.string(), tur: z.enum(KONUM_TURLERI), ad: z.string().nullable(),
   bolmeNo: z.number().int().nullable(), katNo: z.number().int().nullable(),
+  // Konumdaki stok satırı (3135 a): kod değişince stok yerinde kalır, pencere bunu ayrıca söyler.
+  satirSayisi: z.number().int(),
 });
 export type KoduDegisenKonum = z.output<typeof koduDegisenKonum>;
 export const konumDuzenleCevabi = z.object({ konum, koduDegisenler: z.array(koduDegisenKonum) });
