@@ -13,7 +13,7 @@ import { rafOzetleri } from './DepoGorunumu.tsx';
 import { GozPaneli } from './GozPaneli.tsx';
 import { OgeSimgesi, rafSimgesi } from './plan-simgeleri.tsx';
 import type { PlanSimgesiAdi } from './plan-simgeleri.tsx';
-import { useGozler } from './veri.ts';
+import { useGozler, useRafStoklari } from './veri.ts';
 
 interface Ozellikler {
   yerlesim: YerlesimCevabi;
@@ -57,6 +57,10 @@ function Gozler({ rafId, rafAktif, vurguAdres, ozetler, yazabilir }: {
   // Göz seçilince içi açılır: kalemler, doluluk, görünüm.
   const [secilen, secilenYaz] = useState<Goz | null>(null);
   const sorgu = useGozler(rafId, sayfa);
+  // 3012 a: içerik sütunu Stok'tan, Depo cephesiyle aynı okuma ve yetki; eski elle kayıtlar yalnız göz panelinde kalır.
+  const rafIdler = useMemo(() => [rafId], [rafId]);
+  const stok = useRafStoklari(rafIdler);
+  const rafStogu = stok.okur ? stok.raflar.get(rafId) ?? null : null;
   if (sorgu.isPending) return <DurumKutusu durum="yukleniyor" />;
   if (sorgu.isError) return <DurumKutusu durum="hata" mesaj={hataIletisi(sorgu.error, 'Gözler alınamadı')} yenile={() => { void sorgu.refetch(); }} />;
   const { satirlar, toplam, sayfaBoyu } = sorgu.data;
@@ -66,9 +70,9 @@ function Gozler({ rafId, rafAktif, vurguAdres, ozetler, yazabilir }: {
     anahtar: 'icerik',
     baslik: 'İçerik',
     hucre: (g) => {
-      if (!ozetler) return 'bilinmiyor';
-      const o = ozet(g);
-      return o ? `${o.kalemler.map((k) => k.kod).join(', ')} · %${o.toplam}` : 'Boş';
+      if (!rafStogu) return 'bilinmiyor';
+      const kalem = rafStogu.get(hucreAnahtari(g.bolme, g.kat, g.goz)) ?? 0;
+      return kalem > 0 ? `${kalem} kalem` : 'Boş';
     },
   };
   return (
