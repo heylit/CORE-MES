@@ -13,23 +13,7 @@ export const KARAR_ADI: Record<KmGirisKarari, string> = { kabul: 'Kabul', sartli
 export const miktarMetni = (m: string | null): string => (m === null || m.trim() === '' || Number.isNaN(Number(m.replace(',', '.')))
   ? YOK : Number(m.replace(',', '.')).toLocaleString('tr-TR', { maximumFractionDigits: 3 }));
 
-export const GKK_TURU_ADI: Record<KmGkkTuru, string> = { hammadde: 'Hammadde GKK', yari_mamul: 'Yarı mamul GKK' };
-
-// 3118: kontrol maddelerinin ekrandaki başlığı; anahtarlar sözleşmedeki KM_GKK_MADDELERI ile aynıdır.
-export const MADDE_BASLIGI: Record<string, string> = {
-  irsaliye: 'İrsaliye ve sipariş uyumlu',
-  sertifika: 'Malzeme sertifikası var; kalite ve standart kartla aynı',
-  dokum: 'Döküm no sertifikada ve lotta aynı',
-  kimlik: 'Cins, form, durum ve yüzey kartla aynı',
-  olcu: 'Ölçüler tolerans içinde',
-  miktar: 'Sayılan ya da tartılan miktar irsaliyeyle aynı',
-  gorsel: 'Pas, çatlak, eğrilik, darbe yok',
-  markalama: 'Ambalaj ve markalama uygun',
-  resim: 'Resim no ve revizyon kartla aynı',
-  rapor: 'İşlem raporu var (kaplama, ısıl işlem)',
-  yuzey: 'Darbe, çizik ve yüzey hatası yok',
-  ambalaj: 'Çapak yok; ambalaj ve koruma uygun',
-};
+export const GKK_TURU_ADI: Record<KmGkkTuru, string> = { hammadde: 'Hammadde', yari_mamul: 'Yarı mamul', mamul: 'Mamul', sarf: 'Sarf' };
 
 // Dört sonuç ayrı tutulmaz; kabul ve hatalı miktarıyla hatalının kararından çıkar (1251 a, 1252, 1253 a).
 export type GkkSonucu = 'kabul' | 'kismi' | 'sartli' | 'ret';

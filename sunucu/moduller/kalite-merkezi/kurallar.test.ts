@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import { KM_KIMLIK_BICIMI } from '#paylasilan/sozlesme/kalite-merkezi.ts';
 import { onayAlaniDegisiyor as ekranOnayDegisiyor } from '../../../istemci/src/moduller/kalite-merkezi/yeni/kurallar.ts';
-import { GIRIS_KARNE_ANAHTARI, KM_DOSYA_SINIRI, arsivDegisiyor, girisKarneKarari, cihazGecerliMi, dofDurumu, dofGovdesi, dofIstegiReddi, dofKimligi, geriYuklenecekler, ilkParcaBekleyenleri, izReddi, kaliteSatirlari, kapanmisKayitMi, kaynakKoleksiyonuMu, onaylaSilinirMi, karantinaIstegi, kalibrasyonAletKimligi, kalibrasyonCihazi, olcuAletleriListesi, onayDegeriGecerliMi, onayDegisiklikleri, redToplami, serbestBirakanNcrMi, serbestBirakmaIstegi, serbestBirakmaPlani, serbestBirakmaSonucu, yalnizArsivDegisiyor, yeniOlcumCihazlari } from './kurallar.ts';
+import { GIRIS_KARNE_ANAHTARI, KM_DOSYA_SINIRI, gkkNoBicimi, arsivDegisiyor, girisKarneKarari, cihazGecerliMi, dofDurumu, dofGovdesi, dofIstegiReddi, dofKimligi, geriYuklenecekler, ilkParcaBekleyenleri, izReddi, kaliteSatirlari, kapanmisKayitMi, kaynakKoleksiyonuMu, onaylaSilinirMi, karantinaIstegi, kalibrasyonAletKimligi, kalibrasyonCihazi, olcuAletleriListesi, onayDegeriGecerliMi, onayDegisiklikleri, redToplami, serbestBirakanNcrMi, serbestBirakmaIstegi, serbestBirakmaPlani, serbestBirakmaSonucu, yalnizArsivDegisiyor, yeniOlcumCihazlari } from './kurallar.ts';
 
 describe('Kalite Merkezi kuralları', () => {
   test('değişiklik izi: yeni iz kaydı yazılır, dolu iz kaydının üstüne yazılmaz, iz kaydı hiç silinmez', () => {
@@ -337,4 +337,9 @@ describe('Kalite Merkezi kuralları', () => {
     assert.deepEqual(girisKarneKarari(gkk('3'), karar('red'))?.karar, 'red');
     assert.equal(GIRIS_KARNE_ANAHTARI(42), 'giris:42');
   });
+});
+
+test('3118: GKK numara örneği kalıptan birinci sırayla kurulur', () => {
+  assert.equal(gkkNoBicimi('GKK-{YYYY}-{SAYAC:4}', { yil: 2026, ay: 11, tur: 'HM' }), 'GKK-2026-0001');
+  assert.equal(gkkNoBicimi('G-{TUR}-{YY}{AA}-{SAYAC:3}', { yil: 2026, ay: 3, tur: 'YM' }), 'G-YM-2603-001');
 });

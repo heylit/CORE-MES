@@ -1,10 +1,10 @@
 import { useState } from 'react';
 import type { KmGirisAyrintisi, KmGkkKontrolu } from '#paylasilan/sozlesme/kalite-merkezi.ts';
-import { Dugme, Girdi, Kart, Rozet } from '../../../../ortak/arayuz/index.ts';
+import type { DslAlani } from '#paylasilan/form-dsl.ts';
+import { CokSatir, Dugme, Girdi, IsaretKutusu, Kart, Rozet, Secim } from '../../../../ortak/arayuz/index.ts';
 import { YOK } from '../bicim.ts';
-import { MADDE_BASLIGI } from './ortak.ts';
 
-export type MaddeSonucu = KmGkkKontrolu['maddeler'][number]['sonuc'];
+export type MaddeSonucu = KmGkkKontrolu['islemler'][number]['sonuc'];
 export interface Seri { no: string; hatali: boolean }
 
 const UCLU: { deger: MaddeSonucu; baslik: string }[] = [
@@ -98,7 +98,76 @@ export function MaddeKarti({ baslik, simge, anahtarlar, baslikOf, secim, sec, ki
     </Kart>
   );
 }
-export const maddeBasligi = (a: string): string => MADDE_BASLIGI[a] ?? a;
+
+// 3118 v3: şablonun bir bölümü. Açık formda madde üç düğmeyle, alan şablondaki türüyle girilir; kapalı kayıtta kaydın içindeki
+// şablon kopyası okunur (şablon sonra değişse de kayıt aynı görünür).
+export interface GorunenBolum {
+  baslik: string;
+  maddeler: { metin: string; sonuc: MaddeSonucu }[];
+  alanlar: { etiket: string; deger: string; tanim: DslAlani | null }[];
+}
+interface BolumOzellikleri {
+  b: GorunenBolum;
+  kilitli: boolean;
+  madde: (sira: number, d: MaddeSonucu) => void;
+  alan: (sira: number, d: string) => void;
+  eksik: (sira: number) => boolean;
+}
+export function SablonBolumu({ b, kilitli, madde, alan, eksik }: BolumOzellikleri) {
+  const degil = b.maddeler.filter((m) => m.sonuc === 'uygun_degil').length;
+  return (
+    <Kart baslik={b.baslik || 'Kontrol maddeleri'} simge="list">
+      {b.maddeler.length > 0 && (
+        <ul className="tc-km-gkk-maddeler">
+          {b.maddeler.map((m, i) => (
+            <li key={`${String(i)}-${m.metin}`} className="tc-km-gkk-madde">
+              <span>{m.metin}</span>
+              <UcluSecim etiket={m.metin} deger={m.sonuc} sec={(d) => { madde(i, d); }} kilitli={kilitli} />
+            </li>
+          ))}
+        </ul>
+      )}
+      {b.alanlar.length > 0 && (kilitli
+        ? <dl className="tc-km-gkk-bilgi">{b.alanlar.map((x) => <div key={x.etiket}><dt>{x.etiket}</dt><dd>{x.deger || YOK}</dd></div>)}</dl>
+        : (
+          <div className="tc-km-gkk-alanlar">
+            {b.alanlar.map((x, i) => <SablonAlani key={x.etiket} x={x} yaz={(d) => { alan(i, d); }} eksik={eksik(i)} />)}
+          </div>
+        ))}
+      {degil > 0 && <p className="tc-km-gkk-soluk">{String(degil)} madde uygun değil.</p>}
+    </Kart>
+  );
+}
+
+function SablonAlani({ x, yaz, eksik }: { x: GorunenBolum['alanlar'][number]; yaz: (d: string) => void; eksik: boolean }) {
+  const t = x.tanim;
+  const zorunlu = t?.zorunlu ?? false;
+  const hata = eksik ? 'Bu alan zorunlu.' : undefined;
+  if (t?.tur === 'cokSatir') return <CokSatir etiket={x.etiket} required={zorunlu} hata={hata} maxLength={2000} value={x.deger} onChange={(e) => { yaz(e.target.value); }} />;
+  if (t?.tur === 'secim') {
+    return (
+      <Secim etiket={x.etiket} required={zorunlu} hata={hata} value={x.deger} bosSecenek="Seçiniz" onChange={(e) => { yaz(e.target.value); }}
+        secenekler={(t.secenekler ?? []).filter((d) => d !== '').map((d) => ({ deger: d, baslik: d }))} />
+    );
+  }
+  if (t?.tur === 'isaretler') {
+    const secili = x.deger === '' ? [] : x.deger.split(', ');
+    return (
+      <fieldset className="tc-km-gkk-isaretler">
+        <legend>{x.etiket}{zorunlu ? ' *' : ''}</legend>
+        {(t.secenekler ?? []).map((d) => (
+          <IsaretKutusu key={d} etiket={d} checked={secili.includes(d)}
+            onChange={(e) => { yaz((t.secenekler ?? []).filter((y) => (y === d ? e.target.checked : secili.includes(y))).join(', ')); }} />
+        ))}
+        {hata && <p className="tc-km-gkk-hata" role="alert">{hata}</p>}
+      </fieldset>
+    );
+  }
+  return (
+    <Girdi etiket={x.etiket} required={zorunlu} hata={hata} maxLength={2000} value={x.deger} onChange={(e) => { yaz(e.target.value); }}
+      {...(t?.tur === 'tarih' ? { type: 'date' } : t?.tur === 'sayi' ? { inputMode: 'decimal' as const } : {})} />
+  );
+}
 
 // Seri listesi: okutucu ya da elle; yapıştırılan çok satır ayrı seri olur, tekrar eden eklenmez.
 export function SeriKarti({ seriler, yaz, kilitli }: { seriler: Seri[]; yaz: (s: Seri[]) => void; kilitli: boolean }) {

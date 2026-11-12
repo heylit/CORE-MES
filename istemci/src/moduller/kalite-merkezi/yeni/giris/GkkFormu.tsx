@@ -1,13 +1,16 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { KmGirisCevabi, KmGirisGkkGovdesi, KmGirisKaydi, KmGirisKararGovdesi, KmGkkKontrolu } from '#paylasilan/sozlesme/kalite-merkezi.ts';
+import { gkkIskeleti, gkkSablonlari, varsayilanGkkSablonu, type GkkSablonu } from '#paylasilan/gkk-sablonlari.ts';
 import { CokSatir, DurumKutusu, Dugme, Girdi, GrupluSecim, IsaretKutusu, Kart, OnayPenceresi, Rozet, Secim, useBildirim } from '../../../../ortak/arayuz/index.ts';
+import { Kopyala } from '../../../../ortak/arayuz/Kopyala.tsx';
 import { ApiHatasi, api, hataIletisi } from '../../../../ortak/veri/api.ts';
 import { tekrarKorumaliGonder } from '../../../../ortak/veri/istek-kimligi.ts';
 import { YOK, zamanKisa } from '../bicim.ts';
 import { siradakiNo, yeniKimlik } from '../veri.ts';
 import { GIRIS_ANAHTARI } from '../bugun/GirisKarari.tsx';
-import { Bilgi, MaddeKarti, MalzemeKarti, OlcuKarti, SeriKarti, maddeBasligi, type MaddeSonucu, type Seri } from './KontrolBolumleri.tsx';
+import type { Sablon } from '../tipler.ts';
+import { Bilgi, MaddeKarti, MalzemeKarti, OlcuKarti, SablonBolumu, SeriKarti, type GorunenBolum, type MaddeSonucu, type Seri } from './KontrolBolumleri.tsx';
 import {
   DURUM_ADI, DURUM_TONU, GIRIS_KAYITLARI_ANAHTARI, GKK_TURU_ADI, KARAR_ADI, SONUC_ADI, girisKaydiAnahtari, gkkSonucu, miktarMetni, sonucMetni,
   type GkkSonucu,
@@ -16,11 +19,6 @@ import {
 type Karar = KmGirisKararGovdesi['karar'];
 type Ciddiyet = KmGirisKararGovdesi['ciddiyet'];
 
-// Sözleşmedeki KM_GKK_MADDELERI ile aynı; istemci paylaşılanı yalnız tip olarak ithal eder (zod istemci paketine girmesin).
-const MADDELER = {
-  hammadde: ['irsaliye', 'sertifika', 'dokum', 'kimlik', 'olcu', 'miktar', 'gorsel', 'markalama'],
-  yari_mamul: ['irsaliye', 'resim', 'rapor', 'olcu', 'miktar', 'yuzey', 'ambalaj'],
-} as const;
 const KARARLAR: { deger: Karar; baslik: string }[] = [
   { deger: 'red', baslik: 'Red (tedarikçiye iade)' }, { deger: 'kabul', baslik: 'Kabul (olduğu gibi)' }, { deger: 'sartli_kabul', baslik: 'Şartlı kabul' },
 ];
@@ -43,20 +41,27 @@ const bindenMetin = (b: number): string => String(b / 1000);
 interface Ozellikler {
   id: number;
   ncrler: readonly { no?: unknown }[];
+  // Formlar'daki şablon kayıtları (tpl); GKK şablonu bunlardan ve standart dört şablondan seçilir.
+  sablonlar: readonly Sablon[];
   // Ölçümlü muayene yalnız muayene yazabilen kişide açılır; GKK kaydına bağlanmaz, yalnız alanları dolu gelir.
   muayeneAc: ((k: KmGirisKaydi) => void) | null;
   kapat: () => void;
 }
 
-// 3117, 3118: GKK mal kabul satırına bağlı tam formdur; kartın türüne göre hammadde ya da yarı mamul biçimindedir. Sonuç (Kabul,
+// 3117, 3118: GKK mal kabul satırına bağlı tam formdur. Kontrol listesi Formlar'daki GKK şablonundan gelir (kartın türünün
+// varsayılanı, kayıttan önce başkası seçilebilir); kayıt şablonun o anki halini saklar. Sonuç (Kabul,
 // Kısmi kabul, Şartlı kabul, Ret) miktar ve hatalının kararı olarak tek istekte yazılır; karar sonraya bırakılırsa hatalı Karar
 // bekleyen'e düşer. Numara kayıtta verilir. Kapanan kayıt aynı formda salt okunur açılır. Başkası önce yazdıysa (409) form yenilenir.
-export function GkkFormu({ id, ncrler, muayeneAc, kapat }: Ozellikler) {
+export function GkkFormu({ id, ncrler, sablonlar, muayeneAc, kapat }: Ozellikler) {
   const istemci = useQueryClient();
   const { bildir } = useBildirim();
   const anahtar = girisKaydiAnahtari(id);
   const kayit = useQuery({ queryKey: anahtar, queryFn: () => api.get<KmGirisCevabi>(`/kalite-merkezi/giris/${String(id)}`) });
+  const sablonListesi = useMemo(() => gkkSablonlari(sablonlar as readonly Record<string, unknown>[]), [sablonlar]);
+  const [sablonKodu, sablonKoduYaz] = useState<string | null>(null);
   const [maddeler, maddelerYaz] = useState<Record<string, MaddeSonucu>>({});
+  const [alanlar, alanlarYaz] = useState<Record<string, string>>({});
+  const [eksikAlanlar, eksikAlanlarYaz] = useState<ReadonlySet<string>>(new Set());
   const [olculen, olculenYaz] = useState<Record<string, string>>({});
   const [islemler, islemlerYaz] = useState<Record<string, MaddeSonucu>>({});
   const [seriler, serilerYaz] = useState<Seri[]>([]);
@@ -79,7 +84,7 @@ export function GkkFormu({ id, ncrler, muayeneAc, kapat }: Ozellikler) {
   const cevapla = (c: KmGirisCevabi) => { istemci.setQueryData<KmGirisCevabi>(anahtar, c); yenile(); };
   const hata = (h: unknown, varsayilan: string) => {
     if (h instanceof ApiHatasi && h.durum === 409) {
-      bildir('hata', 'Bu GKK az önce yazıldı; form yenilendi.');
+      bildir('hata', hataIletisi(h, 'Bu GKK az önce yazıldı; form yenilendi.'));
       void istemci.invalidateQueries({ queryKey: anahtar });
       yenile();
       return;
@@ -94,7 +99,7 @@ export function GkkFormu({ id, ncrler, muayeneAc, kapat }: Ozellikler) {
     onSuccess: (c) => {
       onayYaz(false);
       const s = gkkSonucu(c.kayit);
-      bildir('tamam', `${c.kayit.gkkNo ?? c.kayit.malKabulNo}: ${s === null ? `${miktarMetni(c.kayit.hataliMiktar)} hatalı karar bekliyor` : sonucMetni({ ...c.kayit, durum: 'kapandi' })}`);
+      bildir('tamam', `${c.kayit.gkkNo === null ? c.kayit.malKabulNo : `${c.kayit.gkkNo} verildi`}: ${s === null ? `${miktarMetni(c.kayit.hataliMiktar)} hatalı karar bekliyor` : sonucMetni({ ...c.kayit, durum: 'kapandi' })}`);
       cevapla(c);
     },
     onError: (h) => { onayYaz(false); hata(h, 'Giriş kontrolü yazılamadı.'); },
@@ -111,21 +116,35 @@ export function GkkFormu({ id, ncrler, muayeneAc, kapat }: Ozellikler) {
   if (kayit.isPending) return <DurumKutusu durum="yukleniyor" />;
   if (kayit.isError) return <DurumKutusu durum="hata" hata={kayit.error} yenile={() => { void kayit.refetch(); }} />;
   const { kayit: k, ayrinti: a } = kayit.data;
-  const parca = k.gkkTuru === 'yari_mamul';
+  const parca = k.gkkTuru === 'yari_mamul' || k.gkkTuru === 'mamul';
   const acik = k.durum === 'gkk_bekliyor';
   const kayitli = a.kontrol;
+  const varsayilan = varsayilanGkkSablonu(sablonListesi, k.gkkTuru);
+  const sablon: GkkSablonu | undefined = sablonListesi.find((x) => x.kod === sablonKodu) ?? varsayilan;
+  const iskelet = sablon ? gkkIskeleti(sablon.dsl) : [];
+  const anahtarOf = (b: number, i: number) => `${String(b)}_${String(i)}`;
+  const bolumler: GorunenBolum[] = acik
+    ? iskelet.map((b, bi) => ({
+      baslik: b.baslik,
+      maddeler: b.liste.map((m, mi) => ({ metin: m, sonuc: maddeler[anahtarOf(bi, mi)] ?? 'bakilmadi' })),
+      alanlar: b.alanlar.map((x, ai) => ({ etiket: x.etiket, deger: alanlar[anahtarOf(bi, ai)] ?? '', tanim: x })),
+    }))
+    : (kayitli?.bolumler ?? []).map((b) => ({ ...b, alanlar: b.alanlar.map((x) => ({ ...x, tanim: null })) }));
+  const bolumAcik = (ad: 'olcu' | 'islem' | 'seri'): boolean => (acik
+    ? sablon?.gkk[ad] ?? false
+    : (ad === 'olcu' ? (kayitli?.olcumler.length ?? 0) : ad === 'islem' ? (kayitli?.islemler.length ?? 0) : (kayitli?.seriler.length ?? 0)) > 0);
+  const sablonSec = (kod: string) => { sablonKoduYaz(kod); maddelerYaz({}); alanlarYaz({}); eksikAlanlarYaz(new Set()); };
   const lot = binde(k.miktar);
   const lotMiktari = miktarMetni(k.miktar);
   const birim = k.birim ?? '';
   const bekliyor = gkk.isPending || kararVer.isPending;
 
-  const maddeSecimi: Record<string, MaddeSonucu> = acik ? maddeler : Object.fromEntries((kayitli?.maddeler ?? []).map((m) => [m.anahtar, m.sonuc]));
   const islemSecimi: Record<string, MaddeSonucu> = acik ? islemler : Object.fromEntries((kayitli?.islemler ?? []).map((m) => [m.ad, m.sonuc]));
   const olcuDegeri: Record<string, string> = acik ? olculen : Object.fromEntries((kayitli?.olcumler ?? []).flatMap((o) => (o.olculen === null ? [] : [[o.ad, o.olculen]])));
   const seriListesi = acik ? seriler : (kayitli?.seriler ?? []);
   const islemAdlari = acik ? a.islemler : (kayitli?.islemler ?? []).map((x) => x.ad);
-  const uygunDegil = Object.values(maddeSecimi).filter((d) => d === 'uygun_degil').length + Object.values(islemSecimi).filter((d) => d === 'uygun_degil').length;
-  const hataliSeri = seriler.filter((s) => s.hatali).length;
+  const uygunDegil = bolumler.reduce((t, b) => t + b.maddeler.filter((m) => m.sonuc === 'uygun_degil').length, 0) + Object.values(islemSecimi).filter((d) => d === 'uygun_degil').length;
+  const hataliSeri = sablon?.gkk.seri ? seriler.filter((s) => s.hatali).length : 0;
 
   // Hatalı (ret ya da şartlı) miktar: kişi yazana kadar hatalı seri sayısı, yoksa şartlıda lotun tamamı.
   const onerilenHatali = sonuc === 'sartli' ? (hataliSeri > 0 ? String(hataliSeri) : lotMiktari.replace(',', '.')) : hataliSeri > 0 ? String(hataliSeri) : '';
@@ -141,13 +160,17 @@ export function GkkFormu({ id, ncrler, muayeneAc, kapat }: Ozellikler) {
   const kararli = sonuc !== null && sonuc !== 'kabul' && !(sonuc === 'kismi' && sonraKarar);
   const gerekceZorunlu = sonuc === 'sartli';
 
-  const kontrolGovdesi = (): KmGkkKontrolu => ({
-    maddeler: MADDELER[k.gkkTuru].map((m) => ({ anahtar: m, sonuc: maddeler[m] ?? 'bakilmadi' })),
-    olcumler: a.olculer.map((o) => ({ ad: o.ad, istenen: o.deger, olculen: olculen[o.ad]?.trim() || null })),
-    islemler: parca ? a.islemler.map((x) => ({ ad: x, sonuc: islemler[x] ?? 'bakilmadi' })) : [],
-    seriler: parca ? seriler : [],
+  const kontrolGovdesi = (s: GkkSablonu): KmGkkKontrolu => ({
+    sablon: { kod: s.kod, rev: s.rev, ad: s.ad },
+    bolumler: bolumler.map((b) => ({ baslik: b.baslik, maddeler: b.maddeler, alanlar: b.alanlar.map((x) => ({ etiket: x.etiket, deger: x.deger.trim() })) })),
+    olcumler: s.gkk.olcu ? a.olculer.map((o) => ({ ad: o.ad, istenen: o.deger, olculen: olculen[o.ad]?.trim() || null })) : [],
+    islemler: s.gkk.islem ? a.islemler.map((x) => ({ ad: x, sonuc: islemler[x] ?? 'bakilmadi' })) : [],
+    seriler: s.gkk.seri ? seriler : [],
   });
   const gkkKaydet = () => {
+    const eksik = new Set(iskelet.flatMap((b, bi) => b.alanlar.flatMap((x, ai) => (x.zorunlu && (alanlar[anahtarOf(bi, ai)] ?? '').trim() === '' ? [anahtarOf(bi, ai)] : []))));
+    eksikAlanlarYaz(eksik);
+    if (eksik.size > 0) { bildir('hata', eksik.size === 1 ? 'Formdaki zorunlu alanı doldurun.' : `Formda ${String(eksik.size)} zorunlu alan boş.`); return; }
     if (sonuc === null) { sonucEksikYaz(true); return; }
     if (miktarHatasi) { bildir('hata', miktarHatasi); return; }
     if (kararli && gerekceZorunlu && gerekce.trim() === '') { bildir('hata', 'Şartlı kabulde şart yazılır.'); return; }
@@ -158,7 +181,7 @@ export function GkkFormu({ id, ncrler, muayeneAc, kapat }: Ozellikler) {
     const kararGovdesi: KmGirisKararGovdesi | null = kararli
       ? { karar: sonuc === 'sartli' ? 'sartli_kabul' : 'red', ciddiyet, not: gerekce.trim() || null, ncrKimlik: yeniKimlik('ncr'), ncrNo: siradakiNo(ncrler, 'NCR') }
       : null;
-    gkk.mutate({ kabul: bindenMetin(kabulB), hatali: bindenMetin(hataliB), not: gkkNotu.trim() || null, kontrol: kontrolGovdesi(), karar: kararGovdesi });
+    gkk.mutate({ kabul: bindenMetin(kabulB), hatali: bindenMetin(hataliB), not: gkkNotu.trim() || null, kontrol: sablon ? kontrolGovdesi(sablon) : null, karar: kararGovdesi });
   };
   const kararYazdir = () => {
     if (karar === '') { kararEksikYaz(true); return; }
@@ -175,8 +198,15 @@ export function GkkFormu({ id, ncrler, muayeneAc, kapat }: Ozellikler) {
     <div className="tc-km-gkk-form">
       <div className="tc-km-gkk-form-ust">
         <Dugme tur="ikincil" simge="chev-left" onClick={kapat}>Listeye dön</Dugme>
+        <div className="tc-km-gkk-no" aria-label="GKK numarası">
+          <small>GKK no</small>
+          {k.gkkNo !== null
+            ? <span className="tc-km-gkk-no-deger"><b className="tc-km-gkk-mono">{k.gkkNo}</b><Kopyala metin={k.gkkNo} etiket="GKK numarasını kopyala" /></span>
+            : acik
+              ? <span className="tc-km-gkk-hucre"><b>Kaydedince verilir</b><small>örnek {a.gkkNoBicimi}</small></span>
+              : <b>Numarasız (eski kayıt)</b>}
+        </div>
         <div className="tc-km-gkk-kimlik">
-          {k.gkkNo === null ? <span className="tc-km-gkk-soluk">{acik ? 'Numara kaydedince verilir' : 'Numarasız GKK'}</span> : <b className="tc-km-gkk-mono">{k.gkkNo}</b>}
           <Rozet ton="bilgi">{GKK_TURU_ADI[k.gkkTuru]}</Rozet>
           <Rozet ton={DURUM_TONU[k.durum]}>{DURUM_ADI[k.durum]}</Rozet>
         </div>
@@ -201,25 +231,43 @@ export function GkkFormu({ id, ncrler, muayeneAc, kapat }: Ozellikler) {
           </p>
         </Kart>
         <MalzemeKarti a={a} parca={parca} />
-        <OlcuKarti olculer={a.olculer} olculen={olcuDegeri} yaz={(ad, d) => { olculenYaz((o) => ({ ...o, [ad]: d })); }} kilitli={!acik} />
+        {bolumAcik('olcu') && <OlcuKarti olculer={a.olculer} olculen={olcuDegeri} yaz={(ad, d) => { olculenYaz((o) => ({ ...o, [ad]: d })); }} kilitli={!acik} />}
       </div>
 
       <div className="tc-km-gkk-sutun">
-        {!acik && kayitli === null
-          ? <Kart baslik="Kontrol maddeleri" simge="list"><p className="tc-km-gkk-soluk">Kontrol maddeleri girilmedi.</p></Kart>
-          : (
-            <MaddeKarti
-              baslik="Kontrol maddeleri" simge="list" anahtarlar={acik ? MADDELER[k.gkkTuru] : (kayitli?.maddeler ?? []).map((m) => m.anahtar)}
-              baslikOf={maddeBasligi} secim={maddeSecimi} sec={(m, d) => { maddelerYaz((x) => ({ ...x, [m]: d })); }} kilitli={!acik}
-            />
-          )}
-        {parca && (
+        <Kart baslik="Kontrol formu" simge="file">
+          {acik
+            ? (
+              <div className="tc-km-gkk-alanlar">
+                <Secim
+                  etiket="Kontrol formu" value={sablon?.kod ?? ''} onChange={(e) => { sablonSec(e.target.value); }}
+                  secenekler={sablonListesi.map((x) => ({ deger: x.kod, baslik: `${x.kod} ${x.ad} (rev ${x.rev})` }))}
+                />
+                <p className="tc-km-gkk-soluk">
+                  {sablon !== undefined && sablon.kod === varsayilan?.kod ? `${GKK_TURU_ADI[k.gkkTuru]} için varsayılan form. ` : ''}
+                  Formlar Kalite Merkezi'nde Formlar sayfasında, Giriş kontrolü altında düzenlenir.
+                </p>
+              </div>
+            )
+            : kayitli === null
+              ? <p className="tc-km-gkk-soluk">Kontrol maddeleri girilmedi.</p>
+              : <p><b className="tc-km-gkk-mono">{kayitli.sablon.kod}</b> rev {kayitli.sablon.rev || '00'} · {kayitli.sablon.ad}</p>}
+        </Kart>
+        {bolumler.map((b, bi) => (
+          <SablonBolumu
+            key={`${String(bi)}-${b.baslik}`} b={b} kilitli={!acik}
+            madde={(i, d) => { maddelerYaz((x) => ({ ...x, [anahtarOf(bi, i)]: d })); }}
+            alan={(i, d) => { alanlarYaz((x) => ({ ...x, [anahtarOf(bi, i)]: d })); }}
+            eksik={(i) => eksikAlanlar.has(anahtarOf(bi, i)) && (alanlar[anahtarOf(bi, i)] ?? '').trim() === ''}
+          />
+        ))}
+        {bolumAcik('islem') && (
           <MaddeKarti
             baslik="İşlemler" simge="wrench" anahtarlar={islemAdlari} baslikOf={(x) => x} bos="Kartta işlem (operasyon) yazılı değil."
             secim={islemSecimi} sec={(x, d) => { islemlerYaz((y) => ({ ...y, [x]: d })); }} kilitli={!acik}
           />
         )}
-        {parca && <SeriKarti seriler={seriListesi} yaz={serilerYaz} kilitli={!acik} />}
+        {bolumAcik('seri') && <SeriKarti seriler={seriListesi} yaz={serilerYaz} kilitli={!acik} />}
 
         <Kart baslik="Sonuç" simge="clipboard-check">
           {acik

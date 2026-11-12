@@ -7,7 +7,8 @@ import type { TestVeritabani } from '#cekirdek/test-vt.ts';
 import { uygulamaKur } from '#cekirdek/uygulama.ts';
 import { ISTEK_KIMLIGI_BASLIGI } from '#paylasilan/istek-kimligi.ts';
 import { kmGirisBekleyenCevabi, kmGirisCevabi, kmGirisKayitlariCevabi } from '#paylasilan/sozlesme/kalite-merkezi.ts';
-import type { KmGirisKaydi } from '#paylasilan/sozlesme/kalite-merkezi.ts';
+import type { KmGirisKaydi, KmGkkKontrolu } from '#paylasilan/sozlesme/kalite-merkezi.ts';
+import { GKK_STANDART_SABLONLARI, gkkIskeleti } from '#paylasilan/gkk-sablonlari.ts';
 import { malKabulCevabi } from '#paylasilan/sozlesme/stok.ts';
 import { denetimYaz } from '../denetim/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
@@ -309,30 +310,45 @@ describe('Kalite Merkezi giriş kontrolü (gerçek PostgreSQL)', () => {
     assert.equal((await istek('kaliteci', 'GET', '/kalite-merkezi/giris/2147483000')).statusCode, 404);
   });
 
-  test('3118: GKK numara alır, kontrol listesi ve hatalının kararı tek istekte yazılır; ayrıntı karttan ve lottan gelir; yanlış madde ve karar reddedilir', async () => {
+  test('3118: GKK numara alır, şablonlu kontrol listesi ve hatalının kararı tek istekte yazılır; değişen şablon 409, zorunlu alan 400', async () => {
     const hm = await kabulEt(await kart('hammadde', null, { form: 'cubuk', dims: { d: 40, l: 3000 }, grade: 'DNM-1' }), '4');
     const oku = async (id: number) => kmGirisCevabi.parse((await istek('kaliteci', 'GET', `/kalite-merkezi/giris/${id}`)).json());
+    const yil = String(new Date().getFullYear());
     const once = await oku(hm.malKabulSatirId);
-    assert.equal(once.kayit.gkkTuru, 'hammadde');
-    assert.equal(once.kayit.gkkNo, null);
+    assert.deepEqual([once.kayit.gkkTuru, once.kayit.gkkNo, once.ayrinti.kartTuruKodu, once.ayrinti.gkkNoBicimi], ['hammadde', null, 'hammadde', `GKK-${yil}-0001`]);
     assert.deepEqual(once.ayrinti.olculer, [{ ad: 'Çap', deger: '40 mm' }, { ad: 'Boy', deger: '3.000 mm' }]);
     assert.equal(once.ayrinti.kalite, 'DNM-1');
     assert.equal(once.ayrinti.kontrol, null);
 
+    const doldur = (kod: string, ek: Partial<KmGkkKontrolu> = {}, rev = '00', dsl?: string): KmGkkKontrolu => {
+      const st = GKK_STANDART_SABLONLARI.find((x) => x.kod === kod)!;
+      return {
+        sablon: { kod, rev, ad: st.ad },
+        bolumler: gkkIskeleti(dsl ?? st.dsl).map((b) => ({ baslik: b.baslik, maddeler: b.liste.map((m) => ({ metin: m, sonuc: 'uygun' as const })), alanlar: b.alanlar.map((x) => ({ etiket: x.etiket, deger: '' })) })),
+        olcumler: [], islemler: [], seriler: [], ...ek,
+      };
+    };
     const yol = (id: number) => `/kalite-merkezi/giris/${id}/gkk`;
-    const kontrol = { maddeler: [{ anahtar: 'irsaliye', sonuc: 'uygun' }, { anahtar: 'olcu', sonuc: 'uygun_degil' }], olcumler: [{ ad: 'Çap', istenen: '40 mm', olculen: '40,3' }], islemler: [], seriler: [] };
+    const kontrol = doldur('GKK-01', { olcumler: [{ ad: 'Çap', istenen: '40 mm', olculen: '40,3' }] });
+    kontrol.bolumler[1]!.maddeler[0]!.sonuc = 'uygun_degil';
     const karar = { karar: 'red', ncrKimlik: `ncr-gkk-${hm.malKabulSatirId}`, ncrNo: `NCR-GKK-${hm.malKabulSatirId}`, ciddiyet: 'Majör', not: 'Çap dışı' };
-    const yanlis = await istek('kaliteci', 'POST', yol(hm.malKabulSatirId), { kabul: '3', hatali: '1', kontrol: { ...kontrol, maddeler: [{ anahtar: 'resim', sonuc: 'uygun' }] } });
-    assert.equal(yanlis.statusCode, 400, yanlis.body);
-    assert.equal(yanlis.json().alan, 'kontrol');
-    assert.equal((await istek('kaliteci', 'POST', yol(hm.malKabulSatirId), { kabul: '3', hatali: '1', kontrol: { ...kontrol, seriler: [{ no: 'S-1', hatali: false }] } })).statusCode, 400, 'hammaddede seri yok');
-    assert.equal((await istek('kaliteci', 'POST', yol(hm.malKabulSatirId), { kabul: '4', hatali: '0', karar })).statusCode, 400, 'hatalısız karar');
+    const gonder = (id: number, g: Record<string, unknown>) => istek('kaliteci', 'POST', yol(id), { kabul: '3', hatali: '1', ...g });
+    const madde = structuredClone(kontrol);
+    madde.bolumler[0]!.maddeler[0]!.metin = 'Başka madde';
+    assert.equal((await gonder(hm.malKabulSatirId, { kontrol: madde })).statusCode, 409, 'şablonda olmayan madde');
+    assert.equal((await gonder(hm.malKabulSatirId, { kontrol: { ...kontrol, sablon: { ...kontrol.sablon, rev: '07' } } })).statusCode, 409, 'eski revizyon');
+    assert.equal((await gonder(hm.malKabulSatirId, { kontrol: { ...kontrol, seriler: [{ no: 'S-1', hatali: false }] } })).statusCode, 409, 'hammadde formunda seri bölümü kapalı');
+    assert.equal((await gonder(hm.malKabulSatirId, { kontrol: { ...kontrol, sablon: { ...kontrol.sablon, kod: 'GKK-99' } } })).statusCode, 409, 'olmayan form');
+    const iki = structuredClone(kontrol);
+    iki.bolumler[0]!.maddeler[1]!.metin = iki.bolumler[0]!.maddeler[0]!.metin;
+    assert.equal((await gonder(hm.malKabulSatirId, { kontrol: iki })).statusCode, 400, 'aynı madde iki kez');
+    assert.equal((await gonder(hm.malKabulSatirId, { kabul: '4', hatali: '0', karar })).statusCode, 400, 'hatalısız karar');
     assert.equal((await sorgular.girisKararlari(o().sahip, [hm.malKabulSatirId])).length, 0, 'reddedilen istek iz bırakmaz');
 
-    const r = await istek('kaliteci', 'POST', yol(hm.malKabulSatirId), { kabul: '3', hatali: '1', kontrol, karar });
+    const r = await gonder(hm.malKabulSatirId, { kontrol, karar });
     assert.equal(r.statusCode, 200, r.body);
     const c = kmGirisCevabi.parse(r.json());
-    assert.match(c.kayit.gkkNo ?? '', new RegExp(`^GKK-${String(new Date().getFullYear())}-\\d{4}$`));
+    assert.match(c.kayit.gkkNo ?? '', new RegExp(`^GKK-${yil}-\\d{4}$`));
     assert.deepEqual([c.kayit.durum, c.kayit.karar, c.kayit.ncrNo, c.kayit.kabulMiktar, c.kayit.hataliMiktar], ['kapandi', 'red', `NCR-GKK-${hm.malKabulSatirId}`, '3.000', '1.000']);
     assert.deepEqual(c.ayrinti.kontrol, kontrol);
     assert.deepEqual(await bakiye(hm.partiId), { 'kabul:serbest': '3.000' }, 'ret iade çıkışıyla düşer');
@@ -343,18 +359,32 @@ describe('Kalite Merkezi giriş kontrolü (gerçek PostgreSQL)', () => {
     await assert.rejects(s.sorgu("INSERT INTO kalite_merkezi_giris_karari (mal_kabul_satiri_id, asama, kabul_miktar, hatali_miktar, kisi_id, gkk_no) VALUES ($1, 'gkk', 1, 0, $2, $3)",
       [(await kabulEt(await kart('hammadde'), '1')).malKabulSatirId, yoneticiId, c.kayit.gkkNo]), /kalite_merkezi_giris_karari_gkk_no_tek/);
 
+    // Formlar'da düzenlenen şablon aynı kodla standardın yerine geçer: yeni revizyon ve zorunlu alan sunucuda da istenir.
+    const dsl = '# Belgeler\n? İrsaliye ve sipariş uyumlu\nÖlçüm aleti *';
+    await sorgular.yaz(s, 'tpl', 'gkk-dnm-sablon', { kod: 'GKK-01', rev: '01', ad: 'Deneme hammadde', kat: 'Giriş kontrolü', dsl, gkk: { turler: ['hammadde'], olcu: false, islem: false, seri: false } }, yoneticiId);
+    const hm2 = await kabulEt(await kart('hammadde'), '2');
+    const yeni = doldur('GKK-01', {}, '01', dsl);
+    assert.equal((await gonder(hm2.malKabulSatirId, { kabul: '2', hatali: '0', kontrol: doldur('GKK-01') })).statusCode, 409, 'açıkken şablon değişti');
+    const eksik = await gonder(hm2.malKabulSatirId, { kabul: '2', hatali: '0', kontrol: yeni });
+    assert.equal(eksik.statusCode, 400, eksik.body);
+    assert.match(eksik.body, /Ölçüm aleti/);
+    yeni.bolumler[0]!.alanlar[0]!.deger = 'DNM-K-01';
+    assert.equal((await gonder(hm2.malKabulSatirId, { kabul: '2', hatali: '0', kontrol: yeni })).statusCode, 200);
+    assert.deepEqual((await oku(hm2.malKabulSatirId)).ayrinti.kontrol, yeni, 'kayıt şablonun o anki halini saklar');
+
     const ayar = await istek('yonetici', 'POST', '/ayarlar/kalite-merkezi.gkk-no/degistir', { deger: 'G-{TUR}-{SAYAC:3}' });
     assert.equal(ayar.statusCode, 200, ayar.body);
     const ym = await kabulEt(await kart('yarimamul'), '2');
-    assert.equal((await oku(ym.malKabulSatirId)).kayit.gkkTuru, 'yari_mamul');
-    const ymKontrol = { maddeler: [{ anahtar: 'resim', sonuc: 'uygun' }], olcumler: [], islemler: [{ ad: 'OP10 Deneme', sonuc: 'uygun' }], seriler: [{ no: 'S-1', hatali: false }, { no: 'S-2', hatali: true }] };
-    assert.equal((await istek('kaliteci', 'POST', yol(ym.malKabulSatirId), { kabul: '1', hatali: '1', kontrol: { ...ymKontrol, seriler: [{ no: 'S-1', hatali: false }, { no: 'S-1', hatali: true }] } })).statusCode, 400, 'aynı seri iki kez');
-    const y = await istek('kaliteci', 'POST', yol(ym.malKabulSatirId), { kabul: '1', hatali: '1', kontrol: ymKontrol });
+    const ymOnce = await oku(ym.malKabulSatirId);
+    assert.deepEqual([ymOnce.kayit.gkkTuru, ymOnce.ayrinti.gkkNoBicimi], ['yari_mamul', 'G-YM-001']);
+    const ymKontrol = doldur('GKK-02', { islemler: [{ ad: 'OP10 Deneme', sonuc: 'uygun' }], seriler: [{ no: 'S-1', hatali: false }, { no: 'S-2', hatali: true }] });
+    assert.equal((await gonder(ym.malKabulSatirId, { kabul: '1', kontrol: { ...ymKontrol, seriler: [{ no: 'S-1', hatali: false }, { no: 'S-1', hatali: true }] } })).statusCode, 400, 'aynı seri iki kez');
+    const y = await gonder(ym.malKabulSatirId, { kabul: '1', kontrol: ymKontrol });
     assert.equal(y.statusCode, 200, y.body);
     const yc = kmGirisCevabi.parse(y.json());
     assert.match(yc.kayit.gkkNo ?? '', /^G-YM-\d{3}$/);
     assert.equal(yc.kayit.durum, 'karar_bekliyor', 'karar sonraya kaldı');
     assert.deepEqual(yc.ayrinti.kontrol, ymKontrol);
-    assert.equal((await istek('kaliteci', 'POST', yol(ym.malKabulSatirId), { kabul: '1', hatali: '1' })).statusCode, 409);
+    assert.equal((await gonder(ym.malKabulSatirId, { kabul: '1' })).statusCode, 409);
   });
 });

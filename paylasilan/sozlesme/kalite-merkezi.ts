@@ -197,21 +197,23 @@ export const kmHataliBekleyenCevabi = z.object({ kayitlar: z.array(hataliKaydiSe
 export const KM_GIRIS_DURUMLARI = ['gkk_bekliyor', 'karar_bekliyor', 'kapandi'] as const;
 export const KM_GIRIS_KARARLARI = ['kabul', 'sartli_kabul', 'red'] as const;
 export type KmGirisKarari = (typeof KM_GIRIS_KARARLARI)[number];
-// 3118: GKK formu kartın türüne göre iki biçimdedir. Yarı mamul ve mamul parça formu (resim, işlemler, seri), gerisi hammadde formu.
-export const KM_GKK_TURLERI = ['hammadde', 'yari_mamul'] as const;
+// 3118: GKK türü kartın türünden gelir (paylasilan/gkk-sablonlari.ts): varsayılan formu ve numaranın {TUR} alanını seçer.
+export const KM_GKK_TURLERI = ['hammadde', 'yari_mamul', 'mamul', 'sarf'] as const;
 export type KmGkkTuru = (typeof KM_GKK_TURLERI)[number];
-// Kontrol maddeleri forma göre sabittir; anahtar kayıtta durur, başlık ekranındır (istemci giris/ortak.ts).
-export const KM_GKK_MADDELERI = {
-  hammadde: ['irsaliye', 'sertifika', 'dokum', 'kimlik', 'olcu', 'miktar', 'gorsel', 'markalama'],
-  yari_mamul: ['irsaliye', 'resim', 'rapor', 'olcu', 'miktar', 'yuzey', 'ambalaj'],
-} as const satisfies Record<KmGkkTuru, readonly string[]>;
 export const KM_GKK_MADDE_SONUCLARI = ['uygun', 'uygun_degil', 'bakilmadi'] as const;
 export const KM_GKK_SERI_SINIRI = 500;
 const kisaMetin = (en: number) => z.string().trim().max(en).nullish().transform((d) => (d ? d : null));
 const maddeSonucu = z.enum(KM_GKK_MADDE_SONUCLARI);
-// Kontrol listesi GKK satırıyla bir kez yazılır. Seri numaraları yalnız bu kayıttadır; stoğa seri açılmaz (mal kabulde seri tutulmuyor).
+// 3118 v3: kontrol listesi Formlar'daki düzenlenebilir GKK şablonundan gelir; kayıt şablonun o anki halini (kod, revizyon, bölüm,
+// madde ve alan metni) yanıtlarla birlikte saklar, şablon sonra değişse de eski GKK aynı okunur. Sunucu şablonu bilmez, yapıyı doğrular.
+// Seri numaraları yalnız bu kayıttadır; stoğa seri açılmaz (mal kabulde seri tutulmuyor).
 export const kmGkkKontrolu = z.object({
-  maddeler: z.array(z.object({ anahtar: z.string().min(1).max(20), sonuc: maddeSonucu })).max(20),
+  sablon: z.object({ kod: z.string().trim().min(1).max(20), rev: z.string().trim().max(10), ad: z.string().trim().max(120) }).strict(),
+  bolumler: z.array(z.object({
+    baslik: z.string().trim().max(120),
+    maddeler: z.array(z.object({ metin: z.string().trim().min(1).max(200), sonuc: maddeSonucu }).strict()).max(40),
+    alanlar: z.array(z.object({ etiket: z.string().trim().min(1).max(120), deger: z.string().trim().max(2000) }).strict()).max(40),
+  }).strict()).max(20),
   olcumler: z.array(z.object({ ad: z.string().trim().min(1).max(40), istenen: kisaMetin(40), olculen: kisaMetin(40) })).max(20),
   islemler: z.array(z.object({ ad: z.string().trim().min(1).max(80), sonuc: maddeSonucu })).max(40),
   seriler: z.array(z.object({ no: z.string().trim().min(1).max(40), hatali: z.boolean() })).max(KM_GKK_SERI_SINIRI),
@@ -273,6 +275,10 @@ export const kmGirisGkkGovdesi = z.object({
 // Malzeme kartı ve lotun GKK'da görünen ayrıntısı (salt okuma; kartta yoksa null ya da boş dizi).
 export const kmGirisAyrintisi = z.object({
   kartTuru: z.string().nullable(),
+  // Şablon seçimi için kartın tür kodu (hammadde, yarimamul, mamul, sarf...).
+  kartTuruKodu: z.string().nullable(),
+  // Kayıttan önce gösterilen numara örneği (Sistem Ayarları'ndaki kalıp, birinci sırayla; sayaç tüketilmez).
+  gkkNoBicimi: z.string(),
   cinsi: z.string().nullable(),
   kalite: z.string().nullable(),
   form: z.string().nullable(),

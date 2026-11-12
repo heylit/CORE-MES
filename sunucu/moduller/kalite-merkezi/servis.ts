@@ -15,7 +15,7 @@ import { ACIK_EMIR_DURUMLARI } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { siparisListesiSorgusu } from '#paylasilan/sozlesme/siparisler.ts';
 import type { Siparis } from '#paylasilan/sozlesme/siparisler.ts';
 import type { KmDegisiklikCevabi, KmOlcuAletleriCevabi, KmDosyaCevabi, KmGecmisCevabi, KmIlkParcaBekleyenCevabi, KmGeriYukleCevabi, KmKarantinaPartileriCevabi, KmKimlikCevabi, KmOnaylaCevabi, KmOnaylaGovdesi, KmOzetCevabi } from '#paylasilan/sozlesme/kalite-merkezi.ts';
-import { numaraAl } from '../ayarlar/disari.ts';
+import { numaraAl, sistemAyariOku } from '../ayarlar/disari.ts';
 import { denetimSatiri, dosyaTutamagi } from '../dosya/disari.ts';
 import { aletlerVeKayitlari } from '../kalibrasyon/disari.ts';
 import { kisiAdlari, kisiBayrakliMi, kisileriListele } from '../kisiler/disari.ts';
@@ -36,7 +36,8 @@ import { TEDARIKCI_FIRMA_ALANI, tedarikciFirmaKimligi, tedarikciFirmalari, tedar
 import { hataliNcrGovdesi, numuneNcrGovdesi, numuneNcrKimligi, sonOlcumler } from './kurallar.ts';
 import { numuneKarari } from './studyo.ts';
 import type { KmNumune, KmNumuneKarari } from '#paylasilan/sozlesme/kalite-merkezi-studyo.ts';
-import { GIRIS_KARNE_ANAHTARI, GKK_NO_TURU, girisDurumu, girisGkkEngeli, girisKarneKarari, girisNcrGovdesi, gkkKontrolEngeli, gkkTuru } from './kurallar.ts';
+import { GIRIS_KARNE_ANAHTARI, girisDurumu, girisGkkEngeli, girisKarneKarari, girisNcrGovdesi, gkkKontrolEngeli, gkkNoBicimi } from './kurallar.ts';
+import { GKK_NO_TURU, gkkSablonDenetle, gkkSablonlari, gkkTuruKarttan as gkkTuru } from '#paylasilan/gkk-sablonlari.ts';
 import { DOF_KOLEKSIYONU, dofDurumu, dofGovdesi, dofIstegiReddi, dofKimligi } from './kurallar.ts';
 import type { DofAcIstegi, DofDurumu, DofKaynagi } from './kurallar.ts';
 import { AQL_DURDURULDU, LOT_KOLEKSIYONU, lotAnahtari, lotGovdesi, lotIstegiReddi, lotKarari, lotKimligi, lotSikiligi, muayenePlani, siradakiLotNo, varsayilanAqlAyari } from './kurallar.ts';
@@ -543,10 +544,12 @@ async function girisAyrintisi(db: Db, k: KmGirisKaydi): Promise<KmGirisAyrintisi
   const oz = ozet.get(no);
   const r = resim.get(no);
   const p = parti.get(k.partiId);
-  const islemler = k.gkkTuru === 'yari_mamul' ? ((await malzemeOperasyonlari(db, no)) ?? []).map((o) => `OP${String(o.no)} ${o.ad ?? o.kod}`) : [];
+  const islemler = ((await malzemeOperasyonlari(db, no)) ?? []).map((o) => `OP${String(o.no)} ${o.ad ?? o.kod}`);
+  const [yil, ay] = tesisGunu(Date.now()).split('-').map(Number);
+  const bicim = gkkNoBicimi(await sistemAyariOku(db, 'kalite-merkezi.gkk-no'), { yil: yil ?? 0, ay: ay ?? 0, tur: GKK_NO_TURU[k.gkkTuru] });
   const kayitli = kmGkkKontrolu.safeParse(kararlar.find((x) => x.asama === 'gkk')?.kontrol ?? null);
   return {
-    kartTuru: KART_TURU_ADI[oz?.tur ?? ''] ?? oz?.tur ?? null, cinsi: oz?.kategoriAdi ?? maliyet.get(no)?.aile ?? null,
+    kartTuru: KART_TURU_ADI[oz?.tur ?? ''] ?? oz?.tur ?? null, kartTuruKodu: oz?.tur ?? null, gkkNoBicimi: bicim, cinsi: oz?.kategoriAdi ?? maliyet.get(no)?.aile ?? null,
     kalite: sa?.kaliteAdi ?? null, form: sa?.formAdi ?? null, durum: sa?.durum ?? null, yuzey: sa?.yuzey ?? null,
     standartlar: sa?.standartlar ?? [], tolerans: sa?.tolerans ?? null, istenenSertifikalar: sa?.sertifikalar ?? [], mensei: sa?.mensei ?? null,
     olculer: olculer.get(no) ?? [], resimNo: r?.resimNo ?? null, revizyon: r?.revizyon ?? null, islemler,
@@ -613,8 +616,15 @@ export async function girisGkk(db: Db, kullanici: Kullanici, id: number, g: KmGi
   if (engel) throw dogrulama(engel, 'kabul');
   const k = await girisKaydi(db, id);
   if (g.kontrol !== null) {
-    const kontrolEngeli = gkkKontrolEngeli(k.gkkTuru, g.kontrol);
+    const kontrolEngeli = gkkKontrolEngeli(g.kontrol);
     if (kontrolEngeli) throw dogrulama(kontrolEngeli, 'kontrol');
+    // 3118 v3: kayıt şablonun şimdiki haliyle yazılır; açıkken şablonu değişen form yeniden açılır, "*" alan sunucuda da istenir.
+    const kod = g.kontrol.sablon.kod;
+    const sablon = gkkSablonlari(await sorgular.sablonKayitlari(db)).find((x) => x.kod === kod);
+    if (sablon === undefined) throw cakisma('GKK formu bulunamadı; formu yeniden açın.');
+    const denetim = gkkSablonDenetle(sablon, g.kontrol);
+    if (denetim?.tur === 'degisti') throw cakisma(`${kod} formu değişti; GKK'yı yeniden açın.`);
+    if (denetim?.tur === 'eksik') throw dogrulama(denetim.metin, 'kontrol');
   }
   if (g.karar !== null && Number(g.hatali) <= 0) throw dogrulama('Hatalı miktar yokken kalite kararı verilmez.', 'karar');
   const aciklama = girisAciklamasi(k, 'Giriş kontrolü', g.not);

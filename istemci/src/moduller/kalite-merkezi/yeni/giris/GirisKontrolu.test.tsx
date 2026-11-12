@@ -1,12 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
-import type { KmGirisAyrintisi, KmGirisBekleyenCevabi } from '#paylasilan/sozlesme/kalite-merkezi.ts';
+import type { KmGirisAyrintisi, KmGirisBekleyenCevabi, KmGkkKontrolu } from '#paylasilan/sozlesme/kalite-merkezi.ts';
 import { kmAc, MUAYENECI, MUHENDIS, type TestKayitlari, type TestKullanicisi } from '../test-ortak.tsx';
 
 // Kayıtlar ve adlar sentetiktir.
 type Kayit = KmGirisBekleyenCevabi['kayitlar'][number];
 const AYRINTI: KmGirisAyrintisi = {
-  kartTuru: 'Hammadde', cinsi: null, kalite: 'Deneme kalite', form: 'Yuvarlak çubuk', durum: null, yuzey: null, standartlar: [], tolerans: null,
+  kartTuru: 'Hammadde', kartTuruKodu: 'hammadde', gkkNoBicimi: 'GKK-2026-0001', cinsi: null, kalite: 'Deneme kalite', form: 'Yuvarlak çubuk', durum: null, yuzey: null, standartlar: [], tolerans: null,
   istenenSertifikalar: [], mensei: null, olculer: [{ ad: 'Çap', deger: '40 mm' }], resimNo: null, revizyon: null, islemler: [],
   dokumNo: 'D-0001', tedarikciPartiNo: null, sertifikaNo: null, kontrol: null,
 };
@@ -74,7 +74,9 @@ describe('GKK listesi ve formu (1246, 3117, 3118)', () => {
   it('hammadde GKK: malzeme ve lot ayrıntısı görünür; Kısmi kabul miktar, kontrol listesi ve ret kararını tek istekte, tekrar korumalı gönderir', async () => {
     const s = ac(MUHENDIS, 'giris-kontrolu', [GKK], { ncr: [{ no: `NCR-${String(new Date().getFullYear())}-0004` }] });
     fireEvent.click(await screen.findByText('MK-0001'));
-    expect(await screen.findByText('Numara kaydedince verilir')).toBeTruthy();
+    expect(await screen.findByText('Kaydedince verilir')).toBeTruthy();
+    expect(screen.getByText('örnek GKK-2026-0001')).toBeTruthy();
+    expect((screen.getByLabelText('Kontrol formu') as HTMLSelectElement).value).toBe('GKK-01');
     expect(screen.getByText('Kart: 40 mm')).toBeTruthy();
     expect(screen.getByText('D-0001')).toBeTruthy();
     expect(screen.queryByRole('heading', { name: /Seri numaraları/ })).toBeNull();
@@ -89,9 +91,12 @@ describe('GKK listesi ve formu (1246, 3117, 3118)', () => {
     await waitFor(() => { expect(s.yazmalar.some((y) => y.yol === '/kalite-merkezi/giris/11/gkk')).toBe(true); });
     const govde = s.yazmalar.find((y) => y.yol === '/kalite-merkezi/giris/11/gkk')?.govde as Record<string, unknown>;
     expect(govde).toMatchObject({ kabul: '8', hatali: '2', not: null, karar: { karar: 'red', ciddiyet: 'Majör', not: 'Ölçü dışı' } });
-    const kontrol = govde['kontrol'] as { maddeler: { anahtar: string; sonuc: string }[]; olcumler: unknown[]; islemler: unknown[]; seriler: unknown[] };
-    expect(kontrol.maddeler[0]).toEqual({ anahtar: 'irsaliye', sonuc: 'uygun' });
-    expect(kontrol.maddeler.slice(1).every((m) => m.sonuc === 'bakilmadi')).toBe(true);
+    const kontrol = govde['kontrol'] as KmGkkKontrolu;
+    expect(kontrol.sablon).toEqual({ kod: 'GKK-01', rev: '00', ad: 'Hammadde giriş kontrolü' });
+    expect(kontrol.bolumler.map((b) => b.baslik)).toEqual(['Belgeler', 'Malzeme']);
+    expect(kontrol.bolumler[0]?.maddeler[0]).toEqual({ metin: 'İrsaliye ve sipariş uyumlu', sonuc: 'uygun' });
+    expect(kontrol.bolumler.flatMap((b) => b.maddeler).slice(1).every((m) => m.sonuc === 'bakilmadi')).toBe(true);
+    expect(kontrol.bolumler[1]?.alanlar).toEqual([{ etiket: 'Ölçüm aleti', deger: '' }]);
     expect(kontrol.olcumler).toEqual([{ ad: 'Çap', istenen: '40 mm', olculen: '40,02' }]);
     expect(kontrol.islemler).toEqual([]);
     expect(kontrol.seriler).toEqual([]);
@@ -99,6 +104,38 @@ describe('GKK listesi ve formu (1246, 3117, 3118)', () => {
     expect(new Headers((istek?.[1] as RequestInit | undefined)?.headers).get('istek-kimligi')).toMatch(/^[0-9a-f-]{36}$/);
     expect(await screen.findByRole('heading', { name: 'Kalite kararı' })).toBeTruthy();
     expect(screen.getByText('GKK-2026-0002')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'GKK numarasını kopyala' })).toBeTruthy();
+  });
+
+  it('Formlar\'da düzenlenen GKK şablonu formu kurar: zorunlu alan boşken gönderilmez; başka form seçilince maddeler değişir', async () => {
+    const dsl = '# Belgeler\n? Deneme maddesi\nÖlçüm aleti *\nSertifika türü | seçim: 2.1, 3.1';
+    const tpl = [{ _id: 'tpl-gkk-1', kod: 'GKK-01', rev: '01', ad: 'Deneme hammadde formu', kat: 'Giriş kontrolü', dsl, gkk: { turler: ['hammadde'], olcu: false, islem: false, seri: false } }];
+    const s = ac(MUHENDIS, 'giris-kontrolu', [GKK], { tpl });
+    fireEvent.click(await screen.findByText('MK-0001'));
+    expect(await screen.findByText('Deneme maddesi')).toBeTruthy();
+    expect(screen.queryByText('Kart: 40 mm')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: /^Kabul/ }));
+    fireEvent.click(screen.getByRole('button', { name: "GKK'yı kaydet" }));
+    expect(await screen.findByText('Bu alan zorunlu.')).toBeTruthy();
+    expect(screen.queryByRole('dialog', { name: "GKK'yı kaydet" })).toBeNull();
+    fireEvent.change(screen.getByLabelText(/^Ölçüm aleti/), { target: { value: 'DNM-K-01' } });
+    fireEvent.change(screen.getByLabelText(/^Sertifika türü/), { target: { value: '3.1' } });
+    fireEvent.click(screen.getByRole('button', { name: "GKK'yı kaydet" }));
+    fireEvent.click(within(screen.getByRole('dialog', { name: "GKK'yı kaydet" })).getByRole('button', { name: 'Kaydet' }));
+    await waitFor(() => { expect(s.yazmalar.some((y) => y.yol.endsWith('/gkk'))).toBe(true); });
+    const kontrol = (s.yazmalar.find((y) => y.yol.endsWith('/gkk'))?.govde as { kontrol: KmGkkKontrolu }).kontrol;
+    expect(kontrol.sablon).toEqual({ kod: 'GKK-01', rev: '01', ad: 'Deneme hammadde formu' });
+    expect(kontrol.bolumler).toEqual([{ baslik: 'Belgeler', maddeler: [{ metin: 'Deneme maddesi', sonuc: 'bakilmadi' }], alanlar: [{ etiket: 'Ölçüm aleti', deger: 'DNM-K-01' }, { etiket: 'Sertifika türü', deger: '3.1' }] }]);
+    expect(kontrol.olcumler).toEqual([]);
+  });
+
+  it('kayıttan önce başka GKK formu seçilebilir; seçim maddeleri yeniler', async () => {
+    ac(MUHENDIS, 'giris-kontrolu', [GKK]);
+    fireEvent.click(await screen.findByText('MK-0001'));
+    fireEvent.change(await screen.findByLabelText('Kontrol formu'), { target: { value: 'GKK-04' } });
+    expect(await screen.findByText('Son kullanma tarihi uygun')).toBeTruthy();
+    expect(screen.queryByText('Döküm no sertifikada ve lotta aynı')).toBeNull();
+    expect(screen.queryByText('Kart: 40 mm')).toBeNull();
   });
 
   it('Kısmi kabulde karar sonraya bırakılırsa karar gönderilmez, hatalı Karar bekleyen olur', async () => {
@@ -134,7 +171,7 @@ describe('GKK listesi ve formu (1246, 3117, 3118)', () => {
 
   it('yarı mamul GKK: işlemler ve seri listesi kontrolle gider; hatalı seri hatalı miktarı önerir', async () => {
     const YM: Kayit = { ...GKK, gkkTuru: 'yari_mamul' };
-    const s = ac(MUHENDIS, 'giris-kontrolu', [YM], {}, { ayrinti: { ...AYRINTI, kartTuru: 'Yarı mamul', olculer: [], resimNo: 'RS-0001', revizyon: 'B', islemler: ['OP10 Tornalama'] }, tek: YM });
+    const s = ac(MUHENDIS, 'giris-kontrolu', [YM], {}, { ayrinti: { ...AYRINTI, kartTuru: 'Yarı mamul', kartTuruKodu: 'yarimamul', olculer: [], resimNo: 'RS-0001', revizyon: 'B', islemler: ['OP10 Tornalama'] }, tek: YM });
     fireEvent.click(await screen.findByText('MK-0001'));
     expect(await screen.findByText('RS-0001')).toBeTruthy();
     expect(screen.getByText('Resim no ve revizyon kartla aynı')).toBeTruthy();
@@ -147,10 +184,11 @@ describe('GKK listesi ve formu (1246, 3117, 3118)', () => {
     fireEvent.click(screen.getByRole('button', { name: "GKK'yı kaydet" }));
     fireEvent.click(within(screen.getByRole('dialog', { name: "GKK'yı kaydet" })).getByRole('button', { name: 'Kaydet' }));
     await waitFor(() => { expect(s.yazmalar.some((y) => y.yol.endsWith('/gkk'))).toBe(true); });
-    const kontrol = (s.yazmalar.find((y) => y.yol.endsWith('/gkk'))?.govde as { kontrol: { islemler: unknown; seriler: unknown; maddeler: { anahtar: string }[] } }).kontrol;
+    const kontrol = (s.yazmalar.find((y) => y.yol.endsWith('/gkk'))?.govde as { kontrol: KmGkkKontrolu }).kontrol;
     expect(kontrol.islemler).toEqual([{ ad: 'OP10 Tornalama', sonuc: 'uygun_degil' }]);
     expect(kontrol.seriler).toEqual([{ no: 'S-1', hatali: false }, { no: 'S-2', hatali: true }]);
-    expect(kontrol.maddeler.map((m) => m.anahtar)).toContain('resim');
+    expect(kontrol.sablon.kod).toBe('GKK-02');
+    expect(kontrol.bolumler.flatMap((b) => b.maddeler.map((m) => m.metin))).toContain('Resim no ve revizyon kartla aynı');
   });
 
   it('başkası önce yazdıysa (409) form yenilenir ve salt okunur olur', async () => {

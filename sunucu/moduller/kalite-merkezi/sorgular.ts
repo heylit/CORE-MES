@@ -239,6 +239,12 @@ export function kayitGecmisi(db: Db, koleksiyon: string, kimlik: string, sinir: 
   );
 }
 
+// 3118: form şablonlarının (tpl) dolu gövdeleri; GKK kaydı şablonunu bunlarla ve standart GKK şablonlarıyla denetler.
+export async function sablonKayitlari(db: Db): Promise<Record<string, unknown>[]> {
+  const satirlar = await db.sorgu<{ govde: Record<string, unknown> }>(`SELECT govde FROM kalite_merkezi_belge WHERE koleksiyon = 'tpl' AND govde IS NOT NULL`);
+  return satirlar.map((r) => r.govde);
+}
+
 // Koleksiyonda bu numarayı taşıyan dolu kayıt var mı (ortak sayaç dolu numarayı atlar).
 export async function noVarMi(db: Db, koleksiyon: string, no: string): Promise<boolean> {
   const satir = await db.tek<{ var: boolean }>(

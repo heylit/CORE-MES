@@ -67,6 +67,8 @@ export interface FormKaydi extends KmKayit {
 
 export interface Sablon extends KmKayit {
   kod?: string; ad?: string; rev?: string; yurur?: string; kat?: string; std?: string; ne?: string; dsl?: string;
+  // 3118: GKK şablonunda varsayılan türler ve açık bölümler (paylasilan/gkk-sablonlari.ts GkkAyari).
+  gkk?: unknown;
 }
 
 export interface Balon { [alan: string]: unknown }

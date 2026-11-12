@@ -53,3 +53,10 @@
 @media (max-width: 767px) {
   .tc-km-gkk-uclu { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); width: 100%; }
 }
+
+/* 3118 v3: GKK numarası formun başında ayrı kutuda. */
+.tc-km-gkk-no { display: grid; gap: var(--b-1); padding: var(--b-2) var(--b-3); border: var(--cizgi-ince) solid var(--edge2); border-radius: var(--yari-1); background: var(--panel2); min-width: 0; }
+.tc-km-gkk-no > small { color: var(--muted); font-size: var(--yazi-xs); }
+.tc-km-gkk-no-deger { display: inline-flex; align-items: center; gap: var(--b-2); font-size: var(--yazi-l); }
+.tc-km-gkk-isaretler { display: flex; flex-wrap: wrap; gap: var(--b-2) var(--b-4); margin: 0; padding: 0; border: 0; }
+.tc-km-gkk-isaretler legend { width: 100%; padding: 0 0 var(--b-1); font-size: var(--yazi-s); }

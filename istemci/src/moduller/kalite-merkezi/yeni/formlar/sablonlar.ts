@@ -1,7 +1,8 @@
+import { GKK_KATEGORISI, GKK_TURU_ADLARI, gkkAyariOku, gkkSablonlari, type GkkAyari } from '#paylasilan/gkk-sablonlari.ts';
 import { dslCoz, icerikVarMi } from './dsl.ts';
 import { YERLESIK_SABLONLAR } from './yerlesik.ts';
 
-export const FORM_KATEGORILERI = ['Muayene ve kabul', 'Uygunsuzluk ve iyileştirme', 'Tedarik zinciri', 'Üretim ve proses', 'Ölçüm ve cihaz'] as const;
+export const FORM_KATEGORILERI = [GKK_KATEGORISI, 'Muayene ve kabul', 'Uygunsuzluk ve iyileştirme', 'Tedarik zinciri', 'Üretim ve proses', 'Ölçüm ve cihaz'] as const;
 
 // Modül formu: doldurmak o görünümün kayıt formunu açar (uygulamanın LINKED listesi). Boş formun alanları `bos-formlar.ts`'tedir.
 export interface BagliForm {
@@ -41,6 +42,7 @@ export interface SablonKaydi {
   terminal?: boolean;
   dsl?: string;
   arsiv?: boolean;
+  gkk?: unknown;
 }
 
 export interface SablonAyari {
@@ -64,9 +66,17 @@ export interface ListedekiForm {
   dsl: string;
   bagli?: BagliForm;
   kayit?: SablonKaydi;
+  // 3118: GKK şablonu; GKK formu mal kabul satırından açılır, Formlar'dan doldurulmaz.
+  gkk?: GkkAyari;
 }
 
 const metin = (v: unknown) => (typeof v === 'string' ? v : '');
+
+const BOS_GKK: GkkAyari = { turler: [], olcu: false, islem: false, seri: false };
+function gkkAlani(t: SablonKaydi, taban?: (typeof YERLESIK_SABLONLAR)[number]): { gkk?: GkkAyari } {
+  const g = gkkAyariOku(t.gkk) ?? taban?.gkk ?? (metin(t.kat) === GKK_KATEGORISI ? BOS_GKK : undefined);
+  return g ? { gkk: g } : {};
+}
 
 function kayittan(t: SablonKaydi, ozel: 'degistirildi' | 'kullanici', taban?: (typeof YERLESIK_SABLONLAR)[number]): ListedekiForm {
   return {
@@ -83,6 +93,7 @@ function kayittan(t: SablonKaydi, ozel: 'degistirildi' | 'kullanici', taban?: (t
     terminal: t.terminal === true,
     dsl: metin(t.dsl) || metin(taban?.dsl),
     kayit: t,
+    ...gkkAlani(t, taban),
   };
 }
 
@@ -120,6 +131,7 @@ export interface SablonTaslagi {
   etiket: boolean;
   terminal: boolean;
   dsl: string;
+  gkk: GkkAyari | null;
 }
 
 const YENI_FORM_DSL = '# Genel bilgiler\nParça no *\nLot / seri no\n# Kontrol maddeleri\n? Birinci kontrol maddesi\n? İkinci kontrol maddesi\n# Sonuç\nKarar * | seçim: Uygun, Uygun değil\nAçıklama | metin';
@@ -129,10 +141,10 @@ const YENI_FORM_DSL = '# Genel bilgiler\nParça no *\nLot / seri no\n# Kontrol m
 export function tasarimBaslangici(form: ListedekiForm | undefined, sablonlar: readonly SablonKaydi[], bugun: string): SablonTaslagi {
   if (form) {
     const rev = form.kayit ? form.rev : String(Number(form.rev || 0) + 1).padStart(2, '0');
-    return { kod: form.kod, ad: form.ad, rev, yurur: bugun, std: form.std, kat: form.kat, ne: form.ne, etiket: form.etiket, terminal: form.terminal, dsl: form.dsl };
+    return { kod: form.kod, ad: form.ad, rev, yurur: bugun, std: form.std, kat: form.kat, ne: form.ne, etiket: form.etiket, terminal: form.terminal, dsl: form.dsl, gkk: form.gkk ?? null };
   }
   const ozelSayisi = sablonlar.filter((t) => !YERLESIK_SABLONLAR.some((y) => y.kod === t.kod)).length;
-  return { kod: `KF-${String(30 + ozelSayisi).padStart(2, '0')}`, ad: '', rev: '00', yurur: bugun, std: '', kat: '', ne: '', etiket: false, terminal: false, dsl: YENI_FORM_DSL };
+  return { kod: `KF-${String(30 + ozelSayisi).padStart(2, '0')}`, ad: '', rev: '00', yurur: bugun, std: '', kat: '', ne: '', etiket: false, terminal: false, dsl: YENI_FORM_DSL, gkk: null };
 }
 
 // Tasarım kaydının kuralları (uygulamadaki sırayla; ilk ihlal döner).
@@ -143,5 +155,17 @@ export function tasarimHatasi(taslak: SablonTaslagi, onceki: ListedekiForm | und
   if (sablonlar.some((t) => t.kod === taslak.kod && t._id !== kendi)) return 'Bu doküman no ile başka bir form var.';
   if (!onceki && YERLESIK_SABLONLAR.some((y) => y.kod === taslak.kod)) return 'Bu no standart bir forma ait; düzenlemek için o formda "Düzenle"yi kullanın.';
   if (onceki && taslak.dsl.trim() !== onceki.dsl.trim() && taslak.rev === (onceki.rev || '00')) return 'Form içeriği değişti: revizyon numarasını artırın.';
+  if (taslak.gkk) return gkkTasarimHatasi(taslak, taslak.gkk, sablonlar);
+  return null;
+}
+
+// 3118: GKK şablonunda tablo yoktur; bir tür için tek varsayılan form olur (ikincisi GKK'da "Kontrol formu" seçiminden kullanılır).
+function gkkTasarimHatasi(taslak: SablonTaslagi, g: GkkAyari, sablonlar: readonly SablonKaydi[]): string | null {
+  if (dslCoz(taslak.dsl).some((b) => b.tablo !== null)) return 'GKK formunda tablo kullanılmaz; madde ya da alan yazın.';
+  const kayitlar = sablonlar.map((t) => t as unknown as Record<string, unknown>);
+  for (const tur of g.turler) {
+    const baska = gkkSablonlari(kayitlar).find((x) => x.kod !== taslak.kod && x.gkk.turler.includes(tur));
+    if (baska) return `${GKK_TURU_ADLARI[tur]} için varsayılan form zaten ${baska.kod}; önce onda bu türü kaldırın.`;
+  }
   return null;
 }

@@ -39,18 +39,20 @@ const BEKLEYEN_SUTUNLARI: Sutun<KmGirisKaydi>[] = [
   { anahtar: 'sertifika', baslik: 'Sertifika', hucre: (k) => (k.sertifikaVar ? <Rozet ton="tamam">Var</Rozet> : <Rozet ton="uyari">Yok</Rozet>), csv: (k) => (k.sertifikaVar ? 'Var' : 'Yok') },
   { anahtar: 'durum', baslik: 'Durum', hucre: (k) => <Rozet ton={DURUM_TONU[k.durum]}>{DURUM_ADI[k.durum]}</Rozet>, csv: (k) => DURUM_ADI[k.durum] },
 ];
+const GKK_NO_SUTUNU: Sutun<KmGirisKaydi> = {
+  anahtar: 'gkkNo', baslik: 'GKK no', kirilmaz: true,
+  hucre: (k) => <span className="tc-km-gkk-hucre"><b className="tc-km-gkk-mono">{k.gkkNo ?? YOK}</b><small>{GKK_TURU_ADI[k.gkkTuru]}</small></span>,
+  csv: (k) => k.gkkNo ?? '',
+};
 const KARAR_SUTUNLARI: Sutun<KmGirisKaydi>[] = [
+  GKK_NO_SUTUNU,
   ...ORTAK_SUTUNLAR,
   { anahtar: 'hatali', baslik: 'Hatalı', hizala: 'sag', hucre: (k) => miktarMetni(k.hataliMiktar) },
   { anahtar: 'gkk', baslik: 'GKK', hucre: (k) => <span className="tc-km-gkk-hucre"><span>{k.gkkKisiAd ?? YOK}</span><small>{zamanKisa(k.gkkZaman)}</small></span>, csv: (k) => k.gkkKisiAd ?? '' },
 ];
 const SONUC_TONU = { kabul: 'tamam', kismi: 'uyari', sartli: 'uyari', ret: 'hata' } as const;
 const YAPILAN_SUTUNLARI: Sutun<KmGirisKaydi>[] = [
-  {
-    anahtar: 'gkkNo', baslik: 'GKK no', kirilmaz: true,
-    hucre: (k) => <span className="tc-km-gkk-hucre"><b className="tc-km-gkk-mono">{k.gkkNo ?? YOK}</b><small>{GKK_TURU_ADI[k.gkkTuru]}</small></span>,
-    csv: (k) => k.gkkNo ?? '',
-  },
+  GKK_NO_SUTUNU,
   ...ORTAK_SUTUNLAR,
   { anahtar: 'sonuc', baslik: 'Sonuç', hucre: (k) => <Rozet ton={SONUC_TONU[gkkSonucu(k) ?? 'kabul']}>{sonucMetni(k)}</Rozet>, csv: (k) => sonucMetni(k) },
   { anahtar: 'ncr', baslik: 'NCR', mono: true, kirilmaz: true, hucre: (k) => k.ncrNo ?? YOK },
@@ -107,7 +109,7 @@ export function GirisKontrolu({ veri, yetki, gecis, gecisTamam, git }: EkranOzel
     return (
       <div className="tc-km-gkk">
         <SayfaBasligi baslik="Giriş kontrolü (GKK)" simge="clipboard-check" />
-        <GkkFormu id={acik} ncrler={veri.ncr} muayeneAc={muayeneAc} kapat={() => { acikYaz(null); }} />
+        <GkkFormu id={acik} ncrler={veri.ncr} sablonlar={veri.tpl} muayeneAc={muayeneAc} kapat={() => { acikYaz(null); }} />
       </div>
     );
   }
