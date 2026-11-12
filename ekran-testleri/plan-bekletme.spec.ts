@@ -1,4 +1,5 @@
 import type { Page } from '@playwright/test';
+import { tesisGunBasi, tesisGunu } from '#paylasilan/zaman.ts';
 import { expect, tasmaOlc, test } from './ortak.ts';
 
 // 3050 a madde 7: bekleyen emir planda yerinde kalır, tezgâhı tutar ve "Beklemede" işaretiyle görünür; Bugün'de kart çıkar, geciken sayısının
@@ -6,8 +7,9 @@ import { expect, tasmaOlc, test } from './ortak.ts';
 test.use({ hesap: 'ornek.yonetici' });
 
 // Taban bugünün günüdür (gün katmanı bugünden açılır); işler yarın 09:00-15:00, ORN-S2 termini yarın 10:00 olduğu için gecikir.
-const bugun = new Date().toISOString().slice(0, 10);
-const yarin = new Date(Date.now() + 86_400_000).toISOString().slice(0, 10);
+// Gün tesisin günüdür: UTC günü tesiste gece yarısından sonraki saatlerde bir gün geridedir ve gün katmanı başka güne açılırdı.
+const bugun = tesisGunu(Date.now());
+const yarin = tesisGunu(tesisGunBasi(bugun) + 36 * 3_600_000);
 const HER_GUN = Object.fromEntries(['pzt', 'sal', 'car', 'per', 'cum', 'cmt', 'paz'].map((g) => [g, ['V1']]));
 const CALISMA = {
   surum: 2, dataVer: 3,
