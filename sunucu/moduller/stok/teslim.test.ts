@@ -268,6 +268,30 @@ describe('stok: malzeme · teslim (gerçek PostgreSQL)', () => {
     assert.equal(m.find((x) => x.id === h)?.kullanilabilir, '6.500');
   });
 
+  test('3088: statülü lotun ikinci okutması da sepette katlanmaz; tavanın üstündeki satır korunur', async () => {
+    const ym = await kart('yarimamul');
+    const st = (await o().sahip.tek<{ id: number }>(
+      `INSERT INTO recete_rota_statu (malzeme_no, ad, kaynak_adim, renk, tur)
+       SELECT stok_kodu, 'OP 10 Torna', $1, '#2F6FDE', 'YM' FROM malzeme_katalog_karti WHERE no = $2 RETURNING id`, [`adim-${randomBytes(4).toString('hex')}`, ym]))!.id;
+    await malKabul(ym, '5');
+    const kabul = await kabulKonumu();
+    const parti = (await o().vt.tek<{ p: number }>('SELECT parti_id AS p FROM stok_bakiye WHERE malzeme_id = $1 AND konum_id = $2', [ym, kabul]))!.p;
+    // Lotun tamamı statülü: statüsüz bakiye satırı kalmaz.
+    await o().vt.tx((db) => statuDegistir(db, kisiler.get('yonetici')!, { malzemeId: ym, konumId: kabul, partiId: parti, kaynakStatuId: null, hedefStatuId: st, miktar: '5' }));
+    const satir = async (miktar: string) => {
+      const c = await istek<{ satirlar: { id: number; malzemeId: number; miktar: string }[] }>('depo', 'POST', '/stok/sepet/satir-ekle', { malzemeId: ym, kaynakKonumId: kabul, partiId: parti, miktar });
+      assert.equal(c.durum, 200, JSON.stringify(c.govde));
+      return c.govde.satirlar.find((x) => x.malzemeId === ym)!;
+    };
+    assert.equal((await satir('5')).miktar, '5');
+    const x = await satir('5');
+    assert.equal(x.miktar, '5', 'statülü lot ikinci okutmada iki kez sayılmaz');
+    // Stok sonradan azalmış gibi: satır tavanın üstündeyse ekleme onu ne artırır ne tavana indirir.
+    await o().vt.sorgu('UPDATE stok_sepet_satiri SET miktar = 8 WHERE id = $1', [x.id]);
+    assert.equal((await satir('1')).miktar, '8');
+    assert.equal((await istek('depo', 'POST', `/stok/sepet/satirlar/${String(x.id)}/sil`, {})).durum, 200);
+  });
+
   test('istasyondan istasyona: parça statüsüyle taşınır, statü değişmez; gönderilenden fazlası alınamaz', async () => {
     const ym = await kart('yarimamul');
     const a = await istasyon();
