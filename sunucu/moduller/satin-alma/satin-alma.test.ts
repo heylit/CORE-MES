@@ -2938,6 +2938,22 @@ describe('satin-alma sürüm 6 (gerçek PostgreSQL)', () => {
     await geriAl(79750);
   });
 
+  // 3143 a: müşteri malı sıfır fiyatlı siparişle girer (3139 b). Bedelsiz teslim son alışı, ortalamayı ve stok değerlemesinin mal kabul
+  // fiyatını değiştirmez (fiyatı boştur); sipariş Logo kuyruğuna 0 TL ile yine girer (3141).
+  test('3143: sıfır fiyatlı teslim son ve ortalama alışı değiştirmez, mal kabul fiyatı boş; sipariş Logo kuyruğunda 0 TL', async () => {
+    const { s, a, k2 } = await bolunmusSiparis('0');
+    const m = (await vt().tx((db) => db.tek<{ n: number }>(
+      'SELECT c.malzeme_no AS n FROM satin_alma_talep_kalemi k JOIN satin_alma_katalog c ON c.id = k.katalog_id WHERE k.talep_id = $1 AND k.id = $2', [s.id, k2])))!.n;
+    const ia = await siparisNo(s.id, a);
+    assert.deepEqual((await logoKuyrugu([ia])).find((x) => x.id === ia)!.satirlar.map((r) => r.birimFiyat), ['0']);
+    const [sonOnce, ortOnce] = [(await vt().tx((db) => sonAlisFiyatlari(db, [m]))).get(m), (await vt().tx((db) => ortalamaAlisFiyatlari(db, [m]))).get(m)!];
+    await teslimEt(siparisi(s, a).satirlar[0]!.id, '4', 79760);
+    assert.deepEqual(await vt().tx((db) => malKabulFiyatlari(db, [79760])), new Map([[79760, null]]));
+    assert.deepEqual((await vt().tx((db) => sonAlisFiyatlari(db, [m]))).get(m), sonOnce);
+    assert.deepEqual((await vt().tx((db) => ortalamaAlisFiyatlari(db, [m]))).get(m), ortOnce);
+    await geriAl(79760);
+  });
+
   test('2975: basamaklı siparişte iş emrinin fason tutarı ve analiz fiyatları basamak fiyatından', async () => {
     const { s, a, b, k1, k2 } = await basamakli();
     const satirA = siparisi(s, a).satirlar[0]!.id, satirB = siparisi(s, b).satirlar[0]!.id;
