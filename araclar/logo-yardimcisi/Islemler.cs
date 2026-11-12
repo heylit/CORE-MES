@@ -632,6 +632,17 @@ namespace LogoYardimcisi
             return a;
         }
 
+        // Kart 3066: yalnız XML ile açılan siparişin satırına; eski satın alma programının Logo'da çalışan XML gönderimindeki alanlar.
+        // Logo Objects satırında (AppendLine) bu adlar denenmedi; düzenlemede eklenen satıra yazılmaz.
+        static void XmlSatirEkleri(AlanListesi a, SiparisSatiri x, Doviz d)
+        {
+            a.Ekle("TOTAL_NET", a.Deger("TOTAL")).Ekle("ORG_QUANTITY", x.Miktar);
+            if (d == null) return;
+            var dovizTutar = Bicim.Yuvarla(x.Miktar * x.Fiyat, 2);
+            a.Ekle("EXCLINE_PRICE", x.Fiyat).Ekle("EXCLINE_TOTAL", dovizTutar).Ekle("EXCLINE_VAT_AMOUNT", Bicim.Yuvarla(dovizTutar * (x.Kdv ?? 0) / 100, 2))
+                .Ekle("EXCLINE_VAT_MATRAH", dovizTutar).Ekle("EXCLINE_LINE_NET", dovizTutar);
+        }
+
         // Birim kodu büyük-küçük harf ve baştaki/sondaki boşluk gözetmeden karşılaştırılır (VARSAYIM: Logo birim kodu harf duyarsız).
         static bool AyniBirim(string logo, string gelen)
         {
@@ -667,19 +678,24 @@ namespace LogoYardimcisi
             var x = new LogoXml("PURCHASE_ORDERS", "ORDER_SLIP");
             x.Alan("NUMBER", no).Alan("DATE", tarih).Alan("ARP_CODE", cari);
             // Ambar SOURCE_WH, işyeri DIVISION (SOURCEINDEX ve BRANCH etiket değil; tuzak 4).
-            x.Alan("SOURCE_WH", ayar.AmbarNo).Alan("DIVISION", ayar.IsyeriNo).Alan("ORDER_STATUS", durum).Alan("CURRSEL_TOTAL", 1);
+            // Kart 3066: GL_CODE cari koduyla; dövizli fişte döviz kullanımı (CURRSEL_TOTAL 2) eski programın çalışan gönderimindeki gibi.
+            x.Alan("GL_CODE", cari);
+            x.Alan("SOURCE_WH", ayar.AmbarNo).Alan("DIVISION", ayar.IsyeriNo).Alan("ORDER_STATUS", durum).Alan("CURRSEL_TOTAL", d == null ? 1 : 2);
             if (d != null) x.Alan("CURRSEL_DETAILS", 2).Alan("CURR_TRANSACTIN", d.Tur).Alan("TC_RATE", d.Kur).Alan("RC_RATE", d.Kur);
             x.Ac("TRANSACTIONS");
-            decimal brut = 0, kdvToplam = 0;
+            decimal brut = 0, kdvToplam = 0, dovizBrut = 0, dovizKdv = 0;
             foreach (var s in satirlar)
             {
                 var a = SiparisSatiriAlanlari(s, d, true);
+                XmlSatirEkleri(a, s, d);
                 brut += (decimal)a.Deger("TOTAL");
                 kdvToplam += (decimal)a.Deger("VAT_AMOUNT");
+                if (d != null) { dovizBrut += (decimal)a.Deger("EXCLINE_TOTAL"); dovizKdv += (decimal)a.Deger("EXCLINE_VAT_AMOUNT"); }
                 x.Ac("TRANSACTION").Alanlar(a).Kapat();
             }
             x.Kapat();
             x.Alan("TOTAL_GROSS", brut).Alan("TOTAL_DISCOUNTED", 0m).Alan("TOTAL_VAT", kdvToplam).Alan("TOTAL_NET", brut + kdvToplam);
+            if (d != null) x.Alan("EXCHINFO_GROSS_TOTAL", dovizBrut).Alan("EXCHINFO_TOTAL_DISCOUNTED", dovizBrut).Alan("EXCHINFO_TOTAL_VAT", dovizKdv);
             var h = yaz.XmlEkle(Nesne.SatinAlmaSiparisi, "PURCHASE_ORDERS", x.Bitir());
             if (h != null) return Cevap.Ret(h);
 

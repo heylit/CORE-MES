@@ -25,7 +25,9 @@ namespace LogoYardimcisi
                 "PAYMENT_CODE", "UNITS") },
             { "PURCHASE_ORDERS", K("NUMBER", "DATE", "DOC_NUMBER", "ARP_CODE", "GL_CODE", "PAYMENT_CODE", "PROJECT_CODE", "OHP_CODE", "SOURCE_WH", "DIVISION",
                 "ORDER_STATUS", "CURRSEL_TOTAL", "CURRSEL_DETAILS", "CURR_TRANSACTIN", "TC_RATE", "RC_RATE", "TRANSACTIONS", "TOTAL_GROSS", "TOTAL_DISCOUNTED",
-                "TOTAL_VAT", "TOTAL_NET", "SALESMAN_CODE", "EINVOICE", "AFFECT_RISK") },
+                "TOTAL_VAT", "TOTAL_NET", "SALESMAN_CODE", "EINVOICE", "AFFECT_RISK",
+                // Kart 3066: eski satın alma programının Logo'da çalışan sipariş XML'inde geçen döviz toplamları (rehberde yok).
+                "EXCHINFO_GROSS_TOTAL", "EXCHINFO_TOTAL_DISCOUNTED", "EXCHINFO_TOTAL_VAT") },
             { "DEMAND_FICHES", K("NUMBER", "DATE", "TIME", "STATUS", "DO_CODE", "PROJECT_CODE", "LINE_CNT", "TRANSACTIONS", "FICHE_DATE", "MRP_HEAD_TYPE", "ORD_PEG_USE",
                 "REAL_SRC_INDEX") },
             { "MATERIAL_SLIPS", K("TYPE", "NUMBER", "DATE", "TIME", "GROUP", "CURRSEL_TOTALS", "PROJECT_CODE", "SHIP_DATE", "SHIP_TIME", "DOC_DATE", "DOC_TIME", "RC_RATE",
@@ -36,7 +38,9 @@ namespace LogoYardimcisi
         {
             { "PURCHASE_ORDERS", K("TYPE", "MASTER_CODE", "QUANTITY", "PRICE", "VAT_RATE", "UNIT_CODE", "UNIT_CONV1", "UNIT_CONV2", "DUE_DATE", "ORG_DUE_DATE",
                 "TRANS_DESCRIPTION", "PROJECT_CODE", "OHP_CODE1", "SOURCE_WH", "EDT_PRICE", "EDT_CURR", "RC_XRATE", "GL_CODE1", "TOTAL", "VAT_BASE", "VAT_AMOUNT",
-                "ORG_PRICE", "ORG_QUANTITY", "DEM_PEGGED_AMNT") },
+                "ORG_PRICE", "ORG_QUANTITY", "DEM_PEGGED_AMNT",
+                // Kart 3066: eski programın çalışan sipariş XML'inde geçen satır alanları (rehberde yok).
+                "TOTAL_NET", "EXCLINE_PRICE", "EXCLINE_TOTAL", "EXCLINE_VAT_AMOUNT", "EXCLINE_VAT_MATRAH", "EXCLINE_LINE_NET") },
             { "DEMAND_FICHES", K("ITEM_CODE", "AMOUNT", "MEET_AMOUNT", "UNIT_CODE", "UNIT_CONV1", "UNIT_CONV2", "MEET_TYPE", "PROCURE_DATE", "STATUS", "LINE_TYPE",
                 "LINE_NO", "USER_NAME", "PROJECT_CODE", "CARD_TYPE") },
             { "MATERIAL_SLIPS", K("ITEM_CODE", "QUANTITY", "UNIT_CODE", "UNIT_CONV1", "UNIT_CONV2", "LINE_TYPE", "LINE_NUMBER", "DESCRIPTION", "PROJECT_CODE",
