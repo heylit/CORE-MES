@@ -34,7 +34,7 @@
 
 ## Logo'dan çekme (kartlar 2116, 2118; kararlar 2116-1..5, 2118-1..3)
 - Malzeme kartı ve stok toplamı ayrı anahtarla (`logo.malzeme-okumasi`, `logo.stok-okumasi`, kapalı gelir) sayfa sayfa okunur: iş turunda tek sayfa,
-  imleç `logo_okuma_imleci`'nde; tam tur en çok saatte bir başlar. Okunan yalnız aynaya yazılır (`logo_malzeme_karti`, `logo_stok_toplami`); TMI kartına
+  imleç `logo_okuma_imleci`'nde; tam tur ilk açılışta bir kez, sonra yalnız Logo geçişi sayfasındaki "Şimdi oku" ile başlar (3077 a; "Geçişi bitir" okumayı kapatır, kopya kalır). Okunan yalnız aynaya yazılır (`logo_malzeme_karti`, `logo_stok_toplami`); TMI kartına
   ve stoğuna işlemek malzemelerin ve stoğun işidir (2116-1 a: TMI sahiptir). Son sayfada turda görülmeyen satır silinir; boş tam tur aynayı boşaltmaz
   (okuma kazası olabilir). Logo'ya hiçbir şey gitmez.
 - Döngü yok: gönderim kuyruğu yalnız `bekliyor` ve `hata` kartları alır; Logo'dan alınan kart `gonderildi` yazılır, açılış devri fiş olarak gitmez (malzemeler, stok).

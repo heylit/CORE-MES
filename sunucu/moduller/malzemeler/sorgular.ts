@@ -919,13 +919,13 @@ export function katalogKartTuru(db: Db, kimlik: string): Promise<{ tur: string; 
 
 export interface LogoIcinTmiKarti {
   kimlik: string; stokKodu: string; ad: string | null; aciklama1: string | null; aciklama2: string | null; aciklama3: string | null;
-  onayDurumu: KatalogKartDurumu; surum: number; logoKayitNo: string | null; logoGonderimDurumu: string | null;
+  onayDurumu: KatalogKartDurumu; surum: number; logoKayitNo: string | null; logoGonderimDurumu: string | null; birim: string | null;
 }
 // Logo kayıt numarasıyla bağlı ya da aynı stok kodlu kartlar (iptal dahil: kodu yeniden verilmez).
 export function logoIcinTmiKartlari(db: Db, refler: readonly string[], kodlar: readonly string[]): Promise<LogoIcinTmiKarti[]> {
   return db.sorgu(
     `SELECT kimlik, stok_kodu AS "stokKodu", ${KATALOG_AD} AS ad, aciklama_1 AS aciklama1, aciklama_2 AS aciklama2, aciklama_3 AS aciklama3,
-            onay_durumu AS "onayDurumu", surum, logo_kayit_no AS "logoKayitNo", logo_gonderim_durumu AS "logoGonderimDurumu"
+            onay_durumu AS "onayDurumu", surum, logo_kayit_no AS "logoKayitNo", logo_gonderim_durumu AS "logoGonderimDurumu", ${KATALOG_BIRIM} AS birim
        FROM malzeme_katalog_karti WHERE logo_kayit_no = ANY($1::text[]) OR stok_kodu = ANY($2::text[])`,
     [refler, kodlar],
   );
@@ -986,4 +986,64 @@ export async function logoAciklamalariniYaz(
       RETURNING surum`,
     [kimlik, a[0], a[1], a[2], o.surum, o.kisiId],
   );
+}
+
+/* ---------------- 3068 a: Logo geçişi toplu işlem izi ve geri alma ---------------- */
+
+export interface LogoGonderimAlanlari { durum: string | null; zaman: string | null; hata: string | null; kartTuru: string | null; birimSeti: string | null }
+
+export function logoGonderimAlanlari(db: Db, kimlik: string): Promise<LogoGonderimAlanlari | null> {
+  return db.tek<LogoGonderimAlanlari>(
+    `SELECT logo_gonderim_durumu AS durum, logo_gonderim_zamani::text AS zaman, logo_hata AS hata, logo_kart_turu AS "kartTuru", logo_birim_seti AS "birimSeti"
+       FROM malzeme_katalog_karti WHERE kimlik = $1`,
+    [kimlik],
+  );
+}
+
+export async function gecisIziYaz(
+  db: Db, i: { islem: string; kimlik: string; tur: 'al' | 'bagla'; logoKayitNo: string; onceki: LogoGonderimAlanlari | null; kisiId: number },
+): Promise<void> {
+  await db.sorgu(
+    `INSERT INTO malzeme_logo_gecis_izi (islem, kart_no, tur, logo_kayit_no, surum, onceki, kisi_id)
+     SELECT $1, no, $3, $4, surum, $5::jsonb, $6 FROM malzeme_katalog_karti WHERE kimlik = $2`,
+    [i.islem, i.kimlik, i.tur, i.logoKayitNo, i.onceki === null ? null : JSON.stringify(i.onceki), i.kisiId],
+  );
+}
+
+export interface GecisIzi {
+  kartNo: number; kimlik: string; stokKodu: string; tur: 'al' | 'bagla'; izSurumu: number; surum: number;
+  izKayitNo: string; logoKayitNo: string | null; logoPasifDurumu: string | null; onceki: LogoGonderimAlanlari | null;
+}
+
+// Kartlar kilitlenir: geri alma ile aynı anda kartı değiştiren beklesin, sürüm karşılaştırması tutarlı olsun.
+export function gecisIzleri(db: Db, islem: string, kisiId: number): Promise<GecisIzi[]> {
+  return db.sorgu<GecisIzi>(
+    `SELECT k.no AS "kartNo", k.kimlik, k.stok_kodu AS "stokKodu", i.tur, i.surum AS "izSurumu", k.surum, i.logo_kayit_no AS "izKayitNo",
+            k.logo_kayit_no AS "logoKayitNo", k.logo_pasif_durumu AS "logoPasifDurumu", i.onceki
+       FROM malzeme_logo_gecis_izi i JOIN malzeme_katalog_karti k ON k.no = i.kart_no
+      WHERE i.islem = $1 AND i.kisi_id = $2
+      ORDER BY k.no
+        FOR UPDATE OF k`,
+    [islem, kisiId],
+  );
+}
+
+// Koruma tetiği yalnız bu kart için gevşer (transaction'a özgü); boş değer kapatır.
+export async function geriAlinanKart(db: Db, kimlik: string | null): Promise<void> {
+  await db.sorgu("SELECT set_config('tmiv2.logo_gecis_geri_al', $1, true)", [kimlik ?? '']);
+}
+
+export async function logoBaginiGeriAl(db: Db, kimlik: string, onceki: LogoGonderimAlanlari, kisiId: number): Promise<void> {
+  await db.sorgu(
+    `UPDATE malzeme_katalog_karti
+        SET logo_kayit_no = NULL, logo_kart_turu = $5, logo_birim_seti = $6,
+            logo_gonderim_durumu = $2, logo_gonderim_zamani = $3::timestamptz, logo_hata = $4,
+            surum = surum + 1, guncelleyen_kisi_id = $7, guncelleme = now()
+      WHERE kimlik = $1`,
+    [kimlik, onceki.durum, onceki.zaman, onceki.hata, onceki.kartTuru, onceki.birimSeti, kisiId],
+  );
+}
+
+export async function gecisIziSil(db: Db, islem: string, kartNo: number): Promise<void> {
+  await db.sorgu('DELETE FROM malzeme_logo_gecis_izi WHERE islem = $1 AND kart_no = $2', [islem, kartNo]);
 }

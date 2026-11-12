@@ -26,6 +26,7 @@ import { KALIBRASYON_IKINCI_MENU, KALIBRASYON_SAYFALARI } from './sayfalar/kalib
 import { KALITE_MERKEZI_IKINCI_MENU, KALITE_MERKEZI_SAYFALARI } from './sayfalar/kalite-merkezi.ts';
 import { KISILER_IKINCI_MENU, KISILER_SAYFALARI } from './sayfalar/kisiler.ts';
 import { KUYRUK_SAYFALARI } from './sayfalar/kuyruk.ts';
+import { LOGO_SAYFALARI } from './sayfalar/logo.ts';
 import { MALZEMELER_IKINCI_MENU, MALZEMELER_SAYFALARI } from './sayfalar/malzemeler.ts';
 import { MARKALAMA_IKINCI_MENU, MARKALAMA_SAYFALARI } from './sayfalar/markalama.ts';
 import { MATRIS_SAYFALARI } from './sayfalar/matris.ts';
@@ -83,6 +84,7 @@ export const TUM_SAYFALAR = sayfalariSirala([
   ...KALITE_MERKEZI_SAYFALARI,
   ...KISILER_SAYFALARI,
   ...KUYRUK_SAYFALARI,
+  ...LOGO_SAYFALARI,
   ...MALZEMELER_SAYFALARI,
   ...MARKALAMA_SAYFALARI,
   ...MATRIS_SAYFALARI,

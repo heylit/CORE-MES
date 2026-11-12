@@ -453,14 +453,22 @@ export async function pasifHatasiYaz(db: Db, tur: FisTuru, id: number, d: { zama
 /* ---------------- 2116: Logo malzeme kartı ve stok toplamı aynası, kod eşlemesi ---------------- */
 
 export type SayfaliAkis = 'malzeme-karti' | 'stok';
-export interface OkumaImleci { sonRef: number; turBasi: Date; sonTamam: Date | null; sonTamamMetni: string | null; sayi: number }
+export interface OkumaImleci {
+  sonRef: number; turBasi: Date; sonTamam: Date | null; sonTamamMetni: string | null; sayi: number; turIstendi: boolean;
+}
 
 export function okumaImleci(db: Db, akis: SayfaliAkis): Promise<OkumaImleci | null> {
   return db.tek<OkumaImleci>(
-    `SELECT son_ref::float8 AS "sonRef", tur_basi AS "turBasi", son_tamam AS "sonTamam", ${zamanMetni('son_tamam')} AS "sonTamamMetni", sayi
+    `SELECT son_ref::float8 AS "sonRef", tur_basi AS "turBasi", son_tamam AS "sonTamam", ${zamanMetni('son_tamam')} AS "sonTamamMetni", sayi,
+            tur_istendi AS "turIstendi"
        FROM logo_okuma_imleci WHERE akis = $1`,
     [akis],
   );
+}
+
+// 3077 a: "Şimdi oku" iki sayfalı akışı baştan okutur. İmleç satırı yoksa yazılmaz: hiç okunmamış akış zaten baştan başlar.
+export async function turIste(db: Db): Promise<void> {
+  await db.sorgu("UPDATE logo_okuma_imleci SET tur_istendi = true WHERE akis IN ('malzeme-karti', 'stok')");
 }
 
 // Sayfa yazılır; son sayfada turda görülmeyen satırlar silinir ve imleç başa döner. Boş tam tur (okuma kazası olabilir) aynayı boşaltmaz.
@@ -477,7 +485,9 @@ export async function sayfaYaz(
   await db.sorgu(
     `INSERT INTO logo_okuma_imleci (akis, son_ref, tur_basi, son_tamam, sayi) VALUES ($1, $2, $3, $4, $5)
      ON CONFLICT (akis) DO UPDATE SET son_ref = EXCLUDED.son_ref, tur_basi = EXCLUDED.tur_basi,
-       son_tamam = coalesce(EXCLUDED.son_tamam, logo_okuma_imleci.son_tamam), sayi = EXCLUDED.sayi`,
+       son_tamam = coalesce(EXCLUDED.son_tamam, logo_okuma_imleci.son_tamam), sayi = EXCLUDED.sayi,
+       -- Turun ilk sayfası isteği karşılar; tur ortasında gelen istek kalır ve tur bitince yeni tur başlatır (3077 a).
+       tur_istendi = logo_okuma_imleci.tur_istendi AND logo_okuma_imleci.son_ref > 0`,
     [akis, sonraki ?? 0, turBasi, sonraki === null ? zaman : null, sayi],
   );
 }
@@ -523,6 +533,21 @@ export function aynadakiKartlar(
              OR public.arama_sade(aciklama_2) LIKE $4 OR public.arama_sade(aciklama_3) LIKE $4)
       ORDER BY logical_ref LIMIT $2`,
     [o.kodlar ?? null, o.sinir, o.sonra, ara],
+  );
+}
+
+// Geçiş sayfası (3068): aynanın hafif özeti, süzgeç ve sayaçlar için; stok bütün ambarların toplamıdır (okunmamışsa null).
+export interface AynaOzetSatiri { logoKayitNo: number; kod: string; aktif: boolean; stok: string | null }
+export function aynaOzeti(db: Db, o: { ara?: string }): Promise<AynaOzetSatiri[]> {
+  const ara = o.ara?.trim() ? icindeDeseni(o.ara) : null;
+  return db.sorgu<AynaOzetSatiri>(
+    `SELECT k.logical_ref::float8 AS "logoKayitNo", k.kod, k.aktif, t.toplam::text AS stok
+       FROM logo_malzeme_karti k
+       LEFT JOIN (SELECT malzeme_kodu, sum(miktar) AS toplam FROM logo_stok_toplami GROUP BY malzeme_kodu) t ON t.malzeme_kodu = k.kod
+      WHERE ($1::text IS NULL OR public.arama_sade(k.kod) LIKE $1 OR public.arama_sade(k.ad) LIKE $1
+             OR public.arama_sade(k.aciklama_2) LIKE $1 OR public.arama_sade(k.aciklama_3) LIKE $1)
+      ORDER BY k.logical_ref`,
+    [ara],
   );
 }
 

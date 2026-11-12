@@ -1,5 +1,6 @@
 import { uc } from '#cekirdek/uc.ts';
 import {
+  logoGecisCevabi, logoGecisSorgusu, logoGeriAlCevabi, logoGeriAlGovdesi, logoTopluAlGovdesi, logoTopluBaglaGovdesi, logoTopluCevabi,
   katalogAyarKaydetGovdesi, katalogAyarParametresi, katalogAyarlariCevabi, katalogKartiKaydetCevabi, katalogKartiKaydetGovdesi, katalogKartiRotasiCevabi,
   katalogKartlariCevabi, katalogKartlariSorgusu, katalogKimlikCevabi, katalogKimlikParametresi, katalogSablonlariCevabi, katalogSablonuKaydetGovdesi, katalogSurumluKayitCevabi,
   demirbasMakineSecenekleriCevabi, demirbasTeknikCevabi, demirbasTeknikKaydetGovdesi,
@@ -94,6 +95,24 @@ export const uclar = [
   uc({
     yontem: 'GET', yol: '/malzeme-logo-kartlari', yetki: OKUMA, sorgu: logoGelenSorgusu, cevap: logoGelenCevabi,
     isle: ({ db, sorgu }) => servis.logodanGelenler(db, sorgu),
+  }),
+  // 3068: Logo geçişi; aynı okuma işlemiyle (yeni veri işlemi yok), toplu işlem adaylığı satırda.
+  uc({
+    yontem: 'GET', yol: '/malzeme-logo-gecisi', yetki: OKUMA, sorgu: logoGecisSorgusu, cevap: logoGecisCevabi,
+    isle: ({ db, sorgu }) => servis.logoGecisi(db, sorgu),
+  }),
+  // 3068 a: toplu işlemler tek kart işlemlerinin yetkisiyle (malzemeler.yaz); geri alma yalnız CORE'da, Logo'ya istek gitmez.
+  uc({
+    yontem: 'POST', yol: '/malzeme-logo-gecisi/toplu-bagla', yetki: 'malzemeler.yaz', tekrarKorumali: true, govde: logoTopluBaglaGovdesi, cevap: logoTopluCevabi,
+    isle: ({ db, kullanici, govde }) => servis.logoTopluBagla(db, kullanici, govde),
+  }),
+  uc({
+    yontem: 'POST', yol: '/malzeme-logo-gecisi/toplu-al', yetki: 'malzemeler.yaz', tekrarKorumali: true, govde: logoTopluAlGovdesi, cevap: logoTopluCevabi,
+    isle: ({ db, kullanici, govde }) => servis.logoTopluAl(db, kullanici, govde),
+  }),
+  uc({
+    yontem: 'POST', yol: '/malzeme-logo-gecisi/geri-al', yetki: 'malzemeler.yaz', tekrarKorumali: true, govde: logoGeriAlGovdesi, cevap: logoGeriAlCevabi,
+    isle: ({ db, kullanici, govde }) => servis.logoGecisiGeriAl(db, kullanici, govde.islem),
   }),
   uc({
     yontem: 'POST', yol: '/malzeme-logo-kartlari/:ref/al', yetki: 'malzemeler.yaz', parametre: logoGelenParametresi, govde: logodanAlGovdesi, cevap: logodanAlCevabi,

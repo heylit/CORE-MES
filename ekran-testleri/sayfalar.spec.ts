@@ -67,6 +67,7 @@ const SAYFALAR: Sayfa[] = [
   { modul: 'uretim-terminali', yol: '/uretim-terminali', hesap: 'ornek.yonetici', baslik: 'Üretim Terminali', bolum: 'Üretim Terminali', kabukBasligiGizli: true },
   { modul: 'stok', yol: '/stok', hesap: 'ornek.depo', baslik: 'Stok Merkezi' },
   { modul: 'stok', yol: '/stok/malzemeler', hesap: 'ornek.depo', baslik: 'Malzemeler' },
+  { modul: 'malzemeler', yol: '/logo-gecisi', hesap: 'ornek.yonetici', baslik: 'Logo geçişi' },
   ...ISTASYONLAR_BOLUMLERI.map((yol): Sayfa => ({ modul: 'istasyonlar', yol, hesap: 'ornek.planlama', baslik: 'İstasyonlar' })),
   ...VARDIYA_BOLUMLERI.map(([yol, baslik]): Sayfa => ({ modul: 'vardiya', yol, hesap: 'ornek.planlama', baslik })),
   ...PLAN_VERI_SAYFALARI.flatMap(([yol, baslik]): Sayfa[] => (['ornek.yonetici', 'ornek.planlama'] as const).map((hesap) => ({ modul: 'plan', yol, hesap, baslik }))),
