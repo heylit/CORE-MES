@@ -2,7 +2,8 @@ import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import type { HazirlikMaddesi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import {
-  GEREKCE_GEREK, ONAY_GEREKSIZ, acikElleStatu, acikOnaylar, adimSistemStatusu, hazirlikOnayiReddi, onayGecerliMi, oncekiBekleniyor,
+  BEKLETME_DURUMU, BEKLETME_VAR, BEKLETME_YOK, EMIR_BEKLEMEDE, GEREKCE_GEREK, ONAY_GEREKSIZ, acikElleStatu, bekletmeBaslatmaIhlali, bekletmeIhlali,
+  bekletmeKaldirmaIhlali, acikOnaylar, adimSistemStatusu, hazirlikOnayiReddi, onayGecerliMi, oncekiBekleniyor,
 } from './kurallar.ts';
 import type { AdimStatuGirdisi, HazirlikHali } from './kurallar.ts';
 
@@ -44,6 +45,30 @@ describe('uretim-emirleri adım durumu kuralları (2893)', () => {
     assert.equal(adimSistemStatusu(g({ tedarik: [{ ...fasonTalep, asama: 'siparis', siparisNo: 'SP-1', termin: null }] })).statu, 'baslayabilir', 'fason siparişi verildi: gönderilebilir');
     assert.equal(adimSistemStatusu(g({ fasonda: true, tedarik: [fasonTalep] })).statu, 'fasonda');
     assert.equal(adimSistemStatusu(g({ durum: 'tamam', tedarik: [talep] }, [['malzeme', 'eksik']])).statu, 'bitti');
+  });
+
+  test('3050 a: beklemedeki emirde başlamamış adım "Beklemede"; çalışan, fasondaki ve biten adım kendi hâlinde', () => {
+    assert.deepEqual(adimSistemStatusu(g({ bekletme: 'malzeme' }, [['cnc', 'eksik']])),
+      { statu: 'beklemede', nedenler: ['Emir beklemede: Malzeme bekleniyor', 'CNC kurulumu (NC) eksik'] });
+    assert.equal(adimSistemStatusu(g({ bekletme: 'kalite', oncekiBekleniyor: true })).statu, 'beklemede');
+    assert.equal(adimSistemStatusu(g({ bekletme: 'kalite', durum: 'calisiyor', calisma: 'durakli' })).statu, 'duraklatildi');
+    assert.equal(adimSistemStatusu(g({ bekletme: 'kalite', fasonda: true })).statu, 'fasonda');
+    assert.equal(adimSistemStatusu(g({ bekletme: 'kalite', durum: 'tamam' })).statu, 'bitti');
+    assert.equal(adimSistemStatusu(g({ bekletme: null })).statu, 'baslayabilir');
+  });
+
+  test('3050 a: yalnız açık emir bekletilir; başlatma bekletmeden önceki kayıt anında kabul', () => {
+    assert.equal(bekletmeIhlali('planli', false), null);
+    assert.equal(bekletmeIhlali('basladi', false), null);
+    assert.equal(bekletmeIhlali('basladi', true), BEKLETME_VAR);
+    for (const d of ['taslak', 'bitti', 'iptal'] as const) assert.equal(bekletmeIhlali(d, false), BEKLETME_DURUMU);
+    assert.equal(bekletmeKaldirmaIhlali(false), BEKLETME_YOK);
+    assert.equal(bekletmeKaldirmaIhlali(true), null);
+    const t = '2026-01-01T10:00:00.000Z';
+    assert.equal(bekletmeBaslatmaIhlali(null, null), null);
+    assert.equal(bekletmeBaslatmaIhlali(t, null), EMIR_BEKLEMEDE);
+    assert.equal(bekletmeBaslatmaIhlali(t, '2026-01-01T09:59:00.000Z'), null);
+    assert.equal(bekletmeBaslatmaIhlali(t, t), EMIR_BEKLEMEDE);
   });
 
   test('önceki adım: bekleyen bağımlılıkta öncül bitmeli, akışlıda başlamış olmalı, bağımsız beklemez; dal öncülleri sıradan önce gelir', () => {

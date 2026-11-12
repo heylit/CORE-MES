@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import type { EmirAkisiCevabi } from '#paylasilan/sozlesme/akis.ts';
-import type { EmirAyrintiCevabi, EmirIlerlemesi, UretimKaydi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
+import type { Bekletme, BekletmeOlayi, EmirAyrintiCevabi, EmirIlerlemesi, UretimKaydi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { AdimListesi, Dugme, DurumKutusu, Kart, Menu, Rozet, Sekmeler, Simge, Tablo, type MenuOgesi, type Sutun } from '../../ortak/arayuz/index.ts';
 import type { SimgeAdi } from '../../ortak/tasarim/simgeler.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
@@ -17,19 +17,31 @@ import { useAdimSatirEki, type AdimSatirEki } from './AdimSatiri.tsx';
 import { HazirlikListesi } from './HazirlikListesi.tsx';
 import { Ilerleme } from './Ilerleme.tsx';
 import { Iplik } from './Iplik.tsx';
+import { BeklemeSeridi, BekletPenceresi, beklemeNedeni, useBekletOgesi } from './Bekletme.tsx';
 import { iplikDuraklari, konumDuraklari } from './iplik.ts';
 import { OLAY_ETIKETI, durumGosterimi, farkMetni, kayitAdedi, kayitKisisi, kayitNedeni, saglamSayisi, zamanMetni } from './gorunum.ts';
 import './uretim-emirleri.css';
 
 type Emir = EmirAyrintiCevabi['emir'];
 
-const KAYIT_SUTUNLARI: Sutun<UretimKaydi>[] = [
-  { anahtar: 'olay', baslik: 'Olay', hucre: (k) => OLAY_ETIKETI[k.olay] },
-  { anahtar: 'adet', baslik: 'Adet', hizala: 'sag', hucre: kayitAdedi },
-  { anahtar: 'neden', baslik: 'Neden', hucre: kayitNedeni },
-  { anahtar: 'kisi', baslik: 'Kişi', hucre: kayitKisisi },
-  { anahtar: 'zaman', baslik: 'Zaman', kirilmaz: true, hucre: (k) => zamanMetni(k.zaman) },
+// Kayıt defteri üretim kayıtlarını ve bekletme olaylarını (3050 a, "Bekletildi", "Devam etti") birlikte, zamana göre gösterir.
+type DefterSatiri = { tur: 'kayit'; k: UretimKaydi } | { tur: 'bekletme'; b: BekletmeOlayi };
+const KAYIT_SUTUNLARI: Sutun<DefterSatiri>[] = [
+  { anahtar: 'olay', baslik: 'Olay', hucre: (s) => s.tur === 'kayit' ? OLAY_ETIKETI[s.k.olay] : s.b.olay === 'beklet' ? 'Bekletildi' : 'Devam etti' },
+  { anahtar: 'adet', baslik: 'Adet', hizala: 'sag', hucre: (s) => s.tur === 'kayit' ? kayitAdedi(s.k) : null },
+  { anahtar: 'neden', baslik: 'Neden', hucre: (s) => s.tur === 'kayit' ? kayitNedeni(s.k)
+    : s.b.neden === null ? null : `${beklemeNedeni({ neden: s.b.neden })}${s.b.not ? ` · ${s.b.not}` : ''}` },
+  { anahtar: 'kisi', baslik: 'Kişi', hucre: (s) => s.tur === 'kayit' ? kayitKisisi(s.k) : s.b.kisi.ad },
+  { anahtar: 'zaman', baslik: 'Zaman', kirilmaz: true, hucre: (s) => zamanMetni(s.tur === 'kayit' ? s.k.zaman : s.b.zaman) },
 ];
+const defterSatirlari = (v: EmirAyrintiCevabi): DefterSatiri[] => {
+  const bekletmeler = v.bekletmeler ?? [];
+  if (bekletmeler.length === 0) return v.kayitlar.map((k) => ({ tur: 'kayit', k }));
+  const zaman = (s: DefterSatiri) => Date.parse(s.tur === 'kayit' ? s.k.zaman : s.b.zaman);
+  // Sunucu kayıtları eskiden yeniye verir; bekletme olayları zamanına göre araya girer (aynı anda kayıt önce).
+  return [...v.kayitlar.map((k): DefterSatiri => ({ tur: 'kayit', k })), ...bekletmeler.map((b): DefterSatiri => ({ tur: 'bekletme', b }))]
+    .map((s, i) => ({ s, i })).sort((a, b) => zaman(a.s) - zaman(b.s) || a.i - b.i).map((x) => x.s);
+};
 
 // Emir sayfası (3039): üstte kimlik, yaşam döngüsü ve dört özet; altta sekmeler. Her bilgi tek yerde durur: adımlar yalnız "Adımlar"
 // sekmesindedir. Emri değiştiren parçalar (işlemler, adım listesi, malzeme) üstteki modülden parametre olarak gelir (ADR 0006); verilmezse
@@ -37,7 +49,8 @@ const KAYIT_SUTUNLARI: Sutun<UretimKaydi>[] = [
 export interface EmirParcalari {
   // Parçaların ortak kaynağı (sayfa başına tek köprü) bütün sayfayı sarar.
   sar: (icerik: ReactNode) => ReactNode;
-  islemler: (emirId: number) => ReactNode;
+  // ekOgeler: bu modülün kendi işlemleri (3050 a "Beklet"); sahibin "İşlemler" menüsüne girer, tek menü kalır.
+  islemler: (emirId: number, ekOgeler: readonly MenuOgesi[]) => ReactNode;
   // Satırın sağını (statü, iç/fason, Adım Durumu) bu modül çizer; adım listesi her satırda çağırır.
   adimlar: (emirId: number, satirEki: AdimSatirEki['ek']) => ReactNode;
   malzeme: (emirId: number) => ReactNode;
@@ -68,7 +81,7 @@ export function asamaSirasi(e: Pick<Emir, 'durum'> & { kapanisSonucu?: string | 
   }
 }
 
-function YasamSeridi({ emir }: { emir: Emir }) {
+function YasamSeridi({ emir, bekleme }: { emir: Emir; bekleme: Bekletme | null }) {
   const simdi = asamaSirasi(emir);
   const iptal = emir.durum === 'iptal';
   // Dar ekranda şerit yatay kayar: şu anki aşama görünür kalsın.
@@ -85,7 +98,7 @@ function YasamSeridi({ emir }: { emir: Emir }) {
     <>
     {/* Telefonda şerit kaymaz: yalnız geçerli aşama ve sırası yazılır. */}
     <p className="tc-emir-yasam-kisa" aria-hidden="true">
-      {iptal ? 'İptal' : gecerli ? `${simdi >= ASAMALAR.length ? 'Kapandı' : gecerli.baslik} · ${String(Math.min(simdi + 1, ASAMALAR.length))}/${String(ASAMALAR.length)}` : ''}
+      {iptal ? 'İptal' : gecerli ? `${simdi >= ASAMALAR.length ? 'Kapandı' : gecerli.baslik}${bekleme ? ' · Beklemede' : ''} · ${String(Math.min(simdi + 1, ASAMALAR.length))}/${String(ASAMALAR.length)}` : ''}
     </p>
     <ol ref={serit} className="tc-emir-yasam" aria-label="Emrin yaşam döngüsü">
       {ASAMALAR.map((a, i) => {
@@ -94,7 +107,7 @@ function YasamSeridi({ emir }: { emir: Emir }) {
           <li key={a.ad} data-hal={hal} aria-current={hal === 'simdi' ? 'step' : undefined}>
             <span className="tc-emir-yasam-nokta"><Simge ad={hal === 'gecti' ? 'check' : a.simge} boyut="k" /></span>
             <span className="tc-emir-yasam-ad">{a.baslik}</span>
-            {hal !== 'bekliyor' && tarih(a.ad) && <small>{tarih(a.ad)}</small>}
+            {hal === 'simdi' && bekleme ? <small className="tc-emir-yasam-bekleme">Beklemede</small> : hal !== 'bekliyor' && tarih(a.ad) && <small>{tarih(a.ad)}</small>}
           </li>
         );
       })}
@@ -127,7 +140,9 @@ function Ozet({ baslik, simge, deger, alt, cubuk, ton }: { baslik: string; simge
   );
 }
 
-function OzetKutulari({ emir, veri, kayitlariAc, statu }: { emir: Emir; veri: EmirAyrintiCevabi; kayitlariAc: () => void; statu: AdimSatirEki['statu'] }) {
+function OzetKutulari({ emir, veri, kayitlariAc, statu, bekleme }: {
+  emir: Emir; veri: EmirAyrintiCevabi; kayitlariAc: () => void; statu: AdimSatirEki['statu']; bekleme: Bekletme | null;
+}) {
   const canli = emir.canli ?? null;
   const saglam = saglamSayisi(emir);
   const il = veri.ilerleme ?? null;
@@ -138,7 +153,8 @@ function OzetKutulari({ emir, veri, kayitlariAc, statu }: { emir: Emir; veri: Em
   const durdu = canli?.durusNedeni ?? null;
   const st = adim ? statu(adim.opNo) : null;
   const statuMetni = st ? `${st.ad}${st.kisi ? ` · ${st.kisi}` : ''}` : null;
-  const suAn: { deger: ReactNode; alt: ReactNode; ton?: 'uyari' | 'hata' } = emir.durum === 'iptal' ? { deger: 'İptal edildi', alt: null }
+  const suAn: { deger: ReactNode; alt: ReactNode; ton?: 'uyari' | 'hata' } = bekleme ? { deger: 'Beklemede', alt: `${beklemeNedeni(bekleme)} · ${bekleme.kisi.ad}`, ton: 'uyari' }
+    : emir.durum === 'iptal' ? { deger: 'İptal edildi', alt: null }
     : emir.durum === 'bitti' ? { deger: 'Bütün adımlar bitti', alt: fark }
       : emir.durum === 'taslak' ? { deger: 'Plana alınmadı', alt: 'Plana alınınca terminale gider.' }
         : adim ? {
@@ -183,6 +199,8 @@ function EmirSayfasi({ parcalar }: { parcalar?: EmirParcalari }) {
     queryFn: () => api.get<EmirAyrintiCevabi>(`/uretim-emirleri/${emirId}`),
   });
   const emir = ayrinti.data?.emir;
+  const bekleme = emir?.bekletme ?? null;
+  const bekletOgesi = useBekletOgesi(emir);
   const durum = emir ? durumGosterimi(emir) : { etiket: '', ton: 'bilgi' as const };
   const kontrolAdimlari = ayrinti.data?.adimlar ?? [];
   const malzemeNo = emir?.malzemeNo ?? null;
@@ -232,8 +250,8 @@ function EmirSayfasi({ parcalar }: { parcalar?: EmirParcalari }) {
     </nav>
     <Kart
       baslik={emir ? emir.emirNo : 'Üretim emri'}
-      baslikEki={emir && <Rozet ton={durum.ton}>{durum.etiket}</Rozet>}
-      sag={emir && parcalar ? <div className="tc-emir-ust tc-emir-ust-sag">{parcalar.islemler(emir.id)}</div> : undefined}
+      baslikEki={emir && <><Rozet ton={durum.ton}>{durum.etiket}</Rozet>{bekleme && <> <Rozet ton="uyari">Beklemede</Rozet></>}</>}
+      sag={emir && parcalar ? <div className="tc-emir-ust tc-emir-ust-sag">{parcalar.islemler(emir.id, bekletOgesi)}</div> : undefined}
     >
       {ayrinti.isPending && <DurumKutusu durum="yukleniyor" />}
       {ayrinti.isError && <DurumKutusu durum="hata" mesaj={hataIletisi(ayrinti.error, 'Emir alınamadı.')} yenile={() => { void ayrinti.refetch(); }} />}
@@ -249,8 +267,10 @@ function EmirSayfasi({ parcalar }: { parcalar?: EmirParcalari }) {
               </small>
             </div>
           </div>
-          <YasamSeridi emir={emir} />
-          <OzetKutulari emir={emir} veri={ayrinti.data} statu={satirEki.statu} kayitlariAc={() => { sekmeSec('kayitlar'); }} />
+          {bekleme && <BeklemeSeridi emirId={emir.id} bilgi={bekleme} />}
+          <YasamSeridi emir={emir} bekleme={bekleme} />
+          <OzetKutulari emir={emir} veri={ayrinti.data} statu={satirEki.statu} bekleme={bekleme} kayitlariAc={() => { sekmeSec('kayitlar'); }} />
+          <BekletPenceresi emirId={emir.id} emirNo={emir.emirNo} />
 
           <Sekmeler etiket="Emrin bölümleri" sekmeler={sekmeler} secili={sekme} sec={sekmeSec} />
           <div className="tc-emir-sekme" role="tabpanel" aria-label={sekmeler.find((s) => s.anahtar === sekme)?.baslik}>
@@ -319,8 +339,8 @@ function EmirSayfasi({ parcalar }: { parcalar?: EmirParcalari }) {
                     )}
                   </section>
                 )}
-                <Tablo etiket="Kayıt defteri" sutunlar={KAYIT_SUTUNLARI} satirlar={ayrinti.data.kayitlar}
-                  satirAnahtari={(k) => k.id} bosMesaj="Henüz kayıt yok" />
+                <Tablo etiket="Kayıt defteri" sutunlar={KAYIT_SUTUNLARI} satirlar={defterSatirlari(ayrinti.data)}
+                  satirAnahtari={(s) => s.tur === 'kayit' ? s.k.id : `b${String(s.b.id)}`} bosMesaj="Henüz kayıt yok" />
               </>
             )}
           </div>

@@ -19,7 +19,7 @@ import type { EmirTedarikSatiri } from './disari.ts';
 import type { IsEmriGirdisi } from './disari.ts';
 import { hazirlikCozucusuKaydet } from './hazirlik.ts';
 import type { HazirlikCozucusu } from './hazirlik.ts';
-import { ADIM_KAPALI_EMIR } from './kurallar.ts';
+import { ADIM_KAPALI_EMIR, EMIR_BEKLEMEDE, EMIR_BEKLEMEDE_STATU } from './kurallar.ts';
 import type { HazirlikBilgisi } from './kurallar.ts';
 import { isEmriKilitle } from './sorgular.ts';
 
@@ -303,6 +303,34 @@ describe('uretim-emirleri adım durumu (2893, gerçek PostgreSQL)', () => {
       adimTedarikCozucusu(oncekiTedarik);
       hazirlikCozucusuKaydet('malzeme', oncekiMalzeme);
     }
+  });
+
+  test('3050 a: beklemedeki emirde adımlar "Beklemede"; terminal nedeni okur; elle statü ve başlatma reddedilir; yetki emri yazabilende', async () => {
+    const { id, ie } = await ac();
+    const [ie1 = 0] = ie;
+    const yetkisiz = await istek<Hata>('operator', 'POST', `/uretim-emirleri/${id}/beklet`, { neden: 'malzeme' });
+    assert.equal(yetkisiz.durum, 403);
+    const b = await istek('planlama_proje', 'POST', `/uretim-emirleri/${id}/beklet`, { neden: 'malzeme', not: 'Deneme notu' });
+    assert.equal(b.durum, 200, JSON.stringify(b.govde));
+    const d = await oku(id);
+    assert.equal(d.durum, 'planli', 'emrin durumu değişmez');
+    assert.deepEqual(d.adimlar.map((a) => a.sistemStatusu), ['beklemede', 'beklemede']);
+    assert.equal(d.adimlar[0]?.nedenler[0], 'Emir beklemede: Malzeme bekleniyor');
+    const t = await istek<AdimDurumuTerminalCevabi>('operator', 'GET', `/adimli-emirler/${id}/adim-durumu/terminal`);
+    assert.equal(t.durum, 200, JSON.stringify(t.govde));
+    const terminal = adimDurumuTerminalCevabi.parse(t.govde);
+    assert.equal(terminal.bekletme, 'Malzeme bekleniyor');
+    assert.deepEqual(terminal.adimlar.map((a) => a.statu), ['beklemede', 'beklemede']);
+    const elle = await istek<Hata>('planlama_proje', 'POST', `/adimli-emirler/${id}/is-emirleri/${ie1}/statu-yaz`, { statu: 'talep', not: null, sistemStatusu: 'beklemede' });
+    assert.deepEqual([elle.durum, elle.govde.mesaj], [409, EMIR_BEKLEMEDE_STATU]);
+    const basla = await baslat(id, ie1);
+    assert.deepEqual([basla.durum, basla.govde.mesaj], [409, EMIR_BEKLEMEDE]);
+    const k = await istek('planlama_proje', 'POST', `/uretim-emirleri/${id}/bekletme-kaldir`);
+    assert.equal(k.durum, 200, JSON.stringify(k.govde));
+    assert.notEqual((await oku(id)).adimlar[0]?.sistemStatusu, 'beklemede');
+    const t2 = adimDurumuTerminalCevabi.parse((await istek('operator', 'GET', `/adimli-emirler/${id}/adim-durumu/terminal`)).govde);
+    assert.equal(t2.bekletme, null);
+    assert.equal((await baslat(id, ie1)).durum, 200);
   });
 
   test('isEmriKilitle yalnız emrin kendi iş emrini bulur', async () => {

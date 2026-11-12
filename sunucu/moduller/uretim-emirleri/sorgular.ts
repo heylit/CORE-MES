@@ -9,6 +9,9 @@ export {
   malzemeKartiIzleri,
 } from './sorgular/emir/sorgular.ts';
 export {
+  type BekletmeYazisi, bekletmeOlayiEkle, type BekletmeSatiri, aktifBekletmeler, type BekletmeOlaySatiri, bekletmeOlaylari,
+} from './sorgular/bekletme/sorgular.ts';
+export {
   type AdimSatiri, adimEkle, adimlariGetir, adimEmirdeVarMi, adimOlayiEkle, adimKanitiEkle, type NotAnahtari, notAnahtari, adimNotuEkle, type AdimNotuSatiri,
   adimNotlari,
 } from './sorgular/adim/sorgular.ts';

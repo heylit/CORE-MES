@@ -684,7 +684,7 @@ export function useEmirIslemi() {
 type ParcaOzellikleri = Omit<Ozellikler, 'kapat'>;
 
 // Başlıktaki işlemler: duruma göre tek ana düğme (taslakta "Plana al", üretimi bitince "Kapanış onayları") ve "İşlemler" menüsü.
-export function EmirIslemDugmeleri({ durum: d, emir: o, yetki, git, komut, emirAc }: ParcaOzellikleri) {
+export function EmirIslemDugmeleri({ durum: d, emir: o, yetki, git, komut, emirAc, ekOgeler = [] }: ParcaOzellikleri & { ekOgeler?: readonly MenuOgesi[] }) {
   const yonlen = useNavigate();
   const isl = useEmirIslemi();
   const [iptal, setIptal] = useState(false);
@@ -698,6 +698,7 @@ export function EmirIslemDugmeleri({ durum: d, emir: o, yetki, git, komut, emirA
   const ogeler: MenuOgesi[] = [
     ...(yaz && !o.rotasiz && adimlar.length > 0 ? [{ anahtar: 'ek', baslik: 'Adım ekle (ek, rework, tamir)', simge: 'plus' as const, sec: () => { isl.ac('ek'); } }] : []),
     ...(yaz && adimlar.length > 0 ? [{ anahtar: 'bol', baslik: 'Böl (parti ya da kol)', simge: 'layers' as const, sec: () => { isl.ac('bol'); } }] : []),
+    ...ekOgeler,
     ...(o.kol && yaz ? [{ anahtar: 'katil', baslik: 'Katılma ya da ayrı ilerleme', simge: 'route' as const, sec: () => { isl.ac('katil'); } }] : []),
     { anahtar: 'akis', baslik: 'Rotayı akışta aç', simge: 'route' as const, sec: () => { git('schema', o.itemId); } },
     ...(plandaMi(o) ? [{ anahtar: 'kanban', baslik: 'Kanbanda göster', simge: 'grid' as const, sec: () => { void yonlen(KANBAN_YOLU); } }] : []),

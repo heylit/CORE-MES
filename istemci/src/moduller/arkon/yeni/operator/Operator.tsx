@@ -69,7 +69,7 @@ import { KART_DEGIL_ILETISI, KART_YOK_ILETISI, terminalOkutmasi, useElOkuyucu } 
 import { kartNumarasiGibi } from '../../../../ortak/veri/kart-degistir.ts';
 import {
   DURUM_ILETISI, DURUM_SIMGESI, EYLEM_DURUMU, URETIM_EYLEMLERI, baslangicUyarilari, bosIs, durusOnerileri, eksikTakimTabanlari, hazirlikSayisi,
-  ilkParcaKalemleri, ilkParcaKapisi, isSekmeleri, kararOzeti, kontrolTakvimi, mobilGorunumler, numuneAraligi, paketleriBirlestir, siradakiGorev, simgeSec,
+  ilkParcaKalemleri, ilkParcaKapisi, isSekmeleri, kararOzeti, kontrolTakvimi, mobilGorunumler, numuneAraligi, paketleriBirlestir, siradakiGorev, simgeSec, bekletmeGorevi, BEKLEMEDE_KAPALI,
   sonucBelgesi, takimUyarilari, tonAdi, uyariAnahtari, vardiyaHesabi, vardiyaOzeti, zamaniGelenUyarilar, hurdaUyarisi, bitisOzeti, bitirmeEksigi, tmiIlkParcaGerekli,
   type EkranSekmesi,
   hataliNedenleri, hataliUstSiniri,
@@ -793,8 +793,11 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
   } : {
     anahtar: 'oniz-bos:' + b.no, dosyalar: [], anaResim: null, balonlar: [], balonlarYaz: () => undefined, olcumler: {}, olcumlerYaz: () => undefined, saltOkunur: true,
   }), [b && siraAnahtari(b), bakPkgAnahtari, bakDosyalar]);
-  const task0 = siradakiGorev(o, D, nextOrder, ilk, simdi);
-  const ertelenmis = task0 && task0.key && (snooze[task0.key] ?? 0) > simdi ? siradakiGorev({ ...o, _skip: true }, D, null, ilk, simdi) : task0;
+  const emrinAdimlari = useEmrinAdimlari(pv ? null : tmiEmirId(o.pkg), o.state);
+  // 3050 a: beklemedeki emirde başlatan görev ve düğmeler kapalıdır; çalışan adım sürer.
+  const bekletme = emrinAdimlari?.bekletme ?? null;
+  const task0 = bekletmeGorevi(siradakiGorev(o, D, nextOrder, ilk, simdi), bekletme);
+  const ertelenmis = task0 && task0.key && (snooze[task0.key] ?? 0) > simdi ? bekletmeGorevi(siradakiGorev({ ...o, _skip: true }, D, null, ilk, simdi), bekletme) : task0;
   const eskiG = eskiCizimGorevi(ertelenmis, cizimEski);
   const task: Gorev | null = eskiG && eskiG !== ertelenmis
     ? { ...(eskiG as unknown as Gorev), tone: tonAdi((eskiG as { tone: string }).tone), icon: simgeSec((eskiG as { icon: string }).icon) }
@@ -999,6 +1002,7 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
   const hazirlikta = useRef(false);
   const act = (a: GorevEylemi, t?: Gorev, warned?: boolean, hazir?: boolean, ekUyari?: string | null) => {
     if (URETIM_EYLEMLERI.includes(a) && (o.empty || !ok('prod.run'))) return;
+    if (bekletme && BEKLEMEDE_KAPALI.has(a)) { say(`Emir beklemede · ${bekletme}`, 'pause', 'hold'); return; }
     if (a === 'tool') { const tl = RL.prod.tools.find((x) => x.id === (t && t.toolId)); if (tl) changeTool(tl); return; }
     if (a === 'warns') { warnShowYaz({ list: RL.warns.filter((w) => w.t), title: 'Bu işin uyarıları' }); return; }
     if (a === 'stop') { ovYaz('reason'); return; }
@@ -1226,7 +1230,6 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
   const pdSonra = pdSimdi ? null : siradakiDurus(MACHINE, simdi, ayarlar.planliDuruslar, tesis, 30 * 60e3);
 
   const hz = useHazirlik(pv ? null : tmiEmirId(o.pkg), o.state);
-  const emrinAdimlari = useEmrinAdimlari(pv ? null : tmiEmirId(o.pkg), o.state);
   /* ekran parçaları */
   const uyarili = RL.warns.some((w) => w.t);
   const panelSimgesi = OT.simge;
@@ -1327,7 +1330,7 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
   ) : null;
   // 1999 a: genişte Resim sağ sütunun sekmesidir; alttaki tekrarı çizilmez.
   const durumDugmeleri = (mobil: boolean) => (uretir ? (
-    <DurumDugmeleri durum={o.state} pasif={!!o.empty} gizle={mobil ? undefined : 'drawing'} erken={(e) => say(`${e} için 1,2 sn basılı tut`, 'alert', 'hold')}
+    <DurumDugmeleri durum={o.state} pasif={!!o.empty} beklemede={bekletme !== null} gizle={mobil ? undefined : 'drawing'} erken={(e) => say(`${e} için 1,2 sn basılı tut`, 'alert', 'hold')}
       eylem={(d) => { if (mobil && d.eylem === 'drawing') { mvYaz('draw'); return; } act(d.eylem); }} />
   ) : !pv ? <p className="tc-ay1-soluk tc-ay1-izin">Bu rol üretim kaydı yapamaz</p> : null);
   // 702: Şimdi kartı ve numune şeridi tek şeritte (şerit görevin başlığının altında); ikisi de yoksa şerit çizilmez.
@@ -1483,7 +1486,7 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
     const MV = mobilGorunumler(o, ozetVar, !!Panel, OT.short, panelSimgesi, D, isler.filter((x) => x.fresh).length, telefon);
     const gor = MV.some((x) => x.id === mv) ? mv : 'prod';
     const cubuk = gor === 'prod' && uretir && !kaliteGorunumu
-      ? <EylemCubugu durum={o.state} pasif={!!o.empty} eylem={(d) => act(d.eylem)} tuslar={tuslar.filter((t) => t.simge !== 'minus' && t.simge !== 'layers')} />
+      ? <EylemCubugu durum={o.state} pasif={!!o.empty} beklemede={bekletme !== null} eylem={(d) => act(d.eylem)} tuslar={tuslar.filter((t) => t.simge !== 'minus' && t.simge !== 'layers')} />
       : null;
     return (
       <div className="tc-ay1 tc-ay1-dar" data-durum={IS_DURUM_RENGI(o.state)} data-dokunmatik="" data-cubuk={cubuk ? '' : undefined}>

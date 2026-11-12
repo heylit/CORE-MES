@@ -424,13 +424,13 @@ export function TopluGiris({ kalan, kapali, kaydet, nedenler, hurdaEtiketi = 'Hu
 }
 
 /* ── durum düğmeleri: nedensiz Duraklat ve Bitir 1,2 sn basılı tutulur; Durdur dokunuşla neden sorar (2000 b) ── */
-export function DurumDugmeleri({ durum, eylem, erken, pasif = false, gizle }: {
-  durum: string; eylem: (d: DurumDugmesi) => void; erken: (etiket: string) => void; pasif?: boolean; gizle?: string | undefined;
+export function DurumDugmeleri({ durum, eylem, erken, pasif = false, gizle, beklemede = false }: {
+  durum: string; eylem: (d: DurumDugmesi) => void; erken: (etiket: string) => void; pasif?: boolean; gizle?: string | undefined; beklemede?: boolean;
 }) {
   return (
     <OrbGrubu etiket="İş durumu">
-      {durumDugmeleri(durum).filter((d) => d.eylem !== gizle).map((d) => (
-        <Orb key={d.key} simge={d.simge} etiket={d.etiket} ton={tonDurumu(d.ton)} ana={!!d.ana} disabled={pasif} {...(d.tut ? { basiliTutMs: 1200 } : {})}
+      {durumDugmeleri(durum, beklemede).filter((d) => d.eylem !== gizle).map((d) => (
+        <Orb key={d.key} simge={d.simge} etiket={d.etiket} ton={tonDurumu(d.ton)} ana={!!d.ana} disabled={pasif || !!d.kapali} {...(d.tut ? { basiliTutMs: 1200 } : {})}
           tetikle={() => eylem(d)} erkenBirakinca={() => erken(d.etiket)} />
       ))}
     </OrbGrubu>

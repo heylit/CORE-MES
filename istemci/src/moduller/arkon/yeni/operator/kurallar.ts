@@ -305,8 +305,19 @@ export function durusOnerileri(g: OneriGirdisi): { code: string; why: string }[]
 }
 
 /* ── durum düğmeleri (bilesenler.ts Orbs) ── */
-export interface DurumDugmesi { key: string; eylem: GorevEylemi; simge: SimgeAdi; etiket: string; ton: Ton; ana?: boolean; tut?: boolean }
-export function durumDugmeleri(durum: string): DurumDugmesi[] {
+export interface DurumDugmesi { key: string; eylem: GorevEylemi; simge: SimgeAdi; etiket: string; ton: Ton; ana?: boolean; tut?: boolean; kapali?: true }
+// 3050 a: beklemedeki emirde adım başlamaz, hazırlığa geçilmez, duraklamış ya da durmuş adım sürmez; çalışan adım duraklatılır, durdurulur, biter.
+export const BEKLEMEDE_KAPALI: ReadonlySet<GorevEylemi> = new Set<GorevEylemi>(['start', 'resume', 'restart', 'setup']);
+export function durumDugmeleri(durum: string, beklemede = false): DurumDugmesi[] {
+  const l = durumDugmeleriHam(durum);
+  return beklemede ? l.map((d) => (BEKLEMEDE_KAPALI.has(d.eylem) ? { ...d, kapali: true as const } : d)) : l;
+}
+// Beklemedeki emirde başlatan görev yerine bekletme görünür (sunucu da reddeder; ekran önce söyler).
+export function bekletmeGorevi(g: Gorev | null, bekletme: string | null | undefined): Gorev | null {
+  if (!bekletme || g === null || !g.act || !BEKLEMEDE_KAPALI.has(g.act)) return g;
+  return { tone: 'hold', icon: 'pause', t: 'Emir beklemede', d: `${bekletme} · adım başlatılamaz; bekletmeyi emri düzenleyen kaldırır`, act: null, quiet: true, key: 'beklet' };
+}
+function durumDugmeleriHam(durum: string): DurumDugmesi[] {
   if (durum === 'queued') return [
     { key: 'su', eylem: 'setup', simge: 'wrench', etiket: 'Hazırlık', ton: 'hazard' },
     { key: 's', eylem: 'start', simge: 'play', etiket: 'İşi Başlat', ton: 'run', ana: true },
@@ -332,8 +343,8 @@ export function durumDugmeleri(durum: string): DurumDugmesi[] {
 }
 // Telefonun alt eylem çubuğu (618, 615-1 b): durumun ana eylemi, Durdur ve Duraklat. Durdur dokunuşla duruş nedeni penceresini açar, orada onaylanır;
 // basılı tutulan Bitir ve ikincil eylemler (Hazırlık, Resim) aşağıdaki düğme grubunda kalır.
-export function cubukDugmeleri(durum: string): DurumDugmesi[] {
-  return durumDugmeleri(durum).filter((d) => d.ana || d.eylem === 'stop' || d.eylem === 'pause').map(({ tut: _tut, ...d }) => d);
+export function cubukDugmeleri(durum: string, beklemede = false): DurumDugmesi[] {
+  return durumDugmeleri(durum, beklemede).filter((d) => d.ana || d.eylem === 'stop' || d.eylem === 'pause').map(({ tut: _tut, ...d }) => d);
 }
 // Durum düğmesinin geri alınabilir iletisi ve simgesi (act içindeki sözlükler).
 export const DURUM_ILETISI: Readonly<Record<string, string>> = { start: 'Üretim başladı', resume: 'Üretime devam', restart: 'Yeniden başlatıldı', pause: 'İş duraklatıldı', setup: 'Hazırlık süresi başladı' };

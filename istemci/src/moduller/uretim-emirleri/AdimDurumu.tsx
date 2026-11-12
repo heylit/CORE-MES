@@ -40,7 +40,7 @@ const OBEK: Readonly<Record<AdimStatusu, Obek>> = {
   bitti: 'bitti', uretimde: 'calisiyor', fasonda: 'calisiyor', baslayabilir: 'baslayabilir',
   duraklatildi: 'durdu', durdu: 'durdu',
   program: 'bekliyor', cizim: 'bekliyor', yayin: 'bekliyor', makine: 'bekliyor', talep: 'bekliyor', siparis: 'bekliyor', malzeme: 'bekliyor',
-  firma: 'bekliyor', onceki: 'bekliyor', diger: 'bekliyor',
+  firma: 'bekliyor', onceki: 'bekliyor', diger: 'bekliyor', beklemede: 'bekliyor',
 };
 // Başlayabilir, Bitti ile aynı yeşildir; çizgi görünümle ayrılır (bitmiş adım dolu, başlamayı bekleyen boş).
 const OBEKLER: readonly { obek: Obek; ad: string; simge: SimgeAdi; ton: RozetTonu; cizgi?: true }[] = [

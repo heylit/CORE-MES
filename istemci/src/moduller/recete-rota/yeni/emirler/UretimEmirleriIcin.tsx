@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
-import { Dugme, DurumKutusu, Pencere } from '../../../../ortak/arayuz/index.ts';
+import { Dugme, DurumKutusu, Pencere, type MenuOgesi } from '../../../../ortak/arayuz/index.ts';
 import { useYetki } from '../../../../ortak/veri/yetki.ts';
 import { RrSaglayici } from '../ReceteRotaYeni.tsx';
 import { SEKMELER, type SekmeAnahtari } from '../sekmeler.ts';
@@ -97,7 +97,8 @@ export type EmirParcasiTuru = 'islemler' | 'adimlar' | 'malzeme';
 // Adım satırının sağı Üretim Emirleri'nden gelir (statü, iç/fason); verilmezse satır kendi durum rozetini gösterir.
 export type SatirEki = (opNo: number, yedek: ReactNode) => ReactNode;
 
-export function EmirParcasi({ kayitNo, parca, satirEki }: { kayitNo: number; parca: EmirParcasiTuru; satirEki?: SatirEki }) {
+// ekOgeler: Üretim Emirleri'nin kendi işlemleri (3050 a "Beklet"); "İşlemler" menüsüne girer.
+export function EmirParcasi({ kayitNo, parca, satirEki, ekOgeler }: { kayitNo: number; parca: EmirParcasiTuru; satirEki?: SatirEki; ekOgeler?: readonly MenuOgesi[] }) {
   const yetki = useRrYetkisi();
   const veri = useRrVerisi(yetki.oku);
   const komut = useEmirKomutu();
@@ -121,7 +122,7 @@ export function EmirParcasi({ kayitNo, parca, satirEki }: { kayitNo: number; par
       <Dugme onClick={komut.uyariKapat}>Tamam</Dugme>
     </div>
   );
-  if (parca === 'islemler') return <>{uyari}<EmirIslemDugmeleri {...ortak} /></>;
+  if (parca === 'islemler') return <>{uyari}<EmirIslemDugmeleri {...ortak} ekOgeler={ekOgeler} /></>;
   return (
     <div className="tc-rr3" data-parca="R3">
       {uyari}

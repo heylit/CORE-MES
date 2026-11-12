@@ -1,7 +1,7 @@
 import { KOD_ONEKI } from '#paylasilan/kod-sozlugu.ts';
-import { HAZIRLIK_MADDELERI, MUAF_TUTULABILEN_MADDELER, hazirlikUyarirMi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
+import { BEKLEME_NEDENI_ADLARI, HAZIRLIK_MADDELERI, MUAF_TUTULABILEN_MADDELER, hazirlikUyarirMi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import type {
-  AdimStatusu, AdimTedariki, CalismaDurumu, EmirDurumu, EmirIlerlemesi, EmirTuru, HataliKarari, HazirlikMaddesi, IlerlemeEsasi, KapanisAsamasi, KapanisMaddeBilgisi, KapanisMaddeHali, KapanisMaddesi, KapanisOnayi,
+  AdimStatusu, BeklemeNedeni, AdimTedariki, CalismaDurumu, EmirDurumu, EmirIlerlemesi, EmirTuru, HataliKarari, HazirlikMaddesi, IlerlemeEsasi, KapanisAsamasi, KapanisMaddeBilgisi, KapanisMaddeHali, KapanisMaddesi, KapanisOnayi,
 } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import type { Islem } from '#paylasilan/islemler.ts';
 import type { TalimatAsamasi } from '#paylasilan/sozlesme/talimat-asamasi.ts';
@@ -1705,6 +1705,8 @@ export interface AdimStatuGirdisi {
   oncekiBekleniyor: boolean;
   // Adımın girdilerine (fason değil) ve fason iş emrine bağlı açık tedarik.
   tedarik: readonly AdimTedariki[];
+  // 3050 a: emir beklemedeyse nedeni. Başlamamış ve fasonda olmayan adım "Beklemede" görünür; çalışan adım kendi hâlini söyler.
+  bekletme?: BeklemeNedeni | null;
 }
 const tedarikNedeni = (t: AdimTedariki): string => t.asama === 'talep'
   ? `${t.fason ? 'Fason talebi' : 'Talep'} ${t.talepNo} siparişe dönmedi`
@@ -1719,6 +1721,7 @@ export function adimSistemStatusu(g: AdimStatuGirdisi): { statu: AdimStatusu; ne
     return { statu, nedenler };
   }
   if (g.fasonda) return { statu: 'fasonda', nedenler };
+  if (g.bekletme != null) return { statu: 'beklemede', nedenler: [`Emir beklemede: ${BEKLEME_NEDENI_ADLARI[g.bekletme]}`, ...nedenler] };
   const hammadde = g.tedarik.filter((t) => !t.fason);
   const fasonTalebi = g.tedarik.filter((t) => t.fason && t.asama === 'talep');
   if (eksikler.includes('malzeme')) nedenler.push(...hammadde.map(tedarikNedeni));
@@ -1775,4 +1778,24 @@ export function hazirlikOnayiReddi(madde: HazirlikMaddesi, hal: HazirlikHali, ge
   if (hal === 'tamam' || hal === 'gerekmez' || hal === 'muaf') return ONAY_GEREKSIZ;
   if (!hazirlikUyarirMi(madde) && (gerekce?.trim().length ?? 0) < GEREKCE_EN_AZ) return GEREKCE_GEREK;
   return null;
+}
+
+// 3050 a: bekletme emrin durumunu değiştirmez, üstünde bir işarettir. Yalnız açık (planlı ya da başlamış) emir bekletilir; bekleyen emir
+// yeniden bekletilmez, beklemeyen emirde "Devam ettir" yoktur.
+export const BEKLETME_DURUMU = 'Yalnız planlı ya da üretimdeki emir bekletilir.';
+export const BEKLETME_VAR = 'Emir zaten beklemede.';
+export const BEKLETME_YOK = 'Emir beklemede değil.';
+export const EMIR_BEKLEMEDE_STATU = 'Emir beklemede; adımın statüsü elle yazılamaz. Önce bekletmeyi kaldırın.';
+export const EMIR_BEKLEMEDE = 'Emir beklemede; adım başlatılamaz ve duraklamış adım devam ettirilemez. Emri düzenleyebilen kişi bekletmeyi kaldırır.';
+export function bekletmeIhlali(durum: EmirDurumu, beklemede: boolean): string | null {
+  if (durum !== 'planli' && durum !== 'basladi') return BEKLETME_DURUMU;
+  return beklemede ? BEKLETME_VAR : null;
+}
+export const bekletmeKaldirmaIhlali = (beklemede: boolean): string | null => beklemede ? null : BEKLETME_YOK;
+// Başlatma ve devam beklemedeki emirde reddedilir. Çevrimdışı kuyruktan gelen komut kendi anını taşır: an bekletmeden önceyse iş
+// bekletilmeden önce yapılmıştır ve kabul edilir (kayıt gerçeği yazar); sonraysa reddedilir.
+export function bekletmeBaslatmaIhlali(bekletmeZamani: string | null, kayitAni: string | null): string | null {
+  if (bekletmeZamani === null) return null;
+  if (kayitAni !== null && Date.parse(kayitAni) < Date.parse(bekletmeZamani)) return null;
+  return EMIR_BEKLEMEDE;
 }
