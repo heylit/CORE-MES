@@ -44,6 +44,8 @@
 .tc-km-gkk-bilgi dt { color: var(--muted); font-size: var(--yazi-xs); }
 .tc-km-gkk-bilgi dd { margin: 0; overflow-wrap: anywhere; }
 .tc-km-gkk-satir { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2); margin: 0 0 var(--b-3); }
+.tc-km-gkk-bilgi + .tc-km-gkk-satir { margin-top: var(--b-3); }
+.tc-km-gkk-kod { white-space: nowrap; }
 .tc-km-gkk-satir:last-child { margin-bottom: 0; }
 .tc-km-gkk-alanlar { display: grid; gap: var(--b-3); }
 .tc-km-gkk-eylem { display: flex; justify-content: flex-end; }

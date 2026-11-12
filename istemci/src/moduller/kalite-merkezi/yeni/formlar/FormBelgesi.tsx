@@ -44,7 +44,9 @@ const kutular = (secenekler: readonly string[], secili?: (s: string) => boolean)
   secenekler.map((o) => `${kutu(secili?.(o) ?? false)} ${o}`).join('   ');
 
 // Uygulamanın secPrint'i: bölüm başlığı, alanlar, kontrol maddeleri (Evet / Hayır / UD), tablo. Kayıt yoksa boş form.
-export function BolumBaskisi({ b, si, kayit }: { b: DslBolumu; si: number; kayit: KayitIcerigi | null }) {
+// 3118: GKK şablonu ekrandaki gibi Uygun / Uygun değil / Bakılmadı başlıklarıyla basılır.
+export const GKK_YANIT_BASLIKLARI = ['Uygun', 'Uygun değil', 'Bakılmadı'] as const;
+export function BolumBaskisi({ b, si, kayit, yanitlar = LISTE_YANITLARI }: { b: DslBolumu; si: number; kayit: KayitIcerigi | null; yanitlar?: readonly string[] }) {
   const deger = (k: string) => kayit?.veri?.[k];
   return (
     <>
@@ -71,7 +73,7 @@ export function BolumBaskisi({ b, si, kayit }: { b: DslBolumu; si: number; kayit
       )}
       {b.liste.length > 0 && (
         <table>
-          <thead><tr><th>#</th><th>Kontrol maddesi</th><th>Evet</th><th>Hayır</th><th>UD</th></tr></thead>
+          <thead><tr><th>#</th><th>Kontrol maddesi</th>{yanitlar.map((y) => <th key={y}>{y}</th>)}</tr></thead>
           <tbody>
             {b.liste.map((m, mi) => {
               const k = alanAnahtari(si, mi);
@@ -159,7 +161,7 @@ export function BosDslFormu({ veri, form }: { veri: Ayar; form: ListedekiForm })
     <Belge>
       <FormBasi veri={veri} kod={form.kod} ad={form.ad} rev={form.rev} yurur={form.yurur} />
       <table><tbody><tr><th>Tarih</th><td /><th>Dolduran</th><td /><th>Alan / bölüm</th><td /></tr></tbody></table>
-      {dslCoz(form.dsl).map((b, si) => <BolumBaskisi key={si} b={b} si={si} kayit={null} />)}
+      {dslCoz(form.dsl).map((b, si) => <BolumBaskisi key={si} b={b} si={si} kayit={null} {...(form.gkk ? { yanitlar: GKK_YANIT_BASLIKLARI } : {})} />)}
       <Imza />
     </Belge>
   );

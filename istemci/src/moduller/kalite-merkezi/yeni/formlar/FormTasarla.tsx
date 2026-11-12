@@ -11,7 +11,7 @@ import type { Sablon } from '../tipler.ts';
 import { useKmKomutu, type KmVerisi } from '../veri.ts';
 import type { KmYetkisi } from '../yetki.ts';
 import { dslCoz } from './dsl.ts';
-import { BolumBaskisi } from './FormBelgesi.tsx';
+import { BolumBaskisi, GKK_YANIT_BASLIKLARI } from './FormBelgesi.tsx';
 import { GKK_KATEGORISI, GKK_TURU_ADLARI, GKK_TURU_SIRASI, type GkkAyari } from '#paylasilan/gkk-sablonlari.ts';
 import { FORM_KATEGORILERI, tasarimBaslangici, tasarimHatasi, type ListedekiForm, type SablonTaslagi } from './sablonlar.ts';
 
@@ -109,7 +109,7 @@ export function FormTasarla({ veri, yetki, form, kapat }: { veri: KmVerisi; yetk
             <div className="tc-km3-tasarim-yan">
               <p className="tc-km3-etiket">Önizleme</p>
               <div className="tc-km-onizleme">
-                <Belge>{bolumler.length ? bolumler.map((b, si) => <BolumBaskisi key={si} b={b} si={si} kayit={null} />) : <p className="tc-km-soluk">Boş</p>}</Belge>
+                <Belge>{bolumler.length ? bolumler.map((b, si) => <BolumBaskisi key={si} b={b} si={si} kayit={null} {...(t.gkk ? { yanitlar: GKK_YANIT_BASLIKLARI } : {})} />) : <p className="tc-km-soluk">Boş</p>}</Belge>
               </div>
               <div className="tc-km3-yardim">
                 <b>Yazım kuralları</b>

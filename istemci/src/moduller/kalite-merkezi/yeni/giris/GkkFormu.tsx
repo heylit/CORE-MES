@@ -213,7 +213,7 @@ export function GkkFormu({ id, ncrler, sablonlar, muayeneAc, kapat }: Ozellikler
       </div>
 
       <div className="tc-km-gkk-sutun">
-        <Kart baslik={`${k.malKabulNo} · ${k.malzemeKod ?? `#${String(k.malzemeId)}`}`} simge="box">
+        <Kart baslik={k.malKabulNo} baslikEki={<b className="tc-km-gkk-mono tc-km-gkk-kod">{k.malzemeKod ?? `#${String(k.malzemeId)}`}</b>} simge="box">
           <dl className="tc-km-gkk-bilgi">
             <div><dt>Malzeme</dt><dd>{k.malzemeAd ?? YOK}</dd></div>
             <div><dt>Miktar</dt><dd>{lotMiktari} {birim}</dd></div>
