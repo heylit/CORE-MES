@@ -252,6 +252,20 @@ describe('cizimler ekranları', () => {
     expect(screen.queryByRole('button', { name: 'Yükle' })).toBeNull();
   });
 
+  it('3081 irsaliye belgesinde "Malzemeye bağla" yok; öbür türde durur', async () => {
+    sunucuKur(YAZAR);
+    const temel = vi.mocked(fetch);
+    vi.stubGlobal('fetch', vi.fn(async (adres: string, ayar?: RequestInit) => (
+      adres.replace('/api', '') === '/cizimler/7' ? json(200, { ...AYRINTI, tur: 'irsaliye', baglar: [] }) : temel(adres, ayar))));
+    ac('/cizimler/belge/7');
+    expect(await screen.findByRole('button', { name: 'Yeni revizyon' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Malzemeye bağla' })).toBeNull();
+    cleanup();
+    sunucuKur(YAZAR);
+    ac('/cizimler/belge/7');
+    expect(await screen.findByRole('button', { name: 'Malzemeye bağla' })).toBeTruthy();
+  });
+
   it('Ctrl K komutu (?yeni=1) yazara yeni belge penceresini türü seçili açar; kapatınca adresten düşer', async () => {
     sunucuKur(YAZAR);
     ac('/cizimler/sertifika?yeni=1');

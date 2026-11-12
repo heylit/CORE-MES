@@ -15,6 +15,7 @@ export const ILETILER = {
   malzemeDisi: 'Merkezden yalnız malzeme kartına ve istasyona bağ kurulur; öbür kayıtlar kendi ekranından bağlanır.',
   malKabulBagi: 'İrsaliye mal kabulden kaldırılır; buradan bağı kaldırılamaz.',
   irsaliyeMalKabulden: 'İrsaliye mal kabulden eklenir; burada yeni irsaliye açılmaz.',
+  irsaliyeMalzemeyeBaglanmaz: 'İrsaliye malzeme kartına bağlanmaz; malzemenin mal kabullerinden açılır.',
   istasyonaModelDisi: 'İstasyona merkezden yalnız 3B model belgesi bağlanır.',
   onizlemeTaslak: 'Önizleme yalnız yayındaki revizyon ve taslak 3B model için üretilir.',
   onizlemeTuru: 'Bu dosya türünden önizleme üretilmez.',
@@ -49,8 +50,9 @@ export const IZINLI_DOSYA_TURLERI: Readonly<Record<BelgeTuru, readonly DosyaTuru
 export const merkezAcmaReddi = (tur: BelgeTuru): string | null => (tur === 'irsaliye' ? ILETILER.irsaliyeMalKabulden : null);
 export const merkezBagKaldirmaReddi = (hedefModul: string): string | null => (hedefModul === 'stok-mal-kabul' ? ILETILER.malKabulBagi : null);
 
+// 3081 a: irsaliye malzemeye doğrudan bağlanmaz; malzeme ona mal kabul hareketi üzerinden dolaylı ulaşır (3082).
 export function merkezBagReddi(hedefModul: string, tur: BelgeTuru): string | null {
-  if (hedefModul === 'malzemeler') return null;
+  if (hedefModul === 'malzemeler') return tur === 'irsaliye' ? ILETILER.irsaliyeMalzemeyeBaglanmaz : null;
   if (hedefModul === 'istasyonlar') return tur === '3b-model' ? null : ILETILER.istasyonaModelDisi;
   return ILETILER.malzemeDisi;
 }

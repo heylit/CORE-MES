@@ -746,6 +746,10 @@ describe('stok (gerçek PostgreSQL)', () => {
     assert.equal(merkez.durum, 200, JSON.stringify(merkez.govde));
     const merkezRed = await istek<Hata>('yonetici', 'POST', `/cizimler/${b1!.id}/bag-kaldir`, { hedefModul: 'stok-mal-kabul', hedefId: id, surum: merkez.govde.surum });
     assert.equal(merkezRed.durum, 400, JSON.stringify(merkezRed.govde));
+    // 3081 a: irsaliye malzeme kartına bağlanmaz; malzeme ona mal kabulden ulaşır.
+    const malzemeyeBag = await istek<Hata>('yonetici', 'POST', `/cizimler/${b1!.id}/bag-ekle`, { hedefModul: 'malzemeler', hedefId: k, surum: merkez.govde.surum });
+    assert.equal(malzemeyeBag.durum, 400, JSON.stringify(malzemeyeBag.govde));
+    assert.match(malzemeyeBag.govde.mesaj, /malzeme kartına bağlanmaz/);
     const acma = await istek<Hata>('yonetici', 'POST', '/cizimler', { ad: 'ORN irsaliye', tur: 'irsaliye', ozet: await yukle('yonetici'), dosyaAdi: 'irsaliye.pdf' });
     assert.equal(acma.durum, 400, JSON.stringify(acma.govde));
 
