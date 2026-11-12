@@ -3,7 +3,7 @@ import { listeCevapSemasi, listeSorguAlanlari } from '../liste.ts';
 import { ondalikMetinSemasi } from '../ondalik.ts';
 import { zamanSemasi } from '../zaman.ts';
 import { irsaliyeBelgesi } from './stok-irsaliye.ts';
-import { KALITE_DURUMLARI, KONUM_TURLERI, LOGO_ESLESME_DURUMLARI, MAL_KABUL_TURLERI, partiBelgesi } from './stok.ts';
+import { KALITE_DURUMLARI, KONUM_TURLERI, LOGO_ESLESME_DURUMLARI, MAL_KABUL_BELGE_TURLERI, partiBelgesi } from './stok.ts';
 
 // 2890: "Mal kabulü yapılanlar" — mal kabul belgelerinin satırları tek listede, her satırın lotunun bugün nerede ve hangi kalitede
 // durduğuyla. Belge düzeyi özet stok.ts'teki `/stok/mal-kabuller`dadır; bu liste satır düzeyidir. Fiyat taşımaz.
@@ -14,7 +14,7 @@ export const malKabulSatirlariSorgusu = z.object({
   // Belge no, irsaliye no, lot no ya da tedarikçi parti no içinde arar.
   metin: z.string().trim().max(40).optional(),
   malzemeId: kimlik.optional(),
-  tur: z.enum(MAL_KABUL_TURLERI).optional(),
+  tur: z.enum(MAL_KABUL_BELGE_TURLERI).optional(),
   logoDurumu: z.enum(LOGO_ESLESME_DURUMLARI).optional(),
   baslangic: zamanSemasi.optional(),
   bitis: zamanSemasi.optional(),
@@ -36,7 +36,7 @@ export const malKabulSatirOzeti = z.object({
   id: z.number().int(),
   malKabulId: z.number().int(),
   belgeNo: z.string(),
-  tur: z.enum(MAL_KABUL_TURLERI),
+  tur: z.enum(MAL_KABUL_BELGE_TURLERI),
   irsaliyeNo: z.string().nullable(),
   zaman: zamanSemasi,
   kisiAd: z.string().nullable(),

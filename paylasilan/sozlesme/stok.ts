@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { listeCevapSemasi, listeSorguAlanlari, sayfaSorguAlanlari } from '../liste.ts';
 import { ondalikMetinSemasi } from '../ondalik.ts';
 import { beklenenSurum, surumSemasi } from '../surum.ts';
+import { TOPLU_EN_COK_SATIR } from '../toplu.ts';
 import { tarihSemasi, zamanSemasi } from '../zaman.ts';
 import { AZAMI_OGE, rafGovdesi, yerlesimGovdesi } from './atolye.ts';
 import { dosyaOzeti } from './dosya.ts';
@@ -23,11 +24,15 @@ export const KONUM_TURLERI = [
 export const KALITE_DURUMLARI = ['serbest', 'karar_bekliyor', 'sartli', 'red'] as const;
 export type KaliteDurumu = (typeof KALITE_DURUMLARI)[number];
 export const ELLE_KONUM_TURLERI = ['kabul', 'depo_zemini', 'fason', 'ara_alan', 'hurda'] as const;
+// Elle mal kabulün türleri (form ve taslak). Başlangıç stoğu (3129) yalnız toplu yüklemeyle açılır; belge ve liste türleri geniş listedir.
 export const MAL_KABUL_TURLERI = ['satin_alma', 'iade', 'diger'] as const;
+export const MAL_KABUL_BELGE_TURLERI = [...MAL_KABUL_TURLERI, 'baslangic'] as const;
 export const CIKIS_NEDENLERI = ['uretime_sarf', 'sevk', 'fire', 'numune', 'diger', 'tedarikci_iade'] as const;
 // 1253 a: tedarikçiye iade yalnız giriş kontrolünde kalitenin red kararıyla yazılır; elle çıkışta seçilmez.
 export const ELLE_CIKIS_NEDENLERI = ['uretime_sarf', 'sevk', 'fire', 'numune', 'diger'] as const;
 export const AMBALAJ_TURLERI = ['kasa', 'koli', 'palet', 'bidon', 'makara'] as const;
+export const HAREKET_KAYNAKLARI = ['mal_kabul', 'uretim', 'baslangic'] as const;
+export type HareketKaynagi = (typeof HAREKET_KAYNAKLARI)[number];
 export const HAREKET_TURLERI = ['giris', 'cikis', 'transfer', 'sayim_fazla', 'sayim_eksik', 'geri_alma'] as const;
 export const LOGO_ESLESME_DURUMLARI = ['irsaliye_bekleniyor', 'eslesti', 'fark_var'] as const;
 export const STOK_DURUMLARI = ['kritik', 'eksi', 'kabulde', 'statulu'] as const;
@@ -37,6 +42,7 @@ export type KonumTuru = (typeof KONUM_TURLERI)[number];
 export type HareketTuru = (typeof HAREKET_TURLERI)[number];
 export type LogoEslesmeDurumu = (typeof LOGO_ESLESME_DURUMLARI)[number];
 export type MalKabulTuru = (typeof MAL_KABUL_TURLERI)[number];
+export type MalKabulBelgeTuru = (typeof MAL_KABUL_BELGE_TURLERI)[number];
 export type AmbalajTuru = (typeof AMBALAJ_TURLERI)[number];
 export type CikisNedeni = (typeof CIKIS_NEDENLERI)[number];
 export type RafTuru = (typeof RAF_TURLERI)[number];
@@ -154,6 +160,8 @@ export const hareket = z.object({
   miktar: ondalikMetinSemasi,
   onayliEksi: z.boolean(),
   girisKaynagi: z.enum(['mal_kabul', 'uretim']).nullable(),
+  // 3129: giriş başlangıç stoğu belgesindense belgenin numarası. Başka modülün fikstürleri alanı bilmez.
+  baslangicBelgeNo: z.string().nullable().optional(),
   cikisNedeni: z.enum(CIKIS_NEDENLERI).nullable(),
   uretimEmriId: z.number().int().nullable(),
   // Başka modülün hareket fikstürleri alanı bilmez; sunucu her zaman doldurur (numara bulunamazsa null).
@@ -663,7 +671,7 @@ export type MalKabulDuzeltGovdesi = z.input<typeof malKabulDuzeltGovdesi>;
 export const malKabulOzeti = z.object({
   id: z.number().int(),
   no: z.string(),
-  tur: z.enum(MAL_KABUL_TURLERI),
+  tur: z.enum(MAL_KABUL_BELGE_TURLERI),
   irsaliyeNo: z.string().nullable(),
   zaman: zamanSemasi,
   kisiAd: z.string().nullable(),
@@ -671,6 +679,8 @@ export const malKabulOzeti = z.object({
   farkSayisi: z.number().int(),
   duzeltilenId: z.number().int().nullable(),
   duzeltenId: z.number().int().nullable(),
+  // 3129: belgedeki ayrı malzeme sayısı (başlangıç stoğu listesi). Başka modülün fikstürleri alanı bilmez.
+  malzemeSayisi: z.number().int().optional(),
 });
 export type MalKabulOzeti = z.output<typeof malKabulOzeti>;
 export const malKabulSatiri = z.object({
@@ -693,7 +703,8 @@ export const malKabulSatiri = z.object({
   // 1246: kartı GKK isteyen satın alma satırı karantinaya karar bekliyor girer; kararı giriş kontrolü verir.
   gkk: z.boolean(),
 });
-export const malKabulAyrintiCevabi = z.object({ belge: malKabulOzeti, satirlar: z.array(malKabulSatiri) });
+// Başlangıç stoğu belgesinde dosya adı ve tabloda yapılan düzeltmeler (3129); öbür türlerde null.
+export const malKabulAyrintiCevabi = z.object({ belge: malKabulOzeti, satirlar: z.array(malKabulSatiri), baslangic: z.lazy(() => baslangicBilgisi).nullable().optional() });
 export type MalKabulAyrintiCevabi = z.output<typeof malKabulAyrintiCevabi>;
 // Satın alma kabulünde seçilecek açık sipariş satırları (satın almanın `siparisSatirlari`; fiyatsız). Malzeme no kalem kataloğa
 // bağlı değilse null: kart elle seçilir.
@@ -730,8 +741,10 @@ export const acikSiparisSatirlariCevabi = z.object({ satirlar: z.array(acikSipar
 export type AcikSiparisSatirlariCevabi = z.output<typeof acikSiparisSatirlariCevabi>;
 export const malKabullerSorgusu = z.object({
   ...listeSorguAlanlari(['zaman', 'no']),
-  tur: z.enum(MAL_KABUL_TURLERI).optional(),
+  tur: z.enum(MAL_KABUL_BELGE_TURLERI).optional(),
   logoDurumu: z.enum(LOGO_ESLESME_DURUMLARI).optional(),
+  // 3129: yalnız asıl belgeler (iptal ve düzeltme kaydı olmayanlar).
+  asil: z.literal('1').optional(),
   baslangic: zamanSemasi.optional(),
   bitis: zamanSemasi.optional(),
   metin: z.string().trim().max(30).optional(),
@@ -869,6 +882,8 @@ export const hareketlerSorgusu = z.object({
   konumId: kimlik.optional(),
   partiId: buyukKimlik.optional(),
   tur: z.enum(HAREKET_TURLERI).optional(),
+  // 3129: girişin kaynağı. Mal kabul başlangıç stoğunu içermez; başlangıç stoğu geri almalarını da getirir.
+  kaynak: z.enum(HAREKET_KAYNAKLARI).optional(),
   uretimEmriId: kimlik.optional(),
   baslangic: zamanSemasi.optional(),
   bitis: zamanSemasi.optional(),
@@ -1761,3 +1776,79 @@ export type SeriAdetGovdesi = z.input<typeof seriAdetGovdesi>;
 export const seriIslendiGovdesi = z.object({ satirIdler: z.array(buyukKimlik).min(1).max(SERI_SATIR_SINIRI) });
 export type SeriIslendiGovdesi = z.input<typeof seriIslendiGovdesi>;
 export const seriListeParametresi = z.object({ id: buyukKimlik });
+
+// ---- Başlangıç stoğu (3129, 3134 a) ---------------------------------------------------------------------------------
+// Excel'den toplu giriş: istemci sütunları eşler ve satırları düzeltir; sunucu son satırları mal kabul kurallarıyla yeniden denetler.
+// Satır alanları metindir: hatalı değer bütün isteği düşürmez, satırın denetim sonucunda döner.
+const baslangicMetni = (n: number) => z.string().trim().max(n).optional();
+export const baslangicSatirGirdisi = z.object({
+  // Dosyadaki satır numarası (başlık 1); düzeltme ve hata bununla eşlenir.
+  sira: z.number().int().min(1).max(1_000_000),
+  malzemeId: kimlik.optional(),
+  malzemeKodu: baslangicMetni(60),
+  konumId: kimlik.optional(),
+  konumKodu: baslangicMetni(60),
+  miktar: z.string().trim().max(30),
+  lotNo: baslangicMetni(40),
+  tedarikciPartiNo: baslangicMetni(40),
+  dokumNo: baslangicMetni(40),
+  sertifikaNo: baslangicMetni(40),
+  tedarikci: baslangicMetni(60),
+  sonKullanma: baslangicMetni(20),
+  not: baslangicMetni(120),
+}).strict();
+export type BaslangicSatirGirdisi = z.input<typeof baslangicSatirGirdisi>;
+const baslangicSatirlari = z.array(baslangicSatirGirdisi).min(1, 'En az bir satır girin.').max(TOPLU_EN_COK_SATIR, `En çok ${TOPLU_EN_COK_SATIR} satır; dosyayı bölün.`);
+export const baslangicDenetleGovdesi = z.object({ satirlar: baslangicSatirlari, dosyaOzeti: dosyaOzeti.optional() }).strict();
+export type BaslangicDenetleGovdesi = z.input<typeof baslangicDenetleGovdesi>;
+
+export const BASLANGIC_DUZELTME_ALANLARI = ['malzeme', 'konum', 'miktar', 'lotNo', 'tedarikciPartiNo', 'dokumNo', 'sertifikaNo', 'tedarikci', 'sonKullanma', 'not', 'haric'] as const;
+export const baslangicDuzeltmesi = z.object({
+  sira: z.number().int().min(1).max(1_000_000),
+  alan: z.enum(BASLANGIC_DUZELTME_ALANLARI),
+  dosyada: z.string().max(120).nullable(),
+  girilen: z.string().max(120).nullable(),
+  // Üst panelden kodun bütün satırlarına uygulanan eşleme.
+  toplu: z.boolean(),
+}).strict();
+export type BaslangicDuzeltmesi = z.output<typeof baslangicDuzeltmesi>;
+export const baslangicYukleGovdesi = z.object({
+  dosyaOzeti,
+  dosyaAdi: z.string().trim().min(1, 'Dosya adı zorunlu.').max(120),
+  satirlar: baslangicSatirlari,
+  duzeltmeler: z.array(baslangicDuzeltmesi).max(TOPLU_EN_COK_SATIR * 12),
+}).strict();
+export type BaslangicYukleGovdesi = z.input<typeof baslangicYukleGovdesi>;
+
+const baslangicIletisi = z.object({ alan: z.string(), ileti: z.string() });
+export const BASLANGIC_SATIR_DURUMLARI = ['eklenecek', 'uyarili', 'hatali'] as const;
+export const baslangicSatirDenetimi = z.object({
+  sira: z.number().int(),
+  malzeme: z.object({
+    id: z.number().int(), kod: z.string(), ad: z.string().nullable(), birim: z.string().nullable(), tur: z.enum(MALZEME_TURLERI),
+    kalite: z.string().nullable(), durum: z.string().nullable(), islem: z.string().nullable(), olcu: z.string().nullable(),
+  }).nullable(),
+  konum: z.object({ id: z.number().int(), kod: z.string() }).nullable(),
+  durum: z.enum(BASLANGIC_SATIR_DURUMLARI),
+  hatalar: z.array(baslangicIletisi),
+  uyarilar: z.array(baslangicIletisi),
+});
+export type BaslangicSatirDenetimi = z.output<typeof baslangicSatirDenetimi>;
+export const baslangicDenetleCevabi = z.object({
+  satirlar: z.array(baslangicSatirDenetimi),
+  // Aynı dosya geri alınmamış bir belgeyle yüklendiyse o belge.
+  tekrar: z.object({ id: z.number().int(), no: z.string() }).nullable(),
+});
+export type BaslangicDenetleCevabi = z.output<typeof baslangicDenetleCevabi>;
+// Denetim tutmazsa hiçbir şey yazılmaz: belge null, denetim satırlarla döner (tablo hatalı satırları gösterir, düzenleme kaybolmaz).
+export const baslangicYukleCevabi = z.object({ belge: malKabulOzeti.nullable(), denetim: baslangicDenetleCevabi.nullable() });
+export type BaslangicYukleCevabi = z.output<typeof baslangicYukleCevabi>;
+
+export const baslangicBilgisi = z.object({ dosyaAdi: z.string().nullable(), duzeltmeler: z.array(baslangicDuzeltmesi) });
+// Geri almadan önce: belgenin lotlarından sonradan hareket görenler (varsa geri alma yapılmaz).
+export const baslangicGeriAlmaDurumu = z.object({
+  satirSayisi: z.number().int(), lotSayisi: z.number().int(), geriAlindi: z.boolean(),
+  // Lot (lotsuzda göz) ve girişten sonraki ilk başka hareketi.
+  hareketGorenler: z.array(z.object({ etiket: z.string(), tur: z.enum(HAREKET_TURLERI), cikisNedeni: z.enum(CIKIS_NEDENLERI).nullable(), zaman: zamanSemasi })),
+});
+export type BaslangicGeriAlmaDurumu = z.output<typeof baslangicGeriAlmaDurumu>;

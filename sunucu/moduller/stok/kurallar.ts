@@ -1629,3 +1629,84 @@ export function irsaliyeBelgeAdi(malKabulNo: string, irsaliyeNo: string | null, 
   const ek = sira > 1 ? ` · ${sira}` : '';
   return `İrsaliye${no} (${malKabulNo})${ek}`.slice(0, 120);
 }
+
+// ---- Başlangıç stoğu satır denetimi (3129, 3134 a) ---------------------------------------------------------------------------
+// Excel'den gelen satır mal kabulün "Diğer" kurallarıyla denetlenir; bütün satırlar serbest girer (GKK yok), var olan bakiyeye eklenir.
+// Hata satırı yüklenmez; uyarı yüklemeyi durdurmaz. Alan adları istemci tablosunun sütunlarıdır.
+export interface BaslangicIletisi { alan: string; ileti: string }
+export interface BaslangicSatirBaglami {
+  malzemeKodu: string | null;
+  malzeme: { kod: string; ad: string | null; birim: string | null; tur: MalzemeTuru; aktif: boolean } | null;
+  konumKodu: string | null;
+  konum: { tur: KonumTuru; aktif: boolean } | null;
+  miktar: string;
+  lotNo: string | null;
+  // Lot no veritabanında varsa o lot; dosyanın başka satırı aynı lot no'yu başka kartla açıyorsa o kartın kodu.
+  lot: { malzemeId: number; malzemeKodu: string | null; uretimEmriId: number | null; sonKullanma: string | null } | null;
+  malzemeId: number | null;
+  dosyadaBaskaKart: string | null;
+  partiBilgisiVar: boolean;
+  sonKullanma: string | null;
+  sktTakipli: boolean;
+  gozdeki: string | null;
+  // Dosyada aynı malzeme, göz ve lotla önceki satır.
+  oncekiSatir: number | null;
+}
+const BASLANGIC_MIKTAR = /^\d{1,11}(?:\.(\d{1,3}))?$/;
+export function tarihGecerliMi(t: string): boolean {
+  const p = /^(\d{4})-(\d{2})-(\d{2})$/.exec(t);
+  if (!p) return false;
+  const d = new Date(Date.UTC(Number(p[1]), Number(p[2]) - 1, Number(p[3])));
+  return d.getUTCFullYear() === Number(p[1]) && d.getUTCMonth() === Number(p[2]) - 1 && d.getUTCDate() === Number(p[3]);
+}
+export function baslangicSatirDenetimi(b: BaslangicSatirBaglami): { hatalar: BaslangicIletisi[]; uyarilar: BaslangicIletisi[] } {
+  const hatalar: BaslangicIletisi[] = [];
+  const uyarilar: BaslangicIletisi[] = [];
+  const m = b.malzeme;
+  if (m === null) hatalar.push({ alan: 'malzeme', ileti: b.malzemeKodu ? `Malzeme kodu bulunamadı: ${b.malzemeKodu}. Kart yoksa Malzemeler'de açın, sonra yeniden eşleyin.` : 'Malzeme kodu boş.' });
+  else if (!stoklanirMi(m.tur)) hatalar.push({ alan: 'malzeme', ileti: `${m.kod}: hizmet kartı stoklanmaz.` });
+  else if (!m.aktif) hatalar.push({ alan: 'malzeme', ileti: `${m.kod}: kart kullanılabilir değil (taslak ya da pasif).` });
+  if (b.konum === null) hatalar.push({ alan: 'konum', ileti: b.konumKodu ? `Konum kodu bulunamadı: ${b.konumKodu}.` : 'Konum kodu boş.' });
+  else if (!b.konum.aktif) hatalar.push({ alan: 'konum', ileti: 'Konum pasif; stok yazılamaz.' });
+  else {
+    const e = malKabulKonumuEngeli(b.konum.tur)
+      ?? ((AYRILMIS_KONUM_TURLERI as readonly string[]).includes(b.konum.tur) || b.konum.tur === 'fason'
+        ? 'Başlangıç stoğu serbest girer; karantina, hurda, sevkiyat ve fason konumlarına yazılmaz.' : null);
+    if (e) hatalar.push({ alan: 'konum', ileti: e });
+  }
+  const mk = BASLANGIC_MIKTAR.exec(b.miktar);
+  if (!mk) hatalar.push({ alan: 'miktar', ileti: 'Miktar en çok üç ondalıklı, sıfırdan büyük bir sayı olmalı (örnek: 12.5).' });
+  else if (binde(b.miktar) <= 0n) hatalar.push({ alan: 'miktar', ileti: 'Miktar sıfırdan büyük olmalı.' });
+  else if (mk[1] !== undefined && /[1-9]/.test(mk[1]) && m?.birim?.toLocaleLowerCase('tr') === 'adet') hatalar.push({ alan: 'miktar', ileti: 'Birimi adet olan kartta miktar tam sayıdır.' });
+  const demirbas = m?.tur === 'demirbas';
+  if (demirbas && (b.lotNo !== null || b.partiBilgisiVar)) hatalar.push({ alan: 'lotNo', ileti: 'Demirbaş parti almaz; lot ve parti bilgisini boş bırakın.' });
+  if (b.lotNo !== null) {
+    if (b.dosyadaBaskaKart !== null) hatalar.push({ alan: 'lotNo', ileti: `Bu lot no dosyada başka malzemeyle de geçiyor (${b.dosyadaBaskaKart}).` });
+    if (b.lot !== null && b.malzemeId !== null && b.lot.malzemeId !== b.malzemeId) hatalar.push({ alan: 'lotNo', ileti: `Bu lot no başka malzemenin lotu${b.lot.malzemeKodu ? ` (${b.lot.malzemeKodu})` : ''}.` });
+    else if (b.lot !== null && b.lot.uretimEmriId !== null) hatalar.push({ alan: 'lotNo', ileti: 'Bu lot bir üretim emrinin lotu; başlangıç stoğu ona eklenmez.' });
+  }
+  let skt: string | null = null;
+  if (b.sonKullanma !== null) {
+    if (!tarihGecerliMi(b.sonKullanma)) hatalar.push({ alan: 'sonKullanma', ileti: 'Son kullanma tarihi geçersiz (örnek: 2027-03-31).' });
+    else if (demirbas) hatalar.push({ alan: 'sonKullanma', ileti: 'Demirbaş lot almaz; son kullanma tarihi yazılmaz.' });
+    else skt = b.sonKullanma;
+  }
+  if (m !== null && !demirbas && (b.sonKullanma === null || skt !== null)) {
+    const e = sktGirisEngeli({ takipli: b.sktTakipli, sonKullanma: skt, lotunki: b.lot?.malzemeId === b.malzemeId ? b.lot?.sonKullanma ?? null : null });
+    if (e) hatalar.push({ alan: 'sonKullanma', ileti: e });
+  }
+  if (b.gozdeki !== null) uyarilar.push({ alan: 'konum', ileti: `Gözde zaten ${b.gozdeki}${m?.birim ? ` ${m.birim}` : ''} var; eklenecek.` });
+  if (b.lot !== null && hatalar.every((h) => h.alan !== 'lotNo')) uyarilar.push({ alan: 'lotNo', ileti: 'Bu lot sistemde var; miktar lota eklenecek.' });
+  if (b.oncekiSatir !== null) uyarilar.push({ alan: 'malzeme', ileti: `Aynı malzeme, göz ve lot ${b.oncekiSatir}. satırda da var; ikisi de eklenecek.` });
+  return { hatalar, uyarilar };
+}
+// Hareketin açıklaması: belge no, tedarikçi ve not (200 karakter sınırı).
+export function baslangicAciklamasi(no: string, tedarikci: string | null, not: string | null): string {
+  return [`Başlangıç stoğu ${no}`, tedarikci ? `Tedarikçi: ${tedarikci}` : null, not].filter((x): x is string => !!x).join(' · ').slice(0, 200);
+}
+// Kısmi geri alma yok (KURGU V7): satırlardan biri sonradan hareket gördüyse bütün belge durur.
+export function baslangicGeriAlmaEngeli(hareketGorenler: readonly string[]): string | null {
+  if (hareketGorenler.length === 0) return null;
+  const ilk = hareketGorenler.slice(0, 10).join(', ');
+  return `Şu lotlar hareket gördü: ${ilk}${hareketGorenler.length > 10 ? ` ve ${hareketGorenler.length - 10} lot daha` : ''}; önce onları geri alın ya da satır satır düzeltin.`;
+}

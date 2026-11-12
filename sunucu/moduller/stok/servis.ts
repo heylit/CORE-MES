@@ -12,3 +12,4 @@ export * from './servis/refakat.ts';
 export * from './servis/kabul-satirlari.ts';
 export * from './servis/irsaliye.ts';
 export * from './servis/taslak.ts';
+export * from './servis/baslangic.ts';

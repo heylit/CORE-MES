@@ -4,7 +4,7 @@ import { siralamaSql } from '#cekirdek/liste.ts';
 import type { SiralamaTanimi } from '#cekirdek/liste.ts';
 import { zamanMetni } from '#cekirdek/zaman.ts';
 import { basDeseni } from '#paylasilan/kayit-aramasi.ts';
-import type { KaliteDurumu, KonumTuru } from '#paylasilan/sozlesme/stok.ts';
+import type { KaliteDurumu, KonumTuru, MalKabulBelgeTuru } from '#paylasilan/sozlesme/stok.ts';
 import { S, icinde } from '../ortak/sorgular.ts';
 
 // ---- Satır tipleri ----------------------------------------------------------------------------------------------
@@ -33,7 +33,7 @@ export interface HareketHam {
   lotNo: string | null; tedarikciPartiNo: string | null; dokumNo: string | null; partiEmirId: number | null; kaynakKonumId: number | null; hedefKonumId: number | null;
   kaynakKonumKod: string | null; hedefKonumKod: string | null; miktar: string; onayliEksi: boolean; girisKaynagi: 'mal_kabul' | 'uretim' | null;
   cikisNedeni: 'uretime_sarf' | 'sevk' | 'fire' | 'numune' | 'diger' | null; uretimEmriId: number | null; geriAlinanId: number | null;
-  geriAlindi: boolean; malKabulSatiriMi: boolean; fisId: number | null; fisNo: string | null; hareketFisiId: number | null; hareketFisiNo: string | null; akis: string | null; kisiId: number; aciklama: string | null;
+  geriAlindi: boolean; malKabulSatiriMi: boolean; fisId: number | null; fisNo: string | null; hareketFisiId: number | null; hareketFisiNo: string | null; akis: string | null; kisiId: number; aciklama: string | null; baslangicBelgeNo: string | null;
   kaynakStatuId: number | null; hedefStatuId: number | null; kaynakKaliteDurumu: KaliteDurumu | null; hedefKaliteDurumu: KaliteDurumu | null;
 }
 export interface PartiHam {
@@ -41,8 +41,8 @@ export interface PartiHam {
   uretimEmriId: number | null; kayitZamani: string; eldeki: string;
 }
 export interface MalKabulHam {
-  id: number; no: string; tur: 'satin_alma' | 'iade' | 'diger'; irsaliyeNo: string | null; zaman: string; kisiId: number;
-  satirSayisi: number; farkSayisi: number; duzeltilenId: number | null; duzeltenId: number | null;
+  id: number; no: string; tur: MalKabulBelgeTuru; irsaliyeNo: string | null; zaman: string; kisiId: number;
+  satirSayisi: number; farkSayisi: number; duzeltilenId: number | null; duzeltenId: number | null; malzemeSayisi: number;
 }
 
 // ---- Depo ve konum ------------------------------------------------------------------------------------------------

@@ -27,6 +27,7 @@ import { belgeNo, partiBulVeyaAc, yururluktekiRevizyonlar, korumali, adlar, emir
 import { karantinaEksigiNedeni } from './depo.ts';
 import { partiBelgeleri } from './pano.ts';
 import { emirVarDenetle, bekleyenlereDagit } from './uretim.ts';
+import { baslangicAyrintisi } from './baslangic.ts';
 
 // ---- Mal kabul (DEP-10, DEP-20, DEP-38, DEP-39) ---------------------------------------------------------------------------------
 // Denetim eki komutta bir kez yazılır: satırların sertifika bağları burada toplanır, komut sonunda tek ek olur.
@@ -202,6 +203,8 @@ export async function malKabulDuzelt(db: Db, k: Kullanici, id: number, g: MalKab
   if (!eski) throw bulunamadi('Mal kabul belgesi bulunamadı.');
   const engel = duzeltmeEngeli({ duzeltildi: eski.duzeltenId !== null });
   if (engel) throw cakisma(engel);
+  // 3129: başlangıç stoğu satır satır düzeltilmez; bütün belge kendi geri alma ucundan, hareket görmemişse geri alınır.
+  if (eski.tur === 'baslangic') throw cakisma('Başlangıç stoğu belgesi düzeltilmez; belge ayrıntısından bütün olarak geri alın.');
   const hareketIdler: number[] = [];
   const satirlar = await sorgular.malKabulSatirlari(db, id);
   // Fason işinden dönen satırın stoğu emir adımıyla yazılmıştır (statü çevirme, sarf, çıktı); tek hareketle geri alınamaz.
@@ -254,7 +257,7 @@ export async function acikSiparisSatirlari(db: Db): Promise<AcikSiparisSatirlari
   }) };
 }
 export async function malKabulListesi(db: Db, s: MalKabullerListesi): Promise<SayfaliListe<MalKabulOzeti>> {
-  const suzgec = { tur: s.tur, logoDurumu: s.logoDurumu, baslangic: s.baslangic, bitis: s.bitis, metin: s.metin };
+  const suzgec = { asil: s.asil === '1', tur: s.tur, logoDurumu: s.logoDurumu, baslangic: s.baslangic, bitis: s.bitis, metin: s.metin };
   const l = await sayfaliListe(s, { say: () => sorgular.malKabulSay(db, suzgec), satirlar: (d) => sorgular.malKabuller(db, suzgec, s, d) });
   const kisiler = await kisiAdlari(db, [...new Set(l.satirlar.map((b) => b.kisiId))]);
   return { ...l, satirlar: l.satirlar.map(({ kisiId, ...b }) => ({ ...b, kisiAd: kisiler.get(kisiId) ?? null })) };
@@ -270,6 +273,7 @@ export async function malKabulAyrintisi(db: Db, id: number): Promise<MalKabulAyr
   const nolar = await emirNoHaritasi(db, s.map((x) => x.partiEmirId));
   return {
     belge: await malKabulOzetiCevir(db, b),
+    baslangic: b.tur === 'baslangic' ? await baslangicAyrintisi(db, id) : null,
     satirlar: s.map((x) => ({
       sira: x.sira, malzemeId: x.malzemeId, malzemeAd: ad.get(x.malzemeId) ?? null, sayilanMiktar: x.sayilanMiktar, konumKod: x.konumKod, hareketId: x.hareketId, siparisSatirId: x.siparisSatirId,
       fason: x.fasonCikisHareketId === null || x.fasonMalzemeId === null ? null

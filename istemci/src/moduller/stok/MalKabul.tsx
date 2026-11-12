@@ -13,7 +13,7 @@ import { AmbalajIkonu } from './AmbalajIkonu.tsx';
 import { acikSiparisAra } from './acik-siparis-arama.ts';
 import { useDepoSevk } from './depo-sevk.ts';
 import { anahtarlar } from './anahtarlar.ts';
-import { AMBALAJ_TURLERI, MAL_KABUL_TURLERI, MAL_KABUL_TURU, birimliMiktar, miktarGirdisi, miktarMetni, partiAlinirMi, lotluMu, LOT_IPUCU } from './gorunum.ts';
+import { AMBALAJ_TURLERI, ELLE_MAL_KABUL_TURLERI, MAL_KABUL_TURU, birimliMiktar, miktarGirdisi, miktarMetni, partiAlinirMi, lotluMu, LOT_IPUCU } from './gorunum.ts';
 import { EtiketMerkeziDugmesi } from './Etiketler.tsx';
 import { BekleyenIrsaliyeler, IrsaliyeSecici, bekleyenSayfasi, irsaliyeEkleYaDaBeklet, type IrsaliyeSayfasi } from './IrsaliyeBelgesi.tsx';
 import { bekleyenDosyasi, bekleyeniSil, sayfalardanSakla, type BekleyenIrsaliye } from './irsaliye-kuyrugu.ts';
@@ -464,7 +464,7 @@ function EmirEksikleri({ emirId, doldur }: { emirId: number; doldur: (l: Satir[]
 
 export function MalKabul() {
   const yazabilir = useIslem('stok.giris');
-  const [tur, setTur] = useState<(typeof MAL_KABUL_TURLERI)[number]>('satin_alma');
+  const [tur, setTur] = useState<(typeof ELLE_MAL_KABUL_TURLERI)[number]>('satin_alma');
   const [irsaliye, setIrsaliye] = useState('');
   // Uyarı yazarken değil, alandan çıkınca aranır.
   const [arananIrsaliye, setArananIrsaliye] = useState('');
@@ -522,7 +522,7 @@ export function MalKabul() {
           }} />
           <form className="tc-stok-form" onSubmit={(e) => { e.preventDefault(); const g = { tur, irsaliyeNo: irsaliye, taslakSil: taslak.silinsinMi(), satirlar: satirlar.map((s) => satirGovdesi(tur === 'satin_alma' ? s : { ...s, siparisSatirId: '', hizmetKarti: '' })) }; kilitli(() => komut.mutateAsync(g)); }}>
             <div className="tc-stok-iki">
-              <Secim etiket="Tür" value={tur} onChange={(e) => setTur(e.target.value as typeof tur)} secenekler={MAL_KABUL_TURLERI.map((t) => ({ deger: t, baslik: MAL_KABUL_TURU[t] }))} />
+              <Secim etiket="Tür" value={tur} onChange={(e) => setTur(e.target.value as typeof tur)} secenekler={ELLE_MAL_KABUL_TURLERI.map((t) => ({ deger: t, baslik: MAL_KABUL_TURU[t] }))} />
               <Girdi etiket="İrsaliye no" value={irsaliye} onChange={(e) => setIrsaliye(e.target.value)} onBlur={() => setArananIrsaliye(irsaliye)} />
             </div>
             <AyniIrsaliye irsaliye={arananIrsaliye} />

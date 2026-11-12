@@ -35,6 +35,10 @@ export async function partiBulVeyaAc(db: Db, p: sorgular.PartiAnahtari, siparisR
   const lotNo = await numaraAl(db, 'stok.lot-no', { varMi: (no) => sorgular.lotNoVarMi(db, no) });
   return (await sorgular.partiAc(db, { ...p, lotNo, parcaRevizyonu: siparisRevizyonu ?? await partiRevizyonu(db, p.malzemeId) })) ?? (await sorgular.emirPartisiBul(db, p.malzemeId, p.uretimEmriId!))!;
 }
+// 3129: başlangıç stoğunda lot no dosyadan gelir (eski sistemin lotu); boşsa partiBulVeyaAc numarayı verir.
+export async function partiyiNoylaAc(db: Db, p: Omit<sorgular.PartiAnahtari, 'uretimEmriId'>, lotNo: string): Promise<number> {
+  return (await sorgular.partiAc(db, { ...p, uretimEmriId: null, lotNo, parcaRevizyonu: await partiRevizyonu(db, p.malzemeId) }))!;
+}
 // 2099-5 a: SKT karşılaştırması tesis günüyle yapılır; gün sunucudan, istemciden alınmaz.
 export const sktBugun = (): string => tesisGunu(Date.now());
 // Üretim girişinin partisi: refakat kartıyla sayılan parça kartın partisine, kartsız sayım emrin partisine girer (#126).
@@ -98,7 +102,7 @@ export async function hareketleriCevir(db: Db, satirlar: HareketHam[]): Promise<
   return satirlar.map((h) => ({
     id: h.id, zaman: h.zaman, tur: h.tur, malzemeId: h.malzemeId, malzemeAd: ad.get(h.malzemeId) ?? null, partiId: h.partiId,
     partiEtiketi: h.partiId === null ? null : partiEtiketi({ lotNo: h.lotNo, tedarikciPartiNo: h.tedarikciPartiNo, dokumNo: h.dokumNo, uretimEmriId: h.partiEmirId }, emirNoDe(nolar, h.partiEmirId)),
-    kaynakKonumKod: h.kaynakKonumKod, hedefKonumKod: h.hedefKonumKod, miktar: h.miktar, onayliEksi: h.onayliEksi, girisKaynagi: h.girisKaynagi,
+    kaynakKonumKod: h.kaynakKonumKod, hedefKonumKod: h.hedefKonumKod, miktar: h.miktar, onayliEksi: h.onayliEksi, girisKaynagi: h.girisKaynagi, baslangicBelgeNo: h.baslangicBelgeNo,
     cikisNedeni: h.cikisNedeni, uretimEmriId: h.uretimEmriId, emirNo: emirNoDe(nolar, h.uretimEmriId), geriAlinanId: h.geriAlinanId, geriAlindi: h.geriAlindi, fisId: h.fisId, fisNo: h.fisNo,
     hareketFisiId: h.hareketFisiId, hareketFisiNo: h.hareketFisiNo, otomatik: h.akis !== null,
     kisiAd: kisiler.get(h.kisiId) ?? null, aciklama: h.aciklama, kaynakStatuId: h.kaynakStatuId, hedefStatuId: h.hedefStatuId,

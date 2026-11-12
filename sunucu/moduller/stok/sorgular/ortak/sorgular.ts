@@ -21,7 +21,9 @@ export const HAREKET_SECIMI = `SELECT h.id, ${zamanMetni('h.zaman')} AS zaman, h
   h.kaynak_statu_id AS "kaynakStatuId", h.hedef_statu_id AS "hedefStatuId", h.kaynak_kalite_durumu AS "kaynakKaliteDurumu",
   h.hedef_kalite_durumu AS "hedefKaliteDurumu", fs.fis_id AS "fisId", (SELECT f.no FROM stok_fis f WHERE f.id = fs.fis_id) AS "fisNo",
   hs.fis_id AS "hareketFisiId", (SELECT f.no FROM stok_hareket_fisi f WHERE f.id = hs.fis_id) AS "hareketFisiNo",
-  (SELECT f.akis FROM stok_hareket_fisi f WHERE f.id = hs.fis_id) AS "akis"`;
+  (SELECT f.akis FROM stok_hareket_fisi f WHERE f.id = hs.fis_id) AS "akis",
+  (SELECT m.no FROM stok_mal_kabul_satiri s JOIN stok_mal_kabul m ON m.id = s.mal_kabul_id
+    WHERE m.tur = 'baslangic' AND s.hareket_id IN (h.id, h.geri_alinan_id) LIMIT 1) AS "baslangicBelgeNo"`;
 export const HAREKET_BAGLARI = `FROM stok_hareketi h LEFT JOIN stok_parti p ON p.id = h.parti_id LEFT JOIN stok_fis_satiri fs ON fs.hareket_id = h.id LEFT JOIN stok_hareket_fisi_satiri hs ON hs.hareket_id = h.id
   LEFT JOIN stok_konum kk ON kk.id = h.kaynak_konum_id LEFT JOIN stok_konum hk ON hk.id = h.hedef_konum_id`;
 export const malzemeKaynagi = (ekKartlar = '') => `FROM (SELECT malzeme_id FROM stok_bakiye UNION SELECT malzeme_id FROM stok_malzeme_ayari${ekKartlar}) m
@@ -33,7 +35,8 @@ export const MALZEME_KAYNAGI = malzemeKaynagi();
 export const MAL_KABUL_SECIMI = `SELECT m.id, m.no, m.tur, m.irsaliye_no AS "irsaliyeNo", ${zamanMetni('m.zaman')} AS zaman, m.kisi_id AS "kisiId",
   (SELECT count(*)::int FROM stok_mal_kabul_satiri s WHERE s.mal_kabul_id = m.id) AS "satirSayisi",
   (SELECT count(*)::int FROM stok_mal_kabul_satiri s WHERE s.mal_kabul_id = m.id AND s.logo_durumu = 'fark_var') AS "farkSayisi",
-  m.duzeltilen_id AS "duzeltilenId", (SELECT d.id FROM stok_mal_kabul d WHERE d.duzeltilen_id = m.id) AS "duzeltenId"`;
+  m.duzeltilen_id AS "duzeltilenId", (SELECT d.id FROM stok_mal_kabul d WHERE d.duzeltilen_id = m.id) AS "duzeltenId",
+  (SELECT count(DISTINCT s.malzeme_id)::int FROM stok_mal_kabul_satiri s WHERE s.mal_kabul_id = m.id) AS "malzemeSayisi"`;
 // Bakiyenin hareket toplamına eşitliği (DEP-11): fark veren eksenler. Gece karşılaştırması (1692 a) aynı seçimi kaydeder.
 export const DEFTER_FARKI_SECIMI = `WITH defter AS (
      SELECT malzeme_id, konum_id, parti_id, statu_id, kalite_durumu, sum(etki) AS toplam FROM (

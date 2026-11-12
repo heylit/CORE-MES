@@ -1,6 +1,7 @@
 import { Navigate, useLocation } from 'react-router-dom';
 import type { ModulRotasi } from '../../ortak/rota/kesif.ts';
 import { Ayarlar } from './Ayarlar.tsx';
+import { BaslangicStogu } from './BaslangicStogu.tsx';
 import { Depo } from './Depo.tsx';
 import { DepoSevk } from './DepoSevk.tsx';
 import { Fis } from './Fis.tsx';
@@ -52,6 +53,7 @@ export const rotalar: ModulRotasi[] = [
   { yol: '/stok/yerlesim', ekran: YerlesimDuzenleyici },
   { yol: '/stok/toplama/:id', ekran: EskiToplamaYolu },
   { yol: '/stok/mal-kabul', ekran: MalKabul },
+  { yol: '/stok/baslangic-stogu', ekran: BaslangicStogu },
   { yol: '/stok/depo-sevk', ekran: DepoSevk },
   { yol: '/stok/istekler', ekran: EskiToplamaYolu },
   { yol: '/stok/mal-kabul/:id', ekran: MalKabulAyrinti },

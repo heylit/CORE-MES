@@ -1,11 +1,11 @@
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useParams } from 'react-router-dom';
-import type { MalKabulAyrintiCevabi, MalKabulCevabi, MalKabulDuzeltGovdesi } from '#paylasilan/sozlesme/stok.ts';
-import { Dugme, DurumKutusu, Kart, Pencere, Rozet, Tablo, type Sutun } from '../../ortak/arayuz/index.ts';
+import type { BaslangicGeriAlmaDurumu, MalKabulAyrintiCevabi, MalKabulCevabi, MalKabulDuzeltGovdesi } from '#paylasilan/sozlesme/stok.ts';
+import { Dugme, DurumKutusu, Kart, OnayPenceresi, Pencere, Rozet, Tablo, useBildirim, type Sutun } from '../../ortak/arayuz/index.ts';
 import { api } from '../../ortak/veri/api.ts';
 import { anahtarlar } from './anahtarlar.ts';
-import { LOGO_ETIKETI, miktarMetni, zamanMetni } from './gorunum.ts';
+import { CIKIS_NEDENI, HAREKET_ETIKETI, LOGO_ETIKETI, miktarMetni, zamanMetni } from './gorunum.ts';
 import { SatirListesi, bosSatir, satirGovdesi, type Satir } from './MalKabul.tsx';
 import { EtiketMerkeziDugmesi } from './Etiketler.tsx';
 import { IrsaliyeBelgeleri } from './IrsaliyeBelgesi.tsx';
@@ -29,10 +29,59 @@ const SUTUNLAR: Sutun<Satiri>[] = [
   { anahtar: 'irsaliyede', baslik: 'İrsaliyede', hizala: 'sag', hucre: (s) => (s.logoIrsaliyeMiktari === null ? null : miktarMetni(s.logoIrsaliyeMiktari)) },
 ];
 
+type Duzeltme = NonNullable<MalKabulAyrintiCevabi['baslangic']>['duzeltmeler'][number];
+const DUZELTME_ALANI: Record<Duzeltme['alan'], string> = {
+  malzeme: 'Malzeme', konum: 'Konum', miktar: 'Miktar', lotNo: 'Lot no', tedarikciPartiNo: 'Tedarikçi parti no', dokumNo: 'Döküm no', sertifikaNo: 'Sertifika no',
+  tedarikci: 'Tedarikçi', sonKullanma: 'Son kullanma', not: 'Not', haric: 'Hariç tutuldu',
+};
+const DUZELTME_SUTUNLARI: Sutun<Duzeltme & { i: number }>[] = [
+  { anahtar: 'sira', baslik: 'Satır', hizala: 'sag', hucre: (d) => d.sira },
+  { anahtar: 'alan', baslik: 'Alan', hucre: (d) => DUZELTME_ALANI[d.alan] },
+  { anahtar: 'dosyada', baslik: 'Dosyada', mono: true, kes: true, hucre: (d) => d.dosyada ?? '—' },
+  { anahtar: 'girilen', baslik: 'Girilen', mono: true, kes: true, hucre: (d) => (d.alan === 'haric' ? '—' : d.girilen ?? '—') },
+  { anahtar: 'toplu', baslik: 'Toplu eşleme', hucre: (d) => (d.toplu ? 'Evet' : '') },
+];
+const hareketAdi = (h: BaslangicGeriAlmaDurumu['hareketGorenler'][number]): string =>
+  (h.tur === 'cikis' && h.cikisNedeni ? CIKIS_NEDENI[h.cikisNedeni] : HAREKET_ETIKETI[h.tur]).toLocaleLowerCase('tr-TR');
+
+// Başlangıç stoğu belgesi (3129) düzeltilmez; bütün olarak geri alınır. Lotlardan biri yüklemeden sonra hareket gördüyse geri alma durur.
+function BaslangicGeriAl({ id, kapali }: { id: number; kapali: boolean }) {
+  const { bildir } = useBildirim();
+  const istemci = useQueryClient();
+  const [durum, setDurum] = useState<BaslangicGeriAlmaDurumu | null>(null);
+  const [bakiliyor, setBakiliyor] = useState(false);
+  const bak = async () => {
+    setBakiliyor(true);
+    try { setDurum(await api.get<BaslangicGeriAlmaDurumu>(`/stok/baslangic-stogu/${id}/geri-alma`)); } catch (e) { bildir('hata', hataMetni(e)); } finally { setBakiliyor(false); }
+  };
+  const geriAl = useMutation({
+    mutationFn: () => korumaliPost<MalKabulCevabi>(`/stok/baslangic-stogu/${id}/geri-al`, {}),
+    onSuccess: async () => { setDurum(null); bildir('tamam', 'Belge geri alındı; hareketleri ters çevrildi.'); await istemci.invalidateQueries({ queryKey: anahtarlar.hepsi }); },
+    onError: (e) => { setDurum(null); bildir('hata', hataMetni(e)); },
+  });
+  if (kapali) return null;
+  const engel = durum !== null && durum.hareketGorenler.length > 0;
+  return (
+    <>
+      <Dugme simge="rotate" yukleniyor={bakiliyor} onClick={() => void bak()}>Belgeyi geri al</Dugme>
+      <Pencere acik={engel} kapat={() => setDurum(null)} baslik="Belge geri alınamıyor" alt={<Dugme onClick={() => setDurum(null)}>Kapat</Dugme>}>
+        <p>Şu lotlar yüklemeden sonra hareket gördü:</p>
+        <ul>{durum?.hareketGorenler.map((h) => <li key={`${h.etiket}-${h.zaman}`}><span className="tc-baslangic-kod">{h.etiket}</span> ({hareketAdi(h)}, {zamanMetni(h.zaman)})</li>)}</ul>
+        <p>Önce bu hareketleri geri alın ya da satırları tek tek düzeltin.</p>
+      </Pencere>
+      <OnayPenceresi acik={durum !== null && !engel} baslik="Belgeyi geri al" onayMetni="Geri al" tehlikeli yukleniyor={geriAl.isPending}
+        onayla={() => geriAl.mutate()} vazgec={() => setDurum(null)}>
+        <p>{durum?.satirSayisi} satır ve {durum?.lotSayisi} lot geri alınacak. Emin misiniz?</p>
+      </OnayPenceresi>
+    </>
+  );
+}
+
 export function MalKabulAyrinti() {
   const id = Number(useParams().id);
   const duzeltebilir = useIslem('stok.geri-al');
   const [acik, setAcik] = useState(false);
+  const [duzeltmelerAcik, setDuzeltmelerAcik] = useState(false);
   const [satirlar, setSatirlar] = useState<Satir[]>([]);
   const b = useQuery({ queryKey: anahtarlar.ayrinti('mal-kabul', id), queryFn: () => api.get<MalKabulAyrintiCevabi>(`/stok/mal-kabuller/${id}`) });
   const { komut, onayPenceresi } = useStokKomutu(
@@ -48,15 +97,30 @@ export function MalKabulAyrinti() {
   if (b.isPending) return <DurumKutusu durum="yukleniyor" />;
   if (b.isError) return <DurumKutusu durum="hata" mesaj={hataMetni(b.error)} yenile={() => void b.refetch()} />;
   const belge = b.data.belge;
+  const baslangic = belge.tur === 'baslangic' ? b.data.baslangic ?? null : null;
+  const lotSayisi = new Set(b.data.satirlar.flatMap((s) => (s.partiId === null ? [] : [s.partiId]))).size;
   return (
     <section className="tc-stok">
-      <SayfaBasi baslik={`Mal kabul ${belge.no}`} alt={`${zamanMetni(belge.zaman)} · ${belge.kisiAd ?? '—'}${belge.irsaliyeNo ? ` · irsaliye ${belge.irsaliyeNo}` : ''}`}
-        sag={<>
-          {b.data.satirlar.some((s) => s.partiId !== null) && <EtiketMerkeziDugmesi tur="mal-kabul" idler={[id]}>Lot etiketlerini bas</EtiketMerkeziDugmesi>}
-          {duzeltebilir && belge.duzeltenId === null && <Dugme simge="edit" onClick={duzeltAc}>Düzelt</Dugme>}
-        </>} />
-      {belge.duzeltenId !== null && <p className="tc-stok-not">Bu belge düzeltildi: <Link to={`/stok/mal-kabul/${belge.duzeltenId}`}>düzeltme belgesine git</Link>. Hareketleri ters çevrildi.</p>}
-      {belge.duzeltilenId !== null && <p className="tc-stok-not">Bu belge <Link to={`/stok/mal-kabul/${belge.duzeltilenId}`}>önceki belgeyi</Link> düzeltir.</p>}
+      {belge.tur === 'baslangic' ? (
+        <SayfaBasi baslik={belge.no}
+          alt={<><Rozet ton="bilgi">Başlangıç stoğu</Rozet> {zamanMetni(belge.zaman)} · {belge.kisiAd ?? '—'} · {belge.satirSayisi} satır · {lotSayisi} lot açıldı
+            {baslangic?.dosyaAdi ? ` · Asıl dosya: ${baslangic.dosyaAdi}` : ''}
+            {baslangic && <> · <button type="button" className="tc-stok-bag" onClick={() => setDuzeltmelerAcik(true)}>Düzeltmeler ({baslangic.duzeltmeler.length})</button></>}</>}
+          sag={<>
+            {b.data.satirlar.some((s) => s.partiId !== null) && <EtiketMerkeziDugmesi tur="mal-kabul" idler={[id]}>Lot etiketlerini bas</EtiketMerkeziDugmesi>}
+            {duzeltebilir && <BaslangicGeriAl id={id} kapali={belge.duzeltenId !== null || belge.duzeltilenId !== null} />}
+          </>} />
+      ) : (
+        <SayfaBasi baslik={`Mal kabul ${belge.no}`} alt={`${zamanMetni(belge.zaman)} · ${belge.kisiAd ?? '—'}${belge.irsaliyeNo ? ` · irsaliye ${belge.irsaliyeNo}` : ''}`}
+          sag={<>
+            {b.data.satirlar.some((s) => s.partiId !== null) && <EtiketMerkeziDugmesi tur="mal-kabul" idler={[id]}>Lot etiketlerini bas</EtiketMerkeziDugmesi>}
+            {duzeltebilir && belge.duzeltenId === null && <Dugme simge="edit" onClick={duzeltAc}>Düzelt</Dugme>}
+          </>} />
+      )}
+      {belge.tur === 'baslangic' && belge.duzeltenId !== null && <p className="tc-stok-not">Bu belge geri alındı: <Link to={`/stok/mal-kabul/${belge.duzeltenId}`}>geri alma belgesine git</Link>. Hareketleri ters çevrildi.</p>}
+      {belge.tur !== 'baslangic' && belge.duzeltenId !== null && <p className="tc-stok-not">Bu belge düzeltildi: <Link to={`/stok/mal-kabul/${belge.duzeltenId}`}>düzeltme belgesine git</Link>. Hareketleri ters çevrildi.</p>}
+      {belge.tur === 'baslangic' && belge.duzeltilenId !== null && <p className="tc-stok-not">Bu belge <Link to={`/stok/mal-kabul/${belge.duzeltilenId}`}>başlangıç stoğu belgesini</Link> geri alır.</p>}
+      {belge.tur !== 'baslangic' && belge.duzeltilenId !== null && <p className="tc-stok-not">Bu belge <Link to={`/stok/mal-kabul/${belge.duzeltilenId}`}>önceki belgeyi</Link> düzeltir.</p>}
       <IrsaliyeBelgeleri malKabulId={id} />
       <Kart baslik="Satırlar"><Tablo etiket="Mal kabul satırları" kip="kaydir" sutunlar={SUTUNLAR} satirlar={b.data.satirlar} satirAnahtari={(s) => s.sira} /></Kart>
       <Pencere acik={acik} kapat={() => setAcik(false)} baslik={`${belge.no} düzeltmesi`} tur="yan"
@@ -67,6 +131,12 @@ export function MalKabulAyrinti() {
         <p className="tc-stok-not">Belge değişmez. Eski belgenin bütün hareketleri ters çevrilir ve doğru satırlarla yeni belge açılır. Gelmeyen kalemin miktarını 0 yazın; tamamen iptalde yeni belge satırsız açılır. Eski satırların Logo durumu olduğu gibi kalır.</p>
         <div className="tc-stok-form"><SatirListesi satirlar={satirlar} setSatirlar={setSatirlar} /></div>
       </Pencere>
+      {baslangic && (
+        <Pencere acik={duzeltmelerAcik} kapat={() => setDuzeltmelerAcik(false)} baslik={`Düzeltmeler (${baslangic.duzeltmeler.length})`} tur="yan" genis>
+          <p className="tc-stok-not">Yükleme öncesi tabloda yapılan düzeltmeler; dosyadaki değer yükleyenin tarayıcısında okunan değerdir.</p>
+          <Tablo etiket="Düzeltmeler" kip="kaydir" sutunlar={DUZELTME_SUTUNLARI} satirlar={baslangic.duzeltmeler.map((d, i) => ({ ...d, i }))} satirAnahtari={(d) => d.i} bosMesaj="Düzeltme yapılmadı." />
+        </Pencere>
+      )}
       {onayPenceresi}
     </section>
   );

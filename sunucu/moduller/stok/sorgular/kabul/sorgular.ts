@@ -2,7 +2,7 @@ import type { Db } from '#cekirdek/db.ts';
 import type { Dilim, SiralamaIstegi, SiralamaTanimi } from '#cekirdek/liste.ts';
 import { siralamaSql } from '#cekirdek/liste.ts';
 import { zamanMetni } from '#cekirdek/zaman.ts';
-import type { KaliteDurumu, KonumTuru } from '#paylasilan/sozlesme/stok.ts';
+import type { KaliteDurumu, KonumTuru, MalKabulBelgeTuru } from '#paylasilan/sozlesme/stok.ts';
 import { S, icinde } from '../ortak/sorgular.ts';
 
 // ---- Mal kabulü yapılanlar (2890): satır düzeyi liste ve lotların bugünkü bakiyeleri -----------------------------------------
@@ -23,7 +23,7 @@ export async function malKabulSatiriSay(db: Db, s: MalKabulSatirSuzgeci): Promis
   return (await db.tek<{ toplam: number }>(`SELECT count(*)::int AS toplam ${KAYNAK} ${f.sql}`, f.p))?.toplam ?? 0;
 }
 export interface MalKabulListeSatiriHam {
-  id: number; malKabulId: number; belgeNo: string; tur: 'satin_alma' | 'iade' | 'diger'; irsaliyeNo: string | null; zaman: string; kisiId: number;
+  id: number; malKabulId: number; belgeNo: string; tur: MalKabulBelgeTuru; irsaliyeNo: string | null; zaman: string; kisiId: number;
   sira: number; malzemeId: number; sayilanMiktar: string; partiId: number | null; lotNo: string | null; tedarikciPartiNo: string | null;
   ilkKonumKod: string | null; siparisSatirId: number | null; fasonMalzemeId: number | null; gkk: boolean;
   logoDurumu: 'irsaliye_bekleniyor' | 'eslesti' | 'fark_var'; duzeltenId: number | null;

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
-import type { GeriAlGovdesi, Hareket, HareketCevabi, HareketlerCevabi, HareketTuru } from '#paylasilan/sozlesme/stok.ts';
+import type { GeriAlGovdesi, Hareket, HareketCevabi, HareketKaynagi, HareketlerCevabi, HareketTuru } from '#paylasilan/sozlesme/stok.ts';
 import type { EmirlerCevabi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { tesisGunBasi, tesisGunu } from '#paylasilan/tesis-zamani.ts';
 import { Dugme, DurumKutusu, Girdi, Kart, OnayPenceresi, Rozet, Sayfalama, Secim, Sekmeler, Tablo, useBildirim, type Sutun } from '../../ortak/arayuz/index.ts';
@@ -9,14 +9,15 @@ import { api } from '../../ortak/veri/api.ts';
 import { sorguMetni, useListeDurumu, type SuzgecDegeri } from '../../ortak/veri/liste-durumu.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { stokCsvAlani } from './csv-alani.ts';
-import { CIKIS_NEDENI, HAREKET_ETIKETI, HAREKET_TONU, HAREKET_TURLERI, hareketIsareti, miktarMetni, zamanMetni } from './gorunum.ts';
+import { CIKIS_NEDENI, HAREKET_ETIKETI, HAREKET_KAYNAGI, HAREKET_KAYNAKLARI, HAREKET_TONU, HAREKET_TURLERI, hareketIsareti, miktarMetni, zamanMetni } from './gorunum.ts';
 import { SayfaBasi, hataMetni, useIslem, useStokKomutu } from './ortak.tsx';
 import { hareketStatusu, useStatuAdi } from './statu.ts';
 import './stok.css';
 
 const yer = (h: Hareket): string => [h.kaynakKonumKod, h.hedefKonumKod].filter(Boolean).join(' → ');
 const not = (h: Hareket): string => [
-  h.girisKaynagi === 'uretim' ? 'Üretimden giriş' : h.girisKaynagi === 'mal_kabul' ? 'Mal kabul' : null,
+  // Başlangıç stoğunun açıklaması belge numarasıyla başlar ("Başlangıç stoğu MK-…"); ayrıca "Mal kabul" yazılmaz.
+  h.girisKaynagi === 'uretim' ? 'Üretimden giriş' : h.girisKaynagi === 'mal_kabul' && !h.baslangicBelgeNo ? 'Mal kabul' : null,
   h.cikisNedeni ? CIKIS_NEDENI[h.cikisNedeni] : null,
   h.uretimEmriId !== null ? `Emir ${h.emirNo ?? `#${h.uretimEmriId}`}` : null,
   h.aciklama,
@@ -104,10 +105,10 @@ export function Hareketler() {
   const { bildir } = useBildirim();
   const liste = useListeDurumu({
     suzgecler: {
-      tur: '' as '' | HareketTuru, metin: '', malzemeId: '' as number | '', partiId: '' as number | '', konumId: '' as number | '',
+      tur: '' as '' | HareketTuru, kaynak: '' as '' | HareketKaynagi, metin: '', malzemeId: '' as number | '', partiId: '' as number | '', konumId: '' as number | '',
       uretimEmriId: '' as number | '', gunBaslangic: '', gunBitis: '',
     },
-    suzgecDegerleri: { tur: HAREKET_TURLERI }, suzgecTurleri: { malzemeId: 'sayi', partiId: 'sayi', konumId: 'sayi', uretimEmriId: 'sayi' }, siralamaAlanlari: ['zaman'], adres: true,
+    suzgecDegerleri: { tur: HAREKET_TURLERI, kaynak: HAREKET_KAYNAKLARI }, suzgecTurleri: { malzemeId: 'sayi', partiId: 'sayi', konumId: 'sayi', uretimEmriId: 'sayi' }, siralamaAlanlari: ['zaman'], adres: true,
   });
   const [arama, setArama] = useState(liste.suzgecler.metin);
   useEffect(() => { const t = setTimeout(() => { if (arama !== liste.suzgecler.metin) liste.suzgecDegistir({ metin: arama }); }, 300); return () => clearTimeout(t); }, [arama]);
@@ -143,6 +144,7 @@ export function Hareketler() {
     return api.post<HareketCevabi>(`/stok/hareketler/${id}/geri-al`, govde);
   }, 'Hareket geri alındı.');
   const sekmeler = [{ anahtar: '' as const, baslik: 'Tümü' }, ...HAREKET_TURLERI.map((t) => ({ anahtar: t, baslik: HAREKET_ETIKETI[t] }))];
+  const kaynaklar: { anahtar: '' | HareketKaynagi; baslik: string }[] = [{ anahtar: '', baslik: 'Tümü' }, ...HAREKET_KAYNAKLARI.map((k) => ({ anahtar: k, baslik: HAREKET_KAYNAGI[k] }))];
   const gruplar: { anahtar: string; baslik: string; satirlar: Hareket[] }[] = [];
   for (const h of l.data?.satirlar ?? []) {
     const k = gunAnahtari(h.zaman), son = gruplar[gruplar.length - 1];
@@ -159,6 +161,7 @@ export function Hareketler() {
         <Girdi etiket="Bitiş" type="date" value={liste.suzgecler.gunBitis} min={liste.suzgecler.gunBaslangic || undefined} onChange={(e) => liste.suzgecDegistir({ gunBitis: e.target.value })} />
       </div>
       <Sekmeler etiket="Tür" sekmeler={sekmeler} secili={liste.suzgecler.tur} sec={(t) => liste.suzgecDegistir({ tur: t })} />
+      <Sekmeler etiket="Kaynak" sekmeler={kaynaklar} secili={liste.suzgecler.kaynak} sec={(k) => liste.suzgecDegistir({ kaynak: k })} />
       {l.isError && <DurumKutusu durum="hata" mesaj={hataMetni(l.error)} yenile={() => void l.refetch()} />}
       {l.isPending && <DurumKutusu durum="yukleniyor" />}
       {l.data && l.data.satirlar.length === 0 && <DurumKutusu durum="bos" mesaj="Bu süzgece uyan hareket yok." />}
