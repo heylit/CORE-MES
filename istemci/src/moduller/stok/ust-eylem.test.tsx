@@ -402,11 +402,11 @@ describe('Malzeme · Teslim üst çubuk düğmesi', () => {
     const liste: IsMalzemeleriCevabi = { isler: [{
       uretimEmriId: 70, emirNo: 'UE-70', opNo: 10, adimAd: 'Tornalama', calisiyor: false, kalanAdet: 10,
       malzemeler: [
-        { malzemeId: 902, kod: 'HM-2', ad: 'Deneme cubuk', birim: 'kg', birAdet: '2.500', gereken: '25.000', istasyonda: '0.000', eksik: true,
+        { malzemeId: 902, kod: 'HM-2', ad: 'Deneme cubuk', birim: 'kg', birAdet: '2.500', gereken: '25.000', istasyonda: '0.000', eksik: true, tasinan: false,
           yerler: [{ konum: 'R-01', miktar: '40.000', konumId: 11, istasyonId: null, buEmrin: false }, { konum: 'T1', miktar: '5.000', konumId: 12, istasyonId: 1, buEmrin: false }], istek: { id: 3, no: 'IST-3', durum: 'acik' } },
-        { malzemeId: 904, kod: 'HM-4', ad: 'Deneme boru', birim: null, birAdet: '1.000', gereken: '10.000', istasyonda: '0.000', eksik: true, yerler: [],
+        { malzemeId: 904, kod: 'HM-4', ad: 'Deneme boru', birim: null, birAdet: '1.000', gereken: '10.000', istasyonda: '0.000', eksik: true, tasinan: false, yerler: [],
           istek: { id: 4, no: 'IST-4', durum: 'acik', yoldaTeslim: { id: 8, no: 'TS-000008' } } },
-        { malzemeId: 903, kod: 'HM-3', ad: 'Deneme pul', birim: null, birAdet: '1.000', gereken: '10.000', istasyonda: '12.000', eksik: false, yerler: [], istek: null },
+        { malzemeId: 903, kod: 'HM-3', ad: 'Deneme pul', birim: null, birAdet: '1.000', gereken: '10.000', istasyonda: '12.000', eksik: false, tasinan: false, yerler: [], istek: null },
       ],
     }] };
     const istekler = ciz({ 'GET /stok/teslim-kutusu/is-malzemeleri': () => json(200, liste) }, { ...KUTU_ISTASYONLU, gelenler: [] });
@@ -435,7 +435,7 @@ describe('Malzeme · Teslim üst çubuk düğmesi', () => {
   it('teslim al: eksik malzeme depodan istenir ya da rotadaki istasyondan alinir (kart #1418)', async () => {
     const liste: IsMalzemeleriCevabi = { isler: [{
       uretimEmriId: 70, emirNo: 'UE-70', opNo: 20, adimAd: 'Frezeleme', calisiyor: false, kalanAdet: 10,
-      malzemeler: [{ malzemeId: 902, kod: 'HM-2', ad: 'Deneme cubuk', birim: null, birAdet: '1.000', gereken: '10.000', istasyonda: '0.000', eksik: true,
+      malzemeler: [{ malzemeId: 902, kod: 'HM-2', ad: 'Deneme cubuk', birim: null, birAdet: '1.000', gereken: '10.000', istasyonda: '0.000', eksik: true, tasinan: false,
         yerler: [{ konum: 'R-01', miktar: '40.000', konumId: 11, istasyonId: null, buEmrin: false }, { konum: 'T1', miktar: '5.000', konumId: 12, istasyonId: 1, buEmrin: true },
           { konum: 'T1', miktar: '2.000', konumId: 12, istasyonId: 1, buEmrin: false }], istek: null }],
     }] };
@@ -451,6 +451,25 @@ describe('Malzeme · Teslim üst çubuk düğmesi', () => {
     expect(istekler.some((i) => i.yol.includes('refakat-partileri'))).toBe(false);
     fireEvent.click(within(satir).getByRole('button', { name: /Depodan iste/ }));
     await waitFor(() => expect(istekler.filter((i) => i.yontem === 'POST')[1]?.govde).toMatchObject({ malzemeId: 902, kaynakKonumId: 11 }));
+  });
+
+  it('teslim al: onceki adimin parcasi depodan istenmez; dugme yerine ne olacagi yazar (3059)', async () => {
+    const satiri = (yerler: IsMalzemeleriCevabi['isler'][number]['malzemeler'][number]['yerler']): IsMalzemeleriCevabi => ({ isler: [{
+      uretimEmriId: 70, emirNo: 'UE-70', opNo: 20, adimAd: 'Frezeleme', calisiyor: false, kalanAdet: 10,
+      malzemeler: [{ malzemeId: 902, kod: 'HM-2', ad: 'Deneme cubuk', birim: 'kg', birAdet: '1.000', gereken: '10.000', istasyonda: '0.000', eksik: true, tasinan: true, yerler, istek: null }],
+    }] });
+    ciz({ 'GET /stok/teslim-kutusu/is-malzemeleri': () => json(200, satiri([])) }, { ...KUTU_ISTASYONLU, gelenler: [] });
+    window.dispatchEvent(new CustomEvent(MALZEME_TESLIM_AC, { detail: { istasyonId: 2, uretimEmriId: 70, malzemeId: 902 } }));
+    let satir = within(await screen.findByRole('list', { name: 'Bu işin malzemeleri' })).getAllByRole('listitem')[0]!;
+    expect(within(satir).getByText("Önceki adımdan gelir; önceki istasyon bitirince Bana gelen'de görünür")).toBeTruthy();
+    expect(within(satir).queryByText('Başka yerde yok')).toBeNull();
+    expect(within(satir).queryByRole('button', { name: /Depodan iste/ })).toBeNull();
+    cleanup();
+    ciz({ 'GET /stok/teslim-kutusu/is-malzemeleri': () => json(200, satiri([{ konum: 'T1', miktar: '5.000', konumId: 12, istasyonId: 1, buEmrin: true }])) }, { ...KUTU_ISTASYONLU, gelenler: [] });
+    window.dispatchEvent(new CustomEvent(MALZEME_TESLIM_AC, { detail: { istasyonId: 2, uretimEmriId: 70, malzemeId: 902 } }));
+    satir = within(await screen.findByRole('list', { name: 'Bu işin malzemeleri' })).getAllByRole('listitem')[0]!;
+    expect(within(satir).getByRole('button', { name: /T1 istasyonundan al · bu emrin/ })).toBeTruthy();
+    expect(within(satir).queryByRole('button', { name: /Depodan iste/ })).toBeNull();
   });
 
   it('sepet: elle sarf yok, sarf yalniz sayimdan duser (896 a)', async () => {
@@ -535,7 +554,7 @@ describe('Malzeme · Teslim üst çubuk düğmesi', () => {
     const bununki: Teslim = { ...GELEN, id: 51, no: 'TS-000051', malzemeAd: 'Bu emrin cubugu', uretimEmriId: 70 };
     const liste: IsMalzemeleriCevabi = { isler: [{
       uretimEmriId: 70, emirNo: 'UE-70', opNo: 10, adimAd: 'Tornalama', calisiyor: true, kalanAdet: 10,
-      malzemeler: [{ malzemeId: 902, kod: 'HM-2', ad: 'Deneme cubuk', birim: null, birAdet: '1.000', gereken: '10.000', istasyonda: '0.000', eksik: true, yerler: [], istek: null }],
+      malzemeler: [{ malzemeId: 902, kod: 'HM-2', ad: 'Deneme cubuk', birim: null, birAdet: '1.000', gereken: '10.000', istasyonda: '0.000', eksik: true, tasinan: false, yerler: [], istek: null }],
     }] };
     const istekler = ciz({
       'GET /stok/teslim-kutusu/is-malzemeleri': () => json(200, liste),

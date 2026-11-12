@@ -667,6 +667,7 @@ describe('stok: malzeme · teslim (gerçek PostgreSQL)', () => {
     const [is0] = await isMalzemesi(a.id);
     assert.deepEqual([is0?.opNo, is0?.kalanAdet, is0?.malzemeler.map((x) => [x.malzemeId, x.birAdet, x.gereken, x.istasyonda, x.eksik, x.istek])],
       [10, 10, [[hm, '2.5', '25', '0', true, null]]]);
+    assert.equal(is0!.malzemeler[0]!.tasinan, false, 'hammadde taşınan değil: depodan istenebilir (3059)');
     assert.ok(is0!.malzemeler[0]!.yerler.length > 0, 'bulunduğu yer');
     assert.equal(is0!.malzemeler[0]!.birim, 'kg', 'birim kartın biriminden gelir');
     assert.equal((await isMalzemesi(c.id))[0]!.malzemeler[0]!.birim, null, 'kartta birim yoksa null, uydurulmaz');
@@ -716,8 +717,8 @@ describe('stok: malzeme · teslim (gerçek PostgreSQL)', () => {
     const hb = await istek<UretimHazirligiCevabi>('operator', 'POST', '/stok/uretim-hazirligi', { uretimEmriId: e, istasyonId: b.id });
     assert.deepEqual([hb.govde.hazir, hb.govde.eksikler.map((x) => [x.malzemeId, x.gereken, x.istasyonda, x.istek, x.yerler.map((y) => [y.konumId, y.istasyonId, y.miktar])])],
       [false, [[hm, '2.5', '0', null, [[ka2, a.id, '10']]]]], 'OP 10 parçası önceki istasyonda: istek açılmaz, yeri gösterilir');
-    assert.deepEqual((await isMalzemesi(b.id))[0]?.malzemeler.map((x) => [x.malzemeId, x.birAdet, x.gereken, x.istasyonda, x.eksik, x.istek]),
-      [[hm, '2.5', '25', '0', true, null]], 'Teslim al önceki adımın parçasını işin malzemesi olarak gösterir');
+    assert.deepEqual((await isMalzemesi(b.id))[0]?.malzemeler.map((x) => [x.malzemeId, x.birAdet, x.gereken, x.istasyonda, x.eksik, x.istek, x.tasinan]),
+      [[hm, '2.5', '25', '0', true, null, true]], 'Teslim al önceki adımın parçasını işin malzemesi olarak gösterir; taşınan diye işaretli (3059)');
     const isteB = (kaynakKonumId: number | null, kaynakKimligi: string, kartOnayi?: boolean) =>
       istek<IsMalzemeleriCevabi & Hata>('operator', 'POST', '/stok/teslim-kutusu/is-malzemeleri/iste', { istasyonId: b.id, uretimEmriId: e, opNo: 20, malzemeId: hm, kaynakKonumId, buEmrin: null, kaynakKimligi, ...(kartOnayi === undefined ? {} : { kartOnayi }) });
     assert.equal((await isteB(null, 'ym-0')).durum, 400, 'önceki adımın parçası depodan istenmez');

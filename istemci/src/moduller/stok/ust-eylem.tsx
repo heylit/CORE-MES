@@ -486,7 +486,7 @@ function IsMalzemesiSatiri({ istasyonId, is, m, secili }: { istasyonId: number; 
         <strong>{m.ad ?? m.kod ?? `Malzeme #${m.malzemeId}`}</strong>
         <span className="tc-stok-mono">{is.emirNo} · OP {is.opNo} · {is.adimAd}{is.calisiyor ? ' · çalışıyor' : ''}</span>
         <span>Kalan {is.kalanAdet} adet için {birimliMiktar(m.gereken, m.birim)} · istasyonda {birimliMiktar(m.istasyonda, m.birim)}</span>
-        <span>{yer === '' ? 'Başka yerde yok' : `Bulunduğu yer: ${yer}`}</span>
+        <span>{yer === '' ? (m.tasinan ? 'Önceki adımdan gelir; önceki istasyon bitirince Bana gelen\'de görünür' : 'Başka yerde yok') : `Bulunduğu yer: ${yer}`}</span>
         {m.istek && <span>İstek {m.istek.no} · {istekDurumu(m.istek).etiket}</span>}
         <IsMalzemesiIste istasyonId={istasyonId} is={is} m={m} />
       </div>
@@ -496,6 +496,7 @@ function IsMalzemesiSatiri({ istasyonId, is, m, secili }: { istasyonId: number; 
 }
 
 // Eksik malzemeyi tek dokunuşla iste (kart #1418): depodaysa eksik miktarla istek açılır, emrin rotasındaki başka istasyondaysa oradan alınır.
+// Önceki adımın parçası depodan istenmez (sunucu reddeder): onda yalnız bulunduğu istasyondan alma düğmeleri çizilir.
 function IsMalzemesiIste({ istasyonId, is, m }: { istasyonId: number; is: IsMalzemeleriCevabi['isler'][number]; m: IsMalzemeleriCevabi['isler'][number]['malzemeler'][number] }) {
   const [kimlik, setKimlik] = useState(yeniKimlik);
   const kartiSoyle = useAcilanKartBildirimi('geliyor');
@@ -513,7 +514,7 @@ function IsMalzemesiIste({ istasyonId, is, m }: { istasyonId: number; is: IsMalz
     iste.komut.mutate({ istasyonId, uretimEmriId: is.uretimEmriId, opNo: is.opNo, malzemeId: m.malzemeId, kaynakKonumId, buEmrin, kaynakKimligi: kimlik });
   return (
     <span className="tc-stok-eylem" role="group" aria-label="Malzemeyi iste">
-      {!istekAcik && <Dugme tur="birincil" simge="download" yukleniyor={iste.komut.isPending} onClick={() => gonder(depo?.konumId ?? null, null)}>Depodan iste</Dugme>}
+      {!istekAcik && !m.tasinan && <Dugme tur="birincil" simge="download" yukleniyor={iste.komut.isPending} onClick={() => gonder(depo?.konumId ?? null, null)}>Depodan iste</Dugme>}
       {istasyonlar.map((y) => (
         <Dugme key={`${y.konumId}-${y.buEmrin}`} tur="ikincil" simge="download" yukleniyor={iste.komut.isPending} onClick={() => gonder(y.konumId, y.buEmrin)}>
           {y.konum} istasyonundan al · {y.buEmrin ? 'bu emrin' : 'emirsiz'}
