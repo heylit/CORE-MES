@@ -58,7 +58,7 @@ describe('UretimEmirleri liste', () => {
     ac(ekran, '/uretim-emirleri');
     await screen.findByText('EM-1');
     const cipler = screen.getByRole('group', { name: 'Duruma göre süz' });
-    expect(within(cipler).getAllByRole('button').map((b) => b.textContent)).toEqual(['Tümü 3', 'Taslak 0', 'Planlı 1', 'Üretimde 2', 'Duran 1']);
+    expect(within(cipler).getAllByRole('button').map((b) => b.textContent)).toEqual(['Tümü 3', 'Taslak 0', 'Planlı 1', 'Üretimde 2', 'Duran 1', 'Beklemede 0']);
     const suAn = (no: string) => screen.getByText(no).closest('tr')!.querySelector('td[data-baslik="Şu an"]')?.textContent;
     expect(suAn('EM-1')).toBe('Sırada: OP 10 Tornalama');
     expect(suAn('EM-2')).toBe('OP 20 FrezelemeDeneme Tezgah 1');

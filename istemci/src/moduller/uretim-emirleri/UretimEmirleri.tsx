@@ -8,13 +8,17 @@ import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { KucukResimKutusu, useKucukResimler } from '../belge-merkezi/disari.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { durumGosterimi, saglamSayisi, zamanMetni } from './gorunum.ts';
+import { beklemeNedeni } from './Bekletme.tsx';
 import './uretim-emirleri.css';
 
 type Gorunum = 'acik' | 'bitenler';
 const GORUNUMLER = [{ anahtar: 'acik', baslik: 'Açık emirler', simge: 'list' }, { anahtar: 'bitenler', baslik: 'Bitenler', simge: 'check' }] as const;
 
 // Emrin şu an nerede olduğu (3039): çalışan adım, yoksa sıradaki açık adım; istasyon ve duruş nedeni yanında. Adım bilgisi yoksa çizgi.
+// Beklemedeki emirde (3050 a) önce bekletmenin nedeni ve bekleten kişi yazılır.
 function suAnMetni(e: IzlemeEmri): ReactNode {
+  const b = e.bekletme;
+  if (b) return <><span className="tc-emir-hurda">Beklemede: {beklemeNedeni(b)}</span><small className="tc-emir-alt-satir">{b.kisi.ad}</small></>;
   const c = e.canli;
   if (c?.isEmri) {
     const hal = c.durusNedeni ? <span className="tc-emir-hurda"> · Durdu: {c.durusNedeni.ad}</span>
@@ -41,12 +45,15 @@ const sutunlar = (resimler: ReadonlyMap<number, KucukResim>): Sutun<IzlemeEmri>[
       return <>{saglam === null ? '—' : saglam} / {e.adet}{hurda > 0 && <span className="tc-emir-hurda"> (hurda {hurda})</span>}</>;
     } },
   { anahtar: 'suAn', baslik: 'Şu an', hucre: suAnMetni },
-  { anahtar: 'durum', baslik: 'Durum', hucre: (e) => { const d = durumGosterimi(e); return <Rozet ton={d.ton}>{d.etiket}</Rozet>; } },
+  { anahtar: 'durum', baslik: 'Durum', hucre: (e) => {
+      const d = durumGosterimi(e);
+      return <><Rozet ton={d.ton}>{d.etiket}</Rozet>{e.bekletme && <> <Rozet ton="uyari">Beklemede</Rozet></>}</>;
+    } },
   { anahtar: 'acilma', baslik: 'Açılma', kirilmaz: true, hucre: (e) => zamanMetni(e.acilma) },
 ];
 
 // Açık emir çipleri (3039): sunucudaki durumdan türetilir, yeni durum yok. "Duran" duraklatılmış ya da durmuş emirdir.
-type AcikCip = '' | 'taslak' | 'planli' | 'basladi' | 'duran';
+type AcikCip = '' | 'taslak' | 'planli' | 'basladi' | 'duran' | 'beklemede';
 const ACIK_CIPLER: readonly { deger: AcikCip; baslik: string; uyar: (e: IzlemeEmri) => boolean }[] = [
   { deger: '', baslik: 'Tümü', uyar: () => true },
   { deger: 'taslak', baslik: 'Taslak', uyar: (e) => e.durum === 'taslak' },
@@ -54,6 +61,8 @@ const ACIK_CIPLER: readonly { deger: AcikCip; baslik: string; uyar: (e: IzlemeEm
   { deger: 'basladi', baslik: 'Üretimde', uyar: (e) => e.durum === 'basladi' },
   { deger: 'duran', baslik: 'Duran', uyar: (e) => e.durum === 'basladi' && (e.canli?.calisma === 'durakli' || e.canli?.calisma === 'durdu') },
 ];
+// Bekletme durum değil işarettir (3050 a): ayrı süzgeçtir; bekleyen emir Planlı ya da Üretimde sayısında da kalır.
+const BEKLEMEDE = { deger: 'beklemede', baslik: 'Beklemede', uyar: (e: IzlemeEmri) => e.bekletme != null } as const;
 const BITEN_CIPLER: readonly { deger: '' | 'bitti' | 'iptal'; baslik: string }[] = [
   { deger: '', baslik: 'Tümü' }, { deger: 'bitti', baslik: 'Bitti' }, { deger: 'iptal', baslik: 'İptal' },
 ];
@@ -123,7 +132,7 @@ export function UretimEmirleri({ emirAcma }: { emirAcma?: EmirAcmaYuvasi }) {
     })),
   });
   const tumAcik = liste.data?.emirler ?? [];
-  const secilenCip = ACIK_CIPLER.find((c) => c.deger === cip) ?? ACIK_CIPLER[0]!;
+  const secilenCip = cip === 'beklemede' ? BEKLEMEDE : ACIK_CIPLER.find((c) => c.deger === cip) ?? ACIK_CIPLER[0]!;
   const emirler = tumAcik.filter(secilenCip.uyar).filter((e) => ara === '' || `${e.emirNo} ${e.parcaNo} ${e.parcaAd}`.toLocaleLowerCase('tr-TR').includes(ara));
   const sorgu = gorunum === 'acik' ? liste : bitenler;
   const gorunen = gorunum === 'acik' ? emirler : bitenler.data?.satirlar ?? [];
@@ -151,6 +160,10 @@ export function UretimEmirleri({ emirAcma }: { emirAcma?: EmirAcmaYuvasi }) {
           {kapanis.data && (
             <Dugme simge="clipboard-check" onClick={() => { void yonlendir('/uretim-emirleri/kapanis'); }}>Kapanış bekliyor {kapanis.data.toplam}</Dugme>
           )}
+          <span className="tc-emir-cip-ayirici" aria-hidden="true" />
+          <Dugme simge="pause" aria-pressed={cip === 'beklemede'} onClick={() => { setCip('beklemede'); }}>
+            {BEKLEMEDE.baslik} {tumAcik.filter(BEKLEMEDE.uyar).length}
+          </Dugme>
         </div>
       )}
       {gorunum === 'bitenler' && (

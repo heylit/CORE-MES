@@ -100,3 +100,81 @@ test.describe('yönetici', () => {
     expect(ag.yazmalar, 'kart listesi yazmaz').toEqual([]);
   });
 });
+
+// 3050 a: bekletme durum değil işarettir. Sunucu cevabı yolda işaretlenir (ortak veritabanı değişmez): liste, emir sayfası ve pencere
+// üç genişlikte çalışır; telefonda "Beklemede" süzgeci öbür çiplerle tek satırda kalır.
+const BEKLETME = { neden: 'musteri', not: 'Deneme notu', kisi: { id: 1, ad: 'Deneme Planlamaci' }, zaman: '2026-11-12T08:30:00.000Z' };
+test.describe('bekletme (3050 a)', () => {
+  test.use({ hesap: 'ornek.yonetici' });
+
+  test('liste: "Beklemede" ayrı süzgeç, rozet yanında işaret, "Şu an"da neden; telefonda çipler tek satırda', async ({ page, ag, ac }) => {
+    let isaretli = '';
+    await page.route(/\/api\/uretim-emirleri\?/, async (r) => {
+      const c = await r.fetch();
+      const g = await c.json() as { emirler: { emirNo: string; durum: string; bekletme?: unknown }[] };
+      const e = g.emirler.find((x) => x.durum === 'planli' || x.durum === 'basladi');
+      if (e) { e.bekletme = BEKLETME; isaretli = e.emirNo; }
+      await r.fulfill({ response: c, json: g });
+    });
+    await ac('/uretim-emirleri');
+    const cipler = page.getByRole('group', { name: 'Duruma göre süz' });
+    const beklemede = cipler.getByRole('button', { name: 'Beklemede 1' });
+    await expect(beklemede).toBeVisible();
+    if ((page.viewportSize()?.width ?? 1280) < 768) {
+      const ustler = await cipler.getByRole('button').evaluateAll((l) => l.map((d) => Math.round(d.getBoundingClientRect().top)));
+      expect(new Set(ustler).size, 'çipler tek satırda').toBe(1);
+    }
+    await beklemede.click();
+    const tablo = page.getByRole('table', { name: 'Üretim emirleri' });
+    const satir = tablo.getByRole('row').filter({ has: page.getByRole('link', { name: isaretli }) });
+    await expect(tablo.getByRole('row').filter({ has: page.getByRole('link', { name: /^MM-ORN-/ }) })).toHaveCount(1);
+    await expect(satir).toContainText('Beklemede: Müşteri onayı bekleniyor');
+    await expect(satir.locator('td[data-baslik="Durum"]')).toContainText('Beklemede');
+    await page.unrouteAll({ behavior: 'ignoreErrors' });
+    expect(ag.hatalar).toEqual([]);
+    expect(ag.yazmalar).toEqual([]);
+  });
+
+  test('emir sayfası: "İşlemler > Beklet" neden ister; bekleyen emirde şerit ve "Devam ettir"', async ({ page, ag, ac }) => {
+    let beklet: unknown = null;
+    await page.route(/\/api\/uretim-emirleri\/\d+$/, async (r) => {
+      const c = await r.fetch();
+      const g = await c.json() as { emir: { bekletme?: unknown } };
+      if (beklet !== null) g.emir.bekletme = BEKLETME;
+      await r.fulfill({ response: c, json: g });
+    });
+    await page.route(/\/api\/uretim-emirleri\/\d+\/(beklet|bekletme-kaldir)$/, async (r) => {
+      const yol = new URL(r.request().url()).pathname;
+      beklet = yol.endsWith('/beklet') ? r.request().postDataJSON() : null;
+      const c = await r.fetch({ method: 'GET', url: r.request().url().replace(/\/(beklet|bekletme-kaldir)$/, ''), postData: undefined });
+      const g = await c.json() as { emir: { bekletme?: unknown } };
+      g.emir.bekletme = beklet === null ? null : BEKLETME;
+      await r.fulfill({ status: 200, json: g });
+    });
+    await ac('/uretim-emirleri');
+    await page.getByRole('group', { name: 'Duruma göre süz' }).getByRole('button', { name: /^Planlı \d+$/ }).click();
+    await page.getByRole('table', { name: 'Üretim emirleri' }).getByRole('link', { name: /^MM-ORN-/ }).first().click();
+    await expect(page.getByRole('group', { name: 'Emrin özeti' })).toBeVisible();
+    await page.locator('.tc-emir-ust-sag').first().getByRole('button', { name: /işlemleri$/ }).click();
+    await page.getByRole('menuitem', { name: 'Beklet' }).click();
+    const pencere = page.getByRole('dialog', { name: /bekletilsin mi\?$/ });
+    await pencere.getByRole('button', { name: 'Beklet' }).click();
+    await expect(pencere.getByText('Neden seçin.')).toBeVisible();
+    await pencere.getByLabel('Neden').selectOption('musteri');
+    await pencere.getByRole('button', { name: 'Beklet' }).click();
+    const serit = page.getByRole('status', { name: 'Emir beklemede' });
+    await expect(serit).toContainText('Beklemede: Müşteri onayı bekleniyor');
+    expect(beklet).toEqual({ neden: 'musteri' });
+    await expect(page.getByRole('group', { name: 'Emrin özeti' })).toContainText('Beklemede');
+    // Şerit telefonda da taşmaz.
+    const [sk, gk] = await Promise.all([serit.boundingBox(), page.locator('body').boundingBox()]);
+    expect(sk!.x + sk!.width).toBeLessThanOrEqual(gk!.x + gk!.width + 1);
+    const yenilendi = page.waitForResponse((c) => /\/api\/uretim-emirleri\/\d+$/.test(new URL(c.url()).pathname) && c.request().method() === 'GET');
+    await serit.getByRole('button', { name: 'Devam ettir' }).click();
+    await expect(serit).toHaveCount(0);
+    // "Devam ettir" sonrası yeniden çekme yoldaki işaretleyiciden geçer; test o bitmeden kapanırsa route.fetch kapalı sayfaya düşer.
+    await yenilendi;
+    await page.unrouteAll({ behavior: 'ignoreErrors' });
+    expect(ag.hatalar).toEqual([]);
+  });
+});

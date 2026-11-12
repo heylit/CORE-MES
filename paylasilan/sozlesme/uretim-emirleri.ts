@@ -187,6 +187,20 @@ export const acikAdimSemasi = z.object({
 // Onaylı kapanışın sonucu (1082 a); emir okumaları da taşıdığı için burada.
 export const KAPANIS_SONUCLARI = ['tamamlandi', 'saglamsiz'] as const;
 
+// 3050 a: emri bekletmenin nedenleri. Bekletme emrin durumu değildir, üstünde bir işarettir (emrin durumu ve sayıları değişmez).
+export const BEKLEME_NEDENLERI = ['malzeme', 'musteri', 'fason', 'kalite', 'takim', 'diger'] as const;
+export type BeklemeNedeni = (typeof BEKLEME_NEDENLERI)[number];
+export const BEKLEME_NEDENI_ADLARI: Record<BeklemeNedeni, string> = {
+  malzeme: 'Malzeme bekleniyor', musteri: 'Müşteri onayı bekleniyor', fason: 'Fason dönüşü bekleniyor', kalite: 'Kalite kararı bekleniyor',
+  takim: 'Takım ya da aparat bekleniyor', diger: 'Diğer',
+};
+export const bekletmeSemasi = z.object({ neden: z.enum(BEKLEME_NEDENLERI), not: z.string().nullable(), kisi: adliKayit, zaman });
+export const bekletGovdesi = z.object({ neden: z.enum(BEKLEME_NEDENLERI), not: z.string().trim().max(500).optional() }).strict();
+// Kayıt defterinde bekletme olayları ("Bekletildi", "Devam etti"); emrin kendi olay defterinden ayrıdır (istasyonsuz yazılır).
+export const bekletmeOlaySemasi = z.object({
+  id: KIMLIK, olay: z.enum(['beklet', 'devam']), neden: z.enum(BEKLEME_NEDENLERI).nullable(), not: z.string().nullable(), kisi: adliKayit, zaman,
+});
+
 export const emirSemasi = z.object({
   id: KIMLIK,
   emirNo: z.string(),
@@ -214,6 +228,8 @@ export const emirSemasi = z.object({
   baslatilabilirAdimlar: z.array(KIMLIK).optional(),
   // Kapanış iki onayla tamamlandıysa dolu; açık kapanışta ve kapanışa girmeyen emirde null. İsteğe bağlı: yalnız izleme ve biten listeleri doldurur.
   kapanisSonucu: z.enum(KAPANIS_SONUCLARI).nullable().optional(),
+  // 3050 a: emir beklemedeyse neden, not, kim, ne zaman; değilse null. İsteğe bağlı: bu alandan önce yazılmış istemci verisi geçerli kalır.
+  bekletme: bekletmeSemasi.nullable().optional(),
 });
 
 export const adimSemasi = z.object({
@@ -276,6 +292,8 @@ export const emirAyrintiCevabi = z.object({
   // sure planlı süreyle ağırlıklı, adet adım yüzdelerinin ortalaması, adim biten adım oranı. İş emri olmayan emirde null.
   // İsteğe bağlı: sunucu her zaman yazar, bu alandan önce yazılmış istemci verisi geçerli kalır.
   ilerleme: z.lazy(() => emirIlerlemesiSemasi).nullable().optional(),
+  // 3050 a: bekletme olayları, eskiden yeniye. İsteğe bağlı: bu alandan önce yazılmış istemci verisi geçerli kalır.
+  bekletmeler: z.array(bekletmeOlaySemasi).optional(),
 });
 export const ILERLEME_ESASLARI = ['sure', 'adet', 'adim'] as const;
 const yuzdeSemasi = z.number().int().min(0).max(100);
@@ -386,6 +404,9 @@ export type IzlemeListeCevabi = z.output<typeof izlemeListeCevabi>;
 export type BitenEmirlerCevabi = z.output<typeof bitenEmirlerCevabi>;
 export type BitenEmirlerSorgusu = z.input<typeof bitenEmirlerSorgusu>;
 export type EmirAyrintiCevabi = z.output<typeof emirAyrintiCevabi>;
+export type Bekletme = z.output<typeof bekletmeSemasi>;
+export type BekletmeOlayi = z.output<typeof bekletmeOlaySemasi>;
+export type BekletGovdesi = z.output<typeof bekletGovdesi>;
 export type EmirCevabi = z.output<typeof emirCevabi>;
 export type AdimCevabi = z.output<typeof adimCevabi>;
 
@@ -1033,8 +1054,8 @@ export type ArsiveAlCevabi = z.output<typeof arsiveAlCevabi>;
 // (2893-2 b: elle onay durduran maddede de başlatmayı açar; gerekçe zorunludur). Yazma `uretim-emirleri.adim-durumu-yaz` (2893-1 a).
 // Sıra öncelik sırasıdır: bir adımda birden çok neden varsa görünen statü listede önce gelenidir (bitti en sonda değil, ilk denetlenir).
 export const ADIM_STATULERI = [
-  'bitti', 'uretimde', 'duraklatildi', 'durdu', 'fasonda', 'program', 'cizim', 'yayin', 'makine', 'talep', 'siparis', 'malzeme', 'firma',
-  'baslayabilir', 'onceki', 'diger',
+  'bitti', 'uretimde', 'duraklatildi', 'durdu', 'fasonda', 'beklemede', 'program', 'cizim', 'yayin', 'makine', 'talep', 'siparis', 'malzeme',
+  'firma', 'baslayabilir', 'onceki', 'diger',
 ] as const;
 export const adimStatusu = z.enum(ADIM_STATULERI);
 // Elle yazılabilen statüler: çalışma, bitiş ve "Başlayabilir" sistemden gelir; yanlış "Bitti" ya da "Üretimde" planı yanıltır.
@@ -1108,6 +1129,8 @@ export const adimDurumuTerminalCevabi = z.object({
     nedenler: z.array(z.string()),
     tedarik: z.array(adimTedarikSemasi),
   })),
+  // 3050 a: emir beklemedeyse nedenin adı; terminal adım başlatmayı ve devamı kapatır. İsteğe bağlı: eski istemci verisi geçerli kalır.
+  bekletme: z.string().nullable().optional(),
 });
 export type AdimTedariki = z.output<typeof adimTedarikSemasi>;
 export type AdimStatusu = z.output<typeof adimStatusu>;

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { AnlikVardiya } from '../cekirdek/vardiya.ts';
 import {
-  bitirmeEksigi, bitisOzeti, siradakiGorev, tmiIlkParcaGerekli,
+  bekletmeGorevi, bitirmeEksigi, bitisOzeti, siradakiGorev, tmiIlkParcaGerekli,
   cagriTonu, cubukDugmeleri, durumDugmeleri, numuneAraligi, durusOnerileri, hurdaUyarisi, kalanSure, kaliteIstasyonuNumuneleri, kontrolTakvimi, lotKarariEksigi, lotKarariOku, lotSayisi, tonDurumu, vardiyaHesabi, vardiyaOzeti, type VardiyaOzetGirdisi,
 } from './kurallar.ts';
 import type { Is, KontrolTakvimi } from './tipler.ts';
@@ -190,5 +190,29 @@ describe('CORE ilk parça kapısı ve eksik adette bitirme', () => {
     expect(bitirmeEksigi(is({ pkg: cnc, target: 30, good: 3 }), null)).toBe(27);
     expect(bitirmeEksigi(is({ pkg: { opType: 'kalite' } as unknown as Is['pkg'], target: 30, good: 3 }), 0)).toBe(0);
     expect(bitirmeEksigi(is({ pkg: null as unknown as Is['pkg'], target: 30, good: 3 }), 0)).toBe(0);
+  });
+});
+
+describe('3050 a: beklemedeki emir terminalde', () => {
+  it('başlatan, hazırlığa geçiren ve devam ettiren düğmeler kapalı; çalışan işte Durdur, Duraklat, Bitir açık', () => {
+    const kapali = (d: string) => durumDugmeleri(d, true).filter((x) => x.kapali).map((x) => x.eylem);
+    expect(kapali('queued')).toEqual(['setup', 'start']);
+    expect(kapali('paused')).toEqual(['resume']);
+    expect(kapali('stopped')).toEqual(['restart']);
+    expect(kapali('running')).toEqual([]);
+    expect(cubukDugmeleri('queued', true).find((x) => x.eylem === 'start')?.kapali).toBe(true);
+    expect(durumDugmeleri('queued').some((x) => x.kapali)).toBe(false);
+  });
+  it('başlatan görev yerine "Emir beklemede"; başka görev ve beklemeyen emir değişmez', () => {
+    const baslat = siradakiGorev(is({ state: 'queued' }), BOS, null, undefined, 0);
+    expect(baslat?.act).toBe('start');
+    const g = bekletmeGorevi(baslat, 'Malzeme bekleniyor');
+    expect(g).toMatchObject({ t: 'Emir beklemede', act: null, quiet: true });
+    expect(g?.d).toContain('Malzeme bekleniyor');
+    expect(bekletmeGorevi(baslat, null)).toBe(baslat);
+    const devam = siradakiGorev(is({ state: 'paused' }), BOS, null, undefined, 0);
+    expect(bekletmeGorevi(devam, 'Diğer')?.act).toBeNull();
+    const calisan = siradakiGorev(is({ state: 'running' }), BOS, null, undefined, 0);
+    expect(bekletmeGorevi(calisan, 'Diğer')).toBe(calisan);
   });
 });

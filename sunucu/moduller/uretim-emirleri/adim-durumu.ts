@@ -1,14 +1,14 @@
 import type { Db } from '#cekirdek/db.ts';
 import { bulunamadi, cakisma, dogrulama } from '#cekirdek/hata.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
-import { ADIM_STATULERI } from '#paylasilan/sozlesme/uretim-emirleri.ts';
+import { ADIM_STATULERI, BEKLEME_NEDENI_ADLARI } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import type {
-  AdimDurumuCevabi, AdimStatusu, AdimDurumuTerminalCevabi, AdimTedariki, ElleStatuGovdesi, HazirlikMaddesi, HazirlikOnayiGovdesi, HazirlikOnayiKaldirGovdesi,
+  AdimDurumuCevabi, AdimStatusu, BeklemeNedeni, AdimDurumuTerminalCevabi, AdimTedariki, ElleStatuGovdesi, HazirlikMaddesi, HazirlikOnayiGovdesi, HazirlikOnayiKaldirGovdesi,
 } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { kisiAdlari } from '../kisiler/disari.ts';
 import { hazirlik, isEmriHazirliklari } from './hazirlik.ts';
 import {
-  ADIM_KAPALI_EMIR, ELLE_STATU_YOK, EMIR_YOK, GEREKCE_GEREK, HAL_ESKIDI, IS_EMRI_EMIRDE_YOK, ONAY_YOK, STATU_ESKIDI,
+  ADIM_KAPALI_EMIR, ELLE_STATU_YOK, EMIR_BEKLEMEDE_STATU, EMIR_YOK, GEREKCE_GEREK, HAL_ESKIDI, IS_EMRI_EMIRDE_YOK, ONAY_YOK, STATU_ESKIDI,
   acikElleStatu, acikOnaylar, adimSistemStatusu, calismaDurumu, hazirlikOnayiReddi, oncekiBekleniyor,
 } from './kurallar.ts';
 import type { HazirlikHali } from './kurallar.ts';
@@ -44,6 +44,9 @@ async function adimTedarikleri(db: Db, emirId: number, idler: readonly number[])
 }
 
 // Tabloda statü serbest metindir (liste sonradan değişebilir); listede olmayan eski değer 'diger' okunur.
+const ACIK = new Set(['planli', 'basladi']);
+const emrinBekletmesi = async (db: Db, emirId: number, durum: string): Promise<BeklemeNedeni | null> =>
+  ACIK.has(durum) ? (await s.aktifBekletmeler(db, [emirId]))[0]?.neden ?? null : null;
 const statuOku = (x: string): AdimStatusu => (ADIM_STATULERI as readonly string[]).includes(x) ? x as AdimStatusu : 'diger';
 
 // Adım Durumu (2893): emrin her iş emri için sistem statüsü, açık elle statü, açık elle onaylar ve geçmiş. Elle statü sistem statüsü
@@ -62,6 +65,7 @@ export async function adimDurumu(db: Db, emirId: number): Promise<AdimDurumuCeva
   const tedarik = await adimTedarikleri(db, emirId, idler);
   const statuDefteri = await s.elleStatuDefteri(db, idler);
   const onayDefteri = await s.hazirlikOnayDefteri(db, idler);
+  const bekletme = await emrinBekletmesi(db, emirId, e.durum);
   const adlar = await kisiAdlari(db, [...new Set([...statuDefteri, ...onayDefteri].map((x) => x.kisiId))]);
   const ad = (id: number) => adlar.get(id) ?? null;
   return {
@@ -73,6 +77,7 @@ export async function adimDurumu(db: Db, emirId: number): Promise<AdimDurumuCeva
         durum: i.durum, calisma: calisma.get(i.id) ?? null, fasonda: i.fasonFirmaId !== null && i.durum !== 'tamam' && (fason.get(i.id) ?? 0) > 0, hal,
         oncekiBekleniyor: oncekiBekleniyor({ sira: i.sira, bagimlilik: i.bagimlilik, oncul: i.onculler?.map((o) => o.id) ?? null }, isEmirleri),
         tedarik: i.durum === 'tamam' ? [] : tedarik.get(i.id) ?? [],
+        bekletme,
       });
       const statuSatirlari = statuDefteri.filter((x) => x.isEmriId === i.id);
       const onaySatirlari = onayDefteri.filter((x) => x.isEmriId === i.id);
@@ -102,8 +107,9 @@ export async function adimDurumu(db: Db, emirId: number): Promise<AdimDurumuCeva
 const TEDARIK_GORUNEN = new Set<AdimStatusu>(['talep', 'siparis', 'malzeme']);
 export async function adimDurumuTerminal(db: Db, emirId: number): Promise<AdimDurumuTerminalCevabi> {
   const d = await adimDurumu(db, emirId);
+  const bekletme = await emrinBekletmesi(db, emirId, d.durum);
   return {
-    emirId,
+    emirId, bekletme: bekletme === null ? null : BEKLEME_NEDENI_ADLARI[bekletme],
     adimlar: d.adimlar.map((a) => ({
       isEmriId: a.isEmriId, opNo: a.opNo, ad: a.ad, statu: a.elle?.statu ?? a.sistemStatusu, elle: a.elle !== null, yuzde: a.yuzde, nedenler: a.nedenler,
       tedarik: TEDARIK_GORUNEN.has(a.elle?.statu ?? a.sistemStatusu) ? a.tedarik : [],
@@ -125,6 +131,8 @@ async function yazmaHazirla(db: Db, emirId: number, isEmriId: number): Promise<A
 export async function elleStatuYaz(db: Db, kullanici: Kullanici, emirId: number, isEmriId: number, g: ElleStatuGovdesi): Promise<AdimDurumuCevabi> {
   const adim = await yazmaHazirla(db, emirId, isEmriId);
   if (adim.sistemStatusu !== g.sistemStatusu) throw cakisma(STATU_ESKIDI);
+  // 3050 a: beklemedeki adımın statüsü bekletmeden gelir; elle statü "Beklemede"yi örtmesin, bekletme kalkınca yazılır.
+  if (adim.sistemStatusu === 'beklemede') throw cakisma(EMIR_BEKLEMEDE_STATU);
   await s.elleStatuEkle(db, { isEmriId, olay: 'yaz', statu: g.statu, sistemStatusu: adim.sistemStatusu, aciklama: g.not === '' ? null : g.not, kisiId: kullanici.id });
   return adimDurumu(db, emirId);
 }

@@ -1,7 +1,7 @@
 import { uc } from '#cekirdek/uc.ts';
 import { islemVarMi } from '#cekirdek/yetki.ts';
 import {
-  ADIMLI_OKUMA_ISLEMLERI, adimCevabi, adimNotuGovdesi, adimParametresi, adimTamamlaGovdesi, emirAyrintiCevabi, emirCevabi,
+  ADIMLI_OKUMA_ISLEMLERI, adimCevabi, bekletGovdesi, adimNotuGovdesi, adimParametresi, adimTamamlaGovdesi, emirAyrintiCevabi, emirCevabi,
   emirParametresi, izlemeListeCevabi, bitenEmirlerCevabi, bitenEmirlerSorgusu, adimliBitenlerCevabi, adimliBitenlerSorgusu,
   emirlerSorgusu, emirTopluGuncelleCevabi, emirTopluGuncelleGovdesi,
   adimKaynagiGovdesi, uretimYeriGovdesi, fasonFirmalariCevabi, adimliEmirCevabi, adimliIptalGovdesi, adimliListeCevabi, adimliListeSorgusu, adimliOzetCevabi, fasonGidisGovdesi, siradakiFasonCevabi,
@@ -22,7 +22,7 @@ import { hataliKaydet, hataliKayitlari } from './hatali-parca.ts';
 import { hazirlik, hazirliklar, muafiyetVer } from './hazirlik.ts';
 import { emirKapat, kapanis, kapanisGeriAc, kapanislar, kapanisMuafTut, kapanisOnayla, kapanisReddet } from './kapanis.ts';
 import {
-  adimNotuYaz, adimTamamla, anaSayfaOzeti, asimlar, durusDagilimi, emirAyar, emirAyrintisi, emirDuraklat, katil, katilimAyril, katilimDuraklat, katilimlar, makineDevral, sonOlaylar, adimPaylari, makineEkle,
+  adimNotuYaz, adimTamamla, anaSayfaOzeti, asimlar, durusDagilimi, emirAyar, emirAyrintisi, emirBeklet, emirBekletmeKaldir, emirDuraklat, katil, katilimAyril, katilimDuraklat, katilimlar, makineDevral, sonOlaylar, adimPaylari, makineEkle,
   izlemeListesi, yeniKapananlar, bitenEmirler, gunlukUretim, isEmriSureOzeti,
 } from './servis.ts';
 
@@ -62,6 +62,26 @@ const emirUclari = [
     parametre: emirParametresi,
     cevap: emirAyrintiCevabi,
     isle: ({ db, parametre }) => emirAyrintisi(db, parametre.id),
+  }),
+  // 3050 a: emri düzenleyebilen kişi bekletir ve bekletmeyi kaldırır (yeni yetki yok). Emrin durumu değişmez.
+  uc({
+    yontem: 'POST',
+    yol: '/uretim-emirleri/:id/beklet',
+    yetki: 'uretim-emirleri.yaz',
+    tekrarKorumali: true,
+    parametre: emirParametresi,
+    govde: bekletGovdesi,
+    cevap: emirAyrintiCevabi,
+    isle: ({ db, kullanici, parametre, govde }) => emirBeklet(db, kullanici.id, parametre.id, govde),
+  }),
+  uc({
+    yontem: 'POST',
+    yol: '/uretim-emirleri/:id/bekletme-kaldir',
+    yetki: 'uretim-emirleri.yaz',
+    tekrarKorumali: true,
+    parametre: emirParametresi,
+    cevap: emirAyrintiCevabi,
+    isle: ({ db, kullanici, parametre }) => emirBekletmeKaldir(db, kullanici.id, parametre.id),
   }),
   // Ayar sıradaki işin ayarını başlatır; başlatma kapatır.
   uc({

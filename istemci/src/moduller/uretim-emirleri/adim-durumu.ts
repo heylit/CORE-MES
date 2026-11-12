@@ -11,6 +11,7 @@ export const STATU: Readonly<Record<AdimStatusu, StatuGorunumu>> = {
   duraklatildi: { ad: 'Duraklatıldı', ton: 'uyari', simge: 'pause' },
   durdu: { ad: 'Durdu', ton: 'hata', simge: 'stop' },
   fasonda: { ad: 'Fasonda', ton: 'bilgi', simge: 'truck' },
+  beklemede: { ad: 'Beklemede', ton: 'uyari', simge: 'pause' },
   program: { ad: 'Program hazır değil', ton: 'hata', simge: 'cpu' },
   cizim: { ad: 'Çizim revizyonu bekleniyor', ton: 'hata', simge: 'ruler' },
   yayin: { ad: 'Paket yayınlanmadı', ton: 'hata', simge: 'flag' },

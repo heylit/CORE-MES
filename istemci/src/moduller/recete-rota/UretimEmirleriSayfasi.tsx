@@ -1,4 +1,5 @@
 import { lazy, Suspense } from 'react';
+import type { MenuOgesi } from '../../ortak/arayuz/index.ts';
 import { EmirAyrintisi, UretimEmirleri } from '../uretim-emirleri/disari.ts';
 import { useEmirAcabilir, useRrYetkisi } from './yeni/yetki.ts';
 import type { SatirEki } from './yeni/emirler/UretimEmirleriIcin.tsx';
@@ -33,11 +34,13 @@ export function UretimEmirleriSayfasi() {
 // Reçete ve Rota'yı okuyamayan kişi Üretim Emirleri'nin kendi adım ilerlemesini görür.
 export function EmirAyrintiSayfasi() {
   const oku = useRrYetkisi().oku;
-  const parca = (kayitNo: number, tur: 'islemler' | 'adimlar' | 'malzeme', satirEki?: SatirEki) => <EmirParcasi kayitNo={kayitNo} parca={tur} satirEki={satirEki} />;
+  const parca = (kayitNo: number, tur: 'islemler' | 'adimlar' | 'malzeme', satirEki?: SatirEki, ekOgeler?: readonly MenuOgesi[]) => (
+    <EmirParcasi kayitNo={kayitNo} parca={tur} satirEki={satirEki} ekOgeler={ekOgeler} />
+  );
   return (
     <EmirAyrintisi parcalar={oku ? {
       sar: (icerik) => <Suspense fallback={null}><EmirAlani>{icerik}</EmirAlani></Suspense>,
-      islemler: (id) => parca(id, 'islemler'),
+      islemler: (id, ekOgeler) => parca(id, 'islemler', undefined, ekOgeler),
       adimlar: (id, ek) => parca(id, 'adimlar', ek),
       malzeme: (id) => parca(id, 'malzeme'),
     } : undefined} />
