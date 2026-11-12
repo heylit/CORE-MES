@@ -417,10 +417,13 @@ export async function malzemeKapagi(db: Db, no: number, id: number, surum: numbe
 // Yalnız öneri bağlanır (teknik resim numarası kartınkine uyan belge): malzeme yetkisiyle merkezdeki rastgele belge bağlanamaz.
 export async function malzemeyeOneriBagla(db: Db, kullanici: Kullanici, no: number, id: number, surum: number): Promise<MalzemeBelgeleriCevabi> {
   await malzemeOlmali(db, no);
+  const b = await kilitliBelge(db, id);
+  // Tür reddi öneri listesinden bağımsızdır: irsaliye listeden düşse de düşmese de bağlanmaz (3081 a).
+  const red = merkezBagReddi('malzemeler', b.tur);
+  if (red !== null) throw dogrulama(red, 'id');
   const kart = await kartAnahtari(db, no);
   const oneriler = kart?.resimNo ? await sorgular.resimNoyaUyanBelgeler(db, kart.resimNo, 'malzemeler', no) : [];
   if (!oneriler.some((o) => o.id === id)) throw bulunamadi(ILETILER.malzemeyeBagliDegil);
-  const b = await kilitliBelge(db, id);
   etkinOlmali(b);
   await surumuIlerlet(db, id, surum);
   await bagYaz(db, kullanici, id, 'malzemeler', no);

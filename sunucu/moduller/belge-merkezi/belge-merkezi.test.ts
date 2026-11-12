@@ -990,6 +990,22 @@ describe('çizim merkezi (gerçek PostgreSQL, gerçek giriş)', () => {
       assert.deepEqual(cevap.oneriler, []);
     });
 
+    test('3081 a: resim no karta uyan irsaliye önerilmez ve öneriden bağlanmaz', async () => {
+      const no = await kartAc({ resim: 'TR-3081-1', rev: 'A' });
+      const b = await belgeAc(yonetici, 'teknik-resim', pdf(), 'ORN irsaliye');
+      const g = await gonder(yonetici, `/cizimler/${b.id}/guncelle`, { ad: b.ad, resimNo: 'TR-3081-1', surum: b.surum });
+      assert.equal(g.statusCode, 200, g.body);
+      // Merkez irsaliye açmaz (mal kabulden gelir); deneme için tür doğrudan yazılır.
+      await vt().tx((db) => db.sorgu("UPDATE belge_merkezi_belge SET tur = 'irsaliye' WHERE id = $1", [b.id]));
+      const cevap = (await oku(malzemeci, `/cizimler/malzemeler/${no}/belgeler`)).json<MalzemeBelgeleriCevabi>();
+      assert.deepEqual(cevap.oneriler, []);
+      const surum = (await oku(yonetici, `/cizimler/${b.id}`)).json<BelgeAyrintisi>().surum;
+      const c = await gonder(malzemeci, `/cizimler/malzemeler/${no}/belgeler/${b.id}/bagla`, { surum });
+      assert.equal(c.statusCode, 400, c.body);
+      assert.match(c.json<{ mesaj: string }>().mesaj, /malzeme kartına bağlanmaz/);
+      assert.equal((await vt().tek<{ n: number }>("SELECT count(*)::int AS n FROM belge_merkezi_bag WHERE belge_id = $1 AND hedef_modul = 'malzemeler'", [b.id]))?.n, 0);
+    });
+
     test('2138-2: gösterilen revizyon kodu antet, yoksa bağlı kartların ortak revizyonu; harf gösterilmez', async () => {
       const kart = await kartAc({ resim: 'TR-88', rev: '00' });
       const ilk = (await malzemeBelgesiEkle(malzemeci, kart, 'teknik-resim', pdf(), { resimNo: 'TR-88' })).json<MalzemeBelgeleriCevabi>().belgeler[0];

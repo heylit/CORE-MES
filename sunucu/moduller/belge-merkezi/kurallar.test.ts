@@ -34,10 +34,11 @@ test('CZ-03 her belge türünün izinli dosya türü vardır; 3B model yalnız C
   }
 });
 
-test('CZ-14 merkezden istasyona yalnız 3B model bağlanır; malzemeye her tür; öbür modüle hiçbiri', () => {
+test('CZ-14 merkezden istasyona yalnız 3B model bağlanır; malzemeye irsaliye dışında her tür; öbür modüle hiçbiri', () => {
   assert.equal(merkezBagReddi('istasyonlar', '3b-model'), null);
   assert.equal(merkezBagReddi('istasyonlar', 'teknik-resim'), ILETILER.istasyonaModelDisi);
-  for (const t of BELGE_TURLERI) assert.equal(merkezBagReddi('malzemeler', t), null, t);
+  for (const t of BELGE_TURLERI.filter((x) => x !== 'irsaliye')) assert.equal(merkezBagReddi('malzemeler', t), null, t);
+  assert.equal(merkezBagReddi('malzemeler', 'irsaliye'), ILETILER.irsaliyeMalzemeyeBaglanmaz);
   assert.equal(merkezBagReddi('atolye', '3b-model'), ILETILER.malzemeDisi);
 });
 

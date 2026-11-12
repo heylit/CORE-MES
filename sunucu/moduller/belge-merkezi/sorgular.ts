@@ -489,7 +489,7 @@ export function resimNoyaUyanBelgeler(
 ): Promise<{ id: number; ad: string; tur: BelgeTuru; surum: number }[]> {
   return db.sorgu(
     `SELECT b.id, b.ad, b.tur, b.surum FROM belge_merkezi_belge b
-      WHERE b.aktif AND b.resim_no IS NOT NULL AND upper(b.resim_no) = upper($1)
+      WHERE b.aktif AND b.resim_no IS NOT NULL AND upper(b.resim_no) = upper($1) AND b.tur <> 'irsaliye'
         AND NOT EXISTS (SELECT 1 FROM belge_merkezi_bag g WHERE g.belge_id = b.id AND g.hedef_modul = $2 AND g.hedef_id = $3)
       ORDER BY b.ad, b.id LIMIT 20`,
     [resimNo.trim(), hedefModul, hedefId],

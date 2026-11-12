@@ -189,7 +189,7 @@ export function BelgeSayfasi() {
             sag={degisir && (
               <div className="tc-cz-rev-arac">
                 {belge.tur === '3b-model' && <Dugme simge="cpu" onClick={() => { acikYaz('istasyon'); }}>Makineyle eşleştir</Dugme>}
-                <Dugme simge="plus" onClick={() => { acikYaz('bag'); }}>Malzemeye bağla</Dugme>
+                {belge.tur !== 'irsaliye' && <Dugme simge="plus" onClick={() => { acikYaz('bag'); }}>Malzemeye bağla</Dugme>}
               </div>
             )}
           >
