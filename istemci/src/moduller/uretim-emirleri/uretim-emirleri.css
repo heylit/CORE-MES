@@ -123,3 +123,62 @@
 /* Adım Durumu (2893): statü rozeti ile "Elle" işareti yan yana; dar ekranda alt satıra geçer. */
 .tc-adim-statu { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--b-1); }
 .tc-adim-statu .tc-rozet { display: inline-flex; align-items: center; gap: var(--b-1); }
+/* Emir sayfası (3039): kimlik, yaşam döngüsü şeridi, dört özet ve sekmeler. Şerit dar ekranda yatay kayar; özetler ızgarada dizilir. */
+.tc-emir-kimlik { display: flex; align-items: center; gap: var(--b-3); margin: 0 0 var(--b-4); min-width: 0; }
+.tc-emir-kimlik-metin { display: grid; gap: var(--b-1); min-width: 0; }
+.tc-emir-kimlik-parca { overflow-wrap: anywhere; }
+.tc-emir-kimlik-metin small { color: var(--muted); font-size: var(--yazi-s); }
+.tc-emir-yasam {
+  display: flex; list-style: none; margin: 0 0 var(--b-4); padding: 0; overflow-x: auto; min-width: 0;
+  border: thin solid var(--edge); border-radius: var(--yari-1); background: var(--panel-solid);
+}
+.tc-emir-yasam li {
+  flex: 1 0 auto; display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 0 var(--b-2);
+  padding: var(--b-3); border-right: thin solid var(--edge); font-size: var(--yazi-s); color: var(--faint);
+}
+.tc-emir-yasam li:last-child { border-right: 0; }
+.tc-emir-yasam small { grid-column: 2; font-size: var(--yazi-xs); color: var(--muted); white-space: nowrap; }
+.tc-emir-yasam-ad { white-space: nowrap; }
+.tc-emir-yasam-nokta {
+  grid-row: span 2; display: grid; place-items: center; width: var(--dokunma-yogun); height: var(--dokunma-yogun);
+  border-radius: var(--yari-tam); border: var(--cizgi-orta) solid var(--edge2);
+}
+.tc-emir-yasam li[data-hal='gecti'] { color: var(--ink); }
+.tc-emir-yasam li[data-hal='gecti'] .tc-emir-yasam-nokta { border-color: var(--done); color: var(--done); }
+.tc-emir-yasam li[data-hal='simdi'] { color: var(--ink); font-weight: 700; background: color-mix(in srgb, var(--hazard) 18%, var(--panel-solid)); }
+.tc-emir-yasam li[data-hal='simdi'] small { color: var(--ink); }
+.tc-emir-yasam li[data-hal='simdi'] .tc-emir-yasam-nokta { border-color: var(--hazard); background: var(--hazard); color: var(--on-hazard); }
+.tc-emir-yasam li[data-hal='iptal'] { color: var(--stop); font-weight: 700; }
+.tc-emir-yasam li[data-hal='iptal'] .tc-emir-yasam-nokta { border-color: var(--stop); }
+.tc-emir-ozetler { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, var(--pano-kart-enaz)), 1fr)); gap: var(--b-3); margin: 0 0 var(--b-4); }
+.tc-emir-ozet {
+  display: grid; align-content: start; gap: var(--b-1); padding: var(--b-3); min-width: 0;
+  border: thin solid var(--edge); border-radius: var(--yari-1); background: var(--panel);
+}
+.tc-emir-ozet[data-ton='uyari'] { border-color: var(--hold); }
+.tc-emir-ozet[data-ton='hata'] { border-color: var(--stop); }
+.tc-emir-ozet-baslik { display: inline-flex; align-items: center; gap: var(--b-1); color: var(--muted); font-size: var(--yazi-xs); text-transform: uppercase; letter-spacing: .06em; }
+.tc-emir-ozet-deger { font-size: var(--yazi-m); overflow-wrap: anywhere; }
+.tc-emir-ozet-alt { color: var(--muted); font-size: var(--yazi-s); overflow-wrap: anywhere; }
+.tc-emir-ozet[data-ton='hata'] .tc-emir-ozet-alt { color: var(--stop); }
+.tc-emir-ozet progress { width: 100%; }
+.tc-emir-ozet .tc-dugme { justify-self: start; }
+.tc-emir-sekme { padding-top: var(--b-4); min-width: 0; display: grid; gap: var(--b-4); }
+.tc-emir-sekme > * { min-width: 0; }
+/* Durum çipleri telefonda da alt alta dizilir (onaylı ön izleme); ortak tablo kuralının yana kaydırmasını derleme sırasından bağımsız ezer. */
+.tc-tablo-cipler.tc-emir-durum-cipleri { display: flex; flex-wrap: wrap; gap: var(--b-2); margin: var(--b-3) 0 var(--b-2); overflow-x: visible; padding-inline-end: 0; mask-image: none; }
+/* 3039: geri ve bağlantılar başlığın üstünde; telefonda şerit yerine tek satır ("Üretimde · 3/6"); dört özet geniş ekranda tek satır. */
+.tc-emir-yol { display: flex; flex-wrap: wrap; justify-content: space-between; gap: var(--b-2); margin: 0 0 var(--b-2); }
+.tc-emir-yasam-kisa { display: none; margin: 0 0 var(--b-3); font-weight: 700; }
+@media (max-width: 480px) {
+  .tc-emir-yasam-kisa { display: block; }
+  .tc-emir-yasam { display: none; }
+}
+@media (min-width: 1024px) { .tc-emir-ozetler { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+/* Adım satırının sağı: statü, elle yazan ya da neden, fason yeri ve "…" menüsü. */
+.tc-emir-adim-statu { display: inline-flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: var(--b-1) var(--b-2); min-width: 0; }
+.tc-emir-adim-statu small { color: var(--muted); font-size: var(--yazi-xs); }
+.tc-emir-alt-satir { display: block; color: var(--muted); font-size: var(--yazi-xs); }
+/* Emir no listede harf harf kırılmaz. Telefonda sabit ilk sütun dardır: no yalnız tirelerde alt satıra geçer, yandaki sütunun üstüne taşmaz. */
+.tc-emir-kod.tc-emir-no { white-space: nowrap; overflow-wrap: normal; }
+@media (max-width: 767px) { .tc-emir-kod.tc-emir-no { white-space: normal; } }

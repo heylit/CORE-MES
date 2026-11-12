@@ -64,3 +64,10 @@ export function yetkiHesapla(y: Pick<Yetki, 'var' | 'herhangi'>): RrYetkisi {
 export function useRrYetkisi(): RrYetkisi {
   return yetkiHesapla(useYetki());
 }
+
+// Emir açabilen (3003 a, Üretim Emirleri'nin "Yeni üretim emri" düğmesi): Reçete ve Rota verisini okur ve iki açma işleminden birine
+// sahiptir. Rotalı üründe rota.emre-kopyala, rotasızda uretim-emirleri.yaz; asıl denetim sahiplerin ucundadır.
+export function useEmirAcabilir(): boolean {
+  const y = useRrYetkisi();
+  return y.oku && (y.rotaEmreKopyala || y.emirYaz);
+}

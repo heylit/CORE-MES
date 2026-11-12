@@ -28,24 +28,24 @@ export function saglamMetni(a: Pick<IsEmri, 'saglamAdet' | 'kararBekliyor'>): st
 }
 
 // 2874: firması seçilmemiş fason adım da dış üretimdir; firmayı satın alma siparişle seçer.
-const fasonMu = (a: Pick<IsEmri, 'kaynak' | 'fasonFirmasiz'>): boolean => a.kaynak?.tur === 'fason' || a.fasonFirmasiz === true;
-const yerMetni = (a: IsEmri): string => {
+export const fasonMu = (a: Pick<IsEmri, 'kaynak' | 'fasonFirmasiz'>): boolean => a.kaynak?.tur === 'fason' || a.fasonFirmasiz === true;
+export const yerMetni = (a: IsEmri): string => {
   if (a.fasonFirmasiz === true) return 'Dış üretim: firma bekleniyor';
   return a.kaynak?.tur === 'fason' ? `Dış üretim: ${a.kaynak.kod ? `${a.kaynak.kod} ` : ''}${a.kaynak.ad}` : 'İç üretim';
 };
 
-// Üretim Emirleri salt okumadır (1391 a): değiştirme yalnız emrin evinde (Reçete ve Rota) açılır; orası `duzenlenir` verir.
+// Değiştirme emrin ana yerinde, Üretim Emirleri ayrıntısında açılır (3003 a); orası `duzenlenir` verir.
 export function UretimYerleri({ emir, duzenlenir = false }: { emir: { id: number; malzemeNo?: number | null }; duzenlenir?: boolean }) {
   const islemler = (useOturum().data?.islemler ?? []) as readonly string[];
   const gorur = emir.malzemeNo != null && ADIMLI_OKUMA_ISLEMLERI.some((i) => islemler.includes(i));
   if (!gorur) return null;
   const yetkili = islemler.includes('uretim-emirleri.yaz');
-  return <Adimlar emirId={emir.id} yazar={duzenlenir && yetkili} evdeYazilir={!duzenlenir && yetkili} izleme={!duzenlenir} />;
+  return <Adimlar emirId={emir.id} yazar={duzenlenir && yetkili} izleme={!duzenlenir} />;
 }
 
 // İzleme sayfası (1787c): adımın durumu, sağlamı, karar bekleyeni ve çok katmanlı emirde hangi alt parçaya ait olduğu da görünür.
-// Emrin evi (Reçete ve Rota) bunları kendi plan bölümünde gösterir; orada tablo değişmez.
-function Adimlar({ emirId, yazar, evdeYazilir, izleme }: { emirId: number; yazar: boolean; evdeYazilir: boolean; izleme: boolean }) {
+// Emrin plan bölümü bunları kendi gösterir; orada tablo değişmez.
+function Adimlar({ emirId, yazar, izleme }: { emirId: number; yazar: boolean; izleme: boolean }) {
   const [secili, seciliYaz] = useState<IsEmri | null>(null);
   const d = useQuery({
     queryKey: anahtarlar.adimli(emirId),
@@ -102,7 +102,6 @@ function Adimlar({ emirId, yazar, evdeYazilir, izleme }: { emirId: number; yazar
         <>
           <Tablo etiket="Operasyon adımları" sutunlar={sutunlar} satirlar={d.data.emir.isEmirleri} satirAnahtari={(a) => a.id} bosMesaj="Adım yok" />
           {yazar && <p className="tc-emir-not">Değişiklik yalnız bu emri etkiler; rota aynı kalır. Başlamış adım değiştirilemez.</p>}
-          {evdeYazilir && <p className="tc-emir-not">Üretim yeri Reçete ve Rota'daki emirde değiştirilir.</p>}
           {secili && <YerPenceresi emirId={emirId} surum={d.data.emir.surum} adim={secili} kapat={() => seciliYaz(null)} />}
         </>
       )}
@@ -110,7 +109,7 @@ function Adimlar({ emirId, yazar, evdeYazilir, izleme }: { emirId: number; yazar
   );
 }
 
-function YerPenceresi({ emirId, surum, adim, kapat }: { emirId: number; surum: number; adim: IsEmri; kapat: () => void }) {
+export function YerPenceresi({ emirId, surum, adim, kapat }: { emirId: number; surum: number; adim: IsEmri; kapat: () => void }) {
   const istemci = useQueryClient();
   const { bildir } = useBildirim();
   const fasonda = fasonMu(adim);

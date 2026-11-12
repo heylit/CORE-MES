@@ -52,7 +52,8 @@ const PLAN_VERI_SAYFALARI = [
 const SAYFALAR: Sayfa[] = [
   { modul: 'uretim-emirleri', yol: '/uretim-emirleri', hesap: 'ornek.planlama', baslik: 'Üretim Emirleri' },
   { modul: 'uretim-emirleri', yol: '/uretim-emirleri?gorunum=bitenler', hesap: 'ornek.planlama', baslik: 'Üretim Emirleri' },
-  { modul: 'uretim-emirleri', yol: '/uretim-emirleri/2', hesap: 'ornek.planlama', baslik: 'Üretim emri' },
+  // 3039: emir sayfasının başlığı emir numarasıdır.
+  { modul: 'uretim-emirleri', yol: '/uretim-emirleri/2', hesap: 'ornek.planlama', baslik: /^MM-ORN-00002-/ },
   { modul: 'uretim-emirleri', yol: '/uretim-emirleri', hesap: 'ornek.mudur', baslik: 'Üretim Emirleri' },
   // Reçete ve Rota bölümleri yeni ekrandadır (541; eski çerçeve 805 ile kalktı); planlama bölümleri Planlama'ya yönlenir.
   { modul: 'recete-rota', yol: '/recete-rota', varis: RECETE_ROTA, hesap: 'ornek.yonetici', baslik: 'Üretim emirleri' },

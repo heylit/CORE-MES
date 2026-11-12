@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { useLocation } from 'react-router-dom';
 import type { KucukResimlerCevabi } from '#paylasilan/sozlesme/belge-merkezi.ts';
 import type { BitenEmirlerCevabi, Emir, EmirAyrintiCevabi, EmirlerCevabi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
@@ -32,8 +32,9 @@ describe('UretimEmirleri liste', () => {
     const satirlar = screen.getAllByRole('row');
     const planli = satirlar.find((s) => within(s).queryByText('EM-1'))!;
     const bitmis = satirlar.find((s) => within(s).queryByText('EM-3'))!;
-    expect(planli.querySelector('td[data-baslik="Sağlam adet"]')?.textContent).toBe('—Girilmemiş');
-    expect(bitmis.querySelector('td[data-baslik="Sağlam adet"]')?.textContent).toBe('8');
+    // 3039: sağlam ve emir adedi tek sütundadır.
+    expect(planli.querySelector('td[data-baslik="Sağlam / adet"]')?.textContent).toBe('— / 10');
+    expect(bitmis.querySelector('td[data-baslik="Sağlam / adet"]')?.textContent).toBe('8 / 10');
     expect(within(bitmis).getByText('Üretimi bitti')).toBeTruthy();
     expect(within(planli).getByText('DNM-001')).toBeTruthy();
   });
@@ -49,17 +50,41 @@ describe('UretimEmirleri liste', () => {
     expect(ilkBaslik.classList.contains('tc-tablo-sabit-sol')).toBe(true);
   });
 
-  it('durum suzgeci sorguya girer', async () => {
-    // Sunucu süzgeci uygular; sahte sunucu son isteğin yoluna bakarak aynısını yapar.
-    const istekler = sunucuKur(OKUYUCU, {
-      'GET /uretim-emirleri': () => json(200, liste(istekler.at(-1)?.yol.endsWith('durum=basladi') ? [BASLAMIS] : [PLANLI, BASLAMIS])),
-    });
+  it('3039: durum çipleri sayılarıyla listeyi süzer; liste tek okumadır; "Şu an" çalışan ya da sıradaki adımı yazar', async () => {
+    const CALISAN = { ...BASLAMIS, canli: { calisma: 'calisiyor', saglam: 2, hurda: 0, durusNedeni: null, durusBaslangic: null, isEmri: { id: 70, opNo: 20, ad: 'Frezeleme', makineId: null } } } satisfies Emir;
+    const DURAN = { ...BASLAMIS, id: 5, emirNo: 'EM-5', canli: { calisma: 'durdu', saglam: 1, hurda: 0, durusNedeni: { id: 1, ad: 'Arıza' }, durusBaslangic: '2026-10-06T10:00:00+00:00', isEmri: { id: 71, opNo: 10, ad: 'Tornalama', makineId: null } } } satisfies Emir;
+    const SIRADA = { ...PLANLI, acikAdimlar: [{ isEmriId: 72, opNo: 10, ad: 'Tornalama', istasyon: null, durum: 'bekliyor', calisma: null }] } as Emir;
+    const istekler = sunucuKur(OKUYUCU, { 'GET /uretim-emirleri': () => json(200, liste([SIRADA, CALISAN, DURAN])) });
     ac(ekran, '/uretim-emirleri');
     await screen.findByText('EM-1');
-    fireEvent.change(screen.getByLabelText('Durum'), { target: { value: 'basladi' } });
-    expect(await screen.findByText('EM-2')).toBeTruthy();
+    const cipler = screen.getByRole('group', { name: 'Duruma göre süz' });
+    expect(within(cipler).getAllByRole('button').map((b) => b.textContent)).toEqual(['Tümü 3', 'Taslak 0', 'Planlı 1', 'Üretimde 2', 'Duran 1']);
+    const suAn = (no: string) => screen.getByText(no).closest('tr')!.querySelector('td[data-baslik="Şu an"]')?.textContent;
+    expect(suAn('EM-1')).toBe('Sırada: OP 10 Tornalama');
+    expect(suAn('EM-2')).toBe('OP 20 FrezelemeDeneme Tezgah 1');
+    expect(suAn('EM-5')).toBe('OP 10 Tornalama · Durdu: ArızaDeneme Tezgah 1');
+    fireEvent.click(within(cipler).getByRole('button', { name: 'Duran 1' }));
+    expect(within(cipler).getByRole('button', { name: 'Duran 1' }).getAttribute('aria-pressed')).toBe('true');
+    expect(screen.getByText('EM-5')).toBeTruthy();
     expect(screen.queryByText('EM-1')).toBeNull();
-    expect(istekler.some((i) => i.yol === '/uretim-emirleri?istasyonsuz=1&durum=basladi')).toBe(true);
+    expect(screen.queryByText('EM-2')).toBeNull();
+    expect(istekler.filter((i) => i.yol.startsWith('/uretim-emirleri?')).map((i) => i.yol)).toEqual(['/uretim-emirleri?istasyonsuz=1']);
+  });
+
+  it('3039: "Kapanış bekliyor" sayısı kapanış kuyruğundandır ve Kapanış onaylarını açar; kuyruk okunamazsa çip yok', async () => {
+    sunucuKur(OKUYUCU, {
+      'GET /uretim-emirleri': () => json(200, liste([PLANLI])),
+      'GET /kapanislar': () => json(200, { satirlar: [], toplam: 4, sayfa: 1, sayfaBoyu: 50 }),
+    });
+    const Kapanis = () => <p>Kapanış sayfası</p>;
+    ac([{ yol: '/uretim-emirleri/kapanis', ekran: Kapanis }, ...ekran], '/uretim-emirleri');
+    fireEvent.click(await screen.findByRole('button', { name: 'Kapanış bekliyor 4' }));
+    expect(await screen.findByText('Kapanış sayfası')).toBeTruthy();
+    cleanup();
+    sunucuKur(OKUYUCU, { 'GET /uretim-emirleri': () => json(200, liste([PLANLI])), 'GET /kapanislar': () => json(403, { kod: 'YETKI', mesaj: 'Yetki yok.' }) });
+    ac(ekran, '/uretim-emirleri');
+    await screen.findByText('EM-1');
+    expect(screen.queryByRole('button', { name: /Kapanış bekliyor/ })).toBeNull();
   });
 
   it('bos liste ve sunucu hatasi gosterilir', async () => {
@@ -72,47 +97,61 @@ describe('UretimEmirleri liste', () => {
     expect(await screen.findByText('Sunucu meşgul.')).toBeTruthy();
   });
 
-  it('#1185: salt okunur; yazma yetkisi olsa da emir aç ve iptal yok, Reçete ve Rota bağlantısı yalnız sayfa yetkisi olana; ?ara= listeyi süzer', async () => {
-    const istekler = sunucuKur(YAZAR, { 'GET /uretim-emirleri': () => json(200, liste([PLANLI, BITMIS])) });
+  it('3039: "Yeni üretim emri" yalnız açabilene görünür ve pencereyi açar; ?yeni=1 pencereyi ürünle açar; ?ara= listeyi süzer', async () => {
+    const pencere = (yeni: { urun: string | null } | null) => (yeni ? <p>Pencere açık: {yeni.urun ?? 'ürün yok'}</p> : null);
+    sunucuKur(YAZAR, { 'GET /uretim-emirleri': () => json(200, liste([PLANLI, BITMIS])) });
     ac(ekran, '/uretim-emirleri?ara=EM-3');
     expect(await screen.findByText('EM-3')).toBeTruthy();
     expect(screen.queryByText('EM-1')).toBeNull();
-    expect(screen.queryByRole('button', { name: 'Emir aç' })).toBeNull();
-    expect(screen.queryByRole('button', { name: /Reçete ve Rota/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Yeni üretim emri' })).toBeNull();
     cleanup();
-    sunucuKur({ ...YAZAR, islemler: [...YAZAR.islemler, 'sayfa.recete-rota'] }, { 'GET /uretim-emirleri': () => json(200, liste([PLANLI])) });
-    const Yer = () => <p>Reçete ve Rota yeri</p>;
-    ac([...ekran, { yol: '/recete-rota', ekran: Yer }], '/uretim-emirleri');
-    fireEvent.click(await screen.findByRole('button', { name: "Reçete ve Rota'da emir aç" }));
-    expect(await screen.findByText('Reçete ve Rota yeri')).toBeTruthy();
-    expect(istekler.filter((i) => i.yontem !== 'GET')).toHaveLength(0);
+    sunucuKur(YAZAR, { 'GET /uretim-emirleri': () => json(200, liste([PLANLI])) });
+    const Acan = () => <UretimEmirleri emirAcma={{ acabilir: true, ciz: pencere }} />;
+    ac([{ yol: '/uretim-emirleri', ekran: Acan }], '/uretim-emirleri');
+    fireEvent.click(await screen.findByRole('button', { name: 'Yeni üretim emri' }));
+    expect(screen.getByText('Pencere açık: ürün yok')).toBeTruthy();
+    cleanup();
+    sunucuKur(YAZAR, { 'GET /uretim-emirleri': () => json(200, liste([PLANLI])) });
+    ac([{ yol: '/uretim-emirleri', ekran: Acan }], '/uretim-emirleri?yeni=1&urun=11');
+    expect(await screen.findByText('Pencere açık: 11')).toBeTruthy();
+    cleanup();
+    sunucuKur(YAZAR, { 'GET /uretim-emirleri': () => json(200, liste([PLANLI])) });
+    const Acamayan = () => <UretimEmirleri emirAcma={{ acabilir: false, ciz: pencere }} />;
+    ac([{ yol: '/uretim-emirleri', ekran: Acamayan }], '/uretim-emirleri?yeni=1');
+    await screen.findByText('EM-1');
+    expect(screen.queryByText(/Pencere açık/)).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Yeni üretim emri' })).toBeNull();
   });
 });
 
 describe('UretimEmirleri bitenler (kart #1323)', () => {
   const sayfa = (satirlar: Emir[], no: number, toplam: number) => ({ satirlar, toplam, sayfa: no, sayfaBoyu: 1 }) satisfies BitenEmirlerCevabi;
 
-  it('Bitenler sekmesi biten emirleri sunucudan sayfa sayfa ister; durum süzgeci yalnız kapalı durumları sunar', async () => {
+  it('Bitenler sekmesi biten emirleri sunucudan sayfa sayfa ister; çipler yalnız kapalı durumları sayısıyla sunar (3039)', async () => {
     const IPTAL = { ...TEMEL, id: 4, emirNo: 'EM-4', durum: 'iptal', iptal: '2026-10-06T10:00:00+00:00' } satisfies Emir;
     const istekler = sunucuKur(OKUYUCU, {
       'GET /uretim-emirleri': () => json(200, liste([PLANLI])),
-      'GET /uretim-emirleri/bitenler': () => json(200, istekler.at(-1)?.yol.includes('sayfa=2') ? sayfa([IPTAL], 2, 2) : sayfa([BITMIS], 1, 2)),
+      'GET /uretim-emirleri/bitenler': () => {
+        const yol = istekler.at(-1)?.yol ?? '';
+        if (yol.includes('durum=iptal')) return json(200, sayfa([IPTAL], 1, 1));
+        if (yol.includes('durum=bitti')) return json(200, sayfa([BITMIS], 1, 1));
+        return json(200, yol.includes('sayfa=2') ? sayfa([IPTAL], 2, 2) : sayfa([BITMIS], 1, 2));
+      },
     });
     ac(ekran, '/uretim-emirleri');
     await screen.findByText('EM-1');
-    const durumlar = () => [...(screen.getByLabelText('Durum') as HTMLSelectElement).options].map((o) => o.value);
-    expect(durumlar()).toEqual(['', 'taslak', 'planli', 'basladi']);
     fireEvent.click(screen.getByRole('tab', { name: /Bitenler/ }));
     expect(await screen.findByText('EM-3')).toBeTruthy();
     expect(screen.queryByText('EM-1')).toBeNull();
-    expect(durumlar()).toEqual(['', 'bitti', 'iptal']);
+    const cipler = screen.getByRole('group', { name: 'Duruma göre süz' });
+    await waitFor(() => { expect(within(cipler).getAllByRole('button').map((b) => b.textContent)).toEqual(['Tümü 2', 'Bitti 1', 'İptal 1']); });
     expect(istekler.some((i) => i.yol === '/uretim-emirleri/bitenler?istasyonsuz=1&sayfa=1')).toBe(true);
     fireEvent.click(screen.getByRole('button', { name: /Sonraki/ }));
     expect(await screen.findByText('EM-4')).toBeTruthy();
     expect(istekler.some((i) => i.yol === '/uretim-emirleri/bitenler?istasyonsuz=1&sayfa=2')).toBe(true);
-    fireEvent.change(screen.getByLabelText('Durum'), { target: { value: 'bitti' } });
+    fireEvent.click(within(cipler).getByRole('button', { name: 'Bitti 1' }));
     await screen.findByText('EM-3');
-    expect(istekler.at(-1)?.yol).toBe('/uretim-emirleri/bitenler?istasyonsuz=1&sayfa=1&durum=bitti');
+    expect(istekler.some((i) => i.yol === '/uretim-emirleri/bitenler?istasyonsuz=1&sayfa=1&durum=bitti')).toBe(true);
   });
 
   it('?ara= açık emirlerde yoksa "Bitenlerde ara" aramayı sunucuya taşır', async () => {
@@ -137,8 +176,10 @@ describe('EmirAyrintisi', () => {
         { id: 2, emirId: 3, kisi: { id: 5, ad: 'Deneme Operator' }, istasyon: IST, olay: 'bitir', saglamAdet: 8, zaman: '2026-10-06T11:00:00+00:00' },
       ]),
     });
+    // 3039: kayıt defteri "Kayıtlar" sekmesindedir; bitmiş emir "Stok ve kapanış" ile açılır, fark özet kutusundadır.
     ac(ekran, '/uretim-emirleri/3');
     expect(await screen.findByText('Emir adedinden 2 eksik')).toBeTruthy();
+    fireEvent.click(screen.getByRole('tab', { name: 'Kayıtlar' }));
     const kayit = within(screen.getByRole('table', { name: 'Kayıt defteri' }));
     const baslat = kayit.getByText('Başlatıldı').closest('tr')!;
     expect(baslat.querySelector('td[data-baslik="Adet"]')?.textContent).toBe('—Girilmemiş');
@@ -147,35 +188,33 @@ describe('EmirAyrintisi', () => {
     expect(within(bitir).getByText('Deneme Operator')).toBeTruthy();
   });
 
-  it('bitmemis emirde fark yok, zamanlar "yok"; kayit yoksa bos mesaj', async () => {
+  it('3039: planlı emirde yaşam şeridi "Planlı"da durur, açılış tarihi Taslak\'ta; fark yok; kayıt yoksa "Henüz kayıt yok"', async () => {
     sunucuKur(OKUYUCU, { 'GET /uretim-emirleri/1': () => ayrinti(PLANLI) });
     ac(ekran, '/uretim-emirleri/1');
-    await screen.findByText('EM-1');
-    expect(screen.queryByText('Fark')).toBeNull();
-    expect(screen.getByText('Başlama').nextElementSibling?.textContent).toBe('yok');
-    expect(screen.getByText('Bitiş').nextElementSibling?.textContent).toBe('yok');
-    expect(screen.getByText('Sağlam adet', { selector: 'dt' }).nextElementSibling?.textContent).toBe('yok');
+    const serit = await screen.findByRole('list', { name: 'Emrin yaşam döngüsü' });
+    const asamalar = within(serit).getAllByRole('listitem');
+    expect(asamalar.map((li) => li.getAttribute('data-hal'))).toEqual(['gecti', 'simdi', 'bekliyor', 'bekliyor', 'bekliyor', 'bekliyor']);
+    expect(asamalar[1]?.getAttribute('aria-current')).toBe('step');
+    expect(within(asamalar[0]!).getByText(new Date(PLANLI.acilma).toLocaleString('tr-TR', { dateStyle: 'medium', timeStyle: 'short' }))).toBeTruthy();
+    expect(screen.queryByText(/Emir adedinden/)).toBeNull();
     expect(screen.getByText('Henüz kayıt yok')).toBeTruthy();
+    expect(screen.getByRole('tab', { name: 'Adımlar' }).getAttribute('aria-selected')).toBe('true');
   });
 
-  it('#1185: ayrıntıda iptal düğmesi yok; Reçete ve Rota bağlantısı sayfa yetkisine bağlı', async () => {
-    sunucuKur({ ...YAZAR, islemler: [...YAZAR.islemler, 'sayfa.recete-rota'] }, { 'GET /uretim-emirleri/1': () => ayrinti(PLANLI) });
-    ac(ekran, '/uretim-emirleri/1');
-    expect(await screen.findByText('EM-1')).toBeTruthy();
-    expect(screen.queryByRole('button', { name: 'İptal et' })).toBeNull();
-    expect(screen.getByRole('button', { name: "Reçete ve Rota'da aç" })).toBeTruthy();
-    cleanup();
-    // 1787a: düğme emri Reçete ve Rota'da seçili açar (genel aramanın `?kayit=` adresi).
+  it('3039: ayrıntıda iptal düğmesi yok; Reçete ve Rota bağlantısı "Bağlantılar" menüsünde, sayfa yetkisine bağlı', async () => {
     sunucuKur({ ...YAZAR, islemler: [...YAZAR.islemler, 'sayfa.recete-rota'] }, { 'GET /uretim-emirleri/1': () => ayrinti(PLANLI) });
     const Ev = () => <p>Ev: {useLocation().search}</p>;
     ac([...ekran, { yol: '/recete-rota', ekran: Ev }], '/uretim-emirleri/1');
-    fireEvent.click(await screen.findByRole('button', { name: "Reçete ve Rota'da aç" }));
+    await screen.findByRole('heading', { name: 'EM-1' });
+    expect(screen.queryByRole('button', { name: 'İptal et' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Emri başka ekranda aç' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: "Reçete ve Rota'da gör" }));
     expect(await screen.findByText(`Ev: ?kayit=${String(PLANLI.id)}`)).toBeTruthy();
     cleanup();
     sunucuKur(YAZAR, { 'GET /uretim-emirleri/1': () => ayrinti(PLANLI) });
     ac(ekran, '/uretim-emirleri/1');
-    expect(await screen.findByText('EM-1')).toBeTruthy();
-    expect(screen.queryByRole('button', { name: "Reçete ve Rota'da aç" })).toBeNull();
+    await screen.findByRole('heading', { name: 'EM-1' });
+    expect(screen.queryByRole('button', { name: 'Emri başka ekranda aç' })).toBeNull();
   });
 
   it('bulunamayan emirde sunucu iletisi gosterilir', async () => {
@@ -213,13 +252,13 @@ describe('malzeme resmi (kart #688)', () => {
       'GET /cizimler/kucuk-resimler': () => resimler([{ hedefId: 40, belgeId: 2, revizyonId: 6, harf: 'A', kareSayisi: 8, revUyumu: true }]),
     });
     ac(ekran, '/uretim-emirleri/1');
+    // 3039: resim emrin kimlik satırındadır.
     expect((await screen.findByRole('img', { name: 'Deneme mil' })).getAttribute('src')).toBe('/api/cizimler/kucuk-resim/6/0');
-    expect(screen.getByText('Malzeme resmi')).toBeTruthy();
     cleanup();
     const istekler = sunucuKur(OKUYUCU, { 'GET /uretim-emirleri/2': () => json(200, { emir: KARTSIZ, kayitlar: [] } satisfies EmirAyrintiCevabi) });
     ac(ekran, '/uretim-emirleri/2');
-    expect(await screen.findByText('EM-2')).toBeTruthy();
-    expect(screen.queryByText('Malzeme resmi')).toBeNull();
+    expect(await screen.findByRole('heading', { name: 'EM-2' })).toBeTruthy();
+    expect(screen.queryByRole('img', { name: 'Deneme mil' })).toBeNull();
     expect(istekler.some((i) => i.yol.startsWith('/cizimler/'))).toBe(false);
   });
 });

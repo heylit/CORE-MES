@@ -16,7 +16,9 @@ describe('Reçete ve Rota genel komutları (kart #1241)', () => {
 
   it('izinli: sayfayı gören kişi yalnız düğmesinin işlemi olan komutu görür', () => {
     expect(gorunen(['sayfa.recete-rota', 'rota.yaz'])).toEqual(['recete-rota-yeni-rota']);
-    expect(gorunen(['sayfa.recete-rota', 'rota.emre-kopyala'])).toEqual(['recete-rota-yeni-emir']);
+    // 3039: yeni emir Üretim Emirleri'nin penceresinde açılır; komut o sayfayı görene çıkar.
+    expect(gorunen(['sayfa.uretim-emirleri', 'rota.emre-kopyala'])).toEqual(['recete-rota-yeni-emir']);
+    expect(gorunen(['sayfa.recete-rota', 'rota.emre-kopyala'])).toEqual([]);
     expect(gorunen(['sayfa.recete-rota', 'rota.sartname-yaz', 'rota.talimat-yaz'])).toEqual(['recete-rota-yeni-sartname', 'recete-rota-yeni-talimat']);
   });
 

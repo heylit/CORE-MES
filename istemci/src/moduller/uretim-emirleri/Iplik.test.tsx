@@ -53,7 +53,7 @@ describe('İzlenebilirlik ipliği', () => {
       'GET /uretim-emirleri/5': () => json(200, AYRINTI),
       'GET /akis/emirler/5': () => json(200, AKIS),
     });
-    ac(ekran, '/uretim-emirleri/5');
+    ac(ekran, '/uretim-emirleri/5?sekme=kayitlar');
     await screen.findByText('UE-000005');
     expect(screen.queryByRole('img', { name: /izlenebilirlik ipliği/ })).toBeNull();
     expect(istekler.some((i) => i.yol.startsWith('/akis'))).toBe(false);
@@ -77,7 +77,7 @@ describe('İzlenebilirlik ipliği', () => {
 
   it('Akış Süresi yetkisi yoksa uç çağrılmaz; mal kabul, kalite, sevk soluk ve "kayıt yok"', async () => {
     const istekler = sunucuKur(OKUYUCU, { 'GET /uretim-emirleri/5': () => json(200, AYRINTI) });
-    ac(ekran, '/uretim-emirleri/5');
+    ac(ekran, '/uretim-emirleri/5?sekme=kayitlar');
     await screen.findByText('UE-000005');
     fireEvent.click(screen.getByRole('button', { name: 'Parçayı izle' }));
     await screen.findByRole('img', { name: 'UE-000005 izlenebilirlik ipliği' });
@@ -96,9 +96,11 @@ describe('İzlenebilirlik ipliği', () => {
 
   it("Akış Süresi yetkisi olan emrin yolculuğunu Akış Süresi'nde açar", async () => {
     sunucuKur(AKISLI, { 'GET /uretim-emirleri/5': () => json(200, AYRINTI), 'GET /akis/emirler/5': () => json(200, AKIS) });
-    ac([...ekran, { yol: '/akis/:id', ekran: AkisEkrani }], '/uretim-emirleri/5');
+    ac([...ekran, { yol: '/akis/:id', ekran: AkisEkrani }], '/uretim-emirleri/5?sekme=kayitlar');
     await screen.findByText('UE-000005');
-    fireEvent.click(screen.getByRole('button', { name: "Akış Süresi'nde aç" }));
+    // 3039: başka ekranlara geçiş başlığın üstündeki "Bağlantılar" menüsündedir.
+    fireEvent.click(screen.getByRole('button', { name: 'Emri başka ekranda aç' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: "Akış Süresi'nde aç" }));
     expect(await screen.findByText('Akış ekranı 5')).toBeTruthy();
   });
 
@@ -110,7 +112,7 @@ describe('İzlenebilirlik ipliği', () => {
         { id: 2, sira: 2, ad: 'Çapak alma', aciklama: null, asama: 'uretim', tamam: false, tamamlayan: null, tamamlanma: null, kanit: null, gecenNot: null, buNot: null, talimat: null },
       ],
     } satisfies EmirAyrintiCevabi) });
-    ac(ekran, '/uretim-emirleri/5');
+    ac(ekran, '/uretim-emirleri/5?sekme=kayitlar');
     await screen.findByText('UE-000005');
     fireEvent.click(screen.getByRole('button', { name: 'Parçayı izle' }));
     await screen.findByRole('img', { name: 'UE-000005 izlenebilirlik ipliği' });
@@ -124,7 +126,7 @@ describe('İzlenebilirlik ipliği', () => {
     vi.stubGlobal('matchMedia', () => ({ matches: false }));
     const yanan = async () => {
       sunucuKur(AKISLI, { 'GET /uretim-emirleri/5': () => json(200, AYRINTI), 'GET /akis/emirler/5': () => json(200, AKIS) });
-      ac(ekran, '/uretim-emirleri/5');
+      ac(ekran, '/uretim-emirleri/5?sekme=kayitlar');
       await screen.findByText('UE-000005');
       fireEvent.click(screen.getByRole('button', { name: 'Parçayı izle' }));
       const ogeler = within(await screen.findByRole('img', { name: /izlenebilirlik ipliği/ })).getAllByRole('listitem');
@@ -184,7 +186,7 @@ describe('Parçanın konum akışı (2224)', () => {
 
   it('Parçayı izle konum akışını açar; konum hareketi yoksa adım ipliği ve not', async () => {
     sunucuKur(AKISLI, { 'GET /uretim-emirleri/5': () => json(200, AYRINTI), 'GET /akis/emirler/5': () => json(200, KONUMLU) });
-    ac(ekran, '/uretim-emirleri/5');
+    ac(ekran, '/uretim-emirleri/5?sekme=kayitlar');
     await screen.findByText('UE-000005');
     fireEvent.click(screen.getByRole('button', { name: 'Parçayı izle' }));
     const img = await screen.findByRole('img', { name: 'UE-000005 konum akışı' });
@@ -192,7 +194,7 @@ describe('Parçanın konum akışı (2224)', () => {
     expect(screen.getByRole('heading', { name: 'Parçanın konum akışı' })).toBeTruthy();
     cleanup();
     sunucuKur(AKISLI, { 'GET /uretim-emirleri/5': () => json(200, AYRINTI), 'GET /akis/emirler/5': () => json(200, { ...AKIS, konumHareketleri: [] }) });
-    ac(ekran, '/uretim-emirleri/5');
+    ac(ekran, '/uretim-emirleri/5?sekme=kayitlar');
     await screen.findByText('UE-000005');
     fireEvent.click(screen.getByRole('button', { name: 'Parçayı izle' }));
     await screen.findByRole('img', { name: 'UE-000005 izlenebilirlik ipliği' });

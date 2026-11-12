@@ -22,16 +22,12 @@ const kapanisUcu = (id: number) => `/adimli-emirler/${String(id)}/kapanis`;
 // Süzgeç: onay veren kişi açılışta kendi onayını bekleyenleri görür; planlama bütün açık kapanışları.
 type Gorunum = 'bekleyen' | 'acik' | 'tamam';
 
-// Onay emrin evinde (Reçete ve Rota) verilir (1416 a); orası `duzenlenir` verir. Üretim Emirleri'ndeki aynı liste salt okumadır ve
-// onay verecek kişiyi seçili emirle oraya yönlendirir.
-export const KAPANIS_EVI = '/recete-rota/kapanis';
-
-export function KapanisOnaylari({ duzenlenir = false }: { duzenlenir?: boolean }) {
+// Onay emrin ana yerinde, burada verilir (3003 a); onay düğmesi kişinin onay işlemine bağlıdır.
+export function KapanisOnaylari() {
   const oturum = useOturum();
-  const yonlendir = useNavigate();
   const islemler = (oturum.data?.islemler ?? []) as readonly string[];
   const onayVerir = (t: KapanisOnayi) => islemler.includes(KAPANIS_YETKISI[t]);
-  const yetkili = (t: KapanisOnayi) => duzenlenir && onayVerir(t);
+  const yetkili = onayVerir;
   const onayci = onayVerir('kalite') || onayVerir('mudur');
   const [adres, adresYaz] = useSearchParams();
   const secili = Number(adres.get('emir')) || null;
@@ -54,7 +50,6 @@ export function KapanisOnaylari({ duzenlenir = false }: { duzenlenir?: boolean }
   });
   const sec = (id: number) => { adresYaz((a) => { const y = new URLSearchParams(a); y.set('emir', String(id)); return y; }, { replace: true }); };
   const satirlar = (liste.data?.satirlar ?? []).filter((r) => gorunum !== 'bekleyen' || r.bekleyenOnaylar.some(onayVerir));
-  const evdeAc = () => { void yonlendir(secili === null ? KAPANIS_EVI : `${KAPANIS_EVI}?emir=${String(secili)}`); };
   const simdi = new Date();
   const sutunlar: Sutun<KapanisListeSatiri>[] = [
     { anahtar: 'emir', baslik: 'Emir', mono: true, kirilmaz: true, hucre: (r) => (
@@ -75,9 +70,7 @@ export function KapanisOnaylari({ duzenlenir = false }: { duzenlenir?: boolean }
       <Kart baslik="Kapanış onayları" simge="clipboard-check"
         sag={(
           <div className="tc-emir-ust tc-emir-ust-sag">
-            {onayci && !duzenlenir
-              ? <Dugme simge="tool" onClick={evdeAc}>Reçete ve Rota'da onayla</Dugme>
-              : <span className="tc-emir-not">{onayci ? 'Onayınızı bekleyenler' : 'Bütün kapanışları görürsünüz, onay vermezsiniz.'}</span>}
+            <span className="tc-emir-not">{onayci ? 'Onayınızı bekleyenler' : 'Bütün kapanışları görürsünüz, onay vermezsiniz.'}</span>
           </div>
         )}>
         {liste.isPending && <DurumKutusu durum="yukleniyor" />}
@@ -94,7 +87,7 @@ export function KapanisOnaylari({ duzenlenir = false }: { duzenlenir?: boolean }
             sayfalama={gorunum === 'bekleyen' ? undefined : { sayfa: liste.data.sayfa, sayfaBoyu: liste.data.sayfaBoyu, toplam: liste.data.toplam, degistir: sayfaYaz, etiket: 'Kapanış sayfaları' }} />
         )}
         <p className="tc-emir-not">
-          {onayci && !duzenlenir ? "Satıra tıklayınca emrin kapanışı aşağıda açılır; onay Reçete ve Rota'da verilir." : 'Satıra tıklayınca emrin kapanışı aşağıda açılır.'}
+          Satıra tıklayınca emrin kapanışı aşağıda açılır.
         </p>
       </Kart>
       {secili !== null && <SeciliKapanis id={secili} yetkili={yetkili} />}
@@ -120,8 +113,11 @@ function KapanisAyrintisi({ k, yetkili }: { k: KapanisCevabi; yetkili: (t: Kapan
   const sira = seritSirasi(k.asama);
   const eksik = eksikMaddeler(k);
   const muafNotu = new Map(k.muafiyetler.map((m) => [m.madde, m.gerekce]));
+  const yonlendir = useNavigate();
+  // Onay burada verilir; emrin stoğu ve kayıtları emir sayfasının "Stok ve kapanış" sekmesindedir (3039).
+  const emreGit = <Dugme simge="next" onClick={() => { void yonlendir(`/uretim-emirleri/${String(k.uretimEmriId)}?sekme=stok`); }}>Emri aç</Dugme>;
   return (
-    <Kart baslik={`${k.emirNo} · ${k.urun.ad}`} baslikEki={<Rozet ton={ust.ton}>{ust.metin}</Rozet>}>
+    <Kart baslik={`${k.emirNo} · ${k.urun.ad}`} baslikEki={<Rozet ton={ust.ton}>{ust.metin}</Rozet>} sag={emreGit}>
       <p className="tc-emir-kod">{EMIR_TURU_ADLARI[k.emirTuru]} · {k.adet} adet · sağlam {k.saglamAdet}</p>
       <h3 className="tc-kapanis-alt">Seçili emrin kapanışı</h3>
       <ol className="tc-kapanis-seritler" aria-label="Kapanış adımları">

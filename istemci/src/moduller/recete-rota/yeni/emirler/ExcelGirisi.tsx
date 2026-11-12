@@ -10,8 +10,15 @@ import { emirGuncelleTanimi, emirGuncelleYaz, emirKaynagi, emirTanimi, emirYaz }
 // Excel ile toplu emir (2627): emir bölümünün ⋯ menüsünde, yalnız emri rotadan açabilene (rota.emre-kopyala). Proje listesi emir
 // açma seçeneklerinden okunur; seçenekler üründen bağımsızdır, sipariş satırları burada kullanılmaz. Açık emirleri güncelleme (2704 a)
 // yalnız emri değiştirebilene (uretim-emirleri.yaz).
-export function EmirExcelMenusu({ durum, acabilir, guncelleyebilir }: { durum: RrDurumu; acabilir: boolean; guncelleyebilir: boolean }) {
-  const [pencere, pencereYaz] = useState<'yeni' | 'guncelle' | null>(null);
+export type ExcelPenceresiTuru = 'yeni' | 'guncelle';
+
+// Menü dışarıda çizilebilir (Üretim Emirleri, 3003 a): o zaman `acilis` seçilen pencereyle gelir, pencere kapanınca `kapandi` çağrılır;
+// kaynak verisi yalnız pencere açılınca okunur.
+export function EmirExcelMenusu({ durum, acabilir, guncelleyebilir, acilis, kapandi }: {
+  durum: RrDurumu; acabilir: boolean; guncelleyebilir: boolean; acilis?: ExcelPenceresiTuru; kapandi?: () => void;
+}) {
+  const [pencere, pencereYaz0] = useState<ExcelPenceresiTuru | null>(acilis ?? null);
+  const pencereYaz = (p: ExcelPenceresiTuru | null) => { pencereYaz0(p); if (p === null) kapandi?.(); };
   const acik = pencere === 'yeni';
   const acikYaz = (v: boolean) => { pencereYaz(v ? 'yeni' : null); };
   const istemci = useQueryClient();
@@ -27,10 +34,7 @@ export function EmirExcelMenusu({ durum, acabilir, guncelleyebilir }: { durum: R
   const tanim = useMemo(() => (bekliyor ? null : emirTanimi(durum, hazir)), [durum, hazir, bekliyor]);
   return (
     <>
-      <Menu etiket="Üretim emirleri: diğer işlemler" ipucu="Diğer işlemler" ogeler={[
-        ...(acabilir ? [{ anahtar: 'excel', baslik: 'Excel ile toplu emir', simge: 'file' as const, sec: () => { acikYaz(true); } }] : []),
-        ...(guncelleyebilir ? [{ anahtar: 'excel-guncelle', baslik: 'Excel ile açık emirleri güncelle', simge: 'edit' as const, sec: () => { pencereYaz('guncelle'); } }] : []),
-      ]} />
+      {acilis === undefined && <ExcelMenusu acabilir={acabilir} guncelleyebilir={guncelleyebilir} sec={pencereYaz} />}
       {acik && (
         <ExcelPenceresi
           tanim={tanim}
@@ -44,6 +48,15 @@ export function EmirExcelMenusu({ durum, acabilir, guncelleyebilir }: { durum: R
       )}
       {pencere === 'guncelle' && <GuncellePenceresi durum={durum} kapat={() => { pencereYaz(null); }} />}
     </>
+  );
+}
+
+export function ExcelMenusu({ acabilir, guncelleyebilir, sec }: { acabilir: boolean; guncelleyebilir: boolean; sec: (p: ExcelPenceresiTuru) => void }) {
+  return (
+    <Menu etiket="Üretim emirleri: diğer işlemler" ipucu="Diğer işlemler" ogeler={[
+      ...(acabilir ? [{ anahtar: 'excel', baslik: 'Excel ile toplu emir', simge: 'file' as const, sec: () => { sec('yeni'); } }] : []),
+      ...(guncelleyebilir ? [{ anahtar: 'excel-guncelle', baslik: 'Excel ile açık emirleri güncelle', simge: 'edit' as const, sec: () => { sec('guncelle'); } }] : []),
+    ]} />
   );
 }
 

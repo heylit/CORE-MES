@@ -33,15 +33,16 @@ const SUTUNLAR: Sutun<Bilesen>[] = [
 // Bitmiş emrin kalan sarfı ve çıktısı stok modülünün tek komutuyla (#428). Komut hem giriş hem çıkış yazdığı için iki yetki de
 // gerekir; yoksa kart çizilmez.
 // Ürün kartı olmayan (eski) emir stokta tamamlanmaz: bölüm çizilmez, sunucu da sorulmaz.
-// Üretim Emirleri salt okumadır (1391 a): stoğa işleme düğmesi yalnız emrin evinde (Reçete ve Rota) çizilir; orası `islenir` verir.
-export function StokTamamlama({ emir, islenir = false }: { emir: { id: number; emirNo: string; durum: string; malzemeNo?: number | null }; islenir?: boolean }) {
+// Stoğa işleme düğmesi emrin ana yerinde, Üretim Emirleri ayrıntısında çizilir (3003 a); orası `islenir` verir.
+// `ikincil`: sayfanın ana işi başka bir düğmedeyse (emir sayfasında "Kapanış onayları") tamamlama ikincil görünür; ekranda tek birincil kalır.
+export function StokTamamlama({ emir, islenir = false, ikincil = false }: { emir: { id: number; emirNo: string; durum: string; malzemeNo?: number | null }; islenir?: boolean; ikincil?: boolean }) {
   const islemler = (useOturum().data?.islemler ?? []) as readonly string[];
   const gorunur = emir.durum === 'bitti' && emir.malzemeNo != null && islemler.includes('stok.giris') && islemler.includes('stok.cikis');
   if (!gorunur) return null;
-  return <Kart emir={emir} islenir={islenir} />;
+  return <Kart emir={emir} islenir={islenir} ikincil={ikincil} />;
 }
 
-function Kart({ emir, islenir }: { emir: { id: number; emirNo: string }; islenir: boolean }) {
+function Kart({ emir, islenir, ikincil }: { emir: { id: number; emirNo: string }; islenir: boolean; ikincil: boolean }) {
   const istemci = useQueryClient();
   const yonlendir = useNavigate();
   const { bildir } = useBildirim();
@@ -80,14 +81,14 @@ function Kart({ emir, islenir }: { emir: { id: number; emirNo: string }; islenir
       <div className="tc-emir-ust">
         {eksikVar && <Dugme simge="plus" onClick={() => { void yonlendir(`/stok/mal-kabul?emir=${emir.id}`); }}>Eksikleri teslim al</Dugme>}
         {islenir && c.engel === null && k.tur === 'gonder' && (
-          <Dugme tur={silahli ? 'tehlike' : 'birincil'} simge="check" yukleniyor={tamamla.isPending}
+          <Dugme tur={silahli ? 'tehlike' : ikincil ? 'ikincil' : 'birincil'} simge="check" yukleniyor={tamamla.isPending}
             onClick={() => { if (silahli) tamamla.mutate(); else silahliYaz(true); }}>
             {silahli ? 'Emin misin? Tamamla ve stoktan düş' : 'Stoka tamamla'}
           </Dugme>
         )}
       </div>
       {c.engel !== null && <p className="tc-emir-not" role="status">{c.engel}</p>}
-      {!islenir && c.engel === null && k.tur === 'gonder' && <p className="tc-emir-not">Stoğa işleme Reçete ve Rota'daki emirdedir.</p>}
+      {!islenir && c.engel === null && k.tur === 'gonder' && <p className="tc-emir-not">Stoğa işleme emrin Üretim Emirleri ayrıntısındadır.</p>}
       {c.bilesenler.length > 0 && (
         <Tablo etiket={`${emir.emirNo} sarfı`} sutunlar={SUTUNLAR} satirlar={c.bilesenler} satirAnahtari={(b) => b.malzemeId} bosMesaj="Sarf yok" />
       )}

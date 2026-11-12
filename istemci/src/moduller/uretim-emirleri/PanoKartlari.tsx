@@ -17,7 +17,7 @@ function ozetKarti(alan: Exclude<keyof OzetCevabi, 'asamalar'>, baslik: string, 
   };
 }
 
-// Emirler Reçete ve Rota'da açılır ve plana alınır; salt okunur liste /uretim-emirleri'dedir. Operatör ekranı Arkon'dadır; kişinin kartları bağlantısızdır.
+// Emirler /uretim-emirleri'de açılır ve plana alınır (3003 a). Operatör ekranı Arkon'dadır; kişinin kartları bağlantısızdır.
 export const Planlanacak = ozetKarti('planlanacak', 'Planlanacak emirler', 'flag', 'Taslak, plana alınmayı bekliyor', '/uretim-emirleri');
 export const AcikEmirler = ozetKarti('acik', 'Açık emirler', 'list', 'Serbest ve üretimde', '/uretim-emirleri');
 export const Kuyrugum = ozetKarti('kuyrugum', 'Kuyruğumdaki işler', 'layers', 'Size atanmış, bitmemiş iş emirleri');

@@ -23,6 +23,8 @@
   display: flex; flex-direction: column; gap: var(--b-3); min-width: 0; padding: var(--b-4);
   background: var(--panel); border: var(--cizgi-ince) solid var(--edge); border-radius: var(--yari-2);
 }
+/* Açma formu Üretim Emirleri'nin penceresindedir (3003 a): başlık ve çerçeve pencereninkidir. */
+.tc-rr3-panel[data-pencerede] { padding: 0; background: none; border: 0; }
 .tc-rr3-form { display: grid; grid-template-columns: repeat(auto-fill, minmax(var(--acilir-enaz), 1fr)); gap: var(--b-3); min-width: 0; }
 .tc-rr3-kpi { display: grid; grid-template-columns: repeat(auto-fit, minmax(var(--pano-kart-enaz), 1fr)); gap: var(--b-3); }
 .tc-rr3-uyari { display: flex; align-items: center; gap: var(--b-2); margin: 0; color: var(--stop); font-size: var(--yazi-s); }
@@ -273,3 +275,14 @@ small.tc-rr3-plan-alt[data-ton="uyari"] { color: var(--hold); }
 .tc-rr3-arsiv-uyari { flex: 1 1 var(--acilir-enaz); min-width: 0; margin: 0; padding-left: var(--b-4); overflow-wrap: anywhere; }
 .tc-rr3-uyari-kutu[data-ton="engel"] { border-color: var(--stop); }
 .tc-rr3-uyari-kutu[data-ton="engel"] > svg { color: var(--stop); }
+/* Adımların arasına adım ekleme (3039): başlamamış adımın üstünde ince "Buraya adım ekle" satırı; form aynı yerde açılır. */
+.tc-rr3-adimlar > li.tc-rr3-araya-yer, .tc-rr3-adimlar > li.tc-rr3-araya-panel { display: block; padding-block: 0; }
+.tc-rr3-adimlar > li.tc-rr3-araya-yer + li { border-top: 0; }
+.tc-rr3-adimlar > li.tc-rr3-araya-panel { padding-block: var(--b-2); background: var(--panel-solid); }
+.tc-rr3-araya { min-height: var(--dokunma-yogun); font-size: var(--yazi-s); color: var(--muted); }
+/* Emir sayfasında (3039) satırın sağı statü ve menü taşır; dar ekranda adın altına iner, ad sütunu daralmaz. */
+@media (max-width: 767px) {
+  .tc-rr3-sayfa-adim .tc-rr3-adimlar > li { grid-template-columns: auto minmax(0, 1fr) auto; }
+  .tc-rr3-sayfa-adim .tc-rr3-adimlar .tc-rr3-eylemler { grid-column: 2 / -1; justify-content: flex-start; }
+  .tc-rr3-sayfa-adim .tc-rr3-adimlar .tc-rr3-eylemler > * { justify-content: flex-start; }
+}

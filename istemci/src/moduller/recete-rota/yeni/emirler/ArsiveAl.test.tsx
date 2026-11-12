@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
-import { json, ornekDurum, rrAc, sunucuKur, YONETICI } from '../test-ortak.tsx';
+import { emirSayfasiAc, json, ornekDurum, rrAc, sunucuKur, YONETICI } from '../test-ortak.tsx';
 import { arsivOzeti, type ArsivOnizlemesi } from './ArsiveAl.tsx';
 
 // 2721: başlamış emir iptal edilmez; önizlemeli uyarıyla durdurulup arşive alınır. Veri uydurmadır.
@@ -23,10 +23,10 @@ const ac = async (onizleme: ArsivOnizlemesi) => {
       'POST /adimli-emirler/61/arsive-al': () => json(200, {}),
     },
   });
-  rrAc();
-  const b = await screen.findByRole('region', { name: 'Üretim emirleri' });
-  fireEvent.click(await within(b).findByRole('button', { name: /UE-0001/ }));
-  fireEvent.click(within(b).getByRole('button', { name: 'UE-0001 için diğer işlemler' }));
+  // 3039: emrin işlemleri Üretim Emirleri'nin emir sayfasındadır.
+  emirSayfasiAc(61);
+  const b = await screen.findByRole('region', { name: 'Emir sayfası' });
+  fireEvent.click(await within(b).findByRole('button', { name: 'UE-0001 işlemleri' }));
   expect(screen.queryByRole('menuitem', { name: 'İptal et' })).toBeNull();
   fireEvent.click(screen.getByRole('menuitem', { name: 'Durdur ve arşive al' }));
   const pencere = await screen.findByRole('dialog', { name: 'UE-0001 arşive alınsın mı?' });

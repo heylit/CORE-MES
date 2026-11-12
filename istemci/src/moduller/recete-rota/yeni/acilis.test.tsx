@@ -21,10 +21,12 @@ describe('Reçete ve Rota adresle açılış: izinli', () => {
     expect(await screen.findByRole('searchbox', { name: 'Ürün ara' })).toBeTruthy();
   });
 
-  it('?yeni=1 Üretim emirlerinde yeni emir formunu açık getirir', async () => {
+  it('3039: Üretim emirleri bölümünde yeni emir formu yoktur; ?yeni=1 bölümü salt gösterimle açar (komut Üretim Emirleri\'ne gider)', async () => {
     sunucuKur(YONETICI);
     rrAc('/recete-rota?yeni=1');
-    expect(await screen.findByRole('button', { name: 'Yeni emir formunu kapat' })).toBeTruthy();
+    await screen.findByRole('region', { name: 'Üretim emirleri' });
+    expect(screen.queryByRole('button', { name: 'Yeni emir formunu kapat' })).toBeNull();
+    expect(screen.queryByRole('region', { name: 'Yeni üretim emri' })).toBeNull();
   });
 
   it('?kayit= seçili emri açar', async () => {

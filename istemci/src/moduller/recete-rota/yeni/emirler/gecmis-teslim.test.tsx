@@ -1,12 +1,13 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
-import { json, rrAc, sunucuKur, YONETICI } from '../test-ortak.tsx';
+import { json, sunucuKur, yeniEmirAc, YONETICI } from '../test-ortak.tsx';
 import { gecmisTeslimMi } from './UretimEmirleri.tsx';
 
 // K19 a (UE-6): bugünden önceki teslimle emir uyarı ve onay penceresiyle açılır; engel yoktur. Veriler uydurmadır.
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
-const bolum = (ad: string) => screen.findByRole('region', { name: ad });
+const onay = () => screen.findByRole('dialog', { name: 'Teslim tarihi geçmişte' });
+const onayAcik = () => screen.queryByRole('dialog', { name: 'Teslim tarihi geçmişte' }) !== null;
 const acmalar = (istekler: readonly { yontem: string; yol: string }[]) => istekler.filter((i) => i.yontem === 'POST' && i.yol === '/adimli-emirler/rotasiz');
 
 describe('geçmiş teslim (K19 a)', () => {
@@ -24,11 +25,10 @@ describe('geçmiş teslim (K19 a)', () => {
         'POST /adimli-emirler/rotasiz': () => json(200, { uretimEmriId: 62 }),
       },
     });
-    rrAc();
-    const b = await bolum('Üretim emirleri');
-    fireEvent.click(await within(b).findByRole('button', { name: 'Yeni üretim emri' }));
-    const form = within(b).getByRole('region', { name: 'Yeni üretim emri' });
-    fireEvent.change(within(form).getByLabelText('Miktar'), { target: { value: '25' } });
+    // 3039: emir Üretim Emirleri'nin yeni emir penceresinde açılır; onay penceresi onun üstüne gelir.
+    yeniEmirAc();
+    const form = await screen.findByRole('dialog', { name: 'Yeni üretim emri' });
+    fireEvent.change(await within(form).findByLabelText('Miktar'), { target: { value: '25' } });
     return { istekler, form };
   }
 
@@ -37,13 +37,13 @@ describe('geçmiş teslim (K19 a)', () => {
     fireEvent.change(within(form).getByLabelText('Teslim'), { target: { value: '2020-01-01' } });
     expect(within(form).getByText('Teslim tarihi geçmişte: emir açılınca gecikmiş görünür.')).toBeTruthy();
     fireEvent.click(within(form).getByRole('button', { name: 'Emri oluştur' }));
-    const pencere = await screen.findByRole('dialog');
+    const pencere = await onay();
     expect(within(pencere).getByText(/bugünden önce/)).toBeTruthy();
     fireEvent.click(within(pencere).getByRole('button', { name: 'Vazgeç' }));
-    await waitFor(() => { expect(screen.queryByRole('dialog')).toBeNull(); });
+    await waitFor(() => { expect(onayAcik()).toBe(false); });
     expect(acmalar(istekler)).toHaveLength(0);
     fireEvent.click(within(form).getByRole('button', { name: 'Emri oluştur' }));
-    fireEvent.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Yine de aç' }));
+    fireEvent.click(within(await onay()).getByRole('button', { name: 'Yine de aç' }));
     await waitFor(() => { expect(acmalar(istekler)).toHaveLength(1); });
   });
 
@@ -52,6 +52,6 @@ describe('geçmiş teslim (K19 a)', () => {
     expect(within(form).queryByText(/Teslim tarihi geçmişte/)).toBeNull();
     fireEvent.click(within(form).getByRole('button', { name: 'Emri oluştur' }));
     await waitFor(() => { expect(acmalar(istekler)).toHaveLength(1); });
-    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(onayAcik()).toBe(false);
   });
 });

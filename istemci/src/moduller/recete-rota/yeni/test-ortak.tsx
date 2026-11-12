@@ -1,7 +1,8 @@
 import { beforeAll, vi } from 'vitest';
+import type { ReactNode } from 'react';
 import { render } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { Link, MemoryRouter, Route, Routes } from 'react-router-dom';
+import { Link, MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import type { Kullanici } from '#paylasilan/kullanici.ts';
 import type { OturumCevabi } from '#paylasilan/sozlesme/oturum.ts';
 import type { KayitlarCevabi } from '#paylasilan/sozlesme/recete-rota.ts';
@@ -9,6 +10,7 @@ import type { DurumCevabi } from '#paylasilan/sozlesme/planlama.ts';
 import { BildirimSaglayici } from '../../../ortak/arayuz/index.ts';
 import { ReceteRotaYeni } from './ReceteRotaYeni.tsx';
 import { SEKMELER } from './sekmeler.ts';
+import { EmirAlani, EmirParcasi, YeniEmirPenceresi } from './emirler/UretimEmirleriIcin.tsx';
 
 // Yeni Reçete ve Rota ekranı testlerinin ortak kurulumu (R1-R3 de kullanır). Kullanıcılar ve kayıtlar uydurmadır.
 const kisi = (id: number, islemler: string[]): Kullanici => ({ id, ad: `Deneme ${id}`, islemler: islemler as Kullanici['islemler'] });
@@ -112,6 +114,8 @@ export function rrAc(adres = '/recete-rota') {
             {SEKMELER.map((s) => <Route key={s.yol} path={s.yol} element={<ReceteRotaYeni />} />)}
             {/* Yönlendiricide bölümü olmayan adres yoktur; ekranın kendi reddi bununla sınanır. */}
             <Route path="/recete-rota/bilinmeyen" element={<ReceteRotaYeni />} />
+            {/* Emrin ana yeri Üretim Emirleri'dir (3039): oraya giden yönlendirme adresiyle görünür. */}
+            <Route path="/uretim-emirleri/*" element={<GidilenAdres />} />
             <Route path="*" element={<p>Başka sayfa</p>} />
           </Routes>
         </MemoryRouter>
@@ -119,4 +123,50 @@ export function rrAc(adres = '/recete-rota') {
     </QueryClientProvider>,
   );
   return istemci;
+}
+
+// Emrin ana yeri Üretim Emirleri'dir (3039): emir orada açılır ve yönetilir. Testler bu modülün o sayfaya verdiği parçaları
+// (açma penceresi; emir sayfasının işlemleri, adımları ve malzemesi) Üretim Emirleri'nin uçlarını taklit etmeden doğrudan çizer.
+function ueSar(adres: string, icerik: ReactNode) {
+  const istemci = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
+  render(
+    <QueryClientProvider client={istemci}>
+      <BildirimSaglayici>
+        <MemoryRouter initialEntries={[adres]}>
+          <Routes>
+            <Route path={adres} element={icerik} />
+            <Route path="*" element={<GidilenAdres />} />
+          </Routes>
+        </MemoryRouter>
+      </BildirimSaglayici>
+    </QueryClientProvider>,
+  );
+  return istemci;
+}
+
+function GidilenAdres() {
+  const yer = useLocation();
+  return <p>Gidilen adres: {yer.pathname}{yer.search}</p>;
+}
+
+export function yeniEmirAc(ilkUrun: string | null = null) {
+  return ueSar('/uretim-emirleri', (
+    <EmirAlani>
+      <section aria-label="Üretim emirleri">
+        <YeniEmirPenceresi acik kapat={() => undefined} ilkUrun={ilkUrun} />
+      </section>
+    </EmirAlani>
+  ));
+}
+
+export function emirSayfasiAc(kayitNo = 61) {
+  return ueSar(`/uretim-emirleri/${String(kayitNo)}`, (
+    <EmirAlani>
+      <section aria-label="Emir sayfası">
+        <EmirParcasi kayitNo={kayitNo} parca="islemler" />
+        <EmirParcasi kayitNo={kayitNo} parca="adimlar" />
+        <EmirParcasi kayitNo={kayitNo} parca="malzeme" />
+      </section>
+    </EmirAlani>
+  ));
 }
