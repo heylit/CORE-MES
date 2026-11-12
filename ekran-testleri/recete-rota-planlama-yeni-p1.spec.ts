@@ -49,7 +49,7 @@ test.describe('P1a Planlama motoru', () => {
       await expect(page.getByRole('dialog', { name: 'Yapılacaklar' })).toHaveCount(0);
     }
     await tasmaz(page);
-    await page.getByRole('button', { name: /Başka/ }).click();
+    await page.getByRole('button', { name: 'Kartlar', exact: true }).click();
     await expect(page.getByRole('menu')).toBeVisible();
     await tasmaz(page);
     await page.keyboard.press('Escape');
@@ -85,7 +85,7 @@ test.describe('P1b Tezgâh haritası', () => {
     const kilavuz = page.getByRole('complementary', { name: 'Kılavuz' });
     await page.waitForTimeout(2000);
     await expect(kilavuz).toHaveCount(0);
-    await page.getByRole('button', { name: /Başka/ }).click();
+    await page.getByRole('button', { name: 'Kartlar', exact: true }).click();
     await page.getByRole('menuitemcheckbox', { name: /Nasıl okunur/ }).click();
     await expect(kilavuz).toBeVisible();
     await tasmaz(page);
@@ -93,14 +93,14 @@ test.describe('P1b Tezgâh haritası', () => {
     const dar = (page.viewportSize()?.width ?? 0) < 600;
     await kilavuz.getByRole('button', { name: dar ? 'Anladım' : 'Kılavuzu kapat' }).click();
     await expect(kilavuz).toHaveCount(0);
-    await page.getByRole('button', { name: /Başka/ }).click();
+    await page.getByRole('button', { name: 'Kartlar', exact: true }).click();
     await page.getByRole('menuitemcheckbox', { name: /Nasıl okunur/ }).click();
     await expect(kilavuz).toBeVisible();
     await kilavuz.getByRole('button', { name: 'Anladım' }).click();
     await expect(kilavuz).toHaveCount(0);
     // Özet'te de açılır, görünüm değişmez (eski atKilavuz).
     await page.getByRole('button', { name: 'Özet', exact: true }).click();
-    await page.getByRole('button', { name: /Başka/ }).click();
+    await page.getByRole('button', { name: 'Kartlar', exact: true }).click();
     await page.getByRole('menuitemcheckbox', { name: /Nasıl okunur/ }).click();
     await expect(kilavuz).toBeVisible();
     await expect(page.getByRole('region', { name: 'Plan nasıl gidiyor?' })).toBeVisible();
@@ -120,7 +120,7 @@ test.describe('P1c Çizelge', () => {
     await page.getByRole('button', { name: 'Çizelge', exact: true }).click();
     const arac = page.getByRole('toolbar', { name: 'Plan araçları' });
     await expect(arac).toBeVisible();
-    await expect(arac.getByRole('button', { name: /Başka/ })).toHaveCount(0);
+    await expect(arac.getByRole('button', { name: 'Kartlar', exact: true })).toHaveCount(0);
     await expect(page.getByRole('region', { name: 'Çizelge, hafta' })).toBeVisible();
     await tasmaz(page);
     await arac.getByRole('button', { name: 'Gün', exact: true }).click();
@@ -322,7 +322,7 @@ test.describe('577b Veri ve kısıtlar', () => {
       await tasmaz(page);
     }
     await expect(page).toHaveURL(/ekran=veri&bolum=denetim$/);
-    await cubuk.getByRole('button', { name: 'Plan', exact: true }).click();
+    await cubuk.getByRole('button', { name: 'Motor', exact: true }).click();
     await expect(page.locator('[data-parca="veri"]')).toHaveCount(0);
     await expect(page).toHaveURL(/\/plan$/);
     expect(ag.yazmalar.filter((y) => !y.startsWith('POST /api/oturum'))).toEqual([]);
@@ -352,7 +352,7 @@ test.describe('577a Nasıl hesaplandı', () => {
       await kok.getByRole('button', { name: 'Akışı adım adım göster' }).click();
       await expect(kok.getByRole('status').filter({ hasText: '1 / 5' })).toBeVisible();
     }
-    await page.getByRole('toolbar', { name: 'Plan çubuğu' }).getByRole('button', { name: 'Plan', exact: true }).click();
+    await page.getByRole('toolbar', { name: 'Plan çubuğu' }).getByRole('button', { name: 'Motor', exact: true }).click();
     await expect(kok).toHaveCount(0);
     expect(ag.yazmalar.filter((y) => !y.startsWith('POST /api/oturum'))).toEqual([]);
   });
@@ -372,7 +372,7 @@ test.describe('577a Bugünün kararları', () => {
       }
       await expect(kok.getByRole('region', { name: /^Gün katmanı/ })).toBeVisible();
     }
-    await page.getByRole('toolbar', { name: 'Plan çubuğu' }).getByRole('button', { name: 'Plan', exact: true }).click();
+    await page.getByRole('toolbar', { name: 'Plan çubuğu' }).getByRole('button', { name: 'Motor', exact: true }).click();
     await expect(kok).toHaveCount(0);
     expect(ag.yazmalar.filter((y) => !y.startsWith('POST /api/oturum'))).toEqual([]);
   });
@@ -422,9 +422,9 @@ test.describe('577c Geçmiş ve fark', () => {
     }
     await expect(page).toHaveURL(/ekran=gecmis&bolum=iz$/);
     await expect(kok.getByRole('table', { name: 'Değişiklik izi' }).or(kok.getByText(/^(Kayıt yok\.|Planlama çalışması yok)$/)).first()).toBeVisible();
-    await cubuk.getByRole('button', { name: 'Plan', exact: true }).click();
+    await cubuk.getByRole('button', { name: 'Motor', exact: true }).click();
     await expect(kok).toHaveCount(0);
-    const baska = page.getByRole('button', { name: /Başka/ });
+    const baska = page.getByRole('button', { name: 'Kartlar', exact: true });
     if (await baska.isVisible()) {
       await baska.click();
       await page.getByRole('menuitemcheckbox', { name: /Önceki planla fark/ }).click();
@@ -454,7 +454,7 @@ test.describe('577d Tezgâh stüdyosu', () => {
 test.describe('577d Tahta kartları', () => {
   test('Sekiz kart açılır, bölgelere dizilir, Esc ve rakam tuşları kapatır; sayfa taşmaz, açmak yazma göndermez', async ({ page, ac, ag }) => {
     await ac('/plan');
-    const baska = page.getByRole('button', { name: /Başka/ });
+    const baska = page.getByRole('button', { name: 'Kartlar', exact: true });
     if (await baska.isVisible() && await (async () => { await baska.click(); return page.getByRole('menuitemcheckbox', { name: /Siparişler/ }).isVisible(); })()) {
       await page.keyboard.press('Escape');
       for (const ad of [/^Plan/, /Siparişler/, /Kuyruklar/, /Senaryolar/, /Kısıt ve veri/, /Hesaplar/, /Ne neyi etkiliyor/, /Reçete ve Rota/]) {

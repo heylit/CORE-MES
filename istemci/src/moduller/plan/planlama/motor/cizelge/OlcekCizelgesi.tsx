@@ -6,6 +6,8 @@ import type { Aralik } from '../harita/kurallar.ts';
 import type { Derleme, OkunanPlan } from '../kurallar.ts';
 import { degisken, yuzde } from '../ortak.tsx';
 import { gunAdi, olcekCizelgesi } from './kurallar.ts';
+import { useKaynakAdlari } from '../../kaynak-kodu.tsx';
+import { emirKuyrugu } from '../../ortak/emir-no.ts';
 
 // Hafta, ay ve yıl çizelgesi (zq-olcek olYuzey): tezgâh satırlarında işler gün ızgarasında, ayda ve yılda doluluk ısısı; yıl işleri tek tek
 // göstermez. İşe basmak onu seçer, gün başlığına basmak o günü saatlik açar.
@@ -20,6 +22,7 @@ export function OlcekCizelgesi(o: Ozellikler) {
   const { c, p, cx, olcek, r, now } = o;
   const v = useMemo(() => olcekCizelgesi(c, p, cx, olcek, r, now), [c, p, cx, olcek, r, now]);
   const ad = OLCEK_AD[olcek]; const yil = olcek === 'yil';
+  const adlar = useKaynakAdlari();
   return (
     <section className="tc-pym-ol" data-olcek={olcek} aria-label={`Çizelge, ${ad}`}>
       <header className="tc-pym-ol-ust">
@@ -42,13 +45,13 @@ export function OlcekCizelgesi(o: Ozellikler) {
         <div className="tc-pym-ol-satirlar">
           {v.satirlar.map((s) => (
             <div key={s.m} className="tc-pym-ol-satir">
-              <button type="button" className="tc-pym-ol-ad tc-pym-mono" onClick={() => o.tezSec(s.m)}>{s.etiket}</button>
+              <button type="button" className="tc-pym-ol-ad tc-pym-mono" title={s.etiket} onClick={() => o.tezSec(s.m)}><span dir="ltr">{s.etiket}</span></button>
               <div className="tc-pym-ol-cizgi">
                 {s.isi.map((h) => <i key={h.x} className="tc-pym-ol-isi" data-d={h.d} title={h.baslik} ref={degisken({ '--x': yuzde(h.x), '--w': yuzde(h.w), '--o': h.o.toFixed(2) })} />)}
                 {s.isler.map((i) => (
                   <button key={i.id} type="button" className="tc-pym-ol-is" data-secili={o.secili === i.id ? '' : undefined} data-sabit={i.sabit ? '' : undefined}
                     title={i.baslik} ref={degisken({ '--x': yuzde(i.x), '--w': yuzde(i.w), '--c': i.renk })} onClick={() => o.isSec(i.id)}>
-                    {i.etiket ? <span className="tc-pym-mono">{i.etiket}</span> : <span className="tc-gizli-etiket">{i.id}</span>}
+                    {i.etiket ? <span className="tc-pym-mono">{emirKuyrugu(adlar.emir(i.etiket))}</span> : <span className="tc-gizli-etiket">{i.id}</span>}
                   </button>
                 ))}
               </div>

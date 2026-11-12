@@ -21,3 +21,8 @@
 @media (max-width: 767px) {
   .tc-py-gorunum > :is(.tc-pys, .tc-pyk, .tc-pyz, .tc-pyu, .tc-pyv) { margin-inline: var(--b-4); }
 }
+
+/* Ortadan kırpma (ortak/OrtaKirpik.tsx): baş kısım kısalır, kuyruk kalır. */
+.tc-py-ok { display: inline-flex; max-width: 100%; vertical-align: bottom; }
+.tc-py-ok > span:first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tc-py-ok > span:last-child { flex: none; white-space: nowrap; }

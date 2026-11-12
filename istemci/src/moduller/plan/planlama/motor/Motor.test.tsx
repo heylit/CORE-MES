@@ -112,6 +112,21 @@ describe('PlanlamaMotoru', () => {
     expect(screen.queryByRole('button', { name: 'Değişiklikleri uygula' })).toBeNull();
   });
 
+  it('Ne yapmalıyım? haritanın yanında dar şeride iner, tercih saklanır, şeritten geri açılır (3042)', () => {
+    localStorage.removeItem('tmi:planlama:yorum-dar');
+    ac();
+    const yorum = screen.getByRole('region', { name: 'Ne yapmalıyım?' });
+    fireEvent.click(within(yorum).getByRole('button', { name: 'Ne yapmalıyım? bölümünü daralt' }));
+    const dar = screen.getByRole('region', { name: 'Ne yapmalıyım?' });
+    expect(dar.hasAttribute('data-dar')).toBe(true);
+    expect(document.querySelector('.tc-pym-oz')?.hasAttribute('data-yorum-dar')).toBe(true);
+    expect(screen.getByRole('region', { name: 'Tezgâh haritası' })).toBeTruthy();
+    expect(localStorage.getItem('tmi:planlama:yorum-dar')).toBe('1');
+    fireEvent.click(within(dar).getByRole('button', { expanded: false }));
+    expect(screen.getByRole('region', { name: 'Ne yapmalıyım?' }).hasAttribute('data-dar')).toBe(false);
+    expect(localStorage.getItem('tmi:planlama:yorum-dar')).toBeNull();
+  });
+
   it('plan yazma yetkisi yoksa Planı kur görünmez ya da pasif kalır', () => {
     ac({ c: { ...ornekCalisma(), plan: null } as PlanlamaCalismasi, yaz: false, komut: { kaydet: vi.fn(), degistir: vi.fn() } as unknown as CalismaKomutu });
     for (const b of screen.getAllByRole('button', { name: 'Planı kur' })) expect(b.getAttribute('aria-disabled')).toBe('true');
@@ -156,7 +171,7 @@ describe('PlanlamaMotoru', () => {
 
   it('Başka menüsü açılır; sekiz kart açılabilir; gecikme kaynağı ve kısayollar açılır', () => {
     ac();
-    fireEvent.click(screen.getByRole('button', { name: /Başka/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Kartlar' }));
     const menu = screen.getByRole('menu');
     expect(within(menu).getByRole('menuitem', { name: /Bugünün kararları/ }).getAttribute('title')).toContain(YOK_NOTU);
     expect(within(menu).getByRole('menuitemcheckbox', { name: /Siparişler/ }).getAttribute('aria-checked')).toBe('false');
@@ -164,7 +179,7 @@ describe('PlanlamaMotoru', () => {
     expect(within(menu).getByRole('menuitem', { name: /Kartları bölgelere diz/ }).getAttribute('title')).toContain('Açık kart yok.');
     fireEvent.click(within(menu).getByRole('menuitemcheckbox', { name: /Gecikme kaynağı/ }));
     expect(screen.queryByRole('menu')).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: /Başka/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Kartlar' }));
     expect(screen.getByRole('menuitemcheckbox', { name: /Gecikme kaynağı/ }).getAttribute('aria-checked')).toBe('true');
     fireEvent.click(screen.getByRole('menuitem', { name: /Klavye kısayolları/ }));
     expect(screen.getByRole('dialog', { name: 'Klavye kısayolları' }).textContent).toContain('Seçilene göre Düzenle menüsü');
@@ -199,7 +214,7 @@ describe('PlanlamaMotoru', () => {
 
   it('kılavuz Başka menüsünden Özet içinde açılır, görünüm değişmez; Anladım kapatır', () => {
     ac();
-    fireEvent.click(screen.getByRole('button', { name: /Başka/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Kartlar' }));
     fireEvent.click(screen.getByRole('menuitemcheckbox', { name: /Nasıl okunur/ }));
     expect(screen.getByRole('region', { name: 'Plan nasıl gidiyor?' })).toBeTruthy();
     const k = screen.getByRole('complementary', { name: 'Kılavuz' });
@@ -235,7 +250,7 @@ describe('PlanlamaMotoru', () => {
     ac();
     fireEvent.click(screen.getByRole('button', { name: 'Çizelge' }));
     const arac = screen.getByRole('toolbar', { name: 'Plan araçları' });
-    expect(within(arac).queryByRole('button', { name: /Başka/ })).toBeNull();
+    expect(within(arac).queryByRole('button', { name: 'Kartlar' })).toBeNull();
     expect(within(arac).getByRole('tab', { name: 'Tezgâhlar' }).getAttribute('aria-selected')).toBe('true');
     const ol = screen.getByRole('region', { name: 'Çizelge, hafta' });
     expect(within(ol).getAllByRole('button').map((b) => b.textContent).filter((x) => x === 'fason Ornek Fason Isil Islem')).toHaveLength(1);

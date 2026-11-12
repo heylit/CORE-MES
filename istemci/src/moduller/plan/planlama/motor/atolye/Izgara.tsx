@@ -62,8 +62,8 @@ export function Izgara({ ort, pano, parla }: { ort: Ortam; pano: MutableRefObjec
       <div key={S.m} className="tc-pym-tp-satir" data-m={S.m} data-son={S.son ? '' : undefined} data-soluk={soluk ? '' : undefined}>
         <button type="button" className="tc-pym-tp-m" data-darbogaz={darb ? '' : undefined} title={`${S.ad} · görünen sürede doluluk %${y}${darb ? ' · darboğaz' : ''}`}
           onClick={(e) => ort.kartAc({ tur: 'gunluk', m: S.m }, ankraj(e))}>
-          <b>{S.fason ? S.m.slice(1) : S.m}{M && <span className="tc-pym-tp-yuzde">{darb && <Simge ad="fire" boyut="k" />}{`%${y}`}</span>}</b>
-          <small>{S.ad}</small>
+          <b><span className="tc-pym-tp-kod" title={ort.ad.kaynak(S.m)}><span dir="ltr">{ort.ad.kaynak(S.m)}</span></span>{M && <span className="tc-pym-tp-yuzde">{darb && <Simge ad="fire" boyut="k" />}{`%${y}`}</span>}</b>
+          {S.ad !== ort.ad.kaynak(S.m) && <small>{S.ad}</small>}
           {M && <span className="tc-pym-tp-yuk"><i ref={degisken({ '--o': `${o * 100}%` })} /></span>}
         </button>
         <div className="tc-pym-tp-zaman" ref={degisken({ '--w': `${W}px` })}>

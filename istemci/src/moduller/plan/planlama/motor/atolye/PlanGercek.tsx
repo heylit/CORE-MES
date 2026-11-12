@@ -11,6 +11,7 @@ import { degisken, HAZIRLANIYOR } from '../ortak.tsx';
 import {
   emirNoOkuyucu, PG_NEDEN, pgGostergeleri, pgKaynakKur, pgNedenOzeti, pgSa, pgSatirlar, pgSerit, saatYaz, sapmaEsik, tarihGun, tt, type PgKaynak, type PgSatiri, type EmirNo,
 } from './kurallar.ts';
+import { useKaynakAdlari } from '../../kaynak-kodu.tsx';
 import { useAn } from '../saat.ts';
 
 // Plan ve gerçekleşen (zz35): taban plan, son canlı plan ve atölyede olan; üç yönlü karşılaştırma. Buradan plan değişmez. Taban ve canlı
@@ -18,7 +19,7 @@ import { useAn } from '../saat.ts';
 export function PlanGercek({ o, c, p, canliSurum }: { o: PlanlamaEkranOzellikleri; c: PlanlamaCalismasi; p: OkunanPlan; canliSurum: number | null }) {
   const emirler = o.depo.durum?.emirler ?? null;
   const an = useAn();
-  const emirNo = useMemo(() => emirNoOkuyucu(o.depo.receteRotaKaydi), [o.depo.receteRotaKaydi]);
+  const emirNo = useMemo(() => emirNoOkuyucu(o.depo.receteRotaKaydi, o.depo.durum?.emirler), [o.depo.receteRotaKaydi, o.depo.durum?.emirler]);
   const cx = useMemo(() => derle(girdiKur(c, emirler ? bitenler(emirler, c.D) : plandanBitenler(c, p), an)), [c, p, emirler, an]);
   const hazir = useMemo(() => malzemeHazir(cx), [cx]);
   const [cevap, setCevap] = useState<{ r: TabanVeCanliCevabi } | { hata: string } | null>(null);
@@ -72,6 +73,7 @@ function Gostergeler({ c, p, K, L, gecmis }: { c: PlanlamaCalismasi; p: OkunanPl
 
 const LEJANT = [['taban', 'Taban plan'], ['canli', 'Son canlı plan'], ['zaman', 'Gerçekleşen, zamanında'], ['gec', 'Gerçekleşen, geç'], ['calisiyor', 'Çalışıyor (tahmin)']] as const;
 function Serit({ c, p, K, now }: { c: PlanlamaCalismasi; p: OkunanPlan; K: PgKaynak; now: number }) {
+  const ad = useKaynakAdlari();
   const { a, b, satirlar } = pgSerit(c, p, K, now);
   if (!satirlar.length) return null;
   const yz = (t: number) => `${(Math.max(0, Math.min(1, (t - a) / (b - a))) * 100).toFixed(2)}%`;
@@ -79,12 +81,12 @@ function Serit({ c, p, K, now }: { c: PlanlamaCalismasi; p: OkunanPlan; K: PgKay
     ? <i className="tc-pym-tp-pg-c" data-k={k} ref={degisken({ '--x': yz(S0), '--w': `calc(${yz(C0)} - ${yz(S0)})` })} /> : null);
   return (
     <section className="tc-pym-tp-pg-blok" aria-label="Tezgâhta üç çizgi">
-      <h4><Simge ad="gantt" boyut="k" /> Tezgâhta üç çizgi <small>{satirlar.map((x) => x.m).join(', ')}</small></h4>
+      <h4><Simge ad="gantt" boyut="k" /> Tezgâhta üç çizgi <small>{satirlar.map((x) => ad.kaynak(x.m)).join(', ')}</small></h4>
       <div className="tc-pym-tp-pg-serit">
         <div className="tc-pym-tp-pg-satir"><span /><div className="tc-pym-tp-pg-gun">{[0, 1, 2, 3, 4].map((i) => <span key={i}>{tarihGun(c.D, a + i * 24)}</span>)}</div></div>
         {satirlar.map(({ m, isler }) => (
           <div key={m} className="tc-pym-tp-pg-satir">
-            <span className="tc-pym-tp-pg-m">{m}</span>
+            <span className="tc-pym-tp-pg-m">{ad.kaynak(m)}</span>
             <div className="tc-pym-tp-pg-yol" ref={degisken({ '--simdi': yz(now) })}>
               {isler.map((x) => (
                 <div key={x.id} className="tc-pym-tp-pg-is" title={`${x.id} · taban ${tt(c.D, x.t0.S)} → ${tt(c.D, x.t0.C)}`}>

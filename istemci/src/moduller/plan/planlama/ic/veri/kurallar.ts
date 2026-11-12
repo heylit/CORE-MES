@@ -86,13 +86,13 @@ export type SiparisSuzgeci = 'hepsi' | 'gec' | 'yuksek';
 export const SIPARIS_SUZGECLERI: readonly [SiparisSuzgeci, string][] = [['hepsi', 'Hepsi'], ['gec', 'Gecikenler'], ['yuksek', 'Yüksek öncelik']];
 export type PlanJ = Record<string, { C: number | null; T: number | null }>;
 // Arama sipariş no, ürün kodu ve ürün adında (data-ara).
-export function siparisSuz(l: readonly Siparis[], J: PlanJ, f: SiparisSuzgeci, ara: string, urunAd: (id: string) => string = (id) => id): Siparis[] {
+export function siparisSuz(l: readonly Siparis[], J: PlanJ, f: SiparisSuzgeci, ara: string, urunAd: (id: string) => string = (id) => id, emirNo: (id: string) => string = (id) => id): Siparis[] {
   const q = ara.trim().toLocaleLowerCase('tr-TR');
   return l.filter((s) => {
     if (f !== 'hepsi' && s.iptal === true) return false;
     if (f === 'gec') { const j = J[s.id]; if (!j || !(j.T == null || j.T > 0.01)) return false; }
     if (f === 'yuksek' && s.oncelik !== 1) return false;
-    return !q || `${s.id} ${s.urun} ${urunAd(s.urun)}`.toLocaleLowerCase('tr-TR').includes(q);
+    return !q || `${s.id} ${emirNo(s.id)} ${s.urun} ${urunAd(s.urun)}`.toLocaleLowerCase('tr-TR').includes(q);
   });
 }
 export type SiparisDurumu = { ad: string; ton: 'pasif' | 'hata' | 'tamam' } | null;

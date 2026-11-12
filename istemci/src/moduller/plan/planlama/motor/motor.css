@@ -70,7 +70,6 @@
 }
 .tc-pym-sb-ekran button[aria-current] { background: var(--panel-solid); color: var(--ink); box-shadow: 0 var(--cizgi-ince) var(--kayma) color-mix(in oklab, var(--ink) 12%, transparent); }
 .tc-pym-sb-ekran button:hover { color: var(--ink); }
-.tc-pym-sb-ekran button:not([aria-current]) > span { display: none; }
 .tc-pym-sb-nb { display: flex; gap: var(--pay-ince); }
 .tc-pym-sb-nb-k {
   display: inline-flex; align-items: baseline; gap: var(--b-1); min-height: calc(var(--dokunma) - var(--b-2)); padding: var(--b-2);
@@ -84,6 +83,7 @@
 .tc-pym-sb-nb-k[data-ton="kotu"] small { color: var(--stop); }
 .tc-pym-sb-sag { display: inline-flex; align-items: center; gap: var(--b-2); margin-left: auto; }
 .tc-pym-sb-not { color: var(--muted); font-size: var(--yazi-xs); white-space: nowrap; }
+.tc-pym-sb-kisa { display: none; }
 
 .tc-pym-sk-nb {
   position: absolute; z-index: calc(var(--z-katman) + 5); top: calc(100% - var(--b-1)); left: var(--b-2); right: var(--b-2);
@@ -166,6 +166,20 @@
 .tc-pym-oz > [data-b="ozet"] { grid-area: oz; }
 .tc-pym-oz > [data-b="harita"] { grid-area: ha; }
 .tc-pym-oz > [data-b="yorum"] { grid-area: yo; }
+/* Ne yapmalıyım? daraltılınca harita on bir sütun alır, bölüm sağda dikey şerit olur; alttaki bölümler yerinde kalır. */
+.tc-pym-oz[data-yorum-dar] { grid-template-areas: "oz oz oz oz oz oz oz oz oz oz oz oz" "ha ha ha ha ha ha ha ha ha ha ha yo" "be be be be yu yu yu yu su su su su" "ya ya ya ya ya ya ya ya ya ya ya ya"; }
+.tc-pym-br-daralt { margin-left: auto; display: inline-flex; align-items: center; justify-content: center; min-width: var(--dokunma-yogun); min-height: var(--dokunma-yogun); border: 0; border-radius: var(--yari-1); background: transparent; color: var(--muted); cursor: pointer; }
+.tc-pym-br-daralt:hover { background: var(--panel2); color: var(--ink); }
+.tc-pym-br-dar { display: flex; }
+.tc-pym-br-dar > button {
+  flex: 1; display: flex; flex-direction: column; align-items: center; gap: var(--b-2); padding: var(--b-3) var(--b-1);
+  border: var(--cizgi-ince) solid var(--edge2); border-left: var(--kayma) solid var(--edge2); border-radius: var(--yari-2); background: var(--panel-solid); color: var(--ink); cursor: pointer;
+}
+.tc-pym-br-dar > button[data-ton="hata"] { border-left-color: var(--stop); }
+.tc-pym-br-dar > button[data-ton="uyari"] { border-left-color: var(--hold); }
+.tc-pym-br-dar > button[data-ton="tamam"] { border-left-color: var(--run); }
+.tc-pym-br-dar > button > b { font-family: var(--font-mono); font-size: var(--yazi-l); }
+.tc-pym-br-dar > button > span { writing-mode: vertical-rl; font-size: var(--yazi-s); color: var(--muted); }
 .tc-pym-oz > [data-b="bekle"] { grid-area: be; }
 .tc-pym-oz > [data-b="yuk"] { grid-area: yu; }
 .tc-pym-oz > [data-b="sure"] { grid-area: su; }
@@ -484,11 +498,22 @@
 @container (max-width: 1399px) {
   .tc-pym-sb-ekran button { padding: 0 var(--b-2); }
 }
+/* Dört ekran adı ve nabız birlikte ancak geniş çubuğa sığar: orta genişlikte iyileştirme düğmesi kısa adını alır,
+   daha darda yalnız seçili ekranın adı yazılır (öteki adlar görselden kalkar, ipucu ve ekran okuyucu söyler). */
+@container (min-width: 1200px) and (max-width: 1399px) {
+  .tc-pym-sb-uzun { display: none; }
+  .tc-pym-sb-kisa { display: inline; }
+}
+@container (max-width: 1199px) {
+  .tc-pym-sb-ekran button:not([aria-current]) > span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+}
 @container (max-width: 1099px) {
   .tc-pym-sb-sag .tc-rozet, .tc-pym-sb-nb-k[data-ikincil], .tc-pym-sb-iyi[data-olay] > span { display: none; }
   .tc-pym-nb-l { grid-template-columns: repeat(6, minmax(8.5rem, 1fr)); }
   .tc-pym-nb-ref-ad { display: none; }
-  .tc-pym-oz { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-areas: "oz oz" "ha ha" "yo be" "yu su" "ya ya"; }
+  .tc-pym-oz, .tc-pym-oz[data-yorum-dar] { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-areas: "oz oz" "ha ha" "yo be" "yu su" "ya ya"; }
+  .tc-pym-br-dar > button { flex-direction: row; justify-content: flex-start; padding: var(--b-2) var(--b-3); }
+  .tc-pym-br-dar > button > span { writing-mode: horizontal-tb; }
   .tc-pym-oz-yer { height: calc(var(--b-1) * 95); }
 }
 @container (max-width: 760px) {
@@ -516,7 +541,7 @@
   .tc-pym-nb-ref { margin-left: 0; }
   .tc-pym-nb-l { grid-template-columns: repeat(6, 8rem); }
   .tc-pym-nb-egri { width: var(--dokunma); }
-  .tc-pym-oz { grid-template-columns: minmax(0, 1fr); grid-template-areas: "oz" "ha" "yo" "be" "yu" "su" "ya"; padding: var(--b-2); }
+  .tc-pym-oz, .tc-pym-oz[data-yorum-dar] { grid-template-columns: minmax(0, 1fr); grid-template-areas: "oz" "ha" "yo" "be" "yu" "su" "ya"; padding: var(--b-2); }
   .tc-pym-oz-yer { height: calc(var(--b-6) * 10); }
 }
 

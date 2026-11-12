@@ -53,7 +53,7 @@ describe('PlanlamaYeni', () => {
     ac('/plan/ysiparis');
     const cubuk = await screen.findByRole('toolbar', { name: 'Plan çubuğu' }, { timeout: 10000 });
     expect(cubuk.querySelector('[aria-current]')).toBeNull();
-    fireEvent.click(within(cubuk).getByRole('button', { name: 'Plan' }));
+    fireEvent.click(within(cubuk).getByRole('button', { name: 'Motor' }));
     await waitFor(() => { expect(screen.getByTestId('adres').textContent).toBe('/plan'); });
     await waitFor(() => { expect(screen.getAllByRole('toolbar', { name: 'Plan çubuğu' })).toHaveLength(1); }, { timeout: 10000 });
   }, 20000);

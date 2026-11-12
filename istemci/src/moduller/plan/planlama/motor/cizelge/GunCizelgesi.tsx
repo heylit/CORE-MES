@@ -11,7 +11,6 @@ import { gunAcilimlari, gunBaslayanlar, gunCizelgesi, gunDondurmasiniKaldir, gun
 
 // Saatlik gün (s-gun sGunYuzey ve gyYan, w-v20 kilit şeridi): tezgâh satırları ve saatler; kapalı saat, arıza, şimdi ve dondurma bölgesi.
 // İş seçilince yapabilen tezgâhlar yanar, sağda işin ayrıntısı açılır. Taşıma, saat kapatma, çoklu kaydırma ve formlar motorla gelir (357 b).
-const SAATLER = Array.from({ length: 12 }, (_, i) => i * 2);
 
 interface Ozellikler {
   c: PlanlamaCalismasi; p: OkunanPlan; cx: Derleme; g: number; planYaz: boolean; planKilitle: boolean;
@@ -73,7 +72,7 @@ export function GunCizelgesi(o: Ozellikler) {
         <div className="tc-pym-gy-tablo">
           <div className="tc-pym-gy-saat" aria-hidden="true">
             <span className="tc-pym-gy-ad" />
-            <div>{SAATLER.map((s) => <span key={s} ref={degisken({ '--x': yuzde(s / 24) })}>{String(s).padStart(2, '0')}</span>)}</div>
+            <div>{v.saatler.map((s) => <span key={s.ad} ref={degisken({ '--x': yuzde(s.x) })}>{s.ad}</span>)}</div>
           </div>
           <div className="tc-pym-gy-satirlar">
             {(v.simdi != null || v.cit != null || v.citBant) && (

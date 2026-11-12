@@ -23,6 +23,8 @@ interface Ozellikler {
   bekleyenUygula?: BekleyenUygulayici | null;
   // Plan güncelken kayıtlı planı iyileştirme araması, önizlemeli (2129-1 b); verilmezse düğme pasif.
   hamle?: Hamleci | null;
+  // Stüdyo'da Olay ekle ve iyileştirme tahtanın kendi araç çubuğunda var; bantta tekrarlanmaz. Plan nabzı her ekranda kalır.
+  studyoda?: boolean;
 }
 
 const KISA: [NabizGostergesi, string, boolean][] = [['late', '', false], ['wT', 'toplam gecikme', true], ['dar', 'darboğaz', true]];
@@ -39,8 +41,8 @@ export function Cubuk(o: Ozellikler) {
       <div className="tc-pym-sb" role="toolbar" aria-label="Plan çubuğu">
         <nav className="tc-pym-sb-ekran" aria-label="Ekranlar">
           {/* Plan ekranının sayfalarında (Bugünün kararları, Nasıl hesaplandı) Plan seçilidir ve tahtaya döner; tahtada planaGit verilmez. */}
-          <button type="button" aria-current={o.etkin === 'plan' ? 'page' : undefined} onClick={o.planaGit ?? undefined} title={o.planaGit ? 'Plan' : undefined}><Simge ad="gantt" boyut="k" /><span>Plan</span></button>
-          <button type="button" aria-current={o.etkin === 'studyo' ? 'page' : undefined} onClick={o.etkin === 'studyo' ? undefined : o.studyo} title="Planlama stüdyosu"><Simge ad="layers" boyut="k" /><span>Stüdyo</span></button>
+          <button type="button" aria-current={o.etkin === 'plan' ? 'page' : undefined} onClick={o.planaGit ?? undefined} title={o.planaGit ? 'Motor: planı anla' : undefined}><Simge ad="gantt" boyut="k" /><span>Motor</span></button>
+          <button type="button" aria-current={o.etkin === 'studyo' ? 'page' : undefined} onClick={o.etkin === 'studyo' ? undefined : o.studyo} title="Stüdyo: planı düzenle ve yayınla"><Simge ad="layers" boyut="k" /><span>Stüdyo</span></button>
           {o.etkin === 'veri' || o.veri
             ? <button type="button" aria-current={o.etkin === 'veri' ? 'page' : undefined} onClick={o.etkin === 'veri' ? undefined : o.veri ?? undefined} title="Veri ve kısıtlar"><Simge ad="layers" boyut="k" /><span>Veri</span></button>
             : <button type="button" aria-disabled="true" title={`Veri: ${YOK_NOTU}`}><Simge ad="layers" boyut="k" /><span>Veri</span></button>}
@@ -66,14 +68,14 @@ export function Cubuk(o: Ozellikler) {
         )}
         <span className="tc-pym-sb-sag">
           {!o.plan ? <Rozet ton="pasif">Plan yok</Rozet> : o.guncel ? <Rozet ton="tamam">Güncel</Rozet> : <Rozet ton="uyari">Veri değişti</Rozet>}
-          {o.planYaz && o.plan && (
+          {o.planYaz && o.plan && !o.studyoda && (
             <button type="button" className="tc-dugme tc-pym-kucuk tc-pym-hayalet tc-pym-sb-iyi" data-olay="" aria-disabled={olayAc ? undefined : 'true'}
               title={`Olay ekle: acil sipariş, arıza, malzeme gecikmesi.${olayAc ? '' : ` ${OLAY_YOK}`}`} aria-label="Olay ekle" onClick={olayAc ? () => { olayAc('ariza'); } : undefined}>
               <Simge ad="alert" boyut="k" /><span>Olay ekle</span>
             </button>
           )}
           {/* Motor sunucuda açıktır (576): düğme ancak çalışma yokken pasiftir; nedeni yalnız ipucunda kalınca kullanıcı düğmeyi bozuk sanıyor. */}
-          {pasifNot !== null && <small className="tc-pym-sb-not">{pasifNot}</small>}
+          {pasifNot !== null && !o.studyoda && <small className="tc-pym-sb-not">{pasifNot}</small>}
           {o.planYaz && uyg ? (
             <button type="button" className="tc-dugme tc-pym-kucuk tc-pym-sb-iyi tc-dugme-birincil" disabled={uyg.suruyor} aria-busy={uyg.suruyor || undefined}
               title={uyg.suruyor ? KURULUYOR : `Değişiklikleri uygula: ${String(uyg.say)} bekleyen değişikliğin etkilediği işler yeniden dizilir; öteki işler yerinde kalır.`}
@@ -85,17 +87,17 @@ export function Cubuk(o: Ozellikler) {
               title={kur.suruyor ? KURULUYOR : 'Planı kur: motor siparişleri sıfırdan yerleştirir.'} aria-label="Planı kur" onClick={kur.kur}>
               <Simge ad="play" boyut="k" /><span>{kur.suruyor ? 'Kuruluyor' : 'Planı kur'}</span>
             </button>
-          ) : o.plan && o.hamle ? (
+          ) : o.studyoda ? null : o.plan && o.hamle ? (
             <IyilestirDugmesi h={o.hamle} />
           ) : o.plan && o.planaGit ? (
             <button type="button" className={`tc-dugme tc-pym-kucuk tc-pym-sb-iyi${o.guncel ? '' : ' tc-dugme-birincil'}`}
               title="Plan iyileştirme ara: Plan sayfasında motor daha iyi bir plan arar; bulursa önizlersiniz." aria-label="Plan iyileştirme ara" onClick={o.planaGit}>
-              <Simge ad="play" boyut="k" /><span>Plan iyileştirme ara</span>
+              <Simge ad="play" boyut="k" /><IyiAdi />
             </button>
           ) : (
             <button type="button" className={`tc-dugme tc-pym-kucuk tc-pym-sb-iyi${o.plan && o.guncel ? '' : ' tc-dugme-birincil'}`} aria-disabled="true"
               title={`${o.plan ? 'Plan iyileştirme ara' : 'Planı kur'}: ${pasifNeden}`} aria-label={o.plan ? 'Plan iyileştirme ara' : 'Planı kur'}>
-              <Simge ad="play" boyut="k" /><span>{o.plan ? 'Plan iyileştirme ara' : 'Planı kur'}</span>
+              <Simge ad="play" boyut="k" />{o.plan ? <IyiAdi /> : <span>Planı kur</span>}
             </button>
           ))}
         </span>
@@ -105,13 +107,18 @@ export function Cubuk(o: Ozellikler) {
   );
 }
 
+// Çubuk dar kaldığında (dört ekran adı yazılıyken) uzun ad sağ kenardan taşar; orada kısa ad görünür, düğmenin adı (aria-label) aynı kalır.
+function IyiAdi() {
+  return <span><span className="tc-pym-sb-uzun">Plan iyileştirme ara</span><span className="tc-pym-sb-kisa">İyileştir</span></span>;
+}
+
 function IyilestirDugmesi({ h }: { h: Hamleci }) {
   const y = hamleYapisi(h, (x) => { x.iyilestir(); });
   return (
     <button type="button" className="tc-dugme tc-pym-kucuk tc-pym-sb-iyi" aria-disabled={y.yap ? undefined : 'true'} aria-busy={h.suruyor || undefined}
       title={y.yap ? 'Plan iyileştirme ara: motor daha iyi bir plan arar; bulursa önizlersiniz, siz uygularsınız.' : `Plan iyileştirme ara: ${y.not}`}
       aria-label="Plan iyileştirme ara" onClick={y.yap ?? undefined}>
-      <Simge ad="play" boyut="k" /><span>{h.suruyor ? 'Aranıyor' : 'Plan iyileştirme ara'}</span>
+      <Simge ad="play" boyut="k" />{h.suruyor ? <span>Aranıyor</span> : <IyiAdi />}
     </button>
   );
 }

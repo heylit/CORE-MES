@@ -53,7 +53,7 @@ describe('Keşfet hesapları', () => {
       ['Doluluk', 'bilgi', 'yuk'], ['Ayarlar', 'bilgi', null], ['Teslim', 'bilgi', null], ['Hazırlık', 'bilgi', null],
     ]);
     expect(html(l[0]?.m ?? [])).toBe("Planda <b>2</b> sipariş var. <b>1</b>'i zamanında, <b>1</b>'i geç. Son iş <b>27.10 Sal 17:55</b> bitiyor.");
-    expect(html(l[1]?.m ?? [])).toBe('Geç siparişleri en çok <b>Fason · 5</b> bekletiyor: toplam <b>2,8 sa</b>. Bu kaynağı rahatlatmak gecikmeyi en çok azaltır.');
+    expect(html(l[1]?.m ?? [])).toBe('Geç siparişleri en çok <b>Fason · Ornek Fason Isil Islem</b> bekletiyor: toplam <b>2,8 sa</b>. Bu kaynağı rahatlatmak gecikmeyi en çok azaltır.');
     expect(html(l[7]?.m ?? [])).toBe(HAZIRLIK_YOK);
   });
 });

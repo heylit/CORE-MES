@@ -146,12 +146,12 @@ describe('Nasıl hesaplandı sayfası planlama ekranında', () => {
   it('Başka menüsünün Sayfalar\'ından açılır, adresle doğrudan açılır; Plan tahtaya döner', async () => {
     sunucuKur(YONETICI, KAYIT);
     ortakAc('/plan');
-    fireEvent.click(await screen.findByRole('button', { name: 'Başka' }, { timeout: 10000 }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Kartlar' }, { timeout: 10000 }));
     fireEvent.click(within(screen.getByRole('menu')).getByRole('menuitem', { name: /Nasıl hesaplandı/ }));
     await waitFor(() => { expect(document.querySelector('[data-parca="hesap"]')).not.toBeNull(); }, { timeout: 10000 });
     const cubuk = screen.getByRole('toolbar', { name: 'Plan çubuğu' });
-    expect(within(cubuk).getByRole('button', { name: 'Plan' }).getAttribute('aria-current')).toBe('page');
-    fireEvent.click(within(cubuk).getByRole('button', { name: 'Plan' }));
+    expect(within(cubuk).getByRole('button', { name: 'Motor' }).getAttribute('aria-current')).toBe('page');
+    fireEvent.click(within(cubuk).getByRole('button', { name: 'Motor' }));
     await waitFor(() => { expect(document.querySelector('[data-parca="hesap"]')).toBeNull(); });
     cleanup(); vi.unstubAllGlobals();
     sunucuKur(MALIYETSIZ, KAYIT);

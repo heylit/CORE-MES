@@ -23,6 +23,7 @@ import {
 import { planDisi } from '../../tipler.ts';
 import { gunBaslayanlar, gunDondurmasiniKaldir, gunDonuk, gunNumarasi, gunuDondur } from '../../motor/cizelge/kurallar.ts';
 import { hamleYapisi, useHamleci } from '../../motor/hamle/hamle.ts';
+import { useKaynakAdlari } from '../../kaynak-kodu.tsx';
 import { siraTasi } from '../sira/kurallar.ts';
 
 // Kartların gövdeleri (z-komuta kmPlan; za-merkez mzSiparis, mzKuyruk, mzAg). Okurlar; çalışmaya yazan tek yol kararların eylemidir (eylem.ts).
@@ -173,6 +174,7 @@ function SiparisGovdesi({ b }: { b: KartBaglami }) {
 }
 
 function KuyrukGovdesi({ b }: { b: KartBaglami }) {
+  const ad = useKaynakAdlari();
   const { c, p, cx, s, now } = b; const D = c.D;
   const [secilen, setSecilen] = useState<string | null>(null);
   const g = kuyrukGrubu(c, p, b.secim, secilen); const gruplar = kuyrukGruplari(c);
@@ -192,7 +194,7 @@ function KuyrukGovdesi({ b }: { b: KartBaglami }) {
       if (y) h.sirala(m, y.ids);
       return;
     }
-    if (!yapabilir(t.id, m)) { b.uyar(`${t.id} ${m} tezgâhında yapılamaz.`); return; }
+    if (!yapabilir(t.id, m)) { b.uyar(`${t.id} ${ad.kaynak(m)} tezgâhında yapılamaz.`); return; }
     h.sirala(m, hedef ? [t.id, hedef] : [...sira, t.id]);
   };
   return (
@@ -214,9 +216,9 @@ function KuyrukGovdesi({ b }: { b: KartBaglami }) {
             e.preventDefault();
           };
           return (
-            <section key={m} className="tc-pyt-kol" aria-label={`${m} kuyruğu`} data-secili={b.secim.tezgah === m ? '' : undefined}>
+            <section key={m} className="tc-pyt-kol" aria-label={`${ad.kaynak(m)} kuyruğu`} data-secili={b.secim.tezgah === m ? '' : undefined}>
               <header>
-                <button type="button" onClick={() => b.tezSec(m)}><i className="tc-pyt-dur" data-dur={st?.dur ?? 'bos'} /><b className="tc-pym-mono">{m}</b></button>
+                <button type="button" onClick={() => b.tezSec(m)}><i className="tc-pyt-dur" data-dur={st?.dur ?? 'bos'} /><b className="tc-pym-mono">{ad.kaynak(m)}</b></button>
                 <small className="tc-pym-mono" title="Şimdiki dilimde doluluk" data-ton={d != null && d > 0.97 ? 'hata' : undefined}>{d == null ? 'kapalı' : `%${Math.round(d * 100)}`}</small>
                 <small className="tc-pym-mono">{l.length} iş</small>
               </header>
@@ -313,6 +315,7 @@ function Bayat({ b, metin }: { b: KartBaglami; metin: string }) {
 // kaldırma çalışmaya yazar (plan.yaz, 223 a); etki ve bedel hesabı, arıza ve bakım denemesi motor ister; vardiya tezgâhın sahibindedir.
 const GOSTERIM = 8;
 function KisitGovdesi({ b }: { b: KartBaglami }) {
+  const ad = useKaynakAdlari();
   const { c } = b; const D = c.D; const yaz = b.komut && b.planYaz ? b.komut : null; const pasif = b.planYaz ? MOTOR_NOTU : YETKISIZ;
   const bedel = bedelOku(c); const gevsek = KATALOG.flatMap((g) => g.l).filter((k) => k.g); const prm = KATALOG.flatMap((g) => g.l).flatMap((k) => k.p ?? []);
   const ar = [...duruslar(c)].sort((x, y) => x.from - y.from); const em = ekMesailer(c);
@@ -326,7 +329,7 @@ function KisitGovdesi({ b }: { b: KartBaglami }) {
   const ilkiniSil = <T,>(l: T[], ayni: (x: T) => boolean): T[] | false => { const i = l.findIndex(ayni); return i < 0 ? false : [...l.slice(0, i), ...l.slice(i + 1)]; };
   const durusSil = (d: Durus) => yaz?.degistir('Arıza/bakım silindi', (t) => {
     const l = ilkiniSil(t.down, (x) => x.m === d.m && x.from === d.from && x.to === d.to); if (!l) return false; t.down = l;
-  }, { ayrinti: `${d.m} ${saatYaz(D, d.from)}` });
+  }, { ayrinti: `${ad.kaynak(d.m)} ${saatYaz(D, d.from)}` });
   const mesaiSil = (e: EkMesai) => yaz?.degistir('Ek mesai silindi', (t) => {
     const l = ilkiniSil(t.ekMesai, (x) => x.m === e.m && x.gun === e.gun && x.vardiya === e.vardiya); if (!l) return false; t.ekMesai = l;
   });
@@ -364,16 +367,16 @@ function KisitGovdesi({ b }: { b: KartBaglami }) {
         <Bolum baslik="Takvim: arıza ve ek mesai" simge="wrench">
           <ul className="tc-pyt-liste tc-pyt-sade">
             {ar.length ? ar.slice(0, GOSTERIM).map((d) => (
-              <li key={`${d.m}-${d.from}-${d.to}`}><button type="button" className="tc-pym-link tc-pym-mono" onClick={() => b.tezSec(d.m)}>{d.m}</button><small className="tc-pym-mono">{saatYaz(D, d.from)} → {saatYaz(D, d.to).slice(6)}</small></li>
+              <li key={`${d.m}-${d.from}-${d.to}`}><button type="button" className="tc-pym-link tc-pym-mono" onClick={() => b.tezSec(d.m)}>{ad.kaynak(d.m)}</button><small className="tc-pym-mono">{saatYaz(D, d.from)} → {saatYaz(D, d.to).slice(6)}</small></li>
             )) : <li className="tc-pym-kucuk-yazi">Bilinen arıza yok.</li>}
           </ul>
           <ul className="tc-pyt-liste tc-pyt-sade">
             {em.length ? em.slice(0, GOSTERIM).map((x) => (
-              <li key={`${x.m}-${x.gun}-${x.vardiya}`}><button type="button" className="tc-pym-link tc-pym-mono" onClick={() => b.tezSec(x.m)}>{x.m}</button><small className="tc-pym-mono">{saatYaz(D, x.gun * 24).slice(0, 9)} {x.vardiya}</small></li>
+              <li key={`${x.m}-${x.gun}-${x.vardiya}`}><button type="button" className="tc-pym-link tc-pym-mono" onClick={() => b.tezSec(x.m)}>{ad.kaynak(x.m)}</button><small className="tc-pym-mono">{saatYaz(D, x.gun * 24).slice(0, 9)} {x.vardiya}</small></li>
             )) : <li className="tc-pym-kucuk-yazi">Ek mesai yok.</li>}
           </ul>
           <div className="tc-pym-dugmeler">
-            {m && !m.startsWith('@') ? <Pasif ad={`${m} için 4 sa arıza dene`} simge="wrench" not={pasif} /> : <small className="tc-pym-kucuk-yazi">Arıza denemek için haritada bir tezgâh seçin.</small>}
+            {m && !m.startsWith('@') ? <Pasif ad={`${ad.kaynak(m)} için 4 sa arıza dene`} simge="wrench" not={pasif} /> : <small className="tc-pym-kucuk-yazi">Arıza denemek için haritada bir tezgâh seçin.</small>}
             <BagDugmesi ad="Takvim" b={b} bolum="takvim" />
           </div>
         </Bolum>
@@ -586,7 +589,7 @@ function SenaryoGovdesi({ b }: { b: KartBaglami }) {
         <button type="button" className="tc-dugme tc-pym-kucuk tc-dugme-birincil" aria-disabled={b.senaryolarAc ? undefined : 'true'} onClick={() => b.senaryolarAc?.()}>
           <Simge ad="eye" boyut="k" /><span>Yan yana karşılaştır</span>
         </button>
-        <button type="button" className="tc-dugme tc-pym-kucuk" onClick={b.atolyeAc}><Simge ad="layers" boyut="k" /><span>Planlama atölyesi</span></button>
+        <button type="button" className="tc-dugme tc-pym-kucuk" onClick={b.atolyeAc}><Simge ad="layers" boyut="k" /><span>Stüdyo'da aç</span></button>
       </div>
     </div>
   );

@@ -14,7 +14,7 @@ export function SenaryolarBolumu({ v, planlamaAc }: { v: SenaryolarCevabi | null
   if (!v) return <Serit ton="uyari" simge="alert">Senaryolar okunamadı. Sayfayı yenileyin; sürerse plan modülü kapalı olabilir.</Serit>;
   const l = senaryoSirasi(v.senaryolar);
   const secilen = sec.map((id) => l.find((s) => s.id === id)).filter((s): s is Senaryo => !!s && !!s.gostergeler);
-  const ac = <KucukDugme ad="Planlama atölyesi" simge="layers" metin="Planlama atölyesi" yap={() => planlamaAc?.()} kapali={!planlamaAc} not="Atölye bu ekrandan açılamıyor." />;
+  const ac = <KucukDugme ad="Stüdyo'da aç" simge="layers" metin="Stüdyo'da aç" yap={() => planlamaAc?.()} kapali={!planlamaAc} not="Stüdyo bu ekrandan açılamıyor." />;
   const sutunlar: readonly Sutun<Senaryo>[] = [
     {
       anahtar: 'sec', baslik: 'Karşılaştır', gizliBaslik: true, hucre: (s) => (
@@ -42,7 +42,7 @@ export function SenaryolarBolumu({ v, planlamaAc }: { v: SenaryolarCevabi | null
   return (
     <>
       <Serit ton="tamam" simge="flag" eylem={ac}>
-        {`Canlı plan: sürüm ${String(v.canliSurum)}. Canlıya giden her değişiklik önce bir taslağa düşer; kaydetme, onaya gönderme ve canlıya alma Planlama atölyesindedir.`}
+        {`Canlı plan: sürüm ${String(v.canliSurum)}. Canlıya giden her değişiklik önce bir taslağa düşer; kaydetme, onaya gönderme ve canlıya alma Stüdyo'dadır.`}
       </Serit>
       <VeriKarti baslik="Senaryolar" simge="flag" ek={String(l.length)} sag={<span className="tc-pyi-k">{`Karşılaştırmak için en çok ${String(KARSILASTIRMA_SINIRI)} taslak seçin; ilk sütun canlıdır.`}</span>}>
         <VeriTablosu

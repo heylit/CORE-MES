@@ -5,6 +5,7 @@ import type { PlanlamaCalismasi } from '../../tipler.ts';
 import { useCanliPlan } from '../fark.ts';
 import type { Derleme, OkunanPlan } from '../kurallar.ts';
 import { degisken } from '../ortak.tsx';
+import { useKaynakAdlari } from '../../kaynak-kodu.tsx';
 import { ATOLYE_GEC_SINIRI, atolyeEkrani, sure, tz, zs, type EmirNo } from './kurallar.ts';
 
 // Atölye ekranı (zz36 atolyeAc, cizAtolye): canlı plan, salt okunur, büyük ekran; her tezgâhın şu anki ve sıradaki işi, yanda geciken
@@ -16,6 +17,7 @@ export function AtolyeEkrani({ c, p, cx, now, emirNo, canliSurum, kapat }: {
   c: PlanlamaCalismasi; p: OkunanPlan; cx: Derleme; now: number; emirNo: EmirNo; canliSurum: number | null; kapat: () => void;
 }) {
   const d = useCanliPlan(true, c, p, canliSurum);
+  const ad = useKaynakAdlari();
   const ekran = useMemo(() => (d.tur === 'tamam' && Object.keys(d.canli).length ? atolyeEkrani(c, cx, d.canli, now) : null), [d, c, cx, now]);
   const izgara = useRef<HTMLDivElement | null>(null);
   const kapatRef = useRef(kapat); kapatRef.current = kapat;
@@ -41,9 +43,9 @@ export function AtolyeEkrani({ c, p, cx, now, emirNo, canliSurum, kapat }: {
       <div className="tc-pym-ae-govde">
         <div className="tc-pym-ae-izgara" ref={izgara}>
           {ekran.kartlar.map((k) => (
-            <section key={k.m} className="tc-pym-ae-kart" data-durum={k.durum} aria-label={`Tezgâh ${k.m}`}>
+            <section key={k.m} className="tc-pym-ae-kart" data-durum={k.durum} aria-label={`Tezgâh ${ad.kaynak(k.m)}`}>
               <div className="tc-pym-ae-ust">
-                <b>{k.m}</b><span>{k.ad}</span>
+                <b>{ad.kaynak(k.m)}</b>{k.ad !== ad.kaynak(k.m) && <span>{k.ad}</span>}
                 <i>{k.durum === 'ariza' ? <><Simge ad="alert" boyut="k" />Arıza</> : k.durum === 'calisiyor' ? <><Simge ad="play" boyut="k" />Çalışıyor</> : <><Simge ad="pause" boyut="k" />Boş</>}</i>
               </div>
               {k.su ? (

@@ -90,6 +90,12 @@ describe('DegisiklikSeridi', () => {
     expect(screen.queryByRole('button')).toBeNull();
   });
 
+  it("Motor ve Stüdyo'da plan güncelken satır çizilmez (güncel rozeti plan çubuğundadır)", () => {
+    const { container } = render(<DegisiklikSeridi calisma={calismaKur()} dis={null} bosGizle />);
+    expect(container.firstChild).toBeNull();
+    expect(screen.queryByRole('status')).toBeNull();
+  });
+
   it('başka sayfa satırını düğmeyle açar; kişi bilinmiyor yazar', () => {
     render(<DegisiklikSeridi calisma={bayat()} dis={kaynakSatiri(KD, 0, 4)} />);
     expect(screen.getByRole('status').textContent).toContain('1 değişiklik, 1 tanesi başka sayfadan');

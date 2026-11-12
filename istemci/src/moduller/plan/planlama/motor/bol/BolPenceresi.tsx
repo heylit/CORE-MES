@@ -4,6 +4,7 @@ import type { CalismaKomutu } from '../../kayit.ts';
 import type { PlanlamaCalismasi } from '../../tipler.ts';
 import type { Derleme, OkunanPlan } from '../kurallar.ts';
 import { bolDenetle, bolDurumu, bolYaz, esitPaylar, ilkTezgahlar, payMetni, type BolPayi } from './kurallar.ts';
+import { kaynakAdlariKur } from '../../kaynak-kodu.tsx';
 import './bol.css';
 
 // Böl penceresi (2524 b, ELLE-BOLME 3): pay sayısı, her payın adedi ve tezgâhı; toplam adımın adedine eşit olmalı. "Payları birleştir"
@@ -32,6 +33,7 @@ function Kapat({ kapat }: { kapat: () => void }) {
 
 function Form({ c, cx, p, r, kip, komut, kapat }: Omit<Ozellikler, 'id'> & { r: OkunanPlan['ops'][string] }) {
   const d = bolDurumu(c, cx, p, r);
+  const kad = kaynakAdlariKur(c.D);
   const ilkN = Math.min(d.enCok, Math.max(2, d.elle && d.elle.length > 1 ? d.elle.length : d.paylar.length > 1 ? d.paylar.length : 2));
   const ilk = (n: number): BolPayi[] => {
     const m = ilkTezgahlar(d, n); const a = esitPaylar(d.adet, n);
@@ -61,7 +63,7 @@ function Form({ c, cx, p, r, kip, komut, kapat }: Omit<Ozellikler, 'id'> & { r: 
       {birlestir ? (
         <div className="tc-pym-bol-sayi">
           <label htmlFor="tc-pym-bol-tek">Tezgâh</label>
-          <select id="tc-pym-bol-tek" value={tek} onChange={(e) => setTek(e.target.value)} disabled={!!engel}>{d.adaylar.map((m) => <option key={m} value={m}>{m}</option>)}</select>
+          <select id="tc-pym-bol-tek" value={tek} onChange={(e) => setTek(e.target.value)} disabled={!!engel}>{d.adaylar.map((m) => <option key={m} value={m}>{kad.kaynak(m)}</option>)}</select>
         </div>
       ) : (
         <>
@@ -78,7 +80,7 @@ function Form({ c, cx, p, r, kip, komut, kapat }: Omit<Ozellikler, 'id'> & { r: 
                 <input type="number" min={1} step={1} aria-label={`Pay ${String(i + 1)} adedi`} className="tc-pym-tp-girdi" value={Number.isFinite(x.adet) ? x.adet : ''} disabled={!!engel}
                   onChange={(e) => yaz(i, { adet: e.target.value === '' ? Number.NaN : Number(e.target.value) })} />
                 <select aria-label={`Pay ${String(i + 1)} tezgâhı`} value={x.m} disabled={!!engel} onChange={(e) => yaz(i, { m: e.target.value })}>
-                  {d.adaylar.map((m) => <option key={m} value={m}>{m}</option>)}
+                  {d.adaylar.map((m) => <option key={m} value={m}>{kad.kaynak(m)}</option>)}
                 </select>
               </li>
             ))}

@@ -39,21 +39,17 @@ export function PlanlamaAtolyesi(o: PlanlamaEkranOzellikleri) {
   const ipucu = IPUCU[sek];
   return (
     <div className="tc-pym tc-pym-tp" data-sek={sek}>
-      <h2 className="tc-pym-tp-baslik"><span><Simge ad="layers" boyut="k" />Planlama stüdyosu</span></h2>
+      {/* Tek satır: sekmeler ve canlı sürüm. Sayfa adı menüde ve plan çubuğunda yazılı; burada tekrar edilmez (3042, tahtaya yer). */}
       <div className="tc-pym-tp-bas">
-        <div className="tc-pym-tp-kimlik">
-          <button type="button" className="tc-dugme tc-pym-kucuk tc-pym-hayalet tc-pym-simge-d" aria-label="Planlama motoruna dön" title="Planlama motoruna dön" onClick={() => o.git('plan')}>
-            <Simge ad="chev-left" boyut="k" />
-          </button>
-          <span className="tc-pym-tp-surum" title="Uyguladığın değişiklik bu sürüme göre hesaplanır"><Simge ad="flag" boyut="k" />{`Canlı sürüm ${canli ?? '—'}`}</span>
-          <span className="tc-pym-tp-kip"><Simge ad="edit" boyut="k" />Düzenleme</span>
-        </div>
         <div className="tc-pym-tp-sek" role="tablist" aria-label="Stüdyo sekmeleri">
           {SEKMELER.map(([k, s, ad]) => (
             <button key={k} type="button" role="tab" aria-label={ad} aria-selected={sek === k} onClick={() => setSek(k)}>
               <Simge ad={s} boyut="k" /><span>{ad}</span>{k === 'onay' && onayda > 0 && <b className="tc-pym-tp-say">{onayda}</b>}
             </button>
           ))}
+        </div>
+        <div className="tc-pym-tp-kimlik">
+          <span className="tc-pym-tp-surum" title="Uyguladığın değişiklik bu sürüme göre hesaplanır"><Simge ad="flag" boyut="k" />{`Canlı sürüm ${canli ?? '—'}`}</span>
         </div>
       </div>
       {ipucu && <p className="tc-pym-tp-ipucu"><Simge ad="help" boyut="k" /><span>{ipucu}</span></p>}

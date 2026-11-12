@@ -33,8 +33,9 @@ const LEJANT: Record<BolgeKimligi, ReactNode> = {
   yorum: <><Sz r="sorun">sorun</Sz><Sz r="dikkat">dikkat</Sz><Sz r="iyi">iyi</Sz></>,
 };
 
-interface PanoOzellikleri { id: BolgeKimligi; cevap: Metin; nasil: boolean; nasilAc: () => void; yakindan: (el: HTMLElement | null) => void; ek?: ReactNode; children: ReactNode }
-export function Pano({ id, cevap, nasil, nasilAc, yakindan, ek, children }: PanoOzellikleri) {
+// `daralt` verilen bölüm (Ne yapmalıyım?) geniş ekranda haritanın yanında dar şeride iner; harita genişler, hiçbir bölüm aşağı itilmez (3042).
+interface PanoOzellikleri { id: BolgeKimligi; cevap: Metin; nasil: boolean; nasilAc: () => void; yakindan: (el: HTMLElement | null) => void; ek?: ReactNode; children: ReactNode; daralt?: () => void }
+export function Pano({ id, cevap, nasil, nasilAc, yakindan, ek, children, daralt }: PanoOzellikleri) {
   const [, ad, simge] = SAHNE.find((x) => x[0] === id) ?? SAHNE[0]!;
   const [kok, setKok] = useState<HTMLElement | null>(null);
   return (
@@ -43,6 +44,7 @@ export function Pano({ id, cevap, nasil, nasilAc, yakindan, ek, children }: Pano
         <button type="button" className="tc-pym-br-soru" title="Yakından bak" onClick={() => yakindan(kok)}><Simge ad={simge} boyut="k" /><b>{ad}</b></button>
         <button type="button" className="tc-pym-br-nasil-d" aria-expanded={nasil} title="Nasıl okunur" onClick={nasilAc}><Simge ad="help" boyut="k" /><span>Nasıl okunur</span></button>
         {ek}
+        {daralt && <button type="button" className="tc-pym-br-daralt" title="Haritanın yanında dar şeride indir" aria-label={`${ad} bölümünü daralt`} onClick={daralt}><Simge ad="chev-right" boyut="k" /></button>}
       </header>
       <p className="tc-pym-br-cevap"><MetinYaz m={cevap} /></p>
       {nasil && <ol className="tc-pym-br-nasil">{NASIL[id].map((x) => <li key={x}>{x}</li>)}</ol>}
@@ -148,7 +150,7 @@ function Yolculuk({ c, v, sec, kartAc }: { c: PlanlamaCalismasi; v: OzetVerisi; 
     <div className="tc-pym-br-yc">
       <p>
         <button type="button" className="tc-dugme tc-pym-kucuk tc-pym-hayalet" aria-disabled={kartAc ? undefined : 'true'} title={kartAc ? undefined : 'Kartı aç: siparişin tezgâhı haritada yok.'} onClick={kartAc ?? undefined}><Simge ad="expand" boyut="k" />Kartı aç</button>
-        <b className="tc-pym-mono">{s.id}</b> {s.urun} · {s.adim.length} adım · işleme {saKisa(isl)}, bekleme <b>{saKisa(bek)}</b> · {s.gec ? <b data-ton="hata">{saKisa(s.T)} geç</b> : 'zamanında'}
+        <b className="tc-pym-mono">{v.emir(s.id)}</b> {s.urun} · {s.adim.length} adım · işleme {saKisa(isl)}, bekleme <b>{saKisa(bek)}</b> · {s.gec ? <b data-ton="hata">{saKisa(s.T)} geç</b> : 'zamanında'}
       </p>
       <div className="tc-pym-br-yc-yol">
         {par}
@@ -217,7 +219,7 @@ export function Sure({ v, sipSec }: { v: OzetVerisi; sipSec: (j: string) => void
           <ul className="tc-pym-br-gecler">
             {gec.map((s) => {
               const seg = s.seg ?? {}; const t = Object.values(seg).reduce((a, b) => a + b, 0);
-              return <li key={s.id}><button type="button" className="tc-pym-link tc-pym-mono" onClick={() => sipSec(s.id)}>{s.id}</button><Serit sira={sira} seg={seg} toplam={t} /><b className="tc-pym-mono">+{saKisa(s.T)}</b></li>;
+              return <li key={s.id}><button type="button" className="tc-pym-link tc-pym-mono" onClick={() => sipSec(s.id)}>{v.emir(s.id)}</button><Serit sira={sira} seg={seg} toplam={t} /><b className="tc-pym-mono">+{saKisa(s.T)}</b></li>;
             })}
           </ul>
         </>
@@ -240,7 +242,7 @@ export function Yaris({ c, v, sec, sipSec }: { c: PlanlamaCalismasi; v: OzetVeri
         const a = konum(v, s.S), b = Math.max(a + 0.002, konum(v, s.C)); const fark = s.due == null ? null : s.C - s.due;
         return (
           <div key={s.id} className="tc-pym-br-yaris-s" data-hedef="" data-gec={s.gec ? '' : undefined} data-ilgili={sec?.sip.has(s.id) ? '' : undefined} data-secili={sec?.j === s.id ? '' : undefined}>
-            <button type="button" className="tc-pym-link tc-pym-mono" title={`${s.urun}: yolculuğunu ve tezgâhlarını göster`} onClick={() => sipSec(s.id)}>{s.id}</button>
+            <button type="button" className="tc-pym-link tc-pym-mono" title={`${s.urun}: yolculuğunu ve tezgâhlarını göster`} onClick={() => sipSec(s.id)}>{v.emir(s.id)}</button>
             <div className="tc-pym-br-yol">
               <i className="tc-pym-br-cubuk" ref={degisken({ '--s': a.toFixed(4), '--e': b.toFixed(4) })}><u /></i>
               {s.due != null && <b className="tc-pym-br-termin" ref={degisken({ '--x': yuzde(konum(v, s.due)) })} title={`Termin ${saatYaz(c.D, s.due)}`} />}
@@ -270,5 +272,18 @@ export function Yorumlar({ l, eylem }: { l: Yorum[]; eylem: (e: NonNullable<Yoru
         );
       })}
     </ol>
+  );
+}
+
+// Daraltılmış "Ne yapmalıyım?": haritanın yanında dikey şerit; gözlem sayısı ve en önemli tonu görünür, dokununca bölüm geri açılır.
+export function DarYorum({ l, ac }: { l: Yorum[]; ac: () => void }) {
+  const [, ad, simge] = SAHNE.find((x) => x[0] === 'yorum') ?? SAHNE[0]!;
+  const ton = l.find((x) => x.ton === 'hata') ? 'hata' : l.find((x) => x.ton === 'uyari') ? 'uyari' : l.length ? 'tamam' : undefined;
+  return (
+    <section className="tc-pym-br-dar" data-b="yorum" data-dar="" aria-label={ad}>
+      <button type="button" aria-expanded="false" data-ton={ton} title={`${ad}: ${String(l.length)} gözlem. Açmak için dokunun.`} onClick={ac}>
+        <Simge ad={simge} boyut="k" /><b>{l.length}</b><span>{ad}</span>
+      </button>
+    </section>
   );
 }

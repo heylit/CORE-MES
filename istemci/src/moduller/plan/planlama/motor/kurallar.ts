@@ -2,6 +2,7 @@ import type { ExtraAlanlar, PlanlamaCalismasi, PlanVerisi, Siparis } from '../ti
 import type { Metin } from './ozet/veri.ts';
 import { ufukGunu } from '../ufuk-olcegi.ts';
 import { planDisi } from '../tipler.ts';
+import { isAdi, type EmirNo } from '../ortak/emir-no.ts';
 import { tesisSaati } from '#paylasilan/tesis-zamani.ts';
 
 // P1'in saf hesapları. Plan saat eksenlidir: 0, D.meta.baslangic günü 00:00 duvar saatidir (engine.betik baseMs, parseT, fmtDT).
@@ -670,7 +671,7 @@ export function olayAdi(c: PlanlamaCalismasi, ev: ExtraAlanlar): string {
   if (ev.tip === 'sureOp') return `${String(ev.id)}: süre ×${sayiYaz(Number(ev.oran), 2)}`;
   return String(ev.tip);
 }
-export function sorunlar(c: PlanlamaCalismasi, p: OkunanPlan, cx: Derleme, guncel: boolean): Sorun[] {
+export function sorunlar(c: PlanlamaCalismasi, p: OkunanPlan, cx: Derleme, guncel: boolean, emirNo: EmirNo = (j) => j): Sorun[] {
   const D = c.D; const out: Sorun[] = [];
   const ekle = (ton: SorunTonu, simge: Sorun['simge'], baslik: string, metin: Metin, eylemler: [string, SorunEylemi, string?, boolean?][], job: string | null = null) => {
     const l = eylemler.map(([ad, tur, v = '', birincil = false]) => ({ ad, tur, v, birincil }));
@@ -678,7 +679,7 @@ export function sorunlar(c: PlanlamaCalismasi, p: OkunanPlan, cx: Derleme, gunce
   };
   if (!guncel) ekle('uyari', 'rotate', 'Plan eski veriyle hesaplı', ['Plan kurulduktan sonra veri, kısıt ya da olay değişti. Değişiklikler Plan atölyesinde bekler; orada uygulayın ya da reddedin.'], [['Plan iyileştirme ara', 'ekip', '', true]]);
   if (c.kapali.length) ekle('hata', 'alert', `${c.kapali.length} kısıt kapalı`, [`${c.kapali.map(kisitAdi).join(', ')}. Motor bunları saymadan çözer; plan atölyede uygulanamayabilir.`], [['Hepsini aç', 'kisit-hepsi', '', true], ['Kısıtlar', 'git', 'kisitlar']]);
-  if (p.fail.length) ekle('hata', 'alert', `${p.fail.length} işlem planlanamadı`, [`${p.fail.slice(0, 3).join(', ')}${p.fail.length > 3 ? '…' : ''}. Süre, uygun tezgâh ya da önceki adım eksik olabilir.`], [['Veri denetimi', 'git', 'denetim']]);
+  if (p.fail.length) ekle('hata', 'alert', `${p.fail.length} işlem planlanamadı`, [`${p.fail.slice(0, 3).map((id) => { const j = cx.byId[id]?.job; return j ? isAdi(emirNo, id, j) : id; }).join(', ')}${p.fail.length > 3 ? '…' : ''}. Süre, uygun tezgâh ya da önceki adım eksik olabilir.`], [['Veri denetimi', 'git', 'denetim']]);
   const kay = gecikmeKaynaklari(c, p, cx);
   const gec = D.siparisler.map((s) => ({ s, j: p.J[s.id] })).filter((x): x is { s: Siparis; j: NonNullable<typeof x.j> } => !!x.j && (x.j.T == null || x.j.T > 0.05))
     .sort((a, b) => (b.j.T ?? 1e4) * isAgirligi(b.s) - (a.j.T ?? 1e4) * isAgirligi(a.s));
@@ -686,12 +687,12 @@ export function sorunlar(c: PlanlamaCalismasi, p: OkunanPlan, cx: Derleme, gunce
     const en = kay.is[s.id]; const urun = D.urunler.find((u) => u.id === s.urun)?.ad ?? (s.urun || '—');
     const metin: Metin = [`${urun}, ${sayiYaz(Number(s.adet) || 0)} adet, ${ONCELIK_AD[Number(s.oncelik)] ?? ''} öncelik. Termin ${(s.termin ?? '—').slice(5)}, bitiş ${j.C != null ? saatYaz(D, j.C).slice(0, 15) : '—'}.`];
     if (en) metin.push(' En çok ', { b: en.ad }, ` bekledi (${saatYazi(en.v)}).`);
-    ekle('hata', 'flag', `${s.id} ${j.T == null ? 'planlanamadı' : `${saatYazi(j.T)} gecikiyor`}`, metin, [['Öne almayı dene', 'one-al', s.id, true], ['Ayrıntı', 'sec-is', s.id]], s.id);
+    ekle('hata', 'flag', `${emirNo(s.id)} ${j.T == null ? 'planlanamadı' : `${saatYazi(j.T)} gecikiyor`}`, metin, [['Öne almayı dene', 'one-al', s.id, true], ['Ayrıntı', 'sec-is', s.id]], s.id);
   }
   if (gec.length > 3) ekle('uyari', 'flag', `${gec.length - 3} sipariş daha gecikiyor`, ['Hepsini görmek için süzgeçte "Yalnız geciken siparişler"i açın.'], [['Gecikenleri göster', 'suz-gec']]);
   const mal = p.warn.filter((w) => w.t === 'malzeme'); const malJ = [...new Set(mal.map((w) => w.j ?? ''))];
   if (malJ.length) {
-    const diger = malJ.length > 1 ? ` Diğerleri: ${malJ.slice(1, 4).join(', ')}${malJ.length > 4 ? '…' : ''}.` : '';
+    const diger = malJ.length > 1 ? ` Diğerleri: ${malJ.slice(1, 4).map(emirNo).join(', ')}${malJ.length > 4 ? '…' : ''}.` : '';
     ekle('uyari', 'box', `${malJ.length} siparişin malzemesi eksik`, [`${mal[0]?.txt ?? ''}${diger} İş planda başlar; malzeme gelmezse kayar.`], [['Ayrıntı', 'sec-is', malJ[0] ?? ''], ['Malzeme', 'git', 'malzeme']]);
   }
   const dol = grupDoluluk(c, p).filter((g) => g.u > 0.88); const darb = kay.liste.find((x) => x.k === 'tezgah');

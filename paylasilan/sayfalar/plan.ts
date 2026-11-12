@@ -14,8 +14,8 @@ export const PLAN_IKINCI_MENU = {
   simge: 'dash',
   gruplar: [
     { maddeler: [
-      { anahtar: 'plan', baslik: 'Planlama motoru', yol: '/plan', simge: 'gantt', islem: 'plan.planlama-oku' },
-      { anahtar: 'studio', baslik: 'Planlama atölyesi', yol: '/plan/studio', simge: 'flag', islem: 'plan.planlama-oku' },
+      { anahtar: 'plan', baslik: 'Motor', yol: '/plan', simge: 'gantt', islem: 'plan.planlama-oku' },
+      { anahtar: 'studio', baslik: 'Stüdyo', yol: '/plan/studio', simge: 'flag', islem: 'plan.planlama-oku' },
       { anahtar: 'ysiparis', baslik: 'Siparişler', yol: '/plan/ysiparis', simge: 'list', islem: 'plan.planlama-oku' },
       { anahtar: 'maliyet', baslik: 'Maliyetler', yol: '/plan/maliyet', simge: 'lira', islem: 'finans.maliyet-oku' },
       { anahtar: 'giderler', baslik: 'Genel gider', yol: '/plan/giderler', simge: 'layers', islem: 'finans.maliyet-oku' },

@@ -118,3 +118,10 @@ export function SahipNotu({ children }: { children?: ReactNode }) {
 
 export const sayiYazi = (x: number | null | undefined, basamak = 0): string =>
   (x == null || !Number.isFinite(x) ? '—' : x.toLocaleString('tr-TR', { minimumFractionDigits: 0, maximumFractionDigits: basamak }));
+
+// Termin "2026-11-25 23:59" biçiminde gelir; ekranlar gün.ay.yıl yazar (saat varsa yanında).
+export function terminYazi(t: string | null | undefined): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}:\d{2}))?/.exec(t ?? '');
+  if (!m) return t || '—';
+  return `${m[3] ?? ''}.${m[2] ?? ''}.${m[1] ?? ''}${m[4] ? ` ${m[4]}` : ''}`;
+}

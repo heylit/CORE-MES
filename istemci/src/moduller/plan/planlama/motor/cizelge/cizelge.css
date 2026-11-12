@@ -61,7 +61,7 @@
 .tc-pym-ol-ust small { color: var(--muted); font-size: var(--yazi-xs); }
 .tc-pym-ol-govde { flex: 1 1 0; min-height: 0; overflow: auto; border: var(--cizgi-ince) solid var(--edge); border-radius: var(--yari-2); background: var(--panel-solid); }
 .tc-pym-ol-satir {
-  display: grid; grid-template-columns: calc(var(--b-6) * 2 + var(--b-2)) minmax(calc(var(--b-6) * 17.5), 1fr); min-height: calc(var(--b-6) - var(--pay-ince));
+  display: grid; grid-template-columns: calc(var(--b-6) * 3) minmax(calc(var(--b-6) * 17.5), 1fr); min-height: calc(var(--b-6) - var(--pay-ince));
   border-bottom: var(--cizgi-ince) solid var(--edge);
 }
 .tc-pym-ol[data-olcek="yil"] .tc-pym-ol-satir { min-height: var(--b-5); }
@@ -71,7 +71,10 @@
 .tc-pym-ol-ad {
   position: sticky; left: 0; z-index: 1; display: flex; align-items: center; padding: 0 var(--b-2); border: 0; border-right: var(--cizgi-ince) solid var(--edge);
   background: var(--panel-solid); color: var(--ink); font-size: var(--yazi-xs); font-weight: 700; text-align: left; cursor: pointer;
+  min-width: 0; overflow: hidden;
 }
+/* Tezgâh kodu tek satır; sığmazsa baştan kısalır, ayırt eden son kısım görünür (ORN-CNC-T1 → …CNC-T1; 3042). */
+.tc-pym-ol-ad > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; direction: rtl; }
 .tc-pym-ol-cizgi { position: relative; }
 .tc-pym-ol-bas {
   position: absolute; top: 0; bottom: 0; left: var(--x); width: var(--w); display: flex; align-items: center; justify-content: center; overflow: hidden; padding: 0;

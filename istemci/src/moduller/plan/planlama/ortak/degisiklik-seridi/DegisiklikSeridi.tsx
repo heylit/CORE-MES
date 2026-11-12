@@ -5,15 +5,17 @@ import { canliBayatMetni, canliBayatSatiri, seritListesi, seritMetni, seritOzeti
 
 const saat = (t: number): string => (t > 0 ? new Date(t).toLocaleString('tr-TR', { dateStyle: 'short', timeStyle: 'short' }) : '');
 
-// 1965 a: sayfanın en üstünde tek satır; liste düğmeyle altında açılır. Uygulama ve ret Onay ve canlı sekmesindedir (755 a), burada yalnız görünür.
+// 1965 a: sayfanın en üstünde tek satır (yalnız söyleyecek bir şey varken); liste düğmeyle altında açılır. Uygulama ve ret Onay ve canlı sekmesindedir (755 a), burada yalnız görünür.
 // 2319: canli verilirse ve bayatsa canlı planın eskidiği ikinci satırda söylenir (yalnız işaret).
-export function DegisiklikSeridi({ calisma, dis, canli = null }: { calisma: PlanlamaCalismasi | null; dis: BekleyenDegisiklik | null; canli?: CanliBayatlik | null }) {
+export function DegisiklikSeridi({ calisma, dis, canli = null, bosGizle = false }: { calisma: PlanlamaCalismasi | null; dis: BekleyenDegisiklik | null; canli?: CanliBayatlik | null; bosGizle?: boolean }) {
   const [acik, setAcik] = useState(false);
   const [canliAcik, setCanliAcik] = useState(false);
   if (calisma === null || calisma.plan === null) return null;
   const canliMetin = canli === null ? null : canliBayatMetni(canli);
   const liste = seritListesi(calisma, dis);
   const ozet = seritOzeti(liste);
+  // Motor ve Stüdyo'da "güncel" plan çubuğunun rozetindedir; boş satır tahtadan yer almasın diye orada çizilmez. Öteki sayfalarda satır kalır.
+  if (bosGizle && ozet.toplam === 0 && canliMetin === null) return null;
   return (
     <section className="tc-py-ds" data-durum={ozet.toplam > 0 || canliMetin !== null ? 'eski' : 'guncel'} aria-label="Değişiklik akışı">
       <div className="tc-py-ds-satir" role="status">
