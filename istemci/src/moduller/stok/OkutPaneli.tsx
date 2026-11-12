@@ -62,6 +62,7 @@ export function OkutAlani({ teslimEteGec, okundu, sifir = 0, sonuc: sonucKarti, 
   const okuyucuKutusu = useRef<HTMLDivElement>(null);
   // Okutulan raf: gözleri düğme olur; seçilen göz kendi etiketi okutulmuş gibi çözülür.
   const [raf, setRaf] = useState<Extract<OkutCozCevabi, { tur: 'raf' }> | null>(null);
+  const [gozOkutuldu, setGozOkutuldu] = useState(false);
   const [birakHedefi, setBirakHedefi] = useState<OkutHedefi | null>(null);
   // 1919 a: bırakma açıkken okutulan etiket o yere giden kalemleri seçer; Kaydet komutu bırakır.
   const [birakOkutma, setBirakOkutma] = useState<{ ids: number[]; sira: number } | null>(null);
@@ -95,6 +96,7 @@ export function OkutAlani({ teslimEteGec, okundu, sifir = 0, sonuc: sonucKarti, 
       const ad = okutmaAdi(c);
       setSonCevap(c);
       setRaf(c.tur === 'raf' ? c : null);
+      setGozOkutuldu(false);
       // Stok okuması olana tam çözüm aynı cevapla gelir; Mal kabul ve Sevk bölümleri ikinci kez istemez.
       if ((c.tur === 'malzeme' || c.tur === 'yer') && c.stok) sorgu.setQueryData(stokKodCozAnahtari(kod), c.stok);
       // Göz seçimi açıkken okutulan başka malzeme ya da lot yeni okutmadır (Arayüz v2 K1): seçim bırakılır, akış baştan.
@@ -114,6 +116,13 @@ export function OkutAlani({ teslimEteGec, okundu, sifir = 0, sonuc: sonucKarti, 
         }
         birakAc(null);
         okundu?.(kod, c);
+        // 3119 (1338 a): yer etiketi okutulunca gözün içi gösterilir, tek kalem olsa da sepete kendiliğinden atılmaz; "Al" ile alınır.
+        if (c.tur === 'yer' && c.satirlar && c.satirlar.length > 0) {
+          gecmis.bildir(kod, 'tamam', ad);
+          setRaf({ tur: 'raf', raf: { id: c.yer.konumId, kod: c.yer.kod }, gozler: [{ ...c.yer, satirlar: c.satirlar }], baskaSepetler: c.baskaSepetler });
+          setGozOkutuldu(true);
+          return;
+        }
         if (x.tur === 'sepete-at') {
           // 3085 (kullanıcı 06:45Z): aynı lot ikinci kez okutulunca miktar yeniden eklenmez; sepette olduğu söylenir.
           const k = x.kaynak;
@@ -221,7 +230,8 @@ export function OkutAlani({ teslimEteGec, okundu, sifir = 0, sonuc: sonucKarti, 
         {coz.isError && <p className="tc-stok-bilgi tc-stok-bilgi-uyari" role="alert">{hataMetni(coz.error)}</p>}
         {'ileti' in durum && durum.ileti && <p className="tc-stok-bilgi tc-stok-bilgi-uyari" role="alert">{durum.ileti}</p>}
         {raf && raf.gozler.length > 0 && (sepetli
-          ? <RafIcerigi raf={raf} gozSec={(kod) => coz.mutate(`LOC:${kod}`)} bekliyor={coz.isPending} at={at} />
+          ? <RafIcerigi raf={raf} goz={gozOkutuldu} gozSec={(kod) => coz.mutate(`LOC:${kod}`)} bekliyor={coz.isPending} at={at}
+            teslimEt={(kaynak) => { setRaf(null); setDurum({ adim: 'nereye', kaynak, ileti: null }); }} />
           : (
             <ul className="tc-stok-okut-gozler" aria-label={`Raf ${raf.raf.kod} gözleri`}>
               {raf.gozler.map((g) => <li key={g.konumId}><Dugme simge="box" disabled={coz.isPending} onClick={() => coz.mutate(`LOC:${g.kod}`)}>{g.kod}</Dugme></li>)}
@@ -261,11 +271,14 @@ function KaynakSatiri({ k }: { k: OkutKaynagi }) {
 const birakmaAnahtari = (h: OkutHedefi): string => (kisiHedefiMi(h) ? `k:${h.alici.kod}` : `y:${h.konumId}`);
 
 // Raf okutulunca (1338 a) gözler içerikleriyle gelir: alabileceği gözün serbest satırları (93 a), statüsüz satır sepete atılır.
-// Göz düğmesi gözün etiketi okutulmuş gibidir: sepet doluysa bırakma hedefi olur.
-function RafIcerigi({ raf, gozSec, bekliyor, at }: { raf: Extract<OkutCozCevabi, { tur: 'raf' }>; gozSec: (kod: string) => void; bekliyor: boolean; at: (k: OkutKaynagi) => void }) {
+// Göz düğmesi gözün etiketi okutulmuş gibidir: sepet doluysa bırakma hedefi olur. Tek göz okutulunca (3119) aynı görünüm o gözle
+// gelir; sepete girmeyen statülü satır bugünkü gibi "Teslim et" ile nereye adımına gider.
+function RafIcerigi({ raf, goz: tekGoz = false, gozSec, bekliyor, at, teslimEt }: {
+  raf: Extract<OkutCozCevabi, { tur: 'raf' }>; goz?: boolean; gozSec: (kod: string) => void; bekliyor: boolean; at: (k: OkutKaynagi) => void; teslimEt?: (k: OkutKaynagi) => void;
+}) {
   const statuAdi = useStatuAdi();
   return (
-    <div className="tc-stok-raf-icerik" aria-label={`Raf ${raf.raf.kod}`}>
+    <div className="tc-stok-raf-icerik" aria-label={tekGoz ? `Göz ${raf.raf.kod} içeriği` : `Raf ${raf.raf.kod}`}>
       {raf.gozler.map(({ satirlar, ...goz }) => (
         <section key={goz.konumId} className="tc-stok-raf-goz" aria-label={`Göz ${goz.kod}`}>
           <div className="tc-stok-raf-goz-bas">
@@ -280,7 +293,7 @@ function RafIcerigi({ raf, gozSec, bekliyor, at }: { raf: Extract<OkutCozCevabi,
                 return (
                   <li key={`${x.malzemeId}-${x.partiId ?? 0}-${x.statuId ?? 0}`}>
                     <span><strong>{k.malzemeAd}</strong> <span className="tc-stok-mono">{[x.partiEtiketi, statuAdi(x.statuId)].filter(Boolean).join(' · ')} · {miktarMetni(x.miktar)}</span></span>
-                    {sepeteAtilir(k) && <Dugme simge="plus" onClick={() => at(k)}>Al</Dugme>}
+                    {sepeteAtilir(k) ? <Dugme simge="plus" onClick={() => at(k)}>Al</Dugme> : tekGoz && teslimEt && <Dugme simge="truck" onClick={() => teslimEt(k)}>Teslim et</Dugme>}
                   </li>
                 );
               })}
