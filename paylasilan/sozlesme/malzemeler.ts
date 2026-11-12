@@ -3,6 +3,9 @@ import { listeCevapSemasi, sayfaSorguAlanlari } from '../liste.ts';
 import { zamanSemasi } from '../zaman.ts';
 import { surumSemasi } from '../surum.ts';
 import { durumSemasi as aletDurumu } from './kalibrasyon.ts';
+import { LOGO_GECIS_SAYFA_BOYU, LOGO_TOPLU_AZAMI } from './logo-gecisi-sabitleri.ts';
+
+export { LOGO_GECIS_SAYFA_BOYU, LOGO_TOPLU_AZAMI };
 
 /* ---------------- Malzeme Kataloğu (prototip) kartları ----------------
    KULLANICI KARARI: prototip ekranları birebir yerleşir; kart bütün olarak saklanır. Tür, onay durumu ve stok kodu karttan okunur (özet bunları taşırsa kartla aynı olmalı);
@@ -361,6 +364,82 @@ export const logoKartSurumCevabi = z.object({ id: z.string(), surum: surumSemasi
 // 2116h: aynı kodlu TMI kartı Logo'dakinden farklı malzemeyse yeni koda geçer; eski kod kartta "önceki kod" olarak kalır.
 export const logoYeniKodCevabi = z.object({ id: z.string(), stok_kodu: z.string(), eski_kod: z.string(), surum: surumSemasi });
 export type LogoYeniKodCevabi = z.output<typeof logoYeniKodCevabi>;
+
+/* ---------------- Logo geçişi (3068): Logo kartları CORE karşılığıyla yan yana, süzgeç ve toplu işlem adaylığı ---------------- */
+// Süzgeçler sunucuda uygulanır: istemciye bütün ayna inmez. "stoklu" Logo stok toplamı sıfırdan büyük karttır (aynadaki stok okuması).
+export const LOGO_GECIS_SUZGECLERI = ['stoklu', 'tumu', 'yeni', 'bagsiz', 'bagli', 'kullanim-disi'] as const;
+export type LogoGecisSuzgeci = (typeof LOGO_GECIS_SUZGECLERI)[number];
+// Toplu işleme girmeyen satırın nedeni: kullanıcı satırda tek tek karar verir.
+export const LOGO_GECIS_KARAR_NEDENLERI = ['birim-farki', 'kod-eslenecek', 'kullanim-disi', 'iptal-kart'] as const;
+export const logoGecisSorgusu = z.object({
+  suzgec: z.enum(LOGO_GECIS_SUZGECLERI).prefault('stoklu'),
+  ara: z.string().trim().min(2, 'En az 2 karakter yazın.').max(100).optional(),
+  sayfa: z.coerce.number<number>().int().min(0).max(100_000).prefault(0),
+});
+const logoGecisSayilari = z.object({
+  toplam: z.number().int(), stoklu: z.number().int(), yeni: z.number().int(), bagsiz: z.number().int(), bagli: z.number().int(),
+  kullanimDisi: z.number().int(),
+  // Toplu işleme girmeyen, tek tek karar isteyen satırlar.
+  kararBekleyen: z.number().int(),
+});
+export const logoGecisCevabi = z.object({
+  // Logo malzeme okuması bağlı değilse false: liste boş, neden ekranda.
+  baglanti: z.boolean(),
+  // Ayna okuması: açık mı, tur sürüyor mu (sayılar artabilir), okunan kart ve son tam tur.
+  okuma: z.object({ acik: z.boolean(), suruyor: z.boolean(), okunan: z.number().int().nullable(), sonTamam: zamanSemasi.nullable() }),
+  sayilar: logoGecisSayilari,
+  // Süzgece ve aramaya uyan satır sayısı ("süzgece uyan hepsini seç").
+  uyan: z.number().int(),
+  kartlar: z.array(z.object({
+    logoKayitNo: z.number().int(),
+    kod: z.string(),
+    ad: z.string().nullable(),
+    birimSeti: z.string().nullable(),
+    kartTuru: z.string().nullable(),
+    aktif: z.boolean(),
+    // Logo stok toplamı (bütün ambarlar), ondalık metin; stok okuması yoksa null.
+    stok: z.string().nullable(),
+    durum: z.enum(LOGO_GELEN_DURUMLARI),
+    koduUyar: z.boolean(),
+    topluBaglanir: z.boolean(),
+    topluAlinir: z.boolean(),
+    kararNedeni: z.enum(LOGO_GECIS_KARAR_NEDENLERI).nullable(),
+    tmi: z.object({
+      kimlik: z.string(), stokKodu: z.string(), ad: z.string().nullable(), birim: z.string().nullable(),
+      onayDurumu: z.enum(KATALOG_KART_DURUMLARI), surum: surumSemasi, logoKayitli: z.boolean(),
+    }).nullable(),
+    // Bağlı kartta Logo'daki açıklama farkı (2116-2 a); tek tek "Logo'dakini al" ile alınır.
+    farklar: z.array(z.object({ alan: z.enum(LOGO_FARK_ALANLARI), logo: z.string().nullable(), tmi: z.string().nullable() })),
+  })),
+  sayfa: z.number().int(),
+  sonrakiSayfa: z.number().int().nullable(),
+});
+export type LogoGecisCevabi = z.output<typeof logoGecisCevabi>;
+// Toplu işlem (3068 a): tek işlemde en çok 200 kart; her kart kendi kayıt noktasında işlenir, olmayan atlanır ve nedeni döner.
+// Bağlamada CORE kartının sürümü gelir (arada değişen kart atlanır); almada tür ve birim bir kez seçilir, boşsa satırın Logo karşılığından.
+const logoTopluKartlari = z.array(z.object({ logoKayitNo: z.number().int().positive(), surum: surumSemasi.nullable() }).strict())
+  .min(1).max(LOGO_TOPLU_AZAMI)
+  .refine((l) => new Set(l.map((k) => k.logoKayitNo)).size === l.length, 'Aynı Logo kartı iki kez seçilmiş.');
+export const logoTopluBaglaGovdesi = z.object({ kartlar: logoTopluKartlari }).strict();
+export const logoTopluAlGovdesi = z.object({
+  kartlar: logoTopluKartlari,
+  tur: z.enum(LOGO_TUR_KARSILIGI_TURLERI).nullable(),
+  birim: z.string().trim().min(1).max(40).nullable(),
+}).strict();
+export const logoTopluCevabi = z.object({
+  // Geri alma bu kimlikle yapılır; yalnız işlemi yapan kişi geri alır.
+  islem: z.uuid(),
+  tur: z.enum(['bagla', 'al']),
+  basarili: z.array(z.object({ logoKayitNo: z.number().int(), kod: z.string(), stokKodu: z.string() })),
+  atlanan: z.array(z.object({ logoKayitNo: z.number().int(), kod: z.string(), neden: z.string() })),
+});
+export type LogoTopluCevabi = z.output<typeof logoTopluCevabi>;
+export const logoGeriAlGovdesi = z.object({ islem: z.uuid() }).strict();
+export const logoGeriAlCevabi = z.object({
+  geriAlinan: z.number().int().nonnegative(),
+  atlanan: z.array(z.object({ stokKodu: z.string(), neden: z.string() })),
+});
+export type LogoGeriAlCevabi = z.output<typeof logoGeriAlCevabi>;
 
 // Arşiv (2114c, 2114-3 a, 2114-4 a): katalogdan silinen (iptal) kartlar ve başka modüllerdeki izleri. Kesin bağ sütun eşleşmesidir,
 // olası iz kayıt içinde kartın kodu ya da numarasıdır; ikisi de kalıcı silmeyi engeller. Bağ sayımı bağlı değilse adetler null.

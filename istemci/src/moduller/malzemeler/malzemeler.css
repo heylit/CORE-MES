@@ -15,3 +15,22 @@
 
 /* Sistem Ayarları'nda çerçeve sayfanın içinde bir bölümdür: yüksekliği kendi verir, kaydırmayı yine prototip yapar. */
 .tc-malzeme-ayar-cerceve { height: calc(100dvh - var(--ust-cubuk) * 2); min-height: calc(var(--dokunma) * 12); border: thin solid var(--edge); }
+
+/* Logo geçişi (3068), malzeme sekmesi: Logo ve CORE taraflarının kodu üstte, adı altta; dar ekranda kart kipinde alt alta iner. */
+.tc-lg-not { margin: 0 0 var(--b-3); color: var(--muted); }
+.tc-lg-hata { color: var(--stop); overflow-wrap: anywhere; }
+.tc-lg-okuma { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--b-3); }
+.tc-lg-okuma-metin { display: inline-flex; align-items: center; gap: var(--b-2); color: var(--muted); overflow-wrap: anywhere; min-width: 0; }
+.tc-lg-taraf { display: flex; flex-direction: column; gap: var(--b-1); min-width: 0; overflow-wrap: anywhere; }
+.tc-lg-kod { font-family: var(--font-mono); white-space: nowrap; }
+.tc-lg-yok { color: var(--muted); }
+.tc-lg-ek { color: var(--muted); font-size: var(--yazi-s); overflow-wrap: anywhere; }
+.tc-lg-rozetler, .tc-lg-eylemler { display: inline-flex; flex-wrap: wrap; gap: var(--b-1); }
+.tc-lg-canli { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--b-3); }
+.tc-lg-toplu { display: flex; flex-direction: column; gap: var(--b-3); }
+.tc-lg-on-sonuc { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--b-2); }
+.tc-lg-on-sonuc li { display: flex; align-items: flex-start; gap: var(--b-2); overflow-wrap: anywhere; }
+
+/* Logo geçişi sayfası (3068): sekmeler ve içerik alt alta; kaydırmayı kabuğun içerik alanı yapar. */
+.tc-lg-sayfa { display: flex; flex-direction: column; gap: var(--b-4); min-width: 0; }
+.tc-lg-sayfa-not { margin: 0; color: var(--muted); }

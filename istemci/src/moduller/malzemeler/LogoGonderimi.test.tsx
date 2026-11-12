@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { MemoryRouter } from 'react-router-dom';
 import type { Kullanici } from '#paylasilan/kullanici.ts';
 import type { OturumCevabi } from '#paylasilan/sozlesme/oturum.ts';
 import type { BirimSetleriCevabi } from '#paylasilan/sozlesme/logo.ts';
@@ -71,7 +72,7 @@ function sunucuKur(kullanici: Kullanici, setler: BirimSetleriCevabi = BIRIM_SETL
 
 function ac() {
   const istemci = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  render(<QueryClientProvider client={istemci}><BildirimSaglayici><LogoGonderimi /></BildirimSaglayici></QueryClientProvider>);
+  render(<MemoryRouter><QueryClientProvider client={istemci}><BildirimSaglayici><LogoGonderimi /></BildirimSaglayici></QueryClientProvider></MemoryRouter>);
 }
 
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });

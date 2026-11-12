@@ -917,13 +917,14 @@ export function cariListesiniAyikla(govde: unknown): LogoCari[] | null {
 // Cari arama metni: yardımcı en az 3, en çok 100 karakter kabul eder.
 export const CARI_ARAMA_EN_AZ = 3;
 export const CARI_ARAMA_EN_COK = 100;
-// Sayfalı okumanın tam turu en çok saatte bir başlar; tur sürerken sonraki sayfa bir sonraki iş turunda okunur.
-export const SAYFALI_OKUMA_TAZELEME_MS = 60 * 60_000;
-
-export function sayfaliOkumaSirasi(i: { sonRef: number; sonTamam: Date | null } | null, simdi: Date): 'devam' | 'bastan' | 'bekle' {
+// 3077 a: kopya yalnız geçiş içindir; tam tur kendiliğinden yinelenmez. Okuma ilk açılışta bir kez, sonra yalnız "Şimdi oku"
+// isteğiyle baştan başlar; tur sürerken sonraki sayfa bir sonraki iş turunda okunur.
+export function sayfaliOkumaSirasi(
+  i: { sonRef: number; sonTamam: Date | null; turIstendi: boolean } | null,
+): 'devam' | 'bastan' | 'bekle' {
   if (i !== null && i.sonRef > 0) return 'devam';
-  if (i === null || i.sonTamam === null) return 'bastan';
-  return simdi.getTime() - i.sonTamam.getTime() >= SAYFALI_OKUMA_TAZELEME_MS ? 'bastan' : 'bekle';
+  if (i === null || i.sonTamam === null || i.turIstendi) return 'bastan';
+  return 'bekle';
 }
 
 /* ---------------- Malzeme kodu eşlemesi (2116-3 c) ---------------- */

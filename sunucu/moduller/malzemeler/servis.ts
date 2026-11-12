@@ -1,4 +1,5 @@
 
+import { randomUUID } from 'node:crypto';
 import { kayitNoktasi } from '#cekirdek/db.ts';
 import type { Db } from '#cekirdek/db.ts';
 import { bagimliKayit, bulunamadi, cakisma, dogrulama, eskiSurum, gecersiz, yetkiYok } from '#cekirdek/hata.ts';
@@ -9,13 +10,13 @@ import { aletKimlikleri, aletNoIleGetir } from '../kalibrasyon/disari.ts';
 import { aparatKapasiteleri, istasyonlar as istasyonListesi, makineGetir, makineler, operasyonTipleri } from '../istasyonlar/disari.ts';
 import { OPERASYON_GRUP_ADLARI } from '#paylasilan/sozlesme/istasyonlar.ts';
 import { kisitKorumali } from '#cekirdek/kisit.ts';
-import { KATALOG_TURLERI, LOGO_GELEN_SAYFA_BOYU, LOGO_KART_TURLERI, MALZEME_SECIM_SAYFA_BOYU } from '#paylasilan/sozlesme/malzemeler.ts';
+import { KATALOG_TURLERI, LOGO_GECIS_SAYFA_BOYU, LOGO_TUR_KARSILIGI_TURLERI, LOGO_GELEN_SAYFA_BOYU, LOGO_KART_TURLERI, MALZEME_SECIM_SAYFA_BOYU } from '#paylasilan/sozlesme/malzemeler.ts';
 import type {
   DemirbasMakineSecenekleriCevabi, DemirbasTeknikCevabi, demirbasTeknikKaydetGovdesi,
   HizmetYonu, LogoDurumuCevabi, LogoEksik, LogoKarsiligi,
   KatalogAyarlariCevabi, KatalogKartiKaydetCevabi, MalzemelerOzetiCevabi, KatalogKartlariCevabi, KatalogMalzemeOzeti, KatalogSablonlariCevabi, KatalogTuru, MalzemeSecimCevabi,
   OlcuAletiSecenekleriCevabi, OlcuBirimleriCevabi, katalogKartiKaydetGovdesi, KatalogKartiRotasiCevabi,
-  LogoGelenCevabi, LogodanAlCevabi, LogoYeniKodCevabi, logodanAlGovdesi, logoGelenSorgusu,
+  LogoGecisCevabi, logoGecisSorgusu, LogoGelenCevabi, LogoGeriAlCevabi, logoTopluAlGovdesi, logoTopluBaglaGovdesi, LogoTopluCevabi, LogodanAlCevabi, LogoYeniKodCevabi, logodanAlGovdesi, logoGelenSorgusu,
   ArsivKarti, ArsivKartiCevabi, ArsivKartlariCevabi, KatalogKartiIptalCevabi,
 } from '#paylasilan/sozlesme/malzemeler.ts';
 import type { SayfaliListe } from '#paylasilan/liste.ts';
@@ -36,7 +37,7 @@ import { katalogGeriCekildiMi, katalogKartAdi, kategoriAgaciKur } from './kurall
 import type { KategoriAgaciDugumu, KategoriAgaciTuru } from '#paylasilan/sozlesme/kategori-agaci-sabitleri.ts';
 import { arsivdenDonusDurumu, arsivIzAdetleri, arsivKaliciSilmeEngeli, type ArsivIzi } from './kurallar.ts';
 import type { MalzemeKartiAnahtari, MalzemeKartiIzi } from '#paylasilan/malzeme-karti-izi.ts';
-import { logoGelenDurumu, logoKartFarklari, logoKodBicimi, logoKoduTureUyar } from './kurallar.ts';
+import { logoGecisAdayligi, logoGelenDurumu, logoKartFarklari, logoKodBicimi, logoKoduTureUyar } from './kurallar.ts';
 import * as s from './sorgular.ts';
 
 // Dört göz ayarının tek kaynağı: Sistem Ayarları. Satır yokken ayar açıktır.
@@ -977,6 +978,14 @@ let logoKartAynasi: LogoKartAynasiCozucusu | null = null;
 let logoEslemeYazici: LogoEslemeYazici | null = null;
 let logoTmiKodlari: LogoTmiKodCozucusu | null = null;
 export function logoKartAynasiKaydet(c: LogoKartAynasiCozucusu): void { logoKartAynasi = c; }
+// 3068: geçiş sayfası aynanın hafif özetini (süzgeç, sayaç) ve okuma durumunu logo modülünden alır; sunucu/kablolama.ts bağlar.
+export interface LogoAynaOzeti {
+  kartlar: { logoKayitNo: number; kod: string; aktif: boolean; stok: string | null }[];
+  okuma: { acik: boolean; suruyor: boolean; okunan: number | null; sonTamam: string | null };
+}
+export type LogoAynaOzetiCozucusu = (db: Db, o: { ara?: string }) => Promise<LogoAynaOzeti>;
+let logoAynaOzeti: LogoAynaOzetiCozucusu | null = null;
+export function logoAynaOzetiKaydet(c: LogoAynaOzetiCozucusu): void { logoAynaOzeti = c; }
 export function logoEslemeYaziciKaydet(c: LogoEslemeYazici): void { logoEslemeYazici = c; }
 export function logoTmiKodCozucusuKaydet(c: LogoTmiKodCozucusu): void { logoTmiKodlari = c; }
 
@@ -1013,6 +1022,64 @@ export async function logodanGelenler(db: Db, q: z.output<typeof logoGelenSorgus
   };
 }
 
+const stokVar = (stok: string | null): boolean => stok !== null && Number(stok) > 0;
+
+// 3068: Logo geçişi. Süzgeç ve sayaçlar bütün aynanın hafif özetinden, sayfa satırları yalnız o sayfanın kartlarından kurulur;
+// sayaçlar aramadan bağımsızdır (aynanın tamamı), süzgece uyan sayı aramayla birlikte.
+export async function logoGecisi(db: Db, q: z.output<typeof logoGecisSorgusu>): Promise<LogoGecisCevabi> {
+  const bos = { toplam: 0, stoklu: 0, yeni: 0, bagsiz: 0, bagli: 0, kullanimDisi: 0, kararBekleyen: 0 };
+  if (!logoKartAynasi || !logoAynaOzeti) {
+    return { baglanti: false, okuma: { acik: false, suruyor: false, okunan: null, sonTamam: null }, sayilar: bos, uyan: 0, kartlar: [], sayfa: 0, sonrakiSayfa: null };
+  }
+  const ozet = await logoAynaOzeti(db, {});
+  const firma = katalogFirmaKodu(await katalogGenelAyari(db));
+  const birimKarsiliklari = (await s.logoKarsiliklari(db)).filter((k) => k.cesit === 'birim');
+  const tumKartlar = ozet.kartlar.map((k) => ({ ...k, ad: null, aciklama2: null, aciklama3: null, kartTuru: null, birimSeti: null, sonOkuma: '' }));
+  const { esleme, refle, kodla } = await logoGelenTmiKartlari(db, tumKartlar);
+  const satirlar = ozet.kartlar.map((k) => {
+    const { durum, tmi } = logoGelenDurumu(k, refle, kodla, esleme);
+    return { k, durum, tmi, koduUyar: logoKodBicimi(k.kod, firma) !== null };
+  });
+  const sayilar = { ...bos, toplam: satirlar.length };
+  for (const r of satirlar) {
+    if (stokVar(r.k.stok)) sayilar.stoklu += 1;
+    if (!r.k.aktif) sayilar.kullanimDisi += 1;
+    if (r.durum === 'yeni') sayilar.yeni += 1;
+    else if (r.durum === 'bagsiz') sayilar.bagsiz += 1;
+    else sayilar.bagli += 1;
+  }
+  const arananlar = q.ara ? new Set((await logoAynaOzeti(db, { ara: q.ara })).kartlar.map((k) => k.logoKayitNo)) : null;
+  const uyanlar = satirlar.filter((r) => (arananlar === null || arananlar.has(r.k.logoKayitNo)) && (
+    q.suzgec === 'tumu' ? true
+      : q.suzgec === 'stoklu' ? stokVar(r.k.stok)
+        : q.suzgec === 'kullanim-disi' ? !r.k.aktif
+          : r.durum === q.suzgec));
+  const sayfaSatirlari = uyanlar.slice(q.sayfa * LOGO_GECIS_SAYFA_BOYU, (q.sayfa + 1) * LOGO_GECIS_SAYFA_BOYU);
+  const tam = new Map((sayfaSatirlari.length === 0 ? [] : await logoKartAynasi(db, {
+    kodlar: sayfaSatirlari.map((r) => r.k.kod), sinir: sayfaSatirlari.length, sonra: 0,
+  })).map((k) => [k.logoKayitNo, k]));
+  const kartlar = sayfaSatirlari.map((r) => {
+    const t = tam.get(r.k.logoKayitNo);
+    const birimSeti = t?.birimSeti ?? null;
+    const aday = logoGecisAdayligi({ durum: r.durum, aktif: r.k.aktif, koduUyar: r.koduUyar, logoBirimSeti: birimSeti, tmi: r.tmi, birimKarsiliklari });
+    return {
+      logoKayitNo: r.k.logoKayitNo, kod: r.k.kod, ad: t?.ad ?? null, birimSeti, kartTuru: t?.kartTuru == null ? null : String(t.kartTuru),
+      aktif: r.k.aktif, stok: r.k.stok, durum: r.durum, koduUyar: r.koduUyar, ...aday,
+      tmi: r.tmi && {
+        kimlik: r.tmi.kimlik, stokKodu: r.tmi.stokKodu, ad: r.tmi.ad, birim: r.tmi.birim, onayDurumu: r.tmi.onayDurumu, surum: r.tmi.surum, logoKayitli: r.tmi.logoKayitNo !== null,
+      },
+      farklar: r.durum === 'bagli' && r.tmi && t ? logoKartFarklari(t, r.tmi) : [],
+    };
+  });
+  // Karar bekleyen sayısı yalnız birim farkı dışındakiler için bütün aynadan sayılır; birim için tam kart gerekir, sayfa kadarı yazılır.
+  sayilar.kararBekleyen = satirlar.filter((r) => r.k.aktif && ((r.durum === 'yeni' && !r.koduUyar) || (r.durum === 'bagsiz' && r.tmi?.onayDurumu === 'iptal'))).length
+    + kartlar.filter((k) => k.kararNedeni === 'birim-farki').length;
+  return {
+    baglanti: true, okuma: ozet.okuma, sayilar, uyan: uyanlar.length, kartlar, sayfa: q.sayfa,
+    sonrakiSayfa: (q.sayfa + 1) * LOGO_GECIS_SAYFA_BOYU < uyanlar.length ? q.sayfa + 1 : null,
+  };
+}
+
 async function aynadakiKart(db: Db, ref: number): Promise<LogoAynaKarti> {
   if (!logoKartAynasi) throw gecersiz(LOGO_BAGI_YOK);
   const k = (await logoKartAynasi(db, { sinir: 1, sonra: ref - 1 }))[0];
@@ -1023,7 +1090,7 @@ async function aynadakiKart(db: Db, ref: number): Promise<LogoAynaKarti> {
 // 2116-4 a: Logo'daki kart TMI'de taslak açılır; tür ve birim seçilir, öteki zorunlu alanlar onaydan önce sihirbazda tamamlanır.
 // Kart Logo'da olduğu için gönderilmiş sayılır (yeniden gönderilmez); kodu TMI biçimine uymuyorsa yeni kod alır ve eşlemesi yazılır (2116-3 c).
 export async function logodanKartAl(
-  db: Db, kullanici: Kullanici, ref: number, g: z.output<typeof logodanAlGovdesi>,
+  db: Db, kullanici: Kullanici, ref: number, g: z.output<typeof logodanAlGovdesi>, secenek: { yalnizKendiKodu?: boolean } = {},
 ): Promise<LogodanAlCevabi> {
   const k = await aynadakiKart(db, ref);
   if (!k.aktif) throw gecersiz('Logo\'da kullanım dışı kart alınmaz.');
@@ -1040,6 +1107,8 @@ export async function logodanKartAl(
     await s.katalogSirasiniIlerlet(db, bicim.onek, bicim.sira);
     kod = { ...bicim, stokKodu: k.kod };
   } else {
+    // Toplu almada kod eşlemesi yazılmaz: geri alma eşlemeyi silemez (eşleme değişmez), kod eşlenecek kart tek tek alınır.
+    if (secenek.yalnizKendiKodu) throw gecersiz('Logo kodu seçilen türün koduna uymuyor; tek tek alın.');
     if (!logoEslemeYazici) throw gecersiz(LOGO_BAGI_YOK);
     if (!firmaOneki && !g.onek) throw dogrulama('Logo kodu TMI kod biçimine ya da seçilen türe uymuyor; yeni kodun önekini seçin (ör. HM-GEN-).', 'onek');
     kod = await yeniStokKodu(db, firmaOneki ? null : `${g.onek!.toUpperCase()}1`, g.tur);
@@ -1103,6 +1172,95 @@ export async function logoFarkiniAl(db: Db, kullanici: Kullanici, ref: number, s
   const r = await s.logoAciklamalariniYaz(db, tmi.kimlik, [k.ad, k.aciklama2, k.aciklama3], { surum, kisiId: kullanici.id });
   if (!r) throw eskiSurum();
   return { id: tmi.kimlik, surum: r.surum };
+}
+
+// 3068 a: toplu bağla ve al. Her kart kendi kayıt noktasında tek kart işlemiyle (aynı kurallar) işlenir; olmayan atlanır ve nedeni döner.
+// İşlenen kart izle yazılır; "Bu işlemi geri al" yalnız bu izle ve yalnız CORE'da geri döner. Logo'ya hiçbir şey gitmez.
+export async function logoTopluBagla(db: Db, kullanici: Kullanici, g: z.output<typeof logoTopluBaglaGovdesi>): Promise<LogoTopluCevabi> {
+  return topluIsle(db, kullanici, 'bagla', g.kartlar, async (ref, surum) => {
+    if (surum === null) throw gecersiz('CORE kartının sürümü yok; listeyi yenileyin.');
+    const k = await aynadakiKart(db, ref);
+    const { refle, kodla, esleme } = await logoGelenTmiKartlari(db, [k]);
+    const { tmi } = logoGelenDurumu(k, refle, kodla, esleme);
+    const birimKarsiliklari = (await s.logoKarsiliklari(db)).filter((x) => x.cesit === 'birim');
+    const aday = logoGecisAdayligi({ durum: logoGelenDurumu(k, refle, kodla, esleme).durum, aktif: k.aktif, koduUyar: true, logoBirimSeti: k.birimSeti, tmi, birimKarsiliklari });
+    if (!aday.topluBaglanir) throw gecersiz(aday.kararNedeni === 'birim-farki' ? 'Birim farklı; tek tek bağlayın.' : 'Toplu bağlanamaz; satırdan işleyin.');
+    const onceki = tmi ? await s.logoGonderimAlanlari(db, tmi.kimlik) : null;
+    const r = await logoKartiBagla(db, kullanici, ref, surum);
+    return { kimlik: r.id, kod: k.kod, stokKodu: tmi!.stokKodu, onceki };
+  });
+}
+
+export async function logoTopluAl(db: Db, kullanici: Kullanici, g: z.output<typeof logoTopluAlGovdesi>): Promise<LogoTopluCevabi> {
+  const karsiliklar = await s.logoKarsiliklari(db);
+  const tek = (cesit: 'tur' | 'birim', logo: string | null): string | null => {
+    const uyan = karsiliklar.filter((x) => x.cesit === cesit && logo !== null && x.logoDegeri === logo);
+    return uyan.length === 1 ? uyan[0]!.tmiDegeri : null;
+  };
+  return topluIsle(db, kullanici, 'al', g.kartlar, async (ref) => {
+    const k = await aynadakiKart(db, ref);
+    const tur = g.tur ?? tek('tur', k.kartTuru === null ? null : String(k.kartTuru));
+    const birim = g.birim ?? tek('birim', k.birimSeti);
+    if (tur === null) throw gecersiz('Türün Logo karşılığı yok; türü seçin ya da tek tek alın.');
+    if (birim === null) throw gecersiz('Birimin Logo karşılığı yok; birimi seçin ya da tek tek alın.');
+    const turu = LOGO_TUR_KARSILIGI_TURLERI.find((x) => x === tur);
+    if (!turu) throw gecersiz('Türün Logo karşılığı alınabilen bir tür değil; tek tek alın.');
+    const r = await logodanKartAl(db, kullanici, ref, { tur: turu, birim, onek: null }, { yalnizKendiKodu: true });
+    return { kimlik: r.id, kod: k.kod, stokKodu: r.stok_kodu, onceki: null };
+  });
+}
+
+async function topluIsle(
+  db: Db, kullanici: Kullanici, tur: 'al' | 'bagla', kartlar: readonly { logoKayitNo: number; surum: number | null }[],
+  isle: (ref: number, surum: number | null) => Promise<{ kimlik: string; kod: string; stokKodu: string; onceki: s.LogoGonderimAlanlari | null }>,
+): Promise<LogoTopluCevabi> {
+  if (!logoKartAynasi) throw gecersiz(LOGO_BAGI_YOK);
+  const islem = randomUUID();
+  const basarili: LogoTopluCevabi['basarili'] = [];
+  const atlanan: LogoTopluCevabi['atlanan'] = [];
+  const aynadaKod = async (ref: number): Promise<string> => {
+    const k = (await logoKartAynasi!(db, { sinir: 1, sonra: ref - 1 }))[0];
+    return k?.logoKayitNo === ref ? k.kod : String(ref);
+  };
+  for (const k of kartlar) {
+    const r = await kayitNoktasi(db, async () => {
+      const sonuc = await isle(k.logoKayitNo, k.surum);
+      await s.gecisIziYaz(db, { islem, kimlik: sonuc.kimlik, tur, logoKayitNo: String(k.logoKayitNo), onceki: sonuc.onceki, kisiId: kullanici.id });
+      return sonuc;
+    });
+    if (r.tamam) basarili.push({ logoKayitNo: k.logoKayitNo, kod: r.deger.kod, stokKodu: r.deger.stokKodu });
+    else atlanan.push({ logoKayitNo: k.logoKayitNo, kod: await aynadaKod(k.logoKayitNo), neden: r.hata.message });
+  }
+  return { islem, tur, basarili, atlanan };
+}
+
+// Geri alma: işlemi yapan kişi, işlemden sonra değişmemiş kartta. Bağ boşaltılır ve önceki gönderim alanları döner; alınan taslak silinir.
+// Logo'ya istek gitmez; koruma tetiği yalnız geri alınan kart için gevşer (göç 20261112083200).
+export async function logoGecisiGeriAl(db: Db, kullanici: Kullanici, islem: string): Promise<LogoGeriAlCevabi> {
+  const izler = await s.gecisIzleri(db, islem, kullanici.id);
+  if (izler.length === 0) throw bulunamadi('Geri alınacak işlem yok ya da başkasının işlemi.');
+  let geriAlinan = 0;
+  const atlanan: LogoGeriAlCevabi['atlanan'] = [];
+  for (const iz of izler) {
+    if (iz.surum !== iz.izSurumu) { atlanan.push({ stokKodu: iz.stokKodu, neden: 'Kart işlemden sonra değişti.' }); continue; }
+    if (iz.logoKayitNo !== iz.izKayitNo || iz.logoPasifDurumu !== null) { atlanan.push({ stokKodu: iz.stokKodu, neden: 'Kartın Logo bağı değişti.' }); continue; }
+    const r = await kayitNoktasi(db, async () => {
+      await s.geriAlinanKart(db, iz.kimlik);
+      try {
+        if (iz.tur === 'bagla') {
+          await s.logoBaginiGeriAl(db, iz.kimlik, iz.onceki!, kullanici.id);
+          await s.gecisIziSil(db, islem, iz.kartNo);
+        } else {
+          await s.katalogKartiSilmeyiDene(db, iz.kimlik);
+        }
+      } finally {
+        await s.geriAlinanKart(db, null);
+      }
+    });
+    if (r.tamam) geriAlinan += 1;
+    else atlanan.push({ stokKodu: iz.stokKodu, neden: r.hata.kod === 'BAGIMLI_KAYIT' ? 'Kart başka kayıtta kullanılıyor.' : r.hata.message });
+  }
+  return { geriAlinan, atlanan };
 }
 
 // Aktif kartların sayfasız, sınırlı okuması (Reçete-Rota ve planlama bağlı durumu): stok kodu ve no sırasıyla en çok `sinir` kart;

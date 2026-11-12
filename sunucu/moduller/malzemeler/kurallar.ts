@@ -1236,3 +1236,24 @@ export function logoKartFarklari(
   ];
   return ciftler.filter(([, l, t]) => l !== t).map(([alan, l, t]) => ({ alan, logo: l, tmi: t }));
 }
+
+// Logo geçişi (3068): satırın toplu işleme girip girmediği. Toplu bağlama yalnız aynı kodlu, bağsız, iptal olmayan ve birimi
+// karşılıkla (ya da aynen) tutan kartta; toplu alma yalnız CORE'da olmayan, Logo'da kullanımda ve kodu CORE biçimine uyan kartta.
+// Geri kalanı tek tek karar ister; neden ekranda yazar.
+export type LogoGecisKararNedeni = 'birim-farki' | 'kod-eslenecek' | 'kullanim-disi' | 'iptal-kart';
+export function logoGecisAdayligi(o: {
+  durum: LogoGelenDurumu; aktif: boolean; koduUyar: boolean; logoBirimSeti: string | null;
+  tmi: { birim: string | null; onayDurumu: string } | null;
+  birimKarsiliklari: readonly { tmiDegeri: string; logoDegeri: string | null }[];
+}): { topluBaglanir: boolean; topluAlinir: boolean; kararNedeni: LogoGecisKararNedeni | null } {
+  const yok = { topluBaglanir: false, topluAlinir: false };
+  if (o.durum === 'bagli') return { ...yok, kararNedeni: null };
+  if (!o.aktif) return { ...yok, kararNedeni: 'kullanim-disi' };
+  if (o.durum === 'yeni') return o.koduUyar ? { ...yok, topluAlinir: true, kararNedeni: null } : { ...yok, kararNedeni: 'kod-eslenecek' };
+  if (!o.tmi || o.tmi.onayDurumu === 'iptal') return { ...yok, kararNedeni: 'iptal-kart' };
+  const tmiBirim = o.tmi.birim;
+  const tutar = tmiBirim !== null && o.logoBirimSeti !== null
+    && (tmiBirim.toLocaleUpperCase('tr-TR') === o.logoBirimSeti.toLocaleUpperCase('tr-TR')
+      || o.birimKarsiliklari.some((k) => k.tmiDegeri === tmiBirim && k.logoDegeri === o.logoBirimSeti));
+  return tutar ? { ...yok, topluBaglanir: true, kararNedeni: null } : { ...yok, kararNedeni: 'birim-farki' };
+}

@@ -4,7 +4,7 @@ import { bulunamadi, gecersiz, UygulamaHatasi } from '#cekirdek/hata.ts';
 import { LOGO_AYARLARI } from '#paylasilan/ayarlar/logo.ts';
 import type { BirimSetleriCevabi, LogoBaglantiDurumu, LogoHazirlikCevabi, LogoKontrolCevabi } from '#paylasilan/sozlesme/logo.ts';
 import type { FisGonderimSekli, LogoFisBilgisi, MalzemeFisiTuru } from '#paylasilan/sozlesme/stok.ts';
-import { sistemAyariOku } from '../ayarlar/disari.ts';
+import { modulAyariDegistir, sistemAyariOku } from '../ayarlar/disari.ts';
 import { firmaOzeti } from '../musteri-tedarikci/disari.ts';
 import { logoBirimSetiKullaniliyorMu, logoyaGidecekMalzemeler, malzemeLogoSonucu } from '../malzemeler/disari.ts';
 import type { LogoyaGidecekMalzeme, MalzemeLogoSonucu } from '../malzemeler/disari.ts';
@@ -972,7 +972,7 @@ export function logodaKullanilanMalzemeKodlari(db: Db, kodlar: readonly string[]
   return s.logodaOlanMalzemeKodlari(db, kodlar);
 }
 
-// 2116: malzeme kartı ve stok toplamı sayfa sayfa okunur (iş turunda tek sayfa); tam tur en çok saatte bir başlar. Okunan yalnız logo
+// 2116: malzeme kartı ve stok toplamı sayfa sayfa okunur (iş turunda tek sayfa); tam tur yalnız ilk açılışta ve istekle başlar (3077 a). Okunan yalnız logo
 // modülünün aynasına yazılır, TMI kartına ya da stoğuna işlenmez (2116-1 a, 2116-2 a); Logo'ya hiçbir şey gitmez.
 function sayfaliOkumaTuru<T>(
   akis: s.SayfaliAkis, ayar: LogoAyarAnahtari, kapali: 'malzeme-karti-kapali' | 'stok-kapali',
@@ -984,7 +984,7 @@ function sayfaliOkumaTuru<T>(
     if ('tur' in kopru) return kopru;
     if (!okumaSirasiGeldi(o, akis)) return { tur: 'bos' };
     const imlec = await s.okumaImleci(db, akis);
-    const sira = sayfaliOkumaSirasi(imlec, o.saat());
+    const sira = sayfaliOkumaSirasi(imlec);
     if (sira === 'bekle') return { tur: 'bos' };
     const since = sira === 'devam' && imlec ? imlec.sonRef : 0;
     const turBasi = sira === 'devam' && imlec ? imlec.turBasi : o.saat();
@@ -1017,6 +1017,40 @@ export function logodakiMalzemeKartlari(db: Db, o: { kodlar?: readonly string[];
 }
 export function logodakiStokToplamlari(db: Db, malzemeKodlari: readonly string[]): Promise<(LogoStokSatiri & { sonOkuma: string })[]> {
   return s.aynadakiStoklar(db, malzemeKodlari);
+}
+
+// Geçiş sayfası (3068): aynanın özeti ve okuma durumu. Okuma açık değilse ayna eski kalabilir; tur sürerken sayılar artar.
+export interface LogoAynaOzeti {
+  kartlar: s.AynaOzetSatiri[];
+  okuma: { acik: boolean; suruyor: boolean; okunan: number | null; sonTamam: string | null };
+}
+export async function logodakiMalzemeOzeti(db: Db, o: { ara?: string }): Promise<LogoAynaOzeti> {
+  const acik = (await sistemAyariOku(db, 'logo.baglanti')) === true && (await sistemAyariOku(db, 'logo.malzeme-okumasi')) === true;
+  const i = await s.okumaImleci(db, 'malzeme-karti');
+  return {
+    kartlar: await s.aynaOzeti(db, o),
+    // İmleç başta değilse tur yarıdadır; hiç tam tur bitmemişse ya da istenen tur başlamadıysa da okuma sürüyor sayılır.
+    okuma: { acik, suruyor: acik && sayfaliOkumaSirasi(i) !== 'bekle', okunan: i?.sayi ?? null, sonTamam: i?.sonTamamMetni ?? null },
+  };
+}
+
+// 3077 a: geçiş okuması yalnız istekle. "Şimdi oku" malzeme kartı ve stok okumasını açar ve ikisini baştan okutur; "Geçişi bitir"
+// ikisini kapatır, okunmuş kopya silinmez. Ayar Sistem Ayarları'ndaki aynı anahtardır; değişiklik ayar geçmişine yazılır.
+const GECIS_AYARLARI = ['logo.malzeme-okumasi', 'logo.stok-okumasi'] as const;
+const GECIS_KAYNAGI = { modul: 'logo', yetki: 'ayarlar.yaz' } as const;
+export async function gecisOkumasiIste(db: Db, kisiId: number): Promise<void> {
+  if ((await sistemAyariOku(db, 'logo.baglanti')) !== true) throw gecersiz('Logo bağlantısı kapalı; önce Sistem Ayarları\'nda "Logo bağlantısı"nı açın.');
+  for (const a of GECIS_AYARLARI) {
+    const simdi = (await sistemAyariOku(db, a)) === true;
+    if (!simdi) await modulAyariDegistir(db, kisiId, a, true, false, { ...GECIS_KAYNAGI, yol: '/logo-gecisi/oku' });
+  }
+  await s.turIste(db);
+}
+export async function gecisiBitir(db: Db, kisiId: number): Promise<void> {
+  for (const a of GECIS_AYARLARI) {
+    const simdi = (await sistemAyariOku(db, a)) === true;
+    if (simdi) await modulAyariDegistir(db, kisiId, a, false, true, { ...GECIS_KAYNAGI, yol: '/logo-gecisi/bitir' });
+  }
 }
 
 // 2116-3 c: Logo'dan alınan ve TMI'de başka kodla açılan kartın eşlemesi; aynı transaction'da kartla birlikte yazılır. Yalnız malzemeler çağırır.

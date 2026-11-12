@@ -40,7 +40,7 @@ export const EKSIK_ADLARI: Record<LogoEksik, string> = {
   birim_karsiligi: 'birim karşılığı',
 };
 
-const TUR_ADLARI: Record<string, string> = { hammadde: 'Hammadde', yarimamul: 'Yarı mamul', mamul: 'Mamul', sarf: 'Sarf', demirbas: 'Demirbaş', ticari_mal: 'Ticari mal' };
+export const TUR_ADLARI: Readonly<Record<string, string>> = { hammadde: 'Hammadde', yarimamul: 'Yarı mamul', mamul: 'Mamul', sarf: 'Sarf', demirbas: 'Demirbaş', ticari_mal: 'Ticari mal' };
 // Kart #1218 (TM2): ticari mal yalnız Logo ticari mal kartına gider, öteki türler o kodu alamaz; sunucu da aynısını denetler.
 const LOGO_TICARI_MAL_KODU = '1';
 const turunSecenekleri = (tmiDegeri: string, hepsi: readonly Secenek[]): readonly Secenek[] =>
@@ -389,7 +389,7 @@ export function LogoGonderimi() {
           {karsilikEksik > 0 && <p className="tc-logo-not tc-logo-eksik" role="status">{karsilikEksik.toLocaleString('tr-TR')} kartta tür ya da birim karşılığı eksik.</p>}
           <Tablo etiket="Logo gönderim durumu" sutunlar={KART_SUTUNLARI} satirlar={durum.data.kartlar} satirAnahtari={(k) => k.id} bosMesaj="Logo'ya gidecek kart yok" />
         </Kart>
-        <LogodanGelenler turAdlari={TUR_ADLARI} karsiliklar={durum.data.karsiliklar} />
+        <LogodanGelenler />
         <LogoKarsiliklari />
       </>
     );

@@ -1,11 +1,11 @@
 import { bulunamadi } from '#cekirdek/hata.ts';
 import { uc } from '#cekirdek/uc.ts';
 import { disDuzeltmeCevabi, disDuzeltmelerCevabi, disSiparisCevabi, disSiparisDuzeltGovdesi, disSiparisSorgusu } from '#paylasilan/sozlesme/logo.ts';
-import { birimSetiCevabi, birimSetiEkleGovdesi, birimSetiParametresi, birimSetleriCevabi, logoHazirlikCevabi, logoKontrolCevabi } from '#paylasilan/sozlesme/logo.ts';
+import { birimSetiCevabi, birimSetiEkleGovdesi, birimSetiParametresi, birimSetleriCevabi, logoGecisKomutuCevabi, logoHazirlikCevabi, logoKontrolCevabi } from '#paylasilan/sozlesme/logo.ts';
 import { disDuzeltmeAcik, ortamKoprusu, ortamOzeti } from './baglanti.ts';
 import { disDuzeltmeleri, disSiparisDuzelt } from './dis-siparis.ts';
 import { logodanDisSiparisOku } from './isler.ts';
-import { birimSetiEkle, birimSetiKaldir, birimSetleriniGetir, hazirlik, kontrol } from './servis.ts';
+import { birimSetiEkle, birimSetiKaldir, birimSetleriniGetir, gecisiBitir, gecisOkumasiIste, hazirlik, kontrol } from './servis.ts';
 
 // Birim seti listesi: malzemelerin "Logo gönderimi" sayfası karşılık seçerken okur (LB9 a); elle ekleme ve kaldırma yalnız yöneticide (LB11 a).
 export const uclar = [
@@ -31,6 +31,21 @@ export const uclar = [
     parametre: birimSetiParametresi,
     cevap: birimSetiCevabi,
     isle: ({ db, parametre }) => birimSetiKaldir(db, parametre.kod),
+  }),
+  // 3077 a: geçiş okuması yalnız istekle. Ayarı değiştirdiği için Sistem Ayarları'nın yazma yetkisini ister (3078 b); Logo'ya yalnız okuma gider.
+  uc({
+    yontem: 'POST',
+    yol: '/logo-gecisi/oku',
+    yetki: 'ayarlar.yaz',
+    cevap: logoGecisKomutuCevabi,
+    isle: async ({ db, kullanici }) => { await gecisOkumasiIste(db, kullanici.id); return { tamam: true as const }; },
+  }),
+  uc({
+    yontem: 'POST',
+    yol: '/logo-gecisi/bitir',
+    yetki: 'ayarlar.yaz',
+    cevap: logoGecisKomutuCevabi,
+    isle: async ({ db, kullanici }) => { await gecisiBitir(db, kullanici.id); return { tamam: true as const }; },
   }),
   // Hazırlık ve canlı kontrol yalnız sistem ayrıntısını görene (yönetici): adres ve ayar durumu gösterilir, anahtar gösterilmez.
   uc({

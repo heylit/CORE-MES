@@ -166,3 +166,6 @@ export const disDuzeltmelerCevabi = z.object({ kayitlar: z.array(disDuzeltmeKayd
 export type DisSiparisCevabi = z.output<typeof disSiparisCevabi>;
 export type DisSiparisDuzeltGovdesi = z.input<typeof disSiparisDuzeltGovdesi>;
 export type DisDuzeltmeKaydi = z.output<typeof disDuzeltmeKaydi>;
+
+// 3077 a: "Logo geçişi" sayfasındaki "Şimdi oku" ve "Geçişi bitir" komutlarının cevabı.
+export const logoGecisKomutuCevabi = z.object({ tamam: z.literal(true) });
