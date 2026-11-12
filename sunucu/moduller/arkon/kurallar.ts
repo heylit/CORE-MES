@@ -2,7 +2,7 @@ import { arkonBelgeAlanlari } from '#paylasilan/sozlesme/arkon.ts';
 import type { ANOMALI_DONEM_ADLARI, ArkonDeposu, ArkonKayitTuru, ArkonRolu, MerkezDurumu, OzetDonemi } from '#paylasilan/sozlesme/arkon.ts';
 import type { CagriEkibi, DurusNedeni, HurdaNedeni } from '#paylasilan/sozlesme/durus-nedenleri.ts';
 import { CAGRI_EKIPLERI } from '#paylasilan/sozlesme/durus-nedenleri.ts';
-import type { IsMerkezi, Istasyon, Makine } from '#paylasilan/sozlesme/istasyonlar.ts';
+import type { IsMerkezi, Istasyon, Makine, OperasyonGrubu } from '#paylasilan/sozlesme/istasyonlar.ts';
 import type { IlkParcaSecimi } from '#paylasilan/sozlesme/rota.ts';
 import { AZAMI_MAKINE_SECIMI } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import type { Emir } from '#paylasilan/sozlesme/uretim-emirleri.ts';
@@ -198,6 +198,13 @@ export const silmeCakisiyorMu = (mevcut: number | null, taban: number): boolean 
 const TIP: Record<Istasyon['tip'], string> = {
   talasli: 'cnc', kalite: 'kalite', depo: 'depo', markalama: 'mark', boya: 'boya', montaj: 'montaj', tesviye: 'tesviye',
 };
+// 2166-2 a, 2166-5 a: terminal görünümü (paketin iş türü) adımın operasyon tipinin grubundan seçilir; karşılığı olmayan grupta
+// (ısıl işlem, fason) ya da tipsiz adımda istasyon tipinden. Operasyon koduna özel görünüm (terminal_gorunumu) henüz yoktur.
+const GRUP_TURU: Readonly<Partial<Record<OperasyonGrubu, string>>> = {
+  TAL: 'cnc', KES: 'cnc', SKL: 'cnc', KYN: 'cnc', KAL: 'kalite', MRK: 'mark', MON: 'montaj', YZY: 'tesviye', BOY: 'boya', KAP: 'boya', PAK: 'depo',
+};
+export const paketTuru = (grup: OperasyonGrubu | null | undefined, istasyon: Pick<Istasyon, 'tip'> | null): string =>
+  (grup == null ? undefined : GRUP_TURU[grup]) ?? (istasyon === null ? 'cnc' : TIP[istasyon.tip]);
 const BAGLANTI: Record<NonNullable<Makine['baglantiTuru']>, string> = {
   focas: 'focas', opcua: 'opcua', mtconnect: 'mtc', modbus: 'modbus', dijital_giris: 'io',
 };
@@ -271,9 +278,11 @@ export interface IsEmriPaketGirdisi {
     kaynakRotaRevizyonId?: number | null | undefined;
   };
   ekAciklama?: string | null | undefined;
-  // Adımın operasyon tipi kodu (GKK, GM, KMM...); terminal kalite istasyonunda alt görünümü seçer (2011 a). Yalnız kalite istasyonundaki
-  // pakete yazılır: öteki istasyonlarda görünümü istasyon tipi seçer.
+  // Adımın operasyon tipi kodu (GKK, GM, KMM...); terminal kalite görünümünde alt görünümü seçer (2011 a). Yalnız iş türü kalite olan
+  // pakete yazılır.
   opTipi?: string | null | undefined;
+  // Adımın operasyon tipinin grubu (TAL, KAL, BOY...): paketin iş türünü istasyon tipinden önce seçer (`paketTuru`).
+  opGrubu?: OperasyonGrubu | null | undefined;
   emir: Pick<Emir, 'parcaNo' | 'parcaAd' | 'acan' | 'acilma'>;
   // Emrin projesinin adı (projeler modülü); projesiz emirde boş metin.
   proje?: string | undefined;
@@ -350,7 +359,7 @@ export function isEmrindenTaslakPaket(g: IsEmriPaketGirdisi): Record<string, unk
   const acilma = Date.parse(emir.acilma);
   const birim = dakika(ie.birimSureDk);
   const ayar = dakika(ie.ayarSuresiDk);
-  const opType = istasyon === null ? 'cnc' : TIP[istasyon.tip];
+  const opType = paketTuru(g.opGrubu, istasyon);
   const kopya = sablon === null ? {} : Object.fromEntries(SABLON_ALANLARI.filter((a) => a in sablon).map((a) => [a, sablon[a]]));
   return {
     id: g.parca ? parcaPaketKimligi(ie.id, g.parca.no) : isEmriPaketKimligi(ie.id), no: ie.emirNo, opType, st: sablon !== null && sablon['opType'] === opType && kayitMi(sablon['st']) ? sablon['st'] : {},
@@ -361,7 +370,7 @@ export function isEmrindenTaslakPaket(g: IsEmriPaketGirdisi): Record<string, unk
     ...(g.girenler?.length && doluMetin(kopya['material']) === null ? { material: girenMetni(g.girenler) } : {}),
     ...(g.ilkParcaSecimi === 'yok' ? { rules: ilkParcasizKural(kopya['rules']) } : {}),
     status: 'draft', version: 0, dirty: true, createdAt: acilma, updatedAt: acilma, by: emir.acan.ad, from: 'tmi',
-    tmi: { emirId: ie.uretimEmriId, isEmriId: ie.id, opNo: ie.opNo, plan: g.plan, ...adimTuruAlanlari(ie.tur, g.ekAciklama), ...(g.rotaEksik ? { rotaEksik: g.rotaEksik } : {}), ...(g.hazirlik ? { hazirlik: g.hazirlik } : {}), ...(g.ilkParca ? { ilkParca: { karar: g.ilkParca.karar, zaman: g.ilkParca.zaman } } : {}), ...(g.ilkParcaGerekli ? { ilkParcaGerekli: true } : {}), ...(g.aql ? { aql: g.aql } : {}), ...(g.opTipi && istasyon?.tip === 'kalite' ? { opTipi: g.opTipi } : {}),
+    tmi: { emirId: ie.uretimEmriId, isEmriId: ie.id, opNo: ie.opNo, plan: g.plan, ...adimTuruAlanlari(ie.tur, g.ekAciklama), ...(g.rotaEksik ? { rotaEksik: g.rotaEksik } : {}), ...(g.hazirlik ? { hazirlik: g.hazirlik } : {}), ...(g.ilkParca ? { ilkParca: { karar: g.ilkParca.karar, zaman: g.ilkParca.zaman } } : {}), ...(g.ilkParcaGerekli ? { ilkParcaGerekli: true } : {}), ...(g.aql ? { aql: g.aql } : {}), ...(g.opTipi && opType === 'kalite' ? { opTipi: g.opTipi } : {}),
       ...(g.parca ? { parca: { no: g.parca.no, adet: g.parca.adet, toplam: g.parca.toplam } } : {}), ...(g.bolunmus ? { bolunmus: true } : {}) },
   };
 }

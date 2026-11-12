@@ -54,7 +54,7 @@ import { planliDuruslarinHepsi, planliDurusSilArkon, planliDurusYaz } from '../v
 import type { ArkonDurusHedefi, PlanliDurusKaydi } from '../vardiya/disari.ts';
 import {
   ILETILER, ILETI_YENIDEN_YUKLE, cagriBildirimi, belgedenDurusa, durusBelgeKimligi, durusBelgeKimligindenId, durustenBelgeye, iletiBasi, iletiKacirildi, KONUMLU_DEPOLAR, KONUMLU_KAYITLAR, KONUMSUZ, arkonRoluSec, belgeBicimiHatasi, belgeKonumu, kayitBicimiHatasi, durusNedenleriniCevir,
-  adimEmirDurumu, emirPaketKimligi, hazirlikEksigi, parcaPaketKimligi, paketParcasi, butunPaketSablonu, parcaYayini, parcaSayimReddi, parcaOlayKarari, emirdenTaslakPaket, isEmriPaketKimligi, isEmrindenTaslakPaket, paketinEmri, paketIsEmri, PAKET_ADIM_SIRASI, ROTALI_EMIR_PAKETI,
+  adimEmirDurumu, emirPaketKimligi, hazirlikEksigi, parcaPaketKimligi, paketParcasi, butunPaketSablonu, parcaYayini, parcaSayimReddi, parcaOlayKarari, emirdenTaslakPaket, isEmriPaketKimligi, isEmrindenTaslakPaket, paketTuru, paketinEmri, paketIsEmri, PAKET_ADIM_SIRASI, ROTALI_EMIR_PAKETI,
   ADIMSIZ_YAYIN, ISTASYONSUZ_YAYIN, PLANSIZ, partiKomutu, planBaslatmaReddi, yayinDenetlenir, yayinlanmamis, cizimOnayiGecer, planDurumlari, planSiralayabilirMi, planSirasiReddi, planSirasiTasinacaklar, siraOnaylari, siraOnayiniYaz,
   KUYRUK_ILETILERI, eksiAlaniniEkle, hataliAlaniniEkle, kuyrukAlanlariniEkle, kuyrukSirasiReddi, planSaatleri,
   plansizKaynak, rotaAnahtari, sablonPaket, tabanCoz, tmiAlanlariniYaz, tmiBirlesikSurum, hurdaNedenleriniCevir, stokaBagliMi, stokDurumuyla, stokIstegiKaynagi, stokIstegiKarari, numuneTeslimGirdisi, numuneTesliminiKoru, kaliteIstasyonuSec, tekKaliteIstasyonu, lotKarariGirdisi, lotKarariKoru, lotPaketi, lotKarariDamgala, KALITE_KARARI_ROLLERI,
@@ -301,7 +301,8 @@ async function isEmriTaslaklari(
   const taslakta = await taslaktakiler(db, rotali.filter((i) => !planlar.has(i.id)).map((i) => i.id));
   const makineler = new Map((await aktifMakineler(db)).map((m) => [m.id, m]));
   // 2011 a: kalite istasyonunun alt görünümü adımın operasyon tipi kodundan seçilir; pasif tip de adı geçen adımda kalır.
-  const tipKodlari = new Map((await operasyonTipleri(db, { pasiflerDahil: true })).map((t) => [t.id, t.kod]));
+  // 2166-2 a: grubu paketin iş türünü seçer (`paketTuru`).
+  const tipler = new Map((await operasyonTipleri(db, { pasiflerDahil: true })).map((t) => [t.id, t] as const));
   const anahtarlar = await rotaAnahtarlari(db, isEmirleri);
   const anahtar = (ie: { id: number; malzemeNo: number; opNo: number; kaynakRotaRevizyonId?: number | null }) => anahtarlar.get(ie.id) ?? rotaAnahtari(ie, undefined, new Map());
   const rotaEksik = await girdisiEksikRevizyonlar(db, [...anahtarlar.values()].flatMap((a) => (a.revizyonId === null ? [] : [a.revizyonId])));
@@ -332,7 +333,8 @@ async function isEmriTaslaklari(
       isEmri: ie, emir, proje: projeAdi(emir), istasyon, makineKodu: makine?.kod ?? null, revizyon, talimat: acilanTalimatlar.has(talimatAnahtari) ? talimatlar.get(talimatAnahtari) ?? null : null, sablon,
       plan: revizyonId === null ? null : planlar.get(ie.id) ?? { ...PLANSIZ, zorunlu, ...(taslakta.has(ie.id) ? { taslakta: true as const } : {}) }, ekAciklama: ie.ekAciklama ?? null,
       rotaEksik: revizyonId === null || rota.revizyonId === null ? null : rotaEksik.get(rota.revizyonId) ?? null,
-      opTipi: ie.operasyonTipiId === undefined ? null : tipKodlari.get(ie.operasyonTipiId) ?? null,
+      opTipi: ie.operasyonTipiId === undefined ? null : tipler.get(ie.operasyonTipiId)?.kod ?? null,
+      opGrubu: ie.operasyonTipiId === undefined ? null : tipler.get(ie.operasyonTipiId)?.grup ?? null,
     };
     const parcalar = bolmeler.get(ie.id);
     girdiler.push(parcalar === undefined ? girdi : { ...girdi, bolunmus: true });
@@ -362,7 +364,7 @@ async function isEmriTaslaklari(
   // 564 2 a: kalite istasyonunun lot planı; parti paketin hedef adedidir (bölünmüş işte parçanınki), aynı parça ve adet bir kez hesaplanır.
   const aqlPlanlari = new Map<string, ReturnType<typeof tmiAqlPlani>>();
   for (const g of girdiler) {
-    if (g.istasyon?.tip !== 'kalite') continue;
+    if (paketTuru(g.opGrubu, g.istasyon) !== 'kalite') continue;
     const N = g.parca?.adet ?? g.isEmri.adimAdedi ?? g.isEmri.adet;
     const anahtar = `${g.emir.parcaNo}\n${String(N)}`;
     if (!aqlPlanlari.has(anahtar)) aqlPlanlari.set(anahtar, tmiAqlPlani(await muayenePlaniOner(db, { parcaNo: g.emir.parcaNo, N, ayar: null })));
@@ -371,7 +373,7 @@ async function isEmriTaslaklari(
   const hatali = await hataliToplamlari(db, girdiler.flatMap((g) => (acikAdimi(g.isEmri)?.hataliAdet === undefined ? [g.isEmri.uretimEmriId] : [])));
   for (const g of girdiler) {
     const hazirlik = g.istasyon === null ? null : hazirlikEksigi(g.istasyon.tip, hazirliklar.get(g.isEmri.id)?.durum);
-    const aql = g.istasyon?.tip === 'kalite' ? aqlPlanlari.get(`${g.emir.parcaNo}\n${String(g.parca?.adet ?? g.isEmri.adimAdedi ?? g.isEmri.adet)}`) ?? null : null;
+    const aql = paketTuru(g.opGrubu, g.istasyon) === 'kalite' ? aqlPlanlari.get(`${g.emir.parcaNo}\n${String(g.parca?.adet ?? g.isEmri.adimAdedi ?? g.isEmri.adet)}`) ?? null : null;
     const taslak = isEmrindenTaslakPaket({ ...g, hazirlik, aql, ilkParca: ilkParcalar.get(g.isEmri.id) ?? null,
       ilkParcaSecimi: ilkParcaSecimiOku(ilkParcaSecimleri, anahtar(g.isEmri)),
       ilkParcaGerekli: ilkParcaGereksinimi(ilkParcaSecimiOku(ilkParcaSecimleri, anahtar(g.isEmri)) ?? 'her_kurulum', g.istasyon?.tip ?? null) === 'gerekli',
