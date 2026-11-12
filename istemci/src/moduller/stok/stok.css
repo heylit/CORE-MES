@@ -579,6 +579,15 @@ a.tc-stok-kpi:hover, a.tc-stok-kpi:focus-visible { background: var(--panel2); }
 /* Kesilen ad hücresi (ad + alt satır) tek satır kalır; her satır kendi genişliğinde "…" ile biter, tamamı ipucunda. */
 .tc-tablo-kes .tc-stok-ad { inline-size: auto; max-inline-size: none; white-space: nowrap; }
 .tc-tablo-kes .tc-stok-ad > * { display: block; overflow: hidden; text-overflow: ellipsis; }
+/* Telefonda yapışık ad sütunu yarım menü genişliğindeydi; ad birkaç harfte kesiliyordu. Stok adlarında sütun menü
+   genişliğinin %60'ına kadar açılır, ad iki satıra kırılır, gerisi "…"; yanındaki miktar sütunu tam görünür kalır. */
+@media (max-width: 767px) {
+  .tc-tablo-kap[data-kaydir] .tc-tablo td.tc-tablo-sabit-sol:has(.tc-stok-ad),
+  .tc-tablo-kap[data-kaydir] .tc-tablo td.tc-tablo-sabit-sol:has(.tc-stok-ad) .tc-tablo-kes { max-inline-size: calc(var(--menu-sabit) * .6); }
+  .tc-tablo-kap[data-kaydir] .tc-tablo-kes .tc-stok-ad > strong {
+    display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; white-space: normal; overflow-wrap: anywhere;
+  }
+}
 @media (max-width: 767px) {
   .tc-tablo-kap[data-kaydir] .tc-stok-etiketler { max-inline-size: var(--menu-sabit); }
 }
