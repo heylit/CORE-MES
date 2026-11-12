@@ -10,7 +10,7 @@ import type { KaliteKarari, KapanisMaddeBilgisi } from '#paylasilan/sozlesme/ure
 import { KM_GECMIS_SINIRI, KM_GIRIS_KAYIT_SINIRI, kmGkkKontrolu } from '#paylasilan/sozlesme/kalite-merkezi.ts';
 import type { KayitAramaKaynagi } from '#paylasilan/kayit-aramasi.ts';
 import type { KmGirisAyrintisi, KmGirisBekleyenCevabi, KmGirisCevabi, KmGirisKayitlariCevabi, KmGirisGkkIstegi, KmGirisKaydi, KmGirisKararIstegi, KmHataliBekleyenCevabi, KmHataliKararCevabi, KmHataliKararGovdesi, KmTedarikciDurumu, KmTedarikciFirmalariCevabi } from '#paylasilan/sozlesme/kalite-merkezi.ts';
-import type { KmEmirKaynagi, KmEmirKaynaklariCevabi, KmEslesmeSayimiCevabi, KmParcaKaynaklariCevabi } from '#paylasilan/sozlesme/kalite-merkezi.ts';
+import type { KmEmirKaynagi, KmGirisKarari, KmEmirKaynaklariCevabi, KmEslesmeSayimiCevabi, KmParcaKaynaklariCevabi } from '#paylasilan/sozlesme/kalite-merkezi.ts';
 import { ACIK_EMIR_DURUMLARI } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { siparisListesiSorgusu } from '#paylasilan/sozlesme/siparisler.ts';
 import type { Siparis } from '#paylasilan/sozlesme/siparisler.ts';
@@ -582,6 +582,24 @@ async function girisKayitlari(db: Db, idler: readonly number[]): Promise<KmGiris
       not: karar?.aciklama ?? gkk?.aciklama ?? null,
     };
   });
+}
+
+// 3148: mal kabul satırının GKK özeti (3120 malzeme etiketi, 3124). GKK'sı olmayan satır haritada yoktur; kararı henüz verilmemiş ya da
+// hatalısız GKK'da karar null. Not, ekrandaki gibi kararın notu, yoksa GKK'nın. Yetki denetlemez: çağıran modül kendi ucunda denetler.
+export interface GirisOzeti {
+  gkkNo: string | null; gkkZaman: string; kabulMiktar: string | null; hataliMiktar: string | null; karar: KmGirisKarari | null; ncrNo: string | null; not: string | null;
+}
+export async function girisOzetleri(db: Db, malKabulSatirIdleri: readonly number[]): Promise<Map<number, GirisOzeti>> {
+  const benzersiz = [...new Set(malKabulSatirIdleri)];
+  if (benzersiz.length === 0) return new Map();
+  const kararlar = await sorgular.girisKararlari(db, benzersiz);
+  return new Map(kararlar.filter((g) => g.asama === 'gkk').map((g) => {
+    const karar = kararlar.find((k) => k.malKabulSatirId === g.malKabulSatirId && k.asama === 'karar') ?? null;
+    return [g.malKabulSatirId, {
+      gkkNo: g.gkkNo, gkkZaman: g.zaman, kabulMiktar: g.kabulMiktar, hataliMiktar: g.hataliMiktar,
+      karar: karar?.karar ?? null, ncrNo: karar?.ncrNo ?? null, not: karar?.aciklama ?? g.aciklama ?? null,
+    }];
+  }));
 }
 
 async function girisKaydi(db: Db, id: number): Promise<KmGirisKaydi> {
