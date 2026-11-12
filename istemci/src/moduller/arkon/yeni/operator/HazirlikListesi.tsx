@@ -31,6 +31,14 @@ export function hazirlikSatirlari(v: HazirlikCevabi, isEmriId: number | null): H
     return { madde: m.madde, hal, isEmriDuzeyi: m.isEmriDuzeyi, muafTutulur: m.muafTutulur, uyarir: HAZIRLIK_MADDE_BILGISI[m.madde].uyarir, muaf };
   }).sort((a, b) => sira(a) - sira(b));
 }
+// Başlama durumu Hazırlık matrisinin satır durumudur (2227e): durduran madde eksikse durur, yalnız uyaran eksikse uyarıyla başlar.
+// Matris ve Hazırlık takip tablosu (3111) aynı hesabı kullanır; iki tablo aynı iş için farklı durum göstermesin.
+export type BaslamaDurumu = 'durur' | 'uyari' | 'hazir';
+export const BASLAMA_DURUMLARI: Readonly<Record<BaslamaDurumu, string>> = { durur: 'Durur', uyari: 'Uyarıyla başlar', hazir: 'Hazır' };
+export function baslamaDurumu(l: readonly Pick<HazirlikSatiri, 'hal' | 'uyarir'>[]): BaslamaDurumu {
+  const eksik = l.filter((x) => x.hal === 'eksik');
+  return eksik.some((x) => !x.uyarir) ? 'durur' : eksik.length > 0 ? 'uyari' : 'hazir';
+}
 export function hazirlikOzeti(l: readonly HazirlikSatiri[]): { ton: Ton; simge: SimgeAdi; metin: string; eksik: number } {
   const eksik = l.filter((x) => x.hal === 'eksik' && !x.uyarir).length;
   const uyari = l.filter((x) => x.hal === 'eksik' && x.uyarir).length;

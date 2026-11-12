@@ -465,3 +465,77 @@ button.tc-ay2-esitleme { cursor: pointer; }
   .tc-ay2-tork-satir, .tc-ay2-olcu { grid-template-columns: auto minmax(0, 1fr) auto; }
   .tc-ay2-olcu-giris, .tc-ay2-tork-satir > input { grid-column: 1 / -1; }
 }
+
+/* takip tablosu (3111): kart listesinin yerine; satıra tıklayınca ayrıntı yanda (geniş) ya da üstte (dar) açılır */
+.tc-ay2[data-gorunum="tablo"] .tc-ay2-govde { grid-template-columns: minmax(0, 1fr); }
+.tc-ay2[data-gorunum="tablo"]:not([data-duzen]) .tc-ay2-duzen { display: none; }
+@media (min-width: 1024px) {
+  .tc-ay2[data-gorunum="tablo"][data-duzen] .tc-ay2-govde { grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); }
+  /* ayrıntı yarım sütunda: sekme şeridi kesilmesin, alt satıra geçsin */
+  .tc-ay2[data-gorunum="tablo"] .tc-ay2-adimlar { display: flex; flex-wrap: wrap; overflow: visible; }
+  .tc-ay2[data-gorunum="tablo"] .tc-ay2-adimlar > li { flex: 1 1 auto; }
+}
+.tc-ay2[data-gorunum="tablo"] .tc-ay2-geri { display: inline-flex; }
+.tc-ay2-gorunum button { display: inline-flex; align-items: center; gap: var(--b-1); }
+.tc-ay2-takip { display: grid; gap: var(--b-2); min-width: 0; container-type: inline-size; }
+.tc-ay2-takip-cipler { display: flex; flex-wrap: wrap; gap: var(--b-1); }
+.tc-ay2-takip-cip {
+  min-block-size: var(--dokunma); padding: 0 var(--b-3); border: var(--cizgi-ince) solid var(--edge); border-radius: var(--yari-tam);
+  background: var(--panel2); color: var(--ink); font: inherit; font-size: var(--yazi-s); cursor: pointer;
+}
+.tc-ay2-takip-cip[aria-pressed="true"] { background: var(--sig); color: var(--on-sig); border-color: transparent; font-weight: 700; }
+.tc-ay2-takip-toplu {
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2); padding: var(--b-2) var(--b-3);
+  border: var(--cizgi-ince) solid var(--edge2); border-radius: var(--yari-2); background: var(--panel2); position: sticky; inset-block-start: 0; z-index: 1;
+}
+.tc-ay2-takip-toplu > span { font-weight: 700; margin-inline-end: auto; }
+.tc-ay2-takip-tablo { inline-size: 100%; border-collapse: collapse; font-size: var(--yazi-s); }
+.tc-ay2-takip-tablo th, .tc-ay2-takip-tablo td { padding: var(--b-2); text-align: start; vertical-align: middle; border-block-end: var(--cizgi-ince) solid var(--edge); }
+.tc-ay2-takip-tablo thead th { font-size: var(--yazi-xs); color: var(--muted); text-transform: uppercase; letter-spacing: var(--harf-aralik-06); font-weight: 700; white-space: nowrap; }
+.tc-ay2-takip-tablo .tc-ay2-takip-sayi { text-align: end; white-space: nowrap; }
+.tc-ay2-takip-kutu { inline-size: var(--dokunma); text-align: center; }
+.tc-ay2-takip-kutu input { inline-size: var(--b-5); block-size: var(--b-5); }
+.tc-ay2-takip-emir th { background: var(--panel2); border-block-start: var(--cizgi-ince) solid var(--edge2); }
+.tc-ay2-takip-emir-ic { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-1) var(--b-3); }
+.tc-ay2-takip-ilerleme { display: inline-flex; align-items: center; gap: var(--b-2); margin-inline-start: auto; font-size: var(--yazi-xs); color: var(--muted); font-weight: 700; }
+.tc-ay2-takip-serit { display: inline-flex; gap: var(--b-1); }
+.tc-ay2-takip-serit > i { inline-size: var(--b-5); block-size: var(--b-2); border-radius: var(--yari-tam); background: var(--edge2); }
+.tc-ay2-takip-serit > i[data-dilim="bitti"] { background: var(--done); }
+.tc-ay2-takip-serit > i[data-dilim="calisiyor"] { background: var(--run); }
+.tc-ay2-takip-serit > i[data-dilim="durdu"] { background: var(--hold); }
+.tc-ay2-takip-serit > i[data-dilim="sirada"] { background: var(--idle); }
+.tc-ay2-takip-serit > i[data-dilim="yok"] { background: transparent; border: var(--cizgi-ince) dashed var(--edge2); }
+.tc-ay2-takip-satir { cursor: pointer; }
+.tc-ay2-takip-satir:hover td { background: var(--hi); }
+.tc-ay2-takip-satir[aria-selected="true"] td { background: var(--panel2); }
+.tc-ay2-takip-satir[aria-selected="true"] td:first-child { box-shadow: inset var(--b-1) 0 0 var(--sig); }
+.tc-ay2-takip-satir[data-paketsiz] { cursor: default; color: var(--muted); }
+.tc-ay2-takip-ac { all: unset; cursor: pointer; display: inline; }
+.tc-ay2-takip-ac:focus-visible { outline: var(--cizgi-kalin) solid var(--sig); outline-offset: var(--b-1); }
+.tc-ay2-takip-cip-satir { display: inline-flex; flex-wrap: wrap; gap: var(--b-1); }
+.tc-ay2-takip-hazirlik { text-decoration: none; color: inherit; }
+.tc-ay2-takip-islem { text-align: end; inline-size: var(--dokunma); }
+.tc-ay2-takip-islem .tc-ay2-arac[data-ton="stop"] { color: var(--stop); }
+.tc-ay2-takip-uyari { display: flex; align-items: center; gap: var(--b-2); }
+.tc-ay2-takip-liste { margin: 0; padding-inline-start: var(--b-5); max-block-size: calc(var(--dokunma) * 5); overflow: auto; }
+@container (max-width: 860px) {
+  .tc-ay2-takip-tablo [data-genis] { display: none; }
+}
+/* dar kap: satır karta döner, sütun adı hücrenin önünde */
+@container (max-width: 560px) {
+  .tc-ay2-takip-tablo thead { display: none; }
+  .tc-ay2-takip-tablo, .tc-ay2-takip-tablo tbody { display: block; }
+  .tc-ay2-takip-emir, .tc-ay2-takip-emir th { display: block; }
+  .tc-ay2-takip-ilerleme { margin-inline-start: 0; inline-size: 100%; }
+  .tc-ay2-takip-satir {
+    display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: var(--b-1) var(--b-2); align-items: center;
+    padding: var(--b-2); border-block-end: var(--cizgi-ince) solid var(--edge);
+  }
+  .tc-ay2-takip-tablo .tc-ay2-takip-satir td { border: 0; padding: 0; }
+  .tc-ay2-takip-satir > td[data-etiket] { grid-column: 2; display: flex; gap: var(--b-2); align-items: center; flex-wrap: wrap; }
+  .tc-ay2-takip-satir > td[data-etiket]:not([data-etiket="Adım"])::before { content: attr(data-etiket); color: var(--muted); font-size: var(--yazi-xs); min-inline-size: calc(var(--b-6) * 3); }
+  .tc-ay2-takip-satir > .tc-ay2-takip-kutu { grid-column: 1; grid-row: 1 / span 6; align-self: start; }
+  .tc-ay2-takip-satir > .tc-ay2-takip-islem { grid-column: 3; grid-row: 1; inline-size: auto; }
+  .tc-ay2-takip-tablo .tc-ay2-takip-sayi { text-align: start; }
+}
+.tc-ay2-kb > .tc-ay2-gorunum { display: flex; flex: none; flex-wrap: nowrap; }
