@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
+import { irsaliyeBelgeAdi } from './kurallar.ts';
 import {
   fisNoKimligi, hareketinFisBagi, malzemeFisiGonderilebilir, malzemeFisiNo,
   refakatBaglamaEngeli, refakatEtiketi, refakatIptalEngeli, refakatKolEngeli, refakatLotEngeli, refakatSayimEngeli, refakatTeslimEngeli, kartOnayiTuru, refakatAnaEylemi,
@@ -984,5 +985,12 @@ describe('STK-3 a: göz tamamı sayılınca sayıldı', () => {
     assert.deepEqual(ozet(sahipsizStatuluHesapla(stoklar, [{ ...acik, emirDurumu: 'kapandi' }, { ...acik, emirDurumu: null }])).length, 3, 'kapanan ya da bulunamayan emrin rezervesi ayrılmış sayılmaz');
     assert.deepEqual(ozet(sahipsizStatuluHesapla([st(7, 'serbest', 1000n), st(8, 'serbest', 1000n)], [acik])), [[8, 'serbest', 0n, 1000n]], 'ayrılan yalnız kendi statüsünden düşer');
     assert.deepEqual(['serbest', 'sartli', 'karar_bekliyor', 'red'].map((k) => planaSayilirMi(k as 'serbest')), [true, true, false, false]);
+  });
+
+  test('3063 irsaliye belge adı: irsaliye no varsa ad onu taşır, ikinci belge sırasını alır, ad 120 karakteri geçmez', () => {
+    assert.equal(irsaliyeBelgeAdi('MK-000001', 'ORN-1', 1), 'İrsaliye ORN-1 (MK-000001)');
+    assert.equal(irsaliyeBelgeAdi('MK-000001', null, 1), 'İrsaliye (MK-000001)');
+    assert.equal(irsaliyeBelgeAdi('MK-000001', null, 3), 'İrsaliye (MK-000001) · 3');
+    assert.ok(irsaliyeBelgeAdi('MK-000001', 'X'.repeat(200), 2).length <= 120);
   });
 });

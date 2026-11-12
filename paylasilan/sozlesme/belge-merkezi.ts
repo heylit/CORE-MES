@@ -7,7 +7,7 @@ import { DOSYA_TURLERI, dosyaOzeti } from './dosya.ts';
 // Çizim ve Dosya Merkezi (kart #708): belge kartı, revizyonları ve başka modüllerin kayıtlarına bağı. İçerik `dosya`
 // modülünde durur (ADR 0009); merkez dosyayı revizyona bağlar ve kendi okuma ucundan verir.
 
-export const BELGE_TURLERI = ['teknik-resim', '3b-model', 'fotograf', 'makine', 'sertifika', 'rapor', 'kroki', 'diger'] as const;
+export const BELGE_TURLERI = ['teknik-resim', '3b-model', 'fotograf', 'makine', 'sertifika', 'rapor', 'kroki', 'diger', 'irsaliye'] as const;
 export type BelgeTuru = (typeof BELGE_TURLERI)[number];
 
 export const REVIZYON_DURUMLARI = ['taslak', 'yayinda', 'eski'] as const;
@@ -15,7 +15,7 @@ export type RevizyonDurumu = (typeof REVIZYON_DURUMLARI)[number];
 
 // Belgenin bağlanabildiği kayıt sahipleri; hedef kimliği o modülün sayı kimliğidir (malzemelerde kart no). Merkez bu modülleri
 // ithal etmez (onlar merkezi ithal eder, ADR 0006): kimliğin varlığı bağlamada yabancı anahtarla denetlenir (UYUM-BORCU).
-export const BAG_MODULLERI = ['malzemeler', 'istasyonlar', 'atolye', 'arkon', 'kalibrasyon', 'rota', 'uretim-emirleri', 'stok', 'satin-alma', 'cnc-kurulum'] as const;
+export const BAG_MODULLERI = ['malzemeler', 'istasyonlar', 'atolye', 'arkon', 'kalibrasyon', 'rota', 'uretim-emirleri', 'stok', 'satin-alma', 'cnc-kurulum', 'stok-mal-kabul'] as const;
 export type BagModulu = (typeof BAG_MODULLERI)[number];
 
 const zorunluMetin = (ileti: string, azami: number) => z.string().trim().min(1, ileti).max(azami);

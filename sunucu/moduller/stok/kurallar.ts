@@ -1618,3 +1618,11 @@ export function revizyonUyusmuyor(siparis: string | null | undefined, yururlukte
   const b = yururlukte?.trim().toLocaleUpperCase('tr-TR');
   return a && b ? a !== b : null;
 }
+
+// ---- İrsaliye belgesi (3063) ---------------------------------------------------------------------------------------------
+// Merkezdeki adı: irsaliye no ve mal kabul no ile aranır. İkinci ve sonraki belge sırasını taşır; ad merkezin 120 sınırına sığar.
+export function irsaliyeBelgeAdi(malKabulNo: string, irsaliyeNo: string | null, sira: number): string {
+  const no = irsaliyeNo?.trim() ? ` ${irsaliyeNo.trim()}` : '';
+  const ek = sira > 1 ? ` · ${sira}` : '';
+  return `İrsaliye${no} (${malKabulNo})${ek}`.slice(0, 120);
+}

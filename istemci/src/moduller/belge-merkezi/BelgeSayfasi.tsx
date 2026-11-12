@@ -201,7 +201,8 @@ export function BelgeSayfasi() {
                     <li key={`${b.hedefModul}-${b.hedefId}`}>
                       <span><Simge ad="tag" />{BAG_ADI[b.hedefModul]} <b className="mono">{bagHedefi(b)}</b>{b.kapak && <Rozet ton="bilgi">Kapak</Rozet>}</span>
                       <span className="tc-cz-ipucu">{b.ekleyenAd ?? 'bilinmiyor'} · <span className="mono">{zamanMetni(b.eklendi)}</span></span>
-                      {yazar && <Dugme simge="x" aria-label="Bağı kaldır" onClick={() => { acikYaz({ bagKaldir: b }); }} />}
+                      {/* İrsaliye mal kabulden kaldırılır (sunucu merkezBagKaldirmaReddi). */}
+                      {yazar && b.hedefModul !== 'stok-mal-kabul' && <Dugme simge="x" aria-label="Bağı kaldır" onClick={() => { acikYaz({ bagKaldir: b }); }} />}
                     </li>
                   ))}
                 </ul>

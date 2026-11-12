@@ -47,7 +47,9 @@ export function Belgeler({ tur, arsiv = false }: { tur?: BelgeTuru; arsiv?: bool
   // adresten düşer ki geri tuşu ve yenileme pencereyi yeniden açmasın.
   const [adres, adresYaz] = useSearchParams();
   const komutla = adres.get('yeni') === '1';
-  const pencereAcik = (yeni || komutla) && yazar && !arsiv;
+  // İrsaliye mal kabulden eklenir (3063): bölümünde yeni belge düğmesi yok.
+  const acabilir = yazar && !arsiv && tur !== 'irsaliye';
+  const pencereAcik = (yeni || komutla) && acabilir;
   const pencereyiKapat = () => {
     yeniYaz(false);
     if (komutla) { const p = new URLSearchParams(adres); p.delete('yeni'); adresYaz(p, { replace: true }); }
@@ -75,7 +77,7 @@ export function Belgeler({ tur, arsiv = false }: { tur?: BelgeTuru; arsiv?: bool
   return (
     <Kart
       baslik={baslik}
-      sag={yazar && !arsiv && <Dugme tur="birincil" simge="upload" onClick={() => { yeniYaz(true); }}>Yeni belge</Dugme>}
+      sag={acabilir && <Dugme tur="birincil" simge="upload" onClick={() => { yeniYaz(true); }}>Yeni belge</Dugme>}
     >
       <div className="tc-cz-icerik">
         {ucBGorunumu && <Sekmeler etiket="3B modeller" sekmeler={UC_B_SEKMELERI} secili={ucB} sec={(s) => { ucBYaz(s); liste.sayfaDegistir(1); }} />}

@@ -13,6 +13,8 @@ export const ILETILER = {
   bagVar: 'Bu kayıt zaten bağlı.',
   hedefYok: 'Bağlanacak kayıt bulunamadı.',
   malzemeDisi: 'Merkezden yalnız malzeme kartına ve istasyona bağ kurulur; öbür kayıtlar kendi ekranından bağlanır.',
+  malKabulBagi: 'İrsaliye mal kabulden kaldırılır; buradan bağı kaldırılamaz.',
+  irsaliyeMalKabulden: 'İrsaliye mal kabulden eklenir; burada yeni irsaliye açılmaz.',
   istasyonaModelDisi: 'İstasyona merkezden yalnız 3B model belgesi bağlanır.',
   onizlemeTaslak: 'Önizleme yalnız yayındaki revizyon ve taslak 3B model için üretilir.',
   onizlemeTuru: 'Bu dosya türünden önizleme üretilmez.',
@@ -33,6 +35,7 @@ export const IZINLI_DOSYA_TURLERI: Readonly<Record<BelgeTuru, readonly DosyaTuru
   fotograf: ['png', 'jpeg', 'webp'],
   makine: ['pdf', 'png', 'jpeg', 'webp', 'step', 'stl', 'iges', 'glb', 'gltf'],
   sertifika: ['pdf', 'png', 'jpeg', 'webp'],
+  irsaliye: ['pdf', 'png', 'jpeg', 'webp'],
   rapor: ['pdf', 'png', 'jpeg', 'webp'],
   kroki: ['pdf', 'png', 'jpeg', 'webp'],
   diger: ['pdf', 'png', 'jpeg', 'webp', 'step', 'stl', 'iges', 'glb', 'gltf'],
@@ -40,6 +43,12 @@ export const IZINLI_DOSYA_TURLERI: Readonly<Record<BelgeTuru, readonly DosyaTuru
 
 // CZ-09/CZ-14: merkezden kurulan bağ. Malzeme kartına her tür; istasyona (makine eşleştirmesi, kart #1196) yalnız 3B model,
 // çünkü fabrika haritası istasyonun modelini buradan okur. Öbür kayıtlar kendi ekranından bağlanır.
+// Mal kabul irsaliyesinin bağı yalnız Stok'un kaldırma komutundan kalkar (3058 c, 3062 a): orada yetki mal kabul yapabilendedir
+// ve belge aynı işlemde arşive alınır; merkezden kaldırılsa belge sessizce mal kabulden düşerdi.
+// Merkezden açılan irsaliye hiçbir mal kabule bağlanamaz (bağı yalnız stok yazar): yetim belge olmasın.
+export const merkezAcmaReddi = (tur: BelgeTuru): string | null => (tur === 'irsaliye' ? ILETILER.irsaliyeMalKabulden : null);
+export const merkezBagKaldirmaReddi = (hedefModul: string): string | null => (hedefModul === 'stok-mal-kabul' ? ILETILER.malKabulBagi : null);
+
 export function merkezBagReddi(hedefModul: string, tur: BelgeTuru): string | null {
   if (hedefModul === 'malzemeler') return null;
   if (hedefModul === 'istasyonlar') return tur === '3b-model' ? null : ILETILER.istasyonaModelDisi;

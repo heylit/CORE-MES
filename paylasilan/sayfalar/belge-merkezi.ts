@@ -23,6 +23,8 @@ export const BELGE_MERKEZI_IKINCI_MENU = {
       { anahtar: 'fotograf', baslik: 'Fotoğraflar', yol: '/cizimler/fotograf', simge: 'camera', islem: 'sayfa.cizimler' },
       { anahtar: 'makine', baslik: 'Makine dosyaları', yol: '/cizimler/makine', simge: 'cpu', islem: 'sayfa.cizimler' },
       { anahtar: 'sertifika', baslik: 'Sertifikalar', yol: '/cizimler/sertifika', simge: 'check', islem: 'sayfa.cizimler' },
+      // 3055 a+b: mal kabulün irsaliyesi; belge mal kabulden eklenir ve kaldırılır, burada listelenir ve aranır.
+      { anahtar: 'irsaliye', baslik: 'İrsaliyeler', yol: '/cizimler/irsaliye', simge: 'truck', islem: 'sayfa.cizimler' },
       { anahtar: 'rapor', baslik: 'Raporlar', yol: '/cizimler/rapor', simge: 'lab', islem: 'sayfa.cizimler' },
       { anahtar: 'kroki', baslik: 'Krokiler', yol: '/cizimler/kroki', simge: 'grid', islem: 'sayfa.cizimler' },
       { anahtar: 'diger', baslik: 'Diğer', yol: '/cizimler/diger', simge: 'box', islem: 'sayfa.cizimler' },

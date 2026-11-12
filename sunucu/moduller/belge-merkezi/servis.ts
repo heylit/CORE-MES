@@ -20,7 +20,7 @@ import { istasyonAdlari, istasyonGetir } from '../istasyonlar/disari.ts';
 import { kisiAdlari } from '../kisiler/disari.ts';
 import { malzemeAra, malzemeOzetleri, malzemeResimAnahtarlari } from '../malzemeler/disari.ts';
 import {
-  AZAMI_BAYT, ILETILER, IZINLI_DOSYA_TURLERI, ONIZLEME_KARE_TURLERI, indirmeReddi, kucukResimSec, malzemedenYayinda, menuAnahtari, merkezBagReddi, onizlemeBoyutReddi,
+  AZAMI_BAYT, ILETILER, IZINLI_DOSYA_TURLERI, ONIZLEME_KARE_TURLERI, indirmeReddi, kucukResimSec, malzemedenYayinda, menuAnahtari, merkezAcmaReddi, merkezBagKaldirmaReddi, merkezBagReddi, onizlemeBoyutReddi,
   kartRevizyonu, onizlemeKareReddi, onizlemeRevizyonReddi, revizyonHarfi, revizyonKodu, silmeReddi, yayinReddi,
 } from './kurallar.ts';
 import type { AdayBelge, KartAnahtari } from './kurallar.ts';
@@ -84,6 +84,8 @@ async function revizyonYaz(
 }
 
 export async function belgeOlustur(db: Db, kullanici: Kullanici, g: BelgeOlusturGovdesi, denetimEki: DenetimEki): Promise<BelgeAyrintisi> {
+  const red = merkezAcmaReddi(g.tur);
+  if (red !== null) throw dogrulama(red, 'tur');
   const id = await sorgular.belgeEkle(db, { ad: g.ad.trim(), tur: g.tur, aciklama: g.aciklama ?? null, resimNo: g.resimNo ?? null, kisiId: kullanici.id });
   await revizyonYaz(db, kullanici, { id, tur: g.tur }, g, denetimEki);
   return belgeAyrintisi(db, id);
@@ -216,6 +218,8 @@ export async function malzemeSecimi(db: Db, ara: string): Promise<MalzemeSecimiC
 }
 
 export async function bagKaldir(db: Db, id: number, g: { hedefModul: BagModulu; hedefId: number; surum: number }): Promise<BelgeAyrintisi> {
+  const red = merkezBagKaldirmaReddi(g.hedefModul);
+  if (red !== null) throw dogrulama(red, 'hedefModul');
   await kilitliBelge(db, id);
   await surumuIlerlet(db, id, g.surum);
   if (!(await sorgular.bagSil(db, id, g.hedefModul, g.hedefId))) throw bulunamadi('Bağ bulunamadı.');
@@ -517,7 +521,7 @@ export async function kaydaBagla(db: Db, kullanici: Kullanici, belgeId: number, 
 // CZ-13: başka modülün kaydına ait sertifika ya da rapor (ör. mal kabulde parti sertifikası): belge açılır, ilk revizyon yayınlanır
 // ve kayda bağlanır. `belge-merkezi.yaz` ve `belge-merkezi.yayinla` sorulmaz; yetkiyi çağıran modülün ucu denetler, belge yalnız o
 // kayıttan görünür. Dosyayı içeriği yükleyen kişi bağlar (CZ-04), tür belge türüne uyar (CZ-03).
-export type KayitBelgesiTuru = Extract<BelgeTuru, 'sertifika' | 'rapor'>;
+export type KayitBelgesiTuru = Extract<BelgeTuru, 'sertifika' | 'rapor' | 'irsaliye'>;
 export async function belgeAcVeBagla(
   db: Db, kullanici: Kullanici, g: { ad: string; tur: KayitBelgesiTuru; ozet: string; dosyaAdi: string },
   hedefModul: BagModulu, hedefId: number, denetimEki: DenetimEki,
@@ -535,6 +539,17 @@ export async function kayittanKaldir(db: Db, belgeId: number, hedefModul: BagMod
   const silindi = await sorgular.bagSil(db, belgeId, hedefModul, hedefId);
   if (silindi) await surumuIlerlet(db, belgeId, b.surum);
   return silindi;
+}
+
+// Bağı kaldırır ve belgeyi arşive alır (3062 a: kaldırılan irsaliye merkezde arşivde saklanır; yayınlanmış dosya silinmez, ADR 0026 m.3).
+// Belge o kayda bağlı değilse false. Kaydın kendisi değişmez; iz, çağıranın denetim ekindedir.
+export async function kayittanKaldirVeArsivle(db: Db, belgeId: number, hedefModul: BagModulu, hedefId: number): Promise<{ ad: string; ozet: string | null } | null> {
+  const b = await sorgular.belgeKilitle(db, belgeId);
+  if (b === null) return null;
+  const bagli = (await sorgular.bagliBelgeler(db, hedefModul, hedefId)).find((s) => s.id === belgeId);
+  if (bagli === undefined || !(await sorgular.bagSil(db, belgeId, hedefModul, hedefId))) return null;
+  await surumluGuncelle({ guncelle: () => sorgular.belgeAktifligi(db, belgeId, b.surum, false), varMi: () => sorgular.belgeVarMi(db, belgeId) });
+  return { ad: bagli.ad, ozet: bagli.ozet };
 }
 
 // Bağlayan modülün okuma ucu için: belge o kayda bağlı değilse null (modül başka kaydın belgesini kendi ucundan veremez).
@@ -677,7 +692,7 @@ export async function yayindakiOnizlemeKaresi(
 // Arama satırının ikinci satırı; ekrandaki tür adlarıyla aynı (istemci/src/moduller/belge-merkezi/gosterim.ts).
 const ARAMA_TUR_ADI: Record<BelgeTuru, string> = {
   'teknik-resim': 'Teknik resim', '3b-model': '3B model', fotograf: 'Fotoğraf', makine: 'Makine dokümanı',
-  sertifika: 'Sertifika', rapor: 'Rapor', kroki: 'Kroki', diger: 'Diğer',
+  sertifika: 'Sertifika', irsaliye: 'İrsaliye', rapor: 'Rapor', kroki: 'Kroki', diger: 'Diğer',
 };
 
 // Üst çubuktaki genel aramanın çizim kaynağı (kart 1240): yalnız yayında revizyonu olan etkin belge; arşiv ve yalnız taslak

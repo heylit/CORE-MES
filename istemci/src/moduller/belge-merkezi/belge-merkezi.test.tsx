@@ -96,6 +96,7 @@ function ac(adres: string) {
             <Route path="/cizimler/teknik-resim" element={<Belgeler tur="teknik-resim" />} />
             <Route path="/cizimler/3b-model" element={<Belgeler tur="3b-model" />} />
             <Route path="/cizimler/sertifika" element={<Belgeler tur="sertifika" />} />
+            <Route path="/cizimler/irsaliye" element={<Belgeler tur="irsaliye" />} />
             <Route path="/cizimler/belge/:id" element={<BelgeSayfasi />} />
             <Route path="/cizimler/belge/:id/duzenle/:revizyonId" element={<PdfDuzenleyici />} />
           </Routes>
@@ -241,6 +242,14 @@ describe('cizimler ekranları', () => {
     await screen.findByText('Deneme flanş');
     expect(ikinci.some((c) => c.yol.includes('arsiv=evet'))).toBe(true);
     expect(screen.queryByRole('button', { name: /Yeni belge/ })).toBeNull();
+  });
+
+  it('3063 İrsaliyeler bölümünde yazara da yeni belge düğmesi yok; ?yeni=1 pencere açmaz', async () => {
+    const c = sunucuKur(YAZAR);
+    ac('/cizimler/irsaliye?yeni=1');
+    await waitFor(() => { expect(c.some((x) => x.yol.includes('tur=irsaliye'))).toBe(true); });
+    expect(screen.queryByRole('button', { name: /Yeni belge/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Yükle' })).toBeNull();
   });
 
   it('Ctrl K komutu (?yeni=1) yazara yeni belge penceresini türü seçili açar; kapatınca adresten düşer', async () => {

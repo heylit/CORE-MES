@@ -39,7 +39,7 @@ describe('sipariş takibi ve ödeme planı (kart #1124)', () => {
   it('sipariş sekmesinde irsaliye ve fatura satırları ile plan görünür; plan düzenlenip talebin sürümüyle kaydedilir', async () => {
     let takip: SiparisTakibiCevabi = { siparisler: [{ teklifId: QA, satirIdleri: [41], paraBirimi: 'TRY', faturalar: [], kdvOrani: '20', kdvElle: false, kdvSecenekleri: ['0', '1', '10', '20'],
       odemePlani: [{ tur: 'vade', vade: '2026-11-06', yontem: 'banka', tutar: '1000' }] }] };
-    const irsaliyeler: SiparisIrsaliyeleriCevabi = { irsaliyeler: [{ siparisSatirId: 41, malKabulId: 3, malKabulNo: 'MK-000003', irsaliyeNo: 'DN-IRS-9', zaman: '2026-10-10T07:00:00.000Z' }] };
+    const irsaliyeler: SiparisIrsaliyeleriCevabi = { irsaliyeler: [{ siparisSatirId: 41, malKabulId: 3, malKabulNo: 'MK-000003', irsaliyeNo: 'DN-IRS-9', zaman: '2026-10-10T07:00:00.000Z', belgeler: [] }] };
     const istekler: { yontem: string; yol: string; govde: unknown }[] = [];
     vi.stubGlobal('fetch', vi.fn(async (adres: string, i?: RequestInit) => {
       const yol = String(adres).replace('/api', '');

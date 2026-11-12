@@ -33,6 +33,13 @@ export const sepeteEkle = async (db: Db, s: {
        hedef_konum_id = COALESCE(EXCLUDED.hedef_konum_id, stok_sepet_satiri.hedef_konum_id) RETURNING id`,
     [s.kisiId, s.malzemeId, s.kaynakKonumId, s.partiId, s.miktar, s.refakatPartisiId ?? null, s.hedefKonumId ?? null, s.tavan ?? null],
   ))!.id;
+// 3088: lotun gözdeki serbest miktarı, bütün statülerin toplamı (sepet satırı statü taşımaz); yoldaki teslimler düşülür. Lot orada yoksa null.
+export const lotunGozdekiSerbesti = async (db: Db, malzemeId: number, konumId: number, partiId: number): Promise<string | null> =>
+  (await db.tek<{ serbest: string | null }>(
+    `SELECT sum(b.miktar - COALESCE((SELECT sum(t.miktar) FROM stok_teslim t WHERE t.durum = 'yolda' AND t.kaynak_konum_id = b.konum_id
+              AND t.malzeme_id = b.malzeme_id AND t.parti_id IS NOT DISTINCT FROM b.parti_id AND t.statu_id IS NOT DISTINCT FROM b.statu_id AND t.kalite_durumu = b.kalite_durumu), 0))::text AS serbest
+       FROM stok_bakiye b WHERE b.malzeme_id = $1 AND b.konum_id = $2 AND b.parti_id = $3 AND b.kalite_durumu = 'serbest' AND b.miktar > 0`,
+    [malzemeId, konumId, partiId]))?.serbest ?? null;
 export const sepetMiktari = (db: Db, id: number, kisiId: number, miktar: string): Promise<{ id: number } | null> =>
   db.tek('UPDATE stok_sepet_satiri SET miktar = $3 WHERE id = $1 AND kisi_id = $2 RETURNING id', [id, kisiId, miktar]);
 export const sepettenSil = (db: Db, id: number, kisiId: number): Promise<{ id: number } | null> =>
