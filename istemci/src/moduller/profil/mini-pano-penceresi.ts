@@ -17,7 +17,30 @@ export function panoPenceresiniAc(): boolean {
   return true;
 }
 
-export interface PanoDurumu { acik: boolean }
+// var: bu tarayıcıda pano penceresi açık (pano üstte açık olmasa da).
+export interface PanoDurumu { acik: boolean; var: boolean }
+
+export const panoDurumuMu = (d: unknown): d is PanoDurumu =>
+  typeof d === 'object' && d !== null && typeof (d as PanoDurumu).acik === 'boolean' && typeof (d as PanoDurumu).var === 'boolean';
+
+// Ayrı açılmış iki CORE MES sekmesi aynı adlı pencereyi birbirinde bulamaz (tarayıcı adı yalnız kendi açtığı pencereler
+// arasında arar): her biri yeni pano penceresi açardı. Açmadan önce kanaldan sorulur; açık bir pano penceresi yanıt verirse
+// yenisi açılmaz, o pencere öne çağrılır. Yanıt süresi tıklamanın açılır pencere izni içinde kalacak kadar kısadır.
+const YANIT_MS = 250;
+export function panoPenceresiVarMi(kanal: BroadcastChannel | null): Promise<boolean> {
+  if (kanal === null) return Promise.resolve(false);
+  return new Promise((coz) => {
+    const z = setTimeout(() => { kanal.removeEventListener('message', dinle); coz(false); }, YANIT_MS);
+    function dinle(o: MessageEvent<unknown>) {
+      if (!panoDurumuMu(o.data) || !o.data.var) return;
+      clearTimeout(z);
+      kanal?.removeEventListener('message', dinle);
+      coz(true);
+    }
+    kanal.addEventListener('message', dinle);
+    kanal.postMessage('sor');
+  });
+}
 
 // Küçük pencere panonun açık olup olmadığını ana sekmelere duyurur; ana sekme açılışta sorar (Hesap menüsündeki "(açık)").
 export function panoKanali(): BroadcastChannel | null {
@@ -41,3 +64,12 @@ export function panoDenetimineAbone(d: () => void): () => void {
   return () => { dinleyiciler.delete(d); };
 }
 export const panoDenetimi = (): PanoDenetimi => denetim;
+
+// Açık pano penceresi varsa onu öne çağırır, yoksa açar. false: tarayıcı açılır pencereyi engelledi.
+export async function panoPenceresiniAcYaDaOneGetir(): Promise<boolean> {
+  const kanal = panoKanali();
+  try {
+    if (await panoPenceresiVarMi(kanal)) { kanal?.postMessage('one-gel'); return true; }
+    return panoPenceresiniAc();
+  } finally { kanal?.close(); }
+}
