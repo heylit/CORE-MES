@@ -12,7 +12,7 @@ import { STOK_ISLEMLERI } from '#paylasilan/islemler/stok.ts';
 import type {
   KaliteDurumu, FisAyrintiCevabi, FislerListesi, FisOzeti, MalzemeFisiAyrintiCevabi, KodCozCevabi, SepetCevabi, SepetEkleKomutu, SepetTeslimCevabi, SepetTeslimEtCevabi, SepetTeslimEtKomutu,
   StoktanDusKomutu, TeslimKomutu, MalzemeIstegi, MalzemeIstegiAcGirdisi, MalzemeIstegiCevabi, MalzemeIstegiDurumu, MalzemeIstekleriListesi, IstekAcGovdesi, IstekMalzemeleriCevabi, Teslim,
-  TeslimCevabi, TeslimKutusuCevabi, TeslimYeri, YerdekiStokCevabi, OkutCozCevabi, IstekKabulGovdesi, IstekReddetGovdesi, MalzemeYerleriCevabi, OkutarakAlCevabi, OkutarakAlGovdesi, ItirazGovdesi,
+  TeslimCevabi, TeslimKutusuCevabi, SonIslemlerimCevabi, TeslimYeri, YerdekiStokCevabi, OkutCozCevabi, IstekKabulGovdesi, IstekReddetGovdesi, MalzemeYerleriCevabi, OkutarakAlCevabi, OkutarakAlGovdesi, ItirazGovdesi,
   OkutYeri, KisiKoduCevabi, IstasyonSepetiCevabi, GelecekSepetCevabi, IstasyonSepetleriCevabi, SepettenCekGovdesi,
 } from '#paylasilan/sozlesme/stok.ts';
 import { malzemeIstegiAcGirdisi, type IstekTeslimGovdesi, type KartlaAlGovdesi, type RefakatKartSatiri } from '#paylasilan/sozlesme/stok.ts';
@@ -562,6 +562,25 @@ async function teslimleriAdlandir(db: Db, satirlar: TeslimHam[]): Promise<Teslim
     itiraz: t.itirazNedeni === null || t.itirazZamani === null ? null
       : { neden: t.itirazNedeni, kisiAd: t.itirazKisiId === null ? null : kisiler.get(t.itirazKisiId) ?? null, zaman: t.itirazZamani, iadeTeslimId: t.iadeTeslimId },
   }));
+}
+// Son yaptıklarım (3085): yalnız kişinin kendi kaydı; kabul edilen teslim "Alındı"dır. Hedef istasyonsa istasyonun kodu yazılır.
+export async function sonIslemlerim(db: Db, k: Kullanici): Promise<SonIslemlerimCevabi> {
+  const satirlar = await sorgular.sonIslemlerim(db, k.id);
+  const ad = await adlar(db, satirlar.map((x) => x.malzemeId));
+  const uclar = new Map((await sorgular.teslimUclari(db, [...new Set(satirlar.map((x) => x.hedefKonumId))])).map((u) => [u.konumId, u]));
+  const istKodlari = await istasyonKodlari(db, [...uclar.values()].map((u) => u.istasyonId));
+  const kisiler = await kisiAdlari(db, [...new Set(satirlar.flatMap((x) => (x.aliciKisiId === null ? [] : [x.aliciKisiId])))]);
+  return {
+    islemler: satirlar.map((x) => {
+      const u = uclar.get(x.hedefKonumId);
+      return {
+        tur: x.tur, id: x.id, no: x.no, malzemeAd: ad.get(x.malzemeId) ?? null, partiEtiketi: x.lotNo, miktar: x.miktar,
+        nereye: { kod: (u?.istasyonId == null ? undefined : istKodlari.get(u.istasyonId)) ?? u?.kod ?? '', ad: u?.ad ?? null },
+        aliciAd: x.aliciKisiId === null ? null : kisiler.get(x.aliciKisiId) ?? null,
+        durum: x.durum === 'teslim' ? 'alindi' : x.durum, redNedeni: x.redNedeni, zaman: x.zaman, surum: x.surum,
+      };
+    }),
+  };
 }
 export async function teslimOku(db: Db, id: number): Promise<TeslimCevabi> {
   const t = await sorgular.teslimBul(db, id);

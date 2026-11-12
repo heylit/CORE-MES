@@ -17,7 +17,7 @@ export interface ModTanimi {
 }
 
 export const OKUT_MODLARI: readonly ModTanimi[] = [
-  { mod: 'otomatik', komut: 'OTOMATIK', ad: 'Otomatik', simge: 'bolt', aciklama: 'Ne okutursan ona göre iş önerir.', adimlar: ['Herhangi bir etiket'], islemler: null },
+  { mod: 'otomatik', komut: 'OTOMATIK', ad: 'Otomatik', simge: 'bolt', aciklama: 'Okuttuğunu sepete alır, sonra nereye bırakacağını sorar.', adimlar: ['Herhangi bir etiket'], islemler: null },
   { mod: 'bilgi', komut: 'BILGI', ad: 'Bilgi', simge: 'eye', aciklama: 'Yalnız okur: ne olduğu, nerede ve ne kadar. Hiçbir şey yazılmaz.', adimlar: ['Herhangi bir etiket'], islemler: null },
   { mod: 'seri', komut: 'SERI', ad: 'Seri', simge: 'list', aciklama: 'Art arda okut, seçim sorulmaz; liste hesabına kaydedilir, stok değişmez. Bilgisayarda Seri listeler\'den devam edilir.', adimlar: ['Etiketler art arda', 'Bilgisayarda karar'], islemler: ['stok.istek'] },
   { mod: 'tasi', komut: 'TASI', ad: 'Taşı', simge: 'cart', aciklama: 'Önce malzemeler sepete, sonra bırakılacak yer ya da kişi.', adimlar: ['Malzeme / lot', 'Hedef yer'], islemler: ['stok.transfer'] },

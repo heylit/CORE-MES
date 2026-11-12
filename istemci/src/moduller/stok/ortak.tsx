@@ -104,7 +104,7 @@ export function SayfaBasi({ baslik, alt, aciklama, sag }: { baslik: string; alt?
 
 // Yetersiz stokta sunucu ONAY_GEREKLI döner (DEP-02); kullanıcı onaylarsa aynı komut `eksiOnay: true` ile yinelenir (DEP-03).
 // Emre giden malzemenin kartı (632 a) aynı yolla sorulur; onay `kartOnayi: true` ile yinelenir.
-export function useStokKomutu<G extends object>(gonder: (govde: G) => Promise<unknown>, basarili: string, sonra?: () => void) {
+export function useStokKomutu<G extends object>(gonder: (govde: G) => Promise<unknown>, basarili: string | null, sonra?: () => void) {
   const istemci = useQueryClient();
   const { bildir } = useBildirim();
   const [onay, setOnay] = useState<{ govde: G; mevcut: string } | null>(null);
@@ -118,7 +118,7 @@ export function useStokKomutu<G extends object>(gonder: (govde: G) => Promise<un
       setOnay(null);
       setKartOnayi(null);
       setSkt(null);
-      bildir('tamam', basarili);
+      if (basarili !== null) bildir('tamam', basarili);
       await istemci.invalidateQueries({ queryKey: anahtarlar.hepsi });
       sonra?.();
     },

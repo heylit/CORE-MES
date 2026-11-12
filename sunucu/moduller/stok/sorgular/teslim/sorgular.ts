@@ -107,6 +107,24 @@ export const iadeBagla = (db: Db, id: number, iadeTeslimId: number): Promise<unk
 export const gonderdiklerim = (db: Db, kisiId: number): Promise<TeslimHam[]> =>
   db.sorgu(`${TESLIM_SECIMI} WHERE t.gonderen_kisi_id = $1 AND (t.durum = 'yolda' OR t.kapanis > now() - interval '7 days')
     ORDER BY t.gonderim DESC, t.id DESC LIMIT 50`, [kisiId]);
+// Son yaptıklarım (3085): kişinin bugün (tesis saat diliminde) gönderdiği teslimler ve yaptığı taşımalar, yeniden eskiye, en çok 10.
+// Teslimin kabulünde yazılan hareket teslim satırıdır, taşıma sayılmaz; aynı yerde statü dönüşümü taşıma değildir.
+export interface SonIslemHam {
+  tur: 'teslim' | 'tasima'; id: number; no: string | null; malzemeId: number; lotNo: string | null; miktar: string; hedefKonumId: number;
+  aliciKisiId: number | null; durum: 'yapildi' | TeslimDurumu; redNedeni: string | null; zaman: string; surum: number | null;
+}
+export const sonIslemlerim = (db: Db, kisiId: number): Promise<SonIslemHam[]> =>
+  db.sorgu(`SELECT tur, id, no, "malzemeId", "lotNo", miktar, "hedefKonumId", "aliciKisiId", durum, "redNedeni", ${zamanMetni('z')} AS zaman, surum FROM (
+      SELECT 'teslim' AS tur, t.id::int AS id, t.no, t.malzeme_id AS "malzemeId", p.lot_no AS "lotNo", t.miktar::text AS miktar, t.hedef_konum_id AS "hedefKonumId",
+             t.alici_kisi_id AS "aliciKisiId", t.durum, t.red_nedeni AS "redNedeni", t.gonderim AS z, t.surum
+        FROM stok_teslim t LEFT JOIN stok_parti p ON p.id = t.parti_id
+       WHERE t.gonderen_kisi_id = $1 AND t.gonderim >= current_date
+      UNION ALL
+      SELECT 'tasima', h.id::int, NULL, h.malzeme_id, p.lot_no, h.miktar::text, h.hedef_konum_id, NULL, 'yapildi', NULL, h.zaman, NULL
+        FROM stok_hareketi h LEFT JOIN stok_parti p ON p.id = h.parti_id
+       WHERE h.kisi_id = $1 AND h.tur = 'transfer' AND h.zaman >= current_date AND h.kaynak_konum_id IS DISTINCT FROM h.hedef_konum_id
+         AND NOT EXISTS (SELECT 1 FROM stok_teslim t WHERE t.hareket_id = h.id)
+    ) x ORDER BY z DESC, tur, id DESC LIMIT 10`, [kisiId]);
 export const teslimKapat = (db: Db, id: number, surum: number, k: { durum: 'teslim' | 'red' | 'iptal'; alinan: string | null; redNedeni: string | null; hareketId: number | null; kisiId: number }): Promise<{ id: number } | null> =>
   db.tek(
     `UPDATE stok_teslim SET durum = $3, alinan = $4, red_nedeni = $5, hareket_id = $6, kapatan_kisi_id = $7, kapanis = now(), surum = surum + 1

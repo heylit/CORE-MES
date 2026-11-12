@@ -1350,6 +1350,18 @@ export const teslimKutusuCevabi = z.object({
   }).nullable(),
 });
 export type TeslimKutusuCevabi = z.output<typeof teslimKutusuCevabi>;
+// Son yaptıklarım (3085): kişinin bugünkü teslim ve taşıma kayıtları, yeniden eskiye; yalnız kendi kaydı okunur.
+export const SON_ISLEM_DURUMLARI = ['yapildi', 'yolda', 'alindi', 'red', 'iptal'] as const;
+export const sonIslemlerimCevabi = z.object({
+  islemler: z.array(z.object({
+    tur: z.enum(['teslim', 'tasima']), id: z.number().int(), no: z.string().nullable(),
+    malzemeAd: z.string().nullable(), partiEtiketi: z.string().nullable(), miktar: ondalikMetinSemasi,
+    nereye: z.object({ kod: z.string(), ad: z.string().nullable() }), aliciAd: z.string().nullable(),
+    durum: z.enum(SON_ISLEM_DURUMLARI), redNedeni: z.string().nullable(), zaman: zamanSemasi, surum: surumSemasi.nullable(),
+  })),
+});
+export type SonIslemlerimCevabi = z.output<typeof sonIslemlerimCevabi>;
+export type SonIslem = SonIslemlerimCevabi['islemler'][number];
 // İstek panelinin malzeme seçicisi: katalogdaki stoklanan kart ve kullanılabilir miktar; statülü stok ayrı satırda.
 export const istekMalzemeSorgusu = z.object({ ara: z.string().trim().max(80).optional() });
 export const istekMalzemeleriCevabi = z.object({

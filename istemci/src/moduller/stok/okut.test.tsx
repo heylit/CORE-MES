@@ -86,6 +86,15 @@ async function pencereAc(): Promise<HTMLElement> {
   return screen.findByRole('dialog');
 }
 
+// 3085: sepete alınan kartta "Sepete eklendi · Geri al" satırıyla, bırakmanın sonucu kalıcı sonuç kartıyla görünür.
+async function sepeteEklendi(pencere: HTMLElement, ne: RegExp): Promise<void> {
+  await within(pencere).findByText('Sepete eklendi');
+  expect(pencere.querySelector('.tc-stok-sepette')?.textContent).toMatch(ne);
+}
+async function sonucKarti(pencere: HTMLElement): Promise<string> {
+  return (await within(pencere).findByRole('status', { name: 'İşlem sonucu' })).textContent ?? '';
+}
+
 describe('Malzeme penceresinin okuyucusu (372 a)', () => {
   it('ayrı QR tuşu yok; okuyucu pencere açılınca kutucukların üstünde hazır', async () => {
     expect(ustEylemler.some((e) => e.anahtar === 'qr-okut')).toBe(false);
@@ -104,7 +113,7 @@ describe('Malzeme penceresinin okuyucusu (372 a)', () => {
     });
     const pencere = await pencereAc();
     await okut(pencere, 'MLZ:901');
-    expect(await within(pencere).findByText(/Deneme sac · 2 sepete atıldı/)).toBeTruthy();
+    await sepeteEklendi(pencere, /Deneme sac · 2/);
     expect(istekler.find((i) => i.yol === '/stok/sepet/satir-ekle')?.govde).toEqual({ malzemeId: 901, miktar: '2.000', kaynakKonumId: 20, partiId: 4 });
     expect(await within(pencere).findByRole('region', { name: 'Taşıma sepetim' })).toBeTruthy();
     await okut(pencere, 'T1');
@@ -113,9 +122,9 @@ describe('Malzeme penceresinin okuyucusu (372 a)', () => {
     const birak = await within(pencere).findByRole('button', { name: '1 kalemi bırak' });
     expect((within(pencere).getByRole('textbox', { name: /Miktar/ }) as HTMLInputElement).value).toBe('2');
     fireEvent.click(birak);
-    expect(await screen.findByText('Kaynakta yetmez.')).toBeTruthy();
+    expect((await screen.findAllByText('Kaynakta yetmez.')).length).toBeGreaterThan(0);
     fireEvent.click(within(pencere).getByRole('button', { name: '1 kalemi bırak' }));
-    expect(await within(pencere).findByText(/^1 kalem Torna 2 · .* yerine bırakıldı\.$/)).toBeTruthy();
+    expect(await sonucKarti(pencere)).toMatch(/^Yolda.*Teslim edildi: Torna 2 · /);
     const postlar = istekler.filter((i) => i.yontem === 'POST' && i.yol === '/stok/sepet/gonder').map((i) => i.govde as { kaynakKimligi: string });
     expect(postlar).toHaveLength(2);
     expect(postlar[0]).toMatchObject({ satirlar: [{ satirId: 1, hedef: { istasyonId: 2 } }], aliciKodu: null });
@@ -123,24 +132,25 @@ describe('Malzeme penceresinin okuyucusu (372 a)', () => {
     expect(await within(pencere).findByRole('button', { name: /^Bana gelen/ })).toBeTruthy();
   });
 
-  it('bırakma ekranı kutucukların yerine gelir; başka yer okutmaya dönünce kutucuklar geri gelir', async () => {
+  it('bırakma ekranı okuyucunun altında açılır, kutucuklar yerinde kalır (3085 düzeni); Başka yer okut bırakmayı kapatır', async () => {
     ciz(OPERATOR);
     const pencere = await pencereAc();
     await okut(pencere, 'MLZ:901');
-    await within(pencere).findByText(/sepete atıldı/);
+    await within(pencere).findByText('Sepete eklendi');
     await within(pencere).findByRole('region', { name: 'Taşıma sepetim' });
     await okut(pencere, 'T2');
     await within(pencere).findByText(/^Buraya bırak: Torna 2/);
-    expect(within(pencere).queryByRole('button', { name: /^Bana gelen/ })).toBeNull();
+    expect(within(pencere).getByRole('button', { name: /^Bana gelen/ })).toBeTruthy();
     fireEvent.click(within(pencere).getByRole('button', { name: 'Başka yer okut' }));
-    expect(await within(pencere).findByRole('button', { name: /^Bana gelen/ })).toBeTruthy();
+    await waitFor(() => expect(within(pencere).queryByText(/^Buraya bırak: Torna 2/)).toBeNull());
+    expect(within(pencere).getByRole('button', { name: /^Bana gelen/ })).toBeTruthy();
   });
 
   it('DEP-64: katalog etiketi (MK) okutulunca malzeme sepete düşer', async () => {
     const istekler = ciz(OPERATOR);
     const pencere = await pencereAc();
     await okut(pencere, 'MK:HM-1');
-    expect(await within(pencere).findByText(/Deneme sac · 2 sepete atıldı/)).toBeTruthy();
+    await sepeteEklendi(pencere, /Deneme sac · 2/);
     expect(istekler.some((i) => i.yol === '/stok/teslim-kutusu/kod-coz?kod=MK%3AHM-1')).toBe(true);
   });
 
@@ -148,14 +158,14 @@ describe('Malzeme penceresinin okuyucusu (372 a)', () => {
     const istekler = ciz(OPERATOR, { 'POST /stok/sepet/gonder': () => json(200, { teslimler: [{ satirId: 1, teslimNo: 'TS-000002' }], kalanlar: [] }) });
     const pencere = await pencereAc();
     await okut(pencere, 'MLZ:901');
-    await within(pencere).findByText(/sepete atıldı/);
+    await within(pencere).findByText('Sepete eklendi');
     await within(pencere).findByRole('region', { name: 'Taşıma sepetim' });
     expect(await okutVeBekle(pencere, 'KSI-7', /Buraya bırak: Deneme Alıcı · Torna 2/)).toBeTruthy();
     expect(within(pencere).getByText('Alıcı: Deneme Alıcı. Teslim edince hemen kapanır; alıcı vardiya sonuna kadar itiraz edebilir.')).toBeTruthy();
     expect(within(pencere).queryByRole('button', { name: 'Bıraktım' })).toBeNull();
     fireEvent.click(within(pencere).getByRole('button', { name: '1 kalemi bırak' }));
     await waitFor(() => expect(istekler.find((i) => i.yol === '/stok/sepet/gonder')?.govde).toMatchObject({ satirlar: [{ satirId: 1, hedef: { istasyonId: 2 } }], aliciKodu: 'KSI-7' }));
-    expect(await within(pencere).findByText(/^1 kalem Deneme Alıcı · Torna 2 yerine bırakıldı\.$/)).toBeTruthy();
+    expect(await sonucKarti(pencere)).toMatch(/^Yapıldı.*Elden teslim edildi: Deneme Alıcı · Torna 2/);
   });
 
   it('ilk okutulan kişi kodu Elimdekiler\'i o kişiye hedefli açar; gönderilemeyecek istasyondaki kişi hedef olmaz', async () => {
@@ -172,10 +182,66 @@ describe('Malzeme penceresinin okuyucusu (372 a)', () => {
     expect((within(pencere).getByRole('button', { name: 'Teslim et' }) as HTMLButtonElement).disabled).toBe(true);
   });
 
+  it('3085: aynı kod 2 sn içinde ikinci kez gelirse yok sayılır; sonra sepetteki kalem yeniden okutulunca "Zaten sepette" yazar, yeniden eklenmez', async () => {
+    const istekler = ciz(OPERATOR);
+    const pencere = await pencereAc();
+    await okut(pencere, 'MLZ:901');
+    await sepeteEklendi(pencere, /Deneme sac · 2/);
+    await okut(pencere, 'MLZ:901');
+    expect(istekler.filter((i) => i.yol.startsWith('/stok/teslim-kutusu/kod-coz?kod=MLZ')).length).toBe(1);
+    const simdi = Date.now();
+    const saat = vi.spyOn(Date, 'now').mockReturnValue(simdi + 3000);
+    try {
+      await okut(pencere, 'MLZ:901');
+      expect(await within(pencere).findByText('Zaten sepette')).toBeTruthy();
+      expect(istekler.filter((i) => i.yol === '/stok/sepet/satir-ekle')).toHaveLength(1);
+    } finally { saat.mockRestore(); }
+  });
+
+  it('3085: Son yaptıklarım bugünkü işlemi durumuyla gösterir; yoldaki teslimde Geri çek var', async () => {
+    ciz(OPERATOR, { 'GET /stok/teslim-kutusu/son-islemlerim': () => json(200, { islemler: [
+      { tur: 'teslim', id: 7, no: 'TS-000007', malzemeAd: 'Deneme sac', partiEtiketi: 'TP-4', miktar: '2.000', nereye: { kod: 'T2', ad: 'Torna 2' }, aliciAd: null,
+        durum: 'yolda', redNedeni: null, zaman: '2026-10-30T10:05:00+03:00', surum: 1 },
+      { tur: 'tasima', id: 3, no: null, malzemeAd: 'Deneme sac', partiEtiketi: null, miktar: '1.000', nereye: { kod: 'A-01-01', ad: null }, aliciAd: null,
+        durum: 'yapildi', redNedeni: null, zaman: '2026-10-30T09:00:00+03:00', surum: null },
+    ] }) });
+    const pencere = await pencereAc();
+    const liste = await within(pencere).findByRole('region', { name: 'Son yaptıklarım' });
+    const satirlar = await within(liste).findAllByRole('listitem');
+    expect(satirlar).toHaveLength(2);
+    expect(satirlar[0]!.textContent).toMatch(/Teslim: Torna 2 · TS-000007/);
+    expect(within(satirlar[0]!).getByText('Yolda')).toBeTruthy();
+    expect(within(satirlar[0]!).getByRole('button', { name: 'Geri çek' })).toBeTruthy();
+    expect(satirlar[1]!.textContent).toMatch(/Taşıma: A-01-01/);
+    expect(within(satirlar[1]!).queryByRole('button', { name: 'Geri çek' })).toBeNull();
+  });
+
+  it('3085: göz seçimi açıkken başka kod okutulursa seçim bırakılır, yeni kod işlenir', async () => {
+    const istekler = ciz(DEPOCU);
+    const pencere = await pencereAc();
+    await okut(pencere, 'KABUL');
+    expect(await within(pencere).findByText('Hangi gözden alınacak?')).toBeTruthy();
+    await okut(pencere, 'MLZ:901');
+    await waitFor(() => expect(istekler.some((i) => i.yol.startsWith('/stok/teslim-kutusu/kod-coz?kod=MLZ'))).toBe(true));
+    await waitFor(() => expect(within(pencere).queryByRole('list', { name: 'Nereden alınacak' })).toBeNull());
+    await sepeteEklendi(pencere, /Deneme sac · 2/);
+    expect(within(pencere).queryByText('Hangi gözden alınacak?')).toBeNull();
+  });
+
+  it('3085: "Geri al" sepete eklenen satırı siler', async () => {
+    const istekler = ciz(OPERATOR);
+    const pencere = await pencereAc();
+    await okut(pencere, 'MLZ:901');
+    await sepeteEklendi(pencere, /Deneme sac · 2/);
+    fireEvent.click(within(pencere).getByRole('button', { name: 'Geri al' }));
+    await waitFor(() => expect(istekler.some((i) => /^\/stok\/sepet\/satirlar\/\d+\/sil$/.test(i.yol))).toBe(true));
+  });
+
   it('depocu: kabul alanını okutur, malzemeyi sepete atar, rafa bırakır (taşıma, sepet satırı düşer)', async () => {
     const istekler = ciz(DEPOCU, { 'POST /stok/tasima': () => json(200, { hareketIdler: [3] }) });
     const pencere = await pencereAc();
     await okut(pencere, 'KABUL');
+    expect(await within(pencere).findByText('Hangi gözden alınacak?')).toBeTruthy();
     const secim = await within(pencere).findByRole('list', { name: 'Nereden alınacak' });
     fireEvent.click(within(secim).getAllByRole('button', { name: 'Sepete at' })[0]!);
     await within(pencere).findByRole('region', { name: 'Taşıma sepetim' });
@@ -185,6 +251,6 @@ describe('Malzeme penceresinin okuyucusu (372 a)', () => {
       govde: { malzemeId: 901, kaynakKonumId: 5, partiId: 4, hedefKonumId: 30, miktar: '6' },
     }));
     await waitFor(() => expect(istekler.some((i) => i.yol === '/stok/sepet/satirlar/1/sil')).toBe(true));
-    expect(await within(pencere).findByText(/^1 kalem A-01-01 · .* yerine bırakıldı\.$/)).toBeTruthy();
+    expect(await sonucKarti(pencere)).toMatch(/^Yapıldı.*Bırakıldı: A-01-01 · /);
   });
 });

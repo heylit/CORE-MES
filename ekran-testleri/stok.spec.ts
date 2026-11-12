@@ -44,13 +44,17 @@ test('Okut paneli: kamera önce, kutucuklar görünür ve ekranlarını açar', 
   await page.getByRole('button', { name: /^Okut(, \d+ gelen teslim)?$/ }).filter({ visible: true }).first().click();
   const panel = page.getByRole('dialog', { name: 'Okut' });
   await expect(panel).toBeVisible();
-  // 372 a, 809: ayrı QR tuşu yok; okuyucu pencerenin üstünde, kutucuklardan önce görünür.
+  // 372 a, 809: ayrı QR tuşu yok; okuyucu kutucuklardan önce görünür. 3096 a: geniş ekranda iki sütun, okuyucu solda.
   await expect(page.getByRole('button', { name: 'QR okut', exact: true })).toHaveCount(0);
   const kod = panel.getByRole('textbox', { name: /Kod/ }).first();
   await expect(kod).toBeVisible();
   const gelen = panel.getByRole('button', { name: /^Bana gelen/ });
+  expect(await kod.evaluate((el, s) => s !== null && Boolean(el.compareDocumentPosition(s) & Node.DOCUMENT_POSITION_FOLLOWING), await gelen.elementHandle()),
+    'okuyucu belge sırasında kutucuklardan önce').toBe(true);
   const [k, s] = [await kod.boundingBox(), await gelen.boundingBox()];
-  expect(k !== null && s !== null && k.y < s.y, 'okuyucu kutucukların üstünde').toBe(true);
+  const ikiSutun = (page.viewportSize()?.width ?? 0) >= 760;
+  if (ikiSutun) expect(k !== null && s !== null && k.x + k.width <= s.x, 'iki sütunda okuyucu sol sütunda, kutucuklar sağda').toBe(true);
+  else expect(k !== null && s !== null && k.y + k.height <= s.y, 'tek sütunda okuyucu kutucukların üstünde').toBe(true);
   for (const [ad, baslik] of [[/^Bana gelen/, 'Bana gelen'], [/^Elimdekiler/, 'Elimdekiler'], [/^Malzeme iste/, 'Malzeme iste']] as const) {
     await panel.getByRole('button', { name: ad }).click();
     await expect(page.getByRole('dialog', { name: baslik })).toBeVisible();

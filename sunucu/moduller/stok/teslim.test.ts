@@ -1704,6 +1704,47 @@ describe('stok: malzeme · teslim (gerçek PostgreSQL)', () => {
     assert.equal(kimliksiz.statusCode, 400, kimliksiz.body);
   });
 
+  test('3085: Son yaptıklarım kişinin bugünkü teslim ve taşımalarını yeniden eskiye verir; kabul edilen teslim Alındı olur, başkası görmez', async () => {
+    const h = await kart('hammadde');
+    await malKabul(h, '10');
+    const kabul = await kabulKonumu();
+    const a = await istasyon();
+    const z = (await o().vt.tx((db) => konumAc(db, { tur: 'depo_zemini', kod: `SY-${sira}`, ad: null }))).konum.id;
+    assert.equal((await istek<Hata>('depo', 'POST', '/stok/tasima', { malzemeId: h, kaynakKonumId: kabul, hedefKonumId: z, miktar: '4' })).durum, 200);
+    const g = await gonder('depo', { malzemeId: h, miktar: '3', kaynak: { konumId: kabul }, hedef: { istasyonId: a.id } });
+    assert.equal(g.durum, 200, JSON.stringify(g.govde));
+    type Liste = { islemler: { tur: string; id: number; no: string | null; malzemeAd: string | null; miktar: string; nereye: { kod: string }; durum: string; surum: number | null }[] };
+    const son = async (kim: string) => {
+      const c = await istek<Liste>(kim, 'GET', '/stok/teslim-kutusu/son-islemlerim');
+      assert.equal(c.durum, 200, JSON.stringify(c.govde));
+      return c.govde.islemler;
+    };
+    const ilk = await son('depo');
+    assert.deepEqual(ilk.slice(0, 2).map((x) => [x.tur, x.miktar, x.durum]), [['teslim', '3.000', 'yolda'], ['tasima', '4.000', 'yapildi']]);
+    assert.equal(ilk[0]!.id, g.govde.teslim.id);
+    assert.equal(ilk[0]!.no, g.govde.teslim.no);
+    assert.equal(ilk[0]!.surum, g.govde.teslim.surum);
+    assert.equal(ilk[1]!.surum, null);
+    assert.ok(ilk.length <= 10);
+    const opIlk = await son('operator');
+    assert.ok(!opIlk.some((x) => x.tur === 'teslim' && x.id === g.govde.teslim.id), 'başkasının teslimi görünmez');
+    assert.ok(!opIlk.some((x) => x.tur === 'tasima' && x.id === ilk[1]!.id), 'başkasının taşıması görünmez');
+    // Alıcı teslim alınca kayıt "Alındı" olur; kabulün yazdığı hareket ayrıca taşıma sayılmaz.
+    assert.equal((await istek('operator', 'POST', `/stok/teslimler/${g.govde.teslim.id}/teslim-al`, { surum: g.govde.teslim.surum, alinan: '3' })).durum, 200);
+    const sonra = await son('depo');
+    assert.deepEqual(sonra.slice(0, 2).map((x) => [x.tur, x.durum]), [['teslim', 'alindi'], ['tasima', 'yapildi']]);
+    assert.ok(!(await son('operator')).some((x) => x.tur === 'tasima' && x.miktar === '3.000' && x.malzemeAd === ilk[0]!.malzemeAd), 'kabul hareketi alıcıda taşıma görünmez');
+    // Dünkü teslim listede yer almaz (stok_hareketi yalnız eklenir; taşımanın gün sınırı aynı koşulla yazılı).
+    await o().vt.tx((db) => db.sorgu(`UPDATE stok_teslim SET gonderim = current_date - interval '1 hour' WHERE id = $1`, [g.govde.teslim.id]));
+    assert.ok(!(await son('depo')).some((x) => x.tur === 'teslim' && x.id === g.govde.teslim.id), 'dünkü teslim görünmez');
+    // En çok on kayıt, yeniden eskiye.
+    for (let i = 0; i < 11; i++) assert.equal((await istek<Hata>('depo', 'POST', '/stok/tasima', { malzemeId: h, kaynakKonumId: i % 2 ? z : kabul, hedefKonumId: i % 2 ? kabul : z, miktar: '1' })).durum, 200);
+    const cok = await son('depo');
+    assert.equal(cok.length, 10);
+    assert.ok(cok.every((x) => x.tur === 'tasima'), 'en yeni on taşıma');
+    assert.deepEqual(cok.map((x) => x.id), [...cok.map((x) => x.id)].sort((a, b) => b - a), 'yeniden eskiye');
+  });
+
   test('kart #1323: ters yönlü eşzamanlı taşımalar birbirini kilitlemez; aynı yeni satıra eşzamanlı giriş tek satırda toplanır', async () => {
     const h = await kart('hammadde');
     await malKabul(h, '40');

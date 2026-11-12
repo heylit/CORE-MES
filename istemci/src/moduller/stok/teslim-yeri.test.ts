@@ -10,14 +10,15 @@ const kutu = (o: Partial<TeslimKutusuCevabi>): TeslimKutusuCevabi => ({
 });
 
 describe('teslimAlIstasyonu (Akış A provası D2)', () => {
-  it('istasyon bilinmiyorsa ilk istasyon yerine son seçileni, o da yoksa gelen teslimin istasyonunu açar', () => {
+  it('istasyon bilinmiyorsa ilk istasyon yerine son seçileni, o da yoksa gelen teslimin istasyonunu açar; 3085: ilk istasyon kendiliğinden seçilmez', () => {
     expect(teslimAlIstasyonu(kutu({}), null, 2)).toBe(2);
     expect(teslimAlIstasyonu(kutu({ gelenler: [teslim(null), teslim(2)] }), null, null)).toBe(2);
-    expect(teslimAlIstasyonu(kutu({}), null, null)).toBe(1);
+    expect(teslimAlIstasyonu(kutu({}), null, null)).toBeNull();
+    expect(teslimAlIstasyonu(kutu({ istasyonlar: [{ id: 3, kod: 'F3', ad: 'Freze 3' }] }), null, null)).toBe(3);
   });
   it('terminalden gelen odak ve kişinin bulunduğu istasyon önce gelir; kapsam dışı son seçim kullanılmaz', () => {
     expect(teslimAlIstasyonu(kutu({ buradakiIstasyonId: 1 }), 2, 2)).toBe(2);
     expect(teslimAlIstasyonu(kutu({ buradakiIstasyonId: 1 }), null, 2)).toBe(1);
-    expect(teslimAlIstasyonu(kutu({}), null, 9)).toBe(1);
+    expect(teslimAlIstasyonu(kutu({}), null, 9)).toBeNull();
   });
 });

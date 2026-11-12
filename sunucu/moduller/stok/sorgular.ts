@@ -43,7 +43,7 @@ export {
 export {
   istasyonKonumlari, istasyonKonumu, konumaSonGirisler, istasyonKonumuAc, teslimUclari, istekStoklari, type TeslimHam, teslimAc, teslimBul, teslimKaynaktan,
   adiGecenKonumlar, teslimDepoKonumlari, ilkKabulKonumu, ilkKarantinaKonumu, suresiDolanTeslimler, teslimAraAlanlari, konumdakiPartiler,
-  konumdakiPartiMiktarlari, teslimVarMi, yoldakiGelenler, okutarakAlinanlar, itirazYaz, iadeBagla, gonderdiklerim, teslimKapat, teslimeNotYaz, yoldaAyrilan,
+  konumdakiPartiMiktarlari, teslimVarMi, yoldakiGelenler, okutarakAlinanlar, itirazYaz, iadeBagla, gonderdiklerim, type SonIslemHam, sonIslemlerim, teslimKapat, teslimeNotYaz, yoldaAyrilan,
   konumdakiYoldaAyrilanlar, konumlardakiYoldaAyrilanlar, baskaSepetlerdekiler, rafKoduyla, teslimGeriAlindi, yoldakiTeslimSayisi, type YerlesimHam, yerlesim,
   depoBul, depoAdiYaz, yerlesimGuncelle, yerlesimVarMi, rafYeriYaz, type YerlesimRafHam, yerlesimRaflari, gozleriYenidenNumarala, kodDenetiminiErtele,
   kodDenetiminiAc, konumAra, rafAra, partiAra, type PartiKaydi, partiKayitAra, type KonumKaydi, konumKayitAra, sayimBekleyenGozler, siparisIrsaliyeleri,
