@@ -25,7 +25,7 @@ import { ALANLAR, HAZIR_SABLONLAR, ORNEK_DEGERLER } from './sablonlar.ts';
 import {
   atlamaEkle, baskiEkle, etiketTurleriOku, sonAtlamalar, sonBaskilar, sonBasimlar, yaziciEkle, yaziciGuncelle, yaziciOku, yaziciVarMi, yazicilariOku, type YaziciYazimi,
 } from './sorgular.ts';
-import { KOMUT_URETICILERI } from './yazici-dili.ts';
+import { KOMUT_URETICILERI, pplbDenemesi, zplDenemesi } from './yazici-dili.ts';
 
 export const sablonlar = (): SablonlarCevabi => ({
   sablonlar: [...HAZIR_SABLONLAR],
@@ -92,7 +92,11 @@ export function ornekCikti(anahtar: string, secenek: CiktiSecenekleri): CiktiCev
   const degerler = sablon.tur === 'deneme'
     ? { ...ORNEK_DEGERLER.deneme, yazici: `${YAZICI_DILI_ADLARI[secenek.dil]} · ${secenek.dpi} dpi${secenek.sade ? ' · sade' : ''}` }
     : ORNEK_DEGERLER[sablon.tur];
-  return cikti(sablon, [degerler], secenek);
+  const c = cikti(sablon, [degerler], secenek);
+  if (sablon.tur !== 'deneme') return c;
+  // 3074 a: deneme ek etiketleri (kod sayfası, harf adımı, ters yazı); önizleme ana deneme etiketidir.
+  const ek = (secenek.dil === 'pplb' ? pplbDenemesi : zplDenemesi)({ genislik: c.sablon.genislik, yukseklik: c.sablon.yukseklik, dpi: secenek.dpi });
+  return { ...c, komut: c.komut + ek };
 }
 
 // Mal kabul seçiminde `id` basılan lotun parti kimliğidir; deftere de o yazılır.

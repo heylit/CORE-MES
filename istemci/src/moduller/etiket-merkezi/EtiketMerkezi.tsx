@@ -7,7 +7,7 @@ import type {
   BasCevabi, BekleyenlerCevabi, CiktiCevabi, IndirCevabi, KayitCiktiCevabi, KayitSecimi, KayitTuru, OzelOlcu, Sablon, SablonlarCevabi, Yazici, YaziciDili,
   YazicilarCevabi,
 } from '#paylasilan/sozlesme/etiket-merkezi.ts';
-import { REFAKAT_KOPYA_SAYISI } from '#paylasilan/etiket-sabitleri.ts';
+import { REFAKAT_KOPYA_SAYISI, komutBaytlari } from '#paylasilan/etiket-sabitleri.ts';
 import { Dugme, DurumKutusu, IsaretKutusu, Kart, Rozet, Secim, Girdi, useBildirim } from '../../ortak/arayuz/index.ts';
 import { api, ApiHatasi, hataIletisi } from '../../ortak/veri/api.ts';
 import { yeniIstekKimligi } from '../../ortak/veri/istek-kimligi.ts';
@@ -46,7 +46,7 @@ export const basAdresi = (tur: KayitTuru, idler: readonly number[] = []): string
 
 function komutuIndir(c: Pick<CiktiCevabi, 'komut' | 'dosyaAdi'>) {
   const a = document.createElement('a');
-  a.href = URL.createObjectURL(new Blob([c.komut], { type: 'text/plain;charset=utf-8' }));
+  a.href = URL.createObjectURL(new Blob([komutBaytlari(c.komut)], { type: 'application/octet-stream' }));
   a.download = c.dosyaAdi;
   a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
