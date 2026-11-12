@@ -165,8 +165,8 @@
 .tc-emir-ozet .tc-dugme { justify-self: start; }
 .tc-emir-sekme { padding-top: var(--b-4); min-width: 0; display: grid; gap: var(--b-4); }
 .tc-emir-sekme > * { min-width: 0; }
-/* Durum çipleri telefonda da alt alta dizilir (onaylı ön izleme); ortak tablo kuralının yana kaydırmasını derleme sırasından bağımsız ezer. */
-.tc-tablo-cipler.tc-emir-durum-cipleri { display: flex; flex-wrap: wrap; gap: var(--b-2); margin: var(--b-3) 0 var(--b-2); overflow-x: visible; padding-inline-end: 0; mask-image: none; }
+/* Dizilişi ortak tablo kuralı verir: telefonda tek satır, yana kayar (2997 a, 3051 b); burada yalnız boşluk. */
+.tc-tablo-cipler.tc-emir-durum-cipleri { margin: var(--b-3) 0 var(--b-2); }
 /* 3039: geri ve bağlantılar başlığın üstünde; telefonda şerit yerine tek satır ("Üretimde · 3/6"); dört özet geniş ekranda tek satır. */
 .tc-emir-yol { display: flex; flex-wrap: wrap; justify-content: space-between; gap: var(--b-2); margin: 0 0 var(--b-2); }
 .tc-emir-yasam-kisa { display: none; margin: 0 0 var(--b-3); font-weight: 700; }
