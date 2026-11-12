@@ -56,13 +56,13 @@ describe('stok örnek verisi (gerçek PostgreSQL)', { timeout: 120_000 }, () => 
 
     const kisi = await vt().tx((db) => kisiNoKullaniciAdindan(db, 'ornek.operator1'));
     assert.ok(kisi !== null);
-    const istekler = await vt().tx((db) => servis.malzemeIstekleriListesi(db, kisi!, { sayfa: 1, sayfaBoyu: 50, yon: 'artan' as const }));
+    const istekler = await vt().tx((db) => servis.malzemeIstekleriListesi(db, { id: kisi!, islemler: [] }, { sayfa: 1, sayfaBoyu: 50, yon: 'artan' as const }));
     const durumlar = new Set(istekler.satirlar.map((i) => i.durum));
     for (const d of ['acik', 'stok_yok', 'hazirlaniyor', 'teslim']) assert.ok(durumlar.has(d as never), `istek durumu yok: ${d}`);
 
     const ikinci = await ornekVeriYukle(vt(), liste, secenek);
     assert.equal(ikinci.durum, 'yuklu');
     assert.equal((await vt().tx((db) => servis.hareketListesi(db, { sayfa: 1, sayfaBoyu: 50, yon: 'artan' as const }))).satirlar.length, hareketler.satirlar.length);
-    assert.equal((await vt().tx((db) => servis.malzemeIstekleriListesi(db, kisi!, { sayfa: 1, sayfaBoyu: 50, yon: 'artan' as const }))).satirlar.length, istekler.satirlar.length);
+    assert.equal((await vt().tx((db) => servis.malzemeIstekleriListesi(db, { id: kisi!, islemler: [] }, { sayfa: 1, sayfaBoyu: 50, yon: 'artan' as const }))).satirlar.length, istekler.satirlar.length);
   });
 });

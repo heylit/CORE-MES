@@ -82,10 +82,10 @@ export const ornekVeri = ornekVeriTanimi({
     await ac(isteyen1, 'ornek-istek-2', flans, '10', istasyon.id, 'Örnek: stokta olmayan parça');
     await ac(isteyen2, 'ornek-istek-3', mil, '5', null, 'Örnek: stokta olmayan parça');
     const hazir = await ac(isteyen1, 'ornek-istek-4', levha, '25', istasyon.id, 'Örnek: hazırlanan istek');
-    await servis.malzemeIstegiGecir(db, depocu.id, hazir.id, 'hazirla', { surum: hazir.surum });
+    await servis.malzemeIstegiGecir(db, depocu, hazir.id, 'hazirla', { surum: hazir.surum });
     const teslim = await ac(isteyen1, 'ornek-istek-5', yag, '5', istasyon.id, 'Örnek: teslim edilen istek');
-    await servis.malzemeIstegiGecir(db, depocu.id, teslim.id, 'teslim', { surum: teslim.surum, karsilanan: '5' });
+    await servis.malzemeIstegiGecir(db, depocu, teslim.id, 'teslim', { surum: teslim.surum, karsilanan: '5' });
     const iptal = await ac(isteyen2, 'ornek-istek-6', cubuk, '15', null, 'Örnek: iptal edilen istek');
-    await servis.malzemeIstegiGecir(db, depocu.id, iptal.id, 'iptal', { surum: iptal.surum });
+    await servis.malzemeIstegiGecir(db, depocu, iptal.id, 'iptal', { surum: iptal.surum });
   },
 });

@@ -13,7 +13,7 @@ import * as sorgular from '../sorgular.ts';
 import type { IstekHam } from '../sorgular.ts';
 import { dusumDenetle } from './hareket.ts';
 import { belgeNo, korumali, adlar, emirNoDe, emirNoHaritasi, aktifKonum, bakiyeDegistir, siraliKilitle, hareket, sktBugun } from './ortak.ts';
-import { ISTASYON_ISTEGI, kalaniAc, kapsamOku, istasyonKapsamiIdleri, istasyonKapsaminiDenetle, istasyonKonumuBul, toplamaHedefiGoster } from './teslim.ts';
+import { ISTASYON_ISTEGI, kalaniAc, istekIstasyonlari, istekKapsaminiDenetle, istasyonKonumuBul, toplamaHedefiGoster, type IstekKisisi } from './teslim.ts';
 import { rezerveyiAsmasin } from './uretim.ts';
 
 // ---- Toplama (DEP-42 rota, DEP-56 adım toplanınca çıkış) -----------------------------------------------------------------
@@ -38,7 +38,7 @@ export async function toplamaAc(db: Db, k: Kullanici, g: ToplamaAcKomutu): Promi
   for (const [i, id] of istekIdler.entries()) {
     const x = await sorgular.istekBul(db, id, true);
     if (!x) throw dogrulama('Malzeme isteği bulunamadı.', `istekIdler.${i}`);
-    await istasyonKapsaminiDenetle(db, k.id, x.istasyonId);
+    await istekKapsaminiDenetle(db, k, x.istasyonId);
     if (!ISTEK_GECIS_KAYNAKLARI.teslim.includes(x.durum)) throw cakisma(`${x.no} kapandı; listeye alınamaz.`);
     if (x.kaynakIstasyonId !== null) throw cakisma(`${x.no}: ${ISTASYON_ISTEGI}`);
     const engel = istekListeEngeli(x);
@@ -46,7 +46,7 @@ export async function toplamaAc(db: Db, k: Kullanici, g: ToplamaAcKomutu): Promi
     istekler.push(x);
   }
   const hedef = g.hedef ? await toplamaHedefiCoz(db, g.hedef) : null;
-  if (hedef !== null) await istasyonKapsaminiDenetle(db, k.id, await sorgular.konumIstasyonu(db, hedef));
+  if (hedef !== null) await istekKapsaminiDenetle(db, k, await sorgular.konumIstasyonu(db, hedef));
   // İstasyonlu istek yalnız kendi istasyonuna toplanır; yolda teslimi olan istek ikinci kez taşınmasın diye listeye alınmaz (kart #1410).
   for (const [i, x] of istekler.entries()) {
     const yer = x.istasyonId === null ? null : await sorgular.istasyonKonumu(db, x.istasyonId);
@@ -87,13 +87,13 @@ export async function toplamaAc(db: Db, k: Kullanici, g: ToplamaAcKomutu): Promi
   });
   return toplamaAyrintisi(db, id);
 }
-export async function toplamaAyrintisiGor(db: Db, kisiId: number, id: number): Promise<ToplamaAyrintiCevabi> {
-  await toplamaKapsaminiDenetle(db, kisiId, id);
+export async function toplamaAyrintisiGor(db: Db, k: IstekKisisi, id: number): Promise<ToplamaAyrintiCevabi> {
+  await toplamaKapsaminiDenetle(db, k, id);
   return toplamaAyrintisi(db, id);
 }
 // Teslim yeri istasyon olan liste, istasyonu kişinin kapsamındaysa görünür ve işlenir; teslim yeri istasyon olmayan liste kapsamsızdır.
-async function toplamaKapsaminiDenetle(db: Db, kisiId: number, toplamaId: number): Promise<void> {
-  await istasyonKapsaminiDenetle(db, kisiId, (await sorgular.toplamaHedefi(db, toplamaId))?.istasyonId ?? null);
+async function toplamaKapsaminiDenetle(db: Db, k: IstekKisisi, toplamaId: number): Promise<void> {
+  await istekKapsaminiDenetle(db, k, (await sorgular.toplamaHedefi(db, toplamaId))?.istasyonId ?? null);
 }
 export async function toplamaAyrintisi(db: Db, id: number): Promise<ToplamaAyrintiCevabi> {
   const t = await sorgular.toplamaBul(db, id);
@@ -116,8 +116,8 @@ export async function toplamaAyrintisi(db: Db, id: number): Promise<ToplamaAyrin
     })),
   };
 }
-export async function toplamaListesi(db: Db, kisiId: number, s: ToplamalarListesi): Promise<SayfaliListe<ToplamaOzeti>> {
-  const istasyonlar = await istasyonKapsamiIdleri(db, await kapsamOku(db, kisiId));
+export async function toplamaListesi(db: Db, k: IstekKisisi, s: ToplamalarListesi): Promise<SayfaliListe<ToplamaOzeti>> {
+  const istasyonlar = await istekIstasyonlari(db, k);
   const l = await sayfaliListe(s, { say: () => sorgular.toplamaSay(db, s.durum, istasyonlar), satirlar: (d) => sorgular.toplamalar(db, s.durum, s, d, istasyonlar) });
   const kisiler = await kisiAdlari(db, [...new Set(l.satirlar.flatMap((t) => (t.kapatanKisiId === null ? [t.kisiId] : [t.kisiId, t.kapatanKisiId])))]);
   return {
@@ -127,10 +127,11 @@ export async function toplamaListesi(db: Db, kisiId: number, s: ToplamalarListes
 }
 // Adım toplanınca hedefli listede mal o gözden hedefe taşınır, hedefsiz listede gözden sevk çıkışı yazılır. Miktar kısmi olabilir
 // (STK-H2). Liste sürümü artar, iki kişi aynı adımı toplayamaz.
-export async function adimTopla(db: Db, kisiId: number, toplamaId: number, adimId: number, g: { surum: number; miktar?: string | undefined; eksiOnay?: boolean | undefined }): Promise<ToplamaAyrintiCevabi> {
+export async function adimTopla(db: Db, k: IstekKisisi, toplamaId: number, adimId: number, g: { surum: number; miktar?: string | undefined; eksiOnay?: boolean | undefined }): Promise<ToplamaAyrintiCevabi> {
+  const kisiId = k.id;
   const t = await sorgular.toplamaBul(db, toplamaId, true);
   if (!t) throw bulunamadi('Toplama listesi bulunamadı.');
-  await toplamaKapsaminiDenetle(db, kisiId, toplamaId);
+  await toplamaKapsaminiDenetle(db, k, toplamaId);
   if (t.durum !== 'topluyor') throw cakisma('Liste kapandı; adım toplanamaz.');
   await surumluGuncelle({ guncelle: () => sorgular.toplamaSurumu(db, toplamaId, g.surum), varMi: () => sorgular.toplamaVarMi(db, toplamaId), bulunamadiIletisi: 'Toplama listesi bulunamadı.' });
   const a = await sorgular.adimBul(db, toplamaId, adimId);
@@ -158,9 +159,10 @@ export async function adimTopla(db: Db, kisiId: number, toplamaId: number, adimI
 // ST4 a: listeyi açan ya da `stok.toplama` işlemi olan başka biri kapatır (yetki uçta); kapatan kişi listede tutulur.
 // Biten listede toplanan, bağlı isteklere dağıtılır ve karşılanan istek teslim olur (STK-H4); karşılanmayan istek listeden çıkar,
 // açık kalır. İptal edilen listenin istekleri listeden çıkar.
-export async function toplamaKapat(db: Db, kisiId: number, id: number, g: { surum: number; durum: 'bitti' | 'iptal' }): Promise<ToplamaAyrintiCevabi> {
+export async function toplamaKapat(db: Db, k: IstekKisisi, id: number, g: { surum: number; durum: 'bitti' | 'iptal' }): Promise<ToplamaAyrintiCevabi> {
+  const kisiId = k.id;
   const t = await sorgular.toplamaBul(db, id, true);
-  if (t) await toplamaKapsaminiDenetle(db, kisiId, id);
+  if (t) await toplamaKapsaminiDenetle(db, k, id);
   if (t && t.durum !== 'topluyor') throw cakisma('Liste zaten kapalı.');
   await surumluGuncelle({ guncelle: () => sorgular.toplamaKapat(db, id, g.surum, g.durum, kisiId), varMi: () => sorgular.toplamaVarMi(db, id), bulunamadiIletisi: 'Toplama listesi bulunamadı.' });
   const acik = (await sorgular.toplamaIstekleri(db, id, true)).filter((i) => ISTEK_GECIS_KAYNAKLARI.teslim.includes(i.durum));

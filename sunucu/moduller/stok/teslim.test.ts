@@ -143,6 +143,10 @@ describe('stok: malzeme · teslim (gerçek PostgreSQL)', () => {
     for (const rol of ['depo', 'operator', 'kalite', 'sevkiyat']) await kisiEkle(rol, rol);
     await kisiEkle('operator_kisitli', 'operator');
     await kisiEkle('depo_kisitli', 'depo');
+    // 3094 a: yalnız toplama izni olan rol; Stok transferi izni olmadığı için istek ve toplama listelerinde kapsamla süzülür.
+    const toplayici = (await ortam.sahip.tek<{ id: number }>("INSERT INTO rol (kod, ad) VALUES ('test_toplayici', 'Deneme toplayıcı') RETURNING id"))!.id;
+    await ortam.sahip.sorgu("INSERT INTO rol_islemi (rol_id, islem) VALUES ($1, 'stok.toplama')", [toplayici]);
+    await kisiEkle('toplayici_kisitli', 'test_toplayici');
   });
   after(async () => { await ortam?.kaldir(); });
 
@@ -1934,78 +1938,83 @@ describe('stok: malzeme · teslim (gerçek PostgreSQL)', () => {
     assert.deepEqual(kayit.map((x) => [Number(x.m), x.n]), [[4, 'Emir iptal edildi']], 'kaldırma defterde nedeniyle durur');
     assert.equal((await o().vt.sorgu('SELECT 1 FROM stok_emir_rezerve_istegi WHERE uretim_emri_id = $1', [acil])).length, 0, 'bekleme isteği de kalkar');
   });
-  // Kart #436 (UYUM-BORCU 35): iş merkezine bağlı istasyonun isteği ve hazırlık listesi kişinin kapsamıyla sınırlıdır; sınırsız kapsam hepsini görür.
+  // Kart #436 (UYUM-BORCU 35): iş merkezine bağlı istasyonun isteği ve hazırlık listesi kişinin kapsamıyla sınırlıdır.
+  // 3094 a: Stok transferi izni olan kişi (depocu) bu listelerde kapsamla süzülmez; yalnız toplama izniyle gören süzülür.
   async function kapsamKur() {
     const a = await istasyon();
     const b = await istasyon();
-    await o().sahip.sorgu('INSERT INTO kisi_is_merkezi (kisi_id, is_merkezi_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [kisiler.get('depo_kisitli'), a.isMerkeziId]);
+    for (const kim of ['depo_kisitli', 'toplayici_kisitli']) {
+      await o().sahip.sorgu('INSERT INTO kisi_is_merkezi (kisi_id, is_merkezi_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [kisiler.get(kim), a.isMerkeziId]);
+    }
     const h = await kart('hammadde');
     await malKabul(h, '50');
-    const ac = async (istasyonId: number | null) => malzemeIstegiCevabi.parse((await istek('operator', 'POST', '/stok/malzeme-istekleri/ac', {
-      malzemeId: h, miktar: '2', istasyonId, not: null, kaynakKimligi: randomUUID(),
+    const ac = async (istasyonId: number | null, kaynakIstasyonId?: number) => malzemeIstegiCevabi.parse((await istek('operator', 'POST', '/stok/malzeme-istekleri/ac', {
+      malzemeId: h, miktar: '2', istasyonId, not: null, kaynakKimligi: randomUUID(), ...(kaynakIstasyonId === undefined ? {} : { kaynakIstasyonId }),
     })).govde).istek;
-    return { a, b, h, ia: await ac(a.id), ib: await ac(b.id), isiz: await ac(null) };
+    return { a, b, h, ia: await ac(a.id), ib: await ac(b.id), isiz: await ac(null), istasyondan: await ac(a.id, b.id) };
   }
   const idler = (g: unknown): number[] => (g as { satirlar: { id: number }[] }).satirlar.map((x) => x.id);
+  const sayac = async (kim: string) => ((await istek<{ hazirlik: number | null }>(kim, 'GET', '/stok/menu-sayaclari')).govde.hazirlik) ?? 0;
 
-  test('STK-K1 istek listesi ve tekil okuma kişinin kapsamıyla süzülür; istasyonsuz istek süzülmez; sınırsız kapsam hepsini görür', async () => {
-    const { ia, ib, isiz } = await kapsamKur();
-    const kisitli = idler((await istek('depo_kisitli', 'GET', '/stok/malzeme-istekleri')).govde);
-    assert.ok(kisitli.includes(ia.id) && kisitli.includes(isiz.id), 'kapsam içi ve istasyonsuz istek görünür');
-    assert.ok(!kisitli.includes(ib.id), 'kapsam dışı istek listede yok');
-    const hepsi = idler((await istek('depo', 'GET', '/stok/malzeme-istekleri')).govde);
-    assert.ok([ia.id, ib.id, isiz.id].every((x) => hepsi.includes(x)), 'sınırsız kapsam hepsini görür');
-    assert.equal((await istek('depo_kisitli', 'GET', `/stok/malzeme-istekleri/${ia.id}`)).durum, 200);
-    const red = await istek<Hata>('depo_kisitli', 'GET', `/stok/malzeme-istekleri/${ib.id}`);
+  test('STK-K1 istek listesi: iş merkezi seçili depocu kapsam dışı istasyonun isteğini de görür ve sayar; yalnız toplama izniyle gören süzülür', async () => {
+    const { ia, ib, isiz, istasyondan } = await kapsamKur();
+    const depocu = idler((await istek('depo_kisitli', 'GET', '/stok/malzeme-istekleri')).govde);
+    assert.ok([ia.id, ib.id, isiz.id].every((x) => depocu.includes(x)), 'depocu kapsam dışı istasyonun isteğini görür (3094 a)');
+    assert.ok(!depocu.includes(istasyondan.id), 'istasyondan istenen istek depoya düşmez (soru 96 a)');
+    assert.equal((await istek('depo_kisitli', 'GET', `/stok/malzeme-istekleri/${ib.id}`)).durum, 200);
+    assert.equal(await sayac('depo_kisitli'), await sayac('depo'), 'menü sayacı da süzülmez');
+    const bekleyen = async (kim: string) => (await istek<{ teslimBekleyenIstek: number | null }>(kim, 'GET', '/stok/is-kutusu')).govde.teslimBekleyenIstek;
+    assert.equal(await bekleyen('depo_kisitli'), await bekleyen('depo'), 'iş kutusu kapsam dışı istasyonun teslim bekleyen isteğini de sayar');
+    const toplayici = idler((await istek('toplayici_kisitli', 'GET', '/stok/malzeme-istekleri')).govde);
+    assert.ok(toplayici.includes(ia.id) && toplayici.includes(isiz.id), 'kapsam içi ve istasyonsuz istek görünür');
+    assert.ok(!toplayici.includes(ib.id), 'Stok transferi izni olmayan kişide kapsam dışı istek listede yok');
+    const red = await istek<Hata>('toplayici_kisitli', 'GET', `/stok/malzeme-istekleri/${ib.id}`);
     assert.equal(red.durum, 403, JSON.stringify(red.govde));
-    assert.equal((await istek('depo_kisitli', 'GET', `/stok/malzeme-istekleri/${isiz.id}`)).durum, 200);
-    assert.equal((await istek('depo', 'GET', `/stok/malzeme-istekleri/${ib.id}`)).durum, 200);
-    const sayac = async (kim: string) => ((await istek<{ hazirlik: number | null }>(kim, 'GET', '/stok/menu-sayaclari')).govde.hazirlik) ?? 0;
-    assert.ok((await sayac('depo')) - (await sayac('depo_kisitli')) >= 1, 'sayaç da kapsamla sınırlı');
+    assert.equal((await istek('toplayici_kisitli', 'GET', `/stok/malzeme-istekleri/${isiz.id}`)).durum, 200);
   });
 
-  test('STK-K2 hazırla, teslim et ve iptal et: kapsam dışı istek 403 ve değişmez; kapsam içi geçer; sınırsız kapsam geçer', async () => {
-    const { ia, ib } = await kapsamKur();
+  test('STK-K2 hazırla, teslim et ve iptal et: iş merkezi seçili depocu kapsam dışı istasyonun isteğini işler; Stok transferi izni olmayan işleyemez', async () => {
+    const { ib } = await kapsamKur();
     const gec = (kim: string, id: number, eylem: string, surum: number, g: Record<string, unknown> = {}) =>
       istek<MalzemeIstegiCevabi & Hata>(kim, 'POST', `/stok/malzeme-istekleri/${id}/${eylem}`, { surum, ...g });
     for (const [eylem, g] of [['hazirla', {}], ['teslim-et', { karsilanan: '2' }], ['iptal-et', {}]] as const) {
-      const red = await gec('depo_kisitli', ib.id, eylem, ib.surum, g);
+      const red = await gec('toplayici_kisitli', ib.id, eylem, ib.surum, g);
       assert.equal(red.durum, 403, `${eylem}: ${JSON.stringify(red.govde)}`);
     }
     assert.equal(malzemeIstegiCevabi.parse((await istek('depo', 'GET', `/stok/malzeme-istekleri/${ib.id}`)).govde).istek.durum, 'acik', 'reddedilen komut yazmadı');
-    const hazir = await gec('depo_kisitli', ia.id, 'hazirla', ia.surum);
+    const hazir = await gec('depo_kisitli', ib.id, 'hazirla', ib.surum);
     assert.equal(hazir.durum, 200, JSON.stringify(hazir.govde));
-    assert.equal((await gec('depo_kisitli', ia.id, 'iptal-et', hazir.govde.istek.surum)).govde.istek.durum, 'iptal', 'kapsam içi iptal');
-    assert.equal((await gec('depo', ib.id, 'hazirla', ib.surum)).durum, 200, 'sınırsız kapsam');
+    assert.equal((await gec('depo_kisitli', ib.id, 'iptal-et', hazir.govde.istek.surum)).govde.istek.durum, 'iptal', 'depocu kapsam dışı isteği iptal eder');
+    const { ib: teslimEdilecek } = await kapsamKur();
+    const teslim = await gec('depo_kisitli', teslimEdilecek.id, 'teslim-et', teslimEdilecek.surum, { karsilanan: '2' });
+    assert.equal(teslim.durum, 200, JSON.stringify(teslim.govde));
+    assert.equal(teslim.govde.istek.durum, 'teslim', 'depocu kapsam dışı isteği teslim eder');
   });
 
-  test('STK-K3 hazırlık listesi: kapsam dışı istasyona liste açılamaz, görünmez, toplanamaz ve kapatılamaz; kapsam içi ve istasyonsuz geçer; sınırsız kapsam hepsini görür', async () => {
+  test('STK-K3 hazırlık listesi: depocu kapsam dışı istasyona liste açar, görür ve kapatır; yalnız toplama izniyle gören kapsam dışını göremez, toplayamaz, kapatamaz', async () => {
     const { a, b, h, ia, ib } = await kapsamKur();
     const liste = (kim: string, g: Record<string, unknown>) => istek<ToplamaAyrintiCevabi & Hata>(kim, 'POST', '/stok/toplamalar', { ad: 'Kapsam hazırlığı', ...g });
-    const redIstek = await liste('depo_kisitli', { istekIdler: [ib.id], hedef: { istasyonId: b.id } });
-    assert.equal(redIstek.durum, 403, 'kapsam dışı isteği listeye alamaz');
-    assert.equal((await liste('depo_kisitli', { kalemler: [{ malzemeId: h, miktar: '1' }], hedef: { istasyonId: b.id } })).durum, 403, 'kapsam dışı teslim yeri');
-    const tb = await liste('depo', { istekIdler: [ib.id], hedef: { istasyonId: b.id } });
-    assert.equal(tb.durum, 200, JSON.stringify(tb.govde));
+    const tb = await liste('depo_kisitli', { istekIdler: [ib.id], hedef: { istasyonId: b.id } });
+    assert.equal(tb.durum, 200, `depocu kapsam dışı isteği listeye alır: ${JSON.stringify(tb.govde)}`);
+    assert.equal((await liste('toplayici_kisitli', { kalemler: [{ malzemeId: h, miktar: '1' }], hedef: { istasyonId: b.id } })).durum, 403, 'kapsam dışı teslim yeri');
     const ta = await liste('depo_kisitli', { istekIdler: [ia.id], hedef: { istasyonId: a.id } });
     assert.equal(ta.durum, 200, JSON.stringify(ta.govde));
-    const ts = await liste('depo_kisitli', { kalemler: [{ malzemeId: h, miktar: '1' }] });
+    const ts = await liste('toplayici_kisitli', { kalemler: [{ malzemeId: h, miktar: '1' }] });
     assert.equal(ts.durum, 200, JSON.stringify(ts.govde));
-    const kisitli = idler((await istek('depo_kisitli', 'GET', '/stok/toplamalar')).govde);
-    assert.ok(kisitli.includes(ta.govde.toplama.id) && kisitli.includes(ts.govde.toplama.id), 'kapsam içi ve teslim yeri istasyon olmayan liste görünür');
-    assert.ok(!kisitli.includes(tb.govde.toplama.id), 'kapsam dışı liste yok');
-    const hepsi = idler((await istek('depo', 'GET', '/stok/toplamalar')).govde);
-    assert.ok([ta, tb, ts].every((t) => hepsi.includes(t.govde.toplama.id)), 'sınırsız kapsam hepsini görür');
-    assert.equal((await istek('depo_kisitli', 'GET', `/stok/toplamalar/${ta.govde.toplama.id}`)).durum, 200);
-    assert.equal((await istek('depo_kisitli', 'GET', `/stok/toplamalar/${tb.govde.toplama.id}`)).durum, 403);
-    assert.equal((await istek('depo', 'GET', `/stok/toplamalar/${tb.govde.toplama.id}`)).durum, 200);
+    const toplayici = idler((await istek('toplayici_kisitli', 'GET', '/stok/toplamalar')).govde);
+    assert.ok(toplayici.includes(ta.govde.toplama.id) && toplayici.includes(ts.govde.toplama.id), 'kapsam içi ve teslim yeri istasyon olmayan liste görünür');
+    assert.ok(!toplayici.includes(tb.govde.toplama.id), 'kapsam dışı liste yok');
+    const depocu = idler((await istek('depo_kisitli', 'GET', '/stok/toplamalar')).govde);
+    assert.ok([ta, tb, ts].every((t) => depocu.includes(t.govde.toplama.id)), 'depocu hepsini görür');
+    assert.equal((await istek('toplayici_kisitli', 'GET', `/stok/toplamalar/${tb.govde.toplama.id}`)).durum, 403);
+    assert.equal((await istek('depo_kisitli', 'GET', `/stok/toplamalar/${tb.govde.toplama.id}`)).durum, 200);
     const adimB = toplamaAyrintiCevabi.parse(tb.govde).adimlar[0]!;
     const topla = (kim: string, t: ToplamaAyrintiCevabi, adimId: number) =>
       istek<Hata>(kim, 'POST', `/stok/toplamalar/${t.toplama.id}/adimlar/${adimId}/topla`, { surum: t.toplama.surum });
-    assert.equal((await topla('depo_kisitli', tb.govde, adimB.id)).durum, 403, 'kapsam dışı adım toplanmaz');
-    assert.equal((await istek('depo_kisitli', 'POST', `/stok/toplamalar/${tb.govde.toplama.id}/kapat`, { surum: tb.govde.toplama.surum, durum: 'iptal' })).durum, 403, 'kapsam dışı liste kapatılamaz');
-    assert.equal((await topla('depo_kisitli', ta.govde, toplamaAyrintiCevabi.parse(ta.govde).adimlar[0]!.id)).durum, 200, 'kapsam içi adım toplanır');
-    assert.equal((await istek('depo', 'POST', `/stok/toplamalar/${tb.govde.toplama.id}/kapat`, { surum: tb.govde.toplama.surum, durum: 'iptal' })).durum, 200, 'sınırsız kapsam kapatır');
+    assert.equal((await topla('toplayici_kisitli', tb.govde, adimB.id)).durum, 403, 'kapsam dışı adım toplanmaz');
+    assert.equal((await istek('toplayici_kisitli', 'POST', `/stok/toplamalar/${tb.govde.toplama.id}/kapat`, { surum: tb.govde.toplama.surum, durum: 'iptal' })).durum, 403, 'kapsam dışı liste kapatılamaz');
+    assert.equal((await topla('toplayici_kisitli', ta.govde, toplamaAyrintiCevabi.parse(ta.govde).adimlar[0]!.id)).durum, 200, 'kapsam içi adım toplanır');
+    assert.equal((await istek('depo_kisitli', 'POST', `/stok/toplamalar/${tb.govde.toplama.id}/kapat`, { surum: tb.govde.toplama.surum, durum: 'iptal' })).durum, 200, 'depocu kapsam dışı listeyi kapatır');
   });
   test('numune teslimi (karar 115 a, 125 a): adımın bir adetlik parçası istasyondan "Kalite numune" kutusuna bırakılır; yeniden gönderim çift kayıt açmaz', async () => {
     const [ym, hm] = [await kart('yarimamul'), await kart('hammadde')];

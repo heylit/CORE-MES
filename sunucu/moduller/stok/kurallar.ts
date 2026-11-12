@@ -735,6 +735,9 @@ export function konumTurDegisimEngeli(k: { kod: string; tur: KonumTuru; haritaGo
 // ---- Malzeme · Teslim (kart #1208) ------------------------------------------------------------------------------------------
 // STK-T1: istek açılışta depo konumlarındaki stok (serbest ve statülü) istenenden azsa "stok yok" durumunda açılır; depo ve satın
 // alma görür, istek yine karşılanabilir.
+// 3094 a: depo bütün istasyonlara taşır; Stok transferi izni olan kişi istek ve toplama listelerinde iş merkezi kapsamıyla süzülmez.
+// Yalnız toplama izniyle gören süzülür. Öteki ekranlar kapsamı aynen uygular.
+export const istekKapsamindanMuafMi = (islemler: readonly string[]): boolean => islemler.includes('stok.transfer');
 export const istekAcilisDurumu = (depodaki: string, istenen: string): 'acik' | 'stok_yok' => (binde(depodaki) >= binde(istenen) ? 'acik' : 'stok_yok');
 // STK-T2: teslim yalnız yoldayken kapanır (teslim alınır, reddedilir ya da iptal edilir); kapanan değişmez.
 export function teslimKapanisEngeli(durum: TeslimDurumu): string | null {
