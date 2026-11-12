@@ -18,6 +18,11 @@ test('liste: açık emirler, sayılı durum çipleri, "Şu an" sütunu ve Bitenl
   const no = tablo.getByRole('link', { name: /^MM-ORN-/ }).first();
   const [nk, hk] = await Promise.all([no.boundingBox(), no.locator('xpath=ancestor::td[1]').boundingBox()]);
   expect(nk!.x + nk!.width).toBeLessThanOrEqual(hk!.x + hk!.width + 1);
+  // Telefonda durum çipleri tek satırdadır, sığmayan yana kayar (3051 b); geniş ekranda alt satıra geçebilir.
+  if ((page.viewportSize()?.width ?? 1280) < 768) {
+    const ustler = await page.getByRole('group', { name: 'Duruma göre süz' }).getByRole('button').evaluateAll((l) => l.map((d) => Math.round(d.getBoundingClientRect().top)));
+    expect(new Set(ustler).size, 'çipler tek satırda').toBe(1);
+  }
 
   // Çip sayısı süzülen satır sayısıdır; süzgeç istemcidedir, sunucuya yeni okuma gitmez.
   const cipler = page.getByRole('group', { name: 'Duruma göre süz' });
