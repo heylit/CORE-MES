@@ -23,10 +23,19 @@ const SUTUNLAR: Sutun<MalKabulSatirOzeti>[] = [
   { anahtar: 'malzeme', baslik: 'Malzeme', sabit: 'sol', kes: true, csv: (s) => s.malzemeAd ?? '', hucre: (s) => (
     <Link to={`/stok/malzemeler/${s.malzemeId}`} onClick={(e) => e.stopPropagation()}>{s.malzemeAd ?? `Kart ${s.malzemeId}`}</Link>
   ) },
+  // İrsaliye PDF'i aranmadan görülsün diye sütun malzemenin hemen yanında, belge simge değil yazılı bağlantı ve
+  // numaradan önce (uzun numarada telefonda kaydırmadan görünsün); miktar hemen ardından
+  // gelir ki 1280'de yapışkan Etiket sütununun altında kalmasın (3152).
+  { anahtar: 'irsaliye', baslik: 'İrsaliye', csv: (s) => s.irsaliyeNo ?? '', hucre: (s) => (
+    <span className="tc-stok-irsaliye-eylem">{s.irsaliyeBelgeleri.map((b, i) => (
+      <a key={b.id} className="tc-stok-bag" href={irsaliyeAdresi(s.malKabulId, b.id)} target="_blank" rel="noopener" aria-label={`${b.ad} belgesini aç`} title={b.ad}
+        onClick={(e) => e.stopPropagation()}><Simge ad="file" boyut="k" />{s.irsaliyeBelgeleri.length > 1 ? `PDF ${i + 1}` : 'PDF'}</a>
+    ))}<span className="mono">{s.irsaliyeNo}</span></span>
+  ) },
+  { anahtar: 'miktar', baslik: 'Kabul edilen', hizala: 'sag', hucre: (s) => birimli(s.sayilanMiktar, s.birim) },
   { anahtar: 'kod', baslik: 'Stok kodu', mono: true, hucre: (s) => s.malzemeKod },
   { anahtar: 'zaman', baslik: 'Kabul zamanı', sirala: true, csv: (s) => s.zaman, hucre: (s) => zamanMetni(s.zaman) },
   { anahtar: 'kisi', baslik: 'Alan', kes: true, hucre: (s) => s.kisiAd },
-  { anahtar: 'miktar', baslik: 'Kabul edilen', hizala: 'sag', hucre: (s) => birimli(s.sayilanMiktar, s.birim) },
   { anahtar: 'lot', baslik: 'Lot', mono: true, csv: (s) => s.lotNo ?? '', hucre: (s) => (s.partiId === null ? null : s.lotNo) },
   { anahtar: 'tedarikciParti', baslik: 'Tedarikçi partisi', mono: true, hucre: (s) => s.tedarikciPartiNo },
   { anahtar: 'belgeler', baslik: 'Belgeler', csv: false, hucre: (s) => (s.partiId === null || s.partiBelgeleri.length === 0 ? null : <PartiBelgeleri partiId={s.partiId} belgeler={s.partiBelgeleri} />) },
@@ -48,12 +57,6 @@ const SUTUNLAR: Sutun<MalKabulSatirOzeti>[] = [
     <Link to={`/stok/mal-kabul/${s.malKabulId}`} onClick={(e) => e.stopPropagation()}>{s.belgeNo}</Link>
   ) },
   { anahtar: 'tur', baslik: 'Tür', hucre: (s) => MAL_KABUL_TURU[s.tur] },
-  // 3063: irsaliye belgesi varsa no'nun yanında belge simgesi; tıklayınca PDF açılır.
-  { anahtar: 'irsaliye', baslik: 'İrsaliye', mono: true, csv: (s) => s.irsaliyeNo ?? '', hucre: (s) => (
-    <span className="tc-stok-irsaliye-hucre">{s.irsaliyeNo}{s.irsaliyeBelgeleri.map((b) => (
-      <a key={b.id} href={irsaliyeAdresi(s.malKabulId, b.id)} target="_blank" rel="noopener" aria-label={`${b.ad} belgesini aç`} title={b.ad}><Simge ad="file" boyut="k" /></a>
-    ))}</span>
-  ) },
   { anahtar: 'siparis', baslik: 'Sipariş', mono: true, hucre: (s) => s.siparisNo },
   { anahtar: 'tedarikci', baslik: 'Tedarikçi', kes: true, hucre: (s) => s.tedarikciAdi },
   { anahtar: 'fason', baslik: 'Fasondan dönüş', kes: true, hucre: (s) => (s.fasonGidenAd ? `Giden ${s.fasonGidenAd}` : null) },

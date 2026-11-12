@@ -53,6 +53,26 @@ describe('Mal kabulü yapılanlar (2890)', () => {
     expect(s.getByRole('link', { name: 'LT-000012 etiketi' }).getAttribute('href')).toBe('/etiket-merkezi?tur=lot&id=12');
   });
 
+  it('3152: irsaliye PDF\'i malzemenin yanında yazılı bağlantıdır; belgesiz satırda bağlantı yok, iki belge numaralanır', async () => {
+    sunucuKur(DEPOCU, { 'GET /stok/mal-kabul-satirlari': () => json(200, cevap([
+      { ...SATIR, irsaliyeBelgeleri: [{ id: 31, ad: 'İrsaliye IRS-1' }] },
+      { ...SATIR, id: 502, malKabulId: 78, malzemeAd: 'Deneme boru', irsaliyeNo: 'IRS-2', irsaliyeBelgeleri: [] },
+      { ...SATIR, id: 503, malKabulId: 79, malzemeAd: 'Deneme mil', irsaliyeNo: 'IRS-3', irsaliyeBelgeleri: [{ id: 41, ad: 'İrsaliye IRS-3' }, { id: 42, ad: 'İrsaliye IRS-3 ek' }] },
+    ])) });
+    goster();
+    const tablo = within(await screen.findByRole('table', { name: 'Mal kabulü yapılanlar' }));
+    expect(tablo.getAllByRole('columnheader').slice(0, 3).map((b) => b.textContent)).toEqual(['Malzeme', 'İrsaliye', 'Kabul edilen']);
+    const bir = within((await tablo.findByText('Deneme sac')).closest('tr')!);
+    const pdf = bir.getByRole('link', { name: 'İrsaliye IRS-1 belgesini aç' });
+    expect(pdf.textContent).toBe('PDF');
+    expect(pdf.getAttribute('href')).toBe('/api/stok/mal-kabuller/77/irsaliyeler/31');
+    expect(pdf.getAttribute('target')).toBe('_blank');
+    // Uzun irsaliye numarasında telefonda kaydırmadan görünsün diye bağlantı numaradan önce gelir.
+    expect(pdf.compareDocumentPosition(bir.getByText('IRS-1')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(within(tablo.getByText('Deneme boru').closest('tr')!).queryByRole('link', { name: /belgesini aç/ })).toBeNull();
+    expect(within(tablo.getByText('Deneme mil').closest('tr')!).getAllByRole('link', { name: /belgesini aç/ }).map((a) => a.textContent)).toEqual(['PDF 1', 'PDF 2']);
+  });
+
   it('sipariş ve tedarikçi gelmezse yazılmaz; lotsuz satırda etiket düğmesi yok', async () => {
     sunucuKur(OKUYUCU, { 'GET /stok/mal-kabul-satirlari': () => json(200, cevap([{ ...SATIR, siparisNo: null, tedarikciAdi: null, partiId: null, lotNo: null, yerler: [], ilkKonumKod: null }])) });
     goster();
