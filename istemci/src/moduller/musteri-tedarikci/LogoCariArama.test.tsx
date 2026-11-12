@@ -70,6 +70,22 @@ describe('Logo\'dan cari (2118)', () => {
     expect(al?.govde).toMatchObject({ logoKodu: 'LG.001', kod: 'LG.001', ad: 'Deneme Logo Cari', tur: 'tedarikci', vergiNo: '1000000001' });
   });
 
+  it('yeni firma formunda Ara ve Enter firma formunu göndermez; pencere açık kalır', async () => {
+    const istekler = sunucuKur({ durum: 'tamam', ileti: null, cariler: [YENI] });
+    const kapat = vi.fn();
+    const kaydedildi = vi.fn();
+    ciz(<FirmaFormu firma={null} kapat={kapat} kaydedildi={kaydedildi} />);
+    // Ad dolu: firma formu gönderilseydi kayıt isteği giderdi.
+    fireEvent.change(document.querySelector('input[name="ad"]') as HTMLInputElement, { target: { value: 'Deneme Dolu Ad' } });
+    fireEvent.click(screen.getByRole('button', { name: "Logo'dan ara" }));
+    await ara('Deneme');
+    expect(await screen.findByText('LG.001')).toBeTruthy();
+    fireEvent.submit(screen.getByLabelText(/Logo'da ara/));
+    await waitFor(() => expect(istekler.filter((i) => i.yol.startsWith('/musteri-tedarikci/logo-cari/ara')).length).toBeGreaterThan(0));
+    expect(istekler.filter((i) => i.yontem === 'POST')).toEqual([]);
+    expect([kapat.mock.calls.length, kaydedildi.mock.calls.length]).toEqual([0, 0]);
+  });
+
   it('eşleşen firma varsa yeni kart yerine o firmaya bağlanır (2118-2 a)', async () => {
     const istekler = sunucuKur({ durum: 'tamam', ileti: null, cariler: [ESLESEN] });
     const baglandi = vi.fn();

@@ -47,8 +47,10 @@ export function LogoCariArama({ hedef, formaAl, baglandi }: Ozellikler) {
     },
     onError: (e) => bildir('hata', hataIletisi(e, 'Bağlanamadı.')),
   });
+  // Arama formu yeni firma formunun içinde durur; React'te submit olayı üst forma da kabarır ve firma formunu gönderirdi.
   const gonder = (o: FormEvent) => {
     o.preventDefault();
+    o.stopPropagation();
     const q = metin.trim();
     if (q.length >= EN_AZ) arananYaz(q);
   };
