@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import type {
   AZAMI_HAZIRLIK_EMRI as SINIR, AdimliEmirOzeti, AdimliListeCevabi, HazirlikCevabi, HazirlikMaddesi, HazirlikOzetiCevabi,
 } from '#paylasilan/sozlesme/uretim-emirleri.ts';
@@ -8,6 +8,7 @@ import { DurumKutusu, Girdi, Kart, Rozet, Secim, type RozetTonu } from '../../or
 import { api } from '../../ortak/veri/api.ts';
 import { useOturum } from '../../ortak/veri/oturum.ts';
 import { EMIR_DURUMU, HAZIRLIK_MADDE_BILGISI, hazirlikHucreHali } from '../uretim-emirleri/disari.ts';
+import { baslamaDurumu, type BaslamaDurumu } from './yeni/operator/HazirlikListesi.tsx';
 import './hazirlik-matrisi.css';
 
 // 2227e: bütün açık emirlerin hazırlığı tek tabloda; satır üretim emri × operasyon (iş emri), sütun hazırlık maddesi. Veri emir
@@ -18,7 +19,7 @@ const AZAMI_HAZIRLIK_EMRI: typeof SINIR = 100;
 const ACIK = new Set(['taslak', 'planli', 'basladi']);
 
 type Hal = HazirlikCevabi['maddeler'][number]['durum'];
-type Durum = 'durur' | 'uyari' | 'hazir';
+type Durum = BaslamaDurumu;
 export interface MatrisSatiri {
   anahtar: string;
   emir: AdimliEmirOzeti;
@@ -47,8 +48,7 @@ export function matrisSatirlari(emirler: readonly AdimliEmirOzeti[], hazirlik: R
     const kaynak = v.isEmirleri.length === 0 ? [null] : acik;
     for (const i of kaynak) {
       const hal = new Map(v.maddeler.map((m) => [m.madde, m.isEmriDuzeyi && i !== null ? hazirlikHucreHali(v, { madde: m.madde, isEmriId: i.isEmriId }) : m.durum] as const));
-      const eksik = [...hal].filter(([, h]) => h === 'eksik').map(([m]) => m);
-      const durum: Durum = eksik.some((m) => !HAZIRLIK_MADDE_BILGISI[m].uyarir) ? 'durur' : eksik.length > 0 ? 'uyari' : 'hazir';
+      const durum: Durum = baslamaDurumu([...hal].map(([m, h]) => ({ hal: h, uyarir: HAZIRLIK_MADDE_BILGISI[m].uyarir })));
       satirlar.push({ anahtar: `${String(emir.id)}-${String(i?.isEmriId ?? 0)}`, emir, isEmri: i && { isEmriId: i.isEmriId, opNo: i.opNo, ad: i.ad }, hal, durum });
     }
   }
@@ -79,7 +79,9 @@ export function HazirlikMatrisi() {
     },
   });
   const [suzgec, suzgecYaz] = useState<string>('hepsi');
-  const [ara, araYaz] = useState('');
+  // Hazırlık takip tablosu (3111) rozetten emrin numarasıyla açar.
+  const [arama] = useSearchParams();
+  const [ara, araYaz] = useState(() => arama.get('ara') ?? '');
   const tum = useMemo(() => (veri.data ? matrisSatirlari(veri.data.emirler, veri.data.hazirlik) : []), [veri.data]);
   const maddeler = useMemo(() => {
     const ilk = veri.data ? [...veri.data.hazirlik.values()][0] : undefined;

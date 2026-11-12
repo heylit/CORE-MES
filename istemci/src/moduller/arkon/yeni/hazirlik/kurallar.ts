@@ -344,3 +344,82 @@ export function planDisiEki(p: PlanliPaket | null | undefined): string {
   if (uyari === null) return '';
   return uyari.gorunmez ? ' · operatöre plan canlıya alınınca düşer' : ' · plan dışı: operatöre düşer, plansız başlatılabilir';
 }
+
+/* ── takip tablosu (3111) ── */
+// Emir başına adımlar operasyon sırasıyla. Payda emrin bütün iş emirleridir (hazırlık cevabı); paketi olmayan adım da satırdır.
+// Hazırlık okunmamışsa (bitmiş emir, okuma hatası) emir paketlerden kurulur. "Biten" yalnız tamamlanan adımdır.
+export type AdimDilimi = 'bitti' | 'calisiyor' | 'durdu' | 'sirada' | 'taslak' | 'yok';
+export interface TakipSatiri {
+  anahtar: string;
+  paket: Pkg | null;
+  sonuc: Result | null;
+  durum: PaketDurumu;
+  opNo: number | null;
+  sira: number;
+  ad: string;
+  bitti: boolean;
+}
+export interface TakipEmri { anahtar: string; no: string; urun: string; dilimler: AdimDilimi[]; biten: number; satirlar: TakipSatiri[] }
+export type TakipSuzgeci = 'acik' | 'yayinda' | 'uretimde' | 'taslak' | 'bitti' | 'hepsi';
+export const TAKIP_SUZGECLERI: readonly (readonly [TakipSuzgeci, string])[] = [
+  ['acik', 'Açık işler'], ['yayinda', 'Yayında'], ['uretimde', 'Üretimde'], ['taslak', 'Taslak ve onayda'], ['bitti', 'Bitenler'], ['hepsi', 'Hepsi'],
+];
+const SUZGEC_DURUMLARI: Readonly<Record<Exclude<TakipSuzgeci, 'hepsi'>, readonly PaketDurumu[]>> = {
+  acik: ['draft', 'review', 'published', 'production'], yayinda: ['published'], uretimde: ['production'], taslak: ['draft', 'review'], bitti: ['done'],
+};
+export const takipSuzgeciOku = (d: unknown): TakipSuzgeci => (TAKIP_SUZGECLERI.some(([k]) => k === d) ? d as TakipSuzgeci : 'acik');
+
+function dilim(durum: PaketDurumu, r: Pick<Result, 'state'> | null): AdimDilimi {
+  if (durum === 'done') return 'bitti';
+  if (r && (r.state === 'paused' || r.state === 'stopped')) return 'durdu';
+  if (durum === 'production') return 'calisiyor';
+  return durum === 'published' ? 'sirada' : 'taslak';
+}
+interface HazirlikAdimlari { isEmirleri: readonly { isEmriId: number; opNo: number; ad: string; bitti: boolean }[] }
+
+export function takipEmirleri(
+  gruplar: readonly { anahtar: string; paketler: readonly Pkg[] }[], sonuclar: Readonly<Record<string, Result>>,
+  hazirlik: ReadonlyMap<number, HazirlikAdimlari>, suz: TakipSuzgeci,
+): TakipEmri[] {
+  const l: TakipEmri[] = [];
+  for (const g of gruplar) {
+    const ilk = g.paketler[0];
+    if (!ilk) continue;
+    const emirId = ilk.tmi && Number.isSafeInteger(ilk.tmi.emirId) ? ilk.tmi.emirId : null;
+    const adimlar = emirId === null ? undefined : hazirlik.get(emirId)?.isEmirleri;
+    const paketSatiri = (p: Pkg, sira: number): TakipSatiri => {
+      const r = sonuclar[p.id] ?? null;
+      const durum = paketKartDurumu(p, r);
+      return { anahtar: p.id, paket: p, sonuc: r, durum, opNo: p.tmi?.opNo ?? null, sira, ad: p.op, bitti: durum === 'done' };
+    };
+    let satirlar: TakipSatiri[];
+    if (adimlar && adimlar.length) {
+      const kullanilan = new Set<string>();
+      satirlar = [...adimlar].sort((a, b) => a.opNo - b.opNo).flatMap((a, i): TakipSatiri[] => {
+        const ps = g.paketler.filter((p) => p.tmi?.isEmriId === a.isEmriId);
+        ps.forEach((p) => kullanilan.add(p.id));
+        if (!ps.length) return [{ anahtar: 'ie-' + String(a.isEmriId), paket: null, sonuc: null, durum: a.bitti ? 'done' : 'draft', opNo: a.opNo, sira: i + 1, ad: a.ad, bitti: a.bitti }];
+        return ps.map((p) => { const s = paketSatiri(p, i + 1); return a.bitti ? { ...s, bitti: true } : s; });
+      });
+      // Hazırlık cevabında olmayan paket (kol adımı, eski bağ) kaybolmasın: sona eklenir.
+      for (const p of g.paketler) if (!kullanilan.has(p.id)) satirlar.push(paketSatiri(p, satirlar.length + 1));
+    } else {
+      satirlar = g.paketler.map((p, i) => paketSatiri(p, i + 1));
+    }
+    const dilimler = satirlar.map((s) => (s.bitti ? 'bitti' : s.paket ? dilim(s.durum, s.sonuc) : 'yok'));
+    // Paketsiz adım emrin bağlamıdır: "Hepsi"de ve bitmemişse "Açık işler"de görünür; yalnız paketsiz kalan emir listelenmez.
+    const satir = satirlar.filter((s) => (suz === 'hepsi' ? true : s.paket ? SUZGEC_DURUMLARI[suz].includes(s.durum) : suz === 'acik' && !s.bitti));
+    if (!satir.some((s) => s.paket)) continue;
+    l.push({
+      anahtar: g.anahtar, no: ilk.no, urun: [ilk.part || 'Adsız parça', ilk.partNo].filter(Boolean).join(' · '),
+      dilimler, biten: dilimler.filter((d) => d === 'bitti').length, satirlar: satir,
+    });
+  }
+  return l;
+}
+// Geri çekmek bugünkü "Operatörden geri çek"tir: paket taslağa döner, kayıt ve operatör sonucu (sayım, ölçüm) durur.
+export const geriCekilebilir = (p: Pick<Pkg, 'status'>): boolean => p.status !== 'draft';
+// Başlamış iş: operatör başlatmış, bitirmemiş (ayar dahil). Pencere bunu ayrıca söyler.
+export const calisiyorMu = (r: Pick<Result, 'state'> | null | undefined): boolean => !!r && r.state !== 'queued' && r.state !== 'done';
+// Toplu geri çekme yalnız yayındaki ve başlamamış işte: başlamış iş fark edilmeden operatörün elinden alınmasın, tek tek çekilir.
+export const topluGeriCekilebilir = (p: Pick<Pkg, 'status'>, r: Pick<Result, 'state'> | null | undefined): boolean => p.status === 'published' && !calisiyorMu(r) && r?.state !== 'done';
