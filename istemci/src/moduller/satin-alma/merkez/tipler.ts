@@ -116,6 +116,8 @@ export interface RequestItem {
   /** Hizmet kaleminin bağları (2429): uygulanan parça ve fason adımı; yalnız okunur, kayıtta gönderilmez. */
   parca?: { no: number; kod: string | null; ad: string | null; revizyon?: string | null } | null;
   fason?: { emirNo: string | null; opNo: number | null; adim: string | null; firmaAdi: string | null } | null;
+  /** 3100: yaklaşık karşılık metni ("≈ 4 adet", "≈ 12,5 kg"); sunucu hesaplar, yalnız okunur, kayıtta gönderilmez. */
+  karsilik?: string | null;
 }
 
 export interface Rfq { supplierId: string; sentAt: DateStr; dueDate: DateStr }

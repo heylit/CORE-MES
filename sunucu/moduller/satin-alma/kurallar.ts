@@ -1079,6 +1079,17 @@ export function birimKarsiligi(miktar: string | null, birim: string, kart: { sto
   }
   return birimAdi(birim) === stok ? { miktar: ondalikCarp(miktar, kg), birim: 'kg' } : null;
 }
+// 3100: kg stoklu hammaddede (çubuk, levha, boru) birim ağırlık bir parçanın (boy, levha) ağırlığıdır; kg miktarın parça karşılığı ondan çıkar.
+// Ayrı kuraldır: stokBirimiBasinaKg kg stokta 1 kalır, çünkü birim fiyat ve proje maliyeti stok birimi başına kg'a dayanır. Ağırlık yoksa karşılık yok.
+export function parcaKarsiligi(miktar: string | null, birim: string, kart: { stokBirimi: string | null; birimKg: number | null } | undefined): BirimKarsiligi | null {
+  if (miktar === null || kart === undefined || birimAdi(kart.stokBirimi) !== 'kg' || birimAdi(birim) !== 'kg') return null;
+  if (kart.birimKg === null || !(kart.birimKg > 0)) return null;
+  const m = ondalikBol(miktar, kart.birimKg.toFixed(OLCEK));
+  return m === null ? null : { miktar: m, birim: 'adet' };
+}
+// Kalemin gösterilen karşılığı: stok birimi ile kg arasında (SAT-78), yoksa kg stoklu kartta parça (3100).
+export const kalemKarsiligi = (miktar: string | null, birim: string, kart: { stokBirimi: string | null; birimKg: number | null } | undefined): BirimKarsiligi | null =>
+  birimKarsiligi(miktar, birim, kart) ?? parcaKarsiligi(miktar, birim, kart);
 
 // 898 a: fason ön talep. Bitmemiş fason iş emirlerinden siparişe ya da açık talebe bağlanmamış, yoksayılmamış ve henüz firmaya gönderilmemiş
 // olanlar (gönderilmişse iş başlamıştır, ön talep geç kalmıştır). En erken gereken üstte; tarihsiz sonda.

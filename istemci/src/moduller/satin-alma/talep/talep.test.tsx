@@ -15,6 +15,12 @@ import { SAYFALAR } from '#paylasilan/sayfalar.ts';
 
 const json = (durum: number, govde: unknown) => new Response(JSON.stringify(govde), { status: durum });
 const KARTLAR = { malzemeler: [{ no: 7, kod: 'HM-00007', ad: 'Deneme rulman', birim: 'adet', kategori: 'Rulman', katalogId: null, stokBirimi: 'adet', birimKg: 2.5 }] } satisfies MalzemeSecenekleriCevabi;
+// 3100: kg stoklu çubuk (parça ağırlığı bilinir) ve kg stoklu levha (bilinmez); yalnız 3100 testlerinde listelenir.
+const KG_KARTLAR = { malzemeler: [
+  ...KARTLAR.malzemeler,
+  { no: 21, kod: 'HM-00021', ad: 'Deneme çubuk', birim: 'kg', kategori: null, katalogId: null, stokBirimi: 'kg', birimKg: 2.466, hammadde: true },
+  { no: 22, kod: 'HM-00022', ad: 'Deneme levha', birim: 'kg', kategori: null, katalogId: null, stokBirimi: 'kg', birimKg: null, hammadde: true },
+] } satisfies MalzemeSecenekleriCevabi;
 const HIZMETLER = { malzemeler: [{ no: 11, kod: 'HZ-00011', ad: 'Deneme kaplama', birim: 'saat', kategori: null, katalogId: null }] } satisfies MalzemeSecenekleriCevabi;
 const EMIRLER = { emirler: [{ id: 31, emirNo: 'UE-000031', parcaNo: 'P-31', parcaAd: 'Deneme parça' }] } satisfies AcikEmirlerCevabi;
 const talep = (n: number, ek: Partial<Talebim> = {}): Talebim => ({
@@ -32,6 +38,7 @@ const PLAN_TALEBI: OnTalep = {
   emirler: ['UE-000031', 'UE-000032'], stokBilinmiyor: true, hesap: { eksik: 10, siparis: 2, talep: 1.5, yoksayilan: 0 },
 };
 let onListe: OnTalepleriCevabi = ON_TALEPLER;
+let kartListesi: MalzemeSecenekleriCevabi = KARTLAR;
 
 interface Cagri { yol: string; govde: unknown; kimlik: string | undefined }
 // ag.kopuk: hızlı açma isteği cevapsız kalır (sunucuya ulaşılamaz).
@@ -40,7 +47,7 @@ function sunucuKur(ag = { kopuk: false }): Cagri[] {
   vi.stubGlobal('fetch', vi.fn(async (adres: string, istek?: RequestInit) => {
     const yol = adres.replace('/api', '');
     cagrilar.push({ yol, govde: istek?.body ? JSON.parse(String(istek.body)) : null, kimlik: (istek?.headers as Record<string, string> | undefined)?.['istek-kimligi'] });
-    if (yol.startsWith('/satin-alma-malzeme-secenekleri?')) return json(200, yol.includes('tur=hizmet') ? HIZMETLER : KARTLAR);
+    if (yol.startsWith('/satin-alma-malzeme-secenekleri?')) return json(200, yol.includes('tur=hizmet') ? HIZMETLER : kartListesi);
     if (yol === '/satin-alma-acik-emirler') return json(200, EMIRLER);
     if (yol === '/satin-alma-on-talepleri') return json(200, onListe);
     if (yol === '/satin-alma-on-talepleri/yoksay') return json(200, { tamam: true });
@@ -65,7 +72,7 @@ const sar = (cocuk: ReactNode, adres = '/taleplerim') => render(
   </MemoryRouter>,
 );
 
-afterEach(() => { cleanup(); vi.unstubAllGlobals(); onListe = ON_TALEPLER; });
+afterEach(() => { cleanup(); vi.unstubAllGlobals(); onListe = ON_TALEPLER; kartListesi = KARTLAR; });
 
 describe('Ana sayfadan talep (#375)', () => {
   it('kartlı ve adıyla yazılan kalemle talep gönderir; gövdede kişi alanı yok, kartsız kalem kart bekler', async () => {
@@ -215,6 +222,60 @@ describe('Ana sayfadan talep (#375)', () => {
     fireEvent.keyDown(kutu, { key: 'Enter' });
     expect(screen.getByText('Deneme rulman')).toBeTruthy();
     expect(screen.queryByRole('combobox', { name: 'Malzeme' })).toBeNull();
+  });
+
+  const kartSec = async (ad: string) => {
+    fireEvent.focus(screen.getByRole('combobox', { name: 'Malzeme' }));
+    fireEvent.click(await screen.findByRole('option', { name: new RegExp(ad) }));
+  };
+  it('3100 izinli: kg stoklu çubukta adet yazınca kg dolar; kg yazınca yaklaşık adet görünür; talep kg ile gider', async () => {
+    const cagrilar = sunucuKur();
+    kartListesi = KG_KARTLAR;
+    sar(<TalepAc />);
+    await kartSec('Deneme çubuk');
+    expect(screen.getByText('1 parça ≈ 2,47 kg')).toBeTruthy();
+    fireEvent.change(screen.getByLabelText('Adet'), { target: { value: '20' } });
+    expect((screen.getByLabelText(/^Miktar \(kg\)/) as HTMLInputElement).value).toBe('49,32');
+    fireEvent.change(screen.getByLabelText(/^Miktar \(kg\)/), { target: { value: '50' } });
+    expect((screen.getByLabelText('Adet') as HTMLInputElement).value).toBe('');
+    expect(screen.getByLabelText('Adet').getAttribute('placeholder')).toBe('≈ 20,3 adet');
+    fireEvent.click(screen.getByRole('button', { name: 'Talebi gönder' }));
+    await waitFor(() => expect(cagrilar.some((c) => c.yol === '/satin-alma-talepleri/hizli-ac')).toBe(true));
+    const govde = cagrilar.find((c) => c.yol === '/satin-alma-talepleri/hizli-ac')!.govde as { kalemler: Record<string, unknown>[] };
+    expect(govde.kalemler[0]).toMatchObject({ malzemeNo: 21, miktar: '50' });
+    expect(JSON.stringify(govde)).not.toContain('adet');
+  });
+  it('3100 yasak: kesirli adet kg uydurmaz (kg boşalır, alan hatalı); sıfır kg yaklaşık adet göstermez', async () => {
+    sunucuKur();
+    kartListesi = KG_KARTLAR;
+    sar(<TalepAc />);
+    await kartSec('Deneme çubuk');
+    const adet = screen.getByLabelText('Adet');
+    fireEvent.change(adet, { target: { value: '2' } });
+    expect((screen.getByLabelText(/^Miktar \(kg\)/) as HTMLInputElement).value).toBe('4,932');
+    fireEvent.change(adet, { target: { value: '2,5' } });
+    expect((screen.getByLabelText(/^Miktar \(kg\)/) as HTMLInputElement).value).toBe('');
+    expect(adet.getAttribute('aria-invalid')).toBe('true');
+    expect(screen.getByRole('alert').textContent).toBe('Adet tam sayı olur; kesirli miktarı kg olarak yazın.');
+    fireEvent.change(adet, { target: { value: '' } });
+    fireEvent.change(screen.getByLabelText(/^Miktar \(kg\)/), { target: { value: '0' } });
+    expect(screen.getByLabelText('Adet').getAttribute('placeholder')).toBe('Kaç parça');
+  });
+  it('3100 yasak: parça ağırlığı olmayan kg kartta adet alanı yok, nedeni yazılır; adet stoklu kartta adet alanı yok', async () => {
+    sunucuKur();
+    kartListesi = KG_KARTLAR;
+    sar(<TalepAc />);
+    await kartSec('Deneme levha');
+    expect(screen.queryByLabelText('Adet')).toBeNull();
+    expect(screen.getByText('Kartta parça ağırlığı yok; adet karşılığı hesaplanamaz.')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Değiştir' }));
+    await kartSec('Deneme rulman');
+    expect(screen.queryByLabelText('Adet')).toBeNull();
+    expect(screen.queryByText(/parça ağırlığı yok/)).toBeNull();
+  });
+  it('3100: karşılık metni adet için bir ondalık yazar', () => {
+    expect(karsilikYaz({ miktar: '20.27575', birim: 'adet' })).toBe('≈ 20,3 adet');
+    expect(karsilikYaz({ miktar: '4', birim: 'adet' })).toBe('≈ 4 adet');
   });
 
   it('#1192: Hizmet seçilince liste yalnız hizmet kartlarını ister, kalemler sıfırlanır ve talep hizmet türüyle gider', async () => {

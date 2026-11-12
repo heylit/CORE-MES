@@ -11,7 +11,7 @@ import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
 import { kablola } from '../../kablolama.ts';
-import { birimKarsiligi } from './kurallar.ts';
+import { birimKarsiligi, birimFiyati, kalemKarsiligi, parcaKarsiligi, stokBirimiBasinaKg } from './kurallar.ts';
 
 const PAROLA = 'dogru-parola-1';
 
@@ -36,6 +36,31 @@ describe('SAT-78 (2871): kalemin kg ile stok birimi karşılığı (saf)', () =>
       assert.equal(birimKarsiligi('1.5', b, { stokBirimi: b, birimKg: 2.466 }), null, b);
       assert.equal(birimKarsiligi('10', 'kg', { stokBirimi: b, birimKg: 2.466 }), null, b);
     }
+  });
+});
+
+describe('3100: kg stoklu hammaddede kg miktarın parça (adet) karşılığı (saf)', () => {
+  const cubuk = { stokBirimi: 'kg', birimKg: 2.5 };
+  test('izinli: kg stoklu kartta kg kalem parça ağırlığına bölünür; birim adı büyük-küçük harf duyarsız', () => {
+    assert.deepEqual(parcaKarsiligi('10', 'kg', cubuk), { miktar: '4', birim: 'adet' });
+    assert.deepEqual(parcaKarsiligi('11', 'KG', { stokBirimi: 'Kg', birimKg: 2.5 }), { miktar: '4.4', birim: 'adet' });
+    assert.deepEqual(kalemKarsiligi('10', 'kg', cubuk), { miktar: '4', birim: 'adet' });
+  });
+  test('yasak: ağırlık yok ya da sıfır, kart yok, miktar yok, kalem kg değil ya da stok birimi kg değil ise parça karşılığı yok', () => {
+    assert.equal(parcaKarsiligi('10', 'kg', { stokBirimi: 'kg', birimKg: null }), null);
+    assert.equal(parcaKarsiligi('10', 'kg', { stokBirimi: 'kg', birimKg: 0 }), null);
+    assert.equal(parcaKarsiligi('10', 'kg', undefined), null);
+    assert.equal(parcaKarsiligi(null, 'kg', cubuk), null);
+    assert.equal(parcaKarsiligi('10', 'adet', cubuk), null);
+    assert.equal(parcaKarsiligi('10', 'kg', { stokBirimi: null, birimKg: 2.5 }), null);
+    assert.equal(parcaKarsiligi('10', 'kg', { stokBirimi: 'm', birimKg: 2.5 }), null);
+  });
+  test('kalemKarsiligi adet stoklu kartta SAT-78 karşılığını değiştirmez', () => {
+    assert.deepEqual(kalemKarsiligi('4', 'adet', { stokBirimi: 'adet', birimKg: 2.5 }), { miktar: '10', birim: 'kg' });
+  });
+  test('2891-1 korunur: kg stoklu kartta stok birimi başına kg 1, birim fiyat kg fiyatıdır (parça ağırlığı fiyata girmez)', () => {
+    assert.equal(stokBirimiBasinaKg('kg', 2.5), 1);
+    assert.equal(birimFiyati('100', 'kg', 2.5), birimFiyati('100', 'kg', null));
   });
 });
 
@@ -102,5 +127,26 @@ describe('SAT-78 (2871): Taleplerim ve kart seçeneklerinde kg karşılığı (g
     });
     assert.equal(acilan.statusCode, 200, acilan.body);
     assert.deepEqual((acilan.json() as TaleplerimCevabi['talepler'][number]).kalemler.map((k) => k.karsilik), [null, null]);
+  });
+
+  test('3100 izinli: kg stoklu çubukta kg kalem adet karşılığıyla gelir (Taleplerim ve satın alma merkezi); seçenek hammadde olduğunu söyler', async () => {
+    const cubuk = await kartAc(3, 'Deneme kg çubuk', 'kg', 2.5);
+    const s = ((await get(c.talep, '/satin-alma-malzeme-secenekleri?ara=HM-BKA-00003')).json() as MalzemeSecenekleriCevabi).malzemeler.find((x) => x.no === cubuk);
+    assert.deepEqual([s?.stokBirimi, s?.birimKg, s?.hammadde], ['kg', 2.5, true]);
+    const acilan = await post(c.talep, '/satin-alma-talepleri/hizli-ac', { id: randomUUID(), kalemler: [{ malzemeNo: cubuk, miktar: '10' }] });
+    assert.equal(acilan.statusCode, 200, acilan.body);
+    const talep = acilan.json() as TaleplerimCevabi['talepler'][number];
+    assert.deepEqual(talep.kalemler.map((k) => k.karsilik), [{ miktar: '4', birim: 'adet' }]);
+    const acilis = await get(c.yonetici, '/satin-alma-acilis');
+    assert.equal(acilis.statusCode, 200, acilis.body);
+    const merkez = (acilis.json() as { talepler: { id: string; kalemKarsiliklari?: { miktar: string; birim: string }[] }[] }).talepler.find((t) => t.id === talep.id);
+    assert.deepEqual(merkez?.kalemKarsiliklari?.map((k) => [k.miktar, k.birim]), [['4', 'adet']]);
+  });
+
+  test('3100 yasak: kg stoklu kartta parça ağırlığı yoksa adet karşılığı yoktur (uydurulmaz)', async () => {
+    const levha = await kartAc(4, 'Deneme kg levha', 'kg', null);
+    const acilan = await post(c.talep, '/satin-alma-talepleri/hizli-ac', { id: randomUUID(), kalemler: [{ malzemeNo: levha, miktar: '10' }] });
+    assert.equal(acilan.statusCode, 200, acilan.body);
+    assert.deepEqual((acilan.json() as TaleplerimCevabi['talepler'][number]).kalemler.map((k) => k.karsilik), [null]);
   });
 });

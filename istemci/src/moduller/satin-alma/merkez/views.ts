@@ -472,6 +472,8 @@ export function tabLog(r: PurchaseRequest): string {
   const log = (r.log || []).slice().reverse();
   return `<div class="panel"><div class="panel-b">${log.length ? `<ul class="log">${log.map(l => `<li><time>${fmtTs(l.at)}</time><span>${esc(l.t)}${l.by ? `<span class="by"> ${esc(nameOf(l.by))}</span>` : ""}</span></li>`).join("")}</ul>` : '<p class="muted">Bu talepte henüz kayıtlı hareket yok. Teklif, karar, onay ve teslimat adımları burada tarih ve kişiyle birlikte tutulur.</p>'}</div></div>`;
 }
+/** 3100: miktar hücresinde ikinci satır; ayrı sütun açılmaz. */
+const karsilikAlti = (it: RequestItem): string => (it.karsilik ? `<span class="sub" data-sa-karsilik="">${esc(it.karsilik)}</span>` : "");
 /** simple: talep eden ve onaylayan için sade liste (hafıza paneli ve satın alma düzenlemesi yok) */
 export function tabItems(r: PurchaseRequest, simple = false): string {
   const items = r.items || [];
@@ -486,7 +488,7 @@ export function tabItems(r: PurchaseRequest, simple = false): string {
     if (st) st.suppliers.forEach(s => { prevSup[s.supplierId] = prevSup[s.supplierId] || { id: s.supplierId, name: s.name, items: new Set(), wins: 0 }; prevSup[s.supplierId]!.items.add(it.name); prevSup[s.supplierId]!.wins += s.wins; });
     if (mid) Object.values(S.requests).forEach(o => { if (o.id !== r.id && o.award && o.award.lessons && (o.items || []).some(x => matOf(x) === mid)) lessons.push({ r: o, t: o.award.lessons! }); });
     return `<tr><td class="lead"><b>${m ? matLink(mid, it.name) : esc(it.name)}</b>${m ? `<span class="sub">${esc(m.code || "")}${m.category ? ", " + esc(m.category) : ""}</span>` : '<span class="sub">katalogda yok</span>'}${it.spec ? `<span class="sub">${esc(it.spec)}</span>` : ""}${kalemBagMetinleri(it).map(t => `<span class="sub" data-sa-kalem-bagi="">${esc(t)}</span>`).join("")}</td>
-      <td class="r num">${numIn(parseNum(it.qty))} ${esc(it.unit)}</td>
+      <td class="r num">${numIn(parseNum(it.qty))} ${esc(it.unit)}${karsilikAlti(it)}</td>
       <td class="r num">${last ? `${money(last.unitTRY)}<span class="sub">${esc(last.supplier)}, ${fmtDate(last.date)}</span>` : '<span class="faint">ilk alım</span>'}</td>
       <td class="r num">${st && isNum(st.avgTRY) ? money(st.avgTRY) : "–"}${st && st.quotes ? `<span class="sub">${st.quotes} teklif kaydı</span>` : ""}</td>
       <td class="r num">${last ? money(last.unitTRY * (parseNum(it.qty) || 0), "TRY", 0) : "–"}</td></tr>`;
@@ -636,7 +638,7 @@ function matrixHTML(r: PurchaseRequest, ev: Evaluation): string {
   items.forEach(it => {
     const vals = cols.map(x => x.c.lines[it.id] ? x.c.lines[it.id]!.unit * x.c.unitTRY : null);
     const any = vals.find(isNum); const vl = isNum(any) ? vsLast(r, it, any) : null;
-    h += row(`${esc(it.name)}<span class="sub">${numIn(parseNum(it.qty))} ${esc(it.unit)}${vl ? `, son alış ${money(vl.last.unitTRY)}` : ""}</span>${parcaAltSatiri(it)}`,
+    h += row(`${esc(it.name)}<span class="sub">${numIn(parseNum(it.qty))} ${esc(it.unit)}${it.karsilik ? ` (${esc(it.karsilik)})` : ""}${vl ? `, son alış ${money(vl.last.unitTRY)}` : ""}</span>${parcaAltSatiri(it)}`,
       cols.map(x => { const l = x.c.lines[it.id]; if (!l) return '<span class="faint">teklif yok</span>'; const d = vsLast(r, it, l.unit * x.c.unitTRY); return `${money(l.unit, x.q.currency)}${kademeRozeti(x.q, it)}<span class="sub">${money(l.line, x.q.currency)}${d ? " " + deltaHTML(d.pct) : ""}</span>${l.ust ? `<span class="sub">${esc(numIn(l.ust.min))} ${esc(it.unit)} alınırsa ${money(l.ust.line, x.q.currency)}</span>` : ""}`; }), vals, "min");
   });
   h += sec("Ticari şartlar");
@@ -839,7 +841,7 @@ function splitEditorHTML(r: PurchaseRequest, ev: Evaluation, assign: Record<stri
   return `<p class="small muted" data-sa-y="30">Her kalemi hangi tedarikçiden alacağınızı seçin. Başlangıçta nakliye dahil en uygun dağılım seçilidir. Her tedarikçinin nakliye ve diğer masrafları sipariş başına tam eklenir. Bir kalemin miktarını birden fazla tedarikçiye bölmek için yukarıdaki <button class="btn sm ghost" data-sa-y="51" data-act="paylastir-git">Paylaştırma</button> bölümünü kullanın.</p>
   <div class="tw"><table class="itbl rt"><thead><tr><th>Kalem</th><th>Tedarikçi</th><th class="r">Birim (net)</th><th class="r">Tutar (net)</th></tr></thead><tbody>
   ${(r.items || []).map(it => { const opts = ev.elig.map(x => ({ x, u: itemCost(x, it) })).filter((o): o is { x: EvalRow; u: number } => o.u !== null).sort((a, b) => a.u - b.u);
-    return `<tr><td class="lead"><b>${esc(it.name)}</b><span class="sub">${numIn(parseNum(it.qty))} ${esc(it.unit)}</span></td>
+    return `<tr><td class="lead"><b>${esc(it.name)}</b><span class="sub">${numIn(parseNum(it.qty))} ${esc(it.unit)}${it.karsilik ? ` (${esc(it.karsilik)})` : ""}</span></td>
     <td><select data-split="${it.id}" ${locked ? "disabled" : ""} aria-label="${esc(it.name)} tedarikçisi">${opts.map(o => `<option value="${o.x.q.id}" ${assign[it.id] === o.x.q.id ? "selected" : ""}>${esc(supName(o.x.q))}, ${money(o.u)}${o.x.q.id === opt[it.id] ? " (en uygun dağılım)" : ""}</option>`).join("")}</select></td>
     <td class="r num" data-su="${it.id}"></td><td class="r num" data-st="${it.id}"></td></tr>`; }).join("")}
   </tbody></table></div>

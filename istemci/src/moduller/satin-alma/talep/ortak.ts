@@ -53,8 +53,18 @@ const OLCULU_STOK_BIRIMLERI: readonly string[] = ['mm', 'cm', 'm', 'mt', 'metre'
 // 0,01'in altı "≈ 0" yazılmaz; küçük sarfta yanıltır.
 const sayiYaz = (n: number) => (n > 0 && n < 0.01 ? '< 0,01' : n.toLocaleString('tr-TR', { maximumFractionDigits: 2 }));
 const yaklasik = (n: number) => { const y = sayiYaz(n); return y.startsWith('<') ? y : `≈ ${y}`; };
+// 3100: parça sayısı bir ondalıkla yazılır, ",0" atılır ("≈ 4", "≈ 4,3").
+const adetYaz = (n: number) => `≈ ${n.toLocaleString('tr-TR', { maximumFractionDigits: 1 })}`;
 export const karsilikYaz = (c: { miktar: string; birim: string } | null | undefined): string | null =>
-  (c == null ? null : `${yaklasik(Number(c.miktar))} ${c.birim}`);
+  (c == null ? null : c.birim === 'adet' ? `${adetYaz(Number(c.miktar))} adet` : `${yaklasik(Number(c.miktar))} ${c.birim}`);
+// 3100: kg stoklu hammaddede bir parçanın (boy, levha) kg'ı; kalemin birimi kg değilse ya da ağırlık yoksa null. Sunucu kurallar.ts parcaKarsiligi ile aynı.
+export function parcaKg(kart: { birim: string | null; stokBirimi?: string | null; birimKg?: number | null }): number | null {
+  const kg = (b: string | null | undefined) => (b ?? '').trim().toLocaleLowerCase('tr-TR') === 'kg';
+  return kg(kart.stokBirimi) && kg(kart.birim) && kart.birimKg != null && kart.birimKg > 0 ? kart.birimKg : null;
+}
+// Adetten kg: form alanına virgüllü, en çok üç ondalık, binliksiz yazılır.
+export const adettenKg = (adet: number, kg: number): string =>
+  (Math.round(adet * kg * 1000) / 1000).toLocaleString('tr-TR', { maximumFractionDigits: 3, useGrouping: false });
 // Yeni talep formu: kartın stok biriminde girilen miktarın kg karşılığı ve birim ağırlık. Ağırlık bilinmiyorsa ya da birim kg ise yok.
 export function kartKarsiligi(kart: { birim: string | null; stokBirimi?: string | null; birimKg?: number | null }, miktar: string | null): string | null {
   const stok = (kart.stokBirimi ?? '').trim();
