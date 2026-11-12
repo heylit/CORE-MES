@@ -208,9 +208,6 @@ a.tc-stok-kpi:hover, a.tc-stok-kpi:focus-visible { background: var(--panel2); }
 .tc-stok-depocu-kutu span { color: var(--muted); }
 .tc-stok-depocu-ana { background: var(--hazard); border-color: var(--hazard); color: var(--on-hazard); }
 .tc-stok-depocu-ana span { color: var(--on-hazard); }
-.tc-stok-depocu-cubuk { position: sticky; inset-block-end: var(--b-2); z-index: 2; display: flex; gap: var(--b-2); justify-content: center; padding: var(--b-2); border: thin solid var(--edge); border-radius: var(--yari-2); background: var(--panel-solid); order: 99; }
-/* Sayfalaması olan ekranda çubuk yüzmez: kayarken sayfalama yazısını örtmesin, listenin altında yerinde durur. */
-.tc-stok:has(.tc-sayfalama) .tc-stok-depocu-cubuk { position: static; }
 .tc-stok-ara-sonuc { inline-size: 100%; justify-content: space-between; padding: var(--b-2) var(--b-1); text-align: left; }
 
 /* Ambalaj simgeleri (önizlemedeki PACK_IC renkleri, tasarım değişkenlerinden) */
@@ -592,7 +589,7 @@ a.tc-stok-kpi:hover, a.tc-stok-kpi:focus-visible { background: var(--panel2); }
   .tc-tablo-kap[data-kaydir] .tc-stok-etiketler { max-inline-size: var(--menu-sabit); }
 }
 
-/* Telefon: tek sütun 360'a sığar; alttaki Okut/Taşı/Hazırlık çubuğu genişliği aşınca bütün sayfa 8 px taşıyordu.
+/* Telefon: tek sütun 360'a sığar.
    İş kutusu kısayolları iki sütunlu kısa kutulardır, Okut iki sütunu kaplar; dev başlık bir boy küçülür. */
 @media (max-width: 767px) {
   .tc-stok { grid-template-columns: minmax(0, 1fr); gap: var(--b-4); }
@@ -601,9 +598,6 @@ a.tc-stok-kpi:hover, a.tc-stok-kpi:focus-visible { background: var(--panel2); }
   .tc-stok-depocu-kutu { padding: var(--b-3); }
   .tc-stok-depocu-kutu strong { font-size: var(--yazi-l); }
   .tc-stok-depocu-ana { grid-column: 1 / -1; }
-  .tc-stok-depocu-cubuk { gap: var(--b-1); padding: var(--b-1); box-shadow: var(--shadow); }
-  .tc-stok-depocu-cubuk > * { flex: 1 1 0; min-width: 0; }
-  .tc-stok-depocu-cubuk .tc-dugme { inline-size: 100%; min-inline-size: 0; padding-inline: var(--b-2); justify-content: center; }
 }
 
 /* Telefon: sayfa başı ekranın yarısını tutuyordu. Sabit açıklama iki satırda kesilir ve "Devamı" ile açılır, kaydın kendi bilgisi
