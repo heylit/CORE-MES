@@ -23,6 +23,9 @@
 .sa-talep-secenek-ad { font-weight: 600; min-width: 0; }
 .sa-talep-secili { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--b-2); }
 .sa-talep-miktar, .sa-talep-alt { display: grid; gap: var(--b-3); grid-template-columns: minmax(0, 1fr); }
+/* 3100: Miktar ve Adet; dar ekranda alt alta, genişte yan yana. */
+.sa-talep-miktar-grup, .sa-talep-adet { display: grid; gap: var(--b-1); grid-template-columns: minmax(0, 1fr); align-content: start; }
+.sa-talep-miktar-grup { gap: var(--b-3); }
 .sa-talep-bag { color: inherit; text-decoration: underline; background: none; border: 0; padding: 0; font: inherit; cursor: pointer; }
 .sa-talep-liste { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--b-3); }
 .sa-talep-satir { display: grid; gap: var(--b-1); padding-bottom: var(--b-3); border-bottom: 1px solid var(--edge); min-width: 0; overflow-wrap: anywhere; }
@@ -32,6 +35,8 @@
 @media (min-width: 600px) {
   .sa-talep-miktar { grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); }
   .sa-talep-alt { grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); }
+  .sa-talep-miktar:has(.sa-talep-adet) { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .sa-talep-miktar-grup:has(.sa-talep-adet) { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
 }
 
 /* 898 a: Taleplerim sayfası, ön talepler, ilerleme */

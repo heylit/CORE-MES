@@ -5,7 +5,7 @@ import { CokSatir, Dugme, Girdi, Kart, Rozet, Secim, useBildirim } from '../../.
 import { ApiHatasi } from '../../../ortak/veri/api.ts';
 import { BELIRSIZ_MIKTAR, belirsizMiktarVar, miktarGirdisi } from '../../../ortak/veri/miktar.ts';
 import { tekrarKorumaliGonder, yeniIstekKimligi } from '../../../ortak/veri/istek-kimligi.ts';
-import { KART_SAYFASI, SURE, anahtarlar, cagri, kartKarsiligi } from './ortak.ts';
+import { KART_SAYFASI, SURE, adettenKg, anahtarlar, cagri, kartKarsiligi, karsilikYaz, parcaKg } from './ortak.ts';
 import './talep.css';
 
 type KartSecenegi = MalzemeSecenekleriCevabi['malzemeler'][number];
@@ -18,14 +18,17 @@ interface KalemTaslagi {
   uygulanan: Uygulanan | null; isEmriId: number | null; kaynak: string | null;
   // 2871-1 a: düzenlenen talepte var olan kalem; kartı, adı ve birimi değişmez. Bağlı (fason, parça) kalemin miktarı da değişmez.
   mevcut: { id: string; bagli: boolean } | null;
+  // 3100: adet alanına yazılan (yalnız giriş yardımcısı, gönderilmez); kg değişince silinir. parcaKg: düzenlenen kalemde sunucunun karşılığından.
+  adet: string; parcaKg: number | null;
 }
 const TUR_ADI: Record<TalepTuru, string> = { malzeme: 'Malzeme', hizmet: 'Hizmet', fason: 'Fason' };
 const bosKalem = (): KalemTaslagi => ({
-  anahtar: yeniIstekKimligi(), kart: null, serbest: false, ad: '', birim: '', miktar: '', aciklama: '', uygulanan: null, isEmriId: null, kaynak: null, mevcut: null,
+  anahtar: yeniIstekKimligi(), kart: null, serbest: false, ad: '', birim: '', miktar: '', aciklama: '', uygulanan: null, isEmriId: null, kaynak: null, mevcut: null, adet: '', parcaKg: null,
 });
 const mevcutKalem = (x: Talebim['kalemler'][number]): KalemTaslagi => ({
   ...bosKalem(), ad: x.ad, birim: x.birim, miktar: (x.miktar ?? '').replace('.', ','), aciklama: x.aciklama ?? '',
   mevcut: { id: x.id!, bagli: x.uygulanan !== null || x.fasonAdim !== null },
+  parcaKg: x.karsilik?.birim === 'adet' && x.miktar !== null && Number(x.karsilik.miktar) > 0 ? Number(x.miktar) / Number(x.karsilik.miktar) : null,
 });
 // Ön talepten kalem: fason adımın adı kalem adıdır (hizmet kartı seçilene kadar kart bekler), miktar emrin adedi. Plan ihtiyacında kalem
 // malzeme kartıdır, miktar kalan eksik.
@@ -113,6 +116,27 @@ function KartArama({ tur, sec, serbesteGec, etiket, ipucu }: {
   );
 }
 
+// 3100: kg ile alınan çubuk, levha, boruda adet giriş yardımcısıdır: adet yazılınca kg dolar, kg yazılınca yaklaşık adet görünür. Kayıt yine kg.
+function AdetAlani({ k, degistir }: { k: KalemTaslagi; degistir: (d: Partial<KalemTaslagi>) => void }) {
+  const kg = k.kart !== null ? parcaKg(k.kart) : k.parcaKg;
+  if (kg === null) {
+    const agirliksiz = k.kart !== null && k.kart.hammadde === true && (k.kart.birim ?? '').trim().toLocaleLowerCase('tr-TR') === 'kg';
+    return agirliksiz ? <p className="sa-talep-not">Kartta parça ağırlığı yok; adet karşılığı hesaplanamaz.</p> : null;
+  }
+  const miktar = miktarOku(k.miktar);
+  const yaklasik = miktar === null || k.adet !== '' ? null : karsilikYaz({ miktar: String(Number(miktar) / kg), birim: 'adet' });
+  return (
+    <div className="sa-talep-adet">
+      <Girdi etiket="Adet" inputMode="numeric" value={k.adet} placeholder={yaklasik ?? 'Kaç parça'} disabled={k.mevcut?.bagli === true}
+        onChange={(e) => {
+          const adet = e.target.value.replace(/\D/g, '');
+          degistir(adet === '' ? { adet } : { adet, miktar: adettenKg(Number(adet), kg) });
+        }} />
+      <p className="sa-talep-not" aria-live="polite">{yaklasik !== null ? `${yaklasik} · ` : ''}1 parça ≈ {kg.toLocaleString('tr-TR', { maximumFractionDigits: 2 })} kg</p>
+    </div>
+  );
+}
+
 function KalemSatiri({ tur, k, degistir, kaldir }: { tur: TalepTuru; k: KalemTaslagi; degistir: (d: Partial<KalemTaslagi>) => void; kaldir: (() => void) | null }) {
   return (
     <fieldset className="sa-talep-kalem">
@@ -156,8 +180,11 @@ function KalemSatiri({ tur, k, degistir, kaldir }: { tur: TalepTuru; k: KalemTas
         </div>
       )}
       <div className="sa-talep-miktar">
-        <Girdi etiket={`Miktar${k.kart?.birim ? ` (${k.kart.birim})` : k.mevcut ? ` (${k.birim})` : ''}`} inputMode="decimal" placeholder="Ondalık için virgül: 2,5" value={k.miktar} onChange={(e) => degistir({ miktar: e.target.value })} required disabled={k.mevcut?.bagli === true} />
-        {k.kart !== null && kartKarsiligi(k.kart, miktarOku(k.miktar)) !== null && <p className="sa-talep-not" aria-live="polite">{kartKarsiligi(k.kart, miktarOku(k.miktar))}</p>}
+        <div className="sa-talep-miktar-grup">
+          <Girdi etiket={`Miktar${k.kart?.birim ? ` (${k.kart.birim})` : k.mevcut ? ` (${k.birim})` : ''}`} inputMode="decimal" placeholder="Ondalık için virgül: 2,5" value={k.miktar} onChange={(e) => degistir({ miktar: e.target.value, adet: '' })} required disabled={k.mevcut?.bagli === true} />
+          <AdetAlani k={k} degistir={degistir} />
+          {k.kart !== null && kartKarsiligi(k.kart, miktarOku(k.miktar)) !== null && <p className="sa-talep-not" aria-live="polite">{kartKarsiligi(k.kart, miktarOku(k.miktar))}</p>}
+        </div>
         <Girdi etiket="Açıklama" value={k.aciklama} onChange={(e) => degistir({ aciklama: e.target.value })} maxLength={500} placeholder="Ölçü, marka, kullanım yeri" />
       </div>
       {kaldir && <Dugme simge="trash" onClick={kaldir}>Kalemi kaldır</Dugme>}

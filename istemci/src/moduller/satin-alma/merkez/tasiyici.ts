@@ -10,6 +10,7 @@ import type { FirmaCevabi, FirmaEkleGovdesi } from '#paylasilan/sozlesme/musteri
 import type { SiparisIrsaliyeleriCevabi, SonPartilerCevabi } from '#paylasilan/sozlesme/stok.ts';
 import { eskiSurumMu } from '#paylasilan/hata.ts';
 import { ApiHatasi, api } from '../../../ortak/veri/api.ts';
+import { karsilikYaz } from '../talep/ortak.ts';
 import { tekrarKorumaliGonder, yeniIstekKimligi, yenidenDenenebilirMi, type Deneme } from '../../../ortak/veri/istek-kimligi.ts';
 import { ucCagrisi } from '../../../ortak/veri/uc-cagrisi.ts';
 import { FIRMA_KARTLARI, S, applyLocal, notify, scheduleRender, type Backend, type Coll, type Entity, type Transport } from './store.ts';
@@ -112,6 +113,7 @@ export function talepEkrana(t: Talep): PurchaseRequest {
       return {
         id: i.id, materialId: i.katalogId, name: i.ad, spec: i.ozellik, qty: sayi(i.miktar), unit: i.birim, category: i.kategori,
         ...(bag?.uygulanan ? { parca: bag.uygulanan } : {}),
+        ...((k) => (k ? { karsilik: karsilikYaz(k) } : {}))(t.kalemKarsiliklari?.find((x) => x.kalemId === i.id)),
         ...(bag?.fason ? { fason: { emirNo: bag.fason.emirNo, opNo: bag.fason.opNo, adim: bag.fason.adim, firmaAdi: bag.fason.firmaAdi } } : {}),
       };
     }),

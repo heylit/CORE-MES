@@ -312,6 +312,8 @@ export const talepSemasi = z.object({
   kaynaklar: z.array(talepKaynagiSemasi).optional(),
   guncellemeGrubu: guncellemeGrubuSemasi.optional(),
   kalemBaglari: z.array(kalemBagiCikisSemasi).optional(),
+  // 3100: kalemin yaklaşık karşılığı (kg ile stok birimi ya da kg stoklu kartta parça); hesaplanamayan kalem listede yoktur. Yalnız çıkışta.
+  kalemKarsiliklari: z.array(z.object({ kalemId: uuid, miktar: z.string(), birim: z.string() })).optional(),
   // Yalnız talep edenin görünümünde (SAT-53 b): kararın seçtiği tedarikçiler; karar yoksa boş. Teklif ve fiyat taşımaz.
   secilenTedarikciler: z.array(z.object({ firmaId: z.number().int().nullable(), ad: z.string() })).optional(),
   karar: kararCikisSemasi.nullable(),
@@ -519,6 +521,8 @@ export const malzemeSecenekleriCevabi = z.object({
     no: z.number().int(), kod: z.string(), ad: z.string(), birim: z.string().nullable(), kategori: z.string().nullable(), katalogId: uuid.nullable(),
     // 2871: hammadde kartının stok birimi başına kg'ı (kart ekranının yoğunluk ve ölçüden hesapladığı); bilinmiyorsa null.
     stokBirimi: z.string().nullable().optional(), birimKg: z.number().nullable().optional(),
+    // 3100: hammadde kartı mı (parça ağırlığı yalnız hammaddede olur; yoksa formda "hesaplanamaz" satırı çıkar).
+    hammadde: z.boolean().optional(),
   })),
 });
 

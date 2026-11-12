@@ -33,7 +33,7 @@ import { projeGetir, projeSecenekleri } from '../projeler/disari.ts';
 import { islemVarMi } from '#cekirdek/yetki.ts';
 import {
   ILETILER, ISLEM, type KurKilidiIsi, emirAcikMi, kilitliDurum, basamakEsigiReddi, basamakKilidiReddi, tedarikciyeGidenAyrinti, kalemAyrintisiniKoru, kilittenSonraOnayliMi, kurKilidiIsi, kurKilidiReddi, degisiklikReddi, gecikmeGunu, fasonKalani, sonDonusGecikmesi, agirlikliGecikme, degisiklikTuru, dortGozSonucu, onayKademesiReddi, onayLimitRolleri, onayLimitleriDegistiMi, onayLimitiReddi, terminsizSiparisReddi, terminTakibi, fazlaTeslim, finanstanEklenenKurlar, aylikFaiz, fiyatIzleri, kullanilanParaBirimleri, gecisVarMi, gorunenDurum, kararDegistiMi, kararOnayliMi, talepFisiGiderMi,
-  KARTSIZ_KATEGORI, TALEP_TURU_KARTLARI, satinAlinabilirKartReddi, kartBirimiReddi, hizliBaslik, hizliKalemReddi, kartKopyasi, kartsizSiparisReddi, katalogKartiReddi, logoGuncellenecekSiparisler, logoIptalGeriAlmaReddi, logoSiparisDegisikligiReddi, siparisliKalemReddi, siparisDegisikligiMetni, siparisFaturaFirmasi, faturaEslesmeUyarilari, siparisKalemiDegisikligiReddi, siparisKapatmaReddi, siparisBekletmeReddi, talebinAlimlari, ondalikKiyas, siparisReddi, talebim, birimKarsiligi, talebimDuzenlenirMi, talebimKalemReddi, guncellemeReddi, guncellemeIptalleri, ikinciAlimRiski,
+  KARTSIZ_KATEGORI, TALEP_TURU_KARTLARI, satinAlinabilirKartReddi, kartBirimiReddi, hizliBaslik, hizliKalemReddi, kartKopyasi, kartsizSiparisReddi, katalogKartiReddi, logoGuncellenecekSiparisler, logoIptalGeriAlmaReddi, logoSiparisDegisikligiReddi, siparisliKalemReddi, siparisDegisikligiMetni, siparisFaturaFirmasi, faturaEslesmeUyarilari, siparisKalemiDegisikligiReddi, siparisKapatmaReddi, siparisBekletmeReddi, talebinAlimlari, ondalikKiyas, siparisReddi, talebim, kalemKarsiligi, talebimDuzenlenirMi, talebimKalemReddi, guncellemeReddi, guncellemeIptalleri, ikinciAlimRiski,
   fasonKalemReddi, fasonOnTalepAdaylari, hizliBagReddi, planOnTalepAdaylari, uygulananKartReddi, type KalemBagi,
   fasonKirilimlari, fasonSureOrnekleri, fasonSuresiTahmini, fasonTerminUyumu, talepEdenDurumu, talepEdenGovdeDurumu, talepEdenGorunumu, avansAsimi, gerceklesenKosul, planGerceklesenFarki, talepKartiReddi, tamGorurMu, teklifKuru, teslimDurumu, odemePlaniHedefi, varsayilanOdemePlani,
   askidakiTedarikciReddi, birimFiyati, kaliteSiparisReddi, karneTeslimOlayi, stokTutari, uygulananKgFiyati, yeniSiparisFirmalari,
@@ -151,6 +151,7 @@ async function talepleriYalinKur(db: Db, satirlar: s.TalepSatiri[]): Promise<Tal
   };
   const at = <T extends { talepId: string }>({ talepId: _t, ...r }: T) => r;
   const baglar = await kalemBaglariKur(db, satirlar.map((t) => t.id));
+  const karsiliklar = await kalemKarsiliklari(db, [{ kalemler: a.kalemler.map((k) => ({ ...k, miktar: sade(k.miktar) })) }]);
   return satirlar.map((t) => {
     const k = a.kararlar.find((x) => x.talepId === t.id) ?? null;
     return {
@@ -166,6 +167,7 @@ async function talepleriYalinKur(db: Db, satirlar: s.TalepSatiri[]): Promise<Tal
         : { maliyet: t.agirlikMaliyet, termin: t.agirlikTermin ?? 0, tedarikci: t.agirlikTedarikci ?? 0, garanti: t.agirlikGaranti ?? 0 },
       kalemler: grup(a.kalemler, t.id).map((k) => ({ ...at(k), miktar: sade(k.miktar) })),
       kalemBaglari: baglar.get(t.id) ?? [],
+      kalemKarsiliklari: grup(a.kalemler, t.id).flatMap((k) => { const c = karsiliklar.get(k.id); return c === undefined ? [] : [{ kalemId: k.id, ...c }]; }),
       teklifIstekleri: grup(a.istekler, t.id).map(at),
       teklifler: grup(a.teklifler, t.id).map((q) => ({
         ...at(q), kur: sade(q.kur), iskontoYuzdesi: sade(q.iskontoYuzdesi), nakliye: sade(q.nakliye), digerMasraf: sade(q.digerMasraf),
@@ -572,15 +574,17 @@ async function guncellemeGrubunuKapat(db: Db, k: Kullanici, siparisteki: Talep, 
   }
 }
 
-// SAT-78 (2871): kalemlerin kg ile stok birimi karşılığı; kart bilgisi malzemelerden toplu okunur (talep sayısından bağımsız iki sorgu).
-async function kalemKarsiliklari(db: Db, talepler: readonly Talep[]): Promise<Map<string, BirimKarsiligi>> {
+// SAT-78 (2871): kalemlerin kg ile stok birimi karşılığı; 3100: kg stoklu kartta parça karşılığı. Kart bilgisi malzemelerden toplu okunur
+// (talep sayısından bağımsız iki sorgu).
+type KarsilikKalemi = { id: string; katalogId: string | null; miktar: string | null; birim: string };
+async function kalemKarsiliklari(db: Db, talepler: readonly { kalemler: readonly KarsilikKalemi[] }[]): Promise<Map<string, BirimKarsiligi>> {
   const kalemler = talepler.flatMap((t) => t.kalemler).filter((x) => x.katalogId !== null && x.miktar !== null);
   if (kalemler.length === 0) return new Map();
   const nolar = new Map((await s.katalogMalzemeNolari(db, [...new Set(kalemler.map((x) => x.katalogId!))])).map((r) => [r.id, r.no]));
   const bilgiler = await malzemeMaliyetBilgileri(db, [...nolar.values()].flatMap((n) => (n === null ? [] : [n])));
   return new Map(kalemler.flatMap((x) => {
     const no = nolar.get(x.katalogId!);
-    const c = birimKarsiligi(x.miktar, x.birim, no == null ? undefined : bilgiler.get(no));
+    const c = kalemKarsiligi(x.miktar, x.birim, no == null ? undefined : bilgiler.get(no));
     return c === null ? [] : [[x.id, c] as const];
   }));
 }
@@ -1444,6 +1448,8 @@ export async function malzemeSecenekleri(db: Db, ara: string, tur: TalepTuru = '
   return bulunan.map((m) => ({
     no: m.id, kod: m.kod, ad: m.ad ?? m.kod, birim: m.birim, kategori: m.kategoriAdi, katalogId: baglar.get(m.id) ?? null,
     stokBirimi: agirliklar.get(m.id)?.stokBirimi ?? null, birimKg: agirliklar.get(m.id)?.birimKg ?? null,
+    // Aile yalnız hammadde kartında dolu gelir (malzemeler katalogMaliyetSatirlari).
+    hammadde: (agirliklar.get(m.id)?.aile ?? null) !== null,
   }));
 }
 

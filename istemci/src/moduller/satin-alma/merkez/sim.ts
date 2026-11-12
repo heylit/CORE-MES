@@ -356,7 +356,7 @@ function drawScenarios(r: PurchaseRequest, ev: Evaluation, st: SimState): void {
   h += row("Nakliye ve masraf", ks.map((k) => (k.extras > 0.5 ? money(k.extras, "TRY", 0) : "yok")), ks.map((k) => k.extras), "min");
   h += sec("Kalem dağılımı");
   for (const it of r.items ?? []) {
-    h += row(`${esc(it.name)}<span class="sub">${numIn(qtyOf(it))} ${esc(it.unit)}</span>`, cols.map((c) => {
+    h += row(`${esc(it.name)}<span class="sub">${numIn(qtyOf(it))} ${esc(it.unit)}${it.karsilik ? ` (${esc(it.karsilik)})` : ""}</span>`, cols.map((c) => {
       const parts = Object.entries(c.alloc[it.id] ?? {}).filter(([, v]) => v > 0);
       return parts.length ? parts.map(([q, v]) => { const x = ev.all.find((y) => y.q.id === q); return `${esc(x ? supName(x.q).split(" ")[0]! : "?")} ${numIn(v)}`; }).join("<br>") : '<span class="faint">–</span>';
     }), undefined, undefined, "wrap");
