@@ -16,7 +16,7 @@ const GKK: Kayit = {
   partiId: 4, partiEtiketi: 'LT-000123', sertifikaVar: false, tedarikciAdi: 'Deneme Tedarikçi', siparisNo: 'SA-0001', miktar: '10.000', durum: 'gkk_bekliyor',
   kabulMiktar: null, hataliMiktar: null, gkkKisiAd: null, gkkZaman: null, karar: null, ncrNo: null, kararKisiAd: null, kararZaman: null, not: null,
 };
-const KARAR: Kayit = { ...GKK, malKabulSatirId: 12, malKabulNo: 'MK-0002', sertifikaVar: true, durum: 'karar_bekliyor', kabulMiktar: '7.000', hataliMiktar: '3.000', gkkKisiAd: 'Deneme Kişi', gkkZaman: '2026-10-30T09:00:00.000Z' };
+const KARAR: Kayit = { ...GKK, malKabulSatirId: 12, gkkNo: 'GKK-2026-0009', malKabulNo: 'MK-0002', sertifikaVar: true, durum: 'karar_bekliyor', kabulMiktar: '7.000', hataliMiktar: '3.000', gkkKisiAd: 'Deneme Kişi', gkkZaman: '2026-10-30T09:00:00.000Z' };
 const KAPALI: Kayit = { ...KARAR, malKabulSatirId: 13, gkkNo: 'GKK-2026-0001', malKabulNo: 'MK-0003', durum: 'kapandi', karar: 'red', ncrNo: 'NCR-2026-0001', kararKisiAd: 'Deneme Kişi', kararZaman: '2026-10-30T10:00:00.000Z' };
 
 interface Secenek { cakisma?: boolean; ayrinti?: KmGirisAyrintisi; tek?: Kayit }
@@ -189,6 +189,75 @@ describe('GKK listesi ve formu (1246, 3117, 3118)', () => {
     expect(kontrol.seriler).toEqual([{ no: 'S-1', hatali: false }, { no: 'S-2', hatali: true }]);
     expect(kontrol.sablon.kod).toBe('GKK-02');
     expect(kontrol.bolumler.flatMap((b) => b.maddeler.map((m) => m.metin))).toContain('Resim no ve revizyon kartla aynı');
+  });
+
+  it('kabulde "Uygun değil" işaretli madde kaydı engellemez, uyarır', async () => {
+    ac(MUHENDIS, 'giris-kontrolu', [GKK]);
+    fireEvent.click(await screen.findByText('MK-0001'));
+    fireEvent.click(await screen.findByRole('button', { name: /^Kabul/ }));
+    expect(screen.queryByText(/uygun değil işaretli/)).toBeNull();
+    fireEvent.click(within(screen.getByRole('group', { name: 'İrsaliye ve sipariş uyumlu' })).getByRole('button', { name: 'Uygun değil' }));
+    expect(screen.getByText(/1 madde uygun değil işaretli; yine de kabul yazılabilir/)).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: "GKK'yı kaydet" }));
+    expect(screen.getByRole('dialog', { name: "GKK'yı kaydet" })).toBeTruthy();
+  });
+
+  it('"Hatalının kararını sonra ver" yalnız Kısmi kabulde çıkar; Şartlı kabul kararı her zaman aynı istekte şartla gider', async () => {
+    const s = ac(MUHENDIS, 'giris-kontrolu', [GKK], { ncr: [{ no: `NCR-${String(new Date().getFullYear())}-0004` }] });
+    fireEvent.click(await screen.findByText('MK-0001'));
+    const sonra = () => screen.queryByLabelText(/kararını sonra ver/);
+    for (const ad of [/^Kabul/, /^Şartlı kabul/, /^Ret/]) {
+      fireEvent.click(await screen.findByRole('button', { name: ad }));
+      expect(sonra()).toBeNull();
+    }
+    fireEvent.click(screen.getByRole('button', { name: /^Kısmi kabul/ }));
+    fireEvent.click(sonra()!);
+    fireEvent.click(screen.getByRole('button', { name: /^Şartlı kabul/ }));
+    fireEvent.change(screen.getByLabelText('Şartlı'), { target: { value: '4' } });
+    fireEvent.click(screen.getByRole('button', { name: "GKK'yı kaydet" }));
+    expect(screen.queryByRole('dialog', { name: "GKK'yı kaydet" })).toBeNull();
+    fireEvent.change(screen.getByLabelText(/^Şart/, { selector: 'textarea' }), { target: { value: 'Yalnız deneme işinde' } });
+    fireEvent.click(screen.getByRole('button', { name: "GKK'yı kaydet" }));
+    fireEvent.click(within(screen.getByRole('dialog', { name: "GKK'yı kaydet" })).getByRole('button', { name: 'Kaydet' }));
+    await waitFor(() => { expect(s.yazmalar.some((y) => y.yol.endsWith('/gkk'))).toBe(true); });
+    expect(s.yazmalar.find((y) => y.yol.endsWith('/gkk'))?.govde).toMatchObject({ kabul: '6', hatali: '4', karar: { karar: 'sartli_kabul', not: 'Yalnız deneme işinde' } });
+  });
+
+  it('kapanmış GKK kayıttaki formla okunur: şablon kodu, bölüm, madde sonucu ve alan değeri; düzenlenemez', async () => {
+    const kontrol: KmGkkKontrolu = {
+      sablon: { kod: 'GKK-01', rev: '03', ad: 'Eski hammadde formu' },
+      bolumler: [{ baslik: 'Eski bölüm', maddeler: [{ metin: 'Eski madde', sonuc: 'uygun_degil' }, { metin: 'İkinci eski madde', sonuc: 'uygun' }], alanlar: [{ etiket: 'Ölçüm aleti', deger: 'DNM-K-07' }] }],
+      olcumler: [], islemler: [], seriler: [],
+    };
+    ac(MUHENDIS, 'giris-kontrolu', [GKK], {}, { ayrinti: { ...AYRINTI, kontrol } });
+    fireEvent.click(await screen.findByRole('tab', { name: /Yapılan/ }));
+    fireEvent.click(await screen.findByText('MK-0003'));
+    expect(await screen.findByRole('heading', { name: 'Eski bölüm' })).toBeTruthy();
+    expect(screen.getByText('· Eski hammadde formu', { exact: false })).toBeTruthy();
+    expect(screen.getByText('rev 03', { exact: false })).toBeTruthy();
+    const madde = screen.getByText('Eski madde').closest('li') as HTMLElement;
+    expect(within(madde).getByText('Uygun değil')).toBeTruthy();
+    expect(within(madde).queryByRole('button')).toBeNull();
+    expect(screen.getByText('DNM-K-07')).toBeTruthy();
+    expect(screen.queryByLabelText('Kontrol formu')).toBeNull();
+    expect(screen.queryByText('İrsaliye ve sipariş uyumlu')).toBeNull();
+    expect(screen.queryByRole('heading', { name: 'Ölçüler' })).toBeNull();
+  });
+
+  it('GKK no Karar bekleyen ve Yapılan listesinde görünür; numarayla aranır', async () => {
+    ac(MUHENDIS, 'giris-kontrolu', [GKK, KARAR]);
+    fireEvent.click(await screen.findByRole('tab', { name: /Karar bekleyen/ }));
+    const karar = await screen.findByRole('table', { name: 'Karar bekleyen' });
+    expect(within(karar).getByRole('columnheader', { name: 'GKK no' })).toBeTruthy();
+    expect(within(karar).getByText('GKK-2026-0009')).toBeTruthy();
+    fireEvent.click(screen.getByRole('tab', { name: /Yapılan/ }));
+    const yapilan = await screen.findByRole('table', { name: 'Yapılan GKK' });
+    expect(within(yapilan).getByText('GKK-2026-0001')).toBeTruthy();
+    const ara = screen.getByLabelText('GKK ara');
+    fireEvent.change(ara, { target: { value: 'gkk-2026-0001' } });
+    expect(within(await screen.findByRole('table', { name: 'Yapılan GKK' })).getByText('MK-0003')).toBeTruthy();
+    fireEvent.change(ara, { target: { value: 'GKK-2026-0777' } });
+    expect(await screen.findByText('Aramaya uyan kayıt yok')).toBeTruthy();
   });
 
   it('başkası önce yazdıysa (409) form yenilenir ve salt okunur olur', async () => {

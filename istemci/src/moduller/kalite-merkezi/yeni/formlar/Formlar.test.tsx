@@ -186,4 +186,22 @@ describe('Ürün durum etiketi Etiket Merkezi\'nden (1288, 1548)', () => {
     expect(terminalFormlari(eski)).toEqual([]);
     expect(terminalFormlari(formListesi([{ ...DEGISMIS, terminal: true }], undefined)).map((f) => f.kod)).toEqual(['KF-08']);
   });
+
+  it('3118: GKK şablonunun boş formu ve tasarımcı önizlemesi ekrandaki gibi Uygun / Uygun değil / Bakılmadı başlıklarıyla basılır', async () => {
+    kmAc('formlar', MUHENDIS);
+    fireEvent.click((await kart('GKK-01')).getByRole('button', { name: /Boş form/ }));
+    const basliklar = async () => (await screen.findAllByRole('columnheader')).map((h) => h.textContent);
+    expect(await basliklar()).toEqual(expect.arrayContaining(['Uygun', 'Uygun değil', 'Bakılmadı']));
+    expect(await basliklar()).not.toContain('UD');
+    cleanup();
+    kmAc('formlar', MUHENDIS);
+    fireEvent.click((await kart('KF-08')).getByRole('button', { name: /Boş form/ }));
+    expect(await basliklar()).toEqual(expect.arrayContaining(['Evet', 'Hayır', 'UD']));
+    cleanup();
+    kmAc('formlar', MUHENDIS);
+    fireEvent.click((await kart('GKK-02')).getByRole('button', { name: /Düzenle/ }));
+    expect(await screen.findByRole('group', { name: 'Hangi kart türlerinde açılır' })).toBeTruthy();
+    expect(await basliklar()).toEqual(expect.arrayContaining(['Uygun', 'Uygun değil', 'Bakılmadı']));
+    expect(await basliklar()).not.toContain('Evet');
+  });
 });

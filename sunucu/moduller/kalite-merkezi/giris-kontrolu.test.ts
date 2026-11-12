@@ -316,7 +316,7 @@ describe('Kalite Merkezi giriş kontrolü (gerçek PostgreSQL)', () => {
     const yil = String(new Date().getFullYear());
     const once = await oku(hm.malKabulSatirId);
     assert.deepEqual([once.kayit.gkkTuru, once.kayit.gkkNo, once.ayrinti.kartTuruKodu, once.ayrinti.gkkNoBicimi], ['hammadde', null, 'hammadde', `GKK-${yil}-0001`]);
-    assert.deepEqual(once.ayrinti.olculer, [{ ad: 'Çap', deger: '40 mm' }, { ad: 'Boy', deger: '3.000 mm' }]);
+    assert.deepEqual(once.ayrinti.olculer, [{ ad: 'Çap', deger: '40 mm' }, { ad: 'Boy', deger: '3000 mm' }]);
     assert.equal(once.ayrinti.kalite, 'DNM-1');
     assert.equal(once.ayrinti.kontrol, null);
 
