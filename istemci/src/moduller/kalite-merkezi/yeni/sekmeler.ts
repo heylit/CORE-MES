@@ -10,6 +10,7 @@ import { IsEmirleri, IsEmirleriSayaci } from './emirler/index.tsx';
 import { Formlar, FormlarSayaci } from './formlar/index.tsx';
 import { Gostergeler, GostergelerSayaci } from './gostergeler/index.tsx';
 import { DegisiklikIzi, DegisiklikIziSayaci } from './iz/index.tsx';
+import { GirisKontrolu, GirisKontroluSayaci } from './giris/index.tsx';
 import { Kullanicilar, KullanicilarSayaci } from './kullanicilar/index.tsx';
 import { TeknikKutuphane, TeknikKutuphaneSayaci } from './kutuphane/index.tsx';
 import { LotKabul, LotKabulSayaci } from './lot/index.tsx';
@@ -68,6 +69,7 @@ export const GORUNUMLER: readonly KmGorunumTanimi[] = [
   { anahtar: 'resimler', baslik: 'Resim ve modeller', bolum: 'resim', ekran: ResimVeModellerSayfasi, sayac: ResimVeModellerSayaci },
   { anahtar: 'kutuphane', baslik: 'Teknik kütüphane', bolum: 'resim', ekran: TeknikKutuphane, sayac: TeknikKutuphaneSayaci },
   { anahtar: 'muayeneler', baslik: 'Muayeneler', bolum: 'muayene', ekran: Muayeneler, sayac: MuayenelerSayaci },
+  { anahtar: 'giris-kontrolu', baslik: 'Giriş kontrolü (GKK)', bolum: 'muayene', ekran: GirisKontrolu, sayac: GirisKontroluSayaci },
   { anahtar: 'lot-kabul', baslik: 'Lot kabul (AQL)', bolum: 'muayene', ekran: LotKabul, sayac: LotKabulSayaci },
   { anahtar: 'is-emirleri', baslik: 'İş emirleri', bolum: 'muayene', ekran: IsEmirleri, sayac: IsEmirleriSayaci },
   { anahtar: 'olcum-analizi', baslik: 'Ölçüm analizi', bolum: 'muayene', ekran: OlcumAnalizi, sayac: OlcumAnaliziSayaci },

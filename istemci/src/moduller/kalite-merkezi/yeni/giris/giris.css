@@ -1,0 +1,26 @@
+/* 3117 GKK listesi ve formu. bilgi ızgarası genişliğe göre sütun sayısını kendisi seçer (360'ta bir). */
+.tc-km-gkk { display: grid; gap: var(--b-4); min-width: 0; }
+.tc-km-gkk-soluk { margin: 0; color: var(--muted); font-size: var(--yazi-s); }
+.tc-km-gkk-mono { font-family: var(--font-mono); }
+.tc-km-gkk-hucre { display: grid; gap: var(--b-1); min-width: 0; }
+.tc-km-gkk-hucre small { color: var(--muted); font-size: var(--yazi-xs); }
+.tc-km-gkk-aralik { display: flex; flex-wrap: wrap; gap: var(--b-3); align-items: flex-start; }
+
+.tc-km-gkk-form { display: grid; gap: var(--b-4); min-width: 0; align-items: start; }
+/* Geniş ekranda iki sütun: lot ile belge, GKK ile karar yan yana; dar ekranda alt alta. */
+@media (min-width: 1024px) {
+  .tc-km-gkk-form { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .tc-km-gkk-form > :first-child, .tc-km-gkk-form > p { grid-column: 1 / -1; }
+}
+.tc-km-gkk-form-ust { display: flex; align-items: center; justify-content: space-between; gap: var(--b-3); }
+.tc-km-gkk-bilgi { display: grid; gap: var(--b-3); grid-template-columns: repeat(auto-fit, minmax(calc(var(--dokunma) * 3.4), 1fr)); margin: 0; }
+.tc-km-gkk-bilgi div { display: grid; gap: var(--b-1); min-width: 0; }
+.tc-km-gkk-bilgi dt { color: var(--muted); font-size: var(--yazi-xs); }
+.tc-km-gkk-bilgi dd { margin: 0; overflow-wrap: anywhere; }
+.tc-km-gkk-satir { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2); margin: 0 0 var(--b-3); }
+.tc-km-gkk-satir:last-child { margin-bottom: 0; }
+.tc-km-gkk-alanlar { display: grid; gap: var(--b-3); }
+.tc-km-gkk-eylem { display: flex; justify-content: flex-end; }
+@media (max-width: 767px) {
+  .tc-km-gkk-eylem .tc-dugme { flex: 1 1 auto; }
+}

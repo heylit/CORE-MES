@@ -52,3 +52,4 @@
 .tc-km-atolye .tc-km1-bugun .tc-km1-kisayol { min-height: calc(var(--dokunma-ana) * 2); padding: var(--b-5); }
 .tc-km-atolye .tc-km1-bugun .tc-km1-kisayol b { font-size: var(--yazi-xl); }
 .tc-km-atolye .tc-km1-bugun .tc-km1-gorev { padding: var(--b-4); }
+.tc-km1-grup-tumu { margin-inline-start: auto; }

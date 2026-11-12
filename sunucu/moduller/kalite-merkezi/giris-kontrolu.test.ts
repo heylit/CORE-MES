@@ -6,7 +6,7 @@ import { testVeritabaniKur } from '#cekirdek/test-vt.ts';
 import type { TestVeritabani } from '#cekirdek/test-vt.ts';
 import { uygulamaKur } from '#cekirdek/uygulama.ts';
 import { ISTEK_KIMLIGI_BASLIGI } from '#paylasilan/istek-kimligi.ts';
-import { kmGirisBekleyenCevabi, kmGirisCevabi } from '#paylasilan/sozlesme/kalite-merkezi.ts';
+import { kmGirisBekleyenCevabi, kmGirisCevabi, kmGirisKayitlariCevabi } from '#paylasilan/sozlesme/kalite-merkezi.ts';
 import type { KmGirisKaydi } from '#paylasilan/sozlesme/kalite-merkezi.ts';
 import { malKabulCevabi } from '#paylasilan/sozlesme/stok.ts';
 import { denetimYaz } from '../denetim/disari.ts';
@@ -14,6 +14,7 @@ import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { kullaniciYukle, rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { karneOzetleri } from '../musteri-tedarikci/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
+import { tesisGunu } from '#paylasilan/tesis-zamani.ts';
 import { uretimEmriAc } from '../uretim-emirleri/disari.ts';
 import { GIRIS_KARNE_ANAHTARI, GIRIS_NCR_KAYNAGI } from './kurallar.ts';
 import * as sorgular from './sorgular.ts';
@@ -276,5 +277,35 @@ describe('Kalite Merkezi giriş kontrolü (gerçek PostgreSQL)', () => {
     const ozet = (await o().vt.tx((db) => karneOzetleri(db, [firmaId]))).get(firmaId);
     assert.equal(ozet?.kalite.lot, 4);
     assert.equal(ozet?.kalite.puan, 50, 'kabul 1 + şartlı 0,5 + hatalı kabul 0,5 + red 0 = 2 / 4');
+  });
+  // 3117: Yapılan sekmesi kapanan GKK'ları gün aralığıyla, en yeni üstte verir; karar bekleyen girmez. Form tek satırı okur.
+  test('kayıtlar: kapanan GKK aralıkta, karar bekleyen yok, aralık dışı yok; tek satır okunur; yetkisiz 403, ters aralık 400', async () => {
+    const ilk = await kabulEt(await kart('hammadde'), '2');
+    const ikinci = await kabulEt(await kart('hammadde'), '3');
+    const acik = await kabulEt(await kart('hammadde'), '2');
+    const gkk = (id: number, kabul: string, hatali: string) => istek('kaliteci', 'POST', `/kalite-merkezi/giris/${id}/gkk`, { kabul, hatali });
+    assert.equal((await gkk(ilk.malKabulSatirId, '2', '0')).statusCode, 200);
+    assert.equal((await gkk(ikinci.malKabulSatirId, '3', '0')).statusCode, 200);
+    assert.equal((await gkk(acik.malKabulSatirId, '1', '1')).statusCode, 200);
+    const gun = tesisGunu(Date.now());
+    const liste = async (baslangic: string, bitis: string, ad = 'kaliteci') => istek(ad, 'GET', `/kalite-merkezi/giris/kayitlar?baslangic=${baslangic}&bitis=${bitis}`);
+
+    const r = await liste(gun, gun);
+    assert.equal(r.statusCode, 200, r.body);
+    const c = kmGirisKayitlariCevabi.parse(r.json());
+    const idler = c.kayitlar.map((k) => k.malKabulSatirId);
+    assert.ok(idler.indexOf(ikinci.malKabulSatirId) < idler.indexOf(ilk.malKabulSatirId) && idler.includes(ilk.malKabulSatirId), 'en yeni üstte');
+    assert.ok(!idler.includes(acik.malKabulSatirId), 'karar bekleyen Yapılan\'da yok');
+    assert.ok(c.kayitlar.every((k) => k.durum === 'kapandi'));
+    assert.equal(c.sinirda, false);
+    assert.deepEqual(kmGirisKayitlariCevabi.parse((await liste('2000-01-01', '2000-01-31')).json()).kayitlar, []);
+    assert.equal((await liste(gun, '2000-01-01')).statusCode, 400);
+    assert.equal((await liste(gun, gun, 'operator')).statusCode, 403);
+
+    const tek = await istek('kaliteci', 'GET', `/kalite-merkezi/giris/${acik.malKabulSatirId}`);
+    assert.equal(tek.statusCode, 200, tek.body);
+    assert.deepEqual([kmGirisCevabi.parse(tek.json()).kayit.durum, kmGirisCevabi.parse(tek.json()).kayit.hataliMiktar], ['karar_bekliyor', '1.000']);
+    assert.equal((await istek('operator', 'GET', `/kalite-merkezi/giris/${acik.malKabulSatirId}`)).statusCode, 403);
+    assert.equal((await istek('kaliteci', 'GET', '/kalite-merkezi/giris/2147483000')).statusCode, 404);
   });
 });

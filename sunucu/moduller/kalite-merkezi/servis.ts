@@ -7,9 +7,9 @@ import type { Kullanici } from '#cekirdek/yetki.ts';
 import { tesisGunu, tesisSaati } from '#paylasilan/tesis-zamani.ts';
 import type { Durum as AletDurumu } from '#paylasilan/sozlesme/kalibrasyon.ts';
 import type { KaliteKarari, KapanisMaddeBilgisi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
-import { KM_GECMIS_SINIRI } from '#paylasilan/sozlesme/kalite-merkezi.ts';
+import { KM_GECMIS_SINIRI, KM_GIRIS_KAYIT_SINIRI } from '#paylasilan/sozlesme/kalite-merkezi.ts';
 import type { KayitAramaKaynagi } from '#paylasilan/kayit-aramasi.ts';
-import type { KmGirisBekleyenCevabi, KmGirisCevabi, KmGirisGkkIstegi, KmGirisKaydi, KmGirisKararIstegi, KmHataliBekleyenCevabi, KmHataliKararCevabi, KmHataliKararGovdesi, KmTedarikciDurumu, KmTedarikciFirmalariCevabi } from '#paylasilan/sozlesme/kalite-merkezi.ts';
+import type { KmGirisBekleyenCevabi, KmGirisCevabi, KmGirisKayitlariCevabi, KmGirisGkkIstegi, KmGirisKaydi, KmGirisKararIstegi, KmHataliBekleyenCevabi, KmHataliKararCevabi, KmHataliKararGovdesi, KmTedarikciDurumu, KmTedarikciFirmalariCevabi } from '#paylasilan/sozlesme/kalite-merkezi.ts';
 import type { KmEmirKaynagi, KmEmirKaynaklariCevabi, KmEslesmeSayimiCevabi, KmParcaKaynaklariCevabi } from '#paylasilan/sozlesme/kalite-merkezi.ts';
 import { ACIK_EMIR_DURUMLARI } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { siparisListesiSorgusu } from '#paylasilan/sozlesme/siparisler.ts';
@@ -506,6 +506,22 @@ export async function hataliBekleyenListesi(db: Db): Promise<KmHataliBekleyenCev
 export async function girisBekleyenListesi(db: Db): Promise<KmGirisBekleyenCevabi> {
   const idler = [...new Set([...(await girisKontroluSatirlari(db, null)).map((s) => s.malKabulSatirId), ...(await sorgular.kararBekleyenGirisler(db))])];
   return { kayitlar: (await girisKayitlari(db, idler)).filter((k) => k.durum !== 'kapandi') };
+}
+
+// 3117: Yapılan listesi kapanan GKK'lardır; hatalısı kararını bekleyen Bekleyenler'de kalır.
+export async function girisKayitlariListesi(db: Db, a: { baslangic: string; bitis: string }): Promise<KmGirisKayitlariCevabi> {
+  const idler = await sorgular.gkkVerilenGirisler(db, { ...a, sinir: KM_GIRIS_KAYIT_SINIRI });
+  const kayitlar = await girisKayitlari(db, idler);
+  const sira = new Map(idler.map((id, i) => [id, i]));
+  return {
+    kayitlar: kayitlar.filter((k) => k.durum === 'kapandi').sort((x, y) => (sira.get(x.malKabulSatirId) ?? 0) - (sira.get(y.malKabulSatirId) ?? 0)),
+    sinirda: idler.length >= KM_GIRIS_KAYIT_SINIRI,
+  };
+}
+
+// 3117: GKK formu tek satırı açar; kapanmış satır da okunur (salt okunur görünüm).
+export async function girisKaydiOku(db: Db, id: number): Promise<KmGirisCevabi> {
+  return { kayit: await girisKaydi(db, id) };
 }
 
 async function girisKayitlari(db: Db, idler: readonly number[]): Promise<KmGirisKaydi[]> {

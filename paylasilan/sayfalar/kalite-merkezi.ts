@@ -23,6 +23,8 @@ export const KALITE_MERKEZI_IKINCI_MENU = {
     ] },
     { baslik: 'Muayene', maddeler: [
       { anahtar: 'insp', baslik: 'Muayeneler', yol: '/kalite-merkezi/muayeneler', simge: 'check', islem: 'kalite-merkezi.oku' },
+      // 3117: GKK listesi GKK uçlarının işlemiyle görünür (yeni işlem açılmaz).
+      { anahtar: 'gkk', baslik: 'Giriş kontrolü (GKK)', yol: '/kalite-merkezi/giris-kontrolu', simge: 'clipboard-check', islem: 'kalite-merkezi.onayla' },
       { anahtar: 'aql', baslik: 'Lot kabul (AQL)', yol: '/kalite-merkezi/lot-kabul', simge: 'scan', islem: 'kalite-merkezi.oku' },
       { anahtar: 'emir', baslik: 'İş emirleri', yol: '/kalite-merkezi/is-emirleri', simge: 'list', islem: 'kalite-merkezi.oku' },
       { anahtar: 'spc', baslik: 'Ölçüm analizi', yol: '/kalite-merkezi/olcum-analizi', simge: 'chart', islem: 'kalite-merkezi.oku' },

@@ -659,6 +659,17 @@ export async function kararBekleyenGirisler(db: Db): Promise<number[]> {
   return l.map((r) => r.id);
 }
 
+// 3117: GKK'sı gün aralığında verilmiş satırlar, en yeni GKK üstte. Gün tesis saatindedir (oturumun TimeZone ayarı, cekirdek/db.ts).
+export async function gkkVerilenGirisler(db: Db, a: { baslangic: string; bitis: string; sinir: number }): Promise<number[]> {
+  const l = await db.sorgu<{ id: number }>(
+    `SELECT mal_kabul_satiri_id::int AS id FROM kalite_merkezi_giris_karari
+      WHERE asama = 'gkk' AND zaman::date BETWEEN $1::date AND $2::date
+      ORDER BY zaman DESC, id DESC LIMIT $3`,
+    [a.baslangic, a.bitis, a.sinir],
+  );
+  return l.map((r) => r.id);
+}
+
 export async function girisKarariYaz(db: Db, k: {
   malKabulSatirId: number; asama: 'gkk' | 'karar'; kabulMiktar: string | null; hataliMiktar: string | null; karar: 'kabul' | 'sartli_kabul' | 'red' | null;
   ncrKimlik: string | null; ncrNo: string | null; aciklama: string | null; kisiId: number;

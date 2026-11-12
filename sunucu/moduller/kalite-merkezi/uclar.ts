@@ -4,7 +4,7 @@ import {
   kmBelgeParametresi, kmDegisiklikCevabi, kmDegisiklikSorgusu, kmDosyaBaglaGovdesi, kmDosyaCevabi, kmDosyaParametresi,
   kmEmirKaynaklariCevabi, kmEslesmeSayimiCevabi, kmParcaKaynaklariCevabi, kmParcaKaynaklariSorgusu,
   kmHataliBekleyenCevabi, kmHataliKararCevabi, kmHataliKararGovdesi, kmHataliParametresi,
-  kmGirisBekleyenCevabi, kmGirisCevabi, kmGirisGkkGovdesi, kmGirisKararGovdesi, kmGirisParametresi,
+  kmGirisBekleyenCevabi, kmGirisKayitlariCevabi, kmGirisKayitlariSorgusu, kmGirisCevabi, kmGirisGkkGovdesi, kmGirisKararGovdesi, kmGirisParametresi,
   kmGeriYukleCevabi, kmGeriYukleGovdesi, kmGecmisCevabi, kmIlkParcaBekleyenCevabi, kmIlkParcaCevabi, kmIlkParcaGovdesi, kmIlkParcaParametresi, kmKarantinaKonumlariCevabi, kmKarantinaPartileriCevabi, kmKimlikCevabi, kmOlcuAletleriCevabi, kmOnayGeriAlGovdesi, kmOnaylaCevabi, kmOnaylaGovdesi, kmOzetCevabi, kmSilGovdesi, kmSurumCevabi, kmTamamCevabi, kmTedarikciFirmalariCevabi, kmYazGovdesi,
 } from '#paylasilan/sozlesme/kalite-merkezi.ts';
 import * as servis from './servis.ts';
@@ -176,6 +176,23 @@ export const uclar: Uc[] = [
     yetki: 'kalite-merkezi.onayla',
     cevap: kmGirisBekleyenCevabi,
     isle: ({ db }) => servis.girisBekleyenListesi(db),
+  }),
+  // 3117: GKK listesinin Yapılan sekmesi ve GKK formu; bekleyenlerle aynı yetki (GKK'yı veren kişi).
+  uc({
+    yontem: 'GET',
+    yol: '/kalite-merkezi/giris/kayitlar',
+    yetki: 'kalite-merkezi.onayla',
+    sorgu: kmGirisKayitlariSorgusu,
+    cevap: kmGirisKayitlariCevabi,
+    isle: ({ db, sorgu }) => servis.girisKayitlariListesi(db, sorgu),
+  }),
+  uc({
+    yontem: 'GET',
+    yol: '/kalite-merkezi/giris/:malKabulSatirId',
+    yetki: 'kalite-merkezi.onayla',
+    parametre: kmGirisParametresi,
+    cevap: kmGirisCevabi,
+    isle: ({ db, parametre }) => servis.girisKaydiOku(db, parametre.malKabulSatirId),
   }),
   uc({
     yontem: 'POST',

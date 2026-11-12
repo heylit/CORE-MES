@@ -225,6 +225,13 @@ export const kmGirisKaydi = z.object({
 export type KmGirisKaydi = z.output<typeof kmGirisKaydi>;
 export const kmGirisBekleyenCevabi = z.object({ kayitlar: z.array(kmGirisKaydi) });
 export const kmGirisParametresi = z.object({ malKabulSatirId: z.coerce.number<number>().int().positive().max(2147483647) });
+// 3117: kapanan GKK'lar (Yapılan listesi); gün aralığı GKK zamanına göredir, ikisi de dahil; en yeni üstte, en çok
+// KM_GIRIS_KAYIT_SINIRI satır (sınıra değince `sinirda`).
+export const KM_GIRIS_KAYIT_SINIRI = 500;
+export const kmGirisKayitlariSorgusu = z.object({ baslangic: tarihSemasi, bitis: tarihSemasi }).strict()
+  .refine((s) => s.baslangic <= s.bitis, { message: 'Başlangıç bitişten sonra olamaz.', path: ['baslangic'] });
+export const kmGirisKayitlariCevabi = z.object({ kayitlar: z.array(kmGirisKaydi), sinirda: z.boolean() });
+export type KmGirisKayitlariCevabi = z.output<typeof kmGirisKayitlariCevabi>;
 export const kmGirisGkkGovdesi = z.object({
   kabul: sifirOlabilirMiktar,
   hatali: sifirOlabilirMiktar,
