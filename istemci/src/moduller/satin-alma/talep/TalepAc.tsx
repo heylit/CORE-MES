@@ -124,15 +124,19 @@ function AdetAlani({ k, degistir }: { k: KalemTaslagi; degistir: (d: Partial<Kal
     return agirliksiz ? <p className="sa-talep-not">Kartta parça ağırlığı yok; adet karşılığı hesaplanamaz.</p> : null;
   }
   const miktar = miktarOku(k.miktar);
-  const yaklasik = miktar === null || k.adet !== '' ? null : karsilikYaz({ miktar: String(Number(miktar) / kg), birim: 'adet' });
+  const yaklasik = miktar === null || !(Number(miktar) > 0) || k.adet !== '' ? null : karsilikYaz({ miktar: String(Number(miktar) / kg), birim: 'adet' });
+  // Parça bölünmez: kesirli adet kg'ı değiştirmez, uyarılır (virgül sessizce atılırsa 2,5 adet 25 olur).
+  const kesirli = k.adet !== '' && !/^\d+$/.test(k.adet.trim());
   return (
     <div className="sa-talep-adet">
       <Girdi etiket="Adet" inputMode="numeric" value={k.adet} placeholder={yaklasik ?? 'Kaç parça'} disabled={k.mevcut?.bagli === true}
         onChange={(e) => {
-          const adet = e.target.value.replace(/\D/g, '');
-          degistir(adet === '' ? { adet } : { adet, miktar: adettenKg(Number(adet), kg) });
+          const adet = e.target.value;
+          degistir(/^\d+$/.test(adet.trim()) ? { adet, miktar: adettenKg(Number(adet.trim()), kg) } : { adet });
         }} />
-      <p className="sa-talep-not" aria-live="polite">{yaklasik !== null ? `${yaklasik} · ` : ''}1 parça ≈ {kg.toLocaleString('tr-TR', { maximumFractionDigits: 2 })} kg</p>
+      {kesirli
+        ? <p className="sa-talep-not" role="alert">Adet tam sayı olur; kesirli miktarı kg olarak yazın.</p>
+        : <p className="sa-talep-not">1 parça ≈ {kg.toLocaleString('tr-TR', { maximumFractionDigits: 2 })} kg</p>}
     </div>
   );
 }
