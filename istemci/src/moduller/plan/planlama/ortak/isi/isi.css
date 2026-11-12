@@ -36,6 +36,8 @@
 .tc-isi-tablo { display: flex; flex-direction: column; gap: var(--b-1); width: max-content; min-width: 100%; }
 .tc-isi-tablo[data-genis="kalem"] { --isi-min: 6rem; }
 .tc-isi-tablo[data-genis="hafta"], .tc-isi-tablo[data-genis="donem"] { --isi-min: 3.5rem; }
+/* Gün sütunları eşit kalır: hücre yazısı ("+7 gün") sütunu genişletmez, sığmayan kısım üç noktayla kesilir, tamamı başlıkta. */
+.tc-isi-tablo[data-genis="gun"] .tc-isi-h { contain: inline-size; padding: 0; }
 .tc-isi-sat {
   display: grid; grid-template-columns: var(--isi-ad); grid-auto-flow: column; grid-auto-columns: minmax(var(--isi-min), 1fr);
   gap: 3px; align-items: center; min-width: 0;

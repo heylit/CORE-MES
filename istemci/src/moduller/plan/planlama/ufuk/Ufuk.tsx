@@ -3,11 +3,12 @@ import { DurumKutusu, Dugme, IsaretKutusu, Kart, Rozet, Simge, Tablo, useBildiri
 import type { PlanlamaEkranOzellikleri } from '../gorunumler.ts';
 import type { PlanlamaCalismasi } from '../tipler.ts';
 import {
-  TALEP_GECMIS_ENAZ, gunAy, gunAyHafta, kullanilabilirlik, ufukAyarOku, ufukAyarYaz, ufukVerisi, yillikAyarOku, zamanKur,
+  TALEP_GECMIS_ENAZ, gunAyHafta, gunAyYil, kullanilabilirlik, ufukAyarOku, ufukAyarYaz, ufukVerisi, yillikAyarOku, zamanKur,
   type MalzemeHaftasi, type MalzemeSatiri, type UfukAyar, type UfukKatmani, type UfukVerisi, type Zaman,
 } from './kurallar.ts';
 import { GostergeSeridi, Not, SayiGirdisi, SecimDugmeleri, sayi, tl, type Gosterge } from './parcalar.tsx';
 import './ufuk.css';
+import { useKaynakAdlari } from '../kaynak-kodu.tsx';
 import { ufukGunu } from '../ufuk-olcegi.ts';
 
 // Ufuk (zz39-ufuk.betik): 26 ya da 52 haftaya plan, plan dışı sipariş ve öngörü yükü; malzeme netleştirmesi. Motoru çalıştırmaz: kayıtlı
@@ -38,7 +39,7 @@ export function Ufuk({ calisma, komut, yetki, git }: PlanlamaEkranOzellikleri) {
   const notlar = ufukNotlari(calisma, v, ongoru);
   return (
     <div className="tc-pyu" data-parca="P5">
-      <Kart baslik="Yük haritası" baslikEki={<span className="tc-pyu-kucuk">{v.H[0]?.ad} – {gunAy(z, v.son - 1)} · {A.hafta} hafta · Atölyedeki plan</span>}>
+      <Kart baslik="Yük haritası" baslikEki={<span className="tc-pyu-kucuk">{v.H[0] ? gunAyYil(z, v.H[0].a) : ''} – {gunAyYil(z, v.son - 1)} · {A.hafta} hafta · Atölyedeki plan</span>}>
         <div className="tc-pyu-sira">
           <SecimDugmeleri etiket="Görünüm" secili={gor} sec={gorYaz} secenekler={[['yuk', 'Yük', 'gauge'], ['malzeme', 'Malzeme', 'box']]} />
           <SecimDugmeleri etiket="Ufuk" kapali={!yaz} secili={String(A.hafta) as '26' | '52'} secenekler={[['26', '26 hafta'], ['52', '52 hafta']]}
@@ -88,6 +89,7 @@ function ufukNotlari(c: PlanlamaCalismasi, v: UfukVerisi, ongoru: boolean): stri
 }
 
 function YukGorunumu({ v, elle, ongoru, sec, secYaz }: { v: UfukVerisi; elle: boolean; ongoru: boolean; sec: { g: string; w: number } | null; secYaz: (s: { g: string; w: number } | null) => void }) {
+  const ad = useKaynakAdlari();
   const top = (k: UfukKatmani): number => v.sat.reduce((a, s) => a + s.w.reduce((b, c) => b + c[k], 0), 0);
   const asim = v.sat.reduce((a, s) => a + s.w.filter((c) => c.o > 1.0001).length, 0);
   const enDolu = v.sat.map((s) => ({ g: s.g, ...s.w.reduce((b, c, i) => (c.o > b.o ? { o: c.o, i } : b), { o: -1, i: 0 }) })).sort((a, b) => b.o - a.o)[0];
@@ -100,7 +102,7 @@ function YukGorunumu({ v, elle, ongoru, sec, secYaz }: { v: UfukVerisi; elle: bo
       : !elle && v.gec.dusuk
         ? [{ simge: 'chart' as const, ad: 'Öngörü', deger: `${sayi(top('ongoru'), 0)} sa`, alt: `düşük güven: ${sayi(v.gec.hafta, 0)} hafta giriş`, ton: 'uyari' as const }]
         : [{ simge: 'chart' as const, ad: 'Öngörü', deger: `${sayi(top('ongoru'), 0)} sa`, alt: `${v.ong.length} ürün-ay partisi` }]),
-    { simge: 'alert', ad: 'Kapasiteyi aşan', deger: `${asim} hücre`, alt: enDolu && enDolu.o > 0 ? `en dolu: ${enDolu.g} grubu, ${v.H[enDolu.i]?.ad ?? ''} haftası %${sayi(enDolu.o * 100, 0)}` : 'yok', ton: asim ? 'uyari' : 'tamam' },
+    { simge: 'alert', ad: 'Kapasiteyi aşan', deger: `${asim} hücre`, alt: enDolu && enDolu.o > 0 ? `en dolu: ${ad.grup(enDolu.g)} grubu, ${v.H[enDolu.i]?.ad ?? ''} haftası %${sayi(enDolu.o * 100, 0)}` : 'yok', ton: asim ? 'uyari' : 'tamam' },
     { simge: 'clock', ad: 'Termine yetişmeyen', deger: `${gec.length} sipariş`, alt: gec.length ? 'plan dışı; bugün başlasa bile' : 'plan dışı siparişlerde yok', ton: gec.length ? 'hata' : 'tamam' },
   ];
   const sinir = v.H.findIndex((w) => !w.plan);
@@ -119,11 +121,11 @@ function YukGorunumu({ v, elle, ongoru, sec, secYaz }: { v: UfukVerisi; elle: bo
           <tbody>
             {v.sat.map((s) => (
               <tr key={s.g}>
-                <th scope="row"><b>{s.g}</b><small>{s.n} tezgâh</small></th>
+                <th scope="row"><b>{ad.grup(s.g)}</b><small>{s.n} tezgâh</small></th>
                 {s.w.map((c, i) => {
                   const ton = !Number.isFinite(c.o) || c.o > 1.0001 ? 'hata' : c.o > 0.85 ? 'uyari' : c.o > 0.6 ? 'dolu' : undefined;
                   const bos = c.top < 0.05;
-                  const t = `${s.g}, ${v.H[i]?.ad ?? ''} haftası: plan ${sayi(c.plan, 0)} sa, plan dışı ${sayi(c.kaba, 0)} sa${ongoru ? `, öngörü ${sayi(c.ongoru, 0)} sa` : ''}; kapasite ${sayi(c.kap, 0)} sa`;
+                  const t = `${ad.grup(s.g)}, ${v.H[i]?.ad ?? ''} haftası: plan ${sayi(c.plan, 0)} sa, plan dışı ${sayi(c.kaba, 0)} sa${ongoru ? `, öngörü ${sayi(c.ongoru, 0)} sa` : ''}; kapasite ${sayi(c.kap, 0)} sa`;
                   let x = 0;
                   return (
                     <td key={i} data-sinir={i === sinir ? '' : undefined}>
@@ -162,6 +164,7 @@ function YukGorunumu({ v, elle, ongoru, sec, secYaz }: { v: UfukVerisi; elle: bo
 interface IsSatiri { kat: UfukKatmani; j: string; h: number; adim: Set<string> }
 
 function HaftaSecimi({ v, calisma, sec, kapat, ongoru, git }: { v: UfukVerisi; calisma: PlanlamaCalismasi; sec: { g: string; w: number }; kapat: () => void; ongoru: boolean; git: PlanlamaEkranOzellikleri['git'] }) {
+  const ad = useKaynakAdlari();
   const r = v.sat.find((x) => x.g === sec.g);
   const c = r?.w[sec.w]; const w = v.H[sec.w];
   if (!r || !c || !w) return null;
@@ -187,7 +190,7 @@ function HaftaSecimi({ v, calisma, sec, kapat, ongoru, git }: { v: UfukVerisi; c
   ];
   const gec = v.kaba.filter((x) => x.gec > 0.05 && x.r.adim.some((a) => a.g === sec.g));
   return (
-    <Kart baslik={`${sec.g} · ${w.ad} haftası`} baslikEki={<span className="tc-pyu-kucuk">{w.plan ? 'plan ufkunda' : 'kaba'} · yük {sayi(c.top, 0)} sa / kapasite {sayi(c.kap, 0)} sa</span>}
+    <Kart baslik={`${ad.grup(sec.g)} · ${w.ad} haftası`} baslikEki={<span className="tc-pyu-kucuk">{w.plan ? 'plan ufkunda' : 'kaba'} · yük {sayi(c.top, 0)} sa / kapasite {sayi(c.kap, 0)} sa</span>}
       sag={<Dugme simge="x" onClick={kapat} aria-label="Kapat" />}>
       {satirlar.length ? <Tablo etiket="Haftanın işleri" sutunlar={sutun} satirlar={satirlar} satirAnahtari={(x) => `${x.kat}|${x.j}`} />
         : <p className="tc-pyu-not">Bu hafta bu grupta iş yok.</p>}

@@ -1,6 +1,7 @@
 import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react';
 import { Dugme, Simge } from '../../../../ortak/arayuz/index.ts';
 import type { SimgeAdi } from '../../../../ortak/tasarim/simgeler.ts';
+import { OrtaKirpik } from '../ortak/OrtaKirpik.tsx';
 import type { IsiHucresi, IsiSatiri, IsiSutunu, UstDurum } from './kurallar.ts';
 
 // Bugünkü çerçevenin ısı haritası düzeni (zz30-isi): başlık ve durum satırı, satır × sütun ızgarası, seçilen hücrenin satırın hemen altında
@@ -104,7 +105,7 @@ export function IsiIzgarasi<S extends IsiSatiri>({ etiket, satirAd, genis, sutun
               <div className="tc-pys-sat" data-secili={r.k === secim?.satir ? '' : undefined}>
                 <span className="tc-pys-ad" data-ton={r.ton || undefined}>
                   <Simge ad={r.simge} boyut="k" />
-                  <span><b className="mono">{r.ad}</b>{r.alt && <small>{r.alt}</small>}</span>
+                  <span><b className="mono" title={r.ad}><OrtaKirpik metin={r.ad} /></b>{r.alt && <small>{r.alt}</small>}</span>
                 </span>
                 {sutunlar.map((c) => {
                   const secili = secim?.satir === r.k && secim.sutun === c.k;

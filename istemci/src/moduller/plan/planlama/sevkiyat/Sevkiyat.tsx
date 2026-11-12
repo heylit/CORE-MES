@@ -4,6 +4,7 @@ import '../../../../ortak/arayuz/tablo.css';
 import { planGuncel } from '../durum.ts';
 import { Acilim, BosHarita, IsiIzgarasi, IsiSayfasi, IzinYok, Lejant, type IsiSecimi } from '../ortak/isi/index.ts';
 import type { PlanlamaEkranOzellikleri } from '../gorunumler.ts';
+import { useEmirNo, type EmirNo } from '../ortak/emir-no.ts';
 import {
   ACIK_GRUP, AKIS_SINIRI, AYNI_BITIS, DONEMLER, bitisAkisi, donemOzetleri, farkYaz, gecMi, ilkPlanaGore, oncekineGore, planAdi, sayiYaz, sevkDurumu,
   SEVK_LEJANTI, sevkAcilimi, sevkGruplari, sevkGunuYaz, sevkIsisi, sevkListesi, sevkSayilari, simdi, tarihSaatYaz, type AkisSatiri, type BitisKaydi, type Donem, type DonemOzeti, type Olcu,
@@ -75,13 +76,14 @@ function SevkTablosu<S>({ etiket, sutunlar, satirlar, anahtar, ton, sinif }: {
   );
 }
 
-export function Sevkiyat({ calisma, sec, git }: PlanlamaEkranOzellikleri) {
+export function Sevkiyat({ calisma, sec, git, depo }: PlanlamaEkranOzellikleri) {
+  const emirNo = useEmirNo(depo.receteRotaKaydi, depo.durum?.emirler);
   const [donem, donemYaz] = useState<Donem>('gun');
   const [olcu, olcuYaz] = useState<Olcu>('siparis');
   const [gor, gorYaz] = useState<Gorunum>('ikisi');
   const liste = useMemo(() => (calisma ? sevkListesi(calisma) : null), [calisma]);
 
-  const isi = useMemo(() => (calisma && liste ? sevkIsisi(liste.satirlar, liste.taban, simdi(calisma)) : null), [calisma, liste]);
+  const isi = useMemo(() => (calisma && liste ? sevkIsisi(liste.satirlar, liste.taban, simdi(calisma), emirNo) : null), [calisma, liste, emirNo]);
   const [secim, secimYaz] = useState<IsiSecimi | null>(null);
 
   const donemSecici = <Secici etiket="Dönem" secenekler={DONEMLER} secili={donem} sec={donemYaz} />;
@@ -91,8 +93,8 @@ export function Sevkiyat({ calisma, sec, git }: PlanlamaEkranOzellikleri) {
     : (
       <>
         <Ozet satirlar={liste.satirlar} taban={liste.taban} donem={donem} olcu={olcu} gor={gor} donemSecici={donemSecici} olcuYaz={olcuYaz} gorYaz={gorYaz} />
-        <Isler satirlar={liste.satirlar} taban={liste.taban} donem={donem} guncel={planGuncel(calisma)} donemSecici={donemSecici} />
-        <Akis satirlar={liste.satirlar} taban={liste.taban} />
+        <Isler satirlar={liste.satirlar} taban={liste.taban} donem={donem} guncel={planGuncel(calisma)} donemSecici={donemSecici} emirNo={emirNo} />
+        <Akis satirlar={liste.satirlar} taban={liste.taban} emirNo={emirNo} />
       </>
     );
   return (
@@ -105,7 +107,7 @@ export function Sevkiyat({ calisma, sec, git }: PlanlamaEkranOzellikleri) {
               <IsiIzgarasi
                 etiket="Sipariş × gün, termine kalan süre" satirAd="Sipariş" genis="gun" sutunlar={isi.sutunlar} satirlar={isi.satirlar}
                 secim={secim} sec={secimYaz} gizliAd="termine üç günden çok pay"
-                acilim={(r, _sutun, kapat) => <SevkAcilimKarti r={r} taban={liste.taban} kapat={kapat} goster={() => { sec({ siparis: r.x.id, adim: null, tezgah: null }); git('plan'); }} />}
+                acilim={(r, _sutun, kapat) => <SevkAcilimKarti r={r} taban={liste.taban} emirNo={emirNo} kapat={kapat} goster={() => { sec({ siparis: r.x.id, adim: null, tezgah: null }); git('plan'); }} />}
               />
             </>
           )
@@ -117,12 +119,12 @@ export function Sevkiyat({ calisma, sec, git }: PlanlamaEkranOzellikleri) {
 
 // Satırın açılımı. "Sevk edildi olarak işaretle" formu sevkiyat modülünündür (455/1 a): yerinde eski sayfanın yetkisiz hali durur.
 // "çizelgede": sipariş seçilir, Planlama motoru tahtası açılır.
-function SevkAcilimKarti({ r, taban, kapat, goster }: { r: SevkIsiSatiri; taban: number; kapat: () => void; goster: () => void }) {
-  const a = sevkAcilimi(r, taban);
+function SevkAcilimKarti({ r, taban, emirNo, kapat, goster }: { r: SevkIsiSatiri; taban: number; emirNo: EmirNo; kapat: () => void; goster: () => void }) {
+  const a = sevkAcilimi(r, taban, emirNo);
   return (
     <Acilim
       baslik={a.baslik} simge="truck" ton={a.ton} neden={a.neden} bilgi={a.bilgi} kapat={kapat} form={<IzinYok />}
-      secenekler={[{ ad: `${r.x.id} çizelgede`, etki: 'Siparişin adımlarını tezgâh çizelgesinde gösterir.', simge: 'gantt', yap: goster }]}
+      secenekler={[{ ad: `${emirNo(r.x.id)} çizelgede`, etki: 'Siparişin adımlarını tezgâh çizelgesinde gösterir.', simge: 'gantt', yap: goster }]}
     />
   );
 }
@@ -299,15 +301,15 @@ function SevkHucresi({ x, taban }: { x: SevkSatiri; taban: number }) {
   );
 }
 
-function Isler({ satirlar, taban, donem, guncel, donemSecici }: {
-  satirlar: readonly SevkSatiri[]; taban: number; donem: Donem; guncel: boolean; donemSecici: ReactNode;
+function Isler({ satirlar, taban, donem, guncel, donemSecici, emirNo }: {
+  satirlar: readonly SevkSatiri[]; taban: number; donem: Donem; guncel: boolean; donemSecici: ReactNode; emirNo: EmirNo;
 }) {
   const sayilar = sevkSayilari(satirlar);
   const gruplar = sevkGruplari(satirlar, taban, donem);
   const sutunlar: Sutun<SevkSatiri>[] = [
     {
       anahtar: 'siparis', baslik: 'Sipariş ve müşteri',
-      hucre: (x) => <span className="tc-pyv-hucre"><b className="mono">{x.id}</b><small>{`${x.ad ?? ''} · ${x.musteri}`}</small></span>,
+      hucre: (x) => <span className="tc-pyv-hucre"><b className="mono">{emirNo(x.id)}</b><small>{`${x.ad ?? ''} · ${x.musteri}`}</small></span>,
     },
     { anahtar: 'adet', baslik: 'Adet', sag: true, hucre: (x) => (x.adet === null ? '—' : sayiYaz(x.adet)) },
     { anahtar: 'bitis', baslik: 'Plana göre bitiş', hucre: (x) => <PlanHucresi x={x} taban={taban} /> },
@@ -356,11 +358,11 @@ function Isler({ satirlar, taban, donem, guncel, donemSecici }: {
   );
 }
 
-function Akis({ satirlar, taban }: { satirlar: readonly SevkSatiri[]; taban: number }) {
+function Akis({ satirlar, taban, emirNo }: { satirlar: readonly SevkSatiri[]; taban: number; emirNo: EmirNo }) {
   const l = bitisAkisi(satirlar);
   const sutunlar: Sutun<AkisSatiri>[] = [
     { anahtar: 'zaman', baslik: 'Zaman', hucre: (x) => <span className="mono">{zamanYaz(x.kayit.t)}</span> },
-    { anahtar: 'siparis', baslik: 'Sipariş', hucre: (x) => <b className="mono">{x.id}</b> },
+    { anahtar: 'siparis', baslik: 'Sipariş', hucre: (x) => <b className="mono">{emirNo(x.id)}</b> },
     { anahtar: 'degisiklik', baslik: 'Değişiklik', hucre: (x) => x.ad },
     { anahtar: 'bitis', baslik: 'Yeni bitiş', hucre: (x) => <span className="mono">{tarihSaatYaz(taban, x.kayit.C)}</span> },
     { anahtar: 'fark', baslik: 'Fark', sag: true, hucre: (x) => farkYaz(x.fark) },

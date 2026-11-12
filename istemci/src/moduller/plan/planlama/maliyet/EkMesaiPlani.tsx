@@ -10,6 +10,7 @@ import { ekMesaiKaldirYaz } from './yazmalar.ts';
 import {
   baslangicMs, calisilir, ekMesailer, gunYaz, isoGun, planIsleri, saatYaz, simdiSaati, takvimKur, vardiyalar, zamanYaz, type Takvim,
 } from './kurallar.ts';
+import { kaynakAdlariKur } from '../kaynak-kodu.tsx';
 import { hucreKoy, IsiSayfasi, kdOran, yazici, type Acilim, type Hucre, type IsiBos, type IsiSatiri, type IsiSutunu, type IsiVerisi } from './ortak.tsx';
 
 interface Satir { t: Tezgah; mx: number; ek: Record<string, number[]> }
@@ -29,6 +30,7 @@ export function mesaiIsisi(c: PlanlamaCalismasi, T: Takvim): IsiVerisi<Satir> | 
   const G = gunSutunlari(c, 14);
   const ops = planIsleri(c).filter((r) => !r.fas && Number.isFinite(r.S) && Number.isFinite(r.C));
   const EK = ekMesailer(c);
+  const adlar = kaynakAdlariKur(c.D);
   const satirlar: IsiSatiri<Satir>[] = c.D.tezgahlar.map((t) => {
     const M = T.M[t.id];
     const h: Record<string, Hucre> = {};
@@ -48,7 +50,7 @@ export function mesaiIsisi(c: PlanlamaCalismasi, T: Takvim): IsiVerisi<Satir> | 
         etiket: `${pct === null ? 'vardiya yok' : `%${String(Math.round(pct))} dolu (${saatYaz(dolu)} / ${saatYaz(acik)})`}${ek.length ? `, ${ek.map((x) => x.e.vardiya).join(', ')} ek vardiya planlı` : ''}`,
       });
     }
-    return { k: t.id, ad: t.id, alt: t.ad, simge: 'cpu' as const, ton: mx >= 98 ? 'hata' as const : mx >= 90 ? 'uyari' as const : '' as const, gizli: mx < 75 && !ozel, h, veri: { t, mx, ek: ekler } };
+    return { k: t.id, ad: adlar.kaynak(t.id), alt: t.ad, simge: 'cpu' as const, ton: mx >= 98 ? 'hata' as const : mx >= 90 ? 'uyari' as const : '' as const, gizli: mx < 75 && !ozel, h, veri: { t, mx, ek: ekler } };
   }).sort((a, b) => b.veri.mx - a.veri.mx);
   const dolu = satirlar.filter((r) => r.veri.mx >= 98);
   const en = satirlar[0];
@@ -87,14 +89,14 @@ export function EkMesaiPlani(o: PlanlamaEkranOzellikleri) {
     const i = ekI[0];
     const ilkEk = i !== undefined ? EK[i] : undefined;
     if (ilkEk && i !== undefined && yazabilir) {
-      sec.push({ ad: `${ilkEk.vardiya} ek vardiyasını kaldır`, etki: 'Ek vardiya takvimden çıkar; plan yeniden kurulunca kullanılmaz.', simge: 'trash', yap: () => { ekMesaiKaldirYaz(yaz, i, `${ilkEk.m} ${gAd} ${ilkEk.vardiya}`); } });
+      sec.push({ ad: `${ilkEk.vardiya} ek vardiyasını kaldır`, etki: 'Ek vardiya takvimden çıkar; plan yeniden kurulunca kullanılmaz.', simge: 'trash', yap: () => { ekMesaiKaldirYaz(yaz, i, `${r.ad} ${gAd} ${ilkEk.vardiya}`); } });
     }
     sec.push({ ad: 'Önerileri hesapla', etki: '', simge: 'play', pasif: MOTOR_KAPALI });
     const kd = cel?.kd ?? 0;
     return {
-      baslik: `${r.k} · ${gAd}`, simge: 'clock', ton: kd >= 4 ? 'hata' : kd >= 3 ? 'uyari' : '',
-      neden: `${r.k} ${gAd}: ${cel?.etiket || 'vardiya yok'}.${kd >= 3 ? ' Tezgâh dolu; ek vardiya bekleyen işleri öne çeker.' : ''}`,
-      formlar: vard && ekleFormu ? [{ tanim: ekleFormu, deg: { m: r.k, gun: isoGun(D, g), vardiya: vard }, adim: 1, etki: `${r.k} ${gAd} günü ek vardiyayla açılır.` }] : [],
+      baslik: `${r.ad} · ${gAd}`, simge: 'clock', ton: kd >= 4 ? 'hata' : kd >= 3 ? 'uyari' : '',
+      neden: `${r.ad} ${gAd}: ${cel?.etiket || 'vardiya yok'}.${kd >= 3 ? ' Tezgâh dolu; ek vardiya bekleyen işleri öne çeker.' : ''}`,
+      formlar: vard && ekleFormu ? [{ tanim: ekleFormu, deg: { m: r.k, gun: isoGun(D, g), vardiya: vard }, adim: 1, etki: `${r.ad} ${gAd} günü ek vardiyayla açılır.` }] : [],
       secenekler: sec, kilitli: Boolean(vard) && !yazabilir,
     };
   };

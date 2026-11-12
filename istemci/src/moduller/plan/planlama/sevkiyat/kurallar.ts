@@ -1,6 +1,7 @@
 import { hucreKoy, kisaSure, saatKademesi, type IsiHucresi, type IsiSatiri, type IsiSutunu, type IsiUstDurumu } from '../ortak/isi/index.ts';
 import type { ExtraAlanlar, PlanlamaCalismasi } from '../tipler.ts';
 import { planDisi } from '../tipler.ts';
+import type { EmirNo } from '../ortak/emir-no.ts';
 
 // Sevkiyat hesapları (saf, 205 a): plana göre bitmesi gereken işler, dönem özeti ve bitiş tarihi akışı. Ölçüt bugünkü sayfadır
 // (cerceve/planlama/parca/zx-sevkiyat.betik). Sipariş, son adımının planlanan bitişine göre döneme düşer ve terminiyle karşılaştırılır;
@@ -274,7 +275,7 @@ const gunNo = (t: number): number => Math.floor(t / 24);
 export interface SevkIsiSatiri extends IsiSatiri { ton: 'hata' | 'uyari' | 'tamam'; x: SevkSatiri; sevkGunu: string | null }
 export interface SevkIsisi { sutunlar: IsiSutunu[]; satirlar: SevkIsiSatiri[]; durum: IsiUstDurumu }
 
-export function sevkIsisi(l: readonly SevkSatiri[], taban: number, now: number): SevkIsisi {
+export function sevkIsisi(l: readonly SevkSatiri[], taban: number, now: number, emirNo: EmirNo = (id) => id): SevkIsisi {
   const g0 = gunNo(now);
   const kis = (g: number): number => Math.min(Math.max(g, g0), g0 + ISI_GUN - 1);
   const sutunlar: IsiSutunu[] = [];
@@ -300,7 +301,7 @@ export function sevkIsisi(l: readonly SevkSatiri[], taban: number, now: number):
     }
     if (x.termin !== null) hucreKoy(h, `g${String(kis(gunNo(x.termin)))}`, { bayrak: true, etiket: `termin ${gunYaz(taban, x.termin)}` });
     return {
-      k: x.id, ad: x.id, simge: 'truck', alt: `${x.ad ?? '—'} · ${x.adet === null ? '—' : sayiYaz(x.adet)} adet${x.musteri === '—' ? '' : ` · ${x.musteri}`}`,
+      k: x.id, ad: emirNo(x.id), simge: 'truck', alt: `${x.ad ?? '—'} · ${x.adet === null ? '—' : sayiYaz(x.adet)} adet${x.musteri === '—' ? '' : ` · ${x.musteri}`}`,
       ton: ev ? 'tamam' : gec ? (T >= 24 ? 'hata' : 'uyari') : 'tamam',
       gizli: !gec && !ev && x.termin !== null && x.termin - x.C >= GENIS_PAY, h, x, sevkGunu: ev,
     };
@@ -326,14 +327,15 @@ export const SEVK_LEJANTI = {
 } as const;
 
 // Satırın açılımı (zz30-isi ISI.sevkiyat acilim). Sevk edildi formu 455/1 a ile gelmez.
-export function sevkAcilimi(r: SevkIsiSatiri, taban: number): SevkAcilimi {
+export function sevkAcilimi(r: SevkIsiSatiri, taban: number, emirNo: EmirNo = (id) => id): SevkAcilimi {
   const { x } = r;
+  const no = emirNo(x.id);
   const T = x.T ?? 0;
   const neden = r.sevkGunu
-    ? `${x.id} ${r.sevkGunu} sevk edildi.`
-    : `${x.id} termini ${gunYaz(taban, x.termin)}, plan ${gunYaz(taban, x.C)} sevke hazır diyor${gecMi(x) ? `: ${saatMetni(T)} geç` : x.termin !== null && x.C !== null ? `; ${saatMetni(x.termin - x.C)} pay var` : ''}.`;
+    ? `${no} ${r.sevkGunu} sevk edildi.`
+    : `${no} termini ${gunYaz(taban, x.termin)}, plan ${gunYaz(taban, x.C)} sevke hazır diyor${gecMi(x) ? `: ${saatMetni(T)} geç` : x.termin !== null && x.C !== null ? `; ${saatMetni(x.termin - x.C)} pay var` : ''}.`;
   return {
-    baslik: `${x.id} · ${x.musteri}`, ton: r.ton === 'tamam' ? '' : r.ton, neden,
+    baslik: `${no} · ${x.musteri}`, ton: r.ton === 'tamam' ? '' : r.ton, neden,
     bilgi: [['Termin', gunYaz(taban, x.termin)], ['Hazır', gunYaz(taban, x.C)], ['Adet', x.adet === null ? '—' : sayiYaz(x.adet)]],
   };
 }

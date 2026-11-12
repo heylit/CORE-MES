@@ -26,7 +26,7 @@ export function oranKademesi(x: number | null, e: readonly [number, number, numb
   if (x == null || !Number.isFinite(x)) return null;
   return x < e[0] ? 0 : x < e[1] ? 1 : x < e[2] ? 2 : x < e[3] ? 3 : 4;
 }
-export const kisaSure = (h: number | null): string => (h == null ? '' : h < 48 ? `${Math.round(h)}s` : `${Math.round(h / 24)}g`);
+export const kisaSure = (h: number | null): string => (h == null ? '' : h < 48 ? `${Math.round(h)} sa` : `${Math.round(h / 24)} gün`);
 
 // Hücre birleştirme: sonraki işaret öncekinin kademesini düşürmez, etiketler virgülle eklenir.
 export function hucreKoy(h: Record<string, IsiHucresi>, k: string, o: IsiHucresi): IsiHucresi {

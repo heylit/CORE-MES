@@ -130,7 +130,7 @@ describe('ısı haritası (zz30-isi ISI.sevkiyat)', () => {
     expect(v.satirlar.map((r) => [r.k, r.ton, r.gizli])).toEqual([['S2', 'uyari', false], ['S1', 'tamam', false], ['S3', 'tamam', false]]);
     const [s2, s1, s3] = v.satirlar as [SevkIsiSatiri, SevkIsiSatiri, SevkIsiSatiri];
     expect(s2.h.g0).toMatchObject({ bayrak: true, kd: 1, etiket: 'termin geçti, termin 02.03 Pzt' });
-    expect(s2.h.g1).toMatchObject({ sm: 'truck', kd: 1, v: '+6s' });
+    expect(s2.h.g1).toMatchObject({ sm: 'truck', kd: 1, v: '+6 sa' });
     expect(s1.h.g2).toMatchObject({ sm: 'check', iyi: true, etiket: 'sevk edildi 2026-03-04' });
     expect(s1.h.g1).toMatchObject({ bayrak: true });
     expect(s3.h.g8).toMatchObject({ sm: 'truck', iyi: true, v: '' });
@@ -146,6 +146,19 @@ describe('ısı haritası (zz30-isi ISI.sevkiyat)', () => {
       bilgi: [['Termin', '02.03 Pzt'], ['Hazır', '03.03 Sal'], ['Adet', '5']],
     });
     expect(sevkAcilimi(s1, taban).neden).toBe('S1 2026-03-04 sevk edildi.');
+  });
+
+  it('emir no verilince satır adı, durum metni ve açılım emir noyla yazılır; anahtar iç numara kalır', () => {
+    const c = ornekCalisma();
+    const { satirlar, taban } = sevkListesi(c)!;
+    const no = (id: string) => `MM-ORN-${id}`;
+    const v = sevkIsisi(satirlar, taban, simdi(c), no);
+    const s2 = v.satirlar[0] as SevkIsiSatiri;
+    expect([s2.k, s2.ad]).toEqual(['S2', 'MM-ORN-S2']);
+    expect(v.durum?.metin).toContain('En sıcak satır MM-ORN-S2:');
+    const a = sevkAcilimi(s2, taban, no);
+    expect(a.baslik).toBe('MM-ORN-S2 · —');
+    expect(a.neden).toMatch(/^MM-ORN-S2 termini/);
   });
 
   it('şimdi en az 7; çalışmanın kaydettiği şimdi ileriyse o', () => {
