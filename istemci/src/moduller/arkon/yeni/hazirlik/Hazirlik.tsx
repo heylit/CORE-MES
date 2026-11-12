@@ -10,6 +10,7 @@ import {
 } from '../../../../../../arkon/web/src/data/paket-suzgec.ts';
 import { ISTASYONSUZ_GONDERIM, gonderimUyarisi, istasyonsuzMu, rotaEksigi, type GonderimUyarisi } from '../../../../../../arkon/web/src/data/tmi-plan.ts';
 import { sablonUygula, tmiPaketiMi } from '../../../../../../arkon/web/src/data/yeni-paket.ts';
+import { tmiBekletme } from '../../../../../../arkon/web/src/data/bekleyen-emir.ts';
 import { YOK, sayi } from '../cekirdek/bicim.ts';
 import { IS_DURUMLARI } from '../cekirdek/sabitler.ts';
 import { bip } from '../cekirdek/ses.ts';
@@ -22,7 +23,7 @@ import type { ArkonEkranOzellikleri } from '../sayfalar.ts';
 import { useArkon, useArkonDurumu, useCakismaUyarisi, useIleti } from '../veri/baglam.ts';
 import type { ArkonDeposu, Ileti } from '../veri/depo.ts';
 import { baytiVar, dosyaBoyu, useCozulmus } from '../veri/dosyalar.ts';
-import { Bolmeli, Cip } from './denetimler.tsx';
+import { BeklemeCipi, Bolmeli, Cip } from './denetimler.tsx';
 import { IstasyonDuzenleyici, TurSecici } from './IstasyonDuzenleyici.tsx';
 import { ArkonBandi } from '../ortak/SaatSeridi.tsx';
 import { IstasyonSecimi } from './IstasyonSecici.tsx';
@@ -32,7 +33,7 @@ import { KuralSekmesi } from './KuralSekmesi.tsx';
 import {
   ADIM_SABLONLARI, IS_TURLERI, PAKET_DURUMLARI, SIKLIKLAR, TMI_KILIT, VARSAYILAN_AYARLAR, isTuru, numunePlani, numunePlaniYaz,
   olcumYontemi, onayBekliyor, onayGerekir, onayReddedildi, onayli, paketDenetimi, paketKartDurumu, planYokUyarisiGerekir, tmiIsEmri, yeniKimlik,
-  planDisiEki, geriCekilebilir, takipSuzgeciOku, topluGeriCekilebilir, type TakipSuzgeci,
+  beklemeEki, planDisiEki, geriCekilebilir, takipSuzgeciOku, topluGeriCekilebilir, type TakipSuzgeci,
 } from './kurallar.ts';
 import { HazirlikListesi } from '../operator/HazirlikListesi.tsx';
 import { EkHazirlikMaddeleri } from './EkHazirlikMaddeleri.tsx';
@@ -458,6 +459,7 @@ export function Hazirlik({ kimlik }: ArkonEkranOzellikleri) {
         </div>
         <div className="tc-ay2-paket-cipler">
           <Cip ton={d.ton}>{d.l}</Cip>
+          <BeklemeCipi neden={tmiBekletme(x)} />
           <PlanCipi paket={x} sira />
           <HazirlikPaketCipi satirlar={paketHazirligi(hz.harita, x)} />
           {x.dirty && x.status !== 'draft' ? <Cip ton="hold">Değişiklik var</Cip> : null}
@@ -872,6 +874,7 @@ export function Hazirlik({ kimlik }: ArkonEkranOzellikleri) {
                         <small>
                           {p.status === 'draft' ? 'İlk yayın' : 'Güncelleme · v' + ((p.version || 0) + 1)}
                           {planDisiEki(p)}
+                          {beklemeEki(p)}
                         </small>
                       </div>
                       <Dugme boyut="ana" tur="ikincil" simge="eye" onClick={() => { void onizle(); }}>Önizle</Dugme>

@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { AcKapa } from '../../../../ortak/arayuz/index.ts';
+import { AcKapa, Simge } from '../../../../ortak/arayuz/index.ts';
 import type { Ton } from './tipler.ts';
 
 // Eski ekranın küçük denetimleri (kurallar.ts Sw, Seg, Num): hazırlık, istasyon düzenleyici ve operatör aynı biçimi kullanır.
@@ -58,4 +58,11 @@ export function KartBasligi({ simge, ton, baslik, aciklama, sag }: {
       {sag ? <span className="tc-ay2-ust-yazi tc-ay2-sag">{sag}</span> : null}
     </div>
   );
+}
+
+// 3131: emir CORE'da beklemede (3050 a). Paket yayında kalabilir; başlamamış işi operatör görmez, emir devam edince görür.
+export const BEKLEME_IPUCU = 'Operatörde gizli; emir devam edince görünür.';
+export function BeklemeCipi({ neden }: { neden: string | null }) {
+  if (neden === null) return null;
+  return <span className="tc-ay2-cip" data-ton="hold" title={BEKLEME_IPUCU}><Simge ad="pause" boyut="k" />Beklemede · {neden}</span>;
 }

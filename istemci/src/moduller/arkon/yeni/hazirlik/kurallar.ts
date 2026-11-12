@@ -1,5 +1,6 @@
 import { muayeneNumunePlani, type MuayenePlani } from '../../../../../../arkon/web/src/data/muayene-lotu.ts';
 import { ISTASYONSUZ_GONDERIM, gonderimUyarisi, istasyonsuzMu, rotaEksigi, type PlanliPaket } from '../../../../../../arkon/web/src/data/tmi-plan.ts';
+import { tmiBekletme } from '../../../../../../arkon/web/src/data/bekleyen-emir.ts';
 import type { SimgeAdi } from '../../../../ortak/tasarim/simgeler.ts';
 import type { Plant, Policy } from '../cekirdek/tipler.ts';
 import { istasyonBul } from '../cekirdek/tesis.ts';
@@ -339,6 +340,10 @@ export const olcumYontemi = (b: Pick<PlanItem, 'm' | 'tool'>): 'cmm' | 'man' => 
 
 // Gönderim kartının plan dışı eki, "Operatöre gönder" penceresiyle aynı kuraldan: "yalnız canlı plandaki iş düşer" ayarı kapalıysa
 // plan dışı iş de operatöre düşer.
+// 3131: beklemedeki emrin paketi yayınlanabilir; operatöre emir devam edince düşer (gönderim kartının eki).
+export function beklemeEki(p: Parameters<typeof tmiBekletme>[0]): string {
+  return tmiBekletme(p) === null ? '' : ' · emir beklemede: devam ettirilince operatöre düşer';
+}
 export function planDisiEki(p: PlanliPaket | null | undefined): string {
   const uyari = gonderimUyarisi(p);
   if (uyari === null) return '';
@@ -359,13 +364,15 @@ export interface TakipSatiri {
   ad: string;
   bitti: boolean;
 }
-export interface TakipEmri { anahtar: string; no: string; urun: string; dilimler: AdimDilimi[]; biten: number; satirlar: TakipSatiri[] }
-export type TakipSuzgeci = 'acik' | 'yayinda' | 'uretimde' | 'taslak' | 'bitti' | 'hepsi';
+// bekletme: emir beklemedeyse nedenin adı (3131); paketlerden okunur.
+export interface TakipEmri { anahtar: string; no: string; urun: string; dilimler: AdimDilimi[]; biten: number; satirlar: TakipSatiri[]; bekletme: string | null }
+export type TakipSuzgeci = 'acik' | 'yayinda' | 'uretimde' | 'taslak' | 'beklemede' | 'bitti' | 'hepsi';
 export const TAKIP_SUZGECLERI: readonly (readonly [TakipSuzgeci, string])[] = [
-  ['acik', 'Açık işler'], ['yayinda', 'Yayında'], ['uretimde', 'Üretimde'], ['taslak', 'Taslak ve onayda'], ['bitti', 'Bitenler'], ['hepsi', 'Hepsi'],
+  ['acik', 'Açık işler'], ['yayinda', 'Yayında'], ['uretimde', 'Üretimde'], ['taslak', 'Taslak ve onayda'], ['beklemede', 'Beklemede'], ['bitti', 'Bitenler'], ['hepsi', 'Hepsi'],
 ];
 const SUZGEC_DURUMLARI: Readonly<Record<Exclude<TakipSuzgeci, 'hepsi'>, readonly PaketDurumu[]>> = {
-  acik: ['draft', 'review', 'published', 'production'], yayinda: ['published'], uretimde: ['production'], taslak: ['draft', 'review'], bitti: ['done'],
+  acik: ['draft', 'review', 'published', 'production'], yayinda: ['published'], uretimde: ['production'], taslak: ['draft', 'review'],
+  beklemede: ['draft', 'review', 'published', 'production'], bitti: ['done'],
 };
 export const takipSuzgeciOku = (d: unknown): TakipSuzgeci => (TAKIP_SUZGECLERI.some(([k]) => k === d) ? d as TakipSuzgeci : 'acik');
 
@@ -408,11 +415,14 @@ export function takipEmirleri(
     }
     const dilimler = satirlar.map((s) => (s.bitti ? 'bitti' : s.paket ? dilim(s.durum, s.sonuc) : 'yok'));
     // Paketsiz adım emrin bağlamıdır: "Hepsi"de ve bitmemişse "Açık işler"de görünür; yalnız paketsiz kalan emir listelenmez.
-    const satir = satirlar.filter((s) => (suz === 'hepsi' ? true : s.paket ? SUZGEC_DURUMLARI[suz].includes(s.durum) : suz === 'acik' && !s.bitti));
+    const bekletme = g.paketler.map((p) => tmiBekletme(p)).find((b) => b !== null) ?? null;
+    // "Beklemede" süzgeci emrin işaretidir: beklemedeki emrin açık işleri ve paketsiz adımları "Açık işler" gibi.
+    if (suz === 'beklemede' && bekletme === null) continue;
+    const satir = satirlar.filter((s) => (suz === 'hepsi' ? true : s.paket ? SUZGEC_DURUMLARI[suz].includes(s.durum) : (suz === 'acik' || suz === 'beklemede') && !s.bitti));
     if (!satir.some((s) => s.paket)) continue;
     l.push({
       anahtar: g.anahtar, no: ilk.no, urun: [ilk.part || 'Adsız parça', ilk.partNo].filter(Boolean).join(' · '),
-      dilimler, biten: dilimler.filter((d) => d === 'bitti').length, satirlar: satir,
+      dilimler, biten: dilimler.filter((d) => d === 'bitti').length, satirlar: satir, bekletme,
     });
   }
   return l;

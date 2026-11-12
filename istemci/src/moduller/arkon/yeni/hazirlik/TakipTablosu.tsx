@@ -7,7 +7,7 @@ import { tmiEmirId } from '../../../../../../arkon/web/src/data/tmi-adim.ts';
 import { YOK, sayi } from '../cekirdek/bicim.ts';
 import { IS_DURUMLARI } from '../cekirdek/sabitler.ts';
 import { baslamaDurumu, BASLAMA_DURUMLARI } from '../operator/HazirlikListesi.tsx';
-import { Cip } from './denetimler.tsx';
+import { BeklemeCipi, Cip } from './denetimler.tsx';
 import { paketHazirligi } from './HazirlikTakibi.tsx';
 import {
   PAKET_DURUMLARI, TAKIP_SUZGECLERI, calisiyorMu, geriCekilebilir, topluGeriCekilebilir, takipEmirleri,
@@ -72,6 +72,7 @@ export function TakipTablosu({ paketler, sonuclar, hazirlik, suz, suzYaz, yayinl
               <th scope="rowgroup" colSpan={yayinlar ? 9 : 8}>
                 <span className="tc-ay2-takip-emir-ic">
                   <b className="tc-ay2-mono">{e.no}</b><span className="tc-ay2-soluk">{e.urun}</span>
+                  <BeklemeCipi neden={e.bekletme} />
                   <span className="tc-ay2-takip-ilerleme">
                     <span>{e.biten}/{e.dilimler.length} adım tamamlandı</span>
                     <span className="tc-ay2-takip-serit" role="img" aria-label={e.dilimler.map((d, i) => `${String(i + 1)}. adım ${DILIM_ADI[d]}`).join(', ')}>
