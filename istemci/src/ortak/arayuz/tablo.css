@@ -155,7 +155,13 @@
   .tc-tablo-kap[data-kaydir] .tc-tablo thead th.tc-tablo-sec { left: auto; z-index: 2; }
   .tc-tablo-kap[data-kaydir] .tc-tablo-sec ~ .tc-tablo-sabit-sol { left: 0; }
   .tc-tablo-kap[data-kaydir] .tc-tablo-kes { max-inline-size: calc(var(--menu-sabit) * .5); }
-  .tc-tablo-kap[data-kaydir] .tc-tablo td.tc-tablo-sabit-sol { max-inline-size: calc(var(--menu-sabit) * .5); }
+  /* Sınıra sığmayan kimlik tek satırda kalırsa yandaki hücrelerin üstüne taşar. "…" ile kesilmez: aynı emrin kartları gibi
+     yalnız sonu ayrılan kodlar ayırt edilemez olur; kod sütun içinde alt satıra kırılır, tamamı görünür. Sınır, dokuz karakterlik
+     belge no (MK-000001) tek satırda kalacak kadardır. Kimlik yerine rozet duruyorsa o da kırılır. */
+  .tc-tablo-kap[data-kaydir] .tc-tablo td.tc-tablo-sabit-sol {
+    max-inline-size: calc(var(--menu-sabit) * .6); white-space: normal; overflow-wrap: anywhere;
+  }
+  .tc-tablo-kap[data-kaydir] .tc-tablo td.tc-tablo-sabit-sol .tc-rozet { max-inline-size: 100%; white-space: normal; overflow-wrap: anywhere; }
 }
 
 /* Telefon: süzgeç çipleri alt alta dizilip listeyi ekranın altına itiyordu; tek satırda yana kayar. Yana kayan
