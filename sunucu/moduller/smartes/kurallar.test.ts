@@ -3,7 +3,8 @@ import { describe, test } from 'node:test';
 import {
   adetDegistiMi, alarmKimligi, alarmOku, alarmSatiri, ambarOku, ASGARI_PENCERE_MS, ATLAMA_ESIGI, durusOku, gonderimOzeti, isEmriParametreleri,
   kapanisParametreleri, kaliteOku, listedekiKodlar, okumaPenceresi, ORTUSME_MS, pencereAtlanmaliMi, redOku, smartesAkisDurumu, smartesMakineleri,
-  sonucBilinmiyorMu, tanimEylemi, tanimKoduUygunMu,
+  sonucBilinmiyorMu, tanimEylemi, tanimKoduUygunMu, bugunDilimleri, DURUM_KODLARI, ilerlemeOku, ISTEGE_BAGLI_METOTLAR, makineBilgisiOku, makineDurumu,
+  turSirasi, yasakMetotMu, MAKINE_BILGI_METODU, ILERLEME_METODU,
 } from './kurallar.ts';
 import type { GidecekIsEmri } from './kurallar.ts';
 
@@ -150,5 +151,62 @@ describe('Tanım gönderimi kuralları (SME-21)', () => {
     assert.equal(smartesAkisDurumu({ kaynak: 'bagli' }, { ortamVar: true, acik: true, akisAcik: true }), 'hazir');
     assert.equal(smartesAkisDurumu({ kaynak: 'bagli' }, { ortamVar: true, acik: true }), 'hazir');
     assert.equal(smartesAkisDurumu({ kaynak: 'bagli' }, { ortamVar: false, acik: true, akisAcik: true }), 'ayar-eksik');
+  });
+});
+
+describe('Canlı makine panosu kuralları (SME-34)', () => {
+  test('SME-34: okuma metotları yasak kalıba uymaz ve isteğe bağlıdır (eksikliği kontrolü kırmızı yapmaz)', () => {
+    for (const m of [MAKINE_BILGI_METODU, ILERLEME_METODU]) {
+      assert.equal(yasakMetotMu(m), false, m);
+      assert.ok(ISTEGE_BAGLI_METOTLAR.includes(m), m);
+    }
+  });
+
+  test('SME-34: durum kodunun karşılığı yoksa "bilinmiyor"; alarm her koddan önce gelir; karşılık tablosu uydurma değer taşımaz', () => {
+    assert.deepEqual(Object.keys(DURUM_KODLARI), []);
+    assert.equal(makineDurumu('ORN-KOD', false), 'bilinmiyor');
+    assert.equal(makineDurumu(null, false), 'bilinmiyor');
+    assert.equal(makineDurumu('ORN-KOD', true), 'alarm');
+  });
+
+  test('SME-34: makine satırı belgedeki alanlardan okunur; kod cevapta yoksa makine listesindeki kod kullanılır, o da yoksa satır yazılmaz', () => {
+    const m = makineBilgisiOku({ AD: 'ORN makine', CNCSTATE: 'ORN-1', PARTS1: '5', PARTS2: '900', FSPD: '100', FOVR: '80', SLD: '30', SOVR: '70', SSPD: '1500',
+      PROGNO: 'O1', PROGDESCRIPTION: 'ORN açıklama', ACTMOD: 'MDI', ALARMNO: '0', ALARMTEXT: '', CNCWARNING: 'ORN uyarı', TOOLNUM: '7' }, { id: 4, kod: 'ORN-M04' });
+    assert.deepEqual(m, {
+      makineKodu: 'ORN-M04', smartesMakineId: 4, makineAdi: 'ORN makine', durum: 'bilinmiyor', durumKodu: 'ORN-1', mod: 'MDI', alarm: null, uyari: 'ORN uyarı',
+      programNo: 'O1', programAdi: 'ORN açıklama', sayac: 5, sayacToplam: 900, eksenHizi: 100, eksenOrani: 80, spindleYuku: 30, spindleOrani: 70, spindleHizi: 1500,
+      takimCebi: 7,
+    });
+    assert.equal(makineBilgisiOku({ KOD: 'ORN-X', ALARMTEXT: 'ORN alarm' }, { id: 1, kod: 'ORN-M01' })?.makineKodu, 'ORN-X');
+    assert.equal(makineBilgisiOku({ KOD: 'ORN-X', ALARMTEXT: 'ORN alarm' }, { id: 1, kod: null })?.alarm, 'ORN alarm');
+    assert.equal(makineBilgisiOku({ KOD: 'ORN-X', ALARMNO: '12' }, { id: 1, kod: null })?.durum, 'alarm');
+    // Sayı olmayan değer "veri yok"tur, sıfır uydurulmaz.
+    assert.equal(makineBilgisiOku({ KOD: 'ORN-X', SLD: 'x' }, { id: 1, kod: null })?.spindleYuku, null);
+    assert.equal(makineBilgisiOku({ AD: 'kodsuz' }, { id: 1, kod: null }), null);
+  });
+
+  test('SME-34: tur sırası verilen makineden başlar ve listeyi dolanır; makine listede yoksa baştan başlanır', () => {
+    const l = [{ id: 1 }, { id: 2 }, { id: 3 }];
+    assert.deepEqual(turSirasi(l, null).map((m) => m.id), [1, 2, 3]);
+    assert.deepEqual(turSirasi(l, 3).map((m) => m.id), [3, 1, 2]);
+    assert.deepEqual(turSirasi(l, 9).map((m) => m.id), [1, 2, 3]);
+    assert.deepEqual(turSirasi([], 1), []);
+  });
+
+  test('SME-34: bugünkü şerit gün başındaki durumdan başlar; art arda aynı durum tek dilimdir; sonuncu dilim açıktır', () => {
+    const g = '2026-11-10T00:00:00+03:00';
+    assert.deepEqual(bugunDilimleri(g, null, []), []);
+    assert.deepEqual(bugunDilimleri(g, 'calisiyor', []), [{ durum: 'calisiyor', baslangic: g, bitis: null }]);
+    assert.deepEqual(bugunDilimleri(g, 'calisiyor', [{ zaman: 't1', yeni: 'alarm' }, { zaman: 't2', yeni: 'bilinmiyor' }, { zaman: 't3', yeni: 'bilinmiyor' }]), [
+      { durum: 'calisiyor', baslangic: g, bitis: 't1' }, { durum: 'alarm', baslangic: 't1', bitis: 't2' }, { durum: 'bilinmiyor', baslangic: 't2', bitis: null },
+    ]);
+    assert.deepEqual(bugunDilimleri(g, null, [{ zaman: 't1', yeni: 'bekliyor' }]), [{ durum: 'bekliyor', baslangic: 't1', bitis: null }]);
+  });
+
+  test('SME-34: ilerleme satırında iş emri no zorunludur; yüzde virgüllü de okunur, aralık dışı ve boş değer "veri yok"tur', () => {
+    assert.deepEqual(ilerlemeOku({ WORKORDER_NO: 'ORN-1-10', COMPLETED_PERCENTAGE_BY_PIECE: '12,5' })?.tamamlananYuzde, 12.5);
+    assert.equal(ilerlemeOku({ WORKORDER_NO: 'ORN-1-10', COMPLETED_PERCENTAGE_BY_PIECE: '-4' })?.tamamlananYuzde, null);
+    assert.equal(ilerlemeOku({ WORKORDER_NO: 'ORN-1-10' })?.tahminiBitis, null);
+    assert.equal(ilerlemeOku({ COMPLETED_PERCENTAGE_BY_PIECE: '5' }), null);
   });
 });

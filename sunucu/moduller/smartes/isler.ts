@@ -1,8 +1,8 @@
 import { isBekliyor, isTanimi } from '#cekirdek/zamanlayici.ts';
 import { ortamIstemcisi } from './baglanti.ts';
-import { IS_ARALIKLARI_MS, KALITE_AMBAR_KAYNAKLARI } from './kurallar.ts';
+import { IS_ARALIKLARI_MS, KALITE_AMBAR_KAYNAKLARI, MAKINE_OKUMA_ARALIGI_MS } from './kurallar.ts';
 import type { KaliteAmbarKaynagi, OkumaKaynagi } from './kurallar.ts';
-import { BEKLEME_NEDENLERI, gonderimTuru, kaliteAmbarTuru, okumaTuru, tanimTuru, yeniBekleyenBellegi, yeniOkumaBellegi, yeniSurecBellegi } from './servis.ts';
+import { BEKLEME_NEDENLERI, ilerlemeTuru, makineTuru, yeniMakineBellegi, gonderimTuru, kaliteAmbarTuru, okumaTuru, tanimTuru, yeniBekleyenBellegi, yeniOkumaBellegi, yeniSurecBellegi } from './servis.ts';
 import type { TurOrtami } from './servis.ts';
 
 // İşler her zaman koşar; istek ancak "SmartES bağlantısı" ayarı açık ve TMIV2_SMARTES_ADRESI varken çıkar (karar 3b: okuma ve yazma birlikte).
@@ -10,6 +10,8 @@ import type { TurOrtami } from './servis.ts';
 const ortam: TurOrtami = {
   istemci: ortamIstemcisi, saat: () => new Date(), operasyonlar: yeniSurecBellegi(), okumalar: yeniOkumaBellegi(), bekleyenler: yeniBekleyenBellegi(), niyetler: new Set<string>(),
 };
+
+const makineBellegi = yeniMakineBellegi();
 
 const bekliyorMu = (r: { tur: string }) =>
   r.tur === 'kapali' || r.tur === 'ortam-degiskeni-yok' || r.tur === 'akis-kapali' ? isBekliyor(BEKLEME_NEDENLERI[r.tur]) : undefined;
@@ -33,5 +35,8 @@ export const isler = [
   okumaIsi('alarm'),
   isTanimi({ ad: 'smartes-is-emri-gonderimi', aralikMs: IS_ARALIKLARI_MS.gonderim, txDisi: async (vt) => bekliyorMu(await gonderimTuru(vt, ortam)) }),
   ...KALITE_AMBAR_KAYNAKLARI.map(kaliteAmbarIsi),
+  // Canlı makine panosu: kendi anahtarıyla (varsayılan kapalı) dakikada bir; iş emri ilerlemesi aynı anahtarla, beş dakikada bir okunur.
+  isTanimi({ ad: 'smartes-makine-okumasi', aralikMs: MAKINE_OKUMA_ARALIGI_MS, txDisi: async (vt) => bekliyorMu(await makineTuru(vt, ortam, makineBellegi)) }),
+  isTanimi({ ad: 'smartes-ilerleme-okumasi', aralikMs: MAKINE_OKUMA_ARALIGI_MS, txDisi: async (vt) => bekliyorMu(await ilerlemeTuru(vt, ortam)) }),
   isTanimi({ ad: 'smartes-tanim-gonderimi', aralikMs: IS_ARALIKLARI_MS.tanim, txDisi: async (vt) => bekliyorMu(await tanimTuru(vt, ortam)) }),
 ];

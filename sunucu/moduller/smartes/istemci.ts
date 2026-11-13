@@ -8,6 +8,8 @@ import type { CevapYorumu, Parametreler, SkalerSonuc, TabloSatiri } from './soap
 // Brief 2: tekil istek 30 sn, liste metotları 60 sn.
 export const ISTEK_SURESI_MS = 30_000;
 export const LISTE_SURESI_MS = 60_000;
+// Dakikada bir, makine başına atılan anlık okuma: cevap gecikirse beklenmez ve yinelenmez; sonraki tur yeniden okur.
+export const ANLIK_SURESI_MS = 10_000;
 // Brief 12: zaman aşımında 3 yeniden deneme (1 sn, 3 sn, 9 sn); başka ağ ya da sunucu hatasında 1.
 export const ZAMAN_ASIMI_BEKLEMELERI_MS = [1_000, 3_000, 9_000] as const;
 export const AG_HATASI_BEKLEMELERI_MS = [1_000] as const;
@@ -37,6 +39,8 @@ export interface SmartesIstemcisi {
   skaler(metot: string, parametreler: Parametreler, secenek: CagriSecenegi): Promise<IstemciSonucu<SkalerSonuc>>;
   // List metotları: DataSet satırları. Okuma olduğundan her zaman yinelenebilir.
   liste(metot: string, parametreler: Parametreler): Promise<IstemciSonucu<TabloSatiri[]>>;
+  // Sık yinelenen anlık okuma: kısa zaman aşımı, yineleme yok.
+  anlik(metot: string, parametreler: Parametreler): Promise<IstemciSonucu<TabloSatiri[]>>;
   // Bağlantı kontrolü: `?WSDL` okunur, metot adları döner. Yalnız GET, yinelenmez.
   wsdl(): Promise<IstemciSonucu<string[]>>;
 }
@@ -46,6 +50,7 @@ export interface IstemciSecenegi {
   fetch?: typeof fetch;
   istekSuresiMs?: number;
   listeSuresiMs?: number;
+  anlikSuresiMs?: number;
   // Testte saat beklememek için.
   bekle?: (ms: number) => Promise<void>;
   zamanAsimiBeklemeleriMs?: readonly number[];
@@ -135,6 +140,8 @@ export function smartesIstemcisiKur(ayar: SmartesAyari, secenek: IstemciSecenegi
       yorumlaVeDene(metot, parametreler, secenek.istekSuresiMs ?? ISTEK_SURESI_MS, yinele, skalerSonucuOku),
     liste: (metot, parametreler) =>
       yorumlaVeDene(metot, parametreler, secenek.listeSuresiMs ?? LISTE_SURESI_MS, true, tabloSatirlariniOku),
+    anlik: (metot, parametreler) =>
+      yorumlaVeDene(metot, parametreler, secenek.anlikSuresiMs ?? ANLIK_SURESI_MS, false, tabloSatirlariniOku),
     async wsdl() {
       let cevap: Response;
       try {

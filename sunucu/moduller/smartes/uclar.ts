@@ -1,7 +1,7 @@
 import { uc } from '#cekirdek/uc.ts';
 import { ikinciMenuSayacSemasi } from '#paylasilan/ikinci-menu.ts';
 import {
-  alarmlarCevabi, durumCevabi, duruslarCevabi, eslemeAtaGovdesi, eslemeCevabi, eslemeKaldirGovdesi, eslemelerCevabi, eslemeSorgusu, gidenCevabi,
+  alarmlarCevabi, canliMakineAyrintisiCevabi, canliMakineParametresi, canliMakinelerCevabi, durumCevabi, duruslarCevabi, eslemeAtaGovdesi, eslemeCevabi, eslemeKaldirGovdesi, eslemelerCevabi, eslemeSorgusu, gidenCevabi,
   isEmriDurumlariCevabi, sayfaSorgusu, smartesHazirlikCevabi, smartesKontrolCevabi,
 } from '#paylasilan/sozlesme/smartes.ts';
 import { ortamIstemcisi, ortamOzeti } from './baglanti.ts';
@@ -79,6 +79,22 @@ export const uclar = [
     sorgu: sayfaSorgusu,
     cevap: gidenCevabi,
     isle: ({ db, sorgu }) => servis.giden(db, sorgu),
+  }),
+  // Canlı makine panosu: yalnız saklanan son okumayı verir; SmartES'e istek atmaz.
+  uc({
+    yontem: 'GET',
+    yol: '/smartes/makineler',
+    yetki: { biri: ['sayfa.smartes'] },
+    cevap: canliMakinelerCevabi,
+    isle: ({ db }) => servis.canliMakineler(db, ortamIstemcisi),
+  }),
+  uc({
+    yontem: 'GET',
+    yol: '/smartes/makineler/:kod',
+    yetki: { biri: ['sayfa.smartes'] },
+    parametre: canliMakineParametresi,
+    cevap: canliMakineAyrintisiCevabi,
+    isle: ({ db, parametre }) => servis.canliMakineAyrintisi(db, parametre.kod),
   }),
   // Hazırlık ve canlı kontrol yalnız sistem ayrıntısını görene (yönetici): adres ve ayar durumu gösterilir.
   uc({

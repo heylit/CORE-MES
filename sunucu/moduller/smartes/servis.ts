@@ -5,15 +5,16 @@ import { kisitKorumali } from '#cekirdek/kisit.ts';
 import { sayfaliListe } from '#cekirdek/liste.ts';
 import { surumluGuncelle } from '#cekirdek/surum.ts';
 import type {
-  AlarmlarCevabi, DurumCevabi, DuruslarCevabi, EslemeCevabi, EslemelerCevabi, GidenCevabi, IsEmriDurumlariCevabi, SmartesBaglantiDurumu,
+  AlarmlarCevabi, CanliMakineAyrintisiCevabi, CanliMakinelerCevabi, DurumCevabi, DuruslarCevabi, EslemeCevabi, EslemelerCevabi, GidenCevabi, IsEmriDurumlariCevabi, SmartesBaglantiDurumu,
   SmartesHazirlikCevabi, SmartesKontrolCevabi,
 } from '#paylasilan/sozlesme/smartes.ts';
 import type { IkinciMenuSayaclari } from '#paylasilan/sayfa-tanimi.ts';
+import { tesisGunBasi, tesisGunu } from '#paylasilan/tesis-zamani.ts';
 import { sistemAyariOku } from '../ayarlar/disari.ts';
 import { durusNedenleriniListele } from '../durus-nedenleri/disari.ts';
 import { istasyonlar, makineler, operasyonTipleri } from '../istasyonlar/disari.ts';
 import { malzemeOzetleri } from '../malzemeler/disari.ts';
-import { isEmriOzeti, planlanacakIsEmirleri } from '../uretim-emirleri/disari.ts';
+import { isEmriOzeti, makinelerdekiIsler, planlanacakIsEmirleri } from '../uretim-emirleri/disari.ts';
 import type { IstemciHatasi, IstemciSonucu, SmartesIstemcisi } from './istemci.ts';
 import {
   adetDegistiMi, alarmOku, alarmParametreleri, alarmSatiri, ambarOku, MAKINE_LISTESI_METODU, smartesMakineleri, BELIRSIZ_ILETISI, durusOku, eksikIstegeBagliMetotlar, eksikMetotlar, geriCekilmeMs, KALITE_AMBAR_METOTLARI, KALITE_AMBAR_AYARI,
@@ -22,8 +23,10 @@ import {
   listedekiKodlar, OKUMA_METOTLARI, okumaParametreleri, okumaPenceresi, OPERASYON_METODU, pencereAtlanmaliMi, operasyonParametreleri, redOku,
   skalerBasariliMi, smartesIsEmriNo, smartesOperasyonKodu, sonucBilinmiyorMu, TANIM_AYARI, TANIM_LISTE_METOTLARI, TANIM_METOTLARI, TANIM_NIYET_SINIRI,
   TANIM_TUR_SINIRI, TANIM_TURLERI, tanimEylemi, tanimKoduUygunMu, tanimParametreleri, yasakMetotMu,
+  bugunDilimleri, ILERLEME_ARALIGI_MS, ILERLEME_METODU, ilerlemeOku, ilerlemeParametreleri, MAKINE_AYARI, MAKINE_BILGI_METODU, MAKINE_LISTESI_YENILEME_MS,
+  MAKINE_OKUMA_ARALIGI_MS, MAKINE_TUR_TAVANI_MS, makineBilgiParametreleri, makineBilgisiOku, turSirasi,
 } from './kurallar.ts';
-import type { AkisAyari, EslemeTuru, GidecekIsEmri, KaliteAmbarKaynagi, OkumaKaynagi, TanimKaydi, TanimTuru } from './kurallar.ts';
+import type { AkisAyari, AktifMakine, EslemeTuru, GidecekIsEmri, KaliteAmbarKaynagi, MakineDurumu, OkumaKaynagi, TanimKaydi, TanimTuru } from './kurallar.ts';
 import { smartesTarihi } from './soap.ts';
 import type { Parametreler, TabloSatiri } from './soap.ts';
 import * as s from './sorgular.ts';
@@ -625,6 +628,160 @@ export const alarmlar = (db: Db, q: Sayfa): Promise<AlarmlarCevabi> =>
   sayfaliListe(q, { say: () => s.alarmSay(db), satirlar: (d) => s.alarmSatirlari<Satir<AlarmlarCevabi>>(db, d) });
 export const giden = (db: Db, q: Sayfa): Promise<GidenCevabi> =>
   sayfaliListe(q, { say: () => s.gidenSay(db), satirlar: (d) => s.gidenListeSatirlari<Satir<GidenCevabi>>(db, d) });
+
+/* ---------------- Canlı makine panosu (SME-34) ---------------- */
+
+// Süreç belleği: makine listesi saatte bir yenilenir; kesilen tur `sonraki` makineden sürer. Yeniden başlayan süreçte boştur.
+export interface MakineBellegi { makineler: AktifMakine[] | null; listeZamani: number; sonraki: number | null }
+export const yeniMakineBellegi = (): MakineBellegi => ({ makineler: null, listeZamani: 0, sonraki: null });
+
+export type MakineOkumaSonucu = Engel | { tur: 'islendi'; okunan: number; makineSayisi: number; kesildi: boolean; hata: string | null };
+
+// Makineler sırayla, makine başına tek istekle okunur (AllMachineInformationList makine kimliği ister). Tur süre tavanını aşarsa ya da
+// SmartES'e ulaşılamazsa kesilir; okunamayan makinenin eski kaydı yerinde kalır ve ekranda "veri eski" görünür.
+export async function makineTuru(
+  vt: Pick<Veritabani, 'tx'>, o: Pick<TurOrtami, 'istemci' | 'saat'>, bellek: MakineBellegi, sayac: () => number = Date.now,
+): Promise<MakineOkumaSonucu> {
+  const e = await vt.tx((db) => engel(db, o.istemci, MAKINE_AYARI));
+  if (e !== null) return e;
+  const istemci = o.istemci;
+  if (istemci === null) return { tur: 'ortam-degiskeni-yok' };
+  for (const metot of [MAKINE_LISTESI_METODU, MAKINE_BILGI_METODU]) if (yasakMetotMu(metot)) throw new Error('Bu akış işaretleme ya da silme metodu çağıramaz.');
+  const t0 = sayac();
+  const bitir = async (t: { hata: string | null; okunan: number; makineSayisi: number; kesildi: boolean }): Promise<MakineOkumaSonucu> => {
+    await vt.tx((db) => s.makineTuruYaz(db, o.saat(), { hata: t.hata, okunan: t.okunan, makineSayisi: t.makineSayisi, turSuresiMs: Math.max(0, Math.round(sayac() - t0)) }));
+    return { tur: 'islendi', ...t };
+  };
+  if (bellek.makineler === null || o.saat().getTime() - bellek.listeZamani >= MAKINE_LISTESI_YENILEME_MS) {
+    const r = await istemci.anlik(MAKINE_LISTESI_METODU, []);
+    if (r.tur !== 'basarili') return bitir({ hata: hataMetni(r), okunan: 0, makineSayisi: bellek.makineler?.length ?? 0, kesildi: true });
+    bellek.makineler = smartesMakineleri(r.deger);
+    bellek.listeZamani = o.saat().getTime();
+  }
+  const sira = turSirasi(bellek.makineler, bellek.sonraki);
+  let okunan = 0;
+  let hata: string | null = null;
+  let kesildi = false;
+  for (const [i, m] of sira.entries()) {
+    if (sayac() - t0 > MAKINE_TUR_TAVANI_MS) {
+      bellek.sonraki = m.id;
+      kesildi = true;
+      break;
+    }
+    const r = await istemci.anlik(MAKINE_BILGI_METODU, makineBilgiParametreleri(m.id));
+    if (r.tur !== 'basarili') {
+      hata = hataMetni(r);
+      if (r.tur === 'ag' || r.tur === 'zaman-asimi') {
+        // Cevap vermeyen makine sonraki turun başına konmaz: ötekilerin okunmasını engellemesin.
+        bellek.sonraki = sira[i + 1]?.id ?? null;
+        kesildi = true;
+        break;
+      }
+      continue;
+    }
+    const satir = r.deger[0];
+    const okuma = satir === undefined ? null : makineBilgisiOku(satir, m);
+    if (okuma === null) {
+      hata = kirp(`${MAKINE_BILGI_METODU} cevabında makine kodu bulunamadı; alan adı doğrulanana kadar o makine yazılmaz.`);
+      continue;
+    }
+    const zaman = o.saat();
+    await vt.tx((db) => s.makineYaz(db, okuma, zaman));
+    okunan += 1;
+  }
+  if (!kesildi) bellek.sonraki = null;
+  return bitir({ hata, okunan, makineSayisi: sira.length, kesildi });
+}
+
+export type IlerlemeOkumaSonucu = Engel | { tur: 'islendi'; okunan: number; hata: string | null } | { tur: 'erken' };
+
+// İş emirlerinin SmartES'teki ilerlemesi (tamamlanma yüzdesi, tahmini bitiş) beş dakikada bir, tek istekle okunur.
+export async function ilerlemeTuru(vt: Pick<Veritabani, 'tx'>, o: Pick<TurOrtami, 'istemci' | 'saat'>): Promise<IlerlemeOkumaSonucu> {
+  const bas = await vt.tx(async (db) => {
+    const e = await engel(db, o.istemci, MAKINE_AYARI);
+    if (e !== null) return e;
+    const iz = await s.ilerlemeOkumasi(db);
+    return iz !== null && o.saat().getTime() - iz.sonDeneme.getTime() < ILERLEME_ARALIGI_MS ? { tur: 'erken' as const } : { tur: 'hazir' as const };
+  });
+  if (bas.tur !== 'hazir') return bas;
+  const istemci = o.istemci;
+  if (istemci === null) return { tur: 'ortam-degiskeni-yok' };
+  if (yasakMetotMu(ILERLEME_METODU)) throw new Error('Bu akış işaretleme ya da silme metodu çağıramaz.');
+  const r = await istemci.liste(ILERLEME_METODU, ilerlemeParametreleri(o.saat()));
+  const zaman = o.saat();
+  if (r.tur !== 'basarili') {
+    await vt.tx((db) => s.ilerlemeHatali(db, zaman, hataMetni(r)));
+    return { tur: 'islendi', okunan: 0, hata: hataMetni(r) };
+  }
+  const kayitlar = [...new Map(r.deger.flatMap((satir) => ilerlemeOku(satir) ?? []).map((k) => [k.isEmriNo, k])).values()];
+  if (r.deger.length > 0 && kayitlar.length === 0) {
+    const hata = kirp(`${ILERLEME_METODU} cevabında beklenen alanlar bulunamadı; alan adı doğrulanana kadar kayıt yazılmaz.`);
+    await vt.tx((db) => s.ilerlemeHatali(db, zaman, hata));
+    return { tur: 'islendi', okunan: 0, hata };
+  }
+  await vt.tx((db) => s.ilerlemeYaz(db, kayitlar, zaman));
+  return { tur: 'islendi', okunan: kayitlar.length, hata: null };
+}
+
+const MAKINE_SATIR_SINIRI = 500;
+
+// Makine SmartES koduyla eşlenmişse CORE'daki istasyonu ve o makinede açık iş yanına yazılır; eşlenmemiş makinede ikisi de boştur.
+export async function canliMakineler(db: Db, istemci: SmartesIstemcisi | null, simdi: Date = new Date()): Promise<CanliMakinelerCevabi> {
+  const baglanti = baglantiDurumu(await sistemAyariOku(db, 'smartes.baglanti'), istemci);
+  const okumaAcik = await sistemAyariOku(db, MAKINE_AYARI);
+  const iz = await s.makineOkumaIzi(db);
+  const bos = { baglanti, okumaAcik, destekleniyor: true, aralikSaniye: MAKINE_OKUMA_ARALIGI_MS / 1000, sonOkuma: iz?.sonBasarili ?? null };
+  if (baglanti !== 'acik' || !okumaAcik) return { ...bos, makineler: [] };
+  const satirlar = await s.makineDurumlari(db, MAKINE_SATIR_SINIRI);
+  const kodlar = new Map((await s.eslemeler(db, 'makine')).map((e) => [e.smartesKod, e.tmiId]));
+  const coreMakineleri = new Map((await makineler(db, { pasiflerDahil: true })).map((m) => [m.id, m]));
+  const coreIstasyonlari = new Map((await istasyonlar(db, { pasiflerDahil: true })).map((i) => [i.id, i]));
+  const isler = await makinelerdekiIsler(db, [...kodlar.values()]);
+  const ilerleme = new Map((await s.ilerlemeler(db, [...isler.values()].map((i) => smartesIsEmriNo(i.emirNo, i.opNo)))).map((i) => [i.isEmriNo, i]));
+  const gunBasi = new Date(tesisGunBasi(tesisGunu(simdi)));
+  const degisimler = new Map<string, { onceki: MakineDurumu | null; liste: { zaman: string; yeni: MakineDurumu }[] }>();
+  for (const d of await s.gunDegisimleri(db, gunBasi, null)) {
+    const k = degisimler.get(d.makineKodu) ?? { onceki: null, liste: [] };
+    if (d.onceki) k.onceki = d.yeni;
+    else k.liste.push({ zaman: d.zaman, yeni: d.yeni });
+    degisimler.set(d.makineKodu, k);
+  }
+  const gunBasiMetni = gunBasi.toISOString();
+  return {
+    ...bos,
+    // Hiç okunamadıysa ve son hata metodun olmadığını söylüyorsa pano "SmartES bu bilgiyi vermiyor" der.
+    destekleniyor: !(satirlar.length === 0 && iz !== null && iz.sonBasarili === null && iz.sonHata !== null && iz.sonHata.startsWith('SmartES hatası')),
+    makineler: satirlar.map((m) => {
+      const coreId = kodlar.get(m.makineKodu);
+      const core = coreId === undefined ? undefined : coreMakineleri.get(coreId);
+      const istasyon = core?.istasyonId == null ? undefined : coreIstasyonlari.get(core.istasyonId);
+      const is = coreId === undefined ? undefined : isler.get(coreId);
+      const il = is === undefined ? undefined : ilerleme.get(smartesIsEmriNo(is.emirNo, is.opNo));
+      const g = degisimler.get(m.makineKodu);
+      return {
+        makineKodu: m.makineKodu, makineAdi: m.makineAdi ?? core?.ad ?? null, istasyonKodu: istasyon?.kod ?? null, istasyonAdi: istasyon?.ad ?? null,
+        durum: m.durum, durumKodu: m.durumKodu, durumBaslangic: m.durumBaslangic, mod: m.mod, alarm: m.alarm, uyari: m.uyari, programNo: m.programNo,
+        programAdi: m.programAdi, sayac: m.sayac, spindleYuku: m.spindleYuku, okundu: m.okundu,
+        calisanIs: is === undefined ? null : {
+          emirId: is.emirId, emirNo: is.emirNo, opNo: is.opNo, opAdi: is.opAdi, tamamlananYuzde: il?.tamamlananYuzde ?? null, tahminiBitis: il?.tahminiBitis ?? null,
+        },
+        bugun: bugunDilimleri(gunBasiMetni, g?.onceki ?? null, g?.liste ?? []),
+      };
+    }),
+  };
+}
+
+export async function canliMakineAyrintisi(db: Db, makineKodu: string, simdi: Date = new Date()): Promise<CanliMakineAyrintisiCevabi> {
+  const m = await s.makineDurumuGetir(db, makineKodu);
+  if (m === null) throw bulunamadi('Bu makinenin canlı kaydı yok.');
+  const gunBasi = new Date(tesisGunBasi(tesisGunu(simdi)));
+  const degisimler = (await s.gunDegisimleri(db, gunBasi, makineKodu)).filter((d) => !d.onceki);
+  return {
+    makineKodu: m.makineKodu, okundu: m.okundu, mod: m.mod, uyari: m.uyari, sayacToplam: m.sayacToplam, eksenHizi: m.eksenHizi, eksenOrani: m.eksenOrani,
+    spindle: { hiz: m.spindleHizi, yuk: m.spindleYuku, oran: m.spindleOrani }, takimCebi: m.takimCebi,
+    degisimler: degisimler.map((d) => ({ zaman: d.zaman, eski: d.eski, yeni: d.yeni, aciklama: d.aciklama })).reverse(),
+  };
+}
 
 /* ---------------- bağlantı hazırlığı ve canlı kontrol (SME-H) ---------------- */
 

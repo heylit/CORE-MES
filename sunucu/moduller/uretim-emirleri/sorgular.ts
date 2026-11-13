@@ -41,6 +41,7 @@ export {
   sonOlaylarGetir, kisininAcikIstasyonu, type KisiAcikIsSatiri, kisininAcikIsleriGetir, type KisiIsEmriSatiri, kisininIsEmirleriGetir,
   kisininGunlukIsEmirleriGetir, kisininHurdalariGetir, standartSureleriGetir, isEmriPlanBilgileriGetir, type IsEmriZamanSatiri, isEmriZamanlariGetir,
   kisiSaglamlariGetir, makineSaglamlariGetir, adiminAcikMakineleri,
+  type MakinedekiIsSatiri, makinelerdekiIslerGetir,
 } from './sorgular/sureler/sorgular.ts';
 export {
   type AkisEmirSatiri, type AkisIsEmriSatiri, type AkisOlaySatiri, type AkisSayimSatiri, type AkisFasonSatiri, akisEmriGetir, akisIsEmirleriGetir,

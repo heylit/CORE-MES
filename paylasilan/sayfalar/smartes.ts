@@ -17,6 +17,7 @@ export const SMARTES_IKINCI_MENU = {
       { anahtar: 'eslemeler', baslik: 'Kod eşlemeleri', yol: '/smartes/eslemeler', simge: 'layers', islem: 'sayfa.smartes' },
     ] },
     { baslik: 'Gelen', maddeler: [
+      { anahtar: 'makineler', baslik: 'Makineler canlı', yol: '/smartes/makineler', simge: 'cpu', islem: 'sayfa.smartes' },
       { anahtar: 'is-emri-durumlari', baslik: 'Üretim sayıları', yol: '/smartes/is-emri-durumlari', simge: 'chart', islem: 'sayfa.smartes' },
       { anahtar: 'duruslar', baslik: 'Duruşlar', yol: '/smartes/duruslar', simge: 'pause', islem: 'sayfa.smartes' },
       { anahtar: 'alarmlar', baslik: 'Alarmlar', yol: '/smartes/alarmlar', simge: 'alert', islem: 'sayfa.smartes' },

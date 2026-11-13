@@ -4,7 +4,7 @@ import { testVeritabaniKur } from '#cekirdek/test-vt.ts';
 import type { TestVeritabani } from '#cekirdek/test-vt.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
 import { kullaniciYukle, rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
-import { emirBaslat, emirBitir, emirDevam, emirDuraklat, uretimEmriAc } from './disari.ts';
+import { emirBaslat, emirBitir, emirDevam, emirDuraklat, makinelerdekiIsler, uretimEmriAc } from './disari.ts';
 import type { IsEmriGirdisi } from './disari.ts';
 import { izlemeListesi } from './servis.ts';
 
@@ -103,5 +103,25 @@ describe('uretim-emirleri haritadaki çalışan makine (1997, gerçek PostgreSQL
     await o().vt.tx((db) => emirDevam(db, operator, emir, [baslatilan]));
     await o().vt.tx((db) => emirBitir(db, operator, emir));
     assert.equal(await haritaMakinesi(emir), undefined);
+  });
+
+  test('izinli/ret: makinedeki açık iş emir ve adımıyla okunur; işi olmayan, duraklatılan ve biten makine haritada yoktur (3176)', async () => {
+    const dolu = await makineKur(), bos = await makineKur();
+    const emir = await ac(dolu);
+    await o().vt.tx((db) => emirBaslat(db, operator, emir, [dolu]));
+    const isler = await o().vt.tx((db) => makinelerdekiIsler(db, [dolu, bos, dolu]));
+    assert.deepEqual([...isler.keys()], [dolu]);
+    const is = isler.get(dolu);
+    assert.equal(is?.emirId, emir);
+    assert.equal(is?.opNo, 10);
+    assert.equal(is?.opAdi, 'Adım 1');
+    assert.match(is?.emirNo ?? '', /\S/);
+    assert.equal((await o().vt.tx((db) => makinelerdekiIsler(db, []))).size, 0);
+    await o().vt.tx((db) => emirDuraklat(db, operator, emir));
+    assert.equal((await o().vt.tx((db) => makinelerdekiIsler(db, [dolu]))).size, 0);
+    await o().vt.tx((db) => emirDevam(db, operator, emir, [dolu]));
+    assert.equal((await o().vt.tx((db) => makinelerdekiIsler(db, [dolu]))).size, 1);
+    await o().vt.tx((db) => emirBitir(db, operator, emir));
+    assert.equal((await o().vt.tx((db) => makinelerdekiIsler(db, [dolu]))).size, 0);
   });
 });
