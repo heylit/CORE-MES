@@ -17,7 +17,7 @@ export const useRafKodlamasi = () =>
 export function RafKodGecisiUyarisi() {
   const istemci = useQueryClient();
   const { bildir } = useBildirim();
-  const tanimlar = useIslem('stok.tanim');
+  const tanimlar = useIslem('stok.raf-yaz');
   const durum = useRafKodlamasi();
   const [liste, listeYaz] = useState<KoduDegisenKonum[] | null>(null);
   const [onay, onayYaz] = useState(false);

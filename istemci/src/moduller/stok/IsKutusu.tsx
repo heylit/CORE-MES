@@ -6,7 +6,7 @@ import { Dugme, DurumKutusu, Kart } from '../../ortak/arayuz/index.ts';
 import { api } from '../../ortak/veri/api.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { HAREKET_ETIKETI, bugunMetni, hareketIsareti, miktarMetni, paraMetni } from './gorunum.ts';
-import { SayfaBasi, hataMetni, useIslem } from './ortak.tsx';
+import { SayfaBasi, hataMetni, useEsleyebilir, useIslem } from './ortak.tsx';
 import './stok.css';
 import { paneliAc, type PanelIstegi } from './panel-olayi.ts';
 
@@ -106,7 +106,7 @@ function SayimBekleyenler() {
 }
 
 export function IsKutusu() {
-  const tanimlar = useIslem('stok.tanim');
+  const tanimlar = useEsleyebilir();
   const malKabulYetkisi = useIslem('stok.giris');
   const cikisYetkisi = useIslem('stok.cikis');
   const s = useQuery({ queryKey: anahtarlar.isKutusu, queryFn: () => api.get<IsKutusuCevabi>('/stok/is-kutusu') });

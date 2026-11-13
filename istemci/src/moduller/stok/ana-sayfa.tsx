@@ -75,7 +75,7 @@ function AylikStokDegeri() {
 }
 
 // Stoğu okuyabilen herkes (stok sayfası ya da bir stok işlemi); uçtaki okuma kümesiyle aynı.
-const OKUYAN: readonly Islem[] = ['stok.giris', 'stok.cikis', 'stok.transfer', 'stok.sayim', 'stok.tanim', 'stok.geri-al', 'stok.toplama'];
+const OKUYAN: readonly Islem[] = ['stok.giris', 'stok.cikis', 'stok.transfer', 'stok.sayim', 'stok.konum-yaz', 'stok.raf-yaz', 'stok.harita-yaz', 'stok.malzeme-ayari', 'stok.geri-al', 'stok.toplama'];
 
 export const anaSayfaKartlari: AnaSayfaKarti[] = [
   // Şirket özeti kartlarını stoğu okuyan görür (kart #1085). Değer kartları finans rakamını görene görünür: değer uçta yalnız

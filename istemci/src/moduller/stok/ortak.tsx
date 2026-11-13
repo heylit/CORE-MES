@@ -36,9 +36,15 @@ export async function korumaliPost<T>(yol: string, govde: unknown): Promise<T> {
 export function useIslem(islem: Islem): boolean {
   return (useOturum().data?.islemler ?? []).includes(islem);
 }
+// Haritadan eşleme raf, konum ya da depo haritası eyleminden biriyle koşar (3165 a; sunucudaki ESLEME ile aynı).
+const ESLEME: readonly Islem[] = ['stok.konum-yaz', 'stok.raf-yaz', 'stok.harita-yaz'];
+export function useEsleyebilir(): boolean {
+  const islemler = useOturum().data?.islemler ?? [];
+  return ESLEME.some((i) => islemler.includes(i));
+}
 // Tam stok okuması sunucudaki OKUMA ile aynıdır: sayfa.stok ya da herhangi bir stok işlemi; stok.istek tek başına açmaz (soru 93 a).
 // Liste istemcide yazılır (paylasilan değeri zod taşıyabilir); eksik işlem tip denetiminde yakalanır.
-const STOK_OKUMA = ['sayfa.stok', 'stok.giris', 'stok.cikis', 'stok.transfer', 'stok.sayim', 'stok.tanim', 'stok.geri-al', 'stok.toplama', 'stok.statu-degistir', 'stok.eksi-onayla', 'stok.skt-onayla'] as const;
+const STOK_OKUMA = ['sayfa.stok', 'stok.giris', 'stok.cikis', 'stok.transfer', 'stok.sayim', 'stok.konum-yaz', 'stok.raf-yaz', 'stok.harita-yaz', 'stok.malzeme-ayari', 'stok.geri-al', 'stok.toplama', 'stok.statu-degistir', 'stok.eksi-onayla', 'stok.skt-onayla'] as const;
 const stokOkumaTam: [Exclude<(typeof STOK_ISLEMLERI)[number], (typeof STOK_OKUMA)[number]>] extends [never] ? true : never = true;
 export function useStokOkur(): boolean {
   const islemler = useOturum().data?.islemler ?? [];

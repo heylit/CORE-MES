@@ -16,7 +16,10 @@ import './stok.css';
 // Depo: Fabrika Haritası'nın depo görünümü, yalnız stok deposu yapılmış bölümlerle (kart #1304). Raf ve göz haritada tek
 // kayıttır; burada eklenen ya da düzenlenen raf haritada da aynıdır. Gözün stoğu stoktan okunur.
 export function Depo() {
-  const tanimlar = useIslem('stok.tanim');
+  // Gömülü depo paneli rafı raf eylemiyle, göz kalemini depo haritası eylemiyle yazar; panel ikisi birden olana yazılır (3165 a).
+  const rafYazar = useIslem('stok.raf-yaz');
+  const haritaYazar = useIslem('stok.harita-yaz');
+  const tanimlar = rafYazar && haritaYazar;
   const istemci = useQueryClient();
   const { bildir } = useBildirim();
   // 3135 a: kayıttan sonraki eşleme kodu değişen konumları döner; eski etiket okunmaz, pencere yeniden basmayı önerir.
@@ -47,7 +50,7 @@ export function Depo() {
       {salonIdler && salonIdler.length === 0 && (
         <>
           <DurumKutusu durum="bos" mesaj="Fabrika Haritası'nda stok deposu yapılmış bölüm yok." />
-          {tanimlar && <Link to="/stok/ayarlar"><Dugme simge="tool">Ayarlar'da bölümü depo yap</Dugme></Link>}
+          {haritaYazar && <Link to="/stok/ayarlar"><Dugme simge="tool">Ayarlar'da bölümü depo yap</Dugme></Link>}
         </>
       )}
       {salonIdler && salonIdler.length > 0 && <DepoPaneli salonIdler={salonIdler} depoYazimi={depoYazimi} />}

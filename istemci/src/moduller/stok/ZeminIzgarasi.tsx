@@ -9,7 +9,7 @@ import { ALAN_TURU_ADI, ZeminSimgesi } from '../atolye/disari.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { EtiketMerkeziDugmesi } from './Etiketler.tsx';
 import { KONUM_ETIKETI, miktarMetni } from './gorunum.ts';
-import { hataMetni, useIslem, useStokKomutu } from './ortak.tsx';
+import { hataMetni, useEsleyebilir, useIslem, useStokKomutu } from './ortak.tsx';
 import './stok.css';
 
 type Bolum = ZeminCevabi['bolumler'][number];
@@ -22,7 +22,7 @@ const ALAN_TURLERI = Object.keys(ALAN_TURU_ADI) as AlanTuru[];
 // alan türü ya da istasyon atar; atama haritaya yazılır, ardından stok konumları haritadan eşlenir.
 export function ZeminIzgarasi() {
   const atolyeYazar = useIslem('atolye.salon-yaz');
-  const tanimlar = useIslem('stok.tanim');
+  const tanimlar = useEsleyebilir();
   const [salonId, setSalonId] = useState<number | null>(null);
   const [secili, setSecili] = useState<string | null>(null);
   const z = useQuery({ queryKey: [...anahtarlar.hepsi, 'zemin'], queryFn: () => api.get<ZeminCevabi>('/stok/zemin') });

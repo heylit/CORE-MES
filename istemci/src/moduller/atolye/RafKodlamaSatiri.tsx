@@ -19,7 +19,7 @@ export function RafKodlamaSatiri({ raf, stok }: { raf: RafBoyu & { id: number };
   const istemci = useQueryClient();
   const { bildir } = useBildirim();
   const islemler = useOturum().data?.islemler;
-  const tanimlar = islemler?.includes('stok.tanim') === true;
+  const tanimlar = islemler?.includes('stok.raf-yaz') === true;
   const [soruluyor, soruluyorYaz] = useState(false);
   const [degisenler, degisenlerYaz] = useState<KoduDegisenYer[] | null>(null);
   const numarala = useMutation({

@@ -178,7 +178,7 @@ export function MalzemeAyrinti() {
   const cikabilir = useIslem('stok.cikis');
   const tasiyabilir = useIslem('stok.transfer');
   const girebilir = useIslem('stok.giris');
-  const tanimlar = useIslem('stok.tanim');
+  const tanimlar = useIslem('stok.malzeme-ayari');
   const sepetYetkisi = useIslem('stok.transfer');
   const ayirabilir = useIslem('stok.statu-degistir');
   const [islem, setIslem] = useState<Islem | null>(null);

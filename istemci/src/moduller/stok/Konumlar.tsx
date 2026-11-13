@@ -58,7 +58,7 @@ export function KonumAcPenceresi({ kapat, ilkTur = 'depo_zemini' }: { kapat: () 
 
 export function Konumlar() {
   const yonlendir = useNavigate();
-  const tanimlar = useIslem('stok.tanim');
+  const tanimlar = useIslem('stok.konum-yaz');
   const [ac, setAc] = useState<false | (typeof ELLE_KONUM_TURLERI)[number]>(false);
   const [gorunum, setGorunum] = useState<'zemin' | 'malzemeler' | 'fason' | 'liste'>('zemin');
   const liste = useListeDurumu({ suzgecler: { tur: '' as '' | (typeof KONUM_TURLERI)[number] }, suzgecDegerleri: { tur: KONUM_TURLERI }, siralamaAlanlari: ['kod', 'tur'], adres: true });
@@ -69,7 +69,7 @@ export function Konumlar() {
   useEffect(() => { if (l.data) liste.sayfaEsitle(l.data.sayfa, liste.sorgu.sayfa); }, [l.data]);
   return (
     <section className="tc-stok">
-      <SayfaBasi baslik="Konumlar" aciklama="Fabrika zemini (harita kareleri), raf gözleri, mal kabul alanı, üretim çıkışı ve fason kutuları." sag={tanimlar && <><Dugme tur="birincil" simge="plus" onClick={() => setAc('depo_zemini')}>Konum aç</Dugme><HaritaEsleDugmesi /></>} />
+      <SayfaBasi baslik="Konumlar" aciklama="Fabrika zemini (harita kareleri), raf gözleri, mal kabul alanı, üretim çıkışı ve fason kutuları." sag={<>{tanimlar && <Dugme tur="birincil" simge="plus" onClick={() => setAc('depo_zemini')}>Konum aç</Dugme>}<HaritaEsleDugmesi /></>} />
       <Sekmeler etiket="Konum görünümü" secili={gorunum} sec={setGorunum} sekmeler={[{ anahtar: 'zemin', baslik: 'Fabrika zemini' }, { anahtar: 'malzemeler', baslik: 'Konumdaki malzemeler' }, { anahtar: 'fason', baslik: 'Fason kutuları' }, { anahtar: 'liste', baslik: 'Bütün konumlar' }]} />
       {gorunum === 'zemin' && <ZeminIzgarasi />}
       {gorunum === 'malzemeler' && <KonumMalzemeleri />}

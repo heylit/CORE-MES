@@ -784,7 +784,7 @@ describe('fabrika haritası', () => {
   const yollar = (c: Cagri[]) => c.map((x) => `${x.yontem} ${x.yol}`);
 
   it('stok tanımı olan kişi haritayı kaydedince eşleme kayıttan sonra koşar (2884)', async () => {
-    const cagrilar = sunucuKur({ ...YAZAN, islemler: [...YAZAN.islemler, 'sayfa.stok', 'stok.tanim'] }, { bolumler: [YERLESIM, YERLESIM_B] });
+    const cagrilar = sunucuKur({ ...YAZAN, islemler: [...YAZAN.islemler, 'sayfa.stok', 'stok.konum-yaz', 'stok.raf-yaz', 'stok.harita-yaz', 'stok.malzeme-ayari'] }, { bolumler: [YERLESIM, YERLESIM_B] });
     await fabrikayiKaydet();
     await waitFor(() => expect(yollar(cagrilar)).toContain('POST /stok/konumlar/haritadan-esle'));
     const l = yollar(cagrilar);
@@ -794,7 +794,7 @@ describe('fabrika haritası', () => {
   });
 
   it('eşleme düşerse harita kaydı kalır, hata ve eşlenmemiş yer bilgisi görünür (2884)', async () => {
-    sunucuKur({ ...YAZAN, islemler: [...YAZAN.islemler, 'sayfa.stok', 'stok.tanim'] }, {
+    sunucuKur({ ...YAZAN, islemler: [...YAZAN.islemler, 'sayfa.stok', 'stok.konum-yaz', 'stok.raf-yaz', 'stok.harita-yaz', 'stok.malzeme-ayari'] }, {
       bolumler: [YERLESIM, YERLESIM_B], esleme: { durum: 500, govde: { kod: 'SUNUCU', mesaj: 'hata' } }, haritaOzeti: HARITA_OZETI(2),
     });
     await fabrikayiKaydet();
@@ -807,7 +807,7 @@ describe('fabrika haritası', () => {
     const yaz = vi.fn(() => Promise.resolve());
     vi.stubGlobal('isSecureContext', true);
     vi.stubGlobal('navigator', { ...navigator, clipboard: { writeText: yaz } });
-    sunucuKur({ ...YAZAN, islemler: [...YAZAN.islemler, 'sayfa.stok', 'stok.tanim'] }, {
+    sunucuKur({ ...YAZAN, islemler: [...YAZAN.islemler, 'sayfa.stok', 'stok.konum-yaz', 'stok.raf-yaz', 'stok.harita-yaz', 'stok.malzeme-ayari'] }, {
       bolumler: [YERLESIM, YERLESIM_B], esleme: { durum: 200, govde: { eklenen: 0, guncellenen: 2, kapatilan: 0, atlanan: [], koduDegisenler: [
         { konumId: 55, eskiKod: 'R1-02-3-1', yeniKod: 'R9-02-3-1', tur: 'raf_gozu', ad: null, bolmeNo: 2, katNo: 3, satirSayisi: 1 },
         { konumId: 56, eskiKod: 'R1-02-3-2', yeniKod: 'R9-02-3-2', tur: 'raf_gozu', ad: null, bolmeNo: 2, katNo: 3, satirSayisi: 0 },
@@ -824,7 +824,7 @@ describe('fabrika haritası', () => {
   });
 
   it('Etiket Merkezi olan kişi harita kaydından sonra kodu değişen konumları Etiket Merkezi\'nde açar (3135 a)', async () => {
-    sunucuKur({ ...YAZAN, islemler: [...YAZAN.islemler, 'sayfa.stok', 'stok.tanim', 'sayfa.etiket-merkezi'] }, {
+    sunucuKur({ ...YAZAN, islemler: [...YAZAN.islemler, 'sayfa.stok', 'stok.konum-yaz', 'stok.raf-yaz', 'stok.harita-yaz', 'stok.malzeme-ayari', 'sayfa.etiket-merkezi'] }, {
       bolumler: [YERLESIM, YERLESIM_B], esleme: { durum: 200, govde: { eklenen: 0, guncellenen: 1, kapatilan: 0, atlanan: [], koduDegisenler: [
         { konumId: 55, eskiKod: 'R1-02-3-1', yeniKod: 'R9-02-3-1', tur: 'raf_gozu', ad: null, bolmeNo: 2, katNo: 3, satirSayisi: 0 },
       ] } },
@@ -842,7 +842,7 @@ describe('fabrika haritası', () => {
   });
 
   it('bölüm yerleşimi kaydından sonra da eşleme koşar; stok tanımı yoksa koşmaz (2884)', async () => {
-    for (const [islemler, beklenen] of [[['sayfa.stok', 'stok.tanim'], true], [['sayfa.stok'], false]] as const) {
+    for (const [islemler, beklenen] of [[['sayfa.stok', 'stok.konum-yaz'], true], [['sayfa.stok', 'stok.malzeme-ayari'], false]] as const) {
       const cagrilar = sunucuKur({ ...YAZAN, islemler: [...YAZAN.islemler, ...islemler] });
       goster(<AtolyeHaritasi />);
       fireEvent.click(await screen.findByRole('button', { name: 'Bölümün yerleşimini düzenle' }));

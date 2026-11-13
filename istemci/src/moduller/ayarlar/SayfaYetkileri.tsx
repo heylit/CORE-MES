@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { KisiEkIslemleri, KisiEkIslemleriCevabi, RolIslemleriCevabi } from '#paylasilan/sozlesme/kisiler.ts';
 import { islemAdi, islemGrubu } from '#paylasilan/islem-adlari.ts';
-import { ATOLYE_YAZMA_ISLEMLERI, ETKISIZ_ISLEMLER, ISTASYON_YAZMA_ISLEMLERI, ROTA_YAZMA_ISLEMLERI, URETIM_EMRI_YAZMA_ISLEMLERI } from '#paylasilan/islemler.ts';
+import { ATOLYE_YAZMA_ISLEMLERI, ETKISIZ_ISLEMLER, ISTASYON_YAZMA_ISLEMLERI, ROTA_YAZMA_ISLEMLERI, STOK_TANIM_YAZMA_ISLEMLERI, URETIM_EMRI_YAZMA_ISLEMLERI } from '#paylasilan/islemler.ts';
 import { Dugme, DurumKutusu, Girdi, Kart, OnayPenceresi, Rozet, Secim, Sekmeler, Simge, useBildirim } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { useOturum } from '../../ortak/veri/oturum.ts';
@@ -63,6 +63,7 @@ const BOLUMLER: readonly { ad: string; islemler: readonly string[] }[] = [
   { ad: 'Rota kayıtlarını düzenleme', islemler: ROTA_YAZMA_ISLEMLERI },
   { ad: 'Üretim emirlerini düzenleme', islemler: URETIM_EMRI_YAZMA_ISLEMLERI },
   { ad: 'Fabrika haritasını düzenleme', islemler: ATOLYE_YAZMA_ISLEMLERI },
+  { ad: 'Stok tanımları', islemler: STOK_TANIM_YAZMA_ISLEMLERI },
 ];
 const BOLUMU = new Map(BOLUMLER.flatMap((b) => b.islemler.map((i) => [i, b.ad] as const)));
 type Satirlar = { genel: string[]; bolumler: { ad: string; islemler: string[] }[] };

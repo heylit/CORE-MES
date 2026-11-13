@@ -3,7 +3,7 @@ import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
 import type { HaritaOzetiCevabi, TopluBolumDeposuCevabi } from '#paylasilan/sozlesme/stok.ts';
 import { DEPOCU, MUDUR, ac, json, sunucuKur } from './test-ortak.tsx';
 
-// 2902: "Bütün bölümleri depo yap" yalnız stok.tanim taşıyana ve deposuz bölüm varken görünür; sonuç sayılarla söylenir.
+// 2902: "Bütün bölümleri depo yap" yalnız stok.harita-yaz taşıyana ve deposuz bölüm varken görünür; sonuç sayılarla söylenir.
 const ozet = (depoKod: string | null, deposuzYer: number): HaritaOzetiCevabi => ({
   bolum: 1, goz: 6, alan: 1, eslenmemis: 0, deposuzYer, bagsizKonumlar: [],
   bolumler: [{ salonId: 1, kod: 'ANA', gozSayisi: 6, depoKod: 'ANA' }, { salonId: 2, kod: 'DENEME-AT1', gozSayisi: 4, depoKod }],
@@ -44,7 +44,7 @@ describe('stok Ayarlar: toplu bölüm deposu', () => {
     expect(screen.queryByRole('button', { name: /Bütün bölümleri depo yap/ })).toBeNull();
   });
 
-  it('stok.tanim olmayan düğmeyi görmez', async () => {
+  it('stok.harita-yaz olmayan düğmeyi görmez', async () => {
     sunucuKur(DEPOCU, { 'GET /stok/harita-ozeti': () => json(200, ozet(null, 4)), 'GET /stok/depolar': () => json(200, { depolar: [] }) });
     ac('/stok/ayarlar');
     expect(await screen.findByText(/Depo olmayan bölümlerde 4 yer/)).toBeTruthy();

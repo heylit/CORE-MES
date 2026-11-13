@@ -354,7 +354,7 @@ describe('App modul rotalari', () => {
     expect(screen.queryByText('Stok ayarları')).toBeNull();
     cleanup();
 
-    await ac({ ...STOK_GOREN, islemler: ['sayfa.stok', 'stok.tanim'] }, '/stok/ayarlar', ayarli);
+    await ac({ ...STOK_GOREN, islemler: ['sayfa.stok', 'stok.harita-yaz'] }, '/stok/ayarlar', ayarli);
     expect(screen.getByText('Stok ayarları')).toBeTruthy();
   });
 

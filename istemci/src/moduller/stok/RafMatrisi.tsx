@@ -45,7 +45,7 @@ function Hucre({ g, gorunum, bolmeGenislikM }: { g: GozHucresi; gorunum: Gorunum
 
 // Önizlemedeki raf matrisi: satırlar kat (üstten alta), sütunlar bölme; üç görünüm.
 export function RafMatrisiGovdesi({ id }: { id: number }) {
-  const tanimlar = useIslem('stok.tanim');
+  const tanimlar = useIslem('stok.raf-yaz');
   const [gorunum, setGorunum] = useState<Gorunum>('urunler');
   const m = useQuery({ queryKey: anahtarlar.ayrinti('raf', id), queryFn: () => api.get<RafMatrisiCevabi>(`/stok/raflar/${id}`) });
   if (m.isPending) return <DurumKutusu durum="yukleniyor" />;
