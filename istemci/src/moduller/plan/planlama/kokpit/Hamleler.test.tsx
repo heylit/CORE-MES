@@ -48,4 +48,14 @@ describe('Hamleler', () => {
     expect(await screen.findByText(/biter/)).toBeTruthy();
     expect(container.querySelector('[data-hamle="T1"]')).not.toBeNull();
   });
+  it('plan yeniden dizilirken önizleme istemez; bitince ister', async () => {
+    onizlemeKur();
+    const o = { m: M, e: E, isId: null, zaman, uygula: null, tek: true, surum: 4 };
+    const { rerender } = render(<Hamleler {...o} bekle />);
+    await Promise.resolve();
+    expect(gonder.isTasiOnizle).not.toHaveBeenCalled();
+    rerender(<Hamleler {...o} />);
+    expect(await screen.findByText(/erken/)).toBeTruthy();
+    expect(gonder.isTasiOnizle).toHaveBeenCalled();
+  });
 });

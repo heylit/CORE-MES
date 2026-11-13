@@ -4,7 +4,7 @@ import { BEKLEME_ESIGI, adimBeklemesi, durumYazisi, enCokBekleyen, satirKimligi,
 
 // Seçili emrin ayrıntısı: adımları, yerleri ve seçili adım için tezgâh seçenekleri. Bilgisayarda tahtanın yanında, telefonda alttan açılır;
 // telefonda taşıma buradaki düğmelerle yapılır. Matriste çözüm buradadır: neden geç olduğu ve seçenekler adımlardan önce gelir.
-export interface AyrintiOzellikleri extends Pick<HamleOzellikleri, 'zaman' | 'uygula' | 'surum'> {
+export interface AyrintiOzellikleri extends Pick<HamleOzellikleri, 'zaman' | 'uygula' | 'surum' | 'bekle'> {
   m: KokpitModeli; e: KokpitEmri; secIs: string | null;
   adimSec: (isId: string) => void;
   kapat: () => void;
@@ -13,7 +13,7 @@ export interface AyrintiOzellikleri extends Pick<HamleOzellikleri, 'zaman' | 'uy
   ileti?: string | null;
 }
 
-export function Ayrinti({ m, e, secIs, zaman, uygula, surum, adimSec, kapat, matris = false, ileti = null }: AyrintiOzellikleri) {
+export function Ayrinti({ m, e, secIs, zaman, uygula, surum, bekle = false, adimSec, kapat, matris = false, ileti = null }: AyrintiOzellikleri) {
   const kod = new Map(m.tezgahlar.map((t) => [t.id, t.kod]));
   const secili = secIs ? m.isler[secIs] : undefined;
   const neden = matris && (e.durum === 'gec' || e.durum === 'risk') ? enCokBekleyen(m, e) : null;
@@ -41,12 +41,12 @@ export function Ayrinti({ m, e, secIs, zaman, uygula, surum, adimSec, kapat, mat
   const cozum = e.durum === 'plansiz' ? (
     <>
       <h3>Plana al</h3>
-      <Hamleler m={m} e={e} isId={null} zaman={zaman} uygula={uygula} surum={surum} />
+      <Hamleler m={m} e={e} isId={null} zaman={zaman} uygula={uygula} surum={surum} bekle={bekle} />
     </>
   ) : (
     <>
       <h3>{secili ? `${secili.ad}: tezgâh seçenekleri` : 'Erkene alma seçenekleri'}</h3>
-      {secili && tasinabilir(secili) ? <p className="tc-pyq-not">{tasinabilir(secili)}</p> : <Hamleler m={m} e={e} isId={secIs} zaman={zaman} uygula={uygula} surum={surum} yalnizKazanc={matris} />}
+      {secili && tasinabilir(secili) ? <p className="tc-pyq-not">{tasinabilir(secili)}</p> : <Hamleler m={m} e={e} isId={secIs} zaman={zaman} uygula={uygula} surum={surum} bekle={bekle} yalnizKazanc={matris} />}
     </>
   );
   return (
