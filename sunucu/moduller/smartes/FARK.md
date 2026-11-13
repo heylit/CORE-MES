@@ -19,3 +19,6 @@ Yeni modül; depoda önceki hâli yok. Brief (`SMARTES_PROMPT.md`, .NET/ASMX iç
 - Tanım gönderiminde brief 8'deki "ERP WorkStationList ile farkı bulur" izlendi: gönderimden önce SmartES listesi okunur. Rota tanımı ve
   `OperationCreateUpdate` ayrı akış değildir; operasyon iş emri gönderiminde zaten açılıyor.
 - `GEREKLI_METOTLAR` değişmedi; yeni metotlar `ISTEGE_BAGLI_METOTLAR` listesinde, canlı kontrolde yalnız bildirilir.
+- Makine bulguları (3192 a, adım D1): `GET /smartes/makine-bulgulari` (yalnız okur, `sayfa.smartes`); ikinci menüde "Makine bulguları". Canlı durum,
+  nedensiz duruş, sayım farkı, termin riski, tekrar eden alarm hesaplanır; program, çevrim, OEE, ilerleme oranı ve takım yükü sonraki adımlardadır
+  (kutu "Veri yok"). Makine okumaları yeni `smartes_makine_ornegi` tablosuna eklenir ve silinmez (3200 c). Eşikler `kurallar.ts` `BULGU_ESIKLERI`.
