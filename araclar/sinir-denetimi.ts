@@ -397,8 +397,9 @@ export const KATMANLAR: Katmanlar = {
     /* 1 */ ['ayarlar', 'guvenlik', 'ik', 'istasyonlar', 'kisiler', 'musteri-tedarikci', 'projeler', 'siparisler'],
     /* 2 */ ['belge-merkezi', 'vardiya'],
     /* 3 */ ['cizimler', 'cnc-kurulum', 'markalama', 'ortak-dosyalar', 'satin-alma', 'uretim-emirleri'],
-    /* 4 */ ['malzemeler', 'stok'],
-    /* 5 */ ['arkon', 'geometri', 'recete-rota'],
+    /* 4 */ ['malzemeler'],
+    /* 5 */ ['geometri', 'recete-rota', 'stok'],
+    /* 6 */ ['arkon'],
   ],
 };
 

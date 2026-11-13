@@ -1115,9 +1115,11 @@ export type RefakatPartisiKartiCevabi = z.output<typeof refakatPartisiKartiCevab
 
 // ---- Kod çözümleme (Okut): konum kodu, "LOC:" önekli konum, kart numarası ya da "MLZ:" önekli kart numarası (DEP-55) --------
 export const kodCozSorgusu = z.object({ kod: z.string().trim().min(1).max(80) });
+// 3215 c: hammaddede kesit çizimi için biçim ve ölçüler (mm); başka kart alanı taşınmaz. Hammadde değilse ya da ölçü yoksa null.
+export const malzemeKesiti = z.object({ form: z.string().min(1).max(40), olcu: z.record(z.string().max(10), z.number().positive()) }).strict();
 export const kodCozCevabi = z.discriminatedUnion('tur', [
   z.object({ tur: z.literal('konum'), konum, bakiyeler: z.array(bakiyeSatiri) }),
-  z.object({ tur: z.literal('malzeme'), ozet: malzemeOzetiCevabi.shape.ozet, toplam: ondalikMetinSemasi, bakiyeler: z.array(bakiyeSatiri) }),
+  z.object({ tur: z.literal('malzeme'), ozet: malzemeOzetiCevabi.shape.ozet, toplam: ondalikMetinSemasi, bakiyeler: z.array(bakiyeSatiri), kesit: malzemeKesiti.nullable() }),
   // Okutulan lot: bakiyeler yalnız o lotun gözleridir; düşüm o lottan yapılır.
   // Refakat kartı okutulunca lotun çözümüne kartın partisi eklenir; gözler lotun bütün gözleridir.
   z.object({

@@ -23,7 +23,7 @@ import { aktifIstasyonlar, istasyonAdlari, istasyonGetir, istasyondakiKisiler, i
 import { bildirimGonder } from '../../bildirim/disari.ts';
 import { basladigiGunTakvimi } from '../../vardiya/disari.ts';
 import { kisiAdlari } from '../../kisiler/disari.ts';
-import { malzemeAra, malzemeKullanilabilirMi, malzemeNoKoddan, malzemeOzeti, malzemeOzetleri } from '../../malzemeler/disari.ts';
+import { malzemeAra, malzemeKesiti, malzemeKullanilabilirMi, malzemeNoKoddan, malzemeOzeti, malzemeOzetleri } from '../../malzemeler/disari.ts';
 import { KOMUT_ISLEMI as URETIM_ISLEMI, acikIstasyon, adimliEmirAyrintisi, emirDilimi, uretimEmriOzeti, emirlerinAdimIstasyonlari } from '../../uretim-emirleri/disari.ts';
 import {
   binde, bindenMetin, cikisOnerisi, partiEtiketi, stoklanirMi, partiSec, ISTEK_GECIS_KAYNAKLARI, istekGecisEngeli, buradakiIstasyon, istekAcilisDurumu, istekKapsamindanMuafMi, istekListeEngeli, serbestMiktarEngeli,
@@ -289,6 +289,7 @@ async function malzemeCoz(db: Db, no: number): Promise<KodCozCevabi | null> {
   return {
     tur: 'malzeme', ozet: { id: o.id, tur: o.tur, kod: o.kod, ad: o.ad, onayDurumu: o.onayDurumu, kullanilabilir: await malzemeKullanilabilirMi(db, o.id), birim: o.birim },
     toplam: bindenMetin(b.reduce((t, x) => t + binde(x.miktar), 0n)), bakiyeler: b.map((x) => bakiyeSatiri(x, ad, nolar)),
+    kesit: await malzemeKesiti(db, o.id),
   };
 }
 // Üretim emri kodu stokta çözülmez (emre çıkış bağlamada); sözlüğün tanımadığı öneksiz konum kodu (A-01-01, KABUL), eski `LOC-`

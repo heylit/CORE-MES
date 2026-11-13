@@ -54,6 +54,19 @@ export function malzemeOzeti(db: Db, id: number): Promise<KatalogMalzemeOzeti | 
   return s.katalogMalzemeOzeti(db, id);
 }
 
+// 3215 c: mal kabulde kesit çizimi için yalnız biçim ve sıfırdan büyük sayı ölçüler; yetki denetlemez (tek çağıran stok kod çözümü,
+// o uç kendi kapısından sonra çağırır). Ölçü yoksa null.
+export async function malzemeKesiti(db: Db, no: number): Promise<{ form: string; olcu: Record<string, number> } | null> {
+  const r = await s.hammaddeBicimOlcusu(db, no);
+  if (!r || !/^[a-z0-9_-]{1,40}$/.test(r.form) || typeof r.dims !== 'object' || r.dims === null) return null;
+  const olcu: Record<string, number> = {};
+  for (const [k, v] of Object.entries(r.dims as Record<string, unknown>)) {
+    const n = typeof v === 'number' ? v : typeof v === 'string' && v.trim() !== '' ? Number(v.replace(',', '.')) : Number.NaN;
+    if (Number.isFinite(n) && n > 0 && /^[A-Za-z0-9]{1,10}$/.test(k)) olcu[k] = n;
+  }
+  return Object.keys(olcu).length ? { form: r.form, olcu } : null;
+}
+
 // Boş dizide sorgu atılmaz; yinelenen kimlik tek kayıt; olmayan kimlik haritada yok.
 export async function malzemeOzetleri(db: Db, idler: number[]): Promise<Map<number, KatalogMalzemeOzeti>> {
   const benzersiz = [...new Set(idler)];

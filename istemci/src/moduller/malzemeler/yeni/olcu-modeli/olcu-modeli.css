@@ -1,0 +1,32 @@
+/* 3215 c: ölçülü kesit ve küçük model. Yalnız tasarım değişkenleri. */
+.tc-om-blok { display: grid; gap: var(--b-3); min-width: 0; }
+.tc-om-cizim { margin: 0; display: grid; gap: var(--b-1); padding: var(--b-3); border: var(--cizgi-ince) solid var(--edge); border-radius: var(--yari-2); background: var(--panel); min-width: 0; }
+.tc-om-cizim svg { inline-size: 100%; block-size: auto; display: block; }
+.tc-om-cizim-bas { display: flex; flex-wrap: wrap; justify-content: space-between; gap: var(--b-2); font-family: var(--font-mono); font-size: var(--yazi-xs); color: var(--muted); }
+.tc-om-govde { stroke: var(--ink); stroke-width: 1.4; }
+.tc-om-tarama { stroke: var(--muted); stroke-width: 0.7; }
+.tc-om-bos { fill: var(--panel2); stroke: var(--ink); stroke-width: 1.4; }
+.tc-om-kirik { fill: none; stroke: var(--ink); stroke-width: 1.2; }
+.tc-om-olcu { stroke: var(--done); stroke-width: 1; }
+.tc-om-ok-ucu { fill: var(--done); }
+.tc-om-eksen { stroke: var(--faint); stroke-width: 0.8; stroke-dasharray: 8 3 2 3; }
+.tc-om-yazi { fill: var(--done); font-family: var(--font-mono); font-size: var(--yazi-xs); font-weight: 600; }
+.tc-om-yazi-soluk { fill: var(--muted); font-weight: 400; }
+
+.tc-om-model { position: relative; inline-size: 100%; aspect-ratio: 4 / 3; border-radius: var(--yari-2); overflow: hidden; background: var(--sahne-arka); border: var(--cizgi-ince) solid var(--edge); touch-action: none; user-select: none; }
+.tc-om-model canvas { display: block; inline-size: 100%; block-size: 100%; }
+.tc-om-etiketler { position: absolute; inset: 0; pointer-events: none; }
+.tc-om-etiket { position: absolute; left: 0; top: 0; padding: 0 var(--b-1); border-radius: var(--yari-1); background: var(--panel-solid); color: var(--done); border: var(--cizgi-ince) solid var(--done); font-family: var(--font-mono); font-size: var(--yazi-xs); font-weight: 600; white-space: nowrap; }
+.tc-om-rozetler { position: absolute; inset-inline: var(--b-2); top: var(--b-2); display: flex; flex-wrap: wrap; gap: var(--b-1); pointer-events: none; }
+.tc-om-rozet { padding: 0 var(--b-2); border-radius: var(--yari-tam); background: var(--panel-solid); border: var(--cizgi-ince) solid var(--edge2); font-size: var(--yazi-xs); color: var(--muted); }
+.tc-om-araclar { position: absolute; inset-inline-start: var(--b-2); bottom: var(--b-2); display: flex; flex-wrap: wrap; gap: var(--b-1); }
+.tc-om-hata { position: absolute; inset: 0; display: grid; place-items: center; margin: 0; padding: var(--b-4); color: var(--muted); font-size: var(--yazi-s); text-align: center; }
+.tc-om-foy { display: grid; gap: var(--b-2); margin-block-end: var(--b-3); }
+.tc-om-not { margin: 0; color: var(--muted); font-size: var(--yazi-xs); }
+
+/* Föy 780 altında gizli (sihirbaz.css); orada model kesitin altında görünür. */
+.tc-om-dar { display: none; }
+@container (width < 780px) {
+  .tc-om-dar { display: block; }
+}
+.tc-om-araclar .tc-dugme { min-block-size: var(--dokunma); }
