@@ -6,9 +6,10 @@ import { expect, tasmaOlc, test } from './ortak.ts';
 // yanına "N'i beklemede" yazılır. Çalışma ve emir dilimi sentetiktir (ORN-); öteki uçlar gerçektir. Projeler 360, 768 ve 1280'de koşar.
 test.use({ hesap: 'ornek.yonetici' });
 
-// Taban bugünün günüdür (gün katmanı bugünden açılır); işler yarın 09:00-15:00, ORN-S2 termini yarın 10:00 olduğu için gecikir.
-// Gün tesisin günüdür: UTC günü tesiste gece yarısından sonraki saatlerde bir gün geridedir ve gün katmanı başka güne açılırdı.
-const bugun = tesisGunu(Date.now());
+// Sayfanın saati sabittir: gün katmanı "bugün"den açılır ve işler yarına konur; gerçek saatle test koşarken tesis günü
+// değişirse (gece yarısı) dosya yüklenirken hesaplanan gün ile sayfanın günü ayrılır.
+const SIMDI = new Date('2026-10-19T07:00:00+03:00');
+const bugun = tesisGunu(SIMDI.getTime());
 const yarin = tesisGunu(tesisGunBasi(bugun) + 36 * 3_600_000);
 const HER_GUN = Object.fromEntries(['pzt', 'sal', 'car', 'per', 'cum', 'cmt', 'paz'].map((g) => [g, ['V1']]));
 const CALISMA = {
@@ -41,6 +42,7 @@ const emir = (id: string, bekletme?: string) => ({
 });
 
 const kur = async (page: Page) => {
+  await page.clock.setSystemTime(SIMDI);
   await page.route('**/api/plan/planlama-calismasi', (r) => r.fulfill({
     status: 200, contentType: 'application/json', body: JSON.stringify({ calisma: CALISMA, surum: 1 }),
   }));
