@@ -3,7 +3,7 @@ import { Simge } from '../../../../ortak/arayuz/index.ts';
 import { emirKuyrugu } from '../ortak/emir-no.ts';
 import type { Derleme } from '../motor/kurallar.ts';
 import {
-  SAAT_ENI, aralikYuku, durumYazisi, satirKimligi, sureYaz, tasimaSaati, tasinabilir, uzakMi, yukSinifi, yukYuzdesi,
+  SAAT_ENI, aralikYuku, durumYazisi, durusYazisi, satirKimligi, suAndakiDurus, sureYaz, tasimaSaati, tasinabilir, uzakMi, yukSinifi, yukYuzdesi,
   type KokpitEmri, type KokpitIsi, type KokpitModeli, type KokpitOlcegi, type TurAdayi,
 } from './kurallar.ts';
 
@@ -231,8 +231,8 @@ export function Tahta(o: TahtaOzellikleri) {
     );
   }
 
-  const satirlar: { kimlik: string; bas: string; alt: string; isler: KokpitIsi[]; durum?: string; tam?: string; termin?: number | null }[] = goz === 'T'
-    ? m.tezgahlar.map((t) => ({ kimlik: t.id, bas: t.kod, alt: t.ad, isler: Object.values(m.isler).filter((x) => satirKimligi(x) === t.id) }))
+  const satirlar: { kimlik: string; bas: string; alt: string; isler: KokpitIsi[]; durum?: string; tam?: string; termin?: number | null; durus?: string }[] = goz === 'T'
+    ? m.tezgahlar.map((t) => ({ kimlik: t.id, bas: t.kod, alt: t.ad, ...(suAndakiDurus(m, t.id) ? { durus: durusYazisi(suAndakiDurus(m, t.id)!, zaman) } : {}), isler: Object.values(m.isler).filter((x) => satirKimligi(x) === t.id) }))
     : emirler.filter((e) => e.durum !== 'plansiz').map((e) => ({ kimlik: e.id, bas: `${emirKuyrugu(e.no)} · ${e.urun}`, alt: `${String(e.adet)} adet · ${durumYazisi(e)}`, tam: e.no, termin: e.termin, isler: e.adimlar.flatMap((a) => m.isler[a.id] ?? []), durum: e.durum }));
   const plansiz = emirler.filter((e) => e.durum === 'plansiz');
   const tasinanIs = tasinan ? m.isler[tasinan.id] : undefined;
@@ -305,12 +305,13 @@ export function Tahta(o: TahtaOzellikleri) {
             className="tc-pyq-satir" key={r.kimlik} data-satir={r.kimlik} data-d={r.durum}
             data-aday={adaySatirlari ? (adaySatirlari.has(r.kimlik) ? 'evet' : 'hayir') : undefined}
           >
-            <div className="tc-pyq-bas" title={`${r.tam ?? r.bas} · ${r.alt}${yuk.get(r.kimlik)?.yazi ?? ''}`}>
-              <b>{r.bas}</b><small>{r.alt}</small>
+            <div className="tc-pyq-bas" data-durus={r.durus ? '' : undefined} title={`${r.tam ?? r.bas} · ${r.durus ?? r.alt}${yuk.get(r.kimlik)?.yazi ?? ''}`}>
+              <b>{r.bas}</b><small>{r.durus ?? r.alt}</small>
               {yuk.has(r.kimlik) && <i className="tc-pyq-yukcubuk" data-yuk={yuk.get(r.kimlik)!.sinif} ref={(el) => { el?.style.setProperty('--oran', String(yuk.get(r.kimlik)!.oran)); }} />}
             </div>
             <div className="tc-pyq-alan">
               {(kapali.get(r.kimlik) ?? []).map(([a, b]) => <span className="tc-pyq-kapali" key={a} ref={(el) => { yerYaz(el, (a - m.bas) * px, (b - a) * px); }} />)}
+              {goz === 'T' && (m.durus[r.kimlik] ?? []).filter((d) => d.ariza).map((d) => <span className="tc-pyq-durus" key={d.a} title={durusYazisi(d, zaman)} ref={(el) => { yerYaz(el, (Math.max(d.a, m.bas) - m.bas) * px, (Math.min(d.b, m.son) - Math.max(d.a, m.bas)) * px); }} />)}
               {r.termin !== undefined && r.termin !== null && <span className="tc-pyq-satir-termin" data-d={r.durum} title={`Termin ${zaman(r.termin)}`} ref={(el) => { yerYaz(el, (r.termin! - m.bas) * px); }} />}
               {r.isler.map(isDugmesi)}
               {oneriIsi && oneri && !tasinanIs && (goz === 'T' ? oneri.tezgah : oneriIsi.job) === r.kimlik && (

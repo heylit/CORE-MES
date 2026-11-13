@@ -123,8 +123,14 @@ test('Kokpit: tahta, sağ tıkla tut ve bırak, Geri / İleri sayar, Matris, sor
   expect(tasinan).toEqual([]);
 
   if (bilgi.project.name === 'g360') {
-    // Telefon: tahta yok, liste var; emre dokununca ayrıntı açılır, adımın tezgâh seçeneği önizlemeyle gelir ve Uygula taşır.
+    // Telefon: tahta yok, liste var. Tezgâh gözünde işler tezgâha göre toplanır; Sipariş gözünde emirler sıralanır.
     await expect(kokpit.locator('.tc-pyq-tahta')).toBeHidden();
+    const grup = kokpit.getByRole('group', { name: 'Tezgâhlar ve işler' });
+    await expect(grup.getByRole('heading', { name: /Plana alınacak/ })).toBeVisible();
+    await expect(grup.getByRole('heading', { name: /T-01/ })).toBeVisible();
+    await tasma();
+    await kokpit.getByRole('group', { name: 'Görünüm' }).getByRole('button', { name: 'Sipariş' }).click();
+    // Emre dokununca ayrıntı açılır, adımın tezgâh seçeneği önizlemeyle gelir ve Uygula taşır.
     const liste = kokpit.getByRole('list', { name: 'Emirler' });
     await expect(liste.getByRole('button')).toHaveCount(4);
     await liste.getByRole('button', { name: /S1/ }).click();

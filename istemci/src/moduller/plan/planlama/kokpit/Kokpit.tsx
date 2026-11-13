@@ -11,11 +11,12 @@ import { useEmirNo } from '../ortak/emir-no.ts';
 import type { PlanlamaCalismasi } from '../tipler.ts';
 import { Ayrinti } from './Ayrinti.tsx';
 import {
-  OLCEKLER, aramaUyar, durumYazisi, matrisSirasi, modelKur, olcekKomsusu, onizlemeBitisi, sayim, sorunlular, sureYaz, tasimaSaati, tasinabilir, fasonMu, uzakMi,
+  OLCEKLER, aramaUyar, modelKur, olcekKomsusu, onizlemeBitisi, sayim, sorunlular, sureYaz, tasimaSaati, tasinabilir, fasonMu, uzakMi,
   type EmirDurumu, type KokpitOlcegi, type TurAdayi,
 } from './kurallar.ts';
 import { Matris, darEkran, type MatrisDuzeni } from './Matris.tsx';
 import { Tahta } from './Tahta.tsx';
+import { Liste } from './Liste.tsx';
 import { emriPlanaAl, planaAlOnizle } from './plana-al.ts';
 import { Tur, type TurDurumu } from './Tur.tsx';
 import './kokpit.css';
@@ -380,16 +381,7 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi }) {
                 m={m} cx={cx} goz={goz} olcek={olcek} emirler={gorunen} uyar={uyar} secEmir={secEmir} secIs={secIs} sec={sec} zaman={zaman}
                 tasi={yazabilir && !tur ? tasiDene : null} planaAl={yazabilir && !tur ? planaAlDene : null} once={once} gunAc={gunAc} uyari={uyarYaz} goster={goster} odak={odak} oneri={tur ? oneri : null}
               />
-              <ul className="tc-pyq-liste" aria-label="Emirler">
-                {matrisSirasi(gorunen).map((e) => (
-                  <li key={e.id}>
-                    <button type="button" data-d={e.durum} aria-current={secEmir === e.id} onClick={() => { sec(e.id, null); }}>
-                      <b>{e.no}</b><span>{e.urun}</span><small>{durumYazisi(e)}{e.bitis === null ? '' : ` · biter ${zaman(e.bitis).slice(0, 9)}`}</small>
-                    </button>
-                  </li>
-                ))}
-                {!gorunen.length && <li className="tc-pyq-not">Süzgece uyan emir yok.</li>}
-              </ul>
+              <Liste m={m} cx={cx} goz={goz} emirler={gorunen} secEmir={secEmir} secIs={secIs} zaman={zaman} sec={sec} />
             </>
           )}
         </div>

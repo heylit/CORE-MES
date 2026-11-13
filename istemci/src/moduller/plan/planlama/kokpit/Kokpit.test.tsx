@@ -58,7 +58,20 @@ describe('Kokpit', () => {
     fireEvent.click(within(screen.getByRole('group', { name: 'Durum süzgeci' })).getByRole('button', { name: /Geç/ }));
     expect(document.querySelector('[data-is="3.10"]')?.hasAttribute('data-sonuk')).toBe(true);
     expect(document.querySelector('[data-is="2.40"]')?.hasAttribute('data-sonuk')).toBe(false);
+    fireEvent.click(within(screen.getByRole('group', { name: 'Görünüm' })).getByRole('button', { name: 'Sipariş' }));
     expect(within(screen.getByRole('list', { name: 'Emirler' })).getAllByRole('button')).toHaveLength(1);
+  });
+
+  it('telefon listesi: Tezgâh gözünde işler tezgâha göre toplanır, ilk üçten sonrası düğmeyle açılır', () => {
+    const { sec } = ac();
+    const liste = screen.getByRole('group', { name: 'Tezgâhlar ve işler' });
+    const basliklar = within(liste).getAllByRole('heading', { level: 3 });
+    expect(basliklar.length).toBeGreaterThan(1);
+    const satir = liste.querySelector<HTMLElement>('section ul button:not(.tc-pyq-liste-daha)');
+    expect(satir).not.toBeNull();
+    if (satir) fireEvent.click(satir);
+    expect(sec).toHaveBeenCalledTimes(1);
+    expect(sec.mock.calls[0]?.[0]).toMatchObject({ adim: expect.any(String) as unknown });
   });
 
   it('seçili emrin ayrıntısı adımları ve yerlerini gösterir; kapatmak seçimi kaldırır', () => {

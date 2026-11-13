@@ -3,7 +3,7 @@ import { derle, girdiKur, planOku, plandanBitenler } from '../motor/kurallar.ts'
 import { ornekCalisma } from '../motor/ornek.ts';
 import {
   adimBeklemesi, aralikYuku, aramaUyar, darbogaz, emirGunleri, enCokBekleyen, tezgahGunundeMi, durumYazisi, ilkBosluk, matrisSirasi, modelKur, olcekKomsusu, onizlemeBitisi, satirKimligi, sayim, sorunlular, sureYaz,
-  acigaOtur, hucreler3B, onayliGecSayisi, yeriDegisti, tasimaSaati, tasinabilir, turAdaylari, yukSinifi, yukYuzdesi, type KokpitEmri, type KokpitIsi, type KokpitModeli,
+  acigaOtur, durusYazisi, hucreler3B, suAndakiDurus, onayliGecSayisi, yeriDegisti, tasimaSaati, tasinabilir, turAdaylari, yukSinifi, yukYuzdesi, type KokpitEmri, type KokpitIsi, type KokpitModeli,
 } from './kurallar.ts';
 
 // Örnek çalışma uydurmadır: iki emir (biri geç, biri riskli), beş tezgâh, bir fason adım.
@@ -16,7 +16,7 @@ const is = (id: string, m: string, S: number, C: number, ek: Partial<KokpitIsi> 
 const emir = (id: string, ek: Partial<KokpitEmri>): KokpitEmri => ({ id, no: id, urun: 'Deneme', adet: 1, termin: null, bitis: null, durum: 'iyi', gecikme: null, adimlar: [], ...ek });
 const model = (isler: KokpitIsi[], emirler: KokpitEmri[], simdi = 0): KokpitModeli => ({
   simdi, tezgahlar: [{ id: 'T1', kod: 'T1', ad: '', fason: false }, { id: 'T2', kod: 'T2', ad: '', fason: false }],
-  isler: Object.fromEntries(isler.map((x) => [x.id, x])), emirler, bas: 0, son: 336, acik: {},
+  isler: Object.fromEntries(isler.map((x) => [x.id, x])), emirler, bas: 0, son: 336, acik: {}, durus: {},
 });
 
 describe('Kokpit modeli', () => {
@@ -39,6 +39,28 @@ describe('Kokpit modeli', () => {
     expect(Object.values(modelKur({ ...c, locks: {} }, p, cx, (id) => id).isler).some((x) => x.kilitli)).toBe(false);
     const m = modelKur({ ...c, locks: { [sabit ?? '']: { m: 'x', S: 0 } } }, p, cx, (id) => id);
     expect(Object.values(m.isler).filter((x) => x.kilitli).map((x) => x.id)).toEqual([sabit]);
+  });
+
+  it('kodu olmayan tezgâh satırı kimliğiyle değil adıyla yazılır', () => {
+    const { c, p, cx } = ornek();
+    const ilk = c.D.tezgahlar.find((t) => cx.M[t.id]);
+    const D = { ...c.D, tezgahlar: c.D.tezgahlar.map((t) => (t.id === ilk?.id ? { id: t.id, ad: 'Deneme el işi' } : t)) };
+    const t = modelKur({ ...c, D }, p, cx, (id) => id).tezgahlar.find((x) => x.id === ilk?.id);
+    expect(t).toMatchObject({ kod: 'Deneme el işi', ad: '' });
+  });
+
+  it('duruş: arıza olayı başlığa "arızada" yazılır, planlı duruş yazılmaz; geçmiş duruş alınmaz', () => {
+    const { c } = ornek();
+    const t = c.D.tezgahlar[0]?.id ?? '', u = c.D.tezgahlar[1]?.id ?? '';
+    const c2 = { ...c, down: [{ m: u, from: 0, to: 1000 }], olaylar: [{ tip: 'ariza', m: t, saat: 6 }] };
+    const p = planOku(c2), cx = derle(girdiKur(c2, plandanBitenler(c2, p)));
+    const m = modelKur(c2, p, cx, (id) => id);
+    const a = suAndakiDurus(m, t), d = suAndakiDurus(m, u);
+    expect(a).toMatchObject({ ariza: true, a: m.simdi, b: m.simdi + 6 });
+    expect(d).toBeNull();
+    expect(m.durus[u]?.[0]).toMatchObject({ ariza: false });
+    expect(a && durusYazisi(a, () => '13.11 Cum 18:00')).toBe('arızada · Cum 18:00');
+    expect(suAndakiDurus(modelKur(c, planOku(c), derle(girdiKur(c, plandanBitenler(c, planOku(c)))), (id) => id), t)).toBeNull();
   });
 
   it('plan yokken her emir plansızdır; sıfır bitiş uydurulmaz', () => {

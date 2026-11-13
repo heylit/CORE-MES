@@ -27,6 +27,7 @@ export interface KokpitEmri {
 }
 // grup: planın istasyon kimliği; grupAdi istasyonun adı (yoksa kodu), 3B istasyona göre toplarken başlık olur.
 export interface KokpitTezgahi { id: string; kod: string; ad: string; fason: boolean; grup?: string; grupAdi?: string }
+export interface KokpitDurusu { a: number; b: number; ariza: boolean }
 export interface KokpitModeli {
   simdi: number;
   tezgahlar: KokpitTezgahi[];
@@ -36,6 +37,8 @@ export interface KokpitModeli {
   bas: number; son: number;
   // Tezgâhın açık saat pencereleri (hamle adayı açık saate oturur); bilinmeyen tezgâh hep açık sayılır.
   acik: Record<string, readonly (readonly [number, number])[]>;
+  // Tezgâhın duruşları (saat aralığı). ariza: makine arızası olayından gelen; değilse planlı duruş (bakım).
+  durus: Record<string, readonly KokpitDurusu[]>;
 }
 
 const FASON_SATIRI = '@';
@@ -68,12 +71,22 @@ export function modelKur(c: PlanlamaCalismasi, p: OkunanPlan | null, cx: Derleme
       adimlar: j.ops.map((a) => ({ id: a.id, ad: a.ad, adaylar: a.c })),
     });
   }
-  const tezgahlar: KokpitTezgahi[] = c.D.tezgahlar.filter((t) => cx.M[t.id]).map((t) => ({ id: t.id, kod: t.kod ?? t.id, ad: t.ad ?? '', fason: false, ...(t.grup ? { grup: t.grup } : {}), ...(t.grupAd ?? t.grupKod ? { grupAdi: t.grupAd ?? t.grupKod } : {}) }));
+  const tezgahlar: KokpitTezgahi[] = c.D.tezgahlar.filter((t) => cx.M[t.id]).map((t) => ({ id: t.id, kod: t.kod ?? t.ad ?? t.id, ad: t.kod ? t.ad ?? '' : '', fason: false, ...(t.grup ? { grup: t.grup } : {}), ...(t.grupAd ?? t.grupKod ? { grupAdi: t.grupAd ?? t.grupKod } : {}) }));
   if (Object.values(isler).some((x) => x.fason)) tezgahlar.push({ id: FASON_SATIRI, kod: 'Fason', ad: 'dış atölye', fason: true });
   const bas = Math.floor(simdi / 24) * 24;
   const acik = Object.fromEntries(Object.values(cx.M).map((t) => [t.id, t.sw]));
-  return { simdi, tezgahlar, isler, emirler, bas, son: Math.max(bas + 14 * 24, Math.ceil(enSon / 24) * 24 + 24), acik };
+  const durus: Record<string, KokpitDurusu[]> = {};
+  for (const d of cx.g.down) {
+    if (d.to <= bas) continue;
+    (durus[d.m] ??= []).push({ a: d.from, b: d.to, ariza: !c.down.some((x) => x.m === d.m && x.from === d.from && x.to === d.to) });
+  }
+  return { simdi, tezgahlar, isler, emirler, bas, son: Math.max(bas + 14 * 24, Math.ceil(enSon / 24) * 24 + 24), acik, durus };
 }
+
+// Tezgâh şu anda arızadaysa o arıza (başlığa "arızada · bitiş" yazılır). Planlı duruş kapalı saat gibi taralıdır, başlığa yazılmaz.
+export const suAndakiDurus = (m: Pick<KokpitModeli, 'durus' | 'simdi'>, tezgah: string): KokpitDurusu | null =>
+  m.durus[tezgah]?.find((d) => d.ariza && d.a <= m.simdi && m.simdi < d.b) ?? null;
+export const durusYazisi = (d: KokpitDurusu, zaman: (t: number) => string): string => `arızada · ${zaman(d.b).slice(6)}`;
 
 // Fason işler tek satırda toplanır (fasoncu kimliği satır değildir).
 export const satirKimligi = (x: Pick<KokpitIsi, 'm' | 'fason'>): string => (x.fason ? FASON_SATIRI : x.m);

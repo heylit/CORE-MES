@@ -12,7 +12,7 @@ const E: KokpitEmri = { id: 'a', no: 'ORN-a', urun: 'Deneme', adet: 1, termin: 3
 const M: KokpitModeli = {
   simdi: 1, tezgahlar: [{ id: 'T1', kod: 'T1', ad: '', fason: false }, { id: 'T2', kod: 'T2', ad: '', fason: false }],
   isler: Object.fromEntries([is('a.1', 'T1', 2, 6), is('a.2', 'T1', 40, 44, 1), { ...is('b.1', 'T1', 6, 40), job: 'b' }, { ...is('c.1', 'T2', 0, 10), job: 'c' }].map((x) => [x.id, x])),
-  emirler: [E], bas: 0, son: 336, acik: {},
+  emirler: [E], bas: 0, son: 336, acik: {}, durus: {},
 };
 function onizlemeKur() {
   vi.spyOn(gonder, 'isTasiOnizle').mockImplementation((g) => {
