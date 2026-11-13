@@ -62,7 +62,7 @@ describe('finans sabit kıymet düzeltmesi ve makineye göre okuma (gerçek Post
     ortam = await testVeritabaniKur('finanskiymet');
     app = await uygulamaKur({ vt: ortam.vt, ayar: ortam.ayar, kimlik: kimlikCozucu(ortam.vt), denetle: denetimYaz, tekrar: tekrarDeposu });
     yoneticiId = await ortam.vt.tx((db) => yoneticiOlustur(db, { ad: 'Deneme Yönetici', kullaniciAdi: 'yonetici', parola: PAROLA }));
-    await girisliKisi('yonetim', ['sayfa.finans', 'finans.oku', 'finans.yaz', 'finans.yonet']);
+    await girisliKisi('yonetim', ['sayfa.finans', 'finans.oku', 'finans.yaz', 'finans.sabit-kiymet']);
     await girisliKisi('okuyan', ['sayfa.finans', 'finans.oku']);
     await girisliKisi('malzemeci', ['sayfa.malzemeler', 'malzemeler.yaz']);
   });

@@ -81,7 +81,7 @@ describe('2594 b genel gider bileşenleri (gerçek PostgreSQL)', () => {
     ortam = await testVeritabaniKur('finansgenelgiderbilesen');
     app = await uygulamaKur({ vt: ortam.vt, ayar: ortam.ayar, kimlik: kimlikCozucu(ortam.vt), denetle: denetimYaz, tekrar: tekrarDeposu });
     yoneticiId = await ortam.vt.tx((db) => yoneticiOlustur(db, { ad: 'Deneme Yönetici', kullaniciAdi: 'yonetici', parola: PAROLA }));
-    await girisliKisi('yonetim', ['finans.yonet', 'finans.maliyet-oku']);
+    await girisliKisi('yonetim', ['finans.oran-yaz', 'finans.maliyet-oku']);
     await girisliKisi('okuyan', ['finans.maliyet-oku']);
     firmaId = (await vt().tek<{ id: number }>("INSERT INTO musteri_tedarikci_firma (ad, tur, olusturan_id) VALUES ('Deneme Firma', 'ikisi', $1) RETURNING id", [yoneticiId]))!.id;
     // 2643 b: eşikten önce açılan siparişli belge eski.

@@ -53,7 +53,7 @@ describe('finans genel gider oranı (gerçek PostgreSQL)', () => {
     ortam = await testVeritabaniKur('finansgenelgider');
     app = await uygulamaKur({ vt: ortam.vt, ayar: ortam.ayar, kimlik: kimlikCozucu(ortam.vt), denetle: denetimYaz, tekrar: tekrarDeposu });
     yoneticiId = await ortam.vt.tx((db) => yoneticiOlustur(db, { ad: 'Deneme Yönetici', kullaniciAdi: 'yonetici', parola: PAROLA }));
-    await girisliKisi('yonetim', ['finans.yonet', 'finans.maliyet-oku']);
+    await girisliKisi('yonetim', ['finans.oran-yaz', 'finans.maliyet-oku']);
     await girisliKisi('okuyan', ['finans.maliyet-oku']);
     await girisliKisi('finansci', ['finans.oku', 'finans.yaz']);
   });
@@ -74,7 +74,7 @@ describe('finans genel gider oranı (gerçek PostgreSQL)', () => {
     assert.equal((await vt().tek<{ g: string }>('SELECT aylik_genel_gider::text AS g FROM finans_genel_gider_orani'))?.g, '100.00');
   });
 
-  test('yetki: ekleme finans.yonet, okuma finans.maliyet-oku ister; finans.oku ve finans.yaz oranı açmaz', async () => {
+  test('yetki: ekleme finans.oran-yaz, okuma finans.maliyet-oku ister; finans.oku ve finans.yaz oranı açmaz', async () => {
     const govde = { gecerlilikBaslangic: '2026-02-01', aylikGenelGider: 300000, aylikMakineSaati: 720, amortismanDahil: true };
     assert.equal((await istek('', 'GET', '/finans/genel-gider-oranlari')).durum, 401);
     assert.equal((await liste('finansci')).durum, 403);

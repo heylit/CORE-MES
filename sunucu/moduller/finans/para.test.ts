@@ -82,14 +82,14 @@ describe('finans para kuralları (gerçek PostgreSQL)', () => {
     app = await uygulamaKur({ vt: ortam.vt, ayar: ortam.ayar, kimlik: kimlikCozucu(ortam.vt), denetle: denetimYaz, tekrar: tekrarDeposu });
     yoneticiId = await ortam.vt.tx((db) => yoneticiOlustur(db, { ad: 'Deneme Yönetici', kullaniciAdi: 'yonetici', parola: PAROLA }));
     const firmaIslemleri = ['musteri-tedarikci.oku', 'musteri-tedarikci.yaz'];
-    await girisliKisi('yonetim', ['sayfa.finans', 'finans.oku', 'finans.yaz', 'finans.yonet', 'finans.kur-yaz', ...firmaIslemleri]);
+    await girisliKisi('yonetim', ['sayfa.finans', 'finans.oku', 'finans.yaz', 'finans.iptal', 'finans.cek-yonet', 'finans.hesap-yonet', 'finans.oran-yaz', 'finans.sabit-kiymet', 'finans.maliyet-yaz', 'finans.duzenli-odeme', 'finans.ayar', 'finans.kur-yaz', ...firmaIslemleri]);
     await girisliKisi('yazan', ['sayfa.finans', 'finans.oku', 'finans.yaz', 'musteri-tedarikci.oku']);
     await girisliKisi('okuyan', ['sayfa.finans', 'finans.oku', 'musteri-tedarikci.oku']);
     await girisliKisi('firmaci', ['sayfa.finans', ...firmaIslemleri]);
   });
   after(async () => { await ortam?.kaldir(); });
 
-  test('yetki: okuma finans.oku, kayıt finans.yaz, iptal finans.yonet ister; firma yetkisi rakam açmaz', async () => {
+  test('yetki: okuma finans.oku, kayıt finans.yaz, iptal finans.iptal ister; firma yetkisi rakam açmaz', async () => {
     const f = await firma();
     assert.equal((await istek(null, 'GET', '/finans/belgeler')).durum, 401);
     assert.equal((await istek('firmaci', 'GET', '/finans/belgeler')).durum, 403);
@@ -341,7 +341,7 @@ describe('finans para kuralları (gerçek PostgreSQL)', () => {
     assert.equal(await kisitAdi('UPDATE finans_cek SET tutar = 1 WHERE id = $1', [c.id]), 'finans_cek_kilit');
   });
 
-  test('FNS-25 (D-3): karşılıksız çek tahsilatı iptal eder, belge yeniden açılır; yalnız finans.yonet işaretler', async () => {
+  test('FNS-25 (D-3): karşılıksız çek tahsilatı iptal eder, belge yeniden açılır; yalnız finans.cek-yonet işaretler', async () => {
     const f = await firma();
     const b = await belge(f);
     const c = tamam(await yaz<{ cek: Cek }>('/finans/cekler/ekle', { yon: 'alinan', tur: 'senet', firmaId: f, duzenlemeTarihi: TARIH, vade: '2026-11-15', tutar: 1200, dagitimlar: [{ belgeId: b.id, belgeTutari: 1200 }] })).cek;
@@ -491,7 +491,7 @@ describe('finans para kuralları (gerçek PostgreSQL)', () => {
     // 952 a: şerit her sayfadadır; finans işlemi olmayan kişi de okur (yalnız kur, faiz ve giren kişi).
     assert.equal((await istek('firmaci', 'GET', '/finans/kur-ozeti')).durum, 200);
     assert.equal((await istek('firmaci', 'GET', '/finans/kurlar')).durum, 403);
-    // finans.kur-yaz yalnız kur ve faiz açar (satın alma, kart #953): rakam okumaz, belge yazmaz, finans.yonet ucuna giremez.
+    // finans.kur-yaz yalnız kur ve faiz açar (satın alma, kart #953): rakam okumaz, belge yazmaz, yönetim eylemi ucuna giremez.
     assert.equal((await istek('duzelten', 'GET', '/finans/kur-ozeti')).durum, 200);
     assert.equal((await istek('duzelten', 'GET', '/finans/belgeler')).durum, 403);
     assert.equal((await yaz('/finans/belgeler/ekle', belgeGovdesi(null), 'duzelten')).durum, 403);
@@ -812,7 +812,7 @@ describe('finans para kuralları (gerçek PostgreSQL)', () => {
     assert.equal(asiri, 'finans_mahsup_capraz_kur_sinir');
   });
 
-  test('B-012: dağıtım iptali yalnız finans.yonet; belge yeniden açılır, tutar ödemede avansa döner; ikinci iptal 422', async () => {
+  test('B-012: dağıtım iptali yalnız finans.iptal; belge yeniden açılır, tutar ödemede avansa döner; ikinci iptal 422', async () => {
     const f = await firma();
     const h = await hesap();
     const b = await belge(f);
@@ -842,9 +842,9 @@ describe('finans para kuralları (gerçek PostgreSQL)', () => {
     assert.equal(await hesapBakiyesi(h), '5000.00');
   });
 
-  test('B-012 (GUVENLIK B): finans.yaz olan kişi her finans.yonet ucunda, finans.oku olan kişi her finans.yaz ucunda 403 alır', async () => {
-    const yollar = (yetki: string) => uclar.filter((u) => u.yontem === 'POST' && u.yetki === yetki).map((u) => u.yol.replace('/finans/', '').replace(':id', '1'));
-    const YONET = yollar('finans.yonet');
+  test('B-012 (GUVENLIK B): finans.yaz olan kişi sekiz yönetim eyleminin her ucunda, finans.oku olan kişi her finans.yaz ucunda 403 alır', async () => {
+    const yollar = (...yetkiler: string[]) => uclar.filter((u) => u.yontem === 'POST' && typeof u.yetki === 'string' && yetkiler.includes(u.yetki)).map((u) => u.yol.replace('/finans/', '').replace(':id', '1'));
+    const YONET = yollar('finans.iptal', 'finans.cek-yonet', 'finans.hesap-yonet', 'finans.oran-yaz', 'finans.sabit-kiymet', 'finans.maliyet-yaz', 'finans.duzenli-odeme', 'finans.ayar');
     const YAZ = yollar('finans.yaz');
     assert.equal(YONET.length, 27);
     assert.equal(YAZ.length, 16);

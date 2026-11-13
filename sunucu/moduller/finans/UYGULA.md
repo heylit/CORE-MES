@@ -37,7 +37,7 @@ Not: zip git deposu değildir; iki araç testi git ister, çalışma kopyası `g
 ## Varsayımlar (mesajda ulaşmayan ya da çelişen yerler)
 
 - Belge parasal alanlarının kilidi (FNS-9) ve Logo kilidi (FNS-10) belge tarihini ve firmayı da kapsar.
-- "Karşılıksız" işareti ve çekin geri alınması `finans.yonet` ister; ileri geçişler (tahsile verme, tahsil, ödendi, ciro) `finans.yaz`.
+- "Karşılıksız" işareti ve çekin geri alınması `finans.cek-yonet` ister; ileri geçişler (tahsile verme, tahsil, ödendi, ciro) `finans.yaz`.
 - Çek yalnız aynı para birimindeki banka hesabına tahsil edilir ya da oradan ödenir (kasa ve kredi kartı değil).
 - FNS-46 onaylandığı haliyle: pasif firmaya yeni ödeme de açılamaz (eski faturasının tahsilatı dahil). Tahsilat açık kalsın istenirse tetikleyiciden ödeme tablosu çıkarılır (tek satır).
 - Bütçe değeri girildiği aydan itibaren geçerlidir; aynı ay için yeniden girilen değer o ayın satırını düzeltir, önceki ayların satırları kalır (D-6).

@@ -537,8 +537,8 @@ describe('recete-rota kayıt deposu (gerçek PostgreSQL)', () => {
     assert.deepEqual([izinli.includes(gun(5)), izinli[0], izinli.length], [false, gun(6), KAPASITE_GUNU - 6]);
   });
 
-  // Birim maliyetler finanstadır (kart #1187): durum dilimi finans.maliyet-oku ister, yazma finans.yonet ister.
-  test('RR-16: maliyet dilimi finans.maliyet-oku olana gelir, olmayana null; yazma finans.yonet ister ve dilimde sürümle görünür; satırı olmayan kalem haritada yoktur', async () => {
+  // Birim maliyetler finanstadır (kart #1187): durum dilimi finans.maliyet-oku ister, yazma finans.maliyet-yaz ister.
+  test('RR-16: maliyet dilimi finans.maliyet-oku olana gelir, olmayana null; yazma finans.maliyet-yaz ister ve dilimde sürümle görünür; satırı olmayan kalem haritada yoktur', async () => {
     const durumOku = async (cerez: string): Promise<DurumCevabi> => {
       const c = await istek(cerez, 'GET', '/recete-rota/durum');
       assert.equal(c.statusCode, 200, c.body);
@@ -550,8 +550,8 @@ describe('recete-rota kayıt deposu (gerçek PostgreSQL)', () => {
     const istasyon = await vt().tek<{ id: number }>("INSERT INTO istasyon (kod, ad, is_merkezi_id, aktif) VALUES ('RRM-IS', 'Maliyet istasyonu', $1, true) RETURNING id", [merkez?.id]);
 
     const goren = await islemliKisi('maliyetgoren', ['recete-rota.oku', 'finans.maliyet-oku']);
-    const yazan = await islemliKisi('maliyetyazan', ['recete-rota.oku', 'finans.maliyet-oku', 'finans.yonet']);
-    const yalniz = await islemliKisi('maliyetyalniz', ['recete-rota.oku', 'finans.yonet']);
+    const yazan = await islemliKisi('maliyetyazan', ['recete-rota.oku', 'finans.maliyet-oku', 'finans.maliyet-yaz']);
+    const yalniz = await islemliKisi('maliyetyalniz', ['recete-rota.oku', 'finans.maliyet-yaz']);
 
     // Başlangıçta tablolar boştur: dilim vardır ama harita boştur (sıfır uydurulmaz).
     assert.deepEqual((await durumOku(goren.cerez)).maliyet, { yazabilir: false, malzeme: {}, istasyon: {}, kisi: {} });

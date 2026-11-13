@@ -258,7 +258,7 @@ export function mahsupTutarlari(satisPb: string, alisPb: string, satisTutari: st
 // Ödeme yöntemi ile hesap türü (FNS-15).
 export const YONTEM_HESAP_TURU = { nakit: 'kasa', banka: 'banka', kredi_karti: 'kredi_karti' } as const;
 
-// FNS-22: çek ve senet durum geçişleri. İleri geçişler finans.yaz; karşılıksız, geri alma ve iptal finans.yonet (uç ayırır).
+// FNS-22: çek ve senet durum geçişleri. İleri geçişler finans.yaz; karşılıksız, geri alma ve iptal finans.cek-yonet (uç ayırır).
 export type CekDurumu = 'portfoy' | 'tahsilde' | 'tahsil' | 'ciro' | 'karsiliksiz' | 'bekliyor' | 'odendi' | 'iptal';
 export type CekKomutu = 'tahsile-ver' | 'tahsil' | 'odendi' | 'ciro' | 'karsiliksiz' | 'geri-al' | 'iptal';
 const GECISLER: Record<CekKomutu, { yon: 'alinan' | 'verilen' | 'ikisi'; kaynak: CekDurumu[] }> = {

@@ -58,7 +58,7 @@ describe('kur ve faiz toplu yükleme (1083-1087, gerçek PostgreSQL)', () => {
     await girisliKisi('yukleyen', ['finans.kur-yaz']);
     await girisliKisi('okuyan', ['finans.oku', 'finans.yaz']);
     await girisliKisi('firmaci', ['musteri-tedarikci.oku']);
-    await girisliKisi('ayarci', ['finans.oku', 'finans.yonet']);
+    await girisliKisi('ayarci', ['finans.oku', 'finans.ayar']);
   });
   after(async () => { await ortam?.kaldir(); });
 
@@ -143,7 +143,7 @@ describe('kur ve faiz toplu yükleme (1083-1087, gerçek PostgreSQL)', () => {
     assert.equal(Number((await vt().tek<{ n: string }>("SELECT count(*)::text AS n FROM finans_faiz WHERE para_birimi = 'RON'"))?.n), 0);
   });
 
-  test('1725 a: hesaplar ayardaki birimin oranını alır, o birimde oran yoksa öbürünü çevirir; birimi yalnız finans.yonet değiştirir', async () => {
+  test('1725 a: hesaplar ayardaki birimin oranını alır, o birimde oran yoksa öbürünü çevirir; birimi yalnız finans.ayar değiştirir', async () => {
     tamam(await yukle([
       { tur: 'faiz', paraBirimi: 'HUF', tarih: '2026-07-01', deger: 3 },
       { tur: 'gunluk_faiz', paraBirimi: 'HUF', tarih: '2026-07-10', deger: 0.12 },
