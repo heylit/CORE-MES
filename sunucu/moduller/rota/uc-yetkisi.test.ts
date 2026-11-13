@@ -44,6 +44,7 @@ const BEKLENEN: BeklenenYetkiler = {
   'GET /rota/sartnameler/:id': ROTA_OKUR,
   'GET /rota/revizyonlar/:id/sartnameler': ROTA_OKUR,
   'GET /rota/is-emri-sartnameleri': ROTA_OKUR,
+  'GET /rota/aparat-kullanimi': ROTA_OKUR,
   'GET /rota/olcu-aleti-turleri': ROTA_OKUR,
   'GET /rota/patlatmalar/:id': 'rota.emre-kopyala',
   'GET /rota/revizyonlar/:id/patlatma-onizleme': 'rota.emre-kopyala',
