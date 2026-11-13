@@ -991,6 +991,57 @@ describe('satin-alma sürüm 6 (gerçek PostgreSQL)', () => {
     await limitler([]);
   });
 
+  test('3170: kademeli teklifte karar tutarı ve onay basamağı basamak fiyatından: ucuzlayan kademede alt basamak onaylar, pahalanan kademede limit aşımı reddedilir (403)', async () => {
+    c.samuduru ||= await rolluKisi('samuduru', 'satin_alma_muduru');
+    const rolId = async (kod: string) => (await vt().tx((db) => db.tek<{ id: number }>('SELECT id FROM rol WHERE kod = $1', [kod])))!.id;
+    const [mudurRol, samRol] = [await rolId('mudur'), await rolId('satin_alma_muduru')];
+    const limitler = async (l: object[]) => {
+      const a = tamam<AcilisCevabi>(await istek(c.sa, 'GET', '/satin-alma-acilis')).ayarlar;
+      tamam(await istek(c.yonetici, 'POST', '/satin-alma-ayarlari/kaydet', {
+        agirliklar: a.agirliklar, gecerlilikGun: a.gecerlilikGun, enAzTeklif: a.enAzTeklif, fiyatUyariYuzdesi: a.fiyatUyariYuzdesi,
+        kurlar: a.kurlar.map((k) => ({ paraBirimi: k.paraBirimi })), kategoriler: a.kategoriler, birimler: a.birimler, onayLimitleri: l, surum: a.surum,
+      }));
+    };
+    const kademe = async (deger: boolean) => tamam(await istek(c.yonetici, 'POST', '/ayarlar/satin-alma.onay-kademesi/degistir', { deger }));
+    const onay = () => ({ id: randomUUID(), zaman: '', kisiId: null, kisiAdi: null, sonuc: 'onay', dortGozsuz: false, notlar: '' });
+    // Kalem 1: 10 adet, taban 10, "10 ve üstü" basamağı; kalem 2: 4 adet × 5. Tabanla tutar 120 olurdu.
+    const kademeliKarar = async (ustFiyat: string, uzmanLimiti: string) => {
+      await limitler([{ azamiTutar: uzmanLimiti, seviye: 'Deneme uzman', rolId: mudurRol }, { azamiTutar: null, seviye: 'Deneme müdür', rolId: samRol }]);
+      const t = tamam<Talep>(await istek(c.talep, 'POST', '/satin-alma-talepleri/ac', yeniTalep()));
+      const [k1, k2] = t.kalemler.map((k) => k.id) as [string, string];
+      const a = teklif(firmaA, []);
+      a.fiyatlar = [{ kalemId: k1, birimFiyat: '10', basamaklar: [{ esik: '10', birimFiyat: ustFiyat }] } as never, { kalemId: k2, birimFiyat: '5' } as never];
+      const deg = tamam<Talep>(await kaydet(c.sa, { ...govde(t), durum: 'degerlendirme', teklifler: [a] }));
+      const onayda = tamam<Talep>(await kaydet(c.sa, {
+        ...govde(deg), durum: 'onayda',
+        karar: { mod: 'tek', teklifId: a.id, bolunme: [], gerekce: '', kararVerenKisiId: kisi.sa!, kararTarihi: '2026-10-07', ogrenilenler: '', sabitKurlar: [], siparisler: [] },
+      }));
+      const vtToplam = Number((await vt().tx((db) => db.tek<{ t: string }>('SELECT satin_alma_teklif_toplami($1, $2)::text AS t', [t.id, a.id])))!.t);
+      const d = tamam<DegerlendirmeCevabi>(await istek(c.sa, 'GET', `/satin-alma-talepleri/${t.id}/degerlendirme`));
+      // Tek hesap: değerlendirmenin karar tutarı ve teklif toplamı siparişin okuduğu veritabanı toplamına eşittir.
+      assert.equal(Number(d.karar!.tlToplam), vtToplam);
+      assert.equal(Number(d.teklifler[0]!.toplam), vtToplam);
+      return { onayda, d };
+    };
+    await kademe(true);
+    try {
+      // Ucuzlayan kademe: 10 × 8 + 20 = 100; 110'a kadar onaylayan basamak yeter.
+      const ucuz = await kademeliKarar('8', '110');
+      assert.deepEqual([ucuz.d.karar!.tlToplam, ucuz.d.karar!.basamak], ['100.00', 'Deneme uzman']);
+      tamam(await kaydet(c.mudur, { ...govde(ucuz.onayda), onaylar: [onay()] }));
+      // Pahalanan kademe: 10 × 12 + 20 = 140; 130 limitini aşar, alt basamak onaylayamaz, üst basamak onaylar.
+      const pahali = await kademeliKarar('12', '130');
+      assert.deepEqual([pahali.d.karar!.tlToplam, pahali.d.karar!.basamak], ['140.00', 'Deneme müdür']);
+      const red = await kaydet(c.mudur, { ...govde(pahali.onayda), onaylar: [onay()] });
+      assert.equal(red.statusCode, 403);
+      assert.match((red.json() as { mesaj: string }).mesaj, /Deneme müdür/);
+      tamam(await kaydet(c.samuduru, { ...govde(pahali.onayda), onaylar: [onay()] }));
+    } finally {
+      await kademe(false);
+      await limitler([]);
+    }
+  });
+
   test('2398 a: talebi açan ya da talep eden onaylayamaz (403), reddedebilir; başkasının talebini onaylar', async () => {
     const onay = (sonuc: 'onay' | 'ret') => ({ id: randomUUID(), zaman: '', kisiId: null, kisiAdi: null, sonuc, dortGozsuz: false, notlar: sonuc === 'ret' ? 'Vade kısa' : '' });
     const acan = await kararli(c.mudur, { talepEdenKisiId: kisi.talep! });

@@ -68,6 +68,18 @@ export interface TeklifHesabi {
   termin: number | null;
 }
 
+// Kademeli fiyat (2975): alınan miktarın düştüğü en yüksek basamağın fiyatı; basamak yoksa ya da miktar ilk üst basamağın altındaysa
+// taban fiyat. Veritabanındaki satin_alma_etkin_birim_fiyat ile aynı seçimdir: onay basamağını belirleyen tutar siparişin tutarıdır.
+export function etkinBirimFiyat(f: Pick<HesapTeklifi['fiyatlar'][number], 'birimFiyat' | 'basamaklar'>, alinanMiktar: number): number {
+  let esik = -Infinity;
+  let fiyat = Number(f.birimFiyat);
+  for (const b of f.basamaklar ?? []) {
+    const e = Number(b.esik);
+    if (e <= alinanMiktar && e > esik) { esik = e; fiyat = Number(b.birimFiyat); }
+  }
+  return fiyat;
+}
+
 // SAT-13 ile aynı formül (satin_alma_teklif_toplami): satır iskontosu genel iskontodan önce; nakliye fiyata dahil değilse eklenir.
 export function teklifHesabi(q: HesapTeklifi, kalemler: readonly HesapKalemi[], o: Pick<HesapOrtami, 'kur' | 'aylikFaiz'>): TeklifHesabi {
   const kur = q.paraBirimi === 'TRY' ? 1 : o.kur(q);
@@ -82,8 +94,8 @@ export function teklifHesabi(q: HesapTeklifi, kalemler: readonly HesapKalemi[], 
   for (const k of kalemler) {
     const f = fiyat.get(k.id);
     if (f === undefined) continue;
-    const birimFiyat = Number(f.birimFiyat);
     const alinanMiktar = Math.max(sayi(k.miktar) ?? 0, sayi(f.enAzMiktar) ?? 0);
+    const birimFiyat = etkinBirimFiyat(f, alinanMiktar);
     const satir = kirp((sayi(f.iskontoYuzdesi) ?? 0) / 100, 0, 1);
     ham.push({ kalemId: k.id, birimFiyat, alinanMiktar, satirTutari: birimFiyat * alinanMiktar * (1 - satir), termin: f.terminGun ?? q.terminGun });
   }
