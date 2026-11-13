@@ -162,4 +162,43 @@ describe('2542 C ve 3188: dallar şemada yana açılır', () => {
     const uyari = await within(bolge).findByText('Birleşmiyor');
     expect(uyari.closest('.tc-rr1-dh')).toBe(within(bolge).getByRole('button', { name: 'OP 20 Tornalama' }).closest('.tc-rr1-dh'));
   }, 30000);
+  it('3188: paletten dal etiketine bırakılan operasyon o dalın sonuna eklenir', async () => {
+    const k = kur([
+      adimOrnegi(),
+      adimOrnegi({ id: 'o20', seq: 20, opNo: 20, dal: 'A', ins: [] }), adimOrnegi({ id: 'o30', seq: 30, opNo: 30, dal: 'B', ins: [] }),
+      adimOrnegi({ id: 'o40', seq: 40, opNo: 40, birlesen: ['A', 'B'], ins: [] }),
+    ]);
+    rrAc('/recete-rota/schema');
+    const bolge = await bolumAc();
+    const b = await within(bolge).findByRole('group', { name: 'Dal B kolu' });
+    fireEvent.click(within(bolge).getByRole('button', { name: 'Operasyon paleti' }));
+    const palet = within(bolge).getByRole('complementary', { name: 'Operasyon paleti' });
+    const t = tasima();
+    fireEvent.dragStart(within(palet).getAllByRole('button', { name: /Tornalama/ })[0]!, t);
+    fireEvent.dragOver(b, t);
+    fireEvent.drop(b, t);
+    await waitFor(() => { expect(k.govde).not.toBeNull(); }, BEKLE);
+    expect(dallar(k.govde)).toEqual([[10, null, ''], [20, 'A', ''], [30, 'B', ''], [null, 'B', ''], [40, null, 'AB']]);
+  }, 30000);
+  it('3188: her dallı bağlantının üstünde bir akış çizgisi durur; dalsız rotada akış çizgisi yoktur', async () => {
+    kur([
+      adimOrnegi(),
+      adimOrnegi({ id: 'o20', seq: 20, opNo: 20, dal: 'A', ins: [] }), adimOrnegi({ id: 'o30', seq: 30, opNo: 30, dal: 'B', ins: [] }),
+      adimOrnegi({ id: 'o40', seq: 40, opNo: 40, birlesen: ['A', 'B'], ins: [] }),
+    ]);
+    rrAc('/recete-rota/schema');
+    const bolge = await bolumAc();
+    await within(bolge).findByRole('group', { name: 'Dal A kolu' });
+    // Beş bağlantı: OP 10'dan iki dala ayrılma, iki daldan OP 40'a birleşme ve eksende OP 10'dan OP 40'a inen ana hat.
+    await waitFor(() => { expect(bolge.querySelectorAll('path.tc-rr1-e-dalli')).toHaveLength(5); });
+    expect(bolge.querySelectorAll('path.tc-rr1-e-akis')).toHaveLength(5);
+    cleanup();
+    kur();
+    rrAc('/recete-rota/schema');
+    const duz = await bolumAc();
+    await within(duz).findByRole('button', { name: 'OP 30 Tornalama' });
+    await waitFor(() => { expect(duz.querySelectorAll('path.tc-rr1-e-ef').length).toBeGreaterThan(0); });
+    expect(duz.querySelectorAll('path.tc-rr1-e-akis, path.tc-rr1-e-dalli')).toHaveLength(0);
+  }, 30000);
 });
+

@@ -516,6 +516,11 @@ describe('2542 C: şemada kollar yan yana', () => {
     expect(y.yer.get('d')?.serit).toBe(-1);
     expect([...y.acikUclar]).toEqual([['b', 'A']]);
   });
+  it('3188: rotanın sonuna kadar yürüyen dal açık uç sayılmaz ("Birleşmiyor" uyarısı çıkmaz)', () => {
+    const y = dalYerlesimi([adim('a', 10), adim('b', 20, { dal: 'A' }), adim('c', 30), adim('d', 40, { dal: 'A' })]);
+    expect(y.acikUclar.size).toBe(0);
+    expect(y.yer.get('d')?.serit).toBe(1);
+  });
   it('3188: yeni açılan dal var olan dalların şeridini değiştirmez; aynı anda açık iki dal aynı şeritte durmaz', () => {
     const once = [adim('a', 10), adim('b', 20, { dal: 'A' }), adim('c', 30, { dal: 'B' }), adim('f', 60, { birlesen: ['A', 'B'] })];
     const sonra = [adim('a', 10), adim('b', 20, { dal: 'A' }), adim('c', 30, { dal: 'B' }), adim('x', 40, { dal: 'C' }), adim('f', 60, { birlesen: ['A', 'B'] })];
