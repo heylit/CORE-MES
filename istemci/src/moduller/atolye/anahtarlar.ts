@@ -38,6 +38,7 @@ export const anahtarlar = {
   // Gözdeki stok (stok modülünün ucu); anahtar bu ekranın.
   gozStogu: (gozId: number) => ['atolye', 'goz-stogu', gozId] as const,
   rafStogu: (rafId: number) => ['atolye', 'raf-stogu', rafId] as const,
+  rafOzeti: (rafId: number) => ['atolye', 'raf-ozeti', rafId] as const,
   gozMalzemeleri: (konumId: number) => ['atolye', 'goz-malzemeleri', konumId] as const,
   malzemeBirimi: (malzemeId: number) => ['atolye', 'malzeme-birimi', malzemeId] as const,
   stokMalzemeAramasi: (metin: string) => ['atolye', 'stok-malzeme-aramasi', metin] as const,

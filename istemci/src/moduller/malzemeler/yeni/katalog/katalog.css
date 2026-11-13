@@ -166,3 +166,7 @@
   .tc-mk-logo-tablo td, .tc-mk-logo-tablo td:not(:first-child) { min-width: 0; padding: 0; border: 0; text-align: left; overflow-wrap: anywhere; }
   .tc-mk-logo-tablo td[data-l]:not([data-l=""])::before { content: attr(data-l); display: block; font-size: var(--yazi-xs); color: var(--muted); }
 }
+
+/* 3202 B: kartın depodaki gözleri. */
+.tc-mk-depoda { margin: 0; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+.tc-mk-depoda-git { display: inline-flex; align-items: center; gap: var(--b-1); min-height: 44px; }

@@ -1,4 +1,5 @@
 import { parcaAnahtari } from '#paylasilan/atolye-sabitleri.ts';
+import type { AmbalajTuru, GozOzetleriCevabi } from '#paylasilan/sozlesme/stok.ts';
 import type { AlanTuru, GozKalemi, IstasyonModeli, IstasyonYeri, KalemAmbalaji, MerkezModeli, YerlesimCevabi, KalemGorunumu, KalemMalzemesi, Raf, RafTuru } from '#paylasilan/sozlesme/atolye.ts';
 import type { GozYuku, YukBicimi } from './sahne/nesneler.ts';
 import type { IstasyonTipi } from '#paylasilan/sozlesme/istasyonlar.ts';
@@ -364,7 +365,8 @@ export function depoMerkezi<T extends { id: number; x: string; z: string }>(rafl
 const RAF_VARSAYILAN_BICIM: Record<RafTuru, YukBicimi> = { palet: 'koli', kucuk_parca: 'parca', konsol: 'cubuk', zemin: 'sac' };
 
 // Raf yükü ve (rafta model gösterimiyse) dizilecek modeli.
-export type RafYuku = GozYuku & { model: IstasyonModeli | null };
+// 3202 B: depodaki malzemenin Çizim Merkezi modeli (merkez), dizilecek en çok kopya (adet) ve göz etiketi (etiket) isteğe bağlıdır.
+export type RafYuku = GozYuku & { model: IstasyonModeli | null; merkez?: { malzemeNo: number; model: MerkezModeli }; adet?: number; etiket?: string };
 
 const AMBALAJ_BICIMI: Record<Exclude<KalemAmbalaji, 'otomatik'>, YukBicimi> = { koli: 'koli', kasa: 'kasa', kutu: 'parca', demet: 'cubuk', levha: 'sac' };
 
@@ -681,4 +683,57 @@ export function stokEslemeIletisi(d: { eslenmemis: number; yetimStoklu: number }
   if (d.yetimStoklu > 0) parcalar.push(`${d.yetimStoklu} stoklu konumun haritada yeri kalmadı`);
   if (parcalar.length === 0) return null;
   return `Stok: ${parcalar.join('; ')}. ${stokTanimlar ? 'Stok > Ayarlar\'da "Haritadan eşle" ile güncelleyin.' : 'Stok yetkilisi Stok > Ayarlar\'dan eşlemeli.'}`;
+}
+
+// ---------- 3202 B: depodaki malzeme gerçek biçimiyle ----------
+
+// Gözdeki malzemeler (Stok'un göz özeti; miktarı büyükten küçüğe).
+export type GozMalzemeleri = GozOzetleriCevabi['gozler'][number]['malzemeler'];
+
+// Stok ambalajının çizim biçimi; palet koli yığını, bidon ve makara küçük parça kutusu gibi çizilir.
+const STOK_AMBALAJ_BICIMI: Record<AmbalajTuru, YukBicimi> = { kasa: 'kasa', koli: 'koli', palet: 'koli', bidon: 'parca', makara: 'parca' };
+const ADET_BIRIMI = /^(adet|ad\.?)$/i;
+const MIKTAR = new Intl.NumberFormat('tr-TR', { maximumFractionDigits: 3 });
+
+// Göz etiketi: baskın malzemenin miktarı ve birimi, gözde başka malzeme varsa "+N malzeme". Birimi bilinmeyen miktar yalnız sayıdır.
+export function gozMiktarMetni(malzemeler: GozMalzemeleri): string | null {
+  const b = malzemeler[0];
+  if (!b) return null;
+  const miktar = `${MIKTAR.format(Number(b.miktar))}${b.birim ? ` ${b.birim.toLocaleLowerCase('tr')}` : ''}`;
+  return malzemeler.length > 1 ? `${miktar} +${malzemeler.length - 1} malzeme` : miktar;
+}
+
+// Rafın çizilecek yükleri Stok'un göz özetinden (raf kimliği -> hücre anahtarı -> malzemeler). Görünümü baskın malzeme (en çok
+// miktar) verir: yayında modeli varsa gerçek biçimiyle, birimi adetse adedi kadar (motor en çok 48 dizer), değilse bir kez; modeli
+// yoksa ambalajı, o da yoksa raf türünün olağan yükü (3012 a yarım yük). Pasif, bilinmeyen ya da okunmamış raf atlanır.
+export function depoYukleri(
+  raflar: readonly Pick<Raf, 'id' | 'tur' | 'aktif'>[],
+  ozetler: ReadonlyMap<number, ReadonlyMap<string, GozMalzemeleri>>,
+  modeller: ReadonlyMap<number, MerkezModeli>,
+): Map<number, RafYuku[]> {
+  const sonuc = new Map<number, RafYuku[]>();
+  for (const raf of raflar) {
+    const ozet = ozetler.get(raf.id);
+    if (!raf.aktif || !ozet) continue;
+    const liste: RafYuku[] = [];
+    for (const [anahtar, malzemeler] of ozet) {
+      const [bolme, kat, goz] = anahtar.split('-').map(Number);
+      const b = malzemeler[0];
+      if (!b || !bolme || !kat || !goz) continue;
+      const etiket = gozMiktarMetni(malzemeler) ?? undefined;
+      const model = modeller.get(b.malzemeId);
+      if (model) {
+        const adet = b.birim !== null && ADET_BIRIMI.test(b.birim) ? Math.max(1, Math.floor(Number(b.miktar))) : 1;
+        liste.push({ bolme, kat, goz, bicim: 'model', doluluk: 1, model: null, merkez: { malzemeNo: b.malzemeId, model }, adet, ...(etiket ? { etiket } : {}) });
+        continue;
+      }
+      let bicim = b.ambalaj ? STOK_AMBALAJ_BICIMI[b.ambalaj] : RAF_VARSAYILAN_BICIM[raf.tur];
+      if (raf.tur === 'palet' && bicim === 'parca') bicim = 'koli';
+      liste.push({ bolme, kat, goz, bicim, doluluk: STOKLU_GOZ_DOLULUGU, model: null, ...(etiket ? { etiket } : {}) });
+    }
+    if (liste.length === 0) continue;
+    liste.sort((a, c) => a.bolme - c.bolme || a.kat - c.kat || a.goz - c.goz);
+    sonuc.set(raf.id, liste);
+  }
+  return sonuc;
 }

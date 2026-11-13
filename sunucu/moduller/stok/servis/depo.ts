@@ -5,16 +5,17 @@ import { surumluGuncelle } from '#cekirdek/surum.ts';
 import type { SayfaliListe } from '#paylasilan/liste.ts';
 import type {
   DepolarCevabi, Konum, KonumAyrintiCevabi, KonumlarListesi, Raf, RafAcKomutu, RafDuzenleKomutu, RafDuzenleCevabi, KonumDuzenleCevabi, RafMatrisiCevabi, RaflarListesi, YerlesimCevabi,
-  YerlesimKaydetKomutu, HaritaEslemeCevabi, HaritaOzetiCevabi, TopluBolumDeposuCevabi, GozStoklariCevabi, KonumMalzemesi, KonumMalzemeleriListesi,
+  YerlesimKaydetKomutu, HaritaEslemeCevabi, HaritaOzetiCevabi, TopluBolumDeposuCevabi, GozStoklariCevabi, GozOzetleriCevabi, KonumMalzemesi, KonumMalzemeleriListesi,
 } from '#paylasilan/sozlesme/stok.ts';
 import type { GozKalemi, GozKalemiKaydi, KayitCevabi, RafKaydi } from '#paylasilan/sozlesme/atolye.ts';
-import { type ElleKonumTuru, type ZeminCevabi } from '#paylasilan/sozlesme/stok.ts';
+import { AMBALAJ_TURLERI, type AmbalajTuru, type ElleKonumTuru, type ZeminCevabi } from '#paylasilan/sozlesme/stok.ts';
 import {
   alanlar as haritaAlanlari, gozAdresi as haritaGozAdresi, gozKaleminBolumu, gozKalemiSil as haritaGozKalemiSil, gozKalemiYaz as haritaGozKalemiYaz, gozler as haritaGozleri, rafYerlesimiKaydet,
   zemin as haritaZemini,
 } from '../../atolye/disari.ts';
 import { bolmeNo, rafGozleri, haritaPlani, haritaAlaniMi, depoKoduOner, deposuzBolumler, konumTurDegisimEngeli, koduDegisenler, karantinaEksigi, type KarantinaEksigi } from '../kurallar.ts';
 import { aktifIstasyonlar } from '../../istasyonlar/disari.ts';
+import { malzemeOzetleri } from '../../malzemeler/disari.ts';
 import * as sorgular from '../sorgular.ts';
 import { istasyonKonumunuSil } from '../sorgular/depo/sorgular.ts';
 import { korumali, adlar, emirNoHaritasi, bakiyeSatiri } from './ortak.ts';
@@ -350,4 +351,23 @@ export async function yerlesimKaydet(db: Db, g: YerlesimKaydetKomutu): Promise<Y
     }
   });
   return yerlesimOku(db);
+}
+
+const AMBALAJ_TURU = new Set<string>(AMBALAJ_TURLERI);
+// 3202 B: raf sahnesi göz başına malzemeleri (miktarı büyükten küçüğe) ve birimi okur; ad ve birim tek sorguda toplu alınır.
+export async function gozOzetleri(db: Db, gozIdler: number[]): Promise<GozOzetleriCevabi> {
+  const satirlar = await sorgular.gozMalzemeleri(db, gozIdler);
+  const idler = satirlar.map((s) => s.malzemeId);
+  const ad = await adlar(db, idler);
+  const ozet = await malzemeOzetleri(db, idler);
+  const gozler = new Map<number, GozOzetleriCevabi['gozler'][number]>();
+  for (const s of satirlar) {
+    const g = gozler.get(s.gozId) ?? { gozId: s.gozId, konumId: s.konumId, malzemeler: [] };
+    g.malzemeler.push({
+      malzemeId: s.malzemeId, ad: ad.get(s.malzemeId) ?? null, birim: ozet.get(s.malzemeId)?.birim ?? null, miktar: s.miktar,
+      ambalaj: AMBALAJ_TURU.has(s.ambalaj ?? '') ? (s.ambalaj as AmbalajTuru) : null,
+    });
+    gozler.set(s.gozId, g);
+  }
+  return { gozler: [...gozler.values()] };
 }

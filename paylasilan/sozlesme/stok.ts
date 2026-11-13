@@ -1928,3 +1928,14 @@ export const baslangicGeriAlmaDurumu = z.object({
   hareketGorenler: z.array(z.object({ etiket: z.string(), tur: z.enum(HAREKET_TURLERI), cikisNedeni: z.enum(CIKIS_NEDENLERI).nullable(), zaman: zamanSemasi })),
 });
 export type BaslangicGeriAlmaDurumu = z.output<typeof baslangicGeriAlmaDurumu>;
+// 3202 B: Fabrika Haritası raf sahnesi gözdeki malzemeleri gerçek biçimiyle çizer. Göz başına malzeme toplamı (bakiyeler malzemeye
+// göre toplanır, miktar numeric metin); ambalaj malzemenin ilk ambalajlı bakiyesindendir, yoksa null. Stoksuz göz cevapta yoktur.
+export const gozOzetleriCevabi = z.object({
+  gozler: z.array(z.object({
+    gozId: z.number().int(), konumId: z.number().int(),
+    malzemeler: z.array(z.object({
+      malzemeId: z.number().int(), ad: z.string().nullable(), birim: z.string().nullable(), miktar: ondalikMetinSemasi, ambalaj: z.enum(AMBALAJ_TURLERI).nullable(),
+    })),
+  })),
+});
+export type GozOzetleriCevabi = z.output<typeof gozOzetleriCevabi>;
