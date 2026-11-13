@@ -39,7 +39,7 @@ import { SATIN_ALMA_ISLEMLERI } from './islemler/satin-alma.ts';
 import { SEVKIYAT_ISLEMLERI } from './islemler/sevkiyat.ts';
 import { SIPARISLER_ISLEMLERI } from './islemler/siparisler.ts';
 import { SMARTES_ISLEMLERI } from './islemler/smartes.ts';
-import { STOK_FIS_ISLEMLERI, STOK_ISLEMLERI, STOK_ISTEK_ISLEMLERI } from './islemler/stok.ts';
+import { STOK_ESKI_ISLEMLERI, STOK_FIS_ISLEMLERI, STOK_ISLEMLERI, STOK_ISTEK_ISLEMLERI } from './islemler/stok.ts';
 import { STOK_SAYIM_ONAY_ISLEMLERI } from './islemler/stok.ts';
 import { TAKVIM_ISLEMLERI } from './islemler/takvim.ts';
 import { TERMINAL_ISLEMLERI } from './islemler/terminal.ts';
@@ -95,6 +95,7 @@ export const VERI_ISLEMLERI = [
   ...SIPARISLER_ISLEMLERI,
   ...SMARTES_ISLEMLERI,
   ...STOK_ISLEMLERI,
+  ...STOK_ESKI_ISLEMLERI,
   ...STOK_ISTEK_ISLEMLERI,
   ...STOK_FIS_ISLEMLERI,
   ...STOK_SAYIM_ONAY_ISLEMLERI,
@@ -139,5 +140,10 @@ export const URETIM_EMRI_YAZMA_ISLEMLERI = [
   'uretim-emirleri.bol-birlestir', 'uretim-emirleri.plana-al', 'uretim-emirleri.beklet', 'uretim-emirleri.iptal',
 ] as const satisfies readonly VeriIslemi[];
 
+// Stok tanım yazımı dört eyleme bölündü (3165 a).
+export const STOK_TANIM_YAZMA_ISLEMLERI = ['stok.konum-yaz', 'stok.raf-yaz', 'stok.harita-yaz', 'stok.malzeme-ayari'] as const satisfies readonly VeriIslemi[];
+// Haritadan eşleme raf, konum ya da depo haritası yazımının ardından koşar; üçünden biri yeter.
+export const STOK_ESLEME_ISLEMLERI = ['stok.konum-yaz', 'stok.raf-yaz', 'stok.harita-yaz'] as const satisfies readonly VeriIslemi[];
+
 // Bölünmüş eski anahtarlar: hiçbir ucu açmaz, satırı ayrı kartla silinene dek katalogda kalır (3165 a). Sayfa yetkileri ekranı bunları göstermez.
-export const ETKISIZ_ISLEMLER: readonly Islem[] = ['istasyonlar.yaz', 'rota.yaz', 'uretim-emirleri.yaz', 'atolye.yaz'];
+export const ETKISIZ_ISLEMLER: readonly Islem[] = ['istasyonlar.yaz', 'rota.yaz', 'uretim-emirleri.yaz', 'atolye.yaz', 'stok.tanim'];

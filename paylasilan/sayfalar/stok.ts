@@ -54,7 +54,7 @@ export const STOK_IKINCI_MENU = {
     },
     {
       baslik: 'Sistem',
-      maddeler: [{ anahtar: 'ayarlar', baslik: 'Ayarlar', yol: '/stok/ayarlar', simge: 'tool', islem: 'stok.tanim' }],
+      maddeler: [{ anahtar: 'ayarlar', baslik: 'Ayarlar', yol: '/stok/ayarlar', simge: 'tool', islem: 'stok.harita-yaz', veya: ['stok.raf-yaz', 'stok.konum-yaz', 'stok.malzeme-ayari'] }],
     },
   ],
 } as const satisfies IkinciMenuTanimi;

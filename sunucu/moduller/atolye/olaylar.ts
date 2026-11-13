@@ -4,7 +4,7 @@ import type { Db } from '#cekirdek/db.ts';
 // Bu yüzden dinleyici `sunucu/kablolama.ts`'te bağlanır (ADR 0006 madde 6). Olay komutla aynı işlemde verilir; dinleyicinin reddi
 // bütün işlemi geri alır.
 
-// Yeni bölüm açıldı. `islemler` açan kişinindir: dinleyen kendi yetki kuralını uygular (stok deposu yalnız stok.tanim ile açılır).
+// Yeni bölüm açıldı. `islemler` açan kişinindir: dinleyen kendi yetki kuralını uygular (stok deposu yalnız stok.harita-yaz ile açılır).
 export interface BolumAcildiOlayi {
   salonId: number;
   kod: string;

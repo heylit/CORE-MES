@@ -35,9 +35,9 @@ const PAROLA = 'dogru-parola-1';
 // Rol x işlem satırları kisiler modülünün göçüyle gelecek (BASKA-MODUL-ISTEKLERI); test kendi şemasında ekler.
 const ROL_ISLEMLERI: Record<string, string[]> = {
   // Fikstür rolü: işlemler tek tek verilir, gerçek matris oturum testindedir. Eksiye düşüm onayı (1387 a) ayrıca denenir.
-  depo: ['stok.giris', 'stok.cikis', 'stok.transfer', 'stok.sayim', 'stok.tanim', 'stok.geri-al', 'stok.toplama', 'stok.eksi-onayla'],
+  depo: ['stok.giris', 'stok.cikis', 'stok.transfer', 'stok.sayim', 'stok.konum-yaz', 'stok.raf-yaz', 'stok.harita-yaz', 'stok.malzeme-ayari', 'stok.geri-al', 'stok.toplama', 'stok.eksi-onayla'],
   kalite: ['stok.sayim'],
-  mudur: ['stok.giris', 'stok.cikis', 'stok.transfer', 'stok.sayim', 'stok.tanim', 'stok.geri-al', 'stok.toplama', 'stok.eksi-onayla', 'finans.oku'],
+  mudur: ['stok.giris', 'stok.cikis', 'stok.transfer', 'stok.sayim', 'stok.konum-yaz', 'stok.raf-yaz', 'stok.harita-yaz', 'stok.malzeme-ayari', 'stok.geri-al', 'stok.toplama', 'stok.eksi-onayla', 'finans.oku'],
 };
 
 interface Cevap<T = unknown> { durum: number; govde: T }

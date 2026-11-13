@@ -403,7 +403,7 @@ export async function firmaFasonKonumlari(db: Db, firmaIdler: readonly number[])
   return m;
 }
 
-// 2902: Fabrika Haritası'nda yeni bölüm açıldı (bağ sunucu/kablolama.ts'te): açan kişide stok.tanim varsa bölümün deposu açılır.
+// 2902: Fabrika Haritası'nda yeni bölüm açıldı (bağ sunucu/kablolama.ts'te): açan kişide stok.harita-yaz varsa bölümün deposu açılır.
 export const bolumAcildiYansit = (db: Db, olay: { salonId: number; kod: string; islemler: readonly string[] }): Promise<void> => servis.bolumAcildiYansit(db, olay);
 // 2902 (karar 2903 a): istasyon açıldı (bağ sunucu/kablolama.ts'te): aktif istasyonun stok konumu hemen açılır.
 export const istasyonAcildiYansit = (db: Db, olay: { istasyonId: number; ad: string; aktif: boolean }): Promise<void> => servis.istasyonAcildiYansit(db, olay);
