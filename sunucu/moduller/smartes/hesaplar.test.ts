@@ -90,10 +90,12 @@ describe('SmartES hesapları: OEE raporu ve çevrim süresi (kart 3174, gerçek 
   });
 
   test('SME-33: OEE ve çevrim süresi belgedeki metotlarla okunur, vardiya + makine başına tek kayıt güncellenir; saat dolmadan yeniden okunmaz', async () => {
+    // Sahte SmartES her okumada aynı vardiya gününü verir: test saati ilerletirken gün dönerse tarih değişmesin.
+    const dun = gun(1);
     sahte.isleyiciler.set('OEEReport', () => tablo([
-      { SHIFT_DATE: `${gun(1)}T00:00:00+03:00`, SHIFT: '1', MACHINE_CODE: 'ORN-M1', AVAILABILITY: '0.80', PERFORMANCE: '0.90', QUALITY: '1.00', OEE: '0.72' },
-      { SHIFT_DATE: `${gun(1)}T00:00:00+03:00`, SHIFT: '1', MACHINE_CODE: 'ORN-M1', AVAILABILITY: '0.85', PERFORMANCE: '0.90', QUALITY: '1.00', OEE: '0.77' },
-      { SHIFT_DATE: `${gun(1)}T00:00:00+03:00`, SHIFT: '2', MACHINE_CODE: 'ORN-M2', AVAILABILITY: '75', PERFORMANCE: '80', QUALITY: '100', OEE: '60' },
+      { SHIFT_DATE: `${dun}T00:00:00+03:00`, SHIFT: '1', MACHINE_CODE: 'ORN-M1', AVAILABILITY: '0.80', PERFORMANCE: '0.90', QUALITY: '1.00', OEE: '0.72' },
+      { SHIFT_DATE: `${dun}T00:00:00+03:00`, SHIFT: '1', MACHINE_CODE: 'ORN-M1', AVAILABILITY: '0.85', PERFORMANCE: '0.90', QUALITY: '1.00', OEE: '0.77' },
+      { SHIFT_DATE: `${dun}T00:00:00+03:00`, SHIFT: '2', MACHINE_CODE: 'ORN-M2', AVAILABILITY: '75', PERFORMANCE: '80', QUALITY: '100', OEE: '60' },
       { SHIFT: '2', MACHINE_CODE: 'ORN-M3' },
     ]));
     sahte.isleyiciler.set('PartsCycleTimesList', () => tablo([
@@ -112,7 +114,7 @@ describe('SmartES hesapları: OEE raporu ve çevrim süresi (kart 3174, gerçek 
       [2, 'ORN-M2', 75, 80, 100, 60, null],
       [1, 'ORN-M1', 85, 90, 100, 77, null],
     ]);
-    assert.equal(c.oee[0]?.vardiyaTarihi, gun(1));
+    assert.equal(c.oee[0]?.vardiyaTarihi, dun);
     assert.deepEqual(c.cevrim.map((x) => [x.operasyonKodu, x.gercekMetni, x.gercekSaniye, x.tanimliSaniye, x.parcaSayisi, x.gunSayisi]), [
       ['10', '00:01:30', 90, null, 120, 7],
       ['20', '45', null, null, null, null],
