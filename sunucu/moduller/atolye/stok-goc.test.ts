@@ -119,7 +119,9 @@ describe('stok rafları Fabrika Haritası\'na kopyalanır (kart #686, gerçek Po
     assert.equal((await gozAdresi(vt, bulunan?.id ?? 0))?.rafKodu, 'AN12');
     assert.equal(await gozBul(vt, 'AN12-03'), null);
     assert.equal(await gozAdresi(vt, 999999), null);
-    assert.equal((await gozBul(vt, 'AB-02-10'))?.kat, 10);
+    // Harf raf kodu varsayılan sıra numarasıyla (3177 b): 2. bölmenin 10. katı 20; rakamlı AN12 eski adresle kalır.
+    assert.equal((await gozBul(vt, 'AB20'))?.kat, 10);
+    assert.equal(await gozBul(vt, 'AB-02-10'), null);
     const salon = bulunan?.salonId ?? 0;
     assert.equal((await gozler(vt, salon)).length, 6 + 20);
     assert.deepEqual((await raflar(vt)).filter((r) => r.salonId === salon).map((r) => r.kod), ['AB', 'AN12']);

@@ -18,7 +18,7 @@ export function KonumSecici({ etiket, deger, degistir, zorunlu, ipucu, hata }: {
     : q === '' ? 'Konum kodunu ya da adını yazın; okutabilirsiniz.'
       : a.isPending ? 'Aranıyor…' : konumlar.length === 0 ? 'Eşleşen konum yok.' : 'Listeden konumu seçin.';
   return (
-    <AramaSecici etiket={etiket} deger={metin} zorunlu={zorunlu} hata={hata} ipucu={bilgi} yerTutucu="Örn. A-01-2 ya da Kabul"
+    <AramaSecici etiket={etiket} deger={metin} zorunlu={zorunlu} hata={hata} ipucu={bilgi} yerTutucu="Örn. A12 ya da Kabul"
       degistir={(v) => { setMetin(v); if (deger !== null) degistir(null); }}
       secildi={(x) => { setMetin(''); degistir({ id: Number(x.deger), etiket: x.baslik }); }}
       secili={deger?.etiket ?? null}

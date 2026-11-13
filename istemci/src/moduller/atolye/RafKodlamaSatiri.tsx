@@ -3,6 +3,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import type { HaritaEslemeCevabi } from '#paylasilan/sozlesme/stok.ts';
 import { Dugme, KodDegisimPenceresi, OnayPenceresi, useBildirim, type KoduDegisenYer } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
+import { tekrarKorumaliGonder, yeniIstekKimligi } from '../../ortak/veri/istek-kimligi.ts';
 import { useOturum } from '../../ortak/veri/oturum.ts';
 import { hucreAnahtari } from './kurallar.ts';
 import type { RafStogu } from './RafCephesi.tsx';
@@ -22,7 +23,8 @@ export function RafKodlamaSatiri({ raf, stok }: { raf: RafBoyu & { id: number };
   const [soruluyor, soruluyorYaz] = useState(false);
   const [degisenler, degisenlerYaz] = useState<KoduDegisenYer[] | null>(null);
   const numarala = useMutation({
-    mutationFn: () => api.post<HaritaEslemeCevabi>(`/stok/harita-raflari/${raf.id}/yeniden-numarala`, {}),
+    // Tekrar korumalı komut: cevabı yitirilen gönderim aynı kimlikle yinelenir, raf iki kez numaralanmaz.
+    mutationFn: () => tekrarKorumaliGonder((deneme) => api.post<HaritaEslemeCevabi>(`/stok/harita-raflari/${raf.id}/yeniden-numarala`, {}, deneme), { istekKimligi: yeniIstekKimligi() }),
     onSuccess: (e) => {
       soruluyorYaz(false);
       degisenlerYaz(e.koduDegisenler);
@@ -56,7 +58,7 @@ export function RafKodlamaSatiri({ raf, stok }: { raf: RafBoyu & { id: number };
         onayla={() => numarala.mutate()}
         vazgec={() => soruluyorYaz(false)}
       >
-        <p>{etkilenen.length} gözün kodu değişir{stok === null ? '' : `; ${stoklu} gözde stok var`}. Stok yerinde kalır.</p>
+        <p>{etkilenen.length} gözün kodu değişir{stok === null || stoklu === 0 ? '' : `; ${stoklu} gözde stok var`}. Stok yerinde kalır.</p>
         {etkilenen[0] && <p className="mono">{etkilenen[0].eski} → {etkilenen[0].yeni}</p>}
         <p><strong>Eski etiketler başka gözü gösterir; okutmayın.</strong> Rafın bütün etiketlerini söküp yeniden basın; yoksa okutulan stok yanlış göze yazılır.</p>
       </OnayPenceresi>

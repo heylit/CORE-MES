@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import type { RafKodlamaOnizlemeCevabi } from '#paylasilan/sozlesme/atolye.ts';
-import type { HaritaEslemeCevabi } from '#paylasilan/sozlesme/stok.ts';
+import type { HaritaEslemeCevabi, RafKodlamaDurumuCevabi } from '#paylasilan/sozlesme/stok.ts';
 import { DEPOCU, MUDUR, ac, json, sunucuKur } from './test-ortak.tsx';
 
 // 3168 a, 3171 a: Stok > Ayarlar'da raf kodlaması; değiştirmeden önce sayı ve örnek sorulur, onayla kodlar değişir ve etiket penceresi
@@ -79,5 +79,45 @@ describe('stok Ayarlar: raf kodlama (3168)', () => {
     const k = await kutu();
     expect(k.value).toBe('duz-sayi');
     expect(k.disabled).toBe(true);
+  });
+
+  it('3177 b: güncellemeyle geçişte değişen kodlar uyarıyla durur; etiket penceresi saklı listeyle açılır, Basıldı uyarıyı kaldırır', async () => {
+    const durum = (basildi: boolean): RafKodlamaDurumuCevabi => ({
+      kodlama: 'duz-sayi',
+      gecis: { zaman: '2026-11-13T08:00:00Z', kodlama: 'duz-sayi', degisenSayisi: 2, stokluSayisi: 1, eskiKodluRaflar: ['ORN7'], atlanan: ['ORNB2'], pasifStoklu: ['ORNC4'], basildi },
+    });
+    const istekler = sunucuKur(MUDUR, {
+      ...ortak,
+      'GET /stok/raf-kodlama': () => json(200, durum(false)),
+      'GET /stok/raf-kodlama/gecis': () => json(200, { degisenler: esleme.koduDegisenler }),
+      'POST /stok/raf-kodlama/gecis/basildi': () => json(200, durum(true)),
+    });
+    ac('/stok/ayarlar');
+    const uyari = await screen.findByRole('alert');
+    expect(uyari.textContent).toContain('2 gözün kodu değişti, 1 gözde stok var. Eski etiketler okunmaz');
+    expect(uyari.textContent).toContain('ORN7');
+    expect(uyari.textContent).toContain('Şu gözler geçemedi, eski kodunda kaldı: ORNB2.');
+    expect(uyari.textContent).toContain('Pasif raftaki şu gözlerde stok var, göz açık kaldı: ORNC4. Stoğu taşıyınca göz kapanır.');
+    fireEvent.click(within(uyari).getByRole('button', { name: 'Etiketleri bas' }));
+    const p = await screen.findByRole('dialog', { name: 'Konum kodu değişti' });
+    expect(within(p).getByText('ORNA-01-2-1', { exact: false })).toBeTruthy();
+    fireEvent.click(within(p).getByRole('button', { name: 'Kapat' }));
+    fireEvent.click(within(uyari).getByRole('button', { name: 'Basıldı' }));
+    // Uyarıyı geri getiren yol yok: tek dokunuş kaldırmaz, onay ister.
+    const onay = await screen.findByRole('dialog', { name: 'Uyarı kaldırılsın mı?' });
+    expect(istekler.some((i) => i.yol === '/stok/raf-kodlama/gecis/basildi')).toBe(false);
+    fireEvent.click(within(onay).getByRole('button', { name: 'Basıldı, kaldır' }));
+    await waitFor(() => expect(screen.queryByText(/gözün kodu değişti/)).toBeNull());
+    expect(istekler.some((i) => i.yontem === 'POST' && i.yol === '/stok/raf-kodlama/gecis/basildi')).toBe(true);
+  });
+
+  it('3177 b: stok tanımı olmayan geçiş uyarısını görmez', async () => {
+    sunucuKur(DEPOCU, {
+      ...ortak,
+      'GET /stok/raf-kodlama': () => json(200, { kodlama: 'duz-sayi', gecis: { zaman: '2026-11-13T08:00:00Z', kodlama: 'duz-sayi', degisenSayisi: 2, stokluSayisi: 0, eskiKodluRaflar: [], atlanan: [], pasifStoklu: [], basildi: false } }),
+    });
+    ac('/stok/ayarlar');
+    expect((await kutu()).value).toBe('duz-sayi');
+    expect(screen.queryByText(/gözün kodu değişti/)).toBeNull();
   });
 });

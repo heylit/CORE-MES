@@ -4,7 +4,7 @@ import { ondalikMetinSemasi } from '../ondalik.ts';
 import { beklenenSurum, surumSemasi } from '../surum.ts';
 import { TOPLU_EN_COK_SATIR } from '../toplu.ts';
 import { tarihSemasi, zamanSemasi } from '../zaman.ts';
-import { AZAMI_OGE, rafGovdesi, yerlesimGovdesi } from './atolye.ts';
+import { AZAMI_OGE, RAF_KODLAMALARI, rafGovdesi, yerlesimGovdesi } from './atolye.ts';
 import { dosyaOzeti } from './dosya.ts';
 import { KATALOG_KART_DURUMLARI, KATALOG_TURLERI } from './malzemeler.ts';
 import { IS_DURUMU, KALEM_KAYNAGI, TASIMA } from './sevkiyat.ts';
@@ -282,6 +282,19 @@ export const haritaEslemeCevabi = z.object({
   koduDegisenler: z.array(koduDegisenKonum),
 });
 export type HaritaEslemeCevabi = z.output<typeof haritaEslemeCevabi>;
+// 3177 b: sıra numaralı koda güncellemeyle kendiliğinden geçilir; ilk eşleme kodu değişen konumları bir kez saklar. Ekran stok
+// tanımı olan kişiye etiketleri bastırır; "Basıldı" denince uyarı kalkar. Harf olmayan kodlu raf eski adresiyle kalır.
+export const rafKodGecisi = z.object({
+  zaman: zamanSemasi, kodlama: z.enum(RAF_KODLAMALARI), degisenSayisi: z.number().int(), stokluSayisi: z.number().int(),
+  // atlanan: yeni kodu başka konumda olduğu için geçemeyen yerlerin adresi (eski kodda kalırlar). pasifStoklu: pasif rafta stoğu
+  // olduğu için açık kalan konumlar.
+  eskiKodluRaflar: z.array(z.string()), atlanan: z.array(z.string()), pasifStoklu: z.array(z.string()), basildi: z.boolean(),
+});
+export type RafKodGecisi = z.output<typeof rafKodGecisi>;
+export const rafKodlamaDurumuCevabi = z.object({ kodlama: z.enum(RAF_KODLAMALARI), gecis: rafKodGecisi.nullable() });
+export type RafKodlamaDurumuCevabi = z.output<typeof rafKodlamaDurumuCevabi>;
+export const rafKodGecisiListesiCevabi = z.object({ degisenler: z.array(koduDegisenKonum) });
+export type RafKodGecisiListesiCevabi = z.output<typeof rafKodGecisiListesiCevabi>;
 // Eşleme özeti (#711): bağlı bölüm, göz ve alan sayısı; haritada olup stokta konumu olmayan yer; haritada karşılığı olmayan açık konumlar.
 export const haritaOzetiCevabi = z.object({
   bolum: z.number().int(), goz: z.number().int(), alan: z.number().int(), eslenmemis: z.number().int(),

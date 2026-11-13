@@ -799,3 +799,12 @@ a.tc-stok-kpi:hover, a.tc-stok-kpi:focus-visible { background: var(--panel2); }
 .tc-stok-akis-liste > li > span { min-inline-size: 0; overflow-wrap: anywhere; }
 .tc-stok-akis-liste small { display: block; color: var(--muted); font-size: var(--yazi-xs); }
 .tc-stok-akis-liste strong { font-family: var(--font-mono); white-space: nowrap; }
+
+/* 3177 b: güncellemeyle kodu değişen raf gözleri; etiketler basılana kadar Depo ve Ayarlar'da durur. */
+.tc-stok-kod-gecisi { display: flex; flex-wrap: wrap; align-items: flex-start; gap: var(--b-2) var(--b-3); padding: var(--b-3); border: thin solid var(--edge); border-left: var(--b-1) solid var(--hold); border-radius: var(--yari-2); background: var(--panel-solid); margin-block-end: var(--b-3); }
+.tc-stok-kod-gecisi > .tc-simge { color: var(--hold); flex: none; margin-block-start: var(--b-1); }
+.tc-stok-kod-gecisi-metin { flex: 1 1 16rem; min-width: 0; }
+.tc-stok-kod-gecisi-metin p { margin: 0; }
+.tc-stok-kod-gecisi-metin p + p { margin-block-start: var(--b-1); }
+.tc-stok-kod-gecisi-dugmeler { display: flex; flex-wrap: wrap; gap: var(--b-2); }
+@media (pointer: coarse) { .tc-stok-kod-gecisi-dugmeler { gap: var(--b-3); } .tc-stok-kod-gecisi-dugmeler .tc-dugme { min-block-size: var(--dokunma); } }

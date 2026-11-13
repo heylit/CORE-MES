@@ -654,6 +654,10 @@ export interface HaritaPlani {
   turDegisimi: { id: number; tur: HaritaAlanTuru; depoId: number }[];
   kapat: number[];
   atlanan: string[];
+  // atlanan'ın iki alt kümesi (geçiş uyarısı nedeniyle ayrı söyler): yeni kodu başka konumda olduğu için eski kodunda kalan göz
+  // adresleri ve pasif rafta stoğu olduğu için açık kalan konumların kodu.
+  koduGecemeyen: string[];
+  pasifStoklu: string[];
 }
 export const haritaAlaniMi = (tur: string): tur is HaritaAlanTuru => (HARITA_ALAN_TURLERI as readonly string[]).includes(tur);
 
@@ -668,7 +672,7 @@ export function depoKoduOner(salonKodu: string, kullanilan: ReadonlySet<string>)
 }
 
 export function haritaPlani(g: { gozler: readonly HaritaGozu[]; alanlar: readonly HaritaAlani[]; depolar: readonly HaritaDeposu[]; konumlar: readonly HaritaKonumu[]; kodlar: ReadonlySet<string> }): HaritaPlani {
-  const plan: HaritaPlani = { ekle: [], guncelle: [], turDegisimi: [], kapat: [], atlanan: [] };
+  const plan: HaritaPlani = { ekle: [], guncelle: [], turDegisimi: [], kapat: [], atlanan: [], koduGecemeyen: [], pasifStoklu: [] };
   const kodlar = new Set(g.kodlar);
   const bolumDeposu = new Map(g.depolar.flatMap((d) => (d.salonId !== null && d.aktif ? [[d.salonId, d.id] as const] : [])));
   const depolu = new Set(bolumDeposu.keys());
@@ -699,14 +703,14 @@ export function haritaPlani(g: { gozler: readonly HaritaGozu[]; alanlar: readonl
   for (const { z } of tasinan) kodlar.add(z.adres);
   for (const { k, z } of bagli) {
     const kod = yeniKod.get(k.id) ?? k.kod;
-    if (k.rafId === null && kod !== z.adres) plan.atlanan.push(z.adres);
+    if (k.rafId === null && kod !== z.adres) { plan.atlanan.push(z.adres); plan.koduGecemeyen.push(z.adres); }
     // Pasif rafın stoklu gözü açık kalır (bakiye pasif konumda duramaz) ve bildirilir; stok taşınınca sonraki eşleme kapatır.
     let aktif = z.rafAktif;
-    if (!aktif && k.aktif && k.satirSayisi > 0) { aktif = true; plan.atlanan.push(kod); }
+    if (!aktif && k.aktif && k.satirSayisi > 0) { aktif = true; plan.atlanan.push(kod); plan.pasifStoklu.push(kod); }
     if (kod !== k.kod || k.aktif !== aktif) plan.guncelle.push({ id: k.id, kod, aktif });
   }
   for (const z of yeniGozler) {
-    if (kodlar.has(z.adres)) { plan.atlanan.push(z.adres); continue; }
+    if (kodlar.has(z.adres)) { plan.atlanan.push(z.adres); plan.koduGecemeyen.push(z.adres); continue; }
     kodlar.add(z.adres);
     plan.ekle.push({ depoId: bolumDeposu.get(z.salonId)!, salonId: z.salonId, kod: z.adres, tur: 'raf_gozu', bolme: z.bolme, kat: z.kat, ad: null, gozId: z.id, alanId: null, aktif: z.rafAktif });
   }

@@ -126,6 +126,8 @@ describe('stok (gerçek PostgreSQL)', () => {
     ortam = await testVeritabaniKur('stok');
     app = await uygulamaKur({ vt: ortam.vt, ayar: ortam.ayar, kimlik: kimlikCozucu(ortam.vt), denetle: denetimYaz, tekrar: tekrarDeposu });
     kisiler.set('yonetici', await ortam.vt.tx((db) => yoneticiOlustur(db, { ad: 'Deneme Yönetici', kullaniciAdi: 'yonetici', parola: PAROLA })));
+    // Bu testlerin raf kodları rakamlıdır (D8) ve adresleri eski düzendedir: kurulum eski düzeni seçmiş gibi (varsayılan sıra numarası, 3177 b).
+    await ortam.vt.sorgu(`INSERT INTO ayar (anahtar, deger, guncelleyen_kisi_id) VALUES ('atolye.raf-kodlama', '"bolme-kat-goz"', $1)`, [kisiler.get('yonetici')]);
     for (const [rol, islemler] of Object.entries(ROL_ISLEMLERI)) {
       const r = await ortam.vt.tek<{ id: number }>('SELECT id FROM rol WHERE kod = $1', [rol]);
       for (const i of islemler) await ortam.vt.sorgu('INSERT INTO rol_islemi (rol_id, islem) VALUES ($1, $2) ON CONFLICT DO NOTHING', [r!.id, i]);

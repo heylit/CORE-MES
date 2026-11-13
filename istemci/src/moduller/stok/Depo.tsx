@@ -10,6 +10,7 @@ import type { DepoYazimi } from '../atolye/disari.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { KodDegisimPenceresi } from './Etiketler.tsx';
 import { SayfaBasi, hataMetni, useIslem } from './ortak.tsx';
+import { RafKodGecisiUyarisi } from './RafKodGecisi.tsx';
 import './stok.css';
 
 // Depo: Fabrika Haritası'nın depo görünümü, yalnız stok deposu yapılmış bölümlerle (kart #1304). Raf ve göz haritada tek
@@ -40,6 +41,7 @@ export function Depo() {
   return (
     <section className="tc-stok">
       <SayfaBasi baslik="Depo" aciklama="Raflar, bölmeler ve gözler. Göze basınca içindeki stok açılır." />
+      <RafKodGecisiUyarisi />
       {o.isError && <DurumKutusu durum="hata" mesaj={hataMetni(o.error)} yenile={() => void o.refetch()} />}
       {o.isPending && <DurumKutusu durum="yukleniyor" />}
       {salonIdler && salonIdler.length === 0 && (

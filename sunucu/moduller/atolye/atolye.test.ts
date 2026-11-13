@@ -199,6 +199,8 @@ describe('atolye (gerçek PostgreSQL)', () => {
     ortam = await testVeritabaniKur('atolye');
     app = await uygulamaKur({ vt: ortam.vt, ayar: ortam.ayar, kimlik: kimlikCozucu(ortam.vt), denetle: denetimYaz, tekrar: tekrarDeposu });
     yoneticiId = await ortam.vt.tx((db) => yoneticiOlustur(db, { ad: 'Deneme Yönetici', kullaniciAdi: 'yonetici', parola: PAROLA }));
+    // Bu testlerin raf kodları rakamlıdır (R1) ve adresleri eski düzendedir: kurulum eski düzeni seçmiş gibi (varsayılan sıra numarası, 3177 b).
+    await ortam.vt.sorgu(`INSERT INTO ayar (anahtar, deger, guncelleyen_kisi_id) VALUES ('atolye.raf-kodlama', '"bolme-kat-goz"', $1)`, [yoneticiId]);
     const operatorRolu = await ortam.vt.tek<{ id: number }>("SELECT id FROM rol WHERE kod = 'operator'");
     // Hiçbir göç bir role atolye.yaz vermiyor (çekirdek isteği): bayraksız yazan için geçici rol kurulur.
     const yazanRol = await ortam.vt.tek<{ id: number }>("INSERT INTO rol (kod, ad) VALUES ('gecici_atolye', 'Geçici Atölye') RETURNING id");
@@ -622,8 +624,18 @@ describe('atolye (gerçek PostgreSQL)', () => {
     const kodlamaYaz = (deger: string, beklenen: string) => vt().tx((db) => modulAyariDegistir(db, yoneticiId, 'atolye.raf-kodlama', deger, beklenen, {
       modul: 'atolye', yol: '/deneme', yetki: 'stok.tanim',
     }));
+    // Kodu rakamlı eski raf (eski düzende açılmış): sıra numaralı kodlamada eski adresini taşır, kaydı durdurmaz.
+    const s3 = await salonKur();
+    const eskiRaf = await kaydet(s3.id, bosYerlesim(s3, { raflar: [raf({ kod: 'R9Y1' })] }));
+    assert.equal(eskiRaf.durum, 200, JSON.stringify(eskiRaf.govde));
     await kodlamaYaz('duz-sayi', 'bolme-kat-goz');
     try {
+      const eskiRafId = eskiRaf.govde.raflar[0]?.id ?? 0;
+      assert.equal((await oku<GozlerCevabi>(`/atolye/raflar/${eskiRafId}/gozler`)).govde.satirlar[0]?.adres, 'R9Y1-01-1-1');
+      assert.equal((await oku<YerlesimCevabi>(`/atolye/salonlar/${s3.id}`)).govde.raflar[0]?.gozNolari, null);
+      assert.equal((await vt().tx((db) => gozBul(db, 'r9y1-1-1-1')))?.rafKodu, 'R9Y1');
+      const yeniden3 = await kaydet(s3.id, bosYerlesim({ ...s3, surum: s3.surum + 1 }, { raflar: [raf({ id: eskiRafId, kod: 'R9Y1' })] }));
+      assert.equal(yeniden3.durum, 200, JSON.stringify(yeniden3.govde));
       assert.deepEqual((await oku<GozlerCevabi>(`/atolye/raflar/${rafId}/gozler?bolme=3`)).govde.satirlar.map((g) => g.adres), [`${kod}7`, `${kod}8`]);
       assert.deepEqual((await oku<YerlesimCevabi>(`/atolye/salonlar/${s.id}`)).govde.raflar[0]?.gozNolari, [1, 2, 3, 4, 7, 8]);
       assert.equal((await vt().tx((db) => gozBul(db, `${kod.toLowerCase()}7`)))?.bolme, 3);

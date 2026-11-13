@@ -7,8 +7,8 @@ import type {
   DepolarCevabi, Konum, KonumAyrintiCevabi, KonumlarListesi, Raf, RafAcKomutu, RafDuzenleKomutu, RafDuzenleCevabi, KonumDuzenleCevabi, RafMatrisiCevabi, RaflarListesi, YerlesimCevabi,
   YerlesimKaydetKomutu, HaritaEslemeCevabi, HaritaOzetiCevabi, TopluBolumDeposuCevabi, GozStoklariCevabi, GozOzetleriCevabi, KonumMalzemesi, KonumMalzemeleriListesi,
 } from '#paylasilan/sozlesme/stok.ts';
-import type { GozKalemi, GozKalemiKaydi, KayitCevabi, RafKaydi, RafKodlamaCevabi, RafKodlamaOnizlemeCevabi } from '#paylasilan/sozlesme/atolye.ts';
-import { AMBALAJ_TURLERI, type AmbalajTuru, type ElleKonumTuru, type ZeminCevabi } from '#paylasilan/sozlesme/stok.ts';
+import type { GozKalemi, GozKalemiKaydi, KayitCevabi, RafKaydi, RafKodlamaOnizlemeCevabi } from '#paylasilan/sozlesme/atolye.ts';
+import { AMBALAJ_TURLERI, type AmbalajTuru, type ElleKonumTuru, type RafKodGecisiListesiCevabi, type RafKodlamaDurumuCevabi, type ZeminCevabi, rafKodGecisiListesiCevabi } from '#paylasilan/sozlesme/stok.ts';
 import {
   alanlar as haritaAlanlari, gozAdresi as haritaGozAdresi, harfOlmayanRafKodlari, rafKodlamasi, rafKodlamasiDegistir as haritaRafKodlamasiDegistir,
   rafYenidenNumarala as haritaRafYenidenNumarala, type RafKodlamasi, gozKaleminBolumu, gozKalemiSil as haritaGozKalemiSil, gozKalemiYaz as haritaGozKalemiYaz, gozler as haritaGozleri, rafYerlesimiKaydet,
@@ -147,10 +147,24 @@ export async function haritadanEsle(db: Db): Promise<HaritaEslemeCevabi> {
   for (const k of plan.guncelle) await korumali(() => sorgular.haritaKonumuGuncelle(db, k));
   for (const k of plan.turDegisimi) await sorgular.haritaKonumuTuru(db, k);
   const kapatilan = plan.kapat.length === 0 ? 0 : (await sorgular.haritaKonumlariniKapat(db, plan.kapat)).length;
-  return {
+  const e: HaritaEslemeCevabi = {
     eklenen: plan.ekle.length, guncellenen: plan.guncelle.length + plan.turDegisimi.length, kapatilan, atlanan: plan.atlanan,
     koduDegisenler: idler.length === 0 ? [] : koduDegisenler(onceki, await sorgular.kodDurumlari(db, { idler })),
   };
+  // 3177 b: bu sürümden sonraki ilk eşleme (açılış işi ya da ondan önce gelen bir harita kaydı) kod değişimlerini bir kez saklar.
+  if (!(await sorgular.rafKodGecisiVarMi(db))) {
+    const kodlama = await rafKodlamasi(db);
+    await sorgular.rafKodGecisiYaz(db, { kodlama, degisenler: e.koduDegisenler, eskiKodluRaflar: kodlama === 'duz-sayi' ? await harfOlmayanRafKodlari(db) : [], atlanan: plan.koduGecemeyen, pasifStoklu: plan.pasifStoklu });
+  }
+  return e;
+}
+
+// 3177 b: güncellemeden sonra stok konumları sıra numaralı koda kendiliğinden geçer. Açılıştan sonraki ilk turda eşleme bir kez
+// koşar (tek transaction; kodlar zincir ve takasla değişir); kayıt yazıldıktan sonra iş bir şey yapmaz. Kilit ve tek satır ikinci
+// sunucunun ikinci kez geçirmesini önler.
+export async function rafKodGecisiIsi(db: Db): Promise<void> {
+  if (await sorgular.rafKodGecisiVarMi(db)) return;
+  await haritadanEsle(db);
 }
 
 // 2884: aktif karantina konumu bulunamayınca nedeni (mal kabul iletisi için); yeni sorgu yok, eşlemenin okuduklarıyla.
@@ -375,8 +389,19 @@ export async function gozOzetleri(db: Db, gozIdler: number[]): Promise<GozOzetle
 }
 
 // ---- 3168: raf kodlama (Stok > Ayarlar) ve rafın yeniden numaralanması --------------------------------------------------
-export async function rafKodlamaOku(db: Db): Promise<RafKodlamaCevabi> {
-  return { kodlama: await rafKodlamasi(db) };
+export async function rafKodlamaOku(db: Db): Promise<RafKodlamaDurumuCevabi> {
+  const g = await sorgular.rafKodGecisi(db);
+  return { kodlama: await rafKodlamasi(db), gecis: g === null ? null : { ...g, zaman: g.zaman.toISOString() } };
+}
+
+export async function rafKodGecisiListesi(db: Db): Promise<RafKodGecisiListesiCevabi> {
+  return rafKodGecisiListesiCevabi.parse({ degisenler: await sorgular.rafKodGecisiDegisenleri(db) });
+}
+
+// Etiketler basıldı: uyarı kalkar, liste kalır (denetim için).
+export async function rafKodGecisiBasildi(db: Db, kisiId: number): Promise<RafKodlamaDurumuCevabi> {
+  await sorgular.rafKodGecisiBasildi(db, kisiId);
+  return rafKodlamaOku(db);
 }
 
 // Kuru deneme (3171 R3): kodlama değişse kaç konumun kodu değişir, kaçında stok var, bir örnek; yalnız harf olmayan raf kodu

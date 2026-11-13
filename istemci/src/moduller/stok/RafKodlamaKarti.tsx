@@ -1,12 +1,13 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { RafKodlamaCevabi, RafKodlamaGovdesi, RafKodlamaOnizlemeCevabi, RafKodlamasi } from '#paylasilan/sozlesme/atolye.ts';
+import type { RafKodlamaGovdesi, RafKodlamaOnizlemeCevabi, RafKodlamasi } from '#paylasilan/sozlesme/atolye.ts';
 import type { HaritaEslemeCevabi, KoduDegisenKonum } from '#paylasilan/sozlesme/stok.ts';
 import { DurumKutusu, Kart, OnayPenceresi, Secim, useBildirim } from '../../ortak/arayuz/index.ts';
 import { ApiHatasi, api } from '../../ortak/veri/api.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { KodDegisimPenceresi } from './Etiketler.tsx';
-import { hataMetni, useIslem } from './ortak.tsx';
+import { hataMetni, korumaliPost, useIslem } from './ortak.tsx';
+import { RafKodGecisiUyarisi, useRafKodlamasi } from './RafKodGecisi.tsx';
 
 const KODLAMA_ORNEGI: Record<RafKodlamasi, string> = {
   'bolme-kat-goz': 'Örnek: A rafı, 1. bölme, aşağıdan yukarı A-01-1-1, A-01-2-1, A-01-3-1, A-01-4-1.',
@@ -19,8 +20,6 @@ const KODLAMA_ADI: Record<RafKodlamasi, string> = {
   'bolme-kat-goz': 'Raf, bölme, kat ve göz (A-01-2-1)',
 };
 
-const KODLAMA_ANAHTARI = ['stok', 'raf-kodlama'] as const;
-
 // 3168 a, 3171 a: raf kodlaması bütün raflar için tektir; eski düzen seçilebilir kalır. Değiştirmek bütün göz kodlarını değiştirir:
 // önce kuru denemeyle sayısı ve bir örnek sorulur, onayla kodlar tek kayıtta değişir ve etiket penceresi açılır. Vazgeçince seçim
 // kayıtlı değere döner (kutu sunucunun değerini gösterir). Değiştirme stok tanımı yetkisiyledir; öbürleri yalnız okur.
@@ -28,7 +27,7 @@ export function RafKodlamaKarti() {
   const istemci = useQueryClient();
   const { bildir } = useBildirim();
   const tanimlar = useIslem('stok.tanim');
-  const kayitli = useQuery({ queryKey: KODLAMA_ANAHTARI, queryFn: () => api.get<RafKodlamaCevabi>('/stok/raf-kodlama') });
+  const kayitli = useRafKodlamasi();
   const [yeni, yeniYaz] = useState<RafKodlamasi | null>(null);
   const [degisenler, degisenlerYaz] = useState<KoduDegisenKonum[] | null>(null);
   const onizleme = useQuery({
@@ -38,7 +37,7 @@ export function RafKodlamaKarti() {
     staleTime: 0,
   });
   const degistir = useMutation({
-    mutationFn: (govde: RafKodlamaGovdesi) => api.post<HaritaEslemeCevabi>('/stok/raf-kodlama/degistir', govde),
+    mutationFn: (govde: RafKodlamaGovdesi) => korumaliPost<HaritaEslemeCevabi>('/stok/raf-kodlama/degistir', govde),
     onSuccess: (e) => {
       yeniYaz(null);
       degisenlerYaz(e.koduDegisenler);
@@ -57,6 +56,7 @@ export function RafKodlamaKarti() {
   const engel = o && o.engelliRaflar.length > 0 ? o.engelliRaflar : null;
   return (
     <Kart baslik="Raf kodlama">
+      <RafKodGecisiUyarisi />
       {kayitli.isError && <DurumKutusu durum="hata" mesaj={hataMetni(kayitli.error)} yenile={() => { void kayitli.refetch(); }} />}
       {kodlama && <>
         <Secim

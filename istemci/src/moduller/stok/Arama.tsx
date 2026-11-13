@@ -46,7 +46,7 @@ export function AramaPenceresi({ kapat }: { kapat: () => void }) {
   return (
     <Pencere acik kapat={kapat} baslik="Ara" tur="yan">
       <form className="tc-stok-form" onSubmit={(e) => { e.preventDefault(); if (l[0]) git(l[0].yol); }}>
-        <Girdi etiket="Ara" placeholder="Konum (A-03-02), raf, parti no ya da kart no" value={q} onChange={(e) => setQ(e.target.value)} autoFocus />
+        <Girdi etiket="Ara" placeholder="Konum (A12), raf, parti no ya da kart no" value={q} onChange={(e) => setQ(e.target.value)} autoFocus />
       </form>
       {!gecikmeli ? (
         <div className="tc-stok-form">

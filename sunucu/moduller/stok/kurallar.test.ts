@@ -377,6 +377,7 @@ describe('stok kuralları (saf)', () => {
     });
     assert.deepEqual(engel.guncelle, []);
     assert.deepEqual(engel.atlanan, ['A2', 'A3', 'A4', 'A1']);
+    assert.deepEqual([engel.koduGecemeyen, engel.pasifStoklu], [['A2', 'A3', 'A4', 'A1'], []]);
     assert.deepEqual(engel.ekle, []);
   });
 
@@ -393,6 +394,7 @@ describe('stok kuralları (saf)', () => {
     assert.deepEqual(plan.ekle.map((k) => k.kod), ['U1-01-1-1']);
     assert.deepEqual(plan.kapat, [20]);
     assert.deepEqual(plan.atlanan, ['U4-01-1-1']);
+    assert.deepEqual([plan.koduGecemeyen, plan.pasifStoklu], [[], []]);
   });
 
   test('harita eşlemesi (KD-042): pasif rafın stoklu gözü kapatılmaz, bildirilir; stoksuzu kapanır', () => {
@@ -404,6 +406,7 @@ describe('stok kuralları (saf)', () => {
     });
     assert.deepEqual(plan.guncelle, [{ id: 11, kod: 'P1-02-1-1', aktif: false }]);
     assert.deepEqual(plan.atlanan, ['P1-01-1-1']);
+    assert.deepEqual([plan.pasifStoklu, plan.koduGecemeyen], [['P1-01-1-1'], []]);
   });
 
   test('harita eşlemesi (#1304): fason, ara alan ve hurda depo olmayan bölümde ANA depoya konum olur; kabul olmaz', () => {

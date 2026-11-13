@@ -18,7 +18,7 @@ import { modulAyariDegistir, sistemAyariOku } from '../ayarlar/disari.ts';
 import { malzemeNoKoddan, malzemeOzetleri } from '../malzemeler/disari.ts';
 import { acikEmirler } from '../uretim-emirleri/disari.ts';
 import {
-  GOZ_SAYFA_BOYU, ODA_TURLERI, adresCoz, bolumCakismalari, fabrikaDenetle, fabrikaKonumuYuvarla, krokiHizalamaYuvarla, pdfBasligiGecerliMi, gozDolulukIhlali, aramaSirala, base64Coz, donusIndirge, beklenenParcaBoyu, duvarKutusu, glbBasligiGecerliMi, gozKodu, DUZ_RAF_KODU, hucreAdi,
+  GOZ_SAYFA_BOYU, ODA_TURLERI, adresCoz, bolumCakismalari, fabrikaDenetle, fabrikaKonumuYuvarla, krokiHizalamaYuvarla, pdfBasligiGecerliMi, gozDolulukIhlali, aramaSirala, base64Coz, donusIndirge, beklenenParcaBoyu, duvarKutusu, glbBasligiGecerliMi, gozKodu, DUZ_RAF_KODU, rafDuzMu, hucreAdi,
   hucreKutusu, izgaraAdlari, modelParcaSayisi, odaDuvarlari, rafKutusu, rotaBul, rotaNoktasiIhlali, surumGuncelMi, yerlesimiDenetle, yerlesimiYuvarla,
 } from './kurallar.ts';
 import type { AramaAdayi, FabrikaBolumu, Kutu, MakineBilgisi, SalonOlcusu } from './kurallar.ts';
@@ -69,12 +69,12 @@ const rafCevabi = (r: RafSatiri, o: SalonOlcusu, kodlama: RafKodlamasi): Raf => 
   bolmeGenisligi: r.bolmeGenisligi, derinlik: r.derinlik, yukseklik: r.yukseklik, x: r.x, z: r.z, donus: r.donus,
   aktif: r.aktif, genislik: r.genislik, hucre: hucreAdi(sayi(r.x), sayi(r.z), o),
   katYukseklikleri: r.katYukseklikleri, gozGenisligi: r.gozGenisligi, gozDerinligi: r.gozDerinligi,
-  gozNolari: kodlama === 'duz-sayi' ? r.duzNolari ?? [] : null,
+  gozNolari: rafDuzMu(kodlama, r.kod) ? r.duzNolari ?? [] : null,
 });
 
 // ---------- 3168: raf kodlama ----------
 
-// Bütün raflarda tek kodlama (sistem ayarı); saklanan değer tanınmıyorsa varsayılan (bugünkü düzen).
+// Bütün raflarda tek kodlama (sistem ayarı); saklanan değer tanınmıyorsa varsayılan (sıra numarası, 3177 b).
 export async function rafKodlamasi(db: Db): Promise<RafKodlamasi> {
   const deger: string = await sistemAyariOku(db, 'atolye.raf-kodlama');
   return (RAF_KODLAMALARI as readonly string[]).includes(deger) ? deger as RafKodlamasi : RAF_KODLAMASI_VARSAYILAN;
@@ -416,8 +416,9 @@ async function yazimHatalari(yaz: () => Promise<void>): Promise<void> {
 async function bolumIcerigiYaz(
   db: Db, salonId: number, kayit: YerlesimKaydi, onceki: ReadonlyMap<number, RafSatiri>, korunanAlanlar: readonly number[] = [],
 ): Promise<void> {
+  // Yeni raf ve kodu değişen raf yalnız harf koduyla kaydedilir; harfe çevrilmemiş eski raf (eski adresiyle) kaydı durdurmaz.
   if (await rafKodlamasi(db) === 'duz-sayi') {
-    const engel = kayit.raflar.filter((r) => !DUZ_RAF_KODU.test(r.kod)).map((r) => r.kod);
+    const engel = kayit.raflar.filter((r) => !DUZ_RAF_KODU.test(r.kod) && (r.id === null || onceki.get(r.id)?.kod !== r.kod)).map((r) => r.kod);
     if (engel.length > 0) throw gecersiz(harfOlmayanRafIletisi(engel));
   }
   for (const r of kayit.raflar) {
@@ -550,7 +551,7 @@ export async function gozler(db: Db, rafId: number, sayfa: number, bolme: number
   const kodlama = await rafKodlamasi(db);
   return {
     raf: { id: r.id, kod: r.kod, ad: r.ad, aktif: r.aktif },
-    satirlar: satirlar.map((g) => ({ id: g.id, adres: gozKodu(kodlama, r.kod, g), bolme: g.bolme, kat: g.kat, goz: g.goz, duzNo: kodlama === 'duz-sayi' ? g.duzNo : null })),
+    satirlar: satirlar.map((g) => ({ id: g.id, adres: gozKodu(kodlama, r.kod, g), bolme: g.bolme, kat: g.kat, goz: g.goz, duzNo: rafDuzMu(kodlama, r.kod) ? g.duzNo : null })),
     toplam,
     sayfaBoyu: GOZ_SAYFA_BOYU,
   };
@@ -592,7 +593,7 @@ export async function arama(db: Db, metin: string, salonId: number | null): Prom
         const etiket = gozKodu(kodlama, raf.kod, g);
         adaylar.push({
           // Sıra numaralı kodda bölme, kat ve göz adı gösterilmez (3168 a): yalnız raf adı.
-          tur: 'goz', kimlik: g.id, etiket, ayrinti: kodlama === 'duz-sayi' ? raf.ad : `${raf.ad} · bölme ${g.bolme}, kat ${g.kat}, göz ${g.goz}`,
+          tur: 'goz', kimlik: g.id, etiket, ayrinti: rafDuzMu(kodlama, raf.kod) ? raf.ad : `${raf.ad} · bölme ${g.bolme}, kat ${g.kat}, göz ${g.goz}`,
           anahtarlar: [etiket], aktif: raf.aktif, salon, x: raf.x, z: raf.z,
         });
       }

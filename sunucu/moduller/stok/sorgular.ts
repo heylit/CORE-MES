@@ -4,7 +4,7 @@ export {
   type DepoSatiri, type KonumSatiri, type RafSatiri, type BakiyeHam, type HareketHam, type PartiHam, type MalKabulHam, depolar, depoKimligi, depoVarMi,
   konumBul, konumKoduyla, type KonumSuzgeci, KONUM_SIRALAMASI, konumSay, konumlar, konumAc, konumGuncelle, konumPasifYap, konumSayildi, haritaDepolari,
   depoAktifligi, depoDoluMu, depoKonumlariniKapat, haritaDeposuAc, haritaKonumlari, zeminKonumlari, haritaBagSayilari, haritasizKonumlar, gozStoklari,
-  tumKonumKodlari, konumKodTekliginiErtele, haritaKonumuAc, haritaKonumuGuncelle, haritaKonumuTuru, haritaKonumlariniKapat, type KonumKodu, kodDurumlari, konumVarMi, rafBul,
+  tumKonumKodlari, konumKodTekliginiErtele, rafKodGecisiVarMi, rafKodGecisiYaz, rafKodGecisi, rafKodGecisiDegisenleri, rafKodGecisiBasildi, type RafKodGecisiSatiri, haritaKonumuAc, haritaKonumuGuncelle, haritaKonumuTuru, haritaKonumlariniKapat, type KonumKodu, kodDurumlari, konumVarMi, rafBul,
   type RafSuzgeci, RAF_SIRALAMASI, rafSay, raflar, type RafAlanlari, rafAc, rafGuncelle, rafPasifYap, rafVarMi, gozKodlariniYenile, gozleriYaz,
   fazlaGozleriKapat, rafGozleriniKapat, type GozHam, rafinGozleri, type KonumMalzemesiHam, type KonumMalzemesiSuzgeci,
   KONUM_MALZEMESI_SIRALAMASI, konumMalzemesiSay, konumMalzemeleri, type LogoEsliDepoMiktari, logoEsliDepoMiktarlari,

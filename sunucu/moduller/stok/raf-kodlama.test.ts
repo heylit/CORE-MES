@@ -6,10 +6,11 @@ import { testVeritabaniKur } from '#cekirdek/test-vt.ts';
 import type { TestVeritabani } from '#cekirdek/test-vt.ts';
 import { uygulamaKur } from '#cekirdek/uygulama.ts';
 import { rafKodlamaOnizlemeCevabi } from '#paylasilan/sozlesme/atolye.ts';
-import type { RafKodlamaCevabi, RafKodlamaOnizlemeCevabi } from '#paylasilan/sozlesme/atolye.ts';
+import type { RafKodlamaOnizlemeCevabi } from '#paylasilan/sozlesme/atolye.ts';
 import { haritaEslemeCevabi } from '#paylasilan/sozlesme/stok.ts';
-import type { HaritaEslemeCevabi } from '#paylasilan/sozlesme/stok.ts';
+import type { HaritaEslemeCevabi, RafKodGecisiListesiCevabi, RafKodlamaDurumuCevabi } from '#paylasilan/sozlesme/stok.ts';
 import { gozBul } from '../atolye/disari.ts';
+import { rafKodGecisiIsi } from './servis.ts';
 import { denetimYaz } from '../denetim/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
@@ -68,6 +69,8 @@ describe('stok raf kodlama (gerçek PostgreSQL)', () => {
       assert.equal(g.statusCode, 200);
       cerezler.set(rol, String(g.headers['set-cookie']).split(';')[0] ?? '');
     }
+    // Bu testler eski düzenden başlar (Stok > Ayarlar'da seçilmiş gibi); varsayılandan kendiliğinden geçiş ayrı testte.
+    await ortam.vt.sorgu(`INSERT INTO ayar (anahtar, deger, guncelleyen_kisi_id) VALUES ('atolye.raf-kodlama', '"bolme-kat-goz"', $1)`, [yonetici]);
   });
   after(async () => { await ortam?.kaldir(); });
 
@@ -78,15 +81,15 @@ describe('stok raf kodlama (gerçek PostgreSQL)', () => {
     await raf(b, 'R7', 1);
     for (const s of [a, b]) assert.equal((await iste('depo', 'POST', `/stok/harita-bolumleri/${s}/depo`, { depo: true })).durum, 200);
     assert.deepEqual(await kodlar('RKA'), ['RKA-01-1-1', 'RKA-02-1-1', 'RKA-03-1-1']);
-    assert.deepEqual((await iste<RafKodlamaCevabi>('kalite', 'GET', '/stok/raf-kodlama')).govde, { kodlama: 'bolme-kat-goz' });
+    assert.equal((await iste<RafKodlamaDurumuCevabi>('kalite', 'GET', '/stok/raf-kodlama')).govde.kodlama, 'bolme-kat-goz');
 
-    // Kuru deneme yalnız stok.tanim ile; hiçbir şey yazmaz.
+    // Kuru deneme yalnız stok.tanim ile; hiçbir şey yazmaz. Rakamlı R7 rafı sıra numarasında eski adresini taşırdı (sayılmaz).
     assert.equal((await iste('kalite', 'GET', '/stok/raf-kodlama/onizleme?kodlama=duz-sayi')).durum, 403);
     const on = await iste<RafKodlamaOnizlemeCevabi>('depo', 'GET', '/stok/raf-kodlama/onizleme?kodlama=duz-sayi');
     assert.equal(on.durum, 200, JSON.stringify(on.govde));
     rafKodlamaOnizlemeCevabi.parse(on.govde);
     assert.deepEqual(on.govde, {
-      kodlama: 'duz-sayi', rafSayisi: 2, gozSayisi: 4, degisenKonum: 4, stokluKonum: 0, ornek: { eski: 'R7-01-1-1', yeni: 'R71' }, engelliRaflar: ['R7'],
+      kodlama: 'duz-sayi', rafSayisi: 2, gozSayisi: 4, degisenKonum: 3, stokluKonum: 0, ornek: { eski: 'RKA-01-1-1', yeni: 'RKA1' }, engelliRaflar: ['R7'],
     });
     assert.deepEqual(await kodlar('RKA'), ['RKA-01-1-1', 'RKA-02-1-1', 'RKA-03-1-1']);
 
@@ -106,7 +109,7 @@ describe('stok raf kodlama (gerçek PostgreSQL)', () => {
       [['RKA-01-1-1', 'RKA1'], ['RKA-02-1-1', 'RKA2'], ['RKA-03-1-1', 'RKA3'], ['R7-01-1-1', 'RKB1']]);
     assert.deepEqual(d.govde.atlanan, []);
     assert.deepEqual(await kodlar('RKA'), ['RKA1', 'RKA2', 'RKA3']);
-    assert.deepEqual((await iste<RafKodlamaCevabi>('kalite', 'GET', '/stok/raf-kodlama')).govde, { kodlama: 'duz-sayi' });
+    assert.equal((await iste<RafKodlamaDurumuCevabi>('kalite', 'GET', '/stok/raf-kodlama')).govde.kodlama, 'duz-sayi');
 
     // R6: ayar değişikliği komutun yolu ve yetkisiyle; uç kaydına özet ve kod değişimleri eklenir.
     const ayarKaydi = await o().vt.tek<{ yetki: string; govde: { eski: string; yeni: string } }>(
@@ -144,5 +147,45 @@ describe('stok raf kodlama (gerçek PostgreSQL)', () => {
     assert.equal(geri.durum, 200, JSON.stringify(geri.govde));
     assert.deepEqual(await kodlar('RKA'), ['RKA-01-1-1', 'RKA-02-1-1', 'RKA-03-1-1']);
     assert.equal((await iste('depo', 'POST', `/stok/harita-raflari/${rafId}/yeniden-numarala`)).durum, 422);
+  });
+
+  test('3177 b: kayıtlı ayar yoksa güncellemeden sonra ilk iş bir kez sıra numarasına geçirir; liste saklanır, harf olmayan raf eski kodda kalır', async () => {
+    const g = await salon('RK-G');
+    await raf(g, 'GA', 2);
+    await raf(g, 'G7', 1);
+    assert.equal((await iste('depo', 'POST', `/stok/harita-bolumleri/${g}/depo`, { depo: true })).durum, 200);
+    assert.deepEqual(await kodlar('GA'), ['GA-01-1-1', 'GA-02-1-1']);
+    // Güncellemeden önceki kurulum: ayar hiç kaydedilmemiş, geçiş kaydı yok.
+    await o().vt.sorgu("DELETE FROM ayar WHERE anahtar = 'atolye.raf-kodlama'");
+    await o().vt.sorgu('DELETE FROM stok_raf_kod_gecisi');
+    // Risk K1: GA rafının 2. gözünün yeni kodu elle açılmış başka bir konumda; o göz geçemez, sessiz kalmaz.
+    await o().vt.sorgu(`INSERT INTO stok_konum (depo_id, kod, tur, aktif) SELECT depo_id, 'GA2', 'depo_zemini', true FROM stok_konum WHERE kod = 'GA-01-1-1'`);
+    assert.equal((await iste<RafKodlamaDurumuCevabi>('kalite', 'GET', '/stok/raf-kodlama')).govde.gecis, null);
+
+    await o().vt.tx((db) => rafKodGecisiIsi(db));
+    assert.deepEqual(await kodlar('GA'), ['GA1', 'GA-02-1-1']);
+    assert.deepEqual(await kodlar('G7'), ['G7-01-1-1']);
+    const durum = (await iste<RafKodlamaDurumuCevabi>('kalite', 'GET', '/stok/raf-kodlama')).govde;
+    assert.equal(durum.kodlama, 'duz-sayi');
+    assert.deepEqual(durum.gecis && { ...durum.gecis, zaman: typeof durum.gecis.zaman },
+      { zaman: 'string', kodlama: 'duz-sayi', degisenSayisi: 5, stokluSayisi: 0, eskiKodluRaflar: ['G7'], atlanan: ['GA2'], pasifStoklu: [], basildi: false });
+    const liste = await iste<RafKodGecisiListesiCevabi>('kalite', 'GET', '/stok/raf-kodlama/gecis');
+    assert.deepEqual(liste.govde.degisenler.filter((d) => d.eskiKod.startsWith('GA')).map((d) => [d.eskiKod, d.yeniKod]), [['GA-01-1-1', 'GA1']]);
+    // Harf olmayan raf eski adresiyle bulunur; harf rafın eski adresi takma ad değildir.
+    assert.equal((await o().vt.tx((db) => gozBul(db, 'G7-01-1-1')))?.rafKodu, 'G7');
+    assert.equal(await o().vt.tx((db) => gozBul(db, 'GA-01-1-1')), null);
+    assert.equal((await o().vt.tx((db) => gozBul(db, 'ga1')))?.bolme, 1);
+
+    // İkinci tur bir şey yapmaz; liste ilk geçişte kalır.
+    await o().vt.tx((db) => rafKodGecisiIsi(db));
+    assert.equal((await o().vt.tek<{ n: number }>('SELECT count(*)::int AS n FROM stok_raf_kod_gecisi'))?.n, 1);
+    assert.equal((await iste<RafKodlamaDurumuCevabi>('kalite', 'GET', '/stok/raf-kodlama')).govde.gecis?.degisenSayisi, 5);
+
+    // "Basıldı" yalnız stok tanımıyla; uyarı kalkar, liste kalır.
+    assert.equal((await iste('kalite', 'POST', '/stok/raf-kodlama/gecis/basildi')).durum, 403);
+    const b = await iste<RafKodlamaDurumuCevabi>('depo', 'POST', '/stok/raf-kodlama/gecis/basildi');
+    assert.equal(b.durum, 200, JSON.stringify(b.govde));
+    assert.equal(b.govde.gecis?.basildi, true);
+    assert.equal((await iste<RafKodGecisiListesiCevabi>('kalite', 'GET', '/stok/raf-kodlama/gecis')).govde.degisenler.length, 5);
   });
 });
