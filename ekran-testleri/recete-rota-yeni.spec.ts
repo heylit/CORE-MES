@@ -172,8 +172,8 @@ test.describe('R2 kaynaklar', () => {
     await seritte(page, 'Kaynaklar').click();
     const kaynaklar = page.getByRole('region', { name: 'Kaynaklar' });
     const alt = kaynaklar.getByRole('tablist', { name: 'Kaynak türü' });
-    await expect(alt.getByRole('tab')).toHaveCount(6, { timeout: 15_000 });
-    for (const ad of ['Genel bakış', 'Vardiyalar', 'İş merkezleri ve istasyonlar', /^Makineler/, /^Personel/, 'Fason ve aparat']) {
+    await expect(alt.getByRole('tab')).toHaveCount(7, { timeout: 15_000 });
+    for (const ad of ['Genel bakış', 'Vardiyalar', 'İş merkezleri ve istasyonlar', /^Makineler/, /^Personel/, 'İkincil kaynaklar', 'Fason']) {
       await alt.getByRole('tab', { name: ad }).click();
       await expect(alt.getByRole('tab', { name: ad, selected: true })).toBeVisible();
       await expect(kaynaklar.locator('.tc-rr2-govde')).toBeVisible();
@@ -200,6 +200,36 @@ test.describe('R2 kaynaklar', () => {
     await expect(page).toHaveURL(/\/vardiya$/);
     expect(yazmalar(ag.yazmalar)).toEqual([]);
     expect(ag.hatalar).toEqual([]);
+  });
+
+  // 3199: İkincil kaynaklar istasyon okumasıyla görünür, aparat yazma işlemi olmayan ekleme ve düzenleme görmez.
+  test.describe('İkincil kaynaklar yetkisi', () => {
+    test.describe('istasyon okuyan, aparat yazmayan', () => {
+      test.use({ hesap: 'ornek.planlama' });
+      test('liste görünür; "Kaynak ekle" ve düzenleme yok; yazma yok', async ({ page, ag, ac }) => {
+        await ac('/recete-rota/res');
+        const kaynaklar = page.getByRole('region', { name: 'Kaynaklar' });
+        await kaynaklar.getByRole('tablist', { name: 'Kaynak türü' }).getByRole('tab', { name: 'İkincil kaynaklar' }).click({ timeout: 15_000 });
+        await expect(kaynaklar.getByRole('table', { name: 'İkincil kaynaklar' })
+          .or(kaynaklar.getByText(/Henüz ikincil kaynak yok/))).toBeVisible({ timeout: 15_000 });
+        await expect(kaynaklar.getByRole('button', { name: 'Kaynak ekle' })).toHaveCount(0);
+        await expect(kaynaklar.getByRole('button', { name: /düzenle$/ })).toHaveCount(0);
+        expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0);
+        expect(yazmalar(ag.yazmalar)).toEqual([]);
+        expect(ag.hatalar).toEqual([]);
+      });
+    });
+    test.describe('istasyon okumayan', () => {
+      test.use({ hesap: 'ornek.kalite' });
+      test('liste istenmez, yetki notu görünür', async ({ page, ag, ac }) => {
+        await ac('/recete-rota/res');
+        const kaynaklar = page.getByRole('region', { name: 'Kaynaklar' });
+        await kaynaklar.getByRole('tablist', { name: 'Kaynak türü' }).getByRole('tab', { name: 'İkincil kaynaklar' }).click({ timeout: 15_000 });
+        await expect(kaynaklar.getByText(/İstasyonlar okuma yetkisi gerekir/)).toBeVisible();
+        await expect(kaynaklar.getByRole('button', { name: 'Kaynak ekle' })).toHaveCount(0);
+        expect(yazmalar(ag.yazmalar)).toEqual([]);
+      });
+    });
   });
 });
 
