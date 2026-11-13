@@ -63,6 +63,8 @@
 
 /* --- tahta --- */
 .tc-pyq-ana { container-type: inline-size; }
+/* Sipariş gözünde satır başlığı emir no ile ürün adını birlikte taşır. */
+.tc-pyq[data-goz="S"] { --bas-en: calc(var(--b-6) * 6); }
 .tc-pyq-tahta {
   position: relative; overflow: auto; max-height: var(--ekran-boy-70); border: var(--cizgi-ince) solid var(--edge); border-radius: var(--yari-1); background: var(--panel-solid);
   overscroll-behavior-x: contain;
@@ -91,6 +93,17 @@
   font: inherit; font-size: var(--yazi-xs); font-weight: 700; text-align: left; white-space: nowrap; overflow: hidden; cursor: pointer;
 }
 .tc-pyq-gun:hover { color: var(--ink); }
+.tc-pyq-eksen[data-saatli] .tc-pyq-gun { bottom: 50%; }
+.tc-pyq-saat { position: absolute; bottom: 0; left: var(--x); transform: translateX(-50%); color: var(--muted); font-family: var(--font-mono); font-size: var(--yazi-xs); pointer-events: none; }
+.tc-pyq-kapali {
+  position: absolute; top: 0; bottom: 0; left: var(--x); width: var(--w); pointer-events: none;
+  background: repeating-linear-gradient(135deg, var(--panel2) 0 var(--b-1), transparent var(--b-1) var(--b-2));
+}
+.tc-pyq-satir-termin { position: absolute; top: var(--b-1); bottom: var(--b-1); left: var(--x); width: var(--cizgi); background: var(--muted); pointer-events: none; }
+.tc-pyq-satir-termin::before { content: ""; position: absolute; top: 0; left: 50%; width: var(--b-2); height: var(--b-2); border: var(--cizgi) solid var(--muted); background: var(--panel-solid); transform: translate(-50%, -25%) rotate(45deg); }
+.tc-pyq-satir-termin[data-d="gec"], .tc-pyq-satir-termin[data-d="gec"]::before { background-color: var(--d-gec); border-color: var(--d-gec); }
+.tc-pyq-satir-termin[data-d="gec"]::before { background-color: var(--panel-solid); }
+.tc-pyq-yukcubuk { display: block; width: calc(var(--b-6) * 1.5); height: var(--kayma); margin-top: var(--pay-ince); border-radius: var(--yari-tam); background: linear-gradient(90deg, var(--renk) calc(var(--oran, 0) * 100%), var(--edge) 0); }
 .tc-pyq-simdi-et {
   position: absolute; bottom: 0; left: var(--x); padding: 0 var(--b-1); border-radius: var(--yari-1) var(--yari-1) 0 0; background: var(--stop); color: var(--on-sig);
   font-size: var(--yazi-xs); font-weight: 700; white-space: nowrap; pointer-events: none;
@@ -104,20 +117,23 @@
 }
 
 .tc-pyq-is {
-  --renk: var(--d-iyi);
-  position: absolute; top: var(--b-1); bottom: var(--b-1); left: var(--x); width: var(--w); display: flex; align-items: center; gap: var(--b-1); padding: 0 var(--b-1);
-  border: var(--cizgi-ince) solid color-mix(in oklab, var(--renk) 70%, var(--ink)); border-radius: var(--yari-1); background: color-mix(in oklab, var(--renk) 82%, var(--panel-solid)); color: var(--on-sig);
+  --renk: var(--edge2);
+  position: absolute; top: var(--b-1); bottom: var(--b-1); left: var(--x); width: var(--w); display: flex; align-items: center; gap: var(--b-1); padding: 0 var(--b-1) 0 var(--b-2);
+  border: var(--cizgi-ince) solid var(--edge2); border-radius: var(--yari-1); background: var(--panel-solid); color: var(--ink); box-shadow: inset var(--kayma) 0 0 var(--renk);
   font: inherit; font-size: var(--yazi-xs); text-align: left; white-space: nowrap; overflow: hidden; cursor: pointer;
   transition: left var(--hareket-panel) var(--hareket-egri-panel), width var(--hareket-panel) var(--hareket-egri-panel), opacity var(--hareket-sure);
 }
-.tc-pyq-is[data-d="gec"] { --renk: var(--d-gec); }
-.tc-pyq-is[data-d="risk"] { --renk: var(--d-risk); }
+.tc-pyq-is[data-d="gec"] { --renk: var(--d-gec); border-color: color-mix(in oklab, var(--d-gec) 45%, var(--edge2)); }
+.tc-pyq-is[data-d="risk"] { --renk: var(--d-risk); border-color: color-mix(in oklab, var(--d-risk) 45%, var(--edge2)); }
 .tc-pyq-is b { font-family: var(--font-mono); }
-.tc-pyq-is span { overflow: hidden; text-overflow: ellipsis; opacity: var(--saydam-85); }
+.tc-pyq-is[data-d="gec"] b { color: var(--d-gec); }
+.tc-pyq-is span { overflow: hidden; text-overflow: ellipsis; color: var(--muted); }
+.tc-pyq-is[data-suruyor] { background: color-mix(in oklab, var(--d-sur) 12%, var(--panel-solid)); }
+.tc-pyq-ilerleme { position: absolute; left: 0; bottom: 0; width: calc(var(--oran, 0) * 100%); height: var(--kayma); background: var(--d-sur); }
 .tc-pyq-is[data-sonuk] { opacity: var(--saydam-28); }
-.tc-pyq-is[data-sabit] { background: repeating-linear-gradient(135deg, color-mix(in oklab, var(--renk) 82%, var(--panel-solid)) 0 var(--b-2), color-mix(in oklab, var(--renk) 62%, var(--panel-solid)) var(--b-2) var(--b-4)); }
-.tc-pyq-is[data-emir-secili] { box-shadow: 0 0 0 var(--cizgi) var(--ink); z-index: 1; }
-.tc-pyq-is[aria-pressed="true"] { box-shadow: 0 0 0 var(--cizgi-kalin) var(--hazard); z-index: 1; }
+.tc-pyq-is[data-sabit] { background: repeating-linear-gradient(135deg, var(--panel-solid) 0 var(--b-2), var(--panel2) var(--b-2) var(--b-4)); }
+.tc-pyq-is[data-emir-secili] { box-shadow: inset var(--kayma) 0 0 var(--renk), 0 0 0 var(--cizgi) var(--ink); z-index: 1; }
+.tc-pyq-is[aria-pressed="true"] { box-shadow: inset var(--kayma) 0 0 var(--renk), 0 0 0 var(--cizgi-kalin) var(--hazard); z-index: 1; }
 .tc-pyq-is[data-tasinan] { opacity: var(--saydam-45); }
 .tc-pyq-is[data-kaydi] { outline: var(--cizgi) dashed var(--hazard); outline-offset: var(--pay-ince); }
 .tc-pyq-is:focus-visible { outline: var(--cizgi) solid var(--ink); outline-offset: var(--pay-ince); }
@@ -310,6 +326,11 @@
 
 /* Fareyle (ince işaretçi) çalışan ekranda matris sıkıdır: yük şeridi ve emirler ilk ekrana sığsın (ön izlemedeki yoğunluk).
    Dokunmatik ekran dokunma ölçüsünde kalır. */
+/* Fareyle çalışılan ekranda satır ve tepsi sıkışır: ilk ekrana ön izlemedeki kadar tezgâh sığar (dokunmatikte ölçü dokunma hedefidir). */
+@media (pointer: fine) and (min-width: 768px) {
+  .tc-pyq { --satir: calc(var(--dokunma) - var(--b-1)); }
+  .tc-pyq-fis { flex-direction: row; align-items: baseline; gap: var(--b-2); min-height: calc(var(--b-6) + var(--b-1)); max-width: calc(var(--b-6) * 9); }
+}
 @media (pointer: fine) {
   .tc-pyq-mat-kap { --yuk-boy: var(--b-4); gap: var(--b-1); }
   .tc-pyq-mat thead tr:first-child th { height: var(--b-5); }
