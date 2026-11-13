@@ -11,6 +11,7 @@ import {
   aralikDakika, basHarfler, etkinMakine, GUN_ADI, GUNLER, gunListesi, gunParcalari, gunSaati, haftaSaati, kapasiteKaynagi, planEkleri, sayiGirdisi,
   geceyiGecer, vardiyaHaftaSaati, yetkinler, type Hafta,
 } from './kurallar.ts';
+import { IkincilKaynaklar } from './IkincilKaynaklar.tsx';
 import { SAHIP_SAYFASI, SahibindeDuzenle, SatirGirdisi, useR2Komutu } from './parcalar.tsx';
 
 // Kaynaklar (envanter 2.7): iş merkezi, istasyon, makine ve personel sahiplerinin kayıtlarıdır (İstasyonlar, Kişiler, Vardiya). Tek giriş
@@ -21,9 +22,9 @@ type Makine = NonNullable<RrDurumu['machines']>[number];
 type Kisi = NonNullable<RrDurumu['people']>[number];
 type Vardiya = RrDurumu['cal']['shifts'][number];
 
-type AltSekme = 'overview' | 'shifts' | 'wcs' | 'machines' | 'people' | 'plan';
+type AltSekme = 'overview' | 'shifts' | 'wcs' | 'machines' | 'people' | 'ikincil' | 'plan';
 const ALT_SEKME_ANAHTARI = 'tmi.recete-rota.yeni.kaynak-sekmesi';
-const ALT_SEKMELER: readonly AltSekme[] = ['overview', 'shifts', 'wcs', 'machines', 'people', 'plan'];
+const ALT_SEKMELER: readonly AltSekme[] = ['overview', 'shifts', 'wcs', 'machines', 'people', 'ikincil', 'plan'];
 const MAKINE_DURUMU: Record<Makine['status'], { ad: string; ton: RozetTonu }> = {
   aktif: { ad: 'Aktif', ton: 'tamam' }, bakim: { ad: 'Bakımda', ton: 'uyari' }, ariza: { ad: 'Arızalı', ton: 'hata' },
 };
@@ -96,7 +97,8 @@ export function Kaynaklar({ veri, yetki }: EkranOzellikleri) {
   const sekmeler: { anahtar: AltSekme; baslik: string }[] = [
     { anahtar: 'overview', baslik: 'Genel bakış' }, { anahtar: 'shifts', baslik: 'Vardiyalar' },
     { anahtar: 'wcs', baslik: 'İş merkezleri ve istasyonlar' }, { anahtar: 'machines', baslik: `Makineler ${String(bag.machines.length)}` },
-    { anahtar: 'people', baslik: `Personel ${String(bag.people.length)}` }, { anahtar: 'plan', baslik: 'Fason ve aparat' },
+    { anahtar: 'people', baslik: `Personel ${String(bag.people.length)}` }, { anahtar: 'ikincil', baslik: 'İkincil kaynaklar' },
+    { anahtar: 'plan', baslik: 'Fason ve aparat' },
   ];
 
   let govde;
@@ -107,6 +109,7 @@ export function Kaynaklar({ veri, yetki }: EkranOzellikleri) {
   else if (alt === 'wcs') govde = <IsMerkezleri b={bag} />;
   else if (alt === 'machines') govde = <Makineler b={bag} />;
   else if (alt === 'people') govde = <Personel b={bag} />;
+  else if (alt === 'ikincil') govde = <IkincilKaynaklar stations={bag.stations} items={durum.items} />;
   else govde = <FasonVeAparat />;
 
   return (

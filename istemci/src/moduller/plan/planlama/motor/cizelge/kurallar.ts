@@ -2,7 +2,10 @@ import type { SimgeAdi } from '../../../../../ortak/tasarim/simgeler.ts';
 import type { DonemOlcegi } from '../../gorunumler.ts';
 import type { PlanlamaCalismasi, PlanVerisi } from '../../tipler.ts';
 import { haritaGruplari, siparisRengi, type Aralik } from '../harita/kurallar.ts';
-import { acikSaat, AY_AD, hm, nedenMetni, saatOku, saatYaz, saatYazi, sayiYaz, tabanMs, type Derleme, type OkunanPlan, type PlanIslemi } from '../kurallar.ts';
+import {
+  acikSaat, AY_AD, hm, ikincilKaynaklari, ikincilSecimi, kaynakIstekleri, nedenMetni, saatOku, saatYaz, saatYazi, sayiYaz, tabanMs, type Derleme, type IkincilKaynak,
+  type OkunanPlan, type PlanIslemi,
+} from '../kurallar.ts';
 import { ufukGunu } from '../../ufuk-olcegi.ts';
 import { tezgahKodlari, tezgahKodu, type Adlar } from '../ozet/veri.ts';
 
@@ -199,10 +202,19 @@ export function gunCizelgesi(c: PlanlamaCalismasi, p: OkunanPlan, cx: Derleme, g
 // Ölçek saat başına piksel olarak eskidekiyle aynıdır; ekran konumu saat cinsinden alır, piksel çarpanı stildedir. Sayılar yalnız etiket kararları içindir.
 export const ZAMAN_PX: Record<DonemOlcegi, number> = { gun: 40, hafta: 10, ay: 2.5, yil: 0.6 };
 export interface ZamanBasligi { x: number; w: number; ad: string; tatil: boolean; saatler: { x: number; ad: string }[] }
-export interface ZamanIsi { id: string; job: string; x: number; w: number; renk: string; ayar: number; gec: boolean; soluk: boolean; kilit: boolean; etiket: string | null; baslik: string }
+export interface ZamanIsi {
+  id: string; job: string; x: number; w: number; renk: string; ayar: number; gec: boolean; soluk: boolean; kilit: boolean; etiket: string | null; baslik: string;
+  // 3199 (D): ömrün bittiği anda iş içine eklenen takım değişimi; a ve w çubuğun oranı.
+  degisim: { a: number; w: number; baslik: string }[];
+  // 3199: ikincil kaynak yüzünden kayan işin bekleme aralığı (ilk aday başlangıçtan başlangıca); "Oynat" işi oradan kaydırır.
+  bek: { x: number; w: number; baslik: string } | null;
+}
 export interface ZamanSatiri { m: string; kod: string; ad: string; u: number | null; kapali: { x: number; w: number }[]; ariza: { x: number; w: number; baslik: string }[]; isler: ZamanIsi[] }
 export interface ZamanGrubu { g: string; n: number; u: number | null; satirlar: ZamanSatiri[] }
-export interface ZamanCizelgesi { px: number; saat: number; basliklar: ZamanBasligi[]; cizgiler: number[]; gruplar: ZamanGrubu[]; fason: ZamanSatiri[]; termin: number | null; terminYazi: string | null }
+export interface ZamanCizelgesi {
+  px: number; saat: number; basliklar: ZamanBasligi[]; cizgiler: number[]; gruplar: ZamanGrubu[]; fason: ZamanSatiri[]; termin: number | null; terminYazi: string | null;
+  ikincil: IkincilSatiri[];
+}
 
 export function zamanCizelgesi(c: PlanlamaCalismasi, p: OkunanPlan, cx: Derleme, olcek: DonemOlcegi, secJob: string | null): ZamanCizelgesi {
   const D = c.D; const px = ZAMAN_PX[olcek];
@@ -222,6 +234,10 @@ export function zamanCizelgesi(c: PlanlamaCalismasi, p: OkunanPlan, cx: Derleme,
       id: r.id, job: r.job, x: r.S, w: r.C - r.S, renk: renk(D, r.job), ayar: r.C > r.S ? Math.max(0, Math.min(1, ((r.Su ?? r.S) - r.S) / (r.C - r.S))) : 0,
       gec: gec.has(r.job), soluk: !!secJob && r.job !== secJob, kilit, etiket: w * px > 56 ? `${r.job}·${kisa(r.id)}` : null,
       baslik: `${r.id} · ${saatYaz(D, r.S)} → ${saatYaz(D, r.C)}${gec.has(r.job) ? ' · gecikiyor' : ''}${kilit ? ' · kilitli' : ''}`,
+      degisim: r.C > r.S ? (r.takim ?? []).flatMap((t) => (t.n > 0 && t.at != null ? [{
+        a: Math.max(0, Math.min(1, (t.at - r.S) / (r.C - r.S))), w: Math.min(1, t.dk / 60 / (r.C - r.S)), baslik: `Takım değişimi ${saatYaz(D, t.at)}, ${String(t.dk)} dk`,
+      }] : [])) : [],
+      bek: r.ikBas != null && r.S - r.ikBas >= BEKLEME_ESIGI ? { x: r.ikBas, w: r.S - r.ikBas, baslik: `İkincil kaynak bekledi: ${saatYaz(D, r.ikBas)} → ${saatYaz(D, r.S)}` } : null,
     };
   });
   const satir = (m: string, ad: string, alt: boolean): ZamanSatiri => {
@@ -261,7 +277,118 @@ export function zamanCizelgesi(c: PlanlamaCalismasi, p: OkunanPlan, cx: Derleme,
   }
   const s = secJob ? D.siparisler.find((z) => z.id === secJob) : undefined;
   const termin = s ? saatOku(D, s.termin) : null;
-  return { px, saat: son, basliklar, cizgiler, gruplar, fason, termin, terminYazi: s?.termin ?? null };
+  return { px, saat: son, basliklar, cizgiler, gruplar, fason, termin, terminYazi: s?.termin ?? null, ikincil: ikincilSatirlari(c, p, cx, son) };
+}
+
+// --- ikincil kaynak satırları (3199 A + D) ---
+// Tezgâhların altında her ikincil kaynak bir satırdır: hangi işte (kullanım çubukları, çakışan kullanım alt alta), doluluk profili (kullanılan
+// adet / tanımlı adet; kesintide kapasite düşer, aşım kırmızı), kesinti takvimi ve özel takımda değişim anları. Kullanım motorun hesabıdır:
+// "ayar ve işleme" isteği işin başından, "yalnız işleme" ayar bitiminden işin sonuna kadar.
+export interface IkincilKullanimi { id: string; job: string; x: number; w: number; serit: number; renk: string; etiket: string; baslik: string; n: number }
+export interface IkincilProfil { x: number; w: number; oran: number; asim: boolean }
+export interface IkincilSatiri {
+  id: string; kod: string; ad: string; adet: number; izle: boolean; takim: boolean; serit: number;
+  kullanim: IkincilKullanimi[]; profil: IkincilProfil[]; kesinti: { x: number; w: number; ad: string }[]; degisim: { x: number; w: number; baslik: string }[];
+}
+const KESINTI_AD: Record<string, string> = { bakim: 'Bakım', kalibrasyon: 'Kalibrasyon', odunc: 'Ödünç' };
+export const kesintiAdi = (n: string): string => KESINTI_AD[n] ?? n;
+const KESINTIDE: Record<string, string> = { bakim: 'bakımda', kalibrasyon: 'kalibrasyonda', odunc: 'ödünçte' };
+
+interface Kullanim { r: PlanIslemi; a: number; b: number; n: number }
+function kullanimlar(c: PlanlamaCalismasi, p: OkunanPlan, cx: Derleme, K: readonly IkincilKaynak[]): Map<string, Kullanim[]> {
+  const y = new Map<string, Kullanim[]>(K.map((k) => [k.id, []]));
+  for (const r of Object.values(p.ops)) {
+    if (r.fas || !Number.isFinite(r.S) || !Number.isFinite(r.C)) continue;
+    for (const [k, n, isl] of ikincilSecimi(K, kaynakIstekleri(c.D, r.id), cx.M[r.m]?.grup)) {
+      const a = isl ? Math.max(r.S, r.Su ?? r.S) : r.S;
+      if (r.C > a) y.get(k.id)?.push({ r, a, b: r.C, n });
+    }
+  }
+  return y;
+}
+const kapasite = (k: IkincilKaynak, t: number): number => Math.max(0, k.adet - k.kesintiler.filter((x) => x.bas <= t + 1e-9 && x.bit > t + 1e-9).reduce((a, x) => a + x.adet, 0));
+
+export function ikincilSatirlari(c: PlanlamaCalismasi, p: OkunanPlan, cx: Derleme, son: number): IkincilSatiri[] {
+  const D = c.D; const K = ikincilKaynaklari(D);
+  if (K.length === 0) return [];
+  const kodlar = tezgahKodlari(D);
+  const u = kullanimlar(c, p, cx, K);
+  const kisa = (id: string) => id.slice(id.lastIndexOf('.') + 1);
+  return K.map((k): IkincilSatiri => {
+    const l = (u.get(k.id) ?? []).slice().sort((a, b) => a.a - b.a);
+    const seritler: number[] = [];
+    const kullanim = l.map((x): IkincilKullanimi => {
+      let s = seritler.findIndex((e) => e <= x.a + 1e-6);
+      if (s < 0) { s = seritler.length; seritler.push(0); }
+      seritler[s] = x.b;
+      return {
+        id: x.r.id, job: x.r.job, x: x.a, w: x.b - x.a, serit: s, renk: renk(D, x.r.job), n: x.n, etiket: `${x.r.job}·${kisa(x.r.id)} · ${tezgahKodu(x.r.m, kodlar)}`,
+        baslik: `${x.r.id} (${tezgahKodu(x.r.m, kodlar)}) · ${String(x.n)} adet · ${saatYaz(D, x.a)} → ${saatYaz(D, x.b)}`,
+      };
+    });
+    // Doluluk profili: kullanım ve kesinti sınırlarında parçalanan aralıklar; boş aralık çizilmez.
+    const sinir = [...new Set([0, son, ...l.flatMap((x) => [x.a, x.b]), ...k.kesintiler.flatMap((x) => [x.bas, x.bit])].filter((t) => t >= 0 && t <= son))].sort((a, b) => a - b);
+    const profil: IkincilProfil[] = [];
+    for (let i = 0; i + 1 < sinir.length; i++) {
+      const a = sinir[i]!, b = sinir[i + 1]!; const t = (a + b) / 2;
+      const n = l.filter((x) => x.a <= t && x.b > t).reduce((s2, x) => s2 + x.n, 0);
+      if (n <= 0) continue;
+      const oran = k.adet > 0 ? Math.min(1, n / k.adet) : 1; const asim = n > kapasite(k, t) + 1e-9;
+      const onceki = profil.at(-1);
+      if (onceki && Math.abs(onceki.x + onceki.w - a) < 1e-9 && onceki.oran === oran && onceki.asim === asim) onceki.w += b - a;
+      else profil.push({ x: a, w: b - a, oran, asim });
+    }
+    const degisim = l.flatMap((x) => (x.r.takim ?? []).filter((t) => t.id === k.id && t.n > 0 && t.at != null)
+      .map((t) => ({ x: t.at!, w: t.dk / 60, baslik: `${k.kod} değişimi ${saatYaz(D, t.at!)}, ${String(t.dk)} dk · ${x.r.id}` })));
+    return {
+      id: k.id, kod: k.kod, ad: k.ad, adet: k.adet, izle: k.izle, takim: k.tur === 'ozel_takim', serit: Math.max(1, seritler.length), kullanim, profil, degisim,
+      kesinti: k.kesintiler.filter((x) => x.bit > 0 && x.bas < son).map((x) => ({ x: Math.max(0, x.bas), w: Math.min(son, x.bit) - Math.max(0, x.bas), ad: kesintiAdi(x.neden) })),
+    };
+  });
+}
+
+// Bir dakikadan kısa kayma dilim yuvarlamasıdır: bekleme taraması çizilmez, ayrıntıda bekleme yazılmaz (motor da yazmaz; eski kayıt için).
+const BEKLEME_ESIGI = 1 / 60;
+
+// İşin ayrıntısındaki ikincil kaynak bölümü: ne istediği, neden beklediği (kaynak, doluluk, kimde, ne zamana kadar) ve takım ömrü.
+export interface IkincilAyrintisi { ister: string; neden: string | null; doluluk: string | null; kimde: string | null; bekleme: string | null; takim: string[] }
+export function ikincilAyrintisi(c: PlanlamaCalismasi, p: OkunanPlan, cx: Derleme, id: string): IkincilAyrintisi | null {
+  const r = p.ops[id]; if (!r) return null;
+  const D = c.D; const K = ikincilKaynaklari(D);
+  const sec = ikincilSecimi(K, kaynakIstekleri(D, id), cx.M[r.m]?.grup);
+  if (sec.length === 0) return null;
+  const kodlar = tezgahKodlari(D);
+  const ister = sec.map(([k, n, isl]) => `${k.kod}${n > 1 ? ` × ${String(n)}` : ''}${isl ? ' (yalnız işleme)' : ''}${k.izle ? ' · İzle' : ''}`).join(', ');
+  const takim = (r.takim ?? []).flatMap((t) => {
+    const k = K.find((z) => z.id === t.id); if (!k) return [];
+    const birim = k.omurBirimi === 'adet' ? 'adet' : 'dk';
+    const kalan = `kalan ömür ${sayiYaz(Math.round(t.kalan))} ${birim}${t.bilinmiyor ? ' (başlangıç ömrü bilinmiyor; tam ömür varsayıldı)' : ''}`;
+    return [t.n > 0 && t.at != null
+      ? `${k.kod} ${kalan}, iş ${sayiYaz(Math.round(t.ihtiyac))} ${birim} ister: ${saatYaz(D, t.at)}'de ${String(t.dk)} dk takım değişimi eklendi, hazırlıkta "Takım hazırla".`
+      : `${k.kod} ${kalan}; bu işe yetiyor.`];
+  });
+  const w = r.why;
+  if (w?.t !== 'ikincil') return { ister, neden: null, doluluk: null, kimde: null, bekleme: null, takim };
+  const bd = r.ikBas != null && r.S - r.ikBas >= BEKLEME_ESIGI ? Math.round((r.S - r.ikBas) * 60) : null;
+  const bekleme = bd === null || r.ikBas == null ? null
+    : `${saatYaz(D, r.ikBas)} → ${saatYaz(D, r.S)} (${bd >= 60 ? `${String(Math.floor(bd / 60))} sa${bd % 60 ? ` ${String(bd % 60)} dk` : ''}` : `${String(bd)} dk`})`;
+  const k = K.find((z) => z.id === w.r);
+  if (!k) return { ister, neden: 'İkincil kaynak bekledi.', doluluk: null, kimde: null, bekleme, takim };
+  // Tutan iş bekleme aralığı boyunca aranır (ilk aday başlangıçtan başlangıca): iş dilim sınırında başladığı için tutan, başlangıçtan
+  // birkaç dakika önce bitmiş olabilir. Aralık bilinmiyorsa (eski kayıt) başlangıçtan önceki bir dilim.
+  const t0 = bd !== null && r.ikBas != null ? r.ikBas : r.S - 0.25;
+  const once = (kullanimlar(c, p, cx, [k]).get(k.id) ?? []).filter((x) => x.r.id !== id && x.a < r.S - 1e-6 && x.b > t0 + 1e-6);
+  const kesinti = k.kesintiler.find((x) => x.bas < r.S - 1e-6 && x.bit > t0 + 1e-6);
+  const n = once.reduce((a, x) => a + x.n, 0);
+  return {
+    ister, takim, bekleme,
+    neden: `${kesinti ? `Kaynak ${KESINTIDE[kesinti.neden] ?? 'kesintide'}` : 'İkincil kaynak bekledi'}: ${k.kod}${k.ad ? ` ${k.ad}` : ''}`,
+    // Tutan da kesinti de bulunamadıysa (eski kayıt) "0 tanesi kullanımda" yazılmaz: nedenle çelişir.
+    doluluk: n === 0 && !kesinti ? null
+      : `${String(k.adet)} adetten ${String(Math.min(n, k.adet))} tanesi kullanımda${kesinti ? `, ${String(kesinti.adet)} tanesi ${kesintiAdi(kesinti.neden).toLocaleLowerCase('tr-TR')}` : ''}`,
+    kimde: once.length ? once.map((x) => `${x.r.id} (${tezgahKodu(x.r.m, kodlar)}), bitiş ${saatYaz(D, x.b)}`).join('; ')
+      : kesinti ? `${kesintiAdi(kesinti.neden)} ${saatYaz(D, kesinti.bas)} → ${saatYaz(D, kesinti.bit)}` : null,
+  };
 }
 
 // Adımın adedi: adım başına girilen adet (opAdet) yoksa siparişin adedi.

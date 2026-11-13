@@ -575,7 +575,21 @@ function tmiCevir(st, kaynak, D0, bugun) {
   if (k && k.ek && 'malzemeFiyatlari' in k.ek && Array.isArray(D.malzemeler)) tmiFiyatlar(D.malzemeler, k.ek.malzemeFiyatlari);
   if (k && k.ek && 'siparisBedelleri' in k.ek && Array.isArray(D.siparisler)) tmiSiparisBedelleri(D.siparisler, k.ek.siparisBedelleri);
   if (k && k.ek && 'mrpEksikleri' in k.ek && Array.isArray(D.malzemeler)) tmiMrpEksikleri(D.malzemeler, k.ek.mrpEksikleri);
+  const ik = k && k.ek && k.ek.ikincil;
+  if (ik && Array.isArray(ik.kaynaklar)) D.ikincilKaynaklar = tmiIkincilKaynaklar(ik.kaynaklar);
+  if (ik && ik.istekler && typeof ik.istekler === 'object') D.opKaynak = tmiOpKaynak(ik.istekler, sk, D);
   return D;
+}
+/* 3199 (A + D): ikincil kaynağın tek kaynağı sunucudur (plan/girdi/ikincil.ts). Kesinti anı motorun duvar saatine çevrilir (parseT okur).
+   Okunamayan dilim (yetki yok: null) alanı yazmaz; açık çalışmadaki gibi kalır (kaynakBirlestir). */
+function tmiIkincilKaynaklar(l) {
+  return l.map(k => Object.assign({}, k, { kesintiler: (k.kesintiler || []).map(x => ({ neden: x.neden, bas: duvarSaati(x.bas), bit: duvarSaati(x.bit), adet: x.adet })).filter(x => x.bas && x.bit) }));
+}
+/* Adımın isteği "emir no|OP no" anahtarıyla gelir, planın işlem kimliğine (sipariş.adım) adım adedi gibi çevrilir (tmiIslemler). */
+function tmiOpKaynak(istekler, st, D) {
+  const opOf = tmiIslemler(st, D); const y = {};
+  for (const [k, l] of Object.entries(istekler)) if (opOf[k] && Array.isArray(l) && l.length) y[opOf[k]] = l.map(x => ({ kart: String(x.kart), adet: +x.adet || 1, asama: x.asama === 'isleme' ? 'isleme' : 'ayar_isleme' }));
+  return y;
 }
 /* B-2483-67: siparişi verilmemiş eksik malzemenin tek kuralı sunucudadır (plan/mrp-kurallar.ts: emrin brüt kopyası, adım ve bileşen firesi,
    verilen sarf düşülür). Kaynak okuması malzeme başına eksiği verirse (mrpEksikleri [{ kod, eksik }]; eksik null = hesaplanamadı) malzemede
@@ -655,7 +669,7 @@ function tmiDevamsizlik(eski, kisiler) {
 
 /* ürünler de: rota adımının tezgâh listesi makinelerden kurulur (rrCevir grupMak), makine gelince adımlar yeniden kurulmalı. Malzeme ve
    sipariş kaynak okumasındaki sunucu kayıtlarındandır (sunucuKaydi). */
-const TMI_KAYNAK_ALANLARI = ['tezgahlar', 'personel', 'vardiyalar', 'calismaGunleri', 'tatiller', 'urunler', 'malzemeler', 'siparisler', 'fasoncular', 'opAdet', 'devamsizlik', 'satinalma'];
+const TMI_KAYNAK_ALANLARI = ['tezgahlar', 'personel', 'vardiyalar', 'calismaGunleri', 'tatiller', 'urunler', 'malzemeler', 'siparisler', 'fasoncular', 'opAdet', 'devamsizlik', 'satinalma', 'ikincilKaynaklar', 'opKaynak'];
 /* Kaynaklar açık çalışmaya (D0) yalnız bu alanlarla girer: kaydın geri kalanı ve kaydedilmemiş plan ayarları olduğu gibi kalır. Dönen: değişen alanlar. */
 function kaynakBirlestir(D0, kayit, kaynak, bugun) {
   const D = tmiCevir(kayit && kayit.items ? kayit : TMI_BOS_KAYIT, kaynak, D0, bugun);
@@ -721,7 +735,8 @@ const GEVSEK = {
   yetkin: st => { const g = [...new Set(st.D.tezgahlar.map(m => m.grup))]; for (const p of st.D.personel) { p.gruplar = g.slice(); delete p.makineler; delete p.enCok; } },
   devam: st => { st.D.devamsizlik = []; },
   ayarci: st => { for (const v of st.D.vardiyalar) for (let i = 0; i < 40; i++) st.D.personel.push({ id: `~A${v.id}${i}`, ad: 'sanal ayarcı', vardiya: v.id, gruplar: [], ayar: true }); },
-  aparat: st => { for (const a of st.D.aparatlar || []) a.adet = 999; },
+  /* 3199: ikincil kaynak (aparat, özel takım) aynı kısıttır; gevşeyince plan onu yalnız izler (İzle), ömür yine sayılır */
+  aparat: st => { for (const a of st.D.aparatlar || []) a.adet = 999; for (const k of st.D.ikincilKaynaklar || []) k.kisit = 'izle'; },
   program: st => { st.D.ayarlar.programSaat = 0; },
   fai: st => { for (const u of st.D.urunler) for (const o of u.rota) o.fai = false; },
   serbest: st => { for (const s of st.D.siparisler) s.serbest = null; },

@@ -173,4 +173,13 @@ describe('ekranın şimdisi (B-2500-3, 2506 a)', () => {
     expect(simdiSaati({ ...c, D: { ...c.D, meta: {} } }, Date.now())).toBe(8);
     expect(simdiSaati({ ...c, simdi: undefined, D: { ...c.D, meta: {} } }, Date.now())).toBe(7);
   });
+
+  it('aparat kısıtı gevşetilince ikincil kaynaklar İzle olur: plan sınırlamaz, aşımı uyarır (3199)', () => {
+    const { c } = kur();
+    const x = structuredClone(c);
+    Object.assign(x.D, { ikincilKaynaklar: [{ id: '1', kart: '900', kod: 'AP-ORN-12', adet: 1, kisit: 'sert' }] });
+    const kisit = (kapali: string[]) => ((girdiKur({ ...x, kapali }).D as unknown as { ikincilKaynaklar: { kisit: string }[] }).ikincilKaynaklar[0]!.kisit);
+    expect(kisit([])).toBe('sert');
+    expect(kisit(['aparat'])).toBe('izle');
+  });
 });

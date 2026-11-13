@@ -12,6 +12,8 @@ import {
   degerlendirmeParametresi, durumCevabi, kapasiteCevabi, planlamaCalismasiCevabi, planlamaSilGovdesi, planlamaYazGovdesi, satinAlmaEkiCevabi, tabanVeCanliCevabi,
   taslaktanCalismayaCevabi, taslaktanCalismayaGovdesi, yillikCozBaslatCevabi, yillikCozDurumuCevabi, yillikCozGovdesi, yillikCozParametresi,
 } from '#paylasilan/sozlesme/planlama.ts';
+import { ISTASYON_YAZMA_ISLEMLERI } from '#paylasilan/islemler.ts';
+import { takimOmurleriCevabi } from '#paylasilan/sozlesme/istasyonlar.ts';
 import { planAnaliziCevabi } from '#paylasilan/sozlesme/plan-analiz.ts';
 import { emirParametresi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import {
@@ -27,6 +29,7 @@ import { mesaiGrupSirasi, mesaiMaliyeti, mesaiSaatDegerleri } from './mesai-mali
 import { motorAyarlari, motorAyariYaz } from './motor-ayari.ts';
 import { emrinMrpIhtiyaci, mrpIhtiyaci } from './mrp.ts';
 import * as planlama from './planlama-servis.ts';
+import { takimKalanlari } from './girdi/ikincil.ts';
 import { planAnalizi } from './analiz.ts';
 import { planSagligi } from './plan-sagligi.ts';
 import { projePlani } from './proje-plani.ts';
@@ -64,6 +67,9 @@ export const uclar = [
   uc({ yontem: 'GET', yol: '/plan/canliya-alma-gecmisi', yetki: PLAN_OKUR, cevap: canliyaAlmaGecmisiCevabi, isle: ({ db }) => servis.canliyaAlmaGecmisi(db) }),
   // 782: plana giden verinin kaynağında boş olan yerler; yalnız okur, kaynak çağıranın yetkisiyle.
   uc({ yontem: 'GET', yol: '/plan/veri-sagligi', yetki: { biri: ['plan.oku', 'plan.yaz', PLANLAMA_OKUR] }, cevap: veriSagligiCevabi, isle: ({ db, kullanici }) => veriSagligi(db, kullanici) }),
+  // 3199 (D): özel takımın şimdiki kalan ömrü; Kaynaklar > İkincil kaynaklar'ı gören (istasyon okuyan) okur. Yalnız kapasite kimliği ve kalan döner.
+  uc({ yontem: 'GET', yol: '/plan/takim-omurleri', yetki: { biri: ['sayfa.istasyonlar', ...ISTASYON_YAZMA_ISLEMLERI] }, cevap: takimOmurleriCevabi,
+    isle: async ({ db }) => ({ takimlar: await takimKalanlari(db) }) }),
   // 1478: plan sağlığı; yalnız okur. Planlama sayfalarını gören (yönetici, müdür, planlama) okur.
   uc({ yontem: 'GET', yol: '/plan/plan-sagligi', yetki: PLANLAMA_OKUR, cevap: planSagligiCevabi, isle: ({ db, kullanici }) => planSagligi(db, kullanici) }),
   // 2151: planlama analizi; plan sağlığıyla aynı okuyucu (yeni işlem açılmaz).

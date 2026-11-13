@@ -224,9 +224,9 @@ export async function kaydet(db: Db, kullanici: Kullanici, id: number, govde: Ka
     const carpan = a.adetCarpani === undefined ? (dal === null ? null : eski?.adetCarpani ?? null) : a.adetCarpani;
     // Ekipmanı göndermeyen (alanı bilmeyen) ekran da adımın kayıtlı listesini silmesin (2893-4 a).
     const ekipman = a.ekipman?.map((x) => (x.tur === 'aparat'
-      ? { tur: x.tur, malzemeId: x.malzemeId, aletTuruId: null, aciklama: x.aciklama }
-      : { tur: x.tur, malzemeId: null, aletTuruId: x.aletTuruId, aciklama: x.aciklama }))
-      ?? (eski === undefined ? [] : (mevcut.ekipman ?? []).filter((x) => x.adimId === eski.id).map(({ tur, malzemeId, aletTuruId, aciklama }) => ({ tur, malzemeId, aletTuruId, aciklama })));
+      ? { tur: x.tur, malzemeId: x.malzemeId, aletTuruId: null, aciklama: x.aciklama, adet: x.adet, asama: x.asama }
+      : { tur: x.tur, malzemeId: null, aletTuruId: x.aletTuruId, aciklama: x.aciklama, adet: 1, asama: 'ayar_isleme' as const }))
+      ?? (eski === undefined ? [] : (mevcut.ekipman ?? []).filter((x) => x.adimId === eski.id).map(({ tur, malzemeId, aletTuruId, aciklama, adet, asama }) => ({ tur, malzemeId, aletTuruId, aciklama, adet, asama })));
     return { ...a, dal, birlesen: a.birlesen ?? eski?.birlesen ?? [], adetCarpani: carpan === 1 ? null : carpan, ekipman };
   });
   const carpanHatasi = dalli.findIndex((a) => a.dal === null && a.adetCarpani !== null);
@@ -265,8 +265,8 @@ export async function adimEkipmaniKaydet(db: Db, kullanici: Kullanici, id: numbe
     }
   }
   await s.adimEkipmaniniYaz(db, adim.id, g.ekipman.map((x) => (x.tur === 'aparat'
-    ? { tur: x.tur, malzemeId: x.malzemeId, aletTuruId: null, aciklama: x.aciklama }
-    : { tur: x.tur, malzemeId: null, aletTuruId: x.aletTuruId, aciklama: x.aciklama })));
+    ? { tur: x.tur, malzemeId: x.malzemeId, aletTuruId: null, aciklama: x.aciklama, adet: x.adet, asama: x.asama }
+    : { tur: x.tur, malzemeId: null, aletTuruId: x.aletTuruId, aciklama: x.aciklama, adet: 1, asama: 'ayar_isleme' as const })));
   return cevap(id, 'taslak', await s.duzenlemeYaz(db, id, kullanici.id));
 }
 

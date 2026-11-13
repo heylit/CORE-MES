@@ -104,6 +104,8 @@ function mask(W){const m=new Uint8Array(NS);for(const [a,b] of W){const k0=Math.
     @property {any[]} PK
     @property {Record<string, any>} FS
     @property {Record<string, any>} AP
+    @property {Record<string, any>} [IK]
+    @property {Record<string, string>} [IKK]
     @property {any[]} ops
     @property {any} byId
     @property {Record<string, any>} jobs
@@ -173,6 +175,13 @@ function compile(st){olcekKur(st.w);
   const gen=merge(genW);
   const FS=Object.fromEntries((D.fasoncular||[]).map(f=>[f.id,f]));
   const AP=Object.fromEntries((D.aparatlar||[]).map(a=>[a.id,a]));
+  /* 3199 (A): ikincil kaynak (aparat, özel takım) personel gibi dilim dizisiyle sayılır: kapasite adettir, kesinti (bakım, kalibrasyon,
+     ödünç) dokunduğu her dilimde adedi düşürür (0'a kadar, V10). Aynı kart istasyonda ve ortakta ayrı kaynaktır (IKK: kart@istasyon). */
+  const IK={},IKK={};
+  for(const k of D.ikincilKaynaklar||[]){const cap=new Float32Array(NS).fill(Math.max(0,+k.adet||0));
+    for(const x of k.kesintiler||[]){const a=parseT(D,x.bas),b=parseT(D,x.bit);if(a==null||b==null||!(b>a))continue;
+      for(let i=Math.max(0,Math.floor(a/SL+1e-9));i<Math.min(NS,Math.ceil(b/SL-1e-9));i++)cap[i]=Math.max(0,cap[i]-(+x.adet||0));}
+    IK[k.id]={...k,cap};IKK[k.kart+'@'+(k.istasyon==null?'':k.istasyon)]=k.id;}
   // işlemler
   const ops=[],jobs={},bolunen={};
   const urun=Object.fromEntries(D.urunler.map(u=>[u.id,u]));
@@ -203,7 +212,8 @@ function compile(st){olcekKur(st.w);
       if(o.fasonIzin&&A.fasonTalas&&FS[A.fasonTalas])c.push({m:'@'+A.fasonTalas,fas:1,opt:1});
       const lr=(st.ogren||{})[j.urun+' '+o.k];const sig=lr&&lr.n>=3&&lr.v!=null?Math.sqrt(lr.v)/Math.max(.3,lr.f):(+st.w.mcSigma||0);
       const pr=(o.bag||[]).map(([k,t])=>[j.id+'.'+k,t]),prK=pr.filter(([p])=>!bitti[p]);
-      const op={id:pid,job:j.id,k:o.k,ad:o.ad,c,sig,pr:prK,aile:o.aile||'',aparat:o.aparat||null,
+      const ik=D.opKaynak&&Array.isArray(D.opKaynak[id])&&D.opKaynak[id].length?D.opKaynak[id]:null;
+      const op={id:pid,job:j.id,k:o.k,ad:o.ad,c,sig,pr:prK,aile:o.aile||'',aparat:o.aparat||null,ik,
         program:o.program!==false,fai:!!o.fai,adet:ad,x,matYok:prK.length<pr.length,ayarsiz:o.ayarci===false,ayarSaat:o.ayarDk!=null&&isFinite(+o.ayarDk)?Math.max(0,+o.ayarDk)/60:null,...(N>1?{parca:p+1,parcaAdedi:N,asil:id}:{})};
       if(N>1)bolunen[id].push(pid);
       ops.push(op);jobs[j.id].ops.push(op);}}
@@ -221,7 +231,7 @@ function compile(st){olcekKur(st.w);
   const mat=matAlloc(st,jobs);
   // program
   const progRel=A.programSaat?adv(gen,openAt(gen,st.now),A.programSaat):st.now;
-  return {st,D,A,M,days,gen,capTot,capAyar,capG,PK,FS,AP,ops,byId,jobs,succ,mat,progRel};
+  return {st,D,A,M,days,gen,capTot,capAyar,capG,PK,FS,AP,IK,IKK,ops,byId,jobs,succ,mat,progRel};
 }
 /** @param {MotorDurumu} [st] @param {any} [jobs] */
 function matAlloc(st,jobs){
@@ -272,7 +282,7 @@ function satinalmaListe(plan,st){const cx=plan.cx,D=st.D,mats=Object.fromEntries
   return out;}
 /* ---- kaynak kullanımı ---- */
 /** @param {Derleme} [cx] */
-function newUse(cx){const u={tot:new Float32Array(NS),ayar:new Float32Array(NS),g:{},ap:{},fas:{},pl:(cx.PK||[]).map(()=>new Float32Array(NS)),pn:(cx.PK||[]).map(()=>new Uint8Array(NS)),pa:{}};for(const g in cx.capG)u.g[g]=new Float32Array(NS);for(const a in cx.AP)u.ap[a]=new Float32Array(NS);return u;}
+function newUse(cx){const u={tot:new Float32Array(NS),ayar:new Float32Array(NS),g:{},ap:{},fas:{},pl:(cx.PK||[]).map(()=>new Float32Array(NS)),pn:(cx.PK||[]).map(()=>new Uint8Array(NS)),pa:{}};for(const g in cx.capG)u.g[g]=new Float32Array(NS);for(const a in cx.AP)u.ap[a]=new Float32Array(NS);u.ik={};for(const k in cx.IK||{})u.ik[k]=new Float32Array(NS);return u;}
 /* Başlamış adımın kalanı (391 a): sunucu adetten hesaplar (kalan saat, verimli; sayim son sayım anı, yoksa başlama), motor aynen kullanır.
    Gelmezse null: motor geçen süreyi düşer (elle giriş, deneme). */
 function kalanBitis(M,a){if(a.kalan==null||!isFinite(+a.kalan))return null;return adv(M.rw,a.sayim!=null&&isFinite(+a.sayim)?+a.sayim:a.S,Math.max(0,+a.kalan));}
@@ -302,8 +312,35 @@ function ayarciIster(cx,r){const o=cx.byId[r.id];return r.su>0&&!(o&&o.ayarsiz)&
    hazırlık ayarcıdadır (eski kayıt). Hazırlık tezgâhı yine tutar. */
 /** @param {Derleme} [cx] @param {any} [M] @param {any} [r] */
 function ayarciBitis(cx,M,r){const o=cx.byId[r.id];if(!o||o.ayarSaat==null||o.ayarSaat>=r.su-1e-9)return r.Su;return Math.min(r.Su,adv(M.sw,r.S,o.ayarSaat));}
-/** @param {Derleme} [cx] @param {any} [u] @param {any} [M] @param {any} [r] @param {any} [apId] */
-function checkUse(cx,u,M,r,apId){
+/* 3199 (A): adımın ikincil kaynak isteği tezgâhın istasyonundaki satıra, yoksa ortak satıra düşer; tanımsız kart sayılmaz (kisitlar.js
+   uyarır). Dönen: [kaynak, adet, yalnız işleme mi]. Tezgâh başına bir kez çözülür (aynı derlemede aynı sonuç). */
+/** @param {Derleme} [cx] @param {any} [o] @param {any} [M] */
+function ikSec(cx,o,M){if(!o||!o.ik||!cx.IKK)return null;const c=o.ikc||(o.ikc={});if(c[M.id]!==undefined)return c[M.id];
+  const l=[];for(const x of o.ik){const id=cx.IKK[x.kart+'@'+M.grup]||cx.IKK[x.kart+'@'];if(id&&!l.some(y=>y[0]===id))l.push([id,Math.max(1,+x.adet||1),x.asama==='isleme']);}
+  return c[M.id]=l.length?l:null;}
+/* Sert kaynak tezgâhla birlikte boş olmalı: "ayar ve işleme" isteği S..C, "yalnız işleme" Su..C boyunca her dilimde adet kadar. İzle kaynak
+   sınırlamaz, kullanımı yine yazılır (evaluate aşımı uyarır). */
+/** @param {Derleme} [cx] @param {any} [u] @param {any} [M] @param {any} [r] @param {any} [o] */
+function ikCheck(cx,u,M,r,o){const l=ikSec(cx,o,M);if(!l)return null;
+  for(const [id,n,isl] of l){const K=cx.IK[id];if(K.kisit!=='sert')continue;const U=u.ik[id];
+    for(let k=k0(isl?r.Su:r.S);k<k1(r.C);k++)if(U[k]+n>K.cap[k]+1e-6)return {k,t:'ikincil',r:id,n,kalici:K.cap[k]<n-1e-6,off:isl?r.Su-r.S:0};}
+  return null;}
+/** @param {Derleme} [cx] @param {any} [u] @param {any} [M] @param {any} [r] @param {any} [sign] */
+function ikAdd(cx,u,M,r,sign){const l=ikSec(cx,cx.byId[r.id],M);if(!l)return;
+  for(const [id,n,isl] of l){const U=u.ik[id];for(let k=k0(isl?r.Su:r.S);k<k1(r.C);k++)U[k]+=n*sign;}}
+/* 3199 (D): özel takımın ömrü plan sırasında taşınır (ctx.omur, kaynak başına kalan; başlangıç CNC Kurulum'daki kalan payı, yoksa tam ömür,
+   V13). İşleme ömrü dakika (verim ve pay düşülmüş işleme süresi) ya da adet olarak tüketir. Kalan yetmezse ömrün bittiği anda değişim
+   süresi kadar duruş eklenir ve takım yenilenir (V14: değişim iş içinde, ömür bittiği an); iş bu yüzden yer değiştirmez, yalnız uzar. */
+/** @param {Derleme} [cx] @param {any} [ctx] @param {any} [o] @param {any} [M] @param {any} [c] @param {any} [run] */
+function takimIhtiyaci(cx,ctx,o,M,c,run){const l=ikSec(cx,o,M);if(!l)return null;let ek=0;const tk=[];
+  for(const [id] of l){const K=cx.IK[id];if(K.tur!=='ozel_takim'||!(+K.omur>0)||!K.omurBirimi)continue;
+    const omur=+K.omur,kalan=ctx.omur&&ctx.omur[id]!=null?ctx.omur[id]:omur*(K.kalanPay==null?1:K.kalanPay);
+    const ihtiyac=K.omurBirimi==='adet'?(+o.adet||0):run*(1-(c.pay||0))*60;
+    const n=ihtiyac>kalan+1e-9?Math.ceil((ihtiyac-kalan)/omur-1e-9):0;const dk=n*Math.max(0,+K.degisimDk||0);
+    ek+=dk/60;tk.push({id,kalan,ihtiyac,n,dk,sonra:kalan+n*omur-ihtiyac,bilinmiyor:K.kalanPay==null});}
+  return tk.length?{ek,tk}:null;}
+/** @param {Derleme} [cx] @param {any} [u] @param {any} [M] @param {any} [r] @param {any} [apId] @param {any} [o] */
+function checkUse(cx,u,M,r,apId,o){
   // dönüş: -1 uygun; yoksa sorunlu slot ve tür
   if(ayarciIster(cx,r)){const z=ayarciBitis(cx,M,r);for(let k=k0(r.S);k<k1(z);k++)if(M.smask[k]&&u.ayar[k]+1>cx.capAyar[k]+1e-6)return {k,t:'ayarci',kalici:cx.capAyar[k]<1};}
   const d=M.opOran;
@@ -315,7 +352,7 @@ function checkUse(cx,u,M,r,apId){
       if(u.tot[k]+d>cx.capTot[k]+1e-6)return {k,t:'personel',kalici:cx.capTot[k]<d};
       if(G&&G[k]+d>cG[k]+1e-6)return {k,t:'yetkin',kalici:cG[k]<d};}}
   if(apId&&u.ap[apId]){const cap=+cx.AP[apId].adet||1;for(let k=k0(r.S);k<k1(r.C);k++)if(u.ap[apId][k]+1>cap+1e-6)return {k,t:'aparat',kalici:false};}
-  return null;
+  return ikCheck(cx,u,M,r,o);
 }
 /** @param {Derleme} [cx] @param {any} [u] @param {any} [M] @param {any} [r] @param {any} [apId] @param {any} [sign] */
 function addUse(cx,u,M,r,apId,sign=1){
@@ -325,6 +362,7 @@ function addUse(cx,u,M,r,apId,sign=1){
       if(pa){const sec=kisiDagit(cx,u,M,k);if(sec)for(const [i,al] of sec){u.pl[i][k]+=al;u.pn[i][k]++;pa.push(k,i,al);}}}
     if(M.kisiler&&sign<0&&u.pa[r.id]){const a=u.pa[r.id];for(let j=0;j<a.length;j+=3){u.pl[a[j+1]][a[j]]-=a[j+2];u.pn[a[j+1]][a[j]]--;}delete u.pa[r.id];}}
   if(apId&&u.ap[apId])for(let k=k0(r.S);k<k1(r.C);k++)u.ap[apId][k]+=sign;
+  if(u.ik)ikAdd(cx,u,M,r,sign);
 }
 
 /* ---- tek işlem zamanlaması ---- */
@@ -376,7 +414,8 @@ function tMach(o,c,cx,ctx,b,fast){
   if(o.fai)su+=c.cyc+(+cx.A.faiSaat||0);
   const run=o.fai?Math.max(0,c.run-c.cyc):c.run;
   const lastLot=Math.min(run,c.tbRun);
-  const W0=su>0?M.sw:M.rw;const s_in=s;
+  const tki=takimIhtiyaci(cx,ctx,o,M,c,run),tkEk=tki?tki.ek:0;
+  const W0=su>0?M.sw:M.rw;const s_in=s;let ikBas=null;
   for(let it=0;it<600;it++){
     s=openAt(W0,s);if(!isFinite(s))return null;
     const Su=adv(M.sw,s,su);if(!isFinite(Su))return null;
@@ -384,12 +423,13 @@ function tMach(o,c,cx,ctx,b,fast){
        vardiya sınırında bölünür; tezgâh S..C boyunca bu işindir (ctx.av), bekleme aralığına başka işin hazırlığı girmez. */
     if(su>0){const bi=M.sblok.findIndex(([a,z])=>s>=a-1e-9&&s<z-1e-9);
       if(bi<0||Su>M.sblok[bi][1]+1e-9){const nx=M.sblok.findIndex(([a,z],i)=>i>bi&&a>s+1e-9&&workIn(M.sw,a,z)>=su-1e-9);if(nx<0)return null;s=M.sblok[nx][0];continue;}}
-    const C=adv(M.rw,Su,run);if(!isFinite(C))return null;
+    const C=adv(M.rw,Su,run+tkEk);if(!isFinite(C))return null;
     if(b.fin>-Infinity&&C<b.fin+lastLot-1e-9){const need=b.fin+lastLot-C;s+=Math.max(need,SL);why={t:'rota',r:b.finRef,o:2};continue;}
     const kl=ctx.kilit&&ctx.kilit[c.m]&&ctx.kilit[c.m].find(([a,z])=>s<z-1e-9&&C>a+1e-9);if(kl){s=kl[1];why={t:'tezgah',r:kl[2]};continue;}
     const r={S:s,Su,C,su};
-    const bad=fast?null:checkUse(cx,ctx.u,M,r,o.aparat);
+    const bad=fast?null:checkUse(cx,ctx.u,M,r,o.aparat,o);
     if(bad){let k=bad.k+1;
+      if(bad.t==='ikincil'){if(ikBas===null)ikBas=s;if(bad.kalici){const K=cx.IK[bad.r];while(k<NS&&K.cap[k]<bad.n-1e-6)k++;}s=Math.max(s+1e-6,k*SL-bad.off);why={t:'ikincil',r:bad.r};continue;}
       if(bad.kalici&&bad.kisi){while(k<NS&&!M.kav[k])k++;}
       else if(bad.kalici){const cap=bad.t==='ayarci'?cx.capAyar:bad.t==='personel'?cx.capTot:cx.capG[M.grup];const need=bad.t==='ayarci'?1:M.opOran;while(k<NS&&cap[k]<need-1e-6)k++;}
       s=Math.max(s+1e-6,k*SL);why={t:bad.t};continue;}
@@ -400,7 +440,13 @@ function tMach(o,c,cx,ctx,b,fast){
     if(s>s_in+1e-9&&dl.some(d=>d.from<=s_in+1e-9&&d.to>=s-1e-9))why={t:'ariza',r:c.m};
     /* 2509 a: pay, işleme süresini uzatan pay oranıdır (acil iş payı ve arıza payı); canlı plan saati uzatılmış süredir, sapma ve öğrenme
        ölçümü işleme süresini (run) (1-pay) ile çarparak uzatılmamış süreye döner */
-    return {id:o.id,job:o.job,m:c.m,S:s,Su,C,lot1,su,run,cost,why,famHit,downHit,pay:c.pay||0};
+    const res={id:o.id,job:o.job,m:c.m,S:s,Su,C,lot1,su,run,cost,why,famHit,downHit,pay:c.pay||0};
+    /* Çizelgedeki bekleme taraması ve "Oynat": iş ikincil kaynak yüzünden kaydıysa ilk aday başlangıç (kaymadan önceki yer).
+       Bir dakikadan kısa kayma dilim yuvarlamasıdır, bekleme sayılmaz. */
+    if(ikBas!==null&&why&&why.t==='ikincil'&&s-ikBas>=1/60-1e-9)res.ikBas=ikBas;
+    if(tki)res.takim=tki.tk.map(t=>({id:t.id,dk:t.dk,n:t.n,kalan:t.kalan,ihtiyac:t.ihtiyac,sonra:t.sonra,bilinmiyor:t.bilinmiyor,
+      at:t.n>0?adv(M.rw,Su,run*Math.min(1,Math.max(0,t.kalan/Math.max(t.ihtiyac,1e-9)))):null}));
+    return res;
   }
   return null;
 }
@@ -412,6 +458,7 @@ function commit(cx,ctx,r){
   if(r.fas){(ctx.fas[r.m.slice(1)]=ctx.fas[r.m.slice(1)]||[]).push([r.S,r.C]);return;}
   const M=cx.M[r.m];ctx.ver[r.m]=(ctx.ver[r.m]||0)+1;ctx.av[r.m]=Math.max(ctx.av[r.m]||0,r.C);ctx.lastFam[r.m]=cx.byId[r.id].aile;ctx.lastId[r.m]=r.id;
   addUse(cx,ctx.u,M,r,cx.byId[r.id].aparat);
+  if(r.takim){ctx.omur=ctx.omur||{};for(const t of r.takim)ctx.omur[t.id]=t.sonra;}
 }
 /** @param {any} [o] @param {MotorDurumu} [st] @param {any} [opt] @param {any} [base] */
 function candM(o,st,opt,base){
@@ -642,6 +689,14 @@ function evaluate(plan,st,ref,fast){
   if(!fast)for(const m of cx.D.malzemeler||[])if(m.stok==null&&cx.mat.summ[m.kod])warn.push({t:'malzeme',txt:`${m.kod}: stok bilinmiyor; 0 sayıldı`});
   if(st.ayarciYok)warn.push({t:'Ayarcı',txt:'Vardiyası olan ayarcı yok; ayarcı sınırı uygulanmadı. Ayarcılara vardiya verince sınır yeniden uygulanır.'});
   for(const id of plan.fail||[])warn.push({t:'plan',j:id.split('.')[0],id,txt:`${id} planlanamadı: ${failNedenMetni((plan.failNeden||{})[id])}`});
+  /* 3199: ikincil kaynağın aşımı (İzle kaynakta plan sınırlamaz; Sert kaynakta kilitli ya da başlamış iş aşabilir) ve takım değişimi uyarıdır */
+  if(!fast&&cx.IK&&Object.keys(cx.IK).length){const use={};
+    for(const r of Object.values(plan.ops)){if(r.fas||r.done)continue;const M=cx.M[r.m],o=cx.byId[r.id];if(!M||!o)continue;const l=ikSec(cx,o,M);if(!l)continue;
+      for(const [id,n,isl] of l){const U=use[id]||(use[id]=new Float32Array(NS));for(let k=k0(isl?r.Su:r.S);k<k1(r.C);k++)U[k]+=n;}}
+    for(const id in use){const K=cx.IK[id],U=use[id];let k=-1;for(let i=0;i<NS;i++)if(U[i]>K.cap[i]+1e-6){k=i;break;}
+      if(k>=0)warn.push({t:'ikincil',kaynak:id,txt:`${K.kod||K.kart}: ${fmtDT(cx.D,k*SL)} kapasite aşılıyor (${U[k]} / ${K.cap[k]})${K.kisit==='izle'?'; İzle: plan sınırlamadı':''}`});}
+    for(const r of Object.values(plan.ops))for(const t of r.takim||[])if(t.n>0){const K=cx.IK[t.id];if(!K)continue;
+      warn.push({t:'takim',j:r.job,id:r.id,kaynak:t.id,txt:`${K.kod||K.kart} ömrü ${r.id} işine yetmiyor; ${fmtDT(cx.D,t.at)} ${t.dk} dk değişim eklendi, hazırlıkta "Takım hazırla"`});}}
   return {Z,lex,tl,wB,bufN,J,rev,cost,pen,hold,onT,late,yerlesmeyenSip:yerN,n:Object.keys(cx.jobs).length,sumT,wT,suH,suN,famN,Cmax,chg,stab,idle,fas,unk,warn,mesaiH,mesaiTL,util,score,amac:w.amac};
 }
 

@@ -18,6 +18,9 @@ const n = (g: string | undefined): number => (g === undefined ? 0 : Number(g));
 // --- plan ---
 // İşlemin bekleme nedeni (motorun `why`'ı): t tür, o ikincil kod (rota: 2 son parti kuralı).
 export interface Neden { t: string; o?: number; r?: string }
+// 3199 (D): özel takımın ömür hesabı. `at` değişim anı (ömrün bittiği an, iş içinde), `dk` eklenen değişim süresi, `n` değişim sayısı;
+// `bilinmiyor`: başlangıç ömrü CNC Kurulum'da kayıtlı değil, tam ömür varsayıldı (V13).
+export interface TakimOmru { id: string; n: number; dk: number; at: number | null; kalan: number; ihtiyac: number; bilinmiyor: boolean }
 // Planın işlem kaydı. `m` tezgâh kimliği, fasonda `@fasoncu`. `Su` ayarın bittiği an, `lot1` ilk partinin bitişi.
 export interface PlanIslemi {
   id: string; job: string; m: string; S: number; C: number;
@@ -26,6 +29,9 @@ export interface PlanIslemi {
   why: Neden | null;
   // Bolluk: işin planı bozmadan kayabileceği saat; aynı aileden gelen kısa ayar; başlamış iş.
   sl: number | null; famHit: boolean; act: boolean;
+  takim?: TakimOmru[];
+  // İkincil kaynak yüzünden kayan işin ilk aday başlangıcı (çizelgedeki bekleme taraması ve Oynat).
+  ikBas?: number;
 }
 export interface PlanOzeti { wT: number; late: number; n: number; suH: number | null; suN: number | null; famN: number | null; Cmax: number | null }
 export interface FailNedeni { kod: 'aday' | 'oncul' | 'zaman'; oncul?: string }
@@ -43,6 +49,12 @@ export interface OkunanPlan {
   kisiTezgahIsleri?: string[];
 }
 
+function takimOku(l: unknown[]): TakimOmru[] {
+  return l.flatMap((t) => (nesne(t) && typeof t.id === 'string' ? [{
+    id: t.id, n: sayi(t.n) ?? 0, dk: sayi(t.dk) ?? 0, at: sayi(t.at), kalan: sayi(t.kalan) ?? 0, ihtiyac: sayi(t.ihtiyac) ?? 0, bilinmiyor: !!t.bilinmiyor,
+  }] : []));
+}
+
 // Kayıttaki planı daraltır. Saatsiz işlem `S`/`C` olarak NaN taşır (eski sayfa kayıtta Infinity'yi null okur, yerleşmemiş sayar);
 // özet yoksa plan yok sayılır.
 export function planOku(c: PlanlamaCalismasi | null): OkunanPlan | null {
@@ -58,6 +70,8 @@ export function planOku(c: PlanlamaCalismasi | null): OkunanPlan | null {
       id, job, m, S: sayi(r.S) ?? Number.NaN, C: sayi(r.C) ?? Number.NaN,
       su: sayi(r.su) ?? 0, run: sayi(r.run) ?? 0, fas: !!r.fas, pin: !!r.pin, Su: sayi(r.Su), lot1: sayi(r.lot1), why,
       sl: sayi(r.sl), famHit: !!r.famHit, act: !!r.act,
+      ...(Array.isArray(r.takim) && r.takim.length ? { takim: takimOku(r.takim) } : {}),
+      ...(sayi(r.ikBas) !== null ? { ikBas: r.ikBas as number } : {}),
     };
   }
   const o = p.ozet;
@@ -265,6 +279,46 @@ export function yerlesmeyenSiparisler(c: PlanlamaCalismasi, p: OkunanPlan, bit: 
 
 // Planın girdisi (girdi.betik stKur, simdiUygula): verinin kopyası; havuzdaki ve biten sipariş düşer, kapalı kısıtın gevşetmesi ve olaylar
 // uygulanır. Ekranın okuduğu alanlar: takvim, duruş, ek mesai, sipariş, personel, aparat, fason, ayar matrisi, satın alma gecikmesi.
+// --- ikincil kaynak (3199 A + D; engine.betik IK, IKK, ikSec) ---
+// Aparat ve özel takım planın ikincil kaynağıdır. Kaynak satırı İstasyonlar'dan, adımın isteği Rota'dan gelir (girdi.betik). Aynı kart
+// istasyonda ve ortakta ayrı kaynaktır; tezgâhın istasyonundaki satır önce, yoksa ortak satır seçilir.
+export interface IkincilKesinti { neden: string; bas: number; bit: number; adet: number }
+export interface IkincilKaynak {
+  id: string; kart: string; kod: string; ad: string; istasyon: string | null; adet: number; tur: 'aparat' | 'ozel_takim'; izle: boolean;
+  kesintiler: IkincilKesinti[]; omur: number | null; omurBirimi: 'dk' | 'adet' | null; degisimDk: number | null; kalanPay: number | null;
+}
+export interface KaynakIstegi { kart: string; adet: number; isleme: boolean }
+export function ikincilKaynaklari(D: PlanVerisi): IkincilKaynak[] {
+  const l = Array.isArray(D.ikincilKaynaklar) ? D.ikincilKaynaklar : [];
+  return l.flatMap((k): IkincilKaynak[] => {
+    if (!nesne(k) || typeof k.id !== 'string' || typeof k.kart !== 'string') return [];
+    const kesintiler = (Array.isArray(k.kesintiler) ? k.kesintiler : []).flatMap((x): IkincilKesinti[] => {
+      if (!nesne(x)) return [];
+      const bas = saatOku(D, x.bas), bit = saatOku(D, x.bit);
+      return bas != null && bit != null && bit > bas ? [{ neden: metin(x.neden) ?? '', bas, bit, adet: sayi(x.adet) ?? 0 }] : [];
+    });
+    return [{
+      id: k.id, kart: k.kart, kod: metin(k.kod) ?? k.kart, ad: metin(k.ad) ?? '', istasyon: metin(k.istasyon), adet: Math.max(0, sayi(k.adet) ?? 0),
+      tur: k.tur === 'ozel_takim' ? 'ozel_takim' : 'aparat', izle: k.kisit === 'izle', kesintiler, omur: sayi(k.omur),
+      omurBirimi: k.omurBirimi === 'dk' || k.omurBirimi === 'adet' ? k.omurBirimi : null, degisimDk: sayi(k.degisimDk), kalanPay: sayi(k.kalanPay),
+    }];
+  });
+}
+export function kaynakIstekleri(D: PlanVerisi, opId: string): KaynakIstegi[] {
+  const l = nesne(D.opKaynak) ? D.opKaynak[opId] : undefined;
+  return (Array.isArray(l) ? l : []).flatMap((x) => (nesne(x) && typeof x.kart === 'string' ? [{ kart: x.kart, adet: Math.max(1, sayi(x.adet) ?? 1), isleme: x.asama === 'isleme' }] : []));
+}
+// Tezgâhta çalışan işin kullandığı kaynak satırları (engine ikSec): [kaynak, adet, yalnız işleme].
+export function ikincilSecimi(K: readonly IkincilKaynak[], istekler: readonly KaynakIstegi[], istasyon: string | undefined): [IkincilKaynak, number, boolean][] {
+  const y: [IkincilKaynak, number, boolean][] = [];
+  for (const x of istekler) {
+    const k = K.find((z) => z.kart === x.kart && istasyon !== undefined && z.istasyon === istasyon) ?? K.find((z) => z.kart === x.kart && z.istasyon === null);
+    if (k && !y.some(([z]) => z.id === k.id)) y.push([k, x.adet, x.isleme]);
+  }
+  return y;
+}
+export const ikincilKod = (g: Girdi, id: string | undefined): string => ikincilKaynaklari(g.D).find((k) => k.id === id)?.kod ?? id ?? '';
+
 export interface Girdi {
   D: PlanVerisi & { ayarlar: Record<string, unknown>; aparatlar?: unknown[]; ayarMatrisi?: unknown[] }; now: number; kapali: Set<string>; bitti: Set<string>;
   down: { m: string; from: number; to: number }[]; ekMesai: { m: string; gun: number; vardiya: string }[]; saGecik: Record<string, number>;
@@ -281,7 +335,10 @@ const GEVSEK: Record<string, (g: Girdi) => void> = {
   ayarci: (g) => {
     for (const v of g.D.vardiyalar ?? []) for (let i = 0; i < 40; i++) (g.D.personel ??= []).push({ id: `~A${String(v.id)}${i}`, ad: 'sanal ayarcı', vardiya: String(v.id), gruplar: [], ayar: true });
   },
-  aparat: (g) => { g.D.aparatlar = (Array.isArray(g.D.aparatlar) ? g.D.aparatlar : []).filter(nesne).map((a) => ({ ...a, adet: 999 })); },
+  aparat: (g) => {
+    g.D.aparatlar = (Array.isArray(g.D.aparatlar) ? g.D.aparatlar : []).filter(nesne).map((a) => ({ ...a, adet: 999 }));
+    if (Array.isArray(g.D.ikincilKaynaklar)) Object.assign(g.D, { ikincilKaynaklar: g.D.ikincilKaynaklar.filter(nesne).map((k) => ({ ...k, kisit: 'izle' })) });
+  },
   serbest: (g) => { g.D.siparisler = g.D.siparisler.map((s) => ({ ...s, serbest: null })); },
   tasima: (g) => { g.D.ayarlar = { ...g.D.ayarlar, tasimaSaat: 0 }; },
   fasonGun: (g) => { g.D.fasoncular = (g.D.fasoncular ?? []).map((f) => ({ ...f, cikisGunleri: [...GUN_KODLARI] })); },
@@ -390,11 +447,11 @@ export function derle(g: Girdi): Derleme {
 export type SureKategorisi = 'isleme' | 'ayar' | 'kapali' | 'tezgah' | 'personel' | 'ayarci' | 'aparat' | 'ariza' | 'tasima' | 'fason' | 'fasonBek' | 'rota' | 'baslangic';
 export const KATEGORI_AD: Record<SureKategorisi, string> = {
   isleme: 'İşleme', ayar: 'Ayar', kapali: 'Tezgâh kapalı (vardiya dışı, tatil)', tezgah: 'Tezgâh dolu bekledi', personel: 'Operatör bekledi',
-  ayarci: 'Ayarcı bekledi', aparat: 'Aparat bekledi', ariza: 'Arıza, bakım', tasima: 'Taşıma', fason: 'Fasonda',
+  ayarci: 'Ayarcı bekledi', aparat: 'Aparat, ikincil kaynak bekledi', ariza: 'Arıza, bakım', tasima: 'Taşıma', fason: 'Fasonda',
   fasonBek: 'Fason çıkışı ya da kapasitesi bekledi', rota: 'Son parti kuralı', baslangic: 'Başlangıç koşulu (serbest, malzeme, NC programı, kilit)',
 };
 const NEDEN_KAT: Record<string, SureKategorisi> = {
-  tezgah: 'tezgah', personel: 'personel', yetkin: 'personel', ayarci: 'ayarci', aparat: 'aparat', ariza: 'ariza', 'fason-kap': 'fasonBek',
+  tezgah: 'tezgah', personel: 'personel', yetkin: 'personel', ayarci: 'ayarci', aparat: 'aparat', ikincil: 'aparat', ariza: 'ariza', 'fason-kap': 'fasonBek',
   'fason-cikis': 'fasonBek', serbest: 'baslangic', malzeme: 'baslangic', program: 'baslangic', kilit: 'baslangic', oneri: 'baslangic',
 };
 export interface Ayrisim { seg: Partial<Record<SureKategorisi, number>>; kaynak: [SureKategorisi, string, number][]; C: number; toplam: number }
@@ -410,7 +467,7 @@ export function ayristir(p: OkunanPlan, cx: Derleme, jid: string): Ayrisim | 'ek
     const k: SureKategorisi = NEDEN_KAT[w.t] ?? (w.t === 'rota' && w.o === 2 ? 'rota' : 'kapali');
     ekle(k, v);
     const Mg = cx.M[r.m]?.grup ?? '';
-    const ad = k === 'tezgah' ? r.m : k === 'personel' ? `Operatör · ${Mg}` : k === 'ayarci' ? 'Ayarcı' : k === 'aparat' ? `Aparat · ${cx.byId[r.id]?.aparat ?? ''}`
+    const ad = k === 'tezgah' ? r.m : k === 'personel' ? `Operatör · ${Mg}` : k === 'ayarci' ? 'Ayarcı' : k === 'aparat' ? (w.t === 'ikincil' ? `İkincil kaynak · ${ikincilKod(cx.g, w.r)}` : `Aparat · ${cx.byId[r.id]?.aparat ?? ''}`)
       : k === 'fasonBek' ? `Fason · ${r.m.slice(1)}` : k === 'ariza' ? `Arıza · ${r.m}` : null;
     if (ad !== null) kaynak.push([k, ad, v]);
   };
@@ -759,7 +816,7 @@ const NEDEN: Record<string, string> = {
   simdi: 'Plan başlangıcında hazırdı; ilk boş anda başladı.', serbest: 'Siparişin serbest bırakılma anını bekledi.',
   malzeme: 'Malzemenin gelişini bekledi (malzeme kuralı: sert).', program: 'NC programının hazırlanmasını bekledi.', kilit: 'Kilitli saatine bağlı.',
   ariza: 'Tezgâhın arıza ya da bakımının bitmesini bekledi.', ayarci: 'Boş ayarcı bekledi.', personel: 'Boş operatör bekledi.',
-  yetkin: 'Bu tezgâh grubunda yetkin boş operatör bekledi.', aparat: 'Aparatın boşalmasını bekledi.',
+  yetkin: 'Bu tezgâh grubunda yetkin boş operatör bekledi.', aparat: 'Aparatın boşalmasını bekledi.', ikincil: 'İkincil kaynağın (aparat, özel takım) boşalmasını bekledi.',
   'fason-kap': 'Fasoncunun kapasitesi doluydu; sonraki çıkışa kaldı.', 'fason-cikis': 'Fasoncunun çıkış gününü bekledi.',
 };
 export function nedenMetni(r: PlanIslemi): string {

@@ -8,6 +8,7 @@ import type { BeklenenYetkiler } from '#cekirdek/test-yetki.ts';
 import { testVeritabaniKur } from '#cekirdek/test-vt.ts';
 import type { TestVeritabani } from '#cekirdek/test-vt.ts';
 import { uygulamaKur } from '#cekirdek/uygulama.ts';
+import { ISTASYON_YAZMA_ISLEMLERI } from '#paylasilan/islemler.ts';
 import { PLAN_ISLEMLERI } from '#paylasilan/islemler/plan.ts';
 import { denetimYaz } from '../denetim/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
@@ -31,6 +32,7 @@ const BEKLENEN: BeklenenYetkiler = {
   'GET /plan/canli-yerlesim': PLAN_OKUR,
   'GET /plan/canliya-alma-gecmisi': PLAN_OKUR,
   'GET /plan/veri-sagligi': { biri: ['plan.oku', 'plan.yaz', 'plan.planlama-oku'] } as const,
+  'GET /plan/takim-omurleri': { biri: ['sayfa.istasyonlar', ...ISTASYON_YAZMA_ISLEMLERI] } as const,
   'GET /plan/plan-sagligi': 'plan.planlama-oku',
   'GET /plan/analiz': 'plan.planlama-oku',
   'GET /plan/mrp-ihtiyaci': 'plan.planlama-oku',

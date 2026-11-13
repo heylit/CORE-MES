@@ -106,8 +106,15 @@ export const yanUrunGirdisi = z.object({
 // Adım ekipmanı (2893-4 a): aparat bir malzeme kartıdır (adet ve yer Stok'ta), ölçü aleti kalibrasyondaki alet türüdür.
 export const EKIPMAN_TURLERI = ['aparat', 'olcu_aleti'] as const;
 const ekipmanAciklamasi = z.string().trim().max(200, 'Açıklama en çok 200 karakter.').nullable().transform((x) => (x === '' ? null : x));
+// 3199 (A): aparat ve özel takım planın ikincil kaynağıdır; adım kaç adet ve hangi aşamada (ayar ve işleme ya da yalnız işleme) istediğini
+// söyler. Ölçü aleti plana girmez (V5): alanları yoktur.
+export const EKIPMAN_ASAMALARI = ['ayar_isleme', 'isleme'] as const;
+export const EKIPMAN_ADET_TAVANI = 100;
 export const ekipmanGirdisi = z.discriminatedUnion('tur', [
-  z.object({ tur: z.literal('aparat'), malzemeId: MALZEME_KIMLIGI, aciklama: ekipmanAciklamasi }),
+  z.object({
+    tur: z.literal('aparat'), malzemeId: MALZEME_KIMLIGI, aciklama: ekipmanAciklamasi,
+    adet: z.number().int().min(1, 'Adet en az 1.').max(EKIPMAN_ADET_TAVANI).default(1), asama: z.enum(EKIPMAN_ASAMALARI).default('ayar_isleme'),
+  }),
   z.object({ tur: z.literal('olcu_aleti'), aletTuruId: KIMLIK, aciklama: ekipmanAciklamasi }),
 ]);
 
@@ -259,6 +266,7 @@ export const adimSemasi = z.object({
   // Aparatta malzeme, ölçü aletinde alet türü dolu; öteki null.
   ekipman: z.array(z.object({
     tur: z.enum(EKIPMAN_TURLERI), malzeme: urunOzeti.nullable(), aletTuru: z.object({ id: KIMLIK, ad: z.string() }).nullable(), aciklama: z.string().nullable(),
+    adet: z.number().int(), asama: z.enum(EKIPMAN_ASAMALARI),
   })),
   akis: akisSemasi,
   // İstenen ürün miktarı için: fire payıyla büyümüş adım miktarı ve teorik süre (dk); süre eksikse ya da adım fasonsa null.
@@ -528,6 +536,7 @@ export type Adim = z.output<typeof adimSemasi>;
 export type AdimGirdisi = z.output<typeof adimGirdisi>;
 export type EkipmanGirdisi = z.output<typeof ekipmanGirdisi>;
 export type EkipmanTuru = (typeof EKIPMAN_TURLERI)[number];
+export type EkipmanAsamasi = (typeof EKIPMAN_ASAMALARI)[number];
 export type KaydetGovdesiCikti = z.output<typeof kaydetGovdesi>;
 export type KaydetGovdesi = z.input<typeof kaydetGovdesi>;
 export type TaslakAcGovdesi = z.input<typeof taslakAcGovdesi>;
@@ -837,6 +846,9 @@ export const adimSartnameleriGovdesi = z.object({
 export const adimEkipmaniGovdesi = z.object({ surum: KIMLIK, opNo: KIMLIK, ekipman: z.array(ekipmanGirdisi).max(AZAMI_EKIPMAN) });
 export type AdimEkipmaniGovdesi = z.output<typeof adimEkipmaniGovdesi>;
 // Adımda seçilebilen ölçü aleti türleri (kalibrasyonun açık türleri); rota yazan rol kalibrasyon sayfasını görmeyebilir.
+// 3199: Kaynaklar > İkincil kaynaklar'daki "Kullanan adım" sütunu: yürürlükteki ve açık revizyonlarda kartı isteyen adım sayısı.
+export const aparatKullanimiCevabi = z.object({ kullanim: z.array(z.object({ malzemeId: KIMLIK, adim: z.number().int() })) });
+export type AparatKullanimiCevabi = z.output<typeof aparatKullanimiCevabi>;
 export const olcuAletiTurleriCevabi = z.object({ turler: z.array(z.object({ id: KIMLIK, ad: z.string() })) });
 export type OlcuAletiTurleriCevabi = z.output<typeof olcuAletiTurleriCevabi>;
 

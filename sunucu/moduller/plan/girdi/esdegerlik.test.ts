@@ -74,6 +74,11 @@ const ek = {
   tedarikTerminleri: [{ kod: '60', termin: '2026-10-22', surum: 3, aciklama: '' }],
   malzemeFiyatlari: [{ kod: '60', alisFiyati: 80, teslimSayisi: 2, kg: null }],
   siparisBedelleri: { 1: { gelir: 15000, cezaOran: 0.5, cezaTavan: 10 }, 2: { gelir: null, cezaOran: null, cezaTavan: null } },
+  // 3199: ikincil kaynak (İstasyonlar) ve adımın isteği (Rota).
+  ikincil: {
+    kaynaklar: [{ id: '1', kart: '70', kod: 'AP-ORN-1', ad: 'Ornek fikstur', istasyon: null, adet: 1, tur: 'aparat', kisit: 'sert', kesintiler: [], omur: null, omurBirimi: null, degisimDk: null, kalanPay: null }],
+    istekler: { 'E-1|10': [{ kart: '70', adet: 1, asama: 'ayar_isleme' }] },
+  },
 };
 // Açık çalışma: planlamacının elle girdikleri (plan alt nesneleri ve sayfa ayarları) önceki kurulumdan kalmış gibi.
 const calisma = {

@@ -179,6 +179,31 @@ describe('rota adım ekipmanı (2893-4 a, gerçek PostgreSQL)', () => {
     assert.deepEqual(s.adimlar.map((a) => [a.opNo, a.ekipman.map((x) => x.aletTuru?.ad ?? x.malzeme?.id)]), [[10, []], [20, ['Kumpas']]]);
   });
 
+  // 3199 (A): aparat satırı planın ikincil kaynak isteğidir: adet ve aşama yazılır, okunur ve emre kopyalanır; verilmezse 1 ve ayar ile işleme.
+  test('aparat adedi ve aşaması yazılır, okunur ve iş emrine kopyalanır; verilmezse 1 adet ayar ve işleme; sınır dışı adet ve aşama 400', async () => {
+    const { id, surum } = await taslak();
+    const takim = await kartAc('hammadde');
+    assert.equal((await yaz(id, surum, 10, [{ tur: 'aparat', malzemeId: aparat, aciklama: null, adet: 0 }])).statusCode, 400, 'adet 0');
+    assert.equal((await yaz(id, surum, 10, [{ tur: 'aparat', malzemeId: aparat, aciklama: null, adet: 101 }])).statusCode, 400, 'adet tavan üstü');
+    assert.equal((await yaz(id, surum, 10, [{ tur: 'aparat', malzemeId: aparat, aciklama: null, asama: 'ayar' }])).statusCode, 400, 'bilinmeyen aşama');
+    const y = await yaz(id, surum, 10, [
+      { tur: 'aparat', malzemeId: aparat, aciklama: null }, { tur: 'aparat', malzemeId: takim, aciklama: null, adet: 2, asama: 'isleme' },
+      { tur: 'olcu_aleti', aletTuruId: mikrometre, aciklama: null },
+    ]);
+    assert.equal(y.statusCode, 200, y.body);
+    const r = await oku(id);
+    assert.deepEqual(r.adimlar.find((a) => a.opNo === 10)!.ekipman.map((x) => [x.malzeme?.id ?? null, x.adet, x.asama]),
+      [[aparat, 1, 'ayar_isleme'], [takim, 2, 'isleme'], [null, 1, 'ayar_isleme']]);
+    const kullanim = (await tamam<{ kullanim: { malzemeId: number; adim: number }[] }>(c.planlama, 'GET', '/rota/aparat-kullanimi')).kullanim;
+    assert.equal(kullanim.find((k) => k.malzemeId === takim)?.adim, 1, 'kartı isteyen adım sayısı');
+    await yururlugeAl(id, y.json<KomutCevabi>().surum);
+    const { uretimEmriId } = await emirAc(id);
+    const emir = await vt().tx((db) => adimliEmirAyrintisi(db, uretimEmriId));
+    const ie = emir.isEmirleri.find((i) => i.opNo === 10)!.id;
+    const liste = await vt().tx((db) => isEmriEkipmanlari(db, [ie]));
+    assert.deepEqual(liste.map((x) => [x.malzemeId, x.adet, x.asama]), [[aparat, 1, 'ayar_isleme'], [takim, 2, 'isleme'], [null, 1, 'ayar_isleme']]);
+  });
+
   test('yürürlükteki revizyona yazılmaz; emir açılınca liste iş emrine kopyalanır, hazırlık maddeleri eksik görünür; bölünen kol kopyalar', async () => {
     const { id, surum } = await taslak();
     const y = await yaz(id, surum, 10, [{ tur: 'aparat', malzemeId: aparat, aciklama: null }, { tur: 'olcu_aleti', aletTuruId: mikrometre, aciklama: null }]);

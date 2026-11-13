@@ -471,11 +471,20 @@ export async function planAyariYaz(
 }
 
 // 2112: aparat plan kapasitesi. Kart ile istasyon çifti tekildir (kısıt); güncelleme ve silme okunan sürümle koşulludur.
+// 3199: satır ikincil kaynaktır (tür, kısıt, özel takımın ömrü); kesinti takvimi alt tablodadır, satırla birlikte yeniden yazılır.
 export interface AparatKapasitesiSatiri {
-  id: number; aparatKartiId: number; istasyonId: number | null; adet: number; degistirenKisiId: number; degisme: string; surum: number;
+  id: number; aparatKartiId: number; istasyonId: number | null; adet: number; tur: 'aparat' | 'ozel_takim'; kisit: 'sert' | 'izle';
+  omur: number | null; omurBirimi: 'dk' | 'adet' | null; degisimDk: number | null; degistirenKisiId: number; degisme: string; surum: number;
 }
-const APARAT_KAPASITESI = `id, aparat_karti_id AS "aparatKartiId", istasyon_id AS "istasyonId", adet, degistiren_kisi_id AS "degistirenKisiId",
-  ${zamanMetni('degisme')} AS degisme, surum`;
+export interface AparatKesintisiSatiri {
+  id: number; kapasiteId: number; neden: 'bakim' | 'kalibrasyon' | 'odunc'; baslangic: string; bitis: string; adet: number; aciklama: string | null;
+}
+export interface IkincilKaynakAlanlari {
+  adet: number; tur: 'aparat' | 'ozel_takim'; kisit: 'sert' | 'izle'; omur: number | null; omurBirimi: 'dk' | 'adet' | null; degisimDk: number | null;
+}
+// numeric metin döner; ömür sayıdır (iki ondalık).
+const APARAT_KAPASITESI = `id, aparat_karti_id AS "aparatKartiId", istasyon_id AS "istasyonId", adet, tur, kisit, omur::float8 AS omur,
+  omur_birimi AS "omurBirimi", degisim_dk AS "degisimDk", degistiren_kisi_id AS "degistirenKisiId", ${zamanMetni('degisme')} AS degisme, surum`;
 
 export function aparatKapasiteleri(db: Db): Promise<AparatKapasitesiSatiri[]> {
   return db.sorgu<AparatKapasitesiSatiri>(
@@ -483,24 +492,47 @@ export function aparatKapasiteleri(db: Db): Promise<AparatKapasitesiSatiri[]> {
   );
 }
 
+export function aparatKesintileri(db: Db, kapasiteIdleri: readonly number[] | null = null): Promise<AparatKesintisiSatiri[]> {
+  return db.sorgu<AparatKesintisiSatiri>(
+    `SELECT id, kapasite_id AS "kapasiteId", neden, ${zamanMetni('baslangic')} AS baslangic, ${zamanMetni('bitis')} AS bitis, adet, aciklama
+       FROM istasyonlar_aparat_kesintisi WHERE $1::int[] IS NULL OR kapasite_id = ANY($1::int[]) ORDER BY kapasite_id, baslangic, id`,
+    [kapasiteIdleri === null ? null : [...kapasiteIdleri]],
+  );
+}
+
+export async function aparatKesintileriYaz(
+  db: Db, kapasiteId: number, l: readonly { neden: string; baslangic: string; bitis: string; adet: number; aciklama: string | null }[], kisiId: number,
+): Promise<void> {
+  await db.sorgu('DELETE FROM istasyonlar_aparat_kesintisi WHERE kapasite_id = $1', [kapasiteId]);
+  for (const k of l) {
+    await db.sorgu(
+      `INSERT INTO istasyonlar_aparat_kesintisi (kapasite_id, neden, baslangic, bitis, adet, aciklama, degistiren_kisi_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+      [kapasiteId, k.neden, k.baslangic, k.bitis, k.adet, k.aciklama, kisiId],
+    );
+  }
+}
+
 export function aparatKapasitesiEkle(
-  db: Db, g: { aparatKartiId: number; istasyonId: number | null; adet: number }, kisiId: number,
+  db: Db, g: { aparatKartiId: number; istasyonId: number | null } & IkincilKaynakAlanlari, kisiId: number,
 ): Promise<AparatKapasitesiSatiri | null> {
   return db.tek<AparatKapasitesiSatiri>(
-    `INSERT INTO istasyonlar_aparat_kapasitesi (aparat_karti_id, istasyon_id, adet, degistiren_kisi_id) VALUES ($1, $2, $3, $4)
+    `INSERT INTO istasyonlar_aparat_kapasitesi (aparat_karti_id, istasyon_id, adet, tur, kisit, omur, omur_birimi, degisim_dk, degistiren_kisi_id)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
      RETURNING ${APARAT_KAPASITESI}`,
-    [g.aparatKartiId, g.istasyonId, g.adet, kisiId],
+    [g.aparatKartiId, g.istasyonId, g.adet, g.tur, g.kisit, g.omur, g.omurBirimi, g.degisimDk, kisiId],
   );
 }
 
 export function aparatKapasitesiGuncelle(
-  db: Db, id: number, g: { istasyonId: number | null; adet: number; surum: number }, kisiId: number,
+  db: Db, id: number, g: { istasyonId: number | null; surum: number } & IkincilKaynakAlanlari, kisiId: number,
 ): Promise<AparatKapasitesiSatiri | null> {
   return db.tek<AparatKapasitesiSatiri>(
-    `UPDATE istasyonlar_aparat_kapasitesi SET istasyon_id = $2, adet = $3, degistiren_kisi_id = $4, degisme = now(), surum = surum + 1
-      WHERE id = $1 AND surum = $5
+    `UPDATE istasyonlar_aparat_kapasitesi SET istasyon_id = $2, adet = $3, tur = $4, kisit = $5, omur = $6, omur_birimi = $7, degisim_dk = $8,
+            degistiren_kisi_id = $9, degisme = now(), surum = surum + 1
+      WHERE id = $1 AND surum = $10
      RETURNING ${APARAT_KAPASITESI}`,
-    [id, g.istasyonId, g.adet, kisiId, g.surum],
+    [id, g.istasyonId, g.adet, g.tur, g.kisit, g.omur, g.omurBirimi, g.degisimDk, kisiId, g.surum],
   );
 }
 
