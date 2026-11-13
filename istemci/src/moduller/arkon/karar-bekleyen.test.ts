@@ -148,12 +148,15 @@ describe('kuyruk gönderimi: reddedilen bekleyen kayıt düşmez', () => {
     await AKStore.local.add('outbox', say('yazilmadi-1'));
     await AKStore.init(); await bekle(120);
     const [a] = await AKStore.Log.bekleyenler();
+    const donen: { cid?: string }[] = [];
+    window.addEventListener('arkon-sayim-yeniden-yazildi', (e) => donen.push((e as CustomEvent).detail));
 
     kabul.add('yazilmadi-1');
     expect(await AKStore.Log.kararCoz(a!.anahtar, 'yeniden')).toBe(true);
     await bekle(120);
     expect(await AKStore.Log.bekleyenler()).toEqual([]);
     expect(gonderilen.filter((c) => c === 'yazilmadi-1')).toHaveLength(2);
+    expect(donen.map((d) => d.cid)).toEqual(['yazilmadi-1']);
   });
 
   it('"yeniden": ikinci kez reddedilen kayıt bir daha denenmez', async () => {
@@ -161,9 +164,12 @@ describe('kuyruk gönderimi: reddedilen bekleyen kayıt düşmez', () => {
     await AKStore.local.add('outbox', say('yazilmadi-1'));
     await AKStore.init(); await bekle(120);
     const [a] = await AKStore.Log.bekleyenler();
+    const retler: unknown[] = [];
+    window.addEventListener('arkon-rejected', (e) => retler.push((e as CustomEvent).detail));
     expect(await AKStore.Log.kararCoz(a!.anahtar, 'yeniden')).toBe(true);
     await bekle(120);
     expect((await AKStore.Log.bekleyenler()).map((x) => [x.durum, x.yenidenDenenir])).toEqual([['karar', false]]);
+    expect(retler, 'adet ilk retle geri alındı; ikinci ret yeniden geri aldırmaz').toEqual([]);
     expect(await AKStore.Log.kararCoz(a!.anahtar, 'yeniden')).toBe(false);
   });
 

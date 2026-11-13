@@ -293,17 +293,19 @@ export interface Status { mode: 'server' | 'local'; base: string | null; online:
           else if (it.op === 'del') await remoteDel(it.store, it.id, it.base);
           else if (it.op === 'log') {
             const cevap = await api('POST', '/log/' + it.kind, [it.row]);
-            retleriBildir(it.kind, [it.row], cevap, true);
+            // Yeniden denenen kaydın adedi ilk retle ekrandan zaten geri alındı: ikinci ret yeniden geri aldırmaz.
+            if (!it.yeniden) retleriBildir(it.kind, [it.row], cevap, true);
             const ret = logRetleri(cevap).find(r => r.cid === it.row.cid);
             // Sunucu kaydı yazdı ama CORE'a işlemedi: aynı kimlikle yeniden gönderim sunucuda elenir, yeniden denenmez.
             if (ret) { await L.put('outbox', Object.assign({}, it, { red: { ileti: ret.ileti, at: Date.now(), yazildi: true, yenidenDenendi: !!it.yeniden } }), k); karar++; continue; }
             kesin++;
+            if (it.yeniden && it.kind === 'counts') { try { window.dispatchEvent(new CustomEvent(SAYIM_YENIDEN_YAZILDI_OLAYI, { detail: { kind: 'counts', cid: it.row.cid, row: it.row } })); } catch (x) {} }
           }
         } catch (e: any) {
           // sunucu reddetti (yetki yok, geçersiz kayıt): kuyruğu tıkamasın, kaydı düşür ve bildir
           if (gonderimSonucu(e) === 'kuyruk') throw e;
           console.warn('sunucu kaydı reddetti', it, e.message);
-          try { window.dispatchEvent(new CustomEvent('arkon-rejected', { detail: { store: it.store, id: it.id, kind: it.kind, row: it.row, msg: e.message, ...(it.op === 'log' ? { cid: it.row.cid, bekledi: true } : {}) } })); } catch (x) {}
+          if (!(it.op === 'log' && it.yeniden)) { try { window.dispatchEvent(new CustomEvent('arkon-rejected', { detail: { store: it.store, id: it.id, kind: it.kind, row: it.row, msg: e.message, ...(it.op === 'log' ? { cid: it.row.cid, bekledi: true } : {}) } })); } catch (x) {} }
           if (it.op === 'put') belgeRedBildir(it.store, it.id, e);
           // Bekleyen üretim kaydının reddi düşmez: kişi yeniden deneyene ya da vazgeçene kadar kuyrukta kalır (kayıt sunucuda yazılmadı).
           if (it.op === 'log') { await L.put('outbox', Object.assign({}, it, { red: { ileti: String(e.message || ''), at: Date.now(), yazildi: false, yenidenDenendi: !!it.yeniden } }), k); karar++; continue; }

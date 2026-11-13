@@ -1,0 +1,28 @@
+/* Bekleyen işlem işaretleri. Ton: bekliyor (saat), kesinleşiyor, kesin, karar; renk tek başına anlam taşımaz, durum metniyle yazılır. */
+[data-ton="bekliyor"] { --bk: var(--hold); }
+[data-ton="gonderiliyor"] { --bk: var(--done); }
+[data-ton="kesin"] { --bk: var(--run); }
+[data-ton="karar"] { --bk: var(--stop); }
+[data-ton="vazgecildi"] { --bk: var(--idle); }
+
+.tc-bk-isaret { display: inline-flex; align-items: center; gap: var(--b-1); color: var(--bk); font-size: var(--yazi-xs); font-weight: 700; white-space: nowrap; }
+.tc-bk-soluk { color: var(--muted); font-size: var(--yazi-xs); margin: 0; }
+.tc-bk-ozet { display: flex; gap: var(--b-2); align-items: flex-start; margin: 0 0 var(--b-2); font-size: var(--yazi-s); }
+.tc-bk-liste { list-style: none; margin: var(--b-3) 0 0; padding: 0; display: grid; gap: var(--b-2); }
+.tc-bk-satir { display: grid; gap: var(--b-2); padding: var(--b-2) var(--b-3); border: var(--cizgi-ince) solid var(--edge); border-inline-start: var(--b-1) solid var(--bk); border-radius: var(--yari-1); background: var(--panel2); }
+.tc-bk-satir-ust { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--b-1) var(--b-3); }
+.tc-bk-satir-ust .tc-bk-isaret { margin-inline-start: auto; }
+.tc-bk-neden { display: flex; gap: var(--b-2); align-items: flex-start; margin: 0; color: var(--ink); font-size: var(--yazi-s); }
+.tc-bk-neden .tc-simge { color: var(--stop); flex: none; }
+.tc-bk-yollar, .tc-bk-duzelt { display: flex; flex-wrap: wrap; gap: var(--b-2); align-items: center; }
+.tc-bk-duzelt input { inline-size: 6em; min-block-size: var(--dokunma); margin-inline-start: var(--b-2); font: inherit; padding: 0 var(--b-2); border: var(--cizgi-ince) solid var(--edge2); border-radius: var(--yari-1); background: var(--panel-solid); color: var(--ink); }
+.tc-bk-yollar .tc-dugme, .tc-bk-duzelt .tc-dugme { min-block-size: var(--dokunma); }
+
+/* Sayacın üstünde kendi satırında çip; yalnız bekleyen varken yer tutar. */
+.tc-bk-cip {
+  align-self: center; flex: none; inline-size: fit-content; display: inline-flex; align-items: center; gap: var(--b-2); min-block-size: var(--dokunma); padding: 0 var(--b-3);
+  border: var(--cizgi-kalin) solid var(--bk); border-radius: var(--yari-tam); background: color-mix(in srgb, var(--bk) 16%, var(--panel-solid));
+  color: var(--ink); font: inherit; font-size: var(--yazi-s); cursor: pointer; box-shadow: var(--shadow);
+}
+.tc-bk-cip .tc-simge { color: var(--bk); }
+.tc-bk-cip span { color: var(--muted); }

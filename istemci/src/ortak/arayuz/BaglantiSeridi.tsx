@@ -37,7 +37,7 @@ export function BaglantiSeridi() {
   } else if (kuyrukta > 0) {
     mesaj = 'Bağlantı geldi. Bekleyen işlemler kesinleşiyor; yeniden girmeyin.';
   } else if (ulasan > 0) {
-    mesaj = 'Bağlantı geldi. Bekleyen işlemler sonuçlandı; kesinleşmeyen olursa ayrıca bildirilir.';
+    mesaj = 'Bağlantı geldi. Bekleyen işlemler sonuçlandı.';
   } else {
     mesaj = 'Bağlantı geri geldi. Ekrandaki bilgiler yenilendi.';
   }
