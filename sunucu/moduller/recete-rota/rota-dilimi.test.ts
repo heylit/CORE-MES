@@ -195,7 +195,10 @@ describe('recete-rota rota dilimi (gerçek PostgreSQL)', () => {
     const yalniz = await islemliKisi('yalniz', ['recete-rota.oku']);
     const bos = await durumOku(yalniz);
     assert.deepEqual([bos.routes, bos.routeRevs], [null, null]);
-    for (const [ad, islem] of [['sayfali', 'sayfa.rota'], ['yazar', 'rota.yaz'], ['onaycisi', 'rota.onayla']] as const) {
+    // 3165 a: bölünmüş eski anahtar rota dilimini açmaz.
+    const eski = await durumOku(await islemliKisi('eskici', ['recete-rota.oku', 'rota.yaz']));
+    assert.deepEqual([eski.routes, eski.routeRevs], [null, null]);
+    for (const [ad, islem] of [['sayfali', 'sayfa.rota'], ['yazar', 'rota.revizyon-yaz'], ['onaycisi', 'rota.onayla']] as const) {
       const cerez = await islemliKisi(ad, ['recete-rota.oku', islem]);
       const d = await durumOku(cerez);
       assert.notEqual(d.routeRevs, null, ad);

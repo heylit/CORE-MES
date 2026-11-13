@@ -161,7 +161,8 @@ describe('rotalar (gerçek PostgreSQL)', () => {
     await ortam.vt.tx((db) => db.sorgu(
       `INSERT INTO rol_islemi (rol_id, islem)
        SELECT (SELECT id FROM rol WHERE kod = m.kod), m.islem FROM (VALUES
-         ('planlama_proje', 'rota.yaz'), ('planlama_proje', 'rota.talimat-yaz'), ('planlama_proje', 'rota.emre-kopyala'),
+         ('planlama_proje', 'rota.yaz'), ('planlama_proje', 'rota.revizyon-yaz'), ('planlama_proje', 'rota.onaya-gonder'),
+         ('planlama_proje', 'rota.sablon-yaz'), ('planlama_proje', 'rota.taslak-ac'), ('planlama_proje', 'rota.sure-kabul'), ('planlama_proje', 'rota.talimat-yaz'), ('planlama_proje', 'rota.emre-kopyala'),
          ('mudur', 'rota.onayla'), ('cam', 'rota.talimat-yaz')) AS m (kod, islem)
        ON CONFLICT DO NOTHING`,
     ));
@@ -206,6 +207,44 @@ describe('rotalar (gerçek PostgreSQL)', () => {
     assert.equal((await istek(c.operator, 'GET', `/rota/revizyonlar/${id}`)).statusCode, 403);
     const liste = await tamam<RotaListesiCevabi>(c.kalite, 'GET', '/rota/urunler');
     assert.equal(liste.rotalar.find((r) => r.urun.id === urun)?.acik?.harf, 'A');
+  });
+
+  test('3165 a: rota yazımı beş eylemdir; tek eylemi olan yalnız onu yapar, eski toplu anahtar hiçbirini açmaz', async () => {
+    const kisi = async (ad: string, islemler: readonly string[]): Promise<Cerez> => {
+      const rol = await vt().tek<{ id: number }>('INSERT INTO rol (kod, ad) VALUES ($1, $1) RETURNING id', [`gecici_${ad}`]);
+      await vt().sorgu('INSERT INTO rol_islemi (rol_id, islem) SELECT $1, unnest($2::text[])', [rol!.id, [...islemler]]);
+      await kisiEkle(ad, rol!.id);
+      return girisCerezi(ad);
+    };
+    const duzenleyen = await kisi('ornekduzen', ['rota.revizyon-yaz']);
+    const gonderen = await kisi('ornekgonder', ['rota.onaya-gonder']);
+    const eski = await kisi('ornekeski', ['rota.yaz']);
+    const urun = await mamulAc();
+    for (const cerez of [duzenleyen, gonderen, eski]) assert.equal((await taslakAc(urun, { tur: 'bos' }, cerez)).statusCode, 403);
+    // Excel açık taslağı olmayan üründe taslak açacaksa taslak açma eylemini de ister; red hiçbir şey yazmaz.
+    const excel = await istek(duzenleyen, 'POST', '/rota/adimlar/toplu-kaydet', { satirlar: [
+      { satir: 2, urunId: urun, dayanak: null, opNo: null, operasyonTipiId: tip('TRN'), ad: 'İlk adım', kaynak: { tur: 'makine', id: makineA } },
+    ] });
+    assert.equal(excel.statusCode, 403, excel.body);
+    assert.equal((await vt().tek("SELECT 1 FROM rota_revizyonu WHERE malzeme_id = $1", [urun])), null, 'reddedilen Excel taslak açmaz');
+    const { id } = (await taslakAc(urun)).json<KomutCevabi>();
+    assert.equal((await kaydet(id, 1, [yeniAdim()], gonderen)).statusCode, 403);
+    assert.equal((await kaydet(id, 1, [yeniAdim()], eski)).statusCode, 403);
+    const k = await kaydet(id, 1, [yeniAdim()], duzenleyen);
+    assert.equal(k.statusCode, 200, k.body);
+    const surum = k.json<KomutCevabi>().surum;
+    // Ekran düğmeleri sunucunun verdiği komut listesinden çizilir.
+    assert.deepEqual((await ayrinti(id, duzenleyen)).komutlar, ['kaydet', 'iptal']);
+    // Kopya hedef üründe taslak açar: yalnız düzenleyen kopyalayamaz, hedefte revizyon oluşmaz.
+    const hedef = await mamulAc();
+    assert.equal((await komut(id, 'kopyala', { hedefUrunId: hedef }, duzenleyen)).statusCode, 403);
+    assert.equal((await vt().tek('SELECT 1 FROM rota_revizyonu WHERE malzeme_id = $1', [hedef])), null);
+    assert.deepEqual((await ayrinti(id, gonderen)).komutlar, ['onaya-gonder']);
+    assert.equal((await istek(eski, 'GET', `/rota/revizyonlar/${id}`)).statusCode, 403, 'eski anahtar okumayı da açmaz');
+    assert.equal((await komut(id, 'onaya-gonder', { surum }, duzenleyen)).statusCode, 403);
+    assert.equal((await komut(id, 'onaya-gonder', { surum }, eski)).statusCode, 403);
+    const g = await komut(id, 'onaya-gonder', { surum }, gonderen);
+    assert.equal(g.statusCode, 200, g.body);
   });
 
   test('#1372: ilk adımında giren olmayan rota kaydedilir ama onaya gitmez', async () => {

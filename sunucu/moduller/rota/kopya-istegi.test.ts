@@ -118,7 +118,8 @@ describe('rota kopya isteği (gerçek PostgreSQL)', () => {
     // Rol x işlem satırları teslimle girmez: rota.test.ts ile aynı öneri dağılımı test veritabanına yazılır.
     await ortam.vt.tx((db) => db.sorgu(
       `INSERT INTO rol_islemi (rol_id, islem)
-       SELECT (SELECT id FROM rol WHERE kod = m.kod), m.islem FROM (VALUES ('planlama_proje', 'rota.yaz'), ('mudur', 'rota.onayla')) AS m (kod, islem)
+       SELECT (SELECT id FROM rol WHERE kod = m.kod), m.islem FROM (VALUES ('planlama_proje', 'rota.yaz'), ('planlama_proje', 'rota.revizyon-yaz'), ('planlama_proje', 'rota.onaya-gonder'),
+         ('planlama_proje', 'rota.sablon-yaz'), ('planlama_proje', 'rota.taslak-ac'), ('planlama_proje', 'rota.sure-kabul'), ('mudur', 'rota.onayla')) AS m (kod, islem)
        ON CONFLICT DO NOTHING`,
     ));
     await ortam.vt.tx((db) => yoneticiOlustur(db, { ad: 'Deneme Kart Onaycısı', kullaniciAdi: 'kartonay', parola: PAROLA }));

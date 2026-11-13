@@ -129,7 +129,7 @@ export function RevizyonCubugu({ r, agac, urunId, urunSec, duzenDugmeleri = null
           </>
         )}
         <span className="tc-rr1-grow" />
-        {yetki.rotaYaz && durumu === 'taslak' && <Dugme tur="birincil" simge="next" onClick={() => { ac('gonder'); }}>Onaya gönder…</Dugme>}
+        {yetki.rotaGonder && durumu === 'taslak' && <Dugme tur="birincil" simge="next" onClick={() => { ac('gonder'); }}>Onaya gönder…</Dugme>}
         {onaylayabilir && durumu === 'onay' && <Dugme tur="birincil" simge="check" onClick={() => { ac('onay'); }}>Onayla…</Dugme>}
         {onaylayabilir && V?.status === 'onayli' && (
           <Dugme tur="birincil" onClick={() => {
@@ -216,13 +216,13 @@ export function RevizyonCubugu({ r, agac, urunId, urunSec, duzenDugmeleri = null
                 tehlikeli: true, yap: () => eylem('sil', O) });
             }}>Taslağı sil</Dugme>
           )}
-          {yetki.rotaYaz && !O && !taslak && V && (V.status === 'onayli' || V.status === 'yururlukte') && (
+          {yetki.rotaTaslakAc && !O && !taslak && V && (V.status === 'onayli' || V.status === 'yururlukte') && (
             <Dugme tur="ikincil" disabled={duzen.mesgul} onClick={() => { void duzen.yeniTaslak(urunId, V).then(() => { setPanel(null); }); }}>
               Rev {V.no}&apos;dan yeni taslak aç
             </Dugme>
           )}
           <Dugme tur="ikincil" onClick={() => { setPanel('gecmis'); }}>Geçmiş ({revs.length})</Dugme>
-          {yetki.rotaYaz && <Dugme tur="ikincil" onClick={() => { setPanel('kopya'); }}>Rotayı başka ürüne kopyala</Dugme>}
+          {yetki.rotaYaz && yetki.rotaTaslakAc && <Dugme tur="ikincil" onClick={() => { setPanel('kopya'); }}>Rotayı başka ürüne kopyala</Dugme>}
         </div>
       )}
       {panel === 'gecmis' && (
@@ -254,7 +254,7 @@ export function RevizyonCubugu({ r, agac, urunId, urunSec, duzenDugmeleri = null
           />
         </div>
       )}
-      {panel === 'kopya' && yetki.rotaYaz && (
+      {panel === 'kopya' && yetki.rotaYaz && yetki.rotaTaslakAc && (
         <div className="tc-rr1-rv-panel">
           <p className="tc-rr1-ipucu">Gösterilen revizyon ({V ? `Rev ${V.no}` : 'taslak'}) başka bir ürüne taslak revizyon olarak kopyalanır; orada değiştirip onaylarsın.</p>
           <div className="tc-rr1-rv-row">

@@ -15,7 +15,7 @@ import { EmirAlani, EmirParcasi, YeniEmirPenceresi } from './emirler/UretimEmirl
 // Yeni Reçete ve Rota ekranı testlerinin ortak kurulumu (R1-R3 de kullanır). Kullanıcılar ve kayıtlar uydurmadır.
 const kisi = (id: number, islemler: string[]): Kullanici => ({ id, ad: `Deneme ${id}`, islemler: islemler as Kullanici['islemler'] });
 export const KAPI = 'kisiler.rol-yonet';
-export const YONETICI = kisi(1, [KAPI, 'sayfa.recete-rota', 'recete-rota.oku', 'recete-rota.yaz', 'rota.yaz', 'rota.onayla', 'uretim-emirleri.yaz',
+export const YONETICI = kisi(1, [KAPI, 'sayfa.recete-rota', 'recete-rota.oku', 'recete-rota.yaz', 'rota.revizyon-yaz', 'rota.onaya-gonder', 'rota.taslak-ac', 'rota.sure-kabul', 'rota.sablon-yaz', 'rota.onayla', 'uretim-emirleri.yaz',
   'stok.statu-degistir', 'stok.sayim', 'istasyonlar.istasyon-yaz', 'kisiler.yaz', 'finans.maliyet-oku']);
 export const OKUYAN = kisi(2, [KAPI, 'sayfa.recete-rota', 'recete-rota.oku']);
 export const PLANCI = kisi(4, [KAPI, 'sayfa.recete-rota', 'recete-rota.oku', 'plan.yaz']);

@@ -13,7 +13,7 @@ import { SatirGirdisi, useR2Komutu } from './parcalar.tsx';
 
 // Süreler (envanter 2.5): her ürünün yürürlükteki rotasının adımları; teorik süre, bekleyen ölçüm ve planın kullandığı süre rota
 // modülünün süre görünümündendir (169 c, 171 a). Elle giriş ölçüm yazar, kabul ölçümü ürünün rota taslağına teorik süre olarak
-// yazar; ikisi de rota.yaz ister. Plan tabanı yalnız gösterilir (Soru 468/4, öneri a): plan teorik süreyi kullanır.
+// yazar; ikisi de rota.sure-kabul ister. Plan tabanı yalnız gösterilir (Soru 468/4, öneri a): plan teorik süreyi kullanır.
 // Düzen eski ekranınkidir: tek tablo, grup başlıklı sütunlar (Adım, Teorik, Gerçekleşen, Plan); her ürün kendi satır grubudur.
 type SureAdimi = SurelerCevabi['adimlar'][number];
 
@@ -184,7 +184,7 @@ function UrunSureleri({ urunId, kod, ad, revizyonId, revNo, yetki, opId, suzgec,
     const ad = `${kod} OP ${String(a.opNo)}`;
     return (
       <span className="tc-rr2-olcum" data-tur={tur}>
-        {yetki.rotaYaz
+        {yetki.rotaSureKabul
           ? <SatirGirdisi sayi deger={virgullu(ortanca)} etiket={`Gerçekleşen ${etiket.toLocaleLowerCase('tr-TR')} dakika, ${ad}`} kaydet={(v) => elleYaz(a, tur, v)} />
           : <span>{sayi(ortanca)}</span>}
         {s !== null && (
@@ -199,7 +199,7 @@ function UrunSureleri({ urunId, kod, ad, revizyonId, revNo, yetki, opId, suzgec,
             )}
           </small>
         )}
-        {o && yetki.rotaYaz && (
+        {o && yetki.rotaSureKabul && (
           <Dugme simge="check" onClick={() => kabulEt(a, tur)} aria-label={`${etiket} ortancasını kabul et, ${ad}`}>Kabul et</Dugme>
         )}
       </span>

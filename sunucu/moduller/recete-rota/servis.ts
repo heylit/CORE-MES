@@ -3,7 +3,7 @@ import type { Gunluk } from '#cekirdek/gunluk.ts';
 import { bulunamadi, cakisma, cokBuyuk, dogrulama, eskiSurum, yetkiYok } from '#cekirdek/hata.ts';
 import { islemVarMi } from '#cekirdek/yetki.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
-import { ISTASYON_YAZMA_ISLEMLERI, type Islem } from '#paylasilan/islemler.ts';
+import { ETKISIZ_ISLEMLER, ISTASYON_YAZMA_ISLEMLERI, type Islem } from '#paylasilan/islemler.ts';
 import { ROTA_ISLEMLERI } from '#paylasilan/islemler/rota.ts';
 import { STOK_ISLEMLERI } from '#paylasilan/islemler/stok.ts';
 import type {
@@ -199,7 +199,8 @@ const MALZEME_OKUMA: readonly Islem[] = ['sayfa.malzemeler'];
 const ISTASYON_OKUMA: readonly Islem[] = ['sayfa.istasyonlar', ...ISTASYON_YAZMA_ISLEMLERI];
 const KISI_OKUMA: readonly Islem[] = ['kisiler.oku'];
 // Rotanın kendi uçları oturumla açıktır; okuma işlemi olarak rota sayfası ve rota işlemleri sayılır (kart #1184, VARSAYIM).
-const ROTA_OKUMA: readonly Islem[] = ['sayfa.rota', ...ROTA_ISLEMLERI];
+// Bölünmüş eski anahtar (ETKISIZ_ISLEMLER) okumayı açmaz: ekranda görünmediği için yönetici onu geri alamaz.
+const ROTA_OKUMA: readonly Islem[] = ['sayfa.rota', ...ROTA_ISLEMLERI.filter((i) => !ETKISIZ_ISLEMLER.includes(i))];
 const MALIYET_OKUMA: readonly Islem[] = ['finans.maliyet-oku'];
 const MALIYET_YAZMA: readonly Islem[] = ['finans.yonet'];
 const STOK_OKUMA: readonly Islem[] = ['sayfa.stok', ...STOK_ISLEMLERI];

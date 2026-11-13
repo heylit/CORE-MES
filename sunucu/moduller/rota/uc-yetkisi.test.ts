@@ -16,7 +16,8 @@ import { yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
 import { uclar } from './uclar.ts';
 
-const OKUR = ['sayfa.recete-rota', 'recete-rota.oku', ...ROTA_ISLEMLERI] as const;
+// Bölünmüş eski rota.yaz (3165 a) hiçbir ucu açmaz; tablo dışı her işlem gibi 403 alır.
+const OKUR = ['sayfa.recete-rota', 'recete-rota.oku', ...ROTA_ISLEMLERI.filter((i) => i !== 'rota.yaz')] as const;
 const ROTA_OKUR = { biri: OKUR } as const;
 
 const BEKLENEN: BeklenenYetkiler = {

@@ -222,6 +222,8 @@ export const ROL_MATRISI = {
       'plan.motor-ayari', 'plan.oku', 'plan.planlama-oku', 'plan.studyo', 'plan.yaz', 'portal.oku', 'projeler.gorev-yaz', 'projeler.oku',
       'projeler.statu-yaz', 'projeler.yaz', 'recete-rota.oku', 'recete-rota.yaz', 'rota.emre-kopyala', 'rota.onayla', 'rota.sartname-yayinla', 'rota.sartname-yaz', 'rota.talimat-yaz',
       'rota.yaz', 'saat.uyari-ustlen', 'satin-alma.oku', 'satin-alma.talep-ac', 'sayfa.adim-durumu', 'sayfa.akis', 'sayfa.arkon', 'sayfa.atolye',
+      // 3165 a: rota.yaz beş eyleme bölündü; eski işlem ayrı kartla kalkana dek satırda kalır.
+      'rota.revizyon-yaz', 'rota.onaya-gonder', 'rota.sablon-yaz', 'rota.taslak-ac', 'rota.sure-kabul',
       'sayfa.cizelge', 'sayfa.cizimler', 'sayfa.cnc-kurulum', 'sayfa.denetim-hazirlik', 'sayfa.durus-nedenleri', 'sayfa.emirler',
       'sayfa.etiket-merkezi', 'sayfa.finans', 'sayfa.geometri', 'sayfa.idari-isler', 'sayfa.ik-islemlerim', 'sayfa.istasyonlar',
       'sayfa.kuyruk', 'sayfa.logo-gecisi', 'sayfa.malzemeler', 'sayfa.matris', 'sayfa.mesai', 'sayfa.mesaj', 'sayfa.musteri-tedarikci', 'sayfa.oee',
@@ -243,6 +245,8 @@ export const ROL_MATRISI = {
       'musteri-tedarikci.yaz', 'oee.oku', 'plan.canliya-al', 'plan.kilitle', 'plan.motor-ayari', 'plan.oku', 'plan.planlama-oku',
       'plan.studyo', 'plan.yaz', 'portal.oku', 'projeler.gorev-yaz', 'projeler.oku', 'projeler.statu-yaz', 'projeler.yaz',
       'recete-rota.oku', 'recete-rota.yaz', 'rota.emre-kopyala', 'rota.sartname-yayinla', 'rota.sartname-yaz', 'rota.talimat-yaz', 'rota.yaz', 'saat.uyari-ustlen', 'satin-alma.oku',
+      // 3165 a: rota.yaz beş eyleme bölündü; eski işlem ayrı kartla kalkana dek satırda kalır.
+      'rota.revizyon-yaz', 'rota.onaya-gonder', 'rota.sablon-yaz', 'rota.taslak-ac', 'rota.sure-kabul',
       'satin-alma.talep-ac', 'sayfa.adim-durumu', 'sayfa.akis', 'sayfa.arkon', 'sayfa.atolye', 'sayfa.cizelge', 'sayfa.cizimler', 'sayfa.cnc-kurulum',
       'sayfa.denetim-hazirlik', 'sayfa.durus-nedenleri', 'sayfa.emirler', 'sayfa.etiket-merkezi', 'sayfa.finans', 'sayfa.geometri',
       'sayfa.idari-isler', 'sayfa.ik-islemlerim', 'sayfa.istasyonlar', 'sayfa.kuyruk', 'sayfa.logo-gecisi', 'sayfa.malzemeler', 'sayfa.matris', 'sayfa.mesai',

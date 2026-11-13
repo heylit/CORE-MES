@@ -9,6 +9,7 @@ import {
 import { sayi, YOK } from '../bicim.ts';
 import { tercihOku, tercihYaz, type RotaEkrani, type Secim } from './ortak.tsx';
 import { useRotaDuzeni, yeniKimlik } from './useRotaDuzeni.ts';
+import { duzenlemeAcar, yeniRotaAcar } from '../yetki.ts';
 import { AkisSemasi, SURUKLE_TURU, surukleCoz } from './AkisSemasi.tsx';
 import { AkisTablosu } from './AkisTablosu.tsx';
 import { PatlamisRota } from './PatlamisRota.tsx';
@@ -25,11 +26,11 @@ import { useKalanBoy } from './kalanBoy.ts';
 export function UrunVeRotalar(o: EkranOzellikleri) {
   const { bildir } = useBildirim();
   const [sorgu] = useSearchParams();
-  const [secim, setSecim] = useState<Secim | null>(() => (o.yetki.rotaYaz && sorgu.get('yeni') === '1' ? { tur: 'yeniRota' } : null));
+  const [secim, setSecim] = useState<Secim | null>(() => (yeniRotaAcar(o.yetki) && sorgu.get('yeni') === '1' ? { tur: 'yeniRota' } : null));
   const tamDuzen = useRotaDuzeni(o.veri, o.yetki, (urunId, adimId) => { setSecim({ tur: 'adim', urunId, adimId, seq: 0, miktar: 1 }); });
   // 2558 b/5: sayfa görüntüleme kipinde açılır; "Düzenle" palet, ekleme düğmeleri ve sürüklemeyi açar. Taslak ilk değişiklikte açılır
   // (eskisi gibi). Kip ekrandadır: kapalıyken bütün düzenleme denetimleri duzenlenebilir() üzerinden kapanır.
-  const [duzenKipi, setDuzenKipi] = useState(() => o.yetki.rotaYaz && sorgu.get('yeni') === '1');
+  const [duzenKipi, setDuzenKipi] = useState(() => yeniRotaAcar(o.yetki) && sorgu.get('yeni') === '1');
   const duzen = duzenKipi ? tamDuzen : { ...tamDuzen, duzenlenebilir: () => false };
   const [araKartlar, setAraKartlar] = useState(() => tercihOku('ara-kartlar', '') === '1');
   const { h } = duzen;
@@ -161,8 +162,8 @@ export function UrunVeRotalar(o: EkranOzellikleri) {
   const tercihYazVeAyarla = (k: string, v: boolean, yaz: (v: boolean) => void) => { yaz(v); tercihYaz(k, v ? '1' : ''); };
   const digerIslemler: MenuOgesi[] = [
     { anahtar: 'liste', baslik: liste ? 'Şemaya dön' : 'Ürün listesi', simge: 'list', sec: () => { setListe(!liste); } },
-    ...(o.yetki.rotaYaz ? [{ anahtar: 'yeni', baslik: 'Yeni rota', simge: 'plus' as const, sec: () => { setListe(false); secimYaz({ tur: 'yeniRota' }); } }] : []),
-    ...(o.yetki.rotaYaz ? [{ anahtar: 'excel', baslik: 'Excel ile rota adımları', simge: 'file' as const, sec: () => { setExcelAcik(true); } }] : []),
+    ...(yeniRotaAcar(o.yetki) ? [{ anahtar: 'yeni', baslik: 'Yeni rota', simge: 'plus' as const, sec: () => { setListe(false); secimYaz({ tur: 'yeniRota' }); } }] : []),
+    ...(duzenlemeAcar(o.yetki, taslakAcik) ? [{ anahtar: 'excel', baslik: 'Excel ile rota adımları', simge: 'file' as const, sec: () => { setExcelAcik(true); } }] : []),
     ...(!liste && kokId ? [
       { anahtar: 'ara', baslik: araKartlar ? 'Ara kartları gizle' : 'Ara kartları göster', simge: 'box' as const,
         sec: () => { tercihYazVeAyarla('ara-kartlar', !araKartlar, setAraKartlar); } },
@@ -264,10 +265,10 @@ export function UrunVeRotalar(o: EkranOzellikleri) {
   const revSatiri = !liste && kokId !== null && revId !== null;
   const duzenDugmeleri = revSatiri && gorunum !== 'patlamis' ? (
     <span className="tc-rr1-duzen-grup" role="group" aria-label="Rota düzenleme">
-      {o.yetki.rotaYaz && <Dugme className="tc-rr1-kd" tur="ikincil" simge={duzenKipi ? 'check' : 'wrench'} aria-pressed={duzenKipi}
+      {duzenlemeAcar(o.yetki, taslakAcik) && <Dugme className="tc-rr1-kd" tur="ikincil" simge={duzenKipi ? 'check' : 'wrench'} aria-pressed={duzenKipi}
         title={duzenKipi ? 'Görüntülemeye dön; kayıtlar taslakta kalır' : 'Rotayı düzenle: ilk değişiklikte taslak açılır, yürürlükteki rota değişmez'}
         onClick={() => { duzenKipiYaz(!duzenKipi); }}>{duzenKipi ? 'Düzenlemeyi bitir' : 'Düzenle'}</Dugme>}
-      {o.yetki.rotaYaz && duzenKipi && (
+      {duzenlemeAcar(o.yetki, taslakAcik) && duzenKipi && (
         <Dugme className="tc-rr1-kd" tur="ikincil" simge="layers" aria-expanded={adimPaneli} aria-controls="tc-rr1-palet"
           aria-label="Operasyon paleti" title={adimPaneli ? 'Operasyon paletini kapat' : 'Operasyon paletini aç'} onClick={() => { paletYaz(!adimPaneli); }}><span className="tc-rr1-dar-gizli">Palet</span></Dugme>
       )}
@@ -361,7 +362,7 @@ export function UrunVeRotalar(o: EkranOzellikleri) {
               <div className="tc-rr1-emptycv">
                 <h3>İlk rotanı kur</h3>
                 <p className="tc-rr1-ipucu">Bir mamul seç, sonra rotasına adım ekleyip her adıma giren ve çıkan malzemeleri bağla. Ürün kartı Malzemeler ve Hizmetler&apos;de açılır.</p>
-                {o.yetki.rotaYaz && <Dugme tur="birincil" simge="plus" onClick={() => { secimYaz({ tur: 'yeniRota' }); }}>Yeni rota</Dugme>}
+                {yeniRotaAcar(o.yetki) && <Dugme tur="birincil" simge="plus" onClick={() => { secimYaz({ tur: 'yeniRota' }); }}>Yeni rota</Dugme>}
               </div>
             )}
             <div className="tc-rr1-insp-kap">

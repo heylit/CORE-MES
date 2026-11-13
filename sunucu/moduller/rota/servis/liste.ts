@@ -6,7 +6,7 @@ import { OPERASYON_GRUP_ADLARI } from '#paylasilan/sozlesme/istasyonlar.ts';
 import { malzemeGeometrisi } from '../../geometri/disari.ts';
 import { firmaAra, firmaOzetleri } from '../../musteri-tedarikci/disari.ts';
 import { kisiAdlari } from '../../kisiler/disari.ts';
-import { YAZ, fasonTerminToplami, yeniOpNo, izinliKomutlar, ondalikMetin, rotaOzeti, sayiyaCevir } from '../kurallar.ts';
+import { TASLAK_AC, fasonTerminToplami, yeniOpNo, izinliKomutlar, ondalikMetin, rotaOzeti, sayiyaCevir } from '../kurallar.ts';
 import * as s from '../sorgular.ts';
 import {
   adimlariKur, dortGozAcikMi, gorunumBaglami, kartAdimlari, kaynakBaglami, operasyonTipleri, revizyonuAl, rotaliTurMu, urunOzetiAl, urunOzetleri,
@@ -80,7 +80,7 @@ export async function urunRevizyonlari(db: Db, kullanici: Kullanici, urunId: num
   return {
     urun,
     revizyonlar,
-    taslakAcilabilir: !acik && rotaliTurMu(urun.tur) && urun.onayDurumu === 'aktif' && kullanici.islemler.includes(YAZ),
+    taslakAcilabilir: !acik && rotaliTurMu(urun.tur) && urun.onayDurumu === 'aktif' && kullanici.islemler.includes(TASLAK_AC),
     kartOperasyonlari: kart && { sayi: kart.length, eslesmeyen: kart.filter((a) => !a.eslesti).map((a) => a.ad) },
   };
 }

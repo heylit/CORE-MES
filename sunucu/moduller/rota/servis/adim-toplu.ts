@@ -1,9 +1,9 @@
 import type { Db } from '#cekirdek/db.ts';
-import { UygulamaHatasi, cakisma, dogrulama, gecersiz } from '#cekirdek/hata.ts';
+import { UygulamaHatasi, cakisma, dogrulama, gecersiz, yetkiYok } from '#cekirdek/hata.ts';
 import { satirdaReddet } from '#cekirdek/toplu.ts';
-import type { Kullanici } from '#cekirdek/yetki.ts';
+import { islemVarMi, type Kullanici } from '#cekirdek/yetki.ts';
 import { kaydetGovdesi, type RotaAdimTopluCevabi, type RotaAdimTopluGirdisi } from '#paylasilan/sozlesme/rota.ts';
-import { ONAYDAKI_ROTA, ROTA_DEGISTI, YENI_ADIM_EKSIK, excelAdimiUygula, excelDayanagiTutar, excelYeniAdimi } from '../kurallar.ts';
+import { ONAYDAKI_ROTA, ROTA_DEGISTI, TASLAK_AC, YENI_ADIM_EKSIK, excelAdimiUygula, excelDayanagiTutar, excelYeniAdimi } from '../kurallar.ts';
 import * as s from '../sorgular.ts';
 import { icerikYazimlari } from './ortak.ts';
 import { kaydet, taslakAc } from './revizyon.ts';
@@ -44,6 +44,8 @@ async function taslakBul(db: Db, kullanici: Kullanici, urunId: number, dayanak: 
   const yururlukte = await s.yururluktekiRevizyonId(db, urunId);
   const kaynak = yururlukte === null ? null : await s.revizyonKilitle(db, yururlukte);
   if (!excelDayanagiTutar(dayanak, yururlukte === null || kaynak === null ? null : { id: yururlukte, surum: kaynak.surum })) throw cakisma(ROTA_DEGISTI);
+  // Açık taslağı olmayan üründe Excel taslak açar: taslak açma ayrı eylemdir (3165 a). Uç tek transaction'dır, red hiçbir şey yazmaz.
+  if (!islemVarMi(kullanici, TASLAK_AC)) throw yetkiYok('Bu üründe açık taslak yok; taslak açma yetkiniz olmadığı için Excel yazamaz.');
   const id = (await taslakAc(db, kullanici, urunId, yururlukte === null ? { tur: 'bos' } : { tur: 'revizyon', revizyonId: yururlukte })).id;
   const r = await s.revizyonKilitle(db, id);
   if (r === null) throw gecersiz('Taslak bulunamadı.');

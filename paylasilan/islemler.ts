@@ -123,5 +123,10 @@ export const ISTASYON_YAZMA_ISLEMLERI = [
 // Kişi listesini (bütün kişilerin adı) yalnız kişi seçen eylemler okur.
 export const ISTASYON_KISI_SECEN_ISLEMLER = ['istasyonlar.kisi-ata', 'istasyonlar.ekip-yaz', 'istasyonlar.yetkinlik-yaz'] as const satisfies readonly VeriIslemi[];
 
+// Rota yazımı beş eyleme bölündü (3165 a); okuma uçları hepsini tanır.
+export const ROTA_YAZMA_ISLEMLERI = [
+  'rota.revizyon-yaz', 'rota.onaya-gonder', 'rota.sablon-yaz', 'rota.taslak-ac', 'rota.sure-kabul',
+] as const satisfies readonly VeriIslemi[];
+
 // Bölünmüş eski anahtarlar: hiçbir ucu açmaz, satırı ayrı kartla silinene dek katalogda kalır (3165 a). Sayfa yetkileri ekranı bunları göstermez.
-export const ETKISIZ_ISLEMLER: readonly Islem[] = ['istasyonlar.yaz'];
+export const ETKISIZ_ISLEMLER: readonly Islem[] = ['istasyonlar.yaz', 'rota.yaz'];

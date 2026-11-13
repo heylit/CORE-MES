@@ -5,7 +5,7 @@ import type { Komut } from '../../ortak/rota/komutlar.ts';
 export const komutlar: Komut[] = [
   {
     anahtar: 'recete-rota-yeni-rota', sira: 10, baslik: 'Yeni rota', aciklama: 'Ürün ve rotalarda yeni rota penceresini açar.',
-    sozcukler: ['rota aç', 'reçete', 'akış şeması'], simge: 'layers', yol: '/recete-rota/schema?yeni=1', islem: 'rota.yaz',
+    sozcukler: ['rota aç', 'reçete', 'akış şeması'], simge: 'layers', yol: '/recete-rota/schema?yeni=1', islem: 'rota.taslak-ac',
   },
   {
     // Emrin ana yeri Üretim Emirleri'dir (3003 a): komut oradaki açma penceresini getirir.

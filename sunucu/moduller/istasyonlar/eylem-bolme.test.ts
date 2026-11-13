@@ -144,6 +144,20 @@ describe('istasyon eylemlerine bölme (gerçek PostgreSQL)', () => {
     assert.equal(await yaz(istasyoncu, '/is-merkezleri', { kod: 'ORN-IM2', ad: 'Deneme', aciklama: null }), 403);
     assert.equal(await yaz(eskici, '/is-merkezleri', { kod: 'ORN-IM2', ad: 'Deneme', aciklama: null }), 403);
     assert.equal(await yaz(istasyoncu, '/tesis-sablonu/uygula', undefined), 403, 'şablon iş merkezi de açar');
+    // Şablon ucu tanım eylemini ister; iş merkezi ve istasyon açtığı için servis o iki eylemi de arar ve hiçbir şey açmadan reddeder.
+    await rolluKisi('ornek.tanim', ['istasyonlar.tanim-yaz']);
+    await rolluKisi('ornek.sablon', ['istasyonlar.tanim-yaz', 'istasyonlar.is-merkezi-yaz', 'istasyonlar.istasyon-yaz']);
+    const merkezSayisi = async () => (await vt().tek<{ n: number }>('SELECT count(*)::int AS n FROM is_merkezi'))!.n;
+    const once = await merkezSayisi();
+    assert.equal(await yaz(await girisCerezi('ornek.tanim'), '/tesis-sablonu/uygula', undefined), 403);
+    assert.equal(await merkezSayisi(), once, 'reddedilen şablon iş merkezi açmaz');
+    assert.equal(await yaz(await girisCerezi('ornek.sablon'), '/tesis-sablonu/uygula', undefined), 200);
+    // Bütün kişilerin adını veren liste yalnız kişi seçen üç eyleme açıktır.
+    await rolluKisi('ornek.ekip', ['istasyonlar.ekip-yaz']);
+    const kisiListesi = async (cerez: string) => (await app.inject({ method: 'GET', url: '/api/kisi-secenekleri', headers: { cookie: cerez } })).statusCode;
+    assert.equal(await kisiListesi(await girisCerezi('ornek.ekip')), 200);
+    assert.equal(await kisiListesi(istasyoncu), 403);
+    assert.equal(await kisiListesi(eskici), 403);
     // Excel: istasyon satırı geçer, aynı dosyada iş merkezi satırı varsa hiçbiri yazılmaz.
     const satir = (n: number, kayit: 'is-merkezi' | 'istasyon') => (kayit === 'is-merkezi'
       ? { kayit, islem: 'ekle', satir: n, kod: `ORN-IM${n}`, ad: 'Deneme', aciklama: null }

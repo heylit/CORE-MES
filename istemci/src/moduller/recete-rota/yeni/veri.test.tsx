@@ -94,8 +94,11 @@ describe('yetki', () => {
     const okuyan = yetkiHesapla(yetkiKur(['sayfa.recete-rota']));
     expect(okuyan.oku).toBe(true);
     expect(okuyan.herhangiYazma).toBe(false);
-    const rotaci = yetkiHesapla(yetkiKur(['recete-rota.oku', 'rota.yaz']));
-    expect(rotaci).toMatchObject({ oku: true, rotaYaz: true, rotaOnayla: false, yaz: false, emirYaz: false, herhangiYazma: true });
+    const rotaci = yetkiHesapla(yetkiKur(['recete-rota.oku', 'rota.revizyon-yaz']));
+    expect(rotaci).toMatchObject({ oku: true, rotaYaz: true, rotaGonder: false, rotaTaslakAc: false, rotaSureKabul: false, rotaOnayla: false, yaz: false, emirYaz: false, herhangiYazma: true });
+    // 3165 a: her eylem kendi bayrağını açar; bölünmüş eski anahtar hiçbirini açmaz.
+    expect(yetkiHesapla(yetkiKur(['recete-rota.oku', 'rota.onaya-gonder', 'rota.taslak-ac', 'rota.sure-kabul']))).toMatchObject({ rotaYaz: false, rotaGonder: true, rotaTaslakAc: true, rotaSureKabul: true });
+    expect(yetkiHesapla(yetkiKur(['recete-rota.oku', 'rota.yaz']))).toMatchObject({ rotaYaz: false, rotaGonder: false, rotaTaslakAc: false, rotaSureKabul: false, herhangiYazma: false });
     expect(yetkiHesapla(yetkiKur(['stok.sayim'])).stokOku).toBe(true);
     expect(yetkiHesapla(yetkiKur([])).oku).toBe(false);
   });
