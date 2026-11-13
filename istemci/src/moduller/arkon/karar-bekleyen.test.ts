@@ -7,6 +7,7 @@ interface Bekleyen { anahtar: number; tur: string; satir: { cid?: string }; duru
 interface Depo {
   init(): Promise<unknown>; status(): { pending: number };
   local: { add(s: string, v: unknown): Promise<unknown> };
+  Server: { flush(): Promise<void> };
   Log: { bekleyenler(): Promise<Bekleyen[]>; kararCoz(a: number, yol: 'yeniden' | 'vazgec' | 'duzelt'): Promise<boolean> };
 }
 
@@ -141,6 +142,12 @@ describe('kuyruk gönderimi: reddedilen bekleyen kayıt düşmez', () => {
     expect(olaylar.map((o) => [o.cid, o.bekledi])).toEqual([['yazilmadi-1', true], ['yazildi-1', true]]);
     expect(ozet).toContainEqual({ kesin: 1, karar: 2 });
     expect(gonderilen).toEqual(['tamam-1', 'yazilmadi-1', 'yazildi-1']);
+
+    // Sonraki gönderimde karar bekleyenler atlanır; yalnız yeni bekleyen gider.
+    await AKStore.local.add('outbox', say('tamam-2'));
+    await AKStore.Server.flush(); await bekle(120);
+    expect(gonderilen).toEqual(['tamam-1', 'yazilmadi-1', 'yazildi-1', 'tamam-2']);
+    expect((await AKStore.Log.bekleyenler()).map((x) => x.satir.cid)).toEqual(['yazilmadi-1', 'yazildi-1']);
   });
 
   it('"yeniden": sunucuda yazılmamış kayıt kuyruğa döner ve güncel kuralla yeniden gönderilir', async () => {
