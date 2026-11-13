@@ -26,6 +26,8 @@ export interface Sutun<S> {
   sabit?: 'sol' | 'sag';
   // Yalnız `kip="kaydir"` tabloda: uzun yazı tek satırda sütun genişliğinde "…" ile kesilir; tamamı imlecin ipucunda (CSV değeri).
   kes?: boolean;
+  // Hücresi birkaç parçadan oluşan sütun (rozet, kod, düğme birlikte): kart kipinde değer başlığın yanına sıkışmaz, altında tam satıra iner.
+  kartTamSatir?: boolean;
 }
 
 export interface TabloSuzgeci {
@@ -423,7 +425,7 @@ export function Tablo<S>({
                 )}
                 {sutunlar.map((s) => {
                   const icerik = s.hucre(satir);
-                  const sinif = [s.hizala === 'sag' && 'tc-tablo-sag', s.mono && 'mono', s.kirilmaz && 'tc-tablo-kirilmaz', sabitSinif(s)].filter(Boolean).join(' ');
+                  const sinif = [s.hizala === 'sag' && 'tc-tablo-sag', s.mono && 'mono', s.kirilmaz && 'tc-tablo-kirilmaz', s.kartTamSatir && 'tc-tablo-tam', sabitSinif(s)].filter(Boolean).join(' ');
                   return (
                     <td key={s.anahtar} data-baslik={s.baslik} className={sinif || undefined}>
                       {icerik === null || icerik === undefined || icerik === '' ? <BosHucre />

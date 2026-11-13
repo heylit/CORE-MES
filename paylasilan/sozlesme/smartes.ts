@@ -34,6 +34,9 @@ export const durumCevabi = z.object({
   }),
 });
 
+export const SMARTES_ONERI_GEREKCELERI = ['ayni-kod', 'ayni-ad', 'benzer-ad'] as const;
+export type SmartesOneriGerekcesi = (typeof SMARTES_ONERI_GEREKCELERI)[number];
+
 export const eslemeSorgusu = z.object({ tur: z.enum(SMARTES_ESLEME_TURLERI) });
 
 export const eslemelerCevabi = z.object({
@@ -46,8 +49,20 @@ export const eslemelerCevabi = z.object({
     smartesKod: z.string().nullable(),
     // Eşleme yoksa null; düzenleme ve kaldırma bu sürümle gider.
     surum: surumSemasi.nullable(),
+    // Eşlenmemiş kayda SmartES listesinden bulunan aday: aynı kod, aynı ad ya da benzer ad. Kişi onaylamadan eşleme yazılmaz.
+    oneri: z.object({ kod: z.string(), ad: z.string().nullable(), gerekce: z.enum(SMARTES_ONERI_GEREKCELERI) }).nullable(),
   })),
+  // SmartES'in kendi listesi (istasyon, makine, operasyon); kod buradan seçilir. Hiç okunamadıysa null: kod elle girilir.
+  smartesListesi: z.array(z.object({ kod: z.string(), ad: z.string().nullable() })).nullable(),
 });
+
+// Önerilerin onayı (tek ya da toplu): yalnız ekranda görülen öneriler gider. Sunucu öneriyi yeniden hesaplar; arada eşlenmiş,
+// kodu başka kayda verilmiş ya da önerisi değişmiş satır yazılmaz, sayılır.
+export const onerileriOnaylaGovdesi = z.object({
+  tur: z.enum(SMARTES_ESLEME_TURLERI),
+  satirlar: z.array(z.object({ tmiId: z.number().int().positive(), smartesKod: z.string().min(1).max(50) })).min(1).max(500),
+});
+export const onerileriOnaylaCevabi = z.object({ yazilan: z.number().int(), atlanan: z.number().int() });
 
 // SmartES kodu baştan ve sondan boşluksuz, en çok 50 karakter; boş kod "kaldır" ucuyla gider.
 const smartesKodu = z.string().trim().min(1, 'SmartES kodu zorunlu.').max(50, 'SmartES kodu en çok 50 karakter.');
@@ -261,3 +276,73 @@ export const makineBulgulariCevabi = z.object({
   }).nullable(),
 });
 export type MakineBulgulariCevabi = z.output<typeof makineBulgulariCevabi>;
+// Fire ve duruş adı eşlemesi (3174): liste SmartES'in tanım listesinden gelir (RejectsList, DownTimeList); her ad bir CORE nedenine bağlanır.
+// "yok": eşlenmiş ad son okumada SmartES listesinde bulunmadı (silinmiş ya da adı değişmiş). "yeni": ilk listeden sonra gelmiş, eşlenmemiş ad.
+export const SMARTES_GELEN_AD_TURLERI = ['fire', 'durus'] as const;
+export type SmartesGelenAdTuru = (typeof SMARTES_GELEN_AD_TURLERI)[number];
+export const SMARTES_AD_DURUMLARI = ['eslendi', 'eslenmedi', 'yok', 'yeni'] as const;
+// Fire eşlemesinde: hatalı kaydı (kalite kararına) ya da doğrudan hurda (stoktan fire çıkışı).
+export const SMARTES_FIRE_SONUCLARI = ['hatali', 'hurda'] as const;
+export type SmartesFireSonucu = (typeof SMARTES_FIRE_SONUCLARI)[number];
+
+const nedenOzeti = z.object({ id: z.number().int(), kod: z.string(), ad: z.string() });
+// SmartES kimliği ('id:<n>') ya da kimlik gelmediyse ad ('ad:<ad>').
+const adAnahtari = z.string().min(4).max(210);
+
+export const gelenAdSorgusu = z.object({ tur: z.enum(SMARTES_GELEN_AD_TURLERI) });
+
+export const gelenAdlarCevabi = z.object({
+  tur: z.enum(SMARTES_GELEN_AD_TURLERI),
+  // SmartES listesinin son başarılı okuması; hiç okunmadıysa null.
+  sonOkuma: zamanSemasi.nullable(),
+  // Son deneme hata verdiyse iletisi; liste eski haliyle gösterilir.
+  sonHata: z.string().nullable(),
+  // Okunan kayıtların üretim ve duruş kaydına işlenmesi bağlı mı. Bağlı değilken eşleme yalnız saklanır, kayıt işlenmez.
+  islemeBagli: z.boolean(),
+  satirlar: z.array(z.object({
+    anahtar: adAnahtari,
+    smartesId: z.string().nullable(),
+    ad: z.string(),
+    grup: z.string().nullable(),
+    operatorKaynakli: z.boolean().nullable(),
+    // SmartES fire tanımında "yeniden işlenir" alanı yoktur; ileride gelirse dolar.
+    rework: z.boolean().nullable(),
+    durum: z.enum(SMARTES_AD_DURUMLARI),
+    neden: nedenOzeti.nullable(),
+    sonuc: z.enum(SMARTES_FIRE_SONUCLARI).nullable(),
+    // Bu adla okunmuş, adı eşlenmediği için bekleyen kayıt sayısı.
+    bekleyen: z.number().int(),
+    // Eşlenmemiş ada adı aynı ya da çok benzeyen CORE nedeni; kişi onaylamadan eşleme yazılmaz.
+    oneri: nedenOzeti.nullable(),
+    ilkBekleyen: zamanSemasi.nullable(),
+    surum: surumSemasi.nullable(),
+  })),
+  nedenler: z.array(nedenOzeti),
+});
+
+export const gelenAdEsleGovdesi = z.object({
+  tur: z.enum(SMARTES_GELEN_AD_TURLERI),
+  anahtar: adAnahtari,
+  nedenId: z.number().int().positive(),
+  // Firede zorunlu, duruşta null.
+  sonuc: z.enum(SMARTES_FIRE_SONUCLARI).nullable(),
+  // Yeni eşlemede null; var olanı değiştirirken okunan sürüm.
+  surum: surumSemasi.nullable(),
+});
+export const gelenAdKaldirGovdesi = z.object({ tur: z.enum(SMARTES_GELEN_AD_TURLERI), anahtar: adAnahtari, surum: surumSemasi });
+export const gelenAdOnerileriOnaylaGovdesi = z.object({
+  tur: z.enum(SMARTES_GELEN_AD_TURLERI),
+  satirlar: z.array(z.object({ anahtar: adAnahtari, nedenId: z.number().int().positive() })).min(1).max(500),
+});
+
+// "Şimdi oku": SmartES'in tanım listeleri (istasyon, makine, operasyon, fire, duruş) yeniden okunur. Okunamayan liste eski haliyle kalır.
+export const SMARTES_LISTE_TURLERI = ['istasyon', 'makine', 'operasyon', 'fire', 'durus'] as const;
+export const listeOkuCevabi = z.object({ okunan: z.array(z.enum(SMARTES_LISTE_TURLERI)), hatali: z.array(z.enum(SMARTES_LISTE_TURLERI)) });
+export type ListeOkuCevabi = z.output<typeof listeOkuCevabi>;
+
+export type OnerileriOnaylaGovdesi = z.input<typeof onerileriOnaylaGovdesi>;
+export type OnerileriOnaylaCevabi = z.output<typeof onerileriOnaylaCevabi>;
+export type GelenAdlarCevabi = z.output<typeof gelenAdlarCevabi>;
+export type GelenAdEsleGovdesi = z.input<typeof gelenAdEsleGovdesi>;
+export type GelenAdKaldirGovdesi = z.input<typeof gelenAdKaldirGovdesi>;
+export type GelenAdOnerileriOnaylaGovdesi = z.input<typeof gelenAdOnerileriOnaylaGovdesi>;

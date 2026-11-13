@@ -50,6 +50,14 @@ describe('Tablo', () => {
     expect(ad?.classList.contains('tc-tablo-kirilmaz')).toBe(false);
   });
 
+  it('kartTamSatir sutununun hucreleri isaretlenir, digerleri isaretlenmez', () => {
+    const sutunlar: Sutun<Satir>[] = [{ ...(SUTUNLAR[0] as Sutun<Satir>), kartTamSatir: true }, SUTUNLAR[1] as Sutun<Satir>];
+    render(<Tablo etiket="Liste" sutunlar={sutunlar} satirlar={[{ no: 1, ad: 'A', adet: 3 }]} satirAnahtari={(s) => s.no} />);
+    const [ad, adet] = screen.getAllByRole('cell');
+    expect(ad?.classList.contains('tc-tablo-tam')).toBe(true);
+    expect(adet?.classList.contains('tc-tablo-tam')).toBe(false);
+  });
+
   it('kabina sigmayan tablo kart kipine gecer, kap genisleyince tabloya doner', () => {
     // jsdom yerlesim yapmaz: kabin ve icerigin genisligi buradan verilir.
     const olcu = { kap: 600, icerik: 836 };

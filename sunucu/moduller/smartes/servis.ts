@@ -1,33 +1,38 @@
 import { kayitNoktasi } from '#cekirdek/db.ts';
 import type { Db, Veritabani } from '#cekirdek/db.ts';
-import { bulunamadi } from '#cekirdek/hata.ts';
+import { bulunamadi, dogrulama } from '#cekirdek/hata.ts';
 import { kisitKorumali } from '#cekirdek/kisit.ts';
 import { sayfaliListe } from '#cekirdek/liste.ts';
 import { surumluGuncelle } from '#cekirdek/surum.ts';
 import type {
-  AlarmlarCevabi, CanliMakineAyrintisiCevabi, MakineBulgulariCevabi, CanliMakinelerCevabi, DurumCevabi, DuruslarCevabi, EslemeCevabi, EslemelerCevabi, GidenCevabi, IsEmriDurumlariCevabi, SmartesBaglantiDurumu,
-  SmartesHazirlikCevabi, SmartesKontrolCevabi,
+  AlarmlarCevabi, CanliMakineAyrintisiCevabi, MakineBulgulariCevabi, CanliMakinelerCevabi, DurumCevabi, DuruslarCevabi, EslemeCevabi, EslemelerCevabi,
+  GidenCevabi, IsEmriDurumlariCevabi, SmartesBaglantiDurumu, GelenAdEsleGovdesi, GelenAdKaldirGovdesi, GelenAdlarCevabi, GelenAdOnerileriOnaylaGovdesi,
+  OnerileriOnaylaCevabi, OnerileriOnaylaGovdesi, SmartesHazirlikCevabi, SmartesKontrolCevabi,
 } from '#paylasilan/sozlesme/smartes.ts';
 import type { IkinciMenuSayaclari } from '#paylasilan/sayfa-tanimi.ts';
 import { tesisGunBasi, tesisGunu } from '#paylasilan/tesis-zamani.ts';
 import { sistemAyariOku } from '../ayarlar/disari.ts';
-import { durusNedenleriniListele } from '../durus-nedenleri/disari.ts';
+import { durusNedenleriniListele, hurdaNedenleriniListele } from '../durus-nedenleri/disari.ts';
 import { istasyonlar, makineler, operasyonTipleri } from '../istasyonlar/disari.ts';
 import { malzemeOzetleri } from '../malzemeler/disari.ts';
 import { gunlukAralikAdetleri, isEmriOzeti, isEmriOzetleri, isEmriZamanlari, makinelerdekiIsler, planlanacakIsEmirleri } from '../uretim-emirleri/disari.ts';
 import type { IstemciHatasi, IstemciSonucu, SmartesIstemcisi } from './istemci.ts';
 import {
-  adetDegistiMi, alarmOku, alarmParametreleri, alarmSatiri, ambarOku, MAKINE_LISTESI_METODU, smartesMakineleri, BELIRSIZ_ILETISI, durusOku, eksikIstegeBagliMetotlar, eksikMetotlar, geriCekilmeMs, KALITE_AMBAR_METOTLARI, KALITE_AMBAR_AYARI,
-  kaliteAmbarParametreleri, kaliteOku, KONTROL_PENCERESI_MS, SMARTES_AKISLARI, smartesAkisDurumu, GONDERIM_TUR_SINIRI, gonderimEylemi, gonderimOzeti,
-  IS_EMRI_METODU, isEmriDurumuOku, isEmriParametreleri, kapanisParametreleri, kirp,
-  listedekiKodlar, OKUMA_METOTLARI, okumaParametreleri, okumaPenceresi, OPERASYON_METODU, pencereAtlanmaliMi, operasyonParametreleri, redOku,
-  skalerBasariliMi, smartesIsEmriNo, smartesOperasyonKodu, sonucBilinmiyorMu, TANIM_AYARI, TANIM_LISTE_METOTLARI, TANIM_METOTLARI, TANIM_NIYET_SINIRI,
-  TANIM_TUR_SINIRI, TANIM_TURLERI, tanimEylemi, tanimKoduUygunMu, tanimParametreleri, yasakMetotMu,
-  alarmTekrarTonu, birikimliSayac, cizelgeParcalari, nedensizDuruslar, sayimKarsilastir, terminAsimi,
-  bugunDilimleri, ILERLEME_ARALIGI_MS, ILERLEME_METODU, ilerlemeOku, ilerlemeParametreleri, MAKINE_AYARI, MAKINE_BILGI_METODU, MAKINE_LISTESI_YENILEME_MS,
-  MAKINE_OKUMA_ARALIGI_MS, MAKINE_TUR_TAVANI_MS, makineBilgiParametreleri, makineBilgisiOku, turSirasi,
+  adetDegistiMi, alarmOku, alarmParametreleri, alarmSatiri, ambarOku, MAKINE_LISTESI_METODU, smartesMakineleri, BELIRSIZ_ILETISI, durusOku,
+  eksikIstegeBagliMetotlar, eksikMetotlar, geriCekilmeMs, KALITE_AMBAR_METOTLARI, KALITE_AMBAR_AYARI, kaliteAmbarParametreleri, kaliteOku,
+  KONTROL_PENCERESI_MS, SMARTES_AKISLARI, smartesAkisDurumu, GONDERIM_TUR_SINIRI, gonderimEylemi, gonderimOzeti, IS_EMRI_METODU, isEmriDurumuOku,
+  isEmriParametreleri, kapanisParametreleri, kirp, listedekiKodlar, OKUMA_METOTLARI, okumaParametreleri, okumaPenceresi, OPERASYON_METODU, pencereAtlanmaliMi,
+  operasyonParametreleri, redOku, skalerBasariliMi, smartesIsEmriNo, smartesOperasyonKodu, sonucBilinmiyorMu, TANIM_AYARI, TANIM_LISTE_METOTLARI,
+  TANIM_METOTLARI, TANIM_NIYET_SINIRI, TANIM_TUR_SINIRI, TANIM_TURLERI, tanimEylemi, tanimKoduUygunMu, tanimParametreleri, yasakMetotMu, alarmTekrarTonu,
+  birikimliSayac, cizelgeParcalari, nedensizDuruslar, sayimKarsilastir, terminAsimi, bugunDilimleri, ILERLEME_ARALIGI_MS, ILERLEME_METODU, ilerlemeOku,
+  ilerlemeParametreleri, MAKINE_AYARI, MAKINE_BILGI_METODU, MAKINE_LISTESI_YENILEME_MS, MAKINE_OKUMA_ARALIGI_MS, MAKINE_TUR_TAVANI_MS,
+  makineBilgiParametreleri, makineBilgisiOku, turSirasi, adAnahtari, adDurumu, kodOnerileri, LISTE_METOTLARI, LISTE_TURLERI, listeKayitlari, listeOkunmaliMi,
+  listeParametreleri, nedenOnerisi,
 } from './kurallar.ts';
-import type { AkisAyari, AktifMakine, CizelgeParcasi, EslemeTuru, GidecekIsEmri, KaliteAmbarKaynagi, MakineDurumu, OkumaKaynagi, TanimKaydi, TanimTuru } from './kurallar.ts';
+import type {
+  AkisAyari, AktifMakine, EslemeTuru, GidecekIsEmri, KaliteAmbarKaynagi, KodOnerisi, ListeTuru, MakineDurumu, OkumaKaynagi, TanimKaydi, TanimTuru,
+  CizelgeParcasi,
+} from './kurallar.ts';
 import { smartesTarihi } from './soap.ts';
 import type { Parametreler, TabloSatiri } from './soap.ts';
 import * as s from './sorgular.ts';
@@ -551,7 +556,7 @@ export async function durum(db: Db, istemci: SmartesIstemcisi | null): Promise<D
 
 export async function menuSayaclari(db: Db): Promise<IkinciMenuSayaclari> {
   const n = await s.sayilar(db);
-  return { 'is-emri-durumlari': n.isEmriDurumu, duruslar: n.durus, alarmlar: n.alarm, giden: n.gidenHatali };
+  return { 'is-emri-durumlari': n.isEmriDurumu, duruslar: n.durus, alarmlar: n.alarm, giden: n.gidenHatali, eslemeler: await s.degisenAdSayisi(db) };
 }
 
 interface TmiKaydi {
@@ -571,14 +576,49 @@ async function tmiKayitlari(db: Db, tur: EslemeTuru): Promise<TmiKaydi[]> {
   }
 }
 
-export async function eslemeleriGetir(db: Db, tur: EslemeTuru): Promise<EslemelerCevabi> {
+// Eşleme türünün SmartES'teki listesi; duruş nedeninin kod listesi yoktur (ad listesiyle eşlenir, `gelenAdlar`).
+const ESLEME_LISTESI: Readonly<Record<EslemeTuru, ListeTuru | null>> = { istasyon: 'istasyon', makine: 'makine', 'operasyon-tipi': 'operasyon', 'durus-nedeni': null };
+const SMARTES_KOD_EN_UZUN = 50;
+
+// Seçilebilir SmartES kodları: son listede olan, pasif olmayan, eşleme koduna sığan. Liste hiç okunamadıysa null.
+async function smartesKodListesi(db: Db, tur: EslemeTuru): Promise<{ kod: string; ad: string | null }[] | null> {
+  const liste = ESLEME_LISTESI[tur];
+  if (liste === null || ((await s.listeOkumasi(db, liste))?.sonBasarili ?? null) === null) return null;
+  const sonuc: { kod: string; ad: string | null }[] = [];
+  for (const k of await s.listeSatirlari(db, liste)) {
+    if (k.var && k.pasif !== true && k.kod !== null && k.kod.length <= SMARTES_KOD_EN_UZUN) sonuc.push({ kod: k.kod, ad: k.ad });
+  }
+  return sonuc;
+}
+
+interface EslemeGorunumu {
+  kayitlar: TmiKaydi[];
+  eslemeler: Map<number, s.EslemeSatiri>;
+  liste: { kod: string; ad: string | null }[] | null;
+  oneriler: Map<number, KodOnerisi>;
+}
+
+// Öneri yalnız eşlenmemiş aktif kayda, başka kayda verilmemiş koddan çıkar.
+async function eslemeGorunumu(db: Db, tur: EslemeTuru): Promise<EslemeGorunumu> {
   const kayitlar = await tmiKayitlari(db, tur);
   const eslemeler = new Map((await s.eslemeler(db, tur)).map((e) => [e.tmiId, e]));
+  const liste = await smartesKodListesi(db, tur);
+  const kullanilan = new Set([...eslemeler.values()].map((e) => e.smartesKod));
+  const oneriler = liste === null
+    ? new Map<number, KodOnerisi>()
+    : kodOnerileri(kayitlar.filter((k) => k.aktif && !eslemeler.has(k.id)), liste.filter((x) => !kullanilan.has(x.kod)));
+  return { kayitlar, eslemeler, liste, oneriler };
+}
+
+export async function eslemeleriGetir(db: Db, tur: EslemeTuru): Promise<EslemelerCevabi> {
+  const g = await eslemeGorunumu(db, tur);
   return {
     tur,
-    satirlar: kayitlar.map((k) => ({
-      tmiId: k.id, tmiKod: k.kod, tmiAd: k.ad, aktif: k.aktif, smartesKod: eslemeler.get(k.id)?.smartesKod ?? null, surum: eslemeler.get(k.id)?.surum ?? null,
+    satirlar: g.kayitlar.map((k) => ({
+      tmiId: k.id, tmiKod: k.kod, tmiAd: k.ad, aktif: k.aktif, smartesKod: g.eslemeler.get(k.id)?.smartesKod ?? null,
+      surum: g.eslemeler.get(k.id)?.surum ?? null, oneri: g.oneriler.get(k.id) ?? null,
     })),
+    smartesListesi: g.liste,
   };
 }
 
@@ -616,6 +656,192 @@ export async function eslemeKaldir(db: Db, g: { tur: EslemeTuru; tmiId: number; 
     bulunamadiIletisi: 'Eşleme bulunamadı; sayfayı yenileyin.',
   });
   return { tmiId: g.tmiId, smartesKod: null, surum: null };
+}
+
+// Öneri onayı: sunucu öneriyi aynı transaction'da yeniden hesaplar ve yalnız hâlâ geçerli olanı yazar. Arada eşlenmiş, kodu başka
+// kayda verilmiş ya da önerisi değişmiş satır yazılmaz, sayılır; istek o yüzden düşmez.
+export async function onerileriOnayla(db: Db, kisiId: number, g: OnerileriOnaylaGovdesi): Promise<OnerileriOnaylaCevabi> {
+  const gorunum = await eslemeGorunumu(db, g.tur);
+  let yazilan = 0;
+  let atlanan = 0;
+  await kisitKorumali(KOD_TEKIL, async () => {
+    for (const satir of g.satirlar) {
+      const oneri = gorunum.oneriler.get(satir.tmiId);
+      if (oneri === undefined || oneri.kod !== satir.smartesKod || (await s.eslemeEkle(db, g.tur, satir.tmiId, oneri.kod, kisiId)) === 0) atlanan++;
+      else yazilan++;
+    }
+  });
+  return { yazilan, atlanan };
+}
+
+/* ---------------- SmartES listeleri (SME-30) ---------------- */
+
+export type ListeOkumaSonucu = Engel | { tur: 'islendi'; okunan: ListeTuru[]; hatali: ListeTuru[] };
+
+// Tanım listeleri okunur ve saklanır; SmartES'e hiçbir şey yazılmaz. `zorla` (ekrandaki "Şimdi oku") günlük aralığı beklemez.
+// İstek hiçbir transaction açıkken beklenmez: her listenin sonucu kendi kısa yazısıdır (`listeYaz` tek deyim).
+export async function listeTuru(
+  vt: Pick<Veritabani, 'tx'>, o: Pick<TurOrtami, 'istemci' | 'saat'>, secenek: { turler?: readonly ListeTuru[]; zorla?: boolean } = {},
+): Promise<ListeOkumaSonucu> {
+  const bas = await vt.tx(async (db) => {
+    const e = await engel(db, o.istemci);
+    if (e !== null) return e;
+    const okunacak: ListeTuru[] = [];
+    for (const t of secenek.turler ?? LISTE_TURLERI) {
+      if (secenek.zorla === true || listeOkunmaliMi(await s.listeOkumasi(db, t), o.saat())) okunacak.push(t);
+    }
+    return { tur: 'hazir' as const, okunacak };
+  });
+  if (bas.tur !== 'hazir') return bas;
+  const istemci = o.istemci;
+  if (istemci === null) return { tur: 'ortam-degiskeni-yok' };
+  const okunan: ListeTuru[] = [];
+  const hatali: ListeTuru[] = [];
+  for (const t of bas.okunacak) {
+    const metot = LISTE_METOTLARI[t];
+    if (yasakMetotMu(metot)) throw new Error('Bu akış işaretleme ya da silme metodu çağıramaz.');
+    const r = await istemci.liste(metot, listeParametreleri(t));
+    const zaman = o.saat();
+    if (r.tur !== 'basarili') {
+      await vt.tx((db) => s.listeHatali(db, t, zaman, hataMetni(r)));
+      hatali.push(t);
+      // Servise ulaşılamıyorsa öbür listeler de beklemesin.
+      if (r.tur === 'ag' || r.tur === 'zaman-asimi') break;
+      continue;
+    }
+    const { kayitlar } = listeKayitlari(t, r.deger);
+    // Satır var ama hiçbirinde kod ya da ad yok: alan adı yanlış varsayılmıştır; eski liste yerinde kalır.
+    if (r.deger.length > 0 && kayitlar.length === 0) {
+      await vt.tx((db) => s.listeHatali(db, t, zaman, kirp(`${metot} cevabında kod ya da ad alanı bulunamadı; alan adı doğrulanana kadar liste güncellenmez.`)));
+      hatali.push(t);
+      continue;
+    }
+    await vt.tx((db) => s.listeYaz(db, t, kayitlar, zaman));
+    okunan.push(t);
+  }
+  return { tur: 'islendi', okunan, hatali };
+}
+
+/* ---------------- fire ve duruş adı eşlemesi (SME-31) ---------------- */
+
+type AdTuru = s.AdTuru;
+interface NedenOzeti { id: number; kod: string; ad: string; aktif: boolean }
+
+// Nedenler sahibi modülden okunur (ADR 0006): fire adı hurda nedenine, duruş adı duruş nedenine bağlanır.
+async function nedenler(db: Db, tur: AdTuru): Promise<NedenOzeti[]> {
+  const l = tur === 'fire' ? await hurdaNedenleriniListele(db, { yalnizAktif: false }) : await durusNedenleriniListele(db, { yalnizAktif: false });
+  return l.map((n) => ({ id: n.id, kod: n.kod, ad: n.ad, aktif: n.aktif }));
+}
+
+// Okunan kayıtların üretim ve duruş kaydına işlenmesi ayrı karttır (3173) ve bağlı değildir: eşleme saklanır, kayıt işlenmez.
+const ISLEME_BAGLI = false;
+
+const adKarsilastirma = (ad: string): string => ad.trim().toLocaleLowerCase('tr');
+const ozet = (n: NedenOzeti): { id: number; kod: string; ad: string } => ({ id: n.id, kod: n.kod, ad: n.ad });
+
+export async function gelenAdlar(db: Db, tur: AdTuru): Promise<GelenAdlarCevabi> {
+  const liste = await s.listeSatirlari(db, tur);
+  const okuma = await s.listeOkumasi(db, tur);
+  const eslemeler = new Map((await s.adEslemeleri(db, tur)).map((e) => [e.anahtar, e]));
+  const tumNedenler = await nedenler(db, tur);
+  const nedenHaritasi = new Map(tumNedenler.map((n) => [n.id, n]));
+  const aktifNedenler = tumNedenler.filter((n) => n.aktif);
+  // Hareket satırı adla gelir: listedeki ada (önce hâlâ listede olana) bağlanır; listede olmayan ad kendi satırını açar.
+  const addanAnahtar = new Map<string, string>();
+  for (const l of [...liste].sort((a, b) => Number(b.var) - Number(a.var))) {
+    if (l.ad !== null && !addanAnahtar.has(adKarsilastirma(l.ad))) addanAnahtar.set(adKarsilastirma(l.ad), l.anahtar);
+  }
+  const bekleyenler = new Map<string, { ad: string; sayi: number; ilk: string | null }>();
+  for (const o of await s.okunanAdlar(db, tur)) {
+    const anahtar = addanAnahtar.get(adKarsilastirma(o.ad)) ?? adAnahtari(o.ad.trim());
+    const onceki = bekleyenler.get(anahtar);
+    bekleyenler.set(anahtar, onceki === undefined ? { ad: o.ad.trim(), sayi: o.sayi, ilk: o.ilk }
+      : { ad: onceki.ad, sayi: onceki.sayi + o.sayi, ilk: [onceki.ilk, o.ilk].filter((z) => z !== null).sort()[0] ?? null });
+  }
+
+  type Satir = GelenAdlarCevabi['satirlar'][number];
+  const satir = (k: { anahtar: string; ad: string; smartesId: number | null; grup: string | null; operatorKaynakli: boolean | null; var: boolean; ilkGorulme: Date | null }): Satir => {
+    const e = eslemeler.get(k.anahtar);
+    const bekleyen = e === undefined ? bekleyenler.get(k.anahtar) : undefined;
+    const neden = e === undefined ? undefined : nedenHaritasi.get(e.nedenId);
+    const oneri = e === undefined && k.var ? nedenOnerisi(k.ad, aktifNedenler) : null;
+    return {
+      anahtar: k.anahtar, smartesId: k.smartesId === null ? null : String(k.smartesId), ad: k.ad, grup: k.grup, operatorKaynakli: k.operatorKaynakli, rework: null,
+      durum: adDurumu({ var: k.var, eslendi: e !== undefined, ilkGorulme: k.ilkGorulme, ilkBasarili: okuma?.ilkBasarili ?? null }),
+      neden: e === undefined ? null : neden === undefined ? { id: e.nedenId, kod: String(e.nedenId), ad: 'Neden bulunamadı' } : ozet(neden),
+      sonuc: e?.sonuc ?? null, bekleyen: bekleyen?.sayi ?? 0, oneri: oneri === null ? null : ozet(oneri), ilkBekleyen: bekleyen?.ilk ?? null, surum: e?.surum ?? null,
+    };
+  };
+
+  const satirlar: Satir[] = [];
+  const gorulen = new Set<string>();
+  for (const l of liste) {
+    gorulen.add(l.anahtar);
+    if (l.ad === null) continue;
+    // Eşlenmemiş ad listeden çıkmış ya da pasifse ve bekleyen kaydı yoksa gösterilecek bir şey yoktur.
+    if (!eslemeler.has(l.anahtar) && (!l.var || l.pasif === true) && !bekleyenler.has(l.anahtar)) continue;
+    satirlar.push(satir({ ...l, ad: l.ad }));
+  }
+  // SmartES listesinde olmayan adla gelmiş kayıtlar ve yalnız adla tutulan eşlemeler: listeden bağımsızdır, "yok" olmaz.
+  const listeDisi = new Map<string, string>();
+  for (const [anahtar, b] of bekleyenler) if (!gorulen.has(anahtar)) listeDisi.set(anahtar, b.ad);
+  for (const e of eslemeler.values()) if (!gorulen.has(e.anahtar) && !listeDisi.has(e.anahtar)) listeDisi.set(e.anahtar, e.ad);
+  for (const [anahtar, ad] of listeDisi) satirlar.push(satir({ anahtar, ad, smartesId: null, grup: null, operatorKaynakli: null, var: true, ilkGorulme: null }));
+  satirlar.sort((a, b) => a.ad.localeCompare(b.ad, 'tr') || a.anahtar.localeCompare(b.anahtar));
+
+  const secilebilir = new Map(aktifNedenler.map((n) => [n.id, n]));
+  for (const x of satirlar) if (x.neden !== null && !secilebilir.has(x.neden.id)) secilebilir.set(x.neden.id, { ...x.neden, aktif: false });
+  return {
+    tur, sonOkuma: okuma?.sonBasarili?.toISOString() ?? null, sonHata: okuma?.sonSonuc === 'hata' ? okuma.sonHata : null, islemeBagli: ISLEME_BAGLI,
+    satirlar, nedenler: [...secilebilir.values()].map(ozet),
+  };
+}
+
+export async function gelenAdEsle(db: Db, kisiId: number, g: GelenAdEsleGovdesi): Promise<GelenAdlarCevabi> {
+  const hedef = (await gelenAdlar(db, g.tur)).satirlar.find((x) => x.anahtar === g.anahtar);
+  if (hedef === undefined) throw bulunamadi('SmartES adı bulunamadı; sayfayı yenileyin.');
+  const neden = (await nedenler(db, g.tur)).find((n) => n.id === g.nedenId);
+  // Pasif neden yeni eşlemeye seçilemez; eşleme zaten o nedendeyse kalabilir.
+  if (neden === undefined || (!neden.aktif && hedef.neden?.id !== neden.id)) throw bulunamadi('Seçilen neden bulunamadı ya da pasif.');
+  if (g.tur === 'fire' && g.sonuc === null) throw dogrulama('Bu adla gelen firenin ne olacağı seçilmeli.', 'sonuc');
+  const yazi: s.AdEslemeYazisi = { tur: g.tur, anahtar: g.anahtar, ad: hedef.ad, nedenId: g.nedenId, sonuc: g.tur === 'fire' ? g.sonuc : null, kisiId };
+  if (g.surum === null) {
+    // Yeni eşleme sürümsüz gelir; o arada başkası eklemişse üstüne yazılmaz (409).
+    if ((await s.adEslemeEkle(db, yazi)) === 0) await surumluGuncelle<number>({ guncelle: async () => null, varMi: async () => true });
+  } else {
+    const beklenen = g.surum;
+    await surumluGuncelle({
+      guncelle: () => s.adEslemeGuncelle(db, yazi, beklenen),
+      varMi: async () => (await s.adEslemeKilitle(db, g.tur, g.anahtar)) !== null,
+      bulunamadiIletisi: 'Eşleme bulunamadı; sayfayı yenileyin.',
+    });
+  }
+  return gelenAdlar(db, g.tur);
+}
+
+export async function gelenAdKaldir(db: Db, g: GelenAdKaldirGovdesi): Promise<GelenAdlarCevabi> {
+  await surumluGuncelle({
+    guncelle: async () => ((await s.adEslemeSil(db, g.tur, g.anahtar, g.surum)) ? true : null),
+    varMi: async () => (await s.adEslemeKilitle(db, g.tur, g.anahtar)) !== null,
+    bulunamadiIletisi: 'Eşleme bulunamadı; sayfayı yenileyin.',
+  });
+  return gelenAdlar(db, g.tur);
+}
+
+// Öneri onayı: yalnız hâlâ eşlenmemiş ve önerisi aynı kalan ad yazılır; fire "Hatalı" ile yazılır, sonradan değiştirilir.
+export async function gelenAdOnerileriniOnayla(db: Db, kisiId: number, g: GelenAdOnerileriOnaylaGovdesi): Promise<OnerileriOnaylaCevabi> {
+  const satirlar = new Map((await gelenAdlar(db, g.tur)).satirlar.map((x) => [x.anahtar, x]));
+  let yazilan = 0;
+  let atlanan = 0;
+  for (const istek of g.satirlar) {
+    const x = satirlar.get(istek.anahtar);
+    const gecerli = x !== undefined && x.neden === null && x.oneri?.id === istek.nedenId;
+    const yazi: s.AdEslemeYazisi | null = gecerli
+      ? { tur: g.tur, anahtar: x.anahtar, ad: x.ad, nedenId: istek.nedenId, sonuc: g.tur === 'fire' ? 'hatali' : null, kisiId } : null;
+    if (yazi !== null && (await s.adEslemeEkle(db, yazi)) > 0) yazilan++;
+    else atlanan++;
+  }
+  return { yazilan, atlanan };
 }
 
 type Sayfa = { sayfa: number; sayfaBoyu?: number | undefined };

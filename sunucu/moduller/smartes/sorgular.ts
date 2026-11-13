@@ -2,8 +2,8 @@ import type { Db } from '#cekirdek/db.ts';
 import type { Dilim } from '#cekirdek/liste.ts';
 import { zamanMetni } from '#cekirdek/zaman.ts';
 import type {
-  AlarmKaydi, AmbarKaydi, DurusKaydi, EslemeTuru, IlerlemeKaydi, IsEmriDurumuKaydi, KaliteKaydi, MakineDurumu, MakineOkumasi, OkumaKaynagi, RedKaydi,
-  TanimIzi, TanimKaydi, TanimTuru,
+  AlarmKaydi, AmbarKaydi, DurusKaydi, EslemeTuru, IlerlemeKaydi, IsEmriDurumuKaydi, KaliteKaydi, ListeKaydi, ListeTuru, MakineDurumu, MakineOkumasi,
+  OkumaKaynagi, RedKaydi, TanimIzi, TanimKaydi, TanimTuru,
 } from './kurallar.ts';
 
 /* ---------------- eşleme ---------------- */
@@ -661,4 +661,168 @@ export function butunIlerlemeler(db: Db): Promise<{ isEmriNo: string; tamamlanan
     `SELECT is_emri_no AS "isEmriNo", tamamlanan_yuzde::float8 AS "tamamlananYuzde", ${zamanMetni('tahmini_bitis')} AS "tahminiBitis"
        FROM smartes_is_emri_ilerleme WHERE tahmini_bitis IS NOT NULL AND (tamamlanan_yuzde IS NULL OR tamamlanan_yuzde < 100)`,
   );
+}
+
+/* ---------------- SmartES listeleri ve ad eşlemesi (3174) ---------------- */
+
+export interface ListeSatiri {
+  anahtar: string;
+  smartesId: number | null;
+  kod: string | null;
+  ad: string | null;
+  grup: string | null;
+  operatorKaynakli: boolean | null;
+  pasif: boolean | null;
+  var: boolean;
+  ilkGorulme: Date;
+}
+
+export function listeSatirlari(db: Db, tur: ListeTuru): Promise<ListeSatiri[]> {
+  return db.sorgu<ListeSatiri>(
+    `SELECT anahtar, smartes_id AS "smartesId", kod, ad, grup, operator_kaynakli AS "operatorKaynakli", pasif, var, ilk_gorulme AS "ilkGorulme"
+     FROM smartes_liste_kaydi WHERE tur = $1 ORDER BY COALESCE(kod, ad), anahtar`,
+    [tur],
+  );
+}
+
+export interface ListeOkumasi {
+  sonDeneme: Date;
+  sonSonuc: 'tamam' | 'hata';
+  sonHata: string | null;
+  ilkBasarili: Date | null;
+  sonBasarili: Date | null;
+}
+
+export function listeOkumasi(db: Db, tur: ListeTuru): Promise<ListeOkumasi | null> {
+  return db.tek<ListeOkumasi>(
+    `SELECT son_deneme AS "sonDeneme", son_sonuc AS "sonSonuc", son_hata AS "sonHata", ilk_basarili AS "ilkBasarili", son_basarili AS "sonBasarili"
+     FROM smartes_liste_okuma WHERE tur = $1`,
+    [tur],
+  );
+}
+
+// Tek deyim: transaction dışından çağrılsa da liste, "artık yok" işareti ve okuma izi birlikte yazılır. Boş gelen liste kimseyi
+// "yok" yapmaz: yanlış süzgeç ya da boş cevap bütün eşlemeleri uyarıya düşürmesin.
+export async function listeYaz(db: Db, tur: ListeTuru, kayitlar: readonly ListeKaydi[], zaman: Date): Promise<void> {
+  const gelen = kayitlar.map((k) => ({
+    anahtar: k.anahtar, smartes_id: k.smartesId, kod: k.kod, ad: k.ad, grup: k.grup, operator_kaynakli: k.operatorKaynakli, pasif: k.pasif, ham: k.ham,
+  }));
+  await db.sorgu(
+    `WITH gelen AS (
+       SELECT * FROM jsonb_to_recordset($2::jsonb)
+         AS x(anahtar text, smartes_id bigint, kod text, ad text, grup text, operator_kaynakli boolean, pasif boolean, ham jsonb)
+     ), yazilan AS (
+       INSERT INTO smartes_liste_kaydi (tur, anahtar, smartes_id, kod, ad, grup, operator_kaynakli, pasif, var, ham, ilk_gorulme, son_gorulme)
+       SELECT $1, anahtar, smartes_id, kod, ad, grup, operator_kaynakli, pasif, true, ham, $3, $3 FROM gelen
+       ON CONFLICT (tur, anahtar) DO UPDATE SET smartes_id = EXCLUDED.smartes_id, kod = EXCLUDED.kod, ad = EXCLUDED.ad, grup = EXCLUDED.grup,
+         operator_kaynakli = EXCLUDED.operator_kaynakli, pasif = EXCLUDED.pasif, var = true, ham = EXCLUDED.ham, son_gorulme = EXCLUDED.son_gorulme
+       RETURNING 1
+     ), kalkan AS (
+       UPDATE smartes_liste_kaydi SET var = false
+       WHERE tur = $1 AND var AND EXISTS (SELECT 1 FROM gelen) AND anahtar NOT IN (SELECT anahtar FROM gelen)
+       RETURNING 1
+     )
+     INSERT INTO smartes_liste_okuma (tur, son_deneme, son_sonuc, son_hata, ilk_basarili, son_basarili, okunan)
+     VALUES ($1, $3, 'tamam', NULL, $3, $3, $4)
+     ON CONFLICT (tur) DO UPDATE SET son_deneme = EXCLUDED.son_deneme, son_sonuc = 'tamam', son_hata = NULL,
+       ilk_basarili = COALESCE(smartes_liste_okuma.ilk_basarili, EXCLUDED.ilk_basarili), son_basarili = EXCLUDED.son_basarili, okunan = EXCLUDED.okunan`,
+    [tur, JSON.stringify(gelen), zaman, kayitlar.length],
+  );
+}
+
+// Okunamayan liste eski haliyle kalır; yalnız iz yazılır.
+export async function listeHatali(db: Db, tur: ListeTuru, zaman: Date, hata: string): Promise<void> {
+  await db.sorgu(
+    `INSERT INTO smartes_liste_okuma (tur, son_deneme, son_sonuc, son_hata) VALUES ($1, $2, 'hata', $3)
+     ON CONFLICT (tur) DO UPDATE SET son_deneme = EXCLUDED.son_deneme, son_sonuc = 'hata', son_hata = EXCLUDED.son_hata`,
+    [tur, zaman, hata],
+  );
+}
+
+export type AdTuru = 'fire' | 'durus';
+
+export interface AdEslemeSatiri {
+  anahtar: string;
+  ad: string;
+  nedenId: number;
+  sonuc: 'hatali' | 'hurda' | null;
+  surum: number;
+}
+
+const AD_ESLEME_ALANLARI = 'anahtar, ad, neden_id AS "nedenId", sonuc, surum';
+
+export function adEslemeleri(db: Db, tur: AdTuru): Promise<AdEslemeSatiri[]> {
+  return db.sorgu<AdEslemeSatiri>(`SELECT ${AD_ESLEME_ALANLARI} FROM smartes_ad_esleme WHERE tur = $1 ORDER BY anahtar`, [tur]);
+}
+
+export function adEslemeKilitle(db: Db, tur: AdTuru, anahtar: string): Promise<AdEslemeSatiri | null> {
+  return db.tek<AdEslemeSatiri>(`SELECT ${AD_ESLEME_ALANLARI} FROM smartes_ad_esleme WHERE tur = $1 AND anahtar = $2 FOR UPDATE`, [tur, anahtar]);
+}
+
+export interface AdEslemeYazisi {
+  tur: AdTuru;
+  anahtar: string;
+  ad: string;
+  nedenId: number;
+  sonuc: 'hatali' | 'hurda' | null;
+  kisiId: number;
+}
+
+// Eklenemediyse (o arada başkası eklemiş) 0.
+export async function adEslemeEkle(db: Db, y: AdEslemeYazisi): Promise<number> {
+  const r = await db.tek<{ surum: number }>(
+    `INSERT INTO smartes_ad_esleme (tur, anahtar, ad, neden_id, sonuc, guncelleyen_kisi_id) VALUES ($1, $2, $3, $4, $5, $6)
+     ON CONFLICT (tur, anahtar) DO NOTHING RETURNING surum`,
+    [y.tur, y.anahtar, y.ad, y.nedenId, y.sonuc, y.kisiId],
+  );
+  return r?.surum ?? 0;
+}
+
+// Neden ve sonuç değişmediyse satıra yazılmaz, sürüm artmaz; sürüm yine denetlenir.
+export async function adEslemeGuncelle(db: Db, y: AdEslemeYazisi, surum: number): Promise<number | null> {
+  const r = await db.tek<{ surum: number | null }>(
+    `WITH hedef AS (
+       SELECT surum, neden_id, sonuc FROM smartes_ad_esleme WHERE tur = $1 AND anahtar = $2 AND surum = $7 FOR UPDATE
+     ), guncel AS (
+       UPDATE smartes_ad_esleme e SET ad = $3, neden_id = $4, sonuc = $5, guncelleyen_kisi_id = $6, guncelleme = now(), surum = e.surum + 1
+       FROM hedef WHERE e.tur = $1 AND e.anahtar = $2 AND (hedef.neden_id <> $4 OR hedef.sonuc IS DISTINCT FROM $5) RETURNING e.surum
+     )
+     SELECT COALESCE((SELECT surum FROM guncel), (SELECT surum FROM hedef)) AS surum`,
+    [y.tur, y.anahtar, y.ad, y.nedenId, y.sonuc, y.kisiId, surum],
+  );
+  return r?.surum ?? null;
+}
+
+export async function adEslemeSil(db: Db, tur: AdTuru, anahtar: string, surum: number): Promise<boolean> {
+  const r = await db.sorgu('DELETE FROM smartes_ad_esleme WHERE tur = $1 AND anahtar = $2 AND surum = $3 RETURNING 1', [tur, anahtar, surum]);
+  return r.length > 0;
+}
+
+export interface OkunanAd {
+  ad: string;
+  sayi: number;
+  ilk: string | null;
+}
+
+// Okunan fire ve duruş kayıtlarının ada göre sayısı ve en eski zamanı. Kayıt adla gelir (REJECT_NAME, DOWNTIME_NAME).
+export function okunanAdlar(db: Db, tur: AdTuru): Promise<OkunanAd[]> {
+  const [tablo, zaman] = tur === 'fire' ? ['smartes_red', 'zaman'] : ['smartes_durus', 'baslangic'];
+  return db.sorgu<OkunanAd>(
+    `SELECT neden_kodu AS ad, count(*)::int AS sayi, ${zamanMetni(`min(${zaman})`)} AS ilk
+     FROM ${tablo} WHERE neden_kodu IS NOT NULL GROUP BY neden_kodu ORDER BY neden_kodu`,
+  );
+}
+
+// Menüdeki sayı: eşlenmiş olup SmartES listesinden çıkan ve ilk listeden sonra gelip eşlenmemiş fire ve duruş adları.
+export async function degisenAdSayisi(db: Db): Promise<number> {
+  const r = await db.tek<{ n: number }>(
+    `SELECT count(*)::int AS n
+     FROM smartes_liste_kaydi k
+     JOIN smartes_liste_okuma o ON o.tur = k.tur
+     LEFT JOIN smartes_ad_esleme e ON e.tur = k.tur AND e.anahtar = k.anahtar
+     WHERE k.tur IN ('fire', 'durus')
+       AND ((e.anahtar IS NOT NULL AND NOT k.var)
+         OR (e.anahtar IS NULL AND k.var AND k.pasif IS DISTINCT FROM true AND k.ilk_gorulme > o.ilk_basarili))`,
+  );
+  return r?.n ?? 0;
 }
