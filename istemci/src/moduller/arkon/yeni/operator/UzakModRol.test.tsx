@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
 import { arkonAc, OPERATOR, sunucuKur, YONETICI, type Deneme } from '../test-ortak.tsx';
 
 // 2031 a: 45 sn dokunulmayan Üretim Terminali uzak moda kendiliğinden yalnız operatörde geçer; öteki rollerde ekran olduğu gibi kalır.
@@ -22,6 +22,9 @@ async function bekletVeAc(d: Deneme, kabuktaki = false) {
   sunucuKur({ ...d, istasyon: 'IST-1' }, sunucu);
   arkonAc('/uretim-terminali', { kabuktaki });
   await screen.findByRole('region', { name: 'Aktif iş emri' }, { timeout: 10000 });
+  // Ekran çizilmiş ama kuruluş etkileri henüz koşmamış olabilir; saat ondan önce ileri alınırsa "son dokunuş" ileri saatle
+  // kurulur ve 45 sn hiç dolmaz. Etkiler bitirilir, sonra saat ilerler.
+  await act(async () => {});
   ileri = 60000;
   vi.spyOn(Date, 'now').mockImplementation(() => gercekSimdi() + ileri);
 }

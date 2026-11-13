@@ -167,6 +167,8 @@ describe('A1 Üretim Terminali', () => {
     await waitFor(() => { expect(olaylar(istekler).some((e) => e.state === 'running')).toBe(true); }, { timeout: 10000 });
     const baslatma = olaylar(istekler).find((e) => e.state === 'running') as { mcs?: unknown } | undefined;
     expect(baslatma?.mcs).toBeUndefined();
+    // Durum belgesi gecikmeli yazılır; beklenmezse ekran kapanırken gider ve sıradaki testin sahte sunucusuna düşer.
+    await waitFor(() => { expect(sonuclar(istekler).some((r) => r.state === 'running')).toBe(true); }, { timeout: 10000 });
   }, 40000);
 
   it('2125-1 b: İşlerim şeridi başka istasyondaki makinede çalışan işi gösterir; "İstasyona geç" cihazın istasyonunu değiştirir, yazma yok', async () => {
