@@ -180,7 +180,7 @@ describe('2542 C ve 3188: dallar şemada yana açılır', () => {
     await waitFor(() => { expect(k.govde).not.toBeNull(); }, BEKLE);
     expect(dallar(k.govde)).toEqual([[10, null, ''], [20, 'A', ''], [30, 'B', ''], [null, 'B', ''], [40, null, 'AB']]);
   }, 30000);
-  it('3188: her dallı bağlantının üstünde bir akış çizgisi durur; dalsız rotada akış çizgisi yoktur', async () => {
+  it('3188: her dallı bağlantının üstünde bir akış çizgisi durur, gizli sekmede durur; dalsız rotada akış çizgisi yoktur', async () => {
     kur([
       adimOrnegi(),
       adimOrnegi({ id: 'o20', seq: 20, opNo: 20, dal: 'A', ins: [] }), adimOrnegi({ id: 'o30', seq: 30, opNo: 30, dal: 'B', ins: [] }),
@@ -192,6 +192,15 @@ describe('2542 C ve 3188: dallar şemada yana açılır', () => {
     // Beş bağlantı: OP 10'dan iki dala ayrılma, iki daldan OP 40'a birleşme ve eksende OP 10'dan OP 40'a inen ana hat.
     await waitFor(() => { expect(bolge.querySelectorAll('path.tc-rr1-e-dalli')).toHaveLength(5); });
     expect(bolge.querySelectorAll('path.tc-rr1-e-akis')).toHaveLength(5);
+    // Sekme gizlenince akış durur, geri gelince sürer; görünüş değişmez.
+    const svg = bolge.querySelector('svg.tc-rr1-edges');
+    vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden');
+    fireEvent(document, new Event('visibilitychange'));
+    await waitFor(() => { expect(svg?.classList.contains('tc-rr1-edges-dur')).toBe(true); });
+    vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('visible');
+    fireEvent(document, new Event('visibilitychange'));
+    await waitFor(() => { expect(svg?.classList.contains('tc-rr1-edges-dur')).toBe(false); });
+    vi.restoreAllMocks();
     cleanup();
     kur();
     rrAc('/recete-rota/schema');

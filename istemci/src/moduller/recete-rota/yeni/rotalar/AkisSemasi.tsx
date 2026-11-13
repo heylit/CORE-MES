@@ -526,6 +526,19 @@ export function AkisSemasi({ r, kok, cop }: {
   const vp = useRef<HTMLDivElement>(null);
   const ic = useRef<HTMLDivElement>(null);
   const [z, setZ] = useState<Yakinlik>(100);
+  // Akış çizgisi her karede ana iş parçacığında yeniden hesaplanır; sekme gizliyken ya da tuval ekran dışındayken durur (görünüşü değişmez).
+  const [akar, setAkar] = useState(true);
+  useEffect(() => {
+    const v = vp.current;
+    let gorunur = true;
+    const yaz = () => { setAkar(gorunur && document.visibilityState !== 'hidden'); };
+    const g = v && typeof IntersectionObserver !== 'undefined'
+      ? new IntersectionObserver((e) => { gorunur = e.some((x) => x.isIntersecting); yaz(); })
+      : null;
+    if (v && g) g.observe(v);
+    document.addEventListener('visibilitychange', yaz);
+    return () => { g?.disconnect(); document.removeEventListener('visibilitychange', yaz); };
+  }, []);
   const [yardim, setYardim] = useState(false);
   const [cizim, setCizim] = useState<Cizim>({ kenarlar: [], noktalar: [], bantlar: [], en: 0, boy: 0 });
   const capa = useRef<{ x: number; y: number; cx: number; cy: number } | null>(null);
@@ -739,7 +752,7 @@ export function AkisSemasi({ r, kok, cop }: {
         onKeyDown={tus} onPointerDown={basla} onPointerMove={tasima} onPointerUp={birak} onPointerCancel={birak}
       >
         <div ref={ic} className={`tc-rr1-inner tc-rr1-z-${String(z)}${r.odak ? ' tc-rr1-odakta' : ''}`}>
-          <svg className="tc-rr1-edges" width={cizim.en} height={cizim.boy} aria-hidden="true">
+          <svg className={`tc-rr1-edges${akar ? '' : ' tc-rr1-edges-dur'}`} width={cizim.en} height={cizim.boy} aria-hidden="true">
             <defs>
               <marker id="tc-rr1-ok-f" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path className="tc-rr1-mf" d="M0,0 L10,5 L0,10 z" /></marker>
               <marker id="tc-rr1-ok-i" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path className="tc-rr1-mi" d="M0,0 L10,5 L0,10 z" /></marker>

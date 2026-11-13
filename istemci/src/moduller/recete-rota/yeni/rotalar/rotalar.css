@@ -342,6 +342,7 @@
 .tc-rr1-e-akis { stroke: var(--panel-solid); stroke-width: 2; stroke-linecap: round; stroke-dasharray: 2 16; opacity: .9; }
 @media (prefers-reduced-motion: no-preference) { .tc-rr1-e-akis { animation: tc-rr1-akis 1.2s linear infinite; } }
 @keyframes tc-rr1-akis { to { stroke-dashoffset: -18; } }
+.tc-rr1-edges-dur .tc-rr1-e-akis { animation-play-state: paused; }
 .tc-rr1-e-dal-1 { stroke: var(--run); } .tc-rr1-e-dal-2 { stroke: var(--hold); } .tc-rr1-e-dal-3 { stroke: var(--bp); } .tc-rr1-e-dal-4 { stroke: var(--stop); }
 .tc-rr1-e-dal-5 { stroke: var(--idle); } .tc-rr1-e-dal-6 { stroke: var(--done); } .tc-rr1-e-dal-7 { stroke: var(--muted); }
 .tc-rr1-dalsec { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-1) var(--b-3); }
