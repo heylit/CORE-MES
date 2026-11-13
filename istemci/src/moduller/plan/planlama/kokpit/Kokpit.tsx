@@ -309,6 +309,7 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi }) {
   }, [geri, ileri, sorunSec, tur, secEmir, sec, okla]);
 
   // --- onaya gönder ---
+  // Plan güncel değilken sayfanın birincil düğmesi plan çubuğundadır (Planı kur / Uygula); gönderme o zaman kapalıdır ve birincil değildir.
   const engel = gonderEngeli(c);
   const gonder = async (): Promise<void> => {
     setGidiyor(true);
@@ -343,7 +344,7 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi }) {
         </span>
         <button type="button" className="tc-pyq-ok" aria-pressed={onceAcik} title="Onaylı planla karşılaştır (B)" onClick={() => { setOnceAcik(!onceAcik); }}><Simge ad="layers" boyut="k" /><span>Önce / sonra</span></button>
         <Dugme simge="route" onClick={turBaslat} disabled={tur !== null}>Sorunları sırayla çöz</Dugme>
-        {yazabilir && <Dugme tur={tur ? 'ikincil' : 'birincil'} simge="upload" disabled={engel !== null || mesgul || tur !== null} title={tur ? 'Tur bitince gönderilir' : engel ?? undefined} onClick={() => { setGonderSor(true); }}>Onaya gönder</Dugme>}
+        {yazabilir && <Dugme tur={tur || engel !== null ? 'ikincil' : 'birincil'} simge="upload" disabled={engel !== null || mesgul || tur !== null} title={tur ? 'Tur bitince gönderilir' : engel ?? undefined} onClick={() => { setGonderSor(true); }}>Onaya gönder</Dugme>}
       </div>
       {(adim > 0 || mesgul) && (
         <p className="tc-pyq-degisim" role="status">

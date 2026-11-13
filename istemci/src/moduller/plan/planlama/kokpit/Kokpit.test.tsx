@@ -119,6 +119,18 @@ describe('Kokpit', () => {
     expect(screen.queryByText(/Bırakmak için tıklayın/)).toBeNull();
   });
 
+  it('Onaya gönder yalnız gönderilebilirken birincildir: plan güncel değilken sayfanın birincili plan çubuğundadır', () => {
+    // Örnek çalışmada veri plandan sonra değişmiştir.
+    const c = ornekCalisma();
+    ac({ calisma: { ...c, dataVer: c.plan?.dataVer ?? c.dataVer } });
+    expect(screen.getByRole('button', { name: 'Onaya gönder' }).className).toContain('tc-dugme-birincil');
+    cleanup();
+    ac();
+    const d = screen.getByRole('button', { name: 'Onaya gönder' });
+    expect(d.className).not.toContain('tc-dugme-birincil');
+    expect(d.hasAttribute('disabled')).toBe(true);
+  });
+
   it('çalışma yokken boş durum gösterir', () => {
     ac({ calisma: null });
     expect(screen.getByText(/Henüz plan yok/)).toBeTruthy();

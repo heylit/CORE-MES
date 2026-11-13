@@ -245,6 +245,8 @@ test('Kokpit: tahta, sağ tıkla tut ve bırak, Geri / İleri sayar, Matris, sor
     await page.keyboard.press('ArrowLeft');
     await expect.poll(() => tasinan.length).toBe(n + 1);
     expect(tasinan[n]).toMatchObject({ isId: 'S3.a1', baslangic: eski - 0.5 });
+    // Taşıma yazılırken yeni bırakma alınmaz (bildirimle geri çevrilir): sonraki adım yazma bitince başlar.
+    await expect(kokpit.locator('.tc-pyq-degisim span', { hasText: 'yazılıyor' })).toHaveCount(0);
   }
 
   // Plana alma. Geniş ekranda tepsideki emir sağ tıkla tutulur ve ilk adımının aday tezgâhına bırakılır; ötekilerde emrin ayrıntısında ilk
