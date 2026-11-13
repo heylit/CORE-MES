@@ -14,7 +14,7 @@ const DUZENLER: readonly (readonly [MatrisDuzeni, string])[] = [['A', 'Akış'],
 // Yük şeridi bu satırdan uzunsa emirlerin üstünde yapışık durmaz (ekranı kaplar).
 const YAPISIK_SATIR = 12;
 // Tezgâh bundan çoksa yük şeridi emirleri ilk ekrandan iter: genişte de telefondaki gibi yalnız dolu tezgâhlar görünür (düğmeyle hepsi).
-const KISA_SERIT = 8;
+export const KISA_SERIT = 8;
 const DAR = '(max-width: 767px)';
 export const darEkran = (): boolean => typeof window.matchMedia === 'function' && window.matchMedia(DAR).matches;
 

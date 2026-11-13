@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { BildirimSaglayici } from '../../../../ortak/arayuz/index.ts';
+import { api } from '../../../../ortak/veri/api.ts';
 import { PLANLAMA_ISLEMI } from '../../planlama-menusu.ts';
 import { ACILIS_OLCEGI, BOS_SECIM, type PlanlamaEkranOzellikleri } from '../gorunumler.ts';
 import type { CalismaKomutu } from '../kayit.ts';
@@ -169,6 +170,29 @@ describe('Kokpit', () => {
     cleanup();
     ac({ calisma: { ...c, dataVer: c.plan?.dataVer ?? c.dataVer }, secim: { ...BOS_SECIM, siparis: '2', adim: '2.20' } });
     expect(screen.getByRole('button', { name: 'Onaya gönder' }).className).not.toContain('tc-dugme-birincil');
+  });
+
+  it('3B görünümünde WebGL yoksa sahne açılmaz, Matris önerilir; emirler ve bakışlar yine çalışır', async () => {
+    // Onaylı plan okuması bekletilir: sunucu yok, bakış "okunuyor" der.
+    const oku = vi.spyOn(api, 'get').mockReturnValue(new Promise(() => undefined));
+    const { sec } = ac();
+    fireEvent.click(within(screen.getByRole('group', { name: 'Görünüm' })).getByRole('button', { name: '3B' }));
+    expect(oku).toHaveBeenCalledWith('/plan/planlama-calismasi/taban-ve-canli');
+    expect(await screen.findByText(/3B çizim açılamıyor/)).toBeTruthy();
+    expect(screen.queryByRole('group', { name: 'Kamera' })).toBeNull();
+    // 2B / 3B Matris: sağda açıklama paneli, altta emir tablosu (geç olan üstte); emre tıklamak onu seçer.
+    expect(screen.getByRole('complementary', { name: 'Açıklama' }).textContent).toContain('2B/3B geçişli Matris');
+    const satirlar = within(screen.getByRole('region', { name: 'Emirler' })).getAllByRole('button');
+    expect(satirlar).toHaveLength(2);
+    fireEvent.click(satirlar[0] as HTMLElement);
+    expect(sec).toHaveBeenCalledWith({ siparis: '2', adim: null });
+    const bakis = screen.getByRole('group', { name: '3B bakış' });
+    fireEvent.click(within(bakis).getByRole('button', { name: 'Yük ve gecikme' }));
+    expect(screen.getByText(/Saydamlık/).parentElement?.textContent).toContain('taslakta yeri değişen');
+    expect(screen.getByRole('complementary', { name: 'Açıklama' }).textContent).toContain('Onaylı plan okunuyor.');
+    expect(screen.queryByRole('region', { name: 'Emirler' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: "Matris'e geç" }));
+    expect(document.querySelector('.tc-pyq-mat-kap')).not.toBeNull();
   });
 
   it('çalışma yokken boş durum gösterir', () => {
