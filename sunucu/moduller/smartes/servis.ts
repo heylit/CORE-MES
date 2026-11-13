@@ -950,13 +950,14 @@ export async function makineBulgulari(db: Db, istemci: SmartesIstemcisi | null, 
   }
   const sayimHucresi = new Map<string, Hucre>();
   let enBuyukFark = 0;
+  let enBuyukFarkliMakine: string | null = null;
   for (const x of sayimlar) {
     const k = sayimKarsilastir(x);
     if (k === null) continue;
     const e = emri(x.isEmriNo);
     sayimHucresi.set(x.makineKodu, { metin: `${sayi(k.makine)} / ${sayi(k.operator)}`, ton: k.asti ? 'hata' : 'tamam' });
     if (!k.asti) continue;
-    enBuyukFark = Math.max(enBuyukFark, Math.abs(k.fark));
+    if (Math.abs(k.fark) > enBuyukFark) { enBuyukFark = Math.abs(k.fark); enBuyukFarkliMakine = x.makineKodu; }
     bulgu({
       id: `sayim:${x.makineKodu}:${x.isEmriNo ?? ''}`, tur: 'sayim', ton: 'hata', makineKodu: x.makineKodu, emirNo: e.emirNo, opNo: e.opNo,
       baslik: `makine ${sayi(k.makine)} saydı, operatör ${sayi(k.operator)} girdi`,
@@ -1007,9 +1008,13 @@ export async function makineBulgulari(db: Db, istemci: SmartesIstemcisi | null, 
   const alarmda = makinelerListesi.filter((m) => m.durum === 'alarm').length;
   const bekleyen = makinelerListesi.filter((m) => m.durum === 'bekliyor').length;
   const toplamNedensiz = [...nedensizDk.values()].reduce((t, n) => t + n, 0);
+  // Durumu okunabilen makine yoksa çalışan ve nedensiz duruş sayılamaz: sıfır değil "veri yok".
+  const durumBilinen = makinelerListesi.some((m) => m.durum !== 'bilinmiyor');
   const kutular: MakineBulgulariCevabi['kutular'] = [
-    { tur: 'durum', deger: `${calisan} / ${makinelerListesi.length}`, alt: `çalışıyor · ${alarmda} alarm, ${bekleyen} bekliyor`, ton: alarmda > 0 ? 'hata' : bekleyen > 0 ? 'uyari' : 'tamam' },
-    kutu('durus', `toplam ${toplamNedensiz} dk nedensiz`),
+    durumBilinen
+      ? { tur: 'durum', deger: `${calisan} / ${makinelerListesi.length}`, alt: `çalışıyor · ${alarmda} alarm, ${bekleyen} bekliyor`, ton: alarmda > 0 ? 'hata' : bekleyen > 0 ? 'uyari' : 'tamam' }
+      : { tur: 'durum', deger: null, alt: null, ton: 'pasif' },
+    durumBilinen ? kutu('durus', `toplam ${toplamNedensiz} dk nedensiz`) : yok('durus'),
     kutu('sayim', `en büyük fark ${sayi(enBuyukFark)} adet`),
     yok('program'), yok('cevrim'),
     kutu('bitis', 'termini geçen iş'),
@@ -1048,7 +1053,7 @@ export async function makineBulgulari(db: Db, istemci: SmartesIstemcisi | null, 
   // Sayım eğrisi: en büyük farkı olan makine (yoksa sayımı olan ilk makine), gün başından bu saate saat saat.
   const saatBaslari: number[] = [];
   for (let t = gunBasi.getTime(); t <= simdi.getTime(); t += 3_600_000) saatBaslari.push(t);
-  const secilen = say('sayim')[0]?.makineKodu ?? sayimlar[0]?.makineKodu ?? null;
+  const secilen = enBuyukFarkliMakine ?? sayimlar[0]?.makineKodu ?? null;
   let sayimGrafigi: NonNullable<MakineBulgulariCevabi['grafikler']>['sayim'] = null;
   if (secilen !== null && saatBaslari.length > 0) {
     const makine = birikimliSayac(await s.ornekler(db, secilen, gunBasi, simdi), saatBaslari);

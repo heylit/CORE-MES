@@ -304,6 +304,10 @@ describe('SmartES canlı makine panosu (kart 3176, gerçek PostgreSQL)', () => {
     await vt().sorgu(
       `INSERT INTO smartes_is_emri_durumu (smartes_id, is_emri_no, makine_kodu, saglam, red, makine_saglam, makine_red, ham, ilk_okuma, son_okuma)
        VALUES ($1, $2, 'ORN-M01', 38, 2, 52, 0, '{}', $3, $3)`, [simdi % 1_000_000_000, no, new Date(simdi)]);
+    // Daha yeni ama farkı küçük satır: eğri yine en büyük farklı makineyi gösterir.
+    await vt().sorgu(
+      `INSERT INTO smartes_is_emri_durumu (smartes_id, is_emri_no, makine_kodu, saglam, red, makine_saglam, makine_red, ham, ilk_okuma, son_okuma)
+       VALUES ($1, $2, 'ORN-M02', 20, 0, 25, 0, '{}', $3, $3)`, [simdi % 1_000_000_000 + 100, `${no}-B`, new Date(simdi + 1000)]);
     for (const gunOnce of [1, 2, 3]) {
       await vt().sorgu(
         `INSERT INTO smartes_alarm (smartes_id, makine_kodu, alarm_kodu, aciklama, baslangic, ham, ilk_okuma, son_okuma)
@@ -312,10 +316,13 @@ describe('SmartES canlı makine panosu (kart 3176, gerçek PostgreSQL)', () => {
     const b = await bulgular();
     assert.equal(b.okumaAcik, true);
     assert.equal(b.kutular.length, 10);
-    assert.deepEqual(b.kutular.find((k) => k.tur === 'durum')?.deger, '0 / 3');
+    // Durum kodları henüz bilinmiyor: çalışan ve nedensiz duruş sıfır değil, veri yok.
+    assert.equal(b.kutular.find((k) => k.tur === 'durum')?.deger, null);
+    assert.equal(b.kutular.find((k) => k.tur === 'durus')?.deger, null);
+    assert.equal(b.kutular.find((k) => k.tur === 'sayim')?.alt, 'en büyük fark 12 adet');
     for (const tur of ['program', 'cevrim', 'oee', 'oran', 'yuk'] as const) assert.equal(b.kutular.find((k) => k.tur === tur)?.deger, null, tur);
-    const sayim = b.bulgular.find((x) => x.tur === 'sayim');
-    assert.equal(sayim?.makineKodu, 'ORN-M01');
+    const sayim = b.bulgular.find((x) => x.tur === 'sayim' && x.makineKodu === 'ORN-M01');
+    assert.equal(b.bulgular.filter((x) => x.tur === 'sayim').length, 2);
     assert.match(sayim?.hesap ?? '', /fark 12 \(tolerans 2\)/);
     const alarm = b.bulgular.find((x) => x.tur === 'alarm');
     assert.equal(alarm?.ton, 'uyari');
