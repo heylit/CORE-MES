@@ -427,7 +427,9 @@ describe('saat okuma uçları (gerçek PostgreSQL)', () => {
     const cevap = saatIstasyonlariCevabi.parse((await istek('planlama_proje', 'GET', '/saat/istasyonlar')).govde);
     assert.equal(cevap.pencere.baslangic, new Date(tesisGunBasi(tesisGunu(Date.parse(cevap.zaman)))).toISOString());
     const baslangic = Date.parse(cevap.pencere.baslangic);
-    const beklenen = Math.round((T - 30_000 - Math.max(T - 90_000, baslangic)) / 1000);
+    // Tesis günü başladıktan sonraki ilk 30 saniyede duruşun tamamı pencerenin dışında kalır: istasyonun bugün duruşu yoktur (null).
+    const kesit = T - 30_000 - Math.max(T - 90_000, baslangic);
+    const beklenen = kesit > 0 ? Math.round(kesit / 1000) : null;
     assert.equal(cevap.istasyonlar.find((i) => i.id === a.ist)?.durusSaniye, beklenen, 'duruş pencereyle kesilir');
     assert.equal(cevap.istasyonlar.find((i) => i.id === b.ist)?.durusSaniye, null, 'duruş verisi yoksa sıfır değil null');
   });
