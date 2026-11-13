@@ -267,6 +267,8 @@ export interface TasimaTakvimi {
   donuk: number; ufuk: number; tasimaSaat: number;
   onculler: Record<string, [string, 'b' | 'o'][]>;
   opNo: Record<string, string>;
+  // Emrin adımları rota sırasında; fas: adım yalnız fasonda yapılır.
+  emirler: Record<string, { id: string; adaylar: string[]; fas: boolean }[]>;
   yer: (id: string, m: string, t: number) => { S: number; C: number; lot1: number } | null;
   saatMetni: (h: number) => string;
   tezgahAdi: (m: string) => string;
@@ -276,5 +278,5 @@ export function tasimaTakvimi(calisma: unknown, simdi: number): TasimaTakvimi {
   const { sunucuTasimaTakvimi } = baglamla<{ sunucuTasimaTakvimi: (S: unknown, now: number) => TasimaTakvimi }>(tasimaKodu(), 'tasima-takvimi.js', null);
   const t = sunucuTasimaTakvimi(jsonKopya(calisma), simdi);
   const yer: TasimaTakvimi['yer'] = (id, m, h) => { const y = t.yer(id, m, h); return y === null ? null : { S: y.S, C: y.C, lot1: y.lot1 }; };
-  return { donuk: t.donuk, ufuk: t.ufuk, tasimaSaat: t.tasimaSaat, onculler: structuredClone(t.onculler), opNo: structuredClone(t.opNo), yer, saatMetni: (h) => String(t.saatMetni(h)), tezgahAdi: (m) => String(t.tezgahAdi(m)) };
+  return { donuk: t.donuk, ufuk: t.ufuk, tasimaSaat: t.tasimaSaat, onculler: structuredClone(t.onculler), opNo: structuredClone(t.opNo), emirler: structuredClone(t.emirler), yer, saatMetni: (h) => String(t.saatMetni(h)), tezgahAdi: (m) => String(t.tezgahAdi(m)) };
 }

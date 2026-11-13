@@ -13,9 +13,12 @@ import {
   taslaktanCalismayaCevabi, taslaktanCalismayaGovdesi, yillikCozBaslatCevabi, yillikCozDurumuCevabi, yillikCozGovdesi, yillikCozParametresi,
 } from '#paylasilan/sozlesme/planlama.ts';
 import { planAnaliziCevabi } from '#paylasilan/sozlesme/plan-analiz.ts';
-import { atolyeKomutuCevabi, ekMesaiEkleGovdesi, isTasiGovdesi, isTasiOnizlemeSorgusu, isTasiOnizlemesiCevabi, olayEkleGovdesi } from '#paylasilan/sozlesme/planlama-atolye.ts';
+import {
+  atolyeKomutuCevabi, ekMesaiEkleGovdesi, isTasiGovdesi, isTasiOnizlemeSorgusu, isTasiOnizlemesiCevabi, olayEkleGovdesi, planaAlGovdesi, planaAlOnizlemeSorgusu,
+  planaAlOnizlemesiCevabi,
+} from '#paylasilan/sozlesme/planlama-atolye.ts';
 import { kayitlarCevabi, silCevabi, yazCevabi } from '#paylasilan/sozlesme/recete-rota.ts';
-import { ekMesaiyiEkle, isiTasi, isTasiOnizlemesi, olayiEkle } from './atolye-komutlari.ts';
+import { ekMesaiyiEkle, emriPlanaAl, isiTasi, isTasiOnizlemesi, olayiEkle, planaAlOnizlemesi } from './atolye-komutlari.ts';
 import { calismaGeriAl, calismaTaslagi, canliFarki, tabanVeCanli, taslaktanCalismaya } from './calisma-plani.ts';
 import { degerlendirmeBaslat, degerlendirmeDurumu } from './degerlendirme.ts';
 import { grupSaatMaliyetleri } from './grup-saat-maliyeti.ts';
@@ -243,6 +246,11 @@ export const uclar = [
     isle: ({ db, kullanici, govde }) => isiTasi(db, kullanici, govde) }),
   uc({ yontem: 'GET', yol: '/plan/planlama-calismasi/is-tasi-onizlemesi', yetki: 'plan.yaz', sorgu: isTasiOnizlemeSorgusu, cevap: isTasiOnizlemesiCevabi,
     isle: ({ db, kullanici, sorgu }) => isTasiOnizlemesi(db, kullanici, sorgu) }),
+  // 3151: planda yeri olmayan emir plana alınır (ilk adım tezgâha ve saate kilitlenir); önizlemesi yazmaz. Yetki taşımayla aynıdır.
+  uc({ yontem: 'POST', yol: '/plan/planlama-calismasi/plana-al', yetki: 'plan.yaz', tekrarKorumali: true, govde: planaAlGovdesi, cevap: atolyeKomutuCevabi,
+    isle: ({ db, kullanici, govde }) => emriPlanaAl(db, kullanici, govde) }),
+  uc({ yontem: 'GET', yol: '/plan/planlama-calismasi/plana-al-onizlemesi', yetki: 'plan.yaz', sorgu: planaAlOnizlemeSorgusu, cevap: planaAlOnizlemesiCevabi,
+    isle: ({ db, kullanici, sorgu }) => planaAlOnizlemesi(db, kullanici, sorgu) }),
   uc({ yontem: 'POST', yol: '/plan/planlama-calismasi/olay-ekle', yetki: 'plan.yaz', tekrarKorumali: true, govde: olayEkleGovdesi, cevap: atolyeKomutuCevabi,
     isle: ({ db, kullanici, govde }) => olayiEkle(db, kullanici, govde) }),
   // 2053: ek mesai de atölyenin ayrı komutudur (1982 a); haftalık bütçe onaya gönderirken denetlenir.

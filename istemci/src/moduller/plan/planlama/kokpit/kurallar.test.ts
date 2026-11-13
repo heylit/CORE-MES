@@ -108,6 +108,10 @@ describe('Kokpit taşıma ve tur', () => {
     expect(turAdaylari(m, e, null, 1)).toHaveLength(1);
     expect(turAdaylari(m, e, 'a.2')).toEqual([{ isId: 'a.2', tezgah: 'T2', baslangic: 10 }]);
     expect(turAdaylari(m, emir('p', { durum: 'plansiz', adimlar: e.adimlar }))).toEqual([]);
+    // Hiçbir adımı planda olmayan emir plana alınır: ilk adımın fason olmayan aday tezgâhları, şimdiden sonraki ilk açık an.
+    const acik = { ...m, acik: { T2: [[8, 16]] as const } };
+    expect(turAdaylari(acik, emir('p', { durum: 'plansiz', adimlar: [{ id: 'p.1', ad: 'Torna', adaylar: ['T1', '@F', 'T2'] }, { id: 'p.2', ad: 'Freze', adaylar: ['T2'] }] })))
+      .toEqual([{ isId: 'p.1', tezgah: 'T1', baslangic: 1, planaAl: 'p' }, { isId: 'p.1', tezgah: 'T2', baslangic: 8, planaAl: 'p' }]);
     expect(onizlemeBitisi(m, e, [{ isId: 'a.2', C: 14 }])).toBe(14);
     expect(onizlemeBitisi(m, emir('x', { adimlar: [{ id: 'yok.1', ad: '', adaylar: [] }] }), [])).toBeNull();
   });

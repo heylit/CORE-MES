@@ -1,8 +1,12 @@
 import type { Db } from '#cekirdek/db.ts';
 import { cakisma, dogrulama, eskiSurum } from '#cekirdek/hata.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
-import type { AtolyeKomutuCevabi, EkMesaiEkleGovdesi, IsTasiGovdesi, IsTasiOnizlemeSorgusu, IsTasiOnizlemesiCevabi, OlayEkleGovdesi } from '#paylasilan/sozlesme/planlama-atolye.ts';
-import { ekMesaiEkle, isTasi, olayEkle, tasimaDenetimi, type KomutKisisi, type KomutSonucu } from './atolye-komutlari-kurallar.ts';
+import type {
+  AtolyeKomutuCevabi, EkMesaiEkleGovdesi, IsTasiGovdesi, IsTasiOnizlemeSorgusu, IsTasiOnizlemesiCevabi, OlayEkleGovdesi, PlanaAlGovdesi, PlanaAlOnizlemeSorgusu,
+  PlanaAlOnizlemesiCevabi,
+} from '#paylasilan/sozlesme/planlama-atolye.ts';
+import { ekMesaiEkle, isTasi, olayEkle, planaAl, planaAlDenetimi, tasimaDenetimi, type KomutKisisi, type KomutSonucu } from './atolye-komutlari-kurallar.ts';
+import { planaAlmaHesabi } from './plana-al.ts';
 import { PLANLAMA_ANAHTARI, planlamaCalismasi, planlamaYaz, planlamaYazmaDenetimi } from './planlama-servis.ts';
 import * as sorgular from './sorgular.ts';
 import { tasimaHesabi } from './tasima.ts';
@@ -39,6 +43,26 @@ export async function isTasiOnizlemesi(db: Db, kullanici: Kullanici, g: IsTasiOn
   const d = tasimaDenetimi(c.calisma, g, simdi);
   if ('hata' in d) return { calismaSurumu: c.surum, gecerli: false, ileti: d.hata.ileti, isler: [] };
   return { calismaSurumu: c.surum, ...tasimaHesabi(d.deger, d.simdi, g) };
+}
+
+// 3151: planda yeri olmayan emrin ilk adımı verilen tezgâha ve saate kilitlenir.
+export function emriPlanaAl(db: Db, kullanici: Kullanici, g: PlanaAlGovdesi, simdi: number = Date.now()): Promise<AtolyeKomutuCevabi> {
+  const { calismaSurumu, ...al } = g;
+  return uygula(db, kullanici, calismaSurumu, (d, k) => planaAl(d, al, k, planaAlmaHesabi), simdi);
+}
+
+// Plana almanın önizlemesi: komutla aynı denetim ve hesap, yazma yok. Sayfanın sürümü kayıttakinden eskiyse sonuç hesaplanmaz: eski plana
+// göre yer göstermek yanıltır.
+export async function planaAlOnizlemesi(db: Db, kullanici: Kullanici, g: PlanaAlOnizlemeSorgusu, simdi: number = Date.now()): Promise<PlanaAlOnizlemesiCevabi> {
+  planlamaYazmaDenetimi(kullanici, PLANLAMA_ANAHTARI);
+  const c = await planlamaCalismasi(db, kullanici, simdi);
+  const red = (ileti: string): PlanaAlOnizlemesiCevabi => ({ calismaSurumu: c.surum, gecerli: false, ileti, isler: [], bitis: null });
+  if (c.surum !== g.calismaSurumu) return red('Plan bu sırada değişti; sayfayı yenileyin.');
+  const { calismaSurumu: _, ...al } = g;
+  const d = planaAlDenetimi(c.calisma, al, simdi);
+  if ('hata' in d) return red(d.hata.ileti);
+  const r = planaAlmaHesabi(d.deger, d.simdi, al);
+  return { calismaSurumu: c.surum, gecerli: r.gecerli, ileti: r.ileti, isler: r.isler, bitis: r.bitis };
 }
 
 export function olayiEkle(db: Db, kullanici: Kullanici, g: OlayEkleGovdesi, simdi: number = Date.now()): Promise<AtolyeKomutuCevabi> {

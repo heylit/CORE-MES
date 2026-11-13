@@ -4,13 +4,13 @@ import { durumYazisi, satirKimligi, tasinabilir, type KokpitEmri, type KokpitMod
 
 // Seçili emrin ayrıntısı: adımları, yerleri ve seçili adım için tezgâh seçenekleri. Bilgisayarda tahtanın yanında, telefonda alttan açılır;
 // telefonda taşıma buradaki düğmelerle yapılır.
-export interface AyrintiOzellikleri extends Pick<HamleOzellikleri, 'zaman' | 'uygula'> {
+export interface AyrintiOzellikleri extends Pick<HamleOzellikleri, 'zaman' | 'uygula' | 'surum'> {
   m: KokpitModeli; e: KokpitEmri; secIs: string | null;
   adimSec: (isId: string) => void;
   kapat: () => void;
 }
 
-export function Ayrinti({ m, e, secIs, zaman, uygula, adimSec, kapat }: AyrintiOzellikleri) {
+export function Ayrinti({ m, e, secIs, zaman, uygula, surum, adimSec, kapat }: AyrintiOzellikleri) {
   const kod = new Map(m.tezgahlar.map((t) => [t.id, t.kod]));
   const secili = secIs ? m.isler[secIs] : undefined;
   return (
@@ -38,10 +38,15 @@ export function Ayrinti({ m, e, secIs, zaman, uygula, adimSec, kapat }: AyrintiO
           );
         })}
       </ol>
-      {e.durum === 'plansiz' ? <p className="tc-pyq-not">Bu emrin adımları henüz plana alınmadı.</p> : (
+      {e.durum === 'plansiz' ? (
+        <>
+          <h3>Plana al</h3>
+          <Hamleler m={m} e={e} isId={null} zaman={zaman} uygula={uygula} surum={surum} />
+        </>
+      ) : (
         <>
           <h3>{secili ? `${secili.ad}: tezgâh seçenekleri` : 'Erkene alma seçenekleri'}</h3>
-          {secili && tasinabilir(secili) ? <p className="tc-pyq-not">{tasinabilir(secili)}</p> : <Hamleler m={m} e={e} isId={secIs} zaman={zaman} uygula={uygula} />}
+          {secili && tasinabilir(secili) ? <p className="tc-pyq-not">{tasinabilir(secili)}</p> : <Hamleler m={m} e={e} isId={secIs} zaman={zaman} uygula={uygula} surum={surum} />}
         </>
       )}
     </aside>

@@ -156,12 +156,13 @@ export function ilkBosluk(m: KokpitModeli, tezgah: string, sure: number, baslang
 }
 
 // --- sorun turu ---
-export interface TurAdayi { isId: string; tezgah: string; baslangic: number }
+// planaAl dolu ise hamle taşıma değil plana almadır: değer emrin kimliğidir, isId emrin ilk adımıdır.
+export interface TurAdayi { isId: string; tezgah: string; baslangic: number; planaAl?: string }
 // Emrin taşınabilen bekleyen adımları için hamle adayları: aday tezgâhların her birinde, öncül adım bittikten sonraki en erken boşluk.
 // Bugünkü yerinden erken olmayan aday hamle değildir; en çok öne alan başta. Sonucu (emrin yeni bitişi) sunucu önizlemesi verir; burada
 // yalnız denenecek yerler seçilir. `isId` verilirse yalnız o adım (ayrıntıdaki seçenekler).
 export function turAdaylari(m: KokpitModeli, e: KokpitEmri, isId: string | null = null, enCok = 3): TurAdayi[] {
-  if (e.durum === 'plansiz') return [];
+  if (e.durum === 'plansiz') return planaAlAdaylari(m, e, enCok);
   const l: (TurAdayi & { kazanc: number })[] = [];
   let onceki = m.simdi;
   for (const adim of e.adimlar) {
@@ -177,6 +178,14 @@ export function turAdaylari(m: KokpitModeli, e: KokpitEmri, isId: string | null 
     onceki = Math.max(onceki, x.C);
   }
   return l.sort((a, b) => b.kazanc - a.kazanc).slice(0, enCok).map(({ isId: id, tezgah, baslangic }) => ({ isId: id, tezgah, baslangic }));
+}
+// Plansız emrin plana alma adayları: ilk adımın aday tezgâhlarında şimdiden sonraki ilk açık an. Boş yeri ve emrin bitişini sunucu
+// önizlemesi verir (adımın süresi plana alınmadan bilinmez). Bir adımı planda olan emir tahtadan taşınır, plana alınmaz.
+export function planaAlAdaylari(m: KokpitModeli, e: KokpitEmri, enCok = 3): TurAdayi[] {
+  const ilk = e.adimlar[0];
+  if (!ilk || e.adimlar.some((a) => m.isler[a.id])) return [];
+  return ilk.adaylar.filter((t) => !fasonMu(t)).slice(0, enCok)
+    .map((tezgah) => ({ isId: ilk.id, tezgah, baslangic: tasimaSaati(acigaOtur(m.acik[tezgah], m.simdi), m.simdi), planaAl: e.id }));
 }
 // Önizlemeden emrin yeni bitişi: taşınan ve itilen adımlar önizlemedeki, ötekiler bugünkü yerinde.
 export function onizlemeBitisi(m: KokpitModeli, e: KokpitEmri, isler: readonly { isId: string; C: number }[]): number | null {

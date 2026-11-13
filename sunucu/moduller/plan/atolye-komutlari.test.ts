@@ -12,7 +12,8 @@ import { kimlikCozucu } from '../oturum/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { DURUM_ANAHTARI } from '../recete-rota/disari.ts';
 import { PLANLAMA_ANAHTARI } from './disari.ts';
-import { IZ_SINIRI, ekMesaiEkle, isTasi, olayEkle } from './atolye-komutlari-kurallar.ts';
+import { IZ_SINIRI, ekMesaiEkle, isTasi, olayEkle, planaAl } from './atolye-komutlari-kurallar.ts';
+import type { PlanaAlSonucu } from './plana-al-kurallar.ts';
 import type { TasimaSonucu } from './tasima-kurallar.ts';
 import { tesisGunu } from '#paylasilan/zaman.ts';
 import { planAni } from './planlama-kurallar.ts';
@@ -147,6 +148,34 @@ describe('atölye komutlarının kuralı', () => {
     assert.equal((y.iz as unknown[]).length, IZ_SINIRI);
     assert.equal((y.iz as { ne: string }[])[0]?.ne, 'Malzeme gecikmesi olayı eklendi');
   });
+  test('3151 plana al: yalnız ilk adım kilitlenir; tek değişikliktir ve geri alması kilidi kaldırır; planda olan, plan dışı ve bilinmeyen emir reddedilir', () => {
+    const SIP = [{ id: 'J1', urun: 'U1' }, { id: 'J2', urun: 'U1' }, { id: 'J3', urun: 'U1', iptal: true }, { id: 'J4', urun: 'U1', havuz: true }];
+    const c = planli({ D: { ...D, siparisler: SIP } });
+    const hesap = (): PlanaAlSonucu => ({ gecerli: true, ileti: 'İlk adım 19.10 Pzt 12:00 saatine oturur.', bitis: 20, isler: [{ isId: 'J2.10', tezgah: 'T2', S: 12, C: 14 }, { isId: 'J2.20', tezgah: 'T1', S: 14, C: 20 }] });
+    const r = planaAl(c, { emirId: 'J2', tezgah: 'T2', baslangic: 11 }, KISI, hesap);
+    const y = deger(r);
+    assert.equal((r as { ileti?: string | null }).ileti, 'İlk adım 19.10 Pzt 12:00 saatine oturur.');
+    assert.deepEqual(y.locks, { 'J2.10': { m: 'T2', S: 12 } });
+    assert.equal(y.dataVer, 4);
+    assert.deepEqual(y.bekleyen, [{ id: `${String(KISI.t)}-3`, ne: 'Emir plana alındı', ayrinti: 'J2 → T2; İlk adım 19.10 Pzt 12:00 saatine oturur.', kim: KISI.kim, t: KISI.t, isler: ['J2'], geri: [{ yol: ['locks'], id: 'J2.10' }] }]);
+    assert.deepEqual(c.locks, {});
+    // Aynı yere ikinci kez alınan emir yeni değişiklik yazmaz.
+    const tekrar = planaAl(y, { emirId: 'J2', tezgah: 'T2', baslangic: 11 }, KISI, hesap);
+    assert.equal('degisti' in tekrar && tekrar.degisti, false);
+    let cagri = 0;
+    const say = (): PlanaAlSonucu => { cagri++; return hesap(); };
+    assert.deepEqual(hata(planaAl(c, { emirId: 'J1', tezgah: 'T2', baslangic: 11 }, KISI, say)), { tur: 'cakisma', ileti: 'Emir zaten planda; yerini tahtadan değiştirin.' });
+    assert.equal(hata(planaAl(c, { emirId: 'J3', tezgah: 'T2', baslangic: 11 }, KISI, say)).tur, 'cakisma');
+    assert.equal(hata(planaAl(c, { emirId: 'J4', tezgah: 'T2', baslangic: 11 }, KISI, say)).tur, 'cakisma');
+    assert.deepEqual(hata(planaAl(c, { emirId: 'YOK', tezgah: 'T2', baslangic: 11 }, KISI, say)), { tur: 'dogrulama', ileti: 'Emir çalışmada yok.', alan: 'emirId' });
+    assert.deepEqual(hata(planaAl(c, { emirId: 'J2', tezgah: 'YOK', baslangic: 11 }, KISI, say)), { tur: 'dogrulama', ileti: 'Tezgâh çalışmada yok.', alan: 'tezgah' });
+    assert.deepEqual(hata(planaAl(c, { emirId: 'J2', tezgah: 'T2', baslangic: 9 }, KISI, say)), { tur: 'dogrulama', ileti: 'Emir geçmiş bir saate alınamaz.', alan: 'baslangic' });
+    assert.equal(hata(planaAl({ ...c, plan: null }, { emirId: 'J2', tezgah: 'T2', baslangic: 11 }, KISI, say)).tur, 'cakisma');
+    // Denetimden geçmeyen istekte yer hesaplanmaz; hesabın reddi alanıyla döner ve hiçbir şey yazılmaz.
+    assert.equal(cagri, 0);
+    const red = planaAl(c, { emirId: 'J2', tezgah: 'T2', baslangic: 11 }, KISI, () => ({ gecerli: false, ileti: 'T2 bu emrin ilk adımını yapamaz.', alan: 'tezgah', isler: [], bitis: null }));
+    assert.deepEqual(hata(red), { tur: 'dogrulama', ileti: 'T2 bu emrin ilk adımını yapamaz.', alan: 'tezgah' });
+  });
 });
 
 // Uçlar gerçek PostgreSQL'de: yetki (izinli ve reddedilen), sürüm denetimi, yazmanın kayda düşmesi.
@@ -250,6 +279,8 @@ describe('atölye komut uçları (gerçek PostgreSQL)', () => {
       assert.equal(m.statusCode, 403, m.body);
       const t = await gonder(cerez, 'is-tasi', { calismaSurumu: surum, isId: 'J1.10', tezgah: 'T1', baslangic: 12 }, `ak-02-t-${ad}`);
       assert.equal(t.statusCode, 403, t.body);
+      const p = await gonder(cerez, 'plana-al', { calismaSurumu: surum, emirId: 'J1', tezgah: 'T1', baslangic: 12 }, `ak-02-p-${ad}`);
+      assert.equal(p.statusCode, 403, p.body);
     }
     assert.equal((await vt().tx((db) => sorgular.planlamaKaydi(db, PLANLAMA_ANAHTARI)))?.surum, surum);
   });
@@ -281,6 +312,25 @@ describe('atölye komut uçları (gerçek PostgreSQL)', () => {
     assert.deepEqual(o.json(), { calismaSurumu: surum, gecerli: false, ileti: 'Çalışmada plan yok; önce planı kurun.', isler: [] });
     assert.equal((await oku(tam, `isId=J1.10&tezgah=${makineId}&baslangic=abc`)).statusCode, 400);
     assert.equal((await oku(tam, `isId=J1.10&baslangic=12`)).statusCode, 400);
+    assert.equal((await vt().tx((db) => sorgular.planlamaKaydi(db, PLANLAMA_ANAHTARI)))?.surum, surum);
+  });
+  test('AK-05 (3151): plana al ve önizlemesi plan.yaz ister; eski sürüm, plansız çalışma ve bozuk istek reddedilir; önizleme yazmaz, eski sürümde yer göstermez', async () => {
+    const surum = await calismaYaz(calisma());
+    const oku = (cerez: string, q: string) => app.inject({ method: 'GET', url: `/api/plan/planlama-calismasi/plana-al-onizlemesi?${q}`, headers: { cookie: cerez } });
+    const q = (s: number) => `calismaSurumu=${String(s)}&emirId=J1&tezgah=${makineId}&baslangic=12`;
+    for (const cerez of [okuyucu, receteYazari]) assert.equal((await oku(cerez, q(surum))).statusCode, 403);
+    const o = await oku(tam, q(surum));
+    assert.equal(o.statusCode, 200, o.body);
+    assert.deepEqual(o.json(), { calismaSurumu: surum, gecerli: false, ileti: 'Çalışmada plan yok; önce planı kurun.', isler: [], bitis: null });
+    assert.deepEqual((await oku(tam, q(surum - 1))).json(), { calismaSurumu: surum, gecerli: false, ileti: 'Plan bu sırada değişti; sayfayı yenileyin.', isler: [], bitis: null });
+    assert.equal((await oku(tam, `calismaSurumu=${String(surum)}&emirId=J1&tezgah=${makineId}&baslangic=abc`)).statusCode, 400);
+    assert.equal((await oku(tam, `emirId=J1&tezgah=${makineId}&baslangic=12`)).statusCode, 400);
+    const eski = await gonder(tam, 'plana-al', { calismaSurumu: surum - 1, emirId: 'J1', tezgah: makineId, baslangic: 12 }, 'ak-05-a');
+    assert.equal(eski.statusCode, 409, eski.body);
+    const plansiz = await gonder(tam, 'plana-al', { calismaSurumu: surum, emirId: 'J1', tezgah: makineId, baslangic: 12 }, 'ak-05-b');
+    assert.equal(plansiz.statusCode, 409, plansiz.body);
+    const bozuk = await gonder(tam, 'plana-al', { calismaSurumu: surum, emirId: 'J1', tezgah: makineId, baslangic: -1 }, 'ak-05-c');
+    assert.equal(bozuk.statusCode, 400, bozuk.body);
     assert.equal((await vt().tx((db) => sorgular.planlamaKaydi(db, PLANLAMA_ANAHTARI)))?.surum, surum);
   });
 });

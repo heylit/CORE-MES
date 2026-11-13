@@ -24,6 +24,8 @@ export interface TahtaOzellikleri {
   zaman: (t: number) => string;
   // Yazamayan kişide null: tutma kapalıdır.
   tasi: ((isId: string, tezgah: string, S: number) => void) | null;
+  // Tepsiden tutulan plansız emrin bırakıldığı yer (ilk adımın tezgâhı ve saati); yazamayan kişide null.
+  planaAl: ((emirId: string, tezgah: string, S: number) => void) | null;
   // Önce / sonra açıkken işlerin onaylı plandaki yerleri; iş orada çizilir, üstünde taslakta ne kadar kaydığı yazar.
   once: Record<string, CanliYer> | null;
   gunAc: (gun: number) => void;
@@ -41,19 +43,23 @@ const yerYaz = (el: HTMLElement | null, x: number, w?: number): void => {
   el.style.setProperty('--x', `${String(Math.round(x * 10) / 10)}px`);
   if (w !== undefined) el.style.setProperty('--w', `${String(Math.max(6, Math.round(w * 10) / 10))}px`);
 };
+const FIS = 'fis:';
 const yazimda = (): boolean => /^(INPUT|SELECT|TEXTAREA)$/.test(document.activeElement?.tagName ?? '');
 
-interface Tasinan { id: string; tut: number }
+// fis: tepsiden tutulan plansız emir; id o emrin ilk adımıdır (planda yeri yoktur).
+interface Tasinan { id: string; tut: number; fis?: string }
+// Plansız emrin süresi plana alınmadan bilinmez; bırakma çerçevesi bu genişlikte çizilir.
+const FIS_SAATI = 2;
 interface Hedef { satir: string; S: number; gecerli: boolean }
 
 export function Tahta(o: TahtaOzellikleri) {
-  const { m, cx, goz, olcek, emirler, uyar, secEmir, secIs, sec, zaman, tasi, once, gunAc, uyari, goster, odak, oneri } = o;
+  const { m, cx, goz, olcek, emirler, uyar, secEmir, secIs, sec, zaman, tasi, planaAl, once, gunAc, uyari, goster, odak, oneri } = o;
   const px = SAAT_ENI[olcek];
   const en = (m.son - m.bas) * px;
   const kap = useRef<HTMLDivElement | null>(null);
   const [tasinan, setTasinan] = useState<Tasinan | null>(null);
   const [hedef, setHedef] = useState<Hedef | null>(null);
-  const [menu, setMenu] = useState<{ id: string; x: number; y: number; tut: number } | null>(null);
+  const [menu, setMenu] = useState<{ id: string; x: number; y: number; tut: number; fis?: boolean } | null>(null);
   const imlecteki = useRef<string | null>(null);
   const emir = useMemo(() => new Map(m.emirler.map((e) => [e.id, e])), [m]);
   const adaylar = useCallback((x: KokpitIsi): string[] => emir.get(x.job)?.adimlar.find((a) => a.id === x.id)?.adaylar ?? [], [emir]);
@@ -65,14 +71,31 @@ export function Tahta(o: TahtaOzellikleri) {
     if (neden) { uyari(neden); return; }
     setMenu(null); setTasinan({ id, tut: tutma }); setHedef({ satir: goz === 'T' ? satirKimligi(x) : x.job, S: x.S, gecerli: true });
   }, [m, tasi, goz, uyari]);
+  const fisAdaylari = useCallback((emirId: string): string[] => (emir.get(emirId)?.adimlar[0]?.adaylar ?? []).filter((t) => !t.startsWith('@')), [emir]);
+  const tutFis = useCallback((emirId: string): void => {
+    const e = emir.get(emirId), ilk = e?.adimlar[0];
+    if (!e || !ilk || !planaAl) return;
+    if (goz !== 'T') { uyari('Plana almak için Tezgâh görünümüne geçin'); return; }
+    if (e.adimlar.some((a) => m.isler[a.id])) { uyari('Bu emrin bir adımı planda; öteki adımları plan yeniden dizilince yerleşir'); return; }
+    if (!fisAdaylari(emirId).length) { uyari('Bu emrin ilk adımı tezgâhta yapılmıyor'); return; }
+    setMenu(null); setTasinan({ id: ilk.id, tut: 0, fis: emirId }); setHedef(null);
+  }, [emir, m, planaAl, goz, uyari, fisAdaylari]);
   const birak = useCallback((): void => {
+    if (tasinan?.fis !== undefined) {
+      if (!hedef) { uyari('Emri bir tezgâh satırına bırakın'); return; }
+      if (!hedef.gecerli) { uyari('Bu emrin ilk adımı bu tezgâhta yapılamaz'); return; }
+      const emirId = tasinan.fis;
+      setTasinan(null); setHedef(null);
+      planaAl?.(emirId, hedef.satir, hedef.S);
+      return;
+    }
     const x = tasinan ? m.isler[tasinan.id] : undefined;
     if (!x || !hedef || !tasi) { setTasinan(null); setHedef(null); return; }
     if (!hedef.gecerli) { uyari('Bu adım bu tezgâhta yapılamaz'); return; }
     const tezgah = goz === 'T' ? hedef.satir : x.m;
     setTasinan(null); setHedef(null);
     if (tezgah !== x.m || Math.abs(hedef.S - x.S) > 0.01) tasi(x.id, tezgah, hedef.S);
-  }, [tasinan, hedef, m, tasi, goz, uyari]);
+  }, [tasinan, hedef, m, tasi, planaAl, goz, uyari]);
 
   // Tutulan iş imleci izler: satır imlecin altındaki satırdır, saat imlecin yeri eksi tutulan noktadır (çeyrek saate oturur).
   const izle = (ev: ImlecOlayi<HTMLDivElement>): void => {
@@ -80,6 +103,12 @@ export function Tahta(o: TahtaOzellikleri) {
     const x = m.isler[tasinan.id];
     const satir = (ev.target as Element).closest<HTMLElement>('[data-satir]');
     const alan = satir?.querySelector<HTMLElement>('.tc-pyq-alan');
+    if (tasinan.fis !== undefined) {
+      if (!satir || !alan) { setHedef(null); return; }
+      const t = satir.dataset.satir ?? '';
+      setHedef({ satir: t, S: tasimaSaati(m.bas + (ev.clientX - alan.getBoundingClientRect().left) / px, m.simdi), gecerli: fisAdaylari(tasinan.fis).includes(t) });
+      return;
+    }
     if (!x || !satir || !alan) return;
     const kimlik = satir.dataset.satir ?? '';
     const S = tasimaSaati(m.bas + (ev.clientX - alan.getBoundingClientRect().left) / px - tasinan.tut, m.simdi);
@@ -91,17 +120,20 @@ export function Tahta(o: TahtaOzellikleri) {
     const tus = (ev: KeyboardEvent): void => {
       if (ev.key === 'Escape' && (tasinan || menu)) { ev.stopPropagation(); setTasinan(null); setHedef(null); setMenu(null); return; }
       if (yazimda() || ev.ctrlKey || ev.metaKey || ev.altKey) return;
-      if (menu && (ev.key === '1' || ev.key === 'Enter')) { ev.preventDefault(); tut(menu.id, menu.tut); return; }
+      if (menu && (ev.key === '1' || ev.key === 'Enter')) { ev.preventDefault(); if (menu.fis) tutFis(menu.id); else tut(menu.id, menu.tut); return; }
       if (ev.key !== ' ' || uzakMi(olcek)) return;
       if (tasinan) { ev.preventDefault(); birak(); return; }
       // Odak başka bir düğmedeyken Space o düğmenindir; imleç bir işin üstündeyse iş tutulur.
-      const odakDugme = /^(BUTTON|A|SUMMARY)$/.test(document.activeElement?.tagName ?? '') && !document.activeElement?.closest('.tc-pyq-is');
+      const odakDugme = /^(BUTTON|A|SUMMARY)$/.test(document.activeElement?.tagName ?? '') && !document.activeElement?.closest('.tc-pyq-is, .tc-pyq-fis');
       const id = imlecteki.current ?? (odakDugme ? null : secIs);
-      if (id && m.isler[id]) { ev.preventDefault(); tut(id); }
+      if (id?.startsWith(FIS)) { ev.preventDefault(); tutFis(id.slice(FIS.length)); return; }
+      if (id && m.isler[id]) { ev.preventDefault(); tut(id); return; }
+      // Seçili plansız emir de Space ile tutulur.
+      if (!id && !odakDugme && planaAl && secEmir && emir.get(secEmir)?.durum === 'plansiz') { ev.preventDefault(); tutFis(secEmir); }
     };
     document.addEventListener('keydown', tus, true);
     return () => { document.removeEventListener('keydown', tus, true); };
-  }, [tasinan, menu, tut, birak, secIs, m, olcek]);
+  }, [tasinan, menu, tut, tutFis, birak, secIs, secEmir, emir, planaAl, m, olcek]);
 
   // Açılışta şimdi görünür; istenen iş görünüme gelir.
   useEffect(() => {
@@ -171,7 +203,7 @@ export function Tahta(o: TahtaOzellikleri) {
   const plansiz = emirler.filter((e) => e.durum === 'plansiz');
   const tasinanIs = tasinan ? m.isler[tasinan.id] : undefined;
   const oneriIsi = oneri ? m.isler[oneri.isId] : undefined;
-  const adaySatirlari = tasinanIs && goz === 'T' ? new Set(adaylar(tasinanIs)) : null;
+  const adaySatirlari = goz !== 'T' ? null : tasinan?.fis !== undefined ? new Set(fisAdaylari(tasinan.fis)) : tasinanIs ? new Set(adaylar(tasinanIs)) : null;
   const secili = secEmir ? emir.get(secEmir) : undefined;
 
   const isDugmesi = (x: KokpitIsi) => {
@@ -211,10 +243,20 @@ export function Tahta(o: TahtaOzellikleri) {
         {eksen}
         {plansiz.length > 0 && (
           <div className="tc-pyq-satir tc-pyq-tepsi">
-            <div className="tc-pyq-bas"><b>Plana alınacak</b><small>{plansiz.length} emir</small></div>
+            <div className="tc-pyq-bas"><b>Plana alınacak</b><small>{plansiz.length} emir{planaAl && goz === 'T' ? ' · sağ tık ya da Space ile tut' : ''}</small></div>
             <div className="tc-pyq-alan tc-pyq-fisler"><div>
               {plansiz.map((e) => (
-                <button type="button" key={e.id} className="tc-pyq-fis" aria-pressed={secEmir === e.id} onClick={() => { sec(e.id, null); }}>
+                <button
+                  type="button" key={e.id} className="tc-pyq-fis" data-fis={e.id} aria-pressed={secEmir === e.id} data-tasinan={tasinan?.fis === e.id ? '' : undefined}
+                  onClick={() => { if (!tasinan) sec(e.id, null); }} onDoubleClick={(ev) => { ev.preventDefault(); tutFis(e.id); }}
+                  onContextMenu={(ev: FareOlayi<HTMLButtonElement>) => {
+                    if (!planaAl || tasinan || goz !== 'T') return;
+                    ev.preventDefault();
+                    const k = kap.current?.getBoundingClientRect();
+                    setMenu({ id: e.id, fis: true, tut: 0, x: ev.clientX - (k?.left ?? 0) + (kap.current?.scrollLeft ?? 0), y: ev.clientY - (k?.top ?? 0) + (kap.current?.scrollTop ?? 0) });
+                  }}
+                  onPointerEnter={() => { imlecteki.current = FIS + e.id; }} onPointerLeave={() => { if (imlecteki.current === FIS + e.id) imlecteki.current = null; }}
+                >
                   <b>{emirKuyrugu(e.no)}</b><span>{e.urun}</span><small>{e.termin === null ? 'termin yok' : `termin ${zaman(e.termin).slice(6)}`}</small>
                 </button>
               ))}
@@ -234,6 +276,14 @@ export function Tahta(o: TahtaOzellikleri) {
                   {goz === 'T' ? '' : `${m.tezgahlar.find((t) => t.id === oneri.tezgah)?.kod ?? ''} · `}{zaman(oneri.baslangic).slice(6)} · −{sureYaz(oneriIsi.S - oneri.baslangic)}
                 </span>
               )}
+              {oneri?.planaAl !== undefined && !tasinan && goz === 'T' && oneri.tezgah === r.kimlik && (
+                <span className="tc-pyq-hayalet" data-oneri="" ref={(el) => { yerYaz(el, (oneri.baslangic - m.bas) * px, FIS_SAATI * px); }}>{zaman(oneri.baslangic).slice(6)} · plana al</span>
+              )}
+              {tasinan?.fis !== undefined && hedef?.satir === r.kimlik && (
+                <span className="tc-pyq-hayalet" data-gecersiz={hedef.gecerli ? undefined : ''} ref={(el) => { yerYaz(el, (hedef.S - m.bas) * px, FIS_SAATI * px); }}>
+                  {hedef.gecerli ? `${zaman(hedef.S).slice(6)} · plana al` : 'buraya olmaz'}
+                </span>
+              )}
               {tasinanIs && hedef?.satir === r.kimlik && (
                 <span className="tc-pyq-hayalet" data-gecersiz={hedef.gecerli ? undefined : ''} ref={(el) => { yerYaz(el, (hedef.S - m.bas) * px, (tasinanIs.C - tasinanIs.S) * px); }}>
                   {hedef.gecerli ? `${zaman(hedef.S).slice(6)} · ${hedef.S === tasinanIs.S ? 'yerinde' : `${hedef.S > tasinanIs.S ? '+' : '−'}${sureYaz(hedef.S - tasinanIs.S)}`}` : 'buraya olmaz'}
@@ -247,9 +297,9 @@ export function Tahta(o: TahtaOzellikleri) {
           <div className="tc-pyq-termin" ref={(el) => { yerYaz(el, (secili.termin! - m.bas) * px); }}><span>Termin {secili.no} · {zaman(secili.termin).slice(6)}</span></div>
         )}
         {menu && (
-          <div className="tc-pyq-menu" role="menu" aria-label={emir.get(m.isler[menu.id]?.job ?? '')?.no ?? 'İş'} ref={(el) => { el?.style.setProperty('--x', `${String(menu.x)}px`); el?.style.setProperty('--y', `${String(menu.y)}px`); el?.querySelector('button')?.focus(); }}>
-            <button type="button" role="menuitem" onClick={() => { tut(menu.id, menu.tut); }}><Simge ad="expand" boyut="k" /><span>Yapışarak tut<small>öteki işler yerinde kalır</small></span><kbd>1</kbd></button>
-            <button type="button" role="menuitem" onClick={() => { const x = m.isler[menu.id]; setMenu(null); if (x) sec(x.job, x.id); }}><Simge ad="list" boyut="k" /><span>Ayrıntı</span></button>
+          <div className="tc-pyq-menu" role="menu" aria-label={emir.get(menu.fis ? menu.id : m.isler[menu.id]?.job ?? '')?.no ?? 'İş'} ref={(el) => { el?.style.setProperty('--x', `${String(menu.x)}px`); el?.style.setProperty('--y', `${String(menu.y)}px`); el?.querySelector('button')?.focus(); }}>
+            <button type="button" role="menuitem" onClick={() => { if (menu.fis) tutFis(menu.id); else tut(menu.id, menu.tut); }}><Simge ad="expand" boyut="k" /><span>{menu.fis ? 'Tut ve tahtaya bırak' : 'Yapışarak tut'}<small>öteki işler yerinde kalır</small></span><kbd>1</kbd></button>
+            <button type="button" role="menuitem" onClick={() => { const x = m.isler[menu.id]; setMenu(null); if (menu.fis) sec(menu.id, null); else if (x) sec(x.job, x.id); }}><Simge ad="list" boyut="k" /><span>Ayrıntı</span></button>
           </div>
         )}
       </div>

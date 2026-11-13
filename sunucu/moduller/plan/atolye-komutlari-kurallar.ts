@@ -1,5 +1,6 @@
-import type { AtolyeOlayi, EkMesaiEkleGovdesi, IsTasiGovdesi } from '#paylasilan/sozlesme/planlama-atolye.ts';
+import type { AtolyeOlayi, EkMesaiEkleGovdesi, IsTasiGovdesi, PlanaAlGovdesi } from '#paylasilan/sozlesme/planlama-atolye.ts';
 import { planSaati } from './planlama-kurallar.ts';
+import type { PlanaAlSonucu } from './plana-al-kurallar.ts';
 import type { TasimaSonucu } from './tasima-kurallar.ts';
 
 // Atölye komutlarının saf kuralı (1982 a): kayıtlı çalışmaya tek bir değişiklik uygulanır. Değişiklik sayfanın kendi yazmasıyla aynı izi
@@ -101,6 +102,46 @@ export function isTasi(deger: unknown, g: Omit<IsTasiGovdesi, 'calismaSurumu'>, 
   const isler = typeof r.job === 'string' ? [r.job] : ['*'];
   const ayrinti = `${g.isId} → ${g.tezgah}${sonuc.ileti === null ? '' : `; ${sonuc.ileti}`}`;
   return { deger: isle(d.deger, yeni, { ne, ayrinti, isler, geri }, k), degisti: true, ileti: sonuc.ileti };
+}
+
+// Plana alınabilirlik (3151): emir çalışmada olmalı, iptal ya da havuzda olmamalı ve planda hiçbir adımı bulunmamalı (planda olan emir
+// tahtadan taşınır). Geçerse çalışma ve planın ekseninde şimdi döner. Önizleme de aynı denetimden geçer.
+type PlanaAl = Omit<PlanaAlGovdesi, 'calismaSurumu'>;
+export function planaAlDenetimi(deger: unknown, g: PlanaAl, an: number): { hata: KomutHatasi } | { deger: Nesne; simdi: number } {
+  const h = (r: KomutSonucu): { hata: KomutHatasi } => r as { hata: KomutHatasi };
+  if (!nesne(deger)) return h(cakisma('Çalışma kaydı okunamadı; sayfayı yenileyin.'));
+  const plan = planOf(deger);
+  const ops = plan !== null && nesne(plan.ops) ? plan.ops : null;
+  if (ops === null) return h(cakisma('Çalışmada plan yok; önce planı kurun.'));
+  const D = veriOf(deger);
+  const s = dizi(D.siparisler).find((x) => nesne(x) && String(x.id) === g.emirId);
+  if (!nesne(s)) return h(dogrulama('Emir çalışmada yok.', 'emirId'));
+  if (s.iptal === true || s.havuz === true) return h(cakisma('Emir plan dışında (iptal ya da havuzda); plana alınamaz.'));
+  if (Object.values(ops).some((r) => nesne(r) && String(r.job) === g.emirId)) return h(cakisma('Emir zaten planda; yerini tahtadan değiştirin.'));
+  if (!kimligiVar(D.tezgahlar, 'id', g.tezgah)) return h(dogrulama('Tezgâh çalışmada yok.', 'tezgah'));
+  const simdi = simdiSaati(deger, an);
+  if (simdi === null) return h(cakisma(EKSENSIZ));
+  if (g.baslangic < simdi - 1e-9) return h(dogrulama('Emir geçmiş bir saate alınamaz.', 'baslangic'));
+  return { deger, simdi };
+}
+
+// Yalnız ilk adım kilitlenir (motor kilitYeri: {m, S}); emrin öteki adımlarını plan yeniden dizilirken motor yerleştirir. Tek değişikliktir:
+// bekleyen satırı, iz ve geri alma (kilit kalkar, emir yine plansız olur).
+export function planaAl(deger: unknown, g: PlanaAl, k: KomutKisisi, hesap: (d: Nesne, simdi: number, g: PlanaAl) => PlanaAlSonucu): KomutSonucu & { ileti?: string | null } {
+  const d = planaAlDenetimi(deger, g, k.t);
+  if ('hata' in d) return d;
+  const sonuc = hesap(d.deger, d.simdi, g);
+  if (!sonuc.gecerli) return dogrulama(sonuc.ileti, sonuc.alan);
+  const ilk = sonuc.isler[0];
+  if (ilk === undefined) return cakisma('Emrin yeri hesaplanamadı; sayfayı yenileyin.');
+  const locks = nesne(d.deger.locks) ? d.deger.locks : {};
+  const kilit = { m: ilk.tezgah, S: ilk.S };
+  if (esit(locks[ilk.isId], kilit)) return { deger: d.deger, degisti: false, ileti: sonuc.ileti };
+  const yeni = kopya(d.deger);
+  yeni.locks = { ...locks, [ilk.isId]: kilit };
+  const geri: GeriYama[] = [locks[ilk.isId] === undefined ? { yol: ['locks'], id: ilk.isId } : { yol: ['locks'], id: ilk.isId, once: locks[ilk.isId] }];
+  const ayrinti = `${g.emirId} → ${g.tezgah}${sonuc.ileti === null ? '' : `; ${sonuc.ileti}`}`;
+  return { deger: isle(d.deger, yeni, { ne: 'Emir plana alındı', ayrinti, isler: [g.emirId], geri }, k), degisti: true, ileti: sonuc.ileti };
 }
 
 const OLAY_ADI: Record<AtolyeOlayi['tip'], string> = {

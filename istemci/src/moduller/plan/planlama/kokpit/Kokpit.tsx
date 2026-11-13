@@ -16,6 +16,7 @@ import {
 } from './kurallar.ts';
 import { MATRIS_GUNU, Matris, type MatrisTuru } from './Matris.tsx';
 import { Tahta } from './Tahta.tsx';
+import { emriPlanaAl, planaAlOnizle } from './plana-al.ts';
 import { Tur, type TurDurumu } from './Tur.tsx';
 import './kokpit.css';
 
@@ -38,7 +39,7 @@ export function Kokpit(o: PlanlamaEkranOzellikleri) {
   return <Sayfa {...o} c={o.calisma} />;
 }
 
-interface Onay { isId: string; tezgah: string; S: number; ileti: string; turda: boolean }
+interface Onay { aday: TurAdayi; ileti: string; turda: boolean; baslik: string; dugme: string }
 
 function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi }) {
   const { c, komut, yetki, sec: ortakSec } = o;
@@ -101,13 +102,14 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi }) {
   }, [yaziliyor, surum]);
 
   const { yenile } = o;
-  const yaz = useCallback(async (isId: string, tezgah: string, S: number): Promise<boolean> => {
+  const yaz = useCallback(async (a: TurAdayi): Promise<boolean> => {
     if (!komut || !yazabilir) return false;
     setYaziliyor(true); setIleriYigin([]);
     // Komut geri alma geçmişine girer: sayfa yeniden okununca komuttan önceki hâl bir geri alma adımı olur (kayit.ts komutBasladi).
-    komut.komutBasladi?.('İş taşındı');
+    komut.komutBasladi?.(a.planaAl === undefined ? 'İş taşındı' : 'Emir plana alındı');
     try {
-      const r = await isiTasi(komut, { isId, tezgah, baslangic: S });
+      const r = a.planaAl === undefined ? await isiTasi(komut, { isId: a.isId, tezgah: a.tezgah, baslangic: a.baslangic })
+        : await emriPlanaAl(komut, { emirId: a.planaAl, tezgah: a.tezgah, baslangic: a.baslangic });
       otomatikUygulaIste(r);
       if (r.calismaSurumu === r.oncekiSurum) setYaziliyor(false); else beklenenSurum.current = r.calismaSurumu;
       if (r.ileti) bildir('bilgi', r.ileti);
@@ -128,20 +130,42 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi }) {
       if (oz && !oz.gecerli) { bildir('hata', oz.ileti ?? 'Bu taşıma yapılamıyor.'); return; }
       const bitis = oz && e ? onizlemeBitisi(m, e, oz.isler.map((y) => ({ isId: y.isId, C: y.C }))) : null;
       if (e && bitis !== null && e.termin !== null && bitis > e.termin + 0.01 && e.durum !== 'gec') {
-        setOnay({ isId, tezgah, S, turda: false, ileti: `${e.no} terminden ${sureYaz(bitis - e.termin)} sonra biter.` });
+        setOnay({ aday: { isId, tezgah, baslangic: S }, turda: false, baslik: 'Bu taşıma emri geç bırakır', dugme: 'Yine de taşı', ileti: `${e.no} terminden ${sureYaz(bitis - e.termin)} sonra biter.` });
         return;
       }
-      void yaz(isId, tezgah, S);
+      void yaz({ isId, tezgah, baslangic: S });
     });
   }, [m, emir, mesgul, bildir, yaz]);
+
+  // Tepsiden tahtaya bırakılan plansız emir: önce sunucu önizlemesi (ilk adımın oturacağı yer ve emrin bitişi), sonra plana alma komutu.
+  const planaAlDene = useCallback((emirId: string, tezgah: string, hedefS: number): void => {
+    const e = emir.get(emirId), ilk = e?.adimlar[0];
+    if (!e || !ilk || mesgul || surum === null) { if (mesgul) bildir('bilgi', 'Önceki değişiklik yazılıyor; bitince yeniden deneyin.'); return; }
+    const aday: TurAdayi = { isId: ilk.id, tezgah, baslangic: tasimaSaati(hedefS, m.simdi), planaAl: emirId };
+    void planaAlOnizle({ emirId, tezgah, baslangic: aday.baslangic }, surum).then((oz) => {
+      if (oz && !oz.gecerli) { bildir('hata', oz.ileti ?? 'Bu emir buraya alınamıyor.'); return; }
+      if (oz?.bitis != null && e.termin !== null && oz.bitis > e.termin + 0.01) {
+        setOnay({ aday, turda: false, baslik: 'Emir terminine yetişmiyor', dugme: 'Yine de plana al', ileti: `${e.no} bu yerde terminden ${sureYaz(oz.bitis - e.termin)} sonra biter.` });
+        return;
+      }
+      void yaz(aday);
+    });
+  }, [m, emir, mesgul, surum, bildir, yaz]);
 
   const turKarar = useCallback((uygulandi: boolean) => {
     setTur((t) => (t && t.i < t.idler.length ? { ...t, i: t.i + 1, gecmis: [...t.gecmis, { i: t.i, uygulandi }], ileri: [] } : t));
   }, []);
   const hamleUygula = useMemo(() => (yazabilir && !mesgul ? (a: TurAdayi, gecBirakir: boolean): void => {
-    const e = emir.get(m.isler[a.isId]?.job ?? '');
-    if (gecBirakir && e) { setOnay({ isId: a.isId, tezgah: a.tezgah, S: a.baslangic, turda: tur !== null, ileti: `${e.no} bu hamleyle terminden sonra biter.` }); return; }
-    void yaz(a.isId, a.tezgah, a.baslangic).then((tamam) => { if (tamam && tur) turKarar(true); });
+    const al = a.planaAl !== undefined;
+    const e = emir.get(a.planaAl ?? m.isler[a.isId]?.job ?? '');
+    if (gecBirakir && e) {
+      setOnay({
+        aday: a, turda: tur !== null, baslik: al ? 'Emir terminine yetişmiyor' : 'Bu taşıma emri geç bırakır', dugme: al ? 'Yine de plana al' : 'Yine de uygula',
+        ileti: al ? `${e.no} bu yerde terminden sonra biter.` : `${e.no} bu hamleyle terminden sonra biter.`,
+      });
+      return;
+    }
+    void yaz(a).then((tamam) => { if (tamam && tur) turKarar(true); });
   } : null), [yazabilir, mesgul, emir, m, tur, yaz, turKarar]);
 
   // --- geri / ileri ---
@@ -192,15 +216,24 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi }) {
 
   // --- sorun turu ---
   const turBaslat = (): void => {
-    const idler = sorunlular(m.emirler).filter((e) => e.durum !== 'plansiz').map((e) => e.id);
-    if (!idler.length) { bildir('bilgi', 'Geç ya da riskli emir yok.'); return; }
+    const idler = sorunlular(m.emirler).map((e) => e.id);
+    if (!idler.length) { bildir('bilgi', 'Geç, riskli ya da plansız emir yok.'); return; }
     if (goz === 'M') setGoz('T');
     if (uzakMi(olcek)) olcekSec('3');
     setSuz(null); setAra(''); setOnceAcik(false);
     setTur({ idler, i: 0, gecmis: [], ileri: [] });
   };
+  const turBitti = tur !== null && tur.i >= tur.idler.length;
+  const [oynuyor, setOynuyor] = useState(false);
+  useEffect(() => { if (!tur || turBitti) setOynuyor(false); }, [tur === null, turBitti]);
+  const oynatKarar = useCallback((a: TurAdayi | null): void => {
+    if (!a) { turKarar(false); return; }
+    void yaz(a).then((tamam) => { if (tamam) turKarar(true); else setOynuyor(false); });
+  }, [yaz, turKarar]);
   const turEmri = tur && tur.i < tur.idler.length ? emir.get(tur.idler[tur.i] ?? '') ?? null : null;
   const turEmirId = turEmri?.id ?? null;
+  // Oynarken plandan düşmüş emir adımı kendiliğinden atlanır (hamle listesi çizilmediği için karar oradan gelmez).
+  useEffect(() => { if (oynuyor && tur && !turBitti && turEmirId === null && !mesgul) turKarar(false); }, [oynuyor, tur, turBitti, turEmirId, mesgul, turKarar]);
   useEffect(() => {
     if (turEmirId === null) return;
     const ilkIs = emir.get(turEmirId)?.adimlar.find((a) => m.isler[a.id])?.id ?? null;
@@ -310,7 +343,7 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi }) {
         </span>
         <button type="button" className="tc-pyq-ok" aria-pressed={onceAcik} title="Onaylı planla karşılaştır (B)" onClick={() => { setOnceAcik(!onceAcik); }}><Simge ad="layers" boyut="k" /><span>Önce / sonra</span></button>
         <Dugme simge="route" onClick={turBaslat} disabled={tur !== null}>Sorunları sırayla çöz</Dugme>
-        {yazabilir && <Dugme tur="birincil" simge="upload" disabled={engel !== null || mesgul} title={engel ?? undefined} onClick={() => { setGonderSor(true); }}>Onaya gönder</Dugme>}
+        {yazabilir && <Dugme tur={tur ? 'ikincil' : 'birincil'} simge="upload" disabled={engel !== null || mesgul || tur !== null} title={tur ? 'Tur bitince gönderilir' : engel ?? undefined} onClick={() => { setGonderSor(true); }}>Onaya gönder</Dugme>}
       </div>
       {(adim > 0 || mesgul) && (
         <p className="tc-pyq-degisim" role="status">
@@ -330,7 +363,7 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi }) {
             <>
               <Tahta
                 m={m} cx={cx} goz={goz} olcek={olcek} emirler={gorunen} uyar={uyar} secEmir={secEmir} secIs={secIs} sec={sec} zaman={zaman}
-                tasi={yazabilir && !tur ? tasiDene : null} once={once} gunAc={gunAc} uyari={uyarYaz} goster={goster} odak={odak} oneri={tur ? oneri : null}
+                tasi={yazabilir && !tur ? tasiDene : null} planaAl={yazabilir && !tur ? planaAlDene : null} once={once} gunAc={gunAc} uyari={uyarYaz} goster={goster} odak={odak} oneri={tur ? oneri : null}
               />
               <ul className="tc-pyq-liste" aria-label="Emirler">
                 {matrisSirasi(gorunen).map((e) => (
@@ -347,17 +380,18 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi }) {
         </div>
         {tur ? (
           <Tur
-            m={m} tur={tur} e={turEmri} zaman={zaman} uygula={hamleUygula} oneri={setOneri} mesgul={mesgul}
+            m={m} tur={tur} e={turEmri} zaman={zaman} uygula={hamleUygula} oneri={setOneri} surum={surum} mesgul={mesgul}
+            oynat={oynuyor ? oynatKarar : null} oynatAc={yazabilir ? () => { setOynuyor(true); } : null} oynatDur={() => { setOynuyor(false); }}
             atla={() => { turKarar(false); }} onceki={turOnceki} sonraki={turSonraki} bitir={turBitir} vazgec={turVazgec}
           />
         ) : secili && goz !== 'M' && (
-          <Ayrinti m={m} e={secili} secIs={secIs} zaman={zaman} uygula={hamleUygula} adimSec={(id) => { sec(secili.id, id); setGoster(id); }} kapat={() => { sec(null, null); }} />
+          <Ayrinti m={m} e={secili} secIs={secIs} zaman={zaman} uygula={hamleUygula} surum={surum} adimSec={(id) => { sec(secili.id, id); setGoster(id); }} kapat={() => { sec(null, null); }} />
         )}
       </div>
       <OnayPenceresi
-        acik={onay !== null} baslik="Bu taşıma emri geç bırakır" onayMetni={onay?.turda ? 'Yine de uygula' : 'Yine de taşı'}
+        acik={onay !== null} baslik={onay?.baslik ?? ''} onayMetni={onay?.dugme ?? ''}
         vazgec={() => { setOnay(null); }}
-        onayla={() => { const x = onay; setOnay(null); if (x) void yaz(x.isId, x.tezgah, x.S).then((tamam) => { if (tamam && x.turda) turKarar(true); }); }}
+        onayla={() => { const x = onay; setOnay(null); if (x) void yaz(x.aday).then((tamam) => { if (tamam && x.turda) turKarar(true); }); }}
       >{onay?.ileti}</OnayPenceresi>
       <OnayPenceresi acik={gonderSor} baslik="Plan onaya gönderilsin mi?" onayMetni="Onaya gönder" yukleniyor={gidiyor} vazgec={() => { setGonderSor(false); }} onayla={() => { void gonder(); }}>
         Taslaktaki {adim} değişiklik onay taslağına yazılır; canlıya onaylayan alır.

@@ -231,15 +231,17 @@
 .tc-pyq[data-goz="M"] .tc-pyq-olcek { display: none; }
 
 @media (max-width: 1279px) {
-  .tc-pyq-govde { flex-direction: column; align-items: stretch; }
-  .tc-pyq-ayrinti {
-    position: sticky; bottom: 0; z-index: var(--z-ust); flex: 0 0 auto; max-height: var(--ekran-boy-50);
-    border-radius: var(--yari-2) var(--yari-2) 0 0; box-shadow: var(--shadow);
-  }
   .tc-pyq-ust .tc-pyq-ok > span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 }
 /* Telefon: zaman tahtası yerine liste; taşıma ayrıntıdaki seçeneklerle. Ölçek ve tutma yoktur. */
 @media (max-width: 767px) {
+  .tc-pyq-govde { flex-direction: column; align-items: stretch; }
+  /* Sabit sayfa: liste kısa da olsa birincil düğme alt menünün üstünde görünür kalır; liste sayfanın altında kalmasın diye gövde boşluk bırakır. */
+  .tc-pyq-ayrinti {
+    position: fixed; left: var(--b-4); right: var(--b-4); bottom: var(--alt-cubuk); z-index: var(--z-ust); max-height: var(--ekran-boy-50);
+    border-radius: var(--yari-2) var(--yari-2) 0 0; box-shadow: var(--shadow);
+  }
+  .tc-pyq-govde:has(.tc-pyq-ayrinti) { padding-bottom: var(--ekran-boy-50); }
   .tc-pyq-tahta, .tc-pyq-olcek, .tc-pyq-seg [data-goz="S"] { display: none; }
   .tc-pyq-ara { flex-basis: 100%; max-width: none; order: -1; }
   .tc-pyq-liste { display: flex; flex-direction: column; gap: var(--b-1); margin: 0; padding: 0; list-style: none; }
@@ -269,3 +271,11 @@
   border: var(--cizgi-ince) solid var(--edge2); border-radius: var(--yari-1); background: none; color: var(--ink); font: inherit; font-size: var(--yazi-s); text-align: left; cursor: pointer;
 }
 .tc-pyq-baska button small { color: var(--muted); font-size: var(--yazi-xs); }
+
+/* Tepsiden tutulan emir. */
+.tc-pyq-fis[data-tasinan] { border-style: solid; border-color: var(--ink); opacity: 0.6; }
+.tc-pyq-tur-ust { display: inline-flex; flex: 0 0 auto; gap: var(--b-1); }
+.tc-pyq-tur-ust .tc-pyq-kucuk { display: inline-flex; align-items: center; gap: var(--b-1); }
+/* Başlık tam satır, düğmeler altında: dar panelde başlık üç satıra kırılmaz. */
+.tc-pyq-tur header { flex-wrap: wrap; }
+.tc-pyq-tur header > div { flex: 1 0 100%; }
