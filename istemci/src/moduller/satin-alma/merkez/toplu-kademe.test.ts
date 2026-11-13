@@ -225,4 +225,20 @@ describe('3181: teklif tablosunda kademeli fiyat', () => {
     await vi.waitFor(() => expect(document.querySelector('[data-act="add-tier"]')).not.toBeNull());
     expect(document.querySelector('[data-act="add-tier"]')!.textContent).toBe('Kademe ekle');
   });
+
+  it('3190: sütun kaldırılınca tıklanan sütun gider, kalan sütun kendi girdileriyle durur', async () => {
+    const kok = await ac([]);
+    yaz(kok, 'select[data-bf="supplierId"][data-col="0"]', '41');
+    yaz(kok, 'select[data-bf="supplierId"][data-col="1"]', '42');
+    yaz(kok, '[data-bi][data-col="0"]', '11');
+    yaz(kok, '[data-bi][data-col="1"]', '22');
+    yaz(kok, '[data-bf="payDays"][data-col="1"]', '45');
+    kok.querySelector<HTMLElement>('[data-act="bulk-rm"][data-col="0"]')!.click();
+    expect(kok.querySelectorAll('#bulk [data-bi]')).toHaveLength(1);
+    expect(kok.querySelector<HTMLInputElement>('[data-bi][data-col="0"]')!.value).toBe('22');
+    expect(kok.querySelector<HTMLSelectElement>('select[data-bf="supplierId"][data-col="0"]')!.value).toBe('42');
+    expect(kok.querySelector<HTMLInputElement>('[data-bf="payDays"][data-col="0"]')!.value).toBe('45');
+    await kaydet(kok);
+    expect(yazilanlar[0]!.teklifler).toEqual([expect.objectContaining({ firmaId: 42, vadeGun: 45, fiyatlar: [expect.objectContaining({ birimFiyat: '22' })] })]);
+  });
 });

@@ -1271,7 +1271,7 @@ const ACTIONS: Record<string, Action> = {
     BULK!.dirty = true; bulkCiz();
     $<HTMLElement>(`#bulk [data-act="bulk-add-tier"][data-k="${el.dataset.k}"][data-col="${el.dataset.col}"]`)?.focus();
   },
-  "bulk-rm": el => { bulkRead(); BULK!.cols.splice(+el.dataset.col!, 1); if (!BULK!.cols.length) BULK!.cols.push(bulkBlank("")); bulkRerender(); },
+  "bulk-rm": el => { bulkRead(); BULK!.cols.splice(+el.dataset.col!, 1); if (!BULK!.cols.length) BULK!.cols.push(bulkBlank("")); bulkCiz(); },
   "bulk-save": () => bulkSave(),
   "bulk-close": () => bulkClose(),
   "pick-top": (el, r) => { if (!r) return; const top = evaluate(r).ranking[0]; if (!top) return; V.tab = "compare"; render(); teklifSec(top.q.id); $<HTMLElement>(".sa-karar")?.scrollIntoView({ block: "center" }); },
