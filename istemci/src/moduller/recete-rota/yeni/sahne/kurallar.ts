@@ -1,51 +1,17 @@
 import type { SahneAdimi, SahneHareketi, SahneYonu } from '#paylasilan/sozlesme/rota.ts';
+import type { ParcaKutusu, Uc } from '../../../belge-merkezi/disari.ts';
 
-// Talimatın 3B sahnesinin saf kuralları (3209 a): oynatma zamanı, parçanın konumu, sıra ve yön önerisi. Sunucu RT-90/RT-91'i ayrıca denetler.
+// Talimatın 3B sahnesinin saf kuralları (3209 a): sıra ve yön önerisi, kayıt kuralları. Sunucu RT-90/RT-91'i ayrıca denetler.
+// Oynatma kuralları oynatıcıyla birlikte Belge Merkezi'ndedir (terminal de kullanır); stüdyo ve testleri buradan da alır.
+export { ADIM_BEKLEMESI_SN, YON_VEKTORU, donguSuresi, modelBicimiBul, parcaHali, parcaIlerleyisi, type ParcaHali, type ParcaKutusu, type Uc } from '../../../belge-merkezi/disari.ts';
+
+const kisit = (x: number, alt: number, ust: number): number => Math.min(ust, Math.max(alt, x));
 
 // Sözleşmedeki sınırların ekrandaki kopyası (istemci sözleşmeyi yalnız tip olarak alır); asıl denetim sunucudadır.
 export const SAHNE_YONLERI: readonly SahneYonu[] = ['+X', '-X', '+Y', '-Y', '+Z', '-Z'];
 export const SAHNE_SINIRI = { adim: 100, parca: 100, parcaNo: 9999, mesafeMm: 2000, sureSnAlt: 0.3, sureSnUst: 10 } as const;
 
-export type Uc = readonly [number, number, number];
-export interface ParcaKutusu { en: Uc; ust: Uc }
-
-export const YON_VEKTORU: Record<SahneYonu, Uc> = {
-  '+X': [1, 0, 0], '-X': [-1, 0, 0], '+Y': [0, 1, 0], '-Y': [0, -1, 0], '+Z': [0, 0, 1], '-Z': [0, 0, -1],
-};
-
-// Adım sonunda kısa bekleme: parça yerine oturduktan sonra döngü hemen başa sarmaz.
-export const ADIM_BEKLEMESI_SN = 0.8;
 export const VARSAYILAN_HAREKET: SahneHareketi = { parcalar: [], yon: '+Z', mesafeMm: 80, sureSn: 1.6, sirali: false, kamera: null };
-
-const kisit = (x: number, alt: number, ust: number): number => Math.min(ust, Math.max(alt, x));
-// Yumuşak başlayıp yumuşak duran geçiş: parça yuvaya yavaşlayarak oturur.
-const yumusak = (x: number): number => x * x * (3 - 2 * x);
-
-// Parçanın adım içindeki ilerleyişi (0: girişte uzakta, 1: yerinde). Sıralı adımda parçalar sırayla, eşit dilimlerle girer.
-export function parcaIlerleyisi(h: SahneHareketi, parca: number, tSn: number): number {
-  const i = h.parcalar.indexOf(parca);
-  if (i < 0) return 1;
-  const oran = kisit(tSn / h.sureSn, 0, 1);
-  if (!h.sirali || h.parcalar.length < 2) return yumusak(oran);
-  const n = h.parcalar.length;
-  return yumusak(kisit(oran * n - i, 0, 1));
-}
-
-export interface ParcaHali { gorunur: boolean; hayalet: boolean; kayma: Uc }
-
-// Etkin adımda parçanın hâli: önceki adımlarda girenler yerinde, sonrakiler gizli (ya da soluk), adımda hiç anılmayan parça gövdedir.
-export function parcaHali(adimlar: readonly SahneAdimi[], aktifSira: number, parca: number, tSn: number, hayaletGoster: boolean): ParcaHali {
-  const yerinde: ParcaHali = { gorunur: true, hayalet: false, kayma: [0, 0, 0] };
-  const giren = adimlar.find((a) => a.hareket.parcalar.includes(parca));
-  if (giren === undefined || giren.sira < aktifSira) return yerinde;
-  if (giren.sira > aktifSira) return { gorunur: hayaletGoster, hayalet: true, kayma: [0, 0, 0] };
-  const kalan = 1 - parcaIlerleyisi(giren.hareket, parca, tSn);
-  const [x, y, z] = YON_VEKTORU[giren.hareket.yon];
-  const m = giren.hareket.mesafeMm * kalan;
-  return { gorunur: true, hayalet: false, kayma: [x * m, y * m, z * m] };
-}
-
-export const donguSuresi = (h: SahneHareketi): number => h.sureSn + ADIM_BEKLEMESI_SN;
 
 const hacim = (k: ParcaKutusu): number => Math.max(0, k.ust[0] - k.en[0]) * Math.max(0, k.ust[1] - k.en[1]) * Math.max(0, k.ust[2] - k.en[2]);
 const merkez = (k: ParcaKutusu): Uc => [(k.en[0] + k.ust[0]) / 2, (k.en[1] + k.ust[1]) / 2, (k.en[2] + k.ust[2]) / 2];
@@ -119,3 +85,4 @@ export const hareketYaz = (adimlar: readonly SahneAdimi[], sira: number, degisik
   adimlar.some((a) => a.sira === sira)
     ? adimlar.map((a) => (a.sira === sira ? { ...a, hareket: { ...a.hareket, ...degisiklik } } : a))
     : [...adimlar, { sira, hareket: { ...VARSAYILAN_HAREKET, ...degisiklik } }];
+

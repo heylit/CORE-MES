@@ -1,14 +1,13 @@
-import { lazy, Suspense, useMemo, useRef, useState } from 'react';
+import { Suspense, useMemo, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import type { GeometriModelSatiri } from '#paylasilan/sozlesme/geometri.ts';
 import type { SahneAdimi, TalimatlarCevabi } from '#paylasilan/sozlesme/rota.ts';
 import { Dugme, DurumKutusu, IsaretKutusu, Pencere, Secim, Simge, useBildirim } from '../../../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../../../ortak/veri/api.ts';
-import { dosyaYukle } from '../../../belge-merkezi/disari.ts';
+import { dosyaYukle, MontajOynatici as Sahne3B, type SahneDenetimi } from '../../../belge-merkezi/disari.ts';
 import { anahtarlar as talimatAnahtarlari, useTalimatKomutu } from '../sartnameler/veri.ts';
 import type { ParcaKutusu } from './kurallar.ts';
 import { donguSuresi, hareketYaz, kaydedilecekler, SAHNE_SINIRI, SAHNE_YONLERI, parcaDegistir, sahneEksigi, sahneOner, VARSAYILAN_HAREKET } from './kurallar.ts';
-import type { SahneDenetimi } from './Sahne3B.tsx';
 import { useModelDosyasi, useSahneKaydet, useSahneler, useUrunModelleri } from './veri.ts';
 import { tuvalKaydet, videoDesteklenirMi, videoluTaslak } from './video.ts';
 import './sahne.css';
@@ -16,8 +15,6 @@ import './sahne.css';
 // 3B Adım Stüdyosu (3209 a, "A Adım şeridi"): yayındaki talimat sürümünün adımlarına montaj modelinden parça, giriş yönü, mesafe ve süre
 // bağlanır. Kayıt yeni sahne sürümüdür (yalnız eklenir); talimat metni ve kontrol noktaları bugünkü talimat düzenleyicisinde kalır.
 // Telefonda yalnız izlenir: düzenleme denetimleri dar ekranda gizlidir (Arayüz K3).
-
-const Sahne3B = lazy(() => import('./Sahne3B.tsx'));
 type Surum = TalimatlarCevabi['surumler'][number];
 
 const sayi = (x: number, h = 1): string => x.toLocaleString('tr-TR', { minimumFractionDigits: h, maximumFractionDigits: h });

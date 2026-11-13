@@ -1,32 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import type { SahneAdimi } from '#paylasilan/sozlesme/rota.ts';
-import { hareketYaz, kaydedilecekler, parcaDegistir, parcaHali, parcaIlerleyisi, sahneEksigi, sahneOner, VARSAYILAN_HAREKET, yonOner, type ParcaKutusu } from './kurallar.ts';
+import { hareketYaz, kaydedilecekler, parcaDegistir, sahneEksigi, sahneOner, VARSAYILAN_HAREKET, yonOner, type ParcaKutusu } from './kurallar.ts';
 
 const adim = (sira: number, parcalar: number[], ek: Partial<SahneAdimi['hareket']> = {}): SahneAdimi => ({ sira, hareket: { ...VARSAYILAN_HAREKET, parcalar, ...ek } });
 const kutu = (en: [number, number, number], ust: [number, number, number]): ParcaKutusu => ({ en, ust });
 
 describe('talimat sahnesi kuralları (3209 a)', () => {
-  it('parça adım süresinde uzaktan yerine gelir; sıralı adımda parçalar sırayla girer', () => {
-    const h = adim(1, [3, 4], { sureSn: 2 }).hareket;
-    expect(parcaIlerleyisi(h, 3, 0)).toBe(0);
-    expect(parcaIlerleyisi(h, 3, 2)).toBe(1);
-    expect(parcaIlerleyisi(h, 9, 0)).toBe(1);
-    const s = { ...h, sirali: true };
-    expect(parcaIlerleyisi(s, 3, 1)).toBe(1);
-    expect(parcaIlerleyisi(s, 4, 1)).toBe(0);
-    expect(parcaIlerleyisi(s, 4, 2)).toBe(1);
-  });
-
-  it('etkin adımdan önce giren yerinde, sonra giren gizli ya da soluk, etkin adımdaki giriş yönünden kayar', () => {
-    const adimlar = [adim(1, [1], { yon: '+Z', mesafeMm: 100, sureSn: 1 }), adim(2, [2], { yon: '-X', mesafeMm: 50, sureSn: 1 })];
-    expect(parcaHali(adimlar, 2, 1, 0, true)).toEqual({ gorunur: true, hayalet: false, kayma: [0, 0, 0] });
-    expect(parcaHali(adimlar, 1, 2, 0, false).gorunur).toBe(false);
-    expect(parcaHali(adimlar, 1, 2, 0, true)).toMatchObject({ gorunur: true, hayalet: true });
-    expect(parcaHali(adimlar, 2, 2, 0, true).kayma).toEqual([-50, 0, 0]);
-    expect(parcaHali(adimlar, 2, 2, 1, true).kayma.map(Math.abs)).toEqual([0, 0, 0]);
-    expect(parcaHali(adimlar, 1, 0, 0, true).kayma).toEqual([0, 0, 0]);
-  });
-
   it('öneri: en büyük parça gövde kalır, kalanlar büyükten küçüğe adımlara dağılır, yön merkezden dışarıdır', () => {
     const kutular = [
       kutu([0, 0, 0], [100, 100, 20]),

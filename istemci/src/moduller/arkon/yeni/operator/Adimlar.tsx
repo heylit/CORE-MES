@@ -3,6 +3,7 @@ import { AdimListesi, DurumKutusu, Simge } from '../../../../ortak/arayuz/index.
 import { adimCevabiUygula, adimYaz } from '../../../../../../arkon/web/src/data/tmi-adim.ts';
 import { useArkon, useArkonDurumu } from '../veri/baglam.ts';
 import type { TmiAdim } from '../veri/depo.ts';
+import { MontajSahnesi } from './MontajSahnesi.tsx';
 import type { Pkg } from './tipler.ts';
 
 // 1999 a: sağ sütun kaymasın diye adımlar sayfa sayfa gösterilir; sayfa boyu sabit, ilk açılışta ilk yapılmamış adımın sayfası.
@@ -46,12 +47,13 @@ function useSayfa(liste: readonly { tamam: boolean }[]) {
 // Operasyon adımları (operator-parcalar.ts Steps). TMI emrinde adımlar emrin talimatıdır ve işaret TMI'ye yazılır; yerel pakette
 // paketin adımları ekranda işaretlenir, kayda gitmez. Önizlemede TMI'ye yazılmaz, paketin adımları gösterilir.
 
-export function Adimlar({ adimlar, emirId, onizleme }: { adimlar: Pkg['steps'] | undefined; emirId: number | null; onizleme: boolean }) {
+// 3209 a: iş emri bilinirse ve talimatında 3B sahne varsa adımların üstünde "3B montaj" açılır (yalnız sunucu kipinde).
+export function Adimlar({ adimlar, emirId, onizleme, isEmriId = null }: { adimlar: Pkg['steps'] | undefined; emirId: number | null; onizleme: boolean; isEmriId?: number | null }) {
   const durum = useArkonDurumu();
-  return emirId !== null && !onizleme && durum.mode === 'server' ? <TmiAdimlari emirId={emirId} /> : <YerelAdimlar adimlar={adimlar} />;
+  return emirId !== null && !onizleme && durum.mode === 'server' ? <TmiAdimlari emirId={emirId} isEmriId={isEmriId} /> : <YerelAdimlar adimlar={adimlar} />;
 }
 
-function TmiAdimlari({ emirId }: { emirId: number }) {
+function TmiAdimlari({ emirId, isEmriId }: { emirId: number; isEmriId: number | null }) {
   const { depo } = useArkon();
   const [liste, listeYaz] = useState<TmiAdim[] | null>(null);
   const [hata, hataYaz] = useState<string | null>(null);
@@ -79,6 +81,7 @@ function TmiAdimlari({ emirId }: { emirId: number }) {
   return (
     <div className="tc-ay1-adimlar" {...surukle}>
       {hata ? <p className="tc-ay1-hata" role="alert">{hata}</p> : null}
+      {isEmriId !== null && liste.length > 0 ? <MontajSahnesi isEmriId={isEmriId} adimlar={liste} /> : null}
       <AdimListesi baslik="Operasyon adımları · CORE'a yazılır" adimlar={liste} sayfa={sayfa} degistir={isaretle} bosMesaj="Bu emrin talimat adımı yok" />
       {gezgin}
     </div>

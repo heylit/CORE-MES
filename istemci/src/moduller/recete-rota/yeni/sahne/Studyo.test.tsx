@@ -6,7 +6,7 @@ import { json, OKUYAN, rrAc, sunucuKur, YONETICI } from '../test-ortak.tsx';
 import { revizyonOrnegi, rotaDurumu } from '../rotalar/test-veri.ts';
 
 // WebGL testte yoktur: oynatıcı yerine parçaları düğme olarak gösteren yalın bir benzeri; kutular modelin yerine verilir.
-vi.mock('./Sahne3B.tsx', async () => {
+vi.mock('../../../belge-merkezi/goruntu/montaj/Sahne3B.tsx', async () => {
   const { useEffect } = await import('react');
   const KUTULAR = [
     { en: [0, 0, 0], ust: [100, 100, 20] }, { en: [40, 40, 20], ust: [60, 60, 60] }, { en: [95, 45, 5], ust: [100, 55, 15] },

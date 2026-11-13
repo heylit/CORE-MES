@@ -671,3 +671,11 @@ export async function makinelerdekiIsler(db: Db, makineIdleri: readonly number[]
   if (tekil.length === 0) return new Map();
   return new Map((await makinelerdekiIslerGetir(db, tekil)).map((r) => [r.makineId, r]));
 }
+
+// Terminalin 3B montaj sahnesi (3209 a): iş emrinin rota adımı ve emir açılırken sabitlenen talimat sürümü (adımların talimat künyesiyle aynı
+// kaynak). Sürüm sabitlenmemişse ya da emir malzemesizse null. Yetki denetlemez; çağıran (arkon) işin görünürlüğünü denetler.
+import { notAnahtari as talimatKunyesiOku } from './sorgular.ts';
+export async function isEmriTalimatKunyesi(db: Db, isEmriId: number): Promise<{ malzemeNo: number; opNo: number; surum: number } | null> {
+  const a = await talimatKunyesiOku(db, isEmriId);
+  return a === null || a.talimatSurumu === null ? null : { malzemeNo: a.malzemeNo, opNo: a.opNo, surum: a.talimatSurumu };
+}

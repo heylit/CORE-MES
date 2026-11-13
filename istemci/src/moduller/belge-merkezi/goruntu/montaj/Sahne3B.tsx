@@ -7,10 +7,11 @@ import type { Object3D } from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import type { SahneAdimi } from '#paylasilan/sozlesme/rota.ts';
 import { DurumKutusu } from '../../../../ortak/arayuz/index.ts';
-import { birak, modelOku, type ModelBicimi } from '../../../belge-merkezi/disari.ts';
-import { donguSuresi, parcaHali, type ParcaKutusu } from './kurallar.ts';
+import { birak, modelOku, type ModelBicimi } from '../model.ts';
+import { donguSuresi, parcaHali, type ParcaKutusu } from './oynatma.ts';
+import './montaj.css';
 
-// Talimat sahnesinin oynatıcısı (3209 a): stüdyo ve terminal aynı bileşeni kullanır. Parça, modeldeki ağ sırasıdır (CAD koordinatı, mm;
+// Montaj talimatı sahnesinin oynatıcısı (3209 a): stüdyo (recete-rota) ve terminal (arkon) aynı bileşeni kullanır. Parça, modeldeki ağ sırasıdır (CAD koordinatı, mm;
 // montaj ağları dünya koordinatındadır, bu yüzden kayma ağın konumuna doğrudan eklenir). Ayrı pakette iner (React.lazy).
 
 export interface Kamera { yatay: number; dikey: number; uzaklik: number }
@@ -92,7 +93,7 @@ export default function Sahne3B({ veri, bicim, adimlar, aktifSira, oynuyor, haya
     }
     cizer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
     cizer.outputColorSpace = SRGBColorSpace;
-    cizer.domElement.classList.add('tc-sh-tuval');
+    cizer.domElement.classList.add('tc-mt-tuval');
     el.appendChild(cizer.domElement);
     const sahne = new Scene();
     sahne.background = renk('--sahne-arka');
@@ -124,8 +125,10 @@ export default function Sahne3B({ veri, bicim, adimlar, aktifSira, oynuyor, haya
       const merkez = kutu.getCenter(new Vector3());
       const r = Math.max(1, kutu.getSize(new Vector3()).length() / 2);
       kontrol.target.copy(merkez);
-      // Dar ekranda (telefon) model yanlardan kesilmesin diye uzaklık en-boy oranıyla büyür.
-      kamera.position.copy(merkez).add(new Vector3(1.4, 1.0, 1.8).normalize().multiplyScalar(r * 3 * Math.max(1, 1.35 / kamera.aspect)));
+      // Modeli saran küre dikeyde ve yatayda (dar ekranda yatay açı küçülür) kadraja payla sığar.
+      const dikeyYari = (kamera.fov * Math.PI) / 360;
+      const yari = Math.min(dikeyYari, Math.atan(Math.tan(dikeyYari) * kamera.aspect));
+      kamera.position.copy(merkez).add(new Vector3(1.4, 1.0, 1.8).normalize().multiplyScalar((r / Math.sin(yari)) * 1.1));
       kamera.near = r / 100;
       kamera.far = r * 100;
       kamera.updateProjectionMatrix();
@@ -199,7 +202,7 @@ export default function Sahne3B({ veri, bicim, adimlar, aktifSira, oynuyor, haya
   }, [veri, bicim]);
 
   return (
-    <div className="tc-sh-sahne" ref={kap} role="img" aria-label={etiket}>
+    <div className="tc-mt-sahne" ref={kap} role="img" aria-label={etiket}>
       {hata !== null && <DurumKutusu durum="hata" mesaj={hata} />}
       {hata === null && !hazir && <DurumKutusu durum="yukleniyor" mesaj="Model açılıyor" />}
     </div>

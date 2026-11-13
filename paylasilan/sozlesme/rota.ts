@@ -998,3 +998,8 @@ export type SahneAdimi = z.output<typeof sahneAdimiSemasi>;
 export type TalimatSahnesi = z.output<typeof talimatSahnesiSemasi>;
 export type TalimatSahneleriCevabi = z.output<typeof talimatSahneleriCevabi>;
 export type TalimatSahnesiKaydetGovdesi = z.input<typeof talimatSahnesiKaydetGovdesi>;
+
+// Terminalin 3B montaj sahnesi (3209 a, 3213): işin sabitlenen talimat sürümünün en son sahnesi; sahne yoksa null.
+export const isEmriSahneParametresi = z.object({ isEmriId: yolKimligi });
+export const isEmriSahnesiCevabi = z.object({ sahne: talimatSahnesiSemasi.nullable() });
+export type IsEmriSahnesiCevabi = z.output<typeof isEmriSahnesiCevabi>;
