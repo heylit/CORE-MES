@@ -46,3 +46,17 @@ yazma (iş emri gönderimi, IsErp işareti) tek anahtarla birlikte açılır.
 - `SetErpOkRed` metodu ve parametre adları; `WorkOrdersStatusList` süzgeç parametreleri (VARSAYIM, brief'ten).
 - Logo ile SmartES arasındaki eski doğrudan bağlantının IsErp işaretini kullanıp kullanmadığı (BİLMİYORUM; kullanıyorsa iki taraf aynı kaydı
   "aktarıldı" sayar, biri kaçırır). Bu yüzden anahtar geçiş gününe kadar kapalı kalır.
+
+## Ek: onaylanan SmartES kaydının üretim emrine ve stoğa işlenmesi (13.11.2026, kart 3173 b, 3193 a)
+
+Kullanıcının yazılı onayıyla (13.11.2026) karar 3'teki "smartes başka modüle yazmaz" cümlesine tek istisna eklenir: SmartES'ten okunan
+adet, fire ve duruş, bir kişi onayladıktan sonra üretim emrine ve stoğa işlenebilir.
+
+- **Yalnız onaylanan kayıt.** Okunan satır önce smartes modülünün kendi tablosunda "onay bekliyor" olur; kendiliğinden işlenmez ve süreyle
+  onaylanmış sayılmaz. Onay `smartes.adet-onayla` işlemiyle verilir (3193 a: müdür ve planlama rolleri; yönetici her zaman). Reddedilen
+  satır CORE'a yazılmaz.
+- **Yazan sahibi modüldür.** smartes başka modülün tablosuna SQL yazmaz; onaylanan satır sahibi modülün `disari.ts` komutuyla (üretim
+  emri sayımı, fire, duruş) aynı transaction'da işlenir. Stok etkisi terminal sayımıyla aynı yoldan doğar; ikinci stok yolu yoktur.
+- **Bir kez ve izli.** Her işlenen kayıt SmartES satır kimliğini ve kaynağını ("SmartES") taşır; aynı satır ikinci kez işlenmez. SmartES'te
+  sonradan değişen adet yeni bir onay satırı olarak gelir.
+- **MES'e dokunulmaz.** Karar 6 aynen sürer: onay ve red SmartES'te hiçbir şeyi değiştirmez.
