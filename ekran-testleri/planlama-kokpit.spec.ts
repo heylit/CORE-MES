@@ -319,3 +319,27 @@ test('Kokpit: tahta, sağ tıkla tut ve bırak, Geri / İleri sayar, Matris, sor
   expect(ag.hatalar).toEqual([]);
   expect(ag.yazmalar.every((y) => /planlama-calismasi\/is-tasi|planlama-calismasi\/plana-al|planlama-kayitlari\/yaz|duzenleyen/.test(y))).toBe(true);
 });
+
+// Tezgâh çoksa yük şeridi emirleri ilk ekrandan itmesin: her genişlikte yalnız dolu tezgâhlar görünür, düğme hepsini açar.
+test('Kokpit Matris: tezgâh çoksa yük şeridinde yalnız dolu tezgâhlar, düğmeyle hepsi', async ({ page, ac, ag }) => {
+  const c = calisma({ ...ILK }, {});
+  const yedek = Array.from({ length: 9 }, (_, i) => ({ id: `Y${String(i + 1)}`, kod: `Y-0${String(i + 1)}`, ad: `Deneme yedek ${String(i + 1)}` }));
+  c.D.tezgahlar = [...c.D.tezgahlar, ...yedek];
+  await page.route('**/api/plan/planlama-calismasi', (r) => json(r, { calisma: c, surum: 1 }));
+  await page.clock.setSystemTime(new Date('2026-10-19T07:00:00+03:00'));
+  await ac('/plan/kokpit');
+  const kokpit = page.locator('.tc-pyq');
+  await expect(kokpit).toBeVisible({ timeout: 20_000 });
+  await kokpit.getByRole('group', { name: 'Görünüm' }).getByRole('button', { name: 'Matris' }).click();
+  const satir = kokpit.locator('tr[data-yuk-satiri]');
+  await expect(satir).toHaveCount(12);
+  // Uydurma veride hiçbir tezgâh günü %85'e varmaz: kapalıyken şeritte satır görünmez, emirler hemen başlıktan sonra gelir.
+  await expect(satir.filter({ visible: true })).toHaveCount(0);
+  await expect(kokpit.locator('tr[data-emir]').first()).toBeVisible();
+  const dugme = kokpit.getByRole('button', { name: 'Dolu tezgâhlar' });
+  await dugme.click();
+  await expect(kokpit.getByRole('button', { name: 'Tüm tezgâhlar' })).toHaveAttribute('aria-pressed', 'true');
+  await expect(satir.filter({ visible: true })).toHaveCount(12);
+  expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0);
+  expect(ag.hatalar).toEqual([]);
+});

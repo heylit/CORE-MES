@@ -13,6 +13,8 @@ export type MatrisDuzeni = 'A' | 'Y';
 const DUZENLER: readonly (readonly [MatrisDuzeni, string])[] = [['A', 'Akış'], ['Y', 'Yan yana']];
 // Yük şeridi bu satırdan uzunsa emirlerin üstünde yapışık durmaz (ekranı kaplar).
 const YAPISIK_SATIR = 12;
+// Tezgâh bundan çoksa yük şeridi emirleri ilk ekrandan iter: genişte de telefondaki gibi yalnız dolu tezgâhlar görünür (düğmeyle hepsi).
+const KISA_SERIT = 8;
 const DAR = '(max-width: 767px)';
 export const darEkran = (): boolean => typeof window.matchMedia === 'function' && window.matchMedia(DAR).matches;
 
@@ -170,7 +172,7 @@ export function Matris({ m, cx, duzen, duzenSec, emirler, secEmir, secIs, zaman,
 
   const darKod = dar ? kod.get(dar.tezgah) ?? dar.tezgah : '';
   return (
-    <div className="tc-pyq-mat-kap" data-tum={tum ? 'evet' : 'hayir'} ref={kap}>
+    <div className="tc-pyq-mat-kap" data-tum={tum ? 'evet' : 'hayir'} data-kalabalik={yuk.length > KISA_SERIT ? '' : undefined} ref={kap}>
       <div className="tc-pyq-mat-ust">
         <p className="tc-pyq-ozet" role="status">
           {gec > 0 ? <><b>{gec} emir geç.</b>{dar && ` ${String(dar.emir)} tanesi ${darKod} tezgâhında toplam ${sureYaz(dar.sure)} sıra bekliyor.`}</> : <b>Geç emir yok.</b>}
