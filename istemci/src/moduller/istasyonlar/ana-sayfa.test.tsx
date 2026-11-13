@@ -1,3 +1,4 @@
+import { ISTASYON_YAZMA_ISLEMLERI } from '#paylasilan/islemler.ts';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, render, screen, waitFor } from '@testing-library/react';
@@ -92,7 +93,7 @@ describe('istasyonlar ana sayfa kartları (#483)', () => {
   it('kart görünürlüğü işleme bağlı: duran makine terminalle, personel vardiya ya da personel sayfasıyla', () => {
     const gorunur = Object.fromEntries(anaSayfaKartlari.map((k) => [k.anahtar, [k.islem, ...(k.veya ?? [])]]));
     expect(gorunur).toEqual({
-      'istasyonlar-makine-durumu': ['sayfa.istasyonlar', 'istasyonlar.yaz', 'sayfa.terminal', 'sayfa.vardiya', 'sayfa.personel', 'arkon.bakim'],
+      'istasyonlar-makine-durumu': ['sayfa.istasyonlar', ...ISTASYON_YAZMA_ISLEMLERI, 'sayfa.terminal', 'sayfa.vardiya', 'sayfa.personel', 'arkon.bakim'],
       'istasyonlar-duran-makine': ['sayfa.istasyonlar', 'sayfa.terminal', 'arkon.bakim'],
       'istasyonlar-calisan-makine': ['sayfa.istasyonlar'],
       'istasyonlar-personel': ['sayfa.vardiya', 'sayfa.personel'],

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { KisiEkIslemleri, KisiEkIslemleriCevabi, RolIslemleriCevabi } from '#paylasilan/sozlesme/kisiler.ts';
 import { islemAdi, islemGrubu } from '#paylasilan/islem-adlari.ts';
+import { ETKISIZ_ISLEMLER } from '#paylasilan/islemler.ts';
 import { Dugme, DurumKutusu, Girdi, Kart, OnayPenceresi, Rozet, Secim, Sekmeler, Simge, useBildirim } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { useOturum } from '../../ortak/veri/oturum.ts';
@@ -59,7 +60,7 @@ const disNot = (grup: string): ReactNode => (DIS_NOT[grup] === undefined
 function gruplar(islemler: readonly string[], arama: string): Grup[] {
   const a = kucuk(arama.trim());
   const eslesir = (i: string) => a === '' || kucuk(islemAdi(i)).includes(a) || i.includes(a);
-  return grupla(islemler)
+  return grupla(islemler.filter((i) => !(ETKISIZ_ISLEMLER as readonly string[]).includes(i)))
     .map((g) => ({ ...g, islemler: kucuk(g.ad).includes(a) ? g.islemler : g.islemler.filter(eslesir) }))
     .filter((g) => g.islemler.length > 0);
 }

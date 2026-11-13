@@ -1,4 +1,4 @@
-import type { Islem } from '#paylasilan/islemler.ts';
+import { ISTASYON_YAZMA_ISLEMLERI, type Islem } from '#paylasilan/islemler.ts';
 import { useYetki, type Yetki } from '../../../ortak/veri/yetki.ts';
 
 // Ekran yalnız gizler; asıl denetim sahibinin ucundadır. Bugünkü çerçevenin "yalnız bu sekmede" kipi yoktur (210.8): işlemi olmayan
@@ -43,7 +43,7 @@ export function yetkiHesapla(y: Pick<Yetki, 'var' | 'herhangi'>): RrYetkisi {
     stokStatuDegistir: y.var('stok.statu-degistir'),
     stokSayim: y.var('stok.sayim'),
     stokGiris: y.var('stok.giris'),
-    istasyonYaz: y.var('istasyonlar.yaz'),
+    istasyonYaz: y.herhangi(...ISTASYON_YAZMA_ISLEMLERI),
     kisiYaz: y.var('kisiler.yaz'),
     planYaz: y.var('plan.yaz'),
     maliyetYaz: y.var('finans.yonet'),

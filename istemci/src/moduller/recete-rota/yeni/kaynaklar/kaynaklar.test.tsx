@@ -289,7 +289,7 @@ describe('R2 Kaynaklar', () => {
     expect(yazmalar(istekler)).toEqual([]);
   });
 
-  it('reddedilen: istasyonlar.yaz olmayan ekleme, silme ve girdi görmez; istek gitmez', async () => {
+  it('reddedilen: istasyon eylemi olmayan ekleme, silme ve girdi görmez; istek gitmez', async () => {
     const istekler = sunucuKur({ ...OKUYAN, islemler: [KAPI, 'sayfa.recete-rota', 'recete-rota.oku'] } as Kullanici, { durum: kaynakDurumu(), yazmalar: SAHIP_OKUMALARI });
     rrAc('/recete-rota/res');
     const bolge = await bolumAc('Kaynaklar');

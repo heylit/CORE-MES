@@ -1,3 +1,4 @@
+import { ISTASYON_KISI_SECEN_ISLEMLER } from '#paylasilan/islemler.ts';
 import { uc } from '#cekirdek/uc.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
 import {
@@ -11,7 +12,7 @@ import {
 
 // Ortak kişi seçicisini çağıran modüller (karar 1321 b): kişiler, bugün kişi seçen istasyonlar (atama), mesaj ve Arkon.
 // Seçiciyi alan modül (A5) işlemini buraya ekler.
-const SECIM_OKUMA = { biri: ['kisiler.oku', 'istasyonlar.yaz', 'sayfa.mesaj', 'sayfa.arkon'] } as const;
+const SECIM_OKUMA = { biri: ['kisiler.oku', ...ISTASYON_KISI_SECEN_ISLEMLER, 'sayfa.mesaj', 'sayfa.arkon'] } as const;
 
 const bayrakGorur = (kullanici: Kullanici): boolean => kullanici.islemler.includes('kisiler.rol-yonet');
 

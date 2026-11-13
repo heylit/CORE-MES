@@ -16,7 +16,7 @@ import { EmirAlani, EmirParcasi, YeniEmirPenceresi } from './emirler/UretimEmirl
 const kisi = (id: number, islemler: string[]): Kullanici => ({ id, ad: `Deneme ${id}`, islemler: islemler as Kullanici['islemler'] });
 export const KAPI = 'kisiler.rol-yonet';
 export const YONETICI = kisi(1, [KAPI, 'sayfa.recete-rota', 'recete-rota.oku', 'recete-rota.yaz', 'rota.yaz', 'rota.onayla', 'uretim-emirleri.yaz',
-  'stok.statu-degistir', 'stok.sayim', 'istasyonlar.yaz', 'kisiler.yaz', 'finans.maliyet-oku']);
+  'stok.statu-degistir', 'stok.sayim', 'istasyonlar.istasyon-yaz', 'kisiler.yaz', 'finans.maliyet-oku']);
 export const OKUYAN = kisi(2, [KAPI, 'sayfa.recete-rota', 'recete-rota.oku']);
 export const PLANCI = kisi(4, [KAPI, 'sayfa.recete-rota', 'recete-rota.oku', 'plan.yaz']);
 export const SAYFASIZ = kisi(3, [KAPI]);

@@ -3,7 +3,7 @@ import type { Gunluk } from '#cekirdek/gunluk.ts';
 import { bulunamadi, cakisma, cokBuyuk, dogrulama, eskiSurum, yetkiYok } from '#cekirdek/hata.ts';
 import { islemVarMi } from '#cekirdek/yetki.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
-import type { Islem } from '#paylasilan/islemler.ts';
+import { ISTASYON_YAZMA_ISLEMLERI, type Islem } from '#paylasilan/islemler.ts';
 import { ROTA_ISLEMLERI } from '#paylasilan/islemler/rota.ts';
 import { STOK_ISLEMLERI } from '#paylasilan/islemler/stok.ts';
 import type {
@@ -196,7 +196,7 @@ async function aktifMalzemeler(db: Db, sinir: MalzemeSiniri): Promise<{ kartlar:
 // Birim maliyetler finanstan gelir ve finans.maliyet-oku ister (kullanıcı kararı 14.10.2026, kart #1187).
 // Vardiya takvimi sahibinde yalnız oturum ister (vardiya/uclar.ts), burada da açık. Stok yetkisi yoksa malzemenin stok ve kritik seviyesi null.
 const MALZEME_OKUMA: readonly Islem[] = ['sayfa.malzemeler'];
-const ISTASYON_OKUMA: readonly Islem[] = ['sayfa.istasyonlar', 'istasyonlar.yaz'];
+const ISTASYON_OKUMA: readonly Islem[] = ['sayfa.istasyonlar', ...ISTASYON_YAZMA_ISLEMLERI];
 const KISI_OKUMA: readonly Islem[] = ['kisiler.oku'];
 // Rotanın kendi uçları oturumla açıktır; okuma işlemi olarak rota sayfası ve rota işlemleri sayılır (kart #1184, VARSAYIM).
 const ROTA_OKUMA: readonly Islem[] = ['sayfa.rota', ...ROTA_ISLEMLERI];

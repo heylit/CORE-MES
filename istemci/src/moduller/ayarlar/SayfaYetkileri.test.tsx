@@ -77,6 +77,16 @@ describe('Sayfa yetkileri', () => {
     expect(screen.getByText('Yetkilerini görmek için bir kişi seçin.')).toBeTruthy();
   });
 
+  it('3165 a: bölünmüş eylemler görünür, etkisiz eski anahtar listede yok', async () => {
+    const istasyonlu = ['sayfa.istasyonlar', 'istasyonlar.yaz', 'istasyonlar.istasyon-yaz', 'istasyonlar.tanim-yaz'];
+    ac(DUZENLER, () => json(200, LISTE), { ...kisiyle({}), islemler: [...ISLEMLER, ...istasyonlu] });
+    await kisiSec();
+    sayfaAc('İstasyonlar');
+    expect(screen.getByRole('button', { name: 'Depocu Deneme: İstasyon ekleme, düzenleme, silme' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Depocu Deneme: Operasyon tipleri ve tesis şablonu' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /Eski toplu anahtar/ })).toBeNull();
+  });
+
   it('kişide rolden gelen işleme basınca yalnız o kişiden alınır; cevapla "Alındı" olur; yeniden basınca geri verilir', async () => {
     const alinmis = kisiyle({ alinan: ['stok.giris'] });
     const gonderilen = ac(DUZENLER, (_y, g) => json(200, g['alindi'] === true ? alinmis : LISTE));

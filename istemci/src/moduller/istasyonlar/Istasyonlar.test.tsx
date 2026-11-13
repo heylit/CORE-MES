@@ -1,3 +1,4 @@
+import { ISTASYON_YAZMA_ISLEMLERI } from '#paylasilan/islemler.ts';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
@@ -18,7 +19,7 @@ import { kodDizisi } from './tesis.ts';
 import { ESKI_SURUM_UYARISI } from './tesisVerisi.ts';
 import { rotalar } from './rotalar.tsx';
 
-const YONETICI: Kullanici = { id: 1, ad: 'Deneme Yönetici', islemler: ['sayfa.istasyonlar', 'istasyonlar.yaz'] };
+const YONETICI: Kullanici = { id: 1, ad: 'Deneme Yönetici', islemler: ['sayfa.istasyonlar', ...ISTASYON_YAZMA_ISLEMLERI] };
 const OKUYUCU: Kullanici = { id: 2, ad: 'Deneme Okuyucu', islemler: ['sayfa.istasyonlar'] };
 
 const IS_MERKEZLERI = {
@@ -573,6 +574,24 @@ describe('istasyonlar ekranı (#1109, IS25)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'İş merkezi' }));
     await waitFor(() => { expect(POSTLAR(cagrilar)).toHaveLength(2); });
     expect(POSTLAR(cagrilar)[1]).toEqual({ yontem: 'POST', yol: '/is-merkezleri', govde: { kod: 'IM-1', ad: 'Yeni iş merkezi', aciklama: null } });
+  });
+
+  it('3165 a: düğmeler kendi eylemine bağlıdır; yalnız istasyon eylemi olan iş merkezi ve şablon düğmesini görmez', async () => {
+    sunucuKur({ id: 4, ad: 'Deneme İstasyoncu', islemler: ['sayfa.istasyonlar', 'istasyonlar.istasyon-yaz'] });
+    goster(<Istasyonlar />);
+    const panel = await screen.findByRole('region', { name: 'TORNA iş merkezi' });
+    expect(within(panel).getByRole('button', { name: 'İstasyon' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('tab', { name: 'İş merkezleri' }));
+    expect(screen.queryByRole('button', { name: 'İş merkezi' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Şablonu uygula' })).toBeNull();
+    cleanup();
+    sunucuKur({ id: 5, ad: 'Deneme Merkezci', islemler: ['sayfa.istasyonlar', 'istasyonlar.is-merkezi-yaz'] });
+    goster(<Istasyonlar />);
+    const panel2 = await screen.findByRole('region', { name: 'TORNA iş merkezi' });
+    expect(within(panel2).queryByRole('button', { name: 'İstasyon' })).toBeNull();
+    fireEvent.click(screen.getByRole('tab', { name: 'İş merkezleri' }));
+    await waitFor(() => { expect(screen.getByRole('button', { name: 'İş merkezi' })).toBeTruthy(); });
+    expect(screen.queryByRole('button', { name: 'Şablonu uygula' })).toBeNull();
   });
 
   it('IST-5: tek istasyon adresi (?istasyon=<id>) satırı işaretler; pasif istasyonda pasifler açılır; bilinmeyen kimlik bir şey işaretlemez', async () => {

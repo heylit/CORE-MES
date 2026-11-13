@@ -8,6 +8,7 @@ import { uygulamaKur } from '#cekirdek/uygulama.ts';
 import type {
   IsMerkezleriCevabi, IstasyonSecimiCevabi, IstasyonlarCevabi, MakineDurumlariCevabi, MakinelerCevabi, OperasyonTipleriCevabi, PanoOzetiCevabi,
 } from '#paylasilan/sozlesme/istasyonlar.ts';
+import { ISTASYON_YAZMA_ISLEMLERI } from '#paylasilan/islemler.ts';
 import { BILDIRIM_TURLERI } from '#paylasilan/sozlesme/bildirim.ts';
 import { denetimYaz } from '../denetim/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
@@ -123,10 +124,10 @@ describe('istasyonlar (gerçek PostgreSQL)', () => {
     app = await uygulamaKur({ vt: ortam.vt, ayar: ortam.ayar, kimlik: kimlikCozucu(ortam.vt), denetle: denetimYaz, tekrar: tekrarDeposu });
     yoneticiId = await ortam.vt.tx((db) => yoneticiOlustur(db, { ad: 'Deneme Yönetici', kullaniciAdi: 'yonetici', parola: PAROLA }));
     const operatorRolu = await ortam.vt.tek<{ id: number }>("SELECT id FROM rol WHERE kod = 'operator'");
-    // Yerleşik rollerde istasyonlar.yaz yalnız bütün işlemleri taşıyan rolde var; bayraksız sahibi için geçici rol gerekir.
+    // Tesisçi bölünmeden önceki istasyonlar.yaz sahibinin bugünkü karşılığıdır: sekiz eylemin hepsi (3165 a). Bayraksız sahibi için geçici rol gerekir.
     const tesisRolu = await ortam.vt.tek<{ id: number }>("INSERT INTO rol (kod, ad) VALUES ('gecici_tesis', 'Geçici Tesis') RETURNING id");
     if (!operatorRolu || !tesisRolu) throw new Error('rol kurulamadı');
-    await ortam.vt.sorgu("INSERT INTO rol_islemi (rol_id, islem) VALUES ($1, 'istasyonlar.yaz')", [tesisRolu.id]);
+    await ortam.vt.sorgu('INSERT INTO rol_islemi (rol_id, islem) SELECT $1, unnest($2::text[])', [tesisRolu.id, [...ISTASYON_YAZMA_ISLEMLERI]]);
     operatorId = await girisliKisiEkle('operator1', operatorRolu.id);
     tesisciId = await girisliKisiEkle('tesisci1', tesisRolu.id);
     yonetici = await girisCerezi('yonetici');
@@ -235,7 +236,7 @@ describe('istasyonlar (gerçek PostgreSQL)', () => {
     assert.equal(vardiya.govde.personel.length, sonra.personel.kisi);
   });
 
-  test('yetki: her yazma ucu istasyonlar.yaz ister; işlemi olmayan 403 alır ve kayıt değişmez, işlemi olan yazar', async () => {
+  test('yetki: her yazma ucu bir istasyon eylemi ister; işlemi olmayan 403 alır ve kayıt değişmez, işlemi olan yazar', async () => {
     const im = await isMerkeziKur();
     const digerMerkez = await isMerkeziKur();
     const ist = await istasyonKur(im.id);
@@ -365,7 +366,7 @@ describe('istasyonlar (gerçek PostgreSQL)', () => {
       const mk = await makineKur();
       assert.equal((await istek(cerez, 'POST', `/makineler/${mk.id}/durum`, { durum: 'ariza' })).durum, 200, rol);
       assert.equal((await istek(cerez, 'POST', '/makineler/toplu-durum', { kayitlar: [{ id: mk.id, surum: 1 }], durum: 'calisir' })).durum, 200, rol);
-      // Müdür istasyonlar.yaz da taşır; 263 a onu daraltmaz.
+      // Müdür makine yazma eylemini de taşır; 263 a onu daraltmaz.
       if (rol === 'mudur') continue;
       const red = await istek(cerez, 'POST', `/makineler/${mk.id}/guncelle`, { kod: mk.kod, ad: 'Değişmez', istasyonId: null, surum: 1 });
       assert.deepEqual([red.durum, hataKodu(red)], [403, 'YETKI_YOK'], rol);
@@ -683,7 +684,7 @@ describe('istasyonlar (gerçek PostgreSQL)', () => {
     assert.equal((await oku(`/kisi-is-merkezleri/${kisi}`)).durum, 404);
   });
 
-  test('IS2: kişinin kısıtını kendisi ve istasyonlar.yaz sahibi okur; başkası 403 alır', async () => {
+  test('IS2: kişinin kısıtını kendisi ve kişi atayan okur; başkası 403 alır', async () => {
     const im = await isMerkeziKur();
     assert.equal((await yaz(`/kisi-is-merkezleri/${operatorId}/belirle`, { isMerkeziIdleri: [im.id] })).durum, 200);
     const yol = `/kisi-is-merkezleri/${operatorId}`;
@@ -1055,7 +1056,7 @@ describe('istasyonlar (gerçek PostgreSQL)', () => {
     assert.equal(kodlar.includes(ia.kod), false);
     assert.ok(kodlar.includes(ib.kod));
 
-    // istasyonlar.yaz muafiyet değildir: işlemi olan ama bayraksız kişi kısıtlanır.
+    // İstasyon eylemleri muafiyet değildir: işlemi olan ama bayraksız kişi kısıtlanır.
     kodlar = await secimKodlari(tesisci);
     assert.ok(kodlar.includes(ia.kod) && kodlar.includes(ib.kod));
     assert.equal((await yaz(`/kisi-is-merkezleri/${tesisciId}/belirle`, { isMerkeziIdleri: [b.id] })).durum, 200);

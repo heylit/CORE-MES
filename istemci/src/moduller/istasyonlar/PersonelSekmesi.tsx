@@ -39,8 +39,9 @@ const YOK = 'yok';
 
 const basHarfler = (ad: string) => ad.split(/\s+/).filter(Boolean).slice(0, 2).map((p) => p[0]?.toLocaleUpperCase('tr-TR')).join('');
 
-function PersonelKarti({ k, v, y, yazabilir, kisitYazabilir, kendisi, vardiyaYazabilir, renk, cokVardiyali, secim, reddedildi }: {
-  k: KisiOzeti; v: TesisVerisi; y: TesisYaz; yazabilir: boolean; kisitYazabilir: boolean; kendisi: boolean; vardiyaYazabilir: boolean; renk: string;
+// yazabilir kişi atamasını, yetkinlikYazabilir yetkinliği düzenler (3165 a: iki ayrı eylem).
+function PersonelKarti({ k, v, y, yazabilir, yetkinlikYazabilir, kisitYazabilir, kendisi, vardiyaYazabilir, renk, cokVardiyali, secim, reddedildi }: {
+  k: KisiOzeti; v: TesisVerisi; y: TesisYaz; yazabilir: boolean; yetkinlikYazabilir: boolean; kisitYazabilir: boolean; kendisi: boolean; vardiyaYazabilir: boolean; renk: string;
   cokVardiyali: boolean; secim: { secili: boolean; degistir: (secili: boolean) => void } | null; reddedildi: boolean;
 }) {
   const istemci = useQueryClient();
@@ -52,7 +53,7 @@ function PersonelKarti({ k, v, y, yazabilir, kisitYazabilir, kendisi, vardiyaYaz
   const [hedef, hedefYaz] = useState('');
   const [yuzde, yuzdeYaz] = useState('100');
   const [cikarilan, cikarilanYaz] = useState<KisiAtamasi | null>(null);
-  // Kısıt kişi başına okunur; yalnız yazabilen görür (uç kişinin kendisine, istasyonlar.yaz ya da arkon.amir taşıyana açıktır).
+  // Kısıt kişi başına okunur; yalnız yazabilen görür (uç kişinin kendisine, kişi atayana ya da arkon.amir taşıyana açıktır).
   // Kişi kendi kısıtını görür ama değiştiremez (245 a); amir başkasınınkini değiştirir (252 a).
   const kisit = useQuery({
     queryKey: anahtarlar.kisiKisiti(k.id),
@@ -61,6 +62,7 @@ function PersonelKarti({ k, v, y, yazabilir, kisitYazabilir, kendisi, vardiyaYaz
   });
   const satir = `kisi:${k.id}`;
   const kapali = !yazabilir || y.mesgul;
+  const yKapali = !yetkinlikYazabilir || y.mesgul;
   const yetkinlik = v.yetkinlikler?.find((x) => x.kisiId === k.id);
   const yetkin = yetkinlik?.istasyonIdleri ?? [];
   // Karar 146 a: geçerlilik bitişi ve dayanak çipin düzenle düğmesiyle girilir; süresi dolan yetkinlik iş başlatmaz.
@@ -181,24 +183,24 @@ function PersonelKarti({ k, v, y, yazabilir, kisitYazabilir, kendisi, vardiyaYaz
               <span key={i.id} className="tc-ist-cip" title={a?.dayanak ? `${i.ad}: ${a.dayanak}` : i.ad}>
                 <span className="tc-ist-mono">{i.kod}</span>{!i.aktif && ' (pasif)'}
                 {a?.gecerlilikBitis && (a.gecerli ? ` · ${a.gecerlilikBitis} bitiş` : <span className="tc-ist-dal-uyari"> süresi doldu ({a.gecerlilikBitis})</span>)}
-                {yazabilir && a && (
-                  <button type="button" className="tc-ist-cip-sil" aria-label={`${k.ad}: ${i.kod} yetkinliğinin bitişi ve dayanağı`} disabled={kapali}
+                {yetkinlikYazabilir && a && (
+                  <button type="button" className="tc-ist-cip-sil" aria-label={`${k.ad}: ${i.kod} yetkinliğinin bitişi ve dayanağı`} disabled={yKapali}
                     onClick={() => duzenlenenYaz({
                       yol: `/kisi-yetkinlikleri/${k.id}/istasyonlar/${i.id}/ayrinti`, baslik: i.kod, bitis: a.gecerlilikBitis ?? '', dayanak: a.dayanak ?? '', surum: a.surum,
                     })}>
                     <Simge ad="edit" boyut="k" />
                   </button>
                 )}
-                {yazabilir && (
-                  <button type="button" className="tc-ist-cip-sil" aria-label={`${k.ad}: ${i.kod} yetkinliğini kaldır`} disabled={kapali || !v.yetkinlikler}
+                {yetkinlikYazabilir && (
+                  <button type="button" className="tc-ist-cip-sil" aria-label={`${k.ad}: ${i.kod} yetkinliğini kaldır`} disabled={yKapali || !v.yetkinlikler}
                     onClick={() => yetkinlikYaz(yetkin.filter((x) => x !== i.id))}>
                     <Simge ad="x" boyut="k" />
                   </button>
                 )}
               </span>
             ); })}
-            {yazabilir && v.yetkinlikler && (
-              <AranabilirSecim etiket={`${k.ad} için yetkinlik ekle`} tur="istasyon" deger="" yerTutucu="+ Yetkinlik…" disabled={kapali}
+            {yetkinlikYazabilir && v.yetkinlikler && (
+              <AranabilirSecim etiket={`${k.ad} için yetkinlik ekle`} tur="istasyon" deger="" yerTutucu="+ Yetkinlik…" disabled={yKapali}
                 secenekler={istasyonlar.filter((i) => !yetkin.includes(Number(i.deger)))} sec={(d) => { if (d !== '') yetkinlikYaz([...yetkin, Number(d)]); }} />
             )}
           </span>
@@ -211,21 +213,21 @@ function PersonelKarti({ k, v, y, yazabilir, kisitYazabilir, kendisi, vardiyaYaz
               {v.makineler.filter((m) => makineYetkin.includes(m.id)).map((m) => (
                 <span key={m.id} className="tc-ist-cip" title={m.ad}>
                   <Simge ad="cpu" boyut="k" /> <span className="tc-ist-mono">{m.kod}</span>{!m.aktif && ' (pasif)'}
-                  {yazabilir && (
-                    <button type="button" className="tc-ist-cip-sil" aria-label={`${k.ad}: ${m.kod} makine yetkinliğini kaldır`} disabled={kapali}
+                  {yetkinlikYazabilir && (
+                    <button type="button" className="tc-ist-cip-sil" aria-label={`${k.ad}: ${m.kod} makine yetkinliğini kaldır`} disabled={yKapali}
                       onClick={() => makineYaz(makineYetkin.filter((x) => x !== m.id))}>
                       <Simge ad="x" boyut="k" />
                     </button>
                   )}
                 </span>
               ))}
-              {yazabilir && makineSecenekleri.length > 0 && (
-                <AranabilirSecim etiket={`${k.ad} için makine ekle`} tur="makine" deger="" yerTutucu="+ Makine…" disabled={kapali}
+              {yetkinlikYazabilir && makineSecenekleri.length > 0 && (
+                <AranabilirSecim etiket={`${k.ad} için makine ekle`} tur="makine" deger="" yerTutucu="+ Makine…" disabled={yKapali}
                   secenekler={makineSecenekleri} sec={(d) => { if (d !== '') makineYaz([...makineYetkin, Number(d)]); }} />
               )}
               <label className="tc-ist-kisi-alan">
                 <span>Aynı anda en çok</span>
-                <select className="tc-alan-kutu tc-ist-hucre" aria-label={`${k.ad} aynı anda en çok tezgâh`} value={enCok ?? ''} disabled={kapali}
+                <select className="tc-alan-kutu tc-ist-hucre" aria-label={`${k.ad} aynı anda en çok tezgâh`} value={enCok ?? ''} disabled={yKapali}
                   onChange={(o) => y.gonder({ yol: `/kisi-yetkinlikleri/${k.id}/tezgah-siniri`, govde: { enCok: o.target.value ? Number(o.target.value) : null }, satir })}>
                   <option value="">Sınırsız</option>
                   {Array.from({ length: TEZGAH_SINIRI_EN_COK }, (_, i) => i + 1).map((n) => <option key={n} value={n}>{n} tezgâh</option>)}
@@ -243,24 +245,24 @@ function PersonelKarti({ k, v, y, yazabilir, kisitYazabilir, kendisi, vardiyaYaz
                 <span key={a.makineId} className="tc-ist-cip" title={a.dayanak ? `${m?.ad ?? kod}: ${a.dayanak}` : m?.ad}>
                   <Simge ad="tool" boyut="k" /> <span className="tc-ist-mono">{kod}</span>{m && !m.aktif && ' (pasif)'}
                   {a.gecerlilikBitis && (a.gecerli ? ` · ${a.gecerlilikBitis} bitiş` : <span className="tc-ist-dal-uyari"> süresi doldu ({a.gecerlilikBitis})</span>)}
-                  {yazabilir && (
-                    <button type="button" className="tc-ist-cip-sil" aria-label={`${k.ad}: ${kod} ayar yetkinliğinin bitişi ve dayanağı`} disabled={kapali}
+                  {yetkinlikYazabilir && (
+                    <button type="button" className="tc-ist-cip-sil" aria-label={`${k.ad}: ${kod} ayar yetkinliğinin bitişi ve dayanağı`} disabled={yKapali}
                       onClick={() => duzenlenenYaz({
                         yol: `/kisi-yetkinlikleri/${k.id}/ayar/${a.makineId}/ayrinti`, baslik: `${kod} ayar`, bitis: a.gecerlilikBitis ?? '', dayanak: a.dayanak ?? '', surum: a.surum,
                       })}>
                       <Simge ad="edit" boyut="k" />
                     </button>
                   )}
-                  {yazabilir && (
-                    <button type="button" className="tc-ist-cip-sil" aria-label={`${k.ad}: ${kod} ayar yetkinliğini kaldır`} disabled={kapali}
+                  {yetkinlikYazabilir && (
+                    <button type="button" className="tc-ist-cip-sil" aria-label={`${k.ad}: ${kod} ayar yetkinliğini kaldır`} disabled={yKapali}
                       onClick={() => ayarYaz({ makineIdleri: ayarIdleri.filter((x) => x !== a.makineId) })}>
                       <Simge ad="x" boyut="k" />
                     </button>
                   )}
                 </span>
               ); })}
-              {yazabilir && (
-                <AranabilirSecim etiket={`${k.ad} için ayar yetkinliği ekle`} tur="makine" deger="" yerTutucu="+ Ayar…" disabled={kapali}
+              {yetkinlikYazabilir && (
+                <AranabilirSecim etiket={`${k.ad} için ayar yetkinliği ekle`} tur="makine" deger="" yerTutucu="+ Ayar…" disabled={yKapali}
                   secenekler={ayarSecenekleri} sec={(d) => { if (d !== '') ayarEkle(d); }} />
               )}
             </span>
@@ -274,8 +276,8 @@ function PersonelKarti({ k, v, y, yazabilir, kisitYazabilir, kendisi, vardiyaYaz
               <Girdi etiket="Geçerlilik bitişi" type="date" value={duzenlenen.bitis} onChange={(o) => duzenlenenYaz({ ...duzenlenen, bitis: o.target.value })}
                 ipucu={duzenlenen.bitis !== '' && duzenlenen.bitis < tesisGunu(Date.now()) ? 'Tarih geçmişte: kaydedilince yetkinlik hemen "süresi doldu" olur, iş başlatmaz.' : 'Boşsa süresiz.'} />
               <Girdi etiket="Dayanak" value={duzenlenen.dayanak} maxLength={300} onChange={(o) => duzenlenenYaz({ ...duzenlenen, dayanak: o.target.value })} ipucu="Eğitim ya da sertifika." />
-              <Dugme simge="check" disabled={kapali} onClick={ayrintiKaydet}>Kaydet</Dugme>
-              <Dugme simge="x" disabled={kapali} onClick={() => duzenlenenYaz(null)}>Vazgeç</Dugme>
+              <Dugme simge="check" disabled={yKapali} onClick={ayrintiKaydet}>Kaydet</Dugme>
+              <Dugme simge="x" disabled={yKapali} onClick={() => duzenlenenYaz(null)}>Vazgeç</Dugme>
             </span>
           </div>
         )}
@@ -308,8 +310,8 @@ function PersonelKarti({ k, v, y, yazabilir, kisitYazabilir, kendisi, vardiyaYaz
 
 // Personel: kişiler atandıkları iş merkezine göre gruplu; atama, yetkinlik, iş merkezi kısıtı ve vardiya kartta yazılır.
 // Ekipler aynı bölümün altındadır.
-export function PersonelSekmesi({ v, y, yazabilir, kisitYazabilir, benId, kisiAcabilir, vardiyaYazabilir }: {
-  v: TesisVerisi; y: TesisYaz; yazabilir: boolean; kisitYazabilir: boolean; benId: number; kisiAcabilir: boolean; vardiyaYazabilir: boolean;
+export function PersonelSekmesi({ v, y, yazabilir, yetkinlikYazabilir, ekipYazabilir, kisitYazabilir, benId, kisiAcabilir, vardiyaYazabilir }: {
+  v: TesisVerisi; y: TesisYaz; yazabilir: boolean; yetkinlikYazabilir: boolean; ekipYazabilir: boolean; kisitYazabilir: boolean; benId: number; kisiAcabilir: boolean; vardiyaYazabilir: boolean;
 }) {
   const [ara, araYaz] = useState('');
   const istemci = useQueryClient();
@@ -425,7 +427,7 @@ export function PersonelSekmesi({ v, y, yazabilir, kisitYazabilir, benId, kisiAc
         <section key={g.id ?? 'yok'} className={`tc-ist-panel ${merkezRengi(g.id)}`} aria-label={g.baslik}>
           <div className="tc-ist-grup-bas"><h3 className="tc-ist-alt-baslik">{g.baslik}</h3><small className="tc-ist-ipucu">{g.kisiler.length} kişi</small></div>
           {g.kisiler.map((k) => (
-            <PersonelKarti key={k.id} k={k} v={v} y={y} yazabilir={yazabilir} kisitYazabilir={kisitYazabilir} kendisi={k.id === benId} vardiyaYazabilir={vardiyaYazabilir} renk={merkezRengi(g.id)}
+            <PersonelKarti key={k.id} k={k} v={v} y={y} yazabilir={yazabilir} yetkinlikYazabilir={yetkinlikYazabilir} kisitYazabilir={kisitYazabilir} kendisi={k.id === benId} vardiyaYazabilir={vardiyaYazabilir} renk={merkezRengi(g.id)}
               cokVardiyali={acikVardiyaSayisi(g.id) > 1} reddedildi={reddedilen.has(k.id)}
               secim={topluAcik ? { secili: secili.has(k.id), degistir: (s) => seciminiDegistir([k.id], s) } : null} />
           ))}
@@ -433,7 +435,7 @@ export function PersonelSekmesi({ v, y, yazabilir, kisitYazabilir, benId, kisiAc
       ))}
       <section className="tc-ist-panel" aria-label="Ekipler">
         <h3 className="tc-ist-alt-baslik">Ekipler</h3>
-        <Ekipler yazabilir={yazabilir} />
+        <Ekipler yazabilir={ekipYazabilir} />
       </section>
     </div>
   );

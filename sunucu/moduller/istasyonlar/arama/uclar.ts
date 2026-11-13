@@ -1,11 +1,12 @@
 import { uc } from '#cekirdek/uc.ts';
+import { ISTASYON_YAZMA_ISLEMLERI } from '#paylasilan/islemler.ts';
 import { kayitAramaCevapSemasi, kayitAramaSorguSemasi } from '#paylasilan/ikinci-menu.ts';
 import { KAYIT_ARAMA_EN_COK_SONUC } from '#paylasilan/sayfa-tanimi.ts';
 import { SECIM_SAYFA_BOYU, tesisSecimCevabi, tesisSecimSorgusu } from '#paylasilan/sozlesme/istasyonlar.ts';
 import { tesisAra, tesisSecimAra } from './sorgular.ts';
 
 // Tanım listelerini okuyabilen arar (`uclar.ts` OKUMA ile aynı).
-const OKUMA = { biri: ['sayfa.istasyonlar', 'istasyonlar.yaz'] } as const;
+const OKUMA = { biri: ['sayfa.istasyonlar', ...ISTASYON_YAZMA_ISLEMLERI] } as const;
 // Seçiciyi çağıran modüller (1321 b): istasyonlar, bugün istasyon ya da makine seçen Arkon, markalama ve stok.
 const SECIM_OKUMA = { biri: [...OKUMA.biri, 'sayfa.arkon', 'sayfa.markalama', 'sayfa.stok'] } as const;
 // Kayda doğrudan açılan adres yok; sonuç kaydın bölümünü açar.

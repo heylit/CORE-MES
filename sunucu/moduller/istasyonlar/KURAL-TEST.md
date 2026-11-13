@@ -4,6 +4,9 @@ Bu turda eklenen kurallar. Önceki kurallar (IS1-IS7, ARK-IST-*, KAY-07) test ad
 
 | Kural | Test |
 |---|---|
+| 3165 a B2: hiçbir uç `istasyonlar.yaz` istemez; 41 yazma ucunun her biri tek eylem ister (Excel toplu kayıt üç tür eylemi); her eylem en az bir ucu açar | `eylem-bolme.test.ts` B2 (mutasyon: Excel denetimi silinince B4 kırmızı) |
+| 3165 a B1: göç eski işlemi taşıyan rolü, kişi ekini ve kişiden alınanı sekiz eyleme kopyalar; eski satır kalır | `eylem-bolme.test.ts` göç testi (mutasyon: kısıt kopyası silinince kırmızı) |
+| 3165 a B4: yerleşik rollerde rol x uç tablosu önce ve sonra aynı; yalnız istasyon eylemi olan iş merkezi ve şablonda 403, Excel'de karışık dosya hiç yazılmaz | `eylem-bolme.test.ts` B4, `Istasyonlar.test.tsx` "3165 a" |
 | IS9: güncelleme okunan sürümü taşır; eski sürüm 409, eksik sürüm 400, kayıt değişmez; güncel sürüm yazar ve bir artırır | `IS9: güncelleme okunan sürümle yazılır…` (`istasyonlar.test.ts`); istemci `IS9: sunucu eski sürüm derse satır uyarır…` (`Istasyonlar.test.tsx`) |
 | IS10: `istasyonAdlari` tek sorgu; boş dizide sorgu yok; yinelenen tek; olmayan yok; pasif döner | `istasyon-adlari.test.ts` (üç test) |
 | IS11: operasyon tipi kataloğu malzemelerin kodlu listesiyle (96 tip, 13 grup) başlar (İ2); koda göre sıralı; pasif yalnız istenince; kod benzersiz ve biçimli, ad boş değil, grup listeden | `operasyon-tipleri.test.ts` (üç test) |

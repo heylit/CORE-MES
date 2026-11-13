@@ -1,3 +1,4 @@
+import { ISTASYON_YAZMA_ISLEMLERI } from '#paylasilan/islemler.ts';
 // Kaynaklar okuma tablosu ve köprü komutlarının istek kurucusu: zod taşımaz, bu yüzden istemci modülünde durur; köprü ve sunucu testi
 // aynısını kullanır. Kaynaklar sekmesi yazmaz (1927 a): iş merkezi, istasyon, makine, kişi ve yetkinlik İstasyonlar'da, vardiya Vardiya'da
 // yazılır. Komut tablosu (KomutTanimi) plan ve stok komutlarınındır: hangi uca, hangi gövde alanlarıyla gideceğini söyler.
@@ -55,7 +56,7 @@ export const KAYNAK_OKUMALARI: ReadonlyArray<{
   { koleksiyon: 'makineler', yol: '/makineler', alan: 'makineler', anahtar: 'id' },
   { koleksiyon: 'kisiler', yol: '/kisiler', alan: 'kisiler', anahtar: 'id', islemler: ['kisiler.oku'] },
   { koleksiyon: 'vardiyalar', yol: '/vardiya-takvimi', alan: 'vardiyalar', anahtar: 'id' },
-  { koleksiyon: 'planAyarlari', yol: '/istasyon-plan-ayarlari', alan: 'ayarlar', anahtar: 'istasyonId', islemler: ['sayfa.istasyonlar', 'istasyonlar.yaz'] },
+  { koleksiyon: 'planAyarlari', yol: '/istasyon-plan-ayarlari', alan: 'ayarlar', anahtar: 'istasyonId', islemler: ['sayfa.istasyonlar', ...ISTASYON_YAZMA_ISLEMLERI] },
   { koleksiyon: 'makineDurumlari', yol: '/makine-durumlari', alan: 'durumlar', anahtar: 'makineId' },
 ];
 

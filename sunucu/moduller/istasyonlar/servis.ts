@@ -15,7 +15,7 @@ import { bildirimGonder } from '../bildirim/disari.ts';
 import { kisiAdlari, kisiBayrakliMi, kisileriListele, kisiVarMi } from '../kisiler/disari.ts';
 import type { AtamaTuru } from './kurallar.ts';
 import {
-  AKTIF_ISTASYONU_VAR, KULLANIMDA_ILETISI, PASIF_IS_MERKEZI, PASIF_ISTASYON, YUZDE_TAVANI_SENT, pasifeAliniyorMu, ustDenetlenirMi, arizayaGectiMi, atamaReddi, ekipCakismasi, gecerliAtamalar, gecmisTarihliMi, gunBicimi, kalanYuk, kendiKisitiniYazabilirMi, kisiteEklenemeyenler, kisitiOkuyabilirMi,
+  AKTIF_ISTASYONU_VAR, KULLANIMDA_ILETISI, PASIF_IS_MERKEZI, PASIF_ISTASYON, YUZDE_TAVANI_SENT, pasifeAliniyorMu, ustDenetlenirMi, arizayaGectiMi, atamaReddi, ekipCakismasi, gecerliAtamalar, gecmisTarihliMi, gunBicimi, kalanYuk, eksikKayitIslemi, kendiKisitiniYazabilirMi, kisiteEklenemeyenler, kisitiOkuyabilirMi,
   ayarListesi, ayarYetkinligiReddi, gelenAlanlar, topluSirasi, sablonPlani, istasyonuKalkanMakineler, kisiBasinaDegisiklik, makineYetkinligiReddi, secimGruplari, sentBicimi, tekrarsiz, yetkinlikDegisiklikleri, yetkinlikFarki, yetkinlikGecerliMi, yetkinlikUygula, yuzdeSente,
 } from './kurallar.ts';
 import * as sorgular from './sorgular.ts';
@@ -79,7 +79,8 @@ export async function isMerkeziGuncelle(db: Db, id: number, kayit: IsMerkeziGunc
 
 // Tesis şablonu (2166-1 a): eksik iş merkezi ve istasyonları açar, var olana dokunmaz. Uç tek transaction'dır: bir kayıt
 // reddedilirse hiçbiri açılmaz. Kod çakışması planda ayıklanır; arada başkası aynı kodu açarsa kısıt 409 döner.
-export async function tesisSablonunuUygula(db: Db): Promise<TesisSablonuSonucu> {
+export async function tesisSablonunuUygula(db: Db, kullanici: Kullanici): Promise<TesisSablonuSonucu> {
+  if (eksikKayitIslemi(kullanici.islemler, ['is-merkezi', 'istasyon']) !== null) throw yetkiYok();
   const plan = sablonPlani(TESIS_SABLONU, await sorgular.isMerkezleriListele(db, true),
     (await sorgular.istasyonlariListele(db, true)).map((i) => i.kod));
   const acilanMerkezler: string[] = [];
@@ -337,7 +338,9 @@ const bulunanKayit = <T>(kayit: T | undefined, ileti: string): T => {
   return kayit;
 };
 
-export async function topluKaydet(db: Db, g: IstasyonTopluKaydetGirdisi): Promise<TopluKaydetCevabi> {
+export async function topluKaydet(db: Db, kullanici: Kullanici, g: IstasyonTopluKaydetGirdisi): Promise<TopluKaydetCevabi> {
+  // Yetki satırlardan önce: eksik eylem varsa hiçbir satır yazılmaz.
+  if (eksikKayitIslemi(kullanici.islemler, g.satirlar.map((s) => s.kayit)) !== null) throw yetkiYok();
   const merkezler = new Map((await sorgular.isMerkezleriListele(db, true)).map((m) => [m.id, m]));
   const istasyonlarById = new Map((await sorgular.istasyonlariListele(db, true)).map((i) => [i.id, i]));
   const makinelerById = new Map((await sorgular.makineleriListele(db, { pasiflerDahil: true, istasyonId: null })).map((m) => [m.id, m]));

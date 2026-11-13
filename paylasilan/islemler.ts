@@ -114,3 +114,14 @@ export const ISLEMLER: readonly Islem[] = [...VERI_ISLEMLERI, ...SAYFA_ISLEMLERI
 
 export const veriIslemiMi = (deger: unknown): deger is VeriIslemi => VERI_ISLEMLERI.some((i) => i === deger);
 export const islemMi = (deger: unknown): deger is Islem => ISLEMLER.some((i) => i === deger);
+
+// İstasyon tanım yazımının sekiz eylemi (3165 a). Okuma uçları yazanın da okuması için bunlardan birini kabul eder.
+export const ISTASYON_YAZMA_ISLEMLERI = [
+  'istasyonlar.istasyon-yaz', 'istasyonlar.makine-yaz', 'istasyonlar.is-merkezi-yaz', 'istasyonlar.kisi-ata',
+  'istasyonlar.ekip-yaz', 'istasyonlar.yetkinlik-yaz', 'istasyonlar.aparat-yaz', 'istasyonlar.tanim-yaz',
+] as const satisfies readonly VeriIslemi[];
+// Kişi listesini (bütün kişilerin adı) yalnız kişi seçen eylemler okur.
+export const ISTASYON_KISI_SECEN_ISLEMLER = ['istasyonlar.kisi-ata', 'istasyonlar.ekip-yaz', 'istasyonlar.yetkinlik-yaz'] as const satisfies readonly VeriIslemi[];
+
+// Bölünmüş eski anahtarlar: hiçbir ucu açmaz, satırı ayrı kartla silinene dek katalogda kalır (3165 a). Sayfa yetkileri ekranı bunları göstermez.
+export const ETKISIZ_ISLEMLER: readonly Islem[] = ['istasyonlar.yaz'];

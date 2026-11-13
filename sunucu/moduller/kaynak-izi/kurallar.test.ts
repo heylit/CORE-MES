@@ -4,7 +4,8 @@ import { adimMetni, bolumGorunur, gorunurBolumler, kaynakSuz, sonYediGun, type A
 
 test('KI-1 bölüm sahibinin okuma işlemlerinden biriyle görünür; işlemsiz kişide hiçbiri', () => {
   assert.equal(bolumGorunur(['sayfa.istasyonlar'], 'tesis'), true);
-  assert.equal(bolumGorunur(['istasyonlar.yaz'], 'tesis'), true);
+  assert.equal(bolumGorunur(['istasyonlar.aparat-yaz'], 'tesis'), true);
+  assert.equal(bolumGorunur(['istasyonlar.yaz'], 'tesis'), false, 'eski toplu anahtar artık bölüm açmaz (3165 a)');
   assert.equal(bolumGorunur(['ik.izin-oku'], 'izin'), true);
   assert.equal(bolumGorunur(['sayfa.kaynak-izi'], 'maliyet'), false);
   assert.deepEqual(gorunurBolumler(['sayfa.kaynak-izi']), []);

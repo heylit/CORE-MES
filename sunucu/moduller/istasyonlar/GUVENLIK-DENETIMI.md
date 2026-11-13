@@ -28,7 +28,58 @@ Kapandı (#247, IS8): üç tanım listesi sayfası olan ya da yazan role açık;
 | GET /istasyonlar/ara (#1221) | `biri: sayfa.istasyonlar, istasyonlar.yaz` | sorgu 2-60 harf, en çok 5 satır, `%` joker değil | `arama/arama.test.ts` istasyon ve makine | aynı dosya: işlemsiz 403, oturumsuz 401 |
 | GET /istasyonlar/secim-ara (#1318) | `biri: sayfa.istasyonlar, istasyonlar.yaz, sayfa.arkon, sayfa.markalama, sayfa.stok` (karar 1321 b: çağıran modüllerin işlemi; A5'te modül eklenir); yalnız kod, ad, aktiflik ve üst kaydın kodu ve adı döner | sorgu en çok 80 harf, sayfa 1-1000, sayfa başına 30 satır; `%` joker değil; varsayılan yalnız aktif | `arama/arama.test.ts` `#1318 ortak seçici` (yalnız sayfa.arkon 200) | aynı dosya: işlemsiz 403, oturumsuz 401, geçersiz sorgu 400 |
 
-## Yazma uçları (hepsi `istasyonlar.yaz`)
+## Eylemlere bölme (kart 3165, karar 3165 a)
+
+`istasyonlar.yaz` sekiz eyleme bölündü; aşağıdaki tablo ve satırlardaki `istasyonlar.yaz` geçmiş metindir, geçerli yetki bu tablodadır. Okuma uçlarında
+`istasyonlar.yaz` yerine sekiz eylemden biri (`ISTASYON_YAZMA_ISLEMLERI`), kişi listesinde kişi seçen üç eylemden biri geçerlidir. Excel toplu kayıt
+satırdaki her kayıt türünün eylemini ister; tesis şablonu operasyon tipi eylemine bağlıdır ve iş merkezi ile istasyon eylemini de ister (servis, yazmadan önce 403). Makine durumunu makine
+eylemi de yazar. Eski işlem hiçbir ucu açmaz (`eylem-bolme.test.ts` B2), rol x uç tablosu önce ve sonra aynıdır (B4).
+
+| Uç | Eylem |
+|---|---|
+| POST /is-merkezleri | `istasyonlar.is-merkezi-yaz` |
+| POST /is-merkezleri/:id/guncelle | `istasyonlar.is-merkezi-yaz` |
+| POST /is-merkezleri/:id/sil | `istasyonlar.is-merkezi-yaz` |
+| POST /tesis-sablonu/uygula | `istasyonlar.tanim-yaz` (servis ayrıca iş merkezi ve istasyon eylemini ister) |
+| POST /istasyonlar | `istasyonlar.istasyon-yaz` |
+| POST /istasyonlar/:id/guncelle | `istasyonlar.istasyon-yaz` |
+| POST /istasyonlar/:id/sil | `istasyonlar.istasyon-yaz` |
+| POST /makineler | `istasyonlar.makine-yaz` |
+| POST /makineler/:id/guncelle | `istasyonlar.makine-yaz` |
+| POST /makineler/:id/sil | `istasyonlar.makine-yaz` |
+| POST /operasyon-tipleri | `istasyonlar.tanim-yaz` |
+| POST /operasyon-tipleri/:id/guncelle | `istasyonlar.tanim-yaz` |
+| POST /istasyonlar/:id/kisiler/ata | `istasyonlar.kisi-ata` |
+| POST /istasyonlar/:id/kisiler/:kisiId/cikar | `istasyonlar.kisi-ata` |
+| POST /makineler/:id/kisiler/ata | `istasyonlar.kisi-ata` |
+| POST /makineler/:id/kisiler/:kisiId/cikar | `istasyonlar.kisi-ata` |
+| POST /ekipler | `istasyonlar.ekip-yaz` |
+| POST /ekipler/:id/guncelle | `istasyonlar.ekip-yaz` |
+| POST /ekipler/:id/uyeler/ata | `istasyonlar.ekip-yaz` |
+| POST /ekipler/:id/uyeler/:kisiId/cikar | `istasyonlar.ekip-yaz` |
+| POST /kisi-is-merkezleri/:kisiId/belirle | `istasyonlar.kisi-ata` |
+| POST /istasyonlar/:id/plan-ayari | `istasyonlar.istasyon-yaz` |
+| POST /istasyonlar/aparat-kapasiteleri | `istasyonlar.aparat-yaz` |
+| POST /istasyonlar/aparat-kapasiteleri/:id/guncelle | `istasyonlar.aparat-yaz` |
+| POST /istasyonlar/aparat-kapasiteleri/:id/sil | `istasyonlar.aparat-yaz` |
+| POST /makineler/:id/durum | `istasyonlar.makine-yaz` |
+| POST /kisi-yetkinlikleri/:kisiId/belirle | `istasyonlar.yetkinlik-yaz` |
+| POST /kisi-yetkinlikleri/toplu | `istasyonlar.yetkinlik-yaz` |
+| POST /kisi-yetkinlikleri/:kisiId/makineler/belirle | `istasyonlar.yetkinlik-yaz` |
+| POST /kisi-yetkinlikleri/:kisiId/ayar/belirle | `istasyonlar.yetkinlik-yaz` |
+| POST /kisi-yetkinlikleri/:kisiId/ayar/:makineId/ayrinti | `istasyonlar.yetkinlik-yaz` |
+| POST /kisi-yetkinlikleri/:kisiId/tezgah-siniri | `istasyonlar.yetkinlik-yaz` |
+| POST /kisi-yetkinlikleri/:kisiId/istasyonlar/:istasyonId/ayrinti | `istasyonlar.yetkinlik-yaz` |
+| POST /makineler/toplu-tasi | `istasyonlar.makine-yaz` |
+| POST /makineler/toplu-aktiflik | `istasyonlar.makine-yaz` |
+| POST /makineler/toplu-durum | `istasyonlar.makine-yaz` |
+| POST /makineler/coklu-ekle | `istasyonlar.makine-yaz` |
+| POST /istasyonlar/toplu-tasi | `istasyonlar.istasyon-yaz` |
+| POST /istasyonlar/toplu-aktiflik | `istasyonlar.istasyon-yaz` |
+| POST /istasyonlar/coklu-ekle | `istasyonlar.istasyon-yaz` |
+| POST /istasyonlar/toplu-kaydet | `istasyonlar.is-merkezi-yaz`, `istasyonlar.istasyon-yaz`, `istasyonlar.makine-yaz` |
+
+## Yazma uçları (bölünmeden önce hepsi `istasyonlar.yaz`; geçerli eylem yukarıdaki tabloda)
 
 | Uç | Sunucu kuralları | İzinli test | Reddeden test |
 |---|---|---|---|
