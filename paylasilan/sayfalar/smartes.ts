@@ -22,6 +22,9 @@ export const SMARTES_IKINCI_MENU = {
       { anahtar: 'is-emri-durumlari', baslik: 'Üretim sayıları', yol: '/smartes/is-emri-durumlari', simge: 'chart', islem: 'sayfa.smartes' },
       { anahtar: 'duruslar', baslik: 'Duruşlar', yol: '/smartes/duruslar', simge: 'pause', islem: 'sayfa.smartes' },
       { anahtar: 'alarmlar', baslik: 'Alarmlar', yol: '/smartes/alarmlar', simge: 'alert', islem: 'sayfa.smartes' },
+      { anahtar: 'fire', baslik: 'Fire', yol: '/smartes/fire', simge: 'trash', islem: 'sayfa.smartes' },
+      { anahtar: 'ambar', baslik: 'Ambar hareketleri', yol: '/smartes/ambar', simge: 'pallet', islem: 'sayfa.smartes' },
+      { anahtar: 'kalite', baslik: 'Kalite ölçümleri', yol: '/smartes/kalite', simge: 'ruler', islem: 'sayfa.smartes' },
     ] },
     { baslik: 'Giden', maddeler: [
       { anahtar: 'giden', baslik: 'İş emri gönderimi', yol: '/smartes/giden', simge: 'upload', islem: 'sayfa.smartes' },

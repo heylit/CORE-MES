@@ -8,5 +8,7 @@ export const anahtarlar = {
   makineBulgulari: ['smartes', 'makine-bulgulari'] as const,
   makine: (kod: string) => ['smartes', 'makineler', kod] as const,
   gelenAdlar: (tur: SmartesGelenAdTuru) => ['smartes', 'gelen-adlar', tur] as const,
+  gelenler: ['smartes', 'gelenler'] as const,
+  ham: (tur: string, id: number) => ['smartes', 'ham', tur, id] as const,
   liste: (ad: string, sayfa: number) => ['smartes', 'liste', ad, sayfa] as const,
 };

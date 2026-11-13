@@ -5,7 +5,8 @@ import {
   alarmlarCevabi, canliMakineAyrintisiCevabi, canliMakineParametresi, canliMakinelerCevabi, durumCevabi, duruslarCevabi, eslemeAtaGovdesi, eslemeCevabi,
   eslemeKaldirGovdesi, eslemelerCevabi, eslemeSorgusu, gidenCevabi, isEmriDurumlariCevabi, makineBulgulariCevabi, sayfaSorgusu, smartesHazirlikCevabi,
   smartesKontrolCevabi, gelenAdEsleGovdesi, gelenAdKaldirGovdesi, gelenAdlarCevabi, gelenAdOnerileriOnaylaGovdesi, gelenAdSorgusu, listeOkuCevabi,
-  onerileriOnaylaCevabi, onerileriOnaylaGovdesi,
+  onerileriOnaylaCevabi, onerileriOnaylaGovdesi, ambarHareketleriCevabi, fireHareketleriCevabi, gelenlerCevabi, hamKayitCevabi, hamKayitParametresi,
+  kaliteOlcumleriCevabi,
 } from '#paylasilan/sozlesme/smartes.ts';
 import { ortamIstemcisi, ortamOzeti } from './baglanti.ts';
 import * as servis from './servis.ts';
@@ -129,6 +130,45 @@ export const uclar = [
     sorgu: sayfaSorgusu,
     cevap: alarmlarCevabi,
     isle: ({ db, sorgu }) => servis.alarmlar(db, sorgu),
+  }),
+  uc({
+    yontem: 'GET',
+    yol: '/smartes/fire',
+    yetki: { biri: ['sayfa.smartes'] },
+    sorgu: sayfaSorgusu,
+    cevap: fireHareketleriCevabi,
+    isle: ({ db, sorgu }) => servis.fireHareketleri(db, sorgu),
+  }),
+  uc({
+    yontem: 'GET',
+    yol: '/smartes/ambar',
+    yetki: { biri: ['sayfa.smartes'] },
+    sorgu: sayfaSorgusu,
+    cevap: ambarHareketleriCevabi,
+    isle: ({ db, sorgu }) => servis.ambarHareketleri(db, sorgu),
+  }),
+  uc({
+    yontem: 'GET',
+    yol: '/smartes/kalite',
+    yetki: { biri: ['sayfa.smartes'] },
+    sorgu: sayfaSorgusu,
+    cevap: kaliteOlcumleriCevabi,
+    isle: ({ db, sorgu }) => servis.kaliteOlcumleri(db, sorgu),
+  }),
+  uc({
+    yontem: 'GET',
+    yol: '/smartes/gelenler',
+    yetki: { biri: ['sayfa.smartes'] },
+    cevap: gelenlerCevabi,
+    isle: ({ db }) => servis.gelenler(db, ortamIstemcisi),
+  }),
+  uc({
+    yontem: 'GET',
+    yol: '/smartes/ham/:tur/:id',
+    yetki: { biri: ['sayfa.smartes'] },
+    parametre: hamKayitParametresi,
+    cevap: hamKayitCevabi,
+    isle: ({ db, parametre }) => servis.hamKayit(db, parametre.tur, parametre.id),
   }),
   uc({
     yontem: 'GET',

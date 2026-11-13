@@ -1099,3 +1099,71 @@ export function adDurumu(k: { var: boolean; eslendi: boolean; ilkGorulme: Date |
   if (k.eslendi) return k.var ? 'eslendi' : 'yok';
   return k.ilkGorulme !== null && k.ilkBasarili !== null && k.ilkGorulme > k.ilkBasarili ? 'yeni' : 'eslenmedi';
 }
+
+/* ---------------- SmartES'ten gelen bilgilerin özeti (SME-32) ---------------- */
+
+export type GelenDurumu = 'okunuyor' | 'kapali' | 'okunmuyor';
+// baglanti: yalnız ana anahtar ve adres. kalite-ambar: ayrıca kendi anahtarı. yok: CORE bu bilgiyi okumuyor.
+type GelenKosulu = 'baglanti' | 'kalite-ambar' | 'yok';
+
+interface GelenTanimi {
+  anahtar: string;
+  baslik: string;
+  kosul: GelenKosulu;
+  // Okuma izinin anahtarları; birden çoksa en eskisi gösterilir (hepsi o andan beri okunmuş demektir).
+  izler: readonly string[];
+  kullanim: string;
+  yol: string | null;
+}
+
+export const GELEN_TANIMLARI: readonly GelenTanimi[] = [
+  { anahtar: 'makine', baslik: 'Makinelerin canlı durumu', kosul: 'yok', izler: [], kullanim: 'Henüz okunmuyor', yol: null },
+  { anahtar: 'uretim', baslik: 'Üretim sayıları', kosul: 'baglanti', izler: ['is-emri-durumu'], kullanim: 'Yalnız gösterilir; üretim kaydına işlenmesi ayrı iştir', yol: '/smartes/is-emri-durumlari' },
+  { anahtar: 'durus', baslik: 'Duruşlar', kosul: 'baglanti', izler: ['durus'], kullanim: 'Yalnız gösterilir; duruş adının karşılığı Kod eşlemeleri > Duruş’tan verilir', yol: '/smartes/duruslar' },
+  { anahtar: 'alarm', baslik: 'Alarmlar', kosul: 'baglanti', izler: ['alarm'], kullanim: 'Yalnız gösterilir', yol: '/smartes/alarmlar' },
+  { anahtar: 'fire', baslik: 'Fire kayıtları', kosul: 'kalite-ambar', izler: ['red'], kullanim: 'Yalnız gösterilir; fire adının karşılığı Kod eşlemeleri > Fire’den verilir', yol: '/smartes/fire' },
+  { anahtar: 'adlar', baslik: 'Fire ve duruş adları', kosul: 'baglanti', izler: ['liste:fire', 'liste:durus'], kullanim: 'Kod eşlemeleri', yol: '/smartes/eslemeler' },
+  { anahtar: 'tanimlar', baslik: 'İstasyon, makine ve operasyon listesi', kosul: 'baglanti', izler: ['liste:istasyon', 'liste:makine', 'liste:operasyon'], kullanim: 'Kod eşlemelerinde öneri ve seçim listesi', yol: '/smartes/eslemeler' },
+  { anahtar: 'ambar', baslik: 'Ambar hareketleri', kosul: 'kalite-ambar', izler: ['ambar'], kullanim: 'Yalnız gösterilir; stoğa yazılmaz', yol: '/smartes/ambar' },
+  { anahtar: 'kalite', baslik: 'Kalite ölçümleri', kosul: 'kalite-ambar', izler: ['kalite'], kullanim: 'Yalnız gösterilir', yol: '/smartes/kalite' },
+  { anahtar: 'oee', baslik: 'OEE raporu (SmartES’in hesabı)', kosul: 'yok', izler: [], kullanim: 'Henüz okunmuyor', yol: null },
+  { anahtar: 'cevrim', baslik: 'Parça çevrim süreleri', kosul: 'yok', izler: [], kullanim: 'Henüz okunmuyor', yol: null },
+  { anahtar: 'ilerleme', baslik: 'İş emri tamamlanma yüzdesi ve tahmini bitiş', kosul: 'yok', izler: [], kullanim: 'Henüz okunmuyor', yol: null },
+];
+
+export interface GelenKalemi {
+  anahtar: string;
+  baslik: string;
+  durum: GelenDurumu;
+  sonOkuma: string | null;
+  sayi: number | null;
+  kullanim: string;
+  yol: string | null;
+}
+
+export function gelenKalemleri(g: {
+  baglantiAcik: boolean;
+  kaliteAmbarAcik: boolean;
+  izler: ReadonlyMap<string, string | null>;
+  sayilar: ReadonlyMap<string, number>;
+}): GelenKalemi[] {
+  return GELEN_TANIMLARI.map((t) => {
+    if (t.kosul === 'yok') return { anahtar: t.anahtar, baslik: t.baslik, durum: 'okunmuyor', sonOkuma: null, sayi: null, kullanim: t.kullanim, yol: t.yol };
+    const acik = g.baglantiAcik && (t.kosul === 'baglanti' || g.kaliteAmbarAcik);
+    const zamanlar = t.izler.map((i) => g.izler.get(i) ?? null);
+    // Biri hiç okunmadıysa "son okuma" yoktur: eksik listeyi okunmuş göstermez.
+    const sonOkuma = zamanlar.some((z) => z === null) ? null : (zamanlar as string[]).reduce((a, b) => (Date.parse(a) <= Date.parse(b) ? a : b));
+    return {
+      anahtar: t.anahtar, baslik: t.baslik, durum: acik ? 'okunuyor' : 'kapali', sonOkuma, sayi: g.sayilar.get(t.anahtar) ?? 0, kullanim: t.kullanim, yol: t.yol,
+    };
+  });
+}
+
+// Ham kayıt alanları: ad sırasıyla; boş değer null, metin olduğu gibi, diğerleri JSON yazımıyla.
+export function hamAlanlari(ham: Record<string, unknown>): { ad: string; deger: string | null }[] {
+  return Object.keys(ham).sort((a, b) => a.localeCompare(b, 'tr')).map((ad) => {
+    const d = ham[ad];
+    if (d === null || d === undefined || d === '') return { ad, deger: null };
+    return { ad, deger: typeof d === 'string' ? d : JSON.stringify(d) };
+  });
+}

@@ -340,6 +340,45 @@ export const SMARTES_LISTE_TURLERI = ['istasyon', 'makine', 'operasyon', 'fire',
 export const listeOkuCevabi = z.object({ okunan: z.array(z.enum(SMARTES_LISTE_TURLERI)), hatali: z.array(z.enum(SMARTES_LISTE_TURLERI)) });
 export type ListeOkuCevabi = z.output<typeof listeOkuCevabi>;
 
+// SmartES'ten gelen her şeyin özeti: hangi bilgi okunuyor, en son ne zaman, kaç kayıt, CORE'da nerede kullanılıyor.
+// okunuyor: düzenli okunur. kapali: bağlantı ya da o okumanın anahtarı kapalı. okunmuyor: CORE bu bilgiyi henüz okumuyor.
+export const SMARTES_GELEN_DURUMLARI = ['okunuyor', 'kapali', 'okunmuyor'] as const;
+export const gelenlerCevabi = z.object({
+  kalemler: z.array(z.object({
+    anahtar: z.string(),
+    baslik: z.string(),
+    durum: z.enum(SMARTES_GELEN_DURUMLARI),
+    sonOkuma: zamanSemasi.nullable(),
+    sayi: z.number().int().nullable(),
+    kullanim: z.string(),
+    yol: z.string().nullable(),
+  })),
+});
+
+const gelenSatir = { smartesId: z.number().int(), isEmriNo: z.string().nullable(), stokNo: z.string().nullable(), zaman: zamanSemasi.nullable() };
+export const fireHareketleriCevabi = listeCevapSemasi(z.object({
+  ...gelenSatir, istasyonKodu: z.string().nullable(), makineKodu: z.string().nullable(), adet: z.number().int().nullable(), neden: z.string().nullable(),
+}));
+export const ambarHareketleriCevabi = listeCevapSemasi(z.object({
+  ...gelenSatir, ambarKodu: z.string().nullable(), hareketTuru: z.string().nullable(), miktar: z.number().nullable(),
+}));
+export const kaliteOlcumleriCevabi = listeCevapSemasi(z.object({
+  ...gelenSatir, istasyonKodu: z.string().nullable(), makineKodu: z.string().nullable(), olcumAdi: z.string().nullable(),
+  olcumDegeri: z.string().nullable(), sonuc: z.string().nullable(),
+}));
+
+// Satırın SmartES'ten geldiği haliyle bütün alanları (saklanan ham kayıt).
+export const SMARTES_HAM_TURLERI = ['uretim', 'durus', 'alarm', 'fire', 'ambar', 'kalite'] as const;
+export type SmartesHamTuru = (typeof SMARTES_HAM_TURLERI)[number];
+export const hamKayitParametresi = z.object({ tur: z.enum(SMARTES_HAM_TURLERI), id: z.coerce.number<number>().int().positive() });
+export const hamKayitCevabi = z.object({ alanlar: z.array(z.object({ ad: z.string(), deger: z.string().nullable() })) });
+
+export type GelenlerCevabi = z.output<typeof gelenlerCevabi>;
+export type FireHareketleriCevabi = z.output<typeof fireHareketleriCevabi>;
+export type AmbarHareketleriCevabi = z.output<typeof ambarHareketleriCevabi>;
+export type KaliteOlcumleriCevabi = z.output<typeof kaliteOlcumleriCevabi>;
+export type HamKayitCevabi = z.output<typeof hamKayitCevabi>;
+
 export type OnerileriOnaylaGovdesi = z.input<typeof onerileriOnaylaGovdesi>;
 export type OnerileriOnaylaCevabi = z.output<typeof onerileriOnaylaCevabi>;
 export type GelenAdlarCevabi = z.output<typeof gelenAdlarCevabi>;

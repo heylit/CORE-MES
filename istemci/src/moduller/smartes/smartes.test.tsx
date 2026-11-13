@@ -5,11 +5,15 @@ import type { ReactNode } from 'react';
 import type { HataGovdesi } from '#paylasilan/hata.ts';
 import type { Kullanici } from '#paylasilan/kullanici.ts';
 import type { OturumCevabi } from '#paylasilan/sozlesme/oturum.ts';
-import type { DurumCevabi, EslemelerCevabi, GelenAdlarCevabi, GidenCevabi, IsEmriDurumlariCevabi, OnerileriOnaylaCevabi } from '#paylasilan/sozlesme/smartes.ts';
+import { MemoryRouter } from 'react-router-dom';
+import type {
+  DurumCevabi, EslemelerCevabi, FireHareketleriCevabi, GelenAdlarCevabi, GelenlerCevabi, GidenCevabi, HamKayitCevabi, IsEmriDurumlariCevabi,
+  OnerileriOnaylaCevabi,
+} from '#paylasilan/sozlesme/smartes.ts';
 import { BildirimSaglayici } from '../../ortak/arayuz/index.ts';
 import { BaglantiDurumu } from './BaglantiDurumu.tsx';
 import { Eslemeler } from './Eslemeler.tsx';
-import { Giden, UretimSayilari } from './Listeler.tsx';
+import { FireHareketleri, Giden, UretimSayilari } from './Listeler.tsx';
 import { SmartesAyarlari, ayarEkranlari } from './ayar-ekranlari.tsx';
 
 const YONETICI: Kullanici = { id: 1, ad: 'Deneme Yönetici', islemler: ['sayfa.smartes', 'smartes.esleme-yaz', 'ayarlar.yaz'] };
@@ -113,6 +117,26 @@ describe('SmartES bağlantı durumu', () => {
     ac(<BaglantiDurumu />);
     expect(await screen.findByText(/yöneticiye başvurun/)).toBeTruthy();
     expect(screen.queryByText(/Sistem Ayarları/)).toBeNull();
+  });
+
+  it('SmartES’ten gelen bilgiler tek tabloda: okunan bilgi listesine bağlanır, okunmayan bağlantısız ve sayısızdır', async () => {
+    const kalemler: GelenlerCevabi['kalemler'] = [
+      { anahtar: 'durus', baslik: 'Duruşlar', durum: 'okunuyor', sonOkuma: '2026-11-13T08:00:00.000Z', sayi: 41, kullanim: 'Yalnız gösterilir', yol: '/smartes/duruslar' },
+      { anahtar: 'fire', baslik: 'Fire kayıtları', durum: 'kapali', sonOkuma: null, sayi: 0, kullanim: 'Yalnız gösterilir', yol: '/smartes/fire' },
+      { anahtar: 'oee', baslik: 'OEE raporu', durum: 'okunmuyor', sonOkuma: null, sayi: null, kullanim: 'Henüz okunmuyor', yol: null },
+    ];
+    sunucuKur(IZLEYICI, (yol) => {
+      if (yol === '/smartes/durum') return json(200, { baglanti: 'acik', sayilar: SAYILAR, okumalar: [] } satisfies DurumCevabi);
+      return yol === '/smartes/gelenler' ? json(200, { kalemler } satisfies GelenlerCevabi) : null;
+    });
+    ac(<MemoryRouter><BaglantiDurumu /></MemoryRouter>);
+    const tablo = await screen.findByRole('table', { name: 'SmartES’ten gelen bilgiler' });
+    expect(within(tablo).getByRole('link', { name: 'Duruşlar' }).getAttribute('href')).toBe('/smartes/duruslar');
+    expect(within(tablo).getByText('41')).toBeTruthy();
+    expect(within(tablo).getByText('Okunuyor')).toBeTruthy();
+    expect(within(tablo).getByText('Okuması kapalı')).toBeTruthy();
+    expect(within(tablo).getByText('Okunmuyor')).toBeTruthy();
+    expect(within(tablo).queryByRole('link', { name: 'OEE raporu' })).toBeNull();
   });
 });
 
@@ -295,6 +319,29 @@ describe('SmartES listeleri', () => {
       : null));
     ac(<Giden />);
     expect(await screen.findByText('Henüz gönderilen iş emri yok.')).toBeTruthy();
+    expect(screen.queryByText('Tüm alanlar')).toBeNull();
+  });
+
+  it('fire listesinde "Tüm alanlar" satırın SmartES’ten geldiği haliyle bütün alanlarını açar; boş alan boşluk işaretiyle', async () => {
+    const cagrilar = sunucuKur(IZLEYICI, (yol) => {
+      if (yol.startsWith('/smartes/fire')) {
+        return json(200, {
+          toplam: 1, sayfa: 1, sayfaBoyu: 50,
+          satirlar: [{ smartesId: 3, isEmriNo: 'E-1-10', stokNo: null, istasyonKodu: 'IST-01', makineKodu: null, adet: null, neden: 'Deneme çapak', zaman: null }],
+        } satisfies FireHareketleriCevabi);
+      }
+      return yol === '/smartes/ham/fire/3'
+        ? json(200, { alanlar: [{ ad: 'REJECT_NAME', deger: 'Deneme çapak' }, { ad: 'SHIFT_NAME', deger: null }] } satisfies HamKayitCevabi)
+        : null;
+    });
+    ac(<FireHareketleri />);
+    expect(await screen.findByText('Deneme çapak')).toBeTruthy();
+    expect(screen.queryByText('0')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'SmartES’ten gelen tüm alanları göster' }));
+    const pencere = await screen.findByRole('dialog');
+    expect(await within(pencere).findByText('REJECT_NAME')).toBeTruthy();
+    expect(within(pencere).getByText('SHIFT_NAME')).toBeTruthy();
+    expect(cagrilar.some((c) => c.yol === '/smartes/ham/fire/3')).toBe(true);
   });
 });
 

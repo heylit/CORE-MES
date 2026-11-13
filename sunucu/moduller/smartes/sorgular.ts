@@ -826,3 +826,80 @@ export async function degisenAdSayisi(db: Db): Promise<number> {
   );
   return r?.n ?? 0;
 }
+
+/* ---------------- gelen bilgiler: fire, ambar, kalite listeleri ve ham kayıt ---------------- */
+
+export function redSay(db: Db): Promise<number> {
+  return db.tek<{ n: number }>('SELECT count(*)::int AS n FROM smartes_red').then((r) => r?.n ?? 0);
+}
+
+// Fire adı hareket satırında gelir (neden_kodu); ayrı açıklama geldiyse o gösterilir.
+export function redSatirlari<T>(db: Db, d: Dilim): Promise<T[]> {
+  return db.sorgu<T>(
+    `SELECT smartes_id AS "smartesId", is_emri_no AS "isEmriNo", stok_no AS "stokNo", istasyon_kodu AS "istasyonKodu", makine_kodu AS "makineKodu",
+       adet, COALESCE(neden, neden_kodu) AS neden, ${zamanMetni('zaman')} AS zaman
+     FROM smartes_red ORDER BY zaman DESC NULLS LAST, smartes_id DESC LIMIT $1 OFFSET $2`,
+    [d.sinir, d.atla],
+  );
+}
+
+export function ambarSay(db: Db): Promise<number> {
+  return db.tek<{ n: number }>('SELECT count(*)::int AS n FROM smartes_ambar_hareketi').then((r) => r?.n ?? 0);
+}
+
+export function ambarSatirlari<T>(db: Db, d: Dilim): Promise<T[]> {
+  return db.sorgu<T>(
+    `SELECT smartes_id AS "smartesId", is_emri_no AS "isEmriNo", stok_no AS "stokNo", ambar_kodu AS "ambarKodu", hareket_turu AS "hareketTuru",
+       miktar::float8 AS miktar, ${zamanMetni('zaman')} AS zaman
+     FROM smartes_ambar_hareketi ORDER BY zaman DESC NULLS LAST, smartes_id DESC LIMIT $1 OFFSET $2`,
+    [d.sinir, d.atla],
+  );
+}
+
+export function kaliteSay(db: Db): Promise<number> {
+  return db.tek<{ n: number }>('SELECT count(*)::int AS n FROM smartes_kalite_kontrol').then((r) => r?.n ?? 0);
+}
+
+export function kaliteSatirlari<T>(db: Db, d: Dilim): Promise<T[]> {
+  return db.sorgu<T>(
+    `SELECT smartes_id AS "smartesId", is_emri_no AS "isEmriNo", stok_no AS "stokNo", istasyon_kodu AS "istasyonKodu", makine_kodu AS "makineKodu",
+       olcum_adi AS "olcumAdi", olcum_degeri AS "olcumDegeri", sonuc, ${zamanMetni('zaman')} AS zaman
+     FROM smartes_kalite_kontrol ORDER BY zaman DESC NULLS LAST, smartes_id DESC LIMIT $1 OFFSET $2`,
+    [d.sinir, d.atla],
+  );
+}
+
+const HAM_TABLOLARI = {
+  uretim: 'smartes_is_emri_durumu', durus: 'smartes_durus', alarm: 'smartes_alarm',
+  fire: 'smartes_red', ambar: 'smartes_ambar_hareketi', kalite: 'smartes_kalite_kontrol',
+} as const;
+export type HamTuru = keyof typeof HAM_TABLOLARI;
+
+export function hamKayit(db: Db, tur: HamTuru, smartesId: number): Promise<Record<string, unknown> | null> {
+  return db.tek<{ ham: Record<string, unknown> }>(`SELECT ham FROM ${HAM_TABLOLARI[tur]} WHERE smartes_id = $1`, [smartesId]).then((r) => r?.ham ?? null);
+}
+
+export interface GelenIzi {
+  kaynak: string;
+  sonOkuma: string | null;
+}
+
+// Her okumanın son başarılı zamanı: akış izinde son deneme başarılıysa o, değilse en son tamamlanan pencerenin sonu; listede son başarılı okuma.
+export function gelenIzleri(db: Db): Promise<GelenIzi[]> {
+  return db.sorgu<GelenIzi>(
+    `SELECT kaynak, ${zamanMetni('CASE WHEN son_sonuc = \'tamam\' THEN son_deneme ELSE son_bitis END')} AS "sonOkuma" FROM smartes_okuma
+     UNION ALL
+     SELECT akis, ${zamanMetni('CASE WHEN son_sonuc = \'tamam\' THEN son_deneme ELSE son_bitis END')} FROM smartes_akis_izi WHERE akis <> 'tanim'
+     UNION ALL
+     SELECT 'liste:' || tur, ${zamanMetni('son_basarili')} FROM smartes_liste_okuma`,
+  );
+}
+
+export interface ListeSayisi {
+  tur: ListeTuru;
+  n: number;
+}
+
+export function listeSayilari(db: Db): Promise<ListeSayisi[]> {
+  return db.sorgu<ListeSayisi>('SELECT tur, count(*)::int AS n FROM smartes_liste_kaydi WHERE var GROUP BY tur');
+}

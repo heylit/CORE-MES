@@ -7,7 +7,8 @@ import { surumluGuncelle } from '#cekirdek/surum.ts';
 import type {
   AlarmlarCevabi, CanliMakineAyrintisiCevabi, MakineBulgulariCevabi, CanliMakinelerCevabi, DurumCevabi, DuruslarCevabi, EslemeCevabi, EslemelerCevabi,
   GidenCevabi, IsEmriDurumlariCevabi, SmartesBaglantiDurumu, GelenAdEsleGovdesi, GelenAdKaldirGovdesi, GelenAdlarCevabi, GelenAdOnerileriOnaylaGovdesi,
-  OnerileriOnaylaCevabi, OnerileriOnaylaGovdesi, SmartesHazirlikCevabi, SmartesKontrolCevabi,
+  OnerileriOnaylaCevabi, OnerileriOnaylaGovdesi, SmartesHazirlikCevabi, SmartesKontrolCevabi, AmbarHareketleriCevabi, FireHareketleriCevabi, GelenlerCevabi,
+  HamKayitCevabi, KaliteOlcumleriCevabi,
 } from '#paylasilan/sozlesme/smartes.ts';
 import type { IkinciMenuSayaclari } from '#paylasilan/sayfa-tanimi.ts';
 import { tesisGunBasi, tesisGunu } from '#paylasilan/tesis-zamani.ts';
@@ -27,7 +28,7 @@ import {
   birikimliSayac, cizelgeParcalari, nedensizDuruslar, sayimKarsilastir, terminAsimi, bugunDilimleri, ILERLEME_ARALIGI_MS, ILERLEME_METODU, ilerlemeOku,
   ilerlemeParametreleri, MAKINE_AYARI, MAKINE_BILGI_METODU, MAKINE_LISTESI_YENILEME_MS, MAKINE_OKUMA_ARALIGI_MS, MAKINE_TUR_TAVANI_MS,
   makineBilgiParametreleri, makineBilgisiOku, turSirasi, adAnahtari, adDurumu, kodOnerileri, LISTE_METOTLARI, LISTE_TURLERI, listeKayitlari, listeOkunmaliMi,
-  listeParametreleri, nedenOnerisi,
+  listeParametreleri, nedenOnerisi, gelenKalemleri, hamAlanlari,
 } from './kurallar.ts';
 import type {
   AkisAyari, AktifMakine, EslemeTuru, GidecekIsEmri, KaliteAmbarKaynagi, KodOnerisi, ListeTuru, MakineDurumu, OkumaKaynagi, TanimKaydi, TanimTuru,
@@ -855,6 +856,37 @@ export const alarmlar = (db: Db, q: Sayfa): Promise<AlarmlarCevabi> =>
   sayfaliListe(q, { say: () => s.alarmSay(db), satirlar: (d) => s.alarmSatirlari<Satir<AlarmlarCevabi>>(db, d) });
 export const giden = (db: Db, q: Sayfa): Promise<GidenCevabi> =>
   sayfaliListe(q, { say: () => s.gidenSay(db), satirlar: (d) => s.gidenListeSatirlari<Satir<GidenCevabi>>(db, d) });
+export const fireHareketleri = (db: Db, q: Sayfa): Promise<FireHareketleriCevabi> =>
+  sayfaliListe(q, { say: () => s.redSay(db), satirlar: (d) => s.redSatirlari<Satir<FireHareketleriCevabi>>(db, d) });
+export const ambarHareketleri = (db: Db, q: Sayfa): Promise<AmbarHareketleriCevabi> =>
+  sayfaliListe(q, { say: () => s.ambarSay(db), satirlar: (d) => s.ambarSatirlari<Satir<AmbarHareketleriCevabi>>(db, d) });
+export const kaliteOlcumleri = (db: Db, q: Sayfa): Promise<KaliteOlcumleriCevabi> =>
+  sayfaliListe(q, { say: () => s.kaliteSay(db), satirlar: (d) => s.kaliteSatirlari<Satir<KaliteOlcumleriCevabi>>(db, d) });
+
+export async function hamKayit(db: Db, tur: s.HamTuru, smartesId: number): Promise<HamKayitCevabi> {
+  const ham = await s.hamKayit(db, tur, smartesId);
+  if (ham === null) throw bulunamadi('Kayıt bulunamadı; sayfayı yenileyin.');
+  return { alanlar: hamAlanlari(ham) };
+}
+
+export async function gelenler(db: Db, istemci: SmartesIstemcisi | null): Promise<GelenlerCevabi> {
+  const baglantiAcik = baglantiDurumu(await sistemAyariOku(db, 'smartes.baglanti'), istemci) === 'acik';
+  const n = await s.sayilar(db);
+  const ka = await s.kaliteAmbarSayilari(db);
+  const liste = new Map((await s.listeSayilari(db)).map((l) => [l.tur, l.n]));
+  const l = (tur: ListeTuru): number => liste.get(tur) ?? 0;
+  return {
+    kalemler: gelenKalemleri({
+      baglantiAcik,
+      kaliteAmbarAcik: await sistemAyariOku(db, KALITE_AMBAR_AYARI),
+      izler: new Map((await s.gelenIzleri(db)).map((i) => [i.kaynak, i.sonOkuma])),
+      sayilar: new Map([
+        ['uretim', n.isEmriDurumu], ['durus', n.durus], ['alarm', n.alarm], ['fire', ka.red], ['ambar', ka.ambar], ['kalite', ka.kalite],
+        ['adlar', l('fire') + l('durus')], ['tanimlar', l('istasyon') + l('makine') + l('operasyon')],
+      ]),
+    }),
+  };
+}
 
 /* ---------------- Canlı makine panosu (SME-34) ---------------- */
 
