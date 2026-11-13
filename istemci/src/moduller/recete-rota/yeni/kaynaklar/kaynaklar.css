@@ -170,10 +170,10 @@
 .tc-rr2-ik [data-kip="kart"] .tc-tablo tr::before { order: 3; }
 .tc-rr2-ik [data-kip="kart"] .tc-tablo tr::after { order: 9; }
 .tc-rr2-ik [data-kip="kart"] .tc-tablo td, .tc-rr2-ik [data-kip="kart"] .tc-tablo td.tc-tablo-sag {
-  display: inline-flex; flex: 0 1 auto; min-height: 0; padding: 0; color: var(--muted); font-size: var(--yazi-s); text-align: left;
+  display: inline-flex; flex: 0 1 auto; gap: 0; min-height: 0; padding: 0; border: 0; color: var(--muted); font-size: var(--yazi-s); text-align: left; white-space: nowrap; overflow-wrap: normal;
 }
 .tc-rr2-ik [data-kip="kart"] .tc-tablo td::before { content: none; }
-.tc-rr2-ik [data-kip="kart"] .tc-tablo td:nth-child(1) { flex: 1 1 0; order: 1; color: var(--ink); font-size: var(--yazi-m); }
+.tc-rr2-ik [data-kip="kart"] .tc-tablo td:nth-child(1) { flex: 1 1 0; order: 1; color: var(--ink); font-size: var(--yazi-m); white-space: normal; }
 .tc-rr2-ik [data-kip="kart"] .tc-tablo td:nth-child(3) { flex: none; order: 2; min-height: var(--dokunma); color: var(--ink); }
 .tc-rr2-ik [data-kip="kart"] .tc-tablo td:nth-child(2) { order: 4; }
 .tc-rr2-ik [data-kip="kart"] .tc-tablo td:nth-child(4) { order: 5; }
@@ -182,8 +182,8 @@
 .tc-rr2-ik [data-kip="kart"] .tc-tablo td:nth-child(7) { order: 8; }
 .tc-rr2-ik [data-kip="kart"] .tc-tablo td:nth-child(5) { order: 10; }
 .tc-rr2-ik [data-kip="kart"] .tc-tablo td:nth-child(4)::before, .tc-rr2-ik [data-kip="kart"] .tc-tablo td:nth-child(8)::before,
-.tc-rr2-ik [data-kip="kart"] .tc-tablo td:nth-child(6)::before, .tc-rr2-ik [data-kip="kart"] .tc-tablo td:nth-child(7)::before {
+.tc-rr2-ik [data-kip="kart"] .tc-tablo td:nth-child(7)::before {
   content: "·"; margin-right: var(--b-2); color: var(--muted); font-size: inherit; font-weight: 400; letter-spacing: 0;
 }
-.tc-rr2-ik [data-kip="kart"] .tc-tablo td:nth-child(8)::after { content: "\00a0adımda"; }
+.tc-rr2-ik [data-kip="kart"] .tc-tablo td:nth-child(8)::after { content: "\00a0 adımda"; }
 .tc-rr2-ik [data-kip="kart"] .tc-tablo td:has(> .tc-rr2-bos) { display: none; }
