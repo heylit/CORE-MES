@@ -252,3 +252,11 @@ export function konumMalzemeleri(db: Db, s: KonumMalzemesiSuzgeci, sira: Siralam
 }
 // 2902: silinecek istasyonun konumu; hareketi ya da bakiyesi olan konumu yabancı anahtar korur (çağıran kayıt noktasında dener).
 export const istasyonKonumunuSil = (db: Db, istasyonId: number): Promise<unknown[]> => db.sorgu('DELETE FROM stok_konum WHERE istasyon_id = $1 RETURNING id', [istasyonId]);
+// 3202 B: göz başına malzeme toplamı (aktif konum, sıfırdan büyük bakiye); ambalaj malzemenin en eski ambalajlı bakiyesinden.
+export interface GozMalzemesiHam { gozId: number; konumId: number; malzemeId: number; miktar: string; ambalaj: string | null }
+export const gozMalzemeleri = (db: Db, gozIdler: number[]): Promise<GozMalzemesiHam[]> =>
+  db.sorgu(`SELECT k.atolye_goz_id AS "gozId", k.id AS "konumId", b.malzeme_id AS "malzemeId", sum(b.miktar)::text AS miktar,
+                   (array_agg(b.ambalaj_tur ORDER BY b.ilk_giris, b.id) FILTER (WHERE b.ambalaj_tur IS NOT NULL))[1] AS ambalaj
+              FROM stok_konum k JOIN stok_bakiye b ON b.konum_id = k.id
+             WHERE k.atolye_goz_id = ANY($1::int[]) AND k.aktif AND b.miktar > 0
+             GROUP BY k.atolye_goz_id, k.id, b.malzeme_id ORDER BY k.atolye_goz_id, sum(b.miktar) DESC, b.malzeme_id`, [gozIdler]);

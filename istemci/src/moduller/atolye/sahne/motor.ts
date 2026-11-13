@@ -310,7 +310,8 @@ function rafOlcusu(r: YerlesimCevabi['raflar'][number]): RafOlcusu {
 
 const yukImzasi = (liste: readonly RafYuku[]): string => liste.map((y) => {
   const m = y.model;
-  return `${y.bolme}.${y.kat}.${y.goz}.${y.bicim}.${y.doluluk.toFixed(2)}${m ? `.${m.id}.${m.birim}.${m.yukari}.${m.donus}` : ''}`;
+  const mm = y.merkez;
+  return `${y.bolme}.${y.kat}.${y.goz}.${y.bicim}.${y.doluluk.toFixed(2)}${m ? `.${m.id}.${m.birim}.${m.yukari}.${m.donus}` : ''}${mm ? `.m${mm.malzemeNo}.${mm.model.belgeId}.${mm.model.ozet}.${y.adet ?? 1}` : ''}`;
 }).sort().join('|');
 
 export class SahneMotoru {
@@ -1322,12 +1323,20 @@ export class SahneMotoru {
     birlestir(grup);
     for (const y of liste) {
       const model = y.model;
-      const bolge = model && y.bicim === 'model' ? modelBolgesi(olcu, y) : null;
-      if (!model || !bolge) continue;
-      this.hamModel(model).then((ham) => {
+      const merkez = y.merkez;
+      const bolge = (model || merkez) && y.bicim === 'model' ? modelBolgesi(olcu, y) : null;
+      if (!bolge) continue;
+      // 3202 B: depodaki malzemenin Çizim Merkezi modeli dosya türünün ayarıyla, adedi kadar (en çok 48) dizilir.
+      const kaynak = model
+        ? { ham: this.hamModel(model), ayar: { birim: model.birim, yukari: model.yukari, donus: sayi(model.donus) }, ad: model.ad, doluluk: y.doluluk, azami: undefined }
+        : merkez
+          ? { ham: this.merkezHam(merkez.malzemeNo, merkez.model), ayar: { ...varsayilanAyar(merkez.model.dosyaTuru), donus: 0 }, ad: merkez.model.ad, doluluk: 1, azami: Math.min(48, y.adet ?? 1) }
+          : null;
+      if (!kaynak) continue;
+      kaynak.ham.then((ham) => {
         this.kirli = true;
         if (!gecerli()) return;
-        const dizi = modelDizisi(ham.clone(true), { birim: model.birim, yukari: model.yukari, donus: sayi(model.donus) }, bolge, y.doluluk);
+        const dizi = modelDizisi(ham.clone(true), kaynak.ayar, bolge, kaynak.doluluk, kaynak.azami);
         grup.add(dizi.kok);
         ((grup.userData.diziler ??= []) as ModelDizisi[]).push(dizi);
         this.diziler.push({ d: dizi, kure: null });
@@ -1339,7 +1348,7 @@ export class SahneMotoru {
           this.odak.etiketImza = '';
           this.rafOdakYaz(this.odak.istek);
         }
-      }).catch(() => this.olaylar.modelYuklenemedi(model.ad, 'parca'));
+      }).catch(() => this.olaylar.modelYuklenemedi(kaynak.ad, 'parca'));
     }
     return grup;
   }
@@ -1405,9 +1414,14 @@ export class SahneMotoru {
 
     // Göz etiketleri yalnız bakılan bölmede: göz adresi ve stoktaki kalem sayısı (Depo cephesiyle aynı yazı).
     const stok = istek.etiketler;
+    // 3202 B: yükte miktar yazısı varsa (stok okuma yetkisiyle gelir) göz onu yazar, yoksa kalem sayısını.
+    const miktarlar = new Map((this.yukler.get(r.id) ?? []).flatMap((y) => (y.etiket ? [[hucreAnahtari(y.bolme, y.kat, y.goz), y.etiket] as const] : [])));
     const bolmeEtiketleri: string[] = [];
     for (let k = 1; k <= olcu.kat; k++) {
-      for (let g = 1; g <= olcu.goz; g++) bolmeEtiketleri.push(stok === null ? '?' : String(stok.get(hucreAnahtari(istek.bolme, k, g)) ?? 0));
+      for (let g = 1; g <= olcu.goz; g++) {
+        const h = hucreAnahtari(istek.bolme, k, g);
+        bolmeEtiketleri.push(stok === null ? '?' : `${stok.get(h) ?? 0}:${miktarlar.get(h) ?? ''}`);
+      }
     }
     const etiketImza = `${imza}|${istek.bolme}|${bolmeEtiketleri.join(',')}`;
     if (o.etiketImza !== etiketImza) {
@@ -1428,7 +1442,8 @@ export class SahneMotoru {
           ad.textContent = `K${k}·G${g}`;
           const ek = document.createElement('span');
           const sigmiyor = o.sigmayan.has(hucreAnahtari(istek.bolme, k, g));
-          ek.textContent = `${stok === null ? '—' : kalem > 0 ? `${kalem} kalem` : 'boş'}${sigmiyor ? ' · sığmıyor' : ''}`;
+          const miktar = miktarlar.get(hucreAnahtari(istek.bolme, k, g));
+          ek.textContent = `${stok === null ? '—' : kalem > 0 ? miktar ?? `${kalem} kalem` : 'boş'}${sigmiyor ? ' · sığmıyor' : ''}`;
           if (sigmiyor) {
             el.dataset.sigmiyor = 'true';
             el.title = 'Parça modeli bu göze hiçbir duruşta sığmıyor; küçültülerek gösteriliyor.';
@@ -1575,20 +1590,23 @@ export class SahneMotoru {
       const m = p.model;
       return { imza: ['model', m.id, m.birim, m.yukari, m.donus].join('|'), sahne: () => this.hamModel(m), yerlesim: { birim: m.birim, yukari: m.yukari, donus: sayi(m.donus) } };
     }
-    const anahtar = `malzeme:${p.model.belgeId}:${p.model.ozet}`;
     return {
-      imza: anahtar,
-      sahne: () => {
-        let ham = this.parcaSahneleri.get(anahtar);
-        if (!ham) {
-          ham = this.olaylar.malzemeModelGetir(p.malzemeNo, p.model).then((glb) => modelSahnesi(glb));
-          this.parcaSahneleri.set(anahtar, ham);
-          ham.catch(() => this.parcaSahneleri.delete(anahtar));
-        }
-        return ham;
-      },
+      imza: `malzeme:${p.model.belgeId}:${p.model.ozet}`,
+      sahne: () => this.merkezHam(p.malzemeNo, p.model),
       yerlesim: { ...varsayilanAyar(p.model.dosyaTuru), donus: 0 },
     };
+  }
+
+  // Malzemenin Çizim Merkezi modeli bir kez okunur (makinedeki parça ve depodaki malzeme aynı sahneyi kopyalar).
+  private merkezHam(malzemeNo: number, model: MerkezModeli): Promise<Object3D> {
+    const anahtar = `malzeme:${model.belgeId}:${model.ozet}`;
+    let ham = this.parcaSahneleri.get(anahtar);
+    if (!ham) {
+      ham = this.olaylar.malzemeModelGetir(malzemeNo, model).then((glb) => modelSahnesi(glb));
+      this.parcaSahneleri.set(anahtar, ham);
+      ham.catch(() => this.parcaSahneleri.delete(anahtar));
+    }
+    return ham;
   }
 
   // Yalnız değişen istasyonun önizlemesi kurulur; model ya da ayarı değişince imza değişir.

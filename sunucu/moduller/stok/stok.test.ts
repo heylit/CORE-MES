@@ -14,7 +14,7 @@ import {
   araCevabi, yerlesimCevabi, fisAyrintiCevabi, fislerCevabi, kodCozCevabi, toplamaAyrintiCevabi, panelCevabi, aylikStokDegeriCevabi, stokDegeriCevabi, partiIziCevabi, rafMatrisiCevabi,
   malzemeIstegiCevabi, malzemeIstekleriCevabi, stokOzetiCevabi, haritaOzetiCevabi, gozStoklariCevabi, lotEtiketleriCevabi, zeminCevabi,
 } from '#paylasilan/sozlesme/stok.ts';
-import type { ZeminCevabi, AylikStokDegeriCevabi, HareketCevabi, MalzemeAyrintiCevabi, KodCozCevabi, EmirTamamlamaCevabi, GozStoklariCevabi, HaritaOzetiCevabi, KonumAyrintiCevabi, KonumDuzenleCevabi, RafDuzenleCevabi, MalKabulAyrintiCevabi, MalKabulCevabi, MalzemeIstegiAcGirdisi, MalzemeIstegiCevabi, MalzemeIstekleriCevabi, Raf, StokDegeriCevabi, SiparisIrsaliyeleriCevabi, SonPartilerCevabi, StokOzetiCevabi } from '#paylasilan/sozlesme/stok.ts';
+import type { ZeminCevabi, AylikStokDegeriCevabi, HareketCevabi, MalzemeAyrintiCevabi, KodCozCevabi, EmirTamamlamaCevabi, GozStoklariCevabi, GozOzetleriCevabi, HaritaOzetiCevabi, KonumAyrintiCevabi, KonumDuzenleCevabi, RafDuzenleCevabi, MalKabulAyrintiCevabi, MalKabulCevabi, MalzemeIstegiAcGirdisi, MalzemeIstegiCevabi, MalzemeIstekleriCevabi, Raf, StokDegeriCevabi, SiparisIrsaliyeleriCevabi, SonPartilerCevabi, StokOzetiCevabi } from '#paylasilan/sozlesme/stok.ts';
 import type { Kullanici } from '#paylasilan/kullanici.ts';
 import { komutIstegi } from '../../../istemci/src/moduller/recete-rota/kaynak-komutlari.ts';
 import { STOK_KOMUTLARI } from '../../../istemci/src/moduller/recete-rota/stok-komutlari.ts';
@@ -2529,6 +2529,14 @@ describe('stok (gerçek PostgreSQL)', () => {
     gozStoklariCevabi.parse(gs.govde);
     assert.deepEqual(gs.govde.gozler.map((g) => [g.gozId, g.konumId, g.kalemSayisi, typeof g.ilkMalzemeAd]), [[gozIdleri[0], ilkGoz!.id, 1, 'string']]);
     assert.equal((await depo('GET', '/stok/goz-stoklari?gozIdler=1,x')).durum, 400);
+    // 3202 B: göz özeti malzeme başına toplam ve birimi verir; stok okuma yetkisi ister (Risk K1).
+    const go = await depo<GozOzetleriCevabi>('GET', `/stok/goz-ozetleri?gozIdler=${gozIdleri.join(',')}`);
+    assert.equal(go.durum, 200, JSON.stringify(go.govde));
+    assert.deepEqual(go.govde.gozler.map((g) => [g.gozId, g.konumId, g.malzemeler.map((x) => [x.malzemeId, Number(x.miktar), typeof x.ad, x.ambalaj])]),
+      [[gozIdleri[0], ilkGoz!.id, [[m, 2, 'string', null]]]]);
+    assert.equal((await depo('GET', '/stok/goz-ozetleri?gozIdler=1,x')).durum, 400);
+    assert.equal((await istek('operator', 'GET', `/stok/goz-ozetleri?gozIdler=${gozIdleri[0]}`)).durum, 403);
+    assert.equal((await istek(null, 'GET', `/stok/goz-ozetleri?gozIdler=${gozIdleri[0]}`)).durum, 401);
 
     // Stoklu bölüm depodan çıkmaz; stok taşınınca çıkar, konumları kapanır, bağsız konum listesine düşmez.
     assert.equal((await mudur('POST', `/stok/harita-bolumleri/${salon!.id}/depo`, { depo: false })).durum, 409);
