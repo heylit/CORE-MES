@@ -615,6 +615,8 @@ const omurTutarli = (g: { tur: string; omur: number | null; omurBirimi: string |
 const OMUR_TUTARSIZ = { message: 'Ömür yalnız özel takımda ve birimiyle (dakika ya da adet) girilir.', path: ['omur'] };
 export const aparatKapasitesiGovdesi = z.object({ aparatKartiId: intKimlik, istasyonId: intKimlik.nullable(), adet: aparatAdedi, ...ikincilKaynakAlanlari })
   .refine(omurTutarli, OMUR_TUTARSIZ);
+// Güncelleme tam gövde ister (yerine koyar): gönderilmeyen tür, kısıt, ömür varsayılana döner ve kesinti listesi boşalır. Çağıran okuduğu
+// kaydın bütün alanlarını geri gönderir.
 export const aparatKapasitesiGuncellemeGovdesi = z.object({ ...beklenenSurum, istasyonId: intKimlik.nullable(), adet: aparatAdedi, ...ikincilKaynakAlanlari })
   .refine(omurTutarli, OMUR_TUTARSIZ);
 export const aparatKapasitesiSilmeGovdesi = z.object({ ...beklenenSurum });

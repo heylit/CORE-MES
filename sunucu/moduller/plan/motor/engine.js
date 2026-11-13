@@ -441,8 +441,9 @@ function tMach(o,c,cx,ctx,b,fast){
     /* 2509 a: pay, işleme süresini uzatan pay oranıdır (acil iş payı ve arıza payı); canlı plan saati uzatılmış süredir, sapma ve öğrenme
        ölçümü işleme süresini (run) (1-pay) ile çarparak uzatılmamış süreye döner */
     const res={id:o.id,job:o.job,m:c.m,S:s,Su,C,lot1,su,run,cost,why,famHit,downHit,pay:c.pay||0};
-    /* Çizelgedeki bekleme taraması ve "Oynat": iş ikincil kaynak yüzünden kaydıysa ilk aday başlangıç (kaymadan önceki yer). */
-    if(ikBas!==null&&why&&why.t==='ikincil'&&s>ikBas+1e-9)res.ikBas=ikBas;
+    /* Çizelgedeki bekleme taraması ve "Oynat": iş ikincil kaynak yüzünden kaydıysa ilk aday başlangıç (kaymadan önceki yer).
+       Bir dakikadan kısa kayma dilim yuvarlamasıdır, bekleme sayılmaz. */
+    if(ikBas!==null&&why&&why.t==='ikincil'&&s-ikBas>=1/60-1e-9)res.ikBas=ikBas;
     if(tki)res.takim=tki.tk.map(t=>({id:t.id,dk:t.dk,n:t.n,kalan:t.kalan,ihtiyac:t.ihtiyac,sonra:t.sonra,bilinmiyor:t.bilinmiyor,
       at:t.n>0?adv(M.rw,Su,run*Math.min(1,Math.max(0,t.kalan/Math.max(t.ihtiyac,1e-9)))):null}));
     return res;

@@ -237,7 +237,7 @@ export function zamanCizelgesi(c: PlanlamaCalismasi, p: OkunanPlan, cx: Derleme,
       degisim: r.C > r.S ? (r.takim ?? []).flatMap((t) => (t.n > 0 && t.at != null ? [{
         a: Math.max(0, Math.min(1, (t.at - r.S) / (r.C - r.S))), w: Math.min(1, t.dk / 60 / (r.C - r.S)), baslik: `Takım değişimi ${saatYaz(D, t.at)}, ${String(t.dk)} dk`,
       }] : [])) : [],
-      bek: r.ikBas != null && r.ikBas < r.S ? { x: r.ikBas, w: r.S - r.ikBas, baslik: `İkincil kaynak bekledi: ${saatYaz(D, r.ikBas)} → ${saatYaz(D, r.S)}` } : null,
+      bek: r.ikBas != null && r.S - r.ikBas >= BEKLEME_ESIGI ? { x: r.ikBas, w: r.S - r.ikBas, baslik: `İkincil kaynak bekledi: ${saatYaz(D, r.ikBas)} → ${saatYaz(D, r.S)}` } : null,
     };
   });
   const satir = (m: string, ad: string, alt: boolean): ZamanSatiri => {
@@ -347,6 +347,9 @@ export function ikincilSatirlari(c: PlanlamaCalismasi, p: OkunanPlan, cx: Derlem
   });
 }
 
+// Bir dakikadan kısa kayma dilim yuvarlamasıdır: bekleme taraması çizilmez, ayrıntıda bekleme yazılmaz (motor da yazmaz; eski kayıt için).
+const BEKLEME_ESIGI = 1 / 60;
+
 // İşin ayrıntısındaki ikincil kaynak bölümü: ne istediği, neden beklediği (kaynak, doluluk, kimde, ne zamana kadar) ve takım ömrü.
 export interface IkincilAyrintisi { ister: string; neden: string | null; doluluk: string | null; kimde: string | null; bekleme: string | null; takim: string[] }
 export function ikincilAyrintisi(c: PlanlamaCalismasi, p: OkunanPlan, cx: Derleme, id: string): IkincilAyrintisi | null {
@@ -366,19 +369,23 @@ export function ikincilAyrintisi(c: PlanlamaCalismasi, p: OkunanPlan, cx: Derlem
   });
   const w = r.why;
   if (w?.t !== 'ikincil') return { ister, neden: null, doluluk: null, kimde: null, bekleme: null, takim };
-  const bd = r.ikBas != null && r.ikBas < r.S ? Math.round((r.S - r.ikBas) * 60) : null;
+  const bd = r.ikBas != null && r.S - r.ikBas >= BEKLEME_ESIGI ? Math.round((r.S - r.ikBas) * 60) : null;
   const bekleme = bd === null || r.ikBas == null ? null
     : `${saatYaz(D, r.ikBas)} → ${saatYaz(D, r.S)} (${bd >= 60 ? `${String(Math.floor(bd / 60))} sa${bd % 60 ? ` ${String(bd % 60)} dk` : ''}` : `${String(bd)} dk`})`;
   const k = K.find((z) => z.id === w.r);
   if (!k) return { ister, neden: 'İkincil kaynak bekledi.', doluluk: null, kimde: null, bekleme, takim };
-  const t = r.S - 1e-3;
-  const once = (kullanimlar(c, p, cx, [k]).get(k.id) ?? []).filter((x) => x.r.id !== id && x.a <= t && x.b > t);
-  const kesinti = k.kesintiler.find((x) => x.bas <= t && x.bit > t);
+  // Tutan iş bekleme aralığı boyunca aranır (ilk aday başlangıçtan başlangıca): iş dilim sınırında başladığı için tutan, başlangıçtan
+  // birkaç dakika önce bitmiş olabilir. Aralık bilinmiyorsa (eski kayıt) başlangıçtan önceki bir dilim.
+  const t0 = bd !== null && r.ikBas != null ? r.ikBas : r.S - 0.25;
+  const once = (kullanimlar(c, p, cx, [k]).get(k.id) ?? []).filter((x) => x.r.id !== id && x.a < r.S - 1e-6 && x.b > t0 + 1e-6);
+  const kesinti = k.kesintiler.find((x) => x.bas < r.S - 1e-6 && x.bit > t0 + 1e-6);
   const n = once.reduce((a, x) => a + x.n, 0);
   return {
     ister, takim, bekleme,
     neden: `${kesinti ? `Kaynak ${KESINTIDE[kesinti.neden] ?? 'kesintide'}` : 'İkincil kaynak bekledi'}: ${k.kod}${k.ad ? ` ${k.ad}` : ''}`,
-    doluluk: `${String(k.adet)} adetten ${String(n)} tanesi kullanımda${kesinti ? `, ${String(kesinti.adet)} tanesi ${kesintiAdi(kesinti.neden).toLocaleLowerCase('tr-TR')}` : ''}`,
+    // Tutan da kesinti de bulunamadıysa (eski kayıt) "0 tanesi kullanımda" yazılmaz: nedenle çelişir.
+    doluluk: n === 0 && !kesinti ? null
+      : `${String(k.adet)} adetten ${String(Math.min(n, k.adet))} tanesi kullanımda${kesinti ? `, ${String(kesinti.adet)} tanesi ${kesintiAdi(kesinti.neden).toLocaleLowerCase('tr-TR')}` : ''}`,
     kimde: once.length ? once.map((x) => `${x.r.id} (${tezgahKodu(x.r.m, kodlar)}), bitiş ${saatYaz(D, x.b)}`).join('; ')
       : kesinti ? `${kesintiAdi(kesinti.neden)} ${saatYaz(D, kesinti.bas)} → ${saatYaz(D, kesinti.bit)}` : null,
   };

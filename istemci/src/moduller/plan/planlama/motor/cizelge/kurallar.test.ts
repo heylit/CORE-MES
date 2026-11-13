@@ -257,6 +257,25 @@ describe('ikincil kaynak satırları (3199)', () => {
     expect(ikincilAyrintisi(c, p, cx, Object.keys(p.ops).find((id) => id !== a.id && id !== b.id)!)).toBeNull();
   });
 
+  it('tutan iş başlangıçtan önce bitmişse de bulunur (dilim yuvarlaması); bir dakikadan kısa kayma bekleme sayılmaz', () => {
+    const { c, p, cx, a, b } = ikincilKur();
+    const D = c.D as unknown as { ikincilKaynaklar: { kesintiler: unknown[] }[] };
+    D.ikincilKaynaklar[0]!.kesintiler = [];
+    // Bekleyen iş, tutanın bitişinden altı dakika sonra (dilim başında) başlar; beklemeye tutan çalışırken girmiştir.
+    const S = a.C + 0.1; const sure = b.C - b.S;
+    const kur2 = (ikBas: number | undefined) => ({ ...p, ops: { ...p.ops, [b.id]: { ...b, S, Su: S, C: S + sure, why: { t: 'ikincil', r: '1' }, ...(ikBas === undefined ? {} : { ikBas }) } } });
+    const uzun = ikincilAyrintisi(c, kur2(a.S + 0.05), cx, b.id)!;
+    expect(uzun.doluluk).toBe('1 adetten 1 tanesi kullanımda');
+    expect(uzun.kimde).toContain(a.id);
+    expect(uzun.bekleme).toMatch(/ → /);
+    const kisa = kur2(S - 16 / 3600);
+    expect(ikincilAyrintisi(c, kisa, cx, b.id)!.bekleme).toBeNull();
+    expect(ikincilAyrintisi(c, kisa, cx, b.id)!.kimde).toContain(a.id);
+    const is = zamanCizelgesi(c, kisa, cx, 'hafta', null).gruplar.flatMap((g) => g.satirlar).flatMap((s) => s.isler).find((i) => i.id === b.id)!;
+    expect(is.bek).toBeNull();
+    expect(ikincilAyrintisi(c, kur2(undefined), cx, b.id)!.kimde).toContain(a.id);
+  });
+
   it('kaynak yoksa satır çizilmez', () => {
     const { c, p, cx } = kur();
     expect(zamanCizelgesi(c, p, cx, 'hafta', null).ikincil).toEqual([]);

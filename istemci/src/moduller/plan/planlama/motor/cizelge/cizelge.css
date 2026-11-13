@@ -569,3 +569,7 @@ button.tc-pym-m-ad:hover b { text-decoration: underline; }
 .tc-pym-gantt[data-oynat="kay"] .tc-pym-g-bek { transition: opacity calc(var(--hareket-panel) * 6); }
 .tc-pym-gantt[data-oynat="once"] .tc-pym-g-is[data-kay] { left: calc(var(--x0) * var(--pym-sa)); }
 .tc-pym-gantt[data-oynat="once"] .tc-pym-g-bek { opacity: 0; }
+/* İkincil kaynak satırının etiketi: kod kırpılır ama bölünmez; adet ve "İzle" her genişlikte görünür (ad altta kırpılır). */
+.tc-pym-g-etiket > .tc-pym-g-ik-ust { display: flex; align-items: baseline; gap: var(--b-1); overflow: visible; color: inherit; font-size: inherit; }
+.tc-pym-g-ik-ust > b:first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tc-pym-g-ik-ust > .tc-pym-g-ik-adet { flex: none; margin-left: auto; font-family: inherit; font-size: var(--yazi-xs); white-space: nowrap; }

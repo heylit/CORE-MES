@@ -73,7 +73,10 @@ export function ZamanCizelgesi(o: Ozellikler) {
   // 3199: ikincil kaynak satırı; kullanım çubuğuna basmak o işi seçer.
   const ikSatir = (s: IkincilSatiri) => (
     <div key={`ik${s.id}`} className="tc-pym-g-satir tc-pym-g-ik" ref={degisken({ '--n': s.serit })}>
-      <div className="tc-pym-g-etiket"><b>{s.kod}</b><span title={s.ad}>{s.ad} · <b>{s.adet}</b>{s.izle ? ' · İzle' : ''}</span></div>
+      <div className="tc-pym-g-etiket">
+        <span className="tc-pym-g-ik-ust"><b title={s.kod}>{s.kod}</b><b className="tc-pym-g-ik-adet" title={`${String(s.adet)} adet${s.izle ? ', İzle' : ''}`}>{s.adet}{s.izle ? ' · İzle' : ''}</b></span>
+        <span title={s.ad}>{s.ad}</span>
+      </div>
       <div className="tc-pym-g-serit">
         {v.cizgiler.map((x) => <i key={`c${x}`} className="tc-pym-g-gunc" ref={degisken({ '--x': x })} />)}
         {s.profil.map((x) => <i key={`p${x.x}`} className="tc-pym-g-ik-profil" data-asim={x.asim ? '' : undefined} ref={degisken({ '--x': x.x, '--w': x.w, '--h': `${(x.oran * 100).toFixed(1)}%` })} />)}

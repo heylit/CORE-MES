@@ -157,3 +157,33 @@
 @media (max-width: 767px) {
   .tc-rr2-malzeme-tablo td:nth-child(2) { min-inline-size: calc(var(--b-6) * 4); }
 }
+
+/* İkincil kaynaklar (3199): bilgi şeridi ve dar ekranda sıkı kart (kod ve ad, yanında adet; altında "Aparat · Ortak · 6 adımda · Sert · ömür";
+   en altta takvim). Ortak tablonun kart kipindeki başlıklı satırlar yerine sütunlar tek not satırına dizilir. */
+.tc-rr2-bilgi {
+  display: flex; align-items: flex-start; gap: var(--b-2); margin: 0; padding: var(--b-2) var(--b-3); border-left: var(--cizgi) solid var(--done); border-radius: var(--yari-1);
+  background: color-mix(in srgb, var(--done) 10%, transparent); font-size: var(--yazi-s);
+}
+.tc-rr2-bilgi > svg { flex: none; }
+.tc-rr2-ik [data-kip="kart"] .tc-tablo tr { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-1) var(--b-2); }
+.tc-rr2-ik [data-kip="kart"] .tc-tablo tr::before, .tc-rr2-ik [data-kip="kart"] .tc-tablo tr::after { flex: 0 0 100%; height: 0; content: ""; }
+.tc-rr2-ik [data-kip="kart"] .tc-tablo tr::before { order: 3; }
+.tc-rr2-ik [data-kip="kart"] .tc-tablo tr::after { order: 9; }
+.tc-rr2-ik [data-kip="kart"] .tc-tablo td, .tc-rr2-ik [data-kip="kart"] .tc-tablo td.tc-tablo-sag {
+  display: inline-flex; flex: 0 1 auto; min-height: 0; padding: 0; color: var(--muted); font-size: var(--yazi-s); text-align: left;
+}
+.tc-rr2-ik [data-kip="kart"] .tc-tablo td::before { content: none; }
+.tc-rr2-ik [data-kip="kart"] .tc-tablo td:nth-child(1) { flex: 1 1 0; order: 1; color: var(--ink); font-size: var(--yazi-m); }
+.tc-rr2-ik [data-kip="kart"] .tc-tablo td:nth-child(3) { flex: none; order: 2; min-height: var(--dokunma); color: var(--ink); }
+.tc-rr2-ik [data-kip="kart"] .tc-tablo td:nth-child(2) { order: 4; }
+.tc-rr2-ik [data-kip="kart"] .tc-tablo td:nth-child(4) { order: 5; }
+.tc-rr2-ik [data-kip="kart"] .tc-tablo td:nth-child(8) { order: 6; }
+.tc-rr2-ik [data-kip="kart"] .tc-tablo td:nth-child(6) { order: 7; }
+.tc-rr2-ik [data-kip="kart"] .tc-tablo td:nth-child(7) { order: 8; }
+.tc-rr2-ik [data-kip="kart"] .tc-tablo td:nth-child(5) { order: 10; }
+.tc-rr2-ik [data-kip="kart"] .tc-tablo td:nth-child(4)::before, .tc-rr2-ik [data-kip="kart"] .tc-tablo td:nth-child(8)::before,
+.tc-rr2-ik [data-kip="kart"] .tc-tablo td:nth-child(6)::before, .tc-rr2-ik [data-kip="kart"] .tc-tablo td:nth-child(7)::before {
+  content: "·"; margin-right: var(--b-2); color: var(--muted); font-size: inherit; font-weight: 400; letter-spacing: 0;
+}
+.tc-rr2-ik [data-kip="kart"] .tc-tablo td:nth-child(8)::after { content: "\00a0adımda"; }
+.tc-rr2-ik [data-kip="kart"] .tc-tablo td:has(> .tc-rr2-bos) { display: none; }

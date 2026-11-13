@@ -1,10 +1,12 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import vm from 'node:vm';
 import { describe, test } from 'node:test';
 import { MOTOR_AYARI_VARSAYILAN } from '#paylasilan/sozlesme/plan.ts';
 import { ikincilKaynakKur, type MotorIkincilKaynagi, type MotorKaynakIstegi } from './girdi/ikincil-kurallar.ts';
 import { calismayaMotorAyari } from './motor-ayari-kurallar.ts';
 import { planGirdisi } from './plan-girdisi.ts';
-import { motorYukle } from './plan-motoru.ts';
+import { MOTOR_DOSYALARI, motorYukle } from './plan-motoru.ts';
 
 // 3199 (A + D): aparat ve özel takım planın ikincil kaynağıdır. Veriler uydurmadır (ORN-). Gün 2026-10-19 Pazartesi, vardiya 08:00-16:00,
 // iki istasyonda birer tezgâh; iki emir aynı adımı (OP 10, 60 dk) ister, aday iki tezgâh. Kaynaksız iki iş 08:00'de yan yana başlar.
@@ -77,6 +79,30 @@ describe('plan 3199: ikincil kaynak kısıtı', () => {
     // Çizelgedeki bekleme taraması: kaymadan önceki ilk aday başlangıç; beklemeyen işte alan yok.
     assert.ok(b.ikBas !== undefined && yakin(b.ikBas, 8) && b.ikBas < b.S, JSON.stringify(b));
     assert.equal(a.ikBas, undefined);
+  });
+
+  test('kayıtlı plan (çizelgenin okuduğu) bekleme başlangıcını ve takımı taşır', () => {
+    const g = planGirdisi({ calisma: calismayaMotorAyari(calisma(), MOTOR_AYARI_VARSAYILAN), kayit: kayit(0), kaynak: kaynakOkumasi({ kaynaklar: [kaynak()], istekler: IKI_ISTEK() }), bugun: '2026-10-19' });
+    assert.ok(g);
+    const b = vm.createContext({ GIRDI_SAAT_DILIMI: 'Europe/Istanbul' }); b['self'] = b;
+    const kod = [...MOTOR_DOSYALARI, 'degerlendir'].map((d) => readFileSync(new URL(`./motor/${d}.js`, import.meta.url), 'utf8')).join('\n');
+    const m = vm.runInContext(`${kod}\n;({ schedule, stHazirla, planKaydi });`, b) as {
+      schedule: (st: unknown, kip: string, taban: null) => unknown; stHazirla: (st: unknown) => { pref: Record<string, string> };
+      planKaydi: (p: unknown, st: unknown, ref: null) => { ops: Record<string, Islem> };
+    };
+    const st = m.stHazirla(g.st);
+    st.pref['1.10'] = '100'; st.pref['2.10'] = '200';
+    const ops = Object.values(m.planKaydi(m.schedule(st, 'yeni', null), st, null).ops).sort((x, y) => x.S - y.S);
+    assert.ok(ops[1]!.ikBas !== undefined && yakin(ops[1]!.ikBas, 8), JSON.stringify(ops));
+    assert.equal(ops[0]!.ikBas, undefined);
+  });
+
+  test('istasyonlu satır ortak satırdan önce gelir: istasyonun tezgâhı kendi satırının adedini kullanır', () => {
+    // Tezgâh 100 (istasyon 10) kendi istasyon satırını, tezgâh 200 ortak satırı sayar: iki iş ayrı sayaçtadır, birbirini bekletmez.
+    const ikiSatir = [kaynak({ id: '1', istasyon: null, adet: 1 }), kaynak({ id: '2', istasyon: '10', adet: 1 })];
+    const { ops } = planla({ kaynaklar: ikiSatir, istekler: IKI_ISTEK() });
+    assert.ok(ops.every((o) => yakin(o.S, 8)), JSON.stringify(ops.map((o) => [o.m, o.S, o.why])));
+    // Yalnız ortak satır olsaydı ikinci iş beklerdi (yukarıdaki sert testin tabanı).
   });
 
   test('iki adetli aparat sınırlamaz; adım iki adet isterse yine sıraya girer', () => {

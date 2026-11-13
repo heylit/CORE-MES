@@ -92,14 +92,14 @@ export function IkincilKaynaklar({ stations, items }: Ozellikler) {
         </span>
       ) : sayi(k.adet)),
     },
-    { anahtar: 'nerede', baslik: 'Nerede', hucre: nerede },
+    { anahtar: 'nerede', baslik: 'Nerede', kirilmaz: true, hucre: nerede },
     {
       anahtar: 'takvim', baslik: 'Takvim',
       hucre: (k) => { const t = takvimDurumu(k.kesintiler, simdi); return <Rozet ton={t.acik ? 'tamam' : 'uyari'}>{t.metin}</Rozet>; },
       csv: (k) => takvimDurumu(k.kesintiler, simdi).metin,
     },
     { anahtar: 'kisit', baslik: 'Kısıt', hucre: (k) => <Rozet ton={k.kisit === 'sert' ? 'bilgi' : 'uyari'}>{KISIT_ADI[k.kisit]}</Rozet>, csv: (k) => KISIT_ADI[k.kisit] },
-    { anahtar: 'omur', baslik: 'Ömür', hucre: (k) => omurMetni(k, omurler.isSuccess ? (omurler.data.takimlar.find((x) => x.kapasiteId === k.id)?.kalan ?? null) : undefined) ?? YOK },
+    { anahtar: 'omur', baslik: 'Ömür', hucre: (k) => omurMetni(k, omurler.isSuccess ? (omurler.data.takimlar.find((x) => x.kapasiteId === k.id)?.kalan ?? null) : undefined) ?? <span className="tc-rr2-bos">{YOK}</span> },
     { anahtar: 'adim', baslik: 'Kullanan adım', hizala: 'sag', hucre: (k) => sayi(adim(k)) },
   ];
   const kesintiler = kaynaklar.flatMap((k) => k.kesintiler.map((x) => ({ ...x, kaynak: k })))
@@ -113,13 +113,15 @@ export function IkincilKaynaklar({ stations, items }: Ozellikler) {
           <Rozet ton="pasif">tezgâhla birlikte boş olmalı</Rozet>
           {yazar && <Dugme tur="ikincil" simge="plus" onClick={() => { formYaz({ kayit: null }); }}>Kaynak ekle</Dugme>}
         </h3>
-        <Tablo<Kaynak>
+<div className="tc-rr2-ik">
+                <Tablo<Kaynak>
           etiket="İkincil kaynaklar" sutunlar={sutunlar} satirlar={kaynaklar} satirAnahtari={(k) => k.id}
           {...(yazar ? { satirSec: (k: Kaynak) => { formYaz({ kayit: k }); } } : {})}
           bosMesaj="Henüz ikincil kaynak yok. Aparat ya da özel takım ekleyin; rota adımı onu Ekipman bölümünde ister."
         />
+        </div>
         <p className="tc-rr2-not">{IKINCIL_ACIKLAMA}</p>
-        {kaynaklar.some((k) => k.tur === 'ozel_takim') && <p className="tc-rr2-uyari" role="note"><Simge ad="help" boyut="k" /> {OMUR_ACIKLAMASI}</p>}
+        {kaynaklar.some((k) => k.tur === 'ozel_takim') && <p className="tc-rr2-bilgi" role="note"><Simge ad="help" boyut="k" /><span>{OMUR_ACIKLAMASI}</span></p>}
       </section>
       <section className="tc-rr2-grup" aria-label="Kesinti takvimi">
         <h3 className="tc-rr2-grup-baslik"><span>Kesinti takvimi ({kesintiler.length})</span></h3>
