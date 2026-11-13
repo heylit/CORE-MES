@@ -213,8 +213,10 @@
   display: inline-flex; align-items: center; justify-content: center; width: var(--dokunma); height: var(--dokunma); border: 0; border-radius: var(--yari-tam); background: transparent; color: var(--muted); cursor: pointer;
 }
 .tc-pyq-suz button:hover { color: var(--ink); }
-.tc-pyq-lejk summary { display: inline-block; color: var(--muted); font-size: var(--yazi-xs); cursor: pointer; }
-.tc-pyq-lejk[open] summary { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+/* Renk açıklaması özet satırında kapalı durur; açılınca satırın altında tam genişlikte. */
+.tc-pyq-lejk { display: contents; }
+.tc-pyq-lejk summary { display: inline-flex; align-items: center; min-height: var(--dokunma); color: var(--muted); font-size: var(--yazi-xs); cursor: pointer; }
+.tc-pyq-lejk > .tc-pyq-lej { flex: 1 0 100%; order: 9; }
 .tc-pyq-lej { display: flex; flex-wrap: wrap; gap: var(--b-1) var(--b-3); color: var(--muted); font-size: var(--yazi-xs); }
 .tc-pyq-lej span { display: inline-flex; align-items: center; gap: var(--b-1); }
 .tc-pyq-lej span::before { content: ""; width: var(--b-3); height: var(--b-3); border-radius: var(--kayma); background: var(--renk, transparent); }
@@ -287,6 +289,19 @@
 .tc-pyq-mat td[data-son] b, .tc-pyq-mat td[data-son] small { display: block; }
 .tc-pyq-mat td[data-son][data-d="gec"] b { color: var(--d-gec); }
 .tc-pyq-mat td[data-son][data-d="risk"] b { color: var(--d-risk); }
+
+/* Fareyle (ince işaretçi) çalışan ekranda matris sıkıdır: yük şeridi ve emirler ilk ekrana sığsın (ön izlemedeki yoğunluk).
+   Dokunmatik ekran dokunma ölçüsünde kalır. */
+@media (pointer: fine) {
+  .tc-pyq-mat-kap { --yuk-boy: var(--b-4); gap: var(--b-1); }
+  .tc-pyq-mat thead tr:first-child th { height: var(--b-5); }
+  .tc-pyq-mat th button, .tc-pyq-mat[data-tur="E"] td button { min-height: var(--dokunma-yogun); padding: var(--pay-ince) var(--b-2); }
+  .tc-pyq-cipler { min-height: var(--dokunma-yogun); }
+  .tc-pyq-mat .tc-pyq-cip { flex: 0 0 auto; min-height: 0; height: calc(var(--b-3) + var(--pay-ince)); line-height: var(--b-3); }
+  .tc-pyq-mat-bolum th { padding: var(--pay-ince) 0; }
+  .tc-pyq-mat-ust .tc-pyq-kucuk, .tc-pyq-duzen button, .tc-pyq-lejk summary { min-height: var(--dokunma-yogun); }
+  .tc-pyq-mat tbody th b, .tc-pyq-mat tbody th small, .tc-pyq-mat[data-tur="E"] td b, .tc-pyq-mat[data-tur="E"] td small { line-height: var(--b-4); }
+}
 
 .tc-pyq-neden { margin: 0; padding: var(--b-2); border-left: var(--cizgi-kalin) solid var(--d-gec); border-radius: var(--kayma); background: var(--panel2); font-size: var(--yazi-s); }
 .tc-pyq-ayrinti[data-d="risk"] .tc-pyq-neden { border-left-color: var(--d-risk); }
