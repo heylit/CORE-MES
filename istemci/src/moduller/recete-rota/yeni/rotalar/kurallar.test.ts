@@ -9,7 +9,7 @@ import { adimCarpani, adimOnculleri, birlesebilenDallar, birlesenYaz, carpanYaz,
 import { hazirlikBolumu, hazirlikYaz, sureYaz, toplamdanBolum } from './kurallar.ts';
 import { hamGirdisiVar, hamOneriMiktari, onerilebilirKartlar } from './kurallar.ts';
 import { adimAdi, turKisa, yerelTur } from './kurallar.ts';
-import { catalFarki, dalBilgileri, dalCarpaniYaz, dalEtiketi, dalHatasi, kolaEkle, kolaTasi, kollariBirlestir, kolParcalari, serbestDal } from './kurallar.ts';
+import { catalFarki, dalBilgileri, dalCarpaniYaz, dalEtiketi, dalHatasi, kolaEkle, kolaTasi, kollariBirlestir, dalYerlesimi, serbestDal } from './kurallar.ts';
 import { sayiAlaniHatasi, SURE_EN_COK } from './ortak.tsx';
 import { adimOrnegi } from './test-veri.ts';
 
@@ -488,15 +488,40 @@ describe('2542 çatallı rota kolaylıkları (veri biçimi aynı)', () => {
 });
 
 describe('2542 C: şemada kollar yan yana', () => {
-  it('çatalla birleşme arası tek parça; ana hat ve her dal kendi sütunu, birleştiren adım parçadan sonra', () => {
+  const seritler = (l: Adim[]) => Object.fromEntries(l.map((x) => [x.id, dalYerlesimi(l).yer.get(x.id)]));
+  it('3188: ana hat tek şeritte kalır; dal ayrıldığı adımın alt satırında yana açılır, birleştiren adım dalların altındadır', () => {
     const l = [adim('a', 10), adim('b', 20, { dal: 'A' }), adim('c', 30, { dal: 'B' }), adim('d', 40, { dal: 'A' }), adim('e', 50), adim('f', 60, { birlesen: ['A', 'B'] }), adim('g', 70)];
-    expect(kolParcalari(l)).toEqual([
-      { tur: 'adim', id: 'a' },
-      { tur: 'kollar', seritler: [{ dal: null, idler: ['e'] }, { dal: 'A', idler: ['b', 'd'] }, { dal: 'B', idler: ['c'] }] },
-      { tur: 'adim', id: 'f' }, { tur: 'adim', id: 'g' },
-    ]);
-    expect(kolParcalari([adim('a', 10), adim('b', 20)])).toEqual([{ tur: 'adim', id: 'a' }, { tur: 'adim', id: 'b' }]);
-    expect(kolParcalari([adim('a', 10), adim('b', 20, { dal: 'A' })])).toEqual([{ tur: 'adim', id: 'a' }, { tur: 'kollar', seritler: [{ dal: 'A', idler: ['b'] }] }]);
+    const y = dalYerlesimi(l);
+    expect(seritler(l)).toEqual({
+      a: { satir: 0, serit: 0 }, b: { satir: 1, serit: 1 }, c: { satir: 1, serit: -1 }, d: { satir: 2, serit: 1 }, e: { satir: 1, serit: 0 },
+      f: { satir: 3, serit: 0 }, g: { satir: 4, serit: 0 },
+    });
+    expect(y.seritler).toEqual([-1, 0, 1]);
+    expect(y.satirlar).toEqual([[null, 'a', null], ['c', 'e', 'b'], [null, null, 'd'], [null, 'f', null], [null, 'g', null]]);
+    expect([...y.ilkAdimlar]).toEqual(expect.arrayContaining([['b', 'A'], ['c', 'B']]));
+    expect(y.acikUclar.size).toBe(0);
+  });
+  it('3188: dalsız rotada tek şerit, her adım kendi satırında', () => {
+    const y = dalYerlesimi([adim('a', 10), adim('b', 20)]);
+    expect(y.seritler).toEqual([0]);
+    expect(y.satirlar).toEqual([['a'], ['b']]);
+  });
+  it('3188: sırayla açılıp kapanan dallar aynı şeridi yeniden kullanır; birleşmeyen dal şeridini sona kadar tutar ve ucu açık sayılır', () => {
+    const l = [adim('a', 10), adim('b', 20, { dal: 'A' }), adim('c', 30, { birlesen: ['A'] }), adim('d', 40, { dal: 'B' }), adim('e', 50, { birlesen: ['B'] })];
+    expect(seritler(l)['b']?.serit).toBe(1);
+    expect(seritler(l)['d']?.serit).toBe(1);
+    const acik = [adim('a', 10), adim('b', 20, { dal: 'A' }), adim('c', 30), adim('d', 40, { dal: 'B' }), adim('e', 50, { birlesen: ['B'] })];
+    const y = dalYerlesimi(acik);
+    expect(y.yer.get('b')?.serit).toBe(1);
+    expect(y.yer.get('d')?.serit).toBe(-1);
+    expect([...y.acikUclar]).toEqual([['b', 'A']]);
+  });
+  it('3188: yeni açılan dal var olan dalların şeridini değiştirmez; aynı anda açık iki dal aynı şeritte durmaz', () => {
+    const once = [adim('a', 10), adim('b', 20, { dal: 'A' }), adim('c', 30, { dal: 'B' }), adim('f', 60, { birlesen: ['A', 'B'] })];
+    const sonra = [adim('a', 10), adim('b', 20, { dal: 'A' }), adim('c', 30, { dal: 'B' }), adim('x', 40, { dal: 'C' }), adim('f', 60, { birlesen: ['A', 'B'] })];
+    const y1 = dalYerlesimi(once); const y2 = dalYerlesimi(sonra);
+    for (const id of ['a', 'b', 'c']) expect(y2.yer.get(id)?.serit).toBe(y1.yer.get(id)?.serit);
+    expect(new Set(['b', 'c', 'x'].map((id) => y2.yer.get(id)?.serit)).size).toBe(3);
   });
   it('kola bırakılan adım o kola geçer, kolun son adımının ardına taşınır ve çarpanını alır; ana hatta dalı kalkar', () => {
     const l = [adim('a', 10), adim('b', 20, { dal: 'A', adetCarpani: 2 }), adim('c', 30, { dal: 'B' }), adim('d', 40, { birlesen: ['A', 'B'] })];
