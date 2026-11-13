@@ -91,6 +91,7 @@ export function sunucununBaglari(): Bag[] {
     bag('açık NCR partileri -> stok sevki', stok.acikNcrPartiCozucusu, kaliteMerkezi.acikNcrPartileri),
     bag('adım statüsü çözücüsü -> stok', stok.adimStatusuCozucusu, receteRota.adimStatusu),
     bag('makine 3B görünümü -> atölye', atolye.makineModelTuruCozucusu, cncKurulum.makineModelTurleri),
+    bag('depoda stoklu malzemeler -> atölye 3B modeli', atolye.depoMalzemeCozucusu, stok.haritaStokluMalzemeleri),
     bag('bölüm açıldı -> stok deposu', atolye.bolumAcildiDinle, stok.bolumAcildiYansit),
     bag('istasyon açıldı -> stok konumu', istasyonAcildiDinle, stok.istasyonAcildiYansit),
     bag('istasyon silinecek -> kullanılmamış stok konumu', istasyonSilinecekDinle, stok.istasyonSilinecekYansit),
