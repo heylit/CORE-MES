@@ -62,7 +62,7 @@ afterEach(() => {
 
 describe('göz panelinde stok', () => {
   it('3012 a: stok okuyan kişi gözdeki malzemeyi, miktarı birimiyle, partiyi ve konum bağlantısını görür; elle ekleme yok', async () => {
-    const yollar = sunucuKur({ id: 1, ad: 'Depocu', islemler: ['sayfa.atolye', 'stok.giris', 'atolye.yaz'] });
+    const yollar = sunucuKur({ id: 1, ad: 'Depocu', islemler: ['sayfa.atolye', 'stok.giris', 'atolye.kalem-yaz'] });
     goster(1);
     const liste = await screen.findByRole('region', { name: 'Stoktaki malzemeler' });
     expect(within(liste).getByText('Çelik çubuk')).toBeTruthy();
@@ -74,7 +74,7 @@ describe('göz panelinde stok', () => {
   });
 
   it('3012 a: elle yazılmış eski kayıt yalnız görünür (düzeltme ve silme yok)', async () => {
-    sunucuKur({ id: 1, ad: 'Depocu', islemler: ['sayfa.stok', 'atolye.yaz'] });
+    sunucuKur({ id: 1, ad: 'Depocu', islemler: ['sayfa.stok', 'atolye.kalem-yaz'] });
     goster(1, ESKI);
     expect(await screen.findByText('Eski elle yazılan kayıtlar (1) · %40')).toBeTruthy();
     expect(screen.getByText('S2')).toBeTruthy();

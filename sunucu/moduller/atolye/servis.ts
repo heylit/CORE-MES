@@ -1110,10 +1110,10 @@ export async function krokiAyari(db: Db): Promise<KrokiAyariCevabi> {
   return { saydamlik: (await sistemAyariOku(db, 'atolye.kroki-saydamligi')) ?? KROKI_SAYDAMLIGI.varsayilan };
 }
 
-// Haritayı düzenleyen değiştirir (2122-5 a); ekranın gördüğü değer `beklenen`dir, arada değiştiyse 409.
+// Krokiyi düzenleyen değiştirir (2122-5 a, 3165 a); ekranın gördüğü değer `beklenen`dir, arada değiştiyse 409.
 export async function krokiAyariDegistir(db: Db, govde: KrokiAyariKaydi, kisiId: number): Promise<KrokiAyariCevabi> {
   const yeni = await modulAyariDegistir(db, kisiId, 'atolye.kroki-saydamligi', govde.saydamlik, govde.beklenen, {
-    modul: 'atolye', yol: '/atolye/kroki-ayari/degistir', yetki: 'atolye.yaz',
+    modul: 'atolye', yol: '/atolye/kroki-ayari/degistir', yetki: 'atolye.kroki-yaz',
   });
   return { saydamlik: yeni ?? KROKI_SAYDAMLIGI.varsayilan };
 }

@@ -6,21 +6,25 @@ import {
   gozKalemleriSorgusu, hucreAtaGovdesi, istasyonParametresi, rafParametresi, rotaCevabi, rotaSorgusu,
   salonGovdesi, salonOzetiSemasi, salonParametresi, salonlarCevabi, yerlesimCevabi, yerlesimGovdesi,
 } from '#paylasilan/sozlesme/atolye.ts';
+import { ATOLYE_YAZMA_ISLEMLERI } from '#paylasilan/islemler.ts';
 import * as servis from './servis.ts';
 
+// Okuma: sayfa ya da beş düzenleme eyleminden biri (3165 a).
+const OKUMA = { biri: ['sayfa.atolye', ...ATOLYE_YAZMA_ISLEMLERI] } as const;
+
 export const uclar = [
-  // Okuma uçları fabrika haritası sayfasını görene açılır (sayfa ya da düzenleme yetkisi); yazma uçları yalnız düzenleyene.
+  // Okuma uçları fabrika haritası sayfasını görene açılır (sayfa ya da düzenleme eylemi); her yazma ucu kendi eylemini ister (3165 a).
   uc({
     yontem: 'GET',
     yol: '/atolye/salonlar',
-    yetki: { biri: ['sayfa.atolye', 'atolye.yaz'] },
+    yetki: OKUMA,
     cevap: salonlarCevabi,
     isle: async ({ db }) => ({ salonlar: await servis.salonlar(db) }),
   }),
   uc({
     yontem: 'GET',
     yol: '/atolye/salonlar/:id',
-    yetki: { biri: ['sayfa.atolye', 'atolye.yaz'] },
+    yetki: OKUMA,
     parametre: salonParametresi,
     cevap: yerlesimCevabi,
     isle: ({ db, parametre }) => servis.yerlesim(db, parametre.id),
@@ -29,7 +33,7 @@ export const uclar = [
   uc({
     yontem: 'GET',
     yol: '/atolye/istasyonlar/:id/merkez-modeli',
-    yetki: { biri: ['sayfa.atolye', 'atolye.yaz'] },
+    yetki: OKUMA,
     // Harita sahnesi kendiliğinden yükler; kişi dosyayı açmaz (385 a kapsamı).
     kendiligindenYuklenir: true,
     parametre: istasyonParametresi,
@@ -40,14 +44,14 @@ export const uclar = [
   uc({
     yontem: 'GET',
     yol: '/atolye/malzeme-modelleri',
-    yetki: { biri: ['sayfa.atolye', 'atolye.yaz'] },
+    yetki: OKUMA,
     cevap: malzemeModelleriCevabi,
     isle: ({ db }) => servis.malzemeModelleri(db),
   }),
   uc({
     yontem: 'GET',
     yol: '/atolye/malzemeler/:no/merkez-modeli',
-    yetki: { biri: ['sayfa.atolye', 'atolye.yaz'] },
+    yetki: OKUMA,
     // Harita sahnesi kendiliğinden yükler; kişi dosyayı açmaz (385 a kapsamı).
     kendiligindenYuklenir: true,
     parametre: malzemeParametresi,
@@ -57,7 +61,7 @@ export const uclar = [
   uc({
     yontem: 'GET',
     yol: '/atolye/salonlar/:id/rota',
-    yetki: { biri: ['sayfa.atolye', 'atolye.yaz'] },
+    yetki: OKUMA,
     parametre: salonParametresi,
     sorgu: rotaSorgusu,
     cevap: rotaCevabi,
@@ -66,7 +70,7 @@ export const uclar = [
   uc({
     yontem: 'GET',
     yol: '/atolye/arama',
-    yetki: { biri: ['sayfa.atolye', 'atolye.yaz'] },
+    yetki: OKUMA,
     sorgu: aramaSorgusu,
     cevap: aramaCevabi,
     isle: async ({ db, sorgu }) => ({ sonuclar: await servis.arama(db, sorgu.metin, sorgu.salonId ?? null) }),
@@ -74,7 +78,7 @@ export const uclar = [
   uc({
     yontem: 'GET',
     yol: '/atolye/raflar/:id/gozler',
-    yetki: { biri: ['sayfa.atolye', 'atolye.yaz'] },
+    yetki: OKUMA,
     parametre: rafParametresi,
     sorgu: gozSorgusu,
     cevap: gozlerCevabi,
@@ -84,14 +88,14 @@ export const uclar = [
   uc({
     yontem: 'GET',
     yol: '/atolye/modeller',
-    yetki: { biri: ['sayfa.atolye', 'atolye.yaz'] },
+    yetki: OKUMA,
     cevap: modellerCevabi,
     isle: async ({ db }) => ({ modeller: await servis.modeller(db) }),
   }),
   uc({
     yontem: 'GET',
     yol: '/atolye/modeller/:id/parcalar/:sira',
-    yetki: { biri: ['sayfa.atolye', 'atolye.yaz'] },
+    yetki: OKUMA,
     parametre: modelParcaParametresi,
     cevap: modelParcaCevabi,
     isle: ({ db, parametre }) => servis.modelParcaOku(db, parametre.id, parametre.sira),
@@ -101,7 +105,7 @@ export const uclar = [
   uc({
     yontem: 'GET',
     yol: '/atolye/fabrika',
-    yetki: { biri: ['sayfa.atolye', 'atolye.yaz'] },
+    yetki: OKUMA,
     cevap: fabrikaCevabi,
     isle: ({ db }) => servis.fabrika(db),
   }),
@@ -109,7 +113,7 @@ export const uclar = [
   uc({
     yontem: 'GET',
     yol: '/atolye/kroki-ayari',
-    yetki: { biri: ['sayfa.atolye', 'atolye.yaz'] },
+    yetki: OKUMA,
     cevap: krokiAyariCevabi,
     isle: ({ db }) => servis.krokiAyari(db),
   }),
@@ -117,14 +121,14 @@ export const uclar = [
   uc({
     yontem: 'GET',
     yol: '/atolye/fabrika/kroki',
-    yetki: { biri: ['sayfa.atolye', 'atolye.yaz'] },
+    yetki: OKUMA,
     cevap: krokiCevabi,
     isle: async ({ db }) => ({ kroki: await servis.kroki(db, null) }),
   }),
   uc({
     yontem: 'GET',
     yol: '/atolye/fabrika/kroki/parcalar/:sira',
-    yetki: { biri: ['sayfa.atolye', 'atolye.yaz'] },
+    yetki: OKUMA,
     parametre: krokiSiraParametresi,
     cevap: modelParcaCevabi,
     isle: ({ db, parametre }) => servis.krokiParcaOku(db, null, parametre.sira),
@@ -133,7 +137,7 @@ export const uclar = [
   uc({
     yontem: 'GET',
     yol: '/atolye/salonlar/:id/kroki',
-    yetki: { biri: ['sayfa.atolye', 'atolye.yaz'] },
+    yetki: OKUMA,
     parametre: salonParametresi,
     cevap: krokiCevabi,
     isle: async ({ db, parametre }) => ({ kroki: await servis.kroki(db, parametre.id) }),
@@ -141,7 +145,7 @@ export const uclar = [
   uc({
     yontem: 'GET',
     yol: '/atolye/salonlar/:id/kroki/parcalar/:sira',
-    yetki: { biri: ['sayfa.atolye', 'atolye.yaz'] },
+    yetki: OKUMA,
     parametre: krokiParcaParametresi,
     cevap: modelParcaCevabi,
     isle: ({ db, parametre }) => servis.krokiParcaOku(db, parametre.id, parametre.sira),
@@ -149,7 +153,7 @@ export const uclar = [
   uc({
     yontem: 'GET',
     yol: '/atolye/goz-kalemleri',
-    yetki: { biri: ['sayfa.atolye', 'atolye.yaz'] },
+    yetki: OKUMA,
     sorgu: gozKalemleriSorgusu,
     cevap: gozKalemleriCevabi,
     isle: async ({ db, sorgu }) => ({ kalemler: await servis.gozKalemleri(db, sorgu.salonId ?? null) }),
@@ -157,7 +161,7 @@ export const uclar = [
   uc({
     yontem: 'GET',
     yol: '/atolye/kalem-gorunumleri',
-    yetki: { biri: ['sayfa.atolye', 'atolye.yaz'] },
+    yetki: OKUMA,
     cevap: kalemGorunumleriCevabi,
     isle: async ({ db }) => ({ kalemler: await servis.kalemGorunumleri(db) }),
   }),
@@ -165,7 +169,7 @@ export const uclar = [
   uc({
     yontem: 'POST',
     yol: '/atolye/salonlar',
-    yetki: 'atolye.yaz',
+    yetki: 'atolye.salon-yaz',
     govde: salonGovdesi,
     cevap: salonOzetiSemasi,
     isle: ({ db, govde, kullanici }) => servis.salonEkle(db, govde, kullanici.id, kullanici.islemler),
@@ -173,7 +177,7 @@ export const uclar = [
   uc({
     yontem: 'POST',
     yol: '/atolye/salonlar/:id/yerlesim-kaydet',
-    yetki: 'atolye.yaz',
+    yetki: 'atolye.salon-yaz',
     parametre: salonParametresi,
     govde: yerlesimGovdesi,
     cevap: kayitCevabi,
@@ -182,7 +186,7 @@ export const uclar = [
   uc({
     yontem: 'POST',
     yol: '/atolye/salonlar/:id/hucre-ata',
-    yetki: 'atolye.yaz',
+    yetki: 'atolye.salon-yaz',
     parametre: salonParametresi,
     govde: hucreAtaGovdesi,
     cevap: kayitCevabi,
@@ -192,7 +196,7 @@ export const uclar = [
   uc({
     yontem: 'POST',
     yol: '/atolye/fabrika/kaydet',
-    yetki: 'atolye.yaz',
+    yetki: 'atolye.fabrika-yaz',
     govde: fabrikaKayitGovdesi,
     cevap: fabrikaKayitCevabi,
     isle: ({ db, govde, kullanici }) => servis.fabrikaKaydet(db, govde, kullanici.id),
@@ -201,7 +205,7 @@ export const uclar = [
   uc({
     yontem: 'POST',
     yol: '/atolye/fabrika/kroki',
-    yetki: 'atolye.yaz',
+    yetki: 'atolye.kroki-yaz',
     govde: krokiGovdesi,
     cevap: krokiSemasi,
     isle: ({ db, govde, kullanici }) => servis.krokiYuklemeBaslat(db, null, govde, kullanici.id),
@@ -209,7 +213,7 @@ export const uclar = [
   uc({
     yontem: 'POST',
     yol: '/atolye/fabrika/kroki/parca-yaz',
-    yetki: 'atolye.yaz',
+    yetki: 'atolye.kroki-yaz',
     govde: modelParcaGovdesi,
     cevap: modelParcaYazCevabi,
     isle: ({ db, govde }) => servis.krokiParcaYaz(db, null, govde.sira, govde.veri),
@@ -217,7 +221,7 @@ export const uclar = [
   uc({
     yontem: 'POST',
     yol: '/atolye/fabrika/kroki/tamamla',
-    yetki: 'atolye.yaz',
+    yetki: 'atolye.kroki-yaz',
     cevap: krokiSemasi,
     isle: ({ db }) => servis.krokiTamamla(db, null),
   }),
@@ -225,7 +229,7 @@ export const uclar = [
   uc({
     yontem: 'POST',
     yol: '/atolye/kroki-ayari/degistir',
-    yetki: 'atolye.yaz',
+    yetki: 'atolye.kroki-yaz',
     govde: krokiAyariGovdesi,
     cevap: krokiAyariCevabi,
     isle: ({ db, govde, kullanici }) => servis.krokiAyariDegistir(db, govde, kullanici.id),
@@ -233,7 +237,7 @@ export const uclar = [
   uc({
     yontem: 'POST',
     yol: '/atolye/fabrika/kroki/hizala',
-    yetki: 'atolye.yaz',
+    yetki: 'atolye.kroki-yaz',
     govde: krokiHizalaGovdesi,
     cevap: krokiSemasi,
     isle: ({ db, govde, kullanici }) => servis.krokiHizala(db, null, govde, kullanici.id),
@@ -241,7 +245,7 @@ export const uclar = [
   uc({
     yontem: 'POST',
     yol: '/atolye/fabrika/kroki/sil',
-    yetki: 'atolye.yaz',
+    yetki: 'atolye.kroki-yaz',
     cevap: modelSilCevabi,
     isle: async ({ db }) => { await servis.krokiSil(db, null); return undefined; },
   }),
@@ -249,7 +253,7 @@ export const uclar = [
   uc({
     yontem: 'POST',
     yol: '/atolye/salonlar/:id/kroki',
-    yetki: 'atolye.yaz',
+    yetki: 'atolye.kroki-yaz',
     parametre: salonParametresi,
     govde: krokiGovdesi,
     cevap: krokiSemasi,
@@ -258,7 +262,7 @@ export const uclar = [
   uc({
     yontem: 'POST',
     yol: '/atolye/salonlar/:id/kroki/parca-yaz',
-    yetki: 'atolye.yaz',
+    yetki: 'atolye.kroki-yaz',
     parametre: salonParametresi,
     govde: modelParcaGovdesi,
     cevap: modelParcaYazCevabi,
@@ -267,7 +271,7 @@ export const uclar = [
   uc({
     yontem: 'POST',
     yol: '/atolye/salonlar/:id/kroki/tamamla',
-    yetki: 'atolye.yaz',
+    yetki: 'atolye.kroki-yaz',
     parametre: salonParametresi,
     cevap: krokiSemasi,
     isle: ({ db, parametre }) => servis.krokiTamamla(db, parametre.id),
@@ -275,7 +279,7 @@ export const uclar = [
   uc({
     yontem: 'POST',
     yol: '/atolye/salonlar/:id/kroki/hizala',
-    yetki: 'atolye.yaz',
+    yetki: 'atolye.kroki-yaz',
     parametre: salonParametresi,
     govde: krokiHizalaGovdesi,
     cevap: krokiSemasi,
@@ -284,7 +288,7 @@ export const uclar = [
   uc({
     yontem: 'POST',
     yol: '/atolye/salonlar/:id/kroki/sil',
-    yetki: 'atolye.yaz',
+    yetki: 'atolye.kroki-yaz',
     parametre: salonParametresi,
     cevap: modelSilCevabi,
     isle: async ({ db, parametre }) => { await servis.krokiSil(db, parametre.id); return undefined; },
@@ -294,7 +298,7 @@ export const uclar = [
   uc({
     yontem: 'GET',
     yol: '/atolye/cizim-merkezi/krokiler',
-    yetki: 'atolye.yaz',
+    yetki: 'atolye.kroki-yaz',
     cevap: merkezKrokileriCevabi,
     isle: ({ db }) => servis.merkezKrokileri(db),
   }),
@@ -302,21 +306,21 @@ export const uclar = [
   uc({
     yontem: 'GET',
     yol: '/atolye/yerlesmemis-istasyonlar',
-    yetki: { biri: ['sayfa.atolye', 'atolye.yaz'] },
+    yetki: OKUMA,
     cevap: yerlesmemisIstasyonlarCevabi,
     isle: ({ db }) => servis.yerlesmemisIstasyonlar(db),
   }),
   uc({
     yontem: 'GET',
     yol: '/atolye/cizim-merkezi/modeller',
-    yetki: 'atolye.yaz',
+    yetki: 'atolye.model-yaz',
     cevap: merkezModelleriCevabi,
     isle: ({ db }) => servis.merkezModelleri(db),
   }),
   uc({
     yontem: 'POST',
     yol: '/atolye/istasyonlar/:id/merkez-modeli-bagla',
-    yetki: 'atolye.yaz',
+    yetki: 'atolye.model-yaz',
     parametre: istasyonParametresi,
     govde: merkezModeliBaglaGovdesi,
     cevap: merkezModeliBaglaCevabi,
@@ -325,7 +329,7 @@ export const uclar = [
   uc({
     yontem: 'POST',
     yol: '/atolye/salonlar/:id/kroki/merkezden',
-    yetki: 'atolye.yaz',
+    yetki: 'atolye.kroki-yaz',
     parametre: salonParametresi,
     govde: krokiMerkezdenGovdesi,
     cevap: krokiSemasi,
@@ -335,7 +339,7 @@ export const uclar = [
   uc({
     yontem: 'POST',
     yol: '/atolye/modeller',
-    yetki: 'atolye.yaz',
+    yetki: 'atolye.model-yaz',
     govde: modelGovdesi,
     cevap: modelSemasi,
     isle: ({ db, govde, kullanici }) => servis.modelYuklemeBaslat(db, govde, kullanici.id),
@@ -343,7 +347,7 @@ export const uclar = [
   uc({
     yontem: 'POST',
     yol: '/atolye/modeller/:id/parca-yaz',
-    yetki: 'atolye.yaz',
+    yetki: 'atolye.model-yaz',
     parametre: modelParametresi,
     govde: modelParcaGovdesi,
     cevap: modelParcaYazCevabi,
@@ -352,7 +356,7 @@ export const uclar = [
   uc({
     yontem: 'POST',
     yol: '/atolye/modeller/:id/tamamla',
-    yetki: 'atolye.yaz',
+    yetki: 'atolye.model-yaz',
     parametre: modelParametresi,
     cevap: modelSemasi,
     isle: ({ db, parametre }) => servis.modelTamamla(db, parametre.id),
@@ -360,7 +364,7 @@ export const uclar = [
   uc({
     yontem: 'POST',
     yol: '/atolye/modeller/:id/ayarla',
-    yetki: 'atolye.yaz',
+    yetki: 'atolye.model-yaz',
     parametre: modelParametresi,
     govde: modelAyarlaGovdesi,
     cevap: modelSemasi,
@@ -369,7 +373,7 @@ export const uclar = [
   uc({
     yontem: 'POST',
     yol: '/atolye/modeller/:id/sil',
-    yetki: 'atolye.yaz',
+    yetki: 'atolye.model-yaz',
     parametre: modelParametresi,
     cevap: modelSilCevabi,
     isle: async ({ db, parametre }) => { await servis.modelSil(db, parametre.id); return undefined; },
@@ -378,7 +382,7 @@ export const uclar = [
   uc({
     yontem: 'POST',
     yol: '/atolye/kalem-gorunumleri/yaz',
-    yetki: 'atolye.yaz',
+    yetki: 'atolye.kalem-yaz',
     govde: kalemGorunumuGovdesi,
     cevap: kalemGorunumleriCevabi,
     isle: async ({ db, govde, kullanici }) => ({ kalemler: await servis.kalemGorunumuYaz(db, govde, kullanici.id) }),
@@ -387,7 +391,7 @@ export const uclar = [
   uc({
     yontem: 'POST',
     yol: '/atolye/goz-kalemleri/yaz',
-    yetki: 'atolye.yaz',
+    yetki: 'atolye.kalem-yaz',
     govde: gozKalemiGovdesi,
     cevap: gozKalemiSemasi,
     isle: ({ db, govde, kullanici }) => servis.gozKalemiYaz(db, govde, kullanici.id),
@@ -395,7 +399,7 @@ export const uclar = [
   uc({
     yontem: 'POST',
     yol: '/atolye/goz-kalemleri/sil',
-    yetki: 'atolye.yaz',
+    yetki: 'atolye.kalem-yaz',
     govde: gozKalemiSilGovdesi,
     cevap: modelSilCevabi,
     isle: async ({ db, govde }) => { await servis.gozKalemiSil(db, govde.id); return undefined; },
@@ -403,7 +407,7 @@ export const uclar = [
   uc({
     yontem: 'POST',
     yol: '/atolye/kalem-gorunumleri/sil',
-    yetki: 'atolye.yaz',
+    yetki: 'atolye.kalem-yaz',
     govde: kalemSilGovdesi,
     cevap: kalemGorunumleriCevabi,
     isle: async ({ db, govde }) => ({ kalemler: await servis.kalemGorunumuSil(db, govde.kod) }),

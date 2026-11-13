@@ -6,12 +6,13 @@ import type { Kullanici } from '#paylasilan/kullanici.ts';
 import type { Kroki, KrokiAyariCevabi, YerlesimCevabi } from '#paylasilan/sozlesme/atolye.ts';
 import type { OturumCevabi } from '#paylasilan/sozlesme/oturum.ts';
 import { BildirimSaglayici } from '../../ortak/arayuz/index.ts';
+import { anahtarlar } from '../../ortak/veri/anahtarlar.ts';
 import { YerlesimDuzenleyici } from './YerlesimDuzenleyici.tsx';
 
 // Düzenleyicide seçme, silme ve taşıma (kart 2122): plana basınca tuşlar çalışır, seçmek için basmak öğeyi oynatmaz,
 // tutamak uzaktan da tutulur, makineli istasyonun çerçevesi içinden seçilir.
 
-const YAZAN: Kullanici = { id: 1, ad: 'Deneme Yönetici', islemler: ['sayfa.atolye', 'atolye.yaz'] };
+const YAZAN: Kullanici = { id: 1, ad: 'Deneme Yönetici', islemler: ['sayfa.atolye', 'atolye.salon-yaz', 'atolye.fabrika-yaz', 'atolye.kroki-yaz', 'atolye.model-yaz', 'atolye.kalem-yaz'] };
 
 const YERLESIM = {
   salon: {
@@ -90,8 +91,10 @@ const YERLESIM_B = {
   ],
 } satisfies YerlesimCevabi;
 
-function goster(bolum: YerlesimCevabi = YERLESIM, fabrika = false, ikinci: YerlesimCevabi = YERLESIM_B) {
+function goster(bolum: YerlesimCevabi = YERLESIM, fabrika = false, ikinci: YerlesimCevabi = YERLESIM_B, kullanici: Kullanici = YAZAN) {
   const istemci = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  // 3165 a: düzenleyici kaydet ve kroki düğmelerini oturumdaki eylemle açar; testler eşzamanlı olduğundan oturum önceden yazılır.
+  istemci.setQueryData(anahtarlar.oturum, kullanici);
   render(
     <MemoryRouter>
       <QueryClientProvider client={istemci}>
@@ -213,6 +216,16 @@ describe('plan düzenleyici etkileşimi (2122)', () => {
     expect(within(panel).getByText('Saydamlık %55')).toBeTruthy();
     await waitFor(() => expect(cagrilar.some((c) => c.yol === '/atolye/kroki-ayari/degistir')).toBe(true));
     expect(cagrilar.filter((c) => c.yol === '/atolye/kroki-ayari/degistir').map((c) => c.govde)).toEqual([{ saydamlik: 55, beklenen: 40 }]);
+  });
+
+  it('3165 a: saydamlığı yalnız kroki eylemi olan kişi de saklar (yerleşim eylemi gerekmez)', async () => {
+    const cagrilar = sunucuKur({ fabrikaKrokisi: FABRIKA_KROKISI, saydamlik: 40 });
+    const { duzen } = goster(YERLESIM, false, YERLESIM_B, { ...YAZAN, islemler: ['sayfa.atolye', 'atolye.kroki-yaz'] });
+    fireEvent.click(within(duzen).getByRole('button', { name: 'Kroki' }));
+    const panel = within(duzen).getByRole('complementary', { name: 'Kroki' });
+    expect(await within(panel).findByText('Saydamlık %40')).toBeTruthy();
+    fireEvent.change(within(panel).getByRole('slider'), { target: { value: '55' } });
+    await waitFor(() => expect(cagrilar.filter((c) => c.yol === '/atolye/kroki-ayari/degistir').map((c) => c.govde)).toEqual([{ saydamlik: 55, beklenen: 40 }]));
   });
 
   it('fabrika planında seçili bölümün komşuyla ortak duvarı listelenir; sınır kaldırılınca geçiş komşuyu bağlar (2122-4 a)', () => {

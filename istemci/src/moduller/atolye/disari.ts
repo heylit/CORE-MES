@@ -1,4 +1,5 @@
 // Başka modül ekranlarının ithal edebildiği tek dosya.
+import { ATOLYE_YAZMA_ISLEMLERI } from '#paylasilan/islemler.ts';
 import { useOturum } from '../../ortak/veri/oturum.ts';
 import { useFabrika } from './veri.ts';
 
@@ -6,7 +7,7 @@ import { useFabrika } from './veri.ts';
 // liste alınamayan kullanıcıda `null`: yerleşim bilinmiyor, "yok" denmez.
 export function useHaritadakiIstasyonlar(): ReadonlySet<number> | null {
   const islemler = useOturum().data?.islemler ?? [];
-  const gorur = islemler.includes('sayfa.atolye') || islemler.includes('atolye.yaz');
+  const gorur = islemler.includes('sayfa.atolye') || ATOLYE_YAZMA_ISLEMLERI.some((i) => islemler.includes(i));
   const fabrika = useFabrika(gorur);
   if (!gorur || !fabrika.data) return null;
   return new Set(fabrika.data.bolumler.flatMap((b) => b.istasyonYerleri.map((i) => i.istasyonId)));
