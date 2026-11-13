@@ -10,6 +10,7 @@ import type { TestVeritabani } from '#cekirdek/test-vt.ts';
 import { uygulamaKur } from '#cekirdek/uygulama.ts';
 import { ISTEK_KIMLIGI_BASLIGI } from '#paylasilan/istek-kimligi.ts';
 import { sayimGovdesi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
+import { teslimLotlariCevabi } from '#paylasilan/sozlesme/stok.ts';
 import { gelecekSepetCevabi, istasyonSepetleriCevabi, isMalzemeleriCevabi, kodCozCevabi, lotBekleyenKartlarCevabi, refakatIziCevabi, refakatLotaBaglaCevabi, refakatKartSatirlariCevabi, refakatPartileriCevabi, refakatPartisiCevabi, refakatPartisiKartiCevabi, sepetTeslimEtCevabi, istasyonSepetiCevabi, istekMalzemeleriCevabi, malzemeIstegiCevabi, malzemeYerleriCevabi, kisiKoduCevabi, okutarakAlCevabi, okutCozCevabi, teslimCevabi, teslimKutusuCevabi, toplamaAyrintiCevabi, yerdekiStokCevabi } from '#paylasilan/sozlesme/stok.ts';
 import type { SepetTeslimEtCevabi, IsMalzemeleriCevabi, IstasyonSepetiCevabi, KodCozCevabi, RefakatPartisiCevabi, RefakatPartisiKartiCevabi, IstekMalzemeleriCevabi, MalzemeIstegiCevabi, MalzemeYerleriCevabi, OkutarakAlCevabi, OkutCozCevabi, TeslimCevabi, TeslimKutusuCevabi, ToplamaAyrintiCevabi, UretimHazirligiCevabi, YerdekiStokCevabi } from '#paylasilan/sozlesme/stok.ts';
 import { denetimYaz } from '../denetim/disari.ts';
@@ -549,6 +550,56 @@ describe('stok: malzeme · teslim (gerçek PostgreSQL)', () => {
     assert.equal(kapandi.karsilanan, '2.500');
     assert.equal(await bakiye(h, (await istasyonKonumu(a.id))!), '2.500');
     assert.equal((await istekli({ kaynakKimligi: randomUUID() })).durum, 400, 'kapanan isteğe ikinci teslim bağlanmaz');
+  });
+
+  test('3187 a, 3191 a teslim penceresi: lotlar sırayla okunur; istek birden çok lottan gönderilir, son parça alınınca kapanır', async () => {
+    const h = await kart('hammadde');
+    await malKabul(h, '4');
+    await malKabul(h, '5');
+    const kabul = await kabulKonumu();
+    const a = await istasyon();
+    const [l1, l2] = (await o().vt.sorgu<{ id: number }>('SELECT id::int AS id FROM stok_parti WHERE malzeme_id = $1 ORDER BY id', [h])).map((x) => x.id);
+    const lotlar = async (kim: string, ek = '') => istek<{ lotlar: { partiId: number | null; onerilen: string | null; miktar: string }[] }>(kim, 'GET', `/stok/malzemeler/${h}/teslim-lotlari?miktar=6${ek}`);
+    const ilk = await lotlar('depo');
+    assert.equal(ilk.durum, 200, JSON.stringify(ilk.govde));
+    assert.deepEqual(teslimLotlariCevabi.parse(ilk.govde).lotlar.map((x) => [x.partiId, x.miktar, x.onerilen]), [[l1, '4', '4'], [l2, '5', '2']]);
+    assert.deepEqual(teslimLotlariCevabi.parse((await lotlar('depo', '&sira=lifo')).govde).lotlar.map((x) => [x.partiId, x.onerilen]), [[l2, '5'], [l1, '1']], 'son giren önce');
+    assert.equal((await lotlar('depo', '&sira=baska')).durum, 400);
+    assert.equal((await lotlar('operator')).durum, 403, 'stok okuması olmayan lot listesini okuyamaz');
+
+    const ac = async (istasyonId: number | null) => malzemeIstegiCevabi.parse((await istek('operator', 'POST', '/stok/malzeme-istekleri/ac', {
+      malzemeId: h, miktar: '6', istasyonId, not: null, kaynakKimligi: randomUUID(),
+    })).govde).istek;
+    const ist = await ac(a.id);
+    const parcalar = [{ konumId: kabul, partiId: l1, miktar: '4', okutuldu: true }, { konumId: kabul, partiId: l2, miktar: '2', okutuldu: false }];
+    const lotlarla = (kim: string, id: number, g: Record<string, unknown>) => istek<TeslimCevabi & Hata>(kim, 'POST', `/stok/malzeme-istekleri/${id}/lotlarla-gonder`, { parcalar, kaynakKimligi: randomUUID(), ...g });
+    assert.equal((await lotlarla('depo', (await ac(null)).id, {})).durum, 409, 'istasyonsuz istek kişiye teslim edilir');
+    assert.equal((await lotlarla('depo', ist.id, { parcalar: [parcalar[0], parcalar[0]] })).durum, 400, 'aynı lot iki kez');
+    assert.equal((await lotlarla('depo', ist.id, { parcalar: [parcalar[0], { ...parcalar[1], miktar: '9' }] })).durum, 400, 'lotta olandan fazla');
+    assert.equal((await o().vt.tek<{ n: number }>('SELECT count(*)::int AS n FROM stok_teslim WHERE istek_id = $1', [ist.id]))!.n, 0, 'bir parça reddedilince hiçbiri yazılmaz');
+    const kimlik = randomUUID();
+    const g = await lotlarla('depo', ist.id, { kaynakKimligi: kimlik });
+    assert.equal(g.durum, 200, JSON.stringify(g.govde));
+    const c = teslimCevabi.parse(g.govde);
+    assert.deepEqual([c.teslim, ...(c.ekTeslimler ?? [])].map((t) => [t.istekId, t.miktar, t.aciklama?.includes('Okutulmadı') ?? false]), [[ist.id, '4.000', false], [ist.id, '2.000', true]]);
+    const yine = teslimCevabi.parse((await lotlarla('depo', ist.id, { kaynakKimligi: kimlik })).govde);
+    assert.deepEqual([yine.teslim.id, yine.ekTeslimler?.[0]?.id], [c.teslim.id, c.ekTeslimler![0]!.id], 'aynı kimlik aynı kayıtları döner');
+    const uzun = await lotlarla('depo', ist.id, { kaynakKimligi: kimlik, parcalar: [...parcalar, { konumId: kabul, partiId: null, miktar: '1', okutuldu: false }] });
+    assert.equal(uzun.durum, 400, 'aynı kimlikle eklenen yeni parça yoldaki teslim engeline takılır');
+    assert.match(uzun.govde.mesaj, /yolda/);
+    assert.equal((await lotlarla('depo', ist.id, {})).durum, 400, 'yoldaki teslimi olan isteğe ikinci gönderim');
+    const al = (t: { id: number; surum: number; miktar: string }) => istek<TeslimCevabi>('operator', 'POST', `/stok/teslimler/${t.id}/teslim-al`, { surum: t.surum, alinan: t.miktar });
+    assert.equal((await al(c.teslim)).durum, 200);
+    assert.equal(malzemeIstegiCevabi.parse((await istek('depo', 'GET', `/stok/malzeme-istekleri/${ist.id}`)).govde).istek.durum, 'acik', 'yolda parça varken istek açık');
+    assert.equal((await al(c.ekTeslimler![0]!)).durum, 200);
+    const kapandi = malzemeIstegiCevabi.parse((await istek('depo', 'GET', `/stok/malzeme-istekleri/${ist.id}`)).govde).istek;
+    assert.deepEqual([kapandi.durum, kapandi.karsilanan], ['teslim', '6.000']);
+    assert.equal(await bakiye(h, (await istasyonKonumu(a.id))!), '6.000');
+    await malKabul(h, '4');
+    const l3 = (await o().vt.tek<{ id: number }>('SELECT max(id)::int AS id FROM stok_parti WHERE malzeme_id = $1', [h]))!.id;
+    const ist2 = await ac(a.id);
+    const fazla = teslimCevabi.parse((await lotlarla('depo', ist2.id, { parcalar: [{ konumId: kabul, partiId: l2, miktar: '3', okutuldu: true }, { konumId: kabul, partiId: l3, miktar: '4', okutuldu: true }] })).govde);
+    assert.deepEqual([fazla.teslim.aciklama, fazla.ekTeslimler?.[0]?.aciklama], [null, 'istenenden fazla (istenen 6)'], 'toplamı istenenden fazla gönderim son parçada notlanır');
   });
 
   test('STK-U1/U2 üretim sayımı: girdisiz rotada ara adım ürün girmez, son adım istasyon konumuna girer; teslim edilen sayı kilitlidir', async () => {

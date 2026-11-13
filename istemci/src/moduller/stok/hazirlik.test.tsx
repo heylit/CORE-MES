@@ -25,6 +25,15 @@ async function konumSec(kap: HTMLElement, etiket: string, yaz: string, secenek: 
   fireEvent.click(await within(await within(kap).findByRole('listbox', { name: `${etiket} için bulunanlar` })).findByRole('option', { name: new RegExp(secenek) }));
 }
 
+// 3187 a: istasyona giden istek önce teslim penceresinde açılır; bu testler bugünkü (elle konum seçilen) pencereyi dener.
+async function elleAc(): Promise<HTMLElement> {
+  const ilk = await screen.findByRole('dialog');
+  const elle = within(ilk).queryByRole('button', { name: 'Konumu elle seç' });
+  if (elle === null) return ilk;
+  fireEvent.click(elle);
+  return screen.findByRole('dialog');
+}
+
 describe('Hazırlık: malzeme istekleri', () => {
   it('istasyona giden istek konum aranarak teslim edilir', async () => {
     const yerdeki: YerdekiStokCevabi = { satirlar: [
@@ -42,7 +51,7 @@ describe('Hazırlık: malzeme istekleri', () => {
     const satir = (await screen.findByText('MI-000031')).closest('tr')!;
     expect(within(satir).getByText('Stokta yok')).toBeTruthy();
     fireEvent.click(within(satir).getByRole('button', { name: 'Teslim et' }));
-    const pencere = await screen.findByRole('dialog');
+    const pencere = await elleAc();
     await konumSec(pencere, 'Hangi konumdan', 'KAB', 'KABUL');
     const parti = await within(pencere).findByRole('combobox', { name: /Parti ve statü/ });
     expect(within(parti).queryAllByRole('option')).toHaveLength(2);
@@ -77,7 +86,7 @@ describe('Hazırlık: malzeme istekleri', () => {
     });
     ac('/stok/hazirlik');
     fireEvent.click(within((await screen.findByText('MI-000031')).closest('tr')!).getByRole('button', { name: 'Teslim et' }));
-    const pencere = await screen.findByRole('dialog');
+    const pencere = await elleAc();
     await waitFor(() => expect((within(pencere).getByRole('combobox', { name: /Hangi konumdan/ }) as HTMLInputElement).value).toBe('KABUL'));
     await waitFor(() => expect((within(pencere).getByRole('combobox', { name: /Parti ve statü/ }) as HTMLSelectElement).value).toBe('8:-'));
     expect(istekler.some((i) => i.yol === '/stok/malzemeler/901/cikis-onerisi?miktar=3.000')).toBe(true);
@@ -101,7 +110,7 @@ describe('Hazırlık: malzeme istekleri', () => {
     });
     ac('/stok/hazirlik');
     fireEvent.click(within((await screen.findByText('MI-000031')).closest('tr')!).getByRole('button', { name: 'Teslim et' }));
-    const pencere = await screen.findByRole('dialog');
+    const pencere = await elleAc();
     await waitFor(() => expect((within(pencere).getByRole('combobox', { name: /Hangi konumdan/ }) as HTMLInputElement).value).toBe('KS-01-1-1'));
     const parti = await within(pencere).findByRole('combobox', { name: /Parti ve statü/ });
     expect((parti as HTMLSelectElement).value).toBe('');
@@ -123,7 +132,7 @@ describe('Hazırlık: malzeme istekleri', () => {
     });
     ac('/stok/hazirlik');
     fireEvent.click(within((await screen.findByText('MI-000031')).closest('tr')!).getByRole('button', { name: 'Teslim et' }));
-    const pencere = await screen.findByRole('dialog');
+    const pencere = await elleAc();
     await konumSec(pencere, 'Hangi konumdan', 'KAB', 'KABUL');
     const parti = await within(pencere).findByRole('combobox', { name: /Parti ve statü/ }) as HTMLSelectElement;
     fireEvent.change(parti, { target: { value: within(parti).getByRole('option', { name: /TP-9/ }).getAttribute('value') } });
@@ -150,7 +159,7 @@ describe('Hazırlık: malzeme istekleri', () => {
     const satir = (await screen.findByText('MI-000032')).closest('tr')!;
     expect(within(satir).getByText(/kişiye/)).toBeTruthy();
     fireEvent.click(within(satir).getByRole('button', { name: 'Teslim et' }));
-    const pencere = await screen.findByRole('dialog');
+    const pencere = await elleAc();
     const dugme = within(pencere).getByRole('button', { name: 'Teslim edildi' });
     fireEvent.click(dugme);
     expect((await within(pencere).findAllByRole('alert')).map((a) => a.textContent)).toContain('Teslimin çıkacağı konumu seçin.');
@@ -199,7 +208,7 @@ describe('Hazırlık: malzeme istekleri', () => {
     expect(screen.queryByRole('button', { name: 'İsteksiz liste' })).toBeNull();
   });
 
-  it('istekler ve toplama listeleri tek satırlı kayan tablo: seçim kutusu ilk sütunda, kimlik solda, eylemler sağda yapışık', async () => {
+  it('istekler ve toplama listeleri tek satırlı kayan tablo: seçim kutusu ilk sütunda, kimlik ve Teslim et solda yapışık', async () => {
     const TOPLAMA = { id: 3, no: 'TL-000003', ad: 'Sabah turu', acilis: '2026-10-14T08:10:00+03:00', kisiAd: 'Deneme Depocu', durum: 'topluyor', toplanan: 1, adimSayisi: 2, eksikVar: false, surum: 1, hedefKonumId: null, hedefKonumKod: null };
     sunucuKur(DEPOCU, {
       'GET /stok/malzeme-istekleri': () => json(200, liste([{ ...ISTEK, aciklama: 'Yarın ilk iş', karsilanan: '1.000' }, LISTEDE])),
@@ -209,22 +218,22 @@ describe('Hazırlık: malzeme istekleri', () => {
     const tablo = await screen.findByRole('table', { name: 'Malzeme istekleri' });
     expect(tablo.closest('.tc-tablo-kap')?.hasAttribute('data-kaydir')).toBe(true);
     expect(within(tablo).getAllByRole('columnheader').map((h) => h.textContent?.trim())).toEqual(
-      ['', 'İstek', 'Malzeme', 'Miktar', 'Karşılanan', 'Durum', 'Nereye', 'İsteyen', 'Açılış', 'Açıklama', 'Toplama listesi', '']);
+      ['', 'İstek', 'Malzeme', 'Miktar', 'Karşılanan', 'Durum', 'Nereye', 'İsteyen', 'Açılış', 'Açıklama', 'Toplama listesi']);
     const [, ilk, ikinci] = within(tablo).getAllByRole('row');
     const h = within(ilk!).getAllByRole('cell');
     expect(within(h[0]!).getByRole('checkbox', { name: 'MI-000031 seç' })).toBeTruthy();
     expect(h[1]!.classList.contains('tc-tablo-sabit-sol')).toBe(true);
-    expect(h[1]!.textContent).toBe('MI-000031');
+    expect(h[1]!.querySelector('.mono')?.textContent).toBe('MI-000031');
+    expect(within(h[1]!).getByRole('button', { name: 'Teslim et' })).toBeTruthy();
     expect(h[2]!.querySelector('.tc-tablo-kes')?.getAttribute('title')).toBe('Deneme sac');
     expect(h[3]!.textContent).toBe('3');
     expect(h[4]!.textContent).toBe('1');
     expect(h[5]!.textContent).toBe('Stokta yok');
     expect(h[9]!.textContent).toBe('Yarın ilk iş');
-    expect(h[11]!.classList.contains('tc-tablo-sabit-sag')).toBe(true);
-    expect(within(h[11]!).queryByRole('checkbox')).toBeNull();
-    expect(within(h[11]!).getByRole('button', { name: 'Teslim et' })).toBeTruthy();
+    expect(h).toHaveLength(11);
     const h2 = within(ikinci!).getAllByRole('cell');
     expect(within(h2[0]!).queryByRole('checkbox')).toBeNull();
+    expect(within(h2[1]!).queryByRole('button', { name: 'Teslim et' })).toBeNull();
     expect(h2[4]!.textContent).toBe('—');
     expect(within(h2[10]!).getByRole('link', { name: 'TL-000003' })).toBeTruthy();
     const listeler = await screen.findByRole('table', { name: 'Toplama listeleri' });
@@ -260,7 +269,7 @@ describe('Hazırlık: emre giden teslimde refakat kartı bildirimi', () => {
   });
   const teslimEt = async () => {
     fireEvent.click(within((await screen.findByText('MI-000031')).closest('tr')!).getByRole('button', { name: 'Teslim et' }));
-    const pencere = await screen.findByRole('dialog');
+    const pencere = await elleAc();
     await konumSec(pencere, 'Hangi konumdan', 'KAB', 'KABUL');
     await waitFor(() => expect((within(pencere).getByRole('combobox', { name: /Parti ve statü/ }) as HTMLSelectElement).value).toBe('8:-'));
     fireEvent.click(within(pencere).getByRole('button', { name: 'Teslim et' }));
@@ -298,7 +307,7 @@ describe('Hazırlık: emre giden teslimde refakat kartı bildirimi', () => {
     const istekler = kur(MERKEZLI, { ...KISIYE, uretimEmriId: 77 });
     ac('/stok/hazirlik');
     fireEvent.click(within((await screen.findByText('MI-000032')).closest('tr')!).getByRole('button', { name: 'Teslim et' }));
-    const pencere = await screen.findByRole('dialog');
+    const pencere = await elleAc();
     await konumSec(pencere, 'Hangi konumdan', 'KAB', 'KABUL');
     fireEvent.change(await within(pencere).findByRole('combobox', { name: /Parti ve statü/ }), { target: { value: '8:-' } });
     fireEvent.click(within(pencere).getByRole('button', { name: 'Teslim edildi' }));

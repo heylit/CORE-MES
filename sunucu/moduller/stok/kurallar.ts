@@ -4,6 +4,7 @@ import { ACIK_EMIR_DURUMLARI, type KapanisMaddeBilgisi } from '#paylasilan/sozle
 import { kodTuru, okutmaDuzelt } from '#paylasilan/kod-sozlugu.ts';
 import { ELLE_KONUM_TURLERI, EMIR_FIS_KARTLARI, HAREKET_YAZANLARI, type EmirFisKarti, type EmirFisKartiCevabi, type HareketYazani, type FisGonderimSekli, type LogoFisDurumu, type MalzemeFisiTuru, type KaliteDurumu, type KoduDegisenKonum, type KonumTuru, type MalzemeIstegiDurumu, type TeslimDurumu } from '#paylasilan/sozlesme/stok.ts';
 import { FABRIKA_GENELI_ALAN_TURLERI, HARITA_ALAN_TURLERI, type HaritaAlanTuru } from '#paylasilan/sozlesme/stok-harita-sabitleri.ts';
+import type { LotSirasi } from '#paylasilan/sozlesme/stok.ts';
 
 // ---- Miktar: numeric(14,3) metni binde tam sayıya çevrilir; ondalık hata payı olmaz ------------------------------
 const MIKTAR = /^(-)?(\d+)(?:\.(\d{1,3}))?$/;
@@ -165,10 +166,19 @@ export type DegerGrubu = (typeof DEGER_GRUPLARI)[number];
 const ONERI_DISI = new Set<string>(['fason', 'uretim_cikisi', 'istasyon', ...AYRILMIS_KONUM_TURLERI] satisfies KonumTuru[]);
 // 2099-4 a: SKT'li lot önce bozulan önce çıkar (FEFO), SKT'siz lotlar ardından ilk giren önce; SKT'siz kartta sıra değişmez.
 // 2099-5 a: SKT'si geçmiş lot öneriye girmez (bugün tesis günüdür, sunucudan); son gün henüz geçmiş sayılmaz.
-export function cikisOnerisi(satirlar: readonly OneriSatiri[], istenen: string, bugun: string | null = null) {
-  const uygun = satirlar
-    .filter((s) => !ONERI_DISI.has(s.konumTur) && binde(s.miktar) > 0n && !(bugun !== null && sktGecmisMi(s.sonKullanma ?? null, bugun)))
-    .sort((a, b) => sktSirasi(a.sonKullanma ?? null, b.sonKullanma ?? null) || Date.parse(a.ilkGiris) - Date.parse(b.ilkGiris) || a.bakiyeId - b.bakiyeId);
+// 3191 a: teslim penceresinde sıra seçilir. `fefo` bugünkü kuraldır (2099-4 a); `fifo` son kullanma tarihine bakmadan ilk giren,
+// `lifo` son giren öncedir. Tarihi geçen lot hiçbir sırada verilmez (2099-5 a değişmez).
+const girisSirasi = (a: OneriSatiri, b: OneriSatiri): number => Date.parse(a.ilkGiris) - Date.parse(b.ilkGiris) || a.bakiyeId - b.bakiyeId;
+const LOT_SIRALAMASI: Readonly<Record<LotSirasi, (a: OneriSatiri, b: OneriSatiri) => number>> = {
+  fefo: (a, b) => sktSirasi(a.sonKullanma ?? null, b.sonKullanma ?? null) || girisSirasi(a, b),
+  fifo: girisSirasi,
+  lifo: (a, b) => girisSirasi(b, a),
+};
+const oneriSirasi = (satirlar: readonly OneriSatiri[], bugun: string | null, sira: LotSirasi): OneriSatiri[] => satirlar
+  .filter((s) => !ONERI_DISI.has(s.konumTur) && binde(s.miktar) > 0n && !(bugun !== null && sktGecmisMi(s.sonKullanma ?? null, bugun)))
+  .sort(LOT_SIRALAMASI[sira]);
+export function cikisOnerisi(satirlar: readonly OneriSatiri[], istenen: string, bugun: string | null = null, sira: LotSirasi = 'fefo') {
+  const uygun = oneriSirasi(satirlar, bugun, sira);
   const mevcut = uygun.reduce((t, s) => t + binde(s.miktar), 0n);
   if (uygun.length === 0) return { veriYetersiz: true, yeterli: false, mevcut: '0', oneriler: [] };
   let kalan = binde(istenen);
@@ -180,6 +190,20 @@ export function cikisOnerisi(satirlar: readonly OneriSatiri[], istenen: string, 
     kalan -= al;
   }
   return { veriYetersiz: false, yeterli: kalan <= 0n, mevcut: bindenMetin(mevcut), oneriler };
+}
+
+// 3187 a: teslim penceresi verilebilecek bütün lotları öneri sırasıyla gösterir; `onerilen` çıkış önerisinin o lottan düşen payıdır
+// (öneride olmayan lotta null). Eleme ve sıra çıkış önerisiyle aynı yerden gelir: pencere ile öneri ayrışmaz.
+export function teslimLotlari(satirlar: readonly OneriSatiri[], istenen: string, bugun: string | null = null, sira: LotSirasi = 'fefo') {
+  const oneri = cikisOnerisi(satirlar, istenen, bugun, sira);
+  const pay = new Map(oneri.oneriler.map((o) => [o.bakiyeId, o.miktar]));
+  return {
+    veriYetersiz: oneri.veriYetersiz, yeterli: oneri.yeterli, mevcut: oneri.mevcut,
+    lotlar: oneriSirasi(satirlar, bugun, sira).map((s) => ({
+      bakiyeId: s.bakiyeId, konumId: s.konumId, konumKod: s.konumKod, partiId: s.partiId, partiEtiketi: s.partiEtiketi, miktar: bindenMetin(binde(s.miktar)),
+      ilkGiris: s.ilkGiris, sonKullanma: s.sonKullanma ?? null, onerilen: pay.get(s.bakiyeId) ?? null,
+    })),
+  };
 }
 
 // ---- Emir tamamlama (EK "Stok ve tamamlama"; ilk sistemde "Tamamla ve stokta") ----------------------------------

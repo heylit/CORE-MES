@@ -6,7 +6,7 @@ import {
   refakatBaglamaEngeli, refakatEtiketi, refakatIptalEngeli, refakatKolEngeli, refakatLotEngeli, refakatSayimEngeli, refakatTeslimEngeli, kartOnayiTuru, refakatAnaEylemi,
   sonrakiIstasyon, statuAramasi, statuKodlari, stoksuzStatuler,
   baslatmaEksikleri, buradakiIstasyon, eksidenUyari, geriCevirmeKaliteleri, istekGecisEngeli, enKotuKalite, girdiSec, sayimArtisPlani, sayimAzalisPlani, istekAcilisDurumu, istekKapsamindanMuafMi, istekliTeslimEngeli, teslimAlimMiktariEngeli, teslimAlmaEngeli, teslimKapanisEngeli, yoldaSureSonu, kisiKoduAyristir, kisiKoduEngeli, kisiKoduGovdesi, KISI_KODU_SURESI_SN,
-  binde, bindenMetin, bolmeNo, cikisOnerisi, duzeltmeEngeli, dusumKarari, geriAlmaEngeli, gozKodu, ilkGirisBirlesik, kalanAmbalajAdedi, logoAmbari,
+  binde, bindenMetin, bolmeNo, cikisOnerisi, teslimLotlari, duzeltmeEngeli, dusumKarari, geriAlmaEngeli, gozKodu, ilkGirisBirlesik, kalanAmbalajAdedi, logoAmbari,
   logoEslesmeDurumu, logoyaGiderMi, malKabulGozOnerisi, malKabulSatirTuru, rotaSirala, partiDenetimi, partiGereksinimi, partiSec, rafGozleri, sayimBekliyorMu, sayimFarki, sayimKarariEngeli, sayimOnayaGiderMi, siparisMalzemeEngeli, stokDurumu, stoklanirMi, tersYon,
   ihtiyacToplami, kalanSarf, stokDegeri, alisFiyatlari, tamamlamaEngeli, depoKoduOner, haritaPlani, istekListeEngeli, adimMiktarEngeli, istekKarsilamalari,
   adetMiktari, birikimliMiktar, kalanAdimAdedi, kaynaklardanAl, uretimAdimPlani, dalliAdimPlani, tasimaKaynagi, gelenOrani, oranliAdet, type ZincirAdimi, rezerveSiniri, fasonGonderimiEksikMi, partiEtiketi, koduDegisenler,
@@ -120,6 +120,22 @@ describe('stok kuralları (saf)', () => {
     const cikis = cikisOnerisi([s(5, '2026-09-01T10:00:00Z', '9', 'uretim_cikisi'), s(6, '2026-10-01T10:00:00Z', '2')], '3');
     assert.deepEqual(cikis.oneriler.map((x) => x.bakiyeId), [6]);
     assert.equal(cikis.mevcut, '2');
+  });
+
+  test('3187 a, 3191 a teslim lotları: bütün uygun lotlar seçilen sırayla, öneri payıyla; tarihi geçen hiçbir sırada verilmez', () => {
+    const s = (id: number, ilk: string, miktar: string, sonKullanma: string | null = null, konumTur = 'raf_gozu') =>
+      ({ bakiyeId: id, konumId: id, konumKod: `K${id}`, konumTur, partiId: id, partiEtiketi: `L${id}`, miktar, ilkGiris: ilk, sonKullanma });
+    const lotlar = [s(1, '2026-10-01T10:00:00Z', '4'), s(2, '2026-10-05T10:00:00Z', '3', '2026-12-01'), s(3, '2026-10-09T10:00:00Z', '5', '2027-01-01'), s(4, '2026-09-01T10:00:00Z', '9', '2026-11-01'), s(5, '2026-08-01T10:00:00Z', '9', null, 'istasyon')];
+    const sirayla = (sira?: 'fefo' | 'fifo' | 'lifo') => teslimLotlari(lotlar, '6', '2026-11-13', sira).lotlar.map((x) => [x.bakiyeId, x.onerilen]);
+    assert.deepEqual(sirayla(), [[2, '3'], [3, '3'], [1, null]], 'verilmezse bugünkü kural: son kullanma tarihi olan önce');
+    assert.deepEqual(sirayla('fefo'), sirayla());
+    assert.deepEqual(sirayla('fifo'), [[1, '4'], [2, '2'], [3, null]], 'ilk giren önce, tarihe bakmadan');
+    assert.deepEqual(sirayla('lifo'), [[3, '5'], [2, '1'], [1, null]], 'son giren önce');
+    const o = teslimLotlari(lotlar, '20', '2026-11-13', 'lifo');
+    assert.deepEqual([o.yeterli, o.mevcut, o.veriYetersiz], [false, '12', false]);
+    assert.deepEqual(o.lotlar[0], { bakiyeId: 3, konumId: 3, konumKod: 'K3', partiId: 3, partiEtiketi: 'L3', miktar: '5', ilkGiris: '2026-10-09T10:00:00Z', sonKullanma: '2027-01-01', onerilen: '5' });
+    assert.deepEqual(teslimLotlari([], '1'), { veriYetersiz: true, yeterli: false, mevcut: '0', lotlar: [] });
+    assert.deepEqual(cikisOnerisi(lotlar, '6', '2026-11-13').oneriler.map((x) => x.bakiyeId), [2, 3], 'çıkış önerisinin sırası değişmedi (2099-4 a)');
   });
 
   test('DEP-23/24 parti seçimi: tek parti kendiliğinden, birden çoksa seçim; partisiz satır partiyi uydurmaz', () => {
