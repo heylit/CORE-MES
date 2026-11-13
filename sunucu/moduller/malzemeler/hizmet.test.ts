@@ -172,6 +172,20 @@ describe('Hizmet kartı (kart #163, MH1-MH5, gerçek PostgreSQL)', () => {
     assert.deepEqual([k?.tur, k?.hizmetYonu, k?.logoKartTuru, k?.eksikler], ['hizmet', 'verilen', null, []]);
   });
 
+  test('3198 N1: Logo kuyruğu türü ve yönü sınırdan önce süzer; kapalı türdeki eski kartlar açık olanı bekletmez', async () => {
+    // Kuyruğun en eskisi önceki testlerin alınan hizmet kartıdır; tek yerlik kuyruk süzme sınırdan sonra olsaydı hep onu verirdi.
+    const sarf = await kartAc({ tur: 'sarf', kod: 'SF-KYS-00001', kat: 'kaynak', birim: 'kg', yon: null });
+    await kartAc({ yon: 'Verilen', kat: 'nakliye', kod: 'HZ-NAK-00009', birim: 'sefer' });
+    const ilk = async (s: Parameters<typeof logoyaGidecekMalzemeler>[2]) => (await vt().tx((db) => logoyaGidecekMalzemeler(db, 1, s)))[0];
+    assert.equal((await ilk({ hizmetDahil: true }))?.hizmetYonu, 'alinan', 'en eski kart alınan hizmet');
+    const verilen = await ilk({ malzemeDahil: false, hizmetYonleri: ['verilen'] });
+    assert.deepEqual([verilen?.tur, verilen?.hizmetYonu], ['hizmet', 'verilen'], 'alınan yön kapalıyken verilen hizmet sırada');
+    const malzeme = await ilk({ hizmetYonleri: [] });
+    assert.ok(malzeme !== undefined && malzeme.tur !== 'hizmet', 'hizmet kapalıyken ilk kart malzeme');
+    assert.deepEqual(await vt().tx((db) => logoyaGidecekMalzemeler(db, 500, { malzemeDahil: false, hizmetYonleri: [] })), [], 'ikisi de kapalı: boş');
+    assert.ok((await vt().tx((db) => logoyaGidecekMalzemeler(db, 500))).some((k) => k.no === sarf.no), 'öntanım: malzeme gelir');
+  });
+
   test('malzemeAra: hizmet türü ve yönüyle süzülür (satın alma alınan hizmeti seçer)', async () => {
     const r = await vt().tx((db) => malzemeAra(db, { metin: null, turler: ['hizmet'], hizmetYonu: 'alinan', yalnizAktif: true, sayfa: 1, sayfaBoyu: 200 }));
     assert.ok(r.satirlar.length > 0);

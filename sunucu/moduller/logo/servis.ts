@@ -185,9 +185,9 @@ async function malzemeHazirla(db: Db, o: TurOrtami): Promise<TurSonucu | KopruAd
     alinan: await sistemAyariOku(db, HIZMET_AYARI.alinan), verilen: await sistemAyariOku(db, HIZMET_AYARI.verilen),
   };
   const malzemeAcik = o.malzemeAcik ?? (await sistemAyariOku(db, MALZEME_GONDERIM_AYARI)) === true;
-  // Kapalı yöndeki hizmet kartı ve gönderimi kapalıyken malzeme kartı atlanır: istek yok, satır yok, kart bekler.
-  const kuyruk = (await logoyaGidecekMalzemeler(db, KUYRUK_SINIRI, { hizmetDahil: true }))
-    .filter((k) => uygunMu(k) && (k.tur !== 'hizmet' ? malzemeAcik : k.hizmetYonu !== null && hizmetAcik[k.hizmetYonu]));
+  // Kapalı yöndeki hizmet kartı ve gönderimi kapalıyken malzeme kartı sorguda atlanır (sınırdan önce): istek yok, satır yok, kart bekler.
+  const hizmetYonleri = (['alinan', 'verilen'] as const).filter((y) => hizmetAcik[y]);
+  const kuyruk = (await logoyaGidecekMalzemeler(db, KUYRUK_SINIRI, { malzemeDahil: malzemeAcik, hizmetYonleri })).filter(uygunMu);
   if (kuyruk.length === 0) return pasifTuru(db, o, kopru);
   // Kart numarası türler arasında tekildir (tek kart tablosu).
   const satirlar = new Map<number, GidenSatiri>();
