@@ -11,7 +11,7 @@ import { logoBirimSetiKullaniliyorMu, logoyaGidecekMalzemeler, malzemeLogoSonucu
 import type { LogoyaGidecekMalzeme, MalzemeLogoSonucu } from '../malzemeler/disari.ts';
 import type { KopruIstemcisi, SatirliSonuc } from './kopru.ts';
 import {
-  BELIRSIZ_BEKLEME_MS, bekletmeGovdesi, eklemeGovdesi, kodCakismasiMetni, guncellemeEslemesi, HIZMET_ALANLARI, kapatmaGovdesi, karsilamaGovdesi, karsilamaKaydiBul, malzemeGuncellemeGovdesi, siparisGuncellemeGovdesi, talepGovdesi, satirEslemesi, siparisGovdesi, gecerliBirimSetleri, geriCekilmeMs, hizmetGovdesi, HIZMET_AYARI, kartEylemi, kirp, KUYRUK_SINIRI,
+  BELIRSIZ_BEKLEME_MS, bekletmeGovdesi, eklemeGovdesi, kodCakismasiMetni, guncellemeEslemesi, HIZMET_ALANLARI, kapatmaGovdesi, karsilamaGovdesi, karsilamaKaydiBul, malzemeGuncellemeGovdesi, siparisGuncellemeGovdesi, talepGovdesi, satirEslemesi, siparisGovdesi, gecerliBirimSetleri, geriCekilmeMs, hizmetGovdesi, HIZMET_AYARI, MALZEME_GONDERIM_AYARI, kartEylemi, kirp, KUYRUK_SINIRI,
   FATURA_TUR_SINIRI, FATURA_YENIDEN_OKUMA_MS, FIS_GONDERIM_AYARI, gonderimSekli, LOGO_FIS_TURLERI, logoFisDurumu, STOK_FISI_LOGO_TURU, stokFisindenLogoFisi, kontrolAdiminiYorumla, listeOkunmaliMi, malzemeFisiGovdesi, malzemeFisiOzeti, eskiEmirFisiNo, FIS_NO_EN_COK, logoFisNumarasi, OKUMA_HATA_BEKLEME_MS, LOGO_AKISLARI, LOGO_KONTROL_ADIMLARI, logoAkisDurumu, satisSiparisiGovdesi, satisTeklifiGovdesi,
   belgeStokKodlari, CARI_ARAMA_EN_AZ, CARI_ARAMA_EN_COK, logoKodlarinaCevir, sayfaliOkumaSirasi,
 } from './kurallar.ts';
@@ -59,6 +59,8 @@ export interface TurOrtami {
   saat: () => Date;
   // Yalnız test verir; üretimde Sistem Ayarları'ndaki yön anahtarları geçerlidir (HIZMET_AYARI).
   hizmetAcik?: Readonly<Record<HizmetYonu, boolean>>;
+  // Yalnız test verir; üretimde "Logo: malzeme kartı gönderimi" geçerlidir (MALZEME_GONDERIM_AYARI).
+  malzemeAcik?: boolean;
   // Logo'ya gitmiş kartın ad güncellemesi (S4 b): kuyruğu ve sonucu malzemelerin işlevleridir; gelene kadar verilmez (UYUM-BORCU).
   malzemeGuncelleme?: MalzemeGuncellemeKaynagi;
   // Silinen Logo kartının Logo'da pasife alınması (2114b, 2114-7, ADR 0017 madde 8): kuyruğu ve sonucu malzemelerin işlevleridir.
@@ -182,9 +184,10 @@ async function malzemeHazirla(db: Db, o: TurOrtami): Promise<TurSonucu | KopruAd
   const hizmetAcik = o.hizmetAcik ?? {
     alinan: await sistemAyariOku(db, HIZMET_AYARI.alinan), verilen: await sistemAyariOku(db, HIZMET_AYARI.verilen),
   };
-  // Kapalı yöndeki hizmet kartı atlanır: istek yok, satır yok, kart bekler.
+  const malzemeAcik = o.malzemeAcik ?? (await sistemAyariOku(db, MALZEME_GONDERIM_AYARI)) === true;
+  // Kapalı yöndeki hizmet kartı ve gönderimi kapalıyken malzeme kartı atlanır: istek yok, satır yok, kart bekler.
   const kuyruk = (await logoyaGidecekMalzemeler(db, KUYRUK_SINIRI, { hizmetDahil: true }))
-    .filter((k) => uygunMu(k) && (k.tur !== 'hizmet' || (k.hizmetYonu !== null && hizmetAcik[k.hizmetYonu])));
+    .filter((k) => uygunMu(k) && (k.tur !== 'hizmet' ? malzemeAcik : k.hizmetYonu !== null && hizmetAcik[k.hizmetYonu]));
   if (kuyruk.length === 0) return pasifTuru(db, o, kopru);
   // Kart numarası türler arasında tekildir (tek kart tablosu).
   const satirlar = new Map<number, GidenSatiri>();

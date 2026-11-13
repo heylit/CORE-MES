@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { after, afterEach, before, beforeEach, describe, test } from 'node:test';
 import type { FastifyInstance } from 'fastify';
+import { LOGO_AYARLARI } from '#paylasilan/ayarlar/logo.ts';
 import { testVeritabaniKur } from '#cekirdek/test-vt.ts';
 import type { TestVeritabani } from '#cekirdek/test-vt.ts';
 import type { Veritabani } from '#cekirdek/db.ts';
@@ -125,6 +126,7 @@ describe('Logo malzeme kartı gönderimi, sahte köprüyle uçtan uca (kart #207
     await tamam('/malzeme-logo-karsiliklari/kaydet', { cesit: 'birim', tmiDegeri: 'kg', logoDegeri: '06' });
     await tamam('/malzeme-logo-karsiliklari/kaydet', { cesit: 'birim', tmiDegeri: 'saat', logoDegeri: '05' });
     await tamam('/ayarlar/logo.baglanti/degistir', { deger: true });
+    await tamam('/ayarlar/logo.malzeme-gonderimi/degistir', { deger: true });
     const opId = await vt().tx((db) => yoneticiOlustur(db, { ad: 'Deneme Okuyucu', kullaniciAdi: 'lb-okuyucu', parola: PAROLA }));
     // Yerleşik rollerin hiçbiri malzemeyi yalnız okumaz: okuyucu rolü testte açılır.
     await vt().sorgu("INSERT INTO rol (kod, ad) VALUES ('okuyucu', 'Okuyucu')");
@@ -641,6 +643,31 @@ describe('Logo malzeme kartı gönderimi, sahte köprüyle uçtan uca (kart #207
     } finally {
       await yaz('logo.kdv-orani', 20);
       await yaz('logo.hizmet-kdv-orani', null);
+    }
+  });
+
+  test('3198 a: "Logo: malzeme kartı gönderimi" kapalıyken malzeme kartına istek yok, satır yok, kart bekler; açılınca gider; hizmet kendi anahtarıyla gider', async () => {
+    assert.equal(LOGO_AYARLARI['logo.malzeme-gonderimi'].varsayilan, false, 'kapalı gelir');
+    await kuyruguBosalt();
+    await tamam('/ayarlar/logo.malzeme-gonderimi/degistir', { deger: false });
+    try {
+      const k = await aktifKart();
+      const h = await hizmetKart('Alınan');
+      const bellek = yeniSurecBellegi();
+      const once = kopru.istekler.length;
+      const kapali = turOrtami(bellek);
+      for (let i = 0; i < 3; i++) { simdi += BELIRSIZ_BEKLEME_MS; assert.deepEqual(await tur(kapali), { tur: 'bos' }); }
+      assert.equal(kopru.istekler.slice(once).filter((i) => i.yol.includes(k.kod) || (i.govde as { code?: string } | null)?.code === k.kod).length, 0, 'malzeme kartına istek yok');
+      assert.equal(await giden(k.no), null, 'satır yazılmadı');
+      assert.equal((await kartLogo(k.no))?.durum, 'bekliyor');
+      const yalnizAlinan = { alinan: true, verilen: false };
+      assert.deepEqual(await tur(hizmetOrtami(bellek, yalnizAlinan)), { tur: 'niyet', no: h.no }, 'hizmet kendi anahtarıyla gider, malzeme atlanır');
+      assert.deepEqual(await tur(hizmetOrtami(bellek, yalnizAlinan)), { tur: 'gonderim', no: h.no, sonuc: 'gonderildi' });
+      await tamam('/ayarlar/logo.malzeme-gonderimi/degistir', { deger: true });
+      assert.deepEqual(await tur(turOrtami(bellek)), { tur: 'niyet', no: k.no }, 'açılınca bekleyen kart sırayla gider');
+      assert.deepEqual(await tur(turOrtami(bellek)), { tur: 'gonderim', no: k.no, sonuc: 'gonderildi' });
+    } finally {
+      await tamam('/ayarlar/logo.malzeme-gonderimi/degistir', { deger: true });
     }
   });
 

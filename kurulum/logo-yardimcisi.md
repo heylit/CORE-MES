@@ -2,7 +2,8 @@
 
 TMI Logo'ya, Logo istemcisiyle aynı bilgisayarda çalışan Logo yardımcısı üzerinden yazar (`araclar/logo-yardimcisi`). Yardımcı yalnız
 `127.0.0.1`'i dinler, Logo'ya Logo Objects (COM) ile yazar, Logo veritabanını SQL ile yalnız okur. İstek ancak iki koşul birlikteyken çıkar:
-Sistem Ayarları'nda "Logo bağlantısı" anahtarı açık (varsayılan kapalı) VE aşağıdaki iki ortam değişkeni tanımlı. Biri eksikse
+Sistem Ayarları'nda "Logo bağlantısı" ve işin kendi anahtarı (malzeme kartı için "Logo: malzeme kartı gönderimi") açık (hepsi varsayılan
+kapalı) VE aşağıdaki iki ortam değişkeni tanımlı. Biri eksikse
 kartlar "bekliyor" olarak birikir, hiçbir istek atılmaz, sunucu açılır. Anahtar açık ama değişken yoksa `/saglik/ayrinti`'de
 `logo-malzeme-gonderimi` işi "Bekliyor" ve nedenini gösterir (anahtar kapalıyken de). Anahtarı açıp kapatmak denetim kaydına yazılır.
 

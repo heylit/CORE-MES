@@ -195,6 +195,7 @@ export function eklemeGovdesi(k: GonderilecekKart, o: GovdeSecenegi): { govde: M
 export type HizmetYonu = 'alinan' | 'verilen';
 
 // Hizmet gönderimi Sistem Ayarları'nda yön başına ayrı anahtardır, varsayılan kapalı (kullanıcı kararı 12.10.2026, kart #777; LH1 a'nın yerine).
+export const MALZEME_GONDERIM_AYARI = 'logo.malzeme-gonderimi';
 export const HIZMET_AYARI = Object.freeze({ alinan: 'logo.hizmet-alinan-gonderimi', verilen: 'logo.hizmet-verilen-gonderimi' } as const);
 
 // Logo hizmet kartı türü (CARD_TYPE): alınan 1, verilen 2 (kullanıcı bilgisi, 09.10.2026).
@@ -1181,7 +1182,7 @@ export interface LogoAkisTanimi {
 }
 
 export const LOGO_AKISLARI: readonly LogoAkisTanimi[] = [
-  { anahtar: 'malzeme-karti', yon: 'tmi-logo', baslik: 'Malzeme kartı', kaynak: 'bagli', ayarlar: [], belgeTurleri: ['malzeme'],
+  { anahtar: 'malzeme-karti', yon: 'tmi-logo', baslik: 'Malzeme kartı', kaynak: 'bagli', ayarlar: [MALZEME_GONDERIM_AYARI], belgeTurleri: ['malzeme'],
     aciklama: 'Aktif malzeme kartı Logo\'da açılır (Material/AddRich); önce "var mı" okunur.' },
   { anahtar: 'malzeme-guncelleme', yon: 'tmi-logo', baslik: 'Malzeme adı güncellemesi', kaynak: 'bagli', ayarlar: ['logo.malzeme-guncelleme-gonderimi'],
     belgeTurleri: ['malzeme-guncelleme'],
