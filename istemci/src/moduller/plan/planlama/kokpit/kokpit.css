@@ -260,6 +260,10 @@
 .tc-pyq-mat-bolum th { padding: var(--b-1) 0; background: var(--panel2); color: var(--muted); font-size: var(--yazi-xs); font-weight: 700; }
 .tc-pyq-mat-bolum th > span { position: sticky; left: var(--b-2); }
 .tc-pyq-mat .tc-pyq-dar { display: none; }
+.tc-pyq-mat-kap[data-kalabalik] .tc-pyq-genis { display: none; }
+.tc-pyq-mat-kap[data-kalabalik] thead .tc-pyq-dar { display: flex; flex-direction: row; align-items: center; gap: var(--b-1); min-height: var(--b-6); padding: 0; color: var(--muted); font-size: var(--yazi-xs); font-weight: 700; }
+.tc-pyq-mat-kap[data-kalabalik] .tc-pyq-dar .tc-simge { transform: rotate(90deg); }
+.tc-pyq-mat-kap[data-kalabalik][data-tum="hayir"] tr[data-yuk-satiri]:not([data-dolu], [data-iz]) { display: none; }
 
 /* Emir satırları. */
 .tc-pyq-mat tbody tr[data-d="gec"] > th { box-shadow: inset var(--kayma) 0 0 var(--d-gec); }
