@@ -559,3 +559,13 @@ button.tc-pym-m-ad:hover b { text-decoration: underline; }
 .tc-pym-l-ik-asim { background: var(--stop); }
 .tc-pym-l-ik-kesinti { border: var(--cizgi-ince) dashed var(--hold); background: repeating-linear-gradient(135deg, var(--hold) 0 var(--kayma), transparent var(--kayma) var(--nokta)); }
 .tc-pym-l-ik-degisim { background: repeating-linear-gradient(90deg, var(--muted) 0 var(--pay-ince), transparent var(--pay-ince) var(--b-1)); }
+/* 3199: ikincil kaynak yüzünden kayan işin önündeki bekleme (ilk aday başlangıçtan başlangıca) ve "Oynat": iş önce ilk yerinde, sonra planlanan yerine kayar. */
+.tc-pym-g-bek {
+  position: absolute; top: var(--nokta); bottom: var(--nokta); left: calc(var(--x) * var(--pym-sa)); width: calc(var(--w) * var(--pym-sa)); overflow: hidden; padding: 0 var(--b-1);
+  border: var(--cizgi-ince) dashed var(--hold); border-radius: var(--yari-1); color: var(--muted); font-size: var(--yazi-xs); white-space: nowrap; pointer-events: none;
+  background: repeating-linear-gradient(135deg, color-mix(in srgb, var(--hold) 25%, transparent) 0 var(--b-1), transparent var(--b-1) var(--b-2));
+}
+.tc-pym-gantt[data-oynat="kay"] .tc-pym-g-is[data-kay] { transition: left calc(var(--hareket-panel) * 6) ease-out; }
+.tc-pym-gantt[data-oynat="kay"] .tc-pym-g-bek { transition: opacity calc(var(--hareket-panel) * 6); }
+.tc-pym-gantt[data-oynat="once"] .tc-pym-g-is[data-kay] { left: calc(var(--x0) * var(--pym-sa)); }
+.tc-pym-gantt[data-oynat="once"] .tc-pym-g-bek { opacity: 0; }

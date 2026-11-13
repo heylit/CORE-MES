@@ -37,6 +37,14 @@ export function ZamanCizelgesi(o: Ozellikler) {
   const simdiye = () => kap.current?.scrollTo({ left: Math.max(0, now * v.px - 60), behavior: 'smooth' });
   const geri = o.planYaz ? planGeriAdimi(o.komut) : null;
   const katla = (g: string) => setKatli((l) => (l.includes(g) ? l.filter((x) => x !== g) : [...l, g]));
+  // 3199 "Oynat": ikincil kaynak yüzünden kayan işler önce ilk aday yerinde çizilir, sonra planlanan yerlerine kayar (hareket azaltılmışsa süre 0).
+  const [oynat, setOynat] = useState<'yok' | 'once' | 'kay'>('yok');
+  const kayanVar = useMemo(() => [...v.gruplar.flatMap((g) => g.satirlar), ...v.fason].some((s) => s.isler.some((i) => i.bek)), [v]);
+  useEffect(() => {
+    if (oynat === 'yok') return undefined;
+    const z = oynat === 'once' ? window.setTimeout(() => setOynat('kay'), 400) : window.setTimeout(() => setOynat('yok'), 1600);
+    return () => window.clearTimeout(z);
+  }, [oynat]);
 
   const satir = (s: ZamanSatiri) => (
     <div key={s.m} className="tc-pym-g-satir">
@@ -47,11 +55,13 @@ export function ZamanCizelgesi(o: Ozellikler) {
         {v.cizgiler.map((x) => <i key={`c${x}`} className="tc-pym-g-gunc" ref={degisken({ '--x': x })} />)}
         <i className="tc-pym-g-simdi" ref={degisken({ '--x': now })} />
         {v.termin != null && <i className="tc-pym-g-termin" title={`Termin ${v.terminYazi ?? ''}`} ref={degisken({ '--x': v.termin })} />}
+        {s.isler.map((i) => i.bek && <span key={`b${i.id}`} className="tc-pym-g-bek" title={i.bek.baslik} ref={degisken({ '--x': i.bek.x, '--w': i.bek.w })}>İkincil kaynak bekledi</span>)}
         {s.isler.map((i) => (
           <button key={i.id} type="button" className="tc-pym-g-is" data-job={i.job} data-gec={i.gec ? '' : undefined} data-soluk={i.soluk ? '' : undefined}
             data-bekle={o.bekleyen?.has(i.job) ? '' : undefined}
             data-secili={o.secili === i.id ? '' : undefined} title={bekleyenBaslik(o.bekleyen, i.job, i.baslik)} aria-label={bekleyenBaslik(o.bekleyen, i.job, i.baslik)}
-            ref={degisken({ '--x': i.x, '--w': i.w, '--c': i.renk, '--a': `${(i.ayar * 100).toFixed(2)}%` })} onClick={() => o.opSec(i.id)}>
+            data-kay={i.bek ? '' : undefined}
+            ref={degisken({ '--x': i.x, '--w': i.w, '--c': i.renk, '--a': `${(i.ayar * 100).toFixed(2)}%`, ...(i.bek ? { '--x0': i.bek.x } : {}) })} onClick={() => o.opSec(i.id)}>
             <i className="tc-pym-g-is-ayar" aria-hidden="true" />
             {i.degisim.map((d) => <i key={d.a} className="tc-pym-g-is-takim" title={d.baslik} aria-hidden="true" ref={degisken({ '--ta': `${(d.a * 100).toFixed(2)}%`, '--tw': `${(d.w * 100).toFixed(2)}%` })} />)}{o.bekleyen?.has(i.job) ? <Simge ad="pause" boyut="k" /> : i.kilit && <Simge ad="lock" boyut="k" />}{i.etiket && <span>{i.etiket}</span>}
           </button>
@@ -88,6 +98,9 @@ export function ZamanCizelgesi(o: Ozellikler) {
         <span className="tc-pym-ara" />
         <button type="button" className="tc-dugme tc-pym-kucuk tc-pym-hayalet tc-pym-simge-d" title="Grupları katla ya da aç" aria-label="Grupları katla ya da aç"
           onClick={() => setKatli((l) => (l.length ? [] : v.gruplar.map((g) => g.g)))}><Simge ad="layers" boyut="k" /></button>
+        <button type="button" className="tc-dugme tc-pym-kucuk" data-pasif={kayanVar ? undefined : ''} aria-disabled={!kayanVar}
+          title={kayanVar ? 'İkincil kaynak yüzünden kayan işleri ilk yerlerinden planlanan yerlerine kaydırarak göster' : 'İkincil kaynak yüzünden kayan iş yok.'}
+          onClick={() => { if (kayanVar) setOynat('once'); }}><Simge ad="play" boyut="k" />Oynat</button>
         <button type="button" className="tc-dugme tc-pym-kucuk tc-pym-hayalet tc-pym-simge-d" title="Şimdiye git" aria-label="Şimdiye git" onClick={simdiye}><Simge ad="target" boyut="k" /></button>
         {o.planYaz && (
           <button type="button" className="tc-dugme tc-pym-kucuk" data-pasif={geri === null ? '' : undefined} aria-disabled={geri === null}
@@ -95,7 +108,7 @@ export function ZamanCizelgesi(o: Ozellikler) {
             onClick={() => { if (geri !== null) o.komut?.geriDon(geri); }}><Simge ad="back" boyut="k" />Planı geri al</button>
         )}
       </div>
-      <div ref={kap} className="tc-pym-gantt" tabIndex={0} role="region" aria-label="Plan çizelgesi" data-olcek={olcek}>
+      <div ref={kap} className="tc-pym-gantt" tabIndex={0} role="region" aria-label="Plan çizelgesi" data-olcek={olcek} data-oynat={oynat === 'yok' ? undefined : oynat}>
         <div className="tc-pym-g-ic" ref={degisken({ '--w': v.saat })}>
           <div className="tc-pym-g-ust">
             <div className="tc-pym-g-kose">Tezgâh</div>
@@ -132,8 +145,7 @@ export function ZamanCizelgesi(o: Ozellikler) {
         {o.bekleyen?.size ? <span><i className="tc-pym-l-bekle" />Beklemede</span> : null}
         {v.ikincil.length > 0 && (
           <>
-            <span><i className="tc-pym-l-ik-profil" />Kaynak doluluğu</span><span><i className="tc-pym-l-ik-asim" />Kapasite aşımı</span>
-            <span><i className="tc-pym-l-ik-kesinti" />Kesinti</span>
+            <span><i className="tc-pym-l-ik-kesinti" />Bekleme, kesinti</span><span><i className="tc-pym-l-ik-profil" />Kaynak doluluğu</span><span><i className="tc-pym-l-ik-asim" />Kapasite aşımı</span>
             {v.ikincil.some((x) => x.takim) && <span><i className="tc-pym-l-ik-degisim" />Takım değişimi</span>}
           </>
         )}

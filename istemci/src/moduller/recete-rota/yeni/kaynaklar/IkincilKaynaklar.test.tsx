@@ -20,6 +20,7 @@ function kur(k: Kullanici) {
   const okumalar = {
     'GET /istasyonlar/aparat-kapasiteleri': () => json(200, { kapasiteler: [KAYNAK, TAKIM] }),
     'GET /rota/aparat-kullanimi': () => json(200, { kullanim: [{ malzemeId: 11, adim: 3 }] }),
+    'GET /plan/takim-omurleri': () => json(200, { takimlar: [{ kapasiteId: 8, kalan: 120 }] }),
     'POST /istasyonlar/aparat-kapasiteleri/7/guncelle': () => json(200, KAYNAK),
   };
   return sunucuKur(k, { durum: ornekDurum(), yazmalar: okumalar });
@@ -41,7 +42,7 @@ describe('İkincil kaynaklar (3199)', () => {
     const satirlar = within(tablo).getAllByRole('row').slice(1).map((r) => r.textContent);
     expect(satirlar[0]).toMatch(/MM-0001.*Aparat.*Ortak.*Bakım · .*Sert.*3/);
     expect((within(tablo).getByRole('textbox', { name: 'MM-0001 adet' }) as HTMLInputElement).value).toBe('2');
-    expect(satirlar[1]).toMatch(/Kart 12.*Özel takım.*TZ1.*Açık.*600 dk · değişim 20 dk/);
+    await waitFor(() => expect(within(tablo).getAllByRole('row')[2]!.textContent).toMatch(/Kart 12.*Özel takım.*TZ1.*Açık.*600 dk · kalan 120/));
     expect(within(bolge).getByRole('table', { name: 'Kesinti takvimi' }).textContent).toMatch(/Bakım/);
     expect(within(bolge).getByText(/“İzle”: plan sınırlamaz, aşımı uyarır/)).toBeTruthy();
     expect(within(bolge).getByRole('button', { name: 'Kaynak ekle' })).toBeTruthy();
@@ -51,17 +52,19 @@ describe('İkincil kaynaklar (3199)', () => {
     const istekler = kur(YAZAN);
     const bolge = await ac();
     const kutu = await within(bolge).findByRole('textbox', { name: 'MM-0001 adet' });
+    fireEvent.click(kutu);
+    expect(screen.queryByRole('dialog', { name: 'İkincil kaynak' })).toBeNull();
     fireEvent.change(kutu, { target: { value: '3' } });
     fireEvent.blur(kutu);
     await waitFor(() => expect(yazmalar(istekler)).toHaveLength(1));
     expect(yazmalar(istekler)[0]!.govde).toMatchObject({ surum: 3, adet: 3, kisit: 'sert', istasyonId: null, kesintiler: [{ neden: 'bakim', adet: 1 }] });
   });
 
-  it('düzenleme: kısıt İzle yapılır; gövde sürümle ve kesinti listesiyle gider', async () => {
+  it('düzenleme satıra basınca panelde: kısıt İzle yapılır; gövde sürümle ve kesinti listesiyle gider', async () => {
     const istekler = kur(YAZAN);
     const bolge = await ac();
     const tablo = await within(bolge).findByRole('table', { name: 'İkincil kaynaklar' });
-    fireEvent.click(within(tablo).getAllByRole('button', { name: 'MM-0001 düzenle' })[0]!);
+    fireEvent.click(within(tablo).getAllByRole('row')[1]!);
     const pencere = await screen.findByRole('dialog', { name: 'İkincil kaynak' });
     fireEvent.change(within(pencere).getByRole('combobox', { name: 'Kısıt' }), { target: { value: 'izle' } });
     fireEvent.click(within(pencere).getByRole('button', { name: 'Kaydet' }));
@@ -76,7 +79,8 @@ describe('İkincil kaynaklar (3199)', () => {
     let bolge = await ac();
     await within(bolge).findByRole('table', { name: 'İkincil kaynaklar' });
     expect(within(bolge).queryByRole('button', { name: 'Kaynak ekle' })).toBeNull();
-    expect(within(bolge).queryByRole('button', { name: /düzenle$/ })).toBeNull();
+    fireEvent.click(within(within(bolge).getByRole('table', { name: 'İkincil kaynaklar' })).getAllByRole('row')[1]!);
+    expect(screen.queryByRole('dialog', { name: 'İkincil kaynak' })).toBeNull();
     expect(within(bolge).queryAllByRole('textbox')).toEqual([]);
     expect(yazmalar(istekler)).toEqual([]);
     cleanup();

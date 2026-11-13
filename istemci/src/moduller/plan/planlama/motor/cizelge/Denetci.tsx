@@ -112,7 +112,7 @@ export function OpDenetci({ id, ...o }: DenetciOzellikleri & { id: string }) {
           {ik.neden && <><dt>Neden</dt><dd>{ik.neden}</dd></>}
           {ik.doluluk && <><dt>Doluluk</dt><dd>{ik.doluluk}</dd></>}
           {ik.kimde && <><dt>Kimde</dt><dd>{ik.kimde}</dd></>}
-          {ik.neden && <><dt>Bekledi</dt><dd className="tc-pym-mono">{saatYaz(D, r.S)} saatine kadar</dd></>}
+          {ik.bekleme && <><dt>Bekleme</dt><dd className="tc-pym-mono">{ik.bekleme}</dd></>}
           {ik.takim.map((t) => <Fragment key={t}><dt>Takım</dt><dd>{t}</dd></Fragment>)}
         </dl>
       )}

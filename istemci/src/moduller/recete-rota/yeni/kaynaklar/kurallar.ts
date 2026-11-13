@@ -318,10 +318,13 @@ export function takvimDurumu(kesintiler: readonly KesintiSatiri[], simdi: number
 }
 
 // Ömür hücresi: yalnız özel takımda; birim dakika (kesme) ya da adet (V15). Değişim süresi yanında.
-export function omurMetni(k: { tur: string; omur: number | null; omurBirimi: keyof typeof OMUR_BIRIM_ADI | null; degisimDk: number | null }): string | null {
+// Ömür sütunu: "600 dk · kalan 120" (on izleme v7). Kalan şimdiki ömürdür (planın başlangıç ömrü); okunmadıysa (undefined) yazılmaz,
+// CNC Kurulum'da yük kaydı yoksa (null) "kalan bilinmiyor".
+export function omurMetni(k: { tur: string; omur: number | null; omurBirimi: keyof typeof OMUR_BIRIM_ADI | null }, kalan?: number | null): string | null {
   if (k.tur !== 'ozel_takim' || k.omur === null || k.omurBirimi === null) return null;
-  const omur = `${k.omur.toLocaleString('tr-TR', { maximumFractionDigits: 2 })} ${OMUR_BIRIM_ADI[k.omurBirimi]}`;
-  return k.degisimDk === null ? omur : `${omur} · değişim ${String(k.degisimDk)} dk`;
+  const say = (x: number) => x.toLocaleString('tr-TR', { maximumFractionDigits: 2 });
+  const omur = `${say(k.omur)} ${OMUR_BIRIM_ADI[k.omurBirimi]}`;
+  return kalan === undefined ? omur : `${omur} · kalan ${kalan === null ? 'bilinmiyor' : say(Math.round(kalan))}`;
 }
 
 // <input type="datetime-local"> değeri (yerel) ile sunucunun ISO zamanı arasında.

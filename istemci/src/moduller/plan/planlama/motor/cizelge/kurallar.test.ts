@@ -218,7 +218,7 @@ describe('ikincil kaynak satırları (3199)', () => {
       opKaynak: { [a.id]: [{ kart: '900', adet: 1, asama: 'ayar_isleme' }, { kart: '901', adet: 1, asama: 'isleme' }], [b.id]: [{ kart: '900', adet: 1, asama: 'ayar_isleme' }] },
     });
     const at = (a.S + a.C) / 2;
-    const q = { ...p, ops: { ...p.ops, [a.id]: { ...a, takim: [{ id: '2', n: 1, dk: 20, at, kalan: 120, ihtiyac: 170, bilinmiyor: true }] }, [b.id]: { ...b, why: { t: 'ikincil', r: '1' } } } };
+    const q = { ...p, ops: { ...p.ops, [a.id]: { ...a, takim: [{ id: '2', n: 1, dk: 20, at, kalan: 120, ihtiyac: 170, bilinmiyor: true }] }, [b.id]: { ...b, why: { t: 'ikincil', r: '1' }, ikBas: b.S - 1.5 } } };
     return { c: x, p: q, cx, a, b, at };
   };
 
@@ -237,6 +237,10 @@ describe('ikincil kaynak satırları (3199)', () => {
     const is = z.gruplar.flatMap((g) => g.satirlar).flatMap((s) => s.isler).find((i) => i.id === a.id)!;
     expect(is.degisim).toHaveLength(1);
     expect(is.degisim[0]!.a).toBeCloseTo(0.5, 6);
+    expect(is.bek).toBeNull();
+    // Kayan işin önündeki bekleme: ilk aday başlangıçtan başlangıca; "Oynat" işi oradan kaydırır.
+    const kayan = z.gruplar.flatMap((g) => g.satirlar).flatMap((s) => s.isler).find((i) => i.id === b.id)!;
+    expect(kayan.bek).toEqual({ x: b.S - 1.5, w: 1.5, baslik: expect.stringMatching(/^İkincil kaynak bekledi: .* → /) as string });
   });
 
   it('ayrıntı: isteği, bekleme nedeni, doluluk, kimde; takım ömrü bilinmiyorsa söyler', () => {
@@ -246,6 +250,7 @@ describe('ikincil kaynak satırları (3199)', () => {
     expect(bek.neden).toMatch(/^(İkincil kaynak bekledi|Kaynak bakımda): AP-ORN-12 Flans fiksturu$/);
     expect(bek.doluluk).toMatch(/^1 adetten [01] tanesi kullanımda/);
     expect(bek.kimde === null || bek.kimde.includes('bitiş') || bek.kimde.startsWith('Bakım')).toBe(true);
+    expect(bek.bekleme).toMatch(/ → .* \(1 sa 30 dk\)$/);
     const tak = ikincilAyrintisi(c, p, cx, a.id)!;
     expect(tak.ister).toBe('AP-ORN-12 · İzle, TK-ORN-03 (yalnız işleme)');
     expect(tak.takim[0]).toMatch(/TK-ORN-03 kalan ömür 120 dk \(başlangıç ömrü bilinmiyor; tam ömür varsayıldı\), iş 170 dk ister: .* 20 dk takım değişimi eklendi, hazırlıkta "Takım hazırla"/);

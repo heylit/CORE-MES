@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { AdimEkipmaniGovdesi, EkipmanAsamasi, EkipmanGirdisi, KomutCevabi, MalzemeAraCevabi, OlcuAletiTurleriCevabi, RevizyonAyrintisi } from '#paylasilan/sozlesme/rota.ts';
-import { Dugme, Girdi, Secim, Simge, useBildirim } from '../../../../ortak/arayuz/index.ts';
+import { Dugme, Girdi, Secim, Simge, Tablo, useBildirim, type Sutun } from '../../../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../../../ortak/veri/api.ts';
 import { anahtarlar as rrAnahtarlari, type RrVerisi } from '../veri.ts';
 import type { Revizyon } from './kurallar.ts';
@@ -38,20 +38,22 @@ export function AdimEkipmani({ rev, opNo, yazabilir, kayitBekliyor }: Ozellikler
     <Bolme baslik={`Aparat ve ölçü aleti (${String(satirlar.length)})`}>
       {okuma.isError && <p className="tc-rr1-hata" role="alert">{hataIletisi(okuma.error, 'Adımın ekipmanı okunamadı.')}</p>}
       {okuma.isSuccess && satirlar.length === 0 && <p className="tc-rr1-ipucu">Bu adımda aparat ya da ölçü aleti istenmiyor.</p>}
-      {satirlar.length > 0 && (
-        <ul className="tc-rr1-sartnameler">
-          {satirlar.map((x, i) => (
-            <li key={`${x.tur}:${String(x.malzeme?.id ?? x.aletTuru?.id ?? i)}`} className="tc-rr1-sartname">
-              <div className="tc-rr1-sartname-ust">
-                <span className="tc-rr1-sartname-ad">
-                  <b><Simge ad={x.tur === 'aparat' ? 'wrench' : 'ruler'} boyut="k" />{satirAdi(x)}</b>
-                  <small className="tc-rr1-ipucu">{x.tur === 'aparat' ? `Aparat · ${String(x.adet)} adet · ${ASAMA_ADI[x.asama]}` : 'Ölçü aleti türü · plana girmez, hazırlık uyarısı'}{x.aciklama ? ` · ${x.aciklama}` : ''}</small>
-                </span>
-                {yazabilir && kilit === null && rev && opNo !== null && <Cikar revId={Number(rev.id)} surum={rev.surum} opNo={opNo} satirlar={satirlar} i={i} />}
-              </div>
-            </li>
-          ))}
-        </ul>
+      {satirlar.length > 0 && rev && (
+        <Tablo<Satir>
+          etiket="Adımın ekipmanı" satirlar={satirlar} satirAnahtari={(x) => `${x.tur}:${String(x.malzeme?.id ?? x.aletTuru?.id ?? 0)}`}
+          sutunlar={[
+            {
+              anahtar: 'kaynak', baslik: 'Kaynak', kirilmaz: true, csv: satirAdi,
+              hucre: (x) => <span><Simge ad={x.tur === 'aparat' ? 'wrench' : 'ruler'} boyut="k" /> {satirAdi(x)}{x.aciklama ? <small className="tc-rr1-ipucu"> · {x.aciklama}</small> : null}</span>,
+            },
+            { anahtar: 'adet', baslik: 'Adet', hizala: 'sag', hucre: (x) => (x.tur === 'aparat' ? String(x.adet) : '—') },
+            { anahtar: 'asama', baslik: 'Ne zaman', hucre: (x) => (x.tur === 'aparat' ? ASAMA_ADI[x.asama] : 'Plana girmez, hazırlık uyarısı') },
+            ...(yazabilir && kilit === null && opNo !== null ? [{
+              anahtar: 'cikar', baslik: '', csv: false as const,
+              hucre: (x: Satir) => <Cikar revId={Number(rev.id)} surum={rev.surum} opNo={opNo} satirlar={satirlar} i={satirlar.indexOf(x)} />,
+            } satisfies Sutun<Satir>] : []),
+          ]}
+        />
       )}
       {yazabilir && kilit === null && rev && opNo !== null && okuma.isSuccess && satirlar.length < AZAMI && (
         <Ekle revId={Number(rev.id)} surum={rev.surum} opNo={opNo} satirlar={satirlar} />

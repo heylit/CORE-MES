@@ -173,7 +173,7 @@ test.describe('R2 kaynaklar', () => {
     const kaynaklar = page.getByRole('region', { name: 'Kaynaklar' });
     const alt = kaynaklar.getByRole('tablist', { name: 'Kaynak türü' });
     await expect(alt.getByRole('tab')).toHaveCount(7, { timeout: 15_000 });
-    for (const ad of ['Genel bakış', 'Vardiyalar', 'İş merkezleri ve istasyonlar', /^Makineler/, /^Personel/, 'İkincil kaynaklar', 'Fason']) {
+    for (const ad of ['Genel bakış', 'Vardiyalar', 'İş merkezleri ve istasyonlar', /^Makineler/, /^Personel/, 'İkincil kaynaklar', 'Fason ve aparat']) {
       await alt.getByRole('tab', { name: ad }).click();
       await expect(alt.getByRole('tab', { name: ad, selected: true })).toBeVisible();
       await expect(kaynaklar.locator('.tc-rr2-govde')).toBeVisible();

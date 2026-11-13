@@ -40,3 +40,12 @@ export async function ikincilEkiOku(
   }
   return ikincilKaynakKur(okuma);
 }
+
+// 3199 (D): özel takımın şimdiki kalan ömrü, planın başlangıç ömrüyle aynı okuma (Kaynaklar > İkincil kaynaklar "Ömür" sütunu).
+// Ömür birimi satırdakidir; CNC Kurulum'da yük kaydı yoksa null (ekran "bilinmiyor" yazar). Çağıran istasyon okumasını yetkiyle verir.
+export async function takimKalanlari(db: Db): Promise<{ kapasiteId: number; kalan: number | null }[]> {
+  const ek = await ikincilEkiOku(db, { istasyon: true, emir: false }, []);
+  return (ek.kaynaklar ?? []).filter((k) => k.tur === 'ozel_takim' && k.omur !== null).map((k) => ({
+    kapasiteId: Number(k.id), kalan: k.kalanPay === null || k.omur === null ? null : Math.round(k.omur * k.kalanPay * 100) / 100,
+  }));
+}

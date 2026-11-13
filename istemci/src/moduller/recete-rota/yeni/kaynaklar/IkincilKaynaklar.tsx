@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ISTASYON_YAZMA_ISLEMLERI } from '#paylasilan/islemler.ts';
-import type { AparatKapasitesi, AparatKapasiteleriCevabi, AparatKapasitesiGovdesi } from '#paylasilan/sozlesme/istasyonlar.ts';
+import type { AparatKapasitesi, AparatKapasiteleriCevabi, AparatKapasitesiGovdesi, TakimOmurleriCevabi } from '#paylasilan/sozlesme/istasyonlar.ts';
 import type { AparatKullanimiCevabi, MalzemeAraCevabi } from '#paylasilan/sozlesme/rota.ts';
 import { Dugme, DurumKutusu, Girdi, Pencere, Rozet, Secim, Simge, Tablo, useBildirim, type Sutun } from '../../../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../../../ortak/veri/api.ts';
@@ -28,8 +28,8 @@ const KESINTI_EN_COK = 50;
 const OMUR_TAVANI = 1000000;
 const YOL = '/istasyonlar/aparat-kapasiteleri';
 export const IKINCIL_ACIKLAMA = 'Kart Malzemeler’den seçilir (aparat, kesici takım). “İzle”: plan sınırlamaz, aşımı uyarır. “Sert”: plan bekletir.';
-export const OMUR_ACIKLAMASI = 'Takım ömrü CNC Kurulum’daki takım yükünden başlar; plan ömrü işin işleme süresiyle (ya da adetle) düşürür. '
-  + 'Yetmezse ömrün bittiği anda işe değişim süresi eklenir ve hazırlığa “Takım hazırla” düşer.';
+export const OMUR_ACIKLAMASI = 'Takım ömrü CNC Kurulum’daki takım yükünden başlar; plan ömrü işin parça başı süresiyle düşer. '
+  + 'Değişim süresi kaynak satırında (satıra basınca açılan panelde).';
 
 interface Ozellikler {
   stations: readonly Istasyon[];
@@ -42,6 +42,8 @@ export function IkincilKaynaklar({ stations, items }: Ozellikler) {
   const yazar = yetki.var('istasyonlar.aparat-yaz');
   const liste = useQuery({ queryKey: [...KOK, 'liste'], enabled: okur, queryFn: () => api.get<AparatKapasiteleriCevabi>(YOL) });
   const kullanim = useQuery({ queryKey: [...KOK, 'kullanim'], enabled: okur, retry: false, queryFn: () => api.get<AparatKullanimiCevabi>('/rota/aparat-kullanimi') });
+  const takimVar = !!liste.data?.kapasiteler.some((k) => k.tur === 'ozel_takim' && k.omur !== null);
+  const omurler = useQuery({ queryKey: [...KOK, 'omur'], enabled: okur && takimVar, retry: false, queryFn: () => api.get<TakimOmurleriCevabi>('/plan/takim-omurleri') });
   const [form, formYaz] = useState<{ kayit: Kaynak | null } | null>(null);
   const istemci = useQueryClient();
   const { bildir } = useBildirim();
@@ -83,7 +85,12 @@ export function IkincilKaynaklar({ stations, items }: Ozellikler) {
     { anahtar: 'tur', baslik: 'Tür', hucre: (k) => IKINCIL_TUR_ADI[k.tur] },
     {
       anahtar: 'adet', baslik: 'Adet', hizala: 'sag', csv: (k) => String(k.adet),
-      hucre: (k) => (yazar ? <SatirGirdisi sayi deger={String(k.adet)} etiket={`${kart(k.aparatKartiId)?.code ?? `Kart ${String(k.aparatKartiId)}`} adet`} kaydet={(v) => adetYaz(k, v)} /> : sayi(k.adet)),
+      // Satıra basmak paneli açar; satırdaki adet kutusuna basmak ve yazmak açmaz.
+      hucre: (k) => (yazar ? (
+        <span onClick={(o) => { o.stopPropagation(); }} onKeyDown={(o) => { o.stopPropagation(); }} role="presentation">
+          <SatirGirdisi sayi deger={String(k.adet)} etiket={`${kart(k.aparatKartiId)?.code ?? `Kart ${String(k.aparatKartiId)}`} adet`} kaydet={(v) => adetYaz(k, v)} />
+        </span>
+      ) : sayi(k.adet)),
     },
     { anahtar: 'nerede', baslik: 'Nerede', hucre: nerede },
     {
@@ -92,14 +99,8 @@ export function IkincilKaynaklar({ stations, items }: Ozellikler) {
       csv: (k) => takvimDurumu(k.kesintiler, simdi).metin,
     },
     { anahtar: 'kisit', baslik: 'Kısıt', hucre: (k) => <Rozet ton={k.kisit === 'sert' ? 'bilgi' : 'uyari'}>{KISIT_ADI[k.kisit]}</Rozet>, csv: (k) => KISIT_ADI[k.kisit] },
-    { anahtar: 'omur', baslik: 'Ömür', hucre: (k) => omurMetni(k) ?? YOK },
+    { anahtar: 'omur', baslik: 'Ömür', hucre: (k) => omurMetni(k, omurler.isSuccess ? (omurler.data.takimlar.find((x) => x.kapasiteId === k.id)?.kalan ?? null) : undefined) ?? YOK },
     { anahtar: 'adim', baslik: 'Kullanan adım', hizala: 'sag', hucre: (k) => sayi(adim(k)) },
-    ...(yazar ? [{
-      anahtar: 'duzenle', baslik: '', csv: () => '',
-      hucre: (k: Kaynak) => (
-        <Dugme simge="edit" aria-label={`${kart(k.aparatKartiId)?.code ?? `Kart ${String(k.aparatKartiId)}`} düzenle`} onClick={() => { formYaz({ kayit: k }); }}>Düzenle</Dugme>
-      ),
-    }] : []),
   ];
   const kesintiler = kaynaklar.flatMap((k) => k.kesintiler.map((x) => ({ ...x, kaynak: k })))
     .filter((x) => Date.parse(x.bitis) > simdi).sort((a, b) => Date.parse(a.baslangic) - Date.parse(b.baslangic));
@@ -114,10 +115,11 @@ export function IkincilKaynaklar({ stations, items }: Ozellikler) {
         </h3>
         <Tablo<Kaynak>
           etiket="İkincil kaynaklar" sutunlar={sutunlar} satirlar={kaynaklar} satirAnahtari={(k) => k.id}
+          {...(yazar ? { satirSec: (k: Kaynak) => { formYaz({ kayit: k }); } } : {})}
           bosMesaj="Henüz ikincil kaynak yok. Aparat ya da özel takım ekleyin; rota adımı onu Ekipman bölümünde ister."
         />
         <p className="tc-rr2-not">{IKINCIL_ACIKLAMA}</p>
-        {kaynaklar.some((k) => k.tur === 'ozel_takim') && <p className="tc-rr2-not"><Simge ad="help" boyut="k" /> {OMUR_ACIKLAMASI}</p>}
+        {kaynaklar.some((k) => k.tur === 'ozel_takim') && <p className="tc-rr2-uyari" role="note"><Simge ad="help" boyut="k" /> {OMUR_ACIKLAMASI}</p>}
       </section>
       <section className="tc-rr2-grup" aria-label="Kesinti takvimi">
         <h3 className="tc-rr2-grup-baslik"><span>Kesinti takvimi ({kesintiler.length})</span></h3>

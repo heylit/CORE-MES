@@ -71,8 +71,12 @@ describe('Rota adımının aparat ve ölçü aleti listesi (2893-4 a)', () => {
     await waitFor(() => { expect(yazilan).toHaveLength(2); });
     // Sürüm ilk yazımdan dönen sürümdür: düzenleyicinin kaydı da aynı sürümü kullanır.
     expect(yazilan[1]).toEqual({ surum: 5, opNo: 10, ekipman: [{ tur: 'olcu_aleti', aletTuruId: 3, aciklama: '0-25 mm' }, { tur: 'aparat', malzemeId: 501, aciklama: null, adet: 2, asama: 'isleme' }] });
-    await within(panel).findByText('DM-DNM-1 Deneme aparat');
-    expect(within(panel).getByText(/Aparat · 2 adet · Yalnız işleme/)).toBeTruthy();
+    await within(panel).findByText(/DM-DNM-1 Deneme aparat/);
+    // On izleme v7: Kaynak, Adet, Ne zaman tablosu; ölçü aleti plana girmez.
+    const tablo = within(panel).getByRole('table', { name: 'Adımın ekipmanı' });
+    const satirlar = within(tablo).getAllByRole('row').slice(1).map((r) => r.textContent);
+    expect(satirlar.find((s) => /DM-DNM-1/.test(s ?? ''))).toMatch(/DM-DNM-1 Deneme aparat.*2.*Yalnız işleme/);
+    expect(satirlar.find((s) => /Mikrometre/.test(s ?? ''))).toMatch(/Mikrometre.*—.*Plana girmez, hazırlık uyarısı/);
 
     fireEvent.click(within(panel).getByRole('button', { name: 'Mikrometre adımdan çıkar' }));
     await waitFor(() => { expect(yazilan).toHaveLength(3); });

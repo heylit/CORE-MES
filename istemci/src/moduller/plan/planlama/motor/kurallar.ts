@@ -30,6 +30,8 @@ export interface PlanIslemi {
   // Bolluk: işin planı bozmadan kayabileceği saat; aynı aileden gelen kısa ayar; başlamış iş.
   sl: number | null; famHit: boolean; act: boolean;
   takim?: TakimOmru[];
+  // İkincil kaynak yüzünden kayan işin ilk aday başlangıcı (çizelgedeki bekleme taraması ve Oynat).
+  ikBas?: number;
 }
 export interface PlanOzeti { wT: number; late: number; n: number; suH: number | null; suN: number | null; famN: number | null; Cmax: number | null }
 export interface FailNedeni { kod: 'aday' | 'oncul' | 'zaman'; oncul?: string }
@@ -69,6 +71,7 @@ export function planOku(c: PlanlamaCalismasi | null): OkunanPlan | null {
       su: sayi(r.su) ?? 0, run: sayi(r.run) ?? 0, fas: !!r.fas, pin: !!r.pin, Su: sayi(r.Su), lot1: sayi(r.lot1), why,
       sl: sayi(r.sl), famHit: !!r.famHit, act: !!r.act,
       ...(Array.isArray(r.takim) && r.takim.length ? { takim: takimOku(r.takim) } : {}),
+      ...(sayi(r.ikBas) !== null ? { ikBas: r.ikBas as number } : {}),
     };
   }
   const o = p.ozet;

@@ -415,7 +415,7 @@ function tMach(o,c,cx,ctx,b,fast){
   const run=o.fai?Math.max(0,c.run-c.cyc):c.run;
   const lastLot=Math.min(run,c.tbRun);
   const tki=takimIhtiyaci(cx,ctx,o,M,c,run),tkEk=tki?tki.ek:0;
-  const W0=su>0?M.sw:M.rw;const s_in=s;
+  const W0=su>0?M.sw:M.rw;const s_in=s;let ikBas=null;
   for(let it=0;it<600;it++){
     s=openAt(W0,s);if(!isFinite(s))return null;
     const Su=adv(M.sw,s,su);if(!isFinite(Su))return null;
@@ -429,7 +429,7 @@ function tMach(o,c,cx,ctx,b,fast){
     const r={S:s,Su,C,su};
     const bad=fast?null:checkUse(cx,ctx.u,M,r,o.aparat,o);
     if(bad){let k=bad.k+1;
-      if(bad.t==='ikincil'){if(bad.kalici){const K=cx.IK[bad.r];while(k<NS&&K.cap[k]<bad.n-1e-6)k++;}s=Math.max(s+1e-6,k*SL-bad.off);why={t:'ikincil',r:bad.r};continue;}
+      if(bad.t==='ikincil'){if(ikBas===null)ikBas=s;if(bad.kalici){const K=cx.IK[bad.r];while(k<NS&&K.cap[k]<bad.n-1e-6)k++;}s=Math.max(s+1e-6,k*SL-bad.off);why={t:'ikincil',r:bad.r};continue;}
       if(bad.kalici&&bad.kisi){while(k<NS&&!M.kav[k])k++;}
       else if(bad.kalici){const cap=bad.t==='ayarci'?cx.capAyar:bad.t==='personel'?cx.capTot:cx.capG[M.grup];const need=bad.t==='ayarci'?1:M.opOran;while(k<NS&&cap[k]<need-1e-6)k++;}
       s=Math.max(s+1e-6,k*SL);why={t:bad.t};continue;}
@@ -441,6 +441,8 @@ function tMach(o,c,cx,ctx,b,fast){
     /* 2509 a: pay, işleme süresini uzatan pay oranıdır (acil iş payı ve arıza payı); canlı plan saati uzatılmış süredir, sapma ve öğrenme
        ölçümü işleme süresini (run) (1-pay) ile çarparak uzatılmamış süreye döner */
     const res={id:o.id,job:o.job,m:c.m,S:s,Su,C,lot1,su,run,cost,why,famHit,downHit,pay:c.pay||0};
+    /* Çizelgedeki bekleme taraması ve "Oynat": iş ikincil kaynak yüzünden kaydıysa ilk aday başlangıç (kaymadan önceki yer). */
+    if(ikBas!==null&&why&&why.t==='ikincil'&&s>ikBas+1e-9)res.ikBas=ikBas;
     if(tki)res.takim=tki.tk.map(t=>({id:t.id,dk:t.dk,n:t.n,kalan:t.kalan,ihtiyac:t.ihtiyac,sonra:t.sonra,bilinmiyor:t.bilinmiyor,
       at:t.n>0?adv(M.rw,Su,run*Math.min(1,Math.max(0,t.kalan/Math.max(t.ihtiyac,1e-9)))):null}));
     return res;

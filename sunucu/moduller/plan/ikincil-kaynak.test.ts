@@ -42,7 +42,7 @@ const kaynak = (k: Partial<MotorIkincilKaynagi> = {}): MotorIkincilKaynagi => ({
 });
 const iste = (x: Partial<MotorKaynakIstegi> = {}): MotorKaynakIstegi => ({ kart: '900', adet: 1, asama: 'ayar_isleme', ...x });
 
-interface Islem { m: string; S: number; Su: number; C: number; why: { t: string; r?: string }; takim?: { id: string; n: number; dk: number; at: number | null; kalan: number; bilinmiyor: boolean }[] }
+interface Islem { m: string; S: number; Su: number; C: number; why: { t: string; r?: string }; ikBas?: number; takim?: { id: string; n: number; dk: number; at: number | null; kalan: number; bilinmiyor: boolean }[] }
 function planla(ikincil: unknown, ayar = 0) {
   const g = planGirdisi({ calisma: calismayaMotorAyari(calisma(), MOTOR_AYARI_VARSAYILAN), kayit: kayit(ayar), kaynak: kaynakOkumasi(ikincil), bugun: '2026-10-19' });
   assert.ok(g);
@@ -74,6 +74,9 @@ describe('plan 3199: ikincil kaynak kısıtı', () => {
     const [a, b] = ops as [Islem, Islem];
     assert.ok(yakin(a.S, 8) && b.S >= a.C - 1e-6, JSON.stringify(ops));
     assert.deepEqual({ ...b.why }, { t: 'ikincil', r: '1' });
+    // Çizelgedeki bekleme taraması: kaymadan önceki ilk aday başlangıç; beklemeyen işte alan yok.
+    assert.ok(b.ikBas !== undefined && yakin(b.ikBas, 8) && b.ikBas < b.S, JSON.stringify(b));
+    assert.equal(a.ikBas, undefined);
   });
 
   test('iki adetli aparat sınırlamaz; adım iki adet isterse yine sıraya girer', () => {

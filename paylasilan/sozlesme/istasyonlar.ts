@@ -675,3 +675,7 @@ export const tesisSablonuSonucu = z.object({
 });
 export type TesisSablonuSonucu = z.output<typeof tesisSablonuSonucu>;
 
+
+// 3199 (D): özel takımın şimdiki kalan ömrü (GET /plan/takim-omurleri; planın başlangıç ömrü). Birim satırdaki ömür birimidir; yük kaydı yoksa null.
+export const takimOmurleriCevabi = z.object({ takimlar: z.array(z.object({ kapasiteId: intKimlik, kalan: z.number().nullable() })) });
+export type TakimOmurleriCevabi = z.output<typeof takimOmurleriCevabi>;

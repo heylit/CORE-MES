@@ -199,9 +199,11 @@ describe('ikincil kaynak (3199)', () => {
     expect(kesintiAraligi(k(new Date(2026, 10, 18, 8, 0).toISOString(), new Date(2026, 10, 20, 17, 0).toISOString()))).toBe('18.11 08:00 – 20.11 17:00');
   });
   it('ömür yalnız özel takımda ve birimiyle', () => {
-    expect(omurMetni({ tur: 'ozel_takim', omur: 600, omurBirimi: 'dk', degisimDk: 20 })).toBe('600 dk · değişim 20 dk');
-    expect(omurMetni({ tur: 'ozel_takim', omur: 250, omurBirimi: 'adet', degisimDk: null })).toBe('250 adet');
-    expect(omurMetni({ tur: 'aparat', omur: 600, omurBirimi: 'dk', degisimDk: 20 })).toBeNull();
+    expect(omurMetni({ tur: 'ozel_takim', omur: 600, omurBirimi: 'dk' })).toBe('600 dk');
+    expect(omurMetni({ tur: 'ozel_takim', omur: 600, omurBirimi: 'dk' }, 120.4)).toBe('600 dk · kalan 120');
+    expect(omurMetni({ tur: 'ozel_takim', omur: 600, omurBirimi: 'dk' }, null)).toBe('600 dk · kalan bilinmiyor');
+    expect(omurMetni({ tur: 'ozel_takim', omur: 250, omurBirimi: 'adet' })).toBe('250 adet');
+    expect(omurMetni({ tur: 'aparat', omur: 600, omurBirimi: 'dk' })).toBeNull();
   });
   it('yerel girdi ile ISO gidip gelir', () => {
     const iso = new Date(2026, 10, 13, 8, 30).toISOString();
