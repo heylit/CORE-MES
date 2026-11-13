@@ -431,3 +431,24 @@ export const adiminAcikMakineleri = (db: Db, isEmriId: number): Promise<{ makine
       WHERE is_emri_id = $1 AND makine_id IS NOT NULL AND bitis IS NULL ORDER BY baslama, id`,
     [isEmriId],
   );
+
+export interface MakinedekiIsSatiri {
+  makineId: number;
+  emirId: number;
+  emirNo: string;
+  isEmriId: number;
+  opNo: number;
+  opAdi: string;
+}
+
+// Makinede şu an açık kullanımın emri ve adımı (makinede aynı anda tek açık kullanım vardır). Adımsız kullanım satır vermez.
+export const makinelerdekiIslerGetir = (db: Db, makineIdleri: readonly number[]): Promise<MakinedekiIsSatiri[]> =>
+  db.sorgu<MakinedekiIsSatiri>(
+    `SELECT m.makine_id AS "makineId", e.id AS "emirId", e.emir_no AS "emirNo", i.id AS "isEmriId", i.op_no AS "opNo", i.ad AS "opAdi"
+       FROM uretim_emirleri_makine_kullanimi m
+       JOIN uretim_emri e ON e.id = m.emir_id
+       JOIN uretim_emirleri_is_emri i ON i.id = m.is_emri_id
+      WHERE m.makine_id = ANY($1::int[]) AND m.bitis IS NULL
+      ORDER BY m.makine_id`,
+    [[...makineIdleri]],
+  );

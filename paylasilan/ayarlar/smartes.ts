@@ -24,4 +24,11 @@ export const SMARTES_AYARLARI = {
     baslik: 'SmartES tanım gönderimi',
     aciklama: 'Açıkken (ve SmartES bağlantısı da açıkken) SmartES\'te henüz tanımı olmayan aktif istasyonlar ve stok kartları SmartES\'e tanım olarak gönderilir; SmartES\'te kodu zaten olan kayıt gönderilmez. Kod eşlemesi gönderimle kendiliğinden yazılmaz; iş emri gönderimi için Kod eşlemeleri ekranından eşleyin.',
   },
+  'smartes.makine-okumasi': {
+    modul: 'smartes',
+    tur: 'boolean',
+    varsayilan: false,
+    baslik: 'SmartES canlı makine okuması',
+    aciklama: 'Açıkken (ve SmartES bağlantısı da açıkken) her makinenin anlık durumu, programı, parça sayacı ve iş mili yükü dakikada bir SmartES\'ten okunur ve SmartES > Makineler canlı ekranında gösterilir. Her turda makine başına bir istek atılır; SmartES\'e hiçbir şey yazılmaz.',
+  },
 } as const satisfies Record<string, AyarTanimi>;

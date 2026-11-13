@@ -166,3 +166,60 @@ export const smartesKontrolCevabi = z.object({
 
 export type SmartesHazirlikCevabi = z.output<typeof smartesHazirlikCevabi>;
 export type SmartesKontrolCevabi = z.output<typeof smartesKontrolCevabi>;
+
+// Canlı makine panosu (3176): SmartES'ten makine başına anlık bilgi; CORE'un okuma zamanı ve durum değişimleriyle.
+// "bilinmiyor": SmartES'in durum kodunun karşılığı henüz bilinmiyor; kod ham haliyle gösterilir, uydurulmaz.
+export const SMARTES_MAKINE_DURUMLARI = ['calisiyor', 'bekliyor', 'alarm', 'kapali', 'baglanti-yok', 'bilinmiyor'] as const;
+export type SmartesMakineDurumu = (typeof SMARTES_MAKINE_DURUMLARI)[number];
+
+const durumDilimi = z.object({ durum: z.enum(SMARTES_MAKINE_DURUMLARI), baslangic: zamanSemasi, bitis: zamanSemasi.nullable() });
+
+export const canliMakinelerCevabi = z.object({
+  baglanti: z.enum(SMARTES_BAGLANTI_DURUMLARI),
+  // Canlı makine okumasının kendi anahtarı (varsayılan kapalı); kapalıyken istek atılmaz, eski kayıtlar gösterilmez.
+  okumaAcik: z.boolean(),
+  // SmartES bu metodu sunmuyorsa false; pano "bu bilgiyi vermiyor" der, bağlantı hata sayılmaz.
+  destekleniyor: z.boolean(),
+  aralikSaniye: z.number().int(),
+  sonOkuma: zamanSemasi.nullable(),
+  makineler: z.array(z.object({
+    makineKodu: z.string(),
+    makineAdi: z.string().nullable(),
+    istasyonKodu: z.string().nullable(),
+    istasyonAdi: z.string().nullable(),
+    durum: z.enum(SMARTES_MAKINE_DURUMLARI),
+    durumKodu: z.string().nullable(),
+    durumBaslangic: zamanSemasi.nullable(),
+    mod: z.string().nullable(),
+    alarm: z.string().nullable(),
+    uyari: z.string().nullable(),
+    programNo: z.string().nullable(),
+    programAdi: z.string().nullable(),
+    sayac: z.number().int().nullable(),
+    spindleYuku: z.number().nullable(),
+    okundu: zamanSemasi,
+    calisanIs: z.object({
+      emirId: z.number().int(), emirNo: z.string(), opNo: z.number().int(), opAdi: z.string(),
+      // SmartES'in kendi hesabı (WorkordersList): adetçe tamamlanma yüzdesi ve tahmini bitiş. SmartES vermediyse null.
+      tamamlananYuzde: z.number().nullable(), tahminiBitis: zamanSemasi.nullable(),
+    }).nullable(),
+    bugun: z.array(durumDilimi),
+  })),
+});
+
+// SmartES eksen bilgisini makine başına tek değer verir (eksen başına ayrı değer yoktur); takım için yalnız o anki cep numarası gelir.
+export const canliMakineAyrintisiCevabi = z.object({
+  makineKodu: z.string(),
+  okundu: zamanSemasi,
+  mod: z.string().nullable(),
+  uyari: z.string().nullable(),
+  sayacToplam: z.number().int().nullable(),
+  eksenHizi: z.number().int().nullable(),
+  eksenOrani: z.number().int().nullable(),
+  spindle: z.object({ hiz: z.number().int().nullable(), yuk: z.number().int().nullable(), oran: z.number().int().nullable() }),
+  takimCebi: z.number().int().nullable(),
+  degisimler: z.array(z.object({ zaman: zamanSemasi, eski: z.enum(SMARTES_MAKINE_DURUMLARI).nullable(), yeni: z.enum(SMARTES_MAKINE_DURUMLARI), aciklama: z.string().nullable() })),
+});
+export const canliMakineParametresi = z.object({ kod: z.string().min(1).max(200) });
+export type CanliMakinelerCevabi = z.output<typeof canliMakinelerCevabi>;
+export type CanliMakineAyrintisiCevabi = z.output<typeof canliMakineAyrintisiCevabi>;

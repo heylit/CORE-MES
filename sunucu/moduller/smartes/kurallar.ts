@@ -2,7 +2,7 @@
 // Kural kodları SME-n; testleri KURAL-TEST.md'de.
 import { createHash } from 'node:crypto';
 import { SMARTES_OKUMA_KAYNAKLARI } from '#paylasilan/sozlesme/smartes.ts';
-import type { SmartesEslemeTuru } from '#paylasilan/sozlesme/smartes.ts';
+import type { SmartesEslemeTuru, SmartesMakineDurumu } from '#paylasilan/sozlesme/smartes.ts';
 import { mantiksal, metinAlani, tamSayi, tarihAlani } from './soap.ts';
 import type { ParametreDegeri, Parametreler, TabloSatiri } from './soap.ts';
 
@@ -638,7 +638,8 @@ export type SmartesAkisDurumu = 'hazir' | 'kapali' | 'ayar-eksik' | 'baglanmadi'
 
 export const KALITE_AMBAR_AYARI = 'smartes.kalite-ambar-okumasi';
 export const TANIM_AYARI = 'smartes.tanim-gonderimi';
-export type AkisAyari = typeof KALITE_AMBAR_AYARI | typeof TANIM_AYARI;
+export const MAKINE_AYARI = 'smartes.makine-okumasi';
+export type AkisAyari = typeof KALITE_AMBAR_AYARI | typeof TANIM_AYARI | typeof MAKINE_AYARI;
 
 export interface SmartesAkisTanimi {
   anahtar: string;
@@ -688,9 +689,119 @@ export const eksikMetotlar = (wsdldekiler: readonly string[]): string[] => GEREK
 // Sonradan eklenen akışların metotları: eksikliği kontrolü kırmızı yapmaz (var olan kurulumlar bozulmasın), yalnız bildirilir.
 export const ISTEGE_BAGLI_METOTLAR: readonly string[] = [
   'WsWorkordersRejectStatusList', 'WarehouseStatusList', 'QualityControlStatusList', 'WorkStationList', 'WorkStationCreateUpdate', 'StocksList', 'StockCreateUpdate',
+  'AllMachineInformationList', 'WorkordersList',
 ];
 
 export const eksikIstegeBagliMetotlar = (wsdldekiler: readonly string[]): string[] => ISTEGE_BAGLI_METOTLAR.filter((m) => !wsdldekiler.includes(m));
 
 // SME-H2: kontrolün okuma penceresi kısa tutulur (son bir saat): SmartES'e büyük liste yükü bindirilmez.
 export const KONTROL_PENCERESI_MS = 3_600_000;
+
+/* ---------------- Canlı makine panosu (SME-34, kart 3176) ---------------- */
+// AllMachineInformationList (md. 28) makine başına çağrılır (MachineID zorunlu); WorkordersList (md. 59) iş emrinin ilerlemesini verir.
+// Parametre ve alan adları servis belgesinden; canlı WSDL'de doğrulanmadı. İkisi de yalnız okur.
+
+export const MAKINE_BILGI_METODU = 'AllMachineInformationList';
+export const ILERLEME_METODU = 'WorkordersList';
+export const MAKINE_OKUMA_ARALIGI_MS = 60_000;
+// Makine listesi (ActiveMachinesList) her turda yeniden istenmez.
+export const MAKINE_LISTESI_YENILEME_MS = 3_600_000;
+// Tur süre tavanı: aşılırsa tur kesilir, sonraki tur kaldığı makineden sürer (SmartES'e ve sıradaki tura yük binmesin).
+export const MAKINE_TUR_TAVANI_MS = 40_000;
+export const ILERLEME_ARALIGI_MS = 5 * 60_000;
+export const ILERLEME_PENCERESI_GUN = 30;
+
+export type MakineDurumu = SmartesMakineDurumu;
+
+// CNCSTATE değerlerinin karşılığı (küçük harfe çevrilmiş kodla). Belgede değerler yazmıyor: ilk gerçek okumada doldurulur; karşılığı
+// olmayan kod "bilinmiyor" kalır ve ekranda ham haliyle görünür.
+export const DURUM_KODLARI: Readonly<Record<string, MakineDurumu>> = {};
+
+// Alarm numarası ya da metni varsa makine alarmdadır (belgedeki alanlardan); yoksa durum kodunun karşılığına bakılır.
+export function makineDurumu(durumKodu: string | null, alarmVar: boolean): MakineDurumu {
+  if (alarmVar) return 'alarm';
+  return (durumKodu === null ? undefined : DURUM_KODLARI[durumKodu.trim().toLowerCase()]) ?? 'bilinmiyor';
+}
+
+export interface MakineOkumasi {
+  makineKodu: string;
+  smartesMakineId: number;
+  makineAdi: string | null;
+  durum: MakineDurumu;
+  durumKodu: string | null;
+  mod: string | null;
+  alarm: string | null;
+  uyari: string | null;
+  programNo: string | null;
+  programAdi: string | null;
+  sayac: number | null;
+  sayacToplam: number | null;
+  eksenHizi: number | null;
+  eksenOrani: number | null;
+  spindleYuku: number | null;
+  spindleOrani: number | null;
+  spindleHizi: number | null;
+  takimCebi: number | null;
+}
+
+export const makineBilgiParametreleri = (makineId: number): Parametreler => [['MachineID', makineId]];
+
+// Kodu olmayan satır yazılamaz (anahtar makine kodudur): cevapta yoksa makine listesindeki kod kullanılır.
+export function makineBilgisiOku(s: TabloSatiri, m: AktifMakine): MakineOkumasi | null {
+  const makineKodu = metin(s, ['KOD']) ?? m.kod;
+  if (makineKodu === null || makineKodu.trim() === '') return null;
+  const alarmNo = adet(s, ['ALARMNO']);
+  const alarmMetni = metin(s, ['ALARMTEXT']);
+  const alarmVar = (alarmNo !== null && alarmNo !== 0) || alarmMetni !== null;
+  const durumKodu = metin(s, ['CNCSTATE']);
+  return {
+    makineKodu, smartesMakineId: m.id, makineAdi: metin(s, ['AD']), durum: makineDurumu(durumKodu, alarmVar), durumKodu,
+    mod: metin(s, ['ACTMOD']),
+    alarm: alarmVar ? [alarmNo !== null && alarmNo !== 0 ? String(alarmNo) : null, alarmMetni].filter((x) => x !== null).join(' ') : null,
+    uyari: metin(s, ['CNCWARNING']), programNo: metin(s, ['PROGNO']), programAdi: metin(s, ['PROGCOMMENT', 'PROGDESCRIPTION']),
+    sayac: adet(s, ['PARTS1']), sayacToplam: adet(s, ['PARTS2']), eksenHizi: adet(s, ['FSPD']), eksenOrani: adet(s, ['FOVR']),
+    spindleYuku: adet(s, ['SLD']), spindleOrani: adet(s, ['SOVR']), spindleHizi: adet(s, ['SSPD']), takimCebi: adet(s, ['TOOLNUM']),
+  };
+}
+
+// Kesilen tur kaldığı makineden sürer: liste, verilen makine kimliğinden başlayacak biçimde döndürülür. Kimlik listede yoksa baştan başlanır.
+export function turSirasi<T extends { id: number }>(makineler: readonly T[], baslangicId: number | null): T[] {
+  const i = baslangicId === null ? -1 : makineler.findIndex((m) => m.id === baslangicId);
+  return i <= 0 ? [...makineler] : [...makineler.slice(i), ...makineler.slice(0, i)];
+}
+
+export interface DurumDilimi { durum: MakineDurumu; baslangic: string; bitis: string | null }
+
+// Bugünkü durum şeridi: gün başından önceki son durum gün başından itibaren sürer; sonuncu dilim açıktır. Gün başında durumu bilinmeyen
+// makinenin şeridi ilk değişimden başlar.
+export function bugunDilimleri(
+  gunBasi: string, onceki: MakineDurumu | null, degisimler: readonly { zaman: string; yeni: MakineDurumu }[],
+): DurumDilimi[] {
+  const noktalar = [...(onceki === null ? [] : [{ zaman: gunBasi, yeni: onceki }]), ...degisimler];
+  const sonuc: DurumDilimi[] = [];
+  for (const [i, n] of noktalar.entries()) {
+    const son = sonuc.at(-1);
+    const sonraki = noktalar[i + 1];
+    // Aynı durumun art arda değişimi (bilinmeyen kodlar arası) şeritte tek dilimdir.
+    if (son !== undefined && son.durum === n.yeni) son.bitis = sonraki?.zaman ?? null;
+    else sonuc.push({ durum: n.yeni, baslangic: n.zaman, bitis: sonraki?.zaman ?? null });
+  }
+  return sonuc;
+}
+
+export function ilerlemeParametreleri(simdi: Date): Parametreler {
+  return [
+    ['StartDate', new Date(simdi.getTime() - ILERLEME_PENCERESI_GUN * 86_400_000)], ['EndDate', simdi],
+    ['IncludeRejectInProducedQuantity', false], ['IncludeEstimatedEndDateTime', true],
+    ['TrackingNo', ''], ['WorkOrderNo', ''], ['StockInformation', ''], ['WorkStationInformation', ''], ['OperationInformation', ''], ['MachineInformation', ''],
+  ];
+}
+
+export interface IlerlemeKaydi { isEmriNo: string; tamamlananYuzde: number | null; tahminiBitis: Date | null }
+
+export function ilerlemeOku(s: TabloSatiri): IlerlemeKaydi | null {
+  const isEmriNo = metin(s, ['WORKORDER_NO']);
+  if (isEmriNo === null || isEmriNo.trim() === '') return null;
+  const y = ondalik(s, ['COMPLETED_PERCENTAGE_BY_PIECE']);
+  return { isEmriNo, tamamlananYuzde: y !== null && y >= 0 && y <= 1000 ? y : null, tahminiBitis: tarih(s, ['ESTIMATED_END_DATETIME']) };
+}

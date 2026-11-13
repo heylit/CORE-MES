@@ -16,10 +16,10 @@ import type { KapanisCozucusu } from './kapanis.ts';
 import {
   adimGirdileriGetir, adimUretimSatiriGetir, emirAdimZinciriGetir, akisEmriGetir, akisFasonGetir, akisIsEmirleriGetir, akisOlaylariGetir, akisSayimlariGetir, aralikAdetleriGetir, gunlukAralikAdetleriGetir, kisininGunlukIsEmirleriGetir,
   tasinanGirdiGetir, dugumleriGetir, emirBul, emirDurumlariGetir, ustEmirlerBul, isEmirleriGetir, malzemelerinAcikEmirleriGetir, siparisSatiriEmirleriGetir, isEmriPlanBilgileriGetir, isEmriZamanlariGetir, katilimSureleriGetir, kisininAcikIstasyonu, kisininAcikIsleriGetir, kisininHurdalariGetir,
-  bitenEmirler as bitenEmirlerGetir, bitenIsEmirleriGetir, calismayaGecisAnlari as gecisAnlariGetir, istasyonDurusSureleri as istasyonDuruslariGetir, kisininIsEmirleriGetir, makineKullanimAraliklariGetir, makineSayimAnlariGetir, makineSureleriGetir, sonGirisleriGetir, standartSureleriGetir,
+  bitenEmirler as bitenEmirlerGetir, bitenIsEmirleriGetir, calismayaGecisAnlari as gecisAnlariGetir, istasyonDurusSureleri as istasyonDuruslariGetir, kisininIsEmirleriGetir, makineKullanimAraliklariGetir, makinelerdekiIslerGetir, makineSayimAnlariGetir, makineSureleriGetir, sonGirisleriGetir, standartSureleriGetir,
 } from './sorgular.ts';
 import type {
-  AkisEmirSatiri, AkisFasonSatiri, AkisIsEmriSatiri, AkisOlaySatiri, AkisSayimSatiri, BitenIsEmriSatiri, EtkilenenEmirSatiri, IsEmriZamanSatiri, KisiAcikIsSatiri, KisiIsEmriSatiri, SayimKirilimi,
+  AkisEmirSatiri, AkisFasonSatiri, AkisIsEmriSatiri, AkisOlaySatiri, AkisSayimSatiri, BitenIsEmriSatiri, EtkilenenEmirSatiri, IsEmriZamanSatiri, KisiAcikIsSatiri, MakinedekiIsSatiri, KisiIsEmriSatiri, SayimKirilimi,
 } from './sorgular.ts';
 import { hurdaNedenleriniListele } from '../durus-nedenleri/disari.ts';
 
@@ -653,4 +653,13 @@ export const geridekiOnculler = (db: Db, isEmriIdleri: readonly number[]): Promi
 export async function elleOnayliMaddeler(db: Db, isEmriIdleri: readonly number[]): Promise<Map<number, Map<string, string | null>>> {
   const onay = await elleOnaylar(db, isEmriIdleri);
   return new Map([...onay].map(([i, m]) => [i, new Map([...m].map(([madde, x]) => [madde, x.onaylananSurum]))]));
+}
+
+// SmartES canlı makine panosu (3176): makinede şu an açık kullanımın emri ve adımı; açık işi olmayan makine haritada yoktur.
+// Yetki denetlemez, çağıran korur.
+export type { MakinedekiIsSatiri as MakinedekiIs } from './sorgular.ts';
+export async function makinelerdekiIsler(db: Db, makineIdleri: readonly number[]): Promise<Map<number, MakinedekiIsSatiri>> {
+  const tekil = [...new Set(makineIdleri)];
+  if (tekil.length === 0) return new Map();
+  return new Map((await makinelerdekiIslerGetir(db, tekil)).map((r) => [r.makineId, r]));
 }

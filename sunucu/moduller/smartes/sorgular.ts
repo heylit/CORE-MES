@@ -2,7 +2,8 @@ import type { Db } from '#cekirdek/db.ts';
 import type { Dilim } from '#cekirdek/liste.ts';
 import { zamanMetni } from '#cekirdek/zaman.ts';
 import type {
-  AlarmKaydi, AmbarKaydi, DurusKaydi, EslemeTuru, IsEmriDurumuKaydi, KaliteKaydi, OkumaKaynagi, RedKaydi, TanimIzi, TanimKaydi, TanimTuru,
+  AlarmKaydi, AmbarKaydi, DurusKaydi, EslemeTuru, IlerlemeKaydi, IsEmriDurumuKaydi, KaliteKaydi, MakineDurumu, MakineOkumasi, OkumaKaynagi, RedKaydi,
+  TanimIzi, TanimKaydi, TanimTuru,
 } from './kurallar.ts';
 
 /* ---------------- eşleme ---------------- */
@@ -445,4 +446,143 @@ export async function tanimSayilari(db: Db): Promise<TanimSayilari> {
   );
   if (r === null) throw new Error('Sayılar okunamadı.');
   return r;
+}
+
+/* ---------------- Canlı makine panosu: makinenin son okuması, durum değişimleri, iş emri ilerlemesi ---------------- */
+
+// Tek deyim: son okuma üstüne yazılır; durum (ya da karşılığı bilinmeyen durum kodu) değiştiyse değişim satırı eklenir ve durumun
+// başlangıcı o an olur. Değişmediyse başlangıç korunur.
+export async function makineYaz(db: Db, m: MakineOkumasi, zaman: Date): Promise<void> {
+  await db.sorgu(
+    `WITH onceki AS (
+       SELECT durum, durum_kodu FROM smartes_makine_durumu WHERE makine_kodu = $1 FOR UPDATE
+     ), degisim AS (
+       INSERT INTO smartes_makine_durum_degisimi (makine_kodu, zaman, eski, yeni, aciklama)
+       SELECT $1, $19, (SELECT durum FROM onceki), $4, $20
+        WHERE NOT EXISTS (SELECT 1 FROM onceki WHERE durum = $4 AND ($4 <> 'bilinmiyor' OR durum_kodu IS NOT DISTINCT FROM $5))
+       RETURNING 1
+     )
+     INSERT INTO smartes_makine_durumu (makine_kodu, smartes_makine_id, makine_adi, durum, durum_kodu, durum_baslangic, mod, alarm, uyari, program_no,
+       program_adi, sayac, sayac_toplam, eksen_hizi, eksen_orani, spindle_yuku, spindle_orani, spindle_hizi, takim_cebi, okundu)
+     VALUES ($1, $2, $3, $4, $5, $19, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
+     ON CONFLICT (makine_kodu) DO UPDATE SET smartes_makine_id = EXCLUDED.smartes_makine_id, makine_adi = EXCLUDED.makine_adi, durum = EXCLUDED.durum,
+       durum_kodu = EXCLUDED.durum_kodu, mod = EXCLUDED.mod, alarm = EXCLUDED.alarm, uyari = EXCLUDED.uyari, program_no = EXCLUDED.program_no,
+       program_adi = EXCLUDED.program_adi, sayac = EXCLUDED.sayac, sayac_toplam = EXCLUDED.sayac_toplam, eksen_hizi = EXCLUDED.eksen_hizi,
+       eksen_orani = EXCLUDED.eksen_orani, spindle_yuku = EXCLUDED.spindle_yuku, spindle_orani = EXCLUDED.spindle_orani,
+       spindle_hizi = EXCLUDED.spindle_hizi, takim_cebi = EXCLUDED.takim_cebi, okundu = EXCLUDED.okundu,
+       durum_baslangic = CASE WHEN EXISTS (SELECT 1 FROM degisim) THEN EXCLUDED.durum_baslangic ELSE smartes_makine_durumu.durum_baslangic END`,
+    [
+      m.makineKodu, m.smartesMakineId, m.makineAdi, m.durum, m.durumKodu, m.mod, m.alarm, m.uyari, m.programNo, m.programAdi, m.sayac, m.sayacToplam,
+      m.eksenHizi, m.eksenOrani, m.spindleYuku, m.spindleOrani, m.spindleHizi, m.takimCebi, zaman,
+      m.durum === 'alarm' ? m.alarm?.slice(0, 400) ?? null : m.durum === 'bilinmiyor' ? m.durumKodu : null,
+    ],
+  );
+}
+
+export async function makineTuruYaz(
+  db: Db, zaman: Date, t: { hata: string | null; okunan: number; makineSayisi: number; turSuresiMs: number },
+): Promise<void> {
+  await db.sorgu(
+    `INSERT INTO smartes_makine_okuma (son_deneme, son_sonuc, son_hata, son_basarili, okunan, makine_sayisi, tur_suresi_ms)
+     VALUES ($1, CASE WHEN $2::text IS NULL THEN 'tamam' ELSE 'hata' END, $2, CASE WHEN $3 > 0 THEN $1::timestamptz END, $3, $4, $5)
+     ON CONFLICT (tek) DO UPDATE SET son_deneme = EXCLUDED.son_deneme, son_sonuc = EXCLUDED.son_sonuc, son_hata = EXCLUDED.son_hata,
+       son_basarili = COALESCE(EXCLUDED.son_basarili, smartes_makine_okuma.son_basarili), okunan = EXCLUDED.okunan,
+       makine_sayisi = EXCLUDED.makine_sayisi, tur_suresi_ms = EXCLUDED.tur_suresi_ms`,
+    [zaman, t.hata, t.okunan, t.makineSayisi, t.turSuresiMs],
+  );
+}
+
+export interface MakineOkumaIzi { sonBasarili: string | null; sonHata: string | null; turSuresiMs: number; okunan: number; makineSayisi: number }
+
+export function makineOkumaIzi(db: Db): Promise<MakineOkumaIzi | null> {
+  return db.tek<MakineOkumaIzi>(
+    `SELECT ${zamanMetni('son_basarili')} AS "sonBasarili", son_hata AS "sonHata", tur_suresi_ms AS "turSuresiMs", okunan,
+            makine_sayisi AS "makineSayisi" FROM smartes_makine_okuma`,
+  );
+}
+
+export interface MakineDurumSatiri {
+  makineKodu: string;
+  makineAdi: string | null;
+  durum: MakineDurumu;
+  durumKodu: string | null;
+  durumBaslangic: string;
+  mod: string | null;
+  alarm: string | null;
+  uyari: string | null;
+  programNo: string | null;
+  programAdi: string | null;
+  sayac: number | null;
+  sayacToplam: number | null;
+  eksenHizi: number | null;
+  eksenOrani: number | null;
+  spindleYuku: number | null;
+  spindleOrani: number | null;
+  spindleHizi: number | null;
+  takimCebi: number | null;
+  okundu: string;
+}
+
+const MAKINE_SUTUNLARI = `makine_kodu AS "makineKodu", makine_adi AS "makineAdi", durum, durum_kodu AS "durumKodu",
+  ${zamanMetni('durum_baslangic')} AS "durumBaslangic", mod, alarm, uyari, program_no AS "programNo", program_adi AS "programAdi", sayac,
+  sayac_toplam AS "sayacToplam", eksen_hizi AS "eksenHizi", eksen_orani AS "eksenOrani", spindle_yuku AS "spindleYuku",
+  spindle_orani AS "spindleOrani", spindle_hizi AS "spindleHizi", takim_cebi AS "takimCebi", ${zamanMetni('okundu')} AS okundu`;
+
+export function makineDurumlari(db: Db, sinir: number): Promise<MakineDurumSatiri[]> {
+  return db.sorgu<MakineDurumSatiri>(`SELECT ${MAKINE_SUTUNLARI} FROM smartes_makine_durumu ORDER BY makine_kodu LIMIT $1`, [sinir]);
+}
+
+export function makineDurumuGetir(db: Db, makineKodu: string): Promise<MakineDurumSatiri | null> {
+  return db.tek<MakineDurumSatiri>(`SELECT ${MAKINE_SUTUNLARI} FROM smartes_makine_durumu WHERE makine_kodu = $1`, [makineKodu]);
+}
+
+export interface DurumDegisimSatiri { makineKodu: string; zaman: string; eski: MakineDurumu | null; yeni: MakineDurumu; aciklama: string | null }
+
+// Gün başından beri değişimler ve makine başına gün başından önceki son değişim (gün başındaki durum ondan bilinir), zaman sırasıyla.
+export function gunDegisimleri(db: Db, gunBasi: Date, makineKodu: string | null): Promise<(DurumDegisimSatiri & { onceki: boolean })[]> {
+  return db.sorgu(
+    `SELECT makine_kodu AS "makineKodu", ${zamanMetni('zaman')} AS zaman, eski, yeni, aciklama, onceki FROM (
+       SELECT makine_kodu, zaman, eski, yeni, aciklama, id, false AS onceki FROM smartes_makine_durum_degisimi
+        WHERE zaman >= $1 AND ($2::text IS NULL OR makine_kodu = $2)
+       UNION ALL
+       (SELECT DISTINCT ON (makine_kodu) makine_kodu, zaman, eski, yeni, aciklama, id, true FROM smartes_makine_durum_degisimi
+         WHERE zaman < $1 AND ($2::text IS NULL OR makine_kodu = $2) ORDER BY makine_kodu, zaman DESC, id DESC)
+     ) d ORDER BY makine_kodu, zaman, id`,
+    [gunBasi, makineKodu],
+  );
+}
+
+export async function ilerlemeYaz(db: Db, kayitlar: readonly IlerlemeKaydi[], zaman: Date): Promise<void> {
+  const gelen = kayitlar.map((k) => ({ is_emri_no: k.isEmriNo, tamamlanan_yuzde: k.tamamlananYuzde, tahmini_bitis: k.tahminiBitis }));
+  await db.sorgu(
+    `WITH yazilan AS (
+       INSERT INTO smartes_is_emri_ilerleme (is_emri_no, tamamlanan_yuzde, tahmini_bitis, okundu)
+       SELECT is_emri_no, tamamlanan_yuzde, tahmini_bitis, $2 FROM jsonb_to_recordset($1::jsonb) AS x(is_emri_no text, tamamlanan_yuzde numeric, tahmini_bitis timestamptz)
+       ON CONFLICT (is_emri_no) DO UPDATE SET tamamlanan_yuzde = EXCLUDED.tamamlanan_yuzde, tahmini_bitis = EXCLUDED.tahmini_bitis, okundu = EXCLUDED.okundu
+       RETURNING 1
+     )
+     INSERT INTO smartes_ilerleme_okuma (son_deneme, son_sonuc, son_hata, son_basarili) VALUES ($2, 'tamam', NULL, $2)
+     ON CONFLICT (tek) DO UPDATE SET son_deneme = EXCLUDED.son_deneme, son_sonuc = 'tamam', son_hata = NULL, son_basarili = EXCLUDED.son_basarili`,
+    [JSON.stringify(gelen), zaman],
+  );
+}
+
+export async function ilerlemeHatali(db: Db, zaman: Date, hata: string): Promise<void> {
+  await db.sorgu(
+    `INSERT INTO smartes_ilerleme_okuma (son_deneme, son_sonuc, son_hata) VALUES ($1, 'hata', $2)
+     ON CONFLICT (tek) DO UPDATE SET son_deneme = EXCLUDED.son_deneme, son_sonuc = 'hata', son_hata = EXCLUDED.son_hata`,
+    [zaman, hata],
+  );
+}
+
+export function ilerlemeOkumasi(db: Db): Promise<{ sonDeneme: Date } | null> {
+  return db.tek<{ sonDeneme: Date }>('SELECT son_deneme AS "sonDeneme" FROM smartes_ilerleme_okuma');
+}
+
+export function ilerlemeler(db: Db, isEmriNolari: readonly string[]): Promise<{ isEmriNo: string; tamamlananYuzde: number | null; tahminiBitis: string | null }[]> {
+  return db.sorgu(
+    `SELECT is_emri_no AS "isEmriNo", tamamlanan_yuzde::float8 AS "tamamlananYuzde", ${zamanMetni('tahmini_bitis')} AS "tahminiBitis"
+       FROM smartes_is_emri_ilerleme WHERE is_emri_no = ANY($1::text[])`,
+    [[...isEmriNolari]],
+  );
 }

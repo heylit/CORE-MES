@@ -10,3 +10,65 @@
 .tc-smartes-liste dd { margin: 0; overflow-wrap: anywhere; }
 .tc-smartes-form { display: flex; flex-direction: column; gap: var(--b-4); }
 .tc-smartes-hata { margin: 0; color: var(--stop); font-weight: 700; }
+
+/* Canlı makine panosu (3176) */
+.tc-sm-sag { display: inline-flex; align-items: center; gap: var(--b-3); }
+.tc-sm-not { color: var(--muted); font-size: var(--yazi-s); }
+.tc-sm-mono { font-family: var(--font-mono); }
+.tc-sm-ozet { display: flex; flex-wrap: wrap; gap: var(--b-2); }
+.tc-sm-cip {
+  display: inline-flex; align-items: center; gap: var(--b-2); padding: var(--b-2) var(--b-3);
+  border: 1px solid var(--edge2); border-radius: var(--yari-2); background: var(--panel2); color: var(--ink);
+  font: inherit; font-size: var(--yazi-s); cursor: pointer;
+}
+.tc-sm-cip b { font-family: var(--font-mono); }
+.tc-sm-cip[aria-pressed="true"] { background: var(--secili-zemin); color: var(--secili-yazi); border-color: var(--secili-zemin); }
+.tc-sm-cip[data-durum="calisiyor"] .tc-simge { color: var(--run); }
+.tc-sm-cip[data-durum="bekliyor"] .tc-simge { color: var(--hold); }
+.tc-sm-cip[data-durum="alarm"] .tc-simge { color: var(--stop); }
+.tc-sm-cip[aria-pressed="true"] .tc-simge { color: inherit; }
+.tc-sm-grup { display: flex; flex-direction: column; gap: var(--b-3); }
+.tc-sm-izgara {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 17rem), 1fr));
+  gap: var(--b-3); margin: 0; padding: 0; list-style: none;
+}
+.tc-sm-kart {
+  display: flex; flex-direction: column; gap: var(--b-3); width: 100%; height: 100%; text-align: left;
+  padding: var(--b-4); border: 1px solid var(--edge); border-left: 4px solid var(--idle); border-radius: var(--yari-3);
+  background: var(--panel-solid); color: var(--ink); font: inherit; cursor: pointer; min-width: 0;
+}
+.tc-sm-kart:hover { border-color: var(--edge2); }
+.tc-sm-kart[data-durum="calisiyor"] { border-left-color: var(--run); }
+.tc-sm-kart[data-durum="bekliyor"] { border-left-color: var(--hold); }
+.tc-sm-kart[data-durum="alarm"] { border-left-color: var(--stop); }
+.tc-sm-kart[data-durum="eski"] { border-left-color: var(--faint); opacity: .6; }
+.tc-sm-kart-ust { display: flex; align-items: baseline; gap: var(--b-2); min-width: 0; }
+.tc-sm-kod { font-family: var(--font-mono); font-weight: 700; }
+.tc-sm-ad { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tc-sm-durum { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2); }
+.tc-sm-durum-ad { display: inline-flex; align-items: center; gap: var(--b-2); font-weight: 700; color: var(--idle); }
+.tc-sm-durum-ad[data-durum="calisiyor"] { color: var(--run); }
+.tc-sm-durum-ad[data-durum="bekliyor"] { color: var(--hold); }
+.tc-sm-durum-ad[data-durum="alarm"] { color: var(--stop); }
+.tc-sm-alarm { display: flex; align-items: flex-start; gap: var(--b-2); margin: 0; color: var(--stop); font-size: var(--yazi-s); overflow-wrap: anywhere; }
+.tc-sm-bilgi { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: var(--b-1) var(--b-3); margin: 0; font-size: var(--yazi-s); }
+.tc-sm-bilgi dt { color: var(--muted); }
+.tc-sm-bilgi dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.tc-sm-yuk { display: inline-flex; align-items: center; gap: var(--b-2); width: 100%; }
+.tc-sm-yuk progress { flex: 1; min-width: 0; }
+.tc-sm-serit { display: flex; flex-direction: column; gap: var(--b-1); }
+.tc-sm-serit svg { display: block; width: 100%; height: var(--b-3); border-radius: var(--yari-1); background: var(--panel2); }
+.tc-sm-dilim { fill: var(--idle); }
+.tc-sm-dilim[data-durum="calisiyor"] { fill: var(--run); }
+.tc-sm-dilim[data-durum="bekliyor"] { fill: var(--hold); }
+.tc-sm-dilim[data-durum="alarm"] { fill: var(--stop); }
+.tc-sm-zaman { display: inline-flex; align-items: center; gap: var(--b-1); color: var(--faint); font-size: var(--yazi-xs); }
+.tc-sm-degisim { display: flex; flex-direction: column; gap: var(--b-2); margin: 0; padding: 0; list-style: none; }
+.tc-sm-degisim li { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-3); }
+/* Telefonda kart kısa liste satırıdır (durum, makine, program, sayaç); gerisi ayrıntıdadır. Süzgeçler tek satırda kayar. */
+@media (max-width: 767px) {
+  .tc-sm-genis { display: none; }
+  .tc-sm-kart { gap: var(--b-2); padding: var(--b-3); }
+  .tc-sm-ozet { flex-wrap: nowrap; overflow-x: auto; padding-bottom: var(--b-1); }
+  .tc-sm-cip { flex: none; }
+}
