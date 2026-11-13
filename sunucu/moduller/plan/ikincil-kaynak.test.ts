@@ -1,12 +1,12 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import { describe, test } from 'node:test';
 import { MOTOR_AYARI_VARSAYILAN } from '#paylasilan/sozlesme/plan.ts';
 import { ikincilKaynakKur, type MotorIkincilKaynagi, type MotorKaynakIstegi } from './girdi/ikincil-kurallar.ts';
 import { calismayaMotorAyari } from './motor-ayari-kurallar.ts';
 import { planGirdisi } from './plan-girdisi.ts';
-import { MOTOR_DOSYALARI, motorYukle } from './plan-motoru.ts';
+import { degerlendirmeKodu } from './degerlendirme.ts';
+import { motorYukle } from './plan-motoru.ts';
 
 // 3199 (A + D): aparat ve özel takım planın ikincil kaynağıdır. Veriler uydurmadır (ORN-). Gün 2026-10-19 Pazartesi, vardiya 08:00-16:00,
 // iki istasyonda birer tezgâh; iki emir aynı adımı (OP 10, 60 dk) ister, aday iki tezgâh. Kaynaksız iki iş 08:00'de yan yana başlar.
@@ -85,8 +85,7 @@ describe('plan 3199: ikincil kaynak kısıtı', () => {
     const g = planGirdisi({ calisma: calismayaMotorAyari(calisma(), MOTOR_AYARI_VARSAYILAN), kayit: kayit(0), kaynak: kaynakOkumasi({ kaynaklar: [kaynak()], istekler: IKI_ISTEK() }), bugun: '2026-10-19' });
     assert.ok(g);
     const b = vm.createContext({ GIRDI_SAAT_DILIMI: 'Europe/Istanbul' }); b['self'] = b;
-    const kod = [...MOTOR_DOSYALARI, 'degerlendir'].map((d) => readFileSync(new URL(`./motor/${d}.js`, import.meta.url), 'utf8')).join('\n');
-    const m = vm.runInContext(`${kod}\n;({ schedule, stHazirla, planKaydi });`, b) as {
+    const m = vm.runInContext(`${degerlendirmeKodu()}\n;({ schedule, stHazirla, planKaydi });`, b) as {
       schedule: (st: unknown, kip: string, taban: null) => unknown; stHazirla: (st: unknown) => { pref: Record<string, string> };
       planKaydi: (p: unknown, st: unknown, ref: null) => { ops: Record<string, Islem> };
     };
