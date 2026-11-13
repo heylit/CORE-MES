@@ -115,8 +115,9 @@ function KartlaGelenler({ gelenler, refakat }: { gelenler: Teslim[]; refakat: Re
         setAlinan((x) => [...x, t.id]);
       }
     },
-    onSuccess: async () => {
-      await istemci.invalidateQueries({ queryKey: anahtarlar.hepsi });
+    // Yarıda kalan alımda da (biri alındı, sonraki reddedildi) stok ve kart okumaları yenilenir; iş yalnız hepsi alınınca açılır.
+    onSettled: () => istemci.invalidateQueries({ queryKey: anahtarlar.hepsi }),
+    onSuccess: () => {
       if (refakat) void yonlendir(`/uretim-terminali?emir=${String(refakat.uretimEmriId)}&kart=${String(refakat.id)}`);
     },
   });

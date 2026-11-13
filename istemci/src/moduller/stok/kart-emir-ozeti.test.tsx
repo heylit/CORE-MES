@@ -101,6 +101,21 @@ describe('Gelen kartta "Al ve işi aç" (3155)', () => {
     expect(screen.getByText('TS-000502', { exact: false })).toBeTruthy();
   });
 
+  it('yarıda kalan alımda da kartın durumu sunucudan yeniden okunur (alınan teslim ekranda eski kalmaz)', async () => {
+    const ikinci = { ...GELEN, id: 502, no: 'TS-000502', surum: 1 };
+    const istekler = sunucuKur(OPERATOR, {
+      'POST /stok/teslimler/501/teslim-al': () => json(200, { teslim: { ...GELEN, durum: 'alindi' } }),
+      'POST /stok/teslimler/502/teslim-al': () => json(409, { kod: 'SURUM', mesaj: 'Teslim değişmiş.' }),
+      'GET /stok/teslim-kutusu/kod-coz': () => json(200, cevap({ gelenler: [ikinci], anaEylem: 'teslim-al' })),
+    });
+    ciz(cevap({ gelenler: [GELEN, ikinci], anaEylem: 'teslim-al' }));
+    const once = istekler.filter((i) => i.yol.startsWith('/stok/teslim-kutusu/kod-coz')).length;
+    fireEvent.click(await screen.findByRole('button', { name: 'Al ve işi aç' }));
+    await screen.findByRole('alert');
+    await waitFor(() => expect(istekler.filter((i) => i.yol.startsWith('/stok/teslim-kutusu/kod-coz')).length).toBeGreaterThan(once));
+    expect(screen.queryByText(/Adres \/uretim-terminali/)).toBeNull();
+  });
+
   it('onay isteyen teslimde iş açılmaz; tek tek yola yönlendirir, onaysız yazılmaz', async () => {
     const istekler = sunucuKur(OPERATOR, { 'POST /stok/teslimler/501/teslim-al': () => json(409, { kod: 'ONAY_GEREKLI', mesaj: 'Yetersiz stok.', ayrinti: { mevcut: '0' } }) });
     ciz(cevap({ gelenler: [GELEN], anaEylem: 'teslim-al' }));
