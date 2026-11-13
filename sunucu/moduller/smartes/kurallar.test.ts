@@ -231,6 +231,14 @@ describe('Makine bulguları kuralları (3192 D1)', () => {
     assert.deepEqual(sayimKarsilastir({ saglam: 44, red: 2, makineSaglam: 52, makineRed: null }), { operator: 46, makine: 52, fark: 6, tolerans: 2, asti: true });
     assert.equal(sayimKarsilastir({ saglam: 500, red: 0, makineSaglam: 508, makineRed: 0 })?.asti, false, '508 × %2 = 11');
     assert.equal(sayimKarsilastir({ saglam: null, red: 1, makineSaglam: 5, makineRed: 0 }), null);
+    assert.equal(sayimKarsilastir({ saglam: 48, red: 0, makineSaglam: 50, makineRed: 0 })?.asti, false, 'fark tam tolerans: aşmaz');
+    assert.equal(sayimKarsilastir({ saglam: 47, red: 0, makineSaglam: 50, makineRed: 0 })?.asti, true, 'tolerans + 1 aşar');
+    assert.equal(sayimKarsilastir({ saglam: 389, red: 0, makineSaglam: 400, makineRed: 0 })?.tolerans, 8, '400 × %2 = 8');
+  });
+  test('çizelge: bekleme nedenli duruşla tam yarı örtüşürse nedenli, yarıdan azsa nedensiz', () => {
+    const bekleme = [{ durum: 'bekliyor' as const, baslangic: t('08:00'), bitis: t('08:20') }];
+    assert.equal(cizelgeParcalari(bekleme, [{ nedenKodu: 'ORN-AYAR', baslangic: t('08:10'), bitis: t('08:30') }], t('09:00'))[0]?.tur, 'nedenli');
+    assert.equal(cizelgeParcalari(bekleme, [{ nedenKodu: 'ORN-AYAR', baslangic: t('08:11'), bitis: t('08:30') }], t('09:00'))[0]?.tur, 'nedensiz');
   });
   test('termin: tahmini bitiş teslim gününü geçerse gün farkı; aynı gün sorun değil', () => {
     assert.equal(terminAsimi('2026-11-14T07:40:00.000Z', '2026-11-13'), 1);
