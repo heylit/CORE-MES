@@ -17,7 +17,7 @@ import { sunucuyaGonderilir } from './kayit-gonderimi';
 import { KAYIT_REDDI_OLAYI, gonderimSonucu, iletiHataKarari } from './gonderim-hatasi';
 import { baskasininKayitSayisi } from './bekleyen-kayit';
 import { kuyrukGonderilir } from './kuyruk';
-import { bekleyenKayitlar, cozulmusEskidi, gecikmeliRet, kararBekler, KUYRUK_BITTI_OLAYI, logRetleri, type BekleyenKayit, type KuyrukReddi } from './biten-is';
+import { bekleyenKayitlar, cozulmusEskidi, gecikmeliRet, kararBekler, kararBekleyenKayitMi, KUYRUK_BITTI_OLAYI, logRetleri, SAYIM_YENIDEN_YAZILDI_OLAYI, type BekleyenKayit, type KuyrukReddi } from './biten-is';
 import { oturumKisisi } from './oturum-kisisi';
 import { ORTAK_CIHAZDA_KALAN_DEPOLAR, anahtarKalir, bekleyenKuyrukVar, yerelVeriyiTemizle, type KuyrukOgesi } from './yerel-temizlik';
 import { anilanOzetler, silinecekDosyalar } from './dosya-temizligi';
@@ -33,7 +33,7 @@ export type BusIn = BusMsg & Record<string, any>;
 export interface MerkezBelgesi { id: number; ad: string; tur: string; harf: string; revKodu?: string | null; tip: 'pdf' | 'model'; dosyaAdi: string; ozet: string; malzemeninMi?: boolean }
 export interface ApiOpts { timeout?: number; noAuth?: boolean; raw?: boolean }
 export interface LogQuery { machine?: string | null; wc?: string | null; from?: number | null; to?: number | null; order?: string | null; pkg?: string | null; item?: number | string | null; limit?: number | null }
-type OutboxItem = { at?: number; uid?: string; red?: KuyrukReddi } & ({ op: 'put'; store: string; id: string } | { op: 'del'; store: string; id: string; base?: number } | { op: 'log'; kind: string; row: Record<string, unknown> });
+type OutboxItem = { at?: number; uid?: string; red?: KuyrukReddi; yeniden?: boolean } & ({ op: 'put'; store: string; id: string } | { op: 'del'; store: string; id: string; base?: number } | { op: 'log'; kind: string; row: Record<string, unknown> });
 interface LocalUser { id: string; name: string; role: Role; wcs?: string[]; active?: boolean; pin: string }
 export interface UserSave { id: string; name: string; role: Role; wcs?: string[]; active?: boolean; pin?: string }
 /** sunucu / bağlantı hatası: offline = sunucuya ulaşılamadı (kuyruğa alınır), status = HTTP kodu, body = sunucunun yanıtı */
@@ -249,6 +249,31 @@ export interface Status { mode: 'server' | 'local'; base: string | null; online:
       try { window.dispatchEvent(new CustomEvent('arkon-rejected', { detail: { store: 'log_' + kind, kind, id: cid, cid, row: rows.find(x => x && x.cid === cid), msg: ileti, tmiDurum, ...(bekledi ? { bekledi } : {}) } })); } catch (x) {}
     }
   }
+  // Sunucuda yazılmış ama CORE'un reddettiği sayım (3167 b): sunucu kişinin kendi kaydını güncel kurallarla yeniden dener, sonuç cevaptadır.
+  // Yazılırsa kuyruktan düşer ve geri alınan adet ekrana döner; yine kesinleşmezse nedeni güncellenir ve bir daha denenmez. Bağlantı yoksa değişmez.
+  async function sayimiYenidenDene(anahtar: Key, it: OutboxItem): Promise<boolean> {
+    if (it.op !== 'log' || !it.red) return false;
+    const red = it.red, cid = it.row.cid;
+    if (it.kind !== 'counts' || typeof cid !== 'string') return false;
+    let cevap: any;
+    try { cevap = await api('POST', '/log/counts/' + encodeURIComponent(cid) + '/yeniden-dene'); }
+    catch (e: any) {
+      if (gonderimSonucu(e) === 'kuyruk') return false;
+      cevap = { sonuc: 'reddedildi', neden: e.message || null };
+    }
+    if (cevap && cevap.sonuc === 'yazildi') {
+      await L.del('outbox', anahtar);
+      try { window.dispatchEvent(new CustomEvent(SAYIM_YENIDEN_YAZILDI_OLAYI, { detail: { kind: 'counts', cid, row: it.row } })); } catch (x) {}
+    } else {
+      await L.put('outbox', Object.assign({}, it, { red: Object.assign({}, red, { ileti: (cevap && cevap.neden) || red.ileti, yenidenDenendi: true }) }), anahtar);
+    }
+    kuyrukDegisti();
+    return true;
+  }
+  async function gecikmeliRetDagit(ret: { cid: string } & Record<string, unknown>): Promise<void> {
+    if (kararBekleyenKayitMi(await L.all('outbox').catch(() => []), ret.cid)) return;
+    try { window.dispatchEvent(new CustomEvent('arkon-rejected', { detail: ret })); } catch (x) {}
+  }
   const kuyrukDegisti = (): void => { try { window.dispatchEvent(new CustomEvent(KUYRUK_BITTI_OLAYI, { detail: { kesin: 0, karar: 0 } })); } catch (x) {} };
   let flushing = false;
   async function flush() {
@@ -266,7 +291,7 @@ export interface Status { mode: 'server' | 'local'; base: string | null; online:
             retleriBildir(it.kind, [it.row], cevap, true);
             const ret = logRetleri(cevap).find(r => r.cid === it.row.cid);
             // Sunucu kaydı yazdı ama CORE'a işlemedi: aynı kimlikle yeniden gönderim sunucuda elenir, yeniden denenmez.
-            if (ret) { await L.put('outbox', Object.assign({}, it, { red: { ileti: ret.ileti, at: Date.now(), yazildi: true } }), k); karar++; continue; }
+            if (ret) { await L.put('outbox', Object.assign({}, it, { red: { ileti: ret.ileti, at: Date.now(), yazildi: true, yenidenDenendi: !!it.yeniden } }), k); karar++; continue; }
             kesin++;
           }
         } catch (e: any) {
@@ -276,7 +301,7 @@ export interface Status { mode: 'server' | 'local'; base: string | null; online:
           try { window.dispatchEvent(new CustomEvent('arkon-rejected', { detail: { store: it.store, id: it.id, kind: it.kind, row: it.row, msg: e.message, ...(it.op === 'log' ? { cid: it.row.cid, bekledi: true } : {}) } })); } catch (x) {}
           if (it.op === 'put') belgeRedBildir(it.store, it.id, e);
           // Bekleyen üretim kaydının reddi düşmez: kişi yeniden deneyene ya da vazgeçene kadar kuyrukta kalır (kayıt sunucuda yazılmadı).
-          if (it.op === 'log') { await L.put('outbox', Object.assign({}, it, { red: { ileti: String(e.message || ''), at: Date.now(), yazildi: false } }), k); karar++; continue; }
+          if (it.op === 'log') { await L.put('outbox', Object.assign({}, it, { red: { ileti: String(e.message || ''), at: Date.now(), yazildi: false, yenidenDenendi: !!it.yeniden } }), k); karar++; continue; }
         }
         await L.del('outbox', k);
       }
@@ -429,9 +454,10 @@ export interface Status { mode: 'server' | 'local'; base: string | null; online:
       const it = await L.get('outbox', anahtar) as OutboxItem | undefined;
       if (!it || it.op !== 'log' || !it.red || it.red.cozum !== undefined || it.uid !== oturumSahibi()) return false;
       if (yol === 'yeniden') {
-        if (it.red.yazildi) return false;
+        if (it.red.yenidenDenendi) return false;
+        if (it.red.yazildi) return sayimiYenidenDene(anahtar, it);
         const { red: _red, ...temiz } = it;
-        await L.put('outbox', temiz, anahtar);
+        await L.put('outbox', Object.assign(temiz, { yeniden: true }), anahtar);
         SRV.pending = await bekleyenSay(); emit(); kuyrukDegisti(); flush();
         return true;
       }
@@ -523,7 +549,7 @@ export interface Status { mode: 'server' | 'local'; base: string | null; online:
     const es = new (tasiyici ? tasiyici.EventSource : EventSource)(SRV.base + '/api/bus?t=' + encodeURIComponent(session.token) + '&c=' + SRV.cid);
     es.onopen = () => { if (!SRV.online) { SRV.online = true; SRV.lastErr = ''; emit(); } flush(); };
     es.onerror = () => { if (SRV.online) { SRV.online = false; SRV.lastErr = 'Sunucuya ulaşılamıyor'; emit(); } };
-    es.onmessage = (e: MessageEvent) => { try { const m = JSON.parse(e.data); if (m.type === '$log') logIletisiniDagit(m, logSubs); if (m.type === '$reload') location.reload(); const ret = gecikmeliRet(m, oturumSahibi()); if (ret) window.dispatchEvent(new CustomEvent('arkon-rejected', { detail: ret })); deliver(m); } catch (x) {} };
+    es.onmessage = (e: MessageEvent) => { try { const m = JSON.parse(e.data); if (m.type === '$log') logIletisiniDagit(m, logSubs); if (m.type === '$reload') location.reload(); const ret = gecikmeliRet(m, oturumSahibi()); if (ret) gecikmeliRetDagit(ret); deliver(m); } catch (x) {} };
     SRV.es = es;
   }
   const Bus = {

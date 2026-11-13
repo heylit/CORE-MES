@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { bekleyenKayitlar, cozulmusEskidi, kararBekler } from '../../../../arkon/web/src/data/biten-is';
+import { bekleyenKayitlar, cozulmusEskidi, kararBekleyenKayitMi, kararBekler } from '../../../../arkon/web/src/data/biten-is';
 
 // Karar 3158 a: bağlantı yokken beklemiş üretim kaydı reddedilince kaybolmaz; cihazda "karar bekliyor" olarak kalır.
 const STORE_YOLU = '../../../../arkon/web/src/data/store.ts';
@@ -67,6 +67,13 @@ beforeEach(() => {
     const yol = new URL(girdi).pathname;
     if (yol === '/api/health') return cevap(200, { app: 'arkon-mes' });
     if (yol === '/api/me') return cevap(200, { id: '1', name: 'ORN Operatör', role: 'operator' });
+    const yeniden = /^\/api\/log\/counts\/([^/]+)\/yeniden-dene$/.exec(yol);
+    if (yeniden && ayar?.method === 'POST') {
+      const cid = decodeURIComponent(yeniden[1]!);
+      gonderilen.push(`yeniden:${cid}`);
+      if (kabul.has(cid)) return cevap(200, { sonuc: 'yazildi', neden: null });
+      return cevap(409, { error: 'Bu adımda sonradan yeniden sayım yapıldı; eski sayım yeniden denenmez. Gerekirse düzelterek gönderin.' });
+    }
     if (yol === '/api/log/counts' && ayar?.method === 'POST') {
       const cid = (JSON.parse(ayar.body ?? '[]') as { cid: string }[])[0]!.cid;
       gonderilen.push(cid);
@@ -92,9 +99,19 @@ describe('karar bekleyen kuyruk kaydı (saf)', () => {
     const liste = bekleyenKayitlar([[1, say('a')], [2, { ...say('b'), red: red() }]], '1', new Set<number>(), true);
     expect(liste.map((x) => x.durum)).toEqual(['gonderiliyor', 'karar']);
   });
-  it('sunucuda yazılmış ret ve çözülmüş kayıt yeniden denenmez', () => {
-    const liste = bekleyenKayitlar([[1, { ...say('a'), red: red({ yazildi: true }) }], [2, { ...say('b'), red: red({ cozum: 'vazgecildi', cozumAt: 2000 }) }]], '1', new Set<number>(), false);
-    expect(liste.map((x) => [x.durum, x.yenidenDenenir])).toEqual([['karar', false], ['vazgecildi', false]]);
+  it('sunucuda yazılmış retten yalnız sayım yeniden denenir; bir kez denenmiş ve çözülmüş kayıt denenmez', () => {
+    const olay = { op: 'log', kind: 'events', uid: '1', at: 5, row: { cid: 'e' } };
+    const liste = bekleyenKayitlar([
+      [1, { ...say('a'), red: red({ yazildi: true }) }], [2, { ...olay, red: red({ yazildi: true }) }], [3, { ...say('c'), red: red({ yenidenDenendi: true }) }],
+      [4, { ...say('b'), red: red({ cozum: 'vazgecildi', cozumAt: 2000 }) }],
+    ], '1', new Set<number>(), false);
+    expect(liste.map((x) => [x.durum, x.yenidenDenenir])).toEqual([['karar', true], ['karar', false], ['karar', false], ['vazgecildi', false]]);
+  });
+  it('gecikmeli ret yalnız cihazda karar bekleyen kayda aitse yutulur', () => {
+    const kuyruk = [say('a'), { ...say('b'), red: red() }, { op: 'put', store: 'pkgs', id: 'b', red: red() }];
+    expect(kararBekleyenKayitMi(kuyruk, 'b')).toBe(true);
+    expect(kararBekleyenKayitMi(kuyruk, 'a')).toBe(false);
+    expect(kararBekleyenKayitMi(kuyruk, 'yok')).toBe(false);
   });
   it('çözülmüş iz bir gün sonra eskir; çözülmemiş karar hiç eskimez', () => {
     const gun = 24 * 3600e3;
@@ -116,26 +133,64 @@ describe('kuyruk gönderimi: reddedilen bekleyen kayıt düşmez', () => {
 
     const liste = await AKStore.Log.bekleyenler();
     expect(liste.map((x) => [x.satir.cid, x.durum, x.neden, x.yenidenDenenir])).toEqual([
-      ['yazilmadi-1', 'karar', 'Hedef aşılıyor.', true], ['yazildi-1', 'karar', 'Emir beklemede.', false]]);
+      ['yazilmadi-1', 'karar', 'Hedef aşılıyor.', true], ['yazildi-1', 'karar', 'Emir beklemede.', true]]);
     expect(AKStore.status().pending).toBe(0);
     expect(olaylar.map((o) => [o.cid, o.bekledi])).toEqual([['yazilmadi-1', true], ['yazildi-1', true]]);
     expect(ozet).toContainEqual({ kesin: 1, karar: 2 });
     expect(gonderilen).toEqual(['tamam-1', 'yazilmadi-1', 'yazildi-1']);
   });
 
-  it('"yeniden" yalnız sunucuda yazılmamış kaydı kuyruğa döndürür ve güncel kuralla yeniden gönderir', async () => {
+  it('"yeniden": sunucuda yazılmamış kayıt kuyruğa döner ve güncel kuralla yeniden gönderilir', async () => {
     const { AKStore } = (await import(/* @vite-ignore */ STORE_YOLU)) as { AKStore: Depo };
-    for (const cid of ['yazilmadi-1', 'yazildi-1']) await AKStore.local.add('outbox', say(cid));
+    await AKStore.local.add('outbox', say('yazilmadi-1'));
     await AKStore.init(); await bekle(120);
-    const [a, b] = await AKStore.Log.bekleyenler();
+    const [a] = await AKStore.Log.bekleyenler();
 
-    expect(await AKStore.Log.kararCoz(b!.anahtar, 'yeniden')).toBe(false);
     kabul.add('yazilmadi-1');
     expect(await AKStore.Log.kararCoz(a!.anahtar, 'yeniden')).toBe(true);
     await bekle(120);
-    expect((await AKStore.Log.bekleyenler()).map((x) => x.satir.cid)).toEqual(['yazildi-1']);
+    expect(await AKStore.Log.bekleyenler()).toEqual([]);
     expect(gonderilen.filter((c) => c === 'yazilmadi-1')).toHaveLength(2);
-    expect(gonderilen.filter((c) => c === 'yazildi-1')).toHaveLength(1);
+  });
+
+  it('"yeniden": ikinci kez reddedilen kayıt bir daha denenmez', async () => {
+    const { AKStore } = (await import(/* @vite-ignore */ STORE_YOLU)) as { AKStore: Depo };
+    await AKStore.local.add('outbox', say('yazilmadi-1'));
+    await AKStore.init(); await bekle(120);
+    const [a] = await AKStore.Log.bekleyenler();
+    expect(await AKStore.Log.kararCoz(a!.anahtar, 'yeniden')).toBe(true);
+    await bekle(120);
+    expect((await AKStore.Log.bekleyenler()).map((x) => [x.durum, x.yenidenDenenir])).toEqual([['karar', false]]);
+    expect(await AKStore.Log.kararCoz(a!.anahtar, 'yeniden')).toBe(false);
+  });
+
+  it('"yeniden": sunucuda yazılmış sayım sunucuya sorulur; yazılırsa kuyruktan düşer ve adet ekrana döner', async () => {
+    const { AKStore } = (await import(/* @vite-ignore */ STORE_YOLU)) as { AKStore: Depo };
+    await AKStore.local.add('outbox', say('yazildi-1'));
+    const donen: { cid?: string }[] = [];
+    window.addEventListener('arkon-sayim-yeniden-yazildi', (e) => donen.push((e as CustomEvent).detail));
+    await AKStore.init(); await bekle(120);
+    const [a] = await AKStore.Log.bekleyenler();
+
+    kabul.add('yazildi-1');
+    expect(await AKStore.Log.kararCoz(a!.anahtar, 'yeniden')).toBe(true);
+    expect(await AKStore.Log.bekleyenler()).toEqual([]);
+    expect(donen.map((d) => d.cid)).toEqual(['yazildi-1']);
+    expect(gonderilen).toEqual(['yazildi-1', 'yeniden:yazildi-1']);
+  });
+
+  it('"yeniden": sunucu yine reddederse neden güncellenir, kayıt kalır ve bir daha denenmez', async () => {
+    const { AKStore } = (await import(/* @vite-ignore */ STORE_YOLU)) as { AKStore: Depo };
+    await AKStore.local.add('outbox', say('yazildi-1'));
+    await AKStore.init(); await bekle(120);
+    const [a] = await AKStore.Log.bekleyenler();
+
+    expect(await AKStore.Log.kararCoz(a!.anahtar, 'yeniden')).toBe(true);
+    const [b] = await AKStore.Log.bekleyenler();
+    expect([b!.durum, b!.yenidenDenenir]).toEqual(['karar', false]);
+    expect(b!.neden).toMatch(/sonradan yeniden sayım/);
+    expect(await AKStore.Log.kararCoz(a!.anahtar, 'yeniden')).toBe(false);
+    expect(gonderilen.filter((c) => c.startsWith('yeniden:'))).toHaveLength(1);
   });
 
   it('"vazgec" kaydı göndermez, iz olarak tutar; başkasının kaydı çözülemez', async () => {

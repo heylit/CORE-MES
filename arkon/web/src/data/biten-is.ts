@@ -123,10 +123,13 @@ export function baslatmaGeriUygula<T extends DurumluIs>(isler: readonly T[], g: 
 
 // Bağlantı yokken kuyrukta beklemiş üretim kaydı reddedilince kaybolmaz (karar 3158 a): kuyruk öğesi `red` ile işaretlenir ve kişi çözene kadar
 // gönderilmez. `yazildi`: sunucu kaydı yazmış ama CORE'a işlememiştir; aynı kimlik sunucuda elendiğinden cihazdan yeniden denenemez.
-export interface KuyrukReddi { ileti: string; at: number; yazildi: boolean; cozum?: 'vazgecildi' | 'duzeltildi'; cozumAt?: number }
+// `yenidenDenendi`: kişi bir kez yeniden denedi ve yine kesinleşmedi; aynı kayıt ikinci kez denenmez.
+export interface KuyrukReddi { ileti: string; at: number; yazildi: boolean; yenidenDenendi?: boolean; cozum?: 'vazgecildi' | 'duzeltildi'; cozumAt?: number }
 interface KuyrukKaydi { op?: unknown; kind?: unknown; row?: unknown; at?: unknown; uid?: unknown; red?: KuyrukReddi }
 
 export const KUYRUK_BITTI_OLAYI = 'arkon-kuyruk-bitti';
+// Yeniden denenen sayım yazıldı: ret anında geri alınan adet ekranda yeniden eklenir.
+export const SAYIM_YENIDEN_YAZILDI_OLAYI = 'arkon-sayim-yeniden-yazildi';
 const COZULMUS_IZ_SURESI_MS = 24 * 3600e3;
 
 export const kararBekler = (oge: unknown): boolean => !!(oge as KuyrukKaydi | null | undefined)?.red;
@@ -142,6 +145,17 @@ export interface BekleyenKayit<A = unknown> {
   neden: string | null; yenidenDenenir: boolean;
 }
 
+// Sunucuda yazılmamış kayıt kuyruktan yeniden gönderilir; sunucuda yazılmış ama CORE'un reddettiği kayıttan yalnız sayım yeniden denenir (3167 b).
+// İkinci kez kesinleşmeyen kayıt denenmez.
+function yenidenDenenir(tur: string, red: KuyrukReddi | undefined): boolean {
+  if (!red || red.cozum !== undefined || red.yenidenDenendi) return false;
+  return !red.yazildi || tur === 'counts';
+}
+
+// Gecikmeli ret iletisi ($tmiRet) cihazda karar bekleyen kayda aitse ekran sayıyı yeniden geri almaz: ret anında zaten geri alınmıştır.
+export const kararBekleyenKayitMi = (kuyruk: readonly unknown[], cid: string): boolean =>
+  kuyruk.some((o) => { const k = o as KuyrukKaydi | null | undefined; return !!k?.red && k.op === 'log' && (k.row as { cid?: unknown } | null | undefined)?.cid === cid; });
+
 // Kuyruktaki üretim kayıtları (belge yazımları değil), yalnız oturumdaki kişininkiler: ortak tablette başkasının işlemi listelenmez.
 export function bekleyenKayitlar<A>(
   kuyruk: readonly (readonly [A, unknown])[], kisiId: string | undefined, yolda: { has(a: A): boolean }, gonderiliyor: boolean,
@@ -154,7 +168,7 @@ export function bekleyenKayitlar<A>(
     const durum: BekleyenDurumu = red ? (red.cozum ?? 'karar') : gonderiliyor || yolda.has(anahtar) ? 'gonderiliyor' : 'bekliyor';
     liste.push({
       anahtar, tur: o.kind, satir: o.row as Record<string, unknown>, zaman: typeof o.at === 'number' ? o.at : null, durum,
-      neden: red ? red.ileti : null, yenidenDenenir: !!red && !red.yazildi && red.cozum === undefined,
+      neden: red ? red.ileti : null, yenidenDenenir: yenidenDenenir(o.kind, red),
     });
   }
   return liste;
