@@ -11,13 +11,15 @@ import { zamanMetni } from './gorunum.ts';
 type EmirHareketi = EmirFisleriCevabi['hareketler'][number];
 type MrpSatiri = MrpIhtiyaciCevabi['satirlar'][number];
 
-const TURLER = ['uretim_girisi', 'fire', 'sarf', 'ambar', 'teslim'] as const satisfies readonly EmirFisKarti[];
+const TURLER = ['uretim_girisi', 'fire', 'sarf', 'ambar', 'teslim', 'rezerve'] as const satisfies readonly EmirFisKarti[];
 const TUR: Record<EmirFisKarti, { ad: string; simge: SimgeAdi }> = {
   uretim_girisi: { ad: 'Üretimden giriş', simge: 'pallet' },
   fire: { ad: 'Fire', simge: 'fire' },
   sarf: { ad: 'Sarf', simge: 'box' },
   ambar: { ad: 'Ambar transfer', simge: 'truck' },
   teslim: { ad: 'Teslim', simge: 'login' },
+  // Rezerve fiş değil ayırma kaydıdır (ayır / kaldır, nedeniyle); stok miktarı değişmez, Logo'ya gitmez (3179 a).
+  rezerve: { ad: 'Rezerve', simge: 'lock' },
 };
 // Kaynak, hareketi yazan akıştır (sunucudan); "Sistem" emrin açılışı, birleşmesi, bitişi ya da iptaliyle kendiliğinden yazılandır.
 const KAYNAK: Record<HareketYazani, { ad: string; ton: RozetTonu }> = {
@@ -39,6 +41,7 @@ const LOGO: Record<LogoFisDurumu, { ad: string; ton: RozetTonu }> = {
 const miktarMetni = (m: string | number | null, birim: string | null) => (m === null ? '—' : `${Number(m).toLocaleString('tr-TR')} ${birim ?? ''}`.trim());
 const tarihMetni = (t: string | null) => (t === null ? '—' : new Date(`${t}T00:00:00`).toLocaleDateString('tr-TR', { day: 'numeric', month: 'short' }));
 const konumMetni = (h: EmirHareketi) => {
+  if (h.tur === 'rezerve') return `${h.miktar.startsWith('-') ? 'Kaldırıldı' : 'Ayrıldı'}${h.aciklama === null ? '' : ` · ${h.kaynak === 'elle' ? 'elle: ' : ''}${h.aciklama}`}`;
   const yol = [h.kaynakKonumKod, h.hedefKonumKod].filter((x) => x !== null);
   return yol.length === 0 ? '—' : yol.join(' → ');
 };
@@ -57,7 +60,7 @@ const SUTUNLAR: Sutun<EmirHareketi>[] = [
   },
   { anahtar: 'lot', baslik: 'Lot', mono: true, kirilmaz: true, hucre: (h) => h.partiEtiketi ?? '—' },
   { anahtar: 'miktar', baslik: 'Miktar', hizala: 'sag', kirilmaz: true, hucre: (h) => miktarMetni(h.miktar, h.birim), csv: (h) => h.miktar },
-  { anahtar: 'konum', baslik: 'Konum', hucre: konumMetni },
+  { anahtar: 'konum', baslik: 'Konum / not', hucre: konumMetni },
   { anahtar: 'adim', baslik: 'Adım', kirilmaz: true, hucre: (h) => (h.opNo === null ? '—' : `OP${String(h.opNo)}`) },
   { anahtar: 'kaynak', baslik: 'Kaynak', hucre: (h) => <Rozet ton={KAYNAK[h.kaynak].ton} gorunum="cizgi">{KAYNAK[h.kaynak].ad}</Rozet>, csv: (h) => KAYNAK[h.kaynak].ad },
   { anahtar: 'kisi', baslik: 'Kişi', hucre: (h) => h.kisiAd ?? '—' },
@@ -82,19 +85,21 @@ const MRP_SUTUNLARI: Sutun<MrpSatiri>[] = [
   { anahtar: 'alt', baslik: 'Alt emir', kirilmaz: true, hucre: (m) => (m.acilanlar.length === 0 ? '—' : m.acilanlar.map((a) => a.kod ?? String(a.id)).join(', ')) },
 ];
 
-function FisKarti({ kart, secili, sec }: { kart: EmirFisKartiCevabi; secili: boolean; sec: () => void }) {
+function FisKarti({ kart, ayrili, secili, sec }: { kart: EmirFisKartiCevabi; ayrili: number; secili: boolean; sec: () => void }) {
   const bos = kart.satirSayisi === 0;
-  const no = bos ? 'İlk harekette açılır' : (kart.no ?? `${String(kart.belgeSayisi)} fiş`);
+  // Sarf, üretimden giriş ve fire fişi emirle birlikte açılır: boşken de numarası yazar (3179 a). Ambar transfer ve teslim ilk harekette açılır.
+  const no = kart.tur === 'rezerve' ? (ayrili === 0 ? 'Ayrılan yok' : `${String(ayrili)} malzeme ayrılı`)
+    : kart.no ?? (kart.belgeSayisi > 1 ? `${String(kart.belgeSayisi)} fiş` : 'İlk harekette açılır');
   return (
-    <button type="button" className="tc-emir-fis" data-bos={bos || undefined} aria-pressed={secili} onClick={sec}>
+    <button type="button" className="tc-emir-fis" data-bos={(bos && kart.no === null) || undefined} aria-pressed={secili} onClick={sec}>
       <span className="tc-emir-ozet-baslik"><Simge ad={TUR[kart.tur].simge} boyut="k" /> {TUR[kart.tur].ad}</span>
       <span className="tc-emir-fis-no">{no}</span>
       <span className="tc-emir-ozet-alt">
-        {bos ? 'Henüz hareket yok' : kart.toplam === null ? `${String(kart.satirSayisi)} satır` : `${String(kart.satirSayisi)} satır · ${miktarMetni(kart.toplam, kart.birim)}`}
+        {bos ? 'Henüz hareket yok' : kart.toplam === null || kart.tur === 'rezerve' ? `${String(kart.satirSayisi)} satır` : `${String(kart.satirSayisi)} satır · ${miktarMetni(kart.toplam, kart.birim)}`}
       </span>
       <span className="tc-emir-fis-alt">
         {kart.sonHareket !== null && <small>Son: {zamanMetni(kart.sonHareket)}</small>}
-        {kart.tur === 'teslim' || bos || kart.logo === null
+        {kart.tur === 'teslim' || kart.tur === 'rezerve' || bos || kart.logo === null
           ? <Rozet ton="pasif" gorunum="cizgi">Logo'ya gitmez</Rozet>
           : <Rozet ton={LOGO[kart.logo].ton}>{LOGO[kart.logo].ad}</Rozet>}
       </span>
@@ -102,7 +107,7 @@ function FisKarti({ kart, secili, sec }: { kart: EmirFisKartiCevabi; secili: boo
   );
 }
 
-// Emrin fişleri (3175 a): tür başına kart emir açılır açılmaz durur; kart ilk hareketle dolar. Karta dokunmak "Tüm hareketler" listesini o
+// Emrin fişleri (3175 a, 3179 a): tür başına kart emir açılır açılmaz durur; kart ilk hareketle dolar. Karta dokunmak "Tüm hareketler" listesini o
 // türe süzer; liste emrin bütün malzeme hareketleridir (ayrı belge değil). MRP fişi kayıt değil hesaptır; yalnız planlama okuyabilene görünür.
 export function EmirFisleri({ emirId, emirNo, mrpGorur }: { emirId: number; emirNo: string; mrpGorur: boolean }) {
   const [tur, setTur] = useState<string>('hepsi');
@@ -128,14 +133,18 @@ export function EmirFisleri({ emirId, emirNo, mrpGorur }: { emirId: number; emir
   const a = arama.trim().toLocaleLowerCase('tr');
   const gorunen = hareketler
     .filter((h) => tur === 'hepsi' || h.tur === tur)
-    .filter((h) => a === '' || [h.malzemeKod, h.malzemeAd, h.partiEtiketi, h.belgeNo, KAYNAK[h.kaynak].ad, h.kisiAd]
+    .filter((h) => a === '' || [h.malzemeKod, h.malzemeAd, h.partiEtiketi, h.belgeNo, h.aciklama, KAYNAK[h.kaynak].ad, h.kisiAd]
       .some((x) => x !== null && x.toLocaleLowerCase('tr').includes(a)));
+  // Rezerve kartının başlığı: emre hâlâ ayrılı duran malzeme sayısı (ayırmalar eksi kaldırmalar).
+  const net = new Map<number, number>();
+  for (const h of hareketler) if (h.tur === 'rezerve') net.set(h.malzemeId, (net.get(h.malzemeId) ?? 0) + Number(h.miktar));
+  const ayrili = [...net.values()].filter((n) => n > 1e-6).length;
   const eksik = mrp.data?.satirlar.filter((m) => m.net !== null && m.net > 0).length;
   return (
     <>
       <section aria-label="Emrin fişleri" className="tc-emir-fisler">
         {kartlar.map((k) => (
-          <FisKarti key={k.tur} kart={k} secili={!mrpAcik && tur === k.tur}
+          <FisKarti key={k.tur} kart={k} ayrili={ayrili} secili={!mrpAcik && tur === k.tur}
             sec={() => { setMrpAcik(false); setTur(tur === k.tur && !mrpAcik ? 'hepsi' : k.tur); }} />
         ))}
         {mrpGorur && (
@@ -152,7 +161,7 @@ export function EmirFisleri({ emirId, emirNo, mrpGorur }: { emirId: number; emir
           </button>
         )}
       </section>
-      <p className="tc-emir-not">Fiş ilk harekette açılır. Hareketi olmayan fiş Logo'ya gönderilmez.</p>
+      <p className="tc-emir-not">Sarf, üretimden giriş ve fire fişi emirle birlikte açılır; ambar transfer ve teslim ilk harekette. Hareketi olmayan fiş Logo'ya gönderilmez.</p>
       {mrpAcik ? (
         <section aria-label="MRP fişi" ref={mrpBolumu}>
           <h3 className="tc-emir-bolum">MRP fişi</h3>
@@ -168,8 +177,8 @@ export function EmirFisleri({ emirId, emirNo, mrpGorur }: { emirId: number; emir
       ) : (
         <section aria-label="Tüm hareketler">
           <h3 className="tc-emir-bolum">Tüm hareketler</h3>
-          <Tablo etiket={`${emirNo} malzeme hareketleri`} sutunlar={SUTUNLAR} satirlar={gorunen} satirAnahtari={(h) => h.id}
-            bosMesaj={tur === 'hepsi' ? 'Bu emrin henüz malzeme hareketi yok.' : `${TUR[tur as EmirFisKarti].ad} fişinde henüz hareket yok.`}
+          <Tablo etiket={`${emirNo} malzeme hareketleri`} sutunlar={SUTUNLAR} satirlar={gorunen} satirAnahtari={(h) => `${h.tur}-${String(h.id)}`}
+            bosMesaj={tur === 'hepsi' ? 'Bu emrin henüz malzeme hareketi yok.' : tur === 'rezerve' ? 'Bu emre ayrılmış stok yok.' : `${TUR[tur as EmirFisKarti].ad} fişinde henüz hareket yok.`}
             arac={{
               arama: { deger: arama, degistir: setArama, etiket: 'Hareketlerde ara', yerTutucu: 'Malzeme, lot, fiş, kaynak' },
               suzgec: {

@@ -1732,7 +1732,8 @@ export type MalzemeFisiAyrintiCevabi = z.output<typeof malzemeFisiAyrintiCevabi>
 // ---- Emrin fişleri (3175 a) -----------------------------------------------------------------------------------------------------------
 // Emrin sayfasındaki "Fişler": tür başına kart ve emrin bütün stok hareketleri tek listede. Yalnız okuma; fiyat taşımaz. Ambar transferi ve
 // teslim emre bağlı hareketlerden gelir; emre bağlanmayan transfer görünmez. "Hareket fişi" ayrı belge değildir, bu listedir.
-export const EMIR_FIS_KARTLARI = ['uretim_girisi', 'fire', 'sarf', 'ambar', 'teslim'] as const;
+// Rezerve (3179 a) fiş değil ayırma kaydıdır (ayır / kaldır, nedeniyle): stok miktarı değişmez, Logo'ya gitmez.
+export const EMIR_FIS_KARTLARI = ['uretim_girisi', 'fire', 'sarf', 'ambar', 'teslim', 'rezerve'] as const;
 export type EmirFisKarti = (typeof EMIR_FIS_KARTLARI)[number];
 // Hareketi yazan: terminal, Stok Merkezi'nden elle ya da başka bir akış (fason, sevk, kalite, CNC, emir). SmartES kaynak işi (3173) gelince eklenir.
 export const HAREKET_YAZANLARI = ['terminal', 'elle', 'fason', 'sevk', 'kalite', 'cnc', 'emir'] as const;
@@ -1747,7 +1748,7 @@ export const emirFisKartiSemasi = z.object({
   toplam: ondalikMetinSemasi.nullable(),
   birim: z.string().nullable(),
   sonHareket: zamanSemasi.nullable(),
-  // Logo'ya giden fişte (sarf, üretimden giriş, fire, ambar) durum; teslim Logo'ya gitmez: null. Birden çok ambar fişinde en kötüsü.
+  // Logo'ya giden fişte (sarf, üretimden giriş, fire, ambar) durum; teslim ve rezerve Logo'ya gitmez: null. Birden çok ambar fişinde en kötüsü.
   logo: z.enum(LOGO_FIS_DURUMLARI).nullable(),
 });
 export type EmirFisKartiCevabi = z.output<typeof emirFisKartiSemasi>;
@@ -1755,7 +1756,7 @@ export const emirHareketiSemasi = z.object({
   id: z.number().int(),
   zaman: zamanSemasi,
   tur: z.enum(EMIR_FIS_KARTLARI),
-  // Geri alma satırı asıl hareketin türündedir ve miktarı eksidir.
+  // Geri alma satırı asıl hareketin türündedir ve miktarı eksidir. Rezervede ayırma artı, kaldırma eksidir.
   geriAlma: z.boolean(),
   belgeNo: z.string().nullable(),
   malzemeId: z.number().int(),
@@ -1769,6 +1770,8 @@ export const emirHareketiSemasi = z.object({
   opNo: z.number().int().nullable(),
   kaynak: z.enum(HAREKET_YAZANLARI),
   kisiAd: z.string().nullable(),
+  // Rezerve satırında neden ("Emir açılışı", "Emir iptal edildi", elle kaldırmada yazılan); öteki türlerde null.
+  aciklama: z.string().nullable(),
 });
 export type EmirHareketi = z.output<typeof emirHareketiSemasi>;
 export const emirFisleriCevabi = z.object({ kartlar: z.array(emirFisKartiSemasi), hareketler: z.array(emirHareketiSemasi) });

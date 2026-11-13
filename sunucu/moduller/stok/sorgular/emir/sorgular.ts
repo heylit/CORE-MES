@@ -206,3 +206,9 @@ export const emrinHareketleri = (db: Db, emirId: number): Promise<EmirHareketiHa
 // 3175: emre ayrılmış (rezerve) miktar, malzeme başına (bütün statüler toplamı). Rezervesi olmayan malzeme satırsızdır.
 export const emrinRezerveToplamlari = (db: Db, emirId: number): Promise<{ malzemeId: number; miktar: string }[]> => db.sorgu(
   `SELECT malzeme_id AS "malzemeId", sum(miktar)::text AS miktar FROM stok_rezerve WHERE uretim_emri_id = $1 GROUP BY malzeme_id ORDER BY malzeme_id`, [emirId]);
+
+// 3179 a: emrin ayırma kayıtları (ayır / kaldır), eskiden yeniye. Kapanan emrin kaldırma kaydı da buradadır.
+export interface EmirRezerveKaydi { id: number; zaman: string; malzemeId: number; tur: 'ayir' | 'kaldir'; miktar: string; neden: string | null; kisiId: number }
+export const emrinRezerveKayitlari = (db: Db, emirId: number): Promise<EmirRezerveKaydi[]> => db.sorgu(
+  `SELECT id::int AS id, ${zamanMetni('zaman')} AS zaman, malzeme_id AS "malzemeId", tur, miktar::text AS miktar, neden, kisi_id AS "kisiId"
+     FROM stok_rezerve_kaydi WHERE uretim_emri_id = $1 ORDER BY id`, [emirId]);

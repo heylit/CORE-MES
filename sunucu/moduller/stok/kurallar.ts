@@ -1726,6 +1726,12 @@ export function hareketYazani(akis: string | null): HareketYazani {
   if (akis === null) return 'elle';
   return (HAREKET_YAZANLARI as readonly string[]).includes(akis) ? (akis as HareketYazani) : 'elle';
 }
+// 3179 a: ayırma kaydını kendiliğinden yazan olaylar (emir açılışı, mal kabul, emrin bitişi, iptali, parti birleşmesi) bu nedenleri yazar;
+// başka nedenli ya da nedensiz kayıt Stok Merkezi'nden elle yapılmıştır. Kayıtta akış tutulmaz, kaynak nedenden okunur.
+const REZERVE_SISTEM_NEDENLERI: readonly string[] = ['Emir açılışı', 'Mal kabul', 'Emir bitti', 'Emir iptal edildi'];
+export function rezerveYazani(neden: string | null): HareketYazani {
+  return neden !== null && (REZERVE_SISTEM_NEDENLERI.includes(neden) || neden.startsWith('Parti birleşti:')) ? 'emir' : 'elle';
+}
 const LOGO_KOTULUK: Record<LogoFisDurumu, number> = { hata: 4, bekliyor: 3, bilinmiyor: 2, gonderildi: 1, gonderilmez: 0 };
 // Kart başına özet: emrin fişleri (sarf, üretimden giriş, fire emirle birlikte açılır, 294 c) hareketi olmasa da kartta numarasıyla durur.
 // Toplam yalnız tek birimde; birim karışık ya da satır yoksa null. Birden çok Logo fişinde en kötü durum gösterilir; teslim Logo'ya gitmez.
@@ -1739,7 +1745,7 @@ export function emirFisKartlari(
     const belgeler = [...new Set([...kendiFisleri.map((f) => f.no), ...satir.flatMap((h) => (h.belgeNo === null ? [] : [h.belgeNo]))])];
     const birimler = [...new Set(satir.map((h) => h.birim))];
     const toplam = satir.length > 0 && birimler.length === 1 && birimler[0] !== null ? bindenMetin(satir.reduce((t, h) => t + binde(h.miktar), 0n)) : null;
-    const logo = tur === 'teslim' || kendiFisleri.length === 0 ? null
+    const logo = tur === 'teslim' || tur === 'rezerve' || kendiFisleri.length === 0 ? null
       : kendiFisleri.map((f) => f.logo).reduce((a, b) => (LOGO_KOTULUK[b] > LOGO_KOTULUK[a] ? b : a));
     return {
       tur, no: belgeler.length === 1 ? belgeler[0]! : null, belgeSayisi: belgeler.length, satirSayisi: satir.length,

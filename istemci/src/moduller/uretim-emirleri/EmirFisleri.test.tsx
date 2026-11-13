@@ -11,7 +11,10 @@ const kart = (tur: EmirFisleriCevabi['kartlar'][number]['tur'], p: Partial<EmirF
 });
 const hareket = (id: number, tur: 'sarf' | 'fire', kaynak: 'terminal' | 'elle', miktar = '4') => ({
   id, zaman: '2030-01-02T08:00:00Z', tur, geriAlma: false, belgeNo: tur === 'sarf' ? 'SR-000101' : 'FR-000102', malzemeId: 7, malzemeKod: 'ORN-HM-01',
-  malzemeAd: 'Örnek çubuk', birim: 'adet', partiEtiketi: 'ORN-LOT-1', miktar, kaynakKonumKod: 'ORN-A1', hedefKonumKod: null, opNo: 10, kaynak, kisiAd: 'Örnek Kişi',
+  malzemeAd: 'Örnek çubuk', birim: 'adet', partiEtiketi: 'ORN-LOT-1', miktar, kaynakKonumKod: 'ORN-A1', hedefKonumKod: null, opNo: 10, kaynak, kisiAd: 'Örnek Kişi', aciklama: null,
+});
+const rezerve = (id: number, miktar: string, aciklama: string) => ({
+  ...hareket(id, 'sarf', 'elle', miktar), tur: 'rezerve' as const, belgeNo: null, partiEtiketi: null, kaynakKonumKod: null, opNo: null, kaynak: 'emir' as const, aciklama,
 });
 const cevap = (dolu: boolean): EmirFisleriCevabi => ({
   kartlar: [
@@ -19,8 +22,9 @@ const cevap = (dolu: boolean): EmirFisleriCevabi => ({
     kart('fire', dolu ? { no: 'FR-000102', belgeSayisi: 1, satirSayisi: 1, toplam: '1', birim: 'adet', sonHareket: '2030-01-02T08:00:00Z', logo: 'gonderilmez' } : {}),
     kart('sarf', dolu ? { no: 'SR-000101', belgeSayisi: 1, satirSayisi: 1, toplam: '4', birim: 'adet', sonHareket: '2030-01-02T08:00:00Z', logo: 'gonderildi' } : {}),
     kart('ambar'), kart('teslim'),
+    kart('rezerve', dolu ? { belgeSayisi: 0, satirSayisi: 2, toplam: '0', birim: 'adet', sonHareket: '2030-01-03T08:00:00Z' } : {}),
   ],
-  hareketler: dolu ? [hareket(1, 'sarf', 'terminal'), hareket(2, 'fire', 'elle', '1')] : [],
+  hareketler: dolu ? [hareket(1, 'sarf', 'terminal'), hareket(2, 'fire', 'elle', '1'), rezerve(1, '6', 'Emir açılışı'), rezerve(2, '-6', 'Emir iptal edildi')] : [],
 });
 const mrp: MrpIhtiyaciCevabi = {
   hesaplanan: '2030-01-02T08:00:00Z', stokGorunur: false, satinAlmaGorunur: false, urunsuzEmir: 0,
@@ -33,13 +37,15 @@ const ekran = (mrpGorur: boolean) => [{ yol: '/e/:id', ekran: () => <EmirFisleri
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
 describe('Emrin fişleri (3175)', () => {
-  it('yeni emirde kartlar boş durur: ilk harekette açılır, Logo\'ya gitmez; liste boş', async () => {
+  it('yeni emirde emir fişi numarasıyla, ambar ve teslim "ilk harekette açılır", rezerve "ayrılan yok"; liste boş', async () => {
     sunucuKur(OKUYUCU, { 'GET /stok/uretim-emirleri/3/fisler': () => json(200, cevap(false)) });
     ac(ekran(false), '/e/3');
     const kartlar = await screen.findByRole('region', { name: 'Emrin fişleri' });
-    expect(within(kartlar).getAllByRole('button')).toHaveLength(5);
-    expect(within(kartlar).getAllByText('İlk harekette açılır')).toHaveLength(5);
-    expect(within(kartlar).getAllByText("Logo'ya gitmez")).toHaveLength(5);
+    expect(within(kartlar).getAllByRole('button')).toHaveLength(6);
+    expect(within(kartlar).getByText('UG-000100')).toBeTruthy();
+    expect(within(kartlar).getAllByText('İlk harekette açılır')).toHaveLength(4);
+    expect(within(kartlar).getByText('Ayrılan yok')).toBeTruthy();
+    expect(within(kartlar).getAllByText("Logo'ya gitmez")).toHaveLength(6);
     expect(screen.getByText('Bu emrin henüz malzeme hareketi yok.')).toBeTruthy();
     expect(screen.queryByRole('button', { name: /MRP/ })).toBeNull();
   });
@@ -51,12 +57,26 @@ describe('Emrin fişleri (3175)', () => {
     expect(sarf.textContent).toContain('1 satır · 4 adet');
     expect(sarf.textContent).toContain("Logo'da");
     const tablo = screen.getByRole('table', { name: 'ORN-E1 malzeme hareketleri' });
-    expect(within(tablo).getAllByRole('row')).toHaveLength(3);
+    expect(within(tablo).getAllByRole('row')).toHaveLength(5);
     expect(tablo.textContent).toContain('Terminal');
     expect(tablo.textContent).toContain('Elle');
     fireEvent.click(sarf);
     expect(sarf.getAttribute('aria-pressed')).toBe('true');
     expect(within(screen.getByRole('table', { name: 'ORN-E1 malzeme hareketleri' })).getAllByRole('row')).toHaveLength(2);
+  });
+
+  it('rezerve kartı ayırma ve kaldırmayı nedeniyle gösterir; Logo\'ya gitmez (3179 a)', async () => {
+    sunucuKur(OKUYUCU, { 'GET /stok/uretim-emirleri/3/fisler': () => json(200, cevap(true)) });
+    ac(ekran(false), '/e/3');
+    const kartRezerve = await screen.findByRole('button', { name: /Rezerve.*Ayrılan yok/ });
+    expect(kartRezerve.textContent).toContain('Ayrılan yok');
+    expect(kartRezerve.textContent).toContain("Logo'ya gitmez");
+    fireEvent.click(kartRezerve);
+    const tablo = screen.getByRole('table', { name: 'ORN-E1 malzeme hareketleri' });
+    expect(within(tablo).getAllByRole('row')).toHaveLength(3);
+    expect(tablo.textContent).toContain('Ayrıldı · Emir açılışı');
+    expect(tablo.textContent).toContain('Kaldırıldı · Emir iptal edildi');
+    expect(tablo.textContent).toContain('Sistem');
   });
 
   it('MRP fişi yalnız planlama okuyana; açılınca hesap tablosu gelir, null bilinmiyor diye çizgi', async () => {

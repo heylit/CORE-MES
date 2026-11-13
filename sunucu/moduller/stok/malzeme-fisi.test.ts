@@ -12,7 +12,7 @@ import { denetimYaz } from '../denetim/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
-import { emirAcildiYansit, hurdaSayimiYansit, logoIcinMalzemeFisleri, malzemeFisiDegisiklikleri, malzemeFisiLogoCozucusu } from './disari.ts';
+import { emirAcildiYansit, emirIptalYansit, hurdaSayimiYansit, logoIcinMalzemeFisleri, malzemeFisiDegisiklikleri, malzemeFisiLogoCozucusu } from './disari.ts';
 import type { LogoDurumuSorusu } from './disari.ts';
 
 const PAROLA = 'dogru-parola-1';
@@ -117,7 +117,8 @@ describe('stok malzeme fişleri (gerçek PostgreSQL)', () => {
     const bos = await yon<EmirFisleriCevabi>('GET', `/stok/uretim-emirleri/${e}/fisler`);
     assert.equal(bos.durum, 200, JSON.stringify(bos.govde));
     emirFisleriCevabi.parse(bos.govde);
-    assert.deepEqual(bos.govde.kartlar.map((k) => [k.tur, k.satirSayisi, k.toplam]), [['uretim_girisi', 0, null], ['fire', 0, null], ['sarf', 0, null], ['ambar', 0, null], ['teslim', 0, null]]);
+    assert.deepEqual(bos.govde.kartlar.map((k) => [k.tur, k.satirSayisi, k.toplam]), [['uretim_girisi', 0, null], ['fire', 0, null], ['sarf', 0, null], ['ambar', 0, null], ['teslim', 0, null], ['rezerve', 0, null]]);
+    assert.ok(['sarf', 'uretim_girisi', 'fire'].every((t) => /^(SR|UG|FR)-\d{6}$/.test(bos.govde.kartlar.find((x) => x.tur === t)!.no ?? '')), '3179 a: boş emir fişi numarasıyla gelir');
     assert.deepEqual(bos.govde.hareketler, []);
     const k = await kart();
     await malKabul(k, '10');
@@ -139,6 +140,16 @@ describe('stok malzeme fişleri (gerçek PostgreSQL)', () => {
     const sarflar = g.govde.hareketler.filter((h) => h.tur === 'sarf');
     assert.deepEqual(sarflar.map((h) => [h.miktar, h.geriAlma]).sort(), [['-4', true], ['4', false]]);
     assert.equal(g.govde.kartlar.find((x) => x.tur === 'sarf')!.toplam, '0');
+    // 3179 a: rezerve kartı ayırma kaydından okunur; emir iptalinde rezerve kalkar ve nedeniyle görünür. Stok miktarı değişmez.
+    await o().sahip.sorgu('INSERT INTO stok_rezerve (malzeme_id, statu_id, uretim_emri_id, miktar) VALUES ($1, NULL, $2, 3)', [k, e]);
+    await o().sahip.sorgu("INSERT INTO stok_rezerve_kaydi (malzeme_id, statu_id, uretim_emri_id, tur, miktar, neden, kisi_id) VALUES ($1, NULL, $2, 'ayir', 3, 'Emir açılışı', $3)", [k, e, yoneticiId]);
+    await o().vt.tx((db) => emirIptalYansit(db, { uretimEmriId: e, kisiId: yoneticiId }));
+    const r = await yon<EmirFisleriCevabi>('GET', `/stok/uretim-emirleri/${e}/fisler`);
+    emirFisleriCevabi.parse(r.govde);
+    assert.deepEqual(r.govde.hareketler.filter((h) => h.tur === 'rezerve').map((h) => [h.miktar, h.aciklama, h.kaynak, h.belgeNo]).sort(),
+      [['-3', 'Emir iptal edildi', 'emir', null], ['3', 'Emir açılışı', 'emir', null]]);
+    const rk = r.govde.kartlar.find((x) => x.tur === 'rezerve')!;
+    assert.deepEqual([rk.satirSayisi, rk.toplam, rk.logo, rk.no], [2, '0', null, null]);
     assert.equal((await yon('GET', '/stok/uretim-emirleri/999999/fisler')).durum, 404);
     const rol = (await o().sahip.tek<{ id: number }>("INSERT INTO rol (kod, ad) VALUES ('test_emir_goren', 'test_emir_goren') RETURNING id"))!.id;
     await o().sahip.sorgu("INSERT INTO rol_islemi (rol_id, islem) VALUES ($1, 'sayfa.uretim-emirleri')", [rol]);
