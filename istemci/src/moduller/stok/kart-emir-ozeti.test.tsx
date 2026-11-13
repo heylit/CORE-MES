@@ -5,7 +5,7 @@ import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import type { Kullanici } from '#paylasilan/kullanici.ts';
 import type { OkutCozCevabi, RefakatKartSatiri, RefakatPartisi, Teslim } from '#paylasilan/sozlesme/stok.ts';
 import { BildirimSaglayici } from '../../ortak/arayuz/index.ts';
-import { kartNeredeMetni, OkutmaSonucu } from './OkutmaSonucu.tsx';
+import { OkutmaSonucu } from './OkutmaSonucu.tsx';
 import { json, sunucuKur } from './test-ortak.tsx';
 
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
@@ -32,7 +32,7 @@ const cevap = (x: Partial<Extract<OkutCozCevabi, { tur: 'malzeme' }>> = {}): Oku
   tur: 'malzeme', malzeme: { id: 901, kod: 'HM-1', ad: 'Deneme sac', birim: 'adet' }, parti: { id: 40, etiket: 'LT-000040', uretimEmriId: null },
   yerler: [], refakat: KART, kartSatirlari: [satir({})], anaEylem: 'teslim-et', ...x,
 });
-const adim = (opNo: number, ad: string, durum: 'tamam' | 'calisiyor' | 'bekliyor', yuzde: number) => ({ opNo, ad, dal: null, durum, hedef: 10, yapilan: yuzde / 10, yuzde });
+const adim = (opNo: number, ad: string, durum: 'tamam' | 'calisiyor' | 'bekliyor', yuzde: number) => ({ opNo, ad, dal: null, durum, hedef: 10, yapilan: Math.floor(yuzde / 10), yuzde });
 const EMIR = {
   emir: { id: 1, emirNo: 'UE-000001', parcaNo: 'P-1', parcaAd: 'Deneme parça', adet: 10, istasyon: { id: 4, ad: 'Freze 2' }, durum: 'uretimde', acan: { id: 1, ad: 'Deneme' }, acilma: '2026-10-20T10:00:00+03:00', baslama: null, bitis: null },
   kayitlar: [], adimlar: [],
@@ -53,14 +53,14 @@ function ciz(c: OkutCozCevabi) {
 }
 
 describe('Refakat kartı okutulunca emrin özeti (3155)', () => {
-  it('emri okuyabilen özeti görür: adım sayısı, sunucunun rota yüzdesi, şu anki adım ve kartın yeri', async () => {
+  it('emri okuyabilen özeti görür: adım sayısı, sunucunun rota yüzdesi, şu anki adım, adımın yapılan / hedef adedi', async () => {
     sunucuKur(OPERATOR, { 'GET /uretim-emirleri/1': () => json(200, EMIR) });
     ciz(cevap());
     const ozet = await screen.findByRole('region', { name: 'Emir özeti' });
     expect(ozet.textContent).toContain('2/5 adım bitti · %49');
     expect(ozet.textContent).toContain('10 adet · Şu an: OP30 Freze');
     expect(screen.getAllByRole('listitem').filter((l) => l.closest('[aria-label="Rota"]'))).toHaveLength(5);
-    expect(ozet.textContent).toContain('Torna 1: 4 adet burada, 2 adet buradan yolda');
+    expect(ozet.textContent).toContain('OP30Freze4 / 10');
   });
 
   it('emri okuyamayan (403) özeti görmez; okutma sonucu bugünkü gibi kalır', async () => {
@@ -116,14 +116,5 @@ describe('Gelen kartta "Al ve işi aç" (3155)', () => {
     await waitFor(() => expect(istekler.some((i) => i.yol === '/oturum')).toBe(true));
     expect(await screen.findByRole('button', { name: 'Teslim al' })).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Al ve işi aç' })).toBeNull();
-  });
-});
-
-describe('kartNeredeMetni', () => {
-  it('yer adına ek getirmez; burada ve yolda ayrı, ikiden çok yer sayıyla', () => {
-    expect(kartNeredeMetni([satir({})])).toBe('Torna 1: 4 adet burada, 2 adet buradan yolda');
-    expect(kartNeredeMetni([satir({ yolda: '0' }), satir({ konumAd: null, konumKod: 'D-01', miktar: '1', yolda: '0' }), satir({ konumAd: 'Freze 2', yolda: '0' })]))
-      .toBe('Torna 1: 6 adet burada · D-01: 1 adet burada · +1 yer');
-    expect(kartNeredeMetni([])).toBeNull();
   });
 });

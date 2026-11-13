@@ -14,4 +14,4 @@ export { RotaAkisi, type RotaAkisiAdimi } from './RotaAkisi.tsx';
 export { UretimEmirleri, type EmirAcmaYuvasi } from './UretimEmirleri.tsx';
 export { EmirAyrintisi } from './EmirAyrintisi.tsx';
 // 3155: refakat kartı okutulunca emrin özeti (Malzeme · Teslim paneli okutma sonucu).
-export { KartEmirOzeti } from './KartEmirOzeti.tsx';
+export { KartEmirOzeti, useEmirAdimlari } from './KartEmirOzeti.tsx';
