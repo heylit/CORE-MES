@@ -132,6 +132,43 @@ describe('Kartla malzeme akışı (3162 a)', () => {
     expect(within(await blok()).queryByRole('button')).toBeNull();
   });
 
+  it('gönderebilecek durumda bile bilgi kipinde de, gönderme yetkisi olmayanda da düğme yok; cümle aynı', async () => {
+    const yollar = {
+      'GET /stok/teslim-kutusu': () => json(200, kutu(3)),
+      'GET /stok/teslim-kutusu/istasyon-sepetleri': () => json(200, sepetler({ cikan: [cikan({})] })),
+    };
+    sunucuKur(OPERATOR, yollar);
+    ciz(cevap(), true);
+    await waitFor(async () => expect(await cumle()).toMatch(/Sırada Freze 2 \(OP 30\)/));
+    expect(within(await blok()).queryByRole('button')).toBeNull();
+    cleanup();
+    sunucuKur({ id: 11, ad: 'Deneme İzleyici', islemler: ['terminal.uret'] }, yollar);
+    ciz(cevap());
+    await waitFor(async () => expect(await cumle()).toMatch(/Sırada Freze 2 \(OP 30\)/));
+    expect(within(await blok()).queryByRole('button')).toBeNull();
+  });
+
+  it('her başarılı gönderimden sonra istek kimliği yenilenir; hatalı gönderim aynı kimlikle yeniden denenir', async () => {
+    let n = 0;
+    const istekler = sunucuKur(OPERATOR, {
+      'GET /stok/teslim-kutusu': () => json(200, kutu(3)),
+      'GET /stok/teslim-kutusu/istasyon-sepetleri': () => json(200, sepetler({ cikan: [cikan({})] })),
+      'GET /stok/teslim-kutusu/kod-coz': () => json(200, cevap()),
+      'POST /stok/teslimler/gonder': () => { n += 1; return n === 2 ? json(409, { kod: 'SURUM', mesaj: 'Kayıt değişmiş.' }) : json(200, { teslim: GELEN, acilanKartlar: [] }); },
+    });
+    ciz(cevap());
+    const gonderler = () => istekler.filter((i) => i.yontem === 'POST').map((i) => (i.govde as { kaynakKimligi: string }).kaynakKimligi);
+    const bas = async () => fireEvent.click(await within(await blok()).findByRole('button', { name: /Sonraki istasyona gönder/ }));
+    await bas(); await waitFor(() => expect(gonderler()).toHaveLength(1));
+    await waitFor(async () => expect((await within(await blok()).findByRole('button', { name: /Sonraki istasyona gönder/ })).hasAttribute('disabled')).toBe(false));
+    await bas(); await waitFor(() => expect(gonderler()).toHaveLength(2));
+    await waitFor(async () => expect((await within(await blok()).findByRole('button', { name: /Sonraki istasyona gönder/ })).hasAttribute('disabled')).toBe(false));
+    await bas(); await waitFor(() => expect(gonderler()).toHaveLength(3));
+    const [k1, k2, k3] = gonderler();
+    expect(k2).not.toBe(k1);
+    expect(k3).toBe(k2);
+  });
+
   it('iptal kartta blok yok', () => {
     sunucuKur(OPERATOR, {});
     ciz(cevap({ refakat: { ...KART, durum: 'iptal' } }));
