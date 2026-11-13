@@ -215,7 +215,9 @@
 .tc-pyq-suz button:hover { color: var(--ink); }
 /* Renk açıklaması özet satırında kapalı durur; açılınca satırın altında tam genişlikte. */
 .tc-pyq-lejk { display: contents; }
-.tc-pyq-lejk summary { display: inline-flex; align-items: center; min-height: var(--dokunma); color: var(--muted); font-size: var(--yazi-xs); cursor: pointer; }
+.tc-pyq-lejk summary { display: inline-flex; align-items: center; gap: var(--b-1); min-height: var(--dokunma); color: var(--muted); font-size: var(--yazi-xs); cursor: pointer; }
+/* Kapalı açıklamanın açılabildiği görünsün: ok açıkken aşağı döner. */
+.tc-pyq-lejk[open] summary .tc-simge { transform: rotate(90deg); }
 .tc-pyq-lejk > .tc-pyq-lej { flex: 1 0 100%; order: 9; }
 .tc-pyq-lej { display: flex; flex-wrap: wrap; gap: var(--b-1) var(--b-3); color: var(--muted); font-size: var(--yazi-xs); }
 .tc-pyq-lej span { display: inline-flex; align-items: center; gap: var(--b-1); }
