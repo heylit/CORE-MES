@@ -166,6 +166,9 @@ describe('Kokpit', () => {
     const d = screen.getByRole('button', { name: 'Onaya gönder' });
     expect(d.className).not.toContain('tc-dugme-birincil');
     expect(d.hasAttribute('disabled')).toBe(true);
+    cleanup();
+    ac({ calisma: { ...c, dataVer: c.plan?.dataVer ?? c.dataVer }, secim: { ...BOS_SECIM, siparis: '2', adim: '2.20' } });
+    expect(screen.getByRole('button', { name: 'Onaya gönder' }).className).not.toContain('tc-dugme-birincil');
   });
 
   it('çalışma yokken boş durum gösterir', () => {
