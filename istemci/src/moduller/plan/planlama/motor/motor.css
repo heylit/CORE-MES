@@ -528,7 +528,9 @@
   /* Dar ekranda ad görünmez ama düğmenin adı kalır: seçili düğmenin ipucu yoktur, ad yalnız bu yazıdan gelir. */
   .tc-pym-sb-ekran button > span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
   .tc-pym-sb-iyi > span { display: none; }
-  .tc-pym-sb-sag { gap: var(--b-1); }
+  /* Nabız yazısı uzayınca (çok geciken) çubuk satırı taşmasın: nabız daralır, sağdaki düğmeler yerinde kalır. */
+  .tc-pym-sb-nb { flex: 1 1 auto; min-width: 0; overflow: hidden; }
+  .tc-pym-sb-sag { flex: 0 0 auto; gap: var(--b-1); }
   .tc-pym-sb-sag [data-olay] { display: none; }
   .tc-pym-sb-not { display: none; }
   .tc-pym-sb-nb-k span { font-size: var(--yazi-xs); }

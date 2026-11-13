@@ -33,7 +33,7 @@ const GUNLER = Array.from({ length: MATRIS_GUNU }, (_, g) => g);
 export function Matris({ m, cx, duzen, duzenSec, emirler, secEmir, secIs, zaman, sec, gecSuz }: MatrisOzellikleri) {
   const [suz, setSuz] = useState<YukSuzgeci | null>(null);
   const [tum, setTum] = useState(false);
-  const [lej, setLej] = useState(() => !darEkran());
+  const [lej, setLej] = useState(false);
   const kap = useRef<HTMLDivElement | null>(null);
   const kod = useMemo(() => new Map(m.tezgahlar.map((t) => [t.id, t.kod])), [m]);
   const gunAdi = (g: number): string => { const z = zaman(m.bas + g * 24); return `${z.slice(6, 9)} ${z.slice(0, 2)}`; };
@@ -182,18 +182,18 @@ export function Matris({ m, cx, duzen, duzenSec, emirler, secEmir, secIs, zaman,
             <button type="button" aria-label="Süzgeci kaldır" onClick={() => { setSuz(null); }}><Simge ad="x" boyut="k" /></button>
           </span>
         )}
+        <details className="tc-pyq-lejk" open={lej} onToggle={(ev) => { setLej(ev.currentTarget.open); }}>
+          <summary>Renkler ne anlatıyor</summary>
+          <div className="tc-pyq-lej">
+            <span data-yuk="hafif">az dolu</span><span data-yuk="orta">yarı dolu</span><span data-yuk="dolu">dolmak üzere</span><span data-yuk="tam">tam dolu</span>
+            {duzen === 'A' && <><span data-lej="bekle">sırada bekliyor</span><span data-lej="termin">termin günü</span></>}
+            <span data-lej="iz">seçili emrin geçtiği yer</span>
+          </div>
+        </details>
         <span className="tc-pyq-seg tc-pyq-duzen" role="group" aria-label="Düzen">
           {DUZENLER.map(([k, ad]) => <button type="button" key={k} aria-pressed={duzen === k} onClick={() => { duzenSec(k); }}>{ad}</button>)}
         </span>
       </div>
-      <details className="tc-pyq-lejk" open={lej} onToggle={(ev) => { setLej(ev.currentTarget.open); }}>
-        <summary>Renkler ne anlatıyor</summary>
-        <div className="tc-pyq-lej">
-          <span data-yuk="hafif">az dolu</span><span data-yuk="orta">yarı dolu</span><span data-yuk="dolu">dolmak üzere</span><span data-yuk="tam">tam dolu</span>
-          {duzen === 'A' && <><span data-lej="bekle">sırada bekliyor</span><span data-lej="termin">termin günü</span></>}
-          <span data-lej="iz">seçili emrin geçtiği yer</span>
-        </div>
-      </details>
       {duzen === 'A' ? akis : yan}
     </div>
   );
