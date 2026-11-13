@@ -585,14 +585,52 @@ export const APARAT_ADET_TAVANI = 10000;
 const aparatAdedi = z.number().int().min(1, 'Adet en az 1.').max(APARAT_ADET_TAVANI);
 // Sütun `int`: aşan kimlik sorguya varırsa 400 yerine 500 döner.
 const intKimlik = kimlik.max(2147483647);
-export const aparatKapasitesiGovdesi = z.object({ aparatKartiId: intKimlik, istasyonId: intKimlik.nullable(), adet: aparatAdedi });
-export const aparatKapasitesiGuncellemeGovdesi = z.object({ ...beklenenSurum, istasyonId: intKimlik.nullable(), adet: aparatAdedi });
+// 3199 (A + D): satır planın ikincil kaynağıdır. Tür aparat ya da özel takım; kısıt "sert" plan bekletir, "izle" yalnız aşımı uyarır.
+// Ömür yalnız özel takımda, dakika (kesme) ya da adet birimiyle (V15); boşsa sayılmaz. Değişim süresi ömür bitince işe eklenen dakikadır.
+// Kesinti takvimi satırla birlikte yazılır (gönderilen liste satırdakinin yerine geçer); aralıkta adet o kadar düşer.
+export const IKINCIL_KAYNAK_TURLERI = ['aparat', 'ozel_takim'] as const;
+export const IKINCIL_KAYNAK_KISITLARI = ['sert', 'izle'] as const;
+export const OMUR_BIRIMLERI = ['dk', 'adet'] as const;
+export const KESINTI_NEDENLERI = ['bakim', 'kalibrasyon', 'odunc'] as const;
+export const KESINTI_EN_COK = 50;
+export const DEGISIM_DK_TAVANI = 1440;
+export const OMUR_TAVANI = 1000000;
+const kesintiGovdesi = z.object({
+  neden: z.enum(KESINTI_NEDENLERI),
+  baslangic: zamanSemasi,
+  bitis: zamanSemasi,
+  adet: aparatAdedi,
+  aciklama: z.string().trim().min(1).max(200).nullable().default(null),
+}).refine((k) => Date.parse(k.bitis) > Date.parse(k.baslangic), { message: 'Kesintinin bitişi başlangıcından sonra olmalı.', path: ['bitis'] });
+const ikincilKaynakAlanlari = {
+  tur: z.enum(IKINCIL_KAYNAK_TURLERI).default('aparat'),
+  kisit: z.enum(IKINCIL_KAYNAK_KISITLARI).default('sert'),
+  omur: z.number().positive('Ömür sıfırdan büyük olmalı.').max(OMUR_TAVANI).multipleOf(0.01).nullable().default(null),
+  omurBirimi: z.enum(OMUR_BIRIMLERI).nullable().default(null),
+  degisimDk: z.number().int().min(0).max(DEGISIM_DK_TAVANI).nullable().default(null),
+  kesintiler: z.array(kesintiGovdesi).max(KESINTI_EN_COK).default([]),
+};
+const omurTutarli = (g: { tur: string; omur: number | null; omurBirimi: string | null }): boolean =>
+  (g.omur === null) === (g.omurBirimi === null) && (g.omur === null || g.tur === 'ozel_takim');
+const OMUR_TUTARSIZ = { message: 'Ömür yalnız özel takımda ve birimiyle (dakika ya da adet) girilir.', path: ['omur'] };
+export const aparatKapasitesiGovdesi = z.object({ aparatKartiId: intKimlik, istasyonId: intKimlik.nullable(), adet: aparatAdedi, ...ikincilKaynakAlanlari })
+  .refine(omurTutarli, OMUR_TUTARSIZ);
+export const aparatKapasitesiGuncellemeGovdesi = z.object({ ...beklenenSurum, istasyonId: intKimlik.nullable(), adet: aparatAdedi, ...ikincilKaynakAlanlari })
+  .refine(omurTutarli, OMUR_TUTARSIZ);
 export const aparatKapasitesiSilmeGovdesi = z.object({ ...beklenenSurum });
 export const aparatKapasitesi = z.object({
   id: z.number().int(),
   aparatKartiId: z.number().int(),
   istasyonId: z.number().int().nullable(),
   adet: z.number().int(),
+  tur: z.enum(IKINCIL_KAYNAK_TURLERI),
+  kisit: z.enum(IKINCIL_KAYNAK_KISITLARI),
+  omur: z.number().nullable(),
+  omurBirimi: z.enum(OMUR_BIRIMLERI).nullable(),
+  degisimDk: z.number().int().nullable(),
+  kesintiler: z.array(z.object({
+    id: z.number().int(), neden: z.enum(KESINTI_NEDENLERI), baslangic: zamanSemasi, bitis: zamanSemasi, adet: z.number().int(), aciklama: z.string().nullable(),
+  })),
   degistiren,
   degisme: zamanSemasi,
   surum: surumSemasi,
@@ -603,6 +641,7 @@ export type AparatKapasitesiGuncellemeGovdesi = z.input<typeof aparatKapasitesiG
 export type AparatKapasitesiSilmeGovdesi = z.input<typeof aparatKapasitesiSilmeGovdesi>;
 export type AparatKapasitesi = z.output<typeof aparatKapasitesi>;
 export type AparatKapasiteleriCevabi = z.output<typeof aparatKapasiteleriCevabi>;
+export type AparatKesintisi = AparatKapasitesi['kesintiler'][number];
 
 // Tesis şablonu (2166-1 a): atölyenin hazır iş merkezi ve istasyon listesi. "Şablonu uygula" eksik olanı kodla açar, var olan koda
 // dokunmaz; sonra liste serbestçe büyür ya da pasife alınır. Talaşlı merkezde istasyon yoktur: tezgâh parkı tesise özgüdür.

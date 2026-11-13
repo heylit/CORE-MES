@@ -334,6 +334,11 @@ export async function gecerliTalimatlarToplu(db: Db, anahtarlar: readonly { malz
 }
 
 // Adım ekipmanında seçilebilen ölçü aleti türleri (2893-4 a).
+// 3199: kartı isteyen adım sayısı (Kaynaklar > İkincil kaynaklar); yürürlükteki ve açık (taslak, onay bekleyen) revizyonlar sayılır.
+export function aparatKullanimi(db: Db): Promise<{ malzemeId: number; adim: number }[]> {
+  return s.aparatKullanimi(db);
+}
+
 export async function olcuAletiTurleri(db: Db): Promise<{ turler: { id: number; ad: string }[] }> {
   return { turler: (await aletTurleri(db)).map((t) => ({ id: t.id, ad: t.ad })) };
 }

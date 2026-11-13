@@ -24,6 +24,7 @@ import { rotadanAdimAdetleri } from '../uretim-emirleri/disari.ts';
 import { calismaTakvimleri, isMerkeziKisiPaylari, kisiVardiyalari, vardiyaMatrisi } from '../vardiya/disari.ts';
 import { bakimAraliklariOku } from './bakim/servis.ts';
 import { defterSatirlari } from './degisiklik-defteri-kurallar.ts';
+import { ikincilEkiOku } from './girdi/ikincil.ts';
 import { kaynakDilimiOku } from './girdi/kaynaklar.ts';
 import { kapasitedenIzinler, type KaynakDilimiOkumasi } from './girdi/kaynaklar-kurallar.ts';
 import { hedefMotorAyari } from './motor-ayari.ts';
@@ -274,10 +275,14 @@ async function kaynakOkuKur(db: Db, kullanici: Kullanici): Promise<KaynakOkumasi
   // 2319 (2311 S10): bayrak (plan.bakim-girdisi) açık ve kişi makineleri okuyabiliyorsa Arkon'un periyodik bakımı girdi.betik'te duruş olur.
   // Kapalıyken null: girdi.betik bakım satırına dokunmaz.
   const bakimlar = yetkiliMi(kullanici, ISTASYON_OKUMA) && (await sistemAyariOku(db, 'plan.bakim-girdisi')) ? await bakimAraliklariOku(db) : null;
+  // 3199 (A + D): aparat ve özel takım ikincil kaynaktır; tanımı İstasyonlar'da, adımın isteği iş emrinin ekipman listesinde.
+  const emirOkur = yetkiliMi(kullanici, KAYNAK_OKUMA.emir);
+  const ikincil = await ikincilEkiOku(db, { istasyon: yetkiliMi(kullanici, ISTASYON_OKUMA), emir: emirOkur },
+    emirOkur ? await planlanacakIsler(db, { taslakDahil: true }) : []);
   // 1329: fiyat alanı birleştirmede hep bulunur (malzemeyi okuyamayanda null): girdi.betik önceki kayıttaki fiyatı taşımaz.
   return {
     durum: d,
-    ek: { takvim: null, makineNotu, kisiGorevi: gorev, insanliIstasyonlar, ekipUyeleri: ekipUyeleriEki, kapasite: await kapasite(db, kullanici), malzemeFiyatlari: null, ...sa, siparisBedelleri: await siparisBedelleri(db, kullanici), bakimlar },
+    ek: { takvim: null, makineNotu, kisiGorevi: gorev, insanliIstasyonlar, ekipUyeleri: ekipUyeleriEki, kapasite: await kapasite(db, kullanici), malzemeFiyatlari: null, ...sa, siparisBedelleri: await siparisBedelleri(db, kullanici), bakimlar, ikincil },
   };
 }
 

@@ -1,6 +1,7 @@
 // Plan motorunun girdisinin (st.D) tipli tanımı ve her alanın kaynağı (1683 b). Motor (motor/*.betik) değişmez; bu dosya ona giden verinin
 // sözleşmesidir. Eski yol (motor/girdi.betik) bu biçimi tipsiz kurar; yeni yol alanları sahibi modüllerin tablolarından bu tiplerle kurar.
 // Alanlar motorun ve eski yolun okuduğu adlardır (motorun dili), bu yüzden Türkçe tanımlayıcı kuralına uymayan kısa adlar (k, bag) kalır.
+import type { MotorIkincilKaynagi, MotorKaynakIstegi } from './ikincil-kurallar.ts';
 
 export const GUN_ADLARI = ['pzt', 'sal', 'car', 'per', 'cum', 'cmt', 'paz'] as const;
 export type GunAdi = (typeof GUN_ADLARI)[number];
@@ -158,6 +159,9 @@ export interface MotorVerisi {
   aparatlar?: MotorAparati[];
   ayarMatrisi?: MotorAyarGecisi[];
   tedarikciler?: MotorTedarikcisi[];
+  // 3199 (A + D): aparat ve özel takım ikincil kaynaktır; adımın isteği işlem kimliğiyle (sipariş.adım).
+  ikincilKaynaklar?: MotorIkincilKaynagi[];
+  opKaynak?: Record<string, MotorKaynakIstegi[]>;
 }
 
 // Alanın kaynağı. sunucu: sahibi modülün tablosundan, her okumada yeniden; elle: planlamacının girdiği ana veri (bugün Planlama
@@ -169,7 +173,7 @@ export interface AlanKaynagi {
   // Verinin sahibi modül (klasör adı); sayfa alanında 'plan'. elle alanda önerilen sahiptir: kesin sahip 1719'un sahiplik sorusuyla belli olur.
   sahip: string;
   // Yeni yolu kuran kart (1683 b planı).
-  kart: 1716 | 1717 | 1718 | 1719 | 1720 | 1786;
+  kart: 1716 | 1717 | 1718 | 1719 | 1720 | 1786 | 3199;
 }
 
 // Üst düzey alanların kaynak tablosu; satisfies her MotorVerisi alanının yazılmasını zorlar (TASARIM.md 3).
@@ -191,6 +195,8 @@ export const UST_ALAN_KAYNAKLARI = {
   aparatlar: { kaynak: 'elle', sahip: 'plan', kart: 1719 },
   ayarMatrisi: { kaynak: 'elle', sahip: 'plan', kart: 1719 },
   tedarikciler: { kaynak: 'elle', sahip: 'musteri-tedarikci', kart: 1719 },
+  ikincilKaynaklar: { kaynak: 'sunucu', sahip: 'istasyonlar', kart: 3199 },
+  opKaynak: { kaynak: 'sunucu', sahip: 'rota', kart: 3199 },
 } as const satisfies Record<keyof MotorVerisi, AlanKaynagi>;
 
 export const MOTOR_VERISI_ALANLARI = Object.keys(UST_ALAN_KAYNAKLARI) as (keyof MotorVerisi)[];

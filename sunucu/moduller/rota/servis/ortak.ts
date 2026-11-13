@@ -183,7 +183,7 @@ export function adimlariKur(b: AdimGorunumuBaglami, urunMiktari = 1): RevizyonAy
         })),
       yanUrunler: icerik.yanUrunler.filter((x) => x.adimId === a.id).map((x) => ({ malzeme: urun(x.malzemeId), miktar: x.miktar })),
       ekipman: (icerik.ekipman ?? []).filter((x) => x.adimId === a.id).map((x) => ({
-        tur: x.tur, malzeme: x.malzemeId === null ? null : urun(x.malzemeId), aciklama: x.aciklama,
+        tur: x.tur, malzeme: x.malzemeId === null ? null : urun(x.malzemeId), aciklama: x.aciklama, adet: x.adet, asama: x.asama,
         aletTuru: x.aletTuruId === null ? null : { id: x.aletTuruId, ad: b.aletTurleri.get(x.aletTuruId) ?? 'Kullanım dışı alet türü' },
       })),
       akis: { tuketir: akisi.tuketir, cikti: akisi.cikti },
@@ -320,7 +320,7 @@ export function icerikYazimlari(icerik: Icerik): (YeniAdim & { opNo: number })[]
       .map(({ kaynak, ayarSuresiDk, birimSureDk, islemSuresiDk, degisimSuresiDk }) => ({ kaynak, ayarSuresiDk, birimSureDk, islemSuresiDk, degisimSuresiDk })),
     bilesenler: icerik.bilesenler.filter((x) => x.adimId === a.id).map(({ malzemeId, miktar, fireYuzde }) => ({ malzemeId, miktar, fireYuzde })),
     yanUrunler: icerik.yanUrunler.filter((x) => x.adimId === a.id).map(({ malzemeId, miktar }) => ({ malzemeId, miktar })),
-    ekipman: (icerik.ekipman ?? []).filter((x) => x.adimId === a.id).map(({ tur, malzemeId, aletTuruId, aciklama }) => ({ tur, malzemeId, aletTuruId, aciklama })),
+    ekipman: (icerik.ekipman ?? []).filter((x) => x.adimId === a.id).map(({ tur, malzemeId, aletTuruId, aciklama, adet, asama }) => ({ tur, malzemeId, aletTuruId, aciklama, adet, asama })),
     hazirlikDk: a.hazirlikDk, ayar: a.ayar, ayarDk: a.ayarDk, dal: a.dal, birlesen: a.birlesen, adetCarpani: a.adetCarpani,
   }));
 }
@@ -568,6 +568,6 @@ async function isEmirlerineEkipmanYaz(db: Db, revizyonId: number, isEmirleri: re
   for (const ie of isEmirleri) {
     const adimId = adimi.get(ie.opNo);
     if (adimId === undefined) continue;
-    await s.isEmriEkipmaniYaz(db, ie.id, ekipman.filter((x) => x.adimId === adimId).map(({ tur, malzemeId, aletTuruId, aciklama }) => ({ tur, malzemeId, aletTuruId, aciklama })));
+    await s.isEmriEkipmaniYaz(db, ie.id, ekipman.filter((x) => x.adimId === adimId).map(({ tur, malzemeId, aletTuruId, aciklama, adet, asama }) => ({ tur, malzemeId, aletTuruId, aciklama, adet, asama })));
   }
 }

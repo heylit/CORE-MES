@@ -32,8 +32,8 @@ function dengeKilit(st) {
   return st;
 }
 
-/* planın kaydı (c-masa): ekranın sakladığı biçim */
-function opKaydi(r) { return { id: r.id, job: r.job, m: r.m, S: r.S, Su: r.Su, C: r.C, su: r.su, run: r.run, lot1: r.lot1, fas: r.fas ? 1 : 0, why: r.why || null, sl: r.sl, famHit: !!r.famHit, pin: r.pin ? 1 : 0, done: r.done ? 1 : 0, act: r.act ? 1 : 0 }; }
+/* planın kaydı (c-masa): ekranın sakladığı biçim. 3199: özel takımın ömür hesabı (değişim anı, kalan) yalnız takımlı işte taşınır */
+function opKaydi(r) { return { id: r.id, job: r.job, m: r.m, S: r.S, Su: r.Su, C: r.C, su: r.su, run: r.run, lot1: r.lot1, fas: r.fas ? 1 : 0, why: r.why || null, sl: r.sl, famHit: !!r.famHit, pin: r.pin ? 1 : 0, done: r.done ? 1 : 0, act: r.act ? 1 : 0, ...(r.takim && r.takim.length ? { takim: r.takim } : {}) }; }
 /** @param {any} [p] @param {MotorDurumu} [st] @param {any} [ref] */
 function planKaydi(p, st, ref) {
   const ef = evaluate(p, st, ref, false);

@@ -635,12 +635,26 @@ async function aparatTekligiKorumali<T>(is: () => Promise<T>): Promise<T> {
   }
 }
 
-export const aparatKapasiteleri = async (db: Db): Promise<AparatKapasitesi[]> => degistirenleAdlandir(db, await sorgular.aparatKapasiteleri(db));
+// 3199: kesinti takvimi satırla birlikte döner ve yazılır (gönderilen liste satırdakinin yerine geçer).
+async function kesintileEkle(db: Db, satirlar: sorgular.AparatKapasitesiSatiri[]): Promise<AparatKapasitesi[]> {
+  const kesinti = new Map<number, AparatKapasitesi['kesintiler']>();
+  for (const { kapasiteId, ...k } of await sorgular.aparatKesintileri(db, satirlar.map((s) => s.id))) kesinti.set(kapasiteId, [...(kesinti.get(kapasiteId) ?? []), k]);
+  return (await degistirenleAdlandir(db, satirlar)).map((s) => ({ ...s, kesintiler: kesinti.get(s.id) ?? [] }));
+}
+
+export const aparatKapasiteleri = async (db: Db): Promise<AparatKapasitesi[]> => kesintileEkle(db, await sorgular.aparatKapasiteleri(db));
+
+type IkincilGovde = Pick<AparatKapasitesiGovdesi, 'tur' | 'kisit' | 'omur' | 'omurBirimi' | 'degisimDk' | 'kesintiler' | 'adet'>;
+const ikincilAlanlar = (g: IkincilGovde): sorgular.IkincilKaynakAlanlari => ({
+  adet: g.adet, tur: g.tur ?? 'aparat', kisit: g.kisit ?? 'sert', omur: g.omur ?? null, omurBirimi: g.omurBirimi ?? null, degisimDk: g.degisimDk ?? null,
+});
+const kesintiListesi = (g: IkincilGovde) => (g.kesintiler ?? []).map((k) => ({ neden: k.neden, baslangic: k.baslangic, bitis: k.bitis, adet: k.adet, aciklama: k.aciklama ?? null }));
 
 export async function aparatKapasitesiEkle(db: Db, kullanici: Kullanici, g: AparatKapasitesiGovdesi): Promise<AparatKapasitesi> {
   await aparatIstasyonuDenetle(db, g.istasyonId);
-  const satir = varOlan(await aparatTekligiKorumali(() => sorgular.aparatKapasitesiEkle(db, g, kullanici.id)), APARAT_KAPASITESI_YOK);
-  const [kayit] = await degistirenleAdlandir(db, [satir]);
+  const satir = varOlan(await aparatTekligiKorumali(() => sorgular.aparatKapasitesiEkle(db, { aparatKartiId: g.aparatKartiId, istasyonId: g.istasyonId, ...ikincilAlanlar(g) }, kullanici.id)), APARAT_KAPASITESI_YOK);
+  await sorgular.aparatKesintileriYaz(db, satir.id, kesintiListesi(g), kullanici.id);
+  const [kayit] = await kesintileEkle(db, [satir]);
   return varOlan(kayit ?? null, APARAT_KAPASITESI_YOK);
 }
 
@@ -648,11 +662,12 @@ export async function aparatKapasitesiGuncelle(db: Db, kullanici: Kullanici, id:
   if (!(await sorgular.aparatKapasitesiVarMi(db, id))) throw bulunamadi(APARAT_KAPASITESI_YOK);
   await aparatIstasyonuDenetle(db, g.istasyonId);
   const satir = await aparatTekligiKorumali(() => surumluGuncelle({
-    guncelle: () => sorgular.aparatKapasitesiGuncelle(db, id, g, kullanici.id),
+    guncelle: () => sorgular.aparatKapasitesiGuncelle(db, id, { istasyonId: g.istasyonId, surum: g.surum, ...ikincilAlanlar(g) }, kullanici.id),
     varMi: () => sorgular.aparatKapasitesiVarMi(db, id),
     bulunamadiIletisi: APARAT_KAPASITESI_YOK,
   }));
-  const [kayit] = await degistirenleAdlandir(db, [satir]);
+  await sorgular.aparatKesintileriYaz(db, id, kesintiListesi(g), kullanici.id);
+  const [kayit] = await kesintileEkle(db, [satir]);
   return varOlan(kayit ?? null, APARAT_KAPASITESI_YOK);
 }
 

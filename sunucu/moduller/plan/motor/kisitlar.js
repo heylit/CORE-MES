@@ -15,7 +15,8 @@ const KISITLAR=[
  {id:'ayarci',ad:'Ayarcı sayısı',veri:'personel[].ayar, rota[].ayarDk (yalnız ayar süresi), devamsizlik, eksik',motor:'tam',sinir:'yok',cerceve:'yok',cpsat:'yaklasik',not:'CP-SAT ayarcıyı en kısa ayar süresince sayar.'},
  {id:'personel',ad:'Operatör sayısı ve yetkinlik grubu, ışıksız tezgâh',veri:'personel[].vardiya/gruplar/makineler/enCok, tezgahlar[].opOran/isiksiz, devamsizlik, eksik',motor:'tam',sinir:'yok',cerceve:'tam',cpsat:'yaklasik',
   not:'CP-SAT ayar süresini de operatörlü sayar; ışıksız tezgâhı hiç saymaz. Kişiye makine ataması (makineler, enCok) yalnız sezgisel motordadır; CP-SAT grup düzeyinde kalır.'},
- {id:'aparat',ad:'Aparat ve fikstür adedi',veri:'aparatlar[].adet, rota[].aparat',motor:'tam',sinir:'yok',cerceve:'yok',cpsat:'tam',not:''},
+ {id:'aparat',ad:'Aparat ve fikstür adedi',veri:'aparatlar[].adet, rota[].aparat, ikincilKaynaklar (adet, kesinti, kısıt, ömür), opKaynak',motor:'tam',sinir:'yok',cerceve:'yok',cpsat:'yaklasik',
+  not:'3199: ikincil kaynak dilim dizisiyle sayılır; CP-SAT yalnız elle aparat listesini sayar, ikincil kaynağı hakem uygular.'},
  {id:'fason',ad:'Fason çıkış günü, süre, kapasite',veri:'fasoncular',motor:'tam',sinir:'yaklasik',cerceve:'tam',cpsat:'tam',not:'Alt sınır fason kapasitesini saymaz.'},
  {id:'program',ad:'CNC programı hazır olmadan başlamaz',veri:'rota[].program, ayarlar.programSaat',motor:'tam',sinir:'tam',cerceve:'yok',cpsat:'tam',not:''},
  {id:'serbest',ad:'Siparişin serbest bırakılma zamanı',veri:'siparisler[].serbest',motor:'tam',sinir:'tam',cerceve:'tam',cpsat:'tam',not:''},
@@ -42,7 +43,10 @@ function veriDenetimi(st,cx){
       else if(op>0&&!kayitli.length&&!(kim[m.grup]||new Set()).has(v))bul('personel',`${m.id} ${v} vardiyasında açık ama ${m.grup} yetkinliğinde personel yok; bu vardiyadaki işler yerleşemez.`);
       if(!ayarci.has(v))bul('ayarci',`${m.id} ${v} vardiyasında ayarcı yok; ayar bu vardiyada yapılamaz.`);}}
   for(const o of cx.ops){if(!o.c.length)bul('tezgah',`${o.id}: uygun tezgâh ya da fasoncu yok.`);
-    if(o.aparat&&!cx.AP[o.aparat])bul('aparat',`${o.id}: ${o.aparat} aparatı tanımlı değil.`);}
+    if(o.aparat&&!cx.AP[o.aparat])bul('aparat',`${o.id}: ${o.aparat} aparatı tanımlı değil.`);
+    /* 3199: adımın istediği kart hiçbir istasyonda ve ortakta kaynak olarak tanımlı değilse plan onu saymaz */
+    for(const x of o.ik||[])if(cx.IKK&&!Object.keys(cx.IKK).some(k=>k.startsWith(x.kart+'@')))bul('aparat',`${o.id}: ${x.kart} kartı ikincil kaynak olarak tanımlı değil; plan saymaz.`);
+    for(const x of o.ik||[]){const ks=Object.values(cx.IK||{}).filter(K=>K.kart===x.kart&&K.kisit==='sert');if(ks.length&&ks.every(K=>+K.adet<(+x.adet||1)))bul('aparat',`${o.id}: ${x.kart} kartından ${x.adet} adet ister, tanımlı adet daha az; iş yerleşemez.`);}}
   for(const u of D.urunler)for(const o of u.rota)for(const [k] of o.bag||[])if(!u.rota.some(x=>x.k===k))bul('rota',`${u.id} ${o.k}: öncül ${k} rotada yok.`);
   const fam={};for(const o of cx.ops)if(o.aile)for(const c of o.c)if(!c.fas)(fam[c.m]=fam[c.m]||new Set()).add(o.aile);
   const mx=new Set((D.ayarMatrisi||[]).map(e=>e.den+'|'+e.ye));let eksik=0;

@@ -10,7 +10,7 @@ export { sureler, gerceklesenSureYaz, gerceklesenKabulEt, emirBittiYansit, adimE
 export {
   type RotaAdimi, type RotaRevizyonu, girdisiEksikRevizyonlar, revizyonGetir, revizyonlar, type DurumRotaAdimi, type DurumRotaRevizyonu, durumRevizyonlari,
   adimIlkParcaSecimleri, yururluktekiRevizyon, adimBilesenleri, gecerliTalimat, gecerliTalimatlarToplu, urunAgaci, malzemeKullanimi, emreKopyala, emreUygula, revizyonKunyeleri,
-  malzemeAra, olcuAletiTurleri,
+  malzemeAra, olcuAletiTurleri, aparatKullanimi,
 } from './servis/okuma.ts';
 export { emreKopyalaToplu } from './servis/emir-toplu.ts';
 export { rotaAdimlariToplu } from './servis/adim-toplu.ts';

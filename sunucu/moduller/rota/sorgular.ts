@@ -1,7 +1,7 @@
 import type { Db } from '#cekirdek/db.ts';
 import { islemKilidiAl } from '#cekirdek/kilit.ts';
 import type {
-  Bagimlilik, EkipmanTuru, GerceklesenKaynagi, GerceklesenTuru, IlkParcaSecimi, MakineKullanimi, ParametreDegeri, ParametreDegerleri, ParametreTuru, RevizyonDurumu, RevizyonOzeti, SartnameKapsami, TalimatAsamasi,
+  Bagimlilik, EkipmanAsamasi, EkipmanTuru, GerceklesenKaynagi, GerceklesenTuru, IlkParcaSecimi, MakineKullanimi, ParametreDegeri, ParametreDegerleri, ParametreTuru, RevizyonDurumu, RevizyonOzeti, SartnameKapsami, TalimatAsamasi,
 } from '#paylasilan/sozlesme/rota.ts';
 import { MALZEME_KARTI_IZ_YOLU, malzemeKartiIzParametreleri, type MalzemeKartiAnahtari, type MalzemeKartiIzi } from '#paylasilan/malzeme-karti-izi.ts';
 
@@ -293,7 +293,10 @@ export interface AdaySatiri {
 export interface BilesenSatiri { adimId: number; malzemeId: number; miktar: string; fireYuzde: string }
 export interface YanUrunSatiri { adimId: number; malzemeId: number; miktar: string }
 // Adım ekipmanı (2893-4 a): aparatta malzemeId, ölçü aletinde aletTuruId doludur.
-export interface EkipmanYazimi { tur: EkipmanTuru; malzemeId: number | null; aletTuruId: number | null; aciklama: string | null }
+// 3199: adet ve aşama planın ikincil kaynak isteğidir; ölçü aletinde 1 ve 'ayar_isleme' kalır (plan okumaz).
+export interface EkipmanYazimi {
+  tur: EkipmanTuru; malzemeId: number | null; aletTuruId: number | null; aciklama: string | null; adet: number; asama: EkipmanAsamasi;
+}
 export interface EkipmanSatiri extends EkipmanYazimi { adimId: number }
 
 export interface Icerik {
@@ -350,13 +353,25 @@ export async function iceriklerOku(db: Db, revizyonIdleri: readonly number[]): P
   for (const x of adaylar) adimRevizyonu.get(x.adimId)!.adaylar.push(x);
   for (const x of bilesenler) adimRevizyonu.get(x.adimId)!.bilesenler.push(x);
   const ekipman = await db.sorgu<EkipmanSatiri>(
-    `SELECT adim_id AS "adimId", tur, malzeme_id AS "malzemeId", alet_turu_id AS "aletTuruId", aciklama
+    `SELECT adim_id AS "adimId", tur, malzeme_id AS "malzemeId", alet_turu_id AS "aletTuruId", aciklama, adet, asama
        FROM rota_adim_ekipmani WHERE adim_id = ANY($1::int[]) ORDER BY adim_id, sira`,
     [kimlikler],
   );
   for (const x of yanUrunler) adimRevizyonu.get(x.adimId)!.yanUrunler.push(x);
   for (const x of ekipman) adimRevizyonu.get(x.adimId)!.ekipman!.push(x);
   return sonuc;
+}
+
+export function aparatKullanimi(db: Db): Promise<{ malzemeId: number; adim: number }[]> {
+  return db.sorgu<{ malzemeId: number; adim: number }>(
+    `SELECT e.malzeme_id AS "malzemeId", count(DISTINCT e.adim_id)::int AS adim
+       FROM rota_adim_ekipmani e
+       JOIN rota_adimi a ON a.id = e.adim_id
+       JOIN rota_revizyonu r ON r.id = a.revizyon_id
+      WHERE e.tur = 'aparat' AND r.durum IN ('yururlukte', 'taslak', 'onay_bekliyor')
+      GROUP BY e.malzeme_id
+      ORDER BY e.malzeme_id`,
+  );
 }
 
 // Adımların ilk parça seçimi revizyon ve OP numarası başına (744 a): Arkon'un kapısı emrin rota revizyonundan okur.
@@ -453,9 +468,9 @@ export async function adimYaz(db: Db, revizyonId: number, malzemeId: number, a: 
 async function ekipmanEkle(db: Db, adimId: number, ekipman: readonly EkipmanYazimi[]): Promise<void> {
   if (ekipman.length === 0) return;
   await db.sorgu(
-    `INSERT INTO rota_adim_ekipmani (adim_id, sira, tur, malzeme_id, alet_turu_id, aciklama)
-     SELECT $1, * FROM unnest($2::int[], $3::text[], $4::int[], $5::int[], $6::text[])`,
-    [adimId, ekipman.map((_, i) => i + 1), ekipman.map((x) => x.tur), ekipman.map((x) => x.malzemeId), ekipman.map((x) => x.aletTuruId), ekipman.map((x) => x.aciklama)],
+    `INSERT INTO rota_adim_ekipmani (adim_id, sira, tur, malzeme_id, alet_turu_id, aciklama, adet, asama)
+     SELECT $1, * FROM unnest($2::int[], $3::text[], $4::int[], $5::int[], $6::text[], $7::int[], $8::text[])`,
+    [adimId, ekipman.map((_, i) => i + 1), ekipman.map((x) => x.tur), ekipman.map((x) => x.malzemeId), ekipman.map((x) => x.aletTuruId), ekipman.map((x) => x.aciklama), ekipman.map((x) => x.adet), ekipman.map((x) => x.asama)],
   );
 }
 
@@ -469,16 +484,16 @@ export async function adimEkipmaniniYaz(db: Db, adimId: number, ekipman: readonl
 export async function isEmriEkipmaniYaz(db: Db, isEmriId: number, ekipman: readonly EkipmanYazimi[]): Promise<void> {
   if (ekipman.length === 0) return;
   await db.sorgu(
-    `INSERT INTO rota_is_emri_ekipmani (is_emri_id, sira, tur, malzeme_id, alet_turu_id, aciklama)
-     SELECT $1, * FROM unnest($2::int[], $3::text[], $4::int[], $5::int[], $6::text[]) ON CONFLICT (is_emri_id, sira) DO NOTHING`,
-    [isEmriId, ekipman.map((_, i) => i + 1), ekipman.map((x) => x.tur), ekipman.map((x) => x.malzemeId), ekipman.map((x) => x.aletTuruId), ekipman.map((x) => x.aciklama)],
+    `INSERT INTO rota_is_emri_ekipmani (is_emri_id, sira, tur, malzeme_id, alet_turu_id, aciklama, adet, asama)
+     SELECT $1, * FROM unnest($2::int[], $3::text[], $4::int[], $5::int[], $6::text[], $7::int[], $8::text[]) ON CONFLICT (is_emri_id, sira) DO NOTHING`,
+    [isEmriId, ekipman.map((_, i) => i + 1), ekipman.map((x) => x.tur), ekipman.map((x) => x.malzemeId), ekipman.map((x) => x.aletTuruId), ekipman.map((x) => x.aciklama), ekipman.map((x) => x.adet), ekipman.map((x) => x.asama)],
   );
 }
 
 export async function isEmriEkipmaniniKopyala(db: Db, kaynakIsEmriId: number, hedefIsEmriId: number): Promise<void> {
   await db.sorgu(
-    `INSERT INTO rota_is_emri_ekipmani (is_emri_id, sira, tur, malzeme_id, alet_turu_id, aciklama)
-     SELECT $2, sira, tur, malzeme_id, alet_turu_id, aciklama FROM rota_is_emri_ekipmani WHERE is_emri_id = $1 ON CONFLICT (is_emri_id, sira) DO NOTHING`,
+    `INSERT INTO rota_is_emri_ekipmani (is_emri_id, sira, tur, malzeme_id, alet_turu_id, aciklama, adet, asama)
+     SELECT $2, sira, tur, malzeme_id, alet_turu_id, aciklama, adet, asama FROM rota_is_emri_ekipmani WHERE is_emri_id = $1 ON CONFLICT (is_emri_id, sira) DO NOTHING`,
     [kaynakIsEmriId, hedefIsEmriId],
   );
 }
@@ -486,7 +501,7 @@ export async function isEmriEkipmaniniKopyala(db: Db, kaynakIsEmriId: number, he
 export interface IsEmriEkipmanSatiri extends EkipmanYazimi { isEmriId: number }
 export function isEmriEkipmanlari(db: Db, isEmriIdleri: readonly number[]): Promise<IsEmriEkipmanSatiri[]> {
   return db.sorgu<IsEmriEkipmanSatiri>(
-    `SELECT is_emri_id AS "isEmriId", tur, malzeme_id AS "malzemeId", alet_turu_id AS "aletTuruId", aciklama
+    `SELECT is_emri_id AS "isEmriId", tur, malzeme_id AS "malzemeId", alet_turu_id AS "aletTuruId", aciklama, adet, asama
        FROM rota_is_emri_ekipmani WHERE is_emri_id = ANY($1::int[]) ORDER BY is_emri_id, sira`,
     [[...isEmriIdleri]],
   );

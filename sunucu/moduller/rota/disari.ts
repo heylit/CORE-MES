@@ -49,6 +49,19 @@ export async function isEmriOlcuAletiHazirliklari(db: Db, isEmriIdleri: readonly
     (id) => gecerli.get(id) === true);
 }
 
+// 3199 (A): planın ikincil kaynak isteği. İş emrine kopyalanan listenin aparat ve özel takım satırları (kart, adet, aşama); ölçü aleti plana
+// girmez (V5). Yetki denetlemez; çağıran plan kendi okuma yetkisiyle açar.
+export interface IkincilKaynakIstegi { malzemeId: number; adet: number; asama: 'ayar_isleme' | 'isleme' }
+export async function isEmriKaynakIstekleri(db: Db, isEmriIdleri: readonly number[]): Promise<Map<number, IkincilKaynakIstegi[]>> {
+  const sonuc = new Map<number, IkincilKaynakIstegi[]>();
+  if (isEmriIdleri.length === 0) return sonuc;
+  for (const x of await isEmriEkipmanlari(db, isEmriIdleri)) {
+    if (x.tur !== 'aparat' || x.malzemeId === null) continue;
+    sonuc.set(x.isEmriId, [...(sonuc.get(x.isEmriId) ?? []), { malzemeId: x.malzemeId, adet: x.adet, asama: x.asama }]);
+  }
+  return sonuc;
+}
+
 // Hazırlık matrisinin rota maddesi (2146-1 a, yalnız uyarır): emir, ürünün yürürlükteki rota revizyonuyla mı açıldı. Rotadan açılmamış
 // emirde madde gerekmez; ürünün yürürlükte revizyonu yoksa ya da emir eski revizyonla açıldıysa eksiktir. Bağı kablolama.ts kurar.
 export async function emirRotaHazirliklari(db: Db, emirIdleri: readonly number[]): Promise<Map<number, { durum: 'yok' | 'tamam'; secildi: boolean }>> {
