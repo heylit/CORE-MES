@@ -108,8 +108,8 @@ describe('SmartES bağlantısı, sahte SmartES ile uçtan uca (kart #778, gerçe
     await baglanti(false);
     const kesfedilen = (await modulIsleriniKesfet()).map((i) => i.ad).filter((ad) => ad.startsWith('smartes-'));
     assert.deepEqual(kesfedilen.sort(), [
-      'smartes-ilerleme-okumasi', 'smartes-is-emri-gonderimi', 'smartes-liste-okumasi', 'smartes-makine-okumasi', 'smartes-okuma-alarm', 'smartes-okuma-ambar',
-      'smartes-okuma-durus', 'smartes-okuma-is-emri-durumu', 'smartes-okuma-kalite', 'smartes-okuma-red', 'smartes-tanim-gonderimi',
+      'smartes-hesap-okumasi', 'smartes-ilerleme-okumasi', 'smartes-is-emri-gonderimi', 'smartes-liste-okumasi', 'smartes-makine-okumasi', 'smartes-okuma-alarm',
+      'smartes-okuma-ambar', 'smartes-okuma-durus', 'smartes-okuma-is-emri-durumu', 'smartes-okuma-kalite', 'smartes-okuma-red', 'smartes-tanim-gonderimi',
     ]);
     for (const is of isler) assert.equal(await isiBirKezCalistir(vt(), is), 'bekliyor', is.ad);
   });

@@ -136,12 +136,12 @@ describe('SmartES’ten gelen bilgiler (kart 3174, gerçek PostgreSQL)', () => {
     // Listeden çıkan satır sayılmaz; iki listeden biri hiç okunmadıysa son okuma yoktur.
     assert.deepEqual([kalem(c, 'adlar').sayi, kalem(c, 'adlar').sonOkuma], [1, null]);
     assert.deepEqual([kalem(c, 'tanimlar').sayi, kalem(c, 'tanimlar').sonOkuma], [1, null]);
-    for (const a of ['makine', 'oee', 'cevrim', 'ilerleme']) {
+    for (const a of ['makine', 'ilerleme']) {
       assert.deepEqual([kalem(c, a).durum, kalem(c, a).sayi, kalem(c, a).yol], ['okunmuyor', null, null]);
     }
 
     const acik = await vt().tx((db) => gelenler(db, ISTEMCI));
-    assert.deepEqual(['uretim', 'durus', 'alarm', 'adlar', 'tanimlar'].map((a) => kalem(acik, a).durum), Array(5).fill('okunuyor'));
+    assert.deepEqual(['uretim', 'durus', 'alarm', 'adlar', 'tanimlar', 'oee', 'cevrim'].map((a) => kalem(acik, a).durum), Array(7).fill('okunuyor'));
     assert.deepEqual(['fire', 'ambar', 'kalite'].map((a) => kalem(acik, a).durum), ['kapali', 'kapali', 'kapali']);
     await ayar(KALITE_AMBAR_AYARI, true);
     const ikisiAcik = await vt().tx((db) => gelenler(db, ISTEMCI));

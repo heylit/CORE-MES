@@ -3,7 +3,7 @@ import type { Dilim } from '#cekirdek/liste.ts';
 import { zamanMetni } from '#cekirdek/zaman.ts';
 import type {
   AlarmKaydi, AmbarKaydi, DurusKaydi, EslemeTuru, IlerlemeKaydi, IsEmriDurumuKaydi, KaliteKaydi, ListeKaydi, ListeTuru, MakineDurumu, MakineOkumasi,
-  OkumaKaynagi, RedKaydi, TanimIzi, TanimKaydi, TanimTuru,
+  OkumaKaynagi, RedKaydi, TanimIzi, TanimKaydi, TanimTuru, CevrimKaydi, HesapTuru, OeeKaydi,
 } from './kurallar.ts';
 
 /* ---------------- eşleme ---------------- */
@@ -891,7 +891,9 @@ export function gelenIzleri(db: Db): Promise<GelenIzi[]> {
      UNION ALL
      SELECT akis, ${zamanMetni('CASE WHEN son_sonuc = \'tamam\' THEN son_deneme ELSE son_bitis END')} FROM smartes_akis_izi WHERE akis <> 'tanim'
      UNION ALL
-     SELECT 'liste:' || tur, ${zamanMetni('son_basarili')} FROM smartes_liste_okuma`,
+     SELECT 'liste:' || tur, ${zamanMetni('son_basarili')} FROM smartes_liste_okuma
+     UNION ALL
+     SELECT 'hesap:' || tur, ${zamanMetni('son_basarili')} FROM smartes_hesap_okuma`,
   );
 }
 
@@ -902,4 +904,107 @@ export interface ListeSayisi {
 
 export function listeSayilari(db: Db): Promise<ListeSayisi[]> {
   return db.sorgu<ListeSayisi>('SELECT tur, count(*)::int AS n FROM smartes_liste_kaydi WHERE var GROUP BY tur');
+}
+
+/* ---------------- SmartES'in kendi hesapları: OEE raporu ve parça çevrim süresi ---------------- */
+
+export function hesapOkumasi(db: Db, tur: HesapTuru): Promise<{ sonDeneme: Date } | null> {
+  return db.tek<{ sonDeneme: Date }>('SELECT son_deneme AS "sonDeneme" FROM smartes_hesap_okuma WHERE tur = $1', [tur]);
+}
+
+const HESAP_IZI = `INSERT INTO smartes_hesap_okuma (tur, son_deneme, son_sonuc, son_hata, son_basarili, okunan) VALUES ($1, $3, 'tamam', NULL, $3, $4)
+     ON CONFLICT (tur) DO UPDATE SET son_deneme = EXCLUDED.son_deneme, son_sonuc = 'tamam', son_hata = NULL, son_basarili = EXCLUDED.son_basarili,
+       okunan = EXCLUDED.okunan`;
+
+// Tek deyim: transaction dışından çağrılsa da satırlar ve okuma izi birlikte yazılır.
+export async function oeeYaz(db: Db, kayitlar: readonly OeeKaydi[], zaman: Date): Promise<void> {
+  const gelen = kayitlar.map((k) => ({
+    vardiya_tarihi: k.vardiyaTarihi, vardiya: k.vardiya, makine_kodu: k.makineKodu, kullanilabilirlik: k.kullanilabilirlik, performans: k.performans,
+    kalite: k.kalite, oee: k.oee, ham: k.ham,
+  }));
+  await db.sorgu(
+    `WITH yazilan AS (
+       INSERT INTO smartes_oee (vardiya_tarihi, vardiya, makine_kodu, kullanilabilirlik, performans, kalite, oee, ham, ilk_okuma, son_okuma)
+       SELECT vardiya_tarihi, vardiya, makine_kodu, kullanilabilirlik, performans, kalite, oee, ham, $3, $3 FROM jsonb_to_recordset($2::jsonb)
+         AS x(vardiya_tarihi date, vardiya int, makine_kodu text, kullanilabilirlik numeric, performans numeric, kalite numeric, oee numeric, ham jsonb)
+       ON CONFLICT (vardiya_tarihi, vardiya, makine_kodu) DO UPDATE SET kullanilabilirlik = EXCLUDED.kullanilabilirlik, performans = EXCLUDED.performans,
+         kalite = EXCLUDED.kalite, oee = EXCLUDED.oee, ham = EXCLUDED.ham, son_okuma = EXCLUDED.son_okuma
+       RETURNING 1
+     )
+     ${HESAP_IZI}`,
+    ['oee', JSON.stringify(gelen), zaman, kayitlar.length],
+  );
+}
+
+export async function cevrimYaz(db: Db, kayitlar: readonly CevrimKaydi[], zaman: Date): Promise<void> {
+  const gelen = kayitlar.map((k) => ({
+    anahtar: k.anahtar, stok_no: k.stokNo, operasyon_kodu: k.operasyonKodu, makine_kodu: k.makineKodu, istasyon_kodu: k.istasyonKodu,
+    cevrim_metni: k.cevrimMetni, yukleme_metni: k.yuklemeMetni, parca_sayisi: k.parcaSayisi, gun_sayisi: k.gunSayisi, ham: k.ham,
+  }));
+  await db.sorgu(
+    `WITH yazilan AS (
+       INSERT INTO smartes_cevrim_suresi (anahtar, stok_no, operasyon_kodu, makine_kodu, istasyon_kodu, cevrim_metni, yukleme_metni, parca_sayisi,
+         gun_sayisi, ham, ilk_okuma, son_okuma)
+       SELECT anahtar, stok_no, operasyon_kodu, makine_kodu, istasyon_kodu, cevrim_metni, yukleme_metni, parca_sayisi, gun_sayisi, ham, $3, $3
+       FROM jsonb_to_recordset($2::jsonb) AS x(anahtar text, stok_no text, operasyon_kodu text, makine_kodu text, istasyon_kodu text, cevrim_metni text,
+         yukleme_metni text, parca_sayisi int, gun_sayisi int, ham jsonb)
+       ON CONFLICT (anahtar) DO UPDATE SET cevrim_metni = EXCLUDED.cevrim_metni, yukleme_metni = EXCLUDED.yukleme_metni,
+         parca_sayisi = EXCLUDED.parca_sayisi, gun_sayisi = EXCLUDED.gun_sayisi, ham = EXCLUDED.ham, son_okuma = EXCLUDED.son_okuma
+       RETURNING 1
+     )
+     ${HESAP_IZI}`,
+    ['cevrim', JSON.stringify(gelen), zaman, kayitlar.length],
+  );
+}
+
+export async function hesapHatali(db: Db, tur: HesapTuru, zaman: Date, hata: string): Promise<void> {
+  await db.sorgu(
+    `INSERT INTO smartes_hesap_okuma (tur, son_deneme, son_sonuc, son_hata) VALUES ($1, $2, 'hata', $3)
+     ON CONFLICT (tur) DO UPDATE SET son_deneme = EXCLUDED.son_deneme, son_sonuc = 'hata', son_hata = EXCLUDED.son_hata`,
+    [tur, zaman, hata],
+  );
+}
+
+export interface OeeSatiri {
+  vardiyaTarihi: string;
+  vardiya: number;
+  makineKodu: string;
+  kullanilabilirlik: number | null;
+  performans: number | null;
+  kalite: number | null;
+  oee: number | null;
+}
+
+export function oeeSatirlari(db: Db, ilkGun: string, sinir: number): Promise<OeeSatiri[]> {
+  return db.sorgu<OeeSatiri>(
+    `SELECT vardiya_tarihi::text AS "vardiyaTarihi", vardiya, makine_kodu AS "makineKodu", kullanilabilirlik::float8 AS kullanilabilirlik,
+       performans::float8 AS performans, kalite::float8 AS kalite, oee::float8 AS oee
+     FROM smartes_oee WHERE vardiya_tarihi >= $1::date ORDER BY vardiya_tarihi DESC, vardiya DESC, makine_kodu LIMIT $2`,
+    [ilkGun, sinir],
+  );
+}
+
+export interface CevrimSatiri {
+  stokNo: string | null;
+  operasyonKodu: string | null;
+  makineKodu: string | null;
+  cevrimMetni: string | null;
+  parcaSayisi: number | null;
+  gunSayisi: number | null;
+}
+
+export function cevrimSatirlari(db: Db, sinir: number): Promise<CevrimSatiri[]> {
+  return db.sorgu<CevrimSatiri>(
+    `SELECT stok_no AS "stokNo", operasyon_kodu AS "operasyonKodu", makine_kodu AS "makineKodu", cevrim_metni AS "cevrimMetni",
+       parca_sayisi AS "parcaSayisi", gun_sayisi AS "gunSayisi"
+     FROM smartes_cevrim_suresi ORDER BY stok_no NULLS LAST, operasyon_kodu NULLS LAST, makine_kodu NULLS LAST, anahtar LIMIT $1`,
+    [sinir],
+  );
+}
+
+export async function hesapSayilari(db: Db): Promise<{ oee: number; cevrim: number }> {
+  const r = await db.tek<{ oee: number; cevrim: number }>(
+    'SELECT (SELECT count(*) FROM smartes_oee)::int AS oee, (SELECT count(*) FROM smartes_cevrim_suresi)::int AS cevrim');
+  if (r === null) throw new Error('Sayılar okunamadı.');
+  return r;
 }

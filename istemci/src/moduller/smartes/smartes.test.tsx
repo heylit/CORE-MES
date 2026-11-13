@@ -7,12 +7,13 @@ import type { Kullanici } from '#paylasilan/kullanici.ts';
 import type { OturumCevabi } from '#paylasilan/sozlesme/oturum.ts';
 import { MemoryRouter } from 'react-router-dom';
 import type {
-  DurumCevabi, EslemelerCevabi, FireHareketleriCevabi, GelenAdlarCevabi, GelenlerCevabi, GidenCevabi, HamKayitCevabi, IsEmriDurumlariCevabi,
-  OnerileriOnaylaCevabi,
+  DurumCevabi, EslemelerCevabi, FireHareketleriCevabi, GelenAdlarCevabi, GelenlerCevabi, GidenCevabi, HamKayitCevabi, HesaplarCevabi,
+  IsEmriDurumlariCevabi, OnerileriOnaylaCevabi,
 } from '#paylasilan/sozlesme/smartes.ts';
 import { BildirimSaglayici } from '../../ortak/arayuz/index.ts';
 import { BaglantiDurumu } from './BaglantiDurumu.tsx';
 import { Eslemeler } from './Eslemeler.tsx';
+import { Hesaplar } from './Hesaplar.tsx';
 import { FireHareketleri, Giden, UretimSayilari } from './Listeler.tsx';
 import { SmartesAyarlari, ayarEkranlari } from './ayar-ekranlari.tsx';
 
@@ -342,6 +343,33 @@ describe('SmartES listeleri', () => {
     expect(await within(pencere).findByText('REJECT_NAME')).toBeTruthy();
     expect(within(pencere).getByText('SHIFT_NAME')).toBeTruthy();
     expect(cagrilar.some((c) => c.yol === '/smartes/ham/fire/3')).toBe(true);
+  });
+});
+
+describe('SmartES hesapları', () => {
+  it('OEE farkı puanla, çevrim farkı saniyeyle gösterilir; CORE hesabı ya da birimi belli süre yoksa fark yazılmaz', async () => {
+    sunucuKur(IZLEYICI, (yol) => (yol === '/smartes/hesaplar'
+      ? json(200, {
+        oee: [
+          { vardiyaTarihi: '2026-11-12', vardiya: 1, makineKodu: 'M-1', kullanilabilirlik: 85, performans: 90, kalite: 100, oee: 76.5, coreOee: 70 },
+          { vardiyaTarihi: '2026-11-12', vardiya: 2, makineKodu: 'M-2', kullanilabilirlik: null, performans: null, kalite: null, oee: 60, coreOee: null },
+        ],
+        cevrim: [
+          { stokNo: 'STK-1', operasyonKodu: '10', makineKodu: 'M-1', gercekMetni: '00:01:40', gercekSaniye: 100, tanimliSaniye: 90, parcaSayisi: 120, gunSayisi: 7 },
+          { stokNo: 'STK-2', operasyonKodu: '20', makineKodu: null, gercekMetni: '45', gercekSaniye: null, tanimliSaniye: 30, parcaSayisi: null, gunSayisi: null },
+        ],
+      } satisfies HesaplarCevabi)
+      : null));
+    ac(<Hesaplar />);
+    const oee = await screen.findByRole('table', { name: 'OEE karşılaştırması' });
+    expect(within(oee).getByText('12.11.2026 · 1. vardiya')).toBeTruthy();
+    expect(within(oee).getByText('%77')).toBeTruthy();
+    expect(within(oee).getByText('+6,5 puan')).toBeTruthy();
+    expect(within(oee).queryByText(/NaN/)).toBeNull();
+    const cevrim = screen.getByRole('table', { name: 'Çevrim süresi farkları' });
+    expect(within(cevrim).getByText('+10 sn')).toBeTruthy();
+    expect(within(cevrim).getByText('45')).toBeTruthy();
+    expect(within(cevrim).getByText('30 sn')).toBeTruthy();
   });
 });
 

@@ -8,9 +8,10 @@ import type {
   AlarmlarCevabi, CanliMakineAyrintisiCevabi, MakineBulgulariCevabi, CanliMakinelerCevabi, DurumCevabi, DuruslarCevabi, EslemeCevabi, EslemelerCevabi,
   GidenCevabi, IsEmriDurumlariCevabi, SmartesBaglantiDurumu, GelenAdEsleGovdesi, GelenAdKaldirGovdesi, GelenAdlarCevabi, GelenAdOnerileriOnaylaGovdesi,
   OnerileriOnaylaCevabi, OnerileriOnaylaGovdesi, SmartesHazirlikCevabi, SmartesKontrolCevabi, AmbarHareketleriCevabi, FireHareketleriCevabi, GelenlerCevabi,
-  HamKayitCevabi, KaliteOlcumleriCevabi,
+  HamKayitCevabi, KaliteOlcumleriCevabi, HesaplarCevabi,
 } from '#paylasilan/sozlesme/smartes.ts';
 import type { IkinciMenuSayaclari } from '#paylasilan/sayfa-tanimi.ts';
+import type { Kullanici } from '#cekirdek/yetki.ts';
 import { tesisGunBasi, tesisGunu } from '#paylasilan/tesis-zamani.ts';
 import { sistemAyariOku } from '../ayarlar/disari.ts';
 import { durusNedenleriniListele, hurdaNedenleriniListele } from '../durus-nedenleri/disari.ts';
@@ -28,11 +29,12 @@ import {
   birikimliSayac, cizelgeParcalari, nedensizDuruslar, sayimKarsilastir, terminAsimi, bugunDilimleri, ILERLEME_ARALIGI_MS, ILERLEME_METODU, ilerlemeOku,
   ilerlemeParametreleri, MAKINE_AYARI, MAKINE_BILGI_METODU, MAKINE_LISTESI_YENILEME_MS, MAKINE_OKUMA_ARALIGI_MS, MAKINE_TUR_TAVANI_MS,
   makineBilgiParametreleri, makineBilgisiOku, turSirasi, adAnahtari, adDurumu, kodOnerileri, LISTE_METOTLARI, LISTE_TURLERI, listeKayitlari, listeOkunmaliMi,
-  listeParametreleri, nedenOnerisi, gelenKalemleri, hamAlanlari,
+  listeParametreleri, nedenOnerisi, gelenKalemleri, hamAlanlari, cevrimOku, cevrimSaniyesi, HESAP_METOTLARI, HESAP_TURLERI, hesapOkunmaliMi,
+  hesapParametreleri, OEE_PENCERESI_GUN, oeeOku, oeeYuzdeleri, tanimliAnahtari, tanimliSaniyeler,
 } from './kurallar.ts';
 import type {
   AkisAyari, AktifMakine, EslemeTuru, GidecekIsEmri, KaliteAmbarKaynagi, KodOnerisi, ListeTuru, MakineDurumu, OkumaKaynagi, TanimKaydi, TanimTuru,
-  CizelgeParcasi,
+  CizelgeParcasi, HesapTuru,
 } from './kurallar.ts';
 import { smartesTarihi } from './soap.ts';
 import type { Parametreler, TabloSatiri } from './soap.ts';
@@ -873,6 +875,7 @@ export async function gelenler(db: Db, istemci: SmartesIstemcisi | null): Promis
   const baglantiAcik = baglantiDurumu(await sistemAyariOku(db, 'smartes.baglanti'), istemci) === 'acik';
   const n = await s.sayilar(db);
   const ka = await s.kaliteAmbarSayilari(db);
+  const hesap = await s.hesapSayilari(db);
   const liste = new Map((await s.listeSayilari(db)).map((l) => [l.tur, l.n]));
   const l = (tur: ListeTuru): number => liste.get(tur) ?? 0;
   return {
@@ -882,7 +885,7 @@ export async function gelenler(db: Db, istemci: SmartesIstemcisi | null): Promis
       izler: new Map((await s.gelenIzleri(db)).map((i) => [i.kaynak, i.sonOkuma])),
       sayilar: new Map([
         ['uretim', n.isEmriDurumu], ['durus', n.durus], ['alarm', n.alarm], ['fire', ka.red], ['ambar', ka.ambar], ['kalite', ka.kalite],
-        ['adlar', l('fire') + l('durus')], ['tanimlar', l('istasyon') + l('makine') + l('operasyon')],
+        ['adlar', l('fire') + l('durus')], ['tanimlar', l('istasyon') + l('makine') + l('operasyon')], ['oee', hesap.oee], ['cevrim', hesap.cevrim],
       ]),
     }),
   };
@@ -1040,6 +1043,104 @@ export async function canliMakineAyrintisi(db: Db, makineKodu: string, simdi: Da
     makineKodu: m.makineKodu, okundu: m.okundu, mod: m.mod, uyari: m.uyari, sayacToplam: m.sayacToplam, eksenHizi: m.eksenHizi, eksenOrani: m.eksenOrani,
     spindle: { hiz: m.spindleHizi, yuk: m.spindleYuku, oran: m.spindleOrani }, takimCebi: m.takimCebi,
     degisimler: degisimler.map((d) => ({ zaman: d.zaman, eski: d.eski, yeni: d.yeni, aciklama: d.aciklama })).reverse(),
+  };
+}
+
+/* ---------------- SmartES'in kendi hesapları (SME-33) ---------------- */
+
+export type HesapOkumaSonucu = Engel | { tur: 'islendi'; okunan: HesapTuru[]; hatali: HesapTuru[] };
+
+// OEE raporu ve parça çevrim süresi saatte bir okunur. Okunamayan hesap eski haliyle kalır, hatası izde saklanır.
+export async function hesapTuru(vt: Pick<Veritabani, 'tx'>, o: Pick<TurOrtami, 'istemci' | 'saat'>, secenek: { zorla?: boolean } = {}): Promise<HesapOkumaSonucu> {
+  const bas = await vt.tx(async (db) => {
+    const e = await engel(db, o.istemci);
+    if (e !== null) return e;
+    const okunacak: HesapTuru[] = [];
+    for (const t of HESAP_TURLERI) if (secenek.zorla === true || hesapOkunmaliMi(await s.hesapOkumasi(db, t), o.saat())) okunacak.push(t);
+    return { tur: 'hazir' as const, okunacak };
+  });
+  if (bas.tur !== 'hazir') return bas;
+  const istemci = o.istemci;
+  if (istemci === null) return { tur: 'ortam-degiskeni-yok' };
+  const okunan: HesapTuru[] = [];
+  const hatali: HesapTuru[] = [];
+  for (const t of bas.okunacak) {
+    const metot = HESAP_METOTLARI[t];
+    if (yasakMetotMu(metot)) throw new Error('Bu akış işaretleme ya da silme metodu çağıramaz.');
+    const r = await istemci.liste(metot, hesapParametreleri(t, o.saat()));
+    const zaman = o.saat();
+    if (r.tur !== 'basarili') {
+      await vt.tx((db) => s.hesapHatali(db, t, zaman, hataMetni(r)));
+      hatali.push(t);
+      if (r.tur === 'ag' || r.tur === 'zaman-asimi') break;
+      continue;
+    }
+    const oeeler = t === 'oee' ? r.deger.flatMap((satir) => oeeOku(satir) ?? []) : [];
+    const cevrimler = t === 'cevrim' ? r.deger.flatMap((satir) => cevrimOku(satir) ?? []) : [];
+    // Satır var ama hiçbiri tanınmadı: alan adı yanlış varsayılmıştır; eski kayıtlar yerinde kalır.
+    if (r.deger.length > 0 && oeeler.length + cevrimler.length === 0) {
+      await vt.tx((db) => s.hesapHatali(db, t, zaman, kirp(`${metot} cevabında beklenen alanlar bulunamadı; alan adı doğrulanana kadar kayıt yazılmaz.`)));
+      hatali.push(t);
+      continue;
+    }
+    // Aynı anahtar cevapta iki kez gelirse sonuncusu geçerlidir (tek deyimde aynı satır iki kez yazılamaz).
+    if (t === 'oee') await vt.tx((db) => s.oeeYaz(db, [...new Map(oeeler.map((k) => [`${k.vardiyaTarihi}|${k.vardiya}|${k.makineKodu}`, k])).values()], zaman));
+    else await vt.tx((db) => s.cevrimYaz(db, [...new Map(cevrimler.map((k) => [k.anahtar, k])).values()], zaman));
+    okunan.push(t);
+  }
+  return { tur: 'islendi', okunan, hatali };
+}
+
+const HESAP_SATIR_SINIRI = 500;
+const yuzde = (oran: number | null): number | null => (oran === null ? null : Math.round(oran * 10_000) / 100);
+
+// CORE'un makine OEE'sini kablolama verir: OEE modülü bu modülle aynı kattadır, doğrudan ithal edilemez (ADR 0006). Çözücü kendi
+// yetki denetimini (oee.oku), sorgu sınırını ve iş merkezi kapsamını uygular.
+export type CoreOeeCozucusu = (
+  db: Db, kullanici: Kullanici, sorgu: { baslangic: string; bitis: string }, simdi?: number,
+) => Promise<{ id: number; oee: number | null }[]>;
+let coreOeeCozucusu: CoreOeeCozucusu | null = null;
+export const coreOeeCozucusuKaydet = (c: CoreOeeCozucusu | null): void => { coreOeeCozucusu = c; };
+
+// CORE'un aynı makine ve gün için OEE'si: SmartES makine kodu eşlemesinden CORE makinesi bulunur; OEE'yi görme yetkisi olmayana,
+// eşlenmemiş makineye ve hesaplanamayan güne null. Bağ kurulmamışsa karşılaştırma boş kalır; SmartES'in değerleri yine görünür.
+async function coreOeeleri(db: Db, kullanici: Kullanici, gunler: readonly string[], simdi: Date): Promise<Map<string, number | null>> {
+  const sonuc = new Map<string, number | null>();
+  const makineOeeleri = coreOeeCozucusu;
+  if (makineOeeleri === null || !kullanici.islemler.includes('oee.oku')) return sonuc;
+  const kodlar = new Map((await s.eslemeler(db, 'makine')).map((e) => [e.tmiId, e.smartesKod]));
+  if (kodlar.size === 0) return sonuc;
+  for (const gun of gunler) {
+    for (const m of await makineOeeleri(db, kullanici, { baslangic: gun, bitis: gun }, simdi.getTime())) {
+      const kod = kodlar.get(m.id);
+      if (kod !== undefined) sonuc.set(`${gun}|${kod}`, yuzde(m.oee));
+    }
+  }
+  return sonuc;
+}
+
+export async function hesaplar(db: Db, kullanici: Kullanici, simdi: Date = new Date()): Promise<HesaplarCevabi> {
+  const ilkGun = tesisGunu(simdi.getTime() - OEE_PENCERESI_GUN * 86_400_000);
+  const oeeler = await s.oeeSatirlari(db, ilkGun, HESAP_SATIR_SINIRI);
+  const bugun = tesisGunu(simdi.getTime());
+  // Gelecek tarihli vardiya satırı için CORE hesabı istenmez.
+  const core = await coreOeeleri(db, kullanici, [...new Set(oeeler.map((o) => o.vardiyaTarihi))].filter((g) => g <= bugun), simdi);
+  const cevrimler = await s.cevrimSatirlari(db, HESAP_SATIR_SINIRI);
+  const isler = cevrimler.length === 0 ? [] : await planlanacakIsEmirleri(db);
+  const malzemeler = await malzemeOzetleri(db, isler.map((i) => i.malzemeNo));
+  const tanimli = tanimliSaniyeler(isler.flatMap((i) => {
+    const m = malzemeler.get(i.malzemeNo);
+    return m === undefined ? [] : [{ stokNo: m.kod, opNo: i.opNo, birimSureDk: i.birimSureDk }];
+  }));
+  return {
+    oee: oeeler.map((o) => ({
+      vardiyaTarihi: o.vardiyaTarihi, vardiya: o.vardiya, makineKodu: o.makineKodu, ...oeeYuzdeleri(o),
+      coreOee: core.get(`${o.vardiyaTarihi}|${o.makineKodu}`) ?? null,
+    })),
+    cevrim: cevrimler.map((c) => ({
+      stokNo: c.stokNo, operasyonKodu: c.operasyonKodu, makineKodu: c.makineKodu, gercekMetni: c.cevrimMetni, gercekSaniye: cevrimSaniyesi(c.cevrimMetni),
+      tanimliSaniye: tanimli.get(tanimliAnahtari(c.stokNo, c.operasyonKodu)) ?? null, parcaSayisi: c.parcaSayisi, gunSayisi: c.gunSayisi,
+    })),
   };
 }
 

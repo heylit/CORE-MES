@@ -1,11 +1,12 @@
 import { isBekliyor, isTanimi } from '#cekirdek/zamanlayici.ts';
 import { ortamIstemcisi } from './baglanti.ts';
-import { IS_ARALIKLARI_MS, KALITE_AMBAR_KAYNAKLARI, LISTE_ISI_ARALIGI_MS, MAKINE_OKUMA_ARALIGI_MS } from './kurallar.ts';
+import { HESAP_ISI_ARALIGI_MS, IS_ARALIKLARI_MS, KALITE_AMBAR_KAYNAKLARI, LISTE_ISI_ARALIGI_MS, MAKINE_OKUMA_ARALIGI_MS } from './kurallar.ts';
 import type { KaliteAmbarKaynagi, OkumaKaynagi } from './kurallar.ts';
 import {
-  BEKLEME_NEDENLERI, ilerlemeTuru, makineTuru, yeniMakineBellegi, gonderimTuru, kaliteAmbarTuru, listeTuru, okumaTuru, tanimTuru, yeniBekleyenBellegi, yeniOkumaBellegi,
-  yeniSurecBellegi,
+  BEKLEME_NEDENLERI, ilerlemeTuru, makineTuru, yeniMakineBellegi, gonderimTuru, kaliteAmbarTuru, listeTuru, okumaTuru, tanimTuru, yeniBekleyenBellegi,
+  yeniOkumaBellegi, yeniSurecBellegi,
 } from './servis.ts';
+import { hesapTuru } from './servis.ts';
 import type { TurOrtami } from './servis.ts';
 
 // İşler her zaman koşar; istek ancak "SmartES bağlantısı" ayarı açık ve TMIV2_SMARTES_ADRESI varken çıkar (karar 3b: okuma ve yazma birlikte).
@@ -43,5 +44,7 @@ export const isler = [
   isTanimi({ ad: 'smartes-ilerleme-okumasi', aralikMs: MAKINE_OKUMA_ARALIGI_MS, txDisi: async (vt) => bekliyorMu(await ilerlemeTuru(vt, ortam)) }),
   // SmartES'in tanım listeleri (eşleme ekranı bunlardan seçtirir): iş sık bakar, liste günde bir kez okunur.
   isTanimi({ ad: 'smartes-liste-okumasi', aralikMs: LISTE_ISI_ARALIGI_MS, txDisi: async (vt) => bekliyorMu(await listeTuru(vt, ortam)) }),
+  // SmartES'in kendi hesapları (OEE raporu, çevrim süresi): iş sık bakar, hesap saatte bir okunur.
+  isTanimi({ ad: 'smartes-hesap-okumasi', aralikMs: HESAP_ISI_ARALIGI_MS, txDisi: async (vt) => bekliyorMu(await hesapTuru(vt, ortam)) }),
   isTanimi({ ad: 'smartes-tanim-gonderimi', aralikMs: IS_ARALIKLARI_MS.tanim, txDisi: async (vt) => bekliyorMu(await tanimTuru(vt, ortam)) }),
 ];

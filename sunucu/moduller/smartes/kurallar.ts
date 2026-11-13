@@ -691,7 +691,7 @@ export const eksikMetotlar = (wsdldekiler: readonly string[]): string[] => GEREK
 export const ISTEGE_BAGLI_METOTLAR: readonly string[] = [
   'WsWorkordersRejectStatusList', 'WarehouseStatusList', 'QualityControlStatusList', 'WorkStationList', 'WorkStationCreateUpdate', 'StocksList', 'StockCreateUpdate',
   'AllMachineInformationList', 'WorkordersList',
-  'OperationList', 'RejectsList', 'DownTimeList',
+  'OperationList', 'RejectsList', 'DownTimeList', 'OEEReport', 'PartsCycleTimesList',
 ];
 
 export const eksikIstegeBagliMetotlar = (wsdldekiler: readonly string[]): string[] => ISTEGE_BAGLI_METOTLAR.filter((m) => !wsdldekiler.includes(m));
@@ -1126,8 +1126,8 @@ export const GELEN_TANIMLARI: readonly GelenTanimi[] = [
   { anahtar: 'tanimlar', baslik: 'İstasyon, makine ve operasyon listesi', kosul: 'baglanti', izler: ['liste:istasyon', 'liste:makine', 'liste:operasyon'], kullanim: 'Kod eşlemelerinde öneri ve seçim listesi', yol: '/smartes/eslemeler' },
   { anahtar: 'ambar', baslik: 'Ambar hareketleri', kosul: 'kalite-ambar', izler: ['ambar'], kullanim: 'Yalnız gösterilir; stoğa yazılmaz', yol: '/smartes/ambar' },
   { anahtar: 'kalite', baslik: 'Kalite ölçümleri', kosul: 'kalite-ambar', izler: ['kalite'], kullanim: 'Yalnız gösterilir', yol: '/smartes/kalite' },
-  { anahtar: 'oee', baslik: 'OEE raporu (SmartES’in hesabı)', kosul: 'yok', izler: [], kullanim: 'Henüz okunmuyor', yol: null },
-  { anahtar: 'cevrim', baslik: 'Parça çevrim süreleri', kosul: 'yok', izler: [], kullanim: 'Henüz okunmuyor', yol: null },
+  { anahtar: 'oee', baslik: 'OEE raporu (SmartES’in hesabı)', kosul: 'baglanti', izler: ['hesap:oee'], kullanim: 'Yalnız karşılaştırma; raporlarda CORE’un hesabı kullanılır', yol: '/smartes/hesaplar' },
+  { anahtar: 'cevrim', baslik: 'Parça çevrim süreleri', kosul: 'baglanti', izler: ['hesap:cevrim'], kullanim: 'Tanımlı birim süreyle karşılaştırma', yol: '/smartes/hesaplar' },
   { anahtar: 'ilerleme', baslik: 'İş emri tamamlanma yüzdesi ve tahmini bitiş', kosul: 'yok', izler: [], kullanim: 'Henüz okunmuyor', yol: null },
 ];
 
@@ -1167,3 +1167,111 @@ export function hamAlanlari(ham: Record<string, unknown>): { ad: string; deger: 
     return { ad, deger: typeof d === 'string' ? d : JSON.stringify(d) };
   });
 }
+
+/* ---------------- SmartES'in kendi hesapları (SME-33): OEE raporu ve parça çevrim süresi ---------------- */
+// OEEReport (md. 61) ve PartsCycleTimesList (md. 50): parametre ve alan adları servis belgesinden; canlı WSDL'de doğrulanmadı. İkisi de yalnız okur.
+
+export const HESAP_TURLERI = ['oee', 'cevrim'] as const;
+export type HesapTuru = (typeof HESAP_TURLERI)[number];
+export const HESAP_METOTLARI: Record<HesapTuru, string> = { oee: 'OEEReport', cevrim: 'PartsCycleTimesList' };
+// Vardiya OEE'si vardiya sürerken değişir: saatte bir okunur. Okunamazsa da bir saat beklenir.
+export const HESAP_OKUMA_ARALIGI_MS = 3_600_000;
+export const HESAP_ISI_ARALIGI_MS = 15 * 60_000;
+// OEE son yedi günün vardiyaları için istenir ve gösterilir; çevrim süresi son otuz günün üretiminden.
+export const OEE_PENCERESI_GUN = 7;
+export const CEVRIM_PENCERESI_GUN = 30;
+
+export function hesapParametreleri(tur: HesapTuru, simdi: Date): Parametreler {
+  const gun = tur === 'oee' ? OEE_PENCERESI_GUN : CEVRIM_PENCERESI_GUN;
+  const bas = new Date(simdi.getTime() - gun * 86_400_000);
+  return tur === 'oee'
+    ? [['StartDatetime', bas], ['EndDatetime', simdi], ['MachineIDs', '']]
+    : [['StockNo', ''], ['OperationCode', ''], ['MachineCode', ''], ['StartDatetime', bas], ['EndDatetime', simdi], ['WorkStationCode', '']];
+}
+
+export const hesapOkunmaliMi = (iz: { sonDeneme: Date } | null, simdi: Date): boolean =>
+  iz === null || simdi.getTime() - iz.sonDeneme.getTime() >= HESAP_OKUMA_ARALIGI_MS;
+
+export interface OeeKaydi {
+  vardiyaTarihi: string;
+  vardiya: number;
+  makineKodu: string;
+  kullanilabilirlik: number | null;
+  performans: number | null;
+  kalite: number | null;
+  oee: number | null;
+  ham: TabloSatiri;
+}
+
+// Vardiya tarihi, vardiya ve makine kodu satırın kimliğidir; biri yoksa satır tekil yazılamaz ve atlanır.
+export function oeeOku(s: TabloSatiri): OeeKaydi | null {
+  // Tarih saatli de gelebilir ("2026-11-12T00:00:00+03:00"): vardiya günü yazılan gündür, saat dilimine çevrilmez.
+  const gunMetni = metinAlani(s, 'SHIFT_DATE')?.trim() ?? '';
+  const vardiya = sayi(s, ['SHIFT']);
+  const makineKodu = metin(s, ['MACHINE_CODE']);
+  if (!/^\d{4}-\d{2}-\d{2}(T|$)/.test(gunMetni) || vardiya === null || vardiya < 1 || vardiya > 9 || makineKodu === null) return null;
+  return {
+    vardiyaTarihi: gunMetni.slice(0, 10), vardiya, makineKodu,
+    kullanilabilirlik: ondalik(s, ['AVAILABILITY']), performans: ondalik(s, ['PERFORMANCE']), kalite: ondalik(s, ['QUALITY']), oee: ondalik(s, ['OEE']),
+    ham: s,
+  };
+}
+
+export interface CevrimKaydi {
+  anahtar: string;
+  stokNo: string | null;
+  operasyonKodu: string | null;
+  makineKodu: string | null;
+  istasyonKodu: string | null;
+  cevrimMetni: string | null;
+  yuklemeMetni: string | null;
+  parcaSayisi: number | null;
+  gunSayisi: number | null;
+  ham: TabloSatiri;
+}
+
+export function cevrimOku(s: TabloSatiri): CevrimKaydi | null {
+  const stokNo = metin(s, ['STOCK_INFORMATION']);
+  const operasyonKodu = metin(s, ['OPERATION_INFORMATION']);
+  const makineKodu = metin(s, ['MACHINE_INFORMATION']);
+  const istasyonKodu = metin(s, ['WORKSTATION_INFORMATION']);
+  if (stokNo === null && operasyonKodu === null && makineKodu === null) return null;
+  return {
+    anahtar: [stokNo, operasyonKodu, makineKodu, istasyonKodu].map((d) => d ?? '').join('\u001f'),
+    stokNo, operasyonKodu, makineKodu, istasyonKodu,
+    cevrimMetni: metin(s, ['ESTIMATED_START_TIME']), yuklemeMetni: metin(s, ['ESTIMATED_RESET_STOP_TIME']),
+    parcaSayisi: adet(s, ['TOTAL_PART_COUNT']), gunSayisi: adet(s, ['DAYS_AGO']), ham: s,
+  };
+}
+
+// SmartES oranı Decimal(18,2) verir; kesir mi (0,85) yüzde mi (85,00) olduğu belgede yok. Satırdaki bütün oranlar 1'i geçmiyorsa kesir
+// sayılır: yüzde olsaydı kullanılabilirlik, performans ve kalitenin üçü de %1'in altında olurdu. Sonuç her zaman yüzdedir (0-100).
+export function oeeYuzdeleri(k: Pick<OeeKaydi, 'kullanilabilirlik' | 'performans' | 'kalite' | 'oee'>): Pick<OeeKaydi, 'kullanilabilirlik' | 'performans' | 'kalite' | 'oee'> {
+  const degerler = [k.kullanilabilirlik, k.performans, k.kalite, k.oee].filter((d): d is number => d !== null);
+  const kesir = degerler.length > 0 && degerler.some((d) => d > 0) && degerler.every((d) => d <= 1);
+  const c = (d: number | null): number | null => (d === null ? null : Math.round((kesir ? d * 100 : d) * 100) / 100);
+  return { kullanilabilirlik: c(k.kullanilabilirlik), performans: c(k.performans), kalite: c(k.kalite), oee: c(k.oee) };
+}
+
+// Süre metni yalnız birimi belli biçimdeyse saniyeye çevrilir: "ss:dd:sn" (kesirli saniye olabilir). Düz sayının birimi (saniye mi, dakika mı)
+// bilinmez; çevrilmez, ekranda geldiği haliyle gösterilir.
+export function cevrimSaniyesi(metni: string | null): number | null {
+  const e = metni === null ? null : /^(\d{1,4}):([0-5]\d):([0-5]\d)(?:[.,](\d{1,3}))?$/.exec(metni.trim());
+  if (!e) return null;
+  return Number(e[1]) * 3600 + Number(e[2]) * 60 + Number(e[3]) + (e[4] === undefined ? 0 : Number(`0.${e[4]}`));
+}
+
+// CORE'da tanımlı birim süre: plandaki iş emirlerinden (SmartES'e giden stok no ve operasyon kodu ile). Aynı stok ve operasyon için
+// farklı süreler varsa hangisinin geçerli olduğu bilinmez: null.
+export function tanimliSaniyeler(isler: readonly { stokNo: string; opNo: number; birimSureDk: string | null }[]): Map<string, number | null> {
+  const sonuc = new Map<string, number | null>();
+  for (const i of isler) {
+    const dk = i.birimSureDk === null ? NaN : Number(i.birimSureDk);
+    if (!Number.isFinite(dk) || dk <= 0) continue;
+    const anahtar = `${i.stokNo}\u001f${smartesOperasyonKodu(i.opNo)}`;
+    const sn = Math.round(dk * 60 * 10) / 10;
+    sonuc.set(anahtar, sonuc.has(anahtar) && sonuc.get(anahtar) !== sn ? null : sn);
+  }
+  return sonuc;
+}
+export const tanimliAnahtari = (stokNo: string | null, operasyonKodu: string | null): string => `${stokNo ?? ''}\u001f${operasyonKodu ?? ''}`;

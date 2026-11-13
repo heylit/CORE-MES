@@ -6,7 +6,7 @@ import {
   eslemeKaldirGovdesi, eslemelerCevabi, eslemeSorgusu, gidenCevabi, isEmriDurumlariCevabi, makineBulgulariCevabi, sayfaSorgusu, smartesHazirlikCevabi,
   smartesKontrolCevabi, gelenAdEsleGovdesi, gelenAdKaldirGovdesi, gelenAdlarCevabi, gelenAdOnerileriOnaylaGovdesi, gelenAdSorgusu, listeOkuCevabi,
   onerileriOnaylaCevabi, onerileriOnaylaGovdesi, ambarHareketleriCevabi, fireHareketleriCevabi, gelenlerCevabi, hamKayitCevabi, hamKayitParametresi,
-  kaliteOlcumleriCevabi,
+  kaliteOlcumleriCevabi, hesaplarCevabi,
 } from '#paylasilan/sozlesme/smartes.ts';
 import { ortamIstemcisi, ortamOzeti } from './baglanti.ts';
 import * as servis from './servis.ts';
@@ -161,6 +161,13 @@ export const uclar = [
     yetki: { biri: ['sayfa.smartes'] },
     cevap: gelenlerCevabi,
     isle: ({ db }) => servis.gelenler(db, ortamIstemcisi),
+  }),
+  uc({
+    yontem: 'GET',
+    yol: '/smartes/hesaplar',
+    yetki: { biri: ['sayfa.smartes'] },
+    cevap: hesaplarCevabi,
+    isle: ({ db, kullanici }) => servis.hesaplar(db, kullanici),
   }),
   uc({
     yontem: 'GET',

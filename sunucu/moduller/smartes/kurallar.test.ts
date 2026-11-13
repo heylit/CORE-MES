@@ -6,7 +6,8 @@ import {
   ORTUSME_MS, pencereAtlanmaliMi, redOku, smartesAkisDurumu, smartesMakineleri, sonucBilinmiyorMu, tanimEylemi, tanimKoduUygunMu, bugunDilimleri,
   DURUM_KODLARI, ilerlemeOku, ISTEGE_BAGLI_METOTLAR, makineBilgisiOku, makineDurumu, turSirasi, yasakMetotMu, MAKINE_BILGI_METODU, ILERLEME_METODU,
   adBenzerligi, adDurumu, adNormali, BENZERLIK_ESIGI, kodOnerileri, LISTE_METOTLARI, LISTE_TURLERI, listeKaydiOku, listeKayitlari, listeOkunmaliMi,
-  listeParametreleri, nedenOnerisi,
+  listeParametreleri, nedenOnerisi, cevrimOku, cevrimSaniyesi, gelenKalemleri, hamAlanlari, HESAP_METOTLARI, HESAP_TURLERI, hesapOkunmaliMi,
+  hesapParametreleri, oeeOku, oeeYuzdeleri, tanimliAnahtari, tanimliSaniyeler,
 } from './kurallar.ts';
 import type { GidecekIsEmri } from './kurallar.ts';
 
@@ -339,5 +340,68 @@ describe('SmartES listeleri ve eşleme önerisi (SME-30, SME-31)', () => {
     assert.equal(adDurumu({ var: true, eslendi: false, ilkGorulme: t0, ilkBasarili: t0 }), 'eslenmedi');
     assert.equal(adDurumu({ var: true, eslendi: false, ilkGorulme: t1, ilkBasarili: t0 }), 'yeni');
     assert.equal(adDurumu({ var: true, eslendi: false, ilkGorulme: null, ilkBasarili: t0 }), 'eslenmedi');
+  });
+});
+
+describe('SmartES’ten gelen bilgiler ve SmartES hesapları (SME-32, SME-33)', () => {
+  test('özet: koşulu kapalı okuma "kapalı", CORE’un okumadığı bilgi "okunmuyor"; birden çok ize dayanan satırda en eski okuma gösterilir', () => {
+    const izler = new Map<string, string | null>([['liste:fire', '2026-11-12T10:00:00+03:00'], ['liste:durus', '2026-11-12T08:00:00+03:00'], ['red', null]]);
+    const k = gelenKalemleri({ baglantiAcik: true, kaliteAmbarAcik: false, izler, sayilar: new Map([['adlar', 4]]) });
+    const al = (a: string) => k.find((x) => x.anahtar === a)!;
+    assert.deepEqual([al('adlar').durum, al('adlar').sonOkuma, al('adlar').sayi], ['okunuyor', '2026-11-12T08:00:00+03:00', 4]);
+    assert.deepEqual([al('fire').durum, al('fire').sonOkuma, al('fire').sayi], ['kapali', null, 0]);
+    assert.deepEqual([al('makine').durum, al('makine').sayi, al('makine').yol], ['okunmuyor', null, null]);
+    assert.equal(al('oee').yol, '/smartes/hesaplar');
+  });
+
+  test('ham alanlar ad sırasıyla; boş değer null, metin olmayan değer JSON yazımıyla', () => {
+    assert.deepEqual(hamAlanlari({ B: '', A: 'x', C: 3, D: null }), [
+      { ad: 'A', deger: 'x' }, { ad: 'B', deger: null }, { ad: 'C', deger: '3' }, { ad: 'D', deger: null },
+    ]);
+  });
+
+  test('OEE satırı: vardiya günü yazılan gündür; vardiya, gün ya da makine yoksa satır atlanır; ondalık virgülle de gelir', () => {
+    const k = oeeOku({ SHIFT_DATE: '2026-11-12T00:00:00+03:00', SHIFT: '2', MACHINE_CODE: 'ORN-M1', AVAILABILITY: '0,85', PERFORMANCE: '0.9', QUALITY: 'x' });
+    assert.deepEqual([k?.vardiyaTarihi, k?.vardiya, k?.makineKodu, k?.kullanilabilirlik, k?.performans, k?.kalite, k?.oee], ['2026-11-12', 2, 'ORN-M1', 0.85, 0.9, null, null]);
+    assert.equal(oeeOku({ SHIFT_DATE: '2026-11-12', SHIFT: '1', MACHINE_CODE: 'ORN-M1' })?.vardiyaTarihi, '2026-11-12');
+    assert.equal(oeeOku({ SHIFT_DATE: '12.11.2026', SHIFT: '1', MACHINE_CODE: 'ORN-M1' }), null);
+    assert.equal(oeeOku({ SHIFT_DATE: '2026-11-12', SHIFT: '0', MACHINE_CODE: 'ORN-M1' }), null);
+    assert.equal(oeeOku({ SHIFT_DATE: '2026-11-12', SHIFT: '1' }), null);
+  });
+
+  test('OEE oranı her zaman yüzde çıkar: bütün oranlar 1’i geçmiyorsa kesirdir; hepsi sıfırsa ya da biri 1’den büyükse olduğu gibi; veri yoksa null', () => {
+    assert.deepEqual(oeeYuzdeleri({ kullanilabilirlik: 0.85, performans: 0.9, kalite: 1, oee: 0.765 }), { kullanilabilirlik: 85, performans: 90, kalite: 100, oee: 76.5 });
+    assert.deepEqual(oeeYuzdeleri({ kullanilabilirlik: 85, performans: 90.5, kalite: 100, oee: 0.9 }), { kullanilabilirlik: 85, performans: 90.5, kalite: 100, oee: 0.9 });
+    assert.deepEqual(oeeYuzdeleri({ kullanilabilirlik: 0, performans: 0, kalite: null, oee: 0 }), { kullanilabilirlik: 0, performans: 0, kalite: null, oee: 0 });
+    assert.deepEqual(oeeYuzdeleri({ kullanilabilirlik: null, performans: null, kalite: null, oee: null }), { kullanilabilirlik: null, performans: null, kalite: null, oee: null });
+  });
+
+  test('çevrim süresi yalnız "ss:dd:sn" biçiminden saniyeye çevrilir; düz sayının birimi bilinmediği için çevrilmez', () => {
+    assert.equal(cevrimSaniyesi('00:01:30'), 90);
+    assert.equal(cevrimSaniyesi('1:00:00,5'), 3600.5);
+    for (const m of ['45', '1,5', '01:30', '', 'yok', null]) assert.equal(cevrimSaniyesi(m), null, String(m));
+    const k = cevrimOku({ STOCK_INFORMATION: 'ORN-STK', OPERATION_INFORMATION: '10', MACHINE_INFORMATION: 'ORN-M1', ESTIMATED_START_TIME: '00:01:30', TOTAL_PART_COUNT: '120', DAYS_AGO: '7' });
+    assert.deepEqual([k?.stokNo, k?.operasyonKodu, k?.makineKodu, k?.istasyonKodu, k?.cevrimMetni, k?.parcaSayisi, k?.gunSayisi], ['ORN-STK', '10', 'ORN-M1', null, '00:01:30', 120, 7]);
+    assert.equal(cevrimOku({ ESTIMATED_START_TIME: '00:01:30' }), null);
+  });
+
+  test('tanımlı birim süre plandaki iş emirlerinden: dakika saniyeye çevrilir; süresiz iş sayılmaz; aynı stok ve operasyonda farklı süre varsa null', () => {
+    const t = tanimliSaniyeler([
+      { stokNo: 'ORN-A', opNo: 10, birimSureDk: '1.5' }, { stokNo: 'ORN-A', opNo: 10, birimSureDk: '1.50' }, { stokNo: 'ORN-A', opNo: 20, birimSureDk: null },
+      { stokNo: 'ORN-B', opNo: 10, birimSureDk: '2' }, { stokNo: 'ORN-B', opNo: 10, birimSureDk: '3' },
+    ]);
+    assert.equal(t.get(tanimliAnahtari('ORN-A', '10')), 90);
+    assert.equal(t.has(tanimliAnahtari('ORN-A', '20')), false);
+    assert.equal(t.get(tanimliAnahtari('ORN-B', '10')), null);
+  });
+
+  test('hesap okuması: belgedeki parametreler, yalnız okuma metodu, saatte bir', () => {
+    const simdi = new Date('2026-11-13T08:00:00Z');
+    assert.deepEqual(hesapParametreleri('oee', simdi), [['StartDatetime', new Date('2026-11-06T08:00:00Z')], ['EndDatetime', simdi], ['MachineIDs', '']]);
+    assert.deepEqual(hesapParametreleri('cevrim', simdi).map((p) => p[0]), ['StockNo', 'OperationCode', 'MachineCode', 'StartDatetime', 'EndDatetime', 'WorkStationCode']);
+    for (const t of HESAP_TURLERI) assert.equal(yasakMetotMu(HESAP_METOTLARI[t]), false, t);
+    assert.equal(hesapOkunmaliMi(null, simdi), true);
+    assert.equal(hesapOkunmaliMi({ sonDeneme: new Date(simdi.getTime() - 59 * DK) }, simdi), false);
+    assert.equal(hesapOkunmaliMi({ sonDeneme: new Date(simdi.getTime() - 60 * DK) }, simdi), true);
   });
 });

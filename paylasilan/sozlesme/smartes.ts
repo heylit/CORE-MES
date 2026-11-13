@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { listeCevapSemasi, sayfaSorguAlanlari } from '../liste.ts';
 import { surumSemasi } from '../surum.ts';
-import { zamanSemasi } from '../zaman.ts';
+import { tarihSemasi, zamanSemasi } from '../zaman.ts';
 
 // SmartES bağlantısı (kart #778): kod eşlemesi, okunan makine gerçekleşenleri ve iş emri giden kutusu.
 export const SMARTES_ESLEME_TURLERI = ['istasyon', 'makine', 'operasyon-tipi', 'durus-nedeni'] as const;
@@ -372,6 +372,23 @@ export const SMARTES_HAM_TURLERI = ['uretim', 'durus', 'alarm', 'fire', 'ambar',
 export type SmartesHamTuru = (typeof SMARTES_HAM_TURLERI)[number];
 export const hamKayitParametresi = z.object({ tur: z.enum(SMARTES_HAM_TURLERI), id: z.coerce.number<number>().int().positive() });
 export const hamKayitCevabi = z.object({ alanlar: z.array(z.object({ ad: z.string(), deger: z.string().nullable() })) });
+
+// SmartES'in kendi hesapladığı değerler; CORE'un hesabının yerine geçmez, yanında gösterilir. Oranlar yüzde (0-100).
+export const hesaplarCevabi = z.object({
+  oee: z.array(z.object({
+    vardiyaTarihi: tarihSemasi, vardiya: z.number().int(), makineKodu: z.string(),
+    kullanilabilirlik: z.number().nullable(), performans: z.number().nullable(), kalite: z.number().nullable(), oee: z.number().nullable(),
+    // Aynı makine ve günün CORE hesabı; hesaplanamadıysa (veri eksik, makine eşlenmemiş, OEE'yi görme yetkisi yok) null.
+    coreOee: z.number().nullable(),
+  })),
+  cevrim: z.array(z.object({
+    stokNo: z.string().nullable(), operasyonKodu: z.string().nullable(), makineKodu: z.string().nullable(),
+    // SmartES'in ölçtüğü çevrim, geldiği haliyle; birimi belli biçimdeyse saniyesi (değilse null). CORE'da tanımlı birim süre (saniye).
+    gercekMetni: z.string().nullable(), gercekSaniye: z.number().nullable(), tanimliSaniye: z.number().nullable(),
+    parcaSayisi: z.number().int().nullable(), gunSayisi: z.number().int().nullable(),
+  })),
+});
+export type HesaplarCevabi = z.output<typeof hesaplarCevabi>;
 
 export type GelenlerCevabi = z.output<typeof gelenlerCevabi>;
 export type FireHareketleriCevabi = z.output<typeof fireHareketleriCevabi>;

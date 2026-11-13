@@ -25,6 +25,7 @@ export const SMARTES_IKINCI_MENU = {
       { anahtar: 'fire', baslik: 'Fire', yol: '/smartes/fire', simge: 'trash', islem: 'sayfa.smartes' },
       { anahtar: 'ambar', baslik: 'Ambar hareketleri', yol: '/smartes/ambar', simge: 'pallet', islem: 'sayfa.smartes' },
       { anahtar: 'kalite', baslik: 'Kalite ölçümleri', yol: '/smartes/kalite', simge: 'ruler', islem: 'sayfa.smartes' },
+      { anahtar: 'hesaplar', baslik: 'SmartES hesapları', yol: '/smartes/hesaplar', simge: 'target', islem: 'sayfa.smartes' },
     ] },
     { baslik: 'Giden', maddeler: [
       { anahtar: 'giden', baslik: 'İş emri gönderimi', yol: '/smartes/giden', simge: 'upload', islem: 'sayfa.smartes' },
