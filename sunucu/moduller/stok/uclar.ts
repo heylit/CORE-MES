@@ -19,6 +19,7 @@ import {
   istekKabulGovdesi, istekReddetGovdesi, malzemeYerleriSorgusu, malzemeYerleriCevabi, okutarakAlSorgusu, okutarakAlCevabi, okutarakAlGovdesi, itirazGovdesi,
 } from '#paylasilan/sozlesme/stok.ts';
 import { depoCikisCevabi, depoSevkCevabi, sonIslemlerimCevabi } from '#paylasilan/sozlesme/stok.ts';
+import { istegeLotlarlaGonderGovdesi, teslimLotlariCevabi, teslimLotlariSorgusu } from '#paylasilan/sozlesme/stok.ts';
 import { seriAdetGovdesi, seriEkleGovdesi, seriIslendiGovdesi, seriListeCevabi, seriListelerCevabi, seriListeParametresi, seriSatirParametresi } from '#paylasilan/sozlesme/stok.ts';
 import { lotBekleyenKartlarCevabi, refakatIziCevabi, refakatKartlariCevabi, refakatKartlariSorgusu, refakatKolAcGovdesi, refakatLotaBaglaCevabi, refakatLotaBaglaGovdesi, refakatPartileriCevabi, refakatPartisiAcGovdesi, refakatPartisiCevabi, refakatPartisiKartiCevabi, refakatKartSatirlariCevabi, kartlaAlGovdesi, sepetTeslimEtGovdesi, sepetTeslimEtCevabi } from '#paylasilan/sozlesme/stok.ts';
 import { statulerCevabi } from '#paylasilan/sozlesme/recete-rota.ts';
@@ -244,6 +245,9 @@ export const uclar = [
   uc({ yontem: 'GET', yol: '/stok/istek-malzemeleri', yetki: 'stok.istek', sorgu: istekMalzemeSorgusu, cevap: istekMalzemeleriCevabi, isle: ({ db, sorgu }) => s.istekMalzemeleri(db, sorgu.ara) }),
   uc({ yontem: 'POST', tekrarKorumali: true, yol: '/stok/malzeme-istekleri/ac', yetki: 'stok.istek', govde: istekAcGovdesi, cevap: malzemeIstegiCevabi, isle: ({ db, kullanici, govde }) => s.genelIstekAc(db, kullanici, govde) }),
   uc({ yontem: 'POST', tekrarKorumali: true, kilitlenmedeYinele: true, yol: '/stok/teslimler/gonder', yetki: 'stok.istek', govde: teslimGonderGovdesi, cevap: teslimCevabi, isle: ({ db, kullanici, govde }) => s.teslimGonder(db, kullanici, govde) }),
+  // 3187 a: teslim penceresi. Okuma çıkış önerisiyle aynı yetkidedir (yeni veri açmaz); gönderim tek lotlu gönderimle aynı yetki ve denetimlerdedir.
+  uc({ yontem: 'GET', yol: '/stok/malzemeler/:id/teslim-lotlari', yetki: OKUMA, parametre: kimlikParametresi, sorgu: teslimLotlariSorgusu, cevap: teslimLotlariCevabi, isle: ({ db, parametre, sorgu }) => s.teslimLotlariOku(db, parametre.id, sorgu.miktar, sorgu.sira) }),
+  uc({ yontem: 'POST', tekrarKorumali: true, kilitlenmedeYinele: true, yol: '/stok/malzeme-istekleri/:id/lotlarla-gonder', yetki: 'stok.istek', parametre: kimlikParametresi, govde: istegeLotlarlaGonderGovdesi, cevap: teslimCevabi, isle: ({ db, kullanici, parametre, govde }) => s.istegeLotlarlaGonder(db, kullanici, parametre.id, govde) }),
   uc({ yontem: 'POST', kilitlenmedeYinele: true, yol: '/stok/teslimler/:id/teslim-al', yetki: 'stok.istek', parametre: kimlikParametresi, govde: teslimAlGovdesi, cevap: teslimCevabi, isle: ({ db, kullanici, parametre, govde }) => s.teslimAl(db, kullanici, parametre.id, govde) }),
   uc({ yontem: 'POST', yol: '/stok/teslimler/:id/reddet', yetki: 'stok.istek', parametre: kimlikParametresi, govde: teslimReddetGovdesi, cevap: teslimCevabi, isle: ({ db, kullanici, parametre, govde }) => s.teslimReddet(db, kullanici, parametre.id, govde) }),
   // Soru 96: istasyondan istek (A) ve okutarak alma (B). Kapsam ve iki imza kuralları servis içindedir.

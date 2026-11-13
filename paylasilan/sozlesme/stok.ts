@@ -1342,6 +1342,31 @@ export const acilanKart = z.object({ id: z.number().int(), etiket: z.string() })
 export type AcilanKart = z.output<typeof acilanKart>;
 export const teslimCevabi = z.object({ teslim, ekTeslimler: z.array(teslim).optional(), acilanKartlar: z.array(acilanKart).optional() });
 export type TeslimCevabi = z.output<typeof teslimCevabi>;
+
+// ---- 3187 a: teslim penceresi (öneri kartları ve hızlı liste) -----------------------------------------------------------------------
+// Verilebilecek lotlar çıkış önerisinin sırasıyla (2099-4 a, 2099-5 a): konum, lot, depoya giriş ve son kullanma tarihi. `onerilen`
+// önerinin o lottan düşen payıdır; öneride olmayan lotta null. Yalnız serbest stok; statülü parça elle seçilen konumdan gider.
+// 3191 a: sıra o teslim için seçilir; verilmezse bugünkü kural (son kullanma tarihi olan önce, yoksa ilk giren).
+export const LOT_SIRALARI = ['fefo', 'fifo', 'lifo'] as const;
+export type LotSirasi = (typeof LOT_SIRALARI)[number];
+export const teslimLotlariSorgusu = z.object({ miktar: miktarSemasi, sira: z.enum(LOT_SIRALARI).optional() });
+export const teslimLotlariCevabi = z.object({
+  veriYetersiz: z.boolean(),
+  yeterli: z.boolean(),
+  mevcut: ondalikMetinSemasi,
+  lotlar: z.array(z.object({
+    bakiyeId: z.number().int(), konumId: z.number().int(), konumKod: z.string(), partiId: z.number().int().nullable(), partiEtiketi: z.string().nullable(),
+    miktar: ondalikMetinSemasi, ilkGiris: zamanSemasi, sonKullanma: z.string().nullable(), onerilen: ondalikMetinSemasi.nullable(),
+  })),
+});
+export type TeslimLotlariCevabi = z.output<typeof teslimLotlariCevabi>;
+// İstek birden çok lottan karşılanır: her parça kendi teslim kaydıdır, istek parçaların sonuncusu alınınca kapanır (1229 a ile aynı
+// kapanış). `okutuldu` yalnız kayda düşer (okutmadan teslim serbesttir); sunucu lotu ve miktarı her parçada yeniden denetler.
+export const istegeLotlarlaGonderGovdesi = z.object({
+  parcalar: z.array(z.object({ konumId: kimlik, partiId: buyukKimlik.nullable(), miktar: miktarSemasi, okutuldu: z.boolean() })).min(1).max(10),
+  kaynakKimligi: z.string().trim().min(3).max(100),
+});
+export type IstegeLotlarlaGonderGovdesi = z.input<typeof istegeLotlarlaGonderGovdesi>;
 // Panelin tek okuması: bana gelenler (kapsamımdaki istasyonlara; depo işlemi olana depo konumlarına), gönderdiklerim ve isteklerim.
 export const teslimKutusuCevabi = z.object({
   gelenler: z.array(teslim),
