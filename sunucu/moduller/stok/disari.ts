@@ -98,6 +98,11 @@ export const emirlerinNetSarfi = (db: Db, emirIdler: readonly number[]) => sorgu
 // ilkZaman (2739-2): çiftin geri alınmamış ilk sarf ya da fire çıkışının anı; yoksa null.
 export const emirSarfSonAlisTutarlari = (db: Db, emirIdler: readonly number[]): Promise<{ emirId: number; malzemeId: number; miktar: string; tutar: string | null; ilkZaman: string | null }[]> =>
   servis.emirSarfSonAlisTutarlari(db, emirIdler);
+// 3175: emre ayrılmış miktar, malzeme başına (malzeme no -> ondalık metin); rezervesi olmayan malzeme haritada yoktur (sıfır uydurulmaz).
+// Okuma yetkisini çağıran korur (stok okuma).
+export async function emrinRezerveleri(db: Db, emirId: number): Promise<Map<number, string>> {
+  return new Map((await sorgular.emrinRezerveToplamlari(db, emirId)).map((r) => [r.malzemeId, r.miktar]));
+}
 // B-2482-8: emrin statü zincirinde duran hammaddesi (ilk adımın çevirmesi, statüden sarf düşülmüş). Malzeme ihtiyacında verilene eklenir:
 // verilen = emirlerinNetSarfi + bu. Okuma yetkisini çağıran korur.
 export const emirlerinZincirdekiMiktari = (db: Db, emirIdler: readonly number[]) => sorgular.emirlerinZincirdekiMiktari(db, emirIdler);

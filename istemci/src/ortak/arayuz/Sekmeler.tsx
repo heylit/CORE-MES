@@ -33,6 +33,8 @@ export function Sekmeler<A extends string>({ etiket, sekmeler, secili, sec }: Oz
     const yerlestir = () => {
       const sekme = kap.querySelector<HTMLElement>('[role="tab"][aria-selected="true"]');
       if (!sekme || sekme.offsetWidth === 0) { kap.removeAttribute('data-cizgi'); return; }
+      // Dar ekranda seçili sekme şeridin görünen alanında kalır: kullanıcı hangi sekmede olduğunu görür (3175).
+      if (sekme.offsetLeft < kap.scrollLeft || sekme.offsetLeft + sekme.offsetWidth > kap.scrollLeft + kap.clientWidth) kap.scrollLeft = sekme.offsetLeft;
       c.style.setProperty('--cizgi-x', `${String(sekme.offsetLeft)}px`);
       c.style.setProperty('--cizgi-en', `${String(sekme.offsetWidth)}px`);
       if (!kap.hasAttribute('data-cizgi')) {

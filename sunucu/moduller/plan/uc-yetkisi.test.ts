@@ -34,6 +34,7 @@ const BEKLENEN: BeklenenYetkiler = {
   'GET /plan/plan-sagligi': 'plan.planlama-oku',
   'GET /plan/analiz': 'plan.planlama-oku',
   'GET /plan/mrp-ihtiyaci': 'plan.planlama-oku',
+  'GET /plan/uretim-emirleri/:id/mrp': 'plan.planlama-oku',
   'GET /plan/grup-saat-maliyetleri': 'finans.maliyet-oku',
   'GET /plan/mesai-maliyeti': 'finans.maliyet-oku',
   'GET /plan/mesai-saat-degerleri': 'finans.maliyet-oku',

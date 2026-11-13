@@ -2,7 +2,7 @@
 import type { KatalogTuru } from '#paylasilan/sozlesme/malzemeler.ts';
 import { ACIK_EMIR_DURUMLARI, type KapanisMaddeBilgisi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { kodTuru, okutmaDuzelt } from '#paylasilan/kod-sozlugu.ts';
-import { ELLE_KONUM_TURLERI, type FisGonderimSekli, type LogoFisDurumu, type MalzemeFisiTuru, type KaliteDurumu, type KoduDegisenKonum, type KonumTuru, type MalzemeIstegiDurumu, type TeslimDurumu } from '#paylasilan/sozlesme/stok.ts';
+import { ELLE_KONUM_TURLERI, EMIR_FIS_KARTLARI, HAREKET_YAZANLARI, type EmirFisKarti, type EmirFisKartiCevabi, type HareketYazani, type FisGonderimSekli, type LogoFisDurumu, type MalzemeFisiTuru, type KaliteDurumu, type KoduDegisenKonum, type KonumTuru, type MalzemeIstegiDurumu, type TeslimDurumu } from '#paylasilan/sozlesme/stok.ts';
 import { FABRIKA_GENELI_ALAN_TURLERI, HARITA_ALAN_TURLERI, type HaritaAlanTuru } from '#paylasilan/sozlesme/stok-harita-sabitleri.ts';
 
 // ---- Miktar: numeric(14,3) metni binde tam sayıya çevrilir; ondalık hata payı olmaz ------------------------------
@@ -1709,4 +1709,41 @@ export function baslangicGeriAlmaEngeli(hareketGorenler: readonly string[]): str
   if (hareketGorenler.length === 0) return null;
   const ilk = hareketGorenler.slice(0, 10).join(', ');
   return `Şu lotlar hareket gördü: ${ilk}${hareketGorenler.length > 10 ? ` ve ${hareketGorenler.length - 10} lot daha` : ''}; önce onları geri alın ya da satır satır düzeltin.`;
+}
+
+// ---- Emrin fişleri (3175 a) ---------------------------------------------------------------------------------------------------
+// Hareketin emir sayfasındaki fişi asıl hareketten okunur (geri almada geri alınan): üretimden giriş, sarf, fire; transfer teslim kaydına
+// bağlıysa teslim, değilse ambar transferi. Başka hareket (sayım, mal kabul) emrin fişlerinde yoktur.
+export function emirHareketiTuru(h: { asilTur: string; cikisNedeni: string | null; girisKaynagi: string | null; teslimNo: string | null }): EmirFisKarti | null {
+  if (h.asilTur === 'giris' && h.girisKaynagi === 'uretim') return 'uretim_girisi';
+  if (h.asilTur === 'cikis' && h.cikisNedeni === 'uretime_sarf') return 'sarf';
+  if (h.asilTur === 'cikis' && h.cikisNedeni === 'fire') return 'fire';
+  if (h.asilTur === 'transfer') return h.teslimNo === null ? 'ambar' : 'teslim';
+  return null;
+}
+// Hareketi yazan akış (hareket fişinin akışı); akış yoksa hareket Stok Merkezi'nden elle yazılmıştır.
+export function hareketYazani(akis: string | null): HareketYazani {
+  if (akis === null) return 'elle';
+  return (HAREKET_YAZANLARI as readonly string[]).includes(akis) ? (akis as HareketYazani) : 'elle';
+}
+const LOGO_KOTULUK: Record<LogoFisDurumu, number> = { hata: 4, bekliyor: 3, bilinmiyor: 2, gonderildi: 1, gonderilmez: 0 };
+// Kart başına özet: emrin fişleri (sarf, üretimden giriş, fire emirle birlikte açılır, 294 c) hareketi olmasa da kartta numarasıyla durur.
+// Toplam yalnız tek birimde; birim karışık ya da satır yoksa null. Birden çok Logo fişinde en kötü durum gösterilir; teslim Logo'ya gitmez.
+export function emirFisKartlari(
+  hareketler: readonly { tur: EmirFisKarti; belgeNo: string | null; miktar: string; birim: string | null; zaman: string }[],
+  fisler: readonly { tur: string; no: string; logo: LogoFisDurumu }[],
+): EmirFisKartiCevabi[] {
+  return EMIR_FIS_KARTLARI.map((tur) => {
+    const satir = hareketler.filter((h) => h.tur === tur);
+    const kendiFisleri = fisler.filter((f) => f.tur === tur);
+    const belgeler = [...new Set([...kendiFisleri.map((f) => f.no), ...satir.flatMap((h) => (h.belgeNo === null ? [] : [h.belgeNo]))])];
+    const birimler = [...new Set(satir.map((h) => h.birim))];
+    const toplam = satir.length > 0 && birimler.length === 1 && birimler[0] !== null ? bindenMetin(satir.reduce((t, h) => t + binde(h.miktar), 0n)) : null;
+    const logo = tur === 'teslim' || kendiFisleri.length === 0 ? null
+      : kendiFisleri.map((f) => f.logo).reduce((a, b) => (LOGO_KOTULUK[b] > LOGO_KOTULUK[a] ? b : a));
+    return {
+      tur, no: belgeler.length === 1 ? belgeler[0]! : null, belgeSayisi: belgeler.length, satirSayisi: satir.length,
+      toplam, birim: toplam === null ? null : birimler[0]!, sonHareket: satir.reduce<string | null>((s, h) => (s === null || h.zaman > s ? h.zaman : s), null), logo,
+    };
+  });
 }

@@ -1729,6 +1729,51 @@ export type MalzemeFisleriCevabi = z.output<typeof malzemeFisleriCevabi>;
 export const malzemeFisiAyrintiCevabi = z.object({ fis: malzemeFisiOzeti, satirlar: z.array(malzemeFisiSatiri), hareketler: z.array(hareket) });
 export type MalzemeFisiAyrintiCevabi = z.output<typeof malzemeFisiAyrintiCevabi>;
 // Gönder ve Yeniden gönder aynı komuttur; sunucu fişin türüne ve Logo durumuna göre izin verir.
+// ---- Emrin fişleri (3175 a) -----------------------------------------------------------------------------------------------------------
+// Emrin sayfasındaki "Fişler": tür başına kart ve emrin bütün stok hareketleri tek listede. Yalnız okuma; fiyat taşımaz. Ambar transferi ve
+// teslim emre bağlı hareketlerden gelir; emre bağlanmayan transfer görünmez. "Hareket fişi" ayrı belge değildir, bu listedir.
+export const EMIR_FIS_KARTLARI = ['uretim_girisi', 'fire', 'sarf', 'ambar', 'teslim'] as const;
+export type EmirFisKarti = (typeof EMIR_FIS_KARTLARI)[number];
+// Hareketi yazan: terminal, Stok Merkezi'nden elle ya da başka bir akış (fason, sevk, kalite, CNC, emir). SmartES kaynak işi (3173) gelince eklenir.
+export const HAREKET_YAZANLARI = ['terminal', 'elle', 'fason', 'sevk', 'kalite', 'cnc', 'emir'] as const;
+export type HareketYazani = (typeof HAREKET_YAZANLARI)[number];
+export const emirFisKartiSemasi = z.object({
+  tur: z.enum(EMIR_FIS_KARTLARI),
+  // Tek belgeyse numarası; birden çok belgede null (sayi dolu). Sarf, üretimden giriş ve fire emirle birlikte açılır (294 c).
+  no: z.string().nullable(),
+  belgeSayisi: z.number().int().min(0),
+  satirSayisi: z.number().int().min(0),
+  // Satırların birimi tekse net toplam; birimler karışıksa ya da satır yoksa null (sıfır uydurulmaz).
+  toplam: ondalikMetinSemasi.nullable(),
+  birim: z.string().nullable(),
+  sonHareket: zamanSemasi.nullable(),
+  // Logo'ya giden fişte (sarf, üretimden giriş, fire, ambar) durum; teslim Logo'ya gitmez: null. Birden çok ambar fişinde en kötüsü.
+  logo: z.enum(LOGO_FIS_DURUMLARI).nullable(),
+});
+export type EmirFisKartiCevabi = z.output<typeof emirFisKartiSemasi>;
+export const emirHareketiSemasi = z.object({
+  id: z.number().int(),
+  zaman: zamanSemasi,
+  tur: z.enum(EMIR_FIS_KARTLARI),
+  // Geri alma satırı asıl hareketin türündedir ve miktarı eksidir.
+  geriAlma: z.boolean(),
+  belgeNo: z.string().nullable(),
+  malzemeId: z.number().int(),
+  malzemeKod: z.string().nullable(),
+  malzemeAd: z.string().nullable(),
+  birim: z.string().nullable(),
+  partiEtiketi: z.string().nullable(),
+  miktar: ondalikMetinSemasi,
+  kaynakKonumKod: z.string().nullable(),
+  hedefKonumKod: z.string().nullable(),
+  opNo: z.number().int().nullable(),
+  kaynak: z.enum(HAREKET_YAZANLARI),
+  kisiAd: z.string().nullable(),
+});
+export type EmirHareketi = z.output<typeof emirHareketiSemasi>;
+export const emirFisleriCevabi = z.object({ kartlar: z.array(emirFisKartiSemasi), hareketler: z.array(emirHareketiSemasi) });
+export type EmirFisleriCevabi = z.output<typeof emirFisleriCevabi>;
+
 export const malzemeFisiGonderGovdesi = z.object({ ...beklenenSurum });
 export type MalzemeFisiGonderGovdesi = z.input<typeof malzemeFisiGonderGovdesi>;
 

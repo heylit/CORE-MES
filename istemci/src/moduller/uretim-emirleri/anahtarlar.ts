@@ -12,6 +12,8 @@ export const anahtarlar = {
   akis: (id: number) => ['uretim-emirleri', 'akis', id] as const,
   refakatKartlari: (id: number) => ['uretim-emirleri', 'refakat-kartlari', id] as const,
   adimli: (id: number) => ['uretim-emirleri', 'adimli', id] as const,
+  fisler: (id: number) => ['uretim-emirleri', 'fisler', id] as const,
+  mrp: (id: number) => ['uretim-emirleri', 'mrp', id] as const,
   hazirlik: (id: number) => ['uretim-emirleri', 'hazirlik', id] as const,
   adimDurumu: (id: number) => ['uretim-emirleri', 'adim-durumu', id] as const,
   fasonFirmalari: ['uretim-emirleri', 'fason-firmalari'] as const,

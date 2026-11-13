@@ -542,9 +542,11 @@ describe('R3 Üretim emirleri: malzeme ihtiyacı sunucudan (B-2484-3, 461 b)', (
     d.emirler!.orders[0] = { ...d.emirler!.orders[0]!, status: 'serbest' };
     return d;
   };
-  const satir = (alinacak: string) => ({ malzemeNo: 12, kod: 'HM-0001', ad: 'Örnek çubuk', birim: 'adet', brut: '105', verilen: '5', stoktan: '0', alinacak });
-  const cevap = (stokGorunur: boolean, alinacak: string) => () => json(200, {
-    stokGorunur,
+  const satir = (alinacak: string, ek: { rezerve?: string | null; satinAlma?: unknown } = {}) => ({
+    malzemeNo: 12, kod: 'HM-0001', ad: 'Örnek çubuk', birim: 'adet', brut: '105', verilen: '5', stoktan: '0', alinacak, rezerve: null, satinAlma: null, ...ek,
+  });
+  const cevap = (stokGorunur: boolean, alinacak: string, satinAlmaGorunur = false) => () => json(200, {
+    stokGorunur, satinAlmaGorunur,
     emirler: [{ emirId: ornekDurum().emirler!.orders[0]!.kayitNo, hammadde: [satir(alinacak)], yanUrun: [], eksikler: Number(alinacak) > 0 ? [satir(alinacak)] : [], uyarilar: ['Örnek uyarı.'] }],
   });
 
@@ -561,6 +563,32 @@ describe('R3 Üretim emirleri: malzeme ihtiyacı sunucudan (B-2484-3, 461 b)', (
     const adres = vi.mocked(fetch).mock.calls.map((c) => String(c[0])).find((x) => x.includes('/recete-rota/malzeme-ihtiyaci'));
     expect(adres).toMatch(new RegExp(`\\?emir=${String(ornekDurum().emirler!.orders[0]!.kayitNo)}$`));
     expect(istekler.some((i) => i.yol.startsWith('/stok/'))).toBe(false);
+  });
+
+  // 3175: Rezerve ve Satın alma sütunları sunucunun görünürlüğüyle çizilir; yetkisize sütun yoktur.
+  it('rezerve ve satın alma sütunu sunucu görünür dediğinde gelir: sipariş no ve termin (izinli)', async () => {
+    const dolu = () => json(200, {
+      stokGorunur: true, satinAlmaGorunur: true,
+      emirler: [{ emirId: ornekDurum().emirler!.orders[0]!.kayitNo, hammadde: [satir('0', { rezerve: '40', satinAlma: { asama: 'siparis', no: 'SP-0001', talepDurumu: null, termin: '2030-02-01' } })],
+        yanUrun: [], eksikler: [], uyarilar: [] }],
+    });
+    sunucuKur(YONETICI, { durum: planda(), yazmalar: { 'GET /recete-rota/malzeme-ihtiyaci': dolu } });
+    rrAc();
+    const b = await emirAc();
+    const tablo = await within(b).findByRole('table', { name: /malzeme ihtiyacı/ });
+    expect(within(tablo).getByRole('columnheader', { name: 'Rezerve' })).toBeTruthy();
+    expect(within(tablo).getByRole('columnheader', { name: 'Satın alma' })).toBeTruthy();
+    expect(tablo.textContent).toContain('40');
+    expect(tablo.textContent).toContain('SP-0001');
+  });
+
+  it('görünürlük yoksa rezerve ve satın alma sütunu çizilmez (reddedilen)', async () => {
+    sunucuKur(OKUYAN, { durum: planda(), yazmalar: { 'GET /recete-rota/malzeme-ihtiyaci': cevap(false, '0') } });
+    rrAc();
+    const b = await emirAc();
+    const tablo = await within(b).findByRole('table', { name: /malzeme ihtiyacı/ });
+    expect(within(tablo).queryByRole('columnheader', { name: 'Rezerve' })).toBeNull();
+    expect(within(tablo).queryByRole('columnheader', { name: 'Satın alma' })).toBeNull();
   });
 
   it('stok yetkisi yoksa sunucu söyler, ekran ara stoğun düşülmediğini yazar (reddedilen)', async () => {

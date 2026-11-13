@@ -79,4 +79,29 @@ describe('plan (gerçek PostgreSQL): MRP ihtiyaç raporu', () => {
     await ortam!.sahip.sorgu('UPDATE stok_rezerve SET miktar = 10 WHERE uretim_emri_id = $1', [emir]);
     assert.equal(await brut(), 0, 'OP 10 bütünü sayıldı, OP 20 sayılmadı: kalan 0');
   });
+
+  // 3175 (Risk M1, M2, M4): emrin MRP fişi plan MRP'sinin bu emre düşen satırlarıdır; hesap bütün açık emirlerle yapılır, süzgeç sonra.
+  test('emrin MRP fişi: satırlar plan MRP sayfasındakiyle aynı; yalnız emri anan satır gelir; planlama okuması şart, bilinmeyen emir 404', async () => {
+    const ham = await kartAc('hammadde');
+    const baska = await kartAc('hammadde');
+    const rota1 = await yururlugeAlinmisRota(await kartAc('mamul'), [yeniAdim({ bilesenler: [{ malzemeId: ham, miktar: 2, fireYuzde: 0 }] })]);
+    const rota2 = await yururlugeAlinmisRota(await kartAc('mamul'), [yeniAdim({ bilesenler: [{ malzemeId: ham, miktar: 1, fireYuzde: 0 }, { malzemeId: baska, miktar: 1, fireYuzde: 0 }] })]);
+    const e1 = await tamam<{ isEmriIdleri: number[] }>(c.planlama, 'POST', `/rota/revizyonlar/${rota1}/emre-kopyala`, { projeId: durum().denemeProjeId, adet: 5, teslim: null });
+    await tamam(c.planlama, 'POST', `/rota/revizyonlar/${rota2}/emre-kopyala`, { projeId: durum().denemeProjeId, adet: 3, teslim: null });
+    const { ortam } = durum();
+    const emir = (await ortam!.sahip.tek<{ u: number }>('SELECT uretim_emri_id AS u FROM uretim_emirleri_is_emri WHERE id = $1', [e1.isEmriIdleri[0]]))!.u;
+    const tum = await tamam<MrpIhtiyaciCevabi>(c.planlama, 'GET', yol);
+    const emrin = await tamam<MrpIhtiyaciCevabi>(c.planlama, 'GET', `/plan/uretim-emirleri/${String(emir)}/mrp`);
+    const hamSatiri = tum.satirlar.find((x) => x.malzeme.id === ham)!;
+    assert.deepEqual(emrin.satirlar.find((x) => x.malzeme.id === ham), hamSatiri, 'satır plan MRP sayfasındakiyle aynı (iki emrin toplamı)');
+    assert.equal(hamSatiri.brut, 13);
+    assert.equal(emrin.satirlar.some((x) => x.malzeme.id === baska), false, 'başka emrin malzemesi gelmez');
+    assert.ok(emrin.satirlar.every((x) => tum.satirlar.some((y) => y.malzeme.id === x.malzeme.id && x.emirler.length > 0)));
+    assert.deepEqual([emrin.stokGorunur, emrin.satinAlmaGorunur, emrin.urunsuzEmir], [true, true, 0]);
+    const yalniz = await tamam<MrpIhtiyaciCevabi>(await girisCerezi('mrpokur'), 'GET', `/plan/uretim-emirleri/${String(emir)}/mrp`);
+    const ys = yalniz.satirlar.find((x) => x.malzeme.id === ham)!;
+    assert.deepEqual([ys.serbest, ys.acikSiparis, ys.net], [null, null, null], '1545 a null aynen');
+    assert.equal((await istek(c.operator, 'GET', `/plan/uretim-emirleri/${String(emir)}/mrp`)).statusCode, 403);
+    assert.equal((await istek(c.planlama, 'GET', '/plan/uretim-emirleri/999999/mrp')).statusCode, 404);
+  });
 });
