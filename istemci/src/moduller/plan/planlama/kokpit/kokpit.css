@@ -396,7 +396,12 @@
   }
   .tc-pyq-govde:has(.tc-pyq-ayrinti) { padding-bottom: var(--ekran-boy-50); }
   .tc-pyq-tahta, .tc-pyq-olcek { display: none; }
-  .tc-pyq-ara { flex-basis: 100%; max-width: none; order: -1; }
+  /* Üst şerit dört satıra sığar ki liste ekranın ortasına yakın başlasın: arama + Onaya gönder, süzgeç, görünüm + Geri / İleri, tur + karşılaştırma. */
+  .tc-pyq-ara { flex: 1 1 0; min-width: 0; max-width: none; order: -3; }
+  .tc-pyq-gonder { order: -2; }
+  .tc-pyq-tur-dugme { order: 1; }
+  .tc-pyq-ust > .tc-pyq-ok { order: 2; }
+  .tc-pyq-seg button { padding: 0 calc(var(--b-1) + var(--pay-ince)); }
   .tc-pyq-liste { display: flex; }
   /* Telefon: dar sol sütun, parmağa göre gün ve yük hücresi; yalnız dolu günü olan tezgâhlar (düğmeyle hepsi). Yük şeridi yapışmaz: alttan açılan ayrıntıyla tablo arasında emir satırına yer kalır. */
   .tc-pyq-mat-kap { --sol-en: calc(var(--b-6) * 4); --gun-en: var(--dokunma); --yuk-boy: var(--b-6); }

@@ -354,8 +354,8 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi }) {
           <button type="button" className="tc-pyq-ok" title="İleri (Ctrl+Y)" disabled={!yazabilir || mesgul || tur !== null || ileriSayisi === 0} onClick={() => { ileri(); }}><span>İleri</span><Simge ad="chev-right" boyut="k" /><Sayi n={ileriSayisi} /></button>
         </span>
         <button type="button" className="tc-pyq-ok" aria-pressed={onceAcik} title="Onaylı planla karşılaştır (B)" onClick={() => { setOnceAcik(!onceAcik); }}><Simge ad="layers" boyut="k" /><span>Önce / sonra</span></button>
-        <Dugme simge="route" onClick={turBaslat} disabled={tur !== null}>Sorunları sırayla çöz</Dugme>
-        {yazabilir && <Dugme tur={tur || engel !== null || secili !== null ? 'ikincil' : 'birincil'} simge="upload" disabled={engel !== null || mesgul || tur !== null} title={tur ? 'Tur bitince gönderilir' : engel ?? undefined} onClick={() => { setGonderSor(true); }}>Onaya gönder</Dugme>}
+        <Dugme simge="route" className="tc-pyq-tur-dugme" onClick={turBaslat} disabled={tur !== null}>Sorunları sırayla çöz</Dugme>
+        {yazabilir && <Dugme className="tc-pyq-gonder" tur={tur || engel !== null || secili !== null ? 'ikincil' : 'birincil'} simge="upload" disabled={engel !== null || mesgul || tur !== null} title={tur ? 'Tur bitince gönderilir' : engel ?? undefined} onClick={() => { setGonderSor(true); }}>Onaya gönder</Dugme>}
       </div>
       {(adim > 0 || mesgul) && (
         <p className="tc-pyq-degisim" role="status">
