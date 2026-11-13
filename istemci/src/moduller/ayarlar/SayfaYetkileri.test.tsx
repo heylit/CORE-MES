@@ -43,8 +43,11 @@ function ac(islemler: Islem[] = DUZENLER, yazma: (yol: string, govde: Record<str
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
 const sayfaAc = (ad: string) => { fireEvent.click(screen.getByRole('button', { name: ad, expanded: false })); };
+// Sayfalar ayrıntılı sayfalarla (bölünmüş eylemi olanlarla) açılır; öteki sayfalar "Bütün sayfalar" ile görünür (3163 a, sürüm 3.1).
+const butunSayfalar = () => { fireEvent.click(screen.getByRole('button', { name: 'Bütün sayfalar' })); };
 const kisiSec = async () => {
   fireEvent.change(await screen.findByLabelText('Kişi'), { target: { value: '1' } });
+  butunSayfalar();
   sayfaAc('Stok');
 };
 
@@ -87,6 +90,39 @@ describe('Sayfa yetkileri', () => {
     expect(screen.queryByRole('button', { name: /Eski toplu anahtar/ })).toBeNull();
   });
 
+  it('3163 a (sürüm 3.1): ayrıntılı sayfalarla açılır; bölünmüş eylemler başlıklı bölümde, kalanlar "Genel" altında; düğme bütün sayfaları açar', async () => {
+    const istasyonlu = ['sayfa.istasyonlar', 'istasyonlar.yaz', 'istasyonlar.istasyon-yaz', 'istasyonlar.tanim-yaz',
+      'sayfa.rota', 'rota.yaz', 'rota.revizyon-yaz', 'rota.onaya-gonder', 'rota.sablon-yaz', 'rota.taslak-ac', 'rota.sure-kabul'];
+    ac(DUZENLER, () => json(200, LISTE), { ...kisiyle({}), islemler: [...ISLEMLER, ...istasyonlu] });
+    fireEvent.change(await screen.findByLabelText('Kişi'), { target: { value: '1' } });
+    const dugme = screen.getByRole('button', { name: 'Bütün sayfalar' });
+    expect(dugme.hasAttribute('aria-pressed')).toBe(false);
+    expect(screen.queryByRole('button', { name: 'Stok', expanded: false })).toBeNull();
+    sayfaAc('İstasyonlar');
+    const bolum = (ad: string) => screen.getByRole('heading', { level: 3, name: ad }).parentElement as HTMLElement;
+    expect(within(bolum('İstasyon tanımları')).getByRole('button', { name: 'Depocu Deneme: İstasyon ekleme, düzenleme, silme' })).toBeTruthy();
+    expect(within(bolum('İstasyon tanımları')).getByRole('button', { name: 'Depocu Deneme: Operasyon tipleri ve tesis şablonu' })).toBeTruthy();
+    expect(within(bolum('Genel')).queryByRole('button', { name: /İstasyon ekleme/ })).toBeNull();
+    expect(within(bolum('Genel')).getAllByRole('button').length).toBeGreaterThan(0);
+    // Arama bölüm adını da tanır.
+    fireEvent.change(screen.getByLabelText('Sayfa ya da işlem ara'), { target: { value: 'istasyon tanım' } });
+    expect(screen.getByRole('heading', { level: 3, name: 'İstasyon tanımları' })).toBeTruthy();
+    // Süzgeç eşleşeni gizliyorsa "yok" denmez (Test 2 N1).
+    fireEvent.change(screen.getByLabelText('Sayfa ya da işlem ara'), { target: { value: 'stok' } });
+    expect(screen.queryByText('Aramaya uyan sayfa ya da işlem yok.')).toBeNull();
+    expect(screen.getByText(/Ayrıntılı sayfalarda aramaya uyan yok; "Bütün sayfalar" ile [1-9]\d* sayfa görünür\./)).toBeTruthy();
+    fireEvent.change(screen.getByLabelText('Sayfa ya da işlem ara'), { target: { value: '' } });
+    // Rota da kendi başlığıyla gelir (Test 2 D2).
+    sayfaAc('Rota');
+    const rota = within(bolum('Rota kayıtlarını düzenleme'));
+    for (const ad of ['Revizyon düzenleme, kopyalama, iptal', 'Revizyonu onaya gönderme', 'Rota şablonlarını düzenleme', 'Karttan ve üründen taslak açma', 'Gerçekleşen süreyi yazma ve kabul']) {
+      expect(rota.getByRole('button', { name: `Depocu Deneme: ${ad}` })).toBeTruthy();
+    }
+    fireEvent.click(dugme);
+    expect(screen.getByRole('button', { name: 'Ayrıntılı sayfalar' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Stok', expanded: false })).toBeTruthy();
+  });
+
   it('kişide rolden gelen işleme basınca yalnız o kişiden alınır; cevapla "Alındı" olur; yeniden basınca geri verilir', async () => {
     const alinmis = kisiyle({ alinan: ['stok.giris'] });
     const gonderilen = ac(DUZENLER, (_y, g) => json(200, g['alindi'] === true ? alinmis : LISTE));
@@ -121,6 +157,7 @@ describe('Sayfa yetkileri', () => {
     expect(screen.getByText('Değişiklik bu roldeki herkesi etkiler.')).toBeTruthy();
     expect(screen.queryByText('Kişiye ayrıca verildi')).toBeNull();
     fireEvent.change(screen.getByLabelText('Rol'), { target: { value: '7' } });
+    butunSayfalar();
     sayfaAc('Stok');
     fireEvent.click(screen.getByRole('button', { name: 'Depo: Stok çıkışı' }));
     await waitFor(() => expect(gonderilen).toEqual([{ yol: '/roller/7/islem-degistir', govde: { islem: 'stok.cikis', verildi: true } }]));

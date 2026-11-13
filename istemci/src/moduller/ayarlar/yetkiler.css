@@ -83,6 +83,7 @@
 .tc-sy-sayac[data-durum="tam"] { color: var(--run); font-weight: 700; }
 .tc-sy-sayac[data-durum="kismi"] { color: var(--ink); }
 .tc-sy-kart-govde { display: grid; gap: var(--b-3); padding: var(--b-3); border-top: 1px solid var(--edge); }
+.tc-sy-bolum h3 { margin: 0 0 var(--b-2); font-size: var(--yazi-xs); font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
 .tc-sy-alt { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--b-2); }
 
 /* Eylemler: liste solda, ayrıntı sağda; dar ekranda alt alta. */

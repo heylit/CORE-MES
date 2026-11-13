@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { KisiEkIslemleri, KisiEkIslemleriCevabi, RolIslemleriCevabi } from '#paylasilan/sozlesme/kisiler.ts';
 import { islemAdi, islemGrubu } from '#paylasilan/islem-adlari.ts';
-import { ETKISIZ_ISLEMLER } from '#paylasilan/islemler.ts';
+import { ETKISIZ_ISLEMLER, ISTASYON_YAZMA_ISLEMLERI, ROTA_YAZMA_ISLEMLERI } from '#paylasilan/islemler.ts';
 import { Dugme, DurumKutusu, Girdi, Kart, OnayPenceresi, Rozet, Secim, Sekmeler, Simge, useBildirim } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { useOturum } from '../../ortak/veri/oturum.ts';
@@ -57,9 +57,29 @@ const disNot = (grup: string): ReactNode => (DIS_NOT[grup] === undefined
   ? null
   : <p className="tc-sy-not"><Simge ad="help" boyut="k" /> {DIS_NOT[grup]}</p>);
 
+// Eylemlere bölünmüş işlem sayfanın içinde başlıklı bölüm olur (3163 a, 3165 a); her bölme dilimi buraya bir satır ekler.
+const BOLUMLER: readonly { ad: string; islemler: readonly string[] }[] = [
+  { ad: 'İstasyon tanımları', islemler: ISTASYON_YAZMA_ISLEMLERI },
+  { ad: 'Rota kayıtlarını düzenleme', islemler: ROTA_YAZMA_ISLEMLERI },
+];
+const BOLUMU = new Map(BOLUMLER.flatMap((b) => b.islemler.map((i) => [i, b.ad] as const)));
+type Satirlar = { genel: string[]; bolumler: { ad: string; islemler: string[] }[] };
+const satirlari = (g: Grup): Satirlar => {
+  const genel: string[] = [];
+  const bolumler: Satirlar['bolumler'] = [];
+  for (const i of g.islemler) {
+    const ad = BOLUMU.get(i);
+    if (ad === undefined) { genel.push(i); continue; }
+    const b = bolumler.find((x) => x.ad === ad);
+    if (b) b.islemler.push(i); else bolumler.push({ ad, islemler: [i] });
+  }
+  return { genel, bolumler };
+};
+const ayrintiliMi = (g: Grup): boolean => g.islemler.some((i) => BOLUMU.has(i));
+
 function gruplar(islemler: readonly string[], arama: string): Grup[] {
   const a = kucuk(arama.trim());
-  const eslesir = (i: string) => a === '' || kucuk(islemAdi(i)).includes(a) || i.includes(a);
+  const eslesir = (i: string) => a === '' || kucuk(islemAdi(i)).includes(a) || i.includes(a) || kucuk(BOLUMU.get(i) ?? '').includes(a);
   return grupla(islemler.filter((i) => !(ETKISIZ_ISLEMLER as readonly string[]).includes(i)))
     .map((g) => ({ ...g, islemler: kucuk(g.ad).includes(a) ? g.islemler : g.islemler.filter(eslesir) }))
     .filter((g) => g.islemler.length > 0);
@@ -161,9 +181,11 @@ function Sayfalar({ veri }: { veri: Veri }) {
   const [arama, aramaYaz] = useState('');
   const [aciklar, aciklarYaz] = useState<ReadonlySet<string>>(() => new Set());
   const [toplu, topluYaz] = useState<{ g: Grup; ver: boolean } | null>(null);
+  const [yalnizAyrintili, yalnizAyrintiliYaz] = useState(true);
   const kisi = veri.kisiler.find((k) => String(k.id) === kisiSecimi);
   const rol = veri.roller.find((r) => String(r.id) === rolSecimi);
-  const liste = gruplar(veri.islemler, arama);
+  const tum = gruplar(veri.islemler, arama);
+  const liste = yalnizAyrintili ? tum.filter(ayrintiliMi) : tum;
   const acikMi = (a: string) => arama.trim() !== '' || aciklar.has(a);
   const cevir = (a: string) => aciklarYaz((o) => { const y = new Set(o); if (y.has(a)) y.delete(a); else y.add(a); return y; });
 
@@ -233,11 +255,19 @@ function Sayfalar({ veri }: { veri: Veri }) {
           : <Secim etiket="Rol" value={rolSecimi} onChange={(o) => rolSecimiYaz(o.target.value)}
             secenekler={[{ deger: '', baslik: 'Rol seçin' }, ...veri.roller.map((r) => ({ deger: String(r.id), baslik: r.ad }))]} />}
         <Girdi etiket="Sayfa ya da işlem ara" type="search" value={arama} onChange={(o) => aramaYaz(o.target.value)} placeholder="Örnek: stok" />
+        {/* Düğmenin adı gideceği görünüşü söyler; basılı durumu (aria-pressed) ters okunurdu. */}
+        <div className="tc-yetki-dugmeler">
+          <Dugme simge="layers" onClick={() => yalnizAyrintiliYaz((v) => !v)}>{yalnizAyrintili ? 'Bütün sayfalar' : 'Ayrıntılı sayfalar'}</Dugme>
+        </div>
       </div>
       {kip === 'rol' && rol?.yonetici === true && <p className="tc-sy-not"><Simge ad="lock" boyut="k" /> Bütün yetkileri veren rol değiştirilmez.</p>}
       {kip === 'kisi' && veri.kisiler.length === 0 && <DurumKutusu durum="bos" mesaj="Girişi olan kişi yok." />}
       {!hedefVar && (kip === 'rol' || veri.kisiler.length > 0) && <DurumKutusu durum="bos" mesaj={kip === 'kisi' ? 'Yetkilerini görmek için bir kişi seçin.' : 'Yetkilerini görmek için bir rol seçin.'} />}
-      {hedefVar && liste.length === 0 && <DurumKutusu durum="bos" mesaj="Aramaya uyan sayfa ya da işlem yok." />}
+      {hedefVar && tum.length === 0 && <DurumKutusu durum="bos" mesaj="Aramaya uyan sayfa ya da işlem yok." />}
+      {/* Süzgeç eşleşeni gizliyorsa "yok" denmez; kaç sayfanın düğmeyle görüneceği söylenir. */}
+      {hedefVar && tum.length > 0 && liste.length === 0 && (
+        <DurumKutusu durum="bos" mesaj={`Ayrıntılı sayfalarda aramaya uyan yok; "Bütün sayfalar" ile ${String(tum.length)} sayfa görünür.`} />
+      )}
       {hedefVar && (
         <div className="tc-sy-liste">
           {liste.map((g) => {
@@ -255,7 +285,15 @@ function Sayfalar({ veri }: { veri: Veri }) {
                 {ac && (
                   <div className="tc-sy-kart-govde">
                     {disNot(g.anahtar)}
-                    <div className="tc-sy-cipler">{g.islemler.map(dugme)}</div>
+                    {(() => {
+                      const { genel, bolumler } = satirlari(g);
+                      return (
+                        <>
+                          {genel.length > 0 && <div className="tc-sy-bolum"><h3>Genel</h3><div className="tc-sy-cipler">{genel.map(dugme)}</div></div>}
+                          {bolumler.map((b) => <div key={b.ad} className="tc-sy-bolum"><h3>{b.ad}</h3><div className="tc-sy-cipler">{b.islemler.map(dugme)}</div></div>)}
+                        </>
+                      );
+                    })()}
                     {veri.duzenler && !(kip === 'rol' && rol?.yonetici === true) && (
                       <div className="tc-sy-alt">
                         <Dugme simge="check" disabled={veri.bekliyor} onClick={() => topluYaz({ g, ver: true })}>Hepsini ver</Dugme>
