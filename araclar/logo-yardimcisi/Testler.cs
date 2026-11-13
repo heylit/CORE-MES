@@ -759,6 +759,32 @@ namespace LogoYardimcisi
             Esit(404, C(s, "GET", "/api/Material/YOK-1/movements", null).Durum, "olmayan kart");
         }
 
+        static void T_malzeme_hareketleri_en_yeniden_geriye_okunur()
+        {
+            var s = Logo();
+            var k1 = s.Kartlar[0];
+            for (var i = 1; i <= 25; i++)
+                s.Hareketler.Add(Tuple.Create(k1.Ref, new MalzemeHareketi { Ref = 600 + i, Tarih = new DateTime(2026, 10, i), FisTuru = 1, GirisCikis = 1, Miktar = i }));
+            s.Hareketler.Add(Tuple.Create(s.Kartlar[1].Ref, new MalzemeHareketi { Ref = 700, Tarih = new DateTime(2026, 10, 26), FisTuru = 1, GirisCikis = 1, Miktar = 1 }));
+            var geri = new Dictionary<string, string> { { "order", "desc" } };
+            var m = D(C(s, "GET", "/api/Material/" + k1.Kod + "/movements", null, geri).Govde);
+            var l = (object[])m["data"];
+            Esit(Islemler.HareketGeriSayfasi, l.Length, "ilk sayfa en çok yirmi");
+            Esit(625, D(l[0])["logicalRef"], "en yeni önce; başka kartın hareketi yok");
+            Esit(606, D(l[l.Length - 1])["logicalRef"], "sayfanın en eskisi");
+            Esit("desc", m["order"], "zarf yönü söyler");
+            Esit(606, m["next"], "dolu sayfada sonraki imleç en eski kayıt");
+            var m2 = D(C(s, "GET", "/api/Material/" + k1.Kod + "/movements", null, new Dictionary<string, string> { { "order", "desc" }, { "before", "606" } }).Govde);
+            var l2 = (object[])m2["data"];
+            Esit(5, l2.Length, "kalan beş");
+            Esit(605, D(l2[0])["logicalRef"], "imleçten eskiler");
+            Esit(null, m2["next"], "son sayfa");
+            Esit(false, D(C(s, "GET", "/api/Material/" + k1.Kod + "/movements", null).Govde).ContainsKey("order"), "eski biçim aynen");
+            Esit(400, C(s, "GET", "/api/Material/" + k1.Kod + "/movements", null, new Dictionary<string, string> { { "order", "desc" }, { "before", "x" } }).Durum, "imleç sayı değil");
+            Esit(400, C(s, "GET", "/api/Material/" + k1.Kod + "/movements", null, new Dictionary<string, string> { { "order", "yan" } }).Durum, "bilinmeyen yön");
+            Esit(404, C(s, "GET", "/api/Material/YOK-1/movements", null, geri).Durum, "olmayan kart");
+        }
+
         static void T_son_alis_fiyatlari_en_yeniden_en_cok_on_satir()
         {
             var s = Logo();
@@ -1098,7 +1124,7 @@ namespace LogoYardimcisi
         {
             var q = new Sorgular(7, 3);
             var hepsi = q.Hepsi().ToList();
-            Esit(36, hepsi.Count, "sorgu sayısı");
+            Esit(37, hepsi.Count, "sorgu sayısı");
             Icerir(q.SiparisIcerikBasligi, "O.TRCODE = 2 AND O.FICHENO = @no");
             Icerir(q.SiparisIcerikBasligi, "LG_007_03_ORFICHE");
             Icerir(q.SiparisIcerikSatirlari, "LG_007_03_ORFLINE");

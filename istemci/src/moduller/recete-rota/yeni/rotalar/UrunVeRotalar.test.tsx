@@ -160,9 +160,8 @@ describe('R1 Ürün ve rotalar: izinli', () => {
     await within(bolge).findByRole('button', { name: 'OP 10 Tornalama' });
     const etiketler = [...bolge.querySelectorAll('.tc-rr1-daletiket')].map((e) => e.textContent?.trim());
     // 2558 b/3: kol sütunundaki adımda dal etiketi tekrar edilmez; dal ve çarpanı kol başlığındadır. Birleşme adımı etiketini taşır.
-    expect(etiketler).toEqual(['Ana hat birleşir: A, B']);
-    const kolA = within(bolge).getByRole('region', { name: 'Dal A kolu' });
-    expect(kolA.querySelector('.tc-rr1-kolbas')?.textContent).toContain('1 mamul için 2 adet');
+    expect(etiketler).toEqual(['birleşir: A, B']);
+    expect(within(bolge).getByRole('group', { name: 'Dal A kolu' }).textContent).toContain('1 mamul için 2 adet');
     // Bir mamul için giren 2 kg; çarpan girenin miktarını büyütmez.
     const giren = within(bolge).getAllByText('HM-0012')[0]?.closest('.tc-rr1-cip');
     expect(giren?.querySelector('.tc-rr1-cq')?.textContent).toMatch(/^2/);

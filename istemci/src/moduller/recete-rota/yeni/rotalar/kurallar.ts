@@ -172,34 +172,53 @@ export function kolaEkle(adimlar: readonly Adim[], sonraId: string | null, a: Ad
   const yeni = hedef === null ? a : { ...a, dal: hedef, ...(dal == null && onceki?.adetCarpani != null ? { adetCarpani: onceki.adetCarpani } : {}) };
   return adimEkle(adimlar, sonraId, yeni);
 }
-// C: şemada kollar yan yana. Rota sırası parçalara bölünür: çatalla birleşme arası (açık dal varken) tek "kollar" parçasıdır, içinde ana hat ve her dal
-// kendi sütunudur; kalan adımlar tek tek. Birleştiren adım, başka açık dal kalmadıysa parçadan sonra gelir.
-export type SemaParcasi = { tur: 'adim'; id: string } | { tur: 'kollar'; seritler: { dal: string | null; idler: string[] }[] };
-export function kolParcalari(adimlar: readonly Adim[]): SemaParcasi[] {
+// 3188: dallı rotanın şema yerleşimi. Ana hat tek şeritte (0) kalır. Satır: adım, beklediği adımların en alttakinden (ve kendi hattındaki
+// önceki adımdan) bir sonraki satırdadır; dalın ilk adımı ayrıldığı adımın alt satırına, birleştiren adım birleşen dalların altına düşer.
+// Şerit: dal ayrıldığı satırdan birleştiği satıra kadar bir yan şeridi tutar; aynı anda açık olmayan dallar şeridi yeniden kullanır. Önce
+// başlayan, eşitse aralığı kısa olan, o da eşitse harfi önce gelen dal eksene yakın boş şeridi alır (kısa dal içte kalınca çizgiler az kesişir).
+// Veri ve öncül kuralı değişmez; yerleşim her çizimde hesaplanır.
+export interface DalYerlesimi {
+  satirlar: (string | null)[][]; seritler: number[]; yer: Map<string, { satir: number; serit: number }>;
+  // Dalın ilk adımı (başlık orada durur) ve birleşmeden kalan dalın son adımı (uyarı orada durur).
+  ilkAdimlar: Map<string, string>; acikUclar: Map<string, string>;
+}
+export function dalYerlesimi(adimlar: readonly Adim[]): DalYerlesimi {
   const l = sirali(adimlar);
-  const sonuc: SemaParcasi[] = [];
-  const acik = new Set<string>();
-  let bolge: Map<string | null, string[]> | null = null;
-  const kapat = () => {
-    if (!bolge) return;
-    const seritler = [...bolge.entries()].map(([dal, idler]) => ({ dal, idler }));
-    sonuc.push({ tur: 'kollar', seritler: [...seritler.filter((x) => x.dal === null), ...seritler.filter((x) => x.dal !== null)] });
-    bolge = null;
-  };
-  for (const a of l) {
-    for (const d of adimBirlesen(a)) acik.delete(d);
-    const dal = adimDali(a);
-    if (dal !== null) acik.add(dal);
-    if (dal !== null || acik.size > 0) {
-      bolge ??= new Map();
-      bolge.set(dal, [...(bolge.get(dal) ?? []), a.id]);
-    } else {
-      kapat();
-      sonuc.push({ tur: 'adim', id: a.id });
-    }
+  const onc = adimOnculleri(l);
+  const satir = new Map<string, number>();
+  const son = new Map<string | null, number>();
+  l.forEach((a, i) => {
+    const onculler = onc[i] ?? [l[i - 1]].flatMap((x) => x ?? []);
+    const r = Math.max(0, (son.get(adimDali(a)) ?? -1) + 1, ...onculler.map((o) => (satir.get(o.id) ?? -1) + 1));
+    satir.set(a.id, r);
+    son.set(adimDali(a), r);
+  });
+  const SON = Number.POSITIVE_INFINITY;
+  const dallar = dalBilgileri(l).map((b) => ({
+    b, ilk: satir.get(b.adimlar[0]?.id ?? '') ?? 0,
+    bitis: b.birlesme ? (satir.get(b.birlesme.id) ?? 0) - 1 : SON,
+  })).sort((x, y) => x.ilk - y.ilk || (x.bitis - x.ilk) - (y.bitis - y.ilk) || (x.bitis === y.bitis ? 0 : x.bitis === SON ? 1 : -1) || x.b.dal.localeCompare(y.b.dal));
+  // Dallar sırayla ana hattın sağına ve soluna açılır: şema ortalı ve dar kalır.
+  const tercih = [1, -1, 2, -2, 3, -3, 4, -4];
+  const dolu = new Map<number, number>();
+  const dalSeridi = new Map<string, number>();
+  const ilkAdimlar = new Map<string, string>();
+  const acikUclar = new Map<string, string>();
+  for (const { b, ilk, bitis } of dallar) {
+    const serit = tercih.find((s) => (dolu.get(s) ?? -1) < ilk) ?? tercih.length + dalSeridi.size + 1;
+    dalSeridi.set(b.dal, serit);
+    dolu.set(serit, bitis);
+    const ilkAdim = b.adimlar[0]; const sonAdim = b.adimlar.at(-1);
+    if (ilkAdim) ilkAdimlar.set(ilkAdim.id, b.dal);
+    if (sonAdim && b.birlesme === null && !b.sonaKadar) acikUclar.set(sonAdim.id, b.dal);
   }
-  kapat();
-  return sonuc;
+  const yer = new Map(l.map((a) => [a.id, { satir: satir.get(a.id) ?? 0, serit: adimDali(a) === null ? 0 : dalSeridi.get(adimDali(a) ?? '') ?? 0 }]));
+  const kullanilan = [...yer.values()].map((y) => y.serit);
+  const seritler: number[] = [];
+  for (let s = Math.min(0, ...kullanilan); s <= Math.max(0, ...kullanilan); s++) seritler.push(s);
+  const satirlar: (string | null)[][] = Array.from({ length: Math.max(0, ...[...satir.values()].map((r) => r + 1)) }, () => seritler.map(() => null));
+  yer.forEach((y, id) => { const sr = satirlar[y.satir]; if (sr) sr[seritler.indexOf(y.serit)] = id; });
+  return { satirlar, seritler, yer, ilkAdimlar, acikUclar };
 }
 // C: adım sürüklenip bir kolun sütununa bırakılınca o kola geçer ve kolun son adımının ardına taşınır; ana hat sütununda dalı kalkar.
 export function kolaTasi(adimlar: readonly Adim[], adimId: string, dal: string | null, sonId: string): Adim[] {

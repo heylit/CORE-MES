@@ -121,8 +121,8 @@ const tasima = () => {
   return { dataTransfer: { effectAllowed: '', dropEffect: '', setData: (k: string, v: string) => { veri[k] = v; }, getData: (k: string) => veri[k] ?? '' } };
 };
 
-describe('2542 C: kollar şemada yan yana', () => {
-  it('çatalla birleşme arası kollar ayrı sütunlarda, başlıkta yer ve çarpan; adım başka kolun başlığına bırakılınca o kola geçer', async () => {
+describe('2542 C ve 3188: dallar şemada yana açılır', () => {
+  it('3188: dal ayrıldığı adımın altında yan hücrede açılır, ana hat tek sütunda kalır; etikette çarpan; adım başka dalın etiketine bırakılınca o dala geçer', async () => {
     const k = kur([
       adimOrnegi(),
       adimOrnegi({ id: 'o20', seq: 20, opNo: 20, dal: 'A', adetCarpani: 2, ins: [] }), adimOrnegi({ id: 'o30', seq: 30, opNo: 30, dal: 'B', ins: [] }),
@@ -130,22 +130,84 @@ describe('2542 C: kollar şemada yan yana', () => {
     ]);
     rrAc('/recete-rota/schema');
     const bolge = await bolumAc();
-    const kollar = await within(bolge).findByRole('group', { name: 'Paralel kollar' });
-    const a = within(kollar).getByRole('region', { name: 'Dal A kolu' });
-    const b = within(kollar).getByRole('region', { name: 'Dal B kolu' });
-    expect(within(a).getByRole('button', { name: 'OP 20 Tornalama' })).toBeTruthy();
-    expect(within(b).getByRole('button', { name: 'OP 30 Tornalama' })).toBeTruthy();
-    expect(within(a).getByText('OP 10 ardından başlar, OP 40 adımında birleşir.')).toBeTruthy();
+    const a = await within(bolge).findByRole('group', { name: 'Dal A kolu' });
+    const b = within(bolge).getByRole('group', { name: 'Dal B kolu' });
+    const hucre = (ad: string) => within(bolge).getByRole('button', { name: ad }).closest('.tc-rr1-dh');
+    expect(hucre('OP 20 Tornalama')).toBe(a.closest('.tc-rr1-dh'));
+    expect(hucre('OP 30 Tornalama')).toBe(b.closest('.tc-rr1-dh'));
+    // Izgara: başlık satırı, OP 10, dalların satırı, OP 40; üç sütun (sol dal, ana hat, sağ dal). Ana hat adımları aynı sütundadır.
+    const izgara = hucre('OP 10 Tornalama')?.parentElement;
+    expect(izgara?.classList.contains('tc-rr1-dallar-3')).toBe(true);
+    const sutun = (ad: string) => [...(izgara?.children ?? [])].indexOf(hucre(ad) as Element) % 3;
+    expect([sutun('OP 10 Tornalama'), sutun('OP 40 Tornalama')]).toEqual([1, 1]);
+    expect([sutun('OP 30 Tornalama'), sutun('OP 20 Tornalama')]).toEqual([0, 2]);
+    // Nereden ayrılıp nerede birleştiğini çizgi gösterir: uzun açıklama şemada yazılmaz, birleştiren adım etiketini taşır.
+    expect(within(bolge).queryByText(/ardından başlar/)).toBeNull();
+    expect(within(hucre('OP 40 Tornalama') as HTMLElement).getByText('birleşir: A, B')).toBeTruthy();
+    expect(within(a).getByText(/1 adım/)).toBeTruthy();
     expect((within(a).getByLabelText('Dal A: 1 mamul için adet') as HTMLInputElement).value).toBe('2');
-    expect(within(bolge).getByRole('button', { name: 'OP 40 Tornalama' }).closest('[aria-label="Paralel kollar"]')).toBeNull();
-    // 2550 a: kollu rotanın sütunu daralır (giren ve çıkan kartlar adımın üstünde ve altında); genişliğe sığdırma tarayıcıda ölçülür.
-    expect(kollar.parentElement?.classList.contains('tc-rr1-g3-dar')).toBe(true);
+    expect(within(bolge).queryByText('Birleşmiyor')).toBeNull();
 
     const t = tasima();
-    fireEvent.dragStart(within(b).getByRole('button', { name: 'OP 30 Tornalama' }), t);
-    fireEvent.drop(a.querySelector('.tc-rr1-kolbas')!, t);
+    fireEvent.dragStart(within(bolge).getByRole('button', { name: 'OP 30 Tornalama' }), t);
+    fireEvent.drop(a, t);
     await waitFor(() => { expect(k.govde).not.toBeNull(); }, BEKLE);
     expect(k.govde?.adimlar.map((x) => [x.opNo, x.dal, x.adetCarpani ?? null])).toEqual([[10, null, null], [20, 'A', 2], [30, 'A', 2], [40, null, null]]);
     expect(k.govde?.adimlar.at(-1)?.birlesen).toEqual(['A']);
   }, 30000);
+  it('3188: birleşmeyen dalın son adımının altında "Birleşmiyor" uyarısı durur', async () => {
+    kur([adimOrnegi(), adimOrnegi({ id: 'o20', seq: 20, opNo: 20, dal: 'A', ins: [] }), adimOrnegi({ id: 'o30', seq: 30, opNo: 30, ins: [] })]);
+    rrAc('/recete-rota/schema');
+    const bolge = await bolumAc();
+    const uyari = await within(bolge).findByText('Birleşmiyor');
+    expect(uyari.closest('.tc-rr1-dh')).toBe(within(bolge).getByRole('button', { name: 'OP 20 Tornalama' }).closest('.tc-rr1-dh'));
+  }, 30000);
+  it('3188: paletten dal etiketine bırakılan operasyon o dalın sonuna eklenir', async () => {
+    const k = kur([
+      adimOrnegi(),
+      adimOrnegi({ id: 'o20', seq: 20, opNo: 20, dal: 'A', ins: [] }), adimOrnegi({ id: 'o30', seq: 30, opNo: 30, dal: 'B', ins: [] }),
+      adimOrnegi({ id: 'o40', seq: 40, opNo: 40, birlesen: ['A', 'B'], ins: [] }),
+    ]);
+    rrAc('/recete-rota/schema');
+    const bolge = await bolumAc();
+    const b = await within(bolge).findByRole('group', { name: 'Dal B kolu' });
+    fireEvent.click(within(bolge).getByRole('button', { name: 'Operasyon paleti' }));
+    const palet = within(bolge).getByRole('complementary', { name: 'Operasyon paleti' });
+    const t = tasima();
+    fireEvent.dragStart(within(palet).getAllByRole('button', { name: /Tornalama/ })[0]!, t);
+    fireEvent.dragOver(b, t);
+    fireEvent.drop(b, t);
+    await waitFor(() => { expect(k.govde).not.toBeNull(); }, BEKLE);
+    expect(dallar(k.govde)).toEqual([[10, null, ''], [20, 'A', ''], [30, 'B', ''], [null, 'B', ''], [40, null, 'AB']]);
+  }, 30000);
+  it('3188: her dallı bağlantının üstünde bir akış çizgisi durur, gizli sekmede durur; dalsız rotada akış çizgisi yoktur', async () => {
+    kur([
+      adimOrnegi(),
+      adimOrnegi({ id: 'o20', seq: 20, opNo: 20, dal: 'A', ins: [] }), adimOrnegi({ id: 'o30', seq: 30, opNo: 30, dal: 'B', ins: [] }),
+      adimOrnegi({ id: 'o40', seq: 40, opNo: 40, birlesen: ['A', 'B'], ins: [] }),
+    ]);
+    rrAc('/recete-rota/schema');
+    const bolge = await bolumAc();
+    await within(bolge).findByRole('group', { name: 'Dal A kolu' });
+    // Beş bağlantı: OP 10'dan iki dala ayrılma, iki daldan OP 40'a birleşme ve eksende OP 10'dan OP 40'a inen ana hat.
+    await waitFor(() => { expect(bolge.querySelectorAll('path.tc-rr1-e-dalli')).toHaveLength(5); });
+    expect(bolge.querySelectorAll('path.tc-rr1-e-akis')).toHaveLength(5);
+    // Sekme gizlenince akış durur, geri gelince sürer; görünüş değişmez.
+    const svg = bolge.querySelector('svg.tc-rr1-edges');
+    vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden');
+    fireEvent(document, new Event('visibilitychange'));
+    await waitFor(() => { expect(svg?.classList.contains('tc-rr1-edges-dur')).toBe(true); });
+    vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('visible');
+    fireEvent(document, new Event('visibilitychange'));
+    await waitFor(() => { expect(svg?.classList.contains('tc-rr1-edges-dur')).toBe(false); });
+    vi.restoreAllMocks();
+    cleanup();
+    kur();
+    rrAc('/recete-rota/schema');
+    const duz = await bolumAc();
+    await within(duz).findByRole('button', { name: 'OP 30 Tornalama' });
+    await waitFor(() => { expect(duz.querySelectorAll('path.tc-rr1-e-ef').length).toBeGreaterThan(0); });
+    expect(duz.querySelectorAll('path.tc-rr1-e-akis, path.tc-rr1-e-dalli')).toHaveLength(0);
+  }, 30000);
 });
+
