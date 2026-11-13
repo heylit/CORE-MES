@@ -212,3 +212,11 @@
 @media (max-width: 767px) {
   .tc-sg-baglanti { display: flex; min-height: var(--dokunma); }
 }
+
+/* Onay bekliyor (3193 a) */
+.tc-ob-ozet { display: flex; flex-direction: column; gap: var(--pay-ince); min-width: 0; }
+.tc-ob-eylem { display: inline-flex; align-items: center; gap: var(--b-2); }
+.tc-ob-kararlar { display: flex; flex-direction: column; gap: var(--b-2); margin: 0; padding: 0; list-style: none; }
+.tc-ob-kararlar li { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2) var(--b-3); }
+.tc-ob-ozet > .tc-sm-kod { white-space: nowrap; }
+.tc-ob-ozet .tc-ob-eylem { flex-wrap: wrap; }

@@ -58,6 +58,20 @@ describe('Tablo', () => {
     expect(adet?.classList.contains('tc-tablo-tam')).toBe(false);
   });
 
+  it('buyuk secim kutusu ve birincil toplu eylem yalniz istenen tabloda; varsayilan degismez', () => {
+    const satirlar = [{ no: 1, ad: 'A', adet: 3 }];
+    const eylem = { anahtar: 'sil', baslik: 'Seçilenleri sil', simge: 'x' as const, yap: () => undefined };
+    const { unmount } = render(<Tablo etiket="Düz" sutunlar={SUTUNLAR} satirlar={satirlar} satirAnahtari={(s) => s.no} toplu={{ eylemler: [eylem] }} />);
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Seç: A' }));
+    expect(screen.getByRole('table').closest('.tc-tablo-kap')?.hasAttribute('data-buyuk-secim')).toBe(false);
+    expect(screen.getByRole('button', { name: 'Seçilenleri sil' }).className).toContain('tc-dugme-ikincil');
+    unmount();
+    render(<Tablo etiket="Büyük" sutunlar={SUTUNLAR} satirlar={satirlar} satirAnahtari={(s) => s.no} toplu={{ buyukSecim: true, eylemler: [{ ...eylem, ton: 'birincil' }] }} />);
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Seç: A' }));
+    expect(screen.getByRole('table').closest('.tc-tablo-kap')?.hasAttribute('data-buyuk-secim')).toBe(true);
+    expect(screen.getByRole('button', { name: 'Seçilenleri sil' }).className).toContain('tc-dugme-birincil');
+  });
+
   it('kabina sigmayan tablo kart kipine gecer, kap genisleyince tabloya doner', () => {
     // jsdom yerlesim yapmaz: kabin ve icerigin genisligi buradan verilir.
     const olcu = { kap: 600, icerik: 836 };

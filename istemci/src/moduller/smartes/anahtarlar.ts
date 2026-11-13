@@ -11,5 +11,6 @@ export const anahtarlar = {
   gelenler: ['smartes', 'gelenler'] as const,
   hesaplar: ['smartes', 'hesaplar'] as const,
   ham: (tur: string, id: number) => ['smartes', 'ham', tur, id] as const,
+  onay: (gorunum: 'bekliyor' | 'karar') => ['smartes', 'adet-onaylari', gorunum] as const,
   liste: (ad: string, sayfa: number) => ['smartes', 'liste', ad, sayfa] as const,
 };

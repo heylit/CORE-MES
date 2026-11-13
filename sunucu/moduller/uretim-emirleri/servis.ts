@@ -70,6 +70,20 @@ export async function kayitAniyla<T>(db: Db, an: string | undefined, is: () => P
   }
 }
 
+// 3173: SmartES onayından gelen sayım, onay kaydının kimliğini taşır; kapsam yalnız o komutun çağrısıdır. Kimlik sayım defterinde
+// tür başına tekildir: aynı onay ikinci kez yazılamaz.
+const kayitKaynaklari = new WeakMap<Db, number>();
+
+export async function smartesKaynagiyla<T>(db: Db, kaynakKimligi: number, is: () => Promise<T>): Promise<T> {
+  if (kayitKaynaklari.has(db)) throw new Error('Sayım kaynağı kapsamı iç içe açılamaz.');
+  kayitKaynaklari.set(db, kaynakKimligi);
+  try {
+    return await is();
+  } finally {
+    kayitKaynaklari.delete(db);
+  }
+}
+
 // Emir kilitlendikten sonra çağrılır: son an kilit altında okunur, aynı emre eşzamanlı yazı araya giremez.
 async function komutAni(db: Db, emirId: number): Promise<string> {
   const simdi = await sorgular.anAl(db);
@@ -831,6 +845,7 @@ async function saglamYaz(
 ): Promise<string | null> {
   const { isEmriId } = await sorgular.sayimEkle(db, {
     emirId: emir.id, kisiId, istasyonId, tur: kararBekliyor ? 'karar_bekliyor' : 'saglam', adet, hurdaNedeniId: null, duzeltme, an, refakatPartisiId, isEmriId: adimId, makineId,
+    kaynakKimligi: kayitKaynaklari.get(db) ?? null,
   });
   return saglamSayimiBildir(db, {
     uretimEmriId: emir.id, isEmriId, istasyonId, kisiId, fark: adet, kaliteDurumu: kararBekliyor ? 'karar_bekliyor' : 'serbest', refakatPartisiId,
@@ -898,6 +913,7 @@ export async function emirSayim(
     if (hurdaNedeniId === null) throw dogrulama(HURDA_NEDENI_YOK, 'hurdaNedeniId');
     const { isEmriId } = await sorgular.sayimEkle(db, {
       emirId: id, kisiId, istasyonId, tur: 'hurda', adet: govde.adet, hurdaNedeniId, duzeltme: govde.adet < 0, an: await komutAni(db, id), refakatPartisiId, isEmriId: adimId, makineId,
+      kaynakKimligi: kayitKaynaklari.get(db) ?? null,
     });
     uyari = await hurdaSayimiBildir(db, { uretimEmriId: id, isEmriId, istasyonId, kisiId, hurdaNedeniId, fark: govde.adet, refakatPartisiId });
   }

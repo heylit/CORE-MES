@@ -1279,3 +1279,36 @@ export function tanimliSaniyeler(isler: readonly { stokNo: string; opNo: number;
   return sonuc;
 }
 export const tanimliAnahtari = (stokNo: string | null, operasyonKodu: string | null): string => `${stokNo ?? ''}\u001f${operasyonKodu ?? ''}`;
+/* ---------------- Adet onayı (3173 b, 3193 a; ADR 0013 eki) ---------------- */
+
+export type AdetOnayTuru = 'saglam' | 'red';
+export interface AdetOnayFarki { tur: AdetOnayTuru; adet: number; duzeltme: boolean }
+
+// SmartES satırındaki güncel adet ile o satır için kuyruğa girmiş toplam (reddedilen dahil) arasındaki fark onaya gelir: aynı adet
+// iki kez gelmez, reddedilen yeniden gelmez, SmartES'te sonradan değişen adet farkı kadar "düzeltme" satırıdır. Gelmeyen (null) adet
+// fark üretmez: sıfır uydurulmaz.
+export function adetOnayFarklari(
+  guncel: { saglam: number | null; red: number | null },
+  onceki: readonly { tur: AdetOnayTuru; toplam: number; satir: number }[],
+): AdetOnayFarki[] {
+  const farklar: AdetOnayFarki[] = [];
+  for (const tur of ['saglam', 'red'] as const) {
+    const deger = guncel[tur];
+    if (deger === null) continue;
+    const o = onceki.find((x) => x.tur === tur);
+    const fark = deger - (o?.toplam ?? 0);
+    if (fark !== 0) farklar.push({ tur, adet: fark, duzeltme: (o?.satir ?? 0) > 0 });
+  }
+  return farklar;
+}
+
+// İstasyon SmartES'e geçtiği andan önce başlamış satır kuyruğa girmez (o üretim terminalden sayılmıştır); başlangıcı gelmeyen satır da girmez.
+export function onayaGirerMi(baslangic: Date | null, gecerlilik: Date): boolean {
+  return baslangic !== null && baslangic.getTime() >= gecerlilik.getTime();
+}
+
+export const ONAY_ILETILERI = {
+  karardaDegil: 'Kayıt artık onay beklemiyor.',
+  redIslenmez: 'Red adedi fire eşlemesi gelince işlenir.',
+  isEmriYok: 'SmartES iş emri CORE iş emriyle eşleşmedi.',
+} as const;

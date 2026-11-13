@@ -1,6 +1,6 @@
 import { kayitNoktasi } from '#cekirdek/db.ts';
 import type { Db, Veritabani } from '#cekirdek/db.ts';
-import { bulunamadi, dogrulama } from '#cekirdek/hata.ts';
+import { bulunamadi, cakisma, dogrulama } from '#cekirdek/hata.ts';
 import { kisitKorumali } from '#cekirdek/kisit.ts';
 import { sayfaliListe } from '#cekirdek/liste.ts';
 import { surumluGuncelle } from '#cekirdek/surum.ts';
@@ -8,7 +8,7 @@ import type {
   AlarmlarCevabi, CanliMakineAyrintisiCevabi, MakineBulgulariCevabi, CanliMakinelerCevabi, DurumCevabi, DuruslarCevabi, EslemeCevabi, EslemelerCevabi,
   GidenCevabi, IsEmriDurumlariCevabi, SmartesBaglantiDurumu, GelenAdEsleGovdesi, GelenAdKaldirGovdesi, GelenAdlarCevabi, GelenAdOnerileriOnaylaGovdesi,
   OnerileriOnaylaCevabi, OnerileriOnaylaGovdesi, SmartesHazirlikCevabi, SmartesKontrolCevabi, AmbarHareketleriCevabi, FireHareketleriCevabi, GelenlerCevabi,
-  HamKayitCevabi, KaliteOlcumleriCevabi, HesaplarCevabi,
+  HamKayitCevabi, KaliteOlcumleriCevabi, HesaplarCevabi, AdetKarariCevabi, AdetOnaylariCevabi,
 } from '#paylasilan/sozlesme/smartes.ts';
 import type { IkinciMenuSayaclari } from '#paylasilan/sayfa-tanimi.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
@@ -17,7 +17,10 @@ import { sistemAyariOku } from '../ayarlar/disari.ts';
 import { durusNedenleriniListele, hurdaNedenleriniListele } from '../durus-nedenleri/disari.ts';
 import { istasyonlar, makineler, operasyonTipleri } from '../istasyonlar/disari.ts';
 import { malzemeOzetleri } from '../malzemeler/disari.ts';
-import { gunlukAralikAdetleri, isEmriOzeti, isEmriOzetleri, isEmriZamanlari, makinelerdekiIsler, planlanacakIsEmirleri } from '../uretim-emirleri/disari.ts';
+import {
+  gunlukAralikAdetleri, isEmriOzeti, isEmriOzetleri, isEmriZamanlari, makinelerdekiIsler, planlanacakIsEmirleri, smartesSayimi,
+} from '../uretim-emirleri/disari.ts';
+import { kisiAdlari } from '../kisiler/disari.ts';
 import type { IstemciHatasi, IstemciSonucu, SmartesIstemcisi } from './istemci.ts';
 import {
   adetDegistiMi, alarmOku, alarmParametreleri, alarmSatiri, ambarOku, MAKINE_LISTESI_METODU, smartesMakineleri, BELIRSIZ_ILETISI, durusOku,
@@ -30,11 +33,12 @@ import {
   ilerlemeParametreleri, MAKINE_AYARI, MAKINE_BILGI_METODU, MAKINE_LISTESI_YENILEME_MS, MAKINE_OKUMA_ARALIGI_MS, MAKINE_TUR_TAVANI_MS,
   makineBilgiParametreleri, makineBilgisiOku, turSirasi, adAnahtari, adDurumu, kodOnerileri, LISTE_METOTLARI, LISTE_TURLERI, listeKayitlari, listeOkunmaliMi,
   listeParametreleri, nedenOnerisi, gelenKalemleri, hamAlanlari, cevrimOku, cevrimSaniyesi, HESAP_METOTLARI, HESAP_TURLERI, hesapOkunmaliMi,
-  hesapParametreleri, OEE_PENCERESI_GUN, oeeOku, oeeYuzdeleri, tanimliAnahtari, tanimliSaniyeler, zorlaOkunabilirMi,
+  hesapParametreleri, OEE_PENCERESI_GUN, oeeOku, oeeYuzdeleri, tanimliAnahtari, tanimliSaniyeler, zorlaOkunabilirMi, adetOnayFarklari, ONAY_ILETILERI,
+  onayaGirerMi,
 } from './kurallar.ts';
 import type {
   AkisAyari, AktifMakine, EslemeTuru, GidecekIsEmri, KaliteAmbarKaynagi, KodOnerisi, ListeTuru, MakineDurumu, OkumaKaynagi, TanimKaydi, TanimTuru,
-  CizelgeParcasi, HesapTuru,
+  CizelgeParcasi, HesapTuru, IsEmriDurumuKaydi,
 } from './kurallar.ts';
 import { smartesTarihi } from './soap.ts';
 import type { Parametreler, TabloSatiri } from './soap.ts';
@@ -559,7 +563,10 @@ export async function durum(db: Db, istemci: SmartesIstemcisi | null): Promise<D
 
 export async function menuSayaclari(db: Db): Promise<IkinciMenuSayaclari> {
   const n = await s.sayilar(db);
-  return { 'is-emri-durumlari': n.isEmriDurumu, duruslar: n.durus, alarmlar: n.alarm, giden: n.gidenHatali, eslemeler: await s.degisenAdSayisi(db) };
+  return {
+    'is-emri-durumlari': n.isEmriDurumu, duruslar: n.durus, alarmlar: n.alarm, giden: n.gidenHatali, eslemeler: await s.degisenAdSayisi(db),
+    'onay-bekliyor': await s.bekleyenOnaySay(db),
+  };
 }
 
 interface TmiKaydi {
@@ -1439,4 +1446,68 @@ export async function makineBulgulari(db: Db, istemci: SmartesIstemcisi | null, 
       sayim: sayimGrafigi,
     },
   };
+}
+/* ---------------- Adet onayı (3173 b, 3193 a; ADR 0013 eki) ---------------- */
+
+// Okunan satırın onaya girmemiş farkı kuyruğa yazılır. Yalnız sayım kaynağı SmartES olan istasyonun, o istasyon SmartES'e geçtikten
+// sonra başlamış satırı girer (gecerlilik null: istasyon terminalden sayılıyor, satır yalnız SmartES sayfasında durur). Red adedi fire
+// eşlemesi (3174) gelince kuyruğa girer: şimdi yazılırsa o güne dek reddedilmiş sayılıp bir daha gelmezdi.
+export async function adetOnayinaAl(db: Db, k: IsEmriDurumuKaydi, zaman: Date, gecerlilik: Date | null): Promise<number> {
+  if (gecerlilik === null || !onayaGirerMi(k.baslangic, gecerlilik)) return 0;
+  const farklar = adetOnayFarklari({ saglam: k.saglam, red: null }, await s.onayToplamlari(db, k.smartesId));
+  for (const f of farklar) await s.onaySatiriEkle(db, { smartesId: k.smartesId, ...f, zaman });
+  return farklar.length;
+}
+
+export async function adetOnaylari(db: Db, q: Sayfa & { gorunum: 'bekliyor' | 'karar' }): Promise<AdetOnaylariCevabi> {
+  const cevap = await sayfaliListe(q, { say: () => s.onaySay(db, q.gorunum), satirlar: (d) => s.onaySatirlari(db, q.gorunum, d) });
+  const isEmirleri = await isEmriOzetleri(db, cevap.satirlar.flatMap((x) => (x.isEmriId === null ? [] : [x.isEmriId])));
+  const adlar = await kisiAdlari(db, cevap.satirlar.flatMap((x) => (x.kararVerenKisiId === null ? [] : [x.kararVerenKisiId])));
+  return {
+    ...cevap,
+    satirlar: cevap.satirlar.map(({ isEmriId, kararVerenKisiId, ...x }) => {
+      const ie = isEmriId === null ? undefined : isEmirleri.get(isEmriId);
+      return {
+        ...x,
+        emirId: ie?.uretimEmriId ?? null, emirNo: ie?.emirNo ?? null, opNo: ie?.opNo ?? null,
+        kararVeren: kararVerenKisiId === null ? null : (adlar.get(kararVerenKisiId) ?? null),
+      };
+    }),
+  };
+}
+
+// Her satır kendi kayıt noktasında işlenir: biri reddedilirse (adım çalışmıyor, emir kapalı) ötekiler yine yazılır, reddedilen nedeniyle döner
+// ve onay bekler. Sayım üretim-emirleri komutundan geçer; makine SmartES makine eşlemesinden verilir, eşlenmemişse komut seçer.
+export async function adetOnayla(db: Db, kisiId: number, idler: readonly number[]): Promise<AdetKarariCevabi> {
+  const makineler = new Map((await s.eslemeler(db, 'makine')).map((e) => [e.smartesKod, e.tmiId]));
+  const zaman = new Date().toISOString();
+  let islenen = 0;
+  const hatalar: AdetKarariCevabi['hatalar'] = [];
+  for (const id of new Set(idler)) {
+    const r = await kayitNoktasi(db, async () => {
+      const satir = await s.onaySatiriKilitle(db, id);
+      if (satir === null || satir.durum !== 'bekliyor') throw cakisma(ONAY_ILETILERI.karardaDegil);
+      if (satir.tur !== 'saglam') throw cakisma(ONAY_ILETILERI.redIslenmez);
+      const ie = satir.isEmriId === null ? null : await isEmriOzeti(db, satir.isEmriId);
+      if (ie === null) throw cakisma(ONAY_ILETILERI.isEmriYok);
+      const makineId = satir.makineKodu === null ? undefined : makineler.get(satir.makineKodu);
+      await smartesSayimi(db, kisiId, ie.uretimEmriId, { tur: 'saglam', adet: satir.adet, ...(makineId === undefined ? {} : { makineId }) }, { onayKimligi: id, isEmriId: ie.id });
+      await s.onayKarariYaz(db, id, { durum: 'onaylandi', kisiId, zaman, redNedeni: null });
+    });
+    if (r.tamam) islenen++;
+    else hatalar.push({ id, ileti: r.hata.message });
+  }
+  return { islenen, hatalar };
+}
+
+// Red CORE'a yazmaz ve SmartES'e dokunmaz (ADR 0013 karar 6); reddedilen adet aynı satırdan yeniden gelmez.
+export async function adetReddet(db: Db, kisiId: number, idler: readonly number[], neden: string): Promise<AdetKarariCevabi> {
+  const zaman = new Date().toISOString();
+  let islenen = 0;
+  const hatalar: AdetKarariCevabi['hatalar'] = [];
+  for (const id of new Set(idler)) {
+    if (await s.onayKarariYaz(db, id, { durum: 'reddedildi', kisiId, zaman, redNedeni: neden })) islenen++;
+    else hatalar.push({ id, ileti: ONAY_ILETILERI.karardaDegil });
+  }
+  return { islenen, hatalar };
 }

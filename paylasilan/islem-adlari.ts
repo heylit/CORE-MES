@@ -177,6 +177,7 @@ export const ISLEM_ADLARI: Readonly<Record<VeriIslemi, string>> = {
   'saat.uyari-ustlen': 'Saatten uyarıyı üstlenme',
   'oturum.ortak-cihaz': 'Ortak cihazları kaydetme ve iptal etme',
   'smartes.esleme-yaz': 'SmartES kod eşlemelerini düzenleme',
+  'smartes.adet-onayla': 'SmartES adetlerini onaylama',
   'stok.giris': 'Stok girişi',
   'stok.cikis': 'Stok çıkışı',
   'stok.transfer': 'Stok transferi',

@@ -402,3 +402,45 @@ export type GelenAdlarCevabi = z.output<typeof gelenAdlarCevabi>;
 export type GelenAdEsleGovdesi = z.input<typeof gelenAdEsleGovdesi>;
 export type GelenAdKaldirGovdesi = z.input<typeof gelenAdKaldirGovdesi>;
 export type GelenAdOnerileriOnaylaGovdesi = z.input<typeof gelenAdOnerileriOnaylaGovdesi>;
+
+// Adet onayı (3173 b, 3193 a; ADR 0013 eki): SmartES'ten okunan adet onaylanınca üretim emrine yazılır; red CORE'a yazmaz, SmartES'e dokunmaz.
+export const SMARTES_ADET_ONAY_DURUMLARI = ['bekliyor', 'onaylandi', 'reddedildi'] as const;
+export type SmartesAdetOnayDurumu = (typeof SMARTES_ADET_ONAY_DURUMLARI)[number];
+
+export const adetOnaySorgusu = z.object({ ...sayfaSorguAlanlari, gorunum: z.enum(['bekliyor', 'karar']).prefault('bekliyor') });
+
+export const adetOnaylariCevabi = listeCevapSemasi(z.object({
+  id: z.number().int(),
+  smartesId: z.number().int(),
+  tur: z.enum(['saglam', 'red']),
+  adet: z.number().int(),
+  // SmartES'te sonradan değişen adedin farkı.
+  duzeltme: z.boolean(),
+  durum: z.enum(SMARTES_ADET_ONAY_DURUMLARI),
+  olusma: zamanSemasi,
+  isEmriNo: z.string().nullable(),
+  // CORE iş emri eşleşmediyse null: onaylanamaz.
+  emirId: z.number().int().nullable(),
+  emirNo: z.string().nullable(),
+  opNo: z.number().int().nullable(),
+  // SmartES satırının şimdiki operatör sağlamı ve makine sayacı: tutmuyorsa onaylayan görsün diye. Gelmediyse null.
+  smartesSaglam: z.number().int().nullable(),
+  makineSaglam: z.number().int().nullable(),
+  istasyonKodu: z.string().nullable(),
+  makineKodu: z.string().nullable(),
+  baslangic: zamanSemasi.nullable(),
+  kararVeren: z.string().nullable(),
+  kararZamani: zamanSemasi.nullable(),
+  redNedeni: z.string().nullable(),
+}));
+
+const onayKimlikleri = z.array(z.number().int().positive()).min(1).max(200);
+export const adetOnaylaGovdesi = z.object({ idler: onayKimlikleri });
+export const adetReddetGovdesi = z.object({ idler: onayKimlikleri, neden: z.string().trim().min(1, 'Red nedeni zorunlu.').max(500, 'Red nedeni en çok 500 karakter.') });
+// Toplu karar satır satır işlenir: işlenemeyen satır (adım çalışmıyor, emir kapalı, arada karar verilmiş) nedeniyle döner, ötekiler işlenir.
+export const adetKarariCevabi = z.object({
+  islenen: z.number().int(),
+  hatalar: z.array(z.object({ id: z.number().int(), ileti: z.string() })),
+});
+export type AdetOnaylariCevabi = z.output<typeof adetOnaylariCevabi>;
+export type AdetKarariCevabi = z.output<typeof adetKarariCevabi>;

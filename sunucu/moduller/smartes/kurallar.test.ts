@@ -7,7 +7,7 @@ import {
   DURUM_KODLARI, ilerlemeOku, ISTEGE_BAGLI_METOTLAR, makineBilgisiOku, makineDurumu, turSirasi, yasakMetotMu, MAKINE_BILGI_METODU, ILERLEME_METODU,
   adBenzerligi, adDurumu, adNormali, BENZERLIK_ESIGI, kodOnerileri, LISTE_METOTLARI, LISTE_TURLERI, listeKaydiOku, listeKayitlari, listeOkunmaliMi,
   listeParametreleri, nedenOnerisi, cevrimOku, cevrimSaniyesi, gelenKalemleri, hamAlanlari, HESAP_METOTLARI, HESAP_TURLERI, hesapOkunmaliMi,
-  hesapParametreleri, oeeOku, oeeYuzdeleri, tanimliAnahtari, tanimliSaniyeler,
+  hesapParametreleri, oeeOku, oeeYuzdeleri, tanimliAnahtari, tanimliSaniyeler, adetOnayFarklari, onayaGirerMi,
 } from './kurallar.ts';
 import type { GidecekIsEmri } from './kurallar.ts';
 
@@ -403,5 +403,21 @@ describe('SmartES’ten gelen bilgiler ve SmartES hesapları (SME-32, SME-33)', 
     assert.equal(hesapOkunmaliMi(null, simdi), true);
     assert.equal(hesapOkunmaliMi({ sonDeneme: new Date(simdi.getTime() - 59 * DK) }, simdi), false);
     assert.equal(hesapOkunmaliMi({ sonDeneme: new Date(simdi.getTime() - 60 * DK) }, simdi), true);
+  });
+});
+
+describe('Adet onayı kuralları (3173 b, 3193 a)', () => {
+  test('fark kuyruğa girmiş toplamın (reddedilen dahil) üstündendir; ilk satır düzeltme değildir, gelmeyen adet fark üretmez', () => {
+    assert.deepEqual(adetOnayFarklari({ saglam: 10, red: null }, []), [{ tur: 'saglam', adet: 10, duzeltme: false }]);
+    assert.deepEqual(adetOnayFarklari({ saglam: 10, red: 2 }, [{ tur: 'saglam', toplam: 10, satir: 1 }]), [{ tur: 'red', adet: 2, duzeltme: false }]);
+    assert.deepEqual(adetOnayFarklari({ saglam: 7, red: null }, [{ tur: 'saglam', toplam: 10, satir: 2 }]), [{ tur: 'saglam', adet: -3, duzeltme: true }]);
+    assert.deepEqual(adetOnayFarklari({ saglam: null, red: null }, [{ tur: 'saglam', toplam: 10, satir: 1 }]), []);
+    assert.deepEqual(adetOnayFarklari({ saglam: 0, red: null }, []), []);
+  });
+  test('istasyon SmartES\'e geçmeden başlamış ya da başlangıcı gelmeyen satır onaya girmez', () => {
+    const gecis = new Date('2026-11-13T10:00:00Z');
+    assert.equal(onayaGirerMi(new Date('2026-11-13T09:59:59Z'), gecis), false);
+    assert.equal(onayaGirerMi(new Date('2026-11-13T10:00:00Z'), gecis), true);
+    assert.equal(onayaGirerMi(null, gecis), false);
   });
 });

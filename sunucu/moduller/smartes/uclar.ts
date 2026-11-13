@@ -6,7 +6,7 @@ import {
   eslemeKaldirGovdesi, eslemelerCevabi, eslemeSorgusu, gidenCevabi, isEmriDurumlariCevabi, makineBulgulariCevabi, sayfaSorgusu, smartesHazirlikCevabi,
   smartesKontrolCevabi, gelenAdEsleGovdesi, gelenAdKaldirGovdesi, gelenAdlarCevabi, gelenAdOnerileriOnaylaGovdesi, gelenAdSorgusu, listeOkuCevabi,
   onerileriOnaylaCevabi, onerileriOnaylaGovdesi, ambarHareketleriCevabi, fireHareketleriCevabi, gelenlerCevabi, hamKayitCevabi, hamKayitParametresi,
-  kaliteOlcumleriCevabi, hesaplarCevabi,
+  kaliteOlcumleriCevabi, hesaplarCevabi, adetKarariCevabi, adetOnaylaGovdesi, adetOnaylariCevabi, adetOnaySorgusu, adetReddetGovdesi,
 } from '#paylasilan/sozlesme/smartes.ts';
 import { ortamIstemcisi, ortamOzeti } from './baglanti.ts';
 import * as servis from './servis.ts';
@@ -106,6 +106,31 @@ export const uclar = [
     govde: gelenAdOnerileriOnaylaGovdesi,
     cevap: onerileriOnaylaCevabi,
     isle: ({ db, kullanici, govde }) => servis.gelenAdOnerileriniOnayla(db, kullanici.id, govde),
+  }),
+  // 3193 a: listeyi sayfayı gören görür; onay ve red `smartes.adet-onayla` ister. Onay üretim emrine ve stoğa yazar (ADR 0013 eki).
+  uc({
+    yontem: 'GET',
+    yol: '/smartes/adet-onaylari',
+    yetki: { biri: ['sayfa.smartes'] },
+    sorgu: adetOnaySorgusu,
+    cevap: adetOnaylariCevabi,
+    isle: ({ db, sorgu }) => servis.adetOnaylari(db, sorgu),
+  }),
+  uc({
+    yontem: 'POST',
+    yol: '/smartes/adet-onaylari/onayla',
+    yetki: 'smartes.adet-onayla',
+    govde: adetOnaylaGovdesi,
+    cevap: adetKarariCevabi,
+    isle: ({ db, kullanici, govde }) => servis.adetOnayla(db, kullanici.id, govde.idler),
+  }),
+  uc({
+    yontem: 'POST',
+    yol: '/smartes/adet-onaylari/reddet',
+    yetki: 'smartes.adet-onayla',
+    govde: adetReddetGovdesi,
+    cevap: adetKarariCevabi,
+    isle: ({ db, kullanici, govde }) => servis.adetReddet(db, kullanici.id, govde.idler, govde.neden),
   }),
   uc({
     yontem: 'GET',

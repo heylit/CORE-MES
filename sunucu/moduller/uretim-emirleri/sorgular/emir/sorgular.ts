@@ -188,14 +188,17 @@ export interface SayimYazisi {
   isEmriId?: number | null;
   // 2009 b: sayımın makinesi; verilmezse null (makinesiz iş ya da makinesi seçilemeyen sayım).
   makineId?: number | null;
+  // 3173: SmartES kaynaklı sayım, SmartES onay kaydının kimliğiyle; verilmezse kaynak boş kalır (terminal ve elle ayrımı henüz yazılmıyor).
+  kaynakKimligi?: number | null;
 }
 
 // Satırın bağlandığı iş emri döner (sağlam sayım stoka bu iş emriyle yansır); iş emirsiz eski emirde null.
 export async function sayimEkle(db: Db, y: SayimYazisi): Promise<{ isEmriId: number | null }> {
   const satir = await db.tek<{ isEmriId: number | null }>(
-    `INSERT INTO uretim_sayimi (emir_id, kisi_id, istasyon_id, tur, adet, hurda_nedeni_id, duzeltme, zaman, is_emri_id, refakat_partisi_id, makine_id)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8::timestamptz, ${ADIM_IS_EMRI('$1', '$10')}, $9, $11) RETURNING is_emri_id AS "isEmriId"`,
-    [y.emirId, y.kisiId, y.istasyonId, y.tur, y.adet, y.hurdaNedeniId, y.duzeltme, y.an, y.refakatPartisiId, y.isEmriId ?? null, y.makineId ?? null],
+    `INSERT INTO uretim_sayimi (emir_id, kisi_id, istasyon_id, tur, adet, hurda_nedeni_id, duzeltme, zaman, is_emri_id, refakat_partisi_id, makine_id, kaynak, kaynak_kimligi)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8::timestamptz, ${ADIM_IS_EMRI('$1', '$10')}, $9, $11, CASE WHEN $12::bigint IS NULL THEN NULL ELSE 'smartes' END, $12)
+     RETURNING is_emri_id AS "isEmriId"`,
+    [y.emirId, y.kisiId, y.istasyonId, y.tur, y.adet, y.hurdaNedeniId, y.duzeltme, y.an, y.refakatPartisiId, y.isEmriId ?? null, y.makineId ?? null, y.kaynakKimligi ?? null],
   );
   return { isEmriId: satir?.isEmriId ?? null };
 }

@@ -84,6 +84,14 @@ export const emirSayim = (
   db, uretenKisi(kullanici), id, govde,
   { kararBekliyor: secenek?.kararBekliyor, duzeltebilir: islemVarMi(kullanici, SAYIM_DUZELTME_ISLEMI), isEmriId: secenek?.isEmriId, ilkParca: secenek?.ilkParca },
 ));
+// 3173 (ADR 0013 eki): onaylanan SmartES sayımı terminal sayımıyla aynı komuttan geçer (ilk parça, aşım, stok bildirimi aynı);
+// satır "SmartES" kaynağını ve onay kaydının kimliğini taşır, aynı onay ikinci kez yazılamaz (kısıt). Terminal yetkisi istemez: onay
+// yetkisini çağıran (smartes) denetler; kişi onaylayandır. Adım çalışmıyorsa komutun reddi aynen döner.
+export const smartesSayimi = (
+  db: Db, onaylayanId: number, id: number, govde: SayimKaydi, g: { onayKimligi: number; isEmriId: number; an?: string },
+): Promise<{ emir: Emir; uyari: string | null }> => servis.smartesKaynagiyla(db, g.onayKimligi, () => servis.kayitAniyla(db, g.an, () => servis.emirSayim(
+  db, onaylayanId, id, govde, { duzeltebilir: true, isEmriId: g.isEmriId },
+)));
 // Karar bekleyen sayımı kalite kararıyla kapatır; terminal yetkisi istemez, kalite yetkisini çağıran denetler. Bekleyen yoksa adet 0.
 // isEmriId verilirse yalnız o adımın bekleyeni kapanır (744 a).
 export const kararliSayimiSonuclandir = (db: Db, kisiId: number, id: number, karar: KaliteKarari, isEmriId?: number | null): Promise<{ emir: Emir; adet: number }> =>

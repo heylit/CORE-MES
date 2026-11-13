@@ -1008,3 +1008,108 @@ export async function hesapSayilari(db: Db): Promise<{ oee: number; cevrim: numb
   if (r === null) throw new Error('Sayılar okunamadı.');
   return r;
 }
+
+/* ---------------- Adet onayı (3173 b, 3193 a) ---------------- */
+
+export interface OnayToplamSatiri { tur: 'saglam' | 'red'; toplam: number; satir: number }
+
+// Satırın kuyruğa girmiş bütün adetleri (reddedilen dahil): fark bunun üstünden hesaplanır.
+export function onayToplamlari(db: Db, smartesId: number): Promise<OnayToplamSatiri[]> {
+  return db.sorgu<OnayToplamSatiri>(
+    `SELECT tur, sum(adet)::int AS toplam, count(*)::int AS satir FROM smartes_adet_onayi WHERE smartes_id = $1 GROUP BY tur`,
+    [smartesId],
+  );
+}
+
+export async function onaySatiriEkle(db: Db, y: { smartesId: number; tur: 'saglam' | 'red'; adet: number; duzeltme: boolean; zaman: Date }): Promise<void> {
+  await db.sorgu(
+    'INSERT INTO smartes_adet_onayi (smartes_id, tur, adet, duzeltme, olusma) VALUES ($1, $2, $3, $4, $5)',
+    [y.smartesId, y.tur, y.adet, y.duzeltme, y.zaman],
+  );
+}
+
+// SmartES iş emri no'su giden kutusunda tekil değildir: yalnız tek CORE iş emrine çıkan no eşleşmiş sayılır, birden çoğu eşleşmemiş
+// gibi görünür ve onaylanamaz (yanlış emre sayım ve stok yazılmasın).
+const TEK_GIDEN = `LEFT JOIN LATERAL (SELECT CASE WHEN count(*) = 1 THEN min(x.is_emri_id) END AS is_emri_id
+                    FROM smartes_giden x WHERE x.smartes_is_emri_no = d.is_emri_no) g ON true`;
+
+export interface KilitliOnaySatiri {
+  id: number;
+  tur: 'saglam' | 'red';
+  adet: number;
+  durum: 'bekliyor' | 'onaylandi' | 'reddedildi';
+  isEmriId: number | null;
+  makineKodu: string | null;
+}
+
+// Onay ve red aynı satırı iki kez işlemesin diye satır kilitlenir. SmartES iş emri no'su giden kutusundaki karşılığıyla CORE iş emrine bağlanır.
+export function onaySatiriKilitle(db: Db, id: number): Promise<KilitliOnaySatiri | null> {
+  return db.tek<KilitliOnaySatiri>(
+    `SELECT o.id::int AS id, o.tur, o.adet, o.durum, g.is_emri_id AS "isEmriId", d.makine_kodu AS "makineKodu"
+       FROM smartes_adet_onayi o
+       JOIN smartes_is_emri_durumu d ON d.smartes_id = o.smartes_id
+       ${TEK_GIDEN}
+      WHERE o.id = $1
+      FOR UPDATE OF o`,
+    [id],
+  );
+}
+
+export async function onayKarariYaz(
+  db: Db, id: number, k: { durum: 'onaylandi' | 'reddedildi'; kisiId: number; zaman: string; redNedeni: string | null },
+): Promise<boolean> {
+  const r = await db.tek<{ id: number }>(
+    `UPDATE smartes_adet_onayi SET durum = $2, karar_veren_kisi_id = $3, karar_zamani = $4::timestamptz, red_nedeni = $5
+      WHERE id = $1 AND durum = 'bekliyor' RETURNING id::int AS id`,
+    [id, k.durum, k.kisiId, k.zaman, k.redNedeni],
+  );
+  return r !== null;
+}
+
+export function bekleyenOnaySay(db: Db): Promise<number> {
+  return db.tek<{ n: number }>("SELECT count(*)::int AS n FROM smartes_adet_onayi WHERE durum = 'bekliyor'").then((r) => r?.n ?? 0);
+}
+
+export interface OnayListeSatiri {
+  id: number;
+  smartesId: number;
+  tur: 'saglam' | 'red';
+  adet: number;
+  duzeltme: boolean;
+  durum: 'bekliyor' | 'onaylandi' | 'reddedildi';
+  olusma: string;
+  isEmriNo: string | null;
+  isEmriId: number | null;
+  smartesSaglam: number | null;
+  makineSaglam: number | null;
+  istasyonKodu: string | null;
+  makineKodu: string | null;
+  baslangic: string | null;
+  kararVerenKisiId: number | null;
+  kararZamani: string | null;
+  redNedeni: string | null;
+}
+
+const ONAY_SECIMI = `SELECT o.id::int AS id, o.smartes_id AS "smartesId", o.tur, o.adet, o.duzeltme, o.durum, ${zamanMetni('o.olusma')} AS olusma,
+       d.is_emri_no AS "isEmriNo", g.is_emri_id AS "isEmriId", d.saglam AS "smartesSaglam", d.makine_saglam AS "makineSaglam", d.istasyon_kodu AS "istasyonKodu", d.makine_kodu AS "makineKodu",
+       ${zamanMetni('d.baslangic')} AS baslangic, o.karar_veren_kisi_id AS "kararVerenKisiId", ${zamanMetni('o.karar_zamani')} AS "kararZamani",
+       o.red_nedeni AS "redNedeni"
+     FROM smartes_adet_onayi o
+     JOIN smartes_is_emri_durumu d ON d.smartes_id = o.smartes_id
+     ${TEK_GIDEN}`;
+
+export function onaySay(db: Db, durum: 'bekliyor' | 'karar'): Promise<number> {
+  return db.tek<{ n: number }>(
+    `SELECT count(*)::int AS n FROM smartes_adet_onayi WHERE ${durum === 'bekliyor' ? "durum = 'bekliyor'" : "durum <> 'bekliyor'"}`,
+  ).then((r) => r?.n ?? 0);
+}
+
+// Bekleyen en eskiden, karar verilmiş en yeniden.
+export function onaySatirlari(db: Db, durum: 'bekliyor' | 'karar', d: Dilim): Promise<OnayListeSatiri[]> {
+  return db.sorgu<OnayListeSatiri>(
+    durum === 'bekliyor'
+      ? `${ONAY_SECIMI} WHERE o.durum = 'bekliyor' ORDER BY o.id LIMIT $1 OFFSET $2`
+      : `${ONAY_SECIMI} WHERE o.durum <> 'bekliyor' ORDER BY o.karar_zamani DESC, o.id DESC LIMIT $1 OFFSET $2`,
+    [d.sinir, d.atla],
+  );
+}

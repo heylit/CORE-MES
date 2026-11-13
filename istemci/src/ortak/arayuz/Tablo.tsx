@@ -73,7 +73,8 @@ interface Ozellikler<S> {
   satirEylemi?: SatirEylemi<S>;
   // Verilince satırlar seçilebilir ve seçim olunca tablonun altında toplu işlem çubuğu çıkar (kart 2092, karar 2081-24).
   // Hangi listede hangi eylemin olacağı bağlamada kararlaştırılır. Etki kapatıldıysa seçim sütunu çizilmez.
-  toplu?: { eylemler: readonly TopluEylem<S>[] };
+  // `buyukSecim`: telefonda seçim kutusu dokunma boyunda (44 px); yalnız açan ekranda, varsayılan kapalı.
+  toplu?: { eylemler: readonly TopluEylem<S>[]; buyukSecim?: boolean };
   // 'kaydir': sığmayan tablo kart kipine geçmez, kendi kabında yatay ve dikey kayar; başlık kabın üstünde, `sabit` sütunlar
   // yanlarda kalır. Çok sütunlu izleme listeleri içindir. Verilmezse uyarlanır (sığmayınca kart kipi).
   kip?: 'uyarlanir' | 'kaydir';
@@ -84,7 +85,7 @@ export interface TopluEylem<S> {
   baslik: string;
   simge: SimgeAdi;
   yap: (secili: readonly S[]) => void;
-  ton?: 'tehlike';
+  ton?: 'birincil' | 'tehlike';
 }
 
 // Satırın içeriği değişince (canlı veri) satır bir an vurgulanır (kart 2092, karar 2081-21). Karşılaştırma içerikledir:
@@ -99,7 +100,7 @@ export interface SatirEylemi<S> {
   etiket: (satir: S) => string;
   simge: SimgeAdi;
   yap: (satir: S) => void;
-  ton?: 'tehlike';
+  ton?: 'birincil' | 'tehlike';
 }
 
 const ISKELET_SATIRI = 5;
@@ -351,7 +352,7 @@ export function Tablo<S>({
   return (
     <>
       {ust}
-      <div ref={kap} className="tc-tablo-kap" data-olcer={kaydir ? undefined : ''} data-kaydir={kaydir ? '' : undefined} data-kip={kart ? 'kart' : undefined} aria-busy={mesgul || undefined}>
+      <div ref={kap} className="tc-tablo-kap" data-olcer={kaydir ? undefined : ''} data-kaydir={kaydir ? '' : undefined} data-kip={kart ? 'kart' : undefined} data-buyuk-secim={topluAcik && toplu?.buyukSecim ? '' : undefined} aria-busy={mesgul || undefined}>
         {/* Kart kipinde sütun başlığı görünmez; sıralama düğmeleri kartların üstüne taşınır. */}
         {kart && siralanan.length > 0 && (
           <div className="tc-tablo-siralar" role="group" aria-label="Sıralama">
@@ -453,7 +454,7 @@ export function Tablo<S>({
         <div className="tc-tablo-toplu" role="toolbar" aria-label={`${etiket}: toplu işlem`}>
           <span className="tc-tablo-toplu-sayi" role="status">{secili.size} seçili</span>
           {toplu?.eylemler.map((e) => (
-            <Dugme key={e.anahtar} simge={e.simge} tur={e.ton === 'tehlike' ? 'tehlike' : 'ikincil'}
+            <Dugme key={e.anahtar} simge={e.simge} tur={e.ton ?? 'ikincil'}
               onClick={() => { e.yap(satirlar.filter((satir) => secili.has(anahtar(satir)))); }}>
               {e.baslik}
             </Dugme>

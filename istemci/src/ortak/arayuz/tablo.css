@@ -111,6 +111,9 @@
 /* Çoklu seçim ve toplu işlem çubuğu (kart 2092, karar 2081-24). */
 .tc-tablo .tc-tablo-sec { width: var(--dokunma); padding-right: 0; }
 .tc-tablo-sec input { width: var(--b-5); height: var(--b-5); accent-color: var(--hazard); cursor: pointer; }
+@media (max-width: 767px) {
+  .tc-tablo-kap[data-buyuk-secim] .tc-tablo-sec input { width: var(--dokunma); height: var(--dokunma); }
+}
 .tc-tablo tr[data-secili] > td { background: color-mix(in srgb, var(--hazard) 10%, transparent); }
 [data-kip="kart"] .tc-tablo td.tc-tablo-sec { width: auto; }
 .tc-tablo-toplu {

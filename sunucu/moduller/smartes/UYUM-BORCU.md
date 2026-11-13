@@ -72,3 +72,7 @@ Kurgu, karar ve sınır kayıtları; kapanacak iş değildir (borç denetimi, ka
 - Makine bulguları (3192 D1): "Nedensiz duruş" yalnız SmartES duruş kaydına bakar (CORE terminal duruşu görülmez; BASKA-MODUL-ISTEKLERI 6). Makine durum
     kodlarının karşılığı (`DURUM_KODLARI`) boş olduğu sürece makineler "bilinmiyor" görünür ve çizelge boş kalır (VARSAYIM: ilk gerçek okumada doldurulur).
     Termin, SmartES'in tahmini bitişiyle; CORE'un kendi hesabı çevrim ölçümüyle (D2) gelir. `smartes_makine_ornegi` süresiz büyür (3200 c); boyut izlenmez.
+- 3173 dilim A (adet onayı): sayımın kaynağı (`uretim_sayimi.kaynak`, `kaynak_kimligi`) veride durur, emir ayrıntısında ve stok hareketinde rozet olarak
+    görünmez (onaylı ön izlemede yoktu) / uretim-emirleri `AdimSatiri`, stok `Hareketler` / ayrı iş. Onaylayan kişi sayımın kişisi olur (operatör
+    SmartES'tedir, CORE'da kişisi yok; VARSAYIM). Onay anı sayımın anıdır, SmartES satırının zamanı değil (eski anlı kayıt emrin son olayından önce
+    kalıp reddedilmesin; VARSAYIM). Red adedi fire eşlemesine (3174) dek onaya girmez.

@@ -5,7 +5,7 @@ export const SMARTES_SAYFALARI = [
   { yol: '/smartes', islem: 'sayfa.smartes', baslik: 'SmartES', simge: 'laptop', grup: 'Yönetim', sira: 9 },
 ] as const satisfies readonly SayfaTanimi[];
 
-// Bütün maddeler sayfayı gören herkese açık okumadır; eşleme yazmak ayrıca `smartes.esleme-yaz` ister.
+// Bütün maddeler sayfayı gören herkese açık okumadır; eşleme yazmak ayrıca `smartes.esleme-yaz`, adet onayı `smartes.adet-onayla` ister.
 export const SMARTES_IKINCI_MENU = {
   kok: '/smartes',
   baslik: 'SmartES',
@@ -17,6 +17,7 @@ export const SMARTES_IKINCI_MENU = {
       { anahtar: 'eslemeler', baslik: 'Kod eşlemeleri', yol: '/smartes/eslemeler', simge: 'layers', islem: 'sayfa.smartes' },
     ] },
     { baslik: 'Gelen', maddeler: [
+      { anahtar: 'onay-bekliyor', baslik: 'Onay bekliyor', yol: '/smartes/onay-bekleyenler', simge: 'check', islem: 'sayfa.smartes' },
       { anahtar: 'makineler', baslik: 'Makineler canlı', yol: '/smartes/makineler', simge: 'cpu', islem: 'sayfa.smartes' },
       { anahtar: 'makine-bulgulari', baslik: 'Makine bulguları', yol: '/smartes/makine-bulgulari', simge: 'gauge', islem: 'sayfa.smartes' },
       { anahtar: 'is-emri-durumlari', baslik: 'Üretim sayıları', yol: '/smartes/is-emri-durumlari', simge: 'chart', islem: 'sayfa.smartes' },
