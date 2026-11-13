@@ -434,8 +434,8 @@ jobs:
   # her dosya tek parçaya düşer, dört parçanın toplamı desenlerin bulduğu kümenin tamamıdır ve parça 1 bunu sayarak denetler.
   windows:
     needs: kapsam
-    # Cekme isteginde kosmaz; ana dala gonderimde ve elle kosuda kosar; atlanan is kontrol'de skipped sayilir.
-    if: needs.kapsam.outputs.sunucu == 'true' && github.event_name != 'pull_request'
+    # Çekme isteğinde de koşar (3216 b): bozan iş ana dala girmeden Windows'ta yakalanır. Etiket yine yalnız ana dal koşusundadır.
+    if: needs.kapsam.outputs.sunucu == 'true'
     # İptal yok (3018 a): yeni birleşme eski Windows koşusunu kesmez, her ana dal commit'inin kendi Windows sonucu olur;
     # kırmızıda bozan birleşme, kırmızı koşunun commit'idir (son yeşilden sonraki ilk kırmızı).
     strategy:
