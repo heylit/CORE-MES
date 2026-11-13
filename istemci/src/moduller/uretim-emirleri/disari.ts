@@ -11,3 +11,5 @@ export { STATU as ADIM_STATUSU } from './adim-durumu.ts';
 // Liste ve emir ayrıntısı (3003 a): Reçete ve Rota açma penceresini ve emrin işlemlerini parametre olarak verip bu adreslerde çizer.
 export { UretimEmirleri, type EmirAcmaYuvasi } from './UretimEmirleri.tsx';
 export { EmirAyrintisi } from './EmirAyrintisi.tsx';
+// 3155: refakat kartı okutulunca emrin özeti (Malzeme · Teslim paneli okutma sonucu).
+export { KartEmirOzeti } from './KartEmirOzeti.tsx';
