@@ -3,7 +3,10 @@ import type { Bagimlilik, GerceklesenKaynagi, GerceklesenTuru, KontrolNoktasi, M
 import { oncullerCikar } from '#paylasilan/sozlesme/rota-dal-kurali.ts';
 import type { Oncul } from '#paylasilan/sozlesme/rota-dal-kurali.ts';
 
-export const YAZ = 'rota.yaz';
+// rota.yaz bölündü (3165 a): revizyonu düzenlemek ile onaya göndermek ayrı eylemdir.
+export const YAZ = 'rota.revizyon-yaz';
+export const ONAYA_GONDER = 'rota.onaya-gonder';
+export const TASLAK_AC = 'rota.taslak-ac';
 export const ONAYLA = 'rota.onayla';
 export const TALIMAT_YAZ = 'rota.talimat-yaz';
 
@@ -86,15 +89,20 @@ export function dortGozEngeli(b: Pick<KomutBaglami, 'kisiId' | 'gonderenKisiId' 
 
 export function izinliKomutlar(b: KomutBaglami): RevizyonKomutu[] {
   const yazar = b.islemler.includes(YAZ);
+  const gonderir = b.islemler.includes(ONAYA_GONDER);
+  const taslakAcar = b.islemler.includes(TASLAK_AC);
   const onaylar = b.islemler.includes(ONAYLA);
   const k: RevizyonKomutu[] = [];
-  if (b.durum === 'taslak' && yazar) k.push('kaydet', 'onaya-gonder', 'iptal');
+  if (b.durum === 'taslak' && yazar) k.push('kaydet');
+  if (b.durum === 'taslak' && gonderir) k.push('onaya-gonder');
+  if (b.durum === 'taslak' && yazar) k.push('iptal');
   if (b.durum === 'onay_bekliyor' && onaylar) {
     k.push('geri-gonder');
     if (!dortGozEngeli(b)) k.push('onayla');
   }
   if (b.durum === 'onayli' && onaylar) k.push('yururluge-al');
-  if (b.durum !== 'iptal' && yazar) k.push('kopyala');
+  // Kopya hedef üründe yeni taslak açar: düzenleme ile taslak açma birlikte gerekir.
+  if (b.durum !== 'iptal' && yazar && taslakAcar) k.push('kopyala');
   return k;
 }
 

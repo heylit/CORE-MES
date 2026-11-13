@@ -11,7 +11,7 @@ import { aramaSade, icindeDeseni } from '#paylasilan/kayit-aramasi.ts';
 import { KISI_SECIM_SAYFA_BOYU } from '#paylasilan/sozlesme/kisiler.ts';
 import type { EksikBilgiOzetiCevabi, KisiEkIslemleriCevabi, KisiTopluKaydetCevabi, KisiTopluKaydetGirdisi, KisiOzeti, KisiSecimCevabi, RolIslemleriCevabi, RolOzeti } from '#paylasilan/sozlesme/kisiler.ts';
 import {
-  DEVREDILMEZ_ISLEMLER, ILETILER, korumaliMi, almaReddi, atamaReddi, ekIslemReddi, bayrakliKisiReddi, hesapAcmaReddi, islemDegistirmeReddi, islemleriBirlestir, kisiAlanlariniDuzelt, kullaniciAdiHatasi, kullaniciAdiniDuzelt,
+  DEVREDILMEZ_ISLEMLER, ILETILER, korumaliMi, almaReddi, atamaReddi, ekIslemReddi, kisitReddi, bayrakliKisiReddi, hesapAcmaReddi, islemDegistirmeReddi, islemleriBirlestir, kisiAlanlariniDuzelt, kullaniciAdiHatasi, kullaniciAdiniDuzelt,
   girisYontemi, oturumKapatmaReddi, parolaBaskasiReddi, parolaHatasi, pasifeAlmaReddi, pinHatasi, pinVermeReddi,
   cikisliAktiflikReddi, cikisPasifiReddi, icHesapReddi, sinirliHesapReddi, sinirliRolReddi, ozlukDuzenlemeReddi, ozlukItmeReddi, bosKullaniciAdi, ikRolVerebilirMi, kullaniciAdiKoku, rastgelePin,
 } from './kurallar.ts';
@@ -19,7 +19,7 @@ import type { KisiAlanlari, Ret } from './kurallar.ts';
 import { parolaDogrula, parolaOzetle, yenidenOzetlenmeli } from './parola.ts';
 import {
   aktifYaz, bayrakliKalanSayisi, bayrakliRolleriKilitle, bayrakliSayisiHaric, girisKaydiBul, hesapYaz, kisiBayrakliMi, sirOzetiniYenile,
-  kisiEkIslemSatirlari, kisiGuncelle, kisiIslemiEkle, kisiIslemiSil, kisiKullaniciMi, kisiSatirlari, kisiVarMi, kisiYaz, girisBilgisiBul, oturumlariGecersizKil, parolaYaz, pinBilgisiBul, pinYaz, rolBul, rolEkle, rolIslemiEkle, rolIslemiSil, rolKuraliniHemenDenetle,
+  kisiEkIslemSatirlari, kisiGuncelle, kisiIslemiEkle, kisiIslemiSil, kisiKisitiEkle, kisiKisitiSil, kisininRolundeIslemVarMi, kisiKullaniciMi, kisiSatirlari, kisiVarMi, kisiYaz, girisBilgisiBul, oturumlariGecersizKil, parolaYaz, pinBilgisiBul, pinYaz, rolBul, rolEkle, rolIslemiEkle, rolIslemiSil, rolKuraliniHemenDenetle,
   eksikBilgiSayilari, cikisiGelenKisiler, gizlilikTaahhuduYaz, icHesapYaz, sinirliSorumluUygunMu, sinirliYaz, ozlukBaginiSil, ozlukYaz, rolIslemSatirlari, rolSatirlari, rolSil, rolVarMi, surumuIlerlet, yetkiKaydiBul, yoneticiEkle,
 } from './sorgular.ts';
 import type { KisiSatiri, RolSatiri } from './sorgular.ts';
@@ -138,13 +138,14 @@ export async function rolIslemiDegistir(
   return rolIslemleriGetir(db, true);
 }
 
-// Kişi başına rolden gelen ve ek verilen işlemler (kart #1233); bayraklı kişinin rolden geleni bütün kayıtlı işlemlerdir.
+// Kişi başına rolden gelen, ek verilen ve kişiden alınan işlemler (kart #1233, 3166); bayraklı kişinin rolden geleni bütün kayıtlı işlemlerdir.
 export async function kisiEkIslemleriGetir(db: Db): Promise<KisiEkIslemleriCevabi> {
   const kisiler = (await kisiEkIslemSatirlari(db)).map((k) => ({
     id: k.id, ad: k.ad, kullaniciAdi: k.kullanici_adi, bayrakli: k.bayrakli,
     roldenGelen: islemleriBirlestir(k.bayrakli, k.rol_islemleri),
     // Kayıttan kalkmış işlem yetki vermez; listede de görünmez.
     ek: k.ek_islemler.filter((i): i is string => typeof i === 'string' && islemMi(i)),
+    alinan: k.alinan_islemler.filter((i): i is string => typeof i === 'string' && islemMi(i)),
   }));
   return { islemler: [...ISLEMLER], devredilmez: [...DEVREDILMEZ_ISLEMLER], kisiler };
 }
@@ -159,8 +160,28 @@ export async function kisiEkIslemiDegistir(
     devredilmez: (DEVREDILMEZ_ISLEMLER as readonly string[]).includes(islem), verildi,
   });
   if (ret !== null) reddet(ret);
-  if (verildi) await kisiIslemiEkle(db, kisiId, islem, aktorId);
-  else await kisiIslemiSil(db, kisiId, islem);
+  if (verildi) {
+    // Ek vermek açık bir "bu kişi yapabilsin" kararıdır; eski kısıt kalırsa verilen yetki görünmeden etkisiz olurdu.
+    await kisiKisitiSil(db, kisiId, islem);
+    await kisiIslemiEkle(db, kisiId, islem, aktorId);
+  } else await kisiIslemiSil(db, kisiId, islem);
+  return kisiEkIslemleriGetir(db);
+}
+
+// KS-11 (kart 3166): alindi true ise rolden gelen işlem bu kişiden alınır, false ise kısıt kalkar ve rol yetkisi geri gelir.
+export async function kisiIslemKisitiDegistir(
+  db: Db, aktorId: number, kisiId: number, islem: string, alindi: boolean,
+): Promise<KisiEkIslemleriCevabi> {
+  if (!(await kisiVarMi(db, kisiId))) throw bulunamadi(ILETILER.kisiYok);
+  const ret = kisitReddi({
+    aktorBayrakli: await kisiBayrakliMi(db, aktorId), kisiBayrakli: await kisiBayrakliMi(db, kisiId), kisiKullanici: await kisiKullaniciMi(db, kisiId),
+    islemKayitli: islemMi(islem),
+    devredilmez: (DEVREDILMEZ_ISLEMLER as readonly string[]).includes(islem),
+    roldeVar: await kisininRolundeIslemVarMi(db, kisiId, islem), alindi,
+  });
+  if (ret !== null) reddet(ret);
+  if (alindi) await kisiKisitiEkle(db, kisiId, islem, aktorId);
+  else await kisiKisitiSil(db, kisiId, islem);
   return kisiEkIslemleriGetir(db);
 }
 

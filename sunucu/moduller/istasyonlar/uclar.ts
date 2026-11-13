@@ -12,20 +12,25 @@ import {
 } from '#paylasilan/sozlesme/istasyonlar.ts';
 import { aramaUclari } from './arama/uclar.ts';
 import * as servis from './servis.ts';
+import { ISTASYON_KISI_SECEN_ISLEMLER, ISTASYON_YAZMA_ISLEMLERI } from '#paylasilan/islemler.ts';
 import { MAKINE_DURUMU_ISLEMLERI } from './kurallar.ts';
 
-// Tanım listeleri tesis sayfasının verisidir; yazan rol de yazdığını okur (kişi kısıtları sayfası iş merkezlerini listeler).
-const OKUMA = { biri: ['sayfa.istasyonlar', 'istasyonlar.yaz'] } as const;
+// Tanım listeleri tesis sayfasının verisidir; yazan da yazdığını okur (kişi kısıtları sayfası iş merkezlerini listeler).
+const OKUMA = { biri: ['sayfa.istasyonlar', ...ISTASYON_YAZMA_ISLEMLERI] } as const;
 // Reçete ve Rota yalnız gösterdiği iş merkezi, istasyon ve makine listesini okur (195 a); öteki tanım listeleri açılmaz.
-const LISTE_OKUMA = { biri: ['sayfa.istasyonlar', 'istasyonlar.yaz', 'sayfa.recete-rota'] } as const;
+const LISTE_OKUMA = { biri: [...OKUMA.biri, 'sayfa.recete-rota'] } as const;
 // Fabrika Haritası makine durumunu çizer (195 a).
-const DURUM_OKUMA = { biri: ['sayfa.istasyonlar', 'istasyonlar.yaz', 'sayfa.atolye'] } as const;
+const DURUM_OKUMA = { biri: [...OKUMA.biri, 'sayfa.atolye'] } as const;
 // Rota > Kaynaklar istasyonun verim ve operatör ayarını gösterir: sayfayı açan rol okur (kart #746, 757 a; 195 a'nın bu uç için yerine).
 const PLAN_AYARI_OKUMA = { biri: [...OKUMA.biri, 'sayfa.rota'] } as const;
 // Ana sayfa kartı yalnız sayı alır (#483); operatör terminalden, vardiya ve personel sayfası olan da görür.
 // Duran makine bakımın işidir; Arkon bakım işlemiyle de okunur.
 const MAKINE_DURUMU = { biri: MAKINE_DURUMU_ISLEMLERI } as const;
-const PANO = { biri: ['sayfa.istasyonlar', 'istasyonlar.yaz', 'sayfa.terminal', 'sayfa.vardiya', 'sayfa.personel', 'arkon.bakim'] } as const;
+const PANO = { biri: [...OKUMA.biri, 'sayfa.terminal', 'sayfa.vardiya', 'sayfa.personel', 'arkon.bakim'] } as const;
+// Bütün kişilerin adı döner: yalnız kişi seçen eylemlere açık.
+const KISI_SECIMI = { biri: ISTASYON_KISI_SECEN_ISLEMLER } as const;
+// Excel satırları üç kayıt türünü birlikte yazar; uç türlerden birini ister, satır türüne göre eksik eylemi servis reddeder.
+const TOPLU_KAYDET = { biri: ['istasyonlar.is-merkezi-yaz', 'istasyonlar.istasyon-yaz', 'istasyonlar.makine-yaz'] } as const;
 
 export const uclar = [
   uc({
@@ -126,7 +131,7 @@ export const uclar = [
     yontem: 'GET',
     yol: '/atama-iptalleri',
     // Çıkarma onayından önce gösterilir; yalnız çıkarabilen okur.
-    yetki: 'istasyonlar.yaz',
+    yetki: 'istasyonlar.kisi-ata',
     sorgu: iptalOnizlemeSorgusu,
     cevap: iptalOnizlemesiCevabi,
     isle: async ({ db, sorgu }) => ({ satirlar: await servis.iptalOnizlemesi(db, sorgu.tur, sorgu) }),
@@ -135,7 +140,7 @@ export const uclar = [
     yontem: 'GET',
     yol: '/kisi-secenekleri',
     // Bütün kişilerin adı döner, bu yüzden yalnız atama yapabilene açık; atama listeleri yalnız atanmışların adını verir.
-    yetki: 'istasyonlar.yaz',
+    yetki: KISI_SECIMI,
     cevap: kisiSecenekleriCevabi,
     isle: async ({ db }) => ({ kisiler: await servis.kisiSecenekleri(db) }),
   }),
@@ -143,7 +148,7 @@ export const uclar = [
   uc({
     yontem: 'POST',
     yol: '/is-merkezleri',
-    yetki: 'istasyonlar.yaz',
+    yetki: 'istasyonlar.is-merkezi-yaz',
     govde: isMerkeziGovdesi,
     cevap: isMerkeziKaydiSemasi,
     isle: ({ db, govde }) => servis.isMerkeziEkle(db, govde),
@@ -151,7 +156,7 @@ export const uclar = [
   uc({
     yontem: 'POST',
     yol: '/is-merkezleri/:id/guncelle',
-    yetki: 'istasyonlar.yaz',
+    yetki: 'istasyonlar.is-merkezi-yaz',
     parametre: kimlikParametresi,
     govde: isMerkeziGuncellemeGovdesi,
     cevap: isMerkeziKaydiSemasi,
@@ -160,7 +165,7 @@ export const uclar = [
   uc({
     yontem: 'POST',
     yol: '/is-merkezleri/:id/sil',
-    yetki: 'istasyonlar.yaz',
+    yetki: 'istasyonlar.is-merkezi-yaz',
     parametre: kimlikParametresi,
     cevap: bosCevap,
     isle: async ({ db, parametre }) => {
@@ -172,15 +177,16 @@ export const uclar = [
     yontem: 'POST',
     yol: '/tesis-sablonu/uygula',
     // 2166-1 a: eksik iş merkezi ve istasyonları açar; var olan kayda dokunmaz, ikinci çağrı bir şey açmaz.
-    yetki: 'istasyonlar.yaz',
+    // Şablon iş merkezi ve istasyon da açar: servis o iki eylemi de ister.
+    yetki: 'istasyonlar.tanim-yaz',
     cevap: tesisSablonuSonucu,
-    isle: ({ db }) => servis.tesisSablonunuUygula(db),
+    isle: ({ db, kullanici }) => servis.tesisSablonunuUygula(db, kullanici),
   }),
 
   uc({
     yontem: 'POST',
     yol: '/istasyonlar',
-    yetki: 'istasyonlar.yaz',
+    yetki: 'istasyonlar.istasyon-yaz',
     govde: istasyonGovdesi,
     cevap: istasyonKaydiSemasi,
     isle: ({ db, govde }) => servis.istasyonEkle(db, govde),
@@ -188,7 +194,7 @@ export const uclar = [
   uc({
     yontem: 'POST',
     yol: '/istasyonlar/:id/guncelle',
-    yetki: 'istasyonlar.yaz',
+    yetki: 'istasyonlar.istasyon-yaz',
     parametre: kimlikParametresi,
     govde: istasyonGuncellemeGovdesi,
     cevap: istasyonKaydiSemasi,
@@ -197,7 +203,7 @@ export const uclar = [
   uc({
     yontem: 'POST',
     yol: '/istasyonlar/:id/sil',
-    yetki: 'istasyonlar.yaz',
+    yetki: 'istasyonlar.istasyon-yaz',
     parametre: kimlikParametresi,
     cevap: bosCevap,
     isle: async ({ db, parametre }) => {
@@ -209,7 +215,7 @@ export const uclar = [
   uc({
     yontem: 'POST',
     yol: '/makineler',
-    yetki: 'istasyonlar.yaz',
+    yetki: 'istasyonlar.makine-yaz',
     govde: makineGovdesi,
     cevap: makineKaydiSemasi,
     isle: ({ db, govde }) => servis.makineEkle(db, govde),
@@ -217,7 +223,7 @@ export const uclar = [
   uc({
     yontem: 'POST',
     yol: '/makineler/:id/guncelle',
-    yetki: 'istasyonlar.yaz',
+    yetki: 'istasyonlar.makine-yaz',
     parametre: kimlikParametresi,
     govde: makineGuncellemeGovdesi,
     cevap: makineKaydiSemasi,
@@ -226,7 +232,7 @@ export const uclar = [
   uc({
     yontem: 'POST',
     yol: '/makineler/:id/sil',
-    yetki: 'istasyonlar.yaz',
+    yetki: 'istasyonlar.makine-yaz',
     parametre: kimlikParametresi,
     cevap: bosCevap,
     isle: async ({ db, parametre }) => {
@@ -239,7 +245,7 @@ export const uclar = [
   uc({
     yontem: 'POST',
     yol: '/operasyon-tipleri',
-    yetki: 'istasyonlar.yaz',
+    yetki: 'istasyonlar.tanim-yaz',
     govde: operasyonTipiGovdesi,
     cevap: operasyonTipiKaydiSemasi,
     isle: ({ db, govde }) => servis.operasyonTipiEkle(db, govde),
@@ -247,7 +253,7 @@ export const uclar = [
   uc({
     yontem: 'POST',
     yol: '/operasyon-tipleri/:id/guncelle',
-    yetki: 'istasyonlar.yaz',
+    yetki: 'istasyonlar.tanim-yaz',
     parametre: kimlikParametresi,
     govde: operasyonTipiGuncellemeGovdesi,
     cevap: operasyonTipiKaydiSemasi,
@@ -257,7 +263,7 @@ export const uclar = [
   uc({
     yontem: 'POST',
     yol: '/istasyonlar/:id/kisiler/ata',
-    yetki: 'istasyonlar.yaz',
+    yetki: 'istasyonlar.kisi-ata',
     parametre: kimlikParametresi,
     govde: atamaGovdesi,
     cevap: istasyonKisileriCevabi,
@@ -268,7 +274,7 @@ export const uclar = [
   uc({
     yontem: 'POST',
     yol: '/istasyonlar/:id/kisiler/:kisiId/cikar',
-    yetki: 'istasyonlar.yaz',
+    yetki: 'istasyonlar.kisi-ata',
     parametre: idKisiParametresi,
     govde: atamaKaldirGovdesi,
     cevap: istasyonKisileriCevabi,
@@ -280,7 +286,7 @@ export const uclar = [
   uc({
     yontem: 'POST',
     yol: '/makineler/:id/kisiler/ata',
-    yetki: 'istasyonlar.yaz',
+    yetki: 'istasyonlar.kisi-ata',
     parametre: kimlikParametresi,
     govde: atamaGovdesi,
     cevap: makineKisileriCevabi,
@@ -291,7 +297,7 @@ export const uclar = [
   uc({
     yontem: 'POST',
     yol: '/makineler/:id/kisiler/:kisiId/cikar',
-    yetki: 'istasyonlar.yaz',
+    yetki: 'istasyonlar.kisi-ata',
     parametre: idKisiParametresi,
     govde: atamaKaldirGovdesi,
     cevap: makineKisileriCevabi,
@@ -303,7 +309,7 @@ export const uclar = [
   uc({
     yontem: 'POST',
     yol: '/ekipler',
-    yetki: 'istasyonlar.yaz',
+    yetki: 'istasyonlar.ekip-yaz',
     govde: ekipGovdesi,
     cevap: ekipKaydiSemasi,
     isle: ({ db, govde }) => servis.ekipEkle(db, govde),
@@ -311,7 +317,7 @@ export const uclar = [
   uc({
     yontem: 'POST',
     yol: '/ekipler/:id/guncelle',
-    yetki: 'istasyonlar.yaz',
+    yetki: 'istasyonlar.ekip-yaz',
     parametre: kimlikParametresi,
     govde: ekipGuncellemeGovdesi,
     cevap: ekipKaydiSemasi,
@@ -320,7 +326,7 @@ export const uclar = [
   uc({
     yontem: 'POST',
     yol: '/ekipler/:id/uyeler/ata',
-    yetki: 'istasyonlar.yaz',
+    yetki: 'istasyonlar.ekip-yaz',
     parametre: kimlikParametresi,
     govde: atamaGovdesi,
     cevap: ekipUyeleriCevabi,
@@ -331,7 +337,7 @@ export const uclar = [
   uc({
     yontem: 'POST',
     yol: '/ekipler/:id/uyeler/:kisiId/cikar',
-    yetki: 'istasyonlar.yaz',
+    yetki: 'istasyonlar.ekip-yaz',
     parametre: idKisiParametresi,
     govde: atamaKaldirGovdesi,
     cevap: ekipUyeleriCevabi,
@@ -344,7 +350,7 @@ export const uclar = [
     yontem: 'POST',
     yol: '/kisi-is-merkezleri/:kisiId/belirle',
     // Amir de başkasının sınırını değiştirir (karar 252 a); kendi sınırını servis reddeder.
-    yetki: { biri: ['istasyonlar.yaz', 'arkon.amir'] },
+    yetki: { biri: ['istasyonlar.kisi-ata', 'arkon.amir'] },
     parametre: kisiParametresi,
     govde: kisiIsMerkezleriGovdesi,
     cevap: kisiIsMerkezleriCevabi,
@@ -362,7 +368,7 @@ export const uclar = [
   uc({
     yontem: 'POST',
     yol: '/istasyonlar/:id/plan-ayari',
-    yetki: 'istasyonlar.yaz',
+    yetki: 'istasyonlar.istasyon-yaz',
     parametre: kimlikParametresi,
     govde: planAyariGovdesi,
     cevap: planAyarlariCevabi,
@@ -379,7 +385,7 @@ export const uclar = [
   uc({
     yontem: 'POST',
     yol: '/istasyonlar/aparat-kapasiteleri',
-    yetki: 'istasyonlar.yaz',
+    yetki: 'istasyonlar.aparat-yaz',
     govde: aparatKapasitesiGovdesi,
     cevap: aparatKapasitesi,
     isle: async ({ db, kullanici, govde }) => servis.aparatKapasitesiEkle(db, kullanici, govde),
@@ -387,7 +393,7 @@ export const uclar = [
   uc({
     yontem: 'POST',
     yol: '/istasyonlar/aparat-kapasiteleri/:id/guncelle',
-    yetki: 'istasyonlar.yaz',
+    yetki: 'istasyonlar.aparat-yaz',
     parametre: kimlikParametresi,
     govde: aparatKapasitesiGuncellemeGovdesi,
     cevap: aparatKapasitesi,
@@ -396,7 +402,7 @@ export const uclar = [
   uc({
     yontem: 'POST',
     yol: '/istasyonlar/aparat-kapasiteleri/:id/sil',
-    yetki: 'istasyonlar.yaz',
+    yetki: 'istasyonlar.aparat-yaz',
     parametre: kimlikParametresi,
     govde: aparatKapasitesiSilmeGovdesi,
     cevap: bosCevap,
@@ -438,7 +444,7 @@ export const uclar = [
   uc({
     yontem: 'POST',
     yol: '/kisi-yetkinlikleri/:kisiId/belirle',
-    yetki: 'istasyonlar.yaz',
+    yetki: 'istasyonlar.yetkinlik-yaz',
     parametre: kisiParametresi,
     govde: yetkinlikGovdesi,
     cevap: kisiYetkinligiCevabi,
@@ -448,7 +454,7 @@ export const uclar = [
   uc({
     yontem: 'POST',
     yol: '/kisi-yetkinlikleri/toplu',
-    yetki: 'istasyonlar.yaz',
+    yetki: 'istasyonlar.yetkinlik-yaz',
     govde: yetkinlikTopluGovdesi,
     cevap: yetkinliklerCevabi,
     isle: async ({ db, kullanici, govde }) => ({ yetkinlikler: await servis.yetkinlikleriTopluBelirle(db, kullanici.id, govde.degisiklikler, govde.makineler) }),
@@ -457,7 +463,7 @@ export const uclar = [
   uc({
     yontem: 'POST',
     yol: '/kisi-yetkinlikleri/:kisiId/makineler/belirle',
-    yetki: 'istasyonlar.yaz',
+    yetki: 'istasyonlar.yetkinlik-yaz',
     parametre: kisiParametresi,
     govde: makineYetkinlikGovdesi,
     cevap: kisiYetkinligiCevabi,
@@ -467,7 +473,7 @@ export const uclar = [
   uc({
     yontem: 'POST',
     yol: '/kisi-yetkinlikleri/:kisiId/ayar/belirle',
-    yetki: 'istasyonlar.yaz',
+    yetki: 'istasyonlar.yetkinlik-yaz',
     parametre: kisiParametresi,
     govde: ayarYetkinligiBelirleGovdesi,
     cevap: kisiYetkinligiCevabi,
@@ -477,7 +483,7 @@ export const uclar = [
   uc({
     yontem: 'POST',
     yol: '/kisi-yetkinlikleri/:kisiId/ayar/:makineId/ayrinti',
-    yetki: 'istasyonlar.yaz',
+    yetki: 'istasyonlar.yetkinlik-yaz',
     parametre: ayarYetkinligiParametresi,
     govde: yetkinlikAyrintiGovdesi,
     cevap: kisiYetkinligiCevabi,
@@ -487,7 +493,7 @@ export const uclar = [
   uc({
     yontem: 'POST',
     yol: '/kisi-yetkinlikleri/:kisiId/tezgah-siniri',
-    yetki: 'istasyonlar.yaz',
+    yetki: 'istasyonlar.yetkinlik-yaz',
     parametre: kisiParametresi,
     govde: tezgahSiniriGovdesi,
     cevap: kisiYetkinligiCevabi,
@@ -497,7 +503,7 @@ export const uclar = [
   uc({
     yontem: 'POST',
     yol: '/kisi-yetkinlikleri/:kisiId/istasyonlar/:istasyonId/ayrinti',
-    yetki: 'istasyonlar.yaz',
+    yetki: 'istasyonlar.yetkinlik-yaz',
     parametre: yetkinlikParametresi,
     govde: yetkinlikAyrintiGovdesi,
     cevap: kisiYetkinligiCevabi,
@@ -515,7 +521,7 @@ export const uclar = [
   uc({
     yontem: 'POST',
     yol: '/makineler/toplu-tasi',
-    yetki: 'istasyonlar.yaz',
+    yetki: 'istasyonlar.makine-yaz',
     govde: makineTopluTasiGovdesi,
     cevap: makinelerCevabi,
     isle: async ({ db, govde }) => ({ makineler: await servis.makineleriTasi(db, govde) }),
@@ -523,7 +529,7 @@ export const uclar = [
   uc({
     yontem: 'POST',
     yol: '/makineler/toplu-aktiflik',
-    yetki: 'istasyonlar.yaz',
+    yetki: 'istasyonlar.makine-yaz',
     govde: topluAktiflikGovdesi,
     cevap: makinelerCevabi,
     isle: async ({ db, govde }) => ({ makineler: await servis.makineleriEtkinlestir(db, govde) }),
@@ -539,7 +545,7 @@ export const uclar = [
   uc({
     yontem: 'POST',
     yol: '/makineler/coklu-ekle',
-    yetki: 'istasyonlar.yaz',
+    yetki: 'istasyonlar.makine-yaz',
     govde: makineCokluEkleGovdesi,
     cevap: makinelerCevabi,
     isle: async ({ db, govde }) => ({ makineler: await servis.makineleriEkle(db, govde) }),
@@ -547,7 +553,7 @@ export const uclar = [
   uc({
     yontem: 'POST',
     yol: '/istasyonlar/toplu-tasi',
-    yetki: 'istasyonlar.yaz',
+    yetki: 'istasyonlar.istasyon-yaz',
     govde: istasyonTopluTasiGovdesi,
     cevap: istasyonlarCevabi,
     isle: async ({ db, govde }) => ({ istasyonlar: await servis.istasyonlariTasi(db, govde) }),
@@ -555,7 +561,7 @@ export const uclar = [
   uc({
     yontem: 'POST',
     yol: '/istasyonlar/toplu-aktiflik',
-    yetki: 'istasyonlar.yaz',
+    yetki: 'istasyonlar.istasyon-yaz',
     govde: topluAktiflikGovdesi,
     cevap: istasyonlarCevabi,
     isle: async ({ db, govde }) => ({ istasyonlar: await servis.istasyonlariEtkinlestir(db, govde) }),
@@ -563,7 +569,7 @@ export const uclar = [
   uc({
     yontem: 'POST',
     yol: '/istasyonlar/coklu-ekle',
-    yetki: 'istasyonlar.yaz',
+    yetki: 'istasyonlar.istasyon-yaz',
     govde: istasyonCokluEkleGovdesi,
     cevap: istasyonlarCevabi,
     isle: async ({ db, govde }) => ({ istasyonlar: await servis.istasyonlariEkle(db, govde) }),
@@ -572,11 +578,11 @@ export const uclar = [
   uc({
     yontem: 'POST',
     yol: '/istasyonlar/toplu-kaydet',
-    yetki: 'istasyonlar.yaz',
+    yetki: TOPLU_KAYDET,
     tekrarKorumali: true,
     govde: istasyonTopluKaydetGovdesi,
     cevap: topluKaydetCevabi,
-    isle: ({ db, govde }) => servis.topluKaydet(db, govde),
+    isle: ({ db, kullanici, govde }) => servis.topluKaydet(db, kullanici, govde),
   }),
   ...aramaUclari,
 ];

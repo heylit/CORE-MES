@@ -1,3 +1,4 @@
+import { ISTASYON_YAZMA_ISLEMLERI } from '#paylasilan/islemler.ts';
 import { useQuery } from '@tanstack/react-query';
 import type { Islem } from '#paylasilan/islemler.ts';
 import type { MakineDurumlariCevabi, MakinelerCevabi, PanoOzetiCevabi } from '#paylasilan/sozlesme/istasyonlar.ts';
@@ -67,5 +68,5 @@ export const anaSayfaKaynaklari: AnaSayfaKaynagi[] = [
   { anahtar: 'istasyonlar-duran-is', tur: 'is', baslik: 'Makine', simge: 'stop', sira: 50, islem: 'sayfa.istasyonlar', veya: ['sayfa.terminal', 'arkon.bakim'], yolunda: 'Duran makine yok', kaynak: Duran },
   { anahtar: 'istasyonlar-makine-olcu', tur: 'gidisat', baslik: 'Makine', simge: 'cpu', sira: 300, islem: 'sayfa.istasyonlar', kaynak: Calisan },
   // Liste ve durum uçlarının ikisini de geçen işlemler (LISTE_OKUMA ve DURUM_OKUMA kesişimi).
-  { anahtar: 'istasyonlar-makine-grafik', tur: 'grafik', baslik: 'Makineler', simge: 'cpu', sira: 100, bolum: 'makine', anaSayfada: true, islem: 'sayfa.istasyonlar', veya: ['istasyonlar.yaz'], kaynak: MakineGrafigi },
+  { anahtar: 'istasyonlar-makine-grafik', tur: 'grafik', baslik: 'Makineler', simge: 'cpu', sira: 100, bolum: 'makine', anaSayfada: true, islem: 'sayfa.istasyonlar', veya: ISTASYON_YAZMA_ISLEMLERI, kaynak: MakineGrafigi },
 ];

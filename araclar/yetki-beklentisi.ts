@@ -55,6 +55,9 @@ export const ROL_MATRISI = {
       'etiket-merkezi.sablon-yaz', 'etiket-merkezi.yazici-yaz', 'finans.maliyet-oku', 'finans.oku', 'idari-isler.arac-talebi-ac',
       'idari-isler.oku', 'idari-isler.talep-ac', 'ik.bordro-gordum', 'ik.devam-onay', 'ik.izin-onay', 'ik.izin-talep', 'ik.pozisyon-onay',
       'istasyonlar.makine-durumu', 'istasyonlar.yaz', 'kalite-merkezi.oku', 'kalite-merkezi.onayla', 'kisiler.oku', 'malzemeler.onayla',
+      // 3165 a: istasyonlar.yaz sekiz eyleme bölündü; eski işlem ayrı kartla kalkana dek satırda kalır.
+      'istasyonlar.istasyon-yaz', 'istasyonlar.makine-yaz', 'istasyonlar.is-merkezi-yaz', 'istasyonlar.kisi-ata',
+      'istasyonlar.ekip-yaz', 'istasyonlar.yetkinlik-yaz', 'istasyonlar.aparat-yaz', 'istasyonlar.tanim-yaz',
       'malzemeler.tanim-yaz', 'malzemeler.yaz', 'mesaj.oku', 'mesaj.yaz', 'musteri-tedarikci.oku', 'nizamiye.kart-yonet', 'nizamiye.oku',
       'oee.oku', 'pano.sirket-ozeti', 'plan.bedel-ayari', 'plan.canliya-al', 'plan.kilitle', 'plan.motor-ayari', 'plan.oku',
       'plan.planlama-oku', 'plan.studyo', 'plan.yaz', 'portal.finans', 'portal.kalite', 'portal.oku', 'portal.satinalma', 'portal.satis',
@@ -83,6 +86,9 @@ export const ROL_MATRISI = {
       'etiket-merkezi.sablon-yaz', 'etiket-merkezi.yazici-yaz', 'finans.maliyet-oku', 'finans.oku', 'idari-isler.arac-talebi-ac',
       'idari-isler.oku', 'idari-isler.talep-ac', 'ik.bordro-gordum', 'ik.devam-onay', 'ik.izin-onay', 'ik.izin-talep', 'ik.pozisyon-onay',
       'istasyonlar.makine-durumu', 'istasyonlar.yaz', 'kalite-merkezi.oku', 'kalite-merkezi.onayla', 'kisiler.oku', 'malzemeler.onayla',
+      // 3165 a: istasyonlar.yaz sekiz eyleme bölündü; eski işlem ayrı kartla kalkana dek satırda kalır.
+      'istasyonlar.istasyon-yaz', 'istasyonlar.makine-yaz', 'istasyonlar.is-merkezi-yaz', 'istasyonlar.kisi-ata',
+      'istasyonlar.ekip-yaz', 'istasyonlar.yetkinlik-yaz', 'istasyonlar.aparat-yaz', 'istasyonlar.tanim-yaz',
       'malzemeler.tanim-yaz', 'malzemeler.yaz', 'mesaj.oku', 'mesaj.yaz', 'musteri-tedarikci.oku', 'nizamiye.kart-yonet', 'nizamiye.oku',
       'oee.oku', 'pano.sirket-ozeti', 'plan.bedel-ayari', 'plan.canliya-al', 'plan.kilitle', 'plan.motor-ayari', 'plan.oku',
       'plan.planlama-oku', 'plan.studyo', 'plan.yaz', 'portal.finans', 'portal.kalite', 'portal.oku', 'portal.satinalma', 'portal.satis',
@@ -163,6 +169,9 @@ export const ROL_MATRISI = {
       'etiket-merkezi.oku', 'etiket-merkezi.sablon-yaz', 'etiket-merkezi.yazici-yaz', 'finans.maliyet-oku', 'finans.oku', 'geometri.oku',
       'idari-isler.arac-talebi-ac', 'idari-isler.oku', 'idari-isler.talep-ac', 'ik.bordro-gordum', 'ik.devam-onay', 'ik.izin-onay',
       'ik.izin-talep', 'ik.pozisyon-onay', 'istasyonlar.makine-durumu', 'istasyonlar.yaz', 'kalite-merkezi.oku', 'kalite-merkezi.onayla',
+      // 3165 a: istasyonlar.yaz sekiz eyleme bölündü; eski işlem ayrı kartla kalkana dek satırda kalır.
+      'istasyonlar.istasyon-yaz', 'istasyonlar.makine-yaz', 'istasyonlar.is-merkezi-yaz', 'istasyonlar.kisi-ata',
+      'istasyonlar.ekip-yaz', 'istasyonlar.yetkinlik-yaz', 'istasyonlar.aparat-yaz', 'istasyonlar.tanim-yaz',
       'kisiler.oku', 'malzemeler.onayla', 'malzemeler.tanim-yaz', 'malzemeler.yaz', 'mesaj.oku', 'mesaj.yaz', 'musteri-tedarikci.oku',
       'nizamiye.kart-yonet', 'nizamiye.oku', 'oee.oku', 'pano.sirket-ozeti', 'plan.bedel-ayari', 'plan.canliya-al', 'plan.kilitle',
       'plan.motor-ayari', 'plan.oku', 'plan.planlama-oku', 'plan.studyo', 'plan.yaz', 'portal.finans', 'portal.kalite', 'portal.oku',
@@ -213,6 +222,8 @@ export const ROL_MATRISI = {
       'plan.motor-ayari', 'plan.oku', 'plan.planlama-oku', 'plan.studyo', 'plan.yaz', 'portal.oku', 'projeler.gorev-yaz', 'projeler.oku',
       'projeler.statu-yaz', 'projeler.yaz', 'recete-rota.oku', 'recete-rota.yaz', 'rota.emre-kopyala', 'rota.onayla', 'rota.sartname-yayinla', 'rota.sartname-yaz', 'rota.talimat-yaz',
       'rota.yaz', 'saat.uyari-ustlen', 'satin-alma.oku', 'satin-alma.talep-ac', 'sayfa.adim-durumu', 'sayfa.akis', 'sayfa.arkon', 'sayfa.atolye',
+      // 3165 a: rota.yaz beş eyleme bölündü; eski işlem ayrı kartla kalkana dek satırda kalır.
+      'rota.revizyon-yaz', 'rota.onaya-gonder', 'rota.sablon-yaz', 'rota.taslak-ac', 'rota.sure-kabul',
       'sayfa.cizelge', 'sayfa.cizimler', 'sayfa.cnc-kurulum', 'sayfa.denetim-hazirlik', 'sayfa.durus-nedenleri', 'sayfa.emirler',
       'sayfa.etiket-merkezi', 'sayfa.finans', 'sayfa.geometri', 'sayfa.idari-isler', 'sayfa.ik-islemlerim', 'sayfa.istasyonlar',
       'sayfa.kuyruk', 'sayfa.logo-gecisi', 'sayfa.malzemeler', 'sayfa.matris', 'sayfa.mesai', 'sayfa.mesaj', 'sayfa.musteri-tedarikci', 'sayfa.oee',
@@ -234,6 +245,8 @@ export const ROL_MATRISI = {
       'musteri-tedarikci.yaz', 'oee.oku', 'plan.canliya-al', 'plan.kilitle', 'plan.motor-ayari', 'plan.oku', 'plan.planlama-oku',
       'plan.studyo', 'plan.yaz', 'portal.oku', 'projeler.gorev-yaz', 'projeler.oku', 'projeler.statu-yaz', 'projeler.yaz',
       'recete-rota.oku', 'recete-rota.yaz', 'rota.emre-kopyala', 'rota.sartname-yayinla', 'rota.sartname-yaz', 'rota.talimat-yaz', 'rota.yaz', 'saat.uyari-ustlen', 'satin-alma.oku',
+      // 3165 a: rota.yaz beş eyleme bölündü; eski işlem ayrı kartla kalkana dek satırda kalır.
+      'rota.revizyon-yaz', 'rota.onaya-gonder', 'rota.sablon-yaz', 'rota.taslak-ac', 'rota.sure-kabul',
       'satin-alma.talep-ac', 'sayfa.adim-durumu', 'sayfa.akis', 'sayfa.arkon', 'sayfa.atolye', 'sayfa.cizelge', 'sayfa.cizimler', 'sayfa.cnc-kurulum',
       'sayfa.denetim-hazirlik', 'sayfa.durus-nedenleri', 'sayfa.emirler', 'sayfa.etiket-merkezi', 'sayfa.finans', 'sayfa.geometri',
       'sayfa.idari-isler', 'sayfa.ik-islemlerim', 'sayfa.istasyonlar', 'sayfa.kuyruk', 'sayfa.logo-gecisi', 'sayfa.malzemeler', 'sayfa.matris', 'sayfa.mesai',
@@ -294,6 +307,9 @@ export const ROL_MATRISI = {
       'cnc-kurulum.takim-degistir', 'cnc-kurulum.yaz', 'etiket-merkezi.bas', 'etiket-merkezi.oku', 'idari-isler.arac-talebi-ac',
       'idari-isler.talep-ac', 'ik.bordro-gordum', 'ik.devam-onay', 'ik.izin-onay', 'ik.izin-talep', 'ik.pozisyon-onay',
       'istasyonlar.makine-durumu', 'istasyonlar.yaz', 'kalite-merkezi.oku', 'kisiler.oku', 'mesaj.oku', 'mesaj.yaz', 'oee.oku', 'plan.oku',
+      // 3165 a: istasyonlar.yaz sekiz eyleme bölündü; eski işlem ayrı kartla kalkana dek satırda kalır.
+      'istasyonlar.istasyon-yaz', 'istasyonlar.makine-yaz', 'istasyonlar.is-merkezi-yaz', 'istasyonlar.kisi-ata',
+      'istasyonlar.ekip-yaz', 'istasyonlar.yetkinlik-yaz', 'istasyonlar.aparat-yaz', 'istasyonlar.tanim-yaz',
       'plan.planlama-oku', 'recete-rota.oku', 'rota.emre-kopyala', 'saat.oku', 'saat.uyari-ustlen', 'satin-alma.talep-ac', 'sayfa.adim-durumu', 'sayfa.akis',
       'sayfa.arkon', 'sayfa.atolye', 'sayfa.cizelge', 'sayfa.cnc-kurulum', 'sayfa.durus-nedenleri', 'sayfa.emirler', 'sayfa.etiket-merkezi',
       'sayfa.idari-isler', 'sayfa.ik-islemlerim', 'sayfa.istasyonlar', 'sayfa.kalibrasyon', 'sayfa.kalite-merkezi', 'sayfa.kuyruk',

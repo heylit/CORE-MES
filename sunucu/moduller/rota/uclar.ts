@@ -1,4 +1,5 @@
 import { ikiliCevap, uc } from '#cekirdek/uc.ts';
+import { ROTA_YAZMA_ISLEMLERI } from '#paylasilan/islemler.ts';
 import {
   agacCevabi, agacSorgusu, karttanTaslaklarCevabi, emirParametresi, emreKopyalaCevabi, emreUygulaCevabi, patlatmaCevabi, patlatmaOnizlemeCevabi, patlatmaOnizlemeSorgusu, patlatmaParametresi, revizyonKunyeSorgusu, revizyonKunyeleriCevabi, malzemeAraCevabi, malzemeAraSorgusu, emreKopyalaGovdesi, emreKopyalaTopluCevabi, emreKopyalaTopluGovdesi, rotaAdimTopluCevabi, rotaAdimTopluGovdesi, geriGonderGovdesi, ayrintiSorgusu, farkCevabi, kaydetGovdesi, komutCevabi, kopyaIstegiCevabi, kopyaIsteGovdesi, kopyalaGovdesi, kullanimCevabi, kullanimSorgusu, onaylaGovdesi, revizyonAyrintisi, revizyonParametresi,
   revizyonOzetiCevabi, rotaListesiCevabi, seceneklerCevabi, surumGovdesi, talimatlarCevabi, talimatParametresi, talimatYazGovdesi, adimliTalimatYazGovdesi, talimatTaslakKaydetGovdesi, talimatTaslakKomutGovdesi, talimatSablonDurumGovdesi, talimatSablonEkleGovdesi, talimatSablonKaydetGovdesi,
@@ -18,7 +19,7 @@ import {
 // bugünkü okumasını da taşır: yeni kart sihirbazı şablon ve rotalı ürün listesini, operasyon tipleri seçenekleri, markalama
 // tanımları malzeme aramasını okur. Operatör ekranları rota verisini sunucuda disari.ts ile alır, bu uçlara gelmez.
 const ROTA_OKUMA_ISLEMLERI = [
-  'sayfa.recete-rota', 'recete-rota.oku', 'rota.yaz', 'rota.onayla', 'rota.talimat-yaz', 'rota.emre-kopyala', 'rota.sartname-yaz', 'rota.sartname-yayinla',
+  'sayfa.recete-rota', 'recete-rota.oku', ...ROTA_YAZMA_ISLEMLERI, 'rota.onayla', 'rota.talimat-yaz', 'rota.emre-kopyala', 'rota.sartname-yaz', 'rota.sartname-yayinla',
 ] as const;
 const ROTA_OKUR = { biri: ROTA_OKUMA_ISLEMLERI } as const;
 const ROTA_VE_KART_OKUR = { biri: [...ROTA_OKUMA_ISLEMLERI, 'malzemeler.yaz'] } as const;
@@ -26,7 +27,7 @@ const ROTA_VE_ISTASYON_OKUR = { biri: [...ROTA_OKUMA_ISLEMLERI, 'sayfa.istasyonl
 const ROTA_VE_MARKALAMA_OKUR = { biri: [...ROTA_OKUMA_ISLEMLERI, 'sayfa.markalama'] } as const;
 
 export const uclar = [
-  // Rota şablonları (#698): Malzemeler yeni kart sihirbazı da okur; yazma rota.yaz ile.
+  // Rota şablonları (#698): Malzemeler yeni kart sihirbazı da okur; yazma rota.sablon-yaz ile.
   uc({
     yontem: 'GET',
     yol: '/rota/sablonlar',
@@ -38,7 +39,7 @@ export const uclar = [
     yontem: 'POST',
     yol: '/rota/sablonlar/ekle',
     tekrarKorumali: true,
-    yetki: 'rota.yaz',
+    yetki: 'rota.sablon-yaz',
     govde: sablonYazGovdesi,
     cevap: sablonCevabi,
     isle: ({ db, govde }) => sablonEkle(db, govde),
@@ -46,7 +47,7 @@ export const uclar = [
   uc({
     yontem: 'POST',
     yol: '/rota/sablonlar/:id/kaydet',
-    yetki: 'rota.yaz',
+    yetki: 'rota.sablon-yaz',
     parametre: sablonParametresi,
     govde: sablonKaydetGovdesi,
     cevap: sablonCevabi,
@@ -55,7 +56,7 @@ export const uclar = [
   uc({
     yontem: 'POST',
     yol: '/rota/sablonlar/:id/varsayilan-yap',
-    yetki: 'rota.yaz',
+    yetki: 'rota.sablon-yaz',
     parametre: sablonParametresi,
     govde: surumGovdesi,
     cevap: sablonCevabi,
@@ -64,7 +65,7 @@ export const uclar = [
   uc({
     yontem: 'POST',
     yol: '/rota/sablonlar/:id/sil',
-    yetki: 'rota.yaz',
+    yetki: 'rota.sablon-yaz',
     parametre: sablonParametresi,
     govde: surumGovdesi,
     cevap: sablonlarCevabi,
@@ -128,7 +129,7 @@ export const uclar = [
   uc({
     yontem: 'POST',
     yol: '/rota/karttan-taslaklar',
-    yetki: 'rota.yaz',
+    yetki: 'rota.taslak-ac',
     cevap: karttanTaslaklarCevabi,
     isle: ({ db, gunluk }) => karttanTaslaklar(db, gunluk),
   }),
@@ -137,7 +138,7 @@ export const uclar = [
     yontem: 'POST',
     yol: '/rota/urunler/:urunId/kopya-iste',
     tekrarKorumali: true,
-    yetki: { biri: ['malzemeler.yaz', 'rota.yaz'] },
+    yetki: { biri: ['malzemeler.yaz', 'rota.taslak-ac'] },
     parametre: urunParametresi,
     govde: kopyaIsteGovdesi,
     cevap: kopyaIstegiCevabi,
@@ -147,7 +148,7 @@ export const uclar = [
     yontem: 'POST',
     yol: '/rota/urunler/:urunId/taslak-ac',
     tekrarKorumali: true,
-    yetki: 'rota.yaz',
+    yetki: 'rota.taslak-ac',
     parametre: urunParametresi,
     govde: taslakAcGovdesi,
     cevap: komutCevabi,
@@ -282,7 +283,7 @@ export const uclar = [
     yontem: 'POST',
     yol: '/rota/adimlar/:id/gerceklesen-sure',
     tekrarKorumali: true,
-    yetki: 'rota.yaz',
+    yetki: 'rota.sure-kabul',
     parametre: adimParametresi,
     govde: gerceklesenSureGovdesi,
     cevap: surelerCevabi,
@@ -293,7 +294,7 @@ export const uclar = [
     yontem: 'POST',
     yol: '/rota/adimlar/:id/gerceklesen-sure/kabul',
     tekrarKorumali: true,
-    yetki: 'rota.yaz',
+    yetki: 'rota.sure-kabul',
     parametre: adimParametresi,
     govde: gerceklesenKabulGovdesi,
     cevap: gerceklesenKabulCevabi,
@@ -319,7 +320,7 @@ export const uclar = [
   uc({
     yontem: 'POST',
     yol: '/rota/revizyonlar/:id/kaydet',
-    yetki: 'rota.yaz',
+    yetki: 'rota.revizyon-yaz',
     parametre: revizyonParametresi,
     govde: kaydetGovdesi,
     cevap: komutCevabi,
@@ -328,7 +329,7 @@ export const uclar = [
   uc({
     yontem: 'POST',
     yol: '/rota/revizyonlar/:id/onaya-gonder',
-    yetki: 'rota.yaz',
+    yetki: 'rota.onaya-gonder',
     parametre: revizyonParametresi,
     govde: surumGovdesi,
     cevap: komutCevabi,
@@ -337,7 +338,7 @@ export const uclar = [
   uc({
     yontem: 'POST',
     yol: '/rota/revizyonlar/:id/iptal',
-    yetki: 'rota.yaz',
+    yetki: 'rota.revizyon-yaz',
     parametre: revizyonParametresi,
     govde: surumGovdesi,
     cevap: komutCevabi,
@@ -347,7 +348,7 @@ export const uclar = [
     yontem: 'POST',
     yol: '/rota/revizyonlar/:id/kopyala',
     tekrarKorumali: true,
-    yetki: 'rota.yaz',
+    yetki: 'rota.revizyon-yaz',
     parametre: revizyonParametresi,
     govde: kopyalaGovdesi,
     cevap: komutCevabi,
@@ -404,7 +405,7 @@ export const uclar = [
   uc({
     yontem: 'POST',
     yol: '/rota/adimlar/toplu-kaydet',
-    yetki: 'rota.yaz',
+    yetki: 'rota.revizyon-yaz',
     tekrarKorumali: true,
     govde: rotaAdimTopluGovdesi,
     cevap: rotaAdimTopluCevabi,
@@ -572,7 +573,7 @@ export const uclar = [
   uc({
     yontem: 'POST',
     yol: '/rota/revizyonlar/:id/adim-sartnameleri',
-    yetki: 'rota.yaz',
+    yetki: 'rota.revizyon-yaz',
     parametre: revizyonParametresi,
     govde: adimSartnameleriGovdesi,
     cevap: komutCevabi,
@@ -588,7 +589,7 @@ export const uclar = [
   uc({
     yontem: 'POST',
     yol: '/rota/revizyonlar/:id/adim-ekipmani',
-    yetki: 'rota.yaz',
+    yetki: 'rota.revizyon-yaz',
     parametre: revizyonParametresi,
     govde: adimEkipmaniGovdesi,
     cevap: komutCevabi,

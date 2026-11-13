@@ -59,7 +59,7 @@ describe('revizyon', () => {
   });
 
   test('RT-04, RT-19: taslakta yazar kaydeder, gönderir, iptal eder; onay bekleyen, onaylı ve iptal revizyonda kaydet yok', () => {
-    const yazar = ['rota.yaz'];
+    const yazar = ['rota.revizyon-yaz', 'rota.onaya-gonder', 'rota.taslak-ac'];
     assert.deepEqual(izinliKomutlar(baglam({ islemler: yazar })), ['kaydet', 'onaya-gonder', 'iptal', 'kopyala']);
     for (const durum of ['onay_bekliyor', 'onayli', 'yururlukte', 'iptal'] as const) {
       assert.equal(izinliKomutlar(baglam({ durum, islemler: yazar })).includes('kaydet'), false, durum);
@@ -67,6 +67,16 @@ describe('revizyon', () => {
     }
     assert.deepEqual(izinliKomutlar(baglam({ durum: 'onayli', islemler: ['rota.onayla'] })), ['yururluge-al']);
     assert.deepEqual(izinliKomutlar(baglam({ durum: 'iptal', islemler: [...yazar, 'rota.onayla'] })), []);
+  });
+
+  test('3165 a: revizyon düzenleme ile onaya gönderme ayrı eylemdir; eski toplu anahtar hiçbir komut açmaz', () => {
+    assert.deepEqual(izinliKomutlar(baglam({ islemler: ['rota.revizyon-yaz'] })), ['kaydet', 'iptal']);
+    // Kopya yeni taslak açar: düzenleme ile taslak açma birlikte gerekir; yalnız taslak açan kopyalayamaz.
+    assert.deepEqual(izinliKomutlar(baglam({ islemler: ['rota.revizyon-yaz', 'rota.taslak-ac'] })), ['kaydet', 'iptal', 'kopyala']);
+    assert.deepEqual(izinliKomutlar(baglam({ islemler: ['rota.taslak-ac'] })), []);
+    assert.deepEqual(izinliKomutlar(baglam({ islemler: ['rota.onaya-gonder'] })), ['onaya-gonder']);
+    assert.equal(komutDenetle('onaya-gonder', baglam({ islemler: ['rota.revizyon-yaz'] }))?.tur, 'durum');
+    assert.deepEqual(izinliKomutlar(baglam({ islemler: ['rota.yaz'] })), []);
   });
 
   test('RT-08, RT-09: adımsız revizyon, kapalı tip, kullanımda olmayan makine ya da kişi ya da aday, eksik süre onaya gitmez; kaynağı atanmamış adım gider', () => {

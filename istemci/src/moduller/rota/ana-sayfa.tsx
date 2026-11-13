@@ -116,7 +116,7 @@ const EMIR_OZETI_OKUYAN: readonly Islem[] = [...EMIR_OKUMA_KUMESI, 'plan.oku'];
 
 // Rotayı yazan açık revizyonu, onaylayan onay bekleyeni görür; ikisini de taşıyan iki kartı da görür.
 export const anaSayfaKartlari: AnaSayfaKarti[] = [
-  { anahtar: 'rota-acik-revizyon', sira: 220, bolum: 'is', islem: 'rota.yaz', ekran: AcikRevizyon },
+  { anahtar: 'rota-acik-revizyon', sira: 220, bolum: 'is', islem: 'rota.revizyon-yaz', veya: ['rota.onaya-gonder'], ekran: AcikRevizyon },
   { anahtar: 'rota-yonetim-acik-emir', sira: 100, bolum: 'yonetim', islem: EMIR_OKUMA, veya: EMIR_OZETI_OKUYAN, ekran: AcikEmir },
   { anahtar: 'rota-yonetim-geciken-emir', sira: 110, bolum: 'yonetim', islem: EMIR_OKUMA, veya: EMIR_OZETI_OKUYAN, ekran: GecikenEmir },
   { anahtar: 'rota-yonetim-uretim-akisi', sira: 500, bolum: 'yonetim', genis: true, islem: EMIR_OKUMA, veya: EMIR_OZETI_OKUYAN, ekran: UretimAkisi },

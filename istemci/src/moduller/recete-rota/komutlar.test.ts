@@ -15,7 +15,7 @@ describe('Reçete ve Rota genel komutları (kart #1241)', () => {
   });
 
   it('izinli: sayfayı gören kişi yalnız düğmesinin işlemi olan komutu görür', () => {
-    expect(gorunen(['sayfa.recete-rota', 'rota.yaz'])).toEqual(['recete-rota-yeni-rota']);
+    expect(gorunen(['sayfa.recete-rota', 'rota.taslak-ac'])).toEqual(['recete-rota-yeni-rota']);
     // 3039: yeni emir Üretim Emirleri'nin penceresinde açılır; komut o sayfayı görene çıkar.
     expect(gorunen(['sayfa.uretim-emirleri', 'rota.emre-kopyala'])).toEqual(['recete-rota-yeni-emir']);
     expect(gorunen(['sayfa.recete-rota', 'rota.emre-kopyala'])).toEqual([]);
@@ -23,7 +23,9 @@ describe('Reçete ve Rota genel komutları (kart #1241)', () => {
   });
 
   it('reddedilen: Reçete ve Rota sayfası kapalı kişi işlemi olsa da komut görmez; salt okuyan hiç görmez', () => {
-    expect(gorunen(['rota.yaz', 'uretim-emirleri.yaz', 'rota.sartname-yaz', 'rota.talimat-yaz'])).toEqual([]);
+    expect(gorunen(['rota.taslak-ac', 'uretim-emirleri.yaz', 'rota.sartname-yaz', 'rota.talimat-yaz'])).toEqual([]);
     expect(gorunen(['sayfa.recete-rota'])).toEqual([]);
+    // 3165 a: bölünmüş eski anahtar komutu açmaz.
+    expect(gorunen(['sayfa.recete-rota', 'rota.yaz'])).toEqual([]);
   });
 });

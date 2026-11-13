@@ -6,7 +6,7 @@ import { ISLEMLER } from '#paylasilan/islemler.ts';
 import { kisininIslemleri, matrisMetni, secimOku, yetkiMatrisiOku } from './yetki-matrisi-oku.ts';
 import type { YetkiMatrisi } from './yetki-matrisi-oku.ts';
 
-// Komut, oturumun yetki hesabıyla (rollerin işlemleri + kişiye verilen ek işlemler, yönetici bayrağı hepsi) aynı sonucu
+// Komut, oturumun yetki hesabıyla (rollerin işlemleri + kişiye verilen ek işlemler - kişiden alınanlar, yönetici bayrağı hepsi) aynı sonucu
 // göstermelidir; yoksa "kimde ne var" sorusuna yanlış cevap verir.
 describe('yetki matrisi komutu (gerçek PostgreSQL)', () => {
   let ortam: TestVeritabani | undefined;
@@ -15,16 +15,19 @@ describe('yetki matrisi komutu (gerçek PostgreSQL)', () => {
   before(async () => {
     ortam = await testVeritabaniKur('yetkikomut');
     await ortam.vt.tx(async (tx) => {
-      const ekle = async (kullanici: string, ad: string, roller: string[], ek: string[]): Promise<void> => {
+      const ekle = async (kullanici: string, ad: string, roller: string[], ek: string[], alinan: string[] = []): Promise<void> => {
         const kisi = await tx.tek<{ id: number }>(
           `INSERT INTO kisi (ad, kullanici_adi, parola_ozeti) VALUES ($1, $2, 'ozet') RETURNING id`, [ad, kullanici]);
         if (kisi === null) throw new Error('kişi eklenemedi');
         await tx.sorgu('INSERT INTO kisi_rolu (kisi_id, rol_id) SELECT $1, id FROM rol WHERE kod = ANY($2)', [kisi.id, roller]);
         for (const islem of ek) await tx.sorgu('INSERT INTO kisi_islemi (kisi_id, islem, veren_id) VALUES ($1, $2, $1)', [kisi.id, islem]);
+        for (const islem of alinan) await tx.sorgu('INSERT INTO kisi_islem_kisiti (kisi_id, islem, alan_id) VALUES ($1, $2, $1)', [kisi.id, islem]);
       };
       await ekle('ornek.op', 'Örnek Operatör', ['operator'], ['arkon.planlama']);
       await ekle('ornek.yon', 'Örnek Yönetici', ['yonetici'], []);
       await ekle('ornek.iki', 'Örnek İki Rol', ['depo', 'kalite'], []);
+      await ekle('ornek.kis', 'Örnek Kısıtlı Depo', ['depo'], ['stok.giris'], ['stok.giris', 'stok.sayim']);
+      await ekle('ornek.zkis', 'Örnek Kısıtlı Yönetici', ['yonetici'], [], ['stok.giris']);
       await tx.sorgu(`INSERT INTO kisi (ad, aktif, kullanici_adi, parola_ozeti) VALUES ('Pasif', false, NULL, NULL)`);
     });
     matris = await yetkiMatrisiOku(ortam.vt);
@@ -32,7 +35,7 @@ describe('yetki matrisi komutu (gerçek PostgreSQL)', () => {
   after(async () => { await ortam?.kaldir(); });
 
   test('yalnız etkin ve girişli kişiler; kişinin işlemleri rolleri ile ek işlemlerinin birleşimi, yönetici hepsi', () => {
-    assert.deepEqual(matris.kisiler.map((k) => k.kullaniciAdi), ['ornek.iki', 'ornek.op', 'ornek.yon']);
+    assert.deepEqual(matris.kisiler.map((k) => k.kullaniciAdi), ['ornek.iki', 'ornek.kis', 'ornek.op', 'ornek.yon', 'ornek.zkis']);
     const kisi = (ad: string) => matris.kisiler.find((k) => k.kullaniciAdi === ad)!;
     const op = kisininIslemleri(matris, kisi('ornek.op'));
     assert.equal(op.includes('arkon.planlama'), true);
@@ -41,6 +44,24 @@ describe('yetki matrisi komutu (gerçek PostgreSQL)', () => {
     assert.deepEqual(kisininIslemleri(matris, kisi('ornek.yon')), [...ISLEMLER].sort());
     const iki = kisininIslemleri(matris, kisi('ornek.iki'));
     assert.equal(iki.includes('stok.giris') && iki.includes('kalibrasyon.yaz'), true);
+  });
+
+  test('kişiden alınan işlem (kart 3166): rolden ve ekten gelse de düşer; bayraklı rolde etkisiz; --islem ve --kisi gösterir', () => {
+    const kisi = (ad: string) => matris.kisiler.find((k) => k.kullaniciAdi === ad)!;
+    const kis = kisininIslemleri(matris, kisi('ornek.kis'));
+    assert.equal(kis.includes('stok.giris'), false, 'kısıt ek işlemi de bastırır (oturumla aynı)');
+    assert.equal(kis.includes('stok.sayim'), false);
+    assert.equal(kis.includes('stok.cikis'), true, 'yalnız alınan düşer');
+    assert.deepEqual(kisininIslemleri(matris, kisi('ornek.zkis')), [...ISLEMLER].sort(), 'bayraklı rolde kısıt etkisiz');
+    const metin = matrisMetni(matris, { tur: 'islem', deger: 'stok.sayim' });
+    assert.match(metin, /ornek\.iki \(Örnek İki Rol\): rolden depo/);
+    assert.match(metin, /rolde var, kişiden alındı \(1\):\n {2}ornek\.kis \(Örnek Kısıtlı Depo\): bu kişiden alındı/);
+    assert.doesNotMatch(metin.split('rolde var')[0] ?? '', /ornek\.kis/, 'yapabilenler listesinde yok');
+    assert.doesNotMatch(matrisMetni(matris, { tur: 'islem', deger: 'stok.giris' }), /ornek\.zkis.*alındı/);
+    assert.match(matrisMetni(matris, { tur: 'kisi', deger: 'ornek.kis' }), /alınan işlemler: stok\.giris stok\.sayim/);
+    const hepsi = matrisMetni(matris, { tur: 'hepsi' });
+    assert.match(hepsi, /ornek\.kis \(Örnek Kısıtlı Depo\): depo \+ ek: stok\.giris - alınan: stok\.giris stok\.sayim/);
+    assert.match(hepsi, /Rolünden işlem alınmış kişi: 2/);
   });
 
   test('--islem işlemin rollerini ve kişilerini, nereden geldiğiyle gösterir', () => {
@@ -57,7 +78,7 @@ describe('yetki matrisi komutu (gerçek PostgreSQL)', () => {
     assert.match(metin, /yonetici \(Sistem Yöneticisi\): bütün sayfa ve işlemler/);
     assert.match(metin, /# Yalnız yöneticide: .*kisiler\.rol-yonet/);
     assert.match(metin, /ornek\.op \(Örnek Operatör\): operator \+ ek: arkon\.planlama/);
-    assert.match(metin, /ek işlem verilmiş kişi: 1/);
+    assert.match(metin, /ek işlem verilmiş kişi: 2/);
     assert.match(matrisMetni(matris, { tur: 'kisi', deger: 'ornek.iki' }), /roller: depo kalite/);
     assert.match(matrisMetni(matris, { tur: 'rol', deger: 'operator' }), /işlemler: .*terminal\.uret/);
     assert.match(matrisMetni(matris, { tur: 'rol', deger: 'yok' }), /rolü yok/);

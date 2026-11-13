@@ -42,16 +42,22 @@ export interface YetkiKaydi {
 // verildiğinde eklenir: giriş (oturum henüz yok) bu sütunu hiç okumaz.
 const GECERSIZ_ONCE_SARTI = ' AND (k.oturumlar_gecersiz_once IS NULL OR $2::timestamptz > k.oturumlar_gecersiz_once)';
 
+// Kişiden alınan işlem (kart 3166) kişinin hiçbir yetki listesine girmez. Yetkiyi çözen her sorgu bu koşulu taşır; biri
+// unutulursa kısıtlı kişi o yoldan yetkili görünür. Bütün yetkili rolde liste okunmaz, kısıt da etkisizdir.
+const kisitsiz = (islemSutunu: string): string =>
+  `NOT EXISTS (SELECT 1 FROM kisi_islem_kisiti kk WHERE kk.kisi_id = k.id AND kk.islem = ${islemSutunu})`;
+
 // Pasif kişi ve giriş bilgisi olmayan kişi kullanıcı değildir.
 export function yetkiKaydiBul(db: Db, kisiId: number, oturumAcildi: string | null = null): Promise<YetkiKaydi | null> {
   return db.tek<YetkiKaydi>(
     `SELECT k.id, k.ad, k.sinirli_bitis::text AS sinirli_bitis, k.gizlilik_taahhudu IS NOT NULL AS taahhut,
             ${BAYRAKLI_ROL} AS butun_islemler,
-            -- Rollerin işlemleri ve kişiye verilen ek işlemler (kart #1233) birleşir.
+            -- Rollerin işlemleri ve kişiye verilen ek işlemler (kart #1233) birleşir; kişiden alınanlar (kart 3166) düşer.
             COALESCE((SELECT jsonb_agg(DISTINCT t.islem) FROM (
                         SELECT ri.islem FROM kisi_rolu kr JOIN rol_islemi ri ON ri.rol_id = kr.rol_id WHERE kr.kisi_id = k.id
                         UNION ALL
-                        SELECT ki.islem FROM kisi_islemi ki WHERE ki.kisi_id = k.id) t), '[]'::jsonb) AS islemler,
+                        SELECT ki.islem FROM kisi_islemi ki WHERE ki.kisi_id = k.id) t
+                       WHERE ${kisitsiz('t.islem')}), '[]'::jsonb) AS islemler,
             -- Açılış sayfası yalnız kişinin bütün rolleri aynı sayfayı söylüyorsa geçerlidir; boş ya da farklı olan ana sayfada bırakır.
             (SELECT CASE WHEN bool_and(r.acilis_sayfasi IS NOT NULL) AND count(DISTINCT r.acilis_sayfasi) = 1
                          THEN min(r.acilis_sayfasi) END
@@ -373,7 +379,8 @@ export function kisiIslemSatirlari(db: Db): Promise<KisiIslemSatiri[]> {
             COALESCE((SELECT jsonb_agg(DISTINCT t.islem) FROM (
                         SELECT ri.islem FROM kisi_rolu kr JOIN rol_islemi ri ON ri.rol_id = kr.rol_id WHERE kr.kisi_id = k.id
                         UNION ALL
-                        SELECT ki.islem FROM kisi_islemi ki WHERE ki.kisi_id = k.id) t), '[]'::jsonb) AS islemler
+                        SELECT ki.islem FROM kisi_islemi ki WHERE ki.kisi_id = k.id) t
+                       WHERE ${kisitsiz('t.islem')}), '[]'::jsonb) AS islemler
        FROM kisi k
       WHERE k.aktif AND k.kullanici_adi IS NOT NULL AND ${SINIRLI_GECERLI}`,
   );
@@ -386,12 +393,13 @@ export interface KisiRolIslemSatiri {
 }
 
 // kisiIslemSatirlari ile aynı kapsam, yalnız rolden gelen işlemler (kişiye verilen ek işlemler dışarıda). Kişi verilirse yalnız o kişi.
+// Kişiden alınan işlem burada da yoktur: rolden çözülen yetki (Arkon rolü) kısıtı aşmamalı.
 export function kisiRolIslemSatirlari(db: Db, kisiId?: number): Promise<KisiRolIslemSatiri[]> {
   return db.sorgu<KisiRolIslemSatiri>(
     `SELECT k.id,
             ${BAYRAKLI_ROL} AS butun_islemler,
             COALESCE((SELECT jsonb_agg(DISTINCT ri.islem) FROM kisi_rolu kr JOIN rol_islemi ri ON ri.rol_id = kr.rol_id
-                       WHERE kr.kisi_id = k.id), '[]'::jsonb) AS islemler
+                       WHERE kr.kisi_id = k.id AND ${kisitsiz('ri.islem')}), '[]'::jsonb) AS islemler
        FROM kisi k
       WHERE k.aktif AND k.kullanici_adi IS NOT NULL AND ${SINIRLI_GECERLI} AND ($1::int IS NULL OR k.id = $1)`,
     [kisiId ?? null],
@@ -405,16 +413,19 @@ export interface KisiEkIslemSatiri {
   bayrakli: boolean;
   rol_islemleri: unknown[];
   ek_islemler: unknown[];
+  alinan_islemler: unknown[];
 }
 
-// Ek işlem ekranı (kart #1233): yalnız kullanıcılar (aktif ve girişli); rolden gelen ve kişiye verilen işlemler ayrı.
+// Ek işlem ekranı (kart #1233): yalnız kullanıcılar (aktif ve girişli); rolden gelen, kişiye verilen ve kişiden alınan işlemler ayrı.
+// Rolden gelen burada kısıtsız okunur: ekran "rolde var, bu kişiden alındı" diyebilmek için ikisini de görmeli.
 export function kisiEkIslemSatirlari(db: Db): Promise<KisiEkIslemSatiri[]> {
   return db.sorgu<KisiEkIslemSatiri>(
     `SELECT k.id, k.ad, k.kullanici_adi,
             EXISTS (SELECT 1 FROM kisi_rolu kr JOIN rol r ON r.id = kr.rol_id WHERE kr.kisi_id = k.id AND r.yonetici) AS bayrakli,
             COALESCE((SELECT jsonb_agg(DISTINCT ri.islem) FROM kisi_rolu kr JOIN rol_islemi ri ON ri.rol_id = kr.rol_id
                        WHERE kr.kisi_id = k.id), '[]'::jsonb) AS rol_islemleri,
-            COALESCE((SELECT jsonb_agg(ki.islem ORDER BY ki.islem) FROM kisi_islemi ki WHERE ki.kisi_id = k.id), '[]'::jsonb) AS ek_islemler
+            COALESCE((SELECT jsonb_agg(ki.islem ORDER BY ki.islem) FROM kisi_islemi ki WHERE ki.kisi_id = k.id), '[]'::jsonb) AS ek_islemler,
+            COALESCE((SELECT jsonb_agg(kk.islem ORDER BY kk.islem) FROM kisi_islem_kisiti kk WHERE kk.kisi_id = k.id), '[]'::jsonb) AS alinan_islemler
        FROM kisi k
       WHERE k.aktif AND k.kullanici_adi IS NOT NULL
       ORDER BY k.ad, k.id`,
@@ -428,6 +439,24 @@ export async function kisiIslemiEkle(db: Db, kisiId: number, islem: string, vere
 
 export async function kisiIslemiSil(db: Db, kisiId: number, islem: string): Promise<void> {
   await db.sorgu('DELETE FROM kisi_islemi WHERE kisi_id = $1 AND islem = $2', [kisiId, islem]);
+}
+
+// Kişiden işlem alma (kart 3166): komut hedef durumu söyler; satır varsa ekleme, yoksa silme sessizce geçer. Alan ve zaman ilk alınıştır.
+export async function kisiKisitiEkle(db: Db, kisiId: number, islem: string, alanId: number): Promise<void> {
+  await db.sorgu('INSERT INTO kisi_islem_kisiti (kisi_id, islem, alan_id) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING', [kisiId, islem, alanId]);
+}
+
+export async function kisiKisitiSil(db: Db, kisiId: number, islem: string): Promise<void> {
+  await db.sorgu('DELETE FROM kisi_islem_kisiti WHERE kisi_id = $1 AND islem = $2', [kisiId, islem]);
+}
+
+// Kısıt yalnız rolden gelen işleme konur; kısıtın kendisi sayılmaz (konmuş kısıt ikinci kez sorulduğunda da "rolde var" denir).
+export async function kisininRolundeIslemVarMi(db: Db, kisiId: number, islem: string): Promise<boolean> {
+  const satir = await db.tek<{ var: boolean }>(
+    'SELECT EXISTS (SELECT 1 FROM kisi_rolu kr JOIN rol_islemi ri ON ri.rol_id = kr.rol_id WHERE kr.kisi_id = $1 AND ri.islem = $2) AS var',
+    [kisiId, islem],
+  );
+  return satir?.var === true;
 }
 
 // Ekrandan yetki düzenleme (kart #684): satır varsa ekleme, yoksa silme sessizce geçer; komut hedef durumu söyler.

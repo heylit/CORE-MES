@@ -1,3 +1,4 @@
+import { ISTASYON_YAZMA_ISLEMLERI } from '#paylasilan/islemler.ts';
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link, useLocation } from 'react-router-dom';
@@ -47,7 +48,7 @@ export function TakvimEkrani() {
   // Liste okunamazsa (yetki ya da hata) ilgili seçenekler eksik kalır; iş merkezi ve personel seçimi etkilenmez.
   // /makineler yalnız istasyon sayfasını görene ya da istasyon yazana açıktır; yetkisiz kişide istek atılmaz.
   const islemler = useOturum().data?.islemler;
-  const makineOkur = islemler?.some((i) => i === 'sayfa.istasyonlar' || i === 'istasyonlar.yaz') ?? false;
+  const makineOkur = islemler?.some((i) => i === 'sayfa.istasyonlar' || (ISTASYON_YAZMA_ISLEMLERI as readonly string[]).includes(i)) ?? false;
   const istasyonlar = useQuery({ queryKey: anahtarlar.istasyonSecimi, queryFn: () => api.get<IstasyonSecimiCevabi>('/istasyonlar/secim'), retry: false });
   const makineler = useQuery({ queryKey: anahtarlar.makineler, queryFn: () => api.get<MakinelerCevabi>('/makineler'), retry: false, enabled: makineOkur });
   const [secilen, kaynakYaz] = useState('');

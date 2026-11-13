@@ -1,3 +1,4 @@
+import { ISTASYON_YAZMA_ISLEMLERI } from '#paylasilan/islemler.ts';
 import { useQuery } from '@tanstack/react-query';
 import type { Islem } from '#paylasilan/islemler.ts';
 import type { PanoOzetiCevabi } from '#paylasilan/sozlesme/istasyonlar.ts';
@@ -69,7 +70,7 @@ function Personel() {
 }
 
 // Şirket özeti kartını pano ucunu okuyabilen görür (uçtaki okuma kümesi, kart #1085).
-const PANO_OKUYAN: readonly Islem[] = ['istasyonlar.yaz', 'sayfa.terminal', 'sayfa.vardiya', 'sayfa.personel', 'arkon.bakim'];
+const PANO_OKUYAN: readonly Islem[] = [...ISTASYON_YAZMA_ISLEMLERI, 'sayfa.terminal', 'sayfa.vardiya', 'sayfa.personel', 'arkon.bakim'];
 
 export const anaSayfaKartlari: AnaSayfaKarti[] = [
   { anahtar: 'istasyonlar-makine-durumu', sira: 600, bolum: 'yonetim', islem: 'sayfa.istasyonlar', veya: PANO_OKUYAN, ekran: MakineDurumu },

@@ -115,6 +115,8 @@ export function useRotaDuzeni(veri: RrVerisi, yetki: RrYetkisi, adimaGit: (urunI
   const duzenlenebilir = (id: string): boolean => {
     const m = h.malzeme.get(id);
     if (!yetki.rotaYaz || !m || m.type === 'ham') return false;
+    // Açık revizyonu olmayan üründe ilk düzenleme taslak açar (3165 a): taslak açma eylemi de gerekir.
+    if (!yetki.rotaTaslakAc && acikRevizyon(revler(id)) === null) return false;
     const s = seciliRev(id);
     return !(s && !acikMi(s.status) && (acikRevizyon(revler(id)) !== null || taslakVar(id)));
   };
@@ -354,7 +356,7 @@ export function useRotaDuzeni(veri: RrVerisi, yetki: RrYetkisi, adimaGit: (urunI
     const hedef = h.malzeme.get(hedefId);
     const kaynak = h.malzeme.get(kaynakId);
     if (!hedef || !kaynak) { bildir('hata', 'Hedef ürünü seç.'); return false; }
-    if (!yetki.rotaYaz) return false;
+    if (!yetki.rotaYaz || !yetki.rotaTaslakAc) return false;
     if (acikRevizyon(revler(hedefId)) || taslakVar(hedefId)) {
       bildir('hata', `${hedef.code} için zaten açık bir taslak var; önce onu onayla ya da sil.`);
       return false;

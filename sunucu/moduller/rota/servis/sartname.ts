@@ -213,7 +213,7 @@ export async function yuzeyIslemiAdimlari(db: Db, malzemeId: number): Promise<Ge
   return sonuc;
 }
 
-// Adımın şartnameleri bütün olarak yazılır; yalnız taslak revizyonda (rota.yaz). Yeni bağ kullanımdaki, yayınlanmış ve adımın
+// Adımın şartnameleri bütün olarak yazılır; yalnız taslak revizyonda (rota.revizyon-yaz). Yeni bağ kullanımdaki, yayınlanmış ve adımın
 // kaynağına uyan şartnameyi alır; değerler yürürlükteki sürümün "adımda değişir" alanlarına göre denetlenir.
 export async function adimSartnameleriKaydet(db: Db, kullanici: Kullanici, revizyonId: number, g: {
   surum: number; opNo: number; sartnameler: { sartnameId: number; degerler: ParametreDegerleri }[];

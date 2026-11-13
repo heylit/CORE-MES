@@ -73,7 +73,7 @@ describe('rota ana sayfa kartları (#489)', () => {
 
   it('kart görünürlüğü işleme bağlı: açık revizyon rota yazana, onay bekleyen onaylayana', () => {
     expect(Object.fromEntries(anaSayfaKartlari.map((k) => [k.anahtar, [k.bolum, k.islem, ...(k.veya ?? [])]]))).toEqual({
-      'rota-acik-revizyon': ['is', 'rota.yaz'],
+      'rota-acik-revizyon': ['is', 'rota.revizyon-yaz', 'rota.onaya-gonder'],
       'rota-onay-bekleyen': ['is', 'rota.onayla'],
       'rota-yonetim-acik-emir': ['yonetim', ...EMIR_OKUYAN],
       'rota-yonetim-geciken-emir': ['yonetim', ...EMIR_OKUYAN],

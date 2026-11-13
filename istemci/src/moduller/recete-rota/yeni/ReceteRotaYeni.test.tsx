@@ -93,7 +93,7 @@ describe('yeni Reçete ve Rota ekranı: gezinme ve veri', () => {
     await durumOkundu(istekler);
     await parcaCizildi(bolge, 'R3');
     expect(screen.queryByRole('tablist', { name: 'Reçete ve Rota bölümleri' })).toBeNull();
-    // Okuma yalnız GET'tir; rota.yaz olmayan için kart taslağı açılmaz, kayıt belgesine yazılmaz.
+    // Okuma yalnız GET'tir; rota yazamayan için kart taslağı açılmaz, kayıt belgesine yazılmaz.
     expect(istekler.filter((i) => i.yontem !== 'GET')).toEqual([]);
   });
 
@@ -109,7 +109,7 @@ describe('yeni Reçete ve Rota ekranı: gezinme ve veri', () => {
     expect(istekler.filter((i) => i.yol === '/plan/planlama-kaynagi')).toHaveLength(okuma);
   });
 
-  it('1395 a: rota.yaz olanın ekranı açılışta yazma yapmaz, yalnız okur', async () => {
+  it('1395 a: rota yazabilenin ekranı açılışta yazma yapmaz, yalnız okur', async () => {
     const istekler = sunucuKur(YONETICI);
     rrAc();
     await parcaCizildi(await acikBolum('Üretim emirleri'), 'R3');

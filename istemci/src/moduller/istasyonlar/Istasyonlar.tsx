@@ -1,3 +1,4 @@
+import { ISTASYON_KISI_SECEN_ISLEMLER, type Islem } from '#paylasilan/islemler.ts';
 import { Link, Navigate, useParams } from 'react-router-dom';
 import { Dugme, DurumKutusu, Kart, Rozet } from '../../ortak/arayuz/index.ts';
 import { maddeGorunurMu } from '#paylasilan/sayfalar.ts';
@@ -79,9 +80,15 @@ export function Istasyonlar() {
   const oturum = useOturum();
   const { bolum: adresteki } = useParams();
   const islemler = oturum.data?.islemler ?? [];
-  const yazabilir = islemler.includes('istasyonlar.yaz');
+  // Her bölümün düğmeleri kendi eylemine bağlıdır (3165 a); sunucu ayrıca reddeder.
+  const var_ = (i: Islem): boolean => islemler.includes(i);
+  const yaz = {
+    istasyon: var_('istasyonlar.istasyon-yaz'), merkez: var_('istasyonlar.is-merkezi-yaz'), makine: var_('istasyonlar.makine-yaz'),
+    kisiAta: var_('istasyonlar.kisi-ata'), ekip: var_('istasyonlar.ekip-yaz'), yetkinlik: var_('istasyonlar.yetkinlik-yaz'), tanim: var_('istasyonlar.tanim-yaz'),
+  };
+  const kisiSecer = ISTASYON_KISI_SECEN_ISLEMLER.some(var_);
   // Operasyon tipleri kendi verisini okur; tesis verisi orada istenmez.
-  const v = useTesisVerisi(yazabilir, adresteki !== 'operasyon-tipleri');
+  const v = useTesisVerisi(kisiSecer, adresteki !== 'operasyon-tipleri');
   const y = useTesisYaz();
 
   if (!oturum.data) return null;
@@ -98,16 +105,16 @@ export function Istasyonlar() {
       <div className="tc-ist-sayfa" role="region" aria-label={tanim.baslik}>
         {bolum === 'genel' && <GenelBakis v={v} />}
         {bolum === 'is-merkezleri' && (
-          <MerkezIstasyonlari v={v} y={y} yazabilir={yazabilir} islemler={islemler}
+          <MerkezIstasyonlari v={v} y={y} yazabilir={yaz.istasyon} merkezYazabilir={yaz.merkez} sablonYazabilir={yaz.tanim} islemler={islemler}
             istasyonAraci={islemler.includes('sayfa.etiket-merkezi') ? <IstasyonEtiketleri v={v} /> : null} />
         )}
-        {bolum === 'makineler' && <MakineSekmesi v={v} y={y} yazabilir={yazabilir} durumYazabilir={yazabilir || islemler.includes('istasyonlar.makine-durumu')} haritaVar={islemler.includes('sayfa.atolye')} />}
+        {bolum === 'makineler' && <MakineSekmesi v={v} y={y} yazabilir={yaz.makine} durumYazabilir={yaz.makine || var_('istasyonlar.makine-durumu')} haritaVar={islemler.includes('sayfa.atolye')} />}
         {bolum === 'personel' && (
-          <PersonelSekmesi v={v} y={y} yazabilir={yazabilir} kisitYazabilir={yazabilir || islemler.includes('arkon.amir')} benId={oturum.data.id} kisiAcabilir={islemler.includes('ik.personel-yaz')} vardiyaYazabilir={islemler.includes('vardiya.yaz')} />
+          <PersonelSekmesi v={v} y={y} yazabilir={yaz.kisiAta} yetkinlikYazabilir={yaz.yetkinlik} ekipYazabilir={yaz.ekip} kisitYazabilir={yaz.kisiAta || var_('arkon.amir')} benId={oturum.data.id} kisiAcabilir={islemler.includes('ik.personel-yaz')} vardiyaYazabilir={islemler.includes('vardiya.yaz')} />
         )}
-        {bolum === 'yetkinlik' && <YetkinlikMatrisi v={v} yazabilir={yazabilir} />}
+        {bolum === 'yetkinlik' && <YetkinlikMatrisi v={v} yazabilir={yaz.yetkinlik} />}
         {bolum === 'vardiyalar' && <VardiyaBolumu v={v} sayfaVar={islemler.includes('sayfa.vardiya')} />}
-        {bolum === 'operasyon-tipleri' && <OperasyonTipleri yazabilir={yazabilir} />}
+        {bolum === 'operasyon-tipleri' && <OperasyonTipleri yazabilir={yaz.tanim} />}
       </div>
     </Kart>
   );

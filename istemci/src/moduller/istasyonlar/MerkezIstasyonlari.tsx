@@ -99,8 +99,9 @@ const SEKMELER: readonly Sekme<Gorunum>[] = [
 ];
 
 // istasyonAraci: yalnız İstasyonlar sekmesinde, sekmelerin altında gösterilen araç (istasyon etiketleri).
-export function MerkezIstasyonlari({ v, y, yazabilir, islemler = [], istasyonAraci = null }: {
-  v: TesisVerisi; y: TesisYaz; yazabilir: boolean; islemler?: readonly string[]; istasyonAraci?: ReactNode;
+// yazabilir istasyonu, merkezYazabilir iş merkezini düzenler; şablon ayrıca sablonYazabilir ister (3165 a: ayrı eylemler).
+export function MerkezIstasyonlari({ v, y, yazabilir, merkezYazabilir, sablonYazabilir = false, islemler = [], istasyonAraci = null }: {
+  v: TesisVerisi; y: TesisYaz; yazabilir: boolean; merkezYazabilir: boolean; sablonYazabilir?: boolean; islemler?: readonly string[]; istasyonAraci?: ReactNode;
 }) {
   const [ara, araYaz] = useState('');
   const [sablonSonucu, sablonSonucuYaz] = useState<string | null>(null);
@@ -284,14 +285,14 @@ export function MerkezIstasyonlari({ v, y, yazabilir, islemler = [], istasyonAra
             </Dugme>
           )}
           {!merkezSekmesi && <Dugme simge="download" onClick={csv} disabled={gorunenler.length === 0}>CSV indir</Dugme>}
-          {yazabilir && <ExcelMenusu tur="tesis" v={v} bolum="İş merkezleri ve istasyonlar" />}
-          {yazabilir && merkezSekmesi && (
+          {(yazabilir || merkezYazabilir) && <ExcelMenusu tur="tesis" v={v} bolum="İş merkezleri ve istasyonlar" />}
+          {yazabilir && merkezYazabilir && sablonYazabilir && merkezSekmesi && (
             <Dugme simge="layers" disabled={y.mesgul} title="Hazır iş merkezi ve istasyon listesini açar (Kalite dahil); var olan kayda dokunmaz."
               onClick={() => { sablonSonucuYaz(null); y.gonder({ yol: '/tesis-sablonu/uygula', satir: 'sablon' }, { onSuccess: (c) => sablonSonucuYaz(sablonIletisi(c as TesisSablonuSonucu)) }); }}>
               Şablonu uygula
             </Dugme>
           )}
-          {yazabilir && merkezSekmesi && (
+          {merkezYazabilir && merkezSekmesi && (
             <Dugme tur="birincil" simge="plus" disabled={y.mesgul}
               onClick={() => y.gonder(
                 { yol: '/is-merkezleri', govde: { kod: yeniKod('IM', v.merkezler.map((m) => m.kod)), ad: 'Yeni iş merkezi', aciklama: null }, satir: 'yeni-im' },
@@ -344,7 +345,8 @@ export function MerkezIstasyonlari({ v, y, yazabilir, islemler = [], istasyonAra
         const hafta = v.takvim?.isMerkezleri.find((x) => x.id === m.id)?.haftalikDakika;
         // Arama ya da süzgeç varken bulunan satırlar görünsün diye panel açılır.
         const acik = !merkezSekmesi && (!kapaliMerkezler.has(m.id) || ara.trim() !== '' || suzgec.size > 0);
-        const duzenle = merkezSekmesi && yazabilir && duzenlenen.has(`im:${m.id}`);
+        const duzenle = merkezSekmesi && merkezYazabilir && duzenlenen.has(`im:${m.id}`);
+        const merkezKapali = !merkezYazabilir || y.mesgul;
         const hepsi = satirlar.length > 0 && satirlar.every((s) => secili.has(s.id));
         return (
           <section key={m.id} className={`tc-ist-panel ${merkezRengi(m.id)}`} aria-label={`${m.kod} iş merkezi`}>
@@ -357,8 +359,8 @@ export function MerkezIstasyonlari({ v, y, yazabilir, islemler = [], istasyonAra
               )}
               {duzenle ? (
                 <>
-                  <Hucre baslik="Kod"><MetinHucresi surum={m.surum} etiket={`${m.kod} iş merkezi kodu`} deger={m.kod} mono enCok={24} disabled={kapali} kaydet={(kod) => merkezYaz(m, { kod })} /></Hucre>
-                  <Hucre baslik="İş merkezi adı" className="tc-ist-genis"><MetinHucresi surum={m.surum} etiket={`${m.kod} iş merkezi adı`} deger={m.ad} enCok={120} disabled={kapali} kaydet={(ad) => merkezYaz(m, { ad })} /></Hucre>
+                  <Hucre baslik="Kod"><MetinHucresi surum={m.surum} etiket={`${m.kod} iş merkezi kodu`} deger={m.kod} mono enCok={24} disabled={merkezKapali} kaydet={(kod) => merkezYaz(m, { kod })} /></Hucre>
+                  <Hucre baslik="İş merkezi adı" className="tc-ist-genis"><MetinHucresi surum={m.surum} etiket={`${m.kod} iş merkezi adı`} deger={m.ad} enCok={120} disabled={merkezKapali} kaydet={(ad) => merkezYaz(m, { ad })} /></Hucre>
                 </>
               ) : (
                 <h3 className="tc-ist-alt-baslik tc-ist-genis">
@@ -373,9 +375,9 @@ export function MerkezIstasyonlari({ v, y, yazabilir, islemler = [], istasyonAra
                 <Link to="/istasyonlar/vardiyalar" className="tc-ist-bag"><Simge ad="clock" boyut="k" /> Vardiyalar</Link>
               </Hucre>
               <div className="tc-ist-islemler">
-                {duzenle && <AktifDugmesi aktif={m.aktif} etiket={m.kod} disabled={kapali} degistir={() => merkezYaz(m, { aktif: !m.aktif })} />}
-                {merkezSekmesi && yazabilir && <DuzenleDugmesi kod={`${m.kod} iş merkezi`} acik={duzenle} degistir={(d) => duzenlenenYaz((k) => degistir(k, `im:${m.id}`, d))} />}
-                {merkezSekmesi && yazabilir && <Dugme simge="more" onClick={() => merkezAyrintiYaz(m)} aria-label={`${m.kod} ayrıntı`} title="Ayrıntı" />}
+                {duzenle && <AktifDugmesi aktif={m.aktif} etiket={m.kod} disabled={merkezKapali} degistir={() => merkezYaz(m, { aktif: !m.aktif })} />}
+                {merkezSekmesi && merkezYazabilir && <DuzenleDugmesi kod={`${m.kod} iş merkezi`} acik={duzenle} degistir={(d) => duzenlenenYaz((k) => degistir(k, `im:${m.id}`, d))} />}
+                {merkezSekmesi && merkezYazabilir && <Dugme simge="more" onClick={() => merkezAyrintiYaz(m)} aria-label={`${m.kod} ayrıntı`} title="Ayrıntı" />}
               </div>
             </div>
             <SatirHatasi ileti={y.hatalar[`im:${m.id}`]} />

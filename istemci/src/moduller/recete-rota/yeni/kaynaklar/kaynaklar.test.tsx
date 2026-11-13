@@ -52,7 +52,7 @@ const sureSunucusu = (k: Kullanici) => sunucuKur(k, {
 });
 
 describe('R2 Süreler', () => {
-  it('izinli: rota.yaz olan elle ölçüm yazar ve bekleyen ölçümü kabul eder; okunan son satır gider, süreler yeniden okunur', async () => {
+  it('izinli: rota.sure-kabul olan elle ölçüm yazar ve bekleyen ölçümü kabul eder; okunan son satır gider, süreler yeniden okunur', async () => {
     const istekler = sureSunucusu(YONETICI);
     rrAc('/recete-rota/sureler');
     const bolge = await bolumAc('Süreler');
@@ -90,7 +90,7 @@ describe('R2 Süreler', () => {
     expect(await screen.findByText(uyari)).toBeTruthy();
   });
 
-  it('reddedilen: geçersiz sayı istek atmaz; rota.yaz olmayan girdi ve kabul düğmesi görmez, ölçüm metin olarak görünür', async () => {
+  it('reddedilen: geçersiz sayı istek atmaz; rota.sure-kabul olmayan girdi ve kabul düğmesi görmez, ölçüm metin olarak görünür', async () => {
     const istekler = sureSunucusu(YONETICI);
     rrAc('/recete-rota/sureler');
     const bolge = await bolumAc('Süreler');
@@ -289,7 +289,7 @@ describe('R2 Kaynaklar', () => {
     expect(yazmalar(istekler)).toEqual([]);
   });
 
-  it('reddedilen: istasyonlar.yaz olmayan ekleme, silme ve girdi görmez; istek gitmez', async () => {
+  it('reddedilen: istasyon eylemi olmayan ekleme, silme ve girdi görmez; istek gitmez', async () => {
     const istekler = sunucuKur({ ...OKUYAN, islemler: [KAPI, 'sayfa.recete-rota', 'recete-rota.oku'] } as Kullanici, { durum: kaynakDurumu(), yazmalar: SAHIP_OKUMALARI });
     rrAc('/recete-rota/res');
     const bolge = await bolumAc('Kaynaklar');

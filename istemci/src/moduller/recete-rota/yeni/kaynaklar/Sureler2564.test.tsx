@@ -42,7 +42,7 @@ const sureler = (rev: number, malzemeId: number, adimlar: SurelerCevabi['adimlar
 });
 const OLCUM = { id: 90, sureDk: '2.6', kaynak: 'terminal' as const, isEmriId: 5, makineId: 3, yazan: { id: 1, ad: 'Deneme' }, zaman: '2026-11-09T08:00:00.000Z' };
 // MM-0001 OP 10: işlem ölçümü 5 kez, ortanca 2,6 (teorik 2 → +%30, eşik üstü); OP 20: tek ölçüm 2,1 (+%5). MM-0013: ölçüm yok, plan farklı.
-const kur = () => sunucuKur(YONETICI, {
+const kur = (kisi = YONETICI) => sunucuKur(kisi, {
   durum: durum(),
   yazmalar: {
     'GET /rota/revizyonlar/7/sureler': () => json(200, sureler(7, 11, [
@@ -62,8 +62,8 @@ const kur = () => sunucuKur(YONETICI, {
   },
 });
 
-async function ac() {
-  const istekler = kur();
+async function ac(kisi = YONETICI) {
+  const istekler = kur(kisi);
   rrAc('/recete-rota/sureler');
   const bolge = await screen.findByRole('region', { name: 'Süreler' });
   const tablo = await within(bolge).findByRole('table', { name: 'Süreler' });
@@ -133,4 +133,15 @@ const kur2 = () => sunucuKur(YONETICI, {
     'GET /rota/revizyonlar/7/sureler': () => json(200, sureler(7, 11, [satir(41, 10, 21, 'TOR')])),
     'GET /rota/revizyonlar/8/sureler': () => json(200, sureler(8, 13, [satir(43, 10, 22, 'FRZ')])),
   },
+
+});
+
+describe('3165 a Süreler yetkisi', () => {
+  it('3165 a: gerçekleşen süre eylemi olmayan Kabul et ve süre girişini görmez, istek gitmez', async () => {
+    const { istekler, tablo } = await ac({ ...YONETICI, islemler: YONETICI.islemler.filter((i) => i !== 'rota.sure-kabul') });
+    const satirEl = within(tablo).getByRole('row', { name: 'MM-0001 OP 10 süreleri' });
+    expect(within(satirEl).queryByRole('button', { name: /ortancasını kabul et/ })).toBeNull();
+    expect(within(satirEl).queryByLabelText(/^Gerçekleşen .* dakika/)).toBeNull();
+    expect(istekler.filter((i) => i.yontem === 'POST')).toEqual([]);
+  });
 });

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { ISTASYON_YAZMA_ISLEMLERI } from '../islemler.ts';
 import { MAKINE_DURUMLARI } from './istasyonlar.ts';
 import { tarihSemasi, zamanSemasi } from '../zaman.ts';
 
@@ -22,7 +23,7 @@ export const kaynakAramaCevabi = z.object({
 
 // Bölümlerin okuma işlemleri (1322 a): sahibin kendi ekranını açan işlemlerden biri. Ekran gizlediği bölümü bu tablodan bilir.
 export const BOLUM_ISLEMLERI = {
-  tesis: ['sayfa.istasyonlar', 'istasyonlar.yaz'],
+  tesis: ['sayfa.istasyonlar', ...ISTASYON_YAZMA_ISLEMLERI],
   vardiya: ['sayfa.vardiya'],
   izin: ['ik.oku', 'ik.izin-oku'],
   isler: ['sayfa.uretim-emirleri'],

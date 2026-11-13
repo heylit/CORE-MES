@@ -59,6 +59,11 @@ export const ILETILER = {
   bayrakliEkIslem: 'Tüm yetkileri veren role sahip kişi her işleme sahiptir; ek yetki verilmez.',
   devredilmezIslem: 'Bu yetki kişiye ayrıca verilmez; yalnızca tüm yetkileri veren rolde kalır.',
   ekIslemKullaniciDegil: 'Ek yetki yalnızca aktif ve girişi olan kişiye verilir.',
+  kisitYetkisiz: 'Kişiden yetkiyi yalnızca tüm yetkileri veren role sahip kişi alabilir ve geri verebilir.',
+  bayrakliKisit: 'Tüm yetkileri veren role sahip kişiden yetki alınmaz.',
+  devredilmezKisit: 'Bu yetki tek kişiden alınmaz; yalnızca rolüyle birlikte gelir ve gider.',
+  kisitKullaniciDegil: 'Yetki yalnızca aktif ve girişi olan kişiden alınır.',
+  kisitRoldeYok: 'Bu yetki kişinin rolünden gelmiyor; ek yetkiyse ek yetkiyi kaldırın.',
   ozlukIkte: 'Ad, sicil no ve görev bu kişide İK personel kartından gelir; İK\'da değiştirin.',
   cikisVar: 'Kişinin İK\'da çıkış tarihi geçmiş; aktif yapmak için önce İK\'da çıkışı kaldırın.',
   sinirliBayrakli: 'Tüm yetkileri veren role sahip kişi sınırlı hesap olamaz; sınırlı hesaba bu rol verilmez.',
@@ -241,6 +246,23 @@ export function ekIslemReddi(girdi: {
   if (girdi.verildi && !girdi.kisiKullanici) return { tur: 'gecersiz', ileti: ILETILER.ekIslemKullaniciDegil };
   if (!girdi.islemKayitli) return { tur: 'gecersiz', ileti: ILETILER.islemKayitsiz };
   if (girdi.verildi && girdi.devredilmez) return { tur: 'gecersiz', ileti: ILETILER.devredilmezIslem };
+  return null;
+}
+
+// KS-11 (kart 3166): rolden gelen işlemi tek kişiden yalnız bayraklı kişi alır ve geri verir; kural ek işlemle aynı yetkiye bağlıdır.
+// Bayraklı kişi kısıtlanmaz: alan da bayraklı olduğundan kimse kendi yetkisini alıp kilitlenemez, son yönetici de kısıtlanamaz.
+// Devredilmez işlemler alınmaz: "rol yöneten ama parola değiştiremeyen" gibi yarım roller çıkmasın. Kısıt yalnız rolden gelen
+// işleme konur; ek işlem zaten kendi komutuyla kaldırılır. Var olan kısıt her durumda kaldırılabilir (kaldırmak rol yetkisine döndürür).
+export function kisitReddi(girdi: {
+  aktorBayrakli: boolean; kisiBayrakli: boolean; kisiKullanici: boolean; islemKayitli: boolean; devredilmez: boolean; roldeVar: boolean; alindi: boolean;
+}): Ret | null {
+  if (!girdi.aktorBayrakli) return { tur: 'yetki', ileti: ILETILER.kisitYetkisiz };
+  if (!girdi.alindi) return null;
+  if (girdi.kisiBayrakli) return { tur: 'gecersiz', ileti: ILETILER.bayrakliKisit };
+  if (!girdi.kisiKullanici) return { tur: 'gecersiz', ileti: ILETILER.kisitKullaniciDegil };
+  if (!girdi.islemKayitli) return { tur: 'gecersiz', ileti: ILETILER.islemKayitsiz };
+  if (girdi.devredilmez) return { tur: 'gecersiz', ileti: ILETILER.devredilmezKisit };
+  if (!girdi.roldeVar) return { tur: 'gecersiz', ileti: ILETILER.kisitRoldeYok };
   return null;
 }
 

@@ -2,7 +2,18 @@ import type { Islem } from '#paylasilan/islemler.ts';
 import type { Istasyon, KapasiteKaynagi, SablonIstasyonu, SablonMerkezi, SecimGrubu } from '#paylasilan/sozlesme/istasyonlar.ts';
 
 // Makine durumunu bakımcı, vardiya sorumlusu ve müdür de değiştirir; tanımlar yöneticide kalır (karar 263 a). Uç ve dışa açık komut aynı kümeyi arar.
-export const MAKINE_DURUMU_ISLEMLERI = ['istasyonlar.yaz', 'istasyonlar.makine-durumu'] as const satisfies readonly Islem[];
+// Makineyi düzenleyen durumunu da değiştirir (bölmeden önce tanım yazımı durumu da açıyordu).
+export const MAKINE_DURUMU_ISLEMLERI = ['istasyonlar.makine-yaz', 'istasyonlar.makine-durumu'] as const satisfies readonly Islem[];
+
+// Excel ve şablon birden çok kayıt türünü birlikte yazar; her tür kendi eylemini ister (3165 a). Eksik ilk eylem döner, yoksa null.
+const KAYIT_ISLEMI = {
+  'is-merkezi': 'istasyonlar.is-merkezi-yaz', istasyon: 'istasyonlar.istasyon-yaz', makine: 'istasyonlar.makine-yaz',
+} as const satisfies Record<string, Islem>;
+export type TesisKayitTuru = keyof typeof KAYIT_ISLEMI;
+export function eksikKayitIslemi(islemler: readonly string[], turler: readonly TesisKayitTuru[]): Islem | null {
+  for (const tur of new Set(turler)) if (!islemler.includes(KAYIT_ISLEMI[tur])) return KAYIT_ISLEMI[tur];
+  return null;
+}
 
 // Arıza bildirimi yalnız arızaya geçişte gider; arıza sürerken yazılan açıklama ya da yeniden "arıza" yinelemez.
 export const arizayaGectiMi = (onceki: string | null, yeni: string): boolean => yeni === 'ariza' && onceki !== 'ariza';
@@ -32,7 +43,7 @@ export function isMerkeziIzinliMi(izinli: readonly number[] | null, isMerkeziId:
 
 // Kişinin kısıtını yalnız kendisi, tesisi yöneten ve sınırı değiştirebilen amir okur.
 export function kisitiOkuyabilirMi(okuyan: { id: number; islemler: readonly string[] }, kisiId: number): boolean {
-  return okuyan.id === kisiId || okuyan.islemler.includes('istasyonlar.yaz') || okuyan.islemler.includes('arkon.amir');
+  return okuyan.id === kisiId || okuyan.islemler.includes('istasyonlar.kisi-ata') || okuyan.islemler.includes('arkon.amir');
 }
 
 // Sınır güvenlik içindir: kişi kendi sınırını kaldıramaz; yalnız bütün işlemleri taşıyan (yönetici) kendisininkini değiştirir (karar 245 a).

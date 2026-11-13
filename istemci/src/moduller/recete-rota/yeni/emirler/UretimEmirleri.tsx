@@ -29,7 +29,7 @@ const UE_YENI = '/uretim-emirleri?yeni=1';
 const ueYeniAdresi = (urun: string | null) => (urun === null ? UE_YENI : `${UE_YENI}&urun=${encodeURIComponent(urun)}`);
 
 const saltOkunur = (y: EkranOzellikleri['yetki']): EkranOzellikleri['yetki'] => ({
-  ...y, yaz: false, rotaYaz: false, rotaOnayla: false, rotaEmreKopyala: false, emirYaz: false, stokStatuDegistir: false, stokSayim: false, stokGiris: false,
+  ...y, yaz: false, rotaYaz: false, rotaGonder: false, rotaTaslakAc: false, rotaSureKabul: false, rotaOnayla: false, rotaEmreKopyala: false, emirYaz: false, stokStatuDegistir: false, stokSayim: false, stokGiris: false,
   istasyonYaz: false, kisiYaz: false, planYaz: false, maliyetYaz: false, herhangiYazma: false,
 });
 

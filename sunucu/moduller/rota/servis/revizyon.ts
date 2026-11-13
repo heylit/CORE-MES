@@ -1,12 +1,12 @@
 import { kayitNoktasi } from '#cekirdek/db.ts';
 import type { Db } from '#cekirdek/db.ts';
 import type { Gunluk } from '#cekirdek/gunluk.ts';
-import { UygulamaHatasi, bulunamadi, cakisma, dogrulama, gecersiz } from '#cekirdek/hata.ts';
-import type { Kullanici } from '#cekirdek/yetki.ts';
+import { UygulamaHatasi, bulunamadi, cakisma, dogrulama, gecersiz, yetkiYok } from '#cekirdek/hata.ts';
+import { islemVarMi, type Kullanici } from '#cekirdek/yetki.ts';
 import type { AdimEkipmaniGovdesi, FarkCevabi, KaydetGovdesiCikti, KomutCevabi, RevizyonAyrintisi, KopyaIstegiCevabi } from '#paylasilan/sozlesme/rota.ts';
 import { operasyonluAktifKartlar } from '../../malzemeler/disari.ts';
 import { aletTurleri } from '../../kalibrasyon/disari.ts';
-import { kaynakAnahtari, ilkAdimiDuzenle, dalDenetle, hazirlikBol, girdiOlabilirMi, onayaHazirlikHatalari, topluHataIletisi, hazirlikCeliskisi, revizyonFarki, revizyonHarfi, rotasizMamuller, sayiyaCevir, taslakDenetle, dortGozEngeli, taslakSureleri } from '../kurallar.ts';
+import { TASLAK_AC, kaynakAnahtari, ilkAdimiDuzenle, dalDenetle, hazirlikBol, girdiOlabilirMi, onayaHazirlikHatalari, topluHataIletisi, hazirlikCeliskisi, revizyonFarki, revizyonHarfi, rotasizMamuller, sayiyaCevir, taslakDenetle, dortGozEngeli, taslakSureleri } from '../kurallar.ts';
 import type { FarkAdimi } from '../kurallar.ts';
 import * as s from '../sorgular.ts';
 import type { AdimKaynagi, RevizyonSatiri } from '../sorgular.ts';
@@ -314,6 +314,8 @@ export async function iptal(db: Db, kullanici: Kullanici, id: number, surum: num
 // Revizyon başka (ya da aynı) mamule taslak olarak kopyalanır. Aynı üründe numaralar korunur; başka üründe
 // hedefte kullanılmamış numara korunur, kullanılmış numara yeni numara alır.
 export async function kopyala(db: Db, kullanici: Kullanici, id: number, hedefUrunId: number): Promise<KomutCevabi> {
+  // Uç düzenleme eylemini ister; kopya yeni taslak açtığı için taslak açma eylemi de gerekir (3165 a).
+  if (!islemVarMi(kullanici, TASLAK_AC)) throw yetkiYok();
   const { r } = await komutIcinAl(db, kullanici, id, 'kopyala', null);
   const hedef = await rotaKurulabilirUrun(db, hedefUrunId);
   if (await s.acikRevizyonVarMi(db, hedefUrunId)) throw cakisma(TASLAK_ACIK);
@@ -327,7 +329,7 @@ export async function kopyala(db: Db, kullanici: Kullanici, id: number, hedefUru
 }
 
 // Yeni kartta "reçete ve rotayı şu üründen al" (#500). Kart yazan da rota yazan da ister; kopya her zaman taslaktır, ilerletmek
-// rota.yaz, yürürlüğe almak rota.onayla ister. Kart kullanımdaysa taslak hemen açılır; değilse istek bekler, kart kullanıma girince
+// rota.revizyon-yaz ve rota.onaya-gonder, yürürlüğe almak rota.onayla ister. Kart kullanımdaysa taslak hemen açılır; değilse istek bekler, kart kullanıma girince
 // karttanTaslaklar açar. Aynı karta yeni istek öncekinin yerine geçer.
 export async function kopyaIste(db: Db, kullanici: Kullanici, hedefUrunId: number, kaynakUrunId: number): Promise<KopyaIstegiCevabi> {
   if (hedefUrunId === kaynakUrunId) throw dogrulama('Kaynak ürün kartın kendisi olamaz.', 'kaynakUrunId');

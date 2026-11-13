@@ -7,7 +7,7 @@ import { eskiKoddanKimlikCoz, operasyonTipleri } from '../istasyonlar/disari.ts'
 import { kisiNoKullaniciAdindan } from '../kisiler/disari.ts';
 import { ornekMalzemeNo } from '../malzemeler/disari.ts';
 import type { OrnekMalzemeAnahtari } from '../malzemeler/disari.ts';
-import { ONAYLA, YAZ } from './kurallar.ts';
+import { ONAYA_GONDER, ONAYLA, TASLAK_AC, YAZ } from './kurallar.ts';
 import { kaydet, onayaGonder, onayla, taslakAc } from './servis.ts';
 import { urunRevizyonlari } from './sorgular.ts';
 
@@ -100,7 +100,7 @@ export const ornekVeri = ornekVeriTanimi({
     return false;
   },
   yukle: async (db) => {
-    const hazirlayan = await kullaniciAl(db, HAZIRLAYAN, [YAZ]);
+    const hazirlayan = await kullaniciAl(db, HAZIRLAYAN, [YAZ, ONAYA_GONDER, TASLAK_AC]);
     const onaylayan = await kullaniciAl(db, ONAYLAYAN, [ONAYLA]);
     for (const rota of ROTALAR) {
       const urunId = await malzemeAl(db, rota.urun);
