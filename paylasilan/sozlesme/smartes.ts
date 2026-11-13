@@ -223,3 +223,41 @@ export const canliMakineAyrintisiCevabi = z.object({
 export const canliMakineParametresi = z.object({ kod: z.string().min(1).max(200) });
 export type CanliMakinelerCevabi = z.output<typeof canliMakinelerCevabi>;
 export type CanliMakineAyrintisiCevabi = z.output<typeof canliMakineAyrintisiCevabi>;
+
+/* ---------------- Makine bulguları (kart 3192): makine verisiyle çalışanın girdiği karşılaştırılır; yalnız gösterilir ---------------- */
+
+export const MAKINE_BULGU_TURLERI = ['durum', 'durus', 'sayim', 'program', 'cevrim', 'bitis', 'oee', 'oran', 'yuk', 'alarm'] as const;
+export type MakineBulguTuru = (typeof MAKINE_BULGU_TURLERI)[number];
+export const MAKINE_BULGU_TONLARI = ['tamam', 'uyari', 'hata', 'pasif'] as const;
+export const MAKINE_CIZELGE_TURLERI = ['calisiyor', 'nedenli', 'nedensiz', 'alarm', 'kapali'] as const;
+
+const bulguSerisi = z.object({ ad: z.string(), degerler: z.array(z.number().nullable()) });
+const kategori = z.object({ etiket: z.string(), deger: z.number() });
+
+export const makineBulgulariCevabi = z.object({
+  okumaAcik: z.boolean(),
+  sonOkuma: zamanSemasi.nullable(),
+  // Tür henüz hesaplanmıyorsa (sonraki adımlar) kutu "veri yok" der: deger null.
+  kutular: z.array(z.object({ tur: z.enum(MAKINE_BULGU_TURLERI), deger: z.string().nullable(), alt: z.string().nullable(), ton: z.enum(MAKINE_BULGU_TONLARI) })),
+  bulgular: z.array(z.object({
+    id: z.string(), tur: z.enum(MAKINE_BULGU_TURLERI), ton: z.enum(MAKINE_BULGU_TONLARI), makineKodu: z.string(), makineAdi: z.string().nullable(),
+    emirNo: z.string().nullable(), opNo: z.number().int().nullable(), baslik: z.string(), hesap: z.string(), ne: z.string(), zaman: zamanSemasi,
+  })),
+  karne: z.array(z.object({
+    makineKodu: z.string(), makineAdi: z.string().nullable(),
+    hucreler: z.record(z.enum(MAKINE_BULGU_TURLERI), z.object({ metin: z.string().nullable(), ton: z.enum(MAKINE_BULGU_TONLARI) })),
+  })),
+  grafikler: z.object({
+    cizelge: z.object({
+      baslangic: zamanSemasi, bitis: zamanSemasi, simdi: zamanSemasi,
+      satirlar: z.array(z.object({
+        makineKodu: z.string(),
+        parcalar: z.array(z.object({ baslangic: zamanSemasi, bitis: zamanSemasi, tur: z.enum(MAKINE_CIZELGE_TURLERI), not: z.string() })),
+      })),
+    }),
+    duruslar: z.array(kategori),
+    // Makine sayacı SmartES'ten, operatörün adedi CORE terminalinden; makine CORE'da eşlenmemişse yalnız makine serisi gelir.
+    sayim: z.object({ makineKodu: z.string(), etiketler: z.array(z.string()), seriler: z.array(bulguSerisi) }).nullable(),
+  }).nullable(),
+});
+export type MakineBulgulariCevabi = z.output<typeof makineBulgulariCevabi>;

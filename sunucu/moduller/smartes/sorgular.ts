@@ -586,3 +586,79 @@ export function ilerlemeler(db: Db, isEmriNolari: readonly string[]): Promise<{ 
     [[...isEmriNolari]],
   );
 }
+
+/* ---------------- Makine bulguları (kart 3192): yalnız okur; örnek tablosu okuma turunda yazılır ---------------- */
+
+// Her başarılı makine okumasının izi; satır silinmez (3200 c: süresiz saklanır).
+export async function ornekYaz(db: Db, m: MakineOkumasi, zaman: Date): Promise<void> {
+  await db.sorgu(
+    `INSERT INTO smartes_makine_ornegi (makine_kodu, zaman, durum, sayac, sayac_toplam, eksen_orani, spindle_yuku, takim_cebi, program_no)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+    [m.makineKodu, zaman, m.durum, m.sayac, m.sayacToplam, m.eksenOrani, m.spindleYuku, m.takimCebi, m.programNo?.slice(0, 200) ?? null],
+  );
+}
+
+export interface OrnekSatiri { zaman: string; sayac: number | null; sayacToplam: number | null }
+
+export function ornekler(db: Db, makineKodu: string, bas: Date, son: Date): Promise<OrnekSatiri[]> {
+  return db.sorgu<OrnekSatiri>(
+    `SELECT ${zamanMetni('zaman')} AS zaman, sayac, sayac_toplam AS "sayacToplam" FROM smartes_makine_ornegi
+      WHERE makine_kodu = $1 AND zaman >= $2 AND zaman <= $3 ORDER BY zaman, id`,
+    [makineKodu, bas, son],
+  );
+}
+
+export interface DurusAraligi { makineKodu: string; nedenKodu: string | null; baslangic: string; bitis: string | null }
+
+// Pencereyle kesişen SmartES duruş kayıtları (bitmemiş dahil).
+export function durusAraliklari(db: Db, bas: Date, son: Date): Promise<DurusAraligi[]> {
+  return db.sorgu<DurusAraligi>(
+    `SELECT makine_kodu AS "makineKodu", neden_kodu AS "nedenKodu", ${zamanMetni('baslangic')} AS baslangic, ${zamanMetni('bitis')} AS bitis
+       FROM smartes_durus
+      WHERE makine_kodu IS NOT NULL AND baslangic IS NOT NULL AND baslangic < $2 AND (bitis IS NULL OR bitis > $1)
+      ORDER BY makine_kodu, baslangic, smartes_id`,
+    [bas, son],
+  );
+}
+
+export interface SayimSatiri {
+  isEmriNo: string | null; makineKodu: string; saglam: number | null; red: number | null; makineSaglam: number | null; makineRed: number | null; sonOkuma: string;
+}
+
+// Pencerede okunmuş iş emri durumları (makine kodu olanlar).
+export function gunSayimlari(db: Db, bas: Date): Promise<SayimSatiri[]> {
+  return db.sorgu<SayimSatiri>(
+    `SELECT is_emri_no AS "isEmriNo", makine_kodu AS "makineKodu", saglam, red, makine_saglam AS "makineSaglam", makine_red AS "makineRed",
+            ${zamanMetni('son_okuma')} AS "sonOkuma"
+       FROM smartes_is_emri_durumu WHERE makine_kodu IS NOT NULL AND son_okuma >= $1 ORDER BY makine_kodu, smartes_id`,
+    [bas],
+  );
+}
+
+export interface AlarmTekrari { makineKodu: string; alarmKodu: string; aciklama: string | null; gunler: string[]; son: string }
+
+// Makine ve alarm numarası başına pencerede gelen alarmlar; günler tesis saatine göre değil başlangıç anına göre listelenir (ekran biçimler).
+export function alarmTekrarlari(db: Db, bas: Date): Promise<AlarmTekrari[]> {
+  return db.sorgu<AlarmTekrari>(
+    `SELECT makine_kodu AS "makineKodu", alarm_kodu AS "alarmKodu", max(aciklama) AS aciklama,
+            array_agg(${zamanMetni('baslangic')} ORDER BY baslangic) AS gunler, ${zamanMetni('max(baslangic)')} AS son
+       FROM smartes_alarm
+      WHERE makine_kodu IS NOT NULL AND alarm_kodu IS NOT NULL AND baslangic >= $1
+      GROUP BY makine_kodu, alarm_kodu ORDER BY makine_kodu, alarm_kodu`,
+    [bas],
+  );
+}
+
+export function gidenNolari(db: Db, nolar: readonly string[]): Promise<{ isEmriId: number; no: string }[]> {
+  return db.sorgu(
+    'SELECT is_emri_id AS "isEmriId", smartes_is_emri_no AS no FROM smartes_giden WHERE smartes_is_emri_no = ANY($1::text[])',
+    [[...nolar]],
+  );
+}
+
+export function butunIlerlemeler(db: Db): Promise<{ isEmriNo: string; tamamlananYuzde: number | null; tahminiBitis: string | null }[]> {
+  return db.sorgu(
+    `SELECT is_emri_no AS "isEmriNo", tamamlanan_yuzde::float8 AS "tamamlananYuzde", ${zamanMetni('tahmini_bitis')} AS "tahminiBitis"
+       FROM smartes_is_emri_ilerleme WHERE tahmini_bitis IS NOT NULL AND (tamamlanan_yuzde IS NULL OR tamamlanan_yuzde < 100)`,
+  );
+}

@@ -69,3 +69,6 @@ Kurgu, karar ve sınır kayıtları; kapanacak iş değildir (borç denetimi, ka
     ilk 52 biti); şema değişmedi. Her alarm turunda makine sayısı kadar istek gider; bir makinenin okuması düşerse pencerenin tamamı yeniden okunur.
 - Özet içeriği değişti (`Multipler`, stok açıklaması 150): bağlantı açılınca daha önce gönderilmiş her iş emri bir kez yeniden gider (zararsız
     güncelleme). Bugün bağlantı hiç açılmadı (VARSAYIM).
+- Makine bulguları (3192 D1): "Nedensiz duruş" yalnız SmartES duruş kaydına bakar (CORE terminal duruşu görülmez; BASKA-MODUL-ISTEKLERI 6). Makine durum
+    kodlarının karşılığı (`DURUM_KODLARI`) boş olduğu sürece makineler "bilinmiyor" görünür ve çizelge boş kalır (VARSAYIM: ilk gerçek okumada doldurulur).
+    Termin, SmartES'in tahmini bitişiyle; CORE'un kendi hesabı çevrim ölçümüyle (D2) gelir. `smartes_makine_ornegi` süresiz büyür (3200 c); boyut izlenmez.

@@ -6,7 +6,7 @@ import type { TestVeritabani } from '#cekirdek/test-vt.ts';
 import { uygulamaKur } from '#cekirdek/uygulama.ts';
 import { isiBirKezCalistir } from '#cekirdek/zamanlayici.ts';
 import { SMARTES_AYARLARI } from '#paylasilan/ayarlar/smartes.ts';
-import { canliMakineAyrintisiCevabi, canliMakinelerCevabi } from '#paylasilan/sozlesme/smartes.ts';
+import { canliMakineAyrintisiCevabi, canliMakinelerCevabi, makineBulgulariCevabi } from '#paylasilan/sozlesme/smartes.ts';
 import type { CanliMakinelerCevabi } from '#paylasilan/sozlesme/smartes.ts';
 import { denetimYaz } from '../denetim/disari.ts';
 import { yoneticiOlustur } from '../kisiler/disari.ts';
@@ -17,7 +17,7 @@ import { smartesIstemcisiKur } from './istemci.ts';
 import { MAKINE_TUR_TAVANI_MS } from './kurallar.ts';
 import { sahteSmartesAc } from './sahte-smartes.ts';
 import type { SahteCevap, SahteSmartes } from './sahte-smartes.ts';
-import { canliMakineAyrintisi, canliMakineler, ilerlemeTuru, makineTuru, yeniMakineBellegi } from './servis.ts';
+import { canliMakineAyrintisi, canliMakineler, ilerlemeTuru, makineBulgulari, makineTuru, yeniMakineBellegi } from './servis.ts';
 import type { MakineBellegi } from './servis.ts';
 
 const PAROLA = 'dogru-parola-1';
@@ -90,7 +90,7 @@ describe('SmartES canlı makine panosu (kart 3176, gerçek PostgreSQL)', () => {
     sahte = await sahteSmartesAc();
     simdi += 24 * 3_600_000;
     bellek = yeniMakineBellegi();
-    for (const t of ['smartes_makine_durumu', 'smartes_makine_durum_degisimi', 'smartes_makine_okuma', 'smartes_is_emri_ilerleme', 'smartes_ilerleme_okuma']) {
+    for (const t of ['smartes_makine_ornegi', 'smartes_makine_durumu', 'smartes_makine_durum_degisimi', 'smartes_makine_okuma', 'smartes_is_emri_ilerleme', 'smartes_ilerleme_okuma']) {
       await vt().sorgu(`DELETE FROM ${t}`);
     }
     await ayar('smartes.baglanti', true);
@@ -292,5 +292,50 @@ describe('SmartES canlı makine panosu (kart 3176, gerçek PostgreSQL)', () => {
     assert.equal((await ilerlemeTuru(vt(), ortamKur())).tur, 'islendi');
     assert.equal(cagrilar('WorkordersList').length, 2);
     assert.deepEqual(sahte.cagrilar.map((x) => x.metot).filter((m) => YAZAN_METOT.test(m)), []);
+  });
+  test('3192 D1: her okuma örnek olarak birikir; bulgular sayım farkını ve tekrar eden alarmı hesabıyla verir; henüz hesaplanmayan kutu veri yok der', async () => {
+    const bulgular = async () => makineBulgulariCevabi.parse(await vt().tx((db) => makineBulgulari(db, ortamKur().istemci, new Date(simdi))));
+    await tur();
+    simdi += 60_000;
+    bilgiler.set('1', bilgi('ORN-M01', { PARTS1: '15', PARTS2: '3403' }));
+    await tur();
+    assert.equal(await say('smartes_makine_ornegi'), 6, 'makine başına her okuma bir örnek; silinmez');
+    const no = `ORN-3192-${simdi}`;
+    await vt().sorgu(
+      `INSERT INTO smartes_is_emri_durumu (smartes_id, is_emri_no, makine_kodu, saglam, red, makine_saglam, makine_red, ham, ilk_okuma, son_okuma)
+       VALUES ($1, $2, 'ORN-M01', 38, 2, 52, 0, '{}', $3, $3)`, [simdi % 1_000_000_000, no, new Date(simdi)]);
+    // Daha yeni ama farkı küçük satır: eğri yine en büyük farklı makineyi gösterir.
+    await vt().sorgu(
+      `INSERT INTO smartes_is_emri_durumu (smartes_id, is_emri_no, makine_kodu, saglam, red, makine_saglam, makine_red, ham, ilk_okuma, son_okuma)
+       VALUES ($1, $2, 'ORN-M02', 20, 0, 25, 0, '{}', $3, $3)`, [simdi % 1_000_000_000 + 100, `${no}-B`, new Date(simdi + 1000)]);
+    for (const gunOnce of [1, 2, 3]) {
+      await vt().sorgu(
+        `INSERT INTO smartes_alarm (smartes_id, makine_kodu, alarm_kodu, aciklama, baslangic, ham, ilk_okuma, son_okuma)
+         VALUES ($1, 'ORN-M02', '1012', 'ORN Hidrolik', $2, '{}', $2, $2)`, [simdi % 1_000_000_000 + gunOnce, new Date(simdi - gunOnce * 86_400_000)]);
+    }
+    const b = await bulgular();
+    assert.equal(b.okumaAcik, true);
+    assert.equal(b.kutular.length, 10);
+    // Durum kodları henüz bilinmiyor: çalışan ve nedensiz duruş sıfır değil, veri yok.
+    assert.equal(b.kutular.find((k) => k.tur === 'durum')?.deger, null);
+    assert.equal(b.kutular.find((k) => k.tur === 'durus')?.deger, null);
+    assert.equal(b.kutular.find((k) => k.tur === 'sayim')?.alt, 'en büyük fark 12 adet');
+    for (const tur of ['program', 'cevrim', 'oee', 'oran', 'yuk'] as const) assert.equal(b.kutular.find((k) => k.tur === tur)?.deger, null, tur);
+    const sayim = b.bulgular.find((x) => x.tur === 'sayim' && x.makineKodu === 'ORN-M01');
+    assert.equal(b.bulgular.filter((x) => x.tur === 'sayim').length, 2);
+    assert.match(sayim?.hesap ?? '', /fark 12 \(tolerans 2\)/);
+    const alarm = b.bulgular.find((x) => x.tur === 'alarm');
+    assert.equal(alarm?.ton, 'uyari');
+    assert.match(alarm?.baslik ?? '', /7 günde 3 kez/);
+    assert.equal(b.karne.find((k) => k.makineKodu === 'ORN-M01')?.hucreler.sayim.metin, '52 / 40');
+    const egri = b.grafikler?.sayim;
+    assert.equal(egri?.makineKodu, 'ORN-M01');
+    assert.equal(egri?.seriler.length, 1, 'CORE eşlemesi yok: yalnız makine serisi');
+    assert.equal(egri?.seriler[0]?.degerler.filter((d) => d !== null).at(-1), 3);
+    assert.equal((await istek('GET', '/smartes/makine-bulgulari', undefined, okuyucu)).statusCode, 200);
+    assert.equal((await istek('GET', '/smartes/makine-bulgulari', undefined, yetkisiz)).statusCode, 403);
+
+    await ayar('smartes.makine-okumasi', false);
+    assert.deepEqual((await bulgular()).kutular, []);
   });
 });

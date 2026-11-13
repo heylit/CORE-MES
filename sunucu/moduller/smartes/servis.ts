@@ -5,7 +5,7 @@ import { kisitKorumali } from '#cekirdek/kisit.ts';
 import { sayfaliListe } from '#cekirdek/liste.ts';
 import { surumluGuncelle } from '#cekirdek/surum.ts';
 import type {
-  AlarmlarCevabi, CanliMakineAyrintisiCevabi, CanliMakinelerCevabi, DurumCevabi, DuruslarCevabi, EslemeCevabi, EslemelerCevabi, GidenCevabi, IsEmriDurumlariCevabi, SmartesBaglantiDurumu,
+  AlarmlarCevabi, CanliMakineAyrintisiCevabi, MakineBulgulariCevabi, CanliMakinelerCevabi, DurumCevabi, DuruslarCevabi, EslemeCevabi, EslemelerCevabi, GidenCevabi, IsEmriDurumlariCevabi, SmartesBaglantiDurumu,
   SmartesHazirlikCevabi, SmartesKontrolCevabi,
 } from '#paylasilan/sozlesme/smartes.ts';
 import type { IkinciMenuSayaclari } from '#paylasilan/sayfa-tanimi.ts';
@@ -14,7 +14,7 @@ import { sistemAyariOku } from '../ayarlar/disari.ts';
 import { durusNedenleriniListele } from '../durus-nedenleri/disari.ts';
 import { istasyonlar, makineler, operasyonTipleri } from '../istasyonlar/disari.ts';
 import { malzemeOzetleri } from '../malzemeler/disari.ts';
-import { isEmriOzeti, makinelerdekiIsler, planlanacakIsEmirleri } from '../uretim-emirleri/disari.ts';
+import { gunlukAralikAdetleri, isEmriOzeti, isEmriOzetleri, isEmriZamanlari, makinelerdekiIsler, planlanacakIsEmirleri } from '../uretim-emirleri/disari.ts';
 import type { IstemciHatasi, IstemciSonucu, SmartesIstemcisi } from './istemci.ts';
 import {
   adetDegistiMi, alarmOku, alarmParametreleri, alarmSatiri, ambarOku, MAKINE_LISTESI_METODU, smartesMakineleri, BELIRSIZ_ILETISI, durusOku, eksikIstegeBagliMetotlar, eksikMetotlar, geriCekilmeMs, KALITE_AMBAR_METOTLARI, KALITE_AMBAR_AYARI,
@@ -23,10 +23,11 @@ import {
   listedekiKodlar, OKUMA_METOTLARI, okumaParametreleri, okumaPenceresi, OPERASYON_METODU, pencereAtlanmaliMi, operasyonParametreleri, redOku,
   skalerBasariliMi, smartesIsEmriNo, smartesOperasyonKodu, sonucBilinmiyorMu, TANIM_AYARI, TANIM_LISTE_METOTLARI, TANIM_METOTLARI, TANIM_NIYET_SINIRI,
   TANIM_TUR_SINIRI, TANIM_TURLERI, tanimEylemi, tanimKoduUygunMu, tanimParametreleri, yasakMetotMu,
+  alarmTekrarTonu, birikimliSayac, cizelgeParcalari, nedensizDuruslar, sayimKarsilastir, terminAsimi,
   bugunDilimleri, ILERLEME_ARALIGI_MS, ILERLEME_METODU, ilerlemeOku, ilerlemeParametreleri, MAKINE_AYARI, MAKINE_BILGI_METODU, MAKINE_LISTESI_YENILEME_MS,
   MAKINE_OKUMA_ARALIGI_MS, MAKINE_TUR_TAVANI_MS, makineBilgiParametreleri, makineBilgisiOku, turSirasi,
 } from './kurallar.ts';
-import type { AkisAyari, AktifMakine, EslemeTuru, GidecekIsEmri, KaliteAmbarKaynagi, MakineDurumu, OkumaKaynagi, TanimKaydi, TanimTuru } from './kurallar.ts';
+import type { AkisAyari, AktifMakine, CizelgeParcasi, EslemeTuru, GidecekIsEmri, KaliteAmbarKaynagi, MakineDurumu, OkumaKaynagi, TanimKaydi, TanimTuru } from './kurallar.ts';
 import { smartesTarihi } from './soap.ts';
 import type { Parametreler, TabloSatiri } from './soap.ts';
 import * as s from './sorgular.ts';
@@ -686,7 +687,8 @@ export async function makineTuru(
       continue;
     }
     const zaman = o.saat();
-    await vt.tx((db) => s.makineYaz(db, okuma, zaman));
+    // Son okuma üstüne yazılır; geçmiş (3192) aynı transaction'da örnek olarak eklenir, silinmez (3200 c).
+    await vt.tx(async (db) => { await s.makineYaz(db, okuma, zaman); await s.ornekYaz(db, okuma, zaman); });
     okunan += 1;
   }
   if (!kesildi) bellek.sonraki = null;
@@ -875,4 +877,206 @@ export async function kontrol(istemci: SmartesIstemcisi | null, saat: () => Date
     ileti: l.tur === 'basarili' ? `${l.deger.length} satır okundu (kaydedilmedi).` : hataMetni(l),
   });
   return { zaman: simdi.toISOString(), ulasildi, adimlar };
+}
+
+/* ---------------- Makine bulguları (kart 3192, adım D1) ---------------- */
+
+type Bulgu = MakineBulgulariCevabi['bulgular'][number];
+type Ton = Bulgu['ton'];
+type Hucre = { metin: string | null; ton: Ton };
+const BOS_HUCRE: Hucre = { metin: null, ton: 'pasif' };
+const DURUM_ADI: Record<MakineDurumu, string> = {
+  calisiyor: 'Çalışıyor', bekliyor: 'Bekliyor', alarm: 'Alarm', kapali: 'Kapalı', 'baglanti-yok': 'Bağlantı yok', bilinmiyor: 'Bilinmiyor',
+};
+const DURUM_TONU: Record<MakineDurumu, Ton> = { calisiyor: 'tamam', bekliyor: 'uyari', alarm: 'hata', kapali: 'pasif', 'baglanti-yok': 'pasif', bilinmiyor: 'pasif' };
+const SAAT = new Intl.DateTimeFormat('tr-TR', { timeZone: 'Europe/Istanbul', hour: '2-digit', minute: '2-digit' });
+const GUN = new Intl.DateTimeFormat('tr-TR', { timeZone: 'Europe/Istanbul', day: 'numeric', month: 'numeric' });
+const saat = (iso: string): string => SAAT.format(new Date(iso));
+const sayi = (n: number): string => n.toLocaleString('tr-TR');
+const enKotu = (tonlar: readonly Ton[]): Ton => (tonlar.includes('hata') ? 'hata' : tonlar.includes('uyari') ? 'uyari' : 'tamam');
+
+// Adım D1: canlı durum, nedensiz duruş, sayım farkı, termin, tekrar eden alarm ve üç grafik. Program, çevrim, OEE, ilerleme oranı ve takım
+// yükü sonraki adımlardadır: kutuları "veri yok" der (null), sıfır uydurulmaz.
+export async function makineBulgulari(db: Db, istemci: SmartesIstemcisi | null, simdi: Date = new Date()): Promise<MakineBulgulariCevabi> {
+  const okumaAcik = baglantiDurumu(await sistemAyariOku(db, 'smartes.baglanti'), istemci) === 'acik' && (await sistemAyariOku(db, MAKINE_AYARI));
+  const iz = await s.makineOkumaIzi(db);
+  if (!okumaAcik) return { okumaAcik, sonOkuma: iz?.sonBasarili ?? null, kutular: [], bulgular: [], karne: [], grafikler: null };
+  const simdiMetni = simdi.toISOString();
+  const gunBasi = new Date(tesisGunBasi(tesisGunu(simdi)));
+  const makinelerListesi = await s.makineDurumlari(db, MAKINE_SATIR_SINIRI);
+  const ad = new Map(makinelerListesi.map((m) => [m.makineKodu, m.makineAdi]));
+  const coreKodu = new Map((await s.eslemeler(db, 'makine')).map((e) => [e.smartesKod, e.tmiId]));
+  const smartesKodu = new Map([...coreKodu].map(([k, id]) => [id, k]));
+
+  const degisimler = new Map<string, { onceki: MakineDurumu | null; liste: { zaman: string; yeni: MakineDurumu }[] }>();
+  for (const d of await s.gunDegisimleri(db, gunBasi, null)) {
+    const k = degisimler.get(d.makineKodu) ?? { onceki: null, liste: [] };
+    if (d.onceki) k.onceki = d.yeni;
+    else k.liste.push({ zaman: d.zaman, yeni: d.yeni });
+    degisimler.set(d.makineKodu, k);
+  }
+  const duruslar = await s.durusAraliklari(db, gunBasi, simdi);
+  const cizelge = new Map<string, CizelgeParcasi[]>(makinelerListesi.map((m) => {
+    const g = degisimler.get(m.makineKodu);
+    return [m.makineKodu, cizelgeParcalari(bugunDilimleri(gunBasi.toISOString(), g?.onceki ?? null, g?.liste ?? []), duruslar.filter((x) => x.makineKodu === m.makineKodu), simdiMetni)];
+  }));
+
+  // SmartES iş emri no'su giden kutusundan CORE iş emrine, oradan emir no ve opa bağlanır; bağlanamayan satırda emir boş kalır.
+  const sayimlar = await s.gunSayimlari(db, gunBasi);
+  const ilerlemeler = await s.butunIlerlemeler(db);
+  const giden = new Map((await s.gidenNolari(db, [...sayimlar.flatMap((x) => (x.isEmriNo === null ? [] : [x.isEmriNo])), ...ilerlemeler.map((x) => x.isEmriNo)]))
+    .map((g) => [g.no, g.isEmriId]));
+  const isEmirleri = await isEmriOzetleri(db, [...giden.values()]);
+  const zamanlar = await isEmriZamanlari(db, [...giden.values()]);
+  const emri = (no: string | null) => {
+    const id = no === null ? undefined : giden.get(no);
+    const ie = id === undefined ? undefined : isEmirleri.get(id);
+    return { emirNo: ie?.emirNo ?? null, opNo: ie?.opNo ?? null, id: id ?? null, ie };
+  };
+
+  const bulgular: Bulgu[] = [];
+  const bulgu = (b: Omit<Bulgu, 'makineAdi'>) => { bulgular.push({ ...b, makineAdi: ad.get(b.makineKodu) ?? null }); };
+  const nedensizDk = new Map<string, number>();
+  for (const [kod, parcalar] of cizelge) {
+    for (const n of nedensizDuruslar(parcalar, simdiMetni)) {
+      nedensizDk.set(kod, (nedensizDk.get(kod) ?? 0) + n.sureDk);
+      bulgu({
+        id: `durus:${kod}:${n.baslangic}`, tur: 'durus', ton: n.suruyor ? 'hata' : 'uyari', makineKodu: kod, emirNo: null, opNo: null,
+        baslik: n.suruyor ? `${n.sureDk} dakikadır duruyor, duruş nedeni girilmemiş` : `${saat(n.baslangic)}–${saat(n.bitis)} arası ${n.sureDk} dk nedeni girilmemiş duruş`,
+        hesap: `Çalışmıyor ${saat(n.baslangic)}–${n.suruyor ? 'şimdi' : saat(n.bitis)} = ${n.sureDk} dk (eşik 3 dk); bu aralıkta nedenli duruş kaydı yok`,
+        ne: 'Operatör terminalde duruş nedenini seçer; süre makineden gelir.', zaman: n.baslangic,
+      });
+    }
+  }
+  const sayimHucresi = new Map<string, Hucre>();
+  let enBuyukFark = 0;
+  let enBuyukFarkliMakine: string | null = null;
+  for (const x of sayimlar) {
+    const k = sayimKarsilastir(x);
+    if (k === null) continue;
+    const e = emri(x.isEmriNo);
+    sayimHucresi.set(x.makineKodu, { metin: `${sayi(k.makine)} / ${sayi(k.operator)}`, ton: k.asti ? 'hata' : 'tamam' });
+    if (!k.asti) continue;
+    if (Math.abs(k.fark) > enBuyukFark) { enBuyukFark = Math.abs(k.fark); enBuyukFarkliMakine = x.makineKodu; }
+    bulgu({
+      id: `sayim:${x.makineKodu}:${x.isEmriNo ?? ''}`, tur: 'sayim', ton: 'hata', makineKodu: x.makineKodu, emirNo: e.emirNo, opNo: e.opNo,
+      baslik: `makine ${sayi(k.makine)} saydı, operatör ${sayi(k.operator)} girdi`,
+      hesap: `Makine ${sayi(k.makine)}; operatör sağlam + red ${sayi(k.operator)}; fark ${sayi(Math.abs(k.fark))} (tolerans ${k.tolerans})`,
+      ne: 'Sayım kontrol edilir: girilmemiş fire ya da ayar parçası olabilir.', zaman: x.sonOkuma,
+    });
+  }
+  const bitisHucresi = new Map<string, Hucre>();
+  for (const il of ilerlemeler) {
+    const e = emri(il.isEmriNo);
+    const teslim = e.id === null ? null : (zamanlar.get(e.id)?.emirTeslim ?? null);
+    const kaynak = e.ie?.kaynak;
+    const kod = kaynak?.tur === 'makine' ? smartesKodu.get(kaynak.id) : undefined;
+    if (il.tahminiBitis === null || kod === undefined) continue;
+    const gecikme = teslim === null ? null : terminAsimi(il.tahminiBitis, teslim);
+    bitisHucresi.set(kod, { metin: saat(il.tahminiBitis), ton: gecikme === null ? 'tamam' : 'hata' });
+    if (gecikme === null || teslim === null) continue;
+    bulgu({
+      id: `bitis:${il.isEmriNo}`, tur: 'bitis', ton: 'hata', makineKodu: kod, emirNo: e.emirNo, opNo: e.opNo,
+      baslik: `iş ${GUN.format(new Date(il.tahminiBitis))} ${saat(il.tahminiBitis)}’te biter, termin ${GUN.format(new Date(`${teslim}T12:00:00Z`))}`,
+      hesap: `SmartES tahmini bitiş ${GUN.format(new Date(il.tahminiBitis))} ${saat(il.tahminiBitis)}; emrin teslimi ${teslim}; ${gecikme} gün geç`,
+      ne: 'Planlama sıraya bakar: vardiya uzatılır ya da iş bölünür.', zaman: simdiMetni,
+    });
+  }
+  const alarmSayisi = new Map<string, Hucre>();
+  for (const a of await s.alarmTekrarlari(db, new Date(simdi.getTime() - 7 * 86_400_000))) {
+    const t = alarmTekrarTonu(a.gunler, simdiMetni);
+    const onceki = alarmSayisi.get(a.makineKodu);
+    const n = a.gunler.length + Number(onceki?.metin ?? 0);
+    alarmSayisi.set(a.makineKodu, { metin: String(n), ton: enKotu([onceki?.ton ?? 'tamam', t?.ton ?? 'tamam']) });
+    if (t === null) continue;
+    bulgu({
+      id: `alarm:${a.makineKodu}:${a.alarmKodu}`, tur: 'alarm', ton: t.ton, makineKodu: a.makineKodu, emirNo: null, opNo: null,
+      baslik: `“${a.aciklama ?? a.alarmKodu}” 7 günde ${t.sayi} kez`,
+      hesap: `Alarm ${a.alarmKodu}: ${a.gunler.map((g) => GUN.format(new Date(g))).join(', ')} = ${t.sayi} kez (eşik 3)`,
+      ne: 'Bakıma bildirilir.', zaman: a.son,
+    });
+  }
+  bulgular.sort((a, b) => (a.ton === b.ton ? b.zaman.localeCompare(a.zaman) : a.ton === 'hata' ? -1 : b.ton === 'hata' ? 1 : 0));
+
+  const say = (tur: Bulgu['tur']) => bulgular.filter((b) => b.tur === tur);
+  const kutu = (tur: Bulgu['tur'], alt: string | null) => {
+    const b = say(tur);
+    return { tur, deger: String(b.length), alt: b.length === 0 ? null : alt, ton: b.length === 0 ? 'tamam' as const : enKotu(b.map((x) => x.ton)) };
+  };
+  const yok = (tur: Bulgu['tur']) => ({ tur, deger: null, alt: null, ton: 'pasif' as const });
+  const calisan = makinelerListesi.filter((m) => m.durum === 'calisiyor').length;
+  const alarmda = makinelerListesi.filter((m) => m.durum === 'alarm').length;
+  const bekleyen = makinelerListesi.filter((m) => m.durum === 'bekliyor').length;
+  const toplamNedensiz = [...nedensizDk.values()].reduce((t, n) => t + n, 0);
+  // Durumu okunabilen makine yoksa çalışan ve nedensiz duruş sayılamaz: sıfır değil "veri yok".
+  const durumBilinen = makinelerListesi.some((m) => m.durum !== 'bilinmiyor');
+  const kutular: MakineBulgulariCevabi['kutular'] = [
+    durumBilinen
+      ? { tur: 'durum', deger: `${calisan} / ${makinelerListesi.length}`, alt: `çalışıyor · ${alarmda} alarm, ${bekleyen} bekliyor`, ton: alarmda > 0 ? 'hata' : bekleyen > 0 ? 'uyari' : 'tamam' }
+      : { tur: 'durum', deger: null, alt: null, ton: 'pasif' },
+    durumBilinen ? kutu('durus', `toplam ${toplamNedensiz} dk nedensiz`) : yok('durus'),
+    kutu('sayim', `en büyük fark ${sayi(enBuyukFark)} adet`),
+    yok('program'), yok('cevrim'),
+    kutu('bitis', 'termini geçen iş'),
+    yok('oee'), yok('oran'), yok('yuk'),
+    kutu('alarm', '7 günde 3 ve üzeri'),
+  ];
+  const karne = makinelerListesi.map((m) => ({
+    makineKodu: m.makineKodu, makineAdi: m.makineAdi,
+    hucreler: {
+      durum: { metin: DURUM_ADI[m.durum], ton: DURUM_TONU[m.durum] },
+      durus: nedensizDk.has(m.makineKodu) ? { metin: `${nedensizDk.get(m.makineKodu)} dk`, ton: say('durus').some((b) => b.makineKodu === m.makineKodu && b.ton === 'hata') ? 'hata' as const : 'uyari' as const } : BOS_HUCRE,
+      sayim: sayimHucresi.get(m.makineKodu) ?? BOS_HUCRE,
+      program: BOS_HUCRE, cevrim: BOS_HUCRE,
+      bitis: bitisHucresi.get(m.makineKodu) ?? BOS_HUCRE,
+      oee: BOS_HUCRE, oran: BOS_HUCRE, yuk: BOS_HUCRE,
+      alarm: alarmSayisi.get(m.makineKodu) ?? { metin: '0', ton: 'tamam' as const },
+    },
+  }));
+
+  // Duruş nedenleri: bugünkü SmartES duruş süreleri, nedeni CORE'daki eşlenmiş adıyla; nedensiz toplam ayrı çubuk.
+  const nedenAdlari = new Map<string, string>();
+  const nedenler = new Map((await durusNedenleriniListele(db, { yalnizAktif: false })).map((n) => [n.id, n.ad]));
+  for (const e of await s.eslemeler(db, 'durus-nedeni')) { const a = nedenler.get(e.tmiId); if (a !== undefined) nedenAdlari.set(e.smartesKod, a); }
+  const nedenDk = new Map<string, number>();
+  for (const d of duruslar) {
+    if (d.nedenKodu === null) continue;
+    const bas = Math.max(Date.parse(d.baslangic), gunBasi.getTime());
+    const bit = Math.min(d.bitis === null ? simdi.getTime() : Date.parse(d.bitis), simdi.getTime());
+    if (bit <= bas) continue;
+    const etiket = nedenAdlari.get(d.nedenKodu) ?? d.nedenKodu;
+    nedenDk.set(etiket, (nedenDk.get(etiket) ?? 0) + (bit - bas) / 60_000);
+  }
+  const durusCubuklari = [...[...nedenDk].map(([etiket, dk]) => ({ etiket, deger: Math.round(dk) })), ...(toplamNedensiz > 0 ? [{ etiket: 'Nedeni girilmemiş', deger: toplamNedensiz }] : [])]
+    .filter((x) => x.deger > 0).sort((a, b) => b.deger - a.deger);
+
+  // Sayım eğrisi: en büyük farkı olan makine (yoksa sayımı olan ilk makine), gün başından bu saate saat saat.
+  const saatBaslari: number[] = [];
+  for (let t = gunBasi.getTime(); t <= simdi.getTime(); t += 3_600_000) saatBaslari.push(t);
+  const secilen = enBuyukFarkliMakine ?? sayimlar[0]?.makineKodu ?? null;
+  let sayimGrafigi: NonNullable<MakineBulgulariCevabi['grafikler']>['sayim'] = null;
+  if (secilen !== null && saatBaslari.length > 0) {
+    const makine = birikimliSayac(await s.ornekler(db, secilen, gunBasi, simdi), saatBaslari);
+    const seriler = [{ ad: 'Makine sayacı', degerler: makine }];
+    const coreId = coreKodu.get(secilen);
+    if (coreId !== undefined) {
+      const sinirlar = [...saatBaslari, simdi.getTime()].map((t) => new Date(t).toISOString());
+      let toplam = 0;
+      seriler.push({ ad: 'Operatör (CORE)', degerler: (await gunlukAralikAdetleri(db, 'makine', [coreId], sinirlar)).map((g) => {
+        const a = g.get(coreId);
+        toplam += (a?.saglam ?? 0) + (a?.hurda ?? 0);
+        return toplam;
+      }) });
+    }
+    sayimGrafigi = { makineKodu: secilen, etiketler: saatBaslari.map((t) => saat(new Date(t).toISOString())), seriler };
+  }
+  const bitis = new Date(Math.ceil(simdi.getTime() / 3_600_000) * 3_600_000).toISOString();
+  return {
+    okumaAcik, sonOkuma: iz?.sonBasarili ?? null, kutular, bulgular, karne,
+    grafikler: {
+      cizelge: { baslangic: gunBasi.toISOString(), bitis, simdi: simdiMetni, satirlar: [...cizelge].map(([makineKodu, parcalar]) => ({ makineKodu, parcalar: parcalar.map((p) => ({ ...p, not: p.not === null ? '' : (nedenAdlari.get(p.not) ?? p.not) })) })) },
+      duruslar: durusCubuklari,
+      sayim: sayimGrafigi,
+    },
+  };
 }

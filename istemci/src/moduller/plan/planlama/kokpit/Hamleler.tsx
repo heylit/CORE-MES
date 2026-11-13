@@ -20,6 +20,8 @@ export interface HamleOzellikleri {
   surum: number | null;
   // Kalanını oynat: önizlemeler bitince öne çıkan hamle (yoksa ya da onay istiyorsa null) bir kez bildirilir; kararı sayfa verir.
   oynat?: ((a: TurAdayi | null) => void) | null;
+  // Matris: seçili adımın seçenekleri de yalnız emri erken bitirenlerdir ve ilki öne çıkar.
+  yalnizKazanc?: boolean;
 }
 
 // Taşıma ve plana alma önizlemesinin ortak yüzü. bitis: plana almada sunucunun verdiği tahmin (fason adımlı emirde null).
@@ -29,7 +31,7 @@ const onizle = (a: TurAdayi, surum: number | null): Promise<Onizleme | null> =>
   (a.planaAl === undefined ? isTasiOnizle(a) : surum === null ? Promise.resolve(null) : planaAlOnizle({ emirId: a.planaAl, tezgah: a.tezgah, baslangic: a.baslangic }, surum));
 const anahtar = (a: TurAdayi): string => `${a.isId}|${a.tezgah}|${String(a.baslangic)}`;
 
-export function Hamleler({ m, e, isId, zaman, uygula, tek = false, oneri, surum, oynat = null }: HamleOzellikleri) {
+export function Hamleler({ m, e, isId, zaman, uygula, tek = false, oneri, surum, oynat = null, yalnizKazanc = false }: HamleOzellikleri) {
   const adaylar = useMemo(() => turAdaylari(m, e, isId), [m, e, isId]);
   const [sonuc, setSonuc] = useState<Record<string, Sonuc>>({});
   const [secilen, setSecilen] = useState<string | null>(null);
@@ -56,7 +58,7 @@ export function Hamleler({ m, e, isId, zaman, uygula, tek = false, oneri, surum,
     const r = sonuc[anahtar(a)];
     if (!r || r === 'okunamadi') return true;
     if (!r.gecerli) return false;
-    if (a.planaAl !== undefined || isId !== null || e.bitis === null) return true;
+    if (a.planaAl !== undefined || (isId !== null && !yalnizKazanc) || e.bitis === null) return true;
     const bitis = onizlemeBitisi(m, e, r.isler.map((y) => ({ isId: y.isId, C: y.C })));
     return bitis === null || bitis < e.bitis - 0.01;
   });
@@ -79,7 +81,7 @@ export function Hamleler({ m, e, isId, zaman, uygula, tek = false, oneri, surum,
     // Karar adım başına bir kez: plan ya da adım değişince önizlemeler yeniden biter.
   }, [oynat !== null, hazir]);
   if (!gecerliler.length) {
-    if (e.durum !== 'plansiz') return <p className="tc-pyq-not">Tek işi taşıyarak daha erkene alınacak boş yer yok; tahtadan elle bakın.</p>;
+    if (e.durum !== 'plansiz') return <p className="tc-pyq-not">{isId !== null && yalnizKazanc ? 'Bu adımı taşımak emri erken bitirmiyor.' : 'Tek işi taşıyarak daha erkene alınacak boş yer yok; tahtadan elle bakın.'}</p>;
     const neden = adaylar.map((a) => sonuc[anahtar(a)]).find((r) => r && r !== 'okunamadi' && r.ileti);
     return <p className="tc-pyq-not">{neden && neden !== 'okunamadi' ? neden.ileti : 'Bu emir buradan plana alınamıyor; planı Planlama motoru sayfasında yeniden kurun.'}</p>;
   }
@@ -110,7 +112,7 @@ export function Hamleler({ m, e, isId, zaman, uygula, tek = false, oneri, surum,
                 : `biter ${zaman(bitis).slice(6)}${kazanc !== null && kazanc > 0.01 ? ` · ${sureYaz(kazanc)} erken` : ''}${gec === null ? '' : gec > 0.01 ? ` · ${al ? '' : 'yine '}${sureYaz(gec)} geç` : ' · termine yetişir'}${itilen ? ` · aynı emrin ${String(itilen)} adımı kayar` : ''}`}
           </small>
         </span>
-        <Dugme tur={sira === 0 && gec !== null && gec <= 0.01 ? 'birincil' : 'ikincil'} simge="check" disabled={!uygula || r === undefined} onClick={() => { uygula?.(a, gecBirakir); }}>{tek ? (gecBirakir ? `Yine de ${al ? 'plana al' : 'uygula'}` : `${dugme}, sıradaki`) : dugme}</Dugme>
+        <Dugme tur={sira === 0 && (yalnizKazanc || (gec !== null && gec <= 0.01)) ? 'birincil' : 'ikincil'} simge="check" disabled={!uygula || r === undefined} onClick={() => { uygula?.(a, gecBirakir); }}>{tek ? (gecBirakir ? `Yine de ${al ? 'plana al' : 'uygula'}` : `${dugme}, sıradaki`) : dugme}</Dugme>
       </li>
     );
   };

@@ -17,3 +17,7 @@ Bu iş o modüllere yazmadı; aşağıdakiler imzalı istektir.
 ## Tanım gönderimi (isteğe bağlı iyileştirme)
 5. malzemeler: tüm aktif stok kartlarını (kod, ad, tür) tek işlevle verme isteği. Neden: tanım gönderimi bugün `malzemeAra` ile 200'lük sayfaları
    dolaşır (`tanim-kaynagi.ts`); iş çalışıyor, istek yalnız sorgu sayısını azaltır. Kaynak `TanimKaynagi` arayüzünün arkasında, değişirse yalnız o dosya değişir.
+
+## Makine bulguları (3192)
+6. uretim-emirleri: makine başına CORE duruş aralıklarını (başlangıç, bitiş, neden) veren `disari.ts` işlevi. Neden: "Nedensiz duruş" bugün
+   yalnız SmartES'in kendi duruş kaydına bakıyor; operatörün CORE terminalinde girdiği duruş nedeni görülmüyor (bugün yalnız `istasyonDurusSureleri` var).
