@@ -12,7 +12,15 @@ export const LOGO_AYARLARI = {
     tur: 'boolean',
     varsayilan: false,
     baslik: 'Logo bağlantısı',
-    aciklama: 'Açıkken aktif olan malzeme kartları kurum içindeki Logo köprüsüne gönderilir. Köprü adresi ve anahtarı sunucunun ortam değişkenlerinde yoksa açık olsa da istek çıkmaz. Kapalıyken kartlar "bekliyor" olarak birikir.',
+    aciklama: 'Kurum içindeki Logo köprüsüyle bütün alışverişin ana anahtarı; her gönderim ve okuma ayrıca kendi anahtarıyla açılır. Köprü adresi ve anahtarı sunucunun ortam değişkenlerinde yoksa açık olsa da istek çıkmaz.',
+  },
+  // Kart gönderimi Logo'ya yazar: öteki yazmalar gibi kendi anahtarıyla açılır, kapalı gelir.
+  'logo.malzeme-gonderimi': {
+    modul: 'logo',
+    tur: 'boolean',
+    varsayilan: false,
+    baslik: 'Logo: malzeme kartı gönderimi',
+    aciklama: 'Açıkken aktif olan malzeme kartları Logo\'da açılır (önce Logo\'da var mı diye bakılır). "Logo bağlantısı" da açık olmalı. Kapalıyken kartlar "bekliyor" olarak birikir, açılınca sırayla gider.',
   },
   // Kullanıcı kararı 08.10.2026: atölyede KDV genellikle %20; varsayılan 20 (LB3 değişti, boş gelmez).
   'logo.kdv-orani': {

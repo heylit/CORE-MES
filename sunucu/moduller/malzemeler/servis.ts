@@ -281,9 +281,13 @@ export interface LogoyaGidecekMalzeme {
 
 // Bekleyen ve hatalı kartlar, en eski aktiflik önce, en çok `sinir` kart. Yetki denetlemez: çağıranın işidir.
 // Hizmet kartı yalnız `hizmetDahil` ile gelir: Logo hizmet gönderimini yazana kadar hizmet malzeme olarak gitmesin (Logo planı madde 5).
-export async function logoyaGidecekMalzemeler(db: Db, sinir: number, secenek: { hizmetDahil?: boolean } = {}): Promise<LogoyaGidecekMalzeme[]> {
+// hizmetDahil iki yönü birden alır; hizmetYonleri verilirse yalnız o yönler. malzemeDahil false ise hizmet dışı kart gelmez.
+export async function logoyaGidecekMalzemeler(
+  db: Db, sinir: number, secenek: { hizmetDahil?: boolean; hizmetYonleri?: readonly HizmetYonu[]; malzemeDahil?: boolean } = {},
+): Promise<LogoyaGidecekMalzeme[]> {
   if (!Number.isSafeInteger(sinir) || sinir < 1) throw new Error(`Logo kuyruğu sınırı pozitif tam sayı olmalı: ${sinir}`);
-  return (await s.logoKuyrugu(db, sinir, secenek.hizmetDahil ?? false)).map((k) => ({
+  const yonler: readonly HizmetYonu[] = secenek.hizmetYonleri ?? (secenek.hizmetDahil ? ['alinan', 'verilen'] : []);
+  return (await s.logoKuyrugu(db, sinir, secenek.malzemeDahil ?? true, yonler)).map((k) => ({
     no: k.id, stokKodu: k.kod, ad: k.ad, birim: k.birim, tur: k.tur, hizmetYonu: k.hizmetYonu, logoKartTuru: k.logoKartTuru, logoBirimSeti: k.logoBirimSeti,
     aciklama1: k.aciklama1, aciklama2: k.aciklama2, aciklama3: k.aciklama3,
     durum: k.durum === 'hata' ? 'hata' : 'bekliyor', sonHata: k.hata,

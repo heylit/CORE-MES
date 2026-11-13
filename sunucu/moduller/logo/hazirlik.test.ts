@@ -202,7 +202,11 @@ describe('Logo hazırlık uçları (gerçek PostgreSQL)', () => {
       const kopru = kopruIstemcisiKur({ adres: k.adres, anahtar: k.anahtar });
       const h = await vt().okumaTx((db) => hazirlik(db, kopru, { adres: k.adres, anahtarTanimli: true }));
       assert.equal(h.baglanti, 'acik');
-      assert.equal(h.akislar.find((a) => a.anahtar === 'malzeme-karti')?.durum, 'hazir');
+      assert.equal(h.akislar.find((a) => a.anahtar === 'malzeme-karti')?.durum, 'kapali', '3198 a: kart gönderimi kendi anahtarıyla, kapalı gelir');
+      const m = await app.inject({ method: 'POST', url: '/api/ayarlar/logo.malzeme-gonderimi/degistir', headers: { cookie: yonetici }, payload: { deger: true } });
+      assert.equal(m.statusCode, 200, m.body);
+      const h2 = await vt().okumaTx((db) => hazirlik(db, kopru, { adres: k.adres, anahtarTanimli: true }));
+      assert.equal(h2.akislar.find((a) => a.anahtar === 'malzeme-karti')?.durum, 'hazir');
       assert.equal(h.akislar.find((a) => a.anahtar === 'satis')?.durum, 'kapali');
       assert.equal(k.istekler.length, 0, 'hazırlık okuması köprüye istek atmaz');
     } finally {

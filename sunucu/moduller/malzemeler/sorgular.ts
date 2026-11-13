@@ -595,14 +595,16 @@ const LOGO_KARSILIK_BAGI = `LEFT JOIN malzeme_logo_karsiligi kt ON kt.cesit = 't
   LEFT JOIN malzeme_logo_karsiligi kb ON kb.cesit = 'birim' AND kb.tmi_degeri = ${KATALOG_BIRIM.replaceAll('kayit', 'k.kayit')}`;
 
 // Gönderim kuyruğu: bekleyen ve hatalı kartlar, en eski aktiflik önce (aktiflik zamanı yoksa açılış). Hizmet yalnız istenirse.
-export function logoKuyrugu(db: Db, sinir: number, hizmetDahil: boolean): Promise<LogoKartSatiri[]> {
+// Süzme sınırdan önce yapılır: gönderimi kapalı türdeki kartlar sınırı doldurup açık türdeki kartları bekletmesin.
+export function logoKuyrugu(db: Db, sinir: number, malzemeDahil: boolean, hizmetYonleri: readonly string[]): Promise<LogoKartSatiri[]> {
   return db.sorgu<LogoKartSatiri>(
     `SELECT ${LOGO_KART_ALANLARI}
        FROM malzeme_katalog_karti k ${LOGO_KARSILIK_BAGI}
-      WHERE k.logo_gonderim_durumu IN ('bekliyor', 'hata') AND k.onay_durumu <> 'iptal' AND ($2::boolean OR k.tur <> 'hizmet')
+      WHERE k.logo_gonderim_durumu IN ('bekliyor', 'hata') AND k.onay_durumu <> 'iptal'
+        AND (CASE WHEN k.tur = 'hizmet' THEN k.hizmet_yonu = ANY($3::text[]) ELSE $2::boolean END)
       ORDER BY COALESCE(k.onaylama, k.acilma), k.no
       LIMIT $1`,
-    [sinir, hizmetDahil],
+    [sinir, malzemeDahil, hizmetYonleri],
   );
 }
 
