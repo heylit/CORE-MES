@@ -31,6 +31,24 @@ describe('KodOkuyucu', () => {
     expect(okundu).toHaveBeenLastCalledWith('ŞAFT 2*3');
   });
 
+  it('alansiz: kod alani ve dugme cizilmez; el okuyucu odak aramadan okunur, yazi alanindaki tuslar okutma sayilmaz', () => {
+    const okundu = vi.fn();
+    render(<><KodOkuyucu okundu={okundu} alansiz /><input aria-label="Miktar" /></>);
+    expect(screen.queryByLabelText('Kod')).toBeNull();
+    expect(screen.queryByRole('button')).toBeNull();
+    for (const key of [...'LOT:LT-000123', 'Enter']) fireEvent.keyDown(document.body, { key });
+    expect(okundu).toHaveBeenCalledWith('LOT:LT-000123');
+    for (const key of ['4', 'Enter']) fireEvent.keyDown(screen.getByLabelText('Miktar'), { key });
+    expect(okundu).toHaveBeenCalledTimes(1);
+  });
+
+  it('alansiz: kamerayi cagiran acar; kamerasi olmayan tarayicida uyari cikar', async () => {
+    const { rerender } = render(<KodOkuyucu okundu={() => undefined} alansiz />);
+    expect(screen.queryByRole('status')).toBeNull();
+    rerender(<KodOkuyucu okundu={() => undefined} alansiz kameraAcik />);
+    expect((await screen.findByRole('status')).textContent).toMatch(/kameraya erişemiyor/);
+  });
+
   it('kamerasi olmayan tarayicida kamera acilinca elle girisi gosteren uyari cikar', async () => {
     render(<KodOkuyucu okundu={() => undefined} />);
     fireEvent.click(screen.getByRole('button', { name: 'Kamerayı aç' }));

@@ -16,6 +16,8 @@ import './kod-okuyucu.css';
 // altta şerittir, ses oradan kapatılır.
 // `komut` (1909, 1912): komut barkodu (CMD:...) `okundu`ya gitmez, ekranın işleyicisine gider; sonucu şeritte görünür. Verilmezse
 // komut da sıradan kod gibi `okundu`ya gider.
+// `alansiz` (3187 a): kod alanı ve düğmeleri çizilmez; el okuyucu her cihazda pencere düzeyinde dinlenir, kamerayı çağıran `kameraAcik`
+// ile açıp kapatır (düğmesi çağıranın ekranındadır). Kamera kapalıyken okuyucu yer kaplamaz.
 // Kod alanı açılışta odak alır; pencere içindeyse de (pencere ilk odağı `data-ilk-odak`a verir). `dokunmatikteOdakYok` ile yalnız fareli cihazda ya da kamera hata verince alır: tablette ekran klavyesi açılıp kamerayı örtmesin.
 function inceIsaretci(): boolean {
   try { return window.matchMedia('(pointer: fine)').matches; } catch { return false; }
@@ -66,9 +68,9 @@ function useParlama(g: OkutmaGecmisi | undefined): OkutmaTonu | null {
   return parlak?.ton ?? null;
 }
 
-export function KodOkuyucu({ okundu: kodOkundu, bekliyor = false, ipucu, kendiliginden = false, dokunmatikteOdakYok = false, sik = false, geribildirim, komut }: {
+export function KodOkuyucu({ okundu: kodOkundu, bekliyor = false, ipucu, kendiliginden = false, dokunmatikteOdakYok = false, sik = false, alansiz = false, kameraAcik = false, geribildirim, komut }: {
   okundu: (kod: string) => void; bekliyor?: boolean; ipucu?: string; kendiliginden?: boolean; dokunmatikteOdakYok?: boolean; sik?: boolean;
-  geribildirim?: OkutmaGecmisi; komut?: KomutIsleyici;
+  alansiz?: boolean; kameraAcik?: boolean; geribildirim?: OkutmaGecmisi; komut?: KomutIsleyici;
 }) {
   const okundu = (kod: string) => {
     const k = komut ? kodTuru(kod) : null;
@@ -82,9 +84,10 @@ export function KodOkuyucu({ okundu: kodOkundu, bekliyor = false, ipucu, kendili
   const elleSon = useRef('');
   const setElle = (deger: string) => { elleSon.current = deger; setElleDurumu(deger); };
   const kamera = useKamera(okundu);
-  const { ac } = kamera;
+  const { ac, kapat } = kamera;
   useEffect(() => { if (kendiliginden) void ac(); }, [kendiliginden, ac]);
-  const [acilistaOdak] = useState(() => !dokunmatikteOdakYok || inceIsaretci());
+  useEffect(() => { if (!alansiz) return; if (kameraAcik) void ac(); else kapat(); }, [alansiz, kameraAcik, ac, kapat]);
+  const [acilistaOdak] = useState(() => !alansiz && (!dokunmatikteOdakYok || inceIsaretci()));
   const form = useRef<HTMLFormElement | null>(null);
   const kok = useRef<HTMLDivElement | null>(null);
   useEffect(() => { if (dokunmatikteOdakYok && kamera.hata) form.current?.querySelector('input')?.focus(); }, [dokunmatikteOdakYok, kamera.hata]);
@@ -124,6 +127,18 @@ export function KodOkuyucu({ okundu: kodOkundu, bekliyor = false, ipucu, kendili
   const dosyaGirdisi = (
     <input ref={dosya} type="file" accept="image/*" capture="environment" hidden onChange={(o) => { const f = o.target.files?.[0]; if (f) void kamera.fotograftan(f); o.target.value = ''; }} />
   );
+  if (alansiz) {
+    return (
+      <div ref={kok} className="tc-kod-okuyucu tc-kod-okuyucu-sik" {...tonu}>
+        <div className="tc-kod-okuyucu-kamera" data-acik={kamera.acik ? '' : undefined} hidden={!kamera.acik}>
+          <video ref={kamera.video} muted playsInline aria-label="Kamera görüntüsü" />
+          <canvas ref={kamera.tuval} hidden />
+          <span className="tc-kod-okuyucu-cerceve" aria-hidden="true" />
+        </div>
+        {kamera.hata && <p className="tc-kod-okuyucu-hata" role="status">{kamera.hata}</p>}
+      </div>
+    );
+  }
   if (sik) {
     return (
       <div ref={kok} className="tc-kod-okuyucu tc-kod-okuyucu-sik" {...tonu}>

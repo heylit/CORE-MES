@@ -15,6 +15,7 @@ import { yeniIstekKimligi } from '../../ortak/veri/istek-kimligi.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { belirsizMiktarVar, birimliMiktar, ISTEK_ACIK as ACIK, ISTEK_DURUMU, istekDurumu, miktarGirdisi, miktarMetni, zamanMetni } from './gorunum.ts';
 import { RefakatKartPenceresi } from './RefakatKarti.tsx';
+import { TeslimPenceresi } from './TeslimPenceresi.tsx';
 import { KonumSecici, type KonumSecimi } from './KonumSecici.tsx';
 import { MalzemeSecici } from './MalzemeSecici.tsx';
 import { hataMetni, korumaliPost, SayfaBasi, useIslem, useStokKomutu } from './ortak.tsx';
@@ -274,6 +275,8 @@ function Istekler() {
   const [secim, setSecim] = useState<Record<number, MalzemeIstegi>>({});
   const [liste, setListe] = useState(false);
   const [teslim, setTeslim] = useState<MalzemeIstegi | null>(null);
+  // 3187 a: istasyona giden istek teslim penceresinde (öneri, okutma, çok lot); statülü parça ve elle konum için bugünkü pencere kalır.
+  const [elleTeslim, setElleTeslim] = useState(false);
   const sorgu = new URLSearchParams({ sayfa: String(sayfa), ...(durum === '' ? {} : { durum }) });
   const l = useQuery({ queryKey: anahtarlar.liste('malzeme-istekleri', { durum, sayfa }), queryFn: () => api.get<MalzemeIstekleriCevabi>(`/stok/malzeme-istekleri?${sorgu}`) });
   const sayilar = useBekleyenSayilari();
@@ -290,7 +293,19 @@ function Istekler() {
   const sutunlar: Sutun<MalzemeIstegi>[] = [
     ...(yazabilir ? [{ anahtar: 'sec', baslik: '', csv: false as const, hucre: (i: MalzemeIstegi) => (secilebilir(i)
       ? <input type="checkbox" aria-label={`${i.no} seç`} checked={secim[i.id] !== undefined} onChange={() => degistir(i)} /> : <span />) }] : []),
-    { anahtar: 'no', baslik: 'İstek', mono: true, kirilmaz: true, sabit: 'sol', hucre: (i) => i.no },
+    // Teslim et istek no ile aynı yapışık hücrede: yana kaydırınca da satırın kimliğiyle birlikte görünür, sona gidilmez.
+    { anahtar: 'no', baslik: 'İstek', kirilmaz: true, sabit: 'sol', csv: (i) => i.no, hucre: (i) => (
+      <span className="tc-stok-istek-hucre">
+        <span className="mono">{i.no}</span>
+        {secilebilir(i) && (
+          <span className="tc-stok-dugmeler">
+            <Dugme simge="truck" onClick={() => setTeslim(i)}>Teslim et</Dugme>
+            <Menu etiket={`${i.no}: diğer işlemler`} ipucu="Diğer işlemler"
+              ogeler={[{ anahtar: 'iptal', baslik: 'İsteği iptal et', simge: 'x', ton: 'tehlike', sec: () => setIptalEdilecek(i) }]} />
+          </span>
+        )}
+      </span>
+    ) },
     { anahtar: 'malzeme', baslik: 'Malzeme', kes: true, csv: malzemeAdi, hucre: (i) => <strong>{malzemeAdi(i)}</strong> },
     { anahtar: 'miktar', baslik: 'Miktar', hizala: 'sag', hucre: (i) => miktarMetni(i.miktar) },
     { anahtar: 'karsilanan', baslik: 'Karşılanan', hizala: 'sag', hucre: (i) => (i.karsilanan === null ? '—' : miktarMetni(i.karsilanan)) },
@@ -301,15 +316,6 @@ function Istekler() {
     { anahtar: 'aciklama', baslik: 'Açıklama', kes: true, hucre: (i) => i.aciklama ?? '—' },
     { anahtar: 'toplama', baslik: 'Toplama listesi', mono: true, csv: (i) => i.toplamaNo ?? '',
       hucre: (i) => (i.toplamaId !== null ? <Link to={`/stok/hazirlik/${i.toplamaId}`}>{i.toplamaNo}</Link> : '—') },
-    ...(yazabilir ? [{
-      anahtar: 'eylem', baslik: '', hizala: 'sag' as const, sabit: 'sag' as const, csv: false as const, hucre: (i: MalzemeIstegi) => (secilebilir(i) ? (
-        <span className="tc-stok-dugmeler">
-          <Dugme simge="truck" onClick={() => setTeslim(i)}>Teslim et</Dugme>
-          <Menu etiket={`${i.no}: diğer işlemler`} ipucu="Diğer işlemler"
-            ogeler={[{ anahtar: 'iptal', baslik: 'İsteği iptal et', simge: 'x', ton: 'tehlike', sec: () => setIptalEdilecek(i) }]} />
-        </span>
-      ) : <span />),
-    }] : []),
   ];
   return (
     <Kart baslik="Bekleyen istekler">
@@ -331,7 +337,8 @@ function Istekler() {
       {liste && <ListeAcPenceresi istekler={secililer} kapat={() => { setListe(false); setSecim({}); }} />}
       {teslim && (teslim.istasyonId === null
         ? <KisiyeTeslim istek={teslim} kapat={() => setTeslim(null)} />
-        : <IstasyonaTeslim istek={teslim} istasyonId={teslim.istasyonId} kapat={() => setTeslim(null)} />)}
+        : elleTeslim ? <IstasyonaTeslim istek={teslim} istasyonId={teslim.istasyonId} kapat={() => { setTeslim(null); setElleTeslim(false); }} />
+        : <TeslimPenceresi istek={teslim} kapat={() => setTeslim(null)} elle={() => setElleTeslim(true)} />)}
       {iptal.onayPenceresi}
       <OnayPenceresi acik={iptalEdilecek !== null} tehlikeli baslik={`${iptalEdilecek?.no ?? ''} iptal edilsin mi?`} onayMetni="İsteği iptal et" yukleniyor={iptal.komut.isPending}
         onayla={() => { if (iptalEdilecek) iptal.komut.mutate({ id: iptalEdilecek.id, surum: iptalEdilecek.surum }); }} vazgec={() => setIptalEdilecek(null)}>
