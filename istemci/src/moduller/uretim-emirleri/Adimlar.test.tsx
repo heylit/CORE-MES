@@ -37,6 +37,22 @@ describe('Ayrıntı: canlı durum, adımlar, yeni defter olayları', () => {
     await screen.findByRole('heading', { name: emir.emirNo });
   }
 
+  // 3175 (Risk D1): Fişler sekmesi sunucunun stok okuma listesiyle açılır; herkeste olan stok.istek sekmeyi açmaz.
+  it('Fişler sekmesi stok okuyana görünür; yalnız stok.istek olan görmez (reddedilen)', async () => {
+    const emir: Emir = { ...TEMEL, id: 8, emirNo: 'UE-000008', durum: 'planli' };
+    const acKisiyle = async (islemler: string[]) => {
+      sunucuKur({ ...OKUYUCU, islemler: [...OKUYUCU.islemler, ...islemler] as typeof OKUYUCU.islemler }, { [`GET /uretim-emirleri/${emir.id}`]: () => ayrinti(emir) });
+      ac(ekran, `/uretim-emirleri/${emir.id}`);
+      await screen.findByRole('heading', { name: emir.emirNo });
+      await screen.findByRole('tab', { name: 'Malzeme' });
+    };
+    await acKisiyle(['stok.istek']);
+    expect(screen.queryByRole('tab', { name: 'Fişler' })).toBeNull();
+    cleanup(); vi.unstubAllGlobals();
+    await acKisiyle(['stok.giris']);
+    expect(await screen.findByRole('tab', { name: 'Fişler' })).toBeTruthy();
+  });
+
   it('çalışıyor: rozet, sayaçlar; duruş satırı yok', async () => {
     await ayrintiAc(basladi(1, { ...CANLI, hurda: 2 }), { ilerleme: ilerleme('calisiyor') });
     expect(screen.getByText('Başladı · Çalışıyor')).toBeTruthy();

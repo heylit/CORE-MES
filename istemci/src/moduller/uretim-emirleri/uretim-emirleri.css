@@ -194,3 +194,17 @@
 .tc-emir-yasam li[data-hal='simdi'] small.tc-emir-yasam-bekleme { color: var(--ink); }
 /* "Beklemede" süzgeci durum çiplerinden ince bir çizgiyle ayrılır: durum değil işarettir. */
 .tc-emir-cip-ayirici { align-self: stretch; flex: none; border-left: thin solid var(--edge2); margin-inline: var(--b-1); }
+/* 3175: emrin fişleri tür başına kart; dokununca hareket listesi o türe süzülür. Telefonda alt alta. */
+.tc-emir-fisler { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, var(--pano-kart-enaz)), 1fr)); gap: var(--b-3); }
+.tc-emir-fis {
+  display: grid; align-content: start; gap: var(--b-1); padding: var(--b-3); min-width: 0; text-align: start; font: inherit; color: var(--ink);
+  border: thin solid var(--edge); border-radius: var(--yari-1); background: var(--panel); cursor: pointer; min-height: var(--dokunma);
+}
+.tc-emir-fis[data-bos] { border-style: dashed; background: transparent; }
+.tc-emir-fis[aria-pressed='true'] { border-color: var(--hazard); box-shadow: inset 0 calc(-1 * var(--ikinci-vurgu)) 0 var(--hazard); }
+.tc-emir-fis-no { font-size: var(--yazi-m); font-weight: 600; overflow-wrap: anywhere; }
+.tc-emir-fis[data-bos] .tc-emir-fis-no { color: var(--muted); font-size: var(--yazi-s); font-weight: 400; }
+.tc-emir-fis-alt { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-1) var(--b-2); color: var(--muted); font-size: var(--yazi-xs); }
+@media (min-width: 768px) { .tc-emir-fisler { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (min-width: 1024px) { .tc-emir-fisler { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+.tc-emir-kod.tc-emir-fis-kod { white-space: nowrap; overflow-wrap: normal; }

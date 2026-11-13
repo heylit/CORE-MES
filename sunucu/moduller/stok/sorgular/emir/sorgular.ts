@@ -178,3 +178,37 @@ export const konumKodlari = (db: Db, idler: number[]): Promise<{ id: number; kod
   db.sorgu('SELECT id, kod FROM stok_konum WHERE id = ANY($1::int[])', [idler]);
 export const bakiyeDefterFarki = (db: Db): Promise<{ malzemeId: number; konumId: number; partiId: number | null; bakiye: string; defter: string }[]> => db.sorgu(
   `SELECT malzeme_id AS "malzemeId", konum_id AS "konumId", parti_id AS "partiId", bakiye::text AS bakiye, defter::text AS defter FROM (${DEFTER_FARKI_SECIMI}) f`);
+
+// ---- Emrin fişleri (3175 a) ---------------------------------------------------------------------------------------------------
+// Emrin bütün hareketleri; tür asıl hareketten (geri almada geri alınan) okunur. Transfer, teslim kaydına bağlıysa teslimdir, değilse ambar
+// transferidir. Emre bağlı olmayan hareket gelmez. Belge: malzeme fişi (SR, UG, FR, AF) ya da teslim numarası.
+export interface EmirHareketiHam {
+  id: number; zaman: string; tur: string; asilTur: string; cikisNedeni: string | null; girisKaynagi: string | null; malzemeId: number; miktar: string;
+  partiId: number | null; lotNo: string | null; tedarikciPartiNo: string | null; dokumNo: string | null; partiEmirId: number | null;
+  kaynakKonumKod: string | null; hedefKonumKod: string | null; isEmriId: number | null; akis: string | null; kisiId: number;
+  malzemeFisiId: number | null; teslimNo: string | null;
+}
+export const emrinHareketleri = (db: Db, emirId: number): Promise<EmirHareketiHam[]> => db.sorgu(
+  `SELECT h.id, ${zamanMetni('h.zaman')} AS zaman, h.tur, a.tur AS "asilTur", a.cikis_nedeni AS "cikisNedeni", a.giris_kaynagi AS "girisKaynagi",
+     a.malzeme_id AS "malzemeId", h.miktar::text AS miktar, a.parti_id AS "partiId", p.lot_no AS "lotNo", p.tedarikci_parti_no AS "tedarikciPartiNo",
+     p.dokum_no AS "dokumNo", p.uretim_emri_id AS "partiEmirId", kk.kod AS "kaynakKonumKod", hk.kod AS "hedefKonumKod", a.is_emri_id AS "isEmriId",
+     (SELECT f.akis FROM stok_hareket_fisi_satiri hs JOIN stok_hareket_fisi f ON f.id = hs.fis_id WHERE hs.hareket_id = h.id) AS akis, h.kisi_id AS "kisiId",
+     (SELECT l.fis_id FROM stok_malzeme_fisi_hareketi l WHERE l.hareket_id = h.id) AS "malzemeFisiId",
+     (SELECT t.no FROM stok_teslim t WHERE t.hareket_id = a.id) AS "teslimNo"
+   FROM stok_hareketi h
+   JOIN stok_hareketi a ON a.id = COALESCE(h.geri_alinan_id, h.id)
+   LEFT JOIN stok_parti p ON p.id = a.parti_id
+   LEFT JOIN stok_konum kk ON kk.id = h.kaynak_konum_id LEFT JOIN stok_konum hk ON hk.id = h.hedef_konum_id
+   WHERE a.uretim_emri_id = $1
+     AND ((a.tur = 'giris' AND a.giris_kaynagi = 'uretim') OR (a.tur = 'cikis' AND a.cikis_nedeni IN ('uretime_sarf', 'fire')) OR a.tur = 'transfer')
+   ORDER BY h.zaman DESC, h.id DESC`, [emirId]);
+
+// 3175: emre ayrılmış (rezerve) miktar, malzeme başına (bütün statüler toplamı). Rezervesi olmayan malzeme satırsızdır.
+export const emrinRezerveToplamlari = (db: Db, emirId: number): Promise<{ malzemeId: number; miktar: string }[]> => db.sorgu(
+  `SELECT malzeme_id AS "malzemeId", sum(miktar)::text AS miktar FROM stok_rezerve WHERE uretim_emri_id = $1 GROUP BY malzeme_id ORDER BY malzeme_id`, [emirId]);
+
+// 3179 a: emrin ayırma kayıtları (ayır / kaldır), eskiden yeniye. Kapanan emrin kaldırma kaydı da buradadır.
+export interface EmirRezerveKaydi { id: number; zaman: string; malzemeId: number; tur: 'ayir' | 'kaldir'; miktar: string; neden: string | null; kisiId: number }
+export const emrinRezerveKayitlari = (db: Db, emirId: number): Promise<EmirRezerveKaydi[]> => db.sorgu(
+  `SELECT id::int AS id, ${zamanMetni('zaman')} AS zaman, malzeme_id AS "malzemeId", tur, miktar::text AS miktar, neden, kisi_id AS "kisiId"
+     FROM stok_rezerve_kaydi WHERE uretim_emri_id = $1 ORDER BY id`, [emirId]);

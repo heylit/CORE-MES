@@ -6,7 +6,7 @@ import type { TestVeritabani } from '#cekirdek/test-vt.ts';
 import { yoneticiOlustur } from '../kisiler/disari.ts';
 import { emirTedarikDurumlari } from './disari.ts';
 import { kalemleriBirlesenTalebeTasi } from './sorgular.ts';
-import { tedarikAsamasi } from './kurallar.ts';
+import { emirSatinAlmaDurumlari, tedarikAsamasi } from './kurallar.ts';
 
 // 2893 D2: Adım Durumu'nun okuduğu tedarik aşaması.
 describe('satin-alma emir tedarik aşaması (2893 D2)', () => {
@@ -95,5 +95,32 @@ describe('satin-alma emir tedarik okuması (2893 D2, gerçek PostgreSQL)', () =>
       { uretimEmriId: e2, isEmriId: null, malzemeNo: m1, asama: 'talep', talepNo: baska.no, siparisNo: null, termin: null },
       { uretimEmriId: e2, isEmriId: null, malzemeNo: m2, asama: 'talep', talepNo: birlesik.no, siparisNo: null, termin: null },
     ]);
+  });
+});
+
+// 3175: emrin ihtiyaç tablosunun satın alma sütunu; malzeme başına en ileri aşama.
+describe('satin-alma emrin satın alma durumu (3175)', () => {
+  const kalem = (malzemeNo: number | null, talepDurumu: string, p: { siparisNo?: string; miktar?: string; teslim?: string; termin?: string | null } = {}) => ({
+    malzemeNo, talepNo: `TL-${String(malzemeNo)}`, talepDurumu, siparisNo: p.siparisNo ?? null, beklenenTeslim: p.termin ?? null,
+    miktar: p.miktar ?? null, teslim: p.teslim ?? '0', kapali: false,
+  });
+  test('sipariş talebi, talep ön talebi geçer; teslim alınan ve malzemesiz kalem sayılmaz', () => {
+    const r = emirSatinAlmaDurumlari([
+      kalem(1, 'onayda'), kalem(1, 'siparis_verildi', { siparisNo: 'SP-1', miktar: '5', termin: '2030-02-01' }),
+      kalem(2, 'onayda'), kalem(3, 'siparis_verildi', { siparisNo: 'SP-3', miktar: '5', teslim: '5' }), kalem(null, 'taslak'),
+    ], [2, 3, 4]);
+    assert.deepEqual(r.get(1), { malzemeNo: 1, asama: 'siparis', no: 'SP-1', talepDurumu: null, termin: '2030-02-01' });
+    assert.deepEqual(r.get(2), { malzemeNo: 2, asama: 'talep', no: 'TL-2', talepDurumu: 'onayda', termin: null });
+    assert.equal(r.get(3)?.asama, 'on_talep', 'tamamı gelen sipariş beklenmez; ön talep kalır');
+    assert.equal(r.get(4)?.asama, 'on_talep');
+    assert.equal(r.size, 4);
+  });
+  test('iki açık siparişte en erken termin; tarihsiz en sonda', () => {
+    const r = emirSatinAlmaDurumlari([
+      kalem(1, 'siparis_verildi', { siparisNo: 'SP-A', miktar: '1' }),
+      kalem(1, 'siparis_verildi', { siparisNo: 'SP-B', miktar: '1', termin: '2030-03-01' }),
+      kalem(1, 'siparis_verildi', { siparisNo: 'SP-C', miktar: '1', termin: '2030-02-01' }),
+    ], []);
+    assert.equal(r.get(1)?.no, 'SP-C');
   });
 });

@@ -340,6 +340,31 @@ describe('recete-rota emir dilimi (gerçek PostgreSQL)', () => {
     assert.ok(hepsi.govde.emirler.some((e) => e.emirId === id), 'emir verilmezse plandaki bütün emirler');
     assert.equal((await istek('sadece_sayfa', 'GET', `/recete-rota/malzeme-ihtiyaci?emir=${String(id)}`)).durum, 403);
     assert.equal((await istek('planlama_proje', 'GET', '/recete-rota/malzeme-ihtiyaci?emir=999999')).durum, 404);
+
+    // 3175 (Risk D1): rezerve stok okuyana, satın alma durumu satın alma ya da açık sipariş okuyana; yoksa null, sıfır uydurulmaz.
+    type Ek = { stokGorunur: boolean; satinAlmaGorunur: boolean; emirler: { emirId: number; hammadde: { malzemeNo: number; rezerve: string | null; satinAlma: unknown }[] }[] };
+    const hamSatiri = (c: Ek) => c.emirler.find((e) => e.emirId === id)?.hammadde.find((h) => h.malzemeNo === ham);
+    const once = await istek<Ek>('yonetici', 'GET', `/recete-rota/malzeme-ihtiyaci?emir=${String(id)}`);
+    assert.deepEqual([once.govde.stokGorunur, once.govde.satinAlmaGorunur, hamSatiri(once.govde)?.rezerve, hamSatiri(once.govde)?.satinAlma], [true, true, '0', null],
+      'ayrılan yokken bilinen sıfır, talep yokken null');
+    await o().sahip.sorgu('INSERT INTO stok_rezerve (malzeme_id, statu_id, uretim_emri_id, miktar) VALUES ($1, NULL, $2, 3)', [ham, id]);
+    const sonra = await istek<Ek>('yonetici', 'GET', `/recete-rota/malzeme-ihtiyaci?emir=${String(id)}`);
+    assert.equal(hamSatiri(sonra.govde)?.rezerve, '3');
+    const tumu = await istek<Ek>('yonetici', 'GET', '/recete-rota/malzeme-ihtiyaci');
+    assert.deepEqual([tumu.govde.satinAlmaGorunur, tumu.govde.emirler.find((e) => e.emirId === id)?.hammadde.find((h) => h.malzemeNo === ham)?.rezerve], [false, null],
+      'emir verilmezse rezerve ve satın alma okunmaz');
+    const rol = (await o().sahip.tek<{ id: number }>("INSERT INTO rol (kod, ad) VALUES ('test_emir_okur', 'test_emir_okur') RETURNING id"))!.id;
+    for (const islem of ['sayfa.recete-rota', 'sayfa.uretim-emirleri']) await o().sahip.sorgu('INSERT INTO rol_islemi (rol_id, islem) VALUES ($1, $2)', [rol, islem]);
+    await o().vt.tx(async (db) => {
+      const yeni = await yoneticiOlustur(db, { ad: 'Deneme emir okur', kullaniciAdi: 'emir_okur', parola: PAROLA });
+      const kisi = await rolAta(db, yoneticiId, yeni, rol);
+      for (const r of kisi.roller) if (r.id !== rol) await rolAl(db, yoneticiId, yeni, r.id);
+    });
+    await giris('emir_okur');
+    const kisitli = await istek<Ek>('emir_okur', 'GET', `/recete-rota/malzeme-ihtiyaci?emir=${String(id)}`);
+    assert.equal(kisitli.durum, 200, JSON.stringify(kisitli.govde));
+    assert.deepEqual([kisitli.govde.stokGorunur, kisitli.govde.satinAlmaGorunur, hamSatiri(kisitli.govde)?.rezerve, hamSatiri(kisitli.govde)?.satinAlma],
+      [false, false, null, null], 'stok ve satın alma okumayan rezerveyi ve satın almayı görmez');
   });
 
   test('EMR-5: çeviri kuralı saf: katılma adımı bulunamayan alt emir kol olmaz; ortadan ayrılıp katılmayan kol ana emrin sonuna kadar yürür', () => {

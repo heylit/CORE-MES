@@ -6,7 +6,7 @@ import {
   malKabulCevabi, malKabulDuzeltGovdesi, malKabulGovdesi, malKabullerCevabi, malKabullerSorgusu, malzemeAyarGovdesi, malzemeAyrintiCevabi, malzemeKartBilgileriCevabi, partiBelgeParametresi, siparisIrsaliyeleriCevabi, siparisIrsaliyeleriSorgusu, sonPartilerCevabi, sonPartilerSorgusu,
   malzemelerCevabi, malzemelerSorgusu, malzemeOzetiCevabi, sayfaSorgusu, partiIziCevabi, partilerCevabi, partilerSorgusu, rafAcGovdesi,
   rafCevabi, rafDuzenleCevabi, rafDuzenleGovdesi, raflarCevabi, raflarSorgusu, rafMatrisiCevabi, sayimCevabi, sayimEsigiGovdesi, sayimFarkiOnayGovdesi, sayimFarkiRedGovdesi, sayimFarklariCevabi, sayimGovdesi, surumGovdesi, statuDegistirGovdesi, tasimaGovdesi, uretimGirisiGovdesi,
-  rezerveEtGovdesi, rezerveKaldirGovdesi, rezervelerCevabi, sahipsizStatuluCevabi, sktDuzeltCevabi, sktDuzeltGovdesi, turListesiCevabi, turListesiParametresi,
+  emirFisleriCevabi, rezerveEtGovdesi, rezerveKaldirGovdesi, rezervelerCevabi, sahipsizStatuluCevabi, sktDuzeltCevabi, sktDuzeltGovdesi, turListesiCevabi, turListesiParametresi,
 } from '#paylasilan/sozlesme/stok.ts';
 import { gozKalemiGovdesi, gozKalemiSemasi, gozKalemiSilGovdesi, kayitCevabi } from '#paylasilan/sozlesme/atolye.ts';
 import { ikinciMenuSayacSemasi } from '#paylasilan/ikinci-menu.ts';
@@ -29,6 +29,7 @@ import { irsaliyeBelgeleriCevabi, irsaliyeBelgeParametresi, irsaliyeEkleGovdesi,
 import { malKabulTaslagiCevabi, malKabulTaslagiKaydetCevabi, malKabulTaslagiKaydetGovdesi, malKabulTaslagiSilGovdesi } from '#paylasilan/sozlesme/stok-mal-kabul-taslagi.ts';
 import * as s from './servis.ts';
 import * as mf from './malzeme-fisi.ts';
+import { emrinFisleri } from './emir-fisleri.ts';
 
 // ST5 a: stoğu stok sayfası ya da bir stok işlemi olan okur (ADR 0007). Menü sayacı kabuğundur, oturumla açık kalır.
 // Yazma komutları POST'tur ve kendi işlemini ister; yinelenince iki kez yazacak olanlar tekrar korumalıdır (ağ hatasından
@@ -196,6 +197,8 @@ export const uclar = [
   uc({ yontem: 'GET', yol: '/stok/refakat-kartlari', yetki: OKUMA, sorgu: refakatKartlariSorgusu, cevap: refakatKartlariCevabi, isle: ({ db, sorgu }) => s.refakatKartlari(db, sorgu.durum) }),
   uc({ yontem: 'GET', yol: '/stok/lot-bekleyen-kartlar', yetki: OKUMA, cevap: lotBekleyenKartlarCevabi, isle: ({ db }) => s.lotBekleyenKartlar(db) }),
   uc({ yontem: 'POST', yol: '/stok/refakat-partileri/:id/iptal-et', yetki: 'stok.transfer', parametre: kimlikParametresi, govde: surumGovdesi, cevap: refakatPartisiCevabi, isle: ({ db, kullanici, parametre, govde }) => s.refakatPartisiIptal(db, kullanici.id, parametre.id, govde) }),
+  // 3175 a: emrin fişleri ve bütün hareketleri; stoğu okuyan görür (emri görmek tek başına yetmez), fiyat yok.
+  uc({ yontem: 'GET', yol: '/stok/uretim-emirleri/:id/fisler', yetki: OKUMA, parametre: kimlikParametresi, cevap: emirFisleriCevabi, isle: ({ db, parametre }) => emrinFisleri(db, parametre.id) }),
   uc({ yontem: 'GET', yol: '/stok/uretim-emirleri/:id/refakat-partileri', yetki: OKUMA, parametre: kimlikParametresi, cevap: refakatPartileriCevabi, isle: ({ db, parametre }) => s.emrinRefakatPartileri(db, parametre.id) }),
   uc({ yontem: 'POST', tekrarKorumali: true, kilitlenmedeYinele: true, yol: '/stok/sepet/stoktan-dus', yetki: 'stok.cikis', govde: stoktanDusGovdesi, cevap: fisCevabi, isle: ({ db, kullanici, govde }) => { s.eksiOnayiDenetle(kullanici, govde); return s.stoktanDus(db, kullanici.id, govde); } }),
   uc({ yontem: 'GET', yol: '/stok/fisler', yetki: OKUMA, sorgu: fislerSorgusu, cevap: fislerCevabi, isle: ({ db, sorgu }) => s.fisListesi(db, sorgu) }),

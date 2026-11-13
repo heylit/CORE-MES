@@ -18,12 +18,12 @@ import {
 import { birimMaliyetleri } from '../finans/disari.ts';
 import { kisiSecenekleri } from '../kisiler/disari.ts';
 import { firmaAra } from '../musteri-tedarikci/disari.ts';
-import { fasonSuresiTahminleri } from '../satin-alma/disari.ts';
+import { emrinSatinAlmaDurumlari, fasonSuresiTahminleri } from '../satin-alma/disari.ts';
 import { durumRevizyonlari, patlatmaRevizyonu, revizyonKunyeleri, yururluktekiRevizyonId, yururluktekiRevizyonIdleri } from '../rota/disari.ts';
 import type { AraHalCozumu } from '../rota/disari.ts';
 import type { malzemeAra } from '../malzemeler/disari.ts';
 import { aktifMalzemelerSinirli, malzemeOzetleri, olcuBirimleri } from '../malzemeler/disari.ts';
-import { emirlerinNetSarfi, malzemeStokDurumlari, sonHareketler, statuluStoklar, statuStoklari, stokMiktarlari } from '../stok/disari.ts';
+import { emirlerinNetSarfi, emrinRezerveleri, malzemeStokDurumlari, sonHareketler, statuluStoklar, statuStoklari, stokMiktarlari } from '../stok/disari.ts';
 import { takvimGunleri, vardiyaTanimlari } from '../vardiya/disari.ts';
 import {
   adimCiktisiBul, adimKimligi, araStokHavuzuKur, bagFarklari, emirMalzemeIhtiyaclari, bagiDegisenUrunler, jsondanSatirlar, degerBicimeUyarMi, emirleriCevir, adimAdetleriCevir, hareketleriCevir, isMerkeziCevir, maliyetCevir,
@@ -204,6 +204,8 @@ const MALIYET_OKUMA: readonly Islem[] = ['finans.maliyet-oku'];
 const MALIYET_YAZMA: readonly Islem[] = ['finans.yonet'];
 const STOK_OKUMA: readonly Islem[] = ['sayfa.stok', ...STOK_ISLEMLERI];
 const EMIR_OKUMA: readonly Islem[] = ADIMLI_OKUMA_ISLEMLERI;
+// Risk D1 (3175): satın alma durumu satın alma okuyabilene ya da açık sipariş okuyabilene (stok/uclar.ts ACIK_SIPARIS_OKUMA) görünür.
+const SATIN_ALMA_OKUMA: readonly Islem[] = ['satin-alma.oku', 'satin-alma.talep-ac', 'satin-alma.yaz', 'stok.giris', 'plan.planlama-oku'];
 // Rota modülünün fason seçicisiyle aynı sınır (rota/servis.ts); süzgeç aramada uygulanır, yalnız aktif fason firmalar gelir.
 const FASON_ARAMA_SINIRI = 200;
 const yetkiliMi = (k: Kullanici, islemler: readonly Islem[]): boolean => islemler.some((i) => islemVarMi(k, i));
@@ -325,10 +327,26 @@ export async function malzemeIhtiyaci(db: Db, kullanici: Kullanici, emirId?: num
   const kartlar = await malzemeOzetleri(db, [...new Set(sonuclar.flatMap((x) => [...x.hammadde.map((h) => h.malzemeNo), ...x.yanUrun.map((y) => y.malzemeNo)]))]);
   const kart = (no: number) => { const k = kartlar.get(no); return { malzemeNo: no, kod: k?.kod ?? null, ad: k?.ad ?? null, birim: k?.birim ?? null }; };
   const metin = (n: number): string => String(n);
+  // 3175: rezerve ve satın alma yalnız tek emir okunurken gelir (emir ekranı); stok okuması yoksa rezerve, satın alma ya da açık sipariş
+  // okuması yoksa satın alma null (Risk D1). Emir verilmezse ikisi de null.
+  const satinAlmaGorunur = emirId !== undefined && yetkiliMi(kullanici, SATIN_ALMA_OKUMA);
+  const rezerveler = emirId !== undefined && stokGorunur ? await emrinRezerveleri(db, emirId) : null;
+  const emirNo = satinAlmaGorunur ? (await uretimEmriOzeti(db, emirId))?.emirNo ?? null : null;
+  const satinAlmalar = satinAlmaGorunur && emirNo !== null ? await emrinSatinAlmaDurumlari(db, emirId, emirNo) : null;
+  // Stok okunurken ayrılanı olmayan malzemenin rezervesi bilinen sıfırdır; okunmadıysa null.
+  const rezerve = (no: number): string | null => (rezerveler === null ? null : metin(Number(rezerveler.get(no) ?? '0')));
+  const satinAlma = (no: number) => {
+    const d = satinAlmalar?.get(no);
+    return d === undefined ? null : { asama: d.asama, no: d.no, talepDurumu: d.talepDurumu, termin: d.termin };
+  };
   return {
     stokGorunur,
+    satinAlmaGorunur,
     emirler: sonuclar.map((x) => {
-      const hammadde = x.hammadde.map((h) => ({ ...kart(h.malzemeNo), brut: metin(h.brut), verilen: metin(h.verilen), stoktan: metin(h.stoktan), alinacak: metin(h.alinacak) }));
+      const hammadde = x.hammadde.map((h) => ({
+        ...kart(h.malzemeNo), brut: metin(h.brut), verilen: metin(h.verilen), stoktan: metin(h.stoktan), alinacak: metin(h.alinacak),
+        rezerve: rezerve(h.malzemeNo), satinAlma: satinAlma(h.malzemeNo),
+      }));
       return {
         emirId: x.emirId, hammadde, eksikler: hammadde.filter((h) => Number(h.alinacak) > 1e-6),
         yanUrun: x.yanUrun.map((y) => ({ ...kart(y.malzemeNo), miktar: metin(y.miktar) })), uyarilar: x.uyarilar,

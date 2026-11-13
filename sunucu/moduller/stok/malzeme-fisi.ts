@@ -220,3 +220,9 @@ export async function malzemeFisiDegisiklikleri(db: Db, a: { zaman: string | nul
 export async function emirlerinFisKimlikleri(db: Db, emirIdler: readonly number[]): Promise<{ id: number; tur: MalzemeFisiTuru; uretimEmriId: number }[]> {
   return (await sorgular.emirlerinMalzemeFisleri(db, emirIdler)).map((f) => ({ id: f.id, tur: f.tur, uretimEmriId: f.uretimEmriId! }));
 }
+// Emrin fişleri (3175 a): emrin sarf, üretimden giriş ve fire fişi ile hareketlerinin bağlı olduğu ambar fişleri, Logo durumlarıyla.
+export async function emrinFisOzetleri(db: Db, emirId: number, ambarFisIdler: readonly number[]): Promise<MalzemeFisiOzeti[]> {
+  const emrin = await sorgular.emirlerinMalzemeFisleri(db, [emirId]);
+  const ambar = ambarFisIdler.length === 0 ? [] : await sorgular.malzemeFisleriBul(db, [...new Set(ambarFisIdler)]);
+  return (await ozetler(db, [...emrin, ...ambar.filter((f) => f.tur === 'ambar')])).ozet;
+}

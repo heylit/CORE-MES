@@ -13,6 +13,7 @@ import {
   taslaktanCalismayaCevabi, taslaktanCalismayaGovdesi, yillikCozBaslatCevabi, yillikCozDurumuCevabi, yillikCozGovdesi, yillikCozParametresi,
 } from '#paylasilan/sozlesme/planlama.ts';
 import { planAnaliziCevabi } from '#paylasilan/sozlesme/plan-analiz.ts';
+import { emirParametresi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import {
   atolyeKomutuCevabi, ekMesaiEkleGovdesi, isTasiGovdesi, isTasiOnizlemeSorgusu, isTasiOnizlemesiCevabi, olayEkleGovdesi, planaAlGovdesi, planaAlOnizlemeSorgusu,
   planaAlOnizlemesiCevabi,
@@ -24,7 +25,7 @@ import { degerlendirmeBaslat, degerlendirmeDurumu } from './degerlendirme.ts';
 import { grupSaatMaliyetleri } from './grup-saat-maliyeti.ts';
 import { mesaiGrupSirasi, mesaiMaliyeti, mesaiSaatDegerleri } from './mesai-maliyeti.ts';
 import { motorAyarlari, motorAyariYaz } from './motor-ayari.ts';
-import { mrpIhtiyaci } from './mrp.ts';
+import { emrinMrpIhtiyaci, mrpIhtiyaci } from './mrp.ts';
 import * as planlama from './planlama-servis.ts';
 import { planAnalizi } from './analiz.ts';
 import { planSagligi } from './plan-sagligi.ts';
@@ -70,6 +71,8 @@ export const uclar = [
   // 1472 M1 (1522 a): açık emirlerin brüt ve net malzeme ihtiyacı; yalnız okur, yeni işlem açılmaz. Planlama sayfalarını gören okur;
   // stok ve satın alma miktarı okuyanın kendi yetkisiyle (1545 a).
   uc({ yontem: 'GET', yol: '/plan/mrp-ihtiyaci', yetki: PLANLAMA_OKUR, cevap: mrpIhtiyaciCevabi, isle: ({ db, kullanici }) => mrpIhtiyaci(db, kullanici) }),
+  // 3175 a: emrin MRP fişi; aynı hesabın bu emre giren satırları (hesaptan sonra süzülür), aynı okuyucu ve görünürlük (1545 a).
+  uc({ yontem: 'GET', yol: '/plan/uretim-emirleri/:id/mrp', yetki: PLANLAMA_OKUR, parametre: emirParametresi, cevap: mrpIhtiyaciCevabi, isle: ({ db, kullanici, parametre }) => emrinMrpIhtiyaci(db, kullanici, parametre.id) }),
   // 2618 (2602-a, 2603 a): mesai ve maliyet görünümünün departman saat maliyeti; maliyet görünümünün işlemiyle (223 a). Kişi değeri çıkmaz.
   uc({ yontem: 'GET', yol: '/plan/grup-saat-maliyetleri', yetki: 'finans.maliyet-oku', cevap: grupSaatMaliyetleriCevabi,
     isle: ({ db }) => grupSaatMaliyetleri(db) }),

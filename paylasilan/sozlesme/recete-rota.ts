@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { ILK_PARCA_SECIMLERI } from './rota.ts';
+import { TALEP_DURUMLARI } from './satin-alma.ts';
 import { zamanSemasi } from '../zaman.ts';
 
 // Reçete ve Rota Motoru prototipi TMI içinde değiştirilmeden çalışır. Prototip durumunu tarayıcının yerel deposunda tutar (ana
@@ -383,9 +384,20 @@ export const fasonTahminCevabi = z.object({ gunler: z.array(z.number().nonnegati
 // kuralla (yetkisize 0) sayılır, ara adım stoğu düşülmez.
 export const malzemeIhtiyaciSorgusu = z.object({ emir: z.coerce.number<number>().int().positive().optional() });
 const ihtiyacKarti = { malzemeNo: z.number().int(), kod: z.string().nullable(), ad: z.string().nullable(), birim: z.string().nullable() };
-export const malzemeIhtiyaciSatiri = z.object({ ...ihtiyacKarti, brut: z.string(), verilen: z.string(), stoktan: z.string(), alinacak: z.string() });
+// 3175: rezerve emre ayrılmış miktar (ayrılan yoksa 0; stok okuma yoksa ya da tek emir okunmuyorsa null). satinAlma malzemenin bu emir için en ileri satın alma
+// aşaması: sipariş (no, termin), talep (no, talep durumu) ya da ön talep (no yok); yoksa ya da satın alma okuması yoksa null. Fiyat ve tedarikçi yok.
+export const EMIR_SATIN_ALMA_ASAMALARI = ['on_talep', 'talep', 'siparis'] as const;
+export const ihtiyacSatinAlmaSemasi = z.object({
+  asama: z.enum(EMIR_SATIN_ALMA_ASAMALARI), no: z.string().nullable(), talepDurumu: z.enum(TALEP_DURUMLARI).nullable(), termin: z.string().nullable(),
+});
+export const malzemeIhtiyaciSatiri = z.object({
+  ...ihtiyacKarti, brut: z.string(), verilen: z.string(), stoktan: z.string(), alinacak: z.string(),
+  rezerve: z.string().nullable(), satinAlma: ihtiyacSatinAlmaSemasi.nullable(),
+});
 export const malzemeIhtiyaciCevabi = z.object({
   stokGorunur: z.boolean(),
+  // 3175: satın alma ya da açık sipariş okuması var; yoksa satinAlma her satırda null.
+  satinAlmaGorunur: z.boolean(),
   emirler: z.array(z.object({
     emirId: z.number().int(),
     hammadde: z.array(malzemeIhtiyaciSatiri),
@@ -398,6 +410,7 @@ export const malzemeIhtiyaciCevabi = z.object({
 export type FasonTahminCevabi = z.output<typeof fasonTahminCevabi>;
 export type MalzemeIhtiyaciCevabi = z.output<typeof malzemeIhtiyaciCevabi>;
 export type MalzemeIhtiyaciSatiri = z.output<typeof malzemeIhtiyaciSatiri>;
+export type IhtiyacSatinAlma = z.output<typeof ihtiyacSatinAlmaSemasi>;
 export type Statu = z.output<typeof statuSemasi>;
 export type StatulerCevabi = z.output<typeof statulerCevabi>;
 export type StatuTanimi = z.output<typeof statuTanimiSemasi>;

@@ -1750,3 +1750,32 @@ export function tedarikAsamasi(s: { talepDurumu: string; miktar: string | null; 
   if (s.kapali || Number(s.teslim) >= Number(s.miktar)) return null;
   return 'siparis';
 }
+
+// 3175: emrin malzemesinin satın alma durumu, emrin ihtiyaç tablosu için. Malzeme başına tek satır, en ileri aşama: açık sipariş, yoksa açık
+// talep, yoksa ön talep (plan ihtiyacı bu emri anıyor). Birden çok sipariş varsa en erken termini olan; tarihsiz en sonda. Saf.
+export type EmirSatinAlmaAsamasi = 'on_talep' | 'talep' | 'siparis';
+export interface EmirSatinAlmaDurumu { malzemeNo: number; asama: EmirSatinAlmaAsamasi; no: string | null; talepDurumu: TalepDurumu | null; termin: string | null }
+export function emirSatinAlmaDurumlari(
+  kalemler: readonly { malzemeNo: number | null; talepNo: string; talepDurumu: string; siparisNo: string | null; beklenenTeslim: string | null; miktar: string | null; teslim: string; kapali: boolean }[],
+  onTalepMalzemeleri: readonly number[],
+): Map<number, EmirSatinAlmaDurumu> {
+  const sonuc = new Map<number, EmirSatinAlmaDurumu>();
+  const sira = (d: EmirSatinAlmaDurumu): number => (d.asama === 'siparis' ? 2 : d.asama === 'talep' ? 1 : 0);
+  const once = (a: EmirSatinAlmaDurumu, b: EmirSatinAlmaDurumu): boolean => {
+    if (sira(a) !== sira(b)) return sira(a) > sira(b);
+    if (a.termin === b.termin || b.termin === null) return a.termin !== null && b.termin === null;
+    return a.termin !== null && a.termin < b.termin;
+  };
+  for (const k of kalemler) {
+    if (k.malzemeNo === null) continue;
+    const asama = tedarikAsamasi(k);
+    if (asama === null) continue;
+    const d: EmirSatinAlmaDurumu = asama === 'siparis'
+      ? { malzemeNo: k.malzemeNo, asama, no: k.siparisNo, talepDurumu: null, termin: k.beklenenTeslim }
+      : { malzemeNo: k.malzemeNo, asama, no: k.talepNo, talepDurumu: k.talepDurumu as TalepDurumu, termin: null };
+    const var_ = sonuc.get(k.malzemeNo);
+    if (var_ === undefined || once(d, var_)) sonuc.set(k.malzemeNo, d);
+  }
+  for (const no of onTalepMalzemeleri) if (!sonuc.has(no)) sonuc.set(no, { malzemeNo: no, asama: 'on_talep', no: null, talepDurumu: null, termin: null });
+  return sonuc;
+}

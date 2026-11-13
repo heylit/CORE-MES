@@ -40,7 +40,8 @@ import {
   iptalOncesiTuret, iptalGeriAlmaHareketi, bilinmeyenKgSatirlari, kgEskimeHatirlatmalari, kgFiyatiEskiMi, kgFiyatiKartta, kgFiyatiYasi, kgSapanMi, kgSapmasi, kgSonAlislari, ondalikCarp, birlestirmeReddi, birlesmeProjesiReddi, birlesikTalep, emirHareketi, projeHareketi, projeReddi, siparisDagilimi, type SiparisDagilimi, type DagilimSatiri, genelGiderOrani, satirYolu, type SatirYolu, belgeGenelGiderOrani, eslemeListesiHatasi, eslemeSurumu, type EslemeDurumu, ayirmaReddi, kaynakKalemiReddi, BIRLESIK_KALEM_SINIRI, KUR_KILIDI, HATIRLATMA_ADLARI, type HatirlatmaAyarlari, type HatirlatmaTalebi, haftaIciGunleri, hatirlatmaAnahtari, hatirlatmaFarki, hatirlatmalar,
 } from './kurallar.ts';
 import type { BirimKarsiligi, FiyatIzi, KalemOzelligi } from './kurallar.ts';
-import { kopyaOzelligi } from './kurallar.ts';
+import { emirSatinAlmaDurumlari, kopyaOzelligi } from './kurallar.ts';
+import type { EmirSatinAlmaDurumu } from './kurallar.ts';
 import { butceKullanimi, butceSatirlari, degerlendir, esitVadeOrtami, gerekenBasamak, kalemHarcamalari, kararTutari, tedarikciBasarimi, teklifHesabi, type ButceSatiri } from './hesap-kurallar.ts';
 import * as s from './sorgular.ts';
 import { alimBildir } from './alim-olayi.ts';
@@ -729,6 +730,13 @@ async function planOnTalepleri(db: Db) {
       }];
     }),
   };
+}
+// 3175: emrin ihtiyaç tablosunun satın alma sütunu. Emre bağlı talep kalemleri (2893 D2 okuması) ve bu emri anan plan ön talebi;
+// fiyat ve tedarikçi yok. Yetki denetlemez; çağıran satın alma ya da açık sipariş okumasını denetler.
+export async function emrinSatinAlmaDurumlari(db: Db, uretimEmriId: number, emirNo: string): Promise<Map<number, EmirSatinAlmaDurumu>> {
+  const kalemler = await s.emirTedarikDurumlariOku(db, [uretimEmriId], []);
+  const onTalep = (await planOnTalepleri(db)).adaylar.filter((a) => a.emirler.includes(emirNo)).map((a) => a.malzemeNo);
+  return emirSatinAlmaDurumlari(kalemler.filter((k) => k.uretimEmriId === uretimEmriId), onTalep);
 }
 // Yalnız açık fason adım ya da gösterilen plan ihtiyacı yoksayılır. Fasonda ikinci kez yoksaymak ilk kararı bozmaz; planda karar o anki
 // kalanla yenilenir.

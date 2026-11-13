@@ -6,13 +6,13 @@ import { testVeritabaniKur } from '#cekirdek/test-vt.ts';
 import type { TestVeritabani } from '#cekirdek/test-vt.ts';
 import { uygulamaKur } from '#cekirdek/uygulama.ts';
 import { ISTEK_KIMLIGI_BASLIGI } from '#paylasilan/istek-kimligi.ts';
-import { malzemeFisiAyrintiCevabi, malzemeFisiOzeti, malzemeFisleriCevabi } from '#paylasilan/sozlesme/stok.ts';
-import type { LogoFisBilgisi, MalKabulCevabi, MalzemeFisiAyrintiCevabi, MalzemeFisiListeSatiri, MalzemeFisiOzeti, MalzemeFisleriCevabi } from '#paylasilan/sozlesme/stok.ts';
+import { emirFisleriCevabi, malzemeFisiAyrintiCevabi, malzemeFisiOzeti, malzemeFisleriCevabi } from '#paylasilan/sozlesme/stok.ts';
+import type { EmirFisleriCevabi, LogoFisBilgisi, MalKabulCevabi, MalzemeFisiAyrintiCevabi, MalzemeFisiListeSatiri, MalzemeFisiOzeti, MalzemeFisleriCevabi } from '#paylasilan/sozlesme/stok.ts';
 import { denetimYaz } from '../denetim/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
-import { emirAcildiYansit, hurdaSayimiYansit, logoIcinMalzemeFisleri, malzemeFisiDegisiklikleri, malzemeFisiLogoCozucusu } from './disari.ts';
+import { emirAcildiYansit, emirIptalYansit, hurdaSayimiYansit, logoIcinMalzemeFisleri, malzemeFisiDegisiklikleri, malzemeFisiLogoCozucusu } from './disari.ts';
 import type { LogoDurumuSorusu } from './disari.ts';
 
 const PAROLA = 'dogru-parola-1';
@@ -108,6 +108,59 @@ describe('stok malzeme fişleri (gerçek PostgreSQL)', () => {
     // Logo modülü kablolamayla bağlı (kart #493): sarf ve giriş otomatik türde sıraya girecek, fire kapalı; hiçbiri elle gönderilemez.
     assert.deepEqual(Object.fromEntries(c.govde.satirlar.map((f) => [f.tur, f.logo.durum])), { sarf: 'bekliyor', uretim_girisi: 'bekliyor', fire: 'gonderilmez' });
     assert.ok(c.govde.satirlar.every((f) => !f.gonderilebilir));
+  });
+
+  // 3175 a (Risk D1): emrin Fişler sekmesi. Stok okuması şart; kart tür başına, hareket kaynağı sunucudan, fiyat yok.
+  test('emrin fişleri: kartlar ve hareketler; geri alma eksi satır; stok okumayan 403, bilinmeyen emir 404', async () => {
+    const e = await emir();
+    await o().vt.tx((db) => emirAcildiYansit(db, { uretimEmriId: e, kisiId: yoneticiId, stoktanRezerve: false }));
+    const bos = await yon<EmirFisleriCevabi>('GET', `/stok/uretim-emirleri/${e}/fisler`);
+    assert.equal(bos.durum, 200, JSON.stringify(bos.govde));
+    emirFisleriCevabi.parse(bos.govde);
+    assert.deepEqual(bos.govde.kartlar.map((k) => [k.tur, k.satirSayisi, k.toplam]), [['uretim_girisi', 0, null], ['fire', 0, null], ['sarf', 0, null], ['ambar', 0, null], ['teslim', 0, null], ['rezerve', 0, null]]);
+    assert.ok(['sarf', 'uretim_girisi', 'fire'].every((t) => /^(SR|UG|FR)-\d{6}$/.test(bos.govde.kartlar.find((x) => x.tur === t)!.no ?? '')), '3179 a: boş emir fişi numarasıyla gelir');
+    assert.deepEqual(bos.govde.hareketler, []);
+    const k = await kart();
+    await malKabul(k, '10');
+    const kabul = await konumId('KABUL');
+    const sarf = await yon<{ hareketIdler: number[] }>('POST', '/stok/cikis', { malzemeId: k, konumId: kabul, miktar: '4', cikisNedeni: 'uretime_sarf', uretimEmriId: e });
+    assert.equal(sarf.durum, 200, JSON.stringify(sarf.govde));
+    assert.equal((await yon('POST', '/stok/cikis', { malzemeId: k, konumId: kabul, miktar: '1', cikisNedeni: 'fire', uretimEmriId: e })).durum, 200);
+    const sarfFisi = await emirFisi(e, 'sarf');
+    const c = await yon<EmirFisleriCevabi>('GET', `/stok/uretim-emirleri/${e}/fisler`);
+    const kartDe = (t: string) => c.govde.kartlar.find((x) => x.tur === t)!;
+    assert.deepEqual([kartDe('sarf').no, kartDe('sarf').satirSayisi, kartDe('sarf').toplam, kartDe('sarf').birim, kartDe('sarf').logo], [sarfFisi.no, 1, '4', 'adet', 'bekliyor']);
+    assert.deepEqual([kartDe('fire').satirSayisi, kartDe('fire').toplam, kartDe('fire').logo], [1, '1', 'gonderilmez']);
+    assert.equal(kartDe('teslim').logo, null, 'teslim Logo\'ya gitmez');
+    assert.deepEqual(c.govde.hareketler.map((h) => [h.tur, h.miktar, h.kaynak, h.geriAlma]).sort(), [['fire', '1', 'elle', false], ['sarf', '4', 'elle', false]]);
+    assert.ok(c.govde.hareketler.every((h) => h.malzemeId === k && h.kaynakKonumKod === 'KABUL' && h.kisiAd !== null));
+    assert.ok(!JSON.stringify(c.govde).match(/fiyat|tutar/i), 'cevap fiyat taşımaz');
+    assert.equal((await yon('POST', `/stok/hareketler/${sarf.govde.hareketIdler[0]!}/geri-al`, {})).durum, 200);
+    const g = await yon<EmirFisleriCevabi>('GET', `/stok/uretim-emirleri/${e}/fisler`);
+    const sarflar = g.govde.hareketler.filter((h) => h.tur === 'sarf');
+    assert.deepEqual(sarflar.map((h) => [h.miktar, h.geriAlma]).sort(), [['-4', true], ['4', false]]);
+    assert.equal(g.govde.kartlar.find((x) => x.tur === 'sarf')!.toplam, '0');
+    // 3179 a: rezerve kartı ayırma kaydından okunur; emir iptalinde rezerve kalkar ve nedeniyle görünür. Stok miktarı değişmez.
+    await o().sahip.sorgu('INSERT INTO stok_rezerve (malzeme_id, statu_id, uretim_emri_id, miktar) VALUES ($1, NULL, $2, 3)', [k, e]);
+    await o().sahip.sorgu("INSERT INTO stok_rezerve_kaydi (malzeme_id, statu_id, uretim_emri_id, tur, miktar, neden, kisi_id) VALUES ($1, NULL, $2, 'ayir', 3, 'Emir açılışı', $3)", [k, e, yoneticiId]);
+    await o().vt.tx((db) => emirIptalYansit(db, { uretimEmriId: e, kisiId: yoneticiId }));
+    const r = await yon<EmirFisleriCevabi>('GET', `/stok/uretim-emirleri/${e}/fisler`);
+    emirFisleriCevabi.parse(r.govde);
+    assert.deepEqual(r.govde.hareketler.filter((h) => h.tur === 'rezerve').map((h) => [h.miktar, h.aciklama, h.kaynak, h.belgeNo]).sort(),
+      [['-3', 'Emir iptal edildi', 'emir', null], ['3', 'Emir açılışı', 'emir', null]]);
+    const rk = r.govde.kartlar.find((x) => x.tur === 'rezerve')!;
+    assert.deepEqual([rk.satirSayisi, rk.toplam, rk.logo, rk.no], [2, '0', null, null]);
+    assert.equal((await yon('GET', '/stok/uretim-emirleri/999999/fisler')).durum, 404);
+    const rol = (await o().sahip.tek<{ id: number }>("INSERT INTO rol (kod, ad) VALUES ('test_emir_goren', 'test_emir_goren') RETURNING id"))!.id;
+    await o().sahip.sorgu("INSERT INTO rol_islemi (rol_id, islem) VALUES ($1, 'sayfa.uretim-emirleri')", [rol]);
+    await o().vt.tx(async (db) => {
+      const yeni = await yoneticiOlustur(db, { ad: 'Deneme emir gören', kullaniciAdi: 'emir_goren', parola: PAROLA });
+      const kisi = await rolAta(db, yoneticiId, yeni, rol);
+      for (const r of kisi.roller) if (r.id !== rol) await rolAl(db, yoneticiId, yeni, r.id);
+    });
+    await giris('emir_goren');
+    assert.equal((await istek('emir_goren', 'GET', `/stok/uretim-emirleri/${e}/fisler`)).durum, 403, 'emir okuma tek başına stok hareketini açmaz');
+    assert.equal((await istek('kalite', 'GET', `/stok/uretim-emirleri/${e}/fisler`)).durum, 200, 'stok okuyan görür');
   });
 
   test('emirli sarf ve fire ayrı fişe yazılır; geri alma satırı düşürür ve değişiklik sayılır', async () => {

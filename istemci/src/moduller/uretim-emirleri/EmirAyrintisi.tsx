@@ -12,6 +12,8 @@ import { GecmisDugmesi } from '../denetim/disari.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { RefakatKartlari } from './RefakatKartlari.tsx';
 import { StokTamamlama } from './StokTamamlama.tsx';
+import { EmirFisleri } from './EmirFisleri.tsx';
+import { stokOkur } from './refakat.ts';
 import { UretimYerleri } from './UretimYerleri.tsx';
 import { useAdimSatirEki, type AdimSatirEki } from './AdimSatiri.tsx';
 import { HazirlikListesi } from './HazirlikListesi.tsx';
@@ -56,8 +58,8 @@ export interface EmirParcalari {
   malzeme: (emirId: number) => ReactNode;
 }
 
-type SekmeAdi = 'adimlar' | 'malzeme' | 'hazirlik' | 'stok' | 'kayitlar';
-const SEKME_ADLARI: readonly SekmeAdi[] = ['adimlar', 'malzeme', 'hazirlik', 'stok', 'kayitlar'];
+type SekmeAdi = 'adimlar' | 'malzeme' | 'fisler' | 'hazirlik' | 'stok' | 'kayitlar';
+const SEKME_ADLARI: readonly SekmeAdi[] = ['adimlar', 'malzeme', 'fisler', 'hazirlik', 'stok', 'kayitlar'];
 
 // Yaşam döngüsü: emir bu sırayla ilerler; iptal yan yoldur. "Kapanış onayı" üretimi biten emrin kalite ve müdür onayıdır (1082 a).
 type AsamaAdi = 'taslak' | 'planli' | 'uretimde' | 'bitti' | 'kapanis' | 'kapandi';
@@ -194,6 +196,10 @@ function EmirSayfasi({ parcalar }: { parcalar?: EmirParcalari }) {
   const oturum = useOturum();
   const islemler = oturum.data?.islemler ?? [];
   const receteRotaGorur = islemler.includes('sayfa.recete-rota');
+  // Risk D1 (3175): emrin fişleri stok hareketidir; sunucunun stok okuma listesiyle aynı koşulla görünür (stok.istek herkeste vardır,
+  // stok okuması açmaz). MRP fişi plan okumasıyla (M1).
+  const fislerGorur = stokOkur(islemler);
+  const mrpGorur = islemler.includes('plan.planlama-oku');
   const ayrinti = useQuery({
     queryKey: anahtarlar.ayrinti(emirId),
     queryFn: () => api.get<EmirAyrintiCevabi>(`/uretim-emirleri/${emirId}`),
@@ -236,6 +242,7 @@ function EmirSayfasi({ parcalar }: { parcalar?: EmirParcalari }) {
   const sekmeler = [
     { anahtar: 'adimlar', baslik: 'Adımlar', simge: 'route' },
     { anahtar: 'malzeme', baslik: 'Malzeme', simge: 'box' },
+    ...(fislerGorur ? [{ anahtar: 'fisler', baslik: 'Fişler', simge: 'file' } as const] : []),
     { anahtar: 'hazirlik', baslik: 'Hazırlık', simge: 'clipboard-check' },
     { anahtar: 'stok', baslik: 'Stok ve kapanış', simge: 'pallet' },
     { anahtar: 'kayitlar', baslik: 'Kayıtlar', simge: 'list' },
@@ -303,6 +310,7 @@ function EmirSayfasi({ parcalar }: { parcalar?: EmirParcalari }) {
                 {!parcalar && emir.malzemeNo == null && <p className="tc-emir-not">Bu emrin malzeme kartı yok.</p>}
               </>
             )}
+            {sekme === 'fisler' && fislerGorur && <EmirFisleri emirId={emir.id} emirNo={emir.emirNo} mrpGorur={mrpGorur} />}
             {sekme === 'hazirlik' && <HazirlikListesi emir={emir} />}
             {sekme === 'stok' && (
               <>
