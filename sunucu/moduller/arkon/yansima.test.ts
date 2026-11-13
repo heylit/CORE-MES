@@ -3,6 +3,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { after, before, beforeEach, describe, test } from 'node:test';
 import type { FastifyInstance } from 'fastify';
 import type { Db } from '#cekirdek/db.ts';
+import { semaliKilitAnahtariSql } from '#cekirdek/kilit.ts';
 import { testVeritabaniKur } from '#cekirdek/test-vt.ts';
 import type { TestVeritabani } from '#cekirdek/test-vt.ts';
 import { uygulamaKur } from '#cekirdek/uygulama.ts';
@@ -1515,6 +1516,39 @@ describe('arkon sayım ve olayları CORE üretim emrine yansır (gerçek Postgre
     assert.equal(await onayliSaglam(emir), (once ?? 0) + 4);
     assert.equal((await yansima(String(yeni['cid'])))?.sonuc, 'yazildi');
     assert.equal((await kendi(String(yeni['cid']))).durum, 409, 'yazılmış sayım yeniden denenmez');
+
+    // Sonradan sayım emir kilidi altında sorulur: kilit beklenirken aynı emre giren sayım da eski sayımı durdurur.
+    const gecSayim = sayim(emir, 'good', 2, { refakatPartisiId: yabanci });
+    assert.equal((await ekle(operator, 'counts', gecSayim)).durum, 200);
+    assert.equal((await yansima(String(gecSayim['cid'])))?.sonuc, 'reddedildi');
+    let tutuldu: () => void = () => undefined;
+    const kilitTutuldu = new Promise<void>((coz) => { tutuldu = coz; });
+    const kilitli = sahip.tx(async (db) => {
+      await db.sorgu(`SELECT pg_advisory_xact_lock(${semaliKilitAnahtariSql('$1::text')})`, [`arkon-yansima-emir-${emir}`]);
+      const kopya = await db.tek<{ id: number; kisi_id: number }>(
+        `INSERT INTO arkon_kayit (tur, cid, zaman, makine, is_merkezi, emir_no, paket_id, madde_id, govde, kisi_id, istasyon_id, is_merkezi_id, varis)
+         SELECT tur, $2, zaman, makine, is_merkezi, emir_no, paket_id, madde_id, govde, kisi_id, istasyon_id, is_merkezi_id, now() FROM arkon_kayit WHERE cid = $1
+         RETURNING id::float8 AS id, kisi_id`, [String(gecSayim['cid']), cid()]);
+      await db.sorgu("INSERT INTO arkon_tmi_yansima (kayit_id, kayit_zaman, emir_id, kisi_id, sonuc) VALUES ($1, (SELECT zaman FROM arkon_kayit WHERE id = $1), $2, $3, 'bekliyor')", [kopya!.id, emir, kopya!.kisi_id]);
+      tutuldu();
+      await new Promise((coz) => setTimeout(coz, 600));
+    });
+    await kilitTutuldu;
+    const [kilitSonrasi] = await Promise.all([kendi(String(gecSayim['cid'])), kilitli]);
+    assert.equal(kilitSonrasi.durum, 409, JSON.stringify(kilitSonrasi.govde));
+    assert.match(String(kilitSonrasi.govde.mesaj), /sonradan yeniden sayım/);
+    assert.equal((await yansima(String(gecSayim['cid'])))?.sonuc, 'reddedildi');
+
+    // Kapsam: kişinin iş merkezi kısıtı sonradan daralırsa kendi sayımı da bulunamaz (404, 409 değil); satır değişmez.
+    await yeniIstasyon();
+    try {
+      assert.equal((await istek(yonetici, 'POST', `/kisi-is-merkezleri/${operatorId}/belirle`, { isMerkeziIdleri: [merkezId] })).durum, 200);
+      assert.equal((await kendi(String(gecSayim['cid']))).durum, 404);
+      assert.equal((await yansima(String(gecSayim['cid'])))?.sonuc, 'reddedildi');
+    } finally {
+      assert.equal((await istek(yonetici, 'POST', `/kisi-is-merkezleri/${operatorId}/belirle`, { isMerkeziIdleri: [] })).durum, 200);
+    }
+    assert.equal((await kendi(String(gecSayim['cid']))).durum, 409, 'kısıt kalkınca satır yine görülür');
   });
 
   test('yeniden deneme sıra koruması: emrin sonraki durum kaydı yazılmışsa eski durum kaydı 409 ve emir değişmez; sonrası yoksa yazılır', async () => {

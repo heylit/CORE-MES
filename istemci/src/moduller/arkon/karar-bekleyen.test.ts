@@ -52,10 +52,11 @@ function sahteIndexedDb(): { indexedDB: unknown; IDBRequest: unknown } {
 const say = (cid: string, uid = '1') => ({ op: 'log', kind: 'counts', uid, at: 5, row: { cid, kind: 'good', delta: 1, orderNo: 'ORN-UE-1', pkgId: null } });
 let gonderilen: string[] = [];
 let kabul = new Set<string>();
+let ozelCevap = new Map<string, { durum: number; govde: unknown }>();
 const bekle = (ms = 40) => new Promise((r) => setTimeout(r, ms));
 
 beforeEach(() => {
-  gonderilen = []; kabul = new Set();
+  gonderilen = []; kabul = new Set(); ozelCevap = new Map();
   localStorage.clear();
   localStorage.setItem('arkon:server', JSON.stringify('http://sunucu.test'));
   localStorage.setItem('arkon:session', JSON.stringify({ token: 't', srv: 'http://sunucu.test', user: { id: '1', name: 'ORN Operatör', role: 'operator' } }));
@@ -71,6 +72,8 @@ beforeEach(() => {
     if (yeniden && ayar?.method === 'POST') {
       const cid = decodeURIComponent(yeniden[1]!);
       gonderilen.push(`yeniden:${cid}`);
+      const ozel = ozelCevap.get(cid);
+      if (ozel) return cevap(ozel.durum, ozel.govde);
       if (kabul.has(cid)) return cevap(200, { sonuc: 'yazildi', neden: null });
       return cevap(409, { error: 'Bu adımda sonradan yeniden sayım yapıldı; eski sayım yeniden denenmez. Gerekirse düzelterek gönderin.' });
     }
@@ -177,6 +180,35 @@ describe('kuyruk gönderimi: reddedilen bekleyen kayıt düşmez', () => {
     expect(await AKStore.Log.bekleyenler()).toEqual([]);
     expect(donen.map((d) => d.cid)).toEqual(['yazildi-1']);
     expect(gonderilen).toEqual(['yazildi-1', 'yeniden:yazildi-1']);
+  });
+
+  it('"yeniden": sunucu sayımı kuyruğa aldıysa ("bekliyor") yazılmış gibi düşer ve adet ekrana döner', async () => {
+    const { AKStore } = (await import(/* @vite-ignore */ STORE_YOLU)) as { AKStore: Depo };
+    await AKStore.local.add('outbox', say('yazildi-1'));
+    const donen: { cid?: string }[] = [];
+    window.addEventListener('arkon-sayim-yeniden-yazildi', (e) => donen.push((e as CustomEvent).detail));
+    await AKStore.init(); await bekle(120);
+    const [a] = await AKStore.Log.bekleyenler();
+
+    ozelCevap.set('yazildi-1', { durum: 200, govde: { sonuc: 'bekliyor', neden: null } });
+    expect(await AKStore.Log.kararCoz(a!.anahtar, 'yeniden')).toBe(true);
+    expect(await AKStore.Log.bekleyenler()).toEqual([]);
+    expect(donen.map((d) => d.cid)).toEqual(['yazildi-1']);
+  });
+
+  it('"yeniden": sunucu meşgulse (503) ya da kaydı bulamazsa (404) hak yanmaz, kayıt olduğu gibi kalır', async () => {
+    const { AKStore } = (await import(/* @vite-ignore */ STORE_YOLU)) as { AKStore: Depo };
+    await AKStore.local.add('outbox', say('yazildi-1'));
+    await AKStore.init(); await bekle(120);
+    const [a] = await AKStore.Log.bekleyenler();
+
+    for (const durum of [503, 404]) {
+      ozelCevap.set('yazildi-1', { durum, govde: { error: 'ORN' } });
+      expect(await AKStore.Log.kararCoz(a!.anahtar, 'yeniden')).toBe(false);
+      const [b] = await AKStore.Log.bekleyenler();
+      expect([b!.durum, b!.yenidenDenenir, b!.neden]).toEqual(['karar', true, a!.neden]);
+    }
+    expect(gonderilen.filter((c) => c.startsWith('yeniden:'))).toHaveLength(2);
   });
 
   it('"yeniden": sunucu yine reddederse neden güncellenir, kayıt kalır ve bir daha denenmez', async () => {

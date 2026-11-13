@@ -3,7 +3,7 @@ import type { Db } from '#cekirdek/db.ts';
 import type { Gunluk } from '#cekirdek/gunluk.ts';
 import { kayitNoktasi, vtHataIzi, vtSureDoldu, vtUlasilamadi } from '#cekirdek/db.ts';
 import { ACIK_EMIR_DURUMLARI, BEKLEME_NEDENI_ADLARI, makineDoluAyrintisi, sayimGovdesi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
-import { UygulamaHatasi, bulunamadi, cakisma, cokIstek, dogrulama, eskiSurum, gecersiz, kapsamDisi, yetkiYok } from '#cekirdek/hata.ts';
+import { UygulamaHatasi, bulunamadi, cakisma, cokIstek, dogrulama, eskiSurum, gecersiz, kapsamDisi, mesgul, yetkiYok } from '#cekirdek/hata.ts';
 import { kapsamSuzgeci, kapsamdaMi, kisininKapsami } from '#cekirdek/kapsam.ts';
 import type { Kapsam } from '#cekirdek/kapsam.ts';
 import { sayfaliListe } from '#cekirdek/liste.ts';
@@ -62,7 +62,7 @@ import {
   BITMIS_BITIR, DOSYA_KOTASI, olcumAletleri, islemImzasi, yoklamaDenetimiGecerli, katilimYolu, tmidekiDurum, ZATEN_CALISIYOR, GIZLI_YANSIMA_TURLERI, ILETI_HIZI, ISTEK_KILIT_BUTCESI_MS, KILIT_BEKLEME_MS, KUYRUK_DEGISIKLIK_YOK, HAZIRLIK_DEGISIKLIK_YOK, arizaCagrisi, SAYIM_ERTELEME, yansimaNedeni, yansimaSirasi, YANSIYAN_KAYITLAR, yansimaKarari, yenidenDenemeReddi, YENIDEN_YALNIZ_HATALI, alanYetkisiReddi, belgeRoluReddi, onayEskidiMi, onayIcerigi, onayOzetiDamgala, bekletmeAlaniniEkle, bitenEmirIsareti, bitmisIsReddi, onayZorunluMu, hizSiniriAsildi, iletiReddi, kayitRoluReddi, kisiAlanlariniDoldur, yazmaReddi, yayinEksigi, yerelPaketReddi, yeniSurum, yetkiMatrisi, yuklemeKotasiHatasi,
   cizimRevizyonuReddi, malzemeCizimleri, merkezDosyaAdi, merkezDosyaTipi, merkezDurumu, paketMerkezDosyalari, merkezTuruMu, merkezdenAlabilirMi, merkezDurumunuOkuyabilirMi,
   HAZIRLIK_MADDESI_ILETILERI, hazirlikMaddesiOlayReddi,
-  KAYIT_YAZARLARI, KENDI_YENIDEN_EMIRSIZ, KENDI_YENIDEN_MESGUL, KENDI_YENIDEN_YALNIZ_RET, kendiSayimYenidenReddi,
+  KAYIT_YAZARLARI, KENDI_YENIDEN_EMIRSIZ, KENDI_YENIDEN_MESGUL, KENDI_YENIDEN_SONRADAN_SAYILDI, KENDI_YENIDEN_YALNIZ_RET, kendiSayimYenidenReddi,
   bakimAcikMi, hazirlikBekliyorMu, kaliteBekliyorMu, arizaMakineGecisi, acikArizaMi, ARIZA_ACIKLAMASI,
   adetEksikMi, araliklariBirlestir, araliklariKes, beklenenTopla, bitenIsBeklenen, girisYokAktifDakika, girisYokMu, isEmriBeklenenAdet, kaynakKarsilastir, kesinBeklenen, kisiBeklenen, makineIzinliMi, toplamOran, uretimOrani,
   donemAraligi, donemTopla, etkinGun, gunEkle, gunSiniri, isEmriBeklenenBirlestir, istasyonIsaretli, kalanAdet, kapanacakGunler, performansOrani, planliUretim,
@@ -2421,10 +2421,13 @@ export async function kendiSayiminiYenidenDene(db: Db, kullanici: Kullanici, cid
   const sinir = await kapsamSiniri(db, kullanici);
   const satir = await sorgular.kendiSayimiKilitle(db, cid, kullanici.id, sinir?.yasak ?? KONUMSUZ, sinir?.izinli ?? null);
   if (satir === null) throw bulunamadi('Sayım bulunamadı.');
-  const sonradan = satir.emir_id !== null && (await sorgular.sonradanSayildi(db, satir.emir_id, satir.kayit_id, satir.paket_id, satir.tur_kodu));
-  const ret = kendiSayimYenidenReddi({ tur: satir.tur, sonuc: satir.sonuc, emirId: satir.emir_id, zaman: satir.zaman.getTime() }, sonradan, Date.now());
+  const ozet = { tur: satir.tur, sonuc: satir.sonuc, emirId: satir.emir_id, zaman: satir.zaman.getTime() };
+  const ret = kendiSayimYenidenReddi(ozet, false, Date.now());
   if (ret !== null || satir.emir_id === null) throw cakisma(ret ?? KENDI_YENIDEN_EMIRSIZ);
-  if (!(await emirKilidiniDene(db, satir.emir_id, KILIT_BEKLEME_MS, gunluk))) throw cakisma(KENDI_YENIDEN_MESGUL);
+  // Meşgul (503): istemci sonucu bilinmeyen sayar, yeniden deneme hakkı yanmaz.
+  if (!(await emirKilidiniDene(db, satir.emir_id, KILIT_BEKLEME_MS, gunluk))) throw mesgul(KENDI_YENIDEN_MESGUL);
+  // Sonradan sayım emir kilidi altında sorulur: kilit beklenirken aynı emre yazılan sayım da görülür.
+  if (await sorgular.sonradanSayildi(db, satir.emir_id, satir.kayit_id, satir.paket_id, satir.tur_kodu)) throw cakisma(KENDI_YENIDEN_SONRADAN_SAYILDI);
   if (!(await sorgular.reddedilenSayimiKuyruga(db, satir.id))) throw cakisma(KENDI_YENIDEN_YALNIZ_RET);
   await korumaliIsle(db, satir.emir_id, undefined, okumaOnbellegiKur(), new Set([satir.kayit_id]));
   const yeni = await sorgular.yansimaSonucu(db, satir.id);

@@ -258,10 +258,15 @@ export interface Status { mode: 'server' | 'local'; base: string | null; online:
     let cevap: any;
     try { cevap = await api('POST', '/log/counts/' + encodeURIComponent(cid) + '/yeniden-dene'); }
     catch (e: any) {
+      // Bağlantı yok ya da sunucu meşgul: sonuç bilinmez, kayıt ve deneme hakkı olduğu gibi kalır.
       if (gonderimSonucu(e) === 'kuyruk') return false;
       cevap = { sonuc: 'reddedildi', neden: e.message || null };
     }
-    if (cevap && cevap.sonuc === 'yazildi') {
+    // Kayıt sunucuda bulunamadı (404): hak yanmaz, kayıt değişmez.
+    if (cevap === undefined || cevap === null) return false;
+    // "bekliyor": sunucu sayımı yeniden sıraya aldı (erteleme ya da geçici hata) ve sonra kendisi işler; reddederse gecikmeli ret iletisi
+    // sayıyı normal yoldan bir kez geri alır. Kayıt burada tutulsaydı "Düzelterek gönder" aynı adedi ikinci kez yazdırabilirdi.
+    if (cevap.sonuc === 'yazildi' || cevap.sonuc === 'bekliyor') {
       await L.del('outbox', anahtar);
       try { window.dispatchEvent(new CustomEvent(SAYIM_YENIDEN_YAZILDI_OLAYI, { detail: { kind: 'counts', cid, row: it.row } })); } catch (x) {}
     } else {

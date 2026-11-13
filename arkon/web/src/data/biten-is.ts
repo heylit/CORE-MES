@@ -128,7 +128,7 @@ export interface KuyrukReddi { ileti: string; at: number; yazildi: boolean; yeni
 interface KuyrukKaydi { op?: unknown; kind?: unknown; row?: unknown; at?: unknown; uid?: unknown; red?: KuyrukReddi }
 
 export const KUYRUK_BITTI_OLAYI = 'arkon-kuyruk-bitti';
-// Yeniden denenen sayım yazıldı: ret anında geri alınan adet ekranda yeniden eklenir.
+// Yeniden denenen sayım yazıldı ya da sunucuda yeniden sıraya girdi: ret anında geri alınan adet ekranda yeniden eklenir.
 export const SAYIM_YENIDEN_YAZILDI_OLAYI = 'arkon-sayim-yeniden-yazildi';
 const COZULMUS_IZ_SURESI_MS = 24 * 3600e3;
 
