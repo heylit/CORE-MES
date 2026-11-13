@@ -152,6 +152,7 @@ function sunucuKur(kullanici: Kullanici, ek: Ek = {}): Cagri[] {
     }
     if (yol.startsWith('/uretim-emirleri')) return Promise.resolve(cevap(ek.emirler ?? EMIRLER));
     if (yol.startsWith('/atolye/arama')) return Promise.resolve(cevap(ARAMA));
+    if (yol.startsWith('/stok/goz-ozetleri')) return Promise.resolve(cevap({ gozler: [{ gozId: 100, konumId: 55, malzemeler: [{ malzemeId: 4, ad: 'Çelik çubuk', birim: 'kg', miktar: '120.000', ambalaj: null }] }] }));
     if (yol.startsWith('/stok/goz-stoklari')) return Promise.resolve(cevap({ gozler: [{ gozId: 100, konumId: 55, kalemSayisi: 3, ilkMalzemeAd: 'Çelik çubuk' }] }));
     if (yol.startsWith('/stok/malzemeler?')) return Promise.resolve(cevap({ satirlar: [{ malzemeId: 4, ad: 'Çelik çubuk', stokKodu: 'S2', birim: 'kg' }], toplam: 1, sayfa: 1, sayfaBoyu: 50 }));
     if (yol.startsWith('/stok/konum-malzemeleri')) {
@@ -428,7 +429,7 @@ describe('fabrika haritası', () => {
   it('3012 a: haritadaki 3B raf yükü Stok\'tan okunur; stok yetkisi yoksa stok isteği atılmaz', async () => {
     const cagrilar = sunucuKur({ ...OKUYAN, islemler: ['sayfa.atolye', 'sayfa.stok'] });
     goster(<AtolyeHaritasi />, '/atolye');
-    await waitFor(() => expect(cagrilar.some((c) => c.yol.startsWith('/stok/goz-stoklari'))).toBe(true));
+    await waitFor(() => expect(cagrilar.some((c) => c.yol.startsWith('/stok/goz-ozetleri'))).toBe(true));
     cleanup();
 
     const cagrilar2 = sunucuKur(OKUYAN);
@@ -813,6 +814,14 @@ describe('fabrika haritası', () => {
     fireEvent.click(secenek);
     expect(await screen.findByRole('region', { name: 'Raf R1 ayrıntısı' })).toBeTruthy();
     expect(cagrilar.some((c) => c.yol === '/atolye/arama?metin=R1-02-3-1')).toBe(true);
+  });
+
+  it('3202: /atolye?ara=<kod> aramayı o kodla açar (malzeme kartının "Depoda göster" bağlantısı)', async () => {
+    const cagrilar = sunucuKur({ ...OKUYAN, islemler: ['sayfa.atolye', 'sayfa.stok'] });
+    goster(<AtolyeHaritasi />, '/atolye?ara=celik');
+    expect((await screen.findByLabelText('Ara') as HTMLInputElement).value).toBe('celik');
+    expect(await screen.findByRole('option', { name: /R1-02-3-1 Çelik çubuk 120 kg · LT-000001/ })).toBeTruthy();
+    expect(cagrilar.some((c) => c.yol.startsWith('/stok/malzemeler?metin=celik'))).toBe(true);
   });
 
   it('3012 a: stok yetkisi olmayan kişinin aramasında stok isteği atılmaz, yer ve miktar görünmez', async () => {

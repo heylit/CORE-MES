@@ -12,7 +12,7 @@ Koddan okunamayanlar: neden, vazgeçilen yol, tuzak. En çok 30 satır; eskiyen 
 - Test: tek alanlı şemadan alan silinince tip boş nesne olur ve fikstürdeki fazla alan derleyiciye takılmaz; tip kanıtı için alan adı ya da değer değiştir. Toplu tip komutu sunucuda kırılırsa istemciye hiç geçmez; istemci kanıtını ayrı koş.
 - Tablo kart kipine içerik kabına sığmayınca geçer (ölçümle). Vazgeçildi: sabit eşikli kap sorgusu; dar tabloyu tablet dikeyde gereksiz karta çevirir, geniş tabloyu tablet yatayda yine taşırır.
 - Kart kipinde içerik değişince yeniden ölçülmez, yalnız kap genişliği değişince: ölçüm için tablo kipine dönmek sayfayı kısaltıp kaydırma yerini oynatır. Süzünce kip bu yüzden yerinde kalır.
-- Tarih gibi bölünmemesi gereken sütunu ortak parça tanıyamaz; modül sütuna `kirilmaz` yazar.
+- Tarih gibi bölünmemesi gereken sütunu ortak parça tanıyamaz; modül sütuna `kirilmaz` yazar. Hücresi birkaç parçalı (rozet, kod, düğme) sütuna `kartTamSatir`: kart kipinde değer başlığın altına iner.
 - Terminal parçalarının görünümü ve davranışı kullanıcının tasarladığı başvuru arayüzünden alındı (kullanıcı kararı, 07.10.2026). Alınmadı: sabit ekrana ölçekleme, çevrim halkası, hurda yayı, konfeti (ilk ikisi veri ister, hepsi satır içi stil ister). Büyük değişim eşiği ortak parçada değil, çağıran ekrandadır (iş kuralı).
 - Kadranın yan göstergeleri ekran genişliğine değil bölmenin genişliğine bakar: üç sütunda orta bölme daralınca göstergeler yandaki sütunun üstüne çıkıyordu.
 - Durum rengi metin olarak ayrı değişkenden okunur: açık temada ayar sarısı yazı olarak okunmuyor.

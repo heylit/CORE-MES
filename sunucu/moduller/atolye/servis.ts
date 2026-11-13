@@ -30,6 +30,12 @@ import type { AlanSatiri, GozKalemiSatiri, KrokiKapsami, KrokiSatiri, ModelSatir
 export type MakineModelTuruCozucusu = (db: Db, makineIdleri: readonly number[]) => Promise<ReadonlyMap<number, string>>;
 let modelTuruCozucusu: MakineModelTuruCozucusu | null = null;
 export function makineModelTuruCozucusuKaydet(cozucu: MakineModelTuruCozucusu): void { modelTuruCozucusu = cozucu; }
+// 3202: depoda (haritadaki gözde) stoklu malzemeler; bağ kablolama.ts'te kurulur (atölye stok'u ithal edemez, döngü). Kurulmamışsa
+// harita yalnız açık emrin malzemesini bilir.
+// malzemeNolari null ise bütün stoklu malzemeler, verilirse yalnız onların içinden stoklu olanlar döner.
+export type DepoMalzemeCozucusu = (db: Db, malzemeNolari: readonly number[] | null) => Promise<readonly number[]>;
+let depoMalzemeCozucusu: DepoMalzemeCozucusu | null = null;
+export function depoMalzemeCozucusuKaydet(cozucu: DepoMalzemeCozucusu): void { depoMalzemeCozucusu = cozucu; }
 
 const SALON_YOK = 'Salon bulunamadı.';
 const RAF_YOK = 'Raf bulunamadı.';
@@ -688,8 +694,10 @@ async function acikEmirMalzemeleri(db: Db): Promise<number[]> {
   return [...new Set((await acikEmirler(db)).flatMap((e) => (e.malzemeNo == null ? [] : [e.malzemeNo])))];
 }
 
+// 3202 B, 3205 a: haritada model gösterilen malzemeler açık emrin ve depoda stoklu olanın birleşimidir; liste yalnız kimlik ve model
+// bilgisi taşır (miktar ve yer stok yetkisiyle ayrı uçtan okunur).
 export async function malzemeModelleri(db: Db): Promise<MalzemeModelleriCevabi> {
-  const nolar = await acikEmirMalzemeleri(db);
+  const nolar = [...new Set([...(await acikEmirMalzemeleri(db)), ...((await depoMalzemeCozucusu?.(db, null)) ?? [])])];
   const baglar = await kayitlaraBagliBelgeler(db, 'malzemeler', nolar);
   return {
     malzemeler: nolar.flatMap((malzemeNo) => {
@@ -699,12 +707,13 @@ export async function malzemeModelleri(db: Db): Promise<MalzemeModelleriCevabi> 
   };
 }
 
-// Dosya yalnız açık emrin malzemesi için verilir: harita, kendi gösterdiği kaydın belgesini kendi ucundan verir.
+// Dosya yalnız haritanın gösterdiği malzeme (açık emrin ya da depoda stoklu) için verilir: harita, kendi gösterdiği kaydın belgesini
+// kendi ucundan verir. Gösterilmeyen ve modelsiz malzeme aynı iletiyle döner (hangisi olduğu sızmaz).
 export async function malzemeModelDosyasi(db: Db, malzemeNo: number): Promise<IkiliCevap> {
-  const acik = (await acikEmirMalzemeleri(db)).includes(malzemeNo);
-  const m = acik ? merkezModeliSec(await kaydaBagliBelgeler(db, 'malzemeler', malzemeNo)) : null;
+  const gosterilir = (await acikEmirMalzemeleri(db)).includes(malzemeNo) || ((await depoMalzemeCozucusu?.(db, [malzemeNo]))?.length ?? 0) > 0;
+  const m = gosterilir ? merkezModeliSec(await kaydaBagliBelgeler(db, 'malzemeler', malzemeNo)) : null;
   const dosya = m === null ? null : await kayittakiBelgeDosyasi(db, 'malzemeler', malzemeNo, m.belgeId);
-  if (dosya === null) throw bulunamadi('Bu malzemenin Çizim Merkezi\'nde yayında 3B modeli yok ya da açık emri yok.');
+  if (dosya === null) throw bulunamadi('Bu malzemenin Çizim Merkezi\'nde yayında 3B modeli yok ya da haritada gösterilmiyor.');
   return dosya;
 }
 

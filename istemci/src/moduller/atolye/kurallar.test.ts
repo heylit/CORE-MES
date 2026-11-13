@@ -6,7 +6,7 @@ import {
 } from './duzenleyici-durumu.ts';
 import type { GozKalemi } from '#paylasilan/sozlesme/atolye.ts';
 import {
-  depoMerkezi, dolulukKademesi, emirlerIstasyonaGore, istasyonEmirGruplari, gozKalemiYukleri, stokYukleri, STOKLU_GOZ_DOLULUGU, gozOzetleri, ilerleme, istasyonCanli, istasyonGorunumu, istasyonParcalari, parcaYerleri, siradakiEmirler, yerlesmemisCalisanlar,
+  depoMerkezi, dolulukKademesi, emirlerIstasyonaGore, istasyonEmirGruplari, gozKalemiYukleri, stokYukleri, depoYukleri, gozMiktarMetni, STOKLU_GOZ_DOLULUGU, gozOzetleri, ilerleme, istasyonCanli, istasyonGorunumu, istasyonParcalari, parcaYerleri, siradakiEmirler, yerlesmemisCalisanlar,
   eklenebilirIstasyonlar, ornekIstasyonMu,
   istasyonunParcalari, ozetle, parcaListesi, stokEslemeIletisi, turSirasi, govdeGorunumu, sahneModelTurleri,
 } from './kurallar.ts';
@@ -233,6 +233,27 @@ describe('raf yükü (göz kalemleri)', () => {
     ]);
     expect(y.get(2)?.[0]).toMatchObject({ bicim: 'cubuk' });
     expect(stokYukleri(raflar, new Map()).size).toBe(0);
+  });
+
+  it('3202 B: depodaki malzeme modeliyle adedi kadar, modelsiz olan ambalajıyla çizilir; etiket miktar ve birimdir', () => {
+    const raflar = [{ id: 1, tur: 'kucuk_parca' as const, aktif: true }, { id: 2, tur: 'palet' as const, aktif: true }, { id: 3, tur: 'palet' as const, aktif: false }];
+    const model = { belgeId: 9, ad: 'ORN-PARCA.stl', harf: 'A', revKodu: null, ozet: 'x'.repeat(64), dosyaTuru: 'stl' as const };
+    const m = (malzemeId: number, miktar: string, birim: string | null, ambalaj: 'kasa' | 'bidon' | null = null) => ({ malzemeId, ad: `ORN-${malzemeId}`, birim, miktar, ambalaj });
+    const ozet = new Map([
+      [1, new Map([['1-1-1', [m(10, '240.000', 'Adet')]], ['1-2-1', [m(11, '12.5', 'kg', 'kasa'), m(12, '1', 'adet')]], ['1-3-1', [m(10, '3.5', 'kg')]]])],
+      [2, new Map([['1-1-1', [m(13, '2', null, 'bidon')]]])],
+      [3, new Map([['1-1-1', [m(10, '1', 'adet')]]])],
+    ]);
+    const y = depoYukleri(raflar, ozet, new Map([[10, model]]));
+    expect([...y.keys()]).toEqual([1, 2]);
+    expect(y.get(1)).toEqual([
+      { bolme: 1, kat: 1, goz: 1, bicim: 'model', doluluk: 1, model: null, merkez: { malzemeNo: 10, model }, adet: 240, etiket: '240 adet' },
+      { bolme: 1, kat: 2, goz: 1, bicim: 'kasa', doluluk: STOKLU_GOZ_DOLULUGU, model: null, etiket: '12,5 kg +1 malzeme' },
+      { bolme: 1, kat: 3, goz: 1, bicim: 'model', doluluk: 1, model: null, merkez: { malzemeNo: 10, model }, adet: 1, etiket: '3,5 kg' },
+    ]);
+    // Palet rafında küçük parça biçimi koli olur; birimi bilinmeyen miktar yalnız sayıdır.
+    expect(y.get(2)).toEqual([{ bolme: 1, kat: 1, goz: 1, bicim: 'koli', doluluk: STOKLU_GOZ_DOLULUGU, model: null, etiket: '2' }]);
+    expect(gozMiktarMetni([])).toBeNull();
   });
 
   it('göz özetinde çok dolduran kalem önce gelir', () => {
