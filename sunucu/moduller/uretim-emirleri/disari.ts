@@ -463,6 +463,8 @@ export type { EmirTedarikSatiri, TedarikCozucusu } from './adim-durumu.ts';
 export const rotaHazirlikCozucusu = (c: HazirlikCozucusu | null): void => { hazirlikCozucusuKaydet('rota', c); };
 export const malzemeHazirlikCozucusu = (c: HazirlikCozucusu | null): void => { hazirlikCozucusuKaydet('malzeme', c); };
 export const takimHazirlikCozucusu = (c: HazirlikCozucusu | null): void => { hazirlikCozucusuKaydet('takim-omru', c); };
+// 3199 (D): plan işin içine özel takım değişimi koyduysa; çözücüsü plan.
+export const takimHazirlaCozucusu = (c: HazirlikCozucusu | null): void => { hazirlikCozucusuKaydet('takim-hazirla', c); };
 export type { HazirlikCozucusu };
 // Onaylı kapanış (1072 a, 1074 a): dış maddenin sahibi durumunu verir, bağı kablolama.ts kurar. Kayıtsız ya da null dönen madde 'bilinmiyor'dur
 // ve durdurmaz; yalnız 'eksik' durdurur, müdür gerekçeyle muaf tutabilir (1076 a).

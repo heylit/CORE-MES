@@ -224,7 +224,8 @@ function calismaKodu(): string {
   calismaKod ??= `${[...DOSYALAR, 'calisma'].map((m) => readFileSync(join(MOTOR, `${m}.js`), 'utf8')).join('\n')}\n;({ sunucuCalismaPlani });`;
   return calismaKod;
 }
-export interface CalismaIslemi { id: string; m: string; S: number; C: number; bitti: boolean }
+// takim (3199 D): motorun işe yazdığı özel takım ömrü kaydı; n değişim sayısı (0: ömür yetti), at değişimin plan eksenindeki saati.
+export interface CalismaIslemi { id: string; m: string; S: number; C: number; bitti: boolean; takim?: { id: string; n: number; dk: number; at: number | null }[] }
 export interface CalismaPlani {
   // Planın saat ekseninin başlangıç günü ('GGGG-AA-GG').
   baslangic: string;
