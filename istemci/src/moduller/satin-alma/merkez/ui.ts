@@ -1,7 +1,7 @@
 import { aylikFaizdenYillik, vadeIndirimCarpani } from "#paylasilan/sozlesme/finansman.ts";
 import { teklifMetniSatirlari } from "./kalem-bagi.ts";
 import type {
-  Award, AwardMode, Currency, MalzemeSecenegi, Material, SiparisFaturasi, Priority, PurchaseRequest, Quality, Quote, RequestItem,
+  Award, AwardMode, Currency, MalzemeSecenegi, Material, PriceTier, SiparisFaturasi, Priority, PurchaseRequest, Quality, Quote, RequestItem,
   Settings, Supplier, Weights,
 } from "./tipler.ts";
 import { CURRENCIES as CURS } from "./tipler.ts";
@@ -17,7 +17,7 @@ import {
 import {
   $, $$, addDays, clamp, clone, dayDiff, deltaHTML, esc, fmtDate, isNum, money, nf0, nf2, nfx, norm, numIn, parseNum,
   nf1, pct, sum, todayStr, toCSV, uid, kokIcinde, type FormEl } from "./util.ts";
-import { kademeRozeti, bekletmePenceresiSiparisleri, labelTables, onAfterRender, ozellikAlti, ozellikBasliklari, ozellikHucreleri, PRESETS, rankHTML, readSplitAssign, render, summaryText, UI, updateSplitSum, verdictHTML } from "./views.ts";
+import { bekletmePenceresiSiparisleri, labelTables, onAfterRender, ozellikAlti, ozellikBasliklari, ozellikHucreleri, PRESETS, rankHTML, readSplitAssign, render, summaryText, UI, updateSplitSum, verdictHTML } from "./views.ts";
 import { basamakYazabilir, reportCSV, unlinkedItems } from "./memory.ts";
 import { partileriUnut } from "./partiler.ts";
 import { ODEME_SEKLI, siparisTakibi, takibiUnut, takipGuncelle } from "./takip.ts";
@@ -218,18 +218,29 @@ const BASAMAK_SIMGESI = `<svg class="tc-simge tc-simge-k" viewBox="0 0 24 24" ar
 function fiyatSatirlari(r: PurchaseRequest, q: Quote): string {
   return (r.items || []).map(it => {
     const tiers = q.tiers?.[it.id] ?? [];
-    const ekle = tiers.length < BASAMAK_SINIRI ? `<button type="button" class="btn sm ghost" data-act="add-tier" data-k="${it.id}" aria-label="${esc(it.name)} için basamak ekle" title="Basamak ekle">${BASAMAK_SIMGESI}</button>` : "";
-    const ana = `<tr><td class="lead"><b>${esc(it.name)}</b>${it.spec ? `<span class="sub">${esc(it.spec)}</span>` : ""}</td><td class="r num">${numIn(parseNum(it.qty))} ${esc(it.unit)}${it.karsilik ? `<span class="sub" data-sa-karsilik="">${esc(it.karsilik)}</span>` : ""}${tiers.length || isNum(q.minQty?.[it.id]) ? `<span class="basamak-esik ilk"><span class="muted small">1. basamak</span><input class="qty" type="text" inputmode="decimal" data-tmin0="${it.id}" value="${numIn(q.minQty?.[it.id] ?? null)}" placeholder="0" aria-label="${esc(it.name)} 1. basamak eşiği (en az miktar)"><span class="muted small">ve üstü</span></span>` : ""}</td><td class="r"><span class="fiyat-hucre"><input class="price" type="text" inputmode="decimal" data-price="${it.id}" value="${numIn(q.prices[it.id])}" aria-label="${esc(it.name)} birim fiyatı">${ekle}</span></td><td class="r num" data-line="${it.id}"></td><td class="small" data-vs="${it.id}"></td></tr>`;
+    const ekle = tiers.length < BASAMAK_SINIRI ? `<button type="button" class="kademe-ekle" data-act="add-tier" data-k="${it.id}" aria-label="${esc(it.name)} için kademe ekle">${BASAMAK_SIMGESI}Kademe ekle</button>` : "";
+    const ana = `<tr><td class="lead"><b>${esc(it.name)}</b>${it.spec ? `<span class="sub">${esc(it.spec)}</span>` : ""}</td><td class="r num">${numIn(parseNum(it.qty))} ${esc(it.unit)}${it.karsilik ? `<span class="sub" data-sa-karsilik="">${esc(it.karsilik)}</span>` : ""}${tiers.length || isNum(q.minQty?.[it.id]) ? `<span class="basamak-esik ilk"><span class="muted small">1. basamak</span><input class="qty" type="text" inputmode="decimal" data-tmin0="${it.id}" value="${numIn(q.minQty?.[it.id] ?? null)}" placeholder="0" aria-label="${esc(it.name)} 1. basamak eşiği (en az miktar)"><span class="muted small">ve üstü</span></span>` : ""}</td><td class="r"><span class="fiyat-hucre"><input class="price" type="text" inputmode="decimal" data-price="${it.id}" value="${numIn(q.prices[it.id])}" aria-label="${esc(it.name)} birim fiyatı"></span>${ekle}</td><td class="r num" data-line="${it.id}"></td><td class="small" data-vs="${it.id}"></td></tr>`;
     const alt = tiers.map((t, i) => `<tr class="basamak"><td class="lead"><span class="sub">${i + 2}. basamak</span></td><td class="r"><span class="basamak-esik"><input class="qty" type="text" inputmode="decimal" data-tmin="${it.id}" data-ti="${i}" value="${numIn(t.min)}" aria-label="${esc(it.name)} ${i + 2}. basamak eşik miktarı"><span class="muted small">${esc(it.unit)} ve üstü</span></span></td><td class="r"><span class="fiyat-hucre"><input class="price" type="text" inputmode="decimal" data-tprice="${it.id}" data-ti="${i}" value="${numIn(t.price)}" aria-label="${esc(it.name)} ${i + 2}. basamak birim fiyatı"><button type="button" class="btn sm ghost danger" data-act="rm-tier" data-k="${it.id}" data-ti="${i}" aria-label="${esc(it.name)} ${i + 2}. basamağı kaldır" title="Basamağı kaldır">${KALDIR_SIMGESI}</button></span></td><td></td><td></td></tr>`).join("");
     return ana + alt;
   }).join("");
 }
 
-/** Toplu girişte basamaklı kalem rozetle görünür; basamaklar teklifin "Ayrıntı" penceresinde girilir (2975). */
-function kayitliRozet(c: BulkCol, it: RequestItem): string {
-  const q = c.qid ? (S.requests[BULK!.rid]?.quotes || []).find(x => x.id === c.qid) : undefined;
-  return q ? kademeRozeti(q, it) : "";
+/** Basamak listesinin kayıt öncesi denetimi (tek teklif formu ve toplu tablo aynı kuralı kullanır);
+ *  liste değişmez (kayda giden temiz liste `basamakTemiz`). */
+function basamakHatasi(q: Pick<Quote, "prices" | "tiers" | "minQty">): { mesaj: string; kalemId: string; fiyat?: true } | null {
+  for (const [k, list] of Object.entries(q.tiers ?? {})) {
+    const dolu = list.filter(t => isNum(t.min) || isNum(t.price));
+    if (dolu.some(t => !isNum(t.min) || !isNum(t.price) || t.min <= 0)) return { mesaj: "Her basamağa sıfırdan büyük eşik ve birim fiyat girin.", kalemId: k };
+    const enAz = q.minQty?.[k];
+    if (isNum(enAz) && dolu.some(t => t.min <= enAz)) return { mesaj: "Üst basamağın eşiği 1. basamaktan (en az miktar) büyük olur.", kalemId: k };
+    if (new Set(dolu.map(t => t.min)).size !== dolu.length) return { mesaj: "Aynı eşik iki basamakta olamaz.", kalemId: k };
+    if (dolu.length && !isNum(q.prices[k])) return { mesaj: "Basamak girilen kalemin birim fiyatını da girin.", kalemId: k, fiyat: true };
+  }
+  return null;
 }
+/* Kayda giden liste: boş satırsız, eşiğe göre sıralı. Ekrandaki liste değişmez; kutular sıra numarasıyla okunur. */
+const basamakTemiz = (tiers: NonNullable<Quote["tiers"]>): NonNullable<Quote["tiers"]> =>
+  Object.fromEntries(Object.entries(tiers).map(([k, list]) => [k, list.filter(t => isNum(t.min) && isNum(t.price)).map(t => ({ ...t })).sort((a, b) => a.min - b.min)]));
 
 function readQuoteForm(): void {
   const g = (id: string) => $("#" + id); if (!g("q-sup")) return;
@@ -496,6 +507,7 @@ interface BulkCol {
   qid: string | null; supplierId: string; newName: string; currency: Currency; fxRate: number | null; date: string; validUntil: string;
   discountPct: number; payDays: number; advancePct: number; leadDays: number | null; warrantyMonths: number | null; deliveryTerm: string;
   deliveryIncluded: boolean; shipping: number; otherCost: number; compliant: boolean; note: string; prices: Record<string, number>;
+  tiers?: Record<string, PriceTier[]>; minQty?: Record<string, number | null>;
 }
 type BulkKind = "cur" | "num" | "int" | "text" | "bool" | "date";
 /** inline: talep sayfasındaki teklif tablosu (açılır pencere değil) */
@@ -549,17 +561,25 @@ function bulkGrid(r: PurchaseRequest): string {
   const head = `<tr><th class="rl">Kalem</th>${cols.map((c, j) => `<th><div class="bh"><select data-bf="supplierId" data-col="${j}" aria-label="${j + 1}. sütun tedarikçisi"><option value="">Tedarikçi seçin</option>${sups.map(s => `<option value="${s.id}" ${c.supplierId === s.id ? "selected" : ""}>${esc(s.name)}${pasifEki(s)}</option>`).join("")}${firmaKartiSecenekleri(c.supplierId)}<option value="__new" ${c.supplierId === "__new" ? "selected" : ""}>+ Kayıtsız tedarikçi (adla)</option></select>${c.qid ? "" : `<button class="btn sm ghost" data-act="bulk-rm" data-col="${j}" aria-label="Sütunu kaldır" title="Sütunu kaldır">✕</button>`}</div>${c.supplierId === "__new" ? `<input type="text" data-bf="newName" data-col="${j}" placeholder="Yeni tedarikçi adı" value="${esc(c.newName)}" data-sa-y="32">` : ""}${c.qid ? (() => { const q = (S.requests[BULK!.rid]?.quotes || []).find(x => x.id === c.qid); return `<div class="bh-acts"><span class="sub">kayıtlı${q?.revisions ? `, ${q.revisions}. revizyon` : ""}</span><button class="lnk" data-act="edit-quote" data-qid="${c.qid}">Ayrıntı</button><button class="lnk danger" data-act="del-quote" data-qid="${c.qid}">Sil</button></div>`; })() : ""}</th>`).join("")}</tr>`;
   const priceRows = items.map(it => {
     const mid = matOf(it), st = mid ? matStats(mid) : null, prev = st ? st.buys.filter(e => e.reqId !== r.id) : [], last = prev[prev.length - 1];
-    const tr = `<tr data-item="${it.id}"><td class="rl"><b>${esc(it.name)}</b><span class="sub">${numIn(parseNum(it.qty))} ${esc(it.unit)}${it.karsilik ? ` (${esc(it.karsilik)})` : ""}${last ? `, son alış ${money(last.unitTRY)}` : ""}</span></td>${cols.map((c, j) => `<td data-pc="${j}"><input class="bp" type="text" inputmode="decimal" data-bi="${it.id}" data-col="${j}" data-nr="${row}" value="${numIn(c.prices[it.id])}" aria-label="${esc(it.name)}, ${j + 1}. sütun birim fiyat">${kayitliRozet(c, it)}</td>`).join("")}</tr>`;
+    const tr = `<tr data-item="${it.id}"><td class="rl"><b>${esc(it.name)}</b><span class="sub">${numIn(parseNum(it.qty))} ${esc(it.unit)}${it.karsilik ? ` (${esc(it.karsilik)})` : ""}${last ? `, son alış ${money(last.unitTRY)}` : ""}</span></td>${cols.map((c, j) => `<td data-pc="${j}">${bulkHucre(c, j, it, row)}</td>`).join("")}</tr>`;
     row++; return tr;
   }).join("");
   const termRows = BULK_FIELDS.map(([f, l, kind]) => { const tr = `<tr><td class="rl">${l}</td>${cols.map((c, j) => `<td>${cell(j, f, kind, c[f])}</td>`).join("")}</tr>`; row++; return tr; }).join("");
   const res = [["total", "Toplam (teklif para birimi)"], ["tl", "Toplam TL (güncel kur)"], ["pv", "Net bugünkü maliyet"]].map(([k, l]) => `<tr class="res"><td class="rl">${l}</td>${cols.map((c, j) => `<td data-bres="${k}" data-col="${j}">–</td>`).join("")}</tr>`).join("");
-  return `<p class="small muted">Her sütun bir teklif. Excel'den kopyaladığınız fiyat bloğunu bir hücreye yapıştırın. Enter aşağı, Tab sağa geçer. Satırın en uygun fiyatı sarıyla işaretlenir.</p>
+  return `<p class="small muted">Her sütun bir teklif. Excel'den kopyaladığınız fiyat bloğunu bir hücreye yapıştırın. Enter aşağı, Tab sağa geçer. Satırın en uygun fiyatı sarıyla işaretlenir. Adete göre fiyat değişiyorsa Kademe ekle ile miktar ve fiyat girin.</p>
   <div class="tw"><table class="bulk"><thead>${head}</thead><tbody>
     <tr class="sec"><td class="rl">Birim fiyatlar (KDV hariç)</td>${cols.map(() => "<td></td>").join("")}</tr>${priceRows}
     <tr class="sec"><td class="rl">Ticari şartlar</td>${cols.map(() => "<td></td>").join("")}</tr>${termRows}
     <tr class="sec"><td class="rl">Sonuç</td>${cols.map(() => "<td></td>").join("")}</tr>${res}
   </tbody></table></div><datalist id="dl-dterms-b">${DELIVERY.map(d => `<option value="${esc(d)}">`).join("")}</datalist>`;
+}
+/** Fiyat hücresi: taban fiyat, altında "miktar ve üstü, birim fiyat" kademeleri (3181). Bütün fiyat kutuları aynı sütundadır. */
+function bulkHucre(c: BulkCol, j: number, it: RequestItem, nr: number): string {
+  const l = c.tiers?.[it.id] ?? [], ad = esc(it.name);
+  return `<div class="kademe-hucre"><input class="bp kf-taban" type="text" inputmode="decimal" data-bi="${it.id}" data-col="${j}" data-nr="${nr}" value="${numIn(c.prices[it.id])}" aria-label="${ad}, ${j + 1}. sütun birim fiyat"><span class="kh-bos"></span>${
+    l.length ? `<span class="kh-baslik">miktar ve üstü</span><span class="kh-baslik r">birim fiyat</span><span class="kh-baslik"></span>` : ""}${
+    l.map((t, i) => `<label class="kh-esik" style="--kh-satir:${2 + 2 * i}"><input type="text" inputmode="decimal" data-bt="min" data-bk="${it.id}" data-col="${j}" data-ti="${i}" data-nr="${nr}" value="${numIn(isNum(t.min) ? t.min : null)}" aria-label="${ad}, ${j + 1}. sütun ${i + 2}. basamak: bu miktar ve üstü"><i>${esc(it.unit)}+</i></label><input class="kf" style="--kh-satir:${2 + 2 * i}" type="text" inputmode="decimal" data-bt="price" data-bk="${it.id}" data-col="${j}" data-ti="${i}" data-nr="${nr}" value="${numIn(isNum(t.price) ? t.price : null)}" placeholder="birim fiyat" aria-label="${ad}, ${j + 1}. sütun ${i + 2}. basamak birim fiyatı"><button type="button" class="kh-sil" style="--kh-satir:${2 + 2 * i}" data-act="bulk-rm-tier" data-k="${it.id}" data-col="${j}" data-ti="${i}" aria-label="${ad}, ${j + 1}. sütun ${i + 2}. basamağı kaldır" title="Basamağı kaldır">${KALDIR_SIMGESI}</button>`).join("")}${
+    l.length < BASAMAK_SINIRI ? `<button type="button" class="kademe-ekle" data-act="bulk-add-tier" data-k="${it.id}" data-col="${j}" aria-label="${ad}, ${j + 1}. sütun için kademe ekle">${BASAMAK_SIMGESI}Kademe ekle</button>` : ""}</div>`;
 }
 function bulkRead(): void {
   if (!BULK) return;
@@ -573,6 +593,7 @@ function bulkRead(): void {
     else cc[f] = i.value;
   });
   $$("#bulk [data-bi]").forEach(i => { const c = BULK!.cols[+i.dataset.col!]; if (!c) return; const k = i.dataset.bi!; const v = parseNum(i.value); if (v === null) delete c.prices[k]; else c.prices[k] = v; });
+  $$("#bulk [data-bt]").forEach(i => { const t = BULK!.cols[+i.dataset.col!]?.tiers?.[i.dataset.bk!]?.[+i.dataset.ti!]; if (t) t[i.dataset.bt as "min" | "price"] = parseNum(i.value) ?? NaN; });
 }
 const bulkQuote = (c: BulkCol): Quote => ({ ...c, id: c.qid || "bulk", supplierName: "", supplierId: c.supplierId === "__new" ? "" : c.supplierId });
 function bulkLive(): void {
@@ -588,7 +609,14 @@ function bulkLive(): void {
   });
   // satırda en uygun birim fiyat (güncel kurla, iskonto sonrası TL)
   (r.items || []).forEach(it => {
-    const vals = BULK!.cols.map((c, j) => isNum(c.prices[it.id]) ? c.prices[it.id]! * calcs[j]!.unitTRY : null);
+    // Karşılaştırılan fiyat talep miktarında geçerli olan basamağın fiyatıdır; o kutu işaretlenir.
+    const vals = BULK!.cols.map((_c, j) => { const b = calcs[j]!.lines[it.id]; return b ? b.unit * calcs[j]!.unitTRY : null; });
+    BULK!.cols.forEach((c, j) => {
+      const td = $(`#bulk tr[data-item="${it.id}"] td[data-pc="${j}"]`); if (!td) return;
+      const esik = calcs[j]!.lines[it.id]?.tier, l = c.tiers?.[it.id] ?? [];
+      td.querySelector(".kf-taban")?.classList.toggle("gecerli", esik === undefined);
+      td.querySelectorAll<HTMLInputElement>(".kf").forEach(i => i.classList.toggle("gecerli", esik !== undefined && l[+i.dataset.ti!]?.min === esik));
+    });
     const ok = vals.filter(isNum); const min = ok.length > 1 ? Math.min(...ok) : null;
     BULK!.cols.forEach((c, j) => { const td = $(`#bulk tr[data-item="${it.id}"] td[data-pc="${j}"]`); if (td) td.classList.toggle("best", min !== null && vals[j] != null && Math.abs(vals[j]! - min) < 1e-9); });
   });
@@ -599,7 +627,9 @@ function bulkLive(): void {
   const filled = BULK!.cols.filter(c => Object.keys(c.prices).length).length;
   const st = $("#bulk-st"); if (st) st.textContent = `${filled} sütunda fiyat var`;
 }
-function bulkRerender(): void { const r = S.requests[BULK!.rid]!; bulkRead(); $("#bulk").innerHTML = bulkGrid(r); bulkLive(); }
+/* Liste uzayıp kısaldıktan sonra eski kutular okunmaz: sıra numaraları yeni listeyi göstermez. */
+function bulkCiz(): void { $("#bulk").innerHTML = bulkGrid(S.requests[BULK!.rid]!); bulkLive(); }
+function bulkRerender(): void { bulkRead(); bulkCiz(); }
 /* Excel'den blok yapıştırma: satırlar kalem, sütunlar tedarikçi */
 function bulkPaste(e: ClipboardEvent): void {
   const t = e.target as FormEl; if (!t.classList || !t.classList.contains("bp")) return;
@@ -628,6 +658,7 @@ function bulkNav(e: KeyboardEvent): void {
   const t = e.target as FormEl; if (!t.dataset || t.dataset.nr === undefined || !t.closest("#bulk")) return;
   const down = e.key === "ArrowDown" || (e.key === "Enter" && !e.shiftKey), up = e.key === "ArrowUp" || (e.key === "Enter" && e.shiftKey);
   if (!down && !up) return;
+  if (t.dataset.bt && e.key !== "Enter") return; // basamak kutusunda yalnız Enter kalem değiştirir
   if (t.tagName === "SELECT" && (e.key === "ArrowDown" || e.key === "ArrowUp")) return; // seçim kutusunda oklar seçenek değiştirir
   const nr = +t.dataset.nr + (down ? 1 : -1);
   const next = $(`#bulk [data-col="${t.dataset.col}"][data-nr="${nr}"]`);
@@ -647,7 +678,7 @@ function bulkClose(): void {
 function bulkSave(): void {
   const r = S.requests[BULK!.rid]; if (!r || !canWrite()) return;
   bulkRead();
-  if (eksiAlanVar([...$$<HTMLInputElement>("#bulk [data-bi]"), ...$$<HTMLInputElement>("#bulk [data-bf]")])) return;
+  if (eksiAlanVar([...$$<HTMLInputElement>("#bulk [data-bi]"), ...$$<HTMLInputElement>("#bulk [data-bf]"), ...$$<HTMLInputElement>("#bulk [data-bt]")])) return;
   const set = settings();
   const used = BULK!.cols.map((c, j) => ({ c, j })).filter(x => Object.keys(x.c.prices).length || x.c.qid);
   if (!used.length) { toast("Kaydedilecek fiyat yok."); return; }
@@ -656,6 +687,8 @@ function bulkSave(): void {
     if (c.supplierId === "__new" && !c.newName.trim()) { toast(`${j + 1}. sütunda yeni tedarikçinin adını yazın.`); $(`#bulk [data-bf="newName"][data-col="${j}"]`).focus(); return; }
     if (!Object.keys(c.prices).length) { toast(`${j + 1}. sütunda en az bir birim fiyat girin.`); return; }
     if (kurIstenir(c.currency, c.fxRate, set, c.date || todayStr())) { toast(KUR_ILETISI); $(`#bulk [data-bf="fxRate"][data-col="${j}"]`).focus(); return; }
+    const bh = basamakHatasi(c);
+    if (bh) { toast(`${j + 1}. sütun: ${bh.mesaj}`); $(bh.fiyat ? `#bulk [data-bi="${bh.kalemId}"][data-col="${j}"]` : `#bulk [data-bt="min"][data-bk="${bh.kalemId}"][data-col="${j}"]`)?.focus(); return; }
   }
   const ids = used.map(x => x.c.supplierId === "__new" ? "new:" + norm(x.c.newName) : x.c.supplierId);
   const dup = ids.find((v, i) => ids.indexOf(v) !== i);
@@ -674,7 +707,8 @@ function bulkSave(): void {
       currency: c.currency, fxRate: kaydedilecekKur(c.currency, c.fxRate, set, c.date || todayStr()),
       prices: Object.assign({}, c.prices), discountPct: c.discountPct || 0, shipping: c.shipping || 0, otherCost: c.otherCost || 0,
       deliveryTerm: c.deliveryTerm || "", deliveryIncluded: !!c.deliveryIncluded, leadDays: c.leadDays, payDays: c.payDays || 0, advancePct: c.advancePct || 0,
-      warrantyMonths: c.warrantyMonths, compliant: c.compliant !== false, note: c.note || ""
+      warrantyMonths: c.warrantyMonths, compliant: c.compliant !== false, note: c.note || "",
+      ...(c.tiers ? { tiers: basamakTemiz(c.tiers) } : {})
     };
     const total = quoteCalc(n, q, set).total;
     const i = n.quotes.findIndex(x => x.id === q.id);
@@ -998,18 +1032,10 @@ const ACTIONS: Record<string, Action> = {
     if (!draftQ.supplierId && !draftQ.supplierName) { toast("Tedarikçi seçin."); $("#q-sup").focus(); return; }
     if (!Object.keys(draftQ.prices).length) { toast("En az bir kalem için birim fiyat girin."); return; }
     if (Object.values(draftQ.minQty ?? {}).some(v => v !== null && v <= 0)) { toast("1. basamak eşiği (en az miktar) sıfırdan büyük olur; gerekmiyorsa boş bırakın."); return; }
-    if (draftQ.tiers) {
-      for (const [k, list] of Object.entries(draftQ.tiers)) {
-        const dolu = list.filter(t => isNum(t.min) || isNum(t.price));
-        if (dolu.some(t => !isNum(t.min) || !isNum(t.price) || t.min <= 0)) { toast("Her basamağa sıfırdan büyük eşik ve birim fiyat girin."); $<HTMLInputElement>(`[data-tmin="${k}"]`)?.focus(); return; }
-        const enAz = draftQ.minQty?.[k];
-        if (isNum(enAz) && dolu.some(t => t.min <= enAz)) { toast("Üst basamağın eşiği 1. basamaktan (en az miktar) büyük olur."); $<HTMLInputElement>(`[data-tmin="${k}"]`)?.focus(); return; }
-        if (new Set(dolu.map(t => t.min)).size !== dolu.length) { toast("Aynı eşik iki basamakta olamaz."); $<HTMLInputElement>(`[data-tmin="${k}"]`)?.focus(); return; }
-        if (dolu.length && !isNum(draftQ.prices[k])) { toast("Basamak girilen kalemin birim fiyatını da girin."); $<HTMLInputElement>(`[data-price="${k}"]`)?.focus(); return; }
-        draftQ.tiers[k] = dolu.sort((a, b) => a.min - b.min);
-      }
-    }
+    const bh = basamakHatasi(draftQ);
+    if (bh) { toast(bh.mesaj); $<HTMLInputElement>(bh.fiyat ? `[data-price="${bh.kalemId}"]` : `[data-tmin="${bh.kalemId}"]`)?.focus(); return; }
     if (kurIstenir(draftQ.currency, draftQ.fxRate, settings(), draftQ.date)) { toast(KUR_ILETISI); $("#q-fx").focus(); return; }
+    if (draftQ.tiers) draftQ.tiers = basamakTemiz(draftQ.tiers);
     draftQ.supplierName = tedarikciAdi(draftQ.supplierId) || draftQ.supplierName || "";
     const total = quoteCalc(n, draftQ).total;
     const i = n.quotes.findIndex(x => x.id === draftQ.id);
@@ -1229,7 +1255,23 @@ const ACTIONS: Record<string, Action> = {
     requestAnimationFrame(() => { const sec = $<HTMLElement>('[data-sec="quotes"]'); sec?.scrollIntoView({ block: "start", behavior: "smooth" }); const first = $<HTMLElement>("#bulk .bp"); first?.focus({ preventScroll: true }); });
   },
   "bulk-add": () => { bulkRead(); BULK!.cols.push(bulkBlank("")); bulkRerender(); const sel = $$("#bulk [data-bf=supplierId]"); sel[sel.length - 1]?.focus(); },
-  "bulk-rm": el => { bulkRead(); BULK!.cols.splice(+el.dataset.col!, 1); if (!BULK!.cols.length) BULK!.cols.push(bulkBlank("")); bulkRerender(); },
+  "bulk-add-tier": el => {
+    bulkRead();
+    const c = BULK!.cols[+el.dataset.col!]; if (!c) return;
+    const k = el.dataset.k!, list = ((c.tiers ??= {})[k] ??= []);
+    if (list.length >= BASAMAK_SINIRI) return;
+    list.push({ min: NaN, price: NaN });
+    BULK!.dirty = true; bulkCiz();
+    $<HTMLInputElement>(`#bulk [data-bt="min"][data-bk="${k}"][data-col="${el.dataset.col}"][data-ti="${list.length - 1}"]`)?.focus();
+  },
+  "bulk-rm-tier": el => {
+    bulkRead();
+    const list = BULK!.cols[+el.dataset.col!]?.tiers?.[el.dataset.k!]; if (!list) return;
+    list.splice(+el.dataset.ti!, 1);
+    BULK!.dirty = true; bulkCiz();
+    $<HTMLElement>(`#bulk [data-act="bulk-add-tier"][data-k="${el.dataset.k}"][data-col="${el.dataset.col}"]`)?.focus();
+  },
+  "bulk-rm": el => { bulkRead(); BULK!.cols.splice(+el.dataset.col!, 1); if (!BULK!.cols.length) BULK!.cols.push(bulkBlank("")); bulkCiz(); },
   "bulk-save": () => bulkSave(),
   "bulk-close": () => bulkClose(),
   "pick-top": (el, r) => { if (!r) return; const top = evaluate(r).ranking[0]; if (!top) return; V.tab = "compare"; render(); teklifSec(top.q.id); $<HTMLElement>(".sa-karar")?.scrollIntoView({ block: "center" }); },
