@@ -136,7 +136,7 @@ export function ZamanCizelgesi(o: Ozellikler) {
           {v.fason.map(satir)}
           {v.ikincil.length > 0 && (
             <button type="button" className="tc-pym-g-grup" aria-expanded={!ikKapali} onClick={() => katla(IKINCIL_GRUBU)}>
-              <Simge ad={ikKapali ? 'chev-right' : 'down'} boyut="k" />İkincil kaynaklar <span className="tc-pym-g-grup-alt">{v.ikincil.length} kaynak · tezgâhla birlikte boş olmalı</span>
+              <Simge ad={ikKapali ? 'chev-right' : 'down'} boyut="k" />İkincil kaynaklar <span className="tc-pym-g-grup-alt">{v.ikincil.length} kaynak<span className="tc-pym-g-grup-uzun"> · tezgâhla birlikte boş olmalı</span></span>
             </button>
           )}
           {!ikKapali && v.ikincil.map(ikSatir)}

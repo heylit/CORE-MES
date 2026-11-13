@@ -320,7 +320,9 @@ button.tc-pym-g-grup { letter-spacing: .1em; cursor: pointer; }
 .tc-pym-lejant > .tc-pym-l-dar { display: none; }
 @container tc-pym (max-width: 767px) {
   .tc-pym-tb-mercek { --pym-etiket: calc(var(--b-6) * 3); --pym-satir: var(--dokunma); }
-  .tc-pym-g-u, .tc-pym-lejant > .tc-pym-l-genis { display: none; }
+  .tc-pym-g-u, .tc-pym-g-grup-uzun, .tc-pym-lejant > .tc-pym-l-genis { display: none; }
+  /* Dar etikette kodun sonu ayırt eder: kırpma baştan yapılır. */
+  .tc-pym-g-ik-ust > b:first-child { direction: rtl; text-align: left; }
   .tc-pym-lejant > .tc-pym-l-dar { display: inline-flex; }
 }
 
