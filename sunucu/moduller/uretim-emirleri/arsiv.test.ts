@@ -208,6 +208,33 @@ describe('2721 başlamış emri arşive alma (gerçek PostgreSQL)', () => {
     assert.equal(ikinci.durum, 409, 'arşivdeki emir yeniden arşive alınmaz');
   });
 
+  test('3165 a, 3207 a: üretim emri yazımı sekiz eylemdir; tek eylemi olan yalnız onu yapar, eski toplu anahtar hiçbirini açmaz', async () => {
+    await kisiEkle('bekleten', ['uretim-emirleri.beklet']);
+    await kisiEkle('iptalci', ['uretim-emirleri.iptal']);
+    await kisiEkle('eskiyaz', ['uretim-emirleri.yaz']);
+    const { id } = await ac(3, [await makine()]);
+    const neden = { neden: 'malzeme' };
+    for (const ad of ['iptalci', 'eskiyaz']) assert.equal((await istek(ad, 'POST', `/uretim-emirleri/${id}/beklet`, neden)).durum, 403, ad);
+    const b = await istek('bekleten', 'POST', `/uretim-emirleri/${id}/beklet`, neden);
+    assert.equal(b.durum, 200, JSON.stringify(b.govde));
+    const { surum } = await onizle(id);
+    for (const ad of ['bekleten', 'eskiyaz']) assert.equal((await istek(ad, 'POST', `/adimli-emirler/${id}/iptal`, { surum })).durum, 403, ad);
+    assert.equal((await onizle(id)).surum, surum, 'reddedilen iptal emri değiştirmez');
+    const i = await istek('iptalci', 'POST', `/adimli-emirler/${id}/iptal`, { surum });
+    assert.equal(i.durum, 200, JSON.stringify(i.govde));
+  });
+
+  test('3207 a: plana alma uçta ve serviste aynı eylemdir; yalnız düzenleyen 403 alır, yalnız plana alan yetkiden geçer', async () => {
+    await kisiEkle('planaalan', ['uretim-emirleri.plana-al']);
+    await kisiEkle('duzenleyen', ['uretim-emirleri.duzenle']);
+    const { id } = await ac(3, [await makine()]);
+    const { surum } = await onizle(id);
+    assert.equal((await istek('duzenleyen', 'POST', `/adimli-emirler/${id}/plana-al`, { surum })).durum, 403);
+    // Emrin durumu plana almaya uymayabilir (409/422); ölçülen yalnız yetki: servis içindeki denetim de 403 vermez.
+    const p = await istek('planaalan', 'POST', `/adimli-emirler/${id}/plana-al`, { surum });
+    assert.notEqual(p.durum, 403, JSON.stringify(p.govde));
+  });
+
   test('kısıt uretim_emri_durum_alanlari: iptal emirde başlama kalabilir, bitiş ve sağlam adet olamaz', async () => {
     const id = await baslamisEmir();
     await o().sahip.sorgu("UPDATE uretim_emri SET durum = 'iptal', iptal = now() WHERE id = $1", [id]);

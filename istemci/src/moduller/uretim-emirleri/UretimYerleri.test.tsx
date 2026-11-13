@@ -62,6 +62,16 @@ describe('Emirde iç ve dış üretim', () => {
     expect(istekler.find((i) => i.yontem === 'POST')).toMatchObject({ yol: '/adimli-emirler/3/uretim-yeri', govde: { opNo: 20, yer: 'fason', firmaId: 41, terminGun: 5, surum: 4 } });
   });
 
+  it('3207 a: adımın yerini değiştirme düzenleme eylemine bakar; yalnız adım ya da bölme eylemi olan "Fasona al" görmez', async () => {
+    for (const [islem, gorur] of [['uretim-emirleri.duzenle', true], ['uretim-emirleri.adim-yaz', false], ['uretim-emirleri.bol-birlestir', false]] as const) {
+      sunucuKur({ ...OKUYUCU, islemler: [...OKUYUCU.islemler, islem] } as typeof OKUYUCU, yollar([adim(10), adim(20)]));
+      ac(ev, '/ev/3');
+      const tablo = await screen.findByRole('table', { name: 'Operasyon adımları' });
+      expect(within(tablo).queryAllByRole('button', { name: 'Fasona al' }).length > 0, islem).toBe(gorur);
+      cleanup();
+    }
+  });
+
   it('1208: fasonun arkasına giren otomatik GKK adımı etiketiyle görünür; elle eklenen ek adım etiket almaz', async () => {
     const gkk = adim(25, { ad: 'GKK (otomatik)', tur: 'ek', ekAciklama: 'Otomatik GKK', tip: { id: 9, ad: 'Giriş kalite kontrol', kod: 'GKK' } });
     sunucuKur(OKUYUCU, yollar([adim(10), FASONDA, gkk, adim(30, { tur: 'ek', ekAciklama: 'Elle ek' })]));

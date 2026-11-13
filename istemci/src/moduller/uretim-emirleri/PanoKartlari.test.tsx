@@ -40,7 +40,7 @@ describe('uretim emirleri pano kartlari', () => {
 
   it('kartlar isleme baglidir ve bolum bildirir', () => {
     expect(anaSayfaKartlari.filter((k) => k.anahtar.startsWith('uretim-emirleri-')).map((k) => [k.anahtar, k.islem, k.bolum])).toEqual([
-      ['uretim-emirleri-planlanacak', 'uretim-emirleri.yaz', 'is'],
+      ['uretim-emirleri-planlanacak', 'uretim-emirleri.plana-al', 'is'],
       ['uretim-emirleri-kuyrugum', 'terminal.uret', 'is'],
       ['uretim-emirleri-acik', 'sayfa.rota', 'ozet'],
       ['uretim-emirleri-bugun', 'terminal.uret', 'ozet'],

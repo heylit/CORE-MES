@@ -67,7 +67,7 @@ const emirUclari = [
   uc({
     yontem: 'POST',
     yol: '/uretim-emirleri/:id/beklet',
-    yetki: 'uretim-emirleri.yaz',
+    yetki: 'uretim-emirleri.beklet',
     tekrarKorumali: true,
     parametre: emirParametresi,
     govde: bekletGovdesi,
@@ -77,7 +77,7 @@ const emirUclari = [
   uc({
     yontem: 'POST',
     yol: '/uretim-emirleri/:id/bekletme-kaldir',
-    yetki: 'uretim-emirleri.yaz',
+    yetki: 'uretim-emirleri.beklet',
     tekrarKorumali: true,
     parametre: emirParametresi,
     cevap: emirAyrintiCevabi,
@@ -230,7 +230,7 @@ const adimliUclar = [
   uc({
     yontem: 'GET',
     yol: '/adimli-emirler/fason-firmalari',
-    yetki: 'uretim-emirleri.yaz',
+    yetki: { biri: ['uretim-emirleri.duzenle', 'uretim-emirleri.adim-yaz'] },
     cevap: fasonFirmalariCevabi,
     isle: async ({ db }) => ({ firmalar: await isEmri.fasonFirmalari(db) }),
   }),
@@ -345,7 +345,7 @@ const adimliUclar = [
   uc({
     yontem: 'POST',
     yol: '/adimli-emirler/:id/plana-al',
-    yetki: 'uretim-emirleri.yaz',
+    yetki: 'uretim-emirleri.plana-al',
     parametre: emirParametresi,
     govde: planaAlGovdesi,
     cevap: adimliEmirCevabi,
@@ -357,7 +357,7 @@ const adimliUclar = [
   uc({
     yontem: 'POST',
     yol: '/adimli-emirler/:id/iptal',
-    yetki: 'uretim-emirleri.yaz',
+    yetki: 'uretim-emirleri.iptal',
     parametre: emirParametresi,
     govde: adimliIptalGovdesi,
     cevap: adimliEmirCevabi,
@@ -389,12 +389,12 @@ const adimliUclar = [
     },
   }),
   // Excel ile var olan emirleri güncelleme (2627, 2704): satırlar tek kayıt komutlarından geçer; tek transaction, istek kimliği zorunlu.
-  uc({ yontem: 'POST', yol: '/adimli-emirler/toplu-guncelle', yetki: 'uretim-emirleri.yaz', tekrarKorumali: true, govde: emirTopluGuncelleGovdesi, cevap: emirTopluGuncelleCevabi, isle: ({ db, kullanici, govde }) => emirleriTopluGuncelle(db, kullanici, govde) }),
+  uc({ yontem: 'POST', yol: '/adimli-emirler/toplu-guncelle', yetki: 'uretim-emirleri.duzenle', tekrarKorumali: true, govde: emirTopluGuncelleGovdesi, cevap: emirTopluGuncelleCevabi, isle: ({ db, kullanici, govde }) => emirleriTopluGuncelle(db, kullanici, govde) }),
   // 163 a: başlamamış emrin önceliği senaryo açmadan değişir; eski ve yeni değer kim ve ne zamanla kayda girer.
   uc({
     yontem: 'POST',
     yol: '/adimli-emirler/:id/oncelik',
-    yetki: 'uretim-emirleri.yaz',
+    yetki: 'uretim-emirleri.duzenle',
     parametre: emirParametresi,
     govde: oncelikGovdesi,
     cevap: adimliEmirCevabi,
@@ -407,7 +407,7 @@ const adimliUclar = [
   uc({
     yontem: 'POST',
     yol: '/adimli-emirler/:id/emir-turu',
-    yetki: 'uretim-emirleri.yaz',
+    yetki: 'uretim-emirleri.duzenle',
     parametre: emirParametresi,
     govde: emirTuruGovdesi,
     cevap: adimliEmirCevabi,
@@ -421,7 +421,7 @@ const adimliUclar = [
   uc({
     yontem: 'POST',
     yol: '/adimli-emirler/:id/uretim-yeri',
-    yetki: 'uretim-emirleri.yaz',
+    yetki: 'uretim-emirleri.duzenle',
     parametre: emirParametresi,
     govde: uretimYeriGovdesi,
     cevap: adimliEmirCevabi,
@@ -433,7 +433,7 @@ const adimliUclar = [
   uc({
     yontem: 'POST',
     yol: '/adimli-emirler/:id/adim-kaynagi',
-    yetki: 'uretim-emirleri.yaz',
+    yetki: 'uretim-emirleri.duzenle',
     parametre: emirParametresi,
     govde: adimKaynagiGovdesi,
     cevap: adimliEmirCevabi,
@@ -446,7 +446,7 @@ const adimliUclar = [
   uc({
     yontem: 'POST',
     yol: '/adimli-emirler/:id/bol',
-    yetki: 'uretim-emirleri.yaz',
+    yetki: 'uretim-emirleri.bol-birlestir',
     tekrarKorumali: true,
     parametre: emirParametresi,
     govde: partiBolGovdesi,
@@ -459,7 +459,7 @@ const adimliUclar = [
   uc({
     yontem: 'POST',
     yol: '/adimli-emirler/:id/birlestir',
-    yetki: 'uretim-emirleri.yaz',
+    yetki: 'uretim-emirleri.bol-birlestir',
     tekrarKorumali: true,
     parametre: emirParametresi,
     govde: partiBirlestirGovdesi,
@@ -473,7 +473,7 @@ const adimliUclar = [
   uc({
     yontem: 'POST',
     yol: '/adimli-emirler/:id/ek-adim',
-    yetki: 'uretim-emirleri.yaz',
+    yetki: 'uretim-emirleri.adim-yaz',
     tekrarKorumali: true,
     parametre: emirParametresi,
     govde: ekAdimGovdesi,
@@ -486,7 +486,7 @@ const adimliUclar = [
   uc({
     yontem: 'POST',
     yol: '/adimli-emirler/:id/ek-adim-kaldir',
-    yetki: 'uretim-emirleri.yaz',
+    yetki: 'uretim-emirleri.adim-yaz',
     parametre: emirParametresi,
     govde: ekAdimKaldirGovdesi,
     cevap: adimliEmirCevabi,
@@ -499,7 +499,7 @@ const adimliUclar = [
   uc({
     yontem: 'GET',
     yol: '/adimli-emirler/acilis-secenekleri',
-    yetki: { biri: ['uretim-emirleri.yaz', 'rota.emre-kopyala'] },
+    yetki: { biri: ['uretim-emirleri.emir-ac', 'uretim-emirleri.rotasiz-ac', 'rota.emre-kopyala'] },
     sorgu: acilisSecenekleriSorgusu,
     cevap: acilisSecenekleriCevabi,
     isle: ({ db, kullanici, sorgu }) => isEmri.acilisSecenekleri(db, kullanici, sorgu.malzemeNo, sorgu.emirTuru),
@@ -508,7 +508,7 @@ const adimliUclar = [
   uc({
     yontem: 'POST',
     yol: '/adimli-emirler/rotasiz',
-    yetki: 'uretim-emirleri.yaz',
+    yetki: 'uretim-emirleri.rotasiz-ac',
     tekrarKorumali: true,
     govde: rotasizEmirGovdesi,
     cevap: rotasizEmirCevabi,
@@ -518,7 +518,7 @@ const adimliUclar = [
   uc({
     yontem: 'POST',
     yol: '/adimli-emirler/:id/adim-ekle',
-    yetki: 'uretim-emirleri.yaz',
+    yetki: 'uretim-emirleri.adim-yaz',
     tekrarKorumali: true,
     parametre: emirParametresi,
     govde: rotasizAdimEkleGovdesi,
@@ -531,7 +531,7 @@ const adimliUclar = [
   uc({
     yontem: 'POST',
     yol: '/adimli-emirler/:id/adim-duzenle',
-    yetki: 'uretim-emirleri.yaz',
+    yetki: 'uretim-emirleri.adim-yaz',
     parametre: emirParametresi,
     govde: rotasizAdimDuzenleGovdesi,
     cevap: adimliEmirCevabi,
@@ -543,7 +543,7 @@ const adimliUclar = [
   uc({
     yontem: 'POST',
     yol: '/adimli-emirler/:id/adim-sil',
-    yetki: 'uretim-emirleri.yaz',
+    yetki: 'uretim-emirleri.adim-yaz',
     parametre: emirParametresi,
     govde: rotasizAdimSilGovdesi,
     cevap: adimliEmirCevabi,
@@ -556,7 +556,7 @@ const adimliUclar = [
   uc({
     yontem: 'POST',
     yol: '/adimli-emirler/:id/birlesme-plani',
-    yetki: 'uretim-emirleri.yaz',
+    yetki: 'uretim-emirleri.bol-birlestir',
     tekrarKorumali: true,
     parametre: emirParametresi,
     govde: birlesmePlaniGovdesi,
@@ -710,7 +710,7 @@ const hataliUclari = [
   uc({
     yontem: 'POST',
     yol: '/adimli-emirler/:id/is-emirleri/:isEmriId/rework-adimi',
-    yetki: 'uretim-emirleri.yaz',
+    yetki: 'uretim-emirleri.adim-yaz',
     tekrarKorumali: true,
     parametre: isEmriParametresi,
     govde: reworkAdimiGovdesi,
@@ -800,7 +800,7 @@ const kapanisUclari = [
   uc({
     yontem: 'POST',
     yol: '/adimli-emirler/:id/kapat',
-    yetki: 'uretim-emirleri.yaz',
+    yetki: 'uretim-emirleri.iptal',
     parametre: emirParametresi,
     govde: emirKapatGovdesi,
     cevap: adimliEmirCevabi,

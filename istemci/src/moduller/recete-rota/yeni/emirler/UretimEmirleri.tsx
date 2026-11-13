@@ -29,7 +29,8 @@ const UE_YENI = '/uretim-emirleri?yeni=1';
 const ueYeniAdresi = (urun: string | null) => (urun === null ? UE_YENI : `${UE_YENI}&urun=${encodeURIComponent(urun)}`);
 
 const saltOkunur = (y: EkranOzellikleri['yetki']): EkranOzellikleri['yetki'] => ({
-  ...y, yaz: false, rotaYaz: false, rotaGonder: false, rotaTaslakAc: false, rotaSureKabul: false, rotaOnayla: false, rotaEmreKopyala: false, emirYaz: false, stokStatuDegistir: false, stokSayim: false, stokGiris: false,
+  ...y, yaz: false, rotaYaz: false, rotaGonder: false, rotaTaslakAc: false, rotaSureKabul: false, rotaOnayla: false, rotaEmreKopyala: false,
+  emirAc: false, emirRotasizAc: false, emirDuzenle: false, emirAdimYaz: false, emirBol: false, emirPlanaAl: false, emirBeklet: false, emirIptal: false, stokStatuDegistir: false, stokSayim: false, stokGiris: false,
   istasyonYaz: false, kisiYaz: false, planYaz: false, maliyetYaz: false, herhangiYazma: false,
 });
 
@@ -45,7 +46,7 @@ export function UretimEmirleri({ veri, yetki: tamYetki, git, kimlik }: EkranOzel
   const [acik, setAcik] = useState<string | null>(yeniUrun === null ? kimlik : null);
   const komut = useEmirKomutu();
   const emirler = useMemo(() => d.emirler?.orders ?? [], [d.emirler]);
-  const acabilir = tamYetki.oku && (tamYetki.emirYaz || tamYetki.rotaEmreKopyala);
+  const acabilir = tamYetki.oku && (tamYetki.emirRotasizAc || tamYetki.rotaEmreKopyala);
   // "Ürün ve rotalar"dan gelen "Üretim emri oluştur" emri açma penceresine gider.
   useEffect(() => { if (yeniUrun !== null && acabilir) void yonlen(ueYeniAdresi(yeniUrun), { replace: true }); }, [yeniUrun, acabilir]);
 
@@ -188,9 +189,9 @@ export function YeniEmirFormu({ durum: d, yetki, komut, acildi, git, ilkUrun }: 
   ilkUrun: string | null;
 }) {
   // Emir yalnız mamul ya da yarı mamule açılır; rotası olan emre kopyalanır (rota.emre-kopyala), rotası olmayan rotasız açılır
-  // (uretim-emirleri.yaz). İşlemi olmayan yolun ürünü listede yoktur.
+  // (uretim-emirleri.rotasiz-ac). İşlemi olmayan yolun ürünü listede yoktur.
   const urunler = useMemo(() => (d.items ?? [])
-    .filter((i) => uretilirMi(d, i.id) ? yetki.rotaEmreKopyala : (i.type === 'mamul' || i.type === 'yari') && yetki.emirYaz)
+    .filter((i) => uretilirMi(d, i.id) ? yetki.rotaEmreKopyala : (i.type === 'mamul' || i.type === 'yari') && yetki.emirRotasizAc)
     // Rotalı ürün önce gelir: formun ilk seçimi emri açılabilen üründür (B-2500-6).
     .sort((a, b) => Number(uretilirMi(d, b.id)) - Number(uretilirMi(d, a.id)) || Number(b.type === 'mamul') - Number(a.type === 'mamul')), [d, yetki]);
   const tatiller = d.cal.holidays;

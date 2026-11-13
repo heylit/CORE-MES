@@ -290,6 +290,22 @@ describe('R3 Üretim emirleri: komutlar', () => {
     await waitFor(() => expect(istekler.filter((i) => i.yol === '/plan/planlama-kaynagi').length).toBeGreaterThan(okuma));
   });
 
+  it('3165 a, 3207 a: her düğme kendi eylemine bakar; yalnız iptal eden plana alamaz, bölemez; yalnız plana alan iptal edemez', async () => {
+    sunucuKur(kisi(['uretim-emirleri.iptal']), {});
+    let b = await sayfa();
+    expect(within(b).queryByRole('button', { name: 'Plana al' })).toBeNull();
+    fireEvent.click(within(b).getByRole('button', { name: 'UE-0001 işlemleri' }));
+    expect(screen.getByRole('menuitem', { name: 'İptal et' })).toBeTruthy();
+    expect(screen.queryByRole('menuitem', { name: 'Böl (parti ya da kol)' })).toBeNull();
+    expect(screen.queryByRole('menuitem', { name: /Adım ekle/ })).toBeNull();
+    cleanup();
+    sunucuKur(kisi(['uretim-emirleri.plana-al', 'uretim-emirleri.yaz']), {});
+    b = await sayfa();
+    expect(within(b).getByRole('button', { name: 'Plana al' })).toBeTruthy();
+    fireEvent.click(within(b).getByRole('button', { name: 'UE-0001 işlemleri' }));
+    expect(screen.queryByRole('menuitem', { name: 'İptal et' })).toBeNull();
+  });
+
   it('iptal onay penceresinden sonra gider', async () => {
     const istekler = sunucuKur(YONETICI, { yazmalar: { 'POST /adimli-emirler/61/iptal': () => json(200, {}) } });
     const b = await sayfa();
@@ -302,7 +318,7 @@ describe('R3 Üretim emirleri: komutlar', () => {
     await waitFor(() => expect(istekler.find((i) => i.yol === '/adimli-emirler/61/iptal')?.govde).toEqual({ surum: 1 }));
   });
 
-  it('rotası olmayan ürüne rotasız emir açılır (uretim-emirleri.yaz)', async () => {
+  it('rotası olmayan ürüne rotasız emir açılır (uretim-emirleri.rotasiz-ac)', async () => {
     const istekler = sunucuKur(YONETICI, {
       yazmalar: {
         'GET /adimli-emirler/acilis-secenekleri': () => json(200, { projeZorunlu: false, projeler: [] }),
@@ -401,7 +417,7 @@ describe('R3 Üretim emirleri: komutlar', () => {
       id: 'o10', seq: 10, opNo: 10, opId: '21', name: 'Tornalama', stationId: '31', machineId: null, kisiId: null, fasonId: null, terminGun: null, setup: 30, proc: null,
       chg: null, cycle: 5, dep: 'bagimli', depQty: null, rejectPct: 0, split: 'tek', minLot: null, resetup: false, alts: [], altTimes: {}, digerAdaylar: [], ins: [], outs: [],
     }];
-    sunucuKur(kisi(['uretim-emirleri.yaz']), { durum: d });
+    sunucuKur(kisi(['uretim-emirleri.rotasiz-ac']), { durum: d });
     yeniEmirAc();
     const b = await screen.findByRole('dialog', { name: 'Yeni üretim emri' });
     await within(b).findByText(/Emir açmak için mamul ya da yarı mamul gerekli/);
@@ -517,6 +533,39 @@ describe('R3 Üretim emirleri: Diğer menüsü ve stok (1102 a, 1106 a)', () => 
     fireEvent.click(within(panel2).getByRole('button', { name: 'Kaydet' }));
     await waitFor(() => { expect(within(alt2).getAllByRole('alert').some((a) => a.textContent.includes('Bu tür proje ister'))).toBe(true); });
     expect(within(alt2).getByRole('group', { name: 'Emir türünü değiştir' })).toBeTruthy();
+  });
+
+  it('3207 a: alt emrin menüsünde her madde kendi eylemine bakar; tek eylemli kişi yalnız onun maddesini görür', async () => {
+    const d = adimli('serbest');
+    const ana = d.emirler!.orders[0]!;
+    d.emirler = { ...d.emirler!, orders: [...d.emirler!.orders, { ...ana, id: '62', kayitNo: 62, no: 'UE-0001/1', qty: 2, parentId: ana.id, surum: 4 }] };
+    const MADDELER = ['Adım ekle (ek, rework, tamir)', 'Böl (parti ya da kol)', 'Emir türünü değiştir', 'Ana emre geri kat', 'İptal et', 'Durdur ve arşive al'];
+    const BEKLENEN: readonly (readonly [string, readonly string[]])[] = [
+      ['uretim-emirleri.adim-yaz', ['Adım ekle (ek, rework, tamir)']],
+      ['uretim-emirleri.bol-birlestir', ['Böl (parti ya da kol)', 'Ana emre geri kat']],
+      ['uretim-emirleri.duzenle', ['Emir türünü değiştir']],
+      ['uretim-emirleri.iptal', ['İptal et']],
+      ['uretim-emirleri.beklet', []],
+      ['uretim-emirleri.plana-al', []],
+      ['uretim-emirleri.emir-ac', []],
+      ['uretim-emirleri.rotasiz-ac', []],
+    ];
+    for (const [islem, gorunen] of BEKLENEN) {
+      sunucuKur(kisi([islem]), { durum: d });
+      const alt = await sayfa(62);
+      fireEvent.click(within(alt).getByRole('button', { name: 'UE-0001/1 işlemleri' }));
+      expect(MADDELER.filter((m) => screen.queryByRole('menuitem', { name: m }) !== null), islem).toEqual(gorunen);
+      cleanup();
+    }
+    // Başlamış emirde iptalin yerini arşiv alır; o da iptal eylemine bakar, bekletmeye değil.
+    const basladi = { ...d, emirler: { ...d.emirler!, orders: d.emirler!.orders.map((x) => ({ ...x, status: 'uretimde' as const })) } };
+    for (const [islem, gorunen] of [['uretim-emirleri.iptal', ['Durdur ve arşive al']], ['uretim-emirleri.beklet', []]] as const) {
+      sunucuKur(kisi([islem]), { durum: basladi });
+      const alt = await sayfa(62);
+      fireEvent.click(within(alt).getByRole('button', { name: 'UE-0001/1 işlemleri' }));
+      expect(MADDELER.filter((m) => screen.queryByRole('menuitem', { name: m }) !== null), islem).toEqual(gorunen);
+      cleanup();
+    }
   });
 
   it('stoktan düşme düğmesi yalnız stok tamamlama bölümündedir; üretimi biten emirde kapanış uyarısı, kapanınca yok (1391 a)', async () => {

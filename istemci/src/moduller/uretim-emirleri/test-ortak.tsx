@@ -7,7 +7,7 @@ import type { Kullanici } from '#paylasilan/kullanici.ts';
 import type { OturumCevabi } from '#paylasilan/sozlesme/oturum.ts';
 import { BildirimSaglayici } from '../../ortak/arayuz/index.ts';
 
-export const YAZAR: Kullanici = { id: 7, ad: 'Deneme Planlamaci', islemler: ['sayfa.uretim-emirleri', 'uretim-emirleri.yaz'] };
+export const YAZAR: Kullanici = { id: 7, ad: 'Deneme Planlamaci', islemler: ['sayfa.uretim-emirleri', 'uretim-emirleri.emir-ac', 'uretim-emirleri.rotasiz-ac', 'uretim-emirleri.duzenle', 'uretim-emirleri.adim-yaz', 'uretim-emirleri.bol-birlestir', 'uretim-emirleri.plana-al', 'uretim-emirleri.beklet', 'uretim-emirleri.iptal'] };
 export const OKUYUCU: Kullanici = { id: 9, ad: 'Deneme Okuyucu', islemler: ['sayfa.uretim-emirleri'] };
 
 export const json = (durum: number, govde: unknown) => new Response(JSON.stringify(govde), { status: durum });

@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { EMIR_DURUMU } from '#paylasilan/sozlesme/emir-durumu.ts';
+import { URETIM_EMRI_YAZMA_ISLEMLERI } from '#paylasilan/islemler.ts';
 import type { AdimliEmirOzeti, AdimliListeCevabi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { DurumKutusu, Kart, Rozet, Tablo, type Sutun } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
@@ -8,7 +9,7 @@ import { anahtarlar } from './anahtarlar.ts';
 import { tarihMetni } from './gosterim.ts';
 
 // Emir listesini okuyabilen işlemler: üretim emirleri ucunun okuma kümesi (GET /adimli-emirler). Yetkisi olmayana bölüm gösterilmez.
-export const EMIR_OKUMA_ISLEMLERI = ['sayfa.uretim-emirleri', 'sayfa.rota', 'uretim-emirleri.yaz', 'uretim-emirleri.fason', 'plan.yaz'] as const;
+export const EMIR_OKUMA_ISLEMLERI = ['sayfa.uretim-emirleri', 'sayfa.rota', ...URETIM_EMRI_YAZMA_ISLEMLERI, 'uretim-emirleri.fason', 'plan.yaz'] as const;
 
 // Durum adı ve tonu emir durumunun tek sözlüğünden (1389 a).
 const SUTUNLAR: Sutun<AdimliEmirOzeti>[] = [

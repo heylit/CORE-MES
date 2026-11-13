@@ -31,7 +31,7 @@ function DurusDagilimi() {
 
 // Kart işlemle görünür, rolle değil (kart #483). Planlanacak plana alabilene, kişi kartları üretim kaydı yazabilene.
 export const anaSayfaKartlari: AnaSayfaKarti[] = [
-  { anahtar: 'uretim-emirleri-planlanacak', sira: 200, islem: 'uretim-emirleri.yaz', bolum: 'is', ekran: Planlanacak },
+  { anahtar: 'uretim-emirleri-planlanacak', sira: 200, islem: 'uretim-emirleri.plana-al', bolum: 'is', ekran: Planlanacak },
   { anahtar: 'uretim-emirleri-kuyrugum', sira: 210, islem: 'terminal.uret', bolum: 'is', ekran: Kuyrugum },
   { anahtar: 'uretim-emirleri-acik', sira: 200, islem: 'sayfa.rota', bolum: 'ozet', ekran: AcikEmirler },
   { anahtar: 'uretim-emirleri-bugun', sira: 210, islem: 'terminal.uret', bolum: 'ozet', ekran: BugunUrettigim },

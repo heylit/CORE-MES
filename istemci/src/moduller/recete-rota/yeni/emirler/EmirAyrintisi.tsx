@@ -86,10 +86,10 @@ export function EmirAyrintisi({ durum: d, emir: o, yetki, git, komut, emirAc, ka
   const rotaMetni = o.rotasiz ? 'Rotasız'
     : rev ? `${fark ? 'Emrin rotası' : 'Yürürlükteki'}, Rev ${rev.no}` : yururlukte ? `Yürürlükteki, Rev ${yururlukte.no}` : null;
   const diger: MenuOgesi[] = [
-    ...(acik && yetki.emirYaz && adimlar.length > 0 ? [{ anahtar: 'bol', baslik: 'Böl (parti ya da kol)', simge: 'layers' as const, sec: () => { setIslem('bol'); } }] : []),
-    ...(acik && yetki.emirYaz && !o.rotasiz && adimlar.length > 0 ? [{ anahtar: 'ek', baslik: 'Ek operasyon (rework, tamir, ek)', simge: 'plus' as const, sec: () => { setIslem('ek'); } }] : []),
-    ...(o.kol && acik && yetki.emirYaz ? [{ anahtar: 'katil', baslik: 'Katılma ya da ayrı ilerleme', simge: 'route' as const, sec: () => { setIslem('katil'); } }] : []),
-    ...(ana && acik && yetki.emirYaz ? [{
+    ...(acik && yetki.emirBol && adimlar.length > 0 ? [{ anahtar: 'bol', baslik: 'Böl (parti ya da kol)', simge: 'layers' as const, sec: () => { setIslem('bol'); } }] : []),
+    ...(acik && yetki.emirAdimYaz && !o.rotasiz && adimlar.length > 0 ? [{ anahtar: 'ek', baslik: 'Ek operasyon (rework, tamir, ek)', simge: 'plus' as const, sec: () => { setIslem('ek'); } }] : []),
+    ...(o.kol && acik && yetki.emirBol ? [{ anahtar: 'katil', baslik: 'Katılma ya da ayrı ilerleme', simge: 'route' as const, sec: () => { setIslem('katil'); } }] : []),
+    ...(ana && acik && yetki.emirBol ? [{
       anahtar: 'kat', baslik: o.kol ? 'Kolu geri al' : 'Ana emre geri kat', simge: 'back' as const, ton: 'tehlike' as const,
       sec: () => {
         void komut.calistir('emir-birlestir', { id: o.id, surum: o.surum }, `${o.no} ${ana.no} emrine geri katıldı.`)
@@ -97,8 +97,8 @@ export function EmirAyrintisi({ durum: d, emir: o, yetki, git, komut, emirAc, ka
       },
     }] : []),
     // 2721: başlamış emir iptal edilemez (sahibi reddeder); uyarı ve durdurmayla arşive alınır, kapanış açık kalır.
-    ...(acik && yetki.emirYaz && o.status !== 'uretimde' ? [{ anahtar: 'iptal', baslik: 'İptal et', simge: 'x' as const, ton: 'tehlike' as const, sec: () => { setIptal(true); } }] : []),
-    ...(acik && yetki.emirYaz && o.status === 'uretimde'
+    ...(acik && yetki.emirIptal && o.status !== 'uretimde' ? [{ anahtar: 'iptal', baslik: 'İptal et', simge: 'x' as const, ton: 'tehlike' as const, sec: () => { setIptal(true); } }] : []),
+    ...(acik && yetki.emirIptal && o.status === 'uretimde'
       ? [{ anahtar: 'arsiv', baslik: 'Durdur ve arşive al', simge: 'box' as const, ton: 'tehlike' as const, sec: () => { setArsiv(true); } }] : []),
   ];
 
@@ -129,7 +129,7 @@ export function EmirAyrintisi({ durum: d, emir: o, yetki, git, komut, emirAc, ka
       <EmirUyarilari durum={d} emir={o} yetki={yetki} komut={komut} bittiNotu />
 
       <EmirYapisi durum={d} emir={o} adimlar={adimlar} yetki={yetki} komut={komut} islem={islem === 'ek' ? null : islem} islemKapat={() => { setIslem(null); }} />
-      {acik && islem === 'ek' && yetki.emirYaz && !o.rotasiz && (
+      {acik && islem === 'ek' && yetki.emirAdimYaz && !o.rotasiz && (
         <EkAdimPaneli durum={d} emir={o} yerler={ekYerleri(d, o, adimlar)} komut={komut} kapat={() => { setIslem(null); }} />
       )}
       {o.rotasiz && <RotasizAdimlar durum={d} emir={o} adimlar={adimlar} yetki={yetki} komut={komut} />}
@@ -149,7 +149,7 @@ export function EmirAyrintisi({ durum: d, emir: o, yetki, git, komut, emirAc, ka
         {plandaMi(o) && <Dugme simge="grid" onClick={() => { void yonlen(KANBAN_YOLU); }}>Kanbanda göster</Dugme>}
         {ana && <Dugme simge="back" onClick={() => { emirAc(ana.id); }}>Ana emir {ana.no}</Dugme>}
         {diger.length > 0 && <Menu etiket={`${o.no} için diğer işlemler`} metin="Diğer" ogeler={diger} />}
-        {o.status === 'taslak' && yetki.emirYaz && (
+        {o.status === 'taslak' && yetki.emirPlanaAl && (
           <Dugme tur="birincil" simge="play" className="tc-rr3-ana" yukleniyor={komut.mesgul} onClick={() => { void komut.calistir('emir-serbest', { id: o.id, ...surum }, 'Emir plana alındı.'); }}>
             Plana al
           </Dugme>
@@ -301,8 +301,8 @@ function EmirYapisi({ durum: d, emir: o, adimlar, yetki, komut, islem, islemKapa
           {ana ? '' : ' Ana emri listede yok.'}
         </p>
       )}
-      {acik && yetki.emirYaz && <ReworkSatirlari durum={d} emir={o} komut={komut} />}
-      {o.kol && acik && islem === 'katil' && yetki.emirYaz && (
+      {acik && yetki.emirAdimYaz && <ReworkSatirlari durum={d} emir={o} komut={komut} />}
+      {o.kol && acik && islem === 'katil' && yetki.emirBol && (
         <div className="tc-rr3-katil">
           <h4>Kolun devamı</h4>
           {/* 1825 a+b: kol ya ana kola yeniden katılır (varsayılan) ya da ana rotanın kalan adımlarını kopyalayıp ayrı ilerler; emir sayısı değişmez. */}
@@ -346,7 +346,7 @@ function EmirYapisi({ durum: d, emir: o, adimlar, yetki, komut, islem, islemKapa
       {partiler.length > 0 && (
         <p className="tc-rr3-ipucu">Parti toplamı: ana emir {sayi(o.qty)} + alt emirler {sayi(toplam - o.qty)} = {sayi(toplam)}</p>
       )}
-      {acik && islem === 'bol' && yetki.emirYaz && adimlar.length > 0 && (
+      {acik && islem === 'bol' && yetki.emirBol && adimlar.length > 0 && (
         <div className="tc-rr3-bol">
           <h4>Böl</h4>
           <BolmePaneli
@@ -363,7 +363,7 @@ function EmirYapisi({ durum: d, emir: o, adimlar, yetki, komut, islem, islemKapa
 function RotasizAdimlar({ durum: d, emir: o, adimlar, yetki, komut }: {
   durum: RrDurumu; emir: Emir; adimlar: EmirAdimi[]; yetki: EkranOzellikleri['yetki']; komut: ReturnType<typeof useEmirKomutu>;
 }) {
-  const acik = acikMi(o) && yetki.emirYaz;
+  const acik = acikMi(o) && yetki.emirAdimYaz;
   const [duzen, setDuzen] = useState<{ opNo: number; ad: string; opId: string; ayar: string; birim: string } | null>(null);
   const [yeni, setYeni] = useState({ opId: '', ad: '', ayar: '', birim: '' });
   const [sil, setSil] = useState<number | null>(null);
@@ -549,7 +549,7 @@ function PlanBolumu({ durum: d, emir: o, adimlar, yetki, komut, goster = 'hepsi'
     };
   });
   const ops = [...altOps, ...[...kokOps, ...ekOps].sort((a, b) => a.adim.opNo - b.adim.opNo)];
-  const kaldirilir = acikMi(o) && yetki.emirYaz;
+  const kaldirilir = acikMi(o) && yetki.emirAdimYaz;
   const kart = (id: string) => d.items?.find((i) => i.id === id) ?? null;
   const tutar = (e: MalzemeIhtiyaciSatiri): string | null => {
     const m = d.maliyet?.malzeme[String(e.malzemeNo)];
@@ -717,30 +717,29 @@ export function EmirIslemDugmeleri({ durum: d, emir: o, yetki, git, komut, emirA
   const adimlar = emirAdimlari(d, o);
   const ana = o.parentId === null ? null : d.emirler?.orders.find((x) => x.id === o.parentId) ?? null;
   const acik = acikMi(o);
-  const yaz = acik && yetki.emirYaz;
   const kapanisAcik = (o.status === 'tamam' && !o.kapanisSonucu) || (arsivKapanisi !== null && arsivKapanisi.asama !== 'tamam');
   const ogeler: MenuOgesi[] = [
-    ...(yaz && !o.rotasiz && adimlar.length > 0 ? [{ anahtar: 'ek', baslik: 'Adım ekle (ek, rework, tamir)', simge: 'plus' as const, sec: () => { isl.ac('ek'); } }] : []),
-    ...(yaz && adimlar.length > 0 ? [{ anahtar: 'bol', baslik: 'Böl (parti ya da kol)', simge: 'layers' as const, sec: () => { isl.ac('bol'); } }] : []),
+    ...(acik && yetki.emirAdimYaz && !o.rotasiz && adimlar.length > 0 ? [{ anahtar: 'ek', baslik: 'Adım ekle (ek, rework, tamir)', simge: 'plus' as const, sec: () => { isl.ac('ek'); } }] : []),
+    ...(acik && yetki.emirBol && adimlar.length > 0 ? [{ anahtar: 'bol', baslik: 'Böl (parti ya da kol)', simge: 'layers' as const, sec: () => { isl.ac('bol'); } }] : []),
     ...ekOgeler,
-    ...(ana && yaz ? [{ anahtar: 'tur', baslik: 'Emir türünü değiştir', simge: 'tag' as const, sec: () => { isl.ac('tur'); } }] : []),
-    ...(o.kol && yaz ? [{ anahtar: 'katil', baslik: 'Katılma ya da ayrı ilerleme', simge: 'route' as const, sec: () => { isl.ac('katil'); } }] : []),
+    ...(ana && acik && yetki.emirDuzenle ? [{ anahtar: 'tur', baslik: 'Emir türünü değiştir', simge: 'tag' as const, sec: () => { isl.ac('tur'); } }] : []),
+    ...(o.kol && acik && yetki.emirBol ? [{ anahtar: 'katil', baslik: 'Katılma ya da ayrı ilerleme', simge: 'route' as const, sec: () => { isl.ac('katil'); } }] : []),
     { anahtar: 'akis', baslik: 'Rotayı akışta aç', simge: 'route' as const, sec: () => { git('schema', o.itemId); } },
     ...(plandaMi(o) ? [{ anahtar: 'kanban', baslik: 'Kanbanda göster', simge: 'grid' as const, sec: () => { void yonlen(KANBAN_YOLU); } }] : []),
     ...(ana ? [{ anahtar: 'ana', baslik: `Ana emir ${ana.no}`, simge: 'back' as const, sec: () => { emirAc(ana.id); } }] : []),
-    ...(ana && yaz ? [{
+    ...(ana && acik && yetki.emirBol ? [{
       anahtar: 'kat', baslik: o.kol ? 'Kolu geri al' : 'Ana emre geri kat', simge: 'back' as const, ton: 'tehlike' as const,
       sec: () => {
         void komut.calistir('emir-birlestir', { id: o.id, surum: o.surum }, `${o.no} ${ana.no} emrine geri katıldı.`)
           .then((c) => { if (c.tamam) emirAc(ana.id); });
       },
     }] : []),
-    ...(yaz && o.status !== 'uretimde' ? [{ anahtar: 'iptal', baslik: 'İptal et', simge: 'x' as const, ton: 'tehlike' as const, sec: () => { setIptal(true); } }] : []),
-    ...(yaz && o.status === 'uretimde' ? [{ anahtar: 'arsiv', baslik: 'Durdur ve arşive al', simge: 'box' as const, ton: 'tehlike' as const, sec: () => { setArsiv(true); } }] : []),
+    ...(acik && yetki.emirIptal && o.status !== 'uretimde' ? [{ anahtar: 'iptal', baslik: 'İptal et', simge: 'x' as const, ton: 'tehlike' as const, sec: () => { setIptal(true); } }] : []),
+    ...(acik && yetki.emirIptal && o.status === 'uretimde' ? [{ anahtar: 'arsiv', baslik: 'Durdur ve arşive al', simge: 'box' as const, ton: 'tehlike' as const, sec: () => { setArsiv(true); } }] : []),
   ];
   return (
     <>
-      {o.status === 'taslak' && yetki.emirYaz && (
+      {o.status === 'taslak' && yetki.emirPlanaAl && (
         <Dugme tur="birincil" simge="play" yukleniyor={komut.mesgul} onClick={() => { void komut.calistir('emir-serbest', { id: o.id, surum: o.surum }, 'Emir plana alındı.'); }}>
           Plana al
         </Dugme>
@@ -764,13 +763,13 @@ export function EmirIslemDugmeleri({ durum: d, emir: o, yetki, git, komut, emirA
 export function EmirAdimBolumu({ durum: d, emir: o, yetki, komut, satirEki }: ParcaOzellikleri & { satirEki?: (opNo: number, yedek: ReactNode) => ReactNode }) {
   const isl = useEmirIslemi();
   const adimlar = emirAdimlari(d, o);
-  const ekAcik = acikMi(o) && yetki.emirYaz && !o.rotasiz && adimlar.length > 0;
+  const ekAcik = acikMi(o) && yetki.emirAdimYaz && !o.rotasiz && adimlar.length > 0;
   const yerler = ekAcik ? ekYerleri(d, o, adimlar) : [];
   const yerde = isl.islem === 'ek' && isl.yer !== null && (isl.yer === EMRIN_BASI || yerler.some((y) => y.opNo === isl.yer));
   return (
     <div className="tc-rr3-sayfa-adim">
       <EmirUyarilari durum={d} emir={o} yetki={yetki} komut={komut} />
-      {o.parentId !== null && acikMi(o) && yetki.emirYaz && isl.islem === 'tur' && <EmirTuruPaneli emir={o} komut={komut} kapat={isl.kapat} />}
+      {o.parentId !== null && acikMi(o) && yetki.emirDuzenle && isl.islem === 'tur' && <EmirTuruPaneli emir={o} komut={komut} kapat={isl.kapat} />}
       <EmirYapisi durum={d} emir={o} adimlar={adimlar} yetki={yetki} komut={komut} islem={isl.islem === 'ek' || isl.islem === 'tur' ? null : isl.islem} islemKapat={isl.kapat} />
       {ekAcik && isl.islem === 'ek' && !yerde && (
         <EkAdimPaneli durum={d} emir={o} yerler={yerler} komut={komut} kapat={isl.kapat} />

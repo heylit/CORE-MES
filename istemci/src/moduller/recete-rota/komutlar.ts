@@ -10,7 +10,7 @@ export const komutlar: Komut[] = [
   {
     // Emrin ana yeri Üretim Emirleri'dir (3003 a): komut oradaki açma penceresini getirir.
     anahtar: 'recete-rota-yeni-emir', sira: 20, baslik: 'Yeni üretim emri', aciklama: 'Üretim Emirleri\'nde yeni üretim emri penceresini açar.',
-    sozcukler: ['emir aç', 'iş emri', 'reçeteden emir'], simge: 'list', yol: '/uretim-emirleri?yeni=1', islem: 'uretim-emirleri.yaz', veya: ['rota.emre-kopyala'],
+    sozcukler: ['emir aç', 'iş emri', 'reçeteden emir'], simge: 'list', yol: '/uretim-emirleri?yeni=1', islem: 'uretim-emirleri.rotasiz-ac', veya: ['rota.emre-kopyala'],
   },
   {
     anahtar: 'recete-rota-yeni-sartname', sira: 30, baslik: 'Yeni şartname', aciklama: 'Şartname ve talimatlarda yeni şartname penceresini açar.',

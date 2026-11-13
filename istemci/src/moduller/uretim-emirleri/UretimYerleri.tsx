@@ -39,7 +39,7 @@ export function UretimYerleri({ emir, duzenlenir = false }: { emir: { id: number
   const islemler = (useOturum().data?.islemler ?? []) as readonly string[];
   const gorur = emir.malzemeNo != null && ADIMLI_OKUMA_ISLEMLERI.some((i) => islemler.includes(i));
   if (!gorur) return null;
-  const yetkili = islemler.includes('uretim-emirleri.yaz');
+  const yetkili = islemler.includes('uretim-emirleri.duzenle');
   return <Adimlar emirId={emir.id} yazar={duzenlenir && yetkili} izleme={!duzenlenir} />;
 }
 

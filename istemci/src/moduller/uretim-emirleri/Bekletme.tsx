@@ -10,8 +10,8 @@ import { anahtarlar } from './anahtarlar.ts';
 import { zamanMetni } from './gorunum.ts';
 
 // 3050 a: emir neden ve zamanla bekletilir. Bekletme durum değil işarettir: emrin durumu, sayıları ve raporları değişmez; terminalde
-// beklemedeki emrin adımı başlamaz. Emri düzenleyebilen kişi bekletir ve bekletmeyi kaldırır (yeni yetki yok).
-export const BEKLETME_YETKISI = 'uretim-emirleri.yaz';
+// beklemedeki emrin adımı başlamaz. Bekletme ve kaldırma kendi eylemidir (3165 a).
+export const BEKLETME_YETKISI = 'uretim-emirleri.beklet';
 // Sözleşmedeki BEKLEME_NEDENI_ADLARI ile aynı sıra ve ad; istemci sözleşmeyi yalnız tip olarak ithal eder (zod pakete girmesin).
 // Kayıt tipi eksik ya da fazla nedeni derlemede yakalar.
 const BEKLEME_NEDENI_ADLARI = {

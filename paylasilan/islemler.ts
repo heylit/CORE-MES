@@ -128,5 +128,11 @@ export const ROTA_YAZMA_ISLEMLERI = [
   'rota.revizyon-yaz', 'rota.onaya-gonder', 'rota.sablon-yaz', 'rota.taslak-ac', 'rota.sure-kabul',
 ] as const satisfies readonly VeriIslemi[];
 
+// Üretim emri yazımı sekiz eyleme bölündü (3165 a, 3207 a).
+export const URETIM_EMRI_YAZMA_ISLEMLERI = [
+  'uretim-emirleri.emir-ac', 'uretim-emirleri.rotasiz-ac', 'uretim-emirleri.duzenle', 'uretim-emirleri.adim-yaz',
+  'uretim-emirleri.bol-birlestir', 'uretim-emirleri.plana-al', 'uretim-emirleri.beklet', 'uretim-emirleri.iptal',
+] as const satisfies readonly VeriIslemi[];
+
 // Bölünmüş eski anahtarlar: hiçbir ucu açmaz, satırı ayrı kartla silinene dek katalogda kalır (3165 a). Sayfa yetkileri ekranı bunları göstermez.
-export const ETKISIZ_ISLEMLER: readonly Islem[] = ['istasyonlar.yaz', 'rota.yaz'];
+export const ETKISIZ_ISLEMLER: readonly Islem[] = ['istasyonlar.yaz', 'rota.yaz', 'uretim-emirleri.yaz'];

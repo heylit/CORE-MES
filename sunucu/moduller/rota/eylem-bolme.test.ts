@@ -31,6 +31,12 @@ const eskiYetki = (y: Yetki): Yetki => {
 const izinli = (y: Yetki, islemler: ReadonlySet<string>): boolean => yetkiListesi(y).some((i) => islemler.has(i));
 
 describe('rota eylemlerine bölme (saf)', () => {
+  test('3207 a: üretim emrine rework adımı şartnamesi yazan uç adım eylemini (ya da canlı plana almayı) ister; başka üretim emri eylemi açmaz', () => {
+    const liste = (y: unknown): readonly string[] => (typeof y === 'string' ? [y] : (y as { biri: readonly string[] }).biri);
+    const emirEylemi = uclar.filter((u) => liste(u.yetki).some((i) => i.startsWith('uretim-emirleri.')));
+    assert.deepEqual(emirEylemi.map((u) => [`${u.yontem} ${u.yol}`, [...liste(u.yetki)].sort()]),
+      [['POST /rota/emirler/:emirId/is-emirleri/:isEmriId/sartnameler', ['plan.canliya-al', 'uretim-emirleri.adim-yaz']]]);
+  });
   test('B2: hiçbir uç eski işlemi istemez; bir eylem isteyen her yazma ucu tam bir eylem ister; her eylem en az bir ucu açar', () => {
     for (const u of uclar) assert.equal(yetkiListesi(ucYetkisi(u)).includes(ESKI), false, `${u.yontem} ${u.yol}`);
     const yazma = uclar.filter((u) => u.yontem === 'POST' && yetkiListesi(ucYetkisi(u)).some((i) => YENI.includes(i)));

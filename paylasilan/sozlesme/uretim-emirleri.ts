@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { URETIM_EMRI_YAZMA_ISLEMLERI } from '../islemler.ts';
 import { listeCevapSemasi, sayfaSorguAlanlari } from '../liste.ts';
 import { ondalikMetinSemasi } from '../ondalik.ts';
 import { surumSemasi } from '../surum.ts';
@@ -708,7 +709,7 @@ export const sureOzetiCevabi = z.object({
 });
 
 // İş emirli emri (ayrıntı, refakat kartı) okuyabilen işlemlerden biri yeter; istemci düğmeyi buna göre gösterir.
-export const ADIMLI_OKUMA_ISLEMLERI = ['sayfa.uretim-emirleri', 'sayfa.rota', 'uretim-emirleri.yaz', 'uretim-emirleri.fason', 'plan.yaz'] as const;
+export const ADIMLI_OKUMA_ISLEMLERI = ['sayfa.uretim-emirleri', 'sayfa.rota', ...URETIM_EMRI_YAZMA_ISLEMLERI, 'uretim-emirleri.fason', 'plan.yaz'] as const;
 
 // 100x150 refakat kartı: emir başına tek kart, tek QR. Adımda istasyon yoksa fason firmanın adı yazılır.
 export const refakatKartiCevabi = z.object({

@@ -9,7 +9,7 @@ import { anaSayfaKartlari, haftalikDoluluk } from './ana-sayfa.tsx';
 
 // Şirket özeti emir kartları emir listesini okuyanla görünür: ilk işlem kartın işlemi, liste "veya" (#1085).
 // Planı okuyan da görür (288 a); emir listesine giremediği için kart ona bağlantı vermez.
-const EMIR_OKUYAN = ['sayfa.uretim-emirleri', 'sayfa.uretim-emirleri', 'sayfa.rota', 'uretim-emirleri.yaz', 'uretim-emirleri.fason', 'plan.yaz', 'plan.oku'];
+const EMIR_OKUYAN = ['sayfa.uretim-emirleri', 'sayfa.uretim-emirleri', 'sayfa.rota', 'uretim-emirleri.emir-ac', 'uretim-emirleri.rotasiz-ac', 'uretim-emirleri.duzenle', 'uretim-emirleri.adim-yaz', 'uretim-emirleri.bol-birlestir', 'uretim-emirleri.plana-al', 'uretim-emirleri.beklet', 'uretim-emirleri.iptal', 'uretim-emirleri.fason', 'plan.yaz', 'plan.oku'];
 const PLANCI = { id: 1, ad: 'Deneme Planci', islemler: ['sayfa.rota', 'plan.yaz'] };
 
 // Sayıları sunucu sayar (sunucu testleri listeden sayılanla aynı olduğunu ölçer); kart yalnız gösterir.

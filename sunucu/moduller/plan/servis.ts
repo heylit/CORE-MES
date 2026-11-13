@@ -3022,7 +3022,7 @@ export async function acilSiparisOnaylandi(db: Db, olay: { siparisId: number; ku
   const d = await s.acilSiparisDenemesi(db, olay.siparisId);
   const v = d?.veri as AcilVeri | undefined;
   if (!d || !v || v.uretimEmriId != null) return;
-  if (!islemVarMi(olay.kullanici, 'projeler.yaz') || !islemVarMi(olay.kullanici, 'uretim-emirleri.yaz')) {
+  if (!islemVarMi(olay.kullanici, 'projeler.yaz') || !islemVarMi(olay.kullanici, 'uretim-emirleri.emir-ac')) {
     throw yetkiYok('Acil plan siparişi; onaylamak için proje ve üretim emri açma yetkisi gerekir.');
   }
   const sp = await siparisKilitliAyrinti(db, olay.siparisId);

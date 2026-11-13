@@ -41,8 +41,8 @@ const BEKLENEN: BeklenenYetkiler = {
   'POST /sevkiyat/bekleyenler/:id/kaldir': 'sevkiyat.is-yaz',
   'POST /sevkiyat/bekleyenler/:id/bol': 'sevkiyat.is-yaz',
   // Tüm işler (941 c): kalemin sahibi modülün yazma işlemi de bırakır; kalem başına denetim serviste.
-  'GET /sevkiyat/tum-isler': { biri: ['sevkiyat.oku', 'sevkiyat.is-yaz', 'uretim-emirleri.yaz', 'uretim-emirleri.fason', 'satin-alma.yaz'] },
-  'POST /sevkiyat/tum-isler/serbest-birak': { biri: ['sevkiyat.is-yaz', 'uretim-emirleri.yaz', 'uretim-emirleri.fason', 'satin-alma.yaz'] },
+  'GET /sevkiyat/tum-isler': { biri: ['sevkiyat.oku', 'sevkiyat.is-yaz', 'uretim-emirleri.duzenle', 'uretim-emirleri.fason', 'satin-alma.yaz'] },
+  'POST /sevkiyat/tum-isler/serbest-birak': { biri: ['sevkiyat.is-yaz', 'uretim-emirleri.duzenle', 'uretim-emirleri.fason', 'satin-alma.yaz'] },
   'POST /sevkiyat/tum-isler/elle': 'sevkiyat.is-yaz',
   'POST /sevkiyat/kalemler/:id/tasima': 'sevkiyat.is-yaz',
   'POST /sevkiyat/isler/:id/tetikle': 'sevkiyat.is-yaz',

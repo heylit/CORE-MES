@@ -7,11 +7,11 @@ const acabilir = (islemler: string[]) => emirAcabilir(yetkiHesapla(yetkiKur(isle
 describe('Üretim Emirleri "Yeni üretim emri" düğmesi kimde (3003 a)', () => {
   it('Reçete ve Rota okuyan ve iki açma işleminden birine sahip olan açar', () => {
     expect(acabilir(['sayfa.recete-rota', 'rota.emre-kopyala'])).toBe(true);
-    expect(acabilir(['recete-rota.oku', 'uretim-emirleri.yaz'])).toBe(true);
+    expect(acabilir(['recete-rota.oku', 'uretim-emirleri.rotasiz-ac'])).toBe(true);
   });
 
   it('açma işlemi olsa da Reçete ve Rota okuyamayan açamaz', () => {
-    expect(acabilir(['sayfa.uretim-emirleri', 'rota.emre-kopyala', 'uretim-emirleri.yaz'])).toBe(false);
+    expect(acabilir(['sayfa.uretim-emirleri', 'rota.emre-kopyala', 'uretim-emirleri.rotasiz-ac'])).toBe(false);
   });
 
   it('okuyup açma işlemi olmayan açamaz', () => {

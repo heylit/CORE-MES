@@ -386,9 +386,9 @@ export function bolmeIhlali(kayit: { kaynak: string; adet: string | null }, parc
 // Kalemi sahibi modülün yazma işlemi ya da sevkiyat.is-yaz serbest bırakır (941 c). Uç bu listeden biriyle açılır, kalem başına
 // sahibin işlemi ayrıca aranır.
 export const KALEM_SAHIBI: Record<KalemKaynagi, Islem> = {
-  urun: 'uretim-emirleri.yaz', fason: 'uretim-emirleri.fason', 'fason-donus': 'uretim-emirleri.fason', alim: 'satin-alma.yaz', elle: 'sevkiyat.is-yaz',
+  urun: 'uretim-emirleri.duzenle', fason: 'uretim-emirleri.fason', 'fason-donus': 'uretim-emirleri.fason', alim: 'satin-alma.yaz', elle: 'sevkiyat.is-yaz',
 };
-export const SERBEST_BIRAKMA_ISLEMLERI = ['sevkiyat.is-yaz', 'uretim-emirleri.yaz', 'uretim-emirleri.fason', 'satin-alma.yaz'] as const satisfies readonly Islem[];
+export const SERBEST_BIRAKMA_ISLEMLERI = ['sevkiyat.is-yaz', 'uretim-emirleri.duzenle', 'uretim-emirleri.fason', 'satin-alma.yaz'] as const satisfies readonly Islem[];
 // Erken çıkışı yalnız sevkiyat sorumlusu ya da yönetici zorlar (956 b, 963 a): planı onaylayan işlem.
 export const ERKEN_CIKIS_ISLEMI = 'sevkiyat.onayla' satisfies Islem;
 export const KAYNAK_YONU: Record<Exclude<KalemKaynagi, 'elle'>, KalemYonu> = { urun: 'gidis', fason: 'gidis', 'fason-donus': 'gelis', alim: 'gelis' };

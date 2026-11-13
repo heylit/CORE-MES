@@ -610,7 +610,7 @@ export const uclar = [
   uc({
     yontem: 'POST',
     yol: '/rota/emirler/:emirId/is-emirleri/:isEmriId/sartnameler',
-    yetki: { biri: ['uretim-emirleri.yaz', 'plan.canliya-al'] },
+    yetki: { biri: ['uretim-emirleri.adim-yaz', 'plan.canliya-al'] },
     tekrarKorumali: true,
     parametre: ekAdimSartnameParametresi,
     govde: ekAdimSartnameleriGovdesi,
