@@ -1,10 +1,13 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import {
-  adetDegistiMi, alarmTekrarTonu, birikimliSayac, cizelgeParcalari, nedensizDuruslar, sayimKarsilastir, terminAsimi, alarmKimligi, alarmOku, alarmSatiri, ambarOku, ASGARI_PENCERE_MS, ATLAMA_ESIGI, durusOku, gonderimOzeti, isEmriParametreleri,
-  kapanisParametreleri, kaliteOku, listedekiKodlar, okumaPenceresi, ORTUSME_MS, pencereAtlanmaliMi, redOku, smartesAkisDurumu, smartesMakineleri,
-  sonucBilinmiyorMu, tanimEylemi, tanimKoduUygunMu, bugunDilimleri, DURUM_KODLARI, ilerlemeOku, ISTEGE_BAGLI_METOTLAR, makineBilgisiOku, makineDurumu,
-  turSirasi, yasakMetotMu, MAKINE_BILGI_METODU, ILERLEME_METODU,
+  adetDegistiMi, alarmTekrarTonu, birikimliSayac, cizelgeParcalari, nedensizDuruslar, sayimKarsilastir, terminAsimi, alarmKimligi, alarmOku, alarmSatiri,
+  ambarOku, ASGARI_PENCERE_MS, ATLAMA_ESIGI, durusOku, gonderimOzeti, isEmriParametreleri, kapanisParametreleri, kaliteOku, listedekiKodlar, okumaPenceresi,
+  ORTUSME_MS, pencereAtlanmaliMi, redOku, smartesAkisDurumu, smartesMakineleri, sonucBilinmiyorMu, tanimEylemi, tanimKoduUygunMu, bugunDilimleri,
+  DURUM_KODLARI, ilerlemeOku, ISTEGE_BAGLI_METOTLAR, makineBilgisiOku, makineDurumu, turSirasi, yasakMetotMu, MAKINE_BILGI_METODU, ILERLEME_METODU,
+  adBenzerligi, adDurumu, adNormali, BENZERLIK_ESIGI, kodOnerileri, LISTE_METOTLARI, LISTE_TURLERI, listeKaydiOku, listeKayitlari, listeOkunmaliMi,
+  listeParametreleri, nedenOnerisi, cevrimOku, cevrimSaniyesi, gelenKalemleri, hamAlanlari, HESAP_METOTLARI, HESAP_TURLERI, hesapOkunmaliMi,
+  hesapParametreleri, oeeOku, oeeYuzdeleri, tanimliAnahtari, tanimliSaniyeler, adetOnayFarklari, onayaGirerMi,
 } from './kurallar.ts';
 import type { GidecekIsEmri } from './kurallar.ts';
 
@@ -257,5 +260,164 @@ describe('Makine bulguları kuralları (3192 D1)', () => {
       { zaman: t('08:10'), sayac: 2, sayacToplam: null }, { zaman: t('08:20'), sayac: 6, sayacToplam: null },
     ], saatler), [8, null, 12]);
     assert.deepEqual(birikimliSayac([{ zaman: t('06:10'), sayac: 1, sayacToplam: 100 }, { zaman: t('06:20'), sayac: 0, sayacToplam: 104 }], saatler), [4, null, null]);
+  });
+});
+
+describe('SmartES listeleri ve eşleme önerisi (SME-30, SME-31)', () => {
+  test('liste satırı: kodlu türde kod, fire ve duruşta kimlik ya da ad anahtardır; kodsuz ve adsız satır atlanır, yinelenen anahtar bir kez alınır', () => {
+    assert.equal(listeKaydiOku('istasyon', { ID: '1', CODE: 'ORN-T1', NAME: 'ORN torna', ISPASSIVE: 'true' })?.anahtar, 'kod:ORN-T1');
+    assert.equal(listeKaydiOku('istasyon', { ID: '1', NAME: 'kodsuz' }), null);
+    assert.deepEqual(
+      (({ anahtar, kod, ad, pasif }) => ({ anahtar, kod, ad, pasif }))(listeKaydiOku('makine', { ID: '5', KOD: 'ORN-M1', AD: 'ORN makine' })!),
+      { anahtar: 'kod:ORN-M1', kod: 'ORN-M1', ad: 'ORN makine', pasif: null });
+    const fire = listeKaydiOku('fire', { ID: '7', NAME: 'ORN çapak', GROUP_INFORMATION: 'ORN grup', ISOPERATOR_WELDED: 'true', ISPASSIVE: 'false' });
+    assert.deepEqual([fire?.anahtar, fire?.grup, fire?.operatorKaynakli, fire?.pasif, fire?.kod], ['id:7', 'ORN grup', true, false, null]);
+    assert.equal(listeKaydiOku('durus', { NAME: 'ORN arıza' })?.anahtar, 'ad:ORN arıza');
+    assert.equal(listeKaydiOku('durus', { ID: '3' }), null);
+    const r = listeKayitlari('operasyon', [{ ID: '1', CODE: 'ORN-OP' }, { ID: '2', CODE: 'ORN-OP' }, { ID: '3' }]);
+    assert.deepEqual([r.kayitlar.length, r.kayitlar[0]?.smartesId, r.atlanan], [1, 1, 1]);
+    for (const t of LISTE_TURLERI) assert.equal(yasakMetotMu(LISTE_METOTLARI[t]), false, t);
+    assert.deepEqual(listeParametreleri('fire'), []);
+    assert.deepEqual(listeParametreleri('istasyon'), [['WorkstationCode', ''], ['WorkstationName', '']]);
+  });
+
+  test('liste günde bir okunur; hiç okunmamış hemen, hatalı bir saat sonra yeniden denenir', () => {
+    const simdi = new Date('2026-11-13T12:00:00Z');
+    const once = (dk: number) => new Date(simdi.getTime() - dk * 60_000);
+    assert.equal(listeOkunmaliMi(null, simdi), true);
+    assert.equal(listeOkunmaliMi({ sonBasarili: once(60), sonDeneme: once(60), sonSonuc: 'tamam' }, simdi), false);
+    assert.equal(listeOkunmaliMi({ sonBasarili: once(24 * 60), sonDeneme: once(24 * 60), sonSonuc: 'tamam' }, simdi), true);
+    assert.equal(listeOkunmaliMi({ sonBasarili: once(10 * 60), sonDeneme: once(30), sonSonuc: 'hata' }, simdi), false);
+    assert.equal(listeOkunmaliMi({ sonBasarili: null, sonDeneme: once(61), sonSonuc: 'hata' }, simdi), true);
+  });
+
+  test('ad benzerliği: harf büyüklüğü, Türkçe harf, noktalama ve kelime sırası sayılmaz; kısa ada benzerlik önerisi yok', () => {
+    assert.equal(adNormali('  ÖLÇÜ-Dışı (ISIL) '), 'olcu disi isil');
+    assert.equal(adBenzerligi('Takım kırılması', 'TAKIM KIRILMASI'), 1);
+    assert.equal(adBenzerligi('arıza mekanik', 'Mekanik Arıza'), 1);
+    assert.ok(adBenzerligi('Mekanik arıza', 'Mekanik arızası') >= BENZERLIK_ESIGI);
+    assert.ok(adBenzerligi('Mekanik arıza', 'Elektrik arızası') < BENZERLIK_ESIGI);
+    assert.equal(nedenOnerisi('Ayar', [{ id: 1, ad: 'Ayak' }]), null);
+    assert.equal(adBenzerligi('', 'x'), 0);
+  });
+
+  test('kod önerisi: aynı kod, aynı ad, benzer ad sırasıyla; bir kod tek kayda, belirsiz olan kimseye önerilmez', () => {
+    const kayitlar = [
+      { id: 1, kod: 'T-01', ad: 'Birinci torna' }, { id: 2, kod: 'X-02', ad: 'Taşlama hücresi' }, { id: 3, kod: 'X-03', ad: 'Freze merkezi' },
+      { id: 4, kod: 'X-04', ad: 'Kaynak hattı' }, { id: 5, kod: 'X-05', ad: 'Kaynak hattı' }, { id: 6, kod: 'X-06', ad: 'Karşılıksız' },
+    ];
+    const liste = [
+      { kod: 't-01', ad: 'Başka' }, { kod: 'S2', ad: 'TAŞLAMA HÜCRESİ' }, { kod: 'S3', ad: 'Freze merkezleri' }, { kod: 'S4', ad: 'Kaynak hattı' },
+      { kod: 'S9', ad: null },
+    ];
+    const o = kodOnerileri(kayitlar, liste);
+    assert.deepEqual(o.get(1), { kod: 't-01', ad: 'Başka', gerekce: 'ayni-kod' });
+    assert.deepEqual(o.get(2), { kod: 'S2', ad: 'TAŞLAMA HÜCRESİ', gerekce: 'ayni-ad' });
+    assert.equal(o.get(3)?.gerekce, 'benzer-ad');
+    // İki kayıt aynı SmartES kodunu isterse ikisine de önerilmez.
+    assert.equal(o.has(4), false);
+    assert.equal(o.has(5), false);
+    assert.equal(o.has(6), false);
+    assert.equal(kodOnerileri(kayitlar, []).size, 0);
+    // Aynı adı taşıyan iki SmartES kaydı varsa seçim kişiye kalır.
+    assert.equal(kodOnerileri([{ id: 1, kod: 'A', ad: 'Torna' }], [{ kod: 'K1', ad: 'Torna' }, { kod: 'K2', ad: 'torna' }]).size, 0);
+  });
+
+  test('neden önerisi: adı aynı olan tek neden, yoksa tek başına en benzeyen; eşitlikte öneri yok', () => {
+    const nedenler = [{ id: 1, ad: 'Ölçü dışı' }, { id: 2, ad: 'Yüzey hatası' }, { id: 3, ad: 'Malzeme hatası' }];
+    assert.equal(nedenOnerisi('OLCU DISI', nedenler)?.id, 1);
+    assert.equal(nedenOnerisi('Yüzey hatasi.', nedenler)?.id, 2);
+    assert.equal(nedenOnerisi('Yüzeyde hatası', nedenler)?.id, 2);
+    assert.equal(nedenOnerisi('Boya hatası', nedenler), null);
+    assert.equal(nedenOnerisi('Torna', [{ id: 1, ad: 'Torna' }, { id: 2, ad: 'torna' }]), null);
+  });
+
+  test('ad durumu: eşlenmiş ad listeden çıkınca "yok"; ilk listeden sonra gelen eşlenmemiş ad "yeni"', () => {
+    const t0 = new Date('2026-11-01T00:00:00Z');
+    const t1 = new Date('2026-11-02T00:00:00Z');
+    assert.equal(adDurumu({ var: true, eslendi: true, ilkGorulme: t0, ilkBasarili: t0 }), 'eslendi');
+    assert.equal(adDurumu({ var: false, eslendi: true, ilkGorulme: t0, ilkBasarili: t0 }), 'yok');
+    assert.equal(adDurumu({ var: true, eslendi: false, ilkGorulme: t0, ilkBasarili: t0 }), 'eslenmedi');
+    assert.equal(adDurumu({ var: true, eslendi: false, ilkGorulme: t1, ilkBasarili: t0 }), 'yeni');
+    assert.equal(adDurumu({ var: true, eslendi: false, ilkGorulme: null, ilkBasarili: t0 }), 'eslenmedi');
+  });
+});
+
+describe('SmartES’ten gelen bilgiler ve SmartES hesapları (SME-32, SME-33)', () => {
+  test('özet: koşulu kapalı okuma "kapalı", CORE’un okumadığı bilgi "okunmuyor"; birden çok ize dayanan satırda en eski okuma gösterilir', () => {
+    const izler = new Map<string, string | null>([['liste:fire', '2026-11-12T10:00:00+03:00'], ['liste:durus', '2026-11-12T08:00:00+03:00'], ['red', null]]);
+    const k = gelenKalemleri({ baglantiAcik: true, kaliteAmbarAcik: false, izler, sayilar: new Map([['adlar', 4]]) });
+    const al = (a: string) => k.find((x) => x.anahtar === a)!;
+    assert.deepEqual([al('adlar').durum, al('adlar').sonOkuma, al('adlar').sayi], ['okunuyor', '2026-11-12T08:00:00+03:00', 4]);
+    assert.deepEqual([al('fire').durum, al('fire').sonOkuma, al('fire').sayi], ['kapali', null, 0]);
+    assert.deepEqual([al('makine').durum, al('makine').sayi, al('makine').yol], ['okunmuyor', null, null]);
+    assert.equal(al('oee').yol, '/smartes/hesaplar');
+  });
+
+  test('ham alanlar ad sırasıyla; boş değer null, metin olmayan değer JSON yazımıyla', () => {
+    assert.deepEqual(hamAlanlari({ B: '', A: 'x', C: 3, D: null }), [
+      { ad: 'A', deger: 'x' }, { ad: 'B', deger: null }, { ad: 'C', deger: '3' }, { ad: 'D', deger: null },
+    ]);
+  });
+
+  test('OEE satırı: vardiya günü yazılan gündür; vardiya, gün ya da makine yoksa satır atlanır; ondalık virgülle de gelir', () => {
+    const k = oeeOku({ SHIFT_DATE: '2026-11-12T00:00:00+03:00', SHIFT: '2', MACHINE_CODE: 'ORN-M1', AVAILABILITY: '0,85', PERFORMANCE: '0.9', QUALITY: 'x' });
+    assert.deepEqual([k?.vardiyaTarihi, k?.vardiya, k?.makineKodu, k?.kullanilabilirlik, k?.performans, k?.kalite, k?.oee], ['2026-11-12', 2, 'ORN-M1', 0.85, 0.9, null, null]);
+    assert.equal(oeeOku({ SHIFT_DATE: '2026-11-12', SHIFT: '1', MACHINE_CODE: 'ORN-M1' })?.vardiyaTarihi, '2026-11-12');
+    assert.equal(oeeOku({ SHIFT_DATE: '12.11.2026', SHIFT: '1', MACHINE_CODE: 'ORN-M1' }), null);
+    assert.equal(oeeOku({ SHIFT_DATE: '2026-11-12', SHIFT: '0', MACHINE_CODE: 'ORN-M1' }), null);
+    assert.equal(oeeOku({ SHIFT_DATE: '2026-11-12', SHIFT: '1' }), null);
+  });
+
+  test('OEE oranı her zaman yüzde çıkar: bütün oranlar 1’i geçmiyorsa kesirdir; hepsi sıfırsa ya da biri 1’den büyükse olduğu gibi; veri yoksa null', () => {
+    assert.deepEqual(oeeYuzdeleri({ kullanilabilirlik: 0.85, performans: 0.9, kalite: 1, oee: 0.765 }), { kullanilabilirlik: 85, performans: 90, kalite: 100, oee: 76.5 });
+    assert.deepEqual(oeeYuzdeleri({ kullanilabilirlik: 85, performans: 90.5, kalite: 100, oee: 0.9 }), { kullanilabilirlik: 85, performans: 90.5, kalite: 100, oee: 0.9 });
+    assert.deepEqual(oeeYuzdeleri({ kullanilabilirlik: 0, performans: 0, kalite: null, oee: 0 }), { kullanilabilirlik: 0, performans: 0, kalite: null, oee: 0 });
+    assert.deepEqual(oeeYuzdeleri({ kullanilabilirlik: null, performans: null, kalite: null, oee: null }), { kullanilabilirlik: null, performans: null, kalite: null, oee: null });
+  });
+
+  test('çevrim süresi yalnız "ss:dd:sn" biçiminden saniyeye çevrilir; düz sayının birimi bilinmediği için çevrilmez', () => {
+    assert.equal(cevrimSaniyesi('00:01:30'), 90);
+    assert.equal(cevrimSaniyesi('1:00:00,5'), 3600.5);
+    for (const m of ['45', '1,5', '01:30', '', 'yok', null]) assert.equal(cevrimSaniyesi(m), null, String(m));
+    const k = cevrimOku({ STOCK_INFORMATION: 'ORN-STK', OPERATION_INFORMATION: '10', MACHINE_INFORMATION: 'ORN-M1', ESTIMATED_START_TIME: '00:01:30', TOTAL_PART_COUNT: '120', DAYS_AGO: '7' });
+    assert.deepEqual([k?.stokNo, k?.operasyonKodu, k?.makineKodu, k?.istasyonKodu, k?.cevrimMetni, k?.parcaSayisi, k?.gunSayisi], ['ORN-STK', '10', 'ORN-M1', null, '00:01:30', 120, 7]);
+    assert.equal(cevrimOku({ ESTIMATED_START_TIME: '00:01:30' }), null);
+  });
+
+  test('tanımlı birim süre plandaki iş emirlerinden: dakika saniyeye çevrilir; süresiz iş sayılmaz; aynı stok ve operasyonda farklı süre varsa null', () => {
+    const t = tanimliSaniyeler([
+      { stokNo: 'ORN-A', opNo: 10, birimSureDk: '1.5' }, { stokNo: 'ORN-A', opNo: 10, birimSureDk: '1.50' }, { stokNo: 'ORN-A', opNo: 20, birimSureDk: null },
+      { stokNo: 'ORN-B', opNo: 10, birimSureDk: '2' }, { stokNo: 'ORN-B', opNo: 10, birimSureDk: '3' },
+    ]);
+    assert.equal(t.get(tanimliAnahtari('ORN-A', '10')), 90);
+    assert.equal(t.has(tanimliAnahtari('ORN-A', '20')), false);
+    assert.equal(t.get(tanimliAnahtari('ORN-B', '10')), null);
+  });
+
+  test('hesap okuması: belgedeki parametreler, yalnız okuma metodu, saatte bir', () => {
+    const simdi = new Date('2026-11-13T08:00:00Z');
+    assert.deepEqual(hesapParametreleri('oee', simdi), [['StartDatetime', new Date('2026-11-06T08:00:00Z')], ['EndDatetime', simdi], ['MachineIDs', '']]);
+    assert.deepEqual(hesapParametreleri('cevrim', simdi).map((p) => p[0]), ['StockNo', 'OperationCode', 'MachineCode', 'StartDatetime', 'EndDatetime', 'WorkStationCode']);
+    for (const t of HESAP_TURLERI) assert.equal(yasakMetotMu(HESAP_METOTLARI[t]), false, t);
+    assert.equal(hesapOkunmaliMi(null, simdi), true);
+    assert.equal(hesapOkunmaliMi({ sonDeneme: new Date(simdi.getTime() - 59 * DK) }, simdi), false);
+    assert.equal(hesapOkunmaliMi({ sonDeneme: new Date(simdi.getTime() - 60 * DK) }, simdi), true);
+  });
+});
+
+describe('Adet onayı kuralları (3173 b, 3193 a)', () => {
+  test('fark kuyruğa girmiş toplamın (reddedilen dahil) üstündendir; ilk satır düzeltme değildir, gelmeyen adet fark üretmez', () => {
+    assert.deepEqual(adetOnayFarklari({ saglam: 10, red: null }, []), [{ tur: 'saglam', adet: 10, duzeltme: false }]);
+    assert.deepEqual(adetOnayFarklari({ saglam: 10, red: 2 }, [{ tur: 'saglam', toplam: 10, satir: 1 }]), [{ tur: 'red', adet: 2, duzeltme: false }]);
+    assert.deepEqual(adetOnayFarklari({ saglam: 7, red: null }, [{ tur: 'saglam', toplam: 10, satir: 2 }]), [{ tur: 'saglam', adet: -3, duzeltme: true }]);
+    assert.deepEqual(adetOnayFarklari({ saglam: null, red: null }, [{ tur: 'saglam', toplam: 10, satir: 1 }]), []);
+    assert.deepEqual(adetOnayFarklari({ saglam: 0, red: null }, []), []);
+  });
+  test('istasyon SmartES\'e geçmeden başlamış ya da başlangıcı gelmeyen satır onaya girmez', () => {
+    const gecis = new Date('2026-11-13T10:00:00Z');
+    assert.equal(onayaGirerMi(new Date('2026-11-13T09:59:59Z'), gecis), false);
+    assert.equal(onayaGirerMi(new Date('2026-11-13T10:00:00Z'), gecis), true);
+    assert.equal(onayaGirerMi(null, gecis), false);
   });
 });

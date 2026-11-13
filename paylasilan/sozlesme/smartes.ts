@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { listeCevapSemasi, sayfaSorguAlanlari } from '../liste.ts';
 import { surumSemasi } from '../surum.ts';
-import { zamanSemasi } from '../zaman.ts';
+import { tarihSemasi, zamanSemasi } from '../zaman.ts';
 
 // SmartES bağlantısı (kart #778): kod eşlemesi, okunan makine gerçekleşenleri ve iş emri giden kutusu.
 export const SMARTES_ESLEME_TURLERI = ['istasyon', 'makine', 'operasyon-tipi', 'durus-nedeni'] as const;
@@ -34,6 +34,9 @@ export const durumCevabi = z.object({
   }),
 });
 
+export const SMARTES_ONERI_GEREKCELERI = ['ayni-kod', 'ayni-ad', 'benzer-ad'] as const;
+export type SmartesOneriGerekcesi = (typeof SMARTES_ONERI_GEREKCELERI)[number];
+
 export const eslemeSorgusu = z.object({ tur: z.enum(SMARTES_ESLEME_TURLERI) });
 
 export const eslemelerCevabi = z.object({
@@ -46,8 +49,20 @@ export const eslemelerCevabi = z.object({
     smartesKod: z.string().nullable(),
     // Eşleme yoksa null; düzenleme ve kaldırma bu sürümle gider.
     surum: surumSemasi.nullable(),
+    // Eşlenmemiş kayda SmartES listesinden bulunan aday: aynı kod, aynı ad ya da benzer ad. Kişi onaylamadan eşleme yazılmaz.
+    oneri: z.object({ kod: z.string(), ad: z.string().nullable(), gerekce: z.enum(SMARTES_ONERI_GEREKCELERI) }).nullable(),
   })),
+  // SmartES'in kendi listesi (istasyon, makine, operasyon); kod buradan seçilir. Hiç okunamadıysa null: kod elle girilir.
+  smartesListesi: z.array(z.object({ kod: z.string(), ad: z.string().nullable() })).nullable(),
 });
+
+// Önerilerin onayı (tek ya da toplu): yalnız ekranda görülen öneriler gider. Sunucu öneriyi yeniden hesaplar; arada eşlenmiş,
+// kodu başka kayda verilmiş ya da önerisi değişmiş satır yazılmaz, sayılır.
+export const onerileriOnaylaGovdesi = z.object({
+  tur: z.enum(SMARTES_ESLEME_TURLERI),
+  satirlar: z.array(z.object({ tmiId: z.number().int().positive(), smartesKod: z.string().min(1).max(50) })).min(1).max(500),
+});
+export const onerileriOnaylaCevabi = z.object({ yazilan: z.number().int(), atlanan: z.number().int() });
 
 // SmartES kodu baştan ve sondan boşluksuz, en çok 50 karakter; boş kod "kaldır" ucuyla gider.
 const smartesKodu = z.string().trim().min(1, 'SmartES kodu zorunlu.').max(50, 'SmartES kodu en çok 50 karakter.');
@@ -261,3 +276,171 @@ export const makineBulgulariCevabi = z.object({
   }).nullable(),
 });
 export type MakineBulgulariCevabi = z.output<typeof makineBulgulariCevabi>;
+// Fire ve duruş adı eşlemesi (3174): liste SmartES'in tanım listesinden gelir (RejectsList, DownTimeList); her ad bir CORE nedenine bağlanır.
+// "yok": eşlenmiş ad son okumada SmartES listesinde bulunmadı (silinmiş ya da adı değişmiş). "yeni": ilk listeden sonra gelmiş, eşlenmemiş ad.
+export const SMARTES_GELEN_AD_TURLERI = ['fire', 'durus'] as const;
+export type SmartesGelenAdTuru = (typeof SMARTES_GELEN_AD_TURLERI)[number];
+export const SMARTES_AD_DURUMLARI = ['eslendi', 'eslenmedi', 'yok', 'yeni'] as const;
+// Fire eşlemesinde: hatalı kaydı (kalite kararına) ya da doğrudan hurda (stoktan fire çıkışı).
+export const SMARTES_FIRE_SONUCLARI = ['hatali', 'hurda'] as const;
+export type SmartesFireSonucu = (typeof SMARTES_FIRE_SONUCLARI)[number];
+
+const nedenOzeti = z.object({ id: z.number().int(), kod: z.string(), ad: z.string() });
+// SmartES kimliği ('id:<n>') ya da kimlik gelmediyse ad ('ad:<ad>').
+const adAnahtari = z.string().min(4).max(210);
+
+export const gelenAdSorgusu = z.object({ tur: z.enum(SMARTES_GELEN_AD_TURLERI) });
+
+export const gelenAdlarCevabi = z.object({
+  tur: z.enum(SMARTES_GELEN_AD_TURLERI),
+  // SmartES listesinin son başarılı okuması; hiç okunmadıysa null.
+  sonOkuma: zamanSemasi.nullable(),
+  // Son deneme hata verdiyse iletisi; liste eski haliyle gösterilir.
+  sonHata: z.string().nullable(),
+  // Okunan kayıtların üretim ve duruş kaydına işlenmesi bağlı mı. Bağlı değilken eşleme yalnız saklanır, kayıt işlenmez.
+  islemeBagli: z.boolean(),
+  satirlar: z.array(z.object({
+    anahtar: adAnahtari,
+    smartesId: z.string().nullable(),
+    ad: z.string(),
+    grup: z.string().nullable(),
+    operatorKaynakli: z.boolean().nullable(),
+    // SmartES fire tanımında "yeniden işlenir" alanı yoktur; ileride gelirse dolar.
+    rework: z.boolean().nullable(),
+    durum: z.enum(SMARTES_AD_DURUMLARI),
+    neden: nedenOzeti.nullable(),
+    sonuc: z.enum(SMARTES_FIRE_SONUCLARI).nullable(),
+    // Bu adla okunmuş, adı eşlenmediği için bekleyen kayıt sayısı.
+    bekleyen: z.number().int(),
+    // Eşlenmemiş ada adı aynı ya da çok benzeyen CORE nedeni; kişi onaylamadan eşleme yazılmaz.
+    oneri: nedenOzeti.nullable(),
+    ilkBekleyen: zamanSemasi.nullable(),
+    surum: surumSemasi.nullable(),
+  })),
+  nedenler: z.array(nedenOzeti),
+});
+
+export const gelenAdEsleGovdesi = z.object({
+  tur: z.enum(SMARTES_GELEN_AD_TURLERI),
+  anahtar: adAnahtari,
+  nedenId: z.number().int().positive(),
+  // Firede zorunlu, duruşta null.
+  sonuc: z.enum(SMARTES_FIRE_SONUCLARI).nullable(),
+  // Yeni eşlemede null; var olanı değiştirirken okunan sürüm.
+  surum: surumSemasi.nullable(),
+});
+export const gelenAdKaldirGovdesi = z.object({ tur: z.enum(SMARTES_GELEN_AD_TURLERI), anahtar: adAnahtari, surum: surumSemasi });
+export const gelenAdOnerileriOnaylaGovdesi = z.object({
+  tur: z.enum(SMARTES_GELEN_AD_TURLERI),
+  satirlar: z.array(z.object({ anahtar: adAnahtari, nedenId: z.number().int().positive() })).min(1).max(500),
+});
+
+// "Şimdi oku": SmartES'in tanım listeleri (istasyon, makine, operasyon, fire, duruş) yeniden okunur. Okunamayan liste eski haliyle kalır.
+export const SMARTES_LISTE_TURLERI = ['istasyon', 'makine', 'operasyon', 'fire', 'durus'] as const;
+export const listeOkuCevabi = z.object({ okunan: z.array(z.enum(SMARTES_LISTE_TURLERI)), hatali: z.array(z.enum(SMARTES_LISTE_TURLERI)) });
+export type ListeOkuCevabi = z.output<typeof listeOkuCevabi>;
+
+// SmartES'ten gelen her şeyin özeti: hangi bilgi okunuyor, en son ne zaman, kaç kayıt, CORE'da nerede kullanılıyor.
+// okunuyor: düzenli okunur. kapali: bağlantı ya da o okumanın anahtarı kapalı. okunmuyor: CORE bu bilgiyi henüz okumuyor.
+export const SMARTES_GELEN_DURUMLARI = ['okunuyor', 'kapali', 'okunmuyor'] as const;
+export const gelenlerCevabi = z.object({
+  kalemler: z.array(z.object({
+    anahtar: z.string(),
+    baslik: z.string(),
+    durum: z.enum(SMARTES_GELEN_DURUMLARI),
+    sonOkuma: zamanSemasi.nullable(),
+    sayi: z.number().int().nullable(),
+    kullanim: z.string(),
+    yol: z.string().nullable(),
+  })),
+});
+
+const gelenSatir = { smartesId: z.number().int(), isEmriNo: z.string().nullable(), stokNo: z.string().nullable(), zaman: zamanSemasi.nullable() };
+export const fireHareketleriCevabi = listeCevapSemasi(z.object({
+  ...gelenSatir, istasyonKodu: z.string().nullable(), makineKodu: z.string().nullable(), adet: z.number().int().nullable(), neden: z.string().nullable(),
+}));
+export const ambarHareketleriCevabi = listeCevapSemasi(z.object({
+  ...gelenSatir, ambarKodu: z.string().nullable(), hareketTuru: z.string().nullable(), miktar: z.number().nullable(),
+}));
+export const kaliteOlcumleriCevabi = listeCevapSemasi(z.object({
+  ...gelenSatir, istasyonKodu: z.string().nullable(), makineKodu: z.string().nullable(), olcumAdi: z.string().nullable(),
+  olcumDegeri: z.string().nullable(), sonuc: z.string().nullable(),
+}));
+
+// Satırın SmartES'ten geldiği haliyle bütün alanları (saklanan ham kayıt).
+export const SMARTES_HAM_TURLERI = ['uretim', 'durus', 'alarm', 'fire', 'ambar', 'kalite'] as const;
+export type SmartesHamTuru = (typeof SMARTES_HAM_TURLERI)[number];
+export const hamKayitParametresi = z.object({ tur: z.enum(SMARTES_HAM_TURLERI), id: z.coerce.number<number>().int().positive() });
+export const hamKayitCevabi = z.object({ alanlar: z.array(z.object({ ad: z.string(), deger: z.string().nullable() })) });
+
+// SmartES'in kendi hesapladığı değerler; CORE'un hesabının yerine geçmez, yanında gösterilir. Oranlar yüzde (0-100).
+export const hesaplarCevabi = z.object({
+  oee: z.array(z.object({
+    vardiyaTarihi: tarihSemasi, vardiya: z.number().int(), makineKodu: z.string(),
+    kullanilabilirlik: z.number().nullable(), performans: z.number().nullable(), kalite: z.number().nullable(), oee: z.number().nullable(),
+    // Aynı makine ve günün CORE hesabı; hesaplanamadıysa (veri eksik, makine eşlenmemiş, OEE'yi görme yetkisi yok) null.
+    coreOee: z.number().nullable(),
+  })),
+  cevrim: z.array(z.object({
+    stokNo: z.string().nullable(), operasyonKodu: z.string().nullable(), makineKodu: z.string().nullable(),
+    // SmartES'in ölçtüğü çevrim, geldiği haliyle; birimi belli biçimdeyse saniyesi (değilse null). CORE'da tanımlı birim süre (saniye).
+    gercekMetni: z.string().nullable(), gercekSaniye: z.number().nullable(), tanimliSaniye: z.number().nullable(),
+    parcaSayisi: z.number().int().nullable(), gunSayisi: z.number().int().nullable(),
+  })),
+});
+export type HesaplarCevabi = z.output<typeof hesaplarCevabi>;
+
+export type GelenlerCevabi = z.output<typeof gelenlerCevabi>;
+export type FireHareketleriCevabi = z.output<typeof fireHareketleriCevabi>;
+export type AmbarHareketleriCevabi = z.output<typeof ambarHareketleriCevabi>;
+export type KaliteOlcumleriCevabi = z.output<typeof kaliteOlcumleriCevabi>;
+export type HamKayitCevabi = z.output<typeof hamKayitCevabi>;
+
+export type OnerileriOnaylaGovdesi = z.input<typeof onerileriOnaylaGovdesi>;
+export type OnerileriOnaylaCevabi = z.output<typeof onerileriOnaylaCevabi>;
+export type GelenAdlarCevabi = z.output<typeof gelenAdlarCevabi>;
+export type GelenAdEsleGovdesi = z.input<typeof gelenAdEsleGovdesi>;
+export type GelenAdKaldirGovdesi = z.input<typeof gelenAdKaldirGovdesi>;
+export type GelenAdOnerileriOnaylaGovdesi = z.input<typeof gelenAdOnerileriOnaylaGovdesi>;
+
+// Adet onayı (3173 b, 3193 a; ADR 0013 eki): SmartES'ten okunan adet onaylanınca üretim emrine yazılır; red CORE'a yazmaz, SmartES'e dokunmaz.
+export const SMARTES_ADET_ONAY_DURUMLARI = ['bekliyor', 'onaylandi', 'reddedildi'] as const;
+export type SmartesAdetOnayDurumu = (typeof SMARTES_ADET_ONAY_DURUMLARI)[number];
+
+export const adetOnaySorgusu = z.object({ ...sayfaSorguAlanlari, gorunum: z.enum(['bekliyor', 'karar']).prefault('bekliyor') });
+
+export const adetOnaylariCevabi = listeCevapSemasi(z.object({
+  id: z.number().int(),
+  smartesId: z.number().int(),
+  tur: z.enum(['saglam', 'red']),
+  adet: z.number().int(),
+  // SmartES'te sonradan değişen adedin farkı.
+  duzeltme: z.boolean(),
+  durum: z.enum(SMARTES_ADET_ONAY_DURUMLARI),
+  olusma: zamanSemasi,
+  isEmriNo: z.string().nullable(),
+  // CORE iş emri eşleşmediyse null: onaylanamaz.
+  emirId: z.number().int().nullable(),
+  emirNo: z.string().nullable(),
+  opNo: z.number().int().nullable(),
+  // SmartES satırının şimdiki operatör sağlamı ve makine sayacı: tutmuyorsa onaylayan görsün diye. Gelmediyse null.
+  smartesSaglam: z.number().int().nullable(),
+  makineSaglam: z.number().int().nullable(),
+  istasyonKodu: z.string().nullable(),
+  makineKodu: z.string().nullable(),
+  baslangic: zamanSemasi.nullable(),
+  kararVeren: z.string().nullable(),
+  kararZamani: zamanSemasi.nullable(),
+  redNedeni: z.string().nullable(),
+}));
+
+const onayKimlikleri = z.array(z.number().int().positive()).min(1).max(200);
+export const adetOnaylaGovdesi = z.object({ idler: onayKimlikleri });
+export const adetReddetGovdesi = z.object({ idler: onayKimlikleri, neden: z.string().trim().min(1, 'Red nedeni zorunlu.').max(500, 'Red nedeni en çok 500 karakter.') });
+// Toplu karar satır satır işlenir: işlenemeyen satır (adım çalışmıyor, emir kapalı, arada karar verilmiş) nedeniyle döner, ötekiler işlenir.
+export const adetKarariCevabi = z.object({
+  islenen: z.number().int(),
+  hatalar: z.array(z.object({ id: z.number().int(), ileti: z.string() })),
+});
+export type AdetOnaylariCevabi = z.output<typeof adetOnaylariCevabi>;
+export type AdetKarariCevabi = z.output<typeof adetKarariCevabi>;

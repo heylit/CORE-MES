@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import type {
-  AlarmlarCevabi, DuruslarCevabi, GidenCevabi, IsEmriDurumlariCevabi,
+  AlarmlarCevabi, AmbarHareketleriCevabi, DuruslarCevabi, FireHareketleriCevabi, GidenCevabi, HamKayitCevabi,
+  IsEmriDurumlariCevabi, KaliteOlcumleriCevabi,
 } from '#paylasilan/sozlesme/smartes.ts';
-import { DurumKutusu, Kart, Rozet, Tablo, type Sutun } from '../../ortak/arayuz/index.ts';
+import { Dugme, DurumKutusu, Kart, Pencere, Rozet, Tablo, type Sutun } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { GIDEN, YOK, sayiMetni, zamanMetni } from './gosterim.ts';
@@ -12,10 +13,35 @@ import './smartes.css';
 interface Sayfa<S> { satirlar: S[]; toplam: number | null; sayfa: number; sayfaBoyu: number }
 
 // Dört liste aynı biçimdedir: salt okunur, sunucu sırasıyla (en yeni üstte), sayfalı.
-function SayfaliListe<S>({ ad, yol, baslik, aciklama, sutunlar, anahtar, bos }: {
-  ad: string; yol: string; baslik: string; aciklama: string; sutunlar: readonly Sutun<S>[]; anahtar: (s: S) => number; bos: string;
+// SmartES satırı CORE'da ham haliyle saklanır; listede gösterilmeyen alanlar buradan okunur.
+function TumAlanlar({ tur, id, kapat }: { tur: string; id: number; kapat: () => void }) {
+  const ham = useQuery({ queryKey: anahtarlar.ham(tur, id), queryFn: () => api.get<HamKayitCevabi>(`/smartes/ham/${tur}/${id}`) });
+  return (
+    <Pencere acik tur="yan" kapat={kapat} baslik="SmartES’ten gelen tüm alanlar">
+      <div className="tc-smartes">
+        {ham.isPending && <DurumKutusu durum="yukleniyor" />}
+        {ham.isError && <DurumKutusu durum="hata" mesaj={hataIletisi(ham.error, 'Kayıt alınamadı')} yenile={() => { void ham.refetch(); }} />}
+        {ham.data && (
+          <dl className="tc-smartes-liste tc-sg-ham">
+            {ham.data.alanlar.map((a) => (<div key={a.ad} className="tc-sg-ham-satir"><dt>{a.ad}</dt><dd>{a.deger ?? YOK}</dd></div>))}
+          </dl>
+        )}
+      </div>
+    </Pencere>
+  );
+}
+
+function SayfaliListe<S>({ ad, yol, baslik, aciklama, sutunlar: verilen, anahtar, bos, ham = true }: {
+  ad: string; yol: string; baslik: string; aciklama: string; sutunlar: readonly Sutun<S>[]; anahtar: (s: S) => number; bos: string; ham?: boolean;
 }) {
   const [sayfa, sayfaYaz] = useState(1);
+  const [acik, acikYaz] = useState<number | null>(null);
+  const sutunlar: readonly Sutun<S>[] = ham
+    ? [...verilen, {
+      anahtar: 'tum', baslik: 'Tüm alanlar', csv: false,
+      hucre: (s) => <Dugme simge="list" aria-label="SmartES’ten gelen tüm alanları göster" onClick={() => { acikYaz(anahtar(s)); }} />,
+    }]
+    : verilen;
   const liste = useQuery({
     queryKey: anahtarlar.liste(ad, sayfa),
     queryFn: () => api.get<Sayfa<S>>(`${yol}?sayfa=${sayfa}`),
@@ -38,6 +64,7 @@ function SayfaliListe<S>({ ad, yol, baslik, aciklama, sutunlar, anahtar, bos }: 
             sayfalama={{ sayfa: liste.data.sayfa, sayfaBoyu: liste.data.sayfaBoyu, toplam: liste.data.toplam, degistir: sayfaYaz }}
           />
         )}
+        {acik !== null && <TumAlanlar tur={ad} id={acik} kapat={() => { acikYaz(null); }} />}
       </div>
     </Kart>
   );
@@ -109,6 +136,59 @@ export const Giden = () => (
   <SayfaliListe
     ad="giden" yol="/smartes/giden" baslik="İş emri gönderimi"
     aciklama="Planlı iş emirleri, istasyonu SmartES’te eşlenmişse SmartES’e gönderilir. Plandan düşen emir SmartES’te kapatılır, silinmez."
-    sutunlar={GIDEN_SUTUNLARI} anahtar={(s) => s.isEmriId} bos="Henüz gönderilen iş emri yok."
+    sutunlar={GIDEN_SUTUNLARI} anahtar={(s) => s.isEmriId} bos="Henüz gönderilen iş emri yok." ham={false}
+  />
+);
+
+type FireSatiri = FireHareketleriCevabi['satirlar'][number];
+const FIRE_SUTUNLARI: readonly Sutun<FireSatiri>[] = [
+  { anahtar: 'isEmriNo', baslik: 'İş emri', hucre: (s) => s.isEmriNo ?? YOK, mono: true },
+  { anahtar: 'yer', baslik: 'İstasyon · makine', hucre: (s) => `${s.istasyonKodu ?? YOK} · ${s.makineKodu ?? YOK}`, mono: true },
+  { anahtar: 'neden', baslik: 'Fire adı', hucre: (s) => s.neden ?? YOK },
+  { anahtar: 'adet', baslik: 'Adet', hucre: (s) => sayiMetni(s.adet), hizala: 'sag', mono: true },
+  { anahtar: 'zaman', baslik: 'Zaman', hucre: (s) => zamanMetni(s.zaman), kirilmaz: true },
+];
+
+export const FireHareketleri = () => (
+  <SayfaliListe
+    ad="fire" yol="/smartes/fire" baslik="Fire kayıtları"
+    aciklama="SmartES’te girilen fire kayıtları. Fire adının CORE’daki karşılığı Kod eşlemeleri > Fire’den verilir."
+    sutunlar={FIRE_SUTUNLARI} anahtar={(s) => s.smartesId} bos="Henüz okunan fire kaydı yok."
+  />
+);
+
+type AmbarSatiri = AmbarHareketleriCevabi['satirlar'][number];
+const AMBAR_SUTUNLARI: readonly Sutun<AmbarSatiri>[] = [
+  { anahtar: 'isEmriNo', baslik: 'İş emri', hucre: (s) => s.isEmriNo ?? YOK, mono: true },
+  { anahtar: 'stokNo', baslik: 'Stok', hucre: (s) => s.stokNo ?? YOK, mono: true },
+  { anahtar: 'ambar', baslik: 'Ambar', hucre: (s) => s.ambarKodu ?? YOK, mono: true },
+  { anahtar: 'tur', baslik: 'Hareket', hucre: (s) => s.hareketTuru ?? YOK },
+  { anahtar: 'miktar', baslik: 'Miktar', hucre: (s) => sayiMetni(s.miktar), hizala: 'sag', mono: true },
+  { anahtar: 'zaman', baslik: 'Zaman', hucre: (s) => zamanMetni(s.zaman), kirilmaz: true },
+];
+
+export const AmbarHareketleri = () => (
+  <SayfaliListe
+    ad="ambar" yol="/smartes/ambar" baslik="Ambar hareketleri"
+    aciklama="SmartES’te girilen ambar hareketleri. Yalnız gösterilir; CORE stoğuna yazılmaz."
+    sutunlar={AMBAR_SUTUNLARI} anahtar={(s) => s.smartesId} bos="Henüz okunan ambar hareketi yok."
+  />
+);
+
+type KaliteSatiri = KaliteOlcumleriCevabi['satirlar'][number];
+const KALITE_SUTUNLARI: readonly Sutun<KaliteSatiri>[] = [
+  { anahtar: 'isEmriNo', baslik: 'İş emri', hucre: (s) => s.isEmriNo ?? YOK, mono: true },
+  { anahtar: 'yer', baslik: 'İstasyon · makine', hucre: (s) => `${s.istasyonKodu ?? YOK} · ${s.makineKodu ?? YOK}`, mono: true },
+  { anahtar: 'olcum', baslik: 'Ölçüm', hucre: (s) => s.olcumAdi ?? YOK },
+  { anahtar: 'deger', baslik: 'Değer', hucre: (s) => s.olcumDegeri ?? YOK, hizala: 'sag', mono: true },
+  { anahtar: 'sonuc', baslik: 'Sonuç', hucre: (s) => s.sonuc ?? YOK },
+  { anahtar: 'zaman', baslik: 'Zaman', hucre: (s) => zamanMetni(s.zaman), kirilmaz: true },
+];
+
+export const KaliteOlcumleri = () => (
+  <SayfaliListe
+    ad="kalite" yol="/smartes/kalite" baslik="Kalite ölçümleri"
+    aciklama="SmartES’te girilen kalite kontrol ölçümleri. Yalnız gösterilir; CORE kalite kayıtlarına yazılmaz."
+    sutunlar={KALITE_SUTUNLARI} anahtar={(s) => s.smartesId} bos="Henüz okunan ölçüm yok."
   />
 );

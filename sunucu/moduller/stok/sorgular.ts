@@ -8,6 +8,7 @@ export {
   type RafSuzgeci, RAF_SIRALAMASI, rafSay, raflar, type RafAlanlari, rafAc, rafGuncelle, rafPasifYap, rafVarMi, gozKodlariniYenile, gozleriYaz,
   fazlaGozleriKapat, rafGozleriniKapat, type GozHam, rafinGozleri, type KonumMalzemesiHam, type KonumMalzemesiSuzgeci,
   KONUM_MALZEMESI_SIRALAMASI, konumMalzemesiSay, konumMalzemeleri, type LogoEsliDepoMiktari, logoEsliDepoMiktarlari,
+  type GozMalzemesiHam, gozMalzemeleri, haritaStokluMalzemeleri,
 } from './sorgular/depo/sorgular.ts';
 export {
   bakiyeKilitle, partileriBul, partininBakiyeleri, partininKarantinaBakiyeleri, partilerinRedBakiyeleri, karantinaOncesiKonumu, karantinaDisiKonumlar,

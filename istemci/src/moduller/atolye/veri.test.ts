@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { emirleriBirlestir } from './veri.ts';
+import { emirleriBirlestir, stokOkurMu } from './veri.ts';
 
 describe('haritanın emir listesi (karar 1613 a)', () => {
   it('açık ve son günlerde kapanan emirler tek listede, en yeni üstte', () => {
@@ -14,5 +14,13 @@ describe('haritanın emir listesi (karar 1613 a)', () => {
 
   it('kapanan yoksa yalnız açıklar', () => {
     expect(emirleriBirlestir([{ id: 1 }], [])).toEqual([{ id: 1 }]);
+  });
+});
+
+describe('stok okuma yetkisi (3202 Risk N1)', () => {
+  it('stok.istek okuma açmaz; stok işlemi ve sayfası açar', () => {
+    expect(stokOkurMu('stok.istek')).toBe(false);
+    expect(stokOkurMu('stok.giris')).toBe(true);
+    expect(stokOkurMu('sayfa.stok')).toBe(true);
   });
 });

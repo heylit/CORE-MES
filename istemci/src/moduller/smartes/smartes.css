@@ -72,6 +72,24 @@
   .tc-sm-ozet { flex-wrap: nowrap; overflow-x: auto; padding-bottom: var(--b-1); }
   .tc-sm-cip { flex: none; }
 }
+/* Eşleme önerileri ve fire, duruş adı eşlemesi (3174) */
+.tc-sm-not { color: var(--muted); font-size: var(--yazi-s); }
+.tc-sga-ad { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--b-2); min-width: 0; }
+.tc-sga-ad .mono { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tc-sga-ust { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--b-3); }
+.tc-sga-bant {
+  display: flex; align-items: flex-start; gap: var(--b-2); margin: 0; padding: var(--b-3) var(--b-4);
+  border: 1px solid var(--hold); border-radius: var(--yari-2); background: var(--panel2); color: var(--ink);
+}
+.tc-sga-bant .tc-simge { flex: none; color: var(--hold); }
+.tc-sga-cift { display: flex; flex-direction: column; gap: var(--b-2); margin: 0; padding: 0; list-style: none; }
+.tc-sga-cift li {
+  display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--b-3); padding: var(--b-2) 0;
+  border-bottom: 1px solid var(--edge); overflow-wrap: anywhere;
+}
+@media (max-width: 767px) {
+  .tc-sga-cift li { grid-template-columns: minmax(0, 1fr); gap: var(--b-1); }
+}
 
 /* Makine bulguları (3192): on kutu, tek liste, makine karnesi */
 .tc-mb-kutular { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: var(--b-2); }
@@ -183,3 +201,22 @@
 .tc-mbg-ince[data-tur="nedensiz"], .tc-mbg-ince[data-tur="alarm"] { stroke: var(--stop); }
 .tc-mbg-ince[data-tur="kapali"] { stroke: var(--idle); }
 .tc-mbg-ince[data-tur="alarm"] { stroke-dasharray: 2px 2px; }
+.tc-sg-sayfa { display: flex; flex-direction: column; gap: var(--b-4); }
+.tc-sg-ham { grid-template-columns: minmax(0, 1fr); }
+.tc-sg-ham-satir {
+  display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 3fr); gap: var(--b-3); padding: var(--b-1) 0;
+  border-bottom: 1px solid var(--edge);
+}
+.tc-sg-ham-satir dt { font-family: var(--font-mono); font-size: var(--yazi-s); overflow-wrap: anywhere; }
+.tc-sg-baglanti { display: inline-flex; align-items: center; min-height: var(--dokunma-yogun); }
+@media (max-width: 767px) {
+  .tc-sg-baglanti { display: flex; min-height: var(--dokunma); }
+}
+
+/* Onay bekliyor (3193 a) */
+.tc-ob-ozet { display: flex; flex-direction: column; gap: var(--pay-ince); min-width: 0; }
+.tc-ob-eylem { display: inline-flex; align-items: center; gap: var(--b-2); }
+.tc-ob-kararlar { display: flex; flex-direction: column; gap: var(--b-2); margin: 0; padding: 0; list-style: none; }
+.tc-ob-kararlar li { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2) var(--b-3); }
+.tc-ob-ozet > .tc-sm-kod { white-space: nowrap; }
+.tc-ob-ozet .tc-ob-eylem { flex-wrap: wrap; }

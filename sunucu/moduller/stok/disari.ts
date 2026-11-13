@@ -408,3 +408,6 @@ export const bolumAcildiYansit = (db: Db, olay: { salonId: number; kod: string; 
 // 2902 (karar 2903 a): istasyon açıldı (bağ sunucu/kablolama.ts'te): aktif istasyonun stok konumu hemen açılır.
 export const istasyonAcildiYansit = (db: Db, olay: { istasyonId: number; ad: string; aktif: boolean }): Promise<void> => servis.istasyonAcildiYansit(db, olay);
 export const istasyonSilinecekYansit = (db: Db, olay: { istasyonId: number }): Promise<void> => servis.istasyonSilinecekYansit(db, olay);
+// 3202 (Risk K2, K3): Fabrika Haritası'nın 3B model listesi için haritadaki bir göze bağlı aktif konumda sıfırdan büyük bakiyesi olan
+// malzemelerin kimlikleri (idler null: hepsi; verilirse yalnız onların içinden); miktar ve yer dönmez. Yetki denetlemez; bağı kablolama.ts kurar.
+export const haritaStokluMalzemeleri = (db: Db, idler: readonly number[] | null): Promise<number[]> => sorgular.haritaStokluMalzemeleri(db, idler);

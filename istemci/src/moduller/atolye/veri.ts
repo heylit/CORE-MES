@@ -8,6 +8,7 @@ import type { GozStoklariCevabi, HaritaOzetiCevabi, KonumAyrintiCevabi, KonumMal
 import type { SonOlaylarCevabi as ArkonSonOlaylarCevabi } from '#paylasilan/sozlesme/arkon.ts';
 import type { MakineDurumlariCevabi } from '#paylasilan/sozlesme/istasyonlar.ts';
 import type { Emir, EmirlerCevabi, SonOlaylarCevabi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
+import type * as StokIslemleri from '#paylasilan/islemler/stok.ts';
 import { api, ApiHatasi, OTURUM_BITTI } from '../../ortak/veri/api.ts';
 import { useOturum } from '../../ortak/veri/oturum.ts';
 import { anahtarlar } from './anahtarlar.ts';
@@ -134,20 +135,31 @@ export function useGozler(rafId: number | null, sayfa: number, bolme: number | n
 // Gözdeki stok stok modülünün okuma ucundan (sunucuda atölye stoku ithal edemez: stok atölyeye bağlı). Stoksuz göz
 // cevapta yoktur: null. Yetki yoksa istek atılmaz.
 // Stok okuma yetkisi: stok sayfası ya da bir stok işlemi (sunucu aynısını ister).
-export const stokOkurMu = (i: string): boolean => i === 'sayfa.stok' || i.startsWith('stok.');
+// Sunucunun stok OKUMA kümesi (stok/uclar.ts: sayfa.stok ve STOK_ISLEMLERI); stok.istek okuma açmaz. Liste eksik ya da fazlaysa tip denetimi kırılır.
+type StokOkumaIslemi = 'sayfa.stok' | (typeof StokIslemleri.STOK_ISLEMLERI)[number];
+export const STOK_OKUMA_ISLEMLERI = ['sayfa.stok', 'stok.giris', 'stok.cikis', 'stok.transfer', 'stok.sayim', 'stok.tanim', 'stok.geri-al', 'stok.toplama', 'stok.statu-degistir', 'stok.eksi-onayla', 'stok.skt-onayla'] as const satisfies readonly StokOkumaIslemi[];
+const STOK_OKUMA_TAM: [Exclude<StokOkumaIslemi, (typeof STOK_OKUMA_ISLEMLERI)[number]>] extends [never] ? true : never = true;
+const STOK_OKUMA = new Set<string>(STOK_OKUMA_TAM ? STOK_OKUMA_ISLEMLERI : []);
+export const stokOkurMu = (i: string): boolean => STOK_OKUMA.has(i);
 
 // 3012 a: rafın doluluğu Stok'tandır. Raf başına stoklu gözler (hücre anahtarı -> kalem sayısı); göz kimlikleri rafın göz
 // listesinden, stok konum eşleşmesi stok modülünün okuma ucundan. Stok okuma yetkisi yoksa hiç istek atılmaz: okur false,
 // raflar boş (ekran doluluk göstermez, "boş" da demez).
 export interface RafStoklari { okur: boolean; raflar: ReadonlyMap<number, ReadonlyMap<string, number>> }
 
-async function rafStoguOku(rafId: number): Promise<ReadonlyMap<string, number>> {
+// Rafın bütün gözleri (sayfa sayfa).
+export async function rafGozleriOku(rafId: number): Promise<GozlerCevabi['satirlar']> {
   const satirlar: GozlerCevabi['satirlar'] = [];
   for (let sayfa = 1; ; sayfa++) {
     const c = await api.get<GozlerCevabi>(`/atolye/raflar/${rafId}/gozler?sayfa=${sayfa}`);
     satirlar.push(...c.satirlar);
     if (c.satirlar.length < c.sayfaBoyu || satirlar.length >= c.toplam) break;
   }
+  return satirlar;
+}
+
+async function rafStoguOku(rafId: number): Promise<ReadonlyMap<string, number>> {
+  const satirlar = await rafGozleriOku(rafId);
   const kalem = new Map<number, number>();
   for (let i = 0; i < satirlar.length; i += 500) {
     const idler = satirlar.slice(i, i + 500).map((g) => g.id).join(',');

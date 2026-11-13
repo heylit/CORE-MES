@@ -14,7 +14,7 @@ import {
   araCevabi, yerlesimCevabi, fisAyrintiCevabi, fislerCevabi, kodCozCevabi, toplamaAyrintiCevabi, panelCevabi, aylikStokDegeriCevabi, stokDegeriCevabi, partiIziCevabi, rafMatrisiCevabi,
   malzemeIstegiCevabi, malzemeIstekleriCevabi, stokOzetiCevabi, haritaOzetiCevabi, gozStoklariCevabi, lotEtiketleriCevabi, zeminCevabi,
 } from '#paylasilan/sozlesme/stok.ts';
-import type { ZeminCevabi, AylikStokDegeriCevabi, HareketCevabi, MalzemeAyrintiCevabi, KodCozCevabi, EmirTamamlamaCevabi, GozStoklariCevabi, HaritaOzetiCevabi, KonumAyrintiCevabi, KonumDuzenleCevabi, RafDuzenleCevabi, MalKabulAyrintiCevabi, MalKabulCevabi, MalzemeIstegiAcGirdisi, MalzemeIstegiCevabi, MalzemeIstekleriCevabi, Raf, StokDegeriCevabi, SiparisIrsaliyeleriCevabi, SonPartilerCevabi, StokOzetiCevabi } from '#paylasilan/sozlesme/stok.ts';
+import type { ZeminCevabi, AylikStokDegeriCevabi, HareketCevabi, MalzemeAyrintiCevabi, KodCozCevabi, EmirTamamlamaCevabi, GozStoklariCevabi, GozOzetleriCevabi, HaritaOzetiCevabi, KonumAyrintiCevabi, KonumDuzenleCevabi, RafDuzenleCevabi, MalKabulAyrintiCevabi, MalKabulCevabi, MalzemeIstegiAcGirdisi, MalzemeIstegiCevabi, MalzemeIstekleriCevabi, Raf, StokDegeriCevabi, SiparisIrsaliyeleriCevabi, SonPartilerCevabi, StokOzetiCevabi } from '#paylasilan/sozlesme/stok.ts';
 import type { Kullanici } from '#paylasilan/kullanici.ts';
 import { komutIstegi } from '../../../istemci/src/moduller/recete-rota/kaynak-komutlari.ts';
 import { STOK_KOMUTLARI } from '../../../istemci/src/moduller/recete-rota/stok-komutlari.ts';
@@ -26,7 +26,7 @@ import { denetimYaz } from '../denetim/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
-import { parcaRevizyonuCozucusu, malzemePartiBakiyeleri, statuListesiCozucusu, degerGrubuToplamlari, dusukStokSayisi, partiKaliteDurumuYap, partilerinRedBakiyeleri, karantinadanBirak, karantinaDisiKonumlar, hareketPartileri, partilerinRedGirisleri, partileriBul, emrinAkisHareketleri, emrinPartileri, partiGirisZamanlari, sonPartiler, konumAdlari, malzemeIstegiAc, malzemeIstekleri, malzemeStokDurumlari, stokMiktarlari, stokYokIstekleri, lotEtiketleri, partilerinMalzemeleri } from './disari.ts';
+import { parcaRevizyonuCozucusu, malzemePartiBakiyeleri, statuListesiCozucusu, degerGrubuToplamlari, dusukStokSayisi, partiKaliteDurumuYap, partilerinRedBakiyeleri, karantinadanBirak, karantinaDisiKonumlar, hareketPartileri, partilerinRedGirisleri, partileriBul, emrinAkisHareketleri, emrinPartileri, partiGirisZamanlari, sonPartiler, konumAdlari, malzemeIstegiAc, malzemeIstekleri, malzemeStokDurumlari, stokMiktarlari, stokYokIstekleri, lotEtiketleri, partilerinMalzemeleri, haritaStokluMalzemeleri } from './disari.ts';
 import * as sorgular from './sorgular.ts';
 import { cikisYap, kaliteDegistir } from './servis.ts';
 import { acikEmirler } from '../uretim-emirleri/disari.ts';
@@ -2529,6 +2529,27 @@ describe('stok (gerçek PostgreSQL)', () => {
     gozStoklariCevabi.parse(gs.govde);
     assert.deepEqual(gs.govde.gozler.map((g) => [g.gozId, g.konumId, g.kalemSayisi, typeof g.ilkMalzemeAd]), [[gozIdleri[0], ilkGoz!.id, 1, 'string']]);
     assert.equal((await depo('GET', '/stok/goz-stoklari?gozIdler=1,x')).durum, 400);
+    // 3202 B: göz özeti malzeme başına toplam ve birimi verir; stok okuma yetkisi ister (Risk K1). Stoklu malzeme listesi yalnız
+    // haritadaki göze bağlı aktif konumdaki bakiyeyi sayar (K3); kabuldeki malzeme sayılmaz.
+    const go = await depo<GozOzetleriCevabi>('GET', `/stok/goz-ozetleri?gozIdler=${gozIdleri.join(',')}`);
+    assert.equal(go.durum, 200, JSON.stringify(go.govde));
+    assert.deepEqual(go.govde.gozler.map((g) => [g.gozId, g.konumId, g.malzemeler.map((x) => [x.malzemeId, Number(x.miktar), typeof x.ad, x.ambalaj])]),
+      [[gozIdleri[0], ilkGoz!.id, [[m, 2, 'string', null]]]]);
+    assert.equal((await depo('GET', '/stok/goz-ozetleri?gozIdler=1,x')).durum, 400);
+    assert.equal((await istek('operator', 'GET', `/stok/goz-ozetleri?gozIdler=${gozIdleri[0]}`)).durum, 403);
+    assert.equal((await istek(null, 'GET', `/stok/goz-ozetleri?gozIdler=${gozIdleri[0]}`)).durum, 401);
+    // Haritayı açabilen ama stok okuyamayan kişi (yalnız sayfa.atolye) göz özetini alamaz (3205 a: model görür, miktar görmez).
+    const haritaRolu = await o().sahip.tek<{ id: number }>("INSERT INTO rol (kod, ad) VALUES ('yalniz_harita', 'yalniz_harita') RETURNING id");
+    await o().sahip.sorgu("INSERT INTO rol_islemi (rol_id, islem) VALUES ($1, 'sayfa.atolye')", [haritaRolu!.id]);
+    await kisiEkle('yalniz_harita', 'yalniz_harita');
+    assert.equal((await istek('yalniz_harita', 'GET', `/stok/goz-ozetleri?gozIdler=${gozIdleri[0]}`)).durum, 403);
+    const kabuldeki = await kart('sarf');
+    await malKabul(kabuldeki, '1');
+    assert.deepEqual(await haritaStokluMalzemeleri(vt, [m, kabuldeki]), [m]);
+    // Verilen kimliklerin dışındaki stoklu malzeme dönmez (Risk K4: dosya ucu tek malzemeyi sorar).
+    assert.deepEqual(await haritaStokluMalzemeleri(vt, [kabuldeki]), []);
+    assert.equal((await haritaStokluMalzemeleri(vt, null)).includes(m), true);
+    assert.equal((await haritaStokluMalzemeleri(vt, null)).includes(kabuldeki), false);
 
     // Stoklu bölüm depodan çıkmaz; stok taşınınca çıkar, konumları kapanır, bağsız konum listesine düşmez.
     assert.equal((await mudur('POST', `/stok/harita-bolumleri/${salon!.id}/depo`, { depo: false })).durum, 409);

@@ -5,6 +5,7 @@ import { Dugme, DurumKutusu, Simge } from '../../ortak/arayuz/index.ts';
 import { hataIletisi } from '../../ortak/veri/api.ts';
 import { useOturum } from '../../ortak/veri/oturum.ts';
 import { useDepoYazimi } from './depo-yazimi.ts';
+import { GozModeli } from './GozModeli.tsx';
 import { KalemGorunumuFormu, kalemBul } from './KalemGorunumu.tsx';
 import { AMBALAJ_ADI, dolulukKademesi, sayiMetni } from './kurallar.ts';
 import { stokOkurMu, useGozMalzemeleri, useGozStogu, useGozler, useKalemGorunumleri } from './veri.ts';
@@ -82,6 +83,7 @@ function GozStogu({ gozId, okur }: { gozId: number | null; okur: boolean }) {
           </li>
         ))}
       </ul>
+      <GozModeli malzemeler={satirlar} />
     </section>
   );
 }

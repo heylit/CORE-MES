@@ -1,7 +1,7 @@
 // SmartES bağlantısının saf kuralları (kart #778): satır eşleme, okuma penceresi, işaretleme ve iş emri gönderimi.
 // Kural kodları SME-n; testleri KURAL-TEST.md'de.
 import { createHash } from 'node:crypto';
-import { SMARTES_OKUMA_KAYNAKLARI } from '#paylasilan/sozlesme/smartes.ts';
+import { SMARTES_LISTE_TURLERI, SMARTES_OKUMA_KAYNAKLARI } from '#paylasilan/sozlesme/smartes.ts';
 import type { SmartesEslemeTuru, SmartesMakineDurumu } from '#paylasilan/sozlesme/smartes.ts';
 import { tesisGunBasi, tesisGunu } from '#paylasilan/tesis-zamani.ts';
 import { mantiksal, metinAlani, tamSayi, tarihAlani } from './soap.ts';
@@ -691,6 +691,7 @@ export const eksikMetotlar = (wsdldekiler: readonly string[]): string[] => GEREK
 export const ISTEGE_BAGLI_METOTLAR: readonly string[] = [
   'WsWorkordersRejectStatusList', 'WarehouseStatusList', 'QualityControlStatusList', 'WorkStationList', 'WorkStationCreateUpdate', 'StocksList', 'StockCreateUpdate',
   'AllMachineInformationList', 'WorkordersList',
+  'OperationList', 'RejectsList', 'DownTimeList', 'OEEReport', 'PartsCycleTimesList',
 ];
 
 export const eksikIstegeBagliMetotlar = (wsdldekiler: readonly string[]): string[] => ISTEGE_BAGLI_METOTLAR.filter((m) => !wsdldekiler.includes(m));
@@ -916,3 +917,398 @@ export function birikimliSayac(
   }
   return saatBaslari.map((_, i) => saatSonu.get(i) ?? null);
 }
+
+// --- SmartES tanım listeleri ve eşleme önerisi (SME-30, kart 3174) -----------------
+// Eşlemede kod elle yazılmaz: SmartES'in kendi listeleri okunur, karşılık oradan seçilir. Metot, parametre ve alan adları servis
+// belgesinden (md. 1, 37, 38, 44, 58); canlı WSDL'de doğrulanmadı. Hepsi yalnız okur.
+export const LISTE_TURLERI = SMARTES_LISTE_TURLERI;
+export type ListeTuru = (typeof LISTE_TURLERI)[number];
+
+export const LISTE_METOTLARI: Readonly<Record<ListeTuru, string>> = {
+  istasyon: 'WorkStationList', makine: MAKINE_LISTESI_METODU, operasyon: 'OperationList', fire: 'RejectsList', durus: 'DownTimeList',
+};
+
+// Süzgeç parametreleri boş gider: boş süzgeç bütün listeyi döner (VARSAYIM; belge süzgeçleri zorunlu saymaz).
+export function listeParametreleri(tur: ListeTuru): Parametreler {
+  if (tur === 'istasyon') return [['WorkstationCode', ''], ['WorkstationName', '']];
+  if (tur === 'operasyon') return [['WorkstationCode', ''], ['WorkstationName', ''], ['OperationCode', ''], ['OperationName', '']];
+  return [];
+}
+
+const LISTE_ALANLARI = {
+  istasyon: { id: ['ID'], kod: ['CODE'], ad: ['NAME'], grup: [], operator: [], pasif: ['ISPASSIVE'] },
+  makine: { id: ['ID'], kod: ['KOD'], ad: ['AD'], grup: [], operator: [], pasif: [] },
+  operasyon: { id: ['ID'], kod: ['CODE'], ad: ['NAME'], grup: ['WORKSTATION_INFORMATION'], operator: [], pasif: ['ISPASSIVE'] },
+  fire: { id: ['ID'], kod: [], ad: ['NAME'], grup: ['GROUP_INFORMATION'], operator: ['ISOPERATOR_WELDED'], pasif: ['ISPASSIVE'] },
+  durus: { id: ['ID'], kod: [], ad: ['NAME'], grup: ['GROUP_INFORMATION'], operator: ['ISOPERATOR_WELDED'], pasif: ['ISPASSIVE'] },
+} as const satisfies Record<ListeTuru, Record<'id' | 'kod' | 'ad' | 'grup' | 'operator' | 'pasif', readonly string[]>>;
+
+// İstasyon, makine ve operasyon SmartES koduyla eşlenir; fire ve duruşun kodu yoktur, adla gelir.
+export const kodluListeMi = (tur: ListeTuru): tur is 'istasyon' | 'makine' | 'operasyon' => tur !== 'fire' && tur !== 'durus';
+
+export interface ListeKaydi {
+  tur: ListeTuru;
+  // Kodlu türde 'kod:<kod>'; fire ve duruşta SmartES kimliği 'id:<n>', kimlik gelmezse 'ad:<ad>'.
+  anahtar: string;
+  smartesId: number | null;
+  kod: string | null;
+  ad: string | null;
+  grup: string | null;
+  operatorKaynakli: boolean | null;
+  pasif: boolean | null;
+  ham: TabloSatiri;
+}
+
+export const adAnahtari = (ad: string): string => `ad:${ad}`;
+
+// Kodlu türde kodu, fire ve duruşta adı olmayan satır eşlemede kullanılamaz: atlanır ve sayılır.
+export function listeKaydiOku(tur: ListeTuru, s: TabloSatiri): ListeKaydi | null {
+  const a = LISTE_ALANLARI[tur];
+  const id = kimlik(s, a.id);
+  const kod = metin(s, a.kod);
+  const ad = metin(s, a.ad);
+  let anahtar: string;
+  if (kodluListeMi(tur)) {
+    if (kod === null) return null;
+    anahtar = `kod:${kod}`;
+  } else {
+    if (ad === null) return null;
+    anahtar = id === null ? adAnahtari(ad) : `id:${id}`;
+  }
+  return { tur, anahtar, smartesId: id, kod, ad, grup: metin(s, a.grup), operatorKaynakli: bayrak(s, a.operator), pasif: bayrak(s, a.pasif), ham: s };
+}
+
+// Aynı anahtar bir okumada iki kez gelirse (aynı operasyon kodu iki istasyonda) ilki alınır.
+export function listeKayitlari(tur: ListeTuru, satirlar: readonly TabloSatiri[]): { kayitlar: ListeKaydi[]; atlanan: number } {
+  const gorulen = new Map<string, ListeKaydi>();
+  let atlanan = 0;
+  for (const s of satirlar) {
+    const k = listeKaydiOku(tur, s);
+    if (k === null) atlanan++;
+    else if (!gorulen.has(k.anahtar)) gorulen.set(k.anahtar, k);
+  }
+  return { kayitlar: [...gorulen.values()], atlanan };
+}
+
+export const LISTE_OKUMA_ARALIGI_MS = 24 * 3_600_000;
+export const LISTE_ISI_ARALIGI_MS = 15 * 60_000;
+export const LISTE_HATA_BEKLEMESI_MS = 3_600_000;
+// "Şimdi oku" art arda basılsa da canlı SmartES'e aynı liste için dakikada birden çok istek çıkmaz.
+export const LISTE_ZORLA_BEKLEMESI_MS = 60_000;
+export const zorlaOkunabilirMi = (iz: { sonDeneme: Date } | null, simdi: Date): boolean =>
+  iz === null || simdi.getTime() - iz.sonDeneme.getTime() >= LISTE_ZORLA_BEKLEMESI_MS;
+
+// Liste günde bir kez okunur; iş on beş dakikada bir bakar ki açılıştan sonra ilk liste çabuk gelsin. Okunamayan liste bir saat sonra yeniden denenir.
+export function listeOkunmaliMi(iz: { sonBasarili: Date | null; sonDeneme: Date; sonSonuc: 'tamam' | 'hata' } | null, simdi: Date): boolean {
+  if (iz === null) return true;
+  if (iz.sonSonuc === 'hata') return simdi.getTime() - iz.sonDeneme.getTime() >= LISTE_HATA_BEKLEMESI_MS;
+  return iz.sonBasarili === null || simdi.getTime() - iz.sonBasarili.getTime() >= LISTE_OKUMA_ARALIGI_MS;
+}
+
+// Ad karşılaştırması: büyük/küçük harf, Türkçe harf, noktalama ve boşluk farkı sayılmaz.
+export const adNormali = (s: string): string =>
+  s.toLocaleLowerCase('tr').normalize('NFKD').replace(/[̀-ͯ]/g, '').replace(/ı/g, 'i').replace(/[^a-z0-9]+/g, ' ').trim();
+
+function duzenlemeUzakligi(a: string, b: string): number {
+  let onceki = Array.from({ length: b.length + 1 }, (_, i) => i);
+  for (let i = 1; i <= a.length; i++) {
+    const satir = [i];
+    for (let j = 1; j <= b.length; j++) {
+      satir[j] = Math.min((onceki[j] ?? 0) + 1, (satir[j - 1] ?? 0) + 1, (onceki[j - 1] ?? 0) + (a[i - 1] === b[j - 1] ? 0 : 1));
+    }
+    onceki = satir;
+  }
+  return onceki[b.length] ?? 0;
+}
+
+// 0..1; 1 aynı. Normalleştirilmiş adlar üzerinden; kelime sırası farkı da aynı sayılır.
+export function adBenzerligi(a: string, b: string): number {
+  const x = adNormali(a);
+  const y = adNormali(b);
+  if (x === '' || y === '') return 0;
+  if (x === y || x.split(' ').sort().join(' ') === y.split(' ').sort().join(' ')) return 1;
+  return 1 - duzenlemeUzakligi(x, y) / Math.max(x.length, y.length);
+}
+
+// Benzer ad önerisi ancak adlar çok yakınsa çıkar: kısa adda tek harf başka şey demektir, öneri verilmez.
+export const BENZERLIK_ESIGI = 0.8;
+export const BENZERLIK_EN_KISA = 5;
+const benzerMi = (a: string, b: string): boolean =>
+  Math.min(adNormali(a).length, adNormali(b).length) >= BENZERLIK_EN_KISA && adBenzerligi(a, b) >= BENZERLIK_ESIGI;
+
+// Adaylar içinde tek başına en iyi olan; eşitlik varsa öneri yoktur (kişi seçer).
+function tekEnIyi<T>(adaylar: readonly T[], puan: (a: T) => number): T | null {
+  let iyi: T | null = null;
+  let iyiPuan = -1;
+  let esit = false;
+  for (const a of adaylar) {
+    const p = puan(a);
+    if (p > iyiPuan) {
+      iyi = a;
+      iyiPuan = p;
+      esit = false;
+    } else if (p === iyiPuan) esit = true;
+  }
+  return esit ? null : iyi;
+}
+
+export type OneriGerekcesi = 'ayni-kod' | 'ayni-ad' | 'benzer-ad';
+export interface KodOnerisi { kod: string; ad: string | null; gerekce: OneriGerekcesi }
+
+// Eşlenmemiş CORE kayıtlarına boştaki SmartES kodlarından öneri. Sıra güçlüden zayıfa: aynı kod, aynı ad, benzer ad. Bir SmartES kodu
+// tek kayda önerilir; iki kayıt aynı kodu isterse ikisine de önerilmez. Öneri eşleme yazmaz.
+export function kodOnerileri(
+  kayitlar: readonly { id: number; kod: string; ad: string }[], bostakiler: readonly { kod: string; ad: string | null }[],
+): Map<number, KodOnerisi> {
+  const sonuc = new Map<number, KodOnerisi>();
+  let kalanKayit = [...kayitlar];
+  let kalanKod = [...bostakiler];
+  const uygula = (gerekce: OneriGerekcesi, bul: (k: { id: number; kod: string; ad: string }) => { kod: string; ad: string | null } | null): void => {
+    const istekler = new Map<string, { id: number; aday: { kod: string; ad: string | null } }[]>();
+    for (const k of kalanKayit) {
+      const aday = bul(k);
+      if (aday === null) continue;
+      const l = istekler.get(aday.kod) ?? [];
+      l.push({ id: k.id, aday });
+      istekler.set(aday.kod, l);
+    }
+    for (const l of istekler.values()) {
+      const tek = l.length === 1 ? l[0] : undefined;
+      if (tek !== undefined) sonuc.set(tek.id, { ...tek.aday, gerekce });
+    }
+    kalanKayit = kalanKayit.filter((k) => !sonuc.has(k.id));
+    const verilen = new Set([...sonuc.values()].map((o) => o.kod));
+    kalanKod = kalanKod.filter((x) => !verilen.has(x.kod));
+  };
+  uygula('ayni-kod', (k) => kalanKod.find((x) => x.kod.toLocaleLowerCase('tr') === k.kod.trim().toLocaleLowerCase('tr')) ?? null);
+  uygula('ayni-ad', (k) => {
+    const ayni = kalanKod.filter((x) => x.ad !== null && adNormali(x.ad) !== '' && adNormali(x.ad) === adNormali(k.ad));
+    return ayni.length === 1 ? (ayni[0] ?? null) : null;
+  });
+  uygula('benzer-ad', (k) => tekEnIyi(kalanKod.filter((x) => x.ad !== null && benzerMi(x.ad, k.ad)), (x) => adBenzerligi(x.ad ?? '', k.ad)));
+  return sonuc;
+}
+
+// SmartES fire ya da duruş adına CORE nedeni önerisi: adı aynı olan tek neden, yoksa tek başına en benzeyen. Bir nedene birden çok ad bağlanabilir.
+export function nedenOnerisi<N extends { id: number; ad: string }>(ad: string, nedenler: readonly N[]): N | null {
+  const ayni = nedenler.filter((n) => adNormali(n.ad) !== '' && adNormali(n.ad) === adNormali(ad));
+  if (ayni.length > 0) return ayni.length === 1 ? (ayni[0] ?? null) : null;
+  return tekEnIyi(nedenler.filter((n) => benzerMi(n.ad, ad)), (n) => adBenzerligi(n.ad, ad));
+}
+
+export type AdDurumu = 'eslendi' | 'eslenmedi' | 'yok' | 'yeni';
+
+// Eşlenmiş ad listeden çıktıysa "yok" (silinmiş ya da adı değişmiş); eşlenmemiş ad ilk listeden sonra geldiyse "yeni".
+export function adDurumu(k: { var: boolean; eslendi: boolean; ilkGorulme: Date | null; ilkBasarili: Date | null }): AdDurumu {
+  if (k.eslendi) return k.var ? 'eslendi' : 'yok';
+  return k.ilkGorulme !== null && k.ilkBasarili !== null && k.ilkGorulme > k.ilkBasarili ? 'yeni' : 'eslenmedi';
+}
+
+/* ---------------- SmartES'ten gelen bilgilerin özeti (SME-32) ---------------- */
+
+export type GelenDurumu = 'okunuyor' | 'kapali' | 'okunmuyor';
+// baglanti: yalnız ana anahtar ve adres. kalite-ambar: ayrıca kendi anahtarı. yok: CORE bu bilgiyi okumuyor.
+type GelenKosulu = 'baglanti' | 'kalite-ambar' | 'yok';
+
+interface GelenTanimi {
+  anahtar: string;
+  baslik: string;
+  kosul: GelenKosulu;
+  // Okuma izinin anahtarları; birden çoksa en eskisi gösterilir (hepsi o andan beri okunmuş demektir).
+  izler: readonly string[];
+  kullanim: string;
+  yol: string | null;
+}
+
+export const GELEN_TANIMLARI: readonly GelenTanimi[] = [
+  { anahtar: 'makine', baslik: 'Makinelerin canlı durumu', kosul: 'yok', izler: [], kullanim: 'Henüz okunmuyor', yol: null },
+  { anahtar: 'uretim', baslik: 'Üretim sayıları', kosul: 'baglanti', izler: ['is-emri-durumu'], kullanim: 'Yalnız gösterilir; üretim kaydına işlenmesi ayrı iştir', yol: '/smartes/is-emri-durumlari' },
+  { anahtar: 'durus', baslik: 'Duruşlar', kosul: 'baglanti', izler: ['durus'], kullanim: 'Yalnız gösterilir; duruş adının karşılığı Kod eşlemeleri > Duruş’tan verilir', yol: '/smartes/duruslar' },
+  { anahtar: 'alarm', baslik: 'Alarmlar', kosul: 'baglanti', izler: ['alarm'], kullanim: 'Yalnız gösterilir', yol: '/smartes/alarmlar' },
+  { anahtar: 'fire', baslik: 'Fire kayıtları', kosul: 'kalite-ambar', izler: ['red'], kullanim: 'Yalnız gösterilir; fire adının karşılığı Kod eşlemeleri > Fire’den verilir', yol: '/smartes/fire' },
+  { anahtar: 'adlar', baslik: 'Fire ve duruş adları', kosul: 'baglanti', izler: ['liste:fire', 'liste:durus'], kullanim: 'Kod eşlemeleri', yol: '/smartes/eslemeler' },
+  { anahtar: 'tanimlar', baslik: 'İstasyon, makine ve operasyon listesi', kosul: 'baglanti', izler: ['liste:istasyon', 'liste:makine', 'liste:operasyon'], kullanim: 'Kod eşlemelerinde öneri ve seçim listesi', yol: '/smartes/eslemeler' },
+  { anahtar: 'ambar', baslik: 'Ambar hareketleri', kosul: 'kalite-ambar', izler: ['ambar'], kullanim: 'Yalnız gösterilir; stoğa yazılmaz', yol: '/smartes/ambar' },
+  { anahtar: 'kalite', baslik: 'Kalite ölçümleri', kosul: 'kalite-ambar', izler: ['kalite'], kullanim: 'Yalnız gösterilir', yol: '/smartes/kalite' },
+  { anahtar: 'oee', baslik: 'OEE raporu (SmartES’in hesabı)', kosul: 'baglanti', izler: ['hesap:oee'], kullanim: 'Yalnız karşılaştırma; raporlarda CORE’un hesabı kullanılır', yol: '/smartes/hesaplar' },
+  { anahtar: 'cevrim', baslik: 'Parça çevrim süreleri', kosul: 'baglanti', izler: ['hesap:cevrim'], kullanim: 'Tanımlı birim süreyle karşılaştırma', yol: '/smartes/hesaplar' },
+  { anahtar: 'ilerleme', baslik: 'İş emri tamamlanma yüzdesi ve tahmini bitiş', kosul: 'yok', izler: [], kullanim: 'Henüz okunmuyor', yol: null },
+];
+
+export interface GelenKalemi {
+  anahtar: string;
+  baslik: string;
+  durum: GelenDurumu;
+  sonOkuma: string | null;
+  sayi: number | null;
+  kullanim: string;
+  yol: string | null;
+}
+
+export function gelenKalemleri(g: {
+  baglantiAcik: boolean;
+  kaliteAmbarAcik: boolean;
+  izler: ReadonlyMap<string, string | null>;
+  sayilar: ReadonlyMap<string, number>;
+}): GelenKalemi[] {
+  return GELEN_TANIMLARI.map((t) => {
+    if (t.kosul === 'yok') return { anahtar: t.anahtar, baslik: t.baslik, durum: 'okunmuyor', sonOkuma: null, sayi: null, kullanim: t.kullanim, yol: t.yol };
+    const acik = g.baglantiAcik && (t.kosul === 'baglanti' || g.kaliteAmbarAcik);
+    const zamanlar = t.izler.map((i) => g.izler.get(i) ?? null);
+    // Biri hiç okunmadıysa "son okuma" yoktur: eksik listeyi okunmuş göstermez.
+    const sonOkuma = zamanlar.some((z) => z === null) ? null : (zamanlar as string[]).reduce((a, b) => (Date.parse(a) <= Date.parse(b) ? a : b));
+    return {
+      anahtar: t.anahtar, baslik: t.baslik, durum: acik ? 'okunuyor' : 'kapali', sonOkuma, sayi: g.sayilar.get(t.anahtar) ?? 0, kullanim: t.kullanim, yol: t.yol,
+    };
+  });
+}
+
+// Ham kayıt alanları: ad sırasıyla; boş değer null, metin olduğu gibi, diğerleri JSON yazımıyla.
+export function hamAlanlari(ham: Record<string, unknown>): { ad: string; deger: string | null }[] {
+  return Object.keys(ham).sort((a, b) => a.localeCompare(b, 'tr')).map((ad) => {
+    const d = ham[ad];
+    if (d === null || d === undefined || d === '') return { ad, deger: null };
+    return { ad, deger: typeof d === 'string' ? d : JSON.stringify(d) };
+  });
+}
+
+/* ---------------- SmartES'in kendi hesapları (SME-33): OEE raporu ve parça çevrim süresi ---------------- */
+// OEEReport (md. 61) ve PartsCycleTimesList (md. 50): parametre ve alan adları servis belgesinden; canlı WSDL'de doğrulanmadı. İkisi de yalnız okur.
+
+export const HESAP_TURLERI = ['oee', 'cevrim'] as const;
+export type HesapTuru = (typeof HESAP_TURLERI)[number];
+export const HESAP_METOTLARI: Record<HesapTuru, string> = { oee: 'OEEReport', cevrim: 'PartsCycleTimesList' };
+// Vardiya OEE'si vardiya sürerken değişir: saatte bir okunur. Okunamazsa da bir saat beklenir.
+export const HESAP_OKUMA_ARALIGI_MS = 3_600_000;
+export const HESAP_ISI_ARALIGI_MS = 15 * 60_000;
+// OEE son yedi günün vardiyaları için istenir ve gösterilir; çevrim süresi son otuz günün üretiminden.
+export const OEE_PENCERESI_GUN = 7;
+export const CEVRIM_PENCERESI_GUN = 30;
+
+export function hesapParametreleri(tur: HesapTuru, simdi: Date): Parametreler {
+  const gun = tur === 'oee' ? OEE_PENCERESI_GUN : CEVRIM_PENCERESI_GUN;
+  const bas = new Date(simdi.getTime() - gun * 86_400_000);
+  return tur === 'oee'
+    ? [['StartDatetime', bas], ['EndDatetime', simdi], ['MachineIDs', '']]
+    : [['StockNo', ''], ['OperationCode', ''], ['MachineCode', ''], ['StartDatetime', bas], ['EndDatetime', simdi], ['WorkStationCode', '']];
+}
+
+export const hesapOkunmaliMi = (iz: { sonDeneme: Date } | null, simdi: Date): boolean =>
+  iz === null || simdi.getTime() - iz.sonDeneme.getTime() >= HESAP_OKUMA_ARALIGI_MS;
+
+export interface OeeKaydi {
+  vardiyaTarihi: string;
+  vardiya: number;
+  makineKodu: string;
+  kullanilabilirlik: number | null;
+  performans: number | null;
+  kalite: number | null;
+  oee: number | null;
+  ham: TabloSatiri;
+}
+
+// Vardiya tarihi, vardiya ve makine kodu satırın kimliğidir; biri yoksa satır tekil yazılamaz ve atlanır.
+export function oeeOku(s: TabloSatiri): OeeKaydi | null {
+  // Tarih saatli de gelebilir ("2026-11-12T00:00:00+03:00"): vardiya günü yazılan gündür, saat dilimine çevrilmez.
+  const gunMetni = metinAlani(s, 'SHIFT_DATE')?.trim() ?? '';
+  const vardiya = sayi(s, ['SHIFT']);
+  const makineKodu = metin(s, ['MACHINE_CODE']);
+  if (!/^\d{4}-\d{2}-\d{2}(T|$)/.test(gunMetni) || vardiya === null || vardiya < 1 || vardiya > 9 || makineKodu === null) return null;
+  return {
+    vardiyaTarihi: gunMetni.slice(0, 10), vardiya, makineKodu,
+    kullanilabilirlik: ondalik(s, ['AVAILABILITY']), performans: ondalik(s, ['PERFORMANCE']), kalite: ondalik(s, ['QUALITY']), oee: ondalik(s, ['OEE']),
+    ham: s,
+  };
+}
+
+export interface CevrimKaydi {
+  anahtar: string;
+  stokNo: string | null;
+  operasyonKodu: string | null;
+  makineKodu: string | null;
+  istasyonKodu: string | null;
+  cevrimMetni: string | null;
+  yuklemeMetni: string | null;
+  parcaSayisi: number | null;
+  gunSayisi: number | null;
+  ham: TabloSatiri;
+}
+
+export function cevrimOku(s: TabloSatiri): CevrimKaydi | null {
+  const stokNo = metin(s, ['STOCK_INFORMATION']);
+  const operasyonKodu = metin(s, ['OPERATION_INFORMATION']);
+  const makineKodu = metin(s, ['MACHINE_INFORMATION']);
+  const istasyonKodu = metin(s, ['WORKSTATION_INFORMATION']);
+  if (stokNo === null && operasyonKodu === null && makineKodu === null) return null;
+  return {
+    anahtar: [stokNo, operasyonKodu, makineKodu, istasyonKodu].map((d) => d ?? '').join('\u001f'),
+    stokNo, operasyonKodu, makineKodu, istasyonKodu,
+    cevrimMetni: metin(s, ['ESTIMATED_START_TIME']), yuklemeMetni: metin(s, ['ESTIMATED_RESET_STOP_TIME']),
+    parcaSayisi: adet(s, ['TOTAL_PART_COUNT']), gunSayisi: adet(s, ['DAYS_AGO']), ham: s,
+  };
+}
+
+// SmartES oranı Decimal(18,2) verir; kesir mi (0,85) yüzde mi (85,00) olduğu belgede yok. Satırdaki bütün oranlar 1'i geçmiyorsa kesir
+// sayılır: yüzde olsaydı kullanılabilirlik, performans ve kalitenin üçü de %1'in altında olurdu. Sonuç her zaman yüzdedir (0-100).
+export function oeeYuzdeleri(k: Pick<OeeKaydi, 'kullanilabilirlik' | 'performans' | 'kalite' | 'oee'>): Pick<OeeKaydi, 'kullanilabilirlik' | 'performans' | 'kalite' | 'oee'> {
+  const degerler = [k.kullanilabilirlik, k.performans, k.kalite, k.oee].filter((d): d is number => d !== null);
+  const kesir = degerler.length > 0 && degerler.some((d) => d > 0) && degerler.every((d) => d <= 1);
+  const c = (d: number | null): number | null => (d === null ? null : Math.round((kesir ? d * 100 : d) * 100) / 100);
+  return { kullanilabilirlik: c(k.kullanilabilirlik), performans: c(k.performans), kalite: c(k.kalite), oee: c(k.oee) };
+}
+
+// Süre metni yalnız birimi belli biçimdeyse saniyeye çevrilir: "ss:dd:sn" (kesirli saniye olabilir). Düz sayının birimi (saniye mi, dakika mı)
+// bilinmez; çevrilmez, ekranda geldiği haliyle gösterilir.
+export function cevrimSaniyesi(metni: string | null): number | null {
+  const e = metni === null ? null : /^(\d{1,4}):([0-5]\d):([0-5]\d)(?:[.,](\d{1,3}))?$/.exec(metni.trim());
+  if (!e) return null;
+  return Number(e[1]) * 3600 + Number(e[2]) * 60 + Number(e[3]) + (e[4] === undefined ? 0 : Number(`0.${e[4]}`));
+}
+
+// CORE'da tanımlı birim süre: plandaki iş emirlerinden (SmartES'e giden stok no ve operasyon kodu ile). Aynı stok ve operasyon için
+// farklı süreler varsa hangisinin geçerli olduğu bilinmez: null.
+export function tanimliSaniyeler(isler: readonly { stokNo: string; opNo: number; birimSureDk: string | null }[]): Map<string, number | null> {
+  const sonuc = new Map<string, number | null>();
+  for (const i of isler) {
+    const dk = i.birimSureDk === null ? NaN : Number(i.birimSureDk);
+    if (!Number.isFinite(dk) || dk <= 0) continue;
+    const anahtar = `${i.stokNo}\u001f${smartesOperasyonKodu(i.opNo)}`;
+    const sn = Math.round(dk * 60 * 10) / 10;
+    sonuc.set(anahtar, sonuc.has(anahtar) && sonuc.get(anahtar) !== sn ? null : sn);
+  }
+  return sonuc;
+}
+export const tanimliAnahtari = (stokNo: string | null, operasyonKodu: string | null): string => `${stokNo ?? ''}\u001f${operasyonKodu ?? ''}`;
+/* ---------------- Adet onayı (3173 b, 3193 a; ADR 0013 eki) ---------------- */
+
+export type AdetOnayTuru = 'saglam' | 'red';
+export interface AdetOnayFarki { tur: AdetOnayTuru; adet: number; duzeltme: boolean }
+
+// SmartES satırındaki güncel adet ile o satır için kuyruğa girmiş toplam (reddedilen dahil) arasındaki fark onaya gelir: aynı adet
+// iki kez gelmez, reddedilen yeniden gelmez, SmartES'te sonradan değişen adet farkı kadar "düzeltme" satırıdır. Gelmeyen (null) adet
+// fark üretmez: sıfır uydurulmaz.
+export function adetOnayFarklari(
+  guncel: { saglam: number | null; red: number | null },
+  onceki: readonly { tur: AdetOnayTuru; toplam: number; satir: number }[],
+): AdetOnayFarki[] {
+  const farklar: AdetOnayFarki[] = [];
+  for (const tur of ['saglam', 'red'] as const) {
+    const deger = guncel[tur];
+    if (deger === null) continue;
+    const o = onceki.find((x) => x.tur === tur);
+    const fark = deger - (o?.toplam ?? 0);
+    if (fark !== 0) farklar.push({ tur, adet: fark, duzeltme: (o?.satir ?? 0) > 0 });
+  }
+  return farklar;
+}
+
+// İstasyon SmartES'e geçtiği andan önce başlamış satır kuyruğa girmez (o üretim terminalden sayılmıştır); başlangıcı gelmeyen satır da girmez.
+export function onayaGirerMi(baslangic: Date | null, gecerlilik: Date): boolean {
+  return baslangic !== null && baslangic.getTime() >= gecerlilik.getTime();
+}
+
+export const ONAY_ILETILERI = {
+  karardaDegil: 'Kayıt artık onay beklemiyor.',
+  redIslenmez: 'Red adedi fire eşlemesi gelince işlenir.',
+  isEmriYok: 'SmartES iş emri CORE iş emriyle eşleşmedi.',
+} as const;
