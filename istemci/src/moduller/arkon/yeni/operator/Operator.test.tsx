@@ -626,6 +626,25 @@ describe('A1 Üretim Terminali el okuyucu (1337 a)', () => {
     expect(screen.queryByRole('dialog', { name: 'Refakat kartını okut' })).toBeNull();
     expect(screen.queryByText(/İş emri açıldı/)).toBeNull();
   }, 40000);
+
+  // Düğme iki yerde çizilir (geniş şerit ve dar şerit); ikisi de önizlemede kapalı olmalı.
+  it.each([['geniş ekranda', null], ['telefonda', 360]] as const)('önizleme kipinde "Kartı okut" düğmesi yok (%s; önizleme teslim almaz, iş açmaz)', async (_ad, en) => {
+    if (en !== null) {
+      Object.defineProperty(window, 'innerWidth', { value: en, configurable: true });
+      Object.defineProperty(window, 'innerHeight', { value: 780, configurable: true });
+    }
+    try {
+      sunucuKur(YONETICI, sunucu());
+      arkonAc('/arkon/onizle/IST-1');
+      // Önizleme rozeti yalnız geniş şeritte yazar.
+      if (en === null) expect(await screen.findByText('Önizleme · kayıt yapılmaz', {}, { timeout: 10000 })).toBeTruthy();
+      // Şerit çizilmiş olmalı; yoksa "düğme yok" boş ekranda da geçerdi. Menü yalnız dar, Tema değiştir yalnız geniş şeritte.
+      expect((await screen.findAllByRole('button', { name: en === null ? 'Tema değiştir' : 'Menü' }, { timeout: 10000 })).length).toBeGreaterThan(0);
+      expect(screen.queryByRole('button', { name: 'Kartı okut' })).toBeNull();
+    } finally {
+      Reflect.deleteProperty(window, 'innerWidth'); Reflect.deleteProperty(window, 'innerHeight');
+    }
+  }, 40000);
 });
 
 // 2928 a, 2933 a: stok.istek olan operatörde okutulan kart önce bu istasyona gelen teslimleri alır; iş yalnız belirsizlik yoksa açılır.
