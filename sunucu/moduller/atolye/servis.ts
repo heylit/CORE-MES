@@ -200,7 +200,7 @@ const MAKINE_BASKA_BOLUMDE = 'Yerleştirilen makinelerden biri az önce başka b
 const RAF_KODU_KULLANILIYOR = (kodlar: string) => `Raf kodu başka salonda kullanılıyor: ${kodlar}.`;
 const SALON_KODU_KULLANILIYOR = 'Bu salon kodu kullanılıyor.';
 
-// 2902: yeni bölüm haber verir (stok, açan kişide stok.tanim varsa bölümün deposunu açar). Örnek veri ve testler işlemsiz çağırır.
+// 2902: yeni bölüm haber verir (stok, açan kişide stok.harita-yaz varsa bölümün deposunu açar). Örnek veri ve testler işlemsiz çağırır.
 export async function salonEkle(db: Db, kayit: SalonKaydi, kisiId: number, islemler: readonly string[] = []): Promise<SalonOzeti> {
   try {
     const s = await sorgular.salonEkle(db, kayit, kisiId);

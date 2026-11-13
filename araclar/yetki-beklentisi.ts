@@ -44,7 +44,7 @@ export const ROL_MATRISI = {
       'sayfa.mesaj', 'sayfa.musteri-tedarikci', 'sayfa.ortak-dosyalar', 'sayfa.profil', 'sayfa.projeler', 'sayfa.sevkiyat',
       'sayfa.siparisler', 'sayfa.stok', 'sayfa.taleplerim', 'sayfa.uretim-terminali', 'sevkiyat.is-yaz', 'sevkiyat.oku', 'sevkiyat.onayla',
       'sevkiyat.plan-yaz', 'sevkiyat.tanim-yaz', 'siparisler.oku', 'stok.cikis', 'stok.giris', 'stok.istek', 'stok.malzeme-fisi-gonder',
-      'stok.sayim', 'stok.tanim', 'stok.toplama', 'stok.transfer', 'uretim-emirleri.fason',
+      'stok.sayim', 'stok.tanim', 'stok.konum-yaz', 'stok.raf-yaz', 'stok.harita-yaz', 'stok.malzeme-ayari', 'stok.toplama', 'stok.transfer', 'uretim-emirleri.fason',
     ],
   },
   genel_mudur: {
@@ -73,7 +73,7 @@ export const ROL_MATRISI = {
       'sayfa.uretim-emirleri', 'sayfa.uretim-terminali', 'sayfa.vardiya', 'sevkiyat.oku', 'siparisler.fiyat-oku',
       'siparisler.iskonto-onayla', 'siparisler.maliyet-oku', 'siparisler.oku', 'siparisler.onayla', 'siparisler.termin-dene',
       'siparisler.termin-onayla', 'siparisler.yaz', 'stok.cikis', 'stok.eksi-onayla', 'stok.geri-al', 'stok.giris', 'stok.istek',
-      'stok.sayim', 'stok.sayim-onayla', 'stok.skt-onayla', 'stok.statu-degistir', 'stok.tanim', 'stok.toplama', 'stok.transfer',
+      'stok.sayim', 'stok.sayim-onayla', 'stok.skt-onayla', 'stok.statu-degistir', 'stok.tanim', 'stok.konum-yaz', 'stok.raf-yaz', 'stok.harita-yaz', 'stok.malzeme-ayari', 'stok.toplama', 'stok.transfer',
       'terminal.uret', 'uretim-emirleri.adim-durumu-yaz', 'uretim-emirleri.fason', 'uretim-emirleri.hazirlik-muaf', 'uretim-emirleri.kapanis-oku',
       'uretim-emirleri.kapanis-onay', 'uretim-emirleri.yaz', 'vardiya.durus-yaz', 'vardiya.gecmis-yaz', 'vardiya.tanim-yaz', 'vardiya.yaz',
       // 3165 a: uretim-emirleri.yaz sekiz eyleme bölündü (3207 a); eski işlem ayrı kartla kalkana dek satırda kalır.
@@ -107,7 +107,7 @@ export const ROL_MATRISI = {
       'sayfa.uretim-emirleri', 'sayfa.uretim-terminali', 'sayfa.vardiya', 'sevkiyat.oku', 'siparisler.fiyat-oku',
       'siparisler.iskonto-onayla', 'siparisler.maliyet-oku', 'siparisler.oku', 'siparisler.onayla', 'siparisler.termin-dene',
       'siparisler.termin-onayla', 'siparisler.yaz', 'stok.cikis', 'stok.eksi-onayla', 'stok.geri-al', 'stok.giris', 'stok.istek',
-      'stok.sayim', 'stok.sayim-onayla', 'stok.skt-onayla', 'stok.statu-degistir', 'stok.tanim', 'stok.toplama', 'stok.transfer',
+      'stok.sayim', 'stok.sayim-onayla', 'stok.skt-onayla', 'stok.statu-degistir', 'stok.tanim', 'stok.konum-yaz', 'stok.raf-yaz', 'stok.harita-yaz', 'stok.malzeme-ayari', 'stok.toplama', 'stok.transfer',
       'terminal.uret', 'uretim-emirleri.adim-durumu-yaz', 'uretim-emirleri.fason', 'uretim-emirleri.hazirlik-muaf', 'uretim-emirleri.kapanis-oku',
       'uretim-emirleri.kapanis-onay', 'uretim-emirleri.yaz', 'vardiya.durus-yaz', 'vardiya.gecmis-yaz', 'vardiya.tanim-yaz', 'vardiya.yaz',
       // 3165 a: uretim-emirleri.yaz sekiz eyleme bölündü (3207 a); eski işlem ayrı kartla kalkana dek satırda kalır.
@@ -193,7 +193,7 @@ export const ROL_MATRISI = {
       'sayfa.taleplerim', 'sayfa.terminal', 'sayfa.uretim-emirleri', 'sayfa.uretim-terminali', 'sayfa.vardiya', 'sevkiyat.oku',
       'siparisler.fiyat-oku', 'siparisler.iskonto-onayla', 'siparisler.maliyet-oku', 'siparisler.oku', 'siparisler.onayla',
       'siparisler.termin-dene', 'siparisler.termin-onayla', 'siparisler.yaz', 'stok.cikis', 'stok.eksi-onayla', 'stok.geri-al',
-      'smartes.adet-onayla', 'stok.giris', 'stok.istek', 'stok.sayim', 'stok.sayim-onayla', 'stok.skt-onayla', 'stok.statu-degistir', 'stok.tanim',
+      'smartes.adet-onayla', 'stok.giris', 'stok.istek', 'stok.sayim', 'stok.sayim-onayla', 'stok.skt-onayla', 'stok.statu-degistir', 'stok.tanim', 'stok.konum-yaz', 'stok.raf-yaz', 'stok.harita-yaz', 'stok.malzeme-ayari',
       'stok.toplama', 'stok.transfer', 'terminal.uret', 'uretim-emirleri.adim-durumu-yaz', 'uretim-emirleri.fason', 'uretim-emirleri.hazirlik-muaf',
       'uretim-emirleri.kapanis-oku', 'uretim-emirleri.kapanis-onay', 'uretim-emirleri.yaz', 'vardiya.durus-yaz', 'vardiya.gecmis-yaz', 'vardiya.tanim-yaz',
       'vardiya.yaz',

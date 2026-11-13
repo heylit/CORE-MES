@@ -3,6 +3,7 @@ import { bulunamadi } from '#cekirdek/hata.ts';
 import { sayfaliListe } from '#cekirdek/liste.ts';
 import type { IkiliCevap } from '#cekirdek/uc.ts';
 import type { SayfaliListe } from '#paylasilan/liste.ts';
+import { STOK_ESLEME_ISLEMLERI } from '#paylasilan/islemler.ts';
 import { STOK_ISLEMLERI } from '#paylasilan/islemler/stok.ts';
 import type { IkinciMenuSayaclari } from '#paylasilan/sayfa-tanimi.ts';
 import { ACIK_EMIR_DURUMLARI } from '#paylasilan/sozlesme/uretim-emirleri.ts';
@@ -117,9 +118,9 @@ async function eksikEmirSayisi(db: Db): Promise<number> {
 export async function menuSayaclari(db: Db, islemler: readonly string[], kisiId: number): Promise<IkinciMenuSayaclari> {
   const k = await isKutusu(db, islemler, kisiId);
   const kapsamliIstasyonlar = await istekIstasyonlari(db, { id: kisiId, islemler });
-  // İş kutusu ekranındaki satır sayısı: sıfır olmayan her iş türü bir satırdır (ekranla aynı sayı). Ekran tanım yetkilisine eşlenmemiş
+  // İş kutusu ekranındaki satır sayısı: sıfır olmayan her iş türü bir satırdır (ekranla aynı sayı). Ekran eşlemeyi koşabilene eşlenmemiş
   // harita yerini de iş olarak gösterir; sayaç da sayar.
-  const eslenmemis = islemler.includes('stok.tanim') ? (await haritaOzeti(db)).eslenmemis : 0;
+  const eslenmemis = STOK_ESLEME_ISLEMLERI.some((i) => islemler.includes(i)) ? (await haritaOzeti(db)).eslenmemis : 0;
   const isler = [k.kabuldeBekleyen, k.eksiBakiye, k.kritik, k.logoFarki, k.logoHatasi, k.sayimBekleyen ?? 0, k.fasondaEksik, k.fasonEksikGonderimi, k.teslimBekleyenIstek ?? 0, k.depoyaGelenTeslim ?? 0, eslenmemis, k.defterFarki ?? 0].filter((n) => n > 0).length;
   return {
     'is-kutusu': islemler.includes('sayfa.stok') ? isler : null,

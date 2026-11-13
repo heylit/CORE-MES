@@ -17,7 +17,7 @@ import { kimlikCozucu } from '../oturum/disari.ts';
 // sipariş no ve tedarikçi yalnız mal kabul yapan ya da satın alma okuyana gider. Veriler uydurmadır.
 const PAROLA = 'dogru-parola-1';
 const ROL_ISLEMLERI: Record<string, string[]> = {
-  depo: ['stok.giris', 'stok.transfer', 'stok.tanim', 'stok.geri-al'],
+  depo: ['stok.giris', 'stok.transfer', 'stok.konum-yaz', 'stok.raf-yaz', 'stok.harita-yaz', 'stok.malzeme-ayari', 'stok.geri-al'],
   kalite: ['stok.sayim'],
 };
 

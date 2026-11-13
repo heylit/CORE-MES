@@ -16,7 +16,7 @@ type Tur = 'raf' | 'konum';
 interface Satir { id: number; kod: string; alt: string | null; grup: string }
 // Konum listesini sunucu yalnız stok sayfası ya da stok okuması açan işlemle verir (stok OKUMA); stok.istek okuma açmaz (EM-1).
 // Liste istemcide yazılır (paylasilan değeri zod taşıyabilir); stok/ortak.tsx gibi eksik işlem tip denetiminde yakalanır.
-const STOK_OKUMA = ['sayfa.stok', 'stok.giris', 'stok.cikis', 'stok.transfer', 'stok.sayim', 'stok.tanim', 'stok.geri-al', 'stok.toplama', 'stok.statu-degistir', 'stok.eksi-onayla', 'stok.skt-onayla'] as const;
+const STOK_OKUMA = ['sayfa.stok', 'stok.giris', 'stok.cikis', 'stok.transfer', 'stok.sayim', 'stok.konum-yaz', 'stok.raf-yaz', 'stok.harita-yaz', 'stok.malzeme-ayari', 'stok.geri-al', 'stok.toplama', 'stok.statu-degistir', 'stok.eksi-onayla', 'stok.skt-onayla'] as const;
 const stokOkumaTam: [Exclude<(typeof STOK_ISLEMLERI)[number], (typeof STOK_OKUMA)[number]>] extends [never] ? true : never = true;
 const stokOkurMu = (i: string): boolean => stokOkumaTam && (STOK_OKUMA as readonly string[]).includes(i);
 const KONUM_SAYFASI = 500;

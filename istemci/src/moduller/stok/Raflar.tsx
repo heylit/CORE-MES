@@ -47,7 +47,7 @@ export function RafFormu({ raf, kapat }: { raf?: Raf; kapat: () => void }) {
 export function Raflar() {
   const { id } = useParams();
   const yonlendir = useNavigate();
-  const tanimlar = useIslem('stok.tanim');
+  const tanimlar = useIslem('stok.raf-yaz');
   const l = useQuery({ queryKey: anahtarlar.liste('raflar', { sayfaBoyu: 200 }), queryFn: () => api.get<RaflarCevabi>('/stok/raflar?sayfaBoyu=200') });
   const secili = id ? Number(id) : l.data?.satirlar[0]?.id;
   return (

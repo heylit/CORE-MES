@@ -39,7 +39,7 @@ function taslakKur(v: YerlesimCevabi): { taslak: Taslak; ilk: boolean } {
 }
 
 export function YerlesimDuzenleyici() {
-  const tanimlar = useIslem('stok.tanim');
+  const tanimlar = useIslem('stok.harita-yaz');
   const yonlendir = useNavigate();
   const istemci = useQueryClient();
   const { bildir } = useBildirim();

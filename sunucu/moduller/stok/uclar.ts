@@ -24,6 +24,7 @@ import { istegeLotlarlaGonderGovdesi, teslimLotlariCevabi, teslimLotlariSorgusu 
 import { seriAdetGovdesi, seriEkleGovdesi, seriIslendiGovdesi, seriListeCevabi, seriListelerCevabi, seriListeParametresi, seriSatirParametresi } from '#paylasilan/sozlesme/stok.ts';
 import { lotBekleyenKartlarCevabi, refakatIziCevabi, refakatKartlariCevabi, refakatKartlariSorgusu, refakatKolAcGovdesi, refakatLotaBaglaCevabi, refakatLotaBaglaGovdesi, refakatPartileriCevabi, refakatPartisiAcGovdesi, refakatPartisiCevabi, refakatPartisiKartiCevabi, refakatKartSatirlariCevabi, kartlaAlGovdesi, sepetTeslimEtGovdesi, sepetTeslimEtCevabi } from '#paylasilan/sozlesme/stok.ts';
 import { statulerCevabi } from '#paylasilan/sozlesme/recete-rota.ts';
+import { STOK_ESLEME_ISLEMLERI } from '#paylasilan/islemler.ts';
 import { STOK_ISLEMLERI } from '#paylasilan/islemler/stok.ts';
 import { defterFarklariCevabi, malzemeFisiAyrintiCevabi, malzemeFisiGonderGovdesi, malzemeFisiOzeti, malzemeFisleriCevabi, malzemeFisleriSorgusu } from '#paylasilan/sozlesme/stok.ts';
 import { malKabulSatirlariCevabi, malKabulSatirlariSorgusu } from '#paylasilan/sozlesme/stok-mal-kabul-satirlari.ts';
@@ -42,6 +43,8 @@ const SON_PARTI_OKUMA = { biri: ['sayfa.stok', ...STOK_ISLEMLERI, 'satin-alma.ok
 // Sayfayı açabilen rol sayfanın okuduğu veriyi de görür (kart #746, karar 3 a): Rota'nın Stok bölümü kart listesini ve son
 // hareketleri, Planlama'nın malzeme planı ve terminleri açık sipariş satırlarını okur. Yalnız okuma; cevaplar fiyat taşımaz.
 const ROTA_STOK_OKUMA = { biri: [...OKUMA.biri, 'sayfa.rota'] } as const;
+// Haritadan eşleme raf, konum ya da depo haritası yazımının ardından koşar (3165 a): üçünden biri yeter.
+const ESLEME = { biri: STOK_ESLEME_ISLEMLERI } as const;
 const ACIK_SIPARIS_OKUMA = { biri: ['stok.giris', 'plan.planlama-oku'] } as const;
 export const uclar = [
   uc({ yontem: 'GET', yol: '/stok/is-kutusu', yetki: OKUMA, cevap: isKutusuCevabi, isle: ({ db, kullanici }) => s.isKutusu(db, kullanici.islemler, kullanici.id) }),
@@ -58,33 +61,33 @@ export const uclar = [
   uc({ yontem: 'GET', yol: '/stok/konumlar', yetki: OKUMA, sorgu: konumlarSorgusu, cevap: konumlarCevabi, isle: ({ db, sorgu }) => s.konumListesi(db, sorgu) }),
   uc({ yontem: 'GET', yol: '/stok/konum-malzemeleri', yetki: OKUMA, sorgu: konumMalzemeleriSorgusu, cevap: konumMalzemeleriCevabi, isle: ({ db, sorgu }) => s.konumMalzemeleri(db, sorgu) }),
   uc({ yontem: 'GET', yol: '/stok/konumlar/:id', yetki: OKUMA, parametre: kimlikParametresi, cevap: konumAyrintiCevabi, isle: ({ db, parametre }) => s.konumAyrintisi(db, parametre.id) }),
-  uc({ yontem: 'POST', yol: '/stok/konumlar', yetki: 'stok.tanim', govde: konumAcGovdesi, cevap: konumCevabi, isle: ({ db, govde }) => s.konumAc(db, govde) }),
+  uc({ yontem: 'POST', yol: '/stok/konumlar', yetki: 'stok.konum-yaz', govde: konumAcGovdesi, cevap: konumCevabi, isle: ({ db, govde }) => s.konumAc(db, govde) }),
   uc({ yontem: 'GET', yol: '/stok/goz-stoklari', yetki: OKUMA, sorgu: gozStoklariSorgusu, cevap: gozStoklariCevabi, isle: ({ db, sorgu }) => s.gozStoklari(db, sorgu.gozIdler) }),
   uc({ yontem: 'GET', yol: '/stok/goz-ozetleri', yetki: OKUMA, sorgu: gozStoklariSorgusu, cevap: gozOzetleriCevabi, isle: ({ db, sorgu }) => s.gozOzetleri(db, sorgu.gozIdler) }),
   uc({ yontem: 'GET', yol: '/stok/harita-ozeti', yetki: OKUMA, cevap: haritaOzetiCevabi, isle: ({ db }) => s.haritaOzeti(db) }),
   uc({ yontem: 'GET', yol: '/stok/zemin', yetki: OKUMA, cevap: zeminCevabi, isle: ({ db }) => s.zeminIzgarasi(db) }),
-  uc({ yontem: 'POST', yol: '/stok/harita-bolumleri/:id/depo', yetki: 'stok.tanim', parametre: kimlikParametresi, govde: bolumDeposuGovdesi, cevap: haritaOzetiCevabi, isle: ({ db, parametre, govde }) => s.bolumDeposu(db, parametre.id, govde.depo) }),
-  uc({ yontem: 'POST', tekrarKorumali: true, yol: '/stok/harita-bolumleri/toplu-depo', yetki: 'stok.tanim', cevap: topluBolumDeposuCevabi, isle: ({ db }) => s.topluBolumDeposu(db) }),
+  uc({ yontem: 'POST', yol: '/stok/harita-bolumleri/:id/depo', yetki: 'stok.harita-yaz', parametre: kimlikParametresi, govde: bolumDeposuGovdesi, cevap: haritaOzetiCevabi, isle: ({ db, parametre, govde }) => s.bolumDeposu(db, parametre.id, govde.depo) }),
+  uc({ yontem: 'POST', tekrarKorumali: true, yol: '/stok/harita-bolumleri/toplu-depo', yetki: 'stok.harita-yaz', cevap: topluBolumDeposuCevabi, isle: ({ db }) => s.topluBolumDeposu(db) }),
   // Stok Merkezi > Depo: stok deposu bölümünün rafı ve göz kalemi (DEP-61, kart #1304). Kayıt Fabrika Haritası'nındır.
-  uc({ yontem: 'POST', yol: '/stok/depo-bolumleri/:id/raflari-kaydet', yetki: 'stok.tanim', parametre: kimlikParametresi, govde: depoRaflariGovdesi, cevap: kayitCevabi, isle: ({ db, kullanici, parametre, govde }) => s.depoRaflariKaydet(db, parametre.id, govde, kullanici.id) }),
-  uc({ yontem: 'POST', yol: '/stok/depo-goz-kalemleri/yaz', yetki: 'stok.tanim', govde: gozKalemiGovdesi, cevap: gozKalemiSemasi, isle: ({ db, kullanici, govde }) => s.depoGozKalemiYaz(db, govde, kullanici.id) }),
-  uc({ yontem: 'POST', yol: '/stok/depo-goz-kalemleri/sil', yetki: 'stok.tanim', govde: gozKalemiSilGovdesi, cevap: z.undefined(), isle: async ({ db, govde }) => { await s.depoGozKalemiSil(db, govde.id); return undefined; } }),
-  // 3168, 3171 a: raf kodlaması Stok > Ayarlar'dan; değişim ve yeniden numaralama konum kodlarıyla aynı kayıtta (yetki stok.tanim, R6).
+  uc({ yontem: 'POST', yol: '/stok/depo-bolumleri/:id/raflari-kaydet', yetki: 'stok.raf-yaz', parametre: kimlikParametresi, govde: depoRaflariGovdesi, cevap: kayitCevabi, isle: ({ db, kullanici, parametre, govde }) => s.depoRaflariKaydet(db, parametre.id, govde, kullanici.id) }),
+  uc({ yontem: 'POST', yol: '/stok/depo-goz-kalemleri/yaz', yetki: 'stok.harita-yaz', govde: gozKalemiGovdesi, cevap: gozKalemiSemasi, isle: ({ db, kullanici, govde }) => s.depoGozKalemiYaz(db, govde, kullanici.id) }),
+  uc({ yontem: 'POST', yol: '/stok/depo-goz-kalemleri/sil', yetki: 'stok.harita-yaz', govde: gozKalemiSilGovdesi, cevap: z.undefined(), isle: async ({ db, govde }) => { await s.depoGozKalemiSil(db, govde.id); return undefined; } }),
+  // 3168, 3171 a: raf kodlaması Stok > Ayarlar'dan; değişim ve yeniden numaralama konum kodlarıyla aynı kayıtta (yetki stok.raf-yaz, R6).
   uc({ yontem: 'GET', yol: '/stok/raf-kodlama', yetki: OKUMA, cevap: rafKodlamaDurumuCevabi, isle: ({ db }) => s.rafKodlamaOku(db) }),
   uc({ yontem: 'GET', yol: '/stok/raf-kodlama/gecis', yetki: OKUMA, cevap: rafKodGecisiListesiCevabi, isle: ({ db }) => s.rafKodGecisiListesi(db) }),
-  uc({ yontem: 'POST', tekrarKorumali: true, yol: '/stok/raf-kodlama/gecis/basildi', yetki: 'stok.tanim', cevap: rafKodlamaDurumuCevabi, isle: ({ db, kullanici }) => s.rafKodGecisiBasildi(db, kullanici.id) }),
-  uc({ yontem: 'GET', yol: '/stok/raf-kodlama/onizleme', yetki: 'stok.tanim', sorgu: rafKodlamaOnizlemeSorgusu, cevap: rafKodlamaOnizlemeCevabi, isle: ({ db, sorgu }) => s.rafKodlamaOnizleme(db, sorgu.kodlama) }),
-  uc({ yontem: 'POST', tekrarKorumali: true, yol: '/stok/raf-kodlama/degistir', yetki: 'stok.tanim', govde: rafKodlamaGovdesi, cevap: haritaEslemeCevabi, isle: ({ db, kullanici, govde, denetimEki }) => s.rafKodlamaDegistir(db, govde, kullanici.id, denetimEki) }),
-  uc({ yontem: 'POST', tekrarKorumali: true, yol: '/stok/harita-raflari/:id/yeniden-numarala', yetki: 'stok.tanim', parametre: kimlikParametresi, cevap: haritaEslemeCevabi, isle: ({ db, parametre, denetimEki }) => s.rafYenidenNumarala(db, parametre.id, denetimEki) }),
-  uc({ yontem: 'POST', yol: '/stok/konumlar/haritadan-esle', yetki: 'stok.tanim', cevap: haritaEslemeCevabi, isle: ({ db }) => s.haritadanEsle(db) }),
-  uc({ yontem: 'POST', yol: '/stok/konumlar/:id/duzenle', yetki: 'stok.tanim', parametre: kimlikParametresi, govde: konumDuzenleGovdesi, cevap: konumDuzenleCevabi, isle: ({ db, parametre, govde }) => s.konumDuzenle(db, parametre.id, govde) }),
-  uc({ yontem: 'POST', yol: '/stok/konumlar/:id/pasif-yap', yetki: 'stok.tanim', parametre: kimlikParametresi, govde: surumGovdesi, cevap: konumCevabi, isle: ({ db, parametre, govde }) => s.konumPasif(db, parametre.id, govde.surum) }),
+  uc({ yontem: 'POST', tekrarKorumali: true, yol: '/stok/raf-kodlama/gecis/basildi', yetki: 'stok.raf-yaz', cevap: rafKodlamaDurumuCevabi, isle: ({ db, kullanici }) => s.rafKodGecisiBasildi(db, kullanici.id) }),
+  uc({ yontem: 'GET', yol: '/stok/raf-kodlama/onizleme', yetki: 'stok.raf-yaz', sorgu: rafKodlamaOnizlemeSorgusu, cevap: rafKodlamaOnizlemeCevabi, isle: ({ db, sorgu }) => s.rafKodlamaOnizleme(db, sorgu.kodlama) }),
+  uc({ yontem: 'POST', tekrarKorumali: true, yol: '/stok/raf-kodlama/degistir', yetki: 'stok.raf-yaz', govde: rafKodlamaGovdesi, cevap: haritaEslemeCevabi, isle: ({ db, kullanici, govde, denetimEki }) => s.rafKodlamaDegistir(db, govde, kullanici.id, denetimEki) }),
+  uc({ yontem: 'POST', tekrarKorumali: true, yol: '/stok/harita-raflari/:id/yeniden-numarala', yetki: 'stok.raf-yaz', parametre: kimlikParametresi, cevap: haritaEslemeCevabi, isle: ({ db, parametre, denetimEki }) => s.rafYenidenNumarala(db, parametre.id, denetimEki) }),
+  uc({ yontem: 'POST', yol: '/stok/konumlar/haritadan-esle', yetki: ESLEME, cevap: haritaEslemeCevabi, isle: ({ db }) => s.haritadanEsle(db) }),
+  uc({ yontem: 'POST', yol: '/stok/konumlar/:id/duzenle', yetki: 'stok.konum-yaz', parametre: kimlikParametresi, govde: konumDuzenleGovdesi, cevap: konumDuzenleCevabi, isle: ({ db, parametre, govde }) => s.konumDuzenle(db, parametre.id, govde) }),
+  uc({ yontem: 'POST', yol: '/stok/konumlar/:id/pasif-yap', yetki: 'stok.konum-yaz', parametre: kimlikParametresi, govde: surumGovdesi, cevap: konumCevabi, isle: ({ db, parametre, govde }) => s.konumPasif(db, parametre.id, govde.surum) }),
 
   uc({ yontem: 'GET', yol: '/stok/raflar', yetki: OKUMA, sorgu: raflarSorgusu, cevap: raflarCevabi, isle: ({ db, sorgu }) => s.rafListesi(db, sorgu) }),
   uc({ yontem: 'GET', yol: '/stok/raflar/:id', yetki: OKUMA, parametre: kimlikParametresi, cevap: rafMatrisiCevabi, isle: ({ db, parametre }) => s.rafMatrisi(db, parametre.id) }),
-  uc({ yontem: 'POST', yol: '/stok/raflar', yetki: 'stok.tanim', govde: rafAcGovdesi, cevap: rafCevabi, isle: ({ db, govde }) => s.rafAc(db, govde) }),
-  uc({ yontem: 'POST', yol: '/stok/raflar/:id/duzenle', yetki: 'stok.tanim', parametre: kimlikParametresi, govde: rafDuzenleGovdesi, cevap: rafDuzenleCevabi, isle: ({ db, parametre, govde }) => s.rafDuzenle(db, parametre.id, govde) }),
-  uc({ yontem: 'POST', yol: '/stok/raflar/:id/pasif-yap', yetki: 'stok.tanim', parametre: kimlikParametresi, govde: surumGovdesi, cevap: rafCevabi, isle: ({ db, parametre, govde }) => s.rafPasif(db, parametre.id, govde.surum) }),
+  uc({ yontem: 'POST', yol: '/stok/raflar', yetki: 'stok.raf-yaz', govde: rafAcGovdesi, cevap: rafCevabi, isle: ({ db, govde }) => s.rafAc(db, govde) }),
+  uc({ yontem: 'POST', yol: '/stok/raflar/:id/duzenle', yetki: 'stok.raf-yaz', parametre: kimlikParametresi, govde: rafDuzenleGovdesi, cevap: rafDuzenleCevabi, isle: ({ db, parametre, govde }) => s.rafDuzenle(db, parametre.id, govde) }),
+  uc({ yontem: 'POST', yol: '/stok/raflar/:id/pasif-yap', yetki: 'stok.raf-yaz', parametre: kimlikParametresi, govde: surumGovdesi, cevap: rafCevabi, isle: ({ db, parametre, govde }) => s.rafPasif(db, parametre.id, govde.surum) }),
 
   uc({ yontem: 'GET', yol: '/stok/malzemeler', yetki: ROTA_STOK_OKUMA, sorgu: malzemelerSorgusu, cevap: malzemelerCevabi, isle: ({ db, sorgu }) => s.malzemeListesi(db, sorgu) }),
   uc({ yontem: 'GET', yol: '/stok/malzemeler/:id', yetki: OKUMA, parametre: kimlikParametresi, cevap: malzemeAyrintiCevabi, isle: ({ db, parametre }) => s.malzemeAyrintisi(db, parametre.id) }),
@@ -95,7 +98,7 @@ export const uclar = [
   uc({ yontem: 'GET', yol: '/stok/malzemeler/:id/goz-onerisi', yetki: OKUMA, parametre: kimlikParametresi, cevap: gozOnerisiCevabi, isle: ({ db, parametre }) => s.gozOnerisi(db, parametre.id) }),
   // Malzeme kartı (Malzemeler ve Hizmetler) bu iki değeri gösterir; kartı açabilen herkes görür.
   uc({ yontem: 'GET', yol: '/stok/malzeme-kart-bilgileri', yetki: 'oturum', sorgu: sayfaSorgusu, cevap: malzemeKartBilgileriCevabi, isle: ({ db, sorgu }) => s.malzemeKartBilgileri(db, sorgu) }),
-  uc({ yontem: 'POST', yol: '/stok/malzemeler/:id/ayar-duzenle', yetki: 'stok.tanim', parametre: kimlikParametresi, govde: malzemeAyarGovdesi, cevap: malzemeAyrintiCevabi, isle: ({ db, parametre, govde }) => s.malzemeAyariYaz(db, parametre.id, govde) }),
+  uc({ yontem: 'POST', yol: '/stok/malzemeler/:id/ayar-duzenle', yetki: 'stok.malzeme-ayari', parametre: kimlikParametresi, govde: malzemeAyarGovdesi, cevap: malzemeAyrintiCevabi, isle: ({ db, parametre, govde }) => s.malzemeAyariYaz(db, parametre.id, govde) }),
 
   uc({ yontem: 'GET', yol: '/stok/partiler', yetki: OKUMA, sorgu: partilerSorgusu, cevap: partilerCevabi, isle: ({ db, sorgu }) => s.partiListesi(db, sorgu) }),
   uc({ yontem: 'GET', yol: '/stok/partiler/:id/belgeler/:belgeId', yetki: OKUMA, parametre: partiBelgeParametresi, cevap: ikiliCevap, isle: ({ db, parametre }) => s.partiBelgeDosyasi(db, parametre.id, parametre.belgeId) }),
@@ -270,7 +273,7 @@ export const uclar = [
 
   // Depo yerleşimi: düzenleyici tek komutla kaydeder (raf tanımı işlemi). Kare adı dama tahtası içindir.
   uc({ yontem: 'GET', yol: '/stok/yerlesim', yetki: OKUMA, cevap: yerlesimCevabi, isle: ({ db }) => s.yerlesimOku(db) }),
-  uc({ yontem: 'POST', yol: '/stok/yerlesim/kaydet', yetki: 'stok.tanim', govde: yerlesimKaydetGovdesi, cevap: yerlesimCevabi, isle: ({ db, govde }) => s.yerlesimKaydet(db, govde) }),
+  uc({ yontem: 'POST', yol: '/stok/yerlesim/kaydet', yetki: 'stok.harita-yaz', govde: yerlesimKaydetGovdesi, cevap: yerlesimCevabi, isle: ({ db, govde }) => s.yerlesimKaydet(db, govde) }),
   uc({ yontem: 'GET', yol: '/stok/ara', yetki: OKUMA, sorgu: araSorgusu, cevap: araCevabi, isle: ({ db, sorgu }) => s.ara(db, sorgu.q) }),
   uc({ yontem: 'GET', yol: '/stok/sayim-bekleyenler', yetki: OKUMA, cevap: sayimBekleyenlerCevabi, isle: ({ db }) => s.sayimBekleyenler(db) }),
 ];

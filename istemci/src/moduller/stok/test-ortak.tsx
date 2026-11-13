@@ -10,7 +10,7 @@ import { rotalar } from './rotalar.tsx';
 // Stok yazan ama tanım ve geri alma yetkisi olmayan kişi (depo rolü kart #1225'ten beri tanım da taşır).
 export const DEPOCU: Kullanici = { id: 5, ad: 'Deneme Depocu', islemler: ['sayfa.stok', 'stok.giris', 'stok.cikis', 'stok.transfer', 'stok.sayim', 'stok.toplama'] };
 export const OKUYUCU: Kullanici = { id: 6, ad: 'Deneme Okuyucu', islemler: ['sayfa.stok'] };
-export const MUDUR: Kullanici = { id: 7, ad: 'Deneme Müdür', islemler: ['sayfa.stok', 'stok.giris', 'stok.cikis', 'stok.transfer', 'stok.sayim', 'stok.tanim', 'stok.geri-al', 'stok.toplama'] };
+export const MUDUR: Kullanici = { id: 7, ad: 'Deneme Müdür', islemler: ['sayfa.stok', 'stok.giris', 'stok.cikis', 'stok.transfer', 'stok.sayim', 'stok.konum-yaz', 'stok.raf-yaz', 'stok.harita-yaz', 'stok.malzeme-ayari', 'stok.geri-al', 'stok.toplama'] };
 
 export const json = (durum: number, govde: unknown) => new Response(JSON.stringify(govde), { status: durum });
 export interface Istek { yontem: string; yol: string; govde: unknown }

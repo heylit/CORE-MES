@@ -76,7 +76,7 @@ describe('stok toplu bölüm deposu (gerçek PostgreSQL)', () => {
     ]);
   });
 
-  test('yetki: girişsiz 401, stok.tanim olmayan 403; hiçbir şey yazılmaz', async () => {
+  test('yetki: girişsiz 401, stok.harita-yaz olmayan 403; hiçbir şey yazılmaz', async () => {
     const once = await konumSayisi();
     assert.equal((await iste(null, 'POST', '/stok/harita-bolumleri/toplu-depo')).durum, 401);
     assert.equal((await iste('kalite', 'POST', '/stok/harita-bolumleri/toplu-depo')).durum, 403);

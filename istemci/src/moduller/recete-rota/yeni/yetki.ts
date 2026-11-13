@@ -42,7 +42,7 @@ export interface RrYetkisi {
 
 export const OKUMA_ISLEMLERI: readonly Islem[] = ['sayfa.recete-rota', 'recete-rota.oku', 'recete-rota.yaz'];
 const STOK_OKUMA: readonly Islem[] = [
-  'sayfa.stok', 'stok.giris', 'stok.cikis', 'stok.transfer', 'stok.sayim', 'stok.tanim', 'stok.geri-al', 'stok.toplama', 'stok.statu-degistir',
+  'sayfa.stok', 'stok.giris', 'stok.cikis', 'stok.transfer', 'stok.sayim', 'stok.konum-yaz', 'stok.raf-yaz', 'stok.harita-yaz', 'stok.malzeme-ayari', 'stok.geri-al', 'stok.toplama', 'stok.statu-degistir',
 ];
 
 export function yetkiHesapla(y: Pick<Yetki, 'var' | 'herhangi'>): RrYetkisi {

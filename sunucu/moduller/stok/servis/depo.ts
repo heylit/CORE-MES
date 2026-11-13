@@ -258,10 +258,10 @@ export async function topluBolumDeposu(db: Db): Promise<TopluBolumDeposuCevabi> 
   return { acilanDepo: bolumler.length, eklenen: e.eklenen, atlanan: e.atlanan, koduDegisenler: e.koduDegisenler, ozet: await haritaOzeti(db), atlananPasifDepolar };
 }
 
-// 2902 (madde 1): her bölüm varsayılan olarak stok deposudur. Yeni bölüm, açan kişide stok.tanim varsa deposuyla açılır; yoksa
+// 2902 (madde 1): her bölüm varsayılan olarak stok deposudur. Yeni bölüm, açan kişide depo haritası eylemi (stok.harita-yaz) varsa deposuyla açılır; yoksa
 // depo "Bütün bölümleri depo yap" ya da tek tek "Depo yap" ile açılır. Yeni bölümün gözü ve alanı yoktur, eşleme gerekmez.
 export async function bolumAcildiYansit(db: Db, olay: { salonId: number; kod: string; islemler: readonly string[] }): Promise<void> {
-  if (!olay.islemler.includes('stok.tanim')) return;
+  if (!olay.islemler.includes('stok.harita-yaz')) return;
   const depolar = await sorgular.haritaDepolari(db);
   if (depolar.some((d) => d.salonId === olay.salonId)) return;
   await korumali(() => sorgular.haritaDeposuAc(db, { salonId: olay.salonId, kod: depoKoduOner(olay.kod, new Set(depolar.map((d) => d.kod))), ad: olay.kod }));
@@ -424,7 +424,7 @@ export async function rafKodlamaDegistir(
   db: Db, govde: { kodlama: RafKodlamasi; beklenen: RafKodlamasi }, kisiId: number, denetimEki: (satirlar: readonly Record<string, string | number | boolean | null>[]) => void,
 ): Promise<HaritaEslemeCevabi> {
   const eski = await rafKodlamasi(db);
-  await haritaRafKodlamasiDegistir(db, govde.kodlama, govde.beklenen, kisiId, { yol: '/stok/raf-kodlama/degistir', yetki: 'stok.tanim' });
+  await haritaRafKodlamasiDegistir(db, govde.kodlama, govde.beklenen, kisiId, { yol: '/stok/raf-kodlama/degistir', yetki: 'stok.raf-yaz' });
   const e = await haritadanEsle(db);
   denetimEki(kodDegisimDenetimi({ islem: 'raf-kodlama', eski, yeni: govde.kodlama }, e));
   return e;

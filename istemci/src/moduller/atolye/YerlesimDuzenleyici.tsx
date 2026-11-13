@@ -1,4 +1,5 @@
 import { Suspense, lazy, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { STOK_ESLEME_ISLEMLERI } from '#paylasilan/islemler.ts';
 import type { KeyboardEvent as ReactKeyboardEvent, PointerEvent as ReactPointerEvent } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { FabrikaKayitCevabi, IhlalAyrintisi, KayitCevabi, MerkezModeli, SurumCakismasi, YerlesimCevabi } from '#paylasilan/sozlesme/atolye.ts';
@@ -93,7 +94,8 @@ export function YerlesimDuzenleyici({ salonId, bolumler, kapat, kaydedildi }: Oz
   const { bildir } = useBildirim();
   const oturum = useOturum();
   const stokOkur = oturum.data?.islemler.some(stokOkurMu) === true;
-  const stokTanimlar = oturum.data?.islemler.includes('stok.tanim') === true;
+  // Kayıttan sonraki eşleme raf, konum ya da depo haritası eyleminden biriyle koşar (stok ucundaki kümeyle aynı).
+  const stokTanimlar = STOK_ESLEME_ISLEMLERI.some((i) => oturum.data?.islemler.includes(i) === true);
   const istemci = useQueryClient();
   const fabrikaMi = salonId === null;
   // Depo kipi (Stok Merkezi'nden, harita yetkisi olmadan): yalnız raflar eklenir, taşınır ve düzenlenir; kayıt yalnız rafları
@@ -340,7 +342,7 @@ export function YerlesimDuzenleyici({ salonId, bolumler, kapat, kaydedildi }: Oz
 
   // Bulgu anahtarları gönderilen gövdenin sırasına göredir; kayıt sürerken taslak değişse de o sırayla eşlenir.
   const gonderilenEslesme = useRef<Map<string, string>>(new Map());
-  // 2884: haritada çizilen raf gözü ve alan, stok tanımı olan kişide kayıttan sonra stok konumu olur (eşleme ucu stok.tanim ister;
+  // 2884: haritada çizilen raf gözü ve alan, stok tanımı olan kişide kayıttan sonra stok konumu olur (eşleme ucu konum, raf ya da harita eyleminden birini ister;
   // atölye yazabilen ama stok tanımı olmayan kişi konum açamaz). Harita kaydı ayrı istekte tamamlanmıştır; eşleme düşerse kayıt
   // geri alınmaz, ardından okunan özet eşlenmemiş yeri bildirir ve eşleme tekrar güvenlidir.
   // 3135 a: eşleme kodu değişen konumları döner; düzenleyici kayıttan sonra kapandığı için liste `kaydedildi` ile üste gider.

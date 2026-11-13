@@ -53,7 +53,7 @@ describe('raf kodlama ekranı (3168)', () => {
   });
 
   it('sırası bozuk rafta yeniden numarala tehlikeli onayla çağrılır; pencere tehlike uyarısıyla açılır', async () => {
-    const istekler = kur(['sayfa.stok', 'stok.tanim', 'sayfa.etiket-merkezi']);
+    const istekler = kur(['sayfa.stok', 'stok.raf-yaz', 'sayfa.etiket-merkezi']);
     goster(<RafKodlamaSatiri raf={raf([1, 2, 5, 6])} stok={null} />);
     fireEvent.click(await screen.findByRole('button', { name: 'Yeniden numarala' }));
     const onay = await screen.findByRole('dialog', { name: 'ORNA rafı yeniden numaralansın mı?' });

@@ -83,7 +83,7 @@ describe('stok raf kodlama (gerçek PostgreSQL)', () => {
     assert.deepEqual(await kodlar('RKA'), ['RKA-01-1-1', 'RKA-02-1-1', 'RKA-03-1-1']);
     assert.equal((await iste<RafKodlamaDurumuCevabi>('kalite', 'GET', '/stok/raf-kodlama')).govde.kodlama, 'bolme-kat-goz');
 
-    // Kuru deneme yalnız stok.tanim ile; hiçbir şey yazmaz. Rakamlı R7 rafı sıra numarasında eski adresini taşırdı (sayılmaz).
+    // Kuru deneme yalnız stok.raf-yaz ile; hiçbir şey yazmaz. Rakamlı R7 rafı sıra numarasında eski adresini taşırdı (sayılmaz).
     assert.equal((await iste('kalite', 'GET', '/stok/raf-kodlama/onizleme?kodlama=duz-sayi')).durum, 403);
     const on = await iste<RafKodlamaOnizlemeCevabi>('depo', 'GET', '/stok/raf-kodlama/onizleme?kodlama=duz-sayi');
     assert.equal(on.durum, 200, JSON.stringify(on.govde));
@@ -114,7 +114,7 @@ describe('stok raf kodlama (gerçek PostgreSQL)', () => {
     // R6: ayar değişikliği komutun yolu ve yetkisiyle; uç kaydına özet ve kod değişimleri eklenir.
     const ayarKaydi = await o().vt.tek<{ yetki: string; govde: { eski: string; yeni: string } }>(
       "SELECT yetki, govde FROM denetim_kaydi WHERE yol = '/stok/raf-kodlama/degistir' AND parametre->>'anahtar' = 'atolye.raf-kodlama'");
-    assert.deepEqual([ayarKaydi?.yetki, ayarKaydi?.govde], ['stok.tanim', { eski: 'bolme-kat-goz', yeni: 'duz-sayi' }]);
+    assert.deepEqual([ayarKaydi?.yetki, ayarKaydi?.govde], ['stok.raf-yaz', { eski: 'bolme-kat-goz', yeni: 'duz-sayi' }]);
     const ucKaydi = await o().vt.tek<{ govde: unknown }>(
       "SELECT govde FROM denetim_kaydi WHERE yol = '/stok/raf-kodlama/degistir' AND parametre->>'anahtar' IS NULL ORDER BY id DESC LIMIT 1");
     assert.match(JSON.stringify(ucKaydi?.govde), /"degisenKonum":4/);

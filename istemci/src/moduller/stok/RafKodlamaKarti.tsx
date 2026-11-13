@@ -26,7 +26,7 @@ const KODLAMA_ADI: Record<RafKodlamasi, string> = {
 export function RafKodlamaKarti() {
   const istemci = useQueryClient();
   const { bildir } = useBildirim();
-  const tanimlar = useIslem('stok.tanim');
+  const tanimlar = useIslem('stok.raf-yaz');
   const kayitli = useRafKodlamasi();
   const [yeni, yeniYaz] = useState<RafKodlamasi | null>(null);
   const [degisenler, degisenlerYaz] = useState<KoduDegisenKonum[] | null>(null);

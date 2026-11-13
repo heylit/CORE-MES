@@ -50,7 +50,7 @@ export function KonumAyrinti() {
   const { bildir } = useBildirim();
   const [yerlestir, setYerlestir] = useState<BakiyeSatiri | null>(null);
   const tasiyabilir = useIslem('stok.transfer');
-  const tanimlar = useIslem('stok.tanim');
+  const tanimlar = useIslem('stok.konum-yaz');
   const [turAc, setTurAc] = useState(false);
   const [pasifAc, setPasifAc] = useState(false);
   const k = useQuery({ queryKey: anahtarlar.ayrinti('konum', id), queryFn: () => api.get<KonumAyrintiCevabi>(`/stok/konumlar/${id}`) });

@@ -44,13 +44,13 @@ Eksiye düşüm onayı (1387 a, kart #1414): `eksiOnay: true` taşıyan yazma u�
 
 | Uç | İşlem | Sunucudaki kurallar | İzinli test | Reddeden test |
 |---|---|---|---|---|
-| `POST /stok/konumlar` | `stok.tanim` | kod tekil (kısıt); tür `kabul`, `depo_zemini`, `fason` (DEP-58) | DEP-09/13, DEP-58 (fason kutusu) | YOK |
-| `POST /stok/konumlar/:id/duzenle` | `stok.tanim` | sürüm (`surumluGuncelle`) | YOK | YOK |
-| `POST /stok/konumlar/:id/pasif-yap` | `stok.tanim` | sürüm; stoklu konum pasife alınamaz (bileşik yabancı anahtar, DEP-13) | DEP-09/13 | DEP-09/13 (stoklu konum 409) |
-| `POST /stok/raflar` | `stok.tanim` | kod biçimi, ölçü, kat aralığı (kısıtlar) | DEP-14/12/13 | yetki (K3): depo 403 |
-| `POST /stok/raflar/:id/duzenle` | `stok.tanim` | sürüm (DEP-29); göz kimliği korunur | DEP-14/12/13 | DEP-29 (eski sürüm 409) |
-| `POST /stok/raflar/:id/pasif-yap` | `stok.tanim` | sürüm; stoklu göz kapatılamaz | DEP-14/12/13 | DEP-14/12/13 (409) |
-| `POST /stok/malzemeler/:id/ayar-duzenle` | `stok.tanim` | sürüm; varsayılan konum aktif olmalı (DEP-59) | DEP-28 DEP-59 | DEP-59 (olmayan ve pasif konum 422) |
+| `POST /stok/konumlar` | `stok.konum-yaz` | kod tekil (kısıt); tür `kabul`, `depo_zemini`, `fason` (DEP-58) | DEP-09/13, DEP-58 (fason kutusu) | YOK |
+| `POST /stok/konumlar/:id/duzenle` | `stok.konum-yaz` | sürüm (`surumluGuncelle`) | YOK | YOK |
+| `POST /stok/konumlar/:id/pasif-yap` | `stok.konum-yaz` | sürüm; stoklu konum pasife alınamaz (bileşik yabancı anahtar, DEP-13) | DEP-09/13 | DEP-09/13 (stoklu konum 409) |
+| `POST /stok/raflar` | `stok.raf-yaz` | kod biçimi, ölçü, kat aralığı (kısıtlar) | DEP-14/12/13 | yetki (K3): depo 403 |
+| `POST /stok/raflar/:id/duzenle` | `stok.raf-yaz` | sürüm (DEP-29); göz kimliği korunur | DEP-14/12/13 | DEP-29 (eski sürüm 409) |
+| `POST /stok/raflar/:id/pasif-yap` | `stok.raf-yaz` | sürüm; stoklu göz kapatılamaz | DEP-14/12/13 | DEP-14/12/13 (409) |
+| `POST /stok/malzemeler/:id/ayar-duzenle` | `stok.malzeme-ayari` | sürüm; varsayılan konum aktif olmalı (DEP-59) | DEP-28 DEP-59 | DEP-59 (olmayan ve pasif konum 422) |
 | `GET /stok/malzeme-kart-bilgileri` | `oturum` | yalnız kritik seviye ve varsayılan konum kodu; sayfalı | DEP-60 (operatör 200) | DEP-60 (oturumsuz 401) |
 | `POST /stok/mal-kabul` | `stok.giris` | hammaddede parti zorunlu (DEP-20), kullanılamaz kart reddi (DEP-10), demirbaş parti almaz (DEP-49); başka malzemenin partisi 409 (DEP-22); başka kartın sipariş satırı 400 (KD-009); hizmet siparişinde fason ya da saf hizmet (DEP-58): giden yalnız aktif `fason` konumundan, yetmezse ONAY_GEREKLI (gövdede `eksiOnay`), saf hizmette konum ve parti girilmez; belge ve satır değişmez (tetikleyici); no sunucuda | DEP-20/21/10/49, DEP-58 | yetki (K3): satın almacı 403; DEP-20/21/10/49 (400/422); DEP-23/22 (409); KD-009 (400); DEP-58 reddedilenler (400), yetmeyen giden (409 ONAY_GEREKLI) |
 | `POST /stok/uretim-emirleri/:id/tamamla` | `stok.giris` ve servis içinde `stok.cikis` | emir `bitti`, bir kez (409); K-1 a: sarf yazmaz, yalnız çıktı girer; sağlam adet girilmemiş adedi aşamaz (400); kapsam DEP-36; emir başına işlem kilidi (eşzamanlı ikinci istek yeniden hesaplar); tek işlem, tekrar korumalı | emir tamamlama | kalite 403, yalnız giriş işlemi olan 403, kapsam dışı 403, eşzamanlı ikinci 409, bitmemiş ve ikinci kez 409, aşım 400, çıktı yazılamazsa hiçbir şey yazılmaz |
@@ -76,7 +76,7 @@ Eksiye düşüm onayı (1387 a, kart #1414): `eksiOnay: true` taşıyan yazma u�
 | `POST /stok/toplamalar` | `stok.toplama` | istek ve teslim yeri istasyonu kapsamda olmalı, değilse 403 (STK-K3; `stok.transfer` olan muaf, 3094 a); en eski girişten ayrılır, eksik söylenir (DEP-42) | DEP-42/56 | DEP-42/56 (kalite 403) |
 | `POST /stok/toplamalar/:id/adimlar/:adimId/topla` | `stok.toplama` | liste kapsam dışıysa 403 (STK-K3); sürüm; adım iki kez toplanmaz; kapalı liste toplanmaz (DEP-56) | DEP-42/56 | DEP-42/56 (409) |
 | `POST /stok/toplamalar/:id/kapat` | `stok.toplama` | liste kapsam dışıysa 403 (STK-K3); sürüm; açan ya da işlemi olan başkası kapatır, kapatan kişi kayıtta (ST4) | DEP-42/56 | ST4 (işlemsiz 403) |
-| `POST /stok/yerlesim/kaydet` | `stok.tanim` | tek işlem; stoklu raf kaldırılmaz; aynı adres ve eski sürüm 409 (DEP-57) | DEP-57 | DEP-57 (depo 403, 409) |
+| `POST /stok/yerlesim/kaydet` | `stok.harita-yaz` | tek işlem; stoklu raf kaldırılmaz; aynı adres ve eski sürüm 409 (DEP-57) | DEP-57 | DEP-57 (depo 403, 409) |
 | ~~`POST /stok/yerlesim/kare-adi`~~ kaldırıldı (borç #441) | `stok.tanim` | — | DEP-57 | YOK |
 | `POST /stok/malzeme-istekleri/:id/hazirla`, `/teslim-et`, `/iptal-et` | `stok.transfer` | iş merkezi kapsamı uygulanmaz: depo bütün istasyonlara taşır (3094 a, STK-K2); sürüm; geçiş yalnız ileri, kapanan değişmez (409); teslimde karşılanan pozitif | malzeme isteği | malzeme isteği (operatör 403, ikinci hazırla ve teslimden sonra iptal 409, eski sürüm 409, olmayan 404) |
 | `disari.malzemeIstegiAc` (uç değil, çağıranın işleminde) | üretim işlemi (`uretim-emirleri` `KOMUT_ISLEMI`) servis içinde | istasyon kapsamı (DEP-36 gibi); hizmet kartı, olmayan ya da pasif istasyon, olmayan emir 400; kaynak kimliği tekil, eşzamanlıda tek kayıt | malzeme isteği | malzeme isteği (işlemsiz 403, kapsam dışı 403, 400'ler; satır yazılmaz) |
@@ -115,9 +115,9 @@ Kayıt Fabrika Haritası'nındır (`atolye/disari.ts` `rafYerlesimiKaydet`, `goz
 
 | Uç | Sunucudaki kurallar | İzinli test | Reddeden test |
 |---|---|---|---|
-| `POST /stok/depo-bolumleri/:id/raflari-kaydet` (`stok.tanim`) | DEP-61 bölüm etkin stok deposu; gövde yalnız raflar, bölümün ölçüsü, istasyon ve makine yerleri, alanları, duvarları ve geçişleri kayıtlı haliyle kalır; haritanın yerleşim kuralları (ATL-*) ve sürüm (ATL-16) aynen; kişi sunucudan | "DEP-61" 200 | kalite 403, depo olmayan bölüm 403, eski sürüm 409, başka bölümün rafı 4xx |
-| `POST /stok/depo-goz-kalemleri/yaz` (`stok.tanim`) | DEP-61 gözün bölümü stok deposu; doluluk kuralı ATL-29 | "DEP-61" 200 | kalite 403, depo dışı göz 403 |
-| `POST /stok/depo-goz-kalemleri/sil` (`stok.tanim`) | DEP-61 kalemin bölümü stok deposu | "DEP-61" 200/204 | kalite 403, depo dışı kalem 403, olmayan kalem 404 |
+| `POST /stok/depo-bolumleri/:id/raflari-kaydet` (`stok.raf-yaz`) | DEP-61 bölüm etkin stok deposu; gövde yalnız raflar, bölümün ölçüsü, istasyon ve makine yerleri, alanları, duvarları ve geçişleri kayıtlı haliyle kalır; haritanın yerleşim kuralları (ATL-*) ve sürüm (ATL-16) aynen; kişi sunucudan | "DEP-61" 200 | kalite 403, depo olmayan bölüm 403, eski sürüm 409, başka bölümün rafı 4xx |
+| `POST /stok/depo-goz-kalemleri/yaz` (`stok.harita-yaz`) | DEP-61 gözün bölümü stok deposu; doluluk kuralı ATL-29 | "DEP-61" 200 | kalite 403, depo dışı göz 403 |
+| `POST /stok/depo-goz-kalemleri/sil` (`stok.harita-yaz`) | DEP-61 kalemin bölümü stok deposu | "DEP-61" 200/204 | kalite 403, depo dışı kalem 403, olmayan kalem 404 |
 
 Yalnız ekranda kalan: depo kipinde düzenleyici makine, alan ve duvarı seçtirmez, paleti yalnız raf sunar (sunucu zaten yalnız rafları yazar).
 
@@ -161,4 +161,17 @@ Kart #99 (soru 104 a): `POST /stok/mal-kabul` (`stok.giris`) satın alma satır�
 
 | Uç (kart 2902) | Sunucudaki kurallar | İzinli test | Reddeden test |
 |---|---|---|---|
-| `POST /stok/harita-bolumleri/toplu-depo` (`stok.tanim`) | tekrar korumalı; tek transaction (hata olursa hiçbir depo ve konum kalmaz); yalnız haritadaki bölüm; kod sunucuda `depoKoduOner` ile; gövde yok | depo rolü 200, sayılar | oturumsuz 401, kalite rolü 403 (yazım olmaz), veritabanı reddinde hiçbiri kalmaz |
+| `POST /stok/harita-bolumleri/toplu-depo` (`stok.harita-yaz`) | tekrar korumalı; tek transaction (hata olursa hiçbir depo ve konum kalmaz); yalnız haritadaki bölüm; kod sunucuda `depoKoduOner` ile; gövde yok | depo rolü 200, sayılar | oturumsuz 401, kalite rolü 403 (yazım olmaz), veritabanı reddinde hiçbiri kalmaz |
+
+## Stok tanım eylemleri (kart 3165, karar 3165 a)
+
+`stok.tanim` dört eyleme bölündü; eski işlem katalogda etkisiz durur, hiçbir uç ona bağlı değildir. Göç yalnız ekler: eski işlemi
+taşıyan her rol, kişiye verilen ek ve kişiden alınan kısıt dört eyleme kopyalanır.
+
+| Eylem | Uçlar | İzinli ve reddeden test |
+|---|---|---|
+| `stok.konum-yaz` | `POST /stok/konumlar`, `/konumlar/:id/duzenle`, `/konumlar/:id/pasif-yap` | `eylem-bolme.test.ts` B3: tek eylemli kişi geçer, öteki üç eylem ve eski işlem 403 |
+| `stok.raf-yaz` | `POST /stok/raflar`, `/raflar/:id/duzenle`, `/raflar/:id/pasif-yap`, `/depo-bolumleri/:id/raflari-kaydet`, `/raf-kodlama/gecis/basildi`, `/raf-kodlama/degistir`, `/harita-raflari/:id/yeniden-numarala`, `GET /stok/raf-kodlama/onizleme` | aynı test |
+| `stok.harita-yaz` | `POST /stok/harita-bolumleri/:id/depo`, `/harita-bolumleri/toplu-depo`, `/depo-goz-kalemleri/yaz`, `/depo-goz-kalemleri/sil`, `/yerlesim/kaydet`; Fabrika Haritası'nda açılan bölümün deposu | aynı test; `atolye/bolum-olayi.test.ts` |
+| `stok.malzeme-ayari` | `POST /stok/malzemeler/:id/ayar-duzenle` | aynı test |
+| konum, raf ya da harita eyleminden biri | `POST /stok/konumlar/haritadan-esle` (raf ve harita kaydının ardından koşar; yalnız haritada var olanı konuma çevirir) | aynı test: malzeme ayarı eylemi ve eski işlem 403 |

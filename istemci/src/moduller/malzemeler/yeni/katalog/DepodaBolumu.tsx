@@ -12,7 +12,7 @@ const GOSTERILEN = 3;
 const sayi = (m: string): string => Number(m).toLocaleString('tr-TR', { maximumFractionDigits: 3 });
 // Sunucunun stok OKUMA kümesi (stok/uclar.ts: sayfa.stok ve STOK_ISLEMLERI); stok.istek okuma açmaz. Liste eksik ya da fazlaysa tip denetimi kırılır.
 type StokOkumaIslemi = 'sayfa.stok' | (typeof StokIslemleri.STOK_ISLEMLERI)[number];
-const STOK_OKUMA_ISLEMLERI = ['sayfa.stok', 'stok.giris', 'stok.cikis', 'stok.transfer', 'stok.sayim', 'stok.tanim', 'stok.geri-al', 'stok.toplama', 'stok.statu-degistir', 'stok.eksi-onayla', 'stok.skt-onayla'] as const satisfies readonly StokOkumaIslemi[];
+const STOK_OKUMA_ISLEMLERI = ['sayfa.stok', 'stok.giris', 'stok.cikis', 'stok.transfer', 'stok.sayim', 'stok.konum-yaz', 'stok.raf-yaz', 'stok.harita-yaz', 'stok.malzeme-ayari', 'stok.geri-al', 'stok.toplama', 'stok.statu-degistir', 'stok.eksi-onayla', 'stok.skt-onayla'] as const satisfies readonly StokOkumaIslemi[];
 const STOK_OKUMA_TAM: [Exclude<StokOkumaIslemi, (typeof STOK_OKUMA_ISLEMLERI)[number]>] extends [never] ? true : never = true;
 const STOK_OKUMA = new Set<string>(STOK_OKUMA_TAM ? STOK_OKUMA_ISLEMLERI : []);
 const stokOkurMu = (i: string): boolean => STOK_OKUMA.has(i);

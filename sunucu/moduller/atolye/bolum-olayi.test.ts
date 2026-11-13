@@ -12,7 +12,7 @@ import { kimlikCozucu } from '../oturum/disari.ts';
 import { bolumAcildiDinle } from './olaylar.ts';
 import { salonEkle } from './servis.ts';
 
-// 2902 (madde 1): her bölüm varsayılan olarak stok deposudur. Fabrika Haritası'nda açılan bölüm, açan kişide stok.tanim varsa deposuyla
+// 2902 (madde 1): her bölüm varsayılan olarak stok deposudur. Fabrika Haritası'nda açılan bölüm, açan kişide stok.harita-yaz varsa deposuyla
 // açılır (kod bölüm kodundan); yoksa depo açılmaz (sonra toplu düğmeyle ya da tek tek açılır). Dinleyicinin reddi bölüm kaydını da geri alır.
 const PAROLA = 'dogru-parola-1';
 
@@ -51,7 +51,7 @@ describe('atölye yeni bölüm -> stok deposu (gerçek PostgreSQL)', () => {
   });
   after(async () => { await ortam?.kaldir(); });
 
-  test('stok.tanim olan kişinin açtığı bölüm deposuyla açılır; kod bölüm kodundan, doluysa sıra ekiyle', async () => {
+  test('stok.harita-yaz olan kişinin açtığı bölüm deposuyla açılır; kod bölüm kodundan, doluysa sıra ekiyle', async () => {
     const a = await salonAc('yonetici', 'YB-1');
     assert.equal(a.durum, 200, JSON.stringify(a.govde));
     assert.deepEqual(await depo(a.govde.id!), { kod: 'YB1', ad: 'YB-1', aktif: true });
@@ -60,7 +60,7 @@ describe('atölye yeni bölüm -> stok deposu (gerçek PostgreSQL)', () => {
     assert.deepEqual(await depo(b.govde.id!), { kod: 'YB12', ad: 'YB1', aktif: true });
   });
 
-  test('stok.tanim olmayan (atolye.salon-yaz) kişinin açtığı bölümde depo açılmaz; bölüm açılır', async () => {
+  test('stok.harita-yaz olmayan (atolye.salon-yaz) kişinin açtığı bölümde depo açılmaz; bölüm açılır', async () => {
     const a = await salonAc('planlama', 'YB-PLN');
     assert.equal(a.durum, 200, JSON.stringify(a.govde));
     assert.equal(await depo(a.govde.id!), null);

@@ -7,7 +7,7 @@ import { Dugme, DurumKutusu, Kart, Tablo, useBildirim } from '../../ortak/arayuz
 import { api } from '../../ortak/veri/api.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { KONUM_ETIKETI } from './gorunum.ts';
-import { hataMetni, korumaliPost, useIslem, useStokKomutu } from './ortak.tsx';
+import { hataMetni, korumaliPost, useEsleyebilir, useIslem, useStokKomutu } from './ortak.tsx';
 import { KodDegisimPenceresi } from './Etiketler.tsx';
 
 // Raf, göz ve zemin alanı Fabrika Haritası'nda tanımlanır (kart #686); stok ekranları oraya gönderir.
@@ -17,7 +17,7 @@ export function HaritaLinki({ metin = "Fabrika Haritası'nda düzenle" }: { meti
 
 // Haritada açılan göz ve stok alanını stok konumu yapar; atlanan adresler bildirimde sayılır.
 export function HaritaEsleDugmesi() {
-  const tanimlar = useIslem('stok.tanim');
+  const tanimlar = useEsleyebilir();
   const { bildir } = useBildirim();
   const [degisenler, setDegisenler] = useState<KoduDegisenKonum[]>([]);
   const { komut } = useStokKomutu(async () => {
@@ -38,7 +38,7 @@ export function HaritaEsleDugmesi() {
 
 // 2902: deposu olmayan bütün bölümleri tek komutta depo yapar ve eşler; sonuç sayılarla söylenir. Deposuz bölüm yoksa görünmez.
 export function TopluDepoDugmesi({ deposuz }: { deposuz: number }) {
-  const tanimlar = useIslem('stok.tanim');
+  const tanimlar = useIslem('stok.harita-yaz');
   const { bildir } = useBildirim();
   const [degisenler, setDegisenler] = useState<KoduDegisenKonum[]>([]);
   const { komut } = useStokKomutu(async () => {
@@ -66,7 +66,7 @@ export const HARITA_BAGI_NOTU = `Yalnız stok deposu olan bölümün raf gözler
 // Ayarlar'da eşleme özeti: hangi bölüm stok deposu (yalnız onun gözleri konum olur), bağlı göz ve alan sayısı, eşlenmemiş harita
 // yeri, haritada karşılığı olmayan açık konumlar.
 export function HaritaOzeti() {
-  const tanimlar = useIslem('stok.tanim');
+  const tanimlar = useIslem('stok.harita-yaz');
   const o = useQuery({ queryKey: [...anahtarlar.hepsi, 'harita-ozeti'], queryFn: () => api.get<HaritaOzetiCevabi>('/stok/harita-ozeti') });
   const [secili, setSecili] = useState<number | null>(null);
   const { komut } = useStokKomutu(({ salonId, ...g }: BolumDeposuGovdesi & { salonId: number }) => api.post<HaritaOzetiCevabi>(`/stok/harita-bolumleri/${salonId}/depo`, g), 'Bölüm güncellendi.', () => setSecili(null));

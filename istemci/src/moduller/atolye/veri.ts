@@ -137,7 +137,7 @@ export function useGozler(rafId: number | null, sayfa: number, bolme: number | n
 // Stok okuma yetkisi: stok sayfası ya da bir stok işlemi (sunucu aynısını ister).
 // Sunucunun stok OKUMA kümesi (stok/uclar.ts: sayfa.stok ve STOK_ISLEMLERI); stok.istek okuma açmaz. Liste eksik ya da fazlaysa tip denetimi kırılır.
 type StokOkumaIslemi = 'sayfa.stok' | (typeof StokIslemleri.STOK_ISLEMLERI)[number];
-export const STOK_OKUMA_ISLEMLERI = ['sayfa.stok', 'stok.giris', 'stok.cikis', 'stok.transfer', 'stok.sayim', 'stok.tanim', 'stok.geri-al', 'stok.toplama', 'stok.statu-degistir', 'stok.eksi-onayla', 'stok.skt-onayla'] as const satisfies readonly StokOkumaIslemi[];
+export const STOK_OKUMA_ISLEMLERI = ['sayfa.stok', 'stok.giris', 'stok.cikis', 'stok.transfer', 'stok.sayim', 'stok.konum-yaz', 'stok.raf-yaz', 'stok.harita-yaz', 'stok.malzeme-ayari', 'stok.geri-al', 'stok.toplama', 'stok.statu-degistir', 'stok.eksi-onayla', 'stok.skt-onayla'] as const satisfies readonly StokOkumaIslemi[];
 const STOK_OKUMA_TAM: [Exclude<StokOkumaIslemi, (typeof STOK_OKUMA_ISLEMLERI)[number]>] extends [never] ? true : never = true;
 const STOK_OKUMA = new Set<string>(STOK_OKUMA_TAM ? STOK_OKUMA_ISLEMLERI : []);
 export const stokOkurMu = (i: string): boolean => STOK_OKUMA.has(i);
@@ -183,7 +183,7 @@ export function useRafStoklari(rafIdler: readonly number[]): RafStoklari {
   });
 }
 
-// ATL-5: harita kaydından sonra stok tarafında bekleyen iş. Eşleme Stok Merkezi'ndedir (stok.tanim); harita yalnız haber verir.
+// ATL-5: harita kaydından sonra stok tarafında bekleyen iş. Eşleme Stok Merkezi'ndedir (konum, raf ya da harita eylemi); harita yalnız haber verir.
 // eslenmemis: stok konumu olmayan göz ya da alan; yetimStoklu: haritada yeri kalmamış, içinde stok olan konum. Okunamazsa null.
 export async function stokEslemeDurumu(): Promise<{ eslenmemis: number; yetimStoklu: number } | null> {
   try {

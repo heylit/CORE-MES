@@ -225,7 +225,7 @@ const AZAMI_STOK_KARTI = 200;
 // Stok bakiyesini sayfası ya da stok işlemi olan okur (sahibinin OKUMA kuralı); öteki kişiye sorulmaz (195 a), dilim null kalır.
 // İstemci paylaşılanı yalnız tip olarak ithal eder; liste sahibinin listesiyle tip denetiminde birebir tutar.
 const STOK_ISLEM_KOPYASI = [
-  'stok.giris', 'stok.cikis', 'stok.transfer', 'stok.sayim', 'stok.tanim', 'stok.geri-al', 'stok.toplama', 'stok.statu-degistir', 'stok.eksi-onayla', 'stok.skt-onayla',
+  'stok.giris', 'stok.cikis', 'stok.transfer', 'stok.sayim', 'stok.konum-yaz', 'stok.raf-yaz', 'stok.harita-yaz', 'stok.malzeme-ayari', 'stok.geri-al', 'stok.toplama', 'stok.statu-degistir', 'stok.eksi-onayla', 'stok.skt-onayla',
 ] as const satisfies typeof STOK_ISLEMLERI;
 const STOK_OKUMA_ISLEMLERI: readonly string[] = ['sayfa.stok', ...STOK_ISLEM_KOPYASI];
 
