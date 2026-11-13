@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
-import type { KodCozCevabi, OkutCozCevabi, RefakatKartSatiri, RefakatPartisi, SepetCevabi, Teslim, TeslimCevabi } from '#paylasilan/sozlesme/stok.ts';
+import type { KodCozCevabi, OkutCozCevabi, RefakatPartisi, SepetCevabi, Teslim, TeslimCevabi } from '#paylasilan/sozlesme/stok.ts';
 import { Dugme, Rozet, Tablo } from '../../ortak/arayuz/index.ts';
 import { ApiHatasi, api } from '../../ortak/veri/api.ts';
 import { VARSAYILAN_TAZELIK_MS } from '../../ortak/veri/sorgu-istemcisi.ts';
@@ -15,6 +15,7 @@ import { PartiIziPenceresi } from './PartiIzi.tsx';
 import { SepeteEklePenceresi } from './SepeteEkle.tsx';
 import { TeslimSatiri } from './TeslimSatiri.tsx';
 import { KartEmirOzeti } from '../uretim-emirleri/disari.ts';
+import { KartMalzemeAkisi, useKartDurumu } from './KartMalzemeAkisi.tsx';
 
 // Panelde okutulan kod (soru 89): sonuç okuyucunun altında durur, iş buradan seçilir. Gözler, lotlar ve toplam yalnız stok okuması
 // olana (soru 93 a); herkes alabileceği yerdeki serbest miktarı ve kapsamı dışındaki istasyonları görür.
@@ -98,20 +99,6 @@ function DepoSepetineEkle({ c }: { c: Extract<KodCozCevabi, { tur: 'malzeme' | '
 }
 
 // Refakat kartıyla gelen teslim (Soru 118 a): alan kartı okutur, kendisine gelen teslim burada alınır; Teslim al listesi de kalır.
-// 3155: kartın malzemesi nerede, tek satır (özetin altı). Ayrıntı "Başka işlem" altındaki kart satırlarındadır.
-export function kartNeredeMetni(satirlar: readonly RefakatKartSatiri[] | undefined): string | null {
-  if (!satirlar || satirlar.length === 0) return null;
-  // Yer adına ek getirilmez (ORN torna 2'de / 2'e gibi yanlış ek); "yer: miktar" biçimi.
-  const parca = (x: RefakatKartSatiri) => {
-    const birim = x.birim ? ` ${x.birim}` : '';
-    const yolda = Number(x.yolda);
-    const burada = Number(x.miktar) - yolda;
-    const l = [burada > 0 ? `${miktarMetni(String(burada))}${birim} burada` : null, yolda > 0 ? `${miktarMetni(x.yolda)}${birim} buradan yolda` : null].filter(Boolean);
-    return l.length === 0 ? '' : `${x.konumAd ?? x.konumKod}: ${l.join(', ')}`;
-  };
-  return satirlar.slice(0, 2).map(parca).filter((m) => m !== '').join(' · ') + (satirlar.length > 2 ? ` · +${String(satirlar.length - 2)} yer` : '');
-}
-
 // 3155: gelen teslim varken "Al ve işi aç" tek düğmedir: teslimler alınır, terminal o emir ve kartla açılır (başlatılmaz, 1062).
 // Terminal işi belirsizse (aynı emrin iki işi, çalışan başka iş) bugünkü gibi seçtirir; emrin burada işi yoksa söyler.
 function KartlaGelenler({ gelenler, refakat }: { gelenler: Teslim[]; refakat: RefakatPartisi | null }) {
@@ -140,14 +127,6 @@ function KartlaGelenler({ gelenler, refakat }: { gelenler: Teslim[]; refakat: Re
   const tekDugme = uretir && refakat !== null && refakat.durum === 'acik';
   return (
     <>
-      <ul className="tc-stok-isler tc-stok-teslim-liste" aria-label="Kartla sana gelenler">
-        {kalan.map((t) => (
-          <TeslimSatiri key={t.id} t={t}>
-            <Dugme {...(tekDugme ? {} : { tur: 'birincil' as const })} simge="download" yukleniyor={al.komut.isPending && al.komut.variables?.id === t.id} onClick={() => al.komut.mutate(t)}>{tekDugme ? 'Yalnız teslim al' : 'Teslim al'}</Dugme>
-          </TeslimSatiri>
-        ))}
-        {al.onayPenceresi}
-      </ul>
       {tekDugme && (
         <div className="tc-stok-eylem tc-stok-al-ac">
           <Dugme tur="birincil" simge="play" yukleniyor={alVeAc.isPending} onClick={() => alVeAc.mutate(kalan)}>Al ve işi aç</Dugme>
@@ -157,6 +136,14 @@ function KartlaGelenler({ gelenler, refakat }: { gelenler: Teslim[]; refakat: Re
           <p className="tc-stok-not">Teslim alınır, terminal bu işle açılır; iş başlatılmaz.</p>
         </div>
       )}
+      <ul className="tc-stok-isler tc-stok-teslim-liste" aria-label="Kartla sana gelenler">
+        {kalan.map((t) => (
+          <TeslimSatiri key={t.id} t={t}>
+            <Dugme {...(tekDugme ? {} : { tur: 'birincil' as const })} simge="download" yukleniyor={al.komut.isPending && al.komut.variables?.id === t.id} onClick={() => al.komut.mutate(t)}>{tekDugme ? 'Yalnız teslim al' : 'Teslim al'}</Dugme>
+          </TeslimSatiri>
+        ))}
+        {al.onayPenceresi}
+      </ul>
     </>
   );
 }
@@ -177,6 +164,7 @@ export function OkutmaSonucu({ okunan, sec, kapat, salt = false, ust = null, sep
   const [izAcik, setIzAcik] = useState(false);
   const [baskaAcik, setBaskaAcik] = useState(false);
   const okur = useStokOkur();
+  const kart = useKartDurumu(c.tur === 'malzeme' ? c.refakat ?? null : null, c);
   if (c.tur !== 'malzeme' && c.tur !== 'yer') return null;
   const malzeme = c.tur === 'malzeme' ? c : null;
   const refakat = malzeme?.refakat ?? null;
@@ -206,7 +194,11 @@ export function OkutmaSonucu({ okunan, sec, kapat, salt = false, ust = null, sep
             {stokCevabi.bakiyeler[0] && <span>· {stokCevabi.bakiyeler.map((b) => b.konumKod).slice(0, 2).join(', ')}{stokCevabi.bakiyeler.length > 2 ? ` +${stokCevabi.bakiyeler.length - 2}` : ''}</span>}
           </p>
         )}
-        {refakat && refakat.durum !== 'iptal' && <KartEmirOzeti uretimEmriId={refakat.uretimEmriId} etiket={refakat.etiket} nerede={kartNeredeMetni(malzeme?.kartSatirlari)} />}
+        {refakat && refakat.durum !== 'iptal' && (
+          <KartMalzemeAkisi r={refakat} satirlar={kart.satirlar} salt={salt} gelenVar={kart.gelenler.length > 0}
+            gelenEylemi={<KartlaGelenler key={okunan.kod} gelenler={kart.gelenler} refakat={refakat} />} bekleyenEylemi={<KartRotasi r={refakat} />} />
+        )}
+        {refakat && refakat.durum !== 'iptal' && <KartEmirOzeti uretimEmriId={refakat.uretimEmriId} etiket={refakat.etiket} adetli />}
         {!salt && ust}
         {kabulde.length > 0 && (
           <p className="tc-stok-bilgi tc-stok-bilgi-uyari">
@@ -214,10 +206,8 @@ export function OkutmaSonucu({ okunan, sec, kapat, salt = false, ust = null, sep
           </p>
         )}
         {refakat && <p className="tc-stok-not">{refakatLotSatiri(refakat)} · {refakatMalzemeSatiri(refakat)}{refakat.durum === 'iptal' ? ' · kart iptal' : ''}</p>}
-        {!salt && malzeme?.gelenler && malzeme.gelenler.length > 0 && <KartlaGelenler key={okunan.kod} gelenler={malzeme.gelenler} refakat={refakat} />}
+        {!salt && (!refakat || refakat.durum === 'iptal') && malzeme?.gelenler && malzeme.gelenler.length > 0 && <KartlaGelenler key={okunan.kod} gelenler={malzeme.gelenler} refakat={refakat} />}
         {!salt && refakat && anaEylem === 'isi-ac' && <div className="tc-stok-eylem"><IsEmriniAc r={refakat} /></div>}
-        {refakat && anaEylem !== 'isi-ac' && refakat.durum !== 'iptal' && <KartRotasi r={refakat} />}
-        {!salt && refakat && anaEylem === 'teslim-et' && <p className="tc-stok-not">Başka yere: istasyonun, rafın ya da alacak kişinin kodunu okut.</p>}
         {refakat && malzeme?.kartSatirlari && (!tekKart || baskaAcik) && <KartSatirlari r={refakat} satirlar={malzeme.kartSatirlari} />}
         {stokCevabi ? <StokAyrintisi c={stokCevabi} /> : malzeme && malzeme.yerler.length > 0 && (
           <ul className="tc-stok-satirlar" aria-label="Alabileceğin yerler">

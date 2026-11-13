@@ -786,3 +786,16 @@ a.tc-stok-kpi:hover, a.tc-stok-kpi:focus-visible { background: var(--panel2); }
   .tc-stok-okut-sonuc .tc-stok-teslim-satir > div { flex: 1 1 100%; }
   .tc-stok-okut-sonuc .tc-stok-teslim-satir > .tc-rozet { order: -1; }
 }
+
+/* 3162: kartın malzeme akışı (tek cümle, tek düğme, malzeme nerede). Düğmeler dokunma ölçüsünde, uzun ad sarar. */
+.tc-stok-akis { display: grid; gap: var(--b-3); min-inline-size: 0; padding: var(--b-3); border: 1px solid var(--edge); border-radius: var(--yari-2); background: var(--panel2); }
+.tc-stok-akis-cumle { display: flex; gap: var(--b-2); align-items: flex-start; margin: 0; font-size: var(--yazi-m); font-weight: 600; }
+.tc-stok-akis-cumle > span { min-inline-size: 0; overflow-wrap: anywhere; }
+.tc-stok-akis .tc-dugme { min-block-size: var(--dokunma); white-space: normal; min-inline-size: 0; max-inline-size: 100%; }
+.tc-stok-akis h4 { margin: 0 0 var(--b-1); font-size: var(--yazi-xs); color: var(--muted); text-transform: uppercase; }
+.tc-stok-akis .tc-stok-teslim-liste { margin: 0; }
+.tc-stok-akis-liste { display: grid; gap: var(--b-1); margin: 0; padding: 0; list-style: none; }
+.tc-stok-akis-liste > li { display: flex; justify-content: space-between; gap: var(--b-2); align-items: baseline; font-size: var(--yazi-s); border-block-end: 1px solid var(--edge); padding-block: var(--b-1); }
+.tc-stok-akis-liste > li > span { min-inline-size: 0; overflow-wrap: anywhere; }
+.tc-stok-akis-liste small { display: block; color: var(--muted); font-size: var(--yazi-xs); }
+.tc-stok-akis-liste strong { font-family: var(--font-mono); white-space: nowrap; }
