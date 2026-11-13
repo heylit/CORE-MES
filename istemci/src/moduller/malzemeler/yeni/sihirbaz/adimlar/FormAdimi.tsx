@@ -6,6 +6,7 @@ import { useSihirbaz } from '../baglam.ts';
 import type { Taslak } from '../durum.ts';
 import { aileler, formlar } from '../turler.ts';
 import { KatalogSimgesi } from '../../ortak/KatalogSimgesi.tsx';
+import { KesitBlogu } from '../../olcu-modeli/OlcuModeli.tsx';
 import { Alanlar, BagDugmesi, Cip, CipGrubu, MetinAlani, Uyari, Yardim } from '../parcalar.tsx';
 
 // Hammadde 3. adım (prototipte `s2`): form, standart ölçü hazırları, toplu varyant, ölçüler ve tolerans, canlı ağırlık.
@@ -82,7 +83,7 @@ export function FormAdimi() {
           </Alanlar>
           <ToleransCipleri />
           <OlcuNotlari />
-          {!vm && <><CanliAgirlik d={d} /><BenzerIpucu /></>}
+          {!vm && <><CanliAgirlik d={d} /><BenzerIpucu /><KesitBlogu /></>}
         </>
       )}
     </>
