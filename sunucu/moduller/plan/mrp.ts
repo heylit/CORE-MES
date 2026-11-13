@@ -1,4 +1,5 @@
 import type { Db } from '#cekirdek/db.ts';
+import { bulunamadi } from '#cekirdek/hata.ts';
 import { islemVarMi, type Kullanici } from '#cekirdek/yetki.ts';
 import type { Islem } from '#paylasilan/islemler.ts';
 import { STOK_ISLEMLERI } from '#paylasilan/islemler/stok.ts';
@@ -7,7 +8,7 @@ import { malzemeOzetleri } from '../malzemeler/disari.ts';
 import { urunAgaci } from '../rota/disari.ts';
 import { malzemeGelisTarihleri } from '../satin-alma/disari.ts';
 import { emirlerinNetSarfi, emirlerinZincirdekiMiktari, malzemeStokDurumlari } from '../stok/disari.ts';
-import { acikEmirler, emirlerinMalzemeIhtiyaci, isEmriPlanBilgileri } from '../uretim-emirleri/disari.ts';
+import { acikEmirler, emirlerinMalzemeIhtiyaci, isEmriPlanBilgileri, uretimEmriOzeti } from '../uretim-emirleri/disari.ts';
 import { acilacakUrunler, mrpSatirlari, type MrpGirdisi } from './mrp-kurallar.ts';
 import { yerlesimler } from './sorgular.ts';
 
@@ -78,4 +79,13 @@ export async function mrpIhtiyaci(db: Db, kullanici: Kullanici, simdi = Date.now
       acilanlar: acilanlar.map((no) => ({ id: no, kod: kart(no)?.kod ?? null })),
     })),
   };
+}
+
+// 3175 a: emrin sayfasındaki MRP fişi. Hesap bütün açık emirlerle yapılır, süzme hesaptan SONRA: yalnız bu emrin ihtiyacına giren satırlar
+// döner, satırlar plan MRP sayfasındakiyle aynıdır (serbest stok ve sipariş emirler arasında paylaşılmaz, iyimser net çıkmaz). Kayıt değil.
+export async function emrinMrpIhtiyaci(db: Db, kullanici: Kullanici, emirId: number, simdi = Date.now()): Promise<MrpIhtiyaciCevabi> {
+  const emir = await uretimEmriOzeti(db, emirId);
+  if (emir === null) throw bulunamadi('Üretim emri bulunamadı.');
+  const hepsi = await mrpIhtiyaci(db, kullanici, simdi);
+  return { ...hepsi, urunsuzEmir: 0, satirlar: hepsi.satirlar.filter((s) => s.emirler.includes(emir.emirNo)) };
 }

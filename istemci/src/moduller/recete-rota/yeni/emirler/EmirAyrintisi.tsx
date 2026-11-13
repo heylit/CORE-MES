@@ -17,7 +17,7 @@ import {
   acikMi, adimDugumu, adimDurumu, altDugumAdimlari, adimPlani, canliAdimPlani, durumAdi, durumGosterimi, emirAdimlari, emirAraligi, ilerleme, planOzeti, planSirasi, plandaMi, rotaFarki, sureMetni, sureOzetiNedenleri, type AdimSureOzeti,
   ONCELIK_ADI, yeniOpNo, yururluktekiRevizyon, type AdimPlani, type EmirAdimi, type Emir,
 } from './kurallar.ts';
-import type { MalzemeIhtiyaciCevabi, MalzemeIhtiyaciSatiri } from '#paylasilan/sozlesme/recete-rota.ts';
+import type { IhtiyacSatinAlma, MalzemeIhtiyaciCevabi, MalzemeIhtiyaciSatiri } from '#paylasilan/sozlesme/recete-rota.ts';
 import { api, hataIletisi } from '../../../../ortak/veri/api.ts';
 import { planMetni, tamponRozeti, turAdi, type TamponRozeti } from './gorunum.ts';
 
@@ -25,6 +25,19 @@ const KANBAN_YOLU = '/recete-rota/kanban';
 // Kapanış onayları emrin ana yerindedir (3003 a).
 const KAPANIS_EVI = '/uretim-emirleri/kapanis';
 const TALEP_YOLU = '/satin-alma/talepler';
+const TALEP_DURUMU: Record<NonNullable<IhtiyacSatinAlma['talepDurumu']>, string> = {
+  taslak: 'taslak', teklif_isteniyor: 'teklif toplanıyor', degerlendirme: 'değerlendirmede', onayda: 'onay bekliyor', siparis_verildi: 'sipariş verildi',
+  teslim_alindi: 'teslim alındı', iptal: 'iptal',
+};
+// Malzemenin bu emir için en ileri satın alma aşaması; fiyat ve tedarikçi yok.
+function satinAlmaHucresi(e: MalzemeIhtiyaciSatiri): ReactNode {
+  const s = e.satinAlma;
+  // Alınacak malzemenin talebi de ön talebi de yoksa bu görünür olmalıdır; alınacak yoksa satın alma beklenmez.
+  if (s === null) return Number(e.alinacak) > 1e-6 ? <Rozet ton="hata">Talep yok</Rozet> : YOK;
+  if (s.asama === 'on_talep') return <Rozet ton="uyari" gorunum="cizgi">Ön talep {miktar(Number(e.alinacak), e.birim)}</Rozet>;
+  if (s.asama === 'talep') return <Rozet ton="bilgi" gorunum="cizgi">Talep {s.no}{s.talepDurumu ? ` · ${TALEP_DURUMU[s.talepDurumu]}` : ''}</Rozet>;
+  return <Rozet ton="tamam" gorunum="cizgi">Sipariş {s.no ?? ''}{s.termin ? ` · geliş ${tarih(s.termin)}` : ''}</Rozet>;
+}
 
 interface Ozellikler {
   durum: RrDurumu;
@@ -552,10 +565,13 @@ function PlanBolumu({ durum: d, emir: o, adimlar, yetki, komut, goster = 'hepsi'
     { anahtar: 'kod', baslik: 'Kod', hucre: kod, mono: true },
     { anahtar: 'ad', baslik: 'Malzeme', hucre: (e) => e.ad },
     { anahtar: 'brut', baslik: 'Brüt', hizala: 'sag', hucre: (e) => miktar(Number(e.brut), e.birim) },
+    // 3175: rezerve stok okuyana, satın alma satın alma ya da açık sipariş okuyana görünür (Risk D1); yetkisize sütun hiç çizilmez.
+    ...(ihtiyac.data?.stokGorunur ? [{ anahtar: 'rezerve', baslik: 'Rezerve', hizala: 'sag' as const, hucre: (e: MalzemeIhtiyaciSatiri) => (e.rezerve === null ? YOK : miktar(Number(e.rezerve), e.birim)) }] : []),
     { anahtar: 'verilen', baslik: 'Verilen', hizala: 'sag', hucre: (e) => miktar(Number(e.verilen), e.birim) },
     { anahtar: 'stoktan', baslik: 'Stoktan', hizala: 'sag', hucre: (e) => miktar(Number(e.stoktan), e.birim) },
     { anahtar: 'alinacak', baslik: 'Alınacak', hizala: 'sag', hucre: (e) => miktar(Number(e.alinacak), e.birim) },
     ...(yetki.maliyetOku ? [{ anahtar: 'tutar', baslik: 'Tutar', hizala: 'sag' as const, hucre: tutar }] : []),
+    ...(ihtiyac.data?.satinAlmaGorunur ? [{ anahtar: 'satin-alma', baslik: 'Satın alma', hucre: satinAlmaHucresi }] : []),
   ];
   type YanSatir = MalzemeIhtiyaciCevabi['emirler'][number]['yanUrun'][number];
   const yanSutunlar: Sutun<YanSatir>[] = [

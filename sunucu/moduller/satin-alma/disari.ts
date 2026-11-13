@@ -122,6 +122,10 @@ export const planlananGidisCozucusu = (cozucu: servis.PlanlananGidisCozucusu): v
 export { takvimKayitlari } from './servis.ts';
 export { malzemeKartiIzleri } from './sorgular.ts';
 
+// 3175: emrin ihtiyaç tablosunun satın alma sütunu (malzeme başına en ileri aşama: sipariş, talep, ön talep); numara ve termin, fiyat ve
+// tedarikçi yok. Yetki denetlemez; çağıran satın alma ya da açık sipariş okumasını denetler.
+export { emrinSatinAlmaDurumlari } from './servis.ts';
+export type { EmirSatinAlmaAsamasi, EmirSatinAlmaDurumu } from './kurallar.ts';
 // 2893 D2: Adım Durumu'nun okuduğu açık tedarik: emre ya da fason iş emrine bağlı, beklenen (talep ya da sipariş aşamasındaki) kalemler.
 // Yalnız numara, aşama ve beklenen teslim döner; fiyat ve tedarikçi dönmez (operatör terminali de okur, 2893-3 b).
 export interface EmirTedariki {
