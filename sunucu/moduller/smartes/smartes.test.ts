@@ -615,4 +615,51 @@ describe('SmartES bağlantısı, sahte SmartES ile uçtan uca (kart #778, gerçe
       { islenen: 0, hatalar: [{ id: iki.id, ileti: ONAY_ILETILERI.isEmriYok }] });
     assert.deepEqual((await sayimlar()).map((x) => x.adet), [10, 2]);
   });
+
+  test('3173 b: karar verilmiş satır yeniden karara girmez; red de onay yetkisi ister; red adedi ve eşlenmiş makine korunur', async () => {
+    const { uretimEmriId, ilk } = await emirKur(true);
+    await gonderimTuru(vt(), turOrtami());
+    const no = (await vt().tek<{ no: string }>('SELECT smartes_is_emri_no AS no FROM smartes_giden WHERE is_emri_id = $1', [ilk]))!.no;
+    await vt().tx(async (db) => { await emirBaslat(db, (await kullaniciYukle(db, yoneticiId))!, uretimEmriId, undefined, undefined, ilk); });
+    const [digerMakine, adimMakinesi] = (await vt().sorgu<{ id: number }>('SELECT id FROM makine ORDER BY id DESC LIMIT 2')).map((m) => m.id) as [number, number];
+    const adimKodu = (await vt().tek<{ kod: string }>("SELECT smartes_kod AS kod FROM smartes_esleme WHERE tur = 'makine' AND tmi_id = $1", [adimMakinesi]))!.kod;
+    assert.equal((await istek('POST', '/smartes/eslemeler/ata', { tur: 'makine', tmiId: digerMakine, smartesKod: 'ORN-DIGER', surum: null })).statusCode, 200);
+    const kuyruga = async (smartesId: number, tur: 'saglam' | 'red', adet: number, makineKodu: string | null): Promise<number> => {
+      await vt().sorgu(
+        `INSERT INTO smartes_is_emri_durumu (smartes_id, is_emri_no, makine_kodu, saglam, red, ham, ilk_okuma, son_okuma) VALUES ($1, $2, $3, $4, 0, '{}', now(), now())`,
+        [smartesId, no, makineKodu, adet]);
+      return (await vt().tek<{ id: number }>(
+        'INSERT INTO smartes_adet_onayi (smartes_id, tur, adet, duzeltme, olusma) VALUES ($1, $2, $3, false, now()) RETURNING id::int AS id', [smartesId, tur, adet]))!.id;
+    };
+    const durum = async (id: number) => (await vt().tek<{ durum: string }>('SELECT durum FROM smartes_adet_onayi WHERE id = $1', [id]))!.durum;
+    const sayimlar = () => vt().sorgu<{ adet: number; makine_id: number | null }>(
+      "SELECT adet, makine_id FROM uretim_sayimi WHERE emir_id = $1 AND kaynak = 'smartes' ORDER BY id", [uretimEmriId]);
+
+    // Red de CORE kaydının kaderini belirler: sayfayı gören reddedemez.
+    const ilkSatir = await kuyruga(7201, 'saglam', 6, adimKodu);
+    assert.equal((await istek('POST', '/smartes/adet-onaylari/reddet', { idler: [ilkSatir], neden: 'Deneme' }, okuyucu)).statusCode, 403);
+    assert.equal(await durum(ilkSatir), 'bekliyor');
+
+    // Makine SmartES makine eşlemesinden verilir: adımın makinesi sayıma yazılır.
+    assert.deepEqual((await istek('POST', '/smartes/adet-onaylari/onayla', { idler: [ilkSatir] })).json(), { islenen: 1, hatalar: [] });
+    assert.deepEqual(await sayimlar(), [{ adet: 6, makine_id: adimMakinesi }]);
+
+    // Onaylanan satır CORE'a yazılmıştır: sonradan reddedilemez, kararı değişmez.
+    assert.deepEqual((await istek('POST', '/smartes/adet-onaylari/reddet', { idler: [ilkSatir], neden: 'Geç red' })).json(),
+      { islenen: 0, hatalar: [{ id: ilkSatir, ileti: ONAY_ILETILERI.karardaDegil }] });
+    assert.equal(await durum(ilkSatir), 'onaylandi');
+
+    // Adımda çalışmayan makineye eşlenmiş satır başka makineye yazılmaz; satır bekler.
+    const baskaMakine = await kuyruga(7202, 'saglam', 3, 'ORN-DIGER');
+    const r = (await istek('POST', '/smartes/adet-onaylari/onayla', { idler: [baskaMakine] })).json() as { islenen: number; hatalar: { id: number }[] };
+    assert.deepEqual([r.islenen, r.hatalar.map((h) => h.id)], [0, [baskaMakine]]);
+    assert.equal(await durum(baskaMakine), 'bekliyor');
+
+    // Red adedi fire eşlemesi olmadan sağlam diye sayılmaz.
+    const redSatiri = await kuyruga(7203, 'red', 2, adimKodu);
+    assert.deepEqual((await istek('POST', '/smartes/adet-onaylari/onayla', { idler: [redSatiri] })).json(),
+      { islenen: 0, hatalar: [{ id: redSatiri, ileti: ONAY_ILETILERI.redIslenmez }] });
+    assert.equal(await durum(redSatiri), 'bekliyor');
+    assert.deepEqual((await sayimlar()).map((x) => x.adet), [6]);
+  });
 });

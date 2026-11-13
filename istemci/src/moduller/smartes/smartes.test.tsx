@@ -368,6 +368,7 @@ describe('SmartES hesapları', () => {
     expect(within(oee).queryByText(/NaN/)).toBeNull();
     const cevrim = screen.getByRole('table', { name: 'Çevrim süresi farkları' });
     expect(within(cevrim).getByText('+10 sn')).toBeTruthy();
+    expect(within(cevrim).getByText('M-1').className).toBe('tc-sm-kirilmaz');
     expect(within(cevrim).getByText('45')).toBeTruthy();
     expect(within(cevrim).getByText('30 sn')).toBeTruthy();
   });

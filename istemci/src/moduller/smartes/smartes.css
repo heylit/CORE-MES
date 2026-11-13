@@ -44,6 +44,8 @@
 .tc-sm-kart[data-durum="eski"] { border-left-color: var(--faint); opacity: .6; }
 .tc-sm-kart-ust { display: flex; align-items: baseline; gap: var(--b-2); min-width: 0; }
 .tc-sm-kod { font-family: var(--font-mono); font-weight: 700; }
+/* Kod ortasından bölünmez; satır yalnız parçalar arasından kırılır. */
+.tc-sm-kirilmaz { white-space: nowrap; }
 .tc-sm-ad { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tc-sm-durum { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2); }
 .tc-sm-durum-ad { display: inline-flex; align-items: center; gap: var(--b-2); font-weight: 700; color: var(--idle); }
