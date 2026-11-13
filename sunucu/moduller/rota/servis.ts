@@ -20,3 +20,4 @@ export {
   sartnameTaslakSil, sartnameAktifYap, standartEkle, revizyonSartnameleri, yuzeyIslemiAdimlari, adimSartnameleriKaydet, isEmriKopyalandiYansit,
   isEmriSartnameleri, isEmriSartnameleriCevabi, ekAdimSartnameleriSabitle,
 } from './servis/sartname.ts';
+export { talimatSahneleri, talimatSahnesiKaydet, talimatSahnesi } from './servis/sahne.ts';

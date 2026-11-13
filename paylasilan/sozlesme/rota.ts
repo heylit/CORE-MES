@@ -965,3 +965,36 @@ export const hamOnerisiCevabi = z.object({
   neden: z.enum(['model-yok', ...HAM_STOK_NEDENLERI]).nullable(),
 });
 export type HamOnerisiCevabi = z.output<typeof hamOnerisiCevabi>;
+
+/* ---------------- talimatın 3B sahnesi (3209 a) ---------------- */
+// Sahne yayınlanmış talimat sürümüne bağlıdır; her adımda giren parçalar (model okumasındaki ağ sırası), yön, mesafe, süre ve
+// kamera. Yalnız eklenir: düzeltme aynı talimat sürümünün yeni sahne sürümüdür. Sınırlar RT-90..RT-94.
+export const SAHNE_YONLERI = ['+X', '-X', '+Y', '-Y', '+Z', '-Z'] as const;
+export type SahneYonu = (typeof SAHNE_YONLERI)[number];
+export const SAHNE_SINIRI = { adim: 100, parca: 100, parcaNo: 9999, mesafeMm: 2000, sureSnAlt: 0.3, sureSnUst: 10 } as const;
+const sahneKamerasi = z.object({
+  yatay: z.number().min(-7).max(7), dikey: z.number().min(-0.2).max(1.5), uzaklik: z.number().min(10).max(50000),
+}).strict();
+export const sahneHareketiSemasi = z.object({
+  parcalar: z.array(z.number().int().min(0).max(SAHNE_SINIRI.parcaNo)).max(SAHNE_SINIRI.parca),
+  yon: z.enum(SAHNE_YONLERI),
+  mesafeMm: z.number().min(0).max(SAHNE_SINIRI.mesafeMm),
+  sureSn: z.number().min(SAHNE_SINIRI.sureSnAlt).max(SAHNE_SINIRI.sureSnUst),
+  sirali: z.boolean(),
+  kamera: sahneKamerasi.nullable(),
+}).strict();
+export const sahneAdimiSemasi = z.object({ sira: KIMLIK, hareket: sahneHareketiSemasi }).strict();
+export const talimatSahnesiKaydetGovdesi = z.object({
+  opNo: KIMLIK, talimatSurum: KIMLIK, okunanSahneSurum: KIMLIK.nullable(), modelRevizyonId: KIMLIK,
+  adimlar: z.array(sahneAdimiSemasi).max(SAHNE_SINIRI.adim),
+}).strict();
+const talimatSahnesiSemasi = z.object({
+  talimatSurum: KIMLIK, sahneSurum: KIMLIK, modelRevizyonId: KIMLIK, adimlar: z.array(sahneAdimiSemasi), yazan: adliKayit, yazma: zaman,
+});
+// Her talimat sürümünün en son sahnesi, talimat sürümüne göre azalan.
+export const talimatSahneleriCevabi = z.object({ sahneler: z.array(talimatSahnesiSemasi) });
+export type SahneHareketi = z.output<typeof sahneHareketiSemasi>;
+export type SahneAdimi = z.output<typeof sahneAdimiSemasi>;
+export type TalimatSahnesi = z.output<typeof talimatSahnesiSemasi>;
+export type TalimatSahneleriCevabi = z.output<typeof talimatSahneleriCevabi>;
+export type TalimatSahnesiKaydetGovdesi = z.input<typeof talimatSahnesiKaydetGovdesi>;

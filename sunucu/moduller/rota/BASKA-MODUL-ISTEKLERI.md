@@ -75,3 +75,8 @@ istasyonlar `/operasyon-tipleri*`, `/istasyon-plan-ayarlari`, `/istasyonlar/:id/
 ## Adımlı talimat okuyucusu (989 a, bağlamada)
 
 - arkon: iş emrinin sabitlenmiş talimat sürümünü `talimatSurumuAdimlari(db, malzemeId, opNo, surum)` ile adım adım göstersin; zorunlu kontrol noktası (onay, ölçüm sınırı, fotoğraf, seçim) geçilmeden sonraki adım açılmasın; ölçüm ve seçim cevabı arkon'un kendi tablosunda tutulur.
+
+## Talimatın 3B sahnesi (3209 a)
+
+- geometri (Belge Merkezi 3B model): bir ürünün 3B model revizyonlarını veren `disari.ts` okuması (`urunModelRevizyonlari(db, malzemeId): Promise<number[]>` ya da eşdeğeri); rota sahne kaydında revizyonun ürüne ait olduğunu denetler (UYUM-BORCU B50, dilim 3 öncesi).
+- arkon: emre sabitlenen talimat sürümünün sahnesini `talimatSahnesi(db, malzemeId, opNo, talimatSurum)` ile okuyup adım ekranında oynatsın; sahne yoksa bugünkü adım ekranı aynen kalır.

@@ -91,3 +91,7 @@ export async function olcumAtlamalari(
   }
   return sonuc;
 }
+
+// Terminal: emre sabitlenen talimat sürümünün 3B sahnesi (3209 a); yetki denetlemez.
+export { talimatSahnesi } from './servis.ts';
+export type { TalimatSahnesi } from '#paylasilan/sozlesme/rota.ts';

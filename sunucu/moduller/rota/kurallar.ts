@@ -1361,3 +1361,24 @@ export function ekipmanHazirliklari(
     return [i, liste.length === 0 ? { durum: 'yok', secildi: false } : { durum: liste.every((g) => hazir(g.kimlik)) ? 'tamam' : 'yok', secildi: true }];
   }));
 }
+
+// Talimatın 3B sahnesi (3209 a). RT-90: adım sırası talimat sürümünün adımlarından biridir ve sahnede bir kez geçer.
+// RT-91: parça (model okumasındaki ağ sırası) adım içinde tekrarlanmaz ve bütün sahnede tek adımda girer (parça bir kez takılır).
+export function sahneHatasi(adimlar: readonly { sira: number; hareket: { parcalar: readonly number[] } }[], adimSayisi: number): string | null {
+  const siralar = new Set<number>();
+  for (const a of adimlar) {
+    if (a.sira > adimSayisi) return `Talimatın ${String(adimSayisi)} adımı var; ${String(a.sira)}. adıma sahne yazılamaz.`;
+    if (siralar.has(a.sira)) return `${String(a.sira)}. adım sahnede iki kez var.`;
+    siralar.add(a.sira);
+  }
+  const giren = new Map<number, number>();
+  for (const a of adimlar) {
+    if (new Set(a.hareket.parcalar).size !== a.hareket.parcalar.length) return `${String(a.sira)}. adımda aynı parça iki kez var.`;
+    for (const p of a.hareket.parcalar) {
+      const onceki = giren.get(p);
+      if (onceki !== undefined) return `${String(p + 1)}. parça hem ${String(onceki)}. hem ${String(a.sira)}. adımda giriyor; parça tek adımda takılır.`;
+      giren.set(p, a.sira);
+    }
+  }
+  return null;
+}
