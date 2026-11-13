@@ -7,8 +7,10 @@ Dışarıda yazılan modül kendi rol ve işlem isteklerini bu matrise eklenecek
 satırlar teslimle girmez, kullanıcı onayıyla ayrı göçte girer.
 
 Sayfa işlemi (`sayfa.*`) menüde görünürlüktür; öteki işlemler uçların istediği yetkidir. Kişinin yetkisi rollerinin ve kişiye verilen
-ek işlemlerin birleşimidir (kart #1233, `kisi_islemi`): yönetici Sistem Ayarları'ndan tek kişiye rolünde olmayan sayfa ve işlemi ekler; rolden
-işlem geri alınmaz, bu matris değişmez. "Yalnız yöneticide" listesindeki `kisiler.rol-yonet` ve `kisiler.parola-degistir` kişiye de verilmez.
+ek işlemlerin birleşimidir, eksi kişiden alınan işlemler (kart #1233 `kisi_islemi`, kart 3166 `kisi_islem_kisiti`): yönetici Sistem
+Ayarları'ndan tek kişiye rolünde olmayan sayfa ve işlemi ekler ya da rolünden gelen bir işlemi rolü değiştirmeden yalnız o kişiden alır;
+bu matris ikisinde de değişmez. Alınan işlem kişinin oturumundan hemen düşer; ek işlem kısıta üstün gelmez (ikisi birden varsa kişi yapamaz,
+ek yeniden verilince kısıt kalkar). Tüm yetkileri veren role sahip kişiden işlem alınmaz. "Yalnız yöneticide" listesindeki `kisiler.rol-yonet` ve `kisiler.parola-degistir` kişiye de verilmez, kişiden de alınmaz.
 
 ## Bugünkü durumu okumak
 

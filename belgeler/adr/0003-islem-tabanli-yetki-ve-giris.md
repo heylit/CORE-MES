@@ -2,7 +2,8 @@
 
 Durum: kabul edildi (06.10.2026). ADR 0002'nin 2., 7. ve 8. maddelerini ve 4. maddesindeki kilit
 kuralını değiştirir. 4. maddenin okuma uçları için hükmünü ADR 0007 değiştirir. 8. maddedeki saklama süresini "Ek: giriş denemesi saklama" değiştirir. 7. maddedeki "hesap kilidi yoktur" hükmünü
-"Ek: hesap ve cihaz kilidi" değiştirir (1534 a, 01.11.2026; karar 14.10.2026).
+"Ek: hesap ve cihaz kilidi" değiştirir (1534 a, 01.11.2026; karar 14.10.2026). 3. maddedeki "Kişiye özel yetki yoktur" hükmünü
+"Ek: kişiye verilen ve kişiden alınan işlem" değiştirir (3172 a, 13.11.2026).
 
 ## Bağlam
 
@@ -107,3 +108,18 @@ onu aşar. Bu yüzden beklemeye iki sınır eklendi:
 
 Sonuç: hesap kilidi, adı bilen herkese o kişiyi 15 dakika dışarıda bırakma imkânı verir (Bağlam'da kilidin kaldırılma gerekçesi); kilit
 açma yetkisi ve dağıtık denemeye karşı koruma bunun karşılığıdır.
+
+## Ek: kişiye verilen ve kişiden alınan işlem (13.11.2026; kart #1233, kart 3166; kararlar 3166 a, 3172 a)
+
+3. maddedeki "kişiye özel yetki yoktur" hükmü kişiye ek işlemle (#1233) fiilen değişmişti; kişiden işlem alma (3166 a) ile kural olarak yazıldı:
+
+- **Kişinin işlemleri** rollerinin işlemleri, artı kişiye verilen ek işlemler (`kisi_islemi`), eksi kişiden alınan işlemlerdir (`kisi_islem_kisiti`).
+- Alma rol matrisini (`rol_islemi`) değiştirmez; yalnız o kişiyi etkiler. Kimlik her istekte yüklendiği için açık oturumdan hemen düşer.
+- Ek işlem kısıta üstün gelmez: ikisi birden varsa kişi yapamaz; ek yeniden verilince kısıt kalkar.
+- Bayraklı rolde kısıt etkisizdir; bayraklı kişiye kısıt konamaz.
+- Devredilmez işlemler (`kisiler.rol-yonet`, `kisiler.parola-degistir`, `kisiler.oturum-kapat`, `guvenlik.oku`, `guvenlik.yonet`) kişiye verilmez, kişiden alınmaz.
+- Yalnız bayraklı rol sahibi verir ve alır (`kisiler.rol-yonet`); her verme ve alma denetim kaydına yazılır.
+- Kod: `sunucu/moduller/kisiler/kurallar.ts#kisitReddi`, `sunucu/moduller/kisiler/sorgular.ts#kisitsiz`, göçler `20261014094901_kisiler_kisi_islemi.sql`, `20261113135700_kisiler_islem_kisiti.sql`.
+
+Sonuç: yetki rol tablosundan tek başına okunmaz; kimin neye yetkili olduğunu `npm run yetki-matrisi` (kişi ekleri ve alınanlarla) gösterir.
+Bilinen boşluk: rol değişince kişiden alınan işlem kayıtta kalır; yeni rolde aynı işlem varsa orada da alınmış sayılır (ayrı kart adayı).

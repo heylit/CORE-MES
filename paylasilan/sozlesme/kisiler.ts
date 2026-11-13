@@ -49,6 +49,8 @@ export const rolIslemleriCevabi = z.object({ islemler: z.array(z.string()), roll
 // devredilmez: kişiye ek verilemeyen işlemler (ekran onları kapalı gösterir).
 export const kisiEkIslemleriSemasi = z.object({
   id: KIMLIK, ad: z.string(), kullaniciAdi: z.string(), bayrakli: z.boolean(), roldenGelen: z.array(z.string()), ek: z.array(z.string()),
+  // Rolden geldiği hâlde bu kişiden alınan işlemler (kart 3166); kişinin yetkisi (roldenGelen + ek) eksi bunlardır.
+  alinan: z.array(z.string()),
 });
 export const kisiEkIslemleriCevabi = z.object({
   islemler: z.array(z.string()), devredilmez: z.array(z.string()), kisiler: z.array(kisiEkIslemleriSemasi),
@@ -58,6 +60,8 @@ export const kisiParametresi = z.object({ id: z.coerce.number<number>().pipe(KIM
 export const rolParametresi = z.object({ id: z.coerce.number<number>().pipe(KIMLIK) });
 // Hedef durumu söyler (ver ya da al): aynı komut ikinci kez gelirse sonuç değişmez, sürüm gerekmez.
 export const rolIslemiGovdesi = z.object({ islem: z.string().max(100), verildi: z.boolean() });
+// Hedef durumu söyler (al ya da geri ver); rolIslemiGovdesi gibi yinelenebilir.
+export const kisiIslemKisitiGovdesi = z.object({ islem: z.string().max(100), alindi: z.boolean() });
 // Kişi satırını ya da rollerini değiştiren her komut istemcinin okuduğu sürümü taşır; eskiyse 409.
 export const surumGovdesi = z.object(beklenenSurum);
 export const rolGovdesi = z.object({ ...beklenenSurum, rolId: KIMLIK });

@@ -1,11 +1,11 @@
 import { uc } from '#cekirdek/uc.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
 import {
-  eksikBilgiOzetiCevabi, hesapGovdesi, kisiSecimCevabi, kisiSecimSorgusu, kisiDuzenleGovdesi, kisiEkIslemleriCevabi, kisiGovdesi, kisiParametresi, kisiTopluKaydetCevabi, kisiTopluKaydetGovdesi, kisiSemasi, kisilerCevabi, parolaGovdesi, rolGovdesi,
+  eksikBilgiOzetiCevabi, hesapGovdesi, kisiSecimCevabi, kisiSecimSorgusu, kisiDuzenleGovdesi, kisiEkIslemleriCevabi, kisiIslemKisitiGovdesi, kisiGovdesi, kisiParametresi, kisiTopluKaydetCevabi, kisiTopluKaydetGovdesi, kisiSemasi, kisilerCevabi, parolaGovdesi, rolGovdesi,
   pinVerGovdesi, rolIslemiGovdesi, sinirliHesapGovdesi, rolIslemleriCevabi, rolParametresi, rollerCevabi, surumGovdesi, tamamCevabi,
 } from '#paylasilan/sozlesme/kisiler.ts';
 import {
-  baskasinaPinVer, baskasininOturumlariniKapat, baskasininParolasiniDegistir, eksikBilgiOzeti, hesapAc, kisiAktifYap, kisiDuzenle, kisiEkIslemiDegistir, kisiEkIslemleriGetir, kisiEkleGetir, kisileriGetir, kisiTopluKaydet, kisiSecimAra,
+  baskasinaPinVer, baskasininOturumlariniKapat, baskasininParolasiniDegistir, eksikBilgiOzeti, hesapAc, kisiAktifYap, kisiDuzenle, kisiEkIslemiDegistir, kisiIslemKisitiDegistir, kisiEkIslemleriGetir, kisiEkleGetir, kisileriGetir, kisiTopluKaydet, kisiSecimAra,
   icHesapYap, kisiPasifeAl, sinirliHesapYap, rolAl, rolAta, rolIslemiDegistir, rolIslemleriGetir, rolleriGetir,
 } from './servis.ts';
 
@@ -212,5 +212,16 @@ export const uclar = [
     govde: rolIslemiGovdesi,
     cevap: kisiEkIslemleriCevabi,
     isle: ({ db, kullanici, parametre, govde }) => kisiEkIslemiDegistir(db, kullanici.id, parametre.id, govde.islem, govde.verildi),
+  }),
+  // Rolden gelen işlemi tek kişiden alma (kart 3166). Ek işlemle aynı yetki: yeni işlem açılmaz.
+  uc({
+    yontem: 'POST',
+    yol: '/kisiler/:id/islem-kisiti-degistir',
+    // Uç rol yönetene açıktır; değişikliği yalnız bayraklı kişi yapar (KS-11, servis katmanında).
+    yetki: 'kisiler.rol-yonet',
+    parametre: kisiParametresi,
+    govde: kisiIslemKisitiGovdesi,
+    cevap: kisiEkIslemleriCevabi,
+    isle: ({ db, kullanici, parametre, govde }) => kisiIslemKisitiDegistir(db, kullanici.id, parametre.id, govde.islem, govde.alindi),
   }),
 ];

@@ -7,8 +7,8 @@ import { ISLEMLER } from '#paylasilan/islemler.ts';
 
 // Kullanım: npm run yetki-matrisi [-- --islem <işlem> | --kisi <kullanıcı adı> | --rol <rol kodu>]
 // Bugünkü yetki matrisini çalışan veritabanından tek yerde gösterir: rol x işlem, kişinin rolleri ve kendisine verilen ek
-// işlemler (kart #1233), bir işlemin kimde olduğu. Belge (`kurulum/yetki-matrisi.md`) yalnız rolleri taşır; kişiye verilen ek
-// işlem yalnız veritabanındadır. Yalnız okur; bilgi makineden çıkmaz.
+// işlemler (kart #1233) ve kendisinden alınan işlemler (kart 3166), bir işlemin kimde olduğu. Belge (`kurulum/yetki-matrisi.md`) yalnız rolleri taşır; kişiye verilen ek
+// ve alınan işlem yalnız veritabanındadır. Yalnız okur; bilgi makineden çıkmaz.
 
 export interface RolYetkisi {
   kod: string;
@@ -22,6 +22,7 @@ export interface KisiYetkisi {
   ad: string;
   roller: string[];
   ekIslemler: string[];
+  alinanIslemler: string[];
 }
 
 export interface YetkiMatrisi {
@@ -44,7 +45,8 @@ export async function yetkiMatrisiOku(db: Db): Promise<YetkiMatrisi> {
   const kisiler = await db.sorgu<KisiYetkisi>(
     `SELECT k.kullanici_adi AS "kullaniciAdi", k.ad,
             COALESCE((SELECT array_agg(r.kod ORDER BY r.kod) FROM kisi_rolu kr JOIN rol r ON r.id = kr.rol_id WHERE kr.kisi_id = k.id), '{}') AS roller,
-            COALESCE((SELECT array_agg(ki.islem ORDER BY ki.islem) FROM kisi_islemi ki WHERE ki.kisi_id = k.id), '{}') AS "ekIslemler"
+            COALESCE((SELECT array_agg(ki.islem ORDER BY ki.islem) FROM kisi_islemi ki WHERE ki.kisi_id = k.id), '{}') AS "ekIslemler",
+            COALESCE((SELECT array_agg(kk.islem ORDER BY kk.islem) FROM kisi_islem_kisiti kk WHERE kk.kisi_id = k.id), '{}') AS "alinanIslemler"
        FROM kisi k
       WHERE k.aktif AND k.kullanici_adi IS NOT NULL
       ORDER BY k.kullanici_adi`,
@@ -55,9 +57,15 @@ export async function yetkiMatrisiOku(db: Db): Promise<YetkiMatrisi> {
 // Bayraklı yönetici rolü satır taşımaz, kayıtlı her işlemi alır.
 const rolIslemleri = (rol: RolYetkisi): readonly string[] => (rol.yonetici ? ISLEMLER : rol.islemler);
 
+const kisininRolleri = (matris: YetkiMatrisi, kisi: KisiYetkisi): RolYetkisi[] => matris.roller.filter((r) => kisi.roller.includes(r.kod));
+// Oturumla aynı hesap (kisiler/sorgular.ts yetkiKaydiBul): bayraklı rolde kısıt etkisizdir; öteki kişide alınan işlem hem rolden
+// hem ekten gelse de düşer.
+const kisitliMi = (matris: YetkiMatrisi, kisi: KisiYetkisi, islem: string): boolean =>
+  kisi.alinanIslemler.includes(islem) && !kisininRolleri(matris, kisi).some((r) => r.yonetici);
+
 export function kisininIslemleri(matris: YetkiMatrisi, kisi: KisiYetkisi): string[] {
-  const roller = matris.roller.filter((r) => kisi.roller.includes(r.kod));
-  return [...new Set([...roller.flatMap(rolIslemleri), ...kisi.ekIslemler])].sort();
+  return [...new Set([...kisininRolleri(matris, kisi).flatMap(rolIslemleri), ...kisi.ekIslemler])]
+    .filter((i) => !kisitliMi(matris, kisi, i)).sort();
 }
 
 export function secimOku(argumanlar: readonly string[]): Secim | null {
@@ -88,6 +96,7 @@ function kisiMetni(matris: YetkiMatrisi, kisi: KisiYetkisi): string {
     `${kisi.kullaniciAdi} (${kisi.ad})`,
     `  roller: ${liste(kisi.roller)}`,
     `  ek işlemler: ${liste(kisi.ekIslemler)}`,
+    `  alınan işlemler: ${liste(kisi.alinanIslemler)}`,
     `  sayfalar: ${liste(sayfalar)}`,
     `  işlemler: ${liste(islemler)}`,
   ].join('\n');
@@ -96,12 +105,17 @@ function kisiMetni(matris: YetkiMatrisi, kisi: KisiYetkisi): string {
 function islemMetni(matris: YetkiMatrisi, islem: string): string {
   if (!(ISLEMLER as readonly string[]).includes(islem)) return `"${islem}" kayıtlı bir işlem değil (paylasilan/islemler.ts).`;
   const roller = matris.roller.filter((r) => rolIslemleri(r).includes(islem)).map((r) => r.kod);
+  const alinan = matris.kisiler.filter((k) => kisitliMi(matris, k, islem)).map((k) => `  ${k.kullaniciAdi} (${k.ad}): bu kişiden alındı`);
   const kisiler = matris.kisiler.flatMap((k) => {
+    if (kisitliMi(matris, k, islem)) return [];
     const rolden = matris.roller.filter((r) => k.roller.includes(r.kod) && rolIslemleri(r).includes(islem)).map((r) => r.kod);
     if (rolden.length > 0) return [`  ${k.kullaniciAdi} (${k.ad}): rolden ${rolden.join(' ')}`];
     return k.ekIslemler.includes(islem) ? [`  ${k.kullaniciAdi} (${k.ad}): ek işlem`] : [];
   });
-  return [`${islem}`, `roller: ${liste(roller)}`, `kişiler (${String(kisiler.length)}):`, ...(kisiler.length === 0 ? ['  -'] : kisiler)].join('\n');
+  return [
+    `${islem}`, `roller: ${liste(roller)}`, `kişiler (${String(kisiler.length)}):`, ...(kisiler.length === 0 ? ['  -'] : kisiler),
+    ...(alinan.length === 0 ? [] : [`rolde var, kişiden alındı (${String(alinan.length)}):`, ...alinan]),
+  ].join('\n');
 }
 
 export function matrisMetni(matris: YetkiMatrisi, secim: Secim): string {
@@ -117,6 +131,7 @@ export function matrisMetni(matris: YetkiMatrisi, secim: Secim): string {
   const verilen = new Set(matris.roller.filter((r) => !r.yonetici).flatMap((r) => r.islemler));
   const yalnizYonetici = ISLEMLER.filter((i) => !verilen.has(i));
   const ekli = matris.kisiler.filter((k) => k.ekIslemler.length > 0);
+  const kisitli = matris.kisiler.filter((k) => k.alinanIslemler.length > 0);
   return [
     '# Rol x işlem',
     ...matris.roller.map(rolMetni),
@@ -124,9 +139,10 @@ export function matrisMetni(matris: YetkiMatrisi, secim: Secim): string {
     `# Yalnız yöneticide: ${liste(yalnizYonetici)}`,
     '',
     `# Kişiler (${String(matris.kisiler.length)} etkin kullanıcı)`,
-    ...matris.kisiler.map((k) => `${k.kullaniciAdi} (${k.ad}): ${liste(k.roller)}${k.ekIslemler.length > 0 ? ` + ek: ${k.ekIslemler.join(' ')}` : ''}`),
+    ...matris.kisiler.map((k) => `${k.kullaniciAdi} (${k.ad}): ${liste(k.roller)}${k.ekIslemler.length > 0 ? ` + ek: ${k.ekIslemler.join(' ')}` : ''}${k.alinanIslemler.length > 0 ? ` - alınan: ${k.alinanIslemler.join(' ')}` : ''}`),
     '',
     `# Rolünün üstüne ek işlem verilmiş kişi: ${String(ekli.length)}`,
+    `# Rolünden işlem alınmış kişi: ${String(kisitli.length)}`,
   ].join('\n');
 }
 

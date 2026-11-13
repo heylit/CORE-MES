@@ -11,6 +11,7 @@ Modülün tuttuğu ve başka modülde de olabilecek kavramlar. Sütunlar `npm ru
 | `rol` | id, kod, ad, yerlesik, yonetici | kisiler (K2 a) |
 | `rol_islemi` | rol_id -> rol, islem | kisiler (K2 a) |
 | `kisi_islemi` | kisi_id -> kisi, islem, veren_id -> kisi, verildi | kisiler (kart #1233) |
+| `kisi_islem_kisiti` | kisi_id -> kisi, islem, alan_id -> kisi, alindi | kisiler (kart 3166) |
 
 ## Kavramlar
 
@@ -24,7 +25,8 @@ Modülün tuttuğu ve başka modülde de olabilecek kavramlar. Sütunlar `npm ru
 | hesap türü (iç, sınırlı) | `kisi.hesap_turu`, `kisi.sinirli_bitis`, `kisi.sinirli_sorumlu_id`, `kisi.gizlilik_taahhudu` | yok; oturum `Kullanici.sinirli` ile okur, çekirdek kapıda kullanır | kart 2158 |
 | rol | `rol.kod`, `rol.ad`, `rol.yonetici` | yok | `yonetici` bayrağı "bütün işlemler" demektir |
 | rol x işlem | `rol_islemi (rol_id, islem)` | işlem adları bütün modüllerde (`paylasilan/islemler.ts`) | aşağıda |
-| kişiye ek işlem | `kisi_islemi (kisi_id, islem)` | yok | rolün üstüne eklenir, rolden işlem almaz; oturumdaki işlem listesine girer |
+| kişiye ek işlem | `kisi_islemi (kisi_id, islem)` | yok | rolün üstüne eklenir; oturumdaki işlem listesine girer |
+| kişiden alınan işlem | `kisi_islem_kisiti (kisi_id, islem)` | yok | rolden geleni rol değişmeden kişiden alır; oturumdaki işlem listesinden ve `kisilerinIslemleri` haritasından düşer (kart 3166) |
 
 ## Rol ve rol x işlem sahipliği (K2 a)
 

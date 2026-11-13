@@ -12,8 +12,8 @@ const LISTE = {
   islemler: ['sayfa.stok', 'stok.giris', 'stok.cikis', 'sayfa.personel', 'kisiler.yaz', 'kisiler.parola-degistir'],
   devredilmez: ['kisiler.parola-degistir'],
   kisiler: [
-    { id: 1, ad: 'Depocu Deneme', kullaniciAdi: 'depocu.deneme', bayrakli: false, roldenGelen: ['sayfa.stok', 'stok.giris'], ek: [] },
-    { id: 2, ad: 'Yönetici Deneme', kullaniciAdi: 'yonetici.deneme', bayrakli: true, roldenGelen: [], ek: [] },
+    { id: 1, ad: 'Depocu Deneme', kullaniciAdi: 'depocu.deneme', bayrakli: false, roldenGelen: ['sayfa.stok', 'stok.giris'], ek: [], alinan: [] },
+    { id: 2, ad: 'Yönetici Deneme', kullaniciAdi: 'yonetici.deneme', bayrakli: true, roldenGelen: [], ek: [], alinan: [] },
   ],
 } satisfies KisiEkIslemleriCevabi;
 
