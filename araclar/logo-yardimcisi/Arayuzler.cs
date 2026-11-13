@@ -295,6 +295,8 @@ namespace LogoYardimcisi
         List<FisSatiri> MalzemeFisiSatirlari(int fisRef);
         // 2961-D4: malzemenin hareketleri kayıt sırasıyla (sonGorulen'den sonrası, en çok enCok) ve en yeni alış faturası satırları.
         List<MalzemeHareketi> MalzemeHareketleri(int malzemeRef, int sonGorulen, int enCok);
+        // 3204: en yeniden geriye (once 0 ise sınırsız, değilse once'den küçük kayıtlar), en çok enCok; kart son hareketleri tek istekle gösterir.
+        List<MalzemeHareketi> MalzemeHareketleriGeriye(int malzemeRef, int once, int enCok);
         List<AlisFiyati> SonAlisFiyatlari(int malzemeRef, int enCok);
         // Kart 2987: fiş numarasıyla satın alma siparişi (TRCODE 2) başlığı ve satırları; tür sabittir, çağıran seçemez. Yoksa null;
         // aynı numarada birden çok sipariş varsa BirdenCokKayit.

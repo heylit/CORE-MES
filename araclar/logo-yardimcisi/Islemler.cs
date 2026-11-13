@@ -20,6 +20,7 @@ namespace LogoYardimcisi
         // 2961-D4: hareket sayfası ve son alış satırı sayısı.
         public const int HareketSayfasi = 500;
         public const int SonAlisEnCok = 10;
+        public const int HareketGeriSayfasi = 20;
         // 4 (sabit kıymet) DEPREC_TYPE, REVAL_FLAG ister; değerleri ölçülmedi, gönderilmez.
         static readonly int[] KartTurleri = { 1, 10, 11, 12, 13 };
         const string OzelKod = "TMI";
@@ -290,6 +291,15 @@ namespace LogoYardimcisi
             return son;
         }
 
+        static int Once(Dictionary<string, string> sorgu)
+        {
+            string m;
+            var once = 0;
+            if (sorgu.TryGetValue("before", out m) && m != "" && (!int.TryParse(m, NumberStyles.None, CultureInfo.InvariantCulture, out once) || once == 0))
+                throw new GecersizIstek("before pozitif tam sayı olmalı.");
+            return once;
+        }
+
         // Sayfa: { data, next }. next, sayfa doluysa son kartın kaydıdır (sonraki istek since=next); son sayfada null.
         static Dictionary<string, object> Sayfa(List<object> veri, int sonRef, bool dolu)
         {
@@ -380,12 +390,18 @@ namespace LogoYardimcisi
         }
 
         // 2961-D4: malzeme hareketleri, kayıt sırasıyla sayfa sayfa. Kart yoksa 404.
+        // 3204: order=desc ile en yeniden geriye HareketGeriSayfasi kadar; before verilirse ondan eskiler. Zarfta order "desc" döner
+        // (eski yardımcı bu alanı göndermez; CORE ondan anlar). next, sayfa doluysa en eski kaydın numarasıdır (sonraki istek before=next).
         Cevap MalzemeHareketleri(string kod, Dictionary<string, string> sorgu)
         {
-            var since = Imlec(sorgu);
+            string yon;
+            var geriye = sorgu.TryGetValue("order", out yon) && yon == "desc";
+            if (sorgu.TryGetValue("order", out yon) && yon != "" && yon != "asc" && yon != "desc") throw new GecersizIstek("order asc ya da desc olmalı.");
+            var since = geriye ? 0 : Imlec(sorgu);
+            var once = geriye ? Once(sorgu) : 0;
             var kart = oku.MalzemeRef(kod);
             if (kart == 0) return Cevap.Hata(404, "Material not found");
-            var hareketler = oku.MalzemeHareketleri(kart, since, HareketSayfasi);
+            var hareketler = geriye ? oku.MalzemeHareketleriGeriye(kart, once, HareketGeriSayfasi) : oku.MalzemeHareketleri(kart, since, HareketSayfasi);
             var l = new List<object>();
             var son = 0;
             foreach (var x in hareketler)
@@ -400,9 +416,12 @@ namespace LogoYardimcisi
                 o["warehouseNr"] = x.AmbarNo;
                 o["unitCode"] = x.Birim;
                 l.Add(o);
-                if (x.Ref > son) son = x.Ref;
+                if (geriye ? (son == 0 || x.Ref < son) : x.Ref > son) son = x.Ref;
             }
-            return new Cevap(200, Sayfa(l, son, hareketler.Count >= HareketSayfasi));
+            if (!geriye) return new Cevap(200, Sayfa(l, son, hareketler.Count >= HareketSayfasi));
+            var z = Sayfa(l, son, hareketler.Count >= HareketGeriSayfasi);
+            z["order"] = "desc";
+            return new Cevap(200, z);
         }
 
         // 2961-D4: en yeni alış faturası satırları (en çok SonAlisEnCok). Kart yoksa 404; alışı olmayan kart boş liste.
