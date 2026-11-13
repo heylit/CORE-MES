@@ -1460,6 +1460,63 @@ describe('arkon sayım ve olayları CORE üretim emrine yansır (gerçek Postgre
     assert.deepEqual((await yenidenDene(cerez, String(hatali['cid']))).govde.sonuc, 'yazildi');
   });
 
+  // 3167 b: kişi kendi reddedilen sayımını yeniden dener; arkon.yansima-yeniden gerekmez. Başkasının kaydı görünmez (404), sayım yazamayan rol 403.
+  test('3167 b: kendi reddedilen sayımı yeniden deneme: sahiplik, rol, çift sayım koruması, tek yazım', async () => {
+    await yeniIstasyon();
+    const emir = await emirAc();
+    const baska = await emirAc();
+    const baska2 = await emirAc();
+    const sahip = ortam!.sahip;
+    await sahip.sorgu('INSERT INTO malzeme_katalog_kod_sirasi (onek, son_sira) VALUES ($1, 0) ON CONFLICT (onek) DO NOTHING', ['YNS-DNM-']);
+    const kimlik = `yns-dnm-${(sayac += 1)}`;
+    const hm = (await sahip.tek<{ no: number }>(
+      `INSERT INTO malzeme_katalog_karti (kimlik, tur, onek, sira_no, onay_durumu, kayit, acan_kisi_id, guncelleyen_kisi_id)
+       VALUES ($1, 'hammadde', 'YNS-DNM-', $2, 'aktif', $3, $4, $4) RETURNING no`,
+      [kimlik, sayac, JSON.stringify({ id: kimlik, com: { ad: 'Deneme çubuk' } }), yoneticiId]))!.no;
+    const lot = (await sahip.tek<{ id: number }>('INSERT INTO stok_parti (malzeme_id, acan_kisi_id, lot_no) VALUES ($1, $2, $3) RETURNING id', [hm, yoneticiId, `LT-${kimlik}`]))!.id;
+    const kartAc = async (e: number) => (await sahip.tek<{ id: number }>(
+      'INSERT INTO stok_refakat_partisi (uretim_emri_id, sira, malzeme_id, parti_id, acan_kisi_id) VALUES ($1, 1, $2, $3, $4) RETURNING id', [e, hm, lot, yoneticiId]))!.id;
+    const yabanci = await kartAc(baska);
+    const yabanci2 = await kartAc(baska2);
+    const kendi = (c: string, cerez = operator) =>
+      istek<{ sonuc: string; neden: string | null; mesaj?: string }>(cerez, 'POST', `/arkon/kayitlar/counts/${encodeURIComponent(c)}/yeniden-dene`);
+    assert.equal((await ekle(operator, 'events', olay(emir, 'running'))).durum, 200);
+
+    const eski = sayim(emir, 'good', 3, { refakatPartisiId: yabanci });
+    assert.equal((await ekle(operator, 'counts', eski)).durum, 200);
+    assert.equal((await yansima(String(eski['cid'])))?.sonuc, 'reddedildi');
+    const sonraki = sayim(emir, 'good', 1);
+    assert.equal((await ekle(operator, 'counts', sonraki)).durum, 200);
+    assert.equal((await yansima(String(sonraki['cid'])))?.sonuc, 'yazildi');
+    const yeni = sayim(emir, 'good', 4, { refakatPartisiId: yabanci2 });
+    assert.equal((await ekle(operator, 'counts', yeni)).durum, 200);
+    assert.equal((await yansima(String(yeni['cid'])))?.sonuc, 'reddedildi');
+
+    // Aynı adımda sonradan sayılmış: eski sayım denenmez, satır değişmez.
+    const d1 = await kendi(String(eski['cid']));
+    assert.equal(d1.durum, 409, JSON.stringify(d1.govde));
+    assert.match(String(d1.govde.mesaj), /sonradan yeniden sayım/);
+    assert.equal((await yansima(String(eski['cid'])))?.sonuc, 'reddedildi');
+
+    // Başkasının kaydı yok sayılır; sayım yazamayan Arkon rolü 403; oturumsuz 401.
+    assert.equal((await kendi(String(yeni['cid']), digerOperator)).durum, 404);
+    const cam = await kisiKur('cam_kendi', ['arkon.hazirlik', 'sayfa.arkon']);
+    assert.equal((await kendi(String(yeni['cid']), cam)).durum, 403);
+    assert.equal((await app.inject({ method: 'POST', url: `/api/arkon/kayitlar/counts/${String(yeni['cid'])}/yeniden-dene` })).statusCode, 401);
+    assert.equal((await kendi('yok-boyle-bir-kayit')).durum, 404);
+    assert.equal((await yansima(String(yeni['cid'])))?.sonuc, 'reddedildi', 'reddedilen istek satırı değiştirmez');
+
+    // Neden ortadan kalktı (kart bu emre geçti): eşzamanlı iki istekten biri yazar, adet bir kez girer.
+    const once = await onayliSaglam(emir);
+    await sahip.sorgu('UPDATE stok_refakat_partisi SET uretim_emri_id = $1 WHERE id = $2', [emir, yabanci2]);
+    const cevaplar = await Promise.all([kendi(String(yeni['cid'])), kendi(String(yeni['cid']))]);
+    assert.deepEqual(cevaplar.map((c) => c.durum).sort(), [200, 409], JSON.stringify(cevaplar.map((c) => c.govde)));
+    assert.equal(cevaplar.find((c) => c.durum === 200)?.govde.sonuc, 'yazildi');
+    assert.equal(await onayliSaglam(emir), (once ?? 0) + 4);
+    assert.equal((await yansima(String(yeni['cid'])))?.sonuc, 'yazildi');
+    assert.equal((await kendi(String(yeni['cid']))).durum, 409, 'yazılmış sayım yeniden denenmez');
+  });
+
   test('yeniden deneme sıra koruması: emrin sonraki durum kaydı yazılmışsa eski durum kaydı 409 ve emir değişmez; sonrası yoksa yazılır', async () => {
     const cerez = await yenileyiciAl();
     const emir = await calisanEmir();

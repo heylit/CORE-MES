@@ -3,7 +3,7 @@ import {
   anomaliCevabi, anomaliIstatistikCevabi, eksikIslerCevabi, eksikIslerimCevabi, anomaliOlaylariCevabi, anomaliIstatistikSorgusu, operatorOzetiCevabi, operatorOzetiSorgusu, arkonBenCevabi, arkonKisilerCevabi, arkonMalzemelerCevabi, malzemeAramaSorgusu, belgeCevabi, belgeParametresi, belgeSilGovdesi, belgeYazCevabi, belgeYazGovdesi,
   belgelerCevabi, depoParametresi, dosyaParametresi, dosyaParcasiCevabi, dosyaParcasiGovdesi,
   eksikDosyaCevabi, eksikDosyaGovdesi, iletiGovdesi, iletiSorgusu, iletilerCevabi, kayitEkleCevabi, kayitEkleGovdesi, makineDevralGovdesi, calismaDevralGovdesi,
-  kayitParametresi, kayitSorgusu, kayitlarCevabi, islerimCevabi, makineAyrimlariCevabi, makineAyrimlariSorgusu, planSiralaCevabi, planSiraSurumuCevabi, arkonOzetiCevabi, planSiralaGovdesi, tamamCevabi, yansimaParametresi, yansimaSorgusu, yansimaYenidenCevabi, yansimalarCevabi,
+  kayitParametresi, kayitSorgusu, kayitlarCevabi, islerimCevabi, makineAyrimlariCevabi, makineAyrimlariSorgusu, planSiralaCevabi, planSiraSurumuCevabi, arkonOzetiCevabi, planSiralaGovdesi, tamamCevabi, kendiSayimParametresi, yansimaParametresi, yansimaSorgusu, yansimaYenidenCevabi, yansimalarCevabi,
   kuyrukPlanaDonCevabi, kuyrukPlanaDonGovdesi, kuyrukSiralaCevabi, kuyrukSiralaGovdesi,
   hazirlikMaddeleriCevabi, hazirlikMaddeleriSorgusu, hazirlikMaddesiEkleGovdesi, hazirlikMaddesiIsaretleGovdesi, hazirlikMaddesiParametresi,
   numuneOlcumuGovdesi, numuneParametresi, merkezBelgeParametresi, merkezBelgeSorgusu, refakatKartlariCevabi, refakatKartlariSorgusu, sonOlaylarCevabi, sonOlaylarSorgusu, merkezBelgelerCevabi, merkezEkleCevabi, merkezKontrolCevabi, merkezKontrolSorgusu,
@@ -52,6 +52,15 @@ export const uclar = [
     parametre: yansimaParametresi,
     cevap: yansimaYenidenCevabi,
     isle: ({ db, kullanici, parametre, gunluk }) => servis.yansimaYenidenDene(db, kullanici, parametre.id, gunluk),
+  }),
+  // Kişinin kendi reddedilen sayımı (3167 b): kayıt yazma uçlarının sayfa yetkisi; Arkon rolü, kapsam ve sahiplik serviste denetlenir.
+  uc({
+    yontem: 'POST',
+    yol: '/arkon/kayitlar/counts/:cid/yeniden-dene',
+    yetki: ARKON_SAYFASI,
+    parametre: kendiSayimParametresi,
+    cevap: yansimaYenidenCevabi,
+    isle: ({ db, kullanici, parametre, gunluk }) => servis.kendiSayiminiYenidenDene(db, kullanici, parametre.cid, gunluk),
   }),
   uc({
     yontem: 'GET',

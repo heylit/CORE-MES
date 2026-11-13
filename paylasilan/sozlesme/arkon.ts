@@ -178,6 +178,8 @@ export const yansimalarCevabi = listeCevapSemasi(yansimaSatiri).extend({
 });
 // Yeniden kuyruğa alma (#243): satırın aynı istekteki denemeden sonraki sonucu.
 export const yansimaParametresi = z.object({ id: z.coerce.number<number>().int().positive() });
+// Kişinin kendi reddedilen sayımını yeniden denemesi (3167 b): sayım kayıt kimliğiyle anılır.
+export const kendiSayimParametresi = z.object({ cid: z.string().min(1).max(100) });
 export const yansimaYenidenCevabi = z.object({ sonuc: z.enum([...YANSIMA_SONUCLARI, 'yazildi']), neden: z.string().nullable() });
 
 // Son terminal olayları (kart #1122): Fabrika Haritası'nın "Son hareketler" listesi istemciden okur (atolye sunucusu Arkon'u ithal edemez, ADR 0006).
