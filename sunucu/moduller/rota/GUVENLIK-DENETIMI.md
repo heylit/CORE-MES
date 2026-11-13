@@ -77,6 +77,6 @@ yazmasına uygulanmaz; VARSAYIM, ON-PAKET V6).
 | Yol | İşlem | Sunucudaki kurallar | İzinli test | Reddeden test |
 |---|---|---|---|---|
 | GET /rota/urunler/:urunId/talimatlar/:opNo/sahneler | ROTA_OKUR | Talimat sürümü başına en son sahne; tablodan okunan adımlar şemayla yeniden denetlenir | U sahne.test.ts (planlama okur); U `uc-yetkisi.test.ts` | U sahne.test.ts (operatör 403); U `uc-yetkisi.test.ts` |
-| POST /rota/urunler/:urunId/talimat-sahnesi-kaydet | rota.talimat-yaz | Sıkı şema (RT-94); yalnız yayınlanmış sürüm (RT-92); RT-90, RT-91; okunan sahne sürümü (RT-93); yalnız ekleme tetikleyicisi; istek kimliği; kişi ve zaman sunucudan | U sahne.test.ts (planlama yazar, tekrar koruması) | U sahne.test.ts (operatör 403, 404, 400, 409) |
+| POST /rota/urunler/:urunId/talimat-sahnesi-kaydet | rota.talimat-yaz | Sıkı şema (RT-94); yalnız yayınlanmış sürüm (RT-92); RT-90, RT-91, RT-95 (model ürünün); okunan sahne sürümü (RT-93); yalnız ekleme tetikleyicisi; istek kimliği; kişi ve zaman sunucudan | U sahne.test.ts (planlama yazar, tekrar koruması) | U sahne.test.ts (operatör 403, 404, 400, 409) |
 
-Model revizyonunun ürüne ait olduğu henüz denetlenmez (UYUM-BORCU B50, dilim 3 öncesi kapanır). Denetim kaydı tam gövdedir (gövde en çok 100 adım).
+Model revizyonunun ürünün yayındaki modeli olduğu sunucuda denetlenir (RT-95, Risk R2; UYUM-BORCU B50 kapandı). Denetim kaydı tam gövdedir (gövde en çok 100 adım).

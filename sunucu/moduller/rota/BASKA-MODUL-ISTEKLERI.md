@@ -78,5 +78,5 @@ istasyonlar `/operasyon-tipleri*`, `/istasyon-plan-ayarlari`, `/istasyonlar/:id/
 
 ## Talimatın 3B sahnesi (3209 a)
 
-- geometri (Belge Merkezi 3B model): bir ürünün 3B model revizyonlarını veren `disari.ts` okuması (`urunModelRevizyonlari(db, malzemeId): Promise<number[]>` ya da eşdeğeri); rota sahne kaydında revizyonun ürüne ait olduğunu denetler (UYUM-BORCU B50, dilim 3 öncesi).
+- geometri: KARŞILANDI (3209 dilim 3a): `disari.ts` `malzemeModelRevizyonlari(db, malzemeNo)`; rota sahne kaydı bununla denetler (RT-95).
 - arkon: emre sabitlenen talimat sürümünün sahnesini `talimatSahnesi(db, malzemeId, opNo, talimatSurum)` ile okuyup adım ekranında oynatsın; sahne yoksa bugünkü adım ekranı aynen kalır.

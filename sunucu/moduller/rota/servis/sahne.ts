@@ -4,6 +4,7 @@ import { bulunamadi, dogrulama, eskiSurum } from '#cekirdek/hata.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
 import { sahneAdimiSemasi } from '#paylasilan/sozlesme/rota.ts';
 import type { SahneAdimi, TalimatSahneleriCevabi, TalimatSahnesi } from '#paylasilan/sozlesme/rota.ts';
+import { malzemeModelRevizyonlari } from '../../geometri/disari.ts';
 import { kisiAdlari } from '../../kisiler/disari.ts';
 import { sahneHatasi } from '../kurallar.ts';
 import * as s from '../sorgular.ts';
@@ -12,6 +13,7 @@ import { talimatSurumuAdimlari } from './talimat.ts';
 // Montaj talimatının 3B sahnesi (3209 a): yayınlanmış talimat sürümüne bağlı, yalnız eklenen sahne sürümleri.
 
 const SAHNE_KISITLARI = { rota_talimat_sahnesi_surum_tekil: { ileti: 'Sahne bu arada başka biri tarafından kaydedildi; ekranı yenile.', alan: 'okunanSahneSurum' } };
+const MODEL_YOK = 'Seçilen 3B model bu ürünün yayındaki modeli değil; stüdyoyu yeniden açıp modeli seçin.';
 const SURUM_YOK = (opNo: number, surum: number) => `OP ${String(opNo)} talimatının ${String(surum)}. sürümü yayınlanmamış; sahne yalnız yayınlanmış sürüme yazılır.`;
 
 // Tabloya yazılanı yeniden okurken biçim yine denetlenir: elle bozulmuş satır ekrana ve terminale geçmez.
@@ -41,6 +43,8 @@ export async function talimatSahnesiKaydet(
 ): Promise<TalimatSahneleriCevabi> {
   const adimlar = await talimatSurumuAdimlari(db, urunId, govde.opNo, govde.talimatSurum);
   if (adimlar === null) throw bulunamadi(SURUM_YOK(govde.opNo, govde.talimatSurum));
+  // Risk R2: model başka ürünün ya da yayından düşmüş revizyonun olamaz; sahne terminalde bu modeli açtırır.
+  if (!(await malzemeModelRevizyonlari(db, urunId)).includes(govde.modelRevizyonId)) throw dogrulama(MODEL_YOK, 'modelRevizyonId');
   const hata = sahneHatasi(govde.adimlar, adimlar.length);
   if (hata !== null) throw dogrulama(hata, 'adimlar');
   const son = await s.sonSahne(db, urunId, govde.opNo, govde.talimatSurum);

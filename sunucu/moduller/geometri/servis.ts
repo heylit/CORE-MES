@@ -401,3 +401,9 @@ export async function geometriTuru(vt: Veritabani, surec: GeometriSureci, gunluk
   }
   return alinanlar.length;
 }
+
+// Malzemenin yayındaki 3B model revizyonları (3209 a, Risk R2): rota talimat sahnesi kaydında modelin ürüne ait olduğunu denetler.
+// Yetki denetlemez; çağıran kendi yazma işlemini ister.
+export async function malzemeModelRevizyonlari(db: Db, malzemeNo: number): Promise<number[]> {
+  return (await modeller(db)).filter((x) => x.malzemeNo === malzemeNo).map((x) => x.revizyonId);
+}

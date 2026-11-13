@@ -106,4 +106,5 @@ Göç `sunucu/gocler/20261113173535_rota_talimat_sahnesi.sql`; testler `sahne.te
 | RT-91 | Parça bir adımda tekrarlanmaz ve yalnız bir adımda girer. | K, U: "RT-90, RT-91" | yok (servis) |
 | RT-92 | Sahne yalnız yayınlanmış talimat sürümüne yazılır; yoksa 404. | U: "yayınlanmamış sürüm 404" | rota_talimat_sahnesi_op_kayitli |
 | RT-93 | Sahne yalnız eklenir: düzeltme aynı talimat sürümünde yeni sahne sürümüdür; okunan sürüm eskiyse 409. | U: "sürüm denetimi", "tekrar koruması" | rota_talimat_sahnesi_surum_tekil, tetikleyiciler _degismez ve _bosaltilmaz |
+| RT-95 | Sahnenin modeli ürünün yayındaki 3B model revizyonlarından biridir (Risk R2); başka ürünün ya da olmayan revizyon 400, hiçbir şey yazılmaz. | U: "RT-90/RT-91 sunucuda" (R2 satırları) | yok (servis, geometri disari) |
 | RT-94 | Hareket biçimi sınırlıdır: yön altı eksenden biri, mesafe 0-2000 mm, süre 0,3-10 sn, en çok 100 adım ve adımda 100 parça; bilinmeyen alan reddedilir. | K: "sözleşme"; U: fazla alan 400 | rota_talimat_sahnesi_adimlar_dizi (dizi ve 256 KB) |

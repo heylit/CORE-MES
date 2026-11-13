@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { after, before, describe, test } from 'node:test';
 import type { FastifyInstance } from 'fastify';
 import { testVeritabaniKur } from '#cekirdek/test-vt.ts';
@@ -45,7 +45,7 @@ describe('talimatın 3B sahnesi (gerçek PostgreSQL, 3209 a)', () => {
   let ortam: TestVeritabani | undefined;
   let app: FastifyInstance;
   let yoneticiId = 0;
-  const c: Record<'yonetici' | 'kartOnaycisi' | 'planlama' | 'operator', string> = { yonetici: '', kartOnaycisi: '', planlama: '', operator: '' };
+  const c: Record<'yonetici' | 'kartOnaycisi' | 'planlama' | 'kalite' | 'operator', string> = { yonetici: '', kartOnaycisi: '', planlama: '', kalite: '', operator: '' };
   let tipler: SeceneklerCevabi['operasyonTipleri'] = [];
   let makine = 0;
   let hammadde = 0;
@@ -97,9 +97,27 @@ describe('talimatın 3B sahnesi (gerçek PostgreSQL, 3209 a)', () => {
   });
   const talimatAdimi = (baslik: string): TalimatAdimiGirdisi => ({ baslik, metin: null, kontrol: { tur: 'onay' }, zorunlu: true, medya: [] });
 
-  // Ürün, OP 10 ve üç adımlı yayınlanmış talimat (1. sürüm).
+  // Belge Merkezi'ne ürünün 3B modeli kendi uçlarıyla eklenip yayınlanır (bu test merkezin tablolarına yazmaz); revizyon kimliği döner.
+  let modelSayaci = 0;
+  async function modelEkle(urun: number): Promise<number> {
+    modelSayaci += 1;
+    const icerik = Buffer.from(`ISO-10303-21;\nHEADER;\nFILE_NAME('ORN-${String(modelSayaci)}');\nENDSEC;\nDATA;\nENDSEC;\nEND-ISO-10303-21;\n`);
+    const ozet = createHash('sha256').update(icerik).digest('hex');
+    await tamam(c.yonetici, 'POST', `/dosyalar/${ozet}/parca`, { sira: 0, toplam: 1, veri: icerik.toString('base64') });
+    const ad = `Model ORN-${String(modelSayaci)}`;
+    const b = (await tamam<{ belgeler: { id: number; ad: string; surum: number; revizyonlar: { id: number }[] }[] }>(c.yonetici, 'POST',
+      `/cizimler/malzemeler/${String(urun)}/belge-ekle`, { ad, tur: '3b-model', ozet, dosyaAdi: `orn-${String(modelSayaci)}.step` })).belgeler.find((x) => x.ad === ad)!;
+    const rev = b.revizyonlar[0]!.id;
+    await tamam(c.yonetici, 'POST', `/cizimler/${String(b.id)}/revizyonlar/${String(rev)}/yayinla`, { surum: b.surum });
+    return rev;
+  }
+  // Son kurulan ürünün iki yayındaki modeli; govde() ilkini kullanır.
+  let model: [number, number] = [0, 0];
+
+  // Ürün, OP 10, üç adımlı yayınlanmış talimat (1. sürüm) ve ürüne bağlı iki 3B model.
   async function montaj(): Promise<number> {
     const urun = await kartAc('mamul');
+    model = [await modelEkle(urun), await modelEkle(urun)];
     const { id } = await tamam<KomutCevabi>(c.planlama, 'POST', `/rota/urunler/${urun}/taslak-ac`, { kaynak: { tur: 'bos' } });
     await tamam<KomutCevabi>(c.planlama, 'POST', `/rota/revizyonlar/${id}/kaydet`, { surum: 1, aciklama: null, adimlar: [adim()] });
     await tamam(c.planlama, 'POST', `/rota/urunler/${urun}/talimat-adimli-yaz`, {
@@ -109,7 +127,7 @@ describe('talimatın 3B sahnesi (gerçek PostgreSQL, 3209 a)', () => {
   }
   const kaydetUrl = (urun: number) => `/rota/urunler/${urun}/talimat-sahnesi-kaydet`;
   const govde = (p: Record<string, unknown> = {}) => ({
-    opNo: 10, talimatSurum: 1, okunanSahneSurum: null, modelRevizyonId: 7,
+    opNo: 10, talimatSurum: 1, okunanSahneSurum: null, modelRevizyonId: model[0],
     adimlar: [{ sira: 1, hareket: hareket([0]) }, { sira: 2, hareket: hareket([1]) }, { sira: 3, hareket: hareket([2, 3, 4, 5], { sirali: true, mesafeMm: 50 }) }],
     ...p,
   });
@@ -128,7 +146,7 @@ describe('talimatın 3B sahnesi (gerçek PostgreSQL, 3209 a)', () => {
     await ortam.vt.tx((db) => yoneticiOlustur(db, { ad: 'Deneme Kart Onaycısı', kullaniciAdi: 'kartonay', parola: PAROLA }));
     c.kartOnaycisi = await girisCerezi('kartonay');
     const roller = ((await istek(c.yonetici, 'GET', '/roller')).json() as { roller: { id: number; ad: string }[] }).roller;
-    for (const [ad, rolAdi] of [['planlama', 'Planlama ve Proje'], ['operator', 'Operatör']] as const) {
+    for (const [ad, rolAdi] of [['planlama', 'Planlama ve Proje'], ['kalite', 'Kalite'], ['operator', 'Operatör']] as const) {
       const rolId = roller.find((x) => x.ad === rolAdi)!.id;
       await vt().tx(async (db) => {
         const id = await yoneticiOlustur(db, { ad: `Deneme ${ad}`, kullaniciAdi: ad, parola: PAROLA });
@@ -151,17 +169,40 @@ describe('talimatın 3B sahnesi (gerçek PostgreSQL, 3209 a)', () => {
     await red(c.operator, kaydetUrl(urun), govde(), 403);
     assert.equal((await istek(c.operator, 'GET', `/rota/urunler/${urun}/talimatlar/10/sahneler`)).statusCode, 403);
     const k = await tamam<TalimatSahneleriCevabi>(c.planlama, 'POST', kaydetUrl(urun), govde());
-    assert.deepEqual(k.sahneler.map((x) => [x.talimatSurum, x.sahneSurum, x.modelRevizyonId, x.adimlar.length, x.yazan.ad]), [[1, 1, 7, 3, 'Deneme planlama']]);
+    assert.deepEqual(k.sahneler.map((x) => [x.talimatSurum, x.sahneSurum, x.modelRevizyonId, x.adimlar.length, x.yazan.ad]), [[1, 1, model[0], 3, 'Deneme planlama']]);
     const o = await tamam<TalimatSahneleriCevabi>(c.planlama, 'GET', `/rota/urunler/${urun}/talimatlar/10/sahneler`);
     assert.deepEqual(o.sahneler[0]?.adimlar[2]?.hareket, hareket([2, 3, 4, 5], { sirali: true, mesafeMm: 50 }));
+  });
+
+  test('rotayı okuyup talimat yazamayan hesap sahneyi okur, yazamaz (403)', async () => {
+    const urun = await montaj();
+    await tamam(c.planlama, 'POST', kaydetUrl(urun), govde());
+    await red(c.kalite, kaydetUrl(urun), govde({ okunanSahneSurum: 1 }), 403);
+    const o = await tamam<TalimatSahneleriCevabi>(c.kalite, 'GET', `/rota/urunler/${urun}/talimatlar/10/sahneler`);
+    assert.deepEqual(o.sahneler.map((x) => x.sahneSurum), [1]);
+  });
+
+  test('adımlar sıraya dizilerek yazılır; okumada biçimi bozuk adım süzülür', async () => {
+    const urun = await montaj();
+    const ters = [{ sira: 3, hareket: hareket([2]) }, { sira: 1, hareket: hareket([0]) }, { sira: 2, hareket: hareket([1]) }];
+    const k = await tamam<TalimatSahneleriCevabi>(c.planlama, 'POST', kaydetUrl(urun), govde({ adimlar: ters }));
+    assert.deepEqual(k.sahneler[0]?.adimlar.map((a) => a.sira), [1, 2, 3]);
+    await vt().tx((db) => db.sorgu(
+      `INSERT INTO rota_talimat_sahnesi (malzeme_id, op_no, talimat_surum, sahne_surum, model_revizyon_id, adimlar, yazan_kisi_id)
+       VALUES ($1, 10, 1, 2, $2, $3::jsonb, $4)`,
+      [urun, model[0], JSON.stringify([{ sira: 1, hareket: hareket([0]) }, { sira: 2, hareket: { yon: 'yukari' } }, 'bozuk']), yoneticiId],
+    ));
+    const o = await tamam<TalimatSahneleriCevabi>(c.planlama, 'GET', `/rota/urunler/${urun}/talimatlar/10/sahneler`);
+    const son = o.sahneler.find((x) => x.sahneSurum === 2);
+    assert.deepEqual(son?.adimlar.map((a) => a.sira), [1]);
   });
 
   test('sürüm denetimi: yeni sahne sürüm açar, eski okunanla yazma reddedilir; eski sürüm satırı yerinde kalır (yalnız ekleme)', async () => {
     const urun = await montaj();
     await tamam(c.planlama, 'POST', kaydetUrl(urun), govde());
     await red(c.planlama, kaydetUrl(urun), govde(), 409);
-    const k = await tamam<TalimatSahneleriCevabi>(c.planlama, 'POST', kaydetUrl(urun), govde({ okunanSahneSurum: 1, modelRevizyonId: 8 }));
-    assert.deepEqual(k.sahneler.map((x) => [x.sahneSurum, x.modelRevizyonId]), [[2, 8]]);
+    const k = await tamam<TalimatSahneleriCevabi>(c.planlama, 'POST', kaydetUrl(urun), govde({ okunanSahneSurum: 1, modelRevizyonId: model[1] }));
+    assert.deepEqual(k.sahneler.map((x) => [x.sahneSurum, x.modelRevizyonId]), [[2, model[1]]]);
     await red(c.planlama, kaydetUrl(urun), govde({ okunanSahneSurum: 1 }), 409);
     const sayi = await vt().tx((db) => db.tek<{ n: number }>('SELECT count(*)::int AS n FROM rota_talimat_sahnesi WHERE malzeme_id = $1', [urun]));
     assert.equal(sayi?.n, 2);
@@ -175,6 +216,13 @@ describe('talimatın 3B sahnesi (gerçek PostgreSQL, 3209 a)', () => {
     await red(c.planlama, kaydetUrl(urun), govde({ adimlar: [{ sira: 4, hareket: hareket([0]) }] }), 400, /3 adımı var/);
     await red(c.planlama, kaydetUrl(urun), govde({ adimlar: [{ sira: 1, hareket: hareket([0]) }, { sira: 2, hareket: hareket([0]) }] }), 400, /tek adımda/);
     await red(c.planlama, kaydetUrl(urun), govde({ fazla: true }), 400);
+    // Risk R2: başka ürünün modeli ve hiç olmayan revizyon reddedilir, hiçbir şey yazılmaz.
+    const baskasi = model[0];
+    const ikinci = await montaj();
+    await red(c.planlama, kaydetUrl(ikinci), govde({ modelRevizyonId: baskasi }), 400, /bu ürünün yayındaki modeli değil/);
+    await red(c.planlama, kaydetUrl(ikinci), govde({ modelRevizyonId: 999999 }), 400, /bu ürünün yayındaki modeli değil/);
+    const yok = await vt().tx((db) => db.tek<{ n: number }>('SELECT count(*)::int AS n FROM rota_talimat_sahnesi WHERE malzeme_id = $1', [ikinci]));
+    assert.equal(yok?.n, 0);
   });
 
   test('aynı istek kimliği ikinci sahne sürümü açmaz (tekrar koruması)', async () => {
