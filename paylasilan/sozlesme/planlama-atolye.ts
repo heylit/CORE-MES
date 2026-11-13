@@ -60,6 +60,31 @@ export const isTasiOnizlemesiCevabi = z.object({
   })),
 });
 
+// Plana alma (3151): planda yeri olmayan açık emrin ilk adımı verilen tezgâhta, verilen saatten sonraki ilk boş yerde kilitlenir; öteki
+// adımları ve tezgâhlarını plan yeniden dizilirken motor yerleştirir. Başka emrin işi kımıldamaz.
+export const planaAlGovdesi = z.object({
+  calismaSurumu: z.number().int(),
+  emirId: kimlik,
+  tezgah: kimlik,
+  baslangic: saat,
+});
+// Önizleme yazmaz. calismaSurumu sayfanın gördüğü sürümdür: kayıt ilerlediyse sonuç hesaplanmaz, gecerli false döner.
+export const planaAlOnizlemeSorgusu = z.object({
+  calismaSurumu: z.coerce.number<number>({ message: 'Sürüm sayı olmalı.' }).pipe(z.number().int()),
+  emirId: kimlik,
+  tezgah: kimlik,
+  baslangic: z.coerce.number<number>({ message: 'Başlangıç sayı olmalı.' }).pipe(saat),
+});
+// isler: emrin adımlarının oturacağı yerler (ilki kilitlenecek olan, ötekiler tahmin: motor dizerken değiştirebilir). bitis: emrin tahmini
+// bitişi; fason adımı olan emirde ve geçersiz önizlemede null. Cevap yalnız iş kimliği, tezgâh ve saat taşır.
+export const planaAlOnizlemesiCevabi = z.object({
+  calismaSurumu: z.number().int().nullable(),
+  gecerli: z.boolean(),
+  ileti: z.string().nullable(),
+  isler: z.array(z.object({ isId: z.string(), tezgah: z.string(), S: z.number(), C: z.number() })),
+  bitis: z.number().nullable(),
+});
+
 export type IsTasiGovdesi = z.output<typeof isTasiGovdesi>;
 export type AtolyeOlayi = z.output<typeof atolyeOlayi>;
 export type OlayEkleGovdesi = z.output<typeof olayEkleGovdesi>;
@@ -67,3 +92,6 @@ export type EkMesaiEkleGovdesi = z.output<typeof ekMesaiEkleGovdesi>;
 export type AtolyeKomutuCevabi = z.output<typeof atolyeKomutuCevabi>;
 export type IsTasiOnizlemeSorgusu = z.output<typeof isTasiOnizlemeSorgusu>;
 export type IsTasiOnizlemesiCevabi = z.output<typeof isTasiOnizlemesiCevabi>;
+export type PlanaAlGovdesi = z.output<typeof planaAlGovdesi>;
+export type PlanaAlOnizlemeSorgusu = z.output<typeof planaAlOnizlemeSorgusu>;
+export type PlanaAlOnizlemesiCevabi = z.output<typeof planaAlOnizlemesiCevabi>;

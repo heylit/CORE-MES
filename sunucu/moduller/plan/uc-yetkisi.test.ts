@@ -103,6 +103,8 @@ const BEKLENEN: BeklenenYetkiler = {
   'POST /plan/planlama-calismasi/geri-al': 'recete-rota.yaz',
   'POST /plan/planlama-calismasi/is-tasi': 'plan.yaz',
   'GET /plan/planlama-calismasi/is-tasi-onizlemesi': 'plan.yaz',
+  'POST /plan/planlama-calismasi/plana-al': 'plan.yaz',
+  'GET /plan/planlama-calismasi/plana-al-onizlemesi': 'plan.yaz',
   'POST /plan/planlama-calismasi/olay-ekle': 'plan.yaz',
   'POST /plan/planlama-calismasi/ek-mesai-ekle': 'plan.yaz',
   // Değerlendirme ve yıllık çözüm kayıt yazmaz; planlama sayfasını gören başlatır.

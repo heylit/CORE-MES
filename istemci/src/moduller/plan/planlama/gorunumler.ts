@@ -107,7 +107,7 @@ export interface GorunumKaydi {
   anahtar: MenuGorunumu;
   baslik: string;
   simge: SimgeAdi;
-  parca: 'P1' | 'P2' | 'P3' | 'P4' | 'P5' | 'P6';
+  parca: 'P1' | 'P2' | 'P3' | 'P4' | 'P5' | 'P6' | 'P7';
   bilesen: LazyExoticComponent<ComponentType<PlanlamaEkranOzellikleri>>;
 }
 
@@ -120,6 +120,7 @@ export const PlanSeridi = lazy(async () => ({ default: (await import('./motor/us
 const BILESENLER: Record<MenuGorunumu, Pick<GorunumKaydi, 'parca' | 'bilesen'>> = {
   plan: { parca: 'P1', bilesen: parca(() => import('./motor/index.tsx'), 'PlanlamaMotoru') },
   studio: { parca: 'P1', bilesen: parca(() => import('./motor/index.tsx'), 'PlanlamaAtolyesi') },
+  kokpit: { parca: 'P7', bilesen: parca(() => import('./kokpit/index.tsx'), 'Kokpit') },
   ysiparis: { parca: 'P2', bilesen: parca(() => import('./siparis/index.tsx'), 'Siparisler') },
   terminler: { parca: 'P2', bilesen: parca(() => import('./siparis/index.tsx'), 'Terminler') },
   denge: { parca: 'P2', bilesen: parca(() => import('./siparis/index.tsx'), 'TerminVeKar') },
