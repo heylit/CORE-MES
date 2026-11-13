@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import {
-  adetDegistiMi, alarmKimligi, alarmOku, alarmSatiri, ambarOku, ASGARI_PENCERE_MS, ATLAMA_ESIGI, durusOku, gonderimOzeti, isEmriParametreleri,
+  adetDegistiMi, alarmTekrarTonu, birikimliSayac, cizelgeParcalari, nedensizDuruslar, sayimKarsilastir, terminAsimi, alarmKimligi, alarmOku, alarmSatiri, ambarOku, ASGARI_PENCERE_MS, ATLAMA_ESIGI, durusOku, gonderimOzeti, isEmriParametreleri,
   kapanisParametreleri, kaliteOku, listedekiKodlar, okumaPenceresi, ORTUSME_MS, pencereAtlanmaliMi, redOku, smartesAkisDurumu, smartesMakineleri,
   sonucBilinmiyorMu, tanimEylemi, tanimKoduUygunMu, bugunDilimleri, DURUM_KODLARI, ilerlemeOku, ISTEGE_BAGLI_METOTLAR, makineBilgisiOku, makineDurumu,
   turSirasi, yasakMetotMu, MAKINE_BILGI_METODU, ILERLEME_METODU,
@@ -208,5 +208,46 @@ describe('Canlı makine panosu kuralları (SME-34)', () => {
     assert.equal(ilerlemeOku({ WORKORDER_NO: 'ORN-1-10', COMPLETED_PERCENTAGE_BY_PIECE: '-4' })?.tamamlananYuzde, null);
     assert.equal(ilerlemeOku({ WORKORDER_NO: 'ORN-1-10' })?.tahminiBitis, null);
     assert.equal(ilerlemeOku({ COMPLETED_PERCENTAGE_BY_PIECE: '5' }), null);
+  });
+});
+
+describe('Makine bulguları kuralları (3192 D1)', () => {
+  const t = (hm: string) => `2026-11-13T${hm}:00.000Z`;
+  test('çizelge: kısa bekleme çalışmadır; nedenli duruşla örtüşen bekleme nedenli, değilse nedensiz; bağlantı yok boş; açık dilim şimdiye dek', () => {
+    const p = cizelgeParcalari([
+      { durum: 'calisiyor', baslangic: t('06:00'), bitis: t('07:00') },
+      { durum: 'bekliyor', baslangic: t('07:00'), bitis: t('07:02') },
+      { durum: 'calisiyor', baslangic: t('07:02'), bitis: t('08:00') },
+      { durum: 'bekliyor', baslangic: t('08:00'), bitis: t('08:20') },
+      { durum: 'baglanti-yok', baslangic: t('08:20'), bitis: t('08:30') },
+      { durum: 'bekliyor', baslangic: t('08:30'), bitis: null },
+    ], [{ nedenKodu: 'ORN-AYAR', baslangic: t('07:58'), bitis: t('08:15') }, { nedenKodu: null, baslangic: t('08:30'), bitis: null }], t('08:40'));
+    assert.deepEqual(p.map((x) => [x.tur, x.baslangic.slice(11, 16), x.bitis.slice(11, 16), x.not]), [
+      ['calisiyor', '06:00', '08:00', null], ['nedenli', '08:00', '08:20', 'ORN-AYAR'], ['nedensiz', '08:30', '08:40', null],
+    ]);
+    assert.deepEqual(nedensizDuruslar(p, t('08:40')).map((n) => [n.sureDk, n.suruyor]), [[10, true]]);
+  });
+  test('sayım: operatör sağlam + red ile makine karşılaştırılır; tolerans en az 2, %2; biri gelmediyse karşılaştırma yok', () => {
+    assert.deepEqual(sayimKarsilastir({ saglam: 44, red: 2, makineSaglam: 52, makineRed: null }), { operator: 46, makine: 52, fark: 6, tolerans: 2, asti: true });
+    assert.equal(sayimKarsilastir({ saglam: 500, red: 0, makineSaglam: 508, makineRed: 0 })?.asti, false, '508 × %2 = 11');
+    assert.equal(sayimKarsilastir({ saglam: null, red: 1, makineSaglam: 5, makineRed: 0 }), null);
+  });
+  test('termin: tahmini bitiş teslim gününü geçerse gün farkı; aynı gün sorun değil', () => {
+    assert.equal(terminAsimi('2026-11-14T07:40:00.000Z', '2026-11-13'), 1);
+    assert.equal(terminAsimi('2026-11-13T18:00:00.000Z', '2026-11-13'), null);
+  });
+  test('alarm: son 7 günde 3 kez uyarı, 5 kez hata; daha eskisi sayılmaz', () => {
+    const g = (gun: number) => new Date(Date.parse(t('12:00')) - gun * 86_400_000).toISOString();
+    assert.equal(alarmTekrarTonu([g(1), g(2)], t('12:00')), null);
+    assert.deepEqual(alarmTekrarTonu([g(1), g(2), g(3), g(9)], t('12:00')), { sayi: 3, ton: 'uyari' });
+    assert.deepEqual(alarmTekrarTonu([g(1), g(2), g(3), g(4), g(5)], t('12:00')), { sayi: 5, ton: 'hata' });
+  });
+  test('birikimli sayaç: yalnız artış toplanır, sıfırlanan sayaç düşürmez; toplam sayaç önce; örneksiz saat boş', () => {
+    const saatler = ['06:00', '07:00', '08:00'].map((x) => Date.parse(t(x)));
+    assert.deepEqual(birikimliSayac([
+      { zaman: t('06:10'), sayac: 10, sayacToplam: null }, { zaman: t('06:50'), sayac: 18, sayacToplam: null },
+      { zaman: t('08:10'), sayac: 2, sayacToplam: null }, { zaman: t('08:20'), sayac: 6, sayacToplam: null },
+    ], saatler), [8, null, 12]);
+    assert.deepEqual(birikimliSayac([{ zaman: t('06:10'), sayac: 1, sayacToplam: 100 }, { zaman: t('06:20'), sayac: 0, sayacToplam: 104 }], saatler), [4, null, null]);
   });
 });

@@ -2,7 +2,7 @@ import { uc } from '#cekirdek/uc.ts';
 import { ikinciMenuSayacSemasi } from '#paylasilan/ikinci-menu.ts';
 import {
   alarmlarCevabi, canliMakineAyrintisiCevabi, canliMakineParametresi, canliMakinelerCevabi, durumCevabi, duruslarCevabi, eslemeAtaGovdesi, eslemeCevabi, eslemeKaldirGovdesi, eslemelerCevabi, eslemeSorgusu, gidenCevabi,
-  isEmriDurumlariCevabi, sayfaSorgusu, smartesHazirlikCevabi, smartesKontrolCevabi,
+  isEmriDurumlariCevabi, makineBulgulariCevabi, sayfaSorgusu, smartesHazirlikCevabi, smartesKontrolCevabi,
 } from '#paylasilan/sozlesme/smartes.ts';
 import { ortamIstemcisi, ortamOzeti } from './baglanti.ts';
 import * as servis from './servis.ts';
@@ -81,6 +81,14 @@ export const uclar = [
     isle: ({ db, sorgu }) => servis.giden(db, sorgu),
   }),
   // Canlı makine panosu: yalnız saklanan son okumayı verir; SmartES'e istek atmaz.
+  // 3192: makine verisiyle çalışanın girdiği karşılaştırılır; yalnız okur, bir şey düzeltmez.
+  uc({
+    yontem: 'GET',
+    yol: '/smartes/makine-bulgulari',
+    yetki: { biri: ['sayfa.smartes'] },
+    cevap: makineBulgulariCevabi,
+    isle: ({ db }) => servis.makineBulgulari(db, ortamIstemcisi),
+  }),
   uc({
     yontem: 'GET',
     yol: '/smartes/makineler',

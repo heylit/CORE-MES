@@ -3,6 +3,7 @@
 import { createHash } from 'node:crypto';
 import { SMARTES_OKUMA_KAYNAKLARI } from '#paylasilan/sozlesme/smartes.ts';
 import type { SmartesEslemeTuru, SmartesMakineDurumu } from '#paylasilan/sozlesme/smartes.ts';
+import { tesisGunBasi, tesisGunu } from '#paylasilan/tesis-zamani.ts';
 import { mantiksal, metinAlani, tamSayi, tarihAlani } from './soap.ts';
 import type { ParametreDegeri, Parametreler, TabloSatiri } from './soap.ts';
 
@@ -804,4 +805,114 @@ export function ilerlemeOku(s: TabloSatiri): IlerlemeKaydi | null {
   if (isEmriNo === null || isEmriNo.trim() === '') return null;
   const y = ondalik(s, ['COMPLETED_PERCENTAGE_BY_PIECE']);
   return { isEmriNo, tamamlananYuzde: y !== null && y >= 0 && y <= 1000 ? y : null, tahminiBitis: tarih(s, ['ESTIMATED_END_DATETIME']) };
+}
+
+/* ---------------- Makine bulguları (kart 3192): saf hesaplar; eşikler tek yerde ---------------- */
+
+export const BULGU_ESIKLERI = {
+  // Bu süreden kısa bekleme çalışma sayılır (parça değiştirme, kapı açma).
+  kisaBeklemeMs: 3 * 60_000,
+  // Bekleme aralığının bu payı SmartES duruş kaydıyla örtüşüyorsa duruş nedenli sayılır.
+  nedenOrtusmePayi: 0.5,
+  sayimToleransAdet: 2,
+  sayimToleransOrani: 0.02,
+  alarmGun: 7,
+  alarmUyari: 3,
+  alarmHata: 5,
+} as const;
+
+export type CizelgeTuru = 'calisiyor' | 'nedenli' | 'nedensiz' | 'alarm' | 'kapali';
+export interface CizelgeParcasi { baslangic: string; bitis: string; tur: CizelgeTuru; not: string | null }
+export interface SmartesDurusAraligi { nedenKodu: string | null; baslangic: string; bitis: string | null }
+
+const ms = (iso: string): number => Date.parse(iso);
+const ortusme = (a1: number, a2: number, b1: number, b2: number): number => Math.max(0, Math.min(a2, b2) - Math.max(a1, b1));
+
+// Durum dilimleri zaman çizelgesine çevrilir. Bağlantı yok ve bilinmeyen durum boş kalır (veri uydurulmaz); açık dilim şimdiye kadar
+// çizilir. Bekleme: kısa ise çalışma, SmartES duruş kaydı nedenliyse "nedenli" (not: neden kodu), değilse "nedensiz".
+export function cizelgeParcalari(dilimler: readonly DurumDilimi[], duruslar: readonly SmartesDurusAraligi[], simdi: string): CizelgeParcasi[] {
+  const sonAn = ms(simdi);
+  const parcalar: CizelgeParcasi[] = [];
+  for (const d of dilimler) {
+    const bas = ms(d.baslangic);
+    const bit = d.bitis === null ? sonAn : Math.min(ms(d.bitis), sonAn);
+    if (bit <= bas) continue;
+    let tur: CizelgeTuru | null;
+    let not: string | null = null;
+    if (d.durum === 'calisiyor' || d.durum === 'alarm' || d.durum === 'kapali') tur = d.durum;
+    else if (d.durum === 'bekliyor') {
+      if (bit - bas < BULGU_ESIKLERI.kisaBeklemeMs) tur = 'calisiyor';
+      else {
+        const nedenli = duruslar.filter((x) => x.nedenKodu !== null);
+        const pay = nedenli.reduce((t, x) => t + ortusme(bas, bit, ms(x.baslangic), x.bitis === null ? sonAn : ms(x.bitis)), 0);
+        tur = pay >= (bit - bas) * BULGU_ESIKLERI.nedenOrtusmePayi ? 'nedenli' : 'nedensiz';
+        if (tur === 'nedenli') {
+          const enCok = [...nedenli].sort((a, b) =>
+            ortusme(bas, bit, ms(b.baslangic), b.bitis === null ? sonAn : ms(b.bitis)) - ortusme(bas, bit, ms(a.baslangic), a.bitis === null ? sonAn : ms(a.bitis)))[0];
+          not = enCok?.nedenKodu ?? null;
+        }
+      }
+    } else tur = null;
+    if (tur === null) continue;
+    const onceki = parcalar.at(-1);
+    // Kısa bekleme çalışmaya katıldığında art arda aynı tür tek parçadır.
+    if (onceki !== undefined && onceki.tur === tur && onceki.not === not && ms(onceki.bitis) === bas) onceki.bitis = new Date(bit).toISOString();
+    else parcalar.push({ baslangic: new Date(bas).toISOString(), bitis: new Date(bit).toISOString(), tur, not });
+  }
+  return parcalar;
+}
+
+export interface NedensizDurus { baslangic: string; bitis: string; sureDk: number; suruyor: boolean }
+
+// Nedeni girilmemiş duruşlar (zaman çizelgesindeki "nedensiz" parçalar); süren duruş en sonda olabilir.
+export function nedensizDuruslar(parcalar: readonly CizelgeParcasi[], simdi: string): NedensizDurus[] {
+  return parcalar.filter((p) => p.tur === 'nedensiz').map((p) => ({
+    baslangic: p.baslangic, bitis: p.bitis, sureDk: Math.round((ms(p.bitis) - ms(p.baslangic)) / 60_000), suruyor: p.bitis === new Date(ms(simdi)).toISOString(),
+  }));
+}
+
+export interface SayimKarsilastirmasi { operator: number; makine: number; fark: number; tolerans: number; asti: boolean }
+
+// Operatörün SmartES'e girdiği (sağlam + red) ile makinenin saydığı karşılaştırılır. Biri gelmediyse karşılaştırma yoktur (null).
+export function sayimKarsilastir(s: { saglam: number | null; red: number | null; makineSaglam: number | null; makineRed: number | null }): SayimKarsilastirmasi | null {
+  if (s.saglam === null || s.makineSaglam === null) return null;
+  const operator = s.saglam + (s.red ?? 0);
+  const makine = s.makineSaglam + (s.makineRed ?? 0);
+  const fark = makine - operator;
+  const tolerans = Math.max(BULGU_ESIKLERI.sayimToleransAdet, Math.ceil(makine * BULGU_ESIKLERI.sayimToleransOrani));
+  return { operator, makine, fark, tolerans, asti: Math.abs(fark) > tolerans };
+}
+
+// SmartES'in tahmini bitişi emrin teslim gününün sonunu geçiyorsa termin riski; kaç gün geçtiği tesis gününe göre.
+export function terminAsimi(tahminiBitis: string, teslim: string): number | null {
+  const gecikmeGun = Math.round((tesisGunBasi(tesisGunu(ms(tahminiBitis))) - tesisGunBasi(teslim)) / 86_400_000);
+  return gecikmeGun > 0 ? gecikmeGun : null;
+}
+
+// Aynı alarmın son 7 gündeki tekrarı; eşiğin altında null.
+export function alarmTekrarTonu(gunler: readonly string[], simdi: string): { sayi: number; ton: 'uyari' | 'hata' } | null {
+  const sinir = ms(simdi) - BULGU_ESIKLERI.alarmGun * 86_400_000;
+  const sayi = gunler.filter((g) => ms(g) >= sinir).length;
+  if (sayi >= BULGU_ESIKLERI.alarmHata) return { sayi, ton: 'hata' };
+  return sayi >= BULGU_ESIKLERI.alarmUyari ? { sayi, ton: 'uyari' } : null;
+}
+
+// Makine sayacından saat başına birikimli üretim: yalnız artışlar toplanır (sayaç sıfırlanırsa o adım sayılmaz). Toplam sayaç varsa o
+// kullanılır. Örneği olmayan saat null kalır.
+export function birikimliSayac(
+  ornekler: readonly { zaman: string; sayac: number | null; sayacToplam: number | null }[], saatBaslari: readonly number[],
+): (number | null)[] {
+  let onceki: number | null = null;
+  let toplam = 0;
+  const saatSonu = new Map<number, number>();
+  for (const o of ornekler) {
+    const deger = o.sayacToplam ?? o.sayac;
+    if (deger === null) continue;
+    if (onceki !== null && deger > onceki) toplam += deger - onceki;
+    onceki = deger;
+    const t = ms(o.zaman);
+    const saat = saatBaslari.findLastIndex((b) => b <= t);
+    if (saat >= 0) saatSonu.set(saat, toplam);
+  }
+  return saatBaslari.map((_, i) => saatSonu.get(i) ?? null);
 }
