@@ -155,18 +155,31 @@ test.describe('A1 Operatör', () => {
       await page.route('**/api/arkon/belgeler/pkgs', (r) => r.fulfill({ json: { belgeler: Array.from({ length: n }, (_, i) => ({ kimlik: paket(i).id, surum: 1, govde: paket(i) })) } }));
       await ac('/uretim-terminali');
       const cark = page.getByRole('region', { name: 'İş ve makine çarkı' });
+      // 3136: telefonda çark sayfada durmaz, istasyon kutusundan açılan "Aktif iş" penceresindedir (tek görünüş, sayfa kaymaz).
+      const kutu = page.getByRole('button', { name: /ORN-TORNA-1/ }).and(page.getByTitle('İstasyon · çarkın İstasyonlar şeridinden değişir'));
+      await expect(cark.or(kutu).first()).toBeVisible();
+      if (!(await cark.isVisible())) await kutu.click();
       await expect(cark).toBeVisible();
       return cark;
     };
 
-    // Görünen bölümler sayfa sırasıyla alt alta durur; biri öncekinin üstüne çıkmaz.
+    // Görünen bölümler birbirinin üstüne çıkmaz. 3136: genişte çark sol sütunda, iş kimliği sağ sütunun başındadır (yan yana);
+    // telefonda çark penceredir ve açıkken sayfanın üstünde durur, o yüzden pencere kapatılıp sayfadaki bölümler ölçülür.
     const altAlta = async (page: Page) => {
-      const kutular = await page.evaluate(() => ['.tc-ay1-tcark', '.tc-ay1-aktif', ':is(.tc-ay1-sahne > :first-child, .tc-ay1-simdi)', '.tc-ay1-sayac']
+      const pencere = page.getByRole('dialog', { name: 'Aktif iş' });
+      if (await pencere.isVisible()) { await page.keyboard.press('Escape'); await expect(pencere).toBeHidden(); }
+      const kutular = await page.evaluate(() => ['.tc-ay1-tcark', ':is(.tc-ay1-aktif, .tc-ay1-is-baslik)', ':is(.tc-ay1-sahne > :first-child, .tc-ay1-simdi)', '.tc-ay1-sayac']
         .map((s) => document.querySelector(s)?.getBoundingClientRect())
         .filter((b): b is DOMRect => !!b && b.height > 0)
-        .map((b) => [Math.round(b.top), Math.round(b.bottom)] as const));
+        .map((b) => [Math.round(b.left), Math.round(b.top), Math.round(b.right), Math.round(b.bottom)] as const));
       expect(kutular.length, JSON.stringify(kutular)).toBeGreaterThanOrEqual(3);
-      for (let i = 1; i < kutular.length; i++) expect(kutular[i]![0], JSON.stringify(kutular)).toBeGreaterThanOrEqual(kutular[i - 1]![1]);
+      for (let i = 0; i < kutular.length; i++) {
+        for (let j = i + 1; j < kutular.length; j++) {
+          const [a, b] = [kutular[i]!, kutular[j]!];
+          const biniyor = a[0] < b[2] && b[0] < a[2] && a[1] < b[3] && b[1] < a[3];
+          expect(biniyor, JSON.stringify(kutular)).toBe(false);
+        }
+      }
     };
 
     // Kullanıcının bildirdiği geniş pencereler: binme 900 px'ten yüksek pencerede de oluyordu (1600x1000'de 14 px).

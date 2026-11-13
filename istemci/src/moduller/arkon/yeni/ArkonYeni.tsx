@@ -319,12 +319,16 @@ function useOlcek(kok: HTMLDivElement | null, olcekli: boolean): boolean | null 
     const alan = kutuluAta(kok);
     if (!kok || !alan) return undefined;
     const uygula = () => {
-      const yukseklik = Math.max(0, window.innerHeight - Math.max(0, alan.getBoundingClientRect().top));
+      const kutu = alan.getBoundingClientRect();
+      const yukseklik = Math.max(0, window.innerHeight - Math.max(0, kutu.top));
       const olcek = olcekHesapla(alan.clientWidth, yukseklik, yerel.oku<number>('scale'));
       const mobil = olcekli ? olcek.mobil : olcekHesapla(window.innerWidth, window.innerHeight).mobil;
       const z = olcekli ? olcek.z : 1;
       kok.style.setProperty('--tc-ay-olcek', String(z));
       kok.style.setProperty('--tc-ay-vh', `${Math.round(yukseklik / z)}px`);
+      // Alanın altında kalan kabuk parçası (telefonda alt menü): tam ekran düzen onu da düşer, yoksa sayfa o kadar kayar.
+      const alt = kutu.height > 0 ? Math.max(0, window.innerHeight - kutu.bottom) : 0;
+      kok.style.setProperty('--tc-ay-alt', `${Math.round(alt / z)}px`);
       kok.toggleAttribute('data-mobil', mobil);
       // Ölçülemeyen alan (genişlik 0) ve terminal null verir; dar düzen kararı pencere genişliğine düşer (useDarEkran).
       mobilYaz(olcekli && alan.clientWidth > 0 ? mobil : null);
