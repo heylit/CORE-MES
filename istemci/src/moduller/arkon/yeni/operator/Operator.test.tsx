@@ -593,6 +593,39 @@ describe('A1 Üretim Terminali el okuyucu (1337 a)', () => {
     expect(await screen.findByText(/Bu kart bu istasyondaki işlerin kartı değil/, {}, { timeout: 10000 })).toBeTruthy();
     expect(screen.queryByText(/İş emri açıldı/)).toBeNull();
   }, 40000);
+
+  // 3155 (3157 a): el okuyucusu olmayan istasyonda aynı okutma "Kartı okut" düğmesinden, kamera penceresiyle yapılır.
+  const pencereyeOkut = async (kod: string) => {
+    fireEvent.click((await screen.findAllByRole('button', { name: 'Kartı okut' }))[0]!);
+    const kutu = within(await screen.findByRole('dialog', { name: 'Refakat kartını okut' })).getByRole('textbox', { name: 'Kod' });
+    fireEvent.change(kutu, { target: { value: kod } });
+    fireEvent.submit(kutu.closest('form')!);
+  };
+
+  it('"Kartı okut" düğmesiyle okutulan kart işi o kartla açar, başlatmaz; pencere kapanır', async () => {
+    const istekler = kur();
+    arkonAc('/uretim-terminali');
+    const d = await ekran();
+    expect(await within(d).findByRole('heading', { name: /UE-DENEME-8/ })).toBeTruthy();
+    await waitFor(() => { expect(kartOkundu).toBe(true); }, { timeout: 10000 });
+    await pencereyeOkut('RP:4');
+    expect(await screen.findByText(/İş emri açıldı: UE-DENEME-8 · UE-DENEME-8-P4/, {}, { timeout: 10000 })).toBeTruthy();
+    expect(screen.queryByRole('dialog', { name: 'Refakat kartını okut' })).toBeNull();
+    await new Promise((r) => setTimeout(r, 700));
+    expect(olaylar(istekler).some((e) => e.state === 'running')).toBe(false);
+  }, 40000);
+
+  it('"Kartı okut" penceresinde kart dışı kod işi açmaz, sessiz de kalmaz', async () => {
+    kur();
+    arkonAc('/uretim-terminali');
+    await ekran();
+    await waitFor(() => { expect(kartOkundu).toBe(true); }, { timeout: 10000 });
+    // Personel kartı biçimindeki kod el okuyucuda yok sayılır (kişi değiştirme yoluna bırakılır); pencerede söylenir.
+    await pencereyeOkut('1234567890');
+    expect(await screen.findByText(/Refakat kartı değil/, {}, { timeout: 10000 })).toBeTruthy();
+    expect(screen.queryByRole('dialog', { name: 'Refakat kartını okut' })).toBeNull();
+    expect(screen.queryByText(/İş emri açıldı/)).toBeNull();
+  }, 40000);
 });
 
 // 2928 a, 2933 a: stok.istek olan operatörde okutulan kart önce bu istasyona gelen teslimleri alır; iş yalnız belirsizlik yoksa açılır.

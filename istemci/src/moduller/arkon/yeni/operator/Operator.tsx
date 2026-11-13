@@ -609,6 +609,9 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
     return true;
   };
   useElOkuyucu(!pv && scan === null && (ov === null || ov === 'done'), kartOkutuldu);
+  // 3155: el okuyucusu olmayan istasyonda kart kamerayla okutulur; okutma el okuyucuyla aynı yoldan geçer (2928 a).
+  // El okuyucuda yok sayılan kod (personel kartı gibi) burada sessiz kalmaz: operatör düğmeye basıp bir şey okutmuştur.
+  const kartiKameraylaOkut = () => scanYaz({ baslik: 'Refakat kartını okut', ipucu: 'Kartın karekodunu çerçeveye tutun', okundu: (k) => { if (!kartOkutuldu(k)) { bip('nok'); say(KART_DEGIL_ILETISI, 'alert', 'hold'); } } });
 
   /* iş kuralları ve istasyon türü (hazırlıktan) */
   const RL = useMemo(() => isKurallari(o.pkg), [o.pkg]);
@@ -1641,6 +1644,7 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
           {bkSayi.bekliyor > 0 || bkSayi.karar > 0
             ? <><span hidden><BaglantiDurumu /></span><SayacCipi liste={bekleyen.liste} kopuk={bekleyen.kopuk} ac={() => bkAcikYaz(true)} kisa /></>
             : <BaglantiDurumu />}
+          {!pv ? <button type="button" className="tc-ay1-simge-dugme" onClick={kartiKameraylaOkut} title="Kartı okut" aria-label="Kartı okut"><Simge ad="camera" /></button> : null}
           {!call && !pv ? <button type="button" className="tc-ay1-simge-dugme" onClick={() => ovYaz('call')} aria-label="Çağrı"><Simge ad="bell" /></button> : null}
           <button type="button" className="tc-ay1-simge-dugme" onClick={() => ovYaz('menu')} aria-label="Menü"><Simge ad="list" /></button>
         </header>
@@ -1716,6 +1720,7 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
         <button type="button" className="tc-ay1-simge-dugme" onClick={() => awayYaz(true)} title="Uzak mod" aria-label="Uzak mod"><Simge ad="expand" /></button>
         {/* 1999 a: çark görünürken iş listesi çarkın İşler şerididir; düğme tekrar olur. */}
         {carkVar ? null : <span className="tc-ay1-isler-dugme"><Dugme tur="ikincil" simge="list" onClick={() => ovYaz('isler')}>İşler · {isler.filter((x) => !x.empty && x.state !== 'done').length}</Dugme></span>}
+        {!pv ? <Dugme tur="ikincil" simge="camera" aria-label="Kartı okut" title="Kartı okut" onClick={kartiKameraylaOkut}><span className="tc-ay1-cagri-yazi">Kartı okut</span></Dugme> : null}
         {!pv ? <Dugme tur="ikincil" simge="bell" className="tc-ay1-cagri" aria-label="Çağrı" title="Çağrı" onClick={() => ovYaz('call')}><span className="tc-ay1-cagri-yazi">Çağrı</span></Dugme> : null}
         {/* 2052-1 a (prototip v5): bağlantı durumu saatin altında; vardiya satırı yer varsa yanında. */}
         <span className="tc-ay1-saat"><b>{iki(saat.getHours())}:{iki(saat.getMinutes())}</b><span className="tc-ay1-saat-alt"><BaglantiDurumu /><small>{GUN_ADLARI[saat.getDay()]} {saat.getDate()} {AYLAR[saat.getMonth()]} · {vardiyaMetni}</small></span></span>
