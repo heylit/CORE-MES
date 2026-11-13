@@ -3,6 +3,7 @@ import {
   karsilastirmaTeorigi, planTeoriktenFarkli, sapiyor, sapmaMetni, sapmaYuzdesi, sureSuzgecindenGecer, virgullu,
   aralikDakika, basHarfler, eskiKalemler, etkinMakine, geceyiGecer, gunListesi, gunParcalari, gunSaati, haftaSaati, kapasiteKaynagi, kategoriler, malzemeSuz,
   minimumAltinda, ondalik, oranMetni, planEkleri, sayiGirdisi, sonrakiKod, statuluKartlar, vardiyaHaftaSaati, yetkinler, yetkinlikDegistir,
+  kesintiAraligi, omurMetni, takvimDurumu, yereldenIso, yerelGirdi, type KesintiSatiri,
 } from './kurallar.ts';
 import type { Adim } from '../rotalar/kurallar.ts';
 
@@ -182,5 +183,29 @@ describe('2564 a Süreler hesapları', () => {
     expect(sureSuzgecindenGecer('bekleyen', false, [30])).toBe(false);
     expect(sureSuzgecindenGecer('sapan', false, [null, 30])).toBe(true);
     expect(sureSuzgecindenGecer('sapan', true, [5])).toBe(false);
+  });
+});
+
+describe('ikincil kaynak (3199)', () => {
+  const k = (bas: string, bit: string): KesintiSatiri => ({ neden: 'bakim', baslangic: bas, bitis: bit, adet: 1 });
+  it('takvim: süren ya da en yakın kesinti; geçmiş yazılmaz; yoksa Açık', () => {
+    const simdi = new Date(2026, 10, 13, 9, 0).getTime();
+    const sabah = k(new Date(2026, 10, 13, 8, 0).toISOString(), new Date(2026, 10, 13, 11, 0).toISOString());
+    const dun = k(new Date(2026, 10, 12, 8, 0).toISOString(), new Date(2026, 10, 12, 9, 0).toISOString());
+    expect(takvimDurumu([dun, sabah], simdi)).toEqual({ metin: 'Bakım · 13.11 08:00 – 11:00', acik: false });
+    expect(takvimDurumu([dun], simdi)).toEqual({ metin: 'Açık', acik: true });
+  });
+  it('günler arası aralık iki tarih yazar', () => {
+    expect(kesintiAraligi(k(new Date(2026, 10, 18, 8, 0).toISOString(), new Date(2026, 10, 20, 17, 0).toISOString()))).toBe('18.11 08:00 – 20.11 17:00');
+  });
+  it('ömür yalnız özel takımda ve birimiyle', () => {
+    expect(omurMetni({ tur: 'ozel_takim', omur: 600, omurBirimi: 'dk', degisimDk: 20 })).toBe('600 dk · değişim 20 dk');
+    expect(omurMetni({ tur: 'ozel_takim', omur: 250, omurBirimi: 'adet', degisimDk: null })).toBe('250 adet');
+    expect(omurMetni({ tur: 'aparat', omur: 600, omurBirimi: 'dk', degisimDk: 20 })).toBeNull();
+  });
+  it('yerel girdi ile ISO gidip gelir', () => {
+    const iso = new Date(2026, 10, 13, 8, 30).toISOString();
+    expect(yereldenIso(yerelGirdi(iso))).toBe(iso);
+    expect(yereldenIso('2026-11-13')).toBeNull();
   });
 });

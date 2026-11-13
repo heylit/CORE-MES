@@ -285,3 +285,53 @@ export function gunParcalari(baslangic: string, bitis: string): [number, number]
   const b = a + sure;
   return b <= 1440 ? [[a, b]] : [[a, 1440], [0, b - 1440]];
 }
+
+/* ---------------- İkincil kaynaklar (3199 A + D) ---------------- */
+
+// Aparat ve özel takım planın ikincil kaynağıdır: tezgâhla birlikte boş olmalı. Satır İstasyonlar'ın aparat kapasitesi kaydıdır.
+export const IKINCIL_TUR_ADI = { aparat: 'Aparat', ozel_takim: 'Özel takım' } as const;
+export const KISIT_ADI = { sert: 'Sert', izle: 'İzle' } as const;
+export const KESINTI_NEDEN_ADI = { bakim: 'Bakım', kalibrasyon: 'Kalibrasyon', odunc: 'Ödünç' } as const;
+export const OMUR_BIRIM_ADI = { dk: 'dk', adet: 'adet' } as const;
+
+export interface KesintiSatiri { neden: keyof typeof KESINTI_NEDEN_ADI; baslangic: string; bitis: string; adet: number }
+
+const ikiHane = (n: number) => String(n).padStart(2, '0');
+// Kısa tarih ve saat: "13.11 08:00" (yerel saat).
+export function kisaZaman(iso: string): string {
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? '—' : `${ikiHane(d.getDate())}.${ikiHane(d.getMonth() + 1)} ${ikiHane(d.getHours())}:${ikiHane(d.getMinutes())}`;
+}
+// Aynı gün biten aralıkta bitiş yalnız saattir: "13.11 08:00 – 11:00".
+export function kesintiAraligi(k: Pick<KesintiSatiri, 'baslangic' | 'bitis'>): string {
+  const b = kisaZaman(k.baslangic);
+  const s = kisaZaman(k.bitis);
+  return b.slice(0, 5) === s.slice(0, 5) ? `${b} – ${s.slice(6)}` : `${b} – ${s}`;
+}
+
+// Takvim hücresi: şu an süren kesinti, yoksa en yakın gelecek kesinti; ikisi de yoksa "Açık". Geçmiş kesinti yazılmaz.
+export function takvimDurumu(kesintiler: readonly KesintiSatiri[], simdi: number): { metin: string; acik: boolean } {
+  const gelecek = kesintiler.filter((k) => Date.parse(k.bitis) > simdi).sort((a, b) => Date.parse(a.baslangic) - Date.parse(b.baslangic));
+  const k = gelecek[0];
+  if (!k) return { metin: 'Açık', acik: true };
+  return { metin: `${KESINTI_NEDEN_ADI[k.neden]} · ${kesintiAraligi(k)}`, acik: false };
+}
+
+// Ömür hücresi: yalnız özel takımda; birim dakika (kesme) ya da adet (V15). Değişim süresi yanında.
+export function omurMetni(k: { tur: string; omur: number | null; omurBirimi: keyof typeof OMUR_BIRIM_ADI | null; degisimDk: number | null }): string | null {
+  if (k.tur !== 'ozel_takim' || k.omur === null || k.omurBirimi === null) return null;
+  const omur = `${k.omur.toLocaleString('tr-TR', { maximumFractionDigits: 2 })} ${OMUR_BIRIM_ADI[k.omurBirimi]}`;
+  return k.degisimDk === null ? omur : `${omur} · değişim ${String(k.degisimDk)} dk`;
+}
+
+// <input type="datetime-local"> değeri (yerel) ile sunucunun ISO zamanı arasında.
+export function yerelGirdi(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  return `${String(d.getFullYear())}-${ikiHane(d.getMonth() + 1)}-${ikiHane(d.getDate())}T${ikiHane(d.getHours())}:${ikiHane(d.getMinutes())}`;
+}
+export function yereldenIso(v: string): string | null {
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(v)) return null;
+  const d = new Date(v);
+  return Number.isNaN(d.getTime()) ? null : d.toISOString();
+}

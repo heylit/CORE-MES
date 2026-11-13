@@ -6,7 +6,7 @@ import type { PlanlamaCalismasi } from '../../tipler.ts';
 import type { Aralik } from '../harita/kurallar.ts';
 import { bekleyenBaslik, type BekleyenSiparis, type Derleme, type OkunanPlan } from '../kurallar.ts';
 import { degisken, MOTOR_NOTU } from '../ortak.tsx';
-import { zamanCizelgesi, type ZamanSatiri } from './kurallar.ts';
+import { zamanCizelgesi, type IkincilSatiri, type ZamanSatiri } from './kurallar.ts';
 
 // Siparişler merceği (t-tekyer mercek "zaman": zamanAraclari, gantt, lejant): bütün planın tezgâh zaman çizelgesi, tezgâh grupları katlanır,
 // fason ayrı grupta. Konumlar saat cinsindendir; saat başına piksel dönemin ölçeğidir (stilde). İşe basmak onu seçer.
@@ -19,6 +19,7 @@ interface Ozellikler {
 
 // Planı geri al (2053): bu oturumda planı değiştiren son adıma (planı kur ya da bekleyen değişikliği uygula) döner. Ondan sonra yapılan
 // değişiklikler de birlikte geri alınır; ipucu kaç adım olduğunu söyler. Plan adımı yoksa düğme pasiftir.
+const IKINCIL_GRUBU = '~ikincil';
 const PLAN_ADIMI = /^Plan çözüldü$|bekleyen değişiklik uygulandı$/iu;
 export function planGeriAdimi(k: CalismaKomutu | null | undefined): number | null {
   const i = k?.geriAdimlari().findIndex((x) => PLAN_ADIMI.test(x.ne)) ?? -1;
@@ -51,12 +52,34 @@ export function ZamanCizelgesi(o: Ozellikler) {
             data-bekle={o.bekleyen?.has(i.job) ? '' : undefined}
             data-secili={o.secili === i.id ? '' : undefined} title={bekleyenBaslik(o.bekleyen, i.job, i.baslik)} aria-label={bekleyenBaslik(o.bekleyen, i.job, i.baslik)}
             ref={degisken({ '--x': i.x, '--w': i.w, '--c': i.renk, '--a': `${(i.ayar * 100).toFixed(2)}%` })} onClick={() => o.opSec(i.id)}>
-            <i className="tc-pym-g-is-ayar" aria-hidden="true" />{o.bekleyen?.has(i.job) ? <Simge ad="pause" boyut="k" /> : i.kilit && <Simge ad="lock" boyut="k" />}{i.etiket && <span>{i.etiket}</span>}
+            <i className="tc-pym-g-is-ayar" aria-hidden="true" />
+            {i.degisim.map((d) => <i key={d.a} className="tc-pym-g-is-takim" title={d.baslik} aria-hidden="true" ref={degisken({ '--ta': `${(d.a * 100).toFixed(2)}%`, '--tw': `${(d.w * 100).toFixed(2)}%` })} />)}{o.bekleyen?.has(i.job) ? <Simge ad="pause" boyut="k" /> : i.kilit && <Simge ad="lock" boyut="k" />}{i.etiket && <span>{i.etiket}</span>}
           </button>
         ))}
       </div>
     </div>
   );
+
+  // 3199: ikincil kaynak satırı; kullanım çubuğuna basmak o işi seçer.
+  const ikSatir = (s: IkincilSatiri) => (
+    <div key={`ik${s.id}`} className="tc-pym-g-satir tc-pym-g-ik" ref={degisken({ '--n': s.serit })}>
+      <div className="tc-pym-g-etiket"><b>{s.kod}</b><span title={s.ad}>{s.ad} · <b>{s.adet}</b>{s.izle ? ' · İzle' : ''}</span></div>
+      <div className="tc-pym-g-serit">
+        {v.cizgiler.map((x) => <i key={`c${x}`} className="tc-pym-g-gunc" ref={degisken({ '--x': x })} />)}
+        {s.profil.map((x) => <i key={`p${x.x}`} className="tc-pym-g-ik-profil" data-asim={x.asim ? '' : undefined} ref={degisken({ '--x': x.x, '--w': x.w, '--h': `${(x.oran * 100).toFixed(1)}%` })} />)}
+        {s.kesinti.map((x) => <span key={`k${x.x}`} className="tc-pym-g-ik-kesinti" ref={degisken({ '--x': x.x, '--w': x.w })}>{x.ad}</span>)}
+        <i className="tc-pym-g-simdi" ref={degisken({ '--x': now })} />
+        {s.kullanim.map((k) => (
+          <button key={k.id} type="button" className="tc-pym-g-ik-kul" title={k.baslik} aria-label={`${s.kod}: ${k.baslik}`} data-soluk={o.secJob && k.job !== o.secJob ? '' : undefined}
+            data-secili={o.secili === k.id ? '' : undefined} ref={degisken({ '--x': k.x, '--w': k.w, '--c': k.renk, '--s': k.serit })} onClick={() => o.opSec(k.id)}>
+            {k.w * v.px > 56 && <span>{k.etiket}</span>}
+          </button>
+        ))}
+        {s.degisim.map((d) => <i key={`d${d.x}`} className="tc-pym-g-ik-degisim" title={d.baslik} ref={degisken({ '--x': d.x, '--w': d.w })} />)}
+      </div>
+    </div>
+  );
+  const ikKapali = katli.includes(IKINCIL_GRUBU);
 
   return (
     <div className="tc-pym-tb-mercek" data-mercek="zaman">
@@ -95,12 +118,25 @@ export function ZamanCizelgesi(o: Ozellikler) {
           })}
           {v.fason.length > 0 && <div className="tc-pym-g-grup">fason</div>}
           {v.fason.map(satir)}
+          {v.ikincil.length > 0 && (
+            <button type="button" className="tc-pym-g-grup" aria-expanded={!ikKapali} onClick={() => katla(IKINCIL_GRUBU)}>
+              <Simge ad={ikKapali ? 'chev-right' : 'down'} boyut="k" />İkincil kaynaklar <span className="tc-pym-g-grup-alt">{v.ikincil.length} kaynak · tezgâhla birlikte boş olmalı</span>
+            </button>
+          )}
+          {!ikKapali && v.ikincil.map(ikSatir)}
         </div>
       </div>
       <div className="tc-pym-lejant">
         <span><i className="tc-pym-l-ayar" />Ayar</span><span><i className="tc-pym-l-gec" />Geciken sipariş</span><span><i className="tc-pym-l-kapali" />Tezgâh kapalı</span>
         <span><i className="tc-pym-l-ariza" />Arıza, bakım</span><span><Simge ad="lock" boyut="k" />Kilitli</span>
         {o.bekleyen?.size ? <span><i className="tc-pym-l-bekle" />Beklemede</span> : null}
+        {v.ikincil.length > 0 && (
+          <>
+            <span><i className="tc-pym-l-ik-profil" />Kaynak doluluğu</span><span><i className="tc-pym-l-ik-asim" />Kapasite aşımı</span>
+            <span><i className="tc-pym-l-ik-kesinti" />Kesinti</span>
+            {v.ikincil.some((x) => x.takim) && <span><i className="tc-pym-l-ik-degisim" />Takım değişimi</span>}
+          </>
+        )}
         {o.planYaz && <span className="tc-pym-l-genis">Bir işi sürükleyip başka tezgâha ya da saate bırakın; motor sonucu hesaplar, siz onaylarsınız.</span>}
         <span className={o.planYaz ? 'tc-pym-l-dar' : undefined}>Bir işe dokunun: ayrıntı ve hamleler sağda.</span>
       </div>

@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { aralik } from '../harita/kurallar.ts';
 import { derle, girdiKur, nedenMetni, planOku, plandanBitenler, simdiSaati } from '../kurallar.ts';
 import { ornekCalisma } from '../ornek.ts';
-import { adaylar, adaySureleri, gunAcilimlari, gunBaslayanlar, gunCizelgesi, gunDondurmasiniKaldir, gunDonuk, gunNumarasi, gunuDondur, isIpucu, gunlukDagilim, kapasitesizEnErken, kuyruk, kuyrukZamani, matris, matrisSutunlari, olcekCizelgesi, riskte, sabitleriKaldir, tezgahKuyrugu, tezgahSirasi, zamanCizelgesi } from './kurallar.ts';
+import { adaylar, adaySureleri, gunAcilimlari, gunBaslayanlar, gunCizelgesi, gunDondurmasiniKaldir, gunDonuk, gunNumarasi, gunuDondur, isIpucu, gunlukDagilim, ikincilAyrintisi, kapasitesizEnErken, kuyruk, kuyrukZamani, matris, matrisSutunlari, olcekCizelgesi, riskte, sabitleriKaldir, tezgahKuyrugu, tezgahSirasi, zamanCizelgesi } from './kurallar.ts';
 import { ufukKur } from '../../ufuk-olcegi.ts';
 
 import { planAni, saatiSabitle } from '../../test-saati.ts';
@@ -201,5 +201,59 @@ describe('çizelge hesapları', () => {
     expect(gunAcilimlari(c, cx, r).map((x) => x[1])).toEqual(['Erken ya da geç biterse', 'Hedefe yetiştir']);
     const c2 = { ...c, simdi: r.S + 1 }; vi.setSystemTime(planAni(c2)); const cx2 = derle(girdiKur(c2, plandanBitenler(c2, p)));
     expect(gunAcilimlari(c2, cx2, r)).toEqual([['clock', 'Gerçekleşen', false], ['target', 'Hedefe yetiştir', false]]);
+  });
+});
+
+// 3199 (A + D): ikincil kaynak satırları ve işin ayrıntısı. Kaynak ve istek örnek çalışmaya elle eklenir (uydurma ORN- kodlar).
+describe('ikincil kaynak satırları (3199)', () => {
+  const ikincilKur = () => {
+    const { c, p, cx } = kur();
+    const ops = Object.values(p.ops).filter((r) => !r.fas && Number.isFinite(r.S) && Number.isFinite(r.C) && r.C > r.S).sort((a, b) => a.S - b.S);
+    const a = ops[0]!, b = ops.find((y) => y.m !== a.m) ?? ops[1]!;
+    const x = structuredClone(c);
+    Object.assign(x.D, {
+      ikincilKaynaklar: [{ id: '1', kart: '900', kod: 'AP-ORN-12', ad: 'Flans fiksturu', istasyon: null, adet: 1, tur: 'aparat', kisit: 'izle',
+        kesintiler: [{ neden: 'bakim', bas: a.S, bit: a.C, adet: 1 }], omur: null, omurBirimi: null, degisimDk: null, kalanPay: null },
+        { id: '2', kart: '901', kod: 'TK-ORN-03', ad: 'Form freze', istasyon: null, adet: 1, tur: 'ozel_takim', kisit: 'sert', kesintiler: [], omur: 600, omurBirimi: 'dk', degisimDk: 20, kalanPay: null }],
+      opKaynak: { [a.id]: [{ kart: '900', adet: 1, asama: 'ayar_isleme' }, { kart: '901', adet: 1, asama: 'isleme' }], [b.id]: [{ kart: '900', adet: 1, asama: 'ayar_isleme' }] },
+    });
+    const at = (a.S + a.C) / 2;
+    const q = { ...p, ops: { ...p.ops, [a.id]: { ...a, takim: [{ id: '2', n: 1, dk: 20, at, kalan: 120, ihtiyac: 170, bilinmiyor: true }] }, [b.id]: { ...b, why: { t: 'ikincil', r: '1' } } } };
+    return { c: x, p: q, cx, a, b, at };
+  };
+
+  it('kaynak başına satır: kullanım çubukları alt alta, doluluk profili aşımı işaretler, takım değişimi satırda ve iş çubuğunun içinde', () => {
+    const { c, p, cx, a, b, at } = ikincilKur();
+    const z = zamanCizelgesi(c, p, cx, 'hafta', null);
+    expect(z.ikincil.map((s) => [s.kod, s.adet, s.izle, s.takim])).toEqual([['AP-ORN-12', 1, true, false], ['TK-ORN-03', 1, false, true]]);
+    const ap = z.ikincil[0]!;
+    expect(ap.kullanim.map((k) => k.id).sort()).toEqual([a.id, b.id].sort());
+    expect(ap.serit).toBe(b.S < a.C && a.S < b.C ? 2 : 1);
+    expect(ap.profil.some((x) => x.asim), 'bakımdaki tek aparatı kullanan iş aşım').toBe(true);
+    expect(ap.kesinti.map((x) => x.ad)).toEqual(['Bakım']);
+    const tk = z.ikincil[1]!;
+    expect(tk.kullanim[0]?.x).toBe(Math.max(a.S, a.Su ?? a.S));
+    expect(tk.degisim).toEqual([{ x: at, w: 20 / 60, baslik: expect.stringMatching(/^TK-ORN-03 değişimi .*, 20 dk/) as string }]);
+    const is = z.gruplar.flatMap((g) => g.satirlar).flatMap((s) => s.isler).find((i) => i.id === a.id)!;
+    expect(is.degisim).toHaveLength(1);
+    expect(is.degisim[0]!.a).toBeCloseTo(0.5, 6);
+  });
+
+  it('ayrıntı: isteği, bekleme nedeni, doluluk, kimde; takım ömrü bilinmiyorsa söyler', () => {
+    const { c, p, cx, a, b } = ikincilKur();
+    const bek = ikincilAyrintisi(c, p, cx, b.id)!;
+    expect(bek.ister).toBe('AP-ORN-12 · İzle');
+    expect(bek.neden).toMatch(/^(İkincil kaynak bekledi|Kaynak bakımda): AP-ORN-12 Flans fiksturu$/);
+    expect(bek.doluluk).toMatch(/^1 adetten [01] tanesi kullanımda/);
+    expect(bek.kimde === null || bek.kimde.includes('bitiş') || bek.kimde.startsWith('Bakım')).toBe(true);
+    const tak = ikincilAyrintisi(c, p, cx, a.id)!;
+    expect(tak.ister).toBe('AP-ORN-12 · İzle, TK-ORN-03 (yalnız işleme)');
+    expect(tak.takim[0]).toMatch(/TK-ORN-03 kalan ömür 120 dk \(başlangıç ömrü bilinmiyor; tam ömür varsayıldı\), iş 170 dk ister: .* 20 dk takım değişimi eklendi, hazırlıkta "Takım hazırla"/);
+    expect(ikincilAyrintisi(c, p, cx, Object.keys(p.ops).find((id) => id !== a.id && id !== b.id)!)).toBeNull();
+  });
+
+  it('kaynak yoksa satır çizilmez', () => {
+    const { c, p, cx } = kur();
+    expect(zamanCizelgesi(c, p, cx, 'hafta', null).ikincil).toEqual([]);
   });
 });

@@ -1,3 +1,4 @@
+import { Fragment } from 'react';
 import { Rozet, Simge } from '../../../../../ortak/arayuz/index.ts';
 import type { CalismaKomutu } from '../../kayit.ts';
 import type { PlanlamaCalismasi } from '../../tipler.ts';
@@ -8,7 +9,7 @@ import {
 import { degisken, MOTOR_NOTU, VERI_NOTU, YOK_NOTU } from '../ortak.tsx';
 import type { CizelgeMercegi } from './CizelgeGorunumu.tsx';
 import { Dg } from './Dugme.tsx';
-import { adaylar, kapasitesizEnErken, tezgahAdi, tezgahKuyrugu } from './kurallar.ts';
+import { adaylar, ikincilAyrintisi, kapasitesizEnErken, tezgahAdi, tezgahKuyrugu } from './kurallar.ts';
 import type { AtolyeKomutlari } from '../atolye/gonder.ts';
 import { hamleYapisi, siraAdimi, useHamleci } from '../hamle/hamle.ts';
 import { tezgahKodlari, tezgahKodu } from '../ozet/veri.ts';
@@ -85,6 +86,7 @@ export function OpDenetci({ id, ...o }: DenetciOzellikleri & { id: string }) {
   const q = tezgahKuyrugu(p, r.m); const i = q.findIndex((x) => x.id === id);
   const komsu = q.slice(Math.max(0, i - 2), i + 3);
   const a = ayristir(p, cx, r.job);
+  const ik = ikincilAyrintisi(c, p, cx, id);
   const kilitle = planKilitle && komut ? () => { komut.degistir('İş kilitlendi', (t) => { t.locks[id] = { m: r.m, S: r.S }; }, { ayrinti: `${id} → ${r.m} ${saatYaz(D, r.S)}`, planKoru: true }); } : null;
   const kilitAc = planKilitle && komut ? () => { komut.degistir('Kilit açıldı', (t) => { delete t.locks[id]; }, { ayrinti: id, planKoru: true }); } : null;
   const kS = kilit && typeof kilit.S === 'number' ? kilit.S : null;
@@ -104,6 +106,16 @@ export function OpDenetci({ id, ...o }: DenetciOzellikleri & { id: string }) {
         {kilit && <><dt>Kilit</dt><dd>{typeof kilit.m === 'string' ? tezYaz(kilit.m) : '—'}{kS != null && kS > 7 ? `, en erken ${saatYaz(D, kS)}` : ', yalnız tezgâh'}</dd></>}
       </dl>
       <div className="tc-pym-neden"><Simge ad="help" boyut="k" /><span><b>Neden bu saatte:</b> {nedenMetni(r)}</span></div>
+      {ik && (
+        <dl className="tc-pym-dl" aria-label="İkincil kaynak">
+          <dt>İster</dt><dd>{ik.ister}</dd>
+          {ik.neden && <><dt>Neden</dt><dd>{ik.neden}</dd></>}
+          {ik.doluluk && <><dt>Doluluk</dt><dd>{ik.doluluk}</dd></>}
+          {ik.kimde && <><dt>Kimde</dt><dd>{ik.kimde}</dd></>}
+          {ik.neden && <><dt>Bekledi</dt><dd className="tc-pym-mono">{saatYaz(D, r.S)} saatine kadar</dd></>}
+          {ik.takim.map((t) => <Fragment key={t}><dt>Takım</dt><dd>{t}</dd></Fragment>)}
+        </dl>
+      )}
       <div className="tc-pym-dugmeler tc-pym-hamleler">
         {kilit ? <Dg ad="Kilidi aç" simge="lock" yap={kilitAc} not="Kilitleme yetkiniz yok." />
           : <Dg ad="Kilitle" simge="lock" yap={kilitle} not="Kilitleme yetkiniz yok." ipucu="Bu tezgâhta, bu saatten erken başlamasın" />}

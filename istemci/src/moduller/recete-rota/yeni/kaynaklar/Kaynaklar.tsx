@@ -11,6 +11,7 @@ import {
   aralikDakika, basHarfler, etkinMakine, GUN_ADI, GUNLER, gunListesi, gunParcalari, gunSaati, haftaSaati, kapasiteKaynagi, planEkleri, sayiGirdisi,
   geceyiGecer, vardiyaHaftaSaati, yetkinler, type Hafta,
 } from './kurallar.ts';
+import { IkincilKaynaklar } from './IkincilKaynaklar.tsx';
 import { SAHIP_SAYFASI, SahibindeDuzenle, SatirGirdisi, useR2Komutu } from './parcalar.tsx';
 
 // Kaynaklar (envanter 2.7): iş merkezi, istasyon, makine ve personel sahiplerinin kayıtlarıdır (İstasyonlar, Kişiler, Vardiya). Tek giriş
@@ -21,9 +22,9 @@ type Makine = NonNullable<RrDurumu['machines']>[number];
 type Kisi = NonNullable<RrDurumu['people']>[number];
 type Vardiya = RrDurumu['cal']['shifts'][number];
 
-type AltSekme = 'overview' | 'shifts' | 'wcs' | 'machines' | 'people' | 'plan';
+type AltSekme = 'overview' | 'shifts' | 'wcs' | 'machines' | 'people' | 'ikincil' | 'plan';
 const ALT_SEKME_ANAHTARI = 'tmi.recete-rota.yeni.kaynak-sekmesi';
-const ALT_SEKMELER: readonly AltSekme[] = ['overview', 'shifts', 'wcs', 'machines', 'people', 'plan'];
+const ALT_SEKMELER: readonly AltSekme[] = ['overview', 'shifts', 'wcs', 'machines', 'people', 'ikincil', 'plan'];
 const MAKINE_DURUMU: Record<Makine['status'], { ad: string; ton: RozetTonu }> = {
   aktif: { ad: 'Aktif', ton: 'tamam' }, bakim: { ad: 'Bakımda', ton: 'uyari' }, ariza: { ad: 'Arızalı', ton: 'hata' },
 };
@@ -96,7 +97,8 @@ export function Kaynaklar({ veri, yetki }: EkranOzellikleri) {
   const sekmeler: { anahtar: AltSekme; baslik: string }[] = [
     { anahtar: 'overview', baslik: 'Genel bakış' }, { anahtar: 'shifts', baslik: 'Vardiyalar' },
     { anahtar: 'wcs', baslik: 'İş merkezleri ve istasyonlar' }, { anahtar: 'machines', baslik: `Makineler ${String(bag.machines.length)}` },
-    { anahtar: 'people', baslik: `Personel ${String(bag.people.length)}` }, { anahtar: 'plan', baslik: 'Fason ve aparat' },
+    { anahtar: 'people', baslik: `Personel ${String(bag.people.length)}` }, { anahtar: 'ikincil', baslik: 'İkincil kaynaklar' },
+    { anahtar: 'plan', baslik: 'Fason' },
   ];
 
   let govde;
@@ -107,7 +109,8 @@ export function Kaynaklar({ veri, yetki }: EkranOzellikleri) {
   else if (alt === 'wcs') govde = <IsMerkezleri b={bag} />;
   else if (alt === 'machines') govde = <Makineler b={bag} />;
   else if (alt === 'people') govde = <Personel b={bag} />;
-  else govde = <FasonVeAparat />;
+  else if (alt === 'ikincil') govde = <><IkincilKaynaklar stations={bag.stations} items={durum.items} /><EskiAparatlar /></>;
+  else govde = <Fason />;
 
   return (
     <div className="tc-rr2" data-parca="R2">
@@ -585,19 +588,18 @@ function KisiKarti({ k, w, b }: { k: Kisi; w: IsMerkezi | null; b: Bag }) {
   );
 }
 
-/* ---------------- Fason ve aparat ---------------- */
+/* ---------------- Fason ---------------- */
 
-// Planlamanın okuduğu dış kaynaklar kayıt belgesindedir (st.plan); yeni ekranda yalnız okunur (204 a).
-function FasonVeAparat() {
+// Planlamanın okuduğu fason firmalar kayıt belgesindedir (st.plan); yeni ekranda yalnız okunur (204 a).
+function Fason() {
   const kayit = useEskiKayit();
   if (kayit.isPending) return <DurumKutusu durum="yukleniyor" />;
   if (kayit.isError) return <DurumKutusu durum="hata" mesaj={kayit.error.message || 'Kayıt okunamadı.'} yenile={() => { void kayit.refetch(); }} />;
-  const { fasoncular, aparatlar } = planEkleri(kayit.data?.deger ?? null);
+  const { fasoncular } = planEkleri(kayit.data?.deger ?? null);
   return (
     <>
       <p className="tc-rr2-not">
-        Planlamanın okuduğu dış kaynaklar: fason firmanın aynı anda alabildiği iş sayısı ve sevk günleri, aparatların adedi. Bu değerler eski kayıttadır ve bu ekranda
-        yalnız okunur.
+        Planlamanın okuduğu fason firmalar: aynı anda alabildiği iş sayısı ve sevk günleri. Bu değerler eski kayıttadır ve bu ekranda yalnız okunur.
       </p>
       <section className="tc-rr2-grup" aria-label="Fason firmalar">
         <h3 className="tc-rr2-grup-baslik"><span>Fason firmalar ({fasoncular.length})</span></h3>
@@ -612,13 +614,22 @@ function FasonVeAparat() {
           ]}
         />
       </section>
-      <section className="tc-rr2-grup" aria-label="Aparatlar">
-        <h3 className="tc-rr2-grup-baslik"><span>Aparatlar ({aparatlar.length})</span></h3>
-        <Tablo
-          etiket="Aparatlar" satirlar={aparatlar} satirAnahtari={(a) => a.id} bosMesaj="Aparat yok."
-          sutunlar={[{ anahtar: 'ad', baslik: 'Aparat', hucre: (a) => a.ad || YOK }, { anahtar: 'adet', baslik: 'Adet', hizala: 'sag', hucre: (a) => sayi(a.adet) }]}
-        />
-      </section>
     </>
+  );
+}
+
+// Planlamadaki elle aparat listesi (eski kayıt) otomatik taşınmaz (3199 V4); varsa İkincil kaynakların altında yalnız okunur kalır.
+function EskiAparatlar() {
+  const kayit = useEskiKayit();
+  const { aparatlar } = planEkleri(kayit.data?.deger ?? null);
+  if (aparatlar.length === 0) return null;
+  return (
+    <section className="tc-rr2-grup" aria-label="Planlamadaki aparat listesi">
+      <h3 className="tc-rr2-grup-baslik"><span>Planlamadaki aparat listesi ({aparatlar.length})</span><Rozet ton="pasif">eski kayıt, yalnız okunur</Rozet></h3>
+      <Tablo
+        etiket="Planlamadaki aparat listesi" satirlar={aparatlar} satirAnahtari={(a) => a.id} bosMesaj="Aparat yok."
+        sutunlar={[{ anahtar: 'ad', baslik: 'Aparat', hucre: (a) => a.ad || YOK }, { anahtar: 'adet', baslik: 'Adet', hizala: 'sag', hucre: (a) => sayi(a.adet) }]}
+      />
+    </section>
   );
 }

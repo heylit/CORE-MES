@@ -24,9 +24,9 @@ function kur() {
       'GET /rota/malzeme-ara': () => json(200, { satirlar: [kart], toplam: 1, sayfaBoyu: 20 }),
       'POST /rota/revizyonlar/72/adim-ekipmani': (g) => {
         yazilan.push(g);
-        const x = g as { ekipman: { tur: string; aletTuruId?: number; malzemeId?: number; aciklama: string | null }[] };
+        const x = g as { ekipman: { tur: string; aletTuruId?: number; malzemeId?: number; aciklama: string | null; adet?: number; asama?: string }[] };
         ekipman = x.ekipman.map((y) => ({
-          tur: y.tur, aciklama: y.aciklama, malzeme: y.malzemeId ? kart : null, aletTuru: y.aletTuruId ? TURLER.turler.find((t) => t.id === y.aletTuruId) ?? null : null,
+          tur: y.tur, aciklama: y.aciklama, adet: y.adet ?? 1, asama: y.asama ?? 'ayar_isleme', malzeme: y.malzemeId ? kart : null, aletTuru: y.aletTuruId ? TURLER.turler.find((t) => t.id === y.aletTuruId) ?? null : null,
         }));
         return json(200, { id: 72, durum: 'taslak', surum: 5 });
       },
@@ -64,14 +64,18 @@ describe('Rota adımının aparat ve ölçü aleti listesi (2893-4 a)', () => {
     const aparat = within(panel).getByLabelText('Aparat');
     await within(aparat).findByRole('option', { name: 'DM-DNM-1 Deneme aparat' });
     fireEvent.change(aparat, { target: { value: '501' } });
+    // 3199: aparat planın ikincil kaynağıdır; adet ve ne zaman (ayar ve işleme ya da yalnız işleme) seçilir.
+    fireEvent.change(within(panel).getByLabelText('Adet'), { target: { value: '2' } });
+    fireEvent.change(within(panel).getByLabelText('Ne zaman'), { target: { value: 'isleme' } });
     fireEvent.click(within(panel).getByRole('button', { name: 'Adıma ekle' }));
     await waitFor(() => { expect(yazilan).toHaveLength(2); });
     // Sürüm ilk yazımdan dönen sürümdür: düzenleyicinin kaydı da aynı sürümü kullanır.
-    expect(yazilan[1]).toEqual({ surum: 5, opNo: 10, ekipman: [{ tur: 'olcu_aleti', aletTuruId: 3, aciklama: '0-25 mm' }, { tur: 'aparat', malzemeId: 501, aciklama: null }] });
+    expect(yazilan[1]).toEqual({ surum: 5, opNo: 10, ekipman: [{ tur: 'olcu_aleti', aletTuruId: 3, aciklama: '0-25 mm' }, { tur: 'aparat', malzemeId: 501, aciklama: null, adet: 2, asama: 'isleme' }] });
     await within(panel).findByText('DM-DNM-1 Deneme aparat');
+    expect(within(panel).getByText(/Aparat · 2 adet · Yalnız işleme/)).toBeTruthy();
 
     fireEvent.click(within(panel).getByRole('button', { name: 'Mikrometre adımdan çıkar' }));
     await waitFor(() => { expect(yazilan).toHaveLength(3); });
-    expect(yazilan[2]).toEqual({ surum: 5, opNo: 10, ekipman: [{ tur: 'aparat', malzemeId: 501, aciklama: null }] });
+    expect(yazilan[2]).toEqual({ surum: 5, opNo: 10, ekipman: [{ tur: 'aparat', malzemeId: 501, aciklama: null, adet: 2, asama: 'isleme' }] });
   });
 });
