@@ -92,6 +92,8 @@ function logoKayitNo(d: unknown): number | null {
   return typeof d === 'number' && Number.isSafeInteger(d) && d > 0 ? d : null;
 }
 
+export const ESKI_YARDIMCI_ILETISI = 'Logo bilgisayarındaki yardımcı program eski sürümde; bu işlem için güncellenmesi gerekir.';
+
 // HTTP durumu ve gövdeden sonuç. govde null: gövde JSON değildi.
 export function cevabiYorumla(durum: number, govde: KopruZarfi | null): KopruSonucu {
   if (durum === 401 || durum === 403) return { tur: 'yetkisiz', ileti: `Köprü anahtarı reddedildi (${durum}).` };
@@ -102,6 +104,9 @@ export function cevabiYorumla(durum: number, govde: KopruZarfi | null): KopruSon
       : { tur: 'reddedildi', ileti: `Köprü isteği reddetti (${durum}).` };
   }
   if (govde.success === true && durum >= 200 && durum < 300) return { tur: 'basarili', logicalRef: logoKayitNo(govde.logicalRef) };
+  // Yardımcı tanımadığı yola 404 "Not found" döner (kayıt yok 404'leri "Material not found" gibi kendi metnini taşır): istek Logo'ya hiç
+  // gitmemiştir, reddeden Logo değil eski yardımcıdır (3195).
+  if (durum === 404 && metinMi(govde.error) && govde.error.trim() === 'Not found') return { tur: 'reddedildi', ileti: ESKI_YARDIMCI_ILETISI };
   const ayrinti = [metinMi(govde.error) ? govde.error.trim() : null, dogrulamaMetni(govde.validate)].filter((p) => p !== null).join(' | ');
   if (govde.success === false || (durum >= 400 && durum < 500)) {
     return { tur: 'reddedildi', ileti: kirp(`Logo reddetti${ayrinti ? `: ${ayrinti}` : ` (${durum}).`}`) };

@@ -3,7 +3,7 @@ import { describe, test } from 'node:test';
 import { LOGO_AYARLARI } from '#paylasilan/ayarlar/logo.ts';
 import { logoAyariOku, yerelMi } from './ayar.ts';
 import {
-  agHatasiniYorumla, BELIRSIZ_BEKLEME_MS, cevabiYorumla, dogrulamaMetni, eklemeGovdesi, gecerliBirimSetleri, geriCekilmeMs, kartEylemi,
+  agHatasiniYorumla, BELIRSIZ_BEKLEME_MS, cevabiYorumla, dogrulamaMetni, ESKI_YARDIMCI_ILETISI, eklemeGovdesi, gecerliBirimSetleri, geriCekilmeMs, kartEylemi,
   HIZMET_ALANLARI, HIZMET_AYARI, hizmetGovdesi, kodCakismasiMetni, LISTE_DENEME_ARALIGI_MS, LISTE_TAZELEME_MS, listeOkunmaliMi, malzemeGuncellemeGovdesi, malzemeKodlariniAyikla, OZEL_KOD, varMiAdi,
 } from './kurallar.ts';
 
@@ -67,6 +67,16 @@ describe('köprü cevabı (kart #207)', () => {
     assert.equal(cevabiYorumla(200, null).tur, 'belirsiz');
     assert.equal(cevabiYorumla(200, { logicalRef: 5 }).tur, 'belirsiz');
     assert.equal(cevabiYorumla(404, null).tur, 'reddedildi');
+  });
+
+  test('3195: yardımcının tanımadığı yol (404 "Not found") eski yardımcı iletisi; kayıt yok 404\'ü kendi metniyle kalır', () => {
+    assert.deepEqual(cevabiYorumla(404, { success: false, error: 'Not found' }), { tur: 'reddedildi', ileti: ESKI_YARDIMCI_ILETISI });
+    assert.deepEqual(cevabiYorumla(404, { success: false, error: ' Not found ' }), { tur: 'reddedildi', ileti: ESKI_YARDIMCI_ILETISI });
+    assert.equal(ESKI_YARDIMCI_ILETISI.includes('Logo reddetti'), false);
+    const kayitYok = cevabiYorumla(404, { success: false, error: 'Material not found' });
+    assert.equal('ileti' in kayitYok && kayitYok.ileti, 'Logo reddetti: Material not found');
+    const baskaDurum = cevabiYorumla(400, { success: false, error: 'Not found' });
+    assert.equal('ileti' in baskaDurum && baskaDurum.ileti, 'Logo reddetti: Not found');
   });
 
   test('LGB-4: bağlantı kurulamadıysa istek gitmemiştir (ulasilamadi); zaman aşımı ve kopan bağlantı belirsiz; ileti adres taşımaz', () => {
