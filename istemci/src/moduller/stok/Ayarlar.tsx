@@ -9,6 +9,7 @@ import { KonumAcPenceresi } from './Konumlar.tsx';
 import { SayfaBasi, hataMetni } from './ortak.tsx';
 import { HaritaLinki, HaritaOzeti } from './HaritaBagi.tsx';
 import { EtiketMerkeziDugmesi } from './Etiketler.tsx';
+import { RafKodlamaKarti } from './RafKodlamaKarti.tsx';
 import './stok.css';
 
 export function Ayarlar() {
@@ -21,6 +22,7 @@ export function Ayarlar() {
         <Dugme simge="plus" onClick={() => setAc('konum')}>Konum aç</Dugme>
       </>} />
       <HaritaOzeti />
+      <RafKodlamaKarti />
       <Kart baslik="Etiketler">
         <p className="tc-stok-not">Raf gözü etiketleri QR'lıdır (LOC:kod); Okut ekranı tanır. Malzeme etiketleri malzeme sayfasından, kare etiketleri Konumlar'dan basılır.</p>
         <EtiketMerkeziDugmesi tur="konum" simge="scan" idler={async () => (await api.get<KonumlarCevabi>('/stok/konumlar?tur=raf_gozu&sayfaBoyu=200')).satirlar.map((g) => g.id)}>Bütün raf gözü etiketleri</EtiketMerkeziDugmesi>

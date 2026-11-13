@@ -1,6 +1,6 @@
 import type { KeyboardEvent } from 'react';
-import type { Raf } from '#paylasilan/sozlesme/atolye.ts';
 import { hucreAnahtari } from './kurallar.ts';
+import { bolmeAraligi, duzMu, gozKodu, type RafBoyu } from './raf-kodlama.ts';
 
 // Rafın önden görünüşü (2B): şerit bütün rafı küçük gösterir ve bölme seçtirir; cephe tek bölmeyi tam karşıdan,
 // katlar ve gözlerle çizer. Göz durumu Stok'tan (3012 a): stokta kalem sayısıyla ya da boş. stok null ise (stok görme
@@ -14,8 +14,6 @@ const gozKademesi = (stok: RafStogu, anahtar: string): string | undefined => (st
 const tusla = (f: () => void) => (o: KeyboardEvent) => {
   if (o.key === 'Enter' || o.key === ' ') { o.preventDefault(); f(); }
 };
-
-type RafBoyu = Pick<Raf, 'kod' | 'bolmeSayisi' | 'katSayisi' | 'gozSayisi'>;
 
 export function RafSeridi({ raf, stok, bolme, sec }: {
   raf: RafBoyu; stok: RafStogu; bolme: number; sec: (bolme: number) => void;
@@ -36,7 +34,7 @@ export function RafSeridi({ raf, stok, bolme, sec }: {
             data-secili={b === bolme || undefined}
             role="button"
             tabIndex={0}
-            aria-label={`Bölme ${b}`}
+            aria-label={duzMu(raf) ? `Gözler ${bolmeAraligi(raf, b)}` : `Bölme ${b}`}
             aria-pressed={b === bolme}
             onClick={() => sec(b)}
             onKeyDown={tusla(() => sec(b))}
@@ -75,12 +73,14 @@ export function BolmeCephesi({ raf, bolme, stok, secili, sec }: {
   const KB = 84;
   const DIK = 10;
   const ZEMIN = 18;
+  // 3168 a: sıra numaralı kodda kat ve göz adı yok, her gözde kodu yazar.
+  const duz = duzMu(raf);
   // Kat adları rafın solundaki boşlukta.
   const SOL = 26;
   const en = SOL + raf.gozSayisi * GE + DIK * 2;
   const boy = raf.katSayisi * KB + ZEMIN;
   return (
-    <svg className="tc-atolye-cephe" viewBox={`0 0 ${en} ${boy}`} role="group" aria-label={`${raf.kod} bölme ${bolme} önden`}>
+    <svg className="tc-atolye-cephe" viewBox={`0 0 ${en} ${boy}`} role="group" aria-label={duz ? `${raf.kod} gözleri ${bolmeAraligi(raf, bolme)} önden` : `${raf.kod} bölme ${bolme} önden`}>
       <rect className="tc-atolye-cephe-dikme" x={SOL} y={0} width={DIK} height={boy - ZEMIN + 4} />
       <rect className="tc-atolye-cephe-dikme" x={en - DIK} y={0} width={DIK} height={boy - ZEMIN + 4} />
       <rect className="tc-atolye-cephe-zemin" x={SOL - 6} y={boy - ZEMIN + 4} width={en - SOL + 6} height={ZEMIN - 4} />
@@ -90,13 +90,13 @@ export function BolmeCephesi({ raf, bolme, stok, secili, sec }: {
         return (
           <g key={kat}>
             <rect className="tc-atolye-cephe-kiris" x={SOL + DIK} y={y + KB - 6} width={en - SOL - DIK * 2} height={6} />
-            <text className="tc-atolye-cephe-kat" x={SOL / 2} y={y + KB / 2}>K{kat}</text>
+            {!duz && <text className="tc-atolye-cephe-kat" x={SOL / 2} y={y + KB / 2}>K{kat}</text>}
             {Array.from({ length: raf.gozSayisi }, (_, gi) => {
               const goz = gi + 1;
               const anahtar = hucreAnahtari(bolme, kat, goz);
               const kalem = stok?.get(anahtar) ?? 0;
               const metin = stok === null ? '—' : kalem > 0 ? `${kalem} kalem` : 'boş';
-              const etiket = `Kat ${kat} göz ${goz}: ${stok === null ? 'stok bilgisi yok' : kalem > 0 ? `stokta ${kalem} kalem` : 'boş'}`;
+              const etiket = `${duz ? gozKodu(raf, bolme, kat, goz) : `Kat ${kat} göz ${goz}`}: ${stok === null ? 'stok bilgisi yok' : kalem > 0 ? `stokta ${kalem} kalem` : 'boş'}`;
               const x = SOL + DIK + gi * GE;
               return (
                 <g
@@ -114,6 +114,7 @@ export function BolmeCephesi({ raf, bolme, stok, secili, sec }: {
                   <title>{etiket}</title>
                   <rect className="tc-atolye-cephe-bosluk" x={x + 3} y={y + 3} width={GE - 6} height={KB - 12} rx={3} />
                   {kalem > 0 && <rect className="tc-atolye-cephe-dolu" x={x + 8} y={y + 10} width={GE - 16} height={KB - 26} rx={2} />}
+                  {duz && <text className="tc-atolye-cephe-kod" x={x + GE / 2} y={y + 22}>{gozKodu(raf, bolme, kat, goz)}</text>}
                   <text className="tc-atolye-cephe-yuzde" x={x + GE / 2} y={y + KB - 16}>{metin}</text>
                   <rect className="tc-atolye-cephe-cerceve" x={x + 1.5} y={y + 1.5} width={GE - 3} height={KB - 9} rx={4} />
                 </g>

@@ -132,6 +132,8 @@ export const gozStoklari = (db: Db, gozIdler: number[]): Promise<{ gozId: number
                    (array_agg(b.malzeme_id ORDER BY b.ilk_giris, b.id) FILTER (WHERE b.id IS NOT NULL))[1] AS "ilkMalzemeId"
               FROM stok_konum k JOIN stok_bakiye b ON b.konum_id = k.id
              WHERE k.atolye_goz_id = ANY($1::int[]) GROUP BY k.atolye_goz_id, k.id`, [gozIdler]);
+// 3171 R1: haritadan eşlemede kodlar zincirleme değişebilir (A5 -> A4, A4 -> A5); teklik işlem sonunda denetlenir.
+export const konumKodTekliginiErtele = async (db: Db): Promise<void> => { await db.sorgu('SET CONSTRAINTS stok_konum_kod_tek DEFERRED'); };
 export const tumKonumKodlari = async (db: Db): Promise<string[]> => (await db.sorgu<{ kod: string }>('SELECT kod FROM stok_konum')).map((r) => r.kod);
 export const haritaKonumuAc = (db: Db, k: { depoId: number; kod: string; tur: string; bolme: number | null; kat: number | null; ad: string | null; gozId: number | null; alanId: number | null; aktif: boolean }): Promise<unknown[]> =>
   db.sorgu(`INSERT INTO stok_konum (depo_id, kod, tur, bolme_no, kat_no, ad, atolye_goz_id, atolye_alan_id, aktif)

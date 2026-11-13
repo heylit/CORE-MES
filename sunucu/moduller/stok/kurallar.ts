@@ -677,24 +677,38 @@ export function haritaPlani(g: { gozler: readonly HaritaGozu[]; alanlar: readonl
   const alanKonumu = new Map(g.konumlar.flatMap((k) => (k.alanId === null ? [] : [[k.alanId, k] as const])));
   const kapanacak = new Set<HaritaKonumu>();
 
+  const yeniGozler: HaritaGozu[] = [];
+  const bagli: { k: HaritaKonumu; z: HaritaGozu }[] = [];
   for (const z of g.gozler) {
     const k = gozKonumu.get(z.id);
     if (!depolu.has(z.salonId)) { if (k) kapanacak.add(k); continue; }
-    if (!k) {
-      if (kodlar.has(z.adres)) { plan.atlanan.push(z.adres); continue; }
-      kodlar.add(z.adres);
-      plan.ekle.push({ depoId: bolumDeposu.get(z.salonId)!, salonId: z.salonId, kod: z.adres, tur: 'raf_gozu', bolme: z.bolme, kat: z.kat, ad: null, gozId: z.id, alanId: null, aktif: z.rafAktif });
-      continue;
-    }
-    let kod = k.kod;
-    if (k.rafId === null && k.kod !== z.adres) {
-      if (kodlar.has(z.adres)) plan.atlanan.push(z.adres);
-      else { kodlar.delete(k.kod); kodlar.add(z.adres); kod = z.adres; }
-    }
+    if (k) bagli.push({ k, z }); else yeniGozler.push(z);
+  }
+  // 3171 R1: kodu değişen konumlar zincir olabilir (yeniden numaralamada A5 -> A4 iken A4 -> A5; raf kodu değişimi). Hedef kodu
+  // aynı eşlemede kodunu bırakacak bir konumdaysa engel sayılmaz; engellenen taşınmaz ve onun kodu da boşalmaz (tekrarlanır).
+  // Kod tekliği eşlemede ertelenir (stok_konum_kod_tek ertelenebilir), ara durumdaki çakışma işlem sonunda denetlenir.
+  let tasinan = bagli.filter(({ k, z }) => k.rafId === null && k.kod !== z.adres);
+  for (;;) {
+    const bosalan = new Set(tasinan.map(({ k }) => k.kod));
+    const kalan = tasinan.filter(({ z }) => !kodlar.has(z.adres) || bosalan.has(z.adres));
+    if (kalan.length === tasinan.length) break;
+    tasinan = kalan;
+  }
+  const yeniKod = new Map(tasinan.map(({ k, z }) => [k.id, z.adres]));
+  for (const { k } of tasinan) kodlar.delete(k.kod);
+  for (const { z } of tasinan) kodlar.add(z.adres);
+  for (const { k, z } of bagli) {
+    const kod = yeniKod.get(k.id) ?? k.kod;
+    if (k.rafId === null && kod !== z.adres) plan.atlanan.push(z.adres);
     // Pasif rafın stoklu gözü açık kalır (bakiye pasif konumda duramaz) ve bildirilir; stok taşınınca sonraki eşleme kapatır.
     let aktif = z.rafAktif;
     if (!aktif && k.aktif && k.satirSayisi > 0) { aktif = true; plan.atlanan.push(kod); }
     if (kod !== k.kod || k.aktif !== aktif) plan.guncelle.push({ id: k.id, kod, aktif });
+  }
+  for (const z of yeniGozler) {
+    if (kodlar.has(z.adres)) { plan.atlanan.push(z.adres); continue; }
+    kodlar.add(z.adres);
+    plan.ekle.push({ depoId: bolumDeposu.get(z.salonId)!, salonId: z.salonId, kod: z.adres, tur: 'raf_gozu', bolme: z.bolme, kat: z.kat, ad: null, gozId: z.id, alanId: null, aktif: z.rafAktif });
   }
 
   for (const a of g.alanlar) {

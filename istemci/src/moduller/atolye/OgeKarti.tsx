@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { adrestenBolme, duzMu, rafAraligi } from './raf-kodlama.ts';
 import type { ReactNode } from 'react';
 import type { Goz, GozKalemi, YerlesimCevabi } from '#paylasilan/sozlesme/atolye.ts';
 import type { Emir } from '#paylasilan/sozlesme/uretim-emirleri.ts';
@@ -80,7 +81,7 @@ function Gozler({ rafId, rafAktif, vurguAdres, ozetler, yazabilir }: {
       {vurguAdres && <p className="tc-atolye-ipucu">Aranan göz: <b className="mono">{vurguAdres}</b></p>}
       <Tablo
         etiket="Raf gözleri"
-        sutunlar={[...GOZ_SUTUNLARI, icerik]}
+        sutunlar={[...(satirlar.some((g) => g.duzNo != null) ? GOZ_SUTUNLARI.slice(0, 1) : GOZ_SUTUNLARI), icerik]}
         satirlar={satirlar}
         satirAnahtari={(g) => g.id}
         satirSec={(g) => secilenYaz((s) => (s?.id === g.id ? null : g))}
@@ -316,12 +317,12 @@ export function OgeKarti({
     const raf = y.raflar.find((r) => r.id === kimlik);
     if (!raf) return null;
     const ozetler = gozKalemleri ? rafOzetleri(gozKalemleri, raf.id) : null;
-    const vurguBolme = vurguAdres ? Number(vurguAdres.split('-')[1]) || 1 : 1;
+    const vurguBolme = (vurguAdres ? adrestenBolme(raf, vurguAdres) : null) ?? 1;
     return (
       <section className="tc-atolye-kart tc-atolye-kart-genis" aria-label={`Raf ${raf.kod} ayrıntısı`}>
         {ust(rafSimgesi(raf.tur), `${RAF_TURU_ADI[raf.tur]} · Hücre ${raf.hucre}`, `${raf.kod} · ${raf.ad}`, raf.aktif ? undefined : <Rozet ton="pasif">Pasif</Rozet>)}
         <dl className="tc-atolye-dl">
-          <dt>Düzen</dt><dd>{raf.bolmeSayisi} bölme × {raf.katSayisi} kat × {raf.gozSayisi} göz</dd>
+          <dt>Düzen</dt><dd>{duzMu(raf) ? `${raf.bolmeSayisi * raf.katSayisi * raf.gozSayisi} göz · ${rafAraligi(raf)}` : `${raf.bolmeSayisi} bölme × ${raf.katSayisi} kat × ${raf.gozSayisi} göz`}</dd>
           <dt>Ölçü</dt><dd>{olcuMetni(sayi(raf.genislik))} × {olcuMetni(sayi(raf.derinlik))}, yükseklik {olcuMetni(sayi(raf.yukseklik))}</dd>
         </dl>
         <div className="tc-atolye-kart-eylem">

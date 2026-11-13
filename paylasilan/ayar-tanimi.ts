@@ -26,6 +26,9 @@ interface OrtakAlanlar {
   modul: string;
   baslik: string;
   aciklama: string;
+  // Değişikliği başka kayıtlarla aynı işlemde yapılması gereken ayar (3168, raf kodlama): genel ayar ucu yazmaz, yalnız sahibi
+  // modülün komutu (modulAyariDegistir) yazar. Değer, ekranda ayarın değiştirildiği yerin adıdır; Sistem Ayarları salt okunur gösterir.
+  degistirenEkran?: string;
 }
 
 export type AyarTanimi =

@@ -236,8 +236,24 @@ function SecimSatiri({ ayar, mesgul, degistir }: { ayar: SecimAyari; mesgul: boo
   );
 }
 
+function SaltOkunurSatir({ ayar, ekran }: { ayar: Ayar; ekran: string }) {
+  const deger = ayar.tur === 'secim' ? ayar.secenekler.find((s) => s.deger === ayar.deger)?.etiket ?? ayar.deger : ayar.deger;
+  return (
+    <li className="tc-ayar">
+      <div className="tc-ayar-metin">
+        <p className="tc-ayar-baslik">{ayar.baslik}</p>
+        <p className="tc-ayar-aciklama">{ayar.aciklama} Değiştirmek için: {ekran}.</p>
+        <GecersizIsareti ayar={ayar} />
+      </div>
+      <div className="tc-ayar-sayi"><span>{deger === null ? 'Boş' : String(deger)}</span></div>
+    </li>
+  );
+}
+
 function AyarSatiri({ ayar, mesgul, degistir }: { ayar: Ayar; mesgul: boolean; degistir: (deger: AyarDegeri) => void }) {
   const aciklamaKimligi = useId();
+  // Başka kayıtlarla birlikte değişen ayar (raf kodlama) burada yalnız okunur; değiştirdiği ekran adıyla gösterilir.
+  if (ayar.degistirenEkran !== undefined) return <SaltOkunurSatir ayar={ayar} ekran={ayar.degistirenEkran} />;
   if (ayar.tur === 'sayi') return <SayiSatiri ayar={ayar} mesgul={mesgul} degistir={degistir} />;
   if (ayar.tur === 'numara') return <NumaraSatiri ayar={ayar} mesgul={mesgul} degistir={degistir} />;
   if (ayar.tur === 'metin') return <MetinSatiri ayar={ayar} mesgul={mesgul} degistir={degistir} />;

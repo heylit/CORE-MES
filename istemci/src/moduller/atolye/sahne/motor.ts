@@ -11,6 +11,7 @@ import type { IstasyonModeli, KapiKenari, MerkezModeli, YerlesimCevabi } from '#
 import type { MakineDurumu } from '../../../ortak/arayuz/index.ts';
 import { bolumeCevir, fabrikayaCevir } from '../fabrika.ts';
 import { varsayilanAyar } from '../model-dosyasi.ts';
+import { duzMu, gozKodu } from '../raf-kodlama.ts';
 import type { Nokta2 } from '../fabrika.ts';
 import { DIS, GECIS_TURU_ADI, acikliklar, bolumYolu, disYolu, distaSerbestMi, gecisOrtasi, kapiKusagindaMi, kapilar } from '../gecis.ts';
 import type { Aciklik, GecisliBolum, Kapi } from '../gecis.ts';
@@ -1423,7 +1424,9 @@ export class SahneMotoru {
         bolmeEtiketleri.push(stok === null ? '?' : `${stok.get(h) ?? 0}:${miktarlar.get(h) ?? ''}`);
       }
     }
-    const etiketImza = `${imza}|${istek.bolme}|${bolmeEtiketleri.join(',')}`;
+    // 3168: sıra numaralı kodda etiket gözün kodudur (A7); kodlama ya da numara değişince etiket yeniden kurulur.
+    const duzSayi = duzMu(r);
+    const etiketImza = `${imza}|${duzSayi ? (r.gozNolari ?? []).join(',') : ''}|${istek.bolme}|${bolmeEtiketleri.join(',')}`;
     if (o.etiketImza !== etiketImza) {
       for (const e of o.etiketler) e.el.remove();
       o.etiketler = [];
@@ -1437,9 +1440,9 @@ export class SahneMotoru {
           el.type = 'button';
           el.className = 'tc-sahne-etiket tc-atolye-goz-etiket';
           if (stok !== null) el.dataset.kademe = kalem > 0 ? 'az' : 'bos';
-          el.setAttribute('aria-label', `Kat ${k} göz ${g}: ${stok === null ? 'stok bilgisi yok' : kalem > 0 ? `stokta ${kalem} kalem` : 'boş'}`);
+          el.setAttribute('aria-label', `${duzSayi ? gozKodu(r, istek.bolme, k, g) : `Kat ${k} göz ${g}`}: ${stok === null ? 'stok bilgisi yok' : kalem > 0 ? `stokta ${kalem} kalem` : 'boş'}`);
           const ad = document.createElement('b');
-          ad.textContent = `K${k}·G${g}`;
+          ad.textContent = duzSayi ? gozKodu(r, istek.bolme, k, g) : `K${k}·G${g}`;
           const ek = document.createElement('span');
           const sigmiyor = o.sigmayan.has(hucreAnahtari(istek.bolme, k, g));
           const miktar = miktarlar.get(hucreAnahtari(istek.bolme, k, g));

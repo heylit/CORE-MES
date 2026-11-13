@@ -351,6 +351,35 @@ describe('stok kuralları (saf)', () => {
     assert.deepEqual(plan.atlanan, ['A1-01-1-1', 'B9-01-1-1']);
   });
 
+  test('harita eşlemesi (3171 R1): zincirleme ve yer değiştiren kodlar tek eşlemede değişir; dışarıdan tutulan kod zinciri durdurur', () => {
+    const goz = (id: number, adres: string) => ({ id, adres, salonId: 1, salonKodu: 'ANA', bolme: 1, kat: 1, rafAktif: true });
+    const konum = (id: number, kod: string, gozId: number) => ({ id, kod, tur: 'raf_gozu', depoId: 5, aktif: true, rafId: null, gozId, alanId: null, satirSayisi: 0 });
+    const depolar = [{ id: 5, kod: 'ANA', salonId: 1, aktif: true }];
+    // Yeniden numaralama: A7 -> A5, A8 -> A6; A5 ve A6 başka gözlerde ama onlar da kayıyor (A5 -> A7, A6 -> A8: yer değişimi).
+    const takas = haritaPlani({
+      gozler: [goz(1, 'A5'), goz(2, 'A6'), goz(3, 'A7'), goz(4, 'A8')], alanlar: [], depolar,
+      konumlar: [konum(10, 'A7', 1), konum(11, 'A8', 2), konum(12, 'A5', 3), konum(13, 'A6', 4)], kodlar: new Set(['A5', 'A6', 'A7', 'A8']),
+    });
+    assert.deepEqual(takas.guncelle.map((k) => [k.id, k.kod]), [[10, 'A5'], [11, 'A6'], [12, 'A7'], [13, 'A8']]);
+    assert.deepEqual(takas.atlanan, []);
+    // Zincir: A1 -> A2 -> A3 -> A4 (yeni). Hepsi bir kerede.
+    const zincir = haritaPlani({
+      gozler: [goz(1, 'A2'), goz(2, 'A3'), goz(3, 'A4')], alanlar: [], depolar,
+      konumlar: [konum(10, 'A1', 1), konum(11, 'A2', 2), konum(12, 'A3', 3)], kodlar: new Set(['A1', 'A2', 'A3']),
+    });
+    assert.deepEqual(zincir.guncelle.map((k) => k.kod), ['A2', 'A3', 'A4']);
+    assert.deepEqual(zincir.atlanan, []);
+    // Zincirin sonundaki kod elle açılmış başka konumdaysa (A4) o adım ve ona bağlı bütün adımlar durur, bildirilir; yeni göz eski kodu almaz.
+    const engel = haritaPlani({
+      gozler: [goz(1, 'A2'), goz(2, 'A3'), goz(3, 'A4'), goz(4, 'A1')], alanlar: [], depolar,
+      konumlar: [konum(10, 'A1', 1), konum(11, 'A2', 2), konum(12, 'A3', 3), { ...konum(20, 'A4', 99), gozId: null, alanId: null, rafId: 7 }],
+      kodlar: new Set(['A1', 'A2', 'A3', 'A4']),
+    });
+    assert.deepEqual(engel.guncelle, []);
+    assert.deepEqual(engel.atlanan, ['A2', 'A3', 'A4', 'A1']);
+    assert.deepEqual(engel.ekle, []);
+  });
+
   test('harita eşlemesi (#711): depo olmayan bölümün gözü konum olmaz; bağlı stoksuz konumu kapanır, stoklusu bildirilir', () => {
     const goz = (id: number, salonId: number) => ({ id, adres: `U${id}-01-1-1`, salonId, salonKodu: salonId === 1 ? 'ANA' : 'URETIM', bolme: 1, kat: 1, rafAktif: true });
     const konum = (id: number, gozId: number, satir: number) => ({ id, kod: `U${gozId}-01-1-1`, tur: 'raf_gozu', depoId: 6, aktif: true, rafId: null, gozId, alanId: null, satirSayisi: satir });

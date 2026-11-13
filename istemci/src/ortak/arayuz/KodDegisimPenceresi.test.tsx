@@ -40,4 +40,13 @@ describe('KodDegisimPenceresi (3135 a)', () => {
     expect(kodDegisimMetni(yerler(70)).split('\n')).toHaveLength(70);
     expect(within(p).getByText(/Bunlardan 1 konumda stok var/)).toBeTruthy();
   });
+  it('3168: ek uyarı verilince ilk satır tehlike uyarısıdır (eski etiket başka gözü gösterir); verilmezse bugünkü metin', () => {
+    render(
+      <MemoryRouter><BildirimSaglayici><KodDegisimPenceresi degisenler={yerler(3)} kapat={() => {}} etiketMerkezi
+        ekUyari="Eski etiketler başka gözü gösterir; okutmayın." /></BildirimSaglayici></MemoryRouter>,
+    );
+    const p = screen.getByRole('dialog', { name: 'Konum kodu değişti' });
+    expect(within(p).getByRole('alert').textContent).toBe('3 gözün kodu değişti. Eski etiketler başka gözü gösterir; okutmayın.');
+    expect(within(p).queryByText(/eski etiketler artık okunmaz/)).toBeNull();
+  });
 });

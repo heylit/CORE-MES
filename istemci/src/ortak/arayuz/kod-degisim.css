@@ -5,3 +5,4 @@
 .tc-kod-degisim-liste { margin: 0; padding-left: var(--b-5); display: grid; gap: var(--b-2); color: var(--muted); }
 .tc-kod-degisim-satir { display: inline-flex; flex-wrap: wrap; gap: var(--b-1); align-items: center; }
 .tc-kod-degisim-dugmeler { display: flex; flex-wrap: wrap; gap: var(--b-2); }
+.tc-kod-degisim-tehlike { background: color-mix(in srgb, var(--stop) 18%, var(--panel-solid)); border-left: var(--b-1) solid var(--stop); font-weight: 600; }

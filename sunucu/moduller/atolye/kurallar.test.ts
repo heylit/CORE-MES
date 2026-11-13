@@ -4,7 +4,7 @@ import { describe, test } from 'node:test';
 import type { AlanKaydi, RafKaydi, YerlesimKaydi } from '#paylasilan/sozlesme/atolye.ts';
 import { MODEL_PARCA_BAYT } from '#paylasilan/sozlesme/atolye.ts';
 import {
-  adresCoz, bolumCakismalari, fabrikaDenetle, fabrikaNoktasi, gecisIhlalleri, gozDolulukIhlali, krokiHizalamaYuvarla, pdfBasligiGecerliMi, aramaKatla, aramaSirala, base64Coz, beklenenParcaBoyu, cakisirMi, donusIndirge, glbBasligiGecerliMi, gozAdresi, hucreAdi, hucreKutusu,
+  DUZ_RAF_KODU, adresCoz, gozKodu, ilkDuzNo, bolumCakismalari, fabrikaDenetle, fabrikaNoktasi, gecisIhlalleri, gozDolulukIhlali, krokiHizalamaYuvarla, pdfBasligiGecerliMi, aramaKatla, aramaSirala, base64Coz, beklenenParcaBoyu, cakisirMi, donusIndirge, glbBasligiGecerliMi, gozAdresi, hucreAdi, hucreKutusu,
   izgaraAdlari, kapiKenardaMi, koseler, modelParcaSayisi, odaDuvarlari, rafNetOlcuIhlalleri, rotaAdimi, rotaBul, rotaNoktasiIhlali, salondaMi, surumGuncelMi, sutunAdi,
   yerlesimiDenetle, yerlesimiYuvarla,
 } from './kurallar.ts';
@@ -136,11 +136,34 @@ describe('atolye kuralları (saf)', () => {
 
   test('ATL-11 göz adresi Raf-Bölme-Kat-Göz; rafın ölçüsünü aşan göz yok', () => {
     assert.equal(gozAdresi('R1', 2, 3, 1), 'R1-02-3-1');
-    assert.deepEqual(adresCoz('r1-2-3-1'), { rafKodu: 'R1', bolme: 2, kat: 3, goz: 1 });
-    assert.deepEqual(adresCoz('R1-02'), { rafKodu: 'R1', bolme: 2, kat: null, goz: null });
+    assert.deepEqual(adresCoz('r1-2-3-1'), { rafKodu: 'R1', bolme: 2, kat: 3, goz: 1, duzNo: null });
+    assert.deepEqual(adresCoz('R1-02'), { rafKodu: 'R1', bolme: 2, kat: null, goz: null, duzNo: null });
     assert.equal(adresCoz('R1'), null);
     assert.equal(adresCoz('R1-'), null);
     assert.equal(adresCoz('R1-100'), null);
+  });
+
+  test('3168 sıra numaralı kod: raf harfi ve numara; ilk numara bölme, göz sütunu, aşağıdan yukarı; eski adres o kodlamada çözülmez', () => {
+    // 2 bölme x 4 kat x 1 göz: A1-A4 birinci bölme aşağıdan yukarı, A5-A8 ikinci bölme.
+    const r = { katSayisi: 4, gozSayisi: 1 };
+    assert.deepEqual([1, 2, 3, 4].map((k) => ilkDuzNo(r, 1, k, 1)), [1, 2, 3, 4]);
+    assert.deepEqual([1, 2, 3, 4].map((k) => ilkDuzNo(r, 2, k, 1)), [5, 6, 7, 8]);
+    // Bölmede iki göz sütunu: önce soldaki sütun aşağıdan yukarı, sonra sağdaki.
+    assert.equal(ilkDuzNo({ katSayisi: 3, gozSayisi: 2 }, 1, 1, 2), 4);
+    assert.equal(ilkDuzNo({ katSayisi: 3, gozSayisi: 2 }, 2, 1, 1), 7);
+    assert.equal(gozKodu('duz-sayi', 'A', { bolme: 2, kat: 1, goz: 1, duzNo: 13 }), 'A13');
+    assert.equal(gozKodu('bolme-kat-goz', 'A', { bolme: 2, kat: 1, goz: 1, duzNo: 13 }), 'A-02-1-1');
+    // Numarası olmayan göze numara uydurulmaz: eski düzenin adresi kalır.
+    assert.equal(gozKodu('duz-sayi', 'A', { bolme: 2, kat: 1, goz: 1, duzNo: null }), 'A-02-1-1');
+    assert.deepEqual(adresCoz('a13', 'duz-sayi'), { rafKodu: 'A', bolme: null, kat: null, goz: null, duzNo: 13 });
+    assert.equal(adresCoz('A-02-1-1', 'duz-sayi'), null);
+    assert.equal(adresCoz('A0', 'duz-sayi'), null);
+    assert.equal(adresCoz('A1B2', 'duz-sayi'), null);
+    assert.equal(adresCoz('A13'), null);
+    assert.equal(DUZ_RAF_KODU.test('AB'), true);
+    assert.equal(DUZ_RAF_KODU.test('A1'), false);
+    const aday = (tur: AramaAdayi['tur'], etiket: string): AramaAdayi => ({ tur, kimlik: etiket.length, etiket, ayrinti: '', anahtarlar: [etiket], aktif: true });
+    assert.equal(aramaSirala('a1', [aday('goz', 'A10'), aday('raf', 'A1X'), aday('goz', 'A1')], 20, 'duz-sayi')[0]?.etiket, 'A1');
   });
 
   test('ATL-13 raf silinemez; başka salonun rafı bu salona yazılamaz', () => {

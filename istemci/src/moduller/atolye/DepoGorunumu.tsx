@@ -1,4 +1,6 @@
 import { useMemo } from 'react';
+import { bolmeAraligi, duzMu, rafAraligi } from './raf-kodlama.ts';
+import { RafKodlamaSatiri } from './RafKodlamaSatiri.tsx';
 import type { GozKalemi, YerlesimCevabi } from '#paylasilan/sozlesme/atolye.ts';
 
 type Raf = YerlesimCevabi['raflar'][number];
@@ -55,6 +57,7 @@ export function DepoGorunumu({ raflar: hamRaflar, bolumKodlari, gozKalemleri, ha
   const bolmeSec = (b: number) => secimYaz({ rafId: raf.id, bolme: Math.min(raf.bolmeSayisi, Math.max(1, b)), kat: null, goz: null });
   const seciliOzet = kat !== null && goz !== null ? ozetler.get(hucreAnahtari(bolme, kat, goz)) : undefined;
   const toplamGoz = raf.bolmeSayisi * raf.katSayisi * raf.gozSayisi;
+  const duz = duzMu(raf);
 
   return (
     <div className="tc-atolye-depo">
@@ -80,19 +83,20 @@ export function DepoGorunumu({ raflar: hamRaflar, bolumKodlari, gozKalemleri, ha
       <section className="tc-atolye-depo-ana" aria-label={`Raf ${raf.kod}`}>
         <header className="tc-atolye-depo-ust">
           <div>
-            <p className="tc-atolye-ust-baslik">{RAF_TURU_ADI[raf.tur]} · Hücre {raf.hucre} · {raf.bolmeSayisi} bölme × {raf.katSayisi} kat × {raf.gozSayisi} göz</p>
+            <p className="tc-atolye-ust-baslik">{RAF_TURU_ADI[raf.tur]} · Hücre {raf.hucre} · {duz ? `${toplamGoz} göz · ${rafAraligi(raf)}` : `${raf.bolmeSayisi} bölme × ${raf.katSayisi} kat × ${raf.gozSayisi} göz`}</p>
             <h3><span className="mono">{raf.kod}</span> · {raf.ad} {!raf.aktif && <Rozet ton="pasif">Pasif</Rozet>}</h3>
           </div>
           <span className="tc-atolye-ipucu">{stokluSayi(raf.id) === null ? `${sayiMetni(toplamGoz)} göz` : `${stokluSayi(raf.id) ?? ''} / ${sayiMetni(toplamGoz)} göz stokta`}</span>
         </header>
 
+        <RafKodlamaSatiri raf={raf} stok={rafStogu(raf.id)} />
         {hata && <DurumKutusu durum="hata" mesaj={hata} yenile={yenile} />}
 
         <div className="tc-atolye-depo-gezinti">
           <Dugme className="tc-atolye-ok" aria-label="Önceki bölme" title="Önceki bölme" disabled={bolme <= 1} onClick={() => bolmeSec(bolme - 1)}>‹</Dugme>
           <Secim
-            etiket="Bölme"
-            secenekler={Array.from({ length: raf.bolmeSayisi }, (_, i) => ({ deger: String(i + 1), baslik: `Bölme ${String(i + 1).padStart(2, '0')}` }))}
+            etiket={duz ? 'Gözler' : 'Bölme'}
+            secenekler={Array.from({ length: raf.bolmeSayisi }, (_, i) => ({ deger: String(i + 1), baslik: duz ? bolmeAraligi(raf, i + 1) : `Bölme ${String(i + 1).padStart(2, '0')}` }))}
             value={String(bolme)}
             onChange={(o) => bolmeSec(Number(o.target.value))}
           />
