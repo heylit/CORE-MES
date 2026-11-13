@@ -120,3 +120,42 @@ export function baslatmaGeriUygula<T extends DurumluIs>(isler: readonly T[], g: 
     return is.good + is.scrap > 0 ? { ...is, state: 'paused' } : { ...is, state: 'queued', startedAt: undefined };
   });
 }
+
+// Bağlantı yokken kuyrukta beklemiş üretim kaydı reddedilince kaybolmaz (karar 3158 a): kuyruk öğesi `red` ile işaretlenir ve kişi çözene kadar
+// gönderilmez. `yazildi`: sunucu kaydı yazmış ama CORE'a işlememiştir; aynı kimlik sunucuda elendiğinden cihazdan yeniden denenemez.
+export interface KuyrukReddi { ileti: string; at: number; yazildi: boolean; cozum?: 'vazgecildi' | 'duzeltildi'; cozumAt?: number }
+interface KuyrukKaydi { op?: unknown; kind?: unknown; row?: unknown; at?: unknown; uid?: unknown; red?: KuyrukReddi }
+
+export const KUYRUK_BITTI_OLAYI = 'arkon-kuyruk-bitti';
+const COZULMUS_IZ_SURESI_MS = 24 * 3600e3;
+
+export const kararBekler = (oge: unknown): boolean => !!(oge as KuyrukKaydi | null | undefined)?.red;
+
+export const cozulmusEskidi = (oge: unknown, simdi: number): boolean => {
+  const red = (oge as KuyrukKaydi | null | undefined)?.red;
+  return red?.cozum !== undefined && simdi - (red.cozumAt ?? red.at) > COZULMUS_IZ_SURESI_MS;
+};
+
+export type BekleyenDurumu = 'bekliyor' | 'gonderiliyor' | 'karar' | 'vazgecildi' | 'duzeltildi';
+export interface BekleyenKayit<A = unknown> {
+  anahtar: A; tur: string; satir: Record<string, unknown>; zaman: number | null; durum: BekleyenDurumu;
+  neden: string | null; yenidenDenenir: boolean;
+}
+
+// Kuyruktaki üretim kayıtları (belge yazımları değil), yalnız oturumdaki kişininkiler: ortak tablette başkasının işlemi listelenmez.
+export function bekleyenKayitlar<A>(
+  kuyruk: readonly (readonly [A, unknown])[], kisiId: string | undefined, yolda: { has(a: A): boolean }, gonderiliyor: boolean,
+): BekleyenKayit<A>[] {
+  const liste: BekleyenKayit<A>[] = [];
+  for (const [anahtar, oge] of kuyruk) {
+    const o = oge as KuyrukKaydi | null | undefined;
+    if (!o || o.op !== 'log' || typeof o.kind !== 'string' || !o.row || typeof o.row !== 'object' || o.uid !== kisiId) continue;
+    const red = o.red;
+    const durum: BekleyenDurumu = red ? (red.cozum ?? 'karar') : gonderiliyor || yolda.has(anahtar) ? 'gonderiliyor' : 'bekliyor';
+    liste.push({
+      anahtar, tur: o.kind, satir: o.row as Record<string, unknown>, zaman: typeof o.at === 'number' ? o.at : null, durum,
+      neden: red ? red.ileti : null, yenidenDenenir: !!red && !red.yazildi && red.cozum === undefined,
+    });
+  }
+  return liste;
+}
