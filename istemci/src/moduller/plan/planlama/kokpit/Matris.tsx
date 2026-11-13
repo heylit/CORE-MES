@@ -183,7 +183,7 @@ export function Matris({ m, cx, duzen, duzenSec, emirler, secEmir, secIs, zaman,
           </span>
         )}
         <details className="tc-pyq-lejk" open={lej} onToggle={(ev) => { setLej(ev.currentTarget.open); }}>
-          <summary>Renkler ne anlatıyor</summary>
+          <summary><Simge ad="chev-right" boyut="k" />Renkler ne anlatıyor</summary>
           <div className="tc-pyq-lej">
             <span data-yuk="hafif">az dolu</span><span data-yuk="orta">yarı dolu</span><span data-yuk="dolu">dolmak üzere</span><span data-yuk="tam">tam dolu</span>
             {duzen === 'A' && <><span data-lej="bekle">sırada bekliyor</span><span data-lej="termin">termin günü</span></>}
