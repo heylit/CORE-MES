@@ -116,7 +116,7 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi }) {
     komut.komutBasladi?.(a.planaAl === undefined ? 'İş taşındı' : 'Emir plana alındı');
     try {
       const r = a.planaAl === undefined ? await isiTasi(komut, { isId: a.isId, tezgah: a.tezgah, baslangic: a.baslangic })
-        : await emriPlanaAl(komut, { emirId: a.planaAl, tezgah: a.tezgah, baslangic: a.baslangic });
+        : await emriPlanaAl(komut, { emirId: a.planaAl, tezgah: a.tezgah, baslangic: a.baslangic, ...(a.adimlar && a.adimlar.length > 0 ? { adimlar: a.adimlar } : {}) });
       otomatikUygulaIste(r);
       if (r.calismaSurumu === r.oncekiSurum) setYaziliyor(false); else beklenenSurum.current = r.calismaSurumu;
       if (r.ileti) bildir('bilgi', r.ileti);

@@ -1,5 +1,5 @@
 import { tasimaTakvimi } from './plan-girdisi.ts';
-import { planaAlHesabi, type PlanaAlSonucu } from './plana-al-kurallar.ts';
+import { planaAlHesabi, type PlanaAlSecimi, type PlanaAlSonucu } from './plana-al-kurallar.ts';
 import type { BagTuru } from './tasima-kurallar.ts';
 
 // Plana almanın girdisi (3151): emrin adımları ve takvim motorun derlemesinden (elle taşımayla aynı bağlam), dolu aralıklar çalışmanın
@@ -7,7 +7,7 @@ import type { BagTuru } from './tasima-kurallar.ts';
 type Nesne = Record<string, unknown>;
 const nesne = (x: unknown): x is Nesne => typeof x === 'object' && x !== null && !Array.isArray(x);
 
-export function planaAlmaHesabi(calisma: Nesne, simdi: number, g: { emirId: string; tezgah: string; baslangic: number }): PlanaAlSonucu {
+export function planaAlmaHesabi(calisma: Nesne, simdi: number, g: { emirId: string; tezgah: string; baslangic: number; adimlar?: readonly PlanaAlSecimi[] | undefined }): PlanaAlSonucu {
   const t = tasimaTakvimi(calisma, simdi);
   const adimlar = t.emirler[g.emirId];
   if (adimlar === undefined) return { gecerli: false, ileti: 'Emir plana alınamaz: iptal edilmiş, bitmiş ya da plan dışında.', alan: 'emirId', isler: [], bitis: null };
@@ -27,5 +27,5 @@ export function planaAlmaHesabi(calisma: Nesne, simdi: number, g: { emirId: stri
     if (y !== null && Number.isFinite(y.C)) ekle(k.m, y.S, y.C);
   }
   const onculler = new Map<string, (readonly [string, BagTuru])[]>(adimlar.map((a) => [a.id, t.onculler[a.id] ?? []]));
-  return planaAlHesabi({ adimlar, onculler, dolu, simdi, ufuk: t.ufuk, tasimaSaat: t.tasimaSaat, yer: t.yer, saatMetni: t.saatMetni, tezgahAdi: t.tezgahAdi }, g.tezgah, g.baslangic);
+  return planaAlHesabi({ adimlar, onculler, dolu, simdi, ufuk: t.ufuk, tasimaSaat: t.tasimaSaat, yer: t.yer, saatMetni: t.saatMetni, tezgahAdi: t.tezgahAdi }, g.tezgah, g.baslangic, g.adimlar ?? []);
 }

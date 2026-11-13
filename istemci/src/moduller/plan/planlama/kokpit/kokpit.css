@@ -356,6 +356,29 @@
 .tc-pyq-neden { margin: 0; padding: var(--b-2); border-left: var(--cizgi-kalin) solid var(--d-gec); border-radius: var(--kayma); background: var(--panel2); font-size: var(--yazi-s); }
 .tc-pyq-ayrinti[data-d="risk"] .tc-pyq-neden { border-left-color: var(--d-risk); }
 .tc-pyq-sonuc { margin: 0; font-size: var(--yazi-s); font-weight: 600; }
+/* Adım adım plana alma (3229 a): adım başına tezgâh düğmeleri ve saat; bitiş özeti ve "Plana al" panelin altında yapışık. */
+.tc-pyq-aa { display: flex; flex-direction: column; gap: var(--b-2); }
+.tc-pyq-aa ol { display: flex; flex-direction: column; gap: var(--b-2); margin: 0; padding: 0; list-style: none; }
+.tc-pyq-aa li { display: flex; flex-direction: column; gap: var(--b-1); padding: var(--b-2); border: var(--cizgi-ince) solid var(--edge); border-radius: var(--yari-1); font-size: var(--yazi-s); }
+.tc-pyq-aa small { color: var(--muted); font-size: var(--yazi-xs); }
+.tc-pyq-aa small em { color: var(--d-risk); font-style: normal; }
+.tc-pyq-aa li > b { display: flex; align-items: baseline; justify-content: space-between; gap: var(--b-2); }
+.tc-pyq-aa li > b small { font-weight: 400; }
+.tc-pyq-aa small em { display: block; }
+.tc-pyq-aa-rozet { display: inline-block; padding: 0 var(--b-2); border-radius: var(--yari-tam); background: var(--panel2); color: var(--muted); font-weight: 700; }
+.tc-pyq-aa-rozet[data-siz] { background: var(--secili-zemin); color: var(--secili-yazi); }
+.tc-pyq-aa-cipler { display: flex; flex-wrap: wrap; gap: var(--b-1); }
+.tc-pyq-aa-cipler button {
+  min-height: var(--dokunma); padding: 0 var(--b-3); border: var(--cizgi-ince) solid var(--edge2); border-radius: var(--yari-tam); background: var(--panel-solid); color: var(--ink);
+  font: inherit; font-family: var(--font-mono); cursor: pointer;
+}
+.tc-pyq-aa-cipler button:first-child { font-family: inherit; }
+.tc-pyq-aa-cipler button[aria-pressed="true"] { border-color: var(--secili-zemin); background: var(--secili-zemin); color: var(--secili-yazi); }
+.tc-pyq-aa select { min-height: var(--dokunma); padding: 0 var(--b-2); border: var(--cizgi-ince) solid var(--edge2); border-radius: var(--yari-1); background: var(--panel-solid); color: var(--ink); font: inherit; max-width: 100%; }
+.tc-pyq-aa-alt { position: sticky; bottom: calc(var(--b-3) * -1); display: flex; flex-direction: column; gap: var(--b-2); margin: 0 calc(var(--b-3) * -1) calc(var(--b-3) * -1); padding: var(--b-2) var(--b-3) var(--b-3); border-top: var(--cizgi-ince) solid var(--edge); background: var(--panel-solid); }
+.tc-pyq-aa-alt p { margin: 0; font-size: var(--yazi-s); font-weight: 600; }
+.tc-pyq-aa-alt p[data-d="gec"] { color: var(--d-gec); }
+.tc-pyq-aa-alt > span { display: flex; flex-wrap: wrap; gap: var(--b-2); }
 
 /* Matriste ölçek anlamsızdır. */
 .tc-pyq[data-goz="M"] .tc-pyq-olcek { display: none; }

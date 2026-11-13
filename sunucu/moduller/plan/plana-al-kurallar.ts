@@ -18,20 +18,35 @@ export interface PlanaAlGirdisi {
   tezgahAdi: (m: string) => string;
 }
 export interface PlanaAlSatiri { isId: string; tezgah: string; S: number; C: number }
+// 3229 a: ilk adımdan sonraki adım için kullanıcının seçtiği tezgâh ve / veya en erken saat.
+export interface PlanaAlSecimi { isId: string; tezgah?: string | undefined; baslangic?: number | undefined }
+type Alan = 'emirId' | 'tezgah' | 'baslangic' | 'adimlar';
+// kilit: kilitlenecek adımlar (ilk adım ve seçilenler); `isler` içindeki yerleriyle.
 export type PlanaAlSonucu =
-  | { gecerli: true; ileti: string | null; isler: PlanaAlSatiri[]; bitis: number | null }
-  | { gecerli: false; ileti: string; alan: 'emirId' | 'tezgah' | 'baslangic'; isler: []; bitis: null };
+  | { gecerli: true; ileti: string | null; isler: PlanaAlSatiri[]; bitis: number | null; kilit: string[] }
+  | { gecerli: false; ileti: string; alan: Alan; isler: []; bitis: null };
 
 const E = 1e-6;
 const ADIM = 0.25;
-const red = (ileti: string, alan: 'emirId' | 'tezgah' | 'baslangic'): PlanaAlSonucu => ({ gecerli: false, ileti, alan, isler: [], bitis: null });
+const red = (ileti: string, alan: Alan): PlanaAlSonucu => ({ gecerli: false, ileti, alan, isler: [], bitis: null });
 
-export function planaAlHesabi(g: PlanaAlGirdisi, tezgah: string, S0: number): PlanaAlSonucu {
+export function planaAlHesabi(g: PlanaAlGirdisi, tezgah: string, S0: number, secimler: readonly PlanaAlSecimi[] = []): PlanaAlSonucu {
   const ilk = g.adimlar[0];
   if (ilk === undefined) return red('Emrin rotasında adım yok; plana alınamaz.', 'emirId');
   if (ilk.fas) return red('Emrin ilk adımı fason; tezgâha alınamaz.', 'emirId');
   if (!ilk.adaylar.includes(tezgah)) return red(`${g.tezgahAdi(tezgah)} bu emrin ilk adımını yapamaz.`, 'tezgah');
   if (S0 < g.simdi - E) return red('Emir geçmiş bir saate alınamaz.', 'baslangic');
+  const secim = new Map<string, PlanaAlSecimi>();
+  for (const s of secimler) {
+    const k = g.adimlar.findIndex((a) => a.id === s.isId), a = g.adimlar[k];
+    if (a === undefined) return red('Seçilen adım bu emrin rotasında yok.', 'adimlar');
+    if (secim.has(s.isId)) return red('Aynı adım iki kez verilemez.', 'adimlar');
+    if (k === 0) return red('İlk adımın tezgâhı ve saati ayrıca verilir.', 'adimlar');
+    if (a.fas) return red(`${String(k + 1)}. adım fason; tezgâha alınamaz.`, 'adimlar');
+    if (s.tezgah !== undefined && !a.adaylar.includes(s.tezgah)) return red(`${g.tezgahAdi(s.tezgah)} bu emrin ${String(k + 1)}. adımını yapamaz.`, 'adimlar');
+    if (s.baslangic !== undefined && s.baslangic < g.simdi - E) return red(`${String(k + 1)}. adım geçmiş bir saate alınamaz.`, 'adimlar');
+    secim.set(s.isId, s);
+  }
   const yerler = new Map<string, TasimaYeri & { m: string }>();
   const carpan = (m: string, y: TasimaYeri): number | null => {
     let son: number | null = null;
@@ -67,16 +82,21 @@ export function planaAlHesabi(g: PlanaAlGirdisi, tezgah: string, S0: number): Pl
       yerler.set(a.id, { ...y, m: tezgah });
       continue;
     }
+    const s = secim.get(a.id);
     let en: (TasimaYeri & { m: string }) | null = null;
-    for (const m of a.adaylar) { const y = bosYer(a.id, m, bas, bit); if (y !== null && (en === null || y.C < en.C - E)) en = { ...y, m }; }
-    // Sonraki adım ufka sığmıyorsa emir yine alınır: yerini motor arar, bitiş bilinmez.
+    for (const m of s?.tezgah === undefined ? a.adaylar : [s.tezgah]) { const y = bosYer(a.id, m, Math.max(bas, s?.baslangic ?? bas), bit); if (y !== null && (en === null || y.C < en.C - E)) en = { ...y, m }; }
+    // Seçilen adım ufka sığmıyorsa komut reddedilir (kilitlenecek yer yok). Seçilmeyen sığmıyorsa emir yine alınır: yerini motor arar, bitiş bilinmez.
+    if (en === null && s !== undefined) return red(`${String(g.adimlar.indexOf(a) + 1)}. adım seçilen yerde planlama ufkuna sığmıyor.`, 'adimlar');
     if (en === null) { tam = false; break; }
     yerler.set(a.id, en);
   }
+  // Fason ya da ufka sığmayan adımdan sonrası hesaplanmaz; orada seçim varsa kilitlenecek yer bilinmez.
+  const yersiz = g.adimlar.findIndex((a) => secim.has(a.id) && !yerler.has(a.id));
+  if (yersiz >= 0) return red(`${String(yersiz + 1)}. adımın yeri önceki adım yüzünden hesaplanamıyor; o adımı sisteme bırakın.`, 'adimlar');
   const isler = [...yerler].map(([isId, y]) => ({ isId, tezgah: y.m, S: y.S, C: y.C }));
   const y0 = yerler.get(ilk.id)!;
   const notlar: string[] = [];
   if (y0.S > S0 + E) notlar.push(`İlk adım ${g.saatMetni(y0.S)} saatine oturur`);
   if (!tam) notlar.push('bitişi plan dizilince belli olur');
-  return { gecerli: true, ileti: notlar.length > 0 ? `${notlar.join('; ')}.` : null, isler, bitis: tam ? Math.max(...isler.map((i) => i.C)) : null };
+  return { gecerli: true, ileti: notlar.length > 0 ? `${notlar.join('; ')}.` : null, isler, bitis: tam ? Math.max(...isler.map((i) => i.C)) : null, kilit: [ilk.id, ...secim.keys()] };
 }

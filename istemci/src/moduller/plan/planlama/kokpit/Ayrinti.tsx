@@ -1,4 +1,6 @@
+import { useState } from 'react';
 import { Simge } from '../../../../ortak/arayuz/index.ts';
+import { AdimAdim } from './AdimAdim.tsx';
 import { Hamleler, type HamleOzellikleri } from './Hamleler.tsx';
 import { BEKLEME_ESIGI, adimBeklemesi, durumYazisi, enCokBekleyen, satirKimligi, sureYaz, tasinabilir, type KokpitEmri, type KokpitModeli } from './kurallar.ts';
 
@@ -15,6 +17,9 @@ export interface AyrintiOzellikleri extends Pick<HamleOzellikleri, 'zaman' | 'uy
 
 export function Ayrinti({ m, e, secIs, zaman, uygula, surum, bekle = false, adimSec, kapat, matris = false, ileti = null }: AyrintiOzellikleri) {
   const kod = new Map(m.tezgahlar.map((t) => [t.id, t.kod]));
+  // Plana alma yolu (3229 a): açılış bugünkü hızlı yoldur.
+  const [adimAdim, setAdimAdim] = useState(false);
+  const adimli = adimAdim && e.durum === 'plansiz';
   const secili = secIs ? m.isler[secIs] : undefined;
   const neden = matris && (e.durum === 'gec' || e.durum === 'risk') ? enCokBekleyen(m, e) : null;
   const adimlar = (
@@ -41,7 +46,12 @@ export function Ayrinti({ m, e, secIs, zaman, uygula, surum, bekle = false, adim
   const cozum = e.durum === 'plansiz' ? (
     <>
       <h3>Plana al</h3>
-      <Hamleler m={m} e={e} isId={null} zaman={zaman} uygula={uygula} surum={surum} bekle={bekle} />
+      <span className="tc-pyq-seg" role="group" aria-label="Plana alma yolu">
+        <button type="button" aria-pressed={!adimAdim} onClick={() => { setAdimAdim(false); }}>Hızlı (ilk adım)</button>
+        <button type="button" aria-pressed={adimAdim} onClick={() => { setAdimAdim(true); }}>Adım adım</button>
+      </span>
+      {adimAdim ? <AdimAdim key={e.id} m={m} e={e} zaman={zaman} uygula={uygula} surum={surum} bekle={bekle} />
+        : <Hamleler m={m} e={e} isId={null} zaman={zaman} uygula={uygula} surum={surum} bekle={bekle} />}
     </>
   ) : (
     <>
@@ -66,7 +76,7 @@ export function Ayrinti({ m, e, secIs, zaman, uygula, surum, bekle = false, adim
         </p>
       )}
       {ileti && <p className="tc-pyq-sonuc" role="status">{ileti}</p>}
-      {matris ? <>{cozum}{adimlar}</> : <>{adimlar}{cozum}</>}
+      {adimli ? cozum : matris ? <>{cozum}{adimlar}</> : <>{adimlar}{cozum}</>}
     </aside>
   );
 }

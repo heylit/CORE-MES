@@ -125,22 +125,22 @@ export function planaAlDenetimi(deger: unknown, g: PlanaAl, an: number): { hata:
   return { deger, simdi };
 }
 
-// Yalnız ilk adım kilitlenir (motor kilitYeri: {m, S}); emrin öteki adımlarını plan yeniden dizilirken motor yerleştirir. Tek değişikliktir:
-// bekleyen satırı, iz ve geri alma (kilit kalkar, emir yine plansız olur).
+// İlk adım ve kullanıcının seçtiği adımlar kilitlenir (motor kilitYeri: {m, S}); emrin öteki adımlarını plan yeniden dizilirken motor
+// yerleştirir. Kaç kilit yazılırsa yazılsın tek değişikliktir: bekleyen satırı, iz ve geri alma (kilitler kalkar, emir yine plansız olur).
 export function planaAl(deger: unknown, g: PlanaAl, k: KomutKisisi, hesap: (d: Nesne, simdi: number, g: PlanaAl) => PlanaAlSonucu): KomutSonucu & { ileti?: string | null } {
   const d = planaAlDenetimi(deger, g, k.t);
   if ('hata' in d) return d;
   const sonuc = hesap(d.deger, d.simdi, g);
   if (!sonuc.gecerli) return dogrulama(sonuc.ileti, sonuc.alan);
-  const ilk = sonuc.isler[0];
-  if (ilk === undefined) return cakisma('Emrin yeri hesaplanamadı; sayfayı yenileyin.');
+  const kilitlenen = sonuc.kilit.flatMap((id) => sonuc.isler.find((i) => i.isId === id) ?? []);
+  if (kilitlenen.length === 0 || kilitlenen.length !== sonuc.kilit.length) return cakisma('Emrin yeri hesaplanamadı; sayfayı yenileyin.');
   const locks = nesne(d.deger.locks) ? d.deger.locks : {};
-  const kilit = { m: ilk.tezgah, S: ilk.S };
-  if (esit(locks[ilk.isId], kilit)) return { deger: d.deger, degisti: false, ileti: sonuc.ileti };
+  const kilitler = Object.fromEntries(kilitlenen.map((i) => [i.isId, { m: i.tezgah, S: i.S }]));
+  if (kilitlenen.every((i) => esit(locks[i.isId], kilitler[i.isId]))) return { deger: d.deger, degisti: false, ileti: sonuc.ileti };
   const yeni = kopya(d.deger);
-  yeni.locks = { ...locks, [ilk.isId]: kilit };
-  const geri: GeriYama[] = [locks[ilk.isId] === undefined ? { yol: ['locks'], id: ilk.isId } : { yol: ['locks'], id: ilk.isId, once: locks[ilk.isId] }];
-  const ayrinti = `${g.emirId} → ${g.tezgah}${sonuc.ileti === null ? '' : `; ${sonuc.ileti}`}`;
+  yeni.locks = { ...locks, ...kilitler };
+  const geri: GeriYama[] = kilitlenen.map((i) => (locks[i.isId] === undefined ? { yol: ['locks'], id: i.isId } : { yol: ['locks'], id: i.isId, once: locks[i.isId] }));
+  const ayrinti = `${g.emirId} → ${kilitlenen.map((i) => i.tezgah).join(', ')}${sonuc.ileti === null ? '' : `; ${sonuc.ileti}`}`;
   return { deger: isle(d.deger, yeni, { ne: 'Emir plana alındı', ayrinti, isler: [g.emirId], geri }, k), degisti: true, ileti: sonuc.ileti };
 }
 

@@ -245,7 +245,23 @@ export function ilkBosluk(m: KokpitModeli, tezgah: string, sure: number, baslang
 
 // --- sorun turu ---
 // planaAl dolu ise hamle taşıma değil plana almadır: değer emrin kimliğidir, isId emrin ilk adımıdır.
-export interface TurAdayi { isId: string; tezgah: string; baslangic: number; planaAl?: string }
+// adimlar (3229 a): plana almada ilk adımdan sonraki adımlar için kullanıcının seçtiği tezgâh ve / veya saat.
+export interface AdimSecimi { tezgah?: string | undefined; baslangic?: number | undefined }
+export interface TurAdayi { isId: string; tezgah: string; baslangic: number; planaAl?: string; adimlar?: { isId: string; tezgah?: string; baslangic?: number }[] }
+// Sunucuya giden seçim listesi: ilk adım ayrı alanlarla gider, boş seçim ve emrin olmayan adımı gitmez; rota sırasıyla.
+export function adimSecimleri(e: Pick<KokpitEmri, 'adimlar'>, sec: Readonly<Record<string, AdimSecimi>>): { isId: string; tezgah?: string; baslangic?: number }[] {
+  return e.adimlar.slice(1).flatMap((a) => {
+    const s = sec[a.id];
+    if (!s || (s.tezgah === undefined && s.baslangic === undefined)) return [];
+    return [{ isId: a.id, ...(s.tezgah === undefined ? {} : { tezgah: s.tezgah }), ...(s.baslangic === undefined ? {} : { baslangic: s.baslangic }) }];
+  });
+}
+// Başlama saati seçenekleri: bugünden başlayarak yedi gün, iki saatte bir 06:00-22:00; geçmiş saat yok.
+export function baslamaSaatleri(m: Pick<KokpitModeli, 'bas' | 'simdi'>, gun = 7): number[] {
+  const l: number[] = [];
+  for (let g = 0; g < gun; g++) for (let h = 6; h <= 22; h += 2) { const t = m.bas + g * 24 + h; if (t >= m.simdi) l.push(t); }
+  return l;
+}
 // Emrin taşınabilen bekleyen adımları için hamle adayları: aday tezgâhların her birinde, öncül adım bittikten sonraki en erken boşluk.
 // Bugünkü yerinden erken olmayan aday hamle değildir; en çok öne alan başta. Sonucu (emrin yeni bitişi) sunucu önizlemesi verir; burada
 // yalnız denenecek yerler seçilir. `isId` verilirse yalnız o adım (ayrıntıdaki seçenekler).

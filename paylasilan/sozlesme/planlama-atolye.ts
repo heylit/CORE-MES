@@ -62,11 +62,20 @@ export const isTasiOnizlemesiCevabi = z.object({
 
 // Plana alma (3151): planda yeri olmayan açık emrin ilk adımı verilen tezgâhta, verilen saatten sonraki ilk boş yerde kilitlenir; öteki
 // adımları ve tezgâhlarını plan yeniden dizilirken motor yerleştirir. Başka emrin işi kımıldamaz.
+// 3229 a: `adimlar` verilirse ilk adımdan sonraki adımların tezgâhı ve saati de seçilmiştir; seçilen her adım hesaplanan yerine kilitlenir,
+// seçilmeyeni motor yerleştirir. İlk adım her zaman `tezgah` ve `baslangic` ile gelir. Tezgâh adımın rotadaki adaylarından olmalıdır.
+export const PLANA_AL_ADIM_EN_COK = 50;
+export const PLANA_AL_ADIM_METNI_EN_COK = 8000;
+const planaAlAdimi = z.strictObject({ isId: kimlik, tezgah: kimlik.optional(), baslangic: saat.optional() })
+  .refine((a) => a.tezgah !== undefined || a.baslangic !== undefined, { message: 'Adım için tezgâh ya da saat seçilmeli.' });
+const planaAlAdimlari = z.array(planaAlAdimi).max(PLANA_AL_ADIM_EN_COK)
+  .refine((l) => new Set(l.map((a) => a.isId)).size === l.length, { message: 'Aynı adım iki kez verilemez.' });
 export const planaAlGovdesi = z.object({
   calismaSurumu: z.number().int(),
   emirId: kimlik,
   tezgah: kimlik,
   baslangic: saat,
+  adimlar: planaAlAdimlari.optional(),
 });
 // Önizleme yazmaz. calismaSurumu sayfanın gördüğü sürümdür: kayıt ilerlediyse sonuç hesaplanmaz, gecerli false döner.
 export const planaAlOnizlemeSorgusu = z.object({
@@ -74,8 +83,12 @@ export const planaAlOnizlemeSorgusu = z.object({
   emirId: kimlik,
   tezgah: kimlik,
   baslangic: z.coerce.number<number>({ message: 'Başlangıç sayı olmalı.' }).pipe(saat),
+  // Okuma GET'tir: seçilen adımlar sorguda JSON metni olarak gelir; gövdedekiyle aynı şema ve sınır.
+  adimlar: z.string().max(PLANA_AL_ADIM_METNI_EN_COK).transform((m, c): unknown => {
+    try { return JSON.parse(m) as unknown; } catch { c.addIssue({ code: 'custom', message: 'Adım listesi okunamadı.' }); return z.NEVER; }
+  }).pipe(planaAlAdimlari).optional(),
 });
-// isler: emrin adımlarının oturacağı yerler (ilki kilitlenecek olan, ötekiler tahmin: motor dizerken değiştirebilir). bitis: emrin tahmini
+// isler: emrin adımlarının oturacağı yerler (ilki ve seçilenler kilitlenecek olan, ötekiler tahmin: motor dizerken değiştirebilir). bitis: emrin tahmini
 // bitişi; fason adımı olan emirde ve geçersiz önizlemede null. Cevap yalnız iş kimliği, tezgâh ve saat taşır.
 export const planaAlOnizlemesiCevabi = z.object({
   calismaSurumu: z.number().int().nullable(),
