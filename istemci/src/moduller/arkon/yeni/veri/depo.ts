@@ -3,6 +3,7 @@ import type { CihazDurumu } from '#paylasilan/sozlesme/oturum.ts';
 import { api } from '../../../../ortak/veri/api.ts';
 import { tohumla } from '../../baglanti.ts';
 import type { AnomaliDonemi, AnomaliIstatistigi, AnomaliOlaylari, Anomaliler, EksikIsler, EksikIslerim } from '../../../../../../arkon/web/src/data/anomali.ts';
+import type { BekleyenKayit } from '../../../../../../arkon/web/src/data/biten-is.ts';
 import type { CagriEkiplerim } from '../../../../../../arkon/web/src/data/cagri-ekiplerim.ts';
 import type { MerkezDurumu } from '../../../../ortak/cizim/cekirdek/cizim-merkezi.ts';
 import type { MakineAyrimlari } from '../../../../../../arkon/web/src/data/makine-secimi.ts';
@@ -45,6 +46,8 @@ export interface ArkonDeposu {
     add(tur: string, satir: Record<string, unknown>): Promise<Record<string, unknown>>;
     query(tur: string, sorgu?: KayitSorgusu): Promise<Record<string, unknown>[]>;
     on(f: (tur: string, satir: Record<string, unknown> | null) => void): () => void;
+    bekleyenler(): Promise<BekleyenKayit<number | string>[]>;
+    kararCoz(anahtar: number | string, yol: 'yeniden' | 'vazgec' | 'duzelt'): Promise<boolean>;
   };
   Auth: { current(): User | null; logout(): Promise<void> };
   Server: {
