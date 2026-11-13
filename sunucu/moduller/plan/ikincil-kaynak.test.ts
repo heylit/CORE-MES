@@ -45,8 +45,8 @@ const kaynak = (k: Partial<MotorIkincilKaynagi> = {}): MotorIkincilKaynagi => ({
 const iste = (x: Partial<MotorKaynakIstegi> = {}): MotorKaynakIstegi => ({ kart: '900', adet: 1, asama: 'ayar_isleme', ...x });
 
 interface Islem { m: string; S: number; Su: number; C: number; why: { t: string; r?: string }; ikBas?: number; takim?: { id: string; n: number; dk: number; at: number | null; kalan: number; bilinmiyor: boolean }[] }
-function planla(ikincil: unknown, ayar = 0) {
-  const g = planGirdisi({ calisma: calismayaMotorAyari(calisma(), MOTOR_AYARI_VARSAYILAN), kayit: kayit(ayar), kaynak: kaynakOkumasi(ikincil), bugun: '2026-10-19' });
+function planla(ikincil: unknown, ayar = 0, kapali: string[] = ['personel']) {
+  const g = planGirdisi({ calisma: calismayaMotorAyari({ ...calisma(), kapali }, MOTOR_AYARI_VARSAYILAN), kayit: kayit(ayar), kaynak: kaynakOkumasi(ikincil), bugun: '2026-10-19' });
   assert.ok(g);
   const m = motorYukle();
   const st = m.stHazirla(g.st) as { pref: Record<string, string> };
@@ -116,6 +116,14 @@ describe('plan 3199: ikincil kaynak kısıtı', () => {
     const w = warn.filter((x) => x.t === 'ikincil');
     assert.equal(w.length, 1);
     assert.match(w[0]!.txt, /AP-ORN-12: .* kapasite aşılıyor \(2 \/ 1\); İzle/);
+  });
+
+  test('aparat kısıtı kapatılınca (Kısıtlar) sert kaynak da yalnız izlenir: iki iş yan yana başlar, aşım uyarıdır', () => {
+    const { ops, warn } = planla({ kaynaklar: [kaynak()], istekler: IKI_ISTEK() }, 0, ['personel', 'aparat']);
+    const [a, b] = ops as [Islem, Islem];
+    assert.ok(yakin(a.S, 8) && yakin(b.S, 8), JSON.stringify(ops));
+    assert.equal(b.ikBas, undefined);
+    assert.ok(warn.some((w) => w.txt.includes('AP-ORN-12')), JSON.stringify(warn));
   });
 
   test('kesinti (bakım) o saatlerde adedi düşürür: bakımdaki tek aparatı isteyen iş bakım bitince başlar', () => {

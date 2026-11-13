@@ -41,6 +41,8 @@ export const MADDE: { [K in HazirlikMaddesi]: MaddeBilgisi<K> } = {
   rota: { ad: 'Rota yürürlükte', kisa: 'Rota', sahip: 'Reçete ve Rota', git: { yol: '/recete-rota', islem: 'sayfa.recete-rota', ad: "Reçete ve Rota'da aç" }, uyarir: true },
   malzeme: { ad: 'Malzeme (girdi stoğu)', kisa: 'Malzeme', sahip: 'Stok Merkezi', git: { yol: '/stok', islem: 'sayfa.stok', ad: "Stok Merkezi'nde aç" }, uyarir: true },
   'takim-omru': { ad: 'Takım ömrü', kisa: 'Takım', sahip: 'CNC Kurulum', git: { yol: '/cnc-kurulum', islem: 'sayfa.cnc-kurulum', ad: "CNC Kurulum'da aç" }, uyarir: true },
+  // 3199 (D): plan işin içine özel takım değişimi koyduysa uyarır; kaynak Planlama'daki kayıtlı plandır.
+  'takim-hazirla': { ad: 'Takım hazırla', kisa: 'Takım hazırla', sahip: 'Planlama', git: { yol: '/plan', islem: 'sayfa.plan', ad: "Planlama'da aç" }, uyarir: true },
   makine: { ad: 'Makine durumu', kisa: 'Makine', sahip: 'İstasyonlar', git: { yol: '/istasyonlar', islem: 'sayfa.istasyonlar', ad: "İstasyonlar'da aç" }, uyarir: true },
   yayin: { ad: 'Paket yayını', kisa: 'Yayın', sahip: 'Üretim Hazırlık', git: { yol: '/arkon/hazirlik', islem: 'sayfa.arkon', ad: "Üretim Hazırlık'ta aç" }, uyarir: false },
   // 2227-1: ön hazırlık ve hazırlık adımları terminalde işaretlenir; matris yalnız uyarır.

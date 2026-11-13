@@ -115,3 +115,5 @@ export type { BayatNedeni, BayatOlayi, PlanBayatligi } from './bayat/kurallar.ts
 export { bakimCozucusuKaydet as bakimCozucusu, bakimAraliklariOku } from './bakim/servis.ts';
 export type { BakimAraligi, BakimPlani } from './bakim/kurallar.ts';
 export type { BakimCozucusu } from './bakim/servis.ts';
+// 3199 (D): hazırlığın "Takım hazırla" maddesi; bağı kablolama.ts kurar.
+export { isEmriTakimHazirlaDurumlari } from './takim-hazirla.ts';
