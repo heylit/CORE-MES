@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import { BekleyenPenceresi, SayacCipi, bekleyenSayilari, cozumYollari, islemAdi, kesinlesenleriKat, kesinlesmeOzeti, type Bekleyen } from './BekleyenIslemler.tsx';
+import { BekleyenPenceresi, SayacCipi, bekleyenSayilari, cozumYollari, islemAdi, kesinlesenleriKat, kesinlesmeOzeti, yolIpucu, type Bekleyen } from './BekleyenIslemler.tsx';
 
 // Bağlantı yokken bekleyen işlemler (3158 a, 3167 b). Emir numaraları uydurmadır (ORN-).
 
@@ -22,6 +22,13 @@ describe('bekleyen işlem kuralları', () => {
     expect(cozumYollari(kayit({ durum: 'karar', yenidenDenenir: true }))).toEqual(['yeniden', 'duzelt', 'vazgec']);
     expect(cozumYollari(kayit({ durum: 'karar' }))).toEqual(['duzelt', 'vazgec']);
     expect(cozumYollari(kayit({ durum: 'karar', tur: 'events', yenidenDenenir: true }))).toEqual(['yeniden', 'vazgec']);
+  });
+
+  it('yol cümlesi sunulan yola göre; neden metni yorumlanmaz', () => {
+    expect(yolIpucu(kayit())).toBeNull();
+    expect(yolIpucu(kayit({ durum: 'karar', yenidenDenenir: true }))).toMatch(/güncel hâline göre/);
+    expect(yolIpucu(kayit({ durum: 'karar' }))).toMatch(/adedi yazıp gönderin/);
+    expect(yolIpucu(kayit({ durum: 'karar', tur: 'events', neden: 'İş zaten çalışıyor; ORN' }))).toBe('Bu işlem buradan yeniden denenmez. İşi terminalden yeniden yapın ya da vazgeçin.');
   });
 
   it('sayılar ve kesinleşme özeti', () => {

@@ -32,6 +32,14 @@ export function cozumYollari(k: Pick<Bekleyen, 'tur' | 'durum' | 'yenidenDenenir
   return [...(k.yenidenDenenir ? ['yeniden' as const] : []), ...(k.tur === 'counts' ? ['duzelt' as const] : []), 'vazgec'];
 }
 
+// Karar bekleyen satırda nedenin altındaki yol cümlesi; yalnız sunulan yollara göre (neden metni yorumlanmaz: ne yapılacağını sunucu nedeni söyler).
+export function yolIpucu(k: Pick<Bekleyen, 'tur' | 'durum' | 'yenidenDenenir'>): string | null {
+  if (k.durum !== 'karar') return null;
+  if (k.yenidenDenenir) return 'Yeniden denerseniz kayıt emrin güncel hâline göre denetlenir.';
+  if (k.tur === 'counts') return 'Gerçekte yaptığınız adedi yazıp gönderin ya da vazgeçin.';
+  return 'Bu işlem buradan yeniden denenmez. İşi terminalden yeniden yapın ya da vazgeçin.';
+}
+
 export interface BekleyenSayilari { bekliyor: number; karar: number }
 export const bekleyenSayilari = (l: readonly Pick<Bekleyen, 'durum'>[]): BekleyenSayilari => ({
   bekliyor: l.filter((x) => x.durum === 'bekliyor' || x.durum === 'gonderiliyor').length,
@@ -85,6 +93,7 @@ function Satir({ k, coz }: { k: Bekleyen; coz: (k: Bekleyen, y: CozumYolu, adet?
   const [duzelt, duzeltYaz] = useState<number | null>(null);
   const [mesgul, mesgulYaz] = useState(false);
   const yollar = cozumYollari(k);
+  const ipucu = yolIpucu(k);
   const durum = DURUMLAR[k.durum];
   const yap = (y: CozumYolu, adet?: number) => {
     mesgulYaz(true);
@@ -100,6 +109,7 @@ function Satir({ k, coz }: { k: Bekleyen; coz: (k: Bekleyen, y: CozumYolu, adet?
         <span className="tc-bk-isaret"><Simge ad={durum.simge} boyut="k" /><span>{durum.ad}</span></span>
       </div>
       {k.durum === 'karar' && k.neden ? <p className="tc-bk-neden"><Simge ad="alert" boyut="k" />{k.neden}</p> : null}
+      {ipucu ? <p className="tc-bk-soluk">{ipucu}</p> : null}
       {k.durum === 'karar' && duzelt !== null ? (
         <div className="tc-bk-duzelt">
           <label>Gönderilecek adet <input type="number" inputMode="numeric" min={0} value={duzelt} onChange={(e) => duzeltYaz(Math.max(0, Math.trunc(Number(e.target.value)) || 0))} /></label>
@@ -127,7 +137,7 @@ export function BekleyenPenceresi({ acik, kapat, liste, kopuk, coz }: {
     <Pencere acik={acik} kapat={kapat} baslik="Bekleyen işlemlerim" tur="yan">
       <p className="tc-bk-ozet">
         {kopuk ? <><Simge ad="clock" boyut="k" /> Bağlantı yok. Yaptıklarınız bu cihazda tutuluyor; bağlantı gelince sistem kurallarla kesinleştirir. Yeniden girmeyin.</>
-          : s.karar > 0 ? <><Simge ad="alert" boyut="k" /> {s.karar} işlem kesinleşmedi; karar sizde.</>
+          : s.karar > 0 ? <><Simge ad="alert" boyut="k" /> {s.karar} işlem kesinleşmedi.</>
             : s.bekliyor > 0 ? <><Simge ad="rotate" boyut="k" /> Bağlantı geldi, işlemler kesinleşiyor.</>
               : <><Simge ad="check" boyut="k" /> Bütün işlemler kesinleşti.</>}
       </p>
