@@ -7,6 +7,8 @@ import { cncKimligiYaz, cncKimlikliKartlar, katalogMalzemeOzeti } from './sorgul
 
 // malzemeAdlari: adı olmayan kart koduyla yer alır; olmayan kimlik haritada yok. malzemeOzeti: `birim` kartta yoksa null.
 export { malzemeAdlari, malzemeOzeti, malzemeKullanilabilirMi } from './servis.ts';
+// 3215 c: hammadde biçimi ve ölçüsü (mal kabulde kesit); yetki denetlemez, çağıran uç kendi kapısını uygular. Yoksa null.
+export { malzemeKesiti } from './servis.ts';
 // Bağlama tur 1 (kart #163): toplu özet (olmayan kimlik haritada yok), metinle sayfalı arama (stok ve rota için tek imza),
 // ölçü birimi listesi (SH4 a; pasif birim eski kartta durur, yeni kayıtta seçilemez).
 export { aktifMalzemelerSinirli, malzemeOzetleri, malzemeAra, olcuBirimleri } from './servis.ts';

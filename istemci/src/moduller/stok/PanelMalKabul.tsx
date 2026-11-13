@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { Suspense, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { GozOnerisiCevabi, KodCozCevabi, MalKabulCevabi } from '#paylasilan/sozlesme/stok.ts';
 import { Dugme, DurumKutusu, KodOkuyucu, Pencere, useOkutmaGecmisi } from '../../ortak/arayuz/index.ts';
 import { api } from '../../ortak/veri/api.ts';
+import { MalzemeKesiti } from '../malzemeler/disari.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { BelirsizMiktarHatasi, belirsizMiktarVar } from './gorunum.ts';
 import { HizliMalKabul, kabulGovdesi, kopyaSayisi, type BekleyenGiris } from './HizliMalKabul.tsx';
@@ -27,7 +28,13 @@ export function PanelMalKabul({ kod }: { kod: string }) {
       {stok.isPending ? <DurumKutusu durum="yukleniyor" />
         : stok.isError ? <DurumKutusu durum="hata" mesaj={hataMetni(stok.error)} yenile={() => { void stok.refetch(); }} />
         : stok.data.tur !== 'malzeme' ? <p className="tc-stok-not">Mal kabul için malzemenin kodunu okutun; lot etiketi stoktaki partiyi gösterir.</p>
-        : <Kabul ozet={stok.data.ozet} bekleyenAc={setBekleyen} bitti={(belgeId, kopya, metin) => setSon({ belgeId, kopya, metin })} />}
+        : (
+          <>
+            {/* Kabul eden gelen malı kartın ölçüsüyle karşılaştırır; kesit yalnız hammaddede ve ölçü tamken gelir. */}
+            {stok.data.kesit && <Suspense fallback={null}><MalzemeKesiti form={stok.data.kesit.form} olcu={stok.data.kesit.olcu} kod={stok.data.ozet.kod} /></Suspense>}
+            <Kabul ozet={stok.data.ozet} bekleyenAc={setBekleyen} bitti={(belgeId, kopya, metin) => setSon({ belgeId, kopya, metin })} />
+          </>
+        )}
       {bekleyen && <RafOkut b={bekleyen} kapat={() => setBekleyen(null)} bitti={(belgeId, metin) => { setBekleyen(null); setSon({ belgeId, kopya: kopyaSayisi(bekleyen.ambalajSayisi), metin }); }} />}
     </>
   );

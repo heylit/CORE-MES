@@ -13,7 +13,7 @@ const konum = (id: number, kod: string, bakiyeler: BakiyeSatiri[]): KodCozCevabi
 });
 const ozet = (id: number, birim: string | null) => ({ id, tur: 'hammadde' as const, kod: `HM-${id}`, ad: `Deneme ${id}`, onayDurumu: 'onayli', kullanilabilir: true, birim });
 const lot = (malzemeId: number, partiId: number, birim: string | null = 'Adet'): KodCozCevabi => ({ tur: 'lot', parti: { id: partiId, lotNo: `LT-${partiId}`, etiket: `LT-${partiId}` }, ozet: ozet(malzemeId, birim), toplam: '0', bakiyeler: [] });
-const malzeme = (id: number, birim: string | null = 'adet'): KodCozCevabi => ({ tur: 'malzeme', ozet: ozet(id, birim), toplam: '0', bakiyeler: [] });
+const malzeme = (id: number, birim: string | null = 'adet'): KodCozCevabi => ({ tur: 'malzeme', ozet: ozet(id, birim), toplam: '0', bakiyeler: [], kesit: null });
 const uygula = (d: SayimDurumu, ...c: KodCozCevabi[]) => c.reduce((s, x) => okutmaUygula(s, 'KOD', x).durum, d);
 
 describe('okutarak sayım', () => {

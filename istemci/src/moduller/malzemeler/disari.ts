@@ -1,3 +1,4 @@
+import { lazy } from 'react';
 import type { KategoriAgaciTuru } from '#paylasilan/sozlesme/kategori-agaci-sabitleri.ts';
 // Başka modül ekranlarının ithal edebildiği tek dosya.
 // 1480: yerleşik kalitenin yoğunluğu (g/cm³) yalnız bu modülün kalite tablosundadır; tablo büyük olduğu için ilk istekte ayrı parça
@@ -20,3 +21,6 @@ export function kategoriAgaciDuzenleYolu(tur: KategoriAgaciTuru): string | null 
   return bolum === null ? null : `/malzemeler/ayarlar?${new URLSearchParams({ bolum }).toString()}`;
 }
 const KATEGORI_DUZENLEME_BOLUMU: Readonly<Record<KategoriAgaciTuru, string | null>> = { hammadde: 'aile', sarf: 'sarf', demirbas: 'db', hizmet: null };
+
+// 3215 c: hammaddenin biçim ve ölçüsünden ölçülü kesit çizimi (mal kabul); çizim parçası ilk kullanımda yüklenir, Suspense içinde kullanılır.
+export const MalzemeKesiti = lazy(() => import('./yeni/olcu-modeli/KesitGorunumu.tsx').then((m) => ({ default: m.KesitGorunumu })));

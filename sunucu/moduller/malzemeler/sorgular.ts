@@ -282,6 +282,13 @@ export function katalogMalzemeOzeti(db: Db, no: number): Promise<KatalogMalzemeO
   return db.tek<KatalogMalzemeOzeti>(`SELECT ${OZET_SECIMI} WHERE k.no = $1`, [no]);
 }
 
+// 3215 c: hammadde kartının biçimi ve ölçüleri (kayit.form, kayit.dims); kesit çizimi için. Başka türde ya da biçim yoksa null.
+export function hammaddeBicimOlcusu(db: Db, no: number): Promise<{ form: string; dims: unknown } | null> {
+  return db.tek<{ form: string; dims: unknown }>(
+    `SELECT kayit ->> 'form' AS form, kayit -> 'dims' AS dims FROM malzeme_katalog_karti
+      WHERE no = $1 AND tur = 'hammadde' AND jsonb_typeof(kayit -> 'form') = 'string'`, [no]);
+}
+
 // 1247 d: istenen kartlardan giriş kalite kontrolü gereken (kartta yazılı değilse türün varsayılanı; kurallar.ts gkkGerekliMi ile aynı).
 export async function gkkGerekenKartlar(db: Db, nolar: readonly number[]): Promise<number[]> {
   const varsayilan = GKK_VARSAYILAN_TURLER.map((t) => `'${t}'`).join(', ');

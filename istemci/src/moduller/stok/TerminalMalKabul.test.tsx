@@ -47,6 +47,23 @@ describe('terminal mal kabulü (2027)', () => {
     }));
   });
 
+  it('3215 c: okutulan hammaddenin kesit çizimi kabul formunun üstünde görünür; kesiti olmayan kartta çizim yok', async () => {
+    const coz = (kesit: unknown) => ({ 'GET /stok/acik-siparis-satirlari': () => json(200, ACIK), 'GET /stok/kod-coz': () => json(200, { tur: 'malzeme', ozet: OZET, toplam: '0', bakiyeler: [], kesit }) });
+    sunucuKur(DEPOCU, coz({ form: 'cubuk', olcu: { d: 42, l: 3000 } }));
+    ac();
+    fireEvent.change((await screen.findAllByLabelText(/^Kod/))[0]!, { target: { value: 'HM-001' } });
+    fireEvent.click(screen.getAllByRole('button', { name: 'Bul' })[0]!);
+    expect(await screen.findByRole('img', { name: 'Ölçülü kesit çizimi: Ø42 × 3000' })).toBeTruthy();
+    expect(screen.getByLabelText(/^Sayılan miktar/)).toBeTruthy();
+    cleanup();
+    sunucuKur(DEPOCU, coz(null));
+    ac();
+    fireEvent.change((await screen.findAllByLabelText(/^Kod/))[0]!, { target: { value: 'HM-001' } });
+    fireEvent.click(screen.getAllByRole('button', { name: 'Bul' })[0]!);
+    await screen.findByLabelText(/^Sayılan miktar/);
+    expect(screen.queryByRole('img', { name: /Ölçülü kesit çizimi/ })).toBeNull();
+  });
+
   it('bekleyen kabuller sayfalanır, liste kaymaz', async () => {
     const cok = { satirlar: Array.from({ length: BEKLEYEN_SAYFA_BOYU + 2 }, (_, i) => satir(100 + i, 900 + i, `Kalem ${i + 1}`)) };
     sunucuKur(DEPOCU, { 'GET /stok/acik-siparis-satirlari': () => json(200, cok) });

@@ -1299,6 +1299,34 @@ describe('stok (gerçek PostgreSQL)', () => {
     assert.equal((await depo<{ tur: string }>('GET', '/stok/kod-coz?kod=MK:YOK-00000')).govde.tur, 'bilinmiyor');
   });
 
+  test('3215 c kod çözümü kesit: hammaddede yalnız biçim ve sayı ölçüler; başka türde ve ölçüsüz kartta null; Malzemeler yetkisi açılmaz', async () => {
+    const h = await kart('hammadde');
+    await o().sahip.sorgu(
+      `UPDATE malzeme_katalog_karti SET kayit = kayit || $2::jsonb WHERE no = $1`,
+      [h, JSON.stringify({ form: 'cubuk', dims: { d: 42, l: '3000', x: 0, bos: '' }, custom: { p: { fiyat: 9 } } })]);
+    const c = await depo<KodCozCevabi>('GET', `/stok/kod-coz?kod=MLZ:${h}`);
+    assert.equal(c.durum, 200, JSON.stringify(c.govde));
+    const m = kodCozCevabi.parse(c.govde);
+    assert.deepEqual(m.tur === 'malzeme' ? m.kesit : m, { form: 'cubuk', olcu: { d: 42, l: 3000 } });
+    const formsuz = await kart('hammadde');
+    const sarf = await kart('sarf');
+    await o().sahip.sorgu(`UPDATE malzeme_katalog_karti SET kayit = kayit || '{"form":"cubuk","dims":{"d":5,"l":5}}'::jsonb WHERE no = $1`, [sarf]);
+    // Sözleşmeye sığmayan biçim adı kod çözümünü düşürmez: kesit null.
+    const uzun = await kart('hammadde');
+    await o().sahip.sorgu(`UPDATE malzeme_katalog_karti SET kayit = kayit || $2::jsonb WHERE no = $1`, [uzun, JSON.stringify({ form: 'x'.repeat(41), dims: { d: 5 } })]);
+    for (const k of [formsuz, sarf, uzun]) {
+      const x = kodCozCevabi.parse((await depo<KodCozCevabi>('GET', `/stok/kod-coz?kod=MLZ:${k}`)).govde);
+      assert.equal(x.tur === 'malzeme' ? x.kesit : x, null, String(k));
+    }
+    // Bakımın Stok sayfası var, Malzemeler sayfası yok: kesiti stok cevabında alır (biçim ve ölçü kart adında da yazılı), kartı okuyamaz.
+    await kisiEkle('bakim', 'bakim');
+    const bk = kodCozCevabi.parse((await istek<KodCozCevabi>('bakim', 'GET', `/stok/kod-coz?kod=MLZ:${h}`)).govde);
+    assert.deepEqual(bk.tur === 'malzeme' ? bk.kesit : bk, { form: 'cubuk', olcu: { d: 42, l: 3000 } });
+    assert.equal((await istek('bakim', 'GET', '/malzeme-katalogu-kartlari')).durum, 403);
+    // Stok okuması olmayan kod çözemez (yalnız istek açan operatör).
+    assert.equal((await istek('operator', 'GET', `/stok/kod-coz?kod=MLZ:${h}`)).durum, 403);
+  });
+
   test('#1060 lot etiketi ve LOT okutma: Etiket Merkezi etiket verisini disari ile alır; LOT: kodu o lotu çözer, düşüm o lottan olur; bilinmeyen lot tanınmaz', async () => {
     const h = await kart('hammadde');
     const ilk = await malKabul(h, '4', { parti: { dokumNo: 'D-ETK', sertifikaNo: 'S-ETK' } });
