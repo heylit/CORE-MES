@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { derle, girdiKur, planOku, plandanBitenler } from '../motor/kurallar.ts';
 import { ornekCalisma } from '../motor/ornek.ts';
 import {
-  aralikYuku, aramaUyar, durumYazisi, ilkBosluk, matrisSirasi, modelKur, olcekKomsusu, onizlemeBitisi, satirKimligi, sayim, sorunlular, sureYaz,
+  adimBeklemesi, aralikYuku, aramaUyar, darbogaz, emirGunleri, enCokBekleyen, tezgahGunundeMi, durumYazisi, ilkBosluk, matrisSirasi, modelKur, olcekKomsusu, onizlemeBitisi, satirKimligi, sayim, sorunlular, sureYaz,
   acigaOtur, tasimaSaati, tasinabilir, turAdaylari, yukSinifi, yukYuzdesi, type KokpitEmri, type KokpitIsi, type KokpitModeli,
 } from './kurallar.ts';
 
@@ -120,5 +120,57 @@ describe('Kokpit taşıma ve tur', () => {
     expect(sureYaz(0)).toBe('0 dk');
     expect(sureYaz(0.25)).toBe('15 dk');
     expect(sureYaz(-26.5)).toBe('1 gün 2 sa 30 dk');
+  });
+});
+
+describe('Kokpit matrisi', () => {
+  // A: T1'de 0-10, sonra T2'de 40-50 (T2'yi B tutuyor: 30 saat sıra); termin 30, bitiş 50: geç. B: T2'de 0-40, zamanında.
+  const adim = (id: string) => ({ id, ad: id, adaylar: ['T1', 'T2'] });
+  const A = emir('A', { durum: 'gec', termin: 30, bitis: 50, gecikme: 20, adimlar: [adim('A.1'), adim('A.2')] });
+  const B = emir('B', { termin: 100, bitis: 40, adimlar: [adim('B.1')] });
+  const m = model([is('A.1', 'T1', 0, 10), is('A.2', 'T2', 40, 50, { sira: 1 }), is('B.1', 'T2', 0, 40)], [A, B]);
+
+  it('adımın beklemesi önceki adım bitince başlar; başlamış, fason ve plansız adım beklemez', () => {
+    expect(adimBeklemesi(m, A, 0)).toBeNull();
+    expect(adimBeklemesi(m, A, 1)).toEqual({ bas: 10, son: 40, acik: 30, sure: 30 });
+    expect(enCokBekleyen(m, A)).toMatchObject({ k: 1, tezgah: 'T2' });
+    expect(enCokBekleyen(m, B)).toBeNull();
+    const basladi = model([is('A.1', 'T1', 0, 10), is('A.2', 'T2', 40, 50, { basladi: true })], [A]);
+    expect(adimBeklemesi(basladi, A, 1)).toBeNull();
+    const fason = model([is('A.1', 'T1', 0, 10), is('A.2', '@x', 40, 50, { fason: true })], [A]);
+    expect(adimBeklemesi(fason, A, 1)).toBeNull();
+    expect(adimBeklemesi(model([is('A.1', 'T1', 0, 10)], [A]), A, 1)).toBeNull();
+  });
+
+  it('bekleme eşiği tezgâhın açık saatiyle ölçülür: kapalı saatte geçen süre sıra sayılmaz', () => {
+    const gece: KokpitModeli = { ...m, acik: { T2: [[0, 12], [38, 60]] } };
+    // 10-40 arasında T2 yalnız 10-12 ve 38-40 açık: 4 saat açık, 30 saat duvar saati.
+    expect(adimBeklemesi(gece, A, 1)).toMatchObject({ acik: 4, sure: 30 });
+    const kapali: KokpitModeli = { ...m, acik: { T2: [[0, 10], [39, 60]] } };
+    expect(enCokBekleyen(kapali, A)).toBeNull();
+  });
+
+  it('darboğaz geç emirlerin en çok beklediği tezgâhtır; geç emir yokken null', () => {
+    expect(darbogaz(m)).toEqual({ tezgah: 'T2', sure: 30, emir: 1 });
+    expect(darbogaz({ ...m, emirler: [B] })).toBeNull();
+  });
+
+  it('emrin günleri: süren adımlar, sırada beklenen gün, termin günü ve terminden sonrası', () => {
+    const g = emirGunleri(m, A, 4);
+    expect(g.map((x) => x.adimlar)).toEqual([[0], [1], [1], []]);
+    // İlk gün işi var (bekleme çizilmez); termin (30. saat) ikinci gündedir; üçüncü gün terminden sonra sürer.
+    expect(g.map((x) => x.bekle)).toEqual([false, false, false, false]);
+    expect(g.map((x) => x.termin)).toEqual([false, true, false, false]);
+    expect(g.map((x) => x.sonra)).toEqual([false, false, true, false]);
+    // Araya iş girmeyen gün beklemedir.
+    const uzun = model([is('A.1', 'T1', 0, 10), is('A.2', 'T2', 80, 90, { sira: 1 })], [A]);
+    expect(emirGunleri(uzun, A, 4).map((x) => x.bekle)).toEqual([false, true, true, false]);
+  });
+
+  it('yük hücresi süzgeci o tezgâhta o gün işi olan emri tutar', () => {
+    expect(tezgahGunundeMi(m, A, 'T2', 1)).toBe(true);
+    expect(tezgahGunundeMi(m, A, 'T2', 0)).toBe(false);
+    expect(tezgahGunundeMi(m, B, 'T2', 0)).toBe(true);
+    expect(tezgahGunundeMi(m, B, 'T1', null)).toBe(false);
   });
 });

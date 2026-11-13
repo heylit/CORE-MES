@@ -131,7 +131,81 @@ export function yukSinifi(y: GunYuku): YukSinifi {
   const o = y.plan / y.acik;
   return o > 1 ? 'asim' : o > 0.85 ? 'dolu' : o > 0.5 ? 'orta' : 'hafif';
 }
+// Matrisin yük basamağı: boş gün renksizdir, %100 ve üstü tam doludur.
+export type MatrisYuku = 'kapali' | 'bos' | 'hafif' | 'orta' | 'dolu' | 'tam';
+export function matrisYuku(y: GunYuku): MatrisYuku {
+  if (y.acik <= 0) return 'kapali';
+  const o = y.plan / y.acik;
+  return o <= 0.005 ? 'bos' : o < 0.5 ? 'hafif' : o < 0.85 ? 'orta' : o < 0.995 ? 'dolu' : 'tam';
+}
 export const yukYuzdesi = (y: GunYuku): number | null => (y.acik > 0 ? Math.round((y.plan / y.acik) * 100) : null);
+
+// --- matris ---
+export const MATRIS_GUNU = 14;
+// Bundan kısa bekleme sıra sayılmaz (açık saat): vardiya arası ve taşıma payı bekleme diye gösterilmez.
+export const BEKLEME_ESIGI = 4;
+const acikSure = (W: readonly (readonly [number, number])[] | undefined, a: number, b: number): number => {
+  if (b <= a) return 0;
+  if (!W) return b - a;
+  let s = 0;
+  for (const [x, y] of W) { if (x >= b) break; s += Math.max(0, Math.min(b, y) - Math.max(a, x)); }
+  return s;
+};
+// Adımın sırada beklediği aralık: emrin önceki plandaki adımı bitince (ilk adımda şimdi) başlar, adım başlayınca biter.
+// acik: aralıkta adımın tezgâhının açık olduğu saat (eşik bununla ölçülür), sure: duvar saati (kişinin gördüğü bekleme).
+// Plansız, başlamış ve fason adımda null: sıra beklemez.
+export interface Bekleme { bas: number; son: number; acik: number; sure: number }
+export function adimBeklemesi(m: KokpitModeli, e: KokpitEmri, k: number): Bekleme | null {
+  const x = m.isler[e.adimlar[k]?.id ?? ''];
+  if (!x || x.basladi || x.fason) return null;
+  let bas = m.simdi;
+  for (let j = 0; j < k; j++) { const y = m.isler[e.adimlar[j]?.id ?? '']; if (y) bas = Math.max(bas, y.C); }
+  if (x.S <= bas) return null;
+  return { bas, son: x.S, acik: acikSure(m.acik[x.m], bas, x.S), sure: x.S - bas };
+}
+// Emrin en çok bekleyen adımı (eşiği aşan); yoksa null.
+export function enCokBekleyen(m: KokpitModeli, e: KokpitEmri): { k: number; tezgah: string; bekleme: Bekleme } | null {
+  let en: { k: number; tezgah: string; bekleme: Bekleme } | null = null;
+  e.adimlar.forEach((a, k) => {
+    const b = adimBeklemesi(m, e, k), x = m.isler[a.id];
+    if (b && x && b.acik >= BEKLEME_ESIGI && (!en || b.acik > en.bekleme.acik)) en = { k, tezgah: x.m, bekleme: b };
+  });
+  return en;
+}
+// Geç emirlerin en çok sıra beklediği tezgâh: beklemeleri tezgâh başına toplanır. Geç emir ya da eşiği aşan bekleme yoksa null.
+export interface Darbogaz { tezgah: string; sure: number; emir: number }
+export function darbogaz(m: KokpitModeli): Darbogaz | null {
+  const t = new Map<string, { acik: number; sure: number; emirler: Set<string> }>();
+  for (const e of m.emirler) {
+    if (e.durum !== 'gec') continue;
+    e.adimlar.forEach((a, k) => {
+      const b = adimBeklemesi(m, e, k), x = m.isler[a.id];
+      if (!b || !x || b.acik < BEKLEME_ESIGI) return;
+      const s = t.get(x.m) ?? { acik: 0, sure: 0, emirler: new Set<string>() };
+      s.acik += b.acik; s.sure += b.sure; s.emirler.add(e.id); t.set(x.m, s);
+    });
+  }
+  let en: Darbogaz | null = null, enAcik = 0;
+  for (const [tezgah, s] of t) if (s.acik > enAcik) { enAcik = s.acik; en = { tezgah, sure: s.sure, emir: s.emirler.size }; }
+  return en;
+}
+// Emrin gün gün yeri (Akış düzeni): o gün süren adımlar (rotadaki sırasıyla), sırada beklediği gün, termin günü, terminden sonra süren gün.
+export interface EmirGunu { adimlar: number[]; bekle: boolean; termin: boolean; sonra: boolean }
+export function emirGunleri(m: KokpitModeli, e: KokpitEmri, gun = MATRIS_GUNU): EmirGunu[] {
+  const beklemeler = e.adimlar.map((_, k) => { const b = adimBeklemesi(m, e, k); return b && b.acik >= BEKLEME_ESIGI ? { b, W: m.acik[m.isler[e.adimlar[k]?.id ?? '']?.m ?? ''] } : null; });
+  const terminGunu = e.termin === null ? null : Math.floor((e.termin - 0.01 - m.bas) / 24);
+  return Array.from({ length: gun }, (_, g) => {
+    const a = m.bas + g * 24, b = a + 24;
+    const adimlar: number[] = [];
+    e.adimlar.forEach((ad, k) => { const x = m.isler[ad.id]; if (x && x.S < b && x.C > a) adimlar.push(k); });
+    const bekle = adimlar.length === 0 && beklemeler.some((w) => w !== null && acikSure(w.W, Math.max(a, w.b.bas), Math.min(b, w.b.son)) >= 1);
+    return { adimlar, bekle, termin: terminGunu === g, sonra: terminGunu !== null && g > terminGunu && e.bitis !== null && e.termin !== null && e.bitis > e.termin + 0.01 && a < e.bitis };
+  });
+}
+// Tezgâhın o gününde (gun null: herhangi bir gün) işi olan emir mi (yük hücresi süzgeci).
+export function tezgahGunundeMi(m: KokpitModeli, e: KokpitEmri, tezgah: string, gun: number | null): boolean {
+  return e.adimlar.some((a) => { const x = m.isler[a.id]; return x !== undefined && satirKimligi(x) === tezgah && (gun === null || (x.S < m.bas + (gun + 1) * 24 && x.C > m.bas + gun * 24)); });
+}
 
 // --- taşıma ---
 // Çeyrek saate yuvarlanır; şimdiden önce olamaz (sunucu geçmişe konan kilidi reddeder).

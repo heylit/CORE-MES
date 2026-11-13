@@ -69,17 +69,54 @@ describe('Kokpit', () => {
     expect(sec).toHaveBeenCalledWith({ siparis: null, adim: null });
   });
 
-  it('Matris iki tabloyu gösterir: emir × adım ve 14 günlük tezgâh × gün', () => {
+  it('Matris yükü ve emirleri tek tabloda gösterir; tıklama görünümü değiştirmez, emri ve adımı seçer', () => {
+    const { sec } = ac();
+    const goz = within(screen.getByRole('group', { name: 'Görünüm' })).getByRole('button', { name: 'Matris' });
+    fireEvent.click(goz);
+    expect(screen.getByRole('status').textContent).toContain('1 emir geç.');
+    const akis = screen.getByRole('region', { name: 'Tezgâh yükü ve emirler, gün gün' });
+    // Gün başlıkları (tezgâh sütunu + 14 gün) ve "Emirler" bölüm başlığı.
+    expect(within(akis).getAllByRole('columnheader')).toHaveLength(16);
+    // Fason satırı yük şeridinde yoktur (kapasitesi izlenmez): beş tezgâh, iki emir.
+    expect(akis.querySelectorAll('tr[data-yuk-satiri]')).toHaveLength(5);
+    expect(akis.querySelectorAll('tbody tr[data-emir]')).toHaveLength(2);
+    const emirDugmesi = akis.querySelector<HTMLElement>('[data-emir-sec="2"]');
+    if (emirDugmesi) fireEvent.click(emirDugmesi);
+    expect(sec).toHaveBeenLastCalledWith({ siparis: '2', adim: null });
+    const cip = akis.querySelector<HTMLElement>('[data-hucre="3.10"]');
+    if (cip) fireEvent.click(cip);
+    expect(sec).toHaveBeenLastCalledWith({ siparis: '3', adim: '3.10' });
+    expect(goz.getAttribute('aria-pressed')).toBe('true');
+    // Yük hücresi o tezgâhta o gün işi olan emirleri süzer.
+    const yukDugmesi = akis.querySelector<HTMLElement>('tr[data-yuk-satiri] td:not([data-yuk="bos"]):not([data-yuk="kapali"]) button');
+    if (!yukDugmesi) throw new Error('dolu yük hücresi yok');
+    fireEvent.click(yukDugmesi);
+    expect(screen.getByText(/süzgeci/)).toBeTruthy();
+    expect(akis.querySelectorAll('tbody tr[data-emir]').length).toBeLessThan(3);
+    fireEvent.click(screen.getByRole('button', { name: 'Süzgeci kaldır' }));
+    expect(akis.querySelectorAll('tbody tr[data-emir]')).toHaveLength(2);
+  });
+
+  it('Matris Yan yana düzeninde yük tablosu ve emir × adım tablosu ayrıdır', () => {
     ac();
     fireEvent.click(within(screen.getByRole('group', { name: 'Görünüm' })).getByRole('button', { name: 'Matris' }));
+    fireEvent.click(within(screen.getByRole('group', { name: 'Düzen' })).getByRole('button', { name: 'Yan yana' }));
     const em = screen.getByRole('region', { name: 'Emir × adım matrisi' });
     expect(within(em).getAllByRole('row')).toHaveLength(3);
-    expect(within(em).getAllByRole('columnheader').map((x) => x.textContent)).toEqual(['Emir', '1. adım', '2. adım', '3. adım', 'Bitiş']);
-    fireEvent.click(screen.getByRole('button', { name: 'Tezgâh × gün' }));
-    const tg = screen.getByRole('region', { name: 'Tezgâh × gün matrisi' });
-    expect(within(tg).getAllByRole('columnheader')).toHaveLength(16);
-    // Fason satırı yük tablosunda yoktur (kapasitesi izlenmez).
-    expect(within(tg).getAllByRole('row')).toHaveLength(6);
+    expect(within(em).getAllByRole('columnheader').map((x) => x.textContent)).toEqual(['Emir', '1. adım', '2. adım', '3. adım', 'Bitiş / termin']);
+    const yuk = screen.getByRole('region', { name: 'Tezgâh × gün yükü' });
+    expect(within(yuk).getAllByRole('columnheader')).toHaveLength(15);
+    expect(within(yuk).getAllByRole('row')).toHaveLength(6);
+  });
+
+  it('Matriste seçili emrin ayrıntısı aynı ekranda açılır; çözüm adımlardan önce gelir', () => {
+    ac({ secim: { ...BOS_SECIM, siparis: '2', adim: '2.20' } });
+    fireEvent.click(within(screen.getByRole('group', { name: 'Görünüm' })).getByRole('button', { name: 'Matris' }));
+    const ayr = screen.getByRole('complementary', { name: /ayrıntısı/ });
+    expect(within(ayr).getAllByRole('heading', { level: 3 }).map((x) => x.textContent)).toEqual([expect.stringContaining('tezgâh seçenekleri'), 'Adımlar']);
+    expect(document.querySelector('tbody tr[data-emir="2"]')?.hasAttribute('data-sec')).toBe(true);
+    // Seçili emrin geçtiği tezgâh-günler yükte çerçevelidir.
+    expect(document.querySelectorAll('tr[data-yuk-satiri] td[data-iz]').length).toBeGreaterThan(0);
   });
 
   it('Geri düğmesi geri alınabilir adım sayısını gösterir ve geri alır; adım yokken pasiftir', () => {

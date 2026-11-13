@@ -14,7 +14,7 @@ import {
   OLCEKLER, aramaUyar, durumYazisi, matrisSirasi, modelKur, olcekKomsusu, onizlemeBitisi, sayim, sorunlular, sureYaz, tasimaSaati, tasinabilir, fasonMu, uzakMi,
   type EmirDurumu, type KokpitOlcegi, type TurAdayi,
 } from './kurallar.ts';
-import { MATRIS_GUNU, Matris, type MatrisTuru } from './Matris.tsx';
+import { Matris, darEkran, type MatrisDuzeni } from './Matris.tsx';
 import { Tahta } from './Tahta.tsx';
 import { emriPlanaAl, planaAlOnizle } from './plana-al.ts';
 import { Tur, type TurDurumu } from './Tur.tsx';
@@ -56,7 +56,9 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi }) {
   const [goz, setGoz] = useState<Goz>('T');
   const [olcek, setOlcek] = useState<KokpitOlcegi>('3');
   const [odak, setOdak] = useState<number | null>(null);
-  const [mat, setMat] = useState<MatrisTuru>('E');
+  // Telefonda gün gün tablo dardır; adım adım düzen açılır.
+  const [duzen, setDuzen] = useState<MatrisDuzeni>(() => (darEkran() ? 'Y' : 'A'));
+  const [sonuc, setSonuc] = useState<string | null>(null);
   const [ara, setAra] = useState('');
   const [suz, setSuz] = useState<Exclude<EmirDurumu, 'iyi'> | null>(null);
   const [onceAcik, setOnceAcik] = useState(false);
@@ -113,6 +115,7 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi }) {
       otomatikUygulaIste(r);
       if (r.calismaSurumu === r.oncekiSurum) setYaziliyor(false); else beklenenSurum.current = r.calismaSurumu;
       if (r.ileti) bildir('bilgi', r.ileti);
+      setSonuc(a.planaAl === undefined ? 'Hamle uygulandı; Geri ile alınır.' : 'Emir plana alındı; Geri ile alınır.');
       yenile();
       return true;
     } catch (h) {
@@ -320,8 +323,9 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi }) {
   };
 
   const secili = secEmir ? emir.get(secEmir) ?? null : null;
+  // Sonuç satırı uygulandığı emrin ayrıntısında kalır; başka emir seçilince silinir.
+  useEffect(() => { setSonuc(null); }, [secEmir]);
   const fark = (d: (typeof DURUMLAR)[number]): string => (say[d] === ilk.current[d] ? '' : ` (${say[d] > ilk.current[d] ? '+' : '−'}${String(Math.abs(say[d] - ilk.current[d]))})`);
-  const emirAc = (job: string, isId: string | null): void => { setGoz('T'); if (uzakMi(olcek)) olcekSec('3'); sec(job, isId); setGoster(isId ?? emir.get(job)?.adimlar.find((a) => m.isler[a.id])?.id ?? null); };
 
   return (
     <div className="tc-pyq" data-goz={goz} ref={kok}>
@@ -356,10 +360,7 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi }) {
       <div className="tc-pyq-govde">
         <div className="tc-pyq-ana">
           {goz === 'M' ? (
-            <Matris
-              m={m} cx={cx} tur={mat} turSec={setMat} emirler={gorunen} secEmir={secEmir} zaman={zaman} emirAc={emirAc}
-              gunAc={(g) => { if (g >= MATRIS_GUNU) return; gunAc(g); }}
-            />
+            <Matris m={m} cx={cx} duzen={duzen} duzenSec={setDuzen} emirler={gorunen} secEmir={secEmir} secIs={secIs} zaman={zaman} sec={sec} gecSuz={() => { setSuz('gec'); }} />
           ) : (
             <>
               <Tahta
@@ -385,8 +386,8 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi }) {
             oynat={oynuyor ? oynatKarar : null} oynatAc={yazabilir ? () => { setOynuyor(true); } : null} oynatDur={() => { setOynuyor(false); }}
             atla={() => { turKarar(false); }} onceki={turOnceki} sonraki={turSonraki} bitir={turBitir} vazgec={turVazgec}
           />
-        ) : secili && goz !== 'M' && (
-          <Ayrinti m={m} e={secili} secIs={secIs} zaman={zaman} uygula={hamleUygula} surum={surum} adimSec={(id) => { sec(secili.id, id); setGoster(id); }} kapat={() => { sec(null, null); }} />
+        ) : secili && (
+          <Ayrinti m={m} e={secili} secIs={secIs} zaman={zaman} uygula={hamleUygula} surum={surum} matris={goz === 'M'} ileti={goz === 'M' ? sonuc : null} adimSec={(id) => { sec(secili.id, id); setGoster(id); }} kapat={() => { sec(null, null); }} />
         )}
       </div>
       <OnayPenceresi

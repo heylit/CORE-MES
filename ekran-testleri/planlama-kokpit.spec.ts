@@ -3,7 +3,7 @@ import { expect, tasmaOlc, test } from './ortak.ts';
 
 // Kart 3151: Kokpit (Planlama > Kokpit). Genişlik projeden gelir (360, 768, 1280). Çalışma okuması ve sunucu komutları ağ katmanında uydurma
 // cevaplarla verilir (page.route); veritabanına yazılmaz. Akış: tahta açılır, iş sağ tıkla tutulup bırakılır (önizleme, sonra iş taşı),
-// Geri / İleri sayar, Matris iki tablosuyla açılır ve hücre tahtaya götürür, sorun turu adım adım ilerler, plansız emir ayrıntıdan plana alınır. Telefonda tahta yerine liste ve
+// Geri / İleri sayar, Matris yükü ve emirleri tek ekranda gösterir, ayrıntı ve çözüm yerinde açılır, sorun turu adım adım ilerler, plansız emir ayrıntıdan plana alınır. Telefonda tahta yerine liste ve
 // alttan ayrıntı vardır. Sayfa hiçbir adımda yatay taşmaz.
 test.use({ hesap: 'ornek.yonetici' });
 
@@ -222,23 +222,43 @@ test('Kokpit: tahta, sağ tıkla tut ve bırak, Geri / İleri sayar, Matris, sor
     await page.keyboard.press('Escape');
   }
 
-  // Matris: Emir × adım ve Tezgâh × gün; hücre tahtaya (telefonda listeye ve ayrıntıya) götürür.
+  // Matris: yük ve emirler tek ekranda. Tıklama sayfa değiştirmez: emir ve adım seçilir, ayrıntı ve çözüm yerinde açılır; yük hücresi emirleri süzer.
   const goz = kokpit.getByRole('group', { name: 'Görünüm' });
   await goz.getByRole('button', { name: 'Matris' }).click();
+  const duzen = kokpit.getByRole('group', { name: 'Düzen' });
+  await expect(duzen.getByRole('button', { name: bilgi.project.name === 'g360' ? 'Yan yana' : 'Akış' })).toHaveAttribute('aria-pressed', 'true');
+  await expect(kokpit.locator('.tc-pyq-ozet')).toContainText(/emir geç|Geç emir yok/);
+  await duzen.getByRole('button', { name: 'Akış' }).click();
+  const akis = kokpit.getByRole('region', { name: 'Tezgâh yükü ve emirler, gün gün' });
+  await expect(akis.locator('tbody tr[data-emir]')).toHaveCount(4);
+  await expect(akis.locator('thead tr').first().getByRole('columnheader')).toHaveCount(15);
+  await tasma();
+  await akis.locator('[data-hucre="S3.a1"]').first().click();
+  await expect(goz.getByRole('button', { name: 'Matris' })).toHaveAttribute('aria-pressed', 'true');
+  const s3 = kokpit.getByRole('complementary', { name: /S3 ayrıntısı/ });
+  await expect(s3).toBeVisible();
+  await expect(akis.locator('tbody tr[data-emir="S3"]')).toHaveAttribute('data-sec', '');
+  await expect(akis.locator('tbody tr[data-emir="S3"]')).toBeInViewport();
+  // Matriste çözüm adımlardan önce gelir.
+  expect(await s3.locator('h3').allTextContents()).toEqual([expect.stringContaining('tezgâh seçenekleri'), 'Adımlar']);
+  // Seçili emrin geçtiği tezgâh-gün yükte çerçevelidir; o hücre emirleri süzer, süzgeç kalkınca hepsi döner.
+  const izli = akis.locator('tr[data-yuk-satiri] td[data-iz] button').first();
+  await expect(izli).toBeVisible();
+  await izli.click();
+  await expect(kokpit.locator('.tc-pyq-suz')).toContainText('süzgeci');
+  await expect(akis.locator('tbody tr[data-emir="S3"]')).toBeVisible();
+  await expect(akis.locator('tbody tr[data-emir="S4"]')).toHaveCount(0);
+  await tasma();
+  await kokpit.getByRole('button', { name: 'Süzgeci kaldır' }).click();
+  await expect(akis.locator('tbody tr[data-emir]')).toHaveCount(4);
+  await duzen.getByRole('button', { name: 'Yan yana' }).click();
   const matris = kokpit.getByRole('region', { name: 'Emir × adım matrisi' });
   await expect(matris.getByRole('row')).toHaveCount(5);
   await expect(matris.locator('tr[data-emir="S4"]')).toContainText('plansız');
+  await expect(kokpit.getByRole('region', { name: 'Tezgâh × gün yükü' }).getByRole('columnheader')).toHaveCount(15);
+  await expect(matris.locator('[data-hucre="S3.a1"]')).toHaveAttribute('aria-pressed', 'true');
   await tasma();
-  await kokpit.getByRole('button', { name: 'Tezgâh × gün' }).click();
-  const yuk = kokpit.getByRole('region', { name: 'Tezgâh × gün matrisi' });
-  await expect(yuk.getByRole('row')).toHaveCount(4);
-  await expect(yuk.getByRole('columnheader')).toHaveCount(16);
-  await tasma();
-  await kokpit.getByRole('button', { name: 'Emir × adım' }).click();
-  await matris.locator('[data-hucre="S3.a1"]').click();
-  await expect(goz.getByRole('button', { name: 'Tezgâh' })).toHaveAttribute('aria-pressed', 'true');
-  await expect(kokpit.getByRole('complementary', { name: /S3 ayrıntısı/ })).toBeVisible();
-  await tasma();
+  if (bilgi.project.name !== 'g360') await goz.getByRole('button', { name: 'Tezgâh' }).click();
   if (bilgi.project.name !== 'g360') {
     // Seçili iş ok tuşuyla yarım saat kayar; her basış bir taşımadır.
     const n = tasinan.length, eski = ops['S3.a1']?.S ?? 0;
@@ -275,6 +295,9 @@ test('Kokpit: tahta, sağ tıkla tut ve bırak, Geri / İleri sayar, Matris, sor
     await s4.locator('[data-hamle="M1"]').getByRole('button', { name: 'Plana al' }).click();
     await expect.poll(() => alinan.length).toBe(1);
     expect(alinan[0]).toMatchObject({ emirId: 'S4', tezgah: 'M1' });
+    // Sonuç ayrıntıda yazar; sayfa Matris'te kalır.
+    await expect(s4).toContainText('Emir plana alındı');
+    await expect(goz.getByRole('button', { name: 'Matris' })).toHaveAttribute('aria-pressed', 'true');
   }
   await expect(suzgec.getByRole('button', { name: /Plansız/ })).toContainText('0');
 
