@@ -45,9 +45,10 @@ export function zpl(g: CiktiGirdisi): string {
   return `${satirlar.join('\n')}\n`;
 }
 
-// PPLB yerleşik yazı tipleri (genişlik x yükseklik, nokta) ve çarpanları; değerler kılavuzdan, cihazda doğrulanmadı.
+// PPLB yerleşik yazı tipleri: harf adımı (g) ve yükseklik (y), nokta. Adım harf kutusundan geniştir (harf arası boşluk dahil);
+// 203 dpi değerleri atölyedeki yazıcının baskısından ölçüldü (yazı 1 ve 3) ve kılavuzla aynıdır, 300 dpi kılavuzdan, doğrulanmadı.
 const PPLB_YAZI: Record<number, { no: number; g: number; y: number }[]> = {
-  203: [{ no: 1, g: 8, y: 12 }, { no: 2, g: 10, y: 16 }, { no: 3, g: 12, y: 20 }, { no: 4, g: 14, y: 24 }, { no: 5, g: 32, y: 48 }],
+  203: [{ no: 1, g: 10, y: 12 }, { no: 2, g: 12, y: 16 }, { no: 3, g: 14, y: 20 }, { no: 4, g: 16, y: 24 }, { no: 5, g: 36, y: 48 }],
   300: [{ no: 1, g: 12, y: 20 }, { no: 2, g: 16, y: 28 }, { no: 3, g: 20, y: 36 }, { no: 4, g: 24, y: 44 }, { no: 5, g: 48, y: 80 }],
 };
 
@@ -65,14 +66,41 @@ export function pplbYaziSecimi(yukseklikNokta: number, dpi: number): { no: numbe
 
 // Etiketler arası boşluk (aralık) varsayılan 3 mm; rulo farklıysa yazıcı tanımında değişecek.
 export const PPLB_ARALIK_MM = 3;
+// Türkçe harf Windows-1254 ile gider: yazıcı baytları tek tek okur, UTF-8 her Türkçe harfi iki bozuk harf basıyordu. Kod sayfası
+// harfi (E) kılavuzdandır; komut tutmazsa yazıcının açılış sayfasında (1252 ailesi) ç, ö, ü yine doğru çıkar.
+export const PPLB_KOD_SAYFASI = 'I8,E,001';
+
+interface Dikdortgen { x: number; y: number; en: number; boy: number }
+const icinde = (d: Dikdortgen, x: number, y: number) => x >= d.x && x < d.x + d.en && y >= d.y && y < d.y + d.boy;
 
 export function pplb(g: CiktiGirdisi): string {
   const n = (mm: number) => noktaya(mm, g.dpi);
-  const satirlar = ['', 'N', `q${n(g.genislik)}`, `Q${n(g.yukseklik)},${n(PPLB_ARALIK_MM)}`];
+  const satirlar = ['', PPLB_KOD_SAYFASI, 'N', `q${n(g.genislik)}`, `Q${n(g.yukseklik)},${n(PPLB_ARALIK_MM)}`];
+  // X çerçeve çizer ve kalınlığı iki kenara da uygular: kalınlığı boyuna eşit "dolu" kutu iki katı yükseklikte basılıyordu
+  // (refakat kartında lot bandı ilk işlem satırını örtüyordu). Dolu kutu LO ile tam ölçüsünde basılır.
+  const dolu = new Map<OnizlemeOgesi, Dikdortgen>();
+  for (const o of g.ogeler) {
+    if (o.tur !== 'kutu') continue;
+    const t = Math.max(1, n(o.kalinlik));
+    const en = Math.max(t, n(o.genislik));
+    const boy = Math.max(t, n(o.yukseklik));
+    if (t * 2 >= Math.min(en, boy)) dolu.set(o, { x: n(o.x), y: n(o.y), en, boy });
+  }
+  // Yazıcı R kipinde yazıyı basıp hücreyi tersler: siyah bandın üstünde hücre beyaza döner, yazı okunmaz. Bandın içindeki ters
+  // yazı düz basılır, bant en sonda LE (XOR) ile çizilir; LE tutmazsa yazı beyaz zeminde siyah kalır, yine okunur.
+  const bandi = (x: number, y: number) => [...dolu.values()].find((d) => icinde(d, x, y));
+  const tersBantlar = new Set<Dikdortgen>();
+  for (const o of g.ogeler) {
+    if (o.tur !== 'metin' || !o.ters) continue;
+    const b = bandi(n(o.x), n(o.y));
+    if (b) tersBantlar.add(b);
+  }
   for (const o of g.ogeler) {
     if (o.tur === 'kutu') {
-      const t = Math.max(1, n(o.kalinlik));
-      satirlar.push(`X${n(o.x)},${n(o.y)},${t},${n(o.x + o.genislik)},${n(o.y + o.yukseklik)}`);
+      const d = dolu.get(o);
+      if (d) {
+        if (!tersBantlar.has(d)) satirlar.push(`LO${d.x},${d.y},${d.en},${d.boy}`);
+      } else satirlar.push(`X${n(o.x)},${n(o.y)},${Math.max(1, n(o.kalinlik))},${n(o.x + o.genislik)},${n(o.y + o.yukseklik)}`);
     } else if (o.tur === 'qr') {
       const modul = qrModulNoktasi(n(o.boyut), o.kareler.length);
       for (const d of qrDikdortgenleri(o.kareler, n(o.x), n(o.y), modul)) satirlar.push(`LO${d.x},${d.y},${d.genislik},${d.yukseklik}`);
@@ -80,15 +108,17 @@ export function pplb(g: CiktiGirdisi): string {
       for (const d of noktaDikdortgenleri(simgeNoktalari(o.ad, o.karo, n(o.boyut)), n(o.x), n(o.y))) satirlar.push(`LO${d.x},${d.y},${d.genislik},${d.yukseklik}`);
     } else {
       const { no, carpan } = pplbYaziSecimi(n(o.yaziMm), g.dpi);
-      // R: ters yazı (kılavuzdan, cihazda doğrulanmadı); ters yazıda kalın için ikinci baskı yapılmaz.
-      const kip = o.ters ? 'R' : 'N';
+      // Bant dışındaki ters yazı R ile basılır (beyaz zeminde hücre siyaha döner); ters yazıda kalın için ikinci baskı yapılmaz.
+      const bantta = o.ters && bandi(n(o.x), n(o.y)) !== undefined;
+      const kip = o.ters && !bantta ? 'R' : 'N';
       o.satirlar.forEach((s, i) => {
         const y = n(o.y + i * o.yaziMm * SATIR_ARALIGI);
         satirlar.push(`A${n(o.x)},${y},0,${no},${carpan},${carpan},${kip},"${pplbKacir(s)}"`);
-        if (o.kalin && !o.ters) satirlar.push(`A${n(o.x) + 1},${y},0,${no},${carpan},${carpan},N,"${pplbKacir(s)}"`);
+        if (o.kalin && kip === 'N') satirlar.push(`A${n(o.x) + 1},${y},0,${no},${carpan},${carpan},N,"${pplbKacir(s)}"`);
       });
     }
   }
+  for (const d of tersBantlar) satirlar.push(`LE${d.x},${d.y},${d.en},${d.boy}`);
   satirlar.push(`P${g.adet}`);
   return `${satirlar.join('\n')}\n`;
 }
@@ -102,10 +132,10 @@ export const DENEME_TURKCE = 'ÇĞİÖŞÜ çğıöşü';
 const CP857: Record<string, number> = { Ç: 0x80, ü: 0x81, ç: 0x87, ı: 0x8d, ö: 0x94, İ: 0x98, Ö: 0x99, Ü: 0x9a, Ş: 0x9e, ş: 0x9f, Ğ: 0xa6, ğ: 0xa7 };
 const CP1254: Record<string, number> = { Ç: 0xc7, Ğ: 0xd0, Ö: 0xd6, Ü: 0xdc, İ: 0xdd, Ş: 0xde, ç: 0xe7, ğ: 0xf0, ö: 0xf6, ü: 0xfc, ı: 0xfd, ş: 0xfe };
 export const DENEME_KOD_SAYFALARI = [{ ad: '857', komut: 'I8,6,001', tablo: CP857 }, { ad: '1254', komut: 'I8,E,001', tablo: CP1254 }] as const;
-// Komut dizesinde her karakter bir bayttır (komutBaytlari, I8 satırı olan komut).
+// Deneme satırı bayt değerleriyle yazılır (komutBaytlari 0xFF'e kadar olan karakteri olduğu gibi bayta çevirir).
 export const kodSayfasinda = (metin: string, tablo: Readonly<Record<string, number>>): string =>
   [...metin].map((h) => String.fromCharCode(tablo[h] ?? (h.charCodeAt(0) < 0x80 ? h.charCodeAt(0) : 0x3f))).join('');
-// Denemeden sonra yazıcı kılavuzdaki varsayılan kod sayfasına (437) döner; bugünkü etiketler UTF-8 gider, bundan etkilenmez.
+// Denemeden sonra yazıcı kılavuzdaki varsayılan kod sayfasına (437) döner; her etiket kendi kod sayfasını seçtiğinden etkilenmez.
 const VARSAYILAN_KOD_SAYFASI = 'I8,0,001';
 
 export function pplbDenemesi(g: { genislik: number; yukseklik: number; dpi: number }): string {

@@ -108,7 +108,7 @@ describe('etiket-merkezi (gerçek PostgreSQL)', () => {
 
     const p = (await al(yonetici, '/etiket-merkezi/sablonlar/lot-100x50/cikti?dil=pplb&dpi=300&sade=true')).json() as CiktiCevabi;
     assert.equal(p.dosyaAdi, 'lot-100x50-300.prn');
-    assert.match(p.komut, /^\nN\nq1181\nQ591,35\n/);
+    assert.match(p.komut, /^\nI8,E,001\nN\nq1181\nQ591,35\n/);
     assert.match(p.komut, /\nP1\n$/);
     assert.equal(/[çğıöşüÇĞİÖŞÜ]/.test(p.komut), false);
   });
@@ -123,13 +123,16 @@ describe('etiket-merkezi (gerçek PostgreSQL)', () => {
     const z = (await al(yonetici, '/etiket-merkezi/sablonlar/deneme-100x50/cikti?dil=zpl&dpi=203')).json() as CiktiCevabi;
     assert.ok(z.komut.includes('^FD0123456789 (2 mm)^FS') && !z.komut.includes('I8,'));
     const lot = (await al(yonetici, '/etiket-merkezi/sablonlar/lot-100x50/cikti?dil=pplb&dpi=203')).json() as CiktiCevabi;
-    assert.ok(!/^I8,/m.test(lot.komut), 'deneme dışındaki etiket kod sayfası seçmez, bugünkü gibi UTF-8 gider');
-    // Ana deneme etiketi bugünkü baskıyı gösterir: ilk I8 satırına kadar Türkçe satırı UTF-8 gider, sonrası tek bayttır.
+    // Her PPLB etiketi Windows-1254 seçer ve Türkçe harfi tek baytla gönderir (UTF-8 yazıcıda iki bozuk harf basıyordu);
+    // komut dizesinde harf okunur kalır.
+    assert.ok(lot.komut.startsWith('\nI8,E,001\nN\n'));
+    assert.ok(c.komut.includes('ÇĞİÖŞÜ'), 'komut dizesinde Türkçe harf kendisi durur');
     const b = Buffer.from(komutBaytlari(c.komut));
-    const i8 = b.indexOf('\nI8,');
-    assert.ok(i8 > 0);
-    assert.ok(b.subarray(0, i8).includes(Buffer.from('ÇĞİÖŞÜ', 'utf8')), 'ana etiketin Türkçe satırı UTF-8');
-    assert.ok(b.subarray(i8).includes(Buffer.from([0xc7, 0xd0, 0xdd, 0xd6, 0xde, 0xdc])), 'CP1254 ek etiketi tek bayt');
+    assert.ok(!b.includes(Buffer.from('Ğ', 'utf8')) && !b.includes(Buffer.from('İ', 'utf8')), 'yazıcıya UTF-8 Türkçe harf gitmez');
+    const ek = b.indexOf('\nI8,6,001');
+    assert.ok(ek > 0);
+    assert.ok(b.subarray(0, ek).includes(Buffer.from([0xc7, 0xd0, 0xdd, 0xd6, 0xde, 0xdc])), 'ana etiketin Türkçe satırı CP1254 baytları');
+    assert.ok(b.subarray(ek).includes(Buffer.from([0xc7, 0xd0, 0xdd, 0xd6, 0xde, 0xdc])), 'CP1254 ek etiketi tek bayt');
   });
 
   test('EM-U4: bilinmeyen şablon 404, sınır dışı adet ve dil 400', async () => {
@@ -330,7 +333,7 @@ describe('etiket-merkezi (gerçek PostgreSQL)', () => {
     const cevap = c.json() as IndirCevabi;
     assert.equal(cevap.dosyaAdi, 'konum-50x25-203.prn');
     assert.match(cevap.komut, /ETK-D04/);
-    assert.match(cevap.komut, /^\nN\n/);
+    assert.match(cevap.komut, /^\nI8,E,001\nN\n/);
     const yineleme = await yaz(basan, '/etiket-merkezi/sablonlar/konum-50x25/indir', govde, tekrarKimligi);
     assert.equal((yineleme.json() as IndirCevabi).baskiId, cevap.baskiId);
 

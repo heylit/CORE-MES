@@ -254,7 +254,8 @@ describe('etiket-merkezi kuralları', () => {
   test('3074 a: kod sayfası seçen PPLB komutu tek baytla, diğer komut UTF-8 ile gider; deneme Türkçe satırı iki kod sayfasında', () => {
     assert.deepEqual([...komutBaytlari('A0,0,0,1,1,1,N,"İ"\n')].slice(-4), [0xc4, 0xb0, 0x22, 0x0a], 'bugünkü gibi UTF-8');
     assert.deepEqual([...komutBaytlari('I8,E,001\nA0,0,0,1,1,1,N,"\u00dd"\n')].slice(-4), [0x22, 0xdd, 0x22, 0x0a], 'I8 varsa karakter bayttır');
-    assert.equal(komutBaytlari('I8,E,001\n\u0130').at(-1), 0x3f, 'bayta sığmayan karakter ? olur');
+    assert.deepEqual([...komutBaytlari('I8,E,001\nĞİŞğışÇçÖöÜüâ')].slice(-13), [0xd0, 0xdd, 0xde, 0xf0, 0xfd, 0xfe, 0xc7, 0xe7, 0xd6, 0xf6, 0xdc, 0xfc, 0xe2], 'Türkçe harf Windows-1254 baytıdır');
+    assert.equal(komutBaytlari('I8,E,001\n\u0416').at(-1), 0x3f, 'kod sayfasında olmayan karakter ? olur');
     assert.deepEqual([...komutBaytlari('A0,0,0,1,1,1,N,"İ"\nP1\nI8,E,001\nA0,0,0,1,1,1,N,"\u00dd"\n')],
       [...new TextEncoder().encode('A0,0,0,1,1,1,N,"İ"\nP1\n'), ...Array.from('I8,E,001\nA0,0,0,1,1,1,N,"\u00dd"\n', (h) => h.charCodeAt(0))],
       'ilk I8 satırından öncesi UTF-8 kalır');
@@ -271,14 +272,42 @@ describe('etiket-merkezi kuralları', () => {
       const { no, carpan } = pplbYaziSecimi(boy, dpi);
       assert.equal(no >= 1 && no <= 5 && carpan >= 1, true);
     }
-    assert.deepEqual(pplbYaziSecimi(24, 203), { no: 4, carpan: 1 });
-    assert.deepEqual(pplbYaziSecimi(23, 203), { no: 3, carpan: 1 });
+    // Harf adımı yazıcıdan ölçülen değerdir (yazı 4: 16 nokta): 4 mm'lik termin (32 nokta) yazı 4 ile basılır, on harf 20 mm tutar.
+    // Adım harf kutusu sayılırken yazı 1'in iki katı (adım 20 nokta) seçiliyor ve tarih kutusundan taşıyordu.
+    assert.deepEqual(pplbYaziSecimi(32, 203), { no: 4, carpan: 1 });
+    assert.deepEqual(pplbYaziSecimi(24, 203), { no: 3, carpan: 1 });
+    assert.deepEqual(pplbYaziSecimi(20, 203), { no: 2, carpan: 1 });
+    assert.deepEqual(pplbYaziSecimi(19, 203), { no: 1, carpan: 1 });
   });
 
   test('ZPL ve PPLB çıktısı etiket ölçüsünü ve adedi taşır', () => {
     const g = { genislik: 100, yukseklik: 50, dpi: 203, adet: 3, ogeler: [] };
     assert.equal(zpl(g), '^XA\n^CI28\n^PW799\n^LL400\n^LH0,0\n^PQ3\n^XZ\n');
-    assert.equal(pplb(g), '\nN\nq799\nQ400,24\nP3\n');
+    assert.equal(pplb(g), '\nI8,E,001\nN\nq799\nQ400,24\nP3\n');
+  });
+
+  test('PPLB: dolu kutu tam ölçüsünde LO ile, siyah banttaki ters yazı düz yazı ve en sonda LE ile basılır', () => {
+    // Refakat kartının lot bandı: X çerçevesi kalınlığı iki kenara uyguladığından bant iki kat yükseklikte basılıp ilk işlem
+    // satırını örtüyordu; R kipindeki yazı da siyah bandın üstünde beyaz boşluk bırakıyordu.
+    const s = sablon([
+      { tur: 'kutu', x: 0, y: 10, genislik: 50, yukseklik: 5, kalinlik: 5 },
+      { tur: 'metin', x: 2, y: 11, genislik: 30, yukseklik: 3, yaziMm: 2.5, kalin: true, alan: '=LT-000123', ters: true },
+      { tur: 'kutu', x: 2, y: 18, genislik: 40, yukseklik: 0.2, kalinlik: 0.2 },
+      { tur: 'kutu', x: 2, y: 20, genislik: 40, yukseklik: 4, kalinlik: 0.4 },
+      { tur: 'metin', x: 2, y: 2, genislik: 30, yukseklik: 3, yaziMm: 2.5, kalin: false, alan: '=AYRI', ters: true },
+    ]);
+    const satirlar = pplb({ genislik: 50, yukseklik: 25, dpi: 203, adet: 1, ogeler: yerlesim(s, {}, false) }).split('\n');
+    assert.ok(!satirlar.some((x) => x.startsWith('X0,80,')), 'bant X ile çizilmez');
+    assert.ok(satirlar.includes('LE0,80,400,40'), 'bant 5 mm = 40 nokta yükseklikte');
+    assert.ok(!satirlar.includes('LO0,80,400,40'), 'ters yazılı bant LO ile de basılmaz; LO + LE bandı beyaza çevirir');
+    const yazi = satirlar.filter((x) => x.endsWith('"LT-000123"'));
+    assert.equal(yazi.length, 2, 'banttaki kalın yazı düz kipte iki baskı');
+    assert.ok(yazi.every((x) => x.includes(',N,"')));
+    assert.ok(satirlar.indexOf('LE0,80,400,40') > satirlar.indexOf(yazi[1] ?? ''), 'LE yazıdan sonra gelir');
+    assert.equal(satirlar.at(-3), 'LE0,80,400,40');
+    assert.ok(satirlar.includes('LO16,144,320,2'), 'ince çizgi LO ile kendi kalınlığında');
+    assert.ok(satirlar.includes('X16,160,3,336,192'), 'çerçeve X ile kalır');
+    assert.ok(satirlar.some((x) => /,R,"AYRI"$/.test(x)), 'bant dışındaki ters yazı R ile kalır');
   });
 
   test('EM-8: ağ yazıcısı yalnız aralık içindeki tek IP ile kaydedilir; dosya yazıcısı adres taşımaz', () => {
