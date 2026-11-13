@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import type { PlanCevabi } from '#paylasilan/sozlesme/plan.ts';
 import type { RevizyonOzetiCevabi } from '#paylasilan/sozlesme/rota.ts';
-import type { Islem } from '#paylasilan/islemler.ts';
+import { URETIM_EMRI_YAZMA_ISLEMLERI, type Islem } from '#paylasilan/islemler.ts';
 import type { ADIMLI_OKUMA_ISLEMLERI, AdimliOzetCevabi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { GrafikKarti } from '../../ortak/arayuz/GrafikKarti.tsx';
 import type { GrafikNoktasi } from '../../ortak/arayuz/GrafikKarti.tsx';
@@ -109,7 +109,7 @@ function YonetimDolulugu() {
 
 // Şirket özeti kartlarını o veriyi okuyabilen görür (kart #1085): emirleri emir listesini okuyan ya da planı okuyan (özet ucu plan.oku kabul eder, 288 a), planı plan sayfasını açan.
 // Liste uçtaki okuma kümesinin kopyasıdır; tip sunucudakiyle aynı kalmasını denetler (istemci sözleşmeden değer ithal etmez).
-const EMIR_OKUMA_KUMESI: typeof ADIMLI_OKUMA_ISLEMLERI = ['sayfa.uretim-emirleri', 'sayfa.rota', 'uretim-emirleri.yaz', 'uretim-emirleri.fason', 'plan.yaz'];
+const EMIR_OKUMA_KUMESI: typeof ADIMLI_OKUMA_ISLEMLERI = ['sayfa.uretim-emirleri', 'sayfa.rota', ...URETIM_EMRI_YAZMA_ISLEMLERI, 'uretim-emirleri.fason', 'plan.yaz'];
 const EMIR_OKUMA = EMIR_OKUMA_KUMESI[0];
 const EMIR_OKUYAN: readonly Islem[] = EMIR_OKUMA_KUMESI;
 const EMIR_OZETI_OKUYAN: readonly Islem[] = [...EMIR_OKUMA_KUMESI, 'plan.oku'];

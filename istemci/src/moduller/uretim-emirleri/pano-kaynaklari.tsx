@@ -136,7 +136,7 @@ function Durus() {
 }
 
 export const anaSayfaKaynaklari: AnaSayfaKaynagi[] = [
-  { anahtar: 'uretim-emirleri-planlanacak-is', tur: 'is', baslik: 'Plan', simge: 'flag', sira: 200, islem: 'uretim-emirleri.yaz', yolunda: 'Plana alınacak emir yok', kaynak: Planlanacak },
+  { anahtar: 'uretim-emirleri-planlanacak-is', tur: 'is', baslik: 'Plan', simge: 'flag', sira: 200, islem: 'uretim-emirleri.plana-al', yolunda: 'Plana alınacak emir yok', kaynak: Planlanacak },
   { anahtar: 'uretim-emirleri-kuyrugum-is', tur: 'is', baslik: 'Kuyruğum', simge: 'play', sira: 100, islem: 'terminal.uret', kaynak: Kuyrugum },
   { anahtar: 'uretim-emirleri-uretim-olcu', tur: 'gidisat', baslik: 'Üretim', simge: 'gauge', sira: 200, islem: ADIMLI_OKUMA_ISLEMLERI[0], veya: ADIMLI_OKUMA_ISLEMLERI, kaynak: Uretim },
   { anahtar: 'uretim-emirleri-uretim-grafik', tur: 'grafik', baslik: 'Üretim', simge: 'chart', sira: 100, bolum: 'uretim', anaSayfada: true, islem: ADIMLI_OKUMA_ISLEMLERI[0], veya: ADIMLI_OKUMA_ISLEMLERI, kaynak: UretimGrafigi },

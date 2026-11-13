@@ -28,7 +28,7 @@ export function useAdimSatirEki(emirId: number, malzemeNo: number | null): AdimS
   const adimliOkur = ADIMLI_OKUMA_ISLEMLERI.some((i) => islemler.includes(i));
   const durumOkur = adimliOkur || islemler.includes('sayfa.adim-durumu');
   const matrisGorur = islemler.includes('sayfa.adim-durumu');
-  const yerYazar = islemler.includes('uretim-emirleri.yaz');
+  const yerYazar = islemler.includes('uretim-emirleri.duzenle');
   const [secili, seciliYaz] = useState<IsEmri | null>(null);
   const durum = useQuery({
     queryKey: anahtarlar.adimDurumu(emirId),

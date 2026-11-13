@@ -9,7 +9,7 @@ import { emirGuncelleTanimi, emirGuncelleYaz, emirKaynagi, emirTanimi, emirYaz }
 
 // Excel ile toplu emir (2627): emir bölümünün ⋯ menüsünde, yalnız emri rotadan açabilene (rota.emre-kopyala). Proje listesi emir
 // açma seçeneklerinden okunur; seçenekler üründen bağımsızdır, sipariş satırları burada kullanılmaz. Açık emirleri güncelleme (2704 a)
-// yalnız emri değiştirebilene (uretim-emirleri.yaz).
+// yalnız emri toplu güncelleyebilene (uretim-emirleri.duzenle).
 export type ExcelPenceresiTuru = 'yeni' | 'guncelle';
 
 // Menü dışarıda çizilebilir (Üretim Emirleri, 3003 a): o zaman `acilis` seçilen pencereyle gelir, pencere kapanınca `kapandi` çağrılır;

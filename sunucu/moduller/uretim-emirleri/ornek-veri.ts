@@ -63,7 +63,7 @@ export const ornekVeri = ornekVeriTanimi({
   },
   // Emir rotadan açılır ve terminal komutlarıyla ilerler: kurallar, sayaç ve kayıtlar gerçek akıştaki gibi yazılır.
   yukle: async (db) => {
-    const acan: Kullanici = { id: await kisiAl(db, ACAN), ad: ACAN, islemler: ['uretim-emirleri.yaz'] };
+    const acan: Kullanici = { id: await kisiAl(db, ACAN), ad: ACAN, islemler: ['uretim-emirleri.emir-ac'] };
     const operator = await kisiAl(db, OPERATOR);
     for (const e of EMIRLER) {
       const urunId = await urunAl(db, e.urun);

@@ -243,7 +243,7 @@ describe('saat okuma uçları (gerçek PostgreSQL)', () => {
       terminGun: null, bagimlilik: 'bekleyen' as const, devirAdedi: null, talimatSurumu: null, kontrolListesi: [],
       ...(bilesen ? { bilesenler: [{ malzemeNo: hammadde, miktar: '2.5' }] } : {}),
     });
-    const yonetici: Kullanici = { id: yoneticiId, ad: 'Deneme Yönetici', islemler: ['uretim-emirleri.yaz'] };
+    const yonetici: Kullanici = { id: yoneticiId, ad: 'Deneme Yönetici', islemler: ['uretim-emirleri.emir-ac'] };
     const ac = (makine: number, bilesen: boolean) => o().vt.tx((db) => uretimEmriAc(db, yonetici, {
       malzemeNo: urunNo, adet: 4, teslim: null, kaynakRotaRevizyonId: rev, projeId,
       isEmirleri: [adim(1, makine, bilesen), adim(2, makine, false)],
@@ -614,7 +614,7 @@ describe('saat okuma uçları (gerçek PostgreSQL)', () => {
       sira, opNo: sira * 10, ad: `Adım ${sira}`, operasyonTipiId: tip, kaynak: { tur: 'makine' as const, id: mk }, ayarSuresiDk: '10', birimSureDk: '1',
       terminGun: null, bagimlilik: 'bekleyen' as const, devirAdedi: null, talimatSurumu: null, kontrolListesi: [],
     });
-    const yonetici: Kullanici = { id: yoneticiId, ad: 'Deneme Yönetici', islemler: ['uretim-emirleri.yaz'] };
+    const yonetici: Kullanici = { id: yoneticiId, ad: 'Deneme Yönetici', islemler: ['uretim-emirleri.emir-ac'] };
     const e = (await o().vt.tx((db) => uretimEmriAc(db, yonetici, {
       malzemeNo: urunNo, adet: 6, teslim: null, kaynakRotaRevizyonId: rev, projeId, isEmirleri: [adim(1), adim(2)],
     }))).uretimEmriId;

@@ -152,5 +152,5 @@ export function rozetOf(r: TumIsSatiri, bugun: string): { ad: string; ton: Rozet
 
 // Kalemi kimin serbest bıraktığı (941 c): sahibi modülün yazma işlemi ya da sevkiyat.is-yaz.
 export const KALEM_SAHIBI: Record<KalemKaynagi, string> = {
-  urun: 'uretim-emirleri.yaz', fason: 'uretim-emirleri.fason', 'fason-donus': 'uretim-emirleri.fason', alim: 'satin-alma.yaz', elle: 'sevkiyat.is-yaz',
+  urun: 'uretim-emirleri.duzenle', fason: 'uretim-emirleri.fason', 'fason-donus': 'uretim-emirleri.fason', alim: 'satin-alma.yaz', elle: 'sevkiyat.is-yaz',
 };

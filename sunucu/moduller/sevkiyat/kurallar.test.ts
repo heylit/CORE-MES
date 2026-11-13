@@ -217,9 +217,9 @@ test('tüm işler aşaması: bırakılmamış kalem hazırlığıyla, bırakıla
 
 test('serbest bırakma: sahibin işlemi ya da sevkiyat.is-yaz; erken çıkış yalnız sevkiyat.onayla ile', () => {
   const yetki = (...islemler: string[]) => (i: string) => islemler.includes(i);
-  assert.equal(serbestBirakmaIhlali({ kaynak: 'urun', asama: 'hazir' }, null, yetki('uretim-emirleri.yaz')), null);
+  assert.equal(serbestBirakmaIhlali({ kaynak: 'urun', asama: 'hazir' }, null, yetki('uretim-emirleri.duzenle')), null);
   assert.equal(serbestBirakmaIhlali({ kaynak: 'alim', asama: 'hazir' }, null, yetki('sevkiyat.is-yaz')), null);
-  assert.equal(serbestBirakmaIhlali({ kaynak: 'alim', asama: 'hazir' }, null, yetki('uretim-emirleri.yaz'))?.tur, 'yetki');
+  assert.equal(serbestBirakmaIhlali({ kaynak: 'alim', asama: 'hazir' }, null, yetki('uretim-emirleri.duzenle'))?.tur, 'yetki');
   assert.equal(serbestBirakmaIhlali({ kaynak: 'fason', asama: 'hazir' }, null, yetki('uretim-emirleri.fason')), null);
   // Önceden bırakma gerekçesizdir ve onay istemez; erken çıkış ister.
   assert.equal(serbestBirakmaIhlali({ kaynak: 'urun', asama: 'hazir-degil' }, null, yetki('sevkiyat.is-yaz')), null);

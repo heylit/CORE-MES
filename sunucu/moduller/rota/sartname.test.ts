@@ -720,7 +720,7 @@ describe('işlem şartnamesi (gerçek PostgreSQL)', () => {
       await rm(dizin, { recursive: true, force: true });
     }
   });
-  test('1034: rework adımına şartname sabitlenir; uretim-emirleri.yaz ister, rota adımı, eski sürüm, kapsam dışı ve zorunlusu boş şartname reddedilir', async () => {
+  test('1034: rework adımına şartname sabitlenir; uretim-emirleri.adim-yaz ister, rota adımı, eski sürüm, kapsam dışı ve zorunlusu boş şartname reddedilir', async () => {
     const { id, surum } = await taslak([icAdim(), icAdim({ ad: 'Frezeleme', bilesenler: [] })]);
     await yururlugeAl(id, surum);
     const { uretimEmriId } = await emirAc(id);

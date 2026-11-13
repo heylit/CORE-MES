@@ -76,7 +76,7 @@ describe('sevkiyat genel araması (932 a, gerçek PostgreSQL)', () => {
 
   test('kaynak tek arama ucuna sevk türüyle, Tüm işler yetkisiyle bildirilir; sayfa eski arama ucunu bildirmez', () => {
     assert.deepEqual(kayitAramaKaynaklari.map((k) => [k.tur, k.yetki]),
-      [['sevk', ['sevkiyat.oku', 'sevkiyat.is-yaz', 'uretim-emirleri.yaz', 'uretim-emirleri.fason', 'satin-alma.yaz']]]);
+      [['sevk', ['sevkiyat.oku', 'sevkiyat.is-yaz', 'uretim-emirleri.duzenle', 'uretim-emirleri.fason', 'satin-alma.yaz']]]);
     assert.equal('aramaUcu' in SEVKIYAT_SAYFALARI[0], false);
   });
 

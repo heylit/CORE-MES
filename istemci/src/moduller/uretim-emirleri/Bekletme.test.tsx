@@ -81,6 +81,19 @@ describe('3050 bekletme: emir sayfası', () => {
     expect(screen.getByText('Ek işlem yok')).toBeTruthy();
   });
 
+  it('3207 a: "Devam ettir" yalnız bekletme eylemine bakar; öbür yedi eylemi olan görmez', async () => {
+    const tek = (islem: string) => ({ ...OKUYUCU, islemler: [...OKUYUCU.islemler, islem] }) as typeof OKUYUCU;
+    for (const [islem, gorur] of [
+      ['uretim-emirleri.beklet', true], ['uretim-emirleri.duzenle', false], ['uretim-emirleri.iptal', false], ['uretim-emirleri.plana-al', false],
+    ] as const) {
+      sunucuKur(tek(islem), { 'GET /uretim-emirleri/2': () => ayrinti(BEKLEYEN) });
+      ac(ekran, '/uretim-emirleri/2');
+      const serit = await screen.findByRole('status', { name: 'Emir beklemede' });
+      expect(within(serit).queryByRole('button', { name: 'Devam ettir' }) !== null, islem).toBe(gorur);
+      cleanup();
+    }
+  });
+
   it('"Beklet" neden ister; gönderilen gövde neden ve isteğe bağlı nottur', async () => {
     let emir: Emir = PLANLI;
     const istekler = sunucuKur(YAZAR, {

@@ -15,7 +15,7 @@ import './emirler.css';
 
 // Üretim emrinin ana yeri Üretim Emirleri'dir (3003 a): emir orada açılır ve yönetilir. Form, plan ve işlemler bu modülün köprüsüyle
 // çalışır (rota, plan ve komut sırası burada); Üretim Emirleri bunları disari.ts'ten çizer. Yetki aynıdır: emir açma rotalı üründe
-// rota.emre-kopyala, rotasızda uretim-emirleri.yaz; asıl denetim sahiplerin ucundadır.
+// rota.emre-kopyala, rotasızda uretim-emirleri.rotasiz-ac; asıl denetim sahiplerin ucundadır.
 
 // Başka bölüme geçiş (ör. "Rotasını kur") Reçete ve Rota'nın o sekmesini açar.
 function useSekmeyeGit() {
@@ -81,12 +81,12 @@ export function EmirExcelDugmesi() {
   const [pencere, setPencere] = useState<ExcelPenceresiTuru | null>(null);
   const veri = useRrVerisi(pencere !== null && yetki.oku);
   const d = veri.data?.durum;
-  if (!(yetki.rotaEmreKopyala || yetki.emirYaz)) return null;
+  if (!(yetki.rotaEmreKopyala || yetki.emirDuzenle)) return null;
   return (
     <>
-      <ExcelMenusu acabilir={yetki.rotaEmreKopyala} guncelleyebilir={yetki.emirYaz} sec={setPencere} />
+      <ExcelMenusu acabilir={yetki.rotaEmreKopyala} guncelleyebilir={yetki.emirDuzenle} sec={setPencere} />
       {pencere !== null && d?.emirler && (
-        <EmirExcelMenusu durum={d} acabilir={yetki.rotaEmreKopyala} guncelleyebilir={yetki.emirYaz} acilis={pencere} kapandi={() => { setPencere(null); }} />
+        <EmirExcelMenusu durum={d} acabilir={yetki.rotaEmreKopyala} guncelleyebilir={yetki.emirDuzenle} acilis={pencere} kapandi={() => { setPencere(null); }} />
       )}
     </>
   );

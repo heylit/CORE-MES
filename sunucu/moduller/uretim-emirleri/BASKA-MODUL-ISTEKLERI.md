@@ -7,8 +7,8 @@
 | rota (T4) | `isEmirleriniYenile(db, kullanici, id, { kaynakRotaRevizyonId, isEmirleri })` -> `{ degisenler }` | "Emirlere uygula" (güvenli kip). Rota "Rev X uygulandı" satırını kendisi başa ekler |
 | rota (T4) | `adimliEmirListesi(db, arsiv)`, `adimliEmirAyrintisi(db, id)` | `POST /adimli-emirler` ve `emirlere-uygula` uçları rotada; `rotaDegisti` ve harf rotada hesaplanır |
 | plan | `planlanacakIsEmirleri(db)` -> `PlanIsEmri[]` | `plan/baglanti.ts` biçimi; fason ve bitmiş iş emri gelmez; taslak emir gelmez (VARSAYIM) |
-| plan | `isEmriKaynagiYaz(db, kullanici, isEmriId, kaynak)` | İşlem: `uretim-emirleri.yaz` ya da `plan.yaz` |
-| plan (P6) | `emirPlanBilgisiYaz`, `emirPlanaAl`, `emirIptalEt` | İşlem: `uretim-emirleri.yaz` ya da `plan.canliya-al` |
+| plan | `isEmriKaynagiYaz(db, kullanici, isEmriId, kaynak)` | İşlem: `uretim-emirleri.duzenle`, `plan.yaz` ya da `plan.canliya-al` |
+| plan (P6) | `emirPlanBilgisiYaz`, `emirPlanaAl`, `emirIptalEt` | İşlem: sırasıyla `uretim-emirleri.duzenle`, `plana-al`, `iptal`; her biri ya da `plan.canliya-al` |
 | stok | `emirNolari`, `isEmriOzeti`, `uretimEmriOzeti`, `fasonHareketiOzeti` | UE12-UE14; K-080 fason transferi hareket kimliğine bağlanır |
 | stok, Arkon | `emirOzeti`, `acikEmirler`, `emirBaslat/Bitir/Sayim/Duraklat/Devam/Durdur`, `KOMUT_ISLEMI` | İmzalar değişmedi |
 

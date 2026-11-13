@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import type { Islem } from '#paylasilan/islemler.ts';
+import { URETIM_EMRI_YAZMA_ISLEMLERI, type Islem } from '#paylasilan/islemler.ts';
 import type { Kullanici } from '#paylasilan/kullanici.ts';
 import type { KisiEkIslemleriCevabi, RolIslemleriCevabi } from '#paylasilan/sozlesme/kisiler.ts';
 import { BildirimSaglayici } from '../../ortak/arayuz/index.ts';
@@ -92,7 +92,8 @@ describe('Sayfa yetkileri', () => {
 
   it('3163 a (sürüm 3.1): ayrıntılı sayfalarla açılır; bölünmüş eylemler başlıklı bölümde, kalanlar "Genel" altında; düğme bütün sayfaları açar', async () => {
     const istasyonlu = ['sayfa.istasyonlar', 'istasyonlar.yaz', 'istasyonlar.istasyon-yaz', 'istasyonlar.tanim-yaz',
-      'sayfa.rota', 'rota.yaz', 'rota.revizyon-yaz', 'rota.onaya-gonder', 'rota.sablon-yaz', 'rota.taslak-ac', 'rota.sure-kabul'];
+      'sayfa.rota', 'rota.yaz', 'rota.revizyon-yaz', 'rota.onaya-gonder', 'rota.sablon-yaz', 'rota.taslak-ac', 'rota.sure-kabul',
+      'sayfa.uretim-emirleri', 'uretim-emirleri.yaz', ...URETIM_EMRI_YAZMA_ISLEMLERI];
     ac(DUZENLER, () => json(200, LISTE), { ...kisiyle({}), islemler: [...ISLEMLER, ...istasyonlu] });
     fireEvent.change(await screen.findByLabelText('Kişi'), { target: { value: '1' } });
     const dugme = screen.getByRole('button', { name: 'Bütün sayfalar' });
@@ -118,6 +119,14 @@ describe('Sayfa yetkileri', () => {
     for (const ad of ['Revizyon düzenleme, kopyalama, iptal', 'Revizyonu onaya gönderme', 'Rota şablonlarını düzenleme', 'Karttan ve üründen taslak açma', 'Gerçekleşen süreyi yazma ve kabul']) {
       expect(rota.getByRole('button', { name: `Depocu Deneme: ${ad}` })).toBeTruthy();
     }
+    // Üretim emirleri sekiz eylemiyle kendi başlığında, ön izleme 3207 sürüm 2 sırasıyla (3165 a, 3207 a).
+    sayfaAc('Üretim emirleri');
+    const emir = within(bolum('Üretim emirlerini düzenleme')).getAllByRole('button').map((b) => b.getAttribute('aria-label') ?? b.textContent ?? '');
+    expect(emir.filter((ad) => ad.startsWith('Depocu Deneme: ')).map((ad) => ad.slice('Depocu Deneme: '.length))).toEqual([
+      'Rotadan emir açma ve adımları rotadan yenileme', 'Rotasız emir açma', 'Öncelik, tür, üretim yeri, toplu güncelleme',
+      'Adım ekleme, düzenleme, silme, ek adım', 'Emri bölme ve birleştirme', 'Plana alma', 'Bekletme ve bekletmeyi kaldırma', 'İptal, arşive alma ve kapatma',
+    ]);
+    expect(screen.queryByRole('button', { name: /Eski toplu anahtar/ })).toBeNull();
     fireEvent.click(dugme);
     expect(screen.getByRole('button', { name: 'Ayrıntılı sayfalar' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Stok', expanded: false })).toBeTruthy();

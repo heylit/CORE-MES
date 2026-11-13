@@ -1,3 +1,4 @@
+import { URETIM_EMRI_YAZMA_ISLEMLERI } from '#paylasilan/islemler.ts';
 import type {
   ADIMLI_OKUMA_ISLEMLERI as SUNUCUDAKI_LISTE, Emir, EmirDurumu, IlerlemeEsasi, KayitOlayi, UretimKaydi,
 } from '#paylasilan/sozlesme/uretim-emirleri.ts';
@@ -7,7 +8,7 @@ import { EMIR_DURUMU, emirDurumuGosterimi, type DurumGosterimi, type KapanisSonu
 // Ad ve ton tek sözlükten (1389 a); bu modül ve başka ekranlar aynı adı yazar.
 export const DURUM_ETIKETI = Object.fromEntries(Object.entries(EMIR_DURUMU).map(([d, g]) => [d, g.etiket])) as Record<EmirDurumu, string>;
 // İş emirli emri okuyabilen işlemler; tip sözleşmedeki listeye birebir eşit olmak zorundadır (sapma derlemede yakalanır).
-export const ADIMLI_OKUMA_ISLEMLERI: typeof SUNUCUDAKI_LISTE = ['sayfa.uretim-emirleri', 'sayfa.rota', 'uretim-emirleri.yaz', 'uretim-emirleri.fason', 'plan.yaz'];
+export const ADIMLI_OKUMA_ISLEMLERI: typeof SUNUCUDAKI_LISTE = ['sayfa.uretim-emirleri', 'sayfa.rota', ...URETIM_EMRI_YAZMA_ISLEMLERI, 'uretim-emirleri.fason', 'plan.yaz'];
 
 export const OLAY_ETIKETI: Record<KayitOlayi, string> = {
   ayar: 'Hazırlık başladı', baslat: 'Başlatıldı', bitir: 'Bitirildi', duraklat: 'Duraklatıldı', durdur: 'Durduruldu', devam: 'Devam edildi',

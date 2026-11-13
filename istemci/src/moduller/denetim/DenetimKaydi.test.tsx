@@ -14,7 +14,7 @@ const MUDUR: Kullanici = { id: 2, ad: 'Deneme Müdür', islemler: ['sayfa.deneti
 const YONETICI: Kullanici = { id: 1, ad: 'Deneme Yönetici', islemler: ['sayfa.denetim', 'denetim.oku', 'denetim.govde-oku'] };
 
 const SATIRLAR: KayitSatiri[] = [
-  { id: 12, zaman: '2026-10-07T10:00:00.000+03:00', kisiId: 2, kisiAd: 'Deneme Müdür', yontem: 'POST', yol: '/uretim-emirleri/:id/baslat', modul: 'uretim-emirleri', yetki: 'uretim-emirleri.yaz', kimlikler: { id: 41 } },
+  { id: 12, zaman: '2026-10-07T10:00:00.000+03:00', kisiId: 2, kisiAd: 'Deneme Müdür', yontem: 'POST', yol: '/uretim-emirleri/:id/baslat', modul: 'uretim-emirleri', yetki: 'uretim-emirleri.duzenle', kimlikler: { id: 41 } },
   { id: 11, zaman: '2026-10-07T09:00:00.000+03:00', kisiId: null, kisiAd: null, yontem: 'POST', yol: '/oturum/giris', modul: null, yetki: null, kimlikler: {} },
   { id: 10, zaman: '2026-10-07T08:30:00.000+03:00', kisiId: null, kisiAd: null, yontem: 'POST', yol: '/oturum/giris', modul: 'oturum', yetki: 'acik', kimlikler: {} },
 ];
@@ -84,7 +84,7 @@ describe('DenetimKaydi', () => {
   it('listede modül, işlem ve kayıt Türkçe adıyla görünür; yetkisi boş eski satır komutuyla yazılır; yazma düğmesi yok', async () => {
     sunucuKur(MUDUR);
     ac();
-    expect(await screen.findByRole('cell', { name: 'Üretim emri açma ve düzenleme' })).toBeTruthy();
+    expect(await screen.findByRole('cell', { name: 'Öncelik, tür, üretim yeri, toplu güncelleme' })).toBeTruthy();
     expect(screen.getByRole('cell', { name: 'Üretim emirleri' })).toBeTruthy();
     expect(screen.getByRole('cell', { name: 'Üretim emri 41' })).toBeTruthy();
     expect(screen.queryByRole('cell', { name: 'POST /uretim-emirleri/:id/baslat' })).toBeNull();
@@ -129,14 +129,14 @@ describe('DenetimKaydi', () => {
     await waitFor(() => expect(screen.getByRole('option', { name: 'Üretim emirleri' })).toBeTruthy());
     fireEvent.change(screen.getByLabelText('Modül'), { target: { value: 'uretim-emirleri' } });
     await waitFor(() => expect(yollar.some((y) => y.includes('modul=uretim-emirleri'))).toBe(true));
-    fireEvent.click(screen.getByRole('cell', { name: 'Üretim emri açma ve düzenleme' }));
+    fireEvent.click(screen.getByRole('cell', { name: 'Öncelik, tür, üretim yeri, toplu güncelleme' }));
     await waitFor(() => expect(screen.getAllByText('POST /uretim-emirleri/:id/baslat').some((e) => e.tagName === 'DD')).toBe(true));
   });
 
   it('içerik yetkisi olmayan satırı açınca "İçerik görme yetkiniz yok" görür; gövde ucu çağrılmaz', async () => {
     const yollar = sunucuKur(MUDUR);
     ac();
-    fireEvent.click(await screen.findByRole('cell', { name: 'Üretim emri açma ve düzenleme' }));
+    fireEvent.click(await screen.findByRole('cell', { name: 'Öncelik, tür, üretim yeri, toplu güncelleme' }));
     expect(await screen.findByText('İçerik görme yetkiniz yok.')).toBeTruthy();
     expect(yollar.some((y) => y.includes('/govde'))).toBe(false);
   });
@@ -146,7 +146,7 @@ describe('DenetimKaydi', () => {
     ac();
     await screen.findAllByText('Oturumsuz');
     await waitFor(() => expect(yollar).toContain('/oturum'));
-    fireEvent.click(screen.getByRole('cell', { name: 'Üretim emri açma ve düzenleme' }));
+    fireEvent.click(screen.getByRole('cell', { name: 'Öncelik, tür, üretim yeri, toplu güncelleme' }));
     const govde = await screen.findByText(/kalın değil/);
     expect(govde.textContent).toContain('<b>kalın değil</b>');
     expect(govde.textContent).toContain('[gizli]');

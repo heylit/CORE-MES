@@ -11,7 +11,7 @@ import { acikCalismalar, enIleriSaglam, fasondaKalanlar } from './sorgular/arsiv
 import type { UstEmirSatiri } from './sorgular.ts';
 
 // 2721 3/3: kim arşive alır; önizleme de aynı yetkiyle okunur.
-export const ARSIV_YETKISI = 'uretim-emirleri.yaz' as const;
+export const ARSIV_YETKISI = 'uretim-emirleri.iptal' as const;
 
 // 2721: başlamış emir silinmez, arşive alınır. Önizleme ile komut aynı durumu okur: ekranın gösterdiği engel komutun reddidir.
 // 2731 b: kararsız hatalı kaydın açtığı kol engel değildir; emirle birlikte arşive gider, kararı arşivde verilir.

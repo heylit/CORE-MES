@@ -102,7 +102,7 @@ describe('Emir sayfasında adım satırı (3039)', () => {
     await screen.findByText('Malzeme bekliyor');
     expect(screen.queryByRole('button', { name: 'OP 20 için' })).toBeNull();
     cleanup();
-    sunucuKur({ ...OKUYUCU, islemler: [...OKUYUCU.islemler, 'sayfa.adim-durumu', 'uretim-emirleri.yaz'] }, yollar);
+    sunucuKur({ ...OKUYUCU, islemler: [...OKUYUCU.islemler, 'sayfa.adim-durumu', 'uretim-emirleri.duzenle'] }, yollar);
     const Matris = () => <p>Adım Durumu sayfası</p>;
     ac([...ekran, { yol: '/adim-durumu', ekran: Matris }], '/uretim-emirleri/5');
     await screen.findByText('Malzeme bekliyor');

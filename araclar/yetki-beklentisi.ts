@@ -76,6 +76,9 @@ export const ROL_MATRISI = {
       'stok.sayim', 'stok.sayim-onayla', 'stok.skt-onayla', 'stok.statu-degistir', 'stok.tanim', 'stok.toplama', 'stok.transfer',
       'terminal.uret', 'uretim-emirleri.adim-durumu-yaz', 'uretim-emirleri.fason', 'uretim-emirleri.hazirlik-muaf', 'uretim-emirleri.kapanis-oku',
       'uretim-emirleri.kapanis-onay', 'uretim-emirleri.yaz', 'vardiya.durus-yaz', 'vardiya.gecmis-yaz', 'vardiya.tanim-yaz', 'vardiya.yaz',
+      // 3165 a: uretim-emirleri.yaz sekiz eyleme bölündü (3207 a); eski işlem ayrı kartla kalkana dek satırda kalır.
+      'uretim-emirleri.emir-ac', 'uretim-emirleri.duzenle', 'uretim-emirleri.adim-yaz', 'uretim-emirleri.bol-birlestir',
+      'uretim-emirleri.plana-al', 'uretim-emirleri.beklet', 'uretim-emirleri.iptal', 'uretim-emirleri.rotasiz-ac',
     ],
   },
   genel_mudur_yardimcisi: {
@@ -107,6 +110,9 @@ export const ROL_MATRISI = {
       'stok.sayim', 'stok.sayim-onayla', 'stok.skt-onayla', 'stok.statu-degistir', 'stok.tanim', 'stok.toplama', 'stok.transfer',
       'terminal.uret', 'uretim-emirleri.adim-durumu-yaz', 'uretim-emirleri.fason', 'uretim-emirleri.hazirlik-muaf', 'uretim-emirleri.kapanis-oku',
       'uretim-emirleri.kapanis-onay', 'uretim-emirleri.yaz', 'vardiya.durus-yaz', 'vardiya.gecmis-yaz', 'vardiya.tanim-yaz', 'vardiya.yaz',
+      // 3165 a: uretim-emirleri.yaz sekiz eyleme bölündü (3207 a); eski işlem ayrı kartla kalkana dek satırda kalır.
+      'uretim-emirleri.emir-ac', 'uretim-emirleri.duzenle', 'uretim-emirleri.adim-yaz', 'uretim-emirleri.bol-birlestir',
+      'uretim-emirleri.plana-al', 'uretim-emirleri.beklet', 'uretim-emirleri.iptal', 'uretim-emirleri.rotasiz-ac',
     ],
   },
   guvenlik_gorevlisi: {
@@ -191,6 +197,9 @@ export const ROL_MATRISI = {
       'stok.toplama', 'stok.transfer', 'terminal.uret', 'uretim-emirleri.adim-durumu-yaz', 'uretim-emirleri.fason', 'uretim-emirleri.hazirlik-muaf',
       'uretim-emirleri.kapanis-oku', 'uretim-emirleri.kapanis-onay', 'uretim-emirleri.yaz', 'vardiya.durus-yaz', 'vardiya.gecmis-yaz', 'vardiya.tanim-yaz',
       'vardiya.yaz',
+      // 3165 a: uretim-emirleri.yaz sekiz eyleme bölündü (3207 a); eski işlem ayrı kartla kalkana dek satırda kalır.
+      'uretim-emirleri.emir-ac', 'uretim-emirleri.duzenle', 'uretim-emirleri.adim-yaz', 'uretim-emirleri.bol-birlestir',
+      'uretim-emirleri.plana-al', 'uretim-emirleri.beklet', 'uretim-emirleri.iptal', 'uretim-emirleri.rotasiz-ac',
     ],
   },
   muhasebe_finans: {
@@ -233,6 +242,9 @@ export const ROL_MATRISI = {
       'sayfa.terminal', 'sayfa.uretim-emirleri', 'sayfa.vardiya', 'sevkiyat.is-yaz', 'sevkiyat.oku', 'sevkiyat.plan-yaz', 'siparisler.oku',
       'siparisler.termin-dene', 'siparisler.termin-onayla', 'siparisler.yaz', 'stok.istek', 'stok.toplama', 'uretim-emirleri.adim-durumu-yaz', 'uretim-emirleri.fason',
       'uretim-emirleri.hazirlik-muaf', 'uretim-emirleri.kapanis-oku', 'uretim-emirleri.kapanis-onay', 'uretim-emirleri.yaz',
+      // 3165 a: uretim-emirleri.yaz sekiz eyleme bölündü (3207 a); eski işlem ayrı kartla kalkana dek satırda kalır.
+      'uretim-emirleri.emir-ac', 'uretim-emirleri.duzenle', 'uretim-emirleri.adim-yaz', 'uretim-emirleri.bol-birlestir',
+      'uretim-emirleri.plana-al', 'uretim-emirleri.beklet', 'uretim-emirleri.iptal', 'uretim-emirleri.rotasiz-ac',
       'vardiya.durus-yaz', 'vardiya.tanim-yaz', 'vardiya.yaz',
     ],
   },
@@ -256,6 +268,9 @@ export const ROL_MATRISI = {
       'sayfa.stok', 'sayfa.taleplerim', 'sayfa.terminal', 'sayfa.uretim-emirleri', 'sayfa.vardiya', 'sevkiyat.is-yaz', 'sevkiyat.oku',
       'sevkiyat.plan-yaz', 'siparisler.oku', 'siparisler.termin-onayla', 'siparisler.yaz', 'smartes.adet-onayla', 'stok.istek', 'stok.toplama',
       'uretim-emirleri.adim-durumu-yaz', 'uretim-emirleri.fason', 'uretim-emirleri.kapanis-oku', 'uretim-emirleri.yaz', 'vardiya.durus-yaz', 'vardiya.tanim-yaz',
+      // 3165 a: uretim-emirleri.yaz sekiz eyleme bölündü (3207 a); eski işlem ayrı kartla kalkana dek satırda kalır.
+      'uretim-emirleri.emir-ac', 'uretim-emirleri.duzenle', 'uretim-emirleri.adim-yaz', 'uretim-emirleri.bol-birlestir',
+      'uretim-emirleri.plana-al', 'uretim-emirleri.beklet', 'uretim-emirleri.iptal', 'uretim-emirleri.rotasiz-ac',
       'vardiya.yaz',
     ],
   },
@@ -319,6 +334,9 @@ export const ROL_MATRISI = {
       'sayfa.uretim-emirleri', 'sayfa.uretim-terminali', 'sayfa.vardiya', 'stok.istek', 'terminal.uret', 'uretim-emirleri.adim-durumu-yaz', 'uretim-emirleri.ara-istasyon',
       'uretim-emirleri.fason', 'uretim-emirleri.hazirlik-muaf', 'uretim-emirleri.kapanis-oku', 'uretim-emirleri.kapanis-onay',
       'uretim-emirleri.sayim-duzelt', 'uretim-emirleri.yaz', 'vardiya.durus-yaz', 'vardiya.gecmis-yaz', 'vardiya.tanim-yaz', 'vardiya.yaz',
+      // 3165 a: uretim-emirleri.yaz sekiz eyleme bölündü (3207 a); eski işlem ayrı kartla kalkana dek satırda kalır.
+      'uretim-emirleri.emir-ac', 'uretim-emirleri.duzenle', 'uretim-emirleri.adim-yaz', 'uretim-emirleri.bol-birlestir',
+      'uretim-emirleri.plana-al', 'uretim-emirleri.beklet', 'uretim-emirleri.iptal', 'uretim-emirleri.rotasiz-ac',
     ],
   },
   vardiya_sorumlusu: {

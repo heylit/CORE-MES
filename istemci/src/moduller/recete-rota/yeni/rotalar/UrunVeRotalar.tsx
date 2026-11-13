@@ -331,7 +331,7 @@ export function UrunVeRotalar(o: EkranOzellikleri) {
         {tamEkran && (
           <Dugme className="tc-rr1-kd" simge="x" title="Tam ekrandan çık (Esc ya da F)" onClick={() => { setTamEkran(false); }}>Tam ekrandan çık</Dugme>
         )}
-        {!liste && kokId && o.yetki.emirYaz && (
+        {!liste && kokId && (o.yetki.emirRotasizAc || o.yetki.rotaEmreKopyala) && (
           <Dugme className="tc-rr1-kd" tur="birincil" simge="clipboard-check" onClick={() => { o.git('orders', `urun:${kokId}`); }}>Üretim emri oluştur</Dugme>
         )}
         <Menu etiket="Diğer rota işlemleri" ogeler={digerIslemler} />

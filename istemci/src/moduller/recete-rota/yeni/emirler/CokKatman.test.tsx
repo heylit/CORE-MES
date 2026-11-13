@@ -78,7 +78,7 @@ describe('1476-F emir açılışında çok katmanlı seçim: izinli', () => {
 
 describe('1476-F emir açılışında çok katmanlı seçim: reddedilen', () => {
   it('rota.emre-kopyala olmayan seçimi görmez ve önizleme sorulmaz', async () => {
-    const istekler = sunucu(['uretim-emirleri.yaz']);
+    const istekler = sunucu(['uretim-emirleri.rotasiz-ac']);
     yeniEmirAc();
     const b = await screen.findByRole('dialog', { name: 'Yeni üretim emri' });
     await within(b).findByText(/Emir açmak için mamul ya da yarı mamul gerekli/);

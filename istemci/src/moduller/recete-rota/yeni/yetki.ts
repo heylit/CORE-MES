@@ -14,7 +14,15 @@ export interface RrYetkisi {
   rotaSureKabul: boolean;
   rotaOnayla: boolean;
   rotaEmreKopyala: boolean;
-  emirYaz: boolean;
+  // Üretim emri yazımı sekiz eylemdir (3165 a, 3207 a); her düğme kendi eylemine bakar.
+  emirAc: boolean;
+  emirRotasizAc: boolean;
+  emirDuzenle: boolean;
+  emirAdimYaz: boolean;
+  emirBol: boolean;
+  emirPlanaAl: boolean;
+  emirBeklet: boolean;
+  emirIptal: boolean;
   stokOku: boolean;
   stokStatuDegistir: boolean;
   stokSayim: boolean;
@@ -46,7 +54,14 @@ export function yetkiHesapla(y: Pick<Yetki, 'var' | 'herhangi'>): RrYetkisi {
     rotaSureKabul: y.var('rota.sure-kabul'),
     rotaOnayla: y.var('rota.onayla'),
     rotaEmreKopyala: y.var('rota.emre-kopyala'),
-    emirYaz: y.var('uretim-emirleri.yaz'),
+    emirAc: y.var('uretim-emirleri.emir-ac'),
+    emirRotasizAc: y.var('uretim-emirleri.rotasiz-ac'),
+    emirDuzenle: y.var('uretim-emirleri.duzenle'),
+    emirAdimYaz: y.var('uretim-emirleri.adim-yaz'),
+    emirBol: y.var('uretim-emirleri.bol-birlestir'),
+    emirPlanaAl: y.var('uretim-emirleri.plana-al'),
+    emirBeklet: y.var('uretim-emirleri.beklet'),
+    emirIptal: y.var('uretim-emirleri.iptal'),
     stokStatuDegistir: y.var('stok.statu-degistir'),
     stokSayim: y.var('stok.sayim'),
     stokGiris: y.var('stok.giris'),
@@ -80,8 +95,8 @@ export function useRrYetkisi(): RrYetkisi {
 }
 
 // Emir açabilen (3003 a, Üretim Emirleri'nin "Yeni üretim emri" düğmesi): Reçete ve Rota verisini okur ve iki açma işleminden birine
-// sahiptir. Rotalı üründe rota.emre-kopyala, rotasızda uretim-emirleri.yaz; asıl denetim sahiplerin ucundadır.
-export const emirAcabilir = (y: RrYetkisi): boolean => y.oku && (y.rotaEmreKopyala || y.emirYaz);
+// sahiptir. Rotalı üründe rota.emre-kopyala, rotasızda uretim-emirleri.rotasiz-ac; asıl denetim sahiplerin ucundadır.
+export const emirAcabilir = (y: RrYetkisi): boolean => y.oku && (y.rotaEmreKopyala || y.emirRotasizAc);
 
 export function useEmirAcabilir(): boolean {
   return emirAcabilir(useRrYetkisi());
