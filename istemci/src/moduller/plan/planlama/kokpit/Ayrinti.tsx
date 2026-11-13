@@ -1,18 +1,54 @@
 import { Simge } from '../../../../ortak/arayuz/index.ts';
 import { Hamleler, type HamleOzellikleri } from './Hamleler.tsx';
-import { durumYazisi, satirKimligi, tasinabilir, type KokpitEmri, type KokpitModeli } from './kurallar.ts';
+import { BEKLEME_ESIGI, adimBeklemesi, durumYazisi, enCokBekleyen, satirKimligi, sureYaz, tasinabilir, type KokpitEmri, type KokpitModeli } from './kurallar.ts';
 
 // Seçili emrin ayrıntısı: adımları, yerleri ve seçili adım için tezgâh seçenekleri. Bilgisayarda tahtanın yanında, telefonda alttan açılır;
-// telefonda taşıma buradaki düğmelerle yapılır.
+// telefonda taşıma buradaki düğmelerle yapılır. Matriste çözüm buradadır: neden geç olduğu ve seçenekler adımlardan önce gelir.
 export interface AyrintiOzellikleri extends Pick<HamleOzellikleri, 'zaman' | 'uygula' | 'surum'> {
   m: KokpitModeli; e: KokpitEmri; secIs: string | null;
   adimSec: (isId: string) => void;
   kapat: () => void;
+  matris?: boolean;
+  // Son uygulanan hamlenin sonucu (Matris).
+  ileti?: string | null;
 }
 
-export function Ayrinti({ m, e, secIs, zaman, uygula, surum, adimSec, kapat }: AyrintiOzellikleri) {
+export function Ayrinti({ m, e, secIs, zaman, uygula, surum, adimSec, kapat, matris = false, ileti = null }: AyrintiOzellikleri) {
   const kod = new Map(m.tezgahlar.map((t) => [t.id, t.kod]));
   const secili = secIs ? m.isler[secIs] : undefined;
+  const neden = matris && (e.durum === 'gec' || e.durum === 'risk') ? enCokBekleyen(m, e) : null;
+  const adimlar = (
+    <>
+      <h3>Adımlar</h3>
+      <ol className="tc-pyq-adimlar">
+        {e.adimlar.map((a, i) => {
+          const x = m.isler[a.id], b = matris ? adimBeklemesi(m, e, i) : null;
+          return (
+            <li key={a.id}>
+              <button type="button" aria-current={secIs === a.id} disabled={!x} onClick={() => { adimSec(a.id); }}>
+                <b>{i + 1}. {a.ad}</b>
+                <small>
+                  {x ? `${kod.get(satirKimligi(x)) ?? x.m} · ${zaman(x.S).slice(6)} – ${zaman(x.C).slice(6)}${x.basladi ? ' · sürüyor' : ''}` : 'plansız'}
+                  {b !== null && b.acik >= BEKLEME_ESIGI && <em> · {sureYaz(b.sure)} bekler</em>}
+                </small>
+              </button>
+            </li>
+          );
+        })}
+      </ol>
+    </>
+  );
+  const cozum = e.durum === 'plansiz' ? (
+    <>
+      <h3>Plana al</h3>
+      <Hamleler m={m} e={e} isId={null} zaman={zaman} uygula={uygula} surum={surum} />
+    </>
+  ) : (
+    <>
+      <h3>{secili ? `${secili.ad}: tezgâh seçenekleri` : 'Erkene alma seçenekleri'}</h3>
+      {secili && tasinabilir(secili) ? <p className="tc-pyq-not">{tasinabilir(secili)}</p> : <Hamleler m={m} e={e} isId={secIs} zaman={zaman} uygula={uygula} surum={surum} yalnizKazanc={matris} />}
+    </>
+  );
   return (
     <aside className="tc-pyq-ayrinti" aria-label={`${e.no} ayrıntısı`} data-d={e.durum}>
       <header>
@@ -24,31 +60,13 @@ export function Ayrinti({ m, e, secIs, zaman, uygula, surum, adimSec, kapat }: A
         <div><dt>Termin</dt><dd>{e.termin === null ? '–' : zaman(e.termin)}</dd></div>
         <div><dt>Plandaki bitiş</dt><dd>{e.bitis === null ? '–' : zaman(e.bitis)}</dd></div>
       </dl>
-      <h3>Adımlar</h3>
-      <ol className="tc-pyq-adimlar">
-        {e.adimlar.map((a, i) => {
-          const x = m.isler[a.id];
-          return (
-            <li key={a.id}>
-              <button type="button" aria-current={secIs === a.id} disabled={!x} onClick={() => { adimSec(a.id); }}>
-                <b>{i + 1}. {a.ad}</b>
-                <small>{x ? `${kod.get(satirKimligi(x)) ?? x.m} · ${zaman(x.S).slice(6)} – ${zaman(x.C).slice(6)}${x.basladi ? ' · sürüyor' : ''}` : 'plansız'}</small>
-              </button>
-            </li>
-          );
-        })}
-      </ol>
-      {e.durum === 'plansiz' ? (
-        <>
-          <h3>Plana al</h3>
-          <Hamleler m={m} e={e} isId={null} zaman={zaman} uygula={uygula} surum={surum} />
-        </>
-      ) : (
-        <>
-          <h3>{secili ? `${secili.ad}: tezgâh seçenekleri` : 'Erkene alma seçenekleri'}</h3>
-          {secili && tasinabilir(secili) ? <p className="tc-pyq-not">{tasinabilir(secili)}</p> : <Hamleler m={m} e={e} isId={secIs} zaman={zaman} uygula={uygula} surum={surum} />}
-        </>
+      {neden && (
+        <p className="tc-pyq-neden">
+          Neden {e.durum === 'gec' ? 'geç' : 'riskli'}: {neden.k + 1}. adım ({e.adimlar[neden.k]?.ad}) {kod.get(neden.tezgah) ?? neden.tezgah} tezgâhında {sureYaz(neden.bekleme.sure)} sıra bekliyor.
+        </p>
       )}
+      {ileti && <p className="tc-pyq-sonuc" role="status">{ileti}</p>}
+      {matris ? <>{cozum}{adimlar}</> : <>{adimlar}{cozum}</>}
     </aside>
   );
 }
