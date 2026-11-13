@@ -32,6 +32,15 @@ describe('Kokpit modeli', () => {
     expect(gec && durumYazisi(gec)).toMatch(/ geç$/);
   });
 
+  it('kilit simgesi yalnız kullanıcının kilidinden gelir; motorun sabitlediği iş kilitli sayılmaz', () => {
+    const { c, p, cx } = ornek();
+    const sabit = Object.entries(p?.ops ?? {}).find(([, x]) => x.pin)?.[0];
+    expect(sabit).toBeDefined();
+    expect(Object.values(modelKur({ ...c, locks: {} }, p, cx, (id) => id).isler).some((x) => x.kilitli)).toBe(false);
+    const m = modelKur({ ...c, locks: { [sabit ?? '']: { m: 'x', S: 0 } } }, p, cx, (id) => id);
+    expect(Object.values(m.isler).filter((x) => x.kilitli).map((x) => x.id)).toEqual([sabit]);
+  });
+
   it('plan yokken her emir plansızdır; sıfır bitiş uydurulmaz', () => {
     const { c, cx } = ornek();
     const m = modelKur(c, null, cx, (id) => id);

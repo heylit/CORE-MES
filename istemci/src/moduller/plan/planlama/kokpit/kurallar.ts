@@ -55,7 +55,7 @@ export function modelKur(c: PlanlamaCalismasi, p: OkunanPlan | null, cx: Derleme
       const x = p?.ops[a.id];
       if (!x || !Number.isFinite(x.S) || !Number.isFinite(x.C)) return;
       yerlesen++;
-      isler[a.id] = { id: a.id, job: j.id, ad: a.ad, m: x.m, S: x.S, C: x.C, basladi: x.act, fason: x.fas || fasonMu(x.m), kilitli: x.pin, sira };
+      isler[a.id] = { id: a.id, job: j.id, ad: a.ad, m: x.m, S: x.S, C: x.C, basladi: x.act, fason: x.fas || fasonMu(x.m), kilitli: !!c.locks[a.id], sira };
       bitis = bitis === null ? x.C : Math.max(bitis, x.C);
       enSon = Math.max(enSon, x.C);
     });
