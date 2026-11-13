@@ -87,7 +87,7 @@ export function DemirbasBolumu({ kimlik, yazar }: { kimlik: string; yazar: boole
     <>
       <TeknikFormu key={t?.surum ?? 0} kimlik={kimlik} teknik={t} yazar={yazar} />
       {yetki.var('finans.oku') && (
-        <AmortismanBolumu makine={t?.makine ?? null} yonetir={yetki.var('finans.yonet')} />
+        <AmortismanBolumu makine={t?.makine ?? null} yonetir={yetki.var('finans.sabit-kiymet')} />
       )}
     </>
   );

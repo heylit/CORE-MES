@@ -86,7 +86,7 @@ const pozitifTamSayi = (v: unknown, alan: string): number => {
 };
 
 // Birim maliyet yazma (kart #1187): yalnız bu üç tür, yalnız TRY. Anahtar kalemin sayı kimliğidir; sürüm köprünün son okuduğu satırdandır
-// (satır yoksa ilk giriş: null). Yetkiyi (finans.yonet) sunucu verir; köprü yazma yetkisini ayrıca varsaymaz.
+// (satır yoksa ilk giriş: null). Yetkiyi (finans.maliyet-yaz) sunucu verir; köprü yazma yetkisini ayrıca varsaymaz.
 const MALIYET_TURLERI = ['malzeme', 'istasyon', 'kisi'] as const;
 const AZAMI_MALIYET = 1_000_000_000;
 export function maliyetIstegi(girdi: Nesne, baglam: KomutBaglami): HazirKomut {
@@ -107,7 +107,7 @@ export const IZINLI_KOMUTLAR: Readonly<Record<string, KomutTanimi | OzelKomut | 
   'statu-degistir': {
     yol: '/stok/statu-degistir', alanlar: ['malzemeId', 'konumId', 'partiId', 'kaynakStatuId', 'hedefStatuId', 'miktar', 'aciklama'], tekrarKorumali: true,
   },
-  // Finans: birim maliyetler (kart #1187, POST /finans/maliyetler/:tur/yaz, `finans.yonet`).
+  // Finans: birim maliyetler (kart #1187, POST /finans/maliyetler/:tur/yaz, `finans.maliyet-yaz`).
   'maliyet-yaz': { hazirla: (girdi: Nesne, baglam: KomutBaglami) => maliyetIstegi(girdi, baglam) },
   ...STOK_KOMUTLARI,
   // 533 a: malzemenin tedarik termini Satın Alma'nın ucuna yazılır (yetki satin-alma.yaz ya da plan.yaz; sürüm tutmazsa 409).

@@ -12,10 +12,11 @@ function useOzet() {
   return useQuery({ queryKey: ['finans', 'ozet'], queryFn: () => api.get<FinansOzetiCevabi>('/finans/ozet') });
 }
 
-// Kur listesi Ayarlar'dadır (finans.yonet); okuyan finans ana sayfasına gider, sayfayı açamayana bağlantı verilmez.
+// Kur listesi Ayarlar'dadır (ayar ekranını açan beş eylemden biri, 3165 a); okuyan finans ana sayfasına gider, sayfayı açamayana bağlantı verilmez.
 function useYol(): string | undefined {
   const islemler = useOturum().data?.islemler ?? [];
-  const secenekler: [Islem, string][] = [['finans.yonet', '/finans/ayarlar'], ['sayfa.finans', '/finans']];
+  const AYAR_EKRANI: readonly Islem[] = ['finans.ayar', 'finans.hesap-yonet', 'finans.oran-yaz', 'finans.sabit-kiymet', 'finans.duzenli-odeme'];
+  const secenekler: [Islem, string][] = [...AYAR_EKRANI.map((i): [Islem, string] => [i, '/finans/ayarlar']), ['sayfa.finans', '/finans']];
   return secenekler.find(([islem]) => islemler.includes(islem))?.[1];
 }
 

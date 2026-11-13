@@ -68,7 +68,7 @@ export function yetkiHesapla(y: Pick<Yetki, 'var' | 'herhangi'>): RrYetkisi {
     istasyonYaz: y.herhangi(...ISTASYON_YAZMA_ISLEMLERI),
     kisiYaz: y.var('kisiler.yaz'),
     planYaz: y.var('plan.yaz'),
-    maliyetYaz: y.var('finans.yonet'),
+    maliyetYaz: y.var('finans.maliyet-yaz'),
   };
   return {
     oku: y.herhangi(...OKUMA_ISLEMLERI),

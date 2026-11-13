@@ -4,7 +4,7 @@ import type { Kullanici } from '#paylasilan/kullanici.ts';
 import { finansAc, json, OKUYAN, sunucuKur, YAZAN, type Istek } from '../test-ortak.tsx';
 
 // Raporların ekran testleri: her yazma düğmesi için izinli ve reddedilen (gizli) görünüm; her yazma kendi ucuna tek istek.
-const YONETEN: Kullanici = { ...YAZAN, id: 9, islemler: [...YAZAN.islemler, 'finans.yonet'] as Kullanici['islemler'] };
+const YONETEN: Kullanici = { ...YAZAN, id: 9, islemler: [...YAZAN.islemler, 'finans.ayar'] as Kullanici['islemler'] };
 const tamam = () => json(200, { anahtar: 'x' });
 
 beforeEach(() => {
@@ -54,7 +54,7 @@ describe('F3 Durum ve öneriler', () => {
     expect(yazmalar(istekler)).toHaveLength(0);
   });
 
-  it('finans.yonet ile bilanço alanı bırakılınca ayar ucuna kayıtlı sürümle gider', async () => {
+  it('finans.ayar ile bilanço alanı bırakılınca ayar ucuna kayıtlı sürümle gider', async () => {
     const istekler = sunucuKur(YONETEN, { 'POST /finans/ayar/guncelle': () => json(200, { ayar: {} }) });
     finansAc('/finans/durum');
     const alan = await screen.findByLabelText(/Dönen varlıklar/);

@@ -38,7 +38,7 @@ afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
 describe('Finans pano kartları', () => {
   it('iki kur kartı tek istekle dolar; kuru olmayan döviz "Veri yok" der, sıfır uydurmaz', async () => {
-    const istekler = sunucuKur(['sayfa.finans', 'finans.oku', 'finans.yonet'], () =>
+    const istekler = sunucuKur(['sayfa.finans', 'finans.oku', 'finans.iptal', 'finans.cek-yonet', 'finans.hesap-yonet', 'finans.oran-yaz', 'finans.sabit-kiymet', 'finans.maliyet-yaz', 'finans.duzenli-odeme', 'finans.ayar'], () =>
       json(200, ozetGovdesi({ kurlar: [{ paraBirimi: 'USD', kur: '33.750000', tarih: '2026-10-09' }] })));
     panoyuAc();
     await screen.findByText('33,75');

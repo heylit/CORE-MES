@@ -319,7 +319,7 @@ export type CekDurumu = 'tahsilde' | 'tahsil' | 'ciro' | 'karsiliksiz' | 'odendi
 export const takiptekiCekler = (V: HazirVeri): SunucuCeki[] =>
   V.cekler.filter((c) => (c.yon === 'alinan' && ['portfoy', 'tahsilde'].includes(c.durum)) || (c.yon === 'verilen' && c.durum === 'bekliyor'))
     .sort((a, b) => (a.vade < b.vade ? -1 : 1));
-// Karşılıksız kaydı faturaları yeniden açar; uç finans.yonet ister, yalnız yazan düğmeyi görmez.
+// Karşılıksız kaydı faturaları yeniden açar; uç finans.cek-yonet ister, yalnız yazan düğmeyi görmez.
 export function cekDugmeleri(c: SunucuCeki, yonet: boolean): { durum: CekDurumu; baslik: string; tehlike?: true }[] {
   if (c.yon === 'verilen') return [{ durum: 'odendi', baslik: 'Ödendi' }];
   return [

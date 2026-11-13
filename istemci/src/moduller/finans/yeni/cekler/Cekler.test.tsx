@@ -73,4 +73,12 @@ describe('Çek ve senet ekranı', () => {
     fireEvent.click(within(pencere).getByRole('button', { name: 'İptali onayla' }));
     await waitFor(() => expect(istekler.find((i) => i.yontem === 'POST')).toEqual({ yontem: 'POST', yol: '/finans/cekler/2/iptal', govde: { surum: 1 } }));
   });
+
+  it.each([['cekYonet', true], ['iptal', false]] as const)('3165 a: çek penceresindeki "İptal et" yalnız çek eylemiyle görünür (%s)', async (bayrak, beklenen) => {
+    sunucuKur(YAZAN, {});
+    ekranAc(Cekler, { ...YAZAR, [bayrak]: true });
+    fireEvent.click(within(takip()).getAllByRole('button', { name: /çekini düzenle/ })[0]!);
+    const pencere = await screen.findByRole('dialog', { name: 'Çek / senedi düzenle' });
+    expect(within(pencere).queryByRole('button', { name: 'İptal et' }) !== null).toBe(beklenen);
+  });
 });

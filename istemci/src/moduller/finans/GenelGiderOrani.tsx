@@ -61,11 +61,11 @@ const SUTUNLAR: Sutun<Gosterim>[] = [
 ];
 
 // Genel gider yük oranı (206 a, 211 a): işe yazılamayan aylık gider, aylık makine saatine bölünüp her makine saatine eklenir.
-// Okuma finans.maliyet-oku, giriş finans.yonet; satır değişmez, düzeltme aynı güne yeni satırdır.
+// Okuma finans.maliyet-oku, giriş finans.oran-yaz; satır değişmez, düzeltme aynı güne yeni satırdır.
 export function GenelGiderOrani() {
   const islemler = useOturum().data?.islemler ?? [];
   const okuyabilir = islemler.includes('finans.maliyet-oku');
-  const yazabilir = islemler.includes('finans.yonet');
+  const yazabilir = islemler.includes('finans.oran-yaz');
   const liste = useQuery({
     queryKey: ANAHTAR,
     queryFn: () => api.get<Liste>('/finans/genel-gider-oranlari?sayfaBoyu=500'),

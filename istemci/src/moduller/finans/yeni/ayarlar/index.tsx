@@ -89,10 +89,10 @@ function SirketSekmesi({ finans, yetki, sec }: SekmeOzellikleri & { sec: (a: Aya
   return (
     <Kart baslik="Şirket" baslikEki={<span className="tc-fa-soluk">Sektör seçimi, oranların hangi eşiklerle puanlanacağını belirler.</span>}>
       <div className="tc-fa-ayar-izgara">
-        <Girdi etiket="Şirket adı" defaultValue={kilitli ? V.sirketAdi! : a.sirketAdi} readOnly={kilitli || !yetki.yonet} maxLength={200}
+        <Girdi etiket="Şirket adı" defaultValue={kilitli ? V.sirketAdi! : a.sirketAdi} readOnly={kilitli || !yetki.ayar} maxLength={200}
           ipucu={kilitli ? "Satın Alma > Ayarlar'dan değiştirilir." : undefined}
           onBlur={(e) => { const v = e.target.value.trim(); if (!kilitli && v && v !== a.sirketAdi) kaydet({ sirketAdi: v }); }} />
-        <Secim etiket="Sektör" defaultValue={a.sektor} disabled={!yetki.yonet} secenekler={Object.entries(SECTORS).map(([k, s]) => ({ deger: k, baslik: s.ad }))}
+        <Secim etiket="Sektör" defaultValue={a.sektor} disabled={!yetki.ayar} secenekler={Object.entries(SECTORS).map(([k, s]) => ({ deger: k, baslik: s.ad }))}
           onChange={(e) => kaydet({ sektor: e.target.value as FinansAyari['sektor'] })} />
       </div>
       <div className="tc-fa-ayar-arac">
@@ -114,7 +114,8 @@ function NakitSekmesi({ finans, yetki, kayitGir }: SekmeOzellikleri) {
   const [kaldirilan, kaldirilanYaz] = useState<DuzenliKayit | null>(null);
   const aylikSabit = sum(motor.durum.recurring, (r) => Number(r.amount) || 0);
   const duzenliler = V.duzenliOdemeler.filter((d) => d.aktif);
-  const yonet = yetki.yonet;
+  const yonet = yetki.ayar;
+  const duzenliYazar = yetki.duzenliOdeme;
   const alanDegisti = (dz: DuzenliKayit, alan: DuzenliAlani) => (e: ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     void gonder([duzenliGuncelleKomutu(dz, alan, e.target.value)]);
   };
@@ -139,19 +140,19 @@ function NakitSekmesi({ finans, yetki, kayitGir }: SekmeOzellikleri) {
       </Kart>
 
       <Kart baslik="Düzenli ödemeler" baslikEki={<span className="tc-fa-soluk">Her ay aynı gün tekrar eden ödemeler; nakit tahminlerine otomatik girer.</span>}
-        sag={yonet ? <Dugme simge="plus" yukleniyor={mesgul} onClick={() => void gonder([duzenliEkleKomutu()])}>Düzenli ödeme ekle</Dugme> : undefined}>
+        sag={duzenliYazar ? <Dugme simge="plus" yukleniyor={mesgul} onClick={() => void gonder([duzenliEkleKomutu()])}>Düzenli ödeme ekle</Dugme> : undefined}>
         {duzenliler.length === 0 && <p className="tc-fa-soluk">Henüz düzenli ödeme yok.</p>}
         <ul className="tc-fa-duzenli">
           {duzenliler.map((dz) => (
             <li key={`${dz.id}-${dz.surum}`} className="tc-fa-duzenli-satir">
-              <Girdi etiket="Ad" defaultValue={dz.ad} maxLength={100} disabled={!yonet} onBlur={(e) => { if (e.target.value !== dz.ad) alanDegisti(dz, 'ad')(e); }} />
-              <Secim etiket="Kategori" defaultValue={dz.kategori} disabled={!yonet} secenekler={DUZENLI_KATEGORILERI} onChange={alanDegisti(dz, 'kategori')} />
-              <Girdi etiket="Tutar (KDV dahil)" type="number" min="0" step="1000" inputMode="decimal" defaultValue={sayi(dz.tutar)} disabled={!yonet}
+              <Girdi etiket="Ad" defaultValue={dz.ad} maxLength={100} disabled={!duzenliYazar} onBlur={(e) => { if (e.target.value !== dz.ad) alanDegisti(dz, 'ad')(e); }} />
+              <Secim etiket="Kategori" defaultValue={dz.kategori} disabled={!duzenliYazar} secenekler={DUZENLI_KATEGORILERI} onChange={alanDegisti(dz, 'kategori')} />
+              <Girdi etiket="Tutar (KDV dahil)" type="number" min="0" step="1000" inputMode="decimal" defaultValue={sayi(dz.tutar)} disabled={!duzenliYazar}
                 onBlur={(e) => { if (sayi(e.target.value) !== sayi(dz.tutar)) alanDegisti(dz, 'tutar')(e); }} />
-              <Secim etiket="İçindeki KDV" defaultValue={String(sayi(dz.kdvOrani))} disabled={!yonet} secenekler={KDV_SECENEKLERI} onChange={alanDegisti(dz, 'kdvOrani')} />
-              <Girdi etiket="Ayın günü" type="number" min="1" max="31" defaultValue={dz.ayinGunu} disabled={!yonet}
+              <Secim etiket="İçindeki KDV" defaultValue={String(sayi(dz.kdvOrani))} disabled={!duzenliYazar} secenekler={KDV_SECENEKLERI} onChange={alanDegisti(dz, 'kdvOrani')} />
+              <Girdi etiket="Ayın günü" type="number" min="1" max="31" defaultValue={dz.ayinGunu} disabled={!duzenliYazar}
                 onBlur={(e) => { if (sayi(e.target.value) !== dz.ayinGunu) alanDegisti(dz, 'ayinGunu')(e); }} />
-              {yonet && <Dugme tur="tehlike" simge="trash" onClick={() => kaldirilanYaz(dz)}>Kaldır</Dugme>}
+              {duzenliYazar && <Dugme tur="tehlike" simge="trash" onClick={() => kaldirilanYaz(dz)}>Kaldır</Dugme>}
             </li>
           ))}
         </ul>
@@ -169,7 +170,7 @@ function AnalizSekmesi({ finans, yetki }: SekmeOzellikleri) {
   const { V, motor } = finans;
   const a = V.ayar, kaydet = useAyarKaydi(finans);
   const A = motor.runAnalysis();
-  const yonet = yetki.yonet;
+  const yonet = yetki.ayar;
   const agirlik: Record<string, keyof AyarDegisikligi> = {
     likidite: 'agirlikLikidite', nakit: 'agirlikNakit', karlilik: 'agirlikKarlilik', verimlilik: 'agirlikVerimlilik', borcluluk: 'agirlikBorcluluk',
   };
@@ -261,7 +262,7 @@ function VeriSekmesi({ finans, yetki }: SekmeOzellikleri) {
           <h3 className="tc-fa-ayar-alt">CSV içe aktar</h3>
           <p className="tc-fa-not">Sütunlar: Tarih, Tür (gelir/gider), Kategori, Cari, Açıklama, KDV hariç, KDV %, Vade, Durum, Ödeme tarihi. Noktalı virgül veya virgül ayraçlı olabilir; tarihler GG.AA.YYYY veya YYYY-AA-GG. Yalnız açık belge açılır; firma adı tam eşleşmelidir.</p>
           <div className="tc-fa-ayar-arac">
-            {yetki.yonet && (
+            {yetki.ayar && (
               <label className="tc-fa-dosya">
                 <span className="tc-dugme tc-dugme-ikincil tc-dugme-normal">CSV dosyası seç</span>
                 <input ref={dosya} type="file" accept=".csv,text/csv" onChange={(e) => void sec(e)} />
@@ -318,8 +319,8 @@ function IlkKurulumSekmesi({ finans, yetki, sec }: SekmeOzellikleri & { sec: (a:
         <Girdi etiket="Bugünkü banka bakiyesi" type="number" step="0.01" value={d.banka} onChange={(e) => dg({ banka: e.target.value })} />
         <Girdi etiket="Bugünkü kasa" type="number" step="0.01" value={d.kasa} onChange={(e) => dg({ kasa: e.target.value })} />
         <div className="tc-fa-ayar-arac tc-fa-ayar-tam">
-          <Dugme type="submit" tur="birincil" simge="check" disabled={!yetki.yonet} yukleniyor={mesgul}>Kurulumu tamamla</Dugme>
-          {!yetki.yonet && <span className="tc-fa-soluk">Kurulum finans yönetimi yetkisi ister.</span>}
+          <Dugme type="submit" tur="birincil" simge="check" disabled={!(yetki.ayar && yetki.hesapYonet)} yukleniyor={mesgul}>Kurulumu tamamla</Dugme>
+          {!(yetki.ayar && yetki.hesapYonet) && <span className="tc-fa-soluk">Kurulum finans yönetimi yetkisi ister.</span>}
         </div>
       </form>
     </Kart>

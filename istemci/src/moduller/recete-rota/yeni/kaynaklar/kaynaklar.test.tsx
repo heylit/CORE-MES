@@ -121,7 +121,7 @@ describe('R2 Süreler', () => {
 
 /* ---------------- Malzemeler ---------------- */
 
-const MALIYETCI = { ...YONETICI, id: 9, islemler: [...YONETICI.islemler, 'finans.yonet'] } as Kullanici;
+const MALIYETCI = { ...YONETICI, id: 9, islemler: [...YONETICI.islemler, 'finans.maliyet-yaz'] } as Kullanici;
 function statuluDurum(): DurumCevabi {
   const d = ornekDurum();
   d.statuses = [{ id: 'S1', code: 'KAR', name: 'Karantina', kind: 'kalite', color: '#336699', surum: 3 }];
@@ -149,7 +149,7 @@ describe('R2 Malzemeler', () => {
     expect(yazmalar(istekler)).toEqual([]);
   });
 
-  it('2584 a: statüler Ayarlar\'dadır, Malzemeler\'de yoktur; recete-rota.yaz statü tanımını sürümüyle yazar; finans.yonet birim maliyeti yazar', async () => {
+  it('2584 a: statüler Ayarlar\'dadır, Malzemeler\'de yoktur; recete-rota.yaz statü tanımını sürümüyle yazar; finans.maliyet-yaz birim maliyeti yazar', async () => {
     const istekler = sunucuKur(MALIYETCI, {
       durum: statuluDurum(),
       yazmalar: {

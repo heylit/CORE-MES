@@ -96,14 +96,18 @@ export interface YeniSekme {
   baslik: string;
   simge: SimgeAdi;
   islem: string;
+  // İşlemin yanında sekmeyi açan öteki işlemler (menüdeki `veya`; 3165 a: Ayarlar beş eylemden biriyle açılır).
+  veya: readonly string[];
   yol: string;
   // Menüdeki grubun başlığı (Plan, Raporlar, Sistem); ilk grubun başlığı yoktur.
   grup: string | null;
 }
 const gruplar = finansMenusu.gruplar as readonly { baslik?: string; maddeler: readonly Madde[] }[];
 export const SEKMELER: readonly YeniSekme[] = gruplar.flatMap((g) => g.maddeler.map((m) => ({
-  anahtar: m.anahtar, baslik: m.baslik, simge: m.simge as SimgeAdi, islem: m.islem, yol: m.yol, grup: g.baslik ?? null,
+  anahtar: m.anahtar, baslik: m.baslik, simge: m.simge as SimgeAdi, islem: m.islem, veya: 'veya' in m && Array.isArray(m.veya) ? (m.veya as readonly string[]) : [], yol: m.yol, grup: g.baslik ?? null,
 })));
+// Sekme, kendi işlemi ya da `veya` listesindeki işlemlerden biriyle açılır.
+export const sekmeAcik = (s: YeniSekme, varMi: (islem: string) => boolean): boolean => varMi(s.islem) || s.veya.some(varMi);
 const YOLLAR = new Map(SEKMELER.map((s) => [s.anahtar, s.yol]));
 export const yeniYol = (anahtar: SekmeAnahtari): string => YOLLAR.get(anahtar) ?? YENI_KOK;
 

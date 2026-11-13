@@ -27,7 +27,7 @@ const KIYMETLER: MakineSabitKiymetleriCevabi = {
     olusturma: '2026-11-01T10:00:00.000Z', bedelTl: '120000.00', buAyTl: '1000.00', birikmisTl: '25000.00', netTl: '95000.00',
   }],
 };
-const FINANSCI: Kullanici = { ...YAZAN, id: 21, islemler: [...YAZAN.islemler, 'finans.oku', 'finans.yonet'] };
+const FINANSCI: Kullanici = { ...YAZAN, id: 21, islemler: [...YAZAN.islemler, 'finans.oku', 'finans.sabit-kiymet'] };
 
 function ac(kullanici: Kullanici, yazar: boolean, yollar: Parameters<typeof sunucuKur>[1] = {}) {
   const istekler = sunucuKur(kullanici, {

@@ -420,7 +420,7 @@ function IstasyonTablosu({ b, wc }: { b: Bag; wc: IsMerkezi }) {
   return <Tablo<Istasyon> etiket={`${wc.code} istasyonları`} sutunlar={sutunlar} satirlar={liste} satirAnahtari={(x) => x.id} bosMesaj="Bu iş merkezinde istasyon yok." />;
 }
 
-// Birim maliyet Finans'tadır (finans.yonet ile yazılır, finans.maliyet-oku ile görünür). Boş bırakılamaz; kaldırmak için 0 girilir.
+// Birim maliyet Finans'tadır (finans.maliyet-yaz ile yazılır, finans.maliyet-oku ile görünür). Boş bırakılamaz; kaldırmak için 0 girilir.
 function MaliyetHucresi({ tur, id, etiket, b }: { tur: 'istasyon' | 'kisi'; id: string; etiket: string; b: Bag }) {
   const { calistir } = useR2Komutu();
   const { bildir } = useBildirim();

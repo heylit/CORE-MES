@@ -12,7 +12,7 @@ import {
 } from './kurallar-duzelt.ts';
 
 // Satıra tıklanınca açılan "Kaydı düzenle" penceresi (prototipte tx çekmecesi). Yalnız belge satırı ve finans.yaz ile form açılır;
-// avans ya da ödeme satırı düzenleme formu açmaz (Soru 844/4). İptal finans.yonet ister; asıl denetim uçtadır.
+// avans ya da ödeme satırı düzenleme formu açmaz (Soru 844/4). İptal finans.iptal ister; asıl denetim uçtadır.
 
 const SUNUCU_ALANLARI: Record<string, keyof DuzeltDegerleri> = {
   belgeTarihi: 'date', vade: 'due', tutar: 'amount', aciklama: 'desc', firmaId: 'party', kategori: 'cat', kdvOrani: 'kdv',
@@ -95,7 +95,7 @@ function BelgeDuzelt({ belge: b, finans, yetki, kapat }: { belge: Belge; finans:
         {tutar > 0 && !tutarKilitli(b) && <p className="tc-fk-not">KDV {tl(tutar * kdv / 100)}, KDV dahil toplam <b>{tl(tutar * (1 + kdv / 100))}</b></p>}
         <Girdi etiket="Vade tarihi" type="date" {...form.alan('due')} />
         <EslemeBaglantisi belge={b} kaydedilmemis={JSON.stringify(d) !== JSON.stringify(ilk)} />
-        {yetki.yonet && (
+        {yetki.iptal && (
           <div className="tc-fk-dugmeler">
             <IptalDugmesi komutKur={() => belgeIptalKomutu(b)} kapat={kapat} uyari={iptalUyarisi(b)} />
           </div>
@@ -105,9 +105,9 @@ function BelgeDuzelt({ belge: b, finans, yetki, kapat }: { belge: Belge; finans:
   );
 }
 
-// Düzenlenemeyen satır (avans ya da ödeme) ya da yazma yetkisi olmayan kullanıcı: bilgi ve (yonet ise) iptal.
+// Düzenlenemeyen satır (avans ya da ödeme) ya da yazma yetkisi olmayan kullanıcı: bilgi ve (iptal eylemi varsa) iptal.
 function KayitAyrintisi({ belge, odeme, yetki, kapat }: { belge: Belge | undefined; odeme: Odeme | undefined; yetki: FinansYetkisi; kapat: () => void }) {
-  const iptal = yetki.yonet && (belge || odeme);
+  const iptal = yetki.iptal && (belge || odeme);
   return (
     <Pencere acik kapat={kapat} baslik="Kayıt" tur="yan" alt={<Dugme onClick={kapat}>Kapat</Dugme>}>
       <div className="tc-fk-form">

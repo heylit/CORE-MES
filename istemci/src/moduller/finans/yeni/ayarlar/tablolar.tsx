@@ -37,7 +37,7 @@ export function HesaplarSekmesi({ finans, yetki }: Ozellik) {
     { anahtar: 'pb', baslik: 'Para birimi', hucre: (h) => h.paraBirimi },
     { anahtar: 'bakiye', baslik: 'Bakiye', hizala: 'sag', mono: true, hucre: (h) => paraMetni(h.bakiye, h.paraBirimi) },
     { anahtar: 'durum', baslik: 'Durum', hucre: (h) => (h.aktif ? <Rozet ton="tamam">Aktif</Rozet> : <Rozet ton="pasif">Pasif</Rozet>), csv: (h) => (h.aktif ? 'Aktif' : 'Pasif') },
-    ...(yetki.yonet ? [{
+    ...(yetki.hesapYonet ? [{
       anahtar: 'eylem', baslik: 'İşlem', csv: false as const, hucre: (h: Hesap) => (
         <span className="tc-fa-ayar-arac">
           <Dugme simge="edit" onClick={() => formYaz({ h })}>Düzenle</Dugme>
@@ -47,7 +47,7 @@ export function HesaplarSekmesi({ finans, yetki }: Ozellik) {
     }] : []),
   ];
   return (
-    <Kart baslik="Hesaplar" sag={yetki.yonet ? <Dugme simge="plus" onClick={() => formYaz({ h: null })}>Yeni hesap</Dugme> : undefined}>
+    <Kart baslik="Hesaplar" sag={yetki.hesapYonet ? <Dugme simge="plus" onClick={() => formYaz({ h: null })}>Yeni hesap</Dugme> : undefined}>
       <Tablo etiket="Hesaplar" sutunlar={sutunlar} satirlar={V.hesaplar} satirAnahtari={(h) => h.id} bosMesaj="Hesap yok." />
       <p className="tc-fa-not">Bakiye: açılış + tahsilat ve ödemeler + sonuçlanan çekler + aktarımlar + eşitlemeler. Bakiyesi sıfır olmayan hesap pasife alınamaz.</p>
       {form && <HesapFormu finans={finans} h={form.h} kapat={() => formYaz(null)} />}
@@ -100,7 +100,7 @@ export function KdvSekmesi({ finans, yetki }: Ozellik) {
   return (
     <Kart baslik="KDV oranları">
       <Tablo etiket="KDV oranları" sutunlar={sutunlar} satirlar={finans.V.kdvOranlari} satirAnahtari={(o) => `${o.oran}-${o.gecerlilikBaslangic}`} bosMesaj="KDV oranı yok." />
-      {yetki.yonet && (
+      {yetki.oranYaz && (
         <form className="tc-fa-ayar-satir" aria-label="KDV oranı ekle"
           onSubmit={(e) => { e.preventDefault(); void gonder([kdvKomutu(f.d.oran, f.d.baslangic)]).then((ok) => { if (ok) f.sifirla(); }); }}>
           <Girdi etiket="Oran (%)" type="number" min="0" max="100" step="0.01" required value={f.d.oran} onChange={(e) => f.dg({ oran: e.target.value })} />
@@ -161,7 +161,7 @@ export function KurFaizSekmesi({ finans, yetki }: Ozellik) {
             <Dugme type="submit" simge="plus" yukleniyor={mesgul}>{mevcutCift ? 'Kuru düzelt' : 'Kur ekle'}</Dugme>
           </form>
         )}
-        {yetki.yonet && (
+        {yetki.ayar && (
           <form className="tc-fa-ayar-satir" aria-label="Çapraz kur payı"
             onSubmit={(e) => { e.preventDefault(); void gonder([ayarPayKomutu(finans, pay)]); }}>
             <Girdi etiket="Çapraz kur sapma payı (%)" type="number" min="0.01" max="100" step="0.01" required value={pay} onChange={(e) => payYaz(e.target.value)} />
@@ -206,7 +206,7 @@ export function SabitKiymetSekmesi({ finans, yetki }: Ozellik) {
   const top = (alan: 'buAyTl' | 'birikmisTl' | 'netTl') => liste.filter((k) => !k.pasifTarihi).reduce((t, k) => t + sayi(k[alan]), 0);
   const durum = (k: SabitKiymetSatiri) => {
     if (k.pasifTarihi) return <Rozet ton="pasif">Pasif · {tarih(k.pasifTarihi)}</Rozet>;
-    if (!yetki.yonet) return <Rozet ton="tamam">Aktif</Rozet>;
+    if (!yetki.sabitKiymet) return <Rozet ton="tamam">Aktif</Rozet>;
     if (pasif?.id !== k.id) return <Dugme onClick={() => pasifYaz({ id: k.id, tarih: motor.bugun })}>Pasife al</Dugme>;
     return (
       <form className="tc-fa-ayar-arac" aria-label={`${k.ad} pasife al`}
@@ -248,7 +248,7 @@ export function SabitKiymetSekmesi({ finans, yetki }: Ozellik) {
         <Rozet ton="bilgi">Net değer {tl(top('netTl'))}</Rozet>
       </div>
       <Tablo etiket="Sabit kıymetler" sutunlar={sutunlar} satirlar={liste} satirAnahtari={(k) => k.id} bosMesaj="Sabit kıymet girilmemiş." />
-      {yetki.yonet && (
+      {yetki.sabitKiymet && (
         <form className="tc-fa-ayar-izgara" aria-label="Sabit kıymet ekle" onSubmit={(e) => { e.preventDefault(); void ekle(); }}>
           <Girdi etiket="Ad" maxLength={200} required value={d.ad} onChange={(e) => dg({ ad: e.target.value })} />
           <Girdi etiket="Makine kodu" maxLength={24} placeholder="İsteğe bağlı" value={d.makineKodu} onChange={(e) => dg({ makineKodu: e.target.value })} />

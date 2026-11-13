@@ -17,7 +17,7 @@ import {
 const DURUM_TONU: Record<ButceDurumu, RozetTonu> = { yok: 'pasif', asildi: 'hata', sinirda: 'uyari', hizli: 'uyari', plan: 'tamam' };
 const kisaKalem = (k: string): string => k.replace(' (net maaş)', '').replace('Mal / hammadde alımı', 'Mal alımı');
 
-// Bütçe (prototip VIEWS.butce). Tutar "bu aydan itibaren" geçerlidir; girişi finans.yonet yapar (uç), öteki rol yalnız okur.
+// Bütçe (prototip VIEWS.butce). Tutar "bu aydan itibaren" geçerlidir; girişi finans.ayar yapar (uç), öteki rol yalnız okur.
 export function Butce({ finans, yetki }: EkranOzellikleri) {
   const [ay, ayYaz] = useState<string>(() => ilkButceAyi(finans?.motor.bugun ?? tesisGunu(Date.now())));
   const komut = useFinansKomutu();
@@ -34,7 +34,7 @@ export function Butce({ finans, yetki }: EkranOzellikleri) {
     });
   };
   const tutarGirdisi = (etiket: string, deger: number, kalem: ReturnType<typeof butceKalemi>, adim: number) => {
-    if (!yetki.yonet || !kalem) return deger ? tl(deger) : '—';
+    if (!yetki.ayar || !kalem) return deger ? tl(deger) : '—';
     return <ButceGirdisi key={deger} etiket={etiket} deger={deger} adim={adim} kaydet={(v) => gonder([butceKomutu(kalem, motor.bugun, v)])} />;
   };
 
@@ -59,7 +59,7 @@ export function Butce({ finans, yetki }: EkranOzellikleri) {
 
   return (
     <div className="tc-fy-bolum tc-fc">
-      <p className="tc-fy-not">Her gider kalemi için aylık bütçe; gerçekleşenle fark anında görünür.{yetki.yonet ? ' Bütçe tutarını tabloda doğrudan değiştirebilirsiniz.' : ''}</p>
+      <p className="tc-fy-not">Her gider kalemi için aylık bütçe; gerçekleşenle fark anında görünür.{yetki.ayar ? ' Bütçe tutarını tabloda doğrudan değiştirebilirsiniz.' : ''}</p>
       <OzetSeridi etiket="Bütçe özeti" hucreler={[
         { etiket: 'Aylık gider bütçesi', deger: tl(T.toplamButce) },
         { etiket: 'Gerçekleşen gider', deger: tl(T.toplamGercek), alt: T.buAy ? `Ayın %${sayiMetni(T.ayOrani * 100)}'i geçti` : `${ymLong(T.ay)}, ay tamamlandı`, ton: T.toplamGercek > T.toplamButce ? 'eksi' : null },
@@ -70,7 +70,7 @@ export function Butce({ finans, yetki }: EkranOzellikleri) {
         baslik={`Bütçe ve gerçekleşen: ${ymLong(ay)}`}
         sag={(
           <div className="tc-fc-arac">
-            {yetki.yonet && <Dugme simge="rotate" yukleniyor={komut.isPending} onClick={() => gonder(altiAyKomutlari(motor))}>Son 6 ay ortalamasıyla doldur</Dugme>}
+            {yetki.ayar && <Dugme simge="rotate" yukleniyor={komut.isPending} onClick={() => gonder(altiAyKomutlari(motor))}>Son 6 ay ortalamasıyla doldur</Dugme>}
             <SecimSeridi etiket="Ay" secenekler={butceAylari(motor.bugun).map((m) => [m, ymLabel(m)] as const)} secili={ay} sec={ayYaz} />
           </div>
         )}

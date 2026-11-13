@@ -157,7 +157,7 @@ function Gostergeler({ finans, A, yetki }: { finans: FinansVerisi; A: Analiz; ye
       <details className="tc-fr-gosterge" open={eksik}>
         <summary><span><b>Bilanço özetini güncelle</b></span></summary>
         <p className="tc-fr-soluk">Mali müşavirinizden alacağınız son bilanço veya mizandan.</p>
-        <BilancoOzeti finans={finans} yonet={yetki.yonet} />
+        <BilancoOzeti finans={finans} yonet={yetki.ayar} />
       </details>
     </Kart>
   );
@@ -181,7 +181,7 @@ function DonusumSuresi({ dio, dso, dpo }: { dio: number; dso: number; dpo: numbe
   );
 }
 
-// Bilanço özeti ayardadır (ayar/guncelle, finans.yonet). Alan bırakılınca kaydedilir (prototipte değişince kaydedilir).
+// Bilanço özeti ayardadır (ayar/guncelle, finans.ayar). Alan bırakılınca kaydedilir (prototipte değişince kaydedilir).
 function BilancoOzeti({ finans, yonet }: { finans: FinansVerisi; yonet: boolean }) {
   const komut = useFinansKomutu();
   const { bildir } = useBildirim();

@@ -320,7 +320,7 @@ describe('köprü: birim maliyet yazma (kart #1187)', () => {
     expect(yazmalar(okunmamis)).toEqual([]);
   });
 
-  it('MAL-03: sunucu yetkiyi reddederse (finans.yonet yok) hata iletisiyle taşınır ve durum yeniden okunmaz', async () => {
+  it('MAL-03: sunucu yetkiyi reddederse (finans.maliyet-yaz yok) hata iletisiyle taşınır ve durum yeniden okunmaz', async () => {
     const istekler = sunucuKur((yontem, yol) => (yontem === 'POST' ? json(403, { kod: 'YETKI_YOK', mesaj: 'Bu işlem için yetkiniz yok.' }) : json(200, yol === '/plan/planlama-kaynagi' ? MALIYETLI : {})));
     const isle = kopruKur();
     await isle('durum-oku', {});

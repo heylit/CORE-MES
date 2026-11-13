@@ -3,10 +3,10 @@ import { act, cleanup, fireEvent, screen, waitFor, within } from '@testing-libra
 import type { Kullanici } from '#paylasilan/kullanici.ts';
 import { finansAc, json, sunucuKur, type Istek } from '../test-ortak.tsx';
 
-// Ayarlar finans.yonet ister (menü işlemi); kur ve faiz girişi finans.kur-yaz. Kişiler uydurmadır.
+// Ayarlar finans.ayar ya da tanım eylemlerinden birini ister (menü işlemi); kur ve faiz girişi finans.kur-yaz. Kişiler uydurmadır.
 const kisi = (id: number, islemler: string[]): Kullanici => ({ id, ad: `Deneme ${id}`, islemler: islemler as Kullanici['islemler'] });
-const YONETICI = kisi(10, ['sayfa.finans', 'finans.oku', 'finans.yaz', 'finans.yonet', 'finans.kur-yaz', 'musteri-tedarikci.oku']);
-const KURSUZ = kisi(11, ['sayfa.finans', 'finans.oku', 'finans.yonet']);
+const YONETICI = kisi(10, ['sayfa.finans', 'finans.oku', 'finans.yaz', 'finans.iptal', 'finans.cek-yonet', 'finans.hesap-yonet', 'finans.oran-yaz', 'finans.sabit-kiymet', 'finans.maliyet-yaz', 'finans.duzenli-odeme', 'finans.ayar', 'finans.kur-yaz', 'musteri-tedarikci.oku']);
+const KURSUZ = kisi(11, ['sayfa.finans', 'finans.oku', 'finans.iptal', 'finans.cek-yonet', 'finans.hesap-yonet', 'finans.oran-yaz', 'finans.sabit-kiymet', 'finans.maliyet-yaz', 'finans.duzenli-odeme', 'finans.ayar']);
 
 beforeEach(() => {
   vi.useFakeTimers({ toFake: ['Date'] });
