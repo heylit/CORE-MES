@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import {
-  anaDalYamaKimlikleri, dayanakDurumu, denemeOrtami, initdbArgumanlari, istemciSarmalayicisi, pgBinBul, sarmalayiciyaYonelt, sonucMetni, sonucOku, testPlani, VT_ISTEMCI_YAPILANDIRMASI, vtDenetle, yamaKimlikleri,
+  anaDalYamaKimlikleri, dayanakDurumu, denemeOrtami, initdbArgumanlari, istemciSarmalayicisi, pgBinBul, sarmalayiciyaYonelt, sonucMetni, sonucOku, testPlani, istemciyeBakanSunucuTestleri, kararDosyalari, kisaYolKarari, veritabanisizMi, VT_ISTEMCI_YAPILANDIRMASI, vtDenetle, yamaKimlikleri,
 } from './teslim-vt.ts';
 
 const SHA = 'a'.repeat(64);
@@ -126,4 +126,84 @@ test('patch-id: ana dal birleşen yamanın satırlarını sonradan değiştirse 
   } finally {
     rmSync(kok, { recursive: true, force: true });
   }
+});
+
+test('veritabanisizMi (3221 a): yalnız her dosya istemci/src altındaysa; tanınmayan her yol tam denemeye düşer', () => {
+  assert.equal(veritabanisizMi(['istemci/src/moduller/stok/Liste.tsx', 'istemci/src/moduller/stok/Liste.test.tsx', 'istemci/src/ortak/arayuz/tablo.css']), true);
+  for (const yol of [
+    'ekran-testleri/stok.spec.ts', 'sunucu/moduller/stok/servis.ts', 'sunucu/moduller/stok/servis.test.ts', 'paylasilan/sozlesme/stok.ts',
+    'sunucu/gocler/20261113000000_x.sql', 'istemci/vite.config.ts', 'istemci/package.json', 'istemci/index.html', 'package.json', 'package-lock.json',
+    'tsconfig.json', 'araclar/teslim-vt.ts', '.github/workflows/kontrol.yml', 'arkon/src/a.ts', 'belgeler/a.md', 'istemci/src/../vite.config.ts', 'istemci/srcx/a.ts',
+  ]) {
+    assert.equal(veritabanisizMi(['istemci/src/a.tsx', yol]), false, yol);
+  }
+  // Yeniden adlandırma: yama eski ve yeni yolu birlikte verir; biri dışarıdaysa tam deneme.
+  assert.equal(veritabanisizMi(['istemci/src/a.ts', 'paylasilan/a.ts']), false);
+  assert.equal(veritabanisizMi([]), false, 'dosyası okunamayan yama kısa yola düşmez');
+  // Kısa yolda modülün sunucu testleri plana girmez: veritabanı ister.
+  const dosyalar = ['istemci/src/moduller/stok/Liste.tsx'];
+  assert.deepEqual(testPlani(dosyalar, () => true).map((x) => x.ad), ['test:modul stok (sunucu)', 'test:modul stok (istemci)']);
+  assert.deepEqual(testPlani(dosyalar, () => true, true).map((x) => x.ad), ['test:modul stok (istemci)']);
+});
+
+test('kısa deneme (3221 a): sonuç dosyasına yazılır ve okunur; PostgreSQL sürümü uyarısı verilmez, sha ve sonuç denetimi aynı kalır', () => {
+  const s = { pg: null, yamalar: [SHA], gecti: true, kisa: true };
+  const metin = sonucMetni(s, ['--vt atlandı: yalnız istemci/src']);
+  assert.match(metin, /^kisa: evet$/m);
+  assert.deepEqual(sonucOku(metin), s);
+  assert.deepEqual(vtDenetle(s, [SHA]), []);
+  assert.deepEqual(vtDenetle(s, ['c'.repeat(64)]).map((b) => b.etiket), ['vt']);
+  assert.deepEqual(vtDenetle({ ...s, gecti: false }, [SHA]).map((b) => b.duzey), ['kirmizi']);
+  assert.ok(!sonucMetni({ pg: 16, yamalar: [SHA], gecti: true }, []).includes('kisa:'), 'tam denemede satır yazılmaz');
+});
+
+test('kisaYolKarari (3221 a): modülün sunucu testi istemci kaynağına bakıyorsa tam deneme; bakmıyorsa ve modül dışı istemci dosyasında kısa yol', () => {
+  const bakan = (modul: string): string[] => (modul === 'stok' ? ['sunucu/moduller/stok/stok.test.ts'] : []);
+  assert.deepEqual(kisaYolKarari(['istemci/src/moduller/arkon/A.tsx', 'istemci/src/moduller/plan/alt/B.test.tsx'], bakan), { kisa: true, neden: null });
+  // Modül dışı istemci dosyasının (ortak, kabuk) modül testi yoktur; kısa yol testsiz yeşil demesin diye tam denemeye düşer.
+  for (const yol of ['istemci/src/ortak/arayuz/tablo.css', 'istemci/src/App.tsx', 'istemci/src/moduller/Ortak.tsx']) {
+    const k = kisaYolKarari(['istemci/src/moduller/arkon/A.tsx', yol], bakan);
+    assert.equal(k.kisa, false, yol);
+    assert.ok(k.neden?.includes(yol), yol);
+  }
+  const stok = kisaYolKarari(['istemci/src/moduller/arkon/A.tsx', 'istemci/src/moduller/stok/Liste.tsx'], bakan);
+  assert.equal(stok.kisa, false);
+  assert.match(stok.neden ?? '', /stok modülünün sunucu testi.*stok\.test\.ts/);
+  // İzin listesi dışındaki yamada modüllere hiç bakılmaz, neden yazılmaz: zaten tam denemedir.
+  assert.deepEqual(kisaYolKarari(['istemci/src/moduller/stok/Liste.tsx', 'sunucu/moduller/stok/servis.ts'], () => { throw new Error('bakılmamalı'); }), { kisa: false, neden: null });
+});
+
+test('istemciyeBakanSunucuTestleri: ana daldaki modül testlerinden istemci kaynak yolu geçenler; test olmayan dosya ve başka modül sayılmaz; git okuyamazsa boş dönmez', () => {
+  const depo = mkdtempSync(join(tmpdir(), 'tmiv2-vt-bakan-'));
+  try {
+    const git = (...a: string[]): string => execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@yerel', ...a], { cwd: depo, encoding: 'utf8' });
+    git('init', '-q', '-b', 'ana');
+    for (const [yol, icerik] of [
+      ['sunucu/moduller/stok/stok.test.ts', "readFileSync('istemci/src/moduller/stok/kural.ts');\n"],
+      ['sunucu/moduller/stok/servis.ts', "// istemci/src yolu test olmayan dosyada\n"],
+      ['sunucu/moduller/stok/baska.test.ts', 'assert.ok(true);\n'],
+      ['sunucu/moduller/plan/plan.test.ts', 'assert.ok(true);\n'],
+    ] as const) {
+      execFileSync('mkdir', ['-p', join(depo, yol, '..')]);
+      writeFileSync(join(depo, yol), icerik);
+    }
+    git('add', '-A');
+    git('commit', '-q', '-m', 'ilk');
+    assert.deepEqual(istemciyeBakanSunucuTestleri(depo, 'ana', 'stok'), ['sunucu/moduller/stok/stok.test.ts']);
+    assert.deepEqual(istemciyeBakanSunucuTestleri(depo, 'ana', 'plan'), []);
+    assert.deepEqual(istemciyeBakanSunucuTestleri(depo, 'ana', 'yok-modul'), []);
+    assert.equal(istemciyeBakanSunucuTestleri(depo, 'olmayan-dal', 'stok').length, 1, 'okunamayan dal tam denemeye düşürür');
+  } finally {
+    rmSync(depo, { recursive: true, force: true });
+  }
+});
+
+test('kararDosyalari (3221 a): dayanılan teslimlerin dosyaları da karara girer; istemci teslimi sunucuya dokunan teslimin üstündeyse kısa yol yok', () => {
+  const yama = (ad: string, dosyalar: string[]) => ({ ad, sha256: 'a'.repeat(64), dosyalar });
+  const istemci = [yama('0001.patch', ['istemci/src/moduller/arkon/A.tsx'])];
+  assert.deepEqual(kararDosyalari({ yamalar: istemci }), ['istemci/src/moduller/arkon/A.tsx']);
+  const zincirli = kararDosyalari({ yamalar: istemci, dayanaklar: [{ ad: '3155', klasor: '/x/3155', yamalar: [yama('0001.patch', ['sunucu/moduller/arkon/servis.ts', 'istemci/src/moduller/arkon/A.tsx'])] }] });
+  assert.deepEqual(zincirli, ['sunucu/moduller/arkon/servis.ts', 'istemci/src/moduller/arkon/A.tsx']);
+  assert.equal(kisaYolKarari(zincirli, () => []).kisa, false);
+  assert.equal(kisaYolKarari(kararDosyalari({ yamalar: istemci, dayanaklar: [{ ad: '3155', klasor: '/x/3155', yamalar: istemci }] }), () => []).kisa, true);
 });

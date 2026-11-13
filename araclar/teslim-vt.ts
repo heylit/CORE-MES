@@ -20,6 +20,8 @@ export interface VtSonuc {
   gecti: boolean;
   // Teslim başka teslimin üstüne kurulduysa önce uygulanan teslimlerin yamaları (3046 a); yoksa boş ya da yok.
   dayanak?: string[];
+  // Küme ve göç adımı atlandıysa true (3221 a); PostgreSQL sürümü o zaman bilinmez.
+  kisa?: boolean;
 }
 
 export interface VtBulgu { duzey: 'kirmizi' | 'uyari'; etiket: string; mesaj: string }
@@ -30,6 +32,7 @@ export function sonucMetni(s: VtSonuc, ayrinti: readonly string[]): string {
     `pg: ${s.pg === null ? '?' : String(s.pg)}`,
     `yamalar: ${s.yamalar.join(', ')}`,
     ...(s.dayanak?.length ? [`dayanak: ${s.dayanak.join(', ')}`] : []),
+    ...(s.kisa ? ['kisa: evet'] : []),
     `sonuc: ${s.gecti ? 'gecti' : 'kirmizi'}`,
     '-->',
     '',
@@ -51,7 +54,44 @@ export function sonucOku(metin: string): VtSonuc | null {
     yamalar: alan('yamalar').split(',').map((s) => s.trim()).filter(Boolean),
     gecti: alan('sonuc') === 'gecti',
     ...(dayanak.length ? { dayanak } : {}),
+    ...(alan('kisa') === 'evet' ? { kisa: true } : {}),
   };
+}
+
+// Yalnız istemci kaynağı değişen teslimde veritabanına dokunan bir şey yoktur: küme ve göç adımı atlanır, testler koşar (3221 a).
+// İzin listesidir: tanınmayan her yol (ekran testleri, sunucu, paylaşılan, göç, yapılandırma, paket, araç) tam denemeye düşer.
+// Yeniden adlandırmada yama eski ve yeni yolu birlikte verir; ikisi de bu klasörde olmalıdır.
+export const KISA_YOL_KOKU = 'istemci/src/';
+export function veritabanisizMi(dosyalar: readonly string[]): boolean {
+  return dosyalar.length > 0 && dosyalar.every((f) => f.startsWith(KISA_YOL_KOKU) && !f.includes('..'));
+}
+
+// Kısa yol, modülün sunucu testlerini yerelde koşmaz. Bazı sunucu testleri istemci kaynağını okur (ör. iki tarafın aynı
+// kuralı taşıdığını karşılaştıran testler); o modülde istemci değişikliği sunucu testini kırabilir, bu yüzden tam deneme koşar.
+// Dosya değil modül düzeyinde bakılır: test hangi dosyayı okursa okusun modülün bütün istemci değişiklikleri tam denenir.
+export function kisaYolKarari(dosyalar: readonly string[], bakanTestler: (modul: string) => readonly string[]): { kisa: boolean; neden: string | null } {
+  if (!veritabanisizMi(dosyalar)) return { kisa: false, neden: null };
+  const moduller = new Set<string>();
+  for (const f of dosyalar) {
+    const m = /^istemci\/src\/moduller\/([a-z][a-z0-9-]*)\//.exec(f);
+    // Modül dışı istemci dosyasının (ortak, kabuk) test planı boştur: kısa yol hiç test koşmadan yeşil derdi.
+    if (!m?.[1]) return { kisa: false, neden: `modül dışı istemci dosyası için koşulacak modül testi yok (${f})` };
+    moduller.add(m[1]);
+  }
+  for (const ad of [...moduller].sort()) {
+    const [ilk] = bakanTestler(ad);
+    if (ilk) return { kisa: false, neden: `${ad} modülünün sunucu testi istemci kaynağına bakıyor (${ilk})` };
+  }
+  return { kisa: true, neden: null };
+}
+
+// Modülün, metninde istemci kaynak yolu geçen sunucu testleri; ana dalın o anki hâlinden okunur (kısa yol adayı yama sunucuya dokunmaz).
+// Git okuyamazsa boş dönmez: bilinmeyen durum tam denemeye düşer.
+export function istemciyeBakanSunucuTestleri(kok: string, dal: string, modul: string): string[] {
+  const r = spawnSync('git', ['grep', '-l', '-F', '-e', KISA_YOL_KOKU.replace(/\/$/, ''), dal, '--', `sunucu/moduller/${modul}/`], { cwd: kok, encoding: 'utf8', maxBuffer: 16 * 1024 * 1024 });
+  if (r.status === 1) return [];
+  if (r.status !== 0) return [`git grep okunamadı: ${(r.stderr ?? '').trim().split('\n')[0] ?? ''}`];
+  return (r.stdout ?? '').split('\n').map((s) => s.slice(dal.length + 1)).filter((s) => /\.test\.tsx?$/.test(s)).sort();
 }
 
 // Yazar ortamında PostgreSQL 18 bulunmayabilir (2340: konteynerde kurulamıyor). Temiz küme zorunludur, sürüm farkı
@@ -68,7 +108,7 @@ export function vtDenetle(sonuc: VtSonuc | null, yamaShalari: readonly string[],
   if (eski.length !== dayanakShalari.length || dayanakShalari.some((s) => !eski.includes(s))) {
     b.push({ duzey: 'kirmizi', etiket: 'vt-dayanak', mesaj: `${SONUC_DOSYASI} dayanılan teslimin bugünkü yamalarıyla koşmamış; yeniden koşun (${kos})` });
   }
-  if (sonuc.pg !== HEDEF_PG) {
+  if (!sonuc.kisa && sonuc.pg !== HEDEF_PG) {
     b.push({ duzey: 'uyari', etiket: 'vt-pg', mesaj: `deneme PostgreSQL ${sonuc.pg === null ? '?' : String(sonuc.pg)} ile koştu; PG${String(HEDEF_PG)} farkı CI'da görülür` });
   }
   return b;
@@ -122,7 +162,8 @@ const NODE_TEST = ['node', '--import', './araclar/ortam-yukle-goc.ts', '--import
 
 // Değişen dosyalardan koşulacak testler: modül klasörü o modülün testleri (test:modul ile aynı tanım), çekirdek ve
 // paylaşılan kendi testleri, araçta değişen dosyanın yanındaki test. Göçler ayrı adımda boş veritabanına uygulanır.
-export function testPlani(dosyalar: readonly string[], varMi: (yol: string) => boolean): TestAdimi[] {
+// Kısa yolda modülün sunucu testleri koşmaz: veritabanı ister. İstemci kaynağına bakan sunucu testi olan modül kısa yola girmez (kisaYolKarari; 3221 a).
+export function testPlani(dosyalar: readonly string[], varMi: (yol: string) => boolean, yalnizIstemci = false): TestAdimi[] {
   const adimlar: TestAdimi[] = [];
   const moduller = new Set<string>();
   for (const f of dosyalar) {
@@ -131,7 +172,7 @@ export function testPlani(dosyalar: readonly string[], varMi: (yol: string) => b
   }
   for (const ad of [...moduller].sort()) {
     for (const k of modulTestKomutlari(ad)) {
-      if (varMi(k.klasor)) adimlar.push({ ad: `test:modul ${ad} (${k.taraf})`, argv: k.komut === 'npx' ? k.argumanlar : [k.komut, ...k.argumanlar] });
+      if (varMi(k.klasor) && !(yalnizIstemci && k.taraf === 'sunucu')) adimlar.push({ ad: `test:modul ${ad} (${k.taraf})`, argv: k.komut === 'npx' ? k.argumanlar : [k.komut, ...k.argumanlar] });
     }
   }
   if (dosyalar.some((f) => f.startsWith('sunucu/cekirdek/'))) adimlar.push({ ad: 'çekirdek testleri', argv: [...NODE_TEST, 'sunucu/cekirdek/**/*.test.ts'] });
@@ -270,20 +311,31 @@ function kullaniciAyari(): { uid: number; gid: number } | null {
   }
 }
 
+// Kısa yol kararının girdisi: teslimin ve dayandığı bütün teslimlerin dosyaları. Dayanılan teslim ana dalda olsa da sayılır;
+// yanlış yöne düşen tam denemedir.
+export function kararDosyalari(g: Pick<VtGirdisi, 'yamalar' | 'dayanaklar'>): string[] {
+  return [...new Set([...(g.dayanaklar ?? []).flatMap((d) => d.yamalar.flatMap((y) => y.dosyalar)), ...g.yamalar.flatMap((y) => y.dosyalar)])];
+}
+
 export async function vtDenemesi(g: VtGirdisi): Promise<{ sonuc: VtSonuc; satirlar: string[] }> {
   const satirlar: string[] = [];
   const yaz = (s: string): void => { satirlar.push(s); console.log(s); };
   const shalar = g.yamalar.map((y) => y.sha256);
   const dayanakShalari = (g.dayanaklar ?? []).flatMap((d) => d.yamalar.map((y) => y.sha256));
-  const pg = pgBinBul();
+  const karar = kisaYolKarari(kararDosyalari(g), (modul) => istemciyeBakanSunucuTestleri(g.kok, g.dal, modul));
+  const kisa = karar.kisa;
+  if (karar.neden) yaz(`Tam deneme: ${karar.neden}.`);
+  const pg = kisa ? { ana: null, bin: '' } : pgBinBul();
   if (!pg) {
     yaz('KIRMIZI PostgreSQL ikilileri bulunamadı (initdb). TMIV2_TESLIM_PG_BIN ile bin klasörünü verin.');
     return { sonuc: { pg: null, yamalar: shalar, gecti: false, dayanak: dayanakShalari }, satirlar };
   }
-  yaz(`PostgreSQL ${String(pg.ana)} (${pg.bin})${pg.ana === HEDEF_PG ? '' : `; hedef ${String(HEDEF_PG)} değil, uyarı`}`);
+  yaz(kisa
+    ? `--vt atlandı: yalnız ${KISA_YOL_KOKU.replace(/\/$/, '')} (küme, göç denemesi ve sunucu testleri koşmaz, değişen modülün istemci testleri koşar; 3221 a)`
+    : `PostgreSQL ${String(pg.ana)} (${pg.bin})${pg.ana === HEDEF_PG ? '' : `; hedef ${String(HEDEF_PG)} değil, uyarı`}`);
   const exe = process.platform === 'win32' ? '.exe' : '';
   const pgAraci = (ad: string): string => join(pg.bin, `${ad}${exe}`);
-  const kullanici = kullaniciAyari();
+  const kullanici = kisa ? null : kullaniciAyari();
   const pgKos = (ad: string, a: string[]): { kod: number; cikti: string } => {
     const [komut, argv] = kullanici ? ['runuser', ['-u', 'postgres', '--', pgAraci(ad), ...a]] : [pgAraci(ad), a];
     const r = spawnSync(komut, argv, { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
@@ -332,28 +384,33 @@ export async function vtDenemesi(g: VtGirdisi): Promise<{ sonuc: VtSonuc; satirl
     symlinkSync(join(g.kok, 'node_modules'), join(agac, 'node_modules'), 'junction');
     writeFileSync(join(agac, VT_ISTEMCI_YAPILANDIRMASI), istemciSarmalayicisi([agac, realpathSync(join(g.kok, 'node_modules'))]));
 
-    if (kullanici) chmodSync(gecici, 0o755);
-    mkdirSync(kume);
-    if (kullanici) chownSync(kume, kullanici.uid, kullanici.gid);
-    const veri = join(kume, 'veri');
-    const init = pgKos('initdb', initdbArgumanlari(veri));
-    if (init.kod !== 0) throw new Error(`initdb: ${sonSatirlar(init.cikti, 3).join(' | ')}`);
-    const port = await bosPort();
-    // CI'daki atılacak test sunucusunun ayarları (kontrol.yml): diske yazma beklenmez.
-    const secenek = [`-p ${String(port)}`, '-c listen_addresses=127.0.0.1', '-c fsync=off', '-c synchronous_commit=off', '-c full_page_writes=off', "-c max_wal_size=4GB"];
-    if (process.platform !== 'win32') secenek.push(`-k ${kume}`);
-    const bas = pgKos('pg_ctl', ['-D', veri, '-l', join(kume, 'sunucu.log'), '-w', '-t', '60', '-o', secenek.join(' '), 'start']);
-    if (bas.kod !== 0) throw new Error(`pg_ctl start: ${sonSatirlar(bas.cikti, 3).join(' | ')}`);
-    kumeAcik = true;
-    const ortam = denemeOrtami(port);
-    const psql = (vt: string, a: string[]): void => {
-      const r = spawnSync(pgAraci('psql'), ['-X', '-q', '-v', 'ON_ERROR_STOP=1', '-h', '127.0.0.1', '-p', String(port), '-U', 'postgres', '-d', vt, ...a], { encoding: 'utf8', env: ortam });
-      if (r.status !== 0) throw new Error(`psql: ${sonSatirlar(`${r.stdout ?? ''}${r.stderr ?? ''}`, 3).join(' | ')}`);
-    };
-    // CI sunucu test işindeki gibi yalnız test veritabanı vardır; asıl veritabanına dayanan test burada düşer.
-    psql('postgres', ['-c', 'CREATE DATABASE tmiv2_test']);
-    psql('tmiv2_test', ['-v', 'goc_parola=tmiv2-goc', '-v', 'uygulama_parola=tmiv2-uygulama', '-f', join(agac, 'araclar', 'vt', 'kurulum.sql')]);
-    yaz(`Temiz küme açıldı (port ${String(port)}, yalnız tmiv2_test).`);
+    // Kısa yolda dinleyen veritabanı yoktur: port 0'a bağlanmaya çalışan test düşer, yazarın veritabanına gitmez.
+    let ortam = denemeOrtami(0);
+    let psql: ((vt: string, a: string[]) => void) | null = null;
+    if (!kisa) {
+      if (kullanici) chmodSync(gecici, 0o755);
+      mkdirSync(kume);
+      if (kullanici) chownSync(kume, kullanici.uid, kullanici.gid);
+      const veri = join(kume, 'veri');
+      const init = pgKos('initdb', initdbArgumanlari(veri));
+      if (init.kod !== 0) throw new Error(`initdb: ${sonSatirlar(init.cikti, 3).join(' | ')}`);
+      const port = await bosPort();
+      // CI'daki atılacak test sunucusunun ayarları (kontrol.yml): diske yazma beklenmez.
+      const secenek = [`-p ${String(port)}`, '-c listen_addresses=127.0.0.1', '-c fsync=off', '-c synchronous_commit=off', '-c full_page_writes=off', "-c max_wal_size=4GB"];
+      if (process.platform !== 'win32') secenek.push(`-k ${kume}`);
+      const bas = pgKos('pg_ctl', ['-D', veri, '-l', join(kume, 'sunucu.log'), '-w', '-t', '60', '-o', secenek.join(' '), 'start']);
+      if (bas.kod !== 0) throw new Error(`pg_ctl start: ${sonSatirlar(bas.cikti, 3).join(' | ')}`);
+      kumeAcik = true;
+      ortam = denemeOrtami(port);
+      psql = (vt: string, a: string[]): void => {
+        const r = spawnSync(pgAraci('psql'), ['-X', '-q', '-v', 'ON_ERROR_STOP=1', '-h', '127.0.0.1', '-p', String(port), '-U', 'postgres', '-d', vt, ...a], { encoding: 'utf8', env: ortam });
+        if (r.status !== 0) throw new Error(`psql: ${sonSatirlar(`${r.stdout ?? ''}${r.stderr ?? ''}`, 3).join(' | ')}`);
+      };
+      // CI sunucu test işindeki gibi yalnız test veritabanı vardır; asıl veritabanına dayanan test burada düşer.
+      psql('postgres', ['-c', 'CREATE DATABASE tmiv2_test']);
+      psql('tmiv2_test', ['-v', 'goc_parola=tmiv2-goc', '-v', 'uygulama_parola=tmiv2-uygulama', '-f', join(agac, 'araclar', 'vt', 'kurulum.sql')]);
+      yaz(`Temiz küme açıldı (port ${String(port)}, yalnız tmiv2_test).`);
+    }
 
     const kos = (ad: string, argv: string[]): void => {
       const [komut = '', ...a] = kabuksuzArgv(sarmalayiciyaYonelt(argv), agac);
@@ -366,13 +423,15 @@ export async function vtDenemesi(g: VtGirdisi): Promise<{ sonuc: VtSonuc; satirl
       yaz(`${tamam ? 'GEÇTİ  ' : 'KIRMIZI'} ${ad}${bos ? ' (desen hiçbir test bulmadı)' : ''}`);
       for (const s of sonSatirlar(cikti)) yaz(`    ${s}`);
     };
-    const plan = testPlani(dosyalar, (y) => existsSync(join(agac, y)));
-    if (plan.length === 0) yaz('Değişen yerde koşulacak test yok; yalnız göç denemesi.');
+    const plan = testPlani(dosyalar, (y) => existsSync(join(agac, y)), kisa);
+    if (plan.length === 0) yaz(kisa ? 'Değişen modülde koşulacak istemci testi yok (modül klasörü kalmamış).' : 'Değişen yerde koşulacak test yok; yalnız göç denemesi.');
     for (const adim of plan) kos(adim.ad, adim.argv);
 
-    psql('postgres', ['-c', 'CREATE DATABASE tmiv2']);
-    psql('tmiv2', ['-v', 'goc_parola=tmiv2-goc', '-v', 'uygulama_parola=tmiv2-uygulama', '-f', join(agac, 'araclar', 'vt', 'kurulum.sql')]);
-    kos('boş veritabanına bütün göçler (npm run goc)', ['node', '--import', './araclar/ortam-yukle-goc.ts', 'sunucu/cekirdek/goc-calistir.ts']);
+    if (psql) {
+      psql('postgres', ['-c', 'CREATE DATABASE tmiv2']);
+      psql('tmiv2', ['-v', 'goc_parola=tmiv2-goc', '-v', 'uygulama_parola=tmiv2-uygulama', '-f', join(agac, 'araclar', 'vt', 'kurulum.sql')]);
+      kos('boş veritabanına bütün göçler (npm run goc)', ['node', '--import', './araclar/ortam-yukle-goc.ts', 'sunucu/cekirdek/goc-calistir.ts']);
+    }
   } catch (hata) {
     gecti = false;
     yaz(`KIRMIZI deneme kurulamadı: ${hata instanceof Error ? hata.message : String(hata)}`);
@@ -380,7 +439,7 @@ export async function vtDenemesi(g: VtGirdisi): Promise<{ sonuc: VtSonuc; satirl
     if (kumeAcik) pgKos('pg_ctl', ['-D', join(kume, 'veri'), '-m', 'immediate', '-w', 'stop']);
     rmSync(gecici, { recursive: true, force: true });
   }
-  return { sonuc: { pg: pg.ana, yamalar: shalar, gecti, ...(dayanakShalari.length ? { dayanak: dayanakShalari } : {}) }, satirlar };
+  return { sonuc: { pg: pg.ana, yamalar: shalar, gecti, ...(dayanakShalari.length ? { dayanak: dayanakShalari } : {}), ...(kisa ? { kisa: true } : {}) }, satirlar };
 }
 
 export function sonucuKaydet(klasor: string, sonuc: VtSonuc, satirlar: readonly string[]): void {
