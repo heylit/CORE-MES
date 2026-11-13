@@ -260,3 +260,9 @@ export const gozMalzemeleri = (db: Db, gozIdler: number[]): Promise<GozMalzemesi
               FROM stok_konum k JOIN stok_bakiye b ON b.konum_id = k.id
              WHERE k.atolye_goz_id = ANY($1::int[]) AND k.aktif AND b.miktar > 0
              GROUP BY k.atolye_goz_id, k.id, b.malzeme_id ORDER BY k.atolye_goz_id, sum(b.miktar) DESC, b.malzeme_id`, [gozIdler]);
+// 3202 (Risk K3): haritada stoklu malzeme = haritadaki bir göze bağlı aktif konumda sıfırdan büyük bakiyesi olan malzeme. idler null ise
+// hepsi, verilirse yalnız onların içinden.
+export const haritaStokluMalzemeleri = async (db: Db, idler: readonly number[] | null): Promise<number[]> =>
+  (await db.sorgu<{ id: number }>(`SELECT DISTINCT b.malzeme_id AS id FROM stok_bakiye b JOIN stok_konum k ON k.id = b.konum_id
+                                    WHERE k.atolye_goz_id IS NOT NULL AND k.aktif AND b.miktar > 0 AND ($1::int[] IS NULL OR b.malzeme_id = ANY($1::int[]))
+                                    ORDER BY 1`, [idler === null ? null : [...idler]])).map((r) => r.id);

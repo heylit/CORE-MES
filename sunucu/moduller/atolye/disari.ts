@@ -99,6 +99,9 @@ export const fabrikaPlani = (db: Db): Promise<FabrikaCevabi> => servis.fabrika(d
 // Makinenin 3B görünümünü (CNC Kurulum `model_turu`, 2100-2 a) veren işlevi kaydeder; bağ kablolama.ts'tedir.
 export type { MakineModelTuruCozucusu } from './servis.ts';
 export const makineModelTuruCozucusu = (cozucu: servis.MakineModelTuruCozucusu): void => servis.makineModelTuruCozucusuKaydet(cozucu);
+// 3202: depoda stoklu malzemeleri veren işlevi kaydeder (haritanın 3B model listesi); bağ kablolama.ts'tedir.
+export type { DepoMalzemeCozucusu } from './servis.ts';
+export const depoMalzemeCozucusu = (cozucu: servis.DepoMalzemeCozucusu): void => servis.depoMalzemeCozucusuKaydet(cozucu);
 
 // 2902: yeni bölüm açıldı haberi (dinleyen stok; bağ sunucu/kablolama.ts'te).
 export type { BolumAcildiOlayi } from './olaylar.ts';

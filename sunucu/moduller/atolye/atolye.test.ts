@@ -17,7 +17,7 @@ import { denetimYaz } from '../denetim/disari.ts';
 import { kullaniciYukle, rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
-import { istasyonYerleri } from './disari.ts';
+import { depoMalzemeCozucusu, istasyonYerleri } from './disari.ts';
 import { uclar } from './uclar.ts';
 
 const PAROLA = 'dogru-parola-1';
@@ -1417,6 +1417,29 @@ describe('atolye (gerçek PostgreSQL)', () => {
     assert.equal((await istek(muhasebeci, 'GET', '/atolye/malzeme-modelleri')).durum, 403);
     assert.equal((await istek(muhasebeci, 'GET', `/atolye/malzemeler/${acikKart}/merkez-modeli`)).durum, 403);
     assert.equal((await istek(null, 'GET', '/atolye/malzeme-modelleri')).durum, 401);
+
+    // 3202 B, 3205 a: depoda stoklu malzeme emri olmasa da modeliyle listelenir ve dosyası haritayı görene verilir; stoklu ama
+    // modelsiz malzeme ve ne açık emri ne stoğu olan malzeme aynı 404 iletisiyle döner.
+    const modelsizKart = await kartAc(3);
+    const stoklu = new Set([kapaliKart, modelsizKart]);
+    depoMalzemeCozucusu(async (_db, nolar) => (nolar === null ? [...stoklu] : nolar.filter((n) => stoklu.has(n))));
+    try {
+      const depoda = await istek<MalzemeModelleriCevabi>(gorur, 'GET', '/atolye/malzeme-modelleri');
+      assert.equal(depoda.durum, 200, JSON.stringify(depoda.govde));
+      assert.equal(depoda.govde.malzemeler.find((m) => m.malzemeNo === kapaliKart)?.merkezModeli.belgeId, parca);
+      assert.equal(depoda.govde.malzemeler.some((m) => m.malzemeNo === modelsizKart), false, 'modelsiz stoklu malzeme listede yok');
+      const stokluDosya = await app.inject({ method: 'GET', url: `/api/atolye/malzemeler/${kapaliKart}/merkez-modeli`, headers: { cookie: gorur } });
+      assert.equal(stokluDosya.statusCode, 200);
+      assert.deepEqual(stokluDosya.rawPayload, stl);
+      const modelsiz = await oku<{ ileti: string }>(`/atolye/malzemeler/${modelsizKart}/merkez-modeli`);
+      stoklu.delete(kapaliKart);
+      const gosterilmeyen = await oku<{ ileti: string }>(`/atolye/malzemeler/${kapaliKart}/merkez-modeli`);
+      assert.deepEqual([modelsiz.durum, gosterilmeyen.durum], [404, 404]);
+      assert.deepEqual(modelsiz.govde, gosterilmeyen.govde, 'iki durum ayırt edilmez');
+      assert.equal((await istek(muhasebeci, 'GET', `/atolye/malzemeler/${modelsizKart}/merkez-modeli`)).durum, 403);
+    } finally {
+      depoMalzemeCozucusu(async () => []);
+    }
   });
   test('kart #1296: yerleşmemiş istasyonlar istasyon ya da ekipman yeri olmayan aktif istasyonlardır; Çizim Merkezi modeli yayında/taslak bilgisiyle gelir', async () => {
     const s = await salonKur();
