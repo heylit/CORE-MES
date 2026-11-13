@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
-  type HesapOrtami, type HesapTeklifi, degerlendir, gerekenBasamak, kararTutari, tedarikciBasarimi, teklifHesabi, terminPuani, esitVadeOrtami,
+  type HesapOrtami, type HesapTeklifi, degerlendir, etkinBirimFiyat, gerekenBasamak, kararTutari, tedarikciBasarimi, teklifHesabi, terminPuani, esitVadeOrtami,
   butceKullanimi, butceSatirlari, kalemHarcamalari,
 } from './hesap-kurallar.ts';
 
@@ -110,6 +110,54 @@ test('1094 b: kararın tutarı: tek kararda teklifin toplamı, kalem bazlıda he
   // C'den ilk iki kalem (1.490 € × 0,95 × 37,2), B'den matkap (6.400 ₺) ve B'nin nakliyesi (450 ₺).
   yakin(bolunmus.tlToplam, 1490 * 0.95 * 37.2 + 6400 + 450);
   assert.equal(kararTutari({ mod: 'tek', teklifId: 'yok', bolunme: [] }, KALEMLER, hesaplar), null);
+});
+
+test('3170: basamak seçimi veritabanındaki etkin fiyatla aynı: eşiğe ulaşan en yüksek basamak, ulaşılmayan basamak tabanı değiştirmez', () => {
+  const f = { birimFiyat: '10', basamaklar: [{ esik: '30', birimFiyat: '6' }, { esik: '10', birimFiyat: '8' }] };
+  assert.deepEqual([1, 9.999, 10, 29, 30, 500].map((m) => etkinBirimFiyat(f, m)), [10, 10, 8, 8, 6, 6]);
+  assert.equal(etkinBirimFiyat({ birimFiyat: '10' }, 500), 10);
+  assert.equal(etkinBirimFiyat({ birimFiyat: '10', basamaklar: [] }, 500), 10);
+});
+
+test('3170: kademeli teklifte karar tutarı, onay basamağı ve bütçe alınan miktarın basamak fiyatından (ucuzlayan ve pahalanan kademe)', () => {
+  const kalemler = [{ id: K1, miktar: '10' }, { id: K2, miktar: '4' }];
+  const kademeli = (ust: string) => teklif('k', { fiyatlar: [{ kalemId: K1, birimFiyat: '10', basamaklar: [{ esik: '10', birimFiyat: ust }] }, { kalemId: K2, birimFiyat: '5' }] });
+  const tutar = (q: HesapTeklifi) => kararTutari({ mod: 'tek', teklifId: q.id, bolunme: [] }, kalemler, [teklifHesabi(q, kalemler, ORTAM)])!.tlToplam;
+  const limitler = (uzman: string) => [{ azamiTutar: uzman, seviye: 'Uzman' }, { azamiTutar: null, seviye: 'Müdür' }];
+  // Ucuzlayan: 10 × 8 + 4 × 5 = 100 (tabanla 120 olurdu); 110'a kadar uzman onaylar.
+  yakin(tutar(kademeli('8')), 100);
+  assert.equal(gerekenBasamak(tutar(kademeli('8')), limitler('110')), 'Uzman');
+  // Pahalanan: 10 × 12 + 4 × 5 = 140 (tabanla 120 olurdu); 130 limitini aşar, üst basamak gerekir.
+  yakin(tutar(kademeli('12')), 140);
+  assert.equal(gerekenBasamak(tutar(kademeli('12')), limitler('130')), 'Müdür');
+  // Basamaksız ve ulaşılmayan basamak: taban.
+  yakin(tutar(teklif('k', { fiyatlar: [{ kalemId: K1, birimFiyat: '10', basamaklar: [{ esik: '11', birimFiyat: '1' }] }, { kalemId: K2, birimFiyat: '5' }] })), 120);
+  // Bütçe kullanımı aynı hesaptan: kalem tutarı basamak fiyatıyla.
+  const h = [teklifHesabi(kademeli('12'), kalemler, ORTAM)];
+  assert.deepEqual(kalemHarcamalari({ mod: 'tek', teklifId: 'k', bolunme: [] }, kalemler, h).map((x) => [x.kalemId, x.tl]), [[K1, 120], [K2, 20]]);
+  assert.deepEqual(h[0]!.satirlar.map((x) => [x.birimFiyat, x.alinanMiktar, x.tutar]), [[12, 10, 120], [5, 4, 20]]);
+});
+
+test('3170: basamak en az miktarla alınan miktara göre seçilir; iskonto, kur, bölünmüş karar ve maliyet puanı basamak fiyatını görür', () => {
+  const kalemler = [{ id: K1, miktar: '10' }, { id: K2, miktar: '4' }];
+  // En az 25: alınan 25, "20 ve üstü" basamağı geçerli (7), "30 ve üstü" değil.
+  const enAz = teklif('e', { fiyatlar: [{ kalemId: K1, birimFiyat: '10', enAzMiktar: '25', basamaklar: [{ esik: '20', birimFiyat: '7' }, { esik: '30', birimFiyat: '6' }] }] });
+  yakin(teklifHesabi(enAz, kalemler, ORTAM).toplam, 25 * 7);
+  // Dövizli, satır ve genel iskontolu: 10 × 8 × 0,9 = 72; + 4 × 5 = 92; %5 genel iskonto 87,4 €; × 40 = 3.496 ₺.
+  const doviz = teklif('d', { paraBirimi: 'EUR', kur: '40', iskontoYuzdesi: '5',
+    fiyatlar: [{ kalemId: K1, birimFiyat: '10', iskontoYuzdesi: '10', basamaklar: [{ esik: '10', birimFiyat: '8' }] }, { kalemId: K2, birimFiyat: '5' }] });
+  const hd = teklifHesabi(doviz, kalemler, ORTAM);
+  yakin(hd.toplam, 87.4);
+  yakin(hd.tlToplam, 3496);
+  // Bölünmüş karar: K1 kademeli tekliften (10 × 8), K2 düz tekliften (4 × 4).
+  const duz = teklif('z', { fiyatlar: [{ kalemId: K1, birimFiyat: '9' }, { kalemId: K2, birimFiyat: '4' }] });
+  const ucuz = teklif('u', { fiyatlar: [{ kalemId: K1, birimFiyat: '10', basamaklar: [{ esik: '10', birimFiyat: '8' }] }, { kalemId: K2, birimFiyat: '5' }] });
+  const hesaplar = [ucuz, duz].map((q) => teklifHesabi(q, kalemler, ORTAM));
+  yakin(kararTutari({ mod: 'bolunmus', teklifId: null, bolunme: [{ kalemId: K1, teklifId: 'u' }, { kalemId: K2, teklifId: 'z' }] }, kalemler, hesaplar)!.tlToplam, 96);
+  // Maliyet puanı: kademeli teklif 100, düz teklif 106; tabanla 120 görünür ve sıralama ters dönerdi.
+  const d = degerlendir(kalemler, [ucuz, duz], ORTAM);
+  assert.equal(d.oneri, 'u');
+  assert.deepEqual(d.satirlar.map((x) => Math.round(x.kriterPuani.maliyet * 100) / 100), [100, Math.round((100 / 106) * 10000) / 100]);
 });
 
 test('1095 b: onay basamağı yalnız bilgidir; tutarın düştüğü ilk basamak, limitsiz basamak en üst', () => {
