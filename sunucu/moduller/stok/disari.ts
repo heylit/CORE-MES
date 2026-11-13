@@ -30,6 +30,10 @@ export async function stokMiktarlari(db: Db, malzemeIdler: number[]): Promise<Ma
   return new Map(satirlar.map(({ malzemeId, ...m }) => [malzemeId, m]));
 }
 
+// 3201: Logo ambarıyla eşli depolarda malzemenin miktarı (malzeme kartının "Logo'da" bölümü karşılaştırır); yetki denetlemez.
+export type { LogoEsliDepoMiktari } from './sorgular.ts';
+export const logoEsliDepoMiktarlari = (db: Db, malzemeId: number) => sorgular.logoEsliDepoMiktarlari(db, malzemeId);
+
 // Stok değeri kırılımı (228 a): malzeme ve değer grubu başına bakiye toplamı (numeric metin). Gruplar kullanilabilir (raf, kabul,
 // zemin; statüsüz; serbest ya da şartlı, stokMiktarlari.kullanilabilir ile aynı), kalite (karantina, red, karar bekliyor), hurda, fason,
 // yolda (sevkiyat dahil) ve diger (üretimde, ara alan, statülü yarı ürün). Fiyatı çağıran uygular; yetki denetlemez.

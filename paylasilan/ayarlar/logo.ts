@@ -111,7 +111,7 @@ export const LOGO_AYARLARI = {
     tur: 'boolean',
     varsayilan: false,
     baslik: 'Logo: stok okuması',
-    aciklama: 'Açıkken Logo\'daki ambar başına stok miktarı saatte bir okunur; Stok\'ta TMI miktarıyla yan yana görünür. TMI stoğuna kendiliğinden yazılmaz. "Logo bağlantısı" da açık olmalı.',
+    aciklama: 'Açıkken Logo\'daki ambar başına stok miktarı saatte bir okunur; malzeme kartının "Logo\'da" bölümünde CORE miktarıyla yan yana görünür. CORE stoğuna kendiliğinden yazılmaz. "Logo bağlantısı" da açık olmalı.',
   },
   // 3079 a: Logo geçişinin "Kullanılanlar" süzgeci; yalnız GET, varsayılan kapalı. "Şimdi oku" bunu açmaz, açıksa birlikte okur.
   'logo.kullanim-okumasi': {
