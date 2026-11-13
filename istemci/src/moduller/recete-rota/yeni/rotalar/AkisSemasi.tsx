@@ -5,7 +5,7 @@ import {
   adimArkasinaTasi, adimBirlesen, adimCarpani, adimDali, adimOnculleri, adimSil, adimSurukle, kolaEkle, akisKarti, adimSuresi, bagimlilikYaz, fasonMu, kartBasligi, kartBirimi, sirali, sonrakiBagimlilik, statuNo, adimAdi,
   tuketilenAdimlar, turKisa, yeniAdim, type Adim, type Dugum, type Malzeme,
 } from './kurallar.ts';
-import { dalBilgileri, dalCarpaniYaz, dalEtiketi, islemSuresiBos, kolaTasi, kolParcalari, type SemaParcasi } from './kurallar.ts';
+import { dalBilgileri, dalCarpaniYaz, dalYerlesimi, islemSuresiBos, kolaTasi, type DalBilgisi } from './kurallar.ts';
 import { bagMetni, fasonAdi, renkSinifi, SayiAlani, type RotaEkrani } from './ortak.tsx';
 import { yeniKimlik } from './useRotaDuzeni.ts';
 
@@ -14,6 +14,9 @@ type Yakinlik = (typeof YAKINLIK)[number];
 // Genişliğe sığdırmada rotanın kenar ve üst payı (ekran pikseli, eski sayfanın değerleri).
 const KENAR = 20;
 const UST_PAY = 16;
+// Dal çizgisinin yatay rayı satır aralığının içindedir: satır kenarından uzaklığı ve köşe yuvarlaması (içerik birimi).
+const RAY = 14;
+const BANT = 10;
 // Vardiya düzeni okunamadığı için gün, günlük 8 saatle hesaplanır (bugünkü ekranın varsayılanı).
 
 const uc = (nid: string, adimId: string) => `${nid}|${adimId}`;
@@ -83,9 +86,9 @@ function Cip({ m, tur, baslik, alt, miktar, rozet, secili, besler, cikan, sec, a
 }
 
 // Dallı rotada (1248 a) akış oku sıradaki adıma değil, adımın öncüllerinden adıma çizilir: kutu öncüllerinin uçlarını taşır.
-function OpKutusu({ r, a, d, sonraki, secili, duzen, sahip, liste, i, onculler }: {
+function OpKutusu({ r, a, d, sonraki, secili, duzen, sahip, liste, i, onculler, catal, serit }: {
   r: RotaEkrani; a: Adim; d: Dugum; sonraki: Adim | undefined; secili: boolean; duzen: boolean; sahip: Malzeme; liste: readonly Adim[]; i: number;
-  onculler: readonly Adim[] | null;
+  onculler: readonly Adim[] | null; catal: boolean; serit: number;
 }) {
   const [ustunde, setUstunde] = useState(false);
   const { h } = r.duzen;
@@ -118,7 +121,7 @@ function OpKutusu({ r, a, d, sonraki, secili, duzen, sahip, liste, i, onculler }
       type="button"
       className={`tc-rr1-opbox ${ist ? renkSinifi(ist.id) : 'tc-rr1-renk-yok'}${secili ? ' tc-rr1-secili' : ''}${ustunde ? ' tc-rr1-birak' : ''}`}
       data-uc={uc(d.nid, a.id)} data-sonraki={onculler === null && sonraki ? uc(d.nid, sonraki.id) : undefined} data-bag={onculler === null ? sonraki?.dep : a.dep}
-      data-onculler={onculler === null ? undefined : onculler.map((o) => uc(d.nid, o.id)).join(' ')}
+      data-onculler={onculler === null ? undefined : onculler.map((o) => uc(d.nid, o.id)).join(' ')} data-catal={catal ? '' : undefined} data-serit={serit > 0 ? String(Math.min(serit, 7)) : undefined} data-dal={adimDali(a) ?? undefined}
       draggable={duzen}
       onDragStart={(e) => { e.dataTransfer.setData(SURUKLE_TURU, surukleAdim(sahip.id, a.id)); e.dataTransfer.effectAllowed = 'move'; r.surukleBasla(); }}
       onDragEnd={r.surukleBitti}
@@ -148,57 +151,40 @@ function OpKutusu({ r, a, d, sonraki, secili, duzen, sahip, liste, i, onculler }
   );
 }
 
-// 2542 C: çatalla birleşme arası kollar yan yana sütunlardır; her sütunun başlığı kolun yerini ve çarpanını söyler (D, E) ve bırakma yeridir:
-// sürüklenen adım o kola geçer, paletten bırakılan operasyon kolun sonuna eklenir. Adım kutuları ve oklar şemanın geri kalanıyla aynıdır.
-function KolSeritleri({ r, d, liste, duzen, seritler, serit, hucreler }: {
-  r: RotaEkrani; d: Dugum; liste: readonly Adim[]; duzen: boolean; seritler: Extract<SemaParcasi, { tur: 'kollar' }>['seritler'];
-  serit: (a: Adim) => number; hucreler: (id: string) => ReactNode;
-}) {
-  const [ustunde, setUstunde] = useState<string | null>(null);
-  const bilgiler = dalBilgileri(liste);
-  const birak = (dal: string | null, sonId: string, v: string) => {
+// 3188: dalın başlığı ilk adımının üstünde kısa etikettir: dalın adı, çarpanı (D) ve bırakma yeri. Sürüklenen adım o dala geçer, paletten
+// bırakılan operasyon dalın sonuna eklenir. Dalın nereden ayrılıp nerede birleştiğini çizgi gösterir.
+function DalBasligi({ r, d, b, duzen, saat, enUzun }: { r: RotaEkrani; d: Dugum; b: DalBilgisi; duzen: boolean; saat: number | null; enUzun: boolean }) {
+  const [ustunde, setUstunde] = useState(false);
+  const sonId = b.adimlar.at(-1)?.id ?? '';
+  const birak = (v: string) => {
     r.surukleBitti();
     const c = surukleCoz(v);
     if (!c) return;
-    const ad = dal === null ? 'ana hatta' : `Dal ${dal} koluna`;
     if (c.tur === 'adim' && c.urunId === d.id) {
-      r.duzen.tasi(d.id, (l) => kolaTasi(l, c.adimId, dal, sonId), `Adım ${ad} taşındı`);
+      r.duzen.tasi(d.id, (l) => kolaTasi(l, c.adimId, b.dal, sonId), `Adım Dal ${b.dal} koluna taşındı`);
     } else if (c.tur === 'op') {
       const yeni = yeniAdim(r.duzen.h.op.get(c.opId), yeniKimlik());
-      const l2 = kolaEkle(r.duzen.adimlar(d.id), sonId, yeni, dal ?? undefined);
-      if (r.duzen.degistir(d.id, () => l2, `Adım ${ad} eklendi`)) {
+      const l2 = kolaEkle(r.duzen.adimlar(d.id), sonId, yeni, b.dal);
+      if (r.duzen.degistir(d.id, () => l2, `Adım Dal ${b.dal} koluna eklendi`)) {
         r.sec({ tur: 'adim', urunId: d.id, adimId: yeni.id, seq: l2.find((x) => x.id === yeni.id)?.seq ?? 0, miktar: d.miktar });
       }
     }
   };
   return (
-    <div className="tc-rr1-kollar" role="group" aria-label="Paralel kollar">
-      {seritler.map((sr) => {
-        const anahtar = sr.dal ?? '';
-        const b = sr.dal === null ? null : bilgiler.find((x) => x.dal === sr.dal) ?? null;
-        const ilk = liste.find((x) => x.id === sr.idler[0]);
-        const sonId = sr.idler.at(-1) ?? '';
-        return (
-          <section key={anahtar} className={`tc-rr1-kol tc-rr1-dalserit tc-rr1-dalserit-${String(ilk ? Math.min(serit(ilk), 7) : 0)}`}
-            aria-label={sr.dal === null ? 'Ana hat' : `Dal ${sr.dal} kolu`}>
-            <div className={`tc-rr1-kolbas${ustunde === anahtar ? ' tc-rr1-birak' : ''}`}
-              onDragOver={(e) => { if (duzen && r.surukleniyor) { e.preventDefault(); setUstunde(anahtar); } }} onDragLeave={() => { setUstunde(null); }}
-              onDrop={(e) => { e.preventDefault(); setUstunde(null); if (duzen) birak(sr.dal, sonId, e.dataTransfer.getData(SURUKLE_TURU)); }}>
-              <span className="tc-rr1-koletiket"><Simge ad={sr.dal === null ? 'layers' : 'route'} boyut="k" />{sr.dal === null ? 'Ana hat' : `Dal ${sr.dal}`}</span>
-              {b && <small>{dalEtiketi(b).replace(/^Dal [A-Z]: /, '')}</small>}
-              {b && (duzen ? (
-                <div className="tc-rr1-kolcarpan">
-                  <small aria-hidden="true">1 mamul için</small>
-                  <SayiAlani etiket={`Dal ${b.dal}: 1 mamul için adet`} deger={b.carpan ?? adimCarpani(b.adimlar[0] ?? { adetCarpani: null })} birim="adet"
-                    yaz={(v) => { r.duzen.degistir(d.id, (l) => dalCarpaniYaz(l, b.dal, v), `Dal ${b.dal} çarpanı değişti`); }} />
-                </div>
-              ) : b.carpan !== null && b.carpan > 1 && <small>1 mamul için {String(b.carpan)} adet</small>)}
-              {duzen && r.surukleniyor && <small>Bu kola bırak</small>}
-            </div>
-            <div className="tc-rr1-g3">{sr.idler.map(hucreler)}</div>
-          </section>
-        );
-      })}
+    <div className={`tc-rr1-kolbas${ustunde ? ' tc-rr1-birak' : ''}`} role="group" aria-label={`Dal ${b.dal} kolu`}
+      onDragOver={(e) => { if (duzen && r.surukleniyor) { e.preventDefault(); setUstunde(true); } }} onDragLeave={() => { setUstunde(false); }}
+      onDrop={(e) => { e.preventDefault(); setUstunde(false); if (duzen) birak(e.dataTransfer.getData(SURUKLE_TURU)); }}>
+      <span className="tc-rr1-koletiket"><Simge ad="route" boyut="k" />Dal {b.dal}</span>
+      <small className="tc-rr1-kolozet">{String(b.adimlar.length)} adım{saat !== null && `, ${sayi(Math.round(saat * 10) / 10)} sa`}</small>
+      {enUzun && <small className="tc-rr1-kolenuzun" title="Birleşen dallar içinde en uzun süren; birleştiren adım bu dalı bekler"><Simge ad="clock" boyut="k" />en uzun</small>}
+      {duzen ? (
+        <div className="tc-rr1-kolcarpan">
+          <small aria-hidden="true">1 mamul için</small>
+          <SayiAlani etiket={`Dal ${b.dal}: 1 mamul için adet`} deger={b.carpan ?? adimCarpani(b.adimlar[0] ?? { adetCarpani: null })} birim="adet"
+            yaz={(v) => { r.duzen.degistir(d.id, (l) => dalCarpaniYaz(l, b.dal, v), `Dal ${b.dal} çarpanı değişti`); }} />
+        </div>
+      ) : b.carpan !== null && b.carpan > 1 && <small>1 mamul için {String(b.carpan)} adet</small>}
+      {duzen && r.surukleniyor && <small>Bu kola bırak</small>}
     </div>
   );
 }
@@ -212,8 +198,23 @@ function Kolon({ r, d, ust, kok }: { r: RotaEkrani; d: Dugum; ust: string | null
   const V = r.duzen.gorulen(d.id);
   const liste = sirali(r.duzen.adimlar(d.id));
   const onculler = adimOnculleri(liste);
-  // 2550 a: kollu rotada sütunlar daralır (giren ve çıkan kartlar adımın üstünde ve altında), kollar ve ana hat açılışta yan yana sığar.
-  const parcalar = kolParcalari(liste);
+  // 2550 a: dallı rotada sütunlar daralır (giren ve çıkan kartlar adımın üstünde ve altında), dallar ve ana hat açılışta yan yana sığar.
+  const dalli = onculler.some((o) => o !== null);
+  const yerlesim = dalli ? dalYerlesimi(liste) : null;
+  const bilgiler = dalli ? dalBilgileri(liste) : [];
+  // Dalın toplam süresi (adım kutusundaki hesapla aynı); bir adımı hesaplanamayan dalın toplamı yazılmaz. Aynı adımda birleşen dallardan en uzunu işaretlenir.
+  const dalSaati = new Map(bilgiler.map((b) => {
+    const sureler = b.adimlar.map((a) => {
+      const ist = a.stationId ? h.istasyon.get(a.stationId) : undefined;
+      return fasonMu(a) ? null : adimSuresi(a, d.miktar * adimCarpani(a), ist, r.gunSaati(ist?.wcId ?? null))?.dk ?? null;
+    });
+    return [b.dal, sureler.some((x) => x === null) ? null : sureler.reduce<number>((t, x) => t + (x ?? 0), 0) / 60] as const;
+  }));
+  const enUzunlar = new Set(bilgiler.filter((b) => {
+    const es = bilgiler.filter((x) => x.birlesme !== null && x.birlesme.id === b.birlesme?.id);
+    const kendi = dalSaati.get(b.dal) ?? null;
+    return es.length > 1 && kendi !== null && es.every((x) => (dalSaati.get(x.dal) ?? null) !== null && (x.dal === b.dal || (dalSaati.get(x.dal) ?? 0) < kendi));
+  }).map((b) => b.dal));
   // Şerit: ana hat 0, dallar ilk göründükleri sırayla 1, 2...; dallı olmayan rotada şerit yoktur.
   const dallar = [...new Set(liste.flatMap((x) => adimDali(x) ?? []))];
   const serit = (x: Adim): number => { const dl = adimDali(x); return dl === null ? 0 : dallar.indexOf(dl) + 1; };
@@ -226,8 +227,7 @@ function Kolon({ r, d, ust, kok }: { r: RotaEkrani; d: Dugum; ust: string | null
       rozet={<span className="tc-rr1-kb tc-rr1-kb-ana">{ust ? 'Çıktı, üst akışa' : 'Ana çıktı'}</span>}
       sec={() => { r.sec({ tur: 'urun', urunId: d.id, nid: d.nid, miktar: d.miktar }); }} />
   );
-  // kolda: adım kol sütunundadır; dal etiketi sütun başlığında yazılı olduğu için adımda tekrar edilmez (2558 b/3).
-  const adimHucreleri = (sn: Dugum['adimlar'][number], i: number, kolda = false) => {
+  const adimHucreleri = (sn: Dugum['adimlar'][number], i: number) => {
     const a = sn.a;
     const anahtar = uc(d.nid, a.id);
     const sonraki = d.adimlar[i + 1]?.a;
@@ -273,13 +273,8 @@ function Kolon({ r, d, ust, kok }: { r: RotaEkrani; d: Dugum; ust: string | null
         )}
       </div>,
       <div key={`o${a.id}`} className={`tc-rr1-cop${oncul ? ` tc-rr1-dalserit tc-rr1-dalserit-${String(Math.min(serit(a), 7))}` : ''}`}>
-        {oncul && !kolda && (
-          <span className="tc-rr1-daletiket">
-            <Simge ad={adimBirlesen(a).length > 0 ? 'layers' : 'route'} boyut="k" />
-            {adimDali(a) === null ? 'Ana hat' : `Dal ${adimDali(a) ?? ''}`}
-            {adimDali(a) !== null && adimCarpani(a) > 1 && <em> 1 mamul için {String(adimCarpani(a))} adet</em>}
-            {adimBirlesen(a).length > 0 && <em> birleşir: {adimBirlesen(a).join(', ')}</em>}
-          </span>
+        {adimBirlesen(a).length > 0 && (
+          <span className="tc-rr1-daletiket"><Simge ad="layers" boyut="k" />birleşir: {adimBirlesen(a).join(', ')}</span>
         )}
         {i > 0 && oncul?.length !== 0 && (
           <button
@@ -288,7 +283,7 @@ function Kolon({ r, d, ust, kok }: { r: RotaEkrani; d: Dugum; ust: string | null
             onClick={() => { r.duzen.degistir(d.id, (l) => l.map((x) => (x.id === a.id ? bagimlilikYaz(x, sonrakiBagimlilik(x.dep)) : x)), 'Bağlılık değişti'); }}
           >{bagMetni(a)}</button>
         )}
-        <OpKutusu r={r} a={a} d={d} sonraki={sonraki} secili={secili('adim')} duzen={duzen} sahip={m} liste={liste} i={i} onculler={oncul} />
+        <OpKutusu r={r} a={a} d={d} sonraki={sonraki} secili={secili('adim')} duzen={duzen} sahip={m} liste={liste} i={i} onculler={oncul} catal={yerlesim?.ilkAdimlar.has(a.id) === true} serit={serit(a)} />
         {duzen && r.surukleniyor && (
           <BirakSeridi metin={`Bırak: OP ${String(statuNo(a))} ardına`} birak={(v) => { yereBirak(r, d.id, a.id, v, sn.miktar); }} />
         )}
@@ -311,6 +306,7 @@ function Kolon({ r, d, ust, kok }: { r: RotaEkrani; d: Dugum; ust: string | null
             </button>
           </div>
         )}
+        {yerlesim?.acikUclar.has(a.id) === true && <span className="tc-rr1-dalacik" role="note"><Simge ad="alert" boyut="k" />Birleşmiyor</span>}
       </div>,
       <div key={`c${a.id}`} className="tc-rr1-cout">
         {son ? anaCip(ust ?? undefined, anahtar) : r.araKartlar && (() => {
@@ -338,29 +334,56 @@ function Kolon({ r, d, ust, kok }: { r: RotaEkrani; d: Dugum; ust: string | null
       </div>,
     ];
   };
+  const baslik = (
+    <div className="tc-rr1-rhd-wrap">
+      {!kok && (
+        <button type="button" className="tc-rr1-ib" onClick={() => { r.kapaliDegistir(d.nid); }} aria-label="Alt akışı gizle">
+          <Simge ad="chev-left" boyut="k" />
+        </button>
+      )}
+      <button type="button" className={`tc-rr1-rhd${basSecili ? ' tc-rr1-secili' : ''}${basaBirak && basUstunde ? ' tc-rr1-birak' : ''}`}
+        onClick={() => { r.sec({ tur: 'urun', urunId: d.id, nid: d.nid, miktar: d.miktar }); }}
+        onDragOver={(e) => { if (basaBirak) { e.preventDefault(); setBasUstunde(true); } }} onDragLeave={() => { setBasUstunde(false); }}
+        onDrop={(e) => { e.preventDefault(); setBasUstunde(false); if (basaBirak) yereBirak(r, d.id, null, e.dataTransfer.getData(SURUKLE_TURU), d.miktar); }}>
+        <span className={`tc-rr1-slot tc-rr1-slot-${m.type}`}>{turKisa(m.type)}</span>
+        <span className="tc-rr1-ci">
+          <b>{m.code} rotası {V && <span className={`tc-rr1-rvchip tc-rr1-rv-${V.status}`}>Rev {V.no}</span>}{r.duzen.taslakVar(d.id) && <span className="tc-rr1-rvchip tc-rr1-rv-taslak">kaydediliyor</span>}</b>
+          <small>{basaBirak ? 'Başa eklemek için buraya bırak' : m.name}</small>
+        </span>
+        <span className="tc-rr1-cq">{miktarMetni(d.miktar, m.unit)}</span>
+      </button>
+    </div>
+  );
+  if (yerlesim) {
+    const bos = (k: string) => <div key={k} className="tc-rr1-dh tc-rr1-dh-bos" />;
+    const ana = yerlesim.seritler.indexOf(0);
+    return (
+      <div className={`tc-rr1-rcol ${kok ? 'tc-rr1-rcol-kok' : 'tc-rr1-rcol-alt'}`}>
+        <div className={`tc-rr1-dallar tc-rr1-dallar-${String(Math.min(yerlesim.seritler.length, 9))}`}>
+          {yerlesim.seritler.map((sr, j) => (j === ana ? <div key="b" className="tc-rr1-dh tc-rr1-dh-bas">{baslik}</div> : bos(`b${String(sr)}`)))}
+          {yerlesim.satirlar.flatMap((satir, si) => satir.map((id, j) => {
+            const i = id === null ? -1 : d.adimlar.findIndex((x) => x.a.id === id);
+            const sn = d.adimlar[i];
+            if (!sn) return bos(`${String(si)}-${String(j)}`);
+            const dal = yerlesim.ilkAdimlar.get(sn.a.id);
+            const b = dal === undefined ? undefined : bilgiler.find((x) => x.dal === dal);
+            return (
+              <div key={sn.a.id} className={`tc-rr1-dh tc-rr1-dalserit tc-rr1-dalserit-${String(Math.min(serit(sn.a), 7))}`}>
+                {b && <DalBasligi r={r} d={d} b={b} duzen={duzen} saat={dalSaati.get(b.dal) ?? null} enUzun={enUzunlar.has(b.dal)} />}
+                <div className="tc-rr1-g3">{adimHucreleri(sn, i)}</div>
+              </div>
+            );
+          }))}
+        </div>
+      </div>
+    );
+  }
   return (
     <div className={`tc-rr1-rcol ${kok ? 'tc-rr1-rcol-kok' : 'tc-rr1-rcol-alt'}`}>
-      <div className={`tc-rr1-g3${parcalar.some((p) => p.tur === 'kollar') ? ' tc-rr1-g3-dar' : ''}`}>
+      <div className="tc-rr1-g3">
         <div className="tc-rr1-cin" />
         <div className="tc-rr1-cop">
-          <div className="tc-rr1-rhd-wrap">
-            {!kok && (
-              <button type="button" className="tc-rr1-ib" onClick={() => { r.kapaliDegistir(d.nid); }} aria-label="Alt akışı gizle">
-                <Simge ad="chev-left" boyut="k" />
-              </button>
-            )}
-            <button type="button" className={`tc-rr1-rhd${basSecili ? ' tc-rr1-secili' : ''}${basaBirak && basUstunde ? ' tc-rr1-birak' : ''}`}
-              onClick={() => { r.sec({ tur: 'urun', urunId: d.id, nid: d.nid, miktar: d.miktar }); }}
-              onDragOver={(e) => { if (basaBirak) { e.preventDefault(); setBasUstunde(true); } }} onDragLeave={() => { setBasUstunde(false); }}
-              onDrop={(e) => { e.preventDefault(); setBasUstunde(false); if (basaBirak) yereBirak(r, d.id, null, e.dataTransfer.getData(SURUKLE_TURU), d.miktar); }}>
-              <span className={`tc-rr1-slot tc-rr1-slot-${m.type}`}>{turKisa(m.type)}</span>
-              <span className="tc-rr1-ci">
-                <b>{m.code} rotası {V && <span className={`tc-rr1-rvchip tc-rr1-rv-${V.status}`}>Rev {V.no}</span>}{r.duzen.taslakVar(d.id) && <span className="tc-rr1-rvchip tc-rr1-rv-taslak">kaydediliyor</span>}</b>
-                <small>{basaBirak ? 'Başa eklemek için buraya bırak' : m.name}</small>
-              </span>
-              <span className="tc-rr1-cq">{miktarMetni(d.miktar, m.unit)}</span>
-            </button>
-          </div>
+          {baslik}
         </div>
         <div className="tc-rr1-cout" />
         {d.dongu && (
@@ -370,11 +393,7 @@ function Kolon({ r, d, ust, kok }: { r: RotaEkrani; d: Dugum; ust: string | null
             <div className="tc-rr1-cout" />
           </>
         )}
-        {parcalar.map((p) => {
-          const sira = (id: string) => d.adimlar.findIndex((x) => x.a.id === id);
-          if (p.tur === 'adim') { const i = sira(p.id); const sn = d.adimlar[i]; return sn ? adimHucreleri(sn, i) : null; }
-          return <KolSeritleri key={`k${p.seritler[0]?.idler[0] ?? ''}`} r={r} d={d} liste={liste} duzen={duzen} seritler={p.seritler} serit={serit} hucreler={(id) => { const i = sira(id); const sn = d.adimlar[i]; return sn ? adimHucreleri(sn, i, true) : null; }} />;
-        })}
+        {d.adimlar.map((sn, i) => adimHucreleri(sn, i))}
         {!d.dongu && d.adimlar.length === 0 && (
           <>
             <div className="tc-rr1-cin" />
@@ -396,10 +415,13 @@ function Kolon({ r, d, ust, kok }: { r: RotaEkrani; d: Dugum; ust: string | null
   );
 }
 
-interface Kenar { d: string; tur: 'ef' | 'ef-ortulu' | 'ef-bagimsiz' | 'ei' | 'eo' }
+interface Kenar { d: string; tur: 'ef' | 'ef-ortulu' | 'ef-bagimsiz' | 'ei' | 'eo'; dal?: string; dalli?: boolean }
+interface Nokta { x: number; y: number }
+interface Bant { x: number; y: number; w: number; h: number; dal: string }
+interface Cizim { kenarlar: Kenar[]; noktalar: Nokta[]; bantlar: Bant[]; en: number; boy: number }
 
 // Kenarlar kutuların gerçek yerinden ölçülür; koordinatlar yakınlaştırılmamış içerik birimindedir (SVG içerikle ölçeklenir).
-function kenarlariOlc(ic: HTMLElement, olcek: number): { kenarlar: Kenar[]; en: number; boy: number } {
+function kenarlariOlc(ic: HTMLElement, olcek: number): Cizim {
   const kok = ic.getBoundingClientRect();
   const kutu = (el: Element) => {
     const b = el.getBoundingClientRect();
@@ -412,7 +434,7 @@ function kenarlariOlc(ic: HTMLElement, olcek: number): { kenarlar: Kenar[]; en: 
   // Dar sütunda (kol ve kollu rota) giren ve çıkan kartlar adımın üstünde ve altındadır; yandan çizilen eğri kutunun üstünden dolanırdı, ok çizilmez.
   const kolda = (el: Element) => {
     const g = el.closest('.tc-rr1-g3');
-    return g !== null && (g.classList.contains('tc-rr1-g3-dar') || g.parentElement?.classList.contains('tc-rr1-kol') === true);
+    return g !== null && g.parentElement?.classList.contains('tc-rr1-dh') === true;
   };
   const kenarlar: Kenar[] = [];
   const egri = (x1: number, y1: number, x2: number, y2: number) => {
@@ -429,23 +451,59 @@ function kenarlariOlc(ic: HTMLElement, olcek: number): { kenarlar: Kenar[]; en: 
       tur: bag === 'ortulu' ? 'ef-ortulu' : bag === 'bagimsiz' ? 'ef-bagimsiz' : 'ef',
     });
   });
+  // 3188: aynı şeritteki öncül düz inen okla; başka şeritteki öncül dik açılı çizgiyle bağlanır. Dal ayrılırken yatay ray ayrıldığı adımın
+  // satırının hemen altından, birleşirken birleştiren adımın satırının hemen üstünden geçer; dikey parça dalın kendi şeridindedir. Çizgi yalnız
+  // satır ve şerit aralığından geçer; başka bir bağlantının dikey parçasını kesen ray orada küçük köprüyle atlar.
+  interface Baglanti { ax: number; ay: number; bx: number; by: number; ray: number | null; grup: string; tur: Kenar['tur']; dal: string | undefined }
+  const baglantilar: Baglanti[] = [];
   ic.querySelectorAll('[data-onculler]').forEach((el) => {
     const b = giris(el);
-    const bag = el.getAttribute('data-bag');
-    const idler = (el.getAttribute('data-onculler') ?? '').split(' ');
-    for (const id of idler) {
+    const tur = el.getAttribute('data-bag') === 'ortulu' ? 'ef-ortulu' : 'ef';
+    const hh = el.closest('.tc-rr1-dh');
+    for (const id of (el.getAttribute('data-onculler') ?? '').split(' ')) {
       const kaynak = uclar.get(id);
       if (!kaynak) continue;
       const a = kutu(kaynak);
-      // Hemen üstteki öncül düz okla; aradaki kutuların üstünden geçmesin diye uzaktaki öncül kutuların solundan eğriyle bağlanır.
-      const bitisik = kaynak.closest('.tc-rr1-cop')?.nextElementSibling?.nextElementSibling?.nextElementSibling === el.closest('.tc-rr1-cop');
-      kenarlar.push({
-        d: bitisik
-          ? `M${String(a.x + a.w / 2)},${String(a.y + a.h)} L${String(b.x + b.w / 2)},${String(b.y)}`
-          : `M${String(a.x + a.w / 4)},${String(a.y + a.h)} C${String(a.x - 40)},${String(a.y + a.h + 60)} ${String(b.x - 40)},${String(b.y - 60)} ${String(b.x + b.w / 4)},${String(b.y)}`,
-        tur: bag === 'ortulu' ? 'ef-ortulu' : 'ef',
+      const hk = kaynak.closest('.tc-rr1-dh');
+      const ax = a.x + a.w / 2; const bx = b.x + b.w / 2;
+      const catal = el.hasAttribute('data-catal');
+      const capraz = Math.abs(ax - bx) > 2 && hk !== null && hh !== null;
+      baglantilar.push({
+        ax, ay: a.y + a.h, bx, by: b.y, tur, dal: el.getAttribute('data-serit') ?? kaynak.getAttribute('data-serit') ?? undefined,
+        ray: !capraz ? null : catal ? kutu(hk).y + kutu(hk).h + RAY : kutu(hh).y - RAY,
+        grup: !capraz ? `d${id}>${el.getAttribute('data-uc') ?? ''}` : catal ? `c${id}` : `m${el.getAttribute('data-uc') ?? ''}`,
       });
     }
+  });
+  const noktalar: Nokta[] = [];
+  const bantlar: Bant[] = [];
+  const n = (v: number) => String(Math.round(v * 10) / 10);
+  const hucreler = [...ic.querySelectorAll('.tc-rr1-dh')].map(kutu);
+  // Hücrenin üstündeki satır aralığı: bir üst satırın alt kenarı ile bu hücrenin üst kenarı arası.
+  const ustAralik = (y: number) => y - Math.max(0, ...hucreler.map((k) => k.y + k.h).filter((alt) => alt <= y + 1));
+  for (const g of baglantilar) {
+    const ek = { tur: g.tur, dalli: true, ...(g.dal ? { dal: g.dal } : {}) };
+    if (g.ray === null) { kenarlar.push({ d: `M${n(g.ax)},${n(g.ay)} L${n(g.bx)},${n(g.by)}`, ...ek }); continue; }
+    const catal = g.grup.startsWith('c');
+    // Eğri satır aralığının içinde kalır: ayrılırken kaynağın satırının altından, birleşirken hedefin satırının üstünden. Bağlantı noktası
+    // ayrılmada eğrinin başında, birleşmede sonunda (eksenin üstünde) durur.
+    const alt = catal ? g.ray - RAY : g.ray + RAY;
+    const aralik = catal ? ustAralik(Math.min(...hucreler.map((k) => k.y).filter((y) => y > alt + 1), g.by)) : ustAralik(alt);
+    const y0 = catal ? alt : alt - aralik; const y1 = y0 + aralik;
+    kenarlar.push({ d: `M${n(g.ax)},${n(g.ay)} L${n(g.ax)},${n(y0)} C${n(g.ax)},${n(y0 + aralik * 0.7)} ${n(g.bx)},${n(y0 + aralik * 0.3)} ${n(g.bx)},${n(y1)} L${n(g.bx)},${n(g.by)}`, ...ek });
+    noktalar.push(catal ? { x: g.ax, y: y0 } : { x: g.bx, y: y1 });
+  }
+  // Dal bandı: dalın ilk hücresinin üstünden son hücresinin altına, şerit genişliğinde.
+  const dalHucreleri = new Map<string, { serit: string; kutular: ReturnType<typeof kutu>[] }>();
+  ic.querySelectorAll('.tc-rr1-opbox[data-dal]').forEach((el) => {
+    const h = el.closest('.tc-rr1-dh'); if (!h || el.closest('.tc-rr1-rcol') !== ic.querySelector('.tc-rr1-rcol-kok')) return;
+    const anahtar = el.getAttribute('data-dal') ?? '';
+    const kayit = dalHucreleri.get(anahtar) ?? { serit: el.getAttribute('data-serit') ?? '7', kutular: [] };
+    kayit.kutular.push(kutu(h)); dalHucreleri.set(anahtar, kayit);
+  });
+  dalHucreleri.forEach((v) => {
+    const x = Math.min(...v.kutular.map((k) => k.x)) - BANT; const y = Math.min(...v.kutular.map((k) => k.y)) - BANT;
+    bantlar.push({ x, y, w: Math.max(...v.kutular.map((k) => k.x + k.w)) + BANT - x, h: Math.max(...v.kutular.map((k) => k.y + k.h)) + BANT - y, dal: v.serit });
   });
   ic.querySelectorAll('[data-besler]').forEach((el) => {
     const op = uclar.get(el.getAttribute('data-besler') ?? '');
@@ -459,7 +517,7 @@ function kenarlariOlc(ic: HTMLElement, olcek: number): { kenarlar: Kenar[]; en: 
     const a = kutu(op); const b = kutu(el);
     kenarlar.push({ d: egri(a.x + a.w, a.y + a.h / 2, b.x, b.y + b.h / 2), tur: 'eo' });
   });
-  return { kenarlar, en: kok.width / olcek, boy: kok.height / olcek };
+  return { kenarlar, noktalar, bantlar, en: kok.width / olcek, boy: kok.height / olcek };
 }
 
 export function AkisSemasi({ r, kok, cop }: {
@@ -468,8 +526,21 @@ export function AkisSemasi({ r, kok, cop }: {
   const vp = useRef<HTMLDivElement>(null);
   const ic = useRef<HTMLDivElement>(null);
   const [z, setZ] = useState<Yakinlik>(100);
+  // Akış çizgisi her karede ana iş parçacığında yeniden hesaplanır; sekme gizliyken ya da tuval ekran dışındayken durur (görünüşü değişmez).
+  const [akar, setAkar] = useState(true);
+  useEffect(() => {
+    const v = vp.current;
+    let gorunur = true;
+    const yaz = () => { setAkar(gorunur && document.visibilityState !== 'hidden'); };
+    const g = v && typeof IntersectionObserver !== 'undefined'
+      ? new IntersectionObserver((e) => { gorunur = e.some((x) => x.isIntersecting); yaz(); })
+      : null;
+    if (v && g) g.observe(v);
+    document.addEventListener('visibilitychange', yaz);
+    return () => { g?.disconnect(); document.removeEventListener('visibilitychange', yaz); };
+  }, []);
   const [yardim, setYardim] = useState(false);
-  const [cizim, setCizim] = useState<{ kenarlar: Kenar[]; en: number; boy: number }>({ kenarlar: [], en: 0, boy: 0 });
+  const [cizim, setCizim] = useState<Cizim>({ kenarlar: [], noktalar: [], bantlar: [], en: 0, boy: 0 });
   const capa = useRef<{ x: number; y: number; cx: number; cy: number } | null>(null);
   const surukle = useRef<{ x: number; y: number; sl: number; st: number } | null>(null);
   const dokundu = useRef<string | null>(null);
@@ -681,16 +752,19 @@ export function AkisSemasi({ r, kok, cop }: {
         onKeyDown={tus} onPointerDown={basla} onPointerMove={tasima} onPointerUp={birak} onPointerCancel={birak}
       >
         <div ref={ic} className={`tc-rr1-inner tc-rr1-z-${String(z)}${r.odak ? ' tc-rr1-odakta' : ''}`}>
-          <svg className="tc-rr1-edges" width={cizim.en} height={cizim.boy} aria-hidden="true">
+          <svg className={`tc-rr1-edges${akar ? '' : ' tc-rr1-edges-dur'}`} width={cizim.en} height={cizim.boy} aria-hidden="true">
             <defs>
               <marker id="tc-rr1-ok-f" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path className="tc-rr1-mf" d="M0,0 L10,5 L0,10 z" /></marker>
               <marker id="tc-rr1-ok-i" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path className="tc-rr1-mi" d="M0,0 L10,5 L0,10 z" /></marker>
               <marker id="tc-rr1-ok-o" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path className="tc-rr1-mo" d="M0,0 L10,5 L0,10 z" /></marker>
             </defs>
+            {cizim.bantlar.map((b, i) => <rect key={`b${String(i)}`} className={`tc-rr1-bant tc-rr1-bant-${b.dal}`} x={b.x} y={b.y} width={b.w} height={b.h} rx="14" />)}
             {cizim.kenarlar.map((k, i) => (
-              <path key={i} d={k.d} className={`tc-rr1-e-${k.tur}`}
+              <path key={i} d={k.d} className={`tc-rr1-e-${k.tur}${k.dalli ? ' tc-rr1-e-dalli' : ''}${k.dal ? ` tc-rr1-e-dal-${k.dal}` : ''}`}
                 markerEnd={k.tur.startsWith('ef') ? 'url(#tc-rr1-ok-f)' : k.tur === 'ei' ? 'url(#tc-rr1-ok-i)' : 'url(#tc-rr1-ok-o)'} />
             ))}
+            {cizim.kenarlar.filter((k) => k.dalli).map((k, i) => <path key={`a${String(i)}`} d={k.d} className="tc-rr1-e-akis" />)}
+            {cizim.noktalar.map((p, i) => <circle key={`n${String(i)}`} className="tc-rr1-dugum" cx={p.x} cy={p.y} r="6" />)}
           </svg>
           <Kolon r={r} d={kok} ust={null} kok />
         </div>
