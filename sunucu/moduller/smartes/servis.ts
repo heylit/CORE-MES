@@ -30,7 +30,7 @@ import {
   ilerlemeParametreleri, MAKINE_AYARI, MAKINE_BILGI_METODU, MAKINE_LISTESI_YENILEME_MS, MAKINE_OKUMA_ARALIGI_MS, MAKINE_TUR_TAVANI_MS,
   makineBilgiParametreleri, makineBilgisiOku, turSirasi, adAnahtari, adDurumu, kodOnerileri, LISTE_METOTLARI, LISTE_TURLERI, listeKayitlari, listeOkunmaliMi,
   listeParametreleri, nedenOnerisi, gelenKalemleri, hamAlanlari, cevrimOku, cevrimSaniyesi, HESAP_METOTLARI, HESAP_TURLERI, hesapOkunmaliMi,
-  hesapParametreleri, OEE_PENCERESI_GUN, oeeOku, oeeYuzdeleri, tanimliAnahtari, tanimliSaniyeler,
+  hesapParametreleri, OEE_PENCERESI_GUN, oeeOku, oeeYuzdeleri, tanimliAnahtari, tanimliSaniyeler, zorlaOkunabilirMi,
 } from './kurallar.ts';
 import type {
   AkisAyari, AktifMakine, EslemeTuru, GidecekIsEmri, KaliteAmbarKaynagi, KodOnerisi, ListeTuru, MakineDurumu, OkumaKaynagi, TanimKaydi, TanimTuru,
@@ -691,7 +691,8 @@ export async function listeTuru(
     if (e !== null) return e;
     const okunacak: ListeTuru[] = [];
     for (const t of secenek.turler ?? LISTE_TURLERI) {
-      if (secenek.zorla === true || listeOkunmaliMi(await s.listeOkumasi(db, t), o.saat())) okunacak.push(t);
+      const iz = await s.listeOkumasi(db, t);
+      if (secenek.zorla === true ? zorlaOkunabilirMi(iz, o.saat()) : listeOkunmaliMi(iz, o.saat())) okunacak.push(t);
     }
     return { tur: 'hazir' as const, okunacak };
   });

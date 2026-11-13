@@ -993,6 +993,10 @@ export function listeKayitlari(tur: ListeTuru, satirlar: readonly TabloSatiri[])
 export const LISTE_OKUMA_ARALIGI_MS = 24 * 3_600_000;
 export const LISTE_ISI_ARALIGI_MS = 15 * 60_000;
 export const LISTE_HATA_BEKLEMESI_MS = 3_600_000;
+// "Şimdi oku" art arda basılsa da canlı SmartES'e aynı liste için dakikada birden çok istek çıkmaz.
+export const LISTE_ZORLA_BEKLEMESI_MS = 60_000;
+export const zorlaOkunabilirMi = (iz: { sonDeneme: Date } | null, simdi: Date): boolean =>
+  iz === null || simdi.getTime() - iz.sonDeneme.getTime() >= LISTE_ZORLA_BEKLEMESI_MS;
 
 // Liste günde bir kez okunur; iş on beş dakikada bir bakar ki açılıştan sonra ilk liste çabuk gelsin. Okunamayan liste bir saat sonra yeniden denenir.
 export function listeOkunmaliMi(iz: { sonBasarili: Date | null; sonDeneme: Date; sonSonuc: 'tamam' | 'hata' } | null, simdi: Date): boolean {

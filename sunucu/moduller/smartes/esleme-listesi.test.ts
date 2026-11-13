@@ -70,7 +70,11 @@ describe('SmartES listeleri ve eşleme önerileri (kart 3174, gerçek PostgreSQL
     return r.json();
   };
   const fireListesi = (satirlar: Record<string, string>[]) => { sahte.isleyiciler.set('RejectsList', () => tablo(satirlar)); };
-  const oku = async (turler: readonly (typeof LISTE_TURLERI)[number][], zorla = true) => listeTuru(vt(), ortamKur(), { turler, zorla });
+  // Zorla okuma aynı listeyi dakikada bir kez ister; testte her okuma bir dakikadan sonra yapılır.
+  const oku = async (turler: readonly (typeof LISTE_TURLERI)[number][], zorla = true) => {
+    simdi += 61_000;
+    return listeTuru(vt(), ortamKur(), { turler, zorla });
+  };
   const fireKaydi = (id: number, ad: string, zaman: string) => vt().sorgu(
     `INSERT INTO smartes_red (smartes_id, neden_kodu, zaman, ham, ilk_okuma, son_okuma) VALUES ($1, $2, $3, '{}'::jsonb, now(), now())`, [id, ad, zaman]);
 
@@ -134,6 +138,17 @@ describe('SmartES listeleri ve eşleme önerileri (kart 3174, gerçek PostgreSQL
     simdi += 24 * 3_600_000;
     assert.equal((await listeTuru(vt(), ortamKur())).tur, 'islendi');
     assert.equal(sahte.cagrilar.length, LISTE_TURLERI.length);
+  });
+
+  test('SME-30: "Şimdi oku" art arda basılınca aynı liste bir dakika dolmadan SmartES’ten yeniden istenmez', async () => {
+    fireListesi([{ ID: '7', NAME: 'ORN ölçü dışı' }]);
+    assert.deepEqual(await oku(['fire']), { tur: 'islendi', okunan: ['fire'], hatali: [] });
+    simdi += 59_000;
+    assert.deepEqual(await listeTuru(vt(), ortamKur(), { turler: ['fire'], zorla: true }), { tur: 'islendi', okunan: [], hatali: [] });
+    assert.equal(sahte.cagrilar.length, 1);
+    simdi += 1_000;
+    assert.deepEqual(await listeTuru(vt(), ortamKur(), { turler: ['fire'], zorla: true }), { tur: 'islendi', okunan: ['fire'], hatali: [] });
+    assert.equal(sahte.cagrilar.length, 2);
   });
 
   test('SME-30: okunamayan liste eski haliyle kalır ve hatası saklanır; boş cevap kimseyi "yok" yapmaz; listeden çıkan satır silinmez', async () => {

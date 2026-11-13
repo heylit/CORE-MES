@@ -79,7 +79,10 @@ export function GelenAdlar({ tur, yazabilir }: { tur: SmartesGelenAdTuru; yazabi
     mutationFn: () => api.get<ListeOkuCevabi>('/smartes/listeler/oku'),
     onSuccess: async (c) => {
       await istemci.invalidateQueries({ queryKey: anahtarlar.kok });
-      bildir(c.hatali.includes(tur) ? 'hata' : 'tamam', c.hatali.includes(tur) ? 'SmartES listesi okunamadı; eski liste gösteriliyor.' : 'SmartES listesi okundu.');
+      if (c.hatali.includes(tur)) bildir('hata', 'SmartES listesi okunamadı; eski liste gösteriliyor.');
+      // Sunucu aynı listeyi dakikada bir kez ister; art arda basışta liste yeniden okunmaz.
+      else if (!c.okunan.includes(tur)) bildir('bilgi', 'SmartES listesi az önce okundu; bir dakika sonra yeniden okunabilir.');
+      else bildir('tamam', 'SmartES listesi okundu.');
     },
     onError: (e) => { bildir('hata', hataIletisi(e, 'SmartES listesi okunamadı')); },
   });
