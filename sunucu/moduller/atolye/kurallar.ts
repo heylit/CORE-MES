@@ -1,7 +1,7 @@
 import type {
   AlanKaydi, AramaTuru, Bulgu, DuvarKaydi, GecisKaydi, KapiKaydi, RafKaydi, YerlesimKaydi,
 } from '#paylasilan/sozlesme/atolye.ts';
-import { ARAMA_AZAMI_SONUC, MODEL_PARCA_BAYT } from '#paylasilan/sozlesme/atolye.ts';
+import { ARAMA_AZAMI_SONUC, MODEL_PARCA_BAYT, type RafKodlamasi } from '#paylasilan/sozlesme/atolye.ts';
 
 // Kural numaraları (ATL-xx) KURAL-TEST.md'de test ya da kısıt adıyla eşleşir.
 
@@ -541,19 +541,47 @@ export function rafNetOlcuIhlalleri(r: Pick<RafKaydi, 'tur' | 'katSayisi' | 'goz
 export const gozAdresi = (rafKodu: string, bolme: number, kat: number, goz: number): string =>
   `${rafKodu}-${String(bolme).padStart(2, '0')}-${kat}-${goz}`;
 
+// 3168: gözün ilk sıra numarası bugünkü düzenden: bölmeler soldan sağa, bölmedeki göz sütunları soldan sağa, her sütun aşağıdan yukarı.
+export const ilkDuzNo = (r: { katSayisi: number; gozSayisi: number }, bolme: number, kat: number, goz: number): number =>
+  ((bolme - 1) * r.gozSayisi + (goz - 1)) * r.katSayisi + kat;
+
+// Sıra numaralı kodlamada raf kodu yalnız harftir ("A1" rafının 2. gözü "A12" rafının gözüyle karışmasın).
+export const DUZ_RAF_KODU = /^[A-Z]{1,5}$/;
+
+// Gözün kodlamaya göre kodu. Sıra numarası saklanmamış (göz yeni açılıyor) göz için bugünkü düzenin numarası kullanılmaz:
+// numara yoksa kod da yoktur, eski düzenin adresine düşülür (uydurma kod basılmaz).
+// Raf kodu yalnız harf değilse (A1 rafı) sıra numarası kullanılmaz: "A1" rafının 2. gözü "A12" olur ve A rafının 12. gözüyle
+// karışırdı. Böyle raf, kodu harfe çevrilene kadar eski düzenin adresini taşır (tireli adres sıra numaralı kodla çakışmaz).
+export const rafDuzMu = (kodlama: RafKodlamasi, rafKodu: string): boolean => kodlama === 'duz-sayi' && DUZ_RAF_KODU.test(rafKodu);
+
+export function gozKodu(kodlama: RafKodlamasi, rafKodu: string, g: { bolme: number; kat: number; goz: number; duzNo: number | null }): string {
+  return rafDuzMu(kodlama, rafKodu) && g.duzNo !== null ? `${rafKodu}${g.duzNo}` : gozAdresi(rafKodu, g.bolme, g.kat, g.goz);
+}
+
 export interface AdresParcasi {
   rafKodu: string;
   bolme: number | null;
   kat: number | null;
   goz: number | null;
+  // Sıra numaralı kodda gözün numarası; öbür kodlamada null.
+  duzNo: number | null;
 }
 
 // "R1-02-3-1", "r1-2-3", "R1-02" adres sayılır; yalnız raf kodu ("R1") adres değildir, raf aramasıdır.
-export function adresCoz(metin: string): AdresParcasi | null {
-  const m = /^([A-Z][A-Z0-9]{0,4})-(\d{1,2})(?:-(\d{1,2})(?:-(\d))?)?$/.exec(aramaBuyut(metin.trim()));
+// Sıra numaralı kodlamada adres raf harfi ve numaradır ("a7"); eski düzenin adresi o kodlamada adres sayılmaz (3171 R4: eski
+// kodun takma adı yok, eski etiket okutulunca göz bulunmaz).
+export function adresCoz(metin: string, kodlama: RafKodlamasi = 'bolme-kat-goz'): AdresParcasi | null {
+  const temiz = aramaBuyut(metin.trim());
+  if (kodlama === 'duz-sayi') {
+    const d = /^([A-Z]{1,5})([1-9]\d{0,3})$/.exec(temiz);
+    if (d && d[1] !== undefined && d[2] !== undefined) return { rafKodu: d[1], bolme: null, kat: null, goz: null, duzNo: Number(d[2]) };
+  }
+  const m = /^([A-Z][A-Z0-9]{0,4})-(\d{1,2})(?:-(\d{1,2})(?:-(\d))?)?$/.exec(temiz);
   if (!m || m[1] === undefined || m[2] === undefined) return null;
+  // Harf raf kodunun eski adresi sıra numaralı kodlamada takma ad değildir (3171 R5); yalnız harfe çevrilmemiş raf eski adresle kalır.
+  if (rafDuzMu(kodlama, m[1])) return null;
   const sayi = (s: string | undefined) => (s === undefined ? null : Number(s));
-  return { rafKodu: m[1], bolme: Number(m[2]), kat: sayi(m[3]), goz: sayi(m[4]) };
+  return { rafKodu: m[1], bolme: Number(m[2]), kat: sayi(m[3]), goz: sayi(m[4]), duzNo: null };
 }
 
 // ---------- ATL-14, 15: arama ----------
@@ -594,11 +622,14 @@ const TUR_SIRASI: Record<AramaTuru, number> = { goz: 0, istasyon: 1, raf: 2, ala
 
 // Pasif öğe (raf, istasyon) aramada çıkmaz (ATL-13, ATL-17). Tam adres ilk sıradadır; sonra tam eşleşme,
 // başlangıç, içerme; eşitlikte tür ve etiket. En çok 20 sonuç.
-export function aramaSirala<T extends AramaAdayi>(sorgu: string, adaylar: readonly T[], azami = ARAMA_AZAMI_SONUC): T[] {
-  const tamAdres = adresCoz(sorgu);
-  const tamAdresMetni = tamAdres && tamAdres.kat !== null && tamAdres.goz !== null
-    ? gozAdresi(tamAdres.rafKodu, tamAdres.bolme ?? 0, tamAdres.kat, tamAdres.goz)
-    : null;
+export function aramaSirala<T extends AramaAdayi>(
+  sorgu: string, adaylar: readonly T[], azami = ARAMA_AZAMI_SONUC, kodlama: RafKodlamasi = 'bolme-kat-goz',
+): T[] {
+  const tamAdres = adresCoz(sorgu, kodlama);
+  const tamAdresMetni = tamAdres === null ? null
+    : tamAdres.duzNo !== null ? `${tamAdres.rafKodu}${tamAdres.duzNo}`
+      : tamAdres.kat !== null && tamAdres.goz !== null ? gozAdresi(tamAdres.rafKodu, tamAdres.bolme ?? 0, tamAdres.kat, tamAdres.goz)
+        : null;
   return adaylar
     .filter((a) => a.aktif)
     .flatMap((a) => {

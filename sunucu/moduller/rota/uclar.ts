@@ -8,6 +8,8 @@ import {
   sartnameParametresi, sartnameSorgusu, sartnamelerCevabi, sartnameTaslakGovdesi, standartCevabi, standartEkleGovdesi,
   hamOnerisiCevabi, opNumaralariCevabi, urunParametresi, urunRevizyonlariCevabi, adimParametresi, gerceklesenKabulCevabi, gerceklesenKabulGovdesi, gerceklesenSureGovdesi, surelerCevabi, surelerSorgusu, sablonCevabi, sablonKaydetGovdesi, sablonlarCevabi, sablonParametresi, sablonYazGovdesi,
 } from '#paylasilan/sozlesme/rota.ts';
+import { talimatSahneleriCevabi, talimatSahnesiKaydetGovdesi } from '#paylasilan/sozlesme/rota.ts';
+import { talimatSahneleri, talimatSahnesiKaydet } from './servis.ts';
 import {
   agac, emreKopyala, emreKopyalaToplu, rotaAdimlariToplu, emreUygula, patlatmaGetir, patlatmaOnizlemesi, fark, revizyonKunyeleri, geriGonder, malzemeAra, iptal, kaydet, kopyaIste, kopyala, malzemeKullanimi, onayaGonder, onayla, revizyonAyrintisi as ayrinti, revizyonOzeti, rotaListesi, secenekler,
   adimEkipmaniKaydet, olcuAletiTurleri, adimSartnameleriKaydet, ekAdimSartnameleriSabitle, isEmriSartnameleriCevabi as isEmriSartnameleriOku, revizyonSartnameleri, sartnameAktifYap, sartnameAyrintisi, sartnameEkle, sartnameKopyala,
@@ -623,5 +625,24 @@ export const uclar = [
     parametre: urunParametresi,
     cevap: opNumaralariCevabi,
     isle: ({ db, parametre }) => opNumaralari(db, parametre.urunId),
+  }),
+  // Montaj talimatının 3B sahnesi (3209 a): okuma talimat okumasıyla, yazma talimat yazmayla aynı yetkidir (yeni işlem yok).
+  uc({
+    yontem: 'GET',
+    yol: '/rota/urunler/:urunId/talimatlar/:opNo/sahneler',
+    yetki: ROTA_OKUR,
+    parametre: talimatParametresi,
+    cevap: talimatSahneleriCevabi,
+    isle: ({ db, parametre }) => talimatSahneleri(db, parametre.urunId, parametre.opNo),
+  }),
+  uc({
+    yontem: 'POST',
+    yol: '/rota/urunler/:urunId/talimat-sahnesi-kaydet',
+    yetki: 'rota.talimat-yaz',
+    tekrarKorumali: true,
+    parametre: urunParametresi,
+    govde: talimatSahnesiKaydetGovdesi,
+    cevap: talimatSahneleriCevabi,
+    isle: ({ db, kullanici, parametre, govde }) => talimatSahnesiKaydet(db, kullanici, parametre.urunId, govde),
   }),
 ];

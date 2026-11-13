@@ -7,3 +7,8 @@ export type { MalzemeGeometrisi } from './servis.ts';
 export { yuzeyAdimlariCozucusuKaydet as yuzeyAdimlariCozucusu } from './servis.ts';
 export type { YuzeyAdimlariCozucusu } from './servis.ts';
 export type { GeometriYuzeyAdimi } from '#paylasilan/sozlesme/geometri.ts';
+// Rota talimat sahnesi (3209 a): malzemenin yayındaki 3B model revizyonları; kayıtta model sahipliği denetimi. Yetki denetlemez.
+export { malzemeModelRevizyonlari } from './servis.ts';
+// Terminalin 3B montaj sahnesi (3209 a): sahnenin model revizyonunun dosyası. Yetki ve sahiplik denetlemez; çağıran (arkon) iş, talimat ve
+// sahne bağını, ardından modelin ürünün yayındaki modeli olduğunu denetler.
+export { modelDosyasi } from './servis.ts';

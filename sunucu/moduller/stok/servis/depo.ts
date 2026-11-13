@@ -7,10 +7,11 @@ import type {
   DepolarCevabi, Konum, KonumAyrintiCevabi, KonumlarListesi, Raf, RafAcKomutu, RafDuzenleKomutu, RafDuzenleCevabi, KonumDuzenleCevabi, RafMatrisiCevabi, RaflarListesi, YerlesimCevabi,
   YerlesimKaydetKomutu, HaritaEslemeCevabi, HaritaOzetiCevabi, TopluBolumDeposuCevabi, GozStoklariCevabi, GozOzetleriCevabi, KonumMalzemesi, KonumMalzemeleriListesi,
 } from '#paylasilan/sozlesme/stok.ts';
-import type { GozKalemi, GozKalemiKaydi, KayitCevabi, RafKaydi } from '#paylasilan/sozlesme/atolye.ts';
-import { AMBALAJ_TURLERI, type AmbalajTuru, type ElleKonumTuru, type ZeminCevabi } from '#paylasilan/sozlesme/stok.ts';
+import type { GozKalemi, GozKalemiKaydi, KayitCevabi, RafKaydi, RafKodlamaOnizlemeCevabi } from '#paylasilan/sozlesme/atolye.ts';
+import { AMBALAJ_TURLERI, type AmbalajTuru, type ElleKonumTuru, type RafKodGecisiListesiCevabi, type RafKodlamaDurumuCevabi, type ZeminCevabi, rafKodGecisiListesiCevabi } from '#paylasilan/sozlesme/stok.ts';
 import {
-  alanlar as haritaAlanlari, gozAdresi as haritaGozAdresi, gozKaleminBolumu, gozKalemiSil as haritaGozKalemiSil, gozKalemiYaz as haritaGozKalemiYaz, gozler as haritaGozleri, rafYerlesimiKaydet,
+  alanlar as haritaAlanlari, gozAdresi as haritaGozAdresi, harfOlmayanRafKodlari, rafKodlamasi, rafKodlamasiDegistir as haritaRafKodlamasiDegistir,
+  rafYenidenNumarala as haritaRafYenidenNumarala, type RafKodlamasi, gozKaleminBolumu, gozKalemiSil as haritaGozKalemiSil, gozKalemiYaz as haritaGozKalemiYaz, gozler as haritaGozleri, rafYerlesimiKaydet,
   zemin as haritaZemini,
 } from '../../atolye/disari.ts';
 import { bolmeNo, rafGozleri, haritaPlani, haritaAlaniMi, depoKoduOner, deposuzBolumler, konumTurDegisimEngeli, koduDegisenler, karantinaEksigi, type KarantinaEksigi } from '../kurallar.ts';
@@ -103,8 +104,8 @@ export async function konumPasif(db: Db, id: number, surum: number): Promise<{ k
 }
 
 // Fabrika Haritası raf, göz ve alanın tek kaynağıdır (#686); eşleme depo seçilmiş bölümün yeni yerini stok konumu yapar (#711).
-async function haritaDurumu(db: Db) {
-  const gozler = await haritaGozleri(db), alanlar = await haritaAlanlari(db), depolar = await sorgular.haritaDepolari(db);
+async function haritaDurumu(db: Db, kodlama?: RafKodlamasi) {
+  const gozler = await haritaGozleri(db, null, kodlama), alanlar = await haritaAlanlari(db), depolar = await sorgular.haritaDepolari(db);
   const plan = haritaPlani({ gozler, alanlar, depolar, konumlar: await sorgular.haritaKonumlari(db), kodlar: new Set(await sorgular.tumKonumKodlari(db)) });
   return { gozler, alanlar, depolar, plan };
 }
@@ -141,14 +142,29 @@ export async function haritadanEsle(db: Db): Promise<HaritaEslemeCevabi> {
   const { plan } = await haritaDurumu(db);
   const idler = plan.guncelle.map((k) => k.id);
   const onceki = idler.length === 0 ? [] : await sorgular.kodDurumlari(db, { idler });
+  if (plan.guncelle.length > 0) await sorgular.konumKodTekliginiErtele(db);
   for (const k of plan.ekle) await korumali(() => sorgular.haritaKonumuAc(db, k));
   for (const k of plan.guncelle) await korumali(() => sorgular.haritaKonumuGuncelle(db, k));
   for (const k of plan.turDegisimi) await sorgular.haritaKonumuTuru(db, k);
   const kapatilan = plan.kapat.length === 0 ? 0 : (await sorgular.haritaKonumlariniKapat(db, plan.kapat)).length;
-  return {
+  const e: HaritaEslemeCevabi = {
     eklenen: plan.ekle.length, guncellenen: plan.guncelle.length + plan.turDegisimi.length, kapatilan, atlanan: plan.atlanan,
     koduDegisenler: idler.length === 0 ? [] : koduDegisenler(onceki, await sorgular.kodDurumlari(db, { idler })),
   };
+  // 3177 b: bu sürümden sonraki ilk eşleme (açılış işi ya da ondan önce gelen bir harita kaydı) kod değişimlerini bir kez saklar.
+  if (!(await sorgular.rafKodGecisiVarMi(db))) {
+    const kodlama = await rafKodlamasi(db);
+    await sorgular.rafKodGecisiYaz(db, { kodlama, degisenler: e.koduDegisenler, eskiKodluRaflar: kodlama === 'duz-sayi' ? await harfOlmayanRafKodlari(db) : [], atlanan: plan.koduGecemeyen, pasifStoklu: plan.pasifStoklu });
+  }
+  return e;
+}
+
+// 3177 b: güncellemeden sonra stok konumları sıra numaralı koda kendiliğinden geçer. Açılıştan sonraki ilk turda eşleme bir kez
+// koşar (tek transaction; kodlar zincir ve takasla değişir); kayıt yazıldıktan sonra iş bir şey yapmaz. Kilit ve tek satır ikinci
+// sunucunun ikinci kez geçirmesini önler.
+export async function rafKodGecisiIsi(db: Db): Promise<void> {
+  if (await sorgular.rafKodGecisiVarMi(db)) return;
+  await haritadanEsle(db);
 }
 
 // 2884: aktif karantina konumu bulunamayınca nedeni (mal kabul iletisi için); yeni sorgu yok, eşlemenin okuduklarıyla.
@@ -370,4 +386,66 @@ export async function gozOzetleri(db: Db, gozIdler: number[]): Promise<GozOzetle
     gozler.set(s.gozId, g);
   }
   return { gozler: [...gozler.values()] };
+}
+
+// ---- 3168: raf kodlama (Stok > Ayarlar) ve rafın yeniden numaralanması --------------------------------------------------
+export async function rafKodlamaOku(db: Db): Promise<RafKodlamaDurumuCevabi> {
+  const g = await sorgular.rafKodGecisi(db);
+  return { kodlama: await rafKodlamasi(db), gecis: g === null ? null : { ...g, zaman: g.zaman.toISOString() } };
+}
+
+export async function rafKodGecisiListesi(db: Db): Promise<RafKodGecisiListesiCevabi> {
+  return rafKodGecisiListesiCevabi.parse({ degisenler: await sorgular.rafKodGecisiDegisenleri(db) });
+}
+
+// Etiketler basıldı: uyarı kalkar, liste kalır (denetim için).
+export async function rafKodGecisiBasildi(db: Db, kisiId: number): Promise<RafKodlamaDurumuCevabi> {
+  await sorgular.rafKodGecisiBasildi(db, kisiId);
+  return rafKodlamaOku(db);
+}
+
+// Kuru deneme (3171 R3): kodlama değişse kaç konumun kodu değişir, kaçında stok var, bir örnek; yalnız harf olmayan raf kodu
+// varsa sıra numaralı kodlamaya geçilmez. Hiçbir şey yazılmaz.
+export async function rafKodlamaOnizleme(db: Db, kodlama: RafKodlamasi): Promise<RafKodlamaOnizlemeCevabi> {
+  const { gozler, plan } = await haritaDurumu(db, kodlama);
+  const raflar = new Set(gozler.map((g) => g.rafId));
+  const konumlar = new Map((await sorgular.haritaKonumlari(db)).map((k) => [k.id, k]));
+  const degisen = plan.guncelle.flatMap((d) => { const k = konumlar.get(d.id); return k && k.kod !== d.kod ? [{ eski: k.kod, yeni: d.kod, stoklu: k.satirSayisi > 0 }] : []; });
+  return {
+    kodlama, rafSayisi: raflar.size, gozSayisi: gozler.length, degisenKonum: degisen.length, stokluKonum: degisen.filter((d) => d.stoklu).length,
+    ornek: degisen[0] ? { eski: degisen[0].eski, yeni: degisen[0].yeni } : null,
+    engelliRaflar: kodlama === 'duz-sayi' ? await harfOlmayanRafKodlari(db) : [],
+  };
+}
+
+// Kodlama değişir ve konum kodları aynı kayıtta eşlenir (3171 R1, R6): ya hepsi ya hiçbiri. Değişen kodlar cevapta döner (etiket
+// penceresi) ve denetim kaydına eklenir (özet ve ilk satırlar).
+export async function rafKodlamaDegistir(
+  db: Db, govde: { kodlama: RafKodlamasi; beklenen: RafKodlamasi }, kisiId: number, denetimEki: (satirlar: readonly Record<string, string | number | boolean | null>[]) => void,
+): Promise<HaritaEslemeCevabi> {
+  const eski = await rafKodlamasi(db);
+  await haritaRafKodlamasiDegistir(db, govde.kodlama, govde.beklenen, kisiId, { yol: '/stok/raf-kodlama/degistir', yetki: 'stok.tanim' });
+  const e = await haritadanEsle(db);
+  denetimEki(kodDegisimDenetimi({ islem: 'raf-kodlama', eski, yeni: govde.kodlama }, e));
+  return e;
+}
+
+// Rafın sıra numaraları bugünkü düzenle yeniden verilir ve konum kodları aynı kayıtta eşlenir. Yalnız sıra numaralı kodlamada.
+export async function rafYenidenNumarala(
+  db: Db, rafId: number, denetimEki: (satirlar: readonly Record<string, string | number | boolean | null>[]) => void,
+): Promise<HaritaEslemeCevabi> {
+  if (await rafKodlamasi(db) !== 'duz-sayi') throw gecersiz('Yeniden numaralama yalnız sıra numaralı raf kodlamasında yapılır.');
+  const r = await haritaRafYenidenNumarala(db, rafId);
+  const e = await haritadanEsle(db);
+  denetimEki(kodDegisimDenetimi({ islem: 'yeniden-numarala', raf: r.rafKodu, degisenGoz: r.degisen }, e));
+  return e;
+}
+
+// Denetim eki satır sınırı 100: ilk satır özet, sonra en çok 99 kod değişimi (eski, yeni). Liste uzunsa özet bunu söyler.
+const DENETIM_KOD_SATIRI = 99;
+function kodDegisimDenetimi(ozet: Record<string, string | number>, e: HaritaEslemeCevabi): Record<string, string | number | boolean | null>[] {
+  return [
+    { ...ozet, degisenKonum: e.koduDegisenler.length, stokluKonum: e.koduDegisenler.filter((d) => d.satirSayisi > 0).length, listeTam: e.koduDegisenler.length <= DENETIM_KOD_SATIRI },
+    ...e.koduDegisenler.slice(0, DENETIM_KOD_SATIRI).map((d) => ({ konumId: d.konumId, eskiKod: d.eskiKod, yeniKod: d.yeniKod })),
+  ];
 }

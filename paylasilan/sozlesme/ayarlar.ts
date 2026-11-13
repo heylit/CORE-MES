@@ -66,7 +66,10 @@ export const ayarParametresi = z.object({ anahtar: z.string().max(80) });
 export const ayarDegistirGovdesi = z.object({ deger: z.unknown(), beklenen: z.unknown().optional() });
 
 // Saklanan değer tanımın türüne uymuyorsa `gecersiz` gelir ve değer null'dur; üstüne yazmak onarır.
-const ayarOrtak = { anahtar: z.string(), baslik: z.string(), aciklama: z.string(), gecersiz: z.literal(true).optional() };
+// `degistirenEkran`: başka kayıtlarla birlikte değişen ayar burada yalnız okunur; değiştiren ekranın adı gelir.
+const ayarOrtak = {
+  anahtar: z.string(), baslik: z.string(), aciklama: z.string(), gecersiz: z.literal(true).optional(), degistirenEkran: z.string().optional(),
+};
 
 export const ayarSemasi = z
   .discriminatedUnion('tur', [

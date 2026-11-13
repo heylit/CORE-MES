@@ -414,3 +414,24 @@ export const uclar = [
     isle: ({ db, kullanici, parametre, govde }) => servis.hazirlikMaddesiIsaretle(db, kullanici, parametre.id, govde.olay),
   }),
 ];
+
+// Terminalin 3B montaj sahnesi (3209 a, 3213): işin görünürlüğü ve iş-talimat-sahne bağı serviste denetlenir; model listesi ucu yoktur.
+import { isEmriSahneParametresi, isEmriSahnesiCevabi } from '#paylasilan/sozlesme/rota.ts';
+uclar.push(
+  uc({
+    yontem: 'GET',
+    yol: '/arkon/is-emirleri/:isEmriId/sahne',
+    yetki: ARKON_SAYFASI,
+    parametre: isEmriSahneParametresi,
+    cevap: isEmriSahnesiCevabi,
+    isle: ({ db, kullanici, parametre }) => servis.isEmriSahnesi(db, kullanici, parametre.isEmriId),
+  }),
+  uc({
+    yontem: 'GET',
+    yol: '/arkon/is-emirleri/:isEmriId/sahne-modeli',
+    yetki: ARKON_SAYFASI,
+    parametre: isEmriSahneParametresi,
+    cevap: ikiliCevap,
+    isle: ({ db, kullanici, parametre }) => servis.isEmriSahneModeli(db, kullanici, parametre.isEmriId),
+  }),
+);

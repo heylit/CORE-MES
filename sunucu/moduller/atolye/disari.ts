@@ -1,16 +1,17 @@
 // Başka modüllerin ithal edebildiği tek dosya. Raf, göz ve zemin alanı Fabrika Haritası'nda tek kaynaktır (kart #686):
 // stok miktarı ve hareketi stokta kalır, yeri buradaki göze ya da alana bağlanır.
 import type { Db } from '#cekirdek/db.ts';
-import type { AlanTuru, FabrikaCevabi, GozKalemi, GozKalemiKaydi, KayitCevabi, RafKaydi, RafTuru } from '#paylasilan/sozlesme/atolye.ts';
-import { adresCoz, gozAdresi as adresUret } from './kurallar.ts';
+import type { AlanTuru, FabrikaCevabi, GozKalemi, GozKalemiKaydi, KayitCevabi, RafKaydi, RafKodlamasi, RafTuru } from '#paylasilan/sozlesme/atolye.ts';
+import { adresCoz, gozKodu } from './kurallar.ts';
 import * as servis from './servis.ts';
 import * as sorgular from './sorgular.ts';
 
-export type { AlanTuru, RafTuru } from '#paylasilan/sozlesme/atolye.ts';
+export type { AlanTuru, RafKodlamasi, RafTuru } from '#paylasilan/sozlesme/atolye.ts';
 
 export interface Goz {
   id: number;
-  // Raf-Bölme-Kat-Göz (A12-03-2-1); raf kodu değişince adres değişir, kimlik kalır.
+  // Raf kodlamasına göre (3168): Raf-Bölme-Kat-Göz (A12-03-2-1) ya da raf kodu ve sıra numarası (A7); raf kodu ya da
+  // kodlama değişince adres değişir, kimlik kalır.
   adres: string;
   rafId: number;
   rafKodu: string;
@@ -20,6 +21,8 @@ export interface Goz {
   bolme: number;
   kat: number;
   goz: number;
+  // 3168: sıra numarası (saklanmamışsa null).
+  duzNo: number | null;
 }
 
 export interface Raf {
@@ -38,25 +41,43 @@ export interface Alan {
   ad: string;
 }
 
-const goze = (g: sorgular.DisGozSatiri): Goz => ({ ...g, adres: adresUret(g.rafKodu, g.bolme, g.kat, g.goz) });
+const goze = (kodlama: RafKodlamasi) => (g: sorgular.DisGozSatiri): Goz => ({ ...g, adres: gozKodu(kodlama, g.rafKodu, g) });
 
-// Bütün gözler ya da bir bölümün gözleri; raf koduna, bölmeye, kata ve göze göre sıralı.
-export async function gozler(db: Db, salonId: number | null = null): Promise<Goz[]> {
-  return (await sorgular.disGozler(db, salonId)).map(goze);
+export const rafKodlamasi = (db: Db): Promise<RafKodlamasi> => servis.rafKodlamasi(db);
+
+// Bütün gözler ya da bir bölümün gözleri; raf koduna, bölmeye, kata ve göze göre sıralı. `kodlama` verilirse adres o kodlamayla
+// üretilir (kodlama değişmeden önceki kuru deneme, 3168); verilmezse geçerli kodlamayla.
+export async function gozler(db: Db, salonId: number | null = null, kodlama?: RafKodlamasi): Promise<Goz[]> {
+  const k = kodlama ?? await servis.rafKodlamasi(db);
+  return (await sorgular.disGozler(db, salonId)).map(goze(k));
 }
 
-// Adres metni göze çözülür ("a12-3-2" de olur); kat verilmeyen adres göz değildir, göz verilmezse 1. göz.
+// Adres metni göze çözülür ("a12-3-2" de olur); kat verilmeyen adres göz değildir, göz verilmezse 1. göz. Sıra numaralı kodlamada
+// raf harfi ve numara ("a7"); eski düzenin adresi o kodlamada göz bulmaz (eski kodun takma adı yok).
 export async function gozBul(db: Db, adres: string): Promise<Goz | null> {
-  const p = adresCoz(adres);
-  if (!p || p.kat === null) return null;
+  const kodlama = await servis.rafKodlamasi(db);
+  const p = adresCoz(adres, kodlama);
+  if (!p) return null;
+  if (p.duzNo !== null) {
+    const d = await sorgular.disGozDuzNoIle(db, p.rafKodu, p.duzNo);
+    return d && goze(kodlama)(d);
+  }
+  if (p.kat === null) return null;
   const g = await sorgular.disGozAdresle(db, p.rafKodu, p.bolme ?? 0, p.kat, p.goz ?? 1);
-  return g && goze(g);
+  return g && goze(kodlama)(g);
 }
 
 export async function gozAdresi(db: Db, gozId: number): Promise<Goz | null> {
   const g = await sorgular.disGoz(db, gozId);
-  return g && goze(g);
+  return g && goze(await servis.rafKodlamasi(db))(g);
 }
+
+// 3168: kodlama değişimi ve rafın yeniden numaralanması Stok Merkezi'nden (Stok > Ayarlar, raf görünümü); yetkiyi çağıran
+// denetler ve konum kodlarını aynı kayıtta eşler.
+export const rafKodlamasiDegistir = (db: Db, kodlama: RafKodlamasi, beklenen: RafKodlamasi, kisiId: number, kaynak: { yol: string; yetki: string }) =>
+  servis.rafKodlamasiDegistir(db, kodlama, beklenen, kisiId, kaynak);
+export const harfOlmayanRafKodlari = (db: Db): Promise<string[]> => servis.harfOlmayanRafKodlari(db);
+export const rafYenidenNumarala = (db: Db, rafId: number) => servis.rafYenidenNumarala(db, rafId);
 
 export async function raflar(db: Db): Promise<Raf[]> {
   return (await sorgular.raflar(db, null)).map(({ id, salonId, kod, ad, tur, aktif }) => ({ id, salonId, kod, ad, tur, aktif }));

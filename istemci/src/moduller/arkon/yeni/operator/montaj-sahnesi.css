@@ -1,0 +1,3 @@
+/* 3B montaj düğmesi (3209 a): terminal dokunma ölçüsü (Arayüz K1). */
+.tc-ay1-montaj { display: flex; justify-content: flex-end; }
+.tc-ay1-montaj button { min-block-size: var(--dokunma-ana); }

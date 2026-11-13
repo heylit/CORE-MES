@@ -1,7 +1,7 @@
 import { crc32 } from 'node:zlib';
 import type { Db } from '#cekirdek/db.ts';
 import type { IkiliCevap } from '#cekirdek/uc.ts';
-import { bulunamadi, dogrulama, eskiSurum } from '#cekirdek/hata.ts';
+import { bulunamadi, dogrulama, eskiSurum, gecersiz } from '#cekirdek/hata.ts';
 import { AYAR_ANAHTARLARI, AYAR_TANIMLARI, ayarAnahtariMi, ayarTanimi } from '#paylasilan/ayarlar.ts';
 import { donemAnahtari, numaraDonemi, numaraKur } from '#paylasilan/numara.ts';
 import type { AyarAnahtari, AyarDegeri, NumaraAnahtari } from '#paylasilan/ayarlar.ts';
@@ -19,7 +19,10 @@ const DEGISTIR_YOLU = '/ayarlar/:anahtar/degistir';
 // Değer kurallardan doğrulanmış gelir; türü tanımın türüyle aynıdır. Geçersiz ayarın değeri yoktur (null).
 function ayarGorunumu(anahtar: AyarAnahtari, deger: boolean | number | string | null, gecersiz = false): Ayar {
   const tanim = ayarTanimi(anahtar);
-  const ortak = { anahtar, baslik: tanim.baslik, aciklama: tanim.aciklama, ...(gecersiz ? { gecersiz: true as const } : {}) };
+  const ortak = {
+    anahtar, baslik: tanim.baslik, aciklama: tanim.aciklama, ...(gecersiz ? { gecersiz: true as const } : {}),
+    ...(tanim.degistirenEkran === undefined ? {} : { degistirenEkran: tanim.degistirenEkran }),
+  };
   if (tanim.tur === 'boolean') return { ...ortak, tur: 'boolean', deger: gecersiz ? null : deger === true };
   if (tanim.tur === 'metin') {
     return {
@@ -156,6 +159,9 @@ export interface AyarKaynagi {
 
 export async function ayarDegistir(db: Db, kisiId: number, anahtar: string, ham: unknown, beklenen?: unknown, kaynak?: AyarKaynagi): Promise<Ayar> {
   if (!ayarAnahtariMi(anahtar)) throw bulunamadi('Ayar bulunamadı.');
+  // 3168: başka kayıtlarla birlikte değişmesi gereken ayarı yalnız sahibi modülün komutu yazar.
+  const ekran = ayarTanimi(anahtar).degistirenEkran;
+  if (kaynak === undefined && ekran !== undefined) throw gecersiz(`Bu ayar ${ekran} ekranından değiştirilir.`);
   const sonuc = degeriDogrula(anahtar, ham);
   if ('hata' in sonuc) throw dogrulama(sonuc.hata, 'deger');
   const yeni = sonuc.deger;

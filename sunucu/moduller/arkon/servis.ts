@@ -3257,3 +3257,27 @@ export async function hazirlikMaddesiIsaretle(db: Db, kullanici: Kullanici, id: 
   await sorgular.hazirlikMaddesiOlayiEkle(db, id, olay, kullanici.id);
   return hazirlikMaddeleriListesi(db, madde.isEmriId);
 }
+
+// Terminalin 3B montaj sahnesi (3209 a; 3213: model yalnız işin rota adımına bağlı talimattan açılır, liste yok). İş, terminalde görünen
+// paketiyle denetlenir (Arkon rolü, kapsam, iptal ve silinmiş adım; `belge`); sahne emir açılırken sabitlenen talimat sürümünündür
+// (adımların talimat künyesiyle aynı kaynak). Model dosyası yalnız bu sahnenin modelidir ve ürünün yayındaki modeli olmalıdır (Risk R2).
+import type { IsEmriSahnesiCevabi } from '#paylasilan/sozlesme/rota.ts';
+import { modelDosyasi, malzemeModelRevizyonlari } from '../geometri/disari.ts';
+import { talimatSahnesi } from '../rota/disari.ts';
+import { isEmriTalimatKunyesi } from '../uretim-emirleri/disari.ts';
+const SAHNE_ISI_YOK = 'İş bu terminalde görünmüyor.';
+const SAHNE_MODELI_YOK = 'Bu işin talimatında 3B sahne yok.';
+async function isinSahnesi(db: Db, kullanici: Kullanici, isEmriId: number) {
+  if ((await belge(db, kullanici, 'pkgs', isEmriPaketKimligi(isEmriId))) === null) throw bulunamadi(SAHNE_ISI_YOK);
+  const kunye = await isEmriTalimatKunyesi(db, isEmriId);
+  const sahne = kunye === null ? null : await talimatSahnesi(db, kunye.malzemeNo, kunye.opNo, kunye.surum);
+  return { kunye, sahne };
+}
+export async function isEmriSahnesi(db: Db, kullanici: Kullanici, isEmriId: number): Promise<IsEmriSahnesiCevabi> {
+  return { sahne: (await isinSahnesi(db, kullanici, isEmriId)).sahne };
+}
+export async function isEmriSahneModeli(db: Db, kullanici: Kullanici, isEmriId: number): Promise<IkiliCevap> {
+  const { kunye, sahne } = await isinSahnesi(db, kullanici, isEmriId);
+  if (kunye === null || sahne === null || !(await malzemeModelRevizyonlari(db, kunye.malzemeNo)).includes(sahne.modelRevizyonId)) throw bulunamadi(SAHNE_MODELI_YOK);
+  return modelDosyasi(db, sahne.modelRevizyonId);
+}

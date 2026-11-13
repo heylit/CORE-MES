@@ -75,6 +75,20 @@ describe('Sistem Ayarları', () => {
     expect(within(satirlar[1] as HTMLElement).getByText(OTEKI.aciklama)).toBeTruthy();
   });
 
+  it('3168: değiştiren ekranı bildirilen ayar salt okunur; seçeneğin adı ve değiştirilen ekran yazılır, düğmesi yoktur', async () => {
+    const raf: Ayar = {
+      anahtar: 'atolye.raf-kodlama', baslik: 'Deneme raf kodlama', aciklama: 'Raf açıklaması.', tur: 'secim', deger: 'duz-sayi',
+      secenekler: [{ deger: 'duz-sayi', etiket: 'Deneme sıra numarası' }, { deger: 'bolme-kat-goz', etiket: 'Deneme bölme' }], degistirenEkran: 'Stok > Ayarlar',
+    };
+    sunucuKur({ liste: () => json(200, { ayarlar: [raf] } satisfies AyarlarCevabi) });
+    ac(undefined, undefined, null);
+    const satir = (await screen.findByText(raf.baslik)).closest('li') as HTMLElement;
+    expect(within(satir).getByText('Raf açıklaması. Değiştirmek için: Stok > Ayarlar.')).toBeTruthy();
+    expect(within(satir).getByText('Deneme sıra numarası')).toBeTruthy();
+    expect(within(satir).queryByRole('combobox')).toBeNull();
+    expect(within(satir).queryByRole('button')).toBeNull();
+  });
+
   it('anahtara dokununca yeni değer o ayarın komutuna gider; sunucunun cevabıyla anahtar döner ve bildirim çıkar', async () => {
     const istekler = sunucuKur({ yazma: (_yol, govde) => json(200, { ...DORT_GOZ, deger: govde.deger as boolean } satisfies Ayar) });
     ac();

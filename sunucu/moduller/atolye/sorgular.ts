@@ -204,12 +204,15 @@ export interface RafSatiri {
   katYukseklikleri: string[] | null;
   gozGenisligi: string | null;
   gozDerinligi: string | null;
+  // 3168: gözlerin sıra numaraları bugünkü düzenin sırasıyla (bölme, göz sütunu, kat); göz satırı eksikse null.
+  duzNolari: (number | null)[] | null;
 }
 
 const RAF = `r.id, r.salon_id AS "salonId", r.kod, r.ad, r.tur, r.bolme_sayisi AS "bolmeSayisi", r.kat_sayisi AS "katSayisi",
   r.goz_sayisi AS "gozSayisi", r.bolme_genisligi AS "bolmeGenisligi", r.derinlik, r.yukseklik, r.x, r.z, r.donus, r.aktif,
   (r.bolme_sayisi * r.bolme_genisligi)::numeric(6, 2) AS genislik,
-  r.kat_yukseklikleri::text[] AS "katYukseklikleri", r.goz_genisligi AS "gozGenisligi", r.goz_derinligi AS "gozDerinligi"`;
+  r.kat_yukseklikleri::text[] AS "katYukseklikleri", r.goz_genisligi AS "gozGenisligi", r.goz_derinligi AS "gozDerinligi",
+  (SELECT array_agg(g.duz_no ORDER BY g.bolme, g.goz, g.kat) FROM atolye_goz g WHERE g.raf_id = r.id) AS "duzNolari"`;
 
 export function raflar(db: Db, salonId: number | null): Promise<RafSatiri[]> {
   return db.sorgu<RafSatiri>(`SELECT ${RAF} FROM atolye_raf r WHERE ($1::int IS NULL OR r.salon_id = $1) ORDER BY r.kod`, [salonId]);
@@ -265,6 +268,8 @@ export async function rafBolumDegistir(db: Db, id: number, salonId: number): Pro
 }
 
 // Göz satırları rafın ölçüsünü izler: dışarıda kalan silinir (bağlı kayıt varsa yabancı anahtar durdurur), eksik eklenir.
+// 3168: yeni göz rafın sıradaki numarasını alır (bölme, göz sütunu, kat sırasıyla); var olanın numarası değişmez, silinenin
+// numarası yeniden verilmez.
 export async function gozleriEsitle(db: Db, rafId: number): Promise<void> {
   await db.sorgu(
     `DELETE FROM atolye_goz g USING atolye_raf r
@@ -272,13 +277,35 @@ export async function gozleriEsitle(db: Db, rafId: number): Promise<void> {
     [rafId],
   );
   await db.sorgu(
-    `INSERT INTO atolye_goz (raf_id, bolme, kat, goz)
-     SELECT r.id, b, k, g FROM atolye_raf r,
-            generate_series(1, r.bolme_sayisi) b, generate_series(1, r.kat_sayisi) k, generate_series(1, r.goz_sayisi) g
-      WHERE r.id = $1
-     ON CONFLICT ON CONSTRAINT atolye_goz_tek DO NOTHING`,
+    `WITH r AS (SELECT id, bolme_sayisi, kat_sayisi, goz_sayisi, son_duz_no FROM atolye_raf WHERE id = $1 FOR UPDATE),
+     eksik AS (
+       SELECT r.id AS raf_id, b, k, g, r.son_duz_no + row_number() OVER (ORDER BY b, g, k) AS duz_no
+         FROM r, generate_series(1, r.bolme_sayisi) b, generate_series(1, r.kat_sayisi) k, generate_series(1, r.goz_sayisi) g
+        WHERE NOT EXISTS (SELECT 1 FROM atolye_goz x WHERE x.raf_id = r.id AND x.bolme = b AND x.kat = k AND x.goz = g)
+     ),
+     eklenen AS (INSERT INTO atolye_goz (raf_id, bolme, kat, goz, duz_no) SELECT raf_id, b, k, g, duz_no FROM eksik RETURNING duz_no)
+     UPDATE atolye_raf SET son_duz_no = (SELECT max(duz_no) FROM eklenen) WHERE id = $1 AND EXISTS (SELECT 1 FROM eklenen)`,
     [rafId],
   );
+}
+
+// 3168: rafın numaraları bugünkü düzenle yeniden verilir (bölmeler soldan sağa, sütun aşağıdan yukarı); değişen göz sayısı döner.
+// Numara tekliği ertelenmiştir: iki göz aynı kayıtta numara değiştirebilir.
+export async function rafYenidenNumarala(db: Db, rafId: number): Promise<number> {
+  const degisen = await db.sorgu<{ id: number }>(
+    `UPDATE atolye_goz g SET duz_no = ((g.bolme - 1) * r.goz_sayisi + (g.goz - 1)) * r.kat_sayisi + g.kat
+       FROM atolye_raf r
+      WHERE r.id = g.raf_id AND r.id = $1 AND g.duz_no IS DISTINCT FROM ((g.bolme - 1) * r.goz_sayisi + (g.goz - 1)) * r.kat_sayisi + g.kat
+     RETURNING g.id`,
+    [rafId],
+  );
+  await db.sorgu('UPDATE atolye_raf r SET son_duz_no = COALESCE((SELECT max(duz_no) FROM atolye_goz WHERE raf_id = r.id), 0) WHERE r.id = $1', [rafId]);
+  return degisen.length;
+}
+
+// Yalnız harf olmayan raf kodları (sıra numaralı kodlamada raf kodu harftir: "A1" rafının 2. gözü "A12" rafınınkiyle karışır).
+export async function harfOlmayanRafKodlari(db: Db): Promise<string[]> {
+  return (await db.sorgu<{ kod: string }>("SELECT kod FROM atolye_raf WHERE kod !~ '^[A-Z]{1,5}$' ORDER BY kod")).map((r) => r.kod);
 }
 
 export interface GozSatiri {
@@ -287,9 +314,10 @@ export interface GozSatiri {
   bolme: number;
   kat: number;
   goz: number;
+  duzNo: number | null;
 }
 
-const GOZ = 'g.id, g.raf_id AS "rafId", g.bolme, g.kat, g.goz';
+const GOZ = 'g.id, g.raf_id AS "rafId", g.bolme, g.kat, g.goz, g.duz_no AS "duzNo"';
 
 export function gozSayfasi(db: Db, rafId: number, sinir: number, atla: number, bolme: number | null = null): Promise<GozSatiri[]> {
   return db.sorgu<GozSatiri>(
@@ -318,6 +346,14 @@ export function gozAra(
   );
 }
 
+// 3168: sıra numaralı kodda aranan numarayla başlayan gözler ("A1": A1, A10-A19, A100 ...); tam eşleşme önce.
+export function gozAraDuz(db: Db, rafId: number, onEk: string, sinir: number): Promise<GozSatiri[]> {
+  return db.sorgu<GozSatiri>(
+    `SELECT ${GOZ} FROM atolye_goz g WHERE g.raf_id = $1 AND g.duz_no::text LIKE $2 || '%' ORDER BY g.duz_no::text <> $2, g.duz_no LIMIT $3`,
+    [rafId, onEk, sinir],
+  );
+}
+
 // Başka modüle verilen göz kaydı (disari.ts): rafı ve bölümüyle; adres raf kodundan üretilir.
 export interface DisGozSatiri {
   id: number;
@@ -329,10 +365,11 @@ export interface DisGozSatiri {
   bolme: number;
   kat: number;
   goz: number;
+  duzNo: number | null;
 }
 
 const DIS_GOZ = `SELECT g.id, g.raf_id AS "rafId", r.salon_id AS "salonId", s.kod AS "salonKodu", r.kod AS "rafKodu", r.aktif AS "rafAktif",
-         g.bolme, g.kat, g.goz
+         g.bolme, g.kat, g.goz, g.duz_no AS "duzNo"
     FROM atolye_goz g JOIN atolye_raf r ON r.id = g.raf_id JOIN atolye_salon s ON s.id = r.salon_id`;
 
 export function disGozler(db: Db, salonId: number | null): Promise<DisGozSatiri[]> {
@@ -345,6 +382,10 @@ export function disGoz(db: Db, id: number): Promise<DisGozSatiri | null> {
 
 export function disGozAdresle(db: Db, rafKodu: string, bolme: number, kat: number, goz: number): Promise<DisGozSatiri | null> {
   return db.tek<DisGozSatiri>(`${DIS_GOZ} WHERE r.kod = $1 AND g.bolme = $2 AND g.kat = $3 AND g.goz = $4`, [rafKodu, bolme, kat, goz]);
+}
+
+export function disGozDuzNoIle(db: Db, rafKodu: string, duzNo: number): Promise<DisGozSatiri | null> {
+  return db.tek<DisGozSatiri>(`${DIS_GOZ} WHERE r.kod = $1 AND g.duz_no = $2`, [rafKodu, duzNo]);
 }
 
 export interface AlanSatiri {
@@ -630,6 +671,7 @@ export interface GozKalemiSatiri {
   bolme: number;
   kat: number;
   goz: number;
+  duzNo: number | null;
   kod: string;
   ad: string;
   doluluk: number;
@@ -638,7 +680,7 @@ export interface GozKalemiSatiri {
 }
 
 const GOZ_KALEMI = `k.id, k.goz_id AS "gozId", r.id AS "rafId", r.kod AS "rafKodu", r.ad AS "rafAdi", s.id AS "salonId",
-  s.kod AS "salonKodu", s.ad AS "salonAdi", g.bolme, g.kat, g.goz, k.kod, k.ad, k.doluluk,
+  s.kod AS "salonKodu", s.ad AS "salonAdi", g.bolme, g.kat, g.goz, g.duz_no AS "duzNo", k.kod, k.ad, k.doluluk,
   k.kaydeden_kisi_id AS "kaydedenKisiId", ${ISO('k.kaydedildi')} AS kaydedildi`;
 const GOZ_KALEMI_KAYNAK = `atolye_goz_kalemi k JOIN atolye_goz g ON g.id = k.goz_id JOIN atolye_raf r ON r.id = g.raf_id
   JOIN atolye_salon s ON s.id = r.salon_id`;

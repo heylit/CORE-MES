@@ -17,7 +17,8 @@ import { denetimYaz } from '../denetim/disari.ts';
 import { kullaniciYukle, rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
-import { depoMalzemeCozucusu, istasyonYerleri } from './disari.ts';
+import { modulAyariDegistir } from '../ayarlar/disari.ts';
+import { depoMalzemeCozucusu, gozBul, istasyonYerleri, rafYenidenNumarala } from './disari.ts';
 import { uclar } from './uclar.ts';
 
 const PAROLA = 'dogru-parola-1';
@@ -198,6 +199,8 @@ describe('atolye (gerçek PostgreSQL)', () => {
     ortam = await testVeritabaniKur('atolye');
     app = await uygulamaKur({ vt: ortam.vt, ayar: ortam.ayar, kimlik: kimlikCozucu(ortam.vt), denetle: denetimYaz, tekrar: tekrarDeposu });
     yoneticiId = await ortam.vt.tx((db) => yoneticiOlustur(db, { ad: 'Deneme Yönetici', kullaniciAdi: 'yonetici', parola: PAROLA }));
+    // Bu testlerin raf kodları rakamlıdır (R1) ve adresleri eski düzendedir: kurulum eski düzeni seçmiş gibi (varsayılan sıra numarası, 3177 b).
+    await ortam.vt.sorgu(`INSERT INTO ayar (anahtar, deger, guncelleyen_kisi_id) VALUES ('atolye.raf-kodlama', '"bolme-kat-goz"', $1)`, [yoneticiId]);
     const operatorRolu = await ortam.vt.tek<{ id: number }>("SELECT id FROM rol WHERE kod = 'operator'");
     // Hiçbir göç bir role atolye.yaz vermiyor (çekirdek isteği): bayraksız yazan için geçici rol kurulur.
     const yazanRol = await ortam.vt.tek<{ id: number }>("INSERT INTO rol (kod, ad) VALUES ('gecici_atolye', 'Geçici Atölye') RETURNING id");
@@ -589,6 +592,69 @@ describe('atolye (gerçek PostgreSQL)', () => {
     assert.equal(red.durum, 409);
     assert.equal(red.govde.kod, 'BAGIMLI_KAYIT');
     assert.equal((await oku<GozlerCevabi>(`/atolye/raflar/${rafId}/gozler`)).govde.toplam, 4);
+  });
+
+  test('3168 göz numarası göze bir kez verilir: büyüyen raf sıradakini alır, silinen numara geri verilmez; kodlama ve yeniden numaralama', async () => {
+    const s = await salonKur();
+    // Sıra numaralı kodlamada raf kodu yalnız harftir.
+    const kod = `Q${[...String((sayac += 1))].map((r) => String.fromCharCode(65 + Number(r))).join('')}`.slice(0, 5);
+    const olcu = (bolmeSayisi: number) => ({ kod, bolmeSayisi, katSayisi: 2, gozSayisi: 1 });
+    const c = await kaydet(s.id, bosYerlesim(s, { raflar: [raf(olcu(2))] }));
+    assert.equal(c.durum, 200, JSON.stringify(c.govde));
+    const rafId = c.govde.raflar[0]?.id ?? 0;
+    const numaralar = async () => (await vt().sorgu<{ b: number; k: number; n: number }>(
+      'SELECT bolme AS b, kat AS k, duz_no AS n FROM atolye_goz WHERE raf_id = $1 ORDER BY bolme, kat', [rafId])).map((g) => `${g.b}-${g.k}:${g.n}`);
+    assert.deepEqual(await numaralar(), ['1-1:1', '1-2:2', '2-1:3', '2-2:4']);
+    const yeniden = async (surum: number, bolme: number) => {
+      const y = await kaydet(s.id, bosYerlesim({ ...s, surum }, { raflar: [raf({ id: rafId, ...olcu(bolme) })] }));
+      assert.equal(y.durum, 200, JSON.stringify(y.govde));
+    };
+    await yeniden(s.surum + 1, 3);
+    assert.deepEqual(await numaralar(), ['1-1:1', '1-2:2', '2-1:3', '2-2:4', '3-1:5', '3-2:6']);
+    await yeniden(s.surum + 2, 2);
+    await yeniden(s.surum + 3, 3);
+    assert.deepEqual(await numaralar(), ['1-1:1', '1-2:2', '2-1:3', '2-2:4', '3-1:7', '3-2:8']);
+    // Bugünkü kodlamada (varsayılan) numara görünmez; adres eski düzendir.
+    assert.equal((await oku<GozlerCevabi>(`/atolye/raflar/${rafId}/gozler?bolme=3`)).govde.satirlar[0]?.adres, `${kod}-03-1-1`);
+    assert.equal((await oku<YerlesimCevabi>(`/atolye/salonlar/${s.id}`)).govde.raflar[0]?.gozNolari, null);
+
+    // Kodlama genel ayar ucundan değişmez; yalnız modülün komutu yazar (bu dosyada rakamlı raf kodları olduğundan engel atlanır).
+    const genel = await yaz<HataGovdesi>('/ayarlar/atolye.raf-kodlama/degistir', { deger: 'duz-sayi', beklenen: 'bolme-kat-goz' });
+    assert.equal(genel.durum, 422, JSON.stringify(genel.govde));
+    const kodlamaYaz = (deger: string, beklenen: string) => vt().tx((db) => modulAyariDegistir(db, yoneticiId, 'atolye.raf-kodlama', deger, beklenen, {
+      modul: 'atolye', yol: '/deneme', yetki: 'stok.tanim',
+    }));
+    // Kodu rakamlı eski raf (eski düzende açılmış): sıra numaralı kodlamada eski adresini taşır, kaydı durdurmaz.
+    const s3 = await salonKur();
+    const eskiRaf = await kaydet(s3.id, bosYerlesim(s3, { raflar: [raf({ kod: 'R9Y1' })] }));
+    assert.equal(eskiRaf.durum, 200, JSON.stringify(eskiRaf.govde));
+    await kodlamaYaz('duz-sayi', 'bolme-kat-goz');
+    try {
+      const eskiRafId = eskiRaf.govde.raflar[0]?.id ?? 0;
+      assert.equal((await oku<GozlerCevabi>(`/atolye/raflar/${eskiRafId}/gozler`)).govde.satirlar[0]?.adres, 'R9Y1-01-1-1');
+      assert.equal((await oku<YerlesimCevabi>(`/atolye/salonlar/${s3.id}`)).govde.raflar[0]?.gozNolari, null);
+      assert.equal((await vt().tx((db) => gozBul(db, 'r9y1-1-1-1')))?.rafKodu, 'R9Y1');
+      const yeniden3 = await kaydet(s3.id, bosYerlesim({ ...s3, surum: s3.surum + 1 }, { raflar: [raf({ id: eskiRafId, kod: 'R9Y1' })] }));
+      assert.equal(yeniden3.durum, 200, JSON.stringify(yeniden3.govde));
+      assert.deepEqual((await oku<GozlerCevabi>(`/atolye/raflar/${rafId}/gozler?bolme=3`)).govde.satirlar.map((g) => g.adres), [`${kod}7`, `${kod}8`]);
+      assert.deepEqual((await oku<YerlesimCevabi>(`/atolye/salonlar/${s.id}`)).govde.raflar[0]?.gozNolari, [1, 2, 3, 4, 7, 8]);
+      assert.equal((await vt().tx((db) => gozBul(db, `${kod.toLowerCase()}7`)))?.bolme, 3);
+      assert.equal(await vt().tx((db) => gozBul(db, `${kod}-03-1-1`)), null);
+      const ara = (await oku<AramaCevabi>(`/atolye/arama?metin=${kod}7`)).govde.sonuclar;
+      assert.deepEqual([ara[0]?.tur, ara[0]?.etiket], ['goz', `${kod}7`]);
+      // Rakamlı raf kodu bu kodlamada kaydedilmez.
+      const s2 = await salonKur();
+      const rakamli = await kaydet(s2.id, bosYerlesim(s2, { raflar: [raf({ kod: 'R9X1' })] }));
+      assert.equal(rakamli.durum, 422, JSON.stringify(rakamli.govde));
+      assert.match(rakamli.govde.mesaj, /yalnız harf/);
+      // Yeniden numaralama sırayı bugünkü düzenle kurar; eski numaranın kodu artık o gözü göstermez.
+      assert.deepEqual(await vt().tx((db) => rafYenidenNumarala(db, rafId)), { rafKodu: kod, salonId: s.id, degisen: 2 });
+      assert.deepEqual(await numaralar(), ['1-1:1', '1-2:2', '2-1:3', '2-2:4', '3-1:5', '3-2:6']);
+      assert.equal(await vt().tx((db) => gozBul(db, `${kod}7`)), null);
+      assert.equal((await vt().tx((db) => gozBul(db, `${kod}5`)))?.bolme, 3);
+    } finally {
+      await kodlamaYaz('bolme-kat-goz', 'duz-sayi');
+    }
   });
 
   test('ATL-13 raf silinmez, pasife alınır; pasif raf aramada çıkmaz; veritabanı da silmeyi reddeder', async () => {

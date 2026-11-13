@@ -1,4 +1,5 @@
 import { ikiliCevap, uc } from '#cekirdek/uc.ts';
+import { rafKodGecisiListesiCevabi, rafKodlamaDurumuCevabi } from '#paylasilan/sozlesme/stok.ts';
 import { baslangicDenetleCevabi, baslangicDenetleGovdesi, baslangicGeriAlmaDurumu, baslangicYukleCevabi, baslangicYukleGovdesi } from '#paylasilan/sozlesme/stok.ts';
 import {
   acikSiparisSatirlariCevabi, fasonIsleriCevabi, fasonIsleriSorgusu, cikisGovdesi, cikisOnerisiCevabi, emirTamamlaGovdesi, emirTamamlamaCevabi, cikisOnerisiSorgusu, depolarCevabi, geriAlGovdesi, topluGeriAlGovdesi, hareketCevabi, hareketlerCevabi, hareketlerSorgusu, isKutusuCevabi,
@@ -8,7 +9,7 @@ import {
   rafCevabi, rafDuzenleCevabi, rafDuzenleGovdesi, raflarCevabi, raflarSorgusu, rafMatrisiCevabi, sayimCevabi, sayimEsigiGovdesi, sayimFarkiOnayGovdesi, sayimFarkiRedGovdesi, sayimFarklariCevabi, sayimGovdesi, surumGovdesi, statuDegistirGovdesi, tasimaGovdesi, uretimGirisiGovdesi,
   emirFisleriCevabi, rezerveEtGovdesi, rezerveKaldirGovdesi, rezervelerCevabi, sahipsizStatuluCevabi, sktDuzeltCevabi, sktDuzeltGovdesi, turListesiCevabi, turListesiParametresi,
 } from '#paylasilan/sozlesme/stok.ts';
-import { gozKalemiGovdesi, gozKalemiSemasi, gozKalemiSilGovdesi, kayitCevabi } from '#paylasilan/sozlesme/atolye.ts';
+import { gozKalemiGovdesi, gozKalemiSemasi, gozKalemiSilGovdesi, kayitCevabi, rafKodlamaGovdesi, rafKodlamaOnizlemeCevabi, rafKodlamaOnizlemeSorgusu } from '#paylasilan/sozlesme/atolye.ts';
 import { ikinciMenuSayacSemasi } from '#paylasilan/ikinci-menu.ts';
 import { z } from 'zod';
 import {
@@ -68,6 +69,13 @@ export const uclar = [
   uc({ yontem: 'POST', yol: '/stok/depo-bolumleri/:id/raflari-kaydet', yetki: 'stok.tanim', parametre: kimlikParametresi, govde: depoRaflariGovdesi, cevap: kayitCevabi, isle: ({ db, kullanici, parametre, govde }) => s.depoRaflariKaydet(db, parametre.id, govde, kullanici.id) }),
   uc({ yontem: 'POST', yol: '/stok/depo-goz-kalemleri/yaz', yetki: 'stok.tanim', govde: gozKalemiGovdesi, cevap: gozKalemiSemasi, isle: ({ db, kullanici, govde }) => s.depoGozKalemiYaz(db, govde, kullanici.id) }),
   uc({ yontem: 'POST', yol: '/stok/depo-goz-kalemleri/sil', yetki: 'stok.tanim', govde: gozKalemiSilGovdesi, cevap: z.undefined(), isle: async ({ db, govde }) => { await s.depoGozKalemiSil(db, govde.id); return undefined; } }),
+  // 3168, 3171 a: raf kodlaması Stok > Ayarlar'dan; değişim ve yeniden numaralama konum kodlarıyla aynı kayıtta (yetki stok.tanim, R6).
+  uc({ yontem: 'GET', yol: '/stok/raf-kodlama', yetki: OKUMA, cevap: rafKodlamaDurumuCevabi, isle: ({ db }) => s.rafKodlamaOku(db) }),
+  uc({ yontem: 'GET', yol: '/stok/raf-kodlama/gecis', yetki: OKUMA, cevap: rafKodGecisiListesiCevabi, isle: ({ db }) => s.rafKodGecisiListesi(db) }),
+  uc({ yontem: 'POST', tekrarKorumali: true, yol: '/stok/raf-kodlama/gecis/basildi', yetki: 'stok.tanim', cevap: rafKodlamaDurumuCevabi, isle: ({ db, kullanici }) => s.rafKodGecisiBasildi(db, kullanici.id) }),
+  uc({ yontem: 'GET', yol: '/stok/raf-kodlama/onizleme', yetki: 'stok.tanim', sorgu: rafKodlamaOnizlemeSorgusu, cevap: rafKodlamaOnizlemeCevabi, isle: ({ db, sorgu }) => s.rafKodlamaOnizleme(db, sorgu.kodlama) }),
+  uc({ yontem: 'POST', tekrarKorumali: true, yol: '/stok/raf-kodlama/degistir', yetki: 'stok.tanim', govde: rafKodlamaGovdesi, cevap: haritaEslemeCevabi, isle: ({ db, kullanici, govde, denetimEki }) => s.rafKodlamaDegistir(db, govde, kullanici.id, denetimEki) }),
+  uc({ yontem: 'POST', tekrarKorumali: true, yol: '/stok/harita-raflari/:id/yeniden-numarala', yetki: 'stok.tanim', parametre: kimlikParametresi, cevap: haritaEslemeCevabi, isle: ({ db, parametre, denetimEki }) => s.rafYenidenNumarala(db, parametre.id, denetimEki) }),
   uc({ yontem: 'POST', yol: '/stok/konumlar/haritadan-esle', yetki: 'stok.tanim', cevap: haritaEslemeCevabi, isle: ({ db }) => s.haritadanEsle(db) }),
   uc({ yontem: 'POST', yol: '/stok/konumlar/:id/duzenle', yetki: 'stok.tanim', parametre: kimlikParametresi, govde: konumDuzenleGovdesi, cevap: konumDuzenleCevabi, isle: ({ db, parametre, govde }) => s.konumDuzenle(db, parametre.id, govde) }),
   uc({ yontem: 'POST', yol: '/stok/konumlar/:id/pasif-yap', yetki: 'stok.tanim', parametre: kimlikParametresi, govde: surumGovdesi, cevap: konumCevabi, isle: ({ db, parametre, govde }) => s.konumPasif(db, parametre.id, govde.surum) }),

@@ -6,6 +6,7 @@ import { api, hataIletisi } from '../../../../ortak/veri/api.ts';
 import { AdimDuzenleyici } from '../sartnameler/index.tsx';
 import { adimEksikleri, ASAMA_ADLARI, AZAMI_TALIMAT_ADIMI, girdiyeCevir, kontrolOzeti, taslagaCevir, type AdimTaslagi } from '../sartnameler/kurallar.ts';
 import { anahtarlar, useSablonlar, useTalimatKomutu, useTalimatlar } from '../sartnameler/veri.ts';
+import { Studyo } from '../sahne/Studyo.tsx';
 import { useRrYetkisi } from '../yetki.ts';
 import { Bolme } from './ortak.tsx';
 
@@ -21,6 +22,7 @@ export function AdimTalimati({ urunId, opNo }: { urunId: number; opNo: number | 
   const talimat = useTalimatlar(urunId, opNo);
   const yazabilir = useRrYetkisi().talimatYaz;
   const [acik, setAcik] = useState(false);
+  const [studyo, setStudyo] = useState(false);
   if (opNo === null) {
     return <Bolme baslik="Talimat"><p className="tc-rr1-ipucu">Adım kaydedilip OP numarası alınca talimat yazılır.</p></Bolme>;
   }
@@ -39,11 +41,13 @@ export function AdimTalimati({ urunId, opNo }: { urunId: number; opNo: number | 
           {`Yayınlanmamış taslak: ${String(taslak.adimlar.length)} adım · ${taslak.yazan.ad ?? 'Bilinmeyen kişi'} · ${tarih(taslak.yazma)}`}
         </p>
       )}
-      {yazabilir && talimat.isSuccess && (
+      {talimat.isSuccess && (yazabilir || son) && (
         <div className="tc-rr1-btnrow">
-          <Dugme tur="ikincil" simge="edit" onClick={() => { setAcik(true); }}>{taslak ? 'Taslağı düzenle' : son ? 'Talimatı düzenle' : 'Talimat yaz'}</Dugme>
+          {yazabilir && <Dugme tur="ikincil" simge="edit" onClick={() => { setAcik(true); }}>{taslak ? 'Taslağı düzenle' : son ? 'Talimatı düzenle' : 'Talimat yaz'}</Dugme>}
+          {son && <Dugme tur="ikincil" simge="cube" onClick={() => { setStudyo(true); }}>{yazabilir ? '3B adım stüdyosu' : '3B sahneyi izle'}</Dugme>}
         </div>
       )}
+      {studyo && son && <Studyo urunId={urunId} opNo={opNo} talimat={son} yazabilir={yazabilir} kapat={() => { setStudyo(false); }} />}
       {acik && talimat.data && (
         <TalimatPenceresi urunId={urunId} opNo={opNo} son={son} taslak={taslak} kapat={() => { setAcik(false); }} />
       )}

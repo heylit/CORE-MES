@@ -102,7 +102,7 @@ export function GozPaneli({ rafId, bolme, kat, goz, kalemler, yazabilir, kapat }
     <section className="tc-atolye-goz-paneli" aria-label={`Göz ${kayit?.adres ?? ''}`}>
       <header className="tc-atolye-goz-paneli-ust">
         <div>
-          <p className="tc-atolye-ust-baslik">Bölme {bolme} · Kat {kat} · Göz {goz}</p>
+          <p className="tc-atolye-ust-baslik">{kayit?.duzNo == null ? `Bölme ${bolme} · Kat ${kat} · Göz ${goz}` : 'Göz'}</p>
           <h4 className="mono">{kayit?.adres ?? '…'}</h4>
         </div>
         {kapat && <Dugme simge="x" aria-label="Göz panelini kapat" onClick={kapat} />}

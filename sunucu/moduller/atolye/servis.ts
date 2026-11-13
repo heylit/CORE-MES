@@ -5,7 +5,7 @@ import type {
   Alan, AramaSonucu, Bulgu, FabrikaCevabi, FabrikaKaydi, FabrikaKayitCevabi, GozlerCevabi, Kroki, KrokiHizalama, KrokiKaydi, MerkezKrokileriCevabi, IhlalAyrintisi, IstasyonModeli, IstasyonYeri, MakineYeri, MerkezModeli, MerkezModeliBaglaCevabi, MerkezModeliBaglaKaydi, MerkezModelleriCevabi, MalzemeModelleriCevabi, YerlesmemisIstasyonlarCevabi, KayitCevabi, Model, ModelAyari, ModelKaydi, KalemGorunumu, KalemGorunumuKaydi, KalemMalzemesi, MakineYeriKaydi, GozKalemi, GozKalemiKaydi, Raf, RafKaydi,
   HucreAtaGovdesi, KrokiAyariCevabi, KrokiAyariKaydi, RotaCevabi, RotaSorgusu, Salon, SalonKaydi, SalonOzeti, SurumCakismasi, YerlesimCevabi, YerlesimKaydi,
 } from '#paylasilan/sozlesme/atolye.ts';
-import { ARAMA_AZAMI_SONUC, KROKI_SAYDAMLIGI, MERKEZ_MODEL_TURLERI } from '#paylasilan/sozlesme/atolye.ts';
+import { ARAMA_AZAMI_SONUC, KROKI_SAYDAMLIGI, MERKEZ_MODEL_TURLERI, RAF_KODLAMALARI, RAF_KODLAMASI_VARSAYILAN, type RafKodlamasi } from '#paylasilan/sozlesme/atolye.ts';
 import { MODEL_AZAMI_BAYT, MODEL_PARCA_BAYT, parcaAnahtari } from '#paylasilan/atolye-sabitleri.ts';
 import type { IkiliCevap } from '#cekirdek/uc.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
@@ -18,7 +18,7 @@ import { modulAyariDegistir, sistemAyariOku } from '../ayarlar/disari.ts';
 import { malzemeNoKoddan, malzemeOzetleri } from '../malzemeler/disari.ts';
 import { acikEmirler } from '../uretim-emirleri/disari.ts';
 import {
-  GOZ_SAYFA_BOYU, ODA_TURLERI, adresCoz, bolumCakismalari, fabrikaDenetle, fabrikaKonumuYuvarla, krokiHizalamaYuvarla, pdfBasligiGecerliMi, gozDolulukIhlali, aramaSirala, base64Coz, donusIndirge, beklenenParcaBoyu, duvarKutusu, glbBasligiGecerliMi, gozAdresi, hucreAdi,
+  GOZ_SAYFA_BOYU, ODA_TURLERI, adresCoz, bolumCakismalari, fabrikaDenetle, fabrikaKonumuYuvarla, krokiHizalamaYuvarla, pdfBasligiGecerliMi, gozDolulukIhlali, aramaSirala, base64Coz, donusIndirge, beklenenParcaBoyu, duvarKutusu, glbBasligiGecerliMi, gozKodu, DUZ_RAF_KODU, rafDuzMu, hucreAdi,
   hucreKutusu, izgaraAdlari, modelParcaSayisi, odaDuvarlari, rafKutusu, rotaBul, rotaNoktasiIhlali, surumGuncelMi, yerlesimiDenetle, yerlesimiYuvarla,
 } from './kurallar.ts';
 import type { AramaAdayi, FabrikaBolumu, Kutu, MakineBilgisi, SalonOlcusu } from './kurallar.ts';
@@ -64,12 +64,46 @@ async function salonCevabi(db: Db, s: SalonSatiri): Promise<Salon> {
   };
 }
 
-const rafCevabi = (r: RafSatiri, o: SalonOlcusu): Raf => ({
+const rafCevabi = (r: RafSatiri, o: SalonOlcusu, kodlama: RafKodlamasi): Raf => ({
   id: r.id, kod: r.kod, ad: r.ad, tur: r.tur, bolmeSayisi: r.bolmeSayisi, katSayisi: r.katSayisi, gozSayisi: r.gozSayisi,
   bolmeGenisligi: r.bolmeGenisligi, derinlik: r.derinlik, yukseklik: r.yukseklik, x: r.x, z: r.z, donus: r.donus,
   aktif: r.aktif, genislik: r.genislik, hucre: hucreAdi(sayi(r.x), sayi(r.z), o),
   katYukseklikleri: r.katYukseklikleri, gozGenisligi: r.gozGenisligi, gozDerinligi: r.gozDerinligi,
+  gozNolari: rafDuzMu(kodlama, r.kod) ? r.duzNolari ?? [] : null,
 });
+
+// ---------- 3168: raf kodlama ----------
+
+// Bütün raflarda tek kodlama (sistem ayarı); saklanan değer tanınmıyorsa varsayılan (sıra numarası, 3177 b).
+export async function rafKodlamasi(db: Db): Promise<RafKodlamasi> {
+  const deger: string = await sistemAyariOku(db, 'atolye.raf-kodlama');
+  return (RAF_KODLAMALARI as readonly string[]).includes(deger) ? deger as RafKodlamasi : RAF_KODLAMASI_VARSAYILAN;
+}
+
+const harfOlmayanRafIletisi = (kodlar: readonly string[]) =>
+  `Sıra numaralı kodlamada raf kodu yalnız harftir; önce şu rafların kodunu harfe çevirin: ${kodlar.join(', ')}.`;
+
+// Kodlama değişir; çağıran (stok) aynı kayıtta konum kodlarını eşler ve değişen kodları gösterir. Ekranın gördüğü değer
+// `beklenen`dir; arada değiştiyse 409. Sıra numaralı kodlamaya yalnız harf raf koduyla geçilir.
+export async function rafKodlamasiDegistir(
+  db: Db, kodlama: RafKodlamasi, beklenen: RafKodlamasi, kisiId: number, kaynak: { yol: string; yetki: string },
+): Promise<RafKodlamasi> {
+  if (kodlama === 'duz-sayi') {
+    const engel = await sorgular.harfOlmayanRafKodlari(db);
+    if (engel.length > 0) throw gecersiz(harfOlmayanRafIletisi(engel));
+  }
+  await modulAyariDegistir(db, kisiId, 'atolye.raf-kodlama', kodlama, beklenen, { modul: 'atolye', ...kaynak });
+  return rafKodlamasi(db);
+}
+
+export const harfOlmayanRafKodlari = (db: Db): Promise<string[]> => sorgular.harfOlmayanRafKodlari(db);
+
+// Rafın sıra numaraları bugünkü düzenle yeniden verilir; değişen göz sayısı döner. Raf bulunamazsa 404.
+export async function rafYenidenNumarala(db: Db, rafId: number): Promise<{ rafKodu: string; salonId: number; degisen: number }> {
+  const r = await sorgular.rafBul(db, rafId);
+  if (r === null) throw bulunamadi(RAF_YOK);
+  return { rafKodu: r.kod, salonId: r.salonId, degisen: await sorgular.rafYenidenNumarala(db, rafId) };
+}
 
 const alanCevabi = (a: AlanSatiri, o: SalonOlcusu): Alan => ({
   id: a.id, tur: a.tur, ad: a.ad, x: a.x, z: a.z, donus: a.donus, genislik: a.genislik, derinlik: a.derinlik,
@@ -115,6 +149,7 @@ export async function yerlesim(db: Db, salonId: number): Promise<YerlesimCevabi>
   const makineler = await aktifMakineler(db);
   const yerliMakineler = await makineHaritasi(db, makineYerleri.map((y) => y.makineId));
   const raflar = await sorgular.raflar(db, salonId);
+  const kodlama = await rafKodlamasi(db);
   const alanlar = await sorgular.alanlar(db, salonId);
   const duvarlar = await sorgular.duvarlar(db, salonId);
   const gecisler = await sorgular.gecisler(db, salonId);
@@ -154,7 +189,7 @@ export async function yerlesim(db: Db, salonId: number): Promise<YerlesimCevabi>
     salon: await salonCevabi(db, s),
     istasyonYerleri: istasyonYerleri.sort((a, b) => a.kod.localeCompare(b.kod, 'tr')),
     makineYerleri: makineYerleriCevabi.sort((a, b) => a.kod.localeCompare(b.kod, 'tr')),
-    raflar: raflar.map((r) => rafCevabi(r, o)),
+    raflar: raflar.map((r) => rafCevabi(r, o, kodlama)),
     alanlar: alanlar.map((a) => alanCevabi(a, o)),
     duvarlar,
     gecisler: gecisler.map(({ salonId: _s, ...g }) => g),
@@ -381,6 +416,11 @@ async function yazimHatalari(yaz: () => Promise<void>): Promise<void> {
 async function bolumIcerigiYaz(
   db: Db, salonId: number, kayit: YerlesimKaydi, onceki: ReadonlyMap<number, RafSatiri>, korunanAlanlar: readonly number[] = [],
 ): Promise<void> {
+  // Yeni raf ve kodu değişen raf yalnız harf koduyla kaydedilir; harfe çevrilmemiş eski raf (eski adresiyle) kaydı durdurmaz.
+  if (await rafKodlamasi(db) === 'duz-sayi') {
+    const engel = kayit.raflar.filter((r) => !DUZ_RAF_KODU.test(r.kod) && (r.id === null || onceki.get(r.id)?.kod !== r.kod)).map((r) => r.kod);
+    if (engel.length > 0) throw gecersiz(harfOlmayanRafIletisi(engel));
+  }
   for (const r of kayit.raflar) {
     const eski = r.id === null ? undefined : onceki.get(r.id);
     if (r.id !== null && eski && eski.salonId !== salonId) await sorgular.rafBolumDegistir(db, r.id, salonId);
@@ -508,9 +548,10 @@ export async function gozler(db: Db, rafId: number, sayfa: number, bolme: number
   if (r === null) throw bulunamadi(RAF_YOK);
   const satirlar = await sorgular.gozSayfasi(db, rafId, GOZ_SAYFA_BOYU, (sayfa - 1) * GOZ_SAYFA_BOYU, bolme);
   const toplam = await sorgular.gozSayisi(db, rafId, bolme);
+  const kodlama = await rafKodlamasi(db);
   return {
     raf: { id: r.id, kod: r.kod, ad: r.ad, aktif: r.aktif },
-    satirlar: satirlar.map((g) => ({ id: g.id, adres: gozAdresi(r.kod, g.bolme, g.kat, g.goz), bolme: g.bolme, kat: g.kat, goz: g.goz })),
+    satirlar: satirlar.map((g) => ({ id: g.id, adres: gozKodu(kodlama, r.kod, g), bolme: g.bolme, kat: g.kat, goz: g.goz, duzNo: rafDuzMu(kodlama, r.kod) ? g.duzNo : null })),
     toplam,
     sayfaBoyu: GOZ_SAYFA_BOYU,
   };
@@ -539,16 +580,20 @@ export async function arama(db: Db, metin: string, salonId: number | null): Prom
   const istasyonHaritasi = new Map(istasyonlar.map((i) => [i.id, i]));
   const adaylar: AramaKaydi[] = [];
 
-  const adres = adresCoz(metin);
-  if (adres !== null && adres.bolme !== null) {
+  const kodlama = await rafKodlamasi(db);
+  const adres = adresCoz(metin, kodlama);
+  if (adres !== null && (adres.bolme !== null || adres.duzNo !== null)) {
     const raf = await sorgular.rafKoduylaBul(db, adres.rafKodu);
     const salon = raf ? salonHaritasi.get(raf.salonId) : undefined;
     if (raf && salon && (salonId === null || raf.salonId === salonId)) {
-      const bulunan = await sorgular.gozAra(db, raf.id, { bolme: adres.bolme, kat: adres.kat, goz: adres.goz }, ARAMA_AZAMI_SONUC);
+      const bulunan = adres.duzNo !== null
+        ? await sorgular.gozAraDuz(db, raf.id, String(adres.duzNo), ARAMA_AZAMI_SONUC)
+        : await sorgular.gozAra(db, raf.id, { bolme: adres.bolme ?? 0, kat: adres.kat, goz: adres.goz }, ARAMA_AZAMI_SONUC);
       for (const g of bulunan) {
-        const etiket = gozAdresi(raf.kod, g.bolme, g.kat, g.goz);
+        const etiket = gozKodu(kodlama, raf.kod, g);
         adaylar.push({
-          tur: 'goz', kimlik: g.id, etiket, ayrinti: `${raf.ad} · bölme ${g.bolme}, kat ${g.kat}, göz ${g.goz}`,
+          // Sıra numaralı kodda bölme, kat ve göz adı gösterilmez (3168 a): yalnız raf adı.
+          tur: 'goz', kimlik: g.id, etiket, ayrinti: rafDuzMu(kodlama, raf.kod) ? raf.ad : `${raf.ad} · bölme ${g.bolme}, kat ${g.kat}, göz ${g.goz}`,
           anahtarlar: [etiket], aktif: raf.aktif, salon, x: raf.x, z: raf.z,
         });
       }
@@ -568,7 +613,7 @@ export async function arama(db: Db, metin: string, salonId: number | null): Prom
     if (salon) adaylar.push({ tur: 'alan', kimlik: a.id, etiket: a.ad, ayrinti: ALAN_TUR_ADI[a.tur], anahtarlar: [a.ad], aktif: true, salon, x: a.x, z: a.z });
   }
 
-  return aramaSirala(metin, adaylar).map((a) => ({
+  return aramaSirala(metin, adaylar, ARAMA_AZAMI_SONUC, kodlama).map((a) => ({
     tur: a.tur, kimlik: a.kimlik, etiket: a.etiket, ayrinti: a.ayrinti,
     salon: { id: a.salon.id, kod: a.salon.kod, ad: a.salon.ad },
     hucre: hucreAdi(sayi(a.x), sayi(a.z), olcusu(a.salon)),
@@ -890,8 +935,9 @@ export async function kalemGorunumuSil(db: Db, kod: string): Promise<KalemGorunu
 async function gozKalemiCevaplari(db: Db, satirlar: GozKalemiSatiri[]): Promise<GozKalemi[]> {
   const adlar = await kisiAdlari(db, satirlar.map((k) => k.kaydedenKisiId));
   const malzemeler = await kalemMalzemeleri(db, satirlar.map((k) => k.kod));
+  const kodlama = await rafKodlamasi(db);
   return satirlar.map((k) => ({
-    id: k.id, gozId: k.gozId, adres: gozAdresi(k.rafKodu, k.bolme, k.kat, k.goz),
+    id: k.id, gozId: k.gozId, adres: gozKodu(kodlama, k.rafKodu, k),
     raf: { id: k.rafId, kod: k.rafKodu, ad: k.rafAdi }, salon: { id: k.salonId, kod: k.salonKodu, ad: k.salonAdi },
     bolme: k.bolme, kat: k.kat, goz: k.goz, kod: k.kod, ad: k.ad, malzeme: malzemeler.get(parcaAnahtari(k.kod)) ?? null, doluluk: k.doluluk,
     kaydeden: { id: k.kaydedenKisiId, ad: adlar.get(k.kaydedenKisiId) ?? null }, kaydedildi: k.kaydedildi,

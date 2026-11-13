@@ -132,6 +132,28 @@ export const gozStoklari = (db: Db, gozIdler: number[]): Promise<{ gozId: number
                    (array_agg(b.malzeme_id ORDER BY b.ilk_giris, b.id) FILTER (WHERE b.id IS NOT NULL))[1] AS "ilkMalzemeId"
               FROM stok_konum k JOIN stok_bakiye b ON b.konum_id = k.id
              WHERE k.atolye_goz_id = ANY($1::int[]) GROUP BY k.atolye_goz_id, k.id`, [gozIdler]);
+// 3171 R1: haritadan eşlemede kodlar zincirleme değişebilir (A5 -> A4, A4 -> A5); teklik işlem sonunda denetlenir.
+export const konumKodTekliginiErtele = async (db: Db): Promise<void> => { await db.sorgu('SET CONSTRAINTS stok_konum_kod_tek DEFERRED'); };
+// 3177 b: ilk eşlemenin kod değişimleri (tek satır). Yarışan ikinci eşleme satırı yazamaz (birincil anahtar), ilk yazan kalır.
+export interface RafKodGecisiSatiri {
+  zaman: Date; kodlama: 'duz-sayi' | 'bolme-kat-goz'; degisenSayisi: number; stokluSayisi: number; eskiKodluRaflar: string[]; atlanan: string[]; pasifStoklu: string[]; basildi: boolean;
+}
+export const rafKodGecisiVarMi = async (db: Db): Promise<boolean> =>
+  (await db.sorgu('SELECT 1 FROM stok_raf_kod_gecisi')).length > 0;
+export const rafKodGecisiYaz = async (db: Db, g: { kodlama: string; degisenler: unknown[]; eskiKodluRaflar: readonly string[]; atlanan: readonly string[]; pasifStoklu: readonly string[] }): Promise<void> => {
+  await db.sorgu(`INSERT INTO stok_raf_kod_gecisi (kodlama, degisenler, eski_kodlu_raflar, atlanan, pasif_stoklu) VALUES ($1, $2::jsonb, $3, $4, $5) ON CONFLICT (tek) DO NOTHING`,
+    [g.kodlama, JSON.stringify(g.degisenler), g.eskiKodluRaflar, g.atlanan, g.pasifStoklu]);
+};
+export const rafKodGecisi = async (db: Db): Promise<RafKodGecisiSatiri | null> =>
+  (await db.tek<RafKodGecisiSatiri>(`SELECT zaman, kodlama, jsonb_array_length(degisenler)::int AS "degisenSayisi",
+            (SELECT count(*)::int FROM jsonb_array_elements(degisenler) d WHERE (d->>'satirSayisi')::int > 0) AS "stokluSayisi",
+            eski_kodlu_raflar AS "eskiKodluRaflar", atlanan, pasif_stoklu AS "pasifStoklu", basildi IS NOT NULL AS basildi
+       FROM stok_raf_kod_gecisi`)) ?? null;
+export const rafKodGecisiDegisenleri = async (db: Db): Promise<unknown[]> =>
+  (await db.tek<{ degisenler: unknown[] }>('SELECT degisenler FROM stok_raf_kod_gecisi'))?.degisenler ?? [];
+export const rafKodGecisiBasildi = async (db: Db, kisiId: number): Promise<void> => {
+  await db.sorgu('UPDATE stok_raf_kod_gecisi SET basildi = now(), basan_kisi_id = $1 WHERE basildi IS NULL', [kisiId]);
+};
 export const tumKonumKodlari = async (db: Db): Promise<string[]> => (await db.sorgu<{ kod: string }>('SELECT kod FROM stok_konum')).map((r) => r.kod);
 export const haritaKonumuAc = (db: Db, k: { depoId: number; kod: string; tur: string; bolme: number | null; kat: number | null; ad: string | null; gozId: number | null; alanId: number | null; aktif: boolean }): Promise<unknown[]> =>
   db.sorgu(`INSERT INTO stok_konum (depo_id, kod, tur, bolme_no, kat_no, ad, atolye_goz_id, atolye_alan_id, aktif)

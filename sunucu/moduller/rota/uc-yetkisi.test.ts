@@ -47,6 +47,7 @@ const BEKLENEN: BeklenenYetkiler = {
   'GET /rota/olcu-aleti-turleri': ROTA_OKUR,
   'GET /rota/patlatmalar/:id': 'rota.emre-kopyala',
   'GET /rota/revizyonlar/:id/patlatma-onizleme': 'rota.emre-kopyala',
+  'GET /rota/urunler/:urunId/talimatlar/:opNo/sahneler': ROTA_OKUR,
 };
 
 describe('rota okuma uçlarının yetkisi (gerçek giriş, gerçek PostgreSQL)', () => {

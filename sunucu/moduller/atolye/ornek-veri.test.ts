@@ -44,7 +44,8 @@ describe('atolye örnek verisi (gerçek PostgreSQL)', { timeout: 60_000 }, () =>
 
     const depoGozleri = await vt().tx((db) => gozler(db, depo.id));
     assert.equal(depoGozleri.length, 3 * 4 * 2 * 2 + 4 * 5 * 3);
-    assert.equal((await vt().tx((db) => gozBul(db, 'ORNK-04-5-3')))?.salonId, depo.id);
+    // Varsayılan sıra numaralı kodlama (3177 b): 4. bölme, 3. göz sütunu, 5. kat = ((4-1)*3 + 2)*5 + 5.
+    assert.equal((await vt().tx((db) => gozBul(db, 'ORNK60')))?.salonId, depo.id);
     const turler = (await vt().tx((db) => alanlar(db, depo.id))).map((a) => a.tur).sort();
     assert.deepEqual(turler, ['depo_zemini', 'kabul', 'sevkiyat', 'yuruyus_yolu']);
     assert.ok((await vt().tx((db) => alanlar(db, uretim.id))).some((a) => a.tur === 'uretim_cikisi'));

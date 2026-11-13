@@ -217,6 +217,32 @@ export const krokiAyariCevabi = z.object({ saydamlik: saydamlikSemasi });
 // Sürüm denetimi: ekranın gördüğü değer `beklenen`dir; arada başkası değiştirdiyse komut reddedilir (409).
 export const krokiAyariGovdesi = z.object({ saydamlik: saydamlikSemasi, beklenen: saydamlikSemasi });
 
+// 3168: raf gözü kodlaması bütün raflarda tek değer (sistem ayarı atolye.raf-kodlama). "duz-sayi": raf kodu ve sıra numarası
+// (A1, A2 ...); "bolme-kat-goz": raf, bölme, kat ve göz (A-01-2-1). Değiştirmek bütün göz kodlarını değiştirir: yalnız
+// Stok > Ayarlar'daki komutla, stok konumlarının kodlarıyla aynı kayıtta (3171 a: eski düzen seçilebilir kalır).
+// Varsayılan sıra numarasıdır (3177 b): güncellemeyle kendiliğinden geçilir, stok konumları ilk eşlemede bir kez yeni koda geçer.
+export const RAF_KODLAMALARI = ['duz-sayi', 'bolme-kat-goz'] as const;
+export type RafKodlamasi = (typeof RAF_KODLAMALARI)[number];
+export const RAF_KODLAMASI_VARSAYILAN: RafKodlamasi = 'duz-sayi';
+export const RAF_KODLAMA_ADI: Record<RafKodlamasi, string> = {
+  'duz-sayi': 'Raf kodu ve sıra numarası (A1, A2, A3 ...)',
+  'bolme-kat-goz': 'Raf, bölme, kat ve göz (A-01-2-1)',
+};
+const rafKodlamasi = z.enum(RAF_KODLAMALARI);
+// Değiştirmeden önce gösterilen özet (kuru deneme): kaç raf ve göz, kodu değişecek stok konumu sayısı ve örnek; yalnız harf
+// olmayan raf kodu varsa sıra numaralı kodlamaya geçilmez (engelliRaflar).
+export const rafKodlamaOnizlemeCevabi = z.object({
+  kodlama: rafKodlamasi,
+  rafSayisi: z.number().int(),
+  gozSayisi: z.number().int(),
+  degisenKonum: z.number().int(),
+  stokluKonum: z.number().int(),
+  ornek: z.object({ eski: z.string(), yeni: z.string() }).nullable(),
+  engelliRaflar: z.array(z.string()),
+});
+export const rafKodlamaOnizlemeSorgusu = z.object({ kodlama: rafKodlamasi });
+export const rafKodlamaGovdesi = z.object({ kodlama: rafKodlamasi, beklenen: rafKodlamasi });
+
 // Hizalama: PDF noktası (punto, sol üst köken) -> salon metresi; ölçek metre/punto, dönüş derece.
 export const krokiHizalaGovdesi = z.object({
   surum: z.number().int().min(1).max(TAM_SAYI_UST),
@@ -398,6 +424,9 @@ export const rafSemasi = z.object({
   gozGenisligi: metinOlcu.nullable(),
   gozDerinligi: metinOlcu.nullable(),
   hucre: z.string(),
+  // 3168: sıra numaralı kodlamada gözlerin numaraları (bölme, göz sütunu, kat sırasıyla; dizin
+  // ((bölme-1) x göz sayısı + (göz-1)) x kat sayısı + (kat-1)); öbür kodlamada null. Göz kodu raf kodu ve numaradır (A7).
+  gozNolari: z.array(z.number().int().nullable()).nullable().optional(),
 });
 
 export const alanSemasi = z.object({
@@ -487,6 +516,8 @@ export const gozSemasi = z.object({
   bolme: z.number().int(),
   kat: z.number().int(),
   goz: z.number().int(),
+  // 3168: sıra numaralı kodlamada gözün numarası (adres raf kodu ve bu numaradır); öbür kodlamada null.
+  duzNo: z.number().int().nullable().optional(),
 });
 export const gozlerCevabi = z.object({
   raf: z.object({ id: kimlik, kod: z.string(), ad: z.string(), aktif: z.boolean() }),
@@ -688,6 +719,8 @@ export type KrokiMerkezdenGovdesi = z.input<typeof krokiMerkezdenGovdesi>;
 export type KrokiGovdesi = z.input<typeof krokiGovdesi>;
 export type KrokiKaydi = z.output<typeof krokiGovdesi>;
 export type KrokiHizalaGovdesi = z.input<typeof krokiHizalaGovdesi>;
+export type RafKodlamaOnizlemeCevabi = z.output<typeof rafKodlamaOnizlemeCevabi>;
+export type RafKodlamaGovdesi = z.input<typeof rafKodlamaGovdesi>;
 export type KrokiAyariCevabi = z.output<typeof krokiAyariCevabi>;
 export type KrokiAyariGovdesi = z.input<typeof krokiAyariGovdesi>;
 export type KrokiAyariKaydi = z.output<typeof krokiAyariGovdesi>;

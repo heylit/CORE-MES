@@ -1,4 +1,5 @@
 import { useEffect, useMemo } from 'react';
+import { bolmeAraligi, duzMu } from './raf-kodlama.ts';
 import type { GozKalemi, Raf, YerlesimCevabi } from '#paylasilan/sozlesme/atolye.ts';
 import { Dugme, Secim } from '../../ortak/arayuz/index.ts';
 import { rafOzetleri } from './DepoGorunumu.tsx';
@@ -37,6 +38,7 @@ export function RafOdagi({ yerlesim: y, raf, secim, secimYaz, gozKalemleri, yaza
   const raflar = useMemo(() => [...y.raflar].sort((a, b) => a.kod.localeCompare(b.kod, 'tr')), [y.raflar]);
   const ozetler = useMemo(() => rafOzetleri(gozKalemleri ?? [], raf.id), [gozKalemleri, raf.id]);
   const { bolme, kat, goz } = secim;
+  const duz = duzMu(raf);
   const bolmeSec = (b: number) => secimYaz({ rafId: raf.id, bolme: Math.min(raf.bolmeSayisi, Math.max(1, b)), kat: null, goz: null });
 
   // Oklar bölme değiştirir (son bölmeden sonraki rafa geçer); Escape önce gözü, sonra bakışı kapatır.
@@ -75,7 +77,7 @@ export function RafOdagi({ yerlesim: y, raf, secim, secimYaz, gozKalemleri, yaza
           value={String(raf.id)}
           onChange={(o) => secimYaz({ rafId: Number(o.target.value), bolme: 1, kat: null, goz: null })}
         />
-        <strong className="mono" aria-live="polite">Bölme {String(bolme).padStart(2, '0')}/{String(raf.bolmeSayisi).padStart(2, '0')}</strong>
+        <strong className="mono" aria-live="polite">{duz ? bolmeAraligi(raf, bolme) : `Bölme ${String(bolme).padStart(2, '0')}/${String(raf.bolmeSayisi).padStart(2, '0')}`}</strong>
         <Dugme className="tc-atolye-ok" aria-label="Sonraki bölme" title="Sonraki bölme" disabled={sonMu} onClick={ileri}>›</Dugme>
         <span className="tc-atolye-ipucu tc-atolye-masaustu">Göze bas: içi · ← →: bölme · Esc: çık</span>
         <Dugme simge="box" onClick={() => depodaAc(raf.id, bolme, kat, goz)}>Depoda</Dugme>

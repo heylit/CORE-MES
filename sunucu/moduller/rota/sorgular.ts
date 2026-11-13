@@ -1310,3 +1310,38 @@ export function gecerliTalimatlarToplu(db: Db, malzemeIdleri: readonly number[],
     [[...malzemeIdleri], [...opNolari]],
   );
 }
+
+/* ---------------- talimatın 3B sahnesi (3209 a) ---------------- */
+
+export interface SahneSatiri {
+  talimatSurum: number; sahneSurum: number; modelRevizyonId: number; adimlar: unknown; yazanKisiId: number; yazma: string;
+}
+const SAHNE = `talimat_surum AS "talimatSurum", sahne_surum AS "sahneSurum", model_revizyon_id AS "modelRevizyonId", adimlar,
+  yazan_kisi_id AS "yazanKisiId", ${ISO('yazma')} AS yazma`;
+
+// Her talimat sürümünün en son sahnesi; talimat sürümüne göre azalan.
+export function sonSahneler(db: Db, malzemeId: number, opNo: number): Promise<SahneSatiri[]> {
+  return db.sorgu<SahneSatiri>(
+    `SELECT DISTINCT ON (talimat_surum) ${SAHNE} FROM rota_talimat_sahnesi WHERE malzeme_id = $1 AND op_no = $2
+      ORDER BY talimat_surum DESC, sahne_surum DESC`,
+    [malzemeId, opNo],
+  );
+}
+
+export function sonSahne(db: Db, malzemeId: number, opNo: number, talimatSurum: number): Promise<SahneSatiri | null> {
+  return db.tek<SahneSatiri>(
+    `SELECT ${SAHNE} FROM rota_talimat_sahnesi WHERE malzeme_id = $1 AND op_no = $2 AND talimat_surum = $3 ORDER BY sahne_surum DESC LIMIT 1`,
+    [malzemeId, opNo, talimatSurum],
+  );
+}
+
+// Eşzamanlı iki kayıt aynı sahne sürümünü yazamaz: tekil kısıt (rota_talimat_sahnesi_surum_tekil) ikinciyi reddeder.
+export async function sahneEkle(db: Db, x: {
+  malzemeId: number; opNo: number; talimatSurum: number; sahneSurum: number; modelRevizyonId: number; adimlar: unknown; kisiId: number;
+}): Promise<void> {
+  await db.sorgu(
+    `INSERT INTO rota_talimat_sahnesi (malzeme_id, op_no, talimat_surum, sahne_surum, model_revizyon_id, adimlar, yazan_kisi_id)
+     VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7)`,
+    [x.malzemeId, x.opNo, x.talimatSurum, x.sahneSurum, x.modelRevizyonId, JSON.stringify(x.adimlar), x.kisiId],
+  );
+}

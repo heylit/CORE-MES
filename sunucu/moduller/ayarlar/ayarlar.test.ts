@@ -12,7 +12,7 @@ import type { Ayar, AyarlarCevabi } from '#paylasilan/sozlesme/ayarlar.ts';
 import { denetimYaz } from '../denetim/disari.ts';
 import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
-import { sistemAyariOku } from './disari.ts';
+import { modulAyariDegistir, sistemAyariOku } from './disari.ts';
 import { ayarDegistir } from './servis.ts';
 import { ayarDegeriniOku, ayarDegeriniYaz } from './sorgular.ts';
 
@@ -250,6 +250,25 @@ describe('ayarlar (gerçek PostgreSQL)', () => {
     assert.deepEqual(await listedeki(), {
       anahtar: DORT_GOZ, baslik: AYAR_TANIMLARI[DORT_GOZ].baslik, aciklama: AYAR_TANIMLARI[DORT_GOZ].aciklama, tur: 'boolean', deger: false,
     });
+  });
+
+  test('3168: değiştiren ekranı bildirilen ayarı genel uç yazmaz (422, değer değişmez), modülün komutu yazar; bayraksız ayarların genel ucu değişmedi', async () => {
+    const bayrakli = Object.entries(AYAR_TANIMLARI).flatMap(([a, t]) => ('degistirenEkran' in t ? [a] : []));
+    assert.deepEqual(bayrakli, ['atolye.raf-kodlama']);
+    const red = await degistir('bolme-kat-goz', yonetici, 'atolye.raf-kodlama');
+    assert.equal(red.statusCode, 422, red.body);
+    assert.match((red.json() as { mesaj: string }).mesaj, /Stok > Ayarlar ekranından/);
+    assert.equal(await vt().tx((db) => sistemAyariOku(db, 'atolye.raf-kodlama')), 'duz-sayi');
+    assert.equal((await listedeki('atolye.raf-kodlama'))?.degistirenEkran, 'Stok > Ayarlar');
+    // Bayraksız her ayar genel uçtan yazılır (tanımın varsayılanı: değer değişmez, satır açılmaz).
+    for (const anahtar of Object.keys(AYAR_TANIMLARI).filter((a) => !bayrakli.includes(a))) {
+      if (!ayarAnahtariMi(anahtar)) continue;
+      const c = await degistir(varsayilanDeger(anahtar), yonetici, anahtar);
+      assert.equal(c.statusCode, 200, `${anahtar}: ${c.body}`);
+    }
+    const yeni = await vt().tx((db) => modulAyariDegistir(db, yoneticiId, 'atolye.raf-kodlama', 'bolme-kat-goz', 'duz-sayi', { modul: 'atolye', yol: '/stok/raf-kodlama/degistir', yetki: 'stok.tanim' }));
+    assert.equal(yeni, 'bolme-kat-goz');
+    await vt().tx((db) => modulAyariDegistir(db, yoneticiId, 'atolye.raf-kodlama', 'duz-sayi', 'bolme-kat-goz', { modul: 'atolye', yol: '/stok/raf-kodlama/degistir', yetki: 'stok.tanim' }));
   });
 
   test('türe uymayan saklanan değer ekrandan onarılır: liste onu işaretli verir, değiştirme kabul edilir, kayıt ham eski değeri taşır', async () => {

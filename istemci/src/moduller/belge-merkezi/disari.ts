@@ -8,3 +8,5 @@ export { onizlemeGonder } from './onizleme-akisi.ts';
 export { ResimPaneli, malzemeBelgesiYukle, useMalzemeResimYetkisi, type MalzemeBelgesiGirdisi } from './ResimPaneli.tsx';
 // Markalama yer seçiminde aynı model okuyucuyu kullanır (kart 806): STEP, IGES, STL ve glTF tek yoldan sahneye girer.
 export { birak, modelOku, type ModelBicimi } from './goruntu/model.ts';
+// Montaj sahnesi oynatıcısı (3209 a): Reçete ve Rota stüdyosu ile Arkon terminali aynı oynatıcıyı ve oynatma kurallarını kullanır.
+export * from './goruntu/montaj/index.ts';

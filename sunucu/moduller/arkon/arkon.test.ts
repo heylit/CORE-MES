@@ -267,7 +267,7 @@ describe('arkon (gerçek PostgreSQL)', () => {
 
   test('uç tanımı: okuma ve yazma uçları Arkon, Üretim Terminali ya da Kuyruk sayfasını ister (sayfası olmayan Arkon rollü kişi okuyamaz, yazamaz)', async () => {
     const okuma = uclar.filter((u) => u.yontem === 'GET' && !u.yol.startsWith('/arkon/tmi-yansimalari') && u.yol !== '/arkon/son-olaylar' && !u.yol.startsWith('/arkon/anomali') && u.yol !== '/arkon/eksik-isler' && !u.yol.startsWith('/arkon/hazirlik-maddeleri'));
-    assert.equal(okuma.length, 19);
+    assert.equal(okuma.length, 21);
     // Son olayları Fabrika Haritası da okur (#1122).
     assert.deepEqual(uclar.find((u) => u.yol === '/arkon/son-olaylar')?.yetki, { biri: ['sayfa.arkon', 'sayfa.uretim-terminali', 'sayfa.kuyruk', 'sayfa.atolye'] });
     for (const u of okuma) assert.deepEqual(u.yetki, { biri: ['sayfa.arkon', 'sayfa.uretim-terminali', 'sayfa.kuyruk'] }, u.yol);
@@ -941,6 +941,8 @@ describe('arkon (gerçek PostgreSQL)', () => {
     { yontem: 'POST', yol: '/arkon/numuneler/yok-1/olcum', govde: { olcumler: [{ balonId: 1, deger: '1' }], kaynak: 'c9' } },
     { yontem: 'POST', yol: '/arkon/kuyruk-sira/sirala', govde: { istasyon: 'YOK-ISTASYON', onceki: ['tmi-ie-999999999'], yeni: ['tmi-ie-999999999'], kaynak: 'c9' } },
     { yontem: 'POST', yol: '/arkon/kuyruk-sira/plana-don', govde: { istasyon: 'YOK-ISTASYON', kaynak: 'c9' } },
+    { yontem: 'GET', yol: '/arkon/is-emirleri/999999999/sahne' },
+    { yontem: 'GET', yol: '/arkon/is-emirleri/999999999/sahne-modeli' },
   ];
 
   // Rol panosu (kart #489): sayılar Arkon ekranlarının süzgeçleridir; kartın işlemi olmayana null.
@@ -1003,7 +1005,7 @@ describe('arkon (gerçek PostgreSQL)', () => {
       // Çizim Merkezi'nden alma paketi düzenleyen rolündür (operatörün değil). Kuyruk sırası ayrı işlemdir; bilinmeyen istasyon 404.
       const yoneticiyle = uc.yol.endsWith('/sil') || uc.yol.startsWith('/arkon/tmi-yansimalari') || uc.yol === '/arkon/plan-sira/sirala' || uc.yol.startsWith('/arkon/cizim-merkezi') || uc.yol === '/arkon/makine-devral' || uc.yol === '/arkon/calisma-devral' || uc.yol.startsWith('/arkon/kuyruk-sira/');
       const kabul = await istek(yoneticiyle ? yonetici : operator, uc.yontem, uc.yol, uc.govde);
-      const bulunamaz = uc.yol.startsWith(`/arkon/dosyalar/${OZET}`) && uc.yontem === 'GET' || uc.yol.endsWith('/yeniden-dene') || uc.yol.endsWith('/999999999/ekle') || uc.yol === '/arkon/makine-devral' || uc.yol === '/arkon/calisma-devral' || uc.yol.startsWith('/arkon/refakat-kartlari') || uc.yol.startsWith('/arkon/kuyruk-sira/') || uc.yol.startsWith('/arkon/numuneler/');
+      const bulunamaz = uc.yol.startsWith(`/arkon/dosyalar/${OZET}`) && uc.yontem === 'GET' || uc.yol.endsWith('/yeniden-dene') || uc.yol.endsWith('/999999999/ekle') || uc.yol === '/arkon/makine-devral' || uc.yol === '/arkon/calisma-devral' || uc.yol.startsWith('/arkon/refakat-kartlari') || uc.yol.startsWith('/arkon/kuyruk-sira/') || uc.yol.startsWith('/arkon/numuneler/') || uc.yol.startsWith('/arkon/is-emirleri/');
       assert.equal(kabul.durum, bulunamaz ? 404 : uc.yol === '/arkon/plan-sira/sirala' ? 409 : 200, `${uc.yontem} ${uc.yol}: ${JSON.stringify(kabul.govde)}`);
     }
   });

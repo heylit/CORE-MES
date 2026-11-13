@@ -1313,7 +1313,7 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
   const panel = Panel ? <Panel key={siraAnahtari(o)} api={stApi} kurallar={RL} /> : null;
   const adimlar = b
     ? <Adimlar key={'oniz:' + siraAnahtari(b)} adimlar={b.pkg && b.pkg.steps} emirId={tmiEmirId(b.pkg)} onizleme />
-    : <><EmrinAdimlari v={emrinAdimlari} hata={emrinAdimHatasi} isEmriId={tmiIsEmriId(o.pkg)} /><Adimlar key={siraAnahtari(o)} adimlar={o.pkg && o.pkg.steps} emirId={tmiEmirId(o.pkg)} onizleme={pv} /></>;
+    : <><EmrinAdimlari v={emrinAdimlari} hata={emrinAdimHatasi} isEmriId={tmiIsEmriId(o.pkg)} /><Adimlar key={siraAnahtari(o)} adimlar={o.pkg && o.pkg.steps} emirId={tmiEmirId(o.pkg)} onizleme={pv} isEmriId={tmiIsEmriId(o.pkg)} /></>;
   // 3126: rota şeridine dokununca Adımlar görünümü açılır ve liste ekrandaki işin adımına gelir.
   const rotaAc = () => {
     if (dar) mvYaz('steps'); else tabYaz('steps');

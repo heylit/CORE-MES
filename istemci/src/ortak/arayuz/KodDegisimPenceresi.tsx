@@ -18,7 +18,9 @@ export const kodDegisimMetni = (degisenler: readonly KoduDegisenYer[]): string =
 // 94 a: eski etiketin QR'ı eski kodu taşır ve artık okunmaz; kayıttan sonra kodu değişen konumların etiketi yeniden basılır.
 // Etiket Merkezi bir kerede ETIKET_MERKEZI_SINIRI konum açar; fazlası parça parça yeni sekmede açılır ki pencere ve liste kaybolmasın.
 // Etiket Merkezi'ni açamayan kişi listeyi kopyalar. `basDugmesi` tek parçalı basmayı değiştirir (stok: varsayılan yazıcıya doğrudan basım).
-export function KodDegisimPenceresi({ degisenler, kapat, etiketMerkezi, basDugmesi }: {
+export function KodDegisimPenceresi({ degisenler, kapat, etiketMerkezi, basDugmesi, ekUyari }: {
+  // 3168: yeniden numaralamada eski kod başka gözde yaşar (eski etiket okunur ve yanlış göze gider); ilk satır bu tehlike uyarısı olur.
+  ekUyari?: string;
   degisenler: readonly KoduDegisenYer[]; kapat: () => void; etiketMerkezi: boolean; basDugmesi?: (idler: readonly number[]) => ReactNode;
 }) {
   const { bildir } = useBildirim();
@@ -42,7 +44,9 @@ export function KodDegisimPenceresi({ degisenler, kapat, etiketMerkezi, basDugme
   return (
     <Pencere acik kapat={kapat} baslik="Konum kodu değişti" tur="yan" alt={alt}>
       <div className="tc-kod-degisim">
-        <p className="tc-kod-degisim-bilgi tc-kod-degisim-uyari" role="status">{degisenler.length} konumun kodu değişti; eski etiketler artık okunmaz. Yeniden basın.</p>
+        {ekUyari
+          ? <p className="tc-kod-degisim-bilgi tc-kod-degisim-tehlike" role="alert"><Simge ad="alert" boyut="k" /><span>{degisenler.length} gözün kodu değişti. {ekUyari}</span></p>
+          : <p className="tc-kod-degisim-bilgi tc-kod-degisim-uyari" role="status">{degisenler.length} konumun kodu değişti; eski etiketler artık okunmaz. Yeniden basın.</p>}
         {stoklu > 0 && <p className="tc-kod-degisim-bilgi"><Simge ad="box" boyut="k" /><span>Bunlardan {stoklu} konumda stok var; stok yerinde kalır, yalnız etiket değişir.</span></p>}
         {!etiketMerkezi && <p className="tc-kod-degisim-not">Etiketler Etiket Merkezi'nden basılır; o sayfayı açabilen birine bastırın. Listeyi kopyalayıp iletebilirsiniz.</p>}
         {etiketMerkezi && parcalar.length > 1 && <p className="tc-kod-degisim-not">Etiket Merkezi bir kerede {ETIKET_MERKEZI_SINIRI} konum açar; her parça yeni sekmede açılır, bu pencere açık kalır.</p>}

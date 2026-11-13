@@ -28,3 +28,5 @@ Rota modülünün tuttuğu ya da kullandığı ve başka modülde de bulunan ya 
 | İstenen belge listesi | `rota_islem_sartnamesi_surumu.istenen_belgeler` (metin dizisi) | sevkiyat ve kalite belge türleri | Bağlamada ortak belge türü listesine bağlanır |
 | Talimat adımı ve kontrol noktası | `rota_talimat_adimi` (talimat sürümü, sıra, başlık, kontrol türü ve ayarı, zorunlu) | arkon terminal (cevapları kendi tutar); kalite ölçüm planı | Yazan yalnız rota; ölçüm cevabı arkon'da |
 | Talimat şablonu | `rota_talimat_sablonu`, `rota_talimat_sablon_adimi` | yok | Kopyalanır, bağlanmaz |
+| 3B model revizyonu | `rota_talimat_sahnesi.model_revizyon_id` | geometri (Belge Merkezi 3B model) | Yabancı anahtar Aşama 2; parçalar modeldeki sırayla anılır |
+| Talimat sahnesi (adımda giren parça, yön, mesafe) | `rota_talimat_sahnesi` (talimat sürümü, sahne sürümü, adımlar) | arkon terminal okur | Yazan yalnız rota |

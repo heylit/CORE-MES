@@ -670,3 +670,7 @@
 /* 3202 B: göz panelindeki malzeme modeli ve kart bağlantısı. */
 .tc-atolye-goz-model { display: grid; gap: var(--b-2); margin-top: var(--b-2); }
 .tc-atolye-goz-model a { display: inline-flex; align-items: center; gap: var(--b-1); min-height: 44px; }
+
+/* 3168: sıra numaralı kodda göz kodu cephede; yeniden numaralama satırı. */
+.tc-atolye-cephe-kod { fill: var(--ink); font-size: 16px; font-weight: 700; text-anchor: middle; font-family: var(--font-mono, monospace); }
+.tc-atolye-kodlama { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2); margin: var(--b-2) 0; }
