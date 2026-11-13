@@ -3,10 +3,20 @@ import { uc } from '#cekirdek/uc.ts';
 import { disDuzeltmeCevabi, disDuzeltmelerCevabi, disSiparisCevabi, disSiparisDuzeltGovdesi, disSiparisSorgusu } from '#paylasilan/sozlesme/logo.ts';
 import { birimSetiCevabi, birimSetiEkleGovdesi, birimSetiParametresi, birimSetleriCevabi, logoGecisKomutuCevabi, logoHazirlikCevabi, logoKontrolCevabi } from '#paylasilan/sozlesme/logo.ts';
 import { logoMalzemeAramaCevabi, logoMalzemeAramaSorgusu, logoMalzemeEkleCevabi, logoMalzemeEkleGovdesi } from '#paylasilan/sozlesme/logo.ts';
+import { logoKartAlislariCevabi, logoKartBolumuCevabi, logoKartHareketleriCevabi, logoKartHareketSorgusu, logoKartParametresi } from '#paylasilan/sozlesme/logo.ts';
+import { STOK_ISLEMLERI } from '#paylasilan/islemler/stok.ts';
+import { islemVarMi } from '#cekirdek/yetki.ts';
+import { kartBolumu } from './kart-bolumu.ts';
 import { disDuzeltmeAcik, ortamKoprusu, ortamOzeti } from './baglanti.ts';
 import { disDuzeltmeleri, disSiparisDuzelt } from './dis-siparis.ts';
-import { logodaMalzemeAra, logodanDisSiparisOku } from './isler.ts';
+import { logodaMalzemeAra, logodanDisSiparisOku, logodanKartAlislari, logodanKartHareketleri } from './isler.ts';
 import { birimSetiEkle, birimSetiKaldir, birimSetleriniGetir, gecisiBitir, gecisOkumasiIste, hazirlik, kontrol, logoAramaSonucunuEkle } from './servis.ts';
+
+// 3201 a: bölümü kartı görebilen ister; stok ve hareket parçası yalnız stoğu okuyabilene (stok uçlarının okuma yetkisi; malzeme
+// sayfası olup stok sayfası olmayan rol depo miktarını burada da görmez), fiyat parçası yalnız alış fiyatını görebilene.
+const KART_OKUMA = { biri: ['sayfa.malzemeler'] } as const;
+const KART_STOK = ['sayfa.stok', ...STOK_ISLEMLERI] as const;
+const KART_FIYAT = ['satin-alma.oku', 'satin-alma.yaz', 'finans.maliyet-oku'] as const;
 
 // Birim seti listesi: malzemelerin "Logo gönderimi" sayfası karşılık seçerken okur (LB9 a); elle ekleme ve kaldırma yalnız yöneticide (LB11 a).
 export const uclar = [
@@ -126,5 +136,37 @@ export const uclar = [
     govde: logoMalzemeEkleGovdesi,
     cevap: logoMalzemeEkleCevabi,
     isle: async ({ db, kullanici, govde }) => ({ eklenen: await logoAramaSonucunuEkle(db, kullanici.id, govde.kartlar, new Date()) }),
+  }),
+  // 3201 a: malzeme kartının "Logo'da" bölümü. Parçalar ve stok aynadan okunur (Logo'ya istek yok); hareket ve son alış istenince köprüden,
+  // transaction dışında (köprü 60 sn bekleyebilir). Hepsi yalnız okuma.
+  uc({
+    yontem: 'GET',
+    yol: '/logo/malzeme-karti/:kod',
+    yetki: KART_OKUMA,
+    parametre: logoKartParametresi,
+    cevap: logoKartBolumuCevabi,
+    isle: ({ db, kullanici, parametre }) => kartBolumu(db, parametre.kod, {
+      stok: KART_STOK.some((i) => islemVarMi(kullanici, i)),
+      fiyat: KART_FIYAT.some((i) => islemVarMi(kullanici, i)),
+    }),
+  }),
+  uc({
+    yontem: 'GET',
+    yol: '/logo/malzeme-karti/:kod/hareketler',
+    yetki: { biri: KART_STOK },
+    txDisi: true,
+    parametre: logoKartParametresi,
+    sorgu: logoKartHareketSorgusu,
+    cevap: logoKartHareketleriCevabi,
+    isle: ({ db, parametre, sorgu }) => logodanKartHareketleri({ tx: (f) => f(db) }, parametre.kod, sorgu.once ?? null),
+  }),
+  uc({
+    yontem: 'GET',
+    yol: '/logo/malzeme-karti/:kod/son-alislar',
+    yetki: { biri: KART_FIYAT },
+    txDisi: true,
+    parametre: logoKartParametresi,
+    cevap: logoKartAlislariCevabi,
+    isle: ({ db, parametre }) => logodanKartAlislari({ tx: (f) => f(db) }, parametre.kod),
   }),
 ];

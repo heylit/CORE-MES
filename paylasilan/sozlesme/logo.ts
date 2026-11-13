@@ -189,3 +189,48 @@ export const logoMalzemeEkleGovdesi = z.object({
 }).strict();
 export const logoMalzemeEkleCevabi = z.object({ eklenen: z.number().int() });
 export type LogoMalzemeEkleCevabi = z.output<typeof logoMalzemeEkleCevabi>;
+
+// 3201: malzeme kartının "Logo'da" bölümü (yalnız okuma). Miktar ve fiyat işaretli ondalık metin; veri yoksa null.
+const kartMiktari = z.string().regex(/^-?\d+(\.\d+)?$/);
+export const logoKartParametresi = z.object({ kod: z.string().trim().min(1).max(64) });
+export const logoKartBolumuCevabi = z.object({
+  // Açık parçalar: anahtar kapalı olan parça ekranda yoktur. fiyat yalnız fiyat görebilen kişide true.
+  parcalar: z.object({ stok: z.boolean(), hareket: z.boolean(), fiyat: z.boolean() }),
+  // Logo'daki kart kodu (CORE kodundan farklıysa eşlemeden).
+  logoKodu: z.string(),
+  stok: z.object({
+    // Stok aynasının son tam turu; hiç bitmediyse null (ekranda "henüz okunmadı").
+    sonOkuma: zamanSemasi.nullable(),
+    ambarlar: z.array(z.object({
+      ambarNo: z.number().int(), ambarAdi: z.string().nullable(), logo: kartMiktari.nullable(),
+      depo: z.object({ kod: z.string(), ad: z.string() }).nullable(), core: kartMiktari.nullable(), fark: kartMiktari.nullable(),
+    })),
+    eslenen: z.object({ logo: kartMiktari, core: kartMiktari, fark: kartMiktari }).nullable(),
+    eslenmemis: kartMiktari.nullable(),
+  }).nullable(),
+});
+export type LogoKartBolumuCevabi = z.output<typeof logoKartBolumuCevabi>;
+
+const kartOkumaDurumu = z.enum(['tamam', 'kapali', 'ortam-degiskeni-yok', 'hata', 'kart-yok']);
+export const logoKartHareketSorgusu = z.object({ once: z.coerce.number().int().positive().optional() });
+export const logoKartHareketleriCevabi = z.object({
+  durum: kartOkumaDurumu,
+  ileti: z.string().nullable(),
+  kayitlar: z.array(z.object({
+    logoKayitNo: z.number().int(), tarih: tarihSemasi, fisTuru: z.number().int(), fisAdi: z.string(),
+    yon: z.enum(['giris', 'cikis']).nullable(), fisNo: z.string().nullable(), ambarNo: z.number().int().nullable(),
+    miktar: kartMiktari, birim: z.string().nullable(),
+  })),
+  // Daha eski hareketlerin imleci; yoksa null.
+  dahaEski: z.number().int().positive().nullable(),
+});
+export type LogoKartHareketleriCevabi = z.output<typeof logoKartHareketleriCevabi>;
+export const logoKartAlislariCevabi = z.object({
+  durum: kartOkumaDurumu,
+  ileti: z.string().nullable(),
+  kayitlar: z.array(z.object({
+    logoKayitNo: z.number().int(), tarih: tarihSemasi, tedarikci: z.string().nullable(), faturaNo: z.string().nullable(),
+    miktar: kartMiktari, birim: z.string().nullable(), fiyat: kartMiktari, dovizTuru: z.number().int().nullable(), dovizFiyati: kartMiktari.nullable(),
+  })),
+});
+export type LogoKartAlislariCevabi = z.output<typeof logoKartAlislariCevabi>;

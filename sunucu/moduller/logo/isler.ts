@@ -16,7 +16,8 @@ import { BEKLEME_NEDENLERI, faturaTuru, listeOkumaTuru, malKabulTuru, malzemeFis
 import { logoCariAra, logoCariOku, logoMalzemeAra } from './servis.ts';
 import type { CariOkumasi, MalzemeFisiKaynagi, SatinAlmaKaynagi, SatisKaynagi, TurSonucu, TxAcan } from './servis.ts';
 import type { LogoCari, LogoMalzemeKarti } from './kurallar.ts';
-import type { DisSiparisCevabi } from '#paylasilan/sozlesme/logo.ts';
+import type { DisSiparisCevabi, LogoKartAlislariCevabi, LogoKartHareketleriCevabi } from '#paylasilan/sozlesme/logo.ts';
+import { kartAlislari, kartHareketleri } from './kart-bolumu.ts';
 
 // İş her zaman koşar; istek ancak "Logo bağlantısı" ayarı açık ve köprü değişkenleri varken çıkar (malzemeTuru).
 const bellek = yeniSurecBellegi();
@@ -129,3 +130,7 @@ export const logodanCariOku = (vt: TxAcan, kod: string): Promise<CariOkumasi<Log
 // D7: Logo'daki siparişi okuma kullanıcı isteğiyle gelir; köprüye zamanlanmış işlerle aynı sıradan gider. Uç transaction dışında çağırır.
 export const logodanDisSiparisOku = (vt: TxAcan, kisiId: number, no: string): Promise<DisSiparisCevabi> =>
   sirali(() => disSiparisOku(vt, ortamKoprusu, kisiId, no));
+// 3201 a: malzeme kartında hareket ve son alış okuması kullanıcı isteğiyle gelir; köprüye zamanlanmış işlerle aynı sıradan gider. Uç transaction dışında çağırır.
+export const logodanKartHareketleri = (vt: TxAcan, kod: string, once: number | null): Promise<LogoKartHareketleriCevabi> =>
+  sirali(() => kartHareketleri(vt, ortamKoprusu, kod, once));
+export const logodanKartAlislari = (vt: TxAcan, kod: string): Promise<LogoKartAlislariCevabi> => sirali(() => kartAlislari(vt, ortamKoprusu, kod));

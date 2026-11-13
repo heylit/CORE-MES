@@ -1209,9 +1209,9 @@ export const LOGO_AKISLARI: readonly LogoAkisTanimi[] = [
     aciklama: 'CORE\'da iptal edilen talebin Logo fişi öneriye geri alınır (Logo\'da iptal durumu yok); iptal geri alınınca yeniden onaylanır.' },
   { anahtar: 'teklif-kapatma', yon: 'tmi-logo', baslik: 'Satış teklifi kapatma', kaynak: 'kodda-yok', ayarlar: ['logo.teklif-kapatma-gonderimi', 'logo.satis-gonderimi'], ayarKosulu: 'hepsi', belgeTurleri: [],
     aciklama: 'Reddedilen teklif ve yeni sürümü gelen teklifin eskisi Logo\'da kapanır.' },
-  { anahtar: 'malzeme-hareketleri', yon: 'logo-tmi', baslik: 'Malzeme hareketleri', kaynak: 'kodda-yok', ayarlar: ['logo.malzeme-hareketleri-okumasi'], belgeTurleri: [],
-    aciklama: 'Malzeme kartında Logo\'daki giriş ve çıkışlar istenince okunur.' },
-  { anahtar: 'son-alis-fiyatlari', yon: 'logo-tmi', baslik: 'Son alış fiyatları', kaynak: 'kodda-yok', ayarlar: ['logo.son-alis-fiyatlari-okumasi'], belgeTurleri: [],
+  { anahtar: 'malzeme-hareketleri', yon: 'logo-tmi', baslik: 'Malzeme hareketleri', kaynak: 'bagli', ayarlar: ['logo.malzeme-hareketleri-okumasi'], belgeTurleri: [],
+    aciklama: 'Malzeme kartının "Logo\'da" bölümünde Logo\'daki giriş ve çıkışlar "Hareketleri oku" denince okunur (son 20, sonra daha eskiler).' },
+  { anahtar: 'son-alis-fiyatlari', yon: 'logo-tmi', baslik: 'Son alış fiyatları', kaynak: 'bagli', ayarlar: ['logo.son-alis-fiyatlari-okumasi'], belgeTurleri: [],
     aciklama: 'Malzemenin son alış faturası fiyatları istenince okunur; yalnız fiyat görene açılır.' },
   { anahtar: 'sozlukler', yon: 'logo-tmi', baslik: 'Ödeme planı, masraf merkezi, proje, kur', kaynak: 'kodda-yok', ayarlar: ['logo.sozluk-okumasi'], belgeTurleri: [],
     aciklama: 'Formlardaki seçim listeleri ve günün kurları Logo\'dan okunur.' },
@@ -1317,6 +1317,12 @@ function hareketSatiri(o: Record<string, unknown>): LogoMalzemeHareketi | null {
 
 export function malzemeHareketleriniAyikla(govde: unknown): Sayfa<LogoMalzemeHareketi> | null {
   return sayfaAyikla(govde, hareketSatiri);
+}
+
+// 3204: order=desc cevabı. Zarfta order "desc" yoksa yardımcı eski sürümdür ve sayfa en eskiden başlar (geriye false).
+export function geriHareketSayfasiniAyikla(govde: unknown): { sayfa: Sayfa<LogoMalzemeHareketi>; geriye: boolean } | null {
+  const sayfa = sayfaAyikla(govde, hareketSatiri);
+  return sayfa === null ? null : { sayfa, geriye: kayitMi(govde) && govde['order'] === 'desc' };
 }
 
 export function alisFiyatlariniAyikla(govde: unknown): LogoAlisFiyati[] | null {
@@ -1558,3 +1564,93 @@ export function disSiparisDuzeltmeGovdesi(
   govde[a.satirlar] = satirlar;
   return { govde, ozet };
 }
+
+/* ---------------- 3201: malzeme kartının "Logo'da" bölümü (yalnız okuma) ---------------- */
+
+// İşaretli ondalık (Logo'da eksi stok olabilir); altı basamağa kadar tam hesap, fazlası okunmaz.
+const ISARETLI_ONDALIK = /^-?\d+(\.\d{1,6})?$/;
+const KART_OLCEK = 1_000_000n;
+function kartOlcekli(d: string): bigint | null {
+  if (!ISARETLI_ONDALIK.test(d)) return null;
+  const eksi = d.startsWith('-');
+  const [tam = '0', kesir = ''] = (eksi ? d.slice(1) : d).split('.');
+  const v = BigInt(tam) * KART_OLCEK + BigInt(kesir.padEnd(6, '0'));
+  return eksi ? -v : v;
+}
+function kartMetni(v: bigint): string {
+  const eksi = v < 0n;
+  const m = eksi ? -v : v;
+  const kesir = (m % KART_OLCEK).toString().padStart(6, '0').replace(/0+$/, '');
+  return `${eksi ? '-' : ''}${m / KART_OLCEK}${kesir === '' ? '' : `.${kesir}`}`;
+}
+
+export interface KartEsliDepo { depoKod: string; depoAd: string; logoAmbarNo: number; miktar: string | null }
+export interface KartStokSatiri {
+  ambarNo: number; ambarAdi: string | null; logo: string | null;
+  depo: { kod: string; ad: string } | null; core: string | null; fark: string | null;
+}
+export interface KartStokKarsilastirmasi {
+  ambarlar: KartStokSatiri[];
+  // Yalnız CORE deposuyla eşli ambarlar; eşli ambar yoksa null.
+  eslenen: { logo: string; core: string; fark: string } | null;
+  // Eşlenmemiş ambarlardaki Logo miktarı toplamı; böyle ambar yoksa null.
+  eslenmemis: string | null;
+}
+
+// Logo'da satırı olmayan ambar ve CORE'da bakiyesi olmayan depo o yerde stok yok demektir: fark hesabında sıfır sayılır, satırda boş kalır.
+// Birden çok depo aynı ambara eşliyse CORE miktarları toplanır, depo adı ilkinden. Okunamayan miktar satırı farksız bırakır.
+export function kartStokKarsilastir(
+  logo: readonly { ambarNo: number; miktar: string }[], depolar: readonly KartEsliDepo[], ambarAdlari: ReadonlyMap<number, string | null>,
+): KartStokKarsilastirmasi {
+  const satirlar = new Map<number, { logo: bigint | null; logoMetin: string | null; okunamadi: boolean; depo: { kod: string; ad: string } | null; core: bigint | null }>();
+  const al = (no: number) => {
+    let s = satirlar.get(no);
+    if (!s) { s = { logo: null, logoMetin: null, okunamadi: false, depo: null, core: null }; satirlar.set(no, s); }
+    return s;
+  };
+  for (const l of logo) {
+    const s = al(l.ambarNo);
+    const v = kartOlcekli(l.miktar);
+    if (v === null) s.okunamadi = true;
+    else s.logo = (s.logo ?? 0n) + v;
+  }
+  for (const d of depolar) {
+    const s = al(d.logoAmbarNo);
+    s.depo ??= { kod: d.depoKod, ad: d.depoAd };
+    if (d.miktar === null) continue;
+    const v = kartOlcekli(d.miktar);
+    if (v === null) s.okunamadi = true;
+    else s.core = (s.core ?? 0n) + v;
+  }
+  let esliVar = false; let esliLogo = 0n; let esliCore = 0n; let esliOkunamadi = false;
+  let eslenmemis: bigint | null = null;
+  const ambarlar = [...satirlar.entries()].sort(([a], [b]) => a - b).map(([ambarNo, s]): KartStokSatiri => {
+    const fark = s.depo === null || s.okunamadi ? null : (s.logo ?? 0n) - (s.core ?? 0n);
+    if (s.depo !== null) { esliVar = true; esliOkunamadi ||= s.okunamadi; esliLogo += s.logo ?? 0n; esliCore += s.core ?? 0n; }
+    else if (s.logo !== null) eslenmemis = (eslenmemis ?? 0n) + s.logo;
+    return {
+      ambarNo, ambarAdi: ambarAdlari.get(ambarNo) ?? null, logo: s.logo === null ? null : kartMetni(s.logo),
+      depo: s.depo, core: s.core === null ? null : kartMetni(s.core), fark: fark === null ? null : kartMetni(fark),
+    };
+  });
+  return {
+    ambarlar,
+    eslenen: esliVar && !esliOkunamadi ? { logo: kartMetni(esliLogo), core: kartMetni(esliCore), fark: kartMetni(esliLogo - esliCore) } : null,
+    eslenmemis: eslenmemis === null ? null : kartMetni(eslenmemis),
+  };
+}
+
+// STLINE IOCODE: 1, 2 giriş; 3, 4 çıkış (VARSAYIM, gerçek Logo'da doğrulanmadı). Bilinmeyen değer null: ekran yön göstermez.
+export function hareketYonu(ioCode: number): 'giris' | 'cikis' | null {
+  return ioCode === 1 || ioCode === 2 ? 'giris' : ioCode === 3 || ioCode === 4 ? 'cikis' : null;
+}
+
+// Fiş türü adı yalnız köprü notunda ve sorgularda geçen kodlar için (1 alış, 12 sarf, 13 üretimden giriş); öbürleri numarasıyla gösterilir.
+const HAREKET_FIS_ADLARI: Readonly<Record<number, string>> = { 1: 'Satın alma irsaliyesi', 12: 'Sarf fişi', 13: 'Üretimden giriş fişi' };
+export function hareketFisAdi(trCode: number): string {
+  return HAREKET_FIS_ADLARI[trCode] ?? `Fiş türü ${trCode}`;
+}
+
+// Kart bölümünde bir seferde gösterilen hareket sayısı; yardımcı geriye okumayı bilmiyorsa okunan en çok sayfa (500'lük).
+export const KART_HAREKET_SAYFASI = 20;
+export const KART_HAREKET_ESKI_YOL_SAYFA_SINIRI = 10;

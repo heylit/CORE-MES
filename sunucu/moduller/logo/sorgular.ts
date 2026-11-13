@@ -690,3 +690,17 @@ export async function coreSiparisiLogodaMi(db: Db, no: string, logoKayitNo: numb
     [no, String(logoKayitNo)],
   )) !== null;
 }
+
+/* ---------------- 3201: malzeme kartının "Logo'da" bölümü ---------------- */
+
+// Ambar listesi aynası: kod ambar numarasının metnidir; adı olmayan ya da sayı olmayan kod atlanır.
+export async function ambarAdlari(db: Db): Promise<Map<number, string | null>> {
+  const l = await db.sorgu<{ kod: string; ad: string | null }>("SELECT kod, ad FROM logo_ambar WHERE kod ~ '^[0-9]{1,9}$'");
+  return new Map(l.map((x) => [Number(x.kod), x.ad]));
+}
+
+export async function cariAdlari(db: Db, kodlar: readonly string[]): Promise<Map<string, string | null>> {
+  if (kodlar.length === 0) return new Map();
+  const l = await db.sorgu<{ kod: string; ad: string | null }>('SELECT kod, ad FROM logo_cari WHERE kod = ANY($1::text[])', [kodlar]);
+  return new Map(l.map((x) => [x.kod, x.ad]));
+}

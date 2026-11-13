@@ -48,6 +48,15 @@ export interface MalKabulHam {
 // ---- Depo ve konum ------------------------------------------------------------------------------------------------
 export const depolar = (db: Db): Promise<DepoSatiri[]> =>
   db.sorgu('SELECT id, kod, ad, logo_ambar_no AS "logoAmbarNo" FROM stok_depo WHERE aktif ORDER BY kod, id');
+// 3201: Logo ambarıyla eşlenmiş her aktif depoda malzemenin miktarı (bütün konumların toplamı); bakiyesi olmayan eşli depo 0 değil null döner.
+export interface LogoEsliDepoMiktari { depoKod: string; depoAd: string; logoAmbarNo: number; miktar: string | null }
+export const logoEsliDepoMiktarlari = (db: Db, malzemeId: number): Promise<LogoEsliDepoMiktari[]> =>
+  db.sorgu(
+    `SELECT d.kod AS "depoKod", d.ad AS "depoAd", d.logo_ambar_no AS "logoAmbarNo",
+            (SELECT sum(b.miktar)::text FROM stok_bakiye b JOIN stok_konum k ON k.id = b.konum_id WHERE k.depo_id = d.id AND b.malzeme_id = $1) AS miktar
+       FROM stok_depo d WHERE d.aktif AND d.logo_ambar_no IS NOT NULL ORDER BY d.logo_ambar_no, d.kod`,
+    [malzemeId],
+  );
 export const depoKimligi = async (db: Db, kod: string): Promise<number | null> =>
   (await db.tek<{ id: number }>('SELECT id FROM stok_depo WHERE kod = $1', [kod]))?.id ?? null;
 export const depoVarMi = async (db: Db, id: number): Promise<boolean> =>

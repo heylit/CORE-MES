@@ -40,7 +40,7 @@ describe('LOGO-H1 akış durumu', () => {
     assert.equal(logoAkisDurumu(iptal, { ortamVar: true, ayarlar: { ...temel, 'logo.talep-iptali-gonderimi': true } }), 'hazir');
     // 2984: siparis-durumu kodlandı ("bağlı"); kendi anahtarı ve gönderim anahtarı birlikte kuralı onda da sürer.
     const yeniler = LOGO_AKISLARI.filter((a) => a.kaynak === 'kodda-yok' || a.anahtar === 'siparis-durumu');
-    assert.equal(yeniler.length, 6);
+    assert.equal(yeniler.length, 4);
     assert.equal(LOGO_AKISLARI.find((a) => a.anahtar === 'siparis-durumu')?.kaynak, 'bagli');
     const eski = new Set(['logo.satin-alma-gonderimi', 'logo.satis-gonderimi']);
     for (const a of yeniler) {
@@ -182,7 +182,8 @@ describe('Logo hazırlık uçları (gerçek PostgreSQL)', () => {
     assert.equal(h.akislar.find((a) => a.anahtar === 'satin-alma-siparisi')?.durum, 'ayar-eksik');
     assert.equal(h.akislar.find((a) => a.anahtar === 'malzeme-guncelleme')?.durum, 'ayar-eksik');
     assert.deepEqual(h.akislar.filter((a) => a.durum === 'kodda-yok').map((a) => a.anahtar).sort(),
-      ['malzeme-hareketleri', 'son-alis-fiyatlari', 'sozlukler', 'talep-iptali', 'teklif-kapatma'], 'yalnız planlanan Logo işleri kodda yok görünür');
+      ['sozlukler', 'talep-iptali', 'teklif-kapatma'], 'yalnız planlanan Logo işleri kodda yok görünür');
+    assert.notEqual(h.akislar.find((a) => a.anahtar === 'malzeme-hareketleri')?.durum, 'kodda-yok', '3201: kodlandı');
     assert.equal(h.akislar.find((a) => a.anahtar === 'siparis-durumu')?.durum, 'ayar-eksik');
     assert.deepEqual(['logo.mal-kabul-okumasi', 'logo.liste-okumasi', 'logo.fatura-okumasi', 'logo.malzeme-fisi-gonderimi', 'logo.malzeme-guncelleme-gonderimi']
       .map((k) => h.ayarlar.find((a) => a.anahtar === k)?.acik), [false, false, false, false, false], 'yeni akışlar kapalı gelir');
