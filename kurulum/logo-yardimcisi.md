@@ -182,6 +182,10 @@ Hepsi yalnız `GET` ve yalnız SQL `SELECT`; Logo'ya hiç yazmaz, COM oturumu ku
   doğrulanmadı.
 - `GET /api/Material/search?q={metin}`: tek kart canlı araması (3080 a): kullanımdaki (`ACTIVE = 0`) malzeme kartları kodda ya da adda (içinde, `LIKE` özel
   karakterleri kaçırılır) aranır; en az 3, en çok 100 karakter, en çok 20 sonuç, kod sırasıyla. Satır `Material/list` ile aynı biçimdedir, cevap düz dizidir.
+- `GET /api/Material/{kod}/movements?since={kayıt}`: malzemenin hareketleri (`STLINE`, iptal ve malzeme dışı satır gelmez) kayıt sırasıyla, sayfada en çok 500.
+  `order=desc` ile en yeniden geriye, sayfada en çok 20 (3204); `before={kayıt}` ondan eskileri verir. Bu biçimde zarf `order: "desc"` taşır, `next` sayfanın
+  en eski kaydıdır. Eski yardımcı `order` alanını göndermez; CORE bunu görünce eski yoldan okur. Kart yoksa 404.
+- `GET /api/Material/{kod}/lastPurchases`: en yeni alış faturası satırları, en çok 10; alışı olmayan kart boş dizi.
 - `GET /api/Arp/search?q={metin}`: kullanımdaki (`ACTIVE = 0`) cariler kodda ya da ünvanda (içinde, `LIKE` özel karakterleri kaçırılır) ya da vergi /
   T.C. kimlik numarasında (tam) aranır; en az 3, en çok 100 karakter, en çok 20 sonuç.
 - `GET /api/Arp/card/{kod}`: tek carinin alanları (`logicalRef, code, name, cardType, taxNr, tckNo, taxOffice, address1, address2, town, city,

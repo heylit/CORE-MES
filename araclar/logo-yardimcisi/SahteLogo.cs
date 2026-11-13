@@ -537,6 +537,11 @@ namespace LogoYardimcisi
             return Hareketler.Where(x => x.Item1 == malzemeRef && x.Item2.Ref > sonGorulen).Select(x => x.Item2).OrderBy(x => x.Ref).Take(enCok).ToList();
         }
 
+        public List<MalzemeHareketi> MalzemeHareketleriGeriye(int malzemeRef, int once, int enCok)
+        {
+            return Hareketler.Where(x => x.Item1 == malzemeRef && (once == 0 || x.Item2.Ref < once)).Select(x => x.Item2).OrderByDescending(x => x.Ref).Take(enCok).ToList();
+        }
+
         public List<AlisFiyati> SonAlisFiyatlari(int malzemeRef, int enCok)
         {
             return AlisSatirlari.Where(x => x.Item1 == malzemeRef).Select(x => x.Item2).OrderByDescending(x => x.Tarih).ThenByDescending(x => x.Ref).Take(enCok).ToList();

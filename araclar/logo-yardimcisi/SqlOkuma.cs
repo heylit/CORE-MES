@@ -14,7 +14,7 @@ namespace LogoYardimcisi
     {
         public readonly string MalzemeRef, Malzeme, MalzemeRefIle, HizmetRefIle, MalzemeKodlari, MalzemeKartlari, StokToplamlari, MalzemeKullanimlari, MalzemeAra, CariAra, Cari, BirimSetleri, Ambarlar, Cariler, CariRef, Hizmet, Siparis, SiparisRefIle, SiparisSatirlari,
             MalKabul, Faturalar, Talep, TalepSatirlari, Karsilamalar, KarsilamaBul, SatisMusterisi, Teklif, TeklifRefIle, TeklifSatirlari,
-            MalzemeFisi, MalzemeFisiSatirlari, MalzemeHareketleri, SonAlisFiyatlari, SiparisIcerikBasligi, SiparisIcerikSatirlari, SiparisSatirBirimleri;
+            MalzemeFisi, MalzemeFisiSatirlari, MalzemeHareketleri, MalzemeHareketleriGeriye, SonAlisFiyatlari, SiparisIcerikBasligi, SiparisIcerikSatirlari, SiparisSatirBirimleri;
 
         // Rehberde kolon olarak geçmeyen, Logo'nun genel adlandırmasından alınanlar (VARSAYIM).
         public static readonly string[] Dogrulanmadi =
@@ -96,6 +96,10 @@ namespace LogoYardimcisi
             MalzemeHareketleri = "SELECT TOP (@enCok) L.LOGICALREF, L.DATE_, L.TRCODE, L.IOCODE, F.FICHENO, L.AMOUNT, L.SOURCEINDEX, U.CODE FROM " + d("STLINE") + " L LEFT JOIN "
                 + d("STFICHE") + " F ON F.LOGICALREF = L.STFICHEREF LEFT JOIN " + f("UNITSETL") + " U ON U.LOGICALREF = L.UOMREF"
                 + " WHERE L.STOCKREF = @malzeme AND L.LINETYPE = 0 AND L.CANCELLED = 0 AND L.LOGICALREF > @son ORDER BY L.LOGICALREF";
+            // 3204: aynı satırlar en yeniden geriye; @once 0 ise üst sınır yok.
+            MalzemeHareketleriGeriye = "SELECT TOP (@enCok) L.LOGICALREF, L.DATE_, L.TRCODE, L.IOCODE, F.FICHENO, L.AMOUNT, L.SOURCEINDEX, U.CODE FROM " + d("STLINE") + " L LEFT JOIN "
+                + d("STFICHE") + " F ON F.LOGICALREF = L.STFICHEREF LEFT JOIN " + f("UNITSETL") + " U ON U.LOGICALREF = L.UOMREF"
+                + " WHERE L.STOCKREF = @malzeme AND L.LINETYPE = 0 AND L.CANCELLED = 0 AND (@once = 0 OR L.LOGICALREF < @once) ORDER BY L.LOGICALREF DESC";
             SonAlisFiyatlari = "SELECT TOP (@enCok) L.LOGICALREF, L.DATE_, C.CODE, V.FICHENO, L.AMOUNT, U.CODE, L.PRICE, L.PRCURR, L.PRPRICE FROM " + d("STLINE") + " L JOIN "
                 + d("INVOICE") + " V ON V.LOGICALREF = L.INVOICEREF LEFT JOIN " + f("CLCARD") + " C ON C.LOGICALREF = L.CLIENTREF LEFT JOIN " + f("UNITSETL")
                 + " U ON U.LOGICALREF = L.UOMREF WHERE L.STOCKREF = @malzeme AND L.LINETYPE = 0 AND L.TRCODE = 1 AND L.CANCELLED = 0 AND L.INVOICEREF > 0"
@@ -286,8 +290,18 @@ namespace LogoYardimcisi
 
         public List<MalzemeHareketi> MalzemeHareketleri(int malzemeRef, int sonGorulen, int enCok)
         {
+            return HareketSatirlari(Sorgula(q.MalzemeHareketleri, P("@malzeme", malzemeRef), P("@son", sonGorulen), P("@enCok", enCok)));
+        }
+
+        public List<MalzemeHareketi> MalzemeHareketleriGeriye(int malzemeRef, int once, int enCok)
+        {
+            return HareketSatirlari(Sorgula(q.MalzemeHareketleriGeriye, P("@malzeme", malzemeRef), P("@once", once), P("@enCok", enCok)));
+        }
+
+        static List<MalzemeHareketi> HareketSatirlari(IEnumerable<object[]> satirlar)
+        {
             var l = new List<MalzemeHareketi>();
-            foreach (var s in Sorgula(q.MalzemeHareketleri, P("@malzeme", malzemeRef), P("@son", sonGorulen), P("@enCok", enCok)))
+            foreach (var s in satirlar)
             {
                 var x = new MalzemeHareketi();
                 x.Ref = Tam(s[0]);
