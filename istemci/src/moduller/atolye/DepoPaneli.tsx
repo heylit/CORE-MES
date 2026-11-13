@@ -21,7 +21,8 @@ interface Ozellikler {
 
 export function DepoPaneli({ salonIdler, depoYazimi }: Ozellikler) {
   const islemler = useOturum().data?.islemler;
-  const haritaYazar = islemler?.includes('atolye.yaz') === true;
+  // Haritanın kendi uçları raf için yerleşim (salon-yaz), göz için kalem (kalem-yaz) ister; ikisi birden yoksa sayfanın uçları kullanılır.
+  const haritaYazar = islemler?.includes('atolye.salon-yaz') === true && islemler.includes('atolye.kalem-yaz');
   const yazim = haritaYazar ? null : depoYazimi;
   const yazabilir = haritaYazar || yazim !== null;
   const fabrika = useFabrika();

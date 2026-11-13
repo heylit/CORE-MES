@@ -60,7 +60,7 @@ describe('atölye yeni bölüm -> stok deposu (gerçek PostgreSQL)', () => {
     assert.deepEqual(await depo(b.govde.id!), { kod: 'YB12', ad: 'YB1', aktif: true });
   });
 
-  test('stok.tanim olmayan (atolye.yaz) kişinin açtığı bölümde depo açılmaz; bölüm açılır', async () => {
+  test('stok.tanim olmayan (atolye.salon-yaz) kişinin açtığı bölümde depo açılmaz; bölüm açılır', async () => {
     const a = await salonAc('planlama', 'YB-PLN');
     assert.equal(a.durum, 200, JSON.stringify(a.govde));
     assert.equal(await depo(a.govde.id!), null);

@@ -100,6 +100,9 @@ export function YerlesimDuzenleyici({ salonId, bolumler, kapat, kaydedildi }: Oz
   // gönderir, bölümün öbür öğeleri görünür ama dokunulmaz (kart #1304).
   const depo = useDepoYazimi();
   const yalnizRaf = depo !== null && salonId !== null;
+  // 3165 a: fabrika planı fabrika-yaz, bölüm yerleşimi salon-yaz, kroki kroki-yaz ister; depo kipi sayfanın kendi uçlarıyla yazar.
+  const yerlesimYazar = yalnizRaf || oturum.data?.islemler.includes(fabrikaMi ? 'atolye.fabrika-yaz' : 'atolye.salon-yaz') === true;
+  const krokiYazar = oturum.data?.islemler.includes('atolye.kroki-yaz') === true;
   const dokunulur = (anahtar: string): boolean => !yalnizRaf || anahtar.startsWith('raf:');
   const yerlesim = salonId === null ? null : bolumler.find((b) => b.salon.id === salonId) ?? null;
   // Çizim Merkezi modeli yerleşim kaydına girmez: seçim hemen kaydedilir, panel burada izler.
@@ -134,10 +137,10 @@ export function YerlesimDuzenleyici({ salonId, bolumler, kapat, kaydedildi }: Oz
   const altlik = useKrokiAltligi(ortakKroki ? fabrikaKroki : kroki);
   const [krokiAcik, krokiAcikYaz] = useState(false);
   const [krokiGorunur, krokiGorunurYaz] = useState(true);
-  // Saydamlık herkes için tek değerdir (2122-2 b): sunucudan gelir, kaydırıcı bırakılınca haritayı düzenleyen (atolye.yaz,
-  // 2122-5 a) için saklanır. Yetkisi olmayan yalnız bu açılışta değiştirir.
+  // Saydamlık herkes için tek değerdir (2122-2 b): sunucudan gelir, kaydırıcı bırakılınca krokiyi düzenleyen (atolye.kroki-yaz,
+  // 2122-5 a, 3165 a) için saklanır. Yetkisi olmayan yalnız bu açılışta değiştirir.
   const krokiAyari = useKrokiAyari(!yalnizRaf);
-  const saydamlikYazar = oturum.data?.islemler.includes('atolye.yaz') === true;
+  const saydamlikYazar = oturum.data?.islemler.includes('atolye.kroki-yaz') === true;
   const [yerelSaydamlik, yerelSaydamlikYaz] = useState<number | null>(null);
   const saydamlik = yerelSaydamlik ?? (krokiAyari.data ? krokiAyari.data.saydamlik / 100 : SAYDAMLIK_YEDEGI);
   const saydamlikKaydet = useMutation({
@@ -790,7 +793,7 @@ export function YerlesimDuzenleyici({ salonId, bolumler, kapat, kaydedildi }: Oz
   const cubuk = (
       <div className="tc-atolye-duzen-cubuk" onKeyDown={tus}>
         <Dugme tur="birincil" simge="plus" aria-pressed={paletAcik} onClick={() => { paletAcikYaz((a) => !a); krokiAcikYaz(false); }}>Ekle</Dugme>
-        {!yalnizRaf && <Dugme simge="layers" aria-pressed={krokiAcik} onClick={() => { krokiAcikYaz((a) => !a); paletAcikYaz(false); }}>Kroki</Dugme>}
+        {!yalnizRaf && krokiYazar && <Dugme simge="layers" aria-pressed={krokiAcik} onClick={() => { krokiAcikYaz((a) => !a); paletAcikYaz(false); }}>Kroki</Dugme>}
         <Dugme simge="ruler" aria-pressed={arac?.tur === 'olc'} onClick={() => (arac?.tur === 'olc' ? aracBirak() : (aracBirak(), aracYaz({ tur: 'olc' })))}>Ölç</Dugme>
         <div className="tc-atolye-duzen-grup">
           <Dugme simge="back" aria-label="Geri al" disabled={gecmis.onceki.length === 0} onClick={() => gecmisYaz(geriAl)} />
@@ -817,7 +820,7 @@ export function YerlesimDuzenleyici({ salonId, bolumler, kapat, kaydedildi }: Oz
             <Dugme tur="tehlike" simge="alert" aria-expanded={bulguAcik} onClick={() => bulguAcikYaz((a) => !a)}>{bulgular.ihlaller.length} kural ihlali</Dugme>
           )}
           <Dugme onClick={kapatIste}>Vazgeç</Dugme>
-          <Dugme tur="birincil" simge="check" yukleniyor={kaydet.isPending} disabled={!degisti} onClick={() => kaydet.mutate()}>Kaydet</Dugme>
+          <Dugme tur="birincil" simge="check" yukleniyor={kaydet.isPending} disabled={!degisti || !yerlesimYazar} onClick={() => kaydet.mutate()}>Kaydet</Dugme>
         </div>
       </div>
   );
@@ -1055,7 +1058,7 @@ export function YerlesimDuzenleyici({ salonId, bolumler, kapat, kaydedildi }: Oz
       </OnayPenceresi>
       {kutuphane && (
         <Suspense fallback={null}>
-          <ModelKutuphanesi acik={kutuphane} kapat={() => kutuphaneYaz(false)} yazabilir />
+          <ModelKutuphanesi acik={kutuphane} kapat={() => kutuphaneYaz(false)} />
         </Suspense>
       )}
       </div>

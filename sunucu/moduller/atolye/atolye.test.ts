@@ -10,6 +10,7 @@ import type {
   SalonlarCevabi,
   MalzemeModelleriCevabi, YerlesmemisIstasyonlarCevabi, MerkezModeliBaglaCevabi, MerkezModelleriCevabi, SurumCakismasi, YerlesimCevabi, YerlesimGovdesi,
 } from '#paylasilan/sozlesme/atolye.ts';
+import { ATOLYE_YAZMA_ISLEMLERI } from '#paylasilan/islemler.ts';
 import { MODEL_PARCA_BAYT } from '#paylasilan/sozlesme/atolye.ts';
 import { ISTEK_KIMLIGI_BASLIGI } from '#paylasilan/istek-kimligi.ts';
 import { kaydaBagla, kaydaBagliBelgeler } from '../belge-merkezi/disari.ts';
@@ -202,10 +203,10 @@ describe('atolye (gerçek PostgreSQL)', () => {
     // Bu testlerin raf kodları rakamlıdır (R1) ve adresleri eski düzendedir: kurulum eski düzeni seçmiş gibi (varsayılan sıra numarası, 3177 b).
     await ortam.vt.sorgu(`INSERT INTO ayar (anahtar, deger, guncelleyen_kisi_id) VALUES ('atolye.raf-kodlama', '"bolme-kat-goz"', $1)`, [yoneticiId]);
     const operatorRolu = await ortam.vt.tek<{ id: number }>("SELECT id FROM rol WHERE kod = 'operator'");
-    // Hiçbir göç bir role atolye.yaz vermiyor (çekirdek isteği): bayraksız yazan için geçici rol kurulur.
+    // Bayraksız yazan için geçici rol kurulur; harita yazımı beş eylemdir (3165 a), rol beşini birden taşır.
     const yazanRol = await ortam.vt.tek<{ id: number }>("INSERT INTO rol (kod, ad) VALUES ('gecici_atolye', 'Geçici Atölye') RETURNING id");
     if (!operatorRolu || !yazanRol) throw new Error('rol kurulamadı');
-    await ortam.vt.sorgu("INSERT INTO rol_islemi (rol_id, islem) VALUES ($1, 'atolye.yaz')", [yazanRol.id]);
+    for (const islem of ATOLYE_YAZMA_ISLEMLERI) await ortam.vt.sorgu('INSERT INTO rol_islemi (rol_id, islem) VALUES ($1, $2)', [yazanRol.id, islem]);
     await girisliKisiEkle('operator1', operatorRolu.id);
     await girisliKisiEkle('planlamaci1', yazanRol.id);
     // Okuma sayfa yetkisiyle açılır: yalnız sayfa.atolye taşıyan rol ve sayfası olmayan bir yerleşik rol.
@@ -228,7 +229,7 @@ describe('atolye (gerçek PostgreSQL)', () => {
     await ortam?.kaldir();
   });
 
-  test('yetki: okuma uçları sayfa.atolye ya da atolye.yaz ister; her yazma ucu atolye.yaz ister, işlemi olmayan 403 alır ve kayıt değişmez', async () => {
+  test('yetki: okuma uçları sayfa.atolye ya da bir düzenleme eylemi ister; her yazma ucu kendi eylemini ister, işlemi olmayan 403 alır ve kayıt değişmez', async () => {
     const s = await salonKur();
     const r = await kaydet(s.id, bosYerlesim(s, { raflar: [raf()] }));
     assert.equal(r.durum, 200, JSON.stringify(r.govde));
@@ -363,7 +364,7 @@ describe('atolye (gerçek PostgreSQL)', () => {
       "SELECT modul, yetki, govde FROM denetim_kaydi WHERE yol = '/atolye/kroki-ayari/degistir' AND parametre->>'anahtar' = 'atolye.kroki-saydamligi' ORDER BY id DESC LIMIT 1",
     );
     assert.equal(kayit?.modul, 'atolye');
-    assert.equal(kayit?.yetki, 'atolye.yaz');
+    assert.equal(kayit?.yetki, 'atolye.kroki-yaz');
     assert.deepEqual(kayit?.govde, { eski: once, yeni });
   });
 
@@ -1533,7 +1534,7 @@ describe('atolye (gerçek PostgreSQL)', () => {
     assert.equal((await istek(null, 'GET', '/atolye/yerlesmemis-istasyonlar')).durum, 401);
   });
 
-  test('ATL-41 kareye atama (#1304): karede alan yoksa kare boyunda açılır, varsa türü değişir; istasyon kareye yerleşir ya da taşınır, başka bölümdeki taşınmaz; atolye.yaz ister', async () => {
+  test('ATL-41 kareye atama (#1304): karede alan yoksa kare boyunda açılır, varsa türü değişir; istasyon kareye yerleşir ya da taşınır, başka bölümdeki taşınmaz; atolye.salon-yaz ister', async () => {
     const s = await salonKur();
     const ata = (govde: unknown, cerez = yonetici) => istek<KayitCevabi & HataGovdesi>(cerez, 'POST', `/atolye/salonlar/${s.id}/hucre-ata`, govde);
     assert.equal((await ata({ surum: s.surum, hucre: 'C2', atama: { tur: 'alan', alanTuru: 'hurda' } }, gorur)).durum, 403);

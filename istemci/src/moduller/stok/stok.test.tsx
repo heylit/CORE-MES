@@ -1413,7 +1413,7 @@ describe('Zemin ızgarası (#1304)', () => {
   });
 
   it('haritayı düzenleyen kareye istasyon atar; atama haritaya yazılır, stok tanımı olan kişide ardından eşleme koşar', async () => {
-    const istekler = sunucuKur({ ...MUDUR, islemler: [...MUDUR.islemler, 'atolye.yaz'] }, {
+    const istekler = sunucuKur({ ...MUDUR, islemler: [...MUDUR.islemler, 'atolye.salon-yaz'] }, {
       ...yollar, 'GET /stok/sepet': () => json(200, { satirlar: [] }),
       'POST /atolye/salonlar/4/hucre-ata': () => json(200, {}), 'POST /stok/konumlar/haritadan-esle': () => json(200, { eklenen: 0, guncellenen: 0, kapatilan: 0, atlanan: [], koduDegisenler: [] }),
     });

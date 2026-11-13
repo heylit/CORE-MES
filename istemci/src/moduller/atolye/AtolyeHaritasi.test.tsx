@@ -15,8 +15,9 @@ import type { MakineDurumlariCevabi } from '#paylasilan/sozlesme/istasyonlar.ts'
 import type { SonOlaylarCevabi as ArkonSonOlaylarCevabi } from '#paylasilan/sozlesme/arkon.ts';
 import { BildirimSaglayici } from '../../ortak/arayuz/index.ts';
 import { AtolyeHaritasi } from './AtolyeHaritasi.tsx';
+import { DepoPaneli } from './DepoPaneli.tsx';
 
-const YAZAN: Kullanici = { id: 1, ad: 'Deneme Yönetici', islemler: ['sayfa.atolye', 'atolye.yaz'] };
+const YAZAN: Kullanici = { id: 1, ad: 'Deneme Yönetici', islemler: ['sayfa.atolye', 'atolye.salon-yaz', 'atolye.fabrika-yaz', 'atolye.kroki-yaz', 'atolye.model-yaz', 'atolye.kalem-yaz'] };
 const OKUYAN: Kullanici = { id: 2, ad: 'Deneme Operatör', islemler: ['sayfa.atolye'] };
 
 const SALON = { id: 1, kod: 'S1', ad: 'Deneme salonu', genislik: '40.00', derinlik: '24.00', hucreBoyu: '4.00', surum: 3, fabrika: { x: '0.00', z: '0.00', donus: '0.0' } };
@@ -540,6 +541,143 @@ describe('fabrika haritası', () => {
     await screen.findByRole('img', { name: 'Atölye planı' });
     expect(screen.queryByRole('button', { name: 'Bölümün yerleşimini düzenle' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Bölüm' })).toBeNull();
+  });
+
+  it('3165 a: yalnız kalem eylemi olan kişi yerleşim düzenleyemez ve bölüm ekleyemez; yalnız kroki eylemi olan düzenleyiciyi açar ama yerleşimi kaydedemez', async () => {
+    sunucuKur({ ...OKUYAN, islemler: ['sayfa.atolye', 'atolye.kalem-yaz'] });
+    const { unmount } = goster(<AtolyeHaritasi />);
+    await screen.findByRole('img', { name: 'Atölye planı' });
+    expect(screen.queryByRole('button', { name: 'Bölümün yerleşimini düzenle' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Bölüm' })).toBeNull();
+    unmount();
+
+    sunucuKur({ ...OKUYAN, islemler: ['sayfa.atolye', 'atolye.kroki-yaz'] });
+    goster(<AtolyeHaritasi />);
+    await screen.findByRole('img', { name: 'Atölye planı' });
+    expect(screen.queryByRole('button', { name: 'Bölüm' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Bölümün yerleşimini düzenle' }));
+    expect(await screen.findByRole('button', { name: 'Kroki' })).toBeTruthy();
+    expect((screen.getByRole('button', { name: 'Kaydet' }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  // 3165 a: beş eylemi birden taşıyanda eylemler yer değiştirse fark edilmez; burada her kişi tek eylem taşır.
+  const EYLEMLER = ['atolye.salon-yaz', 'atolye.fabrika-yaz', 'atolye.kroki-yaz', 'atolye.model-yaz', 'atolye.kalem-yaz'] as const;
+  const tekEylemli = (eylem: (typeof EYLEMLER)[number]): Kullanici => ({ ...OKUYAN, islemler: ['sayfa.atolye', eylem] });
+  const varMi = (ad: string): boolean => screen.queryByRole('button', { name: ad }) !== null;
+  // Düğmenin YOKLUĞU oturum yüklenmeden de doğrudur; önce oturumun ekrana işlemesi beklenir.
+  const oturumIslesin = (): Promise<void> => act(async () => { await new Promise((r) => setTimeout(r, 40)); });
+
+  it.each(EYLEMLER)('3165 a: yalnız %s taşıyan kişi bölüm görünümünde yalnız kendi düğmelerini görür', async (eylem) => {
+    sunucuKur(tekEylemli(eylem));
+    goster(<AtolyeHaritasi />);
+    await screen.findByRole('img', { name: 'Atölye planı' });
+    await oturumIslesin();
+    await waitFor(() => expect(varMi('Bölümün yerleşimini düzenle')).toBe(eylem === 'atolye.salon-yaz' || eylem === 'atolye.kroki-yaz'));
+    expect(varMi('Bölüm')).toBe(eylem === 'atolye.salon-yaz');
+  });
+
+  it.each(EYLEMLER)('3165 a: yalnız %s taşıyan kişi fabrika görünümünde düzenleyiciyi yalnız fabrika ya da kroki eylemiyle açar', async (eylem) => {
+    sunucuKur(tekEylemli(eylem), { bolumler: [YERLESIM, YERLESIM_B] });
+    goster(<AtolyeHaritasi />);
+    await screen.findByRole('img', { name: 'Fabrika planı' });
+    await oturumIslesin();
+    await waitFor(() => expect(varMi('Fabrika planını düzenle (bütün bölümler)')).toBe(eylem === 'atolye.fabrika-yaz' || eylem === 'atolye.kroki-yaz'));
+    expect(varMi('Bölüm')).toBe(eylem === 'atolye.salon-yaz');
+  });
+
+  it.each(EYLEMLER)('3165 a: yalnız %s taşıyan kişide "Görünüm ekle" yalnız kalem eylemiyle görünür', async (eylem) => {
+    sunucuKur(tekEylemli(eylem));
+    goster(<AtolyeHaritasi />, '/atolye/parcalar');
+    await screen.findByRole('table', { name: 'Parçalar ve malzemeler' });
+    expect(screen.getByRole('button', { name: '3B modeller' })).toBeTruthy();
+    await oturumIslesin();
+    await waitFor(() => expect(varMi('Görünüm ekle')).toBe(eylem === 'atolye.kalem-yaz'));
+  });
+
+  it('3165 a: düzenleyicide değişiklikten sonra Kaydet yalnız yerleşim eylemiyle açılır; Kroki düğmesi yalnız kroki eylemiyle görünür', async () => {
+    for (const [eylem, kaydeder, kroki] of [['atolye.salon-yaz', true, false], ['atolye.kroki-yaz', false, true]] as const) {
+      sunucuKur(tekEylemli(eylem));
+      const { unmount } = goster(<AtolyeHaritasi />);
+      fireEvent.click(await screen.findByRole('button', { name: 'Bölümün yerleşimini düzenle' }));
+      const duzen = await screen.findByRole('dialog', { name: 'Yerleşimi düzenle' });
+      expect((within(duzen).getByRole('button', { name: 'Kaydet' }) as HTMLButtonElement).disabled).toBe(true);
+      fireEvent.click(within(duzen).getByRole('button', { name: 'Ekle' }));
+      fireEvent.click(within(duzen).getByRole('button', { name: 'Palet rafı' }));
+      await oturumIslesin();
+      await waitFor(() => expect(within(duzen).queryByRole('button', { name: 'Kroki' }) !== null).toBe(kroki));
+      expect((within(duzen).getByRole('button', { name: 'Kaydet' }) as HTMLButtonElement).disabled, eylem).toBe(!kaydeder);
+      unmount();
+      cleanup();
+    }
+  });
+
+  it('3165 a: fabrika düzenleyicisinde değişiklikten sonra Kaydet fabrika eylemiyle açılır, kroki eylemiyle kapalı kalır', async () => {
+    for (const [eylem, kaydeder] of [['atolye.fabrika-yaz', true], ['atolye.kroki-yaz', false]] as const) {
+      sunucuKur(tekEylemli(eylem), { bolumler: [YERLESIM, YERLESIM_B] });
+      const { unmount } = goster(<AtolyeHaritasi />);
+      fireEvent.click(await screen.findByRole('button', { name: 'Fabrika planını düzenle (bütün bölümler)' }));
+      const duzen = await screen.findByRole('dialog', { name: 'Fabrika planını düzenle' });
+      fireEvent.click(within(duzen).getByRole('button', { name: 'Ekle' }));
+      fireEvent.click(within(duzen).getByRole('button', { name: 'Palet rafı' }));
+      await oturumIslesin();
+      await waitFor(() => expect((within(duzen).getByRole('button', { name: 'Kaydet' }) as HTMLButtonElement).disabled, eylem).toBe(!kaydeder));
+      unmount();
+      cleanup();
+    }
+  });
+
+  it('3165 a: depoda eski kaydın rafta görünümü yalnız kalem eylemiyle düzenlenir; öteki eylemlerde salt okunur', async () => {
+    for (const eylem of EYLEMLER) {
+      const cagrilar = sunucuKur(tekEylemli(eylem));
+      const { unmount } = goster(<AtolyeHaritasi />, '/atolye/depo');
+      const cephe = await screen.findByRole('group', { name: 'R1 bölme 1 önden' });
+      fireEvent.click(within(cephe).getByRole('button', { name: 'Kat 1 göz 1: stok bilgisi yok' }));
+      const panel = await screen.findByRole('region', { name: 'Göz R1-01-1-1' });
+      await oturumIslesin();
+      fireEvent.click(within(panel).getAllByTitle('Rafta görünümü (ambalaj ya da 3B model)')[0] as HTMLElement);
+      await oturumIslesin();
+      // Düzenleme formu model listesini ister; salt okunur metin istemez.
+      expect(cagrilar.some((c) => c.yol === '/atolye/modeller'), eylem).toBe(eylem === 'atolye.kalem-yaz');
+      unmount();
+      cleanup();
+    }
+  });
+
+  it('3165 a: gömülü depo paneli haritanın uçlarını yalnız salon ve kalem eylemi birlikteyse kullanır; biri eksikse sayfanın yazımına düşer', async () => {
+    const dene = async (islemler: Kullanici['islemler']) => {
+      const cagrilar = sunucuKur({ ...OKUYAN, islemler });
+      const depoYazimi = {
+        rafKaydet: vi.fn(() => Promise.resolve({ ...YERLESIM, salon: { ...YERLESIM.salon, surum: 4 }, uyarilar: [] } satisfies KayitCevabi)),
+        kalemYaz: vi.fn(), kalemSil: vi.fn(),
+      };
+      const { unmount } = goster(<DepoPaneli salonIdler={null} depoYazimi={depoYazimi} />);
+      fireEvent.click(await screen.findByRole('button', { name: 'Raf ekle ve düzenle' }));
+      const duzen = await screen.findByRole('dialog', { name: 'Yerleşimi düzenle' });
+      fireEvent.click(within(duzen).getByRole('button', { name: 'Ekle' }));
+      fireEvent.click(within(duzen).getByRole('button', { name: 'Palet rafı' }));
+      await oturumIslesin();
+      fireEvent.click(within(duzen).getByRole('button', { name: 'Kaydet' }));
+      await oturumIslesin();
+      const sonuc = { sayfa: depoYazimi.rafKaydet.mock.calls.length, harita: cagrilar.filter((c) => c.yol === '/atolye/salonlar/1/yerlesim-kaydet').length };
+      unmount();
+      cleanup();
+      return sonuc;
+    };
+    expect(await dene(['sayfa.atolye', 'atolye.salon-yaz'])).toEqual({ sayfa: 1, harita: 0 });
+    expect(await dene(['sayfa.atolye', 'atolye.kalem-yaz'])).toEqual({ sayfa: 1, harita: 0 });
+    expect(await dene(['sayfa.atolye', 'atolye.salon-yaz', 'atolye.kalem-yaz'])).toEqual({ sayfa: 0, harita: 1 });
+  });
+
+  it('3165 a: bölüm yokken "Bölüm ekle" yalnız salon eylemiyle görünür', async () => {
+    for (const eylem of EYLEMLER) {
+      sunucuKur(tekEylemli(eylem), { bolumler: [] });
+      const { unmount } = goster(<AtolyeHaritasi />);
+      expect(await screen.findByText('Henüz fabrika bölümü tanımlı değil.')).toBeTruthy();
+      await oturumIslesin();
+      expect(varMi('Bölüm ekle'), eylem).toBe(eylem === 'atolye.salon-yaz');
+      unmount();
+      cleanup();
+    }
   });
 
   it('bölüm yoksa boş durum; yazabilen bölüm ekleyebilir', async () => {

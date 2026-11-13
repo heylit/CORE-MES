@@ -5,6 +5,7 @@ import type { Model, ModelBirimi, ModelKaynakBicimi, YukariEkseni } from '#payla
 import { DurumKutusu, Dugme, Girdi, IsaretKutusu, OnayPenceresi, Pencere, Rozet, Secim, Tablo, useBildirim } from '../../ortak/arayuz/index.ts';
 import type { Sutun } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
+import { useOturum } from '../../ortak/veri/oturum.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { sayiMetni } from './kurallar.ts';
 import { dosyaAdindanAd, dosyaBicimi, mbMetni, sha256, varsayilanAyar } from './model-dosyasi.ts';
@@ -19,7 +20,6 @@ import { KalemGorunumuFormu } from './KalemGorunumu.tsx';
 interface Ozellikler {
   acik: boolean;
   kapat: () => void;
-  yazabilir: boolean;
 }
 
 interface Ayar {
@@ -100,7 +100,11 @@ function KalemBaglari({ model, yazabilir }: { model: Model; yazabilir: boolean }
   );
 }
 
-export function ModelKutuphanesi({ acik, kapat, yazabilir }: Ozellikler) {
+export function ModelKutuphanesi({ acik, kapat }: Ozellikler) {
+  // Model yazımı ve kalem bağları ayrı eylemlerdir (3165 a): düğmeler kendi eylemine bakar, asıl denetim uçtadır.
+  const islemler = useOturum().data?.islemler;
+  const modelYazar = islemler?.includes('atolye.model-yaz') === true;
+  const kalemYazar = islemler?.includes('atolye.kalem-yaz') === true;
   const istemci = useQueryClient();
   const { bildir } = useBildirim();
   const modeller = useModeller(acik);
@@ -275,15 +279,15 @@ export function ModelKutuphanesi({ acik, kapat, yazabilir }: Ozellikler) {
           {secili.tamam
             ? <ModelOnizleme glb={seciliGlb} ayar={ayar} />
             : <DurumKutusu durum="bos" mesaj="Yüklemesi yarım kalmış; silip yeniden yükleyin." />}
-          {yazabilir && secili.tamam && <AyarAlanlari ayar={ayar} degistir={(a) => ayarYaz((o) => ({ ...o, ...a }))} />}
+          {modelYazar && secili.tamam && <AyarAlanlari ayar={ayar} degistir={(a) => ayarYaz((o) => ({ ...o, ...a }))} />}
           {secili.tamam && (
-            <KalemBaglari model={modeller.data?.modeller.find((m) => m.id === secili.id) ?? secili} yazabilir={yazabilir} />
+            <KalemBaglari model={modeller.data?.modeller.find((m) => m.id === secili.id) ?? secili} yazabilir={kalemYazar} />
           )}
           <div className="tc-atolye-kart-eylem">
-            {yazabilir && secili.tamam && (
+            {modelYazar && secili.tamam && (
               <Dugme tur="birincil" simge="check" yukleniyor={ayarla.isPending} onClick={() => ayarla.mutate(secili)}>Ayarı kaydet</Dugme>
             )}
-            {yazabilir && <Dugme tur="tehlike" simge="trash" onClick={() => silinecekYaz(secili)}>Sil</Dugme>}
+            {modelYazar && <Dugme tur="tehlike" simge="trash" onClick={() => silinecekYaz(secili)}>Sil</Dugme>}
             <Dugme onClick={() => { seciliYaz(null); odakKoru(); }}>Kapat</Dugme>
           </div>
         </section>
@@ -295,7 +299,7 @@ export function ModelKutuphanesi({ acik, kapat, yazabilir }: Ozellikler) {
   return (
     <Pencere acik={acik} kapat={kapat} baslik="3B modeller" tur="yan">
       <div ref={govde} className="tc-atolye-modeller" tabIndex={-1}>
-        {yazabilir && (
+        {modelYazar && (
           <div className="tc-atolye-kart-eylem">
             <Dugme tur="birincil" simge="upload" onClick={() => dosyaGirdisi.current?.click()} disabled={yukleme?.asama === 'gonderiyor'}>Model yükle</Dugme>
             <input

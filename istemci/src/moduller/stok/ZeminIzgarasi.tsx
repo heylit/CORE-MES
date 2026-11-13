@@ -21,7 +21,7 @@ const ALAN_TURLERI = Object.keys(ALAN_TURU_ADI) as AlanTuru[];
 // istasyon, makine ve alan haritadaki simgesiyle görünür, kareye düşen stok konumları sayılır. Haritayı düzenleyen kareye
 // alan türü ya da istasyon atar; atama haritaya yazılır, ardından stok konumları haritadan eşlenir.
 export function ZeminIzgarasi() {
-  const atolyeYazar = useIslem('atolye.yaz');
+  const atolyeYazar = useIslem('atolye.salon-yaz');
   const tanimlar = useIslem('stok.tanim');
   const [salonId, setSalonId] = useState<number | null>(null);
   const [secili, setSecili] = useState<string | null>(null);

@@ -4,7 +4,7 @@ export const ATOLYE_SAYFALARI = [
   { yol: '/atolye', islem: 'sayfa.atolye', baslik: 'Fabrika Haritası', simge: 'target', grup: 'Üretim', sira: 50 },
 ] as const satisfies readonly SayfaTanimi[];
 
-// Haritanın dört bölümü aynı sayfa işlemidir; yazma düğmeleri ekranda atolye.yaz ister.
+// Haritanın dört bölümü aynı sayfa işlemidir; yazma düğmeleri ekranda beş eylemden kendi eylemini ister (salon, fabrika, kroki, model, kalem).
 export const ATOLYE_IKINCI_MENU = {
   kok: '/atolye',
   baslik: 'Fabrika Haritası',

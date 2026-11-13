@@ -225,6 +225,8 @@ export const ROL_MATRISI = {
     ad: 'Planlama Müdürü',
     islemler: [
       'arkon.kuyruk-sirala', 'arkon.planlama', 'arkon.yansima-oku', 'arkon.yansima-yeniden', 'atolye.yaz', 'belge-merkezi.oku',
+      // 3165 a: atolye.yaz beş eyleme bölündü; eski işlem ayrı kartla kalkana dek satırda kalır.
+      'atolye.salon-yaz', 'atolye.fabrika-yaz', 'atolye.kroki-yaz', 'atolye.model-yaz', 'atolye.kalem-yaz',
       'belge-merkezi.yayinla', 'belge-merkezi.yaz', 'cnc-kurulum.oku', 'cnc-kurulum.yaz', 'denetim-hazirlik.oku', 'etiket-merkezi.bas',
       'etiket-merkezi.oku', 'geometri.oku', 'idari-isler.arac-talebi-ac', 'idari-isler.talep-ac', 'ik.bordro-gordum', 'ik.devam-onay',
       'ik.izin-onay', 'ik.izin-talep', 'ik.pozisyon-onay', 'kisiler.oku', 'malzemeler.tanim-yaz', 'malzemeler.yaz', 'mesaj.oku',
@@ -252,6 +254,8 @@ export const ROL_MATRISI = {
     ad: 'Planlama ve Proje',
     islemler: [
       'arkon.kuyruk-sirala', 'arkon.planlama', 'arkon.yansima-oku', 'arkon.yansima-yeniden', 'atolye.yaz', 'belge-merkezi.oku',
+      // 3165 a: atolye.yaz beş eyleme bölündü; eski işlem ayrı kartla kalkana dek satırda kalır.
+      'atolye.salon-yaz', 'atolye.fabrika-yaz', 'atolye.kroki-yaz', 'atolye.model-yaz', 'atolye.kalem-yaz',
       'belge-merkezi.yayinla', 'belge-merkezi.yaz', 'cnc-kurulum.oku', 'cnc-kurulum.yaz', 'denetim-hazirlik.oku', 'durus-nedenleri.yaz',
       'etiket-merkezi.bas', 'etiket-merkezi.oku', 'geometri.oku', 'idari-isler.arac-talebi-ac', 'idari-isler.talep-ac', 'ik.bordro-gordum',
       'ik.izin-talep', 'kisiler.oku', 'malzemeler.tanim-yaz', 'malzemeler.yaz', 'mesaj.oku', 'mesaj.yaz', 'musteri-tedarikci.oku',

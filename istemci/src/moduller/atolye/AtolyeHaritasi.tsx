@@ -85,7 +85,13 @@ function aramaAnahtari(s: AramaSonucu, y: YerlesimCevabi | undefined): { anahtar
 
 export function AtolyeHaritasi() {
   const oturum = useOturum();
-  const yazabilir = oturum.data?.islemler.includes('atolye.yaz') === true;
+  // Harita yazımı beş eylemdir (3165 a): yerleşim düzenleyicisi salon, fabrika ya da kroki eylemiyle açılır; bölüm ekleme salonla,
+  // depo gözü ve kalem görünümleri kalemle. Ekran yalnız gizler; asıl denetim uçtadır.
+  const yetkiler = oturum.data?.islemler ?? [];
+  const salonYazar = yetkiler.includes('atolye.salon-yaz');
+  const krokiYazar = yetkiler.includes('atolye.kroki-yaz');
+  const fabrikaYazar = yetkiler.includes('atolye.fabrika-yaz');
+  const kalemYazar = yetkiler.includes('atolye.kalem-yaz');
   const { bildir } = useBildirim();
   const fabrika = useFabrika();
   const tumBolumler = useMemo(() => fabrika.data?.bolumler ?? [], [fabrika.data]);
@@ -118,6 +124,8 @@ export function AtolyeHaritasi() {
   const gecerliSecim = kapsamSecimi === 'fabrika' || tumBolumler.some((b) => b.salon.id === kapsamSecimi) ? kapsamSecimi : null;
   const kapsam = gecerliSecim ?? (tumBolumler.length > 1 ? 'fabrika' : tumBolumler[0]?.salon.id ?? null);
   const fabrikaGorunumu = kapsam === 'fabrika';
+  // Düzenleyiciyi açan: o kapsamın yerleşim eylemi ya da kroki eylemi (3165 a).
+  const yazabilir = (fabrikaGorunumu ? fabrikaYazar : salonYazar) || krokiYazar;
   const salonId = typeof kapsam === 'number' ? kapsam : null;
   const gorunen = useMemo(() => (kapsam === 'fabrika' ? tumBolumler : tumBolumler.filter((b) => b.salon.id === kapsam)), [tumBolumler, kapsam]);
   // Tek bölüm görünümünde o bölüm; fabrikada yok (öğenin bölümü seçimden bulunur).
@@ -354,7 +362,7 @@ export function AtolyeHaritasi() {
       )}
       {canliTaze ? <Rozet ton="tamam">Canlı</Rozet> : <Rozet ton="uyari">{canli.hata ? 'Durum alınamadı' : 'Bekleniyor'}</Rozet>}
       <Saat />
-      {yazabilir && <Dugme simge="plus" onClick={() => salonPenceresiYaz(true)}>Bölüm</Dugme>}
+      {salonYazar && <Dugme simge="plus" onClick={() => salonPenceresiYaz(true)}>Bölüm</Dugme>}
     </div>
   );
 
@@ -379,7 +387,7 @@ export function AtolyeHaritasi() {
     return (
       <Kart baslik="Fabrika Haritası" sag={ustSag}>
         <DurumKutusu durum="bos" mesaj="Henüz fabrika bölümü tanımlı değil.">
-          {yazabilir ? <Dugme tur="birincil" simge="plus" onClick={() => salonPenceresiYaz(true)}>Bölüm ekle</Dugme> : <p>Bölümü yerleşim yetkisi olan kişi ekler.</p>}
+          {salonYazar ? <Dugme tur="birincil" simge="plus" onClick={() => salonPenceresiYaz(true)}>Bölüm ekle</Dugme> : <p>Bölümü yerleşim yetkisi olan kişi ekler.</p>}
         </DurumKutusu>
         {salonEklendi}
       </Kart>
@@ -471,7 +479,7 @@ export function AtolyeHaritasi() {
               secim={rafOdak}
               secimYaz={rafOdakYaz}
               gozKalemleri={gozKalemListesi}
-              yazabilir={yazabilir}
+              yazabilir={kalemYazar}
               depodaAc={depodaAc}
             />
           )}
@@ -583,7 +591,7 @@ export function AtolyeHaritasi() {
               siradakiler={siradakiler}
               gozKalemleri={gozKalemListesi}
               tumEmirler={tumEmirler.data?.emirler ?? null}
-              yazabilir={yazabilir}
+              yazabilir={kalemYazar}
               depodaAc={depodaAc}
               ucBoyut={ucBoyut}
               vurguAdres={vurguAdres}
@@ -689,7 +697,7 @@ export function AtolyeHaritasi() {
           gozKalemleri={gozKalemListesi}
           hata={gozKalemleri.isError ? hataIletisi(gozKalemleri.error, 'Göz kalemleri alınamadı') : null}
           yenile={() => { void gozKalemleri.refetch(); }}
-          yazabilir={yazabilir}
+          yazabilir={kalemYazar}
           secim={depoSecimi}
           secimYaz={depoSecimiYaz}
           ucBoyut={ucBoyut}
@@ -705,7 +713,7 @@ export function AtolyeHaritasi() {
               emirler={tumEmirler.data?.emirler ?? []}
               emirHatasi={tumEmirler.isError}
               gozHatasi={gozKalemleri.isError}
-              yazabilir={yazabilir}
+              yazabilir={kalemYazar}
               gozeGit={(g) => depodaAc(g.raf.id, g.bolme, g.kat, g.goz)}
               istasyonaGit={istasyonaGit}
             />

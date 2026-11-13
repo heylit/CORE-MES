@@ -169,7 +169,7 @@ export function ParcaListesi({ gozKalemleri, gorunumler, emirler, emirHatasi, go
       )}
       {kutuphane && (
         <Suspense fallback={null}>
-          <ModelKutuphanesi acik={kutuphane} kapat={() => kutuphaneYaz(false)} yazabilir={yazabilir} />
+          <ModelKutuphanesi acik={kutuphane} kapat={() => kutuphaneYaz(false)} />
         </Suspense>
       )}
     </div>
