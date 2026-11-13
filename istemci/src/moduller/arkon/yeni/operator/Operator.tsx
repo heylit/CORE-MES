@@ -9,7 +9,7 @@ import { CAGRI_GERIYE_MS, acikCagri, cagriyiKur, type CagriSatiri } from '../../
 import { baslatmaUyarisi, uyariliBaslatmaIletisi } from '../../../../../../arkon/web/src/data/baslatma-uyarisi.ts';
 import {
   baslatmaGeriAlma, baslatmaGeriUygula, durumEsitle, durumEsitleme, durumIletisi, geriAlinacakIs, sayimGeriAlma, sayimGeriUygula, sayimKapaliNedeni,
-  type DurumEsitleme,
+  KUYRUK_BITTI_OLAYI, SAYIM_YENIDEN_YAZILDI_OLAYI, type DurumEsitleme, type SayimGeriAlma,
 } from '../../../../../../arkon/web/src/data/biten-is.ts';
 import { CAKISMA_ILETISI, CAKISMA_OLAYI } from '../../../../../../arkon/web/src/data/cakisma.ts';
 import { eskiCizim, eskiCizimGorevi, type MerkezDosyasi } from '../../../../ortak/cizim/cekirdek/cizim-merkezi.ts';
@@ -90,6 +90,7 @@ import {
 import { KaliteGorunumu } from './KaliteGorunumu.tsx';
 import { Ozetim, ozetimGorunur } from './Ozetim.tsx';
 import { EylemCubugu } from './EylemCubugu.tsx';
+import { BekleyenPenceresi, SayacCipi, bekleyenSayilari, kesinlesmeOzeti, useBekleyenIslemler, type Bekleyen, type CozumYolu } from './BekleyenIslemler.tsx';
 import { MalzemeCipi } from './MalzemeCipi.tsx';
 import { RotaAkisi } from '../../../uretim-emirleri/disari.ts';
 import { EmrinAdimlari, RotaSeridi, adimCizgisiKimligi, rotaAkisiAdimlari, useEmrinAdimlari } from './EmrinAdimlari.tsx';
@@ -228,10 +229,12 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
   sayRef.current = say;
   // TMI reddi ekranın kendi iletisiyle söylenir, köprünün aynı ret için verdiği genel bildirim kalkar. Reddedilen durum değişikliğinde
   // iyimser "kaydedildi" bildirimi de kalkar (sayımda kalkmaz: art arda sayımlarda son bildirim reddedilen sayımın olmayabilir).
-  const retSoyleRef = useRef<(ileti: string, msg: string | undefined, iyimserKalksin: boolean) => void>(() => undefined);
-  retSoyleRef.current = (ileti, msg, iyimserKalksin) => {
+  // Bağlantı yokken bekleyen işlemin reddi ayrı bildirim olmaz: "Karar bekliyor" olarak listede ve kesinleşme özetinde söylenir.
+  const retSoyleRef = useRef<(ileti: string, msg: string | undefined, iyimserKalksin: boolean, bekledi: boolean) => void>(() => undefined);
+  retSoyleRef.current = (ileti, msg, iyimserKalksin, bekledi) => {
     if (iyimserKalksin && sonIyimser.current !== null) { kaldir(sonIyimser.current); sonIyimser.current = null; }
     if (msg) tmiRetiniUstlen(msg);
+    if (bekledi) return;
     say(ileti, 'alert', 'stop');
   };
   useEffect(() => {
@@ -911,14 +914,15 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
   /* sunucu sayımı ya da başlatmayı reddetti: sayı ya da durum geri döner, ret metni gösterilir; geri alma yeni kayıt yazmaz */
   useEffect(() => {
     const f = (e: Event) => {
-      const detay = (e as CustomEvent<{ msg?: string }>).detail;
+      const detay = (e as CustomEvent<{ msg?: string; bekledi?: boolean }>).detail;
+      const bekledi = detay?.bekledi === true;
       // TMI işin hâlini bildirdiyse ekran ona eşitlenir (tek kaynak TMI). Yoksa başlatma geri alınır.
       const es = durumEsitleme(detay);
       if (es) {
         const a = live.current.o;
         if (a && a.state !== es.state && geriAlinacakIs(a, { ...es, pkgId: es.pkgId ?? null, alan: 'good', fark: 0 })) autoRef.current.state = true;
         islerYaz((l) => durumEsitle(l, es));
-        bip('nok'); retSoyleRef.current(`CORE kabul etmedi · ${detay?.msg || ''}`, detay?.msg, true);
+        bip('nok'); retSoyleRef.current(`CORE kabul etmedi · ${detay?.msg || ''}`, detay?.msg, true, bekledi);
         return;
       }
       const b = baslatmaGeriAlma(detay);
@@ -927,19 +931,62 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
         const a = live.current.o;
         if (a && a.state === 'running' && geriAlinacakIs(a, { ...b, alan: 'good', fark: 0 })) autoRef.current.state = true;
         islerYaz((l) => baslatmaGeriUygula(l, b));
-        bip('nok'); retSoyleRef.current(`İş başlamadı · ${detay?.msg || 'CORE kabul etmedi'}`, detay?.msg, true);
+        bip('nok'); retSoyleRef.current(`İş başlamadı · ${detay?.msg || 'CORE kabul etmedi'}`, detay?.msg, true, bekledi);
         return;
       }
       const g = sayimGeriAlma(detay);
       if (!g) return;
-      const a = live.current.o;
-      if (a && geriAlinacakIs(a, g) && Math.max(0, a[g.alan] + g.fark) !== a[g.alan]) autoRef.current.cnt = true;
-      islerYaz((l) => sayimGeriUygula(l, g));
-      bip('nok'); retSoyleRef.current(`Sayım işlenmedi, sayı geri alındı · ${detay?.msg || ''}`, detay?.msg, false);
+      sayimiEkranaUygula(g);
+      bip('nok'); retSoyleRef.current(`Sayım işlenmedi, sayı geri alındı · ${detay?.msg || ''}`, detay?.msg, false, bekledi);
     };
     window.addEventListener('arkon-rejected', f);
     return () => window.removeEventListener('arkon-rejected', f);
   }, []);
+  // Ekrandaki adede sunucunun kararını uygular; açık işin sayacı bu yüzden değişirse yeni sayım kaydı yazılmaz.
+  function sayimiEkranaUygula(g: SayimGeriAlma): void {
+    const a = live.current.o;
+    if (a && geriAlinacakIs(a, g) && Math.max(0, a[g.alan] + g.fark) !== a[g.alan]) autoRef.current.cnt = true;
+    islerYaz((l) => sayimGeriUygula(l, g));
+  }
+  // Yeniden denenen sayım kesinleşti (3167 b): ret anında geri alınan adet ekrana döner.
+  useEffect(() => {
+    const f = (e: Event) => {
+      const g = sayimGeriAlma((e as CustomEvent).detail);
+      if (g) sayimiEkranaUygula({ ...g, fark: -g.fark });
+    };
+    window.addEventListener(SAYIM_YENIDEN_YAZILDI_OLAYI, f);
+    return () => window.removeEventListener(SAYIM_YENIDEN_YAZILDI_OLAYI, f);
+  }, []);
+  // Bağlantı yokken bekleyen işlemler (3158 a): sayaç üstünde çip, pencerede liste; kuyruk boşalınca tek özet bildirimi.
+  const bekleyen = useBekleyenIslemler();
+  const [bkAcik, bkAcikYaz] = useState(false);
+  useEffect(() => {
+    const f = (e: Event) => {
+      const d = (e as CustomEvent<{ kesin?: number; karar?: number }>).detail;
+      const ozet = { kesin: d?.kesin ?? 0, karar: d?.karar ?? 0 };
+      const m = kesinlesmeOzeti(ozet);
+      if (m === null) return;
+      if (ozet.karar > 0) sayRef.current(m, 'alert', 'stop', { action: { l: 'Aç', fn: () => bkAcikYaz(true) } });
+      else sayRef.current(m, 'check', 'run');
+    };
+    window.addEventListener(KUYRUK_BITTI_OLAYI, f);
+    return () => window.removeEventListener(KUYRUK_BITTI_OLAYI, f);
+  }, []);
+  const bekleyenCoz = async (k: Bekleyen, y: CozumYolu, adet?: number): Promise<void> => {
+    const tamam = await depo.Log.kararCoz(k.anahtar, y);
+    if (!tamam && y === 'yeniden') say('Şimdi denenemedi; bağlantı gelince yeniden deneyin.', 'alert', 'hold');
+    if (tamam && y === 'duzelt' && adet !== undefined && adet > 0) {
+      // Düzeltilmiş adet yeni sayım kaydıdır: eski kaydın yeri, işi ve kartı korunur, kimliği ve zamanı yenidir.
+      const g = sayimGeriAlma({ kind: 'counts', row: k.satir });
+      if (g) {
+        const fark = (g.fark < 0 ? 1 : -1) * adet;
+        const { cid: _cid, at: _at, userId: _kisi, userName: _ad, ...yer } = k.satir;
+        sayimiEkranaUygula({ ...g, fark });
+        void depo.Log.add('counts', { ...yer, delta: fark, cycleMs: null });
+      }
+    }
+    bekleyen.yenile();
+  };
   useEffect(() => {
     const f = (e: Event) => sayRef.current(`${ILETI_GITMEDI} · ${(e as CustomEvent<{ msg?: string }>).detail?.msg || ''}`, 'alert', 'hold');
     window.addEventListener('arkon-ileti-gitmedi', f);
@@ -1351,12 +1398,17 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
   );
   const rotaSeridi = b || rotaAkisi ? null : <RotaSeridi v={emrinAdimlari} hata={emrinAdimHatasi} isEmriId={tmiIsEmriId(o.pkg)} ac={rotaAc} />;
   const ustDurum = rotaAkisi ?? (o.empty ? null : <DurumSeridi oz={oz} is={o} since={since} uyari={uyariVar ? () => ovYaz('bilgi') : null} />);
+  const bkPencere = <BekleyenPenceresi acik={bkAcik} kapat={() => bkAcikYaz(false)} liste={bekleyen.liste} kopuk={bekleyen.kopuk} coz={bekleyenCoz} />;
+  const bkSayi = bekleyenSayilari(bekleyen.liste);
   const sayac = (
+    <>
+    {dar ? null : <SayacCipi liste={bekleyen.liste} kopuk={bekleyen.kopuk} ac={() => bkAcikYaz(true)} />}
     <div className="tc-ay1-sayac">
       <SayacKadrani is={o} etiket={OT.cnt} birim={OT.unit} cevrim={cevrim} {...(hataliSayisi === undefined ? {} : { hatali: hataliSayisi })} duzelt={duzeltir ? () => { if (iyiSayimOk('prod.fix')) ovYaz('num'); } : null} />
       {/* 693: telefonda İyi +1 ve Hurda +1 alttaki eylem çubuğunda; sayacın altında yalnız düzeltme (−1) tuşları kalır. */}
       <SayimTuslari tuslar={dar && uretir ? tuslar.filter((t) => t.simge === 'minus' || t.simge === 'layers') : tuslar} />
     </div>
+    </>
   );
   const toplu = uretir ? (
     <TopluGiris key={siraAnahtari(o)} kalan={o.target - o.good} kapali={kapali} nedenler={hataliTmi ? hataliNedenleri(ayarlar.hurdaNedenleri, o.pkg) : ayarlar.hurdaNedenleri} hurdaEtiketi={hataliTmi ? 'Hatalı' : 'Hurda'}
@@ -1585,7 +1637,10 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
           })()}
           <CagriCipi cagri={call} ac={() => ovYaz('calltrack')} />
           {/* Darda saat yok; kopukluk ve kayıt riski operatörden saklanmasın diye durum üst çubukta kalır. */}
-          <BaglantiDurumu />
+          {/* Bekleyen işlem varken çip bağlantı rozetinin yerini alır; rozet kabuğa kuyruğu bildirmek için takılı kalır. */}
+          {bkSayi.bekliyor > 0 || bkSayi.karar > 0
+            ? <><span hidden><BaglantiDurumu /></span><SayacCipi liste={bekleyen.liste} kopuk={bekleyen.kopuk} ac={() => bkAcikYaz(true)} kisa /></>
+            : <BaglantiDurumu />}
           {!call && !pv ? <button type="button" className="tc-ay1-simge-dugme" onClick={() => ovYaz('call')} aria-label="Çağrı"><Simge ad="bell" /></button> : null}
           <button type="button" className="tc-ay1-simge-dugme" onClick={() => ovYaz('menu')} aria-label="Menü"><Simge ad="list" /></button>
         </header>
@@ -1632,6 +1687,7 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
           </Pencere>
         ) : null}
         {pencereler}
+        {bkPencere}
       </div>
     );
   }
@@ -1717,6 +1773,7 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
         </Pencere>
       ) : null}
       {pencereler}
+      {bkPencere}
     </div>
   );
 }

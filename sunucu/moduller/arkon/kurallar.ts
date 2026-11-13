@@ -1949,6 +1949,28 @@ export function yenidenDenemeReddi(sonuc: string, tur: string, sonrakiDurumYazil
   return null;
 }
 
+// Kişinin kendi reddedilen sayımını terminalden yeniden denemesi (3167 b): yalnız sayım, yalnız kaydedilip CORE'un reddettiği satır ve yalnız taze kayıt.
+// Aynı emirde ve pakette, aynı türde sonradan yazılmış ya da sırada bekleyen sayım varsa aynı parçalar yeniden sayılmış olabilir: eski sayım
+// yeniden denenirse adet iki kez yazılır (Risk 3167 D1, T2). Kimin saydığına bakılmaz; başka cihazdan sayılan da aynı parçalar olabilir.
+export const KENDI_SAYIM_YAS_SINIRI_MS = 24 * 3600e3;
+export const KENDI_YENIDEN_YALNIZ_SAYIM = 'Yalnız sayım yeniden denenir; başlatma, duraklatma ve bitirme yeniden denenmez.';
+export const KENDI_YENIDEN_YALNIZ_RET = 'Yalnız CORE\'un reddettiği sayım yeniden denenir.';
+export const KENDI_YENIDEN_SONRADAN_SAYILDI = 'Bu adımda sonradan yeniden sayım yapıldı; eski sayım yeniden denenmez. Gerekirse düzelterek gönderin.';
+export const KENDI_YENIDEN_ESKI = 'Bu sayım 24 saatten eski; yeniden denenmez. Gerekirse düzelterek gönderin.';
+export const KENDI_YENIDEN_EMIRSIZ = 'Sayımın emri yok; yeniden denenmez.';
+export const KENDI_YENIDEN_MESGUL = 'Emir şu an işleniyor; biraz sonra yeniden deneyin.';
+
+export function kendiSayimYenidenReddi(
+  s: { tur: string; sonuc: string; emirId: number | null; zaman: number }, sonradanSayildi: boolean, simdi: number,
+): string | null {
+  if (s.tur !== 'counts') return KENDI_YENIDEN_YALNIZ_SAYIM;
+  if (s.sonuc !== 'reddedildi') return KENDI_YENIDEN_YALNIZ_RET;
+  if (s.emirId === null) return KENDI_YENIDEN_EMIRSIZ;
+  if (simdi - s.zaman > KENDI_SAYIM_YAS_SINIRI_MS) return KENDI_YENIDEN_ESKI;
+  if (sonradanSayildi) return KENDI_YENIDEN_SONRADAN_SAYILDI;
+  return null;
+}
+
 export interface SiradakiYansima {
   ertelendi: boolean;
   komut: YansimaKomutu['komut'] | null;

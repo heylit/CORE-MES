@@ -424,6 +424,37 @@ export function yansimaKilitle(db: Db, id: number, yasak: KonumKodlari, izinli: 
   );
 }
 
+// Kişinin kendi sayım kaydının yansıması (3167 b): yalnız kaydın kişisi bulur (başkasının kaydı yok sayılır), konum süzgeci listedekiyle aynıdır.
+// Satır işlem sonuna kadar kilitlenir: eşzamanlı ikinci istek ilkinin sonucunu görür.
+export interface KendiSayimi { id: number; sonuc: string; emir_id: number | null; kayit_id: number; tur: string; zaman: Date; paket_id: string | null; tur_kodu: string | null }
+export function kendiSayimiKilitle(db: Db, cid: string, kisiId: number, yasak: KonumKodlari, izinli: KonumKodlari | null): Promise<KendiSayimi | null> {
+  return db.tek<KendiSayimi>(
+    `SELECT y.id::float8 AS id, y.sonuc, y.emir_id, y.kayit_id::float8 AS kayit_id, k.tur, k.zaman, k.paket_id, k.govde->>'kind' AS tur_kodu
+       FROM arkon_tmi_yansima y JOIN arkon_kayit k ON k.id = y.kayit_id
+      WHERE k.cid = $1 AND k.tur = 'counts' AND y.kisi_id = $9 AND ${KONUM_KOSULU} FOR UPDATE OF y`,
+    [cid, ...yansimaParametreleri({ sonuc: null, yasak, izinli, gizli: [], gizlileriGoster: true }).slice(1, 8), kisiId],
+  );
+}
+
+// Aynı emirde ve pakette, aynı türde bu kayıttan sonra yazılmış ya da sırada bekleyen sayım var mı (kim saydığına bakılmaz).
+export async function sonradanSayildi(db: Db, emirId: number, kayitId: number, paketId: string | null, turKodu: string | null): Promise<boolean> {
+  return (await db.tek<{ var: boolean }>(
+    `SELECT EXISTS (SELECT 1 FROM arkon_tmi_yansima y JOIN arkon_kayit k ON k.id = y.kayit_id
+                     WHERE y.emir_id = $1 AND y.kayit_id > $2 AND y.sonuc IN ('yazildi', 'bekliyor') AND k.tur = 'counts'
+                       AND k.paket_id IS NOT DISTINCT FROM $3 AND k.govde->>'kind' IS NOT DISTINCT FROM $4) AS var`,
+    [emirId, kayitId, paketId, turKodu],
+  ))?.var === true;
+}
+
+// Reddedilmiş sayım satırını yeni gibi kuyruğa alır; yalnız "reddedildi" sayım satırına dokunur ("hatali" yolu ayrıdır: yansimaYenidenKuyruga).
+export async function reddedilenSayimiKuyruga(db: Db, id: number): Promise<boolean> {
+  const satir = await db.tek<{ id: number }>(
+    `UPDATE arkon_tmi_yansima y SET sonuc = 'bekliyor', son_hata = NULL, neden = NULL, son_deneme = NULL
+       FROM arkon_kayit k
+      WHERE y.id = $1 AND k.id = y.kayit_id AND k.tur = 'counts' AND y.sonuc = 'reddedildi' AND y.emir_id IS NOT NULL RETURNING y.id::float8 AS id`, [id]);
+  return satir !== null;
+}
+
 // Aynı emrin bu kayıttan sonraki durum kayıtlarından biri TMI'ye yazıldı mı.
 export async function sonrakiDurumYazildi(db: Db, emirId: number, kayitId: number): Promise<boolean> {
   return (await db.tek<{ var: boolean }>(

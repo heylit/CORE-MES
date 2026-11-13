@@ -22,21 +22,22 @@ export function BaglantiSeridi() {
 
   if (!kopuk && !geriGeldi && !bekleyenVar && ulasan === 0) return null;
 
-  // Kuyruktaki kayıt sonucu bilinmeyen değildir: kendiliğinden gider. Kullanıcıya söylenen, yeniden girmemesidir.
-  const kuyrukMetni = kuyrukta > 0 ? ` ${String(kuyrukta)} kayıt bu cihazda bekliyor; bağlantı gelince kendiliğinden gönderilir, yeniden girmeyin.` : '';
+  // Kuyruktaki işlem sonucu bilinmeyen değildir: kendiliğinden gider ve sunucu kuralıyla kesinleşir. Kullanıcıya söylenen, çalışmayı
+  // sürdürmesi ve yeniden girmemesidir; kaç işlemin beklediğini işlemin yapıldığı ekran gösterir.
+  const kuyrukMetni = kuyrukta > 0 ? ' Yaptıklarınız bu cihazda bekliyor; bağlantı gelince kesinleşir, yeniden girmeyin.' : '';
   let mesaj: string;
   if (kopuk) {
     mesaj = bilinmeyenYazma > 0
       ? `Sunucuya ulaşılamıyor, yeniden deneniyor. ${sayiMetni(bilinmeyenYazma)} sunucuya ulaşıp ulaşmadığı bilinmiyor.${kuyrukMetni}`
       : kuyrukta > 0
-        ? `Sunucuya ulaşılamıyor, yeniden deneniyor.${kuyrukMetni}`
+        ? 'Bağlantı yok. Çalışmaya devam edin; yaptıklarınız bu cihazda bekliyor, bağlantı gelince kesinleşir.'
         : 'Sunucuya ulaşılamıyor (güncelleme ya da bağlantı kesintisi). Yeniden deneniyor; çalışmaya devam edebilirsiniz.';
   } else if (bilinmeyenYazma > 0) {
     mesaj = `Bağlantı geri geldi. Kopukken gönderilen ${sayiMetni(bilinmeyenYazma)} durumunu yeniden girmeden önce ekranda denetleyin.${kuyrukMetni}`;
   } else if (kuyrukta > 0) {
-    mesaj = `Bağlantı geri geldi. Bekleyen ${String(kuyrukta)} kayıt gönderiliyor; yeniden girmeyin.`;
+    mesaj = 'Bağlantı geldi. Bekleyen işlemler kesinleşiyor; yeniden girmeyin.';
   } else if (ulasan > 0) {
-    mesaj = `Bağlantı geri geldi. Kopukken bekleyen ${String(ulasan)} kayıt sunucuya ulaştı; reddedilen olursa ayrıca bildirilir.`;
+    mesaj = 'Bağlantı geldi. Bekleyen işlemler sonuçlandı.';
   } else {
     mesaj = 'Bağlantı geri geldi. Ekrandaki bilgiler yenilendi.';
   }

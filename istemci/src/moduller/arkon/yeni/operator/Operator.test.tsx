@@ -40,6 +40,34 @@ describe('A1 Üretim Terminali', () => {
     await waitFor(() => { expect(sonuclar(istekler).some((r) => r.state === 'running')).toBe(true); }, { timeout: 10000 });
   }, 40000);
 
+  it('3158/3167: yeniden yazılan sayım adedi ekrana döner, yeni kayıt yazmaz; bekleyen işlemin reddi ayrı bildirim olmaz, özet bildirimle söylenir', async () => {
+    const istekler = sunucuKur(ISTASYONLU, sunucu());
+    arkonAc('/uretim-terminali');
+    const d = await ekran();
+    expect(await within(d).findByRole('heading', { name: /IE-DENEME-1/ })).toBeTruthy();
+    fireEvent.click(within(screen.getByRole('group', { name: 'İş durumu' })).getByRole('button', { name: /Başlat/ }));
+    await waitFor(() => { expect(olaylar(istekler).some((e) => e.state === 'running')).toBe(true); }, { timeout: 10000 });
+    const sayimlar = () => istekler.filter((i) => i.yol === '/arkon/kayitlar/counts/ekle').flatMap((i) => (i.govde as { satirlar?: unknown[] }).satirlar ?? []);
+    const sayi = () => document.querySelector('.tc-ay1-kadran-sayi')?.textContent;
+    fireEvent.click(screen.getAllByRole('button', { name: /İyi \+1/ })[0]!);
+    await waitFor(() => { expect(sayimlar()).toHaveLength(1); }, { timeout: 10000 });
+    expect(sayi()).toBe('1');
+    const satir = (delta: number) => ({ kind: 'good', delta, orderNo: PAKET.no, pkgId: PAKET.id });
+
+    window.dispatchEvent(new CustomEvent('arkon-sayim-yeniden-yazildi', { detail: { kind: 'counts', cid: 'orn-1', row: satir(3) } }));
+    await waitFor(() => { expect(sayi()).toBe('4'); });
+    window.dispatchEvent(new CustomEvent('arkon-rejected', { detail: { kind: 'counts', cid: 'orn-2', row: satir(2), msg: 'ORN ret', bekledi: true } }));
+    await waitFor(() => { expect(sayi()).toBe('2'); });
+    await new Promise((r) => setTimeout(r, 700));
+    expect(sayimlar(), 'ekrana dönen ve geri alınan adet yeni kayıt yazmaz').toHaveLength(1);
+    expect(screen.queryByText(/Sayım işlenmedi/)).toBeNull();
+
+    window.dispatchEvent(new CustomEvent('arkon-kuyruk-bitti', { detail: { kesin: 1, karar: 1 } }));
+    expect(await screen.findByText('1 işlem kesinleşti, 1 işlem karar bekliyor')).toBeTruthy();
+    // İşin son hâli belgeye yazılmadan test bitmesin: gecikmeli yazım sonraki testin isteklerine düşer.
+    await waitFor(() => { expect(sonuclar(istekler).some((r) => (r as { good?: number }).good === 2)).toBe(true); }, { timeout: 10000 });
+  }, 40000);
+
   it('üretim yetkisi olmayan kişi yalnız görür: sayım ve durum düğmeleri yok, yazma gitmez (reddedilen)', async () => {
     const istekler = sunucuKur(ISTASYONLU, sunucu([{ kimlik: 'perms', surum: 1, govde: { v: { operator: ['page.op'] } } }]));
     arkonAc('/uretim-terminali');

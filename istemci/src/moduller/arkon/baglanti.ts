@@ -3,7 +3,7 @@
 import type {
   AnomaliCevabi, AnomaliIstatistikCevabi, AnomaliOlaylariCevabi, EksikIslerCevabi, EksikIslerimCevabi, OperatorOzetiCevabi, ArkonBenCevabi, ArkonKisi, ArkonKisilerCevabi, ArkonMalzemelerCevabi, BelgeCevabi, BelgeYazCevabi, BelgelerCevabi,
   CalismaDevralRedAyrintisi, EksikDosyaCevabi, IletilerCevabi, IslerimCevabi, KayitEkleCevabi, KayitlarCevabi, MakineAyrimlariCevabi, MakineDoluRedAyrintisi, MerkezBelgelerCevabi, MerkezEkleCevabi, MerkezKontrolCevabi,
-  RefakatKartlariCevabi,
+  RefakatKartlariCevabi, YansimaYenidenCevabi,
 } from '#paylasilan/sozlesme/arkon.ts';
 import type { CagriEkiplerimCevabi } from '#paylasilan/sozlesme/bildirim.ts';
 import type { IstasyonSecimiCevabi } from '#paylasilan/sozlesme/istasyonlar.ts';
@@ -206,6 +206,10 @@ export async function cevir(istemci: Istemci, g: IstekGirdisi, cikis?: () => voi
     return tamam((await istemci.get<MerkezKontrolCevabi>(`/arkon/cizim-merkezi/kontrol?dosyalar=${encodeURIComponent(g.sorgu.get('d') ?? '')}`)).durumlar);
   }
 
+  // Kişinin kendi reddedilen sayımı (3167 b): sonuç cevaptadır, ret ekranda listede gösterilir.
+  if (ilk === 'log' && ikinci === 'counts' && ucuncu !== undefined && p[3] === 'yeniden-dene' && p.length === 4 && g.yontem === 'POST') {
+    return tamam(await istemci.post<YansimaYenidenCevabi>(`/arkon/kayitlar/counts/${yolParcasi(ucuncu)}/yeniden-dene`, {}));
+  }
   if (ilk === 'log' && ikinci !== undefined && g.yontem === 'POST') {
     const govde = govdeyiOku(g.govde);
     const satirlar = (Array.isArray(govde) ? govde : [govde]).filter((s): s is Record<string, unknown> => !!s && typeof s === 'object');
@@ -341,6 +345,8 @@ export function reddiBildirimi(yontem: string, yol: string, cevap: Cevap): strin
   if (SESSIZ_DURUMLAR.has(cevap.durum) && !(cevap.durum === 409 && ilk === 'log')) return null;
   if (ilk === undefined || NE_YAZILDI[ilk] === undefined) return null;
   if (ilk === 'log' && ikinci === 'audit') return null;
+  // Yeniden denemenin reddi "Bekleyen işlemlerim" listesinde nedeniyle görünür; ayrıca bildirim çıkmaz.
+  if (ilk === 'log' && yol.split('/').filter(Boolean).at(-1) === 'yeniden-dene') return null;
   if (ilk === 'blob' && ikinci === 'missing') return null;
   const hata = (cevap.govde as { error?: unknown } | undefined)?.error;
   const neden = typeof hata === 'string' && hata !== '' ? hata : `HTTP ${cevap.durum}`;

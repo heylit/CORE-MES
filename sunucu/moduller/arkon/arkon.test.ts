@@ -272,7 +272,7 @@ describe('arkon (gerçek PostgreSQL)', () => {
     assert.deepEqual(uclar.find((u) => u.yol === '/arkon/son-olaylar')?.yetki, { biri: ['sayfa.arkon', 'sayfa.uretim-terminali', 'sayfa.kuyruk', 'sayfa.atolye'] });
     for (const u of okuma) assert.deepEqual(u.yetki, { biri: ['sayfa.arkon', 'sayfa.uretim-terminali', 'sayfa.kuyruk'] }, u.yol);
     const yazma = uclar.filter((u) => u.yontem === 'POST' && !u.yol.startsWith('/arkon/tmi-yansimalari') && !u.yol.startsWith('/arkon/kuyruk-sira/') && !u.yol.startsWith('/arkon/hazirlik-maddeleri'));
-    assert.equal(yazma.length, 11);
+    assert.equal(yazma.length, 12);
     // Kuyruk sırası (kart 527) Arkon rolüne değil ayrı işleme bağlıdır.
     for (const u of uclar.filter((x) => x.yol.startsWith('/arkon/kuyruk-sira/'))) assert.equal(u.yetki, 'arkon.kuyruk-sirala', u.yol);
     for (const u of yazma) assert.deepEqual(u.yetki, { biri: ['sayfa.arkon', 'sayfa.uretim-terminali', 'sayfa.kuyruk'] }, u.yol);
@@ -280,7 +280,7 @@ describe('arkon (gerçek PostgreSQL)', () => {
     await vt().sorgu("INSERT INTO rol_islemi (rol_id, islem) VALUES ($1, 'arkon.operator')", [rol?.id]);
     await girisliKisiEkle('sayfasiz1', 'gecici_sayfasiz');
     const sayfasiz = await girisCerezi('sayfasiz1');
-    const ornekYol = (yol: string) => yol.replace(':depo', 'pkgs').replace(':kimlik', 'x').replace(':tur', 'events').replace(':ozet', 'c'.repeat(64)).replace(':belgeId', '1').replace(/\/goruntu$/, '/goruntu?imza=r1.a.net.b1.hi.14171c');
+    const ornekYol = (yol: string) => yol.replace(':depo', 'pkgs').replace(':kimlik', 'x').replace(':tur', 'events').replace(':cid', 'x').replace(':ozet', 'c'.repeat(64)).replace(':belgeId', '1').replace(/\/goruntu$/, '/goruntu?imza=r1.a.net.b1.hi.14171c');
     for (const u of okuma) assert.equal((await istek(sayfasiz, 'GET', ornekYol(u.yol))).durum, 403, u.yol);
     for (const u of yazma) assert.equal((await istek(sayfasiz, 'POST', ornekYol(u.yol), {})).durum, 403, u.yol);
     // Karşı örnek: Arkon MES sayfası olmayan ama Üretim Terminali sayfası olan operatör okur.
@@ -917,6 +917,7 @@ describe('arkon (gerçek PostgreSQL)', () => {
     { yontem: 'POST', yol: '/arkon/belgeler/results/yetki-2/sil', govde: { kaynak: 'c9', taban: 0 } },
     { yontem: 'POST', yol: '/arkon/kayitlar/events/ekle', govde: { satirlar: [{ cid: 'yetki-1', state: 'running' }], kaynak: 'c9' } },
     { yontem: 'GET', yol: '/arkon/kayitlar/events' },
+    { yontem: 'POST', yol: '/arkon/kayitlar/counts/yok-cid/yeniden-dene' },
     { yontem: 'POST', yol: '/arkon/dosyalar/eksikler', govde: { ozetler: [OZET] } },
     { yontem: 'POST', yol: `/arkon/dosyalar/${OZET}/parca`, govde: { sira: 0, toplam: 2, veri: 'QQ==' } },
     { yontem: 'GET', yol: `/arkon/dosyalar/${OZET}` },

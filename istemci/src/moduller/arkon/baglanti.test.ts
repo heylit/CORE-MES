@@ -220,6 +220,13 @@ describe('Arkon sözleşmesi -> CORE uçları', () => {
     expect(cagrilar.filter((c) => c.yol.endsWith('/ekle'))).toHaveLength(2);
   });
 
+  it('kayıt: kendi reddedilen sayımını yeniden deneme CORE ucuna gider, kimlik yolda kodlanır (3167 b)', async () => {
+    const { istemci, cagrilar } = istemciKur({ 'POST /arkon/kayitlar/counts/a%2Fb/yeniden-dene': { sonuc: 'yazildi', neden: null } });
+    const cevap = await cevapla(istemci, istek('POST', `/log/counts/${encodeURIComponent('a/b')}/yeniden-dene`, 'c=x'));
+    expect(cevap.govde).toEqual({ sonuc: 'yazildi', neden: null });
+    expect(cagrilar.map((c) => c.yol)).toEqual(['/arkon/kayitlar/counts/a%2Fb/yeniden-dene']);
+  });
+
   it('kayıt: sınıra ulaşan liste satırları döner ve kullanıcıya söylenir', async () => {
     const { istemci } = istemciKur({ 'GET /arkon/kayitlar/events': { satirlar: [{ cid: 'a' }, { cid: 'b' }], kesildi: true } });
     const okunan = await cevapla(istemci, istek('GET', '/log/events', 'limit=2'));
@@ -320,6 +327,7 @@ describe('sessiz kayıp: reddedilen yazma CORE bildirimiyle söylenir', () => {
     expect(reddiBildirimi('POST', '/log/audit', r(400))).toBeNull();
     expect(reddiBildirimi('POST', '/login', r(403))).toBeNull();
     expect(reddiBildirimi('POST', '/blob/missing', r(400))).toBeNull();
+    expect(reddiBildirimi('POST', '/log/counts/c1/yeniden-dene', r(409, 'Bu adımda sonradan yeniden sayım yapıldı.'))).toBeNull();
   });
 
   // 12.9: kaydın 409'u sürüm çakışması değil TMI kuralı reddidir (ör. çizimin yeni revizyonu yayında); Arkon'un kendi iletisi kendiliğinden

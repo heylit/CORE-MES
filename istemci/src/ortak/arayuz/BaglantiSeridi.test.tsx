@@ -62,26 +62,25 @@ describe('BaglantiSeridi', () => {
     expect(baglantiDurumu().kopuk).toBe(false);
   });
 
-  it('kopukken kuyrukta bekleyen kaydi yeniden girmemesini soyler', () => {
+  it('kopukken calismaya devam edilmesini ve yapilanin cihazda bekledigini soyler; sayi vermez', () => {
     render(<BaglantiSeridi />);
     act(() => { ulasilamadi(null); kuyrukKaynagi('arkon').bildir(2); });
     const metin = screen.getByRole('alert').textContent;
-    expect(metin).toContain('2 kayıt bu cihazda bekliyor');
-    expect(metin).toContain('yeniden girmeyin');
+    expect(metin).toBe('Bağlantı yok. Çalışmaya devam edin; yaptıklarınız bu cihazda bekliyor, bağlantı gelince kesinleşir.');
     expect(metin).not.toContain('bilinmiyor');
   });
 
-  it('kuyruk bosalmadan kapanmaz; bosalinca ulasan sayiyi soyler ve kendiliginden kapanir', () => {
+  it('kuyruk bosalmadan kapanmaz; bosalinca sonuclandigini soyler ve kendiliginden kapanir', () => {
     vi.useFakeTimers();
     render(<BaglantiSeridi />);
     const k = kuyrukKaynagi('arkon');
     act(() => { ulasilamadi(null); k.bildir(1); });
     act(() => { cevapGeldi(); });
     act(() => { vi.advanceTimersByTime(GERI_GELDI_SURESI_MS * 2); });
-    expect(screen.getByRole('status').textContent).toContain('Bekleyen 1 kayıt gönderiliyor');
+    expect(screen.getByRole('status').textContent).toContain('Bekleyen işlemler kesinleşiyor; yeniden girmeyin');
     expect(screen.queryByRole('button', { name: 'Bağlantı uyarısını kapat' })).toBeNull();
     act(() => { k.bildir(0); });
-    expect(screen.getByRole('status').textContent).toContain('1 kayıt sunucuya ulaştı');
+    expect(screen.getByRole('status').textContent).toContain('Bekleyen işlemler sonuçlandı');
     act(() => { vi.advanceTimersByTime(GERI_GELDI_SURESI_MS); });
     expect(screen.queryByRole('status')).toBeNull();
   });
