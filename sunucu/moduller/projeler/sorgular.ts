@@ -15,14 +15,15 @@ export interface ProjeSatiri {
   butce_para_birimi: string | null;
   baslangic: string | null;
   bitis: string | null;
+  bitis_bagli: boolean;
   aciklama: string | null;
   olusturma: string;
   guncelleme: string | null;
   surum: number;
 }
 
-const SECIM = `SELECT p.id, p.kod, p.ad, p.durum, p.firma_id, p.siparis_id, p.butce_tutari, p.butce_para_birimi, p.baslangic, p.bitis, p.aciklama,
-                      ${zamanMetni('p.olusturma')} AS olusturma, ${zamanMetni('p.guncelleme')} AS guncelleme, p.surum
+const SECIM = `SELECT p.id, p.kod, p.ad, p.durum, p.firma_id, p.siparis_id, p.butce_tutari, p.butce_para_birimi, p.baslangic, p.bitis, p.bitis_bagli,
+                      p.aciklama, ${zamanMetni('p.olusturma')} AS olusturma, ${zamanMetni('p.guncelleme')} AS guncelleme, p.surum
                  FROM projeler_proje p`;
 
 export type ProjeSiralamasi = 'kod' | 'ad' | 'baslangic';
@@ -97,26 +98,38 @@ export interface ProjeAlanlari {
   butceParaBirimi: string | null;
 }
 
-export async function projeEkle(db: Db, kod: string, a: ProjeAlanlari, kisiId: number, siparisId: number | null = null): Promise<number> {
+export async function projeEkle(
+  db: Db, kod: string, a: ProjeAlanlari, kisiId: number, siparisId: number | null = null, bitisBagli = false,
+): Promise<number> {
   const satir = await db.tek<{ id: number }>(
-    `INSERT INTO projeler_proje (kod, ad, firma_id, baslangic, bitis, aciklama, olusturan_id, siparis_id, butce_tutari, butce_para_birimi)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id`,
-    [kod, a.ad, a.firmaId, a.baslangic, a.bitis, a.aciklama, kisiId, siparisId, a.butceTutari, a.butceParaBirimi],
+    `INSERT INTO projeler_proje (kod, ad, firma_id, baslangic, bitis, aciklama, olusturan_id, siparis_id, butce_tutari, butce_para_birimi, bitis_bagli)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING id`,
+    [kod, a.ad, a.firmaId, a.baslangic, a.bitis, a.aciklama, kisiId, siparisId, a.butceTutari, a.butceParaBirimi, bitisBagli],
   );
   if (satir === null) throw new Error('Proje eklenemedi');
   return satir.id;
 }
 
-// Sürüm tutmazsa satır dönmez; çağıran surumluGuncelle ile 404/409 ayırır.
+// Sürüm tutmazsa satır dönmez; çağıran surumluGuncelle ile 404/409 ayırır. 3244 b: bitiş elle değişirse sipariş termini bağı kopar.
 export function projeGuncelle(
   db: Db, id: number, a: ProjeAlanlari & { durum: ProjeDurumu }, surum: number, kisiId: number,
 ): Promise<{ id: number } | null> {
   return db.tek<{ id: number }>(
     `UPDATE projeler_proje
         SET ad = $2, firma_id = $3, baslangic = $4, bitis = $5, aciklama = $6, durum = $7,
+            bitis_bagli = bitis_bagli AND bitis IS NOT DISTINCT FROM $5::date,
             butce_tutari = $10, butce_para_birimi = $11, guncelleyen_id = $8, guncelleme = now(), surum = surum + 1
       WHERE id = $1 AND surum = $9 RETURNING id`,
     [id, a.ad, a.firmaId, a.baslangic, a.bitis, a.aciklama, a.durum, kisiId, surum, a.butceTutari, a.butceParaBirimi],
+  );
+}
+
+// 3244 b: bitiş siparişin terminine yeniden bağlanır; sürüm tutmazsa satır dönmez.
+export function projeBitisBagla(db: Db, id: number, termin: string, surum: number, kisiId: number): Promise<{ id: number } | null> {
+  return db.tek<{ id: number }>(
+    `UPDATE projeler_proje SET bitis = $2, bitis_bagli = true, guncelleyen_id = $4, guncelleme = now(), surum = surum + 1
+      WHERE id = $1 AND surum = $3 RETURNING id`,
+    [id, termin, surum, kisiId],
   );
 }
 

@@ -34,7 +34,9 @@ function FirmaSecimi({ firmaId, firmaAd, degistir }: { firmaId: string; firmaAd:
 }
 
 // Yeni proje onaylı siparişle açılır (224); müşteri siparişten gelir. Seçici ilk 20 onaylı siparişi getirir.
-function SiparisSecimi({ siparisId, hata, degistir }: { siparisId: string; hata: string | undefined; degistir: (id: string) => void }) {
+function SiparisSecimi({ siparisId, hata, degistir }: {
+  siparisId: string; hata: string | undefined; degistir: (id: string, termin: string | null) => void;
+}) {
   const [ara, araYaz] = useState('');
   const gecikmeli = useDeferredValue(ara.trim());
   const siparisler = useQuery({
@@ -51,10 +53,19 @@ function SiparisSecimi({ siparisId, hata, degistir }: { siparisId: string; hata:
         etiket="Sipariş" required value={siparisId} bosSecenek="Onaylı sipariş seçin" secenekler={secenekler}
         ipucu="Müşteri siparişten gelir."
         hata={hata ?? (siparisler.isError ? hataIletisi(siparisler.error, 'Siparişler alınamadı') : undefined)}
-        onChange={(e) => { degistir(e.target.value); }}
+        onChange={(e) => {
+          const id = e.target.value;
+          degistir(id, siparisler.data?.siparisler.find((x) => String(x.id) === id)?.termin ?? null);
+        }}
       />
     </>
   );
+}
+
+function bitisIpucu(proje: Proje | null, bitis: string, termin: string | null): string | undefined {
+  if (proje === null) return termin !== null && bitis === termin ? 'Sipariş termininden; termin değişince bitiş de değişir.' : undefined;
+  if (!proje.bitisBagli) return undefined;
+  return bitis === proje.bitis ? 'Sipariş terminine bağlı; değiştirirseniz bağ kopar.' : 'Bitiş değişti; sipariş termini bağı kopacak.';
 }
 
 export function ProjeFormu({ proje, kapat, acildi }: { proje: Proje | null; kapat: () => void; acildi?: (p: Proje) => void }) {
@@ -65,6 +76,8 @@ export function ProjeFormu({ proje, kapat, acildi }: { proje: Proje | null; kapa
   const [firmaId, firmaYaz] = useState(proje?.firmaId === null || proje === null ? '' : String(proje.firmaId));
   const [siparisId, siparisYaz] = useState('');
   const [siparisHatasi, siparisHatasiYaz] = useState<string | undefined>(undefined);
+  // 3244 b: yeni projede bitiş seçilen siparişin termininden gelir; termine eşit kalan bitiş sipariş terminine bağlı açılır.
+  const [termin, terminYaz] = useState<string | null>(null);
   const [baslangic, baslangicYaz] = useState(proje?.baslangic ?? '');
   const [bitis, bitisYaz] = useState(proje?.bitis ?? '');
   const [aciklama, aciklamaYaz] = useState(proje?.aciklama ?? '');
@@ -122,13 +135,18 @@ export function ProjeFormu({ proje, kapat, acildi }: { proje: Proje | null; kapa
           onChange={(e) => { kodYaz(e.target.value.toUpperCase()); }}
         />
         <Girdi etiket="Ad" required value={ad} maxLength={200} onChange={(e) => { adYaz(e.target.value); }} />
-        {proje === null && <SiparisSecimi siparisId={siparisId} hata={siparisHatasi} degistir={(id) => { siparisYaz(id); siparisHatasiYaz(undefined); }} />}
+        {proje === null && <SiparisSecimi siparisId={siparisId} hata={siparisHatasi} degistir={(id, t) => {
+          siparisYaz(id);
+          siparisHatasiYaz(undefined);
+          if (bitis === '' || bitis === termin) bitisYaz(t ?? '');
+          terminYaz(t);
+        }} />}
         {proje !== null && proje.siparisId === null && <FirmaSecimi firmaId={firmaId} firmaAd={proje.firmaAd} degistir={firmaYaz} />}
         {proje !== null && proje.siparisId !== null && (
           <Girdi etiket="Müşteri" value={proje.firmaAd ?? '—'} disabled ipucu="Siparişe bağlı projenin müşterisi siparişten gelir." />
         )}
         <Girdi etiket="Başlangıç" type="date" value={baslangic} onChange={(e) => { baslangicYaz(e.target.value); }} />
-        <Girdi etiket="Bitiş" type="date" value={bitis} onChange={(e) => { bitisYaz(e.target.value); }} />
+        <Girdi etiket="Bitiş" type="date" value={bitis} ipucu={bitisIpucu(proje, bitis, termin)} onChange={(e) => { bitisYaz(e.target.value); }} />
         {maliyetGorur && (
           <>
             <Girdi

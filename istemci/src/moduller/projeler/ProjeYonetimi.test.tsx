@@ -15,7 +15,7 @@ const MUDUR: Kullanici = { id: 4, ad: 'Deneme Müdür', islemler: ['sayfa.projel
 const OKUR: Kullanici = { id: 2, ad: 'Deneme Okur', islemler: ['sayfa.projeler'] };
 
 const proje = (durum: Proje['durum']): Proje => ({
-  id: 1, kod: 'PRJ.01', ad: 'Deneme projesi', durum, firmaId: null, firmaAd: null, siparisId: null, baslangic: null, bitis: null,
+  id: 1, kod: 'PRJ.01', ad: 'Deneme projesi', durum, firmaId: null, firmaAd: null, siparisId: null, baslangic: null, bitis: null, bitisBagli: false,
   aciklama: null, olusturma: '2026-10-12T09:00:00+03:00', guncelleme: null, surum: 1, statu: null, ilerleme: null,
 });
 const TAS: KilometreTasi = {

@@ -3,7 +3,7 @@ import { describe, test } from 'node:test';
 import { projeKoduSemasi, statuYazGovdesi } from '#paylasilan/sozlesme/projeler.ts';
 import {
   BITTI_GERCEK_BITIS, FIRMA_PASIF, FIRMA_SIPARISTEN, FIRMA_YOK, GERCEK_BASLANGIC_GEREKLI, GERCEK_SIRASI, PROJE_KAPALI, SERBEST_STATU_KAPALI,
-  SIPARIS_ONAYSIZ, STATU_ETKIN_DEGIL, STATU_YOK, TABAN_AYNI, aramaKalibi, butce, firmaReddi, gorevDurumuDuzelt, oncekiDonguVarMi,
+  BASLANGIC_TERMINDEN_SONRA, KAPALI_BAGLANMAZ, SIPARISSIZ_BAGLANMAZ, SIPARIS_ONAYSIZ, STATU_ETKIN_DEGIL, acilisBitisi, bitisBaglaReddi, STATU_YOK, TABAN_AYNI, aramaKalibi, butce, firmaReddi, gorevDurumuDuzelt, oncekiDonguVarMi,
   projeAcikReddi, projeIlerlemesi, siparisFirmasiReddi, siparisReddi, statuReddi, tabanReddi, YENIDEN_ACMA_GEREKCESI, yenidenAcmaMi, yenidenAcmaReddi,
 } from './kurallar.ts';
 
@@ -105,4 +105,20 @@ test('PRJ-17 yeniden açma: yalnız kapanmıştan aktife geçişte gerekçe iste
   assert.equal(yenidenAcmaReddi('iptal', 'tamamlandi', null), null);
   assert.equal(yenidenAcmaMi('iptal', 'aktif'), true);
   assert.equal(yenidenAcmaMi('aktif', 'aktif'), false);
+});
+
+test('PRJ-18 açılış bitişi: boş ya da termine eşit bağlı; başka tarih bağsız; başlangıç terminden sonraysa boş ve bağsız', () => {
+  assert.deepEqual(acilisBitisi(null, null, '2026-11-15'), { bitis: '2026-11-15', bagli: true });
+  assert.deepEqual(acilisBitisi('2026-11-15', '2026-11-01', '2026-11-15'), { bitis: '2026-11-15', bagli: true });
+  assert.deepEqual(acilisBitisi('2026-11-20', null, '2026-11-15'), { bitis: '2026-11-20', bagli: false });
+  assert.deepEqual(acilisBitisi(null, '2026-11-16', '2026-11-15'), { bitis: null, bagli: false });
+});
+
+test('PRJ-18 bağla: siparişsiz, kapanmış ve başlangıcı terminden sonra olan proje bağlanmaz', () => {
+  const p = { siparisId: 5, durum: 'aktif', baslangic: null };
+  assert.equal(bitisBaglaReddi(p, '2026-11-15'), null);
+  assert.equal(bitisBaglaReddi({ ...p, siparisId: null }, null), SIPARISSIZ_BAGLANMAZ);
+  assert.equal(bitisBaglaReddi({ ...p, durum: 'tamamlandi' }, '2026-11-15'), KAPALI_BAGLANMAZ);
+  assert.equal(bitisBaglaReddi({ ...p, baslangic: '2026-11-16' }, '2026-11-15'), BASLANGIC_TERMINDEN_SONRA);
+  assert.equal(bitisBaglaReddi({ ...p, baslangic: '2026-11-15' }, '2026-11-15'), null);
 });

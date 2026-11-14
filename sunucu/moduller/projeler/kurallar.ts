@@ -124,3 +124,21 @@ export function projeIlerlemesi(gorevler: readonly { durum: string; ilerleme: nu
   }
   return agirlik === 0 ? null : Math.round(toplam / agirlik);
 }
+
+// PRJ-18 (3244 b): siparişten açılan projede bitiş girilmezse ya da siparişin terminine eşitse bitiş termindir ve ona bağlı kalır;
+// başka tarih girilirse bağsızdır. Başlangıç terminden sonraysa bitiş boş ve bağsız kalır (PRJ-04 bozulmaz).
+export function acilisBitisi(girilen: string | null, baslangic: string | null, termin: string): { bitis: string | null; bagli: boolean } {
+  if (girilen !== null && girilen !== termin) return { bitis: girilen, bagli: false };
+  if (baslangic !== null && baslangic > termin) return { bitis: girilen, bagli: false };
+  return { bitis: termin, bagli: true };
+}
+
+export const SIPARISSIZ_BAGLANMAZ = 'Bu proje siparişten açılmadı; bitiş bir termine bağlanamaz.';
+export const KAPALI_BAGLANMAZ = 'Kapanmış projenin bitişi termine bağlanmaz.';
+export const BASLANGIC_TERMINDEN_SONRA = 'Başlangıç sipariş termininden sonra; bitiş termine bağlanamaz.';
+// PRJ-18: bitiş yalnız siparişten açılan aktif projede ve başlangıç terminden sonra değilse yeniden bağlanır.
+export function bitisBaglaReddi(p: { siparisId: number | null; durum: string; baslangic: string | null }, termin: string | null): string | null {
+  if (p.siparisId === null || termin === null) return SIPARISSIZ_BAGLANMAZ;
+  if (p.durum !== 'aktif') return KAPALI_BAGLANMAZ;
+  return p.baslangic !== null && p.baslangic > termin ? BASLANGIC_TERMINDEN_SONRA : null;
+}
