@@ -867,6 +867,35 @@ describe('rotalar (gerçek PostgreSQL)', () => {
     await assert.rejects(vt().tx((db) => db.sorgu('DELETE FROM rota_patlamis_rota WHERE patlatma_id = $1', [emir.patlatmaId])));
   });
 
+  test('3250 aşama 1: adım, talimat ve iş emri operasyonun gizli kimliğini taşır; tek ve çok katmanlı emirde kimlik rotadaki (malzeme, OP) çiftinindir', async () => {
+    const ust = await mamulAc();
+    const alt = await mamulAc();
+    const hm = await hammaddeAc();
+    await yururlugeAlinmisRota(alt, [yeniAdim({ bilesenler: [{ malzemeId: hm, miktar: 1, fireYuzde: 0 }] })]);
+    const id = await yururlugeAlinmisRota(ust, [yeniAdim({ bilesenler: [{ malzemeId: hm, miktar: 1, fireYuzde: 0 }] }), yeniAdim({ bilesenler: [{ malzemeId: alt, miktar: 2, fireYuzde: 0 }] })]);
+    assert.equal((await istek(c.cam, 'POST', `/rota/urunler/${ust}/talimat-yaz`, { opNo: 20, metin: 'Kimlik talimatı', okunanSurum: null })).statusCode, 200);
+    const kimlik = async (malzeme: number, op: number): Promise<number> => {
+      const r = await vt().tx((db) => db.tek<{ id: number }>('SELECT id FROM rota_op_numarasi WHERE malzeme_id = $1 AND op_no = $2', [malzeme, op]));
+      assert.ok(r, `${String(malzeme)}/${String(op)} numarası yok`);
+      return r.id;
+    };
+    const adimlar = await vt().tx((db) => db.sorgu<{ malzeme: number; op: number; operasyon: number }>(
+      'SELECT malzeme_id AS malzeme, op_no AS op, operasyon_id AS operasyon FROM rota_adimi WHERE revizyon_id = $1 ORDER BY sira', [id]));
+    for (const a of adimlar) assert.equal(a.operasyon, await kimlik(a.malzeme, a.op));
+    const talimat = await vt().tx((db) => db.tek<{ operasyon: number }>('SELECT operasyon_id AS operasyon FROM rota_talimati WHERE malzeme_id = $1 AND op_no = 20', [ust]));
+    assert.equal(talimat?.operasyon, await kimlik(ust, 20));
+    const isEmirleri = async (emir: number) => vt().tx((db) => db.sorgu<{ op: number; malzeme: number | null; kaynak: number | null; operasyon: number | null }>(
+      `SELECT op_no AS op, dugum_malzeme_id AS malzeme, kaynak_op_no AS kaynak, operasyon_id AS operasyon
+         FROM uretim_emirleri_is_emri WHERE uretim_emri_id = $1 ORDER BY sira`, [emir]));
+    const yol = `/rota/revizyonlar/${id}/emre-kopyala`;
+    const tek = await tamam<{ uretimEmriId: number }>(c.planlama, 'POST', yol, { projeId: denemeProjeId, adet: 3, teslim: null, taslak: true });
+    assert.deepEqual((await isEmirleri(tek.uretimEmriId)).map((x) => x.operasyon), [await kimlik(ust, 10), await kimlik(ust, 20)]);
+    const cok = await tamam<{ uretimEmriId: number }>(c.planlama, 'POST', yol, { projeId: denemeProjeId, adet: 3, teslim: null, taslak: true, cokKatmanli: true });
+    const satirlar = await isEmirleri(cok.uretimEmriId);
+    // Alt düğüm emirde 1010 numarasını alır; kimlik rotadaki (alt, 10) çiftinindir, emir içi numaranın değil.
+    assert.deepEqual(satirlar.map((x) => [x.op, x.operasyon]), [[1010, await kimlik(alt, 10)], [10, await kimlik(ust, 10)], [20, await kimlik(ust, 20)]]);
+  });
+
   test('1476-F: patlamış rota önizlemesi açılışla aynı numarayı verir, kayıt yazmaz; kesirli kök başına adet engeldir; emri açamayan göremez', async () => {
     const ust = await mamulAc();
     const alt = await mamulAc();
