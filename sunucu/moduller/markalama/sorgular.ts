@@ -9,6 +9,7 @@ export interface TanimSatiri {
   id: number;
   malzemeId: number;
   opNo: number;
+  operasyonId: number | null;
   seriSablonu: string;
   sayacKapsami: SayacKapsami;
   baslangicSirasi: number;
@@ -20,7 +21,7 @@ export interface TanimSatiri {
   degismeZamani: string;
 }
 
-const TANIM_SUTUNLARI = `id, malzeme_id AS "malzemeId", op_no AS "opNo", seri_sablonu AS "seriSablonu", sayac_kapsami AS "sayacKapsami",
+const TANIM_SUTUNLARI = `id, malzeme_id AS "malzemeId", op_no AS "opNo", operasyon_id AS "operasyonId", seri_sablonu AS "seriSablonu", sayac_kapsami AS "sayacKapsami",
   baslangic_sirasi AS "baslangicSirasi", dogrulama, aktif, model_belge_id AS "modelBelgeId", model_revizyon AS "modelRevizyon", surum,
   ${zamanMetni('degisme_zamani')} AS "degismeZamani"`;
 
@@ -44,15 +45,20 @@ export interface TanimYazimi {
   modelRevizyon: string | null;
 }
 
-export async function tanimEkle(db: Db, malzemeId: number, opNo: number, y: TanimYazimi, kisiId: number): Promise<number> {
+// Operasyonu bilinen tanımda op_no operasyonun kayıtlı numarasıdır (eski (malzeme, op_no) tetikleyicisi aynı kimliği bulur) ve aynı
+// operasyonun ikinci tanımı numara yeniden dizilmiş olsa da eklenmez (null döner). Yürürlükte rotası olmayan malzemede numara olduğu gibi yazılır.
+export async function tanimEkle(
+  db: Db, malzemeId: number, opNo: number, operasyon: { id: number; kayitliOpNo: number } | null, y: TanimYazimi, kisiId: number,
+): Promise<number | null> {
   const satir = await db.tek<{ id: number }>(
     `INSERT INTO markalama_tanimi (malzeme_id, op_no, seri_sablonu, sayac_kapsami, baslangic_sirasi, dogrulama, model_belge_id,
        model_revizyon, degistiren_kisi_id)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id`,
-    [malzemeId, opNo, y.seriSablonu, y.sayacKapsami, y.baslangicSirasi, y.dogrulama, y.modelBelgeId, y.modelRevizyon, kisiId],
+     SELECT $1, $2, $3, $4, $5, $6, $7, $8, $9
+      WHERE $10::int IS NULL OR NOT EXISTS (SELECT 1 FROM markalama_tanimi WHERE operasyon_id = $10)
+     RETURNING id`,
+    [malzemeId, operasyon?.kayitliOpNo ?? opNo, y.seriSablonu, y.sayacKapsami, y.baslangicSirasi, y.dogrulama, y.modelBelgeId, y.modelRevizyon, kisiId, operasyon?.id ?? null],
   );
-  if (satir === null) throw new Error('markalama_tanimi eklenemedi');
-  return satir.id;
+  return satir?.id ?? null;
 }
 
 // Sürüm tutmazsa satır dönmez; çağıran surumluGuncelle ile 404/409 ayırır.

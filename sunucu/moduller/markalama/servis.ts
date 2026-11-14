@@ -25,11 +25,28 @@ const TANIM_YOK = 'Markalama tanımı bulunamadı.';
 const BIRIM_YOK = 'Seri no bulunamadı.';
 const BIRIM_LISTE_SINIRI = 500;
 
+// Tanım rota operasyonuna bağlıdır (3250 b). Rota aynı kattadır, markalama onu ithal edemez (ADR 0006): yürürlükteki revizyonun
+// operasyonlarını (bugünkü numara, numara defterindeki kayıtlı numara) rota verir, bağı sunucu/kablolama.ts kurar. Bağ yoksa tanım
+// yazıldığı numarayla gösterilir ve eklenir. Yetki denetlemez.
+export interface MarkalamaOperasyonu { malzemeId: number; operasyonId: number; opNo: number; kayitliOpNo: number }
+export type OperasyonCozucusu = (db: Db, malzemeIdleri: readonly number[]) => Promise<readonly MarkalamaOperasyonu[]>;
+let operasyonlar: OperasyonCozucusu | null = null;
+// Önceki çözücüyü döner (test kurup geri koyar).
+export function operasyonCozucusuKaydet(cozucu: OperasyonCozucusu | null): OperasyonCozucusu | null {
+  const onceki = operasyonlar;
+  operasyonlar = cozucu;
+  return onceki;
+}
+const yururlukteOperasyonlar = async (db: Db, malzemeIdleri: readonly number[]): Promise<readonly MarkalamaOperasyonu[]> =>
+  operasyonlar === null || malzemeIdleri.length === 0 ? [] : operasyonlar(db, malzemeIdleri);
+
 async function tanimlariKur(db: Db, satirlar: s.TanimSatiri[]): Promise<MarkalamaTanimi[]> {
   const alanlar = await s.alanlariOku(db, satirlar.map((t) => t.id));
   const malzemeler = await malzemeOzetleri(db, satirlar.map((t) => t.malzemeId));
+  // Tanım operasyona bağlıdır; gösterilen numara rotanın bugünkü numarasıdır (3250 b), rotada olmayan operasyonda yazıldığı numara.
+  const guncel = new Map((await yururlukteOperasyonlar(db, [...new Set(satirlar.map((t) => t.malzemeId))])).map((o): [number, number] => [o.operasyonId, o.opNo]));
   return satirlar.map((t) => ({
-    id: t.id, malzemeId: t.malzemeId, malzemeKodu: malzemeler.get(t.malzemeId)?.kod ?? null, opNo: t.opNo,
+    id: t.id, malzemeId: t.malzemeId, malzemeKodu: malzemeler.get(t.malzemeId)?.kod ?? null, opNo: (t.operasyonId === null ? undefined : guncel.get(t.operasyonId)) ?? t.opNo,
     seriSablonu: t.seriSablonu, sayacKapsami: t.sayacKapsami, baslangicSirasi: t.baslangicSirasi, dogrulama: t.dogrulama, aktif: t.aktif,
     model: t.modelBelgeId === null || t.modelRevizyon === null ? null : { belgeId: t.modelBelgeId, revizyon: t.modelRevizyon },
     alanlar: alanlar.get(t.id) ?? [], surum: t.surum, degismeZamani: t.degismeZamani,
@@ -99,10 +116,14 @@ export async function tanimEkle(db: Db, kullanici: Kullanici, g: TanimEkleGovdes
   await ayniSablonDenetle(db, g.malzemeId, g.seriSablonu, null);
   await modelDenetle(db, g.malzemeId, g.model);
   await seriUzunluguDenetle(db, g.malzemeId, g);
+  const o = (await yururlukteOperasyonlar(db, [g.malzemeId])).find((x) => x.opNo === g.opNo);
+  const operasyon = o ? { id: o.operasyonId, kayitliOpNo: o.kayitliOpNo } : null;
+  const ADIM_TANIMLI = 'Bu rota adımının markalama tanımı zaten var.';
   const id = await kisitKorumali(
-    { markalama_tanimi_adim_tekil: 'Bu rota adımının markalama tanımı zaten var.' },
-    () => s.tanimEkle(db, g.malzemeId, g.opNo, yazim, kullanici.id),
+    { markalama_tanimi_adim_tekil: ADIM_TANIMLI },
+    () => s.tanimEkle(db, g.malzemeId, g.opNo, operasyon, yazim, kullanici.id),
   );
+  if (id === null) throw cakisma(ADIM_TANIMLI);
   await s.alanlariYaz(db, id, g.alanlar);
   return tanimGetir(db, id);
 }

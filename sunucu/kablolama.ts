@@ -13,7 +13,7 @@ import { istasyonAcildiDinle, istasyonSilinecekDinle } from './moduller/istasyon
 import { istasyonCozucusuKaydet as bildirimIstasyonCozucusu } from './moduller/bildirim/disari.ts';
 import { makineOeeleri } from './moduller/oee/disari.ts';
 import { coreOeeCozucusuKaydet as smartesCoreOeeCozucusu } from './moduller/smartes/disari.ts';
-import { malzemeKartiIzleri as markalamaKartIzleri } from './moduller/markalama/disari.ts';
+import { malzemeKartiIzleri as markalamaKartIzleri, markalamaOperasyonCozucusu } from './moduller/markalama/disari.ts';
 import * as idariIsler from './moduller/idari-isler/disari.ts';
 import * as ik from './moduller/ik/disari.ts';
 import * as kaliteMerkezi from './moduller/kalite-merkezi/disari.ts';
@@ -27,7 +27,7 @@ import {
   logoAcilisCozucusu, logoAynaOzetiCozucusu, logoBirimSetiCozucusu, logoEslemeYaziciCozucusu, logoKartAynasiCozucusu, logoKodCozucusu, logoTmiKodCozucusu, rotaRevizyonlariCozucusu, kartIzleriCozucusu,
 } from './moduller/malzemeler/disari.ts';
 import { firmaDegistiDinle, logoCariCozuculeriKaydet } from './moduller/musteri-tedarikci/disari.ts';
-import { araHalCozucusuKaydet as rotaAraHalCozucusu, durumRevizyonlari, emirBittiYansit as rotaEmirBittiYansit, adimBittiYansit as rotaAdimBittiYansit, emirRotaHazirliklari, isEmriAparatHazirliklari, isEmriKopyalandiYansit, isEmriOlcuAletiHazirliklari, malzemeKartiIzleri as rotaKartIzleri, yuzeyIslemiAdimlari } from './moduller/rota/disari.ts';
+import { araHalCozucusuKaydet as rotaAraHalCozucusu, durumRevizyonlari, emirBittiYansit as rotaEmirBittiYansit, adimBittiYansit as rotaAdimBittiYansit, emirRotaHazirliklari, isEmriAparatHazirliklari, isEmriKopyalandiYansit, isEmriOlcuAletiHazirliklari, malzemeKartiIzleri as rotaKartIzleri, yuzeyIslemiAdimlari, yururlukteOperasyonlar } from './moduller/rota/disari.ts';
 import { yuzeyAdimlariCozucusu } from './moduller/geometri/disari.ts';
 import * as sevkiyat from './moduller/sevkiyat/disari.ts';
 import { bagliEmirCozucusu, kalemEmirCozucusu, malzemeKartiIzleri as siparisKartIzleri, siparisAyrintisi, siparisListesi, siparisOnaylandiDinle, teklifDenemeCozucusu } from './moduller/siparisler/disari.ts';
@@ -105,6 +105,7 @@ export function sunucununBaglari(): Bag[] {
     bag('parça revizyonu -> sipariş satırı', siparisParcaRevizyonuCozucusu, yururluktekiParcaRevizyonlari),
     bag('rota revizyonları -> malzemeler', rotaRevizyonlariCozucusu, durumRevizyonlari),
     bag('rota yüzey adımları -> geometri yüzey işaretleri', yuzeyAdimlariCozucusu, yuzeyIslemiAdimlari),
+    bag('rota operasyonları -> markalama tanımı', markalamaOperasyonCozucusu, yururlukteOperasyonlar),
     bag('emir bitti -> sevkiyat', uretimEmirleri.emirBittiDinle, sevkiyat.emirBittiYansit),
     bag('logo durumu -> stok malzeme fişi', stok.malzemeFisiLogoCozucusu, logo.malzemeFisiLogoDurumlari),
     bag('logo birim setleri -> malzemeler karşılık', logoBirimSetiCozucusu, logo.gecerliBirimSetiKodlari),
