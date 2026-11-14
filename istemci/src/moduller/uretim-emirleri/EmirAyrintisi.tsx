@@ -12,6 +12,7 @@ import { GecmisDugmesi } from '../denetim/disari.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { RefakatKartlari } from './RefakatKartlari.tsx';
 import { StokTamamlama } from './StokTamamlama.tsx';
+import { TeslimBagi } from './TeslimBagi.tsx';
 import { EmirFisleri } from './EmirFisleri.tsx';
 import { stokOkur } from './refakat.ts';
 import { UretimYerleri } from './UretimYerleri.tsx';
@@ -274,6 +275,7 @@ function EmirSayfasi({ parcalar }: { parcalar?: EmirParcalari }) {
               </small>
             </div>
           </div>
+          <TeslimBagi emirId={emir.id} />
           {bekleme && <BeklemeSeridi emirId={emir.id} bilgi={bekleme} />}
           <YasamSeridi emir={emir} bekleme={bekleme} />
           <OzetKutulari emir={emir} veri={ayrinti.data} statu={satirEki.statu} bekleme={bekleme} kayitlariAc={() => { sekmeSec('kayitlar'); }} />
