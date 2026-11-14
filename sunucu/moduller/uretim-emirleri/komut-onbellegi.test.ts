@@ -115,8 +115,8 @@ describe('uretim-emirleri komut önbelleği (gerçek PostgreSQL)', () => {
       assert.deepEqual(icCevaplar.map(kimliksiz), disCevaplar.map(kimliksiz));
       assert.equal(disarida[0], icerde[0], 'ilk komut aynı okumaları yapar');
       assert.equal(disarida[0], disarida[1], 'kapsam dışında artı sayımlar aynı sayıda sorgu atar');
-      // İstasyon, kişinin rol ve iş merkezi kısıtı, istasyon ve kişi ad listeleri: beş okuma bir kez.
-      assert.equal(icerde[1], disarida[1]! - 5);
+      // İstasyon, kişinin rol ve iş merkezi kısıtı, istasyon ve kişi ad listeleri, sayımı SmartES'in yapıp yapmadığı: altı okuma bir kez.
+      assert.equal(icerde[1], disarida[1]! - 6);
       // Eksi sayım kişinin işe katılımını da okur (185 a, 238 H4); bu okuma emre özgüdür, önbelleğe girmez.
       assert.equal(icerde[2]! - icerde[1]!, disarida[2]! - disarida[1]!);
       assert.ok(disarida[2]! > disarida[1]!, 'eksi sayımda katılım okunur');
@@ -172,8 +172,8 @@ describe('uretim-emirleri komut önbelleği (gerçek PostgreSQL)', () => {
       assert.equal(await olc(), tazeSayi, 'hatadan sonra önbellek kalmaz');
       await komutOnbellegiyle(db, async () => {
         await olc();
-        assert.equal(await komutOnbellegiyle(db, olc), tazeSayi - 5);
-        assert.equal(await olc(), tazeSayi - 5, 'iç kapsam bitince dıştaki sürer');
+        assert.equal(await komutOnbellegiyle(db, olc), tazeSayi - 6);
+        assert.equal(await olc(), tazeSayi - 6, 'iç kapsam bitince dıştaki sürer');
       });
     });
   });

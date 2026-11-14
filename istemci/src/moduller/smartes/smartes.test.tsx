@@ -304,6 +304,10 @@ describe('SmartES listeleri', () => {
           smartesId: 9, isEmriNo: 'E-1-10', erpId: '1', istasyonKodu: null, operasyonKodu: '10', makineKodu: 'M-1', stokNo: null,
           saglam: 5, red: null, makineSaglam: null, makineRed: null, baslangic: null, bitis: null,
           sonOkuma: '2026-01-05T08:00:00.000Z',
+        }, {
+          smartesId: 10, isEmriNo: 'E-2-10', erpId: '2', istasyonKodu: null, operasyonKodu: '10', makineKodu: 'M-1', stokNo: null,
+          saglam: 7, red: null, makineSaglam: null, makineRed: null, baslangic: null, bitis: null,
+          sonOkuma: '2026-01-05T08:00:00.000Z', onay: 'bekliyor',
         }],
       } satisfies IsEmriDurumlariCevabi)
       : null));
@@ -312,6 +316,9 @@ describe('SmartES listeleri', () => {
     expect(screen.getByText('5')).toBeTruthy();
     expect(screen.queryByText('0')).toBeNull();
     expect(screen.queryByText('SmartES işareti')).toBeNull();
+    // Onaya girmemiş satır "Aktarılmaz", girmiş satır onay durumuyla görünür.
+    expect(within(screen.getByText('E-1-10').closest('tr')!).getByText('Aktarılmaz')).toBeTruthy();
+    expect(within(screen.getByText('E-2-10').closest('tr')!).getByText('Onay bekliyor')).toBeTruthy();
   });
 
   it('giden kutusu boşsa boş iletisi gösterir', async () => {
@@ -368,6 +375,7 @@ describe('SmartES hesapları', () => {
     expect(within(oee).queryByText(/NaN/)).toBeNull();
     const cevrim = screen.getByRole('table', { name: 'Çevrim süresi farkları' });
     expect(within(cevrim).getByText('+10 sn')).toBeTruthy();
+    expect(within(cevrim).getByText('M-1').className).toBe('tc-sm-kirilmaz');
     expect(within(cevrim).getByText('45')).toBeTruthy();
     expect(within(cevrim).getByText('30 sn')).toBeTruthy();
   });

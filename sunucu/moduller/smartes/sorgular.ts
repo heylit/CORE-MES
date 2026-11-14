@@ -242,8 +242,9 @@ export function isEmriDurumuSatirlari<T>(db: Db, d: Dilim): Promise<T[]> {
   return db.sorgu<T>(
     `SELECT smartes_id AS "smartesId", is_emri_no AS "isEmriNo", erp_id AS "erpId", istasyon_kodu AS "istasyonKodu", operasyon_kodu AS "operasyonKodu",
        makine_kodu AS "makineKodu", stok_no AS "stokNo", saglam, red, makine_saglam AS "makineSaglam", makine_red AS "makineRed",
-       ${zamanMetni('baslangic')} AS baslangic, ${zamanMetni('bitis')} AS bitis, ${zamanMetni('son_okuma')} AS "sonOkuma"
-     FROM smartes_is_emri_durumu ORDER BY son_okuma DESC, smartes_id DESC LIMIT $1 OFFSET $2`,
+       ${zamanMetni('baslangic')} AS baslangic, ${zamanMetni('bitis')} AS bitis, ${zamanMetni('son_okuma')} AS "sonOkuma",
+       (SELECT o.durum FROM smartes_adet_onayi o WHERE o.smartes_id = d.smartes_id ORDER BY (o.durum = 'bekliyor') DESC, o.id DESC LIMIT 1) AS onay
+     FROM smartes_is_emri_durumu d ORDER BY son_okuma DESC, smartes_id DESC LIMIT $1 OFFSET $2`,
     [d.sinir, d.atla],
   );
 }
@@ -1033,6 +1034,21 @@ export async function onaySatiriEkle(db: Db, y: { smartesId: number; tur: 'sagla
 const TEK_GIDEN = `LEFT JOIN LATERAL (SELECT CASE WHEN count(*) = 1 THEN min(x.is_emri_id) END AS is_emri_id
                     FROM smartes_giden x WHERE x.smartes_is_emri_no = d.is_emri_no) g ON true`;
 
+// Anahtarın açık görüldüğü ilk an saklanır, kapalı görülünce silinir; açıkken dönen değer o andır.
+export async function aktarimAcilisiYaz(db: Db, acik: boolean, zaman: Date): Promise<Date | null> {
+  const r = await db.tek<{ acilis: Date | null }>(
+    'UPDATE smartes_sayim_aktarimi SET acilis = CASE WHEN $1 THEN coalesce(acilis, $2) END RETURNING acilis', [acik, zaman]);
+  return r?.acilis ?? null;
+}
+
+// Okunan satırın CORE iş emri: no tek iş emrine çıkıyorsa o, değilse null (onay listesindeki eşleşmeyle aynı kural).
+export async function tekGidenIsEmri(db: Db, isEmriNo: string | null): Promise<number | null> {
+  if (isEmriNo === null) return null;
+  const r = await db.tek<{ id: number | null }>(
+    'SELECT CASE WHEN count(*) = 1 THEN min(is_emri_id) END AS id FROM smartes_giden WHERE smartes_is_emri_no = $1', [isEmriNo]);
+  return r?.id ?? null;
+}
+
 export interface KilitliOnaySatiri {
   id: number;
   tur: 'saglam' | 'red';
@@ -1040,12 +1056,13 @@ export interface KilitliOnaySatiri {
   durum: 'bekliyor' | 'onaylandi' | 'reddedildi';
   isEmriId: number | null;
   makineKodu: string | null;
+  baslangic: Date | null;
 }
 
 // Onay ve red aynı satırı iki kez işlemesin diye satır kilitlenir. SmartES iş emri no'su giden kutusundaki karşılığıyla CORE iş emrine bağlanır.
 export function onaySatiriKilitle(db: Db, id: number): Promise<KilitliOnaySatiri | null> {
   return db.tek<KilitliOnaySatiri>(
-    `SELECT o.id::int AS id, o.tur, o.adet, o.durum, g.is_emri_id AS "isEmriId", d.makine_kodu AS "makineKodu"
+    `SELECT o.id::int AS id, o.tur, o.adet, o.durum, g.is_emri_id AS "isEmriId", d.makine_kodu AS "makineKodu", d.baslangic
        FROM smartes_adet_onayi o
        JOIN smartes_is_emri_durumu d ON d.smartes_id = o.smartes_id
        ${TEK_GIDEN}

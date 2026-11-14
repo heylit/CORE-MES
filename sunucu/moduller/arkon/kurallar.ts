@@ -3142,6 +3142,14 @@ export function bekletmeAlaniniEkle(govde: Record<string, unknown>, neden: strin
   return { ...govde, tmi: { ...tmi, bekletme: neden } };
 }
 
+// 3173: sayımı SmartES'ten gelen istasyondaki işin paketi `tmi.sayimKaynagi: 'smartes'` taşır; terminal sayım tuşlarını kapatır ve nedenini
+// yazar. Sunucu o istasyonda terminal sayımını ayrıca reddeder. Terminalden sayılan istasyonda alan yazılmaz.
+export function sayimKaynagiAlaniniEkle(govde: Record<string, unknown>, smartes: boolean): Record<string, unknown> {
+  if (!smartes) return govde;
+  const tmi = kayitMi(govde['tmi']) ? govde['tmi'] : {};
+  return { ...govde, tmi: { ...tmi, sayimKaynagi: 'smartes' } };
+}
+
 // 1188: adımda girilen hatalı parçaların toplamı (uretim-emirleri `hataliAdet`) paketin `tmi.hatali` alanına yazılır; terminal bunu hurda
 // yerine gösterir. Sıfır gerçek sıfırdır ve yazılır; alan gelmezse (eski veri) yazılmaz, ekran sayıyı bilmiyor sayar.
 export function hataliAlaniniEkle(govde: Record<string, unknown>, hataliAdet: number | null | undefined): Record<string, unknown> {

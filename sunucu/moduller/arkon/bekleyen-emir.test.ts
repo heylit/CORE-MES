@@ -93,7 +93,7 @@ describe('arkon bekleyen emrin paketi (3131, gerçek PostgreSQL)', () => {
   });
   after(async () => { await app?.close(); await ortam?.kaldir(); });
 
-  type Paket = { kimlik: string; surum: number; govde: { status?: string; tmi?: { isEmriId?: number; bekletme?: unknown } } };
+  type Paket = { kimlik: string; surum: number; govde: { status?: string; tmi?: { isEmriId?: number; bekletme?: unknown; sayimKaynagi?: unknown } } };
   const paketler = async (): Promise<Paket[]> => {
     const c = await istek('yonetici', 'GET', '/arkon/belgeler/pkgs');
     assert.equal(c.durum, 200, JSON.stringify(c.govde));
@@ -134,5 +134,22 @@ describe('arkon bekleyen emrin paketi (3131, gerçek PostgreSQL)', () => {
     assert.equal(d.durum, 200, JSON.stringify(d.govde));
     const sonra = await paketi(isEmriId);
     assert.equal(sonra.govde.tmi?.bekletme, undefined, 'devamda işaret düşer, kayıtlı paket yeniden yazılmadan');
+  });
+
+  test('3173: sayımı SmartES’ten gelen istasyondaki işin paketi işaret taşır; kayıtlı pakette de, istasyon terminale dönünce düşer', async () => {
+    const { isEmriIdleri: [isEmriId] } = await emirAc();
+    assert.ok(isEmriId);
+    const kaynak = (k: 'terminal' | 'smartes') => o().vt.sorgu("UPDATE istasyon SET sayim_kaynagi = $1, sayim_kaynagi_gecerlilik = now() WHERE kod = 'BKLI'", [k]);
+    assert.equal((await paketi(isEmriId)).govde.tmi?.sayimKaynagi, undefined, 'terminalden sayılan istasyonda alan yok');
+    await kaynak('smartes');
+    assert.equal((await paketi(isEmriId)).govde.tmi?.sayimKaynagi, undefined, 'aktarım anahtarı kapalıyken alan yok');
+    assert.equal((await istek('yonetici', 'POST', '/ayarlar/smartes.sayim-aktarimi/degistir', { deger: true })).durum, 200);
+    const isaretli = await paketi(isEmriId);
+    assert.equal(isaretli.govde.tmi?.sayimKaynagi, 'smartes');
+    const yaz = await istek('yonetici', 'POST', `/arkon/belgeler/pkgs/${encodeURIComponent(isaretli.kimlik)}/yaz`, { taban: null, govde: isaretli.govde, kaynak: 'bkl' });
+    assert.equal((yaz.govde as { sonuc: string }).sonuc, 'yazildi', JSON.stringify(yaz.govde));
+    assert.equal((await paketi(isEmriId)).govde.tmi?.sayimKaynagi, 'smartes', 'kayıtlı pakette de işaret');
+    await kaynak('terminal');
+    assert.equal((await paketi(isEmriId)).govde.tmi?.sayimKaynagi, undefined, 'kayıtlı satırdaki eski işarete güvenilmez');
   });
 });

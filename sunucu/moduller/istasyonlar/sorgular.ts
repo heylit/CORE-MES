@@ -14,7 +14,7 @@ export type Istasyon = Omit<SurumluIstasyon, 'sorumluAd'>;
 
 const IS_MERKEZI = 'id, kod, ad, aciklama, aktif, surum';
 const ISTASYON = `id, kod, ad, is_merkezi_id AS "isMerkeziId", tip, sorumlu_kisi_id AS "sorumluKisiId",
-  kapasite_kaynagi AS "kapasiteKaynagi", uretim_alani AS "uretimAlani", aktif, surum`;
+  kapasite_kaynagi AS "kapasiteKaynagi", uretim_alani AS "uretimAlani", aktif, surum, sayim_kaynagi AS "sayimKaynagi", ${zamanMetni('sayim_kaynagi_gecerlilik')} AS "sayimKaynagiGecerlilik"`;
 const MAKINE = `id, kod, ad, tur, marka_model AS "markaModel", seri_no AS "seriNo", istasyon_id AS "istasyonId",
   baglanti_turu AS "baglantiTuru", baglanti_adresi AS "baglantiAdresi", aktif, surum`;
 
@@ -56,7 +56,7 @@ export async function isMerkeziSil(db: Db, id: number): Promise<boolean> {
 
 // Aktif istasyonun tek tanımı: kendisi de iş merkezi de aktiftir. Seçim ve aktif listeler bunu kullanır.
 const ISTASYON_I = `i.id, i.kod, i.ad, i.is_merkezi_id AS "isMerkeziId", i.tip, i.sorumlu_kisi_id AS "sorumluKisiId",
-  i.kapasite_kaynagi AS "kapasiteKaynagi", i.uretim_alani AS "uretimAlani", i.aktif, i.surum`;
+  i.kapasite_kaynagi AS "kapasiteKaynagi", i.uretim_alani AS "uretimAlani", i.aktif, i.surum, i.sayim_kaynagi AS "sayimKaynagi", ${zamanMetni('i.sayim_kaynagi_gecerlilik')} AS "sayimKaynagiGecerlilik"`;
 const ISTASYON_VE_MERKEZI = 'istasyon i JOIN is_merkezi m ON m.id = i.is_merkezi_id';
 const AKTIF_ISTASYON = 'i.aktif AND m.aktif';
 
@@ -79,6 +79,15 @@ export function istasyonBul(db: Db, id: number): Promise<Istasyon | null> {
   return db.tek<Istasyon>(`SELECT ${ISTASYON} FROM istasyon WHERE id = $1`, [id]);
 }
 
+// Sayımı SmartES'ten gelen istasyonlar ve kaynağın geçerli olduğu an (3173); terminalden sayılan istasyon dönmez.
+export function smartesSayimIstasyonlari(db: Db, idler: readonly number[] | null): Promise<{ id: number; gecerlilik: Date }[]> {
+  return db.sorgu<{ id: number; gecerlilik: Date }>(
+    `SELECT id, sayim_kaynagi_gecerlilik AS gecerlilik FROM istasyon
+      WHERE sayim_kaynagi = 'smartes' AND ($1::int[] IS NULL OR id = ANY($1::int[]))`,
+    [idler],
+  );
+}
+
 export function istasyonAdlariniBul(db: Db, idler: readonly number[]): Promise<{ id: number; ad: string }[]> {
   return db.sorgu<{ id: number; ad: string }>('SELECT id, ad FROM istasyon WHERE id = ANY($1::int[])', [idler]);
 }
@@ -97,18 +106,21 @@ export function secimSatirlari(db: Db): Promise<SecimSatiri[]> {
 
 export function istasyonEkle(db: Db, g: IstasyonKaydi): Promise<Istasyon | null> {
   return db.tek<Istasyon>(
-    `INSERT INTO istasyon (kod, ad, is_merkezi_id, tip, sorumlu_kisi_id, kapasite_kaynagi, uretim_alani, aktif)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING ${ISTASYON}`,
-    [g.kod, g.ad, g.isMerkeziId, g.tip, g.sorumluKisiId, g.kapasiteKaynagi, g.uretimAlani, g.aktif],
+    `INSERT INTO istasyon (kod, ad, is_merkezi_id, tip, sorumlu_kisi_id, kapasite_kaynagi, uretim_alani, aktif, sayim_kaynagi, sayim_kaynagi_gecerlilik)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, CASE WHEN $9 = 'smartes' THEN now() END) RETURNING ${ISTASYON}`,
+    [g.kod, g.ad, g.isMerkeziId, g.tip, g.sorumluKisiId, g.kapasiteKaynagi, g.uretimAlani, g.aktif, g.sayimKaynagi ?? 'terminal'],
   );
 }
 
+// Sayım kaynağı değişirse geçerlilik sunucu saatiyle o an olur; aynı kaynak yeniden kaydedilirse geçerlilik yerinde kalır.
 export function istasyonGuncelle(db: Db, id: number, g: IstasyonGuncellemesi): Promise<Istasyon | null> {
   return db.tek<Istasyon>(
     `UPDATE istasyon SET kod = $2, ad = $3, is_merkezi_id = $4, tip = $5, sorumlu_kisi_id = $6, kapasite_kaynagi = $7,
-            aktif = $8, uretim_alani = coalesce($10, uretim_alani), surum = surum + 1
+            aktif = $8, uretim_alani = coalesce($10, uretim_alani), surum = surum + 1,
+            sayim_kaynagi = coalesce($11, sayim_kaynagi),
+            sayim_kaynagi_gecerlilik = CASE WHEN $11 IS NOT NULL AND $11 <> sayim_kaynagi THEN clock_timestamp() ELSE sayim_kaynagi_gecerlilik END
       WHERE id = $1 AND surum = $9 RETURNING ${ISTASYON}`,
-    [id, g.kod, g.ad, g.isMerkeziId, g.tip, g.sorumluKisiId, g.kapasiteKaynagi, g.aktif, g.surum, g.uretimAlani ?? null],
+    [id, g.kod, g.ad, g.isMerkeziId, g.tip, g.sorumluKisiId, g.kapasiteKaynagi, g.aktif, g.surum, g.uretimAlani ?? null, g.sayimKaynagi ?? null],
   );
 }
 

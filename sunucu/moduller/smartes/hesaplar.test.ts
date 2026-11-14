@@ -138,12 +138,13 @@ describe('SmartES hesapları: OEE raporu ve çevrim süresi (kart 3174, gerçek 
   });
 
   test('SME-33: CORE OEE’si makine eşlemesiyle aynı güne bağlanır ve yüzdeye çevrilir; OEE’yi görme yetkisi olmayan için hiç sorulmaz', async () => {
+    const dun = gun(1);
     const kisi = (await vt().tek<{ id: number }>("SELECT id FROM kisi WHERE kullanici_adi = 'sh-yonetici'"))?.id;
     await vt().sorgu(
       `INSERT INTO smartes_esleme (tur, tmi_id, smartes_kod, guncelleyen_kisi_id) VALUES ('makine', 77, 'ORN-M1', $1), ('makine', 78, 'ORN-M9', $1)`, [kisi]);
     await vt().sorgu(
       `INSERT INTO smartes_oee (vardiya_tarihi, vardiya, makine_kodu, oee, ham, ilk_okuma, son_okuma) VALUES
-         ($1, 1, 'ORN-M1', 0.8, '{}', now(), now()), ($1, 2, 'ORN-M1', 0.6, '{}', now(), now()), ($1, 1, 'ORN-M2', 0.5, '{}', now(), now())`, [gun(1)]);
+         ($1, 1, 'ORN-M1', 0.8, '{}', now(), now()), ($1, 2, 'ORN-M1', 0.6, '{}', now(), now()), ($1, 1, 'ORN-M2', 0.5, '{}', now(), now())`, [dun]);
     const sorulan: string[] = [];
     // Dosya kendi sürecinde koşar; bağ yerine konan çözücü başka testi etkilemez.
     coreOeeCozucusuKaydet(async (_db, _kullanici, sorgu) => {
@@ -154,7 +155,7 @@ describe('SmartES hesapları: OEE raporu ve çevrim süresi (kart 3174, gerçek 
     assert.deepEqual(yetkili.oee.map((o) => [o.vardiya, o.makineKodu, o.oee, o.coreOee]), [
       [2, 'ORN-M1', 60, 71.23], [1, 'ORN-M1', 80, 71.23], [1, 'ORN-M2', 50, null],
     ]);
-    assert.deepEqual(sorulan, [`${gun(1)}..${gun(1)}`], 'gün başına tek okuma');
+    assert.deepEqual(sorulan, [`${dun}..${dun}`], 'gün başına tek okuma');
     sorulan.length = 0;
     const yetkisiz = await vt().tx((db) => hesaplar(db, { id: 1, ad: 'x', islemler: ['sayfa.smartes'] }, new Date(simdi)));
     assert.deepEqual([yetkisiz.oee.map((o) => o.coreOee), sorulan], [[null, null, null], []]);

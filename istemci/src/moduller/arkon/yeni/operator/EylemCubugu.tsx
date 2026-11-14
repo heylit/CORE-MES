@@ -3,11 +3,13 @@ import { cubukDugmeleri, tonDurumu, type DurumDugmesi } from './kurallar.ts';
 import type { SayimTusu } from './Parcalar.tsx';
 
 // Telefonda işin ana eylemleri kaydırmadan erişilir (618): alt gezinmenin üstünde sabit durur.
-export function EylemCubugu({ durum, pasif, eylem, tuslar, beklemede = false }: {
+export function EylemCubugu({ durum, pasif, eylem, tuslar, beklemede = false, bilgi }: {
   durum: string; pasif: boolean; eylem: (d: DurumDugmesi) => void; tuslar: readonly SayimTusu[]; beklemede?: boolean;
+  // Verilmeyen sayım tuşunun yerine geçen bilgi: hiç çalışmayacak gri tuş yerine neden, bakılan yerde yazar (3173).
+  bilgi?: string | undefined;
 }) {
   const dugmeler = cubukDugmeleri(durum, beklemede);
-  if (!dugmeler.length && !tuslar.length) return null;
+  if (!dugmeler.length && !tuslar.length && bilgi === undefined) return null;
   return (
     <div className="tc-ay1-cubuk" role="group" aria-label="İş eylemleri">
       {dugmeler.map((d) => (
@@ -15,6 +17,7 @@ export function EylemCubugu({ durum, pasif, eylem, tuslar, beklemede = false }: 
           <Simge ad={d.simge} />{d.etiket}
         </button>
       ))}
+      {bilgi !== undefined && <span className="tc-ay1-cubuk-bilgi" role="status"><Simge ad="laptop" />{bilgi}</span>}
       {tuslar.map((t) => (
         <button key={t.etiket} type="button" className="tc-ay1-cubuk-dugme" data-tur={t.ton} disabled={t.kapali} onClick={t.bas} aria-label={t.aria}>
           <Simge ad={t.simge} />{t.etiket}

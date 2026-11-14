@@ -16,7 +16,7 @@ import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
 import {
   aktifIstasyonlar, aktifMakineler, isMerkezleri, istasyonGetir, istasyondakiMakineler, istasyonlar, kisininIzinliIsMerkezleri,
-  aktifUretimAlaniMi, ayarYetkinlikleri, kisiTezgahSinirlari, makineGetir, makineYetkinlikleri, operasyonTipleri, uretimAlanlari,
+  aktifUretimAlaniMi, ayarYetkinlikleri, kisiTezgahSinirlari, makineGetir, makineYetkinlikleri, operasyonTipleri, smartesSayimIstasyonlari, uretimAlanlari,
 } from './disari.ts';
 import { uclar } from './uclar.ts';
 
@@ -479,6 +479,43 @@ describe('istasyonlar (gerçek PostgreSQL)', () => {
       assert.equal(ikinci.govde.surum, 3, yol);
     }
     assert.equal((await yaz(`/makineler/999999/guncelle`, { kod: yeniKod('YOK'), ad: 'Yok', surum: 1 })).durum, 404);
+  });
+
+  test('3173: sayım kaynağı varsayılan terminaldir; değişince geçerlilik o an olur, gönderilmezse ve aynı kalırsa değişmez; bilinmeyen kaynak reddedilir', async () => {
+    type K = { surum: number; sayimKaynagi: string; sayimKaynagiGecerlilik: string | null };
+    const im = await isMerkeziKur();
+    const ist = await istasyonKur(im.id);
+    const govde = { kod: ist.kod, ad: 'Sayım istasyonu', isMerkeziId: im.id };
+    const guncelle = (ek: object, surum: number) => yaz<K>(`/istasyonlar/${ist.id}/guncelle`, { ...govde, ...ek, surum });
+    const ilk = await guncelle({}, 1);
+    assert.deepEqual([ilk.durum, ilk.govde.sayimKaynagi, ilk.govde.sayimKaynagiGecerlilik], [200, 'terminal', null]);
+
+    const once = Date.now();
+    const smartes = await guncelle({ sayimKaynagi: 'smartes' }, 2);
+    assert.equal(smartes.govde.sayimKaynagi, 'smartes');
+    const gecerlilik = Date.parse(smartes.govde.sayimKaynagiGecerlilik ?? '');
+    assert.ok(gecerlilik >= once - 1000 && gecerlilik <= Date.now() + 1000, 'geçerlilik sunucu saatiyle o andır');
+    // Kim, ne zaman, hangi kaynağa: değişiklik denetim kaydında durur.
+    const iz = await vt().tek<{ kisi: number | null; kaynak: string | null }>(
+      "SELECT kisi_id AS kisi, govde->>'sayimKaynagi' AS kaynak FROM denetim_kaydi WHERE yol LIKE '/istasyonlar/:id%' AND parametre->>'id' = $1 AND govde ? 'sayimKaynagi' ORDER BY id DESC LIMIT 1", [String(ist.id)]);
+    assert.deepEqual([iz?.kisi !== null, iz?.kaynak], [true, 'smartes']);
+
+    // Alanı bilmeyen çağıran (toplu taşıma, Excel) ve aynı kaynağı yeniden kaydeden geçerliliği oynatmaz.
+    const ayni = await guncelle({ ad: 'Başka ad' }, 3);
+    assert.deepEqual([ayni.govde.sayimKaynagi, ayni.govde.sayimKaynagiGecerlilik], ['smartes', smartes.govde.sayimKaynagiGecerlilik]);
+    const yine = await guncelle({ sayimKaynagi: 'smartes' }, 4);
+    assert.equal(yine.govde.sayimKaynagiGecerlilik, smartes.govde.sayimKaynagiGecerlilik);
+    assert.deepEqual([...(await vt().tx((db) => smartesSayimIstasyonlari(db))).keys()].includes(ist.id), true);
+
+    const geri = await guncelle({ sayimKaynagi: 'terminal' }, 5);
+    assert.equal(geri.govde.sayimKaynagi, 'terminal');
+    assert.ok(Date.parse(geri.govde.sayimKaynagiGecerlilik ?? '') >= gecerlilik);
+    assert.equal((await vt().tx((db) => smartesSayimIstasyonlari(db, [ist.id]))).size, 0);
+
+    assert.equal((await guncelle({ sayimKaynagi: 'elle' }, 6)).durum, 400);
+    await assert.rejects(vt().sorgu("UPDATE istasyon SET sayim_kaynagi = 'smartes', sayim_kaynagi_gecerlilik = NULL WHERE id = $1", [ist.id]), /istasyon_sayim_kaynagi_gecerli/);
+    const yeni = await yaz<K>('/istasyonlar', { kod: yeniKod('SK'), ad: 'SmartES ile açılan', isMerkeziId: im.id, sayimKaynagi: 'smartes' });
+    assert.deepEqual([yeni.durum, yeni.govde.sayimKaynagi, yeni.govde.sayimKaynagiGecerlilik !== null], [200, 'smartes', true]);
   });
 
   test('IS13: operasyon tipi eklenir (kod büyük harfe, tekil, grup listeden); düzenleme sürümle yazar; gönderilmeyen kod değişmez, gönderilen kod tekil kalarak değişir (#460); pasif tip katalogdan düşer', async () => {

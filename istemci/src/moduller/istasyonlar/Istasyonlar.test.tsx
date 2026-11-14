@@ -655,10 +655,16 @@ describe('istasyonlar ekranı (#1109, IS25)', () => {
     expect(within(sorumlu).queryByRole('option', { name: /Deneme Ayrılan/ })).toBeNull();
     fireEvent.change(sorumlu, { target: { value: '5' } });
     fireEvent.click(within(pencere).getByRole('checkbox', { name: 'Üretim alanı' }));
+    // Sayım kaynağı terminalle açılır; değişince ne zaman geçerli olacağı kaydetmeden önce yazar.
+    const kaynak = within(pencere).getByLabelText(/Sayım kaynağı/) as HTMLSelectElement;
+    expect(kaynak.value).toBe('terminal');
+    expect(within(pencere).queryByText(/kaydettiğiniz andan itibaren geçerli/)).toBeNull();
+    fireEvent.change(kaynak, { target: { value: 'smartes' } });
+    expect(within(pencere).getByText(/kaydettiğiniz andan itibaren geçerli.*terminalde sayım yapılmaz/)).toBeTruthy();
     fireEvent.click(within(pencere).getByRole('button', { name: 'Kaydet' }));
     await waitFor(() => { expect(POSTLAR(cagrilar)).toHaveLength(1); });
     expect(POSTLAR(cagrilar)[0]).toMatchObject({
-      yol: '/istasyonlar/11/guncelle', govde: { kod: 'K-01', kapasiteKaynagi: 'insan', uretimAlani: true, sorumluKisiId: 5, aktif: false, surum: 1 },
+      yol: '/istasyonlar/11/guncelle', govde: { kod: 'K-01', kapasiteKaynagi: 'insan', uretimAlani: true, sayimKaynagi: 'smartes', sorumluKisiId: 5, aktif: false, surum: 1 },
     });
   });
 

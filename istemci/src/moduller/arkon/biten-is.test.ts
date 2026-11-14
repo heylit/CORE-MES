@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BASLAMAMIS_IS_ILETISI, DURUSTA_SAYIM_ILETISI, HAZIRLIKTA_SAYIM_ILETISI, baslatmaGeriAlma, baslatmaGeriUygula, bitenleriAyir, durumEsitle, durumEsitleme, durumIletisi, logRetleri, gecikmeliRet, sayimGeriAlma, sayimGeriUygula, sayimKapali, sayimKapaliNedeni, tmiBitti } from '../../../../arkon/web/src/data/biten-is.ts';
+import { BASLAMAMIS_IS_ILETISI, BITMIS_IS_ILETISI, SMARTES_SAYIM_ILETISI, DURUSTA_SAYIM_ILETISI, HAZIRLIKTA_SAYIM_ILETISI, baslatmaGeriAlma, baslatmaGeriUygula, bitenleriAyir, durumEsitle, durumEsitleme, durumIletisi, logRetleri, gecikmeliRet, sayimGeriAlma, sayimGeriUygula, sayimKapali, sayimKapaliNedeni, tmiBitti } from '../../../../arkon/web/src/data/biten-is.ts';
 
 // Kart #1194: biten işte sağlam, hurda, toplu giriş ve sayaç düzeltmesi kapalıdır.
 describe('Arkon biten iş sayaç kilidi', () => {
@@ -53,6 +53,12 @@ describe('Arkon sayım: CORE\'un kabul etmediği durumda kapalı, ret gelince ge
 describe('Arkon sayım: hazırlıkta iyi parça kapalı', () => {
   it('hazırlıkta iyi parça sayımı kapalı ve nedeni söylenir', () => {
     expect(sayimKapaliNedeni({ state: 'setup' }, 'good')).toBe(HAZIRLIKTA_SAYIM_ILETISI);
+    // Sayımı SmartES'ten gelen istasyonda iyi parça terminalde sayılmaz; hurda sayılır. Biten ve başlamamış işin nedeni önce gelir.
+    const smartes = { pkg: { tmi: { sayimKaynagi: 'smartes' } } };
+    expect(sayimKapaliNedeni({ state: 'running', ...smartes }, 'good')).toBe(SMARTES_SAYIM_ILETISI);
+    expect(sayimKapaliNedeni({ state: 'running', ...smartes })).toBeNull();
+    expect(sayimKapaliNedeni({ state: 'done', ...smartes }, 'good')).toBe(BITMIS_IS_ILETISI);
+    expect(sayimKapaliNedeni({ state: 'running', pkg: { tmi: {} } }, 'good')).toBeNull();
     expect(sayimKapali({ state: 'setup' }, 'good')).toBe(true);
   });
   it('hazırlık hurdası açık; çalışan işte iyi parça açık', () => {

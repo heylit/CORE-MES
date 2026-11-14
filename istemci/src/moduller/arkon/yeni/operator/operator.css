@@ -1184,3 +1184,7 @@ p.tc-ay1-adim-durumu { display: flex; align-items: center; gap: var(--b-2); marg
 .tc-ay1-genis:has(> .tc-ra) .tc-ay1-resim .tc-ay5-araclar { gap: 0; }
 .tc-ay1-genis:has(> .tc-ra) .tc-ay1-resim .tc-ay5-arac { block-size: calc(var(--dokunma) - var(--b-1)); }
 .tc-ay1-genis:has(> .tc-ra) .tc-ay1-resim .tc-ay5-ayrac { display: none; }
+/* 3173: sayımı SmartES'ten gelen istasyon; tuşlar kapalıdır, neden kalıcı yazılır. */
+.tc-ay1-smartes { display: flex; align-items: center; gap: var(--b-2); margin: 0; padding: var(--b-2) var(--b-3); border-radius: var(--yari-2); background: var(--panel2); color: var(--muted); font-size: var(--yazi-s); }
+
+.tc-ay1-cubuk-bilgi { flex: 2 1 0; min-width: 0; display: flex; align-items: center; justify-content: center; gap: var(--b-2); padding: 0 var(--b-2); border: 1px dashed var(--edge); border-radius: var(--yari-2); color: var(--muted); font-size: var(--yazi-s); font-weight: 700; text-align: center; }

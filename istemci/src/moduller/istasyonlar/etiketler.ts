@@ -52,3 +52,6 @@ export const degisimMetni = (ad: string | null, zaman: string): string => {
   const [gun = '', saat = ''] = tesisSaati(new Date(zaman)).split(' ');
   return `${gun.split('-').reverse().join('.')} ${saat}${ad ? `, ${ad}` : ''}`;
 };
+
+// Sayım kaynağı (3173): bir istasyonda tek kaynak; ikisi birlikte sayılırsa aynı üretim iki kez stoğa girer.
+export const SAYIM_KAYNAGI_SECENEKLERI = [{ deger: 'terminal', baslik: 'Üretim Terminali' }, { deger: 'smartes', baslik: 'SmartES' }] as const;

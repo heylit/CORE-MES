@@ -9,7 +9,7 @@ import { isiBirKezCalistir, modulIsleriniKesfet } from '#cekirdek/zamanlayici.ts
 import { denetimYaz } from '../denetim/disari.ts';
 import { kullaniciYukle, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
-import { emirBaslat, emirIptalEt, uretimEmriAc } from '../uretim-emirleri/disari.ts';
+import { emirBaslat, emirBitir, emirIptalEt, emirSayim, uretimEmriAc } from '../uretim-emirleri/disari.ts';
 import { VARSAYILAN_AD_ALANI } from './ayar.ts';
 import { KALITE_AMBAR_KAYNAKLARI, ONAY_ILETILERI, yasakMetotMu } from './kurallar.ts';
 import type { IsEmriDurumuKaydi } from './kurallar.ts';
@@ -71,6 +71,12 @@ describe('SmartES bağlantısı, sahte SmartES ile uçtan uca (kart #778, gerçe
     assert.equal(ist.statusCode, 200, ist.body);
     return (ist.json() as { id: number }).id;
   }
+  // Anahtar açık ve çok önce açılmış sayılır: testin sahte saatiyle gerçek saat karışmasın.
+  const aktarimAc = async (acik = true) => {
+    assert.equal((await istek('POST', '/ayarlar/smartes.sayim-aktarimi/degistir', { deger: acik })).statusCode, 200);
+    if (acik) await vt().sorgu("UPDATE smartes_sayim_aktarimi SET acilis = '2026-01-01'");
+  };
+  const hepsiSmartes = () => vt().sorgu("UPDATE istasyon SET sayim_kaynagi = 'smartes', sayim_kaynagi_gecerlilik = '2026-01-01'");
   const isEmriDurumu = (id: number) => vt().tek<{ saglam: number | null; red: number | null }>(
     'SELECT saglam, red FROM smartes_is_emri_durumu WHERE smartes_id = $1', [id]);
   const okumaSatiri = (kaynak: string) => vt().tek<{ son_bitis: Date | null; son_sonuc: string; son_hata: string | null; okunan: number | null; kimliksiz: number | null }>(
@@ -552,14 +558,16 @@ describe('SmartES bağlantısı, sahte SmartES ile uçtan uca (kart #778, gerçe
     const noIki = (await vt().tek<{ no: string }>('SELECT smartes_is_emri_no AS no FROM smartes_giden WHERE is_emri_id = $1', [ikinci]))!.no;
     await vt().tx(async (db) => { await emirBaslat(db, (await kullaniciYukle(db, yoneticiId))!, uretimEmriId, undefined, undefined, ilk); });
     const gecerlilik = new Date(simdi - 3_600_000);
+    await aktarimAc();
+    await hepsiSmartes();
     const kayit = (smartesId: number, isEmriNo: string, saglam: number | null, baslangic: Date | null = new Date(simdi)): IsEmriDurumuKaydi => ({
       smartesId, isEmriNo, erpId: null, istasyonKodu: null, operasyonKodu: null, makineKodu: null, stokNo: null, saglam, red: 1, makineSaglam: null,
       makineRed: null, baslangic, bitis: null, bitti: null, erpSaglam: null, erpRed: null, ham: {},
     });
     const yaz = async (k: IsEmriDurumuKaydi, g: Date | null = gecerlilik) => vt().tx(async (db) => {
       await db.sorgu(
-        `INSERT INTO smartes_is_emri_durumu (smartes_id, is_emri_no, saglam, red, ham, ilk_okuma, son_okuma) VALUES ($1, $2, $3, $4, '{}', now(), now())
-         ON CONFLICT (smartes_id) DO UPDATE SET saglam = EXCLUDED.saglam, red = EXCLUDED.red`, [k.smartesId, k.isEmriNo, k.saglam, k.red]);
+        `INSERT INTO smartes_is_emri_durumu (smartes_id, is_emri_no, saglam, red, baslangic, ham, ilk_okuma, son_okuma) VALUES ($1, $2, $3, $4, $5, '{}', now(), now())
+         ON CONFLICT (smartes_id) DO UPDATE SET saglam = EXCLUDED.saglam, red = EXCLUDED.red, baslangic = EXCLUDED.baslangic`, [k.smartesId, k.isEmriNo, k.saglam, k.red, k.baslangic]);
       return adetOnayinaAl(db, k, new Date(simdi), g);
     });
     const bekleyenler = async () => (await istek('GET', '/smartes/adet-onaylari?gorunum=bekliyor', undefined, okuyucu)).json() as { satirlar: { id: number; adet: number; duzeltme: boolean; tur: string; emirId: number | null }[] };
@@ -614,5 +622,133 @@ describe('SmartES bağlantısı, sahte SmartES ile uçtan uca (kart #778, gerçe
     assert.deepEqual((await istek('POST', '/smartes/adet-onaylari/onayla', { idler: [iki.id] })).json(),
       { islenen: 0, hatalar: [{ id: iki.id, ileti: ONAY_ILETILERI.isEmriYok }] });
     assert.deepEqual((await sayimlar()).map((x) => x.adet), [10, 2]);
+  });
+
+  test('3173 b: karar verilmiş satır yeniden karara girmez; red de onay yetkisi ister; red adedi ve eşlenmiş makine korunur', async () => {
+    const { uretimEmriId, ilk } = await emirKur(true);
+    await gonderimTuru(vt(), turOrtami());
+    const no = (await vt().tek<{ no: string }>('SELECT smartes_is_emri_no AS no FROM smartes_giden WHERE is_emri_id = $1', [ilk]))!.no;
+    await vt().tx(async (db) => { await emirBaslat(db, (await kullaniciYukle(db, yoneticiId))!, uretimEmriId, undefined, undefined, ilk); });
+    await aktarimAc();
+    await hepsiSmartes();
+    const [digerMakine, adimMakinesi] = (await vt().sorgu<{ id: number }>('SELECT id FROM makine ORDER BY id DESC LIMIT 2')).map((m) => m.id) as [number, number];
+    const adimKodu = (await vt().tek<{ kod: string }>("SELECT smartes_kod AS kod FROM smartes_esleme WHERE tur = 'makine' AND tmi_id = $1", [adimMakinesi]))!.kod;
+    assert.equal((await istek('POST', '/smartes/eslemeler/ata', { tur: 'makine', tmiId: digerMakine, smartesKod: 'ORN-DIGER', surum: null })).statusCode, 200);
+    const kuyruga = async (smartesId: number, tur: 'saglam' | 'red', adet: number, makineKodu: string | null): Promise<number> => {
+      await vt().sorgu(
+        `INSERT INTO smartes_is_emri_durumu (smartes_id, is_emri_no, makine_kodu, saglam, red, baslangic, ham, ilk_okuma, son_okuma) VALUES ($1, $2, $3, $4, 0, now(), '{}', now(), now())`,
+        [smartesId, no, makineKodu, adet]);
+      return (await vt().tek<{ id: number }>(
+        'INSERT INTO smartes_adet_onayi (smartes_id, tur, adet, duzeltme, olusma) VALUES ($1, $2, $3, false, now()) RETURNING id::int AS id', [smartesId, tur, adet]))!.id;
+    };
+    const durum = async (id: number) => (await vt().tek<{ durum: string }>('SELECT durum FROM smartes_adet_onayi WHERE id = $1', [id]))!.durum;
+    const sayimlar = () => vt().sorgu<{ adet: number; makine_id: number | null }>(
+      "SELECT adet, makine_id FROM uretim_sayimi WHERE emir_id = $1 AND kaynak = 'smartes' ORDER BY id", [uretimEmriId]);
+
+    // Red de CORE kaydının kaderini belirler: sayfayı gören reddedemez.
+    const ilkSatir = await kuyruga(7201, 'saglam', 6, adimKodu);
+    assert.equal((await istek('POST', '/smartes/adet-onaylari/reddet', { idler: [ilkSatir], neden: 'Deneme' }, okuyucu)).statusCode, 403);
+    assert.equal(await durum(ilkSatir), 'bekliyor');
+
+    // Makine SmartES makine eşlemesinden verilir: adımın makinesi sayıma yazılır.
+    assert.deepEqual((await istek('POST', '/smartes/adet-onaylari/onayla', { idler: [ilkSatir] })).json(), { islenen: 1, hatalar: [] });
+    assert.deepEqual(await sayimlar(), [{ adet: 6, makine_id: adimMakinesi }]);
+
+    // Onaylanan satır CORE'a yazılmıştır: sonradan reddedilemez, kararı değişmez.
+    assert.deepEqual((await istek('POST', '/smartes/adet-onaylari/reddet', { idler: [ilkSatir], neden: 'Geç red' })).json(),
+      { islenen: 0, hatalar: [{ id: ilkSatir, ileti: ONAY_ILETILERI.karardaDegil }] });
+    assert.equal(await durum(ilkSatir), 'onaylandi');
+
+    // Adımda çalışmayan makineye eşlenmiş satır başka makineye yazılmaz; satır bekler.
+    const baskaMakine = await kuyruga(7202, 'saglam', 3, 'ORN-DIGER');
+    const r = (await istek('POST', '/smartes/adet-onaylari/onayla', { idler: [baskaMakine] })).json() as { islenen: number; hatalar: { id: number }[] };
+    assert.deepEqual([r.islenen, r.hatalar.map((h) => h.id)], [0, [baskaMakine]]);
+    assert.equal(await durum(baskaMakine), 'bekliyor');
+
+    // Red adedi fire eşlemesi olmadan sağlam diye sayılmaz.
+    const redSatiri = await kuyruga(7203, 'red', 2, adimKodu);
+    assert.deepEqual((await istek('POST', '/smartes/adet-onaylari/onayla', { idler: [redSatiri] })).json(),
+      { islenen: 0, hatalar: [{ id: redSatiri, ileti: ONAY_ILETILERI.redIslenmez }] });
+    assert.equal(await durum(redSatiri), 'bekliyor');
+    assert.deepEqual((await sayimlar()).map((x) => x.adet), [6]);
+  });
+
+  test('3173 b: sayım kaynağı SmartES olan istasyonun satırı okununca onaya düşer, terminal sayımı reddedilir; terminalden sayılan istasyonda değişen bir şey yok', async () => {
+    const { uretimEmriId, ilk } = await emirKur(true);
+    await gonderimTuru(vt(), turOrtami());
+    const no = (await vt().tek<{ no: string }>('SELECT smartes_is_emri_no AS no FROM smartes_giden WHERE is_emri_id = $1', [ilk]))!.no;
+    await vt().tx(async (db) => { await emirBaslat(db, (await kullaniciYukle(db, yoneticiId))!, uretimEmriId, undefined, undefined, ilk); });
+    const istasyonId = (await vt().tek<{ id: number }>('SELECT istasyon_id AS id FROM makine ORDER BY id DESC OFFSET 1 LIMIT 1'))!.id;
+    const gun = (fark: number) => new Date(simdi + fark * 86_400_000).toISOString().slice(0, 19);
+    const oku = async (satirlar: Record<string, string>[]) => {
+      sahte.isleyiciler.set('WorkOrdersStatusList', () => tablo(satirlar));
+      simdi += 5 * 60_000;
+      assert.equal((await okumaTuru(vt(), 'is-emri-durumu', turOrtami())).tur, 'okundu');
+    };
+    const terminal = () => vt().tx(async (db) => emirSayim(db, (await kullaniciYukle(db, yoneticiId))!, uretimEmriId, { tur: 'saglam', adet: 1 }, { isEmriId: ilk }));
+    const bekleyenler = async () => ((await istek('GET', '/smartes/adet-onaylari?gorunum=bekliyor')).json() as { satirlar: { id: number; smartesId: number; adet: number; duzeltme: boolean }[] }).satirlar
+      .filter((x) => x.smartesId >= 9100 && x.smartesId < 9200);
+    const sayimlar = () => vt().sorgu<{ adet: number; kaynak: string | null }>(
+      "SELECT adet, kaynak FROM uretim_sayimi WHERE emir_id = $1 AND tur IN ('saglam', 'karar_bekliyor') ORDER BY id", [uretimEmriId]);
+    await vt().sorgu("UPDATE istasyon SET sayim_kaynagi = 'terminal', sayim_kaynagi_gecerlilik = NULL");
+    await aktarimAc();
+    const yeniSatir = { WORKORDER_STATUS_ID: '9102', WORKORDER_NO: no, OK: '7', RED: '1', START_DATETIME: gun(1) };
+
+    // İstasyon terminalden sayılırken SmartES satırı yalnız okunur; terminal sayar.
+    await oku([yeniSatir]);
+    assert.deepEqual(await bekleyenler(), []);
+    await terminal();
+
+    // İstasyon SmartES'e geçer: önce başlamış satır girmez, sonra başlayan bir kez girer; adedi değişirse farkı gelir.
+    await vt().sorgu("UPDATE istasyon SET sayim_kaynagi = 'smartes', sayim_kaynagi_gecerlilik = $2 WHERE id = $1", [istasyonId, new Date(simdi)]);
+    await oku([{ WORKORDER_STATUS_ID: '9101', WORKORDER_NO: no, OK: '4', START_DATETIME: gun(-1) }, yeniSatir, { WORKORDER_STATUS_ID: '9103', WORKORDER_NO: 'ORN-YOK', OK: '5', START_DATETIME: gun(1) }]);
+    assert.deepEqual((await bekleyenler()).map((x) => [x.smartesId, x.adet, x.duzeltme]), [[9102, 7, false]]);
+    const onayDurumu = async () => Object.fromEntries(((await istek('GET', '/smartes/is-emri-durumlari?sayfa=1')).json() as { satirlar: { smartesId: number; onay: string | null }[] })
+      .satirlar.filter((x) => [9101, 9102, 9103].includes(x.smartesId)).map((x) => [x.smartesId, x.onay]));
+    assert.deepEqual(await onayDurumu(), { 9101: null, 9102: 'bekliyor', 9103: null });
+    await oku([yeniSatir]);
+    assert.equal((await bekleyenler()).length, 1);
+    await oku([{ ...yeniSatir, OK: '9' }]);
+    assert.deepEqual((await bekleyenler()).map((x) => [x.adet, x.duzeltme]).sort(), [[2, true], [7, false]]);
+
+    // Terminal sayımı sunucuda reddedilir; onaylanan SmartES adedi aynı emre SmartES kaynağıyla yazılır.
+    await assert.rejects(terminal(), /SmartES’ten gelir/);
+    // Hurda terminalde kalır: SmartES red adedi CORE'a işlenmediği için kapatılırsa hiçbir yerden yazılamazdı.
+    const neden = (await ortam!.sahip.tek<{ id: number }>("INSERT INTO hurda_nedeni (kod, ad, sira) VALUES ('ORN-SH', 'Deneme hurdası', 971) RETURNING id"))!.id;
+    await vt().tx(async (db) => emirSayim(db, (await kullaniciYukle(db, yoneticiId))!, uretimEmriId, { tur: 'hurda', adet: 1, hurdaNedeniId: neden }, { isEmriId: ilk }));
+    assert.equal((await vt().tek<{ n: number }>("SELECT count(*)::int AS n FROM uretim_sayimi WHERE emir_id = $1 AND tur = 'hurda'", [uretimEmriId]))!.n, 1);
+    const onay = (await istek('POST', '/smartes/adet-onaylari/onayla', { idler: (await bekleyenler()).map((x) => x.id) })).json();
+    assert.deepEqual(onay, { islenen: 2, hatalar: [] });
+    assert.equal((await onayDurumu())[9102], 'onaylandi');
+    assert.deepEqual((await sayimlar()).map((x) => [x.adet, x.kaynak]).sort(), [[1, null], [2, 'smartes'], [7, 'smartes']]);
+
+    // Bitirirken verilen adet de terminal sayımıdır: sayaçtan farklıysa reddedilir; adetsiz bitirme bu nedenle reddedilmez.
+    const bitir = (adet?: number) => vt().tx(async (db) => emirBitir(db, (await kullaniciYukle(db, yoneticiId))!, uretimEmriId, adet, undefined, ilk)).then(() => null, (h: Error) => h.message);
+    assert.match((await bitir(15)) ?? '', /SmartES’ten gelir/);
+
+    // Anahtar kapanınca aktarım durur: terminal sayar, okunan satır onaya girmez, bekleyen onaylanamaz. Kapalıyken başlamış satır açılınca da girmez.
+    await oku([{ ...yeniSatir, OK: '10' }]);
+    const [bekleyen] = await bekleyenler();
+    assert.deepEqual([bekleyen?.adet, bekleyen?.duzeltme], [1, true]);
+    await aktarimAc(false);
+    await terminal();
+    await oku([{ ...yeniSatir, OK: '11' }]);
+    assert.equal((await bekleyenler()).length, 1);
+    assert.deepEqual((await istek('POST', '/smartes/adet-onaylari/onayla', { idler: [bekleyen!.id] })).json(),
+      { islenen: 0, hatalar: [{ id: bekleyen!.id, ileti: ONAY_ILETILERI.kaynakDegisti }] });
+    assert.equal((await istek('POST', '/ayarlar/smartes.sayim-aktarimi/degistir', { deger: true })).statusCode, 200);
+    await oku([{ ...yeniSatir, OK: '11' }, { WORKORDER_STATUS_ID: '9105', WORKORDER_NO: no, OK: '3', START_DATETIME: gun(0) }]);
+    assert.deepEqual([...new Set((await bekleyenler()).map((x) => x.smartesId))], [9102], 'açılıştan önce başlamış satır girmez');
+    await aktarimAc();
+    const bekleyenSayisi = (await bekleyenler()).length;
+
+    // Satır beklerken istasyon terminale alınırsa o üretimi terminal sayar: bekleyen onaylanamaz, sonraki SmartES satırı onaya girmez.
+    await vt().sorgu("UPDATE istasyon SET sayim_kaynagi = 'terminal', sayim_kaynagi_gecerlilik = $2 WHERE id = $1", [istasyonId, new Date(simdi)]);
+    await terminal();
+    assert.deepEqual((await istek('POST', '/smartes/adet-onaylari/onayla', { idler: [bekleyen!.id] })).json(),
+      { islenen: 0, hatalar: [{ id: bekleyen!.id, ileti: ONAY_ILETILERI.kaynakDegisti }] });
+    await oku([{ ...yeniSatir, OK: '14' }]);
+    assert.equal((await bekleyenler()).length, bekleyenSayisi);
+    assert.doesNotMatch((await bitir()) ?? '', /SmartES/);
   });
 });

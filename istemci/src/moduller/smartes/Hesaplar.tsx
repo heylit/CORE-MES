@@ -33,7 +33,7 @@ const OEE_SUTUNLARI: readonly Sutun<Oee>[] = [
 const cevrimFarki = (c: Cevrim): number | null => (c.gercekSaniye === null || c.tanimliSaniye === null ? null : c.gercekSaniye - c.tanimliSaniye);
 const CEVRIM_SUTUNLARI: readonly Sutun<Cevrim>[] = [
   { anahtar: 'stok', baslik: 'Stok', hucre: (c) => c.stokNo ?? YOK, mono: true },
-  { anahtar: 'yer', baslik: 'Operasyon · makine', hucre: (c) => `${c.operasyonKodu ?? YOK} · ${c.makineKodu ?? YOK}`, mono: true },
+  { anahtar: 'yer', baslik: 'Operasyon · makine', hucre: (c) => <span><span className="tc-sm-kirilmaz">{c.operasyonKodu ?? YOK} ·</span> <span className="tc-sm-kirilmaz">{c.makineKodu ?? YOK}</span></span>, mono: true, kartTamSatir: true },
   { anahtar: 'tanimli', baslik: 'CORE’da tanımlı', hucre: (c) => saniye(c.tanimliSaniye), hizala: 'sag', mono: true },
   // Birimi belli olmayan süre saniyeye çevrilmez; SmartES’in gönderdiği haliyle gösterilir ve fark hesaplanmaz.
   { anahtar: 'gercek', baslik: 'SmartES’in ölçtüğü', hucre: (c) => (c.gercekSaniye === null ? (c.gercekMetni ?? YOK) : saniye(c.gercekSaniye)), hizala: 'sag', mono: true },

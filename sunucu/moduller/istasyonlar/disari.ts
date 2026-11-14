@@ -49,6 +49,12 @@ export async function eskiKoddanKimlikCoz(
 
 export const istasyonGetir = (db: Db, id: number): Promise<Istasyon | null> => sorgular.istasyonBul(db, id);
 
+// 3173: sayımı SmartES'ten gelen istasyonlar, kaynağın geçerli olduğu anla (sunucu saati). Terminalden sayılan istasyon haritada yoktur.
+// Üretim emirleri terminal sayımını bu istasyonlarda reddeder; smartes yalnız bu istasyonların, geçerlilikten sonra başlamış satırını onaya alır.
+export async function smartesSayimIstasyonlari(db: Db, idler?: readonly number[]): Promise<Map<number, Date>> {
+  return new Map((await sorgular.smartesSayimIstasyonlari(db, idler ?? null)).map((i) => [i.id, i.gecerlilik]));
+}
+
 // Aktif istasyon: kendisi de iş merkezi de aktif. Pasif iş merkezinin aktif istasyonu burada dönmez.
 export const aktifIstasyonlar = (db: Db): Promise<Istasyon[]> => servis.istasyonlar(db, false);
 
