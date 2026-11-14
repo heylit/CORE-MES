@@ -6,7 +6,7 @@ import { MODEL_PARCA_BAYT } from '#paylasilan/sozlesme/atolye.ts';
 import {
   DUZ_RAF_KODU, adresCoz, gozKodu, ilkDuzNo, bolumCakismalari, fabrikaDenetle, fabrikaNoktasi, gecisIhlalleri, gozDolulukIhlali, krokiHizalamaYuvarla, pdfBasligiGecerliMi, aramaKatla, aramaSirala, base64Coz, beklenenParcaBoyu, cakisirMi, donusIndirge, glbBasligiGecerliMi, gozAdresi, hucreAdi, hucreKutusu,
   izgaraAdlari, kapiKenardaMi, koseler, modelParcaSayisi, odaDuvarlari, rafNetOlcuIhlalleri, rotaAdimi, rotaBul, rotaNoktasiIhlali, salondaMi, surumGuncelMi, sutunAdi,
-  yerlesimiDenetle, yerlesimiYuvarla,
+  rafSilmeNedeni, yerlesimiDenetle, yerlesimiYuvarla,
 } from './kurallar.ts';
 import type { AramaAdayi, DenetimBaglami } from './kurallar.ts';
 
@@ -166,9 +166,15 @@ describe('atolye kuralları (saf)', () => {
     assert.equal(aramaSirala('a1', [aday('goz', 'A10'), aday('raf', 'A1X'), aday('goz', 'A1')], 20, 'duz-sayi')[0]?.etiket, 'A1');
   });
 
-  test('ATL-13 raf silinemez; başka salonun rafı bu salona yazılamaz', () => {
+  test('ATL-13 (3230 a) kayıtta olmayan raf silinir; malzemeli ya da açık işli raf silinemez; başka salonun rafı bu salona yazılamaz', () => {
     const b = baglam({ salonRaflari: [{ id: 7, kod: 'R1' }] });
-    assert.deepEqual(kurallar(kayit(), b), ['ATL-13']);
+    assert.deepEqual(kurallar(kayit(), b), []);
+    const engelli = baglam({ salonRaflari: [{ id: 7, kod: 'R1' }], silinemeyenRaflar: new Map([[7, rafSilmeNedeni(['acik-is', 'malzeme'])]]) });
+    assert.deepEqual(yerlesimiDenetle(kayit(), engelli).ihlaller.map((i) => [i.kural, i.mesaj]),
+      [['ATL-13', 'Raf R1 silinemez: rafta malzeme var; önce başka rafa taşıyın ya da rafı pasife alın.']]);
+    assert.match(rafSilmeNedeni(['acik-is']), /açık iş/);
+    // Engelli raf kayıtta kalıyorsa (pasife alma dahil) ihlal yok.
+    assert.deepEqual(kurallar(kayit({ raflar: [raf({ id: 7, aktif: false })] }), engelli), []);
     assert.deepEqual(kurallar(kayit({ raflar: [raf({ id: 7, aktif: false })] }), b), []);
     assert.deepEqual(kurallar(kayit({ raflar: [raf({ id: 7 }), raf({ id: 8, kod: 'R2', z: 15 })] }), b), ['ATL-13']);
   });
@@ -372,7 +378,10 @@ describe('atolye kuralları (saf)', () => {
     // Raf 7 bölüm 2'ye taşınır: geçerli.
     assert.deepEqual(fabrikaDenetle([bolum(1, [5], []), bolum(2, [], [{ id: 7, kod: 'R7' }, { id: 8, kod: 'R8' }])], baglam), []);
     const k = fabrikaDenetle([bolum(1, [5, 50], [{ id: null, kod: 'R99' }]), bolum(2, [5], [{ id: 8, kod: 'R8' }])], baglam);
-    assert.deepEqual(k.map((x) => x.kural).sort(), ['ATL-09', 'ATL-13', 'ATL-32', 'ATL-32']);
+    // 3230 a: kayıtta kalmayan raf 7 silinir; engeli varsa ATL-13.
+    assert.deepEqual(k.map((x) => x.kural).sort(), ['ATL-09', 'ATL-32', 'ATL-32']);
+    const engelli = fabrikaDenetle([bolum(1, [5], []), bolum(2, [], [{ id: 8, kod: 'R8' }])], { ...baglam, silinemeyenRaflar: new Map([[7, 'rafta malzeme var']]) });
+    assert.deepEqual(engelli.map((x) => [x.kural, x.mesaj, x.ogeler]), [['ATL-13', 'Raf R7 silinemez: rafta malzeme var.', ['bolum:1']]]);
   });
 
   test('ATL-33 net ölçü: kat sayısı kadar kat yüksekliği, katlar rafa, gözler bölmeye sığar; girilmezse denetim yok', () => {

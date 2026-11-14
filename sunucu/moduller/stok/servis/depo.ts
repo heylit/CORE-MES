@@ -145,10 +145,12 @@ export async function haritadanEsle(db: Db): Promise<HaritaEslemeCevabi> {
   if (plan.guncelle.length > 0) await sorgular.konumKodTekliginiErtele(db);
   for (const k of plan.ekle) await korumali(() => sorgular.haritaKonumuAc(db, k));
   for (const k of plan.guncelle) await korumali(() => sorgular.haritaKonumuGuncelle(db, k));
+  let yenidenBaglanan = 0;
+  for (const k of plan.yenidenBagla) yenidenBaglanan += (await korumali(() => sorgular.haritaKonumuYenidenBagla(db, k))).length;
   for (const k of plan.turDegisimi) await sorgular.haritaKonumuTuru(db, k);
   const kapatilan = plan.kapat.length === 0 ? 0 : (await sorgular.haritaKonumlariniKapat(db, plan.kapat)).length;
   const e: HaritaEslemeCevabi = {
-    eklenen: plan.ekle.length, guncellenen: plan.guncelle.length + plan.turDegisimi.length, kapatilan, atlanan: plan.atlanan,
+    eklenen: plan.ekle.length, guncellenen: plan.guncelle.length + plan.turDegisimi.length + yenidenBaglanan, kapatilan, atlanan: plan.atlanan,
     koduDegisenler: idler.length === 0 ? [] : koduDegisenler(onceki, await sorgular.kodDurumlari(db, { idler })),
   };
   // 3177 b: bu sürümden sonraki ilk eşleme (açılış işi ya da ondan önce gelen bir harita kaydı) kod değişimlerini bir kez saklar.

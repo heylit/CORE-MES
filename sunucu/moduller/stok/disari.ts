@@ -411,3 +411,11 @@ export const istasyonSilinecekYansit = (db: Db, olay: { istasyonId: number }): P
 // 3202 (Risk K2, K3): Fabrika Haritası'nın 3B model listesi için haritadaki bir göze bağlı aktif konumda sıfırdan büyük bakiyesi olan
 // malzemelerin kimlikleri (idler null: hepsi; verilirse yalnız onların içinden); miktar ve yer dönmez. Yetki denetlemez; bağı kablolama.ts kurar.
 export const haritaStokluMalzemeleri = (db: Db, idler: readonly number[] | null): Promise<number[]> => sorgular.haritaStokluMalzemeleri(db, idler);
+// 3230 a (Risk K2, K5): Fabrika Haritası'nda silinecek rafın gözlerinde silmeyi durduran stok bağı: malzeme (sıfırdan büyük bakiye) ya da
+// açık iş (bekleyen sayım farkı, süren toplama, yoldaki teslim, sepet). Yalnız engeli olan göz döner; malzeme adı ve miktarı dönmez.
+// Bağlı konumları işlem sonuna kadar kilitler. Yetki denetlemez; bağı kablolama.ts kurar.
+export const gozSilmeEngelleri = async (db: Db, gozIdler: readonly number[]): Promise<{ gozId: number; engel: 'malzeme' | 'acik-is' }[]> =>
+  gozIdler.length === 0 ? [] : (await sorgular.gozSilmeEngelleri(db, gozIdler)).flatMap((e) => [
+    ...(e.malzeme ? [{ gozId: e.gozId, engel: 'malzeme' as const }] : []),
+    ...(e.acikIs ? [{ gozId: e.gozId, engel: 'acik-is' as const }] : []),
+  ]);

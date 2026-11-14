@@ -633,7 +633,13 @@ export function dondur(t: Taslak, anahtar: string, derece: number): Taslak {
   return guncelle(t, anahtar, { donus: donusIndir(simdiki + derece) });
 }
 
-// Raf silinmez, pasife alınır (ATL-13); istasyonun ve makinenin yeri kaldırılır (kaydı kalır); öbürleri silinir.
+// 3230 a: kayıtlı raf taslaktan çıkarılır; kayıt onu gözleriyle siler (malzemeli ya da açık işli rafı sunucu reddeder, ATL-13).
+export function rafSil(t: Taslak, anahtar: string): Taslak {
+  return { ...t, raflar: t.raflar.filter((r) => r.anahtar !== anahtar) };
+}
+
+// Kayıtlı raf burada pasife alınır (silmesi rafSil, onay penceresiyle); istasyonun ve makinenin yeri kaldırılır (kaydı kalır);
+// öbürleri silinir.
 export function kaldir(t: Taslak, anahtar: string): Taslak {
   const tur = ogeTuru(anahtar);
   if (tur === 'raf') {

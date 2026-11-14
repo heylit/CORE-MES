@@ -653,6 +653,9 @@ export interface HaritaPlani {
   guncelle: { id: number; kod: string; aktif: boolean }[];
   turDegisimi: { id: number; tur: HaritaAlanTuru; depoId: number }[];
   kapat: number[];
+  // 3230 a: silinip aynı adresle yeniden çizilen gözün eski konumu (bağsız, pasif, bakiyesiz) yeni göze bağlanır; hareket geçmişi
+  // aynı kodda kalır, kod çakışmaz.
+  yenidenBagla: { id: number; gozId: number; depoId: number; bolme: number; kat: number; aktif: boolean }[];
   atlanan: string[];
   // atlanan'ın iki alt kümesi (geçiş uyarısı nedeniyle ayrı söyler): yeni kodu başka konumda olduğu için eski kodunda kalan göz
   // adresleri ve pasif rafta stoğu olduğu için açık kalan konumların kodu.
@@ -672,7 +675,7 @@ export function depoKoduOner(salonKodu: string, kullanilan: ReadonlySet<string>)
 }
 
 export function haritaPlani(g: { gozler: readonly HaritaGozu[]; alanlar: readonly HaritaAlani[]; depolar: readonly HaritaDeposu[]; konumlar: readonly HaritaKonumu[]; kodlar: ReadonlySet<string> }): HaritaPlani {
-  const plan: HaritaPlani = { ekle: [], guncelle: [], turDegisimi: [], kapat: [], atlanan: [], koduGecemeyen: [], pasifStoklu: [] };
+  const plan: HaritaPlani = { ekle: [], guncelle: [], turDegisimi: [], kapat: [], yenidenBagla: [], atlanan: [], koduGecemeyen: [], pasifStoklu: [] };
   const kodlar = new Set(g.kodlar);
   const bolumDeposu = new Map(g.depolar.flatMap((d) => (d.salonId !== null && d.aktif ? [[d.salonId, d.id] as const] : [])));
   const depolu = new Set(bolumDeposu.keys());
@@ -709,7 +712,17 @@ export function haritaPlani(g: { gozler: readonly HaritaGozu[]; alanlar: readonl
     if (!aktif && k.aktif && k.satirSayisi > 0) { aktif = true; plan.atlanan.push(kod); plan.pasifStoklu.push(kod); }
     if (kod !== k.kod || k.aktif !== aktif) plan.guncelle.push({ id: k.id, kod, aktif });
   }
+  // Yeniden bağlanabilir konum: haritadan açılmış raf gözü, bağı boşalmış, kapalı ve bakiyesiz. Bakiyeli, açık ya da başka göze,
+  // alana, stok rafına bağlı konuma dokunulmaz.
+  const bosta = new Map(g.konumlar.flatMap((k) => (
+    k.tur === 'raf_gozu' && k.rafId === null && k.gozId === null && k.alanId === null && !k.aktif && k.satirSayisi === 0 && !yeniKod.has(k.id) ? [[k.kod, k] as const] : [])));
   for (const z of yeniGozler) {
+    const eski = bosta.get(z.adres);
+    if (eski) {
+      bosta.delete(z.adres);
+      plan.yenidenBagla.push({ id: eski.id, gozId: z.id, depoId: bolumDeposu.get(z.salonId)!, bolme: z.bolme, kat: z.kat, aktif: z.rafAktif });
+      continue;
+    }
     if (kodlar.has(z.adres)) { plan.atlanan.push(z.adres); plan.koduGecemeyen.push(z.adres); continue; }
     kodlar.add(z.adres);
     plan.ekle.push({ depoId: bolumDeposu.get(z.salonId)!, salonId: z.salonId, kod: z.adres, tur: 'raf_gozu', bolme: z.bolme, kat: z.kat, ad: null, gozId: z.id, alanId: null, aktif: z.rafAktif });

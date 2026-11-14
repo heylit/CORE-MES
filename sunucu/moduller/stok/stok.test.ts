@@ -14,7 +14,7 @@ import {
   araCevabi, yerlesimCevabi, fisAyrintiCevabi, fislerCevabi, kodCozCevabi, toplamaAyrintiCevabi, panelCevabi, aylikStokDegeriCevabi, stokDegeriCevabi, partiIziCevabi, rafMatrisiCevabi,
   malzemeIstegiCevabi, malzemeIstekleriCevabi, stokOzetiCevabi, haritaOzetiCevabi, gozStoklariCevabi, lotEtiketleriCevabi, zeminCevabi,
 } from '#paylasilan/sozlesme/stok.ts';
-import type { ZeminCevabi, AylikStokDegeriCevabi, HareketCevabi, MalzemeAyrintiCevabi, KodCozCevabi, EmirTamamlamaCevabi, GozStoklariCevabi, GozOzetleriCevabi, HaritaOzetiCevabi, KonumAyrintiCevabi, KonumDuzenleCevabi, RafDuzenleCevabi, MalKabulAyrintiCevabi, MalKabulCevabi, MalzemeIstegiAcGirdisi, MalzemeIstegiCevabi, MalzemeIstekleriCevabi, Raf, StokDegeriCevabi, SiparisIrsaliyeleriCevabi, SonPartilerCevabi, StokOzetiCevabi } from '#paylasilan/sozlesme/stok.ts';
+import type { HaritaEslemeCevabi, ZeminCevabi, AylikStokDegeriCevabi, HareketCevabi, MalzemeAyrintiCevabi, KodCozCevabi, EmirTamamlamaCevabi, GozStoklariCevabi, GozOzetleriCevabi, HaritaOzetiCevabi, KonumAyrintiCevabi, KonumDuzenleCevabi, RafDuzenleCevabi, MalKabulAyrintiCevabi, MalKabulCevabi, MalzemeIstegiAcGirdisi, MalzemeIstegiCevabi, MalzemeIstekleriCevabi, Raf, StokDegeriCevabi, SiparisIrsaliyeleriCevabi, SonPartilerCevabi, StokOzetiCevabi } from '#paylasilan/sozlesme/stok.ts';
 import type { Kullanici } from '#paylasilan/kullanici.ts';
 import { komutIstegi } from '../../../istemci/src/moduller/recete-rota/kaynak-komutlari.ts';
 import { STOK_KOMUTLARI } from '../../../istemci/src/moduller/recete-rota/stok-komutlari.ts';
@@ -26,7 +26,7 @@ import { denetimYaz } from '../denetim/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
-import { parcaRevizyonuCozucusu, malzemePartiBakiyeleri, statuListesiCozucusu, degerGrubuToplamlari, dusukStokSayisi, partiKaliteDurumuYap, partilerinRedBakiyeleri, karantinadanBirak, karantinaDisiKonumlar, hareketPartileri, partilerinRedGirisleri, partileriBul, emrinAkisHareketleri, emrinPartileri, partiGirisZamanlari, sonPartiler, konumAdlari, malzemeIstegiAc, malzemeIstekleri, malzemeStokDurumlari, stokMiktarlari, stokYokIstekleri, lotEtiketleri, partilerinMalzemeleri, haritaStokluMalzemeleri } from './disari.ts';
+import { parcaRevizyonuCozucusu, malzemePartiBakiyeleri, statuListesiCozucusu, degerGrubuToplamlari, dusukStokSayisi, partiKaliteDurumuYap, partilerinRedBakiyeleri, karantinadanBirak, karantinaDisiKonumlar, hareketPartileri, partilerinRedGirisleri, partileriBul, emrinAkisHareketleri, emrinPartileri, partiGirisZamanlari, sonPartiler, konumAdlari, malzemeIstegiAc, malzemeIstekleri, malzemeStokDurumlari, stokMiktarlari, stokYokIstekleri, lotEtiketleri, partilerinMalzemeleri, haritaStokluMalzemeleri, gozSilmeEngelleri } from './disari.ts';
 import * as sorgular from './sorgular.ts';
 import { cikisYap, kaliteDegistir } from './servis.ts';
 import { acikEmirler } from '../uretim-emirleri/disari.ts';
@@ -2580,6 +2580,51 @@ describe('stok (gerçek PostgreSQL)', () => {
     assert.deepEqual(await haritaStokluMalzemeleri(vt, [kabuldeki]), []);
     assert.equal((await haritaStokluMalzemeleri(vt, null)).includes(m), true);
     assert.equal((await haritaStokluMalzemeleri(vt, null)).includes(kabuldeki), false);
+
+    // 3230 a (Risk K2, K5): raf silme engeli yalnız engeli olan gözü döner; malzeme = sıfırdan büyük bakiye, açık iş = sepet satırı,
+    // yoldaki teslim, bekleyen sayım farkı, süren toplama. Bağlı konum satırı işlem sonuna kadar kilitlidir.
+    const bosGoz = (await vt.tek<{ id: number }>('INSERT INTO atolye_goz (raf_id, bolme, kat, goz) VALUES ($1, 2, 1, 1) RETURNING id', [raf!.id]))!.id;
+    assert.equal((await mudur('POST', '/stok/konumlar/haritadan-esle')).durum, 200);
+    assert.deepEqual(await gozSilmeEngelleri(vt, [gozIdleri[0]!, bosGoz]), [{ gozId: gozIdleri[0], engel: 'malzeme' }]);
+    assert.deepEqual(await gozSilmeEngelleri(vt, [bosGoz]), []);
+    assert.deepEqual(await gozSilmeEngelleri(vt, []), []);
+    const bosKonum = (await vt.tek<{ id: number }>('SELECT id FROM stok_konum WHERE atolye_goz_id = $1', [bosGoz]))!.id;
+    const sepet = await vt.tek<{ id: number }>('INSERT INTO stok_sepet_satiri (kisi_id, malzeme_id, kaynak_konum_id, miktar) VALUES ($1, $2, $3, 1) RETURNING id', [kisiler.get('depo'), m, bosKonum]);
+    assert.deepEqual(await gozSilmeEngelleri(vt, [gozIdleri[0]!, bosGoz]), [{ gozId: gozIdleri[0], engel: 'malzeme' }, { gozId: bosGoz, engel: 'acik-is' }]);
+    await vt.sorgu('DELETE FROM stok_sepet_satiri WHERE id = $1', [sepet!.id]);
+    // Eş zamanlı giriş: denetim konumu kilitlerken başka işlem o konuma bakiye yazamaz (yabancı anahtar konum satırını bekler).
+    await vt.tx(async (db) => {
+      assert.deepEqual(await gozSilmeEngelleri(db, [bosGoz]), []);
+      await assert.rejects(
+        vt.tx(async (baska) => {
+          await baska.sorgu("SET LOCAL lock_timeout = '300ms'");
+          await baska.sorgu('SELECT 1 FROM stok_konum WHERE id = $1 FOR KEY SHARE', [bosKonum]);
+        }),
+        (h: { code?: string }) => h.code === '55P03',
+      );
+    });
+    // Risk N1: denetim kilidi beklerken onaylanan iş denetimde görünür (kilit ve denetim ayrı ifade): silme reddedilir.
+    const bekleyen = vt.tx(async (baska) => {
+      await baska.sorgu('SELECT 1 FROM stok_konum WHERE id = $1 FOR KEY SHARE', [bosKonum]);
+      await baska.sorgu('INSERT INTO stok_sepet_satiri (kisi_id, malzeme_id, kaynak_konum_id, miktar) VALUES ($1, $2, $3, 1)', [kisiler.get('depo'), m, bosKonum]);
+      await baska.sorgu('SELECT pg_sleep(0.5)');
+    });
+    await new Promise((bitti) => setTimeout(bitti, 150));
+    assert.deepEqual(await vt.tx((db) => gozSilmeEngelleri(db, [bosGoz])), [{ gozId: bosGoz, engel: 'acik-is' }]);
+    await bekleyen;
+    await vt.sorgu('DELETE FROM stok_sepet_satiri WHERE kaynak_konum_id = $1', [bosKonum]);
+    // Risk K6: boş göz haritada silinince eşleme konumunu kapatır; aynı adres yeniden çizilince kapalı, bağsız ve bakiyesiz eski
+    // konum yeni göze bağlanıp açılır (yeni konum açılmaz, kod çakışmaz).
+    await vt.sorgu('DELETE FROM atolye_goz WHERE id = $1', [bosGoz]);
+    const kapanis = await mudur<HaritaEslemeCevabi>('POST', '/stok/konumlar/haritadan-esle');
+    assert.equal(kapanis.govde.kapatilan, 1);
+    assert.deepEqual(await vt.tek('SELECT aktif, atolye_goz_id AS goz FROM stok_konum WHERE id = $1', [bosKonum]), { aktif: false, goz: null });
+    const yeniGoz = (await vt.tek<{ id: number }>('INSERT INTO atolye_goz (raf_id, bolme, kat, goz) VALUES ($1, 2, 1, 1) RETURNING id', [raf!.id]))!.id;
+    const yeniden = await mudur<HaritaEslemeCevabi>('POST', '/stok/konumlar/haritadan-esle');
+    assert.deepEqual([yeniden.govde.eklenen, yeniden.govde.guncellenen, yeniden.govde.atlanan], [0, 1, []]);
+    assert.deepEqual(await vt.tek('SELECT aktif, atolye_goz_id AS goz FROM stok_konum WHERE id = $1', [bosKonum]), { aktif: true, goz: yeniGoz });
+    await vt.sorgu('DELETE FROM atolye_goz WHERE id = $1', [yeniGoz]);
+    assert.equal((await mudur<HaritaEslemeCevabi>('POST', '/stok/konumlar/haritadan-esle')).govde.kapatilan, 1);
 
     // Stoklu bölüm depodan çıkmaz; stok taşınınca çıkar, konumları kapanır, bağsız konum listesine düşmez.
     assert.equal((await mudur('POST', `/stok/harita-bolumleri/${salon!.id}/depo`, { depo: false })).durum, 409);

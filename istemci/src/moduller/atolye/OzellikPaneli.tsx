@@ -15,6 +15,8 @@ interface Ozellikler {
   degistir: (anahtar: string, degisim: Record<string, unknown>) => void;
   salonDegistir: (degisim: Partial<Taslak['salon']>) => void;
   kaldir: (anahtar: string) => void;
+  // 3230 a: kayıtlı rafı silme isteği (onay penceresi düzenleyicide açılır).
+  rafSil: (anahtar: string) => void;
   // Fabrikada bölümün girişi (bölümün ortasına); tek bölümde salonun.
   girisKoy: (bolum?: TaslakBolum) => void;
   sec: (anahtar: string | null) => void;
@@ -111,7 +113,7 @@ function NetOlculer({ raf, degistir }: { raf: Taslak['raflar'][number]; degistir
   );
 }
 
-export function OzellikPaneli({ taslak: t, secili, degistir, salonDegistir, kaldir, girisKoy, sec, duvarAc, modeller, kutuphaneAc, merkezModelleri, merkezModeliDegisti }: Ozellikler) {
+export function OzellikPaneli({ taslak: t, secili, degistir, salonDegistir, kaldir, rafSil, girisKoy, sec, duvarAc, modeller, kutuphaneAc, merkezModelleri, merkezModeliDegisti }: Ozellikler) {
   if (secili === null && t.bolumler) {
     return (
       <div className="tc-atolye-ozellik">
@@ -297,7 +299,13 @@ export function OzellikPaneli({ taslak: t, secili, degistir, salonDegistir, kald
         <NetOlculer raf={raf} degistir={(d) => degistir(secili, d)} />
         {konum(raf)}
         <IsaretKutusu etiket="Aktif (pasif raf aramada çıkmaz)" checked={raf.aktif} onChange={(o) => degistir(secili, { aktif: o.target.checked })} />
-        {raf.id === null ? sil('Rafı sil') : raf.aktif && <Dugme simge="minus" onClick={() => kaldir(secili)}>Pasife al</Dugme>}
+        {raf.id === null ? sil('Rafı sil') : (
+          <div className="tc-atolye-raf-sil-secim">
+            {raf.aktif && <Dugme simge="minus" onClick={() => kaldir(secili)}>Pasife al</Dugme>}
+            <Dugme tur="tehlike" simge="trash" onClick={() => rafSil(secili)}>Rafı sil</Dugme>
+          </div>
+        )}
+        {raf.id !== null && <p className="tc-atolye-ipucu">Pasif raf haritada soluk kalır. Silinen raf haritadan tamamen gider.</p>}
       </div>
     );
   }
