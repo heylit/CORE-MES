@@ -1779,3 +1779,11 @@ export function emirSatinAlmaDurumlari(
   for (const no of onTalepMalzemeleri) if (!sonuc.has(no)) sonuc.set(no, { malzemeNo: no, asama: 'on_talep', no: null, talepDurumu: null, termin: null });
   return sonuc;
 }
+
+// 3256-2: onaylanmış ama siparişi verilmemiş talep kaleminin plana beklenen gelişi. Sipariş henüz verilmediği için tedarik süresi en erken
+// bugün başlar: geliş bugün + kararın teklifindeki termin günüdür. Termin günü yoksa geliş boştur; plan terminsiz sipariş gibi tahmin eder
+// (Satın Alma tedarik termini, yoksa malzemenin tedarik günü). İhtiyaç tarihi geliş sayılmaz: malzemeyi o gün gelmiş gibi göstermek iyimserdir.
+export function onayliTalepGelisi(bugun: string, terminGun: number | null): string | null {
+  if (terminGun === null || !Number.isInteger(terminGun) || terminGun < 0) return null;
+  return new Date(Date.parse(`${bugun}T00:00:00Z`) + terminGun * GUN_MS).toISOString().slice(0, 10);
+}

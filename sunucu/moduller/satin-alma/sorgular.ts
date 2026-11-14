@@ -889,6 +889,27 @@ export function talepGelisleriOku(db: Db, talepId: string): Promise<TalepGelisiO
   );
 }
 
+// 3256-2: onaylanmış (kararı var, son onay kaydı "onay"), durumu hâlâ "onayda" olan talebin siparişe geçmemiş malzeme kalemleri; termin
+// günü kalemin karardaki teklifindendir (tek kararda kararın teklifi, bölünmüş kararda kalemin teklifi). Karara girmemiş, miktarsız ve fason
+// iş emrine bağlı kalem gelmez. Fiyat ve tedarikçi taşımaz.
+export interface OnayliTalepKalemiOkuma { malzemeNo: number; miktar: string; birim: string; talepNo: string; terminGun: number | null }
+export function onayliTalepKalemleriOku(db: Db, malzemeNolar: readonly number[]): Promise<OnayliTalepKalemiOkuma[]> {
+  return db.sorgu<OnayliTalepKalemiOkuma>(
+    `SELECT c.malzeme_no AS "malzemeNo", k.miktar::text AS miktar, k.birim, t.no AS "talepNo", q.termin_gun AS "terminGun"
+       FROM satin_alma_talep t
+       JOIN satin_alma_karar r ON r.talep_id = t.id
+       JOIN satin_alma_talep_kalemi k ON k.talep_id = t.id
+       JOIN satin_alma_katalog c ON c.id = k.katalog_id
+       LEFT JOIN satin_alma_karar_kalemi rk ON rk.talep_id = t.id AND rk.kalem_id = k.id
+       JOIN satin_alma_teklif q ON q.talep_id = t.id AND q.id = coalesce(rk.teklif_id, r.teklif_id)
+      WHERE t.durum = 'onayda' AND c.malzeme_no = ANY($1::int[]) AND k.miktar IS NOT NULL AND k.is_emri_id IS NULL
+        AND (SELECT o.sonuc FROM satin_alma_onay o WHERE o.talep_id = t.id ORDER BY o.zaman DESC, o.id DESC LIMIT 1) = 'onay'
+        AND NOT EXISTS (SELECT 1 FROM satin_alma_siparis_satiri s WHERE s.talep_id = t.id AND s.kalem_id = k.id)
+      ORDER BY c.malzeme_no, t.yil, t.sira, k.sira`,
+    [[...malzemeNolar]],
+  );
+}
+
 // ---- Stok değeri için alış fiyatları (1382 d). Fiyat net: teklif satırının ve teklifin iskontosu düşülür; masraf dağıtılmaz.
 // TRY karşılığı siparişte sabitlenen kurla, yoksa teklif günü kuruyla (döviz teklifi kursuz yazılamaz, SA3); ikisi de yoksa boş.
 // Güncel kur finanstadır, burada kullanılmaz. Teslim mal kabul satırı başına netlenir: geri alınan (neti sıfır ya da eksi) teslim
