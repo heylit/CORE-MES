@@ -76,17 +76,10 @@ export async function kayitAniyla<T>(db: Db, an: string | undefined, is: () => P
 const kayitKaynaklari = new WeakMap<Db, number>();
 
 // 3173: istasyonda sağlamı SmartES sayıyor mu: "SmartES: sayım aktarımı" anahtarı açık ve istasyonun sayım kaynağı SmartES.
-// Toplu kayıt aynı işlemde satır satır sayar: cevap işlem boyunca bir kez okunur (satır başına sorgu eklenmez).
-const smartesSayanlar = new WeakMap<Db, Map<number, Promise<boolean>>>();
+// Toplu kayıt (komut önbelleği kapsamı) cevabı bir kez okur; kapsam dışında her komutta tazedir.
 function smartesSayarMi(db: Db, istasyonId: number): Promise<boolean> {
-  let okunan = smartesSayanlar.get(db);
-  if (okunan === undefined) smartesSayanlar.set(db, (okunan = new Map()));
-  let cevap = okunan.get(istasyonId);
-  if (cevap === undefined) {
-    cevap = (async () => (await sistemAyariOku(db, 'smartes.sayim-aktarimi')) && (await smartesSayimIstasyonlari(db, [istasyonId])).size > 0)();
-    okunan.set(istasyonId, cevap);
-  }
-  return cevap;
+  return onbellekte(db, `smartes-sayar:${istasyonId}`, async () =>
+    (await sistemAyariOku(db, 'smartes.sayim-aktarimi')) && (await smartesSayimIstasyonlari(db, [istasyonId])).size > 0);
 }
 
 export async function smartesKaynagiyla<T>(db: Db, kaynakKimligi: number, is: () => Promise<T>): Promise<T> {
