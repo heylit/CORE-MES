@@ -65,6 +65,11 @@ describe('Bölme komutu sahibinin adımına çevrilir; uygunluğa Üretim Emirle
     await expect(hazirla('emir-turu', { id: 9, emirTuru: '', surum: 4 })).rejects.toThrow('Emir türünü seçin.');
   });
 
+  it('durdur ve arşive al istek kimliğiyle gider (sahibinin ucu kimliksiz isteği reddeder); sürümsüz gitmez', async () => {
+    expect(await hazirla('emir-arsive-al', { id: 9, surum: 4 })).toEqual({ yol: '/adimli-emirler/9/arsive-al', govde: { surum: 4, onay: true }, tekrarKorumali: true });
+    await expect(hazirla('emir-arsive-al', { id: 9 })).rejects.toThrow('Emrin ekrandaki sürümü bilinmiyor');
+  });
+
   it('katılma adımı ana emrin adımıdır; başlamış adım ekranda engellenmez', async () => {
     const parti = { ustEmirId: 1, bolunmeSira: 2, altEmirIdleri: [], birlestigiEmirId: null, birlesmeOpNo: 30 };
     oku([kur(['tamam', 'calisiyor', 'bekliyor']), kur(['bekliyor'], { id: 9, parti })]);
