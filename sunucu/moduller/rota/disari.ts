@@ -8,6 +8,8 @@ import { isEmriEkipmanlari, kullanilmisOpNolari, revizyonKunyeleri as revizyonKu
 export type { DurumRotaAdimi, DurumRotaRevizyonu, RotaAdimi, RotaRevizyonu } from './servis.ts';
 export type { EtkinAdimSuresi } from './kurallar.ts';
 export { yururluktekiRevizyonId, yururluktekiRevizyonIdleri } from './sorgular.ts';
+export { yururlukteOperasyonlar } from './sorgular.ts';
+export type { OperasyonKimligi, YururlukteOperasyon } from './sorgular.ts';
 // Emir bitti olayının dinleyicisi (B38); bağı kablolama.ts kurar (uretim-emirleri rotayı ithal edemez).
 export { emirBittiYansit, isEmriKopyalandiYansit } from './servis.ts';
 // İş emri bitti (2578 a): ölçüm emrin kapanmasını beklemeden yazılır.

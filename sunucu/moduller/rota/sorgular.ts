@@ -722,6 +722,19 @@ export async function operasyonBul(db: Db, malzemeId: number, opNo: number): Pro
   return r ? operasyonKimligi(r.id) : null;
 }
 
+// Ürünün yürürlükteki revizyonundaki operasyonlar: bugünkü OP numarası ve numara defterindeki kayıtlı numara. Başka modül ürün düzeyi
+// verisini bugünkü numarayla gösterir, ekrandan gelen numarayı bununla kimliğe çevirir; kayıtlı numara yalnız kendi satırına yazılır
+// (eski (malzeme, op_no) tetikleyicisi aynı kimliği bulsun diye).
+export interface YururlukteOperasyon { malzemeId: number; operasyonId: OperasyonKimligi; opNo: number; kayitliOpNo: number }
+export function yururlukteOperasyonlar(db: Db, malzemeIdleri: readonly number[]): Promise<YururlukteOperasyon[]> {
+  return db.sorgu(
+    `SELECT r.malzeme_id AS "malzemeId", a.operasyon_id AS "operasyonId", a.op_no AS "opNo", o.op_no AS "kayitliOpNo"
+       FROM rota_adimi a JOIN rota_revizyonu r ON r.id = a.revizyon_id JOIN rota_op_numarasi o ON o.id = a.operasyon_id
+      WHERE r.malzeme_id = ANY($1::int[]) AND r.durum = 'yururlukte' ORDER BY r.malzeme_id, a.sira`,
+    [malzemeIdleri],
+  );
+}
+
 export interface TalimatSatiri { id: number; surum: number; metin: string; yazanKisiId: number; yazma: string }
 
 export function talimatlar(db: Db, operasyonId: OperasyonKimligi): Promise<TalimatSatiri[]> {

@@ -11,6 +11,7 @@ import {
 } from '../belge-merkezi/disari.ts';
 import { kisiAdlari } from '../kisiler/disari.ts';
 import { malzemeOzeti } from '../malzemeler/disari.ts';
+import { yururlukteOperasyonlar } from '../rota/disari.ts';
 import { kapanisSonuclari, uretimEmriOzeti } from '../uretim-emirleri/disari.ts';
 import {
   STUDYO_ILETILER, balonPlaniReddi, kapanmisEmirReddi, eskiRevizyonlar, balonYeriReddi, numuneDurumu, numuneIstegiReddi, numuneKarariReddi, numunePlaniReddi, olcumIstegiReddi, olcumSonucu, studyoResimTuru,
@@ -70,7 +71,11 @@ const resimAnahtari = (merkezBelgeId: number, ozet: string) => `${String(merkezB
 export async function studyoParcasi(db: Db, malzemeNo: number): Promise<KmStudyoParcaCevabi> {
   const resimler = await resimlerCevabi(db, await sorgular.parcaResimleri(db, malzemeNo));
   // Plan yalnız Kalite Merkezi'nin kuralıyla yazılır; okunamayan plan sessizce boş sayılmaz (hata olarak görünür).
-  const numunePlanlari = (await sorgular.numunePlanlari(db, malzemeNo)).map((p) => ({ opNo: p.opNo, kurallar: kurallarSemasi.parse(p.kurallar), surum: p.surum }));
+  // Plan operasyona bağlıdır; gösterilen numara rotanın bugünkü numarasıdır (3250 b), rotada olmayan operasyonda yazıldığı numara.
+  const guncel = new Map((await yururlukteOperasyonlar(db, [malzemeNo])).map((o): [number, number] => [o.operasyonId, o.opNo]));
+  const numunePlanlari = (await sorgular.numunePlanlari(db, malzemeNo))
+    .map((p) => ({ opNo: (p.operasyonId === null ? undefined : guncel.get(p.operasyonId)) ?? p.opNo, kurallar: kurallarSemasi.parse(p.kurallar), surum: p.surum }))
+    .sort((a, b) => a.opNo - b.opNo);
   const alinan = new Set((await sorgular.parcaResimKaynaklari(db, malzemeNo)).map((r) => resimAnahtari(r.merkezBelgeId, r.ozet)));
   const alinmamis = (await kartinYayindakiBelgeleri(db, malzemeNo)).filter((b) => !alinan.has(resimAnahtari(b.id, b.ozet))).length;
   return { resimler, numunePlanlari, alinmamis };
@@ -219,9 +224,11 @@ export async function numunePlaniYaz(
   if ((await malzemeOzeti(db, malzemeNo)) === null) throw ret('parcaYok', 'malzemeNo');
   const red = numunePlaniReddi(kurallar, new Set(await sorgular.parcaBalonNolari(db, malzemeNo)));
   if (red !== null) throw ret(red, 'kurallar');
-  const p = await sorgular.numunePlaniYaz(db, { malzemeNo, opNo, kurallar, surum, kisiId });
+  const o = (await yururlukteOperasyonlar(db, [malzemeNo])).find((x) => x.opNo === opNo);
+  const operasyon = o ? { id: o.operasyonId, kayitliOpNo: o.kayitliOpNo } : null;
+  const p = await sorgular.numunePlaniYaz(db, { malzemeNo, opNo, operasyon, kurallar, surum, kisiId });
   if (p === null) throw cakisma(STUDYO_ILETILER.surumDegisti);
-  return { opNo: p.opNo, kurallar: kurallarSemasi.parse(p.kurallar), surum: p.surum };
+  return { opNo, kurallar: kurallarSemasi.parse(p.kurallar), surum: p.surum };
 }
 
 // Dosyanın sahibi belge merkezidir. Belge yeni revizyona geçince alınan revizyon verilmez (balonlar eski resmin üstündedir); yalnız

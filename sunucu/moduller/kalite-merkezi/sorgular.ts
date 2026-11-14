@@ -342,9 +342,9 @@ export function studyoOzetleri(db: Db): Promise<{ malzemeNo: number; resim: numb
   );
 }
 
-export function numunePlanlari(db: Db, malzemeNo: number): Promise<{ opNo: number; kurallar: unknown; surum: number }[]> {
+export function numunePlanlari(db: Db, malzemeNo: number): Promise<{ opNo: number; operasyonId: number | null; kurallar: unknown; surum: number }[]> {
   return db.sorgu(
-    'SELECT op_no AS "opNo", kurallar, surum FROM kalite_merkezi_numune_plani WHERE malzeme_no = $1 ORDER BY op_no', [malzemeNo],
+    'SELECT op_no AS "opNo", operasyon_id AS "operasyonId", kurallar, surum FROM kalite_merkezi_numune_plani WHERE malzeme_no = $1 ORDER BY op_no', [malzemeNo],
   );
 }
 
@@ -549,22 +549,39 @@ export async function parcaBalonNolari(db: Db, malzemeNo: number): Promise<numbe
   return r.map((x) => x.no);
 }
 
-// Yeni plan sürümsüz eklenir (aynı anda iki yeni plandan biri çakışır); var olan plan yalnız aynı sürümle güncellenir.
+// Yeni plan sürümsüz eklenir (aynı anda iki yeni plandan biri çakışır); var olan plan yalnız aynı sürümle güncellenir. Operasyonu
+// bilinen plan operasyon kimliğiyle bulunur (OP numarası yeniden dizilse de aynı plan); yazılan op_no operasyonun kayıtlı numarasıdır.
+// Yürürlükte rotası olmayan parçada operasyon yoktur: plan eskisi gibi (parça, OP numarası) ile tutulur.
 export async function numunePlaniYaz(
-  db: Db, g: { malzemeNo: number; opNo: number; kurallar: unknown; surum: number | null; kisiId: number },
-): Promise<{ opNo: number; kurallar: unknown; surum: number } | null> {
+  db: Db, g: { malzemeNo: number; opNo: number; operasyon: { id: number; kayitliOpNo: number } | null; kurallar: unknown; surum: number | null; kisiId: number },
+): Promise<{ kurallar: unknown; surum: number } | null> {
   const metin = JSON.stringify(g.kurallar);
+  if (g.operasyon === null) {
+    if (g.surum === null) {
+      return db.tek(
+        `INSERT INTO kalite_merkezi_numune_plani (malzeme_no, op_no, kurallar, guncelleyen_id) VALUES ($1, $2, $3::jsonb, $4)
+         ON CONFLICT (malzeme_no, op_no) DO NOTHING RETURNING kurallar, surum`,
+        [g.malzemeNo, g.opNo, metin, g.kisiId],
+      );
+    }
+    return db.tek(
+      `UPDATE kalite_merkezi_numune_plani SET kurallar = $3::jsonb, surum = surum + 1, guncelleyen_id = $5, guncellendi = now()
+        WHERE malzeme_no = $1 AND op_no = $2 AND surum = $4 RETURNING kurallar, surum`,
+      [g.malzemeNo, g.opNo, metin, g.surum, g.kisiId],
+    );
+  }
   if (g.surum === null) {
     return db.tek(
-      `INSERT INTO kalite_merkezi_numune_plani (malzeme_no, op_no, kurallar, guncelleyen_id) VALUES ($1, $2, $3::jsonb, $4)
-       ON CONFLICT (malzeme_no, op_no) DO NOTHING RETURNING op_no AS "opNo", kurallar, surum`,
-      [g.malzemeNo, g.opNo, metin, g.kisiId],
+      `INSERT INTO kalite_merkezi_numune_plani (malzeme_no, op_no, kurallar, guncelleyen_id)
+       SELECT $1, $2, $3::jsonb, $4 WHERE NOT EXISTS (SELECT 1 FROM kalite_merkezi_numune_plani WHERE operasyon_id = $5)
+       ON CONFLICT (malzeme_no, op_no) DO NOTHING RETURNING kurallar, surum`,
+      [g.malzemeNo, g.operasyon.kayitliOpNo, metin, g.kisiId, g.operasyon.id],
     );
   }
   return db.tek(
-    `UPDATE kalite_merkezi_numune_plani SET kurallar = $3::jsonb, surum = surum + 1, guncelleyen_id = $5, guncellendi = now()
-      WHERE malzeme_no = $1 AND op_no = $2 AND surum = $4 RETURNING op_no AS "opNo", kurallar, surum`,
-    [g.malzemeNo, g.opNo, metin, g.surum, g.kisiId],
+    `UPDATE kalite_merkezi_numune_plani SET kurallar = $2::jsonb, surum = surum + 1, guncelleyen_id = $4, guncellendi = now()
+      WHERE operasyon_id = $1 AND surum = $3 RETURNING kurallar, surum`,
+    [g.operasyon.id, metin, g.surum, g.kisiId],
   );
 }
 
