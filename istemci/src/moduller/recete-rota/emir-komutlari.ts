@@ -173,7 +173,7 @@ export const EMIR_KOMUTLARI: Readonly<Record<string, EmirKomutu>> = {
   'emir-arsive-al': {
     hazirla: async (girdi) => {
       const id = kimlik(girdi['id'], 'emir');
-      return { yol: `/adimli-emirler/${String(id)}/arsive-al`, govde: { surum: ekranSurumu(girdi), onay: true } };
+      return { yol: `/adimli-emirler/${String(id)}/arsive-al`, govde: { surum: ekranSurumu(girdi), onay: true }, tekrarKorumali: true };
     },
   },
   // Rotasız emrin adımları (kullanıcı kararı 2026-10-14): adımlar emrin kendisindedir, burada eklenir, düzenlenir, silinir. Kaynak
