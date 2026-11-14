@@ -93,7 +93,7 @@
 .tc-my-uyari-uyumsuz { border-color: var(--stop); }
 .tc-my-uyari ul, .tc-my-tamam ul { margin: 0; padding-left: var(--b-5); display: grid; gap: var(--b-1); }
 .tc-my-tamam { display: flex; flex-wrap: wrap; gap: var(--b-2); align-items: center; padding: var(--b-3) var(--b-4); border: thin solid var(--run); border-left-width: var(--b-1); border-radius: var(--yari-1); background: var(--panel); }
-.tc-my-tamam-metin { flex: 1; min-width: 0; font-weight: 600; }
+.tc-my-tamam-metin { flex: 1 1 min(100%, 16rem); min-width: 0; font-weight: 600; }
 .tc-my-hata { color: var(--stop); margin: 0; }
 .tc-my-dikkat { color: var(--hold); }
 .tc-my-bos, .tc-my-soluk, .tc-my-kucuk { color: var(--muted); }
