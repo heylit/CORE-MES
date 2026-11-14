@@ -87,6 +87,26 @@ describe('Yeni Arkon ekranı (iskelet)', () => {
     delete w.__tmiEmirSec; delete w.__tmiKartSec;
   }, 20000);
 
+  it('gizli kurulu Üretim Terminali başka sayfanın ?emir= seçimini almaz ve adresten silmez (Adım Durumu)', async () => {
+    sunucuKur(OPERATOR);
+    const w = window as unknown as { __tmiEmirSec?: number };
+    const secilen: (number | undefined)[] = [];
+    const dinle = () => { secilen.push(w.__tmiEmirSec); };
+    window.addEventListener('tmi-emir-sec', dinle);
+    try {
+      arkonAc('/uretim-terminali', { kabuktaki: true });
+      await bolum('Üretim Terminali');
+      fireEvent.click(screen.getByRole('link', { name: 'Başka sayfada emir seç' }));
+      await screen.findByText('Başka sayfa');
+      await new Promise((r) => { setTimeout(r, 50); });
+      expect(screen.getByTestId('adres-sorgu').textContent).toBe('?emir=42');
+      expect(secilen).toEqual([]);
+    } finally {
+      window.removeEventListener('tmi-emir-sec', dinle);
+      delete w.__tmiEmirSec;
+    }
+  }, 20000);
+
   it('Kuyruk ayrı sayfadır: sekme şeridi olmadan açılır', async () => {
     sunucuKur(YONETICI);
     arkonAc('/kuyruk');
