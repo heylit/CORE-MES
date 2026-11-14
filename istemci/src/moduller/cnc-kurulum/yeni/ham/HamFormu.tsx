@@ -28,9 +28,11 @@ const deger = (v: unknown): string => (v == null ? '' : String(v));
 
 export function HamFormu({ st, malzemeler, seciliMalzeme, varsayilanRho, modelVar, mesaj, degistir, malzemeSec, eylem, sonuc }: Ozellikler) {
   const cubuk = st.type === 'bar' || st.type === 'tube';
-  const sayi = (k: keyof HamAyar, etiket: string, ek: { step?: string; min?: string; placeholder?: string } = {}) => (
+  // Sayı kutusu (type="number") Türkçe virgülü atar: "0,5" yazılınca değer "05" olur ve pay 5 mm hesaplanır. Metin kutusu virgülü
+  // korur; hesap (num) virgülü ondalık okur.
+  const sayi = (k: keyof HamAyar, etiket: string, ek: { placeholder?: string } = {}) => (
     <Girdi
-      etiket={etiket} type="number" step={ek.step ?? '0.5'} min={ek.min ?? '0'} placeholder={ek.placeholder}
+      etiket={etiket} inputMode="decimal" placeholder={ek.placeholder}
       value={deger(st[k])} onChange={(e) => { degistir(k, e.target.value as never); }}
     />
   );
@@ -87,8 +89,8 @@ export function HamFormu({ st, malzemeler, seciliMalzeme, varsayilanRho, modelVa
           {st.type === 'tube' && (
             <div className="tc-ch-izgara3">
               {sayi('idAllow', 'İç çap payı (mm / yüz)', { placeholder: 'çap payı' })}
-              {sayi('idStep', 'İç çap adımı (mm)', { min: '0.1' })}
-              {sayi('idMan', 'İç çap (elle)', { step: '1', placeholder: 'otomatik' })}
+              {sayi('idStep', 'İç çap adımı (mm)')}
+              {sayi('idMan', 'İç çap (elle)', { placeholder: 'otomatik' })}
             </div>
           )}
         </>
@@ -104,20 +106,20 @@ export function HamFormu({ st, malzemeler, seciliMalzeme, varsayilanRho, modelVa
           etiket="Malzeme" value={seciliMalzeme} onChange={(e) => { malzemeSec(e.target.value); }}
           secenekler={malzemeler.map((m) => ({ deger: m.id, baslik: m.name + ' · ' + fmt(m.rho) + ' g/cm³' }))}
         />
-        {sayi('rho', 'Yoğunluk g/cm³', { step: '0.01', placeholder: fmt(varsayilanRho) + ' (malzemeden)' })}
-        {sayi('qty', 'Adet', { step: '1', min: '1' })}
-        {sayi('price', 'Fiyat (TL/kg)', { step: '0.1', placeholder: 'isteğe bağlı' })}
+        {sayi('rho', 'Yoğunluk g/cm³', { placeholder: fmt(varsayilanRho) + ' (malzemeden)' })}
+        {sayi('qty', 'Adet')}
+        {sayi('price', 'Fiyat (TL/kg)', { placeholder: 'isteğe bağlı' })}
       </div>
 
       {!modelVar && (
         <>
           <h3 className="tc-ch-bolum">Model yoksa: parça zarf ölçüsü</h3>
           <div className="tc-ch-izgara3">
-            {sayi('mx', 'X (mm)', { step: '1' })}
-            {sayi('my', 'Y (mm)', { step: '1' })}
-            {sayi('mz', 'Z (mm)', { step: '1' })}
+            {sayi('mx', 'X (mm)')}
+            {sayi('my', 'Y (mm)')}
+            {sayi('mz', 'Z (mm)')}
           </div>
-          {sayi('mvol', 'Parça hacmi (cm³ — CAD\'den, isteğe bağlı)', { step: '1' })}
+          {sayi('mvol', 'Parça hacmi (cm³ — CAD\'den, isteğe bağlı)')}
         </>
       )}
 

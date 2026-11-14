@@ -49,6 +49,20 @@ describe('Ham Malzeme gorunumu', () => {
     expect(screen.getByText(/Kurulum kartına yazıldı/)).toBeTruthy();
   });
 
+  it('pay virgullu ondalikla yazilir: "0,5" 0,5 mm hesaplanir, 5 mm degil', () => {
+    ac();
+    fireEvent.click(screen.getByRole('button', { name: 'Örnek parça' }));
+    const pay = screen.getByLabelText('Çap payı (mm / yüz)');
+    fireEvent.change(pay, { target: { value: '0.5' } });
+    const nokta = S.res?.label;
+    fireEvent.change(pay, { target: { value: '5' } });
+    const bes = S.res?.label;
+    fireEvent.change(pay, { target: { value: '0,5' } });
+    expect((pay as HTMLInputElement).value).toBe('0,5');
+    expect(S.res?.label).toBe(nokta);
+    expect(S.res?.label).not.toBe(bes);
+  });
+
   it('yazma yetkisi yoksa kurulum kartina aktarma gizlidir', () => {
     ac({ ...YETKI, yazabilir: false });
     fireEvent.click(screen.getByRole('button', { name: 'Örnek parça' }));
