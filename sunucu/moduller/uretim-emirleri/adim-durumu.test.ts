@@ -342,4 +342,69 @@ describe('uretim-emirleri adım durumu (2893, gerçek PostgreSQL)', () => {
     assert.equal(await o().vt.tx((db) => isEmriKilitle(db, b1, a.id)), false, 'başka emrin iş emri');
     assert.equal(await o().vt.tx((db) => isEmriKilitle(db, 2_000_000_000, a.id)), false);
   });
+
+  test('3249 b: hazırlık listesi Adım Durumu\'ndan işaretlenir ve eklenir; üretim aşaması yazılmaz, kaynak ve kişi saklanır', async () => {
+    const m = await makineKur();
+    const kontrolListesi = [
+      { ad: 'Program doğrula', aciklama: null, asama: 'on_hazirlik' as const },
+      { ad: 'Ayna kontrolü', aciklama: 'Pabuçlar', asama: 'hazirlik' as const },
+      { ad: 'İlk parça ölçümü', aciklama: null, asama: 'uretim' as const },
+    ];
+    const r = await o().vt.tx((db) => uretimEmriAc(db, kim('planlama_proje'), {
+      malzemeNo: urunNo, adet: 4, teslim: null, kaynakRotaRevizyonId: rev, projeId,
+      isEmirleri: [{ ...adim(1, m), kontrolListesi }, adim(2, m)],
+    }));
+    const id = r.uretimEmriId;
+    const [ie1 = 0] = r.isEmriIdleri;
+    const d = await oku(id);
+    const liste = d.adimlar[0]?.liste ?? [];
+    assert.deepEqual(liste.map((x) => [x.ad, x.asama, x.tamam, x.kaynak, x.ekleyenAdi]),
+      [['Program doğrula', 'on_hazirlik', false, null, null], ['Ayna kontrolü', 'hazirlik', false, null, null]], 'üretim aşaması listede yok');
+    assert.deepEqual(d.adimlar[1]?.liste, []);
+    const uretimAdimi = (await o().sahip.tek<{ id: number }>("SELECT id FROM emir_adimi WHERE is_emri_id = $1 AND asama = 'uretim'", [ie1]))!.id;
+    const ilk = liste[0]!.adimId;
+
+    const isaretle = (govde: unknown, kisi = 'planlama_proje') =>
+      istek<AdimDurumuCevabi & Hata>(kisi, 'POST', `/adimli-emirler/${id}/is-emirleri/${ie1}/liste-isaretle`, govde);
+    for (const kisi of ['operator', 'kalite']) assert.equal((await isaretle({ adimId: ilk, tamam: true }, kisi)).durum, 403, `${kisi} işaretlemez (K1)`);
+    assert.equal((await isaretle({ adimId: uretimAdimi, tamam: true })).durum, 404, 'üretim aşaması matristen yazılmaz (K5)');
+    assert.equal((await isaretle({ adimId: ilk, tamam: false })).durum, 409, 'işaretsiz madde geri alınmaz');
+    const tik = await isaretle({ adimId: ilk, tamam: true }, 'mudur');
+    assert.equal(tik.durum, 200, JSON.stringify(tik.govde));
+    const t0 = tik.govde.adimlar[0]?.liste[0];
+    assert.deepEqual([t0?.tamam, t0?.kaynak, t0?.kisiAdi], [true, 'adim-durumu', 'Deneme mudur']);
+    assert.ok(t0?.zaman);
+    assert.equal((await isaretle({ adimId: ilk, tamam: true })).durum, 409, 'aynı hâle ikinci kez geçilmez');
+    const olay = await o().sahip.tek<{ kaynak: string | null }>('SELECT kaynak FROM emir_adimi_olayi WHERE adim_id = $1 ORDER BY id DESC LIMIT 1', [ilk]);
+    assert.equal(olay?.kaynak, 'adim-durumu', 'kaynak saklanır (K4)');
+    const geri = await isaretle({ adimId: ilk, tamam: false });
+    assert.equal(geri.durum, 200);
+    assert.deepEqual([geri.govde.adimlar[0]?.liste[0]?.tamam, geri.govde.adimlar[0]?.liste[0]?.kisiAdi], [false, 'Deneme planlama_proje']);
+
+    const ekle = (govde: unknown, kisi = 'planlama_proje') =>
+      istek<AdimDurumuCevabi & Hata>(kisi, 'POST', `/adimli-emirler/${id}/is-emirleri/${ie1}/liste-ekle`, govde);
+    assert.equal((await ekle({ ad: 'Pim değişti', asama: 'hazirlik' }, 'kalite')).durum, 403);
+    assert.equal((await ekle({ ad: 'Pim değişti', asama: 'uretim' })).durum, 400, 'üretim aşamasına eklenmez');
+    assert.equal((await ekle({ ad: '  ', asama: 'hazirlik' })).durum, 400);
+    const eklendi = await ekle({ ad: 'Pim değişti', asama: 'hazirlik' });
+    assert.equal(eklendi.durum, 200, JSON.stringify(eklendi.govde));
+    const son = eklendi.govde.adimlar[0]?.liste.at(-1);
+    assert.deepEqual([son?.ad, son?.asama, son?.tamam, son?.ekleyenAdi], ['Pim değişti', 'hazirlik', false, 'Deneme planlama_proje']);
+    assert.ok(son?.eklenme);
+    const siralar = await o().sahip.sorgu<{ sira: number }>('SELECT sira FROM emir_adimi WHERE is_emri_id = $1 ORDER BY sira', [ie1]);
+    assert.deepEqual(siralar.map((x) => x.sira), [1, 2, 3, 4], 'eklenen madde listenin sonuna gelir');
+    await assert.rejects(o().sahip.sorgu("INSERT INTO emir_adimi_olayi (adim_id, kisi_id, olay, kaynak) VALUES ($1, $2, 'tamamla', 'baska')", [ilk, yoneticiId]),
+      /emir_adimi_olayi_kaynak_degeri/);
+
+    // Liste en çok 40 madde: doldurulur, kırk birinci reddedilir (üretim aşaması sayılmaz).
+    await o().sahip.sorgu(
+      "INSERT INTO emir_adimi (emir_id, is_emri_id, sira, ad, asama) SELECT $1, $2, g, 'Dolgu ' || g, 'hazirlik' FROM generate_series(5, 41) g", [id, ie1]);
+    const dolu = await ekle({ ad: 'Kırk birinci', asama: 'hazirlik' });
+    assert.equal(dolu.durum, 409);
+    assert.match(JSON.stringify(dolu.govde), /en çok 40 madde/);
+
+    await o().sahip.sorgu("UPDATE uretim_emri SET durum = 'iptal', iptal = now() WHERE id = $1", [id]);
+    assert.equal((await isaretle({ adimId: ilk, tamam: true })).durum, 409, 'kapalı emirde yazılmaz');
+    assert.equal((await ekle({ ad: 'Geç', asama: 'hazirlik' })).durum, 409);
+  });
 });

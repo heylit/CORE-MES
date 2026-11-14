@@ -15,7 +15,7 @@ const YAYINDA: TalimatlarCevabi = {
   surumler: [{ surum: 2, metin: 'Programı doğrula', yazan: kisi, yazma: '2026-10-28T10:00:00.000Z', adimli: true, adimlar: [yayin('Programı doğrula')], koken: null }],
   taslak: null,
 };
-const SABLONLAR: TalimatSablonlariCevabi = { sablonlar: [{ id: 3, kod: 'TS-DNM', ad: 'Deneme işleme', sartname: null, aktif: true, surum: 1, adimSayisi: 1, kontrolSayisi: 0, resimSayisi: 0, videoSayisi: 0 }] };
+const SABLONLAR: TalimatSablonlariCevabi = { sablonlar: [{ id: 3, kod: 'TS-DNM', ad: 'Deneme işleme', sartname: null, aktif: true, surum: 1, adimSayisi: 1, kontrolSayisi: 0, resimSayisi: 0, videoSayisi: 0, operasyonTipi: null, emreGelir: false }] };
 const SABLON: TalimatSablonuCevabi = {
   sablon: { ...SABLONLAR.sablonlar[0]!, adimlar: [{ sira: 1, baslik: 'Çapak al', metin: null, kontrol: { tur: 'yok' }, zorunlu: false, medya: [], asama: 'uretim', hedefSureDk: null }] },
 };

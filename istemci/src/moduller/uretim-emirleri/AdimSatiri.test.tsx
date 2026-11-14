@@ -12,7 +12,7 @@ const EMIR = {
 } satisfies Emir;
 const ADIM = {
   isEmriId: 51, opNo: 10, ad: 'Testere kesim', durum: 'tamam', calisma: null, bagimlilik: 'bekleyen', fason: false, hedef: 40, yapilan: 40, yuzde: 100,
-  sistemStatusu: 'bitti', nedenler: ['Bitmiş adımda gürültü'], maddeler: [], elle: null, onaylar: [], gecmis: [], tedarik: [],
+  sistemStatusu: 'bitti', nedenler: ['Bitmiş adımda gürültü'], maddeler: [], elle: null, onaylar: [], gecmis: [], tedarik: [], liste: [],
 } satisfies AdimDurumuCevabi['adimlar'][number];
 const DURUM = {
   emirId: 5, emirNo: 'UE-0005', urun: { kod: 'DNM-005', ad: 'Deneme flanş' }, adet: 40, teslim: null, durum: 'basladi', rotaYuzde: 50,

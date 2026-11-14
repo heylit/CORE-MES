@@ -1,5 +1,5 @@
 import { KOD_ONEKI } from '#paylasilan/kod-sozlugu.ts';
-import { BEKLEME_NEDENI_ADLARI, HAZIRLIK_MADDELERI, MUAF_TUTULABILEN_MADDELER, hazirlikUyarirMi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
+import { AZAMI_LISTE_MADDESI, BEKLEME_NEDENI_ADLARI, HAZIRLIK_MADDELERI, MUAF_TUTULABILEN_MADDELER, hazirlikUyarirMi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import type {
   AdimStatusu, BeklemeNedeni, AdimTedariki, CalismaDurumu, EmirDurumu, EmirIlerlemesi, EmirTuru, HataliKarari, HazirlikMaddesi, IlerlemeEsasi, KapanisAsamasi, KapanisMaddeBilgisi, KapanisMaddeHali, KapanisMaddesi, KapanisOnayi,
 } from '#paylasilan/sozlesme/uretim-emirleri.ts';
@@ -1785,6 +1785,28 @@ export const ONAY_YOK = 'Bu maddede açık elle onay yok.';
 export const ELLE_STATU_YOK = 'Bu adımda elle yazılmış statü yok.';
 export const ADIM_KAPALI_EMIR = 'Biten ya da iptal edilen emirde adım durumu yazılmaz.';
 export const IS_EMRI_EMIRDE_YOK = 'İş emri bu emirde yok.';
+// 3249 b: Adım Durumu'ndan hazırlık listesi. Biten adımın listesi değişmez; aynı hâle ikinci kez geçilmez (iki sekmeden aynı tık ya da
+// "Geri al" ile gelen eski istek iz bırakmasın). Liste dolu iş emrine madde eklenmez.
+export const LISTE_MADDESI_YOK = 'Bu madde adımın hazırlık listesinde yok.';
+export const LISTE_ZATEN = 'Madde zaten bu durumda. Güncel listeyi görüp yeniden deneyin.';
+export const LISTE_ADIM_BITTI = 'Biten adımın hazırlık listesi değişmez.';
+export const LISTE_DOLU = 'Bir adımın hazırlık listesine en çok 40 madde olur.';
+export function listeIsaretReddi(adimBitti: boolean, simdiTamam: boolean, istenen: boolean): string | null {
+  if (adimBitti) return LISTE_ADIM_BITTI;
+  return simdiTamam === istenen ? LISTE_ZATEN : null;
+}
+// Biten adımın listesine madde eklenmez; liste en çok AZAMI_LISTE_MADDESI maddedir (ön hazırlık ve hazırlık birlikte).
+export function listeEkleReddi(adimBitti: boolean, maddeSayisi: number): string | null {
+  if (adimBitti) return LISTE_ADIM_BITTI;
+  return maddeSayisi >= AZAMI_LISTE_MADDESI ? LISTE_DOLU : null;
+}
+// Kanıtın ekrandaki kısa metni: ölçüm sayı, seçim kendisi, fotoğraf yalnız "Fotoğraf" (özet gösterilmez).
+export function kanitMetni(k: { olcum: number | null; secim: string | null; foto: string | null }): string | null {
+  if (k.olcum !== null) return String(k.olcum);
+  if (k.secim !== null) return k.secim;
+  return k.foto === null ? null : 'Fotoğraf';
+}
+
 // 2893-2 b: elle onay durduran maddede başlatmayı açar; bu yüzden gerekçe zorunludur. Tamam, muaf ya da gerekmeyen madde onaylanmaz.
 export function hazirlikOnayiReddi(madde: HazirlikMaddesi, hal: HazirlikHali, gerekce: string | null): string | null {
   if (hal === 'tamam' || hal === 'gerekmez' || hal === 'muaf') return ONAY_GEREKSIZ;

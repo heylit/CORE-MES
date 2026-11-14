@@ -601,6 +601,33 @@ describe('işlem şartnamesi (gerçek PostgreSQL)', () => {
     const p = await tamam<TalimatSablonuCevabi>(c.planlama, 'POST', `/rota/talimat-sablonlari/${e.sablon.id}/durum`, { surum: k.sablon.surum, aktif: false });
     assert.equal(p.sablon.aktif, false);
   });
+  test('3249 b: operasyon tipine bağlı şablon emre kendiliğinden gelir; kendi talimatı olan adım onu alır; tip başına tek şablon', async () => {
+    const adimlar = [adim({ baslik: 'Ayna kontrolü', asama: 'hazirlik' }), adim({ baslik: 'Sıfır noktası', asama: 'on_hazirlik' })];
+    const govde = { kod: 'TS-OP-TRN', ad: 'Torna hazırlığı', sartnameId: null, adimlar };
+    await red(c.planlama, '/rota/talimat-sablonlari/ekle', { ...govde, emreGelir: true }, 400, /operasyon tipi seçin/);
+    await red(c.planlama, '/rota/talimat-sablonlari/ekle', { ...govde, operasyonTipiId: 999999 }, 400, /Operasyon tipi bulunamadı/);
+    await red(c.operator, '/rota/talimat-sablonlari/ekle', { ...govde, operasyonTipiId: tip('TRN'), emreGelir: true }, 403);
+    const e = await tamam<TalimatSablonuCevabi>(c.planlama, 'POST', '/rota/talimat-sablonlari/ekle', { ...govde, operasyonTipiId: tip('TRN'), emreGelir: true });
+    assert.deepEqual([e.sablon.operasyonTipi?.id, e.sablon.operasyonTipi?.kod, e.sablon.emreGelir], [tip('TRN'), 'TRN', true]);
+    await red(c.planlama, '/rota/talimat-sablonlari/ekle', { ...govde, kod: 'TS-OP-TRN-2', operasyonTipiId: tip('TRN'), emreGelir: true }, 409, /emre kendiliğinden/);
+    const k = await tamam<TalimatSablonuCevabi>(c.planlama, 'POST', `/rota/talimat-sablonlari/${e.sablon.id}/kaydet`, { surum: e.sablon.surum, ad: 'Torna hazırlığı', sartnameId: null, adimlar });
+    assert.deepEqual([k.sablon.operasyonTipi?.id, k.sablon.emreGelir], [tip('TRN'), true], 'gönderilmeyen alan değişmez');
+
+    const t = await taslak([icAdim(), icAdim({ ad: 'Tornalama 2' })]);
+    await tamam(c.planlama, 'POST', `/rota/urunler/${t.urun}/talimat-yaz`, { opNo: 20, metin: 'Kendi talimatı', okunanSurum: null });
+    await yururlugeAl(t.id, t.surum);
+    const emir = await emirAc(t.id);
+    const liste = (ie: number | undefined) => vt().tx((db) => db.sorgu<{ ad: string; asama: string }>(
+      'SELECT ad, asama FROM emir_adimi WHERE is_emri_id = $1 ORDER BY sira', [ie]));
+    assert.deepEqual((await liste(emir.isEmriIdleri[0])).map((x) => [x.ad, x.asama]), [['Ayna kontrolü', 'hazirlik'], ['Sıfır noktası', 'on_hazirlik']]);
+    assert.deepEqual((await liste(emir.isEmriIdleri[1])).map((x) => [x.ad, x.asama]), [['Kendi talimatı', 'uretim']]);
+
+    const kapat = await tamam<TalimatSablonuCevabi>(c.planlama, 'POST', `/rota/talimat-sablonlari/${e.sablon.id}/kaydet`, {
+      surum: k.sablon.surum, ad: 'Torna hazırlığı', sartnameId: null, adimlar, emreGelir: false,
+    });
+    assert.equal(kapat.sablon.emreGelir, false);
+  });
+
   test('2588 a: şablondan kopya kökeni kaydedilir, sürüm denetlenir, yayında taslaktan geçer; kopyalar şablonla listelenir', async () => {
     const e = await tamam<TalimatSablonuCevabi>(c.planlama, 'POST', '/rota/talimat-sablonlari/ekle', {
       kod: 'TS-KOKEN', ad: 'Köken şablonu', sartnameId: null, adimlar: [adim({ baslik: 'Şablon adımı' })],

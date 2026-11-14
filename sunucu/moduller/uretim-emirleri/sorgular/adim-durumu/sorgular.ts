@@ -51,3 +51,39 @@ export function hazirlikOnayiEkle(
 export async function isEmriKilitle(db: Db, isEmriId: number, uretimEmriId: number): Promise<boolean> {
   return (await db.tek(`SELECT 1 AS var FROM uretim_emirleri_is_emri WHERE id = $1 AND uretim_emri_id = $2 FOR UPDATE`, [isEmriId, uretimEmriId])) !== null;
 }
+
+// 3249 b: iş emrinin ön hazırlık ve hazırlık listesi (emir_adimi), son olayı, kanıtı ve ofisten eklenmişse ekleyeniyle.
+export interface ListeSatiri {
+  id: number; isEmriId: number; sira: number; ad: string; aciklama: string | null; asama: 'on_hazirlik' | 'hazirlik';
+  sonOlay: 'tamamla' | 'geri-al' | null; olayKisiId: number | null; olayZamani: string | null; olayKaynagi: string | null;
+  kanitOlcum: number | null; kanitSecim: string | null; kanitFoto: string | null; ekleyenId: number | null; eklenme: string | null;
+}
+export function listeSatirlari(db: Db, isEmriIdleri: readonly number[]): Promise<ListeSatiri[]> {
+  return db.sorgu<ListeSatiri>(
+    `SELECT a.id, a.is_emri_id AS "isEmriId", a.sira, a.ad, a.aciklama, a.asama, o.olay AS "sonOlay", o.kisi_id AS "olayKisiId",
+            CASE WHEN o.id IS NULL THEN NULL ELSE ${ISO('o.zaman')} END AS "olayZamani", o.kaynak AS "olayKaynagi",
+            k.olcum::float8 AS "kanitOlcum", k.secim AS "kanitSecim", k.foto_ozet AS "kanitFoto",
+            a.ekleyen_id AS "ekleyenId", CASE WHEN a.eklenme IS NULL THEN NULL ELSE ${ISO('a.eklenme')} END AS eklenme
+       FROM emir_adimi a
+       LEFT JOIN LATERAL (SELECT id, olay, kisi_id, zaman, kaynak FROM emir_adimi_olayi WHERE adim_id = a.id ORDER BY id DESC LIMIT 1) o ON true
+       LEFT JOIN emir_adimi_kaniti k ON k.olay_id = o.id AND o.olay = 'tamamla'
+      WHERE a.is_emri_id = ANY($1::int[]) AND a.asama IN ('on_hazirlik', 'hazirlik')
+      ORDER BY a.is_emri_id, a.sira`,
+    [[...isEmriIdleri]],
+  );
+}
+
+export async function listeOlayiEkle(db: Db, adimId: number, kisiId: number, olay: 'tamamla' | 'geri-al'): Promise<void> {
+  await db.sorgu(`INSERT INTO emir_adimi_olayi (adim_id, kisi_id, olay, kaynak) VALUES ($1, $2, $3, 'adim-durumu')`, [adimId, kisiId, olay]);
+}
+
+// Sıra iş emrinin listesinin sonudur; iş emri satırı çağıranca kilitlidir (isEmriKilitle), iki ekleme aynı sırayı almaz.
+export async function listeMaddesiEkle(
+  db: Db, m: { emirId: number; isEmriId: number; ad: string; asama: 'on_hazirlik' | 'hazirlik'; kisiId: number },
+): Promise<void> {
+  await db.sorgu(
+    `INSERT INTO emir_adimi (emir_id, is_emri_id, sira, ad, asama, ekleyen_id, eklenme)
+     SELECT $1, $2, COALESCE(max(sira), 0) + 1, $3, $4, $5, now() FROM emir_adimi WHERE emir_id = $1 AND is_emri_id = $2`,
+    [m.emirId, m.isEmriId, m.ad, m.asama, m.kisiId],
+  );
+}

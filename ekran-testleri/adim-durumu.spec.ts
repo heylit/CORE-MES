@@ -22,7 +22,7 @@ test('emir seçilir, adımlar ve sayaç görünür, adım ayrıntısı yan pence
   await adimlar.getByRole('button').first().click();
   const pencere = page.getByRole('dialog');
   await expect(pencere.getByText('Neden bekliyor')).toBeVisible();
-  await expect(pencere.getByText('Hazırlık', { exact: true })).toBeVisible();
+  await expect(pencere.getByRole('heading', { name: 'Hazırlık', exact: true })).toBeVisible();
   await page.keyboard.press('Escape');
   await expect(pencere).toBeHidden();
 
@@ -81,5 +81,43 @@ test.describe('müdür', () => {
     await expect(pencere).toBeHidden();
     expect(ag.hatalar).toEqual([]);
     expect(ag.yazmalar, 'Vazgeç yazmaz').toEqual([]);
+  });
+});
+
+// 3249 b: açılan satır (müdür). Satırın okuyla liste açılır; madde satırı ve ekleme düğmeleri görünür, sayfa yatay taşmaz,
+// telefonda tik satırı ve düğmeler parmak boyundadır (44 px). Yazma yapılmaz; Madde penceresi Vazgeç ile kapanır.
+test.describe('müdür, açılan satır', () => {
+  test.use({ hesap: 'ornek.mudur' });
+  test('satır açılır, madde ekleme penceresi açılıp kapanır, sayfa taşmaz', async ({ page, ag, ac }) => {
+    await ac('/adim-durumu');
+    await page.getByRole('list', { name: 'Açık emirler' }).getByRole('button').first().click();
+    await page.getByRole('button', { name: 'Matris' }).click();
+    const tablo = page.getByRole('table', { name: 'Hazırlık matrisi' });
+    const ac1 = tablo.getByRole('button', { name: /^OP \d+ maddeleri$/ }).first();
+    await ac1.click();
+    await expect(ac1).toHaveAttribute('aria-expanded', 'true');
+    const madde = tablo.getByRole('button', { name: 'Madde', exact: true }).first();
+    await expect(madde).toBeVisible();
+    const genislik = page.viewportSize()?.width ?? 0;
+    // OP kodu tek satırdır (Arayüz K1): kodun yüksekliği bir satırı geçmez.
+    const kod = tablo.locator('.tc-ad-mx-ad .tc-emir-kod').first();
+    const satir = await kod.evaluate((e) => parseFloat(getComputedStyle(e).lineHeight) || e.getBoundingClientRect().height);
+    expect((await kod.boundingBox())?.height ?? 0).toBeLessThanOrEqual(satir + 1);
+    if (genislik < 1024) expect((await madde.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(44);
+    const telefon = genislik < 768;
+    if (telefon) {
+      for (const k of [await ac1.boundingBox(), await madde.boundingBox()]) expect(k?.height ?? 0).toBeGreaterThanOrEqual(44);
+      const kutu = tablo.getByRole('checkbox').first();
+      if (await kutu.count() > 0) expect((await kutu.locator('xpath=..').boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(44);
+    }
+    const tasma = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+    expect(tasma, 'sayfa yatay taşmaz').toBeLessThanOrEqual(0);
+    await madde.click();
+    const pencere = page.getByRole('dialog');
+    await expect(pencere.getByRole('button', { name: 'Ekle' })).toBeDisabled();
+    await pencere.getByRole('button', { name: 'Vazgeç' }).click();
+    await expect(pencere).toBeHidden();
+    expect(ag.hatalar).toEqual([]);
+    expect(ag.yazmalar, 'açmak ve Vazgeç yazmaz').toEqual([]);
   });
 });

@@ -12,6 +12,7 @@ import {
   SAYIM_KATILIMSIZ, sayimYetkiIhlali, kararAnlari, fasonSirasindaMi, siradakiFasonAdimi,
 } from './kurallar.ts';
 import { DUGUM_GECERSIZ, dugumGirdisiIhlali, kaynakSuresi, kararBekleyenBitisIhlali, malzemeIhtiyaci } from './kurallar.ts';
+import { LISTE_ADIM_BITTI, LISTE_DOLU, LISTE_ZATEN, kanitMetni, listeEkleReddi, listeIsaretReddi } from './kurallar.ts';
 import type { SureGirdisi, SureSayimi } from './kurallar.ts';
 
 const digerleri = (haric: EmirDurumu): EmirDurumu[] => EMIR_DURUMLARI.filter((d) => d !== haric);
@@ -343,4 +344,19 @@ test('2521 b: karar bekleyen parça varken bitirme ihlali adedi ve adımı söyl
   assert.equal(kararBekleyenBitisIhlali(3, 10), '3 parça ilk parça kararı bekliyor (OP 10). Kalite Merkezi kararı gelmeden iş bitirilemez.');
   assert.equal(kararBekleyenBitisIhlali(2, null), '2 parça ilk parça kararı bekliyor. Kalite Merkezi kararı gelmeden iş bitirilemez.');
   assert.equal(kararBekleyenBitisIhlali(0, 10), null);
+});
+
+test('3249 b: biten adımın listesi işaretlenmez ve madde almaz; liste en çok 40 madde; kanıt kısa metni', () => {
+  assert.equal(listeIsaretReddi(true, false, true), LISTE_ADIM_BITTI);
+  assert.equal(listeIsaretReddi(true, true, false), LISTE_ADIM_BITTI);
+  assert.equal(listeIsaretReddi(false, true, true), LISTE_ZATEN);
+  assert.equal(listeIsaretReddi(false, false, true), null);
+  assert.equal(listeEkleReddi(true, 0), LISTE_ADIM_BITTI);
+  assert.equal(listeEkleReddi(false, 39), null);
+  assert.equal(listeEkleReddi(false, 40), LISTE_DOLU);
+  assert.equal(kanitMetni({ olcum: 9.98, secim: null, foto: null }), '9.98');
+  assert.equal(kanitMetni({ olcum: 0, secim: null, foto: null }), '0', 'sıfır ölçüm de yazılır');
+  assert.equal(kanitMetni({ olcum: null, secim: 'Geçti', foto: null }), 'Geçti');
+  assert.equal(kanitMetni({ olcum: null, secim: null, foto: 'ORN-ozet-ab12' }), 'Fotoğraf', 'fotoğraf özeti gösterilmez');
+  assert.equal(kanitMetni({ olcum: null, secim: null, foto: null }), null);
 });

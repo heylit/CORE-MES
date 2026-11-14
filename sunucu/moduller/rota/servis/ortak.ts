@@ -455,13 +455,20 @@ export async function isEmriGirdileri(db: Db, malzemeId: number, rota: NonNullab
     const a = adimlar.get(t.id);
     return [t.opNo, a ? adimliKontrolListesi(a) : kontrolListesi(t.metin)];
   }));
+  // 3249 b: kendi talimatı olmayan adıma, operasyon tipinin emre gelen şablonu kopyalanır (bağ kurulmaz; şablon sonra değişirse emir değişmez).
+  const sablonlar = new Map<number, ReturnType<typeof adimliKontrolListesi>>();
+  const tipler = [...new Set(rota.adimlar.filter((a) => !listeler.has(a.opNo) && a.operasyonTipiId !== null).map((a) => a.operasyonTipiId as number))];
+  for (const x of tipler.length === 0 ? [] : await s.emreGelenSablonlar(db, tipler)) {
+    const a = talimatAdimlariKur(await s.talimatSablonAdimlari(db, x.id), []).get(x.id) ?? [];
+    if (a.length > 0) sablonlar.set(x.operasyonTipiId, adimliKontrolListesi(a));
+  }
   return rota.adimlar.map((a) => ({
     sira: a.sira, opNo: a.opNo, ad: a.ad, operasyonTipiId: a.operasyonTipiId,
     ...isEmriKaynagi(a), ayarSuresiDk: a.ayarSuresiDk,
     birimSureDk: a.birimSureDk, terminGun: a.fason?.terminGun ?? null, talimatSurumu: a.talimatSurumu,
     ...isEmriBagimliligi(a),
     adetCarpani: a.adetCarpani,
-    kontrolListesi: listeler.get(a.opNo) ?? [],
+    kontrolListesi: listeler.get(a.opNo) ?? (a.operasyonTipiId === null ? undefined : sablonlar.get(a.operasyonTipiId)) ?? [],
     // Emir adedi istenen sağlam çıktıdır (250 a): ihtiyacı adımın fire payı büyütür; adım ayarları planın girdisidir, varsayılana düşmez.
     firePayiYuzde: a.firePayiYuzde, makineKullanimi: a.makineKullanimi, enKucukParca: a.enKucukParca, yenidenAyar: a.yenidenAyar,
     // İş emrinin adayı makine ya da kişidir; istasyon adayı emirde karşılıksızdır, adımın istasyonu zaten başlıktır.

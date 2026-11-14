@@ -30,5 +30,5 @@ export const ELLE_YAZILIR: readonly ElleYazilanStatu[] = ['program', 'cizim', 'y
 
 export const ADIM_DURUMU_YAZ = 'uretim-emirleri.adim-durumu-yaz';
 export const adimDurumuUcu = (emirId: number): string => `/adimli-emirler/${String(emirId)}/adim-durumu`;
-export const isEmriKomutu = (emirId: number, isEmriId: number, komut: 'statu-yaz' | 'statu-kaldir' | 'hazirlik-onayla' | 'hazirlik-onay-kaldir'): string =>
+export const isEmriKomutu = (emirId: number, isEmriId: number, komut: 'statu-yaz' | 'statu-kaldir' | 'hazirlik-onayla' | 'hazirlik-onay-kaldir' | 'liste-isaretle' | 'liste-ekle'): string =>
   `/adimli-emirler/${String(emirId)}/is-emirleri/${String(isEmriId)}/${komut}`;

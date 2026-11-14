@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type {
   AdimSartnameleriGovdesi, KomutCevabi, TalimatTaslakKaydetGovdesi, TalimatTaslakKomutGovdesi, RevizyonSartnameleriCevabi, SartnameCevabi, SartnameEkleGovdesi, SartnameKopyalaGovdesi, SartnameKunyeGovdesi, SartnamelerCevabi, SartnameTaslakGovdesi, StandartCevabi,
-  StandartEkleGovdesi, TalimatSablonEkleGovdesi, TalimatSablonKaydetGovdesi, TalimatSablonlariCevabi, TalimatSablonuCevabi,
+  SeceneklerCevabi, StandartEkleGovdesi, TalimatSablonEkleGovdesi, TalimatSablonKaydetGovdesi, TalimatSablonlariCevabi, TalimatSablonuCevabi,
   TalimatlarCevabi,
 } from '#paylasilan/sozlesme/rota.ts';
 import { api } from '../../../../ortak/veri/api.ts';
@@ -18,6 +18,7 @@ export const anahtarlar = {
   sablon: (id: number) => [...KOK, 'sablon', id] as const,
   revizyon: (id: number) => [...KOK, 'revizyon', id] as const,
   talimat: (urunId: number, opNo: number) => [...KOK, 'talimat', urunId, opNo] as const,
+  operasyonTipleri: [...KOK, 'operasyon-tipleri'] as const,
 };
 
 export const useSartnameler = () => useQuery({
@@ -32,6 +33,12 @@ export const useSartname = (id: number | null) => useQuery({
 export const useSablonlar = () => useQuery({
   queryKey: anahtarlar.sablonlar,
   queryFn: () => api.get<TalimatSablonlariCevabi>('/rota/talimat-sablonlari'),
+});
+// 3249 b: şablonun bağlanacağı operasyon tipleri rota seçeneklerinden okunur (rota modülünün ucu; istasyonlar kataloğu disari ile gelir).
+export const useOperasyonTipleri = () => useQuery({
+  queryKey: anahtarlar.operasyonTipleri,
+  queryFn: () => api.get<SeceneklerCevabi>('/rota/secenekler'),
+  staleTime: 60_000,
 });
 export const useSablon = (id: number | null) => useQuery({
   queryKey: anahtarlar.sablon(id ?? 0),

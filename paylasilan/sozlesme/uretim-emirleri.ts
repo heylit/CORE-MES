@@ -1083,6 +1083,26 @@ export const hazirlikOnayiGovdesi = z.object({
   sistemHali: hazirlikHaliSemasi,
 }).strict();
 export const hazirlikOnayiKaldirGovdesi = z.object({ madde: hazirlikMaddesi }).strict();
+// 3249 b: Adım Durumu'ndan hazırlık listesi. Yalnız ön hazırlık ve hazırlık aşaması yazılır; üretim aşamasının kontrolleri operatörün
+// parça başında yaptığıdır ve matristen yazılmaz (Risk K5). İşaret kaynağıyla saklanır (K4): 'terminal' operatör, 'adim-durumu' ofis.
+export const LISTE_ASAMALARI = ['on_hazirlik', 'hazirlik'] as const satisfies readonly (typeof TALIMAT_ASAMALARI)[number][];
+export const AZAMI_LISTE_MADDESI = 40;
+export const listeIsaretleGovdesi = z.object({
+  adimId: KIMLIK,
+  tamam: z.boolean(),
+}).strict();
+export const listeEkleGovdesi = z.object({
+  ad: metin(120, 'Madde adı zorunlu.'),
+  asama: z.enum(LISTE_ASAMALARI),
+}).strict();
+const listeMaddesiSemasi = z.object({
+  adimId: KIMLIK, ad: z.string(), aciklama: z.string().nullable(), asama: z.enum(LISTE_ASAMALARI), tamam: z.boolean(),
+  kisiAdi: z.string().nullable(), zaman: zamanSemasi.nullable(), kaynak: z.enum(['terminal', 'adim-durumu']).nullable(),
+  // Ölçüm, seçim ya da fotoğraf kanıtının kısa metni; yoksa null.
+  kanit: z.string().nullable(),
+  // Adım Durumu'ndan eklenen maddede ekleyen ve zaman; talimattan ya da şablondan gelende null.
+  ekleyenAdi: z.string().nullable(), eklenme: zamanSemasi.nullable(),
+});
 // 2893 D2: adımı bekleten açık tedarik satırı (hammadde talebi ya da siparişi, fason talebi). Yalnız numara, aşama ve beklenen teslim;
 // fiyat ve tedarikçi yok (operatör terminali de okur, 2893-3 b). Sipariş no ve termin yalnız sipariş aşamasında dolu.
 export const adimTedarikSemasi = z.object({
@@ -1123,6 +1143,8 @@ export const adimDurumuCevabi = z.object({
     gecmis: z.array(z.object({
       olay: z.enum(ADIM_DURUMU_OLAYLARI), deger: z.string(), not: z.string().nullable(), kisiAdi: z.string().nullable(), zaman: zamanSemasi,
     })),
+    // 3249 b: adımın ön hazırlık ve hazırlık listesi, sırasıyla.
+    liste: z.array(listeMaddesiSemasi),
   })),
 });
 // Terminal okuması (2893-3 b): operatör yalnız statüyü, nedeni ve elle yazılmış statünün kendisini görür; kişi adı, gerekçe ve geçmiş yok.
@@ -1141,6 +1163,8 @@ export type AdimStatusu = z.output<typeof adimStatusu>;
 export type ElleYazilanStatu = (typeof ELLE_YAZILAN_STATULER)[number];
 export type ElleStatuGovdesi = z.output<typeof elleStatuGovdesi>;
 export type HazirlikOnayiGovdesi = z.output<typeof hazirlikOnayiGovdesi>;
+export type ListeIsaretleGovdesi = z.output<typeof listeIsaretleGovdesi>;
+export type ListeEkleGovdesi = z.output<typeof listeEkleGovdesi>;
 export type HazirlikOnayiKaldirGovdesi = z.output<typeof hazirlikOnayiKaldirGovdesi>;
 export type AdimDurumuCevabi = z.output<typeof adimDurumuCevabi>;
 export type AdimDurumuTerminalCevabi = z.output<typeof adimDurumuTerminalCevabi>;

@@ -4,12 +4,13 @@ import type { Kullanici } from '#cekirdek/yetki.ts';
 import { ADIM_STATULERI, BEKLEME_NEDENI_ADLARI } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import type {
   AdimDurumuCevabi, AdimStatusu, BeklemeNedeni, AdimDurumuTerminalCevabi, AdimTedariki, ElleStatuGovdesi, HazirlikMaddesi, HazirlikOnayiGovdesi, HazirlikOnayiKaldirGovdesi,
+  ListeEkleGovdesi, ListeIsaretleGovdesi,
 } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { kisiAdlari } from '../kisiler/disari.ts';
 import { hazirlik, isEmriHazirliklari } from './hazirlik.ts';
 import {
-  ADIM_KAPALI_EMIR, ELLE_STATU_YOK, EMIR_BEKLEMEDE_STATU, EMIR_YOK, GEREKCE_GEREK, HAL_ESKIDI, IS_EMRI_EMIRDE_YOK, ONAY_YOK, STATU_ESKIDI,
-  acikElleStatu, acikOnaylar, adimSistemStatusu, calismaDurumu, hazirlikOnayiReddi, oncekiBekleniyor,
+  ADIM_KAPALI_EMIR, ELLE_STATU_YOK, EMIR_BEKLEMEDE_STATU, EMIR_YOK, GEREKCE_GEREK, HAL_ESKIDI, IS_EMRI_EMIRDE_YOK, LISTE_MADDESI_YOK,
+  ONAY_YOK, STATU_ESKIDI, acikElleStatu, acikOnaylar, adimSistemStatusu, calismaDurumu, hazirlikOnayiReddi, kanitMetni, listeEkleReddi, listeIsaretReddi, oncekiBekleniyor,
 } from './kurallar.ts';
 import type { HazirlikHali } from './kurallar.ts';
 import * as s from './sorgular.ts';
@@ -66,7 +67,11 @@ export async function adimDurumu(db: Db, emirId: number): Promise<AdimDurumuCeva
   const statuDefteri = await s.elleStatuDefteri(db, idler);
   const onayDefteri = await s.hazirlikOnayDefteri(db, idler);
   const bekletme = await emrinBekletmesi(db, emirId, e.durum);
-  const adlar = await kisiAdlari(db, [...new Set([...statuDefteri, ...onayDefteri].map((x) => x.kisiId))]);
+  const liste = await s.listeSatirlari(db, idler);
+  const adlar = await kisiAdlari(db, [...new Set([
+    ...[...statuDefteri, ...onayDefteri].map((x) => x.kisiId),
+    ...liste.flatMap((x) => [x.olayKisiId, x.ekleyenId].filter((k): k is number => k !== null)),
+  ])]);
   const ad = (id: number) => adlar.get(id) ?? null;
   return {
     emirId, emirNo: e.emirNo, urun: { kod: e.parcaNo, ad: e.parcaAd }, adet: e.adet, teslim: e.teslim, durum: e.durum,
@@ -97,6 +102,16 @@ export async function adimDurumu(db: Db, emirId: number): Promise<AdimDurumuCeva
           ...statuSatirlari.map((x) => ({ olay: x.olay === 'yaz' ? 'statu' as const : 'statu-kaldir' as const, deger: x.statu ?? '', not: x.aciklama, kisiAdi: ad(x.kisiId), zaman: x.zaman })),
           ...onaySatirlari.map((x) => ({ olay: x.olay === 'onay' ? 'onay' as const : 'onay-kaldir' as const, deger: x.madde, not: x.gerekce, kisiAdi: ad(x.kisiId), zaman: x.zaman })),
         ].sort((a, b) => Date.parse(b.zaman) - Date.parse(a.zaman)),
+        liste: liste.filter((x) => x.isEmriId === i.id).map((x) => {
+          const tamam = x.sonOlay === 'tamamla';
+          return {
+            adimId: x.id, ad: x.ad, aciklama: x.aciklama, asama: x.asama, tamam,
+            kisiAdi: x.olayKisiId === null ? null : ad(x.olayKisiId), zaman: x.olayZamani,
+            kaynak: x.sonOlay === null ? null : x.olayKaynagi === 'adim-durumu' ? 'adim-durumu' as const : 'terminal' as const,
+            kanit: tamam ? kanitMetni({ olcum: x.kanitOlcum, secim: x.kanitSecim, foto: x.kanitFoto }) : null,
+            ekleyenAdi: x.ekleyenId === null ? null : ad(x.ekleyenId), eklenme: x.eklenme,
+          };
+        }),
       };
     }),
   };
@@ -162,5 +177,26 @@ export async function hazirlikOnayKaldir(db: Db, kullanici: Kullanici, emirId: n
   const adim = await yazmaHazirla(db, emirId, isEmriId);
   if (!adim.onaylar.some((o) => o.madde === g.madde)) throw cakisma(ONAY_YOK);
   await s.hazirlikOnayiEkle(db, { isEmriId, madde: g.madde, olay: 'kaldir', sistemHali: null, gerekce: null, onaylananSurum: null, kisiId: kullanici.id });
+  return adimDurumu(db, emirId);
+}
+
+// 3249 b: ofisten hazırlık listesi işareti. Yalnız ön hazırlık ve hazırlık aşaması (Risk K5); kayıt kişi, zaman ve "Adım Durumu"
+// kaynağıyla yazılır (K4). Kanıt istemez: ölçüm, seçim ve fotoğraf operatörün terminal kaydıdır (Dilim 2 ayrı karar).
+export async function listeIsaretle(db: Db, kullanici: Kullanici, emirId: number, isEmriId: number, g: ListeIsaretleGovdesi): Promise<AdimDurumuCevabi> {
+  const adim = await yazmaHazirla(db, emirId, isEmriId);
+  const madde = adim.liste.find((m) => m.adimId === g.adimId);
+  if (madde === undefined) throw bulunamadi(LISTE_MADDESI_YOK);
+  const ret = listeIsaretReddi(adim.durum === 'tamam', madde.tamam, g.tamam);
+  if (ret !== null) throw cakisma(ret);
+  await s.listeOlayiEkle(db, g.adimId, kullanici.id, g.tamam ? 'tamamla' : 'geri-al');
+  return adimDurumu(db, emirId);
+}
+
+// Eklenen madde yalnız bu iş emrinindir: terminalde operatörün hazırlık listesinde de görünür, talimatı ve şablonu değiştirmez.
+export async function listeMaddesiEkle(db: Db, kullanici: Kullanici, emirId: number, isEmriId: number, g: ListeEkleGovdesi): Promise<AdimDurumuCevabi> {
+  const adim = await yazmaHazirla(db, emirId, isEmriId);
+  const ret = listeEkleReddi(adim.durum === 'tamam', adim.liste.length);
+  if (ret !== null) throw cakisma(ret);
+  await s.listeMaddesiEkle(db, { emirId, isEmriId, ad: g.ad, asama: g.asama, kisiId: kullanici.id });
   return adimDurumu(db, emirId);
 }

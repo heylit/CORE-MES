@@ -1,16 +1,19 @@
 import { useState } from 'react';
 import type { SartnameOzeti, TalimatSablonuCevabi } from '#paylasilan/sozlesme/rota.ts';
 import { hataIletisi } from '../../../../ortak/veri/api.ts';
-import { DurumKutusu, Dugme, Girdi, Pencere, Rozet, Secim, Simge, useBildirim } from '../../../../ortak/arayuz/index.ts';
+import { DurumKutusu, Dugme, Girdi, IsaretKutusu, Pencere, Rozet, Secim, Simge, useBildirim } from '../../../../ortak/arayuz/index.ts';
 import { AdimDuzenleyici } from './AdimDuzenleyici.tsx';
 import { AdimOnizleme } from './AdimOnizleme.tsx';
 import { adimEksikleri, eslesir, girdiyeCevir, sablonOzeti, taslagaCevir, type AdimTaslagi } from './kurallar.ts';
-import { useSablon, useSablonKomutu, useSablonlar } from './veri.ts';
+import { useOperasyonTipleri, useSablon, useSablonKomutu, useSablonlar } from './veri.ts';
 
 type Sablon = TalimatSablonuCevabi['sablon'];
 // Düzenleyicinin hâli: yeni (boş ya da kopya) ya da var olanın yeni sürümü.
-type Duzen = { tur: 'yeni'; kod: string; ad: string; sartnameId: number | null; adimlar: AdimTaslagi[] }
-  | { tur: 'surum'; sablon: Sablon; ad: string; sartnameId: number | null; adimlar: AdimTaslagi[] };
+// 3249 b: şablon operasyon tipine bağlanır; "emre gelir" açıksa o tipteki adıma, kendi talimatı yoksa, emir açılırken kendiliğinden gelir.
+type Baglanti = { operasyonTipiId: number | null; emreGelir: boolean };
+type Duzen = ({ tur: 'yeni'; kod: string; ad: string; sartnameId: number | null; adimlar: AdimTaslagi[] }
+  | { tur: 'surum'; sablon: Sablon; ad: string; sartnameId: number | null; adimlar: AdimTaslagi[] }) & Baglanti;
+const baglantisi = (s: Sablon): Baglanti => ({ operasyonTipiId: s.operasyonTipi?.id ?? null, emreGelir: s.emreGelir });
 
 interface Ozellikler {
   yazabilir: boolean;
@@ -29,7 +32,7 @@ export function TalimatSablonlari({ yazabilir, sartnameler, yeniAcik, yeniKapat 
   const gorunen = sablonlar.filter((s) => eslesir(q, s.kod, s.ad, s.sartname?.kod ?? null, s.sartname?.ad ?? null));
   const id = seciliId ?? gorunen[0]?.id ?? null;
   const ayrinti = useSablon(id);
-  const acikDuzen: Duzen | null = duzen ?? (yeniAcik ? { tur: 'yeni', kod: '', ad: '', sartnameId: null, adimlar: [] } : null);
+  const acikDuzen: Duzen | null = duzen ?? (yeniAcik ? { tur: 'yeni', kod: '', ad: '', sartnameId: null, adimlar: [], operasyonTipiId: null, emreGelir: false } : null);
 
   if (liste.isPending) return <DurumKutusu durum="yukleniyor" />;
   if (liste.isError) return <DurumKutusu durum="hata" mesaj={hataIletisi(liste.error, 'Talimat şablonları alınamadı.')} yenile={() => { void liste.refetch(); }} />;
@@ -45,10 +48,11 @@ export function TalimatSablonlari({ yazabilir, sartnameler, yeniAcik, yeniKapat 
             <button key={s.id} type="button" className="tc-st-satir-sec" aria-current={s.id === id ? 'true' : undefined} onClick={() => { setSeciliId(s.id); }}>
               <span className="tc-st-adim-metin">
                 <span className="tc-st-kalin">{s.ad}</span>
-                <span className="tc-st-soluk">{`${s.kod} · ${String(s.adimSayisi)} adım${s.kontrolSayisi ? ` · ${String(s.kontrolSayisi)} kontrol noktası` : ''}`}</span>
+                <span className="tc-st-soluk">{`${s.kod} · ${String(s.adimSayisi)} adım${s.kontrolSayisi ? ` · ${String(s.kontrolSayisi)} kontrol noktası` : ''}${s.operasyonTipi ? ` · ${s.operasyonTipi.ad}` : ''}`}</span>
               </span>
               <span className="tc-st-rozetler">
                 {!s.aktif && <Rozet ton="pasif">pasif</Rozet>}
+                {s.emreGelir && <Rozet ton="bilgi" gorunum="cizgi">emre gelir</Rozet>}
                 <span className="tc-st-medya-sayi" aria-label={`${String(s.resimSayisi)} resim, ${String(s.videoSayisi)} video`}>
                   <Simge ad="camera" boyut="k" />{s.resimSayisi}<Simge ad="play" boyut="k" />{s.videoSayisi}
                 </span>
@@ -64,8 +68,11 @@ export function TalimatSablonlari({ yazabilir, sartnameler, yeniAcik, yeniKapat 
         {ayrinti.isError && <DurumKutusu durum="hata" mesaj={hataIletisi(ayrinti.error, 'Şablon alınamadı.')} yenile={() => { void ayrinti.refetch(); }} />}
         {sablon && (
           <SablonOnizleme sablon={sablon} yazabilir={yazabilir}
-            kopyala={() => { setDuzen({ tur: 'yeni', kod: '', ad: `${sablon.ad} (kopya)`, sartnameId: sablon.sartname?.id ?? null, adimlar: sablon.adimlar.map(taslagaCevir) }); }}
-            yeniSurum={() => { setDuzen({ tur: 'surum', sablon, ad: sablon.ad, sartnameId: sablon.sartname?.id ?? null, adimlar: sablon.adimlar.map(taslagaCevir) }); }} />
+            kopyala={() => {
+              // Kopya aynı tipte emre gelmez (tip başına tek şablon); tip kalır, kullanıcı isterse açar.
+              setDuzen({ tur: 'yeni', kod: '', ad: `${sablon.ad} (kopya)`, sartnameId: sablon.sartname?.id ?? null, adimlar: sablon.adimlar.map(taslagaCevir), ...baglantisi(sablon), emreGelir: false });
+            }}
+            yeniSurum={() => { setDuzen({ tur: 'surum', sablon, ad: sablon.ad, sartnameId: sablon.sartname?.id ?? null, adimlar: sablon.adimlar.map(taslagaCevir), ...baglantisi(sablon) }); }} />
         )}
       </section>
 
@@ -96,6 +103,11 @@ function SablonOnizleme({ sablon, yazabilir, kopyala, yeniSurum }: { sablon: Sab
           <span className="tc-st-soluk">
             {`Bağlı şartname: ${sablon.sartname ? `${sablon.sartname.kod} · ${sablon.sartname.ad}` : 'yok'} · ${sablonOzeti(sablon.adimlar)}`}
           </span>
+          <span className="tc-st-soluk">
+            <Simge ad="tool" boyut="k" />
+            {sablon.operasyonTipi === null ? ' Operasyon tipi: yok'
+              : ` Operasyon tipi: ${sablon.operasyonTipi.kod} · ${sablon.operasyonTipi.ad}${sablon.emreGelir ? ' · bu tipteki adıma emir açılırken kendiliğinden gelir' : ''}`}
+          </span>
         </div>
         {yazabilir && (
           <div className="tc-st-araclar">
@@ -122,11 +134,14 @@ function SablonDuzenleyici({ duzen, sartnameler, degistir, kapat, kaydedildi }: 
   if (duzen.ad.trim() === '') eksikler.unshift('Şablon adı zorunlu.');
   if (duzen.tur === 'yeni' && !/^[A-Z0-9][A-Z0-9-]{1,29}$/.test(duzen.kod.trim().toUpperCase())) eksikler.unshift('Kod 2-30 karakter: büyük harf, rakam ve tire.');
   const secenekler = sartnameler.filter((s) => s.aktif || s.id === duzen.sartnameId).map((s) => ({ deger: String(s.id), baslik: `${s.kod} · ${s.ad}` }));
+  const tipler = useOperasyonTipleri();
+  const tipSecenekleri = (tipler.data?.operasyonTipleri ?? []).filter((t) => t.aktif || t.id === duzen.operasyonTipiId)
+    .map((t) => ({ deger: String(t.id), baslik: `${t.kod} · ${t.ad}` }));
 
   const kaydet = () => {
     setHata(null);
     const adimlar = duzen.adimlar.map(girdiyeCevir);
-    const ortak = { ad: duzen.ad.trim(), sartnameId: duzen.sartnameId, adimlar };
+    const ortak = { ad: duzen.ad.trim(), sartnameId: duzen.sartnameId, adimlar, operasyonTipiId: duzen.operasyonTipiId, emreGelir: duzen.emreGelir && duzen.operasyonTipiId !== null };
     komut.mutate(duzen.tur === 'yeni'
       ? { ad: 'ekle', govde: { kod: duzen.kod.trim().toUpperCase(), ...ortak } }
       : { ad: 'kaydet', id: duzen.sablon.id, govde: { surum: duzen.sablon.surum, ...ortak } }, {
@@ -145,6 +160,11 @@ function SablonDuzenleyici({ duzen, sartnameler, degistir, kapat, kaydedildi }: 
           <Girdi etiket="Ad" value={duzen.ad} maxLength={120} required onChange={(e) => { degistir({ ...duzen, ad: e.target.value }); }} />
           <Secim etiket="Bağlı şartname" bosSecenek="Yok (iç adım)" secenekler={secenekler} value={duzen.sartnameId === null ? '' : String(duzen.sartnameId)}
             onChange={(e) => { degistir({ ...duzen, sartnameId: e.target.value === '' ? null : Number(e.target.value) }); }} />
+          <Secim etiket="Operasyon tipi" bosSecenek="Yok (her tipte kullanılır)" secenekler={tipSecenekleri} value={duzen.operasyonTipiId === null ? '' : String(duzen.operasyonTipiId)}
+            onChange={(e) => { const id = e.target.value === '' ? null : Number(e.target.value); degistir({ ...duzen, operasyonTipiId: id, emreGelir: id !== null && duzen.emreGelir }); }} />
+          <IsaretKutusu etiket="Emre kendiliğinden gelsin" checked={duzen.emreGelir} disabled={duzen.operasyonTipiId === null}
+            title={duzen.operasyonTipiId === null ? 'Önce operasyon tipi seçin' : 'Bu tipteki adıma, kendi talimatı yoksa, emir açılırken hazırlık listesi olarak kopyalanır'}
+            onChange={(e) => { degistir({ ...duzen, emreGelir: e.target.checked }); }} />
         </div>
         <AdimDuzenleyici adimlar={duzen.adimlar} degistir={(adimlar) => { degistir({ ...duzen, adimlar }); }}
           alt={(

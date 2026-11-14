@@ -8,6 +8,7 @@ import { MEDYA_SINIRI } from '#paylasilan/sozlesme/rota.ts';
 import { denetimSatiri, medyaTutamagi } from '../../dosya/disari.ts';
 import type { BagliDosya } from '#paylasilan/sozlesme/dosya.ts';
 import { kisiAdlari } from '../../kisiler/disari.ts';
+import { operasyonTipleri as katalogTipleri } from '../../istasyonlar/disari.ts';
 import { adimliTalimatMetni, eskiTalimatAdimi, kontrolAyrisi, medyaSinirHatasi, medyaTuru, talimatAdimiHatasi, urunMedyaToplami } from '../kurallar.ts';
 import type { TalimatAdimiYazisi } from '../kurallar.ts';
 import * as s from '../sorgular.ts';
@@ -240,22 +241,33 @@ export async function talimatSurumuAdimlari(db: Db, malzemeId: number, opNo: num
 type DenetimEki = (satirlar: readonly DenetimSecimi[]) => void;
 
 const TALIMAT_SABLONU_YOK = 'Talimat şablonu bulunamadı.';
-const TALIMAT_SABLON_KISITLARI = { rota_talimat_sablonu_kod_tekil: { ileti: 'Bu kod başka bir talimat şablonunda kullanılıyor.', alan: 'kod' } };
+const TALIMAT_SABLON_KISITLARI = {
+  rota_talimat_sablonu_kod_tekil: { ileti: 'Bu kod başka bir talimat şablonunda kullanılıyor.', alan: 'kod' },
+  rota_talimat_sablonu_emre_gelir_tekil: { ileti: 'Bu operasyon tipinde emre kendiliğinden gelen başka bir şablon var.', alan: 'emreGelir' },
+};
+const OPERASYON_TIPI_YOK = 'Operasyon tipi bulunamadı.';
+const EMRE_GELIR_TIPSIZ = 'Emre kendiliğinden gelmesi için operasyon tipi seçin.';
 
-const sablonOzeti = (x: s.TalimatSablonSatiri) => ({
+type TipAdlari = ReadonlyMap<number, { id: number; kod: string; ad: string }>;
+const tipAdlari = async (db: Db): Promise<TipAdlari> =>
+  new Map((await katalogTipleri(db, { pasiflerDahil: true })).map((t) => [t.id, { id: t.id, kod: t.kod, ad: t.ad }]));
+const sablonOzeti = (x: s.TalimatSablonSatiri, tipler: TipAdlari) => ({
   id: x.id, kod: x.kod, ad: x.ad, aktif: x.aktif, surum: x.surum, adimSayisi: x.adimSayisi,
   kontrolSayisi: x.kontrolSayisi, resimSayisi: x.resimSayisi, videoSayisi: x.videoSayisi,
   sartname: x.sartnameId === null ? null : { id: x.sartnameId, kod: x.sartnameKodu ?? '', ad: x.sartnameAdi ?? '' },
+  operasyonTipi: x.operasyonTipiId === null ? null : (tipler.get(x.operasyonTipiId) ?? { id: x.operasyonTipiId, kod: '', ad: '' }),
+  emreGelir: x.emreGelir,
 });
 
 export async function talimatSablonlari(db: Db): Promise<TalimatSablonlariCevabi> {
-  return { sablonlar: (await s.talimatSablonlari(db)).map(sablonOzeti) };
+  const tipler = await tipAdlari(db);
+  return { sablonlar: (await s.talimatSablonlari(db)).map((x) => sablonOzeti(x, tipler)) };
 }
 
 export async function talimatSablonu(db: Db, id: number): Promise<TalimatSablonuCevabi> {
   const x = (await s.talimatSablonlari(db, [id]))[0];
   if (!x) throw bulunamadi(TALIMAT_SABLONU_YOK);
-  return { sablon: { ...sablonOzeti(x), adimlar: talimatAdimlariKur(await s.talimatSablonAdimlari(db, id), await s.sablonMedyalari(db, id)).get(id) ?? [] } };
+  return { sablon: { ...sablonOzeti(x, await tipAdlari(db)), adimlar: talimatAdimlariKur(await s.talimatSablonAdimlari(db, id), await s.sablonMedyalari(db, id)).get(id) ?? [] } };
 }
 
 // Kopyalar şablonun güncel sürümüyle karşılaştırılır; ürün özeti malzemeler modülünden toplu alınır.
@@ -277,12 +289,22 @@ async function sablonSartnamesiDenetle(db: Db, sartnameId: number | null): Promi
   if (sartnameId !== null && !(await s.sartnameVarMi(db, sartnameId))) throw dogrulama(SARTNAME_YOK, 'sartnameId');
 }
 
+// 3249 b: tip katalogda olmalı (pasif tip eski şablonda kalabilir, yeni seçimde de kabul edilir: emre gelmesi rota adımına bağlıdır).
+async function sablonOperasyonu(db: Db, tipId: number | null, emreGelir: boolean): Promise<{ operasyonTipiId: number | null; emreGelir: boolean }> {
+  if (tipId !== null && !(await tipAdlari(db)).has(tipId)) throw dogrulama(OPERASYON_TIPI_YOK, 'operasyonTipiId');
+  if (emreGelir && tipId === null) throw dogrulama(EMRE_GELIR_TIPSIZ, 'emreGelir');
+  return { operasyonTipiId: tipId, emreGelir };
+}
+
 export async function talimatSablonEkle(
-  db: Db, kullanici: Kullanici, g: { kod: string; ad: string; sartnameId: number | null; adimlar: readonly TalimatAdimiYazisi[] }, denetimEki: DenetimEki,
+  db: Db, kullanici: Kullanici,
+  g: { kod: string; ad: string; sartnameId: number | null; adimlar: readonly TalimatAdimiYazisi[]; operasyonTipiId?: number | null | undefined; emreGelir?: boolean | undefined },
+  denetimEki: DenetimEki,
 ): Promise<TalimatSablonuCevabi> {
   await sablonSartnamesiDenetle(db, g.sartnameId);
+  const op = await sablonOperasyonu(db, g.operasyonTipiId ?? null, g.emreGelir ?? false);
   const yazilar = await adimYazilari(db, kullanici, g.adimlar, denetimEki);
-  const id = await kisitKorumali(TALIMAT_SABLON_KISITLARI, () => s.talimatSablonEkle(db, g));
+  const id = await kisitKorumali(TALIMAT_SABLON_KISITLARI, () => s.talimatSablonEkle(db, { ...g, ...op }));
   await s.talimatSablonAdimlariniYaz(db, id, yazilar);
   return talimatSablonu(db, id);
 }
@@ -294,14 +316,17 @@ async function sablonKomutIcinAl(db: Db, id: number, surum: number): Promise<voi
 }
 
 export async function talimatSablonKaydet(
-  db: Db, kullanici: Kullanici, id: number, g: { surum: number; ad: string; sartnameId: number | null; adimlar: readonly TalimatAdimiYazisi[] },
+  db: Db, kullanici: Kullanici, id: number,
+  g: { surum: number; ad: string; sartnameId: number | null; adimlar: readonly TalimatAdimiYazisi[]; operasyonTipiId?: number | null | undefined; emreGelir?: boolean | undefined },
   denetimEki: DenetimEki,
 ): Promise<TalimatSablonuCevabi> {
   await sablonKomutIcinAl(db, id, g.surum);
   await sablonSartnamesiDenetle(db, g.sartnameId);
+  const simdi = (await s.talimatSablonlari(db, [id]))[0];
+  const op = await sablonOperasyonu(db, g.operasyonTipiId === undefined ? (simdi?.operasyonTipiId ?? null) : g.operasyonTipiId, g.emreGelir ?? simdi?.emreGelir ?? false);
   const yazilar = await adimYazilari(db, kullanici, g.adimlar, denetimEki);
   const onceki = (await s.sablonMedyalari(db, id)).map((m) => m.ozet);
-  await s.talimatSablonGuncelle(db, id, g);
+  await kisitKorumali(TALIMAT_SABLON_KISITLARI, () => s.talimatSablonGuncelle(db, id, { ...g, ...op }));
   await s.talimatSablonAdimlariniYaz(db, id, yazilar);
   await kullanilmayanMedyayiBirak(db, onceki, denetimEki);
   return talimatSablonu(db, id);

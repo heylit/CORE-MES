@@ -920,16 +920,22 @@ export type IsEmriSartnameleriCevabi = z.output<typeof isEmriSartnameleriCevabi>
 // Şablon kütüphanedir: "şablondan başla" adımları talimata kopyalar, bağ kurmaz; şablon sonra değişse ürün talimatı değişmez.
 export const talimatSablonParametresi = z.object({ id: yolKimligi });
 const talimatSablonKodu = z.string().trim().toUpperCase().regex(/^[A-Z0-9][A-Z0-9-]{1,29}$/, 'Kod 2-30 karakter: büyük harf, rakam ve tire.');
+// 3249 b: şablon operasyon tipine bağlanabilir; "emre gelir" açıksa rota adımının tipi tutuyor ve adımın kendi talimatı yoksa emir açılırken
+// hazırlık listesine kopyalanır. Tip başına en çok bir şablon emre gelir. Gönderilmeyen alan değişmez (eski istemci tipi silmesin).
+const sablonOperasyonAlanlari = { operasyonTipiId: KIMLIK.nullable().optional(), emreGelir: z.boolean().optional() };
 export const talimatSablonEkleGovdesi = z.object({
-  kod: talimatSablonKodu, ad: metin(120, 'Şablon adı zorunlu.'), sartnameId: KIMLIK.nullable(), adimlar: talimatAdimlari,
+  kod: talimatSablonKodu, ad: metin(120, 'Şablon adı zorunlu.'), sartnameId: KIMLIK.nullable(), adimlar: talimatAdimlari, ...sablonOperasyonAlanlari,
 });
-export const talimatSablonKaydetGovdesi = z.object({ surum: KIMLIK, ad: metin(120, 'Şablon adı zorunlu.'), sartnameId: KIMLIK.nullable(), adimlar: talimatAdimlari });
+export const talimatSablonKaydetGovdesi = z.object({
+  surum: KIMLIK, ad: metin(120, 'Şablon adı zorunlu.'), sartnameId: KIMLIK.nullable(), adimlar: talimatAdimlari, ...sablonOperasyonAlanlari,
+});
 export const talimatSablonDurumGovdesi = z.object({ surum: KIMLIK, aktif: z.boolean() });
 const talimatSablonOzeti = z.object({
   id: KIMLIK, kod: z.string(), ad: z.string(), sartname: z.object({ id: KIMLIK, kod: z.string(), ad: z.string() }).nullable(),
   aktif: z.boolean(), surum: KIMLIK, adimSayisi: z.number().int().nonnegative(),
   // Listede gösterilir (1180 a): kontrol noktalı adım, resim ve video sayısı.
   kontrolSayisi: z.number().int().nonnegative(), resimSayisi: z.number().int().nonnegative(), videoSayisi: z.number().int().nonnegative(),
+  operasyonTipi: z.object({ id: KIMLIK, kod: z.string(), ad: z.string() }).nullable(), emreGelir: z.boolean(),
 });
 export const talimatSablonlariCevabi = z.object({ sablonlar: z.array(talimatSablonOzeti) });
 export const talimatSablonuCevabi = z.object({ sablon: talimatSablonOzeti.extend({ adimlar: z.array(talimatAdimiSemasi) }) });
