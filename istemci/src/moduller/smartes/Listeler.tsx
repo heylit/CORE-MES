@@ -75,9 +75,9 @@ const ONAY: Record<NonNullable<UretimSatiri['onay']>, { metin: string; ton: Roze
   bekliyor: { metin: 'Onay bekliyor', ton: 'uyari' }, onaylandi: { metin: 'Onaylandı', ton: 'tamam' }, reddedildi: { metin: 'Reddedildi', ton: 'hata' },
 };
 const URETIM_SUTUNLARI: readonly Sutun<UretimSatiri>[] = [
-  { anahtar: 'isEmriNo', baslik: 'İş emri', hucre: (s) => s.isEmriNo ?? YOK, mono: true },
-  { anahtar: 'istasyon', baslik: 'İstasyon', hucre: (s) => s.istasyonKodu ?? YOK, mono: true },
-  { anahtar: 'makine', baslik: 'Makine', hucre: (s) => s.makineKodu ?? YOK, mono: true },
+  { anahtar: 'isEmriNo', baslik: 'İş emri', hucre: (s) => s.isEmriNo ?? YOK, mono: true, kirilmaz: true },
+  { anahtar: 'istasyon', baslik: 'İstasyon', hucre: (s) => s.istasyonKodu ?? YOK, mono: true, kirilmaz: true },
+  { anahtar: 'makine', baslik: 'Makine', hucre: (s) => s.makineKodu ?? YOK, mono: true, kirilmaz: true },
   { anahtar: 'operasyon', baslik: 'Operasyon', hucre: (s) => s.operasyonKodu ?? YOK, mono: true },
   { anahtar: 'saglam', baslik: 'Sağlam', hucre: (s) => sayiMetni(s.saglam), hizala: 'sag', mono: true },
   { anahtar: 'red', baslik: 'Red', hucre: (s) => sayiMetni(s.red), hizala: 'sag', mono: true },

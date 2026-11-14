@@ -1408,10 +1408,11 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
     {dar ? null : <SayacCipi liste={bekleyen.liste} kopuk={bekleyen.kopuk} ac={() => bkAcikYaz(true)} />}
     <div className="tc-ay1-sayac">
       <SayacKadrani is={o} etiket={OT.cnt} birim={OT.unit} cevrim={cevrim} {...(hataliSayisi === undefined ? {} : { hatali: hataliSayisi })} duzelt={duzeltir ? () => { if (iyiSayimOk('prod.fix')) ovYaz('num'); } : null} />
-      {smartesSayimi(o) && <p className="tc-ay1-smartes" role="status"><Simge ad="laptop" />{SMARTES_SAYIM_ILETISI}. Başlat, duraklat, bitir ve hatalı parça burada kalır.</p>}
       {/* 693: telefonda İyi +1 ve Hurda +1 alttaki eylem çubuğunda; sayacın altında yalnız düzeltme (−1) tuşları kalır. */}
       <SayimTuslari tuslar={dar && uretir ? tuslar.filter((t) => t.simge === 'minus' || t.simge === 'layers') : tuslar} />
     </div>
+    {/* Sayaç boyunu içeriğinden almaz; bilgi satırı içine konunca kadranı ve tuşları sıkıştırır. Telefonda aynı bilgi eylem çubuğundadır. */}
+    {!dar && smartesSayimi(o) && <p className="tc-ay1-smartes" role="status"><Simge ad="laptop" />{SMARTES_SAYIM_ILETISI}. Başlat, duraklat, bitir ve hatalı parça burada kalır.</p>}
     </>
   );
   const toplu = uretir ? (
