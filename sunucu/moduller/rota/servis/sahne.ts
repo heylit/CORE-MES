@@ -8,7 +8,7 @@ import { malzemeModelRevizyonlari } from '../../geometri/disari.ts';
 import { kisiAdlari } from '../../kisiler/disari.ts';
 import { sahneHatasi } from '../kurallar.ts';
 import * as s from '../sorgular.ts';
-import { talimatSurumuAdimlari } from './talimat.ts';
+import { operasyonTalimatAdimlari } from './talimat.ts';
 
 // Montaj talimatının 3B sahnesi (3209 a): yayınlanmış talimat sürümüne bağlı, yalnız eklenen sahne sürümleri.
 
@@ -34,30 +34,34 @@ async function cevapKur(db: Db, satirlar: readonly s.SahneSatiri[]): Promise<Tal
 }
 
 export async function talimatSahneleri(db: Db, urunId: number, opNo: number): Promise<TalimatSahneleriCevabi> {
-  return { sahneler: await cevapKur(db, await s.sonSahneler(db, urunId, opNo)) };
+  const op = await s.operasyonBul(db, urunId, opNo);
+  return { sahneler: op === null ? [] : await cevapKur(db, await s.sonSahneler(db, op)) };
 }
 
 export async function talimatSahnesiKaydet(
   db: Db, kullanici: Kullanici, urunId: number,
   govde: { opNo: number; talimatSurum: number; okunanSahneSurum: number | null; modelRevizyonId: number; adimlar: readonly SahneAdimi[] },
 ): Promise<TalimatSahneleriCevabi> {
-  const adimlar = await talimatSurumuAdimlari(db, urunId, govde.opNo, govde.talimatSurum);
-  if (adimlar === null) throw bulunamadi(SURUM_YOK(govde.opNo, govde.talimatSurum));
+  const op = await s.operasyonBul(db, urunId, govde.opNo);
+  const adimlar = op === null ? null : await operasyonTalimatAdimlari(db, op, govde.talimatSurum);
+  if (adimlar === null || op === null) throw bulunamadi(SURUM_YOK(govde.opNo, govde.talimatSurum));
   // Risk R2: model başka ürünün ya da yayından düşmüş revizyonun olamaz; sahne terminalde bu modeli açtırır.
   if (!(await malzemeModelRevizyonlari(db, urunId)).includes(govde.modelRevizyonId)) throw dogrulama(MODEL_YOK, 'modelRevizyonId');
   const hata = sahneHatasi(govde.adimlar, adimlar.length);
   if (hata !== null) throw dogrulama(hata, 'adimlar');
-  const son = await s.sonSahne(db, urunId, govde.opNo, govde.talimatSurum);
+  const son = await s.sonSahne(db, op, govde.talimatSurum);
   if ((son?.sahneSurum ?? null) !== govde.okunanSahneSurum) throw eskiSurum();
   await kisitKorumali(SAHNE_KISITLARI, () => s.sahneEkle(db, {
-    malzemeId: urunId, opNo: govde.opNo, talimatSurum: govde.talimatSurum, sahneSurum: (son?.sahneSurum ?? 0) + 1,
+    operasyonId: op, talimatSurum: govde.talimatSurum, sahneSurum: (son?.sahneSurum ?? 0) + 1,
     modelRevizyonId: govde.modelRevizyonId, adimlar: [...govde.adimlar].sort((a, b) => a.sira - b.sira), kisiId: kullanici.id,
   }));
   return talimatSahneleri(db, urunId, govde.opNo);
 }
 
 // Emre sabitlenen talimat sürümünün en son sahnesi (terminal okur; yetki denetlemez, çağıran denetler). Sahne yoksa null.
+// Emirden gelen (malzeme, OP) kimliğe çevrilir; emir okuyucuları is_emri.operasyon_id'ye geçince (3250 1b-4) kimlikle çağrılır.
 export async function talimatSahnesi(db: Db, malzemeId: number, opNo: number, talimatSurum: number): Promise<TalimatSahnesi | null> {
-  const x = await s.sonSahne(db, malzemeId, opNo, talimatSurum);
+  const op = await s.operasyonBul(db, malzemeId, opNo);
+  const x = op === null ? null : await s.sonSahne(db, op, talimatSurum);
   return x === null ? null : (await cevapKur(db, [x]))[0] ?? null;
 }

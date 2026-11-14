@@ -369,6 +369,7 @@ const firmasizSutunu = (k: AdimKaynagi | null) => k?.tur === 'fason' && k.id ===
 export interface AdimSatiri {
   id: number;
   opNo: number;
+  operasyonId: OperasyonKimligi;
   sira: number;
   operasyonTipiId: number;
   ad: string;
@@ -424,7 +425,7 @@ export async function icerikOku(db: Db, revizyonId: number): Promise<Icerik> {
 // Birden çok revizyonun içeriği, revizyon sayısından bağımsız dört sorguyla; içeriği olmayan revizyon haritada yer almaz.
 export async function iceriklerOku(db: Db, revizyonIdleri: readonly number[]): Promise<Map<number, Icerik>> {
   const adimHam = await db.sorgu<Omit<AdimSatiri, 'kaynak'> & KaynakSutunlari & { fasonFirmaId: number | null; fasonFirmasiz: boolean; revizyonId: number }>(
-    `SELECT revizyon_id AS "revizyonId", id, op_no AS "opNo", sira, operasyon_tipi_id AS "operasyonTipiId", ad, makine_id AS "makineId", kisi_id AS "kisiId",
+    `SELECT revizyon_id AS "revizyonId", id, op_no AS "opNo", operasyon_id AS "operasyonId", sira, operasyon_tipi_id AS "operasyonTipiId", ad, makine_id AS "makineId", kisi_id AS "kisiId",
             istasyon_id AS "istasyonId", fason_firma_id AS "fasonFirmaId", fason_firmasiz AS "fasonFirmasiz", ayar_suresi_dk AS "ayarSuresiDk", birim_sure_dk AS "birimSureDk", termin_gun AS "terminGun",
             islem_suresi_dk AS "islemSuresiDk", degisim_suresi_dk AS "degisimSuresiDk",
             bagimlilik, devir_adedi AS "devirAdedi",
@@ -698,35 +699,59 @@ export const yururlugeAlYaz = (db: Db, id: number, kisiId: number): Promise<numb
 
 /* ---------------- talimat ---------------- */
 
-export interface TalimatSatiri { id: number; surum: number; metin: string; yazanKisiId: number; yazma: string }
+// 3250 b: ürün düzeyindeki veri (talimat, taslak, sahne, gerçekleşen süre) operasyonun gizli kimliğiyle okunur ve yazılır; OP numarası
+// revizyonda yeniden dizildiğinde bağ kopmaz. Markalı tür, OP numarasının yanlışlıkla kimlik yerine verilmesini derlemede yakalar.
+export type OperasyonKimligi = number & { readonly __operasyon: unique symbol };
+export const operasyonKimligi = (n: number): OperasyonKimligi => n as OperasyonKimligi;
+// Yazımda malzeme ve OP numarası operasyonun kendi satırından gelir (tetikleyici kimliği bu çiftten doldurur, aynı kimliği bulur).
+const OPERASYON = 'FROM rota_op_numarasi o WHERE o.id = $1';
 
-export function talimatlar(db: Db, malzemeId: number, opNo: number): Promise<TalimatSatiri[]> {
-  return db.sorgu<TalimatSatiri>(
-    `SELECT id, surum, metin, yazan_kisi_id AS "yazanKisiId", ${ISO('yazma')} AS yazma
-       FROM rota_talimati WHERE malzeme_id = $1 AND op_no = $2 ORDER BY surum DESC`,
-    [malzemeId, opNo],
+export function operasyonlariBul(
+  db: Db, anahtarlar: readonly { malzemeId: number; opNo: number }[],
+): Promise<{ malzemeId: number; opNo: number; operasyonId: OperasyonKimligi }[]> {
+  return db.sorgu(
+    `SELECT o.malzeme_id AS "malzemeId", o.op_no AS "opNo", o.id AS "operasyonId"
+       FROM rota_op_numarasi o JOIN unnest($1::int[], $2::int[]) AS k(m, n) ON o.malzeme_id = k.m AND o.op_no = k.n`,
+    [anahtarlar.map((a) => a.malzemeId), anahtarlar.map((a) => a.opNo)],
   );
 }
 
-export function gecerliTalimatlar(db: Db, malzemeId: number): Promise<{ id: number; opNo: number; surum: number; metin: string }[]> {
+// Aşama 2'ye kadar uçlar OP numarasıyla gelir; numara ürünün kalıcı numara defterinden kimliğe çevrilir.
+export async function operasyonBul(db: Db, malzemeId: number, opNo: number): Promise<OperasyonKimligi | null> {
+  const r = await db.tek<{ id: number }>('SELECT id FROM rota_op_numarasi WHERE malzeme_id = $1 AND op_no = $2', [malzemeId, opNo]);
+  return r ? operasyonKimligi(r.id) : null;
+}
+
+export interface TalimatSatiri { id: number; surum: number; metin: string; yazanKisiId: number; yazma: string }
+
+export function talimatlar(db: Db, operasyonId: OperasyonKimligi): Promise<TalimatSatiri[]> {
+  return db.sorgu<TalimatSatiri>(
+    `SELECT id, surum, metin, yazan_kisi_id AS "yazanKisiId", ${ISO('yazma')} AS yazma
+       FROM rota_talimati WHERE operasyon_id = $1 ORDER BY surum DESC`,
+    [operasyonId],
+  );
+}
+
+export function gecerliTalimatlar(db: Db, malzemeId: number): Promise<{ id: number; operasyonId: OperasyonKimligi; surum: number; metin: string }[]> {
   return db.sorgu(
-    `SELECT DISTINCT ON (op_no) id, op_no AS "opNo", surum, metin FROM rota_talimati WHERE malzeme_id = $1 ORDER BY op_no, surum DESC`,
+    `SELECT DISTINCT ON (operasyon_id) id, operasyon_id AS "operasyonId", surum, metin FROM rota_talimati WHERE malzeme_id = $1 ORDER BY operasyon_id, surum DESC`,
     [malzemeId],
   );
 }
 
-export function urunlerinGecerliTalimatlari(db: Db, malzemeIdleri: readonly number[]): Promise<{ malzemeId: number; opNo: number; surum: number }[]> {
+export function urunlerinGecerliTalimatlari(db: Db, malzemeIdleri: readonly number[]): Promise<{ malzemeId: number; operasyonId: OperasyonKimligi; surum: number }[]> {
   return db.sorgu(
-    `SELECT DISTINCT ON (malzeme_id, op_no) malzeme_id AS "malzemeId", op_no AS "opNo", surum
-       FROM rota_talimati WHERE malzeme_id = ANY($1::int[]) ORDER BY malzeme_id, op_no, surum DESC`,
+    `SELECT DISTINCT ON (malzeme_id, operasyon_id) malzeme_id AS "malzemeId", operasyon_id AS "operasyonId", surum
+       FROM rota_talimati WHERE malzeme_id = ANY($1::int[]) ORDER BY malzeme_id, operasyon_id, surum DESC`,
     [malzemeIdleri],
   );
 }
 
-export async function talimatEkle(db: Db, malzemeId: number, opNo: number, surum: number, metin: string, kisiId: number): Promise<number> {
+export async function talimatEkle(db: Db, operasyonId: OperasyonKimligi, surum: number, metin: string, kisiId: number): Promise<number> {
   return (await db.tek<{ id: number }>(
-    'INSERT INTO rota_talimati (malzeme_id, op_no, surum, metin, yazan_kisi_id) VALUES ($1, $2, $3, $4, $5) RETURNING id',
-    [malzemeId, opNo, surum, metin, kisiId],
+    `INSERT INTO rota_talimati (malzeme_id, op_no, operasyon_id, surum, metin, yazan_kisi_id)
+     SELECT o.malzeme_id, o.op_no, o.id, $2, $3, $4 ${OPERASYON} RETURNING id`,
+    [operasyonId, surum, metin, kisiId],
   ))!.id;
 }
 
@@ -818,17 +843,17 @@ export const talimatAdimlariniEkle = (db: Db, talimatId: number, adimlar: readon
 export interface TalimatTaslagiSatiri { id: number; tabanSurum: number | null; surum: number; yazanKisiId: number; yazma: string }
 const TASLAK_TABLOLARI = { adim: 'rota_talimat_taslak_adimi', medya: 'rota_talimat_taslak_adim_medyasi', sahip: 'taslak_id' };
 
-export function talimatTaslagi(db: Db, malzemeId: number, opNo: number, kilitle = false): Promise<TalimatTaslagiSatiri | null> {
+export function talimatTaslagi(db: Db, operasyonId: OperasyonKimligi, kilitle = false): Promise<TalimatTaslagiSatiri | null> {
   return db.tek<TalimatTaslagiSatiri>(
     `SELECT id, taban_surum AS "tabanSurum", surum, yazan_kisi_id AS "yazanKisiId", ${ISO('yazma')} AS yazma
-       FROM rota_talimat_taslagi WHERE malzeme_id = $1 AND op_no = $2${kilitle ? ' FOR UPDATE' : ''}`,
-    [malzemeId, opNo],
+       FROM rota_talimat_taslagi WHERE operasyon_id = $1${kilitle ? ' FOR UPDATE' : ''}`,
+    [operasyonId],
   );
 }
 
 // Taslak kaydı adımlarıyla bütün olarak yazılır: varsa adımları silinir (medya adımla birlikte), sürümü artar.
 export async function talimatTaslagiYaz(
-  db: Db, g: { malzemeId: number; opNo: number; tabanSurum: number | null; kisiId: number; adimlar: readonly TalimatAdimiYazisi[] }, mevcut: TalimatTaslagiSatiri | null,
+  db: Db, g: { operasyonId: OperasyonKimligi; tabanSurum: number | null; kisiId: number; adimlar: readonly TalimatAdimiYazisi[] }, mevcut: TalimatTaslagiSatiri | null,
 ): Promise<number> {
   let id: number;
   if (mevcut) {
@@ -837,8 +862,9 @@ export async function talimatTaslagiYaz(
     await db.sorgu('UPDATE rota_talimat_taslagi SET taban_surum = $2, surum = surum + 1, yazan_kisi_id = $3, yazma = now() WHERE id = $1', [id, g.tabanSurum, g.kisiId]);
   } else {
     id = (await db.tek<{ id: number }>(
-      'INSERT INTO rota_talimat_taslagi (malzeme_id, op_no, taban_surum, yazan_kisi_id) VALUES ($1, $2, $3, $4) RETURNING id',
-      [g.malzemeId, g.opNo, g.tabanSurum, g.kisiId],
+      `INSERT INTO rota_talimat_taslagi (malzeme_id, op_no, operasyon_id, taban_surum, yazan_kisi_id)
+       SELECT o.malzeme_id, o.op_no, o.id, $2, $3 ${OPERASYON} RETURNING id`,
+      [g.operasyonId, g.tabanSurum, g.kisiId],
     ))!.id;
   }
   await adimlariEkle(db, TASLAK_TABLOLARI, id, g.adimlar);
@@ -861,8 +887,8 @@ export function taslakMedyalari(db: Db, taslakId: number): Promise<MedyaSatiri[]
   );
 }
 
-export async function talimatSurumuKimligi(db: Db, malzemeId: number, opNo: number, surum: number): Promise<{ id: number; metin: string } | null> {
-  return db.tek<{ id: number; metin: string }>('SELECT id, metin FROM rota_talimati WHERE malzeme_id = $1 AND op_no = $2 AND surum = $3', [malzemeId, opNo, surum]);
+export async function talimatSurumuKimligi(db: Db, operasyonId: OperasyonKimligi, surum: number): Promise<{ id: number; metin: string } | null> {
+  return db.tek<{ id: number; metin: string }>('SELECT id, metin FROM rota_talimati WHERE operasyon_id = $1 AND surum = $2', [operasyonId, surum]);
 }
 
 /* ---------------- talimatın şablon kökeni (2588 a) ---------------- */
@@ -904,7 +930,7 @@ export interface SablonKopyasiSatiri {
 export function sablonKopyalari(db: Db, sablonId: number): Promise<SablonKopyasiSatiri[]> {
   return db.sorgu<SablonKopyasiSatiri>(
     `SELECT t.malzeme_id AS "malzemeId", t.op_no AS "opNo", t.surum AS "talimatSurumu", false AS taslak, k.sablon_surum AS "sablonSurumu",
-            t.surum = (SELECT max(x.surum) FROM rota_talimati x WHERE x.malzeme_id = t.malzeme_id AND x.op_no = t.op_no) AS gecerli
+            t.surum = (SELECT max(x.surum) FROM rota_talimati x WHERE x.operasyon_id = t.operasyon_id) AS gecerli
        FROM rota_talimat_kokeni k JOIN rota_talimati t ON t.id = k.talimat_id WHERE k.sablon_id = $1
      UNION ALL
      SELECT t.malzeme_id, t.op_no, NULL, true, k.sablon_surum, false
@@ -1013,21 +1039,21 @@ export function malzemeKullanimi(db: Db, malzemeIdleri: readonly number[]): Prom
 
 /* ---------------- gerçekleşen süre ---------------- */
 
-export async function adimKunyesi(db: Db, adimId: number): Promise<{ revizyonId: number; malzemeId: number; opNo: number } | null> {
+export async function adimKunyesi(db: Db, adimId: number): Promise<{ revizyonId: number; malzemeId: number; opNo: number; operasyonId: OperasyonKimligi } | null> {
   return db.tek(
-    'SELECT revizyon_id AS "revizyonId", malzeme_id AS "malzemeId", op_no AS "opNo" FROM rota_adimi WHERE id = $1',
+    'SELECT revizyon_id AS "revizyonId", malzeme_id AS "malzemeId", op_no AS "opNo", operasyon_id AS "operasyonId" FROM rota_adimi WHERE id = $1',
     [adimId],
   );
 }
 
 // Aynı ürün ve OP için eşzamanlı iki yazma sırayla geçer: "son okunan satır" denetimi kilit altında yapılır.
-export async function gerceklesenKilitle(db: Db, malzemeId: number, opNo: number): Promise<void> {
-  await islemKilidiAl(db, `rota_gerceklesen_sure:${malzemeId}:${opNo}`);
+export async function gerceklesenKilitle(db: Db, operasyonId: OperasyonKimligi): Promise<void> {
+  await islemKilidiAl(db, `rota_gerceklesen_sure:${operasyonId}`);
 }
 
 export interface GerceklesenKaydi {
   id: number;
-  opNo: number;
+  operasyonId: OperasyonKimligi;
   tur: GerceklesenTuru;
   makineId: number | null;
   sureDk: string | null;
@@ -1037,46 +1063,47 @@ export interface GerceklesenKaydi {
   zaman: string;
 }
 
-export function gerceklesenSureler(db: Db, malzemeId: number, opNolari: readonly number[]): Promise<GerceklesenKaydi[]> {
+export function gerceklesenSureler(db: Db, operasyonIdleri: readonly OperasyonKimligi[]): Promise<GerceklesenKaydi[]> {
   return db.sorgu<GerceklesenKaydi>(
-    `SELECT id, op_no AS "opNo", tur, makine_id AS "makineId", sure_dk AS "sureDk", kaynak, is_emri_id AS "isEmriId", kisi_id AS "kisiId", ${ISO('zaman')} AS zaman
-       FROM rota_gerceklesen_sure WHERE malzeme_id = $1 AND op_no = ANY($2::int[]) ORDER BY op_no, tur, id`,
-    [malzemeId, opNolari],
+    `SELECT id, operasyon_id AS "operasyonId", tur, makine_id AS "makineId", sure_dk AS "sureDk", kaynak, is_emri_id AS "isEmriId", kisi_id AS "kisiId", ${ISO('zaman')} AS zaman
+       FROM rota_gerceklesen_sure WHERE operasyon_id = ANY($1::int[]) ORDER BY operasyon_id, tur, id`,
+    [operasyonIdleri],
   );
 }
 
 export function urunlerinGerceklesenSureleri(db: Db, malzemeIdleri: readonly number[]): Promise<(GerceklesenKaydi & { malzemeId: number })[]> {
   return db.sorgu(
-    `SELECT malzeme_id AS "malzemeId", id, op_no AS "opNo", tur, makine_id AS "makineId", sure_dk AS "sureDk", kaynak, is_emri_id AS "isEmriId", kisi_id AS "kisiId", ${ISO('zaman')} AS zaman
-       FROM rota_gerceklesen_sure WHERE malzeme_id = ANY($1::int[]) ORDER BY malzeme_id, op_no, tur, id`,
+    `SELECT malzeme_id AS "malzemeId", id, operasyon_id AS "operasyonId", tur, makine_id AS "makineId", sure_dk AS "sureDk", kaynak, is_emri_id AS "isEmriId", kisi_id AS "kisiId", ${ISO('zaman')} AS zaman
+       FROM rota_gerceklesen_sure WHERE malzeme_id = ANY($1::int[]) ORDER BY malzeme_id, operasyon_id, tur, id`,
     [malzemeIdleri],
   );
 }
 
-export async function sonGerceklesenId(db: Db, g: { malzemeId: number; opNo: number; tur: GerceklesenTuru; makineId: number | null }): Promise<number | null> {
+export async function sonGerceklesenId(db: Db, g: { operasyonId: OperasyonKimligi; tur: GerceklesenTuru; makineId: number | null }): Promise<number | null> {
   const satir = await db.tek<{ id: number }>(
-    `SELECT id FROM rota_gerceklesen_sure WHERE malzeme_id = $1 AND op_no = $2 AND tur = $3 AND makine_id IS NOT DISTINCT FROM $4
+    `SELECT id FROM rota_gerceklesen_sure WHERE operasyon_id = $1 AND tur = $2 AND makine_id IS NOT DISTINCT FROM $3
       ORDER BY id DESC LIMIT 1`,
-    [g.malzemeId, g.opNo, g.tur, g.makineId],
+    [g.operasyonId, g.tur, g.makineId],
   );
   return satir?.id ?? null;
 }
 
 export async function gerceklesenEkle(db: Db, g: {
-  malzemeId: number; opNo: number; tur: GerceklesenTuru; makineId: number | null; sureDk: number | string | null; kisiId: number;
+  operasyonId: OperasyonKimligi; tur: GerceklesenTuru; makineId: number | null; sureDk: number | string | null; kisiId: number;
   kaynak?: GerceklesenKaynagi; isEmriId?: number | null;
 }): Promise<void> {
   await db.sorgu(
-    `INSERT INTO rota_gerceklesen_sure (malzeme_id, op_no, tur, makine_id, sure_dk, kaynak, is_emri_id, kisi_id) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-    [g.malzemeId, g.opNo, g.tur, g.makineId, g.sureDk, g.kaynak ?? 'elle', g.isEmriId ?? null, g.kisiId],
+    `INSERT INTO rota_gerceklesen_sure (malzeme_id, op_no, operasyon_id, tur, makine_id, sure_dk, kaynak, is_emri_id, kisi_id)
+     SELECT o.malzeme_id, o.op_no, o.id, $2, $3, $4, $5, $6, $7 ${OPERASYON}`,
+    [g.operasyonId, g.tur, g.makineId, g.sureDk, g.kaynak ?? 'elle', g.isEmriId ?? null, g.kisiId],
   );
 }
 
-export interface GerceklesenSatirKaydi { id: number; malzemeId: number; opNo: number; tur: GerceklesenTuru; makineId: number | null; sureDk: string | null; kaynak: GerceklesenKaynagi; isEmriId: number | null }
+export interface GerceklesenSatirKaydi { id: number; malzemeId: number; operasyonId: OperasyonKimligi; tur: GerceklesenTuru; makineId: number | null; sureDk: string | null; kaynak: GerceklesenKaynagi; isEmriId: number | null }
 
 export function gerceklesenSatiri(db: Db, id: number): Promise<GerceklesenSatirKaydi | null> {
   return db.tek(
-    `SELECT id, malzeme_id AS "malzemeId", op_no AS "opNo", tur, makine_id AS "makineId", sure_dk AS "sureDk", kaynak, is_emri_id AS "isEmriId"
+    `SELECT id, malzeme_id AS "malzemeId", operasyon_id AS "operasyonId", tur, makine_id AS "makineId", sure_dk AS "sureDk", kaynak, is_emri_id AS "isEmriId"
        FROM rota_gerceklesen_sure WHERE id = $1`,
     [id],
   );
@@ -1444,12 +1471,11 @@ export async function malzemeKartiIzleri(db: Db, kartlar: readonly MalzemeKartiA
 }
 
 // Birden çok (malzeme, adım) için geçerli talimat tek sorguda: her anahtarın en yüksek sürümü (talimatlar() ilk satırıyla aynı).
-export function gecerliTalimatlarToplu(db: Db, malzemeIdleri: readonly number[], opNolari: readonly number[]): Promise<{ malzemeId: number; opNo: number; surum: number; metin: string }[]> {
+export function gecerliTalimatlarToplu(db: Db, operasyonIdleri: readonly OperasyonKimligi[]): Promise<{ operasyonId: OperasyonKimligi; surum: number; metin: string }[]> {
   return db.sorgu(
-    `SELECT DISTINCT ON (t.malzeme_id, t.op_no) t.malzeme_id AS "malzemeId", t.op_no AS "opNo", t.surum, t.metin
-       FROM rota_talimati t JOIN unnest($1::int[], $2::int[]) AS k(malzeme_id, op_no) ON t.malzeme_id = k.malzeme_id AND t.op_no = k.op_no
-      ORDER BY t.malzeme_id, t.op_no, t.surum DESC`,
-    [[...malzemeIdleri], [...opNolari]],
+    `SELECT DISTINCT ON (t.operasyon_id) t.operasyon_id AS "operasyonId", t.surum, t.metin
+       FROM rota_talimati t WHERE t.operasyon_id = ANY($1::int[]) ORDER BY t.operasyon_id, t.surum DESC`,
+    [[...operasyonIdleri]],
   );
 }
 
@@ -1462,28 +1488,28 @@ const SAHNE = `talimat_surum AS "talimatSurum", sahne_surum AS "sahneSurum", mod
   yazan_kisi_id AS "yazanKisiId", ${ISO('yazma')} AS yazma`;
 
 // Her talimat sürümünün en son sahnesi; talimat sürümüne göre azalan.
-export function sonSahneler(db: Db, malzemeId: number, opNo: number): Promise<SahneSatiri[]> {
+export function sonSahneler(db: Db, operasyonId: OperasyonKimligi): Promise<SahneSatiri[]> {
   return db.sorgu<SahneSatiri>(
-    `SELECT DISTINCT ON (talimat_surum) ${SAHNE} FROM rota_talimat_sahnesi WHERE malzeme_id = $1 AND op_no = $2
+    `SELECT DISTINCT ON (talimat_surum) ${SAHNE} FROM rota_talimat_sahnesi WHERE operasyon_id = $1
       ORDER BY talimat_surum DESC, sahne_surum DESC`,
-    [malzemeId, opNo],
+    [operasyonId],
   );
 }
 
-export function sonSahne(db: Db, malzemeId: number, opNo: number, talimatSurum: number): Promise<SahneSatiri | null> {
+export function sonSahne(db: Db, operasyonId: OperasyonKimligi, talimatSurum: number): Promise<SahneSatiri | null> {
   return db.tek<SahneSatiri>(
-    `SELECT ${SAHNE} FROM rota_talimat_sahnesi WHERE malzeme_id = $1 AND op_no = $2 AND talimat_surum = $3 ORDER BY sahne_surum DESC LIMIT 1`,
-    [malzemeId, opNo, talimatSurum],
+    `SELECT ${SAHNE} FROM rota_talimat_sahnesi WHERE operasyon_id = $1 AND talimat_surum = $2 ORDER BY sahne_surum DESC LIMIT 1`,
+    [operasyonId, talimatSurum],
   );
 }
 
 // Eşzamanlı iki kayıt aynı sahne sürümünü yazamaz: tekil kısıt (rota_talimat_sahnesi_surum_tekil) ikinciyi reddeder.
 export async function sahneEkle(db: Db, x: {
-  malzemeId: number; opNo: number; talimatSurum: number; sahneSurum: number; modelRevizyonId: number; adimlar: unknown; kisiId: number;
+  operasyonId: OperasyonKimligi; talimatSurum: number; sahneSurum: number; modelRevizyonId: number; adimlar: unknown; kisiId: number;
 }): Promise<void> {
   await db.sorgu(
-    `INSERT INTO rota_talimat_sahnesi (malzeme_id, op_no, talimat_surum, sahne_surum, model_revizyon_id, adimlar, yazan_kisi_id)
-     VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7)`,
-    [x.malzemeId, x.opNo, x.talimatSurum, x.sahneSurum, x.modelRevizyonId, JSON.stringify(x.adimlar), x.kisiId],
+    `INSERT INTO rota_talimat_sahnesi (malzeme_id, op_no, operasyon_id, talimat_surum, sahne_surum, model_revizyon_id, adimlar, yazan_kisi_id)
+     SELECT o.malzeme_id, o.op_no, o.id, $2, $3, $4, $5::jsonb, $6 ${OPERASYON}`,
+    [x.operasyonId, x.talimatSurum, x.sahneSurum, x.modelRevizyonId, JSON.stringify(x.adimlar), x.kisiId],
   );
 }

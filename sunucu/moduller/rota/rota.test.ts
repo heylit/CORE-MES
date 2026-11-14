@@ -897,6 +897,29 @@ describe('rotalar (gerçek PostgreSQL)', () => {
     assert.deepEqual(satirlar.map((x) => [x.op, x.operasyon]), [[1010, await kimlik(alt, 10)], [10, await kimlik(ust, 10)], [20, await kimlik(ust, 20)]]);
   });
 
+  // Risk K3: aşama 2 OP numarasını revizyonda yeniden dizer; ürün düzeyi veri adıma numarayla değil kimlikle bağlı kalmalı.
+  test('3250 1b-1: revizyonda OP numaraları yeniden dizilse de talimat ve gerçekleşen süre aynı adımda kalır', async () => {
+    const urun = await mamulAc();
+    const id = await yururlugeAlinmisRota(urun, [yeniAdim(), yeniAdim({ kaynak: null })]);
+    await tamam(c.cam, 'POST', `/rota/urunler/${urun}/talimat-yaz`, { opNo: 20, metin: 'Kalıcı talimat', okunanSurum: null });
+    await ortam!.sahip.sorgu(
+      "INSERT INTO rota_gerceklesen_sure (malzeme_id, op_no, tur, makine_id, sure_dk, kaynak, kisi_id) VALUES ($1, 20, 'islem', NULL, 4, 'elle', $2)", [urun, yoneticiId]);
+    const adimId = async (op: number) => (await vt().tx((db) => db.tek<{ id: number }>('SELECT id FROM rota_adimi WHERE revizyon_id = $1 AND op_no = $2', [id, op])))!.id;
+    const ikinci = await adimId(20);
+    // Aşama 2 benzetimi: iki adımın numarası yer değiştirir; operasyon kimliği ve sıra aynı kalır.
+    await ortam!.sahip.sorgu('INSERT INTO rota_op_numarasi (malzeme_id, op_no, ilk_revizyon_id) VALUES ($1, 1010, $2), ($1, 1020, $2)', [urun, id]);
+    await ortam!.sahip.sorgu('ALTER TABLE rota_adimi DISABLE TRIGGER USER');
+    await ortam!.sahip.sorgu('UPDATE rota_adimi SET op_no = op_no + 1000 WHERE revizyon_id = $1', [id]);
+    await ortam!.sahip.sorgu('UPDATE rota_adimi SET op_no = CASE op_no WHEN 1010 THEN 20 ELSE 10 END WHERE revizyon_id = $1', [id]);
+    await ortam!.sahip.sorgu('ALTER TABLE rota_adimi ENABLE TRIGGER USER');
+    assert.equal(await adimId(10), ikinci, 'benzetim: talimatlı adım artık OP 10');
+    const r = await vt().tx((db) => revizyonGetir(db, id));
+    assert.deepEqual(r?.adimlar.map((a) => [a.opNo, a.talimatSurumu]), [[20, null], [10, 1]]);
+    const sureler = await tamam<{ adimlar: { adimId: number; olcum: { islem: { sureDk: string } | null } }[] }>(c.planlama, 'GET', `/rota/revizyonlar/${id}/sureler`);
+    assert.equal(sureler.adimlar.find((a) => a.adimId === ikinci)?.olcum.islem?.sureDk, '4');
+    assert.equal(sureler.adimlar.find((a) => a.adimId !== ikinci)?.olcum.islem ?? null, null);
+  });
+
   test('1476-F: patlamış rota önizlemesi açılışla aynı numarayı verir, kayıt yazmaz; kesirli kök başına adet engeldir; emri açamayan göremez', async () => {
     const ust = await mamulAc();
     const alt = await mamulAc();

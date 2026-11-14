@@ -143,7 +143,7 @@ interface AdimGorunumuBaglami {
   tipler: Map<number, { id: number; kod: string; ad: string; kisaltma: string; aktif: boolean }>;
   kaynaklar: Map<string, AdimKaynakOzeti>;
   urunler: Map<number, UrunOzeti>;
-  talimatlar: Map<number, { surum: number; metin: string }>;
+  talimatlar: Map<s.OperasyonKimligi, { surum: number; metin: string }>;
   aletTurleri: Map<number, string>;
 }
 
@@ -190,7 +190,7 @@ export function adimlariKur(b: AdimGorunumuBaglami, urunMiktari = 1): RevizyonAy
       akis: { tuketir: akisi.tuketir, cikti: akisi.cikti },
       adimMiktari: ondalikMetin(miktar),
       teorikSureDk: sure === null ? null : ondalikMetin(sure),
-      talimat: b.talimatlar.get(a.opNo) ?? null,
+      talimat: b.talimatlar.get(a.operasyonId) ?? null,
     };
   });
 }
@@ -208,7 +208,7 @@ export async function gorunumBaglami(db: Db, malzemeId: number, icerik: Icerik):
     urunler: await urunOzetleri(db, [
       ...icerik.bilesenler.map((x) => x.malzemeId), ...icerik.yanUrunler.map((x) => x.malzemeId), ...(icerik.ekipman ?? []).flatMap((x) => (x.malzemeId === null ? [] : [x.malzemeId])),
     ]),
-    talimatlar: new Map((await s.gecerliTalimatlar(db, malzemeId)).map((t) => [t.opNo, { surum: t.surum, metin: t.metin }])),
+    talimatlar: new Map((await s.gecerliTalimatlar(db, malzemeId)).map((t) => [t.operasyonId, { surum: t.surum, metin: t.metin }])),
     aletTurleri: (icerik.ekipman ?? []).some((x) => x.aletTuruId !== null) ? new Map((await aletTurleri(db)).map((t) => [t.id, t.ad])) : new Map(),
   };
 }
@@ -433,20 +433,21 @@ export async function taslagiAc(db: Db, acanKisiId: number, urunId: number, kayn
 
 export const sayiMi = (m: string | null): number | null => sayiyaCevir(m);
 
-export const gerceklesenSatirlari = (kayitlar: readonly s.GerceklesenKaydi[], opNo: number): GerceklesenSatiri[] =>
-  kayitlar.filter((k) => k.opNo === opNo).map((k) => ({ id: k.id, tur: k.tur, makineId: k.makineId, sureDk: sayiMi(k.sureDk), kaynak: k.kaynak }));
+export const gerceklesenSatirlari = (kayitlar: readonly s.GerceklesenKaydi[], operasyonId: s.OperasyonKimligi): GerceklesenSatiri[] =>
+  kayitlar.filter((k) => k.operasyonId === operasyonId).map((k) => ({ id: k.id, tur: k.tur, makineId: k.makineId, sureDk: sayiMi(k.sureDk), kaynak: k.kaynak }));
 
 // RT-79 (171 a): yürürlüğe giren revizyonda teorik süresi öncekinden farklı türlerin bekleyen ölçümü boş elle satırıyla boşaltılır. Adımın
 // kendi süresi makinesiz görünümü ve adımın makinesinin ölçümünü, aday süresi o makinenin ölçümünü kapatır. Bekleyen ölçümü olmayan yere satır yazılmaz.
 export async function olcumleriBosalt(db: Db, kisiId: number, malzemeId: number, eskiId: number | null, yeniId: number): Promise<void> {
   const yeni = await s.icerikOku(db, yeniId);
   const eski = eskiId === null ? null : await s.icerikOku(db, eskiId);
-  const kayitlar = await s.gerceklesenSureler(db, malzemeId, yeni.adimlar.map((a) => a.opNo));
+  const kayitlar = await s.gerceklesenSureler(db, yeni.adimlar.map((a) => a.operasyonId));
   const sureleri = (x: { ayarSuresiDk: string | null; birimSureDk: string | null; islemSuresiDk: string | null; degisimSuresiDk: string | null }): AdimSureleri => ({
     ayarSuresiDk: sayiMi(x.ayarSuresiDk), birimSureDk: sayiMi(x.birimSureDk), islemSuresiDk: sayiMi(x.islemSuresiDk), degisimSuresiDk: sayiMi(x.degisimSuresiDk),
   });
   for (const a of yeni.adimlar) {
-    const o = eski?.adimlar.find((x) => x.opNo === a.opNo);
+    // Revizyonlar arasında adım operasyon kimliğiyle eşlenir: OP numarası revizyonda yeniden dizilebilir (3250 b).
+    const o = eski?.adimlar.find((x) => x.operasyonId === a.operasyonId);
     const yerler: { makineId: number | null; turler: GerceklesenTuru[] }[] = [];
     const kendi = degisenTurler(o ? sureleri(o) : null, sureleri(a));
     yerler.push({ makineId: null, turler: kendi });
@@ -455,12 +456,12 @@ export async function olcumleriBosalt(db: Db, kisiId: number, malzemeId: number,
       const ox = o === undefined ? undefined : eski?.adaylar.find((y) => y.adimId === o.id && y.kaynak.tur === 'makine' && y.kaynak.id === x.kaynak.id);
       yerler.push({ makineId: x.kaynak.id, turler: degisenTurler(ox ? sureleri(ox) : null, sureleri(x)) });
     }
-    const satirlar = gerceklesenSatirlari(kayitlar, a.opNo);
+    const satirlar = gerceklesenSatirlari(kayitlar, a.operasyonId);
     for (const { makineId, turler } of yerler) {
       const bekleyen = bekleyenOlcum(makineId === null ? satirlar : satirlar.filter((x) => x.makineId === makineId), makineId);
       for (const tur of turler) {
         if (bekleyen[tur] === null) continue;
-        await s.gerceklesenEkle(db, { malzemeId, opNo: a.opNo, tur, makineId, sureDk: null, kisiId });
+        await s.gerceklesenEkle(db, { operasyonId: a.operasyonId, tur, makineId, sureDk: null, kisiId });
       }
     }
   }
@@ -474,11 +475,11 @@ export async function isEmriGirdileri(db: Db, malzemeId: number, rota: NonNullab
   // Adımlı sürümde madde adımın başlığı, açıklaması adımın metnidir; düz metin sürüm satır satır bölünür.
   const listeler = new Map(gecerli.map((t) => {
     const a = adimlar.get(t.id);
-    return [t.opNo, a ? adimliKontrolListesi(a) : kontrolListesi(t.metin)];
+    return [t.operasyonId, a ? adimliKontrolListesi(a) : kontrolListesi(t.metin)];
   }));
   // 3249 b: kendi talimatı olmayan adıma, operasyon tipinin emre gelen şablonu kopyalanır (bağ kurulmaz; şablon sonra değişirse emir değişmez).
   const sablonlar = new Map<number, ReturnType<typeof adimliKontrolListesi>>();
-  const tipler = [...new Set(rota.adimlar.filter((a) => !listeler.has(a.opNo) && a.operasyonTipiId !== null).map((a) => a.operasyonTipiId as number))];
+  const tipler = [...new Set(rota.adimlar.filter((a) => !listeler.has(a.operasyonId) && a.operasyonTipiId !== null).map((a) => a.operasyonTipiId as number))];
   for (const x of tipler.length === 0 ? [] : await s.emreGelenSablonlar(db, tipler)) {
     const a = talimatAdimlariKur(await s.talimatSablonAdimlari(db, x.id), []).get(x.id) ?? [];
     if (a.length > 0) sablonlar.set(x.operasyonTipiId, adimliKontrolListesi(a));
@@ -489,7 +490,7 @@ export async function isEmriGirdileri(db: Db, malzemeId: number, rota: NonNullab
     birimSureDk: a.birimSureDk, terminGun: a.fason?.terminGun ?? null, talimatSurumu: a.talimatSurumu,
     ...isEmriBagimliligi(a),
     adetCarpani: a.adetCarpani,
-    kontrolListesi: listeler.get(a.opNo) ?? (a.operasyonTipiId === null ? undefined : sablonlar.get(a.operasyonTipiId)) ?? [],
+    kontrolListesi: listeler.get(a.operasyonId) ?? (a.operasyonTipiId === null ? undefined : sablonlar.get(a.operasyonTipiId)) ?? [],
     // Emir adedi istenen sağlam çıktıdır (250 a): ihtiyacı adımın fire payı büyütür; adım ayarları planın girdisidir, varsayılana düşmez.
     firePayiYuzde: a.firePayiYuzde, makineKullanimi: a.makineKullanimi, enKucukParca: a.enKucukParca, yenidenAyar: a.yenidenAyar,
     // İş emrinin adayı makine ya da kişidir; istasyon adayı emirde karşılıksızdır, adımın istasyonu zaten başlıktır.
