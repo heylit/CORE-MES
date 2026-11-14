@@ -5,6 +5,7 @@ import type { FastifyInstance } from 'fastify';
 import { testVeritabaniKur } from '#cekirdek/test-vt.ts';
 import type { TestVeritabani } from '#cekirdek/test-vt.ts';
 import { uygulamaKur } from '#cekirdek/uygulama.ts';
+import type { Kullanici } from '#cekirdek/yetki.ts';
 import { ISTEK_KIMLIGI_BASLIGI } from '#paylasilan/istek-kimligi.ts';
 import type { AdimliEmirAyrintisi } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { denetimYaz } from '../denetim/disari.ts';
@@ -13,10 +14,11 @@ import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
 import type { AcilisSecenekleri } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import {
+  PARTI_KALEM_DISI, PARTI_KALEMSIZ, PARTI_TURU_FARKLI, TESLIM_BASLAMIS, TESLIM_KALEMSIZ, kalemTeslimi, partiIhlali, teslimBaglaIhlali,
   PROJE_ZORUNLU, SIPARIS_SATIRI_MALZEME, SIPARIS_SATIRI_ONAYSIZ, SIPARIS_SATIRI_PROJE_DISI, SIPARIS_SATIRI_PROJESIZ, SIPARIS_SATIRI_SECILMELI, SIPARIS_SATIRI_YOK,
   kendiligindenSatir, projeZorunluMu, siparisSatiriIhlali,
 } from './kurallar.ts';
-import { siparisSatirlarininEmirleri } from './disari.ts';
+import { emirPlanBilgisiYaz, siparisSatirlarininEmirleri } from './disari.ts';
 import { isEmriSureleri, projeninIsEmirleri, rotasizIsEmirleri } from './is-emri-servis.ts';
 
 // UE-SS (176 a): emir sipariş satırına bağlanır; zincir sipariş, proje, emir. Veriler uydurmadır.
@@ -48,6 +50,33 @@ describe('UE-SS kuralı (saf)', () => {
     assert.deepEqual(kendiligindenSatir(siparis, 9), { satirId: null });
     assert.deepEqual(kendiligindenSatir({ ...siparis, durum: 'taslak' }, 3), { satirId: null });
     assert.deepEqual(kendiligindenSatir(null, 3), { satirId: null });
+  });
+});
+
+describe('UE-TB teslim ve parti bağı kuralları (saf, 3244 b)', () => {
+  test('teslim: boş ya da termine eşit teslim termindir ve bağlıdır; başka tarih bağsız; satırsız emirde bağ yok', () => {
+    assert.deepEqual(kalemTeslimi(null, '2026-11-15'), { teslim: '2026-11-15', bagli: true });
+    assert.deepEqual(kalemTeslimi('2026-11-15', '2026-11-15'), { teslim: '2026-11-15', bagli: true });
+    assert.deepEqual(kalemTeslimi('2026-11-10', '2026-11-15'), { teslim: '2026-11-10', bagli: false });
+    assert.deepEqual(kalemTeslimi(null, null), { teslim: null, bagli: false });
+    assert.deepEqual(kalemTeslimi('2026-11-10', null), { teslim: '2026-11-10', bagli: false });
+  });
+  test('parti: satırın partisi olmalı; tür verilmişse partinin türüyle aynı olmalı', () => {
+    const partiler = [{ id: 1, emirTuru: 'fai' }, { id: 2, emirTuru: 'seri' }];
+    assert.equal(partiIhlali(partiler, 1, undefined), null);
+    assert.equal(partiIhlali(partiler, 1, 'fai'), null);
+    assert.equal(partiIhlali(partiler, 1, 'seri'), PARTI_TURU_FARKLI);
+    assert.equal(partiIhlali(partiler, 9, undefined), PARTI_KALEM_DISI);
+    assert.equal(partiIhlali(null, 1, undefined), PARTI_KALEMSIZ);
+  });
+  test('bağla: yalnız satırlı, başlamamış, arşivsiz emirde', () => {
+    const e = { siparisSatiriId: 4, durum: 'planli', arsiv: false };
+    assert.equal(teslimBaglaIhlali(e, false), null);
+    assert.equal(teslimBaglaIhlali({ ...e, durum: 'taslak' }, false), null);
+    assert.equal(teslimBaglaIhlali({ ...e, siparisSatiriId: null }, false), TESLIM_KALEMSIZ);
+    assert.equal(teslimBaglaIhlali(e, true), TESLIM_BASLAMIS);
+    assert.equal(teslimBaglaIhlali({ ...e, durum: 'basladi' }, false), TESLIM_BASLAMIS);
+    assert.equal(teslimBaglaIhlali({ ...e, arsiv: true }, false), TESLIM_BASLAMIS);
   });
 });
 
@@ -323,5 +352,62 @@ describe('UE-SS emir sipariş satırına (gerçek PostgreSQL)', () => {
     const harita = await siparisSatirlarininEmirleri(o().vt, [s.satirId, s.satirId, bos.satirId, 2_000_000_000]);
     assert.deepEqual([...harita.entries()], [[s.satirId, [ilk, ikinci]]]);
     assert.equal((await siparisSatirlarininEmirleri(o().vt, [])).size, 0);
+  });
+
+  test('UE-TB (3244 b): satırdan açılan emrin teslimi satırın termini ve bağlı; başka tarih bağsız; elle değişen teslim bağı koparır, Bağla geri bağlar', async () => {
+    const m = await malzeme();
+    const s = await siparis('onayli', m);
+    const p = await proje(s.siparisId);
+    const termin = (await o().sahip.tek<{ t: string }>("SELECT to_char(termin, 'YYYY-MM-DD') AS t FROM siparisler_siparis WHERE id = $1", [s.siparisId]))!.t;
+    const ayrinti = async (id: number) => (await istek<{ emir: AdimliEmirAyrintisi }>('GET', `/adimli-emirler/${id}`)).govde.emir;
+    const bagli = (await ac(m, p, s.satirId)).govde.uretimEmriId;
+    const e = await ayrinti(bagli);
+    assert.deepEqual([e.teslim, e.teslimBagli, e.siparisPartiId], [termin, true, null]);
+    const farkli = await istek<{ uretimEmriId: number }>('POST', '/adimli-emirler/rotasiz', { malzemeNo: m, adet: 4, teslim: '2026-01-05', projeId: p, siparisSatiriId: s.satirId });
+    assert.equal(farkli.durum, 200, JSON.stringify(farkli.govde));
+    assert.deepEqual([(await ayrinti(farkli.govde.uretimEmriId)).teslimBagli], [false]);
+
+    const planlama: Kullanici = { id: yoneticiId, ad: 'Deneme', islemler: ['uretim-emirleri.duzenle'] };
+    await o().vt.tx((db) => emirPlanBilgisiYaz(db, planlama, bagli, { oncelik: 2 }));
+    assert.equal((await ayrinti(bagli)).teslimBagli, true, 'teslim değişmeyince bağ kalır');
+    await o().vt.tx((db) => emirPlanBilgisiYaz(db, planlama, bagli, { teslim: '2026-01-06' }));
+    const kopuk = await ayrinti(bagli);
+    assert.deepEqual([kopuk.teslim, kopuk.teslimBagli], ['2026-01-06', false]);
+
+    const eski = await istek<Hata>('POST', `/adimli-emirler/${bagli}/teslim-bagla`, { surum: e.surum });
+    assert.equal(eski.durum, 409, 'eski sürümle bağlanmaz');
+    const bag = await istek<{ emir: AdimliEmirAyrintisi }>('POST', `/adimli-emirler/${bagli}/teslim-bagla`, { surum: kopuk.surum });
+    assert.equal(bag.durum, 200, JSON.stringify(bag.govde));
+    assert.deepEqual([bag.govde.emir.teslim, bag.govde.emir.teslimBagli], [termin, true]);
+
+    const stok = (await ac(m, null, undefined, 'stok')).govde.uretimEmriId;
+    const satirsiz = await istek<Hata>('POST', `/adimli-emirler/${stok}/teslim-bagla`, { surum: (await ayrinti(stok)).surum });
+    assert.deepEqual([satirsiz.durum, satirsiz.govde.mesaj], [409, TESLIM_KALEMSIZ]);
+    await o().sahip.sorgu("UPDATE uretim_emri SET durum = 'iptal', iptal = now() WHERE id = $1", [farkli.govde.uretimEmriId]);
+    const baslamis = await istek<Hata>('POST', `/adimli-emirler/${farkli.govde.uretimEmriId}/teslim-bagla`, { surum: (await ayrinti(farkli.govde.uretimEmriId)).surum });
+    assert.deepEqual([baslamis.durum, baslamis.govde.mesaj], [409, TESLIM_BASLAMIS]);
+  });
+
+  test('UE-TB (3244 b): emir satırın partisinden açılır, tür partiden gelir; başka satırın partisi ve farklı tür reddedilir; açılış seçenekleri partileri verir', async () => {
+    const m = await malzeme();
+    const s = await siparis('onayli', m);
+    const p = await proje(s.siparisId);
+    const fai = await tek("INSERT INTO siparisler_siparis_satiri_parti (satir_id, sira, emir_turu, adet) VALUES ($1, 1, 'fai', 4) RETURNING id", [s.satirId]);
+    await tek("INSERT INTO siparisler_siparis_satiri_parti (satir_id, sira, emir_turu, adet) VALUES ($1, 2, 'seri', 6) RETURNING id", [s.satirId]);
+    const govde = { malzemeNo: m, adet: 4, teslim: null, projeId: p, siparisSatiriId: s.satirId, siparisPartiId: fai };
+    const c = await istek<{ uretimEmriId: number }>('POST', '/adimli-emirler/rotasiz', govde);
+    assert.equal(c.durum, 200, JSON.stringify(c.govde));
+    const e = (await istek<{ emir: AdimliEmirAyrintisi }>('GET', `/adimli-emirler/${c.govde.uretimEmriId}`)).govde.emir;
+    assert.deepEqual([e.emirTuru, e.siparisPartiId, e.teslimBagli], ['fai', fai, true]);
+    const tur = await istek<Hata>('POST', '/adimli-emirler/rotasiz', { ...govde, emirTuru: 'seri' });
+    assert.deepEqual([tur.durum, tur.govde.mesaj], [400, PARTI_TURU_FARKLI]);
+    const baska = await siparis('onayli', m);
+    const yabanci = await tek("INSERT INTO siparisler_siparis_satiri_parti (satir_id, sira, emir_turu, adet) VALUES ($1, 1, 'seri', 10) RETURNING id", [baska.satirId]);
+    const disari = await istek<Hata>('POST', '/adimli-emirler/rotasiz', { ...govde, siparisPartiId: yabanci });
+    assert.deepEqual([disari.durum, disari.govde.mesaj], [400, PARTI_KALEM_DISI]);
+    const secenek = await istek<AcilisSecenekleri>('GET', `/adimli-emirler/acilis-secenekleri?malzemeNo=${m}`);
+    const satir = secenek.govde.projeler.find((x) => x.id === p)?.satirlar[0];
+    assert.deepEqual(satir?.partiler?.map((x) => [x.emirTuru, x.adet]), [['fai', '4.000'], ['seri', '6.000']]);
+    await assert.rejects(o().sahip.sorgu('DELETE FROM siparisler_siparis_satiri_parti WHERE id = $1', [fai]), /uretim_emri_siparis_parti/, 'emre bağlı parti silinmez');
   });
 });

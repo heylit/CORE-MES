@@ -19,3 +19,5 @@
 | Kapanış (onay, muafiyet, defter) | `uretim_emirleri_kapanis`, `_muafiyeti`, `_defteri` | uretim-emirleri (sahip, 1073 a); kalite ve müdür kişileri `kisi` |
 | Kapanış durum listeleri | aşama: belge, onay, tamam; sonuç: tamamlandi, saglamsiz; madde hâli: tamam, eksik, muaf, gerekmez, bilinmiyor | uretim-emirleri; etiket (1082 a) ve reçete-rota okur |
 | Dış işlem emri (fason belgesi, 2428) | `uretim_emirleri_dis_islem_emri`; hareketler `uretim_emirleri_fason_hareketi.die_id`; parti ve konum `parti_id`, `konum_id` (FK yok, UE-B14) | uretim-emirleri (sahip, 2428-2 a); satın alma ve stok `disari.ts` ile okur ve yazdırır |
+| Emir teslimi termin bağı | `uretim_emri.teslim_bagli` | uretim-emirleri (3244 b); termin siparisler'in (`siparisSatiriOzetleri`) |
+| Emrin kalem partisi | `uretim_emri.siparis_parti_id` -> `siparisler_siparis_satiri_parti.id` | parti siparisler'in; bağ uretim-emirleri'nin (3244 b) |

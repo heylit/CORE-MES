@@ -426,6 +426,8 @@ export type { IsEmriSuresi, ProjeIsEmri } from './is-emri-servis.ts';
 export type { RotasizIsEmri } from './is-emri-servis.ts';
 export const isEmriKaynagiYaz = isEmri.isEmriKaynagiYaz;
 export const emirPlanBilgisiYaz = isEmri.planBilgisiYaz;
+// 3244 b, 3254 a: sipariş yeniden onaylanınca bağlı ve başlamamış emirlerin teslimi yeni termine kayar (kablolama.ts bağlar).
+export const emirTeslimleriniSiparisTermineKaydir = isEmri.siparisTerminiYansit;
 // Plan stüdyosundaki öncelik denemesi canlıya alınınca (281 a); yetki burada da aranır.
 export const emirOnceligiYaz = (db: Db, kullanici: Kullanici, id: number, oncelik: number): Promise<void> => isEmri.oncelikDegistir(db, kullanici, id, oncelik, null);
 export const emirPlanaAl = isEmri.planaAl;

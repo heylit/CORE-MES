@@ -443,6 +443,8 @@ export const partiBolCevabi = z.object({ emir: z.lazy(() => adimliEmirAyrintisi)
 export const planaAlGovdesi = z.object({ surum: surumSemasi }).strict();
 export const adimliIptalGovdesi = z.object({ surum: surumSemasi }).strict();
 // 3099: bölünmüş alt emrin (parti ya da kol) türü sonradan değişir; ana emrin türü açılıştaki kalır.
+// 3244 b: teslim satırın güncel terminine yeniden bağlanır.
+export const teslimBaglaGovdesi = z.object({ surum: surumSemasi }).strict();
 export const emirTuruGovdesi = z.object({ emirTuru: z.enum(EMIR_TURLERI), surum: surumSemasi }).strict();
 export const oncelikGovdesi = z.object({ oncelik: z.number().int().min(1, 'Öncelik 1-4 olmalı.').max(4, 'Öncelik 1-4 olmalı.'), surum: surumSemasi }).strict();
 // Bekleyen iş emrine kaynak atanır ya da kaldırılır (null: atanmamış, ilk sistemdeki "Tezgahsız").
@@ -499,6 +501,8 @@ export const rotasizEmirGovdesi = z.object({
   projeId: KIMLIK.nullish(),
   // Projenin siparişindeki onaylı, aynı malzemeli satır (176 a); verilirse proje zorunludur.
   siparisSatiriId: KIMLIK.nullish(),
+  // 3244 b: satırın üretim çeşidi partisi; verilirse emrin türü partinin türüdür. Teslim boşsa satırın termini olur ve ona bağlanır.
+  siparisPartiId: KIMLIK.nullish(),
 }).strict();
 export const rotasizEmirCevabi = z.object({ uretimEmriId: KIMLIK });
 
@@ -511,7 +515,11 @@ export const acilisSecenekleriCevabi = z.object({
   rotasizAcik: z.boolean(),
   projeler: z.array(z.object({
     id: KIMLIK, kod: z.string(), ad: z.string(),
-    satirlar: z.array(z.object({ id: KIMLIK, siparisNo: z.string(), satirNo: z.number().int(), adet: z.string(), termin: z.string().nullable() })),
+    satirlar: z.array(z.object({
+      id: KIMLIK, siparisNo: z.string(), satirNo: z.number().int(), adet: z.string(), termin: z.string().nullable(),
+      // 3244 b: satırın üretim çeşidi partileri; boşsa satır tek seri partidir. İsteğe bağlı: sunucu her zaman yazar.
+      partiler: z.array(z.object({ id: KIMLIK, emirTuru: z.enum(EMIR_TURLERI), adet: z.string() })).optional(),
+    })),
   })),
 });
 export type AcilisSecenekleri = z.output<typeof acilisSecenekleriCevabi>;
@@ -598,6 +606,10 @@ export const adimliEmirOzeti = z.object({
   projeId: KIMLIK.nullable().optional(),
   // İsteğe bağlı: sunucu her zaman yazar; sipariş satırına bağlı olmayan emirde null.
   siparisSatiriId: KIMLIK.nullable().optional(),
+  // 3244 b: teslim satırın terminine bağlı mı (bağlı ve başlamamış emirde termin kayınca teslim de kayar); emrin açıldığı parti.
+  // İsteğe bağlı: sunucu her zaman yazar.
+  teslimBagli: z.boolean().optional(),
+  siparisPartiId: KIMLIK.nullable().optional(),
   adimSayisi: z.number().int().nonnegative(),
   tamamAdim: z.number().int().nonnegative(),
   // Bitmemiş ilk iş emri; hepsi bitmişse ya da emir iş emirsizse null.

@@ -22,15 +22,15 @@ import { numaraAl, sistemAyariOku } from '../ayarlar/disari.ts';
 import { kayitlarinKucukResimleri } from '../belge-merkezi/disari.ts';
 import { firmaKodu, malzemeOzeti, malzemeOzetleri, malzemeResimAnahtarlari } from '../malzemeler/disari.ts';
 import { projeGetir, projeSecenekleri } from '../projeler/disari.ts';
-import { siparisAyrintisi, siparisKilitliAyrinti, siparisSatiriOzetleri } from '../siparisler/disari.ts';
+import { siparisAyrintisi, siparisinSatirOzetleri, siparisKilitliAyrinti, siparisSatiriOzetleri } from '../siparisler/disari.ts';
 import {
   EMIR_YOK, IS_EMRI_YOK, KAYNAK_YOK, acikEmirIhlali, arsivdeFasonDonusuAcik, adimliOzetSay, adimliIptalIhlali, hataliDurduMu, kaynakSuresi, fasonDonusIhlali, fasonGidisIhlali, fasonTamamIhlali,
-  gorunenDurum, guvenliUygula, isEmriFarki, oneDusenYeniAdimlar, yeniAdimOndeIletisi, isEmirleriIhlali, kaynakDegisimIhlali, kisininIstasyonu, siparisSatiriIhlali, oncelikDegisimIhlali, turDegisimIhlali, TUR_PROJESIZ, malzemeIhtiyaci, planaAlIhlali, siradakiFasonAdimi, siradakiIsEmri, teslimIhlali,
+  gorunenDurum, guvenliUygula, isEmriFarki, oneDusenYeniAdimlar, yeniAdimOndeIletisi, isEmirleriIhlali, kaynakDegisimIhlali, kisininIstasyonu, siparisSatiriIhlali, oncelikDegisimIhlali, turDegisimIhlali, TUR_PROJESIZ, kalemTeslimi, partiIhlali, teslimBaglaIhlali, malzemeIhtiyaci, planaAlIhlali, siradakiFasonAdimi, siradakiIsEmri, teslimIhlali,
   BIRLESME_ADIMI_YOK, BIRLESME_PLANI_KOLDA, BOLME_ADET, BOLME_BIRLESME_ADIMI, BOLME_URETILMIS, EK_ADIM_OP, birlesmeBeklemeIhlali, birlesmePlaniIhlali, birlesmePlaniKaldirIhlali, birlestirmeIhlali, bolmeIhlali, ekAdimIhlali,
   ekAdimKaldirIhlali, kartAdimi, kartSiniri, kolBaslamaIhlali, kolEmirNo, refakatIhlali, refakatQrMetni,
   BILESEN_GECERSIZ, IS_EMRI_BAGLI_KAYIT, IS_EMRI_MALIYETI_DONDURULMUS, IS_EMRI_SIPARISE_BAGLI, IS_EMRI_STOK_HAREKETLI, ROTASIZ_EMIR_KAPALI, PROJE_GECERSIZ, PROJE_ZORUNLU, adaySatirlar, bilesenOlabilirMi, kendiligindenSatir, projeZorunluMu, rotasizAdimDegisimIhlali, rotasizAdimEkleIhlali, URETIM_YERI_BASLAMIS, uretimYeriIhlali, fasonBeklemesi, adimAdetleri,
   adimEksigi, adimTuketimi, reworkAdimiIhlali, reworkTermini, adimOnculleri, fasonSirasindaMi, kolAdimlari, onculdenGelen, onculGirdisiIhlali, dugumGirdisiIhlali,
-  FASON_FIRMA_BEKLENIYOR, GKK_TIPI, OTOMATIK_GKK, OTOMATIK_GKK_ADI, fasonKarneOlayi, fasonMu, gkkFasonu, gkkTipiSec, kaliteIstasyonuSec, otomatikGkkMi, otomatikGkkYerleri,
+  TESLIM_KALEMSIZ, FASON_FIRMA_BEKLENIYOR, GKK_TIPI, OTOMATIK_GKK, OTOMATIK_GKK_ADI, fasonKarneOlayi, fasonMu, gkkFasonu, gkkTipiSec, kaliteIstasyonuSec, otomatikGkkMi, otomatikGkkYerleri,
 } from './kurallar.ts';
 import { emirAcildiBildir, emirBirlestiBildir, emirBittiBildir, emirIptalBildir, fasonHareketiBildir, isEmirleriDegistiBildir, isEmriKopyalandiBildir } from './emir-olaylari.ts';
 import type { AdimOnculu, BolmeDurumu, FasonDurumu, IsEmriKaynakTuru, KolDurumu, OnculTuru, UretimYeri } from './kurallar.ts';
@@ -109,6 +109,8 @@ export interface UretimEmriGirdisi {
   projeId?: number | null;
   // Projenin siparişindeki onaylı satır (176 a); verilirse proje zorunludur.
   siparisSatiriId?: number | null;
+  // 3244 b: satırın üretim çeşidi partisi; verilirse emrin türü partinin türüdür.
+  siparisPartiId?: number | null;
   // Girdiler serbest stoktan emre ayrılsın mı (formda varsayılan açık); verilmezse ayrılmaz.
   stoktanRezerve?: boolean;
   // 1476: emir bu patlamış rotadan açıldı (çok katmanlı); her iş emri düğümünü taşır.
@@ -289,6 +291,9 @@ interface DenetlenmisBaslik {
   emirTuru: EmirTuru;
   proje: { id: number; kod: string } | null;
   siparisSatiriId: number | null;
+  teslim: string | null;
+  teslimBagli: boolean;
+  siparisPartiId: number | null;
 }
 
 async function basligiDenetle(db: Db, g: EmirBasligi): Promise<DenetlenmisBaslik> {
@@ -298,12 +303,10 @@ async function basligiDenetle(db: Db, g: EmirBasligi): Promise<DenetlenmisBaslik
   const oncelik = g.oncelik ?? 3;
   if (!Number.isInteger(oncelik) || oncelik < 1 || oncelik > 4) throw dogrulama(ONCELIK_GECERSIZ, 'oncelik');
   const baslangic = g.baslangic ?? null;
-  const tarihIhlali = teslimIhlali(baslangic, g.teslim);
-  if (tarihIhlali !== null) throw dogrulama(tarihIhlali, 'teslim');
   const aciklama = g.aciklama?.trim() || null;
   if (aciklama !== null && aciklama.length > 300) throw dogrulama(ACIKLAMA_UZUN, 'aciklama');
   // Rota çağrısı sözleşme şemasından geçmez: tür burada denetlenir.
-  const emirTuru = g.emirTuru ?? 'seri';
+  let emirTuru = g.emirTuru ?? 'seri';
   if (!EMIR_TURLERI.includes(emirTuru)) throw dogrulama(EMIR_TURU_GECERSIZ, 'emirTuru');
   const projeId = g.projeId ?? null;
   const proje = projeId === null ? null : await projeGetir(db, projeId);
@@ -322,7 +325,21 @@ async function basligiDenetle(db: Db, g: EmirBasligi): Promise<DenetlenmisBaslik
     const ihlal = siparisSatiriIhlali(satir, proje?.siparisId, g.malzemeNo);
     if (ihlal !== null) throw cakisma(ihlal);
   }
-  return { urun, oncelik, baslangic, aciklama, emirTuru, proje: proje === null ? null : { id: proje.id, kod: proje.kod }, siparisSatiriId };
+  // 3244 b: kalemin termini ve partileri; teslim termine bağlanır, parti kalemin olmalı ve emrin türünü verir.
+  const satir = siparisSatiriId === null ? null : (await siparisSatiriOzetleri(db, [siparisSatiriId])).get(siparisSatiriId) ?? null;
+  const siparisPartiId = g.siparisPartiId ?? null;
+  if (siparisPartiId !== null) {
+    const ihlal = partiIhlali(satir?.partiler ?? null, siparisPartiId, g.emirTuru);
+    if (ihlal !== null) throw dogrulama(ihlal, 'siparisPartiId');
+    emirTuru = satir?.partiler.find((p) => p.id === siparisPartiId)?.emirTuru ?? emirTuru;
+  }
+  const teslim = kalemTeslimi(g.teslim, satir?.termin ?? null);
+  const tarihIhlali = teslimIhlali(baslangic, teslim.teslim);
+  if (tarihIhlali !== null) throw dogrulama(tarihIhlali, 'teslim');
+  return {
+    urun, oncelik, baslangic, aciklama, emirTuru, proje: proje === null ? null : { id: proje.id, kod: proje.kod }, siparisSatiriId,
+    teslim: teslim.teslim, teslimBagli: teslim.bagli, siparisPartiId,
+  };
 }
 
 async function basligiYaz(
@@ -336,9 +353,9 @@ async function basligiYaz(
   });
   return s.ustEmirEkle(db, {
     parcaNo, parcaAd: (b.urun.ad ?? b.urun.kod).slice(0, 120), adet: g.adet, istasyonId,
-    malzemeNo: g.malzemeNo, kaynakRotaRevizyonId, oncelik: b.oncelik, baslangic: b.baslangic, teslim: g.teslim, aciklama: b.aciklama,
+    malzemeNo: g.malzemeNo, kaynakRotaRevizyonId, oncelik: b.oncelik, baslangic: b.baslangic, teslim: b.teslim, aciklama: b.aciklama,
     durum: g.taslak === true ? 'taslak' : 'planli', emirTuru: b.emirTuru, emirNo, projeId: b.proje?.id ?? null,
-    siparisSatiriId: b.siparisSatiriId, patlatmaId: g.patlatmaId ?? null,
+    siparisSatiriId: b.siparisSatiriId, patlatmaId: g.patlatmaId ?? null, teslimBagli: b.teslimBagli, siparisPartiId: b.siparisPartiId,
   }, acanId);
 }
 
@@ -355,7 +372,9 @@ export async function acilisSecenekleri(db: Db, kullanici: Kullanici, malzemeNo:
       const siparis = p.siparisId === null ? null : siparisler.get(p.siparisId) ?? null;
       return {
         id: p.id, kod: p.kod, ad: p.ad,
-        satirlar: adaySatirlar(siparis, malzemeNo).map((x) => ({ id: x.id, siparisNo: siparis!.no, satirNo: x.sira, adet: x.miktar, termin: x.termin ?? siparis!.termin })),
+        satirlar: adaySatirlar(siparis, malzemeNo).map((x) => ({
+          id: x.id, siparisNo: siparis!.no, satirNo: x.sira, adet: x.miktar, termin: x.termin ?? siparis!.termin, partiler: x.partiler,
+        })),
       };
     }),
   };
@@ -498,7 +517,8 @@ function ozet(e: UstEmirSatiri, kendi: readonly IsEmriSatiri[], ad: Adlar, altEm
     id: e.id, emirNo: e.emirNo, urun: { id: e.malzemeNo, kod: e.parcaNo, ad: e.parcaAd }, adet: e.adet, oncelik: e.oncelik,
     baslangic: e.baslangic, teslim: e.teslim, durum: gorunenDurum(e.durum, kendi.some((i) => i.durum !== 'bekliyor')), arsiv: e.arsiv,
     parti: { ustEmirId: e.ustEmirId, bolunmeSira: e.bolunmeSira, altEmirIdleri, birlestigiEmirId: e.birlestigiEmirId, birlesmeOpNo: e.birlesmeOpNo },
-    kaynakRotaRevizyonId: e.kaynakRotaRevizyonId, emirTuru: e.emirTuru, projeId: e.projeId, siparisSatiriId: e.siparisSatiriId, adimSayisi: kendi.length, tamamAdim: kendi.filter((i) => i.durum === 'tamam').length,
+    kaynakRotaRevizyonId: e.kaynakRotaRevizyonId, emirTuru: e.emirTuru, projeId: e.projeId, siparisSatiriId: e.siparisSatiriId,
+    teslimBagli: e.teslimBagli, siparisPartiId: e.siparisPartiId, adimSayisi: kendi.length, tamamAdim: kendi.filter((i) => i.durum === 'tamam').length,
     siradaki: sira === null ? null : {
       id: sira.id, opNo: sira.opNo, ad: sira.ad, durum: sira.durum, kaynak: kaynakAdi(ad, sira), istasyon: istasyonAdi(ad, sira.istasyonId),
     },
@@ -754,6 +774,32 @@ export async function planBilgisiYaz(
   const ihlal = teslimIhlali(baslangic, teslim);
   if (ihlal !== null) throw dogrulama(ihlal, 'teslim');
   await s.planBilgisiYaz(db, id, { oncelik, baslangic, teslim });
+}
+
+// UE-TB (3244 b): başlamamış emrin teslimi kalemin güncel terminine yeniden bağlanır; sürüm denetimli, kişi ve zaman denetim kaydında.
+export async function teslimBagla(db: Db, kullanici: Kullanici, id: number, surum: number): Promise<void> {
+  islemDenetle(kullanici, ['uretim-emirleri.duzenle']);
+  const e = await kilitliUstEmir(db, id);
+  surumDenetle(e, surum);
+  const baslamis = (await s.isEmirleriGetir(db, [id])).some((i) => i.durum !== 'bekliyor');
+  const ihlal = teslimBaglaIhlali(e, baslamis);
+  if (ihlal !== null) throw cakisma(ihlal);
+  const satir = e.siparisSatiriId === null ? null : (await siparisSatiriOzetleri(db, [e.siparisSatiriId])).get(e.siparisSatiriId) ?? null;
+  if (satir === null) throw cakisma(TESLIM_KALEMSIZ);
+  const tarih = teslimIhlali(e.baslangic, satir.termin);
+  if (tarih !== null) throw dogrulama(tarih, 'teslim');
+  if ((await s.teslimBagla(db, id, e.surum, satir.termin)) === null) throw eskiSurum();
+  await isEmirleriDegistiBildir(db, { uretimEmriId: id, kisiId: kullanici.id });
+}
+
+// 3244 b, 3254 a: sipariş onaylandı olayı (geri alınmış onayın yenilenmesi dahil). Satırına bağlı, başlamamış emrin teslimi satırın güncel
+// terminine kayar; başlamış emir ve elle değişmiş (bağsız) teslim olduğu gibi kalır. Değişen emir planı bayat işaretler (yeniden dizilir).
+export async function siparisTerminiYansit(db: Db, olay: { siparisId: number; kullanici: Kullanici }): Promise<void> {
+  for (const satir of await siparisinSatirOzetleri(db, olay.siparisId)) {
+    for (const { id } of await s.bagliTeslimleriKaydir(db, satir.id, satir.termin)) {
+      await isEmirleriDegistiBildir(db, { uretimEmriId: id, kisiId: olay.kullanici.id });
+    }
+  }
 }
 
 // 163 a: planlama yetkisiyle başlamamış emrin önceliği doğrudan değişir; eski ve yeni değer kişi ve zamanla kayda girer.

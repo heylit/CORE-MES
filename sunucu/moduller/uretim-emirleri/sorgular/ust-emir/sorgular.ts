@@ -33,6 +33,9 @@ export interface UstEmirSatiri {
   emirTuru: EmirTuru;
   projeId: number | null;
   siparisSatiriId: number | null;
+  // 3244 b: teslim kalemin terminine bağlı mı; emir hangi kalem partisinden açıldı (partisiz emirde null).
+  teslimBagli: boolean;
+  siparisPartiId: number | null;
   surum: number;
 }
 
@@ -41,7 +44,8 @@ const UST = `e.id, e.emir_no AS "emirNo", e.parca_no AS "parcaNo", e.parca_ad AS
   ${TARIH('e.baslangic')} AS baslangic, ${TARIH('e.teslim')} AS teslim, e.durum, e.arsiv, e.aciklama, ${ISO('e.acilma')} AS acilma,
   ${NULLU_ISO('e.baslama')} AS baslama, ${NULLU_ISO('e.bitis')} AS bitis, e.saglam_adet AS "saglamAdet",
   e.ust_emir_id AS "ustEmirId", e.bolunme_sira AS "bolunmeSira", e.birlestigi_emir_id AS "birlestigiEmirId",
-  e.birlesme_op_no AS "birlesmeOpNo", e.emir_turu AS "emirTuru", e.proje_id AS "projeId", e.siparis_satiri_id AS "siparisSatiriId", e.surum`;
+  e.birlesme_op_no AS "birlesmeOpNo", e.emir_turu AS "emirTuru", e.proje_id AS "projeId", e.siparis_satiri_id AS "siparisSatiriId",
+  e.teslim_bagli AS "teslimBagli", e.siparis_parti_id AS "siparisPartiId", e.surum`;
 
 // Liste iş emirli emirleri ya da arşivi verir; bugünkü adımsız (istasyonlu) emir bu listede yoktur.
 // Arşiv ve proje listesi bütün durumları verir; ana liste `hepsi` değilse yalnız açık emirleri (kart #1323).
@@ -107,16 +111,19 @@ export interface UstEmirYazisi {
   projeId?: number | null;
   siparisSatiriId?: number | null;
   patlatmaId?: number | null;
+  teslimBagli?: boolean;
+  siparisPartiId?: number | null;
 }
 
 export async function ustEmirEkle(db: Db, e: UstEmirYazisi, acanId: number): Promise<number> {
   const satir = await db.tek<{ id: number }>(
     `INSERT INTO uretim_emri (parca_no, parca_ad, adet, istasyon_id, acan_id, malzeme_no, kaynak_rota_revizyonu_id, oncelik, baslangic, teslim,
-       aciklama, durum, ust_emir_id, bolunme_sira, birlesme_op_no, emir_turu, emir_no, proje_id, siparis_satiri_id, patlatma_id)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::date, $10::date, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20) RETURNING id`,
+       aciklama, durum, ust_emir_id, bolunme_sira, birlesme_op_no, emir_turu, emir_no, proje_id, siparis_satiri_id, patlatma_id,
+       teslim_bagli, siparis_parti_id)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::date, $10::date, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22) RETURNING id`,
     [e.parcaNo, e.parcaAd, e.adet, e.istasyonId, acanId, e.malzemeNo, e.kaynakRotaRevizyonId, e.oncelik, e.baslangic, e.teslim, e.aciklama, e.durum,
       e.ustEmirId ?? null, e.bolunmeSira ?? null, e.birlesmeOpNo ?? null, e.emirTuru, e.emirNo ?? null, e.projeId ?? null,
-      e.siparisSatiriId ?? null, e.patlatmaId ?? null],
+      e.siparisSatiriId ?? null, e.patlatmaId ?? null, e.teslimBagli ?? false, e.siparisPartiId ?? null],
   );
   if (satir === null) throw new Error('Üretim emri eklenemedi.');
   return satir.id;
@@ -269,8 +276,28 @@ export function planBilgisiYaz(
   db: Db, id: number, g: { oncelik: number; baslangic: string | null; teslim: string | null },
 ): Promise<unknown> {
   return db.sorgu(
-    'UPDATE uretim_emri SET oncelik = $2, baslangic = $3::date, teslim = $4::date, surum = surum + 1 WHERE id = $1',
+    // 3244 b: teslim gerçekten değişirse kalem termini bağı kopar.
+    `UPDATE uretim_emri SET oncelik = $2, baslangic = $3::date, teslim = $4::date,
+            teslim_bagli = teslim_bagli AND teslim IS NOT DISTINCT FROM $4::date, surum = surum + 1 WHERE id = $1`,
     [id, g.oncelik, g.baslangic, g.teslim],
+  );
+}
+
+// 3244 b: teslim kalemin güncel terminine yeniden bağlanır; sürüm tutmazsa satır dönmez.
+export function teslimBagla(db: Db, id: number, surum: number, teslim: string): Promise<{ id: number } | null> {
+  return db.tek('UPDATE uretim_emri SET teslim = $3::date, teslim_bagli = true, surum = surum + 1 WHERE id = $1 AND surum = $2 RETURNING id', [id, surum, teslim]);
+}
+
+// 3244 b, 3254 a: satırın termini değişip sipariş yeniden onaylanınca bağlı, başlamamış (taslak ya da planlı, hiçbir adımı başlamamış),
+// arşivsiz emirlerin teslimi yeni termine kayar; başlangıcı yeni terminden sonra olan emir değişmez. Değişen emirler döner.
+export function bagliTeslimleriKaydir(db: Db, satirId: number, termin: string): Promise<{ id: number }[]> {
+  return db.sorgu<{ id: number }>(
+    `UPDATE uretim_emri e SET teslim = $2::date, surum = e.surum + 1
+      WHERE e.siparis_satiri_id = $1 AND e.teslim_bagli AND NOT e.arsiv AND e.durum IN ('taslak', 'planli')
+        AND e.teslim IS DISTINCT FROM $2::date AND (e.baslangic IS NULL OR e.baslangic <= $2::date)
+        AND NOT EXISTS (SELECT 1 FROM uretim_emirleri_is_emri i WHERE i.uretim_emri_id = e.id AND i.durum <> 'bekliyor')
+      RETURNING e.id`,
+    [satirId, termin],
   );
 }
 
