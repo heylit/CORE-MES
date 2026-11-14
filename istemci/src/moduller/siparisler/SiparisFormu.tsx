@@ -2,12 +2,13 @@ import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useParams } from 'react-router-dom';
 import type { SiparisAyrintisi, SiparisEkleGovdesi, SiparisGuncelleGovdesi } from '#paylasilan/sozlesme/siparisler.ts';
-import { CokSatir, Dugme, DurumKutusu, Girdi, Kart, Secim, useBildirim } from '../../ortak/arayuz/index.ts';
+import { CokSatir, Dugme, DurumKutusu, Girdi, Kart, Rozet, Secim, useBildirim } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { useForm, type AlanHatalari } from '../../ortak/veri/form.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { FirmaSecici, type SecilenFirma } from './FirmaSecici.tsx';
-import { BELIRSIZ_SAYI, belirsizSayi, bosYap, bugun, girdiMetni, paraBirimiSecenekleri, sayiGirdisi, sifirFiyat } from './gorunum.ts';
+import { BELIRSIZ_SAYI, belirsizSayi, bosYap, bugun, girdiMetni, gunEkle, gunSayisi, paraBirimiSecenekleri, sayiGirdisi, sifirFiyat } from './gorunum.ts';
+import { KalemPartileri, type PartiDegeri, partiAnahtari } from './KalemPartileri.tsx';
 import { MalzemeSecici, secilenKartMetni, type SecilenKart } from './MalzemeSecici.tsx';
 import { SayfaBasligi } from './SayfaBasligi.tsx';
 import { eskiyseYenile, useFiyatGorur, useKorumaliGonderim } from './yazma.ts';
@@ -18,8 +19,10 @@ interface SatirDegeri {
   kart: SecilenKart | null;
   miktar: string;
   birimFiyat: string;
+  // Boş: kalem siparişin terminini izler (sunucuya null gider); dolu: kaleme elle verilmiş termin.
   termin: string;
   aciklama: string;
+  partiler: PartiDegeri[];
 }
 
 interface Degerler {
@@ -27,6 +30,8 @@ interface Degerler {
   musteriSiparisNo: string;
   siparisTarihi: string;
   termin: string;
+  // 3244 b: terminin sipariş tarihinden gün karşılığı; hangisi yazılırsa öteki hesaplanır.
+  terminGun: string;
   paraBirimi: string;
   kdvOrani: string;
   odemeKosulu: string;
@@ -38,17 +43,18 @@ interface Degerler {
 }
 
 let satirSayaci = 0;
-const bosSatir = (): SatirDegeri => ({ anahtar: ++satirSayaci, kart: null, miktar: '', birimFiyat: '', termin: '', aciklama: '' });
+const bosSatir = (): SatirDegeri => ({ anahtar: ++satirSayaci, kart: null, miktar: '', birimFiyat: '', termin: '', aciklama: '', partiler: [] });
 
 function ilkDegerler(s: SiparisAyrintisi | null): Degerler {
   if (s === null) {
-    return { firma: null, musteriSiparisNo: '', siparisTarihi: bugun(), termin: '', paraBirimi: 'TRY', kdvOrani: '20', odemeKosulu: '', aciklama: '', cezaOraniGun: '', cezaTavaniOrani: '', odemeVadesiGun: '', satirlar: [bosSatir()] };
+    return { firma: null, musteriSiparisNo: '', siparisTarihi: bugun(), termin: '', terminGun: '', paraBirimi: 'TRY', kdvOrani: '20', odemeKosulu: '', aciklama: '', cezaOraniGun: '', cezaTavaniOrani: '', odemeVadesiGun: '', satirlar: [bosSatir()] };
   }
   return {
     firma: { id: s.firmaId, ad: s.firmaAd ?? `Firma ${s.firmaId}` },
     musteriSiparisNo: s.musteriSiparisNo ?? '',
     siparisTarihi: s.siparisTarihi,
     termin: s.termin,
+    terminGun: String(gunSayisi(s.siparisTarihi, s.termin) ?? ''),
     paraBirimi: s.paraBirimi,
     kdvOrani: girdiMetni(s.kdvOrani),
     odemeKosulu: s.odemeKosulu ?? '',
@@ -61,8 +67,9 @@ function ilkDegerler(s: SiparisAyrintisi | null): Degerler {
       kart: { no: m.malzemeNo, kod: m.malzemeKodu, ad: m.malzemeAdi ?? m.malzemeKodu ?? `Kart ${m.malzemeNo}`, birim: m.birim, aciklamalar: m.aciklamalar },
       miktar: girdiMetni(m.miktar),
       birimFiyat: m.birimFiyat === null ? '' : girdiMetni(m.birimFiyat),
-      termin: m.termin ?? '',
+      termin: m.termin === null || m.termin === s.termin ? '' : m.termin,
       aciklama: m.aciklama ?? '',
+      partiler: m.partiler.map((p) => ({ anahtar: partiAnahtari(), emirTuru: p.emirTuru, adet: girdiMetni(p.adet) })),
     })),
   };
 }
@@ -83,6 +90,8 @@ function dogrula(d: Degerler): AlanHatalari {
     if (s.miktar.trim() === '') hata[`satirlar.${i}.miktar`] = 'Miktar zorunlu.';
     else if (belirsizSayi(s.miktar)) hata[`satirlar.${i}.miktar`] = BELIRSIZ_SAYI;
     if (belirsizSayi(s.birimFiyat)) hata[`satirlar.${i}.birimFiyat`] = BELIRSIZ_SAYI;
+    if (s.partiler.some((p) => p.adet.trim() === '')) hata[`satirlar.${i}.partiler`] = 'Parti adedini girin ya da partiyi silin.';
+    else if (s.partiler.some((p) => belirsizSayi(p.adet))) hata[`satirlar.${i}.partiler`] = BELIRSIZ_SAYI;
   });
   return hata;
 }
@@ -109,8 +118,9 @@ function govdeKur(d: Degerler) {
       miktar: sayiGirdisi(s.miktar),
       // Fiyatı görmeyen boş gönderir; sunucu taslaktaki fiyatı korur.
       birimFiyat: s.birimFiyat.trim() === '' ? null : sayiGirdisi(s.birimFiyat),
-      termin: s.termin === '' ? null : s.termin,
+      termin: s.termin === '' || s.termin === d.termin ? null : s.termin,
       aciklama: bosYap(s.aciklama),
+      partiler: s.partiler.map((p) => ({ emirTuru: p.emirTuru, adet: sayiGirdisi(p.adet) })),
     })),
   } satisfies SiparisEkleGovdesi;
 }
@@ -152,6 +162,13 @@ function Form({ siparis }: FormOzellikleri) {
   const satirDegistir = (i: number, yama: Partial<SatirDegeri>) =>
     form.degistir({ satirlar: d.satirlar.map((s, j) => (j === i ? { ...s, ...yama } : s)) });
   const geri = siparis === null ? '/siparisler' : `/siparisler/${siparis.id}`;
+  // Gün yazılınca tarih, tarih yazılınca gün hesaplanır; sipariş tarihi değişince tarih kalır, gün yeniden hesaplanır.
+  const gunYaz = (metin: string) => {
+    const gun = /^\d{1,4}$/.test(metin.trim()) ? Number(metin.trim()) : null;
+    form.degistir({ terminGun: metin, ...(gun !== null && d.siparisTarihi !== '' ? { termin: gunEkle(d.siparisTarihi, gun) } : {}) });
+  };
+  const tarihYaz = (termin: string) => form.degistir({ termin, terminGun: String(gunSayisi(d.siparisTarihi, termin) ?? '') });
+  const siparisTarihiYaz = (siparisTarihi: string) => form.degistir({ siparisTarihi, terminGun: String(gunSayisi(siparisTarihi, d.termin) ?? '') });
 
   return (
     <section className="tc-sp">
@@ -167,8 +184,11 @@ function Form({ siparis }: FormOzellikleri) {
           <div className="tc-sp-izgara">
             <FirmaSecici etiket="Müşteri" zorunlu deger={d.firma} degistir={(f) => form.degistir({ firma: f })} {...(form.hata('firma') === undefined ? {} : { hata: form.hata('firma') })} />
             <Girdi etiket="Müşteri sipariş no" autoComplete="off" {...form.alan('musteriSiparisNo')} />
-            <Girdi etiket="Sipariş tarihi" type="date" required {...form.alan('siparisTarihi')} />
-            <Girdi etiket="Termin" type="date" required {...form.alan('termin')} />
+            <Girdi etiket="Sipariş tarihi" type="date" required {...form.alan('siparisTarihi')} onChange={(o) => siparisTarihiYaz(o.target.value)} />
+            <div className="tc-sp-termin">
+              <Girdi etiket="Termin (gün)" inputMode="numeric" autoComplete="off" ipucu="Sipariş tarihinden takvim günü." value={d.terminGun} onChange={(o) => gunYaz(o.target.value)} />
+              <Girdi etiket="Termin" type="date" required {...form.alan('termin')} onChange={(o) => tarihYaz(o.target.value)} />
+            </div>
             <Secim etiket="Para birimi" required secenekler={paraBirimiSecenekleri(d.paraBirimi)} {...form.alan('paraBirimi')} />
             <Girdi etiket="KDV oranı (%)" required inputMode="decimal" autoComplete="off" {...form.alan('kdvOrani')} />
             <Girdi etiket="Gecikme cezası (%/gün)" inputMode="decimal" autoComplete="off" ipucu="Boş: sözleşmede ceza yok." {...form.alan('cezaOraniGun')} />
@@ -216,15 +236,31 @@ function Form({ siparis }: FormOzellikleri) {
                       {...(form.hata(`satirlar.${i}.birimFiyat`) === undefined ? {} : { hata: form.hata(`satirlar.${i}.birimFiyat`) })}
                     />
                   )}
-                  <Girdi
-                    etiket={`Kalem ${i + 1} termin`}
-                    type="date"
-                    ipucu="Boşsa sipariş termini geçerlidir."
-                    value={s.termin}
-                    onChange={(o) => satirDegistir(i, { termin: o.target.value })}
-                    {...(form.hata(`satirlar.${i}.termin`) === undefined ? {} : { hata: form.hata(`satirlar.${i}.termin`) })}
-                  />
+                  <div className="tc-sp-kalem-termin">
+                    <Girdi
+                      etiket={`Kalem ${i + 1} termin`}
+                      type="date"
+                      value={s.termin === '' ? d.termin : s.termin}
+                      onChange={(o) => satirDegistir(i, { termin: o.target.value === d.termin ? '' : o.target.value })}
+                      {...(form.hata(`satirlar.${i}.termin`) === undefined ? {} : { hata: form.hata(`satirlar.${i}.termin`) })}
+                    />
+                    {s.termin === '' || s.termin === d.termin
+                      ? <Rozet ton="pasif" gorunum="cizgi">Sipariş termini</Rozet>
+                      : (
+                        <span className="tc-sp-kalem-elle">
+                          <Rozet ton="uyari" gorunum="cizgi">Elle</Rozet>
+                          <Dugme simge="route" onClick={() => satirDegistir(i, { termin: '' })}>Siparişe bağla</Dugme>
+                        </span>
+                      )}
+                  </div>
                 </div>
+                <KalemPartileri
+                  sira={i + 1}
+                  miktar={s.miktar}
+                  partiler={s.partiler}
+                  degistir={(partiler) => satirDegistir(i, { partiler })}
+                  {...(form.hata(`satirlar.${i}.partiler`) === undefined ? {} : { hata: form.hata(`satirlar.${i}.partiler`) })}
+                />
                 <Girdi
                   etiket={`Kalem ${i + 1} açıklama`}
                   autoComplete="off"

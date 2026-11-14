@@ -2,6 +2,7 @@ import { useState, type ReactNode } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useParams } from 'react-router-dom';
 import type { SiparisAyrintisi, SiparisSatiri } from '#paylasilan/sozlesme/siparisler.ts';
+import { EMIR_TURU_ADLARI } from '#paylasilan/sozlesme/emir-turleri.ts';
 import { Dugme, DurumKutusu, CokSatir, Kart, OnayPenceresi, Rozet, Tablo, useBildirim, type Sutun } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { GecmisDugmesi } from '../denetim/disari.ts';
@@ -79,7 +80,22 @@ export function SiparisAyrinti() {
     { anahtar: 'ad', baslik: 'Kalem', hucre: (m) => <KalemMetni ad={m.malzemeAdi} aciklamalar={m.aciklamalar} /> },
     { anahtar: 'miktar', baslik: 'Miktar', hizala: 'sag', kirilmaz: true, hucre: (m) => `${miktarMetni(m.miktar)}${m.birim ? ` ${m.birim}` : ''}` },
     { anahtar: 'fiyat', baslik: 'Birim fiyat', hizala: 'sag', kirilmaz: true, hucre: (m) => fiyatMetni(m.birimFiyat, s.paraBirimi) },
-    { anahtar: 'termin', baslik: 'Termin', kirilmaz: true, hucre: (m) => (m.termin === null ? 'Sipariş termini' : tarihMetni(m.termin)) },
+    // 3244 b: kalem termini hep tarihle görünür; siparişten geliyorsa işaretlidir, elle verildiyse "Elle".
+    {
+      anahtar: 'termin', baslik: 'Termin', kirilmaz: true,
+      hucre: (m) => (
+        <span className="tc-sp-kalem-termin">
+          {tarihMetni(m.termin ?? s.termin)}
+          {m.termin === null || m.termin === s.termin ? <Rozet ton="pasif" gorunum="cizgi">Sipariş termini</Rozet> : <Rozet ton="uyari" gorunum="cizgi">Elle</Rozet>}
+        </span>
+      ),
+    },
+    {
+      anahtar: 'parti', baslik: 'Üretim çeşidi',
+      hucre: (m) => (m.partiler.length === 0
+        ? EMIR_TURU_ADLARI.seri
+        : <span className="tc-sp-parti-cipleri">{m.partiler.map((p) => <Rozet key={p.id} ton="bilgi" gorunum="cizgi">{`${miktarMetni(p.adet)} ${EMIR_TURU_ADLARI[p.emirTuru]}`}</Rozet>)}</span>),
+    },
     { anahtar: 'tutar', baslik: 'Tutar', hizala: 'sag', kirilmaz: true, hucre: (m) => paraMetni(m.tutar, s.paraBirimi) },
   ];
   const sutunlar = fiyatGorur ? tumSutunlar : tumSutunlar.filter((k) => k.anahtar !== 'fiyat' && k.anahtar !== 'tutar');

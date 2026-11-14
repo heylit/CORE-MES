@@ -4,6 +4,7 @@ import { ondalikMetinSemasi } from '../ondalik.ts';
 import { beklenenSurum, surumSemasi } from '../surum.ts';
 import { tarihSemasi, zamanSemasi } from '../zaman.ts';
 import { PARA_BIRIMLERI } from './satin-alma.ts';
+import { EMIR_TURLERI } from './emir-turleri.ts';
 
 // Satış siparişi (soru 144 a, karar 56): sipariş başlığı ve satırları ilişkisel tutulur; üretim emri ve sevk satırı sipariş satırına bağlanır.
 
@@ -40,6 +41,13 @@ const istege = (azami: number) =>
     return kirpik ? kirpik : null;
   });
 
+// 3244 b: kalem üretim çeşidine göre partilere ayrılır (örnek 10 FAI + 90 seri). Boş liste "tek seri parti" demektir (eski kalemler
+// de öyle okunur). Tür emir türü listesidir (uretim-emirleri sahibi); bir kalemde aynı tür iki kez olmaz, toplam kalem miktarıdır (SIP-30).
+export const PARTI_EN_COK = 8;
+export const partiGovdesi = z.object({ emirTuru: z.enum(EMIR_TURLERI), adet: miktarSemasi });
+export const partiListesiSemasi = z.array(partiGovdesi).max(PARTI_EN_COK, `Kalemde en çok ${PARTI_EN_COK} parti olabilir.`)
+  .refine((p) => new Set(p.map((x) => x.emirTuru)).size === p.length, 'Kalemde aynı üretim çeşidi iki kez olamaz.');
+
 export const siparisSatiriGovdesi = z.object({
   malzemeNo: z.number().int().positive(),
   miktar: miktarSemasi,
@@ -48,6 +56,7 @@ export const siparisSatiriGovdesi = z.object({
   // Boşsa siparişin termini geçerlidir.
   termin: tarihSemasi.nullish().transform((t) => t ?? null),
   aciklama: istege(500),
+  partiler: partiListesiSemasi.optional(),
 });
 
 const siparisAlanlari = {
@@ -104,6 +113,8 @@ export const siparisSatiriSemasi = z.object({
   tutar: ondalikMetinSemasi.nullable(),
   termin: tarihSemasi.nullable(),
   aciklama: z.string().nullable(),
+  // Kaydedilmiş partiler; boşsa kalem tek seri partidir.
+  partiler: z.array(z.object({ id: z.number().int(), emirTuru: z.enum(EMIR_TURLERI), adet: ondalikMetinSemasi })),
 });
 
 export const siparisSemasi = z.object({
@@ -145,6 +156,7 @@ export type SiparisEkleVerisi = z.output<typeof siparisEkleGovdesi>;
 export type SiparisGuncelleGovdesi = z.input<typeof siparisGuncelleGovdesi>;
 export type SiparisGuncelleVerisi = z.output<typeof siparisGuncelleGovdesi>;
 export type SiparisSatiriVerisi = z.output<typeof siparisSatiriGovdesi>;
+export type PartiVerisi = z.output<typeof partiGovdesi>;
 export type SiparisListesiSorgusu = z.input<typeof siparisListesiSorgusu>;
 export type SiparisListesiSuzgeci = z.output<typeof siparisListesiSorgusu>;
 export type Siparis = z.output<typeof siparisSemasi>;

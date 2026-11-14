@@ -3,6 +3,7 @@ import { siralamaSql } from '#cekirdek/liste.ts';
 import type { Dilim, SiralamaIstegi, SiralamaTanimi } from '#cekirdek/liste.ts';
 import { zamanMetni } from '#cekirdek/zaman.ts';
 import type { SiparisDurumu, TeklifDurumu } from '#paylasilan/sozlesme/siparisler.ts';
+import type { EmirTuru } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { MALZEME_KARTI_IZ_YOLU, malzemeKartiIzParametreleri, type MalzemeKartiAnahtari, type MalzemeKartiIzi } from '#paylasilan/malzeme-karti-izi.ts';
 
 export interface SiparisSatiri {
@@ -164,6 +165,7 @@ export interface KalemAlanlari {
   birimFiyat: string | null;
   termin: string | null;
   aciklama: string | null;
+  partiler?: readonly { emirTuru: string; adet: string }[];
 }
 
 // Satırlar taslakta bütün olarak yeniden yazılır; sıra gövdedeki sıradır.
@@ -183,6 +185,26 @@ export async function kalemleriYaz(db: Db, siparisId: number, kalemListesi: Kale
       kalemListesi.map((k) => k.termin),
       kalemListesi.map((k) => k.aciklama),
     ],
+  );
+  // 3244 b: partiler kalemin sırasıyla bağlanır; boş liste yazılmaz (kalem tek seri partidir).
+  const partiler = kalemListesi.flatMap((k, i) => (k.partiler ?? []).map((p, j) => ({ kalemSira: i + 1, sira: j + 1, ...p })));
+  if (partiler.length === 0) return;
+  await db.sorgu(
+    `INSERT INTO siparisler_siparis_satiri_parti (satir_id, sira, emir_turu, adet)
+     SELECT s.id, p.sira, p.emir_turu, p.adet
+       FROM unnest($2::int[], $3::int[], $4::text[], $5::numeric[]) AS p (kalem_sira, sira, emir_turu, adet)
+       JOIN siparisler_siparis_satiri s ON s.siparis_id = $1 AND s.sira = p.kalem_sira`,
+    [siparisId, partiler.map((p) => p.kalemSira), partiler.map((p) => p.sira), partiler.map((p) => p.emirTuru), partiler.map((p) => p.adet)],
+  );
+}
+
+export interface PartiSatiri { id: number; satir_id: number; sira: number; emir_turu: EmirTuru; adet: string }
+
+export function partileriGetir(db: Db, satirIdleri: readonly number[]): Promise<PartiSatiri[]> {
+  if (satirIdleri.length === 0) return Promise.resolve([]);
+  return db.sorgu<PartiSatiri>(
+    'SELECT id, satir_id, sira, emir_turu, adet FROM siparisler_siparis_satiri_parti WHERE satir_id = ANY($1::int[]) ORDER BY satir_id, sira',
+    [[...satirIdleri]],
   );
 }
 

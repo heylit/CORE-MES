@@ -63,6 +63,22 @@ export function miktarReddi(birim: string | null, miktar: string): string | null
   return birim?.trim().toLocaleLowerCase('tr') === 'adet' && !/^\d+(\.0*)?$/.test(miktar.trim()) ? MIKTAR_TAM_SAYI : null;
 }
 
+// SIP-18 (3244 b): kalem partilere ayrıldıysa parti adetleri toplamı kalem miktarıdır; boş liste tek seri partidir. Adet birimli kartta
+// parti de tam sayıdır (SIP-4 a ile aynı gerekçe). Karşılaştırma binde bir hassasiyetle tam sayıda yapılır: kayan nokta 0.1 + 0.2'de şaşar.
+export const PARTI_TOPLAMI_TUTMUYOR = 'Parti adetlerinin toplamı kalem miktarına eşit olmalı.';
+const binde = (m: string): bigint => {
+  const [tam = '0', kesir = ''] = m.trim().split('.');
+  return BigInt(tam) * 1000n + BigInt((kesir + '000').slice(0, 3));
+};
+export function partiReddi(birim: string | null, miktar: string, partiler: readonly { adet: string }[]): string | null {
+  if (partiler.length === 0) return null;
+  for (const p of partiler) {
+    const ret = miktarReddi(birim, p.adet);
+    if (ret !== null) return ret;
+  }
+  return partiler.reduce((t, p) => t + binde(p.adet), 0n) === binde(miktar) ? null : PARTI_TOPLAMI_TUTMUYOR;
+}
+
 // SIP-4 a: yanlış yıl girişini yakalayan makul aralık (bugün sunucudan, tesis günü). Geç girilen eski sipariş için iki yıl geri,
 // önceden alınan sipariş için bir yıl ileri; termin sipariş tarihinden en çok beş yıl sonra (VARSAYIM: çerçeve sözleşmesi bu kadar uzun).
 export const SIPARIS_TARIHI_ARALIK_DISI = 'Sipariş tarihi bugünden en çok iki yıl önce, en çok bir yıl sonra olabilir.';

@@ -35,7 +35,7 @@ const SIPARIS_ONAYLI = { ...SIPARIS_TASLAK, id: 6, no: 'SS-2026-0006', durum: 'o
 const SIPARIS_LISTESI = { satirlar: [SIPARIS_TASLAK, SIPARIS_ONAYLI], toplam: 2, sayfa: 1, sayfaBoyu: 50 } satisfies SiparisListesiCevabi;
 const SATIR = {
   id: 50, sira: 1, malzemeNo: 31, malzemeKodu: 'DNM-001', malzemeAdi: 'Deneme Braket', aciklamalar: ['Deneme aciklama 1', 'Deneme aciklama 2'], birim: 'adet', miktar: '100', birimFiyat: '12.5000',
-  tutar: '1250.00', termin: null, aciklama: null,
+  tutar: '1250.00', termin: null, aciklama: null, partiler: [],
 };
 const AYRINTI_TASLAK = { ...SIPARIS_TASLAK, satirlar: [SATIR] } satisfies SiparisAyrintisi;
 const AYRINTI_ONAYLI = { ...AYRINTI_TASLAK, durum: 'onayli', onayZamani: '2026-10-02T10:00:00+03:00', surum: 3 } satisfies SiparisAyrintisi;
@@ -208,6 +208,20 @@ describe('Satış siparişi ayrıntısı', () => {
     expect(screen.getByText('12,50 TRY')).toBeTruthy();
     expect(screen.getByText('Genel toplam').closest('div')!.textContent).toContain('1.500,00 TRY');
     expect(screen.getByText('Taslak sipariş')).toBeTruthy();
+  });
+
+  it('3244 b: kalem termini tarihle ve işaretle görünür; partiler adet ve çeşitle, partisiz kalem Seri', async () => {
+    const partili = { ...AYRINTI_TASLAK, satirlar: [
+      { ...SATIR, partiler: [{ id: 1, emirTuru: 'fai', adet: '10.000' }, { id: 2, emirTuru: 'seri', adet: '90.000' }] },
+      { ...SATIR, id: 12, sira: 2, termin: '2026-11-20' },
+    ] } satisfies SiparisAyrintisi;
+    sunucuKur(FIYAT_OKUYUCU, (yontem, yol) => (yontem === 'GET' && yol === '/siparisler/5' ? json(200, partili) : undefined));
+    ac('/siparisler/5');
+    await screen.findByText('10 FAI');
+    expect(screen.getByText('90 Seri')).toBeTruthy();
+    expect(screen.getByText('Sipariş termini')).toBeTruthy();
+    expect(screen.getByText('Elle')).toBeTruthy();
+    expect(screen.getByText('Seri')).toBeTruthy();
   });
 
   it('kalemde kartın adı ve Açıklama 1-3 görünür (2120)', async () => {
@@ -396,7 +410,7 @@ describe('Yeni satış siparişi', () => {
     ac('/siparisler/yeni');
     await screen.findByRole('option', { name: 'M-7 · Deneme Musteri A' });
     fireEvent.change(screen.getByLabelText(/^Müşteri( \*)?$/), { target: { value: '7' } });
-    fireEvent.change(screen.getByLabelText(/^Termin/), { target: { value: '2026-12-31' } });
+    fireEvent.change(screen.getByLabelText(/^Termin( \*)?$/), { target: { value: '2026-12-31' } });
     fireEvent.click(screen.getByRole('button', { name: 'Malzeme kartı seç' }));
     const secici = await screen.findByRole('dialog', { name: 'Malzeme kartı seç' });
     await within(secici).findByText('Deneme Braket');
@@ -423,13 +437,55 @@ describe('Yeni satış siparişi', () => {
     await oturumCozuldu(istekler);
     expect(screen.queryByLabelText(/^Kalem 1 birim fiyat/)).toBeNull();
     fireEvent.change(screen.getByLabelText(/^Müşteri( \*)?$/), { target: { value: '7' } });
-    fireEvent.change(screen.getByLabelText(/^Termin/), { target: { value: '2026-12-31' } });
+    fireEvent.change(screen.getByLabelText(/^Termin( \*)?$/), { target: { value: '2026-12-31' } });
     fireEvent.click(screen.getByRole('button', { name: 'Malzeme kartı seç' }));
     fireEvent.click(await screen.findByText('Deneme Braket'));
     fireEvent.change(screen.getByLabelText(/^Kalem 1 miktar/), { target: { value: '3' } });
     fireEvent.click(screen.getByRole('button', { name: 'Taslak aç' }));
     await waitFor(() => expect(yazmalar(istekler)).toHaveLength(1));
     expect(yazmalar(istekler)[0]?.govde).toMatchObject({ satirlar: [{ malzemeNo: 31, miktar: '3', birimFiyat: null }] });
+  });
+
+  it('3244 b: termin gün yazılınca tarih, tarih yazılınca gün hesaplanır; kalem termini siparişten dolu gelir, partiler gövdede gider', async () => {
+    const istekler = sunucuKur(FIYATCI, (yontem, yol) => (yontem === 'POST' && yol === '/siparisler/ekle' ? json(200, AYRINTI_TASLAK) : undefined));
+    ac('/siparisler/yeni');
+    await screen.findByRole('option', { name: 'M-7 · Deneme Musteri A' });
+    fireEvent.change(screen.getByLabelText(/^Müşteri( \*)?$/), { target: { value: '7' } });
+    fireEvent.change(screen.getByLabelText(/^Sipariş tarihi/), { target: { value: '2026-11-14' } });
+    fireEvent.change(screen.getByLabelText(/^Termin \(gün\)/), { target: { value: '45' } });
+    expect((screen.getByLabelText(/^Termin( \*)?$/) as HTMLInputElement).value).toBe('2026-12-29');
+    fireEvent.change(screen.getByLabelText(/^Termin( \*)?$/), { target: { value: '2027-01-13' } });
+    expect((screen.getByLabelText(/^Termin \(gün\)/) as HTMLInputElement).value).toBe('60');
+    fireEvent.click(screen.getByRole('button', { name: 'Malzeme kartı seç' }));
+    fireEvent.click(await screen.findByText('Deneme Braket'));
+    fireEvent.change(screen.getByLabelText(/^Kalem 1 miktar/), { target: { value: '100' } });
+    expect((screen.getByLabelText(/^Kalem 1 termin/) as HTMLInputElement).value).toBe('2027-01-13');
+    expect(screen.getByText('Sipariş termini')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Parti ekle' }));
+    fireEvent.change(screen.getByLabelText(/^Kalem 1 parti 1 adet/), { target: { value: '10' } });
+    fireEvent.change(screen.getByLabelText(/^Kalem 1 parti 2 adet/), { target: { value: '90' } });
+    expect(screen.getByText('Toplam 100 / 100')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Taslak aç' }));
+    await waitFor(() => expect(yazmalar(istekler)).toHaveLength(1));
+    expect(yazmalar(istekler)[0]?.govde).toMatchObject({
+      siparisTarihi: '2026-11-14', termin: '2027-01-13',
+      satirlar: [{ termin: null, partiler: [{ emirTuru: 'fai', adet: '10' }, { emirTuru: 'seri', adet: '90' }] }],
+    });
+  });
+
+  it('3244 b: kalem termini elle değişince "Elle" olur ve gövdede gider; "Siparişe bağla" geri bağlar', async () => {
+    const istekler = sunucuKur(FIYATCI, (yontem, yol) => (yontem === 'POST' && yol === '/siparisler/5/guncelle' ? json(200, AYRINTI_TASLAK) : undefined));
+    ac('/siparisler/5/duzenle');
+    await screen.findByText('Düzenle: SS-2026-0005');
+    fireEvent.change(screen.getByLabelText(/^Kalem 1 termin/), { target: { value: '2026-10-20' } });
+    expect(screen.getByText('Elle')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Siparişe bağla' }));
+    expect(screen.getByText('Sipariş termini')).toBeTruthy();
+    expect((screen.getByLabelText(/^Kalem 1 termin/) as HTMLInputElement).value).toBe('2026-10-30');
+    fireEvent.change(screen.getByLabelText(/^Kalem 1 termin/), { target: { value: '2026-10-20' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Kaydet' }));
+    await waitFor(() => expect(yazmalar(istekler)).toHaveLength(1));
+    expect(yazmalar(istekler)[0]?.govde).toMatchObject({ satirlar: [{ termin: '2026-10-20' }] });
   });
 
   it('boş zorunlu alanlar istemcide yakalanır; istek gitmez', async () => {
@@ -449,7 +505,7 @@ describe('Yeni satış siparişi', () => {
     ac('/siparisler/yeni');
     await screen.findByRole('option', { name: 'M-7 · Deneme Musteri A' });
     fireEvent.change(screen.getByLabelText(/^Müşteri( \*)?$/), { target: { value: '7' } });
-    fireEvent.change(screen.getByLabelText(/^Termin/), { target: { value: '2026-12-31' } });
+    fireEvent.change(screen.getByLabelText(/^Termin( \*)?$/), { target: { value: '2026-12-31' } });
     fireEvent.click(screen.getByRole('button', { name: 'Malzeme kartı seç' }));
     fireEvent.click(await screen.findByText('Deneme Braket'));
     fireEvent.change(screen.getByLabelText(/^Kalem 1 miktar/), { target: { value: '1' } });

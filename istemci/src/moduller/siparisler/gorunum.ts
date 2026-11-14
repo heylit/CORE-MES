@@ -124,3 +124,14 @@ export const belirsizSayi = (v: string): boolean => !v.includes(',') && BELIRSIZ
 export const girdiMetni = (m: string): string => miktarMetni(m).replace(/\./g, '');
 
 export const bosYap = (m: string): string | null => (m.trim() === '' ? null : m.trim());
+
+// 3244 b: termin gün ya da tarih olarak girilir; gün sipariş tarihinden takvim günüdür (iş günü değil). Gün metni geçersizse null.
+export function gunEkle(tarih: string, gun: number): string {
+  const d = new Date(`${tarih}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + gun);
+  return d.toISOString().slice(0, 10);
+}
+export function gunSayisi(baslangic: string, bitis: string): number | null {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(baslangic) || !/^\d{4}-\d{2}-\d{2}$/.test(bitis)) return null;
+  return Math.round((Date.parse(`${bitis}T00:00:00Z`) - Date.parse(`${baslangic}T00:00:00Z`)) / 86_400_000);
+}

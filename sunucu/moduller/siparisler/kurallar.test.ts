@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import {
   FIRMA_MUSTERI_DEGIL, FIRMA_PASIF, FIRMA_YOK, MALZEME_AKTIF_DEGIL, MALZEME_SATILMAZ, MALZEME_YOK, YALNIZ_TASLAK,
-  MIKTAR_TAM_SAYI, SIPARIS_TARIHI_ARALIK_DISI, TERMIN_COK_UZAK, TUTAR_COK_BUYUK, miktarReddi, tarihAraligiReddi, tutarTasmaReddi,
+  MIKTAR_TAM_SAYI, PARTI_TOPLAMI_TUTMUYOR, partiReddi, SIPARIS_TARIHI_ARALIK_DISI, TERMIN_COK_UZAK, TUTAR_COK_BUYUK, miktarReddi, tarihAraligiReddi, tutarTasmaReddi,
   BAGLI_ACIK_EMIR, bagliEmirReddi, duzenlemeReddi, firmaReddi, fiyatlariKoru, gecisHedefi, gecisReddi, malzemeReddi,
   FIYAT_EKSIK, KARTSIZ_SATIR, KART_BAGLANAMAZ, YALNIZ_YENI_TEKLIF, fiyatReddi, kartBaglamaReddi, kartsizSatirReddi, talepDuzenlemeReddi,
   dortGozReddi, surumHedefi, teklifGecisReddi, teklifHedefi, terminAraligi, terminDagilimi,
@@ -57,6 +57,17 @@ describe('siparisler kuralları (saf)', () => {
     assert.equal(miktarReddi('adet', '12.000'), null);
     assert.equal(miktarReddi('kg', '3.5'), null);
     assert.equal(miktarReddi(null, '3.5'), null);
+  });
+
+  test('SIP-18 (3244 b): parti adetleri toplamı kalem miktarıdır; boş liste geçer; adet kartında kesirli parti reddedilir', () => {
+    assert.equal(partiReddi('adet', '100', []), null);
+    assert.equal(partiReddi('adet', '100', [{ adet: '10' }, { adet: '90' }]), null);
+    assert.equal(partiReddi('adet', '100.000', [{ adet: '10' }, { adet: '90.0' }]), null);
+    assert.equal(partiReddi('adet', '100', [{ adet: '10' }, { adet: '80' }]), PARTI_TOPLAMI_TUTMUYOR);
+    assert.equal(partiReddi('adet', '100', [{ adet: '10' }, { adet: '91' }]), PARTI_TOPLAMI_TUTMUYOR);
+    assert.equal(partiReddi('adet', '10', [{ adet: '2.5' }, { adet: '7.5' }]), MIKTAR_TAM_SAYI);
+    assert.equal(partiReddi('kg', '0.3', [{ adet: '0.1' }, { adet: '0.2' }]), null);
+    assert.equal(partiReddi('kg', '0.3', [{ adet: '0.1' }, { adet: '0.21' }]), PARTI_TOPLAMI_TUTMUYOR);
   });
 
   test('SIP-4 a: sipariş tarihi bugünden iki yıl geri, bir yıl ileri; termin sipariş tarihinden en çok beş yıl sonra', () => {
