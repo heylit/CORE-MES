@@ -47,3 +47,13 @@ export async function bitmemisMakineler(db: Db, an: string): Promise<number[]> {
   );
   return satirlar.map((s) => s.makineId);
 }
+
+// 3256-1: canlıda an'dan sonra biten iş emirleri (ana yerleşim ya da bölünmüş işin parçası).
+export async function bitmemisIsEmirleri(db: Db, an: string): Promise<number[]> {
+  const satirlar = await db.sorgu<{ isEmriId: number }>(
+    `SELECT is_emri_id AS "isEmriId" FROM plan_yerlesimi WHERE is_emri_id > 0 AND bitis > $1::timestamptz
+      UNION SELECT is_emri_id FROM plan_yerlesim_parcasi WHERE is_emri_id > 0 AND bitis > $1::timestamptz`,
+    [an],
+  );
+  return satirlar.map((s) => s.isEmriId);
+}

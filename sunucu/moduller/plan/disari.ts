@@ -108,7 +108,7 @@ export { malzemeKartiIzleri } from './sorgular.ts';
 
 // 2319 (2311 S7): emir bitti ve fason dönüşü canlı planı "bayat" işaretler (yalnız işaret); bağ kablolama.ts'te. Okuma: son canlıya almadan
 // sonraki olaylar ve makine duruşları.
-export { emirBittiYansit as bayatEmirBittiYansit, emirIptalYansit as bayatEmirIptalYansit, adimBittiYansit as bayatAdimBittiYansit, fasonHareketiYansit as bayatFasonHareketiYansit, isEmirleriDegistiYansit as bayatIsEmirleriDegistiYansit, planBayatligi } from './bayat/servis.ts';
+export { emirBittiYansit as bayatEmirBittiYansit, emirIptalYansit as bayatEmirIptalYansit, adimBittiYansit as bayatAdimBittiYansit, fasonHareketiYansit as bayatFasonHareketiYansit, isEmirleriDegistiYansit as bayatIsEmirleriDegistiYansit, satinAlmaTerminiYansit as bayatSatinAlmaTerminiYansit, planBayatligi } from './bayat/servis.ts';
 export type { BayatNedeni, BayatOlayi, PlanBayatligi } from './bayat/kurallar.ts';
 
 // 2319 (2311 S10): Arkon periyodik bakımı plan girdisine duruş olarak girer; plan Arkon'u okumaz (ADR 0006), sağlayıcıyı kablolama.ts bağlar.

@@ -871,6 +871,24 @@ export function malzemeGelisleriOku(db: Db, malzemeNolar: readonly number[]): Pr
   );
 }
 
+// 3256-1: bir talebin plana giden gelişleri (malzemeGelisleriOku'nun süzgeciyle); talep kaydından önce ve sonra okunur, farkı plan işaretler.
+export interface TalepGelisiOkuma { malzemeNo: number; tarih: string | null; miktar: string; satirId: number }
+export function talepGelisleriOku(db: Db, talepId: string): Promise<TalepGelisiOkuma[]> {
+  return db.sorgu<TalepGelisiOkuma>(
+    `SELECT c.malzeme_no AS "malzemeNo", p.beklenen_teslim AS tarih, (s.miktar - coalesce(m.toplam, 0))::text AS miktar, s.id AS "satirId"
+       FROM satin_alma_siparis_satiri s
+       JOIN satin_alma_siparis p ON p.talep_id = s.talep_id AND p.teklif_id = s.teklif_id
+       JOIN satin_alma_talep t ON t.id = s.talep_id
+       JOIN satin_alma_talep_kalemi k ON k.talep_id = s.talep_id AND k.id = s.kalem_id
+       JOIN satin_alma_katalog c ON c.id = k.katalog_id
+       LEFT JOIN LATERAL (SELECT sum(x.miktar) AS toplam FROM satin_alma_teslim x WHERE x.siparis_satiri_id = s.id) m ON true
+      WHERE s.talep_id = $1 AND c.malzeme_no IS NOT NULL AND t.durum = 'siparis_verildi' AND p.logo_kapatma_durumu IS NULL
+        AND coalesce(m.toplam, 0) < s.miktar
+      ORDER BY s.id`,
+    [talepId],
+  );
+}
+
 // ---- Stok değeri için alış fiyatları (1382 d). Fiyat net: teklif satırının ve teklifin iskontosu düşülür; masraf dağıtılmaz.
 // TRY karşılığı siparişte sabitlenen kurla, yoksa teklif günü kuruyla (döviz teklifi kursuz yazılamaz, SA3); ikisi de yoksa boş.
 // Güncel kur finanstadır, burada kullanılmaz. Teslim mal kabul satırı başına netlenir: geri alınan (neti sıfır ya da eksi) teslim

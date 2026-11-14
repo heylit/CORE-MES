@@ -2,9 +2,9 @@
 // planı değiştirmez. Okuma yetki denetlemez: çağıran uç denetler.
 import { kayitNoktasi, type Db } from '#cekirdek/db.ts';
 import { makineDurumlari, makineler } from '../../istasyonlar/disari.ts';
-import { emirlerinIsEmriIdleri, emirNolari, fasonHareketiOzeti } from '../../uretim-emirleri/disari.ts';
+import { emirlerinIsEmriIdleri, emirlerinMalzemeIhtiyaci, emirNolari, fasonHareketiOzeti, isEmriPlanBilgileri } from '../../uretim-emirleri/disari.ts';
 import { planSurumu, sonCanliyaAlma } from '../sorgular.ts';
-import { bayatDuruslar, bayatOzeti, type BayatOlayi, type PlanBayatligi } from './kurallar.ts';
+import { bayatDuruslar, bayatOzeti, terminEtkiledigiEmirler, type BayatOlayi, type PlanBayatligi } from './kurallar.ts';
 import * as s from './sorgular.ts';
 
 const isEmirleri = async (db: Db, uretimEmriId: number): Promise<number[]> =>
@@ -56,6 +56,22 @@ export async function emirIptalYansit(db: Db, olay: { uretimEmriId: number }): P
 export async function adimBittiYansit(db: Db, olay: { isEmriId: number; uretimEmriId: number }): Promise<void> {
   await isaretYaz(db, async () => {
     if (await s.bitmemisSatirVar(db, [olay.isEmriId], new Date().toISOString())) await s.olayYaz(db, 'adim-bitti', olay.uretimEmriId, olay.isEmriId);
+  });
+}
+
+// 3256-1: satın almada gelişi ya da termini değişen malzemeyi canlıda bitmemiş adımında kullanan emir işaretlenir. kaynak_id canlı plan
+// sürümüdür (rota-degisti gibi): aynı planda emir başına bir satır, yeni canlıya almadan sonraki değişiklik yeniden yazılır.
+export async function satinAlmaTerminiYansit(db: Db, olay: { malzemeNolar: readonly number[] }): Promise<void> {
+  await isaretYaz(db, async () => {
+    if (olay.malzemeNolar.length === 0 || (await sonCanliyaAlma(db)) === null) return;
+    const bilgi = await isEmriPlanBilgileri(db, await s.bitmemisIsEmirleri(db, new Date().toISOString()));
+    if (bilgi.size === 0) return;
+    const adimlar = [...bilgi.values()].map((b) => ({ uretimEmriId: b.uretimEmriId, opNo: b.opNo }));
+    const ihtiyaclar = await emirlerinMalzemeIhtiyaci(db, [...new Set(adimlar.map((a) => a.uretimEmriId))]);
+    const emirler = terminEtkiledigiEmirler(adimlar, ihtiyaclar, olay.malzemeNolar);
+    if (emirler.length === 0) return;
+    const surum = await planSurumu(db);
+    for (const e of emirler) await s.olayYaz(db, 'satin-alma-termini', e, surum);
   });
 }
 

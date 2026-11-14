@@ -5,7 +5,7 @@ import type { KaynakDegisikligi } from '#paylasilan/sozlesme/planlama.ts';
 import { CalismaYazici, bekleyenler, reddedilemez } from '../../kayit.ts';
 import { calismaKur } from '../../siparis/test-veri.ts';
 import { DegisiklikSeridi } from './DegisiklikSeridi.tsx';
-import { AYRINTI_FARK, canliBayatMetni, canliBayatSatiri, farkMetni, kaynakSatiri, seritListesi, seritMetni, type CanliBayatlik } from './kurallar.ts';
+import { AYRINTI_FARK, canliBayatKaynagi, canliBayatMetni, canliBayatSatiri, farkMetni, kaynakSatiri, seritListesi, seritMetni, type CanliBayatlik } from './kurallar.ts';
 
 afterEach(() => { cleanup(); });
 
@@ -136,6 +136,10 @@ describe('canlı plan bayat işareti (2319)', () => {
     expect(canliBayatMetni(CANLI)).toBe('Canlı plan son canlıya almadan sonra eskidi: 2 emir erken bitti, 1 makine duruşu; planı gözden geçirin');
     expect(canliBayatMetni({ ...CANLI, sayilar: { ...CANLI.sayilar, 'adim-bitti': 3 } })).toContain('2 emir erken bitti, 3 adım erken bitti');
     expect(canliBayatSatiri({ neden: 'adim-bitti', zaman: '', emirNo: 'E-2', makineKod: null })).toBe('adım erken bitti: E-2');
+    expect(canliBayatMetni({ ...CANLI, sayilar: { ...CANLI.sayilar, 'satin-alma-termini': 1 } })).toContain('1 satın alma termini değişti');
+    expect(canliBayatSatiri({ neden: 'satin-alma-termini', zaman: '', emirNo: 'E-3', makineKod: null })).toBe('satın alma termini değişti: E-3');
+    expect(canliBayatKaynagi('satin-alma-termini')).toBe('Satın alma');
+    expect(canliBayatKaynagi('durus')).toBe('Saha');
     expect(canliBayatMetni({ bayat: false, sayilar: { 'emir-bitti': 0, 'adim-bitti': 0, 'fason-donusu': 0, durus: 0, 'rota-degisti': 0 }, olaylar: [] })).toBeNull();
   });
 
@@ -146,6 +150,27 @@ describe('canlı plan bayat işareti (2319)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Olaylar' }));
     expect(screen.getByText('makine duruşu: T1')).toBeTruthy();
     expect(screen.getByText('emir erken bitti: E-1')).toBeTruthy();
+  });
+
+  it('3256-1: satın alma olayı satırı "Satın alma" rozetiyle, saha olayı "Saha" rozetiyle çizilir', () => {
+    const c = { ...CANLI, sayilar: { ...CANLI.sayilar, 'satin-alma-termini': 1 },
+      olaylar: [{ neden: 'satin-alma-termini' as const, zaman: '2026-11-08T09:00:00.000Z', emirNo: 'E-3', makineKod: null }, ...CANLI.olaylar] };
+    const { container } = render(<DegisiklikSeridi calisma={calismaKur()} dis={null} canli={c} />);
+    expect(container.querySelector('[data-canli="eski"]')?.textContent).toContain('1 satın alma termini değişti');
+    fireEvent.click(screen.getByRole('button', { name: 'Olaylar' }));
+    const satirlar = [...screen.getByRole('list', { name: 'Canlı planı eskiten olaylar' }).querySelectorAll('li')].map((l) => l.textContent);
+    expect(satirlar[0]).toContain('Satın alma');
+    expect(satirlar[0]).toContain('satın alma termini değişti: E-3');
+    expect(satirlar[1]).toContain('Saha');
+  });
+
+  it('3258: canlı plan eskimişken bekleyen yoksa "değişiklik yok" satırı çizilmez; bekleyen varsa iki satır da durur', () => {
+    const { container, unmount } = render(<DegisiklikSeridi calisma={calismaKur()} dis={null} canli={CANLI} />);
+    expect(container.textContent).not.toContain('değişiklik yok');
+    expect(container.querySelectorAll('.tc-py-ds-satir').length).toBe(1);
+    unmount();
+    const iki = render(<DegisiklikSeridi calisma={bayat()} dis={kaynakSatiri(KD, 0, 4)} canli={CANLI} />);
+    expect(iki.container.querySelectorAll('.tc-py-ds-satir').length).toBe(2);
   });
 
   it('canlı verilmezse ya da bayat değilse eski davranış', () => {

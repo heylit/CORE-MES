@@ -12,7 +12,7 @@ const BAYAT: PlanSurumCevabi = {
   bayat: {
     bayat: true,
     sonCanliyaAlma: '2026-11-08T06:00:00.000Z',
-    sayilar: { 'emir-bitti': 1, 'fason-donusu': 0, durus: 1, 'rota-degisti': 0, 'adim-bitti': 0, 'emir-iptal': 0 },
+    sayilar: { 'emir-bitti': 1, 'fason-donusu': 0, durus: 1, 'rota-degisti': 0, 'adim-bitti': 0, 'emir-iptal': 0, 'satin-alma-termini': 0 },
     olaylar: [
       { neden: 'durus', zaman: '2026-11-08T08:00:00.000Z', uretimEmriId: null, emirNo: null, makineId: 7, makineKod: 'D-01' },
       { neden: 'emir-bitti', zaman: '2026-11-08T07:00:00.000Z', uretimEmriId: 5, emirNo: 'UE-D-5', makineId: null, makineKod: null },
@@ -49,7 +49,7 @@ describe('PlanlamaYeni canlı plan bayat işareti', () => {
     expect(canliSatiri()).toBeNull();
     cleanup(); vi.unstubAllGlobals();
     sunucuKur(YONETICI, [PLANLI]);
-    surumKur({ ...BAYAT, bayat: { ...BAYAT.bayat!, bayat: false, sayilar: { 'emir-bitti': 0, 'fason-donusu': 0, durus: 0, 'rota-degisti': 0, 'adim-bitti': 0, 'emir-iptal': 0 }, olaylar: [] } });
+    surumKur({ ...BAYAT, bayat: { ...BAYAT.bayat!, bayat: false, sayilar: { 'emir-bitti': 0, 'fason-donusu': 0, durus: 0, 'rota-degisti': 0, 'adim-bitti': 0, 'emir-iptal': 0, 'satin-alma-termini': 0 }, olaylar: [] } });
     ac('/plan/sevkiyat');
     await screen.findByRole('region', { name: 'Değişiklik akışı' }, { timeout: 10000 });
     expect(canliSatiri()).toBeNull();
