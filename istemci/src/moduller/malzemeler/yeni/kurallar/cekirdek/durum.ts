@@ -10,6 +10,7 @@ import { storeErr } from './depolama.ts';
 import { kartAnahtari } from './hizli-arama.ts';
 import { kartTamamla } from './kilavuz.ts';
 import { MA_BOS, malzemeAyarUygula, tumAlanGruplari } from './malzeme-ayarlari.ts';
+import { METAL_EK_FORM, METAL_EK_GRUP, metalEkleriniUygula } from './metal-ekleri.ts';
 import { _kim, onayDurum, yerelAyariBirak } from './onay.ts';
 import { opBul, opGrupAd, opGuncelle, opKod } from './operasyon.ts';
 import { Host, localStorage, toast } from './ortam.ts';
@@ -619,6 +620,7 @@ const SERTIFIKA = ['EN 10204 2.1', 'EN 10204 2.2', 'EN 10204 3.1', 'EN 10204 3.2
     S.oksit!.grades.push(G('Alümina %98 (zırh karosu)', 'AL98Z', { ro: 3.8, egilme: 330, basma: 2500, emod: 350, sert: 1500, tmax: 1500, isil: 28, genl: 8 }, '', { 'Diğer adlar': 'Al₂O₃ zırh karosu' }));
     S.oksitdisi!.grades.push(G('Silisyum karbür (zırh karosu)', 'SICZ', { ro: 3.2, egilme: 450, basma: 3500, emod: 440, sert: 2600, tmax: 1600, isil: 110, genl: 4 }, '', { 'Diğer adlar': 'Preslenmiş SiC zırh karosu' }), G('Bor karbür (zırh karosu)', 'B4CZ', { ro: 2.5, egilme: 450, basma: 3000, emod: 460, sert: 3000, tmax: 1000, isil: 30, genl: 5.5 }, '', { 'Diğer adlar': 'Sıcak preslenmiş B₄C zırh karosu' }));
 })();
+metalEkleriniUygula(FAMS.metal!.classes);
 FAMS.metal!.opts.find(o => o.k === 'uretim')!.opts!.push('VAR / VIM-VAR (vakum ergitme)');
 FAMS.metal!.opts.find(o => o.k === 'test')!.opts!.push('ASTM E45 kalıntı derecelendirme', 'ASTM E381 makro dağlama', 'Balistik kabul testi');
 FAMS.kompozit!.opts.find(o => o.k === 'test')!.opts!.push('Balistik kabul testi');
@@ -777,14 +779,19 @@ const Store: KartDeposu = { items: [], db: null, ro: false,
 Store.loadLocal();
 const AYAR_AD: Sozluk<string> = { onayAkisi: 'Onay akışı', dortGoz: 'Dört göz kuralı', onayYetkisi: 'Onay yetkisi', kodYapisi: 'Kod yapısı', acUzunluk: 'Açıklama uzunluğu', acBuyuk: 'Açıklama büyük harf', qrAdres: 'QR bağlantı şablonu', firmaKodu: 'Firma kodu', firmaKoduTurleri: 'Firma kodlu türler', yerelRol: 'Yerel rol' };
 const NO = (m: string): UyumDurumu => ({ s: 'no', m }), WARN = (m: string): UyumDurumu => ({ s: 'warn', m }), REC: UyumDurumu = { s: 'rec', m: '' };
-const AUST: Kume = SET('304', '304L', '303', '316', '316L', '316TI', '321', '310S', '301');
-const DUPLEX: Kume = SET('2205', '2507');
-const FERRO_SS: Kume = SET('430', '420', '431', '174PH');
+const AUST: Kume = SET('304', '304L', '303', '316', '316L', '316TI', '321', '310S', '301', '4306', '304H', '347', '309', '314', '4435', '316LVM', '904L', 'XM19', 'S21800', 'CF8', 'CF8M');
+const DUPLEX: Kume = SET('2205', '2507', '2304', '2101');
+const FERRO_SS: Kume = SET('430', '420', '431', '174PH', '155PH', '138MO', '410', '4028', '4034', '430F', '440B', '440C', '4122', '4313', '4418', '177PH', '3CR12', 'CA6NM');
 const STEEL_CLS: Kume = SET('karbon', 'sac', 'islah', 'yay', 'takim');
-const CASE_H: Kume = SET('16MNCR5', '20MNCR5', '18CRNIMO76');
-const HARDEN: Kume = SET('4130', '4340', '300M', 'D6AC', 'C45', '41CR4', '42CRMO4', '34CRNIMO6', '100CR6', '51CRV4', '2379', '2344', '2311', '2738', '2510', '2842', '2083', '3343', '420', '431', 'GJS400', 'GJS500', 'GJS600', 'GJS700');
+const CASE_H: Kume = SET('16MNCR5', '20MNCR5', '18CRNIMO76', 'C15', '8620', '17NICRMO64', '2162');
+const HARDEN: Kume = SET('4130', '4340', '300M', 'D6AC', 'C45', '41CR4', '42CRMO4', '34CRNIMO6', '100CR6', '51CRV4', '2379', '2344', '2311', '2738', '2510', '2842', '2083', '3343', '420', '431', 'GJS400', 'GJS500', 'GJS600', 'GJS700',
+    'C35', 'C60', '34CRMO4', '30CRNIMO8', '36CRNIMO4', '42CRMOS4', '35S20', '44SMN28', '31CRMOV9', '34CRALNI7', '41CRALMO7', '100CRMO73', '60SICR7', '55SI7', '54SICR6', 'C75S',
+    '2080', '2363', '2343', '2367', '2312', '2316', '2085', '2436', '2601', '2714', '2767', '1730', '3243', '3247', '410', '4028', '4034', '440B', '440C', '4122', '4313', '4418',
+    'GJS450', 'GJS800', 'GJS40018', 'G42CRMO4', 'CA6NM');
 const AM_G: Kume = SET('MAR300', '155PH', '316L', '174PH', 'GR5', 'GR23', 'A718', 'A625', 'AC43000', '2344');
-const CAST: Kume = SET('GJL200', 'GJL250', 'GJL300', 'GJS400', 'GJS500', 'GJS600', 'GJS700', 'AC42100', 'AC43000', 'AC46000', 'CC493K');
+const CAST: Kume = SET('GJL200', 'GJL250', 'GJL300', 'GJS400', 'GJS500', 'GJS600', 'GJS700', 'AC42100', 'AC43000', 'AC46000', 'CC493K',
+    'GJL150', 'GJL350', 'GJS40018', 'GJS450', 'GJS800', 'GJV400', 'GJV450', 'ADI800', 'ADI1050', 'GJMW400', 'NIRESD2', 'AC42000', 'AC42200', 'AC44200', 'AC45000', 'AC47100', 'AC51300', 'AC21000',
+    'CC483K', 'CC480K', 'CC491K', 'GP240GH', 'G20MN5', 'G42CRMO4', 'CF8', 'CF8M', 'CA6NM', 'AZ91D', 'ZP3', 'ZP5', 'ZA27');
 const SOFTWOOD: Kume = SET('CAM', 'LADIN', 'GOKNAR');
 const DURABLE: Kume = SET('IROKO', 'TIK', 'MESE');
 const F_SHEET = ['levha', 'rulo'], F_LONG = ['cubuk', 'altigen', 'tel'], F_BAR = ['cubuk', 'altigen'];
@@ -820,7 +827,8 @@ const CFORM: Sozluk<string[]> = {
     levha_a: ['levha'],
     muh_a: ['lama', 'levha', 'blok'],
     cam: ['levha', 'disk', 'boru', 'cubuk'],
-    wha: ['cubuk', 'levha', 'blok', 'disk']
+    wha: ['cubuk', 'levha', 'blok', 'disk'],
+    ...METAL_EK_FORM
 };
 const GFORM: Sozluk<string[]> = {
     S690QL: ['levha'], P265GH: ['levha', 'boru'],
@@ -889,7 +897,7 @@ const GA: Sozluk<Sozluk<Sozluk<IzinliSecenek>>> = { metal: { durum: {
             '301': A(['Çözeltiye alınmış (+AT)', 'Soğuk sertleştirilmiş (+C700)', 'Soğuk sertleştirilmiş (+C850)'], ['Soğuk sertleştirilmiş (+C850)']),
             '430': A(['Tavlanmış (+A)', 'Soğuk çekilmiş'], ['Tavlanmış (+A)']),
             '420': A(['Tavlanmış (+A)', 'Islah (+QT, martensitik)', 'Soğuk çekilmiş'], ['Tavlanmış (+A)']), '431': A(['Tavlanmış (+A)', 'Islah (+QT, martensitik)', 'Soğuk çekilmiş'], ['Islah (+QT, martensitik)']),
-            '174PH': A(['Çözeltiye alınmış (+AT)', 'Çökelme sertleştirilmiş (H900)', 'Çökelme sertleştirilmiş (H1150)'], ['Çökelme sertleştirilmiş (H1150)']),
+            '174PH': A(['Çözeltiye alınmış (+AT)', 'Çökelme sertleştirilmiş (H900)', 'Çökelme sertleştirilmiş (H925)', 'Çökelme sertleştirilmiş (H1025)', 'Çökelme sertleştirilmiş (H1075)', 'Çökelme sertleştirilmiş (H1100)', 'Çökelme sertleştirilmiş (H1150)', 'Çökelme sertleştirilmiş (H1150M)'], ['Çökelme sertleştirilmiş (H1150)']),
             '2205': A(['Çözeltiye alınmış (+AT)'], ['Çözeltiye alınmış (+AT)']), '2507': A(['Çözeltiye alınmış (+AT)'], ['Çözeltiye alınmış (+AT)']),
             '1050': A(T_SOFT, ['H14']), '3003': A(T_SOFT, ['H14']), '5754': A(T_5, ['H22', 'H111']), '5083': A(T_5, ['H111', 'H116']),
             '6060': A(T_6X, ['T66']), '6063': A(T_6X, ['T5', 'T6']), '6061': A(T_6, ['T6', 'T651']), '6082': A(T_6, ['T6', 'T651']),
@@ -908,7 +916,8 @@ const GA: Sozluk<Sozluk<Sozluk<IzinliSecenek>>> = { metal: { durum: {
             GJL200: A(GJL, ['Döküm hâli']), GJL250: A(GJL, ['Döküm hâli']), GJL300: A(GJL, ['Döküm hâli']),
             RHA: A(['Su verilmiş + temperlenmiş (+QT)', 'Gerilim giderilmiş'], ['Su verilmiş + temperlenmiş (+QT)']), Z450: A(['Su verilmiş + temperlenmiş (+QT)'], ['Su verilmiş + temperlenmiş (+QT)']), HHA: A(['Su verilmiş + temperlenmiş (+QT)'], ['Su verilmiş + temperlenmiş (+QT)']), UHH: A(['Su verilmiş + temperlenmiş (+QT)'], ['Su verilmiş + temperlenmiş (+QT)']),
             '4130': A(['Normalize (+N)', 'Yumuşak tavlı (+A)', 'Islah (+QT)', 'Soğuk çekilmiş (+C)', 'Gerilim giderilmiş'], ['Normalize (+N)']), '4340': A(['Yumuşak tavlı (+A)', 'Normalize (+N)', 'Islah (+QT)'], ['Normalize (+N)']), '300M': A(['Yumuşak tavlı (+A)', 'Normalize (+N)', 'Islah (+QT)'], ['Yumuşak tavlı (+A)']), D6AC: A(['Yumuşak tavlı (+A)', 'Normalize (+N)', 'Islah (+QT)'], ['Yumuşak tavlı (+A)']),
-            MAR300: A(['Çözeltiye alınmış (+AT)', 'Yaşlandırılmış (maraging)'], ['Çözeltiye alınmış (+AT)']), '155PH': A(['Çözeltiye alınmış (+AT)', 'Çökelme sertleştirilmiş (H1025)', 'Çökelme sertleştirilmiş (H1150)'], ['Çökelme sertleştirilmiş (H1025)']), '138MO': A(['Çözeltiye alınmış (+AT)', 'Çökelme sertleştirilmiş (H1025)'], ['Çökelme sertleştirilmiş (H1025)']),
+            MAR300: A(['Çözeltiye alınmış (+AT)', 'Yaşlandırılmış (maraging)'], ['Çözeltiye alınmış (+AT)']), '155PH': A(['Çözeltiye alınmış (+AT)', 'Çökelme sertleştirilmiş (H900)', 'Çökelme sertleştirilmiş (H925)', 'Çökelme sertleştirilmiş (H1025)', 'Çökelme sertleştirilmiş (H1075)', 'Çökelme sertleştirilmiş (H1100)', 'Çökelme sertleştirilmiş (H1150)', 'Çökelme sertleştirilmiş (H1150M)'], ['Çökelme sertleştirilmiş (H1025)']),
+            '138MO': A(['Çözeltiye alınmış (+AT)', 'Çökelme sertleştirilmiş (H950)', 'Çökelme sertleştirilmiş (H1000)', 'Çökelme sertleştirilmiş (H1025)', 'Çökelme sertleştirilmiş (H1050)', 'Çökelme sertleştirilmiş (H1100)', 'Çökelme sertleştirilmiş (H1150)', 'Çökelme sertleştirilmiş (H1150M)'], ['Çökelme sertleştirilmiş (H1025)']),
             '7039': A(['T64', 'T6', 'O (tavlı)'], ['T64']), '2519': A(['T87'], ['T87']), '5083Z': A(['H131'], ['H131']), '7050': A(['T7451'], ['T7451']),
             W90: A(['Sinterlenmiş', 'Sinterlenmiş + vakum tavlı', 'Soğuk deforme (swaged)'], ['Sinterlenmiş + vakum tavlı']), W95: A(['Sinterlenmiş', 'Sinterlenmiş + vakum tavlı', 'Soğuk deforme (swaged)'], ['Sinterlenmiş + vakum tavlı']), W97: A(['Sinterlenmiş', 'Sinterlenmiş + vakum tavlı', 'Soğuk deforme (swaged)'], ['Sinterlenmiş + vakum tavlı']),
             GJS400: A(GJS, ['Döküm hâli']), GJS500: A(GJS, ['Döküm hâli']), GJS600: A(GJS, ['Döküm hâli']), GJS700: A(GJS, ['Döküm hâli'])
@@ -1661,7 +1670,7 @@ if (AYAR.acBuyuk === undefined)
     AYAR.acBuyuk = false;
 const KOD_TUR: Sozluk<string> = { hammadde: 'HM', yarimamul: 'YM', mamul: 'MM', sarf: 'SF', demirbas: 'DB', hizmet: 'HZ', ticari_mal: 'TM' };
 const KOD_HANE = 5;
-const HM_GRUP: Sozluk<Sozluk<string>> = { metal: { karbon: 'YAP', sac: 'SAC', islah: 'ISL', yay: 'YAY', takim: 'TAK', paslanmaz: 'PAS', aluminyum: 'ALU', aldokum: 'ALD', bakir: 'BAK', titanyum: 'TIT', nikel: 'NIK', dokme: 'DOK', wha: 'TNG' },
+const HM_GRUP: Sozluk<Sozluk<string>> = { metal: { karbon: 'YAP', sac: 'SAC', islah: 'ISL', yay: 'YAY', takim: 'TAK', paslanmaz: 'PAS', aluminyum: 'ALU', aldokum: 'ALD', bakir: 'BAK', titanyum: 'TIT', nikel: 'NIK', dokme: 'DOK', wha: 'TNG', ...METAL_EK_GRUP },
     plastik: { olefin: 'POL', amorf: 'PAM', muh: 'PMU', yp: 'PYP' }, elastomer: { genel: 'ELG', yag: 'ELY', isi: 'ELI', tpe: 'TPE' },
     kompozit: { karbon: 'KCF', cam: 'KGF', aramid: 'KAR', diger_elyaf: 'KDE', sandvic: 'KSD' }, seramik: { oksit: 'SOK', oksitdisi: 'SON' },
     ahsap: { masif: 'AMS', levha: 'ALV', muh: 'AMH' }, cam: { cam: 'CAM' }, diger: { genel: 'DGR' } };
