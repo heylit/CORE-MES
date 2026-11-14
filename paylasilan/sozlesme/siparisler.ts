@@ -535,3 +535,73 @@ export const terminDagilimiCevabi = z.object({
   araliklar: z.array(z.object({ aralik: z.enum(TERMIN_ARALIKLARI), sayi: z.number().int().nonnegative() })),
 });
 export type TerminDagilimiCevabi = z.output<typeof terminDagilimiCevabi>;
+
+// Teklif formu (3245 d): şablon kütüphanesi ve antetteki firma bilgisi. Form tarayıcıda çizilir, "Yazdır / PDF" ile kaydedilir;
+// fiyat ve tutar teklif sürümünden gelir, şablon yalnız metni taşır. Metindeki alanlar ({MUSTERI} gibi) basarken teklifle dolar.
+export const TEKLIF_FORMU_DILLERI = ['tr', 'en'] as const;
+export const TEKLIF_FORMU_ALANLARI = ['{MUSTERI}', '{YETKILI}', '{TEKLIF_NO}', '{GECERLILIK}', '{TESLIM_GUN}'] as const;
+export const TEKLIF_FORMU_SART_EN_COK = 20;
+const formMetni = (enCok: number, ad: string) => z.string().trim().max(enCok, `${ad} en çok ${String(enCok)} karakter olabilir.`);
+export const teklifFormuIcerikSemasi = z.object({
+  baslik: z.string().trim().min(1, 'Form başlığı boş olamaz.').max(80, 'Form başlığı en çok 80 karakter olabilir.'),
+  giris: formMetni(1000, 'Giriş metni'),
+  sartlar: z.array(z.string().trim().min(1, 'Şart boş olamaz.').max(300, 'Şart en çok 300 karakter olabilir.'))
+    .max(TEKLIF_FORMU_SART_EN_COK, `En çok ${String(TEKLIF_FORMU_SART_EN_COK)} şart yazılır.`),
+  imza1: formMetni(60, 'İmza başlığı'),
+  imza2: formMetni(60, 'İmza başlığı'),
+  alt: formMetni(200, 'Alt bilgi'),
+});
+export const teklifFormuKurumSemasi = z.object({
+  unvan: formMetni(200, 'Ünvan'),
+  adres: formMetni(400, 'Adres'),
+  telefon: formMetni(60, 'Telefon'),
+  eposta: formMetni(120, 'E-posta'),
+  vergi: formMetni(120, 'Vergi dairesi ve no'),
+});
+const sablonAdiSemasi = z.string().trim().min(1, 'Şablon adı boş olamaz.').max(80, 'Şablon adı en çok 80 karakter olabilir.');
+export const teklifFormuSablonuSemasi = z.object({
+  id: z.number().int(),
+  ad: z.string(),
+  dil: z.enum(TEKLIF_FORMU_DILLERI),
+  varsayilan: z.boolean(),
+  icerik: teklifFormuIcerikSemasi,
+  surum: surumSemasi,
+});
+export const teklifFormuCevabi = z.object({
+  kurum: teklifFormuKurumSemasi,
+  kurumSurum: surumSemasi,
+  sablonlar: z.array(teklifFormuSablonuSemasi),
+});
+export const teklifFormuSablonKaydetGovdesi = z.object({
+  ...beklenenSurum,
+  ad: sablonAdiSemasi,
+  dil: z.enum(TEKLIF_FORMU_DILLERI),
+  icerik: teklifFormuIcerikSemasi,
+});
+export const teklifFormuKurumKaydetGovdesi = z.object({ ...beklenenSurum, kurum: teklifFormuKurumSemasi });
+export const teklifFormuSablonKopyalaGovdesi = z.object({ ad: sablonAdiSemasi });
+export const teklifFormuVarsayilanGovdesi = z.object({ ...beklenenSurum });
+// Formun verisi: müşteri kutusu firma kartından, toplamlar seçilen sürümden sunucuda hesaplanır. Teklifte KDV oranı tutulmaz;
+// pencerede girilir (varsayılan 20) ve saklanmaz. İlgili kişi firma kartında yoktur; pencerede elle yazılır, saklanmaz.
+export const teklifFormuSorgusu = z.object({
+  surumNo: z.coerce.number<number>().int().min(1).max(99),
+  kdvOrani: kdvOraniSemasi,
+});
+export const teklifFormuVerisiCevabi = z.object({
+  musteri: z.object({ ad: z.string().nullable(), adres: z.string().nullable(), vergiNo: z.string().nullable() }),
+  araToplam: ondalikMetinSemasi,
+  iskontoTutari: ondalikMetinSemasi,
+  kdvHaric: ondalikMetinSemasi,
+  kdvOrani: ondalikMetinSemasi,
+  kdvTutari: ondalikMetinSemasi,
+  genelToplam: ondalikMetinSemasi,
+});
+export type TeklifFormuIcerigi = z.output<typeof teklifFormuIcerikSemasi>;
+export type TeklifFormuKurumu = z.output<typeof teklifFormuKurumSemasi>;
+export type TeklifFormuSablonu = z.output<typeof teklifFormuSablonuSemasi>;
+export type TeklifFormuCevabi = z.output<typeof teklifFormuCevabi>;
+export type TeklifFormuSablonKaydetVerisi = z.output<typeof teklifFormuSablonKaydetGovdesi>;
+export type TeklifFormuVerisiCevabi = z.output<typeof teklifFormuVerisiCevabi>;
+export type TeklifFormuSorgusu = z.output<typeof teklifFormuSorgusu>;
+export type TeklifFormuDili = (typeof TEKLIF_FORMU_DILLERI)[number];
+export type TeklifFormuAlani = (typeof TEKLIF_FORMU_ALANLARI)[number];

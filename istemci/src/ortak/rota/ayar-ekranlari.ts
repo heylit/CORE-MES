@@ -18,7 +18,8 @@ export interface AyarEkrani {
   veya?: readonly Islem[];
   ekran: ComponentType;
   // Dış sistem bağlantısının ayarı Modül ayarları yerine Bağlantılar'da, kendi sistemin alt sekmesinde açılır.
-  bolum?: 'baglanti';
+  // Basılan belgenin şablonu (teklif formu gibi) Formlar'da, kendi alt sekmesinde açılır (3245 d).
+  bolum?: 'baglanti' | 'form';
 }
 
 const ANAHTAR_BICIMI = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
@@ -40,7 +41,7 @@ export function ayarEkranlariniTopla(dosyalar: Record<string, unknown>): AyarEkr
         const kayitsiz = e.veya.find((i) => !islemMi(i));
         if (kayitsiz !== undefined) throw new Error(`Ayar ekranının işlemi kayıtlı değil: ${kayitsiz} (${e.anahtar}, ${dosya})`);
       }
-      if (e.bolum !== undefined && e.bolum !== 'baglanti') throw new Error(`Ayar ekranının bölümü tanınmıyor: ${String(e.bolum)} (${e.anahtar}, ${dosya})`);
+      if (e.bolum !== undefined && e.bolum !== 'baglanti' && e.bolum !== 'form') throw new Error(`Ayar ekranının bölümü tanınmıyor: ${String(e.bolum)} (${e.anahtar}, ${dosya})`);
       if (e.simge !== undefined && !(e.simge in SIMGELER)) throw new Error(`Ayar ekranının simgesi ortak sette yok: ${e.simge} (${e.anahtar}, ${dosya})`);
       if (typeof e.ekran !== 'function' && (typeof e.ekran !== 'object' || e.ekran === null)) {
         throw new Error(`Ayar ekranının bileşeni yok: ${e.anahtar} (${dosya})`);

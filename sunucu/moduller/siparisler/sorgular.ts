@@ -788,3 +788,82 @@ export async function malzemeKartiIzleri(db: Db, kartlar: readonly MalzemeKartiA
     [...malzemeKartiIzParametreleri(kartlar), MALZEME_KARTI_IZ_YOLU],
   );
 }
+
+// ---- Teklif formu (3245 d) ----
+export interface TeklifFormuSablonSatiri { id: number; ad: string; dil: 'tr' | 'en'; varsayilan: boolean; icerik: unknown; surum: number }
+const SABLON_SUTUNLARI = 'id, ad, dil, varsayilan, icerik, surum';
+
+export function teklifFormuSablonlari(db: Db): Promise<TeklifFormuSablonSatiri[]> {
+  return db.sorgu<TeklifFormuSablonSatiri>(`SELECT ${SABLON_SUTUNLARI} FROM siparisler_teklif_formu_sablonu ORDER BY varsayilan DESC, ad, id`);
+}
+
+export function teklifFormuSablonuGetir(db: Db, id: number): Promise<TeklifFormuSablonSatiri | null> {
+  return db.tek<TeklifFormuSablonSatiri>(`SELECT ${SABLON_SUTUNLARI} FROM siparisler_teklif_formu_sablonu WHERE id = $1`, [id]);
+}
+
+export async function teklifFormuSablonuVarMi(db: Db, id: number): Promise<boolean> {
+  return (await db.tek('SELECT 1 AS var FROM siparisler_teklif_formu_sablonu WHERE id = $1', [id])) !== null;
+}
+
+export function teklifFormuSablonuGuncelle(
+  db: Db, id: number, a: { ad: string; dil: string; icerik: object }, surum: number, kisiId: number,
+): Promise<{ id: number } | null> {
+  return db.tek<{ id: number }>(
+    `UPDATE siparisler_teklif_formu_sablonu SET ad = $3, dil = $4, icerik = $5::jsonb, guncelleyen_id = $6, guncelleme = now(), surum = surum + 1
+      WHERE id = $1 AND surum = $2 RETURNING id`,
+    [id, surum, a.ad, a.dil, JSON.stringify(a.icerik), kisiId],
+  );
+}
+
+export async function teklifFormuSablonuEkle(db: Db, a: { ad: string; dil: string; icerik: unknown }, kisiId: number): Promise<number> {
+  const satir = await db.tek<{ id: number }>(
+    `INSERT INTO siparisler_teklif_formu_sablonu (ad, dil, icerik, olusturan_id) VALUES ($1, $2, $3::jsonb, $4) RETURNING id`,
+    [a.ad, a.dil, JSON.stringify(a.icerik), kisiId],
+  );
+  if (satir === null) throw new Error('Şablon eklenemedi');
+  return satir.id;
+}
+
+// Eski varsayılan aynı komutta kalkar; tekil dizin ikisinin birlikte varsayılan kalmasını engeller.
+export async function teklifFormuVarsayilanYap(db: Db, id: number, surum: number, kisiId: number): Promise<{ id: number } | null> {
+  const satir = await db.tek<{ id: number }>('SELECT id FROM siparisler_teklif_formu_sablonu WHERE id = $1 AND surum = $2 FOR UPDATE', [id, surum]);
+  if (satir === null) return null;
+  await db.sorgu(
+    `UPDATE siparisler_teklif_formu_sablonu SET varsayilan = false, guncelleyen_id = $2, guncelleme = now(), surum = surum + 1
+      WHERE varsayilan AND id <> $1`,
+    [id, kisiId],
+  );
+  return db.tek<{ id: number }>(
+    `UPDATE siparisler_teklif_formu_sablonu SET varsayilan = true, guncelleyen_id = $2, guncelleme = now(), surum = surum + 1
+      WHERE id = $1 RETURNING id`,
+    [id, kisiId],
+  );
+}
+
+export function teklifFormuKurumu(db: Db): Promise<{ icerik: unknown; surum: number } | null> {
+  return db.tek<{ icerik: unknown; surum: number }>('SELECT icerik, surum FROM siparisler_teklif_formu_kurum WHERE tek');
+}
+
+export function teklifFormuKurumGuncelle(db: Db, icerik: object, surum: number, kisiId: number): Promise<{ surum: number } | null> {
+  return db.tek<{ surum: number }>(
+    `UPDATE siparisler_teklif_formu_kurum SET icerik = $1::jsonb, guncelleyen_id = $3, guncelleme = now(), surum = surum + 1
+      WHERE tek AND surum = $2 RETURNING surum`,
+    [JSON.stringify(icerik), surum, kisiId],
+  );
+}
+
+// Formun toplamları teklif föyündeki hesapla aynıdır (teklifSurumleri): iskontolu birim fiyat 4 ondalığa, satır tutarı 2 ondalığa
+// yuvarlanır; KDV KDV hariç toplamdan, 2 ondalıkla. Sürüm yoksa satır dönmez.
+export interface TeklifFormuToplamSatiri { ara_toplam: string; kdv_haric: string; kdv_tutari: string }
+export function teklifFormuToplamlari(db: Db, teklifId: number, surumNo: number, kdvOrani: string): Promise<TeklifFormuToplamSatiri | null> {
+  return db.tek<TeklifFormuToplamSatiri>(
+    `SELECT t.ara_toplam::text, t.kdv_haric::text, round(t.kdv_haric * $3::numeric / 100, 2)::numeric(20,2)::text AS kdv_tutari
+       FROM siparisler_teklif_surumu v
+       CROSS JOIN LATERAL (
+         SELECT coalesce(sum(round(f.birim_fiyat * r.miktar, 2)), 0)::numeric(20,2) AS ara_toplam,
+                coalesce(sum(round(round(f.birim_fiyat * (100 - v.iskonto_orani) / 100, 4) * r.miktar, 2)), 0)::numeric(20,2) AS kdv_haric
+           FROM siparisler_teklif_fiyati f JOIN siparisler_teklif_satiri r ON r.id = f.satir_id WHERE f.surum_id = v.id) t
+      WHERE v.teklif_id = $1 AND v.surum_no = $2`,
+    [teklifId, surumNo, kdvOrani],
+  );
+}

@@ -9,6 +9,7 @@ import { AtolyeTaslaklari } from './AtolyeTaslaklari.tsx';
 import { ISKONTO_ONAY_ESIGI, PLAN_TASLAGI_GORUNUMU, TEKLIF_DURUMU, belirsizSayi, bosYap, bugun, miktarMetni, paraMetni, sayiGirdisi, tarihMetni, zamanMetni, BELIRSIZ_SAYI } from './gorunum.ts';
 import { KalemMetni, MalzemeSecici } from './MalzemeSecici.tsx';
 import { SayfaBasligi } from './SayfaBasligi.tsx';
+import { TeklifFormuPenceresi } from './TeklifFormuPenceresi.tsx';
 import { TeklifSurumu } from './TeklifSurumu.tsx';
 import { TerminFiyat } from './TerminFiyat.tsx';
 import { surumCakismasiMi, useFiyatGorur, useIskontoOnaylar, useKorumaliGonderim, useTerminDener, useTerminOnaylar, useYazabilir, yazmaIletisi } from './yazma.ts';
@@ -34,6 +35,7 @@ export function TeklifAyrinti() {
   const [not, notYaz] = useState('');
   const [hata, hataYaz] = useState<string | null>(null);
   const [kartSatiri, kartSatiriYaz] = useState<Satir | null>(null);
+  const [formAcik, formAcikYaz] = useState(false);
   const [donusum, donusumYaz] = useState({ musteriSiparisNo: '', siparisTarihi: bugun(), termin: '', kdvOrani: '20' });
 
   const teklif = useQuery({
@@ -117,8 +119,10 @@ export function TeklifAyrinti() {
   const iskontoBekler = t.durum === 'onay-bekliyor' && son !== null && son.iskontoOnaylayan === null && son.iskontoOrani !== null && Number(son.iskontoOrani) > ISKONTO_ONAY_ESIGI;
   const iskontoOnaylanir = iskontoOnaylar && t.durum === 'onay-bekliyor' && son !== null && (son.iskontoOrani === null || iskontoBekler);
   const terminOnaylanir = terminOnaylar && t.durum === 'onay-bekliyor' && bekleyenTaslak !== null;
-  const islemler = (yazabilir || iskontoOnaylanir || terminOnaylanir) && (
+  const formBasilir = fiyatGorur && gosterilen !== null;
+  const islemler = (yazabilir || iskontoOnaylanir || terminOnaylanir || formBasilir) && (
     <>
+      {formBasilir && <Dugme simge="printer" onClick={() => formAcikYaz(true)}>Teklif formu</Dugme>}
       {iskontoOnaylanir && <Dugme tur="birincil" simge="check" onClick={() => dialogYaz('iskonto')}>İskontoyu onayla</Dugme>}
       {terminOnaylanir && <Dugme tur="birincil" simge="gantt" onClick={() => dialogYaz('termin')}>Termini onayla</Dugme>}
       {yazabilir && t.durum === 'yeni' && <Dugme simge="edit" onClick={() => { void gezin(`/siparisler/teklifler/${t.id}/duzenle`); }}>Düzenle</Dugme>}
@@ -322,6 +326,8 @@ export function TeklifAyrinti() {
           {hata !== null && <p className="tc-sp-hata" role="alert">{hata}</p>}
         </div>
       </Pencere>
+
+      {gosterilen && fiyatGorur && <TeklifFormuPenceresi acik={formAcik} kapat={() => formAcikYaz(false)} teklif={t} surum={gosterilen} />}
 
       <MalzemeSecici
         acik={kartSatiri !== null}
