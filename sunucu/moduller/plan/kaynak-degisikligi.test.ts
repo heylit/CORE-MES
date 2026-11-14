@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import { KAYNAK_FARKI_EN_COK, kaynakDegisikligi } from '#paylasilan/sozlesme/planlama.ts';
-import { planGirdisi } from './plan-girdisi.ts';
+import { eklenenSiparisler, planGirdisi } from './plan-girdisi.ts';
 
 // 1962 / 1963 a: birleşme başka sayfadaki değişikliği bulup planı eskitince neyin değiştiği cevaba girer; eskitmeyince null. Betik değişmez,
 // sarmalama plan-girdisi.ts'tedir. Veriler uydurmadır.
@@ -33,6 +33,12 @@ const oku = (calisma: unknown, k: { durum: unknown; ek: unknown } = kaynak(), ka
 function oturmus(k = kaynak()): Record<string, unknown> {
   let S = oku(ILK, k).S;
   for (let i = 0; i < 3; i++) S = oku(S, k).S;
+  return S;
+}
+
+function oturmus2(kayit: unknown): Record<string, unknown> {
+  let S = oku(ILK, kaynak(), kayit).S;
+  for (let i = 0; i < 3; i++) S = oku(S, kaynak(), kayit).S;
   return S;
 }
 
@@ -108,6 +114,47 @@ describe('kaynak değişikliği (1962)', () => {
     S = oku(S, satirsiz, KAYIT2).S;
     const r = oku(S, { ...kaynak(), ek: { tedarikTerminleri: [{ kod: '60', termin: null, surum: 1, aciklama: null }] } }, KAYIT2);
     assert.equal(r.kaynakDegisikligi, null, JSON.stringify(r.kaynakDegisikligi));
+  });
+
+  test('3233 a: yalnız yeni emir eklenince kimliği gelir; değişen, çıkan ya da başka alanla gelen değişiklikte null', () => {
+    const emir = (id: string, qty = 4) => ({ id, no: `E-${id}`, itemId: '50', qty, start: '2026-10-19', due: '2026-10-31', priority: 2, status: 'serbest' });
+    const S = oturmus();
+    const ekle = oku(S, kaynak(), { ...KAYIT, orders: [...KAYIT.orders, emir('O2'), emir('O3')] });
+    assert.deepEqual(ekle.kaynakDegisikligi?.alanlar, ['siparisler'], JSON.stringify(ekle.kaynakDegisikligi));
+    assert.deepEqual(ekle.kaynakDegisikligi?.eklenenSiparisler, ['O2', 'O3']);
+    assert.doesNotThrow(() => kaynakDegisikligi.parse(ekle.kaynakDegisikligi));
+
+    const ilk = KAYIT.orders[0]!;
+    const degisen = oku(S, kaynak(), { ...KAYIT, orders: [{ ...ilk, qty: 25 }, emir('O2')] });
+    assert.ok(degisen.kaynakDegisikligi?.alanlar.includes('siparisler'), JSON.stringify(degisen.kaynakDegisikligi));
+    assert.equal(degisen.kaynakDegisikligi?.eklenenSiparisler, null, 'adedi değişen emir varsa bütün plan');
+
+    const S2 = oturmus2({ ...KAYIT, orders: [...KAYIT.orders, emir('O2')] });
+    const cikan = oku(S2, kaynak(), { ...KAYIT, orders: [...KAYIT.orders, emir('O3')] });
+    assert.ok(cikan.kaynakDegisikligi?.alanlar.includes('siparisler'), JSON.stringify(cikan.kaynakDegisikligi));
+    assert.equal(cikan.kaynakDegisikligi?.eklenenSiparisler, null, 'çıkan emir varsa bütün plan');
+
+    const baskaAlan = oku(S, kaynak([makine(0), makine(1)]), { ...KAYIT, orders: [...KAYIT.orders, emir('O2')] });
+    assert.ok(baskaAlan.kaynakDegisikligi?.alanlar.includes('tezgahlar'));
+    assert.equal(baskaAlan.kaynakDegisikligi?.eklenenSiparisler, null, 'başka alan da değiştiyse bütün plan');
+
+    const kayitli = oku(S, kaynak(), { ...KAYIT, savedAt: 11, orders: [...KAYIT.orders, emir('O2')] });
+    assert.ok(kayitli.kaynakDegisikligi?.alanlar.includes('receteRotaKaydi'));
+    assert.equal(kayitli.kaynakDegisikligi?.eklenenSiparisler, null, 'Reçete ve Rota kaydı da yenilendiyse bütün plan');
+
+    assert.equal(oku(S, kaynak([makine(0), makine(1)])).kaynakDegisikligi?.eklenenSiparisler, null, 'sipariş değişmediyse null');
+  });
+
+  test('3233 a: alt düğüm üstüyle birlikte eklendiyse ikisi de listede; üstü önceden varsa ya da listede yoksa bilinmez (null)', () => {
+    const ust = { id: '7', urun: '50', adet: 5 }, alt = { id: '7-Y1', urun: '60', adet: 10, ust: '7', ustAdim: '20', birim: 2 }, torun = { id: '7-Y1-Y1', urun: '70', adet: 30, ust: '7-Y1', ustAdim: '10', birim: 3 };
+    const baska = { id: '3', urun: '50', adet: 1 };
+    assert.deepEqual(eklenenSiparisler([baska], [baska, ust, torun, alt]), ['7', '7-Y1-Y1', '7-Y1']);
+    assert.equal(eklenenSiparisler([baska, ust], [baska, ust, alt]), null, 'var olan emrin altına gelen düğüm üstün yerini de oynatır');
+    assert.equal(eklenenSiparisler([baska, ust], [baska, ust, alt, torun]), null);
+    assert.equal(eklenenSiparisler([baska], [baska, alt]), null, 'üstü listede olmayan düğüm');
+    assert.deepEqual(eklenenSiparisler([baska], [baska, ust]), ['7']);
+    assert.equal(eklenenSiparisler([baska, baska], [baska, baska, ust]), null, 'tekrarlı kimlikte liste sırayla eşlenir, kimlik güvenilmez');
+    assert.equal(eklenenSiparisler([{ urun: '50' }], [{ urun: '50' }, ust]), null, 'kimliksiz öğe');
   });
 
   test('girdi değişmez', () => {
