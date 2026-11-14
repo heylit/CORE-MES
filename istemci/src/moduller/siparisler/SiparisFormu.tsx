@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { EMIR_TURU_ADLARI } from '#paylasilan/sozlesme/emir-turleri.ts';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useParams } from 'react-router-dom';
 import type { SiparisAyrintisi, SiparisEkleGovdesi, SiparisGuncelleGovdesi } from '#paylasilan/sozlesme/siparisler.ts';
@@ -16,6 +17,9 @@ import './siparisler.css';
 
 interface SatirDegeri {
   anahtar: number;
+  // Var olan kalemin kimliği; yeni kalemde null. SIP-19: emre bağlı kalem (kilitli) bununla eşlenir, yalnız termini değişir.
+  id: number | null;
+  kilitli: boolean;
   kart: SecilenKart | null;
   miktar: string;
   birimFiyat: string;
@@ -43,7 +47,7 @@ interface Degerler {
 }
 
 let satirSayaci = 0;
-const bosSatir = (): SatirDegeri => ({ anahtar: ++satirSayaci, kart: null, miktar: '', birimFiyat: '', termin: '', aciklama: '', partiler: [] });
+const bosSatir = (): SatirDegeri => ({ anahtar: ++satirSayaci, id: null, kilitli: false, kart: null, miktar: '', birimFiyat: '', termin: '', aciklama: '', partiler: [] });
 
 function ilkDegerler(s: SiparisAyrintisi | null): Degerler {
   if (s === null) {
@@ -64,6 +68,8 @@ function ilkDegerler(s: SiparisAyrintisi | null): Degerler {
     odemeVadesiGun: s.odemeVadesiGun === null ? '' : String(s.odemeVadesiGun),
     satirlar: s.satirlar.map((m) => ({
       anahtar: ++satirSayaci,
+      id: m.id,
+      kilitli: m.emreBagli,
       kart: { no: m.malzemeNo, kod: m.malzemeKodu, ad: m.malzemeAdi ?? m.malzemeKodu ?? `Kart ${m.malzemeNo}`, birim: m.birim, aciklamalar: m.aciklamalar },
       miktar: girdiMetni(m.miktar),
       birimFiyat: m.birimFiyat === null ? '' : girdiMetni(m.birimFiyat),
@@ -114,6 +120,7 @@ function govdeKur(d: Degerler) {
     // Boş vade null gider; proje maliyeti onu eksik sayar, plan sırası vadeyi okumaz (205 a, E-9).
     odemeVadesiGun: d.odemeVadesiGun.trim() === '' ? null : Number(d.odemeVadesiGun.trim()),
     satirlar: d.satirlar.map((s) => ({
+      ...(s.id === null ? {} : { id: s.id }),
       malzemeNo: s.kart?.no ?? 0,
       miktar: sayiGirdisi(s.miktar),
       // Fiyatı görmeyen boş gönderir; sunucu taslaktaki fiyatı korur.
@@ -205,12 +212,14 @@ function Form({ siparis }: FormOzellikleri) {
               <li key={s.anahtar} className="tc-sp-kalem" aria-label={`Kalem ${i + 1}`}>
                 <div className="tc-sp-kalem-ust">
                   <strong>{`Kalem ${i + 1}`}</strong>
-                  {d.satirlar.length > 1 && (
+                  {s.kilitli && <Rozet ton="bilgi" gorunum="cizgi">Emre bağlı</Rozet>}
+                  {s.kilitli && <span className="tc-sp-parti-bos">Üretim emri açıldı; yalnız termin değişir.</span>}
+                  {d.satirlar.length > 1 && !s.kilitli && (
                     <Dugme simge="trash" aria-label={`Kalem ${i + 1} sil`} onClick={() => form.degistir({ satirlar: d.satirlar.filter((_, j) => j !== i) })} />
                   )}
                 </div>
                 <div className="tc-sp-kart-sec">
-                  <Dugme simge="search" onClick={() => secilecekYaz(i)}>{s.kart === null ? 'Malzeme kartı seç' : 'Kartı değiştir'}</Dugme>
+                  {!s.kilitli && <Dugme simge="search" onClick={() => secilecekYaz(i)}>{s.kart === null ? 'Malzeme kartı seç' : 'Kartı değiştir'}</Dugme>}
                   <span className={form.hata(`satirlar.${i}.kart`) === undefined ? 'tc-sp-secili' : 'tc-sp-secili tc-sp-hata'} role={form.hata(`satirlar.${i}.kart`) === undefined ? undefined : 'alert'}>
                     {form.hata(`satirlar.${i}.kart`) ?? (s.kart === null ? 'Kart seçilmedi' : secilenKartMetni(s.kart))}
                   </span>
@@ -222,6 +231,7 @@ function Form({ siparis }: FormOzellikleri) {
                     inputMode="decimal"
                     autoComplete="off"
                     value={s.miktar}
+                    disabled={s.kilitli}
                     onChange={(o) => satirDegistir(i, { miktar: o.target.value })}
                     {...(form.hata(`satirlar.${i}.miktar`) === undefined ? {} : { hata: form.hata(`satirlar.${i}.miktar`) })}
                   />
@@ -232,6 +242,7 @@ function Form({ siparis }: FormOzellikleri) {
                       autoComplete="off"
                       ipucu={sifirFiyat(s.birimFiyat) ? 'Fiyat 0: kalem bedelsiz kaydedilir. Bedelsizse doğru; değilse fiyatı girin.' : 'Boşsa fiyat sonra girilir; fiyatsız sipariş onaylanmaz.'}
                       value={s.birimFiyat}
+                      disabled={s.kilitli}
                       onChange={(o) => satirDegistir(i, { birimFiyat: o.target.value })}
                       {...(form.hata(`satirlar.${i}.birimFiyat`) === undefined ? {} : { hata: form.hata(`satirlar.${i}.birimFiyat`) })}
                     />
@@ -254,17 +265,24 @@ function Form({ siparis }: FormOzellikleri) {
                       )}
                   </div>
                 </div>
-                <KalemPartileri
+                {s.kilitli ? (
+                  <span className="tc-sp-parti-cipleri">
+                    {s.partiler.length === 0
+                      ? <Rozet ton="bilgi" gorunum="cizgi">{`${s.miktar} Seri`}</Rozet>
+                      : s.partiler.map((p) => <Rozet key={p.anahtar} ton="bilgi" gorunum="cizgi">{`${p.adet} ${EMIR_TURU_ADLARI[p.emirTuru]}`}</Rozet>)}
+                  </span>
+                ) : <KalemPartileri
                   sira={i + 1}
                   miktar={s.miktar}
                   partiler={s.partiler}
                   degistir={(partiler) => satirDegistir(i, { partiler })}
                   {...(form.hata(`satirlar.${i}.partiler`) === undefined ? {} : { hata: form.hata(`satirlar.${i}.partiler`) })}
-                />
+                />}
                 <Girdi
                   etiket={`Kalem ${i + 1} açıklama`}
                   autoComplete="off"
                   value={s.aciklama}
+                  disabled={s.kilitli}
                   onChange={(o) => satirDegistir(i, { aciklama: o.target.value })}
                   {...(form.hata(`satirlar.${i}.aciklama`) === undefined ? {} : { hata: form.hata(`satirlar.${i}.aciklama`) })}
                 />

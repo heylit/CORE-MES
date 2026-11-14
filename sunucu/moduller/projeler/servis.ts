@@ -136,6 +136,13 @@ export async function bitisBagla(db: Db, kisiId: number, id: number, g: BitisBag
   return projeAyrintisi(db, id, maliyetGorur);
 }
 
+// 3244 b, 3254 a: sipariş onaylandı olayı (ilk onay ve geri alınmış onayın yenilenmesi). Bağlı projelerin bitişi siparişin güncel
+// terminine kayar; elle değişmiş (bağsız) bitişe dokunulmaz. Onayla aynı işlemde çalışır; kişi onaylayandır.
+export async function siparisTerminiYansit(db: Db, olay: { siparisId: number; kullanici: Kullanici }): Promise<void> {
+  const s = await siparisAyrintisi(db, olay.siparisId);
+  await sorgular.bagliBitisleriKaydir(db, s.id, s.termin, olay.kullanici.id);
+}
+
 // 3244 b: projenin siparişinden gelen kalemler; fiyat taşınmaz (proje okuyan fiyat görmeyebilir). Siparişsiz projede boş.
 export async function projeSiparisKalemleri(db: Db, id: number): Promise<ProjeSiparisKalemleriCevabi> {
   const proje = await sorgular.projeGetir(db, id);

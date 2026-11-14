@@ -27,6 +27,7 @@
 .tc-sp-bildirim strong { display: block; }
 .tc-sp-bildirim-tamam { border-left-color: var(--run); }
 .tc-sp-bildirim-hata { border-left-color: var(--stop); }
+.tc-sp-bildirim-uyari { border-left-color: var(--hold); }
 
 .tc-sp-ozellikler { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--b-3) var(--b-4); margin: 0; }
 .tc-sp-ozellik { min-width: 0; }

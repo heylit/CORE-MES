@@ -133,6 +133,18 @@ export function projeBitisBagla(db: Db, id: number, termin: string, surum: numbe
   );
 }
 
+// 3244 b, 3254 a: siparişin termini değişip yeniden onaylanınca bağlı ve aktif projelerin bitişi yeni termine kayar. Başlangıcı yeni
+// terminden sonra olan proje değişmez (PRJ-04). Değişen projeler döner.
+export function bagliBitisleriKaydir(db: Db, siparisId: number, termin: string, kisiId: number): Promise<{ id: number }[]> {
+  return db.sorgu<{ id: number }>(
+    `UPDATE projeler_proje SET bitis = $2::date, guncelleyen_id = $3, guncelleme = now(), surum = surum + 1
+      WHERE siparis_id = $1 AND bitis_bagli AND durum = 'aktif' AND bitis IS DISTINCT FROM $2::date
+        AND (baslangic IS NULL OR baslangic <= $2::date)
+      RETURNING id`,
+    [siparisId, termin, kisiId],
+  );
+}
+
 export async function projeVarMi(db: Db, id: number): Promise<boolean> {
   return (await db.tek('SELECT 1 AS var FROM projeler_proje WHERE id = $1', [id])) !== null;
 }

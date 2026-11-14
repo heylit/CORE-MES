@@ -439,6 +439,7 @@ export function partiIhlali(
   return emirTuru === undefined || emirTuru === parti.emirTuru ? null : PARTI_TURU_FARKLI;
 }
 
+export const SIPARIS_ONAYI_GERI_ALINDI = 'Projenin siparişinin onayı geri alındı; sipariş yeniden onaylanınca emir açılır.';
 export const TESLIM_KALEMSIZ = 'Bu emir sipariş kalemine bağlı değil; teslim termine bağlanamaz.';
 export const TESLIM_BASLAMIS = 'Başlamış emrin teslimi termine bağlanmaz; elle değiştirilir.';
 // UE-TB (3244 b): teslim yalnız kalemden açılmış, başlamamış (taslak ya da planlı), arşivlenmemiş emirde yeniden bağlanır.

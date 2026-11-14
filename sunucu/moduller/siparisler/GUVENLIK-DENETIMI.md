@@ -9,6 +9,7 @@
 | `POST /siparisler/:id/onayla` | `siparisler.onayla` | SIP-04, sürüm; onaylayan ve zaman sunucudan | `SIP-03 ve sürüm` | `yetki`, `SIP-04` |
 | `POST /siparisler/:id/kapat` | `siparisler.onayla` | SIP-04, sürüm | `SIP-04` | `SIP-04` |
 | `POST /siparisler/:id/iptal` | `siparisler.onayla` | SIP-04, neden zorunlu, sürüm | `SIP-04` | `SIP-04` (nedensiz 400, kapanmış 422) |
+| `POST /siparisler/:id/onay-geri-al` | `siparisler.onayla` | SIP-19, gerekçe zorunlu (denetim kaydında gövdeyle), sürüm; yalnız onaylı | `SIP-19` | `SIP-15` (403, 404), `SIP-19` (nedensiz 400, taslakta 422) |
 | `GET /siparisler/teklifler`, `/:id` | `siparisler.oku` | sayfalı, arama joker kaçırılır; yoksa 404 | `TKL` testleri | `teklif.test.ts` `yetki` |
 | `POST /siparisler/teklifler/ekle` | `siparisler.yaz` | tekrar korumalı; SIP-01, SIP-02; açan ve zaman sunucudan | `SIP-01 ve SIP-02 teklifte de` | `yetki`, `SIP-01 ve SIP-02 teklifte de` |
 | `POST .../:id/guncelle` | `siparisler.yaz` | kilit, TKL-03, sürüm | `TKL-03 ve TKL-04` | `TKL-03 ve TKL-04` (422) |

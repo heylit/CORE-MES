@@ -35,7 +35,7 @@ const SIPARIS_ONAYLI = { ...SIPARIS_TASLAK, id: 6, no: 'SS-2026-0006', durum: 'o
 const SIPARIS_LISTESI = { satirlar: [SIPARIS_TASLAK, SIPARIS_ONAYLI], toplam: 2, sayfa: 1, sayfaBoyu: 50 } satisfies SiparisListesiCevabi;
 const SATIR = {
   id: 50, sira: 1, malzemeNo: 31, malzemeKodu: 'DNM-001', malzemeAdi: 'Deneme Braket', aciklamalar: ['Deneme aciklama 1', 'Deneme aciklama 2'], birim: 'adet', miktar: '100', birimFiyat: '12.5000',
-  tutar: '1250.00', termin: null, aciklama: null, partiler: [],
+  tutar: '1250.00', termin: null, aciklama: null, partiler: [], emreBagli: false,
 };
 const AYRINTI_TASLAK = { ...SIPARIS_TASLAK, satirlar: [SATIR] } satisfies SiparisAyrintisi;
 const AYRINTI_ONAYLI = { ...AYRINTI_TASLAK, durum: 'onayli', onayZamani: '2026-10-02T10:00:00+03:00', surum: 3 } satisfies SiparisAyrintisi;
@@ -305,6 +305,35 @@ describe('Satış siparişi ayrıntısı', () => {
     await screen.findByText('Sipariş iptal edildi');
   });
 
+  it('onayı geri alma nedensiz gitmez; nedenle gövdede gider, yalnız onaylayana görünür (SIP-19)', async () => {
+    const istekler = sunucuKur(YONETICI, (yontem, yol) => (yontem === 'POST' && yol === '/siparisler/6/onay-geri-al'
+      ? json(200, { ...AYRINTI_ONAYLI, durum: 'taslak', onayZamani: null, surum: 4 } satisfies SiparisAyrintisi)
+      : undefined));
+    ac('/siparisler/6');
+    fireEvent.click(await screen.findByRole('button', { name: 'Onayı geri al' }));
+    const pencere = await screen.findByRole('dialog', { name: 'Onayı geri al' });
+    fireEvent.click(within(pencere).getByRole('button', { name: 'Onayı geri al' }));
+    expect((await within(pencere).findByRole('alert')).textContent).toBe('Onayı geri alma nedeni zorunlu.');
+    expect(yazmalar(istekler)).toHaveLength(0);
+    fireEvent.change(within(pencere).getByLabelText(/Geri alma nedeni/), { target: { value: 'Deneme termin' } });
+    fireEvent.click(within(pencere).getByRole('button', { name: 'Onayı geri al' }));
+    await waitFor(() => expect(yazmalar(istekler)).toHaveLength(1));
+    expect(yazmalar(istekler)[0]).toMatchObject({ yol: '/siparisler/6/onay-geri-al', govde: { surum: 3, neden: 'Deneme termin' } });
+    cleanup();
+    sunucuKur(YAZAR);
+    ac('/siparisler/6');
+    await screen.findByText('SS-2026-0005');
+    expect(screen.queryByRole('button', { name: 'Onayı geri al' })).toBeNull();
+  });
+
+  it('onayı geri alınmış siparişte emre bağlı kalem işaretlenir ve uyarı görünür', async () => {
+    const geriAlinmis = { ...AYRINTI_TASLAK, satirlar: [{ ...SATIR, emreBagli: true }] } satisfies SiparisAyrintisi;
+    sunucuKur(YONETICI, (yontem, yol) => (yontem === 'GET' && yol === '/siparisler/5' ? json(200, geriAlinmis) : undefined));
+    ac('/siparisler/5');
+    expect(await screen.findByText('Onay geri alındı')).toBeTruthy();
+    expect(screen.getAllByText('Emre bağlı').length).toBeGreaterThan(0);
+  });
+
   it('onaylı siparişi kapatır', async () => {
     const istekler = sunucuKur(YONETICI, (yontem, yol) => (yontem === 'POST' && yol === '/siparisler/6/kapat'
       ? json(200, { ...AYRINTI_ONAYLI, durum: 'kapandi' } satisfies SiparisAyrintisi)
@@ -524,6 +553,25 @@ describe('Yeni satış siparişi', () => {
     expect(yazmalar(istekler)[0]).toMatchObject({
       yol: '/siparisler/5/guncelle', govde: { surum: 2, firmaId: 7, musteriSiparisNo: 'DM-100', satirlar: [{ malzemeNo: 31, miktar: '100', birimFiyat: '12.5' }] },
     });
+  });
+
+  it('emre bağlı kalemde miktar ve kart kilitli, silinemez; kimliğiyle gider (SIP-19)', async () => {
+    const ikinci = { ...SATIR, id: 51, sira: 2, miktar: '20' };
+    const geriAlinmis = { ...AYRINTI_TASLAK, satirlar: [{ ...SATIR, emreBagli: true }, ikinci] } satisfies SiparisAyrintisi;
+    const istekler = sunucuKur(FIYATCI, (yontem, yol) => {
+      if (yontem === 'GET' && yol === '/siparisler/5') return json(200, geriAlinmis);
+      return yontem === 'POST' && yol === '/siparisler/5/guncelle' ? json(200, geriAlinmis) : undefined;
+    });
+    ac('/siparisler/5/duzenle');
+    await screen.findByText('Düzenle: SS-2026-0005');
+    expect((screen.getByLabelText(/^Kalem 1 miktar/) as HTMLInputElement).disabled).toBe(true);
+    expect((screen.getByLabelText(/^Kalem 2 miktar/) as HTMLInputElement).disabled).toBe(false);
+    expect(screen.queryByRole('button', { name: 'Kalem 1 sil' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Kalem 2 sil' })).toBeTruthy();
+    expect(screen.getByText('Üretim emri açıldı; yalnız termin değişir.')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Kaydet' }));
+    await waitFor(() => expect(yazmalar(istekler)).toHaveLength(1));
+    expect(yazmalar(istekler)[0]?.govde).toMatchObject({ satirlar: [{ id: 50, miktar: '100' }, { id: 51, miktar: '20' }] });
   });
 
   it('ödeme vadesi gün olarak gider; boşsa null, kesirli değer istemcide yakalanır (205 a)', async () => {

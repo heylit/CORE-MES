@@ -30,7 +30,7 @@ import {
   ekAdimKaldirIhlali, kartAdimi, kartSiniri, kolBaslamaIhlali, kolEmirNo, refakatIhlali, refakatQrMetni,
   BILESEN_GECERSIZ, IS_EMRI_BAGLI_KAYIT, IS_EMRI_MALIYETI_DONDURULMUS, IS_EMRI_SIPARISE_BAGLI, IS_EMRI_STOK_HAREKETLI, ROTASIZ_EMIR_KAPALI, PROJE_GECERSIZ, PROJE_ZORUNLU, adaySatirlar, bilesenOlabilirMi, kendiligindenSatir, projeZorunluMu, rotasizAdimDegisimIhlali, rotasizAdimEkleIhlali, URETIM_YERI_BASLAMIS, uretimYeriIhlali, fasonBeklemesi, adimAdetleri,
   adimEksigi, adimTuketimi, reworkAdimiIhlali, reworkTermini, adimOnculleri, fasonSirasindaMi, kolAdimlari, onculdenGelen, onculGirdisiIhlali, dugumGirdisiIhlali,
-  TESLIM_KALEMSIZ, FASON_FIRMA_BEKLENIYOR, GKK_TIPI, OTOMATIK_GKK, OTOMATIK_GKK_ADI, fasonKarneOlayi, fasonMu, gkkFasonu, gkkTipiSec, kaliteIstasyonuSec, otomatikGkkMi, otomatikGkkYerleri,
+  SIPARIS_ONAYI_GERI_ALINDI, TESLIM_KALEMSIZ, FASON_FIRMA_BEKLENIYOR, GKK_TIPI, OTOMATIK_GKK, OTOMATIK_GKK_ADI, fasonKarneOlayi, fasonMu, gkkFasonu, gkkTipiSec, kaliteIstasyonuSec, otomatikGkkMi, otomatikGkkYerleri,
 } from './kurallar.ts';
 import { emirAcildiBildir, emirBirlestiBildir, emirBittiBildir, emirIptalBildir, fasonHareketiBildir, isEmirleriDegistiBildir, isEmriKopyalandiBildir } from './emir-olaylari.ts';
 import type { AdimOnculu, BolmeDurumu, FasonDurumu, IsEmriKaynakTuru, KolDurumu, OnculTuru, UretimYeri } from './kurallar.ts';
@@ -316,6 +316,8 @@ async function basligiDenetle(db: Db, g: EmirBasligi): Promise<DenetlenmisBaslik
   // 2217 (2103-3 a): projenin siparişi emir eklenene dek kilitli okunur; eşzamanlı sipariş iptali bekler, sonra bu emri görüp 409 alır.
   // Kilit olmasaydı iptal henüz yazılmamış emri görmez, emir de iptalden önceki onaylı durumu okurdu; ikisi birden geçerdi.
   const siparis = proje?.siparisId == null ? null : await siparisKilitliAyrinti(db, proje.siparisId);
+  // SIP-19 (3254 a): onayı geri alınmış siparişin projesinde yeniden onaylanana dek emir açılmaz.
+  if (siparis?.durum === 'taslak') throw cakisma(SIPARIS_ONAYI_GERI_ALINDI);
   if (siparisSatiriId === null && siparis !== null) {
     const secim = kendiligindenSatir(siparis, g.malzemeNo);
     if ('ihlal' in secim) throw dogrulama(secim.ihlal, 'siparisSatiriId');

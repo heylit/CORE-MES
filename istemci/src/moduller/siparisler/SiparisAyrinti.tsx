@@ -15,13 +15,19 @@ import { KalemMetni } from './MalzemeSecici.tsx';
 import { surumCakismasiMi, useFiyatGorur, useOnaylayabilir, useYazabilir, yazmaIletisi } from './yazma.ts';
 import './siparisler.css';
 
-type Komut = 'onayla' | 'kapat' | 'iptal';
+type Komut = 'onayla' | 'kapat' | 'iptal' | 'onay-geri-al';
 
 const KOMUT_METNI: Record<Komut, { baslik: string; dugme: string; basari: string; govde: string }> = {
   onayla: { baslik: 'Siparişi onayla', dugme: 'Onayla', basari: 'Sipariş onaylandı.', govde: 'Onaylanınca satırlar ve tutarlar değişmez.' },
   kapat: { baslik: 'Siparişi kapat', dugme: 'Siparişi kapat', basari: 'Sipariş kapandı.', govde: 'Kapanan sipariş yeniden açılmaz. Teslimatın ve faturanın bittiğini kontrol edip kapatın.' },
   iptal: { baslik: 'Siparişi iptal et', dugme: 'İptal et', basari: 'Sipariş iptal edildi.', govde: 'İptal edilen sipariş yeniden açılmaz. Nedeni yazın.' },
+  // SIP-19 (3254 a): onay geri alınır, sipariş taslağa döner; emre bağlı kalemde yalnız termin değişir.
+  'onay-geri-al': {
+    baslik: 'Onayı geri al', dugme: 'Onayı geri al', basari: 'Onay geri alındı; sipariş taslakta.',
+    govde: 'Sipariş taslağa döner. Üretim emri açılmış kalemlerde yalnız termin değişir. Yeniden onaylanınca bağlı proje bitişi ve başlamamış emir teslimi yeni termine kayar. Nedeni yazın.',
+  },
 };
+const GEREKCELI: ReadonlySet<Komut> = new Set(['iptal', 'onay-geri-al']);
 
 function Ozellik({ ad, children }: { ad: string; children: ReactNode }) {
   return (
@@ -53,7 +59,7 @@ export function SiparisAyrinti() {
   const kapat = () => { komutYaz(null); nedenYaz(''); hataYaz(null); };
   const gonder = useMutation({
     mutationFn: ({ k, surum }: { k: Komut; surum: number }) =>
-      api.post<SiparisAyrintisi>(`/siparisler/${id}/${k}`, k === 'iptal' ? { surum, neden: neden.trim() } : { surum }),
+      api.post<SiparisAyrintisi>(`/siparisler/${id}/${k}`, GEREKCELI.has(k) ? { surum, neden: neden.trim() } : { surum }),
     onSuccess: (cevap, { k }) => {
       istemci.setQueryData(anahtarlar.siparis(id), cevap);
       void istemci.invalidateQueries({ queryKey: anahtarlar.siparisListeleri });
@@ -87,6 +93,7 @@ export function SiparisAyrinti() {
         <span className="tc-sp-kalem-termin">
           {tarihMetni(m.termin ?? s.termin)}
           {m.termin === null || m.termin === s.termin ? <Rozet ton="pasif" gorunum="cizgi">Sipariş termini</Rozet> : <Rozet ton="uyari" gorunum="cizgi">Elle</Rozet>}
+          {m.emreBagli && <Rozet ton="bilgi" gorunum="cizgi">Emre bağlı</Rozet>}
         </span>
       ),
     },
@@ -103,10 +110,12 @@ export function SiparisAyrinti() {
   const sifirFiyatliKalem = s.satirlar.filter((m) => m.birimFiyat !== null && Number(m.birimFiyat) === 0).length;
 
   const duzenlenebilir = yazabilir && s.durum === 'taslak';
+  const emreBagliVar = s.satirlar.some((m) => m.emreBagli);
   const islemler = (
     <>
       {duzenlenebilir && <Dugme simge="edit" onClick={() => { void gezin(`/siparisler/${s.id}/duzenle`); }}>Düzenle</Dugme>}
       {onaylayabilir && s.durum === 'taslak' && <Dugme tur="birincil" simge="check" onClick={() => komutYaz('onayla')}>Onayla</Dugme>}
+      {onaylayabilir && s.durum === 'onayli' && <Dugme simge="rotate" onClick={() => komutYaz('onay-geri-al')}>Onayı geri al</Dugme>}
       {onaylayabilir && s.durum === 'onayli' && <Dugme tur="birincil" simge="check" onClick={() => komutYaz('kapat')}>Kapat</Dugme>}
       {onaylayabilir && acik && <Dugme tur="tehlike" simge="x" onClick={() => komutYaz('iptal')}>İptal et</Dugme>}
     </>
@@ -123,8 +132,13 @@ export function SiparisAyrinti() {
         islemler={islemler}
       />
 
-      {s.durum === 'taslak' && (
+      {s.durum === 'taslak' && !emreBagliVar && (
         <p className="tc-sp-bildirim" role="status"><strong>Taslak sipariş</strong> Onaylanana kadar düzenlenebilir; onaylanınca satırlar değişmez.</p>
+      )}
+      {s.durum === 'taslak' && emreBagliVar && (
+        <p className="tc-sp-bildirim tc-sp-bildirim-uyari" role="status">
+          <strong>Onay geri alındı</strong> Üretim emri açılmış kalemlerde yalnız termin değişir. Yeniden onaylanana kadar bu siparişten proje ya da emir açılmaz.
+        </p>
       )}
       {fiyatGorur && s.durum === 'taslak' && sifirFiyatliKalem > 0 && (
         <p className="tc-sp-bildirim" role="status"><strong>{`${sifirFiyatliKalem} kalemin fiyatı 0`}</strong> Onaylamadan önce kalemin bedelsiz olduğunu doğrulayın.</p>
@@ -182,18 +196,20 @@ export function SiparisAyrinti() {
           acik
           baslik={KOMUT_METNI[komut].baslik}
           onayMetni={KOMUT_METNI[komut].dugme}
-          tehlikeli={komut === 'iptal'}
+          tehlikeli={GEREKCELI.has(komut)}
           yukleniyor={gonder.isPending}
           vazgec={kapat}
           onayla={() => {
-            if (komut === 'iptal' && neden.trim() === '') { hataYaz('İptal nedeni zorunlu.'); return; }
+            if (GEREKCELI.has(komut) && neden.trim() === '') { hataYaz(komut === 'iptal' ? 'İptal nedeni zorunlu.' : 'Onayı geri alma nedeni zorunlu.'); return; }
             hataYaz(null);
             gonder.mutate({ k: komut, surum: s.surum });
           }}
         >
           <div className="tc-sp-yigin">
             <p>{`${s.no}: ${KOMUT_METNI[komut].govde}`}</p>
-            {komut === 'iptal' && <CokSatir etiket="İptal nedeni" required value={neden} onChange={(o) => nedenYaz(o.target.value)} maxLength={500} />}
+            {GEREKCELI.has(komut) && (
+              <CokSatir etiket={komut === 'iptal' ? 'İptal nedeni' : 'Geri alma nedeni'} required value={neden} onChange={(o) => nedenYaz(o.target.value)} maxLength={500} />
+            )}
             {hata !== null && <p className="tc-sp-hata" role="alert">{hata}</p>}
           </div>
         </OnayPenceresi>

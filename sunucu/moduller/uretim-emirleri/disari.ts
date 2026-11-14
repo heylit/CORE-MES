@@ -428,6 +428,10 @@ export const isEmriKaynagiYaz = isEmri.isEmriKaynagiYaz;
 export const emirPlanBilgisiYaz = isEmri.planBilgisiYaz;
 // 3244 b, 3254 a: sipariş yeniden onaylanınca bağlı ve başlamamış emirlerin teslimi yeni termine kayar (kablolama.ts bağlar).
 export const emirTeslimleriniSiparisTermineKaydir = isEmri.siparisTerminiYansit;
+// SIP-19 (3254 a): emre bağlı sipariş kalemleri (siparişler onayı geri alınmış siparişte bunları kilitler).
+export async function emreBagliSiparisSatirlari(db: Db, satirIdleri: readonly number[]): Promise<ReadonlySet<number>> {
+  return new Set((await siparisSatirlarininEmirleri(db, satirIdleri)).keys());
+}
 // Plan stüdyosundaki öncelik denemesi canlıya alınınca (281 a); yetki burada da aranır.
 export const emirOnceligiYaz = (db: Db, kullanici: Kullanici, id: number, oncelik: number): Promise<void> => isEmri.oncelikDegistir(db, kullanici, id, oncelik, null);
 export const emirPlanaAl = isEmri.planaAl;

@@ -14,7 +14,7 @@ import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
 import type { AcilisSecenekleri } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import {
-  PARTI_KALEM_DISI, PARTI_KALEMSIZ, PARTI_TURU_FARKLI, TESLIM_BASLAMIS, TESLIM_KALEMSIZ, kalemTeslimi, partiIhlali, teslimBaglaIhlali,
+  SIPARIS_ONAYI_GERI_ALINDI, PARTI_KALEM_DISI, PARTI_KALEMSIZ, PARTI_TURU_FARKLI, TESLIM_BASLAMIS, TESLIM_KALEMSIZ, kalemTeslimi, partiIhlali, teslimBaglaIhlali,
   PROJE_ZORUNLU, SIPARIS_SATIRI_MALZEME, SIPARIS_SATIRI_ONAYSIZ, SIPARIS_SATIRI_PROJE_DISI, SIPARIS_SATIRI_PROJESIZ, SIPARIS_SATIRI_SECILMELI, SIPARIS_SATIRI_YOK,
   kendiligindenSatir, projeZorunluMu, siparisSatiriIhlali,
 } from './kurallar.ts';
@@ -172,7 +172,7 @@ describe('UE-SS emir sipariş satırına (gerçek PostgreSQL)', () => {
     assert.equal(await emrinSatiri(siparissiz.govde.uretimEmriId), null);
   });
 
-  test('224: satır verilmezse projenin onaylı siparişindeki tek satır bağlanır; birden çok satırda 400 ve satır seçilince açılır; o malzemenin satırı yoksa ya da sipariş onaysızsa satırsız', async () => {
+  test('224: satır verilmezse projenin onaylı siparişindeki tek satır bağlanır; birden çok satırda 400 ve satır seçilince açılır; o malzemenin satırı yoksa satırsız; onayı geri alınmış siparişte 409 (3254 a)', async () => {
     const m = await malzeme();
     const baska = await malzeme();
     const s = await siparis('onayli', m);
@@ -183,8 +183,10 @@ describe('UE-SS emir sipariş satırına (gerçek PostgreSQL)', () => {
     const yok = await ac(baska, p);
     assert.equal(yok.durum, 200, JSON.stringify(yok.govde));
     assert.equal(await emrinSatiri(yok.govde.uretimEmriId), null);
+    // SIP-19 (3254 a): taslak siparişli proje yalnız onayı geri alınmış siparişte olur (proje onaylı siparişten açılır); emir açılmaz.
     const t = await siparis('taslak', m);
-    assert.equal(await emrinSatiri((await ac(m, await proje(t.siparisId))).govde.uretimEmriId), null);
+    const geriAlinmis = await ac(m, await proje(t.siparisId));
+    assert.deepEqual([geriAlinmis.durum, geriAlinmis.govde.mesaj], [409, SIPARIS_ONAYI_GERI_ALINDI]);
 
     const ikinci = await tek('INSERT INTO siparisler_siparis_satiri (siparis_id, sira, malzeme_no, miktar, birim_fiyat) VALUES ($1, 2, $2, 6, 5) RETURNING id', [s.siparisId, m]);
     const once = (await o().sahip.tek<{ n: number }>('SELECT count(*)::int AS n FROM uretim_emri'))!.n;
@@ -239,8 +241,8 @@ describe('UE-SS emir sipariş satırına (gerçek PostgreSQL)', () => {
     const durumlar = [
       [await ac(m, p, 2_000_000_000), SIPARIS_SATIRI_YOK],
       [await ac(m, await proje(null), s.satirId), SIPARIS_SATIRI_PROJESIZ],
-      [await ac(m, tp, s.satirId), SIPARIS_SATIRI_PROJE_DISI],
-      [await ac(m, tp, t.satirId), SIPARIS_SATIRI_ONAYSIZ],
+      [await ac(m, await proje((await siparis('onayli', m)).siparisId), s.satirId), SIPARIS_SATIRI_PROJE_DISI],
+      [await ac(m, tp, t.satirId), SIPARIS_ONAYI_GERI_ALINDI],
       [await ac(baska, p, s.satirId), SIPARIS_SATIRI_MALZEME],
     ] as const;
     for (const [c, ileti] of durumlar) assert.deepEqual([c.durum, c.govde.mesaj], [409, ileti]);
@@ -409,5 +411,16 @@ describe('UE-SS emir sipariş satırına (gerçek PostgreSQL)', () => {
     const satir = secenek.govde.projeler.find((x) => x.id === p)?.satirlar[0];
     assert.deepEqual(satir?.partiler?.map((x) => [x.emirTuru, x.adet]), [['fai', '4.000'], ['seri', '6.000']]);
     await assert.rejects(o().sahip.sorgu('DELETE FROM siparisler_siparis_satiri_parti WHERE id = $1', [fai]), /uretim_emri_siparis_parti/, 'emre bağlı parti silinmez');
+  });
+
+  test('SIP-19 (3254 a): onayı geri alınmış siparişin projesinde emir açılmaz (409, emir yok); stoğa üretim projesiz yine açılır', async () => {
+    const m = await malzeme();
+    const s = await siparis('onayli', m);
+    const p = await proje(s.siparisId);
+    await o().sahip.sorgu("UPDATE siparisler_siparis SET durum = 'taslak', onaylayan_id = NULL, onay_zamani = NULL WHERE id = $1", [s.siparisId]);
+    const once = (await o().sahip.tek<{ n: number }>('SELECT count(*)::int AS n FROM uretim_emri'))!.n;
+    for (const c of [await ac(m, p), await ac(m, p, s.satirId)]) assert.deepEqual([c.durum, c.govde.mesaj], [409, SIPARIS_ONAYI_GERI_ALINDI]);
+    assert.equal((await o().sahip.tek<{ n: number }>('SELECT count(*)::int AS n FROM uretim_emri'))!.n, once);
+    assert.equal((await ac(m, null, undefined, 'stok')).durum, 200);
   });
 });
