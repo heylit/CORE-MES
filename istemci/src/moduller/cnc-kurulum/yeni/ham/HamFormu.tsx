@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { Dugme, Girdi, IsaretKutusu, Secim } from '../../../../ortak/arayuz/index.ts';
-import { fmt } from '../bicim.ts';
+import { fmt, num } from '../bicim.ts';
 import type { IsMalzemesi } from '../veri/tipler.ts';
 import type { HamAyar, HamTipi } from '../hesap/ham.ts';
 
@@ -25,6 +25,7 @@ const TIPLER: { deger: HamTipi; baslik: string }[] = [
 ];
 
 const deger = (v: unknown): string => (v == null ? '' : String(v));
+const PAYLAR: readonly (keyof HamAyar)[] = ['ax', 'ay', 'az', 'dAllow', 'face', 'cut', 'idAllow'];
 
 export function HamFormu({ st, malzemeler, seciliMalzeme, varsayilanRho, modelVar, mesaj, degistir, malzemeSec, eylem, sonuc }: Ozellikler) {
   const cubuk = st.type === 'bar' || st.type === 'tube';
@@ -33,6 +34,7 @@ export function HamFormu({ st, malzemeler, seciliMalzeme, varsayilanRho, modelVa
   const sayi = (k: keyof HamAyar, etiket: string, ek: { placeholder?: string } = {}) => (
     <Girdi
       etiket={etiket} inputMode="decimal" placeholder={ek.placeholder}
+      hata={PAYLAR.includes(k) && num(st[k], 0) < 0 ? 'Pay negatif olamaz; 0 mm alındı.' : undefined}
       value={deger(st[k])} onChange={(e) => { degistir(k, e.target.value as never); }}
     />
   );
