@@ -9,7 +9,9 @@ import type { SayfaliListe } from '#paylasilan/liste.ts';
 import { AZAMI_ADIM, BEKLEME_NEDENI_ADLARI, EMIR_TURLERI } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import type { TalimatAsamasi } from '#paylasilan/sozlesme/talimat-asamasi.ts';
 import type { TakvimKaydi } from '#paylasilan/sozlesme/takvim.ts';
-import { tesisGunu } from '#paylasilan/zaman.ts';
+import { tesisGunBasi, tesisGunu } from '#paylasilan/zaman.ts';
+
+const FASON_DONUS_SAATI_MS = 8 * 60 * 60_000;
 import type {
   AcilisSecenekleri, SiradakiFasonCevabi, AdimliEmirAyrintisi, AdimliEmirOzeti, AdimliOzetCevabi, AtanabilirKaynak, RefakatKartiCevabi, EkAdim, EmirDurumu, EmirTuru, IsEmri, IsEmriKaynagi,
   ReworkAdimiGovdesi, RotasizAdimDuzenle, RotasizAdimEkle,
@@ -1708,16 +1710,22 @@ export interface PlanIsEmri {
 // tahminini verir; bu modül satın almayı ithal etmez (satın alma bu modülü okur).
 export type FasonTahmini = (sorgular: readonly { malzemeNo: number; operasyonTipiId: number | null; firmaId: number; adet: number }[]) => Promise<(number | null)[]>;
 
+// 3257 a: bitmemiş fason adımların açık siparişindeki teslim tarihi (iş emri kimliğinden 'GGGG-AA-GG'; tarihsiz ya da siparişsiz adım haritada
+// yok). Plan satın almadan verir; tarih termin gününün ve tahminin önüne geçer (fasonBeklemesi).
+export type FasonSiparisTermini = (isEmriIdleri: readonly number[]) => Promise<ReadonlyMap<number, string>>;
+
 // Taslak emir plana alınmadan plan çizelgesinde denenebilir; varsayılan yalnız planlı ve başlamış emirlerdir.
-export const planlanacakIsEmirleri = (db: Db, secenek: { taslakDahil?: boolean; fasonTahmini?: FasonTahmini } = {}): Promise<PlanIsEmri[]> =>
-  acikAdimlar(db, secenek.taslakDahil ?? false, (r): r is number => r !== null, secenek.fasonTahmini);
+export const planlanacakIsEmirleri = (
+  db: Db, secenek: { taslakDahil?: boolean; fasonTahmini?: FasonTahmini; fasonSiparisTermini?: FasonSiparisTermini } = {},
+): Promise<PlanIsEmri[]> =>
+  acikAdimlar(db, secenek.taslakDahil ?? false, (r): r is number => r !== null, secenek.fasonTahmini, secenek.fasonSiparisTermini);
 
 // Rotasız emrin (B13) açık adımları, plan satırıyla aynı biçimde (kart #1257): plan bunları yerleştirmez, Arkon Hazırlık'a iş paketi olarak alır.
 export type RotasizIsEmri = Omit<PlanIsEmri, 'kaynakRotaRevizyonId'> & { kaynakRotaRevizyonId: null };
 export const rotasizIsEmirleri = (db: Db): Promise<RotasizIsEmri[]> => acikAdimlar(db, false, (r): r is null => r === null);
 
 async function acikAdimlar<R extends number | null>(
-  db: Db, taslakDahil: boolean, revizyonUyar: (r: number | null) => r is R, fasonTahmini?: FasonTahmini,
+  db: Db, taslakDahil: boolean, revizyonUyar: (r: number | null) => r is R, fasonTahmini?: FasonTahmini, fasonSiparisTermini?: FasonSiparisTermini,
 ): Promise<(Omit<PlanIsEmri, 'kaynakRotaRevizyonId'> & { kaynakRotaRevizyonId: R })[]> {
   // 1208: otomatik GKK plana girmez (fason adımı gibi): kaynaksız ve süresizdir, girse ardılını bekletirdi; fasonun beklemesi ardıla geçer.
   const satirlar = (await s.planlanacakIsEmirleriGetir(db, taslakDahil)).filter((i) => !otomatikGkkMi(i));
@@ -1743,6 +1751,12 @@ async function acikAdimlar<R extends number | null>(
     })));
     sorulacak.forEach((x, n) => tahminler.set(`${x.uretimEmriId}|${x.sira}`, cevap[n] ?? null));
   }
+  // 3257 a: siparişteki teslim günü, malzeme gelişiyle aynı biçimde o günün sabahı 08:00 (tesis saati) dönüş sayılır.
+  const siparisGelisleri = new Map<number, number>();
+  if (fasonSiparisTermini) {
+    const acik = butun.filter((x) => x.durum !== 'tamam').map((x) => x.id);
+    if (acik.length > 0) for (const [id, gun] of await fasonSiparisTermini(acik)) siparisGelisleri.set(id, tesisGunBasi(gun) + FASON_DONUS_SAATI_MS);
+  }
   const simdi = Date.now();
   const calisanlar = satirlar.filter((i) => i.durum === 'calisiyor').map((i) => i.id);
   const islenen = await s.islenenAdetleriGetir(db, calisanlar);
@@ -1766,7 +1780,8 @@ async function acikAdimlar<R extends number | null>(
       sira: i.sira, opNo: i.opNo, ad: i.ad, operasyonTipiId: i.operasyonTipiId, kaynak, istasyonId: i.istasyonId, ayarSuresiDk: i.ayarSuresiDk, birimSureDk: i.birimSureDk, bagimlilik: i.bagimlilik,
       devirAdedi: i.devirAdedi, onculler: plandakiOnculler(butun.filter((x) => x.uretimEmriId === e.id), i, plandaki), dal: i.dal,
       durum: e.durum === 'taslak' ? 'taslak' : e.baslamis ? 'basladi' : 'planli', adimDurumu: i.durum, ekAciklama: i.ekAciklama,
-      fasonBekleGun: fasonBeklemesi(butun.filter((x) => x.uretimEmriId === e.id), i.sira, (x) => tahminler.get(`${e.id}|${x.sira}`) ?? null, simdi),
+      fasonBekleGun: fasonBeklemesi(butun.filter((x) => x.uretimEmriId === e.id), i.sira, (x) => tahminler.get(`${e.id}|${x.sira}`) ?? null, simdi,
+        (x) => (x.id === undefined ? null : siparisGelisleri.get(x.id) ?? null)),
       ...(i.durum === 'calisiyor' ? { adimBaslama: i.baslama, islenenAdet: islenen.get(i.id)?.adet ?? 0, sonSayimAni: islenen.get(i.id)?.sonAn ?? null } : {}),
       ...(makine === undefined ? {} : { fiiliMakineId: makine }),
     }];

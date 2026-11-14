@@ -1104,12 +1104,15 @@ const GUN_MS = 24 * 60 * 60_000;
 // (başlamış) fason adımda termin ilk gidişten sayılır: geçen gün düşülür, termini geçmiş adım beklemez (0). simdi verilmezse düşülmez.
 // Zincir adetOnculleri'ndendir (B-2): dallı rotada paralel dalın fasonu bu adımı bekletmez; birleşme adımı öncül dallarından en uzun
 // bekleyeni bekler. Listesi olmayan eski emirde zincir sıradır.
+// 3257 a: adımın açık fason siparişinde teslim tarihi varsa (siparisGelisi: dönüş anı, ms) o esastır; kalan süre dönüşe kadardır, gönderilmiş
+// adımda da geçen gün ayrıca düşülmez. Tarih yoksa ya da simdi verilmezse sıra yukarıdaki gibidir.
 export function fasonBeklemesi(
   emrinIsEmirleri: readonly {
     id?: number; sira: number; fasonFirmaId: number | null; fasonFirmasiz?: boolean; terminGun: number | null; durum: string; baslama?: string | null; tur?: string;
     ekAciklama?: string | null; onculler?: readonly { id: number }[] | null;
   }[], sira: number,
   tahmin: (x: { sira: number; fasonFirmaId: number }) => number | null = () => null, simdi?: number,
+  siparisGelisi: (x: { id?: number; sira: number }) => number | null = () => null,
 ): number {
   type Adim = (typeof emrinIsEmirleri)[number];
   const bekleme = (a: Pick<Adim, 'sira' | 'onculler'>): number => Math.max(0, ...adetOnculleri(emrinIsEmirleri, a).map((x) => {
@@ -1117,6 +1120,8 @@ export function fasonBeklemesi(
     if (x.tur !== undefined && otomatikGkkMi({ tur: x.tur, ekAciklama: x.ekAciklama ?? null })) return bekleme(x);
     if (!fasonMu(x)) return 0;
     if (x.durum === 'tamam') return bekleme(x);
+    const gelis = simdi === undefined ? null : siparisGelisi(x);
+    if (gelis !== null) return Math.max(0, (gelis - simdi!) / GUN_MS) + bekleme(x);
     const sure = x.terminGun ?? (x.fasonFirmaId === null ? null : tahmin({ sira: x.sira, fasonFirmaId: x.fasonFirmaId })) ?? FASON_VARSAYILAN_GUN;
     const gecen = simdi !== undefined && x.baslama ? Math.max(0, (simdi - Date.parse(x.baslama)) / GUN_MS) : 0;
     return Math.max(0, sure - gecen) + bekleme(x);

@@ -390,7 +390,7 @@ export async function isEmriPlanBilgileri(db: Db, isEmriIdleri: readonly number[
 /* ---------------- iş emirli üretim emri (kart #262; ADR 0006: plan > rota > uretim-emirleri) ---------------- */
 
 export type {
-  FasonHareketiOzeti, FasonTahmini, IsEmriGirdisi, IsEmriOzeti, MalzemeIhtiyaci, PlanIsEmri, UretimEmriGirdisi, UretimEmriOzeti,
+  FasonHareketiOzeti, FasonSiparisTermini, FasonTahmini, IsEmriGirdisi, IsEmriOzeti, MalzemeIhtiyaci, PlanIsEmri, UretimEmriGirdisi, UretimEmriOzeti,
 } from './is-emri-servis.ts';
 
 // 1248 a, 1245 a: adımın öncülleri tek ortak saf işlevden; plan önizlemesi kendi denediği adımlarla (id yerine op numarası olabilir) çağırır.
