@@ -3,6 +3,8 @@ import type { KuralBaglami } from '../kurallar/index.ts';
 import type { EkranOzellikleri } from '../sekmeler.ts';
 import type { SonKullanilan } from '../tercihler.ts';
 import type { KatalogKarti } from '../tipler.ts';
+import type { Dispatch, SetStateAction } from 'react';
+import type { BekleyenCizim } from './cizim-rafi.ts';
 import type { Degistirici, SihirbazTaslagi, Taslak } from './durum.ts';
 
 // Ekranın yalnız gösterim için tuttuğu, taslağa yazılmayan seçimler (prototipte modül düzeyi değişkenler).
@@ -36,6 +38,10 @@ export interface Sihirbaz extends EkranOzellikleri {
   sifirla: () => void;
   sonKullanilanlar: readonly SonKullanilan[];
   sonaKoy: (fam: string, cls: string | null, grade: string) => void;
+  // 3242 d: kayıt öncesi seçilen çizimler (föydeki raf) ve kayıttan sonra yüklenince artan sayaç (resim paneli yeniden okur).
+  cizimler: readonly BekleyenCizim[];
+  cizimlerYaz: Dispatch<SetStateAction<readonly BekleyenCizim[]>>;
+  cizimTazele: number;
 }
 
 export const SihirbazBaglami = createContext<Sihirbaz | null>(null);

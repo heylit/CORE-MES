@@ -14,6 +14,8 @@ import { kartStandardi } from '../standart-adlari.ts';
 import { SihirbazBaglami, type EkranSecimi, type Sihirbaz } from './baglam.ts';
 import { kopyala, useSihirbazDurumu, type Taslak } from './durum.ts';
 import { FoyGorunumu } from './FoyGorunumu.tsx';
+import { CizimRafi, useCizimYukleme } from './CizimRafi.tsx';
+import type { BekleyenCizim } from './cizim-rafi.ts';
 import { AdimGovdesi } from './adimlar/AdimGovdesi.tsx';
 import { KategoriUyarisi } from './adimlar/KategoriUyarisi.tsx';
 import { baslangicTaslagi, duzenlemeTaslagi, kopyaTaslagi, sablonTaslagi, type Acilis } from './acilis.ts';
@@ -53,6 +55,9 @@ function SihirbazKabugu(o: EkranOzellikleri & { kartlar: readonly KatalogKarti[]
   const [sonlar, sonlarYaz] = useSonKullanilanlar();
   const [secim, secimYazHam] = useState<EkranSecimi>(() => ({ ...SECIM_BOS, sablonAcik: arama.get('sablonYap') !== null }));
   const secimYaz = useCallback((s: Partial<EkranSecimi>) => { secimYazHam((e) => ({ ...e, ...s })); }, []);
+  const [cizimler, cizimlerYaz] = useState<readonly BekleyenCizim[]>([]);
+  const [cizimTazele, cizimTazeleYaz] = useState(0);
+  const tazeleArttir = useCallback(() => { cizimTazeleYaz((n) => n + 1); }, []);
 
   // Açılışı adres belirler; adres yoksa yarım taslak sürer. Uygulanan sorgu (kart dışında) adresten silinir: sayfa
   // yenilenince yarım taslaktan devam edilir, aynı kopya ikinci kez kurulmaz. Sihirbaz açıkken gelen yeni sorgu
@@ -84,6 +89,7 @@ function SihirbazKabugu(o: EkranOzellikleri & { kartlar: readonly KatalogKarti[]
       const a = acilisTaslagi(arama, kartlar, sablonlar, b, null);
       yenisiniKur(a.taslak, a.adim);
       secimYazHam({ ...SECIM_BOS, sablonAcik: arama.has('sablonYap') });
+      cizimlerYaz([]);
       if (a.ileti) bildir(a.ileti);
     }
     oncekiKart.current = kart;
@@ -142,6 +148,7 @@ function SihirbazKabugu(o: EkranOzellikleri & { kartlar: readonly KatalogKarti[]
   const sifirla = () => {
     yenisiniKur(K.newDraft(b), 0);
     secimYazHam(SECIM_BOS);
+    cizimlerYaz([]);
     if (arama.has('kart')) aramaYaz(new URLSearchParams(), { replace: true });
   };
 
@@ -149,8 +156,9 @@ function SihirbazKabugu(o: EkranOzellikleri & { kartlar: readonly KatalogKarti[]
     ...o, taslak: d, adim: etkinAdim, b, kartlar, degistir, yenisiniKur, adimaGec: adimaGit, secim, secimYaz, bildir,
     kartiAc: (k) => { git.katalog(k); },
     kurVeGit: (y, i) => { yenisiniKur(y, i); },
-    kaliteSec, sifirla, sonKullanilanlar: sonlar, sonaKoy,
+    kaliteSec, sifirla, sonKullanilanlar: sonlar, sonaKoy, cizimler, cizimlerYaz, cizimTazele,
   };
+  useCizimYukleme({ taslak: d, kartlar, cizimler, cizimlerYaz, bildir, tazeleArttir });
   const kaydet = useKaydet(s, adimlar);
 
   const ileri = () => {
@@ -193,6 +201,7 @@ function SihirbazKabugu(o: EkranOzellikleri & { kartlar: readonly KatalogKarti[]
               )}
             </header>
             <KategoriUyarisi />
+            <CizimRafi serit />
             <AdimGovdesi />
             <nav className="tc-my-alt" aria-label="Sihirbaz">
               <Dugme simge="back" onClick={() => { adimaGit(etkinAdim - 1); }} disabled={etkinAdim === 0}>Geri</Dugme>
@@ -202,7 +211,7 @@ function SihirbazKabugu(o: EkranOzellikleri & { kartlar: readonly KatalogKarti[]
                 : <Dugme tur="birincil" onClick={ileri}>İleri</Dugme>}
             </nav>
           </section>
-          <aside className="tc-my-foy" aria-label="Canlı föy önizlemesi"><FoyGorunumu d={d} kisa /></aside>
+          <aside className="tc-my-foy" aria-label="Canlı föy önizlemesi"><FoyGorunumu d={d} kisa /><CizimRafi /></aside>
         </div>
       </div>
     </SihirbazBaglami.Provider>

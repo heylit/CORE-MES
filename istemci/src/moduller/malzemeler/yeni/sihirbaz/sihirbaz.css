@@ -268,3 +268,30 @@
 /* Sağdaki föy önizlemesi ve son adımdaki tam föy, ortak Föy bileşeninin kabı. */
 .tc-my-alt-baslik { margin: 0; font-size: var(--yazi-s); color: var(--muted); }
 .tc-my-bolum { display: grid; gap: var(--b-2); }
+
+/* 3242 d: föyde çizim rafı; telefonda ve geniş (föysüz) adımda adımın üstünde şerit. */
+.tc-my-cz { display: grid; gap: var(--b-2); margin-top: var(--b-3); padding-top: var(--b-3); border-top: var(--cizgi-ince) solid var(--edge); min-width: 0; }
+.tc-my-cz-serit { display: none; margin-top: 0; padding: var(--b-3); border: var(--cizgi-ince) solid var(--edge); border-radius: var(--yari-2); background: var(--panel); }
+.tc-my-cz-bas { display: flex; align-items: center; gap: var(--b-2); font-weight: 600; font-size: var(--yazi-s); }
+.tc-my-cz-bas .tc-rozet { margin-left: auto; }
+.tc-my-cz-kareler { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--b-2); grid-template-columns: repeat(auto-fill, minmax(min(100%, 8rem), 1fr)); }
+.tc-my-cz-kareler > li { display: grid; min-width: 0; }
+.tc-my-cz-kare { display: grid; gap: var(--b-1); align-content: start; min-width: 0; padding: var(--b-2); font-size: var(--yazi-xs); border: var(--cizgi-ince) solid var(--edge); border-radius: var(--yari-1); background: var(--panel-solid); }
+.tc-my-cz-kare > * { min-width: 0; max-width: 100%; }
+.tc-my-cz-kare b { overflow-wrap: anywhere; }
+.tc-my-cz-kare .tc-rozet { justify-self: start; white-space: normal; }
+.tc-my-cz-kare .tc-dugme { inline-size: 100%; justify-content: center; }
+.tc-my-cz-kare progress { inline-size: 100%; }
+.tc-my-cz-hedef { color: var(--muted); overflow-wrap: anywhere; }
+.tc-my-cz-hata { color: var(--stop); }
+.tc-my-cz-ac { display: inline-flex; gap: var(--b-1); align-items: center; min-block-size: var(--dokunma); color: var(--ink); }
+.tc-my-cz-resim { inline-size: 100%; block-size: var(--b-6); display: block; fill: none; stroke: var(--muted); stroke-width: 1.2; }
+.tc-my-cz-resim .tc-my-cz-olcu { stroke: var(--done); }
+.tc-my-cz-model { stroke: var(--done); fill: var(--bg2); }
+.tc-my-cz-model .tc-my-cz-yuz { fill: var(--panel-solid); }
+.tc-my-cz-ekle { position: relative; place-items: center; text-align: center; min-block-size: calc(var(--dokunma) * 2); color: var(--muted); border-style: dashed; border-width: var(--cizgi-kalin); background: var(--bg2); cursor: pointer; }
+.tc-my-cz-ekle:focus-within, .tc-my-cz-uzerinde { border-color: var(--done); color: var(--ink); }
+.tc-my-cz-girdi { position: absolute; inline-size: 1px; block-size: 1px; opacity: 0; pointer-events: none; }
+.tc-my-cz-not { margin: 0; color: var(--muted); font-size: var(--yazi-xs); }
+.tc-my-duzen.tc-my-genis .tc-my-cz-serit { display: grid; }
+@container (width < 780px) { .tc-my-cz-serit { display: grid; } }
