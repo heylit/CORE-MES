@@ -600,6 +600,8 @@ export const emreKopyalaGovdesi = z.object({
   projeId: KIMLIK.nullish(),
   // 176 a: emir bu sipariş satırını üretir; satırın projenin siparişinde olduğunu uretim-emirleri denetler (değilse 409).
   siparisSatiriId: KIMLIK.nullish(),
+  // 3244 b: emir satırın bu üretim çeşidi partisinden açılır; tür partiden gelir, partinin satırını uretim-emirleri denetler.
+  siparisPartiId: KIMLIK.nullish(),
   // Girdiler serbest stoktan emre ayrılsın (rezerve); yetmeyen kısım mal kabulde öncelik sırasıyla gelir. Formda varsayılan açık.
   stoktanRezerve: z.boolean().optional(),
   // Emrin türü (kart #699, borç R13): ekranda seçilen etiket; verilmezse uretim-emirleri varsayılanı (seri).
@@ -614,7 +616,7 @@ export const emreKopyalaCevabi = z.object({ uretimEmriId: KIMLIK, isEmriIdleri: 
 // hiçbiri açılmaz. Çok katmanlı emir ve stoktan düğüm seçimi sayfada tek tek yapılır. Emir başına iş emirleri ve rezerve açıldığı için
 // satır sınırı genel toplu sınırdan küçüktür.
 export const EMIR_TOPLU_EN_COK = 200;
-export const emreKopyalaTopluSatiri = emreKopyalaGovdesi.omit({ cokKatmanli: true, stoktanDugumler: true, siparisSatiriId: true })
+export const emreKopyalaTopluSatiri = emreKopyalaGovdesi.omit({ cokKatmanli: true, stoktanDugumler: true, siparisSatiriId: true, siparisPartiId: true })
   .extend({ satir: z.number().int().min(1).max(1_048_576), urunId: KIMLIK }).strict();
 export const emreKopyalaTopluGovdesi = z.object({
   satirlar: z.array(emreKopyalaTopluSatiri).min(1).max(EMIR_TOPLU_EN_COK)

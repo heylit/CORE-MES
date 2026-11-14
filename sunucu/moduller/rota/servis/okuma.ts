@@ -235,7 +235,7 @@ export async function malzemeKullanimi(db: Db, malzemeIdleri: readonly number[])
 // Rota (üst) üretim emirlerinin (alt) komutunu kendi transaction'ında çağırır (ADR 0006): üretim emri açılır, her rota adımı bir
 // iş emri olur; talimatın emir açıldığı andaki sürümü sabitlenir ve metni iş emrinin kontrol listesi olur.
 export async function emreKopyala(db: Db, kullanici: Kullanici, id: number, g: {
-  adet: number; teslim: string | null; oncelik?: number | undefined; baslangic?: string | null | undefined; aciklama?: string | null | undefined; taslak?: boolean | undefined; projeId?: number | null | undefined; siparisSatiriId?: number | null | undefined;
+  adet: number; teslim: string | null; oncelik?: number | undefined; baslangic?: string | null | undefined; aciklama?: string | null | undefined; taslak?: boolean | undefined; projeId?: number | null | undefined; siparisSatiriId?: number | null | undefined; siparisPartiId?: number | null | undefined;
   stoktanRezerve?: boolean | undefined; emirTuru?: EmirTuru | undefined; cokKatmanli?: boolean | undefined; stoktanDugumler?: readonly string[] | undefined;
 }) {
   const r = revizyonuAl(await s.revizyonOku(db, id));
@@ -246,7 +246,7 @@ export async function emreKopyala(db: Db, kullanici: Kullanici, id: number, g: {
   if (ret || !rota) throw gecersiz(ret ?? 'Rota bulunamadı.');
   const baslik = {
     malzemeNo: r.malzemeId, adet: g.adet, teslim: g.teslim, oncelik: g.oncelik, baslangic: g.baslangic ?? null, aciklama: g.aciklama ?? null,
-    ...(g.taslak ? { taslak: true } : {}), ...(g.stoktanRezerve ? { stoktanRezerve: true } : {}), ...(g.emirTuru ? { emirTuru: g.emirTuru } : {}), projeId: g.projeId ?? null, siparisSatiriId: g.siparisSatiriId ?? null, kaynakRotaRevizyonId: r.id,
+    ...(g.taslak ? { taslak: true } : {}), ...(g.stoktanRezerve ? { stoktanRezerve: true } : {}), ...(g.emirTuru ? { emirTuru: g.emirTuru } : {}), projeId: g.projeId ?? null, siparisSatiriId: g.siparisSatiriId ?? null, siparisPartiId: g.siparisPartiId ?? null, kaynakRotaRevizyonId: r.id,
   };
   if (g.cokKatmanli === true) return cokKatmanliAc(db, kullanici, r.id, r.malzemeId, rota, baslik, g.stoktanDugumler ?? []);
   if ((g.stoktanDugumler ?? []).length > 0) throw gecersiz('Stoktan karşılanan düğüm yalnız çok katmanlı emirde seçilir.');
