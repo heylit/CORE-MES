@@ -1,0 +1,10 @@
+/* 3258 (Arayüz notu): canlı plan olaylarında rozet ve metin her satırda aynı hizada; dar ekranda rozet üstte, metin altında başlar. */
+.tc-py-ds-canli .tc-py-ds-ne { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; justify-items: start; }
+.tc-py-ds-canli .tc-py-ds-ne > b { overflow-wrap: anywhere; }
+@media (max-width: 767px) {
+  .tc-py-ds-canli .tc-py-ds-ne { grid-template-columns: minmax(0, 1fr); }
+}
+/* Dokunmatik ekranda aç-kapa düğmesi parmak boyunda. */
+@media (pointer: coarse), (max-width: 767px) {
+  .tc-py-ds-ac { min-height: var(--dokunma); }
+}
