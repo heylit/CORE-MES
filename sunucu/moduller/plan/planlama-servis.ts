@@ -15,7 +15,7 @@ import {
   aktifMalzemeListesi, DURUM_ANAHTARI, degerBicimeUyarMi, degerCokBuyukMu, durumVeEmirler, KAYNAK_OKUMA, nulKarakteriVarMi, receteRotaDurumu, surumUyarMi,
 } from '../recete-rota/disari.ts';
 import {
-  malzemeGelisTarihleri, malzemeKgFiyatlari, ortalamaAlisFiyatlari, tedarikIhtiyaclariniYaz, tedarikTerminleri,
+  malzemeGelisTarihleri, malzemeKgFiyatlari, onayliTalepGelisleri, ortalamaAlisFiyatlari, tedarikIhtiyaclariniYaz, tedarikTerminleri,
 } from '../satin-alma/disari.ts';
 import { sistemAyariOku } from '../ayarlar/disari.ts';
 import { kurlar } from '../finans/disari.ts';
@@ -32,7 +32,7 @@ import { brutAlanlariniCikar, calismayaMotorAyari, mesaiSaatiniCikar, saklanmaya
 import { sureOgrenmesi } from './ogrenme.ts';
 import { planGirdisi, yeniCalisma, type KaynakOkumasi } from './plan-girdisi.ts';
 import {
-  acikSiparisSatirlari, type AcikSiparisGelisi, ayarCevir, bitisAkisiEkle, calisanAdimlariCevir, gerekenTarihler, planAni, planGunu, planSaati,
+  acikSiparisSatirlari, type AcikSiparisGelisi, ayarCevir, gelisleriBirlestir, bitisAkisiEkle, calisanAdimlariCevir, gerekenTarihler, planAni, planGunu, planSaati,
 } from './planlama-kurallar.ts';
 import { type Gorunum, maliyetiGeriKoy, maliyetsizCalisma } from './maliyet-gizleme.ts';
 import { satinAlmaCalismasi } from './satin-alma-gorunumu.ts';
@@ -364,10 +364,13 @@ async function malzemeTerminleri(db: Db, malzemeler: NonNullable<DurumCevabi['it
   return ham.flatMap((m) => { const x = t.get(m.kayitNo); return x ? [{ kod: m.id, termin: x.termin, surum: x.surum, aciklama: x.aciklama }] : []; });
 }
 
-// 525 1 a: ham malzemenin açık satın alma siparişleri (girdi.betik bunları plana satın alma satırı olarak yazar).
+// 525 1 a: ham malzemenin açık satın alma siparişleri (girdi.betik bunları plana satın alma satırı olarak yazar). 3256-2: onaylanmış,
+// siparişi verilmemiş talep de gelecek malzemedir; numarası talep numarası, sipariş satırlarından sonra gelir.
 async function acikSiparisGelisleri(db: Db, malzemeler: NonNullable<DurumCevabi['items']>): Promise<AcikSiparisGelisi[]> {
   const ham = malzemeler.filter((m) => m.type === 'ham');
-  return acikSiparisSatirlari(ham, await malzemeGelisTarihleri(db, ham.map((m) => m.kayitNo)));
+  const nolar = ham.map((m) => m.kayitNo);
+  const siparisler = await malzemeGelisTarihleri(db, nolar);
+  return acikSiparisSatirlari(ham, gelisleriBirlestir(siparisler, await onayliTalepGelisleri(db, nolar, tesisGunu(Date.now()))));
 }
 
 // Çerçeve kaydı metin olarak da yazabilir (yerel depo değeri); metin biçimli değer JSON olarak okunur.

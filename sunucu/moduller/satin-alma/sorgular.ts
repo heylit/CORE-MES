@@ -871,6 +871,19 @@ export function malzemeGelisleriOku(db: Db, malzemeNolar: readonly number[]): Pr
   );
 }
 
+// 3256-2: onaylanmış (kararı var, son onay kaydı "onay"), durumu hâlâ "onayda" olan talebin siparişe geçmemiş malzeme kalemleri; q kalemin
+// karardaki teklifidir (tek kararda kararın teklifi, bölünmüş kararda kalemin teklifi). Karara girmemiş, miktarsız ve fason iş emrine bağlı
+// kalem gelmez. Plan girdisi ve canlı planın eskime karşılaştırması aynı süzgeci kullanır.
+const ONAYLI_TALEP_KALEMI = `FROM satin_alma_talep t
+       JOIN satin_alma_karar r ON r.talep_id = t.id
+       JOIN satin_alma_talep_kalemi k ON k.talep_id = t.id
+       JOIN satin_alma_katalog c ON c.id = k.katalog_id
+       LEFT JOIN satin_alma_karar_kalemi rk ON rk.talep_id = t.id AND rk.kalem_id = k.id
+       JOIN satin_alma_teklif q ON q.talep_id = t.id AND q.id = coalesce(rk.teklif_id, r.teklif_id)
+      WHERE t.durum = 'onayda' AND c.malzeme_no IS NOT NULL AND k.miktar IS NOT NULL AND k.is_emri_id IS NULL
+        AND (SELECT o.sonuc FROM satin_alma_onay o WHERE o.talep_id = t.id ORDER BY o.zaman DESC, o.id DESC LIMIT 1) = 'onay'
+        AND NOT EXISTS (SELECT 1 FROM satin_alma_siparis_satiri x WHERE x.talep_id = t.id AND x.kalem_id = k.id)`;
+
 // 3256-1: bir talebin plana giden gelişleri (malzemeGelisleriOku'nun süzgeciyle); talep kaydından önce ve sonra okunur, farkı plan işaretler.
 export interface TalepGelisiOkuma { malzemeNo: number; tarih: string | null; miktar: string; satirId: number }
 export function talepGelisleriOku(db: Db, talepId: string): Promise<TalepGelisiOkuma[]> {
@@ -884,8 +897,27 @@ export function talepGelisleriOku(db: Db, talepId: string): Promise<TalepGelisiO
        LEFT JOIN LATERAL (SELECT sum(x.miktar) AS toplam FROM satin_alma_teslim x WHERE x.siparis_satiri_id = s.id) m ON true
       WHERE s.talep_id = $1 AND c.malzeme_no IS NOT NULL AND t.durum = 'siparis_verildi' AND p.logo_kapatma_durumu IS NULL
         AND coalesce(m.toplam, 0) < s.miktar
-      ORDER BY s.id`,
+     UNION ALL
+     -- 3256-2: onaylı, siparişe geçmemiş talep kalemi de planın gelişidir (ONAYLI_TALEP_KALEMI). Anahtar kalemin sayı
+     -- kimliğinin eksisidir (sipariş satırı kimliğiyle karışmaz); onaylı karar değişmediği için geliş günü karşılaştırılmaz (boş).
+     SELECT c.malzeme_no, NULL::date, k.miktar::text, -k.sayi_id
+       ${ONAYLI_TALEP_KALEMI}
+        AND t.id = $1
+      ORDER BY 4`,
     [talepId],
+  );
+}
+
+// 3256-2: onaylı talep kalemleri plana gelecek malzeme olarak (ONAYLI_TALEP_KALEMI); termin günü kalemin karardaki teklifinden. Fiyat ve
+// tedarikçi taşımaz.
+export interface OnayliTalepKalemiOkuma { malzemeNo: number; miktar: string; birim: string; talepNo: string; terminGun: number | null }
+export function onayliTalepKalemleriOku(db: Db, malzemeNolar: readonly number[]): Promise<OnayliTalepKalemiOkuma[]> {
+  return db.sorgu<OnayliTalepKalemiOkuma>(
+    `SELECT c.malzeme_no AS "malzemeNo", k.miktar::text AS miktar, k.birim, t.no AS "talepNo", q.termin_gun AS "terminGun"
+       ${ONAYLI_TALEP_KALEMI}
+        AND c.malzeme_no = ANY($1::int[])
+      ORDER BY c.malzeme_no, t.yil, t.sira, k.sira`,
+    [[...malzemeNolar]],
   );
 }
 

@@ -982,7 +982,6 @@ export async function talepKaydet(db: Db, k: Kullanici, id: string, g: TalepKayd
   }
   // Sipariş bilgisi (beklenen teslim, tedarikçi) ya da durum değişmiş olabilir: alım satırları her kayıtta eşitlenir.
   if (siparisteMi(yazilacak.durum) || siparisteMi(eski.durum)) await alimlariBildir(db, k, id);
-  await gelisFarkiniBildir(db, id, gelislerOnce);
   if (siparisteMi(yazilacak.durum)) await kartKopyalariniAl(db, id);
   let kademeTutari: number | null | undefined;
   for (const o of yeniOnaylar) {
@@ -1000,6 +999,8 @@ export async function talepKaydet(db: Db, k: Kullanici, id: string, g: TalepKayd
     }
     await s.onayEkle(db, id, o, k.id, sonuc === 'dortGozsuz');
   }
+  // 3256-2: onaylı talep planın gelişidir; karşılaştırma onay kaydı yazıldıktan sonra okunur, yoksa onay ve ret olay yaymaz.
+  await gelisFarkiniBildir(db, id, gelislerOnce);
   // TMI A2: karar talebi açana ve talep edene haber verilir; ret gerekçesi metindedir. Karar veren kendisi almaz.
   const sonOnay = yeniOnaylar.at(-1);
   if (sonOnay !== undefined) {

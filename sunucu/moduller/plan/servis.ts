@@ -24,7 +24,8 @@ import { firmaAra } from '../musteri-tedarikci/disari.ts';
 import { siparisinProjeleri, siparistenProjeAc } from '../projeler/disari.ts';
 import { acikRevizyonSayisi, durumRevizyonlari, emreKopyala, girdisiEksikRevizyonlar, revizyonGetir, yururluktekiRevizyonIdleri } from '../rota/disari.ts';
 import type { DurumRotaAdimi } from '../rota/disari.ts';
-import { fasonSuresiTahminleri } from '../satin-alma/disari.ts';
+import { emirTedarikDurumlari, fasonSuresiTahminleri } from '../satin-alma/disari.ts';
+import { fasonSiparisTarihleri } from './planlama-kurallar.ts';
 import { siparisKilitliAyrinti, siparisSatiriOzetleri, taslakSiparisAc } from '../siparisler/disari.ts';
 import { dusukStokSayisi } from '../stok/disari.ts';
 import {
@@ -452,7 +453,7 @@ export async function okumaBellegiyle<T>(db: Db, is: () => Promise<T>): Promise<
 }
 export function planlanacakIsler(db: Db, secenek: { taslakDahil?: boolean; fasonTahmini?: boolean } = {}): Promise<PlanIsEmri[]> {
   const taslakDahil = secenek.taslakDahil ?? false;
-  const oku = () => planlanacakIsEmirleri(db, { taslakDahil, ...(secenek.fasonTahmini ? { fasonTahmini: (q: Parameters<typeof fasonSuresiTahminleri>[1]) => fasonSuresiTahminleri(db, q) } : {}) });
+  const oku = () => planlanacakIsEmirleri(db, { taslakDahil, ...(secenek.fasonTahmini ? { fasonTahmini: (q: Parameters<typeof fasonSuresiTahminleri>[1]) => fasonSuresiTahminleri(db, q), fasonSiparisTermini: async (idler: readonly number[]) => fasonSiparisTarihleri(await emirTedarikDurumlari(db, [], idler)) } : {}) });
   const bellek = okumaBellekleri.get(db);
   if (bellek === undefined) return oku();
   const anahtar = `${String(taslakDahil)}|${String(secenek.fasonTahmini === true)}`;

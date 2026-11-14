@@ -2,7 +2,7 @@ import type { Db } from '#cekirdek/db.ts';
 import { VARSAYILAN_ONAY_LIMITLERI } from './kurallar.ts';
 import * as servis from './servis.ts';
 import * as sorgu from './sorgular.ts';
-import { tedarikAsamasi } from './kurallar.ts';
+import { onayliTalepGelisi, tedarikAsamasi } from './kurallar.ts';
 import type { TedarikAsamasi } from './kurallar.ts';
 // 1237: Ctrl K genel aramasının talep ve sipariş kaynakları; çekirdek ad kuralıyla bulur (1233).
 export { kayitAramaKaynaklari } from './arama/kaynaklar.ts';
@@ -18,6 +18,17 @@ export { ortalamaAlisFiyatlari, siparisBirimFiyatlari, sonAlisFiyatlari, type Si
 // Yetki denetlemez; fiyat yok.
 export { malzemeGelisTarihleri } from './servis.ts';
 export type { MalzemeGelisi } from './servis.ts';
+// 3256-2: onaylanmış, siparişi verilmemiş talep kalemleri plana gelecek malzeme olarak girer (malzemeGelisTarihleri ile aynı biçim; numara
+// talep numarasıdır). Geliş bugün + kararın teklifindeki termin günü, termin günü yoksa boş (onayliTalepGelisi). Yetki denetlemez; fiyat yok.
+export async function onayliTalepGelisleri(db: Db, malzemeNolar: readonly number[], bugun: string): Promise<Map<number, servis.MalzemeGelisi[]>> {
+  const m = new Map<number, servis.MalzemeGelisi[]>();
+  const tekil = [...new Set(malzemeNolar)];
+  if (tekil.length === 0) return m;
+  for (const x of await sorgu.onayliTalepKalemleriOku(db, tekil)) {
+    m.set(x.malzemeNo, [...(m.get(x.malzemeNo) ?? []), { tarih: onayliTalepGelisi(bugun, x.terminGun), miktar: servis.sade(x.miktar), birim: x.birim, siparisNo: x.talepNo }]);
+  }
+  return m;
+}
 export type { OrtalamaAlisFiyati, SonAlisFiyati } from './servis.ts';
 // 533 a: malzemenin tedarik termini (sahibi satın alma). Plan termini okur; satırı olmayan malzeme haritada yoktur (termin
 // bekliyor). Plan "olması gereken" tarihi tam liste olarak yazar (listede olmayanın gereken tarihi boşalır, sürüm artmaz).

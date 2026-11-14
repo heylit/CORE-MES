@@ -364,6 +364,25 @@ export function acikSiparisSatirlari(
     .map((g) => ({ kod: m.id, miktar: Number(g.miktar), tarih: g.tarih, siparisNo: g.siparisNo })));
 }
 
+// 3256-2: açık siparişlerin ve onaylı taleplerin gelişleri malzeme başına tek listede; her malzemede önce sipariş satırları, sonra talepler.
+export function gelisleriBirlestir<T>(...haritalar: readonly ReadonlyMap<number, readonly T[]>[]): Map<number, T[]> {
+  const m = new Map<number, T[]>();
+  for (const h of haritalar) for (const [no, l] of h) m.set(no, [...(m.get(no) ?? []), ...l]);
+  return m;
+}
+
+// 3257 a: fason iş emrinin açık siparişlerindeki teslim tarihi; adım birden çok siparişle gittiyse en geç dönüş esastır. Tarihsiz sipariş ve
+// talep aşamasındaki kalem sayılmaz (sıra termin gününe, tahmine ya da varsayılana kalır).
+export function fasonSiparisTarihleri(l: readonly { isEmriId: number | null; asama: string; termin: string | null }[]): Map<number, string> {
+  const m = new Map<number, string>();
+  for (const x of l) {
+    if (x.isEmriId === null || x.asama !== 'siparis' || x.termin === null) continue;
+    const eski = m.get(x.isEmriId);
+    if (eski === undefined || x.termin > eski) m.set(x.isEmriId, x.termin);
+  }
+  return m;
+}
+
 // 533 a: planın "olması gereken" tarihi Satın Alma'ya bildirilir: malzemeyi kullanan ilk işin kayıtlı plandaki başlangıcı eksi muayene süresi
 // (motor/durum.js tmIhtiyac ile aynı tanım), planın günü olarak. 1473 a: adımı belli satırda ihtiyaç o adımın başlangıcıdır; adım bitmiş ya da
 // planda yoksa satır ihtiyaç doğurmaz. Havuzdaki ve iptal sipariş, bitmiş işlem sayılmaz. Plan ya da başlangıç günü yoksa liste boştur.
