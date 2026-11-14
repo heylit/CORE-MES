@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Link, useNavigate } from 'react-router-dom';
 import { EMIR_TURU_ADLARI } from '#paylasilan/sozlesme/emir-turleri.ts';
 import type { AcilisSecenekleri } from '#paylasilan/sozlesme/uretim-emirleri.ts';
+import type { UrunRevizyonlariCevabi } from '#paylasilan/sozlesme/rota.ts';
 import { api } from '../../../../ortak/veri/api.ts';
 import { Dugme, DurumKutusu, Girdi, IsaretKutusu, Pencere, Secim, Simge } from '../../../../ortak/arayuz/index.ts';
 import { sayi, tarih } from '../bicim.ts';
@@ -14,7 +15,7 @@ import { EmirAyrintisi, PlanHucresi } from './EmirAyrintisi.tsx';
 import { planMetni, tamponRozeti, turAdi } from './gorunum.ts';
 import { acilanEmir, guncelSurum, useEmirKomutu } from './komut.ts';
 import {
-  aramaUyar, bugun, DURUM_ADI, DURUM_SUZGECLERI, durumAdi, durumGosterimi, durumUyar, emirAdimlari, emirAgaci, ilerleme, isGunuEkle, miktarOku, ONCELIK_ADI, planOzeti, planSirasi, seritNo, uretilirMi, cokKatmanOzeti, yururlukteRevizyonId,
+  aramaUyar, bugun, DURUM_ADI, DURUM_SUZGECLERI, durumAdi, durumGosterimi, durumUyar, emirAdimlari, emirAgaci, ilerleme, isGunuEkle, miktarOku, ONCELIK_ADI, planOzeti, planSirasi, seritNo, uretilirMi, cokKatmanOzeti, yururlukteRevizyonId, emirRotasi,
   type DurumSuzgeci, type Emir,
 } from './kurallar.ts';
 
@@ -182,7 +183,7 @@ function EmirSatiri({ durum: d, emir: o, derinlik, secili, sira, sec }: {
 // K19 a: bugünden önceki teslim uyarı ve onayla açılır, engellenmez. İki değer de ISO gün ("2026-11-02"); boş ya da bozuk teslim geçmiş sayılmaz.
 export const gecmisTeslimMi = (teslim: string, bugunGun: string): boolean => /^\d{4}-\d{2}-\d{2}$/.test(teslim) && teslim < bugunGun;
 
-interface YeniFormDurumu { urun: string; miktar: string; baslangic: string; teslim: string; oncelik: string; durum: 'serbest' | 'taslak'; tur: string; not: string; rezerve: boolean }
+interface YeniFormDurumu { urun: string; miktar: string; baslangic: string; teslim: string; oncelik: string; durum: 'serbest' | 'taslak'; tur: string; not: string; rezerve: boolean; rota: string }
 
 export function YeniEmirFormu({ durum: d, yetki, komut, acildi, git, ilkUrun }: {
   durum: RrDurumu; yetki: EkranOzellikleri['yetki']; komut: ReturnType<typeof useEmirKomutu>; acildi: (id: string) => void; git: EkranOzellikleri['git'];
@@ -197,14 +198,22 @@ export function YeniEmirFormu({ durum: d, yetki, komut, acildi, git, ilkUrun }: 
   const tatiller = d.cal.holidays;
   const ilk = isGunuEkle(bugun(), 0, tatiller);
   const [f, setF] = useState<YeniFormDurumu>({
-    urun: (ilkUrun !== null && urunler.some((u) => u.id === ilkUrun) ? ilkUrun : urunler[0]?.id) ?? '', miktar: '100', baslangic: ilk, teslim: isGunuEkle(ilk, 9, tatiller), oncelik: '3', durum: 'serbest', tur: 'seri', not: '', rezerve: true,
+    urun: (ilkUrun !== null && urunler.some((u) => u.id === ilkUrun) ? ilkUrun : urunler[0]?.id) ?? '', miktar: '100', baslangic: ilk, teslim: isGunuEkle(ilk, 9, tatiller), oncelik: '3', durum: 'serbest', tur: 'seri', not: '', rezerve: true, rota: '',
   });
   const [bolme, setBolme] = useState<BolmeDurumu>(bosBolme(true));
   const [cok, setCok] = useState<CokKatmanSecimi>(bosCokKatman);
   const [hata, setHata] = useState<string | null>(null);
   const [gecmisSorusu, setGecmisSorusu] = useState(false);
+  // 3247 a: ürünün rotaları; birden çok rota varsa form "Rota" alanını gösterir.
+  const urunNo = Number(f.urun);
+  const rotalar = useQuery({
+    queryKey: [...RR_ANAHTARI, 'urun-rotalari', urunNo] as const,
+    enabled: yetki.rotaEmreKopyala && uretilirMi(d, f.urun) && Number.isInteger(urunNo) && urunNo > 0,
+    queryFn: () => api.get<UrunRevizyonlariCevabi>(`/rota/urunler/${String(urunNo)}`),
+  });
+  const rotaSecimi = emirRotasi(rotalar.data, f.tur, turAdi(f.tur), f.rota);
   // 1476-F: çok katmanlı seçim yalnız emri rotadan açabilene ve rotalı alt parçası olan ürüne görünür (önizleme sunucudan).
-  const kokRevizyon = yururlukteRevizyonId(d, f.urun);
+  const kokRevizyon = rotaSecimi === null ? yururlukteRevizyonId(d, f.urun) : rotaSecimi.revizyonId;
   const onizleme = usePatlatmaOnizlemesi(kokRevizyon, yetki.rotaEmreKopyala && uretilirMi(d, f.urun)).data;
   const cokKatmanVar = onizleme !== undefined && onizleme.kokRevizyon.id === kokRevizyon && (onizleme.ileti !== null || onizleme.dugumler.length > 1);
   const cokAcik = cokKatmanVar && cok.acik && onizleme.ileti === null && onizleme.engel === null;
@@ -241,6 +250,7 @@ export function YeniEmirFormu({ durum: d, yetki, komut, acildi, git, ilkUrun }: 
     // Emir adedi parça sayısıdır (2565): kesirli adet gönderilmez.
     if (!Number.isInteger(adet.deger)) { setHata('Miktar tam sayı olmalı.'); return; }
     if (!/^\d{4}-\d{2}-\d{2}$/.test(f.baslangic) || !/^\d{4}-\d{2}-\d{2}$/.test(f.teslim)) { setHata('Başlangıç ve teslim tarihini girin.'); return; }
+    if (rotali && rotaSecimi?.uyari) { setHata(rotaSecimi.uyari); return; }
     // K19 a: geçmiş teslim engel değildir; emir kullanıcı onaylayınca açılır.
     if (gecmis && !gecmisOnayli) { setGecmisSorusu(true); return; }
     // Çok katmanlı emir açılırken bölünmez (sunucu bölmeyi reddeder); taslak koşulu 1476-C ile kalktı.
@@ -251,6 +261,7 @@ export function YeniEmirFormu({ durum: d, yetki, komut, acildi, git, ilkUrun }: 
     const govde = {
       itemId: f.urun, qty: adet.deger, start: f.baslangic, due: f.teslim, priority: Number(f.oncelik), note: f.not.trim(), tur: f.tur, taslak: f.durum === 'taslak',
       ...(rotali ? { rezerve: f.rezerve } : { rotasiz: true }),
+      ...(rotali && rotaSecimi ? { rotaId: Number(rotaSecimi.secili) } : {}),
       ...(cokOzet ? { cokKatmanli: true, stoktanDugumler: cokOzet.gonderilecek } : {}),
     };
     const c = await komut.calistir('emir-ac', govde);
@@ -283,7 +294,7 @@ export function YeniEmirFormu({ durum: d, yetki, komut, acildi, git, ilkUrun }: 
     <section className="tc-rr3-panel" data-pencerede="" aria-label="Yeni üretim emri">
       <div className="tc-rr3-form">
         <Secim
-          etiket="Ürün" value={f.urun} onChange={(o) => { yaz({ urun: o.target.value }); setBolme(bosBolme(true)); setCok(bosCokKatman()); }}
+          etiket="Ürün" value={f.urun} onChange={(o) => { yaz({ urun: o.target.value, rota: '' }); setBolme(bosBolme(true)); setCok(bosCokKatman()); }}
           secenekler={urunler.map((u) => ({ deger: u.id, baslik: `${u.code} ${u.name}${uretilirMi(d, u.id) ? '' : ' (rotasız)'}` }))}
         />
         <Girdi etiket="Miktar" inputMode="numeric" value={f.miktar} onChange={(o) => { yaz({ miktar: o.target.value }); }} />
@@ -298,7 +309,11 @@ export function YeniEmirFormu({ durum: d, yetki, komut, acildi, git, ilkUrun }: 
           etiket="Durum" value={f.durum} onChange={(o) => { yaz({ durum: o.target.value === 'taslak' ? 'taslak' : 'serbest' }); }}
           secenekler={[{ deger: 'serbest', baslik: `${DURUM_ADI.serbest} (plana girer)` }, { deger: 'taslak', baslik: DURUM_ADI.taslak }]}
         />
-        <Secim etiket="Emir türü" value={f.tur} secenekler={TUR_SECENEKLERI} onChange={(o) => { yaz({ tur: o.target.value }); }} />
+        <Secim etiket="Emir türü" value={f.tur} secenekler={TUR_SECENEKLERI} onChange={(o) => { yaz({ tur: o.target.value, rota: '' }); }} />
+        {rotali && rotaSecimi && (
+          <Secim etiket="Rota" value={rotaSecimi.secili} secenekler={rotaSecimi.secenekler} ipucu={rotaSecimi.ipucu} hata={rotaSecimi.uyari ?? undefined}
+            onChange={(o) => { yaz({ rota: o.target.value }); }} />
+        )}
         <Girdi etiket="Not" placeholder="Müşteri, sipariş no…" value={f.not} onChange={(o) => { yaz({ not: o.target.value }); }} />
       </div>
       {rotali && (

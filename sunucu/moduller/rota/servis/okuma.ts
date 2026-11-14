@@ -248,7 +248,7 @@ export async function emreKopyala(db: Db, kullanici: Kullanici, id: number, g: {
     malzemeNo: r.malzemeId, adet: g.adet, teslim: g.teslim, oncelik: g.oncelik, baslangic: g.baslangic ?? null, aciklama: g.aciklama ?? null,
     ...(g.taslak ? { taslak: true } : {}), ...(g.stoktanRezerve ? { stoktanRezerve: true } : {}), ...(g.emirTuru ? { emirTuru: g.emirTuru } : {}), projeId: g.projeId ?? null, siparisSatiriId: g.siparisSatiriId ?? null, siparisPartiId: g.siparisPartiId ?? null, kaynakRotaRevizyonId: r.id,
   };
-  if (g.cokKatmanli === true) return cokKatmanliAc(db, kullanici, r.id, r.malzemeId, rota, baslik, g.stoktanDugumler ?? []);
+  if (g.cokKatmanli === true) return cokKatmanliAc(db, kullanici, r.id, r.malzemeId, rota, baslik, g.stoktanDugumler ?? [], g.emirTuru ?? null);
   if ((g.stoktanDugumler ?? []).length > 0) throw gecersiz('Stoktan karşılanan düğüm yalnız çok katmanlı emirde seçilir.');
   const acilan = await uretimEmriAc(db, kullanici, { ...baslik, isEmirleri: await isEmriGirdileri(db, r.malzemeId, rota) });
   // Üretim emirleri iş emirlerini adım sırasıyla açar ve kimlikleri o sırayla döner.
@@ -264,9 +264,9 @@ export async function emreKopyala(db: Db, kullanici: Kullanici, id: number, g: {
 // sonra tek emrin numara, dal ve öncül düzenine çevrilir (cokKatmanaCevir); şartnameler düğümün revizyonu ve rotadaki numarayla sabitlenir.
 async function cokKatmanliAc(
   db: Db, kullanici: Kullanici, revizyonId: number, malzemeId: number, kokRota: RotaRevizyonu,
-  baslik: Omit<Parameters<typeof uretimEmriAc>[2], 'isEmirleri'>, stoktan: readonly string[],
+  baslik: Omit<Parameters<typeof uretimEmriAc>[2], 'isEmirleri'>, stoktan: readonly string[], emirTuru: EmirTuru | null,
 ) {
-  const p = await patlat(db, kullanici.id, revizyonId, malzemeId);
+  const p = await patlat(db, kullanici.id, revizyonId, malzemeId, emirTuru);
   const dugumler = [...new Map(p.satirlar.map((x) => [x.dugum, x])).values()];
   const girdiler = new Map<string, Awaited<ReturnType<typeof isEmriGirdileri>>>();
   for (const d of dugumler) {
@@ -287,13 +287,15 @@ async function cokKatmanliAc(
   return acilan;
 }
 
-// Teslimdeki "Emirlere uygula (yürürlükteki rota)": iş emirleri ürünün yürürlükteki revizyonundan yenilenir. Güvenli kip
+// Teslimdeki "Emirlere uygula (yürürlükteki rota)": iş emirleri emrin açıldığı rotanın yürürlükteki revizyonundan yenilenir
+// (FAI rotasından açılan emir FAI rotasında kalır, 3247 a). Güvenli kip
 // üretim emirlerindedir (başlamış ya da bitmiş iş emri korunur); rota yalnız yürürlükteki adımları verir (ADR 0006).
 export async function emreUygula(db: Db, kullanici: Kullanici, emirId: number) {
   const e = await adimliEmirAyrintisi(db, emirId);
   if (e.urun.id === null || e.kaynakRotaRevizyonId === null) throw gecersiz('Rotadan açılmamış emre rota uygulanmaz.');
-  const yid = await s.yururluktekiRevizyonId(db, e.urun.id);
-  if (yid === null) throw gecersiz('Ürünün yürürlükte rotası yok.');
+  const kaynak = revizyonuAl(await s.revizyonOku(db, e.kaynakRotaRevizyonId));
+  const yid = await s.rotadaYururluktekiRevizyonId(db, kaynak.rotaId);
+  if (yid === null) throw gecersiz('Emrin rotasının yürürlükte revizyonu yok.');
   if (yid === e.kaynakRotaRevizyonId) throw cakisma('Emir zaten yürürlükteki rotayla açılmış.');
   const r = revizyonuAl(await s.revizyonOku(db, yid));
   const rota = await revizyonGetir(db, yid);

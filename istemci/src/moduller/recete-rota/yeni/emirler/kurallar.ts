@@ -3,7 +3,7 @@ import { EMIR_DURUMU, emirDurumuGosterimi, type DurumGosterimi } from '#paylasil
 import type { EmirDurumu } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import type { DurumCevabi } from '#paylasilan/sozlesme/planlama.ts';
 import type { PlanCanliOzeti } from '#paylasilan/sozlesme/plan.ts';
-import type { PatlatmaOnizlemeCevabi } from '#paylasilan/sozlesme/rota.ts';
+import type { PatlatmaOnizlemeCevabi, UrunRevizyonlariCevabi } from '#paylasilan/sozlesme/rota.ts';
 import type { SahipsizStatuluCevabi } from '#paylasilan/sozlesme/stok.ts';
 import type { StokOkumasi } from '../../kopru.ts';
 import { sayi } from '../bicim.ts';
@@ -506,6 +506,34 @@ export const stoktanCikar = (dugum: string, stoktan: ReadonlySet<string>): boole
 
 type OnizlemeDugumu = PatlatmaOnizlemeCevabi['dugumler'][number];
 // Emir yalnız ürünün yürürlükteki revizyonundan açılır (emir-ac komutu da onu bulur); yoksa null.
+// 3247 a: ürünün birden çok rotası varsa emir formunda "Rota" alanı. Varsayılan emir türüne bağlı rota, yoksa Standart; kullanıcı
+// yürürlükte revizyonu olan başka rotayı seçebilir. Türün rotası yürürlükte değilse uyarı çıkar, emir Standart seçilince açılır.
+export interface EmirRotasi {
+  secenekler: { deger: string; baslik: string }[];
+  secili: string;
+  revizyonId: number | null;
+  ipucu: string;
+  uyari: string | null;
+}
+export function emirRotasi(c: Pick<UrunRevizyonlariCevabi, 'rotalar' | 'revizyonlar'> | undefined, tur: string, turAdi: string, secilen: string): EmirRotasi | null {
+  if (c === undefined || c.rotalar.length < 2) return null;
+  const yururlukte = (id: number) => c.revizyonlar.find((r) => r.rotaId === id && r.durum === 'yururlukte') ?? null;
+  const standart = c.rotalar.find((r) => r.standart) ?? c.rotalar[0]!;
+  const turun = c.rotalar.find((r) => (r.emirTurleri as readonly string[]).includes(tur)) ?? standart;
+  const secili = (secilen === '' ? undefined : c.rotalar.find((r) => String(r.id) === secilen)) ?? turun;
+  const rev = yururlukte(secili.id);
+  return {
+    secenekler: c.rotalar.filter((r) => r.id === secili.id || yururlukte(r.id) !== null).map((r) => {
+      const y = yururlukte(r.id);
+      return { deger: String(r.id), baslik: `${r.ad} · ${y === null ? 'yürürlükte değil' : `Rev ${y.harf}`}` };
+    }),
+    secili: String(secili.id),
+    revizyonId: rev?.id ?? null,
+    ipucu: secili.id === turun.id ? `${turAdi} türünün rotası` : `Elle seçildi; ${turAdi} türünün rotası ${turun.ad}`,
+    uyari: rev === null ? `${secili.ad} rotasının yürürlükte revizyonu yok; emri açmak için ${standart.ad} rotasını seçin.` : null,
+  };
+}
+
 export function yururlukteRevizyonId(d: Pick<DurumCevabi, 'routeRevs'>, urunId: string): number | null {
   const r = (d.routeRevs ?? []).find((x) => x.itemId === urunId && x.status === 'yururlukte');
   return r === undefined ? null : Number(r.id);

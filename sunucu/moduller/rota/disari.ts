@@ -4,7 +4,7 @@ import { adimliEmirAyrintisi, aralikAdetleri, isEmriSureOzeti, uretimEmriOzeti }
 import { gecerliAletVarMi } from '../kalibrasyon/disari.ts';
 import { ekipmanHazirliklari, terminalOlcumAdaylari, terminalOlcumKarari, terminalOlcumleri } from './kurallar.ts';
 import type { EkipmanHazirligi, OlcumAtlamaNedeni } from './kurallar.ts';
-import { isEmriEkipmanlari, kullanilmisOpNolari, yururluktekiRevizyonIdleri } from './sorgular.ts';
+import { isEmriEkipmanlari, kullanilmisOpNolari, revizyonKunyeleri as revizyonKunyeleriSorgu } from './sorgular.ts';
 export type { DurumRotaAdimi, DurumRotaRevizyonu, RotaAdimi, RotaRevizyonu } from './servis.ts';
 export type { EtkinAdimSuresi } from './kurallar.ts';
 export { yururluktekiRevizyonId, yururluktekiRevizyonIdleri } from './sorgular.ts';
@@ -62,7 +62,7 @@ export async function isEmriKaynakIstekleri(db: Db, isEmriIdleri: readonly numbe
   return sonuc;
 }
 
-// Hazırlık matrisinin rota maddesi (2146-1 a, yalnız uyarır): emir, ürünün yürürlükteki rota revizyonuyla mı açıldı. Rotadan açılmamış
+// Hazırlık matrisinin rota maddesi (2146-1 a, yalnız uyarır): emir, rotasının yürürlükteki revizyonuyla mı açıldı. Rotadan açılmamış
 // emirde madde gerekmez; ürünün yürürlükte revizyonu yoksa ya da emir eski revizyonla açıldıysa eksiktir. Bağı kablolama.ts kurar.
 export async function emirRotaHazirliklari(db: Db, emirIdleri: readonly number[]): Promise<Map<number, { durum: 'yok' | 'tamam'; secildi: boolean }>> {
   const emirler = [];
@@ -70,10 +70,12 @@ export async function emirRotaHazirliklari(db: Db, emirIdleri: readonly number[]
     const e = await uretimEmriOzeti(db, id);
     if (e !== null) emirler.push(e);
   }
-  const yururlukte = await yururluktekiRevizyonIdleri(db, [...new Set(emirler.flatMap((e) => (e.malzemeNo === null ? [] : [e.malzemeNo])))]);
+  // Karşılaştırma emrin açıldığı rotanın yürürlükteki revizyonuyladır (3247 a): FAI rotasından açılan emir Standart'a göre "eski" sayılmaz.
+  const kunyeler = await revizyonKunyeleriSorgu(db, [...new Set(emirler.flatMap((e) => (e.kaynakRotaRevizyonId === null ? [] : [e.kaynakRotaRevizyonId])))]);
+  const yururlukte = new Map(kunyeler.map((k) => [k.id, k.yururlukteId]));
   return new Map(emirler.map((e) => [e.id, e.kaynakRotaRevizyonId === null || e.malzemeNo === null
     ? { durum: 'yok' as const, secildi: false }
-    : { durum: yururlukte.get(e.malzemeNo) === e.kaynakRotaRevizyonId ? 'tamam' as const : 'yok' as const, secildi: true }]));
+    : { durum: yururlukte.get(e.kaynakRotaRevizyonId) === e.kaynakRotaRevizyonId ? 'tamam' as const : 'yok' as const, secildi: true }]));
 }
 
 // Arkon "Süre ölçülmedi" (2567): emrin bitmiş iş emirlerinden terminal ölçümüne girmeyenler ve nedenleri; ölçüt iş emri bitince yazılan

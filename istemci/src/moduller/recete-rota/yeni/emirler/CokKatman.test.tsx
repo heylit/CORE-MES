@@ -15,7 +15,7 @@ const sunucu = (islemler: string[], onizleme = onizlemeOrnegi()) => sunucuKur(ki
   durum: rotaDurumu(),
   yazmalar: {
     [`GET ${ONIZLEME}`]: () => json(200, onizleme),
-    'GET /rota/urunler/11': () => json(200, { revizyonlar: [{ id: 71, harf: 'A', durum: 'yururlukte' }] }),
+    'GET /rota/urunler/11': () => json(200, { revizyonlar: [{ id: 71, rotaId: 1, harf: 'A', durum: 'yururlukte' }], rotalar: [{ id: 1, ad: 'Standart', standart: true, surum: 1, emirTurleri: [], taslakAcilabilir: false }] }),
     'GET /adimli-emirler/acilis-secenekleri': () => json(200, { projeZorunlu: false, projeler: [] }),
     [`POST ${KOPYA}`]: () => json(200, { uretimEmriId: 62, isEmriIdleri: [1, 2, 3] }),
   },

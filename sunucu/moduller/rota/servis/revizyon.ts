@@ -24,10 +24,11 @@ function farkAdimlari(ayrinti: RevizyonAyrintisi['adimlar']): FarkAdimi[] {
   }));
 }
 
-// Revizyon, ürünün yürürlükteki revizyonuyla karşılaştırılır; yürürlükteki revizyonun kendisi için fark yoktur.
+// Revizyon, kendi rotasının yürürlükteki revizyonuyla karşılaştırılır; rotada henüz yürürlükte revizyon yoksa ürünün Standart
+// rotasınınkiyle. Yürürlükteki revizyonun kendisi için fark yoktur.
 export async function fark(db: Db, id: number): Promise<FarkCevabi> {
   const r = revizyonuAl(await s.revizyonOku(db, id));
-  const yururlukte = await s.yururluktekiRevizyonId(db, r.malzemeId);
+  const yururlukte = await s.rotadaYururluktekiRevizyonId(db, r.rotaId) ?? await s.yururluktekiRevizyonId(db, r.malzemeId);
   if (yururlukte === null || yururlukte === id) return { karsilastirilan: null, farklar: [] };
   const eskiR = revizyonuAl(await s.revizyonOku(db, yururlukte));
   const adimlar = async (rid: number) => adimlariKur(await gorunumBaglami(db, r.malzemeId, await s.icerikOku(db, rid)));
@@ -103,8 +104,8 @@ async function onayDenetimi(db: Db, r: RevizyonSatiri): Promise<void> {
   if (ileti !== null) throw gecersiz(ileti);
 }
 
-export function taslakAc(db: Db, kullanici: Kullanici, urunId: number, kaynak: TaslakKaynagi): Promise<KomutCevabi> {
-  return taslagiAc(db, kullanici.id, urunId, kaynak);
+export function taslakAc(db: Db, kullanici: Kullanici, urunId: number, kaynak: TaslakKaynagi, rotaId: number | null = null): Promise<KomutCevabi> {
+  return taslagiAc(db, kullanici.id, urunId, kaynak, rotaId);
 }
 
 // Kart onaylanınca ilk rota kendiliğinden taslak açılır (#688): Malzemeler Rota'yı çağıramaz (Rota onu ithal eder, döngü yasak),
@@ -298,9 +299,10 @@ export async function yururlugeAl(db: Db, kullanici: Kullanici, id: number, suru
   return yururlugeGir(db, kullanici, r);
 }
 
+// Yürürlük rota başınadır: aynı ürünün öteki rotalarının yürürlükteki revizyonu değişmez (3247 a).
 async function yururlugeGir(db: Db, kullanici: Kullanici, r: RevizyonSatiri): Promise<KomutCevabi> {
-  const onceki = await s.yururluktekiRevizyonId(db, r.malzemeId);
-  await s.yururluktekiniOnayliYap(db, r.malzemeId);
+  const onceki = await s.rotadaYururluktekiRevizyonId(db, r.rotaId);
+  await s.yururluktekiniOnayliYap(db, r.rotaId);
   const surum = await s.yururlugeAlYaz(db, r.id, kullanici.id);
   await olcumleriBosalt(db, kullanici.id, r.malzemeId, onceki, r.id);
   return cevap(r.id, 'yururlukte', surum);
@@ -318,11 +320,13 @@ export async function kopyala(db: Db, kullanici: Kullanici, id: number, hedefUru
   if (!islemVarMi(kullanici, TASLAK_AC)) throw yetkiYok();
   const { r } = await komutIcinAl(db, kullanici, id, 'kopyala', null);
   const hedef = await rotaKurulabilirUrun(db, hedefUrunId);
-  if (await s.acikRevizyonVarMi(db, hedefUrunId)) throw cakisma(TASLAK_ACIK);
-  const harf = revizyonHarfi(await s.harfler(db, hedefUrunId));
+  // Aynı üründe kopya kaynağın rotasında, başka üründe hedefin Standart rotasında açılır.
+  const hedefRota = hedefUrunId === r.malzemeId ? r.rotaId : await s.standartRotaId(db, hedefUrunId);
+  if (await s.rotadaAcikRevizyonVarMi(db, hedefRota)) throw cakisma(TASLAK_ACIK);
+  const harf = revizyonHarfi(await s.rotaHarfleri(db, hedefRota));
   if (harf === null) throw gecersiz('Bu ürünün revizyon harfleri tükendi.');
   const adimlar = hedefUrunId === r.malzemeId ? icerikYazimlari(await s.icerikOku(db, id)) : await baskaUruneAdimlar(db, id, hedefUrunId);
-  const yeni = await s.revizyonEkle(db, { malzemeId: hedefUrunId, malzemeTuru: turu(hedef), harf, acanKisiId: kullanici.id, kaynakRevizyonId: id });
+  const yeni = await s.revizyonEkle(db, { malzemeId: hedefUrunId, malzemeTuru: turu(hedef), harf, acanKisiId: kullanici.id, kaynakRevizyonId: id, rotaId: hedefRota });
   await adimlariYaz(db, yeni, hedefUrunId, adimlar);
   if (hedefUrunId === r.malzemeId) await s.adimSartnameleriniKopyala(db, id, yeni);
   return cevap(yeni, 'taslak', 1);

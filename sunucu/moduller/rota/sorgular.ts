@@ -1,14 +1,18 @@
 import type { Db } from '#cekirdek/db.ts';
 import { islemKilidiAl } from '#cekirdek/kilit.ts';
+import type { EmirTuru } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import type {
   Bagimlilik, EkipmanAsamasi, EkipmanTuru, GerceklesenKaynagi, GerceklesenTuru, IlkParcaSecimi, MakineKullanimi, ParametreDegeri, ParametreDegerleri, ParametreTuru, RevizyonDurumu, RevizyonOzeti, SartnameKapsami, TalimatAsamasi,
 } from '#paylasilan/sozlesme/rota.ts';
 import { MALZEME_KARTI_IZ_YOLU, malzemeKartiIzParametreleri, type MalzemeKartiAnahtari, type MalzemeKartiIzi } from '#paylasilan/malzeme-karti-izi.ts';
 
+// Ürün düzeyindeki okumalar ürünün Standart rotasının revizyonlarıdır (3247 a); takma ad r rota_revizyonu'dur.
+const STANDART_ROTA = 'JOIN rota_tanimi st ON st.id = r.rota_id AND st.standart';
+
 // Zaman ISO 8601 metni olarak döner (sözleşme: zaman).
 const ISO = (sutun: string) => `to_json(${sutun}) #>> '{}'`;
 
-const OZET = `r.id, r.harf, r.durum, r.surum, r.aciklama, ${ISO('r.acilma')} AS acilma, ${ISO('r.onaylama')} AS onaylama,
+const OZET = `r.id, r.rota_id AS "rotaId", r.harf, r.durum, r.surum, r.aciklama, ${ISO('r.acilma')} AS acilma, ${ISO('r.onaylama')} AS onaylama,
   ${ISO('r.yururluge_alma')} AS "yururlugeAlma"`;
 
 export interface RevizyonSatiri extends RevizyonOzeti {
@@ -55,11 +59,12 @@ export function urunRevizyonlari(db: Db, malzemeId: number): Promise<RevizyonOze
   return db.sorgu<RevizyonOzeti>(`SELECT ${OZET} FROM rota_revizyonu r WHERE r.malzeme_id = $1 ORDER BY r.id`, [malzemeId]);
 }
 
-// Reçete ve Rota'nın bağlı durumu (kart #1184): iptal edilmeyen bütün revizyonlar; içerik ayrıca okunur.
+// Reçete ve Rota'nın bağlı durumu (kart #1184): iptal edilmeyen bütün revizyonlar; içerik ayrıca okunur. Çalışma alanı ve plan bugün
+// ürün başına tek rota bilir: yalnız Standart rotanın revizyonları döner (3247 a; öteki rotalar rota uçlarından okunur).
 export interface DurumRevizyonSatiri extends RevizyonOzeti { malzemeId: number; geriGondermeNedeni: string | null }
 export function iptalsizRevizyonlar(db: Db, malzemeId: number | null = null): Promise<DurumRevizyonSatiri[]> {
   return db.sorgu<DurumRevizyonSatiri>(
-    `SELECT ${OZET}, r.malzeme_id AS "malzemeId", r.geri_gonderme_nedeni AS "geriGondermeNedeni" FROM rota_revizyonu r WHERE r.durum <> 'iptal' AND ($1::int IS NULL OR r.malzeme_id = $1) ORDER BY r.malzeme_id, r.id`,
+    `SELECT ${OZET}, r.malzeme_id AS "malzemeId", r.geri_gonderme_nedeni AS "geriGondermeNedeni" FROM rota_revizyonu r ${STANDART_ROTA} WHERE r.durum <> 'iptal' AND ($1::int IS NULL OR r.malzeme_id = $1) ORDER BY r.malzeme_id, r.id`,
     [malzemeId],
   );
 }
@@ -83,7 +88,7 @@ export function rotaOzetleri(db: Db): Promise<RotaOzetSatiri[]> {
             max(r.harf) FILTER (WHERE r.durum IN ('taslak', 'onay_bekliyor')) AS "acikHarf",
             max(r.durum) FILTER (WHERE r.durum IN ('taslak', 'onay_bekliyor')) AS "acikDurum",
             count(*)::int AS "revizyonSayisi"
-       FROM rota_revizyonu r
+       FROM rota_revizyonu r ${STANDART_ROTA}
       GROUP BY r.malzeme_id
       ORDER BY r.malzeme_id`,
   );
@@ -96,7 +101,7 @@ export async function revizyonSayilari(db: Db): Promise<{ acikRevizyon: number; 
     `SELECT count(*) FILTER (WHERE g.acik_durum IS NOT NULL)::int AS "acikRevizyon",
             count(*) FILTER (WHERE g.acik_durum = 'onay_bekliyor')::int AS "onayBekleyen"
        FROM (SELECT max(r.durum) FILTER (WHERE r.durum IN ('taslak', 'onay_bekliyor')) AS acik_durum
-               FROM rota_revizyonu r
+               FROM rota_revizyonu r ${STANDART_ROTA}
               GROUP BY r.malzeme_id) g`,
   );
   if (satir === null) throw new Error('Toplama sorgusu satır döndürmedi.');
@@ -126,26 +131,122 @@ export async function kopyaIstegiSil(db: Db, hedefId: number): Promise<void> {
   await db.sorgu('DELETE FROM rota_kopya_istegi WHERE hedef_malzeme_id = $1', [hedefId]);
 }
 
+// Ürünün bütün rotalarındaki harfler: "ürünün rotası var mı" sorusu bununla sorulur.
 export async function harfler(db: Db, malzemeId: number): Promise<string[]> {
   return (await db.sorgu<{ harf: string }>('SELECT harf FROM rota_revizyonu WHERE malzeme_id = $1', [malzemeId])).map((s) => s.harf);
 }
 
-export function acikRevizyon(db: Db, malzemeId: number): Promise<{ id: number; durum: RevizyonDurumu } | null> {
-  return db.tek("SELECT id, durum FROM rota_revizyonu WHERE malzeme_id = $1 AND durum IN ('taslak', 'onay_bekliyor')", [malzemeId]);
+// Harf rota içinde tekildir (3247 a): yeni revizyonun harfi kendi rotasının harflerinden çıkar. Rotası henüz yoksa boş.
+export async function rotaHarfleri(db: Db, rotaId: number | null): Promise<string[]> {
+  if (rotaId === null) return [];
+  return (await db.sorgu<{ harf: string }>('SELECT harf FROM rota_revizyonu WHERE rota_id = $1', [rotaId])).map((s) => s.harf);
 }
 
-export async function acikRevizyonVarMi(db: Db, malzemeId: number): Promise<boolean> {
+// Ürün düzeyinde açık revizyon Standart rotanınkidir; öteki rotaların açık revizyonu kendi rotasından okunur.
+export function acikRevizyon(db: Db, malzemeId: number): Promise<{ id: number; durum: RevizyonDurumu } | null> {
+  return db.tek(`SELECT r.id, r.durum FROM rota_revizyonu r ${STANDART_ROTA} WHERE r.malzeme_id = $1 AND r.durum IN ('taslak', 'onay_bekliyor')`, [malzemeId]);
+}
+
+export async function rotadaAcikRevizyonVarMi(db: Db, rotaId: number | null): Promise<boolean> {
+  if (rotaId === null) return false;
   return (await db.tek<{ var: boolean }>(
-    "SELECT EXISTS (SELECT 1 FROM rota_revizyonu WHERE malzeme_id = $1 AND durum IN ('taslak', 'onay_bekliyor')) AS var",
-    [malzemeId],
+    "SELECT EXISTS (SELECT 1 FROM rota_revizyonu WHERE rota_id = $1 AND durum IN ('taslak', 'onay_bekliyor')) AS var",
+    [rotaId],
   ))?.var === true;
+}
+
+/* ---------------- rotalar (3247 a) ---------------- */
+
+export interface RotaSatiri { id: number; malzemeId: number; ad: string; standart: boolean; surum: number; emirTurleri: EmirTuru[] }
+const ROTA = `t.id, t.malzeme_id AS "malzemeId", t.ad, t.standart, t.surum,
+  COALESCE((SELECT array_agg(u.emir_turu ORDER BY u.emir_turu) FROM rota_tanimi_turu u WHERE u.rota_id = t.id), '{}') AS "emirTurleri"`;
+
+export function urunRotalari(db: Db, malzemeId: number): Promise<RotaSatiri[]> {
+  return db.sorgu<RotaSatiri>(`SELECT ${ROTA} FROM rota_tanimi t WHERE t.malzeme_id = $1 ORDER BY t.standart DESC, t.id`, [malzemeId]);
+}
+
+export function rotaOku(db: Db, id: number): Promise<RotaSatiri | null> {
+  return db.tek<RotaSatiri>(`SELECT ${ROTA} FROM rota_tanimi t WHERE t.id = $1`, [id]);
+}
+
+export function rotaKilitle(db: Db, id: number): Promise<RotaSatiri | null> {
+  return db.tek<RotaSatiri>(`SELECT ${ROTA} FROM rota_tanimi t WHERE t.id = $1 FOR UPDATE`, [id]);
+}
+
+export async function standartRotaId(db: Db, malzemeId: number): Promise<number | null> {
+  return (await db.tek<{ id: number }>('SELECT id FROM rota_tanimi WHERE malzeme_id = $1 AND standart', [malzemeId]))?.id ?? null;
+}
+
+// Ürünün Standart rotası yoksa açılır (ilk rota ad verilmeden de açılabilir); var olan döner.
+export async function standartRotaAc(db: Db, malzemeId: number, kisiId: number): Promise<number> {
+  const satir = await db.tek<{ id: number }>(
+    `INSERT INTO rota_tanimi (malzeme_id, ad, standart, acan_kisi_id) VALUES ($1, 'Standart', true, $2)
+     ON CONFLICT (malzeme_id) WHERE standart DO NOTHING RETURNING id`,
+    [malzemeId, kisiId],
+  );
+  return satir?.id ?? (await standartRotaId(db, malzemeId))!;
+}
+
+export async function rotaEkle(db: Db, malzemeId: number, ad: string, kisiId: number): Promise<number> {
+  return (await db.tek<{ id: number }>('INSERT INTO rota_tanimi (malzeme_id, ad, acan_kisi_id) VALUES ($1, $2, $3) RETURNING id', [malzemeId, ad, kisiId]))!.id;
+}
+
+export async function rotaAdiYaz(db: Db, id: number, ad: string, surum: number): Promise<number | null> {
+  return (await db.tek<{ surum: number }>('UPDATE rota_tanimi SET ad = $2, surum = surum + 1 WHERE id = $1 AND surum = $3 RETURNING surum', [id, ad, surum]))?.surum ?? null;
+}
+
+// Tür eşlemesi bütünüyle yazılır: silinen ve eklenen satır deftere ayrı düşer; değişmeyen satıra dokunulmaz. Başka rotaya bağlı tür
+// bu rotaya taşınır (ürün içinde tür tek rotadadır); o rotanın sürümü de artar.
+export async function rotaTurleriniYaz(db: Db, id: number, malzemeId: number, turler: readonly EmirTuru[], surum: number): Promise<number | null> {
+  const satir = await db.tek<{ surum: number }>('UPDATE rota_tanimi SET surum = surum + 1 WHERE id = $1 AND surum = $2 RETURNING surum', [id, surum]);
+  if (satir === null) return null;
+  await db.sorgu(
+    `WITH silinen AS (DELETE FROM rota_tanimi_turu WHERE malzeme_id = $2 AND rota_id <> $1 AND emir_turu = ANY($3::text[]) RETURNING rota_id)
+     UPDATE rota_tanimi SET surum = surum + 1 WHERE id IN (SELECT rota_id FROM silinen)`,
+    [id, malzemeId, [...turler]],
+  );
+  await db.sorgu('DELETE FROM rota_tanimi_turu WHERE rota_id = $1 AND NOT (emir_turu = ANY($2::text[]))', [id, [...turler]]);
+  await db.sorgu(
+    `INSERT INTO rota_tanimi_turu (rota_id, malzeme_id, emir_turu) SELECT $1, $2, x FROM unnest($3::text[]) x
+     ON CONFLICT (rota_id, emir_turu) DO NOTHING`,
+    [id, malzemeId, [...turler]],
+  );
+  return satir.surum;
+}
+
+// Emir türünün rotası: türe bağlı rota varsa o, yoksa Standart. Rotanın yürürlükte revizyonu yoksa revizyonId null.
+export interface TurunRotasi { rotaId: number; ad: string; standart: boolean; revizyonId: number | null }
+export function turunRotasi(db: Db, malzemeId: number, emirTuru: EmirTuru | null): Promise<TurunRotasi | null> {
+  return db.tek<TurunRotasi>(
+    `SELECT t.id AS "rotaId", t.ad, t.standart, y.id AS "revizyonId"
+       FROM rota_tanimi t
+       LEFT JOIN rota_revizyonu y ON y.rota_id = t.id AND y.durum = 'yururlukte'
+      WHERE t.malzeme_id = $1
+        AND (t.id = (SELECT u.rota_id FROM rota_tanimi_turu u WHERE u.malzeme_id = $1 AND u.emir_turu = $2)
+             OR (t.standart AND NOT EXISTS (SELECT 1 FROM rota_tanimi_turu u WHERE u.malzeme_id = $1 AND u.emir_turu = $2)))`,
+    [malzemeId, emirTuru],
+  );
+}
+
+// Toplu: ürün başına türün rotası (turunRotasi ile aynı kural).
+export async function turlerinRotalari(db: Db, malzemeIdleri: readonly number[], emirTuru: EmirTuru | null): Promise<Map<number, TurunRotasi>> {
+  if (malzemeIdleri.length === 0) return new Map();
+  const satirlar = await db.sorgu<TurunRotasi & { m: number }>(
+    `SELECT t.malzeme_id::int AS m, t.id AS "rotaId", t.ad, t.standart, y.id AS "revizyonId"
+       FROM rota_tanimi t
+       LEFT JOIN rota_revizyonu y ON y.rota_id = t.id AND y.durum = 'yururlukte'
+       LEFT JOIN rota_tanimi_turu u ON u.malzeme_id = t.malzeme_id AND u.emir_turu = $2
+      WHERE t.malzeme_id = ANY($1::int[]) AND (u.rota_id = t.id OR (t.standart AND u.rota_id IS NULL))`,
+    [[...malzemeIdleri], emirTuru],
+  );
+  return new Map(satirlar.map(({ m, ...r }) => [m, r]));
 }
 
 // Emir listesi "Rev N" ve "rota değişti": emrin kaynak revizyonunun harfi ve ürünün yürürlükteki revizyonu.
 export function revizyonKunyeleri(db: Db, idler: readonly number[]): Promise<{ id: number; harf: string; malzemeId: number; yururlukteId: number | null }[]> {
   return db.sorgu(
     `SELECT r.id, r.harf, r.malzeme_id AS "malzemeId",
-       (SELECT y.id FROM rota_revizyonu y WHERE y.malzeme_id = r.malzeme_id AND y.durum = 'yururlukte') AS "yururlukteId"
+       (SELECT y.id FROM rota_revizyonu y WHERE y.rota_id = r.rota_id AND y.durum = 'yururlukte') AS "yururlukteId"
      FROM rota_revizyonu r WHERE r.id = ANY($1::int[]) ORDER BY r.id`,
     [idler],
   );
@@ -205,15 +306,20 @@ export async function sablonSil(db: Db, id: number): Promise<void> {
   await db.sorgu('DELETE FROM rota_sablonu WHERE id = $1', [id]);
 }
 
+// Ürün düzeyindeki "yürürlükteki revizyon" Standart rotanınkidir (3247 a): türü verilmemiş her okuma bugünkü gibi çalışır.
 export async function yururluktekiRevizyonId(db: Db, malzemeId: number): Promise<number | null> {
-  return (await db.tek<{ id: number }>("SELECT id FROM rota_revizyonu WHERE malzeme_id = $1 AND durum = 'yururlukte'", [malzemeId]))?.id ?? null;
+  return (await db.tek<{ id: number }>(`SELECT r.id FROM rota_revizyonu r ${STANDART_ROTA} WHERE r.malzeme_id = $1 AND r.durum = 'yururlukte'`, [malzemeId]))?.id ?? null;
+}
+
+export async function rotadaYururluktekiRevizyonId(db: Db, rotaId: number): Promise<number | null> {
+  return (await db.tek<{ id: number }>("SELECT id FROM rota_revizyonu WHERE rota_id = $1 AND durum = 'yururlukte'", [rotaId]))?.id ?? null;
 }
 
 // Ürün başına yürürlükteki revizyon, tek sorguda; yürürlükte revizyonu olmayan ürün eşlemde yoktur.
 export async function yururluktekiRevizyonIdleri(db: Db, malzemeIdleri: readonly number[]): Promise<Map<number, number>> {
   if (malzemeIdleri.length === 0) return new Map();
   const satirlar = await db.sorgu<{ m: number; id: number }>(
-    "SELECT malzeme_id::int AS m, id::int AS id FROM rota_revizyonu WHERE durum = 'yururlukte' AND malzeme_id = ANY($1::bigint[])", [malzemeIdleri]);
+    `SELECT r.malzeme_id::int AS m, r.id::int AS id FROM rota_revizyonu r ${STANDART_ROTA} WHERE r.durum = 'yururlukte' AND r.malzeme_id = ANY($1::bigint[])`, [malzemeIdleri]);
   return new Map(satirlar.map((s) => [s.m, s.id]));
 }
 
@@ -221,7 +327,7 @@ export async function yururluktekiRevizyonIdleri(db: Db, malzemeIdleri: readonly
 export function yururluktekiBilesenler(db: Db, malzemeIdleri: readonly number[]): Promise<{ urunId: number; revizyonId: number; bilesenId: number | null }[]> {
   return db.sorgu(
     `SELECT r.malzeme_id AS "urunId", r.id AS "revizyonId", b.malzeme_id AS "bilesenId"
-       FROM rota_revizyonu r
+       FROM rota_revizyonu r ${STANDART_ROTA}
        LEFT JOIN rota_adimi a ON a.revizyon_id = r.id
        LEFT JOIN rota_bileseni b ON b.adim_id = a.id
       WHERE r.durum = 'yururlukte' AND r.malzeme_id = ANY($1::bigint[])`,
@@ -230,11 +336,12 @@ export function yururluktekiBilesenler(db: Db, malzemeIdleri: readonly number[])
 }
 
 export async function revizyonEkle(
-  db: Db, g: { malzemeId: number; malzemeTuru: 'mamul' | 'yarimamul'; harf: string; acanKisiId: number; kaynakRevizyonId: number | null },
+  db: Db, g: { malzemeId: number; malzemeTuru: 'mamul' | 'yarimamul'; harf: string; acanKisiId: number; kaynakRevizyonId: number | null; rotaId?: number | null },
 ): Promise<number> {
+  // Rota verilmezse veritabanı ürünün Standart rotasını yazar (rota_revizyonu_rotasi).
   const satir = await db.tek<{ id: number }>(
-    'INSERT INTO rota_revizyonu (malzeme_id, malzeme_turu, harf, acan_kisi_id, kaynak_revizyon_id) VALUES ($1, $2, $3, $4, $5) RETURNING id',
-    [g.malzemeId, g.malzemeTuru, g.harf, g.acanKisiId, g.kaynakRevizyonId],
+    'INSERT INTO rota_revizyonu (malzeme_id, malzeme_turu, harf, acan_kisi_id, kaynak_revizyon_id, rota_id) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id',
+    [g.malzemeId, g.malzemeTuru, g.harf, g.acanKisiId, g.kaynakRevizyonId, g.rotaId ?? null],
   );
   return satir!.id;
 }
@@ -579,9 +686,9 @@ export const iptalYaz = (db: Db, id: number, kisiId: number): Promise<number> =>
 export const onaylaYaz = (db: Db, id: number, kisiId: number, dortGozsuz: boolean): Promise<number> =>
   surumArtir(db, id, "durum = 'onayli', onaylayan_kisi_id = $2, onaylama = now(), dort_gozsuz_onay = $3", [kisiId, dortGozsuz]);
 
-// Yürürlükteki revizyon önce onaylıya döner: ürün başına tek yürürlükte revizyon dizinle korunur.
-export async function yururluktekiniOnayliYap(db: Db, malzemeId: number): Promise<void> {
-  await db.sorgu("UPDATE rota_revizyonu SET durum = 'onayli', surum = surum + 1 WHERE malzeme_id = $1 AND durum = 'yururlukte'", [malzemeId]);
+// Yürürlükteki revizyon önce onaylıya döner: rota başına tek yürürlükte revizyon dizinle korunur.
+export async function yururluktekiniOnayliYap(db: Db, rotaId: number): Promise<void> {
+  await db.sorgu("UPDATE rota_revizyonu SET durum = 'onayli', surum = surum + 1 WHERE rota_id = $1 AND durum = 'yururlukte'", [rotaId]);
 }
 
 export const yururlugeAlYaz = (db: Db, id: number, kisiId: number): Promise<number> =>

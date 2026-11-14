@@ -1,5 +1,5 @@
 import type { Db } from '#cekirdek/db.ts';
-import { gecersiz } from '#cekirdek/hata.ts';
+import { cakisma, gecersiz } from '#cekirdek/hata.ts';
 import { satirdaReddet } from '#cekirdek/toplu.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
 import type { EmreKopyalaTopluCevabi, EmreKopyalaTopluGirdisi } from '#paylasilan/sozlesme/rota.ts';
@@ -11,9 +11,12 @@ import { emreKopyala } from './okuma.ts';
 export async function emreKopyalaToplu(db: Db, kullanici: Kullanici, g: EmreKopyalaTopluGirdisi): Promise<EmreKopyalaTopluCevabi> {
   for (const [sira, { satir, urunId, ...govde }] of g.satirlar.entries()) {
     await satirdaReddet(sira, satir, async () => {
-      const revizyonId = await s.yururluktekiRevizyonId(db, urunId);
-      if (revizyonId === null) throw gecersiz('Ürünün yürürlükte rotası yok; emir yalnız yürürlükteki rotadan açılır.');
-      await emreKopyala(db, kullanici, revizyonId, govde);
+      // Satırın emir türünün rotası (3247 a): türe bağlı rota yoksa Standart. Türe bağlı rotası yürürlükte olmayan satır Standart'a
+      // sessizce düşmez; formsuz yolda kullanıcı seçim yapamadığı için reddedilir.
+      const rota = await s.turunRotasi(db, urunId, govde.emirTuru ?? null);
+      if (rota !== null && !rota.standart && rota.revizyonId === null) throw cakisma(`Bu emir türünün rotası (${rota.ad}) yürürlükte değil.`);
+      if (rota?.revizyonId == null) throw gecersiz('Ürünün yürürlükte rotası yok; emir yalnız yürürlükteki rotadan açılır.');
+      await emreKopyala(db, kullanici, rota.revizyonId, govde);
     });
   }
   return { eklenen: g.satirlar.length, guncellenen: 0 };

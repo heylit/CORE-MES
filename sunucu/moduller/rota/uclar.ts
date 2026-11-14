@@ -8,8 +8,8 @@ import {
   sartnameParametresi, sartnameSorgusu, sartnamelerCevabi, sartnameTaslakGovdesi, standartCevabi, standartEkleGovdesi,
   hamOnerisiCevabi, opNumaralariCevabi, urunParametresi, urunRevizyonlariCevabi, adimParametresi, gerceklesenKabulCevabi, gerceklesenKabulGovdesi, gerceklesenSureGovdesi, surelerCevabi, surelerSorgusu, sablonCevabi, sablonKaydetGovdesi, sablonlarCevabi, sablonParametresi, sablonYazGovdesi,
 } from '#paylasilan/sozlesme/rota.ts';
-import { talimatSahneleriCevabi, talimatSahnesiKaydetGovdesi } from '#paylasilan/sozlesme/rota.ts';
-import { talimatSahneleri, talimatSahnesiKaydet } from './servis.ts';
+import { rotaAdiGovdesi, rotaEkleGovdesi, rotaParametresi, rotaTurleriGovdesi, talimatSahneleriCevabi, talimatSahnesiKaydetGovdesi } from '#paylasilan/sozlesme/rota.ts';
+import { rotaAdiYaz, rotaEkle, rotaTurleriYaz, talimatSahneleri, talimatSahnesiKaydet } from './servis.ts';
 import {
   agac, emreKopyala, emreKopyalaToplu, rotaAdimlariToplu, emreUygula, patlatmaGetir, patlatmaOnizlemesi, fark, revizyonKunyeleri, geriGonder, malzemeAra, iptal, kaydet, kopyaIste, kopyala, malzemeKullanimi, onayaGonder, onayla, revizyonAyrintisi as ayrinti, revizyonOzeti, rotaListesi, secenekler,
   adimEkipmaniKaydet, aparatKullanimi, olcuAletiTurleri, adimSartnameleriKaydet, ekAdimSartnameleriSabitle, isEmriSartnameleriCevabi as isEmriSartnameleriOku, revizyonSartnameleri, sartnameAktifYap, sartnameAyrintisi, sartnameEkle, sartnameKopyala,
@@ -154,7 +154,37 @@ export const uclar = [
     parametre: urunParametresi,
     govde: taslakAcGovdesi,
     cevap: komutCevabi,
-    isle: ({ db, kullanici, parametre, govde }) => taslakAc(db, kullanici, parametre.urunId, govde.kaynak),
+    isle: ({ db, kullanici, parametre, govde }) => taslakAc(db, kullanici, parametre.urunId, govde.kaynak, govde.rotaId ?? null),
+  }),
+  // Ürünün rotaları (3247 a): rota açmak ve adını değiştirmek taslak açma yetkisiyle; emir türü eşlemesi hangi revizyonun
+  // emre gireceğini değiştirdiği için onay yetkisiyle.
+  uc({
+    yontem: 'POST',
+    yol: '/rota/urunler/:urunId/rotalar',
+    tekrarKorumali: true,
+    yetki: 'rota.taslak-ac',
+    parametre: urunParametresi,
+    govde: rotaEkleGovdesi,
+    cevap: urunRevizyonlariCevabi,
+    isle: ({ db, kullanici, parametre, govde }) => rotaEkle(db, kullanici, parametre.urunId, govde.ad),
+  }),
+  uc({
+    yontem: 'POST',
+    yol: '/rota/urunler/:urunId/rotalar/:rotaId/ad',
+    yetki: 'rota.taslak-ac',
+    parametre: rotaParametresi,
+    govde: rotaAdiGovdesi,
+    cevap: urunRevizyonlariCevabi,
+    isle: ({ db, kullanici, parametre, govde }) => rotaAdiYaz(db, kullanici, parametre.urunId, parametre.rotaId, govde.ad, govde.surum),
+  }),
+  uc({
+    yontem: 'POST',
+    yol: '/rota/urunler/:urunId/rotalar/:rotaId/turler',
+    yetki: 'rota.onayla',
+    parametre: rotaParametresi,
+    govde: rotaTurleriGovdesi,
+    cevap: urunRevizyonlariCevabi,
+    isle: ({ db, kullanici, parametre, govde }) => rotaTurleriYaz(db, kullanici, parametre.urunId, parametre.rotaId, govde.emirTurleri, govde.surum),
   }),
   uc({
     yontem: 'POST',

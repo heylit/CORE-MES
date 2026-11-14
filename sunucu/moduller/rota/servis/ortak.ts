@@ -3,6 +3,7 @@ import { bulunamadi, cakisma, dogrulama, eskiSurum, gecersiz, yetkiYok } from '#
 import type { Kullanici } from '#cekirdek/yetki.ts';
 import type { KatalogMalzemeOzeti } from '#paylasilan/sozlesme/malzemeler.ts';
 import type { AdimKaynagiCevabi, AdimKaynakOzeti, Bagimlilik, GerceklesenTuru, KomutCevabi, MakineKullanimi, RevizyonAyrintisi, RevizyonDurumu, KaynakOzeti, RevizyonKomutu, UrunOzeti, ParametreDegerleri, SartnameSurumu, TalimatAdimi } from '#paylasilan/sozlesme/rota.ts';
+import type { EmirTuru } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { sistemAyariOku } from '../../ayarlar/disari.ts';
 import { firmaOzetleri } from '../../musteri-tedarikci/disari.ts';
 import { aktifIstasyonlar, istasyonKisiAtamalari, istasyonlar as istasyonListesi, istasyondakiMakineler, makineGetir, operasyonTipleri as katalogTipleri } from '../../istasyonlar/disari.ts';
@@ -268,15 +269,16 @@ function patlatmaRotasi(revizyonId: number, icerik: Icerik): PatlatmaRotasi {
   };
 }
 
-// Kökün rotası verilen revizyondur; alt ürünler yürürlükteki revizyonlarıyla açılır. Döngüde zaten okunmuş ürün yeniden okunmaz,
-// döngüyü kural (rotaPatlat) yol üzerinden bulur.
-async function patlatmaRotalari(db: Db, kok: number, kokRevizyon: number): Promise<Map<number, PatlatmaRotasi>> {
+// Kökün rotası verilen revizyondur; alt ürünler emir türünün rotasının yürürlükteki revizyonuyla açılır (türe bağlı rota yoksa
+// Standart, 3247 a). Türe bağlı rotası olup yürürlükte revizyonu olmayan alt ürün sessizce Standart'a düşmez: emir açılmaz (409).
+// Döngüde zaten okunmuş ürün yeniden okunmaz, döngüyü kural (rotaPatlat) yol üzerinden bulur.
+async function patlatmaRotalari(db: Db, kok: number, kokRevizyon: number, emirTuru: EmirTuru | null): Promise<Map<number, PatlatmaRotasi>> {
   const kokIcerik = await s.icerikOku(db, kokRevizyon);
   const rotalar = new Map<number, PatlatmaRotasi>([[kok, patlatmaRotasi(kokRevizyon, kokIcerik)]]);
   let sinir = [...new Set(kokIcerik.bilesenler.map((b) => b.malzemeId))];
   for (let derinlik = 0; sinir.length > 0 && derinlik <= PATLATMA_AZAMI_KATMAN; derinlik += 1) {
     const yeni = sinir.filter((m) => !rotalar.has(m));
-    const idler = await s.yururluktekiRevizyonIdleri(db, yeni);
+    const idler = await alturunRevizyonlari(db, yeni, emirTuru);
     const icerikler = await s.iceriklerOku(db, [...idler.values()]);
     const sonraki: number[] = [];
     for (const [urun, rid] of idler) {
@@ -289,9 +291,20 @@ async function patlatmaRotalari(db: Db, kok: number, kokRevizyon: number): Promi
   return rotalar;
 }
 
+async function alturunRevizyonlari(db: Db, urunler: readonly number[], emirTuru: EmirTuru | null): Promise<Map<number, number>> {
+  if (emirTuru === null) return s.yururluktekiRevizyonIdleri(db, urunler);
+  const rotalar = await s.turlerinRotalari(db, urunler, emirTuru);
+  const eksik = [...rotalar].filter(([, r]) => !r.standart && r.revizyonId === null);
+  if (eksik.length > 0) {
+    const adlar = await urunOzetleri(db, eksik.map(([m]) => m));
+    throw cakisma(`${eksik.map(([m, r]) => `${adlar.get(m)?.stokKodu ?? adlar.get(m)?.ad ?? String(m)} (${r.ad})`).join(', ')}: bu emir türünün rotası yürürlükte değil.`);
+  }
+  return new Map([...rotalar].flatMap(([m, r]) => (r.revizyonId === null ? [] : [[m, r.revizyonId] as const])));
+}
+
 // Patlatma kurulamazsa ileti ürün kodlarıyla yolu gösterir (döngü ya da katman sınırı).
-export async function patlatmaKur(db: Db, revizyonId: number, kokMalzemeId: number): Promise<{ satirlar: PatlamisSatir[] } | { ileti: string }> {
-  const p = rotaPatlat(kokMalzemeId, await patlatmaRotalari(db, kokMalzemeId, revizyonId));
+export async function patlatmaKur(db: Db, revizyonId: number, kokMalzemeId: number, emirTuru: EmirTuru | null = null): Promise<{ satirlar: PatlamisSatir[] } | { ileti: string }> {
+  const p = rotaPatlat(kokMalzemeId, await patlatmaRotalari(db, kokMalzemeId, revizyonId, emirTuru));
   if (!('ileti' in p)) return p;
   if (p.yol === undefined) return { ileti: p.ileti };
   const adlar = await urunOzetleri(db, p.yol);
@@ -299,8 +312,8 @@ export async function patlatmaKur(db: Db, revizyonId: number, kokMalzemeId: numb
 }
 
 // Patlatma kaydı emir açılışının parçasıdır (rota.emre-kopyala); ayrı yazma ucu yoktur. Aynı revizyon kümesi var olan kaydı döndürür.
-export async function patlat(db: Db, kisiId: number, revizyonId: number, kokMalzemeId: number): Promise<{ id: number; satirlar: PatlamisSatir[] }> {
-  const p = await patlatmaKur(db, revizyonId, kokMalzemeId);
+export async function patlat(db: Db, kisiId: number, revizyonId: number, kokMalzemeId: number, emirTuru: EmirTuru | null = null): Promise<{ id: number; satirlar: PatlamisSatir[] }> {
+  const p = await patlatmaKur(db, revizyonId, kokMalzemeId, emirTuru);
   if ('ileti' in p) throw gecersiz(p.ileti);
   const id = await s.patlatmaYaz(db, { kokMalzemeId, kokRevizyonId: revizyonId, ozet: patlatmaOzeti(p.satirlar), kisiId }, p.satirlar);
   return { id, satirlar: p.satirlar };
@@ -342,7 +355,7 @@ export async function adimlariYaz(db: Db, revizyonId: number, malzemeId: number,
   await s.sahipsizAdimSartnameleriniSil(db, revizyonId);
 }
 
-export const TASLAK_ACIK = 'Bu ürünün açık bir revizyonu var; önce onu bitirin ya da iptal edin.';
+export const TASLAK_ACIK = 'Bu rotanın açık bir revizyonu var; önce onu bitirin ya da iptal edin.';
 export const ROTA_VAR = 'Bu ürünün rotası var; başka üründen kopya yalnız ilk rota için istenir.';
 
 export type TaslakKaynagi =
@@ -359,10 +372,18 @@ export async function baskaUruneAdimlar(db: Db, kaynakRevizyonId: number, hedefU
   return adimlar;
 }
 
-export async function taslagiAc(db: Db, acanKisiId: number, urunId: number, kaynak: TaslakKaynagi): Promise<KomutCevabi> {
+export const ROTA_BASKA_URUNUN = 'Rota bu ürünün değil.';
+
+// Taslak verilen rotada açılır; rota verilmezse ürünün Standart rotasında (3247 a). Açık revizyon ve harf rota başınadır.
+export async function taslagiAc(db: Db, acanKisiId: number, urunId: number, kaynak: TaslakKaynagi, rotaId: number | null = null): Promise<KomutCevabi> {
   const urun = await rotaKurulabilirUrun(db, urunId);
-  if (await s.acikRevizyonVarMi(db, urunId)) throw cakisma(TASLAK_ACIK);
-  const harf = revizyonHarfi(await s.harfler(db, urunId));
+  if (rotaId !== null) {
+    const rota = await s.rotaOku(db, rotaId);
+    if (!rota || rota.malzemeId !== urunId) throw cakisma(ROTA_BASKA_URUNUN);
+  }
+  const hedefRota = rotaId ?? await s.standartRotaId(db, urunId);
+  if (await s.rotadaAcikRevizyonVarMi(db, hedefRota)) throw cakisma(TASLAK_ACIK);
+  const harf = revizyonHarfi(await s.rotaHarfleri(db, hedefRota));
   if (harf === null) throw gecersiz('Bu ürünün revizyon harfleri tükendi.');
   let adimlar: YeniAdim[] = [];
   let kaynakId: number | null = null;
@@ -401,7 +422,7 @@ export async function taslagiAc(db: Db, acanKisiId: number, urunId: number, kayn
     if (kaynakId === null) throw gecersiz('Kaynak ürünün yürürlükte rotası yok.');
     adimlar = await baskaUruneAdimlar(db, kaynakId, urunId);
   }
-  const id = await s.revizyonEkle(db, { malzemeId: urunId, malzemeTuru: turu(urun), harf, acanKisiId, kaynakRevizyonId: kaynakId });
+  const id = await s.revizyonEkle(db, { malzemeId: urunId, malzemeTuru: turu(urun), harf, acanKisiId, kaynakRevizyonId: kaynakId, rotaId: hedefRota });
   await adimlariYaz(db, id, urunId, adimlar);
   // Şartname bağı OP numarasıyla tutulur: yalnız aynı ürünün revizyonundan açılan taslak bağları alır.
   if (kaynak.tur === 'revizyon' && kaynakId !== null) await s.adimSartnameleriniKopyala(db, kaynakId, id);
