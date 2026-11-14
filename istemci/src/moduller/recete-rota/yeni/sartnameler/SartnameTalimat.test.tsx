@@ -27,14 +27,14 @@ const LISTE: SartnamelerCevabi = {
 const AYRINTI: SartnameCevabi = { sartname: { ...ozet, surumler: [surumu(11, 1, 'yururlukte'), surumu(12, 2, 'taslak')] } };
 const SABLON: TalimatSablonuCevabi = {
   sablon: {
-    id: 3, kod: 'TS-DNM', ad: 'Deneme işleme', sartname: null, aktif: true, surum: 2, adimSayisi: 2, kontrolSayisi: 2, resimSayisi: 0, videoSayisi: 0,
+    id: 3, kod: 'TS-DNM', ad: 'Deneme işleme', sartname: null, aktif: true, surum: 2, adimSayisi: 2, kontrolSayisi: 2, resimSayisi: 0, videoSayisi: 0, operasyonTipi: null, emreGelir: false,
     adimlar: [
       { sira: 1, baslik: 'Programı doğrula', metin: 'Revizyon iş emriyle aynı.', kontrol: { tur: 'onay' }, zorunlu: true, medya: [], asama: 'uretim', hedefSureDk: 5 },
       { sira: 2, baslik: 'İlk parçayı ölç', metin: null, kontrol: { tur: 'olcum', ad: 'Çap', alt: 9.98, ust: 10.02, birim: 'mm' }, zorunlu: true, medya: [], asama: 'uretim', hedefSureDk: null },
     ],
   },
 };
-const SABLONLAR: TalimatSablonlariCevabi = { sablonlar: [{ id: 3, kod: 'TS-DNM', ad: 'Deneme işleme', sartname: null, aktif: true, surum: 2, adimSayisi: 2, kontrolSayisi: 2, resimSayisi: 0, videoSayisi: 0 }] };
+const SABLONLAR: TalimatSablonlariCevabi = { sablonlar: [{ id: 3, kod: 'TS-DNM', ad: 'Deneme işleme', sartname: null, aktif: true, surum: 2, adimSayisi: 2, kontrolSayisi: 2, resimSayisi: 0, videoSayisi: 0, operasyonTipi: null, emreGelir: false }] };
 
 const okumalar = {
   'GET /rota/sartnameler': () => json(200, LISTE),
@@ -120,6 +120,33 @@ describe('Şartname ve talimatlar: yazan', () => {
     const govde = istekler.find((i) => i.yol === '/rota/talimat-sablonlari/3/kaydet')?.govde as { surum: number; adimlar: { baslik: string; asama: string; hedefSureDk: number | null }[] };
     expect(govde.surum).toBe(2);
     expect(govde.adimlar.map((a) => [a.baslik, a.asama, a.hedefSureDk])).toEqual([['Programı ve sıfırı doğrula', 'hazirlik', 8], ['İlk parçayı ölç', 'uretim', null]]);
+  });
+
+  it('3249 b: şablon operasyon tipine bağlanır; tip seçilmeden emre gelme kapalıdır; ikisi kayıtla gider', async () => {
+    const TIP = { id: 4, kod: 'TRN', ad: 'Torna', kisaltma: 'TRN', grup: 'TAL', grupAdi: 'Talaşlı', aktif: true, varsayilanAyarDk: null, varsayilanBirimDk: null, kullanim: 0 };
+    const istekler = sunucuKur(YAZAN, {
+      yazmalar: {
+        ...okumalar,
+        'GET /rota/secenekler': () => json(200, { operasyonTipleri: [TIP], istasyonlar: [], istasyonsuzKisiler: [], fasonFirmalar: [] }),
+        'POST /rota/talimat-sablonlari/3/kaydet': () => json(200, { sablon: { ...SABLON.sablon, surum: 3 } }),
+      },
+    });
+    await sayfaAc();
+    fireEvent.click(screen.getByRole('tab', { name: /Talimat şablonları/ }));
+    const onizleme = await screen.findByRole('region', { name: 'Şablon önizlemesi' });
+    expect(await within(onizleme).findByText(/Operasyon tipi: yok/)).toBeTruthy();
+    fireEvent.click(await within(onizleme).findByRole('button', { name: 'Yeni sürüm' }));
+    const pencere = await screen.findByRole('dialog', { name: 'TS-DNM · yeni sürüm' });
+    const gelir = within(pencere).getByRole('checkbox', { name: 'Emre kendiliğinden gelsin' }) as HTMLInputElement;
+    expect(gelir.disabled).toBe(true);
+    await within(pencere).findByRole('option', { name: 'TRN · Torna' });
+    fireEvent.change(within(pencere).getByLabelText(/^Operasyon tipi/), { target: { value: '4' } });
+    expect(gelir.disabled).toBe(false);
+    fireEvent.click(gelir);
+    fireEvent.click(within(pencere).getByRole('button', { name: 'Yeni sürümü kaydet' }));
+    await waitFor(() => { expect(istekler.some((i) => i.yol === '/rota/talimat-sablonlari/3/kaydet')).toBe(true); });
+    const govde = istekler.find((i) => i.yol === '/rota/talimat-sablonlari/3/kaydet')?.govde as { operasyonTipiId: number | null; emreGelir: boolean };
+    expect([govde.operasyonTipiId, govde.emreGelir]).toEqual([4, true]);
   });
 
   it('adım sürüklenip başlığa bırakılınca başa geçer (1186 b)', async () => {

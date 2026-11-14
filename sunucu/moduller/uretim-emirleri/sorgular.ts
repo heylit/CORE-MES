@@ -60,4 +60,5 @@ export {
 } from './sorgular/kapanis/sorgular.ts';
 export {
   type ElleStatuSatiri, type HazirlikOnaySatiri, elleStatuDefteri, elleStatuEkle, hazirlikOnayDefteri, hazirlikOnayiEkle, isEmriKilitle,
+  type ListeSatiri, listeSatirlari, listeOlayiEkle, listeMaddesiEkle,
 } from './sorgular/adim-durumu/sorgular.ts';

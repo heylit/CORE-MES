@@ -11,7 +11,7 @@ const EMIR = {
 const HAZIRLIK: HazirlikCevabi = { maddeler: [], muafiyetler: [], isEmirleri: [] };
 const ADIM = {
   isEmriId: 51, opNo: 10, ad: 'Testere kesim', durum: 'tamam', calisma: null, bagimlilik: 'bekleyen', fason: false, hedef: 40, yapilan: 40, yuzde: 100,
-  sistemStatusu: 'bitti', nedenler: [], maddeler: [{ madde: 'cnc', hal: 'gerekmez', ham: 'gerekmez' }, { madde: 'malzeme', hal: 'tamam', ham: 'tamam' }], elle: null, onaylar: [], gecmis: [], tedarik: [],
+  sistemStatusu: 'bitti', nedenler: [], maddeler: [{ madde: 'cnc', hal: 'gerekmez', ham: 'gerekmez' }, { madde: 'malzeme', hal: 'tamam', ham: 'tamam' }], elle: null, onaylar: [], gecmis: [], tedarik: [], liste: [],
 } satisfies AdimDurumuCevabi['adimlar'][number];
 const CEVAP = {
   emirId: 5, emirNo: 'UE-0005', urun: { kod: 'M-1', ad: 'Deneme flanş' }, adet: 40, teslim: null, durum: 'basladi', rotaYuzde: 45, hazirlik: HAZIRLIK,
@@ -115,7 +115,7 @@ describe('Adım Durumu (2893, düzen 2955)', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Matris' }));
     const tablo = await screen.findByRole('table', { name: 'Hazırlık matrisi' });
     // Tamam ve gerekmez hücreleri düğme değildir; yalnız onaylanabilen ve onaylı hücre tıklanır.
-    expect(within(tablo).queryByRole('button', { name: /OP 10/ })).toBeNull();
+    expect(within(tablo).queryByRole('button', { name: /OP 10 .*(Elle onayla|Elle onayı aç)$/ })).toBeNull();
     fireEvent.click(within(tablo).getByRole('button', { name: 'OP 20 CNC kurulumu: Eksik. Elle onayla' }));
     const pencere = await screen.findByRole('dialog', { name: 'OP 20 · CNC kurulumu' });
     expect(screen.queryByRole('dialog', { name: 'OP 20 · CNC freze' })).toBeNull();
@@ -245,5 +245,96 @@ describe('Adım Durumu (2893, düzen 2955)', () => {
     const tablo = await screen.findByRole('table', { name: 'Hazırlık matrisi' });
     expect(within(tablo).getByText('Eksik')).toBeTruthy();
     expect(within(tablo).queryByRole('button', { name: /Elle onayla|Elle onayı aç/ })).toBeNull();
+  });
+  describe('3249 b: açılan satırlar, tik, Boşluk, Geri al, madde ekleme', () => {
+    const MADDE_A = {
+      adimId: 701, ad: 'Bağlama aparatı hazır', aciklama: null, asama: 'on_hazirlik', tamam: false, kisiAdi: null, zaman: null, kaynak: null, kanit: null, ekleyenAdi: null, eklenme: null,
+    } as const;
+    const MADDE_B = {
+      ...MADDE_A, adimId: 702, ad: 'Takım ölçüldü', asama: 'hazirlik', tamam: true, kisiAdi: 'Deneme Operatör', zaman: '2026-11-11T07:00:00.000Z', kaynak: 'terminal',
+    } as const;
+    const LISTELI = { ...CEVAP, adimlar: [CEVAP.adimlar[0]!, { ...CEVAP.adimlar[1]!, liste: [MADDE_A, MADDE_B] }] } satisfies AdimDurumuCevabi;
+    const YAZAR: Parameters<typeof sunucuKur>[0] = { ...OKUYUCU, islemler: [...OKUYUCU.islemler, 'sayfa.adim-durumu', 'uretim-emirleri.adim-durumu-yaz'] };
+    const matrisAc = async () => {
+      fireEvent.click(await screen.findByRole('button', { name: 'Matris' }));
+      const tablo = await screen.findByRole('table', { name: 'Hazırlık matrisi' });
+      fireEvent.click(within(tablo).getByRole('button', { name: 'OP 20 maddeleri' }));
+      return tablo;
+    };
+
+    it('satır açılır; maddeler aşama ve işaret kaydıyla görünür; tik tıklanınca işaretler, Geri al tersini gönderir', async () => {
+      const istekler = sunucuKur(YAZAR, {
+        ...yollar, 'GET /adimli-emirler/5/adim-durumu': () => json(200, LISTELI),
+        'POST /adimli-emirler/5/is-emirleri/52/liste-isaretle': () => json(200, LISTELI),
+      });
+      ac(ekran, '/adim-durumu?emir=5');
+      const tablo = await matrisAc();
+      expect(within(tablo).getAllByRole('button', { name: /OP 20 liste 1 \/ 2/ }).length).toBeGreaterThan(0);
+      expect(within(tablo).getByText(/Deneme Operatör · .* · terminalden/)).toBeTruthy();
+      expect(within(tablo).getByText('Ön hazırlık')).toBeTruthy();
+      const kutu = within(tablo).getByRole('checkbox', { name: 'OP 20 Bağlama aparatı hazır' });
+      expect((kutu as HTMLInputElement).checked).toBe(false);
+      fireEvent.click(kutu);
+      await waitFor(() => expect(istekler.filter((i) => i.yontem === 'POST')).toHaveLength(1));
+      expect(istekler.find((i) => i.yontem === 'POST')?.govde).toEqual({ adimId: 701, tamam: true });
+      fireEvent.click(await screen.findByRole('button', { name: 'Geri al' }));
+      await waitFor(() => expect(istekler.filter((i) => i.yontem === 'POST')).toHaveLength(2));
+      const geri = istekler.filter((i) => i.yontem === 'POST')[1];
+      expect(geri?.govde).toEqual({ adimId: 701, tamam: false });
+      expect(geri?.kimlik).not.toBe(istekler.filter((i) => i.yontem === 'POST')[0]?.kimlik);
+    });
+
+    it('Boşluk fare üstündeki maddeyi işaretler ya da kaldırır; yazı alanında Boşluk komut göndermez', async () => {
+      const istekler = sunucuKur(YAZAR, {
+        ...yollar, 'GET /adimli-emirler/5/adim-durumu': () => json(200, LISTELI),
+        'POST /adimli-emirler/5/is-emirleri/52/liste-isaretle': () => json(200, LISTELI),
+      });
+      ac(ekran, '/adim-durumu?emir=5');
+      const tablo = await matrisAc();
+      const satir = within(tablo).getByRole('checkbox', { name: 'OP 20 Takım ölçüldü' }).closest('tr')!;
+      fireEvent.mouseOver(satir);
+      fireEvent.keyDown(document.body, { key: ' ' });
+      await waitFor(() => expect(istekler.filter((i) => i.yontem === 'POST')).toHaveLength(1));
+      expect(istekler.find((i) => i.yontem === 'POST')?.govde).toEqual({ adimId: 702, tamam: false });
+      fireEvent.keyDown(screen.getByLabelText('Ara'), { key: ' ' });
+      await new Promise((r) => { setTimeout(r, 20); });
+      expect(istekler.filter((i) => i.yontem === 'POST')).toHaveLength(1);
+    });
+
+    it('çift tık adımın ayrıntısını açar; ayrıntıda liste tik kutusuyla durur', async () => {
+      sunucuKur(YAZAR, { ...yollar, 'GET /adimli-emirler/5/adim-durumu': () => json(200, LISTELI) });
+      ac(ekran, '/adim-durumu?emir=5');
+      const tablo = await matrisAc();
+      fireEvent.doubleClick(within(tablo).getAllByRole('row')[2]!.querySelector('td')!);
+      const pencere = await screen.findByRole('dialog', { name: 'OP 20 · CNC freze' });
+      expect(within(within(pencere).getByRole('list', { name: 'Hazırlık listesi' })).getAllByRole('checkbox')).toHaveLength(2);
+    });
+
+    it('okuyucu maddeleri görür, tik kutusu kapalı; ekleme düğmesi yok', async () => {
+      sunucuKur({ ...OKUYUCU, islemler: [...OKUYUCU.islemler, 'sayfa.adim-durumu'] }, { ...yollar, 'GET /adimli-emirler/5/adim-durumu': () => json(200, LISTELI) });
+      ac(ekran, '/adim-durumu?emir=5');
+      const tablo = await matrisAc();
+      expect((within(tablo).getByRole('checkbox', { name: 'OP 20 Bağlama aparatı hazır' }) as HTMLInputElement).disabled).toBe(true);
+      expect(within(tablo).queryByRole('button', { name: 'Madde' })).toBeNull();
+    });
+
+    it('yetkili kontrol adımı ekler: aşama hazırlık, ad kırpılır, istek kimlik taşır', async () => {
+      const istekler = sunucuKur(YAZAR, {
+        ...yollar, 'GET /adimli-emirler/5/adim-durumu': () => json(200, LISTELI),
+        'POST /adimli-emirler/5/is-emirleri/52/liste-ekle': () => json(200, LISTELI),
+      });
+      ac(ekran, '/adim-durumu?emir=5');
+      const tablo = await matrisAc();
+      fireEvent.click(within(tablo).getAllByRole('button', { name: 'Kontrol adımı' })[0]!);
+      const pencere = await screen.findByRole('dialog', { name: 'OP 20 · Kontrol adımı ekle' });
+      const ekle = within(pencere).getByRole('button', { name: 'Ekle' });
+      expect((ekle as HTMLButtonElement).disabled).toBe(true);
+      fireEvent.change(within(pencere).getByLabelText('Kontrol adımı'), { target: { value: '  İlk parça ölçüldü ' } });
+      fireEvent.click(ekle);
+      await waitFor(() => expect(istekler.some((i) => i.yontem === 'POST')).toBe(true));
+      const istek = istekler.find((i) => i.yontem === 'POST');
+      expect(istek?.govde).toEqual({ ad: 'İlk parça ölçüldü', asama: 'hazirlik' });
+      expect(istek?.kimlik).toMatch(/^[0-9a-f-]{36}$/);
+    });
   });
 });

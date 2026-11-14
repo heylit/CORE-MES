@@ -809,12 +809,13 @@ export function sablonKopyalari(db: Db, sablonId: number): Promise<SablonKopyasi
 
 export interface TalimatSablonSatiri {
   id: number; kod: string; ad: string; sartnameId: number | null; sartnameKodu: string | null; sartnameAdi: string | null; aktif: boolean; surum: number; adimSayisi: number;
-  kontrolSayisi: number; resimSayisi: number; videoSayisi: number;
+  kontrolSayisi: number; resimSayisi: number; videoSayisi: number; operasyonTipiId: number | null; emreGelir: boolean;
 }
 
 export function talimatSablonlari(db: Db, idler: readonly number[] | null = null): Promise<TalimatSablonSatiri[]> {
   return db.sorgu<TalimatSablonSatiri>(
     `SELECT t.id, t.kod, t.ad, t.sartname_id AS "sartnameId", s.kod AS "sartnameKodu", s.ad AS "sartnameAdi", t.aktif, t.surum,
+            t.operasyon_tipi_id AS "operasyonTipiId", t.emre_gelir AS "emreGelir",
             (SELECT count(*)::int FROM rota_talimat_sablon_adimi a WHERE a.sablon_id = t.id) AS "adimSayisi",
             (SELECT count(*)::int FROM rota_talimat_sablon_adimi a WHERE a.sablon_id = t.id AND a.kontrol_turu <> 'yok') AS "kontrolSayisi",
             (SELECT count(*)::int FROM rota_talimat_sablon_adim_medyasi m WHERE m.sablon_id = t.id AND m.tur = 'resim') AS "resimSayisi",
@@ -830,14 +831,31 @@ export async function talimatSablonKilitle(db: Db, id: number): Promise<{ surum:
   return db.tek<{ surum: number }>('SELECT surum FROM rota_talimat_sablonu WHERE id = $1 FOR UPDATE', [id]);
 }
 
-export async function talimatSablonEkle(db: Db, g: { kod: string; ad: string; sartnameId: number | null }): Promise<number> {
+export async function talimatSablonEkle(
+  db: Db, g: { kod: string; ad: string; sartnameId: number | null; operasyonTipiId: number | null; emreGelir: boolean },
+): Promise<number> {
   return (await db.tek<{ id: number }>(
-    'INSERT INTO rota_talimat_sablonu (kod, ad, sartname_id) VALUES ($1, $2, $3) RETURNING id', [g.kod, g.ad, g.sartnameId],
+    'INSERT INTO rota_talimat_sablonu (kod, ad, sartname_id, operasyon_tipi_id, emre_gelir) VALUES ($1, $2, $3, $4, $5) RETURNING id',
+    [g.kod, g.ad, g.sartnameId, g.operasyonTipiId, g.emreGelir],
   ))!.id;
 }
 
-export async function talimatSablonGuncelle(db: Db, id: number, g: { ad: string; sartnameId: number | null }): Promise<void> {
-  await db.sorgu('UPDATE rota_talimat_sablonu SET ad = $2, sartname_id = $3, surum = surum + 1 WHERE id = $1', [id, g.ad, g.sartnameId]);
+export async function talimatSablonGuncelle(
+  db: Db, id: number, g: { ad: string; sartnameId: number | null; operasyonTipiId: number | null; emreGelir: boolean },
+): Promise<void> {
+  await db.sorgu(
+    'UPDATE rota_talimat_sablonu SET ad = $2, sartname_id = $3, operasyon_tipi_id = $4, emre_gelir = $5, surum = surum + 1 WHERE id = $1',
+    [id, g.ad, g.sartnameId, g.operasyonTipiId, g.emreGelir],
+  );
+}
+
+// 3249 b: emre gelen aktif şablonların kimliği, operasyon tipine göre (tip başına en çok bir, kısmi tekil dizin).
+export function emreGelenSablonlar(db: Db, operasyonTipiIdleri: readonly number[]): Promise<{ id: number; operasyonTipiId: number }[]> {
+  return db.sorgu<{ id: number; operasyonTipiId: number }>(
+    `SELECT id, operasyon_tipi_id AS "operasyonTipiId" FROM rota_talimat_sablonu
+      WHERE emre_gelir AND aktif AND operasyon_tipi_id = ANY($1::int[])`,
+    [[...operasyonTipiIdleri]],
+  );
 }
 
 export async function talimatSablonDurumu(db: Db, id: number, aktif: boolean): Promise<void> {

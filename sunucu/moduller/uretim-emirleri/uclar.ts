@@ -9,10 +9,10 @@ import {
   birlesmePlaniGovdesi, ekAdimGovdesi, ekAdimKaldirGovdesi, hazirlikCevabi, hazirlikMuafiyetiGovdesi, hazirlikOzetiCevabi, hazirlikOzetiSorgusu, refakatKartiCevabi, katilimCevabi, rotasizAdimDuzenleGovdesi, rotasizAdimEkleGovdesi, rotasizAdimSilGovdesi, rotasizEmirCevabi, rotasizEmirGovdesi, acilisSecenekleriCevabi, acilisSecenekleriSorgusu, makineDevralGovdesi, makineEkleGovdesi, adimPaylariCevabi, durusDagilimiCevabi, sonOlaylarCevabi, sonOlaylarSorgusu, gunlukUretimCevabi, panelSorgusu, sureOzetiCevabi,
   hataliCevabi, hataliGovdesi, hataliListeCevabi, hataliListeSorgusu, reworkAdimiGovdesi,
   disIslemEmriAcGovdesi, disIslemEmriCevabi, disIslemEmriIptalGovdesi, disIslemEmriParametresi,
-  adimDurumuCevabi, adimDurumuTerminalCevabi, elleStatuGovdesi, elleStatuKaldirGovdesi, hazirlikOnayiGovdesi, hazirlikOnayiKaldirGovdesi,
+  adimDurumuCevabi, adimDurumuTerminalCevabi, elleStatuGovdesi, elleStatuKaldirGovdesi, hazirlikOnayiGovdesi, hazirlikOnayiKaldirGovdesi, listeEkleGovdesi, listeIsaretleGovdesi,
   arsivOnizlemeCevabi, arsiveAlCevabi, arsiveAlGovdesi, emirKapatGovdesi, kapanisCevabi, kapanisGeriAcGovdesi, kapanisListeCevabi, kapanislarSorgusu, kapanisMuafGovdesi, kapanisOnayGovdesi, kapanisRetGovdesi,
 } from '#paylasilan/sozlesme/uretim-emirleri.ts';
-import { adimDurumu, adimDurumuTerminal, elleStatuKaldir, elleStatuYaz, hazirlikOnayKaldir, hazirlikOnayla } from './adim-durumu.ts';
+import { adimDurumu, adimDurumuTerminal, elleStatuKaldir, elleStatuYaz, hazirlikOnayKaldir, hazirlikOnayla, listeIsaretle, listeMaddesiEkle } from './adim-durumu.ts';
 import { aramaUclari } from './arama/uclar.ts';
 import * as isEmri from './is-emri-servis.ts';
 import { emirleriTopluGuncelle } from './toplu-guncelle.ts';
@@ -341,6 +341,27 @@ const adimliUclar = [
     cevap: adimDurumuCevabi,
     tekrarKorumali: true,
     isle: ({ db, kullanici, parametre, govde }) => hazirlikOnayKaldir(db, kullanici, parametre.id, parametre.isEmriId, govde),
+  }),
+  // 3249 b: hazırlık listesi aynı yazma işlemiyle (Risk K1); kapsam ve emir durumu denetimi öteki Adım Durumu yazmalarıyla aynı yoldan.
+  uc({
+    yontem: 'POST',
+    yol: '/adimli-emirler/:id/is-emirleri/:isEmriId/liste-isaretle',
+    yetki: 'uretim-emirleri.adim-durumu-yaz',
+    parametre: isEmriParametresi,
+    govde: listeIsaretleGovdesi,
+    cevap: adimDurumuCevabi,
+    tekrarKorumali: true,
+    isle: ({ db, kullanici, parametre, govde }) => listeIsaretle(db, kullanici, parametre.id, parametre.isEmriId, govde),
+  }),
+  uc({
+    yontem: 'POST',
+    yol: '/adimli-emirler/:id/is-emirleri/:isEmriId/liste-ekle',
+    yetki: 'uretim-emirleri.adim-durumu-yaz',
+    parametre: isEmriParametresi,
+    govde: listeEkleGovdesi,
+    cevap: adimDurumuCevabi,
+    tekrarKorumali: true,
+    isle: ({ db, kullanici, parametre, govde }) => listeMaddesiEkle(db, kullanici, parametre.id, parametre.isEmriId, govde),
   }),
   uc({
     yontem: 'POST',

@@ -96,6 +96,50 @@
 .tc-ad-hucre-pencere { display: grid; gap: var(--b-3); }
 .tc-ad-lejant { display: flex; flex-wrap: wrap; gap: var(--b-2) var(--b-4); margin: var(--b-3) 0 0; font-size: var(--yazi-s); }
 
+/* 3249 b: açılan satırlı matris. Liste sütunu genişte sonda, telefonda adımın yanında; iki hücreden biri gizlidir, satır yapısı aynı kalır. */
+.tc-ad-matris .tc-ad-mx-liste-on { display: none; }
+.tc-ad-matris .tc-ad-mx-ayrac { border-left: var(--cizgi-ince) solid var(--edge2); }
+.tc-ad-matris th[scope='row'] { font-weight: 400; }
+.tc-ad-mx-adim { display: flex; align-items: center; gap: var(--b-1); min-inline-size: min-content; white-space: normal; }
+.tc-ad-mx-ac, .tc-ad-mx-ad, .tc-ad-liste-hucre {
+  display: inline-flex; align-items: center; gap: var(--b-1); min-height: var(--dokunma-yogun); padding: 0 var(--b-1);
+  font: inherit; color: inherit; text-align: left; background: transparent; border: thin solid transparent; border-radius: var(--yari-2); cursor: pointer;
+}
+.tc-ad-mx-ac { justify-content: center; min-width: var(--dokunma-yogun); color: var(--muted); }
+/* OP kodu bölünmez; ad sarar. */
+.tc-ad-mx-ad .tc-emir-kod { white-space: nowrap; }
+.tc-ad-mx-ac:hover, .tc-ad-mx-ad:hover, .tc-ad-liste-hucre:hover { background: var(--panel2); border-color: var(--edge); }
+.tc-ad-mx-ac:focus-visible, .tc-ad-mx-ad:focus-visible, .tc-ad-liste-hucre:focus-visible { outline: var(--cizgi-orta) solid var(--done); outline-offset: var(--cizgi); }
+.tc-ad-liste-hucre { font-family: var(--font-mono); font-size: var(--yazi-s); border-style: dashed; border-color: var(--edge); }
+.tc-ad-liste-hucre[aria-expanded='true'] { border-style: solid; border-color: var(--done); }
+.tc-ad-liste-hucre progress {
+  width: calc(var(--b-6) * 1.5); height: var(--b-1); border: 0; border-radius: var(--yari-tam); background: var(--panel); overflow: hidden; appearance: none;
+}
+.tc-ad-liste-hucre progress::-webkit-progress-bar { background: var(--panel); }
+.tc-ad-liste-hucre progress::-webkit-progress-value { background: var(--run); }
+.tc-ad-liste-hucre progress::-moz-progress-bar { background: var(--run); }
+.tc-tablo-kap[data-kaydir] .tc-ad-matris tr.tc-ad-mx-alt > td { background: var(--panel2); }
+.tc-ad-mx-alt > td.tc-tablo-sabit-sol { white-space: normal; }
+.tc-ad-mx-kim { font-size: var(--yazi-s); color: var(--muted); }
+.tc-ad-mx-ekle { display: flex; flex-wrap: wrap; gap: var(--b-2); }
+.tc-ad-mx-ekle-tel { display: none; }
+.tc-ad-mx-bos { margin: 0 0 var(--b-2); font-size: var(--yazi-s); color: var(--muted); }
+.tc-ad-madde { display: flex; align-items: center; gap: var(--b-2); min-height: var(--dokunma-yogun); padding-left: var(--b-6); cursor: pointer; }
+.tc-ad-madde input { flex: none; width: var(--b-5); height: var(--b-5); accent-color: var(--run); cursor: pointer; }
+.tc-ad-madde input:disabled { cursor: default; }
+/* Uzun madde adı sabit sütunu genişletmez, sarar. */
+.tc-ad-madde > span { display: grid; min-width: 0; max-inline-size: calc(var(--b-6) * 8); overflow-wrap: anywhere; }
+.tc-ad-madde small { color: var(--muted); font-size: var(--yazi-xs); }
+/* Son işaret sarı çerçeveyle kalır: Boşlukla kaydırırken yanlış işaret hemen görülsün, bildirimden geri alınsın. */
+.tc-ad-matris [data-son]:is(button), .tc-ad-matris tr[data-son] > td:first-child { outline: var(--cizgi-orta) solid var(--hazard); outline-offset: calc(-1 * var(--cizgi-orta)); }
+.tc-ad-ipucu kbd { font-family: var(--font-mono); font-size: var(--yazi-xs); padding: 0 var(--b-1); border: thin solid var(--edge2); border-radius: var(--yari-1); }
+.tc-ad-ipucu { flex-wrap: wrap; }
+.tc-ad-liste-maddeleri { list-style: none; margin: 0; padding: 0; display: grid; border: thin solid var(--edge); border-radius: var(--yari-1); }
+.tc-ad-liste-maddeleri li { display: grid; gap: var(--b-1); padding: var(--b-1) var(--b-3); border-bottom: thin solid var(--edge); }
+.tc-ad-liste-maddeleri li:last-child { border-bottom: 0; }
+.tc-ad-liste-maddeleri .tc-ad-madde { padding-left: 0; min-height: var(--dokunma); }
+.tc-ad-liste-maddeleri li > small { color: var(--muted); font-size: var(--yazi-xs); }
+
 /* Yan pencere */
 .tc-ad-pencere { display: grid; gap: var(--b-3); min-width: 0; }
 .tc-ad-pencere-ust { display: grid; gap: var(--b-2); }
@@ -116,10 +160,26 @@
   .tc-ad-geri { display: inline-flex; margin-bottom: var(--b-2); }
   .tc-ad:not(.tc-ad-secili) .tc-ad-ayrinti { display: none; }
 }
+/* Tablet de dokunmatik sayılır: ekleme düğmeleri parmak boyunda (Arayüz N2). */
+@media (max-width: 1023px) {
+  .tc-ad-mx-ekle .tc-dugme { min-height: var(--dokunma); }
+}
 @media (max-width: 767px) {
   .tc-ad-adim-dugme { grid-template-columns: auto minmax(0, 1fr) auto; }
   .tc-ad-adim-sag { grid-column: 2; grid-row: 2; justify-items: start; }
   .tc-ad-adim-dugme > svg { grid-column: 3; grid-row: 1; }
   .tc-ad-gorunum .tc-dugme { padding-inline: var(--b-2); }
   .tc-ad-sifir { display: none; }
+  /* Telefonda fare yok: Boşluk ipucu gizlenir; tik satırı ve düğmeler parmak boyundadır (Arayüz K1). */
+  .tc-ad-masa { display: none; }
+  .tc-ad-matris .tc-ad-mx-liste-on { display: table-cell; }
+  .tc-ad-matris .tc-ad-mx-liste-son { display: none; }
+  .tc-ad-mx-ac, .tc-ad-mx-ad, .tc-ad-liste-hucre { min-height: var(--dokunma); }
+  .tc-ad-mx-ac { min-width: var(--dokunma); }
+  .tc-ad-madde { min-height: var(--dokunma); padding-left: 0; }
+  .tc-ad-mx-ekle-tel { display: flex; }
+  .tc-ad-mx-ekle-masa { display: none; }
+  /* Sabit adım sütunu dar kalır; Liste sütunu ekranda görünsün. */
+  .tc-ad-madde > span { max-inline-size: calc(var(--b-6) * 5); }
+  .tc-ad-mx-adim { max-inline-size: calc(var(--b-6) * 6); }
 }
