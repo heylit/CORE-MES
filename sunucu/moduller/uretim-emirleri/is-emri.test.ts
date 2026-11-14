@@ -517,6 +517,21 @@ describe('uretim-emirleri iş emirli emir (gerçek PostgreSQL)', () => {
     const { uretimEmriId: sonraki } = await ac([adim(1, { tur: 'makine', id: m }, liste)]);
     const ikinci = await adimlar(sonraki);
     assert.deepEqual([ikinci[0]?.gecenNot?.metin, ikinci[0]?.buNot, ikinci[1]?.gecenNot], ['Kasa 2 rafın arkasında', null, null], 'not aynı ürün, OP ve sırada sonraki emre geçer');
+    // 3250 1b-4 (Risk K3): rota OP numarasını yeniden dizdikten sonra açılan emirde aynı operasyon başka numarayla gelir; not operasyonu izler.
+    const operasyon = (await o().sahip.tek<{ id: number }>(
+      'INSERT INTO rota_op_numarasi (malzeme_id, op_no, ilk_revizyon_id) VALUES ($1, 910, $2) RETURNING id', [urunNo, rev1]))!.id;
+    const { uretimEmriId: eski } = await ac([adim(1, { tur: 'makine', id: m }, liste)]);
+    const { uretimEmriId: yeni } = await ac([adim(1, { tur: 'makine', id: m }, liste)]);
+    await o().sahip.sorgu('ALTER TABLE uretim_emirleri_is_emri DISABLE TRIGGER USER');
+    try {
+      await o().sahip.sorgu('UPDATE uretim_emirleri_is_emri SET operasyon_id = $2, op_no = CASE uretim_emri_id WHEN $1 THEN 10 ELSE 30 END WHERE uretim_emri_id IN ($1, $3)', [eski, operasyon, yeni]);
+    } finally {
+      await o().sahip.sorgu('ALTER TABLE uretim_emirleri_is_emri ENABLE TRIGGER USER');
+    }
+    const yeniNot = await istek<AdimC>('operator', 'POST', `/uretim-emirleri/${yeni}/adimlar/${(await adimlar(yeni))[0]!.id}/not`, { metin: 'Yeni numarada not' }, randomUUID());
+    assert.equal(yeniNot.durum, 200, JSON.stringify(yeniNot.govde));
+    assert.equal((await adimlar(eski))[0]?.gecenNot?.metin, 'Yeni numarada not', 'OP 30 ile yazılan not aynı operasyonun OP 10 emrinde görünür');
+    assert.equal((await adimlar(sonraki))[0]?.gecenNot?.metin, 'Kasa 2 rafın arkasında', 'kimliksiz adımın notu eski anahtarla kalır');
     await assert.rejects(o().sahip.sorgu('DELETE FROM emir_adim_notu'), /yalnız ekleme/);
     await assert.rejects(o().sahip.sorgu('UPDATE emir_adimi_kaniti SET olcum = 1'), /yalnız ekleme/);
   });

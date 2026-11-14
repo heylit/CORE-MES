@@ -70,19 +70,21 @@ export function adimKanitiEkle(db: Db, olayId: number, k: { olcum: number | null
   return db.sorgu('INSERT INTO emir_adimi_kaniti (olay_id, olcum, secim, foto_ozet) VALUES ($1, $2, $3, $4)', [olayId, k.olcum, k.secim, k.foto]);
 }
 
-// Notun anahtarı ürün + OP + adım sırasıdır (2098-9 a); rotasız emirde iş emri yoktur, anahtar da yoktur.
-export interface NotAnahtari { malzemeNo: number; opNo: number }
+// Notun anahtarı ürün + OP + adım sırasıdır (2098-9 a); rotasız emirde iş emri yoktur, anahtar da yoktur. Rotadan gelen adımda OP,
+// numarası değil operasyonun kalıcı kimliğidir (3250 b): OP numarası rotada yeniden dizilse de not aynı operasyonda kalır.
+export interface NotAnahtari { malzemeNo: number; opNo: number; operasyonId: number | null }
 export function notAnahtari(db: Db, isEmriId: number): Promise<(NotAnahtari & { talimatSurumu: number | null }) | null> {
   return db.tek<NotAnahtari & { talimatSurumu: number | null }>(
-    `SELECT e.malzeme_no AS "malzemeNo", ie.op_no AS "opNo", ie.talimat_surumu AS "talimatSurumu" FROM uretim_emirleri_is_emri ie JOIN uretim_emri e ON e.id = ie.uretim_emri_id
+    `SELECT e.malzeme_no AS "malzemeNo", ie.op_no AS "opNo", ie.operasyon_id AS "operasyonId", ie.talimat_surumu AS "talimatSurumu"
+       FROM uretim_emirleri_is_emri ie JOIN uretim_emri e ON e.id = ie.uretim_emri_id
       WHERE ie.id = $1 AND e.malzeme_no IS NOT NULL`, [isEmriId],
   );
 }
 
 export function adimNotuEkle(db: Db, g: NotAnahtari & { emirId: number; sira: number; kisiId: number; metin: string; an: string }): Promise<unknown> {
   return db.sorgu(
-    `INSERT INTO emir_adim_notu (emir_id, malzeme_no, op_no, adim_sira, kisi_id, metin, zaman) VALUES ($1, $2, $3, $4, $5, $6, $7::timestamptz)`,
-    [g.emirId, g.malzemeNo, g.opNo, g.sira, g.kisiId, g.metin, g.an],
+    `INSERT INTO emir_adim_notu (emir_id, malzeme_no, op_no, operasyon_id, adim_sira, kisi_id, metin, zaman) VALUES ($1, $2, $3, $4, $5, $6, $7, $8::timestamptz)`,
+    [g.emirId, g.malzemeNo, g.opNo, g.operasyonId, g.sira, g.kisiId, g.metin, g.an],
   );
 }
 
@@ -93,8 +95,8 @@ export function adimNotlari(db: Db, emirId: number, a: NotAnahtari, siralar: rea
     `SELECT DISTINCT ON (n.adim_sira, n.emir_id = $1) n.adim_sira AS sira, n.emir_id = $1 AS "buEmir", n.metin, n.kisi_id AS "kisiId",
             ${ISO('n.zaman')} AS zaman, n.emir_id AS "emirId"
        FROM emir_adim_notu n
-      WHERE n.malzeme_no = $2 AND n.op_no = $3 AND n.adim_sira = ANY($4::int[])
+      WHERE (CASE WHEN $5::int IS NULL THEN n.malzeme_no = $2 AND n.op_no = $3 ELSE n.operasyon_id = $5 END) AND n.adim_sira = ANY($4::int[])
       ORDER BY n.adim_sira, n.emir_id = $1, n.id DESC`,
-    [emirId, a.malzemeNo, a.opNo, [...siralar]],
+    [emirId, a.malzemeNo, a.opNo, [...siralar], a.operasyonId],
   );
 }
