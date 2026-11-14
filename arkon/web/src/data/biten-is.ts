@@ -1,6 +1,11 @@
 /* Kart #1194 (AR-BI-1): biten işte sayaç kapalıdır. Sunucu da biten işin sonucunda sayı ve durum değişikliğini reddeder
    (sunucu/moduller/arkon/kurallar.ts bitmisIsReddi); ekran düğmeleri kapalı göstererek ret almadan önce durdurur. */
-export interface SayimIsi { state?: string; empty?: boolean }
+export interface SayimIsi { state?: string; empty?: boolean; pkg?: { tmi?: object | null } | null }
+
+// 3173: sayımı SmartES'ten gelen istasyonda iyi parçayı terminal saymaz; aynı üretim iki kez stoğa girmez. Sunucu da bu sayımı reddeder.
+// Hurda ve hatalı terminalde kalır (SmartES red adedi CORE'a işlenmiyor).
+export const SMARTES_SAYIM_ILETISI = 'Bu istasyonda sayım SmartES’ten gelir';
+export const smartesSayimi = (is: SayimIsi | null | undefined): boolean => (is?.pkg?.tmi as { sayimKaynagi?: unknown } | null | undefined)?.sayimKaynagi === 'smartes';
 
 export const BITMIS_IS_ILETISI = 'Bu iş bitti · sayı değişmez';
 export const BASLAMAMIS_IS_ILETISI = 'İş başlamadı · önce başlat';
@@ -12,6 +17,7 @@ export const HAZIRLIKTA_SAYIM_ILETISI = 'Hazırlıkta sayım yapılmaz · önce 
 // onaysız ilk parçalar işin sonunda iyi parçaya katılıyordu. Hazırlık hurdası sayılır.
 export function sayimKapaliNedeni(is: SayimIsi | null | undefined, tur: 'good' | 'scrap' = 'scrap'): string | null {
   if (!is || is.empty || is.state === 'done') return BITMIS_IS_ILETISI;
+  if (tur === 'good' && smartesSayimi(is)) return SMARTES_SAYIM_ILETISI;
   if (is.state === 'queued') return BASLAMAMIS_IS_ILETISI;
   if (is.state === 'setup' && tur === 'good') return HAZIRLIKTA_SAYIM_ILETISI;
   return is.state === 'stopped' ? DURUSTA_SAYIM_ILETISI : null;

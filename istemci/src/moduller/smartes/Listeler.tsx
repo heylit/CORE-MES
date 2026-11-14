@@ -4,7 +4,7 @@ import type {
   AlarmlarCevabi, AmbarHareketleriCevabi, DuruslarCevabi, FireHareketleriCevabi, GidenCevabi, HamKayitCevabi,
   IsEmriDurumlariCevabi, KaliteOlcumleriCevabi,
 } from '#paylasilan/sozlesme/smartes.ts';
-import { Dugme, DurumKutusu, Kart, Pencere, Rozet, Tablo, type Sutun } from '../../ortak/arayuz/index.ts';
+import { Dugme, DurumKutusu, Kart, Pencere, Rozet, Tablo, type RozetTonu, type Sutun } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { GIDEN, YOK, sayiMetni, zamanMetni } from './gosterim.ts';
@@ -71,6 +71,9 @@ function SayfaliListe<S>({ ad, yol, baslik, aciklama, sutunlar: verilen, anahtar
 }
 
 type UretimSatiri = IsEmriDurumlariCevabi['satirlar'][number];
+const ONAY: Record<NonNullable<UretimSatiri['onay']>, { metin: string; ton: RozetTonu }> = {
+  bekliyor: { metin: 'Onay bekliyor', ton: 'uyari' }, onaylandi: { metin: 'Onaylandı', ton: 'tamam' }, reddedildi: { metin: 'Reddedildi', ton: 'hata' },
+};
 const URETIM_SUTUNLARI: readonly Sutun<UretimSatiri>[] = [
   { anahtar: 'isEmriNo', baslik: 'İş emri', hucre: (s) => s.isEmriNo ?? YOK, mono: true },
   { anahtar: 'istasyon', baslik: 'İstasyon', hucre: (s) => s.istasyonKodu ?? YOK, mono: true },
@@ -80,12 +83,13 @@ const URETIM_SUTUNLARI: readonly Sutun<UretimSatiri>[] = [
   { anahtar: 'red', baslik: 'Red', hucre: (s) => sayiMetni(s.red), hizala: 'sag', mono: true },
   { anahtar: 'baslangic', baslik: 'Başlangıç', hucre: (s) => zamanMetni(s.baslangic), kirilmaz: true },
   { anahtar: 'bitis', baslik: 'Bitiş', hucre: (s) => zamanMetni(s.bitis), kirilmaz: true },
+  { anahtar: 'onay', baslik: 'CORE’a', hucre: (s) => (s.onay == null ? <span className="tc-sm-not">Aktarılmaz</span> : <Rozet ton={ONAY[s.onay].ton}>{ONAY[s.onay].metin}</Rozet>) },
 ];
 
 export const UretimSayilari = () => (
   <SayfaliListe
     ad="uretim" yol="/smartes/is-emri-durumlari" baslik="Üretim sayıları"
-    aciklama="SmartES’ten okunan makine gerçekleşenleri. SmartES’teki veri değiştirilmez; “aktarıldı” işaretini mevcut program koyar."
+    aciklama="SmartES’ten okunan makine gerçekleşenleri. Sayım kaynağı SmartES olan istasyonun sağlam adedi “Onay bekliyor”a düşer ve onaylanınca üretim emrine işlenir; terminalden sayılan istasyonun satırı yalnız burada durur. SmartES’teki veri değiştirilmez."
     sutunlar={URETIM_SUTUNLARI} anahtar={(s) => s.smartesId} bos="Henüz okunan kayıt yok."
   />
 );

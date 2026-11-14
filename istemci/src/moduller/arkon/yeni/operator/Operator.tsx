@@ -8,7 +8,7 @@ import { KabukUstYuvasi } from '../../../../ortak/arayuz/Kabuk.tsx';
 import { CAGRI_GERIYE_MS, acikCagri, cagriyiKur, type CagriSatiri } from '../../../../../../arkon/web/src/data/acik-cagri.ts';
 import { baslatmaUyarisi, uyariliBaslatmaIletisi } from '../../../../../../arkon/web/src/data/baslatma-uyarisi.ts';
 import {
-  baslatmaGeriAlma, baslatmaGeriUygula, durumEsitle, durumEsitleme, durumIletisi, geriAlinacakIs, sayimGeriAlma, sayimGeriUygula, sayimKapaliNedeni,
+  baslatmaGeriAlma, baslatmaGeriUygula, durumEsitle, durumEsitleme, durumIletisi, geriAlinacakIs, sayimGeriAlma, sayimGeriUygula, sayimKapaliNedeni, smartesSayimi, SMARTES_SAYIM_ILETISI,
   KUYRUK_BITTI_OLAYI, SAYIM_YENIDEN_YAZILDI_OLAYI, type DurumEsitleme, type SayimGeriAlma,
 } from '../../../../../../arkon/web/src/data/biten-is.ts';
 import { CAKISMA_ILETISI, CAKISMA_OLAYI } from '../../../../../../arkon/web/src/data/cakisma.ts';
@@ -1408,6 +1408,7 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
     {dar ? null : <SayacCipi liste={bekleyen.liste} kopuk={bekleyen.kopuk} ac={() => bkAcikYaz(true)} />}
     <div className="tc-ay1-sayac">
       <SayacKadrani is={o} etiket={OT.cnt} birim={OT.unit} cevrim={cevrim} {...(hataliSayisi === undefined ? {} : { hatali: hataliSayisi })} duzelt={duzeltir ? () => { if (iyiSayimOk('prod.fix')) ovYaz('num'); } : null} />
+      {smartesSayimi(o) && <p className="tc-ay1-smartes" role="status"><Simge ad="laptop" />{SMARTES_SAYIM_ILETISI}. Başlat, duraklat, bitir ve hatalı parça burada kalır.</p>}
       {/* 693: telefonda İyi +1 ve Hurda +1 alttaki eylem çubuğunda; sayacın altında yalnız düzeltme (−1) tuşları kalır. */}
       <SayimTuslari tuslar={dar && uretir ? tuslar.filter((t) => t.simge === 'minus' || t.simge === 'layers') : tuslar} />
     </div>
@@ -1619,7 +1620,7 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
     const MV = mobilGorunumler(o, ozetVar, !!Panel, OT.short, panelSimgesi, D, isler.filter((x) => x.fresh).length, telefon);
     const gor = MV.some((x) => x.id === mv) ? mv : 'prod';
     const cubuk = gor === 'prod' && uretir && !kaliteGorunumu
-      ? <EylemCubugu durum={o.state} pasif={!!o.empty} beklemede={bekletme !== null} eylem={(d) => act(d.eylem)} tuslar={tuslar.filter((t) => t.simge !== 'minus' && t.simge !== 'layers')} />
+      ? <EylemCubugu durum={o.state} pasif={!!o.empty} beklemede={bekletme !== null} eylem={(d) => act(d.eylem)} tuslar={tuslar.filter((t) => t.simge !== 'minus' && t.simge !== 'layers' && !(smartesSayimi(o) && t.ton === 'iyi'))} bilgi={smartesSayimi(o) ? 'Sayım SmartES’ten' : undefined} />
       : null;
     return (
       <div className="tc-ay1 tc-ay1-dar" data-durum={IS_DURUM_RENGI(o.state)} data-dokunmatik="" data-cubuk={cubuk ? '' : undefined}>

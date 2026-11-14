@@ -242,8 +242,9 @@ export function isEmriDurumuSatirlari<T>(db: Db, d: Dilim): Promise<T[]> {
   return db.sorgu<T>(
     `SELECT smartes_id AS "smartesId", is_emri_no AS "isEmriNo", erp_id AS "erpId", istasyon_kodu AS "istasyonKodu", operasyon_kodu AS "operasyonKodu",
        makine_kodu AS "makineKodu", stok_no AS "stokNo", saglam, red, makine_saglam AS "makineSaglam", makine_red AS "makineRed",
-       ${zamanMetni('baslangic')} AS baslangic, ${zamanMetni('bitis')} AS bitis, ${zamanMetni('son_okuma')} AS "sonOkuma"
-     FROM smartes_is_emri_durumu ORDER BY son_okuma DESC, smartes_id DESC LIMIT $1 OFFSET $2`,
+       ${zamanMetni('baslangic')} AS baslangic, ${zamanMetni('bitis')} AS bitis, ${zamanMetni('son_okuma')} AS "sonOkuma",
+       (SELECT o.durum FROM smartes_adet_onayi o WHERE o.smartes_id = d.smartes_id ORDER BY (o.durum = 'bekliyor') DESC, o.id DESC LIMIT 1) AS onay
+     FROM smartes_is_emri_durumu d ORDER BY son_okuma DESC, smartes_id DESC LIMIT $1 OFFSET $2`,
     [d.sinir, d.atla],
   );
 }
@@ -1032,6 +1033,14 @@ export async function onaySatiriEkle(db: Db, y: { smartesId: number; tur: 'sagla
 // gibi görünür ve onaylanamaz (yanlış emre sayım ve stok yazılmasın).
 const TEK_GIDEN = `LEFT JOIN LATERAL (SELECT CASE WHEN count(*) = 1 THEN min(x.is_emri_id) END AS is_emri_id
                     FROM smartes_giden x WHERE x.smartes_is_emri_no = d.is_emri_no) g ON true`;
+
+// Okunan satırın CORE iş emri: no tek iş emrine çıkıyorsa o, değilse null (onay listesindeki eşleşmeyle aynı kural).
+export async function tekGidenIsEmri(db: Db, isEmriNo: string | null): Promise<number | null> {
+  if (isEmriNo === null) return null;
+  const r = await db.tek<{ id: number | null }>(
+    'SELECT CASE WHEN count(*) = 1 THEN min(is_emri_id) END AS id FROM smartes_giden WHERE smartes_is_emri_no = $1', [isEmriNo]);
+  return r?.id ?? null;
+}
 
 export interface KilitliOnaySatiri {
   id: number;

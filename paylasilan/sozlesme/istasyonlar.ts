@@ -48,6 +48,10 @@ export const isMerkeziGovdesi = z.object({
   aktif: z.boolean().prefault(true),
 });
 
+// Sayım kaynağı (3173): istasyonda üretim adedi ya terminalden ya SmartES'ten gelir, ikisi birlikte değil.
+export const SAYIM_KAYNAKLARI = ['terminal', 'smartes'] as const;
+export type SayimKaynagi = (typeof SAYIM_KAYNAKLARI)[number];
+
 export const istasyonGovdesi = z.object({
   kod: kodSemasi,
   ad: adSemasi,
@@ -58,6 +62,8 @@ export const istasyonGovdesi = z.object({
   kapasiteKaynagi: kapasiteKaynagi.nullish().transform((k) => k ?? null),
   // Stok üretim alanı konumunu yalnız işaretli istasyona bağlar (SH5 b).
   uretimAlani: z.boolean().prefault(false),
+  // Gönderilmezse değişmez (yeni istasyonda terminal): alanı bilmeyen çağıran kaynağı sıfırlamasın.
+  sayimKaynagi: z.enum(SAYIM_KAYNAKLARI).optional(),
   aktif: z.boolean().prefault(true),
 });
 
@@ -168,6 +174,9 @@ export const istasyonKaydiSemasi = istasyonSemasi.extend({
   sorumluAd: z.string().nullable(),
   kapasiteKaynagi: kapasiteKaynagi.nullable(),
   uretimAlani: z.boolean(),
+  sayimKaynagi: z.enum(SAYIM_KAYNAKLARI).optional(),
+  // Kaynağın son değiştiği an; hiç değişmediyse boş. Bundan önce başlamış SmartES satırı aktarılmaz.
+  sayimKaynagiGecerlilik: z.string().nullable().optional(),
 });
 export const makineKaydiSemasi = makineSemasi.extend(surumlu);
 

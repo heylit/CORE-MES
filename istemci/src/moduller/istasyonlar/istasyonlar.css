@@ -198,3 +198,4 @@
 .tc-ist-durum-metni[data-durum='bakim'] { color: var(--hold); font-weight: 700; }
 .tc-ist-durum-metni[data-durum='girilmemis'] { color: var(--muted); }
 .tc-ist-onizleme { display: flex; flex-direction: column; gap: var(--b-2); }
+.tc-ist-uyari { margin: 0; padding: var(--b-3); border: 1px solid var(--hold); border-radius: var(--yari-2); background: var(--panel2); font-size: var(--yazi-s); }

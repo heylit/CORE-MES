@@ -100,6 +100,9 @@ export const isEmriDurumlariCevabi = listeCevapSemasi(z.object({
   baslangic: zamanSemasi.nullable(),
   bitis: zamanSemasi.nullable(),
   sonOkuma: zamanSemasi,
+  // Satırın adet onayı (3173 b): bekleyeni varsa bekliyor, yoksa son kararı. Onaya hiç girmemiş satırda (istasyon terminalden sayılıyor
+  // ya da satır SmartES'e geçilmeden önce başlamış) null.
+  onay: z.enum(['bekliyor', 'onaylandi', 'reddedildi']).nullable().optional(),
 }));
 
 export const duruslarCevabi = listeCevapSemasi(z.object({

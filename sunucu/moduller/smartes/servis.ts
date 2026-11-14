@@ -15,7 +15,7 @@ import type { Kullanici } from '#cekirdek/yetki.ts';
 import { tesisGunBasi, tesisGunu } from '#paylasilan/tesis-zamani.ts';
 import { sistemAyariOku } from '../ayarlar/disari.ts';
 import { durusNedenleriniListele, hurdaNedenleriniListele } from '../durus-nedenleri/disari.ts';
-import { istasyonlar, makineler, operasyonTipleri } from '../istasyonlar/disari.ts';
+import { istasyonlar, makineler, operasyonTipleri, smartesSayimIstasyonlari } from '../istasyonlar/disari.ts';
 import { malzemeOzetleri } from '../malzemeler/disari.ts';
 import {
   gunlukAralikAdetleri, isEmriOzeti, isEmriOzetleri, isEmriZamanlari, makinelerdekiIsler, planlanacakIsEmirleri, smartesSayimi,
@@ -240,7 +240,10 @@ async function satirYazKorumali(db: Db, yaz: () => Promise<boolean>): Promise<bo
 async function satirYaz(db: Db, kaynak: OkumaKaynagi, satir: Readonly<Record<string, string>>, zaman: Date): Promise<boolean> {
   if (kaynak === 'is-emri-durumu') {
     const k = isEmriDurumuOku(satir);
-    if (k) await s.isEmriDurumuYaz(db, k, zaman);
+    if (k) {
+      await s.isEmriDurumuYaz(db, k, zaman);
+      await adetOnayinaAl(db, k, zaman, await sayimGecerliligi(db, k));
+    }
     return k !== null;
   }
   if (kaynak === 'durus') {
@@ -1452,6 +1455,19 @@ export async function makineBulgulari(db: Db, istemci: SmartesIstemcisi | null, 
 // Okunan satırın onaya girmemiş farkı kuyruğa yazılır. Yalnız sayım kaynağı SmartES olan istasyonun, o istasyon SmartES'e geçtikten
 // sonra başlamış satırı girer (gecerlilik null: istasyon terminalden sayılıyor, satır yalnız SmartES sayfasında durur). Red adedi fire
 // eşlemesi (3174) gelince kuyruğa girer: şimdi yazılırsa o güne dek reddedilmiş sayılıp bir daha gelmezdi.
+// Aynı satırı iki okuma aynı anda kuyruğa yazamaz: çağıran önce durum satırını yazar, satır kilidi ikinciyi bekletir ve o, ilkinin farkını görür.
+// Satırın istasyonu CORE iş emrinden bulunur (giden kutusundaki tek karşılık); iş emri bulunamıyorsa SmartES iş istasyonu kodunun
+// eşlemesinden. İstasyon bulunamıyorsa ya da terminalden sayılıyorsa null: satır onaya girmez.
+async function sayimGecerliligi(db: Db, k: IsEmriDurumuKaydi): Promise<Date | null> {
+  const kaynaklar = await smartesSayimIstasyonlari(db);
+  if (kaynaklar.size === 0) return null;
+  const isEmriId = await s.tekGidenIsEmri(db, k.isEmriNo);
+  const istasyonId = isEmriId !== null
+    ? ((await isEmriOzeti(db, isEmriId))?.istasyonId ?? null)
+    : (k.istasyonKodu === null ? null : ((await s.eslemeler(db, 'istasyon')).find((e) => e.smartesKod === k.istasyonKodu)?.tmiId ?? null));
+  return istasyonId === null ? null : (kaynaklar.get(istasyonId) ?? null);
+}
+
 export async function adetOnayinaAl(db: Db, k: IsEmriDurumuKaydi, zaman: Date, gecerlilik: Date | null): Promise<number> {
   if (gecerlilik === null || !onayaGirerMi(k.baslangic, gecerlilik)) return 0;
   const farklar = adetOnayFarklari({ saglam: k.saglam, red: null }, await s.onayToplamlari(db, k.smartesId));

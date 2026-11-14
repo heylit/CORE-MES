@@ -26,7 +26,7 @@ import { adimIlkParcaKararlari, ilkParcaKararlari, lotKarariYaz, muayenePlaniOne
 import type { KmOlcumKaynagi, KmOlcumVerisi } from '../kalite-merkezi/disari.ts';
 import {
   ekipler, ekipUyeleri, eskiKoddanKimlikCoz, isMerkezleri, istasyonGetir, istasyonKisiAtamalari, istasyonYetkinlikleri, makineGetir, istasyondakiMakineler, istasyonKisileri, istasyonlar, kisininIzinliIsMerkezleri, kisilerinIzinliIsMerkezleri, aktifMakineler,
-  istasyonKapasitesi, kapasiteKaynaklari, makineKisiAtamalari, makineYetkinlikleri, planAyarlari, makineler, makineDurumlari, makineDurumuYaz, operasyonTipleri,
+  istasyonKapasitesi, kapasiteKaynaklari, makineKisiAtamalari, makineYetkinlikleri, planAyarlari, makineler, makineDurumlari, makineDurumuYaz, operasyonTipleri, smartesSayimIstasyonlari,
 } from '../istasyonlar/disari.ts';
 import { projeAdlari } from '../projeler/disari.ts';
 import { kisiAdlari, kisiBayrakliMi, kisileriListele, kisilerinIslemleri, kisilerinRolIslemleri, kullaniciYukle } from '../kisiler/disari.ts';
@@ -59,7 +59,7 @@ import {
   KUYRUK_ILETILERI, eksiAlaniniEkle, hataliAlaniniEkle, kuyrukAlanlariniEkle, kuyrukSirasiReddi, planSaatleri,
   plansizKaynak, rotaAnahtari, sablonPaket, tabanCoz, tmiAlanlariniYaz, tmiBirlesikSurum, hurdaNedenleriniCevir, stokaBagliMi, stokDurumuyla, stokIstegiKaynagi, stokIstegiKarari, numuneTeslimGirdisi, numuneTesliminiKoru, kaliteIstasyonuSec, tekKaliteIstasyonu, lotKarariGirdisi, lotKarariKoru, lotPaketi, lotKarariDamgala, KALITE_KARARI_ROLLERI,
   icerikSurumu, planYokDamgala, uyariBirlestir, guvensizCizimleriAyikla, acikIstekMi, alanOku, istekKmPlani, istekKarari, kmKarariniAynala, periyodikNumuneler, periyodikRetAcik, numuneTeslimKaynagi, kmOlcumGruplari, kmUyarisiniYaz, KM_UYARILARI, ilkParcaGereksinimi, tmiAqlPlani, iletiKonumu, kapsamdaMiKisitli, konumBosMu, kayitKonumu, kayitSutunlari, konumKimlikleri, ikinciKontrolEksik, ilkParcaOlculeri, gizliYansimaTuru, gecikmeliSayimReddi, tmiRetIletisi, ilkParcaSayimiAsildi, kararBekleyenAdet, KARAR_BEKLIYOR_ALANI, yenidenIlkParcaTabani, ILK_PARCA_ADEDI, ilkParcaYenidenSorulur, yenidenIlkParcaAcik, yenidenKarariDamgala, yenidenKarariDegisti, kodlarAyir, konumCoz, okuyabilirMi, paketEmri, paketIstasyonuReddi, paketKonumu, paketMakinesi, tesisHaritasiKur, kayitGovdesi, kayitReddi, gunlukSatirlari, paketSuzgeciVar, silmeCakisiyorMu, sunucuIletisiMi, tesisKur, tmiAyariMi, yazimCakisiyorMu, arkonVardiyalari, arkonTatilleri, arkonAletleri, TMI_AYARLARI,
-  BITMIS_BITIR, DOSYA_KOTASI, olcumAletleri, islemImzasi, yoklamaDenetimiGecerli, katilimYolu, tmidekiDurum, ZATEN_CALISIYOR, GIZLI_YANSIMA_TURLERI, ILETI_HIZI, ISTEK_KILIT_BUTCESI_MS, KILIT_BEKLEME_MS, KUYRUK_DEGISIKLIK_YOK, HAZIRLIK_DEGISIKLIK_YOK, arizaCagrisi, SAYIM_ERTELEME, yansimaNedeni, yansimaSirasi, YANSIYAN_KAYITLAR, yansimaKarari, yenidenDenemeReddi, YENIDEN_YALNIZ_HATALI, alanYetkisiReddi, belgeRoluReddi, onayEskidiMi, onayIcerigi, onayOzetiDamgala, bekletmeAlaniniEkle, bitenEmirIsareti, bitmisIsReddi, onayZorunluMu, hizSiniriAsildi, iletiReddi, kayitRoluReddi, kisiAlanlariniDoldur, yazmaReddi, yayinEksigi, yerelPaketReddi, yeniSurum, yetkiMatrisi, yuklemeKotasiHatasi,
+  BITMIS_BITIR, DOSYA_KOTASI, olcumAletleri, islemImzasi, yoklamaDenetimiGecerli, katilimYolu, tmidekiDurum, ZATEN_CALISIYOR, GIZLI_YANSIMA_TURLERI, ILETI_HIZI, ISTEK_KILIT_BUTCESI_MS, KILIT_BEKLEME_MS, KUYRUK_DEGISIKLIK_YOK, HAZIRLIK_DEGISIKLIK_YOK, arizaCagrisi, SAYIM_ERTELEME, yansimaNedeni, yansimaSirasi, YANSIYAN_KAYITLAR, yansimaKarari, yenidenDenemeReddi, YENIDEN_YALNIZ_HATALI, alanYetkisiReddi, belgeRoluReddi, onayEskidiMi, onayIcerigi, onayOzetiDamgala, bekletmeAlaniniEkle, sayimKaynagiAlaniniEkle, bitenEmirIsareti, bitmisIsReddi, onayZorunluMu, hizSiniriAsildi, iletiReddi, kayitRoluReddi, kisiAlanlariniDoldur, yazmaReddi, yayinEksigi, yerelPaketReddi, yeniSurum, yetkiMatrisi, yuklemeKotasiHatasi,
   cizimRevizyonuReddi, malzemeCizimleri, merkezDosyaAdi, merkezDosyaTipi, merkezDurumu, paketMerkezDosyalari, merkezTuruMu, merkezdenAlabilirMi, merkezDurumunuOkuyabilirMi,
   HAZIRLIK_MADDESI_ILETILERI, hazirlikMaddesiOlayReddi,
   KAYIT_YAZARLARI, KENDI_YENIDEN_EMIRSIZ, KENDI_YENIDEN_MESGUL, KENDI_YENIDEN_SONRADAN_SAYILDI, KENDI_YENIDEN_YALNIZ_RET, kendiSayimYenidenReddi,
@@ -372,6 +372,7 @@ async function isEmriTaslaklari(
   }
   const acikAdimi = (ie: { id: number; uretimEmriId: number }) => emirler.get(ie.uretimEmriId)?.acikAdimlar?.find((a) => a.isEmriId === ie.id);
   const hatali = await hataliToplamlari(db, girdiler.flatMap((g) => (acikAdimi(g.isEmri)?.hataliAdet === undefined ? [g.isEmri.uretimEmriId] : [])));
+  const smartesIstasyonlari = await smartesSayimIstasyonlari(db);
   for (const g of girdiler) {
     const hazirlik = g.istasyon === null ? null : hazirlikEksigi(g.istasyon.tip, hazirliklar.get(g.isEmri.id)?.durum);
     const aql = paketTuru(g.opGrubu, g.istasyon) === 'kalite' ? aqlPlanlari.get(`${g.emir.parcaNo}\n${String(g.parca?.adet ?? g.isEmri.adimAdedi ?? g.isEmri.adet)}`) ?? null : null;
@@ -390,8 +391,8 @@ async function isEmriTaslaklari(
     const adim = acikAdimi(g.isEmri);
     const bekleyen = emirler.get(g.isEmri.uretimEmriId)?.bekletme;
     const bekletme = bekleyen ? BEKLEME_NEDENI_ADLARI[bekleyen.neden] : null;
-    sonuc.set(kimlik, bekletmeAlaniniEkle(hataliAlaniniEkle(eksiAlaniniEkle(kuyrukAlanlariniEkle(govde, { kuyruk: kuyrukSirasi, planSaati: saatler.get(kimlik) ?? null }), adim?.eksik),
-      adim?.hataliAdet ?? hatali(g.isEmri.uretimEmriId, g.isEmri.id)), bekletme));
+    sonuc.set(kimlik, sayimKaynagiAlaniniEkle(bekletmeAlaniniEkle(hataliAlaniniEkle(eksiAlaniniEkle(kuyrukAlanlariniEkle(govde, { kuyruk: kuyrukSirasi, planSaati: saatler.get(kimlik) ?? null }), adim?.eksik),
+      adim?.hataliAdet ?? hatali(g.isEmri.uretimEmriId, g.isEmri.id)), bekletme), g.istasyon !== null && smartesIstasyonlari.has(g.istasyon.id)));
   }
   return sonuc;
 }
