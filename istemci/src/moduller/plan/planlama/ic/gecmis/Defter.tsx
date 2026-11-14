@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { DefterSatiri, DegisiklikDefteriCevabi } from '#paylasilan/sozlesme/planlama.ts';
 import { Dugme, Rozet } from '../../../../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../../../../ortak/veri/api.ts';
@@ -7,16 +7,21 @@ import { DEFTER_OLAY_ADI, izZamani } from './kurallar.ts';
 
 // Değişiklik defteri (2129-2 b): planı etkileyen her değişiklik, uygulanması ya da reddi (gerekçesiyle), kişi ve zamanıyla. Satırı sunucu
 // çalışma yazmasında yazar; ekran yalnız okur, en yeni önde, sayfa sayfa.
-const SUTUNLAR: readonly Sutun<DefterSatiri>[] = [
+// Defter işi emrin kimliğiyle saklar; ekranda onay sayfasındaki gibi emrin adı yazılır. Çalışmada artık olmayan emirde kimlik kalır.
+const sutunlar = (ad: (id: string) => string): readonly Sutun<DefterSatiri>[] => [
   { anahtar: 'zaman', baslik: 'Zaman', hucre: (x) => <span className="mono">{izZamani(Date.parse(x.zaman))}</span>, kirilmaz: true },
   { anahtar: 'kisi', baslik: 'Kişi', hucre: (x) => x.kisi ?? '—' },
   { anahtar: 'olay', baslik: 'Olay', hucre: (x) => <Rozet ton={DEFTER_OLAY_ADI[x.olay][1]}>{DEFTER_OLAY_ADI[x.olay][0]}</Rozet>, kirilmaz: true },
   { anahtar: 'ne', baslik: 'Değişiklik', hucre: (x) => <span><b>{x.ne}</b>{x.ayrinti ? <span className="tc-pyi-k"> {x.ayrinti}</span> : null}</span> },
-  { anahtar: 'isler', baslik: 'Etkilenen', hucre: (x) => (x.isler.includes('*') ? 'Bütün işler' : x.isler.join(', ') || '—') },
+  { anahtar: 'isler', baslik: 'Etkilenen', hucre: (x) => (x.isler.includes('*') ? 'Bütün işler' : x.isler.map(ad).join(', ') || '—') },
   { anahtar: 'gerekce', baslik: 'Gerekçe', hucre: (x) => x.gerekce ?? '—' },
 ];
 
-export function DegisiklikDefteri() {
+export function DegisiklikDefteri({ siparisler }: { siparisler?: readonly { id: string; ad?: string }[] }) {
+  const SUTUNLAR = useMemo(() => {
+    const adlar = new Map((siparisler ?? []).map((x) => [x.id, x.ad]));
+    return sutunlar((id) => adlar.get(id) || id);
+  }, [siparisler]);
   const [l, lYaz] = useState<DefterSatiri[] | null>(null);
   const [dahaVar, dahaVarYaz] = useState(false);
   const [hata, hataYaz] = useState<string | null>(null);
