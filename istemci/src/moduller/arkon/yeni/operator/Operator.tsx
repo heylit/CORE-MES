@@ -1412,7 +1412,7 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
       <SayimTuslari tuslar={dar && uretir ? tuslar.filter((t) => t.simge === 'minus' || t.simge === 'layers') : tuslar} />
     </div>
     {/* Sayaç boyunu içeriğinden almaz; bilgi satırı içine konunca kadranı ve tuşları sıkıştırır. Telefonda aynı bilgi eylem çubuğundadır. */}
-    {!dar && smartesSayimi(o) && <p className="tc-ay1-smartes" role="status"><Simge ad="laptop" />{SMARTES_SAYIM_ILETISI}. Başlat, duraklat, bitir ve hatalı parça burada kalır.</p>}
+    {!dar && smartesSayimi(o) && <p className="tc-ay1-smartes" role="status"><Simge ad="laptop" />{SMARTES_SAYIM_ILETISI}</p>}
     </>
   );
   const toplu = uretir ? (

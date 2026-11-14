@@ -74,15 +74,15 @@ type UretimSatiri = IsEmriDurumlariCevabi['satirlar'][number];
 const ONAY: Record<NonNullable<UretimSatiri['onay']>, { metin: string; ton: RozetTonu }> = {
   bekliyor: { metin: 'Onay bekliyor', ton: 'uyari' }, onaylandi: { metin: 'Onaylandı', ton: 'tamam' }, reddedildi: { metin: 'Reddedildi', ton: 'hata' },
 };
+// Birleşik hücre yalnız iki parçanın arasından kırılır; kod ya da tarih ortasından bölünmez.
+const IkiParca = ({ on, arka }: { on: string; arka: string }) => <span><span className="tc-sm-kirilmaz">{on}</span> <span className="tc-sm-kirilmaz">{arka}</span></span>;
 const URETIM_SUTUNLARI: readonly Sutun<UretimSatiri>[] = [
   { anahtar: 'isEmriNo', baslik: 'İş emri', hucre: (s) => s.isEmriNo ?? YOK, mono: true, kirilmaz: true },
-  { anahtar: 'istasyon', baslik: 'İstasyon', hucre: (s) => s.istasyonKodu ?? YOK, mono: true, kirilmaz: true },
-  { anahtar: 'makine', baslik: 'Makine', hucre: (s) => s.makineKodu ?? YOK, mono: true, kirilmaz: true },
+  { anahtar: 'yer', baslik: 'İstasyon · makine', hucre: (s) => <IkiParca on={`${s.istasyonKodu ?? YOK} ·`} arka={s.makineKodu ?? YOK} />, mono: true, kartTamSatir: true, csv: (s) => `${s.istasyonKodu ?? ''} · ${s.makineKodu ?? ''}` },
   { anahtar: 'operasyon', baslik: 'Operasyon', hucre: (s) => s.operasyonKodu ?? YOK, mono: true },
   { anahtar: 'saglam', baslik: 'Sağlam', hucre: (s) => sayiMetni(s.saglam), hizala: 'sag', mono: true },
   { anahtar: 'red', baslik: 'Red', hucre: (s) => sayiMetni(s.red), hizala: 'sag', mono: true },
-  { anahtar: 'baslangic', baslik: 'Başlangıç', hucre: (s) => zamanMetni(s.baslangic), kirilmaz: true },
-  { anahtar: 'bitis', baslik: 'Bitiş', hucre: (s) => zamanMetni(s.bitis), kirilmaz: true },
+  { anahtar: 'zaman', baslik: 'Başlangıç – bitiş', hucre: (s) => <IkiParca on={`${zamanMetni(s.baslangic)} –`} arka={zamanMetni(s.bitis)} />, kartTamSatir: true, csv: (s) => `${zamanMetni(s.baslangic)} – ${zamanMetni(s.bitis)}` },
   { anahtar: 'onay', baslik: 'CORE’a', hucre: (s) => (s.onay == null ? <span className="tc-sm-not">Aktarılmaz</span> : <Rozet ton={ONAY[s.onay].ton}>{ONAY[s.onay].metin}</Rozet>) },
 ];
 
