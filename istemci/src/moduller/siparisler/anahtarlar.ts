@@ -20,6 +20,9 @@ export const anahtarlar = {
   siparisProjeleri: (id: number) => ['siparisler', 'siparis', 'projeler', id] as const,
   // Plan modülünün elle çarpanı (195 a); sipariş ayrıntısında okunur ve yazılır.
   siparisCarpani: (id: number) => ['siparisler', 'siparis', 'carpan', id] as const,
+  // 3245 d: şablonlar ve antet; Sistem Ayarları > Formlar yazınca yenilenir. Form verisi sürüm ve KDV oranıyla önbelleklenir.
+  teklifFormuAyari: ['siparisler', 'teklif-formu', 'ayar'] as const,
+  teklifFormuVerisi: (id: number, sorgu: object) => ['siparisler', 'teklif', 'form', id, sorgu] as const,
   firmaSecimi: (ara: string) => ['siparisler', 'firma-secimi', ara] as const,
   malzemeArama: (metin: string) => ['siparisler', 'malzeme-arama', metin] as const,
 };

@@ -546,6 +546,15 @@ describe('Teklifler', () => {
     expect(screen.queryByText('Toplam (KDV hariç)')).toBeNull();
     expect(screen.queryByLabelText(/^Deneme Mil 20mm birim fiyat/)).toBeNull();
     expect(screen.getByRole('button', { name: 'Müşteri kabulünü kaydet' })).toBeTruthy();
+    // 3245 d: teklif formu fiyat basar; fiyat yetkisi olmayana düğme yoktur.
+    expect(screen.queryByRole('button', { name: 'Teklif formu' })).toBeNull();
+  });
+
+  it('fiyatı gören okuyucu teklif formunu açar (3245 d)', async () => {
+    sunucuKur(FIYAT_OKUYUCU);
+    ac('/siparisler/teklifler/21');
+    fireEvent.click(await screen.findByRole('button', { name: 'Teklif formu' }));
+    expect(await screen.findByRole('dialog', { name: /Teklif formu · TK-2026-0021 · Sürüm 1/ })).toBeTruthy();
   });
 
   it('okuyan teklifte işlem düğmesi ve sürüm formu görmez', async () => {
@@ -553,7 +562,7 @@ describe('Teklifler', () => {
     ac('/siparisler/teklifler/21');
     await screen.findAllByText('Deneme Mil 20mm');
     await oturumCozuldu(istekler);
-    for (const ad of ['Müşteri kabulünü kaydet', 'Revizyon iste', 'Reddet']) expect(screen.queryByRole('button', { name: ad })).toBeNull();
+    for (const ad of ['Müşteri kabulünü kaydet', 'Revizyon iste', 'Reddet', 'Teklif formu']) expect(screen.queryByRole('button', { name: ad })).toBeNull();
     expect(screen.queryByRole('form', { name: 'Sürüm formu' })).toBeNull();
   });
 

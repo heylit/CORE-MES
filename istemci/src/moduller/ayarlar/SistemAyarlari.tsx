@@ -421,7 +421,20 @@ function Baglantilar({ ekranlar, hazirlikGorur }: { ekranlar: readonly AyarEkran
   );
 }
 
-type SayfaSekmesi = 'genel' | 'gorunum' | 'sayfalar' | 'onay' | 'numara' | 'baglanti' | 'moduller' | 'guncelleme' | 'yedek' | 'cihazlar';
+// Formlar (3245 d): basılan belgelerin şablonları; her modülün form ekranı kendi alt sekmesinde açılır.
+function Formlar({ ekranlar }: { ekranlar: readonly AyarEkrani[] }) {
+  const sekmeler: readonly Sekme<string>[] = ekranlar.map((e) => ({ anahtar: e.anahtar, baslik: e.baslik, simge: e.simge }));
+  const [secim, setSecili] = useState<string | null>(null);
+  const secili = sekmeler.find((s) => s.anahtar === secim)?.anahtar ?? sekmeler[0]?.anahtar ?? null;
+  return (
+    <>
+      {sekmeler.length > 1 && <Sekmeler etiket="Formlar" sekmeler={sekmeler} secili={secili ?? ''} sec={setSecili} />}
+      {ekranlar.filter((e) => e.anahtar === secili).map((e) => <ModulAyarlari key={e.anahtar} ekran={e} />)}
+    </>
+  );
+}
+
+type SayfaSekmesi = 'genel' | 'gorunum' | 'sayfalar' | 'onay' | 'numara' | 'formlar' | 'baglanti' | 'moduller' | 'guncelleme' | 'yedek' | 'cihazlar';
 
 const SEKMELER: readonly Sekme<SayfaSekmesi>[] = [
   { anahtar: 'genel', baslik: 'Genel', simge: 'gear' },
@@ -429,6 +442,7 @@ const SEKMELER: readonly Sekme<SayfaSekmesi>[] = [
   { anahtar: 'sayfalar', baslik: 'Sayfalar', simge: 'list' },
   { anahtar: 'onay', baslik: 'Onay kuralları', simge: 'eye' },
   { anahtar: 'numara', baslik: 'Numara kuralları', simge: 'tag' },
+  { anahtar: 'formlar', baslik: 'Formlar', simge: 'file' },
   { anahtar: 'baglanti', baslik: 'Bağlantılar', simge: 'upload' },
   { anahtar: 'moduller', baslik: 'Modül ayarları', simge: 'grid' },
   { anahtar: 'guncelleme', baslik: 'Güncelleme', simge: 'download' },
@@ -445,13 +459,14 @@ export function SistemAyarlari({ ekranlar = ayarEkranlari }: { ekranlar?: readon
   // Modülün ekranını göremeyen kişi o modülün sistem ayarlarını Genel'de bulur: ayar kaybolmaz.
   const genelde = Object.entries(MODUL_AYAR_LISTELERI).filter(([anahtar]) => !gorunen.some((e) => e.anahtar === anahtar));
   const baglantiEkranlari = gorunen.filter((e) => e.bolum === 'baglanti');
+  const formEkranlari = gorunen.filter((e) => e.bolum === 'form');
   // Güncelleme sekmesi yalnız paket yükleyebilene (bayraklı yönetici) çıkar.
   const guncelleyebilir = islemler.includes('ayarlar.guncelleme-yukle');
   // Yedekler sekmesi yalnız yedek alıp indirebilene (bayraklı yönetici) çıkar.
   const yedekleyebilir = islemler.includes('ayarlar.yedek-indir');
   // Ortak cihaz sekmesi yalnız cihaz kaydedebilene (bayraklı yönetici) çıkar.
   const cihazKaydedebilir = islemler.includes('oturum.ortak-cihaz');
-  const sekmeler = SEKMELER.filter((s) => (s.anahtar !== 'moduller' || moduller.length > 0)
+  const sekmeler = SEKMELER.filter((s) => (s.anahtar !== 'moduller' || moduller.length > 0) && (s.anahtar !== 'formlar' || formEkranlari.length > 0)
     && (s.anahtar !== 'guncelleme' || guncelleyebilir) && (s.anahtar !== 'yedek' || yedekleyebilir)
     && (s.anahtar !== 'cihazlar' || cihazKaydedebilir));
   const [secili, setSecili] = useState<SayfaSekmesi>('genel');
@@ -482,6 +497,7 @@ export function SistemAyarlari({ ekranlar = ayarEkranlari }: { ekranlar?: readon
             <AyarListesi baslik="Numara kuralları" kategori="numara" />
           </>
         )}
+        {gecerli === 'formlar' && <Formlar ekranlar={formEkranlari} />}
         {gecerli === 'baglanti' && <Baglantilar ekranlar={baglantiEkranlari} hazirlikGorur={islemler.includes('saglik.ayrinti-oku')} />}
         {gecerli === 'moduller' && <ModulSekmeleri ekranlar={moduller} />}
         {gecerli === 'guncelleme' && <Guncelleme />}

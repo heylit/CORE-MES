@@ -5,12 +5,14 @@ import {
   adetDenemesiCevabi, adetDenemesiSorgusu, atolyeTaslaklariCevabi, denemeTaslagiGovdesi, durumGovdesi, idParametresi, planTaslaklariCevabi, terminDenemesiCevabi, terminDenemesiSorgusu, terminOnayGovdesi, iskontoOnayGovdesi, malzemeSecenekSorgusu, malzemeSecenekleriCevabi, iptalGovdesi, kartBaglaGovdesi, siparisAyrintiSemasi, siparisDonusumCevabi, siparisDonusumGovdesi,
   siparisEkleGovdesi, siparisGuncelleGovdesi, siparisListesiCevabi, siparisListesiSorgusu, siparisOzetiCevabi, teklifAyrintiCevabi, terminDagilimiCevabi, teklifEkleGovdesi,
   teklifGuncelleGovdesi, teklifKabulGovdesi, teklifListesiCevabi, teklifListesiSorgusu, teklifNotGovdesi, teklifSatirParametresi,
-  teklifSurumuGovdesi,
+  teklifSurumuGovdesi, teklifFormuCevabi, teklifFormuKurumKaydetGovdesi, teklifFormuSorgusu, teklifFormuVerisiCevabi, teklifFormuSablonKaydetGovdesi,
+  teklifFormuSablonKopyalaGovdesi, teklifFormuVarsayilanGovdesi,
 } from '#paylasilan/sozlesme/siparisler.ts';
 import type { AdetDenemesiCevabi, AtolyeTaslagi, PlanTaslagi, SiparisAyrintisi, TeklifAyrintisi } from '#paylasilan/sozlesme/siparisler.ts';
 import { FIYAT_YETKISI_YOK, denemeSuzgeci, siparisAyrintisiFiyatsiz, siparisFiyatsiz, teklifFiyatsiz } from './kurallar.ts';
 import * as servis from './servis.ts';
 import * as deneme from './teklif-deneme.ts';
+import * as form from './teklif-formu.ts';
 import * as teklif from './teklif-servis.ts';
 
 // 180: fiyatı ve maliyeti yalnız `siparisler.fiyat-oku` olan görür; bütün cevaplar buradan geçer, servis ve disari dolu kalır.
@@ -290,5 +292,58 @@ export const uclar = [
       const sonuc = await teklif.siparisDonustur(db, kullanici, parametre.id, govde);
       return fiyatGorur(kullanici) ? sonuc : { ...sonuc, teklif: teklifFiyatsiz(sonuc.teklif) };
     },
+  }),
+  // 3245 d: teklif formu şablonları. Basan (fiyat gören) ve düzenleyen (Sistem Ayarları) okur; yalnız ayar yetkisi yazar.
+  uc({
+    yontem: 'GET',
+    yol: '/siparisler/teklif-formu',
+    yetki: { biri: ['siparisler.fiyat-oku', 'ayarlar.yaz'] },
+    cevap: teklifFormuCevabi,
+    isle: ({ db }) => form.teklifFormu(db),
+  }),
+  uc({
+    yontem: 'POST',
+    yol: '/siparisler/teklif-formu/sablonlar/:id/kaydet',
+    yetki: 'ayarlar.yaz',
+    parametre: idParametresi,
+    govde: teklifFormuSablonKaydetGovdesi,
+    cevap: teklifFormuCevabi,
+    isle: ({ db, kullanici, parametre, govde }) => form.sablonKaydet(db, kullanici, parametre.id, govde),
+  }),
+  uc({
+    yontem: 'POST',
+    yol: '/siparisler/teklif-formu/sablonlar/:id/kopyala',
+    yetki: 'ayarlar.yaz',
+    parametre: idParametresi,
+    govde: teklifFormuSablonKopyalaGovdesi,
+    cevap: teklifFormuCevabi,
+    isle: ({ db, kullanici, parametre, govde }) => form.sablonKopyala(db, kullanici, parametre.id, govde.ad),
+  }),
+  uc({
+    yontem: 'POST',
+    yol: '/siparisler/teklif-formu/sablonlar/:id/varsayilan-yap',
+    yetki: 'ayarlar.yaz',
+    parametre: idParametresi,
+    govde: teklifFormuVarsayilanGovdesi,
+    cevap: teklifFormuCevabi,
+    isle: ({ db, kullanici, parametre, govde }) => form.varsayilanYap(db, kullanici, parametre.id, govde.surum),
+  }),
+  uc({
+    yontem: 'POST',
+    yol: '/siparisler/teklif-formu/kurum/kaydet',
+    yetki: 'ayarlar.yaz',
+    govde: teklifFormuKurumKaydetGovdesi,
+    cevap: teklifFormuCevabi,
+    isle: ({ db, kullanici, govde }) => form.kurumKaydet(db, kullanici, govde.kurum, govde.surum),
+  }),
+  // Formun müşteri kutusu ve toplamları; form fiyat taşıdığından yalnız fiyat gören basar.
+  uc({
+    yontem: 'GET',
+    yol: '/siparisler/teklifler/:id/form',
+    yetki: 'siparisler.fiyat-oku',
+    parametre: idParametresi,
+    sorgu: teklifFormuSorgusu,
+    cevap: teklifFormuVerisiCevabi,
+    isle: ({ db, parametre, sorgu }) => form.teklifFormuVerisi(db, parametre.id, sorgu),
   }),
 ];

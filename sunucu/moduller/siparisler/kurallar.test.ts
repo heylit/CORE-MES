@@ -7,6 +7,7 @@ import {
   FIYAT_EKSIK, KARTSIZ_SATIR, KART_BAGLANAMAZ, YALNIZ_YENI_TEKLIF, fiyatReddi, kartBaglamaReddi, kartsizSatirReddi, talepDuzenlemeReddi,
   dortGozReddi, surumHedefi, teklifGecisReddi, teklifHedefi, terminAraligi, terminDagilimi,
   GENEL_GIDER_YOK, denemeCevabi, denemeSuzgeci, gunFarki, adetSatirlari, carpilmisAdet, kalemMaliyeti, kilitler, motorSonucu, motorTaslaklari, planSeridi, onayHedefi, yenidenYerlesirMi,
+  firmaAdresi, formToplamlari, kurumIcerigi, sablonIcerigi, sablonKopyasi,
 } from './kurallar.ts';
 import type { DenemeKalemi, DenemeSonucu } from './kurallar.ts';
 
@@ -324,5 +325,25 @@ describe('teklif termin ve fiyat denemesi kuralları (saf)', () => {
       ['5.000', '10.000', '2.000', '1.000', '10.000']);
     const satir = (carpan: '0.5' | '1' | '2' | '4', adet: string) => ({ carpan, termin: null, maliyetToplami: null, kalemler: [{ satirId: 1, adet, birimMaliyet: null }] });
     assert.deepEqual(adetSatirlari([satir('0.5', '1.000'), satir('1', '1.000'), satir('2', '2.000'), satir('4', '4.000')]).map((x) => x.carpan), ['1', '2', '4']);
+  });
+});
+
+// 3245 d: teklif formu
+describe('teklif formu kuralları', () => {
+  test('firma adresi: boş parça atlanır, hiçbiri yoksa null', () => {
+    assert.equal(firmaAdresi({ adres: 'ORN Sokak 0', postaKodu: '00000', ilce: 'Örnekilçe', il: 'Örnekil' }), 'ORN Sokak 0\n00000 Örnekilçe / Örnekil');
+    assert.equal(firmaAdresi({ adres: null, postaKodu: null, ilce: null, il: 'Örnekil' }), 'Örnekil');
+    assert.equal(firmaAdresi({ adres: ' ', postaKodu: null, ilce: null, il: null }), null);
+  });
+  test('form toplamları kuruş üzerinden çıkar', () => {
+    assert.deepEqual(formToplamlari('152075.00', '144471.25', '28894.25', '20'),
+      { araToplam: '152075.00', kdvHaric: '144471.25', kdvTutari: '28894.25', kdvOrani: '20', iskontoTutari: '7603.75', genelToplam: '173365.50' });
+    assert.equal(formToplamlari('0.10', '0.10', '0.02', '20').iskontoTutari, '0.00');
+  });
+  test('bozuk saklanan içerik boş alanlarla çizilir; kopya varsayılan taşımaz', () => {
+    assert.deepEqual(kurumIcerigi('bozuk'), { unvan: '', adres: '', telefon: '', eposta: '', vergi: '' });
+    assert.equal(sablonIcerigi({ baslik: 5 }).baslik, 'TEKLİF FORMU');
+    const k = sablonKopyasi({ dil: 'en', icerik: { baslik: 'QUOTATION', giris: '', sartlar: ['a'], imza1: '', imza2: '', alt: '' } }, 'Kopya');
+    assert.deepEqual(k, { ad: 'Kopya', dil: 'en', icerik: { baslik: 'QUOTATION', giris: '', sartlar: ['a'], imza1: '', imza2: '', alt: '' } });
   });
 });

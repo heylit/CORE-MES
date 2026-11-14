@@ -1,6 +1,7 @@
 // Saf iş kuralları; veritabanı ve saat yok. Kural numaraları KURAL-TEST.md'de testlerine bağlıdır.
 import type { FirmaTuru } from '#paylasilan/sozlesme/musteri-tedarikci.ts';
-import { ISKONTO_ONAY_ESIGI, TERMIN_ARALIKLARI, type TerminAraligi } from '#paylasilan/sozlesme/siparisler.ts';
+import { ISKONTO_ONAY_ESIGI, TERMIN_ARALIKLARI, teklifFormuIcerikSemasi, teklifFormuKurumSemasi, type TerminAraligi } from '#paylasilan/sozlesme/siparisler.ts';
+import type { TeklifFormuDili, TeklifFormuIcerigi, TeklifFormuKurumu } from '#paylasilan/sozlesme/siparisler.ts';
 import { BITEN_EMIR_DURUMLARI, type EmirDurumu } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import type {
   AdetCarpani, AdetDenemesiSatiri, MaliyetKalemi, PlanBloguTuru, PlanSeridi, Siparis, SiparisAyrintisi, SiparisDurumu, TeklifAyrintiCevabi, TeklifAyrintisi, TeklifDurumu, TeklifSatiri, TerminDenemesiCevabi,
@@ -543,3 +544,51 @@ export const TAKVIM_SIPARIS_DURUMU: Readonly<Record<Exclude<SiparisDurumu, 'ipta
   onayli: { ad: 'Onaylı', bitti: false },
   kapandi: { ad: 'Kapandı', bitti: true },
 };
+
+// ---- Teklif formu (3245 d) ----
+export const SABLON_YOK = 'Teklif formu şablonu bulunamadı.';
+export const SABLON_ADI_KULLANILIYOR = 'Bu adla başka bir şablon var; başka ad verin.';
+export const KURUM_SATIRI_YOK = 'Teklif formu firma bilgisi kurulumda açılmamış; güncellemeyi tamamlayın.';
+const BOS_KURUM: TeklifFormuKurumu = { unvan: '', adres: '', telefon: '', eposta: '', vergi: '' };
+
+// Saklanan içerik sözleşmeye uymuyorsa (elle bozulmuş satır) form boş alanlarla çizilir; düzenleyip kaydetmek onarır.
+export function kurumIcerigi(ham: unknown): TeklifFormuKurumu {
+  const s = teklifFormuKurumSemasi.safeParse(ham);
+  return s.success ? s.data : BOS_KURUM;
+}
+const BOS_ICERIK: TeklifFormuIcerigi = { baslik: 'TEKLİF FORMU', giris: '', sartlar: [], imza1: '', imza2: '', alt: '' };
+export function sablonIcerigi(ham: unknown): TeklifFormuIcerigi {
+  const s = teklifFormuIcerikSemasi.safeParse(ham);
+  return s.success ? s.data : BOS_ICERIK;
+}
+// Kopyanın içeriği kaynağınkidir; kopya varsayılan olmaz.
+export function sablonKopyasi(kaynak: { dil: TeklifFormuDili; icerik: unknown }, ad: string): { ad: string; dil: TeklifFormuDili; icerik: TeklifFormuIcerigi } {
+  return { ad, dil: kaynak.dil, icerik: sablonIcerigi(kaynak.icerik) };
+}
+
+// Firma kartının adresi forma tek metin olarak basılır: sokak, sonra posta kodu ve ilçe / il. Boş parça atlanır; hiçbiri yoksa null.
+export function firmaAdresi(f: { adres: string | null; postaKodu: string | null; ilce: string | null; il: string | null }): string | null {
+  const dolu = (x: string | null): x is string => x !== null && x.trim() !== '';
+  const yer = [f.ilce, f.il].filter(dolu).join(' / ');
+  const satir2 = [f.postaKodu, yer].filter(dolu).join(' ');
+  const metin = [f.adres, satir2].filter(dolu).join('\n');
+  return metin === '' ? null : metin;
+}
+
+// İskonto tutarı ve genel toplam sunucudaki iki ondalıklı tutarlardan kuruş üzerinden çıkar; kayan nokta kullanılmaz.
+const kurus = (t: string): bigint => {
+  const [tam = '0', ondalik = ''] = t.split('.');
+  return BigInt(tam) * 100n + BigInt((ondalik + '00').slice(0, 2));
+};
+const metin = (k: bigint): string => {
+  const isaret = k < 0n ? '-' : '';
+  const m = k < 0n ? -k : k;
+  return `${isaret}${String(m / 100n)}.${String(m % 100n).padStart(2, '0')}`;
+};
+export function formToplamlari(araToplam: string, kdvHaric: string, kdvTutari: string, kdvOrani: string) {
+  return {
+    araToplam, kdvHaric, kdvTutari, kdvOrani,
+    iskontoTutari: metin(kurus(araToplam) - kurus(kdvHaric)),
+    genelToplam: metin(kurus(kdvHaric) + kurus(kdvTutari)),
+  };
+}
