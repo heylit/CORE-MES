@@ -4,6 +4,7 @@ import { ondalikMetinSemasi } from '../ondalik.ts';
 import { beklenenSurum, surumSemasi } from '../surum.ts';
 import { tarihSemasi, zamanSemasi } from '../zaman.ts';
 import { PARA_BIRIMLERI } from './satin-alma.ts';
+import { EMIR_TURLERI } from './emir-turleri.ts';
 
 // Satış siparişi (soru 144 a, karar 56): sipariş başlığı ve satırları ilişkisel tutulur; üretim emri ve sevk satırı sipariş satırına bağlanır.
 
@@ -40,7 +41,16 @@ const istege = (azami: number) =>
     return kirpik ? kirpik : null;
   });
 
+// 3244 b: kalem üretim çeşidine göre partilere ayrılır (örnek 10 FAI + 90 seri). Boş liste "tek seri parti" demektir (eski kalemler
+// de öyle okunur). Tür emir türü listesidir (uretim-emirleri sahibi); bir kalemde aynı tür iki kez olmaz, toplam kalem miktarıdır (SIP-30).
+export const PARTI_EN_COK = 8;
+export const partiGovdesi = z.object({ emirTuru: z.enum(EMIR_TURLERI), adet: miktarSemasi });
+export const partiListesiSemasi = z.array(partiGovdesi).max(PARTI_EN_COK, `Kalemde en çok ${PARTI_EN_COK} parti olabilir.`)
+  .refine((p) => new Set(p.map((x) => x.emirTuru)).size === p.length, 'Kalemde aynı üretim çeşidi iki kez olamaz.');
+
 export const siparisSatiriGovdesi = z.object({
+  // SIP-19 (3254 a): var olan kalemin kimliği; onayı geri alınmış siparişte emre bağlı kalem bununla eşlenir. Yeni kalemde yok.
+  id: z.number().int().positive().max(2147483647).optional(),
   malzemeNo: z.number().int().positive(),
   miktar: miktarSemasi,
   // 201 a: fiyatı yalnız `siparisler.fiyat-oku` olan girer; öteki yazar kalemi fiyatsız (null) gönderir.
@@ -48,6 +58,7 @@ export const siparisSatiriGovdesi = z.object({
   // Boşsa siparişin termini geçerlidir.
   termin: tarihSemasi.nullish().transform((t) => t ?? null),
   aciklama: istege(500),
+  partiler: partiListesiSemasi.optional(),
 });
 
 const siparisAlanlari = {
@@ -76,6 +87,11 @@ export const siparisEkleGovdesi = z.object(siparisAlanlari).refine(tarihSirasi, 
 // Güncelleme tam kayıttır: satırlar bütün olarak yeniden yazılır (SIP-03: yalnız taslak).
 export const siparisGuncelleGovdesi = z.object({ ...siparisAlanlari, ...beklenenSurum }).refine(tarihSirasi, TARIH_SIRASI);
 export const durumGovdesi = z.object({ ...beklenenSurum });
+// SIP-19 (3254 a): onay gerekçeyle geri alınır; gerekçe uç denetim kaydına gövdeyle düşer.
+export const onayGeriAlGovdesi = z.object({
+  ...beklenenSurum,
+  neden: z.string().trim().min(1, 'Onayı geri alma nedeni zorunlu.').max(500, 'En çok 500 karakter.'),
+}).strict();
 export const iptalGovdesi = z.object({
   ...beklenenSurum,
   neden: z.string().trim().min(1, 'İptal nedeni zorunlu.').max(500, 'En çok 500 karakter.'),
@@ -104,6 +120,10 @@ export const siparisSatiriSemasi = z.object({
   tutar: ondalikMetinSemasi.nullable(),
   termin: tarihSemasi.nullable(),
   aciklama: z.string().nullable(),
+  // Kaydedilmiş partiler; boşsa kalem tek seri partidir.
+  partiler: z.array(z.object({ id: z.number().int(), emirTuru: z.enum(EMIR_TURLERI), adet: ondalikMetinSemasi })),
+  // SIP-19 (3254 a): kaleme üretim emri bağlı; onayı geri alınmış siparişte bu kalemde yalnız termin değişir.
+  emreBagli: z.boolean(),
 });
 
 export const siparisSemasi = z.object({
@@ -145,6 +165,7 @@ export type SiparisEkleVerisi = z.output<typeof siparisEkleGovdesi>;
 export type SiparisGuncelleGovdesi = z.input<typeof siparisGuncelleGovdesi>;
 export type SiparisGuncelleVerisi = z.output<typeof siparisGuncelleGovdesi>;
 export type SiparisSatiriVerisi = z.output<typeof siparisSatiriGovdesi>;
+export type PartiVerisi = z.output<typeof partiGovdesi>;
 export type SiparisListesiSorgusu = z.input<typeof siparisListesiSorgusu>;
 export type SiparisListesiSuzgeci = z.output<typeof siparisListesiSorgusu>;
 export type Siparis = z.output<typeof siparisSemasi>;

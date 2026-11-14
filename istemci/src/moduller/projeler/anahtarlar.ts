@@ -5,6 +5,7 @@ export const anahtarlar = {
   liste: (sorgu: ProjeListesiSorgusu) => ['projeler', 'liste', sorgu] as const,
   ayrinti: (id: number) => ['projeler', 'ayrinti', id] as const,
   emirler: (projeId: number) => ['projeler', 'emirler', projeId] as const,
+  kalemler: (projeId: number) => ['projeler', 'kalemler', projeId] as const,
   firmalar: (ara: string) => ['projeler', 'firmalar', ara] as const,
   siparisler: (ara: string) => ['projeler', 'siparisler', ara] as const,
   yonetim: (id: number) => ['projeler', 'yonetim', id] as const,

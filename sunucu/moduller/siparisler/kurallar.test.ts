@@ -2,8 +2,8 @@ import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import {
   FIRMA_MUSTERI_DEGIL, FIRMA_PASIF, FIRMA_YOK, MALZEME_AKTIF_DEGIL, MALZEME_SATILMAZ, MALZEME_YOK, YALNIZ_TASLAK,
-  MIKTAR_TAM_SAYI, SIPARIS_TARIHI_ARALIK_DISI, TERMIN_COK_UZAK, TUTAR_COK_BUYUK, miktarReddi, tarihAraligiReddi, tutarTasmaReddi,
-  BAGLI_ACIK_EMIR, bagliEmirReddi, duzenlemeReddi, firmaReddi, fiyatlariKoru, gecisHedefi, gecisReddi, malzemeReddi,
+  MIKTAR_TAM_SAYI, PARTI_TOPLAMI_TUTMUYOR, partiReddi, SIPARIS_TARIHI_ARALIK_DISI, TERMIN_COK_UZAK, TUTAR_COK_BUYUK, miktarReddi, tarihAraligiReddi, tutarTasmaReddi,
+  BAGLI_ACIK_EMIR, KALEM_BASKA_SIPARISIN, KILITLI_KALEM_DEGISMEZ, KILITLI_KALEM_SILINMEZ, KILITLI_KALEM_SIRASI, kilitliKalemReddi, bagliEmirReddi, duzenlemeReddi, firmaReddi, fiyatlariKoru, gecisHedefi, gecisReddi, malzemeReddi,
   FIYAT_EKSIK, KARTSIZ_SATIR, KART_BAGLANAMAZ, YALNIZ_YENI_TEKLIF, fiyatReddi, kartBaglamaReddi, kartsizSatirReddi, talepDuzenlemeReddi,
   dortGozReddi, surumHedefi, teklifGecisReddi, teklifHedefi, terminAraligi, terminDagilimi,
   GENEL_GIDER_YOK, denemeCevabi, denemeSuzgeci, gunFarki, adetSatirlari, carpilmisAdet, kalemMaliyeti, kilitler, motorSonucu, motorTaslaklari, planSeridi, onayHedefi, yenidenYerlesirMi,
@@ -59,6 +59,17 @@ describe('siparisler kuralları (saf)', () => {
     assert.equal(miktarReddi(null, '3.5'), null);
   });
 
+  test('SIP-18 (3244 b): parti adetleri toplamı kalem miktarıdır; boş liste geçer; adet kartında kesirli parti reddedilir', () => {
+    assert.equal(partiReddi('adet', '100', []), null);
+    assert.equal(partiReddi('adet', '100', [{ adet: '10' }, { adet: '90' }]), null);
+    assert.equal(partiReddi('adet', '100.000', [{ adet: '10' }, { adet: '90.0' }]), null);
+    assert.equal(partiReddi('adet', '100', [{ adet: '10' }, { adet: '80' }]), PARTI_TOPLAMI_TUTMUYOR);
+    assert.equal(partiReddi('adet', '100', [{ adet: '10' }, { adet: '91' }]), PARTI_TOPLAMI_TUTMUYOR);
+    assert.equal(partiReddi('adet', '10', [{ adet: '2.5' }, { adet: '7.5' }]), MIKTAR_TAM_SAYI);
+    assert.equal(partiReddi('kg', '0.3', [{ adet: '0.1' }, { adet: '0.2' }]), null);
+    assert.equal(partiReddi('kg', '0.3', [{ adet: '0.1' }, { adet: '0.21' }]), PARTI_TOPLAMI_TUTMUYOR);
+  });
+
   test('SIP-4 a: sipariş tarihi bugünden iki yıl geri, bir yıl ileri; termin sipariş tarihinden en çok beş yıl sonra', () => {
     const g = (siparisTarihi: string, termin: string, satir: string | null = null) => ({ siparisTarihi, termin, satirlar: [{ termin: satir }] });
     const bugun = '2026-11-02';
@@ -103,6 +114,27 @@ describe('siparisler kuralları (saf)', () => {
     assert.equal(gecisReddi('kapandi', 'iptal'), 'Kapanmış sipariş iptal edilemez.');
     assert.equal(gecisReddi('iptal', 'onayla'), 'İptal edilmiş sipariş onaylanamaz.');
     assert.deepEqual([gecisHedefi('onayla'), gecisHedefi('kapat'), gecisHedefi('iptal')], ['onayli', 'kapandi', 'iptal']);
+  });
+  test('SIP-19 onay geri alma: yalnız onaylı taslağa döner; taslak, kapanmış ve iptal reddedilir', () => {
+    assert.equal(gecisReddi('onayli', 'geri-al'), null);
+    assert.equal(gecisHedefi('geri-al'), 'taslak');
+    assert.equal(gecisReddi('taslak', 'geri-al'), 'Taslak sipariş onayı geri alınamaz.');
+    assert.equal(gecisReddi('kapandi', 'geri-al'), 'Kapanmış sipariş onayı geri alınamaz.');
+    assert.equal(gecisReddi('iptal', 'geri-al'), 'İptal edilmiş sipariş onayı geri alınamaz.');
+  });
+  test('SIP-19 kilitli kalem: yalnız termin değişir; silinmez, sırası değişmez; başka siparişin kalemi reddedilir; bağsız kalem serbest', () => {
+    const k = { id: 7, sira: 1, malzemeNo: 3, miktar: '100.000', birimFiyat: '12.5000', aciklama: null, partiler: [{ emirTuru: 'fai', adet: '10.000' }, { emirTuru: 'seri', adet: '90.000' }] };
+    const y = { id: 7, malzemeNo: 3, miktar: '100', birimFiyat: '12.5', aciklama: null, partiler: [{ emirTuru: 'fai', adet: '10' }, { emirTuru: 'seri', adet: '90' }] };
+    const kilit = new Set([7]);
+    assert.equal(kilitliKalemReddi([k], kilit, [y]), null);
+    assert.equal(kilitliKalemReddi([k], kilit, [y, { malzemeNo: 4, miktar: '1', birimFiyat: null, aciklama: null }]), null, 'yeni kalem eklenir');
+    assert.equal(kilitliKalemReddi([k], new Set(), [{ ...y, miktar: '5', partiler: [] }]), null, 'bağsız kalem serbest');
+    for (const degisen of [{ miktar: '90' }, { malzemeNo: 4 }, { birimFiyat: '13' }, { aciklama: 'not' }, { partiler: [{ emirTuru: 'seri', adet: '100' }] }]) {
+      assert.deepEqual(kilitliKalemReddi([k], kilit, [{ ...y, ...degisen }]), { mesaj: `${KILITLI_KALEM_DEGISMEZ} (kalem 1).`, alan: 'satirlar.0' }, JSON.stringify(degisen));
+    }
+    assert.deepEqual(kilitliKalemReddi([k], kilit, [{ ...y, id: undefined }]), { mesaj: `${KILITLI_KALEM_SILINMEZ} (kalem 1).`, alan: 'satirlar' });
+    assert.deepEqual(kilitliKalemReddi([k], kilit, [{ ...y, id: undefined }, y]), { mesaj: `${KILITLI_KALEM_SIRASI} (kalem 1).`, alan: 'satirlar.1' });
+    assert.deepEqual(kilitliKalemReddi([k], kilit, [y, { ...y, id: 99 }]), { mesaj: KALEM_BASKA_SIPARISIN, alan: 'satirlar.1' });
   });
 });
 

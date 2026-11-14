@@ -256,7 +256,8 @@ async function stokOku(girdi: Nesne, islemler: IslemListesi): Promise<StokOkumas
 }
 
 // Emir açılışında seçilen proje ve sipariş satırı (224). satır null: proje tek satırlıdır ya da satır seçilmedi; sunucu bağlar.
-export interface EmirSecimi { projeId: number; siparisSatiriId: number | null }
+// 3244 b: parti seçilirse emrin türü partinin üretim çeşididir; formdaki tür onunla değiştirilir.
+export interface EmirSecimi { projeId: number; siparisSatiriId: number | null; parti?: { id: number; emirTuru: string } }
 export type EmirSecimiSor = (secenekler: AcilisSecenekleri) => Promise<EmirSecimi | null>;
 
 // Prototip emir açarken proje sormaz (yalnız 220 a değişir): köprü komutu göndermeden önce seçenekleri okur, proje gereken türde
@@ -272,7 +273,10 @@ async function emirAcilisi(girdi: Nesne, sor: EmirSecimiSor | undefined): Promis
   }
   const secim = sor === undefined ? null : await sor(secenekler);
   if (secim === null) throw new ApiHatasi(400, { kod: 'DOGRULAMA', mesaj: 'Proje seçilmedi; emir açılmadı.' });
-  return { ...girdi, projeId: secim.projeId, ...(secim.siparisSatiriId === null ? {} : { siparisSatiriId: secim.siparisSatiriId }) };
+  return {
+    ...girdi, projeId: secim.projeId, ...(secim.siparisSatiriId === null ? {} : { siparisSatiriId: secim.siparisSatiriId }),
+    ...(secim.parti === undefined ? {} : { siparisPartiId: secim.parti.id, tur: secim.parti.emirTuru }),
+  };
 }
 
 // bedelAyariYazabilir: oturumda `plan.bedel-ayari` var; çerçeve öncelik ayarlarını yalnız o zaman düzenlenebilir çizer (yetkiyi sunucu verir).

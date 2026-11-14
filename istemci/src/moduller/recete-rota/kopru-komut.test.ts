@@ -401,6 +401,12 @@ describe('köprü: emir açılışında proje ve sipariş satırı (224)', () =>
     expect(yazmalar(istekler).map((i) => i.govde)).toEqual([{ malzemeNo: 7, adet: 5, teslim: '2030-01-09', baslangic: '2030-01-02', aciklama: null, oncelik: 2, emirTuru: 'seri', projeId: 5, siparisSatiriId: 52 }]);
   });
 
+  it('EP-3 (3244 b): parti seçilince parti ve satırı gövdeye girer, emir türü partiden gelir', async () => {
+    const istekler = sunucu(SECENEK);
+    await kopruKur([], { emirSecimi: () => Promise.resolve({ projeId: 5, siparisSatiriId: 51, parti: { id: 9, emirTuru: 'fai' } }) })('komut', { ad: 'emir-ac', govde: EMIR });
+    expect(yazmalar(istekler)[0]?.govde).toMatchObject({ emirTuru: 'fai', projeId: 5, siparisSatiriId: 51, siparisPartiId: 9 });
+  });
+
   it('EP-2: tek satırlı projede satır gönderilmez (sunucu bağlar); proje gerekmeyen türde pencere açılmaz', async () => {
     const tekSatir = { projeZorunlu: true, projeler: [{ ...SECENEK.projeler[0]!, satirlar: [SECENEK.projeler[0]!.satirlar[0]!] }] };
     let istekler = sunucu(tekSatir);

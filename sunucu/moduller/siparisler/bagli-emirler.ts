@@ -18,3 +18,19 @@ export async function bagliEmirler(db: Db, g: { siparisId: number; satirIdleri: 
   if (cozucu === null) throw new Error('Sipariş iptali için bağlı emir çözücüsü kayıtlı değil (kablolama.ts).');
   return cozucu(db, g);
 }
+
+// SIP-19 (3254 a): emre bağlı kalemler (üretim emri satıra bağlı; satır emrin yabancı anahtarıyla korunur). Karşılık kablolama.ts'te
+// kaydedilir. Yazma yolu kayıtsız çözücüyle geçmez; okuma yolu (ayrıntıdaki "emre bağlı" işareti) kayıtsızsa bağsız sayar.
+export type KalemEmirCozucusu = (db: Db, satirIdleri: readonly number[]) => Promise<ReadonlySet<number>>;
+
+let kalemCozucusu: KalemEmirCozucusu | null = null;
+export function kalemEmirCozucusuKaydet(c: KalemEmirCozucusu | null): void { kalemCozucusu = c; }
+
+export async function emreBagliKalemler(db: Db, satirIdleri: readonly number[]): Promise<ReadonlySet<number>> {
+  if (kalemCozucusu === null) throw new Error('Onayı geri alınmış sipariş için emre bağlı kalem çözücüsü kayıtlı değil (kablolama.ts).');
+  return satirIdleri.length === 0 ? new Set() : kalemCozucusu(db, satirIdleri);
+}
+
+export async function emreBagliKalemlerOku(db: Db, satirIdleri: readonly number[]): Promise<ReadonlySet<number>> {
+  return kalemCozucusu === null || satirIdleri.length === 0 ? new Set() : kalemCozucusu(db, satirIdleri);
+}

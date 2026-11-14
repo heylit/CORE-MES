@@ -27,3 +27,5 @@ Bütçe alanı (PRJ-09) bütün okuma ve yazma uçlarında alan düzeyinde `fina
 
 Kullanıcı metni (ad, açıklama) React ile kaçırılarak basılır. Yalnız ekranda kalan kural: yok (kod alanının kilidi sunucuda da var).
 Denetim kaydı: bütün yazmalar `uc()` üzerinden, tam gövdeyle.
+
+3244 b: `GET /projeler/:id/siparis-kalemleri` proje okuma yetkisiyle siparişin kalemlerini verir; birim fiyat ve tutar cevaba hiç konmaz (proje okuyan fiyat görmeyebilir, 180). `POST /projeler/:id/bitis-bagla` `projeler.yaz` ister, gövdesi yalnız sürümdür; termin sunucuda siparişten kilitli okunur, kişi ve zaman sunucudan.

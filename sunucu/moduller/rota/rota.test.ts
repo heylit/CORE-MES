@@ -1472,6 +1472,16 @@ describe('rotalar (gerçek PostgreSQL)', () => {
     const bos = await istek(c.planlama, 'POST', yol, { adet: 5, teslim: null, projeId: proje });
     assert.equal(bos.statusCode, 200, bos.body);
     assert.equal((await vt().tx((db) => adimliEmirAyrintisi(db, bos.json<{ uretimEmriId: number }>().uretimEmriId))).siparisSatiriId, satir);
+
+    // 3244 b: parti gövdeden emre geçer, tür partiden gelir; başka satırın partisi 400.
+    const fai = await ekle("INSERT INTO siparisler_siparis_satiri_parti (satir_id, sira, emir_turu, adet) VALUES ($1, 1, 'fai', 4) RETURNING id", [satir]);
+    await ekle("INSERT INTO siparisler_siparis_satiri_parti (satir_id, sira, emir_turu, adet) VALUES ($1, 2, 'seri', 6) RETURNING id", [satir]);
+    const p = await istek(c.planlama, 'POST', yol, { adet: 4, teslim: null, projeId: proje, siparisSatiriId: satir, siparisPartiId: fai });
+    assert.equal(p.statusCode, 200, p.body);
+    const pe = await ortam!.sahip.tek<{ siparis_parti_id: number; emir_turu: string }>('SELECT siparis_parti_id, emir_turu FROM uretim_emri WHERE id = $1', [p.json<{ uretimEmriId: number }>().uretimEmriId]);
+    assert.deepEqual([pe?.siparis_parti_id, pe?.emir_turu], [fai, 'fai']);
+    const yanlis = await istek(c.planlama, 'POST', yol, { adet: 4, teslim: null, projeId: proje, siparisSatiriId: satir, siparisPartiId: 2_000_000_000 });
+    assert.equal(yanlis.statusCode, 400, yanlis.body);
   });
   test('#459: yürürlükteki rota emre uygulanır; künye harfi ve yürürlüğü verir; aynı rotada 409, yetkisiz 403, istek kimliği ister', async () => {
     const urun = await mamulAc();

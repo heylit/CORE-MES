@@ -7,17 +7,17 @@ import { islemVarMi } from '#cekirdek/yetki.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
 import type { SayfaliListe } from '#paylasilan/liste.ts';
 import type {
-  Gorev, GorevEkleVerisi, GorevGuncelleVerisi, GuncelStatu, KilometreTasi, KilometreTasiGuncelleVerisi, Proje, ProjeDurumu, ProjeGuncelleVerisi,
-  ProjeListesiSuzgeci, ProjeOlusturVerisi, ProjeYonetimiCevabi, SiparistenProjeVerisi, Statu, StatuKaydi, StatuListesiCevabi, StatuTonu,
+  BitisBaglaGovdesi, Gorev, GorevEkleVerisi, GorevGuncelleVerisi, GuncelStatu, KilometreTasi, KilometreTasiGuncelleVerisi, Proje, ProjeDurumu, ProjeGuncelleVerisi,
+  ProjeListesiSuzgeci, ProjeOlusturVerisi, ProjeSiparisKalemleriCevabi, ProjeYonetimiCevabi, SiparistenProjeVerisi, Statu, StatuKaydi, StatuListesiCevabi, StatuTonu,
   StatuYazVerisi,
 } from '#paylasilan/sozlesme/projeler.ts';
 import { PROJE_KODU_BICIMI } from '#paylasilan/sozlesme/projeler.ts';
 import { siparisListesiSorgusu } from '#paylasilan/sozlesme/siparisler.ts';
 import { kisiAdlari, kisiSecenekleri as kisiListesi } from '../kisiler/disari.ts';
 import { firmaAdlari, firmaAra, firmaVarMi } from '../musteri-tedarikci/disari.ts';
-import { siparisKilitliAyrinti, siparisListesi } from '../siparisler/disari.ts';
+import { siparisAyrintisi, siparisKilitliAyrinti, siparisListesi } from '../siparisler/disari.ts';
 import {
-  FIRMA_YOK, GOREV_YOK, KILOMETRE_TASI_YOK, KOD_KULLANILIYOR, ONCEKI_DONGU, PROJE_YOK, STATU_YOK, aramaKalibi, butce, firmaReddi,
+  FIRMA_YOK, GOREV_YOK, SIPARISSIZ_BAGLANMAZ, acilisBitisi, bitisBaglaReddi, KILOMETRE_TASI_YOK, KOD_KULLANILIYOR, ONCEKI_DONGU, PROJE_YOK, STATU_YOK, aramaKalibi, butce, firmaReddi,
   YENIDEN_ACILDI, gorevDurumuDuzelt, oncekiDonguVarMi, projeAcikReddi, projeIlerlemesi, siparisFirmasiReddi, siparisReddi, statuReddi,
   tabanReddi, yenidenAcmaMi, yenidenAcmaReddi,
 } from './kurallar.ts';
@@ -47,7 +47,7 @@ async function cevir(db: Db, satirlar: ProjeSatiri[], maliyetGorur: boolean): Pr
     id: s.id, kod: s.kod, ad: s.ad, durum: s.durum, firmaId: s.firma_id,
     firmaAd: s.firma_id === null ? null : adlar.get(s.firma_id) ?? null, siparisId: s.siparis_id,
     ...(maliyetGorur ? { butceTutari: s.butce_tutari, butceParaBirimi: s.butce_para_birimi } : {}),
-    baslangic: s.baslangic, bitis: s.bitis, aciklama: s.aciklama, olusturma: s.olusturma, guncelleme: s.guncelleme, surum: s.surum,
+    baslangic: s.baslangic, bitis: s.bitis, bitisBagli: s.bitis_bagli, aciklama: s.aciklama, olusturma: s.olusturma, guncelleme: s.guncelleme, surum: s.surum,
     statu: statuler.get(s.id) ?? null, ilerleme: projeIlerlemesi(gorevleri.get(s.id) ?? []),
   }));
 }
@@ -113,12 +113,50 @@ export async function siparistenProjeAc(
   const ret = siparisReddi(siparis.durum);
   if (ret !== null) throw dogrulama(ret, 'siparisId');
   await firmayiDenetle(db, siparis.firmaId, null);
+  const bitis = acilisBitisi(g.bitis, g.baslangic, siparis.termin);
   const alan = {
-    ad: g.ad, firmaId: siparis.firmaId, baslangic: g.baslangic, bitis: g.bitis, aciklama: g.aciklama,
+    ad: g.ad, firmaId: siparis.firmaId, baslangic: g.baslangic, bitis: bitis.bitis, aciklama: g.aciklama,
     ...butce(maliyetGorur, g.butceTutari, g.butceParaBirimi, null),
   };
-  const id = await kisitKorumali(KISITLAR, () => sorgular.projeEkle(db, g.kod, alan, kisiId, siparis.id));
+  const id = await kisitKorumali(KISITLAR, () => sorgular.projeEkle(db, g.kod, alan, kisiId, siparis.id, bitis.bagli));
   return projeAyrintisi(db, id, maliyetGorur);
+}
+
+// PRJ-18 (3244 b): bitiş siparişin güncel terminine yeniden bağlanır. Sipariş kilitli okunur; kişi ve zaman sunucudan, sürüm denetimli.
+export async function bitisBagla(db: Db, kisiId: number, id: number, g: BitisBaglaGovdesi, maliyetGorur: boolean): Promise<Proje> {
+  const proje = await projeAyrintisi(db, id, maliyetGorur);
+  const termin = proje.siparisId === null ? null : (await siparisKilitliAyrinti(db, proje.siparisId)).termin;
+  const ret = bitisBaglaReddi(proje, termin);
+  if (ret !== null || termin === null) throw dogrulama(ret ?? SIPARISSIZ_BAGLANMAZ, 'bitis');
+  await surumluGuncelle({
+    guncelle: () => sorgular.projeBitisBagla(db, id, termin, g.surum, kisiId),
+    varMi: () => sorgular.projeVarMi(db, id),
+    bulunamadiIletisi: PROJE_YOK,
+  });
+  return projeAyrintisi(db, id, maliyetGorur);
+}
+
+// 3244 b, 3254 a: sipariş onaylandı olayı (ilk onay ve geri alınmış onayın yenilenmesi). Bağlı projelerin bitişi siparişin güncel
+// terminine kayar; elle değişmiş (bağsız) bitişe dokunulmaz. Onayla aynı işlemde çalışır; kişi onaylayandır.
+export async function siparisTerminiYansit(db: Db, olay: { siparisId: number; kullanici: Kullanici }): Promise<void> {
+  const s = await siparisAyrintisi(db, olay.siparisId);
+  await sorgular.bagliBitisleriKaydir(db, s.id, s.termin, olay.kullanici.id);
+}
+
+// 3244 b: projenin siparişinden gelen kalemler; fiyat taşınmaz (proje okuyan fiyat görmeyebilir). Siparişsiz projede boş.
+export async function projeSiparisKalemleri(db: Db, id: number): Promise<ProjeSiparisKalemleriCevabi> {
+  const proje = await sorgular.projeGetir(db, id);
+  if (proje === null) throw bulunamadi(PROJE_YOK);
+  if (proje.siparis_id === null) return { siparisNo: null, siparisTermini: null, kalemler: [] };
+  const s = await siparisAyrintisi(db, proje.siparis_id);
+  return {
+    siparisNo: s.no,
+    siparisTermini: s.termin,
+    kalemler: s.satirlar.map((k) => ({
+      id: k.id, sira: k.sira, malzemeNo: k.malzemeNo, malzemeKodu: k.malzemeKodu, malzemeAdi: k.malzemeAdi, birim: k.birim, miktar: k.miktar,
+      termin: k.termin ?? s.termin, terminElle: k.termin !== null, partiler: k.partiler,
+    })),
+  };
 }
 
 // 281: plan stüdyosundaki acil sipariş canlıya geçerken üretim emirleri projeyi buradan açar. Yetki çağıran uçtadır;

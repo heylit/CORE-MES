@@ -2,15 +2,15 @@ import { uc } from '#cekirdek/uc.ts';
 import { islemVarMi } from '#cekirdek/yetki.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
 import {
-  firmaSecenekleriCevabi, firmaSecenekleriSorgusu, gorevEkleGovdesi, gorevGuncelleGovdesi, gorevParametresi, idParametresi,
+  bitisBaglaGovdesi, firmaSecenekleriCevabi, firmaSecenekleriSorgusu, gorevEkleGovdesi, gorevGuncelleGovdesi, gorevParametresi, idParametresi,
   kilometreTasiEkleGovdesi, kilometreTasiGuncelleGovdesi, kilometreTasiParametresi, kisiSecenekleriCevabi, projeGuncelleGovdesi,
-  projeListesiCevabi, projeListesiSorgusu, projeOlusturGovdesi, projeSemasi, projeYonetimiCevabi, siparisParametresi, siparisProjeleriCevabi,
+  projeListesiCevabi, projeListesiSorgusu, projeOlusturGovdesi, projeSemasi, projeSiparisKalemleriCevabi, projeYonetimiCevabi, siparisParametresi, siparisProjeleriCevabi,
   siparisSecenekleriCevabi, siparisSecenekleriSorgusu, siparistenProjeGovdesi, statuAyariGovdesi, statuEkleGovdesi, statuGuncelleGovdesi,
   statuListesiCevabi, statuYazGovdesi, tabanYenileGovdesi,
 } from '#paylasilan/sozlesme/projeler.ts';
 import {
-  firmaSecenekleri, gorevDuzenle, gorevEkle, kilometreTasiDuzenle, kilometreTasiEkle, projeAc, projeAyrintisi, projeDuzenle, projeListesi,
-  projeYonetimi, siparisProjeleri, siparisSecenekleri, siparistenProjeAc, sorumluSecenekleri, statuAyariDuzenle, statuDuzenle, statuEkle,
+  bitisBagla, firmaSecenekleri, gorevDuzenle, gorevEkle, kilometreTasiDuzenle, kilometreTasiEkle, projeAc, projeAyrintisi, projeDuzenle, projeListesi,
+  projeSiparisKalemleri, projeYonetimi, siparisProjeleri, siparisSecenekleri, siparistenProjeAc, sorumluSecenekleri, statuAyariDuzenle, statuDuzenle, statuEkle,
   statuListesi, statuYaz, tabanYenile,
 } from './servis.ts';
 
@@ -131,6 +131,25 @@ export const uclar = [
     parametre: idParametresi,
     cevap: projeSemasi,
     isle: ({ db, kullanici, parametre }) => projeAyrintisi(db, parametre.id, maliyetGorur(kullanici)),
+  }),
+  // 3244 b: projenin siparişinden gelen kalemler; sipariş okuması proje okuma yetkisiyle yapılır, fiyat taşınmaz.
+  uc({
+    yontem: 'GET',
+    yol: '/projeler/:id/siparis-kalemleri',
+    yetki: OKUMA,
+    parametre: idParametresi,
+    cevap: projeSiparisKalemleriCevabi,
+    isle: ({ db, parametre }) => projeSiparisKalemleri(db, parametre.id),
+  }),
+  // PRJ-18 (3244 b): bitiş siparişin terminine yeniden bağlanır; yazma işlemi proje düzenlemeyle aynıdır.
+  uc({
+    yontem: 'POST',
+    yol: '/projeler/:id/bitis-bagla',
+    yetki: 'projeler.yaz',
+    parametre: idParametresi,
+    govde: bitisBaglaGovdesi,
+    cevap: projeSemasi,
+    isle: ({ db, kullanici, parametre, govde }) => bitisBagla(db, kullanici.id, parametre.id, govde, maliyetGorur(kullanici)),
   }),
   uc({
     yontem: 'POST',

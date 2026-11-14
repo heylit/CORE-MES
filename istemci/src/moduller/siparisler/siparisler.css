@@ -27,6 +27,7 @@
 .tc-sp-bildirim strong { display: block; }
 .tc-sp-bildirim-tamam { border-left-color: var(--run); }
 .tc-sp-bildirim-hata { border-left-color: var(--stop); }
+.tc-sp-bildirim-uyari { border-left-color: var(--hold); }
 
 .tc-sp-ozellikler { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--b-3) var(--b-4); margin: 0; }
 .tc-sp-ozellik { min-width: 0; }
@@ -101,3 +102,15 @@
   .tc-sp-arac, .tc-sp-ozellikler { grid-template-columns: minmax(0, 1fr); }
   .tc-sp-alt-cubuk > * { flex: 1 1 auto; }
 }
+
+/* 3244 b: termin gün ve tarih yan yana; kalem termini ve işareti; kalem partileri. */
+.tc-sp-termin { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); gap: var(--b-2); align-items: start; min-width: 0; }
+.tc-sp-kalem-termin { display: grid; gap: var(--b-1); align-content: start; min-width: 0; }
+.tc-sp-kalem-elle { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2); }
+.tc-sp-partiler { display: grid; gap: var(--b-2); min-width: 0; margin: 0; padding: var(--b-3); border: 1px dashed var(--edge2); border-radius: var(--yari-2); }
+.tc-sp-partiler > legend { padding: 0 var(--b-1); color: var(--muted); font-size: var(--yazi-s); }
+.tc-sp-parti { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; gap: var(--b-2); align-items: end; min-width: 0; }
+.tc-sp-parti-bos { margin: 0; color: var(--muted); font-size: var(--yazi-s); }
+.tc-sp-parti-alt { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: var(--b-2) var(--b-3); }
+.tc-sp-parti-toplam { margin-right: auto; color: var(--muted); font-size: var(--yazi-s); font-variant-numeric: tabular-nums; }
+.tc-sp-parti-cipleri { display: flex; flex-wrap: wrap; gap: var(--b-1); }

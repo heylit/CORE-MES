@@ -208,3 +208,4 @@
 @media (min-width: 768px) { .tc-emir-fisler { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 @media (min-width: 1024px) { .tc-emir-fisler { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
 .tc-emir-kod.tc-emir-fis-kod { white-space: nowrap; overflow-wrap: normal; }
+.tc-emir-teslim-bagi { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2); margin: 0 0 var(--b-3); color: var(--muted); font-size: var(--yazi-s); }

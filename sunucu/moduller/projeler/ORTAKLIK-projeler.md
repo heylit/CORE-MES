@@ -13,3 +13,5 @@
 | kilometre taşı | `projeler_kilometre_tasi`, `projeler_kilometre_tasi_taban` | projeler | üretim emrine bağı yok (UYUM-BORCU 7) |
 | kişi (sorumlu) | `projeler_gorev.sorumlu_kisi_id`, `projeler_statu_kaydi.kisi_id`, `projeler_kilometre_tasi_taban.kisi_id` | kisiler (`kisi.id`) | yabancı anahtar; ad `kisiAdlari` ile okunur |
 | belge no | `projeler_proje.kod` | projeler | Logo PROJECT kodu ile eşleşebilir; üretim emri numarasına girer |
+| proje bitişinin termin bağı | `projeler_proje.bitis_bagli` | projeler | 3244 b; termin `siparisler_siparis.termin` siparisler'in, `siparisKilitliAyrinti` ile okunur |
+| sipariş kalemi (projede gösterim) | tutulmaz; `siparisAyrintisi` ile okunur, fiyat taşınmaz | siparisler | 3244; kalem partisi ve kalem termini siparisler'in |

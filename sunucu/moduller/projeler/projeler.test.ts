@@ -6,7 +6,9 @@ import { testVeritabaniKur } from '#cekirdek/test-vt.ts';
 import type { TestVeritabani } from '#cekirdek/test-vt.ts';
 import { uygulamaKur } from '#cekirdek/uygulama.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
-import type { Proje, ProjeListesiCevabi, ProjeYonetimiCevabi, SiparisProjeleriCevabi } from '#paylasilan/sozlesme/projeler.ts';
+import type {
+  Proje, ProjeListesiCevabi, ProjeSiparisKalemleriCevabi, ProjeYonetimiCevabi, SiparisProjeleriCevabi,
+} from '#paylasilan/sozlesme/projeler.ts';
 import type { SiparisAyrintisi } from '#paylasilan/sozlesme/siparisler.ts';
 import { denetimYaz } from '../denetim/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
@@ -351,6 +353,54 @@ describe('projeler (gerçek PostgreSQL, gerçek giriş)', () => {
     const elle = await eskiProjeAc('SBT.ELLE', 'Elle');
     assert.equal((await guncelle(elle, { firmaId: baska })).statusCode, 200, 'siparişsiz projede firma serbest');
     await assert.rejects(vt().tx((db) => db.sorgu('UPDATE projeler_proje SET siparis_id = $2 WHERE id = $1', [elle.id, s.id])), /sipariş değişmez/);
+  });
+
+  test('PRJ-18 bitiş sipariş terminine bağlı: boş ya da termine eşit bitiş bağlı açılır; elle değişen bitiş bağı koparır, Bağla geri bağlar', async () => {
+    const s = await siparisAc(await firmaAc('Deneme Müşteri BG'), true);
+    const p = (await siparistenAc(yonetici, s.id, { kod: 'BAG.1', ad: 'Bağlı bitiş' })).json<Proje>();
+    assert.deepEqual([p.bitis, p.bitisBagli], [s.termin, true]);
+    const esit = (await siparistenAc(yonetici, s.id, { kod: 'BAG.2', ad: 'Termine eşit', bitis: s.termin })).json<Proje>();
+    assert.equal(esit.bitisBagli, true);
+    const farkli = (await siparistenAc(yonetici, s.id, { kod: 'BAG.3', ad: 'Başka bitiş', bitis: '2026-11-20' })).json<Proje>();
+    assert.deepEqual([farkli.bitis, farkli.bitisBagli], ['2026-11-20', false]);
+    const gec = (await siparistenAc(yonetici, s.id, { kod: 'BAG.4', ad: 'Geç başlangıç', baslangic: '2026-11-20' })).json<Proje>();
+    assert.deepEqual([gec.bitis, gec.bitisBagli], [null, false], 'başlangıç terminden sonraysa bitiş boş kalır');
+
+    const ad = await guncelle(p, { ad: 'Yalnız ad' });
+    assert.equal(ad.statusCode, 200, ad.body);
+    assert.equal(ad.json<Proje>().bitisBagli, true, 'bitiş değişmeyince bağ kalır');
+    const elle = await guncelle(ad.json<Proje>(), { bitis: '2026-11-18' });
+    assert.deepEqual([elle.json<Proje>().bitis, elle.json<Proje>().bitisBagli], ['2026-11-18', false]);
+
+    const eski = await gonder(yonetici, `/projeler/${p.id}/bitis-bagla`, { surum: p.surum });
+    assert.equal(eski.statusCode, 409, 'eski sürümle bağlanmaz');
+    const bag = await gonder(yonetici, `/projeler/${p.id}/bitis-bagla`, { surum: elle.json<Proje>().surum });
+    assert.equal(bag.statusCode, 200, bag.body);
+    assert.deepEqual([bag.json<Proje>().bitis, bag.json<Proje>().bitisBagli], [s.termin, true]);
+    const gecBag = await gonder(yonetici, `/projeler/${gec.id}/bitis-bagla`, { surum: gec.surum });
+    assert.deepEqual([gecBag.statusCode, gecBag.json().mesaj], [400, 'Başlangıç sipariş termininden sonra; bitiş termine bağlanamaz.']);
+
+    const siparissiz = await eskiProjeAc('BAG.ELLE', 'Siparişsiz');
+    const ret = await gonder(yonetici, `/projeler/${siparissiz.id}/bitis-bagla`, { surum: siparissiz.surum });
+    assert.deepEqual([ret.statusCode, ret.json().mesaj], [400, 'Bu proje siparişten açılmadı; bitiş bir termine bağlanamaz.']);
+    assert.equal((await gonder(operator, `/projeler/${p.id}/bitis-bagla`, { surum: 1 })).statusCode, 403);
+  });
+
+  test('3244 projenin sipariş kalemleri: termin siparişten (bağlı), parti ve malzeme; fiyat gelmez; siparişsiz projede boş', async () => {
+    const s = await siparisAc(await firmaAc('Deneme Müşteri KL'), true);
+    const p = (await siparistenAc(yonetici, s.id, { kod: 'KLM.1', ad: 'Kalemli' })).json<Proje>();
+    const c = await oku(yonetici, `/projeler/${p.id}/siparis-kalemleri`);
+    assert.equal(c.statusCode, 200, c.body);
+    const k = c.json<ProjeSiparisKalemleriCevabi>();
+    assert.deepEqual([k.siparisNo, k.siparisTermini, k.kalemler.length], [s.no, s.termin, 1]);
+    const [kalem] = k.kalemler;
+    assert.deepEqual([kalem?.termin, kalem?.terminElle, kalem?.partiler, kalem?.miktar], [s.termin, false, [], '10.000']);
+    assert.equal(kalem !== undefined && 'birimFiyat' in kalem, false, 'fiyat taşınmaz');
+    const elle = await eskiProjeAc('KLM.ELLE', 'Siparişsiz');
+    const bos = await oku(yonetici, `/projeler/${elle.id}/siparis-kalemleri`);
+    assert.deepEqual(bos.json(), { siparisNo: null, siparisTermini: null, kalemler: [] });
+    assert.equal((await oku(operator, `/projeler/${p.id}/siparis-kalemleri`)).statusCode, 403);
+    assert.equal((await oku(yonetici, '/projeler/999999/siparis-kalemleri')).statusCode, 404);
   });
 
   test('PRJ-09 bütçe: maliyet gören girer ve görür; para birimi verilmezse TRY; biçimsiz ve eksi tutar reddedilir', async () => {

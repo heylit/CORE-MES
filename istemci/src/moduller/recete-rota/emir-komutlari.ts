@@ -122,6 +122,7 @@ export const EMIR_KOMUTLARI: Readonly<Record<string, EmirKomutu>> = {
       const baglam = {
         ...(girdi['projeId'] === undefined ? {} : { projeId: kimlik(girdi['projeId'], 'proje') }),
         ...(girdi['siparisSatiriId'] === undefined ? {} : { siparisSatiriId: kimlik(girdi['siparisSatiriId'], 'sipariş satırı') }),
+        ...(girdi['siparisPartiId'] === undefined ? {} : { siparisPartiId: kimlik(girdi['siparisPartiId'], 'parti') }),
       };
       if (girdi['rotasiz'] === true) {
         const aciklama = typeof girdi['note'] === 'string' && girdi['note'].trim() !== '' ? girdi['note'].trim() : null;

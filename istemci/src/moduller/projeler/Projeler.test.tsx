@@ -16,7 +16,7 @@ const YAZAR: Kullanici = { id: 1, ad: 'Deneme Planlama', islemler: ['sayfa.proje
 const OKUR: Kullanici = { id: 2, ad: 'Deneme Müdür', islemler: ['sayfa.projeler'] };
 
 const proje = (ek: Partial<Proje> & Pick<Proje, 'id' | 'kod' | 'ad'>): Proje => ({
-  durum: 'aktif', firmaId: null, firmaAd: null, siparisId: null, baslangic: null, bitis: null, aciklama: null,
+  durum: 'aktif', firmaId: null, firmaAd: null, siparisId: null, baslangic: null, bitis: null, bitisBagli: false, aciklama: null,
   olusturma: '2026-10-12T09:00:00+03:00', guncelleme: null, surum: 1, statu: null, ilerleme: null, ...ek,
 });
 const P1 = proje({ id: 1, kod: 'PRJ.01', ad: 'Deneme projesi', firmaId: 7, firmaAd: 'Deneme Müşteri', baslangic: '2026-10-01', bitis: '2026-12-31', surum: 3 });
@@ -123,7 +123,8 @@ describe('Projeler', () => {
     await waitFor(() => { expect(screen.queryByRole('dialog')).toBeNull(); });
     const yazma = cagrilar.find((c) => c.yontem === 'POST');
     expect(yazma?.yol).toBe('/projeler');
-    expect(yazma?.govde).toEqual({ kod: 'YENI.1', ad: 'Yeni proje', siparisId: 21, baslangic: null, bitis: null, aciklama: '' });
+    // 3244 b: bitiş seçilen siparişin termininden dolar.
+    expect(yazma?.govde).toEqual({ kod: 'YENI.1', ad: 'Yeni proje', siparisId: 21, baslangic: null, bitis: '2026-11-15', aciklama: '' });
     expect(await screen.findByRole('heading', { name: 'PRJ.02 · İkinci proje' })).toBeTruthy();
   });
 

@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { listeCevapSemasi, listeSorguAlanlari } from '../liste.ts';
 import { beklenenSurum, surumSemasi } from '../surum.ts';
+import { EMIR_TURLERI } from './emir-turleri.ts';
 import { tarihSemasi, zamanSemasi } from '../zaman.ts';
 
 // Projeler (kart #803): proje kaydı. Kod üretim emri numarasına girer ve Logo'daki proje koduyla eşleşebilecek biçimdedir.
@@ -109,6 +110,8 @@ export const projeSemasi = z.object({
   butceParaBirimi: z.string().nullable().optional(),
   baslangic: tarihSemasi.nullable(),
   bitis: tarihSemasi.nullable(),
+  // 3244 b: bitiş siparişin terminine bağlı mı; bağlıysa termin kayınca bitiş de kayar, elle değişen bitiş bağı koparır.
+  bitisBagli: z.boolean(),
   aciklama: z.string().nullable(),
   olusturma: zamanSemasi,
   guncelleme: zamanSemasi.nullable(),
@@ -120,6 +123,29 @@ export const projeSemasi = z.object({
 });
 
 export const projeListesiCevabi = listeCevapSemasi(projeSemasi);
+
+// 3244 b: bitiş yeniden siparişin terminine bağlanır; yalnız siparişten açılan projede.
+export const bitisBaglaGovdesi = z.object({ ...beklenenSurum });
+
+// 3244 b: projenin siparişinden gelen kalemler, terminleri ve üretim çeşidi partileriyle. Fiyat gelmez.
+// Partisiz kalem tek seri parti sayılır; boş dizi öyle okunur.
+export const projeSiparisKalemiSemasi = z.object({
+  id: z.number().int(),
+  sira: z.number().int(),
+  malzemeNo: z.number().int(),
+  malzemeKodu: z.string().nullable(),
+  malzemeAdi: z.string().nullable(),
+  birim: z.string().nullable(),
+  miktar: z.string(),
+  termin: tarihSemasi,
+  terminElle: z.boolean(),
+  partiler: z.array(z.object({ id: z.number().int(), emirTuru: z.enum(EMIR_TURLERI), adet: z.string() })),
+});
+export const projeSiparisKalemleriCevabi = z.object({
+  siparisNo: z.string().nullable(),
+  siparisTermini: tarihSemasi.nullable(),
+  kalemler: z.array(projeSiparisKalemiSemasi),
+});
 export const siparisProjeleriCevabi = z.object({ projeler: z.array(projeSemasi) });
 
 // Proje açarken sipariş seçici: yalnız onaylı siparişler, sipariş no ya da müşteri sipariş no ile aranır.
@@ -306,6 +332,9 @@ export type SiparistenProjeGovdesi = z.input<typeof siparistenProjeGovdesi>;
 export type SiparistenProjeVerisi = z.output<typeof siparistenProjeGovdesi>;
 export type SiparisProjeleriCevabi = z.output<typeof siparisProjeleriCevabi>;
 export type ProjeGuncelleGovdesi = z.input<typeof projeGuncelleGovdesi>;
+export type BitisBaglaGovdesi = z.input<typeof bitisBaglaGovdesi>;
+export type ProjeSiparisKalemi = z.output<typeof projeSiparisKalemiSemasi>;
+export type ProjeSiparisKalemleriCevabi = z.output<typeof projeSiparisKalemleriCevabi>;
 export type ProjeGuncelleVerisi = z.output<typeof projeGuncelleGovdesi>;
 export type ProjeListesiSorgusu = z.input<typeof projeListesiSorgusu>;
 export type ProjeListesiSuzgeci = z.output<typeof projeListesiSorgusu>;

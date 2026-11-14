@@ -5,7 +5,7 @@ import {
   emirParametresi, izlemeListeCevabi, bitenEmirlerCevabi, bitenEmirlerSorgusu, adimliBitenlerCevabi, adimliBitenlerSorgusu,
   emirlerSorgusu, emirTopluGuncelleCevabi, emirTopluGuncelleGovdesi,
   adimKaynagiGovdesi, uretimYeriGovdesi, fasonFirmalariCevabi, adimliEmirCevabi, adimliIptalGovdesi, adimliListeCevabi, adimliListeSorgusu, adimliOzetCevabi, fasonGidisGovdesi, siradakiFasonCevabi,
-  asimlarCevabi, emirTuruGovdesi, fasonHareketiCevabi, isEmriParametresi, oncelikGovdesi, ozetCevabi, partiBirlestirGovdesi, partiBolCevabi, partiBolGovdesi, planaAlGovdesi,
+  asimlarCevabi, emirTuruGovdesi, teslimBaglaGovdesi, fasonHareketiCevabi, isEmriParametresi, oncelikGovdesi, ozetCevabi, partiBirlestirGovdesi, partiBolCevabi, partiBolGovdesi, planaAlGovdesi,
   birlesmePlaniGovdesi, ekAdimGovdesi, ekAdimKaldirGovdesi, hazirlikCevabi, hazirlikMuafiyetiGovdesi, hazirlikOzetiCevabi, hazirlikOzetiSorgusu, refakatKartiCevabi, katilimCevabi, rotasizAdimDuzenleGovdesi, rotasizAdimEkleGovdesi, rotasizAdimSilGovdesi, rotasizEmirCevabi, rotasizEmirGovdesi, acilisSecenekleriCevabi, acilisSecenekleriSorgusu, makineDevralGovdesi, makineEkleGovdesi, adimPaylariCevabi, durusDagilimiCevabi, sonOlaylarCevabi, sonOlaylarSorgusu, gunlukUretimCevabi, panelSorgusu, sureOzetiCevabi,
   hataliCevabi, hataliGovdesi, hataliListeCevabi, hataliListeSorgusu, reworkAdimiGovdesi,
   disIslemEmriAcGovdesi, disIslemEmriCevabi, disIslemEmriIptalGovdesi, disIslemEmriParametresi,
@@ -421,6 +421,20 @@ const adimliUclar = [
     cevap: adimliEmirCevabi,
     isle: async ({ db, kullanici, parametre, govde }) => {
       await isEmri.oncelikDegistir(db, kullanici, parametre.id, govde.oncelik, govde.surum);
+      return { emir: await isEmri.adimliAyrinti(db, parametre.id) };
+    },
+  }),
+  // UE-TB (3244 b): başlamamış emrin teslimi sipariş satırının güncel terminine yeniden bağlanır.
+  uc({
+    yontem: 'POST',
+    yol: '/adimli-emirler/:id/teslim-bagla',
+    yetki: 'uretim-emirleri.duzenle',
+    tekrarKorumali: true,
+    parametre: emirParametresi,
+    govde: teslimBaglaGovdesi,
+    cevap: adimliEmirCevabi,
+    isle: async ({ db, kullanici, parametre, govde }) => {
+      await isEmri.teslimBagla(db, kullanici, parametre.id, govde.surum);
       return { emir: await isEmri.adimliAyrinti(db, parametre.id) };
     },
   }),

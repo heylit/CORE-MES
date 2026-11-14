@@ -7,6 +7,7 @@ import type { Kullanici } from '#cekirdek/yetki.ts';
 import type { SayfaliListe } from '#paylasilan/liste.ts';
 import { SIPARIS_OZETI_AY, YAKLASAN_TERMIN_GUN, siparisEkleGovdesi } from '#paylasilan/sozlesme/siparisler.ts';
 import type { TakvimKaydi } from '#paylasilan/sozlesme/takvim.ts';
+import type { EmirTuru } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { tesisGunu } from '#paylasilan/tesis-zamani.ts';
 import type {
   MalzemeSecenekleriCevabi, Siparis, SiparisAyrintisi, SiparisOzetiCevabi, SiparisDurumu, TerminDagilimiCevabi, SiparisEkleVerisi, SiparisGuncelleVerisi, SiparisListesiSuzgeci, SiparisSatiri,
@@ -18,9 +19,9 @@ import { beklenenTahsilatKaldir, beklenenTahsilatYaz } from '../finans/disari.ts
 import { firmaAdlari, firmaOzeti } from '../musteri-tedarikci/disari.ts';
 import {
   FIRMA_YOK, MUSTERI_NO_KULLANILIYOR, NUMARA_UZUN, SATILAN_TURLER, SIPARIS_YOK, aramaKalibi, bagliEmirReddi, duzenlemeReddi, firmaReddi, fiyatEksikReddi, fiyatlariKoru, fiyatYazmaReddi, gecisHedefi, gecisReddi,
-  TAKVIM_SIPARIS_DURUMU, malzemeReddi, miktarReddi, tarihAraligiReddi, terminDagilimi as terminAraliklari, tutarTasmaReddi,
+  TAKVIM_SIPARIS_DURUMU, kilitliKalemReddi, malzemeReddi, miktarReddi, partiReddi, tarihAraligiReddi, terminDagilimi as terminAraliklari, tutarTasmaReddi,
 } from './kurallar.ts';
-import { bagliEmirler } from './bagli-emirler.ts';
+import { bagliEmirler, emreBagliKalemler, emreBagliKalemlerOku } from './bagli-emirler.ts';
 import type { DurumKomutu } from './kurallar.ts';
 import { siparisOnaylandiBildir } from './siparis-olaylari.ts';
 import * as sorgular from './sorgular.ts';
@@ -32,6 +33,12 @@ const KISITLAR = {
   siparisler_siparis_firma: { ileti: FIRMA_YOK, alan: 'firmaId' },
   siparisler_siparis_no_bicim: NUMARA_UZUN,
 } as const;
+
+async function kalemPartileri(db: Db, satirIdleri: number[]): Promise<Map<number, sorgular.PartiSatiri[]>> {
+  const harita = new Map<number, sorgular.PartiSatiri[]>();
+  for (const p of await sorgular.partileriGetir(db, satirIdleri)) harita.set(p.satir_id, [...(harita.get(p.satir_id) ?? []), p]);
+  return harita;
+}
 
 async function cevir(db: Db, satirlar: BaslikSatiri[]): Promise<Siparis[]> {
   const adlar = await firmaAdlari(db, satirlar.map((s) => s.firma_id));
@@ -48,12 +55,16 @@ async function kalemleriCevir(db: Db, kalemler: KalemSatiri[]): Promise<SiparisS
   const nolar = kalemler.map((k) => k.malzeme_no);
   const kartlar = await malzemeOzetleri(db, nolar);
   const ayrintilar = await malzemeSatinAlmaAyrintilari(db, nolar);
+  const partiler = await kalemPartileri(db, kalemler.map((k) => k.id));
+  const bagli = await emreBagliKalemlerOku(db, kalemler.map((k) => k.id));
   return kalemler.map((k) => {
     const kart = kartlar.get(k.malzeme_no);
     return {
       id: k.id, sira: k.sira, malzemeNo: k.malzeme_no, malzemeKodu: kart?.kod ?? null, malzemeAdi: kart?.ad ?? null,
       aciklamalar: ayrintilar.get(k.malzeme_no)?.aciklamalar ?? [], birim: kart?.birim ?? null,
       miktar: k.miktar, birimFiyat: k.birim_fiyat, tutar: k.tutar, termin: k.termin, aciklama: k.aciklama,
+      partiler: (partiler.get(k.id) ?? []).map((p) => ({ id: p.id, emirTuru: p.emir_turu, adet: p.adet })),
+      emreBagli: bagli.has(k.id),
     };
   });
 }
@@ -87,6 +98,8 @@ async function kalemleriDenetle(db: Db, g: SiparisEkleVerisi): Promise<void> {
     if (ret !== null) throw dogrulama(ret, `satirlar.${i}.malzemeNo`);
     const miktar = miktarReddi(kart?.birim ?? null, s.miktar);
     if (miktar !== null) throw dogrulama(miktar, `satirlar.${i}.miktar`);
+    const parti = partiReddi(kart?.birim ?? null, s.miktar, s.partiler ?? []);
+    if (parti !== null) throw dogrulama(parti, `satirlar.${i}.partiler`);
   });
   const tarih = tarihAraligiReddi(tesisGunu(Date.now()), g);
   if (tarih !== null) throw dogrulama(tarih.mesaj, tarih.alan);
@@ -152,10 +165,22 @@ export async function siparisGuncelle(
   const mevcut = await kilitle(db, id);
   const ret = duzenlemeReddi(mevcut.durum);
   if (ret !== null) throw gecersiz(ret);
-  const onceki = (await sorgular.kalemler(db, id)).map((k) => ({
+  const kayitlilar = await sorgular.kalemler(db, id);
+  const onceki = kayitlilar.map((k) => ({
     malzemeNo: k.malzeme_no, miktar: k.miktar, birimFiyat: k.birim_fiyat, termin: k.termin, aciklama: k.aciklama,
   }));
   const satirlar = fiyatYazar ? g.satirlar : fiyatlariKoru(onceki, g.satirlar);
+  // SIP-19 (3254 a): onayı geri alınmış siparişte emre bağlı kalem kilitlidir; yalnız termini değişir.
+  const kilitli = await emreBagliKalemler(db, kayitlilar.map((k) => k.id));
+  if (kilitli.size > 0) {
+    const partiler = await kalemPartileri(db, [...kilitli]);
+    const kayitli = kayitlilar.map((k) => ({
+      id: k.id, sira: k.sira, malzemeNo: k.malzeme_no, miktar: k.miktar, birimFiyat: k.birim_fiyat, aciklama: k.aciklama,
+      partiler: (partiler.get(k.id) ?? []).map((p) => ({ emirTuru: p.emir_turu, adet: p.adet })),
+    }));
+    const kilit = kilitliKalemReddi(kayitli, kilitli, satirlar);
+    if (kilit !== null) throw cakisma(kilit.mesaj);
+  }
   await firmayiDenetle(db, g.firmaId, mevcut.firma_id);
   await kalemleriDenetle(db, { ...g, satirlar });
   await kisitKorumali(KISITLAR, () => surumluGuncelle({
@@ -163,7 +188,7 @@ export async function siparisGuncelle(
     varMi: () => sorgular.siparisVarMi(db, id),
     bulunamadiIletisi: SIPARIS_YOK,
   }));
-  await sorgular.kalemleriYaz(db, id, satirlar);
+  await sorgular.kalemleriYaz(db, id, satirlar, kilitli);
   return siparisAyrintisi(db, id);
 }
 
@@ -182,13 +207,16 @@ export async function durumDegistir(
     if (bagli !== null) throw cakisma(bagli);
   }
   await kisitKorumali(KISITLAR, () => surumluGuncelle({
-    guncelle: () => sorgular.durumYaz(db, id, { hedef: gecisHedefi(komut), surum: g.surum, kisiId: kullanici.id, iptalNedeni: g.neden ?? null }),
+    // Gerekçe yalnız iptalde sütuna yazılır; onay geri almanın gerekçesi uç denetim kaydında gövdeyle durur (SIP-19).
+    guncelle: () => sorgular.durumYaz(db, id, {
+      hedef: gecisHedefi(komut), surum: g.surum, kisiId: kullanici.id, iptalNedeni: komut === 'iptal' ? g.neden ?? null : null,
+    }),
     varMi: () => sorgular.siparisVarMi(db, id),
     bulunamadiIletisi: SIPARIS_YOK,
   }));
   if (komut === 'onayla') await siparisOnaylandiBildir(db, { siparisId: id, kullanici });
   if (komut === 'onayla') await tahsilatiFinansaYaz(db, kullanici.id, id);
-  if (komut === 'iptal') await beklenenTahsilatKaldir(db, id);
+  if (komut === 'iptal' || komut === 'geri-al') await beklenenTahsilatKaldir(db, id);
   return siparisAyrintisi(db, id);
 }
 
@@ -232,17 +260,23 @@ export interface SiparisSatiriOzeti {
   birimFiyat: string | null; tutar: string | null; paraBirimi: string; cezaOraniGun: string | null; cezaTavaniOrani: string | null;
   // 205 a: proje maliyeti finansmanı bu vadeden hesaplar, boşsa eksik sayar; plan vadeyi okumaz.
   odemeVadesiGun: number | null;
+  // 3244 b: termin kalemin kendisinden mi (elle) yoksa siparişten mi geliyor; zincir bağı bunu okur.
+  terminElle: boolean;
+  // 3244 b: kalemin partileri; boşsa kalem tek seri partidir (çağıran öyle sayar).
+  partiler: { id: number; emirTuru: EmirTuru; adet: string }[];
 }
 
 // kisiAdlari kalıbı: satırlar ve başlıklar birer sorgu; boş dizide sorgu yok; olmayan kimlik haritada yok.
 async function satirOzetleri(db: Db, kalemler: KalemSatiri[]): Promise<SiparisSatiriOzeti[]> {
   const basliklar = new Map((await sorgular.siparisleriGetir(db, [...new Set(kalemler.map((k) => k.siparis_id))])).map((b) => [b.id, b]));
+  const partiler = await kalemPartileri(db, kalemler.map((k) => k.id));
   return kalemler.flatMap((k) => {
     const b = basliklar.get(k.siparis_id);
     return b === undefined ? [] : [{
       id: k.id, siparisId: b.id, siparisNo: b.no, siparisDurumu: b.durum, firmaId: b.firma_id,
       sira: k.sira, malzemeNo: k.malzeme_no, miktar: k.miktar, termin: k.termin ?? b.termin, birimFiyat: k.birim_fiyat,
       tutar: k.tutar, paraBirimi: b.para_birimi, cezaOraniGun: b.gecikme_ceza_orani, cezaTavaniOrani: b.ceza_tavani_orani, odemeVadesiGun: b.odeme_vadesi_gun,
+      terminElle: k.termin !== null, partiler: (partiler.get(k.id) ?? []).map((p) => ({ id: p.id, emirTuru: p.emir_turu, adet: p.adet })),
     }];
   });
 }

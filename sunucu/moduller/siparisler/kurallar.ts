@@ -63,6 +63,61 @@ export function miktarReddi(birim: string | null, miktar: string): string | null
   return birim?.trim().toLocaleLowerCase('tr') === 'adet' && !/^\d+(\.0*)?$/.test(miktar.trim()) ? MIKTAR_TAM_SAYI : null;
 }
 
+// SIP-18 (3244 b): kalem partilere ayrıldıysa parti adetleri toplamı kalem miktarıdır; boş liste tek seri partidir. Adet birimli kartta
+// parti de tam sayıdır (SIP-4 a ile aynı gerekçe). Karşılaştırma binde bir hassasiyetle tam sayıda yapılır: kayan nokta 0.1 + 0.2'de şaşar.
+export const PARTI_TOPLAMI_TUTMUYOR = 'Parti adetlerinin toplamı kalem miktarına eşit olmalı.';
+const binde = (m: string): bigint => {
+  const [tam = '0', kesir = ''] = m.trim().split('.');
+  return BigInt(tam) * 1000n + BigInt((kesir + '000').slice(0, 3));
+};
+export function partiReddi(birim: string | null, miktar: string, partiler: readonly { adet: string }[]): string | null {
+  if (partiler.length === 0) return null;
+  for (const p of partiler) {
+    const ret = miktarReddi(birim, p.adet);
+    if (ret !== null) return ret;
+  }
+  return partiler.reduce((t, p) => t + binde(p.adet), 0n) === binde(miktar) ? null : PARTI_TOPLAMI_TUTMUYOR;
+}
+
+// SIP-19 (3254 a): onayı geri alınmış siparişte emre bağlı kalem kilitlidir: silinmez, sırası değişmez; malzeme, miktar, fiyat, açıklama
+// ve partiler aynı kalır, yalnız termin değişir. Kalem kimliğiyle eşlenir (gövdedeki `id`); kimliği bu siparişte olmayan kalem reddedilir.
+export const KALEM_BASKA_SIPARISIN = 'Kalem bu siparişin değil.';
+export const KILITLI_KALEM_SILINMEZ = 'Emre bağlı kalem silinemez';
+export const KILITLI_KALEM_SIRASI = 'Emre bağlı kalemin sırası değişmez';
+export const KILITLI_KALEM_DEGISMEZ = 'Emre bağlı kalemde yalnız termin değişir';
+const sayiAyni = (a: string | null, b: string | null): boolean => {
+  const n = (m: string) => { const [t = '0', k = ''] = m.trim().split('.'); return `${BigInt(t)}.${k.replace(/0+$/, '')}`; };
+  return a === null || b === null ? a === b : n(a) === n(b);
+};
+export interface KayitliKalem {
+  id: number; sira: number; malzemeNo: number; miktar: string; birimFiyat: string | null; aciklama: string | null;
+  partiler: readonly { emirTuru: string; adet: string }[];
+}
+export interface YeniKalem {
+  id?: number | undefined; malzemeNo: number; miktar: string; birimFiyat: string | null; aciklama: string | null;
+  partiler?: readonly { emirTuru: string; adet: string }[] | undefined;
+}
+export function kilitliKalemReddi(
+  kayitli: readonly KayitliKalem[], kilitli: ReadonlySet<number>, yeni: readonly YeniKalem[],
+): { mesaj: string; alan: string } | null {
+  const idler = new Set(kayitli.map((k) => k.id));
+  const yabanci = yeni.findIndex((k) => k.id !== undefined && !idler.has(k.id));
+  if (yabanci >= 0) return { mesaj: KALEM_BASKA_SIPARISIN, alan: `satirlar.${yabanci}` };
+  for (const k of kayitli) {
+    if (!kilitli.has(k.id)) continue;
+    const i = yeni.findIndex((y) => y.id === k.id);
+    const y = yeni[i];
+    if (y === undefined) return { mesaj: `${KILITLI_KALEM_SILINMEZ} (kalem ${k.sira}).`, alan: 'satirlar' };
+    if (i + 1 !== k.sira) return { mesaj: `${KILITLI_KALEM_SIRASI} (kalem ${k.sira}).`, alan: `satirlar.${i}` };
+    const partiler = y.partiler ?? [];
+    const ayni = y.malzemeNo === k.malzemeNo && sayiAyni(y.miktar, k.miktar) && sayiAyni(y.birimFiyat, k.birimFiyat) && y.aciklama === k.aciklama
+      && partiler.length === k.partiler.length
+      && partiler.every((p, j) => p.emirTuru === k.partiler[j]?.emirTuru && sayiAyni(p.adet, k.partiler[j]?.adet ?? null));
+    if (!ayni) return { mesaj: `${KILITLI_KALEM_DEGISMEZ} (kalem ${k.sira}).`, alan: `satirlar.${i}` };
+  }
+  return null;
+}
+
 // SIP-4 a: yanlış yıl girişini yakalayan makul aralık (bugün sunucudan, tesis günü). Geç girilen eski sipariş için iki yıl geri,
 // önceden alınan sipariş için bir yıl ileri; termin sipariş tarihinden en çok beş yıl sonra (VARSAYIM: çerçeve sözleşmesi bu kadar uzun).
 export const SIPARIS_TARIHI_ARALIK_DISI = 'Sipariş tarihi bugünden en çok iki yıl önce, en çok bir yıl sonra olabilir.';
@@ -95,14 +150,18 @@ export function tutarTasmaReddi(
 }
 
 // SIP-04: durum geçişleri. Taslak onaylanır; onaylı kapanır; taslak ve onaylı iptal edilir. Kapanmış ve iptal son durumdur.
-export type DurumKomutu = 'onayla' | 'kapat' | 'iptal';
+// SIP-19 (3254 a): onaylı siparişin onayı gerekçeyle geri alınır, sipariş taslağa döner; emre bağlı kalemler kilitli kalır.
+export type DurumKomutu = 'onayla' | 'kapat' | 'iptal' | 'geri-al';
 const GECISLER: Readonly<Record<DurumKomutu, { kaynak: readonly SiparisDurumu[]; hedef: SiparisDurumu }>> = {
   onayla: { kaynak: ['taslak'], hedef: 'onayli' },
   kapat: { kaynak: ['onayli'], hedef: 'kapandi' },
   iptal: { kaynak: ['taslak', 'onayli'], hedef: 'iptal' },
+  'geri-al': { kaynak: ['onayli'], hedef: 'taslak' },
 };
 const DURUM_ADI: Readonly<Record<SiparisDurumu, string>> = { taslak: 'taslak', onayli: 'onaylı', kapandi: 'kapanmış', iptal: 'iptal edilmiş' };
-const KOMUT_ADI: Readonly<Record<DurumKomutu, string>> = { onayla: 'onaylanamaz', kapat: 'kapatılamaz', iptal: 'iptal edilemez' };
+const KOMUT_ADI: Readonly<Record<DurumKomutu, string>> = {
+  onayla: 'onaylanamaz', kapat: 'kapatılamaz', iptal: 'iptal edilemez', 'geri-al': 'onayı geri alınamaz',
+};
 
 export function gecisHedefi(komut: DurumKomutu): SiparisDurumu {
   return GECISLER[komut].hedef;

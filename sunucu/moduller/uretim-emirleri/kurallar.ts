@@ -418,6 +418,36 @@ export function siparisSatiriIhlali(
   return satir.malzemeNo === malzemeNo ? null : SIPARIS_SATIRI_MALZEME;
 }
 
+// UE-TB (3244 b): kalemden açılan emrin teslimi kalemin terminidir; boş ya da termine eşit teslim bağlı açılır, başka tarih bağsızdır.
+// Kalemsiz emirde teslim girildiği gibidir, bağ yoktur.
+export function kalemTeslimi(teslim: string | null, termin: string | null): { teslim: string | null; bagli: boolean } {
+  if (termin === null) return { teslim, bagli: false };
+  if (teslim === null || teslim === termin) return { teslim: termin, bagli: true };
+  return { teslim, bagli: false };
+}
+
+export const PARTI_KALEMSIZ = 'Parti seçmek için siparişin kalemi seçilmeli.';
+export const PARTI_KALEM_DISI = 'Seçilen parti bu kalemin değil.';
+export const PARTI_TURU_FARKLI = 'Emir türü partinin üretim çeşidiyle aynı olmalı.';
+// UE-TB (3244 b): parti emrin kaleminin partisi olmalı; emrin türü partiden gelir, başka tür verilmişse reddedilir.
+export function partiIhlali(
+  satirPartileri: readonly { id: number; emirTuru: string }[] | null, partiId: number, emirTuru: string | undefined,
+): string | null {
+  if (satirPartileri === null) return PARTI_KALEMSIZ;
+  const parti = satirPartileri.find((p) => p.id === partiId);
+  if (parti === undefined) return PARTI_KALEM_DISI;
+  return emirTuru === undefined || emirTuru === parti.emirTuru ? null : PARTI_TURU_FARKLI;
+}
+
+export const SIPARIS_ONAYI_GERI_ALINDI = 'Projenin siparişinin onayı geri alındı; sipariş yeniden onaylanınca emir açılır.';
+export const TESLIM_KALEMSIZ = 'Bu emir sipariş kalemine bağlı değil; teslim termine bağlanamaz.';
+export const TESLIM_BASLAMIS = 'Başlamış emrin teslimi termine bağlanmaz; elle değiştirilir.';
+// UE-TB (3244 b): teslim yalnız kalemden açılmış, başlamamış (taslak ya da planlı), arşivlenmemiş emirde yeniden bağlanır.
+export function teslimBaglaIhlali(e: { siparisSatiriId: number | null; durum: string; arsiv: boolean }, baslamis: boolean): string | null {
+  if (e.siparisSatiriId === null) return TESLIM_KALEMSIZ;
+  return e.arsiv || baslamis || (e.durum !== 'taslak' && e.durum !== 'planli') ? TESLIM_BASLAMIS : null;
+}
+
 // Emre bağlanabilecek satırlar: projenin onaylı siparişinde emrin malzemesiyle aynı malzemeli satırlar (176 a). Açılış seçenekleri de bunu
 // gösterir, ekran sunucunun kabul etmeyeceği satırı sunmasın.
 export function adaySatirlar<S extends { malzemeNo: number }>(siparis: { durum: string; satirlar: readonly S[] } | null, malzemeNo: number): S[] {

@@ -3,6 +3,7 @@ import { siralamaSql } from '#cekirdek/liste.ts';
 import type { Dilim, SiralamaIstegi, SiralamaTanimi } from '#cekirdek/liste.ts';
 import { zamanMetni } from '#cekirdek/zaman.ts';
 import type { SiparisDurumu, TeklifDurumu } from '#paylasilan/sozlesme/siparisler.ts';
+import type { EmirTuru } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { MALZEME_KARTI_IZ_YOLU, malzemeKartiIzParametreleri, type MalzemeKartiAnahtari, type MalzemeKartiIzi } from '#paylasilan/malzeme-karti-izi.ts';
 
 export interface SiparisSatiri {
@@ -159,16 +160,30 @@ export function siparisGuncelle(db: Db, id: number, a: BaslikAlanlari, surum: nu
 }
 
 export interface KalemAlanlari {
+  // Var olan kalemin kimliği (SIP-19); yalnız kilitli kalemde kullanılır.
+  id?: number | undefined;
   malzemeNo: number;
   miktar: string;
   birimFiyat: string | null;
   termin: string | null;
   aciklama: string | null;
+  partiler?: readonly { emirTuru: string; adet: string }[];
 }
 
 // Satırlar taslakta bütün olarak yeniden yazılır; sıra gövdedeki sıradır.
-export async function kalemleriYaz(db: Db, siparisId: number, kalemListesi: KalemAlanlari[]): Promise<void> {
-  await db.sorgu('DELETE FROM siparisler_siparis_satiri WHERE siparis_id = $1', [siparisId]);
+// SIP-19 (3254 a): `kilitliIdler` emre bağlı kalemlerdir; yerinde kalır, yalnız termini yazılır (sırası ve partileri kural gereği aynıdır).
+// Öteki kalemler silinip gövdedeki sırayla yeniden yazılır; kilitli kalem sırasını koruduğu için sıra tekilliği çakışmaz.
+export async function kalemleriYaz(
+  db: Db, siparisId: number, kalemListesi: KalemAlanlari[], kilitliIdler: ReadonlySet<number> = new Set(),
+): Promise<void> {
+  const kilitli = [...kilitliIdler];
+  await db.sorgu('DELETE FROM siparisler_siparis_satiri WHERE siparis_id = $1 AND NOT (id = ANY($2::int[]))', [siparisId, kilitli]);
+  const yazilacak = kalemListesi.flatMap((k, i) => (k.id !== undefined && kilitliIdler.has(k.id) ? [] : [{ ...k, sira: i + 1 }]));
+  for (const k of kalemListesi) {
+    if (k.id === undefined || !kilitliIdler.has(k.id)) continue;
+    await db.sorgu('UPDATE siparisler_siparis_satiri SET termin = $3 WHERE id = $1 AND siparis_id = $2', [k.id, siparisId, k.termin]);
+  }
+  if (yazilacak.length === 0) return;
   await db.sorgu(
     `INSERT INTO siparisler_siparis_satiri (siparis_id, sira, malzeme_no, miktar, birim_fiyat, termin, aciklama)
      SELECT $1, k.sira, k.malzeme_no, k.miktar, k.birim_fiyat, k.termin, k.aciklama
@@ -176,13 +191,33 @@ export async function kalemleriYaz(db: Db, siparisId: number, kalemListesi: Kale
          AS k (sira, malzeme_no, miktar, birim_fiyat, termin, aciklama)`,
     [
       siparisId,
-      kalemListesi.map((_, i) => i + 1),
-      kalemListesi.map((k) => k.malzemeNo),
-      kalemListesi.map((k) => k.miktar),
-      kalemListesi.map((k) => k.birimFiyat),
-      kalemListesi.map((k) => k.termin),
-      kalemListesi.map((k) => k.aciklama),
+      yazilacak.map((k) => k.sira),
+      yazilacak.map((k) => k.malzemeNo),
+      yazilacak.map((k) => k.miktar),
+      yazilacak.map((k) => k.birimFiyat),
+      yazilacak.map((k) => k.termin),
+      yazilacak.map((k) => k.aciklama),
     ],
+  );
+  // 3244 b: partiler kalemin sırasıyla bağlanır; boş liste yazılmaz (kalem tek seri partidir).
+  const partiler = yazilacak.flatMap((k) => (k.partiler ?? []).map((p, j) => ({ kalemSira: k.sira, sira: j + 1, ...p })));
+  if (partiler.length === 0) return;
+  await db.sorgu(
+    `INSERT INTO siparisler_siparis_satiri_parti (satir_id, sira, emir_turu, adet)
+     SELECT s.id, p.sira, p.emir_turu, p.adet
+       FROM unnest($2::int[], $3::int[], $4::text[], $5::numeric[]) AS p (kalem_sira, sira, emir_turu, adet)
+       JOIN siparisler_siparis_satiri s ON s.siparis_id = $1 AND s.sira = p.kalem_sira`,
+    [siparisId, partiler.map((p) => p.kalemSira), partiler.map((p) => p.sira), partiler.map((p) => p.emirTuru), partiler.map((p) => p.adet)],
+  );
+}
+
+export interface PartiSatiri { id: number; satir_id: number; sira: number; emir_turu: EmirTuru; adet: string }
+
+export function partileriGetir(db: Db, satirIdleri: readonly number[]): Promise<PartiSatiri[]> {
+  if (satirIdleri.length === 0) return Promise.resolve([]);
+  return db.sorgu<PartiSatiri>(
+    'SELECT id, satir_id, sira, emir_turu, adet FROM siparisler_siparis_satiri_parti WHERE satir_id = ANY($1::int[]) ORDER BY satir_id, sira',
+    [[...satirIdleri]],
   );
 }
 
@@ -192,8 +227,8 @@ export function durumYaz(
   return db.tek<{ id: number }>(
     `UPDATE siparisler_siparis
         SET durum = $2, iptal_nedeni = $3,
-            onaylayan_id = CASE WHEN $2 = 'onayli' THEN $4 ELSE onaylayan_id END,
-            onay_zamani = CASE WHEN $2 = 'onayli' THEN now() ELSE onay_zamani END,
+            onaylayan_id = CASE WHEN $2 = 'onayli' THEN $4 WHEN $2 = 'taslak' THEN NULL ELSE onaylayan_id END,
+            onay_zamani = CASE WHEN $2 = 'onayli' THEN now() WHEN $2 = 'taslak' THEN NULL ELSE onay_zamani END,
             guncelleyen_id = $4, guncelleme = now(), surum = surum + 1
       WHERE id = $1 AND surum = $5 RETURNING id`,
     [id, g.hedef, g.iptalNedeni, g.kisiId, g.surum],

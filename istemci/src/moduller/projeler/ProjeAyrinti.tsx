@@ -17,9 +17,10 @@ import { StatuGecmisi } from './StatuGecmisi.tsx';
 import { StatuCipi, StatuPenceresi } from './StatuPenceresi.tsx';
 import { EMIR_OKUMA_ISLEMLERI, ProjeEmirleri } from './ProjeEmirleri.tsx';
 import { ProjeFormu } from './ProjeFormu.tsx';
+import { BitisBagi, ProjeKalemleri } from './ProjeKalemleri.tsx';
 import './projeler.css';
 
-type SekmeAdi = 'ozet' | 'gorevler' | 'taslar' | 'plan' | 'emirler' | 'maliyet' | 'gecmis' | 'genel';
+type SekmeAdi = 'ozet' | 'kalemler' | 'gorevler' | 'taslar' | 'plan' | 'emirler' | 'maliyet' | 'gecmis' | 'genel';
 
 const YONETIM_SEKMELERI: ReadonlySet<SekmeAdi> = new Set(['ozet', 'gorevler', 'taslar', 'gecmis']);
 
@@ -33,18 +34,7 @@ export function ProjeAyrinti() {
   const maliyetGorur = oturum.data?.islemler.includes(MALIYET_ISLEMI) === true;
   const emirleriGorur = EMIR_OKUMA_ISLEMLERI.some((i) => oturum.data?.islemler.includes(i) === true);
   const statuYazabilir = useIslemVar(STATU_ISLEMI);
-  const sekmeler: Sekme<SekmeAdi>[] = [
-    { anahtar: 'ozet', baslik: 'Özet', simge: 'chart' },
-    { anahtar: 'gorevler', baslik: 'Görevler', simge: 'check' },
-    { anahtar: 'taslar', baslik: 'Kilometre taşları', simge: 'flag' },
-    { anahtar: 'plan', baslik: 'Plan', simge: 'clock' },
-    ...(emirleriGorur ? [{ anahtar: 'emirler', baslik: 'Üretim emirleri', simge: 'list' } as const] : []),
-    ...(maliyetGorur ? [{ anahtar: 'maliyet', baslik: 'Maliyet', simge: 'lira' } as const] : []),
-    { anahtar: 'gecmis', baslik: 'Statü geçmişi', simge: 'clock' },
-    { anahtar: 'genel', baslik: 'Genel', simge: 'book' },
-  ];
   const [secili, sec] = useState<SekmeAdi>('ozet');
-  const sekme = sekmeler.some((s) => s.anahtar === secili) ? secili : 'ozet';
   const [duzenle, duzenleYaz] = useState(false);
   const [statuAcik, statuAcikYaz] = useState(false);
   const sorgu = useQuery({ queryKey: anahtarlar.ayrinti(id), queryFn: () => api.get<Proje>(`/projeler/${id}`), enabled: gecerli });
@@ -55,6 +45,20 @@ export function ProjeAyrinti() {
   });
   const p = sorgu.data;
   const y = yonetim.data;
+  const siparisli = p !== undefined && p.siparisId !== null;
+  const sekmeler: Sekme<SekmeAdi>[] = [
+    { anahtar: 'ozet', baslik: 'Özet', simge: 'chart' },
+    // 3244: siparişten gelen kalemler terminleri ve partileriyle; siparişsiz projede sekme yok.
+    ...(siparisli ? [{ anahtar: 'kalemler', baslik: 'Sipariş kalemleri', simge: 'box' } as const] : []),
+    { anahtar: 'gorevler', baslik: 'Görevler', simge: 'check' },
+    { anahtar: 'taslar', baslik: 'Kilometre taşları', simge: 'flag' },
+    { anahtar: 'plan', baslik: 'Plan', simge: 'clock' },
+    ...(emirleriGorur ? [{ anahtar: 'emirler', baslik: 'Üretim emirleri', simge: 'list' } as const] : []),
+    ...(maliyetGorur ? [{ anahtar: 'maliyet', baslik: 'Maliyet', simge: 'lira' } as const] : []),
+    { anahtar: 'gecmis', baslik: 'Statü geçmişi', simge: 'clock' },
+    { anahtar: 'genel', baslik: 'Genel', simge: 'book' },
+  ];
+  const sekme = sekmeler.some((s) => s.anahtar === secili) ? secili : 'ozet';
 
   if (!gecerli) return <DurumKutusu durum="hata" mesaj="Proje bulunamadı" />;
   if (sorgu.isError) return <DurumKutusu durum="hata" mesaj={hataIletisi(sorgu.error, 'Proje alınamadı')} yenile={() => { void sorgu.refetch(); }} />;
@@ -82,11 +86,12 @@ export function ProjeAyrinti() {
           <dt>Proje no</dt><dd>{p.kod}</dd>
           <dt>Müşteri</dt><dd>{p.firmaAd ?? '—'}</dd>
           <dt>Başlangıç</dt><dd>{tarihMetni(p.baslangic)}</dd>
-          <dt>Bitiş</dt><dd>{tarihMetni(p.bitis)}</dd>
+          <dt>Bitiş</dt><dd className="tc-prj-bag">{tarihMetni(p.bitis)} <BitisBagi proje={p} yazabilir={yazabilir} /></dd>
           {maliyetGorur && <><dt>Bütçe</dt><dd>{butceMetni(p.butceTutari, p.butceParaBirimi)}</dd></>}
           <dt>Açıklama</dt><dd>{p.aciklama ?? '—'}</dd>
         </dl>
       </Kart>}
+      {sekme === 'kalemler' && <ProjeKalemleri proje={p} emirleriGorur={emirleriGorur} yazabilir={yazabilir} />}
       {sekme === 'plan' && <ProjePlani projeId={p.id} />}
       {sekme === 'emirler' && <ProjeEmirleri projeId={p.id} />}
       {sekme === 'maliyet' && <ProjeMaliyeti projeId={p.id} />}
