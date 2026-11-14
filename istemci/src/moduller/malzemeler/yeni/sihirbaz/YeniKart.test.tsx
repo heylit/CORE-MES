@@ -9,9 +9,16 @@ import { ORNEK_AYAR, ORNEK_KARTLAR, ornekKayit } from '../ornek-veri.ts';
 import { OKUYAN, YAZAN, YONETICI, json, sunucuKur, yeniEkranAc, yeniIstemci, type Yanit } from '../test-ortak.tsx';
 
 // Çizim merkezinin paneli kendi testlerinde sınanır; burada yalnız hangi kart no ile ve nerede açıldığı ölçülür.
+const yukleme = vi.hoisted(() => ({ cagrilar: [] as { no: number; ad: string; g: unknown }[] }));
 vi.mock('../../../cizimler/disari.ts', async (asil) => ({
   ...(await asil<Record<string, unknown>>()),
   ResimPaneli: ({ malzemeNo }: { malzemeNo: number }) => <div data-testid="resim-paneli">{malzemeNo}</div>,
+  // 3242 d: yükleme Çizim Merkezi'nin işidir; burada hangi kart no, tür, teknik resim no ve revizyonla çağrıldığı ölçülür.
+  malzemeBelgesiYukle: vi.fn(async (no: number, dosya: File, g: { tur: string }) => {
+    yukleme.cagrilar.push({ no, ad: dosya.name, g });
+    if (dosya.name.startsWith('BOZUK')) throw new Error('Sunucuya ulaşılamadı.');
+    return { cevap: { belgeler: [{ id: 40 + yukleme.cagrilar.length, tur: g.tur }] }, kareHatasi: null };
+  }),
 }));
 
 // jsdom kaydırma yapmaz; adım değişince sayfanın başına dönülmesi burada sınanmaz.
@@ -398,5 +405,91 @@ describe('1882 yeni kart kayıtlı kartın kimliğini taşımaz', () => {
     await waitFor(() => { expect(yarimTaslak()?.d.tur).toBe('mamul'); });
     expect(yarimTaslak()?.d.id).toBeUndefined();
     await waitFor(() => { expect(screen.getByTestId('adres').textContent).toBe('/malzemeler/yeni'); });
+  });
+
+  test('3242 d: yeni yarı mamulde föydeki rafa PDF ve STEP seçilir; kayıtta kartın numarası, teknik resim no ve revizyonuyla Çizim Merkezi\'ne gider', async () => {
+    yukleme.cagrilar.length = 0;
+    const taslak = {
+      ...ornekKayit('', '', '', 'yarimamul'), id: undefined, fam: null, cls: null, grade: null, form: null, dims: {},
+      g: { ad: 'Deneme braket', tip: 'Talaşlı işlenmiş parça', resim: 'ORN-2045-01', rev: 'B' }, ops: [], onay: { durum: 'taslak' },
+      com: { kod: '', ad: '', std: '', ted: '', birim: 'ADET', sertifika: [], not: '' },
+    };
+    localStorage.setItem('tmi-malzemeler-yarim-taslak', JSON.stringify({ d: taslak, adim: 5 }));
+    let yeni: { kimlik: string; kayit: Record<string, unknown> } | null = null;
+    sunucuKur(YAZAN, {
+      'GET /malzeme-katalogu-kartlari': () => kartlarYaniti(...(yeni ? [yeni] : []))(undefined, ''),
+    });
+    const asil = globalThis.fetch;
+    vi.stubGlobal('fetch', vi.fn(async (adres: string, secenek?: RequestInit) => {
+      const m = /\/malzeme-katalogu-kartlari\/([^/]+)\/kaydet$/.exec(adres);
+      if (m && secenek?.method === 'POST') {
+        const kimlik = decodeURIComponent(m[1]!);
+        yeni = { kimlik, kayit: (JSON.parse(String(secenek.body)) as { kayit: Record<string, unknown> }).kayit };
+        return json(200, { id: kimlik, stok_kodu: 'YM-DNM-00042', surum: 1 });
+      }
+      return asil(adres, secenek);
+    }));
+    ac();
+    const foy = await screen.findByRole('complementary', { name: 'Canlı föy önizlemesi' });
+    const raf = within(foy).getByRole('region', { name: 'Çizimler' });
+    expect(within(raf).getByText(/Kayıtta ORN-2045-01 · Rev B ile Çizim Merkezi'ne gider/)).toBeTruthy();
+    const girdi = within(raf).getByLabelText('STEP ya da PDF seç') as HTMLInputElement;
+    fireEvent.change(girdi, { target: { files: [new File(['x'], 'ORN-2045-01_Rev-B.pdf'), new File(['y'], 'ORN-2045-01_Rev-B.step'), new File(['z'], 'kroki.dxf')] } });
+    expect(await screen.findByText('Yalnız PDF ve STEP eklenir: kroki.dxf.')).toBeTruthy();
+    expect(within(raf).getAllByText('Kayıtta gönderilir')).toHaveLength(2);
+    expect(within(raf).getAllByText('ORN-2045-01 · Rev B')).toHaveLength(2);
+    expect(yukleme.cagrilar).toHaveLength(0);
+    fireEvent.click(within(raf).getByRole('button', { name: 'ORN-2045-01_Rev-B.step kaldır' }));
+    fireEvent.change(girdi, { target: { files: [new File(['y'], 'ORN-2045-01_Rev-B.step')] } });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Kataloğa kaydet' }));
+    await waitFor(() => { expect(yukleme.cagrilar).toHaveLength(2); });
+    expect(yukleme.cagrilar.map((c) => [c.no, c.ad, c.g])).toEqual([
+      [100, 'ORN-2045-01_Rev-B.pdf', { tur: 'teknik-resim', resimNo: 'ORN-2045-01', antetRev: 'B' }],
+      [100, 'ORN-2045-01_Rev-B.step', { tur: '3b-model', resimNo: 'ORN-2045-01', antetRev: 'B' }],
+    ]);
+    expect(await within(raf).findByText('Yayında')).toBeTruthy();
+    expect(await within(raf).findByText('Taslak')).toBeTruthy();
+    expect(within(raf).queryByRole('button', { name: /kaldır/ })).toBeNull();
+    expect(within(raf).queryByLabelText('STEP ya da PDF seç')).toBeNull();
+  });
+
+  test('3242 d: yükleme hata verirse kart kayıtlı kalır, raf "Gönderilemedi" ve yeniden dener; hammaddede ve kayıtlı kartta raf yok', async () => {
+    yukleme.cagrilar.length = 0;
+    const taslak = {
+      ...ornekKayit('', '', '', 'yarimamul'), id: undefined, fam: null, cls: null, grade: null, form: null, dims: {},
+      g: { ad: 'Deneme braket 2', tip: 'Talaşlı işlenmiş parça', resim: 'ORN-2046-01' }, ops: [], onay: { durum: 'taslak' },
+      com: { kod: '', ad: '', std: '', ted: '', birim: 'ADET', sertifika: [], not: '' },
+    };
+    localStorage.setItem('tmi-malzemeler-yarim-taslak', JSON.stringify({ d: taslak, adim: 5 }));
+    let yeni: { kimlik: string; kayit: Record<string, unknown> } | null = null;
+    sunucuKur(YAZAN, { 'GET /malzeme-katalogu-kartlari': () => kartlarYaniti(...(yeni ? [yeni] : []))(undefined, '') });
+    const asil = globalThis.fetch;
+    vi.stubGlobal('fetch', vi.fn(async (adres: string, secenek?: RequestInit) => {
+      const m = /\/malzeme-katalogu-kartlari\/([^/]+)\/kaydet$/.exec(adres);
+      if (m && secenek?.method === 'POST') {
+        const kimlik = decodeURIComponent(m[1]!);
+        yeni = { kimlik, kayit: (JSON.parse(String(secenek.body)) as { kayit: Record<string, unknown> }).kayit };
+        return json(200, { id: kimlik, stok_kodu: 'YM-DNM-00043', surum: 1 });
+      }
+      return asil(adres, secenek);
+    }));
+    ac();
+    const raf = within(await screen.findByRole('complementary', { name: 'Canlı föy önizlemesi' })).getByRole('region', { name: 'Çizimler' });
+    expect(within(raf).getByText(/ORN-2046-01 · Rev —/)).toBeTruthy();
+    fireEvent.change(within(raf).getByLabelText('STEP ya da PDF seç'), { target: { files: [new File(['x'], 'BOZUK.pdf')] } });
+    fireEvent.click(screen.getByRole('button', { name: 'Kataloğa kaydet' }));
+    expect(await within(raf).findByText('Gönderilemedi')).toBeTruthy();
+    expect(within(raf).getByRole('alert').textContent).toBe("Dosya Çizim Merkezi'ne gönderilemedi; kart kaydedildi.");
+    expect(await screen.findByText(/^Kataloğa kaydedildi/)).toBeTruthy();
+    fireEvent.click(within(raf).getByRole('button', { name: 'Yeniden dene' }));
+    await waitFor(() => { expect(yukleme.cagrilar).toHaveLength(2); });
+    cleanup();
+    vi.unstubAllGlobals();
+    localStorage.clear();
+    sunucuKur(YAZAN);
+    ac('?kart=mornek1');
+    await screen.findByRole('button', { name: 'Değişiklikleri kaydet' });
+    expect(screen.queryByRole('region', { name: 'Çizimler' })).toBeNull();
   });
 });

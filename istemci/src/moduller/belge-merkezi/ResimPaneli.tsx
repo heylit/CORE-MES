@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import type {
@@ -116,14 +116,17 @@ function Ilerleme({ oran }: { oran: number | null }) {
 
 // 2138-1 a: antet revizyonu kartın revizyonuyla dolu açılır; kartla yalnız antet karşılaştırılır. Fotoğrafın anteti yoktur.
 const antetOnDegeri = (tur: MalzemeBelgeTuru, kartRev: string | null): string => (tur === 'fotograf' ? '' : kartRev ?? '');
+// 3242: teknik resim no da kartınkiyle dolu açılır; fotoğrafın numarası yoktur.
+const resimNoOnDegeri = (tur: MalzemeBelgeTuru, kartResimNo: string | null): string => (tur === 'fotograf' ? '' : kartResimNo ?? '');
 
-function BelgeEkle({ no, kartRev, kapat }: { no: number; kartRev: string | null; kapat: () => void }) {
+function BelgeEkle({ no, kartRev, kartResimNo, kapat }: { no: number; kartRev: string | null; kartResimNo: string | null; kapat: () => void }) {
   const istemci = useQueryClient();
   const { bildir } = useBildirim();
   const [tur, turYaz] = useState<MalzemeBelgeTuru>('fotograf');
   const [dosya, dosyaYaz] = useState<File | null>(null);
   const [ad, adYaz] = useState('');
-  const [resimNo, resimNoYaz] = useState('');
+  const [resimNo, resimNoYaz] = useState(resimNoOnDegeri('fotograf', kartResimNo));
+  const [resimNoElle, resimNoElleYaz] = useState(false);
   const [antetRev, antetRevYaz] = useState(antetOnDegeri('fotograf', kartRev));
   const [antetElle, antetElleYaz] = useState(false);
   const [ilerleme, ilerlemeYaz] = useState<number | null>(null);
@@ -149,7 +152,7 @@ function BelgeEkle({ no, kartRev, kapat }: { no: number; kartRev: string | null;
       alt={<Dugme tur="birincil" simge="upload" yukleniyor={komut.isPending} disabled={!dosya || red !== null} onClick={() => { if (dosya) komut.mutate(dosya); }}>Yükle</Dugme>}
     >
       <div className="tc-cz-form">
-        <Secim etiket="Tür" value={tur} onChange={(e) => { const t = e.target.value as MalzemeBelgeTuru; turYaz(t); if (!antetElle) antetRevYaz(antetOnDegeri(t, kartRev)); }} secenekler={MALZEME_TURLERI.map((t) => ({ deger: t, baslik: TUR_ADI[t] }))} />
+        <Secim etiket="Tür" value={tur} onChange={(e) => { const t = e.target.value as MalzemeBelgeTuru; turYaz(t); if (!antetElle) antetRevYaz(antetOnDegeri(t, kartRev)); if (!resimNoElle) resimNoYaz(resimNoOnDegeri(t, kartResimNo)); }} secenekler={MALZEME_TURLERI.map((t) => ({ deger: t, baslik: TUR_ADI[t] }))} />
         <Girdi
           etiket="Dosya" type="file" accept={kabulMetni(tur)} required
           onChange={(e) => { const d = e.target.files?.[0] ?? null; dosyaYaz(d); if (d && ad.trim() === '') adYaz(adindan(d.name)); }}
@@ -157,7 +160,7 @@ function BelgeEkle({ no, kartRev, kapat }: { no: number; kartRev: string | null;
           {...(red ? { hata: red } : {})}
         />
         <Girdi etiket="Belge adı" value={ad} maxLength={120} onChange={(e) => { adYaz(e.target.value); }} />
-        <Girdi etiket="Teknik resim no" value={resimNo} maxLength={60} onChange={(e) => { resimNoYaz(e.target.value); }} ipucu="Kartın teknik resim numarasıyla karşılaştırılır." />
+        <Girdi etiket="Teknik resim no" value={resimNo} maxLength={60} onChange={(e) => { resimNoYaz(e.target.value); resimNoElleYaz(true); }} ipucu="Kartın teknik resim numarasıyla dolu gelir; çizim merkezinde bu numarayla aranır." />
         <Girdi etiket="Revizyon kodu" value={antetRev} maxLength={20} onChange={(e) => { antetRevYaz(e.target.value); antetElleYaz(true); }} ipucu="Resmin antetindeki revizyon; kartın revizyonuyla karşılaştırılır. Boşsa kartın revizyonu gösterilir." />
         <Ilerleme oran={ilerleme} />
         {hata !== null && <p className="tc-cz-hata" role="alert">{hata}</p>}
@@ -223,7 +226,8 @@ function RevizyonYukle({ no, belge, kartRev, kapat }: { no: number; belge: Malze
 // Son revizyon: yayındaki varsa o, yoksa en yenisi (liste sıra azalan gelir).
 const gosterilenRevizyon = (b: MalzemeBelgesi): Revizyon | undefined => b.revizyonlar.find((r) => r.durum === 'yayinda') ?? b.revizyonlar[0];
 
-export function ResimPaneli({ malzemeNo }: { malzemeNo: number }) {
+// `tazele` değişince liste yeniden okunur: kart açılışında seçilen dosyalar kayıttan sonra bu panelin dışından yüklenir (3242).
+export function ResimPaneli({ malzemeNo, tazele = 0 }: { malzemeNo: number; tazele?: number }) {
   const istemci = useQueryClient();
   const { bildir } = useBildirim();
   const { yazar, merkezGorur, yayinlar, atolyeGorur } = useMalzemeResimYetkisi();
@@ -233,6 +237,9 @@ export function ResimPaneli({ malzemeNo }: { malzemeNo: number }) {
     queryKey: anahtarlar.malzemeBelgeleri(malzemeNo),
     queryFn: () => api.get<MalzemeBelgeleriCevabi>(`${kok(malzemeNo)}/belgeler`),
   });
+  useEffect(() => {
+    if (tazele > 0) void istemci.invalidateQueries({ queryKey: anahtarlar.kok });
+  }, [tazele, istemci]);
   const islem = async (belgeId: number, is: () => Promise<unknown>, hataMetni: string) => {
     isleyenYaz(belgeId);
     try {
@@ -339,7 +346,7 @@ export function ResimPaneli({ malzemeNo }: { malzemeNo: number }) {
             )}
           </div>
         )}
-      {acik === 'ekle' && <BelgeEkle no={malzemeNo} kartRev={sorgu.data?.kartRevizyon ?? null} kapat={() => { acikYaz(null); }} />}
+      {acik === 'ekle' && <BelgeEkle no={malzemeNo} kartRev={sorgu.data?.kartRevizyon ?? null} kartResimNo={sorgu.data?.kartResimNo ?? null} kapat={() => { acikYaz(null); }} />}
       {acik !== null && acik !== 'ekle' && <RevizyonYukle no={malzemeNo} belge={acik.revizyon} kartRev={sorgu.data?.kartRevizyon ?? null} kapat={() => { acikYaz(null); }} />}
     </Kart>
   );

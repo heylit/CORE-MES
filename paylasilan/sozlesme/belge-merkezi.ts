@@ -200,6 +200,8 @@ export const malzemeBelgeleriCevabi = z.object({
   kucukResim: kucukResim.nullable(),
   // Kartın revizyonu (mamul ve yarı mamulde); yükleme formunda antet revizyonunun ön değeri (2138-1 a).
   kartRevizyon: z.string().nullable().optional(),
+  // Kartın teknik resim numarası (3242); yükleme formunda teknik resim no'nun ön değeri.
+  kartResimNo: z.string().nullable().optional(),
 });
 
 export const KUCUK_RESIM_AZAMI_KAYIT = 200;

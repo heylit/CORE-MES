@@ -905,6 +905,28 @@ describe('çizim merkezi (gerçek PostgreSQL, gerçek giriş)', () => {
       assert.equal((await malzemeBelgesiEkle(malzemeci, no, 'fotograf', pdf())).statusCode, 400, 'foto belgesine PDF girmez');
     });
 
+    test('CZ-21 (3242): numarasız eklenen teknik resim ve 3B model kartın teknik resim no\'sunu alır, girilen numara geçer, foto almaz; cevap kartın numarasını taşır', async () => {
+      const no = await kartAc({ resim: 'ORN-3242-01', rev: 'B' });
+      let c = await malzemeBelgesiEkle(malzemeci, no, 'teknik-resim', pdf(), { antetRev: 'B' });
+      assert.equal(c.statusCode, 200, c.body);
+      let cevap = c.json<MalzemeBelgeleriCevabi>();
+      assert.equal(cevap.kartResimNo, 'ORN-3242-01');
+      assert.deepEqual([cevap.belgeler[0]?.resimNo, cevap.belgeler[0]?.revizyonlar[0]?.antetRev], ['ORN-3242-01', 'B']);
+      c = await malzemeBelgesiEkle(malzemeci, no, '3b-model', step(), { resimNo: '  ' });
+      cevap = c.json<MalzemeBelgeleriCevabi>();
+      assert.equal(cevap.belgeler.find((b) => b.tur === '3b-model')?.resimNo, 'ORN-3242-01');
+      c = await malzemeBelgesiEkle(malzemeci, no, 'teknik-resim', pdf(), { resimNo: 'ORN-MONTAJ-9' });
+      cevap = c.json<MalzemeBelgeleriCevabi>();
+      assert.ok(cevap.belgeler.some((b) => b.resimNo === 'ORN-MONTAJ-9'), 'girilen numara kartınkinin yerine geçmez');
+      c = await malzemeBelgesiEkle(malzemeci, no, 'fotograf', png());
+      cevap = c.json<MalzemeBelgeleriCevabi>();
+      assert.equal(cevap.belgeler.find((b) => b.tur === 'fotograf')?.resimNo, null, 'fotoğraf numarasız kalır');
+      const bos = await kartAc();
+      c = await malzemeBelgesiEkle(malzemeci, bos, 'teknik-resim', pdf());
+      cevap = c.json<MalzemeBelgeleriCevabi>();
+      assert.deepEqual([cevap.kartResimNo, cevap.belgeler[0]?.resimNo], [null, null], 'kartta numara yoksa boş kalır');
+    });
+
     test('malzeme yazan merkezde yazamaz ve başka kartın belgesine dokunamaz; okuma ucu kart kapsamındadır', async () => {
       const no = await kartAc();
       const baskaNo = await kartAc();
