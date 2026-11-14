@@ -159,13 +159,16 @@ export interface DurumRotaRevizyonu {
   onaylama: string | null;
   yururlugeAlma: string | null;
   geriGondermeNedeni: string | null;
+  rotaId: number;
+  rotaStandart: boolean;
   adimlar: DurumRotaAdimi[];
 }
 
-// malzemeId verilince yalnız o ürünün revizyonları (sayımda tek rotanın statüsü çözülür).
-export async function durumRevizyonlari(db: Db, malzemeId: number | null = null): Promise<DurumRotaRevizyonu[]> {
+// malzemeId verilince yalnız o ürünün revizyonları (sayımda tek rotanın statüsü çözülür). Varsayılan yalnız Standart rotadır (plan ve sayım
+// ürün başına tek rota bilir); Reçete ve Rota çalışma alanı rota sekmeleri için bütün rotaları ister (3247 a).
+export async function durumRevizyonlari(db: Db, malzemeId: number | null = null, tumRotalar = false): Promise<DurumRotaRevizyonu[]> {
   const sonuc: DurumRotaRevizyonu[] = [];
-  const revizyonlar = await s.iptalsizRevizyonlar(db, malzemeId);
+  const revizyonlar = await s.iptalsizRevizyonlar(db, malzemeId, tumRotalar);
   // Planlama çalışması her açılışta bütün revizyonları okur: içerik revizyon başına değil, toplu okunur.
   const icerikler = revizyonlar.length === 0 ? new Map<number, Icerik>() : await s.iceriklerOku(db, revizyonlar.map((r) => r.id));
   for (const r of revizyonlar) {
@@ -173,7 +176,7 @@ export async function durumRevizyonlari(db: Db, malzemeId: number | null = null)
     const onculler = oncullerCikar(icerik.adimlar);
     sonuc.push({
       id: r.id, malzemeId: r.malzemeId, harf: r.harf, durum: r.durum, surum: r.surum, aciklama: r.aciklama, acilma: r.acilma, onaylama: r.onaylama,
-      yururlugeAlma: r.yururlugeAlma, geriGondermeNedeni: r.geriGondermeNedeni,
+      yururlugeAlma: r.yururlugeAlma, geriGondermeNedeni: r.geriGondermeNedeni, rotaId: r.rotaId, rotaStandart: r.rotaStandart,
       adimlar: icerik.adimlar.map((a, i) => ({
         opNo: a.opNo, operasyonTipiId: a.operasyonTipiId, ad: a.ad, kaynak: a.kaynak, terminGun: a.terminGun, ayarSuresiDk: a.ayarSuresiDk,
         birimSureDk: a.birimSureDk, islemSuresiDk: a.islemSuresiDk, degisimSuresiDk: a.degisimSuresiDk, bagimlilik: a.bagimlilik, devirAdedi: a.devirAdedi,

@@ -67,7 +67,7 @@ export function Sureler({ veri, yetki, git, kimlik }: EkranOzellikleri) {
     return durum.items
       .filter((i) => i.type !== 'ham' && rotalar[i.id] !== undefined)
       .sort((a, b) => a.code.localeCompare(b.code, 'tr'))
-      .map((i) => ({ urun: i, rev: revler.find((r) => r.itemId === i.id && r.status === 'yururlukte') ?? null }))
+      .map((i) => ({ urun: i, rev: revler.find((r) => r.itemId === i.id && r.status === 'yururlukte' && r.rotaStandart !== false) ?? null }))
       // Süzgeçte ürün, yürürlükteki revizyonunda (yoksa rotasında) o operasyonun adımı varsa kalır.
       .filter(({ urun, rev }) => !opId || (rev?.data.steps ?? rotalar[urun.id]?.steps ?? []).some((a) => a.opId === opId));
   }, [durum.routes, durum.routeRevs, durum.items, opId]);

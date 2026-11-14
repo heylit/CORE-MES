@@ -74,7 +74,8 @@ export function emirAgaci(emirler: readonly Emir[], uyar: (o: Emir) => boolean):
 export interface EmirAdimi { sira: number; opNo: number; ad: string; opId: string | null; stationId: string | null; durum: 'bekliyor' | 'calisiyor' | 'tamam' | null }
 
 const urunRevizyonlari = (d: Durum, urunId: string) => (d.routeRevs ?? []).filter((r) => r.itemId === urunId);
-export const yururluktekiRevizyon = (d: Durum, urunId: string) => urunRevizyonlari(d, urunId).find((r) => r.status === 'yururlukte') ?? null;
+// Urun duzeyindeki okuma Standart rotadir; emrin kendi revizyonu ise hangi rotada olursa olsun bulunur.
+export const yururluktekiRevizyon = (d: Durum, urunId: string) => urunRevizyonlari(d, urunId).find((r) => r.status === 'yururlukte' && r.rotaStandart !== false) ?? null;
 // Emrin açıldığı revizyon (yürürlükte ya da onaylı): sunucu emri onaylı revizyona da bağlı olabilir.
 export const emirRevizyonu = (d: Durum, o: Emir) =>
   (o.rev === null ? null : urunRevizyonlari(d, o.itemId).find((r) => r.id === o.rev && (r.status === 'yururlukte' || r.status === 'onayli')) ?? null);
@@ -535,7 +536,7 @@ export function emirRotasi(c: Pick<UrunRevizyonlariCevabi, 'rotalar' | 'revizyon
 }
 
 export function yururlukteRevizyonId(d: Pick<DurumCevabi, 'routeRevs'>, urunId: string): number | null {
-  const r = (d.routeRevs ?? []).find((x) => x.itemId === urunId && x.status === 'yururlukte');
+  const r = (d.routeRevs ?? []).find((x) => x.itemId === urunId && x.status === 'yururlukte' && x.rotaStandart !== false);
   return r === undefined ? null : Number(r.id);
 }
 

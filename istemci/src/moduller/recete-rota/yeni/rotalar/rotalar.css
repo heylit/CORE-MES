@@ -69,6 +69,9 @@
 .tc-rr1-rvtab small { font-size: var(--yazi-xs); color: var(--muted); }
 .tc-rr1-rvtab.tc-rr1-on { border-color: var(--ink); background: var(--ink); color: var(--bg); }
 .tc-rr1-rvtab.tc-rr1-on small { color: inherit; }
+/* 3247 a: rota sekmesi üç satırdır (ad, emir türleri, yürürlükteki revizyon); seçili sekmenin altı kalın çizilir. */
+.tc-rr1-rotasekme { padding: var(--b-1) var(--b-2); gap: var(--b-1); text-align: left; }
+.tc-rr1-rotasekme.tc-rr1-cur { border-bottom-width: var(--cizgi-kalin); }
 .tc-rr1-rvchip {
   display: inline-block; font-size: var(--yazi-xs); font-weight: 700; padding: 0 var(--b-1); margin-left: var(--b-1); border-radius: var(--yari-1);
   border: 1px solid var(--edge); color: var(--muted); background: var(--panel-solid);

@@ -41,9 +41,11 @@ describe('2634: önizlemenin ara hâl kartı stok sayımıyla aynı (gerçek Pos
     const m = await o().sahip.tek<{ id: number }>('INSERT INTO makine (kod, ad, istasyon_id) VALUES ($1, $2, $3) RETURNING id', [`AHK-${String(ist!.id)}`, 'Tezgah', ist!.id]);
     return { istasyon: ist!.id, makine: m!.id };
   }
-  async function revizyon(urun: number, harf: string, adimlar: readonly Adim[]): Promise<number> {
+  // rota verilmezse revizyon ürünün Standart rotasına düşer (göç tetiği); yürürlükten kalkan yalnız aynı rotanın revizyonudur (3247 a).
+  async function revizyon(urun: number, harf: string, adimlar: readonly Adim[], rota: number | null = null): Promise<number> {
     const tip = (await o().sahip.tek<{ id: number }>("INSERT INTO istasyonlar_operasyon_tipi (kod, ad, grup) VALUES ($1, 'Torna', 'TAL') RETURNING id", [`AHT${String(++sira)}`]))!.id;
-    const id = (await o().sahip.tek<{ id: number }>("INSERT INTO rota_revizyonu (malzeme_id, malzeme_turu, harf, acan_kisi_id) VALUES ($1, 'mamul', $2, $3) RETURNING id", [urun, harf, yoneticiId]))!.id;
+    const id = (await o().sahip.tek<{ id: number }>(
+      "INSERT INTO rota_revizyonu (malzeme_id, malzeme_turu, harf, acan_kisi_id, rota_id) VALUES ($1, 'mamul', $2, $3, $4) RETURNING id", [urun, harf, yoneticiId, rota]))!.id;
     // Rota modülünün tabloları sayımın ve önizlemenin okuduğu kaynaktır: adım, bileşen (ilk girdi), dal ve birleşen dallar.
     for (const [i, a] of adimlar.entries()) {
       await o().sahip.sorgu('INSERT INTO rota_op_numarasi (malzeme_id, op_no, ilk_revizyon_id) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING', [urun, a.op, id]);
@@ -58,7 +60,7 @@ describe('2634: önizlemenin ara hâl kartı stok sayımıyla aynı (gerçek Pos
     await o().sahip.sorgu("UPDATE rota_revizyonu SET durum = 'onay_bekliyor', gonderen_kisi_id = $2, gonderme = now() WHERE id = $1", [id, yoneticiId]);
     await o().sahip.sorgu("UPDATE rota_revizyonu SET durum = 'onayli', onaylayan_kisi_id = $2, onaylama = now(), dort_gozsuz_onay = true WHERE id = $1", [id, yoneticiId]);
     await o().sahip.sorgu(
-      "UPDATE rota_revizyonu SET durum = 'onayli' WHERE malzeme_id = $1 AND durum = 'yururlukte'", [urun]);
+      "UPDATE rota_revizyonu SET durum = 'onayli' WHERE malzeme_id = $1 AND durum = 'yururlukte' AND rota_id = (SELECT rota_id FROM rota_revizyonu WHERE id = $2)", [urun, id]);
     await o().sahip.sorgu("UPDATE rota_revizyonu SET durum = 'yururlukte', yururluge_alan_kisi_id = $2, yururluge_alma = now() WHERE id = $1", [id, yoneticiId]);
     return id;
   }
@@ -181,5 +183,24 @@ describe('2634: önizlemenin ara hâl kartı stok sayımıyla aynı (gerçek Pos
     const onizleme = await onizlemedekiKart(urun, revB, 10);
     assert.equal(stok.kart, hm1, 'açık emir donmuş revizyonunun girdisini taşır');
     assert.equal(onizleme.kart, hm2, 'önizleme yürürlükteki revizyonu gösterir');
+  });
+
+  test('3247 a: Standart dışı rotayla açılmış emir o rotanın revizyonuyla sayılır; Standart rota yürürlükte kalır', async () => {
+    const [urun, hm1, hm2] = [await kart('mamul'), await yeniKart('hammadde'), await yeniKart('hammadde')];
+    const standart = [{ op: 10, girdi: hm1 }, { op: 20 }] as const;
+    await kur(urun, standart, kartlarOf(standart));
+    const rota = (await o().sahip.tek<{ id: number }>(
+      "INSERT INTO rota_tanimi (malzeme_id, ad, acan_kisi_id) VALUES ($1, 'FAI rotası', $2) RETURNING id", [urun, yoneticiId]))!.id;
+    // FAI rotasında Standart'ta olmayan ara adım (OP 15) var: statüsü ancak emrin kendi rotası okunursa açılır.
+    const fai = [{ op: 10, girdi: hm2 }, { op: 15 }, { op: 20 }] as const;
+    const revFai = await revizyon(urun, 'A', fai, rota);
+    const em = await emirAc(urun, revFai, fai);
+    assert.equal((await stoktakiKart(em, urun, 10)).kart, hm2, 'emir kendi rotasının girdisini taşır');
+    const stok = await stoktakiKart(em, urun, 15);
+    assert.notEqual(stok.statu, null, 'yalnız FAI rotasındaki adımın statüsü emrin rotasından açılır');
+    assert.equal(stok.kart, hm2);
+    assert.deepEqual(await onizlemedekiKart(urun, revFai, 15), stok, 'önizleme FAI revizyonunda aynı kartı ve statüyü verir');
+    const yururlukte = await o().sahip.sorgu<{ rota_id: number }>("SELECT rota_id FROM rota_revizyonu WHERE malzeme_id = $1 AND durum = 'yururlukte' ORDER BY rota_id", [urun]);
+    assert.equal(yururlukte.length, 2, 'iki rotanın yürürlükteki revizyonu birlikte durur');
   });
 });

@@ -218,6 +218,9 @@ export const durumRotaRevizyonSemasi = z.object({
   approvedAt: z.number().nullable(),
   // ROT-3: onaylayanın geri gönderme nedeni; revizyon yeniden onaya gidince boşalır. Önizleme ve örnek veride alan yoktur; yokluğu boşla aynıdır.
   geriGondermeNedeni: z.string().nullable().optional(),
+  // 3247 a: revizyonun rotası; Standart dışı rotanın revizyonu `routes`a girmez, yalnız kendi sekmesinde görünür. Alan yoksa Standart.
+  rotaId: kimlikMetni.optional(),
+  rotaStandart: z.boolean().optional(),
   data: durumRotaSemasi,
 });
 

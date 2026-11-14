@@ -255,7 +255,7 @@ export async function durumVeEmirler(
   const gunler = await takvimGunleri(db);
   const hareketler = stokOkur ? await sonHareketler(db, HAREKET_SAYISI) : null;
   const statuAnahtari = hareketler === null ? new Map<number, string>() : new Map((await sorgular.statuler(db)).map((x) => [x.id, `step:${x.kaynakAdim}`]));
-  const rotaRevizyonlari = rotaOkur ? await durumRevizyonlari(db) : [];
+  const rotaRevizyonlari = rotaOkur ? await durumRevizyonlari(db, null, true) : [];
   const fasonFirmalari = rotaOkur ? await firmaAra(db, { metin: '', sinir: FASON_ARAMA_SINIRI, fason: true }) : null;
   const emirDilimleri = emirOkur ? await fasonTahminiEkle(db, await emirDilimi(db, emirSecimi)) : null;
   const kapanislar = emirDilimleri === null ? null : await kapanisSonuclari(db, emirDilimleri.filter((e) => e.durum === 'bitti').map((e) => e.id));
@@ -369,12 +369,14 @@ async function sayimDurumu(db: Db, malzemeNo: number, revizyonId: number | null 
   const kayit = await sorgular.kayitGetir(db, DURUM_ANAHTARI);
   if (kayit !== null && kayit.bicim !== 'json') return null;
   const kayitliBelge: unknown = kayit === null ? {} : kayit.deger;
-  const revizyonlar = await durumRevizyonlari(db, malzemeNo);
+  // 3247 a: emrin revizyonu Standart dışı bir rotada olabilir; bütün rotalar okunur, emir yoksa yalnız Standart rota sayılır.
+  const revizyonlar = await durumRevizyonlari(db, malzemeNo, true);
   // Kayıt da rota da yoksa okunacak adım yoktur: sayım her adımda bu çözücüyü çağırır, gerisi okunmaz.
   if (kayit === null && revizyonlar.every((r) => r.adimlar.length === 0)) return null;
   const secilen = revizyonId !== null && revizyonlar.some((r) => r.id === revizyonId)
-    ? revizyonlar.map((r) => (r.id === revizyonId ? { ...r, durum: 'yururlukte' as const } : r.durum === 'yururlukte' ? { ...r, durum: 'onayli' as const } : r))
-    : revizyonlar;
+    ? revizyonlar.map((r) => (r.id === revizyonId ? { ...r, durum: 'yururlukte' as const, rotaStandart: true }
+      : r.durum === 'yururlukte' ? { ...r, durum: 'onayli' as const } : r))
+    : revizyonlar.filter((r) => r.rotaStandart);
   const rota = rotaDilimiCevir(secilen, new Map());
   // Bağ, rotası okunan revizyonundur: emrin revizyonu, yoksa yürürlükteki. Taslaktaki bağ yürürlüğe alınana kadar sayıma girmez. Yürürlükte
   // revizyonu olmayan ürünün (rota modülüne geçmemiş yerel rota) bağı tabloya yazılamaz; belge olduğu gibi okunur. Rotalı emir her zaman

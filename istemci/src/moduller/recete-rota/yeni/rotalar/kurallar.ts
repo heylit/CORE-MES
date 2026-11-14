@@ -80,8 +80,10 @@ export const fasonMu = (a: Pick<Adim, 'fasonId' | 'fason' | 'stationId' | 'machi
   (!!a.fasonId || a.fason === true) && !a.stationId && !a.machineId;
 export const girdiOlur = (m: Malzeme | undefined): boolean => !!m && m.girdiOlabilir !== false && m.type !== 'hizmet';
 
-export const revizyonlari = (revler: readonly Revizyon[] | null, urunId: string): Revizyon[] =>
-  (revler ?? []).filter((r) => r.itemId === urunId).sort((a, b) => a.created - b.created);
+// 3247 a: ürünün bir rotasının revizyonları; rota verilmezse Standart rota (alanı olmayan revizyon Standart sayılır). Plan, emir ve öteki
+// görünümler ürün başına tek rota bilir: yalnız Reçete ve Rota'nın rota sekmesi Standart dışı rotayı ister.
+export const revizyonlari = (revler: readonly Revizyon[] | null, urunId: string, rotaId: string | null = null): Revizyon[] =>
+  (revler ?? []).filter((r) => r.itemId === urunId && (rotaId === null ? r.rotaStandart !== false : r.rotaId === rotaId)).sort((a, b) => a.created - b.created);
 export const yururlukteki = (revler: readonly Revizyon[]): Revizyon | null => revler.find((r) => r.status === 'yururlukte') ?? null;
 export const acikRevizyon = (revler: readonly Revizyon[]): Revizyon | null => revler.find((r) => r.status === 'taslak' || r.status === 'onay') ?? null;
 export const acikMi = (d: RevDurumu | null): boolean => d === 'taslak' || d === 'onay';

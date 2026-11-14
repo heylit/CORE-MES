@@ -125,7 +125,11 @@ export const ROTA_KOMUTLARI: Readonly<Record<string, RotaKomutu>> = {
       const tur = secenek(k['tur'], TASLAK_KAYNAKLARI, 'taslak kaynağı');
       return {
         yol: `/rota/urunler/${String(tamSayi(g['urunId'], 'ürün'))}/taslak-ac`,
-        govde: { kaynak: tur === 'revizyon' ? { tur, revizyonId: tamSayi(k['revizyonId'], 'revizyon') } : { tur } },
+        govde: {
+          kaynak: tur === 'revizyon' ? { tur, revizyonId: tamSayi(k['revizyonId'], 'revizyon') } : { tur },
+          // 3247 a: taslağın açılacağı rota; verilmezse Standart.
+          ...(g['rotaId'] === undefined ? {} : { rotaId: tamSayi(g['rotaId'], 'rota') }),
+        },
         tekrarKorumali: true,
       };
     },

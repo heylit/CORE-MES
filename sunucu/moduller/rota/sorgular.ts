@@ -61,11 +61,13 @@ export function urunRevizyonlari(db: Db, malzemeId: number): Promise<RevizyonOze
 
 // Reçete ve Rota'nın bağlı durumu (kart #1184): iptal edilmeyen bütün revizyonlar; içerik ayrıca okunur. Çalışma alanı ve plan bugün
 // ürün başına tek rota bilir: yalnız Standart rotanın revizyonları döner (3247 a; öteki rotalar rota uçlarından okunur).
-export interface DurumRevizyonSatiri extends RevizyonOzeti { malzemeId: number; geriGondermeNedeni: string | null }
-export function iptalsizRevizyonlar(db: Db, malzemeId: number | null = null): Promise<DurumRevizyonSatiri[]> {
+export interface DurumRevizyonSatiri extends RevizyonOzeti { malzemeId: number; geriGondermeNedeni: string | null; rotaStandart: boolean }
+export function iptalsizRevizyonlar(db: Db, malzemeId: number | null = null, tumRotalar = false): Promise<DurumRevizyonSatiri[]> {
   return db.sorgu<DurumRevizyonSatiri>(
-    `SELECT ${OZET}, r.malzeme_id AS "malzemeId", r.geri_gonderme_nedeni AS "geriGondermeNedeni" FROM rota_revizyonu r ${STANDART_ROTA} WHERE r.durum <> 'iptal' AND ($1::int IS NULL OR r.malzeme_id = $1) ORDER BY r.malzeme_id, r.id`,
-    [malzemeId],
+    `SELECT ${OZET}, r.malzeme_id AS "malzemeId", r.geri_gonderme_nedeni AS "geriGondermeNedeni", t.standart AS "rotaStandart"
+       FROM rota_revizyonu r JOIN rota_tanimi t ON t.id = r.rota_id
+      WHERE r.durum <> 'iptal' AND ($1::int IS NULL OR r.malzeme_id = $1) AND ($2 OR t.standart) ORDER BY r.malzeme_id, r.id`,
+    [malzemeId, tumRotalar],
   );
 }
 
