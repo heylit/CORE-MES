@@ -4,7 +4,7 @@ import type {
   FirmaSecenekleriCevabi, KatalogAyarlariCevabi, KatalogKartiKaydetCevabi, KatalogKartiRotasiCevabi, KatalogKartlariCevabi, KatalogSablonlariCevabi,
   KatalogKartiIptalCevabi, KatalogSurumluKayitCevabi, OlcuAletiSecenekleriCevabi,
 } from '#paylasilan/sozlesme/malzemeler.ts';
-import type { AgirlikOzetiCevabi } from '#paylasilan/sozlesme/geometri.ts';
+import type { AgirlikOzetiCevabi, GeometriAnalizCevabi, GeometriModelListeCevabi } from '#paylasilan/sozlesme/geometri.ts';
 import type { KopyaIstegiCevabi, RotaListesiCevabi, SablonlarCevabi } from '#paylasilan/sozlesme/rota.ts';
 import type { MalzemeKgFiyatlariCevabi } from '#paylasilan/sozlesme/satin-alma.ts';
 import type { MalzemeKartBilgileriCevabi } from '#paylasilan/sozlesme/stok.ts';
@@ -28,6 +28,8 @@ export const anahtar = {
   rotaliUrunler: [...MALZEMELER_YENI, 'rotali-urunler'] as const,
   olcuAletleri: [...MALZEMELER_YENI, 'olcu-aletleri'] as const,
   analizAgirligi: (no: number) => [...MALZEMELER_YENI, 'analiz-agirligi', no] as const,
+  modelListesi: (ara: string) => [...MALZEMELER_YENI, 'model-listesi', ara] as const,
+  modelAnalizi: (rev: number) => [...MALZEMELER_YENI, 'model-analizi', rev] as const,
   arsiv: [...MALZEMELER_YENI, 'arsiv'] as const,
 };
 
@@ -228,6 +230,31 @@ export function useAnalizAgirligi(no: number | null, etkin: boolean) {
     enabled: etkin && no !== null,
     staleTime: 60_000,
     queryFn: () => api.get<AgirlikOzetiCevabi>(`/geometri/malzemeler/${String(no)}/agirlik-ozeti`),
+  });
+}
+
+// 3243 a: hammadde sihirbazında modelden öneri. Liste analizi bitmiş 3B modellerdir (3D Atölyesi'nin listesi, geometri.oku);
+// yetkisi olmayan kullanıcıda uç 403 döner ve şerit görünmez.
+export function useModelListesi(ara: string, etkin: boolean) {
+  return useQuery({
+    queryKey: anahtar.modelListesi(ara),
+    enabled: etkin,
+    staleTime: 60_000,
+    retry: false,
+    queryFn: () => {
+      const q = new URLSearchParams({ durum: 'bitti', sayfaBoyu: '50' });
+      if (ara.trim() !== '') q.set('ara', ara.trim());
+      return api.get<GeometriModelListeCevabi>(`/geometri/modeller?${q.toString()}`);
+    },
+  });
+}
+
+export function useModelAnalizi(rev: number | null) {
+  return useQuery({
+    queryKey: anahtar.modelAnalizi(rev ?? 0),
+    enabled: rev !== null,
+    staleTime: 60_000,
+    queryFn: () => api.get<GeometriAnalizCevabi>(`/geometri/analizler/${String(rev)}`),
   });
 }
 
