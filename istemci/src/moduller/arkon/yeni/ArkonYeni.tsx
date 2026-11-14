@@ -6,6 +6,7 @@ import type { ArkonBenCevabi, ArkonRolu, CalismaDevralGovdesi, MakineDevralGovde
 import { bekleyenKayitIletisi } from '../../../../../arkon/web/src/data/bekleyen-kayit.ts';
 import { Dugme, DurumKutusu, Pencere, useBildirim } from '../../../ortak/arayuz/index.ts';
 import { useCerceveSayacYazici } from '../../../ortak/rota/cerceve-sayaclari.ts';
+import { useEkranGorunur } from '../../../ortak/rota/kalici.tsx';
 import { api, hataIletisi } from '../../../ortak/veri/api.ts';
 import { useCikis, useOturum } from '../../../ortak/veri/oturum.ts';
 import { useTema } from '../../../ortak/veri/tema.ts';
@@ -233,8 +234,10 @@ function AcikEkran({ depo, sabitSayfa, islemler, arkonRolu, saltOkunur, onizleme
   const sayacYaz = useCerceveSayacYazici(KOK);
   useEffect(() => { sayacYaz({ kalite: numune > 0 ? numune : null }); }, [sayacYaz, numune]);
   // Ctrl K'nin ve Malzeme Teslim'in "İş emrini aç"ı Üretim Terminali'ne `?emir=&kart=` ile gelir (çerçevedeki gibi): istek operatör
-  // ekranının okuduğu pencereye bırakılır ve adresten silinir, yenilemede yeniden seçmez.
-  const secilecekEmir = adres === 'operator' ? emirParametresiOku(arama.get(EMIR_PARAMETRESI)) : null;
+  // ekranının okuduğu pencereye bırakılır ve adresten silinir, yenilemede yeniden seçmez. Terminal kalıcı rotadır: başka sayfadayken
+  // gizli kurulu kalır ve o sayfanın adresini görür; Adım Durumu da `?emir=` taşır. Gizliyken okursa o sayfanın seçimini silerdi.
+  const ekranGorunur = useEkranGorunur();
+  const secilecekEmir = adres === 'operator' && ekranGorunur ? emirParametresiOku(arama.get(EMIR_PARAMETRESI)) : null;
   useEffect(() => {
     if (secilecekEmir === null) return;
     emirSeciminiGonder(window, secilecekEmir, emirParametresiOku(arama.get(KART_PARAMETRESI)));

@@ -80,7 +80,10 @@ export function sunucuKur(d: Deneme, s: SahteSunucu = {}): Istek[] {
 }
 
 // Testin okuduğu adres: ekranın gezdiği yer.
-function Adres() { return <output data-testid="adres">{useLocation().pathname}</output>; }
+function Adres() {
+  const { pathname, search } = useLocation();
+  return <><output data-testid="adres">{pathname}</output><output data-testid="adres-sorgu">{search}</output></>;
+}
 
 // Sayfalar arası geçiş kabuğun ikinci menü şeridindedir (553 1 a); testte yerine yalın bağlantılar. sayacYaz: kabuğun şeritteki
 // sayılar için verdiği yazıcı.
@@ -93,7 +96,7 @@ export function arkonAc(adres: string, { sayacYaz = null, kalici = false, kabukt
     <QueryClientProvider client={istemci}><BildirimSaglayici><CerceveSayacBaglami.Provider value={sayacYaz}><MemoryRouter initialEntries={[adres]}>
       <nav aria-label="Deneme şeridi">
         {sekmeMaddeleri().map((m) => <Link key={m.anahtar} to={SAYFA_DISI[m.anahtar] ?? sayfaAdresi(m.anahtar)}>{m.baslik}</Link>)}
-        {kabuktaki ? <><Link to="/uretim-terminali">Terminale dön</Link><Link to="/baska-sayfa">Başka sayfaya git</Link></> : null}
+        {kabuktaki ? <><Link to="/uretim-terminali">Terminale dön</Link><Link to="/baska-sayfa">Başka sayfaya git</Link><Link to="/baska-sayfa?emir=42">Başka sayfada emir seç</Link></> : null}
       </nav>
       <Routes>
         {rotalar.map((r) => <Route key={r.yol} path={r.yol} element={kabuktaki && r.kalici === true ? null : kalici
