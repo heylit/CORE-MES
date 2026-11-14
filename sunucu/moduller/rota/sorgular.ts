@@ -725,6 +725,18 @@ export async function operasyonBul(db: Db, malzemeId: number, opNo: number): Pro
 // Ürünün yürürlükteki revizyonundaki operasyonlar: bugünkü OP numarası ve numara defterindeki kayıtlı numara. Başka modül ürün düzeyi
 // verisini bugünkü numarayla gösterir, ekrandan gelen numarayı bununla kimliğe çevirir; kayıtlı numara yalnız kendi satırına yazılır
 // (eski (malzeme, op_no) tetikleyicisi aynı kimliği bulsun diye).
+// Ekrandan (ürün düzeyi uçlardan) gelen OP numarası, rotanın bugün gösterdiği numaradır: önce yürürlükteki revizyonun adımı, yoksa iptal
+// olmayan en yeni revizyonun adımı, o da yoksa numara defteri. Yeniden numaralamadan sonra kayıtlı numara ekrandakinden ayrışır (Risk K1).
+export async function ekrandakiOperasyon(db: Db, malzemeId: number, opNo: number): Promise<OperasyonKimligi | null> {
+  const r = await db.tek<{ id: OperasyonKimligi }>(
+    `SELECT a.operasyon_id AS id FROM rota_adimi a JOIN rota_revizyonu r ON r.id = a.revizyon_id
+      WHERE a.malzeme_id = $1 AND a.op_no = $2 AND r.durum <> 'iptal'
+      ORDER BY r.durum = 'yururlukte' DESC, r.id DESC LIMIT 1`,
+    [malzemeId, opNo],
+  );
+  return r?.id ?? operasyonBul(db, malzemeId, opNo);
+}
+
 export interface YururlukteOperasyon { malzemeId: number; operasyonId: OperasyonKimligi; opNo: number; kayitliOpNo: number }
 export function yururlukteOperasyonlar(db: Db, malzemeIdleri: readonly number[]): Promise<YururlukteOperasyon[]> {
   return db.sorgu(

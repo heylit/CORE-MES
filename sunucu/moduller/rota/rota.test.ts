@@ -915,6 +915,10 @@ describe('rotalar (gerçek PostgreSQL)', () => {
     assert.equal(await adimId(10), ikinci, 'benzetim: talimatlı adım artık OP 10');
     const r = await vt().tx((db) => revizyonGetir(db, id));
     assert.deepEqual(r?.adimlar.map((a) => [a.opNo, a.talimatSurumu]), [[20, null], [10, 1]]);
+    // Risk K1: uç ekrandaki (bugünkü) numarayla gelir; kayıtlı numara defteri değil, yürürlükteki adım belirler.
+    const liste = await tamam<{ surumler: { metin: string }[] }>(c.cam, 'GET', `/rota/urunler/${urun}/talimatlar/10`);
+    assert.deepEqual(liste.surumler.map((x) => x.metin), ['Kalıcı talimat'], 'OP 10 artık talimatlı operasyondur');
+    assert.deepEqual((await tamam<{ surumler: unknown[] }>(c.cam, 'GET', `/rota/urunler/${urun}/talimatlar/20`)).surumler, []);
     const sureler = await tamam<{ adimlar: { adimId: number; olcum: { islem: { sureDk: string } | null } }[] }>(c.planlama, 'GET', `/rota/revizyonlar/${id}/sureler`);
     assert.equal(sureler.adimlar.find((a) => a.adimId === ikinci)?.olcum.islem?.sureDk, '4');
     assert.equal(sureler.adimlar.find((a) => a.adimId !== ikinci)?.olcum.islem ?? null, null);

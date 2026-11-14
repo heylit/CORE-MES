@@ -14,16 +14,16 @@ import type { TalimatAdimiYazisi } from '../kurallar.ts';
 import * as s from '../sorgular.ts';
 import { SARTNAME_YOK, surumAdimlari, talimatAdimlariKur, urunOzetleri } from './ortak.ts';
 
-// Uç OP numarasıyla gelir (aşama 2'ye kadar); içeride her şey operasyonun kimliğiyle (3250 b).
+// Uç ekrandaki OP numarasıyla gelir (aşama 2'ye kadar); içeride her şey operasyonun kimliğiyle (3250 b).
 const opYok = (opNo: number) => dogrulama(`OP ${opNo} bu ürünün hiçbir revizyonunda yok; talimat yazılamaz.`, 'opNo');
 async function yazilacakOperasyon(db: Db, urunId: number, opNo: number): Promise<s.OperasyonKimligi> {
-  const op = (await s.opNoAdimiVarMi(db, urunId, opNo)) ? await s.operasyonBul(db, urunId, opNo) : null;
+  const op = (await s.opNoAdimiVarMi(db, urunId, opNo)) ? await s.ekrandakiOperasyon(db, urunId, opNo) : null;
   if (op === null) throw opYok(opNo);
   return op;
 }
 
 export async function talimatListesi(db: Db, urunId: number, opNo: number): Promise<TalimatlarCevabi> {
-  const op = await s.operasyonBul(db, urunId, opNo);
+  const op = await s.ekrandakiOperasyon(db, urunId, opNo);
   return op === null ? { taslak: null, surumler: [] } : operasyonTalimatlari(db, op);
 }
 
@@ -173,7 +173,7 @@ const TALIMAT_TASLAGI_YOK = 'Bu OP için talimat taslağı yok.';
 const sonYayin = async (db: Db, op: s.OperasyonKimligi): Promise<number | null> => (await s.talimatlar(db, op))[0]?.surum ?? null;
 
 async function taslakAl(db: Db, urunId: number, opNo: number, taslakSurum: number): Promise<{ t: s.TalimatTaslagiSatiri; op: s.OperasyonKimligi }> {
-  const op = await s.operasyonBul(db, urunId, opNo);
+  const op = await s.ekrandakiOperasyon(db, urunId, opNo);
   const t = op === null ? null : await s.talimatTaslagi(db, op, true);
   if (!t || op === null) throw bulunamadi(TALIMAT_TASLAGI_YOK);
   if (t.surum !== taslakSurum) throw eskiSurum();
