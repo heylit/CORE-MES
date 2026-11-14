@@ -409,6 +409,27 @@ describe('stok kuralları (saf)', () => {
     assert.deepEqual([plan.pasifStoklu, plan.koduGecemeyen], [['P1-01-1-1'], []]);
   });
 
+  test('harita eşlemesi (3230 a): silinip aynı adresle yeniden çizilen göz yalnız bağsız, kapalı ve bakiyesiz eski konuma bağlanır', () => {
+    const goz = (id: number, adres: string) => ({ id, adres, salonId: 1, salonKodu: 'ANA', bolme: id, kat: 1, rafAktif: true });
+    const konum = (id: number, kod: string, ek: Record<string, unknown> = {}) =>
+      ({ id, kod, tur: 'raf_gozu', depoId: 9, aktif: false, rafId: null, gozId: null as number | null, alanId: null, satirSayisi: 0, ...ek });
+    const plan = haritaPlani({
+      gozler: [goz(1, 'C-01-1-1'), goz(2, 'C-02-1-1'), goz(3, 'C-03-1-1'), goz(4, 'C-04-1-1'), goz(5, 'C-05-1-1'), goz(6, 'C-06-1-1'), goz(7, 'C-07-1-1')],
+      alanlar: [], depolar: [{ id: 5, kod: 'ANA', salonId: 1, aktif: true }],
+      konumlar: [
+        konum(10, 'C-01-1-1'),
+        // Dokunulmayanlar: bağsız ama açık ve bakiyeli; stok rafına bağlı; başka türde; kapalı ama bakiye satırlı; açık ama bakiyesiz.
+        konum(11, 'C-02-1-1', { aktif: true, satirSayisi: 1 }), konum(12, 'C-03-1-1', { rafId: 7 }), konum(13, 'C-04-1-1', { tur: 'kabul' }),
+        konum(14, 'C-06-1-1', { satirSayisi: 1 }), konum(15, 'C-07-1-1', { aktif: true }),
+      ],
+      kodlar: new Set(['C-01-1-1', 'C-02-1-1', 'C-03-1-1', 'C-04-1-1', 'C-06-1-1', 'C-07-1-1']),
+    });
+    assert.deepEqual(plan.yenidenBagla, [{ id: 10, gozId: 1, depoId: 5, bolme: 1, kat: 1, aktif: true }]);
+    assert.deepEqual(plan.koduGecemeyen, ['C-02-1-1', 'C-03-1-1', 'C-04-1-1', 'C-06-1-1', 'C-07-1-1']);
+    assert.deepEqual(plan.ekle.map((k) => k.kod), ['C-05-1-1']);
+    assert.deepEqual(plan.kapat, [15]);
+  });
+
   test('harita eşlemesi (#1304): fason, ara alan ve hurda depo olmayan bölümde ANA depoya konum olur; kabul olmaz', () => {
     const plan = haritaPlani({
       gozler: [],

@@ -267,6 +267,20 @@ export async function rafBolumDegistir(db: Db, id: number, salonId: number): Pro
   await db.sorgu('UPDATE atolye_raf SET salon_id = $2 WHERE id = $1 AND salon_id <> $2', [id, salonId]);
 }
 
+export function raflarinGozleri(db: Db, rafIdleri: readonly number[]): Promise<{ id: number; rafId: number }[]> {
+  return db.sorgu('SELECT id, raf_id AS "rafId" FROM atolye_goz WHERE raf_id = ANY($1::int[])', [[...rafIdleri]]);
+}
+
+// 3230 a: raf gözleri ve gözlerdeki elle girilmiş kalemlerle birlikte silinir. Göze bağlı stok konumu silinmez: bağı boşalır
+// (stok_konum_atolye_goz_bagi), konumu Stok'un haritadan eşlemesi kapatır.
+export async function raflariSil(db: Db, rafIdleri: readonly number[]): Promise<void> {
+  if (rafIdleri.length === 0) return;
+  const idler = [...rafIdleri];
+  await db.sorgu('DELETE FROM atolye_goz_kalemi k USING atolye_goz g WHERE k.goz_id = g.id AND g.raf_id = ANY($1::int[])', [idler]);
+  await db.sorgu('DELETE FROM atolye_goz WHERE raf_id = ANY($1::int[])', [idler]);
+  await db.sorgu('DELETE FROM atolye_raf WHERE id = ANY($1::int[])', [idler]);
+}
+
 // Göz satırları rafın ölçüsünü izler: dışarıda kalan silinir (bağlı kayıt varsa yabancı anahtar durdurur), eksik eklenir.
 // 3168: yeni göz rafın sıradaki numarasını alır (bölme, göz sütunu, kat sırasıyla); var olanın numarası değişmez, silinenin
 // numarası yeniden verilmez.

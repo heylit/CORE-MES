@@ -160,6 +160,11 @@ export const haritaKonumuAc = (db: Db, k: { depoId: number; kod: string; tur: st
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id`, [k.depoId, k.kod, k.tur, k.bolme, k.kat, k.ad, k.gozId, k.alanId, k.aktif]);
 export const haritaKonumuGuncelle = (db: Db, k: { id: number; kod: string; aktif: boolean }): Promise<unknown[]> =>
   db.sorgu('UPDATE stok_konum SET kod = $2, aktif = $3, surum = surum + 1 WHERE id = $1 RETURNING id', [k.id, k.kod, k.aktif]);
+// 3230 a: yalnız bağsız, kapalı ve bakiyesiz raf gözü konumu yeni göze bağlanır (koşul sorguda da durur).
+export const haritaKonumuYenidenBagla = (db: Db, k: { id: number; gozId: number; depoId: number; bolme: number; kat: number; aktif: boolean }): Promise<unknown[]> =>
+  db.sorgu(`UPDATE stok_konum k SET atolye_goz_id = $2, depo_id = $3, bolme_no = $4, kat_no = $5, aktif = $6, surum = surum + 1
+             WHERE k.id = $1 AND k.tur = 'raf_gozu' AND k.raf_id IS NULL AND k.atolye_goz_id IS NULL AND k.atolye_alan_id IS NULL AND NOT k.aktif
+               AND NOT EXISTS (SELECT 1 FROM stok_bakiye b WHERE b.konum_id = k.id) RETURNING k.id`, [k.id, k.gozId, k.depoId, k.bolme, k.kat, k.aktif]);
 // Stoklu konumun türü değişmez: kullanılabilir stok yalnız taşımayla değişir.
 export const haritaKonumuTuru = (db: Db, k: { id: number; tur: string; depoId: number }): Promise<unknown[]> =>
   db.sorgu(`UPDATE stok_konum k SET tur = $2, depo_id = $3, surum = surum + 1 WHERE k.id = $1
@@ -288,3 +293,19 @@ export const haritaStokluMalzemeleri = async (db: Db, idler: readonly number[] |
   (await db.sorgu<{ id: number }>(`SELECT DISTINCT b.malzeme_id AS id FROM stok_bakiye b JOIN stok_konum k ON k.id = b.konum_id
                                     WHERE k.atolye_goz_id IS NOT NULL AND k.aktif AND b.miktar > 0 AND ($1::int[] IS NULL OR b.malzeme_id = ANY($1::int[]))
                                     ORDER BY 1`, [idler === null ? null : [...idler]])).map((r) => r.id);
+// 3230 a (Risk K2, K5): haritadaki gözlere bağlı konumlarda rafın silinmesini durduran bağ. Bağlı konum satırları işlem sonuna kadar
+// kilitlenir: o konuma yeni bakiye satırı ekleyen yazım konumun anahtar kilidini bekler. Kilit ve denetim ayrı ifadedir: kilit
+// beklenirken onaylanan giriş, denetimin kendi görüntüsünde görünür. malzeme = sıfırdan büyük bakiye; açık iş = bekleyen sayım
+// farkı, süren toplamanın adımı ya da hedefi, yoldaki teslim, sepet satırı.
+export interface GozSilmeEngeli { gozId: number; malzeme: boolean; acikIs: boolean }
+export const gozSilmeEngelleri = async (db: Db, gozIdler: readonly number[]): Promise<GozSilmeEngeli[]> => {
+  await db.sorgu('SELECT id FROM stok_konum WHERE atolye_goz_id = ANY($1::int[]) ORDER BY id FOR UPDATE', [[...gozIdler]]);
+  return db.sorgu(`SELECT k.atolye_goz_id AS "gozId",
+                   EXISTS (SELECT 1 FROM stok_bakiye b WHERE b.konum_id = k.id AND b.miktar > 0) AS malzeme,
+                   (EXISTS (SELECT 1 FROM stok_sayim_farki f WHERE f.konum_id = k.id AND f.durum = 'bekliyor')
+                    OR EXISTS (SELECT 1 FROM stok_toplama_adimi a JOIN stok_toplama t ON t.id = a.toplama_id WHERE a.konum_id = k.id AND t.durum = 'topluyor')
+                    OR EXISTS (SELECT 1 FROM stok_toplama_hedefi h JOIN stok_toplama t ON t.id = h.toplama_id WHERE h.konum_id = k.id AND t.durum = 'topluyor')
+                    OR EXISTS (SELECT 1 FROM stok_teslim t WHERE t.durum = 'yolda' AND (t.kaynak_konum_id = k.id OR t.hedef_konum_id = k.id))
+                    OR EXISTS (SELECT 1 FROM stok_sepet_satiri s WHERE s.kaynak_konum_id = k.id OR s.hedef_konum_id = k.id)) AS "acikIs"
+              FROM stok_konum k WHERE k.atolye_goz_id = ANY($1::int[])`, [[...gozIdler]]);
+};

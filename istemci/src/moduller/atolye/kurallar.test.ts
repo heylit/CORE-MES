@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { Emir } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import type { YerlesimCevabi } from '#paylasilan/sozlesme/atolye.ts';
 import {
-  bulgulariEsle, dondur, gecmisKur, gecmiseYaz, geriAl, govdeyeCevir, guncelle, kaldir, ogeEkle, sonrakiRafKodu, taslakKur, tasi, yinele,
+  bulgulariEsle, dondur, gecmisKur, gecmiseYaz, geriAl, govdeyeCevir, guncelle, kaldir, rafSil, ogeEkle, sonrakiRafKodu, taslakKur, tasi, yinele,
 } from './duzenleyici-durumu.ts';
 import type { GozKalemi } from '#paylasilan/sozlesme/atolye.ts';
 import {
@@ -87,11 +87,14 @@ describe('atolye ekran yardımcıları', () => {
     expect(bulgu[0]?.ogeler).toEqual([t.raflar[0]?.anahtar, 'istasyon:5']);
   });
 
-  it('ATL-13 kayıtlı raf düzenleyicide silinmez, pasife alınır; yeni raf silinir', () => {
+  it('ATL-13 (3230 a) kayıtlı raf kaldir ile pasife alınır, rafSil ile taslaktan çıkar ve kayda girmez; yeni raf silinir', () => {
     let t = taslakKur(YERLESIM);
     const rafAnahtari = t.raflar[0]?.anahtar ?? '';
+    expect(govdeyeCevir(rafSil(t, rafAnahtari)).govde.raflar).toEqual([]);
+    expect(rafSil(t, 'raf:yok')).toEqual(t);
     t = kaldir(t, rafAnahtari);
     expect(t.raflar[0]?.aktif).toBe(false);
+    expect(rafSil(t, rafAnahtari).raflar).toEqual([]);
     const eklendi = ogeEkle(t, 'raf_palet', 20, 12);
     expect(eklendi.taslak.raflar.at(-1)?.kod).toBe('R2');
     expect(kaldir(eklendi.taslak, eklendi.anahtar).raflar).toHaveLength(1);

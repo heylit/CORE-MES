@@ -19,7 +19,7 @@ import { kullaniciYukle, rolAl, rolAta, yoneticiOlustur } from '../kisiler/disar
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
 import { modulAyariDegistir } from '../ayarlar/disari.ts';
-import { depoMalzemeCozucusu, gozBul, istasyonYerleri, rafYenidenNumarala } from './disari.ts';
+import { depoMalzemeCozucusu, gozBul, istasyonYerleri, rafSilmeEngeliCozucusu, rafYenidenNumarala } from './disari.ts';
 import { uclar } from './uclar.ts';
 
 const PAROLA = 'dogru-parola-1';
@@ -658,20 +658,76 @@ describe('atolye (gerçek PostgreSQL)', () => {
     }
   });
 
-  test('ATL-13 raf silinmez, pasife alınır; pasif raf aramada çıkmaz; veritabanı da silmeyi reddeder', async () => {
+  test('ATL-13 (3230 a) boş raf gözleri ve kalemleriyle silinir, deftere düşer; malzemeli ya da açık işli raf silinmez; pasif raf aramada çıkmaz; yetkisiz silemez', async () => {
     const s = await salonKur();
-    const kod = yeniKod('P');
-    const c = await kaydet(s.id, bosYerlesim(s, { raflar: [raf({ kod })] }));
-    const rafId = c.govde.raflar[0]?.id ?? 0;
-    assert.deepEqual(ihlalKurallari(await kaydet(s.id, bosYerlesim({ ...s, surum: s.surum + 1 }))), ['ATL-13']);
-    assert.equal((await oku<AramaCevabi>(`/atolye/arama?metin=${kod}`)).govde.sonuclar.length, 1);
-    const pasif = await kaydet(s.id, bosYerlesim({ ...s, surum: s.surum + 1 }, { raflar: [raf({ id: rafId, kod, aktif: false })] }));
-    assert.equal(pasif.durum, 200);
-    assert.equal(pasif.govde.raflar[0]?.aktif, false);
-    assert.equal((await oku<AramaCevabi>(`/atolye/arama?metin=${kod}`)).govde.sonuclar.length, 0);
+    const kod = yeniKod('P'), kalanKod = yeniKod('P');
+    const c = await kaydet(s.id, bosYerlesim(s, { raflar: [raf({ kod }), raf({ kod: kalanKod, z: 12 })] }));
+    assert.equal(c.durum, 200, JSON.stringify(c.govde));
+    const rafId = c.govde.raflar.find((r) => r.kod === kod)?.id ?? 0;
+    const kalan = c.govde.raflar.find((r) => r.kod === kalanKod)!;
+    const kalanRaf = raf({ id: kalan.id, kod: kalanKod, z: 12 });
+    const gozler = (await vt().sorgu<{ id: number }>('SELECT id FROM atolye_goz WHERE raf_id = $1 ORDER BY id', [rafId])).map((g) => g.id);
+    assert.equal(gozler.length, 24);
+    const kalem = await yaz('/atolye/goz-kalemleri/yaz', { gozId: gozler[0], kod: 'ORN-KALEM', ad: 'Örnek kalem', doluluk: 50 });
+    assert.equal(kalem.durum, 200, JSON.stringify(kalem.govde));
+    const silen = (surum: number) => bosYerlesim({ ...s, surum }, { raflar: [kalanRaf] });
+
+    // Stok bağı engeli: çözücü yalnız silinecek rafın gözleriyle çağrılır; ileti malzeme adı ya da miktarı taşımaz.
+    const sorulan: number[][] = [];
+    let engel: 'malzeme' | 'acik-is' = 'malzeme';
+    rafSilmeEngeliCozucusu(async (_db, idler) => { sorulan.push([...idler].sort((a, b) => a - b)); return [{ gozId: gozler[3]!, engel }]; });
+    try {
+      const malzemeli = await kaydet(s.id, silen(s.surum + 1));
+      assert.equal(malzemeli.durum, 422);
+      assert.deepEqual((malzemeli.govde.ayrinti as IhlalAyrintisi).ihlaller.map((i) => [i.kural, i.mesaj]),
+        [['ATL-13', `Raf ${kod} silinemez: rafta malzeme var; önce başka rafa taşıyın ya da rafı pasife alın.`]]);
+      assert.deepEqual(sorulan, [gozler]);
+      engel = 'acik-is';
+      const isli = await kaydet(s.id, silen(s.surum + 1));
+      assert.match((isli.govde.ayrinti as IhlalAyrintisi).ihlaller[0]?.mesaj ?? '', /silinemez: rafta açık iş var/);
+      assert.equal((await vt().sorgu('SELECT 1 FROM atolye_raf WHERE id = $1', [rafId])).length, 1, 'reddedilen kayıt rafı silmez');
+      // Engelli raf pasife alınabilir; pasif raf aramada çıkmaz.
+      assert.equal((await oku<AramaCevabi>(`/atolye/arama?metin=${kod}`)).govde.sonuclar.length, 1);
+      const pasif = await kaydet(s.id, bosYerlesim({ ...s, surum: s.surum + 1 }, { raflar: [raf({ id: rafId, kod, aktif: false }), kalanRaf] }));
+      assert.equal(pasif.durum, 200, JSON.stringify(pasif.govde));
+      assert.equal(pasif.govde.raflar.find((r) => r.id === rafId)?.aktif, false);
+      assert.equal((await oku<AramaCevabi>(`/atolye/arama?metin=${kod}`)).govde.sonuclar.length, 0);
+      // Yerleşim yetkisi olmayan silemez (Risk K7).
+      assert.equal((await kaydet(s.id, silen(s.surum + 2), operator)).durum, 403);
+      assert.equal((await kaydet(s.id, silen(s.surum + 2), '')).durum, 401);
+    } finally {
+      rafSilmeEngeliCozucusu(async () => []);
+    }
+
+    const silindi = await kaydet(s.id, silen(s.surum + 2));
+    assert.equal(silindi.durum, 200, JSON.stringify(silindi.govde));
+    assert.deepEqual(silindi.govde.raflar.map((r) => r.id), [kalan.id]);
+    assert.equal((await vt().sorgu('SELECT 1 FROM atolye_raf WHERE id = $1', [rafId])).length, 0);
+    assert.equal((await vt().sorgu('SELECT 1 FROM atolye_goz WHERE id = ANY($1::int[])', [gozler])).length, 0);
+    assert.equal((await vt().sorgu('SELECT 1 FROM atolye_goz_kalemi WHERE goz_id = ANY($1::int[])', [gozler])).length, 0);
+    assert.equal((await vt().sorgu('SELECT 1 FROM atolye_goz WHERE raf_id = $1', [kalan.id])).length, 24, 'kalan rafın gözlerine dokunulmaz');
+    // Risk K3: silinen raf değişiklik defterinde, silen kişiyle.
+    const defter = await ortam!.sahip.sorgu<{ islem: string; kisi: number | null; kod: string }>(
+      `SELECT islem, kisi_id AS kisi, alanlar->'kod'->>'eski' AS kod FROM denetim_degisiklik WHERE tablo = 'atolye_raf' AND anahtar = jsonb_build_object('id', $1::int)`, [rafId]);
+    assert.deepEqual(defter.map((d) => [d.islem, d.kod, d.kisi !== null]), [['sil', kod, true]]);
+    const kalemDefteri = await ortam!.sahip.sorgu<{ islem: string; kod: string }>(
+      `SELECT islem, alanlar->'kod'->>'eski' AS kod FROM denetim_degisiklik WHERE tablo = 'atolye_goz_kalemi' AND (alanlar->'goz_id'->>'eski')::int = $1`, [gozler[0]]);
+    assert.deepEqual(kalemDefteri.map((d) => [d.islem, d.kod]), [['sil', 'ORN-KALEM']]);
+    // Risk N2: stok çözücüsü bağlı değilken raf denetimsiz silinmez.
+    rafSilmeEngeliCozucusu(null);
+    try {
+      const bagsiz = await kaydet(s.id, bosYerlesim({ ...s, surum: s.surum + 3 }));
+      assert.deepEqual((bagsiz.govde.ayrinti as IhlalAyrintisi).ihlaller.map((i) => i.mesaj), [`Raf ${kalanKod} silinemez: raftaki stok denetlenemedi.`]);
+    } finally {
+      rafSilmeEngeliCozucusu(async () => []);
+    }
+    // Silinen rafın kodu yeniden kullanılabilir.
+    const yeniden = await kaydet(s.id, bosYerlesim({ ...s, surum: s.surum + 3 }, { raflar: [kalanRaf, raf({ kod })] }));
+    assert.equal(yeniden.durum, 200, JSON.stringify(yeniden.govde));
+    // Salon yine silinmez.
     await assert.rejects(
-      vt().sorgu('DELETE FROM atolye_raf WHERE id = $1', [rafId]),
-      (h: { constraint?: string }) => h.constraint === 'atolye_raf_silinmez',
+      vt().sorgu('DELETE FROM atolye_salon WHERE id = $1', [s.id]),
+      (h: { constraint?: string }) => h.constraint === 'atolye_salon_silinmez',
     );
   });
 
@@ -1216,9 +1272,15 @@ describe('atolye (gerçek PostgreSQL)', () => {
     ]);
     assert.equal(ikiYer.durum, 422);
     assert.ok(ihlalKurallari(ikiYer).includes('ATL-32'));
-    const kayip = await fabrikaKaydet([govde(A), govde(B)]);
-    assert.equal(kayip.durum, 422);
-    assert.ok(ihlalKurallari(kayip).includes('ATL-13'));
+    // 3230 a: kayıttaki bölümün rafı hiçbir bölümde değilse silinir; malzemeli raf silinmez.
+    rafSilmeEngeliCozucusu(async (_db, gozler) => gozler.slice(0, 1).map((gozId) => ({ gozId, engel: 'malzeme' as const })));
+    try {
+      const kayip = await fabrikaKaydet([govde(A), govde(B)]);
+      assert.equal(kayip.durum, 422);
+      assert.ok(ihlalKurallari(kayip).includes('ATL-13'));
+    } finally {
+      rafSilmeEngeliCozucusu(async () => []);
+    }
 
     // Taşıma: raf (gözü ve kalemiyle) ve istasyon A'dan B'ye, B fabrika planında A'nın altına ve 90° dönük.
     // 90° dönük bölüm sol üst köşesi çevresinde döner: x aralığı [x - derinlik, x].

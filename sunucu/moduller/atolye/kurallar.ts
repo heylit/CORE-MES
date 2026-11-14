@@ -274,6 +274,16 @@ export interface IstasyonBilgisi {
   aktif: boolean;
 }
 
+// ATL-13 (3230 a): rafın silinmesini durduran nedenler. Malzeme adı ve miktarı iletiye girmez (stok yetkisi olmayan da görür).
+export type RafSilmeEngeli = 'malzeme' | 'acik-is';
+const RAF_SILME_ENGELI: Record<RafSilmeEngeli, string> = {
+  malzeme: 'rafta malzeme var; önce başka rafa taşıyın ya da rafı pasife alın',
+  'acik-is': 'rafta açık iş var (sayım farkı, toplama, teslim ya da sepet); önce kapatın ya da rafı pasife alın',
+};
+export const rafSilmeNedeni = (engeller: readonly RafSilmeEngeli[]): string =>
+  RAF_SILME_ENGELI[engeller.includes('malzeme') ? 'malzeme' : 'acik-is'];
+const rafSilinemezIletisi = (kod: string, neden: string): string => `Raf ${kod} silinemez: ${neden}.`;
+
 export interface DenetimBaglami {
   // Kayıttaki istasyonların istasyonlar modülündeki karşılığı; olmayan istasyon haritada yoktur.
   istasyonlar: ReadonlyMap<number, IstasyonBilgisi>;
@@ -281,8 +291,10 @@ export interface DenetimBaglami {
   yerlesikIstasyonlar: ReadonlySet<number>;
   // Başka salonda yeri olan istasyonlar (istasyon kimliği -> salon kodu): bir istasyonun tek yeri vardır (ATL-04).
   baskaSalondakiler: ReadonlyMap<number, string>;
-  // Bu salonun kayıtlı rafları: raf silinmez (ATL-13).
+  // Bu salonun kayıtlı rafları: kayıtta olmayan raf silinir (ATL-13).
   salonRaflari: readonly { id: number; kod: string }[];
+  // Silinemeyen raflar (raf kimliği -> neden): malzemesi ya da açık işi olan raf silinmez (ATL-13, 3230 a).
+  silinemeyenRaflar?: ReadonlyMap<number, string>;
   // Kayıtta geçen modeller (kimlik -> yüklemesi tamam mı); bulunmayan model haritada yoktur (ATL-24).
   modeller?: ReadonlyMap<number, boolean>;
   // Kayıttaki makinelerin istasyonlar modülündeki karşılığı, bu salonda zaten yeri olanlar ve başka salonda yeri
@@ -403,11 +415,12 @@ export function yerlesimiDenetle(k: YerlesimKaydi, b: DenetimBaglami): DenetimSo
     for (const m of rafNetOlcuIhlalleri(r)) ihlal('ATL-33', `Raf ${r.kod}: ${m}`, [`raf:${i}`]);
   });
 
-  // ATL-13: raf silinmez; bu salonun her rafı kayıtta olmalıdır, başka salonun rafı buraya gelmez.
+  // ATL-13 (3230 a): kayıtta olmayan raf silinir; malzemesi ya da açık işi olan raf silinmez. Başka salonun rafı buraya gelmez.
   const gelenIdler = new Set(k.raflar.flatMap((r) => (r.id === null ? [] : [r.id])));
   const salonIdleri = new Set(b.salonRaflari.map((r) => r.id));
   for (const r of b.salonRaflari) {
-    if (!gelenIdler.has(r.id)) ihlal('ATL-13', `Raf ${r.kod} silinemez; pasife alın.`, []);
+    const neden = gelenIdler.has(r.id) ? undefined : b.silinemeyenRaflar?.get(r.id);
+    if (neden !== undefined) ihlal('ATL-13', rafSilinemezIletisi(r.kod, neden), []);
   }
   k.raflar.forEach((r, i) => {
     if (r.id !== null && !salonIdleri.has(r.id)) ihlal('ATL-13', `Raf ${r.kod} bu salonda kayıtlı değil.`, [`raf:${i}`]);
@@ -986,6 +999,8 @@ export interface FabrikaBaglami {
   disaridakiMakineler?: ReadonlyMap<number, string>;
   // Kayıtta olmayan bölümler (çakışma denetimi için kayıtlı yerleriyle).
   digerBolumler: readonly FabrikaBolumu[];
+  // Silinemeyen raflar (raf kimliği -> neden); ATL-13.
+  silinemeyenRaflar?: ReadonlyMap<number, string>;
 }
 
 // Fabrika kaydının bölümler arası kuralları (bölüm içi kurallar her bölümde ayrıca denetlenir):
@@ -1031,7 +1046,8 @@ export function fabrikaDenetle(
     });
   }
   for (const [id, r] of b.kayittakiRaflar) {
-    if (!rafBolumu.has(id)) ihlal('ATL-13', `Raf ${r.kod} silinemez; pasife alın.`, [`bolum:${r.salonId}`]);
+    const neden = rafBolumu.has(id) ? undefined : b.silinemeyenRaflar?.get(id);
+    if (neden !== undefined) ihlal('ATL-13', rafSilinemezIletisi(r.kod, neden), [`bolum:${r.salonId}`]);
   }
   return ihlaller;
 }

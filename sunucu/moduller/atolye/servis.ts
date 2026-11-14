@@ -21,7 +21,8 @@ import {
   GOZ_SAYFA_BOYU, ODA_TURLERI, adresCoz, bolumCakismalari, fabrikaDenetle, fabrikaKonumuYuvarla, krokiHizalamaYuvarla, pdfBasligiGecerliMi, gozDolulukIhlali, aramaSirala, base64Coz, donusIndirge, beklenenParcaBoyu, duvarKutusu, glbBasligiGecerliMi, gozKodu, DUZ_RAF_KODU, rafDuzMu, hucreAdi,
   hucreKutusu, izgaraAdlari, modelParcaSayisi, odaDuvarlari, rafKutusu, rotaBul, rotaNoktasiIhlali, surumGuncelMi, yerlesimiDenetle, yerlesimiYuvarla,
 } from './kurallar.ts';
-import type { AramaAdayi, FabrikaBolumu, Kutu, MakineBilgisi, SalonOlcusu } from './kurallar.ts';
+import type { AramaAdayi, FabrikaBolumu, Kutu, MakineBilgisi, RafSilmeEngeli, SalonOlcusu } from './kurallar.ts';
+import { rafSilmeNedeni } from './kurallar.ts';
 import { bolumAcildiBildir } from './olaylar.ts';
 import * as sorgular from './sorgular.ts';
 import type { AlanSatiri, GozKalemiSatiri, KrokiKapsami, KrokiSatiri, ModelSatiri, RafSatiri, SalonSatiri } from './sorgular.ts';
@@ -36,6 +37,28 @@ export function makineModelTuruCozucusuKaydet(cozucu: MakineModelTuruCozucusu): 
 export type DepoMalzemeCozucusu = (db: Db, malzemeNolari: readonly number[] | null) => Promise<readonly number[]>;
 let depoMalzemeCozucusu: DepoMalzemeCozucusu | null = null;
 export function depoMalzemeCozucusuKaydet(cozucu: DepoMalzemeCozucusu): void { depoMalzemeCozucusu = cozucu; }
+
+// 3230 a: rafın gözlerinde silmeyi durduran stok bağı (malzeme ya da açık iş); bağ kablolama.ts'te kurulur (atölye stok'u ithal
+// edemez, döngü). Çözücü bağlı stok konumlarını işlem sonuna kadar kilitler: denetimle silme arasında o gözlere giriş yapılamaz.
+// Kurulmamışsa stok bağı bilinemez: raf silinmez (denetimsiz silme olmaz).
+export type RafSilmeEngeliCozucusu = (db: Db, gozIdleri: readonly number[]) => Promise<readonly { gozId: number; engel: RafSilmeEngeli }[]>;
+let rafSilmeEngeliCozucusu: RafSilmeEngeliCozucusu | null = null;
+export function rafSilmeEngeliCozucusuKaydet(cozucu: RafSilmeEngeliCozucusu | null): void { rafSilmeEngeliCozucusu = cozucu; }
+
+// Kayıtta kalmayan rafların silinemeyenleri (raf kimliği -> neden).
+async function silinemeyenRaflar(db: Db, silinecek: readonly number[]): Promise<Map<number, string>> {
+  const sonuc = new Map<number, string>();
+  if (silinecek.length === 0) return sonuc;
+  if (rafSilmeEngeliCozucusu === null) return new Map(silinecek.map((id) => [id, 'raftaki stok denetlenemedi']));
+  const gozRafi = new Map((await sorgular.raflarinGozleri(db, silinecek)).map((g) => [g.id, g.rafId]));
+  const engeller = new Map<number, RafSilmeEngeli[]>();
+  for (const e of await rafSilmeEngeliCozucusu(db, [...gozRafi.keys()])) {
+    const rafId = gozRafi.get(e.gozId);
+    if (rafId !== undefined) engeller.set(rafId, [...(engeller.get(rafId) ?? []), e.engel]);
+  }
+  for (const [rafId, liste] of engeller) sonuc.set(rafId, rafSilmeNedeni(liste));
+  return sonuc;
+}
 
 const SALON_YOK = 'Salon bulunamadı.';
 const RAF_YOK = 'Raf bulunamadı.';
@@ -240,11 +263,14 @@ export async function yerlesimKaydet(db: Db, salonId: number, gelen: YerlesimKay
   const baskaRafKodlari = await sorgular.baskaSalondakiRafKodlari(db, salonId, kayit.raflar.map((r) => r.kod));
   const modeller = modelIdleri.length ? await sorgular.modelleriBul(db, modelIdleri) : [] as ModelSatiri[];
   if (baskaRafKodlari.length > 0) throw cakisma(RAF_KODU_KULLANILIYOR(baskaRafKodlari.join(', ')));
+  const kalanRaflar = new Set(kayit.raflar.flatMap((r) => (r.id === null ? [] : [r.id])));
+  const silinecekRaflar = salonRaflari.filter((r) => !kalanRaflar.has(r.id)).map((r) => r.id);
   const denetim = yerlesimiDenetle(kayit, {
     istasyonlar: new Map(istasyonlar.map((i) => [i.id, { id: i.id, kod: i.kod, aktif: i.aktif }])),
     yerlesikIstasyonlar: new Set(yerlesikler.map((y) => y.istasyonId)),
     baskaSalondakiler: new Map(baskaSalondakiler.map((b) => [b.istasyonId, b.salonKod])),
     salonRaflari: salonRaflari.map((r) => ({ id: r.id, kod: r.kod })),
+    silinemeyenRaflar: await silinemeyenRaflar(db, silinecekRaflar),
     modeller: new Map(modeller.map((m) => [m.id, m.tamam])),
     makineler: new Map([...makineler].map(([id, m]) => [id, makineBilgisi(m)])),
     yerlesikMakineler: new Set(yerlesikMakineler.map((y) => y.makineId)),
@@ -270,6 +296,7 @@ export async function yerlesimKaydet(db: Db, salonId: number, gelen: YerlesimKay
     if ((await sorgular.makineYerleriniYaz(db, salonId, kayit.makineYerleri)) !== kayit.makineYerleri.length) {
       throw cakisma(MAKINE_BASKA_BOLUMDE);
     }
+    await sorgular.raflariSil(db, silinecekRaflar);
     await bolumIcerigiYaz(db, salonId, kayit, new Map(salonRaflari.map((r) => [r.id, r])));
   });
   return { ...(await yerlesim(db, salonId)), uyarilar: denetim.uyarilar };
@@ -473,6 +500,9 @@ export async function fabrikaKaydet(db: Db, k: FabrikaKaydi, kisiId: number): Pr
   const modeller = modelIdleri.length ? await sorgular.modelleriBul(db, modelIdleri) : [] as ModelSatiri[];
   const salonKodu = new Map(tumSalonlar.map((s) => [s.id, s.kod]));
   const kayittakiRaflar = new Map(tumRaflar.filter((r) => kayitta.has(r.salonId)).map((r) => [r.id, { salonId: r.salonId, kod: r.kod }]));
+  const kalanRaflar = new Set(kayitlar.flatMap((x) => x.kayit.raflar.flatMap((r) => (r.id === null ? [] : [r.id]))));
+  const silinecekRaflar = [...kayittakiRaflar.keys()].filter((id) => !kalanRaflar.has(id));
+  const silinemeyen = await silinemeyenRaflar(db, silinecekRaflar);
   const ihlaller: Bulgu[] = fabrikaDenetle(
     kayitlar.map(({ salonId, konum, kayit }) => ({
       salonId, kod: kayit.salon.kod, olcu: { genislik: kayit.salon.genislik, derinlik: kayit.salon.derinlik }, konum,
@@ -481,6 +511,7 @@ export async function fabrikaKaydet(db: Db, k: FabrikaKaydi, kisiId: number): Pr
     })),
     {
       kayittakiRaflar,
+      silinemeyenRaflar: silinemeyen,
       disaridakiRafKodlari: new Set(tumRaflar.filter((r) => !kayitta.has(r.salonId)).map((r) => r.kod)),
       disaridakiIstasyonlar: new Map(tumYerler.filter((y) => !kayitta.has(y.salonId)).map((y) => [y.istasyonId, salonKodu.get(y.salonId) ?? '?'])),
       disaridakiMakineler: new Map(tumMakineYerleri.filter((y) => !kayitta.has(y.salonId)).map((y) => [y.makineId, salonKodu.get(y.salonId) ?? '?'])),
@@ -534,6 +565,7 @@ export async function fabrikaKaydet(db: Db, k: FabrikaKaydi, kisiId: number): Pr
     for (const { salonId, kayit } of kayitlar) {
       if ((await sorgular.makineYerleriniYaz(db, salonId, kayit.makineYerleri)) !== kayit.makineYerleri.length) throw cakisma(MAKINE_BASKA_BOLUMDE);
     }
+    await sorgular.raflariSil(db, silinecekRaflar);
     // Alan başka bölüme geçebilir: bir bölümün silmesi öteki bölümün listesindeki alanı silmez.
     for (const { salonId, kayit } of kayitlar) {
       const korunan = kayitlar.filter((x) => x.salonId !== salonId).flatMap((x) => x.kayit.alanlar.flatMap((a) => (a.id === null ? [] : [a.id])));

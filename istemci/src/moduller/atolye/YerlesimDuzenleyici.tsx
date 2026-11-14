@@ -7,11 +7,12 @@ import type { Istasyon, IstasyonTipi, IstasyonlarCevabi, Makine, MakinelerCevabi
 import type { HaritaEslemeCevabi } from '#paylasilan/sozlesme/stok.ts';
 import { Dugme, Girdi, IsaretKutusu, OnayPenceresi, Pencere, Secim, Simge, useBildirim, type KoduDegisenYer } from '../../ortak/arayuz/index.ts';
 import { ApiHatasi, api, hataIletisi } from '../../ortak/veri/api.ts';
+import { RafSilmePenceresi } from './RafSilmePenceresi.tsx';
 import { useOturum } from '../../ortak/veri/oturum.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import {
   PALET_GRUPLARI, bulgulariEsle, dondur, duvarUcuTasi, eksenKutusu, fabrikaGovdesi, fabrikaTaslagiKur, gecmisKur, gecmiseYaz, gecmisiDegistir, geriAl,
-  bolumYapistir, bolumunu, govdeyeCevir, ortakDuvarAc, guncelle, istasyonCiz, istasyonEkle, izgarayaOtur, kaldir, kapsamKutusu, konumu, makineCiz, makineEkle, ogeCiz, ogeEkle, taslakKur, tasi, yinele,
+  bolumYapistir, bolumunu, govdeyeCevir, ortakDuvarAc, guncelle, istasyonCiz, istasyonEkle, izgarayaOtur, kaldir, rafSil, kapsamKutusu, konumu, makineCiz, makineEkle, ogeCiz, ogeEkle, taslakKur, tasi, yinele,
 } from './duzenleyici-durumu.ts';
 import { bolumeCevir, fabrikayaCevir, konumOku } from './fabrika.ts';
 import type { EklenecekTur, Gecmis, Taslak } from './duzenleyici-durumu.ts';
@@ -670,6 +671,19 @@ export function YerlesimDuzenleyici({ salonId, bolumler, kapat, kaydedildi }: Oz
     yaz(kaldir(t, secili));
     seciliYaz(null);
   };
+  // 3230 a: kayıtlı raf (aktif ya da pasif) onay penceresiyle silinir; "Pasife al" yanında kalır.
+  const [silinecekRaf, silinecekRafYaz] = useState<string | null>(null);
+  const kayitliRaf = secili && dokunulur(secili) ? t.raflar.find((r) => r.anahtar === secili && r.id !== null) ?? null : null;
+  const silinecek = silinecekRaf === null ? null : t.raflar.find((r) => r.anahtar === silinecekRaf && r.id !== null) ?? null;
+  const rafSilOnayla = () => {
+    if (!silinecek) return;
+    const geriGetir = () => gecmisYaz((g) => (
+      g.simdi.raflar.some((r) => r.anahtar === silinecek.anahtar) ? g : gecmiseYaz(g, { ...g.simdi, raflar: [...g.simdi.raflar, silinecek] })));
+    yaz(rafSil(t, silinecek.anahtar));
+    if (secili === silinecek.anahtar) seciliYaz(null);
+    silinecekRafYaz(null);
+    bildir('tamam', `Raf ${silinecek.kod} silindi.`, { eylem: { etiket: 'Geri al', yap: geriGetir } });
+  };
 
   // Klavye: sil, ok tuşlarıyla ızgara adımı kadar kaydır, R ile döndür, Ctrl+Z / Ctrl+Y.
   const tus = (o: ReactKeyboardEvent) => {
@@ -677,7 +691,7 @@ export function YerlesimDuzenleyici({ salonId, bolumler, kapat, kaydedildi }: Oz
     if ((o.ctrlKey || o.metaKey) && o.key.toLowerCase() === 'z') { o.preventDefault(); gecmisYaz(o.shiftKey ? yinele : geriAl); return; }
     if ((o.ctrlKey || o.metaKey) && o.key.toLowerCase() === 'y') { o.preventDefault(); gecmisYaz(yinele); return; }
     if (!secili) return;
-    if (o.key === 'Delete' || o.key === 'Backspace') { o.preventDefault(); sil(); return; }
+    if (o.key === 'Delete' || o.key === 'Backspace') { o.preventDefault(); if (kayitliRaf) silinecekRafYaz(kayitliRaf.anahtar); else sil(); return; }
     if (o.key.toLowerCase() === 'r') { o.preventDefault(); yaz(dondur(t, secili, o.shiftKey ? -aci : aci)); return; }
     const yon: Record<string, [number, number]> = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] };
     const y = yon[o.key];
@@ -810,12 +824,17 @@ export function YerlesimDuzenleyici({ salonId, bolumler, kapat, kaydedildi }: Oz
           <Dugme simge="zin" aria-label="Yakınlaş" onClick={() => yakinlas(0.8)} />
           <Dugme simge="fit" aria-label="Sığdır" onClick={() => kutuYaz(sigdir(t))} />
         </div>
-        {secili && !secili.startsWith('giris') && !secili.startsWith('gecis') && (
-          <Dugme simge="rotate" onClick={() => yaz(dondur(t, secili, aci))}>{aci}°</Dugme>
-        )}
-        {silme && (
-          <Dugme tur="tehlike" simge={silme.pasif ? 'minus' : 'trash'} title="Delete" onClick={sil}>{silme.pasif ? 'Pasife al' : 'Sil'}</Dugme>
-        )}
+        <div className="tc-atolye-duzen-grup tc-atolye-duzen-secili">
+          {secili && !secili.startsWith('giris') && !secili.startsWith('gecis') && (
+            <Dugme simge="rotate" onClick={() => yaz(dondur(t, secili, aci))}>{aci}°</Dugme>
+          )}
+          {silme && (
+            silme.pasif
+              ? <Dugme simge="minus" onClick={sil}>Pasife al</Dugme>
+              : <Dugme tur="tehlike" simge="trash" title="Delete" onClick={sil}>Sil</Dugme>
+          )}
+          {kayitliRaf && <Dugme tur="tehlike" simge="trash" title="Delete" onClick={() => silinecekRafYaz(kayitliRaf.anahtar)}>Sil</Dugme>}
+        </div>
         {!yalnizRaf && <Dugme simge="cube" onClick={() => kutuphaneYaz(true)}>3B modeller</Dugme>}
         <div className="tc-atolye-duzen-sag">
           {bulgular.ihlaller.length > 0 && (
@@ -1005,6 +1024,7 @@ export function YerlesimDuzenleyici({ salonId, bolumler, kapat, kaydedildi }: Oz
             degistir={(anahtar, degisim) => yaz(guncelle(t, anahtar, degisim))}
             salonDegistir={(degisim) => yaz({ ...t, salon: { ...t.salon, ...degisim } })}
             kaldir={(anahtar) => { yaz(kaldir(t, anahtar)); seciliYaz(null); }}
+            rafSil={silinecekRafYaz}
             modeller={modeller.data?.modeller ?? []}
             kutuphaneAc={() => kutuphaneYaz(true)}
             merkezModelleri={merkezModelleri}
@@ -1041,6 +1061,14 @@ export function YerlesimDuzenleyici({ salonId, bolumler, kapat, kaydedildi }: Oz
       >
         <p>Düzenleyicide yaptığınız değişiklikler silinecek.</p>
       </OnayPenceresi>
+      <RafSilmePenceresi
+        raf={silinecek && silinecek.id !== null
+          ? { id: silinecek.id, kod: silinecek.kod, aktif: silinecek.aktif, gozAdedi: silinecek.bolmeSayisi * silinecek.katSayisi * silinecek.gozSayisi }
+          : null}
+        vazgec={() => silinecekRafYaz(null)}
+        sil={rafSilOnayla}
+        pasifeAl={() => { if (silinecek) yaz(kaldir(t, silinecek.anahtar)); silinecekRafYaz(null); }}
+      />
       <OnayPenceresi
         acik={cakisma !== null}
         baslik="Yerleşimi başkası değiştirdi"

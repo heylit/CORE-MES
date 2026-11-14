@@ -123,6 +123,9 @@ export const makineModelTuruCozucusu = (cozucu: servis.MakineModelTuruCozucusu):
 // 3202: depoda stoklu malzemeleri veren işlevi kaydeder (haritanın 3B model listesi); bağ kablolama.ts'tedir.
 export type { DepoMalzemeCozucusu } from './servis.ts';
 export const depoMalzemeCozucusu = (cozucu: servis.DepoMalzemeCozucusu): void => servis.depoMalzemeCozucusuKaydet(cozucu);
+// 3230 a: silinecek rafın gözlerindeki stok engelini (malzeme, açık iş) veren işlevi kaydeder; bağ kablolama.ts'tedir.
+export type { RafSilmeEngeliCozucusu } from './servis.ts';
+export const rafSilmeEngeliCozucusu = (cozucu: servis.RafSilmeEngeliCozucusu | null): void => servis.rafSilmeEngeliCozucusuKaydet(cozucu);
 
 // 2902: yeni bölüm açıldı haberi (dinleyen stok; bağ sunucu/kablolama.ts'te).
 export type { BolumAcildiOlayi } from './olaylar.ts';
