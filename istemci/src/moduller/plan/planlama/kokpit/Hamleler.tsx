@@ -22,6 +22,8 @@ export interface HamleOzellikleri {
   oynat?: ((a: TurAdayi | null) => void) | null;
   // Matris: seçili adımın seçenekleri de yalnız emri erken bitirenlerdir ve ilki öne çıkar.
   yalnizKazanc?: boolean;
+  // Komut sürerken ve plan sunucuda yeniden dizilirken önizleme istenmez: plan birazdan değişir, sonuç boşa gider.
+  bekle?: boolean;
 }
 
 // Taşıma ve plana alma önizlemesinin ortak yüzü. bitis: plana almada sunucunun verdiği tahmin (fason adımlı emirde null).
@@ -31,13 +33,14 @@ const onizle = (a: TurAdayi, surum: number | null): Promise<Onizleme | null> =>
   (a.planaAl === undefined ? isTasiOnizle(a) : surum === null ? Promise.resolve(null) : planaAlOnizle({ emirId: a.planaAl, tezgah: a.tezgah, baslangic: a.baslangic }, surum));
 const anahtar = (a: TurAdayi): string => `${a.isId}|${a.tezgah}|${String(a.baslangic)}`;
 
-export function Hamleler({ m, e, isId, zaman, uygula, tek = false, oneri, surum, oynat = null, yalnizKazanc = false }: HamleOzellikleri) {
+export function Hamleler({ m, e, isId, zaman, uygula, tek = false, oneri, surum, oynat = null, yalnizKazanc = false, bekle = false }: HamleOzellikleri) {
   const adaylar = useMemo(() => turAdaylari(m, e, isId), [m, e, isId]);
   const [sonuc, setSonuc] = useState<Record<string, Sonuc>>({});
   const [secilen, setSecilen] = useState<string | null>(null);
   // Önizlemelerin hangi aday listesi ve sürüm için bittiği: eski planın sonuçlarıyla otomatik karar verilmez.
   const [biten, setBiten] = useState<{ adaylar: readonly TurAdayi[]; surum: number | null } | null>(null);
   useEffect(() => {
+    if (bekle) return undefined;
     let gecerli = true;
     setSonuc({}); setSecilen(null);
     void (async () => {
@@ -49,7 +52,7 @@ export function Hamleler({ m, e, isId, zaman, uygula, tek = false, oneri, surum,
       if (gecerli) setBiten({ adaylar, surum });
     })();
     return () => { gecerli = false; };
-  }, [adaylar, surum]);
+  }, [adaylar, surum, bekle]);
 
   const kod = (id: string): string => m.tezgahlar.find((t) => t.id === id)?.kod ?? id;
   // Emrin bütünü için önerilen hamle (adım seçilmeden) emri erken bitirmiyorsa öneri değildir: ara adımı öne almak, son adım yerinde kaldıkça

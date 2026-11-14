@@ -3,7 +3,7 @@ import { derle, girdiKur, planOku, plandanBitenler } from '../motor/kurallar.ts'
 import { ornekCalisma } from '../motor/ornek.ts';
 import {
   adimBeklemesi, aralikYuku, aramaUyar, darbogaz, emirGunleri, enCokBekleyen, tezgahGunundeMi, durumYazisi, ilkBosluk, matrisSirasi, modelKur, olcekKomsusu, onizlemeBitisi, satirKimligi, sayim, sorunlular, sureYaz,
-  acigaOtur, tasimaSaati, tasinabilir, turAdaylari, yukSinifi, yukYuzdesi, type KokpitEmri, type KokpitIsi, type KokpitModeli,
+  acigaOtur, durusYazisi, hucreler3B, suAndakiDurus, onayliGecSayisi, yeriDegisti, tasimaSaati, tasinabilir, turAdaylari, yukSinifi, yukYuzdesi, type KokpitEmri, type KokpitIsi, type KokpitModeli,
 } from './kurallar.ts';
 
 // Örnek çalışma uydurmadır: iki emir (biri geç, biri riskli), beş tezgâh, bir fason adım.
@@ -16,7 +16,7 @@ const is = (id: string, m: string, S: number, C: number, ek: Partial<KokpitIsi> 
 const emir = (id: string, ek: Partial<KokpitEmri>): KokpitEmri => ({ id, no: id, urun: 'Deneme', adet: 1, termin: null, bitis: null, durum: 'iyi', gecikme: null, adimlar: [], ...ek });
 const model = (isler: KokpitIsi[], emirler: KokpitEmri[], simdi = 0): KokpitModeli => ({
   simdi, tezgahlar: [{ id: 'T1', kod: 'T1', ad: '', fason: false }, { id: 'T2', kod: 'T2', ad: '', fason: false }],
-  isler: Object.fromEntries(isler.map((x) => [x.id, x])), emirler, bas: 0, son: 336, acik: {},
+  isler: Object.fromEntries(isler.map((x) => [x.id, x])), emirler, bas: 0, son: 336, acik: {}, durus: {},
 });
 
 describe('Kokpit modeli', () => {
@@ -30,6 +30,37 @@ describe('Kokpit modeli', () => {
     const gec = m.emirler[0];
     expect(gec?.gecikme).toBeCloseTo((gec?.bitis ?? 0) - (gec?.termin ?? 0));
     expect(gec && durumYazisi(gec)).toMatch(/ geç$/);
+  });
+
+  it('kilit simgesi yalnız kullanıcının kilidinden gelir; motorun sabitlediği iş kilitli sayılmaz', () => {
+    const { c, p, cx } = ornek();
+    const sabit = Object.entries(p?.ops ?? {}).find(([, x]) => x.pin)?.[0];
+    expect(sabit).toBeDefined();
+    expect(Object.values(modelKur({ ...c, locks: {} }, p, cx, (id) => id).isler).some((x) => x.kilitli)).toBe(false);
+    const m = modelKur({ ...c, locks: { [sabit ?? '']: { m: 'x', S: 0 } } }, p, cx, (id) => id);
+    expect(Object.values(m.isler).filter((x) => x.kilitli).map((x) => x.id)).toEqual([sabit]);
+  });
+
+  it('kodu olmayan tezgâh satırı kimliğiyle değil adıyla yazılır', () => {
+    const { c, p, cx } = ornek();
+    const ilk = c.D.tezgahlar.find((t) => cx.M[t.id]);
+    const D = { ...c.D, tezgahlar: c.D.tezgahlar.map((t) => (t.id === ilk?.id ? { id: t.id, ad: 'Deneme el işi' } : t)) };
+    const t = modelKur({ ...c, D }, p, cx, (id) => id).tezgahlar.find((x) => x.id === ilk?.id);
+    expect(t).toMatchObject({ kod: 'Deneme el işi', ad: '' });
+  });
+
+  it('duruş: arıza olayı başlığa "arızada" yazılır, planlı duruş yazılmaz; geçmiş duruş alınmaz', () => {
+    const { c } = ornek();
+    const t = c.D.tezgahlar[0]?.id ?? '', u = c.D.tezgahlar[1]?.id ?? '';
+    const c2 = { ...c, down: [{ m: u, from: 0, to: 1000 }], olaylar: [{ tip: 'ariza', m: t, saat: 6 }] };
+    const p = planOku(c2), cx = derle(girdiKur(c2, plandanBitenler(c2, p)));
+    const m = modelKur(c2, p, cx, (id) => id);
+    const a = suAndakiDurus(m, t), d = suAndakiDurus(m, u);
+    expect(a).toMatchObject({ ariza: true, a: m.simdi, b: m.simdi + 6 });
+    expect(d).toBeNull();
+    expect(m.durus[u]?.[0]).toMatchObject({ ariza: false });
+    expect(a && durusYazisi(a, () => '13.11 Cum 18:00')).toBe('arızada · Cum 18:00');
+    expect(suAndakiDurus(modelKur(c, planOku(c), derle(girdiKur(c, plandanBitenler(c, planOku(c)))), (id) => id), t)).toBeNull();
   });
 
   it('plan yokken her emir plansızdır; sıfır bitiş uydurulmaz', () => {
@@ -172,5 +203,93 @@ describe('Kokpit matrisi', () => {
     expect(tezgahGunundeMi(m, A, 'T2', 0)).toBe(false);
     expect(tezgahGunundeMi(m, B, 'T2', 0)).toBe(true);
     expect(tezgahGunundeMi(m, B, 'T1', null)).toBe(false);
+  });
+});
+
+describe('3B hücreleri', () => {
+  it('tezgâh-gün yükü Matris ile aynı; durum hücredeki en kötü emir; onaylı plan yoksa değişen ve önce boş', () => {
+    const { m, cx } = ornek();
+    const h = hucreler3B(m, cx, null);
+    expect(h).toHaveLength(m.tezgahlar.filter((t) => !t.fason).length);
+    const x = Object.values(m.isler).find((i) => !i.fason);
+    if (!x) throw new Error('örnekte tezgâh işi yok');
+    const ti = m.tezgahlar.findIndex((t) => t.id === x.m), g = Math.floor((x.S - m.bas) / 24);
+    const c = h[ti]?.[g];
+    const y = aralikYuku(cx, Object.values(m.isler), x.m, m.bas + g * 24, m.bas + g * 24 + 24);
+    expect(c?.yuk).toBeCloseTo(y.plan / y.acik);
+    const d = m.emirler.find((e) => e.id === x.job)?.durum;
+    expect(c?.durum).toBe(d === 'gec' ? 'gec' : d === 'iyi' ? 'iyi' : 'risk');
+    expect(h.flat().every((k) => k.degisen === null && k.once === null)).toBe(true);
+    expect(h.flat().filter((k) => k.yuk === null).every((k) => k.durum === null)).toBe(true);
+  });
+
+  it('onaylı planla aynı yerdeki işler değişmiş sayılmaz; kayan işin saati değişen payına girer', () => {
+    const { m, cx } = ornek();
+    const ayni = Object.fromEntries(Object.values(m.isler).map((x) => [x.id, { m: x.m, S: x.S, C: x.C }]));
+    const h = hucreler3B(m, cx, ayni);
+    expect(h.flat().filter((k) => k.yuk !== null).every((k) => k.degisen === 0 && k.once !== null && Math.abs(k.once - (k.yuk ?? 0)) < 1e-9)).toBe(true);
+    const x = Object.values(m.isler).find((i) => !i.fason);
+    if (!x) throw new Error('örnekte tezgâh işi yok');
+    const kayik = { ...ayni, [x.id]: { m: x.m, S: x.S - 2, C: x.C - 2 } };
+    const ti = m.tezgahlar.findIndex((t) => t.id === x.m), satir = hucreler3B(m, cx, kayik)[ti] ?? [];
+    expect(satir.some((k) => (k.degisen ?? 0) > 0)).toBe(true);
+    expect(hucreler3B(m, cx, kayik).filter((_, i) => i !== ti).flat().every((k) => k.degisen === null || k.degisen === 0)).toBe(true);
+  });
+
+  // Örnekteki bir tezgâh işinin aralığı ikiye bölünür: aynı hücrede iki ayrı emrin birer işi olur.
+  function ikiIsliHucre() {
+    const { m, cx } = ornek();
+    const gunu = (t: number) => Math.floor((t - m.bas) / 24);
+    const x = Object.values(m.isler).find((i) => !i.fason && i.C - i.S >= 1 && gunu(i.S) === gunu(i.C - 0.01));
+    if (!x) throw new Error('örnekte tek güne sığan tezgâh işi yok');
+    const orta = (x.S + x.C) / 2, ti = m.tezgahlar.findIndex((t) => t.id === x.m), g = gunu(x.S);
+    const a = is('A.1', x.m, x.S, orta), b = is('B.1', x.m, orta, x.C);
+    const kur = (dA: KokpitEmri['durum'], dB: KokpitEmri['durum']): KokpitModeli => ({ ...m, isler: { 'A.1': a, 'B.1': b }, emirler: [emir('A', { durum: dA }), emir('B', { durum: dB })] });
+    const yer = (i: KokpitIsi) => ({ m: i.m, S: i.S, C: i.C });
+    return { cx, a, b, ti, g, kur, yer };
+  }
+
+  it('hücrede biri geç biri zamanında iki emir varsa durum geçtir; sıra sonucu değiştirmez', () => {
+    const { cx, ti, g, kur } = ikiIsliHucre();
+    expect(hucreler3B(kur('gec', 'iyi'), cx, null)[ti]?.[g]?.durum).toBe('gec');
+    expect(hucreler3B(kur('iyi', 'gec'), cx, null)[ti]?.[g]?.durum).toBe('gec');
+    expect(hucreler3B(kur('iyi', 'risk'), cx, null)[ti]?.[g]?.durum).toBe('risk');
+    expect(hucreler3B(kur('iyi', 'iyi'), cx, null)[ti]?.[g]?.durum).toBe('iyi');
+    // Plansız emrin yerleşmiş adımı riskli sayılır.
+    expect(hucreler3B(kur('iyi', 'plansiz'), cx, null)[ti]?.[g]?.durum).toBe('risk');
+  });
+
+  it('iki işten biri kaymışsa değişen payı 0 ile 1 arasındadır', () => {
+    const { cx, a, b, ti, g, kur, yer } = ikiIsliHucre();
+    const c = hucreler3B(kur('iyi', 'iyi'), cx, { 'A.1': yer(a), 'B.1': { ...yer(b), S: b.S - 1, C: b.C - 1 } })[ti]?.[g];
+    expect(c?.degisen).toBeCloseTo(0.5);
+  });
+
+  it('önce onaylı planın yüküdür: işin geldiği hücrede önce yükten küçük, onaylı planda başka tezgâhtaysa orada büyük', () => {
+    const { cx, a, b, ti, g, kur, yer } = ikiIsliHucre();
+    const m = kur('iyi', 'iyi');
+    const baska = m.tezgahlar.findIndex((t, i) => !t.fason && i !== ti && (hucreler3B(m, cx, null)[i]?.[g]?.yuk ?? null) !== null);
+    if (baska < 0) throw new Error('örnekte o gün açık ikinci tezgâh yok');
+    const h = hucreler3B(m, cx, { 'A.1': yer(a), 'B.1': { ...yer(b), m: m.tezgahlar[baska]?.id ?? '' } });
+    const yeni = h[ti]?.[g], eski = h[baska]?.[g];
+    expect(yeni?.once ?? 1).toBeLessThan(yeni?.yuk ?? 0);
+    expect(eski?.once ?? 0).toBeGreaterThan(eski?.yuk ?? 1);
+  });
+
+  it('yeri değişen iş: başka tezgâh, çeyrek saatten çok kayma ya da onaylı planda yok', () => {
+    const x = is('a.1', 'T1', 10, 12);
+    expect(yeriDegisti(x, { m: 'T1', S: 10.2, C: 12.2 })).toBe(false);
+    expect(yeriDegisti(x, { m: 'T1', S: 10.5, C: 12.5 })).toBe(true);
+    expect(yeriDegisti(x, { m: 'T2', S: 10, C: 12 })).toBe(true);
+    expect(yeriDegisti(x, undefined)).toBe(true);
+  });
+
+  it('onaylı planda geç biten emir sayılır; adımı onaylı planda olmayan emir sayılmaz', () => {
+    const A = emir('A', { termin: 20, adimlar: [{ id: 'A.1', ad: 'Torna', adaylar: [] }] });
+    const B = emir('B', { termin: 20, adimlar: [{ id: 'B.1', ad: 'Torna', adaylar: [] }] });
+    const m = model([], [A, B]);
+    expect(onayliGecSayisi(m, { 'A.1': { m: 'T1', S: 10, C: 24 }, 'B.1': { m: 'T1', S: 0, C: 8 } })).toBe(1);
+    expect(onayliGecSayisi(m, { 'B.1': { m: 'T1', S: 0, C: 30 } })).toBe(1);
+    expect(onayliGecSayisi(m, {})).toBe(0);
   });
 });

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Dugme, DurumKutusu, OnayPenceresi, Simge, useBildirim } from '../../../../ortak/arayuz/index.ts';
 import type { PlanlamaEkranOzellikleri } from '../gorunumler.ts';
 import { calismayiYolla, gonderHataIletisi, gonderIletisi, isTasiOnizle, isiTasi, otomatikUygulaIste, useOtomatikUygula } from '../motor/atolye/gonder.ts';
@@ -11,11 +11,12 @@ import { useEmirNo } from '../ortak/emir-no.ts';
 import type { PlanlamaCalismasi } from '../tipler.ts';
 import { Ayrinti } from './Ayrinti.tsx';
 import {
-  OLCEKLER, aramaUyar, durumYazisi, matrisSirasi, modelKur, olcekKomsusu, onizlemeBitisi, sayim, sorunlular, sureYaz, tasimaSaati, tasinabilir, fasonMu, uzakMi,
+  OLCEKLER, aramaUyar, modelKur, olcekKomsusu, onizlemeBitisi, sayim, sorunlular, sureYaz, tasimaSaati, tasinabilir, fasonMu, uzakMi,
   type EmirDurumu, type KokpitOlcegi, type TurAdayi,
 } from './kurallar.ts';
 import { Matris, darEkran, type MatrisDuzeni } from './Matris.tsx';
 import { Tahta } from './Tahta.tsx';
+import { Liste } from './Liste.tsx';
 import { emriPlanaAl, planaAlOnizle } from './plana-al.ts';
 import { Tur, type TurDurumu } from './Tur.tsx';
 import './kokpit.css';
@@ -23,8 +24,10 @@ import './kokpit.css';
 // Kokpit (kart 3151): planın tek tahtası. Taslak, planlama çalışmasıdır: her taşıma sunucunun iş taşı komutuyla çalışmaya yazılır
 // (öteki emirler yerinde kalır), Geri / İleri çalışmanın geri alma geçmişidir, Onaya gönder çalışmayı onay taslağına çevirir.
 
-type Goz = 'T' | 'S' | 'M';
-const GOZLER: readonly (readonly [Goz, string])[] = [['T', 'Tezgâh'], ['S', 'Sipariş'], ['M', 'Matris']];
+type Goz = 'T' | 'S' | 'M' | 'B';
+const GOZLER: readonly (readonly [Goz, string])[] = [['T', 'Tezgâh'], ['S', 'Sipariş'], ['M', 'Matris'], ['B', '3B']];
+// Matris ve 3B'de tahta yoktur: iş ok tuşuyla kaymaz, sorun turu tahtaya döner, ayrıntı sonucu kendi içinde yazar.
+const tahtasiz = (g: Goz): boolean => g === 'M' || g === 'B';
 const DURUM_ADI: Record<Exclude<EmirDurumu, 'iyi'>, string> = { gec: 'Geç', risk: 'Riskli', plansiz: 'Plansız' };
 const DURUMLAR = ['gec', 'risk', 'plansiz'] as const;
 // Sunucu komutundan sonra sayfanın yeniden okunması bu kadar beklenir; okunamazsa düğmeler yine açılır.
@@ -32,6 +35,8 @@ const YENIDEN_OKUMA_MS = 8000;
 const yazimda = (): boolean => /^(INPUT|SELECT|TEXTAREA)$/.test(document.activeElement?.tagName ?? '');
 // Tahtada iş tutulurken ya da tutma menüsü açıkken ok tuşları iş kaydırmaz.
 const tutuluyor = (): boolean => document.querySelector('.tc-pyq [data-tasinan], .tc-pyq-menu') !== null;
+// 3B görünümü three'yi getirir; Planlama açılırken değil, 3B seçilince yüklenir.
+const Kokpit3B = lazy(async () => ({ default: (await import('./Kokpit3B.tsx')).Kokpit3B }));
 const Sayi = ({ n }: { n: number }) => (n > 0 ? <b className="tc-pyq-rozet" aria-hidden="true">{n}</b> : null);
 
 export function Kokpit(o: PlanlamaEkranOzellikleri) {
@@ -111,7 +116,7 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi }) {
     komut.komutBasladi?.(a.planaAl === undefined ? 'İş taşındı' : 'Emir plana alındı');
     try {
       const r = a.planaAl === undefined ? await isiTasi(komut, { isId: a.isId, tezgah: a.tezgah, baslangic: a.baslangic })
-        : await emriPlanaAl(komut, { emirId: a.planaAl, tezgah: a.tezgah, baslangic: a.baslangic });
+        : await emriPlanaAl(komut, { emirId: a.planaAl, tezgah: a.tezgah, baslangic: a.baslangic, ...(a.adimlar && a.adimlar.length > 0 ? { adimlar: a.adimlar } : {}) });
       otomatikUygulaIste(r);
       if (r.calismaSurumu === r.oncekiSurum) setYaziliyor(false); else beklenenSurum.current = r.calismaSurumu;
       if (r.ileti) bildir('bilgi', r.ileti);
@@ -195,10 +200,11 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi }) {
   }, [komut, mesgul, ileriYigin, hamAdim]);
 
   // --- önce / sonra ---
-  const canli = useCanliPlan(onceAcik, c, p, o.depo.planSurumu?.planSurumu ?? null);
+  // 3B'nin Yük ve gecikme ile Önce / sonra bakışları da onaylı planı okur (kart 3208 a).
+  const canli = useCanliPlan(onceAcik || goz === 'B', c, p, o.depo.planSurumu?.planSurumu ?? null);
   const canliHata = canli.tur === 'hata' ? canli.ileti : null;
   useEffect(() => { if (canliHata !== null) { bildir('hata', canliHata); setOnceAcik(false); } }, [canliHata, bildir]);
-  const once = canli.tur === 'tamam' ? canli.canli : null;
+  const once = onceAcik && canli.tur === 'tamam' ? canli.canli : null;
 
   // --- ölçek ---
   const olcekSec = useCallback((x: KokpitOlcegi, saat: number | null = null) => { setOlcek(x); setOdak(saat); }, []);
@@ -221,7 +227,7 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi }) {
   const turBaslat = (): void => {
     const idler = sorunlular(m.emirler).map((e) => e.id);
     if (!idler.length) { bildir('bilgi', 'Geç, riskli ya da plansız emir yok.'); return; }
-    if (goz === 'M') setGoz('T');
+    if (tahtasiz(goz)) setGoz('T');
     if (uzakMi(olcek)) olcekSec('3');
     setSuz(null); setAra(''); setOnceAcik(false);
     setTur({ idler, i: 0, gecmis: [], ileri: [] });
@@ -277,7 +283,7 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi }) {
   // Seçili iş ok tuşlarıyla kayar: ← → yarım saat (Shift ile dört saat), ↑ ↓ adımın öteki aday tezgâhı. Her basış bir taşımadır.
   const okla = useCallback((tus: string, buyuk: boolean): boolean => {
     const x = secIs ? m.isler[secIs] : undefined;
-    if (!x || !yazabilir || goz === 'M') return false;
+    if (!x || !yazabilir || tahtasiz(goz)) return false;
     const engel = tasinabilir(x);
     if (engel) { bildir('bilgi', engel); return true; }
     if (tus === 'arrowleft' || tus === 'arrowright') { tasiDene(x.id, x.m, x.S + (tus === 'arrowleft' ? -1 : 1) * (buyuk ? 4 : 0.5)); return true; }
@@ -348,8 +354,8 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi }) {
           <button type="button" className="tc-pyq-ok" title="İleri (Ctrl+Y)" disabled={!yazabilir || mesgul || tur !== null || ileriSayisi === 0} onClick={() => { ileri(); }}><span>İleri</span><Simge ad="chev-right" boyut="k" /><Sayi n={ileriSayisi} /></button>
         </span>
         <button type="button" className="tc-pyq-ok" aria-pressed={onceAcik} title="Onaylı planla karşılaştır (B)" onClick={() => { setOnceAcik(!onceAcik); }}><Simge ad="layers" boyut="k" /><span>Önce / sonra</span></button>
-        <Dugme simge="route" onClick={turBaslat} disabled={tur !== null}>Sorunları sırayla çöz</Dugme>
-        {yazabilir && <Dugme tur={tur || engel !== null || secili !== null ? 'ikincil' : 'birincil'} simge="upload" disabled={engel !== null || mesgul || tur !== null} title={tur ? 'Tur bitince gönderilir' : engel ?? undefined} onClick={() => { setGonderSor(true); }}>Onaya gönder</Dugme>}
+        <Dugme simge="route" className="tc-pyq-tur-dugme" onClick={turBaslat} disabled={tur !== null}>Sorunları sırayla çöz</Dugme>
+        {yazabilir && <Dugme className="tc-pyq-gonder" tur={tur || engel !== null || secili !== null ? 'ikincil' : 'birincil'} simge="upload" disabled={engel !== null || mesgul || tur !== null} title={tur ? 'Tur bitince gönderilir' : engel ?? undefined} onClick={() => { setGonderSor(true); }}>Onaya gönder</Dugme>}
       </div>
       {(adim > 0 || mesgul) && (
         <p className="tc-pyq-degisim" role="status">
@@ -360,7 +366,14 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi }) {
       )}
       <div className="tc-pyq-govde">
         <div className="tc-pyq-ana">
-          {goz === 'M' ? (
+          {goz === 'B' ? (
+            <Suspense fallback={<DurumKutusu durum="yukleniyor" />}>
+              <Kokpit3B
+                m={m} cx={cx} once={canli.tur === 'tamam' ? canli.canli : null} onceDurumu={canli.tur === 'tamam' ? 'tamam' : canli.tur === 'hata' ? 'hata' : 'okunuyor'}
+                emirler={gorunen} secEmir={secEmir} zaman={zaman} sec={sec} matriseGec={() => { setGoz('M'); }}
+              />
+            </Suspense>
+          ) : goz === 'M' ? (
             <Matris m={m} cx={cx} duzen={duzen} duzenSec={setDuzen} emirler={gorunen} secEmir={secEmir} secIs={secIs} zaman={zaman} sec={sec} gecSuz={() => { setSuz('gec'); }} />
           ) : (
             <>
@@ -368,16 +381,7 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi }) {
                 m={m} cx={cx} goz={goz} olcek={olcek} emirler={gorunen} uyar={uyar} secEmir={secEmir} secIs={secIs} sec={sec} zaman={zaman}
                 tasi={yazabilir && !tur ? tasiDene : null} planaAl={yazabilir && !tur ? planaAlDene : null} once={once} gunAc={gunAc} uyari={uyarYaz} goster={goster} odak={odak} oneri={tur ? oneri : null}
               />
-              <ul className="tc-pyq-liste" aria-label="Emirler">
-                {matrisSirasi(gorunen).map((e) => (
-                  <li key={e.id}>
-                    <button type="button" data-d={e.durum} aria-current={secEmir === e.id} onClick={() => { sec(e.id, null); }}>
-                      <b>{e.no}</b><span>{e.urun}</span><small>{durumYazisi(e)}{e.bitis === null ? '' : ` · biter ${zaman(e.bitis).slice(0, 9)}`}</small>
-                    </button>
-                  </li>
-                ))}
-                {!gorunen.length && <li className="tc-pyq-not">Süzgece uyan emir yok.</li>}
-              </ul>
+              <Liste m={m} cx={cx} goz={goz} emirler={gorunen} secEmir={secEmir} secIs={secIs} zaman={zaman} sec={sec} />
             </>
           )}
         </div>
@@ -388,7 +392,7 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi }) {
             atla={() => { turKarar(false); }} onceki={turOnceki} sonraki={turSonraki} bitir={turBitir} vazgec={turVazgec}
           />
         ) : secili && (
-          <Ayrinti m={m} e={secili} secIs={secIs} zaman={zaman} uygula={hamleUygula} surum={surum} matris={goz === 'M'} ileti={goz === 'M' ? sonuc : null} adimSec={(id) => { sec(secili.id, id); setGoster(id); }} kapat={() => { sec(null, null); }} />
+          <Ayrinti m={m} e={secili} secIs={secIs} zaman={zaman} uygula={hamleUygula} surum={surum} bekle={mesgul} matris={tahtasiz(goz)} ileti={tahtasiz(goz) ? sonuc : null} adimSec={(id) => { sec(secili.id, id); setGoster(id); }} kapat={() => { sec(null, null); }} />
         )}
       </div>
       <OnayPenceresi

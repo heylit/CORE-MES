@@ -12,7 +12,7 @@ const E: KokpitEmri = { id: 'a', no: 'ORN-a', urun: 'Deneme', adet: 1, termin: 3
 const M: KokpitModeli = {
   simdi: 1, tezgahlar: [{ id: 'T1', kod: 'T1', ad: '', fason: false }, { id: 'T2', kod: 'T2', ad: '', fason: false }],
   isler: Object.fromEntries([is('a.1', 'T1', 2, 6), is('a.2', 'T1', 40, 44, 1), { ...is('b.1', 'T1', 6, 40), job: 'b' }, { ...is('c.1', 'T2', 0, 10), job: 'c' }].map((x) => [x.id, x])),
-  emirler: [E], bas: 0, son: 336, acik: {},
+  emirler: [E], bas: 0, son: 336, acik: {}, durus: {},
 };
 function onizlemeKur() {
   vi.spyOn(gonder, 'isTasiOnizle').mockImplementation((g) => {
@@ -47,5 +47,15 @@ describe('Hamleler', () => {
     const { container } = render(<Hamleler m={M} e={E} isId="a.1" zaman={zaman} uygula={vi.fn()} surum={4} />);
     expect(await screen.findByText(/biter/)).toBeTruthy();
     expect(container.querySelector('[data-hamle="T1"]')).not.toBeNull();
+  });
+  it('plan yeniden dizilirken önizleme istemez; bitince ister', async () => {
+    onizlemeKur();
+    const o = { m: M, e: E, isId: null, zaman, uygula: null, tek: true, surum: 4 };
+    const { rerender } = render(<Hamleler {...o} bekle />);
+    await Promise.resolve();
+    expect(gonder.isTasiOnizle).not.toHaveBeenCalled();
+    rerender(<Hamleler {...o} />);
+    expect(await screen.findByText(/erken/)).toBeTruthy();
+    expect(gonder.isTasiOnizle).toHaveBeenCalled();
   });
 });

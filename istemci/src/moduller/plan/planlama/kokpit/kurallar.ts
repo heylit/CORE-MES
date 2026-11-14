@@ -25,7 +25,9 @@ export interface KokpitEmri {
   gecikme: number | null;
   adimlar: KokpitAdimi[];
 }
-export interface KokpitTezgahi { id: string; kod: string; ad: string; fason: boolean }
+// grup: planın istasyon kimliği; grupAdi istasyonun adı (yoksa kodu), 3B istasyona göre toplarken başlık olur.
+export interface KokpitTezgahi { id: string; kod: string; ad: string; fason: boolean; grup?: string; grupAdi?: string }
+export interface KokpitDurusu { a: number; b: number; ariza: boolean }
 export interface KokpitModeli {
   simdi: number;
   tezgahlar: KokpitTezgahi[];
@@ -35,6 +37,8 @@ export interface KokpitModeli {
   bas: number; son: number;
   // Tezgâhın açık saat pencereleri (hamle adayı açık saate oturur); bilinmeyen tezgâh hep açık sayılır.
   acik: Record<string, readonly (readonly [number, number])[]>;
+  // Tezgâhın duruşları (saat aralığı). ariza: makine arızası olayından gelen; değilse planlı duruş (bakım).
+  durus: Record<string, readonly KokpitDurusu[]>;
 }
 
 const FASON_SATIRI = '@';
@@ -54,7 +58,7 @@ export function modelKur(c: PlanlamaCalismasi, p: OkunanPlan | null, cx: Derleme
       const x = p?.ops[a.id];
       if (!x || !Number.isFinite(x.S) || !Number.isFinite(x.C)) return;
       yerlesen++;
-      isler[a.id] = { id: a.id, job: j.id, ad: a.ad, m: x.m, S: x.S, C: x.C, basladi: x.act, fason: x.fas || fasonMu(x.m), kilitli: x.pin, sira };
+      isler[a.id] = { id: a.id, job: j.id, ad: a.ad, m: x.m, S: x.S, C: x.C, basladi: x.act, fason: x.fas || fasonMu(x.m), kilitli: !!c.locks[a.id], sira };
       bitis = bitis === null ? x.C : Math.max(bitis, x.C);
       enSon = Math.max(enSon, x.C);
     });
@@ -67,12 +71,22 @@ export function modelKur(c: PlanlamaCalismasi, p: OkunanPlan | null, cx: Derleme
       adimlar: j.ops.map((a) => ({ id: a.id, ad: a.ad, adaylar: a.c })),
     });
   }
-  const tezgahlar: KokpitTezgahi[] = c.D.tezgahlar.filter((t) => cx.M[t.id]).map((t) => ({ id: t.id, kod: t.kod ?? t.id, ad: t.ad ?? '', fason: false }));
+  const tezgahlar: KokpitTezgahi[] = c.D.tezgahlar.filter((t) => cx.M[t.id]).map((t) => ({ id: t.id, kod: t.kod ?? t.ad ?? t.id, ad: t.kod ? t.ad ?? '' : '', fason: false, ...(t.grup ? { grup: t.grup } : {}), ...(t.grupAd ?? t.grupKod ? { grupAdi: t.grupAd ?? t.grupKod } : {}) }));
   if (Object.values(isler).some((x) => x.fason)) tezgahlar.push({ id: FASON_SATIRI, kod: 'Fason', ad: 'dış atölye', fason: true });
   const bas = Math.floor(simdi / 24) * 24;
   const acik = Object.fromEntries(Object.values(cx.M).map((t) => [t.id, t.sw]));
-  return { simdi, tezgahlar, isler, emirler, bas, son: Math.max(bas + 14 * 24, Math.ceil(enSon / 24) * 24 + 24), acik };
+  const durus: Record<string, KokpitDurusu[]> = {};
+  for (const d of cx.g.down) {
+    if (d.to <= bas) continue;
+    (durus[d.m] ??= []).push({ a: d.from, b: d.to, ariza: !c.down.some((x) => x.m === d.m && x.from === d.from && x.to === d.to) });
+  }
+  return { simdi, tezgahlar, isler, emirler, bas, son: Math.max(bas + 14 * 24, Math.ceil(enSon / 24) * 24 + 24), acik, durus };
 }
+
+// Tezgâh şu anda arızadaysa o arıza (başlığa "arızada · bitiş" yazılır). Planlı duruş kapalı saat gibi taralıdır, başlığa yazılmaz.
+export const suAndakiDurus = (m: Pick<KokpitModeli, 'durus' | 'simdi'>, tezgah: string): KokpitDurusu | null =>
+  m.durus[tezgah]?.find((d) => d.ariza && d.a <= m.simdi && m.simdi < d.b) ?? null;
+export const durusYazisi = (d: KokpitDurusu, zaman: (t: number) => string): string => `arızada · ${zaman(d.b).slice(6)}`;
 
 // Fason işler tek satırda toplanır (fasoncu kimliği satır değildir).
 export const satirKimligi = (x: Pick<KokpitIsi, 'm' | 'fason'>): string => (x.fason ? FASON_SATIRI : x.m);
@@ -231,7 +245,23 @@ export function ilkBosluk(m: KokpitModeli, tezgah: string, sure: number, baslang
 
 // --- sorun turu ---
 // planaAl dolu ise hamle taşıma değil plana almadır: değer emrin kimliğidir, isId emrin ilk adımıdır.
-export interface TurAdayi { isId: string; tezgah: string; baslangic: number; planaAl?: string }
+// adimlar (3229 a): plana almada ilk adımdan sonraki adımlar için kullanıcının seçtiği tezgâh ve / veya saat.
+export interface AdimSecimi { tezgah?: string | undefined; baslangic?: number | undefined }
+export interface TurAdayi { isId: string; tezgah: string; baslangic: number; planaAl?: string; adimlar?: { isId: string; tezgah?: string; baslangic?: number }[] }
+// Sunucuya giden seçim listesi: ilk adım ayrı alanlarla gider, boş seçim ve emrin olmayan adımı gitmez; rota sırasıyla.
+export function adimSecimleri(e: Pick<KokpitEmri, 'adimlar'>, sec: Readonly<Record<string, AdimSecimi>>): { isId: string; tezgah?: string; baslangic?: number }[] {
+  return e.adimlar.slice(1).flatMap((a) => {
+    const s = sec[a.id];
+    if (!s || (s.tezgah === undefined && s.baslangic === undefined)) return [];
+    return [{ isId: a.id, ...(s.tezgah === undefined ? {} : { tezgah: s.tezgah }), ...(s.baslangic === undefined ? {} : { baslangic: s.baslangic }) }];
+  });
+}
+// Başlama saati seçenekleri: bugünden başlayarak yedi gün, iki saatte bir 06:00-22:00; geçmiş saat yok.
+export function baslamaSaatleri(m: Pick<KokpitModeli, 'bas' | 'simdi'>, gun = 7): number[] {
+  const l: number[] = [];
+  for (let g = 0; g < gun; g++) for (let h = 6; h <= 22; h += 2) { const t = m.bas + g * 24 + h; if (t >= m.simdi) l.push(t); }
+  return l;
+}
 // Emrin taşınabilen bekleyen adımları için hamle adayları: aday tezgâhların her birinde, öncül adım bittikten sonraki en erken boşluk.
 // Bugünkü yerinden erken olmayan aday hamle değildir; en çok öne alan başta. Sonucu (emrin yeni bitişi) sunucu önizlemesi verir; burada
 // yalnız denenecek yerler seçilir. `isId` verilirse yalnız o adım (ayrıntıdaki seçenekler).
@@ -280,4 +310,48 @@ export function durumYazisi(e: KokpitEmri): string {
   if (e.durum === 'plansiz') return 'plansız';
   if (e.gecikme === null) return 'termin yok';
   return e.gecikme > 0.01 ? `${sureYaz(e.gecikme)} geç` : e.durum === 'risk' ? `termine ${sureYaz(-e.gecikme)}` : 'zamanında';
+}
+
+// --- 3B (kart 3208) ---
+// Hücre: bir tezgâhın bir günü. Yük oranı açık saate göredir (1 = tam dolu); kapalı günde null. Durum, o gün o tezgâhta işi olan
+// emirlerin en kötüsüdür (plansız emrin yerleşmiş adımı zamanında sayılmaz, riskli sayılır). Değişen: plandaki saatin taslakta yeri
+// değişip henüz onaylanmamış kısmı (0-1; onaylı plan okunmadıysa null). Önce: aynı hücrenin onaylı plandaki yük oranı.
+export type HucreDurumu = 'gec' | 'risk' | 'iyi';
+export interface Hucre3B { tezgah: string; gun: number; yuk: number | null; durum: HucreDurumu | null; degisen: number | null; once: number | null; plan: number; acik: number }
+export interface OnayliYer { m: string; S: number; C: number }
+// Yeri değişen iş: onaylı planda yok, başka tezgâhta ya da çeyrek saatten çok kaymış ("Önce / sonra" ile aynı ölçü, motor/fark.ts).
+export const yeriDegisti = (x: Pick<KokpitIsi, 'm' | 'S'>, a: OnayliYer | undefined): boolean => !a || a.m !== x.m || Math.abs(a.S - x.S) > 0.25;
+const DURUM_AGIRLIGI: Record<HucreDurumu, number> = { iyi: 0, risk: 1, gec: 2 };
+
+export function hucreler3B(m: KokpitModeli, cx: Derleme, once: Record<string, OnayliYer> | null, gun = MATRIS_GUNU): Hucre3B[][] {
+  const isler = Object.values(m.isler);
+  const durum = new Map(m.emirler.map((e) => [e.id, e.durum === 'gec' ? 'gec' : e.durum === 'iyi' ? 'iyi' : 'risk'] as const));
+  const onayli: KokpitIsi[] = once === null ? [] : Object.entries(once).map(([id, a]) => ({ id, job: '', ad: '', m: a.m, S: a.S, C: a.C, basladi: false, fason: fasonMu(a.m), kilitli: false, sira: 0 }));
+  return m.tezgahlar.filter((t) => !t.fason).map((t) => {
+    const M = cx.M[t.id];
+    return Array.from({ length: gun }, (_, g): Hucre3B => {
+      const a = m.bas + g * 24, b = a + 24;
+      const y = aralikYuku(cx, isler, t.id, a, b);
+      if (y.acik <= 0 || !M) return { tezgah: t.id, gun: g, yuk: null, durum: null, degisen: null, once: null, plan: 0, acik: 0 };
+      let en: HucreDurumu | null = null, degisen = 0;
+      for (const x of isler) {
+        if (x.m !== t.id || x.fason || x.C <= a || x.S >= b) continue;
+        const d = durum.get(x.job) ?? 'iyi';
+        if (en === null || DURUM_AGIRLIGI[d] > DURUM_AGIRLIGI[en]) en = d;
+        if (once !== null && yeriDegisti(x, once[x.id])) degisen += acikSaat(M.rw, Math.max(a, x.S), Math.min(b, x.C));
+      }
+      const o = once === null ? null : aralikYuku(cx, onayli, t.id, a, b);
+      return { tezgah: t.id, gun: g, yuk: y.plan / y.acik, durum: en, degisen: once === null ? null : y.plan > 0 ? Math.min(1, degisen / y.plan) : 0, once: o === null ? null : o.plan / o.acik, plan: y.plan, acik: y.acik };
+    });
+  });
+}
+
+// Onaylı planda geç biten emir sayısı ("Önce / sonra"da geç emir önce → sonra). Adımı onaylı planda olmayan ya da terminsiz emir sayılmaz.
+export function onayliGecSayisi(m: KokpitModeli, once: Record<string, OnayliYer>): number {
+  return m.emirler.filter((e) => {
+    if (e.termin === null || !e.adimlar.length) return false;
+    let bitis = -Infinity;
+    for (const a of e.adimlar) { const x = once[a.id]; if (!x) return false; bitis = Math.max(bitis, x.C); }
+    return bitis > e.termin + 0.01;
+  }).length;
 }

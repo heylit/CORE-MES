@@ -38,6 +38,9 @@ export function degerlendirici(surum: number | (() => Promise<number | null>), i
 // Sunucunun iki adımı (463 a): başlatma iş kimliği döner, sonuç kimlikle beklenir. Hesaptaki ret (plan yok, süre, meşgul) uçtaki hatanın
 // durumuyla ApiHatasi olur; ekran onu degerlendirmeHatasi ile okur. Sunucu hesabı süre sınırında kendisi keser; bu sınır yalnız sonuç hiç gelmezse.
 export const DEGERLENDIRME_BEKLEME_MS = 400;
+// Tek hamleden sonra planı yeniden dizmek bir iki saniye sürer: ilk iki saniyede sık yoklanır, uzun işte aralık üst sınıra çıkar.
+const SIK_YOKLAMA = 10;
+export const degerlendirmeBeklemesi = (tur: number): number => (tur < 2 ? 100 : tur < SIK_YOKLAMA ? 200 : DEGERLENDIRME_BEKLEME_MS);
 const SONUC_SINIRI_MS = 120_000;
 export interface DegerlendirmeUcu {
   post: <T>(yol: string, govde: unknown) => Promise<T>;
@@ -54,11 +57,11 @@ const UC: DegerlendirmeUcu = {
 export async function degerlendirmeIste(surum: number, istek: SunucuIstegi, u: DegerlendirmeUcu = UC): Promise<SunucuCevabi> {
   const { is } = await u.post<{ is: string }>(DEGERLENDIRME_YOLU, { surum, istek });
   const son = u.simdi() + SONUC_SINIRI_MS;
-  while (u.simdi() < son) {
+  for (let tur = 0; u.simdi() < son; tur++) {
     const d = await u.get<DegerlendirmeDurumuCevabi>(`${DEGERLENDIRME_YOLU}/${is}`);
     if (d.durum === 'bitti') return d.cevap;
     if (d.durum === 'hata') throw new ApiHatasi(HATA_DURUMU[d.kod], { kod: d.kod, mesaj: d.mesaj });
-    await u.bekle(DEGERLENDIRME_BEKLEME_MS);
+    await u.bekle(degerlendirmeBeklemesi(tur));
   }
   throw new ApiHatasi(503, { kod: 'MESGUL', mesaj: 'Sunucu hesabın sonucunu vermedi.' });
 }

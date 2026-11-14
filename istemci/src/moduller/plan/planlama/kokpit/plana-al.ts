@@ -10,6 +10,7 @@ export type PlanaAlOnizlemesi = PlanaAlOnizlemesiCevabi;
 export const PLANA_AL_ONIZLEME_YOLU = '/plan/planlama-calismasi/plana-al-onizlemesi';
 export function planaAlOnizle(g: Omit<PlanaAlGovdesi, 'calismaSurumu'>, calismaSurumu: number): Promise<PlanaAlOnizlemesi | null> {
   const q = new URLSearchParams({ calismaSurumu: String(calismaSurumu), emirId: g.emirId, tezgah: g.tezgah, baslangic: String(g.baslangic) });
+  if (g.adimlar && g.adimlar.length > 0) q.set('adimlar', JSON.stringify(g.adimlar));
   return api.get<PlanaAlOnizlemesi>(`${PLANA_AL_ONIZLEME_YOLU}?${q.toString()}`).then((c) => c, () => null);
 }
 export async function emriPlanaAl(komut: CalismaKomutu, g: Omit<PlanaAlGovdesi, 'calismaSurumu'>): Promise<AtolyeKomutuCevabi> {

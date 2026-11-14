@@ -3,7 +3,7 @@ import { Simge } from '../../../../ortak/arayuz/index.ts';
 import { emirKuyrugu } from '../ortak/emir-no.ts';
 import type { Derleme } from '../motor/kurallar.ts';
 import {
-  SAAT_ENI, aralikYuku, durumYazisi, satirKimligi, sureYaz, tasimaSaati, tasinabilir, uzakMi, yukSinifi, yukYuzdesi,
+  SAAT_ENI, aralikYuku, durumYazisi, durusYazisi, satirKimligi, suAndakiDurus, sureYaz, tasimaSaati, tasinabilir, uzakMi, yukSinifi, yukYuzdesi,
   type KokpitEmri, type KokpitIsi, type KokpitModeli, type KokpitOlcegi, type TurAdayi,
 } from './kurallar.ts';
 
@@ -38,6 +38,9 @@ export interface TahtaOzellikleri {
   oneri: TurAdayi | null;
 }
 
+const SAATLER = [4, 8, 12, 16, 20] as const;
+// Saat yazısının sığması için iki çizgi arasında gereken en az genişlik (px; yazı iki hane).
+const SAAT_YAZISI = 26;
 const yerYaz = (el: HTMLElement | null, x: number, w?: number): void => {
   if (!el) return;
   el.style.setProperty('--x', `${String(Math.round(x * 10) / 10)}px`);
@@ -151,10 +154,38 @@ export function Tahta(o: TahtaOzellikleri) {
     if (el && typeof el.scrollIntoView === 'function') el.scrollIntoView({ block: 'nearest', inline: 'center', behavior: 'smooth' });
   }, [oneriAnahtari, goz, olcek]);
 
+  // Tezgâhın kapalı saatleri (açık pencerelerin tümleyeni) taralı çizilir; penceresi bilinmeyen tezgâh ve fason satırı çizilmez.
+  const kapali = useMemo(() => {
+    const k = new Map<string, [number, number][]>();
+    if (goz !== 'T' || uzakMi(olcek)) return k;
+    for (const t of m.tezgahlar) {
+      const acik = m.acik[t.id];
+      if (t.fason || !acik || acik.length === 0) continue;
+      const l: [number, number][] = []; let son = m.bas;
+      for (const [a, b] of acik) { if (b <= m.bas) continue; if (a >= m.son) break; if (a > son + 0.01) l.push([son, Math.min(a, m.son)]); son = Math.max(son, b); }
+      if (son < m.son - 0.01) l.push([son, m.son]);
+      k.set(t.id, l);
+    }
+    return k;
+  }, [m, goz, olcek]);
+  // Tezgâh adının altındaki çubuk: önümüzdeki yedi günün yükü (plan saati / açık saat).
+  const yuk = useMemo(() => {
+    const k = new Map<string, { oran: number; sinif: string | undefined; yazi: string }>();
+    if (goz !== 'T' || uzakMi(olcek)) return k;
+    const isler = Object.values(m.isler);
+    for (const t of m.tezgahlar) {
+      if (t.fason) continue;
+      const y = aralikYuku(cx, isler, t.id, m.bas, m.bas + 7 * 24), yuzde = yukYuzdesi(y);
+      if (yuzde !== null) k.set(t.id, { oran: Math.min(1, yuzde / 100), sinif: yukSinifi(y), yazi: ` · 7 günde %${String(yuzde)} dolu` });
+    }
+    return k;
+  }, [m, cx, goz, olcek]);
   const gunSayisi = Math.round((m.son - m.bas) / 24);
+  // Saat çizgileri yalnız yazısı sığan ölçekte: Gün'de dört saatte bir, 3 gün'de sekiz saatte bir.
+  const saatAdimi = uzakMi(olcek) ? 0 : px * 4 >= SAAT_YAZISI ? 4 : px * 8 >= SAAT_YAZISI ? 8 : 0;
   const gunler = Array.from({ length: gunSayisi }, (_, g) => g);
   const eksen = (
-    <div className="tc-pyq-satir tc-pyq-eksen">
+    <div className="tc-pyq-satir tc-pyq-eksen" data-saatli={saatAdimi > 0 ? '' : undefined}>
       <div className="tc-pyq-bas">{goz === 'T' || uzakMi(olcek) ? 'Tezgâh' : 'Emir'}</div>
       <div className="tc-pyq-alan">
         {gunler.filter((g) => olcek !== 'Y' || g % 7 === 0).filter((g) => olcek !== 'A' || g % 7 === 0).map((g) => (
@@ -163,6 +194,9 @@ export function Tahta(o: TahtaOzellikleri) {
             title="Bu güne yakınlaş" onDoubleClick={() => { gunAc(g); }} onClick={() => { if (uzakMi(olcek)) gunAc(g); }}
           >{zaman(m.bas + g * 24).slice(0, olcek === 'G' || olcek === '3' ? 9 : 5)}</button>
         ))}
+        {saatAdimi > 0 && gunler.flatMap((g) => SAATLER.filter((h) => h % saatAdimi === 0).map((h) => (
+          <span className="tc-pyq-saat" key={`${String(g)}.${String(h)}`} ref={(el) => { yerYaz(el, (g * 24 + h) * px); }}>{String(h).padStart(2, '0')}</span>
+        )))}
         <span className="tc-pyq-simdi-et" ref={(el) => { yerYaz(el, (m.simdi - m.bas) * px); }}>Şimdi {zaman(m.simdi).slice(-5)}</span>
       </div>
     </div>
@@ -197,15 +231,16 @@ export function Tahta(o: TahtaOzellikleri) {
     );
   }
 
-  const satirlar: { kimlik: string; bas: string; alt: string; isler: KokpitIsi[]; durum?: string }[] = goz === 'T'
-    ? m.tezgahlar.map((t) => ({ kimlik: t.id, bas: t.kod, alt: t.ad, isler: Object.values(m.isler).filter((x) => satirKimligi(x) === t.id) }))
-    : emirler.filter((e) => e.durum !== 'plansiz').map((e) => ({ kimlik: e.id, bas: e.no, alt: `${e.urun} · ${durumYazisi(e)}`, isler: e.adimlar.flatMap((a) => m.isler[a.id] ?? []), durum: e.durum }));
+  const satirlar: { kimlik: string; bas: string; alt: string; isler: KokpitIsi[]; durum?: string; tam?: string; termin?: number | null; durus?: string }[] = goz === 'T'
+    ? m.tezgahlar.map((t) => ({ kimlik: t.id, bas: t.kod, alt: t.ad, ...(suAndakiDurus(m, t.id) ? { durus: durusYazisi(suAndakiDurus(m, t.id)!, zaman) } : {}), isler: Object.values(m.isler).filter((x) => satirKimligi(x) === t.id) }))
+    : emirler.filter((e) => e.durum !== 'plansiz').map((e) => ({ kimlik: e.id, bas: `${emirKuyrugu(e.no)} · ${e.urun}`, alt: `${String(e.adet)} adet · ${durumYazisi(e)}`, tam: e.no, termin: e.termin, isler: e.adimlar.flatMap((a) => m.isler[a.id] ?? []), durum: e.durum }));
   const plansiz = emirler.filter((e) => e.durum === 'plansiz');
   const tasinanIs = tasinan ? m.isler[tasinan.id] : undefined;
   const oneriIsi = oneri ? m.isler[oneri.isId] : undefined;
   const adaySatirlari = goz !== 'T' ? null : tasinan?.fis !== undefined ? new Set(fisAdaylari(tasinan.fis)) : tasinanIs ? new Set(adaylar(tasinanIs)) : null;
   const secili = secEmir ? emir.get(secEmir) : undefined;
 
+  const tezgahKodu = new Map(m.tezgahlar.map((t) => [t.id, t.kod]));
   const isDugmesi = (x: KokpitIsi) => {
     const e = emir.get(x.job), canli = once?.[x.id];
     const S = canli ? canli.S : x.S, C = canli ? canli.C : x.C;
@@ -215,7 +250,7 @@ export function Tahta(o: TahtaOzellikleri) {
     return (
       <button
         type="button" key={x.id} className="tc-pyq-is" data-is={x.id} data-d={e?.durum ?? 'iyi'} title={ad} aria-label={ad}
-        aria-pressed={secIs === x.id} data-emir-secili={secEmir === x.job ? '' : undefined} data-sonuk={uyar(x.job) ? undefined : ''}
+        aria-pressed={secIs === x.id} data-suruyor={x.basladi ? '' : undefined} data-emir-secili={secEmir === x.job ? '' : undefined} data-sonuk={uyar(x.job) ? undefined : ''}
         data-sabit={neden ? '' : undefined} data-tasinan={tasinan?.id === x.id ? '' : undefined} data-kaydi={canli && Math.abs(kayma) > 0.25 ? '' : undefined}
         ref={(el) => { yerYaz(el, (S - m.bas) * px, (C - S) * px); }}
         onClick={() => { if (!tasinan) sec(x.job, x.id); }}
@@ -229,7 +264,9 @@ export function Tahta(o: TahtaOzellikleri) {
         onPointerEnter={() => { imlecteki.current = x.id; }} onPointerLeave={() => { if (imlecteki.current === x.id) imlecteki.current = null; }}
       >
         {x.kilitli && <Simge ad="lock" boyut="k" />}
-        <b>{emirKuyrugu(e?.no ?? x.job)}</b><span>{canli && Math.abs(kayma) > 0.25 ? `${kayma > 0 ? '+' : '−'}${sureYaz(kayma)}` : x.ad}</span>
+        <b>{goz === 'T' ? emirKuyrugu(e?.no ?? x.job) : tezgahKodu.get(x.m) ?? x.m}</b>
+        <span>{canli && Math.abs(kayma) > 0.25 ? `${kayma > 0 ? '+' : '−'}${sureYaz(kayma)}` : goz === 'T' ? e?.urun ?? x.ad : x.ad}</span>
+        {x.basladi && <i className="tc-pyq-ilerleme" ref={(el) => { el?.style.setProperty('--oran', String(Math.min(1, Math.max(0, (m.simdi - S) / Math.max(0.01, C - S))))); }} />}
       </button>
     );
   };
@@ -268,8 +305,14 @@ export function Tahta(o: TahtaOzellikleri) {
             className="tc-pyq-satir" key={r.kimlik} data-satir={r.kimlik} data-d={r.durum}
             data-aday={adaySatirlari ? (adaySatirlari.has(r.kimlik) ? 'evet' : 'hayir') : undefined}
           >
-            <div className="tc-pyq-bas" title={`${r.bas} · ${r.alt}`}><b>{r.bas}</b><small>{r.alt}</small></div>
+            <div className="tc-pyq-bas" data-durus={r.durus ? '' : undefined} title={`${r.tam ?? r.bas} · ${r.durus ?? r.alt}${yuk.get(r.kimlik)?.yazi ?? ''}`}>
+              <b>{r.bas}</b><small>{r.durus ?? r.alt}</small>
+              {yuk.has(r.kimlik) && <i className="tc-pyq-yukcubuk" data-yuk={yuk.get(r.kimlik)!.sinif} ref={(el) => { el?.style.setProperty('--oran', String(yuk.get(r.kimlik)!.oran)); }} />}
+            </div>
             <div className="tc-pyq-alan">
+              {(kapali.get(r.kimlik) ?? []).map(([a, b]) => <span className="tc-pyq-kapali" key={a} ref={(el) => { yerYaz(el, (a - m.bas) * px, (b - a) * px); }} />)}
+              {goz === 'T' && (m.durus[r.kimlik] ?? []).filter((d) => d.ariza).map((d) => <span className="tc-pyq-durus" key={d.a} title={durusYazisi(d, zaman)} ref={(el) => { yerYaz(el, (Math.max(d.a, m.bas) - m.bas) * px, (Math.min(d.b, m.son) - Math.max(d.a, m.bas)) * px); }} />)}
+              {r.termin !== undefined && r.termin !== null && <span className="tc-pyq-satir-termin" data-d={r.durum} title={`Termin ${zaman(r.termin)}`} ref={(el) => { yerYaz(el, (r.termin! - m.bas) * px); }} />}
               {r.isler.map(isDugmesi)}
               {oneriIsi && oneri && !tasinanIs && (goz === 'T' ? oneri.tezgah : oneriIsi.job) === r.kimlik && (
                 <span className="tc-pyq-hayalet" data-oneri="" ref={(el) => { yerYaz(el, (oneri.baslangic - m.bas) * px, (oneriIsi.C - oneriIsi.S) * px); }}>

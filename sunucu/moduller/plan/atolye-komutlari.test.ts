@@ -148,10 +148,24 @@ describe('atölye komutlarının kuralı', () => {
     assert.equal((y.iz as unknown[]).length, IZ_SINIRI);
     assert.equal((y.iz as { ne: string }[])[0]?.ne, 'Malzeme gecikmesi olayı eklendi');
   });
+  test('3229 plana al, adım adım: seçilen adımlar ilk adımla birlikte tek değişiklikte kilitlenir; geri alma hepsini kaldırır; başka emrin kilidi kalır', () => {
+    const SIP = [{ id: 'J1', urun: 'U1' }, { id: 'J2', urun: 'U1' }];
+    const c = { ...planli({ D: { ...D, siparisler: SIP } }), locks: { 'J9.10': { m: 'T1', S: 40 } } };
+    const hesap = (): PlanaAlSonucu => ({ gecerli: true, ileti: null, bitis: 20, isler: [{ isId: 'J2.10', tezgah: 'T2', S: 12, C: 14 }, { isId: 'J2.20', tezgah: 'T1', S: 14, C: 20 }], kilit: ['J2.10', 'J2.20'] });
+    const y = deger(planaAl(c, { emirId: 'J2', tezgah: 'T2', baslangic: 11, adimlar: [{ isId: 'J2.20', tezgah: 'T1' }] }, KISI, hesap));
+    assert.deepEqual(y.locks, { 'J9.10': { m: 'T1', S: 40 }, 'J2.10': { m: 'T2', S: 12 }, 'J2.20': { m: 'T1', S: 14 } });
+    const b = (y.bekleyen as { ayrinti: string; geri: unknown[] }[]);
+    assert.equal(b.length, 1);
+    assert.equal(b[0]?.ayrinti, 'J2 → T2, T1');
+    assert.deepEqual(b[0]?.geri, [{ yol: ['locks'], id: 'J2.10' }, { yol: ['locks'], id: 'J2.20' }]);
+    // Kilitlenecek adımın yeri hesapta yoksa hiçbir şey yazılmaz.
+    const eksik = planaAl(c, { emirId: 'J2', tezgah: 'T2', baslangic: 11 }, KISI, () => ({ ...hesap(), kilit: ['J2.10', 'J2.30'] } as PlanaAlSonucu));
+    assert.equal('hata' in eksik, true);
+  });
   test('3151 plana al: yalnız ilk adım kilitlenir; tek değişikliktir ve geri alması kilidi kaldırır; planda olan, plan dışı ve bilinmeyen emir reddedilir', () => {
     const SIP = [{ id: 'J1', urun: 'U1' }, { id: 'J2', urun: 'U1' }, { id: 'J3', urun: 'U1', iptal: true }, { id: 'J4', urun: 'U1', havuz: true }];
     const c = planli({ D: { ...D, siparisler: SIP } });
-    const hesap = (): PlanaAlSonucu => ({ gecerli: true, ileti: 'İlk adım 19.10 Pzt 12:00 saatine oturur.', bitis: 20, isler: [{ isId: 'J2.10', tezgah: 'T2', S: 12, C: 14 }, { isId: 'J2.20', tezgah: 'T1', S: 14, C: 20 }] });
+    const hesap = (): PlanaAlSonucu => ({ gecerli: true, ileti: 'İlk adım 19.10 Pzt 12:00 saatine oturur.', bitis: 20, isler: [{ isId: 'J2.10', tezgah: 'T2', S: 12, C: 14 }, { isId: 'J2.20', tezgah: 'T1', S: 14, C: 20 }], kilit: ['J2.10'] });
     const r = planaAl(c, { emirId: 'J2', tezgah: 'T2', baslangic: 11 }, KISI, hesap);
     const y = deger(r);
     assert.equal((r as { ileti?: string | null }).ileti, 'İlk adım 19.10 Pzt 12:00 saatine oturur.');
@@ -325,6 +339,14 @@ describe('atölye komut uçları (gerçek PostgreSQL)', () => {
     assert.deepEqual((await oku(tam, q(surum - 1))).json(), { calismaSurumu: surum, gecerli: false, ileti: 'Plan bu sırada değişti; sayfayı yenileyin.', isler: [], bitis: null });
     assert.equal((await oku(tam, `calismaSurumu=${String(surum)}&emirId=J1&tezgah=${makineId}&baslangic=abc`)).statusCode, 400);
     assert.equal((await oku(tam, `emirId=J1&tezgah=${makineId}&baslangic=12`)).statusCode, 400);
+    // 3229: seçilen adımlar sorguda JSON metnidir; bozuk metin, bilinmeyen alan, boş seçim ve yinelenen adım reddedilir.
+    const ad = (x: unknown) => `${q(surum)}&adimlar=${encodeURIComponent(typeof x === 'string' ? x : JSON.stringify(x))}`;
+    assert.equal((await oku(tam, ad([{ isId: 'J1.20', tezgah: makineId }]))).statusCode, 200);
+    for (const bozukAdim of ['[{', [{ isId: 'J1.20' }], [{ isId: 'J1.20', tezgah: makineId, baska: 1 }], [{ isId: 'J1.20', tezgah: makineId }, { isId: 'J1.20', baslangic: 14 }], { isId: 'J1.20' }]) {
+      assert.equal((await oku(tam, ad(bozukAdim))).statusCode, 400, JSON.stringify(bozukAdim));
+    }
+    const cift = await gonder(tam, 'plana-al', { calismaSurumu: surum, emirId: 'J1', tezgah: makineId, baslangic: 12, adimlar: [{ isId: 'J1.20', tezgah: makineId }, { isId: 'J1.20', baslangic: 14 }] }, 'ak-05-d');
+    assert.equal(cift.statusCode, 400, cift.body);
     const eski = await gonder(tam, 'plana-al', { calismaSurumu: surum - 1, emirId: 'J1', tezgah: makineId, baslangic: 12 }, 'ak-05-a');
     assert.equal(eski.statusCode, 409, eski.body);
     const plansiz = await gonder(tam, 'plana-al', { calismaSurumu: surum, emirId: 'J1', tezgah: makineId, baslangic: 12 }, 'ak-05-b');

@@ -123,8 +123,14 @@ test('Kokpit: tahta, sağ tıkla tut ve bırak, Geri / İleri sayar, Matris, sor
   expect(tasinan).toEqual([]);
 
   if (bilgi.project.name === 'g360') {
-    // Telefon: tahta yok, liste var; emre dokununca ayrıntı açılır, adımın tezgâh seçeneği önizlemeyle gelir ve Uygula taşır.
+    // Telefon: tahta yok, liste var. Tezgâh gözünde işler tezgâha göre toplanır; Sipariş gözünde emirler sıralanır.
     await expect(kokpit.locator('.tc-pyq-tahta')).toBeHidden();
+    const grup = kokpit.getByRole('group', { name: 'Tezgâhlar ve işler' });
+    await expect(grup.getByRole('heading', { name: /Plana alınacak/ })).toBeVisible();
+    await expect(grup.getByRole('heading', { name: /T-01/ })).toBeVisible();
+    await tasma();
+    await kokpit.getByRole('group', { name: 'Görünüm' }).getByRole('button', { name: 'Sipariş' }).click();
+    // Emre dokununca ayrıntı açılır, adımın tezgâh seçeneği önizlemeyle gelir ve Uygula taşır.
     const liste = kokpit.getByRole('list', { name: 'Emirler' });
     await expect(liste.getByRole('button')).toHaveCount(4);
     await liste.getByRole('button', { name: /S1/ }).click();
@@ -342,4 +348,153 @@ test('Kokpit Matris: tezgâh çoksa yük şeridinde yalnız dolu tezgâhlar, dü
   await expect(satir.filter({ visible: true })).toHaveCount(12);
   expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0);
   expect(ag.hatalar).toEqual([]);
+});
+
+// Kart 3229 a: plansız emir adım adım plana alınır. S4 burada iki adımlıdır; ikinci adımın rotasında F-01 ve F-02 vardır, T-01 yoktur.
+test('Kokpit: adım adım plana alma; seçilen tezgâh ve saat önizlemeye ve komuta gider, rota dışı tezgâh seçilemez; yatay taşma yok', async ({ page, ac, ag }) => {
+  const c = calisma({ ...ILK }, {});
+  c.D.urunler = [...c.D.urunler, { id: 'U3', ad: 'Deneme govde', rota: [{ k: 'a1', ad: 'Torna', tezgahlar: [{ id: 'M1', cevrim: 60 }, { id: 'M2', cevrim: 60 }] }, { k: 'a2', ad: 'Freze', bag: [['a1', 'FS']], tezgahlar: [{ id: 'M2', cevrim: 60 }, { id: 'M3', cevrim: 60 }] }] }];
+  c.D.siparisler = c.D.siparisler.map((x) => (x.id === 'S4' ? { ...x, urun: 'U3' } : x));
+  let surum = 1;
+  const onizlenen: (string | null)[] = [], alinan: unknown[] = [];
+  await page.route('**/api/plan/planlama-calismasi', (r) => json(r, { calisma: c, surum }));
+  await page.route('**/api/plan/planlama-calismasi/plana-al-onizlemesi?*', (r) => {
+    const q = new URL(r.request().url()).searchParams, S = Number(q.get('baslangic'));
+    const sec = (JSON.parse(q.get('adimlar') ?? '[]') as { isId: string; tezgah?: string; baslangic?: number }[])[0];
+    onizlenen.push(q.get('adimlar'));
+    const S2 = Math.max(S + 4, sec?.baslangic ?? 0);
+    return json(r, { calismaSurumu: surum, gecerli: true, ileti: null, isler: [{ isId: 'S4.a1', tezgah: q.get('tezgah'), S, C: S + 4 }, { isId: 'S4.a2', tezgah: sec?.tezgah ?? 'M2', S: S2, C: S2 + 4 }], bitis: S2 + 4 });
+  });
+  await page.route('**/api/plan/planlama-calismasi/plana-al', (r) => { alinan.push(r.request().postDataJSON()); surum += 1; return json(r, { calismaSurumu: surum, oncekiSurum: surum - 1, ileti: null }); });
+  await page.route('**/api/plan/planlama-kayitlari/yaz', (r) => {
+    const g = r.request().postDataJSON() as { anahtar: string; deger: unknown };
+    surum += 1;
+    return json(r, { kayit: { anahtar: g.anahtar, bicim: 'json', deger: g.deger, surum } });
+  });
+  await page.clock.setSystemTime(new Date('2026-10-19T07:00:00+03:00'));
+  await ac('/plan/kokpit');
+  const kokpit = page.locator('.tc-pyq');
+  await expect(kokpit).toBeVisible({ timeout: 20_000 });
+  await kokpit.getByRole('group', { name: 'Görünüm' }).getByRole('button', { name: 'Matris' }).click();
+  await kokpit.locator('tr[data-emir="S4"] [data-emir-sec="S4"]').click();
+  const s4 = kokpit.getByRole('complementary', { name: /S4 ayrıntısı/ });
+  // Açılış bugünkü hızlı yoldur; "Adım adım" adım listesini açar.
+  const yol = s4.getByRole('group', { name: 'Plana alma yolu' });
+  await expect(yol.getByRole('button', { name: 'Hızlı (ilk adım)' })).toHaveAttribute('aria-pressed', 'true');
+  await expect(s4.locator('[data-hamle]').first()).toBeVisible();
+  await yol.getByRole('button', { name: 'Adım adım' }).click();
+  const iki = s4.getByRole('group', { name: '2. adımın tezgâhı' });
+  await expect(iki.getByRole('button')).toHaveText(['Sistem seçsin', 'F-01', 'F-02']);
+  await expect(s4.getByRole('status')).toContainText(/Biter/);
+  await iki.getByRole('button', { name: 'F-02' }).click();
+  await expect(s4.locator('[data-adim="S4.a2"] [data-sonuc]')).toContainText(/F-02.*tezgâhı siz seçtiniz/);
+  expect(onizlenen.at(-1)).toBe(JSON.stringify([{ isId: 'S4.a2', tezgah: 'M3' }]));
+  await s4.getByLabel('2. adımın başlama saati').selectOption({ index: 3 });
+  await expect.poll(() => onizlenen.at(-1) ?? '').toContain('"baslangic"');
+  expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0);
+  const al = s4.getByRole('button', { name: 'Plana al', exact: true });
+  await expect(al).toBeInViewport({ ratio: 1 });
+  await al.click();
+  await expect.poll(() => alinan.length).toBe(1);
+  expect(alinan[0]).toMatchObject({ emirId: 'S4', adimlar: [{ isId: 'S4.a2', tezgah: 'M3' }] });
+  expect(ag.hatalar).toEqual([]);
+});
+
+// Kart 3208 a: 3B görünümü. Sahne başsız tarayıcının yazılım çizicisinde de çizilsin diye 'zorla' konur (uygulama bunu koymaz). Onaylı plan
+// uydurmadır: S1'in ikinci adımı onaylı planda başka tezgâhta, S3 dört saat sonra; taslak bunları değiştirmiş sayılır.
+test('Kokpit 3B: Matris düz açılır, 3B\'ye kalkar; hücre emirleri süzer; Yük ve gecikme, Önce / sonra; yatay taşma yok', async ({ page, ac, ag }) => {
+  await page.addInitScript(() => { (globalThis as { tmiv2Sahne3B?: string }).tmiv2Sahne3B = 'zorla'; });
+  // Onaylı planın kaynağı makine kimliğidir (sayı): tezgâhlar bu testte sayıyla adlanır.
+  const no: Record<string, string> = { M1: '1', M2: '2', M3: '3' };
+  const ops = Object.fromEntries(Object.entries(ILK).map(([k, x]) => [k, { ...x, m: no[x.m] ?? x.m }]));
+  const c = calisma(ops, {});
+  // İstasyonlar: torna tek başına, iki freze bir arada (Yük ve gecikme, Önce / sonra istasyona göre toplar).
+  c.D.tezgahlar = c.D.tezgahlar.map((t) => ({ ...t, id: no[t.id] ?? t.id, grup: t.id === 'M1' ? '10' : '11', grupAd: t.id === 'M1' ? 'Deneme torna' : 'Deneme freze' }));
+  for (const u of c.D.urunler) for (const a of u.rota) for (const t of a.tezgahlar) t.id = no[t.id] ?? t.id;
+  const bas = Date.parse('2026-10-19T00:00:00+03:00');
+  const iso = (h: number) => new Date(bas + h * 3_600_000).toISOString();
+  const onayli: Record<string, { m: number; S: number; C: number }> = { 'S1.a1': { m: 1, S: 8, C: 16 }, 'S1.a2': { m: 3, S: 57, C: 65 }, 'S2.a1': { m: 2, S: 32, C: 40 }, 'S3.a1': { m: 1, S: 36, C: 42 } };
+  await page.route('**/api/plan/planlama-calismasi', (r) => json(r, { calisma: c, surum: 1 }));
+  await page.route('**/api/plan/planlama-calismasi/taban-ve-canli', (r) => json(r, {
+    planSurumu: 1,
+    isler: Object.entries(onayli).map(([k, x], i) => ({
+      k, anahtar: `ORN-${String(i + 1)}|10`, isEmriId: i + 1, uretimEmriId: i + 1, taban: null,
+      canli: { kaynak: { tur: 'makine', id: x.m }, baslangic: iso(x.S), bitis: iso(x.C), parcalar: [] },
+    })),
+  }));
+  await page.clock.setSystemTime(new Date('2026-10-19T07:00:00+03:00'));
+  await ac('/plan/kokpit');
+  const kokpit = page.locator('.tc-pyq');
+  await expect(kokpit).toBeVisible({ timeout: 20_000 });
+  await kokpit.getByRole('group', { name: 'Görünüm' }).getByRole('button', { name: '3B' }).click();
+  const sahne = kokpit.locator('.tc-pyq-3b-sahne');
+  await expect(sahne).toHaveAttribute('data-cizici', 'tamam', { timeout: 20_000 });
+  // Düz açılış: tezgâh ve gün adları sahnenin üstünde yazılı.
+  await sahne.scrollIntoViewIfNeeded();
+  const yazi = (m: RegExp) => sahne.locator('.tc-pyq-3b-et:not([hidden])').filter({ hasText: m }).first();
+  const tez = yazi(/^T-01$/), gun = yazi(/^(Pzt )?19$/);
+  await expect(tez).toBeVisible();
+  await expect(gun).toBeVisible();
+  // Hücre: gün sütunu ile tezgâh satırının kesişimi (üstten bakış).
+  const t = await tez.boundingBox(), g = await gun.boundingBox();
+  if (!t || !g) throw new Error('yazı yeri okunamadı');
+  await page.mouse.click(g.x + g.width / 2, t.y + t.height / 2);
+  const panel = kokpit.getByRole('complementary', { name: 'Açıklama' });
+  await expect(panel.getByRole('heading')).toContainText('T-01 ·');
+  await expect(panel.getByRole('list', { name: 'Hücrenin emirleri' }).getByRole('button')).toHaveCount(1);
+  const satir = kokpit.getByRole('region', { name: 'Emirler' }).locator('tbody tr');
+  await expect(satir).toHaveCount(1);
+  await expect(satir.first()).toContainText('S1');
+  await kokpit.getByRole('button', { name: 'Süzgeci kaldır' }).click();
+  await expect(satir).toHaveCount(4);
+  const kaldir = kokpit.getByRole('button', { name: "3B'ye kaldır" });
+  await kaldir.click();
+  await expect(kokpit.getByRole('button', { name: "2B'ye indir" })).toHaveAttribute('aria-pressed', 'true');
+  await kokpit.getByRole('group', { name: 'Kamera' }).getByRole('button', { name: 'Yandan' }).click();
+  await expect(kokpit.getByRole('group', { name: 'Kamera' }).getByRole('button', { name: 'Yandan' })).toHaveAttribute('aria-pressed', 'true');
+
+  const bakis = kokpit.getByRole('group', { name: '3B bakış' });
+  await bakis.getByRole('button', { name: 'Yük ve gecikme' }).click();
+  await expect(kokpit.locator('.tc-pyq-3b-boyut')).toContainText('taslakta yeri değişen');
+  await expect(panel).toContainText('darboğaz');
+  await expect(yazi(/^%100$/)).toBeVisible();
+  // İstasyon başlığı telefonda eğik bakışta yazılmaz (yer dar), yalnız üstten bakışta.
+  if ((page.viewportSize()?.width ?? 0) >= 768) await expect(yazi(/^Deneme freze$/)).toBeVisible();
+  // İstasyon başlığı tezgâh kodunu örtmez.
+  await expect(tez).toBeVisible();
+  await bakis.getByRole('button', { name: 'Önce / sonra' }).click();
+  await expect(panel).toContainText('Geç emir');
+  const kaydir = kokpit.getByRole('slider', { name: 'Önce ve sonra arası' });
+  await expect(kaydir).toHaveValue('100');
+  await kokpit.getByRole('button', { name: 'Önce ↔ Sonra' }).click();
+  await expect(kaydir).toHaveValue('0');
+  expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0);
+  expect(ag.hatalar).toEqual([]);
+  expect(ag.yazmalar).toEqual([]);
+});
+
+// Kalabalık atölyede boş tezgâhlar ızgarayı uzatıp çubukları okunmaz kılmasın: 8'den çok tezgâhta yalnız yükü olanlar çizilir, düğme hepsini açar.
+test('Kokpit 3B: tezgâh çoksa yalnız yükü olan tezgâhlar çizilir, düğmeyle hepsi', async ({ page, ac, ag }) => {
+  await page.addInitScript(() => { (globalThis as { tmiv2Sahne3B?: string }).tmiv2Sahne3B = 'zorla'; });
+  const c = calisma({ ...ILK }, {});
+  const yedek = Array.from({ length: 9 }, (_, i) => ({ id: `Y${String(i + 1)}`, kod: `Y-0${String(i + 1)}`, ad: `Deneme yedek ${String(i + 1)}` }));
+  c.D.tezgahlar = [...c.D.tezgahlar, ...yedek];
+  await page.route('**/api/plan/planlama-calismasi', (r) => json(r, { calisma: c, surum: 1 }));
+  await page.clock.setSystemTime(new Date('2026-10-19T07:00:00+03:00'));
+  await ac('/plan/kokpit');
+  const kokpit = page.locator('.tc-pyq');
+  await expect(kokpit).toBeVisible({ timeout: 20_000 });
+  await kokpit.getByRole('group', { name: 'Görünüm' }).getByRole('button', { name: '3B' }).click();
+  const yazi = (ad: RegExp) => kokpit.locator('.tc-pyq-3b-etiketler span').filter({ hasText: ad });
+  await expect(yazi(/^T-01$/)).toBeVisible({ timeout: 20_000 });
+  const secim = kokpit.getByRole('group', { name: 'Tezgâhlar' });
+  await expect(secim.getByRole('button', { name: 'Yükü olan (2)' })).toHaveAttribute('aria-pressed', 'true');
+  await expect(yazi(/^Y-0\d$/)).toHaveCount(0);
+  await secim.getByRole('button', { name: 'Tümü (12)' }).click();
+  // Dar ekranda çakışan tezgâh kodu gizlenir; etiketin sahnede olması yeter.
+  await expect(yazi(/^Y-01$/)).toHaveCount(1);
+  if ((page.viewportSize()?.width ?? 0) >= 768) await expect(yazi(/^Y-01$/)).toBeVisible();
+  expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0);
+  expect(ag.hatalar).toEqual([]);
+  expect(ag.yazmalar).toEqual([]);
 });

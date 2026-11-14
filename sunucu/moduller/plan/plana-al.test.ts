@@ -47,6 +47,63 @@ describe('plana alma hesabı motorun takvimiyle (3151)', () => {
     assert.deepEqual(ozet(kendi), [['S3.10', 'T2', 9, 11]]);
   });
 
+  test('PA-05 (3229): seçilen adım seçilen aday tezgâhta ve saatten sonra durur, ilk adımla birlikte kilitlenir; seçim yokken sonuç aynıdır', () => {
+    const c = calisma({ 'S2.10': op('S2', 'T2', 10) });
+    const g = { emirId: 'S1', tezgah: 'T1', baslangic: 8 };
+    const yalin = planaAlmaHesabi(c, 8, g), bos = planaAlmaHesabi(c, 8, { ...g, adimlar: [] });
+    assert.deepEqual(ozet(bos), ozet(yalin));
+    assert.deepEqual(yalin.gecerli && yalin.kilit, ['S1.10']);
+    // Sistem T3'ü seçerdi; kullanıcı T2'yi seçer: T2 12:00'ye kadar dolu, adım oraya kayar.
+    const t = planaAlmaHesabi(c, 8, { ...g, adimlar: [{ isId: 'S1.20', tezgah: 'T2' }] });
+    assert.deepEqual(ozet(t), [['S1.10', 'T1', 8, 10], ['S1.20', 'T2', 12, 14]]);
+    assert.deepEqual(t.gecerli && t.kilit, ['S1.10', 'S1.20']);
+    // Yalnız saat: aday tezgâhlardan en erken biteni, seçilen saatten önce başlamaz; öncülünden önceye de alınmaz.
+    const s = planaAlmaHesabi(c, 8, { ...g, adimlar: [{ isId: 'S1.20', baslangic: 13 }] });
+    assert.deepEqual(ozet(s), [['S1.10', 'T1', 8, 10], ['S1.20', 'T2', 13, 15]]);
+    const erken = planaAlmaHesabi(c, 8, { ...g, adimlar: [{ isId: 'S1.20', tezgah: 'T3', baslangic: 8 }] });
+    assert.deepEqual(ozet(erken), [['S1.10', 'T1', 8, 10], ['S1.20', 'T3', 10, 12]]);
+  });
+
+  test('PA-06 (3229): rota dışı tezgâh, emrin olmayan adımı, ilk adım, geçmiş saat ve yinelenen adım reddedilir', () => {
+    const g = { emirId: 'S1', tezgah: 'T1', baslangic: 8 };
+    const red = (adimlar: { isId: string; tezgah?: string; baslangic?: number }[], desen: RegExp) => {
+      const r = planaAlmaHesabi(calisma({}), 8, { ...g, adimlar });
+      assert.equal(r.gecerli, false, JSON.stringify(adimlar));
+      assert.equal(r.gecerli === false && r.alan, 'adimlar');
+      assert.match(r.ileti ?? '', desen);
+    };
+    red([{ isId: 'S1.20', tezgah: 'T1' }], /T1 bu emrin 2\. adımını yapamaz/);
+    red([{ isId: 'S2.10', tezgah: 'T2' }], /rotasında yok/);
+    red([{ isId: 'S1.10', tezgah: 'T1' }], /İlk adımın/);
+    red([{ isId: 'S1.20', baslangic: 5 }], /geçmiş bir saate/);
+    red([{ isId: 'S1.20', tezgah: 'T2' }, { isId: 'S1.20', tezgah: 'T3' }], /iki kez/);
+    // Fason adıma seçim yapılamaz.
+    const c = calisma({});
+    c.D.urunler[0]?.rota.push({ ...adim('30', [], [['20', 'b']]), fason: 'F1' } as never);
+    const f = planaAlmaHesabi({ ...c, D: { ...c.D, fasoncular: [{ id: 'F1', sure: 2 }] } }, 8, { ...g, adimlar: [{ isId: 'S1.30', baslangic: 20 }] });
+    assert.equal(f.gecerli, false);
+    assert.match(f.ileti ?? '', /3\. adım fason/);
+  });
+
+  test('PA-07 (3229): seçilen adım ufka sığmazsa ve yeri hesaplanamayan adım seçilirse komut reddedilir; seçim yokken emir yine alınır', () => {
+    const g = { emirId: 'S1', tezgah: 'T1', baslangic: 8 };
+    const uzak = planaAlmaHesabi(calisma({}), 8, { ...g, adimlar: [{ isId: 'S1.20', baslangic: 1e6 }] });
+    assert.equal(uzak.gecerli, false);
+    assert.equal(uzak.gecerli === false && uzak.alan, 'adimlar');
+    assert.match(uzak.ileti ?? '', /2\. adım seçilen yerde planlama ufkuna sığmıyor/);
+    // Rota: 10, 20, 30 fason, 40. Fason adımdan sonrası hesaplanmaz; 40'a seçim yapılamaz, seçimsiz emir alınır.
+    const c = calisma({});
+    c.D.urunler[0]?.rota.push({ ...adim('30', [], [['20', 'b']]), fason: 'F1' } as never, adim('40', ['T3'], [['30', 'b']]));
+    const d = { ...c, D: { ...c.D, fasoncular: [{ id: 'F1', sure: 2 }] } };
+    const sonra = planaAlmaHesabi(d, 8, { ...g, adimlar: [{ isId: 'S1.40', tezgah: 'T3' }] });
+    assert.equal(sonra.gecerli, false);
+    assert.equal(sonra.gecerli === false && sonra.alan, 'adimlar');
+    assert.match(sonra.ileti ?? '', /4\. adımın yeri önceki adım yüzünden hesaplanamıyor/);
+    const secimsiz = planaAlmaHesabi(d, 8, g);
+    assert.equal(secimsiz.gecerli, true, secimsiz.ileti ?? '');
+    assert.equal(secimsiz.bitis, null);
+  });
+
   test('PA-04: ilk adımın adayı olmayan tezgâh ve plan dışı emir reddedilir', () => {
     const t = planaAlmaHesabi(calisma({}), 8, { emirId: 'S1', tezgah: 'T3', baslangic: 8 });
     assert.equal(t.gecerli, false);

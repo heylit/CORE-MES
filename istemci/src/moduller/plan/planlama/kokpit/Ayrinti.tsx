@@ -1,10 +1,12 @@
+import { useState } from 'react';
 import { Simge } from '../../../../ortak/arayuz/index.ts';
+import { AdimAdim } from './AdimAdim.tsx';
 import { Hamleler, type HamleOzellikleri } from './Hamleler.tsx';
 import { BEKLEME_ESIGI, adimBeklemesi, durumYazisi, enCokBekleyen, satirKimligi, sureYaz, tasinabilir, type KokpitEmri, type KokpitModeli } from './kurallar.ts';
 
 // Seçili emrin ayrıntısı: adımları, yerleri ve seçili adım için tezgâh seçenekleri. Bilgisayarda tahtanın yanında, telefonda alttan açılır;
 // telefonda taşıma buradaki düğmelerle yapılır. Matriste çözüm buradadır: neden geç olduğu ve seçenekler adımlardan önce gelir.
-export interface AyrintiOzellikleri extends Pick<HamleOzellikleri, 'zaman' | 'uygula' | 'surum'> {
+export interface AyrintiOzellikleri extends Pick<HamleOzellikleri, 'zaman' | 'uygula' | 'surum' | 'bekle'> {
   m: KokpitModeli; e: KokpitEmri; secIs: string | null;
   adimSec: (isId: string) => void;
   kapat: () => void;
@@ -13,8 +15,11 @@ export interface AyrintiOzellikleri extends Pick<HamleOzellikleri, 'zaman' | 'uy
   ileti?: string | null;
 }
 
-export function Ayrinti({ m, e, secIs, zaman, uygula, surum, adimSec, kapat, matris = false, ileti = null }: AyrintiOzellikleri) {
+export function Ayrinti({ m, e, secIs, zaman, uygula, surum, bekle = false, adimSec, kapat, matris = false, ileti = null }: AyrintiOzellikleri) {
   const kod = new Map(m.tezgahlar.map((t) => [t.id, t.kod]));
+  // Plana alma yolu (3229 a): açılış bugünkü hızlı yoldur.
+  const [adimAdim, setAdimAdim] = useState(false);
+  const adimli = adimAdim && e.durum === 'plansiz';
   const secili = secIs ? m.isler[secIs] : undefined;
   const neden = matris && (e.durum === 'gec' || e.durum === 'risk') ? enCokBekleyen(m, e) : null;
   const adimlar = (
@@ -41,12 +46,17 @@ export function Ayrinti({ m, e, secIs, zaman, uygula, surum, adimSec, kapat, mat
   const cozum = e.durum === 'plansiz' ? (
     <>
       <h3>Plana al</h3>
-      <Hamleler m={m} e={e} isId={null} zaman={zaman} uygula={uygula} surum={surum} />
+      <span className="tc-pyq-seg" role="group" aria-label="Plana alma yolu">
+        <button type="button" aria-pressed={!adimAdim} onClick={() => { setAdimAdim(false); }}>Hızlı (ilk adım)</button>
+        <button type="button" aria-pressed={adimAdim} onClick={() => { setAdimAdim(true); }}>Adım adım</button>
+      </span>
+      {adimAdim ? <AdimAdim key={e.id} m={m} e={e} zaman={zaman} uygula={uygula} surum={surum} bekle={bekle} />
+        : <Hamleler m={m} e={e} isId={null} zaman={zaman} uygula={uygula} surum={surum} bekle={bekle} />}
     </>
   ) : (
     <>
       <h3>{secili ? `${secili.ad}: tezgâh seçenekleri` : 'Erkene alma seçenekleri'}</h3>
-      {secili && tasinabilir(secili) ? <p className="tc-pyq-not">{tasinabilir(secili)}</p> : <Hamleler m={m} e={e} isId={secIs} zaman={zaman} uygula={uygula} surum={surum} yalnizKazanc={matris} />}
+      {secili && tasinabilir(secili) ? <p className="tc-pyq-not">{tasinabilir(secili)}</p> : <Hamleler m={m} e={e} isId={secIs} zaman={zaman} uygula={uygula} surum={surum} bekle={bekle} yalnizKazanc={matris} />}
     </>
   );
   return (
@@ -66,7 +76,7 @@ export function Ayrinti({ m, e, secIs, zaman, uygula, surum, adimSec, kapat, mat
         </p>
       )}
       {ileti && <p className="tc-pyq-sonuc" role="status">{ileti}</p>}
-      {matris ? <>{cozum}{adimlar}</> : <>{adimlar}{cozum}</>}
+      {adimli ? cozum : matris ? <>{cozum}{adimlar}</> : <>{adimlar}{cozum}</>}
     </aside>
   );
 }
