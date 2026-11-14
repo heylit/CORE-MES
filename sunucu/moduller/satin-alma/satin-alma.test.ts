@@ -22,9 +22,9 @@ import {
 import { uclar } from './uclar.ts';
 import * as servis from './servis.ts';
 import { tedarikciOnayDurumlari } from '../kalite-merkezi/disari.ts';
-import { ILETILER, karneTeslimOlayi, talepEdenGorunumu } from './kurallar.ts';
+import { ILETILER, karneTeslimOlayi, onayliTalepGelisi, talepEdenGorunumu } from './kurallar.ts';
 import { kablola } from '../../kablolama.ts';
-import { takvimKayitlari } from './disari.ts';
+import { onayliTalepGelisleri, takvimKayitlari, terminDinle } from './disari.ts';
 import { tesisGunu } from '#paylasilan/zaman.ts';
 import { acikTalepMiktarlari, siparisOdemeKosullari, terminKalemleriOku } from './sorgular.ts';
 import * as sorgu from './sorgular.ts';
@@ -4118,6 +4118,25 @@ describe('satin-alma sürüm 6 (gerçek PostgreSQL)', () => {
     assert.deepEqual(son.map((x) => [x.islem, x.anahtar.sira]), [['sil', 2]]);
     assert.ok((await satirlar()).every((x) => x.kisi !== null), 'K5: uçtan yazımda kişi dolu');
     assert.ok((await satirlar()).every((x) => !('id' in x.alanlar)), 'kimlik deftere girmez');
+  });
+
+  test('3256-2: müdür onayı kaydedilince talebin onaylı kalemleri plana gelir ve olay yayılır; sipariş verilince talep satırı çıkar', async () => {
+    const no = (await ortam!.sahip.tek<{ n: number }>('SELECT malzeme_no AS n FROM satin_alma_katalog WHERE id = $1', [KATALOG]))!.n;
+    const onayda = await kararli();
+    const olaylar: number[][] = [];
+    const birak = terminDinle(async (_db, o) => { olaylar.push(o.malzemeNolar); });
+    try {
+      const onayli = tamam<Talep>(await kaydet(c.mudur, { ...govde(onayda), onaylar: [{ id: randomUUID(), zaman: '', kisiId: null, kisiAdi: null, sonuc: 'onay', dortGozsuz: false, notlar: '' }] }));
+      assert.deepEqual(olaylar, [[no]], 'onay kaydı canlı plana olay yayar');
+      const bugun = tesisGunu(Date.now());
+      const gelis = (await vt().tx((db) => onayliTalepGelisleri(db, [no], bugun))).get(no)?.filter((x) => x.siparisNo === onayda.no);
+      assert.deepEqual(gelis?.map((x) => [x.tarih, x.miktar]), [[onayliTalepGelisi(bugun, 7), '10'], [onayliTalepGelisi(bugun, 7), '4']]);
+      olaylar.length = 0;
+      tamam<Talep>(await kaydet(c.sa, { ...govde(onayli), durum: 'siparis_verildi',
+        karar: { ...onayli.karar!, siparisler: [{ teklifId: onayli.karar!.teklifId!, siparisNo: '', siparisTarihi: bugun, beklenenTeslim: '2099-03-01' }] } }));
+      assert.deepEqual(olaylar, [[no]], 'siparişe geçiş de olay yayar');
+      assert.equal((await vt().tx((db) => onayliTalepGelisleri(db, [no], bugun))).get(no)?.some((x) => x.siparisNo === onayda.no) ?? false, false);
+    } finally { birak(); }
   });
 });
 

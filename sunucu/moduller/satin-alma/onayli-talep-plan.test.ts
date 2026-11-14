@@ -6,6 +6,8 @@ import type { TestVeritabani } from '#cekirdek/test-vt.ts';
 import { yoneticiOlustur } from '../kisiler/disari.ts';
 import { onayliTalepGelisleri } from './disari.ts';
 import { onayliTalepGelisi } from './kurallar.ts';
+import { talepGelisleriOku } from './sorgular.ts';
+import { degisenMalzemeler } from './termin-olayi.ts';
 
 // 3256-2: onaylanmış, siparişi verilmemiş talep plana gelecek malzeme olarak girer. Veriler uydurmadır.
 describe('satin-alma onaylı talebin plana gelişi (3256-2)', () => {
@@ -90,5 +92,15 @@ describe('satin-alma onaylı talep okuması (3256-2, gerçek PostgreSQL)', () =>
     assert.deepEqual(g.get(m2), [{ tarih: null, miktar: '12.5', birim: 'kg', siparisNo: bolunmus }], 'termin günü olmayan teklif tarihsiz gelir');
     assert.equal(g.has(m3), false, 'karara girmemiş, sipariş satırı olan, fason ve sipariş verilmiş kalem gelmez');
     assert.equal((await onayliTalepGelisleri(ortam.vt, [], '2099-01-30')).size, 0);
+
+    // Canlı planın eskime karşılaştırması (3258 kapsamı): onaylı talebin kalemi talebin gelişleri arasındadır; onay geri alınınca çıkar.
+    const id = async (no: string) => (await s.tek<{ id: string }>('SELECT id FROM satin_alma_talep WHERE no = $1', [no]))!.id;
+    const once = await talepGelisleriOku(ortam.vt, await id(bolunmus));
+    assert.deepEqual(once.map((x) => [x.malzemeNo, x.tarih, x.miktar]).sort((a, b) => Number(a[0]) - Number(b[0])), [[m1, null, '12.5000'], [m2, null, '12.5000']]);
+    assert.ok(once.every((x) => x.satirId < 0), 'talep kaleminin anahtarı sipariş satırı kimliğiyle karışmaz');
+    await s.sorgu("INSERT INTO satin_alma_onay (id, talep_id, kisi_id, sonuc, notlar) VALUES ($1, $2, $3, 'ret', 'Deneme ret')", [randomUUID(), await id(bolunmus), kisiId]);
+    const sonra = await talepGelisleriOku(ortam.vt, await id(bolunmus));
+    assert.deepEqual(sonra, []);
+    assert.deepEqual(degisenMalzemeler(once, sonra), [m1, m2].sort((a, b) => a - b));
   });
 });
