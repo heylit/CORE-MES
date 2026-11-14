@@ -5,6 +5,9 @@ import { num } from '../bicim.ts';
 import { STOCK_DEF, type StokAyari } from '../durum.ts';
 import { CK, CLP, camSlice } from './kesit.ts';
 
+// Pay negatif yazilirsa ham parcadan kucuk cikar; pay sifirin altina inmez (form ayrica uyarir).
+export const pay = (v: unknown): number => Math.max(0, num(v, 0));
+
 export type HamTipi = 'block' | 'bar' | 'tube';
 export type Eksen = 'auto' | 'x' | 'y' | 'z';
 
@@ -264,13 +267,13 @@ export function sStockRes(g: HamGirdi, type: HamTipi, box: Kutu, have: boolean, 
   const res = { ok: true, dim, ctr, type: type === 'tube' ? 'bar' : type, tube: type === 'tube', Vs: 0, label: '' } as HamSonuc;
   if (type !== 'block') {
     const ui = (ai + 1) % 3, vi = (ai + 2) % 3, R = have && g.parca ? maxRadius(g.parca.P, g.parca.q, ai, ctr[ui]!, ctr[vi]!) : Math.max(dim[ui]!, dim[vi]!) / 2;
-    const dRaw = 2 * R + 2 * num(st.dAllow, 0), D0 = st.barStd ? stdUp(dRaw, BAR_STD) : roundUp(dRaw, num(st.round, 0));
-    const Lraw = dim[ai]! + 2 * num(st.face, 0) + num(st.cut, 0), L0 = roundUp(Lraw, num(st.round, 0) || 1);
+    const dRaw = 2 * R + 2 * pay(st.dAllow), D0 = st.barStd ? stdUp(dRaw, BAR_STD) : roundUp(dRaw, num(st.round, 0));
+    const Lraw = dim[ai]! + 2 * pay(st.face) + pay(st.cut), L0 = roundUp(Lraw, num(st.round, 0) || 1);
     res.D = D0; res.L = L0; res.R = R; res.ai = ai; res.partLen = dim[ai]; res.partD = 2 * R; res.ID = 0;
     res.Vs = Math.PI * D0 * D0 / 4 * L0; res.label = 'Ø' + fmtN(D0, D0 % 1 ? 1 : 0) + ' × ' + fmtN(L0, L0 % 1 ? 1 : 0) + ' mm';
     if (type === 'tube') {
       // ic cap: parcanin boydan boya deliginden isleme payi dusulur, adima asagi yuvarlanir
-      const ia = st.idAllow === '' || st.idAllow == null ? num(st.dAllow, 0) : num(st.idAllow, 0), stp = num(st.idStep, 1) > 0 ? num(st.idStep, 1) : 1, thr = have && g.parca && g.parca.geo ? g.parca.geo.thr : 0;
+      const ia = st.idAllow === '' || st.idAllow == null ? pay(st.dAllow) : pay(st.idAllow), stp = num(st.idStep, 1) > 0 ? num(st.idStep, 1) : 1, thr = have && g.parca && g.parca.geo ? g.parca.geo.thr : 0;
       const idA = thr > 0 ? Math.floor((2 * thr - 2 * ia + 0.05) / stp) * stp : 0, idM = num(st.idMan, 0);
       let ID = idM > 0 ? idM : idA;
       if (!(ID > 0) || ID >= D0 - 2) ID = 0;
@@ -279,7 +282,7 @@ export function sStockRes(g: HamGirdi, type: HamTipi, box: Kutu, have: boolean, 
       if (ID > 0) res.label = 'Ø' + fmtN(D0, D0 % 1 ? 1 : 0) + ' × Ø' + fmtN(ID, ID % 1 ? 1 : 0) + ' × ' + fmtN(L0, L0 % 1 ? 1 : 0) + ' mm';
     }
   } else {
-    const a = st.uni ? [num(st.ax, 0), num(st.ax, 0), num(st.ax, 0)] : [num(st.ax, 0), num(st.ay, 0), num(st.az, 0)], step = num(st.round, 0);
+    const a = st.uni ? [pay(st.ax), pay(st.ax), pay(st.ax)] : [pay(st.ax), pay(st.ay), pay(st.az)], step = num(st.round, 0);
     const sd = dim.map((d, i) => roundUp(d + 2 * a[i]!, step));
     if (st.plate) sd[2] = stdUp(dim[2]! + 2 * a[2]!, PLATE_STD);
     res.S = sd; res.Vs = sd[0]! * sd[1]! * sd[2]!;

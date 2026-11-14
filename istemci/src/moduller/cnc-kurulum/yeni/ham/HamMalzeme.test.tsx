@@ -63,6 +63,19 @@ describe('Ham Malzeme gorunumu', () => {
     expect(S.res?.label).not.toBe(bes);
   });
 
+  it('negatif pay 0 alinir ve uyarilir: ham parcadan kucuk onerilmez', () => {
+    ac();
+    fireEvent.click(screen.getByRole('button', { name: 'Örnek parça' }));
+    const pay = screen.getByLabelText('Çap payı (mm / yüz)');
+    fireEvent.change(pay, { target: { value: '0' } });
+    const sifir = S.res?.label;
+    fireEvent.change(pay, { target: { value: '-5' } });
+    expect(S.res?.label).toBe(sifir);
+    expect(screen.getByText('Pay negatif olamaz; 0 mm alındı.')).toBeTruthy();
+    fireEvent.change(pay, { target: { value: '1' } });
+    expect(screen.queryByText('Pay negatif olamaz; 0 mm alındı.')).toBeNull();
+  });
+
   it('yazma yetkisi yoksa kurulum kartina aktarma gizlidir', () => {
     ac({ ...YETKI, yazabilir: false });
     fireEvent.click(screen.getByRole('button', { name: 'Örnek parça' }));
