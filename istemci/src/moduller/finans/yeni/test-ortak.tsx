@@ -15,7 +15,7 @@ import { LISTELER } from './veri.ts';
 const kisi = (id: number, islemler: string[]): Kullanici => ({ id, ad: `Deneme ${id}`, islemler: islemler as Kullanici['islemler'] });
 // Yeni ekran kapısı (kisiler.rol-yonet) yoktur: hiçbirinde kapı işlemi bulunmaz.
 export const YAZAN = kisi(1, ['sayfa.finans', 'finans.oku', 'finans.yaz', 'musteri-tedarikci.oku']);
-export const YONETEN = kisi(5, ['sayfa.finans', 'finans.oku', 'finans.yaz', 'finans.yonet', 'musteri-tedarikci.oku']);
+export const YONETEN = kisi(5, ['sayfa.finans', 'finans.oku', 'finans.yaz', 'finans.iptal', 'finans.cek-yonet', 'finans.hesap-yonet', 'finans.oran-yaz', 'finans.sabit-kiymet', 'finans.maliyet-yaz', 'finans.duzenli-odeme', 'finans.ayar', 'musteri-tedarikci.oku']);
 export const OKUYAN = kisi(2, ['sayfa.finans', 'finans.oku', 'musteri-tedarikci.oku']);
 export const FIRMACI = kisi(3, ['sayfa.finans', 'musteri-tedarikci.oku']);
 // Sayfa işlemi var, hiçbir menü maddesinin işlemi yok.

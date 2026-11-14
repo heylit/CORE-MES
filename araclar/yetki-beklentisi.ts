@@ -205,7 +205,8 @@ export const ROL_MATRISI = {
   muhasebe_finans: {
     ad: 'Muhasebe ve Finans',
     islemler: [
-      'finans.beyan-yaz', 'finans.kur-yaz', 'finans.maliyet-oku', 'finans.oku', 'finans.yaz', 'finans.yonet', 'idari-isler.arac-talebi-ac',
+      'finans.beyan-yaz', 'finans.kur-yaz', 'finans.maliyet-oku', 'finans.oku', 'finans.yaz', 'finans.yonet', 'finans.iptal', 'finans.cek-yonet', 'finans.hesap-yonet', 'finans.oran-yaz', 'finans.sabit-kiymet',
+      'finans.maliyet-yaz', 'finans.duzenli-odeme', 'finans.ayar', 'idari-isler.arac-talebi-ac',
       'idari-isler.talep-ac', 'ik.bordro-gordum', 'ik.izin-talep', 'mesaj.oku', 'mesaj.yaz', 'musteri-tedarikci.oku',
       'musteri-tedarikci.yaz', 'portal.finans', 'portal.oku', 'portal.yaz', 'projeler.oku', 'satin-alma.fatura-bagla', 'satin-alma.oku',
       'sayfa.adim-durumu', 'sayfa.emirler', 'sayfa.finans', 'sayfa.idari-isler', 'sayfa.ik-islemlerim', 'sayfa.mesaj', 'sayfa.musteri-tedarikci',

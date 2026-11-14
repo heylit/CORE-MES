@@ -202,7 +202,7 @@ const KISI_OKUMA: readonly Islem[] = ['kisiler.oku'];
 // Bölünmüş eski anahtar (ETKISIZ_ISLEMLER) okumayı açmaz: ekranda görünmediği için yönetici onu geri alamaz.
 const ROTA_OKUMA: readonly Islem[] = ['sayfa.rota', ...ROTA_ISLEMLERI.filter((i) => !ETKISIZ_ISLEMLER.includes(i))];
 const MALIYET_OKUMA: readonly Islem[] = ['finans.maliyet-oku'];
-const MALIYET_YAZMA: readonly Islem[] = ['finans.yonet'];
+const MALIYET_YAZMA: readonly Islem[] = ['finans.maliyet-yaz'];
 const STOK_OKUMA: readonly Islem[] = ['sayfa.stok', ...STOK_ISLEMLERI];
 const EMIR_OKUMA: readonly Islem[] = ADIMLI_OKUMA_ISLEMLERI;
 // Risk D1 (3175): satın alma durumu satın alma okuyabilene ya da açık sipariş okuyabilene (stok/uclar.ts ACIK_SIPARIS_OKUMA) görünür.

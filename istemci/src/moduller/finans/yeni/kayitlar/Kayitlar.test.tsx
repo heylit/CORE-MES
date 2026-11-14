@@ -8,7 +8,7 @@ import { finansAc, json, OKUYAN, sunucuKur, YAZAN, type Istek } from '../test-or
 const kayitYazmasi = (i: Istek) => i.yontem === 'POST';
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
-const YONETEN: Kullanici = { ...YAZAN, id: 9, islemler: [...YAZAN.islemler, 'finans.yonet'] as Kullanici['islemler'] };
+const YONETEN: Kullanici = { ...YAZAN, id: 9, islemler: [...YAZAN.islemler, 'finans.iptal'] as Kullanici['islemler'] };
 const ADRES = '/finans/kayitlar';
 // Belge 2 (Hammadde) mahsupla kapanan parça ve açık kalan olarak iki satırdır; açık kalan (gecikmiş) alınır.
 const hammaddeSatiri = async () => (await screen.findAllByRole('row', { name: /Hammadde.*gecikti/ }))[0]!;
@@ -59,7 +59,27 @@ describe('Kayıtlar', () => {
     expect(yazma.govde).toMatchObject({ aciklama: 'Duzeltilen not', firmaId: 2, tutar: 1000, surum: 1 });
   });
 
-  it('finans.yonet olan belgeyi satır içi onayla iptal eder', async () => {
+  it('3165 a: iptal eylemi dışındaki yedi yönetim eylemi belgede "İptal et" düğmesini açmaz', async () => {
+    const yedi = ['finans.cek-yonet', 'finans.hesap-yonet', 'finans.oran-yaz', 'finans.sabit-kiymet', 'finans.maliyet-yaz', 'finans.duzenli-odeme', 'finans.ayar'] as const;
+    sunucuKur({ ...YAZAN, id: 33, islemler: [...YAZAN.islemler, ...yedi] as Kullanici['islemler'] }, {});
+    finansAc(ADRES);
+    fireEvent.click(await hammaddeSatiri());
+    const pencere = await screen.findByRole('dialog', { name: 'Kaydı düzenle' });
+    await new Promise((r) => setTimeout(r, 40));
+    expect(within(pencere).queryByRole('button', { name: /İptal et/ })).toBeNull();
+  });
+
+  it.each([['finans.iptal', true], ['finans.cek-yonet', false]] as const)('3165 a: yazamayan kişide kayıt penceresindeki "İptal et" yalnız iptal eylemiyle görünür (%s)', async (eylem, beklenen) => {
+    sunucuKur({ ...OKUYAN, id: 34, islemler: [...OKUYAN.islemler, eylem] as Kullanici['islemler'] }, {});
+    finansAc(ADRES);
+    fireEvent.click(await hammaddeSatiri());
+    const pencere = await screen.findByRole('dialog', { name: 'Kayıt' });
+    await within(pencere).findByText(/Düzeltme yetkiniz yok/);
+    await new Promise((r) => setTimeout(r, 40));
+    expect(within(pencere).queryByRole('button', { name: /İptal et/ }) !== null).toBe(beklenen);
+  });
+
+  it('finans.iptal olan belgeyi satır içi onayla iptal eder', async () => {
     const istekler = sunucuKur(YONETEN, { 'POST /finans/belgeler/2/iptal': () => json(200, { belge: ornekHamVeri().belgeler[1] }) });
     finansAc(ADRES);
     fireEvent.click(await hammaddeSatiri());

@@ -107,7 +107,7 @@ export function kayitMaliyetiniSuz<T extends { bicim: string; deger: unknown }>(
   return s.degisti ? { ...k, deger: JSON.stringify(s.deger) } : k;
 }
 
-// Maliyet görmeyen kişinin yazmasında gelen cost yok sayılır (2783; 2601 a: birim maliyetin sahibi Finans, yazma yolu finans.yonet): kayıtta
+// Maliyet görmeyen kişinin yazmasında gelen cost yok sayılır (2783; 2601 a: birim maliyetin sahibi Finans, yazma yolu finans.maliyet-yaz): kayıtta
 // aynı dizide aynı kimlikli kalemin dolu cost'u varsa o kalır (süzülmüş kaydın geri yazması maliyeti silmez, Veri N1), yoksa null olur.
 // Kimliksiz ya da kayıtta olmayan kalemin gelen değeri null'a iner; cost alanı hiç gelmeyen ve kayıtta da olmayan kaleme alan eklenmez.
 const cozulmus = (k: { bicim: string; deger: unknown }): unknown => {

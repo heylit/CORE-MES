@@ -12,5 +12,5 @@ function FinansAyarlari() {
 
 // Finans ayarları kendi sayfasındaki (/finans/ayarlar) Ayarlar bölümüdür; burada aynı bileşen, aynı uçlarla açılır.
 export const ayarEkranlari: AyarEkrani[] = [
-  { anahtar: 'finans', baslik: 'Finans ve Muhasebe', simge: 'lira', sira: 50, islem: 'finans.yonet', ekran: FinansAyarlari },
+  { anahtar: 'finans', baslik: 'Finans ve Muhasebe', simge: 'lira', sira: 50, islem: 'finans.ayar', veya: ['finans.hesap-yonet', 'finans.oran-yaz', 'finans.sabit-kiymet', 'finans.duzenli-odeme'], ekran: FinansAyarlari },
 ];

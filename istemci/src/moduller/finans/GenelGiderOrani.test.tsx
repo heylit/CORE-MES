@@ -64,8 +64,8 @@ describe('Genel gider oranı (206 a)', () => {
     expect(istekler.some((i) => i.yontem === 'POST')).toBe(false);
   });
 
-  it('finans.yonet oranı kaydeder; amortisman seçimi gövdeye boolean gider; "Dahil değil" hesaba girmediğini yazar (E-9)', async () => {
-    const istekler = sunucuKur(['finans.maliyet-oku', 'finans.yonet'], []);
+  it('finans.oran-yaz oranı kaydeder; amortisman seçimi gövdeye boolean gider; "Dahil değil" hesaba girmediğini yazar (E-9)', async () => {
+    const istekler = sunucuKur(['finans.maliyet-oku', 'finans.oran-yaz'], []);
     ac();
     await screen.findByText(/Henüz genel gider oranı girilmedi/);
     const form = within(screen.getByRole('form', { name: 'Genel gider oranı gir' }));
@@ -85,7 +85,7 @@ describe('Genel gider oranı (206 a)', () => {
   });
 
   it('2594 b: belgelerden öneri bileşenleri, bilinmeyen bileşen, eksik, oranı bilinmeyen, eşlenmemiş, baskın belge ve dışarıda kalanlar; toplam bilinmiyorsa kayıt kapalı', async () => {
-    const istekler = sunucuKur(['finans.maliyet-oku', 'finans.yonet'], [], ONERI);
+    const istekler = sunucuKur(['finans.maliyet-oku', 'finans.oran-yaz'], [], ONERI);
     ac();
     const tablo = await screen.findByRole('table', { name: 'Genel gider bileşenleri' });
     expect(within(tablo).getByText('10.000,00 TL')).toBeTruthy();
@@ -108,7 +108,7 @@ describe('Genel gider oranı (206 a)', () => {
   });
 
   it('2594 b: bileşenler biliniyorsa belgelerden kayıt yalnız ay, saat, elle ek ve açıklama gönderir', async () => {
-    const istekler = sunucuKur(['finans.maliyet-oku', 'finans.yonet'], [], { ...ONERI, bilesenler: { ...ONERI.bilesenler, dolayliPersonel: 5000 }, toplam: 22480, eksik: [] });
+    const istekler = sunucuKur(['finans.maliyet-oku', 'finans.oran-yaz'], [], { ...ONERI, bilesenler: { ...ONERI.bilesenler, dolayliPersonel: 5000 }, toplam: 22480, eksik: [] });
     ac();
     const kayit = within(await screen.findByRole('form', { name: 'Belgelerden genel gider oranı kaydet' }));
     fireEvent.change(kayit.getByLabelText(/Geçerlilik başlangıcı/), { target: { value: '2026-11-01' } });
@@ -125,7 +125,7 @@ describe('Genel gider oranı (206 a)', () => {
 
   it('2652 a: dolaylı personel gizliyse bileşen ve toplam "Gizli"; kayıt açık; listede gizli satırın tutarı ve saat başı "Gizli"', async () => {
     const gizliSatir = { ...satir(7, '2026-11-01', '0', '400.00', '0'), aylikGenelGider: null, saatBasi: null, gizli: true, kaynak: 'belge' as const };
-    sunucuKur(['finans.maliyet-oku', 'finans.yonet'], [gizliSatir], { ...ONERI, bilesenler: { ...ONERI.bilesenler, dolayliPersonel: null, emilmeyenDogrudan: null }, toplam: null, eksik: [], gizli: true });
+    sunucuKur(['finans.maliyet-oku', 'finans.oran-yaz'], [gizliSatir], { ...ONERI, bilesenler: { ...ONERI.bilesenler, dolayliPersonel: null, emilmeyenDogrudan: null }, toplam: null, eksik: [], gizli: true });
     ac();
     const tablo = await screen.findByRole('table', { name: 'Genel gider bileşenleri' });
     expect(within(tablo).getAllByText('Gizli').length).toBe(2);

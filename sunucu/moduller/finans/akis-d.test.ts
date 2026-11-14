@@ -144,7 +144,7 @@ describe('akış D: finans uçtan uca, gerçek rollerle (gerçek PostgreSQL)', (
     assert.deepEqual([okunan.iptal, okunan.aciklama, okunan.iptalNedeni], [true, 'Peşin avans', 'Yanlış firmaya girildi']);
   });
 
-  test('CEKIRDEK-ISTEKLERI 8, FK1: çapraz kur payı ayarda okunur ve yalnız finans.yonet ile değişir; gönderilmezse korunur', async () => {
+  test('CEKIRDEK-ISTEKLERI 8, FK1: çapraz kur payı ayarda okunur ve yalnız finans.ayar ile değişir; gönderilmezse korunur', async () => {
     const ilk = tamam(await oku<AyarCevabi>('muhasebe', '/finans/ayar')).ayar;
     assert.equal(ilk.caprazKurPayi, '20.00');
     const ikinci = tamam(await yaz<AyarCevabi>('muhasebe', '/finans/ayar/guncelle', ayarGovdesi(ilk, { caprazKurPayi: 35 }))).ayar;

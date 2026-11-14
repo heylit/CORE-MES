@@ -66,7 +66,7 @@ describe('finans günlük skor zamanlayıcısı (gerçek PostgreSQL)', () => {
     const rol = await vt().tek<{ id: number }>("INSERT INTO rol (kod, ad) VALUES ('gecici_finans', 'gecici_finans') RETURNING id");
     const yr = await vt().tek<{ id: number }>("SELECT id FROM rol WHERE kod = 'yonetici'");
     if (!rol || !yr) throw new Error('rol');
-    for (const i of ['sayfa.finans', 'finans.oku', 'finans.yaz', 'finans.yonet', 'musteri-tedarikci.oku', 'musteri-tedarikci.yaz']) {
+    for (const i of ['sayfa.finans', 'finans.oku', 'finans.yaz', 'finans.iptal', 'finans.cek-yonet', 'finans.hesap-yonet', 'finans.oran-yaz', 'finans.sabit-kiymet', 'finans.maliyet-yaz', 'finans.duzenli-odeme', 'finans.ayar', 'musteri-tedarikci.oku', 'musteri-tedarikci.yaz']) {
       await vt().sorgu('INSERT INTO rol_islemi (rol_id, islem) VALUES ($1, $2)', [rol.id, i]);
     }
     await vt().tx(async (db) => {

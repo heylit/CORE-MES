@@ -50,7 +50,7 @@ describe('finans ekranı: adresler ve açılış', () => {
     expect(screen.queryByText(YENI_EKRAN_ILETISI)).toBeNull();
     // Sekmedeki sayı (kritik öneri) ad sayılmaz.
     const sekmeler = within(screen.getByRole('tablist', { name: 'Finans bölümleri' })).getAllByRole('tab').map((s) => s.textContent?.replace(/\d+ \(\d+\)$/, ''));
-    // Okuyan: Genel gider ve Saatlik maliyetler (finans.maliyet-oku) ve Ayarlar (finans.yonet) görünmez.
+    // Okuyan: Genel gider ve Saatlik maliyetler (finans.maliyet-oku) ve Ayarlar (finans.ayar ya da tanım eylemleri) görünmez.
     expect(sekmeler).toEqual(SEKMELER.filter((s) => !['genel-gider', 'saatlik-maliyet', 'ayarlar'].includes(s.anahtar)).map((s) => s.baslik));
   });
 
@@ -335,8 +335,8 @@ describe('Sistem Ayarları > Finans ve Muhasebe', () => {
     render(<QueryClientProvider client={istemci}><BildirimSaglayici><MemoryRouter initialEntries={['/ayarlar']}><Ekran /></MemoryRouter></BildirimSaglayici></QueryClientProvider>);
   };
 
-  it('ekranın Ayarlar bölümünü çerçevesiz açar; görünürlük finans.yonet ile kalır', async () => {
-    expect(ayarEkranlari.map((e) => [e.anahtar, e.islem])).toEqual([['finans', 'finans.yonet']]);
+  it('ekranın Ayarlar bölümünü çerçevesiz açar; görünürlük ayar ekranını açan eylemlerle kalır', async () => {
+    expect(ayarEkranlari.map((e) => [e.anahtar, e.islem, ...(e.veya ?? [])])).toEqual([['finans', 'finans.ayar', 'finans.hesap-yonet', 'finans.oran-yaz', 'finans.sabit-kiymet', 'finans.duzenli-odeme']]);
     sunucuKur(YONETEN);
     ayarAc();
     expect(await screen.findByRole('tablist', { name: 'Ayar bölümleri' })).toBeTruthy();

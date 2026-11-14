@@ -29,12 +29,12 @@ export function tutarGirdisi(ham: string): { tamam: true; deger: number } | { ta
   return { tamam: true, deger };
 }
 
-// 2593 (2589 b): istasyon saatlik maliyeti yalnız burada yazılır. Okuma finans.maliyet-oku; yazma ve kaldırma finans.yonet
+// 2593 (2589 b): istasyon saatlik maliyeti yalnız burada yazılır. Okuma finans.maliyet-oku; yazma ve kaldırma finans.maliyet-yaz
 // (sunucu denetler). Girilmemiş maliyet "Girilmedi" yazar; sıfır gösterilmez.
 export function SaatlikMaliyet() {
   const islemler = useOturum().data?.islemler ?? [];
   const okuyabilir = islemler.includes('finans.maliyet-oku');
-  const yazabilir = islemler.includes('finans.yonet');
+  const yazabilir = islemler.includes('finans.maliyet-yaz');
   const liste = useQuery({
     queryKey: anahtar(tur),
     queryFn: () => api.get<{ satirlar: SaatlikMaliyetSatiri[] }>(`/finans/saatlik-maliyetler/${tur}`),

@@ -108,7 +108,15 @@ export const satisSevkleriOku = (siparisId: number): Promise<SatisSevkleriCevabi
 export interface FinansYetkisi {
   oku: boolean;
   yaz: boolean;
-  yonet: boolean;
+  // Finans yönetimi sekiz eyleme bölündü (3165 a); her düğme kendi eylemine bakar, asıl denetim uçtadır.
+  iptal: boolean;
+  cekYonet: boolean;
+  hesapYonet: boolean;
+  oranYaz: boolean;
+  sabitKiymet: boolean;
+  maliyetYaz: boolean;
+  duzenliOdeme: boolean;
+  ayar: boolean;
   kurYaz: boolean;
   firmaOku: boolean;
   firmaYaz: boolean;
@@ -116,7 +124,9 @@ export interface FinansYetkisi {
 }
 export function yetkiHesapla(y: Pick<Yetki, 'var'>): FinansYetkisi {
   return {
-    oku: y.var('finans.oku'), yaz: y.var('finans.yaz'), yonet: y.var('finans.yonet'), kurYaz: y.var('finans.kur-yaz'),
+    oku: y.var('finans.oku'), yaz: y.var('finans.yaz'), iptal: y.var('finans.iptal'), cekYonet: y.var('finans.cek-yonet'), hesapYonet: y.var('finans.hesap-yonet'),
+    oranYaz: y.var('finans.oran-yaz'), sabitKiymet: y.var('finans.sabit-kiymet'), maliyetYaz: y.var('finans.maliyet-yaz'),
+    duzenliOdeme: y.var('finans.duzenli-odeme'), ayar: y.var('finans.ayar'), kurYaz: y.var('finans.kur-yaz'),
     firmaOku: y.var('musteri-tedarikci.oku'), firmaYaz: y.var('musteri-tedarikci.yaz'), beyanYaz: y.var('finans.beyan-yaz'),
   };
 }

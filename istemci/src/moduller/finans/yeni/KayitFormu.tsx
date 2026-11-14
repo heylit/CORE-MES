@@ -524,7 +524,7 @@ function sonucuGonder(sonuc: KomutSonucu, komut: ReturnType<typeof useFinansKomu
 function CekDugmeleri({ finans, cek, ekAc }: { finans: FinansVerisi; cek: SunucuCeki; ekAc: (durum: CekDurumu) => void }) {
   const komut = useFinansKomutu();
   const { bildir } = useBildirim();
-  const { yonet } = useFinansYetkisi();
+  const { cekYonet: yonet } = useFinansYetkisi();
   const tikla = (durum: CekDurumu) => {
     if (cekEkAlanIster(durum)) { ekAc(durum); return; }
     sonucuGonder(cekDurumKomutu(finans.V, finans.motor, cek, durum), komut, bildir);

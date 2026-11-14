@@ -63,7 +63,7 @@ describe('finans birim maliyetleri (gerçek PostgreSQL)', () => {
        VALUES ('fml-1', 'hammadde', 'FML-', 1, 'aktif', '{"id":"fml-1","com":{"ad":"Deneme","birim":"kg"}}', $1, $1) RETURNING no`, [yoneticiId]))?.no ?? 0;
     const merkez = await vt().tek<{ id: number }>("INSERT INTO is_merkezi (kod, ad, aciklama, aktif) VALUES ('FML-IM', 'Deneme merkezi', NULL, true) RETURNING id");
     istasyonId = (await vt().tek<{ id: number }>("INSERT INTO istasyon (kod, ad, is_merkezi_id, aktif) VALUES ('FML-IS', 'Deneme istasyonu', $1, true) RETURNING id", [merkez?.id]))?.id ?? 0;
-    await girisliKisi('yonetim', ['finans.yonet', 'finans.maliyet-oku']);
+    await girisliKisi('yonetim', ['finans.maliyet-yaz', 'finans.maliyet-oku']);
     await girisliKisi('okuyan', ['finans.maliyet-oku']);
     await girisliKisi('finansci', ['finans.oku', 'finans.yaz']);
   });
@@ -85,7 +85,7 @@ describe('finans birim maliyetleri (gerçek PostgreSQL)', () => {
     await vt().sorgu('DELETE FROM finans_malzeme_maliyet');
   });
 
-  test('yetki: yazma finans.yonet, okuma finans.maliyet-oku ister; finans.oku maliyeti açmaz', async () => {
+  test('yetki: yazma finans.maliyet-yaz, okuma finans.maliyet-oku ister; finans.oku maliyeti açmaz', async () => {
     assert.equal((await istek('', 'GET', '/finans/maliyetler/malzeme')).durum, 401);
     assert.equal((await liste('okuyan', 'malzeme')).durum, 200);
     assert.equal((await liste('finansci', 'malzeme')).durum, 403);

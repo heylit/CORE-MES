@@ -59,7 +59,7 @@ describe('finans saatlik maliyet listesi (2593, gerçek PostgreSQL)', () => {
     aktifIstasyon = (await vt().tek<{ id: number }>("INSERT INTO istasyon (kod, ad, is_merkezi_id, aktif) VALUES ('FSM-1', 'Deneme torna', $1, true) RETURNING id", [merkez?.id]))?.id ?? 0;
     pasifIstasyon = (await vt().tek<{ id: number }>("INSERT INTO istasyon (kod, ad, is_merkezi_id, aktif) VALUES ('FSM-2', 'Deneme eski freze', $1, false) RETURNING id", [merkez?.id]))?.id ?? 0;
     await girisliKisi('okuyan', ['finans.maliyet-oku']);
-    await girisliKisi('finansci', ['finans.oku', 'finans.yaz', 'finans.yonet']);
+    await girisliKisi('finansci', ['finans.oku', 'finans.yaz', 'finans.maliyet-yaz']);
   });
   after(async () => { await ortam?.kaldir(); });
 

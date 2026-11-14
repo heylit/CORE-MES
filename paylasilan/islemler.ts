@@ -140,10 +140,14 @@ export const URETIM_EMRI_YAZMA_ISLEMLERI = [
   'uretim-emirleri.bol-birlestir', 'uretim-emirleri.plana-al', 'uretim-emirleri.beklet', 'uretim-emirleri.iptal',
 ] as const satisfies readonly VeriIslemi[];
 
+// Finans yönetimi sekiz eyleme bölündü (3165 a).
+export const FINANS_YONETIM_YAZMA_ISLEMLERI = [
+  'finans.iptal', 'finans.cek-yonet', 'finans.hesap-yonet', 'finans.oran-yaz', 'finans.sabit-kiymet', 'finans.maliyet-yaz', 'finans.duzenli-odeme', 'finans.ayar',
+] as const satisfies readonly VeriIslemi[];
 // Stok tanım yazımı dört eyleme bölündü (3165 a).
 export const STOK_TANIM_YAZMA_ISLEMLERI = ['stok.konum-yaz', 'stok.raf-yaz', 'stok.harita-yaz', 'stok.malzeme-ayari'] as const satisfies readonly VeriIslemi[];
 // Haritadan eşleme raf, konum ya da depo haritası yazımının ardından koşar; üçünden biri yeter.
 export const STOK_ESLEME_ISLEMLERI = ['stok.konum-yaz', 'stok.raf-yaz', 'stok.harita-yaz'] as const satisfies readonly VeriIslemi[];
 
 // Bölünmüş eski anahtarlar: hiçbir ucu açmaz, satırı ayrı kartla silinene dek katalogda kalır (3165 a). Sayfa yetkileri ekranı bunları göstermez.
-export const ETKISIZ_ISLEMLER: readonly Islem[] = ['istasyonlar.yaz', 'rota.yaz', 'uretim-emirleri.yaz', 'atolye.yaz', 'stok.tanim'];
+export const ETKISIZ_ISLEMLER: readonly Islem[] = ['istasyonlar.yaz', 'rota.yaz', 'uretim-emirleri.yaz', 'atolye.yaz', 'stok.tanim', 'finans.yonet'];

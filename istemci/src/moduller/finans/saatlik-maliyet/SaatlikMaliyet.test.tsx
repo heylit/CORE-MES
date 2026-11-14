@@ -56,8 +56,8 @@ describe('Saatlik maliyetler (2593, 2589 b)', () => {
     expect(istekler.some((i) => i.yontem === 'POST')).toBe(false);
   });
 
-  it('finans.yonet tutarı sürümle yazar; girilmemiş satır sürümsüz ilk giriş olur', async () => {
-    const istekler = sunucuKur(['finans.maliyet-oku', 'finans.yonet']);
+  it('finans.maliyet-yaz tutarı sürümle yazar; girilmemiş satır sürümsüz ilk giriş olur', async () => {
+    const istekler = sunucuKur(['finans.maliyet-oku', 'finans.maliyet-yaz']);
     ac();
     fireEvent.click(await screen.findByRole('button', { name: 'Deneme torna maliyetini düzenle' }));
     fireEvent.change(screen.getByLabelText(/Saatlik maliyet \(₺\)/), { target: { value: '900' } });
@@ -73,7 +73,7 @@ describe('Saatlik maliyetler (2593, 2589 b)', () => {
   });
 
   it('boş tutar gönderilmez, kaldırmaya yönlendirir', async () => {
-    const istekler = sunucuKur(['finans.maliyet-oku', 'finans.yonet']);
+    const istekler = sunucuKur(['finans.maliyet-oku', 'finans.maliyet-yaz']);
     ac();
     fireEvent.click(await screen.findByRole('button', { name: 'Deneme torna maliyetini düzenle' }));
     fireEvent.change(screen.getByLabelText(/Saatlik maliyet \(₺\)/), { target: { value: ' ' } });
@@ -84,7 +84,7 @@ describe('Saatlik maliyetler (2593, 2589 b)', () => {
   });
 
   it('kaldırma onayla gider: sürüm gövdede, istek kimliği başlıkta', async () => {
-    const istekler = sunucuKur(['finans.maliyet-oku', 'finans.yonet']);
+    const istekler = sunucuKur(['finans.maliyet-oku', 'finans.maliyet-yaz']);
     ac();
     fireEvent.click(await screen.findByRole('button', { name: 'Deneme torna maliyetini kaldır' }));
     const pencere = await screen.findByRole('dialog');
@@ -97,7 +97,7 @@ describe('Saatlik maliyetler (2593, 2589 b)', () => {
   });
 
   it('finans.maliyet-oku yoksa liste istenmez, yetki iletisi görünür', async () => {
-    const istekler = sunucuKur(['finans.oku', 'finans.yonet']);
+    const istekler = sunucuKur(['finans.oku', 'finans.maliyet-yaz']);
     ac();
     await screen.findByText('Saatlik maliyetleri görme yetkiniz yok.');
     expect(istekler.some((i) => i.yol.startsWith('/finans/saatlik-maliyetler'))).toBe(false);

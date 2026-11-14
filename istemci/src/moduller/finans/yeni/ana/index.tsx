@@ -146,7 +146,7 @@ function AnaSayfaIci({ finans, yetki, kayitGir }: { finans: FinansVerisi } & Omi
               {mc.profile.lowData && !mc.profile.assumed && (
                 <div className="tc-fa-ipucu">
                   <span>Satış geçmişi az; tahmine yeni satış katılmadı.</span>
-                  {yetki.yonet && <Dugme onClick={() => sekme('ayarlar', 'sekme=nakit')}>Aylık satışı gir</Dugme>}
+                  {yetki.ayar && <Dugme onClick={() => sekme('ayarlar', 'sekme=nakit')}>Aylık satışı gir</Dugme>}
                 </div>
               )}
             </Kart>
@@ -185,7 +185,7 @@ function AnaSayfaIci({ finans, yetki, kayitGir }: { finans: FinansVerisi } & Omi
 function tamlikDugmesiAcik(h: TamlikHedefi, y: FinansYetkisi, dugme: string): boolean {
   if (dugme === 'Kayıt gir') return false;
   if ('olay' in h) return y.yaz;
-  if ('ayar' in h) return y.yonet;
+  if ('ayar' in h) return y.ayar;
   return true;
 }
 

@@ -294,7 +294,7 @@ export const durumEmirlerSemasi = z.object({
   opYer: z.record(z.string(), durumEmirYeriSemasi).optional(),
 });
 // Birim maliyetler finanstadır (kart #1187). Anahtar kaydın sayı kimliğinin metnidir; satırı olmayan kalemin maliyeti bilinmiyordur (haritada yok).
-// Tutar numeric metnidir; sürüm yazmada geri gönderilir (köprü tutar). yazabilir: finans.yonet var mı (ekranın yazma alanlarını açar; uç yine denetler).
+// Tutar numeric metnidir; sürüm yazmada geri gönderilir (köprü tutar). yazabilir: finans.maliyet-yaz var mı (ekranın yazma alanlarını açar; uç yine denetler).
 export const durumMaliyetGirdisi = z.object({ birimMaliyet: z.string(), paraBirimi: z.string(), surum: z.number().int().min(1) });
 export const durumMaliyetSemasi = z.object({
   yazabilir: z.boolean(),

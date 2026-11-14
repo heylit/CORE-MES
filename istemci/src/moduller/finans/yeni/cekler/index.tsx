@@ -152,7 +152,7 @@ function CekDuzenle({ finans, yetki, cek, kapat }: { finans: FinansVerisi; yetki
       <Girdi etiket="Tutar" readOnly value={paraMetni(cek.tutar, cek.paraBirimi)} />
       <Girdi etiket="Durum" readOnly value={CEK_DURUM_ADI[cek.durum] ?? cek.durum} />
       <p className="tc-fy-not">Karekodlu çeklerde kaydetmeden önce karekod sorgusu yapın. Karşılıksız riski keşideci bazında Danışman ekranında izlenir.</p>
-      {yetki.yonet && (
+      {yetki.cekYonet && (
         <div className="tc-fy-dugmeler">
           {iptalSor
             ? <Dugme tur="tehlike" yukleniyor={komut.isPending} onClick={iptal}>İptali onayla</Dugme>

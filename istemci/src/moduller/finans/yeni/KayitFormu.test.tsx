@@ -6,7 +6,7 @@ import { BildirimSaglayici } from '../../../ortak/arayuz/index.ts';
 import type { OlayTuru } from './akislar.ts';
 import { KayitCekmecesi } from './KayitFormu.tsx';
 import { ornekHamVeri } from './ornek-ham-veri.ts';
-import { json, sunucuKur, YAZAN, YONETEN } from './test-ortak.tsx';
+import { json, sunucuKur, YAZAN } from './test-ortak.tsx';
 import { finansiKur } from './veri.ts';
 
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
@@ -61,13 +61,24 @@ describe('KayitCekmecesi', () => {
     return { satirlar, dugmeler: satirlar.map((s) => within(s).getAllByRole('button').map((b) => b.textContent)) };
   };
 
-  it('çekin durumu: finans.yonet olana portföydeki çekte "Karşılıksız çıktı" da görünür', async () => {
-    sunucuKur(YONETEN);
+  it('çekin durumu: finans.cek-yonet olana portföydeki çekte "Karşılıksız çıktı" da görünür', async () => {
+    // 3165 a: yalnız çek eylemi (öteki yedi yönetim eylemi yok).
+    sunucuKur({ ...YAZAN, id: 31, islemler: [...YAZAN.islemler, 'finans.cek-yonet'] });
     const p = ac('cekdurum');
     await waitFor(() => expect(cekDugmeleriOku(p).dugmeler).toContainEqual(['Bankaya tahsile verdim', 'Tahsil edildi', 'Ciro ettim', 'Karşılıksız çıktı']));
   });
 
-  it('çekin durumu: yalnız yazana üç düğme (karşılıksız uç finans.yonet ister), verilende "Ödendi"; tahsile verme doğrudan gider', async () => {
+  it('3165 a: çek eylemi dışındaki yedi yönetim eylemi "Karşılıksız çıktı" düğmesini açmaz', async () => {
+    const yedi = ['finans.iptal', 'finans.hesap-yonet', 'finans.oran-yaz', 'finans.sabit-kiymet', 'finans.maliyet-yaz', 'finans.duzenli-odeme', 'finans.ayar'] as const;
+    const istekler = sunucuKur({ ...YAZAN, id: 32, islemler: [...YAZAN.islemler, ...yedi] });
+    const p = ac('cekdurum');
+    await waitFor(() => expect(istekler.some((i) => i.yol === '/oturum')).toBe(true));
+    await new Promise((r) => setTimeout(r, 40));
+    expect(cekDugmeleriOku(p).dugmeler).toContainEqual(['Bankaya tahsile verdim', 'Tahsil edildi', 'Ciro ettim']);
+    expect(cekDugmeleriOku(p).dugmeler.flat()).not.toContain('Karşılıksız çıktı');
+  });
+
+  it('çekin durumu: yalnız yazana üç düğme (karşılıksız uç finans.cek-yonet ister), verilende "Ödendi"; tahsile verme doğrudan gider', async () => {
     const istekler = sunucuKur(YAZAN, { 'POST /finans/cekler/1/tahsile-ver': () => json(200, {}) });
     const p = ac('cekdurum');
     await waitFor(() => expect(istekler.some((i) => i.yol === '/oturum')).toBe(true));

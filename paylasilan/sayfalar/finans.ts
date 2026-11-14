@@ -38,7 +38,8 @@ export const FINANS_IKINCI_MENU = {
     { baslik: 'Sistem', maddeler: [
       { anahtar: 'genel-gider', baslik: 'Genel gider oranı', yol: '/finans/genel-gider', simge: 'tag', islem: 'finans.maliyet-oku' },
       { anahtar: 'saatlik-maliyet', baslik: 'Saatlik maliyetler', yol: '/finans/saatlik-maliyet', simge: 'lira', islem: 'finans.maliyet-oku' },
-      { anahtar: 'ayarlar', baslik: 'Ayarlar', yol: '/finans/ayarlar', simge: 'gear', islem: 'finans.yonet' },
+      // Ayarlar ekranı hesap, oran, sabit kıymet ve düzenli ödeme tanımlarını da taşır: ekranda yazabildiği bir bölüm olan her eylem açar (3165 a).
+      { anahtar: 'ayarlar', baslik: 'Ayarlar', yol: '/finans/ayarlar', simge: 'gear', islem: 'finans.ayar', veya: ['finans.hesap-yonet', 'finans.oran-yaz', 'finans.sabit-kiymet', 'finans.duzenli-odeme'] },
     ] },
   ],
 } as const satisfies IkinciMenuTanimi;

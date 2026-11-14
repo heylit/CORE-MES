@@ -14,7 +14,7 @@ import { openFindings } from './gorunum.ts';
 import { KayitCekmecesi } from './KayitFormu.tsx';
 import { CSV_BASLIKLARI, kayitCsvSatirlari } from './kayitlar/kurallar.ts';
 import { finansKomutlari } from './sayfa-komutlari.ts';
-import { adrestenSekme, EKRANLAR, SAYAC_UCU, SEKMELER, VERISIZ, yeniYol, type SekmeAnahtari } from './sekmeler.ts';
+import { adrestenSekme, EKRANLAR, SAYAC_UCU, sekmeAcik, SEKMELER, VERISIZ, yeniYol, type SekmeAnahtari } from './sekmeler.ts';
 import { useFinansVerisi, useFinansYetkisi, type FinansVerisi, type FinansYetkisi } from './veri.ts';
 import './finans-yeni.css';
 
@@ -71,9 +71,9 @@ function FinansYeniIci() {
   const veri = useFinansVerisi(yetki.oku);
   const c = useKayitCekmecesi();
 
-  const gorunen = SEKMELER.filter((s) => izin.var(s.islem as Islem));
+  const gorunen = SEKMELER.filter((s) => sekmeAcik(s, (i) => izin.var(i as Islem)));
   const sekme = adrestenSekme(pathname) ?? SEKMELER[0]!;
-  const acik = izin.var(sekme.islem as Islem);
+  const acik = sekmeAcik(sekme, (i) => izin.var(i as Islem));
   const finans = veri.finans;
   const A = useMemo(() => finans?.motor.runAnalysis() ?? null, [finans]);
   const kritik = A && finans ? openFindings(finans.motor, A).filter((f) => f.sev === 3).length : 0;
@@ -156,7 +156,7 @@ function FinansYeniIci() {
   );
 }
 
-// Sistem Ayarları > Finans ve Muhasebe: ekranın Ayarlar bölümü (aynı bileşen, aynı uçlar). Görünürlüğü finans.yonet verir
+// Sistem Ayarları > Finans ve Muhasebe: ekranın Ayarlar bölümü (aynı bileşen, aynı uçlar). Görünürlüğü sekiz yönetim eyleminden biri verir
 // (ayar-ekranlari.tsx); "Gerçek bakiyeyle eşitle" aynı kayıt penceresini açar.
 export function FinansAyarlariBolumu() {
   const yetki = useFinansYetkisi();

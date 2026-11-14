@@ -84,7 +84,17 @@ describe('Nakit planı', () => {
 });
 
 describe('Bütçe', () => {
-  it('reddedilen: finans.yonet yoksa tutar girdisi ve doldur düğmesi yok (finans.yaz yetmez)', () => {
+  it('3165 a: bütçe yalnız ayar eylemiyle yazılır; öteki yedi yönetim eylemi tutar girdisini açmaz', () => {
+    ekranAc(Butce, { ...YONETICI, ayar: false });
+    expect(screen.queryByRole('spinbutton')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Son 6 ay ortalamasıyla doldur' })).toBeNull();
+    cleanup();
+    ekranAc(Butce, { ...YAZAR, ayar: true });
+    expect(screen.getAllByRole('spinbutton').length).toBeGreaterThan(0);
+    expect(screen.getByRole('button', { name: 'Son 6 ay ortalamasıyla doldur' })).toBeTruthy();
+  });
+
+  it('reddedilen: finans.ayar yoksa tutar girdisi ve doldur düğmesi yok (finans.yaz yetmez)', () => {
     ekranAc(Butce, YAZAR);
     expect(screen.queryByRole('spinbutton')).toBeNull();
     expect(screen.queryByRole('button', { name: 'Son 6 ay ortalamasıyla doldur' })).toBeNull();
