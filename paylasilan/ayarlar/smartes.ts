@@ -31,4 +31,11 @@ export const SMARTES_AYARLARI = {
     baslik: 'SmartES canlı makine okuması',
     aciklama: 'Açıkken (ve SmartES bağlantısı da açıkken) her makinenin anlık durumu, programı, parça sayacı ve iş mili yükü dakikada bir SmartES\'ten okunur ve SmartES > Makineler canlı ekranında gösterilir. Her turda makine başına bir istek atılır; SmartES\'e hiçbir şey yazılmaz.',
   },
+  'smartes.sayim-aktarimi': {
+    modul: 'smartes',
+    tur: 'boolean',
+    varsayilan: false,
+    baslik: 'SmartES: sayım aktarımı',
+    aciklama: 'Açıkken sayım kaynağı SmartES seçilen istasyonların sağlam adetleri SmartES > Onay bekliyor listesine düşer ve o istasyonlarda terminalden sağlam sayım yapılmaz. Hiçbir adet onaylanmadan üretim emrine ve stoğa yazılmaz. Kapatılınca aktarım durur, terminal yeniden sayar; kapalıyken başlamış SmartES kayıtları sonradan aktarılmaz.',
+  },
 } as const satisfies Record<string, AyarTanimi>;

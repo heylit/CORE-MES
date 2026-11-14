@@ -33,7 +33,7 @@ import {
   ilerlemeParametreleri, MAKINE_AYARI, MAKINE_BILGI_METODU, MAKINE_LISTESI_YENILEME_MS, MAKINE_OKUMA_ARALIGI_MS, MAKINE_TUR_TAVANI_MS,
   makineBilgiParametreleri, makineBilgisiOku, turSirasi, adAnahtari, adDurumu, kodOnerileri, LISTE_METOTLARI, LISTE_TURLERI, listeKayitlari, listeOkunmaliMi,
   listeParametreleri, nedenOnerisi, gelenKalemleri, hamAlanlari, cevrimOku, cevrimSaniyesi, HESAP_METOTLARI, HESAP_TURLERI, hesapOkunmaliMi,
-  hesapParametreleri, OEE_PENCERESI_GUN, oeeOku, oeeYuzdeleri, tanimliAnahtari, tanimliSaniyeler, zorlaOkunabilirMi, adetOnayFarklari, ONAY_ILETILERI,
+  hesapParametreleri, OEE_PENCERESI_GUN, oeeOku, oeeYuzdeleri, tanimliAnahtari, tanimliSaniyeler, zorlaOkunabilirMi, adetOnayFarklari, ONAY_ILETILERI, SAYIM_AKTARIMI_AYARI,
   onayaGirerMi,
 } from './kurallar.ts';
 import type {
@@ -242,7 +242,7 @@ async function satirYaz(db: Db, kaynak: OkumaKaynagi, satir: Readonly<Record<str
     const k = isEmriDurumuOku(satir);
     if (k) {
       await s.isEmriDurumuYaz(db, k, zaman);
-      await adetOnayinaAl(db, k, zaman, await sayimGecerliligi(db, k));
+      await adetOnayinaAl(db, k, zaman, await sayimGecerliligi(db, k, zaman));
     }
     return k !== null;
   }
@@ -1456,10 +1456,19 @@ export async function makineBulgulari(db: Db, istemci: SmartesIstemcisi | null, 
 // sonra başlamış satırı girer (gecerlilik null: istasyon terminalden sayılıyor, satır yalnız SmartES sayfasında durur). Red adedi fire
 // eşlemesi (3174) gelince kuyruğa girer: şimdi yazılırsa o güne dek reddedilmiş sayılıp bir daha gelmezdi.
 // Aynı satırı iki okuma aynı anda kuyruğa yazamaz: çağıran önce durum satırını yazar, satır kilidi ikinciyi bekletir ve o, ilkinin farkını görür.
+// Sayımı SmartES'ten gelen istasyonlar ve satırın onaya girebileceği en erken başlangıç: istasyonun SmartES'e geçtiği an ile "SmartES:
+// sayım aktarımı" anahtarının açık görüldüğü ilk andan geç olanı. Anahtar kapalıyken boştur: hiçbir satır onaya girmez ve onaylanamaz.
+// Anahtar kapalıyken başlamış satır açılınca da girmez (geçmiş toptan aktarılmaz).
+export async function sayimGecerlilikleri(db: Db, zaman: Date): Promise<Map<number, Date>> {
+  const acilis = await s.aktarimAcilisiYaz(db, await sistemAyariOku(db, SAYIM_AKTARIMI_AYARI), zaman);
+  if (acilis === null) return new Map();
+  return new Map([...(await smartesSayimIstasyonlari(db))].map(([id, g]) => [id, g.getTime() > acilis.getTime() ? g : acilis]));
+}
+
 // Satırın istasyonu CORE iş emrinden bulunur (giden kutusundaki tek karşılık); iş emri bulunamıyorsa SmartES iş istasyonu kodunun
 // eşlemesinden. İstasyon bulunamıyorsa ya da terminalden sayılıyorsa null: satır onaya girmez.
-async function sayimGecerliligi(db: Db, k: IsEmriDurumuKaydi): Promise<Date | null> {
-  const kaynaklar = await smartesSayimIstasyonlari(db);
+async function sayimGecerliligi(db: Db, k: IsEmriDurumuKaydi, zaman: Date): Promise<Date | null> {
+  const kaynaklar = await sayimGecerlilikleri(db, zaman);
   if (kaynaklar.size === 0) return null;
   const isEmriId = await s.tekGidenIsEmri(db, k.isEmriNo);
   const istasyonId = isEmriId !== null
@@ -1496,7 +1505,9 @@ export async function adetOnaylari(db: Db, q: Sayfa & { gorunum: 'bekliyor' | 'k
 // ve onay bekler. Sayım üretim-emirleri komutundan geçer; makine SmartES makine eşlemesinden verilir, eşlenmemişse komut seçer.
 export async function adetOnayla(db: Db, kisiId: number, idler: readonly number[]): Promise<AdetKarariCevabi> {
   const makineler = new Map((await s.eslemeler(db, 'makine')).map((e) => [e.smartesKod, e.tmiId]));
-  const zaman = new Date().toISOString();
+  const simdi = new Date();
+  const kaynaklar = await sayimGecerlilikleri(db, simdi);
+  const zaman = simdi.toISOString();
   let islenen = 0;
   const hatalar: AdetKarariCevabi['hatalar'] = [];
   for (const id of new Set(idler)) {
@@ -1506,6 +1517,9 @@ export async function adetOnayla(db: Db, kisiId: number, idler: readonly number[
       if (satir.tur !== 'saglam') throw cakisma(ONAY_ILETILERI.redIslenmez);
       const ie = satir.isEmriId === null ? null : await isEmriOzeti(db, satir.isEmriId);
       if (ie === null) throw cakisma(ONAY_ILETILERI.isEmriYok);
+      // Satır beklerken istasyon terminale alınmış (ya da aktarım kapatılmış) olabilir: o üretimi terminal sayar, onay ikinci kez yazardı.
+      const gecerlilik = ie.istasyonId === null ? undefined : kaynaklar.get(ie.istasyonId);
+      if (gecerlilik === undefined || !onayaGirerMi(satir.baslangic, gecerlilik)) throw cakisma(ONAY_ILETILERI.kaynakDegisti);
       const makineId = satir.makineKodu === null ? undefined : makineler.get(satir.makineKodu);
       await smartesSayimi(db, kisiId, ie.uretimEmriId, { tur: 'saglam', adet: satir.adet, ...(makineId === undefined ? {} : { makineId }) }, { onayKimligi: id, isEmriId: ie.id });
       await s.onayKarariYaz(db, id, { durum: 'onaylandi', kisiId, zaman, redNedeni: null });

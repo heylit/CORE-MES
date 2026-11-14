@@ -8,6 +8,7 @@ import { tesisSaati } from '#paylasilan/zaman.ts';
 import type {
   AcikAdim, AdimCevabi, BekletGovdesi, Bekletme, AdimKanitiGirdisi, AdimPaylariCevabi, AsimlarCevabi, Canli, KatilimCevabi, MakineDoluAyrintisi, DurusDagilimiCevabi, Emir, EmirAdimi, EmirAyrintiCevabi, EmirDurumu, EmirKaydi, GunlukUretimCevabi, IzlemeEmri, KaliteKarari, OzetCevabi, SayimKaydi, SonOlaylarCevabi, SureOzetiCevabi, UretimKaydi,
 } from '#paylasilan/sozlesme/uretim-emirleri.ts';
+import { sistemAyariOku } from '../ayarlar/disari.ts';
 import { durusNedeniGetir, durusNedenleriniListele, hurdaNedeniGetir, hurdaNedenleriniListele } from '../durus-nedenleri/disari.ts';
 import {
   aktifIstasyonlar, calisirMakineler, ekipler, kapasiteKaynaklari, ekipUyeleri, isMerkeziIzinliMi, istasyonGetir, istasyonKisiAtamalari, istasyonlar, kisininIzinliIsMerkezleri, makineGetir, makineYetkinlikleri, smartesSayimIstasyonlari, yetkinMi,
@@ -73,6 +74,11 @@ export async function kayitAniyla<T>(db: Db, an: string | undefined, is: () => P
 // 3173: SmartES onayından gelen sayım, onay kaydının kimliğini taşır; kapsam yalnız o komutun çağrısıdır. Kimlik sayım defterinde
 // tür başına tekildir: aynı onay ikinci kez yazılamaz.
 const kayitKaynaklari = new WeakMap<Db, number>();
+
+// 3173: istasyonda sağlamı SmartES sayıyor mu: "SmartES: sayım aktarımı" anahtarı açık ve istasyonun sayım kaynağı SmartES.
+async function smartesSayarMi(db: Db, istasyonId: number): Promise<boolean> {
+  return (await smartesSayimIstasyonlari(db, [istasyonId])).size > 0 && (await sistemAyariOku(db, 'smartes.sayim-aktarimi'));
+}
 
 export async function smartesKaynagiyla<T>(db: Db, kaynakKimligi: number, is: () => Promise<T>): Promise<T> {
   if (kayitKaynaklari.has(db)) throw new Error('Sayım kaynağı kapsamı iç içe açılamaz.');
@@ -796,6 +802,8 @@ export async function emirBitir(
     await birlesmeAdimiBiterMi(db, id, calisan);
   }
   const sayac = await sayaclar(db, id, adimId);
+  // Bitirirken verilen adet sayaçtan farklıysa fark sağlam sayım olarak yazılır: SmartES istasyonunda bu da terminal sayımıdır.
+  if (saglamAdet !== undefined && saglamAdet !== sayac.saglam && (await smartesSayarMi(db, istasyonId))) throw cakisma(SMARTES_ISTASYONU_SAYIMI);
   // 2521 b: ilk parça kararı bekleyen parça varken adım (adımsız emirde emir) bitmez; karar Kalite Merkezi'ndedir.
   const kararIhlali = kararBekleyenBitisIhlali(sayac.kararBekliyor, calisan?.opNo ?? null);
   if (kararIhlali !== null) throw cakisma(kararIhlali);
@@ -885,7 +893,7 @@ export async function emirSayim(
   // 3173: sayımı SmartES'ten gelen istasyonda sağlamı yalnız onaylanan SmartES kaydı sayar; terminal (çevrimdışı kuyruktan sonradan gelen
   // dahil) reddedilir, yoksa aynı üretim iki kez stoğa girer. Karar sunucu saatiyle verilir, cihazın kayıt anıyla değil. Hurda terminalde
   // kalır: SmartES red adedi fire eşlemesi gelene dek CORE'a işlenmiyor, kapatılırsa hurda hiçbir yerden yazılamazdı.
-  if (govde.tur === 'saglam' && !kayitKaynaklari.has(db) && (await smartesSayimIstasyonlari(db, [istasyonId])).size > 0) throw cakisma(SMARTES_ISTASYONU_SAYIMI);
+  if (govde.tur === 'saglam' && !kayitKaynaklari.has(db) && (await smartesSayarMi(db, istasyonId))) throw cakisma(SMARTES_ISTASYONU_SAYIMI);
   if (secenek.duzeltebilir !== undefined && govde.adet < 0) await sayimYetkisiniDenetle(db, kisiId, id, secenek.duzeltebilir, adimId);
   const refakatPartisiId = govde.refakatPartisiId ?? null;
   let hurdaNedeniId: number | null = null;

@@ -102,9 +102,10 @@ export function IstasyonFormu({ kayit, kapat }: { kayit: SurumluIstasyon | null;
         />
         {kaynakDegisti && (
           <p className="tc-form-tam tc-ist-uyari" role="status">
-            Değişiklik kaydettiğiniz andan itibaren geçerli, istasyonda çalışan iş varsa onun için de: {sayimKaynagi === 'smartes'
+            Değişiklik kaydettiğiniz andan itibaren geçerli: {sayimKaynagi === 'smartes'
               ? 'daha önce başlamış SmartES kayıtları aktarılmaz, bundan sonra terminalde sayım yapılmaz.'
               : 'bundan sonraki SmartES adetleri aktarılmaz, sayım terminalden yapılır.'}
+            {' '}İstasyon boşken değiştirin: o an çalışan işin kalan adedi iki kaynaktan da yazılamayabilir.
           </p>
         )}
         {kayit && <div className="tc-form-tam"><GecmisDugmesi kayitlar={[{ tablo: 'istasyon', anahtar: { id: kayit.id } }]} /></div>}

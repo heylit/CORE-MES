@@ -142,6 +142,8 @@ describe('arkon bekleyen emrin paketi (3131, gerçek PostgreSQL)', () => {
     const kaynak = (k: 'terminal' | 'smartes') => o().vt.sorgu("UPDATE istasyon SET sayim_kaynagi = $1, sayim_kaynagi_gecerlilik = now() WHERE kod = 'BKLI'", [k]);
     assert.equal((await paketi(isEmriId)).govde.tmi?.sayimKaynagi, undefined, 'terminalden sayılan istasyonda alan yok');
     await kaynak('smartes');
+    assert.equal((await paketi(isEmriId)).govde.tmi?.sayimKaynagi, undefined, 'aktarım anahtarı kapalıyken alan yok');
+    assert.equal((await istek('yonetici', 'POST', '/ayarlar/smartes.sayim-aktarimi/degistir', { deger: true })).durum, 200);
     const isaretli = await paketi(isEmriId);
     assert.equal(isaretli.govde.tmi?.sayimKaynagi, 'smartes');
     const yaz = await istek('yonetici', 'POST', `/arkon/belgeler/pkgs/${encodeURIComponent(isaretli.kimlik)}/yaz`, { taban: null, govde: isaretli.govde, kaynak: 'bkl' });

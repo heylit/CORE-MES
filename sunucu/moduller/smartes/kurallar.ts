@@ -640,6 +640,7 @@ export type SmartesAkisDurumu = 'hazir' | 'kapali' | 'ayar-eksik' | 'baglanmadi'
 export const KALITE_AMBAR_AYARI = 'smartes.kalite-ambar-okumasi';
 export const TANIM_AYARI = 'smartes.tanim-gonderimi';
 export const MAKINE_AYARI = 'smartes.makine-okumasi';
+export const SAYIM_AKTARIMI_AYARI = 'smartes.sayim-aktarimi';
 export type AkisAyari = typeof KALITE_AMBAR_AYARI | typeof TANIM_AYARI | typeof MAKINE_AYARI;
 
 export interface SmartesAkisTanimi {
@@ -1311,4 +1312,5 @@ export const ONAY_ILETILERI = {
   karardaDegil: 'Kayıt artık onay beklemiyor.',
   redIslenmez: 'Red adedi fire eşlemesi gelince işlenir.',
   isEmriYok: 'SmartES iş emri CORE iş emriyle eşleşmedi.',
+  kaynakDegisti: 'Bu istasyonda sayım artık SmartES’ten gelmiyor; kayıt onaylanamaz, reddedin.',
 } as const;

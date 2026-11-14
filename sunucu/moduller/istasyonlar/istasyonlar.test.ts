@@ -495,6 +495,10 @@ describe('istasyonlar (gerçek PostgreSQL)', () => {
     assert.equal(smartes.govde.sayimKaynagi, 'smartes');
     const gecerlilik = Date.parse(smartes.govde.sayimKaynagiGecerlilik ?? '');
     assert.ok(gecerlilik >= once - 1000 && gecerlilik <= Date.now() + 1000, 'geçerlilik sunucu saatiyle o andır');
+    // Kim, ne zaman, hangi kaynağa: değişiklik denetim kaydında durur.
+    const iz = await vt().tek<{ kisi: number | null; kaynak: string | null }>(
+      "SELECT kisi_id AS kisi, govde->>'sayimKaynagi' AS kaynak FROM denetim_kaydi WHERE yol LIKE '/istasyonlar/:id%' AND parametre->>'id' = $1 AND govde ? 'sayimKaynagi' ORDER BY id DESC LIMIT 1", [String(ist.id)]);
+    assert.deepEqual([iz?.kisi !== null, iz?.kaynak], [true, 'smartes']);
 
     // Alanı bilmeyen çağıran (toplu taşıma, Excel) ve aynı kaynağı yeniden kaydeden geçerliliği oynatmaz.
     const ayni = await guncelle({ ad: 'Başka ad' }, 3);

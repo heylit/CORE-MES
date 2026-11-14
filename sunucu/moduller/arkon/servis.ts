@@ -372,7 +372,7 @@ async function isEmriTaslaklari(
   }
   const acikAdimi = (ie: { id: number; uretimEmriId: number }) => emirler.get(ie.uretimEmriId)?.acikAdimlar?.find((a) => a.isEmriId === ie.id);
   const hatali = await hataliToplamlari(db, girdiler.flatMap((g) => (acikAdimi(g.isEmri)?.hataliAdet === undefined ? [g.isEmri.uretimEmriId] : [])));
-  const smartesIstasyonlari = await smartesSayimIstasyonlari(db);
+  const smartesIstasyonlari = (await sistemAyariOku(db, 'smartes.sayim-aktarimi')) ? await smartesSayimIstasyonlari(db) : new Map<number, Date>();
   for (const g of girdiler) {
     const hazirlik = g.istasyon === null ? null : hazirlikEksigi(g.istasyon.tip, hazirliklar.get(g.isEmri.id)?.durum);
     const aql = paketTuru(g.opGrubu, g.istasyon) === 'kalite' ? aqlPlanlari.get(`${g.emir.parcaNo}\n${String(g.parca?.adet ?? g.isEmri.adimAdedi ?? g.isEmri.adet)}`) ?? null : null;
