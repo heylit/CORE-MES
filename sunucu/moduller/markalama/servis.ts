@@ -27,7 +27,7 @@ const BIRIM_LISTE_SINIRI = 500;
 
 // Tanım rota operasyonuna bağlıdır (3250 b). Rota aynı kattadır, markalama onu ithal edemez (ADR 0006): yürürlükteki revizyonun
 // operasyonlarını (bugünkü numara, numara defterindeki kayıtlı numara) rota verir, bağı sunucu/kablolama.ts kurar. Bağ yoksa tanım
-// yazıldığı numarayla gösterilir ve eklenir. Yetki denetlemez.
+// yazıldığı numarayla gösterilir; yazma bağsız geçmez (operasyonu bilinmeyen tanım sessizce eski anahtarla yazılmasın). Yetki denetlemez.
 export interface MarkalamaOperasyonu { malzemeId: number; operasyonId: number; opNo: number; kayitliOpNo: number }
 export type OperasyonCozucusu = (db: Db, malzemeIdleri: readonly number[]) => Promise<readonly MarkalamaOperasyonu[]>;
 let operasyonlar: OperasyonCozucusu | null = null;
@@ -39,6 +39,11 @@ export function operasyonCozucusuKaydet(cozucu: OperasyonCozucusu | null): Opera
 }
 const yururlukteOperasyonlar = async (db: Db, malzemeIdleri: readonly number[]): Promise<readonly MarkalamaOperasyonu[]> =>
   operasyonlar === null || malzemeIdleri.length === 0 ? [] : operasyonlar(db, malzemeIdleri);
+export const OPERASYON_BAGI_YOK = 'Markalama: rota operasyon çözücüsü bağlanmadı (sunucu/kablolama.ts).';
+function yazmaCozucusu(): OperasyonCozucusu {
+  if (operasyonlar === null) throw new Error(OPERASYON_BAGI_YOK);
+  return operasyonlar;
+}
 
 async function tanimlariKur(db: Db, satirlar: s.TanimSatiri[]): Promise<MarkalamaTanimi[]> {
   const alanlar = await s.alanlariOku(db, satirlar.map((t) => t.id));
@@ -116,7 +121,7 @@ export async function tanimEkle(db: Db, kullanici: Kullanici, g: TanimEkleGovdes
   await ayniSablonDenetle(db, g.malzemeId, g.seriSablonu, null);
   await modelDenetle(db, g.malzemeId, g.model);
   await seriUzunluguDenetle(db, g.malzemeId, g);
-  const o = (await yururlukteOperasyonlar(db, [g.malzemeId])).find((x) => x.opNo === g.opNo);
+  const o = (await yazmaCozucusu()(db, [g.malzemeId])).find((x) => x.opNo === g.opNo);
   const operasyon = o ? { id: o.operasyonId, kayitliOpNo: o.kayitliOpNo } : null;
   const ADIM_TANIMLI = 'Bu rota adımının markalama tanımı zaten var.';
   const id = await kisitKorumali(

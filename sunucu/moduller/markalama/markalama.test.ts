@@ -15,7 +15,7 @@ import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { kullaniciYukle, rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
 import { uretimEmriAc } from '../uretim-emirleri/disari.ts';
-import { kayitAramaKaynaklari } from './disari.ts';
+import { kayitAramaKaynaklari, markalamaOperasyonCozucusu } from './disari.ts';
 
 const PAROLA = 'dogru-parola-1';
 interface Cevap<T = unknown> { durum: number; govde: T }
@@ -542,6 +542,19 @@ describe('markalama (gerçek PostgreSQL)', () => {
     const yeni = await istek('yonetici', 'POST', '/markalama/tanimlar/ekle', { malzemeId: m, opNo: 40, seriSablonu: 'C{PARCA}-{SEQ}', alanlar: [seriAlani] });
     assert.equal(yeni.durum, 200, JSON.stringify(yeni.govde));
     assert.equal(tanimSemasi.parse(yeni.govde).opNo, 40, 'öteki operasyonun tanımı bugünkü numarasıyla');
+  });
+
+  // Risk K2: çözücü bağlı değilse yazma yolu sessizce eski anahtarla yazmaz; okuma bağsız da çalışır.
+  test('3250 1b-3: rota operasyon çözücüsü bağlı değilse tanım eklenmez, liste okunur', async () => {
+    const m = await malzemeAc();
+    const onceki = markalamaOperasyonCozucusu(null);
+    try {
+      const c = await istek('yonetici', 'POST', '/markalama/tanimlar/ekle', { malzemeId: m, opNo: 40, seriSablonu: '{PARCA}-{SEQ}', alanlar: [seriAlani] });
+      assert.equal(c.durum, 500);
+      assert.equal((await istek('yonetici', 'GET', `/markalama/tanimlar?malzemeId=${m}`)).durum, 200);
+    } finally {
+      markalamaOperasyonCozucusu(onceki);
+    }
   });
 
   test('MRK-U6: birim olay defteri yalnız eklenir', async () => {
