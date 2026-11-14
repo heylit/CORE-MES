@@ -132,6 +132,18 @@ describe('Geçmiş ekranı', () => {
     get.mockRestore();
   });
 
+  it('3233: defterde Etkilenen emrin kimliğini değil adını yazar; çalışmada olmayan emirde kimlik kalır, bütün işler yazısı değişmez', async () => {
+    const satir = (id: number, isler: string[]): DefterSatiri =>
+      ({ id, olay: 'uygulandi', bekleyenId: `b${String(id)}`, ne: `Değişiklik ${String(id)}`, ayrinti: '', isler, gerekce: null, kisi: 'Deneme planci', zaman: '2026-11-05T08:00:00.000Z' });
+    const get = vi.spyOn(api, 'get').mockResolvedValue({ satirlar: [satir(3, ['S1', 'YOK-9']), satir(2, ['*']), satir(1, [])], dahaVar: false } as never);
+    const c = calismaKur((x) => { const s = x.D.siparisler.find((y) => y.id === 'S1'); if (s) Object.assign(s, { ad: 'ORN-EMIR-1' }); });
+    ac(c, OKUYAN, 'defter');
+    const tablo = await screen.findByRole('table', { name: 'Değişiklik defteri' });
+    const etkilenen = within(tablo).getAllByRole('row').slice(1).map((r) => r.children[4]?.textContent);
+    expect(etkilenen).toEqual(['ORN-EMIR-1, YOK-9', 'Bütün işler', '—']);
+    get.mockRestore();
+  });
+
   it('her rolde aynı görünüm: okuyan da yazan da aynı bölümleri, süzgeci ve satırları görür', () => {
     const gor = (islemler: string[]) => {
       ac(izli(), islemler, 'iz');

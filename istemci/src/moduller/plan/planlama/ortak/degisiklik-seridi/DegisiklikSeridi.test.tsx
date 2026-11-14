@@ -25,6 +25,16 @@ describe('değişiklik şeridi kuralları', () => {
     expect(reddedilemez([s], [s.id])).toMatch(/yalnız uygulanabilir/);
   });
 
+  it('3233 a: sunucu yalnız eklenen emirleri bildirdiyse yalnız onlar dizilir; alan yoksa, null ya da boşsa bütün işler; yol metnindeki sayıdan kimlik okunmaz', () => {
+    const farklar = [{ yol: 'siparisler.length', eski: 315, yeni: 316 }, { yol: 'siparisler[316]', eski: null, yeni: { id: '316' } }];
+    const kd = { alanlar: ['siparisler'], farklar, kesik: false } satisfies KaynakDegisikligi;
+    expect(kaynakSatiri({ ...kd, eklenenSiparisler: ['316', '316/A'] }, 0, 1).isler).toEqual(['316', '316/A']);
+    expect(kaynakSatiri({ ...kd, kesik: true, eklenenSiparisler: ['316'] }, 0, 1).isler).toEqual(['316']);
+    expect(kaynakSatiri(kd, 0, 1).isler).toEqual(['*']);
+    expect(kaynakSatiri({ ...kd, eklenenSiparisler: null }, 0, 1).isler).toEqual(['*']);
+    expect(kaynakSatiri({ ...kd, eklenenSiparisler: [] }, 0, 1).isler).toEqual(['*']);
+  });
+
   it('fark alan yolu değil kullanıcı metniyle yazılır; adı bilinmeyen iç alanın değeri yazılmaz (B-2499-8)', () => {
     expect(farkMetni({ yol: 'ariza.length', eski: 0, yeni: 1 })).toBe('Makine arızası: kayıt sayısı 0 → 1');
     expect(farkMetni({ yol: 'saSurum', eski: 3, yeni: 4 })).toBe('Planlama verisi: değişti');

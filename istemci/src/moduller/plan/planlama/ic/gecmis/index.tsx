@@ -38,7 +38,7 @@ export function GecmisEkrani(o: GecmisOzellikleri) {
         <div className="tc-pyi-bos"><Simge ad="book" /><strong>Planlama çalışması yok</strong><span>Çalışma kaydı açılınca değişiklik izi burada görünür.</span></div>
       ) : (
         <section className="tc-pyi-icerik" aria-label={GECMIS_BOLUMLERI.find((x) => x[0] === bolum)?.[1]}>
-          {bolum === 'iz' && c ? <DegisiklikIzi c={c} /> : bolum === 'defter' ? <DegisiklikDefteri /> : <SenaryolarBolumu v={o.depo.senaryolar} planlamaAc={() => { o.git('studio'); }} />}
+          {bolum === 'iz' && c ? <DegisiklikIzi c={c} /> : bolum === 'defter' ? <DegisiklikDefteri siparisler={c?.D.siparisler} /> : <SenaryolarBolumu v={o.depo.senaryolar} planlamaAc={() => { o.git('studio'); }} />}
         </section>
       )}
     </div>

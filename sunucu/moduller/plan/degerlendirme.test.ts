@@ -284,6 +284,33 @@ describe('planlama değerlendirmesi: arama (457 1-3 b)', () => {
     assert.deepEqual(await uygula(['O3'], { ...calisma, plan: null }), { hata: 'plan-yok' });
   });
 
+  test('PD-30 (3233 a): plana yeni giren emir tek başına dizilir, yerleşmiş öteki işler tezgâhı ve başlangıcıyla yerinde kalır; plan kur bütün işleri yeniden dizer', async () => {
+    type Is = { job: string; m: string; S: number };
+    const yedi = { ...BUYUK_KAYIT, orders: BUYUK_KAYIT.orders.slice(0, 7) };
+    const c = calismaKur();
+    const g = planGirdisi({ calisma: c, kayit: yedi, kaynak: BUYUK_KAYNAK, bugun: '2026-10-19' });
+    assert.ok(g);
+    const m = motorYukle(); const p = m.schedule(g.st, 'dagit', null);
+    const e = m.evaluate(p, g.st, null, false) as { J: Record<string, { C: number; T: number }> };
+    const calisma = { ...g.S, plan: { ops: p.ops, fail: [], J: Object.fromEntries(Object.entries(e.J).map(([k, x]) => [k, { C: x.C, T: x.T }])), dataVer: g.S['dataVer'] } };
+    const eski = p.ops as unknown as Record<string, Is>;
+    assert.ok(Object.values(eski).every((r) => r.job !== 'O7'), 'yeni emir kayıtlı planda yok');
+    const iste = (istek: DegerlendirmeIstegi) => degerlendirmeYap({ calisma, kayit: BUYUK_KAYIT, kaynak: BUYUK_KAYNAK, bugun: '2026-10-19', istek }, AN);
+
+    const u = sonuc(await iste({ tur: 'plan-uygula', isler: ['O7'] })); if (u.tur !== 'plan-uygula') return assert.fail(u.tur);
+    const yeni = u.plan['ops'] as Record<string, Is>;
+    const yerlesen = Object.values(yeni).filter((r) => r.job === 'O7');
+    assert.equal(yerlesen.length, 2, 'yeni emrin iki adımı da plana girer');
+    for (const r of yerlesen) assert.ok(Number.isFinite(r.S), JSON.stringify(r));
+    assert.ok(Object.keys(eski).length > 0);
+    for (const id of Object.keys(eski)) assert.deepEqual([yeni[id]?.m, yeni[id]?.S], [eski[id]?.m, eski[id]?.S], id);
+
+    const k = sonuc(await iste({ tur: 'plan-kur' })); if (k.tur !== 'plan-kur') return assert.fail(k.tur);
+    const kur = k.plan['ops'] as Record<string, Is>;
+    assert.deepEqual(Object.keys(kur).sort(), Object.keys(yeni).sort(), 'plan kur bütün işleri dizer');
+    assert.ok(Object.keys(eski).some((id) => kur[id]?.m !== eski[id]?.m || kur[id]?.S !== eski[id]?.S), 'plan kur kayıtlı yerlere bağlı kalmaz: en az bir iş yer değiştirir');
+  });
+
   test('PD-15: süre kuyruğa girişten sayılır: süre biterse iş parçacığı durdurulur, sırası gelene süre kalmadıysa koşmadan reddedilir (ikisi de meşgul)', async () => {
     const { calisma } = buyukPlanli();
     const g = { calisma, kayit: BUYUK_KAYIT, kaynak: BUYUK_KAYNAK, bugun: '2026-10-19', istek: { tur: 'plan-secenekleri' } as const };

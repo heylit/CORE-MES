@@ -50,7 +50,9 @@ export function kaynakSatiri(kd: KaynakDegisikligi, t: number, dataVer: number):
   const ek = kalan > 0 || kd.kesik ? [`ve ${kd.kesik ? 'daha çok' : String(kalan)} fark`] : [];
   const ayrinti = farklar.length > 0 ? [...farklar, ...ek].join('; ') : 'Ayrıntısı birleşmede bulunamadı.';
   // Kişi birleşmede bilinmez; değişiklik defterinden 1975 ile gelir. Uydurulmaz.
-  return { id: `${DIS_ONEK}${String(dataVer)}`, ne, ayrinti, kim: '', t, isler: ['*'], geri: null, dis: true };
+  // 3233 a: yalnız yeni emir eklendiyse yalnız o dizilir; kimlikleri sunucu verir (yol metnindeki sayı dizin de olabilir, ondan okunmaz).
+  const isler = kd.eklenenSiparisler != null && kd.eklenenSiparisler.length > 0 ? [...kd.eklenenSiparisler] : ['*'];
+  return { id: `${DIS_ONEK}${String(dataVer)}`, ne, ayrinti, kim: '', t, isler, geri: null, dis: true };
 }
 
 export interface SeritOzeti { toplam: number; dis: number }

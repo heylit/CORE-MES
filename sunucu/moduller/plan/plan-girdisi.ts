@@ -43,7 +43,9 @@ export interface PlanGirdisi { S: Record<string, unknown>; st: MotorDurumu; kayn
 
 // 1962: birleşmenin bulduğu değişiklik atılmasın. Betik değişmez: kaynakBirlestir, otoArizaUygula ve otoBakimUygula bağlamın genel nesnesindedir, girdiKur
 // onları adıyla çağırır (tipli dilim de aynı yolla sarılır). Sarmalayan çağrıdan önceki değeri alır, değişen alanın farkını toplar.
-interface Izci { alanlar: Set<KaynakDegisiklikAlani>; farklar: GirdiFarki[]; kesik: boolean; artis: number }
+// eklenen (3233 a): birleşmenin yalnız EKLEDİĞİ siparişlerin kimlikleri; değişen ya da çıkan sipariş, kimliksiz liste ya da dışarıya bağlı
+// yeni sipariş görülünce null olur ve null kalır (yalnız eklenen emir tek başına dizilebilir).
+interface Izci { alanlar: Set<KaynakDegisiklikAlani>; farklar: GirdiFarki[]; kesik: boolean; artis: number; eklenen: Set<string> | null }
 const KAYNAK_ALANI = new Set<string>(KAYNAK_DEGISIKLIK_ALANLARI);
 const jsonKopya = <T>(x: T): T => (x === undefined ? x : (JSON.parse(JSON.stringify(x)) as T));
 
@@ -82,6 +84,18 @@ function kimlikFarki(eski: unknown, yeni: unknown, yol: string, l: GirdiFarki[],
   for (const f of girdiFarki(eski, yeni, 1)) if (l.length < sinir) l.push({ ...f, yol });
 }
 
+// Fark sınırından bağımsızdır: liste kimlikle eşlenemiyorsa ya da ekleme dışında bir fark varsa sonuç bilinmez (null).
+export function eklenenSiparisler(eski: unknown, yeni: unknown): string[] | null {
+  if (!Array.isArray(eski) || !Array.isArray(yeni)) return null;
+  const e = kimlikle(eski), y = kimlikle(yeni);
+  if (e === null || y === null) return null;
+  for (const [k, x] of e) if (!y.has(k) || JSON.stringify(x) !== JSON.stringify(y.get(k))) return null;
+  const yeniler = [...y.keys()].filter((k) => !e.has(k)), kume = new Set(yeniler);
+  // Alt düğüm üst siparişin adımına bağlıdır (ust); üstü bu eklemede gelmediyse üstün yeri de oynar.
+  for (const k of yeniler) { const u = (y.get(k) as { ust?: unknown }).ust; if (u !== undefined && u !== null && !kume.has(String(u))) return null; }
+  return yeniler;
+}
+
 function farkEkle(izci: Izci, eski: unknown, yeni: unknown, yol: KaynakDegisiklikAlani): void {
   const kalan = KAYNAK_FARKI_EN_COK - izci.farklar.length;
   if (kalan <= 0) { izci.kesik = true; return; }
@@ -106,7 +120,12 @@ function izle(baglam: object, izci: Izci): void {
       if (!KAYNAK_ALANI.has(a)) continue;
       const alan = a as KaynakDegisiklikAlani;
       izci.alanlar.add(alan);
-      farkEkle(izci, once[a], jsonKopya(D0[a]), alan);
+      const sonra = jsonKopya(D0[a]);
+      farkEkle(izci, once[a], sonra, alan);
+      if (alan === 'siparisler' && izci.eklenen !== null) {
+        const l = eklenenSiparisler(once[a], sonra);
+        if (l === null) izci.eklenen = null; else for (const k of l) izci.eklenen.add(k);
+      }
     }
     return alanlar;
   };
@@ -132,7 +151,9 @@ function kaynakDegisikligiKur(oncekiSurum: unknown, S: Record<string, unknown>, 
   const once = Number(oncekiSurum), sonra = Number(S.dataVer);
   if (!Number.isFinite(once) || !Number.isFinite(sonra) || sonra <= once) return null;
   if (sonra - once > izci.artis) izci.alanlar.add('receteRotaKaydi');
-  return { alanlar: KAYNAK_DEGISIKLIK_ALANLARI.filter((a) => izci.alanlar.has(a)), farklar: izci.farklar, kesik: izci.kesik };
+  const alanlar = KAYNAK_DEGISIKLIK_ALANLARI.filter((a) => izci.alanlar.has(a));
+  const yalnizEkleme = alanlar.length === 1 && alanlar[0] === 'siparisler' && izci.eklenen !== null && izci.eklenen.size > 0;
+  return { alanlar, farklar: izci.farklar, kesik: izci.kesik, eklenenSiparisler: yalnizEkleme ? [...izci.eklenen!].sort() : null };
 }
 
 // Bağlam kurulur ve betikler yüklenir. Tipli dilim verilmişse bağlamın kaynakBirlestir'i onu da uygulayan sürümle değişir: betiğin
@@ -152,7 +173,7 @@ type GirdiKur = (calisma: unknown, kayit: unknown, kaynak: KaynakOkumasi | null,
 
 // Her çağrı yeni bağlam kurar; girdiler kopyalanır, çağıranın nesneleri değişmez. Çalışma yoksa null.
 export function planGirdisi(istek: GirdiIstegi, simdi: number = Date.now()): PlanGirdisi | null {
-  const izci: Izci = { alanlar: new Set(), farklar: [], kesik: false, artis: 0 };
+  const izci: Izci = { alanlar: new Set(), farklar: [], kesik: false, artis: 0, eklenen: new Set() };
   const { girdiKur } = baglamla<{ girdiKur: GirdiKur }>(girdiKodu(), 'plan-girdisi.js', istek.kaynakDilimi, izci);
   const sonuc = girdiKur(jsonKopya(istek.calisma), jsonKopya(istek.kayit), jsonKopya(istek.kaynak), istek.bugun ?? tesisGunu(simdi));
   if (sonuc === null) return null;

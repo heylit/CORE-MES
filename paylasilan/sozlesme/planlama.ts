@@ -62,6 +62,8 @@ export const kaynakDegisikligi = z.object({
   alanlar: z.array(z.enum(KAYNAK_DEGISIKLIK_ALANLARI)),
   farklar: z.array(z.object({ yol: z.string(), eski: z.unknown(), yeni: z.unknown() })).max(KAYNAK_FARKI_EN_COK),
   kesik: z.boolean(),
+  // 3233 a: değişiklik yalnız yeni sipariş eklemekse o siparişlerin kimlikleri (sayfa yalnız onları dizdirir); başka her durumda null ya da yok.
+  eklenenSiparisler: z.array(z.string()).nullable().optional(),
 });
 export const planlamaCalismasiCevabi = z.object({
   calisma: z.record(z.string(), z.unknown()).nullable(),
