@@ -348,6 +348,32 @@ describe('siparisler (gerçek PostgreSQL, gerçek giriş)', () => {
     assert.equal(await teslim(kapaliEmir), '2026-11-15', 'taslak ya da planlı olmayan emir değişmez');
   });
 
+  test('SIP-19 (3254 a): emre bağlı partili kalemde parti çıkarılamaz ve değişmez (409, partiler yerinde); aynı partilerle kayıt geçer', async () => {
+    const partiler = [{ emirTuru: 'fai', adet: '10' }, { emirTuru: 'seri', adet: '90' }];
+    const taslak = await siparisAc({ satirlar: [{ malzemeNo: mamulNo, miktar: '100', birimFiyat: '1', partiler }] });
+    const onayli = (await gonder(yonetici, `/siparisler/${taslak.id}/onayla`, { surum: taslak.surum })).json<SiparisAyrintisi>();
+    const satir = onayli.satirlar[0]!;
+    const fai = satir.partiler.find((x) => x.emirTuru === 'fai')!.id;
+    await o().sahip.sorgu(
+      `INSERT INTO uretim_emri (emir_no, parca_no, parca_ad, adet, acan_id, malzeme_no, siparis_satiri_id, siparis_parti_id)
+       VALUES ($1, 'P', 'Deneme', 10, $2, $3, $4, $5)`, [`ORN-GP-${randomUUID().slice(0, 8)}`, yoneticiId, mamulNo, satir.id, fai]);
+    const t = (await gonder(yonetici, `/siparisler/${onayli.id}/onay-geri-al`, { surum: onayli.surum, neden: 'Deneme parti' })).json<SiparisAyrintisi>();
+    assert.equal(t.satirlar[0]?.emreBagli, true);
+
+    const kalem = { id: satir.id, malzemeNo: mamulNo, miktar: '100', birimFiyat: '1', termin: null, aciklama: null };
+    const DEGISMEZ = 'Emre bağlı kalemde yalnız termin değişir (kalem 1).';
+    const cikar = await guncelle(t, { satirlar: [{ ...kalem, partiler: [] }] });
+    assert.deepEqual([cikar.statusCode, cikar.json().mesaj], [409, DEGISMEZ], 'parti çıkarılamaz');
+    const degistir = await guncelle(t, { satirlar: [{ ...kalem, partiler: [{ emirTuru: 'fai', adet: '20' }, { emirTuru: 'seri', adet: '80' }] }] });
+    assert.deepEqual([degistir.statusCode, degistir.json().mesaj], [409, DEGISMEZ], 'parti adedi değişmez');
+    const yerinde = await o().sahip.tek<{ n: number }>('SELECT count(*)::int AS n FROM siparisler_siparis_satiri_parti WHERE satir_id = $1', [satir.id]);
+    assert.equal(yerinde?.n, 2, 'ret partilere dokunmaz');
+
+    const ayni = await guncelle(t, { termin: '2026-11-25', satirlar: [{ ...kalem, partiler }] });
+    assert.equal(ayni.statusCode, 200, ayni.body);
+    assert.deepEqual(ayni.json<SiparisAyrintisi>().satirlar[0]?.partiler.map((x) => x.id).sort(), satir.partiler.map((x) => x.id).sort(), 'parti kimlikleri korunur');
+  });
+
   test('SIP-08 müşteri sipariş no aynı firmada tekil; iptal edilen siparişin numarası yeniden kullanılabilir', async () => {
     const no = `MSN-${randomUUID().slice(0, 8)}`;
     const ilk = await siparisAc({ musteriSiparisNo: no });
