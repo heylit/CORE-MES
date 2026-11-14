@@ -20,7 +20,7 @@ import { istasyonAdlari, istasyonGetir } from '../istasyonlar/disari.ts';
 import { kisiAdlari } from '../kisiler/disari.ts';
 import { malzemeAra, malzemeOzetleri, malzemeResimAnahtarlari } from '../malzemeler/disari.ts';
 import {
-  AZAMI_BAYT, ILETILER, IZINLI_DOSYA_TURLERI, ONIZLEME_KARE_TURLERI, indirmeReddi, kucukResimSec, malzemedenYayinda, menuAnahtari, merkezAcmaReddi, merkezBagKaldirmaReddi, merkezBagReddi, onizlemeBoyutReddi,
+  AZAMI_BAYT, ILETILER, IZINLI_DOSYA_TURLERI, ONIZLEME_KARE_TURLERI, indirmeReddi, kucukResimSec, malzemeBelgesiResimNo, malzemedenYayinda, menuAnahtari, merkezAcmaReddi, merkezBagKaldirmaReddi, merkezBagReddi, onizlemeBoyutReddi,
   kartRevizyonu, onizlemeKareReddi, onizlemeRevizyonReddi, revizyonHarfi, revizyonKodu, silmeReddi, yayinReddi,
 } from './kurallar.ts';
 import type { AdayBelge, KartAnahtari } from './kurallar.ts';
@@ -379,14 +379,16 @@ export async function malzemeBelgeleri(db: Db, no: number): Promise<MalzemeBelge
   const kart = await kartAnahtari(db, no);
   const oneriler = kart?.resimNo ? await sorgular.resimNoyaUyanBelgeler(db, kart.resimNo, 'malzemeler', no) : [];
   // 2138-1 a: kartın revizyonu yükleme formunda antet revizyonunun ön değeridir.
-  return { belgeler, oneriler, kucukResim: (await kayitlarinKucukResimleri(db, 'malzemeler', [no])).get(no) ?? null, kartRevizyon: kart?.revizyon ?? null };
+  return { belgeler, oneriler, kucukResim: (await kayitlarinKucukResimleri(db, 'malzemeler', [no])).get(no) ?? null, kartRevizyon: kart?.revizyon ?? null,
+    kartResimNo: kart?.resimNo ?? null };
 }
 
 export async function malzemeBelgeEkle(
   db: Db, kullanici: Kullanici, no: number, g: MalzemeBelgeEkleGovdesi, denetimEki: DenetimEki,
 ): Promise<MalzemeBelgeleriCevabi> {
   await malzemeOlmali(db, no);
-  const id = await sorgular.belgeEkle(db, { ad: g.ad.trim(), tur: g.tur, aciklama: null, resimNo: g.resimNo ?? null, kisiId: kullanici.id });
+  const resimNo = malzemeBelgesiResimNo(g.resimNo, g.tur, (await kartAnahtari(db, no))?.resimNo);
+  const id = await sorgular.belgeEkle(db, { ad: g.ad.trim(), tur: g.tur, aciklama: null, resimNo, kisiId: kullanici.id });
   const revizyonId = await revizyonYaz(db, kullanici, { id, tur: g.tur }, g, denetimEki);
   if (malzemedenYayinda(g.tur)) await kisitKorumali(BELGE_ISLETILERI, () => sorgular.revizyonYayinla(db, id, revizyonId, kullanici.id));
   await bagYaz(db, kullanici, id, 'malzemeler', no);

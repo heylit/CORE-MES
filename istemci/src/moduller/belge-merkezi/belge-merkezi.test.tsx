@@ -704,6 +704,26 @@ describe('cizimler malzeme resmi revizyonu (2138-1 a)', () => {
     expect(antet.value).toBe('01');
   });
 
+  it('3242: teknik resim no karttan dolu açılır; fotoğrafta boş, elle yazılan tür değişince korunur; kartta numara yoksa boş', async () => {
+    paneliAc({ ...cevap(null), kartResimNo: 'ORN-2045-01' });
+    fireEvent.click(await screen.findByRole('button', { name: 'Ekle' }));
+    const no = await screen.findByLabelText<HTMLInputElement>('Teknik resim no');
+    expect(no.value).toBe('');
+    fireEvent.change(screen.getByLabelText('Tür'), { target: { value: 'teknik-resim' } });
+    expect(no.value).toBe('ORN-2045-01');
+    fireEvent.change(screen.getByLabelText('Tür'), { target: { value: 'fotograf' } });
+    expect(no.value).toBe('');
+    fireEvent.change(screen.getByLabelText('Tür'), { target: { value: '3b-model' } });
+    fireEvent.change(no, { target: { value: 'ORN-MONTAJ-9' } });
+    fireEvent.change(screen.getByLabelText('Tür'), { target: { value: 'teknik-resim' } });
+    expect(no.value).toBe('ORN-MONTAJ-9');
+    cleanup();
+    paneliAc(cevap(null));
+    fireEvent.click(await screen.findByRole('button', { name: 'Ekle' }));
+    fireEvent.change(await screen.findByLabelText('Tür'), { target: { value: 'teknik-resim' } });
+    expect(screen.getByLabelText<HTMLInputElement>('Teknik resim no').value).toBe('');
+  });
+
   it('yeni revizyon penceresinde antet kartın revizyonuyla dolu gelir', async () => {
     paneliAc(cevap(null));
     fireEvent.click(await screen.findByRole('button', { name: /yeni revizyon/i }));

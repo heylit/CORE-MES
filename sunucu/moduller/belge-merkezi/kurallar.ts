@@ -122,6 +122,10 @@ export function onizlemeBoyutReddi(dosyalar: readonly { tur: DosyaTuru; boyut: n
 // atölyede geçerli revizyon olur. 3B model taslak girer, yayını `belge-merkezi.yayinla` sahibi merkezden yapar (1990 a).
 export const malzemedenYayinda = (tur: BelgeTuru): boolean => tur === 'fotograf' || tur === 'teknik-resim';
 
+// CZ-21: malzeme kartından açılan belgenin teknik resim no'su boşsa kartınkidir (3242); fotoğrafın numarası olmaz.
+export const malzemeBelgesiResimNo = (girilen: string | null | undefined, tur: BelgeTuru, kartResimNo: string | null | undefined): string | null =>
+  girilen?.trim() || (tur === 'fotograf' ? null : kartResimNo?.trim() || null);
+
 // CZ-19: kapak seçilmemişse küçük resim bu öncelikle seçilir; eşitse ilk bağlanan, o da eşitse küçük belge kimliği.
 const TUR_ONCELIGI: Readonly<Partial<Record<BelgeTuru, number>>> = { '3b-model': 0, fotograf: 1, 'teknik-resim': 2 };
 const oncelik = (tur: BelgeTuru): number => TUR_ONCELIGI[tur] ?? 3;

@@ -3,7 +3,7 @@ import { describe, test } from 'node:test';
 import { BELGE_TURLERI } from '#paylasilan/sozlesme/belge-merkezi.ts';
 import type { AdayBelge, AdayRevizyon } from './kurallar.ts';
 import {
-  ILETILER, IZINLI_DOSYA_TURLERI, anahtarMetni, kartRevizyonu, kucukResimSec, malzemedenYayinda, merkezAcmaReddi, merkezBagKaldirmaReddi, merkezBagReddi, onizlemeBoyutReddi, onizlemeKareReddi, onizlemeRevizyonReddi, revizyonHarfi, revizyonKodu, silmeReddi, yayinReddi,
+  ILETILER, IZINLI_DOSYA_TURLERI, anahtarMetni, kartRevizyonu, kucukResimSec, malzemeBelgesiResimNo, malzemedenYayinda, merkezAcmaReddi, merkezBagKaldirmaReddi, merkezBagReddi, onizlemeBoyutReddi, onizlemeKareReddi, onizlemeRevizyonReddi, revizyonHarfi, revizyonKodu, silmeReddi, yayinReddi,
 } from './kurallar.ts';
 
 test('CZ-04 revizyon harfi sıradan türer: A..Z, sonra AA, AB; sıfır ve eksi reddedilir', () => {
@@ -89,6 +89,14 @@ test('CZ-18 malzeme kartından foto ve teknik resim doğrudan yayına girer (199
   assert.equal(malzemedenYayinda('teknik-resim'), true);
   assert.equal(malzemedenYayinda('3b-model'), false);
   assert.deepEqual(IZINLI_DOSYA_TURLERI.fotograf, ['png', 'jpeg', 'webp']);
+});
+
+test('CZ-21 malzeme belgesinin boş teknik resim no\'su kartınkidir; girilen numara ve fotoğraf kartınkini almaz (3242)', () => {
+  assert.equal(malzemeBelgesiResimNo(null, 'teknik-resim', 'ORN-1'), 'ORN-1');
+  assert.equal(malzemeBelgesiResimNo('  ', '3b-model', ' ORN-1 '), 'ORN-1');
+  assert.equal(malzemeBelgesiResimNo(' ORN-2 ', 'teknik-resim', 'ORN-1'), 'ORN-2', 'girilen numara geçer');
+  assert.equal(malzemeBelgesiResimNo(null, 'fotograf', 'ORN-1'), null, 'fotoğrafa kartın numarası yazılmaz');
+  assert.equal(malzemeBelgesiResimNo(undefined, 'teknik-resim', null), null, 'kartta numara yoksa null');
 });
 
 test('eşleşme anahtarı boşluk ve büyük-küçük harf gözetmez; boş null olur', () => {
