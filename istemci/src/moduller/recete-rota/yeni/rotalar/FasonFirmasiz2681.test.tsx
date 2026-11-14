@@ -1,8 +1,10 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { json, rrAc, sunucuKur, YONETICI } from '../test-ortak.tsx';
 import { fasonaCevir, fasonMu, istasyonYaz, kaydetGovdesi, rotaFarki, rotaSorunlari, yeniAdim, type Adim, type Operasyon } from './kurallar.ts';
 import { adimOrnegi, revizyonOrnegi, rotaDurumu } from './test-veri.ts';
+// 3248: açılış yatay hattır; bu dosya dikey akış şemasını ("Akış şeması") sınar.
+beforeEach(() => { try { localStorage.setItem('tc-rr1-gorunum', 'dikey'); } catch { /* test ortamında depo yoksa */ } });
 
 // 2681 (2682 a): fason adım firma seçilmeden kaydedilir; firma sonra seçilir; emir firmasız da açılır (2874). Veri uydurmadır.
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); try { localStorage.clear(); } catch { /* depo kapalı */ } });

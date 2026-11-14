@@ -682,3 +682,98 @@ tr[data-bekleyen] .tc-rr1-pr-op { color: var(--hold); }
 /* 2559: Operasyonlar araç satırındaki "Pasifleri gizle" */
 .tc-rr1-onay { display: inline-flex; align-items: center; gap: var(--b-1); font-size: var(--yazi-s); color: var(--ink); white-space: nowrap; cursor: pointer; }
 .tc-rr1-pr-fireli { display: block; font-size: var(--yazi-xs); color: var(--muted); font-weight: 400; }
+
+/* 3248: yatay hat ve süre şeridi. Sayfa kayar; hat yalnız yana kayar (üstten ve alttan sığar), düzenleme alanı altta kendi boyundadır. */
+.tc-rr1-hatli { display: flex; flex-direction: column; gap: var(--b-3); min-width: 0; }
+.tc-rr1-hatli-kap { display: flex; flex-direction: column; gap: var(--b-2); min-width: 0; }
+.tc-rr1-hat-bas { display: flex; align-items: center; gap: var(--b-2); min-width: 0; }
+.tc-rr1-hat-bas .tc-rr1-rhd { max-width: 100%; }
+.tc-rr1-hat {
+  position: relative; overflow-x: auto; overflow-y: hidden; overscroll-behavior-x: contain; background: var(--panel); border: var(--cizgi-ince) solid var(--edge);
+  border-radius: var(--yari-2); padding: var(--b-3);
+}
+.tc-rr1-hat-ic {
+  position: relative; display: grid; width: max-content; align-items: center; gap: var(--b-1) 0;
+  grid-template-columns: repeat(var(--tc-rr1-hat-kolon, 1), var(--menu-sabit) var(--dokunma));
+}
+.tc-rr1-hat-ust, .tc-rr1-hat-alt { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-1); min-width: 0; }
+.tc-rr1-hat-ust { align-self: end; }
+.tc-rr1-hat-alt { align-self: start; }
+.tc-rr1-hat-ust .tc-rr1-add, .tc-rr1-hat-alt .tc-rr1-add { min-height: var(--isaret-boy); }
+.tc-rr1-hat-ust .tc-rr1-deppill { min-height: var(--isaret-boy); padding: 0 var(--b-2); border-radius: var(--yari-tam); white-space: nowrap; }
+.tc-rr1-hat-hucre { position: relative; z-index: 1; min-width: 0; }
+.tc-rr1-hat-arti { position: relative; z-index: 1; display: grid; place-items: center; }
+.tc-rr1-hat-ekle {
+  display: grid; place-items: center; width: var(--isaret-kutu); height: var(--isaret-kutu); min-width: var(--isaret-kutu); padding: 0; border-radius: var(--yari-tam);
+  background: var(--panel-solid); border: var(--cizgi-ince) dashed var(--edge2); color: var(--muted); cursor: pointer;
+}
+.tc-rr1-hat-ekle:hover, .tc-rr1-hat-ekle:focus-visible { color: var(--done); border-color: var(--done); }
+.tc-rr1-hk {
+  display: flex; flex-direction: column; gap: var(--pay-ince); width: 100%; min-height: var(--dokunma); padding: 0 0 var(--b-1); overflow: hidden; text-align: left;
+  font: inherit; color: var(--ink); background: var(--panel-solid); border: var(--cizgi-ince) solid var(--edge); border-radius: var(--yari-1); cursor: pointer;
+}
+.tc-rr1-hk:hover { border-color: var(--edge2); }
+.tc-rr1-hk.tc-rr1-secili { outline: var(--pay-ince) solid var(--done); outline-offset: var(--pay-ince); }
+.tc-rr1-hk-bar { display: flex; align-items: center; justify-content: space-between; gap: var(--b-2); background: var(--renk); color: var(--on-sig); padding: var(--pay-ince) var(--b-2); font-size: var(--yazi-xs); font-weight: 700; }
+.tc-rr1-hk-ad, .tc-rr1-hk-ist, .tc-rr1-hk-sure { padding-inline: var(--b-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tc-rr1-hk-ad { font-size: var(--yazi-s); }
+.tc-rr1-hk-ist, .tc-rr1-hk-sure { font-size: var(--yazi-xs); color: var(--muted); }
+.tc-rr1-hk-kritik .tc-rr1-hk-sure { color: var(--stop); font-weight: 700; }
+.tc-rr1-hk-fason { border-style: dashed; }
+.tc-rr1-hat-hucre:not(.tc-rr1-dalserit-0) .tc-rr1-hk { border-inline-start: var(--cizgi-kalin) solid var(--renk-dal); }
+.tc-rr1-hat-dalet {
+  display: inline-flex; align-items: center; gap: var(--b-1); font-size: var(--yazi-xs); font-weight: 700; color: var(--renk-dal, var(--ink));
+  border: var(--cizgi-ince) solid var(--renk-dal, var(--edge)); border-radius: var(--yari-tam); padding: var(--pay-ince) var(--b-2); white-space: nowrap;
+}
+.tc-rr1-hat-kalemw { display: inline-flex; align-items: center; gap: var(--pay-ince); max-width: 100%; }
+.tc-rr1-hat-kalem {
+  display: inline-flex; align-items: center; gap: var(--b-1); max-width: 100%; min-height: var(--isaret-boy); padding: 0 var(--b-2); font: inherit; font-size: var(--yazi-xs);
+  color: var(--ink); background: var(--panel-solid); border: var(--cizgi-ince) solid var(--edge); border-radius: var(--yari-1); cursor: pointer;
+}
+.tc-rr1-hat-kalem > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.tc-rr1-hat-kalem > em { font-style: normal; color: var(--muted); white-space: nowrap; }
+.tc-rr1-hat-kalem > i { font-style: normal; }
+.tc-rr1-hat-kalem.tc-rr1-secili { outline: var(--pay-ince) solid var(--done); }
+.tc-rr1-hat-cikti { cursor: default; border-color: var(--done); font-weight: 700; }
+.tc-rr1-hat-svg { position: absolute; inset: 0 auto auto 0; pointer-events: none; overflow: visible; }
+.tc-rr1-hat-yol { fill: none; stroke: var(--ink); stroke-width: var(--cizgi); }
+.tc-rr1-hat-yol-ortulu { stroke-dasharray: var(--kesik-uzun); }
+.tc-rr1-hat-yol-bagimsiz { stroke-dasharray: var(--kesik-nokta); stroke-width: var(--cizgi-orta); }
+.tc-rr1-hat-ucu { fill: var(--ink); }
+
+.tc-rr1-ss { display: flex; flex-direction: column; gap: var(--b-2); background: var(--panel); border: var(--cizgi-ince) solid var(--edge); border-radius: var(--yari-2); padding: var(--b-2) var(--b-3); }
+.tc-rr1-ss-bas { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-1) var(--b-3); font-size: var(--yazi-s); }
+.tc-rr1-ss-baslik { display: inline-flex; align-items: center; gap: var(--b-1); font-weight: 700; }
+.tc-rr1-ss-ozet { color: var(--muted); }
+.tc-rr1-ss-ozet b { color: var(--ink); }
+.tc-rr1-ss-lejant { display: inline-flex; align-items: center; gap: var(--b-1); margin-left: auto; font-size: var(--yazi-xs); color: var(--muted); }
+.tc-rr1-ss-lj { display: inline-block; width: var(--b-3); height: var(--b-2); border-radius: var(--pay-ince); margin-left: var(--b-2); }
+.tc-rr1-ss-lj-hz { background: var(--edge2); }
+.tc-rr1-ss-lj-kr { background: var(--stop); }
+.tc-rr1-ss-lj-fs { border: var(--cizgi-ince) dashed var(--muted); }
+.tc-rr1-ss-izler { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: var(--b-1) var(--b-2); align-items: center; }
+.tc-rr1-ss-ad { font-size: var(--yazi-xs); color: var(--muted); white-space: nowrap; }
+/* Satır boyu: çubuk (isaret-yogun) ve satır aralığı; çakışan adım alt satıra iner, çubuk boyu değişmez. */
+.tc-rr1-ss-iz {
+  --tc-rr1-ss-boy: var(--isaret-yogun);
+  position: relative; height: calc(var(--tc-rr1-ss-satir, 1) * (var(--tc-rr1-ss-boy) + var(--pay-ince))); background: var(--panel2); border-radius: var(--yari-1);
+}
+.tc-rr1-ss-cubuk {
+  position: absolute; left: var(--tc-rr1-ss-bas, 0%); width: max(var(--b-1), var(--tc-rr1-ss-en, 0%)); top: calc(var(--tc-rr1-ss-alt, 0) * (var(--tc-rr1-ss-boy) + var(--pay-ince)));
+  height: var(--tc-rr1-ss-boy); padding: 0; overflow: hidden; display: flex; align-items: center; font: inherit; font-size: var(--yazi-xs); font-weight: 700;
+  color: var(--on-sig); background: var(--renk); border: 0; border-radius: var(--kayma); cursor: pointer;
+}
+.tc-rr1-ss-hz { position: absolute; inset: 0 auto 0 0; width: var(--tc-rr1-ss-hz, 0%); background: color-mix(in srgb, var(--bg) 35%, transparent); }
+.tc-rr1-ss-yazi { position: relative; padding-inline: var(--b-1); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tc-rr1-ss-kritik { box-shadow: inset 0 calc(-1 * var(--kayma)) 0 var(--stop); }
+.tc-rr1-ss-fason { background: transparent; color: var(--ink); border: var(--cizgi-ince) dashed var(--muted); }
+.tc-rr1-ss-yok { background: var(--muted); }
+.tc-rr1-ss-cubuk.tc-rr1-secili { outline: var(--pay-ince) solid var(--done); outline-offset: var(--pay-ince); z-index: 1; }
+
+/* Düzenleme alanı ve palet hattın altında, tam genişlikte ve kendi boyunda: iç kaydırma yok, sayfa kayar. */
+.tc-rr1-hatli > .tc-rr1-insp, .tc-rr1-hatli > .tc-rr1-insp.tc-rr1-kapali {
+  display: block; position: static; max-height: none; overflow: visible; box-shadow: none; border-radius: var(--yari-2);
+}
+@media (min-width: 1024px) {
+  .tc-rr1-hatli > .tc-rr1-adimpanel { position: static; max-height: none; overflow: visible; }
+}

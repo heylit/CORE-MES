@@ -1,7 +1,9 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { json, rrAc, sunucuKur, YONETICI } from '../test-ortak.tsx';
 import { adimOrnegi, revizyonOrnegi, rotaDurumu } from './test-veri.ts';
+// 3248: açılış yatay hattır; bu dosya dikey akış şemasını ("Akış şeması") sınar.
+beforeEach(() => { try { localStorage.setItem('tc-rr1-gorunum', 'dikey'); } catch { /* test ortamında depo yoksa */ } });
 
 // 2685: insanlı istasyonda rota adımının adayları yetkin kişilerdir; makine seçimi çıkmaz (2482 kapasite-insan.md madde 2). Veri uydurmadır.
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); try { localStorage.clear(); } catch { /* depo kapalı */ } });

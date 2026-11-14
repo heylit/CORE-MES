@@ -1,7 +1,9 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { json, rrAc, sunucuKur, YONETICI } from '../test-ortak.tsx';
 import { rotaDurumu } from './test-veri.ts';
+// 3248: açılış yatay hattır; bu dosya dikey akış şemasını ("Akış şeması") sınar.
+beforeEach(() => { try { localStorage.setItem('tc-rr1-gorunum', 'dikey'); } catch { /* test ortamında depo yoksa */ } });
 
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.restoreAllMocks(); try { localStorage.clear(); } catch { /* test ortamında depo yoksa */ } });
 
