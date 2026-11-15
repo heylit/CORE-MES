@@ -103,8 +103,9 @@ describe('2117 EN / ASTM adları: Ayarlar', () => {
     const istekler: Istek[] = sunucuKur(YONETICI, { 'POST /malzeme-katalogu-ayarlari/malzeme/kaydet': () => json(200, { surum: 4 }) });
     const ara = await durumListesiniAc();
     fireEvent.click(screen.getByRole('button', { name: 'Islah (+QT): ASTM ve EN adı' }));
-    fireEvent.change(screen.getByLabelText('Islah (+QT): ASTM adı'), { target: { value: 'QT-A' } });
-    fireEvent.change(screen.getByLabelText('Islah (+QT): EN adı'), { target: { value: 'QT-E' } });
+    // Ayar sayfası büyük: jsdom'da getByLabelText burada alan başına saniyeler sürüyordu; rol sorgusu aynı erişilebilir adı ölçer.
+    fireEvent.change(screen.getByRole('textbox', { name: 'Islah (+QT): ASTM adı' }), { target: { value: 'QT-A' } });
+    fireEvent.change(screen.getByRole('textbox', { name: 'Islah (+QT): EN adı' }), { target: { value: 'QT-E' } });
     fireEvent.click(screen.getByRole('button', { name: 'Kaydet' }));
     await waitFor(() => { expect(istekler.some((i) => i.yol === '/malzeme-katalogu-ayarlari/malzeme/kaydet')).toBe(true); });
     const kayit = istekler.find((i) => i.yol === '/malzeme-katalogu-ayarlari/malzeme/kaydet');
@@ -113,8 +114,7 @@ describe('2117 EN / ASTM adları: Ayarlar', () => {
     fireEvent.change(ara, { target: { value: 'qt-e' } });
     expect(screen.getByText('Islah (+QT)')).toBeTruthy();
     expect(screen.queryByText('Normalize (+N)')).toBeNull();
-  // Uzun akış (ayar ekranı, kaydet, liste ve arama) tek başına 13-14 s sürer; modülün tam koşusunda 15 s sınırını aşıyordu.
-  }, 30_000);
+  });
 
   test('ayar yazamayan eşli adı görür ama düzenleme düğmesi yoktur (reddedilen)', async () => {
     sunucuKur(OKUYAN, SALT_OKUR);
