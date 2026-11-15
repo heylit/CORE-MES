@@ -29,6 +29,9 @@ const eskiYetki = (y: Yetki): Yetki => {
   return eski.length === 1 ? ESKI : { biri: eski };
 };
 const izinli = (y: Yetki, islemler: ReadonlySet<string>): boolean => yetkiListesi(y).some((i) => islemler.has(i));
+// Bölünmeden sonra açılan yerleşik rol eski anahtarı hiç almaz (alttaki göç testi: eski anahtarın rolleri değişmez); B1 ve B4
+// eşitliği onda ölçülemez. Dağılımı kendi testindedir: proses_muhendisi kisiler/rol-dagilimi.test.ts (3289).
+const BOLMEDEN_SONRA: readonly string[] = ['proses_muhendisi'];
 
 describe('rota eylemlerine bölme (saf)', () => {
   test('3207 a: üretim emrine rework adımı şartnamesi yazan uç adım eylemini (ya da canlı plana almayı) ister; başka üretim emri eylemi açmaz', () => {
@@ -61,6 +64,10 @@ describe('rota eylemlerine bölme (gerçek PostgreSQL)', () => {
       'SELECT r.kod, array_agg(ri.islem ORDER BY ri.islem) AS islemler FROM rol r JOIN rol_islemi ri ON ri.rol_id = r.id GROUP BY r.kod');
     assert.equal(satirlar.some((r) => r.islemler.includes(ESKI)), true);
     for (const r of satirlar) {
+      if (BOLMEDEN_SONRA.includes(r.kod)) {
+        assert.equal(r.islemler.includes(ESKI), false, r.kod);
+        continue;
+      }
       const yeni = r.islemler.filter((i) => YENI.includes(i));
       assert.deepEqual(yeni, r.islemler.includes(ESKI) ? [...YENI].sort() : [], r.kod);
     }
@@ -71,6 +78,7 @@ describe('rota eylemlerine bölme (gerçek PostgreSQL)', () => {
       'SELECT r.kod, coalesce(array_agg(ri.islem) FILTER (WHERE ri.islem IS NOT NULL), ARRAY[]::text[]) AS islemler FROM rol r LEFT JOIN rol_islemi ri ON ri.rol_id = r.id WHERE NOT r.yonetici GROUP BY r.kod');
     let karsilastirilan = 0;
     for (const r of satirlar) {
+      if (BOLMEDEN_SONRA.includes(r.kod)) continue;
       const islemler = new Set(r.islemler);
       for (const u of uclar) {
         const y = ucYetkisi(u);

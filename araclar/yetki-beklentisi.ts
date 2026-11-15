@@ -279,6 +279,19 @@ export const ROL_MATRISI = {
       'vardiya.yaz',
     ],
   },
+  proses_muhendisi: {
+    ad: 'Proses Mühendisi',
+    islemler: [
+      'belge-merkezi.oku', 'cnc-kurulum.oku', 'cnc-kurulum.yaz', 'degisiklik-yonetimi.revizyon-hazirla',
+      'degisiklik-yonetimi.talep-ac', 'geometri.hesapla', 'geometri.oku', 'idari-isler.arac-talebi-ac', 'idari-isler.talep-ac',
+      'ik.bordro-gordum', 'ik.izin-talep', 'kalite-merkezi.oku', 'mesaj.oku', 'mesaj.yaz', 'plan.oku', 'recete-rota.oku',
+      'rota.onaya-gonder', 'rota.revizyon-yaz', 'rota.sablon-yaz', 'rota.sartname-yaz', 'rota.sure-kabul', 'rota.talimat-yaz',
+      'rota.taslak-ac', 'satin-alma.talep-ac', 'sayfa.adim-durumu', 'sayfa.cizimler', 'sayfa.cnc-kurulum',
+      'sayfa.degisiklik-yonetimi', 'sayfa.geometri', 'sayfa.idari-isler', 'sayfa.ik-islemlerim', 'sayfa.kalite-merkezi',
+      'sayfa.malzemeler', 'sayfa.mesaj', 'sayfa.ortak-dosyalar', 'sayfa.profil', 'sayfa.recete-rota', 'sayfa.rota',
+      'sayfa.taleplerim', 'sayfa.uretim-emirleri', 'stok.istek',
+    ],
+  },
   satin_alma: {
     ad: 'Satın Alma',
     islemler: [
