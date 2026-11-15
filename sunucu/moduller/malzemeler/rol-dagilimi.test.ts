@@ -178,6 +178,7 @@ describe('Malzemeler rol dağılımı (gerçek PostgreSQL, gerçek giriş)', () 
     planlama_muduru: { ...YAZAR, ayar: 200 },
     satin_alma_muduru: YAZAR,
     uretim_muduru: { ...HIC, sayfa: true },
+    proses_muhendisi: { ...HIC, sayfa: true },
   };
 
   test('her rol: sayfa, kart açma, onaylama ve ayar onaylı dağılımdaki gibidir; okuma yalnız sayfası olan role açık', async () => {
@@ -216,6 +217,7 @@ describe('Malzemeler rol dağılımı (gerçek PostgreSQL, gerçek giriş)', () 
       'mudur:malzemeler.onayla', 'mudur:malzemeler.tanim-yaz', 'mudur:malzemeler.yaz', 'mudur:sayfa.malzemeler',
       'planlama_muduru:malzemeler.tanim-yaz', 'planlama_muduru:malzemeler.yaz', 'planlama_muduru:sayfa.malzemeler',
       'planlama_proje:malzemeler.tanim-yaz', 'planlama_proje:malzemeler.yaz', 'planlama_proje:sayfa.malzemeler',
+      'proses_muhendisi:sayfa.malzemeler',
       'satin_alma:malzemeler.yaz', 'satin_alma:sayfa.malzemeler',
       'satin_alma_muduru:malzemeler.yaz', 'satin_alma_muduru:sayfa.malzemeler',
       'uretim_muduru:sayfa.malzemeler',
