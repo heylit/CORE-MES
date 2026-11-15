@@ -231,6 +231,24 @@ describe('UE-SA sipariş onayında proje ve emir (gerçek PostgreSQL)', () => {
     }
   });
 
+  test('UE-SA-02 eşzamanlı: iki "Proje ve emirleri aç" aynı anda gelir; sipariş kilidiyle biri açar, öteki 0 açar, emir çiftlenmez', async () => {
+    await o().sahip.sorgu("INSERT INTO ayar (anahtar, deger, guncelleyen_kisi_id) VALUES ('uretim-emirleri.siparis-onayinda-ac', 'false', $1)", [yoneticiId]);
+    try {
+      const s = await siparis([{ malzemeNo: await malzeme(), miktar: 2 }, { malzemeNo: await malzeme(), miktar: 4 }]);
+      assert.equal((await onayla('onayci', s.id)).durum, 200);
+      const yol = `/uretim-emirleri/siparis-acilisi/${s.id}/ac`;
+      const [a, b] = await Promise.all([
+        istek<{ acilan: number; baglanan: number }>('yonetici', 'POST', yol, {}),
+        istek<{ acilan: number; baglanan: number }>('yonetici', 'POST', yol, {}),
+      ]);
+      assert.deepEqual([a.durum, b.durum], [200, 200], JSON.stringify([a.govde, b.govde]));
+      assert.deepEqual([a.govde.acilan + a.govde.baglanan, b.govde.acilan + b.govde.baglanan].sort(), [0, 2]);
+      assert.equal((await emirler(s.satirlar)).length, 2);
+    } finally {
+      await o().sahip.sorgu("DELETE FROM ayar WHERE anahtar = 'uretim-emirleri.siparis-onayinda-ac'");
+    }
+  });
+
   test('UE-SA-01: onayda verilen proje no kullanılır; kullanılan ya da geçersiz numarada onay reddedilir ve sipariş taslak kalır', async () => {
     const a = await siparis([{ malzemeNo: await malzeme(), miktar: 1 }]);
     assert.equal((await onayla('yonetici', a.id, { projeKodu: 'ORN_OZEL' })).durum, 200);

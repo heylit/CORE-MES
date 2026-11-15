@@ -128,6 +128,7 @@ export function SiparisOnayPenceresi({ siparis, kapat }: { siparis: SiparisAyrin
                 </div>
               </div>
             )}
+            <h3 className="tc-sp-alt-baslik">Onaylayınca açılacak emirler</h3>
             <AcilisTablosu satirlar={c.satirlar} emirli={false} />
             {bekleyen.length > 0 && (
               <p className="tc-sp-bildirim tc-sp-bildirim-uyari" role="status">

@@ -8,7 +8,7 @@ import type { EmirTuru } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { sistemAyariOku } from '../ayarlar/disari.ts';
 import { malzemeOzeti } from '../malzemeler/disari.ts';
 import { projeKoduIleBul, siparisinProjeleri, siparistenProjeAc } from '../projeler/disari.ts';
-import { siparisAyrintisi } from '../siparisler/disari.ts';
+import { siparisAyrintisi, siparisKilitliAyrinti } from '../siparisler/disari.ts';
 import type { SiparisDurumOlayi, SiparisOnaylandiOlayi } from '../siparisler/disari.ts';
 import { emirIptalBildir } from './emir-olaylari.ts';
 import { rotaBekleyenEmirAc } from './is-emri-servis.ts';
@@ -151,7 +151,9 @@ export async function siparisOnaylandiAc(db: Db, olay: SiparisOnaylandiOlayi): P
 // Ayar kapalıyken ya da ayar açılmadan önce onaylanmış sipariş için aynı açılış; yalnız onaylı siparişte.
 export const SIPARIS_ONAYLI_DEGIL = 'Proje ve emirler yalnız onaylı siparişte açılır.';
 export async function siparisAcilisiYap(db: Db, kullanici: Kullanici, siparisId: number, projeKodu: string | undefined): Promise<SiparisAcilisiSonucu> {
-  const sp = await siparisAyrintisi(db, siparisId).catch(() => null);
+  // Sipariş satırı işlem sonuna dek kilitli: eşzamanlı iki açma ya da açmayla yarışan "onayı geri al" sırayla yürür, emir çiftlenmez
+  // (uretim_emri.siparis_parti_id tekil değildir; tekrar engeli bu kilit ve partininEmri okumasıdır).
+  const sp = await siparisKilitliAyrinti(db, siparisId).catch(() => null);
   if (sp === null) throw bulunamadi('Sipariş bulunamadı.');
   if (sp.durum !== 'onayli') throw cakisma(SIPARIS_ONAYLI_DEGIL);
   return ac(db, kullanici, siparisId, projeKodu);
