@@ -257,7 +257,7 @@ export type ResimAl = () => Promise<Blob | null>;
 
 // Yalnız bakmak içindir (döndür, yakınlaştır): ölçü sunucudan gelir, burada hesaplanmaz. Ayrı pakette iner (React.lazy).
 export default function Goruntu3B({ veri, bicim, vurgu = null, kutular = null, yuzBoyasi = null, arac = null, bilgi = null, resimAlici, onizleme = null }: {
-  veri: Uint8Array; bicim: ModelBicimi; vurgu?: Vurgu | null; kutular?: readonly ParcaKutusu[] | null; onizleme?: Onizleme | null;
+  veri: Uint8Array; bicim: ModelBicimi; vurgu?: Vurgu | readonly Vurgu[] | null; kutular?: readonly ParcaKutusu[] | null; onizleme?: Onizleme | null;
   // Görüntünün üstünde araç çubuğu (solda fırça, sağda görünüm) ve altında bilgi satırı (2144 prototip v3).
   yuzBoyasi?: YuzBoyasi | null; arac?: ReactNode; bilgi?: string | null; resimAlici?: (al: ResimAl | null) => void;
 }) {
@@ -389,21 +389,23 @@ export default function Goruntu3B({ veri, bicim, vurgu = null, kutular = null, y
     };
   }, [veri, bicim]);
 
-  const [kx, ky, kz] = vurgu?.konum ?? [];
-  const [ex, ey, ez] = vurgu?.eksen ?? [];
-  const cap = vurgu?.capMm, derinlik = vurgu?.derinlikMm;
+  // 3281-1: bir grubun bütün delikleri birlikte vurgulanır. Etki yalnız değerler değişince yeniden kurulur (dizi her çizimde yenidir).
+  const vurgular = vurgu === null ? [] : Array.isArray(vurgu) ? (vurgu as readonly Vurgu[]) : [vurgu as Vurgu];
+  const vurguAnahtari = JSON.stringify(vurgular.map((v) => [v.konum, v.eksen, v.capMm, v.derinlikMm]));
   useEffect(() => {
     const ic = icGrup.current;
-    if (ic === null || cap === undefined || kx === undefined) return undefined;
-    const g = vurguKur({ konum: [kx, ky ?? 0, kz ?? 0], eksen: [ex ?? 0, ey ?? 0, ez ?? 1], capMm: cap, derinlikMm: derinlik ?? 0 });
+    const liste = JSON.parse(vurguAnahtari) as [number[], number[], number, number][];
+    if (ic === null || liste.length === 0) return undefined;
+    const g = new Group();
+    for (const [konum, eksen, capMm, derinlikMm] of liste) g.add(vurguKur({ konum, eksen, capMm, derinlikMm }));
     ic.add(g);
     return () => {
       ic.remove(g);
-      for (const c of g.children) {
+      g.traverse((c) => {
         if (c instanceof Mesh || c instanceof Line) { (c.geometry as BufferGeometry).dispose(); (c.material as MeshBasicMaterial).dispose(); }
-      }
+      });
     };
-  }, [yuklendi, kx, ky, kz, ex, ey, ez, cap, derinlik]);
+  }, [yuklendi, vurguAnahtari]);
 
   useEffect(() => {
     const b = bakis.current;

@@ -101,6 +101,7 @@ const OZELLIK: GeometriOzellikCevabi = {
     sira: 1, tur: 'delik', ust: null, capMm: 8, yaricapMm: null, derinlikMm: 10, aciDerece: null, genislikMm: null, boyMm: null, gecis: true, dip: null, ic: null,
     eksen: [0, 0, -1], konum: [20, 10, 10], yuzler: [3],
   }],
+  gruplar: [{ tur: 'delik', adet: 1, siralar: [1], desen: { tur: 'daginik', capMm: null, adimMm: null, adim2Mm: null, adimDerece: null, satir: null, sutun: null }, disAdayi: null, ldOrani: 1.25 }],
 };
 const temel = (yuzey: () => Response, islemler: string[] = ['geometri.oku', 'geometri.yuzey-yaz'], ek: Record<string, () => Response> = {}) => ({
   'GET /geometri/modeller?sayfa=1': () => json(200, LISTE),

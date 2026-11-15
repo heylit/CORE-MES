@@ -1,5 +1,5 @@
 import type {
-  GeometriDurumu, GeometriMontajDugumu, GeometriOzellik, GeometriYuzeyAdimi, GeometriYuzeyCevabi, GeometriYuzeyIslemi, HamStokOnerisi,
+  GeometriDesen, GeometriDurumu, GeometriMontajDugumu, GeometriOzellik, GeometriOzellikGrubu, GeometriYuzeyAdimi, GeometriYuzeyCevabi, GeometriYuzeyIslemi, HamStokOnerisi,
 } from '#paylasilan/sozlesme/geometri.ts';
 import type { RozetTonu } from '../../ortak/arayuz/index.ts';
 
@@ -80,6 +80,34 @@ export function pahMetni(o: GeometriOzellik): { ust: string; alt: string } {
 export function radyusMetni(o: GeometriOzellik): { ust: string; alt: string } {
   const ust = `R${o.yaricapMm === null ? '' : uzunluk(o.yaricapMm)}${o.ic === null ? '' : o.ic ? ' iç köşe' : ' dış kenar'}`;
   return { ust, alt: o.boyMm === null ? '' : `Boy ${uzunluk(o.boyMm)} mm` };
+}
+
+// Gruplar (3281-1): desen rozeti, satır başlığı ve kartın üst özeti. Dağınık desende rozet yok.
+export function desenMetni(d: GeometriDesen | null): string | null {
+  if (d === null) return null;
+  if (d.tur === 'izgara' && d.adimMm !== null && d.adim2Mm !== null) {
+    return `ızgara ${String(d.sutun ?? '')} × ${String(d.satir ?? '')} · adım ${uzunluk(d.adimMm)} × ${uzunluk(d.adim2Mm)}`;
+  }
+  if (d.tur === 'dogrusal' && d.adimMm !== null) return `doğrusal · adım ${uzunluk(d.adimMm)}`;
+  if (d.tur === 'daire' && d.capMm !== null) return `daire Ø${uzunluk(d.capMm)}${d.adimDerece === null ? '' : ` · ${aci(d.adimDerece)}`}`;
+  return null;
+}
+export const LD_UYARI = 10;
+export interface GrupSatiri { grup: GeometriOzellikGrubu; ilk: GeometriOzellik; uyeler: GeometriOzellik[] }
+export function grupSatirlari(ozellikler: readonly GeometriOzellik[], gruplar: readonly GeometriOzellikGrubu[]): GrupSatiri[] {
+  const sirayla = new Map(ozellikler.map((o) => [o.sira, o]));
+  return gruplar.flatMap((grup) => {
+    const uyeler = grup.siralar.flatMap((s) => { const o = sirayla.get(s); return o === undefined ? [] : [o]; });
+    const ilk = uyeler[0];
+    return ilk === undefined ? [] : [{ grup, ilk, uyeler }];
+  });
+}
+export interface DelikOzeti { delik: number; grup: number; yon: number; enDerinLd: number | null }
+export function delikOzeti(satirlar: readonly GrupSatiri[]): DelikOzeti {
+  const d = satirlar.filter((s) => s.grup.tur === 'delik');
+  const yonler = new Set(d.flatMap((s) => (s.ilk.eksen === null ? [] : [s.ilk.eksen.map((x) => Math.round(x * 1e5)).join(',')])));
+  const ld = d.flatMap((s) => (s.grup.ldOrani === null ? [] : [s.grup.ldOrani]));
+  return { delik: d.reduce((a, s) => a + s.grup.adet, 0), grup: d.length, yon: yonler.size, enDerinLd: ld.length === 0 ? null : Math.max(...ld) };
 }
 
 // Montaj (2113): düğümün altındaki parça düğümleri (parçada kendisi); ön sıra korunur.

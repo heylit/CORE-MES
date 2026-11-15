@@ -305,7 +305,7 @@ describe('geometri: model listesi, analiz kuyruğu ve ayrı hesap süreci (gerç
     const s = (await liste()).find((x) => x.malzemeNo === burc && x.belgeAdi === 'Model ozellikli.step');
     assert.ok(s);
     const yol = `/geometri/ozellikler/${String(s.revizyonId)}`;
-    assert.deepEqual(geometriOzellikCevabi.parse(tamam(await istek('okur', 'GET', yol))), { revizyonId: s.revizyonId, motor: null, ozellikler: null }, 'analiz yoksa null');
+    assert.deepEqual(geometriOzellikCevabi.parse(tamam(await istek('okur', 'GET', yol))), { revizyonId: s.revizyonId, motor: null, ozellikler: null, gruplar: null }, 'analiz yoksa null');
     await tur();
     const c = geometriOzellikCevabi.parse(tamam(await istek('okur', 'GET', yol)));
     assert.equal(c.motor, YUZ_MOTORU);
@@ -326,6 +326,16 @@ describe('geometri: model listesi, analiz kuyruğu ve ayrı hesap süreci (gerç
     assert.ok(Math.abs(pah[0]!.genislikMm! - 1.5 * Math.SQRT2) < 1e-3 && pah[0]!.aciDerece === 45 && pah[0]!.boyMm === 20);
     assert.deepEqual(oz.filter((o) => o.tur === 'radyus').map((o) => [o.yaricapMm, o.ic, o.boyMm]), [[2, false, 20]]);
     assert.equal(oz.filter((o) => o.tur === 'delik').length, 5);
+    // 3281-1: beş delik farklı ölçüde, beş tek delikli grup; pah ve radyüs birer grup. Ø5 M6 adayı, Ø8 x 60 L/D 7,5.
+    const gr = c.gruplar ?? [];
+    assert.deepEqual(gr.map((g) => g.tur).sort(), ['delik', 'delik', 'delik', 'delik', 'delik', 'pah', 'radyus']);
+    const grubu = (u: typeof a) => gr.find((g) => g.siralar.includes(u.sira));
+    assert.deepEqual([grubu(e)?.adet, grubu(e)?.disAdayi, grubu(e)?.desen?.tur], [1, 'M6', 'daginik']);
+    assert.deepEqual([grubu(d)?.ldOrani, grubu(d)?.disAdayi], [7.5, null]);
+    tamam(await istek('yonetici', 'POST', '/ayarlar/geometri.dis-matkap-tablosu/degistir', { deger: 'ORN-8=8' }));
+    const ayarli = geometriOzellikCevabi.parse(tamam(await istek('okur', 'GET', yol))).gruplar ?? [];
+    assert.deepEqual([ayarli.find((g) => g.siralar.includes(d.sira))?.disAdayi, ayarli.find((g) => g.siralar.includes(e.sira))?.disAdayi], ['ORN-8', null], 'ayardaki tablo yerleşiğin yerine geçer');
+    tamam(await istek('yonetici', 'POST', '/ayarlar/geometri.dis-matkap-tablosu/degistir', { deger: '' }));
     assert.equal((await istek('yetkisiz', 'GET', yol)).statusCode, 403);
     assert.equal((await istek(null, 'GET', yol)).statusCode, 401);
     assert.equal((await istek('okur', 'GET', '/geometri/ozellikler/999999')).statusCode, 404, 'bağsız revizyon');

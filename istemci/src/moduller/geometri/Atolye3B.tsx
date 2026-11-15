@@ -14,8 +14,8 @@ import { yerlesikKaliteYogunlugu } from '../malzemeler/disari.ts';
 import { anahtarlar } from './anahtarlar.ts';
 import { CALISMALAR, calismaOku, KOK, type CalismaAdi } from './calismalar.ts';
 import {
-  agirlikKg, analizKatilari, hamKatisi, agirlikMetni, bagliMetni, buyukSayi, delikMetni, DURUM_ADI, DURUM_TONU, DURUMLAR, FORM_ADI, kutuMetni, pahMetni, radyusMetni, stokOlcuMetni, suruyorMu,
-  uzunluk, yogunlukBicimi, yogunlukOku, type Yon3,
+  agirlikKg, analizKatilari, hamKatisi, agirlikMetni, bagliMetni, buyukSayi, delikMetni, delikOzeti, desenMetni, DURUM_ADI, DURUM_TONU, DURUMLAR, FORM_ADI, grupSatirlari, kutuMetni, LD_UYARI, pahMetni, radyusMetni, stokOlcuMetni, suruyorMu,
+  uzunluk, yogunlukBicimi, yogunlukOku, type GrupSatiri, type Yon3,
 } from './gorunum.ts';
 import type { Onizleme, ParcaKutusu, ResimAl, Vurgu, YuzDurumu } from './Goruntu3B.tsx';
 import { ModelEkle, TaslakModel, useModelYetkisi } from './ModelEkle.tsx';
@@ -245,10 +245,11 @@ function HamKarti({ revizyonId, analizVar, hacimMm3, onizlemeYaz }: {
   );
 }
 
-// Özellikler (2044-2 prototipi): tanınan delik, kademe, havşa, pah ve radyüs; yalnız öneri. Delik satırı modelde vurgulanır (girişte halka
-// ve eksen); pah ve radyüsün konumu sunucudan gelmez, yalnız listede durur. Analiz yenilenince (durum değişince) yeniden okunur.
+// Özellikler (2044-2; 3281-1 A düzeni): sunucunun grupları satırdır (aynı ölçü ve yöndeki delikler tek satır, adet sağda); desen, diş adayı
+// ve derin delik rozeti; grup seçilince gruptaki bütün delikler modelde vurgulanır ve satır açılıp tek delikleri gösterir. Pah ve radyüs
+// gruplu bilgi satırıdır. Yalnız öneri. Analiz yenilenince (durum değişince) yeniden okunur.
 function OzellikKarti({ revizyonId, durum, secili, sec }: {
-  revizyonId: number; durum: GeometriDurumu; secili: number | null; sec: (o: GeometriOzellik | null) => void;
+  revizyonId: number; durum: GeometriDurumu; secili: number | null; sec: (g: GrupSatiri | null) => void;
 }) {
   const surer = suruyorMu(durum);
   const sorgu = useQuery({
@@ -257,67 +258,103 @@ function OzellikKarti({ revizyonId, durum, secili, sec }: {
     enabled: !surer,
   });
   const oz = sorgu.data?.ozellikler ?? null;
-  const ustler = oz?.filter((o) => o.ust === null) ?? [];
-  const delikler = ustler.filter((o) => o.tur === 'delik');
-  const pahlar = ustler.filter((o) => o.tur === 'pah');
-  const radyuslar = ustler.filter((o) => o.tur === 'radyus');
+  const satirlar = useMemo(() => (oz === null ? [] : grupSatirlari(oz, sorgu.data?.gruplar ?? [])), [oz, sorgu.data?.gruplar]);
+  const delikler = satirlar.filter((g) => g.grup.tur === 'delik');
+  const kenarlar = satirlar.filter((g) => g.grup.tur !== 'delik');
+  const ozet = delikOzeti(satirlar);
+  const toplam = satirlar.reduce((a, g) => a + g.grup.adet, 0);
   return (
-    <Kart baslik="Özellikler (öneri)" simge="target" baslikEki={oz !== null && !surer ? <Rozet ton="pasif">{ustler.length} özellik</Rozet> : undefined}>
+    <Kart baslik="Özellikler (öneri)" simge="target"
+      baslikEki={oz !== null && !surer && satirlar.length > 0
+        ? <Rozet ton="pasif">{ozet.delik > 0 ? `${String(ozet.delik)} delik · ${String(ozet.grup)} grup` : `${String(toplam)} özellik`}</Rozet> : undefined}>
       {surer ? <p className="tc-g3b-soluk">Hesap sürüyor; sonuç gelince burada görünür.</p>
         : sorgu.isPending ? <DurumKutusu durum="yukleniyor" />
           : sorgu.isError ? <DurumKutusu durum="hata" mesaj={yetkiyse(sorgu.error, 'Özellikler okunamadı.')} />
             : oz === null ? <p className="tc-g3b-soluk">Bu modelin yüzleri okunamadı; özellik tanınamadı. Ölçüler Analiz kartında.</p>
-              : ustler.length === 0 ? <p className="tc-g3b-soluk">Tanınan delik, pah ya da radyüs yok.</p>
+              : satirlar.length === 0 ? <p className="tc-g3b-soluk">Tanınan delik, pah ya da radyüs yok.</p>
                 : (
                   <>
-                    <div className="tc-g3b-oz-ozet">
-                      <Rozet gorunum="cizgi">{delikler.length} delik</Rozet>
-                      <Rozet gorunum="cizgi">{pahlar.length} pah</Rozet>
-                      <Rozet gorunum="cizgi">{radyuslar.length} radyüs</Rozet>
-                    </div>
+                    {delikler.length > 0 && (
+                      <dl className="tc-g3b-oz-sayilar">
+                        <div><dt>delik</dt><dd>{ozet.delik}</dd></div>
+                        <div><dt>delik grubu</dt><dd>{ozet.grup}</dd></div>
+                        <div><dt>giriş yönü</dt><dd>{ozet.yon}</dd></div>
+                        <div className={ozet.enDerinLd !== null && ozet.enDerinLd > LD_UYARI ? 'tc-g3b-oz-uyari' : undefined}>
+                          <dt>en derin L/D</dt><dd>{ozet.enDerinLd === null ? '-' : uzunluk(ozet.enDerinLd)}</dd>
+                        </div>
+                      </dl>
+                    )}
                     {delikler.length > 0 && (
                       <>
-                        <h3 className="tc-g3b-oz-grup"><Simge ad="target" /> Delikler</h3>
+                        <h3 className="tc-g3b-oz-grup"><Simge ad="target" /> Delik grupları</h3>
                         <ul className="tc-g3b-oz-liste">
-                          {delikler.map((d) => {
-                            const m = delikMetni(d);
-                            const bagli = oz.filter((o) => o.ust === d.sira);
+                          {delikler.map((g) => {
+                            const ilk = g.ilk.sira;
+                            const acik = secili === ilk;
+                            const m = delikMetni(g.ilk);
+                            const bagli = oz.filter((o) => o.ust === ilk);
+                            const desen = desenMetni(g.grup.desen);
+                            const derin = g.grup.ldOrani !== null && g.grup.ldOrani > LD_UYARI;
                             return (
-                              <li key={d.sira}>
-                                <button type="button" className="tc-g3b-oz-satir" aria-pressed={secili === d.sira} onClick={() => sec(secili === d.sira ? null : d)}>
+                              <li key={ilk}>
+                                <button type="button" className="tc-g3b-oz-satir tc-g3b-oz-grupsatiri" aria-expanded={acik}
+                                  onClick={() => sec(acik ? null : g)}>
                                   <Simge ad="target" />
                                   <span className="tc-g3b-oz-metin">
                                     <strong>{m.ust}</strong>
-                                    {m.alt !== '' && <span className="tc-g3b-soluk">{m.alt}</span>}
-                                    {bagli.length > 0 && (
-                                      <span className="tc-g3b-oz-alt">{bagli.map((b) => <Rozet key={b.sira} gorunum="cizgi">{bagliMetni(b)}</Rozet>)}</span>
+                                    {(bagli.length > 0 || m.alt !== '') && (
+                                      <span className="tc-g3b-soluk">{[...bagli.map(bagliMetni), m.alt].filter((x) => x !== '').join(' · ')}</span>
+                                    )}
+                                    {(desen !== null || g.grup.disAdayi !== null || derin) && (
+                                      <span className="tc-g3b-oz-alt">
+                                        {desen !== null && <Rozet ton="bilgi">{desen}</Rozet>}
+                                        {g.grup.disAdayi !== null && <Rozet gorunum="cizgi">{g.grup.disAdayi} adayı</Rozet>}
+                                        {derin && <Rozet ton="uyari">derin delik L/D {uzunluk(g.grup.ldOrani!)}</Rozet>}
+                                      </span>
                                     )}
                                   </span>
+                                  <span className="tc-g3b-oz-adet">× {g.grup.adet}</span>
+                                  <Simge ad={acik ? 'down' : 'chev-right'} />
                                 </button>
+                                {acik && (
+                                  <ul className="tc-g3b-oz-tekler">
+                                    {g.uyeler.map((d, i) => (
+                                      <li key={d.sira}>
+                                        <Simge ad="target" boyut="k" /> Delik {i + 1}
+                                        {d.konum !== null && <span className="tc-g3b-soluk"> · giriş {d.konum.map(uzunluk).join(' / ')}</span>}
+                                      </li>
+                                    ))}
+                                  </ul>
+                                )}
                               </li>
                             );
                           })}
                         </ul>
                       </>
                     )}
-                    {pahlar.length + radyuslar.length > 0 && (
+                    {kenarlar.length > 0 && (
                       <>
                         <h3 className="tc-g3b-oz-grup"><Simge ad="edit" /> Pah ve radyüs</h3>
                         <ul className="tc-g3b-oz-liste">
-                          {[...pahlar.map((o) => ({ o, m: pahMetni(o), simge: 'edit' as const })), ...radyuslar.map((o) => ({ o, m: radyusMetni(o), simge: 'rotate' as const }))]
-                            .map(({ o, m, simge }) => (
-                              <li key={o.sira} className="tc-g3b-oz-satir tc-g3b-oz-duz">
-                                <Simge ad={simge} />
+                          {kenarlar.map((g) => {
+                            const m = g.grup.tur === 'pah' ? pahMetni(g.ilk) : radyusMetni(g.ilk);
+                            return (
+                              <li key={g.ilk.sira} className="tc-g3b-oz-satir tc-g3b-oz-duz tc-g3b-oz-grupsatiri">
+                                <Simge ad={g.grup.tur === 'pah' ? 'edit' : 'rotate'} />
                                 <span className="tc-g3b-oz-metin">
                                   <strong>{m.ust}</strong>
                                   {m.alt !== '' && <span className="tc-g3b-soluk">{m.alt}</span>}
                                 </span>
+                                <span className="tc-g3b-oz-adet">× {g.grup.adet}</span>
                               </li>
-                            ))}
+                            );
+                          })}
                         </ul>
                       </>
                     )}
-                    <p className="tc-g3b-soluk tc-g3b-oz-not">Kesin yüzlerden tanındı; yalnız öneridir, rotaya ve karta yazılmaz. Cep, kanal, diş ve tolerans tanınmaz.</p>
+                    <p className="tc-g3b-soluk tc-g3b-oz-not">
+                      Kesin yüzlerden tanındı; yalnız öneridir, rotaya ve karta yazılmaz. Diş STEP'te yoktur: "adayı" yalnız matkap çapından. Cep, kanal ve tolerans tanınmaz.
+                    </p>
                   </>
                 )}
     </Kart>
@@ -393,7 +430,10 @@ function ModelAyrintisi({ satir, revizyonId, yonlendir, calisma }: {
     staleTime: Infinity,
     retry: false,
   });
-  const [secili, seciliYaz] = useState<GeometriOzellik | null>(null);
+  const [secili, seciliYaz] = useState<GrupSatiri | null>(null);
+  // Analiz yenilenince gruplar değişebilir: açık grup kapanır, vurgu kalkar.
+  const analizDurumu = analiz.data?.durum;
+  useEffect(() => { seciliYaz(null); }, [analizDurumu, revizyonId]);
   const [kutular, kutularYaz] = useState<ParcaKutusu[] | null>(null);
   // Yüzey kartı (2144) görüntüye renk ve seçim verir; görüntü yüz sırası denetiminin sonucunu ve resim alma işlevini geri verir.
   const [yuzeySahnesi, yuzeySahnesiYaz] = useState<YuzeySahnesi | null>(null);
@@ -421,7 +461,7 @@ function ModelAyrintisi({ satir, revizyonId, yonlendir, calisma }: {
         : dosya.isError ? <div className="tc-g3b-sahne"><DurumKutusu durum="hata" mesaj={yetkiyse(dosya.error, 'Model dosyası alınamadı.')} /></div>
           : (
             <Suspense fallback={<div className="tc-g3b-sahne"><DurumKutusu durum="yukleniyor" /></div>}>
-              <Goruntu3B veri={dosya.data} bicim={analiz.data.dosyaTuru} vurgu={calisma === 'ozellikler' ? vurgusu(secili) : null}
+              <Goruntu3B veri={dosya.data} bicim={analiz.data.dosyaTuru} vurgu={calisma === 'ozellikler' && secili !== null ? secili.uyeler.map(vurgusu).filter((v): v is Vurgu => v !== null) : null}
                 kutular={calisma === 'montaj' ? kutular : null} onizleme={onizleme}
                 yuzBoyasi={calisma !== 'yuzey' || yuzeySahnesi === null ? null : { ...yuzeySahnesi.boyasi, durumYaz: yuzBilgisiYaz }}
                 arac={calisma === 'yuzey' ? (yuzeySahnesi?.arac ?? null) : null} bilgi={calisma === 'yuzey' ? (yuzeySahnesi?.bilgi ?? null) : null}
@@ -433,7 +473,7 @@ function ModelAyrintisi({ satir, revizyonId, yonlendir, calisma }: {
         {calisma === 'ham' && (
           <HamKarti revizyonId={revizyonId} analizVar={analiz.data.analiz !== null} hacimMm3={analiz.data.analiz?.hacimMm3 ?? null} onizlemeYaz={hamYaz} />
         )}
-        {calisma === 'ozellikler' && <OzellikKarti revizyonId={revizyonId} durum={analiz.data.durum} secili={secili?.sira ?? null} sec={seciliYaz} />}
+        {calisma === 'ozellikler' && <OzellikKarti revizyonId={revizyonId} durum={analiz.data.durum} secili={secili?.ilk.sira ?? null} sec={seciliYaz} />}
         {calisma === 'yuzey' && (
           <YuzeyKarti revizyonId={revizyonId} durum={analiz.data.durum} revKodu={satir?.revKodu ?? null} yuzDurumu={yuzDurumu} yuzNormalleri={yuzNormalleri}
             sahneYaz={yuzeySahnesiYaz} resimAl={resimAl} />

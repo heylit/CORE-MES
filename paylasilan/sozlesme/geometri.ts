@@ -128,10 +128,39 @@ export const geometriOzellikSemasi = z.object({
 });
 export type GeometriOzellik = z.output<typeof geometriOzellikSemasi>;
 // Tanıma yoksa (analiz yok, yüzler okunamadı ya da sınırı aştı) ozellikler null; tanındı ama özellik yoksa boş liste.
+// Grup (3281-1): aynı ölçüdeki üst düzey delik, pah ya da radyüs tek satırdır; her okumada kayıttan hesaplanır, yalnız öneridir.
+// siralar: gruptaki özelliklerin sıraları (ilki temsilcidir). Desen yalnız delikte: girişler eksene dik tek düzlemde ızgara, doğrusal
+// ya da eşit aralıklı daire ise; değilse 'daginik', delik dışında null. adimMm ızgarada birinci yön, adim2Mm ikinci yön; dairede
+// capMm flanş dairesi çapı, adimDerece açı adımı. disAdayi: delik çapı kılavuz matkabı tablosundaysa ölçü adı (yalnız aday).
+export const GEOMETRI_GRUP_TURLERI = ['delik', 'pah', 'radyus'] as const;
+export const GEOMETRI_DESEN_TURLERI = ['izgara', 'dogrusal', 'daire', 'daginik'] as const;
+export type GeometriDesenTuru = (typeof GEOMETRI_DESEN_TURLERI)[number];
+export const geometriDesenSemasi = z.object({
+  tur: z.enum(GEOMETRI_DESEN_TURLERI),
+  capMm: mm.nullable(),
+  adimMm: mm.nullable(),
+  adim2Mm: mm.nullable(),
+  adimDerece: z.number().nullable(),
+  satir: z.number().int().min(1).nullable(),
+  sutun: z.number().int().min(1).nullable(),
+});
+export type GeometriDesen = z.output<typeof geometriDesenSemasi>;
+export const geometriOzellikGrubuSemasi = z.object({
+  tur: z.enum(GEOMETRI_GRUP_TURLERI),
+  adet: z.number().int().min(1),
+  siralar: z.array(z.number().int().min(1)).min(1),
+  desen: geometriDesenSemasi.nullable(),
+  disAdayi: z.string().nullable(),
+  // Delikte derinlik / çap; delik dışında ya da ölçü yoksa null.
+  ldOrani: z.number().nullable(),
+});
+export type GeometriOzellikGrubu = z.output<typeof geometriOzellikGrubuSemasi>;
 export const geometriOzellikCevabi = z.object({
   revizyonId: z.number().int(),
   motor: z.string().nullable(),
   ozellikler: z.array(geometriOzellikSemasi).nullable(),
+  // ozellikler null ise null.
+  gruplar: z.array(geometriOzellikGrubuSemasi).nullable(),
 });
 export type GeometriOzellikCevabi = z.output<typeof geometriOzellikCevabi>;
 
