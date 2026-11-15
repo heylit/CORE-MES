@@ -7,17 +7,32 @@ import {
   projeListesiCevabi, projeListesiSorgusu, projeOlusturGovdesi, projeSemasi, projeSiparisKalemleriCevabi, projeYonetimiCevabi, siparisParametresi, siparisProjeleriCevabi,
   siparisSecenekleriCevabi, siparisSecenekleriSorgusu, siparistenProjeGovdesi, statuAyariGovdesi, statuEkleGovdesi, statuGuncelleGovdesi,
   statuListesiCevabi, statuYazGovdesi, tabanYenileGovdesi,
+  geriGonderGovdesi, gorevAyrintisiCevabi, gorevKomutuGovdesi, gorevlerimCevabi, rolSecenekleriCevabi, sablondanEkleGovdesi, sablonEkleGovdesi,
+  sablonGuncelleGovdesi, sablonListesiCevabi, sablonSecenekleriCevabi,
 } from '#paylasilan/sozlesme/projeler.ts';
 import {
   bitisBagla, firmaSecenekleri, gorevDuzenle, gorevEkle, kilometreTasiDuzenle, kilometreTasiEkle, projeAc, projeAyrintisi, projeDuzenle, projeListesi,
   projeSiparisKalemleri, projeYonetimi, siparisProjeleri, siparisSecenekleri, siparistenProjeAc, sorumluSecenekleri, statuAyariDuzenle, statuDuzenle, statuEkle,
   statuListesi, statuYaz, tabanYenile,
+  gorevAyrintisi, gorevBasla, gorevBitir, gorevGeriGonder, gorevlerim, gorevOnayla, gorevUstlen, rolSecenekleri, sablondanEkle, sablonDuzenle,
+  sablonEkle, sablonListesi, sablonSecenekleri,
 } from './servis.ts';
 
 // Sayfası olan rol okur; `projeler.oku` sayfasız okuma için ayrı verilebilir (başka modülün ekranı proje seçerken).
 const OKUMA = { biri: ['sayfa.projeler', 'projeler.oku'] } as const;
 // Bütçe tutarı yalnız maliyet görene açılır (180); işlem uçta değil alan düzeyinde denetlenir.
 const maliyetGorur = (k: Kullanici): boolean => islemVarMi(k, 'finans.maliyet-oku');
+// 3269: görev işleyen ve kontrol eden yalnız kendisine düşen kaydı görür; kayıt düzeyi denetim serviste.
+const GOREVLERIM = { biri: ['sayfa.proje-gorevlerim', 'projeler.gorev-isle', 'projeler.gorev-kontrol'] } as const;
+const GOREV_OKUMA = { biri: ['sayfa.projeler', 'projeler.oku', 'projeler.gorev-isle', 'projeler.gorev-kontrol'] } as const;
+const ATAMA_SECICI = { biri: ['projeler.gorev-yaz', 'projeler.sablon-yaz'] } as const;
+const gorevKomutu = (
+  yol: string, yetki: 'projeler.gorev-isle' | 'projeler.gorev-kontrol',
+  is: typeof gorevUstlen,
+) => uc({
+  yontem: 'POST', yol, yetki, parametre: gorevParametresi, govde: gorevKomutuGovdesi, cevap: gorevAyrintisiCevabi,
+  isle: ({ db, kullanici, parametre, govde }) => is(db, kullanici, parametre.gorevId, govde),
+});
 
 export const uclar = [
   uc({
@@ -88,13 +103,82 @@ export const uclar = [
     cevap: statuListesiCevabi,
     isle: ({ db, kullanici, govde }) => statuAyariDuzenle(db, kullanici.id, govde),
   }),
-  // Görev sorumlusu seçicisi yalnız görev yazana açılır.
+  // Görev sorumlusu seçicisi yalnız görev ya da şablon yazana açılır.
   uc({
     yontem: 'GET',
     yol: '/projeler/sorumlu-secenekleri',
-    yetki: 'projeler.gorev-yaz',
+    yetki: ATAMA_SECICI,
     cevap: kisiSecenekleriCevabi,
     isle: async ({ db }) => ({ kisiler: await sorumluSecenekleri(db) }),
+  }),
+  uc({
+    yontem: 'GET',
+    yol: '/projeler/rol-secenekleri',
+    yetki: ATAMA_SECICI,
+    cevap: rolSecenekleriCevabi,
+    isle: async ({ db }) => ({ roller: await rolSecenekleri(db) }),
+  }),
+  // 3269: Proje görevlerim; satırlar kişinin kendisine, rolüne ya da kontrolüne düşen görevlerdir.
+  uc({
+    yontem: 'GET',
+    yol: '/projeler/gorevlerim/liste',
+    yetki: GOREVLERIM,
+    cevap: gorevlerimCevabi,
+    isle: ({ db, kullanici }) => gorevlerim(db, kullanici),
+  }),
+  uc({
+    yontem: 'GET',
+    yol: '/projeler/gorevler/:gorevId/ayrinti',
+    yetki: GOREV_OKUMA,
+    parametre: gorevParametresi,
+    cevap: gorevAyrintisiCevabi,
+    isle: ({ db, kullanici, parametre }) => gorevAyrintisi(db, kullanici, parametre.gorevId),
+  }),
+  gorevKomutu('/projeler/gorevler/:gorevId/ustlen', 'projeler.gorev-isle', gorevUstlen),
+  gorevKomutu('/projeler/gorevler/:gorevId/basla', 'projeler.gorev-isle', gorevBasla),
+  gorevKomutu('/projeler/gorevler/:gorevId/bitir', 'projeler.gorev-isle', gorevBitir),
+  gorevKomutu('/projeler/gorevler/:gorevId/onayla', 'projeler.gorev-kontrol', gorevOnayla),
+  uc({
+    yontem: 'POST',
+    yol: '/projeler/gorevler/:gorevId/geri-gonder',
+    yetki: 'projeler.gorev-kontrol',
+    parametre: gorevParametresi,
+    govde: geriGonderGovdesi,
+    cevap: gorevAyrintisiCevabi,
+    isle: ({ db, kullanici, parametre, govde }) => gorevGeriGonder(db, kullanici, parametre.gorevId, govde),
+  }),
+  // 3269: görev şablonları; yazan şablon ekranını da okur. Proje açan ve görev yazan seçici için etkin şablonları görür.
+  uc({
+    yontem: 'GET',
+    yol: '/projeler/sablonlar/liste',
+    yetki: 'projeler.sablon-yaz',
+    cevap: sablonListesiCevabi,
+    isle: ({ db }) => sablonListesi(db),
+  }),
+  uc({
+    yontem: 'GET',
+    yol: '/projeler/sablon-secenekleri',
+    yetki: { biri: ['projeler.yaz', 'projeler.gorev-yaz'] },
+    cevap: sablonSecenekleriCevabi,
+    isle: ({ db }) => sablonSecenekleri(db),
+  }),
+  uc({
+    yontem: 'POST',
+    yol: '/projeler/sablonlar',
+    yetki: 'projeler.sablon-yaz',
+    govde: sablonEkleGovdesi,
+    cevap: sablonListesiCevabi,
+    tekrarKorumali: true,
+    isle: ({ db, kullanici, govde }) => sablonEkle(db, kullanici.id, govde),
+  }),
+  uc({
+    yontem: 'POST',
+    yol: '/projeler/sablonlar/:id/guncelle',
+    yetki: 'projeler.sablon-yaz',
+    parametre: idParametresi,
+    govde: sablonGuncelleGovdesi,
+    cevap: sablonListesiCevabi,
+    isle: ({ db, kullanici, parametre, govde }) => sablonDuzenle(db, kullanici.id, parametre.id, govde),
   }),
   uc({
     yontem: 'POST',
@@ -216,5 +300,16 @@ export const uclar = [
     cevap: projeYonetimiCevabi,
     tekrarKorumali: true,
     isle: ({ db, kullanici, parametre, govde }) => gorevEkle(db, kullanici.id, parametre.id, govde),
+  }),
+  // 3269: seçilen şablonun görevleri açık projeye eklenir (şablonsuz açılan proje sonradan şablon alır).
+  uc({
+    yontem: 'POST',
+    yol: '/projeler/:id/sablondan-ekle',
+    yetki: 'projeler.gorev-yaz',
+    parametre: idParametresi,
+    govde: sablondanEkleGovdesi,
+    cevap: projeYonetimiCevabi,
+    tekrarKorumali: true,
+    isle: ({ db, kullanici, parametre, govde }) => sablondanEkle(db, kullanici.id, parametre.id, govde.sablonId),
   }),
 ];

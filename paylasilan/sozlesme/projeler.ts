@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { listeCevapSemasi, listeSorguAlanlari } from '../liste.ts';
 import { beklenenSurum, surumSemasi } from '../surum.ts';
 import { EMIR_TURLERI } from './emir-turleri.ts';
+import { HAZIRLIK_MADDELERI } from './uretim-emirleri.ts';
 import { tarihSemasi, zamanSemasi } from '../zaman.ts';
 
 // Projeler (kart #803): proje kaydı. Kod üretim emri numarasına girer ve Logo'daki proje koduyla eşleşebilecek biçimdedir.
@@ -52,9 +53,11 @@ const TARIH_SIRASI = { message: 'Bitiş başlangıçtan önce olamaz.', path: ['
 export const idParametresi = z.object({ id: z.coerce.number<number>().int().positive() });
 
 // Siparişten açılışta firma siparişten alınır; gövdede firma yoktur (PRJ-07, PRJ-08).
+// 3269 a: görev şablonu proje açılınca uygulanır. Alan gönderilmezse varsayılan şablon (varsa), `null` şablonsuz demektir.
 const siparistenAlanlar = {
   kod: projeKoduSemasi, ad: projeAlanlari.ad, baslangic: projeAlanlari.baslangic, bitis: projeAlanlari.bitis, aciklama: projeAlanlari.aciklama,
   ...butceAlanlari,
+  sablonId: z.number().int().positive().max(2147483647).nullable().optional(),
 };
 export const siparistenProjeGovdesi = z.object(siparistenAlanlar).refine(tarihSirasi, TARIH_SIRASI);
 // PRJ-10 (224): yeni proje sipariş seçilmeden açılmaz; firma siparişten gelir.
@@ -245,7 +248,8 @@ export const kilometreTasiSemasi = z.object({
   surum: surumSemasi,
 });
 
-export const GOREV_DURUMLARI = ['yapilacak', 'suruyor', 'bekliyor', 'bitti', 'iptal'] as const;
+// 3269: "kontrolde" yalnız kontrol edeni olan görevdedir; yapan bitirince görev kontrole geçer, onayla biter.
+export const GOREV_DURUMLARI = ['yapilacak', 'suruyor', 'bekliyor', 'kontrolde', 'bitti', 'iptal'] as const;
 export const gorevDurumuSemasi = z.enum(GOREV_DURUMLARI);
 export const gorevParametresi = z.object({ gorevId: z.coerce.number<number>().int().positive().max(2147483647) });
 const kimlikYaDaYok = z.number().int().positive().max(2147483647).nullish().transform((v) => v ?? null);
@@ -257,10 +261,28 @@ const gorevPlanAlanlari = {
   planBaslangic: tarihSemasi,
   planBitis: tarihSemasi,
   oncekiGorevId: kimlikYaDaYok,
+  // 3269: yapan kişi (sorumluKisiId) ya da rol; kontrol eden ve yedeği kişi ya da rol. Aşama görevlerin gruplandığı addır.
+  asama: istege(80),
+  yapanRolId: kimlikYaDaYok,
+  kontrolKisiId: kimlikYaDaYok,
+  kontrolRolId: kimlikYaDaYok,
+  yedekKontrolKisiId: kimlikYaDaYok,
+  yedekKontrolRolId: kimlikYaDaYok,
 };
 const planSirasi = (g: { planBaslangic: string; planBitis: string }) => g.planBitis >= g.planBaslangic;
 const PLAN_SIRASI = { message: 'Plan bitişi başlangıçtan önce olamaz.', path: ['planBitis'] };
-export const gorevEkleGovdesi = z.object(gorevPlanAlanlari).refine(planSirasi, PLAN_SIRASI);
+const TEK_YAPAN = { message: 'Görev ya bir kişiye ya da bir role atanır.', path: ['yapanRolId'] };
+const TEK_KONTROL = { message: 'Kontrol eden ya bir kişi ya da bir roldür.', path: ['kontrolRolId'] };
+const TEK_YEDEK = { message: 'Yedek kontrol eden ya bir kişi ya da bir roldür.', path: ['yedekKontrolRolId'] };
+const YEDEK_KONTROLLU = { message: 'Yedek kontrol eden yalnız kontrol edeni olan görevde seçilir.', path: ['yedekKontrolKisiId'] };
+type Kontrol = { kontrolKisiId: number | null; kontrolRolId: number | null };
+type Yedek = Kontrol & { yedekKontrolKisiId: number | null; yedekKontrolRolId: number | null };
+const tekYapan = (g: { sorumluKisiId: number | null; yapanRolId: number | null }) => g.sorumluKisiId === null || g.yapanRolId === null;
+const tekKontrol = (g: Kontrol) => g.kontrolKisiId === null || g.kontrolRolId === null;
+const tekYedek = (g: Yedek) => g.yedekKontrolKisiId === null || g.yedekKontrolRolId === null;
+const yedekKontrollu = (g: Yedek) => (g.yedekKontrolKisiId === null && g.yedekKontrolRolId === null) || g.kontrolKisiId !== null || g.kontrolRolId !== null;
+export const gorevEkleGovdesi = z.object(gorevPlanAlanlari).refine(planSirasi, PLAN_SIRASI)
+  .refine(tekYapan, TEK_YAPAN).refine(tekKontrol, TEK_KONTROL).refine(tekYedek, TEK_YEDEK).refine(yedekKontrollu, YEDEK_KONTROLLU);
 export const gorevGuncelleGovdesi = z
   .object({
     ...gorevPlanAlanlari,
@@ -270,7 +292,8 @@ export const gorevGuncelleGovdesi = z
     durum: gorevDurumuSemasi,
     ...beklenenSurum,
   })
-  .refine(planSirasi, PLAN_SIRASI);
+  .refine(planSirasi, PLAN_SIRASI)
+  .refine(tekYapan, TEK_YAPAN).refine(tekKontrol, TEK_KONTROL).refine(tekYedek, TEK_YEDEK).refine(yedekKontrollu, YEDEK_KONTROLLU);
 export const gorevSemasi = z.object({
   id: z.number().int(),
   kilometreTasiId: z.number().int().nullable(),
@@ -285,6 +308,19 @@ export const gorevSemasi = z.object({
   ilerleme: z.number().int(),
   durum: gorevDurumuSemasi,
   oncekiGorevId: z.number().int().nullable(),
+  asama: z.string().nullable(),
+  yapanRolId: z.number().int().nullable(),
+  yapanRolAd: z.string().nullable(),
+  kontrolKisiId: z.number().int().nullable(),
+  kontrolKisiAd: z.string().nullable(),
+  kontrolRolId: z.number().int().nullable(),
+  kontrolRolAd: z.string().nullable(),
+  yedekKontrolKisiId: z.number().int().nullable(),
+  yedekKontrolKisiAd: z.string().nullable(),
+  yedekKontrolRolId: z.number().int().nullable(),
+  yedekKontrolRolAd: z.string().nullable(),
+  // Kontrollü görev onayla bitti: ekranda "Onaylandı". Kontrolsüz görevde hep false.
+  onaylandi: z.boolean(),
   surum: surumSemasi,
 });
 
@@ -300,6 +336,101 @@ export const projeYonetimiCevabi = z.object({
   serbestStatu: z.boolean(),
 });
 export const kisiSecenekleriCevabi = z.object({ kisiler: z.array(z.object({ id: z.number().int(), ad: z.string() })) });
+export const rolSecenekleriCevabi = z.object({ roller: z.array(z.object({ id: z.number().int(), ad: z.string() })) });
+
+// --- 3269: görev akışı (üstlen, başla, bitir, onayla, geri gönder) ---
+// Kişi yalnız kendisine ya da rolüne atanan görevi işler, yalnız kendisine ya da rolüne atanan kontrolü onaylar (sunucuda).
+export const gorevKomutuGovdesi = z.object({ ...beklenenSurum });
+export const geriGonderGovdesi = z.object({
+  gerekce: zorunluMetin(500, 'Neden geri gönderiyorsun? Gerekçe zorunlu.'),
+  ...beklenenSurum,
+});
+export const GOREV_OLAYLARI = ['ustlen', 'basla', 'bitti', 'onay', 'geri'] as const;
+export const gorevOlayiSemasi = z.object({
+  olay: z.enum(GOREV_OLAYLARI), kisiAd: z.string().nullable(), gerekce: z.string().nullable(), an: zamanSemasi,
+});
+// Ekranın göstereceği düğmeler: sunucu aynı kuralla yazmayı da denetler.
+export const gorevIzinleriSemasi = z.object({
+  ustlenebilir: z.boolean(), baslayabilir: z.boolean(), bitirebilir: z.boolean(), onaylayabilir: z.boolean(),
+});
+export const gorevAyrintisiCevabi = z.object({
+  gorev: gorevSemasi,
+  proje: z.object({ id: z.number().int(), kod: z.string(), ad: z.string() }),
+  olaylar: z.array(gorevOlayiSemasi),
+  izinler: gorevIzinleriSemasi,
+});
+// Proje görevlerim: kişinin açık görevleri. "bana" kişiye atanan, "rolume" rolüne açık (üstlenilmemiş), "kontrolumde" onayını
+// bekleyen, "yaptim" kişinin bitirip kontrolde bekleyen görevi.
+export const GOREVLERIM_TURLERI = ['bana', 'rolume', 'kontrolumde', 'yaptim'] as const;
+export const gorevlerimSatiri = gorevSemasi.extend({
+  tur: z.enum(GOREVLERIM_TURLERI),
+  projeId: z.number().int(),
+  projeKod: z.string(),
+  projeAd: z.string(),
+  izinler: gorevIzinleriSemasi,
+});
+export const gorevlerimCevabi = z.object({ gorevler: z.array(gorevlerimSatiri) });
+
+// --- 3269: görev şablonu ---
+export const SABLON_DAYANAKLARI = ['baslangic', 'termin'] as const;
+export const KONTROL_KOSULLARI = ['her-zaman', 'yeni-revize'] as const;
+export const SABLON_KALEMI_EN_COK = 100;
+export const sablonKalemiGovdesi = z.object({
+  // Kalemler sırayla gönderilir; önceki kalem bu listedeki sıra numarasıdır (0'dan), kimlik değil.
+  ad: zorunluMetin(200, 'Görev adı zorunlu.'),
+  aciklama: istege(1000),
+  asama: istege(80),
+  dayanak: z.enum(SABLON_DAYANAKLARI),
+  gun: z.number().int().min(-365).max(365),
+  sureGun: z.number().int().min(1, 'Süre en az 1 gün.').max(365),
+  yapanKisiId: kimlikYaDaYok,
+  yapanRolId: kimlikYaDaYok,
+  kontrolKisiId: kimlikYaDaYok,
+  kontrolRolId: kimlikYaDaYok,
+  yedekKontrolKisiId: kimlikYaDaYok,
+  yedekKontrolRolId: kimlikYaDaYok,
+  oncekiSira: z.number().int().min(0).max(SABLON_KALEMI_EN_COK - 1).nullish().transform((v) => v ?? null),
+  hazirlikMaddesi: z.enum(HAZIRLIK_MADDELERI).nullish().transform((v) => v ?? null),
+  kontrolKosulu: z.enum(KONTROL_KOSULLARI).default('her-zaman'),
+})
+  .refine((k) => k.yapanKisiId === null || k.yapanRolId === null, { message: TEK_YAPAN.message, path: ['yapanRolId'] })
+  .refine((k) => tekKontrol(k), TEK_KONTROL).refine((k) => tekYedek(k), TEK_YEDEK).refine((k) => yedekKontrollu(k), YEDEK_KONTROLLU);
+const sablonAlanlari = {
+  ad: zorunluMetin(120, 'Şablon adı zorunlu.'),
+  varsayilan: z.boolean(),
+  etkin: z.boolean(),
+  kalemler: z.array(sablonKalemiGovdesi).max(SABLON_KALEMI_EN_COK, `Şablonda en çok ${SABLON_KALEMI_EN_COK} görev olur.`),
+};
+const ONCEKI_SIRASI = { message: 'Önceki görev listede bu görevden önce olmalı.', path: ['kalemler'] };
+const oncekiOnde = (g: { kalemler: readonly { oncekiSira: number | null }[] }) => g.kalemler.every((k, i) => k.oncekiSira === null || k.oncekiSira < i);
+const VARSAYILAN_ETKIN = { message: 'Varsayılan şablon kapatılamaz.', path: ['etkin'] };
+const varsayilanEtkin = (g: { varsayilan: boolean; etkin: boolean }) => !g.varsayilan || g.etkin;
+export const sablonEkleGovdesi = z.object(sablonAlanlari).refine(oncekiOnde, ONCEKI_SIRASI).refine(varsayilanEtkin, VARSAYILAN_ETKIN);
+export const sablonGuncelleGovdesi = z.object({ ...sablonAlanlari, ...beklenenSurum }).refine(oncekiOnde, ONCEKI_SIRASI).refine(varsayilanEtkin, VARSAYILAN_ETKIN);
+export const sablonKalemiSemasi = z.object({
+  id: z.number().int(),
+  ad: z.string(), aciklama: z.string().nullable(), asama: z.string().nullable(),
+  dayanak: z.enum(SABLON_DAYANAKLARI), gun: z.number().int(), sureGun: z.number().int(),
+  yapanKisiId: z.number().int().nullable(), yapanKisiAd: z.string().nullable(),
+  yapanRolId: z.number().int().nullable(), yapanRolAd: z.string().nullable(),
+  kontrolKisiId: z.number().int().nullable(), kontrolKisiAd: z.string().nullable(),
+  kontrolRolId: z.number().int().nullable(), kontrolRolAd: z.string().nullable(),
+  yedekKontrolKisiId: z.number().int().nullable(), yedekKontrolKisiAd: z.string().nullable(),
+  yedekKontrolRolId: z.number().int().nullable(), yedekKontrolRolAd: z.string().nullable(),
+  oncekiSira: z.number().int().nullable(),
+  hazirlikMaddesi: z.enum(HAZIRLIK_MADDELERI).nullable(),
+  kontrolKosulu: z.enum(KONTROL_KOSULLARI),
+});
+export const sablonSemasi = z.object({
+  id: z.number().int(), ad: z.string(), varsayilan: z.boolean(), etkin: z.boolean(),
+  kalemler: z.array(sablonKalemiSemasi), guncelleme: zamanSemasi.nullable(), surum: surumSemasi,
+});
+export const sablonListesiCevabi = z.object({ sablonlar: z.array(sablonSemasi) });
+// Proje açılış formu için: etkin şablonların adı ve ne kadar görev doğuracağı.
+export const sablonSecenekleriCevabi = z.object({
+  sablonlar: z.array(z.object({ id: z.number().int(), ad: z.string(), varsayilan: z.boolean(), gorevSayisi: z.number().int(), hazirlikSayisi: z.number().int() })),
+});
+export const sablondanEkleGovdesi = z.object({ sablonId: z.number().int().positive().max(2147483647) });
 
 export type StatuTonu = z.output<typeof statuTonuSemasi>;
 export type Statu = z.output<typeof statuSemasi>;
@@ -324,6 +455,28 @@ export type GorevGuncelleGovdesi = z.input<typeof gorevGuncelleGovdesi>;
 export type GorevGuncelleVerisi = z.output<typeof gorevGuncelleGovdesi>;
 export type ProjeYonetimiCevabi = z.output<typeof projeYonetimiCevabi>;
 export type KisiSecenekleriCevabi = z.output<typeof kisiSecenekleriCevabi>;
+export type RolSecenekleriCevabi = z.output<typeof rolSecenekleriCevabi>;
+export type GorevKomutuGovdesi = z.input<typeof gorevKomutuGovdesi>;
+export type GeriGonderGovdesi = z.input<typeof geriGonderGovdesi>;
+export type GorevOlayi = z.output<typeof gorevOlayiSemasi>;
+export type GorevIzinleri = z.output<typeof gorevIzinleriSemasi>;
+export type GorevAyrintisiCevabi = z.output<typeof gorevAyrintisiCevabi>;
+export type GorevlerimTuru = (typeof GOREVLERIM_TURLERI)[number];
+export type GorevlerimSatiri = z.output<typeof gorevlerimSatiri>;
+export type GorevlerimCevabi = z.output<typeof gorevlerimCevabi>;
+export type SablonDayanagi = (typeof SABLON_DAYANAKLARI)[number];
+export type KontrolKosulu = (typeof KONTROL_KOSULLARI)[number];
+export type SablonKalemiGovdesi = z.input<typeof sablonKalemiGovdesi>;
+export type SablonKalemiVerisi = z.output<typeof sablonKalemiGovdesi>;
+export type SablonEkleGovdesi = z.input<typeof sablonEkleGovdesi>;
+export type SablonEkleVerisi = z.output<typeof sablonEkleGovdesi>;
+export type SablonGuncelleGovdesi = z.input<typeof sablonGuncelleGovdesi>;
+export type SablonGuncelleVerisi = z.output<typeof sablonGuncelleGovdesi>;
+export type SablonKalemi = z.output<typeof sablonKalemiSemasi>;
+export type Sablon = z.output<typeof sablonSemasi>;
+export type SablonListesiCevabi = z.output<typeof sablonListesiCevabi>;
+export type SablonSecenekleriCevabi = z.output<typeof sablonSecenekleriCevabi>;
+export type SablondanEkleGovdesi = z.input<typeof sablondanEkleGovdesi>;
 
 export type ProjeDurumu = z.output<typeof projeDurumuSemasi>;
 export type ProjeOlusturGovdesi = z.input<typeof projeOlusturGovdesi>;

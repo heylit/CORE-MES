@@ -1,12 +1,15 @@
 import { useId, useState, type FormEvent } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import type {
-  Gorev, GorevDurumu, GorevEkleGovdesi, GorevGuncelleGovdesi, KisiSecenekleriCevabi, ProjeYonetimiCevabi,
+  Gorev, GorevDurumu, GorevEkleGovdesi, GorevGuncelleGovdesi, ProjeYonetimiCevabi, SablonSecenekleriCevabi,
 } from '#paylasilan/sozlesme/projeler.ts';
 import { CokSatir, Dugme, Girdi, Kart, Pencere, Rozet, Secim, Tablo, type Sutun } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { anahtarlar } from './anahtarlar.ts';
-import { GOREV_DURUMLARI, GOREV_DURUM_METNI, GOREV_DURUM_TONU, GOREV_ISLEMI, bugun, gunFarki, sapmaMetni, tarihMetni } from './gosterim.ts';
+import {
+  GOREV_DURUMLARI, GOREV_DURUM_METNI, GOREV_DURUM_TONU, GOREV_ISLEMI, atamaMetni, bugun, gorevDurumMetni, gunFarki, sapmaMetni, tarihMetni,
+} from './gosterim.ts';
+import { AtamaSecimi, GorevPaneli, atamaCoz, atamaDegeri, useAtamaSecenekleri } from './GorevPaneli.tsx';
 import { bosIseNull, sayiYaDaNull, useIslemVar, useYonetimKomutu } from './komut.ts';
 
 // Bitiş sapması: biten görevde gerçek bitiş, açık görevde bugün plan bitişini geçtiyse bugün; iptal edilen görevde yoktur.
@@ -34,15 +37,24 @@ export function ProjeGorevleri({ projeId, yonetim, acik }: { projeId: number; yo
   const yazabilir = useIslemVar(GOREV_ISLEMI) && acik;
   const [gorunum, gorunumYaz] = useState<Gorunum>('tablo');
   const [form, formYaz] = useState<Gorev | 'yeni' | null>(null);
+  const [panel, panelYaz] = useState<number | null>(null);
+  const [sablondan, sablondanYaz] = useState(false);
   const gun = bugun();
   const taslar = new Map(yonetim.kilometreTaslari.map((t) => [t.id, t.ad]));
-  const sec = yazabilir ? (g: Gorev) => { formYaz(g); } : undefined;
+  // 3269 a: satır görevin yan panelini açar (akış düğmeleri ve geçmiş); düzenleme panelden.
+  const sec = (g: Gorev) => { panelYaz(g.id); };
+  const paneldeki = yonetim.gorevler.find((g) => g.id === panel);
 
   const sutunlar: Sutun<Gorev>[] = [
     { anahtar: 'ad', baslik: 'Görev', hucre: (g) => (
-      <span>{g.ad}{g.kilometreTasiId !== null && <span className="tc-prj-soluk"> · {taslar.get(g.kilometreTasiId) ?? '—'}</span>}</span>
-    ) },
-    { anahtar: 'sorumlu', baslik: 'Sorumlu', hucre: (g) => g.sorumluAd ?? '—' },
+      <span>
+        {g.ad}
+        {g.kilometreTasiId !== null && <span className="tc-prj-soluk"> · {taslar.get(g.kilometreTasiId) ?? '—'}</span>}
+        {g.asama !== null && <span className="tc-prj-soluk"> · {g.asama}</span>}
+      </span>
+    ), csv: (g) => g.ad },
+    { anahtar: 'yapan', baslik: 'Yapan', hucre: (g) => atamaMetni(g.sorumluAd, g.yapanRolAd) },
+    { anahtar: 'kontrol', baslik: 'Kontrol eden', hucre: (g) => atamaMetni(g.kontrolKisiAd, g.kontrolRolAd, 'Yok') },
     { anahtar: 'plan', baslik: 'Plan', mono: true, kirilmaz: true, hucre: (g) => `${tarihMetni(g.planBaslangic)} – ${tarihMetni(g.planBitis)}` },
     { anahtar: 'gercek', baslik: 'Gerçekleşen', mono: true, kirilmaz: true, hucre: (g) => (
       g.gercekBaslangic === null ? '—' : `${tarihMetni(g.gercekBaslangic)} – ${tarihMetni(g.gercekBitis)}`
@@ -52,7 +64,7 @@ export function ProjeGorevleri({ projeId, yonetim, acik }: { projeId: number; yo
       return <span className={s !== null && s > 0 ? 'tc-prj-gec' : undefined}>{sapmaMetni(s)}</span>;
     } },
     { anahtar: 'ilerleme', baslik: 'İlerleme', hucre: (g) => <Ilerleme deger={g.ilerleme} /> },
-    { anahtar: 'durum', baslik: 'Durum', hucre: (g) => <Rozet ton={GOREV_DURUM_TONU[g.durum]}>{GOREV_DURUM_METNI[g.durum]}</Rozet> },
+    { anahtar: 'durum', baslik: 'Durum', hucre: (g) => <Rozet ton={GOREV_DURUM_TONU[g.durum]}>{gorevDurumMetni(g)}</Rozet>, csv: gorevDurumMetni },
   ];
 
   return (
@@ -63,6 +75,7 @@ export function ProjeGorevleri({ projeId, yonetim, acik }: { projeId: number; yo
         <div className="tc-prj-gorunum">
           <Dugme simge="list" aria-pressed={gorunum === 'tablo'} onClick={() => { gorunumYaz('tablo'); }}>Tablo</Dugme>
           <Dugme simge="gantt" aria-pressed={gorunum === 'pano'} onClick={() => { gorunumYaz('pano'); }}>Pano</Dugme>
+          {yazabilir && <Dugme simge="layers" onClick={() => { sablondanYaz(true); }}>Şablondan ekle</Dugme>}
           {yazabilir && <Dugme tur="birincil" simge="plus" onClick={() => { formYaz('yeni'); }}>Görev ekle</Dugme>}
         </div>
       )}
@@ -74,19 +87,26 @@ export function ProjeGorevleri({ projeId, yonetim, acik }: { projeId: number; yo
             sutunlar={sutunlar}
             satirlar={yonetim.gorevler}
             satirAnahtari={(g) => g.id}
-            {...(sec ? { satirSec: sec } : {})}
+            satirSec={sec}
             bosMesaj="Bu projede görev yok"
           />
         )
         : <GorevPanosu gorevler={yonetim.gorevler} gun={gun} sec={sec} />}
-      {form !== null && (
-        <GorevFormu projeId={projeId} yonetim={yonetim} gorev={form === 'yeni' ? null : form} kapat={() => { formYaz(null); }} />
+      {panel !== null && form === null && (
+        <GorevPaneli
+          gorevId={panel} kapat={() => { panelYaz(null); }}
+          duzenle={yazabilir && paneldeki !== undefined ? () => { formYaz(paneldeki); } : undefined}
+        />
       )}
+      {form !== null && (
+        <GorevFormu projeId={projeId} yonetim={yonetim} gorev={form === 'yeni' ? null : form} kapat={() => { formYaz(null); panelYaz(null); }} />
+      )}
+      {sablondan && <SablondanEkle projeId={projeId} kapat={() => { sablondanYaz(false); }} />}
     </Kart>
   );
 }
 
-function GorevPanosu({ gorevler, gun, sec }: { gorevler: readonly Gorev[]; gun: string; sec: ((g: Gorev) => void) | undefined }) {
+function GorevPanosu({ gorevler, gun, sec }: { gorevler: readonly Gorev[]; gun: string; sec: (g: Gorev) => void }) {
   if (gorevler.length === 0) return <p className="tc-prj-soluk">Bu projede görev yok</p>;
   return (
     <div className="tc-prj-pano">
@@ -99,14 +119,13 @@ function GorevPanosu({ gorevler, gun, sec }: { gorevler: readonly Gorev[]; gun: 
               const icerik = (
                 <>
                   <strong>{g.ad}</strong>
-                  <span className="tc-prj-soluk">{g.sorumluAd ?? 'Sorumlu yok'} · {tarihMetni(g.planBitis)}</span>
+                  <span className="tc-prj-soluk">{atamaMetni(g.sorumluAd, g.yapanRolAd, 'Atanmadı')} · {tarihMetni(g.planBitis)}</span>
+                  {g.onaylandi && <span className="tc-prj-soluk">Onaylandı</span>}
                   {gorevGecikiyor(g, gun) && <span className="tc-prj-gec">Gecikiyor</span>}
                   <Ilerleme deger={g.ilerleme} />
                 </>
               );
-              return sec
-                ? <button key={g.id} type="button" className="tc-prj-pano-kart" onClick={() => { sec(g); }}>{icerik}</button>
-                : <div key={g.id} className="tc-prj-pano-kart">{icerik}</div>;
+              return <button key={g.id} type="button" className="tc-prj-pano-kart" onClick={() => { sec(g); }}>{icerik}</button>;
             })}
           </section>
         );
@@ -115,7 +134,55 @@ function GorevPanosu({ gorevler, gun, sec }: { gorevler: readonly Gorev[]; gun: 
   );
 }
 
-const DURUM_SECENEKLERI = GOREV_DURUMLARI.map((d) => ({ deger: d, baslik: GOREV_DURUM_METNI[d] }));
+// "Kontrolde" yalnız akışla gelinir (yapan "Bitti" der); düzenlemede seçenek olarak yalnız görev zaten kontroldeyse durur.
+const KONTROLDE_IPUCU = 'Kontrol bekliyor: önce onaylanmalı ya da geri gönderilmeli.';
+const durumSecenekleri = (mevcut: GorevDurumu | undefined) => GOREV_DURUMLARI
+  .filter((d) => d !== 'kontrolde' || mevcut === 'kontrolde')
+  .map((d) => ({ deger: d, baslik: GOREV_DURUM_METNI[d] }));
+
+// 3269: seçilen şablonun görevleri (hazırlık maddesine bağlı olmayanlar) projeye eklenir; tarihler projenin başlangıç ve bitişinden.
+function SablondanEkle({ projeId, kapat }: { projeId: number; kapat: () => void }) {
+  const kimlik = useId();
+  const [sablonId, sablonYaz] = useState('');
+  const [hata, hataYaz] = useState<string | undefined>(undefined);
+  const sablonlar = useQuery({ queryKey: anahtarlar.sablonSecenekleri, queryFn: () => api.get<SablonSecenekleriCevabi>('/projeler/sablon-secenekleri') });
+  const secenekler = (sablonlar.data?.sablonlar ?? []).map((x) => ({
+    deger: String(x.id), baslik: `${x.ad} · ${x.gorevSayisi} görev${x.varsayilan ? ' (varsayılan)' : ''}`,
+  }));
+  const komut = useYonetimKomutu<{ sablonId: number }>(
+    projeId, (govde, istekKimligi) => api.post(`/projeler/${projeId}/sablondan-ekle`, govde, { istekKimligi }), kapat,
+  );
+  const ilet = (o: FormEvent) => {
+    o.preventDefault();
+    if (sablonId === '') { hataYaz('Şablon seçin.'); return; }
+    komut.mutate({ sablonId: Number(sablonId) });
+  };
+  return (
+    <Pencere
+      acik
+      kapat={kapat}
+      baslik="Şablondan görev ekle"
+      alt={(
+        <>
+          <Dugme onClick={kapat} disabled={komut.isPending}>Vazgeç</Dugme>
+          <Dugme tur="birincil" type="submit" form={kimlik} yukleniyor={komut.isPending}>Ekle</Dugme>
+        </>
+      )}
+    >
+      <form id={kimlik} className="tc-form" onSubmit={ilet} noValidate>
+        <div className="tc-form-tam">
+          <Secim
+            etiket="Şablon" required value={sablonId} bosSecenek="Şablon seçin" secenekler={secenekler}
+            ipucu="Hazırlık maddesine bağlı görevler üretim emri açılınca doğar."
+            hata={hata ?? (sablonlar.isError ? hataIletisi(sablonlar.error, 'Şablonlar alınamadı') : undefined)}
+            onChange={(e) => { sablonYaz(e.target.value); hataYaz(undefined); }}
+          />
+        </div>
+        {komut.isError && <p className="tc-form-tam tc-prj-hata" role="alert">{hataIletisi(komut.error, 'Şablon eklenemedi')}</p>}
+      </form>
+    </Pencere>
+  );
+}
 
 function GorevFormu({ projeId, yonetim, gorev, kapat }: {
   projeId: number; yonetim: ProjeYonetimiCevabi; gorev: Gorev | null; kapat: () => void;
@@ -123,7 +190,10 @@ function GorevFormu({ projeId, yonetim, gorev, kapat }: {
   const kimlik = useId();
   const [ad, adYaz] = useState(gorev?.ad ?? '');
   const [tasId, tasYaz] = useState(gorev?.kilometreTasiId == null ? '' : String(gorev.kilometreTasiId));
-  const [sorumluId, sorumluYaz] = useState(gorev?.sorumluKisiId == null ? '' : String(gorev.sorumluKisiId));
+  const [yapan, yapanYaz] = useState(gorev === null ? '' : atamaDegeri({ kisiId: gorev.sorumluKisiId, rolId: gorev.yapanRolId }));
+  const [kontrol, kontrolYaz] = useState(gorev === null ? '' : atamaDegeri({ kisiId: gorev.kontrolKisiId, rolId: gorev.kontrolRolId }));
+  const [yedek, yedekYaz] = useState(gorev === null ? '' : atamaDegeri({ kisiId: gorev.yedekKontrolKisiId, rolId: gorev.yedekKontrolRolId }));
+  const [asama, asamaYaz] = useState(gorev?.asama ?? '');
   const [planBaslangic, planBaslangicYaz] = useState(gorev?.planBaslangic ?? '');
   const [planBitis, planBitisYaz] = useState(gorev?.planBitis ?? '');
   const [oncekiId, oncekiYaz] = useState(gorev?.oncekiGorevId == null ? '' : String(gorev.oncekiGorevId));
@@ -132,14 +202,9 @@ function GorevFormu({ projeId, yonetim, gorev, kapat }: {
   const [gercekBitis, gercekBitisYaz] = useState(gorev?.gercekBitis ?? '');
   const [ilerleme, ilerlemeYaz] = useState(gorev === null ? '0' : String(gorev.ilerleme));
   const [durum, durumYaz] = useState<GorevDurumu>(gorev?.durum ?? 'yapilacak');
-  const sorumlular = useQuery({
-    queryKey: anahtarlar.sorumlular,
-    queryFn: () => api.get<KisiSecenekleriCevabi>('/projeler/sorumlu-secenekleri'),
-  });
-  const sorumluSecenekleri = (sorumlular.data?.kisiler ?? []).map((k) => ({ deger: String(k.id), baslik: k.ad }));
-  if (gorev?.sorumluKisiId != null && !sorumluSecenekleri.some((s) => s.deger === sorumluId)) {
-    sorumluSecenekleri.unshift({ deger: String(gorev.sorumluKisiId), baslik: gorev.sorumluAd ?? `Kişi ${gorev.sorumluKisiId}` });
-  }
+  // Sunucu da reddeder (409): kontrolde bekleyen görevin kontrol edeni iş bittikten sonra seçilmez.
+  const kontrolKilitli = gorev?.durum === 'kontrolde';
+  const atamalar = useAtamaSecenekleri();
   const tasSecenekleri = yonetim.kilometreTaslari
     .filter((t) => t.etkin || t.id === gorev?.kilometreTasiId)
     .map((t) => ({ deger: String(t.id), baslik: t.ad }));
@@ -154,14 +219,23 @@ function GorevFormu({ projeId, yonetim, gorev, kapat }: {
   );
   const ilet = (o: FormEvent) => {
     o.preventDefault();
+    const y = atamaCoz(yapan);
+    const k = atamaCoz(kontrol);
+    const yd = k.kisiId === null && k.rolId === null ? atamaCoz('') : atamaCoz(yedek);
     const plan = {
       kilometreTasiId: sayiYaDaNull(tasId),
       ad,
       aciklama: bosIseNull(aciklama),
-      sorumluKisiId: sayiYaDaNull(sorumluId),
+      sorumluKisiId: y.kisiId,
       planBaslangic,
       planBitis,
       oncekiGorevId: sayiYaDaNull(oncekiId),
+      asama: bosIseNull(asama),
+      yapanRolId: y.rolId,
+      kontrolKisiId: k.kisiId,
+      kontrolRolId: k.rolId,
+      yedekKontrolKisiId: yd.kisiId,
+      yedekKontrolRolId: yd.rolId,
     };
     komut.mutate(gorev === null ? plan satisfies GorevEkleGovdesi : {
       ...plan,
@@ -191,11 +265,23 @@ function GorevFormu({ projeId, yonetim, gorev, kapat }: {
           <Girdi etiket="Görev adı" required value={ad} maxLength={200} onChange={(e) => { adYaz(e.target.value); }} />
         </div>
         <Secim etiket="Kilometre taşı" value={tasId} bosSecenek="Bağlı değil" secenekler={tasSecenekleri} onChange={(e) => { tasYaz(e.target.value); }} />
-        <Secim
-          etiket="Sorumlu" value={sorumluId} bosSecenek="Atanmadı" secenekler={sorumluSecenekleri}
-          hata={sorumlular.isError ? hataIletisi(sorumlular.error, 'Kişiler alınamadı') : undefined}
-          onChange={(e) => { sorumluYaz(e.target.value); }}
+        <Girdi etiket="Aşama" value={asama} maxLength={80} ipucu="Görevler listede aşamaya göre okunur." onChange={(e) => { asamaYaz(e.target.value); }} />
+        <AtamaSecimi
+          etiket="Yapan" deger={yapan} ad={gorev === null ? null : atamaMetni(gorev.sorumluAd, gorev.yapanRolAd)} secenekler={atamalar.secenekler}
+          hata={atamalar.hata} bos="Atanmadı" ipucu="Role atanan görevi roldeki biri üstlenir." degistir={yapanYaz}
         />
+        <AtamaSecimi
+          etiket="Kontrol eden" deger={kontrol} ad={gorev === null ? null : atamaMetni(gorev.kontrolKisiAd, gorev.kontrolRolAd)}
+          secenekler={atamalar.secenekler} hata={atamalar.hata} bos="Yok" kilitli={kontrolKilitli}
+          ipucu={kontrolKilitli ? KONTROLDE_IPUCU : 'Seçilirse görev onayla biter; yapan kendi işini onaylayamaz.'} degistir={kontrolYaz}
+        />
+        {kontrol !== '' && (
+          <AtamaSecimi
+            etiket="Yedek kontrol eden" deger={yedek} ad={gorev === null ? null : atamaMetni(gorev.yedekKontrolKisiAd, gorev.yedekKontrolRolAd)}
+            secenekler={atamalar.secenekler} hata={atamalar.hata} bos="Yok" kilitli={kontrolKilitli}
+            ipucu={kontrolKilitli ? KONTROLDE_IPUCU : 'Kontrol 2 gün bekler ya da kontrol eden işi yapan kişiyse yedek onaylar.'} degistir={yedekYaz}
+          />
+        )}
         <Girdi etiket="Plan başlangıç" type="date" required value={planBaslangic} onChange={(e) => { planBaslangicYaz(e.target.value); }} />
         <Girdi etiket="Plan bitiş" type="date" required value={planBitis} onChange={(e) => { planBitisYaz(e.target.value); }} />
         <Secim
@@ -205,7 +291,11 @@ function GorevFormu({ projeId, yonetim, gorev, kapat }: {
         />
         {gorev !== null && (
           <>
-            <Secim etiket="Durum" required value={durum} secenekler={DURUM_SECENEKLERI} onChange={(e) => { durumYaz(e.target.value as GorevDurumu); }} />
+            <Secim
+              etiket="Durum" required value={durum} secenekler={durumSecenekleri(gorev.durum)}
+              ipucu={kontrol !== '' ? 'Kontrol edeni olan görev düzenlemeyle bitmez; yapan "Bitti" der, kontrol eden onaylar.' : undefined}
+              onChange={(e) => { durumYaz(e.target.value as GorevDurumu); }}
+            />
             <Girdi etiket="Gerçek başlangıç" type="date" value={gercekBaslangic} onChange={(e) => { gercekBaslangicYaz(e.target.value); }} />
             <Girdi
               etiket="Gerçek bitiş" type="date" value={gercekBitis}

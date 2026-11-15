@@ -298,10 +298,16 @@ export interface GorevSatiri {
   id: number; proje_id: number; kilometre_tasi_id: number | null; ad: string; aciklama: string | null; sorumlu_kisi_id: number | null;
   plan_baslangic: string; plan_bitis: string; gercek_baslangic: string | null; gercek_bitis: string | null; ilerleme: number; durum: string;
   onceki_gorev_id: number | null; surum: number;
+  asama: string | null; yapan_rol_id: number | null; kontrol_kisi_id: number | null; kontrol_rol_id: number | null;
+  yedek_kontrol_kisi_id: number | null; yedek_kontrol_rol_id: number | null; onaylandi: boolean;
 }
-const GOREV_SECIMI = `SELECT id, proje_id, kilometre_tasi_id, ad, aciklama, sorumlu_kisi_id, plan_baslangic, plan_bitis, gercek_baslangic, gercek_bitis,
-                             ilerleme, durum, onceki_gorev_id, surum
-                        FROM projeler_gorev`;
+const GOREV_SUTUNLARI = [
+  'id', 'proje_id', 'kilometre_tasi_id', 'ad', 'aciklama', 'sorumlu_kisi_id', 'plan_baslangic', 'plan_bitis', 'gercek_baslangic', 'gercek_bitis',
+  'ilerleme', 'durum', 'onceki_gorev_id', 'surum', 'asama', 'yapan_rol_id', 'kontrol_kisi_id', 'kontrol_rol_id', 'yedek_kontrol_kisi_id',
+  'yedek_kontrol_rol_id', 'onaylandi',
+] as const;
+const GOREV_ALANLARI = GOREV_SUTUNLARI.join(', ');
+const GOREV_SECIMI = `SELECT ${GOREV_ALANLARI} FROM projeler_gorev`;
 
 export function gorevler(db: Db, projeId: number): Promise<GorevSatiri[]> {
   return db.sorgu<GorevSatiri>(`${GOREV_SECIMI} WHERE proje_id = $1 ORDER BY plan_baslangic, id`, [projeId]);
@@ -326,14 +332,17 @@ export function projelerinGorevleri(
 
 export interface GorevAlanlari {
   kilometreTasiId: number | null; ad: string; aciklama: string | null; sorumluKisiId: number | null; planBaslangic: string; planBitis: string;
-  oncekiGorevId: number | null;
+  oncekiGorevId: number | null; asama: string | null; yapanRolId: number | null; kontrolKisiId: number | null; kontrolRolId: number | null;
+  yedekKontrolKisiId: number | null; yedekKontrolRolId: number | null;
 }
 
 export async function gorevEkle(db: Db, projeId: number, g: GorevAlanlari, kisiId: number): Promise<number> {
   const satir = await db.tek<{ id: number }>(
-    `INSERT INTO projeler_gorev (proje_id, kilometre_tasi_id, ad, aciklama, sorumlu_kisi_id, plan_baslangic, plan_bitis, onceki_gorev_id, olusturan_id)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id`,
-    [projeId, g.kilometreTasiId, g.ad, g.aciklama, g.sorumluKisiId, g.planBaslangic, g.planBitis, g.oncekiGorevId, kisiId],
+    `INSERT INTO projeler_gorev (proje_id, kilometre_tasi_id, ad, aciklama, sorumlu_kisi_id, plan_baslangic, plan_bitis, onceki_gorev_id, olusturan_id,
+                                 asama, yapan_rol_id, kontrol_kisi_id, kontrol_rol_id, yedek_kontrol_kisi_id, yedek_kontrol_rol_id)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15) RETURNING id`,
+    [projeId, g.kilometreTasiId, g.ad, g.aciklama, g.sorumluKisiId, g.planBaslangic, g.planBitis, g.oncekiGorevId, kisiId,
+      g.asama, g.yapanRolId, g.kontrolKisiId, g.kontrolRolId, g.yedekKontrolKisiId, g.yedekKontrolRolId],
   );
   if (satir === null) throw new Error('Görev eklenemedi');
   return satir.id;
@@ -347,10 +356,13 @@ export function gorevGuncelle(
   return db.tek<{ id: number }>(
     `UPDATE projeler_gorev
         SET kilometre_tasi_id = $2, ad = $3, aciklama = $4, sorumlu_kisi_id = $5, plan_baslangic = $6, plan_bitis = $7, onceki_gorev_id = $8,
-            gercek_baslangic = $9, gercek_bitis = $10, ilerleme = $11, durum = $12, guncelleyen_id = $13, guncelleme = now(), surum = surum + 1
+            gercek_baslangic = $9, gercek_bitis = $10, ilerleme = $11, durum = $12, guncelleyen_id = $13, guncelleme = now(), surum = surum + 1,
+            asama = $15, yapan_rol_id = $16, kontrol_kisi_id = $17, kontrol_rol_id = $18, yedek_kontrol_kisi_id = $19, yedek_kontrol_rol_id = $20,
+            onaylandi = onaylandi AND $12 = 'bitti'
       WHERE id = $1 AND surum = $14 RETURNING id`,
     [id, g.kilometreTasiId, g.ad, g.aciklama, g.sorumluKisiId, g.planBaslangic, g.planBitis, g.oncekiGorevId,
-      g.gercekBaslangic, g.gercekBitis, g.ilerleme, g.durum, kisiId, surum],
+      g.gercekBaslangic, g.gercekBitis, g.ilerleme, g.durum, kisiId, surum,
+      g.asama, g.yapanRolId, g.kontrolKisiId, g.kontrolRolId, g.yedekKontrolKisiId, g.yedekKontrolRolId],
   );
 }
 
@@ -359,4 +371,191 @@ export async function oncekiEslemesi(db: Db, projeId: number): Promise<Map<numbe
     'SELECT id, onceki_gorev_id AS onceki FROM projeler_gorev WHERE proje_id = $1', [projeId],
   );
   return new Map(s.map((x) => [x.id, x.onceki]));
+}
+
+// --- 3269: görev akışı ---
+
+// Akış yazmaları sürüm koşulludur; tarih sunucunun günüdür. Bitmeyen görev gerçek bitiş taşımaz.
+export function gorevUstlen(db: Db, id: number, kisiId: number, surum: number): Promise<{ id: number } | null> {
+  return db.tek<{ id: number }>(
+    `UPDATE projeler_gorev SET sorumlu_kisi_id = $2, yapan_rol_id = NULL, guncelleyen_id = $2, guncelleme = now(), surum = surum + 1
+      WHERE id = $1 AND surum = $3 AND sorumlu_kisi_id IS NULL RETURNING id`,
+    [id, kisiId, surum],
+  );
+}
+
+export function gorevBasla(db: Db, id: number, kisiId: number, surum: number): Promise<{ id: number } | null> {
+  return db.tek<{ id: number }>(
+    `UPDATE projeler_gorev SET durum = 'suruyor', gercek_baslangic = COALESCE(gercek_baslangic, current_date),
+            guncelleyen_id = $2, guncelleme = now(), surum = surum + 1
+      WHERE id = $1 AND surum = $3 RETURNING id`,
+    [id, kisiId, surum],
+  );
+}
+
+export function gorevBitir(db: Db, id: number, durum: 'kontrolde' | 'bitti', kisiId: number, surum: number): Promise<{ id: number } | null> {
+  return db.tek<{ id: number }>(
+    `UPDATE projeler_gorev SET durum = $2, gercek_baslangic = LEAST(COALESCE(gercek_baslangic, current_date), current_date),
+            gercek_bitis = CASE WHEN $2 = 'bitti' THEN current_date ELSE NULL END, ilerleme = CASE WHEN $2 = 'bitti' THEN 100 ELSE ilerleme END,
+            guncelleyen_id = $3, guncelleme = now(), surum = surum + 1
+      WHERE id = $1 AND surum = $4 RETURNING id`,
+    [id, durum, kisiId, surum],
+  );
+}
+
+export function gorevOnayla(db: Db, id: number, kisiId: number, surum: number): Promise<{ id: number } | null> {
+  return db.tek<{ id: number }>(
+    `UPDATE projeler_gorev SET durum = 'bitti', onaylandi = true, gercek_baslangic = LEAST(COALESCE(gercek_baslangic, current_date), current_date),
+            gercek_bitis = current_date, ilerleme = 100, guncelleyen_id = $2, guncelleme = now(), surum = surum + 1
+      WHERE id = $1 AND surum = $3 RETURNING id`,
+    [id, kisiId, surum],
+  );
+}
+
+export function gorevGeriGonder(db: Db, id: number, kisiId: number, surum: number): Promise<{ id: number } | null> {
+  return db.tek<{ id: number }>(
+    `UPDATE projeler_gorev SET durum = 'suruyor', guncelleyen_id = $2, guncelleme = now(), surum = surum + 1
+      WHERE id = $1 AND surum = $3 RETURNING id`,
+    [id, kisiId, surum],
+  );
+}
+
+export async function gorevOlayiEkle(db: Db, gorevId: number, olay: string, kisiId: number, gerekce: string | null): Promise<void> {
+  await db.sorgu('INSERT INTO projeler_gorev_olayi (gorev_id, olay, kisi_id, gerekce) VALUES ($1, $2, $3, $4)', [gorevId, olay, kisiId, gerekce]);
+}
+
+export interface GorevOlayiSatiri { olay: string; kisi_id: number; gerekce: string | null; an: string }
+export function gorevOlaylari(db: Db, gorevId: number): Promise<GorevOlayiSatiri[]> {
+  return db.sorgu<GorevOlayiSatiri>(
+    `SELECT olay, kisi_id, gerekce, ${zamanMetni('an')} AS an FROM projeler_gorev_olayi WHERE gorev_id = $1 ORDER BY id DESC`, [gorevId],
+  );
+}
+
+// Görevi son bitiren kişi ve bu "bitti"den beri geçen tam gün: kontrol kuralı (yapan kontrol edemez, yedek süresi) bunu kullanır.
+export async function sonBitirenler(db: Db, gorevIdleri: readonly number[]): Promise<Map<number, { kisiId: number; gun: number }>> {
+  if (gorevIdleri.length === 0) return new Map();
+  const s = await db.sorgu<{ gorev_id: number; kisi_id: number; gun: number }>(
+    `SELECT DISTINCT ON (gorev_id) gorev_id, kisi_id, floor(extract(epoch FROM now() - an) / 86400)::int AS gun
+       FROM projeler_gorev_olayi WHERE olay = 'bitti' AND gorev_id = ANY($1::int[]) ORDER BY gorev_id, id DESC`,
+    [gorevIdleri],
+  );
+  return new Map(s.map((x) => [x.gorev_id, { kisiId: x.kisi_id, gun: x.gun }]));
+}
+
+export function gorevGetir(db: Db, id: number): Promise<GorevSatiri | null> {
+  return db.tek<GorevSatiri>(`${GOREV_SECIMI} WHERE id = $1`, [id]);
+}
+
+// Proje görevlerim adayları: aktif projede kişiye ya da rolüne açık, kontrolü kişiye ya da rolüne düşen ve kişinin bitirip
+// kontrolde bekleyen görevler. Kesin seçim kurallar.ts gorevlerimTuru'ndadır.
+export type GorevlerimSatiri = GorevSatiri & { proje_kod: string; proje_ad: string };
+export function gorevlerimAdaylari(db: Db, kisiId: number, rolIdleri: readonly number[]): Promise<GorevlerimSatiri[]> {
+  return db.sorgu<GorevlerimSatiri>(
+    `SELECT ${GOREV_SUTUNLARI.map((a) => `g.${a}`).join(', ')}, p.kod AS proje_kod, p.ad AS proje_ad
+       FROM projeler_gorev g JOIN projeler_proje p ON p.id = g.proje_id
+      WHERE p.durum = 'aktif' AND g.durum NOT IN ('bitti', 'iptal')
+        AND (g.sorumlu_kisi_id = $1 OR g.yapan_rol_id = ANY($2::int[])
+             OR (g.durum = 'kontrolde' AND (g.kontrol_kisi_id = $1 OR g.kontrol_rol_id = ANY($2::int[])
+                                            OR g.yedek_kontrol_kisi_id = $1 OR g.yedek_kontrol_rol_id = ANY($2::int[])
+                                            OR EXISTS (SELECT 1 FROM projeler_gorev_olayi o WHERE o.gorev_id = g.id AND o.olay = 'bitti' AND o.kisi_id = $1))))
+      ORDER BY g.plan_bitis, g.id
+      LIMIT 500`,
+    [kisiId, rolIdleri],
+  );
+}
+
+export async function gorevOncekiYaz(db: Db, id: number, oncekiId: number): Promise<void> {
+  await db.sorgu('UPDATE projeler_gorev SET onceki_gorev_id = $2 WHERE id = $1', [id, oncekiId]);
+}
+
+// --- 3269: görev şablonu ---
+
+export interface SablonSatiri { id: number; ad: string; varsayilan: boolean; etkin: boolean; guncelleme: string | null; surum: number }
+const SABLON_SECIMI = `SELECT id, ad, varsayilan, etkin, ${zamanMetni('COALESCE(guncelleme, olusturma)')} AS guncelleme, surum FROM projeler_gorev_sablonu`;
+export function sablonlar(db: Db, yalnizEtkin: boolean): Promise<SablonSatiri[]> {
+  return db.sorgu<SablonSatiri>(`${SABLON_SECIMI} WHERE etkin OR NOT $1 ORDER BY varsayilan DESC, lower(ad), id`, [yalnizEtkin]);
+}
+export function sablonGetir(db: Db, id: number): Promise<SablonSatiri | null> {
+  return db.tek<SablonSatiri>(`${SABLON_SECIMI} WHERE id = $1`, [id]);
+}
+export function varsayilanSablon(db: Db): Promise<SablonSatiri | null> {
+  return db.tek<SablonSatiri>(`${SABLON_SECIMI} WHERE varsayilan`);
+}
+export async function sablonVarMi(db: Db, id: number): Promise<boolean> {
+  return (await db.tek('SELECT 1 AS var FROM projeler_gorev_sablonu WHERE id = $1', [id])) !== null;
+}
+
+export interface SablonKalemiSatiri {
+  id: number; sablon_id: number; sira: number; ad: string; aciklama: string | null; asama: string | null; dayanak: 'baslangic' | 'termin'; gun: number;
+  sure_gun: number; yapan_rol_id: number | null; yapan_kisi_id: number | null; kontrol_rol_id: number | null; kontrol_kisi_id: number | null;
+  yedek_kontrol_rol_id: number | null; yedek_kontrol_kisi_id: number | null; onceki_kalem_id: number | null; hazirlik_maddesi: string | null;
+  kontrol_kosulu: 'her-zaman' | 'yeni-revize';
+}
+export function sablonKalemleri(db: Db, sablonIdleri: readonly number[]): Promise<SablonKalemiSatiri[]> {
+  if (sablonIdleri.length === 0) return Promise.resolve([]);
+  return db.sorgu<SablonKalemiSatiri>(
+    `SELECT id, sablon_id, sira, ad, aciklama, asama, dayanak, gun, sure_gun, yapan_rol_id, yapan_kisi_id, kontrol_rol_id, kontrol_kisi_id,
+            yedek_kontrol_rol_id, yedek_kontrol_kisi_id, onceki_kalem_id, hazirlik_maddesi, kontrol_kosulu
+       FROM projeler_gorev_sablon_kalemi WHERE sablon_id = ANY($1::int[]) ORDER BY sablon_id, sira, id`,
+    [sablonIdleri],
+  );
+}
+
+export async function sablonEkle(db: Db, g: { ad: string; varsayilan: boolean; etkin: boolean }, kisiId: number): Promise<number> {
+  const s = await db.tek<{ id: number }>(
+    'INSERT INTO projeler_gorev_sablonu (ad, varsayilan, etkin, olusturan_id) VALUES ($1, $2, $3, $4) RETURNING id', [g.ad, g.varsayilan, g.etkin, kisiId],
+  );
+  if (s === null) throw new Error('Şablon eklenemedi');
+  return s.id;
+}
+export function sablonGuncelle(
+  db: Db, id: number, g: { ad: string; varsayilan: boolean; etkin: boolean }, surum: number, kisiId: number,
+): Promise<{ id: number } | null> {
+  return db.tek<{ id: number }>(
+    `UPDATE projeler_gorev_sablonu SET ad = $2, varsayilan = $3, etkin = $4, guncelleyen_id = $5, guncelleme = now(), surum = surum + 1
+      WHERE id = $1 AND surum = $6 RETURNING id`,
+    [id, g.ad, g.varsayilan, g.etkin, kisiId, surum],
+  );
+}
+// Yeni varsayılan seçilince eskisi kendiliğinden bırakılır (tek varsayılan dizini). Sürümü artar: düzenleyen eski formla yazamaz.
+export async function varsayilaniBirak(db: Db, haricId: number | null, kisiId: number): Promise<void> {
+  await db.sorgu(
+    `UPDATE projeler_gorev_sablonu SET varsayilan = false, guncelleyen_id = $2, guncelleme = now(), surum = surum + 1
+      WHERE varsayilan AND id IS DISTINCT FROM $1`,
+    [haricId, kisiId],
+  );
+}
+export async function sablonKalemleriniSil(db: Db, sablonId: number): Promise<void> {
+  await db.sorgu('DELETE FROM projeler_gorev_sablon_kalemi WHERE sablon_id = $1', [sablonId]);
+}
+export interface KalemAlanlari {
+  ad: string; aciklama: string | null; asama: string | null; dayanak: string; gun: number; sureGun: number; yapanRolId: number | null;
+  yapanKisiId: number | null; kontrolRolId: number | null; kontrolKisiId: number | null; yedekKontrolRolId: number | null;
+  yedekKontrolKisiId: number | null; hazirlikMaddesi: string | null; kontrolKosulu: string;
+}
+export async function sablonKalemiEkle(db: Db, sablonId: number, sira: number, k: KalemAlanlari, oncekiId: number | null): Promise<number> {
+  const s = await db.tek<{ id: number }>(
+    `INSERT INTO projeler_gorev_sablon_kalemi (sablon_id, sira, ad, aciklama, asama, dayanak, gun, sure_gun, yapan_rol_id, yapan_kisi_id, kontrol_rol_id,
+                                               kontrol_kisi_id, yedek_kontrol_rol_id, yedek_kontrol_kisi_id, onceki_kalem_id, hazirlik_maddesi, kontrol_kosulu)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17) RETURNING id`,
+    [sablonId, sira, k.ad, k.aciklama, k.asama, k.dayanak, k.gun, k.sureGun, k.yapanRolId, k.yapanKisiId, k.kontrolRolId, k.kontrolKisiId,
+      k.yedekKontrolRolId, k.yedekKontrolKisiId, oncekiId, k.hazirlikMaddesi, k.kontrolKosulu],
+  );
+  if (s === null) throw new Error('Şablon kalemi eklenemedi');
+  return s.id;
+}
+
+export async function projeSablonuEkle(
+  db: Db, projeId: number, sablonId: number, sablonSurum: number, kalemler: readonly unknown[], kisiId: number,
+): Promise<void> {
+  await db.sorgu(
+    'INSERT INTO projeler_proje_sablonu (proje_id, sablon_id, sablon_surum, kalemler, kisi_id) VALUES ($1, $2, $3, $4::jsonb, $5)',
+    [projeId, sablonId, sablonSurum, JSON.stringify(kalemler), kisiId],
+  );
+}
+
+export async function bugun(db: Db): Promise<string> {
+  const s = await db.tek<{ bugun: string }>('SELECT current_date::text AS bugun');
+  if (s === null) throw new Error('Tarih okunamadı');
+  return s.bugun;
 }

@@ -21,6 +21,7 @@ export const ROL_MATRISI = {
       'ik.bordro-gordum', 'ik.izin-talep', 'istasyonlar.makine-durumu', 'mesaj.oku', 'mesaj.yaz', 'plan.oku', 'saat.oku',
       'saat.uyari-ustlen', 'satin-alma.talep-ac', 'sayfa.arkon', 'sayfa.cnc-kurulum', 'sayfa.idari-isler', 'sayfa.ik-islemlerim',
       'sayfa.istasyonlar', 'sayfa.mesaj', 'sayfa.ortak-dosyalar', 'sayfa.profil', 'sayfa.stok', 'sayfa.taleplerim', 'stok.istek',
+      'projeler.gorev-isle', 'sayfa.proje-gorevlerim',
     ],
   },
   cam: {
@@ -33,6 +34,7 @@ export const ROL_MATRISI = {
       'sayfa.ik-islemlerim', 'sayfa.istasyonlar', 'sayfa.logo-gecisi', 'sayfa.malzemeler', 'sayfa.mesaj', 'sayfa.ortak-dosyalar', 'sayfa.profil',
       'sayfa.projeler', 'sayfa.recete-rota', 'sayfa.rota', 'sayfa.sevkiyat', 'sayfa.taleplerim', 'sayfa.uretim-emirleri', 'sevkiyat.oku',
       'stok.istek',
+      'projeler.gorev-isle', 'sayfa.proje-gorevlerim',
     ],
   },
   depo: {
@@ -45,6 +47,7 @@ export const ROL_MATRISI = {
       'sayfa.siparisler', 'sayfa.stok', 'sayfa.taleplerim', 'sayfa.uretim-terminali', 'sevkiyat.is-yaz', 'sevkiyat.oku', 'sevkiyat.onayla',
       'sevkiyat.plan-yaz', 'sevkiyat.tanim-yaz', 'siparisler.oku', 'stok.cikis', 'stok.giris', 'stok.istek', 'stok.malzeme-fisi-gonder',
       'stok.sayim', 'stok.tanim', 'stok.konum-yaz', 'stok.raf-yaz', 'stok.harita-yaz', 'stok.malzeme-ayari', 'stok.toplama', 'stok.transfer', 'uretim-emirleri.fason',
+      'projeler.gorev-isle', 'sayfa.proje-gorevlerim',
     ],
   },
   genel_mudur: {
@@ -79,6 +82,7 @@ export const ROL_MATRISI = {
       // 3165 a: uretim-emirleri.yaz sekiz eyleme bölündü (3207 a); eski işlem ayrı kartla kalkana dek satırda kalır.
       'uretim-emirleri.emir-ac', 'uretim-emirleri.duzenle', 'uretim-emirleri.adim-yaz', 'uretim-emirleri.bol-birlestir',
       'uretim-emirleri.plana-al', 'uretim-emirleri.beklet', 'uretim-emirleri.iptal', 'uretim-emirleri.rotasiz-ac',
+      'projeler.gorev-isle', 'sayfa.proje-gorevlerim', 'projeler.gorev-kontrol',
     ],
   },
   genel_mudur_yardimcisi: {
@@ -113,6 +117,7 @@ export const ROL_MATRISI = {
       // 3165 a: uretim-emirleri.yaz sekiz eyleme bölündü (3207 a); eski işlem ayrı kartla kalkana dek satırda kalır.
       'uretim-emirleri.emir-ac', 'uretim-emirleri.duzenle', 'uretim-emirleri.adim-yaz', 'uretim-emirleri.bol-birlestir',
       'uretim-emirleri.plana-al', 'uretim-emirleri.beklet', 'uretim-emirleri.iptal', 'uretim-emirleri.rotasiz-ac',
+      'projeler.gorev-isle', 'sayfa.proje-gorevlerim', 'projeler.gorev-kontrol',
     ],
   },
   guvenlik_gorevlisi: {
@@ -130,6 +135,7 @@ export const ROL_MATRISI = {
       'mesaj.oku', 'mesaj.yaz', 'nizamiye.kart-yonet', 'nizamiye.oku', 'nizamiye.yaz', 'satin-alma.talep-ac', 'sayfa.idari-isler',
       'sayfa.ik-islemlerim', 'sayfa.mesai', 'sayfa.mesaj', 'sayfa.nizamiye', 'sayfa.ortak-dosyalar', 'sayfa.personel', 'sayfa.profil',
       'sayfa.sevkiyat', 'sayfa.taleplerim', 'sayfa.vardiya', 'sevkiyat.oku', 'stok.istek',
+      'projeler.gorev-isle', 'sayfa.proje-gorevlerim',
     ],
   },
   insan_kaynaklari: {
@@ -142,6 +148,7 @@ export const ROL_MATRISI = {
       'profil.geri-bildirim-oku', 'profil.geri-bildirim-yanitla', 'satin-alma.talep-ac', 'sayfa.geri-bildirim', 'sayfa.idari-isler',
       'sayfa.ik', 'sayfa.ik-islemlerim', 'sayfa.mesai', 'sayfa.mesaj', 'sayfa.ortak-dosyalar', 'sayfa.personel', 'sayfa.profil',
       'sayfa.sevkiyat', 'sayfa.taleplerim', 'sayfa.vardiya', 'sevkiyat.oku', 'stok.istek', 'vardiya.tanim-yaz',
+      'projeler.gorev-isle', 'sayfa.proje-gorevlerim',
     ],
   },
   kalite: {
@@ -157,6 +164,7 @@ export const ROL_MATRISI = {
       'sayfa.ortak-dosyalar', 'sayfa.portal', 'sayfa.profil', 'sayfa.projeler', 'sayfa.recete-rota', 'sayfa.rota', 'sayfa.sevkiyat',
       'sayfa.siparisler', 'sayfa.stok', 'sayfa.taleplerim', 'sayfa.terminal', 'sayfa.uretim-emirleri', 'sayfa.uretim-terminali',
       'sevkiyat.oku', 'siparisler.oku', 'stok.istek', 'terminal.uret', 'uretim-emirleri.kapanis-kalite', 'uretim-emirleri.kapanis-oku',
+      'projeler.gorev-isle', 'sayfa.proje-gorevlerim', 'projeler.gorev-kontrol',
     ],
   },
   markalama_gorevlisi: {
@@ -165,6 +173,7 @@ export const ROL_MATRISI = {
       'idari-isler.arac-talebi-ac', 'idari-isler.talep-ac', 'ik.bordro-gordum', 'ik.izin-talep', 'markalama.seri-ver', 'markalama.tanim-yaz',
       'mesaj.oku', 'mesaj.yaz', 'sayfa.idari-isler', 'sayfa.ik-islemlerim', 'sayfa.markalama', 'sayfa.mesaj', 'sayfa.ortak-dosyalar',
       'sayfa.profil', 'stok.istek',
+      'projeler.gorev-isle', 'sayfa.proje-gorevlerim',
     ],
   },
   mudur: {
@@ -200,6 +209,7 @@ export const ROL_MATRISI = {
       // 3165 a: uretim-emirleri.yaz sekiz eyleme bölündü (3207 a); eski işlem ayrı kartla kalkana dek satırda kalır.
       'uretim-emirleri.emir-ac', 'uretim-emirleri.duzenle', 'uretim-emirleri.adim-yaz', 'uretim-emirleri.bol-birlestir',
       'uretim-emirleri.plana-al', 'uretim-emirleri.beklet', 'uretim-emirleri.iptal', 'uretim-emirleri.rotasiz-ac',
+      'projeler.gorev-isle', 'sayfa.proje-gorevlerim', 'projeler.gorev-kontrol', 'projeler.sablon-yaz',
     ],
   },
   muhasebe_finans: {
@@ -212,6 +222,7 @@ export const ROL_MATRISI = {
       'sayfa.adim-durumu', 'sayfa.emirler', 'sayfa.finans', 'sayfa.idari-isler', 'sayfa.ik-islemlerim', 'sayfa.mesaj', 'sayfa.musteri-tedarikci',
       'sayfa.ortak-dosyalar', 'sayfa.portal', 'sayfa.profil', 'sayfa.projeler', 'sayfa.satin-alma', 'sayfa.sevkiyat', 'sayfa.siparisler',
       'sayfa.stok', 'sayfa.uretim-emirleri', 'sevkiyat.oku', 'siparisler.fiyat-oku', 'siparisler.oku', 'siparisler.yaz', 'stok.istek',
+      'projeler.gorev-isle', 'sayfa.proje-gorevlerim',
     ],
   },
   operator: {
@@ -220,6 +231,7 @@ export const ROL_MATRISI = {
       'arkon.operator', 'idari-isler.arac-talebi-ac', 'idari-isler.talep-ac', 'ik.bordro-gordum', 'ik.izin-talep', 'mesaj.oku', 'mesaj.yaz',
       'sayfa.idari-isler', 'sayfa.ik-islemlerim', 'sayfa.kuyruk', 'sayfa.mesaj', 'sayfa.ortak-dosyalar', 'sayfa.profil', 'sayfa.terminal',
       'sayfa.uretim-terminali', 'stok.istek', 'terminal.uret', 'uretim-emirleri.ara-istasyon',
+      'projeler.gorev-isle', 'sayfa.proje-gorevlerim', 'projeler.gorev-kontrol',
     ],
   },
   planlama_muduru: {
@@ -249,6 +261,7 @@ export const ROL_MATRISI = {
       'uretim-emirleri.emir-ac', 'uretim-emirleri.duzenle', 'uretim-emirleri.adim-yaz', 'uretim-emirleri.bol-birlestir',
       'uretim-emirleri.plana-al', 'uretim-emirleri.beklet', 'uretim-emirleri.iptal', 'uretim-emirleri.rotasiz-ac',
       'vardiya.durus-yaz', 'vardiya.tanim-yaz', 'vardiya.yaz',
+      'projeler.gorev-isle', 'sayfa.proje-gorevlerim', 'projeler.gorev-kontrol', 'projeler.sablon-yaz',
     ],
   },
   planlama_proje: {
@@ -277,6 +290,7 @@ export const ROL_MATRISI = {
       'uretim-emirleri.emir-ac', 'uretim-emirleri.duzenle', 'uretim-emirleri.adim-yaz', 'uretim-emirleri.bol-birlestir',
       'uretim-emirleri.plana-al', 'uretim-emirleri.beklet', 'uretim-emirleri.iptal', 'uretim-emirleri.rotasiz-ac',
       'vardiya.yaz',
+      'projeler.gorev-isle', 'sayfa.proje-gorevlerim', 'projeler.gorev-kontrol', 'projeler.sablon-yaz',
     ],
   },
   proses_muhendisi: {
@@ -301,6 +315,7 @@ export const ROL_MATRISI = {
       'sayfa.finans', 'sayfa.idari-isler', 'sayfa.ik-islemlerim', 'sayfa.logo-gecisi', 'sayfa.malzemeler', 'sayfa.mesaj', 'sayfa.musteri-tedarikci',
       'sayfa.ortak-dosyalar', 'sayfa.portal', 'sayfa.profil', 'sayfa.projeler', 'sayfa.satin-alma', 'sayfa.sevkiyat', 'sayfa.stok',
       'sayfa.taleplerim', 'sevkiyat.oku', 'stok.istek', 'uretim-emirleri.fason',
+      'projeler.gorev-isle', 'sayfa.proje-gorevlerim',
     ],
   },
   satin_alma_muduru: {
@@ -313,6 +328,7 @@ export const ROL_MATRISI = {
       'sayfa.idari-isler', 'sayfa.ik-islemlerim', 'sayfa.logo-gecisi', 'sayfa.malzemeler', 'sayfa.mesaj', 'sayfa.musteri-tedarikci', 'sayfa.ortak-dosyalar',
       'sayfa.personel', 'sayfa.portal', 'sayfa.profil', 'sayfa.projeler', 'sayfa.satin-alma', 'sayfa.sevkiyat', 'sayfa.stok',
       'sayfa.taleplerim', 'sevkiyat.oku', 'stok.istek', 'uretim-emirleri.fason',
+      'projeler.gorev-isle', 'sayfa.proje-gorevlerim', 'projeler.gorev-kontrol',
     ],
   },
   satis: {
@@ -323,6 +339,7 @@ export const ROL_MATRISI = {
       'sayfa.ik-islemlerim', 'sayfa.mesaj', 'sayfa.musteri-tedarikci', 'sayfa.ortak-dosyalar', 'sayfa.portal', 'sayfa.profil',
       'sayfa.siparisler', 'sevkiyat.oku', 'siparisler.fiyat-oku', 'siparisler.oku', 'siparisler.termin-dene', 'siparisler.termin-onayla',
       'siparisler.yaz', 'stok.istek',
+      'projeler.gorev-isle', 'sayfa.proje-gorevlerim',
     ],
   },
   sevkiyat: {
@@ -332,6 +349,7 @@ export const ROL_MATRISI = {
       'musteri-tedarikci.oku', 'portal.oku', 'portal.yaz', 'projeler.oku', 'sayfa.idari-isler', 'sayfa.ik-islemlerim', 'sayfa.mesaj',
       'sayfa.ortak-dosyalar', 'sayfa.portal', 'sayfa.profil', 'sayfa.sevkiyat', 'sayfa.siparisler', 'sayfa.stok', 'sevkiyat.is-yaz',
       'sevkiyat.oku', 'sevkiyat.onayla', 'sevkiyat.plan-yaz', 'sevkiyat.tanim-yaz', 'siparisler.oku', 'stok.istek',
+      'projeler.gorev-isle', 'sayfa.proje-gorevlerim',
     ],
   },
   uretim_muduru: {
@@ -355,6 +373,7 @@ export const ROL_MATRISI = {
       // 3165 a: uretim-emirleri.yaz sekiz eyleme bölündü (3207 a); eski işlem ayrı kartla kalkana dek satırda kalır.
       'uretim-emirleri.emir-ac', 'uretim-emirleri.duzenle', 'uretim-emirleri.adim-yaz', 'uretim-emirleri.bol-birlestir',
       'uretim-emirleri.plana-al', 'uretim-emirleri.beklet', 'uretim-emirleri.iptal', 'uretim-emirleri.rotasiz-ac',
+      'projeler.gorev-isle', 'sayfa.proje-gorevlerim', 'projeler.gorev-kontrol', 'projeler.sablon-yaz',
     ],
   },
   vardiya_sorumlusu: {
@@ -366,6 +385,7 @@ export const ROL_MATRISI = {
       'sayfa.cnc-kurulum', 'sayfa.etiket-merkezi', 'sayfa.idari-isler', 'sayfa.ik-islemlerim', 'sayfa.istasyonlar', 'sayfa.kuyruk',
       'sayfa.mesaj', 'sayfa.ortak-dosyalar', 'sayfa.profil', 'sayfa.terminal', 'sayfa.uretim-terminali', 'sayfa.vardiya', 'stok.istek',
       'terminal.uret', 'uretim-emirleri.ara-istasyon', 'uretim-emirleri.sayim-duzelt', 'vardiya.tanim-yaz', 'vardiya.yaz',
+      'projeler.gorev-isle', 'sayfa.proje-gorevlerim', 'projeler.gorev-kontrol',
     ],
   },
 } as const satisfies Record<string, BeklenenRol>;

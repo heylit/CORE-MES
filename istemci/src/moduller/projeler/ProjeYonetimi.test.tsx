@@ -25,7 +25,9 @@ const TAS: KilometreTasi = {
 const gorev = (ek: Partial<Gorev>): Gorev => ({
   id: 7, kilometreTasiId: 5, ad: 'Fikstür tasarımı', aciklama: null, sorumluKisiId: null, sorumluAd: null,
   planBaslangic: '2026-10-01', planBitis: '2026-10-10', gercekBaslangic: null, gercekBitis: null, ilerleme: 40, durum: 'suruyor',
-  oncekiGorevId: null, surum: 1, ...ek,
+  oncekiGorevId: null, asama: null, yapanRolId: null, yapanRolAd: null, kontrolKisiId: null, kontrolKisiAd: null, kontrolRolId: null,
+  kontrolRolAd: null, yedekKontrolKisiId: null, yedekKontrolKisiAd: null, yedekKontrolRolId: null, yedekKontrolRolAd: null, onaylandi: false,
+  surum: 1, ...ek,
 });
 const YONETIM: ProjeYonetimiCevabi = {
   statu: { statuId: 1, ad: 'Yolunda', ton: 'tamam', serbest: false, an: '2026-10-20T10:00:00+03:00' },
@@ -53,6 +55,7 @@ function sunucuKur(kullanici: Kullanici, durum: Proje['durum'] = 'aktif') {
     if (yontem === 'GET' && yol === '/projeler/1/yonetim') return json(200, YONETIM);
     if (yontem === 'GET' && yol === '/projeler/statuler') return json(200, STATULER);
     if (yontem === 'GET' && yol === '/projeler/sorumlu-secenekleri') return json(200, { kisiler: [{ id: 3, ad: 'Deneme Planlamacı' }] });
+    if (yontem === 'GET' && yol === '/projeler/rol-secenekleri') return json(200, { roller: [{ id: 8, ad: 'Kalite' }] });
     if (yontem === 'POST' && yol.startsWith('/projeler/statu')) return json(200, STATULER);
     if (yontem === 'POST') return json(200, YONETIM);
     return json(404, { kod: 'BULUNAMADI', mesaj: 'Adres bulunamadı.' });
@@ -122,8 +125,10 @@ describe('Proje yönetimi (890 c)', () => {
     const pencere = await screen.findByRole('dialog');
     fireEvent.change(within(pencere).getByLabelText(/Görev adı/), { target: { value: 'Numune ölçümü' } });
     fireEvent.change(within(pencere).getByLabelText(/Kilometre taşı/), { target: { value: '5' } });
-    await within(pencere).findByRole('option', { name: 'Deneme Planlamacı' });
-    fireEvent.change(within(pencere).getByLabelText(/Sorumlu/), { target: { value: '3' } });
+    await within(pencere).findAllByRole('option', { name: 'Deneme Planlamacı' });
+    fireEvent.change(within(pencere).getByLabelText(/^Yapan/), { target: { value: 'k:3' } });
+    await within(pencere).findAllByRole('option', { name: 'Rol: Kalite' });
+    fireEvent.change(within(pencere).getByLabelText(/^Kontrol eden/), { target: { value: 'r:8' } });
     fireEvent.change(within(pencere).getByLabelText(/Plan başlangıç/), { target: { value: '2026-11-02' } });
     fireEvent.change(within(pencere).getByLabelText(/Plan bitiş/), { target: { value: '2026-11-05' } });
     fireEvent.click(within(pencere).getByRole('button', { name: 'Kaydet' }));
@@ -132,6 +137,7 @@ describe('Proje yönetimi (890 c)', () => {
     expect(yazma?.yol).toBe('/projeler/1/gorevler');
     expect(yazma?.govde).toEqual({
       kilometreTasiId: 5, ad: 'Numune ölçümü', aciklama: null, sorumluKisiId: 3, planBaslangic: '2026-11-02', planBitis: '2026-11-05', oncekiGorevId: null,
+      asama: null, yapanRolId: null, kontrolKisiId: null, kontrolRolId: 8, yedekKontrolKisiId: null, yedekKontrolRolId: null,
     });
     expect(yazma?.kimlik).toBeDefined();
   });
