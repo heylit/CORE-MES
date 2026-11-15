@@ -129,7 +129,7 @@ describe('Kokpit', () => {
     ac({ secim: { ...BOS_SECIM, siparis: '2', adim: '2.20' } });
     fireEvent.click(within(screen.getByRole('group', { name: 'Görünüm' })).getByRole('button', { name: 'Matris' }));
     const ayr = screen.getByRole('complementary', { name: /ayrıntısı/ });
-    expect(within(ayr).getAllByRole('heading', { level: 3 }).map((x) => x.textContent)).toEqual([expect.stringContaining('tezgâh seçenekleri'), 'Adımlar']);
+    expect(within(ayr).getAllByRole('heading', { level: 3 }).map((x) => x.textContent)).toEqual([expect.stringContaining('tezgâh seçenekleri'), 'Adımlar', 'Planlama yönü']);
     expect(document.querySelector('tbody tr[data-emir="2"]')?.hasAttribute('data-sec')).toBe(true);
     // Seçili emrin geçtiği tezgâh-günler yükte çerçevelidir.
     expect(document.querySelectorAll('tr[data-yuk-satiri] td[data-iz]').length).toBeGreaterThan(0);
@@ -265,6 +265,27 @@ describe('Kokpit', () => {
     fireEvent.click(within(kutu).getByRole('button', { name: /Gelenler/ }));
     expect(within(kutu).queryAllByRole('listitem')).toHaveLength(0);
     vi.unstubAllGlobals();
+  });
+
+  // 3282 1b: Ayarlar paneli seçili emrin yerinde açılır; panel ve Onay ve canlı açıkken sayfanın birincili üst düğme değildir.
+  it('Ayarlar paneli seçimi kaldırıp açılır, düğme basılı görünür; Onay ve canlı açıkken üst düğme ikincildir ve Ayarlar kapalıdır', async () => {
+    vi.spyOn(api, 'get').mockImplementation((() => Promise.reject(new Error('yok'))) as never);
+    const c = ornekCalisma();
+    const { sec } = ac({ calisma: { ...c, dataVer: c.plan?.dataVer ?? c.dataVer }, yetki: yetkiKur([PLANLAMA_ISLEMI, 'plan.yaz', 'plan.canliya-al']) });
+    const ust = (): HTMLElement => screen.getByRole('button', { name: /^Canlıya al/ });
+    expect(ust().className).toContain('tc-dugme-birincil');
+    const ayar = screen.getByRole('button', { name: 'Ayarlar' });
+    fireEvent.click(ayar);
+    expect(ayar.getAttribute('aria-pressed')).toBe('true');
+    expect(sec).toHaveBeenCalledWith({ siparis: null, adim: null });
+    expect(screen.getByRole('complementary', { name: 'Plan ayarları' })).toBeTruthy();
+    expect(ust().className).not.toContain('tc-dugme-birincil');
+    fireEvent.click(screen.getByRole('button', { name: 'Ayarları kapat' }));
+    expect(screen.queryByRole('complementary', { name: 'Plan ayarları' })).toBeNull();
+    fireEvent.click(ust());
+    expect(await screen.findByText(/Canlı plan yalnız burada onaylanınca değişir/, {}, { timeout: 5000 })).toBeTruthy();
+    expect(ust().className).not.toContain('tc-dugme-birincil');
+    expect(screen.getByTitle('Plan ayarları').hasAttribute('disabled')).toBe(true);
   });
 
   it('çalışma yokken boş durum gösterir', () => {

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Simge } from '../../../../ortak/arayuz/index.ts';
 import { AdimAdim } from './AdimAdim.tsx';
+import { EmirYonu, type EmirYonuOzellikleri } from './EmirYonu.tsx';
 import { Hamleler, type HamleOzellikleri } from './Hamleler.tsx';
 import { BEKLEME_ESIGI, adimBeklemesi, durumYazisi, enCokBekleyen, satirKimligi, sureYaz, tasinabilir, type KokpitEmri, type KokpitModeli } from './kurallar.ts';
 
@@ -13,9 +14,11 @@ export interface AyrintiOzellikleri extends Pick<HamleOzellikleri, 'zaman' | 'uy
   matris?: boolean;
   // Son uygulanan hamlenin sonucu (Matris).
   ileti?: string | null;
+  // Emrin planlama yönü (3282 1c); verilmezse gösterilmez.
+  yon?: Omit<EmirYonuOzellikleri, 'emirId' | 'no'>;
 }
 
-export function Ayrinti({ m, e, secIs, zaman, uygula, surum, bekle = false, adimSec, kapat, matris = false, ileti = null }: AyrintiOzellikleri) {
+export function Ayrinti({ m, e, secIs, zaman, uygula, surum, bekle = false, adimSec, kapat, matris = false, ileti = null, yon }: AyrintiOzellikleri) {
   const kod = new Map(m.tezgahlar.map((t) => [t.id, t.kod]));
   // Plana alma yolu (3229 a): açılış bugünkü hızlı yoldur.
   const [adimAdim, setAdimAdim] = useState(false);
@@ -77,6 +80,7 @@ export function Ayrinti({ m, e, secIs, zaman, uygula, surum, bekle = false, adim
       )}
       {ileti && <p className="tc-pyq-sonuc" role="status">{ileti}</p>}
       {adimli ? cozum : matris ? <>{cozum}{adimlar}</> : <>{adimlar}{cozum}</>}
+      {yon && e.termin !== null && !adimli && <EmirYonu key={e.id} {...yon} emirId={e.id} no={e.no} />}
     </aside>
   );
 }
