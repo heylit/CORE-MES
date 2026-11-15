@@ -50,9 +50,14 @@
 .tc-mk-serit { flex: none; align-self: stretch; width: var(--b-1); min-height: var(--b-5); border-radius: var(--yari-1); background: var(--tur-renk); }
 .tc-mk-grup-tur { --c: var(--tur-renk); }
 .tc-mk-grup-tur .tc-rozet-cizgi { --c: var(--tur-renk); }
-.tc-mk-ana .tc-tablo-kap[data-kaydir] .tc-mk-malzeme { width: var(--menu-genis); white-space: normal; }
-/* Sınıf adı uzundur ("Islah, otomat, ..."): alt yazı satır kırar, sütunu genişletmez. */
-.tc-mk-ana .tc-tablo-kap[data-kaydir] .tc-mk-alt { max-width: var(--ikinci-sutun); white-space: normal; }
+.tc-mk-ana .tc-tablo-kap[data-kaydir] .tc-mk-malzeme { width: calc(var(--menu-genis) + var(--b-6)); }
+/* Eski yoğunluk (satır <= 64 px): ad tek satırda kesilir, tamamı ipucunda ve kart penceresinde. */
+.tc-mk-ana .tc-tablo-kap[data-kaydir] .tc-mk-malzeme > div { min-width: 0; }
+.tc-mk-ana .tc-tablo-kap[data-kaydir] .tc-mk-ad { overflow: hidden; text-overflow: ellipsis; }
+/* Sınıf adı uzundur ("Islah, otomat, ..."): alt yazı tek satırda kesilir; satır eski yoğunlukta (64 px) kalır, sütun genişlemez. */
+.tc-mk-ana .tc-tablo-kap[data-kaydir] .tc-mk-alt { max-width: var(--ikinci-sutun); overflow: hidden; text-overflow: ellipsis; }
+/* Uzun katalog sayfayla kayar: tablo kabı yalnız yatay kayar, tekerlek içerik alanını kaydırır (kendi dikey kaydırması yok). */
+.tc-mk-ana .tc-tablo-kap[data-kaydir] { max-height: none; }
 .tc-mk-grupla { display: inline-flex; align-items: center; gap: var(--b-2); font-size: var(--yazi-s); font-weight: 700; }
 .tc-mk-sutunlar { position: relative; }
 .tc-mk-sutunlar > summary {
@@ -64,7 +69,7 @@
   position: absolute; z-index: 3; top: calc(100% + var(--b-1)); left: 0; display: grid; gap: var(--b-1); margin: 0; padding: var(--b-3);
   border: var(--cizgi-ince) solid var(--edge2); border-radius: var(--yari-2); background: var(--panel-solid); box-shadow: var(--shadow); min-width: max-content;
 }
-.tc-mk-sutunlar .tc-isaret { display: flex; align-items: center; gap: var(--b-2); min-height: var(--isaret-boy); }
+.tc-mk-sutun { display: flex; align-items: center; gap: var(--b-2); min-height: var(--isaret-boy); }
 .tc-mk-malzeme { display: flex; align-items: flex-start; gap: var(--b-2); min-width: 0; }
 .tc-mk-malzeme > .tc-simge { flex: none; color: var(--muted); }
 .tc-mk-rozetler { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-1); min-width: 0; }

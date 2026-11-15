@@ -479,7 +479,7 @@ describe('3275 a: katalog gruplu tablo', () => {
     kur(OKUYAN, dort());
     yeniEkranAc(KOK);
     await screen.findByText('HM-DNM-00001');
-    fireEvent.click(screen.getByRole('checkbox', { name: 'Metal: hepsini seç' }));
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Grubu seç: Metal' }));
     expect(screen.getByText('2 kayıt seçili')).toBeTruthy();
   });
 

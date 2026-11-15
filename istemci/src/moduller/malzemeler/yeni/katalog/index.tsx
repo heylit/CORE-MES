@@ -92,7 +92,7 @@ function sutunlar(
                 {K.talepVar(x, b) && <Rozet ton="uyari">Değişiklik talebi</Rozet>}
                 <span className="tc-mk-kod">{x.com.kod}</span>
               </div>
-              <div className="tc-mk-ad">{x.com.ad}</div>
+              <div className="tc-mk-ad" title={x.com.ad}>{x.com.ad}</div>
             </div>
           </div>
         );
@@ -102,7 +102,7 @@ function sutunlar(
       anahtar: 'kalite', baslik: 'Kalite · sınıf', sirala: true,
       hucre: (k) => {
         const m = kaliteMetni(k.kayit, b);
-        return m ? <span className="tc-mk-deger">{m.kalite}<small className="tc-mk-alt">{m.sinif}</small></span> : YOK;
+        return m ? <span className="tc-mk-deger">{m.kalite}<small className="tc-mk-alt" title={m.sinif}>{m.sinif}</small></span> : YOK;
       },
     },
     {
@@ -150,7 +150,7 @@ function GrupSecimi({ kartlar, secili, sec, etiket }: { kartlar: readonly Katalo
         ref={(el) => { if (el) el.indeterminate = n > 0 && n < kartlar.length; }}
         onChange={(o) => sec(kartlar.map((k) => k.kimlik), o.target.checked)}
       />
-      <span className="tc-gizli-etiket">{`${etiket}: hepsini seç`}</span>
+      <span className="tc-gizli-etiket">{`Grubu seç: ${etiket}`}</span>
     </label>
   );
 }
@@ -332,7 +332,7 @@ export function Katalog({ ortam, yetki, git }: EkranOzellikleri) {
           <fieldset>
             <legend className="tc-gizli-etiket">Görünen sütunlar</legend>
             {GIZLENEBILIR_SUTUNLAR.map((s) => (
-              <label key={s.anahtar} className="tc-isaret">
+              <label key={s.anahtar} className="tc-mk-sutun">
                 <input
                   type="checkbox" checked={!gizli.has(s.anahtar)}
                   onChange={(o) => gizliYaz(o.target.checked ? gizliListe.filter((a) => a !== s.anahtar) : [...gizliListe, s.anahtar])}
