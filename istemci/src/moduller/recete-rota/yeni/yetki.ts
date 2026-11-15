@@ -36,6 +36,8 @@ export interface RrYetkisi {
   sartnameYaz: boolean;
   sartnameYayinla: boolean;
   talimatYaz: boolean;
+  // 3273 a: rota şablonu yazma (Rota şablonları sayfası ve "Şablon olarak sakla"); rotanın kendi düzenlemesini açmaz.
+  sablonYaz: boolean;
   // Bayraklardan biri açık mı (ekran salt okunur değil).
   herhangiYazma: boolean;
 }
@@ -78,6 +80,7 @@ export function yetkiHesapla(y: Pick<Yetki, 'var' | 'herhangi'>): RrYetkisi {
     sartnameYaz: y.var('rota.sartname-yaz'),
     sartnameYayinla: y.var('rota.sartname-yayinla'),
     talimatYaz: y.var('rota.talimat-yaz'),
+    sablonYaz: y.var('rota.sablon-yaz'),
     ...yazmalar,
     herhangiYazma: Object.values(yazmalar).some(Boolean),
   };
