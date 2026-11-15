@@ -71,21 +71,23 @@ export function KalemPartileri({ sira, malzemeNo, miktar, partiler, degistir, ha
         : partiler.map((p, j) => (
           <div key={p.anahtar} className={rotalar.length > 0 ? 'tc-sp-parti tc-sp-parti-rotali' : 'tc-sp-parti'}>
             <Secim
-              etiket={`Kalem ${sira} parti ${j + 1} çeşit`}
+              etiket="Çeşit"
+              aria-label={`Kalem ${sira} parti ${j + 1} çeşit`}
               secenekler={SECENEKLER}
               value={p.emirTuru}
               onChange={(o) => yaz(j, { emirTuru: o.target.value as EmirTuru })}
             />
             {rotalar.length > 0 && (
               <Secim
-                etiket={`Kalem ${sira} parti ${j + 1} rota`}
+                etiket="Rota"
+                aria-label={`Kalem ${sira} parti ${j + 1} rota`}
                 secenekler={rotaSecenekleri.some((x) => x.deger === String(p.rotaId ?? ''))
                   ? rotaSecenekleri : [...rotaSecenekleri, { deger: String(p.rotaId), baslik: 'Yürürlükte değil' }]}
                 value={p.rotaId === null ? '' : String(p.rotaId)}
                 onChange={(o) => yaz(j, { rotaId: o.target.value === '' ? null : Number(o.target.value) })}
               />
             )}
-            <Girdi etiket={`Kalem ${sira} parti ${j + 1} adet`} inputMode="decimal" autoComplete="off" value={p.adet} onChange={(o) => yaz(j, { adet: o.target.value })} />
+            <Girdi etiket="Adet" aria-label={`Kalem ${sira} parti ${j + 1} adet`} inputMode="decimal" autoComplete="off" value={p.adet} onChange={(o) => yaz(j, { adet: o.target.value })} />
             <Dugme simge="trash" aria-label={`Kalem ${sira} parti ${j + 1} sil`} onClick={() => degistir(partiler.filter((_, k) => k !== j))} />
           </div>
         ))}
