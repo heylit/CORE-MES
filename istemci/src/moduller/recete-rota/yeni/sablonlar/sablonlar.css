@@ -49,7 +49,8 @@
   .tc-rs-iki .tc-rs-govde { grid-template-columns: minmax(0, 1fr); }
 }
 @media (max-width: 48rem) {
-  .tc-rs-tablo thead { display: none; }
+  /* Başlıklar ekran okuyucuda kalır: sütun adları hücrelerin önünde yazılı, satır yine tablo satırıdır. */
+  .tc-rs-tablo thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
   .tc-rs-tablo, .tc-rs-tablo tbody, .tc-rs-tablo tr, .tc-rs-tablo th, .tc-rs-tablo td { display: block; }
   .tc-rs-tablo tr { padding: var(--b-2) 0; border-bottom: 1px solid var(--edge); }
   .tc-rs-tablo th, .tc-rs-tablo td { border: 0; padding: var(--b-1) 0; }

@@ -298,7 +298,8 @@ test.describe('3273 rota şablonları', () => {
     test('şablon sayfası salt okunur; boş rotada seçici yok', async ({ page, ag, ac }) => {
       await ac('/recete-rota/rota-sablonlari');
       const tablo = page.getByRole('table', { name: 'Rota şablonları' });
-      await expect(tablo.getByRole('row').nth(1)).toBeVisible({ timeout: 15_000 });
+      // Ornek veride tek sablon (Standart rota) olabilir; dar ekranda baslik satiri gorunmez: satir basligi aranir.
+      await expect(tablo.getByRole('rowheader').first()).toBeVisible({ timeout: 15_000 });
       await expect(tablo.getByRole('button')).toHaveCount(0);
       await expect(page.getByRole('button', { name: 'Yeni şablon' })).toHaveCount(0);
       await expect(page.getByText(/liste salt okunur/)).toBeVisible();
