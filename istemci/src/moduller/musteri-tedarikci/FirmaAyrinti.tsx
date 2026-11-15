@@ -4,7 +4,7 @@ import type {
   Adres, AdresKaldirGovdesi, Firma, FirmaAyrintiCevabi, FirmaCevabi, FirmaDurumGovdesi,
 } from '#paylasilan/sozlesme/musteri-tedarikci.ts';
 import {
-  Dugme, DurumKutusu, OnayPenceresi, Pencere, Rozet, Sekmeler, Simge, Tablo, useBildirim, type Sekme, type Sutun,
+  Dugme, DurumKutusu, KlasorBaglantisi, OnayPenceresi, Pencere, Rozet, Sekmeler, Simge, Tablo, useBildirim, type Sekme, type Sutun,
 } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { GecmisDugmesi } from '../denetim/disari.ts';
@@ -138,6 +138,7 @@ export function FirmaAyrinti({ id, kapat }: Ozellikler) {
                   )}
               </>
             )}
+            {firma && <KlasorBaglantisi tur="firma" id={firma.id} />}
             {firma && (
               <GecmisDugmesi kayitlar={[
                 { tablo: 'musteri_tedarikci_firma', anahtar: { id: firma.id } },

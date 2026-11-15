@@ -38,3 +38,5 @@ Test adları başlığın başıdır.
 | KK-9 Kök yalnız yetki-ver, bir kez; aynı adlı kökte durur; düzeyler 2067-5 a | `KK-9 ...` | aynı test: 403, 409 |
 | KK-10 Kayıt bağlantısı görünürlüğe bağlı | `KK-10 ...` | aynı test: 404 |
 | KK-11 Toplu komut: sayı, grup, eşgüçlü, toplu iş arşivi | `KK-11 ...`, ekran "gruplar halinde" | aynı test: sayı değişince 409, yetkisiz 403 |
+| KB-1..4 Kayıt olayı klasörü aynı işlemde açar; firma, sipariş ve proje adını izler; iki yönlü firmaya açar, tedarikçiye açmaz; iptalde arşiv; toplu komut klasörsüz sipariş ve projeyi sayar ve açar (3288-2) | `kayit-baglari.test.ts` `KB-1..4` | Bildirimi kaldır (proje değişti, sipariş güncelle), `ikisi`yi müşteri sayma, toplu kaynaktan sipariş ya da projeyi çıkar: her biri 1 kırmızı |
+| Kayıt ekranında "Klasör" bağlantısı; `?klasor=` klasörü seçer | `KayitKlasorleri.test.tsx` "Klasör bağlantısı" | 404'te bağlantı çizilir |

@@ -2,8 +2,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router-dom';
-import type { AyarlarCevabi, DosyalarCevabi, Klasor, KlasorlerCevabi, MevcutAcCevabi, MevcutCevabi } from '#paylasilan/sozlesme/ortak-dosyalar.ts';
-import { BildirimSaglayici } from '../../ortak/arayuz/index.ts';
+import type { AyarlarCevabi, DosyalarCevabi, KaynakKlasoruCevabi, Klasor, KlasorlerCevabi, MevcutAcCevabi, MevcutCevabi } from '#paylasilan/sozlesme/ortak-dosyalar.ts';
+import type { OturumCevabi } from '#paylasilan/sozlesme/oturum.ts';
+import { BildirimSaglayici, KlasorBaglantisi } from '../../ortak/arayuz/index.ts';
 import { OrtakDosyalar, type Gorunum } from './OrtakDosyalar.tsx';
 
 // Kayda bağlı klasörler (kart 3288). ORN- adlar uydurmadır.
@@ -40,6 +41,9 @@ function sunucuKur(ayar: Partial<AyarlarCevabi> = {}, mevcut?: MevcutCevabi) {
       return json(200, { klasor: CIZIM, altKlasorler: [], dosyalar: [], adOnerisi: { onek: 'SS-2026-0412', altKlasor: 'Çizim-ve-model' } } satisfies DosyalarCevabi);
     }
     if (yol === '/ortak-dosyalar/klasorler/4/yukle') return json(200, {});
+    if (yol === '/oturum') return json(200, { kullanici: { id: 1, ad: 'Deneme Yönetici', islemler: ['sayfa.ortak-dosyalar'] } } satisfies OturumCevabi);
+    if (yol === '/ortak-dosyalar/kayit/siparis/77') return json(200, { klasorId: 3 } satisfies KaynakKlasoruCevabi);
+    if (yol === '/ortak-dosyalar/kayit/proje/5') return json(200, { klasorId: null } satisfies KaynakKlasoruCevabi);
     if (yol === '/ortak-dosyalar/ayarlar' || yol === '/ortak-dosyalar/ayarlar/kok-ac' || yol === '/ortak-dosyalar/ayarlar/sablon') {
       return json(200, {
         kok: yol.endsWith('kok-ac') ? { id: 1, ad: 'Müşteriler' } : null, sablon: { siparis: ['Teklif'], proje: [] }, acilamayan: [], topluIsler: [], ...ayar,
@@ -55,11 +59,11 @@ function sunucuKur(ayar: Partial<AyarlarCevabi> = {}, mevcut?: MevcutCevabi) {
   return cagrilar;
 }
 
-function ciz(gorunum: Gorunum = 'klasorler') {
+function ciz(gorunum: Gorunum = 'klasorler', adres = '/ortak-dosyalar', icerik = <OrtakDosyalar gorunum={gorunum} />) {
   const istemci = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={istemci}>
-      <BildirimSaglayici><MemoryRouter><OrtakDosyalar gorunum={gorunum} /></MemoryRouter></BildirimSaglayici>
+      <BildirimSaglayici><MemoryRouter initialEntries={[adres]}>{icerik}</MemoryRouter></BildirimSaglayici>
     </QueryClientProvider>,
   );
 }
@@ -145,5 +149,16 @@ describe('kayda bağlı klasörler (kart 3288)', () => {
     expect((ilk?.govde as { beklenen: unknown }).beklenen).toEqual({ firma: 20, siparis: 90, proje: 10 });
     expect((ikinci?.govde as { beklenen: unknown }).beklenen).toBeNull();
     expect((ilk?.govde as { topluIs: string }).topluIs).toBe((ikinci?.govde as { topluIs: string }).topluIs);
+  });
+
+  it('kayıt ekranındaki "Klasör" bağlantısı klasörü ?klasor= ile açar; klasörü olmayan kayıtta çizilmez (kart 3288-2)', async () => {
+    sunucuKur();
+    ciz('klasorler', '/siparisler/77', <><KlasorBaglantisi tur="siparis" id={77} /><KlasorBaglantisi tur="proje" id={5} /></>);
+    const bag = await screen.findByRole('link', { name: /Klasör/ });
+    expect(bag.getAttribute('href')).toBe('/ortak-dosyalar?klasor=3');
+    await waitFor(() => expect(screen.getAllByRole('link', { name: /Klasör/ })).toHaveLength(1));
+    cleanup();
+    ciz('klasorler', '/ortak-dosyalar?klasor=3');
+    expect(await screen.findByRole('link', { name: /Sipariş SS-2026-0412 aç/ })).toBeTruthy();
   });
 });

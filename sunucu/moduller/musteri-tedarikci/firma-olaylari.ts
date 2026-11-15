@@ -7,6 +7,8 @@ export interface FirmaDegistiOlayi {
   firmaId: number;
   // Adres kaldırılmadan hemen önce verilir: dinleyici o adrese bağlı kaydını başka adrese taşır. Öteki yazmalarda null.
   kaldirilanAdresId: number | null;
+  // Yazan kişi (2067): dinleyicinin kendi kaydı (ör. müşteri klasörü) bu kişiyle yazılır.
+  kisiId: number;
 }
 
 export type FirmaDegistiDinleyicisi = (db: Db, olay: FirmaDegistiOlayi) => Promise<void>;

@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useParams } from 'react-router-dom';
 import type { SiparisAyrintisi, SiparisSatiri } from '#paylasilan/sozlesme/siparisler.ts';
 import { EMIR_TURU_ADLARI } from '#paylasilan/sozlesme/emir-turleri.ts';
-import { Dugme, DurumKutusu, CokSatir, Kart, OnayPenceresi, Rozet, Tablo, useBildirim, type Sutun } from '../../ortak/arayuz/index.ts';
+import { CokSatir, Dugme, DurumKutusu, Kart, KlasorBaglantisi, OnayPenceresi, Rozet, Tablo, useBildirim, type Sutun } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { GecmisDugmesi } from '../denetim/disari.ts';
 import { anahtarlar } from './anahtarlar.ts';
@@ -114,6 +114,7 @@ export function SiparisAyrinti() {
   const emreBagliVar = s.satirlar.some((m) => m.emreBagli);
   const islemler = (
     <>
+      <KlasorBaglantisi tur="siparis" id={s.id} />
       {duzenlenebilir && <Dugme simge="edit" onClick={() => { void gezin(`/siparisler/${s.id}/duzenle`); }}>Düzenle</Dugme>}
       {onaylayabilir && s.durum === 'taslak' && <Dugme tur="birincil" simge="check" onClick={() => komutYaz('onayla')}>Onayla</Dugme>}
       {onaylayabilir && s.durum === 'onayli' && <Dugme simge="rotate" onClick={() => komutYaz('onay-geri-al')}>Onayı geri al</Dugme>}

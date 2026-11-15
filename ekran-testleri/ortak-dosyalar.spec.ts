@@ -28,3 +28,18 @@ test.describe('ortak dosyalar, kayda bağlı klasörler', () => {
     expect(ag.yazmalar).toEqual([]);
   });
 });
+
+// Klasörü açılmamış kayıtta "Klasör" bağlantısı çizilmez ve ağ hatası üretmez (sunucu null döner; 0002, PR #1968 ekran kırmızısı).
+// Yönetici olmayan hesapla: bağlantı Ortak Dosyalar sayfası olmayan kişide istek de atmaz.
+test.describe('kayıt ekranında Klasör bağlantısı, yönetici olmayan hesap', () => {
+  test.use({ hesap: 'ornek.satis' });
+  test('firma ayrıntısı: klasörü olmayan firmada bağlantı yok, ağ hatası yok', async ({ page, ag, ac }) => {
+    await ac('/musteri-tedarikci');
+    await page.getByRole('row').filter({ visible: true }).nth(1).click();
+    await expect(page.getByRole('dialog')).toBeVisible();
+    await page.waitForLoadState('networkidle');
+    await expect(page.getByRole('dialog').getByRole('link', { name: 'Klasör' })).toHaveCount(0);
+    expect(ag.hatalar).toEqual([]);
+    expect(ag.yazmalar).toEqual([]);
+  });
+});

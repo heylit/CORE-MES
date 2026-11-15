@@ -135,7 +135,8 @@ export const mevcutCevabi = z.object({ bagli: z.boolean(), kokVar: z.boolean(), 
 export const mevcutAcGovdesi = z.object({ topluIs: z.uuid(), beklenen: kayitSayilari.nullable() });
 export const mevcutAcCevabi = z.object({ acilan: z.number().int().nonnegative(), acilamayan: z.number().int().nonnegative(), kalan: z.number().int().nonnegative() });
 export const topluGeriAlCevabi = z.object({ arsivlenen: z.number().int().nonnegative(), atlanan: z.number().int().nonnegative() });
-export const kaynakKlasoruCevabi = z.object({ klasorId: z.number().int() });
+// Klasör yoksa ya da kişiye görünmüyorsa `null` (kural 5); iki durum aynı cevaptır, görünmeyen klasörün varlığı sızmaz.
+export const kaynakKlasoruCevabi = z.object({ klasorId: z.number().int().nullable() });
 
 export type Klasor = z.output<typeof klasorSemasi>;
 export type AyarlarCevabi = z.output<typeof ayarlarCevabi>;

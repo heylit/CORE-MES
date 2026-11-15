@@ -100,7 +100,7 @@ export async function firmaEkle(db: Db, kullanici: Kullanici, govde: FirmaKimlig
   if (k.kod === null || k.kod.trim() === '') k.kod = await firmaKoduVer(db, k.tur);
   const firma = await kisitKorumali(FIRMA_KISITLARI, () => sorgular.firmaEkle(db, k, kullanici.id));
   if (!firma) throw new Error('Firma eklenemedi.');
-  await firmaDegistiBildir(db, { firmaId: firma.id, kaldirilanAdresId: null });
+  await firmaDegistiBildir(db, { firmaId: firma.id, kaldirilanAdresId: null, kisiId: kullanici.id });
   return firma;
 }
 
@@ -139,7 +139,7 @@ export async function firmaGuncelle(db: Db, kullanici: Kullanici, id: number, d:
     bulunamadiIletisi: 'Firma bulunamadı.',
   }));
   farkYaz(ek, `firma:${id}`, eski, yeni);
-  await firmaDegistiBildir(db, { firmaId: id, kaldirilanAdresId: null });
+  await firmaDegistiBildir(db, { firmaId: id, kaldirilanAdresId: null, kisiId: kullanici.id });
   return yeni;
 }
 
@@ -160,7 +160,7 @@ export async function firmaDurumuDegistir(
     varMi: async () => (await sorgular.firmaVarMi(db, id)) !== null,
     bulunamadiIletisi: 'Firma bulunamadı.',
   });
-  await firmaDegistiBildir(db, { firmaId: id, kaldirilanAdresId: null });
+  await firmaDegistiBildir(db, { firmaId: id, kaldirilanAdresId: null, kisiId });
   return yeni;
 }
 
@@ -185,7 +185,7 @@ export async function adresEkle(db: Db, kullanici: Kullanici, id: number, a: Adr
   const sinir = adresSiniriHatasi(await sorgular.adresSayisi(db, id));
   if (sinir) throw gecersiz(sinir);
   await kisitKorumali(ADRES_KISITLARI, () => sorgular.adresEkle(db, id, a, kullanici.id));
-  await firmaDegistiBildir(db, { firmaId: id, kaldirilanAdresId: null });
+  await firmaDegistiBildir(db, { firmaId: id, kaldirilanAdresId: null, kisiId: kullanici.id });
   return { firma, adresler: await sorgular.adresleriGetir(db, id) };
 }
 
@@ -199,7 +199,7 @@ export async function adresGuncelle(
   const yeni = await kisitKorumali(ADRES_KISITLARI, () => sorgular.adresGuncelle(db, id, adresId, a, kullanici.id));
   if (!yeni) throw bulunamadi('Adres bulunamadı.');
   farkYaz(ek, `adres:${adresId}`, eski, yeni);
-  await firmaDegistiBildir(db, { firmaId: id, kaldirilanAdresId: null });
+  await firmaDegistiBildir(db, { firmaId: id, kaldirilanAdresId: null, kisiId: kullanici.id });
   return { firma, adresler: await sorgular.adresleriGetir(db, id) };
 }
 
@@ -207,7 +207,7 @@ export async function adresKaldir(db: Db, kullanici: Kullanici, id: number, adre
   const firma = await karttanSonra(db, kullanici.id, id, surum);
   if (!(await sorgular.adresleriGetir(db, id)).some((x) => x.id === adresId)) throw bulunamadi('Adres bulunamadı.');
   // Adrese bağlı kayıt (sevkiyat noktası) silmeden önce başka adrese taşınır; yoksa bağ silmeyi engellerdi.
-  await firmaDegistiBildir(db, { firmaId: id, kaldirilanAdresId: adresId });
+  await firmaDegistiBildir(db, { firmaId: id, kaldirilanAdresId: adresId, kisiId: kullanici.id });
   if (!(await sorgular.adresSil(db, id, adresId))) throw bulunamadi('Adres bulunamadı.');
   return { firma, adresler: await sorgular.adresleriGetir(db, id) };
 }
