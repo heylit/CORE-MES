@@ -88,6 +88,7 @@ const ACILIS = {
     { ...ACILIS_SATIRI, kalemId: 52, kalemSira: 3, malzemeNo: 33, malzemeKodu: 'DNM-003', malzemeAdi: 'Deneme Civata', adet: 8, rota: null, atlama: 'uretilmez' },
   ],
   eksikIslemler: [],
+  geriAlmaUyarilari: [],
 } satisfies SiparisAcilisiCevabi;
 
 // 195 a: elle çarpan Plan uçlarında; kayıt yoksa geçerli null.
@@ -394,6 +395,38 @@ describe('Satış siparişi ayrıntısı', () => {
     ac('/siparisler/6');
     await screen.findByText('SS-2026-0005');
     expect(screen.queryByRole('button', { name: 'Onayı geri al' })).toBeNull();
+  });
+
+  it('3272-2: talebi ya da tamamlanmış hazırlığı olan emir geri alma ve iptal penceresinde uyarıyla görünür; düğme açık kalır', async () => {
+    const uyarili = {
+      ...ACILIS, proje: { id: 9, kod: 'SS_2026_0006', ad: 'Deneme', bitis: null },
+      geriAlmaUyarilari: [{ emirId: 70, emirNo: 'ORN-A-SS_2026_0006-DNM001-26-11-001', nedenler: ['talep', 'hazirlik'] }],
+    } satisfies SiparisAcilisiCevabi;
+    sunucuKur(YONETICI, (yontem, yol) => (yontem === 'GET' && yol === '/uretim-emirleri/siparis-acilisi/5' ? json(200, uyarili) : undefined));
+    ac('/siparisler/6');
+    fireEvent.click(await screen.findByRole('button', { name: 'Onayı geri al' }));
+    let pencere = await screen.findByRole('dialog', { name: 'Onayı geri al' });
+    const geriAl = await within(pencere).findByText(/malzeme talebi var, hazırlık maddesi tamamlanmış/);
+    expect(geriAl.closest('[role="status"]')?.textContent).toMatch(/^Bu emirler kalemden çözülür/);
+    expect((within(pencere).getByRole('button', { name: 'Onayı geri al' }) as HTMLButtonElement).disabled).toBe(false);
+    fireEvent.click(within(pencere).getByRole('button', { name: 'Vazgeç' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'İptal et' }));
+    pencere = await screen.findByRole('dialog', { name: 'Siparişi iptal et' });
+    expect((await within(pencere).findByText(/satın almada açık kalır/)).closest('[role="status"]')?.textContent).toMatch(/^Bu emirler iptal olur/);
+  });
+
+  it('3272-2: yalnız hazırlık nedeninde iptal uyarısı talepten söz etmez', async () => {
+    const hazirlik = {
+      ...ACILIS, proje: { id: 9, kod: 'SS_2026_0006', ad: 'Deneme', bitis: null },
+      geriAlmaUyarilari: [{ emirId: 70, emirNo: 'ORN-A-SS_2026_0006-DNM001-26-11-001', nedenler: ['hazirlik'] }],
+    } satisfies SiparisAcilisiCevabi;
+    sunucuKur(YONETICI, (yontem, yol) => (yontem === 'GET' && yol === '/uretim-emirleri/siparis-acilisi/5' ? json(200, hazirlik) : undefined));
+    ac('/siparisler/6');
+    fireEvent.click(await screen.findByRole('button', { name: 'İptal et' }));
+    const pencere = await screen.findByRole('dialog', { name: 'Siparişi iptal et' });
+    const uyari = (await within(pencere).findByText(/hazırlık maddesi tamamlanmış/)).closest('[role="status"]');
+    expect(uyari?.textContent).toMatch(/^Bu emirler iptal olur/);
+    expect(uyari?.textContent).not.toMatch(/talep/i);
   });
 
   it('onayı geri alınmış siparişte emre bağlı kalem işaretlenir ve uyarı görünür', async () => {

@@ -56,11 +56,13 @@ export function bag<T>(ad: string, kur: ((karsilik: T) => unknown) | undefined, 
   };
 }
 
-// 3272-3 a: emri siparişe kilitleyen bağ: satın alma siparişi aşamasındaki tedarik (talep kilitlemez) ya da stok fişi.
+// 3272-3 a: emri siparişe kilitleyen bağ: satın alma siparişi aşamasındaki tedarik ya da stok fişi. Talep kilitlemez, uyarır (3272-2).
 const siparisEmirBaglari = async (db: Db, idler: readonly number[]) => {
-  const tedarik = new Set((await emirTedarikDurumlari(db, idler, [])).flatMap((x) => (x.asama === 'siparis' && x.uretimEmriId !== null ? [x.uretimEmriId] : [])));
+  const durumlar = await emirTedarikDurumlari(db, idler, []);
+  const tedarik = new Set(durumlar.flatMap((x) => (x.asama === 'siparis' && x.uretimEmriId !== null ? [x.uretimEmriId] : [])));
+  const talep = new Set(durumlar.flatMap((x) => (x.asama === 'talep' && x.uretimEmriId !== null ? [x.uretimEmriId] : [])));
   const fisler = await stok.emirMalzemeFisleri(db, idler);
-  return { tedarik, stok: new Set([...fisler].flatMap(([id, f]) => (f.sarf.length + f.giris.length + f.hurda.length > 0 ? [id] : []))) };
+  return { tedarik, talep, stok: new Set([...fisler].flatMap(([id, f]) => (f.sarf.length + f.giris.length + f.hurda.length > 0 ? [id] : []))) };
 };
 
 // 2118: cari okuması uçta transaction dışında koşar (köprü 60 sn bekleyebilir); logonun ayar okuması aynı bağlantıyı kullanır.
