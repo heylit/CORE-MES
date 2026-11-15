@@ -38,10 +38,14 @@ describe('3273 a: boş rotada şablon seçici', () => {
     const secici = await within(b).findByRole('region', { name: 'Rotaya başla' }, BEKLE);
     const kartlar = await within(secici).findAllByRole('group', undefined, BEKLE);
     expect(kartlar.map((k) => k.getAttribute('aria-label'))).toEqual(['Mil hattı şablonu', 'Çok kullanılan şablonu']);
-    expect(within(kartlar[0]!).getByText(/adında "MİL" geçiyor/)).toBeTruthy();
+    expect(within(kartlar[0]!).getByTitle(/adında "MİL" geçiyor/)).toBeTruthy();
+    expect(within(kartlar[0]!).getByText('önerilen')).toBeTruthy();
+    expect(within(secici).getByRole('heading', { name: 'Bu ürünün rotası yok. Nasıl başlayalım?' })).toBeTruthy();
     expect(within(secici).getByRole('button', { name: 'Bütün şablonlar (3)' })).toBeTruthy();
     fireEvent.click(within(kartlar[0]!).getByRole('button', { name: 'İçine bak: Mil hattı' }));
-    expect(within(kartlar[0]!).getByText(/katalogdan, tahmini/)).toBeTruthy();
+    const panel = within(secici).getByRole('region', { name: 'İçine bak: Mil hattı' });
+    expect(within(panel).getAllByText(/katalogdan, tahmini/).length).toBeGreaterThan(0);
+    expect(within(panel).getByText('OP 10')).toBeTruthy();
     fireEvent.click(within(kartlar[0]!).getByRole('button', { name: 'Başla' }));
     await waitFor(() => { expect(yazilar(ist, '/rota/urunler/11/taslak-ac')).toHaveLength(1); }, BEKLE);
     expect(yazilar(ist, '/rota/urunler/11/taslak-ac')[0]?.govde).toEqual({ kaynak: { tur: 'sablon', sablonId: 3 } });
