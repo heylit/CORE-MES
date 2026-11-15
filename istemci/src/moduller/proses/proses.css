@@ -7,3 +7,4 @@
 .tc-proses-halka-ozet { font-size: var(--yazi-s); overflow-wrap: anywhere; }
 .tc-proses-halka-sahip { color: var(--muted); font-size: var(--yazi-s); }
 .tc-proses-not { margin: 0; color: var(--muted); font-size: var(--yazi-s); max-width: 80ch; }
+.tc-proses-halka > .tc-rozet { align-self: flex-start; }

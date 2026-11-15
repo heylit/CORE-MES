@@ -131,6 +131,21 @@ describe('proses: parça dosyası ucu (gerçek PostgreSQL)', () => {
     // Balonsuz parçada kontrol planı halkası yok kalır (karakteristik sahibinde 0); boş kurallı plan sütunda plan sayılmaz (OP 30).
     assert.equal(h['kontrol']?.durum, 'yok');
     assert.deepEqual([h['ilk-parca']?.durum, h['ilk-parca']?.ozet], ['eksik', '2/2 açık emirde karar yok']);
+
+    // Onay bekleyen taslak da açık taslaktır: yürürlükte rotası olmayan parçada rota halkası eksik ve nedenini söyler.
+    const bekleyen = (await vt().sahip.tek<{ no: number }>(
+      `INSERT INTO malzeme_katalog_karti (kimlik, tur, onek, sira_no, onay_durumu, kayit, acan_kisi_id, guncelleyen_kisi_id)
+       VALUES ('pr-dnm-3', 'mamul', 'PR-DNM-', 3, 'aktif', $1, $2, $2) RETURNING no`,
+      [JSON.stringify({ id: 'pr-dnm-3', com: { ad: 'Deneme onay bekleyen parça' } }), yoneticiId],
+    ))!.no;
+    const t = await yonet<{ id: number }>('POST', `/rota/urunler/${String(bekleyen)}/taslak-ac`, { kaynak: { tur: 'bos' } }, 'proses');
+    const tk = await yonet<{ surum: number }>('POST', `/rota/revizyonlar/${String(t.id)}/kaydet`,
+      { surum: 1, aciklama: null, adimlar: [{ ...adim(10, { tur: 'makine', id: makine }), bilesenler: [{ malzemeId: hammadde, miktar: 1, fireYuzde: 0 }] }] }, 'proses');
+    await yonet('POST', `/rota/revizyonlar/${String(t.id)}/onaya-gonder`, { surum: tk.surum }, 'proses');
+    const b = await oku('proses', bekleyen);
+    assert.equal(b.durum, 200, JSON.stringify(b.govde));
+    const r = b.govde.halkalar.find((x) => x.anahtar === 'rota');
+    assert.deepEqual([b.govde.rota, r?.durum, r?.ozet], [null, 'eksik', 'Taslak var, yürürlükte rota yok']);
   });
 
   test('yetki: proses.oku olmayan rol 403; olmayan kart 404', async () => {
