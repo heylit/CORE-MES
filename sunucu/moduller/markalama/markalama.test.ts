@@ -15,7 +15,7 @@ import { tekrarDeposu } from '../istek-kimligi/disari.ts';
 import { kullaniciYukle, rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { kimlikCozucu } from '../oturum/disari.ts';
 import { uretimEmriAc } from '../uretim-emirleri/disari.ts';
-import { kayitAramaKaynaklari } from './disari.ts';
+import { kayitAramaKaynaklari, markalamaOperasyonCozucusu } from './disari.ts';
 
 const PAROLA = 'dogru-parola-1';
 interface Cevap<T = unknown> { durum: number; govde: T }
@@ -507,6 +507,54 @@ describe('markalama (gerçek PostgreSQL)', () => {
     assert.deepEqual(oz.sayilar, { saglam: 1, red: 0, rework: 0, hurda: 1 });
     const liste = (await istek<{ birimler: MarkalamaBirimi[] }>('kalite', 'GET', `/markalama/birimler?seriNo=${encodeURIComponent(b.seriNo)}`)).govde;
     assert.deepEqual(liste.birimler.map((x) => x.id), [b.id]);
+  });
+
+  // Risk K3: aşama 2 OP numarasını rotada yeniden dizer; markalama tanımı numarayı değil operasyonu izlemeli.
+  test('3250 1b-3: rotada OP numaraları yer değiştirse de tanım aynı operasyonda görünür ve ikinci tanım yalnız öteki operasyona açılır', async () => {
+    const m = await malzemeAc();
+    const rev = (await o().sahip.tek<{ id: number }>(
+      `INSERT INTO rota_revizyonu (malzeme_id, malzeme_turu, harf, durum, acan_kisi_id, onaylayan_kisi_id, onaylama, yururluge_alan_kisi_id, yururluge_alma)
+       VALUES ($1, 'mamul', 'A', 'yururlukte', $2, $2, now(), $2, now()) RETURNING id`, [m, yoneticiId]))!.id;
+    await o().sahip.sorgu('INSERT INTO rota_op_numarasi (malzeme_id, op_no, ilk_revizyon_id) VALUES ($1, 10, $2), ($1, 40, $2), ($1, 1010, $2), ($1, 1040, $2)', [m, rev]);
+    await o().sahip.sorgu('ALTER TABLE rota_adimi DISABLE TRIGGER USER');
+    try {
+      await o().sahip.sorgu(
+        `INSERT INTO rota_adimi (revizyon_id, malzeme_id, op_no, operasyon_id, sira, operasyon_tipi_id, ad)
+         SELECT $1, $2, n.op, (SELECT id FROM rota_op_numarasi WHERE malzeme_id = $2 AND op_no = n.op), n.sira, $3, 'Deneme'
+           FROM (VALUES (10, 1), (40, 2)) AS n(op, sira)`, [rev, m, tipId]);
+    } finally {
+      await o().sahip.sorgu('ALTER TABLE rota_adimi ENABLE TRIGGER USER');
+    }
+    const t = await tanimAc(m);
+    // Aşama 2 benzetimi: iki adımın numarası yer değiştirir, operasyon kimliği aynı kalır.
+    await o().sahip.sorgu('ALTER TABLE rota_adimi DISABLE TRIGGER USER');
+    try {
+      await o().sahip.sorgu('UPDATE rota_adimi SET op_no = op_no + 1000 WHERE revizyon_id = $1', [rev]);
+      await o().sahip.sorgu('UPDATE rota_adimi SET op_no = CASE op_no WHEN 1040 THEN 10 ELSE 40 END WHERE revizyon_id = $1', [rev]);
+    } finally {
+      await o().sahip.sorgu('ALTER TABLE rota_adimi ENABLE TRIGGER USER');
+    }
+    const g = await istek<unknown>('yonetici', 'GET', `/markalama/tanimlar/${t.id}`);
+    assert.equal(g.durum, 200, JSON.stringify(g.govde));
+    assert.equal(tanimSemasi.parse(g.govde).opNo, 10, 'tanım operasyonla OP 10 oldu');
+    const ikinci = await istek('yonetici', 'POST', '/markalama/tanimlar/ekle', { malzemeId: m, opNo: 10, seriSablonu: 'B{PARCA}-{SEQ}', alanlar: [seriAlani] });
+    assert.equal(ikinci.durum, 409, 'aynı operasyona ikinci tanım');
+    const yeni = await istek('yonetici', 'POST', '/markalama/tanimlar/ekle', { malzemeId: m, opNo: 40, seriSablonu: 'C{PARCA}-{SEQ}', alanlar: [seriAlani] });
+    assert.equal(yeni.durum, 200, JSON.stringify(yeni.govde));
+    assert.equal(tanimSemasi.parse(yeni.govde).opNo, 40, 'öteki operasyonun tanımı bugünkü numarasıyla');
+  });
+
+  // Risk K2: çözücü bağlı değilse yazma yolu sessizce eski anahtarla yazmaz; okuma bağsız da çalışır.
+  test('3250 1b-3: rota operasyon çözücüsü bağlı değilse tanım eklenmez, liste okunur', async () => {
+    const m = await malzemeAc();
+    const onceki = markalamaOperasyonCozucusu(null);
+    try {
+      const c = await istek('yonetici', 'POST', '/markalama/tanimlar/ekle', { malzemeId: m, opNo: 40, seriSablonu: '{PARCA}-{SEQ}', alanlar: [seriAlani] });
+      assert.equal(c.durum, 500);
+      assert.equal((await istek('yonetici', 'GET', `/markalama/tanimlar?malzemeId=${m}`)).durum, 200);
+    } finally {
+      markalamaOperasyonCozucusu(onceki);
+    }
   });
 
   test('MRK-U6: birim olay defteri yalnız eklenir', async () => {

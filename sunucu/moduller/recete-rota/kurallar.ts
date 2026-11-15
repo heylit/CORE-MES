@@ -979,9 +979,11 @@ export function rotaDilimiCevir(
     const data = { base: null, steps: r.adimlar.map((a, i) => adimCevir(a, i, r.malzemeId, makineIstasyonu, seqOf)) };
     routeRevs.push({
       id: String(r.id), itemId: String(r.malzemeId), no: r.harf, status, surum: r.surum, note: r.aciklama ?? '',
-      created: zamanMs(r.acilma) ?? 0, approvedAt: zamanMs(r.yururlugeAlma ?? r.onaylama), geriGondermeNedeni: r.geriGondermeNedeni, data,
+      created: zamanMs(r.acilma) ?? 0, approvedAt: zamanMs(r.yururlugeAlma ?? r.onaylama), geriGondermeNedeni: r.geriGondermeNedeni,
+      rotaId: String(r.rotaId), rotaStandart: r.rotaStandart, data,
     });
-    if (status === 'yururlukte') routes[String(r.malzemeId)] = data;
+    // `routes` ürünün Standart rotasıdır (plan ve sayım onu okur); öteki rotaların revizyonları yalnız routeRevs'te durur (3247 a).
+    if (status === 'yururlukte' && r.rotaStandart) routes[String(r.malzemeId)] = data;
   }
   return { routes, routeRevs };
 }

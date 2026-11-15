@@ -6,6 +6,7 @@ import {
   acikRevizyon, gkkUyarilari, REV_DURUMU, rotaEksikleri, rotaFarki, rotaSahibiOlur, yururlukteki, type Adim, type Revizyon,
 } from './kurallar.ts';
 import { rotadaOlmayanNumaralar, useOpNumaralari } from './opNumaralari.ts';
+import { useRotaSekmeleri } from './RotaSekmeleri.tsx';
 import type { RotaEkrani } from './ortak.tsx';
 import type { RevEylemi } from './useRotaDuzeni.ts';
 
@@ -52,6 +53,7 @@ export function RevizyonCubugu({ r, agac, urunId, urunSec, duzenDugmeleri = null
   const [neden, setNeden] = useState('');
   const [hedef, setHedef] = useState('');
   const [onay, setOnay] = useState<Onay | null>(null);
+  const rotalar = useRotaSekmeleri(r, urunId);
   const { duzen, yetki } = r;
   const { h } = duzen;
   const m = h.malzeme.get(urunId);
@@ -82,9 +84,24 @@ export function RevizyonCubugu({ r, agac, urunId, urunSec, duzenDugmeleri = null
   };
   const durumu = V ? V.status : taslak ? 'taslak' : null;
   const onaylayabilir = yetki.rotaOnayla;
+  const urunEtiketi = agac.length > 1 ? (
+    <select className="tc-rr1-secim" value={urunId} aria-label="Revizyonu gösterilen rota" onChange={(e) => { urunSec(e.target.value); setPanel(null); }}>
+      {agac.map((x) => (
+        <option key={x} value={x}>{h.malzeme.get(x)?.code} rotası{acikRevizyon(duzen.revler(x)) || duzen.taslakVar(x) ? ' (taslak var)' : ''}</option>
+      ))}
+    </select>
+  ) : <b className="tc-rr1-rv-t">{m.code} rotası</b>;
 
   return (
     <div className={`tc-rr1-revbar${durumu && durumu !== 'yururlukte' ? ' tc-rr1-has-open' : ''}`}>
+      {rotalar.satir && (
+        <div className="tc-rr1-rv-row">
+          {agac.length > 1 ? urunEtiketi : <span><b className="tc-rr1-rv-t">{m.code}</b> {m.name}</span>}
+          <span className="tc-rr1-grow" />
+          {rotalar.yeniDugmesi}
+        </div>
+      )}
+      {rotalar.satir}
       {(taslaklar.length > 0 || duzen.sonDegisiklik) && (
         <div className="tc-rr1-rv-row tc-rr1-rv-status">
           <SonDegisiklik r={r} />
@@ -103,13 +120,7 @@ export function RevizyonCubugu({ r, agac, urunId, urunSec, duzenDugmeleri = null
         </div>
       )}
       <div className="tc-rr1-rv-row">
-        {agac.length > 1 ? (
-          <select className="tc-rr1-secim" value={urunId} aria-label="Revizyonu gösterilen rota" onChange={(e) => { urunSec(e.target.value); setPanel(null); }}>
-            {agac.map((x) => (
-              <option key={x} value={x}>{h.malzeme.get(x)?.code} rotası{acikRevizyon(duzen.revler(x)) || duzen.taslakVar(x) ? ' (taslak var)' : ''}</option>
-            ))}
-          </select>
-        ) : <b className="tc-rr1-rv-t">{m.code} rotası</b>}
+        {rotalar.rotaAdi === null ? urunEtiketi : <span className="tc-rr1-ipucu">{rotalar.rotaAdi} revizyonları</span>}
         <span className="tc-rr1-rv-list" role="group" aria-label="Revizyonlar">
           {revs.length === 0 && !taslak && <span className="tc-rr1-ipucu">Henüz revizyon yok</span>}
           {revs.map((x) => (
@@ -141,8 +152,10 @@ export function RevizyonCubugu({ r, agac, urunId, urunSec, duzenDugmeleri = null
           <Dugme tur="ikincil" aria-pressed={panel === 'fark'} onClick={() => { ac('fark'); }}>{fark.length} fark</Dugme>
         )}
         <GecmisDugmesi kayitlar={revs.flatMap((x) => (Number.isSafeInteger(Number(x.id)) ? [{ tablo: 'rota_revizyonu', anahtar: { id: Number(x.id) } }] : []))} />
+        {rotalar.ayarDugmesi}
         <Dugme tur="ikincil" simge="more" aria-pressed={panel === 'daha' || panel === 'gecmis' || panel === 'kopya'} onClick={() => { ac('daha'); }}>Revizyon</Dugme>
       </div>
+      {rotalar.panel}
       {eksikler.length > 0 && (
         <div className="tc-rr1-warnbox" role="alert">
           Rota eksik: {eksikler.map((x) => x.metin).join('; ')}.{' '}

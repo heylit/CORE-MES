@@ -136,7 +136,14 @@ export const EMIR_KOMUTLARI: Readonly<Record<string, EmirKomutu>> = {
         };
       }
       const rotalar = await api.get<UrunRevizyonlariCevabi>(`/rota/urunler/${String(urunId)}`);
-      const yururlukte = rotalar.revizyonlar.find((r) => r.durum === 'yururlukte');
+      // 3247 a: formda seçilen rota; seçilmediyse emir türüne bağlı rota, o da yoksa Standart. Türe bağlı rotası yürürlükte olmayan
+      // emir Standart'a sessizce düşmez: kullanıcı formda Standart'ı seçerek açar.
+      const secilen = girdi['rotaId'] === undefined ? null : kimlik(girdi['rotaId'], 'rota');
+      const rota = secilen !== null ? rotalar.rotalar.find((x) => x.id === secilen)
+        : rotalar.rotalar.find((x) => emirTuru !== undefined && (x.emirTurleri as readonly string[]).includes(emirTuru)) ?? rotalar.rotalar.find((x) => x.standart);
+      if (secilen !== null && rota === undefined) throw hata(409, 'Seçilen rota bu ürünün değil.');
+      const yururlukte = rotalar.revizyonlar.find((r) => r.durum === 'yururlukte' && (rota === undefined || r.rotaId === rota.id));
+      if (yururlukte === undefined && rota !== undefined && !rota.standart) throw hata(409, `${rota.ad} rotasının yürürlükte revizyonu yok; Standart rotayı seçerek açabilirsiniz.`);
       if (yururlukte === undefined) throw hata(422, 'Ürünün yürürlükte rotası yok; emir yalnız yürürlükteki rotadan açılır.');
       const not = typeof girdi['note'] === 'string' && girdi['note'].trim() !== '' ? girdi['note'].trim() : null;
       return {

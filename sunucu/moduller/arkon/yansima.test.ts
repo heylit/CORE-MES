@@ -1876,7 +1876,7 @@ describe('arkon sayım ve olayları CORE üretim emrine yansır (gerçek Postgre
     ))!.no;
     // Revizyon harfi pakete rotadan gelir: kartın A revizyonu fikstürle kurulur (aynı kartla ikinci emir aynısını kullanır).
     await sahip.sorgu(
-      "INSERT INTO rota_revizyonu (malzeme_id, malzeme_turu, harf, acan_kisi_id) VALUES ($1, 'mamul', 'A', $2) ON CONFLICT (malzeme_id, harf) DO NOTHING", [kart, yoneticiId]);
+      "INSERT INTO rota_revizyonu (malzeme_id, malzeme_turu, harf, acan_kisi_id) VALUES ($1, 'mamul', 'A', $2) ON CONFLICT DO NOTHING", [kart, yoneticiId]);
     const revizyon = (await sahip.tek<{ id: number }>("SELECT id FROM rota_revizyonu WHERE malzeme_id = $1 AND harf = 'A'", [kart]))!.id;
     const adim = (sira: number, makineId: number) => ({
       sira, opNo: sira * 10, ad: `Adım ${sira}`, operasyonTipiId: tip, kaynak: { tur: 'makine' as const, id: makineId }, ayarSuresiDk: '10', birimSureDk: '1',

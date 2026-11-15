@@ -13,6 +13,7 @@ export {
   malzemeAra, olcuAletiTurleri, aparatKullanimi,
 } from './servis/okuma.ts';
 export { emreKopyalaToplu } from './servis/emir-toplu.ts';
+export { rotaEkle, rotaAdiYaz, rotaTurleriYaz } from './servis/rotalar.ts';
 export { rotaAdimlariToplu } from './servis/adim-toplu.ts';
 export { sablonListesi, sablonEkle, sablonKaydet, sablonuVarsayilanYap, sablonuSil } from './servis/sablon.ts';
 export {

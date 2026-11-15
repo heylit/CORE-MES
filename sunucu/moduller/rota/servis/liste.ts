@@ -75,12 +75,17 @@ export function revizyonOzeti(db: Db): Promise<RevizyonOzetiCevabi> {
 export async function urunRevizyonlari(db: Db, kullanici: Kullanici, urunId: number): Promise<UrunRevizyonlariCevabi> {
   const urun = await urunOzetiAl(db, urunId);
   const revizyonlar = await s.urunRevizyonlari(db, urunId);
-  const acik = revizyonlar.some((r) => r.durum === 'taslak' || r.durum === 'onay_bekliyor');
+  const rotalar = await s.urunRotalari(db, urunId);
+  const acilabilir = rotaliTurMu(urun.tur) && urun.onayDurumu === 'aktif' && kullanici.islemler.includes(TASLAK_AC);
+  const acikVar = (rotaId: number | null) => revizyonlar.some((r) => (rotaId === null || r.rotaId === rotaId) && (r.durum === 'taslak' || r.durum === 'onay_bekliyor'));
+  const standart = rotalar.find((r) => r.standart)?.id ?? null;
   const kart = revizyonlar.length === 0 && rotaliTurMu(urun.tur) ? await kartAdimlari(db, urunId) : null;
   return {
     urun,
     revizyonlar,
-    taslakAcilabilir: !acik && rotaliTurMu(urun.tur) && urun.onayDurumu === 'aktif' && kullanici.islemler.includes(TASLAK_AC),
+    // Üst düzey alan Standart rotanındır (rotası olmayan üründe ilk taslak Standart rotada açılır).
+    taslakAcilabilir: acilabilir && !(standart !== null && acikVar(standart)),
+    rotalar: rotalar.map((r) => ({ id: r.id, ad: r.ad, standart: r.standart, surum: r.surum, emirTurleri: r.emirTurleri, taslakAcilabilir: acilabilir && !acikVar(r.id) })),
     kartOperasyonlari: kart && { sayi: kart.length, eslesmeyen: kart.filter((a) => !a.eslesti).map((a) => a.ad) },
   };
 }
@@ -105,7 +110,7 @@ export async function revizyonAyrintisi(db: Db, kullanici: Kullanici, id: number
   return {
     urun,
     revizyon: {
-      id: r.id, harf: r.harf, durum: r.durum, surum: r.surum, aciklama: r.aciklama, acilma: r.acilma, onaylama: r.onaylama,
+      id: r.id, rotaId: r.rotaId, harf: r.harf, durum: r.durum, surum: r.surum, aciklama: r.aciklama, acilma: r.acilma, onaylama: r.onaylama,
       yururlugeAlma: r.yururlugeAlma,
       kaynak: r.kaynakRevizyonId === null || r.kaynakHarf === null ? null : { id: r.kaynakRevizyonId, harf: r.kaynakHarf },
       acan: kisi(r.acanKisiId), gonderen: varsa(r.gonderenKisiId), gonderme: r.gonderme, onaylayan: varsa(r.onaylayanKisiId),

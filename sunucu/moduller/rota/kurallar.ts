@@ -695,15 +695,15 @@ export const AZ_OLCUM_SINIRI = 3;
 export const azOlcumUyarisi = (n: number): string | null =>
   (n >= AZ_OLCUM_SINIRI ? null : `Ortanca ${String(n)} ölçümden; güvenilir süre için en az ${String(AZ_OLCUM_SINIRI)} ölçüm önerilir.`);
 
-export interface KabulSatiri { malzemeId: number; opNo: number; tur: GerceklesenTuru; makineId: number | null; kaynak: GerceklesenKaynagi; sureDk: number | null }
+export interface KabulSatiri { malzemeId: number; operasyonId: number; tur: GerceklesenTuru; makineId: number | null; kaynak: GerceklesenKaynagi; sureDk: number | null }
 
 // RT-77: kabul edilen satır bu adımın bu türdeki ölçümü (dolu elle ya da terminal satırı) olmalı; makineye özgü kabul başka makinenin
 // ölçümünü almaz.
 export function kabulDenetle(
-  satir: KabulSatiri, hedef: { malzemeId: number; opNo: number; tur: GerceklesenTuru; makineId: number | null },
+  satir: KabulSatiri, hedef: { malzemeId: number; operasyonId: number; tur: GerceklesenTuru; makineId: number | null },
 ): string | null {
   if (!olcumMu(satir)) return 'Yalnız ölçülmüş süre kabul edilir.';
-  if (satir.malzemeId !== hedef.malzemeId || satir.opNo !== hedef.opNo || satir.tur !== hedef.tur) return 'Ölçüm bu adımın bu süresine ait değil.';
+  if (satir.malzemeId !== hedef.malzemeId || satir.operasyonId !== hedef.operasyonId || satir.tur !== hedef.tur) return 'Ölçüm bu adımın bu süresine ait değil.';
   if (hedef.makineId !== null && satir.makineId !== null && satir.makineId !== hedef.makineId) return 'Ölçüm başka makinenin.';
   return null;
 }

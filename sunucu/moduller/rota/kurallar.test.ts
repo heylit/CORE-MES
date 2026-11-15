@@ -483,8 +483,8 @@ describe('süre ayrımı ve gerçekleşen süre', () => {
     assert.equal(bekleyenOlcum([t(1, { makineId: 7 }), bos(2, { makineId: 8 })], 7).islem?.id, 1);
   });
   test('RT-77: yalnız bu adımın bu türdeki ölçümü kabul edilir; makineye özgü kabul başka makinenin ölçümünü almaz', () => {
-    const hedef = { malzemeId: 1, opNo: 10, tur: 'islem' as const, makineId: null };
-    const olcum = { malzemeId: 1, opNo: 10, tur: 'islem' as const, makineId: 7, kaynak: 'terminal' as const, sureDk: 3 };
+    const hedef = { malzemeId: 1, operasyonId: 10, tur: 'islem' as const, makineId: null };
+    const olcum = { malzemeId: 1, operasyonId: 10, tur: 'islem' as const, makineId: 7, kaynak: 'terminal' as const, sureDk: 3 };
     assert.equal(kabulDenetle(olcum, hedef), null);
     assert.equal(kabulDenetle({ ...olcum, kaynak: 'elle' }, hedef), null);
     assert.equal(kabulDenetle(olcum, { ...hedef, makineId: 7 }), null);
@@ -492,7 +492,7 @@ describe('süre ayrımı ve gerçekleşen süre', () => {
     assert.equal(kabulDenetle(olcum, { ...hedef, makineId: 8 }), 'Ölçüm başka makinenin.');
     assert.equal(kabulDenetle({ ...olcum, kaynak: 'kabul' }, hedef), 'Yalnız ölçülmüş süre kabul edilir.');
     assert.equal(kabulDenetle({ ...olcum, kaynak: 'elle', sureDk: null }, hedef), 'Yalnız ölçülmüş süre kabul edilir.');
-    for (const fark of [{ malzemeId: 2 }, { opNo: 20 }, { tur: 'hazirlik' as const }]) {
+    for (const fark of [{ malzemeId: 2 }, { operasyonId: 20 }, { tur: 'hazirlik' as const }]) {
       assert.equal(kabulDenetle({ ...olcum, ...fark }, hedef), 'Ölçüm bu adımın bu süresine ait değil.');
     }
   });

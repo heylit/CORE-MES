@@ -28,7 +28,7 @@ export async function sureler(db: Db, revizyonId: number, makineId: number | nul
   const icerik = await s.icerikOku(db, revizyonId);
   const b = await gorunumBaglami(db, r.malzemeId, icerik);
   const gorunum = adimlariKur(b);
-  const kayitlar = await s.gerceklesenSureler(db, r.malzemeId, icerik.adimlar.map((a) => a.opNo));
+  const kayitlar = await s.gerceklesenSureler(db, icerik.adimlar.map((a) => a.operasyonId));
   const adlar = await kisiAdlari(db, kayitlar.map((k) => k.kisiId));
   const kayitById = new Map(kayitlar.map((k) => [k.id, k]));
   return {
@@ -36,7 +36,7 @@ export async function sureler(db: Db, revizyonId: number, makineId: number | nul
     makineId,
     adimlar: adimTeorikSureleri(icerik).map((a, i) => {
       const g = gorunum[i]!;
-      const satirlar = gerceklesenSatirlari(kayitlar, a.opNo);
+      const satirlar = gerceklesenSatirlari(kayitlar, icerik.adimlar[i]!.operasyonId);
       const etkin = etkinAdimSuresi(a.teorik);
       const son = (tur: GerceklesenTuru) => satirlar.filter((x) => x.tur === tur && x.makineId === makineId).at(-1)?.id ?? null;
       const bekleyen = bekleyenOlcum(satirlar, makineId);
@@ -88,12 +88,12 @@ export async function gerceklesenSureYaz(
   if (icerik.adimlar.find((a) => a.id === adimId)?.kaynak?.tur === 'fason') throw gecersiz(FASON_SURESIZ);
   const ret = gerceklesenDenetle(g.tur, g.sureDk);
   if (ret) throw dogrulama(ret, 'sureDk');
-  await s.gerceklesenKilitle(db, adim.malzemeId, adim.opNo);
-  const son = await s.sonGerceklesenId(db, { malzemeId: adim.malzemeId, opNo: adim.opNo, tur: g.tur, makineId: g.makineId });
+  await s.gerceklesenKilitle(db, adim.operasyonId);
+  const son = await s.sonGerceklesenId(db, { operasyonId: adim.operasyonId, tur: g.tur, makineId: g.makineId });
   if (son !== g.okunanId) throw eskiSurum();
   await kisitKorumali(
     { rota_gerceklesen_sure_makine: { ileti: 'Makine bulunamadı.', alan: 'makineId' } },
-    () => s.gerceklesenEkle(db, { malzemeId: adim.malzemeId, opNo: adim.opNo, tur: g.tur, makineId: g.makineId, sureDk: g.sureDk, kisiId: kullanici.id }),
+    () => s.gerceklesenEkle(db, { operasyonId: adim.operasyonId, tur: g.tur, makineId: g.makineId, sureDk: g.sureDk, kisiId: kullanici.id }),
   );
   return sureler(db, adim.revizyonId, g.makineId);
 }
@@ -113,19 +113,19 @@ export async function gerceklesenKabulEt(
 ): Promise<GerceklesenKabulCevabi> {
   const adim = await s.adimKunyesi(db, adimId);
   if (adim === null) throw bulunamadi('Rota adımı bulunamadı.');
-  await s.gerceklesenKilitle(db, adim.malzemeId, adim.opNo);
+  await s.gerceklesenKilitle(db, adim.operasyonId);
   const satir = await s.gerceklesenSatiri(db, g.olcumId);
   if (satir === null) throw bulunamadi('Ölçüm bulunamadı.');
-  const ret = kabulDenetle({ ...satir, sureDk: sayiMi(satir.sureDk) }, { malzemeId: adim.malzemeId, opNo: adim.opNo, tur: g.tur, makineId: g.makineId });
+  const ret = kabulDenetle({ ...satir, sureDk: sayiMi(satir.sureDk) }, { malzemeId: adim.malzemeId, operasyonId: adim.operasyonId, tur: g.tur, makineId: g.makineId });
   if (ret) throw gecersiz(ret);
-  const son = await s.sonGerceklesenId(db, { malzemeId: adim.malzemeId, opNo: adim.opNo, tur: g.tur, makineId: g.makineId });
+  const son = await s.sonGerceklesenId(db, { operasyonId: adim.operasyonId, tur: g.tur, makineId: g.makineId });
   if (son !== g.okunanId) throw eskiSurum();
   let sureDk = Number(satir.sureDk);
   let azUyari: string | null = null;
   if (g.deger === 'ortanca') {
     const icerikY = await s.icerikOku(db, adim.revizyonId);
-    const kayitlar = await s.gerceklesenSureler(db, adim.malzemeId, icerikY.adimlar.map((a) => a.opNo));
-    const pencere = olcumPenceresi(gerceklesenSatirlari(kayitlar, adim.opNo), g.makineId)[g.tur];
+    const kayitlar = await s.gerceklesenSureler(db, icerikY.adimlar.map((a) => a.operasyonId));
+    const pencere = olcumPenceresi(gerceklesenSatirlari(kayitlar, adim.operasyonId), g.makineId)[g.tur];
     if (pencere.at(-1)?.id !== g.olcumId) throw gecersiz(ORTANCA_SON_OLCUM_DEGIL);
     const o = olcumOzeti(pencere.flatMap((x) => (x.sureDk === null ? [] : [x.sureDk])))!;
     sureDk = Number(ondalikMetin(o.ortanca));
@@ -140,8 +140,10 @@ export async function gerceklesenKabulEt(
     taslakId = (await taslagiAc(db, kullanici.id, adim.malzemeId, { tur: 'revizyon', revizyonId: yururlukte })).id;
   }
   await s.revizyonKilitle(db, taslakId);
-  const yazimlar = icerikYazimlari(await s.icerikOku(db, taslakId));
-  const hedef = yazimlar.find((a) => a.opNo === adim.opNo);
+  // Taslakta adım operasyon kimliğiyle bulunur: taslakta OP numarası yeniden dizilmiş olabilir (3250 b).
+  const taslakIcerigi = await s.icerikOku(db, taslakId);
+  const yazimlar = icerikYazimlari(taslakIcerigi);
+  const hedef = yazimlar[taslakIcerigi.adimlar.findIndex((a) => a.operasyonId === adim.operasyonId)];
   if (hedef === undefined) throw gecersiz('Açık taslakta bu operasyon yok.');
   if (hedef.kaynak?.tur === 'fason') throw gecersiz(FASON_SURESIZ);
   const aday = g.makineId === null || (hedef.kaynak?.tur === 'makine' && hedef.kaynak.id === g.makineId)
@@ -166,7 +168,7 @@ export async function gerceklesenKabulEt(
   const surum = await s.duzenlemeYaz(db, taslakId, kullanici.id);
   if (satir.isEmriId !== null) {
     await s.gerceklesenEkle(db, {
-      malzemeId: adim.malzemeId, opNo: adim.opNo, tur: g.tur, makineId: g.makineId, sureDk: ondalikMetin(sureDk), kisiId: kullanici.id, kaynak: 'kabul', isEmriId: satir.isEmriId,
+      operasyonId: adim.operasyonId, tur: g.tur, makineId: g.makineId, sureDk: ondalikMetin(sureDk), kisiId: kullanici.id, kaynak: 'kabul', isEmriId: satir.isEmriId,
     });
   }
   const taslak = await s.revizyonOku(db, taslakId);
@@ -190,13 +192,16 @@ async function olcumleriYaz(db: Db, uretimEmriId: number, kisiId: number, yalniz
   const opNolari = new Set(await s.kullanilmisOpNolari(db, malzemeId));
   const adaylar = terminalOlcumAdaylari(ayrinti.isEmirleri.filter((i) => yalniz === null || i.id === yalniz), opNolari).rotada;
   const olculmus = await s.olculmusIsEmirleri(db, adaylar.map((i) => i.id));
+  // Emrin OP numarası kimliğe çevrilir; emir okuyucuları is_emri.operasyon_id'ye geçince (3250 1b-4) bu çeviri kalkar.
+  const oplar = new Map((await s.operasyonlariBul(db, adaylar.map((i) => ({ malzemeId, opNo: i.opNo })))).map((o) => [o.opNo, o.operasyonId]));
   for (const i of adaylar) {
-    if (olculmus.has(i.id)) continue;
+    const operasyonId = oplar.get(i.opNo);
+    if (olculmus.has(i.id) || operasyonId === undefined) continue;
     const makineId = i.kaynak?.tur === 'makine' ? i.kaynak.id : null;
     // Atlama nedeni burada kullanılmaz; sayım bilgisi yalnız nedeni ayırır, yazılacak türü değiştirmez.
     const { yazilacak } = terminalOlcumKarari(terminalOlcumleri(await isEmriSureOzeti(db, i.id)), false);
     for (const { tur, sureDk } of yazilacak) {
-      await s.gerceklesenEkle(db, { malzemeId, opNo: i.opNo, tur, makineId, sureDk, kisiId, kaynak: 'terminal', isEmriId: i.id });
+      await s.gerceklesenEkle(db, { operasyonId, tur, makineId, sureDk, kisiId, kaynak: 'terminal', isEmriId: i.id });
     }
   }
 }

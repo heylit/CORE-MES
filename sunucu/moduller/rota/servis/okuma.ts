@@ -19,6 +19,8 @@ import { agac } from './agac.ts';
 /* ---------------- başka modüllere ---------------- */
 
 export interface RotaAdimi {
+  // 3250 b: operasyonun gizli kimliği; ürün düzeyi veri (talimat, süre) buna bağlıdır, OP numarasına değil.
+  operasyonId: s.OperasyonKimligi;
   opNo: number;
   sira: number;
   operasyonTipiId: number;
@@ -72,7 +74,7 @@ export async function revizyonGetir(db: Db, id: number): Promise<RotaRevizyonu |
   const r = await s.revizyonOku(db, id);
   if (!r) return null;
   const icerik = await s.icerikOku(db, id);
-  const talimatlar = new Map((await s.gecerliTalimatlar(db, r.malzemeId)).map((t) => [t.opNo, t.surum]));
+  const talimatlar = new Map((await s.gecerliTalimatlar(db, r.malzemeId)).map((t) => [t.operasyonId, t.surum]));
   return revizyonKur(r, icerik, talimatlar);
 }
 
@@ -84,11 +86,11 @@ export async function revizyonlar(db: Db, idler: readonly number[]): Promise<Map
   const satirlar = await s.revizyonlariOku(db, tekil);
   if (satirlar.length === 0) return sonuc;
   const icerikler = await s.iceriklerOku(db, satirlar.map((r) => r.id));
-  const talimatlar = new Map<number, Map<number, number>>();
+  const talimatlar = new Map<number, Map<s.OperasyonKimligi, number>>();
   for (const t of await s.urunlerinGecerliTalimatlari(db, [...new Set(satirlar.map((r) => r.malzemeId))])) {
     let urun = talimatlar.get(t.malzemeId);
     if (!urun) talimatlar.set(t.malzemeId, urun = new Map());
-    urun.set(t.opNo, t.surum);
+    urun.set(t.operasyonId, t.surum);
   }
   for (const r of satirlar) {
     sonuc.set(r.id, revizyonKur(r, icerikler.get(r.id) ?? { adimlar: [], adaylar: [], bilesenler: [], yanUrunler: [] }, talimatlar.get(r.malzemeId) ?? new Map()));
@@ -96,13 +98,14 @@ export async function revizyonlar(db: Db, idler: readonly number[]): Promise<Map
   return sonuc;
 }
 
-function revizyonKur(r: RevizyonSatiri, icerik: Icerik, talimatlar: ReadonlyMap<number, number>): RotaRevizyonu {
+// Talimat ürün düzeyindedir: adıma operasyon kimliğiyle bağlanır, revizyondaki OP numarası değişse de aynı talimat gelir (3250 b).
+function revizyonKur(r: RevizyonSatiri, icerik: Icerik, talimatlar: ReadonlyMap<s.OperasyonKimligi, number>): RotaRevizyonu {
   const yazim = icerikYazimlari(icerik);
   const onculler = oncullerCikar(icerik.adimlar);
   return {
     id: r.id, malzemeId: r.malzemeId, harf: r.harf, durum: r.durum,
     adimlar: icerik.adimlar.map((a, i) => ({
-      opNo: a.opNo, sira: a.sira, operasyonTipiId: a.operasyonTipiId, ad: a.ad,
+      opNo: a.opNo, operasyonId: a.operasyonId, sira: a.sira, operasyonTipiId: a.operasyonTipiId, ad: a.ad,
       kaynak: a.kaynak === null || a.kaynak.tur === 'fason' ? null : (a.kaynak as Kaynak),
       fason: a.kaynak?.tur === 'fason' ? { firmaId: a.kaynak.id, terminGun: a.terminGun } : null,
       ayarSuresiDk: a.ayarSuresiDk, birimSureDk: a.birimSureDk, bagimlilik: a.bagimlilik, devirAdedi: a.devirAdedi, firePayiYuzde: a.firePayiYuzde,
@@ -110,7 +113,7 @@ function revizyonKur(r: RevizyonSatiri, icerik: Icerik, talimatlar: ReadonlyMap<
       adaylar: (yazim[i]?.adaylar ?? []).map(({ kaynak, ayarSuresiDk, birimSureDk }) => ({ kaynak, ayarSuresiDk, birimSureDk })) as RotaAdimi['adaylar'],
       bilesenler: (yazim[i]?.bilesenler ?? []) as RotaAdimi['bilesenler'],
       yanUrunler: (yazim[i]?.yanUrunler ?? []) as RotaAdimi['yanUrunler'],
-      talimatSurumu: talimatlar.get(a.opNo) ?? null,
+      talimatSurumu: talimatlar.get(a.operasyonId) ?? null,
       dal: a.dal, onculler: onculler[i] ?? null, adetCarpani: a.adetCarpani,
     })),
   };
@@ -159,13 +162,16 @@ export interface DurumRotaRevizyonu {
   onaylama: string | null;
   yururlugeAlma: string | null;
   geriGondermeNedeni: string | null;
+  rotaId: number;
+  rotaStandart: boolean;
   adimlar: DurumRotaAdimi[];
 }
 
-// malzemeId verilince yalnız o ürünün revizyonları (sayımda tek rotanın statüsü çözülür).
-export async function durumRevizyonlari(db: Db, malzemeId: number | null = null): Promise<DurumRotaRevizyonu[]> {
+// malzemeId verilince yalnız o ürünün revizyonları (sayımda tek rotanın statüsü çözülür). Varsayılan yalnız Standart rotadır (plan ve sayım
+// ürün başına tek rota bilir); Reçete ve Rota çalışma alanı rota sekmeleri için bütün rotaları ister (3247 a).
+export async function durumRevizyonlari(db: Db, malzemeId: number | null = null, tumRotalar = false): Promise<DurumRotaRevizyonu[]> {
   const sonuc: DurumRotaRevizyonu[] = [];
-  const revizyonlar = await s.iptalsizRevizyonlar(db, malzemeId);
+  const revizyonlar = await s.iptalsizRevizyonlar(db, malzemeId, tumRotalar);
   // Planlama çalışması her açılışta bütün revizyonları okur: içerik revizyon başına değil, toplu okunur.
   const icerikler = revizyonlar.length === 0 ? new Map<number, Icerik>() : await s.iceriklerOku(db, revizyonlar.map((r) => r.id));
   for (const r of revizyonlar) {
@@ -173,7 +179,7 @@ export async function durumRevizyonlari(db: Db, malzemeId: number | null = null)
     const onculler = oncullerCikar(icerik.adimlar);
     sonuc.push({
       id: r.id, malzemeId: r.malzemeId, harf: r.harf, durum: r.durum, surum: r.surum, aciklama: r.aciklama, acilma: r.acilma, onaylama: r.onaylama,
-      yururlugeAlma: r.yururlugeAlma, geriGondermeNedeni: r.geriGondermeNedeni,
+      yururlugeAlma: r.yururlugeAlma, geriGondermeNedeni: r.geriGondermeNedeni, rotaId: r.rotaId, rotaStandart: r.rotaStandart,
       adimlar: icerik.adimlar.map((a, i) => ({
         opNo: a.opNo, operasyonTipiId: a.operasyonTipiId, ad: a.ad, kaynak: a.kaynak, terminGun: a.terminGun, ayarSuresiDk: a.ayarSuresiDk,
         birimSureDk: a.birimSureDk, islemSuresiDk: a.islemSuresiDk, degisimSuresiDk: a.degisimSuresiDk, bagimlilik: a.bagimlilik, devirAdedi: a.devirAdedi,
@@ -207,7 +213,8 @@ export async function adimBilesenleri(db: Db, revizyonId: number, opNo: number):
 }
 
 export async function gecerliTalimat(db: Db, malzemeId: number, opNo: number): Promise<{ surum: number; metin: string } | null> {
-  const t = (await s.talimatlar(db, malzemeId, opNo))[0];
+  const op = await s.operasyonBul(db, malzemeId, opNo);
+  const t = op === null ? undefined : (await s.talimatlar(db, op))[0];
   return t ? { surum: t.surum, metin: t.metin } : null;
 }
 
@@ -248,7 +255,7 @@ export async function emreKopyala(db: Db, kullanici: Kullanici, id: number, g: {
     malzemeNo: r.malzemeId, adet: g.adet, teslim: g.teslim, oncelik: g.oncelik, baslangic: g.baslangic ?? null, aciklama: g.aciklama ?? null,
     ...(g.taslak ? { taslak: true } : {}), ...(g.stoktanRezerve ? { stoktanRezerve: true } : {}), ...(g.emirTuru ? { emirTuru: g.emirTuru } : {}), projeId: g.projeId ?? null, siparisSatiriId: g.siparisSatiriId ?? null, siparisPartiId: g.siparisPartiId ?? null, kaynakRotaRevizyonId: r.id,
   };
-  if (g.cokKatmanli === true) return cokKatmanliAc(db, kullanici, r.id, r.malzemeId, rota, baslik, g.stoktanDugumler ?? []);
+  if (g.cokKatmanli === true) return cokKatmanliAc(db, kullanici, r.id, r.malzemeId, rota, baslik, g.stoktanDugumler ?? [], g.emirTuru ?? null);
   if ((g.stoktanDugumler ?? []).length > 0) throw gecersiz('Stoktan karşılanan düğüm yalnız çok katmanlı emirde seçilir.');
   const acilan = await uretimEmriAc(db, kullanici, { ...baslik, isEmirleri: await isEmriGirdileri(db, r.malzemeId, rota) });
   // Üretim emirleri iş emirlerini adım sırasıyla açar ve kimlikleri o sırayla döner.
@@ -264,9 +271,9 @@ export async function emreKopyala(db: Db, kullanici: Kullanici, id: number, g: {
 // sonra tek emrin numara, dal ve öncül düzenine çevrilir (cokKatmanaCevir); şartnameler düğümün revizyonu ve rotadaki numarayla sabitlenir.
 async function cokKatmanliAc(
   db: Db, kullanici: Kullanici, revizyonId: number, malzemeId: number, kokRota: RotaRevizyonu,
-  baslik: Omit<Parameters<typeof uretimEmriAc>[2], 'isEmirleri'>, stoktan: readonly string[],
+  baslik: Omit<Parameters<typeof uretimEmriAc>[2], 'isEmirleri'>, stoktan: readonly string[], emirTuru: EmirTuru | null,
 ) {
-  const p = await patlat(db, kullanici.id, revizyonId, malzemeId);
+  const p = await patlat(db, kullanici.id, revizyonId, malzemeId, emirTuru);
   const dugumler = [...new Map(p.satirlar.map((x) => [x.dugum, x])).values()];
   const girdiler = new Map<string, Awaited<ReturnType<typeof isEmriGirdileri>>>();
   for (const d of dugumler) {
@@ -287,13 +294,15 @@ async function cokKatmanliAc(
   return acilan;
 }
 
-// Teslimdeki "Emirlere uygula (yürürlükteki rota)": iş emirleri ürünün yürürlükteki revizyonundan yenilenir. Güvenli kip
+// Teslimdeki "Emirlere uygula (yürürlükteki rota)": iş emirleri emrin açıldığı rotanın yürürlükteki revizyonundan yenilenir
+// (FAI rotasından açılan emir FAI rotasında kalır, 3247 a). Güvenli kip
 // üretim emirlerindedir (başlamış ya da bitmiş iş emri korunur); rota yalnız yürürlükteki adımları verir (ADR 0006).
 export async function emreUygula(db: Db, kullanici: Kullanici, emirId: number) {
   const e = await adimliEmirAyrintisi(db, emirId);
   if (e.urun.id === null || e.kaynakRotaRevizyonId === null) throw gecersiz('Rotadan açılmamış emre rota uygulanmaz.');
-  const yid = await s.yururluktekiRevizyonId(db, e.urun.id);
-  if (yid === null) throw gecersiz('Ürünün yürürlükte rotası yok.');
+  const kaynak = revizyonuAl(await s.revizyonOku(db, e.kaynakRotaRevizyonId));
+  const yid = await s.rotadaYururluktekiRevizyonId(db, kaynak.rotaId);
+  if (yid === null) throw gecersiz('Emrin rotasının yürürlükte revizyonu yok.');
   if (yid === e.kaynakRotaRevizyonId) throw cakisma('Emir zaten yürürlükteki rotayla açılmış.');
   const r = revizyonuAl(await s.revizyonOku(db, yid));
   const rota = await revizyonGetir(db, yid);
@@ -329,8 +338,13 @@ export async function malzemeAra(db: Db, g: { metin: string | null; tur: string[
 // ayrı sorgu atmasın diye.
 export async function gecerliTalimatlarToplu(db: Db, anahtarlar: readonly { malzemeId: number; opNo: number }[]): Promise<Map<string, { surum: number; metin: string }>> {
   if (anahtarlar.length === 0) return new Map();
-  const satirlar = await s.gecerliTalimatlarToplu(db, anahtarlar.map((a) => a.malzemeId), anahtarlar.map((a) => a.opNo));
-  return new Map(satirlar.map((t) => [`${String(t.malzemeId)}:${String(t.opNo)}`, { surum: t.surum, metin: t.metin }]));
+  // Emirden gelen anahtar (malzeme, OP) kimliğe çevrilir; emir okuyucuları is_emri.operasyon_id'ye geçince (3250 1b-4) bu çeviri kalkar.
+  const oplar = await s.operasyonlariBul(db, anahtarlar);
+  const talimat = new Map((await s.gecerliTalimatlarToplu(db, oplar.map((o) => o.operasyonId))).map((t) => [t.operasyonId, t]));
+  return new Map(oplar.flatMap((o) => {
+    const t = talimat.get(o.operasyonId);
+    return t ? [[`${String(o.malzemeId)}:${String(o.opNo)}`, { surum: t.surum, metin: t.metin }] as const] : [];
+  }));
 }
 
 // Adım ekipmanında seçilebilen ölçü aleti türleri (2893-4 a).

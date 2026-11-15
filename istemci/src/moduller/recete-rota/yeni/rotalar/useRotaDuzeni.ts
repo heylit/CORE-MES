@@ -83,6 +83,8 @@ export function useRotaDuzeni(veri: RrVerisi, yetki: RrYetkisi, adimaGit: (urunI
   const gecmisler = useRef(new Map<string, Gecmis>());
   const hatalar = useRef(new Map<string, string>());
   const revSecimi = useRef(new Map<string, string>());
+  // 3247 a: ürünün sekmesi seçili Standart dışı rotası; yoksa Standart.
+  const rotaSecimi = useRef(new Map<string, string>());
   const zamanlar = useRef(new Map<string, ReturnType<typeof setTimeout>>());
   const kuyruk = useRef<Promise<void>>(Promise.resolve());
   const [sonDegisiklik, setSonDegisiklik] = useState<{ urunId: string; metin: string; zaman: number } | null>(null);
@@ -95,7 +97,9 @@ export function useRotaDuzeni(veri: RrVerisi, yetki: RrYetkisi, adimaGit: (urunI
 
   const opAdi = (id: string): string | null => h.op.get(id)?.name ?? null;
   const malzemeVar = (id: string): boolean => h.malzeme.has(id);
-  const revler = (id: string, durum: RrDurumu = d): Revizyon[] => revizyonlari(durum.routeRevs, id);
+  const aktifRota = (id: string): string | null => rotaSecimi.current.get(id) ?? null;
+  const revler = (id: string, durum: RrDurumu = d): Revizyon[] => revizyonlari(durum.routeRevs, id, aktifRota(id));
+  const rotaGovdesi = (id: string): KomutGovdesi => { const r = aktifRota(id); return r === null ? {} : { rotaId: Number(r) }; };
   const seciliRev = (id: string): Revizyon | null => {
     const s = revSecimi.current.get(id);
     return s === undefined ? null : revler(id).find((r) => r.id === s) ?? null;
@@ -109,7 +113,7 @@ export function useRotaDuzeni(veri: RrVerisi, yetki: RrYetkisi, adimaGit: (urunI
   const adimlar = (id: string): Adim[] => {
     const s = seciliRev(id);
     if (s && !acikMi(s.status)) return s.data.steps;
-    return taslaklar.current.get(id)?.adimlar ?? gorulen(id)?.data.steps ?? d.routes?.[id]?.steps ?? [];
+    return taslaklar.current.get(id)?.adimlar ?? gorulen(id)?.data.steps ?? (aktifRota(id) === null ? d.routes?.[id]?.steps : undefined) ?? [];
   };
   const taslakVar = (id: string): boolean => taslaklar.current.has(id);
   const duzenlenebilir = (id: string): boolean => {
@@ -149,7 +153,7 @@ export function useRotaDuzeni(veri: RrVerisi, yetki: RrYetkisi, adimaGit: (urunI
       if (!acik) {
         const kaynak = rs.find((r) => r.id === t.kaynakRevId && !acikMi(r.status)) ?? yururlukteki(rs);
         const c = await gonder('rota-taslak-ac', {
-          urunId: Number(id), kaynak: kaynak ? { tur: 'revizyon', revizyonId: Number(kaynak.id) } : { tur: 'bos' },
+          urunId: Number(id), kaynak: kaynak ? { tur: 'revizyon', revizyonId: Number(kaynak.id) } : { tur: 'bos' }, ...rotaGovdesi(id),
         });
         const s = revSonucu(c.sonuc);
         revId = s.id; surum = s.surum; opNolar = kaynak ? kaynak.data.steps.map((x) => x.opNo) : [];
@@ -247,6 +251,18 @@ export function useRotaDuzeni(veri: RrVerisi, yetki: RrYetkisi, adimaGit: (urunI
   const geriAlinabilir = (id: string) => (gecmisler.current.get(id)?.u.length ?? 0) > 0;
   const yinelenebilir = (id: string) => (gecmisler.current.get(id)?.r.length ?? 0) > 0;
 
+  // Sekme değişince gösterilen revizyon ve geri alma geçmişi o rotanındır. Yerelde kaydedilmemiş değişiklik varken sekme değişmez.
+  const rotaSec = (id: string, rotaId: string | null): boolean => {
+    if (aktifRota(id) === rotaId) return true;
+    if (taslaklar.current.has(id)) { bildir('hata', 'Değişiklik henüz kaydediliyor; birkaç saniye sonra rotayı değiştir.'); return false; }
+    if (rotaId === null) rotaSecimi.current.delete(id); else rotaSecimi.current.set(id, rotaId);
+    revSecimi.current.delete(id);
+    gecmisler.current.delete(id);
+    hatalar.current.delete(id);
+    ciz();
+    return true;
+  };
+
   const revSec = (id: string, revId: string | null) => {
     if (revId === null) revSecimi.current.delete(id); else revSecimi.current.set(id, revId);
     ciz();
@@ -330,7 +346,7 @@ export function useRotaDuzeni(veri: RrVerisi, yetki: RrYetkisi, adimaGit: (urunI
   async function yeniTaslak(urunId: string, kaynak: Revizyon): Promise<void> {
     setMesgul(true);
     try {
-      const c = await gonder('rota-taslak-ac', { urunId: Number(urunId), kaynak: { tur: 'revizyon', revizyonId: Number(kaynak.id) } });
+      const c = await gonder('rota-taslak-ac', { urunId: Number(urunId), kaynak: { tur: 'revizyon', revizyonId: Number(kaynak.id) }, ...rotaGovdesi(urunId) });
       const s = revSonucu(c.sonuc);
       const no = revler(urunId, durumRef.current).find((r) => r.id === s.id)?.no ?? '';
       revSecimi.current.delete(urunId);
@@ -376,6 +392,9 @@ export function useRotaDuzeni(veri: RrVerisi, yetki: RrYetkisi, adimaGit: (urunI
     revler: (id: string) => revler(id), gorulen, seciliRev, adimlar, taslakVar, duzenlenebilir,
     kayitHatasi: (id: string) => hatalar.current.get(id) ?? null,
     degistir, tasi, tasimaOnayi, tasimaKarari, geriAl, geriAlinabilir, yinelenebilir, revSec, revEylemi, yeniTaslak, ilkRevizyonaCevir, kopyala,
+    aktifRota, rotaSec,
+    // Sekmedeki rotanın revizyonları (null: Standart); sekme özeti ve yeni rotanın kaynağı için.
+    rotaRevleri: (id: string, rotaId: string | null) => revizyonlari(d.routeRevs, id, rotaId),
     opAdi, malzemeVar,
     // 2685: istasyonun kapasite kaynağı yalnız istasyonda saklanan değerdir; boş istasyon planda makine sayılır (kapasite-insan.md madde 1).
     insanli: (istasyonId: string | null) => istasyonId !== null && veri.ek.kapasiteKaynagi?.[istasyonId] === 'insan',

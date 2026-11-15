@@ -572,6 +572,35 @@ describe('Kalite Merkezi stüdyo (gerçek PostgreSQL, gerçek giriş)', () => {
     assert.deepEqual([kartsiz.statusCode, ileti(kartsiz)], [400, STUDYO_ILETILER.parcaYok]);
   });
 
+  // Risk K3: aşama 2 OP numarasını rotada yeniden dizer; numune planı numarayı değil operasyonu izlemeli.
+  test('3250 1b-2: rotada OP numaraları yer değiştirse de numune planı aynı operasyonda kalır ve aynı plan güncellenir', async () => {
+    const kurallar = [{ kimlik: 'k3', ne: 'ilk', kim: ['kalite'], balonlar: 'hepsi', kapi: true }];
+    const rev = (await o().sahip.tek<{ id: number }>("SELECT id FROM rota_revizyonu WHERE malzeme_id = $1 AND durum = 'yururlukte'", [flans]))!.id;
+    const ilk = await yaz(kalite, `/kalite-merkezi/studyo/parcalar/${flans}/numune-planlari/20`, { surum: null, kurallar });
+    assert.equal(ilk.statusCode, 200, ilk.body);
+    const takas = async (a: number, b: number) => {
+      await o().sahip.sorgu('ALTER TABLE rota_adimi DISABLE TRIGGER USER');
+      await o().sahip.sorgu('UPDATE rota_adimi SET op_no = op_no + 1000 WHERE revizyon_id = $1 AND op_no IN ($2, $3)', [rev, a, b]);
+      await o().sahip.sorgu('UPDATE rota_adimi SET op_no = CASE op_no WHEN $2::int + 1000 THEN $3::int ELSE $2::int END WHERE revizyon_id = $1 AND op_no IN ($2::int + 1000, $3::int + 1000)', [rev, a, b]);
+      await o().sahip.sorgu('ALTER TABLE rota_adimi ENABLE TRIGGER USER');
+    };
+    await o().sahip.sorgu(
+      'INSERT INTO rota_op_numarasi (malzeme_id, op_no, ilk_revizyon_id) VALUES ($1, 1010, $2), ($1, 1020, $2) ON CONFLICT DO NOTHING', [flans, rev]);
+    await takas(10, 20);
+    try {
+      const parca = (await oku(kalite, `/kalite-merkezi/studyo/parcalar/${flans}`)).json() as KmStudyoParcaCevabi;
+      assert.deepEqual(parca.numunePlanlari.find((p) => p.opNo === 10)?.kurallar.map((k) => k.kimlik), ['k3'], 'plan operasyonla OP 10 oldu');
+      assert.equal(parca.numunePlanlari.find((p) => p.opNo === 20), undefined);
+      const g = await yaz(kalite, `/kalite-merkezi/studyo/parcalar/${flans}/numune-planlari/10`, { surum: 1, kurallar: [...kurallar, { kimlik: 'k4', ne: 'son', kim: ['kalite'], balonlar: 'hepsi' }] });
+      assert.equal(g.statusCode, 200, g.body);
+      assert.deepEqual([(g.json() as { plan: KmNumunePlani }).plan.opNo, (g.json() as { plan: KmNumunePlani }).plan.surum], [10, 2]);
+      const yeniYanlis = await yaz(kalite, `/kalite-merkezi/studyo/parcalar/${flans}/numune-planlari/10`, { surum: null, kurallar });
+      assert.equal(yeniYanlis.statusCode, 409, 'aynı operasyona ikinci yeni plan yazılmaz');
+    } finally {
+      await takas(10, 20);
+    }
+  });
+
   test('KM-S15 numune, karar ve ölçüm yalnız eklenir; sonsuz ya da NaN sınır yazılamaz', async () => {
     await assert.rejects(o().sahip.sorgu('UPDATE kalite_merkezi_olcum SET uygun = NOT uygun'));
     await assert.rejects(o().sahip.sorgu('DELETE FROM kalite_merkezi_numune_karari'));

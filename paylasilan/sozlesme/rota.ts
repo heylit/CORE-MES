@@ -73,6 +73,8 @@ export const taslakAcGovdesi = z.object({
     // Seçilen rota şablonundan (#698); "standart" varsayılan şablondur.
     z.object({ tur: z.literal('sablon'), sablonId: KIMLIK }),
   ]),
+  // Taslağın açılacağı rota (3247 a); verilmezse ürünün Standart rotası.
+  rotaId: KIMLIK.optional(),
 });
 
 // Operasyonu yapan kaynak: bir makine, bir kişi ya da bir istasyon (makineyi planlayıcı seçer; Reçete ve Rota, #1184). Boş kaynak "henüz atanmadı" demektir.
@@ -206,6 +208,8 @@ const revizyonBaglantisi = z.object({ id: KIMLIK, harf: z.string() });
 
 export const revizyonOzeti = z.object({
   id: KIMLIK,
+  // Revizyonun rotası (3247 a); ürünün her rotasının kendi revizyonları ve kendi yürürlükteki revizyonu vardır.
+  rotaId: KIMLIK,
   harf: z.string(),
   durum: revizyonDurumu,
   surum: KIMLIK,
@@ -315,9 +319,29 @@ export const rotaListesiCevabi = z.object({
 // Ana sayfa kartları: ürün listesini taşımadan açık revizyonu (taslak ya da onay bekliyor) olan ve açık revizyonu onay bekleyen ürün sayısı.
 export const revizyonOzetiCevabi = z.object({ acikRevizyon: z.number().int(), onayBekleyen: z.number().int() });
 
+// Ürünün bir rotası (3247 a): Standart rota türü yazılmamış her emirde kullanılır; öteki rota yalnız kendisine bağlı emir türlerinde.
+export const rotaTanimi = z.object({
+  id: KIMLIK,
+  ad: z.string(),
+  standart: z.boolean(),
+  surum: KIMLIK,
+  emirTurleri: z.array(z.enum(EMIR_TURLERI)),
+  // Rotada açık revizyon yokken ve kullanıcı yazabiliyorsa bu rotada yeni taslak açılabilir.
+  taslakAcilabilir: z.boolean(),
+});
+
+export const ROTA_ADI_EN_COK = 60;
+const rotaAdi = z.string().trim().min(1).max(ROTA_ADI_EN_COK);
+export const rotaEkleGovdesi = z.object({ ad: rotaAdi });
+export const rotaAdiGovdesi = z.object({ ad: rotaAdi, surum: KIMLIK });
+// Rotaya bağlı emir türleri bütünüyle yazılır; başka rotaya bağlı tür bu rotaya taşınır. Standart rotaya tür yazılmaz.
+export const rotaTurleriGovdesi = z.object({ emirTurleri: z.array(z.enum(EMIR_TURLERI)).max(EMIR_TURLERI.length), surum: KIMLIK });
+export const rotaParametresi = urunParametresi.extend({ rotaId: yolKimligi });
+
 export const urunRevizyonlariCevabi = z.object({
   urun: urunOzeti,
   revizyonlar: z.array(revizyonOzeti),
+  rotalar: z.array(rotaTanimi),
   // Açık revizyon yokken ve kullanıcı yazabiliyorsa yeni taslak açılabilir.
   taslakAcilabilir: z.boolean(),
   // Rotası olmayan üründe kartın operasyonları (#688): sayı ve tipi katalogda bulunmayan satırların adları; kartta operasyon yoksa

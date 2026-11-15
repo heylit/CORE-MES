@@ -285,7 +285,7 @@ describe('recete-rota rota dilimi (gerçek PostgreSQL)', () => {
     });
     const r = rotaDilimiCevir([{
       id: 1, malzemeId: 2, harf: 'A', durum: 'yururlukte', surum: 1, aciklama: null, acilma: '2030-01-01T00:00:00.000Z', onaylama: null, yururlugeAlma: null,
-      geriGondermeNedeni: null, adimlar: [adim(10, { tur: 'fason', id: null }), adim(20, { tur: 'fason', id: 7 })],
+      geriGondermeNedeni: null, rotaId: 1, rotaStandart: true, adimlar: [adim(10, { tur: 'fason', id: null }), adim(20, { tur: 'fason', id: 7 })],
     }], new Map());
     const [a, b] = r.routes['2']!.steps;
     assert.deepEqual([a?.fason, a?.fasonId, a?.stationId, a?.machineId, a?.terminGun], [true, null, null, null, 5]);
@@ -294,7 +294,7 @@ describe('recete-rota rota dilimi (gerçek PostgreSQL)', () => {
 
   test('RRR-5: iptal revizyon çevrilmez; dilim boşken boş sözlük ve dizidir', () => {
     assert.deepEqual(rotaDilimiCevir([], new Map()), { routes: {}, routeRevs: [] });
-    const r = rotaDilimiCevir([{ id: 1, malzemeId: 2, harf: 'A', durum: 'iptal', surum: 1, aciklama: null, acilma: '2030-01-01T00:00:00.000Z', onaylama: null, yururlugeAlma: null, geriGondermeNedeni: null, adimlar: [] }], new Map());
+    const r = rotaDilimiCevir([{ id: 1, malzemeId: 2, harf: 'A', durum: 'iptal', surum: 1, aciklama: null, acilma: '2030-01-01T00:00:00.000Z', onaylama: null, yururlugeAlma: null, geriGondermeNedeni: null, rotaId: 1, rotaStandart: true, adimlar: [] }], new Map());
     assert.deepEqual(r, { routes: {}, routeRevs: [] });
   });
 });

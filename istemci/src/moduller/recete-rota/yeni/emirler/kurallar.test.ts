@@ -5,7 +5,7 @@ import type { StokOkumasi } from '../../kopru.ts';
 import { planMetni } from './gorunum.ts';
 import {
   adimDurumu, aramaUyar, DURUM_SUZGECLERI, durumUyar, adimPlani, bolmeHesapla, emirAdimlari, emirAgaci, esitBol, ilerleme, isGunuEkle, kolAdimiSec,
-  miktarOku, planOzeti, planSirasi, rotaFarki, sahipsizEkle, statuluSatirlar, stokSurecSirala, seritNo, stokSatirlari, stokVeSurec, surectekiMalzeme, tamponDurumu, yeniOpNo, type Emir, sureOzetiNedenleri,
+  emirRotasi, miktarOku, planOzeti, planSirasi, rotaFarki, sahipsizEkle, statuluSatirlar, stokSurecSirala, seritNo, stokSatirlari, stokVeSurec, surectekiMalzeme, tamponDurumu, yeniOpNo, type Emir, sureOzetiNedenleri,
 } from './kurallar.ts';
 
 // Uydurma veri: bir mamul (üç adımlı rota), bir yarı mamul (tek adımlı rota), bir hammadde ve bir hurda kartı.
@@ -407,5 +407,30 @@ describe('2571 süre özeti nedenleri', () => {
     expect(sureOzetiNedenleri({ ...o, netBirimDk: null, saglam: 0, hurda: 0 }).islem).toBe('Sayım yok: işlem süresi ölçülmedi');
     expect(sureOzetiNedenleri({ ...o, netBirimDk: null, saglam: 0 }).islem).toBe('Sağlam sayım yok: işlem süresi ölçülmedi');
     expect(sureOzetiNedenleri({ ...o, netBirimDk: null }).islem).toBe('İşlem süresi ölçülmedi');
+  });
+});
+
+describe('3247 a: emir formunda rota', () => {
+  const rev = (id: number, rotaId: number, harf: string, durum: 'yururlukte' | 'taslak' | 'onayli') =>
+    ({ id, rotaId, harf, durum, surum: 1, aciklama: null, acilma: '2026-11-14T00:00:00Z', onaylama: null, yururlugeAlma: null });
+  const rota = (id: number, ad: string, standart: boolean, emirTurleri: ('fai' | 'numune')[]) => ({ id, ad, standart, surum: 1, emirTurleri, taslakAcilabilir: true });
+  const c = {
+    rotalar: [rota(1, 'Standart', true, []), rota(2, 'FAI', false, ['fai']), rota(3, 'Numune', false, ['numune'])],
+    revizyonlar: [rev(10, 1, 'C', 'yururlukte'), rev(11, 2, 'A', 'yururlukte'), rev(12, 3, 'A', 'taslak')],
+  };
+  it('tek rotalı üründe alan yok', () => {
+    expect(emirRotasi({ rotalar: [c.rotalar[0]!], revizyonlar: [c.revizyonlar[0]!] }, 'seri', 'Seri', '')).toBeNull();
+    expect(emirRotasi(undefined, 'seri', 'Seri', '')).toBeNull();
+  });
+  it('türün rotası kendiliğinden seçilir, bağlı rota yoksa Standart', () => {
+    expect(emirRotasi(c, 'fai', 'FAI', '')).toMatchObject({ secili: '2', revizyonId: 11, uyari: null, ipucu: 'FAI türünün rotası' });
+    expect(emirRotasi(c, 'seri', 'Seri', '')).toMatchObject({ secili: '1', revizyonId: 10, uyari: null });
+  });
+  it('elle seçilen rota türün rotasını söyler; yürürlükte olmayan rota listeye yalnız türün rotasıyken girer ve uyarır', () => {
+    expect(emirRotasi(c, 'fai', 'FAI', '1')).toMatchObject({ secili: '1', revizyonId: 10, ipucu: 'Elle seçildi; FAI türünün rotası FAI' });
+    expect(emirRotasi(c, 'seri', 'Seri', '')!.secenekler.map((s) => s.deger)).toEqual(['1', '2']);
+    const n = emirRotasi(c, 'numune', 'Numune', '')!;
+    expect(n.secenekler.map((s) => s.baslik)).toEqual(['Standart · Rev C', 'FAI · Rev A', 'Numune · yürürlükte değil']);
+    expect([n.revizyonId, n.uyari]).toEqual([null, 'Numune rotasının yürürlükte revizyonu yok; emri açmak için Standart rotasını seçin.']);
   });
 });
