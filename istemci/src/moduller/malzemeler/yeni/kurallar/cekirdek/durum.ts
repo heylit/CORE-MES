@@ -10,7 +10,7 @@ import { storeErr } from './depolama.ts';
 import { kartAnahtari } from './hizli-arama.ts';
 import { kartTamamla } from './kilavuz.ts';
 import { MA_BOS, malzemeAyarUygula, tumAlanGruplari } from './malzeme-ayarlari.ts';
-import { METAL_EK_FORM, METAL_EK_GRUP, metalEkleriniUygula } from './metal-ekleri.ts';
+import { METAL_EK_FORM, METAL_EK_GRUP, kaliteIzinleriniGenislet, metalEkleriniUygula } from './metal-ekleri.ts';
 import { _kim, onayDurum, yerelAyariBirak } from './onay.ts';
 import { opBul, opGrupAd, opGuncelle, opKod } from './operasyon.ts';
 import { Host, localStorage, toast } from './ortam.ts';
@@ -118,7 +118,17 @@ const LVL = ['Zayıf', 'Orta', 'İyi', 'Çok iyi', 'Mükemmel'];
 const UL94 = ['HB', 'V-2', 'V-1', 'V-0', '5VA'];
 const EN13501 = ['A1', 'A2', 'B', 'C', 'D', 'E', 'F'];
 const M_URETIM = ['Sıcak hadde', 'Soğuk hadde', 'Soğuk çekme', 'Kabuk soyulmuş', 'Taşlanmış', 'Serbest dövme', 'Kalıpta dövme', 'Ekstrüzyon', 'Kontinü döküm', 'Kum döküm', 'Kokil döküm', 'Hassas döküm', 'Basınçlı döküm', 'Toz metalurjisi', 'Eklemeli imalat (3D)', 'Kaynaklı (ERW / profil)', 'Dikişsiz (boru)'];
-const M_ISLEM = ['Gerilim giderme', 'Normalizasyon', 'Islah', 'İndüksiyon sertleştirme', 'Sementasyon', 'Nitrasyon', 'Nitrokarbürleme', 'Kriyojenik işlem', 'Bilyalı dövme (shot peening)', 'Pasivasyon', 'Elektropolisaj', 'Asitleme', 'Fosfatlama', 'Siyah oksit (karartma)', 'Sert krom', 'Kimyasal nikel', 'Çinko-nikel kaplama', 'PVD / CVD kaplama', 'Toz boya', 'Sert eloksal'];
+// Önce ısıl işlemler, sonra yüzey hazırlığı, dönüşüm kaplamaları, metal kaplamalar ve boya; kart seçilen metni saklar, sıra yalnız gösterimdir.
+const M_ISLEM = ['Gerilim giderme', 'Yumuşak tavlama', 'Tam tavlama', 'Küreselleştirme tavlaması', 'Rekristalizasyon tavlaması', 'Homojenleştirme', 'Normalizasyon',
+    'Islah', 'Vakum sertleştirme', 'Martemperleme', 'Östemperleme', 'Çözeltiye alma', 'Yaşlandırma (çökelme sertleştirme)', 'İndüksiyon sertleştirme', 'Alevle sertleştirme',
+    'Lazerle sertleştirme', 'Sementasyon', 'Karbonitrürleme', 'Nitrasyon', 'Plazma nitrürleme', 'Nitrokarbürleme', 'Tuz banyosu nitrokarbürleme (QPQ)', 'Borlama',
+    'Kriyojenik işlem', 'HIP (sıcak izostatik presleme)', 'Hidrojen gevrekliği giderme',
+    'Kumlama', 'Cam küre kumlama', 'Bilyalı dövme (shot peening)', 'Vibrasyonlu yüzey bitirme', 'Mekanik polisaj', 'Honlama', 'Lepleme', 'Süperfiniş',
+    'Pasivasyon', 'Elektropolisaj', 'Asitleme', 'Fosfatlama', 'Çinko fosfat', 'Mangan fosfat', 'Siyah oksit (karartma)', 'Kromat dönüşüm kaplama', 'Krom(VI) içermeyen pasivasyon',
+    'Eloksal (Tip II, sülfürik)', 'Kromik asit eloksal (Tip I)', 'Sert eloksal', 'Mikro ark oksidasyon (MAO)',
+    'Çinko kaplama (elektrolitik)', 'Sıcak daldırma galvaniz', 'Çinko lamel kaplama', 'Çinko-nikel kaplama', 'Kadmiyum kaplama', 'Nikel kaplama (elektrolitik)', 'Kimyasal nikel',
+    'Sert krom', 'Dekoratif krom', 'Bakır kaplama', 'Kalay kaplama', 'Gümüş kaplama', 'Altın kaplama',
+    'PVD / CVD kaplama', 'DLC kaplama', 'Termal sprey (HVOF / plazma)', 'PTFE kaplama', 'Toz boya', 'Yaş boya', 'Kataforez (KTL)'];
 const M_KESIM = ['Testere kesim', 'Lazer kesim', 'Plazma kesim', 'Oksijen kesim', 'Su jeti kesim', 'Giyotin kesim', 'Dilme (slitting)', 'Boy kesme (rulodan levha)', 'Doğrultma', 'Kenar frezeleme', '6 yüzey frezeleme', 'Pah kırma', 'Delik delme', 'Büküm'];
 const M_UT = ['EN 10160 S0/E0', 'EN 10160 S1/E1', 'EN 10160 S2/E2', 'EN 10160 S3/E3', 'EN 10308 Kalite 3', 'EN 10308 Kalite 4', 'SEP 1921 Sınıf C/c', 'SEP 1921 Sınıf D/d', 'SEP 1921 Sınıf E/e', 'EN 10228-3 Kalite 2', 'EN 10228-3 Kalite 3', 'EN 10228-3 Kalite 4', 'ASTM A578 Seviye A', 'ASTM A578 Seviye B', 'ASTM A578 Seviye C', 'ASTM A388', 'ASTM E2375 Sınıf AA', 'ASTM E2375 Sınıf A', 'EN 10228-4 Kalite 3', 'EN 10228-4 Kalite 4', 'EN ISO 10893-10 U2', 'EN ISO 10893-10 U3'];
 const M_TEST = ['Penetrant (PT)', 'Manyetik parçacık (MT)', 'Radyografi (RT)', 'Girdap akımı (ET)', 'Görsel muayene (VT)', 'PMI (pozitif malzeme tanıma)', 'Kimyasal analiz (spektro)', 'Çekme testi', 'Darbe testi (Charpy)', 'Sertlik testi', 'Taneler arası korozyon (IGC)', 'Mikroyapı / tane boyutu', 'Ferrit ölçümü', 'Hidrostatik test', 'Boyut kontrol raporu'];
@@ -986,6 +996,7 @@ const GA: Sozluk<Sozluk<Sozluk<IzinliSecenek>>> = { metal: { durum: {
         renk: { FLT: A(['Şeffaf', 'Füme', 'Bronz', 'Yeşil', 'Mavi', 'Gri', 'Opal (süt beyaz)'], ['Şeffaf']), EXTRA: A(['Ekstra şeffaf'], ['Ekstra şeffaf']),
             BS33: A(['Şeffaf'], ['Şeffaf']), ALSI: A(['Şeffaf'], ['Şeffaf']), KUV: A(['Şeffaf', 'Opal (süt beyaz)'], ['Şeffaf']), CSER: A(['Şeffaf', 'Füme'], ['Şeffaf']) }
     } };
+kaliteIzinleriniGenislet(GA.metal!.durum!);
 const TRANSP: Kume = SET('PC', 'PMMA', 'PETG', 'PVCU', 'PSU', 'PEI', 'PELD');
 const INHERENT_FR: Kume = SET('PVCU', 'PVCC', 'PTFE', 'PVDF', 'PPS', 'PEI', 'PEEK', 'PI');
 const GF_OK: Kume = SET('PA6', 'PA66', 'PA12', 'PBT', 'PET', 'PPS', 'PEEK', 'PEI', 'PSU', 'PPH', 'PPC', 'POMC', 'PC', 'PTFE');
@@ -1003,12 +1014,15 @@ const R: Sozluk<Sozluk<UyumKurali[]>> = {
         durum: [
             (v, c) => ['Soğuk çekilmiş (+C)', 'Soğuk çekilmiş', 'Soğuk çekme'].includes(v) && c.form && !inF(c, 'cubuk', 'altigen', 'lama', 'tel', 'boru') ? NO('Soğuk çekme yalnız çubuk, lama, tel ve borularda uygulanır.') : null,
             (v, c) => ['Skin-pass', 'Soğuk hadde + tavlı (+A)', 'Soğuk hadde', 'Termomekanik hadde (+M)'].includes(v) && c.form && !inF(c, F_SHEET, 'lama', 'kosebent') ? NO('Bu durum yassı (sac, levha, şerit) ürünlere aittir.') : null,
-            (v, c) => ['Soğuk sertleştirilmiş (+C700)', 'Soğuk sertleştirilmiş (+C850)'].includes(v) && c.form && !inF(c, F_SHEET, 'lama', 'tel') ? NO('Soğuk sertleştirilmiş durum sac, şerit ve telde bulunur.') : null,
-            (v, c) => ['T5', 'T66', 'T6511'].includes(v) && c.form && !inF(c, 'cubuk', 'altigen', 'lama', 'boru', 'kutu', 'kosebent') ? NO('Bu temper ekstrüzyon ürünlerine (profil, çubuk, boru) aittir.') : null,
+            (v, c) => ['Soğuk sertleştirilmiş (+C700)', 'Soğuk sertleştirilmiş (+C850)', 'Soğuk sertleştirilmiş (+C1000)', 'Soğuk sertleştirilmiş (+C1150)', 'Soğuk sertleştirilmiş (+C1300)', '¼ sert (ASTM A666)', '½ sert (ASTM A666)', '¾ sert (ASTM A666)', 'Tam sert (ASTM A666)', 'Soğuk hadde, tavsız (+C, tam sert)'].includes(v) && c.form && !inF(c, F_SHEET, 'lama', 'tel') ? NO('Soğuk sertleştirilmiş durum sac, şerit ve telde bulunur.') : null,
+            (v, c) => ['T5', 'T66', 'T6511', 'T3510', 'T3511', 'T4510', 'T4511', 'T6510', 'T73510', 'T73511', 'T76511'].includes(v) && c.form && !inF(c, 'cubuk', 'altigen', 'lama', 'boru', 'kutu', 'kosebent') ? NO('Bu temper ekstrüzyon ürünlerine (profil, çubuk, boru) aittir.') : null,
             (v, c) => ['T651', 'T351', 'T7351', 'T7451', 'T87', 'H131'].includes(v) && c.form && !inF(c, 'levha', 'blok', 'cubuk', 'altigen', 'lama', 'disk') ? NO('Germe ile gerilim giderme levha ve çubuklarda uygulanır.') : null,
-            (v, c) => /^H(1[2-8]|2[24]|3[24]|116|321)$/.test(v) && c.form && !inF(c, F_SHEET, 'lama', 'disk', 'tel') ? NO('Soğuk işlem (H) temperleri sac, şerit, disk ve telde bulunur.') : null,
+            (v, c) => /^H(1[2-9]|2[2-8]|3[2-8]|116|321)$/.test(v) && c.form && !inF(c, F_SHEET, 'lama', 'disk', 'tel') ? NO('Soğuk işlem (H) temperleri sac, şerit, disk ve telde bulunur.') : null,
             (v, c) => v === 'Ekstrüzyon' && c.form && !inF(c, 'cubuk', 'altigen', 'lama', 'boru', 'kutu', 'kosebent') ? NO('Ekstrüzyon profil, çubuk ve boruya uygulanır.') : null,
             (v, c) => v === 'Soğuk deforme (swaged)' && c.form && !inF(c, 'cubuk') ? NO('Soğuk deformasyon (swaging) çubuklara uygulanır.') : null,
+            (v, c) => ['Çökelme sertleştirilmiş (TH1050)', 'Çökelme sertleştirilmiş (RH950)', 'Çökelme sertleştirilmiş (CH900)'].includes(v) && c.g !== '177PH' && !c.custom ? NO('Bu koşullar 17-7PH yarı östenitik paslanmaza aittir.') : null,
+            (v, c) => ['Çökelme sertleştirilmiş (H950)', 'Çökelme sertleştirilmiş (H1050)'].includes(v) && icerir(['174PH', '155PH'], c.g) ? WARN('Bu kalitede yaygın bir yaşlandırma koşulu değil; siparişte şartnameyi ve hedef sertliği belirt.') : null,
+            (v, c) => v === 'Patentlenmiş (tel)' && c.form && !inF(c, 'tel') ? NO('Patentleme tel çekmede uygulanır.') : null,
             (v, c) => v === 'Çökelme sertleştirilmiş (H900)' ? WARN('Tokluk düşük; darbeli yük ve deniz suyunda H1150 daha güvenlidir.') : null,
             (v, c) => v === 'Sertleştirilmiş + temperlenmiş' && c.cls === 'takim' ? WARN('Bu durumda yalnızca taşlama ve erozyonla işlenebilir.') : null
         ],
@@ -1062,10 +1076,19 @@ const R: Sozluk<Sozluk<UyumKurali[]>> = {
         ],
         islem: [
             (v, c) => ['Sementasyon'].includes(v) && !(c.steel) ? NO('Sementasyon çeliklere uygulanır.') : null,
+            (v, c) => ['Karbonitrürleme', 'Borlama', 'Vakum sertleştirme', 'Martemperleme', 'Alevle sertleştirme', 'Lazerle sertleştirme'].includes(v) && !(c.steel || icerir(['dokme', 'celikdokum', 'paslanmaz'], c.cls) || c.custom) ? NO('Bu sertleştirme çelik ve dökme demire uygulanır.') : null,
+            (v, c) => v === 'Östemperleme' && !(c.steel || icerir(['dokme', 'celikdokum'], c.cls) || c.custom) ? NO('Östemperleme çelik ve küresel grafitli dökme demire (ADI) uygulanır.') : null,
+            (v, c) => v === 'Hidrojen gevrekliği giderme' && !(c.steel || icerir(['paslanmaz', 'celikdokum', 'dokme'], c.cls) || c.custom) ? NO('Hidrojen gevrekliği giderme kaplanmış ya da asitlenmiş sertleştirilmiş çeliklere uygulanır.') : null,
+            (v, c) => ['Eloksal (Tip II, sülfürik)', 'Kromik asit eloksal (Tip I)'].includes(v) && !icerir(['aluminyum', 'aldokum'], c.cls) && !c.custom ? NO('Eloksal yalnız alüminyuma uygulanır.') : null,
+            (v, c) => v === 'Eloksal (Tip II, sülfürik)' && icerir(['2017A', '2024', '7075', '2519', '7050', '7039'], c.g) ? WARN('2xxx ve 7xxx serisi eloksalda düzensiz ve koyu renk verir; dekoratif eloksal için 6060/6063 seç.') : null,
+            (v, c) => v === 'Mikro ark oksidasyon (MAO)' && !icerir(['aluminyum', 'aldokum', 'magnezyum', 'titanyum'], c.cls) && !c.custom ? NO('Mikro ark oksidasyon alüminyum, magnezyum ve titanyuma uygulanır.') : null,
+            (v, c) => ['Sıcak daldırma galvaniz', 'Çinko lamel kaplama', 'Kadmiyum kaplama', 'Çinko fosfat', 'Mangan fosfat'].includes(v) && !(c.steel || icerir(['dokme', 'celikdokum'], c.cls) || c.custom) ? NO('Bu kaplama çelik ve döküm parçalara uygulanır.') : null,
+            (v, c) => v === 'Kadmiyum kaplama' ? WARN('Kadmiyum RoHS ve REACH kapsamında kısıtlıdır; yalnız şartname istiyorsa seç.') : null,
+            (v, c) => v === 'Yaşlandırma (çökelme sertleştirme)' && !(icerir(['aluminyum', 'aldokum', 'magnezyum', 'nikel', 'titanyum', 'bakir', 'kobalt'], c.cls) || icerir(['174PH', '155PH', '138MO', '177PH', 'A286', 'MAR300'], c.g) || c.custom) ? WARN('Yaşlandırma çökelme sertleşen alaşımlarda anlamlıdır.') : null,
             (v, c) => v === 'Sementasyon' && c.steel && !CASE_H.has(c.g) && !c.custom ? WARN('Sementasyon düşük karbonlu çeliklere uygulanır; bu kalitede indüksiyon veya nitrasyon daha uygundur.') : null,
             (v, c) => v === 'Sementasyon' && CASE_H.has(c.g) ? REC : null,
-            (v, c) => ['Nitrasyon', 'Nitrokarbürleme'].includes(v) && !(c.steel || c.cls === 'dokme' || c.cls === 'paslanmaz' || c.cls === 'titanyum') ? NO('Nitrasyon çelik, döküm, paslanmaz ve titanyuma uygulanır.') : null,
-            (v, c) => ['Nitrasyon', 'Nitrokarbürleme'].includes(v) && c.cls === 'paslanmaz' ? WARN('Paslanmazda nitrasyon korozyon direncini düşürür; düşük sıcaklık plazma yöntemi gerekir.') : null,
+            (v, c) => ['Nitrasyon', 'Nitrokarbürleme', 'Plazma nitrürleme', 'Tuz banyosu nitrokarbürleme (QPQ)'].includes(v) && !(c.steel || c.cls === 'dokme' || c.cls === 'paslanmaz' || c.cls === 'titanyum') ? NO('Nitrasyon çelik, döküm, paslanmaz ve titanyuma uygulanır.') : null,
+            (v, c) => ['Nitrasyon', 'Nitrokarbürleme', 'Tuz banyosu nitrokarbürleme (QPQ)'].includes(v) && c.cls === 'paslanmaz' ? WARN('Paslanmazda nitrasyon korozyon direncini düşürür; düşük sıcaklık plazma yöntemi gerekir.') : null,
             (v, c) => v === 'Nitrasyon' && (icerir(['41CR4', '42CRMO4', '34CRNIMO6'], c.g) || c.cls === 'takim') ? REC : null,
             (v, c) => v === 'İndüksiyon sertleştirme' && !(HARDEN.has(c.g) || c.custom) ? (c.steel || c.cls === 'dokme' ? WARN('İndüksiyon sertleştirme için en az %0,35 karbon gerekir; bu kalitede yeterli sertlik alınamaz.') : NO('Sertleşebilir çeliklere ve küresel grafitli dökümlere uygulanır.')) : null,
             (v, c) => v === 'İndüksiyon sertleştirme' && icerir(['C45', '42CRMO4', '41CR4'], c.g) ? REC : null,
@@ -1562,15 +1585,31 @@ const HZ_KAT: Sozluk<HizmetKategorisi> = (() => {
             C('Nikel kaplama', 'NKL', ['AMS 2404', 'QQ-N-290'], [S('yontem', 'Yöntem', ['Akımlı (elektrolitik)', 'Akımsız (kimyasal)'], { ada: true }), KALINLIK,
                 S('fosfor', 'Fosfor oranı', ['Düşük', 'Orta', 'Yüksek'], { kosul: d => d.g.yontem === 'Akımsız (kimyasal)' })]),
             C('Pasivasyon', 'PSV', ['AMS 2700', 'ASTM A967'], [S('yontem', 'Yöntem', ['Nitrik asit', 'Sitrik asit'], { ada: true })]),
-            C('Kumlama', 'KUM', [], [S('asindirici', 'Aşındırıcı', ['Alüminyum oksit', 'Cam bilye', 'Çelik bilye', 'Silisyum karbür'], { ada: true }), N('ra', 'Pürüzlülük Ra', 'µm')])]),
+            C('Kumlama', 'KUM', [], [S('asindirici', 'Aşındırıcı', ['Alüminyum oksit', 'Cam bilye', 'Çelik bilye', 'Silisyum karbür'], { ada: true }), N('ra', 'Pürüzlülük Ra', 'µm')]),
+            C('Sert krom kaplama', 'SKR', ['AMS 2460', 'ISO 6158'], [KALINLIK, T('sertlik', 'Sertlik', { ph: 'ör. 850 HV' }), S('taslama', 'Kaplama sonrası taşlama', VARYOK)]),
+            C('Çinko kaplama', 'ZNK', ['ASTM B633', 'ISO 2081'], [S('pasivasyon', 'Pasivasyon', ['Şeffaf (mavi)', 'Sarı', 'Siyah', 'Krom(VI) içermeyen'], { ada: true }), KALINLIK]),
+            C('Sıcak daldırma galvaniz', 'GLV', ['ISO 1461', 'ASTM A123'], [KALINLIK]),
+            C('Çinko lamel kaplama', 'ZNL', ['ISO 10683'], [S('ustKat', 'Üst kat', VARYOK), KALINLIK]),
+            C('Fosfat kaplama', 'FSF', ['ISO 9717'], [S('tip', 'Tip', ['Çinko fosfat', 'Mangan fosfat', 'Demir fosfat'], { ada: true }), S('yag', 'Yağlama', VARYOK)]),
+            C('Siyah oksit (karartma)', 'SOK', ['MIL-DTL-13924'], [S('yag', 'Yağlama', VARYOK)]),
+            C('Elektropolisaj', 'EPL', ['ASTM B912'], [N('ra', 'Pürüzlülük Ra', 'µm')]),
+            C('Kalay, gümüş ya da altın kaplama', 'DMK', [], [S('metal', 'Kaplama metali', ['Kalay', 'Gümüş', 'Altın', 'Bakır'], { ada: true }), KALINLIK]),
+            C('PVD / DLC kaplama', 'PVD', [], [S('tip', 'Kaplama', ['TiN', 'TiAlN', 'AlCrN', 'CrN', 'DLC'], { ada: true }), KALINLIK]),
+            C('Termal sprey', 'TSP', [], [S('yontem', 'Yöntem', ['HVOF', 'Plazma', 'Alev', 'Ark'], { ada: true }), T('malzeme', 'Sprey malzemesi', { ph: 'ör. WC-Co' }), KALINLIK]),
+            C('Bilyalı dövme (shot peening)', 'SHP', ['AMS 2430', 'AMS 2432'], [T('almen', 'Almen yoğunluğu', { ph: 'ör. 0,008-0,012 A', ada: true }), N('kapsama', 'Kapsama', '%')])]),
         isil: g('Isıl işlem', 'ISL', 'thermo', [
             C('Hidrojen gevrekliği giderme', 'HGG', ['AMS 2759/9', 'ISO 9588', 'ASTM B850'], [SICAKLIK, SURE, N('enGec', 'Kaplamadan sonra en geç', 'saat'),
                 S('firinKaydi', 'Fırın kaydı', ['İstenir', 'İstenmez'])]),
             C('Su verme ve temperleme', 'STM', ['AMS 2759/1'], [T('sertlik', 'Hedef sertlik', { ph: 'ör. 36-40 HRC', ada: true })]),
             C('Gerilim giderme', 'GRG', [], [SICAKLIK, SURE]),
-            C('Sementasyon / nitrürleme', 'SMN', ['AMS 2759/7'], [S('yontem', 'Yöntem', ['Sementasyon', 'Nitrürleme'], { ada: true }), N('derinlik', 'Sertlik derinliği', 'mm'),
+            C('Sementasyon / nitrürleme', 'SMN', ['AMS 2759/7'], [S('yontem', 'Yöntem', ['Sementasyon', 'Nitrürleme', 'Karbonitrürleme', 'Plazma nitrürleme', 'Nitrokarbürleme', 'Tuz banyosu nitrokarbürleme (QPQ)', 'Borlama'], { ada: true }), N('derinlik', 'Sertlik derinliği', 'mm'),
                 T('yuzeySertlik', 'Yüzey sertliği', { ph: 'ör. 58-62 HRC' })]),
-            C('Çözeltiye alma ve yaşlandırma (alüminyum)', 'YSL', ['AMS 2770'], [T('temper', 'Hedef temper', { oneri: ['T4', 'T6', 'T73', 'T7351'], ph: 'ör. T6', ada: true })], { kisa: 'Yaşlandırma' })]),
+            C('Çözeltiye alma ve yaşlandırma (alüminyum)', 'YSL', ['AMS 2770'], [T('temper', 'Hedef temper', { oneri: ['T4', 'T6', 'T651', 'T73', 'T7351', 'T7451', 'T76'], ph: 'ör. T6', ada: true })], { kisa: 'Yaşlandırma' }),
+            C('Tavlama ve normalizasyon', 'TVL', [], [S('tip', 'Tip', ['Yumuşak tavlama', 'Tam tavlama', 'Küreselleştirme tavlaması', 'Rekristalizasyon tavlaması', 'Normalizasyon', 'Çözeltiye alma (paslanmaz)'], { ada: true }), SICAKLIK, SURE]),
+            C('İndüksiyon ve alevle sertleştirme', 'IND', [], [S('yontem', 'Yöntem', ['İndüksiyon', 'Alev', 'Lazer'], { ada: true }), N('derinlik', 'Sertlik derinliği', 'mm'), T('yuzeySertlik', 'Yüzey sertliği', { ph: 'ör. 55-60 HRC' })]),
+            C('Vakum sertleştirme', 'VKS', ['AMS 2759/1'], [T('sertlik', 'Hedef sertlik', { ph: 'ör. 58-60 HRC', ada: true }), N('temper', 'Temper sayısı', 'kez')]),
+            C('Çökelme sertleştirme (paslanmaz, süper alaşım)', 'CSY', ['AMS 2759/3'], [T('kosul', 'Hedef koşul', { oneri: ['H900', 'H925', 'H950', 'H1000', 'H1025', 'H1050', 'H1075', 'H1100', 'H1150', 'H1150D', 'H1150M'], ph: 'ör. H1025', ada: true }), T('sertlik', 'Hedef sertlik', { ph: 'ör. 35-40 HRC' })], { kisa: 'Çökelme sertleştirme' }),
+            C('Kriyojenik işlem', 'KRJ', [], [SICAKLIK, SURE])]),
         muayene: g('Muayene ve test', 'MYT', 'magnifier', [
             C('Penetrant muayene', 'PNT', ['ASTM E1417'], [S('tip', 'Tip', ['Tip I (floresan)', 'Tip II (görünür boya)'], { ada: true }), S('yontem', 'Yöntem', ['A', 'B', 'C', 'D']),
                 S('hassasiyet', 'Hassasiyet seviyesi', ['1/2', '1', '2', '3', '4'])]),

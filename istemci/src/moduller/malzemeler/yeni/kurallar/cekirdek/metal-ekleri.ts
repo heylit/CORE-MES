@@ -1,4 +1,5 @@
 import type { Kalite, OzellikDegerleri, Sinif, Sozluk } from './tipler.ts';
+import type { IzinliSecenek } from './uyumluluk.ts';
 
 // 3246: CNC atölyesinde sık geçen metal kaliteleri, sınıfları ve durum (temper) seçenekleri. Yalnız ekleme yapar; var olan kodlar, adlar
 // ve kayıtlı kartlar değişmez. Özellik değerleri ana standardın tipik ya da en az değerleridir; emin olunmayan alan boş bırakılır.
@@ -8,19 +9,33 @@ function K(ad: string, kod: string, p: OzellikDegerleri, std: string, eq: Sozluk
 }
 
 const DURUM_EKLERI: Sozluk<string[]> = {
-    sac: ['Termomekanik hadde (+M)'],
-    islah: ['Küreselleştirme tavlı (+AC)', 'Islah + soğuk çekilmiş (+QT+C)', 'Islah + kabuk soyulmuş (+QT+SH)', 'Sertleşebilirlik garantili (+H)'],
-    yay: ['Islah (+QT)'],
-    takim: ['Vakumda sertleştirilmiş + temperlenmiş'],
+    karbon: ['Normalize + temperlenmiş (+NT)', 'Soğuk çekilmiş (+C)'],
+    sac: ['Termomekanik hadde (+M)', 'Soğuk hadde, tavsız (+C, tam sert)'],
+    islah: ['Küreselleştirme tavlı (+AC)', 'Islah + soğuk çekilmiş (+QT+C)', 'Islah + kabuk soyulmuş (+QT+SH)', 'Sertleşebilirlik garantili (+H)',
+        'Yumuşak tavlı + soğuk çekilmiş (+A+C)', 'Normalize + soğuk çekilmiş (+N+C)', 'Küreselleştirme tavlı + soğuk çekilmiş (+AC+C)', 'Gerilim giderilmiş'],
+    yay: ['Islah (+QT)', 'Sıcak hadde (+AR)', 'Yumuşak tavlı (+A)', 'Patentlenmiş (tel)'],
+    takim: ['Vakumda sertleştirilmiş + temperlenmiş', 'Ön sertleştirilmiş (~40 HRC)', 'Gerilim giderilmiş'],
     paslanmaz: ['Çökelme sertleştirilmiş (H925)', 'Çökelme sertleştirilmiş (H950)',
         'Çökelme sertleştirilmiş (H1000)', 'Çökelme sertleştirilmiş (H1050)', 'Çökelme sertleştirilmiş (H1075)','Çökelme sertleştirilmiş (H1100)', 'Çökelme sertleştirilmiş (H1150M)',
-        'Islah (+QT700)', 'Islah (+QT800)', 'Islah (+QT900)', 'Tavlanmış + soğuk çekilmiş (+AT+C)'],
-    aluminyum: ['T3511', 'T42', 'T61', 'T62', 'T652', 'T73511', 'T76', 'T7651', 'T851', 'H19', 'H26', 'H38'],
-    aldokum: ['O (tavlı)', 'T4', 'T7'],
-    bakir: ['R550', 'R600', 'R700', 'TB00 (çözeltiye alınmış)', 'TD04 (çözelti + soğuk işlem)', 'TF00 (yaşlandırılmış)', 'TH04 (soğuk işlem + yaşlandırılmış)'],
-    titanyum: ['Çözeltiye alınmış (ST)', 'Çift tavlı (duplex annealed)', 'Gerilim giderilmiş'],
-    nikel: ['Çözeltiye alınmış + çift yaşlandırılmış', 'Yaşlandırılmış', 'Sıcak işlenmiş', 'Gerilim giderilmiş'],
-    dokme: ['Su verilmiş + temperlenmiş', 'Grafitleştirme tavlı', 'İndüksiyonla sertleştirilmiş']
+        'Islah (+QT700)', 'Islah (+QT800)', 'Islah (+QT900)', 'Tavlanmış + soğuk çekilmiş (+AT+C)',
+        'Çökelme sertleştirilmiş (H1150D)', 'Çökelme sertleştirilmiş (TH1050)', 'Çökelme sertleştirilmiş (RH950)', 'Çökelme sertleştirilmiş (CH900)',
+        'Soğuk sertleştirilmiş (+C1000)', 'Soğuk sertleştirilmiş (+C1150)', 'Soğuk sertleştirilmiş (+C1300)',
+        '¼ sert (ASTM A666)', '½ sert (ASTM A666)', '¾ sert (ASTM A666)', 'Tam sert (ASTM A666)', 'Islah (+QT650)', 'Islah (+QT780)', 'Gerilim giderilmiş'],
+    aluminyum: ['T3511', 'T42', 'T61', 'T62', 'T652', 'T73511', 'T76', 'T7651', 'T851', 'H19', 'H26', 'H38',
+        'W (çözeltiye alınmış, kararsız)', 'T1', 'T2', 'T3510', 'T451', 'T4510', 'T4511', 'T6510', 'T73510', 'T7352', 'T74', 'T7452', 'T76511', 'T8', 'T81', 'T852', 'T9',
+        'H13', 'H15', 'H17', 'H23', 'H25', 'H27', 'H28', 'H36'],
+    aldokum: ['O (tavlı)', 'T4', 'T7', 'T1'],
+    bakir: ['R550', 'R600', 'R700', 'TB00 (çözeltiye alınmış)', 'TD04 (çözelti + soğuk işlem)', 'TF00 (yaşlandırılmış)', 'TH04 (soğuk işlem + yaşlandırılmış)',
+        'M (üretim hâli)', 'D (çekilmiş)', 'H040', 'H065', 'H090', 'H110', 'H150',
+        'O60 (yumuşak tavlı)', 'H01 (¼ sert)', 'H02 (½ sert)', 'H04 (sert)', 'H06 (ekstra sert)', 'H08 (yay sertliği)', 'M30 (sıcak ekstrüzyon)', 'TQ50 (su verilmiş + temperlenmiş)'],
+    titanyum: ['Çözeltiye alınmış (ST)', 'Çift tavlı (duplex annealed)', 'Gerilim giderilmiş', 'Yeniden kristalleşme tavlı (RA)', 'Soğuk işlenmiş + gerilim giderilmiş (CWSR)', 'Döküm hâli'],
+    nikel: ['Çözeltiye alınmış + çift yaşlandırılmış', 'Yaşlandırılmış', 'Sıcak işlenmiş', 'Gerilim giderilmiş', 'Döküm hâli', 'Soğuk işlenmiş + yaşlandırılmış', 'Sıcak işlenmiş + yaşlandırılmış'],
+    dokme: ['Su verilmiş + temperlenmiş', 'Grafitleştirme tavlı', 'İndüksiyonla sertleştirilmiş', 'Normalize + temperlenmiş', 'Alevle sertleştirilmiş'],
+    celikdokum: ['Tavlanmış (+A)', 'Gerilim giderilmiş'],
+    magnezyum: ['H26'],
+    cinko: ['Yaşlandırılmış (kararlı hâle getirilmiş)'],
+    refrakter: ['Tavlanmış', 'Soğuk işlenmiş'],
+    kobalt: ['Yaşlandırılmış', 'Soğuk çekilmiş', 'HIP']
 };
 
 const KALITE_EKLERI: Sozluk<Kalite[]> = {
@@ -269,8 +284,9 @@ export const METAL_EK_FORM: Sozluk<string[]> = {
     kobalt: ['cubuk', 'levha', 'tel', 'disk', 'blok']
 };
 
-// Durumu sınıfta zaten olan seçenek ve sınıfta zaten olan kalite kodu iki kez eklenmez.
+// Durumu sınıfta zaten olan seçenek ve sınıfta zaten olan kalite kodu iki kez eklenmez. Yeni sınıflar önce girer ki durum ekleri onlara da ulaşsın.
 export function metalEkleriniUygula(M: Sozluk<Sinif>): void {
+    for (const [ck, c] of Object.entries(YENI_SINIFLAR)) if (!M[ck]) M[ck] = c;
     for (const [ck, l] of Object.entries(DURUM_EKLERI)) {
         const c = M[ck];
         if (!c) continue;
@@ -282,5 +298,112 @@ export function metalEkleriniUygula(M: Sozluk<Sinif>): void {
         if (!c) continue;
         for (const g of l) if (!c.grades.some(x => x.kod === g.kod)) c.grades.push(g);
     }
-    for (const [ck, c] of Object.entries(YENI_SINIFLAR)) if (!M[ck]) M[ck] = c;
+    durumlariSirala(M);
+}
+
+// Eklenen durumlar listenin sonuna düşer; aranan H1000 ya da T7351 komşusunun yanında görünsün diye sıra yeniden kurulur.
+// Yalnız gösterim sırasıdır: kart seçilen metni saklar, değer değişmez.
+const TEMPER_HARF = 'FOWHT';
+function temperAnahtari(v: string): [number, number, string] | null {
+    const m = /^([FOWHT])(\d?)(\d*)\b/.exec(v);
+    if (!m) return null;
+    return [TEMPER_HARF.indexOf(m[1]!), m[2] ? Number(m[2]) : -1, m[3]!];
+}
+function temperKarsilastir(a: string, b: string): number {
+    const x = temperAnahtari(a)!, y = temperAnahtari(b)!;
+    return x[0] - y[0] || x[1] - y[1] || (x[2] < y[2] ? -1 : x[2] > y[2] ? 1 : 0);
+}
+// Desene uyan öğeler ilk uyanın yerinde, sayısına göre sıralı bir blok olur; ötekiler yerinde kalır.
+function blokSirala(l: string[], desen: RegExp, kars: (a: string, b: string) => number): void {
+    const ilk = l.findIndex(v => desen.test(v));
+    if (ilk < 0) return;
+    const blok = l.filter(v => desen.test(v)).sort(kars);
+    const kalan = l.filter(v => !desen.test(v));
+    const once = l.slice(0, ilk).filter(v => !desen.test(v)).length;
+    l.splice(0, l.length, ...kalan.slice(0, once), ...blok, ...kalan.slice(once));
+}
+const sayi = (desen: RegExp) => (a: string, b: string): number => {
+    const x = desen.exec(a)!, y = desen.exec(b)!;
+    return Number(x[1]) - Number(y[1]) || (x[2] ?? '').localeCompare(y[2] ?? '');
+};
+function durumlariSirala(M: Sozluk<Sinif>): void {
+    for (const ck of ['aluminyum', 'aldokum', 'magnezyum']) {
+        const l = M[ck]?.durum;
+        if (l) blokSirala(l, /^[FOWHT]\d*\b/, temperKarsilastir);
+    }
+    const ps = M['paslanmaz']?.durum;
+    if (ps) {
+        const H = /^Çökelme sertleştirilmiş \(H(\d+)(\w*)\)$/;
+        blokSirala(ps, H, sayi(H));
+        const C = /^Soğuk sertleştirilmiş \(\+C(\d+)()\)$/;
+        blokSirala(ps, C, sayi(C));
+        const QT = /^Islah \(\+QT(\d+)()\)$/;
+        blokSirala(ps, QT, sayi(QT));
+    }
+    const cu = M['bakir']?.durum;
+    if (cu) {
+        const R = /^R(\d+)()/;
+        blokSirala(cu, R, sayi(R));
+        const H = /^H(\d{3})()$/;
+        blokSirala(cu, H, sayi(H));
+    }
+}
+
+// Kalite izin listesi (GA) dar kalırsa sihirbaz sınıftaki geçerli durumu "uyumsuz" sayıp gizler (ör. 17-4PH'de H1000).
+// Burada yalnız kalitenin standart ya da yaygın ticari teslim durumları eklenir; önerilen durum değişmez.
+const KALITE_DURUM_IZIN_EKLERI: Sozluk<string[]> = (() => {
+    const ISLAH = ['Küreselleştirme tavlı (+AC)', 'Islah + soğuk çekilmiş (+QT+C)', 'Islah + kabuk soyulmuş (+QT+SH)', 'Yumuşak tavlı + soğuk çekilmiş (+A+C)',
+        'Normalize + soğuk çekilmiş (+N+C)', 'Gerilim giderilmiş'];
+    const SEMENTASYON = ['Sertleşebilirlik garantili (+H)', 'Küreselleştirme tavlı (+AC)', 'Yumuşak tavlı + soğuk çekilmiş (+A+C)', 'Gerilim giderilmiş'];
+    const TAKIM = ['Vakumda sertleştirilmiş + temperlenmiş', 'Gerilim giderilmiş'];
+    const OSTENIT = ['Soğuk sertleştirilmiş (+C850)', 'Soğuk sertleştirilmiş (+C1000)', 'Tavlanmış + soğuk çekilmiş (+AT+C)', '¼ sert (ASTM A666)', '½ sert (ASTM A666)', 'Gerilim giderilmiş'];
+    const PH = ['Çökelme sertleştirilmiş (H950)', 'Çökelme sertleştirilmiş (H1000)', 'Çökelme sertleştirilmiş (H1050)', 'Çökelme sertleştirilmiş (H1150D)'];
+    const AL_SAF = ['H13', 'H15', 'H17', 'H19', 'H23', 'H25', 'H26', 'H27', 'H28'];
+    const AL_MG = ['H26', 'H28', 'H36', 'H38'];
+    const AL_6 = ['T1', 'T42', 'T451', 'T4510', 'T4511', 'T5', 'T62', 'T6510', 'T652', 'W (çözeltiye alınmış, kararsız)'];
+    const TI_SAF = ['Gerilim giderilmiş', 'Yeniden kristalleşme tavlı (RA)', 'Soğuk işlenmiş + gerilim giderilmiş (CWSR)'];
+    const CU_SAF = ['M (üretim hâli)', 'D (çekilmiş)', 'H040', 'H065', 'H090', 'O60 (yumuşak tavlı)', 'H01 (¼ sert)', 'H02 (½ sert)', 'H04 (sert)', 'H08 (yay sertliği)'];
+    const GJS_EK = ['Su verilmiş + temperlenmiş', 'Normalize + temperlenmiş', 'İndüksiyonla sertleştirilmiş', 'Alevle sertleştirilmiş'];
+    const GJL_EK = ['İndüksiyonla sertleştirilmiş', 'Alevle sertleştirilmiş'];
+    return {
+        S235: ['Soğuk çekilmiş (+C)'], S355: ['Soğuk çekilmiş (+C)'], P265GH: ['Normalize + temperlenmiş (+NT)'],
+        C45: ISLAH, '41CR4': [...ISLAH, 'Sertleşebilirlik garantili (+H)'], '42CRMO4': [...ISLAH, 'Sertleşebilirlik garantili (+H)'], '34CRNIMO6': [...ISLAH, 'Sertleşebilirlik garantili (+H)'],
+        '11SMNPB30': ['Yumuşak tavlı + soğuk çekilmiş (+A+C)', 'Gerilim giderilmiş'],
+        '16MNCR5': SEMENTASYON, '20MNCR5': SEMENTASYON, '18CRNIMO76': SEMENTASYON,
+        '4130': ['Islah + soğuk çekilmiş (+QT+C)'], '4340': ['Islah + kabuk soyulmuş (+QT+SH)', 'Gerilim giderilmiş'], '300M': ['Gerilim giderilmiş'], D6AC: ['Gerilim giderilmiş'],
+        '100CR6': ['Sıcak hadde (+AR)', 'Yumuşak tavlı (+A)'], '51CRV4': ['Islah (+QT)', 'Sıcak hadde (+AR)', 'Yumuşak tavlı (+A)'],
+        '2379': TAKIM, '2344': TAKIM, '2083': TAKIM, '2510': TAKIM, '2842': TAKIM, '3343': TAKIM,
+        '2311': ['Gerilim giderilmiş'], '2738': ['Ön sertleştirilmiş (~40 HRC)', 'Gerilim giderilmiş'],
+        '304': OSTENIT, '304L': OSTENIT, '316': OSTENIT, '316L': OSTENIT,
+        '303': ['Tavlanmış + soğuk çekilmiş (+AT+C)'], '316TI': ['Tavlanmış + soğuk çekilmiş (+AT+C)'], '321': ['Tavlanmış + soğuk çekilmiş (+AT+C)'], '310S': ['Soğuk çekilmiş'],
+        '301': ['Soğuk sertleştirilmiş (+C1000)', 'Soğuk sertleştirilmiş (+C1150)', 'Soğuk sertleştirilmiş (+C1300)', '¼ sert (ASTM A666)', '½ sert (ASTM A666)', '¾ sert (ASTM A666)', 'Tam sert (ASTM A666)'],
+        '420': ['Islah (+QT700)', 'Islah (+QT800)'], '431': ['Islah (+QT800)', 'Islah (+QT900)'],
+        '174PH': PH, '155PH': PH,
+        '2205': ['Soğuk çekilmiş', 'Tavlanmış + soğuk çekilmiş (+AT+C)'], '2507': ['Soğuk çekilmiş', 'Tavlanmış + soğuk çekilmiş (+AT+C)'],
+        '1050': AL_SAF, '3003': AL_SAF, '5083': AL_MG, '5754': AL_MG,
+        '6060': ['T1', 'T64'], '6063': ['T1', 'T64'], '6061': AL_6, '6082': AL_6,
+        '2017A': ['T351', 'T3510', 'T3511', 'T451', 'T4510', 'T4511'],
+        '2024': ['F (üretim hâli)', 'T3510', 'T3511', 'T42', 'T62', 'T81', 'T851'],
+        '7075': ['T6510', 'T6511', 'T73510', 'T73511', 'T7352', 'T76', 'T7651', 'T76511', 'W (çözeltiye alınmış, kararsız)'],
+        '7050': ['T74', 'T7452', 'T73511', 'T7651', 'T76511'],
+        AC42100: ['T4', 'T5', 'T7'],
+        CUETP: CU_SAF, CUOF: CU_SAF, CW614N: ['M (üretim hâli)', 'H04 (sert)'],
+        GR1: TI_SAF, GR2: TI_SAF, GR4: TI_SAF, GR7: TI_SAF,
+        GR5: ['Çözeltiye alınmış (ST)', 'Çift tavlı (duplex annealed)', 'Yeniden kristalleşme tavlı (RA)', 'Gerilim giderilmiş'],
+        GR23: ['Yeniden kristalleşme tavlı (RA)', 'Gerilim giderilmiş'],
+        A400: ['Sıcak işlenmiş', 'Gerilim giderilmiş'], A600: ['Sıcak işlenmiş', 'Gerilim giderilmiş'], A825: ['Sıcak işlenmiş', 'Gerilim giderilmiş'],
+        A625: ['Soğuk çekilmiş', 'Sıcak işlenmiş'], C276: ['Sıcak işlenmiş'],
+        A718: ['Çözeltiye alınmış + çift yaşlandırılmış', 'Yaşlandırılmış', 'Sıcak işlenmiş'],
+        GJL200: GJL_EK, GJL250: GJL_EK, GJL300: GJL_EK,
+        GJS400: GJS_EK, GJS500: GJS_EK, GJS600: GJS_EK, GJS700: GJS_EK
+    };
+})();
+
+// GA kurulduktan sonra çağrılır; listesi olmayan (sınırsız) kaliteye dokunmaz, var olan seçeneği iki kez eklemez.
+export function kaliteIzinleriniGenislet(izin: Sozluk<IzinliSecenek>): void {
+    for (const [kod, l] of Object.entries(KALITE_DURUM_IZIN_EKLERI)) {
+        const a = izin[kod]?.a;
+        if (!a) continue;
+        for (const d of l) if (!a.includes(d)) a.push(d);
+    }
 }
