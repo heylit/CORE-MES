@@ -20,7 +20,7 @@ export interface KomutKisisi { kim: string; sayfa: string; t: number }
 export type KomutHatasi = { tur: 'dogrulama'; ileti: string; alan: string } | { tur: 'cakisma'; ileti: string };
 export type KomutSonucu = { deger: Nesne; degisti: boolean } | { hata: KomutHatasi };
 
-interface GeriYama { yol: string[]; id?: string; once?: unknown }
+export interface GeriYama { yol: string[]; id?: string; once?: unknown }
 interface Bekleyen { id: string; ne: string; ayrinti: string; kim: string; t: number; isler: string[]; geri: GeriYama[] | null }
 
 const ESKI_DEGISIKLIK = 'eski';
@@ -45,7 +45,7 @@ const kimligiVar = (l: unknown, alan: 'id' | 'kod', deger: string): boolean => d
 
 // Değişikliği çalışmanın yeni hâline işler: plan varken bekleyen satırı (plan bu özellikten önce bayatladıysa önce eski satır, 787 a),
 // veri sürümü ve iz. `yeni` önceden kopyalanmış ve değiştirilmiştir.
-function isle(once: Nesne, yeni: Nesne, s: { ne: string; ayrinti: string; isler: string[]; geri: GeriYama[] }, k: KomutKisisi): Nesne {
+export function isle(once: Nesne, yeni: Nesne, s: { ne: string; ayrinti: string; isler: string[]; geri: GeriYama[] }, k: KomutKisisi): Nesne {
   const dataVer = typeof once.dataVer === 'number' ? once.dataVer : 0;
   const plan = planOf(once);
   if (plan !== null) {

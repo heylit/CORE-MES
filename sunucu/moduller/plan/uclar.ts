@@ -10,6 +10,7 @@ import {
 import {
   calismaGeriAlCevabi, calismaGeriAlGovdesi, calismaTaslagiCevabi, calismaTaslagiGovdesi, canliFarkiCevabi, degerlendirmeBaslatCevabi, degisiklikDefteriCevabi, degisiklikDefteriSorgusu, duzenleyenCevabi, degerlendirmeDurumuCevabi, degerlendirmeGovdesi,
   degerlendirmeParametresi, durumCevabi, kapasiteCevabi, planlamaCalismasiCevabi, planlamaSilGovdesi, planlamaYazGovdesi, satinAlmaEkiCevabi, tabanVeCanliCevabi,
+  taslakCevabi, taslakKomutGovdesi, taslakSurumGovdesi, taslakUygulaCevabi, taslakUygulaGovdesi,
   taslaktanCalismayaCevabi, taslaktanCalismayaGovdesi, yillikCozBaslatCevabi, yillikCozDurumuCevabi, yillikCozGovdesi, yillikCozParametresi,
 } from '#paylasilan/sozlesme/planlama.ts';
 import { ISTASYON_YAZMA_ISLEMLERI } from '#paylasilan/islemler.ts';
@@ -24,6 +25,7 @@ import { kayitlarCevabi, silCevabi, yazCevabi } from '#paylasilan/sozlesme/recet
 import { ekMesaiyiEkle, emriPlanaAl, isiTasi, isTasiOnizlemesi, olayiEkle, planaAlOnizlemesi } from './atolye-komutlari.ts';
 import { calismaGeriAl, calismaTaslagi, canliFarki, tabanVeCanli, taslaktanCalismaya } from './calisma-plani.ts';
 import { degerlendirmeBaslat, degerlendirmeDurumu } from './degerlendirme.ts';
+import { taslagim, taslagiUygula, taslakGeriAl, taslakKomutuEkle, taslaktanVazgec } from './taslak.ts';
 import { grupSaatMaliyetleri } from './grup-saat-maliyeti.ts';
 import { mesaiGrupSirasi, mesaiMaliyeti, mesaiSaatDegerleri } from './mesai-maliyeti.ts';
 import { motorAyarlari, motorAyariYaz } from './motor-ayari.ts';
@@ -260,6 +262,17 @@ export const uclar = [
     isle: ({ db, kullanici, govde }) => emriPlanaAl(db, kullanici, govde) }),
   uc({ yontem: 'GET', yol: '/plan/planlama-calismasi/plana-al-onizlemesi', yetki: 'plan.yaz', sorgu: planaAlOnizlemeSorgusu, cevap: planaAlOnizlemesiCevabi,
     isle: ({ db, kullanici, sorgu }) => planaAlOnizlemesi(db, kullanici, sorgu) }),
+  // 3282 1d: kişinin taslağı. Kokpit'te planlayanın kararları önce çağıranın taslağına yazılır; ortak çalışma Uygula'ya kadar değişmez.
+  // Yetki çalışmanın yazma işlemidir (plan.yaz); satır yalnız çağıranın kimliğiyle okunur ve yazılır (başkasının taslağına yol yok).
+  uc({ yontem: 'GET', yol: '/plan/taslagim', yetki: 'plan.yaz', cevap: taslakCevabi, isle: ({ db, kullanici }) => taslagim(db, kullanici) }),
+  uc({ yontem: 'POST', yol: '/plan/taslagim/komut', yetki: 'plan.yaz', tekrarKorumali: true, govde: taslakKomutGovdesi, cevap: taslakCevabi,
+    isle: ({ db, kullanici, govde }) => taslakKomutuEkle(db, kullanici, govde) }),
+  uc({ yontem: 'POST', yol: '/plan/taslagim/geri-al', yetki: 'plan.yaz', tekrarKorumali: true, govde: taslakSurumGovdesi, cevap: taslakCevabi,
+    isle: ({ db, kullanici, govde }) => taslakGeriAl(db, kullanici, govde) }),
+  uc({ yontem: 'POST', yol: '/plan/taslagim/vazgec', yetki: 'plan.yaz', tekrarKorumali: true, govde: taslakSurumGovdesi, cevap: taslakCevabi,
+    isle: ({ db, kullanici, govde }) => taslaktanVazgec(db, kullanici, govde) }),
+  uc({ yontem: 'POST', yol: '/plan/taslagim/uygula', yetki: 'plan.yaz', tekrarKorumali: true, govde: taslakUygulaGovdesi, cevap: taslakUygulaCevabi,
+    isle: ({ db, kullanici, govde }) => taslagiUygula(db, kullanici, govde) }),
   uc({ yontem: 'POST', yol: '/plan/planlama-calismasi/olay-ekle', yetki: 'plan.yaz', tekrarKorumali: true, govde: olayEkleGovdesi, cevap: atolyeKomutuCevabi,
     isle: ({ db, kullanici, govde }) => olayiEkle(db, kullanici, govde) }),
   // 2053: ek mesai de atölyenin ayrı komutudur (1982 a); haftalık bütçe onaya gönderirken denetlenir.

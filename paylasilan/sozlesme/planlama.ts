@@ -3,6 +3,7 @@ import { HATA_KODLARI } from '../hata.ts';
 import { tarihSemasi, zamanSemasi } from '../zaman.ts';
 import { PLAN_KURALLARI, planCanliOzeti } from './plan.ts';
 import { PLANLAMA_ANAHTARI_BICIMI, receteRotaDurumCevabi, yazGovdesi } from './recete-rota.ts';
+import { isTasiGovdesi, planaAlGovdesi } from './planlama-atolye.ts';
 
 // Planlama sözleşmesi (658 b): planlama sayfası, çalışma kaydı ve plan motoru plan modülünün uçlarıdır (/plan/...). Reçete ve Rota yalnız
 // veri verir (receteRotaDurumCevabi); planın alanlarını plan modülü ekler.
@@ -408,3 +409,55 @@ export type DegerlendirmeDurumuCevabi = z.output<typeof degerlendirmeDurumuCevab
 export type YillikCozGovdesi = z.output<typeof yillikCozGovdesi>;
 export type YillikCozumu = z.output<typeof yillikCozumSemasi>;
 export type YillikCozDurumuCevabi = z.output<typeof yillikCozDurumuCevabi>;
+
+// 3282 1d: kişinin taslağı. Kokpit'te planlayanın kararları (taşı, plana al, ayar, emrin yönü) önce kişinin taslağına komut olarak yazılır;
+// ortak çalışma değişmez, başkasının yazması taslağı bozmaz. Görünüm her okumada güncel ortak çalışmaya komutlar yeniden oynatılarak kurulur.
+// "Uygula" komutları tek işlemde ortak çalışmaya yazar; taslak açıldığından beri başkasının değiştirdiği emir, tezgâh ya da plan ayarına
+// dokunan komut için seçim ister. Bu, plan modülünün onaya giden plan taslağından (calismaTaslagiGovdesi) ayrıdır.
+export const TASLAK_KOMUTU_EN_COK = 200;
+const taslakKimlik = z.string().trim().min(1).max(120);
+// Ayar komutu Kokpit Ayarlar panelinin alanlarıdır (istemci kokpit/ayarlar.ts AYAR_ALANLARI); sınırlar aynı.
+export const taslakAyarlari = z.object({
+  w: z.object({
+    dondurma: z.number().min(0).max(72), mat: z.enum(['karma', 'uyari', 'sert']), yon: z.enum(['ileri', 'geri']),
+  }).partial().strict(),
+  param: z.object({
+    tampon: z.boolean(), tamponZ: z.number().min(0).max(3), mesaiHafta: z.number().min(0).max(60), maxChg: z.number().int().min(0).max(500),
+    geriTamponGun: z.number().int().min(0).max(30),
+  }).partial().strict(),
+  // Açılan ve kapanan kısıtlar (çalışmanın kapali listesi).
+  ac: z.array(taslakKimlik).max(40), kapat: z.array(taslakKimlik).max(40),
+}).strict();
+export const taslakKomutu = z.discriminatedUnion('tur', [
+  isTasiGovdesi.omit({ calismaSurumu: true }).extend({ tur: z.literal('tasi') }).strict(),
+  planaAlGovdesi.omit({ calismaSurumu: true }).extend({ tur: z.literal('plana-al') }).strict(),
+  z.object({ tur: z.literal('ayar'), ayar: taslakAyarlari, ayrinti: z.string().trim().max(500) }).strict(),
+  z.object({ tur: z.literal('yon'), emirId: taslakKimlik, yon: z.enum(['plan', 'ileri', 'geri']) }).strict(),
+]);
+// taslakSurumu: sayfanın gördüğü taslak sürümü (taslak yoksa null); iki sekmede aynı kişinin yazması birbirini ezmez.
+export const taslakKomutGovdesi = z.object({ taslakSurumu: z.number().int().nullable(), komut: taslakKomutu }).strict();
+export const taslakSurumGovdesi = z.object({ taslakSurumu: z.number().int() }).strict();
+// secimler: çatışma anahtarı başına karar; 'benim' komutu yine uygular, 'onun' komutu taslaktan düşer.
+export const taslakUygulaGovdesi = z.object({
+  taslakSurumu: z.number().int(),
+  secimler: z.record(z.string().max(130), z.enum(['benim', 'onun'])).optional(),
+}).strict();
+// Komut satırı: sunucunun yazdığı ad ve zamanla. hata: güncel ortak çalışmaya artık uygulanamıyorsa nedeni (başladı, emir kalktı...).
+export const taslakSatiri = z.object({ komut: taslakKomutu, ne: z.string(), t: z.number(), hata: z.string().nullable() });
+export const taslakCevabi = z.object({
+  taslak: z.object({ surum: z.number().int(), tabanSurum: z.number().int(), satirlar: z.array(taslakSatiri) }).nullable(),
+  // Taslağın uygulanmış görünümü; taslak yoksa ortak çalışma. surum ortak çalışmanın sürümüdür.
+  calisma: z.record(z.string(), z.unknown()).nullable(),
+  surum: z.number().int().nullable(),
+});
+// Uygula: çatışma varsa ve seçim eksikse yazılmaz, çatışmalar döner. anahtar: 'emir:<id>', 'tezgah:<id>' ya da '*' (plan ayarı ya da yeniden dizilen plan).
+export const taslakCatismasi = z.object({ anahtar: z.string(), ad: z.string(), komutlar: z.array(z.string()) });
+export const taslakUygulaCevabi = z.discriminatedUnion('durum', [
+  z.object({ durum: z.literal('uygulandi'), calismaSurumu: z.number().int(), uygulanan: z.number().int(), dusen: z.number().int() }),
+  z.object({ durum: z.literal('secim'), catismalar: z.array(taslakCatismasi) }),
+]);
+export type TaslakKomutu = z.output<typeof taslakKomutu>;
+export type TaslakAyarlari = z.output<typeof taslakAyarlari>;
+export type TaslakCevabi = z.output<typeof taslakCevabi>;
+export type TaslakUygulaCevabi = z.output<typeof taslakUygulaCevabi>;
+export type TaslakCatismasi = z.output<typeof taslakCatismasi>;
