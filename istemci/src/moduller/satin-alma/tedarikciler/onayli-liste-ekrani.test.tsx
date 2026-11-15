@@ -62,6 +62,17 @@ describe('3279 a Onaylı liste sekmesi', () => {
     expect(screen.getByRole('status').textContent).toContain('ORN şart: her partide rapor');
   });
 
+  it('3279-2 a: onay rozetinde tür simgesi; firma penceresinde Kalite\'de aç uygulama içi bağlantı', async () => {
+    ac(ORNEK_LISTE, ['satin-alma.oku', 'sayfa.kalite-merkezi']);
+    const tablo = await screen.findByRole('table', { name: 'Onaylı liste: Hizmet · Isıl işlem' });
+    const kimler = [...tablo.querySelectorAll('.sa-ol-onay > small')];
+    expect(kimler.length).toBeGreaterThan(1);
+    expect(kimler.every((k) => k.querySelector('svg.tc-simge') !== null)).toBe(true);
+    fireEvent.click(within(tablo).getByRole('button', { name: 'ORN-Anka' }));
+    const pencere = await screen.findByRole('dialog');
+    expect(within(pencere).getByRole('link', { name: "Kalite'de aç" }).getAttribute('href')).toBe('/kalite-merkezi/tedarikciler');
+  });
+
   it('istek düşerse hata kutusu', async () => {
     ac(null);
     expect(await screen.findByRole('button', { name: /Yeniden dene/ })).toBeTruthy();

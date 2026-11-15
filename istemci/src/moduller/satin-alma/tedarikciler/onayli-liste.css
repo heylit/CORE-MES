@@ -53,7 +53,7 @@
 /* 3279-2 a: firmanın onayları rozet olarak yan yana; her rozetin üstünde kimin onayı. */
 .sa-ol-onaylar { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--b-2); }
 .sa-ol-onay { display: inline-flex; flex-direction: column; gap: var(--b-1); }
-.sa-ol-onay > small { color: var(--muted); font-size: var(--yazi-xs); }
+.sa-ol-onay > small { display: inline-flex; align-items: center; gap: var(--b-1); color: var(--muted); font-size: var(--yazi-xs); }
 .sa-ol-arti, .sa-ol-firma { padding: 0; border: 0; background: none; color: var(--ink); cursor: pointer; text-align: start; }
 .sa-ol-arti { min-height: var(--dokunma-yogun); padding-inline: var(--b-2); border: 1px solid var(--edge2); border-radius: var(--yari-tam); }
 .sa-ol-firma b { text-decoration: underline; text-underline-offset: 2px; }

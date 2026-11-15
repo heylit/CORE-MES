@@ -14,7 +14,11 @@ const yil = (siparis: number) => ({ siparis, teslim: siparis, zamanindaYuzde: si
 const LISTE = {
   kaliteBagli: true,
   firmalar: [
-    { firmaId: 1, ad: 'ORN-Anka Isıl İşlem', satinAlmaTedarikcisi: true, sonYil: yil(23), kalite: kalite({ kritiklik: 'Kritik', sertifikalar: ['ISO 9001'], sertifikaBitisi: '2027-09-18', sonDenetim: '2026-02-05', kategoriler: [karar('isil', 'onayli'), karar('kaplama', 'onayli')] }) },
+    { firmaId: 1, ad: 'ORN-Anka Isıl İşlem', satinAlmaTedarikcisi: true, sonYil: yil(23), kalite: kalite({ kritiklik: 'Kritik', sertifikalar: ['ISO 9001'], sertifikaBitisi: '2027-09-18', sonDenetim: '2026-02-05', kategoriler: [karar('isil', 'onayli'), karar('kaplama', 'onayli')],
+      onaylar: [
+        { tur: 'musteri', musteriFirmaId: 50, musteriAd: 'ORN-Müşteri Hava', ad: null, kapsamTumu: true, kapsam: [], durum: 'onayli', suresiGecti: false, aciklama: null, bitis: '2027-12-31', belgeVar: true },
+        { tur: 'diger', musteriFirmaId: null, musteriAd: null, ad: 'ORN-Sınıf onayı', kapsamTumu: true, kapsam: [], durum: 'sartli', suresiGecti: false, aciklama: 'ORN şart', bitis: null, belgeVar: false },
+      ] }) },
     { firmaId: 2, ad: 'ORN-Demir Kaplama Uzun Firma Adı', satinAlmaTedarikcisi: true, sonYil: yil(1), kalite: kalite({ durum: 'Şartlı onaylı', kategoriler: [karar('isil', 'sartli', 'ORN şart: her partide rapor'), karar('kaplama', 'onaysiz')] }) },
     { firmaId: 3, ad: 'ORN-Kuzey', satinAlmaTedarikcisi: false, sonYil: yil(0), kalite: kalite({ durum: 'Askıda', firmaAskida: '2026-11-01T09:00:00.000Z', kategoriler: [{ ...karar('isil', 'onaysiz'), tarih: '2026-11-01T09:00:00.000Z' }] }) },
     { firmaId: 4, ad: 'ORN-Ege', satinAlmaTedarikcisi: true, sonYil: yil(0), kalite: null },
@@ -37,6 +41,7 @@ test.describe('3279 Onaylı tedarikçi listesi', () => {
     await expect(tablo.getByText('12.03.2026 · ORN-Kalite Sorumlusu')).toBeVisible();
     await expect(tablo.getByText('Firma askıda: 01.11.2026')).toBeVisible();
     await expect(page.getByText('en az bir kategoride', { exact: true })).toBeVisible();
+    await expect(tablo.getByText('ORN-Müşteri Hava').first()).toBeVisible();
     if (genislik >= 1024) {
       await expect(page.getByRole('navigation', { name: 'Kategoriler' })).toBeVisible();
       await expect(page.getByLabel('Kategori', { exact: true })).toBeHidden();
@@ -46,6 +51,12 @@ test.describe('3279 Onaylı tedarikçi listesi', () => {
     }
     expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0);
     expect(await kesilenBasliklar(page)).toEqual([]);
+    // Rozet kart ya da tablo kenarının dışına taşmaz (360'ta kart kipinde başlığın yanına sıkışınca taşıyordu).
+    const tasanRozet = await page.locator('.sa-ol .tc-rozet').evaluateAll((l) => l
+      .filter((e) => e.getClientRects().length > 0)
+      .filter((e) => e.getBoundingClientRect().right > document.documentElement.clientWidth - 16)
+      .map((e) => e.textContent ?? ''));
+    expect(tasanRozet).toEqual([]);
     // Taşma kaydırılan kapta saklanabilir: ekranın sağ kenarı görünür alanı aşmaz; masaüstünde tablo ağacın yanında durur.
     // Izgara izi kabından geniş olunca kap sığar ama çocukları taşar; çocukların sağ kenarı ölçülür.
     expect(Math.max(...await page.locator('.sa-ol > *').evaluateAll((l) => l.map((e) => e.getBoundingClientRect().right)))).toBeLessThanOrEqual(genislik);

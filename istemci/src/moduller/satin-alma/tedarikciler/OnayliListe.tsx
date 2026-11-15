@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import type { OnayliListeCevabi } from '#paylasilan/sozlesme/satin-alma.ts';
 import { tesisGunu } from '#paylasilan/tesis-zamani.ts';
-import { Dugme, DurumKutusu, Girdi, Pencere, Rozet, SayiKarti, Secim, Sekmeler, Tablo, type Sekme, type Sutun } from '../../../ortak/arayuz/index.ts';
+import { Dugme, DurumKutusu, Girdi, Pencere, Rozet, SayiKarti, Secim, Sekmeler, Simge, Tablo, type Sekme, type Sutun } from '../../../ortak/arayuz/index.ts';
 import { csvIndir } from '../../../ortak/veri/csv.ts';
 import { useOturum } from '../../../ortak/veri/oturum.ts';
 import { SURE, cagri } from '../talep/ortak.ts';
@@ -104,6 +104,8 @@ function Matris({ veri, bugun }: { veri: OnayliListeCevabi; bugun: string }) {
 
 // Üçten fazla onay "+N" ile kısaltılır; tıklayınca firmanın bütün onayları açılır (3279-2 a).
 const ONAY_SINIRI = 3;
+// Onayın türü renkten bağımsız simgeyle de ayrışır: şirket bina, müşteri kişi, diğer belge.
+const ONAY_SIMGESI = { sirket: 'building', musteri: 'user', diger: 'clipboard-check' } as const satisfies Record<Satir['onaylar'][number]['tur'], string>;
 const FIRMA_ONAY_SUTUNLARI: Sutun<FirmaOnaySatiri>[] = [
   { anahtar: 'tur', baslik: 'Tür', hucre: (x) => x.tur },
   { anahtar: 'kim', baslik: 'Kimin onayı', hucre: (x) => x.kim },
@@ -116,7 +118,7 @@ const FIRMA_ONAY_SUTUNLARI: Sutun<FirmaOnaySatiri>[] = [
 function FirmaPenceresi({ veri, satir, kaliteAcar, kapat }: { veri: OnayliListeCevabi; satir: Satir; kaliteAcar: boolean; kapat: () => void }) {
   const l = firmaOnaylari(veri, satir.firmaId);
   return (
-    <Pencere acik kapat={kapat} baslik={satir.ad} alt={<>{kaliteAcar && <a className="sa-ol-kalite" href={KALITE_TEDARIKCI_YOLU}>Kalite'de aç</a>}<Dugme tur="ikincil" onClick={kapat}>Kapat</Dugme></>}>
+    <Pencere acik kapat={kapat} baslik={satir.ad} alt={<>{kaliteAcar && <Link className="sa-ol-kalite" to={KALITE_TEDARIKCI_YOLU}>Kalite'de aç</Link>}<Dugme tur="ikincil" onClick={kapat}>Kapat</Dugme></>}>
       <p className="sa-ol-not">Salt okunur; onaylar Kalite Merkezi'nde değişir. Müşteri onayının belgesi burada açılmaz.</p>
       <Tablo etiket={`${satir.ad}: onaylar`} sutunlar={FIRMA_ONAY_SUTUNLARI} satirlar={l} satirAnahtari={(x) => x.anahtar} bosMesaj="Bu firmanın onayı yok." />
     </Pencere>
@@ -162,10 +164,12 @@ export function OnayliListe() {
     },
     {
       anahtar: 'onaylar', baslik: kategori === TUM_FIRMALAR ? 'Onaylar' : 'Onaylar (bu kategoride)',
+      // Rozetler başlığın yanına sıkışınca 360'ta kartın dışına taşar; kart kipinde başlığın altına iner.
+      kartTamSatir: true,
       hucre: (x) => (x.onaylar.length === 0 ? <span className="sa-ol-iki"><Rozet ton={x.durum.ton}>{x.durum.metin}</Rozet>{x.kararAlt !== null && <small>{x.kararAlt}</small>}</span> : (
         <span className="sa-ol-iki">
           <span className="sa-ol-onaylar">
-            {x.onaylar.slice(0, ONAY_SINIRI).map((r, i) => <span key={i} className="sa-ol-onay"><small>{r.kim}</small><Rozet ton={r.ton}>{r.metin}</Rozet></span>)}
+            {x.onaylar.slice(0, ONAY_SINIRI).map((r, i) => <span key={i} className="sa-ol-onay"><small><Simge ad={ONAY_SIMGESI[r.tur]} boyut="k" />{r.kim}</small><Rozet ton={r.ton}>{r.metin}</Rozet></span>)}
             {x.onaylar.length > ONAY_SINIRI && (
               <button type="button" className="sa-ol-arti" aria-label={`${x.ad}: bütün onaylar (${x.onaylar.length})`} onClick={() => acikFirmaYaz(x)}>{`+${x.onaylar.length - ONAY_SINIRI}`}</button>
             )}
