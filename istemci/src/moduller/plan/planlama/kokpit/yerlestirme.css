@@ -31,23 +31,23 @@
 
 /* Emirler ve adımlar: emir solda, adımları rota sırasıyla sağında. */
 .tc-pyq-emirler { display: flex; flex-direction: column; gap: var(--b-3); padding: var(--b-3); }
-.tc-pyq-emir { display: grid; grid-template-columns: calc(var(--b-6) * 9) minmax(0, 1fr); gap: var(--b-2) var(--b-3); align-items: center; }
+.tc-pyq-emir { display: grid; grid-template-columns: minmax(0, calc(var(--b-6) * 5)) minmax(0, 1fr); gap: var(--b-2) var(--b-3); align-items: center; }
 .tc-pyq-emir-ad { min-width: 0; font-size: var(--yazi-s); overflow-wrap: anywhere; }
 .tc-pyq-emir-ad .tc-pyq-mono { font-family: var(--font-mono); }
 .tc-pyq-emir-ad small { display: block; color: var(--muted); font-size: var(--yazi-xs); }
-.tc-pyq-adimlar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2); margin: 0; padding: 0; list-style: none; }
-.tc-pyq-adimlar li { display: flex; align-items: center; gap: var(--b-2); }
-.tc-pyq-adimlar li + li::before { content: "→"; color: var(--muted); }
-.tc-pyq-adimlar button {
+.tc-pyq-rota { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2); margin: 0; padding: 0; list-style: none; }
+.tc-pyq-rota li { display: flex; align-items: center; gap: var(--b-2); }
+.tc-pyq-rota li + li::before { content: "→"; color: var(--muted); }
+.tc-pyq-rota button {
   display: flex; flex-direction: column; gap: var(--pay-ince); min-width: calc(var(--b-6) * 5); min-height: var(--dokunma); padding: var(--b-1) var(--b-3); border: var(--cizgi-ince) dashed var(--edge2); border-radius: var(--yari-1);
   background: var(--panel2); color: var(--ink); font: inherit; font-size: var(--yazi-s); text-align: left; cursor: pointer;
 }
-.tc-pyq-adimlar button small { color: var(--muted); font-size: var(--yazi-xs); }
-.tc-pyq-adimlar button[data-yer="yerli"] { border-style: solid; border-left: var(--cizgi-kalin) solid var(--d-iyi); background: var(--panel-solid); }
-.tc-pyq-adimlar button[data-yer="secili"] { border-style: solid; border-color: var(--hazard); }
-.tc-pyq-adimlar button[aria-pressed="true"] { border: var(--cizgi) solid var(--ink); background: var(--secili-zemin); color: var(--secili-yazi); }
-.tc-pyq-adimlar button[aria-pressed="true"] small { color: inherit; }
-.tc-pyq-adimlar button:disabled { cursor: default; opacity: var(--saydam-45); }
+.tc-pyq-rota button small { color: var(--muted); font-size: var(--yazi-xs); }
+.tc-pyq-rota button[data-yer="yerli"] { border-style: solid; border-left: var(--cizgi-kalin) solid var(--d-iyi); background: var(--panel-solid); }
+.tc-pyq-rota button[data-yer="secili"] { border-style: solid; border-color: var(--hazard); }
+.tc-pyq-rota button[aria-pressed="true"] { border: var(--cizgi) solid var(--ink); background: var(--secili-zemin); color: var(--secili-yazi); }
+.tc-pyq-rota button[aria-pressed="true"] small { color: inherit; }
+.tc-pyq-rota button:disabled { cursor: default; opacity: var(--saydam-45); }
 
 /* Boş yerler: geniş ekranda tahtadaki işaretin metin karşılığı, telefonda tahtanın yerini tutar. */
 .tc-pyq-yerler { display: flex; flex-direction: column; gap: var(--b-2); grid-column: 1 / -1; padding-top: var(--b-2); border-top: var(--cizgi-ince) solid var(--edge); }
@@ -60,15 +60,16 @@
 .tc-pyq-yerler li .tc-pyq-mono { font-family: var(--font-mono); }
 .tc-pyq-yerler li small { grid-column: 1; color: var(--muted); font-size: var(--yazi-xs); }
 .tc-pyq-yerler li > :last-child { grid-row: 1 / span 2; grid-column: 2; }
+.tc-pyq-yerler > .tc-pyq-not { display: block; }
 .tc-pyq-yerler-alt { display: flex; flex-wrap: wrap; gap: var(--b-2); }
 
 @media (max-width: 1099px) {
   .tc-pyq-emir { grid-template-columns: minmax(0, 1fr); }
 }
 @media (max-width: 767px) {
-  .tc-pyq-adimlar { flex-direction: column; align-items: stretch; }
-  .tc-pyq-adimlar li + li::before { content: none; }
-  .tc-pyq-adimlar button { width: 100%; }
-  .tc-pyq-adimlar li { display: block; }
+  .tc-pyq-rota { flex-direction: column; align-items: stretch; }
+  .tc-pyq-rota li + li::before { content: none; }
+  .tc-pyq-rota button { width: 100%; }
+  .tc-pyq-rota li { display: block; }
   .tc-pyq-yerler li { flex-basis: 100%; }
 }

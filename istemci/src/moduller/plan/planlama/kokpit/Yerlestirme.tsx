@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Dugme, Rozet, Simge, type RozetTonu } from '../../../../ortak/arayuz/index.ts';
 import { planaAlOnizle, type PlanaAlOnizlemesi } from './plana-al.ts';
 import { adimSecimleri, durumYazisi, fasonMu, tasimaSaati, type AdimSecimi, type EmirDurumu, type KokpitEmri, type KokpitModeli, type TurAdayi } from './kurallar.ts';
@@ -18,14 +18,24 @@ export interface SiraSeridiOzellikleri {
   sec: (kok: string) => void;
   // "28.10 Çar 17:00" biçiminde yazar (Kokpit'in zaman yazıcısı).
   zaman: (t: number) => string;
+  // Karta bağlı saha olaylarının sayısı (kök kimliğiyle); kartta rozet olur.
+  olay?: ReadonlyMap<string, number>;
+  // Başlığın sağındaki yer (bütün gelenleri açan düğme).
+  sag?: ReactNode;
 }
 
-export function SiraSeridi({ kartlar, secili, sec, zaman }: SiraSeridiOzellikleri) {
+export function SiraSeridi({ kartlar, secili, sec, zaman, olay, sag }: SiraSeridiOzellikleri) {
+  // Seçili kart şeritte görünür kalır (dar ekranda şerit yatay kayar; seçim tahtadan da gelebilir).
+  const liste = useRef<HTMLUListElement | null>(null);
+  useEffect(() => {
+    const k = liste.current, el = secili === null ? null : k?.querySelector<HTMLElement>('[aria-pressed="true"]');
+    if (k && el && typeof k.scrollTo === 'function') k.scrollTo({ left: Math.max(0, el.offsetLeft - k.offsetLeft - (k.clientWidth - el.offsetWidth) / 2) });
+  }, [secili, kartlar.length]);
   return (
     <section className="tc-pyq-bolum" aria-label="Emirler, sırasıyla">
-      <h2><b className="tc-pyq-bolum-no">1</b>Emirler, sırasıyla<small>Sıra: termin</small></h2>
+      <h2><b className="tc-pyq-bolum-no">1</b>Emirler, sırasıyla<small>Sıra: termin</small>{sag}</h2>
       {kartlar.length === 0 ? <p className="tc-pyq-not">Planda ve sırada emir yok.</p> : (
-        <ul className="tc-pyq-sira">
+        <ul className="tc-pyq-sira" ref={liste}>
           {kartlar.map((k, i) => {
             const bas = k.emirler[0];
             const kismi = k.yerlesen > 0 && k.yerlesen < k.adim;
@@ -38,7 +48,7 @@ export function SiraSeridi({ kartlar, secili, sec, zaman }: SiraSeridiOzellikler
                   </span>
                   <small>{bas?.urun}{k.termin === null ? ' · termin yok' : ` · termin ${zaman(k.termin).slice(0, 9)}`}</small>
                   <progress max={Math.max(1, k.adim)} value={k.yerlesen} aria-hidden="true" />
-                  <small>{`${String(k.yerlesen)} / ${String(k.adim)} operasyon yerleşti`}</small>
+                  <small>{`${String(k.yerlesen)} / ${String(k.adim)} operasyon yerleşti`}{(olay?.get(k.kok) ?? 0) > 0 ? <b data-olay=""> · {String(olay?.get(k.kok))} olay</b> : null}</small>
                 </button>
               </li>
             );
@@ -154,12 +164,14 @@ export interface EmirAdimlariOzellikleri {
   // Planda yeri olan adıma basılınca (tahtada gösterilir, ayrıntısı açılır).
   adimAc: (emirId: string, isId: string) => void;
   // Seçili adımın uygun tezgâhları ve boş yerleri (tahta işaretler); seçim yoksa null.
-  hedef?: (h: { emirId: string; adimId: string; tezgahlar: string[]; yerler: BosYer[] } | null) => void;
+  hedef?: (h: YerlestirmeHedefi | null) => void;
+  // Emrin ayrıntısını açar (yön, plana alma seçenekleri, hamleler).
+  emirAc?: (emirId: string) => void;
   // Kişinin taslağında değişiklik varsa true: önizleme ortak plandan hesaplanır, taslaktaki değişiklikleri görmez; kişiye söylenir.
   taslakVar?: boolean;
 }
 
-export function EmirAdimlari({ m, kart, zaman, uygula, surum, adimAc, hedef, taslakVar = false }: EmirAdimlariOzellikleri) {
+export function EmirAdimlari({ m, kart, zaman, uygula, surum, adimAc, hedef, emirAc, taslakVar = false }: EmirAdimlariOzellikleri) {
   // Kartta birden çok plansız emir varsa (çok katmanlı emir) sırayla çalışılır: etkin olan, kişinin dokunduğu ya da ilk plansız emirdir.
   const [dokunulan, setDokunulan] = useState<string | null>(null);
   const etkin = kart.emirler.find((e) => e.id === dokunulan && e.durum === 'plansiz')?.id ?? kart.emirler.find((e) => e.durum === 'plansiz')?.id ?? null;
@@ -169,16 +181,18 @@ export function EmirAdimlari({ m, kart, zaman, uygula, surum, adimAc, hedef, tas
       <h2><b className="tc-pyq-bolum-no">2</b>{bas?.no ?? kart.kok} · operasyonlar</h2>
       <div className="tc-pyq-emirler">
         {kart.emirler.map((e) => (
-          <EmirSatiri key={e.id} m={m} e={e} zaman={zaman} uygula={uygula} surum={surum} adimAc={adimAc} etkin={etkin === e.id} etkinlestir={() => { setDokunulan(e.id); }} taslakVar={taslakVar} {...(hedef ? { hedef } : {})} />
+          <EmirSatiri key={e.id} m={m} e={e} zaman={zaman} uygula={uygula} surum={surum} adimAc={adimAc} etkin={etkin === e.id} etkinlestir={() => { setDokunulan(e.id); }} taslakVar={taslakVar} {...(hedef ? { hedef } : {})} {...(emirAc ? { emirAc } : {})} />
         ))}
       </div>
     </section>
   );
 }
 
+// Seçili adımın uygun tezgâhları ve boş yerleri; tahta bunları işaretler, boş yere basınca `yerlestir` çağrılır.
+export interface YerlestirmeHedefi { emirId: string; adimId: string; tezgahlar: string[]; yerler: BosYer[]; yerlestir: (tezgah: string) => void }
 interface EmirSatiriOzellikleri extends Omit<EmirAdimlariOzellikleri, 'kart'> { e: KokpitEmri; etkin: boolean; etkinlestir: () => void }
 
-function EmirSatiri({ m, e, zaman, uygula, surum, adimAc, hedef, etkin, etkinlestir, taslakVar = false }: EmirSatiriOzellikleri) {
+function EmirSatiri({ m, e, zaman, uygula, surum, adimAc, hedef, emirAc, etkin, etkinlestir, taslakVar = false }: EmirSatiriOzellikleri) {
   const y = useYerlestirme(m, e, surum, etkin);
   const kod = useMemo(() => new Map(m.tezgahlar.map((t) => [t.id, t.kod])), [m]);
   const tz = (id: string): string => kod.get(id) ?? id;
@@ -189,12 +203,15 @@ function EmirSatiri({ m, e, zaman, uygula, surum, adimAc, hedef, etkin, etkinles
   const hedefAnahtari = seciliAdim === null ? null : JSON.stringify([e.id, seciliAdim, y.yerler]);
   useEffect(() => {
     if (!hedef || !etkin) return undefined;
-    hedef(seciliAdim === null ? null : { emirId: e.id, adimId: seciliAdim, tezgahlar, yerler: y.yerler ?? [] });
+    hedef(seciliAdim === null || !uygula ? null : { emirId: e.id, adimId: seciliAdim, tezgahlar, yerler: y.yerler ?? [], yerlestir: (t) => { yerlestir.current(t); } });
     return () => { hedef(null); };
     // Hedef anahtarda toplanır; yer listesi her hesapta yeni dizidir.
-  }, [hedefAnahtari, etkin, hedef]);
+  }, [hedefAnahtari, etkin, hedef, uygula === null]);
 
   const yaz = (h: { aday: TurAdayi; gecBirakir: boolean } | null): void => { if (h && uygula) { uygula(h.aday, h.gecBirakir); y.sifirla(); } };
+  // Tahtadaki boş yere basılınca çağrılır; her çizimde güncel seçimleri görür.
+  const yerlestir = useRef<(t: string) => void>(() => undefined);
+  useEffect(() => { yerlestir.current = (t) => { yaz(y.tezgahSec(t)); }; });
   const seciliAd = e.adimlar.find((a) => a.id === seciliAdim)?.ad;
   const sistemHazir = y.sistem !== null && y.sistem !== 'okunamadi' && y.sistem.oz.gecerli;
   return (
@@ -202,8 +219,9 @@ function EmirSatiri({ m, e, zaman, uygula, surum, adimAc, hedef, etkin, etkinles
       <div className="tc-pyq-emir-ad">
         <b className="tc-pyq-mono">{e.no}</b> {e.urun}
         <small>{`${String(e.adet)} adet · ${durumYazisi(e)}`}</small>
+        {emirAc && <button type="button" className="tc-pyq-kucuk" aria-label={`${e.no} ayrıntısını aç`} onClick={() => { emirAc(e.id); }}><Simge ad="list" boyut="k" /> Ayrıntı</button>}
       </div>
-      <ol className="tc-pyq-adimlar">
+      <ol className="tc-pyq-rota">
         {e.adimlar.map((a) => {
           const yer = adimYeri(m, a, y.sec), x = m.isler[a.id], s = y.sec[a.id]?.tezgah;
           const secildi = seciliAdim === a.id;
@@ -228,7 +246,7 @@ function EmirSatiri({ m, e, zaman, uygula, surum, adimAc, hedef, etkin, etkinles
                 : y.yerler.length === 0 ? <p className="tc-pyq-not" role="status">Bu adım için uygun boş yer bulunamadı; "Hepsini en erken yere yerleştir" sistemin seçimini dener.</p>
                   : (
                     <>
-                      <p className="tc-pyq-not"><Simge ad="check" boyut="k" /> <b>{seciliAd}</b> seçili. Yere basın.</p>
+                      <p className="tc-pyq-not"><b>{seciliAd}</b> seçili. Yere basın.</p>
                       <ul>
                         {y.yerler.map((b) => (
                           <li key={b.tezgah} data-ilk={b.enErken ? '' : undefined}>

@@ -28,16 +28,20 @@ import { Liste } from './Liste.tsx';
 import { planaAlOnizle } from './plana-al.ts';
 import { sonDegisiklikleriGeriAl, taslakOzeti, useTaslak, type TaslakYazici } from './taslak.ts';
 import { TaslakCubugu } from './TaslakCubugu.tsx';
+import { EmirAdimlari, SiraSeridi, type YerlestirmeHedefi } from './Yerlestirme.tsx';
+import { ilkKart, kokKimligi, siraKartlari } from './yerlestirme.ts';
 import { Tur, type TurDurumu } from './Tur.tsx';
 import './kokpit.css';
 
-// Kokpit (kart 3151, 3282): planın tek yeri. Planlayanın kararları kişinin taslağına yazılır (3282 1d): taşıma, plana alma, ayar ve emrin
+// Kokpit (kart 3151, 3282, 3297): planın tek yeri. Gövde yukarıdan aşağı akar (3297 a): 1 emir kartları sırasıyla, 2 seçilen kartın emirleri
+// ve operasyonları (seç-yerleştir), 3 tam genişlik tahta. Ayrıntı, ayarlar, tur ve gelenler tahtanın üstüne açılır; yanında yer tutmaz. Planlayanın kararları kişinin taslağına yazılır (3282 1d): taşıma, plana alma, ayar ve emrin
 // yönü taslak komutudur, plan taslağın görünümünde yeniden dizilir, ortak çalışma "Plana yaz"a kadar değişmez. Geri son değişikliği taslaktan
 // alır. Gelenler yeni ve değişen işleri toplar; Canlıya al (yetkisi olmayanda Onaya gönder) Onay ve canlı bölümünü açar: onaya gönderme, müdür
 // onayı ve canlıya alma yalnız buradadır (3282-4 a) ve ortak çalışmadandır; taslak varken kapalıdır.
 
 type Goz = 'T' | 'S' | 'M' | 'B';
 const GOZLER: readonly (readonly [Goz, string])[] = [['T', 'Tezgâh'], ['S', 'Sipariş'], ['M', 'Matris'], ['B', '3B']];
+const BOLUM_ADI: Record<Goz, string> = { T: 'Tezgâhlar', S: 'Emirlere göre plan', M: 'Matris', B: '3B' };
 // Matris ve 3B'de tahta yoktur: iş ok tuşuyla kaymaz, sorun turu tahtaya döner, ayrıntı sonucu kendi içinde yazar.
 const tahtasiz = (g: Goz): boolean => g === 'M' || g === 'B';
 const DURUM_ADI: Record<Exclude<EmirDurumu, 'iyi'>, string> = { gec: 'Geç', risk: 'Riskli', plansiz: 'Plansız' };
@@ -106,6 +110,11 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
   const [ayarYon, setAyarYon] = useState<'ileri' | 'geri' | null>(null);
   // Ayarın etkisi Uygula ya da Vazgeç beklerken taslak çubuğundaki birincil düğme kapanır: ekranda tek birincil kalır.
   const [ayarEtkisi, setAyarEtkisi] = useState(false);
+  // Sıra şeridinde seçili kart (kök emir); seçilmediyse yerleşmesi eksik ilk kart. Tahtadan ya da listeden emir seçilince kart onu izler.
+  const [kart, setKart] = useState<string | null>(null);
+  const [gelenAcik, setGelenAcik] = useState(false);
+  // Seç-yerleştir: seçili adımın uygun tezgâhları ve boş yerleri (tahta işaretler).
+  const [yerHedefi, setYerHedefi] = useState<YerlestirmeHedefi | null>(null);
   useEffect(() => { onayIstegiAl(); }, []);
   const kok = useRef<HTMLDivElement | null>(null);
 
@@ -325,12 +334,26 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
   const onayda = o.depo.senaryolar?.senaryolar.filter((x) => x.durum === 'onayda').length ?? 0;
   const gelenListesi = useMemo(() => gelenler(m.emirler, o.depo.planSurumu?.bayat?.olaylar ?? [], zaman), [m, o.depo.planSurumu, zaman]);
   const gelenSec = useCallback((id: string) => {
+    // Plansız emir kartında yerleştirilir (2. bölüm); planlı emirde ayrıntı açılır ve iş tahtada gösterilir.
+    if (emir.get(id)?.durum === 'plansiz') { sec(null, null); setKart(kokKimligi(id)); setGelenAcik(false); return; }
     sec(id, null); setGoster(emir.get(id)?.adimlar.find((a) => m.isler[a.id])?.id ?? null);
   }, [sec, emir, m]);
 
+  const kartlar = useMemo(() => siraKartlari(m), [m]);
+  const seciliKart = kartlar.find((k) => k.kok === kart) ?? kartlar.find((k) => k.kok === ilkKart(kartlar)) ?? null;
+  useEffect(() => { if (secEmir !== null) setKart(kokKimligi(secEmir)); }, [secEmir]);
+  // Karta bağlı saha olayları kartta sayıyla görünür; plansız emir zaten kartın kendisidir.
+  const kartOlayi = useMemo(() => {
+    const k = new Map<string, number>();
+    for (const g of gelenListesi) if (g.emirId !== null && g.tur !== 'yeni') k.set(kokKimligi(g.emirId), (k.get(kokKimligi(g.emirId)) ?? 0) + 1);
+    return k;
+  }, [gelenListesi]);
+  const adimAc = useCallback((emirId: string, isId: string) => { sec(emirId, isId); setGoster(isId); }, [sec]);
+  const emirAc = useCallback((emirId: string) => { sec(emirId, null); }, [sec]);
+
   const secili = secEmir ? emir.get(secEmir) ?? null : null;
   // Sonuç satırı uygulandığı emrin ayrıntısında kalır; başka emir seçilince silinir.
-  useEffect(() => { setSonuc(null); if (secEmir !== null) setAyarAcik(false); }, [secEmir]);
+  useEffect(() => { setSonuc(null); if (secEmir !== null) { setAyarAcik(false); setGelenAcik(false); } }, [secEmir]);
   const fark = (d: (typeof DURUMLAR)[number]): string => (say[d] === ilk.current[d] ? '' : ` (${say[d] > ilk.current[d] ? '+' : '−'}${String(Math.abs(say[d] - ilk.current[d]))})`);
 
   return (
@@ -355,13 +378,13 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
         <span className="tc-pyq-seg tc-pyq-yon" role="group" aria-label="Planın yönü">
           {(['ileri', 'geri'] as const).map((y) => (
             <button type="button" key={y} aria-pressed={planYonu(c) === y} title={y === 'geri' ? 'Bütün planı teslimden geriye diz: iş termine yetişecek en geç saatte başlar' : 'Bütün planı ileriye diz: iş ilk boş saatte başlar'} disabled={!yazabilir || tur !== null || onayAcik}
-              onClick={() => { sec(null, null); setKapasiteAcik(false); setAyarYon(planYonu(c) === y ? null : y); setAyarAcik(true); }}>
+              onClick={() => { sec(null, null); setKapasiteAcik(false); setGelenAcik(false); setAyarYon(planYonu(c) === y ? null : y); setAyarAcik(true); }}>
               <Simge ad={y === 'geri' ? 'flag' : 'chev-right'} boyut="k" /><span>{y === 'geri' ? 'Teslimden geriye' : 'İleriye planla'}</span>
             </button>
           ))}
         </span>
-        <button type="button" className="tc-pyq-ok" aria-pressed={ayarAcik} title="Plan ayarları" disabled={tur !== null || onayAcik} onClick={() => { if (!ayarAcik) sec(null, null); setKapasiteAcik(false); setAyarYon(null); setAyarAcik(!ayarAcik); }}><Simge ad="gear" boyut="k" /><span>Ayarlar</span></button>
-        <button type="button" className="tc-pyq-ok" aria-pressed={kapasiteAcik} title="Tezgâhın arıza, bakım ve ek mesaisi" disabled={tur !== null || onayAcik} onClick={() => { if (!kapasiteAcik) sec(null, null); setAyarAcik(false); setKapasiteAcik(!kapasiteAcik); }}><Simge ad="wrench" boyut="k" /><span>Duruş ve mesai</span></button>
+        <button type="button" className="tc-pyq-ok" aria-pressed={ayarAcik} title="Plan ayarları" disabled={tur !== null || onayAcik} onClick={() => { if (!ayarAcik) sec(null, null); setKapasiteAcik(false); setGelenAcik(false); setAyarYon(null); setAyarAcik(!ayarAcik); }}><Simge ad="gear" boyut="k" /><span>Ayarlar</span></button>
+        <button type="button" className="tc-pyq-ok" aria-pressed={kapasiteAcik} title="Tezgâhın arıza, bakım ve ek mesaisi" disabled={tur !== null || onayAcik} onClick={() => { if (!kapasiteAcik) sec(null, null); setAyarAcik(false); setGelenAcik(false); setKapasiteAcik(!kapasiteAcik); }}><Simge ad="wrench" boyut="k" /><span>Duruş ve mesai</span></button>
         <Dugme simge="route" className="tc-pyq-tur-dugme" onClick={turBaslat} disabled={tur !== null}>Sorunları sırayla çöz</Dugme>
         {/* Taslak varken canlıya alma taslak çubuğundaki tek düğmeyle yapılır (3282-5 a); burada ikinci aynı adlı düğme durmaz. */}
         {(yazabilir || canliyaAlir) && !taslakVar && (
@@ -384,26 +407,44 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
         </Suspense>
       ) : (
       <div className="tc-pyq-govde">
-        <Gelenler l={gelenListesi} sec={gelenSec} yazabilir={yazabilir} secEmir={secEmir} />
         <div className="tc-pyq-ana">
-          {goz === 'B' ? (
-            <Suspense fallback={<DurumKutusu durum="yukleniyor" />}>
-              <Kokpit3B
-                m={m} cx={cx} once={canli.tur === 'tamam' ? canli.canli : null} onceDurumu={canli.tur === 'tamam' ? 'tamam' : canli.tur === 'hata' ? 'hata' : 'okunuyor'}
-                emirler={gorunen} secEmir={secEmir} zaman={zaman} sec={sec} matriseGec={() => { setGoz('M'); }}
-              />
-            </Suspense>
-          ) : goz === 'M' ? (
-            <Matris m={m} cx={cx} duzen={duzen} duzenSec={setDuzen} emirler={gorunen} secEmir={secEmir} secIs={secIs} zaman={zaman} sec={sec} gecSuz={() => { setSuz('gec'); }} />
-          ) : (
-            <>
-              <Tahta
-                m={m} cx={cx} goz={goz} olcek={olcek} emirler={gorunen} uyar={uyar} secEmir={secEmir} secIs={secIs} sec={sec} zaman={zaman}
-                tasi={yazabilir && !tur ? tasiDene : null} planaAl={yazabilir && !tur ? planaAlDene : null} once={once} gunAc={gunAc} uyari={uyarYaz} goster={goster} odak={odak} oneri={tur ? oneri : null}
-              />
-              <Liste m={m} cx={cx} goz={goz} emirler={gorunen} secEmir={secEmir} secIs={secIs} zaman={zaman} sec={sec} />
-            </>
+          <SiraSeridi
+            kartlar={kartlar} secili={seciliKart?.kok ?? null} sec={setKart} zaman={zaman} olay={kartOlayi}
+            sag={(
+              <button type="button" className="tc-pyq-kucuk" aria-pressed={gelenAcik} disabled={tur !== null} title="Yeni emirler ve saha olayları, tümü"
+                onClick={() => { if (!gelenAcik) { sec(null, null); setAyarAcik(false); setKapasiteAcik(false); } setGelenAcik(!gelenAcik); }}>
+                <Simge ad="list" boyut="k" /> Tümü ({gelenListesi.length})
+              </button>
+            )}
+          />
+          {seciliKart && (
+            <EmirAdimlari
+              key={seciliKart.kok} m={m} kart={seciliKart} zaman={zaman} uygula={tur ? null : hamleUygula} surum={surum} adimAc={adimAc} emirAc={emirAc}
+              hedef={setYerHedefi} taslakVar={taslakVar}
+            />
           )}
+          <section className="tc-pyq-bolum tc-pyq-bolum-plan" aria-label={BOLUM_ADI[goz]}>
+            <h2><b className="tc-pyq-bolum-no">3</b>{BOLUM_ADI[goz]}</h2>
+            {goz === 'B' ? (
+              <Suspense fallback={<DurumKutusu durum="yukleniyor" />}>
+                <Kokpit3B
+                  m={m} cx={cx} once={canli.tur === 'tamam' ? canli.canli : null} onceDurumu={canli.tur === 'tamam' ? 'tamam' : canli.tur === 'hata' ? 'hata' : 'okunuyor'}
+                  emirler={gorunen} secEmir={secEmir} zaman={zaman} sec={sec} matriseGec={() => { setGoz('M'); }}
+                />
+              </Suspense>
+            ) : goz === 'M' ? (
+              <Matris m={m} cx={cx} duzen={duzen} duzenSec={setDuzen} emirler={gorunen} secEmir={secEmir} secIs={secIs} zaman={zaman} sec={sec} gecSuz={() => { setSuz('gec'); }} />
+            ) : (
+              <>
+                <Tahta
+                  m={m} cx={cx} goz={goz} olcek={olcek} emirler={gorunen} uyar={uyar} secEmir={secEmir} secIs={secIs} sec={sec} zaman={zaman}
+                  tasi={yazabilir && !tur ? tasiDene : null} planaAl={yazabilir && !tur ? planaAlDene : null} once={once} gunAc={gunAc} uyari={uyarYaz} goster={goster} odak={odak} oneri={tur ? oneri : null}
+                  yerlestirme={tur ? null : yerHedefi}
+                />
+                <Liste m={m} cx={cx} goz={goz} emirler={gorunen} secEmir={secEmir} secIs={secIs} zaman={zaman} sec={sec} />
+              </>
+            )}
+          </section>
         </div>
         {tur ? (
           <Tur
@@ -417,6 +458,8 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
           <Ayrinti m={m} e={secili} secIs={secIs} zaman={zaman} uygula={hamleUygula} surum={surum} bekle={mesgul} matris={tahtasiz(goz)} ileti={tahtasiz(goz) ? sonuc : null} yon={{ c, taslak, yazabilir }} adimSec={(id) => { sec(secili.id, id); setGoster(id); }} kapat={() => { sec(null, null); }} />
         ) : kapasiteAcik ? (
           <Kapasite c={c} m={m} taslak={taslak} yazabilir={yazabilir} zaman={zaman} kapat={() => { setKapasiteAcik(false); }} />
+        ) : gelenAcik ? (
+          <Gelenler l={gelenListesi} sec={gelenSec} yazabilir={yazabilir} secEmir={secEmir} kapat={() => { setGelenAcik(false); }} />
         ) : null}
       </div>
       )}

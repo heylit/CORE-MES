@@ -319,23 +319,39 @@ describe('Kokpit', () => {
     expect(document.querySelector('.tc-pyq-tahta')).not.toBeNull();
   });
 
-  it('Gelenler: saha olayları emir Kokpit\'teyse Göster ile emri seçer; emri olmayan olayda düğme yok; liste kapanır', () => {
+  // 3297 (Risk K5): Gelenler kutusu kalktı; olaylar kaybolmaz. "Tümü" bütün gelenleri sayar; emre bağlanamayan olay listede en üstte ayrı
+  // bölümdedir, emre bağlı olay kartında sayıyla görünür.
+  it('Gelenler "Tümü" ile açılır: sayı bütün olayları kapsar, emre bağlı olmayan olay üstte ayrı bölümde; Göster emri seçer; kartta olay sayısı', () => {
     const bayat = { bayat: true, sonCanliyaAlma: '2026-10-20T06:00:00Z', olaylar: [
       { neden: 'durus', zaman: '2026-10-20T09:00:00Z', uretimEmriId: null, emirNo: null, makineId: 1, makineKod: 'ORN-T01' },
       { neden: 'satin-alma-termini', zaman: '2026-10-20T08:00:00Z', uretimEmriId: 3, emirNo: '3', makineId: null, makineKod: null },
     ] };
     vi.stubGlobal('CSS', { escape: (x: string) => x });
     const { sec } = ac({ depo: { ...DEPO, planSurumu: { planSurumu: 3, sonCanliyaAlma: null, bayat } } as unknown as PlanlamaDeposu });
-    const kutu = screen.getByRole('region', { name: 'Gelenler' });
-    const satirlar = within(kutu).getAllByRole('listitem');
-    expect(satirlar.map((x) => x.textContent)).toEqual([expect.stringContaining('ORN-T01'), expect.stringContaining('Satın alma termini')]);
-    expect(within(satirlar[0]!).queryByRole('button')).toBeNull();
-    expect(satirlar[0]!.textContent).toContain('Arıza / bakım');
+    expect(screen.queryByRole('complementary', { name: 'Gelenler' })).toBeNull();
+    const serit = screen.getByRole('region', { name: 'Emirler, sırasıyla' });
+    expect(serit.querySelector('[data-kart="3"] [data-olay]')?.textContent).toContain('1 olay');
+    fireEvent.click(within(serit).getByRole('button', { name: /Tümü \(2\)/ }));
+    const kutu = screen.getByRole('complementary', { name: 'Gelenler' });
+    const kartsiz = within(kutu).getByRole('region', { name: 'Emre bağlı olmayan olaylar' });
+    expect(kutu.querySelector('section')).toBe(kartsiz);
+    const ilk = within(kartsiz).getAllByRole('listitem');
+    expect(ilk.map((x) => x.textContent)).toEqual([expect.stringContaining('ORN-T01')]);
+    expect(within(ilk[0]!).queryByRole('button')).toBeNull();
+    expect(ilk[0]!.textContent).toContain('Arıza / bakım');
     fireEvent.click(within(kutu).getByRole('button', { name: 'Göster' }));
     expect(sec).toHaveBeenCalledWith({ siparis: '3', adim: null });
-    fireEvent.click(within(kutu).getByRole('button', { name: /Gelenler/ }));
-    expect(within(kutu).queryAllByRole('listitem')).toHaveLength(0);
+    fireEvent.click(within(kutu).getByRole('button', { name: 'Gelenleri kapat' }));
+    expect(screen.queryByRole('complementary', { name: 'Gelenler' })).toBeNull();
     vi.unstubAllGlobals();
+  });
+
+  it('gövde yukarıdan aşağıdır: sıra kartları, seçilen kartın operasyonları, plan bölümü; yan sütun yoktur', () => {
+    ac();
+    const ana = document.querySelector('.tc-pyq-ana');
+    expect([...(ana?.children ?? [])].map((x) => x.getAttribute('aria-label'))).toEqual(['Emirler, sırasıyla', 'Emirler ve operasyonlar', 'Tezgâhlar']);
+    expect(document.querySelector('.tc-pyq-govde')?.children).toHaveLength(1);
+    expect(ana?.querySelector('.tc-pyq-tahta')).not.toBeNull();
   });
 
   // 3282 2a-1: Kapasite üst şeritten açılır (düğme basılı görünür) ve seçimi kaldırır; Ayarlar açılınca kapanır.
