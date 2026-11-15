@@ -24,6 +24,8 @@ export const RECETE_ROTA_IKINCI_MENU = {
       // 2779 (2781 a): planlanamayan emir ve rota adımlarının kontrol listesi; yalnız okur.
       { anahtar: 'planlanabilirlik', baslik: 'Planlanabilirlik', yol: '/recete-rota/planlanabilirlik', simge: 'gauge', islem: 'sayfa.recete-rota' },
       { anahtar: 'sartnameler', baslik: 'Şartname ve talimatlar', yol: '/recete-rota/sartnameler', simge: 'clipboard-check', islem: 'sayfa.recete-rota' },
+      // 3273 a: hazır rota şablonları; okuma rota okuyan herkesin, yazma rota.sablon-yaz.
+      { anahtar: 'rota-sablonlari', baslik: 'Rota şablonları', yol: '/recete-rota/rota-sablonlari', simge: 'route', islem: 'sayfa.recete-rota' },
       // Emrin evi burasıdır (1416 a): kapanış onayı burada verilir; liste kapanış okuma yetkisiyle görünür, onay düğmeleri onay yetkisiyle.
       { anahtar: 'kapanis', baslik: 'Kapanış onayları', yol: '/recete-rota/kapanis', simge: 'check', islem: 'uretim-emirleri.kapanis-oku' },
       // 2584 a: Reçete ve Rota'nın kendi ayarları (elle tanımlanan statüler); yazma recete-rota.yaz ile.

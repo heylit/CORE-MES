@@ -25,6 +25,7 @@ const yukleyiciler = {
   kaynaklar: () => import('./kaynaklar/index.tsx'),
   emirler: () => import('./emirler/index.tsx'),
   sartnameler: () => import('./sartnameler/index.tsx'),
+  sablonlar: () => import('./sablonlar/index.tsx'),
 };
 let hepsi: Promise<unknown> | null = null;
 // İndirilemeyen bölüm (bağlantı koptu) burada sessiz kalır: açıldığında kendi beklemesi hatayı gösterir, sonraki açılış yeniden dener.
@@ -51,6 +52,7 @@ const Malzemeler = tembel(yukleyiciler.kaynaklar, (m) => m.Malzemeler);
 const Kaynaklar = tembel(yukleyiciler.kaynaklar, (m) => m.Kaynaklar);
 const Ayarlar = tembel(yukleyiciler.kaynaklar, (m) => m.Ayarlar);
 const SartnameTalimat = tembel(yukleyiciler.sartnameler, (m) => m.SartnameTalimat);
+const RotaSablonlari = tembel(yukleyiciler.sablonlar, (m) => m.RotaSablonlari);
 // Planlanabilirlik ön yüklemeye girmez: yalnız açılınca indirilir, öteki bölümlerin ilk açılışını ağırlaştırmaz.
 const Planlanabilirlik = tembel(() => import('./planlanabilirlik/index.tsx'), (m) => m.Planlanabilirlik);
 
@@ -72,6 +74,8 @@ export const EKRANLAR: Record<SekmeAnahtari, { ekran: ComponentType<EkranOzellik
   planlanabilirlik: { ekran: Planlanabilirlik, parca: 'R3' },
   // Rota modülünün kütüphaneleri (989 a); rota tarafı olduğu için R1'in alanındadır.
   sartnameler: { ekran: SartnameTalimat, parca: 'R1' },
+  // 3273 a: rota şablonları kütüphanesi (rota tarafı).
+  'rota-sablonlari': { ekran: RotaSablonlari, parca: 'R1' },
   kapanis: { ekran: Kapanis, parca: 'R3' },
   ayarlar: { ekran: Ayarlar, parca: 'R2' },
 };
