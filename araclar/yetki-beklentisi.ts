@@ -165,6 +165,7 @@ export const ROL_MATRISI = {
       'sayfa.siparisler', 'sayfa.stok', 'sayfa.taleplerim', 'sayfa.terminal', 'sayfa.uretim-emirleri', 'sayfa.uretim-terminali',
       'sevkiyat.oku', 'siparisler.oku', 'stok.istek', 'terminal.uret', 'uretim-emirleri.kapanis-kalite', 'uretim-emirleri.kapanis-oku',
       'projeler.gorev-isle', 'sayfa.proje-gorevlerim', 'projeler.gorev-kontrol',
+      'proses.oku', 'sayfa.proses',
     ],
   },
   markalama_gorevlisi: {
@@ -210,6 +211,7 @@ export const ROL_MATRISI = {
       'uretim-emirleri.emir-ac', 'uretim-emirleri.duzenle', 'uretim-emirleri.adim-yaz', 'uretim-emirleri.bol-birlestir',
       'uretim-emirleri.plana-al', 'uretim-emirleri.beklet', 'uretim-emirleri.iptal', 'uretim-emirleri.rotasiz-ac',
       'projeler.gorev-isle', 'sayfa.proje-gorevlerim', 'projeler.gorev-kontrol', 'projeler.sablon-yaz',
+      'proses.oku', 'sayfa.proses',
     ],
   },
   muhasebe_finans: {
@@ -291,6 +293,7 @@ export const ROL_MATRISI = {
       'uretim-emirleri.plana-al', 'uretim-emirleri.beklet', 'uretim-emirleri.iptal', 'uretim-emirleri.rotasiz-ac',
       'vardiya.yaz',
       'projeler.gorev-isle', 'sayfa.proje-gorevlerim', 'projeler.gorev-kontrol', 'projeler.sablon-yaz',
+      'proses.oku', 'sayfa.proses',
     ],
   },
   proses_muhendisi: {
@@ -374,6 +377,7 @@ export const ROL_MATRISI = {
       'uretim-emirleri.emir-ac', 'uretim-emirleri.duzenle', 'uretim-emirleri.adim-yaz', 'uretim-emirleri.bol-birlestir',
       'uretim-emirleri.plana-al', 'uretim-emirleri.beklet', 'uretim-emirleri.iptal', 'uretim-emirleri.rotasiz-ac',
       'projeler.gorev-isle', 'sayfa.proje-gorevlerim', 'projeler.gorev-kontrol', 'projeler.sablon-yaz',
+      'proses.oku', 'sayfa.proses',
     ],
   },
   vardiya_sorumlusu: {
