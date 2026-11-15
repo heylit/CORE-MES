@@ -36,11 +36,11 @@ after(async () => {
 
 test('2133-1 b: ekleme, düzeltme, durum ve adres yazmaları firma değişti olayı verir; reddedilen yazma olay vermez', async () => {
   const firma = await tx((db) => servis.firmaEkle(db, kullanici, firmaEkleGovdesi.parse({ ad: 'Olay Firma', tur: 'musteri' })));
-  assert.deepEqual(gelen.splice(0), [{ firmaId: firma.id, kaldirilanAdresId: null, adresVar: null }]);
+  assert.deepEqual(gelen.splice(0), [{ firmaId: firma.id, kaldirilanAdresId: null, kisiId: kullanici.id, adresVar: null }]);
 
   const duzeltilen = await tx((db) => servis.firmaGuncelle(db, kullanici, firma.id,
     firmaGuncelleGovdesi.parse({ ad: 'Olay Firma', tur: 'musteri', surum: firma.surum, enlem: 39.9, boylam: 32.8 }), () => {}));
-  assert.deepEqual(gelen.splice(0), [{ firmaId: firma.id, kaldirilanAdresId: null, adresVar: null }]);
+  assert.deepEqual(gelen.splice(0), [{ firmaId: firma.id, kaldirilanAdresId: null, kisiId: kullanici.id, adresVar: null }]);
 
   await assert.rejects(tx((db) => servis.firmaGuncelle(db, kullanici, firma.id,
     firmaGuncelleGovdesi.parse({ ad: 'Olay Firma', tur: 'musteri', surum: firma.surum }), () => {})));
@@ -48,7 +48,7 @@ test('2133-1 b: ekleme, düzeltme, durum ve adres yazmaları firma değişti ola
 
   const pasif = await tx((db) => servis.firmaDurumuDegistir(db, kullanici.id, firma.id, duzeltilen.surum, 'pasif'));
   const aktif = await tx((db) => servis.firmaDurumuDegistir(db, kullanici.id, firma.id, pasif.surum, 'aktif'));
-  assert.equal(gelen.splice(0).length, 2);
+  assert.deepEqual(gelen.splice(0).map((o) => o.kisiId), [kullanici.id, kullanici.id]);
 
   const eklendi = await tx((db) => servis.adresEkle(db, kullanici, firma.id,
     adresEkleGovdesi.parse({ surum: aktif.surum, tur: 'teslim', ad: 'Depo', adres: 'Depo yolu', enlem: 39.8, boylam: 32.7 })));
@@ -60,7 +60,7 @@ test('2133-1 b: ekleme, düzeltme, durum ve adres yazmaları firma değişti ola
   await assert.rejects(tx((db) => servis.adresKaldir(db, kullanici, firma.id, adres.id + 1000, guncellendi.firma.surum)));
   assert.deepEqual(gelen.splice(0), [], 'olmayan adres olay vermez');
   await tx((db) => servis.adresKaldir(db, kullanici, firma.id, adres.id, guncellendi.firma.surum));
-  assert.deepEqual(gelen.splice(0), [{ firmaId: firma.id, kaldirilanAdresId: adres.id, adresVar: true }]);
+  assert.deepEqual(gelen.splice(0), [{ firmaId: firma.id, kaldirilanAdresId: adres.id, kisiId: kullanici.id, adresVar: true }]);
 });
 
 test('2133-1 b: dinleyicinin reddi firma yazmasını geri alır', async () => {

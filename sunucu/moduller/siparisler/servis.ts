@@ -23,7 +23,7 @@ import {
 } from './kurallar.ts';
 import { bagliEmirler, emreBagliKalemler, emreBagliKalemlerOku } from './bagli-emirler.ts';
 import type { DurumKomutu } from './kurallar.ts';
-import { siparisIptalEdildiBildir, siparisOnaylandiBildir, siparisOnayiGeriAlindiBildir } from './siparis-olaylari.ts';
+import { siparisDegistiBildir, siparisIptalEdildiBildir, siparisOnaylandiBildir, siparisOnayiGeriAlindiBildir } from './siparis-olaylari.ts';
 import * as sorgular from './sorgular.ts';
 import type { BaslikAlanlari, KalemSatiri, SiparisSatiri as BaslikSatiri } from './sorgular.ts';
 
@@ -122,6 +122,7 @@ export async function siparisEkle(db: Db, kullanici: Kullanici, g: SiparisEkleVe
   const no = await numaraAl(db, 'siparisler.siparis-no', { varMi: (n) => sorgular.siparisNoVarMi(db, n) });
   const id = await kisitKorumali(KISITLAR, () => sorgular.siparisEkle(db, no, baslik(g), kullanici.id));
   await sorgular.kalemleriYaz(db, id, g.satirlar);
+  await siparisDegistiBildir(db, { siparisId: id, kullanici });
   // Ayrı "onaya gönder" durumu yok: taslak açılınca onay bekler; tekliften dönüşüm de buradan geçer.
   await bildirimGonder(db, {
     tur: 'siparisler.onay-bekliyor', baslik: `Onay bekleyen sipariş: ${no}`, yol: `/siparisler/${id}`, kaynakKimlik: String(id), haric: kullanici.id,
@@ -189,6 +190,7 @@ export async function siparisGuncelle(
     bulunamadiIletisi: SIPARIS_YOK,
   }));
   await sorgular.kalemleriYaz(db, id, satirlar, kilitli);
+  await siparisDegistiBildir(db, { siparisId: id, kullanici });
   return siparisAyrintisi(db, id);
 }
 
@@ -217,6 +219,7 @@ export async function durumDegistir(
   if (komut === 'onayla') await siparisOnaylandiBildir(db, { siparisId: id, kullanici, projeKodu: g.projeKodu });
   if (komut === 'geri-al') await siparisOnayiGeriAlindiBildir(db, { siparisId: id, kullanici });
   if (komut === 'iptal') await siparisIptalEdildiBildir(db, { siparisId: id, kullanici });
+  await siparisDegistiBildir(db, { siparisId: id, kullanici });
   if (komut === 'onayla') await tahsilatiFinansaYaz(db, kullanici.id, id);
   if (komut === 'iptal' || komut === 'geri-al') await beklenenTahsilatKaldir(db, id);
   return siparisAyrintisi(db, id);

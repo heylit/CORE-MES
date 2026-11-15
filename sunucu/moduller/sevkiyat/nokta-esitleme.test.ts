@@ -14,7 +14,7 @@ let ortam: TestVeritabani;
 let vt: Veritabani;
 let kisiId = 0;
 const tx = <T>(is: (db: Db) => Promise<T>) => vt.tx(is);
-const olay = (firmaId: number, kaldirilanAdresId: number | null = null) => tx((db) => servis.firmaDegistiYansit(db, { firmaId, kaldirilanAdresId }));
+const olay = (firmaId: number, kaldirilanAdresId: number | null = null) => tx((db) => servis.firmaDegistiYansit(db, { firmaId, kaldirilanAdresId, kisiId: 1 }));
 
 type FirmaGirdisi = { ad: string; kod?: string; tur?: 'musteri' | 'tedarikci' | 'ikisi'; fason?: boolean; enlem?: number; boylam?: number; adres?: string };
 // Firma servisinin yazdığı gibi: satır yazılır, sonra olay verilir.
@@ -37,7 +37,7 @@ const adresEkle = async (firmaId: number, a: { tur: 'fatura' | 'teslim' | 'sube'
 };
 // Firma servisi adres kaldırmada olayı silmeden önce verir; ikisi aynı işlemdedir.
 const adresKaldir = (firmaId: number, adresId: number) => tx(async (db) => {
-  await servis.firmaDegistiYansit(db, { firmaId, kaldirilanAdresId: adresId });
+  await servis.firmaDegistiYansit(db, { firmaId, kaldirilanAdresId: adresId, kisiId: 1 });
   await db.sorgu('DELETE FROM musteri_tedarikci_adres WHERE id = $1', [adresId]);
 });
 const ayarYaz = async (anahtar: string, deger: unknown) => {

@@ -5,4 +5,6 @@ export {
   siparistenProjeAcDisari as siparistenProjeAc,
 } from './servis.ts';
 export type { ProjeAyrintiOzeti, ProjeOzeti } from './servis.ts';
+export { projeAcildiDinle, projeDegistiDinle } from './proje-olaylari.ts';
+export type { ProjeOlayi, ProjeOlayiDinleyicisi } from './proje-olaylari.ts';
 export type { SiparistenProjeVerisi } from '#paylasilan/sozlesme/projeler.ts';

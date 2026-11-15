@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate, useParams } from 'react-router-dom';
 import type { Proje, ProjeYonetimiCevabi } from '#paylasilan/sozlesme/projeler.ts';
-import { Dugme, DurumKutusu, Kart, Rozet, Sekmeler, type Sekme } from '../../ortak/arayuz/index.ts';
+import { Dugme, DurumKutusu, Kart, KlasorBaglantisi, Rozet, Sekmeler, type Sekme } from '../../ortak/arayuz/index.ts';
 import { api, hataIletisi } from '../../ortak/veri/api.ts';
 import { useOturum } from '../../ortak/veri/oturum.ts';
 import { ProjePlani } from '../plan/disari.ts';
@@ -71,7 +71,10 @@ export function ProjeAyrinti() {
         <h1 className="tc-prj-baslik">{p.kod} · {p.ad}</h1>
         <Rozet ton={DURUM_TONU[p.durum]}>{DURUM_METNI[p.durum]}</Rozet>
         <StatuCipi statu={y?.statu ?? p.statu} {...(statuYazabilir && y ? { tikla: () => { statuAcikYaz(true); } } : {})} />
-        {yazabilir && <div className="tc-prj-bas-sag"><Dugme simge="edit" onClick={() => { duzenleYaz(true); }}>Düzenle</Dugme></div>}
+        <div className="tc-prj-bas-sag">
+          <KlasorBaglantisi tur="proje" id={p.id} />
+          {yazabilir && <Dugme simge="edit" onClick={() => { duzenleYaz(true); }}>Düzenle</Dugme>}
+        </div>
       </header>
       <Sekmeler etiket="Proje bölümleri" sekmeler={sekmeler} secili={sekme} sec={sec} />
       {YONETIM_SEKMELERI.has(sekme) && (yonetim.isError

@@ -1,5 +1,5 @@
 import { useRef, useState, type ChangeEvent } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type {
   DosyaListesiCevabi, DosyalarCevabi, GecmisCevabi, GecmisOlayi, Klasor, KlasorAcGovdesi, KlasorDuzeyi, KlasorlerCevabi, OrtakDosya, SurumlerCevabi,
@@ -498,7 +498,9 @@ function yolu(klasorler: readonly Klasor[], id: number | null): Klasor[] {
 
 export function OrtakDosyalar({ gorunum }: { gorunum: Gorunum }) {
   const git = useNavigate();
-  const [secili, seciliYaz] = useState<number | null>(null);
+  // Kayıt ekranındaki "Klasör" bağlantısı klasörü `?klasor=` ile açar (kart 3288-2); görünmeyen kimlik seçimi değiştirmez.
+  const [adres] = useSearchParams();
+  const [secili, seciliYaz] = useState<number | null>(() => { const n = Number(adres.get('klasor')); return Number.isInteger(n) && n > 0 ? n : null; });
   const [sekme, sekmeYaz] = useState<SekmeAdi>('dosyalar');
   const [ara, araYaz] = useState('');
   const [agacAcik, agacAcikYaz] = useState(false);
