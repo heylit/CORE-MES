@@ -203,7 +203,7 @@ test('Kokpit: tahta, sağ tıkla tut ve bırak, taslak, Geri ve Plana yaz, Matri
     await expect.poll(() => tasinan().length).toBe(1);
     expect(onizleme).toContain('S2.a1');
     expect(tasinan()[0]).toMatchObject({ isId: 'S2.a1', tezgah: 'M2' });
-    expect((tasinan()[0] as { baslangic: number }).baslangic).toBeGreaterThan(32);
+    expect(Number(tasinan()[0]?.['baslangic'])).toBeGreaterThan(32);
     // Taşıma taslağa yazılır, plan taslağın görünümünde yeniden dizilir. Geri taslağın değişiklik sayısını gösterir; geri alınınca taslak boşalır.
     await expect.poll(() => t.s.satirlar.map((x) => x.komut.tur)).toEqual(['tasi', 'diz']);
     expect(t.s.degerlendirme).toEqual([{ taslakSurumu: 1, istek: { tur: 'plan-uygula', isler: ['*'] } }]);
