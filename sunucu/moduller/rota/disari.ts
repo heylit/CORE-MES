@@ -116,7 +116,7 @@ export async function olcumAtlamalari(
 }
 
 // 3272: siparişten açılan emrin türüne düşen rota; bağı kablolama.ts kurar (uretim-emirleri rotayı ithal edemez). Yetki denetlemez.
-export { siparisAcilisiRotasi } from './servis.ts';
+export { siparisAcilisiRotasi, revizyonunRotasi } from './servis.ts';
 
 // Terminal: emre sabitlenen talimat sürümünün 3B sahnesi (3209 a); yetki denetlemez.
 export { talimatSahnesi } from './servis.ts';

@@ -42,11 +42,11 @@ const istege = (azami: number) =>
   });
 
 // 3244 b: kalem üretim çeşidine göre partilere ayrılır (örnek 10 FAI + 90 seri). Boş liste "tek seri parti" demektir (eski kalemler
-// de öyle okunur). Tür emir türü listesidir (uretim-emirleri sahibi); bir kalemde aynı tür iki kez olmaz, toplam kalem miktarıdır (SIP-30).
+// de öyle okunur). Tür emir türü listesidir (uretim-emirleri sahibi); toplam kalem miktarıdır (SIP-30). 3296-3 a: aynı türden birden
+// çok parti olabilir; rotaId partide elle seçilen rotadır (boşsa çeşidin rotası; ürün ve yürürlük onayda rota sahibince denetlenir).
 export const PARTI_EN_COK = 8;
-export const partiGovdesi = z.object({ emirTuru: z.enum(EMIR_TURLERI), adet: miktarSemasi });
-export const partiListesiSemasi = z.array(partiGovdesi).max(PARTI_EN_COK, `Kalemde en çok ${PARTI_EN_COK} parti olabilir.`)
-  .refine((p) => new Set(p.map((x) => x.emirTuru)).size === p.length, 'Kalemde aynı üretim çeşidi iki kez olamaz.');
+export const partiGovdesi = z.object({ emirTuru: z.enum(EMIR_TURLERI), adet: miktarSemasi, rotaId: z.number().int().positive().max(2147483647).nullish().transform((r) => r ?? null) });
+export const partiListesiSemasi = z.array(partiGovdesi).max(PARTI_EN_COK, `Kalemde en çok ${PARTI_EN_COK} parti olabilir.`);
 
 export const siparisSatiriGovdesi = z.object({
   // SIP-19 (3254 a): var olan kalemin kimliği; onayı geri alınmış siparişte emre bağlı kalem bununla eşlenir. Yeni kalemde yok.
@@ -123,7 +123,7 @@ export const siparisSatiriSemasi = z.object({
   termin: tarihSemasi.nullable(),
   aciklama: z.string().nullable(),
   // Kaydedilmiş partiler; boşsa kalem tek seri partidir.
-  partiler: z.array(z.object({ id: z.number().int(), emirTuru: z.enum(EMIR_TURLERI), adet: ondalikMetinSemasi })),
+  partiler: z.array(z.object({ id: z.number().int(), emirTuru: z.enum(EMIR_TURLERI), adet: ondalikMetinSemasi, rotaId: z.number().int().nullable() })),
   // SIP-19 (3254 a): kaleme üretim emri bağlı; onayı geri alınmış siparişte bu kalemde yalnız termin değişir.
   emreBagli: z.boolean(),
 });

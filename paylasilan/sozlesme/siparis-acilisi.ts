@@ -27,8 +27,9 @@ export const siparisAcilisiSatiri = z.object({
   // Tam sayı değilse null (atlama "tam-sayi-degil").
   adet: z.number().int().nullable(),
   teslim: tarihSemasi.nullable(),
-  // Emrin türüne düşen rota ve yürürlükteki revizyonu; rota ya da yürürlükte revizyon yoksa null ("Rota bekliyor").
-  rota: z.object({ ad: z.string(), harf: z.string() }).nullable(),
+  // Emrin türüne düşen rota ve yürürlükteki revizyonu; rota ya da yürürlükte revizyon yoksa null ("Rota bekliyor"). 3296-3 a: elle true
+  // ise partide seçilen rota; seçilen rota kullanılamadıysa (yürürlükte değil) türün rotası gelir ve elleDustu true olur.
+  rota: z.object({ ad: z.string(), harf: z.string(), elle: z.boolean().optional(), elleDustu: z.boolean().optional() }).nullable(),
   emir: z.object({ id: KIMLIK, no: z.string(), durum: z.enum(EMIR_DURUMLARI), rotaBekliyor: z.boolean() }).nullable(),
   atlama: z.enum(SIPARIS_ACILISI_ATLAMALARI).nullable(),
 });

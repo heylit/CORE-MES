@@ -230,7 +230,7 @@ describe('Satış siparişi ayrıntısı', () => {
 
   it('3244 b: kalem termini tarihle ve işaretle görünür; partiler adet ve çeşitle, partisiz kalem Seri', async () => {
     const partili = { ...AYRINTI_TASLAK, satirlar: [
-      { ...SATIR, partiler: [{ id: 1, emirTuru: 'fai', adet: '10.000' }, { id: 2, emirTuru: 'seri', adet: '90.000' }] },
+      { ...SATIR, partiler: [{ id: 1, emirTuru: 'fai', adet: '10.000', rotaId: null }, { id: 2, emirTuru: 'seri', adet: '90.000', rotaId: null }] },
       { ...SATIR, id: 12, sira: 2, termin: '2026-11-20' },
     ] } satisfies SiparisAyrintisi;
     sunucuKur(FIYAT_OKUYUCU, (yontem, yol) => (yontem === 'GET' && yol === '/siparisler/5' ? json(200, partili) : undefined));
@@ -304,6 +304,19 @@ describe('Satış siparişi ayrıntısı', () => {
     const pencere = await screen.findByRole('dialog', { name: 'Siparişi onayla' });
     fireEvent.click(await within(pencere).findByRole('button', { name: 'Onayla, proje ve 2 emri aç' }));
     expect((await within(pencere).findByRole('alert')).textContent).toBe('Onaylı sipariş onaylanamaz.');
+  });
+
+  it('3296-3 a: onay penceresi partide elle seçilen rotayı ve yürürlükte olmadığı için türün rotasına düşeni söyler', async () => {
+    const acilis = { ...ACILIS, satirlar: [
+      { ...ACILIS_SATIRI, rota: { ad: 'ORN FAI', harf: 'A', elle: true } },
+      { ...ACILIS_SATIRI, kalemId: 51, kalemSira: 2, rota: { ad: 'Standart', harf: 'B', elleDustu: true } },
+    ] };
+    sunucuKur(YONETICI, (yontem, yol) => (yontem === 'GET' && yol === '/uretim-emirleri/siparis-acilisi/5' ? json(200, acilis) : undefined));
+    ac('/siparisler/5');
+    fireEvent.click(await screen.findByRole('button', { name: 'Onayla' }));
+    const pencere = await screen.findByRole('dialog', { name: 'Siparişi onayla' });
+    expect(await within(pencere).findByText('ORN FAI · Rev A · elle')).toBeTruthy();
+    expect(within(pencere).getByText('Standart · Rev B · seçilen rota yürürlükte değil, türün rotası')).toBeTruthy();
   });
 
   it('3272: onay penceresi açılacak projeyi, emirleri ve rota bekleyeni gösterir; proje no değişince gövdeye girer', async () => {
@@ -625,6 +638,47 @@ describe('Yeni satış siparişi', () => {
       siparisTarihi: '2026-11-14', termin: '2027-01-13',
       satirlar: [{ termin: null, partiler: [{ emirTuru: 'fai', adet: '10' }, { emirTuru: 'seri', adet: '90' }] }],
     });
+  });
+
+  it('3296-3 a: aynı türden ikinci parti eklenir; ürünün iki yürürlükte rotası varsa partiye rota seçilir ve gövdede gider', async () => {
+    const ROTALAR = {
+      revizyonlar: [{ id: 71, rotaId: 1, harf: 'A', durum: 'yururlukte' }, { id: 72, rotaId: 2, harf: 'A', durum: 'yururlukte' }],
+      rotalar: [{ id: 1, ad: 'Standart', standart: true, surum: 1, emirTurleri: [], taslakAcilabilir: false }, { id: 2, ad: 'ORN FAI', standart: false, surum: 1, emirTurleri: ['fai'], taslakAcilabilir: false }],
+    };
+    const istekler = sunucuKur(FIYATCI, (yontem, yol) => (yontem === 'POST' && yol === '/siparisler/ekle' ? json(200, AYRINTI_TASLAK)
+      : yontem === 'GET' && yol === '/rota/urunler/31' ? json(200, ROTALAR) : undefined));
+    ac('/siparisler/yeni');
+    await screen.findByRole('option', { name: 'M-7 · Deneme Musteri A' });
+    fireEvent.change(screen.getByLabelText(/^Müşteri( \*)?$/), { target: { value: '7' } });
+    fireEvent.change(screen.getByLabelText(/^Sipariş tarihi/), { target: { value: '2026-11-14' } });
+    fireEvent.change(screen.getByLabelText(/^Termin \(gün\)/), { target: { value: '45' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Malzeme kartı seç' }));
+    fireEvent.click(await screen.findByText('Deneme Braket'));
+    fireEvent.change(screen.getByLabelText(/^Kalem 1 miktar/), { target: { value: '100' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Parti ekle' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Parti ekle' }));
+    fireEvent.change(screen.getByLabelText(/^Kalem 1 parti 1 adet/), { target: { value: '10' } });
+    fireEvent.change(screen.getByLabelText(/^Kalem 1 parti 2 adet/), { target: { value: '60' } });
+    fireEvent.change(screen.getByLabelText(/^Kalem 1 parti 3 adet/), { target: { value: '30' } });
+    const rota = await screen.findByLabelText(/^Kalem 1 parti 3 rota/);
+    fireEvent.change(rota, { target: { value: '2' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Taslak aç' }));
+    await waitFor(() => expect(yazmalar(istekler)).toHaveLength(1));
+    expect(yazmalar(istekler)[0]?.govde).toMatchObject({
+      satirlar: [{ partiler: [{ emirTuru: 'fai', adet: '10', rotaId: null }, { emirTuru: 'seri', adet: '60', rotaId: null }, { emirTuru: 'seri', adet: '30', rotaId: 2 }] }],
+    });
+  });
+
+  it('3296-3 a: Reçete ve Rota okunamıyorsa partide rota seçimi görünmez', async () => {
+    sunucuKur(FIYATCI);
+    ac('/siparisler/yeni');
+    await screen.findByRole('option', { name: 'M-7 · Deneme Musteri A' });
+    fireEvent.click(screen.getByRole('button', { name: 'Malzeme kartı seç' }));
+    fireEvent.click(await screen.findByText('Deneme Braket'));
+    fireEvent.change(screen.getByLabelText(/^Kalem 1 miktar/), { target: { value: '100' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Parti ekle' }));
+    await screen.findByLabelText(/^Kalem 1 parti 1 adet/);
+    expect(screen.queryByLabelText(/^Kalem 1 parti 1 rota/)).toBeNull();
   });
 
   it('3244 b: kalem termini elle değişince "Elle" olur ve gövdede gider; "Siparişe bağla" geri bağlar', async () => {

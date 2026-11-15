@@ -401,6 +401,26 @@ export const oncelikDegisimIhlali = (durum: EmirDurumu, arsiv: boolean): string 
 // Proje isteyen türe yalnız projeli emir geçer (224).
 export const TUR_ANA_EMIR = 'Ana emrin türü açılışta seçilir; yalnız partinin ya da kolun türü sonradan değişir.';
 export const TUR_PROJESIZ = 'Bu tür proje ister; projesiz emir bu türe geçmez.';
+
+// 3296-2 a: partinin türünün rotası emrinkinden farklıysa parti o rotayla ayrı emir olarak açılır; ancak emirde hiçbir adım başlamadıysa.
+// Başlamış emirden ayrılmaz (yanlış adımlarla üretilmez); kol ve ek adım da o rotayla birleşmez.
+export const farkliRotaBaslamisIletisi = (turAdi: string): string =>
+  `${turAdi} türünün rotası bu emrinkinden farklı ve bu emirde adım başladı; ${turAdi} partisini yeni emir olarak açın.`;
+export const farkliRotaKolIletisi = (turAdi: string): string =>
+  `${turAdi} türünün rotası bu emrinkinden farklı; kol ya da ek adımla ayrılmaz, ${turAdi} partisini yeni emir olarak açın.`;
+export const farkliRotaYururlukteDegilIletisi = (turAdi: string, rotaAdi: string): string =>
+  `${turAdi} türünün rotası (${rotaAdi}) yürürlükte değil; parti ayrılmadı.`;
+// Risk K1: ana emre stoktan ayrılan malzeme ayrı emre geçmez; bölünürse ana emir artık üretmeyeceği adedin malzemesini tutar.
+export const farkliRotaRezerveliIletisi = (turAdi: string): string =>
+  `Bu emre stoktan malzeme ayrılmış; ${turAdi} partisi ayrı emir olarak ayrılırsa ayrılan malzeme ana emirde kalır. Önce rezerveyi Stok Merkezi'nde azaltın ya da ${turAdi} partisini yeni emir olarak açın.`;
+export function farkliRotaliBolmeIhlali(
+  g: { turAdi: string; rotaAdi: string; revizyonVar: boolean; adimBasladi: boolean; kolVeyaEk: boolean },
+): string | null {
+  if (g.adimBasladi) return farkliRotaBaslamisIletisi(g.turAdi);
+  if (g.kolVeyaEk) return farkliRotaKolIletisi(g.turAdi);
+  if (!g.revizyonVar) return farkliRotaYururlukteDegilIletisi(g.turAdi, g.rotaAdi);
+  return null;
+}
 export function turDegisimIhlali(e: { durum: EmirDurumu; arsiv: boolean; ustEmirId: number | null; projeId: number | null }, yeniTur: string): string | null {
   if (e.ustEmirId === null) return TUR_ANA_EMIR;
   const acik = acikEmirIhlali(e.durum, e.arsiv);

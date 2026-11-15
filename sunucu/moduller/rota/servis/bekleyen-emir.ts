@@ -5,17 +5,44 @@ import { islemVarMi } from '#cekirdek/yetki.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
 import type { EmirTuru } from '#paylasilan/sozlesme/uretim-emirleri.ts';
 import { adimliEmirAyrintisi, isEmirleriniYenile, rotaBekleyenEmirler } from '../../uretim-emirleri/disari.ts';
-import { emreKopyalanabilirMi } from '../kurallar.ts';
+import { emreKopyalanabilirMi, turRotasiIhlali } from '../kurallar.ts';
 import * as s from '../sorgular.ts';
 import { isEmirlerineSabitle, isEmriGirdileri, revizyonuAl } from './ortak.ts';
-import { revizyonGetir } from './okuma.ts';
+import { emreKopyala, revizyonGetir } from './okuma.ts';
+import { EMIR_TURU_ADLARI } from '#paylasilan/sozlesme/emir-turleri.ts';
 
 // 3272: siparişten açılan emrin rotası, emrin türüne düşen rota (3247 a: türe bağlı rota, yoksa Standart) ve yürürlükteki revizyonudur.
-export async function siparisAcilisiRotasi(db: Db, malzemeNo: number, emirTuru: EmirTuru): Promise<{ ad: string; harf: string | null; revizyonId: number | null } | null> {
+// 3296-3 a: sipariş partisinde elle seçilen rota (aynı ürünün, yürürlükte revizyonu olan) önce gelir; başka ürünün ya da yürürlükte
+// revizyonu olmayan rotası seçildiyse türün rotasına düşülür ve `elle` false döner (onay penceresi bunu gösterir).
+export async function siparisAcilisiRotasi(
+  db: Db, malzemeNo: number, emirTuru: EmirTuru, secilenRotaId: number | null = null,
+): Promise<{ rotaId: number; ad: string; harf: string | null; revizyonId: number | null; elle: boolean } | null> {
+  if (secilenRotaId !== null) {
+    const r = await s.rotaOku(db, secilenRotaId);
+    const y = r !== null && r.malzemeId === malzemeNo ? await s.rotaninYururlugu(db, r.id) : null;
+    if (r !== null && y !== null) return { rotaId: r.id, ad: r.ad, harf: y.harf, revizyonId: y.id, elle: true };
+  }
   const t = await s.turunRotasi(db, malzemeNo, emirTuru);
   if (t === null) return null;
   const harf = t.revizyonId === null ? null : revizyonuAl(await s.revizyonOku(db, t.revizyonId)).harf;
-  return { ad: t.ad, harf, revizyonId: t.revizyonId };
+  return { rotaId: t.rotaId, ad: t.ad, harf, revizyonId: t.revizyonId, elle: false };
+}
+
+// 3296-2 a: emrin kaynak revizyonunun rotası (bölmede partinin türünün rotası bununla karşılaştırılır); revizyon yoksa null.
+export async function revizyonunRotasi(db: Db, revizyonId: number): Promise<number | null> {
+  return (await s.revizyonOku(db, revizyonId))?.rotaId ?? null;
+}
+
+// 3296 (Risk N2): tek emir ucu. Rota elle seçilmediyse revizyon emrin türünün rotasından olmalı; eski ya da yanlış istemci FAI emrini
+// Standart revizyondan açamaz. Sipariş açılışı ve toplu emir türün rotasını kendisi bulduğu için bu denetimden geçmez.
+export async function tekEmreKopyala(db: Db, kullanici: Kullanici, revizyonId: number, g: Parameters<typeof emreKopyala>[3] & { rotaElle?: boolean | undefined }) {
+  const { rotaElle, ...govde } = g;
+  const r = revizyonuAl(await s.revizyonOku(db, revizyonId));
+  const tur = govde.emirTuru ?? 'seri';
+  const t = await s.turunRotasi(db, r.malzemeId, tur);
+  const ihlal = turRotasiIhlali({ revizyonRotaId: r.rotaId, turRotasi: t, elle: rotaElle === true, turAdi: EMIR_TURU_ADLARI[tur] });
+  if (ihlal !== null) throw cakisma(ihlal);
+  return emreKopyala(db, kullanici, revizyonId, govde);
 }
 
 export const ROTA_BEKLEMIYOR = 'Bu emir rota beklemiyor; rotası "Emirlere uygula" ile yenilenir.';

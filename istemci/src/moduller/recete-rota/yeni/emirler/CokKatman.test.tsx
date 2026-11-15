@@ -66,6 +66,24 @@ describe('1476-F emir açılışında çok katmanlı seçim: izinli', () => {
     expect(istekler.find((i) => i.yol === KOPYA)?.govde).not.toHaveProperty('cokKatmanli');
   });
 
+  it('Risk N1: form önizlediği revizyonu gönderir; emir başka revizyondan açılacaksa komut durur, emre kopya gitmez', async () => {
+    const istekler = sunucuKur(kisi(['rota.emre-kopyala']), {
+      durum: rotaDurumu(),
+      yazmalar: {
+        [`GET ${ONIZLEME}`]: () => json(200, onizlemeOrnegi()),
+        'GET /rota/urunler/11': () => json(200, { revizyonlar: [{ id: 72, rotaId: 2, harf: 'A', durum: 'yururlukte' }], rotalar: [{ id: 2, ad: 'ORN Yeni', standart: true, surum: 1, emirTurleri: [], taslakAcilabilir: false }] }),
+        'GET /adimli-emirler/acilis-secenekleri': () => json(200, { projeZorunlu: false, projeler: [] }),
+        'POST /rota/revizyonlar/72/emre-kopyala': () => json(200, { uretimEmriId: 63, isEmriIdleri: [1] }),
+      },
+    });
+    yeniEmirAc();
+    const form = await formAc();
+    fireEvent.click(await within(form).findByRole('checkbox', { name: /Çok katmanlı/ }));
+    fireEvent.click(within(form).getByRole('button', { name: 'Emri oluştur' }));
+    expect(await within(form).findByText(/çok katmanlı emir için formda bu türü seçip katmanları yeniden seçin/)).toBeTruthy();
+    expect(istekler.some((i) => i.yol.endsWith('/emre-kopyala'))).toBe(false);
+  });
+
   it('engel varsa kutu kapalıdır ve nedeni gösterilir', async () => {
     sunucu(['rota.emre-kopyala'], onizlemeOrnegi({ engel: 'Kök başına adet tam sayı olmalı.' }));
     yeniEmirAc();

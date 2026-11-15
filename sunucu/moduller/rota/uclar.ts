@@ -11,7 +11,7 @@ import {
 import { sablonDurumGovdesi, rotaAdiGovdesi, rotaEkleGovdesi, rotaParametresi, rotaTurleriGovdesi, talimatSahneleriCevabi, talimatSahnesiKaydetGovdesi } from '#paylasilan/sozlesme/rota.ts';
 import { sablonDurumuYaz, rotaAdiYaz, rotaEkle, rotaTurleriYaz, talimatSahneleri, talimatSahnesiKaydet } from './servis.ts';
 import {
-  agac, bekleyenEmreUygula, emreKopyala, emreKopyalaToplu, rotaAdimlariToplu, emreUygula, patlatmaGetir, patlatmaOnizlemesi, fark, revizyonKunyeleri, geriGonder, malzemeAra, iptal, kaydet, kopyaIste, kopyala, malzemeKullanimi, onayaGonder, onayla, revizyonAyrintisi as ayrinti, revizyonOzeti, rotaListesi, secenekler,
+  agac, bekleyenEmreUygula, tekEmreKopyala, emreKopyalaToplu, rotaAdimlariToplu, emreUygula, patlatmaGetir, patlatmaOnizlemesi, fark, revizyonKunyeleri, geriGonder, malzemeAra, iptal, kaydet, kopyaIste, kopyala, malzemeKullanimi, onayaGonder, onayla, revizyonAyrintisi as ayrinti, revizyonOzeti, rotaListesi, secenekler,
   adimEkipmaniKaydet, aparatKullanimi, olcuAletiTurleri, adimSartnameleriKaydet, ekAdimSartnameleriSabitle, isEmriSartnameleriCevabi as isEmriSartnameleriOku, revizyonSartnameleri, sartnameAktifYap, sartnameAyrintisi, sartnameEkle, sartnameKopyala,
   sartnameKunyeKaydet, sartnameListesi, sartnameSurumAc, sartnameTaslakKaydet, sartnameTaslakSil, sartnameYayinla, standartEkle,
   karttanTaslaklar, talimatListesi, talimatYaz, adimliTalimatYaz, talimatTaslakKaydet, talimatTaslakSil, talimatYayinla, talimatSablonDurumuYaz, talimatSablonEkle, talimatSablonKaydet, talimatSablonlari, talimatSablonu, talimatSablonKopyalari, talimatMedyasi, taslakAc, urunRevizyonlari, hamOnerisi, opNumaralari, yururlugeAl, gerceklesenKabulEt, gerceklesenSureYaz, sureler, sablonEkle, sablonKaydet, sablonListesi, sablonuSil, sablonuVarsayilanYap,
@@ -431,7 +431,7 @@ export const uclar = [
     parametre: revizyonParametresi,
     govde: emreKopyalaGovdesi,
     cevap: emreKopyalaCevabi,
-    isle: ({ db, kullanici, parametre, govde }) => emreKopyala(db, kullanici, parametre.id, govde),
+    isle: ({ db, kullanici, parametre, govde }) => tekEmreKopyala(db, kullanici, parametre.id, govde),
   }),
   // Excel ile toplu emir (2627): satırlar emre-kopyala kuralıyla, tek transaction'da.
   uc({

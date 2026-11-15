@@ -19,6 +19,7 @@ import type {
 import { SABIT_HURDA_KODLARI, hurdaNedenleriniListele } from '../durus-nedenleri/disari.ts';
 import { firmaAra, firmaOzetleri, karneOlayiYaz } from '../musteri-tedarikci/disari.ts';
 import { aktifIstasyonlar, istasyonAdlari, istasyonKisiAtamalari, istasyonlar, makineGetir, operasyonTipleri } from '../istasyonlar/disari.ts';
+import { EMIR_TURU_ADLARI } from '#paylasilan/sozlesme/emir-turleri.ts';
 import { kisiAdlari } from '../kisiler/disari.ts';
 import { numaraAl, sistemAyariOku } from '../ayarlar/disari.ts';
 import { kayitlarinKucukResimleri } from '../belge-merkezi/disari.ts';
@@ -27,7 +28,7 @@ import { projeGetir, projeSecenekleri } from '../projeler/disari.ts';
 import { siparisAyrintisi, siparisinSatirOzetleri, siparisKilitliAyrinti, siparisSatiriOzetleri } from '../siparisler/disari.ts';
 import {
   EMIR_YOK, IS_EMRI_YOK, KAYNAK_YOK, acikEmirIhlali, arsivdeFasonDonusuAcik, adimliOzetSay, adimliIptalIhlali, hataliDurduMu, kaynakSuresi, fasonDonusIhlali, fasonGidisIhlali, fasonTamamIhlali,
-  gorunenDurum, guvenliUygula, isEmriFarki, oneDusenYeniAdimlar, yeniAdimOndeIletisi, isEmirleriIhlali, kaynakDegisimIhlali, kisininIstasyonu, siparisSatiriIhlali, oncelikDegisimIhlali, turDegisimIhlali, TUR_PROJESIZ, kalemTeslimi, partiIhlali, teslimBaglaIhlali, malzemeIhtiyaci, planaAlIhlali, siradakiFasonAdimi, siradakiIsEmri, teslimIhlali,
+  gorunenDurum, guvenliUygula, isEmriFarki, oneDusenYeniAdimlar, yeniAdimOndeIletisi, isEmirleriIhlali, kaynakDegisimIhlali, kisininIstasyonu, siparisSatiriIhlali, oncelikDegisimIhlali, turDegisimIhlali, TUR_PROJESIZ, farkliRotaliBolmeIhlali, farkliRotaYururlukteDegilIletisi, farkliRotaRezerveliIletisi, kalemTeslimi, partiIhlali, teslimBaglaIhlali, malzemeIhtiyaci, planaAlIhlali, siradakiFasonAdimi, siradakiIsEmri, teslimIhlali,
   BIRLESME_ADIMI_YOK, BIRLESME_PLANI_KOLDA, BOLME_ADET, BOLME_BIRLESME_ADIMI, BOLME_URETILMIS, EK_ADIM_OP, birlesmeBeklemeIhlali, birlesmePlaniIhlali, birlesmePlaniKaldirIhlali, birlestirmeIhlali, bolmeIhlali, ekAdimIhlali,
   ekAdimKaldirIhlali, kartAdimi, kartSiniri, kolBaslamaIhlali, kolEmirNo, refakatIhlali, refakatQrMetni,
   BILESEN_GECERSIZ, IS_EMRI_BAGLI_KAYIT, IS_EMRI_MALIYETI_DONDURULMUS, IS_EMRI_SIPARISE_BAGLI, IS_EMRI_STOK_HAREKETLI, ROTASIZ_EMIR_KAPALI, PROJE_GECERSIZ, PROJE_ZORUNLU, adaySatirlar, bilesenOlabilirMi, kendiligindenSatir, projeZorunluMu, rotasizAdimDegisimIhlali, rotasizAdimEkleIhlali, URETIM_YERI_BASLAMIS, uretimYeriIhlali, fasonBeklemesi, adimAdetleri,
@@ -1206,18 +1207,36 @@ async function adimiYerineKoy(
 
 // UE-PB2, UE-PB8, Soru 121 a: bölünen adımın üretilmemiş adedi, sonrakiler başlamamışsa önceki adımlar bitmeden de bölünür; planlı birleşmeli kol birleşme
 // adımına kadar olan iş emirlerini taşır, ek adımlar kola konur. Üstün adedi düşer.
+// 3296-2 a: partinin türünün rotası (rota modülünden, kablolama.ts çözücüsüyle). Verilmezse bölme bugünkü gibi rotaya bakmaz.
+export interface BolmeRotasi {
+  turunRotasi: (db: Db, malzemeNo: number, emirTuru: EmirTuru) => Promise<{ rotaId: number; ad: string; revizyonId: number | null } | null>;
+  revizyonunRotasi: (db: Db, revizyonId: number) => Promise<number | null>;
+  emreKopyala: (db: Db, kullanici: Kullanici, revizyonId: number, g: {
+    adet: number; teslim: string | null; baslangic?: string | null; oncelik: number; taslak: boolean; projeId: number | null; siparisSatiriId: number | null;
+    siparisPartiId: number | null; emirTuru: EmirTuru; aciklama?: string | null;
+  }) => Promise<{ uretimEmriId: number }>;
+  rezervesiVar?: (db: Db, emirId: number) => Promise<boolean>;
+}
+
 export async function partiyiBol(
   db: Db, kullanici: Kullanici, id: number,
   g: {
     adimSira: number; adet: number; surum: number; birlesmeOpNo?: number | null | undefined; emirTuru?: EmirTuru | undefined; ekAdimlar?: EkAdim[] | undefined;
   },
-): Promise<{ altEmirId: number }> {
+  rota?: BolmeRotasi,
+): Promise<{ altEmirId: number; ayriEmir?: boolean }> {
   const acanId = islemDenetle(kullanici, ['uretim-emirleri.bol-birlestir', 'plan.canliya-al']);
   const e = await kilitliUstEmir(db, id);
   surumDenetle(e, g.surum);
   await cokKatmanliDegil(db, id, COK_KATMANLI_DEGISMEZ);
   // 3099 (224): projesiz emirden proje isteyen türde parti açılmaz; türsüz bölme üstün türünü alır, denetim gerekmez.
   if (g.emirTuru !== undefined && e.projeId === null && projeZorunluMu(g.emirTuru)) throw cakisma(TUR_PROJESIZ);
+  if (rota !== undefined && g.emirTuru !== undefined && g.emirTuru !== e.emirTuru && e.malzemeNo !== null && e.kaynakRotaRevizyonId !== null) {
+    const hedef = await rota.turunRotasi(db, e.malzemeNo, g.emirTuru);
+    if (hedef !== null && hedef.rotaId !== await rota.revizyonunRotasi(db, e.kaynakRotaRevizyonId)) {
+      return { altEmirId: await ayriEmirOlarakBol(db, kullanici, e, { adet: g.adet, emirTuru: g.emirTuru, kolVeyaEk: (g.birlesmeOpNo ?? null) !== null || (g.ekAdimlar ?? []).length > 0 }, hedef, rota), ayriEmir: true };
+    }
+  }
   const altEmirId = await kilitliEmriBol(db, acanId, e, g);
   const kol = await s.ustEmirBul(db, altEmirId);
   if (kol === null) throw bulunamadi(EMIR_YOK);
@@ -1225,6 +1244,32 @@ export async function partiyiBol(
   for (const ek of g.ekAdimlar ?? []) await ekAdimKoy(db, kol, ek, tipler);
   await siradakiIstasyonuYaz(db, altEmirId);
   return { altEmirId };
+}
+
+// 3296-2 a: farklı rotalı türde parti, emirde adım başlamadıysa o rotanın yürürlükteki revizyonundan ayrı emir olarak açılır (proje,
+// sipariş satırı, teslim ve öncelik emirden); emrin adedi aynı işlemde düşer. Ana emre geri birleşmez (ust_emir bağı yoktur).
+async function ayriEmirOlarakBol(
+  db: Db, kullanici: Kullanici, e: UstEmirSatiri, g: { adet: number; emirTuru: EmirTuru; kolVeyaEk: boolean },
+  hedef: { ad: string; revizyonId: number | null }, rota: BolmeRotasi,
+): Promise<number> {
+  const kendi = await s.isEmirleriGetir(db, [e.id]);
+  const ilk = [...kendi].sort((a, b) => a.sira - b.sira)[0];
+  if (ilk === undefined) throw cakisma('Emrin adımı yok; önce adım ekleyin.');
+  const ihlal = farkliRotaliBolmeIhlali({
+    turAdi: EMIR_TURU_ADLARI[g.emirTuru], rotaAdi: hedef.ad, revizyonVar: hedef.revizyonId !== null,
+    adimBasladi: kendi.some((i) => i.durum !== 'bekliyor'), kolVeyaEk: g.kolVeyaEk,
+  });
+  if (ihlal !== null || hedef.revizyonId === null) throw cakisma(ihlal ?? farkliRotaYururlukteDegilIletisi(EMIR_TURU_ADLARI[g.emirTuru], hedef.ad));
+  if (rota.rezervesiVar !== undefined && await rota.rezervesiVar(db, e.id)) throw cakisma(farkliRotaRezerveliIletisi(EMIR_TURU_ADLARI[g.emirTuru]));
+  const adetIhlali = bolmeIhlali(await bolmeDurumu(db, e, kendi, ilk.sira), ilk.sira, g.adet, null);
+  if (adetIhlali === BOLME_ADET || adetIhlali === BOLME_URETILMIS) throw dogrulama(adetIhlali, 'adet');
+  if (adetIhlali !== null) throw cakisma(adetIhlali);
+  const { uretimEmriId } = await rota.emreKopyala(db, kullanici, hedef.revizyonId, {
+    adet: g.adet, teslim: e.teslim, baslangic: e.baslangic, oncelik: e.oncelik, taslak: e.durum === 'taslak', projeId: e.projeId,
+    siparisSatiriId: e.siparisSatiriId, siparisPartiId: null, emirTuru: g.emirTuru, aciklama: e.aciklama,
+  });
+  if ((await s.adetYaz(db, e.id, e.adet - g.adet, e.surum)) === null) throw eskiSurum();
+  return uretimEmriId;
 }
 
 // Bölünecek adımın elde kalanı için emrin durumu (eldekiAdet): aynı sıradan bölünenler, katılan kollar ve adımda sayılan.

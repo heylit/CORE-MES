@@ -37,9 +37,12 @@ export interface EmirAcmaOzellikleri {
   acik: boolean;
   kapat: () => void;
   ilkUrun: string | null;
+  // 3296: başlamış emirden ayrılamayan parti için form türü ve adedi dolu açılır.
+  ilkTur?: string | null;
+  ilkAdet?: string | null;
 }
 
-export function YeniEmirPenceresi({ acik, kapat, ilkUrun }: EmirAcmaOzellikleri) {
+export function YeniEmirPenceresi({ acik, kapat, ilkUrun, ilkTur = null, ilkAdet = null }: EmirAcmaOzellikleri) {
   const yetki = useRrYetkisi();
   const veri = useRrVerisi(acik && yetki.oku);
   const komut = useEmirKomutu();
@@ -66,7 +69,7 @@ export function YeniEmirPenceresi({ acik, kapat, ilkUrun }: EmirAcmaOzellikleri)
               <Dugme onClick={komut.uyariKapat}>Tamam</Dugme>
             </div>
           )}
-          <YeniEmirFormu durum={d} yetki={yetki} komut={komut} git={(a) => { kapat(); sekmeyeGit(a); }} ilkUrun={ilkUrun} acildi={acildi} />
+          <YeniEmirFormu durum={d} yetki={yetki} komut={komut} git={(a) => { kapat(); sekmeyeGit(a); }} ilkUrun={ilkUrun} ilkTur={ilkTur} ilkAdet={ilkAdet} acildi={acildi} />
         </div>
       )}
     </Pencere>

@@ -75,7 +75,7 @@ function ilkDegerler(s: SiparisAyrintisi | null): Degerler {
       birimFiyat: m.birimFiyat === null ? '' : girdiMetni(m.birimFiyat),
       termin: m.termin === null || m.termin === s.termin ? '' : m.termin,
       aciklama: m.aciklama ?? '',
-      partiler: m.partiler.map((p) => ({ anahtar: partiAnahtari(), emirTuru: p.emirTuru, adet: girdiMetni(p.adet) })),
+      partiler: m.partiler.map((p) => ({ anahtar: partiAnahtari(), emirTuru: p.emirTuru, adet: girdiMetni(p.adet), rotaId: p.rotaId })),
     })),
   };
 }
@@ -127,7 +127,7 @@ function govdeKur(d: Degerler) {
       birimFiyat: s.birimFiyat.trim() === '' ? null : sayiGirdisi(s.birimFiyat),
       termin: s.termin === '' || s.termin === d.termin ? null : s.termin,
       aciklama: bosYap(s.aciklama),
-      partiler: s.partiler.map((p) => ({ emirTuru: p.emirTuru, adet: sayiGirdisi(p.adet) })),
+      partiler: s.partiler.map((p) => ({ emirTuru: p.emirTuru, adet: sayiGirdisi(p.adet), rotaId: p.rotaId })),
     })),
   } satisfies SiparisEkleGovdesi;
 }
@@ -273,6 +273,7 @@ function Form({ siparis }: FormOzellikleri) {
                   </span>
                 ) : <KalemPartileri
                   sira={i + 1}
+                  malzemeNo={s.kart?.no ?? null}
                   miktar={s.miktar}
                   partiler={s.partiler}
                   degistir={(partiler) => satirDegistir(i, { partiler })}

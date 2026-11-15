@@ -33,6 +33,11 @@ const kur = (kullanici = YONETICI, rotalar: Rota[] = [rota(1, 'Standart', true),
         liste = liste.map((x) => (x.id === 2 ? { ...x, emirTurleri: t, surum: 2 } : x));
         return json(200, cevap(liste));
       },
+      'POST /rota/urunler/11/rotalar/3/turler': (g) => {
+        const t = (g as { emirTurleri: Rota['emirTurleri'] }).emirTurleri;
+        liste = liste.map((x) => (x.id === 3 ? { ...x, emirTurleri: t, surum: 2 } : x));
+        return json(200, cevap(liste));
+      },
       'POST /rota/urunler/11/taslak-ac': () => json(200, { id: 91, durum: 'taslak', surum: 1 }),
     },
   });
@@ -88,6 +93,23 @@ describe('Rota sekmeleri (3247 a)', () => {
     await waitFor(() => { expect(istekler.some((i) => i.yol === '/rota/urunler/11/taslak-ac')).toBe(true); });
     expect(istekler.find((i) => i.yol === '/rota/urunler/11/rotalar')?.govde).toEqual({ ad: 'Numune rotası' });
     expect(istekler.find((i) => i.yol === '/rota/urunler/11/taslak-ac')?.govde).toEqual({ kaynak: { tur: 'revizyon', revizyonId: 71 }, rotaId: 3 });
+  });
+
+  it('3296: "Yeni rota" açılırken emir türü seçilir; tür rota açılınca bağlanır, başka rotadan taşınan önceden yazılır', async () => {
+    const istekler = kur();
+    rrAc('/recete-rota/schema');
+    const g = await sekmeler();
+    const bolge = screen.getByRole('region', { name: 'Ürün ve rotalar' });
+    menudenSec(bolge, 'Yeni rota');
+    fireEvent.change(within(bolge).getByRole('textbox', { name: 'Yeni rotanın adı' }), { target: { value: 'Numune rotası' } });
+    const turler = within(bolge).getByRole('group', { name: 'Bu rotayı kullanan emir türleri' });
+    fireEvent.click(within(turler).getByRole('checkbox', { name: 'Numune' }));
+    fireEvent.click(within(turler).getByRole('checkbox', { name: 'FAI' }));
+    expect(within(bolge).getByText('Kaydedince başka rotadan bu rotaya geçer: FAI (FAI rotası).')).toBeTruthy();
+    fireEvent.click(within(bolge).getByRole('button', { name: 'Rotayı aç' }));
+    await within(g).findByRole('button', { name: /Numune rotası/ });
+    await waitFor(() => { expect(istekler.some((i) => i.yol === '/rota/urunler/11/rotalar/3/turler')).toBe(true); });
+    expect(istekler.find((i) => i.yol === '/rota/urunler/11/rotalar/3/turler')?.govde).toEqual({ emirTurleri: ['numune', 'fai'], surum: 1 });
   });
 
   it('"Rotanın adı ve emir türleri" türleri yazar; başka rotadan taşınan tür kaydetmeden önce yazılır', async () => {

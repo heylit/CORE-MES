@@ -28,7 +28,7 @@ import {
   logoAcilisCozucusu, logoAynaOzetiCozucusu, logoBirimSetiCozucusu, logoEslemeYaziciCozucusu, logoKartAynasiCozucusu, logoKodCozucusu, logoTmiKodCozucusu, rotaRevizyonlariCozucusu, kartIzleriCozucusu,
 } from './moduller/malzemeler/disari.ts';
 import { firmaDegistiDinle, firmaOzeti, logoCariCozuculeriKaydet, tumFirmalar } from './moduller/musteri-tedarikci/disari.ts';
-import { araHalCozucusuKaydet as rotaAraHalCozucusu, emreKopyala as rotaEmreKopyala, siparisAcilisiRotasi as rotaSiparisAcilisiRotasi, durumRevizyonlari, emreGelenSablonOzetleri, emreGelenSablonaAdimEkle, emirBittiYansit as rotaEmirBittiYansit, adimBittiYansit as rotaAdimBittiYansit, emirRotaHazirliklari, isEmriAparatHazirliklari, isEmriKopyalandiYansit, isEmriOlcuAletiHazirliklari, malzemeKartiIzleri as rotaKartIzleri, talasliAdimSureleri, yuzeyIslemiAdimlari, yururlukteOperasyonlar } from './moduller/rota/disari.ts';
+import { araHalCozucusuKaydet as rotaAraHalCozucusu, emreKopyala as rotaEmreKopyala, siparisAcilisiRotasi as rotaSiparisAcilisiRotasi, revizyonunRotasi as rotaRevizyonunRotasi, durumRevizyonlari, emreGelenSablonOzetleri, emreGelenSablonaAdimEkle, emirBittiYansit as rotaEmirBittiYansit, adimBittiYansit as rotaAdimBittiYansit, emirRotaHazirliklari, isEmriAparatHazirliklari, isEmriKopyalandiYansit, isEmriOlcuAletiHazirliklari, malzemeKartiIzleri as rotaKartIzleri, talasliAdimSureleri, yuzeyIslemiAdimlari, yururlukteOperasyonlar } from './moduller/rota/disari.ts';
 import { talasliAdimCozucusu, yuzeyAdimlariCozucusu } from './moduller/geometri/disari.ts';
 import * as sevkiyat from './moduller/sevkiyat/disari.ts';
 import { bagliEmirCozucusu, kalemEmirCozucusu, malzemeKartiIzleri as siparisKartIzleri, siparisAyrintisi, siparisDegistiDinle, siparisIptalEdildiDinle, siparisListesi, siparisOnayiGeriAlindiDinle, siparisOnaylandiDinle, teklifDenemeCozucusu } from './moduller/siparisler/disari.ts';
@@ -211,8 +211,9 @@ export function sunucununBaglari(): Bag[] {
     bag('sipariş onayı geri alındı -> emirler kalemden çözülür', siparisOnayiGeriAlindiDinle, uretimEmirleri.siparisOnayiGeriAlindiCoz),
     bag('sipariş iptal edildi -> dokunulmamış emirler iptal', siparisIptalEdildiDinle, uretimEmirleri.siparisIptalEdildiIptal),
     bag('rota, satın alma ve stok -> sipariş açılışı', (emirBaglari: typeof siparisEmirBaglari) => uretimEmirleri.siparisAcilisiCozuculeriKaydet({
-      turunRotasi: rotaSiparisAcilisiRotasi, emreKopyala: rotaEmreKopyala, emirBaglari,
-    }), [uretimEmirleri.siparisAcilisiCozuculeriKaydet, rotaSiparisAcilisiRotasi, rotaEmreKopyala, emirTedarikDurumlari, stok.emirMalzemeFisleri]
+      turunRotasi: rotaSiparisAcilisiRotasi, revizyonunRotasi: rotaRevizyonunRotasi, emreKopyala: rotaEmreKopyala, emirBaglari,
+      rezervesiVar: async (db, emirId) => (await stok.emrinRezerveleri(db, emirId)).size > 0,
+    }), [uretimEmirleri.siparisAcilisiCozuculeriKaydet, rotaSiparisAcilisiRotasi, rotaRevizyonunRotasi, rotaEmreKopyala, emirTedarikDurumlari, stok.emirMalzemeFisleri, stok.emrinRezerveleri]
       .every((f) => typeof f === 'function') ? siparisEmirBaglari : undefined),
     // 3244 b, 3254 a: yeniden onaylanan siparişin termini bağlı proje bitişine ve başlamamış emir teslimine kayar; elle değişen bağsızdır.
     bag('sipariş onaylandı -> proje bitişi', siparisOnaylandiDinle, projeler.projeBitisiniSiparisTermineKaydir),

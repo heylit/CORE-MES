@@ -15,8 +15,9 @@ import { DalRozeti } from '../rotalar/PatlamisRota.tsx';
 import { IS_EMRI_DURUMU } from '#paylasilan/sozlesme/emir-durumu.ts';
 import {
   acikMi, adimDugumu, adimDurumu, altDugumAdimlari, adimPlani, canliAdimPlani, durumAdi, durumGosterimi, emirAdimlari, emirAraligi, ilerleme, planOzeti, planSirasi, plandaMi, rotaFarki, sureMetni, sureOzetiNedenleri, type AdimSureOzeti,
-  ONCELIK_ADI, yeniOpNo, yururluktekiRevizyon, type AdimPlani, type EmirAdimi, type Emir,
+  ONCELIK_ADI, yeniOpNo, yururluktekiRevizyon, bolmeTurRotasi, type AdimPlani, type EmirAdimi, type Emir,
 } from './kurallar.ts';
+import type { UrunRevizyonlariCevabi } from '#paylasilan/sozlesme/rota.ts';
 import type { IhtiyacSatinAlma, MalzemeIhtiyaciCevabi, MalzemeIhtiyaciSatiri } from '#paylasilan/sozlesme/recete-rota.ts';
 import { api, hataIletisi } from '../../../../ortak/veri/api.ts';
 import { planMetni, tamponRozeti, turAdi, type TamponRozeti } from './gorunum.ts';
@@ -236,6 +237,15 @@ function EmirYapisi({ durum: d, emir: o, adimlar, yetki, komut, islem, islemKapa
   islem: 'bol' | 'katil' | null; islemKapat: () => void;
 }) {
   const [bolme, setBolme] = useState<BolmeDurumu>(bosBolme(false));
+  const yonlen = useNavigate();
+  // 3296-2 a: ürünün rotaları (yeni emir formuyla aynı önbellek); bölmede partinin türünün rotası buradan okunur, okunamazsa çizilmez.
+  const urunNo = Number(o.itemId);
+  const urunRotalari = useQuery({
+    queryKey: [...RR_ANAHTARI, 'urun-rotalari', urunNo] as const,
+    enabled: islem === 'bol' && !o.rotasiz && Number.isInteger(urunNo) && urunNo > 0,
+    queryFn: () => api.get<UrunRevizyonlariCevabi>(`/rota/urunler/${String(urunNo)}`),
+    retry: false,
+  });
   const emirler = d.emirler?.orders ?? [];
   const ana = o.parentId === null ? null : emirler.find((x) => x.id === o.parentId) ?? null;
   const altlar = emirler.filter((x) => x.parentId === o.id);
@@ -352,6 +362,8 @@ function EmirYapisi({ durum: d, emir: o, adimlar, yetki, komut, islem, islemKapa
           <BolmePaneli
             yeni={false} anaTur={o.tur} girdi={girdi} adimlar={adimlar} baslamis={baslamis} opdefs={d.opdefs} istasyonlar={d.stations} deger={bolme} degistir={setBolme}
             gonder={() => { void bol(); }} vazgec={() => { setBolme(bosBolme(false)); islemKapat(); }} mesgul={komut.mesgul}
+            turRotasi={(t) => bolmeTurRotasi(d, urunRotalari.data, o, t)}
+            yeniEmirAc={(t, adet) => { void yonlen(`/uretim-emirleri?${new URLSearchParams({ yeni: '1', urun: o.itemId, tur: t, adet }).toString()}`); }}
           />
         </div>
       )}

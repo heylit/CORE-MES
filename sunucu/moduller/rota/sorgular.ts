@@ -175,6 +175,11 @@ export function rotaKilitle(db: Db, id: number): Promise<RotaSatiri | null> {
   return db.tek<RotaSatiri>(`SELECT ${ROTA} FROM rota_tanimi t WHERE t.id = $1 FOR UPDATE`, [id]);
 }
 
+// 3296-3 a: rotanın yürürlükteki revizyonu (kimlik ve harf); yoksa null.
+export function rotaninYururlugu(db: Db, rotaId: number): Promise<{ id: number; harf: string } | null> {
+  return db.tek<{ id: number; harf: string }>(`SELECT id, harf FROM rota_revizyonu WHERE rota_id = $1 AND durum = 'yururlukte'`, [rotaId]);
+}
+
 export async function standartRotaId(db: Db, malzemeId: number): Promise<number | null> {
   return (await db.tek<{ id: number }>('SELECT id FROM rota_tanimi WHERE malzeme_id = $1 AND standart', [malzemeId]))?.id ?? null;
 }

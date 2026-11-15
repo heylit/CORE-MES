@@ -645,6 +645,8 @@ export const emreKopyalaGovdesi = z.object({
   // 1476: tek emir çok katmanlı reçetenin tamamını taşır (patlamış rota). Stoktan karşılanacak düğümler (1483 a) emre girmez.
   cokKatmanli: z.boolean().optional(),
   stoktanDugumler: z.array(DUGUM_YOLU).max(200).optional(),
+  // 3296 (Risk N2): rota formda elle seçildi. Verilmezse revizyon emrin türünün rotasından olmalı (değilse 409).
+  rotaElle: z.boolean().optional(),
 });
 export const emreKopyalaCevabi = z.object({ uretimEmriId: KIMLIK, isEmriIdleri: z.array(KIMLIK) });
 
@@ -652,7 +654,7 @@ export const emreKopyalaCevabi = z.object({ uretimEmriId: KIMLIK, isEmriIdleri: 
 // hiçbiri açılmaz. Çok katmanlı emir ve stoktan düğüm seçimi sayfada tek tek yapılır. Emir başına iş emirleri ve rezerve açıldığı için
 // satır sınırı genel toplu sınırdan küçüktür.
 export const EMIR_TOPLU_EN_COK = 200;
-export const emreKopyalaTopluSatiri = emreKopyalaGovdesi.omit({ cokKatmanli: true, stoktanDugumler: true, siparisSatiriId: true, siparisPartiId: true })
+export const emreKopyalaTopluSatiri = emreKopyalaGovdesi.omit({ cokKatmanli: true, stoktanDugumler: true, siparisSatiriId: true, siparisPartiId: true, rotaElle: true })
   .extend({ satir: z.number().int().min(1).max(1_048_576), urunId: KIMLIK }).strict();
 export const emreKopyalaTopluGovdesi = z.object({
   satirlar: z.array(emreKopyalaTopluSatiri).min(1).max(EMIR_TOPLU_EN_COK)

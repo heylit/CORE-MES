@@ -34,7 +34,9 @@ function RotaRozeti({ s }: { s: SiparisAcilisiSatiri }) {
   if (s.atlama !== null) return <Rozet ton="pasif" gorunum="cizgi">{ATLAMA_METNI[s.atlama]}</Rozet>;
   if (s.emir?.rotaBekliyor === true || (s.emir === null && s.rota === null)) return <Rozet ton="uyari">Rota bekliyor</Rozet>;
   if (s.emir !== null) return <Rozet ton={EMIR_DURUMU[s.emir.durum].ton}>{EMIR_DURUMU[s.emir.durum].etiket}</Rozet>;
-  return <Rozet ton="tamam">{`${s.rota!.ad} · Rev ${s.rota!.harf}`}</Rozet>;
+  // 3296-3 a: partide seçilen rota "elle"; seçilen rota yürürlükte değilse türün rotası gelir ve bu söylenir.
+  const ek = s.rota!.elle === true ? ' · elle' : s.rota!.elleDustu === true ? ' · seçilen rota yürürlükte değil, türün rotası' : '';
+  return <Rozet ton={s.rota!.elleDustu === true ? 'uyari' : 'tamam'}>{`${s.rota!.ad} · Rev ${s.rota!.harf}${ek}`}</Rozet>;
 }
 
 const sutunlar = (emirli: boolean): Sutun<SiparisAcilisiSatiri>[] => [

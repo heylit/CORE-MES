@@ -1624,8 +1624,9 @@ describe('rotalar (gerçek PostgreSQL)', () => {
     const red = await toplu('fai');
     assert.equal(red.statusCode, 409, red.body);
     assert.match(red.json<{ mesaj: string }>().mesaj, /FAI/);
-    // Formda kullanıcı Standart'ı bilerek seçer: Standart revizyonuyla FAI emri açılır.
-    assert.equal((await istek(c.planlama, 'POST', `/rota/revizyonlar/${stA}/emre-kopyala`, { projeId: denemeProjeId, adet: 1, teslim: null, emirTuru: 'fai' })).statusCode, 200);
+    // Formda kullanıcı Standart'ı bilerek seçer (rotaElle): Standart revizyonuyla FAI emri açılır; elle seçim yoksa sahibi reddeder (3296 Risk N2).
+    assert.equal((await istek(c.planlama, 'POST', `/rota/revizyonlar/${stA}/emre-kopyala`, { projeId: denemeProjeId, adet: 1, teslim: null, emirTuru: 'fai' })).statusCode, 409);
+    assert.equal((await istek(c.planlama, 'POST', `/rota/revizyonlar/${stA}/emre-kopyala`, { projeId: denemeProjeId, adet: 1, teslim: null, emirTuru: 'fai', rotaElle: true })).statusCode, 200);
 
     // Taslak FAI rotasında Standart'tan açılır; harf rota içinde (A), açık revizyon rota başına; başka ürünün rotası 409.
     assert.equal((await istek(c.planlama, 'POST', `/rota/urunler/${baska}/taslak-ac`, { kaynak: { tur: 'bos' }, rotaId: fai.id })).statusCode, 409);

@@ -277,14 +277,17 @@ describe('siparisler (gerçek PostgreSQL, gerçek giriş)', () => {
     assert.equal((await gonder(yonetici, '/siparisler/ekle', govde({ termin: '2026-10-19' }))).statusCode, 200);
   });
 
-  test('SIP-18 (3244 b): kalem partileri kaydedilir ve okunur; toplam tutmazsa, tür iki kez varsa 400; partisiz kalem boş liste; düzenleme partileri yeniden yazar', async () => {
+  test('SIP-18 (3244 b): kalem partileri kaydedilir ve okunur; toplam tutmazsa 400; aynı tür iki kez ve partiye rota olur (3296-3 a); partisiz kalem boş liste; düzenleme partileri yeniden yazar', async () => {
     const partili = (partiler: unknown) => govde({ satirlar: [{ malzemeNo: mamulNo, miktar: '100', birimFiyat: '1', termin: null, aciklama: null, partiler }] });
     const s = await siparisAc({ satirlar: [{ malzemeNo: mamulNo, miktar: '100', birimFiyat: '1', partiler: [{ emirTuru: 'fai', adet: '10' }, { emirTuru: 'seri', adet: '90' }] }] });
     assert.deepEqual(s.satirlar[0]?.partiler.map((p) => [p.emirTuru, Number(p.adet)]), [['fai', 10], ['seri', 90]]);
     const toplam = await gonder(yonetici, '/siparisler/ekle', partili([{ emirTuru: 'fai', adet: '10' }, { emirTuru: 'seri', adet: '80' }]));
     assert.equal(toplam.statusCode, 400, toplam.body);
     assert.match(toplam.body, /toplamı kalem miktarına/);
-    assert.equal((await gonder(yonetici, '/siparisler/ekle', partili([{ emirTuru: 'seri', adet: '50' }, { emirTuru: 'seri', adet: '50' }]))).statusCode, 400);
+    const rota = (await o().sahip.tek<{ id: number }>("INSERT INTO rota_tanimi (malzeme_id, ad, acan_kisi_id) VALUES ($1, 'ORN ikinci', $2) RETURNING id", [mamulNo, yoneticiId]))!.id;
+    const ikiSeri = await gonder(yonetici, '/siparisler/ekle', partili([{ emirTuru: 'seri', adet: '50' }, { emirTuru: 'seri', adet: '50', rotaId: rota }]));
+    assert.equal(ikiSeri.statusCode, 200, ikiSeri.body);
+    assert.deepEqual(ikiSeri.json<SiparisAyrintisi>().satirlar[0]?.partiler.map((p) => [p.emirTuru, p.rotaId]), [['seri', null], ['seri', rota]]);
     assert.equal((await gonder(yonetici, '/siparisler/ekle', partili([{ emirTuru: 'yok', adet: '100' }]))).statusCode, 400);
     const partisiz = await siparisAc();
     assert.deepEqual(partisiz.satirlar[0]?.partiler, []);
