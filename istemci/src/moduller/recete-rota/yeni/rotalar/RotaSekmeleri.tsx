@@ -86,7 +86,13 @@ export function useRotaSekmeleri(r: RotaEkrani, urunId: string): Parcalar {
     const onceki = new Set(rotalar.map((x) => x.id));
     const c = await yaz(() => api.post(`/rota/urunler/${encodeURIComponent(urunId)}/rotalar`, { ad: ad.trim() }, { istekKimligi: yeniIstekKimligi() }));
     const yeni = c?.rotalar.find((x) => !onceki.has(x.id) && !x.standart);
-    if (!yeni || !duzen.rotaSec(urunId, String(yeni.id))) return;
+    if (!yeni) return;
+    // 3296: rota açılırken seçilen türler hemen bağlanır (onay yetkisiyle); bağlanamazsa rota türsüz kalır, hata panelde görünür.
+    if (yetki.rotaOnayla && turler.length > 0) {
+      const yol = `/rota/urunler/${encodeURIComponent(urunId)}/rotalar/${String(yeni.id)}/turler`;
+      if (!(await yaz(() => api.post(yol, { emirTurleri: turler, surum: yeni.surum })))) return;
+    }
+    if (!duzen.rotaSec(urunId, String(yeni.id))) return;
     setPanel(null);
     const kaynak = yururlukteki(duzen.rotaRevleri(urunId, null));
     if (standarttan && kaynak) await duzen.yeniTaslak(urunId, kaynak);
@@ -105,9 +111,20 @@ export function useRotaSekmeleri(r: RotaEkrani, urunId: string): Parcalar {
     setPanel(null);
   };
   // Başka rotaya bağlı tür bu rotaya işaretlenirse oradan taşınır; kullanıcı kaydetmeden önce görür.
-  const tasinanlar = aktif && !aktif.standart
-    ? turler.flatMap((t) => { const o = rotalar.find((x) => x.id !== aktif.id && x.emirTurleri.includes(t)); return o ? [`${EMIR_TURU_ADLARI[t]} (${o.ad})`] : []; })
+  const tasinanlar = (panel === 'yeni' || (aktif && !aktif.standart))
+    ? turler.flatMap((t) => { const o = rotalar.find((x) => (panel === 'yeni' || x.id !== aktif?.id) && x.emirTurleri.includes(t)); return o ? [`${EMIR_TURU_ADLARI[t]} (${o.ad})`] : []; })
     : [];
+  const turSecimi = (
+    <>
+      <span className="tc-rr1-rv-row" role="group" aria-label="Bu rotayı kullanan emir türleri">
+        {EMIR_TURLERI.map((t) => (
+          <IsaretKutusu key={t} etiket={EMIR_TURU_ADLARI[t]} checked={turler.includes(t)}
+            onChange={(e) => { setTurler(e.target.checked ? [...turler, t] : turler.filter((x) => x !== t)); }} />
+        ))}
+      </span>
+      {tasinanlar.length > 0 && <p className="tc-rr1-ipucu">Kaydedince başka rotadan bu rotaya geçer: {tasinanlar.join(', ')}.</p>}
+    </>
+  );
 
   const satir = (
     <div className="tc-rr1-rv-row tc-rr1-rotalar">
@@ -143,7 +160,14 @@ export function useRotaSekmeleri(r: RotaEkrani, urunId: string): Parcalar {
             <IsaretKutusu etiket={`${standart.ad} rotasının yürürlükteki revizyonundan başla`} checked={standarttan}
               onChange={(e) => { setStandarttan(e.target.checked); }} />
           )}
-          <p className="tc-rr1-ipucu">Yeni rota hiçbir emir türüne bağlı açılır; türleri &quot;Adı ve türleri&quot;nden bağlarsın. Bağlanana kadar emirler Standart rotayı kullanır.</p>
+          {yetki.rotaOnayla ? (
+            <>
+              {turSecimi}
+              <p className="tc-rr1-ipucu">Seçilen türlerin emirleri bu rotanın yürürlükteki revizyonundan açılır; tür seçilmezse emirler Standart rotayı kullanır.</p>
+            </>
+          ) : (
+            <p className="tc-rr1-ipucu">Yeni rota hiçbir emir türüne bağlı açılır; türleri rota onaylama yetkisi olan biri &quot;Adı ve türleri&quot;nden bağlar. Bağlanana kadar emirler Standart rotayı kullanır.</p>
+          )}
           {hata && <p className="tc-rr1-hata" role="alert">{hata}</p>}
         </div>
       )}
@@ -155,17 +179,7 @@ export function useRotaSekmeleri(r: RotaEkrani, urunId: string): Parcalar {
           </div>
           {aktif.standart ? (
             <p className="tc-rr1-ipucu">Standart rotaya tür bağlanmaz; başka rotaya bağlanmayan her emir türü bu rotayı kullanır.</p>
-          ) : yetki.rotaOnayla ? (
-            <>
-              <span className="tc-rr1-rv-row" role="group" aria-label="Bu rotayı kullanan emir türleri">
-                {EMIR_TURLERI.map((t) => (
-                  <IsaretKutusu key={t} etiket={EMIR_TURU_ADLARI[t]} checked={turler.includes(t)}
-                    onChange={(e) => { setTurler(e.target.checked ? [...turler, t] : turler.filter((x) => x !== t)); }} />
-                ))}
-              </span>
-              {tasinanlar.length > 0 && <p className="tc-rr1-ipucu">Kaydedince başka rotadan bu rotaya geçer: {tasinanlar.join(', ')}.</p>}
-            </>
-          ) : (
+          ) : yetki.rotaOnayla ? turSecimi : (
             <p className="tc-rr1-ipucu">Emir türleri: {rotaTurMetni(aktif, rotalar)}. Türleri rota onaylama yetkisi olan biri değiştirir.</p>
           )}
           {hata && <p className="tc-rr1-hata" role="alert">{hata}</p>}

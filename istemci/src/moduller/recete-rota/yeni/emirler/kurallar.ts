@@ -535,6 +535,27 @@ export function emirRotasi(c: Pick<UrunRevizyonlariCevabi, 'rotalar' | 'revizyon
   };
 }
 
+// 3296: tek rotalı üründe formda salt okunur Rota satırı; emir her türde bu rotadan açılır. İki ya da daha çok rotada seçim emirRotasi'dir.
+export function tekRotaMetni(c: Pick<UrunRevizyonlariCevabi, 'rotalar' | 'revizyonlar'> | undefined): string | null {
+  if (c === undefined || c.rotalar.length !== 1) return null;
+  const r = c.rotalar[0]!;
+  const y = c.revizyonlar.find((x) => x.rotaId === r.id && x.durum === 'yururlukte');
+  return `${r.ad} · ${y === undefined ? 'yürürlükte değil' : `Rev ${y.harf}`}`;
+}
+
+// 3296-2 a: bölmede partinin türünün rotası. farkli: emrin açıldığı rotadan başka; o zaman parti o rotanın yürürlükteki revizyonundan ayrı
+// emir olur (sunucunun kuralı). Ürünün rotaları okunamadıysa null.
+export interface BolmeTurRotasi { ad: string; harf: string | null; farkli: boolean; adimlar: EmirAdimi[] }
+export function bolmeTurRotasi(d: Durum, c: Pick<UrunRevizyonlariCevabi, 'rotalar' | 'revizyonlar'> | undefined, o: Emir, tur: string): BolmeTurRotasi | null {
+  if (c === undefined || c.rotalar.length === 0) return null;
+  const standart = c.rotalar.find((r) => r.standart) ?? c.rotalar[0]!;
+  const rota = c.rotalar.find((r) => (r.emirTurleri as readonly string[]).includes(tur)) ?? standart;
+  const y = c.revizyonlar.find((r) => r.rotaId === rota.id && r.durum === 'yururlukte') ?? null;
+  const emirRev = o.rev === null ? undefined : c.revizyonlar.find((r) => String(r.id) === o.rev);
+  const farkli = emirRev !== undefined && emirRev.rotaId !== rota.id;
+  return { ad: rota.ad, harf: y?.harf ?? null, farkli, adimlar: y === null ? [] : emirAdimlari(d, { ...o, rev: String(y.id), rotasiz: false }) };
+}
+
 export function yururlukteRevizyonId(d: Pick<DurumCevabi, 'routeRevs'>, urunId: string): number | null {
   const r = (d.routeRevs ?? []).find((x) => x.itemId === urunId && x.status === 'yururlukte' && x.rotaStandart !== false);
   return r === undefined ? null : Number(r.id);

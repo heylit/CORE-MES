@@ -55,6 +55,7 @@ describe('3296-1 emir açılışında rota ve tür', () => {
     await waitFor(() => expect(kopya(istekler)).toBeDefined());
     expect(kopya(istekler)?.yol).toBe(FAI);
     expect(kopya(istekler)?.govde).toMatchObject({ emirTuru: 'fai' });
+    expect(kopya(istekler)?.govde).not.toHaveProperty('rotaElle');
   });
 
   it('elle seçilen rota türden bağımsız gider', async () => {
@@ -65,7 +66,7 @@ describe('3296-1 emir açılışında rota ve tür', () => {
     fireEvent.click(within(form).getByRole('button', { name: 'Emri oluştur' }));
     await waitFor(() => expect(kopya(istekler)).toBeDefined());
     expect(kopya(istekler)?.yol).toBe(FAI);
-    expect(kopya(istekler)?.govde).toMatchObject({ emirTuru: 'seri' });
+    expect(kopya(istekler)?.govde).toMatchObject({ emirTuru: 'seri', rotaElle: true });
   });
 
   it('proje penceresinde FAI partisi seçilince form Seri olsa da FAI rotası açılır', async () => {
@@ -81,4 +82,21 @@ describe('3296-1 emir açılışında rota ve tür', () => {
     expect(kopya(istekler)?.yol).toBe(FAI);
     expect(kopya(istekler)?.govde).toMatchObject({ emirTuru: 'fai', projeId: 5, siparisSatiriId: 51, siparisPartiId: 8 });
   });
+
+  it('tek rotalı üründe Rota satırı salt okunur görünür', async () => {
+    sunucuKur(kisi, {
+      durum: rotaDurumu(),
+      yazmalar: {
+        'GET /rota/urunler/11': () => json(200, { revizyonlar: [ROTALAR.revizyonlar[0]], rotalar: [ROTALAR.rotalar[0]] }),
+        'GET /rota/revizyonlar/71/patlatma-onizleme': () => json(200, onizlemeOrnegi({ dugumler: onizlemeOrnegi().dugumler.slice(0, 1) })),
+        'GET /adimli-emirler/acilis-secenekleri': () => json(200, { projeZorunlu: false, rotasizAcik: false, projeler: [] }),
+      },
+    });
+    yeniEmirAc();
+    const p = await screen.findByRole('dialog', { name: 'Yeni üretim emri' });
+    const rota = await within(p).findByRole('textbox', { name: 'Rota' }) as HTMLInputElement;
+    expect([rota.value, rota.readOnly]).toEqual(['Standart · Rev A', true]);
+    expect(within(p).queryByRole('combobox', { name: 'Rota' })).toBeNull();
+  });
 });
+

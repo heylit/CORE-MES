@@ -145,6 +145,11 @@ export const EMIR_KOMUTLARI: Readonly<Record<string, EmirKomutu>> = {
       const yururlukte = rotalar.revizyonlar.find((r) => r.durum === 'yururlukte' && (rota === undefined || r.rotaId === rota.id));
       if (yururlukte === undefined && rota !== undefined && !rota.standart) throw hata(409, `${rota.ad} rotasının yürürlükte revizyonu yok; Standart rotayı seçerek açabilirsiniz.`);
       if (yururlukte === undefined) throw hata(422, 'Ürünün yürürlükte rotası yok; emir yalnız yürürlükteki rotadan açılır.');
+      // Risk N1: çok katmanlı seçim (stoktan karşılanan düğümler) formun önizlediği revizyondandır. Sipariş partisi emri başka türün
+      // rotasına düşürdüyse o düğümler bu revizyonda olmayabilir: emir açılmaz, kullanıcı türü formda seçip yeniden önizler.
+      if (girdi['cokKatmanli'] === true && girdi['onizlemeRevizyonId'] !== undefined && girdi['onizlemeRevizyonId'] !== yururlukte.id) {
+        throw hata(409, `Seçilen parti ${rota?.ad ?? 'başka'} rotasıyla açılır; çok katmanlı emir için formda bu türü seçip katmanları yeniden seçin.`);
+      }
       const not = typeof girdi['note'] === 'string' && girdi['note'].trim() !== '' ? girdi['note'].trim() : null;
       return {
         yol: `/rota/revizyonlar/${String(yururlukte.id)}/emre-kopyala`,
@@ -152,6 +157,8 @@ export const EMIR_KOMUTLARI: Readonly<Record<string, EmirKomutu>> = {
           adet, teslim: tarih(girdi['due'], 'teslim'), baslangic: tarih(girdi['start'], 'başlangıç'), aciklama: not,
           ...(oncelik === undefined ? {} : { oncelik }), ...(girdi['taslak'] === true ? { taslak: true } : {}),
           ...(girdi['rezerve'] === true ? { stoktanRezerve: true } : {}), ...(emirTuru === undefined ? {} : { emirTuru }), ...baglam,
+          // Risk N2: elle seçilen rota türden bağımsızdır; seçilmediyse sahibi revizyonun türün rotası olduğunu denetler.
+          ...(secilen === null ? {} : { rotaElle: true }),
           // 1476-F: tek emir çok katmanlı reçetenin tamamını taşır; stoktan karşılanacak düğümler emre girmez (1483 a).
           ...(girdi['cokKatmanli'] === true ? { cokKatmanli: true, stoktanDugumler: dugumYollari(girdi['stoktanDugumler']) } : {}),
         },

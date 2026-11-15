@@ -4,6 +4,7 @@ import type { Kullanici } from '#paylasilan/kullanici.ts';
 import { zaman } from '../bicim.ts';
 import { emirSayfasiAc, json, KAPI, OKUYAN, ornekDurum, rrAc, sunucuKur, yeniEmirAc, YONETICI, type Istek } from '../test-ortak.tsx';
 import { durumAdi } from './kurallar.ts';
+import { adimOrnegi, revizyonOrnegi } from '../rotalar/test-veri.ts';
 
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
@@ -444,6 +445,60 @@ describe('R3 Üretim emirleri: Diğer menüsü ve stok (1102 a, 1106 a)', () => 
     fireEvent.click(within(ayrinti).getByRole('button', { name: 'UE-0001 işlemleri' }));
     fireEvent.click(screen.getByRole('menuitem', { name: 'Böl (parti ya da kol)' }));
     expect(within(ayrinti).getByRole('group', { name: 'Bölme türü' })).toBeTruthy();
+  });
+
+  // 3296-2 a: ürünün Standart (71, iki adım) ve FAI (72, üç adım) rotası; emir Standart'tan açılmış.
+  const ikiRotali = (baslamis: boolean) => {
+    const d = adimli('serbest');
+    const adim = (opNo: number, seq: number) => ({ ...adimOrnegi(), id: `s${String(opNo)}`, seq, opNo, name: `Adım ${String(opNo)}` });
+    d.routeRevs = [
+      { ...revizyonOrnegi('71', 'F', 'yururlukte', 1, [adim(10, 1), adim(20, 2)]), rotaId: '1', rotaStandart: true },
+      { ...revizyonOrnegi('72', 'A', 'yururlukte', 1, [adim(10, 1), adim(20, 2), adim(25, 3)]), rotaId: '2', rotaStandart: false },
+    ] as typeof d.routeRevs;
+    d.emirler = { ...d.emirler!, orders: d.emirler!.orders.map((o) => ({ ...o, rev: '71' })), ...(baslamis ? { opStatus: { '61|root|1': 'calisiyor' } } : {}) } as typeof d.emirler;
+    return d;
+  };
+  const ROTALAR = {
+    urun: { id: 11 }, taslakAcilabilir: false, kartOperasyonlari: null,
+    revizyonlar: [{ id: 71, rotaId: 1, harf: 'F', durum: 'yururlukte' }, { id: 72, rotaId: 2, harf: 'A', durum: 'yururlukte' }],
+    rotalar: [{ id: 1, ad: 'Standart', standart: true, surum: 1, emirTurleri: [], taslakAcilabilir: false }, { id: 2, ad: 'ORN FAI', standart: false, surum: 1, emirTurleri: ['fai'], taslakAcilabilir: false }],
+  };
+  const emir61 = { id: 61, parti: { ustEmirId: null, bolunmeSira: null, altEmirIdleri: [], birlestigiEmirId: null, birlesmeOpNo: null }, isEmirleri: [{ id: 701, opNo: 10, sira: 1, durum: 'bekliyor' }], surum: 1 };
+  const bolAc = async (baslamis: boolean) => {
+    const istekler = sunucuKur(YONETICI, {
+      durum: ikiRotali(baslamis),
+      yazmalar: { 'GET /adimli-emirler/61': () => json(200, { emir: emir61 }), 'GET /rota/urunler/11': () => json(200, ROTALAR), 'POST /adimli-emirler/61/bol': () => json(200, { emir: emir61, altEmirId: 63, ayriEmir: true }) },
+    });
+    const ayrinti = await sayfa();
+    fireEvent.click(within(ayrinti).getByRole('button', { name: 'UE-0001 işlemleri' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Böl (parti ya da kol)' }));
+    fireEvent.click(within(ayrinti).getByRole('button', { name: 'Partilere böl' }));
+    fireEvent.change(within(ayrinti).getByLabelText('Parti 1'), { target: { value: '3' } });
+    fireEvent.change(within(ayrinti).getByRole('combobox', { name: 'Parti 1 emir türü' }), { target: { value: 'fai' } });
+    return { istekler, ayrinti };
+  };
+
+  it('3296-2 a: farklı rotalı türe parti satırı türün rotasını yazar; "Bölünce ne olacak" yeni emri kendi adımlarıyla gösterir', async () => {
+    const { istekler, ayrinti } = await bolAc(false);
+    const rota = await within(ayrinti).findByRole('textbox', { name: 'Parti 1 rota' }) as HTMLInputElement;
+    await waitFor(() => { expect(rota.value).toBe('ORN FAI · Rev A'); });
+    expect(within(ayrinti).getByText(/FAI türünün rotası ana emrinkinden farklı: parti kendi rotasıyla ayrı emir olarak açılır/)).toBeTruthy();
+    const tablo = within(ayrinti).getByRole('table', { name: 'Bölme önizlemesi' });
+    expect(within(tablo).getByRole('rowheader', { name: /Yeni emir/ })).toBeTruthy();
+    expect(tablo.textContent).toContain('ORN FAI · Rev A, ayrı emir');
+    expect(within(ayrinti).getByText(/^Yeni emir \(FAI, .* adet\): ORN FAI · Rev A: 10 T · 20 T · 25 T$/)).toBeTruthy();
+    fireEvent.click(within(ayrinti).getByRole('button', { name: 'Partilere böl ve onaya gönder' }));
+    await waitFor(() => { expect(yazmalar(istekler).some((i) => i.yol === '/adimli-emirler/61/bol')).toBe(true); });
+  });
+
+  it('3296-2 a: adımı başlamış emirde farklı rotalı parti satır içinde uyarı verir, bölme kapanır, "FAI için yeni emir aç" görünür', async () => {
+    const { istekler, ayrinti } = await bolAc(true);
+    const uyari = await within(ayrinti).findByText(/FAI türünün rotası farklı ve bu emirde adım başladı; FAI partisini yeni emir olarak açın/);
+    expect(uyari.closest('[role="alert"]')).not.toBeNull();
+    expect((within(ayrinti).getByRole('button', { name: 'Partilere böl ve onaya gönder' }) as HTMLButtonElement).disabled).toBe(true);
+    expect(within(ayrinti).getByRole('button', { name: 'FAI için yeni emir aç' })).toBeTruthy();
+    expect(within(ayrinti).queryByRole('table', { name: 'Bölme önizlemesi' })).toBeNull();
+    expect(yazmalar(istekler).some((i) => i.yol === '/adimli-emirler/61/bol')).toBe(false);
   });
 
   it('3099: partilere bölerken her partinin türü seçilir; seçilen tür bölme isteğine girer, seçilmeyen parti türsüz gider (ana emrinki)', async () => {

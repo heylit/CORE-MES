@@ -63,7 +63,7 @@ async function kalemleriCevir(db: Db, kalemler: KalemSatiri[]): Promise<SiparisS
       id: k.id, sira: k.sira, malzemeNo: k.malzeme_no, malzemeKodu: kart?.kod ?? null, malzemeAdi: kart?.ad ?? null,
       aciklamalar: ayrintilar.get(k.malzeme_no)?.aciklamalar ?? [], birim: kart?.birim ?? null,
       miktar: k.miktar, birimFiyat: k.birim_fiyat, tutar: k.tutar, termin: k.termin, aciklama: k.aciklama,
-      partiler: (partiler.get(k.id) ?? []).map((p) => ({ id: p.id, emirTuru: p.emir_turu, adet: p.adet })),
+      partiler: (partiler.get(k.id) ?? []).map((p) => ({ id: p.id, emirTuru: p.emir_turu, adet: p.adet, rotaId: p.rota_id })),
       emreBagli: bagli.has(k.id),
     };
   });
@@ -177,7 +177,7 @@ export async function siparisGuncelle(
     const partiler = await kalemPartileri(db, [...kilitli]);
     const kayitli = kayitlilar.map((k) => ({
       id: k.id, sira: k.sira, malzemeNo: k.malzeme_no, miktar: k.miktar, birimFiyat: k.birim_fiyat, aciklama: k.aciklama,
-      partiler: (partiler.get(k.id) ?? []).map((p) => ({ emirTuru: p.emir_turu, adet: p.adet })),
+      partiler: (partiler.get(k.id) ?? []).map((p) => ({ emirTuru: p.emir_turu, adet: p.adet, rotaId: p.rota_id })),
     }));
     const kilit = kilitliKalemReddi(kayitli, kilitli, satirlar);
     if (kilit !== null) throw cakisma(kilit.mesaj);
@@ -268,7 +268,8 @@ export interface SiparisSatiriOzeti {
   // 3244 b: termin kalemin kendisinden mi (elle) yoksa siparişten mi geliyor; zincir bağı bunu okur.
   terminElle: boolean;
   // 3244 b: kalemin partileri; boşsa kalem tek seri partidir (çağıran öyle sayar).
-  partiler: { id: number; emirTuru: EmirTuru; adet: string }[];
+  // 3296-3 a: rotaId partide elle seçilen rota; boşsa çeşidin rotası.
+  partiler: { id: number; emirTuru: EmirTuru; adet: string; rotaId: number | null }[];
 }
 
 // kisiAdlari kalıbı: satırlar ve başlıklar birer sorgu; boş dizide sorgu yok; olmayan kimlik haritada yok.
@@ -281,7 +282,7 @@ async function satirOzetleri(db: Db, kalemler: KalemSatiri[]): Promise<SiparisSa
       id: k.id, siparisId: b.id, siparisNo: b.no, siparisDurumu: b.durum, firmaId: b.firma_id,
       sira: k.sira, malzemeNo: k.malzeme_no, miktar: k.miktar, termin: k.termin ?? b.termin, birimFiyat: k.birim_fiyat,
       tutar: k.tutar, paraBirimi: b.para_birimi, cezaOraniGun: b.gecikme_ceza_orani, cezaTavaniOrani: b.ceza_tavani_orani, odemeVadesiGun: b.odeme_vadesi_gun,
-      terminElle: k.termin !== null, partiler: (partiler.get(k.id) ?? []).map((p) => ({ id: p.id, emirTuru: p.emir_turu, adet: p.adet })),
+      terminElle: k.termin !== null, partiler: (partiler.get(k.id) ?? []).map((p) => ({ id: p.id, emirTuru: p.emir_turu, adet: p.adet, rotaId: p.rota_id })),
     }];
   });
 }

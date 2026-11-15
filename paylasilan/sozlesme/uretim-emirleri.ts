@@ -440,7 +440,8 @@ export const adimliListeSorgusu = z.object({
 export const adimliBitenlerSorgusu = z.object({ ...sayfaSorguAlanlari, durum: z.enum(BITEN_EMIR_DURUMLARI).optional(), ara: aramaMetni });
 export const isEmriParametresi = z.object({ id: yolKimligi, isEmriId: yolKimligi });
 export const fasonHareketiCevabi = z.object({ emir: z.lazy(() => adimliEmirAyrintisi), hareketId: KIMLIK });
-export const partiBolCevabi = z.object({ emir: z.lazy(() => adimliEmirAyrintisi), altEmirId: KIMLIK });
+// 3296-2 a: ayriEmir true ise parti, türünün rotasıyla ayrı emir olarak açıldı (altEmirId o emirdir).
+export const partiBolCevabi = z.object({ emir: z.lazy(() => adimliEmirAyrintisi), altEmirId: KIMLIK, ayriEmir: z.boolean() });
 
 export const planaAlGovdesi = z.object({ surum: surumSemasi }).strict();
 export const adimliIptalGovdesi = z.object({ surum: surumSemasi }).strict();

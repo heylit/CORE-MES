@@ -15,7 +15,7 @@ import {
 import { adimDurumu, adimDurumuTerminal, ekMaddeIsaretle, elleStatuKaldir, elleStatuYaz, hazirlikOnayKaldir, hazirlikOnayla, listeFotografi, listeIsaretle, listeMaddesiEkle } from './adim-durumu.ts';
 import { aramaUclari } from './arama/uclar.ts';
 import { siparisAcilisiCevabi, siparisAcilisiGovdesi, siparisAcilisiParametresi, siparisAcilisiSonucu } from '#paylasilan/sozlesme/siparis-acilisi.ts';
-import { siparisAcilisiDurumu, siparisAcilisiYap } from './siparis-acilisi.ts';
+import { bolmeCozuculeri, siparisAcilisiDurumu, siparisAcilisiYap } from './siparis-acilisi.ts';
 import * as isEmri from './is-emri-servis.ts';
 import { emirleriTopluGuncelle } from './toplu-guncelle.ts';
 import { ARSIV_YETKISI, arsiveAl, arsivOnizleme } from './arsiv.ts';
@@ -509,8 +509,8 @@ const adimliUclar = [
     govde: partiBolGovdesi,
     cevap: partiBolCevabi,
     isle: async ({ db, kullanici, parametre, govde }) => {
-      const { altEmirId } = await isEmri.partiyiBol(db, kullanici, parametre.id, govde);
-      return { emir: await isEmri.adimliAyrinti(db, parametre.id), altEmirId };
+      const { altEmirId, ayriEmir } = await isEmri.partiyiBol(db, kullanici, parametre.id, govde, bolmeCozuculeri());
+      return { emir: await isEmri.adimliAyrinti(db, parametre.id), altEmirId, ayriEmir: ayriEmir === true };
     },
   }),
   uc({

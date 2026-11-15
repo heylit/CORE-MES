@@ -167,7 +167,7 @@ export interface KalemAlanlari {
   birimFiyat: string | null;
   termin: string | null;
   aciklama: string | null;
-  partiler?: readonly { emirTuru: string; adet: string }[];
+  partiler?: readonly { emirTuru: string; adet: string; rotaId?: number | null | undefined }[];
 }
 
 // Satırlar taslakta bütün olarak yeniden yazılır; sıra gövdedeki sıradır.
@@ -203,20 +203,23 @@ export async function kalemleriYaz(
   const partiler = yazilacak.flatMap((k) => (k.partiler ?? []).map((p, j) => ({ kalemSira: k.sira, sira: j + 1, ...p })));
   if (partiler.length === 0) return;
   await db.sorgu(
-    `INSERT INTO siparisler_siparis_satiri_parti (satir_id, sira, emir_turu, adet)
-     SELECT s.id, p.sira, p.emir_turu, p.adet
-       FROM unnest($2::int[], $3::int[], $4::text[], $5::numeric[]) AS p (kalem_sira, sira, emir_turu, adet)
+    `INSERT INTO siparisler_siparis_satiri_parti (satir_id, sira, emir_turu, adet, rota_id)
+     SELECT s.id, p.sira, p.emir_turu, p.adet, p.rota_id
+       FROM unnest($2::int[], $3::int[], $4::text[], $5::numeric[], $6::int[]) AS p (kalem_sira, sira, emir_turu, adet, rota_id)
        JOIN siparisler_siparis_satiri s ON s.siparis_id = $1 AND s.sira = p.kalem_sira`,
-    [siparisId, partiler.map((p) => p.kalemSira), partiler.map((p) => p.sira), partiler.map((p) => p.emirTuru), partiler.map((p) => p.adet)],
+    [
+      siparisId, partiler.map((p) => p.kalemSira), partiler.map((p) => p.sira), partiler.map((p) => p.emirTuru), partiler.map((p) => p.adet),
+      partiler.map((p) => p.rotaId ?? null),
+    ],
   );
 }
 
-export interface PartiSatiri { id: number; satir_id: number; sira: number; emir_turu: EmirTuru; adet: string }
+export interface PartiSatiri { id: number; satir_id: number; sira: number; emir_turu: EmirTuru; adet: string; rota_id: number | null }
 
 export function partileriGetir(db: Db, satirIdleri: readonly number[]): Promise<PartiSatiri[]> {
   if (satirIdleri.length === 0) return Promise.resolve([]);
   return db.sorgu<PartiSatiri>(
-    'SELECT id, satir_id, sira, emir_turu, adet FROM siparisler_siparis_satiri_parti WHERE satir_id = ANY($1::int[]) ORDER BY satir_id, sira',
+    'SELECT id, satir_id, sira, emir_turu, adet, rota_id FROM siparisler_siparis_satiri_parti WHERE satir_id = ANY($1::int[]) ORDER BY satir_id, sira',
     [[...satirIdleri]],
   );
 }

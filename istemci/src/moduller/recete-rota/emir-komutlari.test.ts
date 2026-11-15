@@ -115,3 +115,26 @@ describe('Hatalı parçanın rework adımı (1034): adım Üretim Emirleri\'ne, 
     await expect(hazirla('emir-rework-sartname', { id: 9, isEmriId: 714, surum: 6 })).rejects.toThrow('Geçersiz şartname listesi.');
   });
 });
+
+describe('Risk N1: çok katmanlı emir formun önizlediği revizyondan açılır', () => {
+  const rotalar = {
+    urun: { id: 12, kod: 'ORN-0001', ad: 'Deneme mil' }, taslakAcilabilir: false, kartOperasyonlari: null,
+    rotalar: [{ id: 1, ad: 'Standart', standart: true, emirTurleri: [], surum: 1 }, { id: 2, ad: 'ORN FAI', standart: false, emirTurleri: ['fai'], surum: 1 }],
+    revizyonlar: [{ id: 10, rotaId: 1, durum: 'yururlukte' }, { id: 20, rotaId: 2, durum: 'yururlukte' }],
+  };
+  const getir = vi.fn(async () => json(200, rotalar));
+  const ac = (ek: Record<string, unknown>) =>
+    EMIR_KOMUTLARI['emir-ac']!.hazirla({ itemId: 12, qty: 5, cokKatmanli: true, stoktanDugumler: [], ...ek });
+
+  it('parti emri başka türün rotasına düşürürse komut 409 ile durur, emre-kopyala hazırlanmaz', async () => {
+    vi.stubGlobal('fetch', getir);
+    await expect(ac({ tur: 'fai', onizlemeRevizyonId: 10 })).rejects.toMatchObject({ durum: 409, message: expect.stringMatching(/ORN FAI rotasıyla açılır; çok katmanlı emir için formda bu türü seçip/) });
+  });
+
+  it('önizlenen revizyon türün rotasıysa emir o revizyondan çok katmanlı açılır', async () => {
+    vi.stubGlobal('fetch', getir);
+    const k = await ac({ tur: 'fai', onizlemeRevizyonId: 20 });
+    expect(k.yol).toBe('/rota/revizyonlar/20/emre-kopyala');
+    expect(k.govde).toMatchObject({ cokKatmanli: true, emirTuru: 'fai' });
+  });
+});

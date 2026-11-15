@@ -20,17 +20,24 @@ import {
 
 // 3272: sipariş onaylanınca proje ve her kalem partisi için taslak emir. Rota modülü bu modülün üstündedir (ADR 0006); emrin rotası ve
 // rotadan emir açma kablolama.ts'te kaydedilen çözücüden gelir. Emir taşıyan satın alma ve stok bağları da öyle (iki modül de bunu ithal eder).
-export interface SiparisAcilisiRotasi { ad: string; harf: string | null; revizyonId: number | null }
+// 3296: secilenRotaId partide elle seçilen rotadır (elle: kullanıldı mı); revizyonunRotasi bölmede emrin rotasını bulur.
+export interface SiparisAcilisiRotasi { rotaId: number; ad: string; harf: string | null; revizyonId: number | null; elle: boolean }
 export interface SiparisAcilisiCozuculeri {
-  turunRotasi: (db: Db, malzemeNo: number, emirTuru: EmirTuru) => Promise<SiparisAcilisiRotasi | null>;
+  turunRotasi: (db: Db, malzemeNo: number, emirTuru: EmirTuru, secilenRotaId?: number | null) => Promise<SiparisAcilisiRotasi | null>;
+  revizyonunRotasi: (db: Db, revizyonId: number) => Promise<number | null>;
   emreKopyala: (db: Db, kullanici: Kullanici, revizyonId: number, g: {
-    adet: number; teslim: null; oncelik: number; taslak: true; projeId: number; siparisSatiriId: number; siparisPartiId: number | null; emirTuru: EmirTuru;
+    adet: number; teslim: string | null; baslangic?: string | null; oncelik: number; taslak: boolean; projeId: number | null; siparisSatiriId: number | null;
+    siparisPartiId: number | null; emirTuru: EmirTuru; aciklama?: string | null;
   }) => Promise<{ uretimEmriId: number }>;
   // tedarik: satın alma siparişi aşamasında (kilitler); talep: yalnız talep aşamasında (uyarır, 3272-2); stok: fişi olan (kilitler).
   emirBaglari: (db: Db, emirIdleri: readonly number[]) => Promise<{ tedarik: ReadonlySet<number>; talep: ReadonlySet<number>; stok: ReadonlySet<number> }>;
+  // 3296 (Risk K1): emre stoktan ayrılmış malzeme var mı; bölmede ayrı emir açılırken ana emrin rezervesi yeni emre geçmez.
+  rezervesiVar?: (db: Db, emirId: number) => Promise<boolean>;
 }
 let cozucu: SiparisAcilisiCozuculeri | null = null;
 export function siparisAcilisiCozuculeriKaydet(c: SiparisAcilisiCozuculeri | null): void { cozucu = c; }
+// 3296-2 a: bölme rotası aynı çözücüyü kullanır; kayıtlı değilse (kablolamasız test) bölme rotaya bakmaz.
+export const bolmeCozuculeri = (): SiparisAcilisiCozuculeri | undefined => cozucu ?? undefined;
 function cozuculer(): SiparisAcilisiCozuculeri {
   if (cozucu === null) throw new Error('Sipariş açılışı için rota ve bağ çözücüsü kayıtlı değil (kablolama.ts).');
   return cozucu;
@@ -86,12 +93,12 @@ export async function siparisAcilisiDurumu(db: Db, kullanici: Kullanici, siparis
   const kalemler = new Map(d.siparis.satirlar.map((k) => [k.id, k]));
   for (const p of d.partiler) {
     const emir = partininEmri(d, p);
-    const rota = p.atlama === null ? await r.turunRotasi(db, p.malzemeNo, p.emirTuru) : null;
+    const rota = p.atlama === null ? await r.turunRotasi(db, p.malzemeNo, p.emirTuru, p.rotaId) : null;
     const k = kalemler.get(p.kalemId);
     satirlar.push({
       kalemId: p.kalemId, kalemSira: p.kalemSira, partiId: p.partiId, malzemeNo: p.malzemeNo, malzemeKodu: k?.malzemeKodu ?? null,
       malzemeAdi: k?.malzemeAdi ?? null, emirTuru: p.emirTuru, adet: p.adet, teslim: p.teslim,
-      rota: rota?.revizyonId == null ? null : { ad: rota.ad, harf: rota.harf ?? '' },
+      rota: rota?.revizyonId == null ? null : { ad: rota.ad, harf: rota.harf ?? '', elle: rota.elle, elleDustu: p.rotaId !== null && !rota.elle },
       emir: emir === null ? null : { id: emir.id, no: emir.emirNo, durum: emir.durum, rotaBekliyor: emir.rotaBekliyor },
       atlama: p.atlama,
     });
@@ -145,7 +152,7 @@ async function ac(db: Db, kullanici: Kullanici, siparisId: number, projeKodu: st
   }
   for (const id of esle.iptal) await iptalEt(db, kullanici, id);
   for (const p of esle.ac) {
-    const rota = await r.turunRotasi(db, p.malzemeNo, p.emirTuru);
+    const rota = await r.turunRotasi(db, p.malzemeNo, p.emirTuru, p.rotaId);
     const baslik = { adet: p.adet, teslim: null, oncelik: 3, taslak: true as const, projeId, siparisSatiriId: p.kalemId, siparisPartiId: p.partiId, emirTuru: p.emirTuru };
     if (rota?.revizyonId == null) {
       await rotaBekleyenEmirAc(db, kullanici, { ...baslik, malzemeNo: p.malzemeNo });

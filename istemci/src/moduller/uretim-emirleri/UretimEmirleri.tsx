@@ -69,23 +69,25 @@ const BITEN_CIPLER: readonly { deger: '' | 'bitti' | 'iptal'; baslik: string }[]
 
 // Emrin ana yeri burasıdır (3003 a): emir burada açılır, ayrıntısında plana alınır, bölünür ve iptal edilir. Açma penceresi Reçete ve
 // Rota'nın formudur (rota seçimi ve plan onun köprüsünde); bu modül alt kattadır (ADR 0006), pencereyi üstteki modül parametre olarak
-// verir (`emirAcma`). Düğme yalnız açabilene görünür. `?yeni=1` (Ctrl K, Reçete ve Rota) pencereyi açar, `urun=` ürünü seçili getirir;
+// verir (`emirAcma`). Düğme yalnız açabilene görünür. `?yeni=1` (Ctrl K, Reçete ve Rota) pencereyi açar, `urun=` ürünü seçili getirir,
+// `tur=` ve `adet=` formu doldurur (3296: başlamış emirden ayrılamayan parti için "FAI için yeni emir aç");
 // istek bir kez karşılanır ve adresten düşer.
+export interface YeniEmirIstegi { urun: string | null; tur?: string | null; adet?: string | null }
 export interface EmirAcmaYuvasi {
   acabilir: boolean;
   // Başlıktaki ek düğmeler (Excel) ve açma penceresi; `yeni` null ise pencere kapalıdır.
-  ciz: (yeni: { urun: string | null } | null, kapat: () => void) => ReactNode;
+  ciz: (yeni: YeniEmirIstegi | null, kapat: () => void) => ReactNode;
 }
 
 export function UretimEmirleri({ emirAcma }: { emirAcma?: EmirAcmaYuvasi }) {
   const yonlendir = useNavigate();
   const acabilir = emirAcma?.acabilir ?? false;
   const [adres, adresYaz] = useSearchParams();
-  const [yeni, setYeni] = useState<{ urun: string | null } | null>(null);
+  const [yeni, setYeni] = useState<YeniEmirIstegi | null>(null);
   useEffect(() => {
     if (!adres.has('yeni')) return;
-    if (adres.get('yeni') === '1' && acabilir) setYeni({ urun: adres.get('urun') });
-    adresYaz((a) => { const y = new URLSearchParams(a); y.delete('yeni'); y.delete('urun'); return y; }, { replace: true });
+    if (adres.get('yeni') === '1' && acabilir) setYeni({ urun: adres.get('urun'), tur: adres.get('tur'), adet: adres.get('adet') });
+    adresYaz((a) => { const y = new URLSearchParams(a); for (const k of ['yeni', 'urun', 'tur', 'adet']) y.delete(k); return y; }, { replace: true });
   }, [adres, acabilir]);
   const gorunum: Gorunum = adres.get('gorunum') === 'bitenler' ? 'bitenler' : 'acik';
   const [durum, setDurum] = useState<EmirDurumu | ''>('');

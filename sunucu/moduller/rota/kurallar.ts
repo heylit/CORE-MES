@@ -1383,3 +1383,11 @@ export function sahneHatasi(adimlar: readonly { sira: number; hareket: { parcala
   }
   return null;
 }
+
+// 3296 (Risk N2): tek emir açılışında revizyonun rotası emrin türünün rotası olmalı; rota formda elle seçildiyse türden bağımsızdır.
+export const turunRotasiDegilIletisi = (turAdi: string, turRotasi: string): string =>
+  `${turAdi} emri ${turRotasi} rotasıyla açılır; başka rotayla açmak için formda Rota alanından seçin.`;
+export function turRotasiIhlali(g: { revizyonRotaId: number; turRotasi: { rotaId: number; ad: string } | null; elle: boolean; turAdi: string }): string | null {
+  if (g.elle || g.turRotasi === null || g.turRotasi.rotaId === g.revizyonRotaId) return null;
+  return turunRotasiDegilIletisi(g.turAdi, g.turRotasi.ad);
+}

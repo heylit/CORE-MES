@@ -91,11 +91,11 @@ const sayiAyni = (a: string | null, b: string | null): boolean => {
 };
 export interface KayitliKalem {
   id: number; sira: number; malzemeNo: number; miktar: string; birimFiyat: string | null; aciklama: string | null;
-  partiler: readonly { emirTuru: string; adet: string }[];
+  partiler: readonly { emirTuru: string; adet: string; rotaId?: number | null | undefined }[];
 }
 export interface YeniKalem {
   id?: number | undefined; malzemeNo: number; miktar: string; birimFiyat: string | null; aciklama: string | null;
-  partiler?: readonly { emirTuru: string; adet: string }[] | undefined;
+  partiler?: readonly { emirTuru: string; adet: string; rotaId?: number | null | undefined }[] | undefined;
 }
 export function kilitliKalemReddi(
   kayitli: readonly KayitliKalem[], kilitli: ReadonlySet<number>, yeni: readonly YeniKalem[],
@@ -112,7 +112,8 @@ export function kilitliKalemReddi(
     const partiler = y.partiler ?? [];
     const ayni = y.malzemeNo === k.malzemeNo && sayiAyni(y.miktar, k.miktar) && sayiAyni(y.birimFiyat, k.birimFiyat) && y.aciklama === k.aciklama
       && partiler.length === k.partiler.length
-      && partiler.every((p, j) => p.emirTuru === k.partiler[j]?.emirTuru && sayiAyni(p.adet, k.partiler[j]?.adet ?? null));
+      && partiler.every((p, j) => p.emirTuru === k.partiler[j]?.emirTuru && sayiAyni(p.adet, k.partiler[j]?.adet ?? null)
+        && (p.rotaId ?? null) === (k.partiler[j]?.rotaId ?? null));
     if (!ayni) return { mesaj: `${KILITLI_KALEM_DEGISMEZ} (kalem ${k.sira}).`, alan: `satirlar.${i}` };
   }
   return null;

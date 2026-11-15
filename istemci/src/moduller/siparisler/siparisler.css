@@ -114,6 +114,12 @@
 .tc-sp-parti-alt { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: var(--b-2) var(--b-3); }
 .tc-sp-parti-toplam { margin-right: auto; color: var(--muted); font-size: var(--yazi-s); font-variant-numeric: tabular-nums; }
 .tc-sp-parti-cipleri { display: flex; flex-wrap: wrap; gap: var(--b-1); }
+/* 3296-3 a: rota seçimi olan parti; dar ekranda rota alttaki satıra iner. */
+.tc-sp-parti-rotali { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) auto; }
+@media (max-width: 479px) {
+  .tc-sp-parti-rotali { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; }
+  .tc-sp-parti-rotali > :nth-child(3) { grid-column: 1 / -1; grid-row: 2; }
+}
 
 /* 3272: onay penceresinde açılacak proje ve emirler; "Proje ve emirler" kartının düğmeleri. */
 .tc-sp-acilis-ozet { display: flex; flex-wrap: wrap; gap: var(--b-2); }

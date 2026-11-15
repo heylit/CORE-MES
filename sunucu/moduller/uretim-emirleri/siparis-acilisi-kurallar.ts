@@ -22,10 +22,12 @@ export const projeKoduGecerliMi = (kod: string): boolean => PROJE_KODU_BICIMI.te
 // ve tam sayı olmayan adedin emri açılmaz: adet uydurulmaz, yuvarlanmaz.
 export interface AcilisKalemi {
   id: number; sira: number; malzemeNo: number; miktar: string; termin: string | null;
-  partiler: readonly { id: number; emirTuru: EmirTuru; adet: string }[];
+  partiler: readonly { id: number; emirTuru: EmirTuru; adet: string; rotaId?: number | null | undefined }[];
 }
 export interface AcilisPartisi {
   kalemId: number; kalemSira: number; partiId: number | null; malzemeNo: number; emirTuru: EmirTuru; adet: number | null; teslim: string | null;
+  // 3296-3 a: partide elle seçilen rota; boşsa türün rotası.
+  rotaId: number | null;
   atlama: SiparisAcilisiAtlamasi | null;
 }
 const tamSayi = (m: string): number | null => {
@@ -34,11 +36,14 @@ const tamSayi = (m: string): number | null => {
 };
 export function acilacakPartiler(kalemler: readonly AcilisKalemi[], siparisTermini: string, uretilir: (malzemeNo: number) => boolean): AcilisPartisi[] {
   return [...kalemler].sort((a, b) => a.sira - b.sira).flatMap((k) => {
-    const partiler = k.partiler.length === 0 ? [{ id: null, emirTuru: 'seri' as EmirTuru, adet: k.miktar }] : k.partiler;
+    const partiler = k.partiler.length === 0 ? [{ id: null, emirTuru: 'seri' as EmirTuru, adet: k.miktar, rotaId: null }] : k.partiler;
     return partiler.map((p) => {
       const adet = tamSayi(p.adet);
       const atlama: SiparisAcilisiAtlamasi | null = !uretilir(k.malzemeNo) ? 'uretilmez' : adet === null ? 'tam-sayi-degil' : null;
-      return { kalemId: k.id, kalemSira: k.sira, partiId: p.id, malzemeNo: k.malzemeNo, emirTuru: p.emirTuru, adet, teslim: k.termin ?? siparisTermini, atlama };
+      return {
+        kalemId: k.id, kalemSira: k.sira, partiId: p.id, malzemeNo: k.malzemeNo, emirTuru: p.emirTuru, adet, teslim: k.termin ?? siparisTermini,
+        rotaId: p.rotaId ?? null, atlama,
+      };
     });
   });
 }

@@ -4,7 +4,8 @@ import { Dugme, Girdi, Secim, Simge } from '../../../../ortak/arayuz/index.ts';
 import { sayi } from '../bicim.ts';
 import { turAdi } from './gorunum.ts';
 import {
-  AZAMI_EK_ADIM, AZAMI_PARTI, bolmeHesapla, esitBol, kolAdimiSec, kolOlur, type BolmeGirdisi, type BolmeSecimi, type BolmeSonucu, type EmirAdimi,
+  AZAMI_EK_ADIM, AZAMI_PARTI, bolmeHesapla, esitBol, kolAdimiSec, kolOlur, type BolmeGirdisi, type BolmeSecimi, type BolmeSonucu, type BolmeTurRotasi,
+  type EmirAdimi,
 } from './kurallar.ts';
 
 // Bölme seçimi (parti ve kol) ve önizleme: bugünkü ekranın düzeni. Seçim üst bileşende tutulur (yeni emir formu ya da emir ayrıntısı);
@@ -49,12 +50,19 @@ interface Ozellikler {
   gonder?: () => void;
   vazgec?: () => void;
   mesgul?: boolean;
+  // 3296-2 a: partinin türünün rotası (mevcut emirde); verilmezse rota satırı ve ayrı emir uyarısı çizilmez.
+  turRotasi?: (tur: string) => BolmeTurRotasi | null;
+  // Adımı başlamış emirden ayrılamayan farklı rotalı parti için yeni emir formunu tür ve adet dolu açar.
+  yeniEmirAc?: (tur: string, adet: string) => void;
 }
+const rotaMetni = (t: BolmeTurRotasi) => `${t.ad} · ${t.harf === null ? 'yürürlükte değil' : `Rev ${t.harf}`}`;
 
 const adimKisaltmasi = (opdefs: DurumCevabi['opdefs'], a: EmirAdimi | undefined): string =>
   (a ? opdefs?.find((d) => d.id === a.opId)?.abbr ?? a.ad : '?');
 
-export function BolmePaneli({ yeni, anaTur, girdi, adimlar, baslamis, opdefs, istasyonlar, deger: b, degistir, gonder, vazgec, mesgul = false }: Ozellikler) {
+export function BolmePaneli({
+  yeni, anaTur, girdi, adimlar, baslamis, opdefs, istasyonlar, deger: b, degistir, gonder, vazgec, mesgul = false, turRotasi, yeniEmirAc,
+}: Ozellikler) {
   const az = !kolOlur(adimlar.length);
   const r = bolmeSonucu(girdi, b);
   const ad = (j: number) => `${String(j)} ${adimKisaltmasi(opdefs, adimlar[j - 1])}`;
@@ -70,6 +78,13 @@ export function BolmePaneli({ yeni, anaTur, girdi, adimlar, baslamis, opdefs, is
   const ekGorunur = !yeni && (b.tur === 'parti' || (b.tur === 'kol' && b.n !== null && b.m !== null));
   const ekDegistir = (i: number, alan: Partial<EkAdimSecimi>) => { degistir({ ...b, ekler: b.ekler.map((e, k) => (k === i ? { ...e, ...alan } : e)) }); };
   const anaGibi = `Ana emirle aynı (${turAdi(anaTur)})`;
+  // 3296-2 a: rotası emrinkinden farklı parti türleri; adım başladıysa ayrılmaz, yeni emir olarak açılır.
+  const partiTuru = (i: number) => (b.turler[i] ?? '') === '' ? anaTur : b.turler[i]!;
+  const farkliTurler = b.tur !== 'parti' || turRotasi === undefined ? []
+    : [...new Set(b.partiler.flatMap((p, i) => (p.trim() !== '' && partiTuru(i) !== anaTur && turRotasi(partiTuru(i))?.farkli ? [partiTuru(i)] : [])))];
+  const ayrilamaz = farkliTurler.length > 0 && baslamis.length > 0;
+  const ilkFarkli = farkliTurler[0];
+  const ilkFarkliAdet = ilkFarkli === undefined ? '' : b.partiler.find((_, i) => partiTuru(i) === ilkFarkli) ?? '';
   const turSecimi = (etiket: string, deger: string, sec: (t: string) => void, ad?: string) => (
     <Secim etiket={etiket} aria-label={ad} value={deger} bosSecenek={anaGibi} secenekler={TUR_SECENEKLERI.filter((t) => t.deger !== anaTur)} onChange={(o) => { sec(o.target.value); }} />
   );
@@ -126,6 +141,10 @@ export function BolmePaneli({ yeni, anaTur, girdi, adimlar, baslamis, opdefs, is
                   onChange={(o) => { degistir({ ...b, partiler: b.partiler.map((x, k) => (k === i ? o.target.value : x)) }); }}
                 />
                 {turSecimi('Emir türü', b.turler[i] ?? '', (tur) => { degistir({ ...b, turler: b.partiler.map((_, k) => (k === i ? tur : b.turler[k] ?? '')) }); }, `Parti ${String(i + 1)} emir türü`)}
+                {(() => {
+                  const t = turRotasi?.(partiTuru(i));
+                  return t ? <Girdi etiket="Rota" aria-label={`Parti ${String(i + 1)} rota`} readOnly tabIndex={-1} value={rotaMetni(t)} /> : null;
+                })()}
               </div>
             ))}
           </div>
@@ -141,7 +160,21 @@ export function BolmePaneli({ yeni, anaTur, girdi, adimlar, baslamis, opdefs, is
               Eşit böl
             </Dugme>
           </div>
-          <p className="tc-rr3-ipucu">Ana emirde kalan = emir miktarı − partiler. Boş bırakılan parti açılmaz. Türü seçilmeyen parti ana emrin türüyle açılır.</p>
+          {ayrilamaz && ilkFarkli !== undefined ? (
+            <>
+              <p className="tc-rr3-uyari" role="alert">
+                <Simge ad="alert" boyut="k" />
+                {`${turAdi(ilkFarkli)} türünün rotası farklı ve bu emirde adım başladı; ${turAdi(ilkFarkli)} partisini yeni emir olarak açın. ${turAdi(ilkFarkli)} yanlış adımlarla üretilmez.`}
+              </p>
+              <p className="tc-rr3-ipucu">Türü boş bırakılan ya da rotası aynı olan türde parti bugünkü gibi ayrılır.</p>
+            </>
+          ) : farkliTurler.length > 0 ? (
+            <p className="tc-rr3-ipucu">
+              {`${farkliTurler.map(turAdi).join(', ')} türünün rotası ana emrinkinden farklı: parti kendi rotasıyla ayrı emir olarak açılır, ana emre geri birleştirilmez. Ana emirde hiçbir adım başlamadığı için ayrılabilir.`}
+            </p>
+          ) : (
+            <p className="tc-rr3-ipucu">Ana emirde kalan = emir miktarı − partiler. Boş bırakılan parti açılmaz. Türü seçilmeyen parti ana emrin türüyle açılır.</p>
+          )}
         </>
       )}
       {ekGorunur && (
@@ -187,12 +220,20 @@ export function BolmePaneli({ yeni, anaTur, girdi, adimlar, baslamis, opdefs, is
           </div>
         </div>
       )}
-      {r && <BolmeOnizleme sonuc={r} adimlar={adimlar} opdefs={opdefs} yeni={yeni} turler={[anaTur, ...altEmirTurleri(b, r.siralar, anaTur).map((t) => t ?? anaTur)]} />}
+      {r && !ayrilamaz && (
+        <BolmeOnizleme
+          sonuc={r} adimlar={adimlar} opdefs={opdefs} yeni={yeni} turler={[anaTur, ...altEmirTurleri(b, r.siralar, anaTur).map((t) => t ?? anaTur)]}
+          ayri={(tur) => (farkliTurler.includes(tur) ? turRotasi?.(tur) ?? null : null)}
+        />
+      )}
       {!yeni && (b.tur === 'parti' || b.tur === 'kol') && (
         <div className="tc-rr3-satir">
-          <Dugme tur="birincil" simge={b.tur === 'kol' ? 'route' : 'layers'} yukleniyor={mesgul} onClick={gonder}>
+          <Dugme tur="birincil" simge={b.tur === 'kol' ? 'route' : 'layers'} yukleniyor={mesgul} disabled={ayrilamaz} onClick={gonder}>
             {b.tur === 'kol' ? 'Kolu ayır ve onaya gönder' : 'Partilere böl ve onaya gönder'}
           </Dugme>
+          {ayrilamaz && ilkFarkli !== undefined && yeniEmirAc && (
+            <Dugme simge="plus" onClick={() => { yeniEmirAc(ilkFarkli, ilkFarkliAdet); }}>{`${turAdi(ilkFarkli)} için yeni emir aç`}</Dugme>
+          )}
           <Dugme onClick={vazgec}>Vazgeç</Dugme>
         </div>
       )}
@@ -200,9 +241,11 @@ export function BolmePaneli({ yeni, anaTur, girdi, adimlar, baslamis, opdefs, is
   );
 }
 
-// turler: satırların emir türü, satirlar sırasıyla (ilk satır ana emir).
-function BolmeOnizleme({ sonuc: r, adimlar, opdefs, yeni, turler }: {
+// turler: satırların emir türü, satirlar sırasıyla (ilk satır ana emir). ayri: türün rotası farklıysa o rota; satır ayrı emir olur ve
+// kendi rotasının adımlarını yazar (3296-2 a).
+function BolmeOnizleme({ sonuc: r, adimlar, opdefs, yeni, turler, ayri }: {
   sonuc: BolmeSonucu; adimlar: readonly EmirAdimi[]; opdefs: DurumCevabi['opdefs']; yeni: boolean; turler: readonly string[];
+  ayri: (tur: string) => BolmeTurRotasi | null;
 }) {
   return (
     <>
@@ -219,7 +262,17 @@ function BolmeOnizleme({ sonuc: r, adimlar, opdefs, yeni, turler }: {
                 <tr><th scope="col">Emir</th>{adimlar.map((a) => <th key={a.sira} scope="col">{a.sira} {adimKisaltmasi(opdefs, a)}</th>)}</tr>
               </thead>
               <tbody>
-                {r.satirlar.map((s, k) => (
+                {r.satirlar.map((s, k) => {
+                  const a = k > 0 && turler[k] !== undefined ? ayri(turler[k]) : null;
+                  if (a !== null) {
+                    return (
+                      <tr key={s.ad}>
+                        <th scope="row">Yeni emir<small className="tc-rr3-bltur">{turAdi(turler[k]!)}</small></th>
+                        <td colSpan={adimlar.length}>{`${rotaMetni(a)}, ayrı emir`}</td>
+                      </tr>
+                    );
+                  }
+                  return (
                   <tr key={s.ad}>
                     <th scope="row">{s.ad}{turler[k] !== undefined && <small className="tc-rr3-bltur">{turAdi(turler[k])}</small>}</th>
                     {s.hucreler.map((c, i) => (
@@ -230,10 +283,21 @@ function BolmeOnizleme({ sonuc: r, adimlar, opdefs, yeni, turler }: {
                       </td>
                     ))}
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>
+          {/* Dar ekranda tablo yatay kayar; ayrı emrin adımları tablonun dışında da okunur. */}
+          {r.satirlar.flatMap((s, k) => {
+            const t = turler[k];
+            const a = k > 0 && t !== undefined ? ayri(t) : null;
+            return a === null || t === undefined ? [] : [(
+              <p key={s.ad} className="tc-rr3-ipucu" data-ayri-emir="">
+                {`Yeni emir (${turAdi(t)}, ${sayi(s.hucreler.find((c) => c)?.miktar ?? 0)} adet): ${rotaMetni(a)}: ${a.adimlar.map((x) => `${String(x.opNo ?? x.sira)} ${adimKisaltmasi(opdefs, x)}`).join(' · ')}`}
+              </p>
+            )];
+          })}
           <p className="tc-rr3-ipucu">
             Her hücre, o emrin o adımda yapacağı miktardır; boş hücre emrin o adımı yapmadığını gösterir.
             {yeni ? ' Emir bu şekilde bölünmüş olarak açılır.' : ' Değişiklik Plan stüdyosuna taslak olarak gider; onaylanınca canlı plana geçer.'}

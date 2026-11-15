@@ -15,7 +15,7 @@ import { EmirAyrintisi, PlanHucresi } from './EmirAyrintisi.tsx';
 import { planMetni, tamponRozeti, turAdi } from './gorunum.ts';
 import { acilanEmir, guncelSurum, useEmirKomutu } from './komut.ts';
 import {
-  aramaUyar, bugun, DURUM_ADI, DURUM_SUZGECLERI, durumAdi, durumGosterimi, durumUyar, emirAdimlari, emirAgaci, ilerleme, isGunuEkle, miktarOku, ONCELIK_ADI, planOzeti, planSirasi, seritNo, uretilirMi, cokKatmanOzeti, yururlukteRevizyonId, emirRotasi,
+  aramaUyar, bugun, DURUM_ADI, DURUM_SUZGECLERI, durumAdi, durumGosterimi, durumUyar, emirAdimlari, emirAgaci, ilerleme, isGunuEkle, miktarOku, ONCELIK_ADI, planOzeti, planSirasi, seritNo, uretilirMi, cokKatmanOzeti, yururlukteRevizyonId, emirRotasi, tekRotaMetni,
   type DurumSuzgeci, type Emir,
 } from './kurallar.ts';
 
@@ -185,9 +185,9 @@ export const gecmisTeslimMi = (teslim: string, bugunGun: string): boolean => /^\
 
 interface YeniFormDurumu { urun: string; miktar: string; baslangic: string; teslim: string; oncelik: string; durum: 'serbest' | 'taslak'; tur: string; not: string; rezerve: boolean; rota: string }
 
-export function YeniEmirFormu({ durum: d, yetki, komut, acildi, git, ilkUrun }: {
+export function YeniEmirFormu({ durum: d, yetki, komut, acildi, git, ilkUrun, ilkTur = null, ilkAdet = null }: {
   durum: RrDurumu; yetki: EkranOzellikleri['yetki']; komut: ReturnType<typeof useEmirKomutu>; acildi: (id: string) => void; git: EkranOzellikleri['git'];
-  ilkUrun: string | null;
+  ilkUrun: string | null; ilkTur?: string | null; ilkAdet?: string | null;
 }) {
   // Emir yalnız mamul ya da yarı mamule açılır; rotası olan emre kopyalanır (rota.emre-kopyala), rotası olmayan rotasız açılır
   // (uretim-emirleri.rotasiz-ac). İşlemi olmayan yolun ürünü listede yoktur.
@@ -198,7 +198,8 @@ export function YeniEmirFormu({ durum: d, yetki, komut, acildi, git, ilkUrun }: 
   const tatiller = d.cal.holidays;
   const ilk = isGunuEkle(bugun(), 0, tatiller);
   const [f, setF] = useState<YeniFormDurumu>({
-    urun: (ilkUrun !== null && urunler.some((u) => u.id === ilkUrun) ? ilkUrun : urunler[0]?.id) ?? '', miktar: '100', baslangic: ilk, teslim: isGunuEkle(ilk, 9, tatiller), oncelik: '3', durum: 'serbest', tur: 'seri', not: '', rezerve: true, rota: '',
+    urun: (ilkUrun !== null && urunler.some((u) => u.id === ilkUrun) ? ilkUrun : urunler[0]?.id) ?? '', miktar: ilkAdet !== null && /^\d+$/.test(ilkAdet) ? ilkAdet : '100', baslangic: ilk, teslim: isGunuEkle(ilk, 9, tatiller), oncelik: '3', durum: 'serbest',
+    tur: ilkTur !== null && ilkTur in EMIR_TURU_ADLARI ? ilkTur : 'seri', not: '', rezerve: true, rota: '',
   });
   const [bolme, setBolme] = useState<BolmeDurumu>(bosBolme(true));
   const [cok, setCok] = useState<CokKatmanSecimi>(bosCokKatman);
@@ -264,7 +265,8 @@ export function YeniEmirFormu({ durum: d, yetki, komut, acildi, git, ilkUrun }: 
       // Rota yalnız elle seçildiyse gider; seçilmediyse sahibi emrin türünün rotasını bulur. Proje penceresinde sipariş partisi seçilince
       // tür partiden gelir, rota da o türün rotası olur (formun ilk türüne göre seçilmiş rota partiye taşınmaz).
       ...(rotali && rotaSecimi && f.rota !== '' ? { rotaId: Number(rotaSecimi.secili) } : {}),
-      ...(cokOzet ? { cokKatmanli: true, stoktanDugumler: cokOzet.gonderilecek } : {}),
+      // Risk N1: çok katmanlı seçim bu revizyonun önizlemesindendir; parti başka türün rotasına düşerse köprü emri açmaz.
+      ...(cokOzet ? { cokKatmanli: true, stoktanDugumler: cokOzet.gonderilecek, onizlemeRevizyonId: kokRevizyon } : {}),
     };
     const c = await komut.calistir('emir-ac', govde);
     const id = acilanEmir(c.sonuc);
@@ -315,6 +317,9 @@ export function YeniEmirFormu({ durum: d, yetki, komut, acildi, git, ilkUrun }: 
         {rotali && rotaSecimi && (
           <Secim etiket="Rota" value={rotaSecimi.secili} secenekler={rotaSecimi.secenekler} ipucu={rotaSecimi.ipucu} hata={rotaSecimi.uyari ?? undefined}
             onChange={(o) => { yaz({ rota: o.target.value }); }} />
+        )}
+        {rotali && rotaSecimi === null && tekRotaMetni(rotalar.data) !== null && (
+          <Girdi etiket="Rota" readOnly value={tekRotaMetni(rotalar.data) ?? ''} ipucu="Ürünün tek rotası; bütün emir türleri bunu kullanır" />
         )}
         <Girdi etiket="Not" placeholder="Müşteri, sipariş no…" value={f.not} onChange={(o) => { yaz({ not: o.target.value }); }} />
       </div>
