@@ -141,6 +141,9 @@ export const ISLEM_ADLARI: Readonly<Record<VeriIslemi, string>> = {
   'projeler.gorev-yaz': 'Proje görevlerini ve kilometre taşlarını yazma',
   'projeler.statu-yaz': 'Proje statüsünü yazma',
   'projeler.statu-ayar': 'Proje statü listesini ve serbest statü iznini değiştirme',
+  'projeler.gorev-isle': 'Kendisine ya da rolüne atanan proje görevini üstlenme, başlatma ve bitirme',
+  'projeler.gorev-kontrol': 'Kendisine ya da rolüne atanan proje görevi kontrolünü onaylama ve geri gönderme',
+  'projeler.sablon-yaz': 'Proje görev şablonlarını yazma',
   'rota.yaz': 'Eski toplu anahtar (etkisiz, ayrı kartla kalkacak)',
   'rota.revizyon-yaz': 'Revizyon düzenleme, kopyalama, iptal',
   'rota.onaya-gonder': 'Revizyonu onaya gönderme',
@@ -304,6 +307,7 @@ const SAYFA_GRUBU: Readonly<Record<string, string>> = {
   'sayfa.ik-islemlerim': 'ik',
   'sayfa.geri-bildirim': 'profil',
   'sayfa.profil': 'profil',
+  'sayfa.proje-gorevlerim': 'projeler',
 };
 
 const SAYFA_ADLARI = new Map<string, string>(TUM_SAYFALAR.map((s) => [s.islem, s.baslik]));

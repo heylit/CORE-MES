@@ -15,3 +15,7 @@
 | belge no | `projeler_proje.kod` | projeler | Logo PROJECT kodu ile eşleşebilir; üretim emri numarasına girer |
 | proje bitişinin termin bağı | `projeler_proje.bitis_bagli` | projeler | 3244 b; termin `siparisler_siparis.termin` siparisler'in, `siparisKilitliAyrinti` ile okunur |
 | sipariş kalemi (projede gösterim) | tutulmaz; `siparisAyrintisi` ile okunur, fiyat taşınmaz | siparisler | 3244; kalem partisi ve kalem termini siparisler'in |
+| rol (görev yapan, kontrol eden) | `projeler_gorev.yapan_rol_id`, `kontrol_rol_id`, `yedek_kontrol_rol_id`; şablon kaleminde aynı sütunlar | kisiler (`rol.id`) | 3269 a; yabancı anahtar; ad `rolSecenekleri` ile; roldeki kişiler `rollerdekiKisiler` |
+| görev şablonu | `projeler_gorev_sablonu`, `projeler_gorev_sablon_kalemi`, uygulanan hâl `projeler_proje_sablonu` | projeler | 3269 a; Rota'nın talimat şablonu ve Etiket şablonu ayrı kavramlardır |
+| hazırlık maddesi (şablon kalemi bağı) | `projeler_gorev_sablon_kalemi.hazirlik_maddesi` (kod metni) | uretim-emirleri (`HAZIRLIK_MADDELERI`) | 3269-B emir başına görev doğurur; şimdilik yalnız saklanır |
+| görev olayı (üstlen, başla, bitti, onay, geri) | `projeler_gorev_olayi` | projeler | yalnız ekleme; kontrol kuralı son "bitti" olayını okur |

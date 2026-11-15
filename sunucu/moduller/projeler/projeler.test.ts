@@ -465,4 +465,40 @@ describe('projeler (gerçek PostgreSQL, gerçek giriş)', () => {
     assert.ok(!hepsi.some((x) => x.id === taslak.id), 'taslak sipariş seçicide yok');
     assert.equal((await oku(operator, '/projeler/siparis-secenekleri')).statusCode, 403);
   });
+
+  test('3269 a şablon proje açılınca: seçilen şablon uygulanır, null şablonsuz, alan yoksa varsayılan; kapalı şablon seçilemez', async () => {
+    const kalem = { ad: 'Açılış görevi', dayanak: 'baslangic', gun: 1, sureGun: 2 };
+    const ekle = async (ad: string, varsayilan: boolean, etkin = true): Promise<number> => {
+      const c = await gonder(yonetici, '/projeler/sablonlar', { ad, varsayilan, etkin, kalemler: [kalem] });
+      assert.equal(c.statusCode, 200, c.body);
+      return c.json<{ sablonlar: { id: number; ad: string }[] }>().sablonlar.find((x) => x.ad === ad)?.id ?? 0;
+    };
+    const gorevSayisi = async (projeId: number): Promise<number> =>
+      (await vt().tek<{ n: number }>('SELECT count(*)::int AS n FROM projeler_gorev WHERE proje_id = $1', [projeId]))?.n ?? -1;
+    const secilen = await ekle('Seçilen açılış şablonu', false);
+    const kapali = await ekle('Kapalı açılış şablonu', false, false);
+    const a = await projeAc({ kod: 'SBL.1', ad: 'Şablonlu', baslangic: '2026-11-20', sablonId: secilen });
+    assert.equal(await gorevSayisi(a.id), 1);
+    const g = await vt().tek<{ plan_baslangic: string; plan_bitis: string }>('SELECT plan_baslangic, plan_bitis FROM projeler_gorev WHERE proje_id = $1', [a.id]);
+    assert.deepEqual(g, { plan_baslangic: '2026-11-21', plan_bitis: '2026-11-22' });
+    const ret = await gonder(yonetici, '/projeler', { kod: 'SBL.2', ad: 'Kapalı', siparisId: await ortak(), sablonId: kapali });
+    assert.equal(ret.statusCode, 400, ret.body);
+    assert.equal(await vt().tek('SELECT 1 AS var FROM projeler_proje WHERE kod = $1', ['SBL.2']), null, 'proje de açılmaz');
+
+    const varsayilan = await ekle('Varsayılan açılış şablonu', true);
+    const b = await projeAc({ kod: 'SBL.3', ad: 'Varsayılanlı' });
+    const c = await projeAc({ kod: 'SBL.4', ad: 'Şablonsuz', sablonId: null });
+    assert.deepEqual([await gorevSayisi(b.id), await gorevSayisi(c.id)], [1, 0]);
+    const don = await vt().sorgu<{ proje_id: number; sablon_id: number }>(
+      'SELECT proje_id, sablon_id FROM projeler_proje_sablonu WHERE proje_id = ANY($1::int[]) ORDER BY proje_id', [[a.id, b.id, c.id]],
+    );
+    assert.deepEqual(don.map((x) => [x.proje_id, x.sablon_id]), [[a.id, secilen], [b.id, varsayilan]]);
+    // Sonraki testler varsayılan şablonsuz açılışı bekler.
+    const liste = (await oku(yonetici, '/projeler/sablonlar/liste')).json<{ sablonlar: { id: number; surum: number }[] }>().sablonlar;
+    const v = liste.find((x) => x.id === varsayilan);
+    const kapat = await gonder(yonetici, `/projeler/sablonlar/${varsayilan}/guncelle`, {
+      ad: 'Varsayılan açılış şablonu', varsayilan: false, etkin: true, kalemler: [kalem], surum: v?.surum,
+    });
+    assert.equal(kapat.statusCode, 200, kapat.body);
+  });
 });

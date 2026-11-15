@@ -142,3 +142,116 @@ export function bitisBaglaReddi(p: { siparisId: number | null; durum: string; ba
   if (p.durum !== 'aktif') return KAPALI_BAGLANMAZ;
   return p.baslangic !== null && p.baslangic > termin ? BASLANGIC_TERMINDEN_SONRA : null;
 }
+
+// --- 3269: görev atama, akış ve şablon ---
+
+export const GOREV_KAPALI = 'Bitmiş ya da iptal edilmiş görev işlenmez.';
+export const USTLENILEMEZ = 'Bu görev rolüne açık değil.';
+export const BASKASI_USTLENDI = 'Bu görevi başka biri üstlendi.';
+export const SANA_ATANMADI = 'Bu görev sana atanmadı.';
+export const BASLANAMAZ = 'Görev yalnız "Yapılacak" ya da "Bekliyor" iken başlar.';
+export const BITIRILEMEZ = 'Görev kontrolde, bitmiş ya da iptal; yeniden bitirilemez.';
+export const KONTROLDE_DEGIL = 'Görev kontrolde değil.';
+export const KONTROLUN_DEGIL = 'Bu görevin kontrolü sana atanmadı.';
+export const KENDI_ISIN = 'Kendi yaptığın görevi kontrol edemezsin.';
+export const KONTROLLU_DURUM = 'Kontrol edeni olan görev düzenlemeyle bitmez ya da kontrole geçmez; yapan "Bitti" der, kontrol eden onaylar.';
+export const KONTROLSUZ_KONTROLDE = 'Kontrol edeni olmayan görev kontrole geçmez.';
+export const SABLON_YOK = 'Şablon bulunamadı.';
+export const SABLON_KAPALI = 'Bu şablon kapatılmış; seçilemez.';
+export const ONCEKI_KALEM_SIRASI = 'Önceki görev listede bu görevden önce olmalı.';
+
+// Kontrol bu kadar gün kontrolde kalırsa (ya da asıl kontrol eden işi yapan kişiyse) yedek kontrol eden de onaylar (3269 V9).
+export const YEDEK_GUN = 2;
+
+export interface GorevAtamasi {
+  durum: string;
+  sorumluKisiId: number | null;
+  yapanRolId: number | null;
+  kontrolKisiId: number | null;
+  kontrolRolId: number | null;
+  yedekKontrolKisiId: number | null;
+  yedekKontrolRolId: number | null;
+}
+export interface Isleyen { kisiId: number; rolIdleri: readonly number[] }
+
+export const kontrolluMu = (g: Pick<GorevAtamasi, 'kontrolKisiId' | 'kontrolRolId'>): boolean => g.kontrolKisiId !== null || g.kontrolRolId !== null;
+const kapaliMi = (durum: string): boolean => durum === 'bitti' || durum === 'iptal';
+const rolde = (rolId: number | null, k: Isleyen): boolean => rolId !== null && k.rolIdleri.includes(rolId);
+
+// Üstlenme: kişiye atanmamış, kişinin rolüne açık, kapanmamış ve kontrolde olmayan görev. Zaten kendisindeyse red yoktur (servis yazmaz).
+export function ustlenReddi(g: GorevAtamasi, k: Isleyen): string | null {
+  if (kapaliMi(g.durum) || g.durum === 'kontrolde') return GOREV_KAPALI;
+  if (g.sorumluKisiId !== null) return g.sorumluKisiId === k.kisiId ? null : BASKASI_USTLENDI;
+  return rolde(g.yapanRolId, k) ? null : USTLENILEMEZ;
+}
+
+// Başlatma ve bitirme yalnız göreve atanmış kişinin işidir; rol görevi önce üstlenilir.
+export function baslaReddi(g: GorevAtamasi, k: Isleyen): string | null {
+  if (g.sorumluKisiId !== k.kisiId) return SANA_ATANMADI;
+  return g.durum === 'yapilacak' || g.durum === 'bekliyor' ? null : BASLANAMAZ;
+}
+
+// Bitirme: kontrollü görev kontrole geçer, kontrolsüz görev biter.
+export function bitirSonucu(g: GorevAtamasi, k: Isleyen): { durum: 'kontrolde' | 'bitti' } | { ileti: string } {
+  if (g.sorumluKisiId !== k.kisiId) return { ileti: SANA_ATANMADI };
+  if (g.durum === 'kontrolde' || kapaliMi(g.durum)) return { ileti: BITIRILEMEZ };
+  return { durum: kontrolluMu(g) ? 'kontrolde' : 'bitti' };
+}
+
+// Onay ve geri gönderme: kontrol eden kişi ya da rolündeki kişi. İşi bitiren kişi (son "bitti" olayı) ve göreve atanmış yapan
+// kontrol edemez. Yedek kontrol eden yalnız asıl kontrol eden işi bitiren kişiyse ya da görev YEDEK_GUN gündür kontroldeyse onaylar.
+export function kontrolReddi(g: GorevAtamasi, k: Isleyen, bitirenId: number | null, kontroldeGun: number): string | null {
+  if (g.durum !== 'kontrolde') return KONTROLDE_DEGIL;
+  if (k.kisiId === bitirenId || k.kisiId === g.sorumluKisiId) return KENDI_ISIN;
+  const asil = g.kontrolKisiId === k.kisiId || rolde(g.kontrolRolId, k);
+  if (asil) return null;
+  const yedek = g.yedekKontrolKisiId === k.kisiId || rolde(g.yedekKontrolRolId, k);
+  const asilYapan = g.kontrolKisiId !== null && g.kontrolKisiId === bitirenId;
+  return yedek && (asilYapan || kontroldeGun >= YEDEK_GUN) ? null : KONTROLUN_DEGIL;
+}
+
+// Düzenleme ucu (görev yazan) kontrollü görevi bitiremez ve kontrole sokamaz: dört göz atlanmasın (Risk 3269 K2). Durumu
+// değişmeyen görev olduğu gibi kalır; kontrolsüz görev kontrole geçmez.
+export function duzenlemeDurumReddi(eski: string, yeni: string, kontrollu: boolean): string | null {
+  if (yeni === eski) return null;
+  if (yeni === 'kontrolde') return kontrollu ? KONTROLLU_DURUM : KONTROLSUZ_KONTROLDE;
+  if (yeni === 'bitti' && kontrollu) return KONTROLLU_DURUM;
+  return null;
+}
+
+// Kişinin bu görevde açılan düğmeleri (ekran); yazma aynı kurallarla ayrıca denetlenir.
+export function gorevIzinleri(
+  g: GorevAtamasi, k: Isleyen, islem: { isle: boolean; kontrol: boolean }, bitirenId: number | null, kontroldeGun: number,
+): { ustlenebilir: boolean; baslayabilir: boolean; bitirebilir: boolean; onaylayabilir: boolean } {
+  return {
+    ustlenebilir: islem.isle && g.sorumluKisiId === null && ustlenReddi(g, k) === null,
+    baslayabilir: islem.isle && baslaReddi(g, k) === null,
+    bitirebilir: islem.isle && !('ileti' in bitirSonucu(g, k)),
+    onaylayabilir: islem.kontrol && kontrolReddi(g, k, bitirenId, kontroldeGun) === null,
+  };
+}
+
+// Proje görevlerim: kişinin göreve göre yeri. Kontrolündeki görev önce gelir; kişinin bitirdiği ve kontrolde bekleyen görev bilgi içindir.
+export function gorevlerimTuru(
+  g: GorevAtamasi, k: Isleyen, bitirenId: number | null, kontroldeGun: number,
+): 'bana' | 'rolume' | 'kontrolumde' | 'yaptim' | null {
+  if (kapaliMi(g.durum)) return null;
+  if (g.durum === 'kontrolde') {
+    if (kontrolReddi(g, k, bitirenId, kontroldeGun) === null) return 'kontrolumde';
+    return g.sorumluKisiId === k.kisiId || bitirenId === k.kisiId ? 'yaptim' : null;
+  }
+  if (g.sorumluKisiId === k.kisiId) return 'bana';
+  return g.sorumluKisiId === null && rolde(g.yapanRolId, k) ? 'rolume' : null;
+}
+
+const GUN_MS = 864e5;
+const tarihEkle = (tarih: string, gun: number): string => new Date(Date.parse(`${tarih}T00:00:00Z`) + gun * GUN_MS).toISOString().slice(0, 10);
+
+// Şablon kalemi tarihleri: dayanak proje başlangıcı ya da bitişi (termin); proje tarihi yoksa bugün. Başlangıç + gün, süre uçlar dahil.
+export function sablonTarihleri(
+  k: { dayanak: 'baslangic' | 'termin'; gun: number; sureGun: number }, proje: { baslangic: string | null; bitis: string | null }, bugun: string,
+): { planBaslangic: string; planBitis: string } {
+  const temel = k.dayanak === 'termin' ? proje.bitis ?? proje.baslangic ?? bugun : proje.baslangic ?? bugun;
+  const planBaslangic = tarihEkle(temel, k.gun);
+  return { planBaslangic, planBitis: tarihEkle(planBaslangic, k.sureGun - 1) };
+}

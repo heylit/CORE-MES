@@ -13,6 +13,7 @@
 9. KAPANDI (940 c, 936 a): görev maliyeti görevde tutulmaz (911 b); üretim dışı masraf belgesi projeye ve görevine proje-maliyet'teki `proje_maliyet_masraf` ile bağlanır, taban fotoğrafı `proje_maliyet_taban`'dadır; Maliyet sekmesinde görünür.
 
 ## Sonra
+- 3269-B'ye kalan (3269 a): rol görevi 2 gün sahipsiz kalınca ve kontrol 2 gün bekleyince yedeğe bildirim zamanlayıcı ister; bugün yedek 2 gün sonra onaylayabilir ama bildirim almaz (kendisi ekranda görür). Ana sayfa sayı kutusu ortak mekanizma ister; bugün Proje görevlerim sayfasında dört sayı kartı var.
 - KAPANDI (borç değerlendirmesi 17.10.2026, geçersiz): kod tekilliği (`projeler_proje_kod_tekil`) çift kaydı önlüyor; yalnız bilgi notu. Kullanmadığı çekirdek kalıbı: tekrar koruması yok (açma komutu kod tekilliğiyle zaten çift kayıt açmaz). Veri kapsamı yok (proje iş merkezine bağlı değil).
 
 ## Bilgi (borç değil)

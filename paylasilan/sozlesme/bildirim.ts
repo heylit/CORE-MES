@@ -169,6 +169,14 @@ export const BILDIRIM_TURLERI = {
   'profil.geri-bildirim-kapandi': {
     baslik: 'Geri bildirimin sonuçlandı', onem: 'bilgi', alanIslemler: [], yol: '/profil', varsayilan: { mesaj: false, eposta: false },
   },
+  // 3269 a: görev kişiye ya da rolüne atanınca ve geri gönderilince; alıcı kayda bağlı kişilerdir. Metinde görev adı yoktur.
+  'projeler.gorev-atandi': {
+    baslik: 'Sana proje görevi var', onem: 'bilgi', alanIslemler: [], yol: '/proje-gorevlerim', varsayilan: { mesaj: false, eposta: false },
+  },
+  // 3269 a: görev kontrole düşünce kontrol edene (kişi ya da roldeki kişiler); onay ya da geri gönderilince projeler kapatır.
+  'projeler.gorev-kontrol-bekliyor': {
+    baslik: 'Proje görevi kontrolünü bekliyor', onem: 'uyari', sinif: 'gorev', alanIslemler: [], yol: '/proje-gorevlerim', varsayilan: { mesaj: false, eposta: false },
+  },
 } as const satisfies Record<string, BildirimTuruTanimi>;
 
 export type BildirimTuru = keyof typeof BILDIRIM_TURLERI;

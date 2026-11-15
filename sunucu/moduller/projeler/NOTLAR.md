@@ -1,2 +1,5 @@
 - Kod değişmez (tetikleyici): üretim emri numarası kodu metin olarak taşır; değişen kod eski emirleri bulunamaz yapardı.
 - Firma seçici kendi ucumuzda (`/projeler/firma-secenekleri`, `projeler.yaz`): proje yazan kişiye finans işlemi vermemek için.
+- 3269 a: kayıt düzeyi yetki serviste: işlem tek başına başkasının görevini açmaz; görev kişiye ya da rolüne, onay kontrol edene düşmeli. Yönetici bayrağı da atanmadıkça onaylamaz (dört göz).
+- Şablon kalemleri kayıtta silinip yeniden yazılır; görev kaleme bağlanmaz. Uygulanan hâl `projeler_proje_sablonu.kalemler` içinde donar (3269-B hazırlık görevleri bunu okur).
+- "Proje görevlerim" ayrı ana sayfadır (`/proje-gorevlerim`): ana sayfa yolu tek parça olmalı ve ikinci menü maddesi kökün altında kalmalı.
