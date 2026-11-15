@@ -8,8 +8,8 @@ import {
   sartnameParametresi, sartnameSorgusu, sartnamelerCevabi, sartnameTaslakGovdesi, standartCevabi, standartEkleGovdesi,
   hamOnerisiCevabi, opNumaralariCevabi, urunParametresi, urunRevizyonlariCevabi, adimParametresi, gerceklesenKabulCevabi, gerceklesenKabulGovdesi, gerceklesenSureGovdesi, surelerCevabi, surelerSorgusu, sablonCevabi, sablonKaydetGovdesi, sablonlarCevabi, sablonParametresi, sablonYazGovdesi,
 } from '#paylasilan/sozlesme/rota.ts';
-import { rotaAdiGovdesi, rotaEkleGovdesi, rotaParametresi, rotaTurleriGovdesi, talimatSahneleriCevabi, talimatSahnesiKaydetGovdesi } from '#paylasilan/sozlesme/rota.ts';
-import { rotaAdiYaz, rotaEkle, rotaTurleriYaz, talimatSahneleri, talimatSahnesiKaydet } from './servis.ts';
+import { sablonDurumGovdesi, rotaAdiGovdesi, rotaEkleGovdesi, rotaParametresi, rotaTurleriGovdesi, talimatSahneleriCevabi, talimatSahnesiKaydetGovdesi } from '#paylasilan/sozlesme/rota.ts';
+import { sablonDurumuYaz, rotaAdiYaz, rotaEkle, rotaTurleriYaz, talimatSahneleri, talimatSahnesiKaydet } from './servis.ts';
 import {
   agac, emreKopyala, emreKopyalaToplu, rotaAdimlariToplu, emreUygula, patlatmaGetir, patlatmaOnizlemesi, fark, revizyonKunyeleri, geriGonder, malzemeAra, iptal, kaydet, kopyaIste, kopyala, malzemeKullanimi, onayaGonder, onayla, revizyonAyrintisi as ayrinti, revizyonOzeti, rotaListesi, secenekler,
   adimEkipmaniKaydet, aparatKullanimi, olcuAletiTurleri, adimSartnameleriKaydet, ekAdimSartnameleriSabitle, isEmriSartnameleriCevabi as isEmriSartnameleriOku, revizyonSartnameleri, sartnameAktifYap, sartnameAyrintisi, sartnameEkle, sartnameKopyala,
@@ -63,6 +63,16 @@ export const uclar = [
     govde: surumGovdesi,
     cevap: sablonCevabi,
     isle: ({ db, parametre, govde }) => sablonuVarsayilanYap(db, parametre.id, govde.surum),
+  }),
+  // Kullanımdan kaldırma ve geri alma (3273 a): kullanılmış şablon silinmez, kalkar.
+  uc({
+    yontem: 'POST',
+    yol: '/rota/sablonlar/:id/durum',
+    yetki: 'rota.sablon-yaz',
+    parametre: sablonParametresi,
+    govde: sablonDurumGovdesi,
+    cevap: sablonCevabi,
+    isle: ({ db, parametre, govde }) => sablonDurumuYaz(db, parametre.id, govde),
   }),
   uc({
     yontem: 'POST',

@@ -374,6 +374,26 @@ export async function baskaUruneAdimlar(db: Db, kaynakRevizyonId: number, hedefU
 
 export const ROTA_BASKA_URUNUN = 'Rota bu ürünün değil.';
 
+// Şablon adımı istasyon ve süreyi operasyon tipinin katalog değerinden alır (3273 a; çalışma alanında paletten eklemeyle aynı kural).
+// Katalogda değer yoksa alan boş kalır: sıfır uydurulmaz. Ayar süresi ayar bölümüne yazılır (toplamdanBolum ile aynı).
+export async function sablonAdimlariniKur(db: Db, sablonId: number): Promise<YeniAdim[]> {
+  const tipler = new Map((await operasyonTipleri(db)).map((t) => [t.id, t]));
+  return (await s.sablonAdimlari(db, [sablonId])).map((st) => {
+    const t = tipler.get(st.operasyonTipiId);
+    const ayar = sayiyaCevir(t?.varsayilanAyarDk ?? null);
+    const birim = sayiyaCevir(t?.varsayilanBirimDk ?? null);
+    const istasyon = t?.varsayilanIstasyonId ?? null;
+    return {
+      opNo: null, operasyonTipiId: st.operasyonTipiId, ad: st.ad, kaynak: istasyon === null ? null : { tur: 'istasyon', id: istasyon },
+      ayarSuresiDk: ayar, birimSureDk: null, islemSuresiDk: birim !== null && birim > 0 ? birim : null, degisimSuresiDk: null, terminGun: null,
+      bagimlilik: 'bekleyen' as Bagimlilik, devirAdedi: null, firePayiYuzde: 0, makineKullanimi: 'tek' as MakineKullanimi,
+      enKucukParca: null, yenidenAyar: true, ilkParca: 'her_kurulum',
+      ...(ayar !== null && ayar > 0 ? { hazirlikDk: 0, ayar: true, ayarDk: ayar } : { hazirlikDk: ayar, ayar: false, ayarDk: null }),
+      adaylar: [], bilesenler: [], yanUrunler: [], dal: null, birlesen: [], adetCarpani: null,
+    };
+  });
+}
+
 // Taslak verilen rotada açılır; rota verilmezse ürünün Standart rotasında (3247 a). Açık revizyon ve harf rota başınadır.
 export async function taslagiAc(db: Db, acanKisiId: number, urunId: number, kaynak: TaslakKaynagi, rotaId: number | null = null): Promise<KomutCevabi> {
   const urun = await rotaKurulabilirUrun(db, urunId);
@@ -387,6 +407,8 @@ export async function taslagiAc(db: Db, acanKisiId: number, urunId: number, kayn
   if (harf === null) throw gecersiz('Bu ürünün revizyon harfleri tükendi.');
   let adimlar: YeniAdim[] = [];
   let kaynakId: number | null = null;
+  // Bağı yalnız şablondan açılan ilk revizyon taşır; istemciden alınmaz (Risk K3).
+  let kaynakSablonId: number | null = null;
   if (kaynak.tur === 'revizyon') {
     const k = await s.revizyonOku(db, kaynak.revizyonId);
     if (!k || k.malzemeId !== urunId) throw dogrulama('Kaynak revizyon bu ürünün değil.', 'kaynak.revizyonId');
@@ -396,16 +418,13 @@ export async function taslagiAc(db: Db, acanKisiId: number, urunId: number, kayn
     // "Standart" varsayılan şablondur (#698). Şablon tipi kimlikle tutar: katalogda kod değişse de taslak açılır (#464).
     const sablonId = kaynak.tur === 'sablon' ? kaynak.sablonId : await s.varsayilanSablonId(db);
     if (sablonId === null) throw gecersiz('Varsayılan rota şablonu tanımlı değil.');
-    const sablon = await s.sablonAdimlari(db, [sablonId]);
-    if (sablon.length === 0) {
-      if (kaynak.tur === 'sablon' && !(await s.sablonlar(db)).some((x) => x.id === sablonId)) throw dogrulama('Şablon bulunamadı.', 'kaynak.sablonId');
-      throw gecersiz('Şablonda adım yok.');
-    }
-    adimlar = sablon.map((st) => ({
-      opNo: null, operasyonTipiId: st.operasyonTipiId, ad: st.ad, kaynak: null, ayarSuresiDk: null, birimSureDk: null, islemSuresiDk: null, degisimSuresiDk: null, terminGun: null,
-      bagimlilik: 'bekleyen' as Bagimlilik, devirAdedi: null, firePayiYuzde: 0, makineKullanimi: 'tek' as MakineKullanimi,
-      enKucukParca: null, yenidenAyar: true, ilkParca: 'her_kurulum', hazirlikDk: null, ayar: false, ayarDk: null, adaylar: [], bilesenler: [], yanUrunler: [], dal: null, birlesen: [], adetCarpani: null,
-    }));
+    // Kilit silme ve kullanımdan kaldırmayla yarışı sıraya koyar (Risk K1); kalkmış şablondan taslak açılmaz (K2).
+    const sablon = await s.sablonKilitle(db, sablonId);
+    if (!sablon) throw dogrulama('Şablon bulunamadı.', 'kaynak.sablonId');
+    if (!sablon.aktif) throw gecersiz('Bu şablon kullanımdan kaldırılmış.');
+    adimlar = await sablonAdimlariniKur(db, sablonId);
+    if (adimlar.length === 0) throw gecersiz('Şablonda adım yok.');
+    kaynakSablonId = sablonId;
   } else if (kaynak.tur === 'kart') {
     // Aktarım tek yönlüdür ve yalnız ilk rotada: kart sonradan değişse de var olan rota değişmez, kartta kopya kalır (#688).
     if ((await s.harfler(db, urunId)).length > 0) throw cakisma('Bu ürünün rotası var; karttan yalnız ilk rota açılır.');
@@ -422,7 +441,7 @@ export async function taslagiAc(db: Db, acanKisiId: number, urunId: number, kayn
     if (kaynakId === null) throw gecersiz('Kaynak ürünün yürürlükte rotası yok.');
     adimlar = await baskaUruneAdimlar(db, kaynakId, urunId);
   }
-  const id = await s.revizyonEkle(db, { malzemeId: urunId, malzemeTuru: turu(urun), harf, acanKisiId, kaynakRevizyonId: kaynakId, rotaId: hedefRota });
+  const id = await s.revizyonEkle(db, { malzemeId: urunId, malzemeTuru: turu(urun), harf, acanKisiId, kaynakRevizyonId: kaynakId, rotaId: hedefRota, kaynakSablonId });
   await adimlariYaz(db, id, urunId, adimlar);
   // Şartname bağı OP numarasıyla tutulur: yalnız aynı ürünün revizyonundan açılan taslak bağları alır.
   if (kaynak.tur === 'revizyon' && kaynakId !== null) await s.adimSartnameleriniKopyala(db, kaynakId, id);

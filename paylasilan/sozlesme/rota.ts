@@ -176,12 +176,20 @@ export const talimatYazGovdesi = z.object({ opNo: KIMLIK, metin: metin(AZAMI_TAL
 // Rota şablonu (#698): ad tekil, adımlar sırasıyla; kaydette sürüm denetlenir.
 export const AZAMI_SABLON_ADI = 120;
 export const sablonParametresi = z.object({ id: yolKimligi });
+export const AZAMI_SABLON_ACIKLAMASI = 500;
+export const AZAMI_ONERI_SOZCUGU = 20;
 export const sablonYazGovdesi = z.object({
   ad: metin(AZAMI_SABLON_ADI, 'Şablon adı zorunlu.'),
+  // 3273 a: verilmezse kayıtlı değer korunur (eklemede boş).
+  aciklama: z.string().trim().max(AZAMI_SABLON_ACIKLAMASI).transform((x) => (x === '' ? null : x)).nullable().optional(),
+  // Ürün adında bu sözcüklerden biri geçerse şablon önerilir; büyük-küçük harf ve Türkçe harf farkı karşılaştırmada gözetilmez.
+  oneriSozcukleri: z.array(metin(40, 'Öneri sözcüğü boş olamaz.')).max(AZAMI_ONERI_SOZCUGU).optional(),
   // Adımsız şablondan açılan taslak onaya gidemez (ROT-4): şablon en az bir adım taşır.
   adimlar: z.array(z.object({ operasyonTipiId: KIMLIK, ad: metin(200, 'Adım adı zorunlu.') })).min(1, 'Şablonda en az bir adım olmalı.').max(AZAMI_ADIM),
 });
 export const sablonKaydetGovdesi = sablonYazGovdesi.extend({ surum: KIMLIK });
+// Kullanımdan kaldırma ve geri alma (3273 a): kullanılmış şablon silinmez, kullanımdan kalkar.
+export const sablonDurumGovdesi = z.object({ aktif: z.boolean(), surum: KIMLIK });
 
 /* ---------------- cevaplar ---------------- */
 
@@ -358,6 +366,9 @@ export const opNumaralariCevabi = z.object({
 
 export const sablonSemasi = z.object({
   id: KIMLIK, ad: z.string(), varsayilan: z.boolean(), surum: KIMLIK,
+  aciklama: z.string().nullable(), oneriSozcukleri: z.array(z.string()), aktif: z.boolean(),
+  // Bu şablondan açılan revizyon sayısı ve sonuncusunun açılışı; bağ 3273 göçünden önce tutulmadığı için eski rotalar sayılmaz.
+  kullanim: z.object({ revizyon: z.number().int().nonnegative(), son: z.string().nullable() }),
   adimlar: z.array(z.object({ sira: KIMLIK, operasyonTipi: z.object({ id: KIMLIK, kod: z.string(), ad: z.string(), aktif: z.boolean() }), ad: z.string() })),
 });
 export const sablonlarCevabi = z.object({ sablonlar: z.array(sablonSemasi) });
@@ -571,6 +582,7 @@ export type KopyaIsteGovdesi = z.input<typeof kopyaIsteGovdesi>;
 export type KopyaIstegiCevabi = z.output<typeof kopyaIstegiCevabi>;
 export type SablonYazGovdesi = z.input<typeof sablonYazGovdesi>;
 export type SablonKaydetGovdesi = z.input<typeof sablonKaydetGovdesi>;
+export type SablonDurumGovdesi = z.input<typeof sablonDurumGovdesi>;
 export type Sablon = z.output<typeof sablonSemasi>;
 export type SablonlarCevabi = z.output<typeof sablonlarCevabi>;
 export type SablonCevabi = z.output<typeof sablonCevabi>;
