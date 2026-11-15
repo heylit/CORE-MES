@@ -134,21 +134,24 @@ export const serbestDal = (liste: readonly Adim[]): string | null => {
   return DAL_HARFLERI.find((d) => !kullanilan.has(d)) ?? null;
 };
 // Dalın çatal ve birleşme yeri (paylaşılan öncül kuralıyla aynı): ilk adımı, listede kendinden önceki son ana hat adımını bekler (yoksa rotanın
-// başından); birleşme, dalı birleşen listesinde taşıyan adımdır. carpan dalın bütün adımlarında aynıysa o sayı, farklıysa null.
-export interface DalBilgisi { dal: string; adimlar: Adim[]; catal: Adim | null; birlesme: Adim | null; carpan: number | null; sonaKadar: boolean }
+// başından); ilk adımı bağımsız olan dal hiçbir adımı beklemez (bağımsız dal, çatalı yoktur). Birleşme, dalı birleşen listesinde taşıyan adımdır.
+// carpan dalın bütün adımlarında aynıysa o sayı, farklıysa null.
+export interface DalBilgisi { dal: string; adimlar: Adim[]; catal: Adim | null; birlesme: Adim | null; carpan: number | null; sonaKadar: boolean; bagimsiz: boolean }
 export function dalBilgileri(adimlar: readonly Adim[]): DalBilgisi[] {
   const l = sirali(adimlar);
   const dallar = [...new Set(l.flatMap((a) => adimDali(a) ?? []))];
   return dallar.map((dal) => {
     const ad = l.filter((a) => adimDali(a) === dal);
     const ilk = l.findIndex((a) => adimDali(a) === dal);
-    const catal = l.slice(0, ilk).reverse().find((a) => adimDali(a) === null) ?? null;
+    const bagimsiz = ad[0]?.dep === 'bagimsiz';
+    const catal = bagimsiz ? null : l.slice(0, ilk).reverse().find((a) => adimDali(a) === null) ?? null;
     const birlesme = l.find((a) => adimBirlesen(a).includes(dal)) ?? null;
     const carpanlar = new Set(ad.map(adimCarpani));
-    return { dal, adimlar: ad, catal, birlesme, carpan: carpanlar.size === 1 ? [...carpanlar][0] ?? null : null, sonaKadar: birlesme === null && l.at(-1) === ad.at(-1) };
+    return { dal, adimlar: ad, catal, birlesme, carpan: carpanlar.size === 1 ? [...carpanlar][0] ?? null : null, sonaKadar: birlesme === null && l.at(-1) === ad.at(-1), bagimsiz };
   });
 }
-export const dalEtiketi = (b: DalBilgisi): string => `Dal ${b.dal}: ${b.catal ? `OP ${String(statuNo(b.catal))} ardından başlar` : 'rotanın başından başlar'}, ${
+export const dalEtiketi = (b: DalBilgisi): string => `Dal ${b.dal}: ${b.bagimsiz ? 'bağımsız dal, hiçbir adımı beklemeden rotanın başından başlar'
+  : b.catal ? `OP ${String(statuNo(b.catal))} ardından başlar` : 'rotanın başından başlar'}, ${
   b.birlesme ? `OP ${String(statuNo(b.birlesme))} adımında birleşir` : b.sonaKadar ? 'rotanın sonuna kadar yürür' : 'birleşmiyor'}.`;
 // Taşımadan önce ve sonra dalların çatal ya da birleşme yeri değiştiyse yeni etiketler (sürüklemede onay için); değişmediyse boş.
 export function catalFarki(once: readonly Adim[], sonra: readonly Adim[]): string[] {
@@ -167,6 +170,16 @@ export const kollariBirlestir = (adimlar: readonly Adim[], adimId: string): Adim
 // D: dal çarpanı dalın her adımına aynı yazılır (veri adım başına kalır).
 export const dalCarpaniYaz = (adimlar: readonly Adim[], dal: string, v: number | null): Adim[] =>
   adimlar.map((a) => (adimDali(a) === dal ? carpanYaz(a, v) : a));
+// 3248-2: ana hat adımına dışarıdan katılan bağımsız dal. Yeni adım hedefin hemen önüne `dal` ile girer, bağımlılığı bağımsızdır (hiçbir adımı
+// beklemez, öncül kuralı rota-dal-kurali.ts); hedef adım dalı birleşen listesine alır. Veri biçimi aynıdır, göç gerekmez.
+export function katilanDalEkle(adimlar: readonly Adim[], hedefId: string, a: Adim, dal: string): Adim[] {
+  const l = sirali(adimlar);
+  const i = l.findIndex((x) => x.id === hedefId);
+  const hedef = l[i];
+  if (!hedef || adimDali(hedef) !== null) return [...adimlar];
+  l.splice(i, 0, bagimlilikYaz({ ...a, dal, birlesen: [] }, 'bagimsiz'));
+  return yenidenNumarala(l.map((x) => (x.id === hedefId ? birlesenYaz(x, dal, true) : x)));
+}
 // Paletten ya da bırakmayla eklenen adım: `dal` verilirse o kolu açar; verilmezse ardına eklendiği adım koldaysa o kola düşer (kolun çarpanıyla).
 export function kolaEkle(adimlar: readonly Adim[], sonraId: string | null, a: Adim, dal?: string | null): Adim[] {
   const onceki = sonraId === null ? undefined : adimlar.find((x) => x.id === sonraId);
@@ -513,6 +526,46 @@ export function adimArkasinaTasi(adimlar: readonly Adim[], kaynakId: string, son
   if (sonraId !== null && i === 0) return [...adimlar];
   kalan.splice(i, 0, mv);
   return yenidenNumarala(kalan);
+}
+// 3248-2: yatay hatta adım yalnız kendi şeridinde (ana hat ya da aynı dal) yer değiştirir. Şeridin adımları şeridin listedeki yerlerinde
+// yeniden dizilir; başka şeridin adımları yerinden oynamaz, bu yüzden dalın çatal ve birleşme yeri hattaki konumunda kalır.
+// sonraId: şeritte ardına konacak adım (null: şeridin başı). Başka şeritteki adım ya da kendisi verilirse sıra değişmez.
+export function seritteYerlestir(adimlar: readonly Adim[], id: string, sonraId: string | null): Adim[] {
+  const l = sirali(adimlar);
+  const a = l.find((x) => x.id === id);
+  if (!a || sonraId === id) return [...adimlar];
+  const dal = adimDali(a);
+  const yerler = l.flatMap((x, i) => (adimDali(x) === dal ? [i] : []));
+  const serit = yerler.map((i) => l[i]).filter((x): x is Adim => x !== undefined && x.id !== id);
+  const j = sonraId === null ? 0 : serit.findIndex((x) => x.id === sonraId) + 1;
+  if (sonraId !== null && j === 0) return [...adimlar];
+  serit.splice(j, 0, a);
+  // Bağımsız dalın "hiçbir adımı beklemez" bilgisi şeridin başına aittir; ilk adım değişince başta kalır, yoksa dal ana hattı beklemeye başlar.
+  const ilk = l[yerler[0] ?? -1];
+  const yeniIlk = serit[0];
+  if (dal !== null && ilk && yeniIlk && ilk.id !== yeniIlk.id && ilk.dep === 'bagimsiz') {
+    serit[0] = bagimlilikYaz(yeniIlk, 'bagimsiz');
+    const k = serit.findIndex((x) => x.id === ilk.id);
+    if (k > 0) serit[k] = bagimlilikYaz(ilk, yeniIlk.dep === 'bagimsiz' ? 'bagimli' : yeniIlk.dep);
+  }
+  const yeni = [...l];
+  yerler.forEach((i, k) => { const x = serit[k]; if (x) yeni[i] = x; });
+  if (yeni.every((x, i) => x.id === l[i]?.id)) return [...adimlar];
+  return yenidenNumarala(yeni);
+}
+// Şeritteki komşu: yon -1 önceki, 1 sonraki; yoksa null. "Öne / Geriye" düğmeleri bunu kullanır.
+export function seritKomsusu(adimlar: readonly Adim[], id: string, yon: -1 | 1): Adim | null {
+  const l = sirali(adimlar);
+  const a = l.find((x) => x.id === id);
+  if (!a) return null;
+  const serit = l.filter((x) => adimDali(x) === adimDali(a));
+  return serit[serit.indexOf(a) + yon] ?? null;
+}
+// Öne: şeritte önceki adımın önüne; Geriye: sonraki adımın ardına.
+export function seritteKaydir(adimlar: readonly Adim[], id: string, yon: -1 | 1): Adim[] {
+  const k = seritKomsusu(adimlar, id, yon);
+  if (!k) return [...adimlar];
+  return seritteYerlestir(adimlar, id, yon === 1 ? k.id : seritKomsusu(adimlar, k.id, -1)?.id ?? null);
 }
 export const adimSil = (adimlar: readonly Adim[], id: string): Adim[] => yenidenNumarala(sirali(adimlar).filter((x) => x.id !== id));
 export const adimGuncelle = (adimlar: readonly Adim[], id: string, f: (a: Adim) => Adim): Adim[] => adimlar.map((a) => (a.id === id ? f(a) : a));

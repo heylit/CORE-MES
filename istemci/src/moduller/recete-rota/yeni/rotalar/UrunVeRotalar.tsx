@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { Dugme, Menu, OnayPenceresi, Simge, useBildirim, type MenuOgesi } from '../../../../ortak/arayuz/index.ts';
 import type { EkranOzellikleri } from '../sekmeler.ts';
 import {
-  kolaEkle, adimSil, ortalamaGunSaati, adimSurukle, agacKur, agacUrunleri, acikRevizyon, malzemeMaliyetiSonucu, rotaSahibiOlur, rotaSorunlari,
+  kolaEkle, katilanDalEkle, adimSil, ortalamaGunSaati, adimSurukle, agacKur, agacUrunleri, acikRevizyon, malzemeMaliyetiSonucu, rotaSahibiOlur, rotaSorunlari,
   sirali, statuNo, yeniAdim, yururlukteki, type Operasyon,
 } from './kurallar.ts';
 import { sayi, YOK } from '../bicim.ts';
@@ -128,6 +128,7 @@ export function UrunVeRotalar(o: EkranOzellikleri) {
     // Açık kalma tercihi yalnız üst çubuktaki düğmeyle yazılır (1111 b); "Araya adım" paleti yalnız bu oturumda açar.
     paletAc: () => { setAdimPaneli(true); if (darKap()) setPanelAcik(false); },
     surukleniyor,
+    hatli,
     // Sürükleme başlarken şema değişirse tarayıcı sürüklemeyi bırakabilir; şeritler bir sonraki turda açılır.
     surukleBasla: () => { window.setTimeout(() => { setSurukleniyor(true); }, 0); },
     surukleBitti: () => { setSurukleniyor(false); },
@@ -178,10 +179,10 @@ export function UrunVeRotalar(o: EkranOzellikleri) {
   const tercih = (k: string, v: string, yaz: (v: string) => void) => { yaz(v); tercihYaz(k, v); };
 
   // Paletten ekleme yeri: seçili adımın ardı; "Adım ekle" seçiminde onun yeri (null: başa); yoksa gösterilen rotanın sonu.
-  const ekleYeri = (): { urunId: string; sonraId: string | null; dal?: string } | null => {
+  const ekleYeri = (): { urunId: string; sonraId: string | null; dal?: string; katilir?: string } | null => {
     const hedef = secim && 'urunId' in secim && duzen.duzenlenebilir(secim.urunId) ? secim.urunId : revId;
     if (!hedef) return null;
-    if (secim?.tur === 'adimEkle' && secim.urunId === hedef) return { urunId: hedef, sonraId: secim.sonraId, ...(secim.dal ? { dal: secim.dal } : {}) };
+    if (secim?.tur === 'adimEkle' && secim.urunId === hedef) return { urunId: hedef, sonraId: secim.sonraId, ...(secim.dal ? { dal: secim.dal } : {}), ...(secim.katilir ? { katilir: secim.katilir } : {}) };
     if (secim?.tur === 'adim' && secim.urunId === hedef) return { urunId: hedef, sonraId: secim.adimId };
     return { urunId: hedef, sonraId: sirali(duzen.adimlar(hedef)).at(-1)?.id ?? null };
   };
@@ -191,6 +192,8 @@ export function UrunVeRotalar(o: EkranOzellikleri) {
     const kod = h.malzeme.get(yer.urunId)?.code ?? '';
     const l = sirali(duzen.adimlar(yer.urunId));
     if (l.length === 0) return `${kod}: ilk adım`;
+    const k = yer.katilir ? l.find((x) => x.id === yer.katilir) : undefined;
+    if (k && yer.dal) return `${kod}: yeni bağımsız Dal ${yer.dal}, OP ${String(statuNo(k))} ${duzen.opAdi(k.opId) ?? ''} adımında ana hatta katılır`;
     const a = yer.sonraId === null ? undefined : l.find((x) => x.id === yer.sonraId);
     if (!a) return `${kod}: rotanın başına`;
     if (yer.dal) return `${kod}: yeni Dal ${yer.dal}, OP ${String(statuNo(a))} ${duzen.opAdi(a.opId) ?? ''} ardından çatallanır`;
@@ -203,7 +206,7 @@ export function UrunVeRotalar(o: EkranOzellikleri) {
     const l = sirali(duzen.adimlar(hedef));
     const sonra = y.sonraId;
     const yeni = yeniAdim(op, yeniKimlik());
-    const l2 = kolaEkle(l, sonra, yeni, y.dal);
+    const l2 = y.katilir && y.dal ? katilanDalEkle(l, y.katilir, yeni, y.dal) : kolaEkle(l, sonra, yeni, y.dal);
     if (duzen.degistir(hedef, () => l2, `${op.abbr ?? op.code} adımı eklendi`)) {
       setSecim({ tur: 'adim', urunId: hedef, adimId: yeni.id, seq: l2.find((x) => x.id === yeni.id)?.seq ?? 0, miktar });
     }

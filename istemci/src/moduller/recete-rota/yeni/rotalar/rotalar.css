@@ -744,6 +744,39 @@ tr[data-bekleyen] .tc-rr1-pr-op { color: var(--hold); }
 .tc-rr1-hat-yol-bagimsiz { stroke-dasharray: var(--kesik-nokta); stroke-width: var(--cizgi-orta); }
 .tc-rr1-hat-ucu { fill: var(--ink); }
 
+/* 3248-2: mini harita, şeritte sürükle-bırak, yarı mamul akışı. Harita telefonda yoktur; sürüklenen adımın şeridi dışındaki bırakma yerleri gizlenir. */
+.tc-rr1-hat-cubuk { display: flex; align-items: center; gap: var(--b-2); min-width: 0; }
+.tc-rr1-hat-surukipucu { display: inline-flex; align-items: center; gap: var(--b-1); flex: 1 1 auto; min-width: 0; }
+.tc-rr1-hrt {
+  position: relative; flex: none; margin-left: auto; inline-size: var(--acilir-enaz); block-size: var(--halka-mini); overflow: hidden; touch-action: none; cursor: pointer;
+  background: var(--panel2); border: var(--cizgi-ince) solid var(--edge2); border-radius: var(--yari-1);
+}
+.tc-rr1-hrt:focus-visible { outline: var(--pay-ince) solid var(--done); outline-offset: var(--pay-ince); }
+.tc-rr1-hrt-k {
+  position: absolute; left: var(--tc-rr1-hrt-kx, 0%); top: var(--tc-rr1-hrt-ky, 0%); inline-size: var(--tc-rr1-hrt-kw, 0%); block-size: var(--tc-rr1-hrt-kh, 0%);
+  margin: var(--pay-ince) 0 0 var(--pay-ince); background: var(--renk); border-radius: var(--pay-ince);
+}
+.tc-rr1-hrt-k.tc-rr1-hrt-ym { opacity: .6; outline: var(--cizgi-ince) dashed var(--bp); }
+.tc-rr1-hrt-k.tc-rr1-secili { outline: var(--cizgi) solid var(--ink); }
+.tc-rr1-hrt-cer {
+  position: absolute; inset-block: 0; left: var(--tc-rr1-hrt-x, 0%); inline-size: var(--tc-rr1-hrt-en, 100%);
+  border: var(--cizgi) solid var(--done); border-radius: var(--yari-1); background: color-mix(in srgb, var(--done) 10%, transparent);
+}
+.tc-rr1-hrt.tc-rr1-hrt-sigiyor { opacity: .55; cursor: default; }
+@media (max-width: 767px) { .tc-rr1-hrt, .tc-rr1-hat-surukipucu { display: none; } }
+.tc-rr1-hk[draggable="true"] { cursor: grab; }
+.tc-rr1-hat-suruk .tc-rr1-hat-arti-disari { visibility: hidden; }
+.tc-rr1-hat-suruk .tc-rr1-hat-ekle { border-style: solid; border-color: var(--done); color: var(--done); }
+.tc-rr1-hat-arti-ustunde .tc-rr1-hat-ekle { background: var(--done); color: var(--on-sig); }
+.tc-rr1-hat-ym { position: relative; z-index: 1; display: flex; flex-direction: column; align-items: flex-end; gap: var(--b-1); min-width: 0; padding-bottom: var(--b-2); }
+.tc-rr1-hat-ymbas { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: var(--b-1); }
+.tc-rr1-hat-ymet { --renk-dal: var(--bp); }
+.tc-rr1-hat-ymsira { display: flex; gap: var(--dokunma); }
+.tc-rr1-hk-ym { inline-size: var(--menu-sabit); cursor: default; border: var(--cizgi) dashed var(--bp); opacity: .92; }
+.tc-rr1-exp-acik { color: var(--bp); border-color: var(--bp); }
+.tc-rr1-hat-yol-ym { stroke: var(--bp); stroke-dasharray: var(--kesik-uzun); }
+.tc-rr1-ss-ym { cursor: default; opacity: .8; outline: var(--cizgi-ince) dashed var(--bp); outline-offset: calc(-1 * var(--cizgi-ince)); }
+
 .tc-rr1-ss { display: flex; flex-direction: column; gap: var(--b-2); background: var(--panel); border: var(--cizgi-ince) solid var(--edge); border-radius: var(--yari-2); padding: var(--b-2) var(--b-3); }
 .tc-rr1-ss-bas { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-1) var(--b-3); font-size: var(--yazi-s); }
 .tc-rr1-ss-baslik { display: inline-flex; align-items: center; gap: var(--b-1); font-weight: 700; }
