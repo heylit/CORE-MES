@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Dugme, DurumKutusu, Rozet, Tablo, useBildirim, type Sutun } from '../../../../ortak/arayuz/index.ts';
+import { Dugme, DurumKutusu, Rozet, Simge, Tablo, useBildirim, type Sutun } from '../../../../ortak/arayuz/index.ts';
 import { kgFmt, perM2Fmt, perMFmt, YOK } from '../bicim.ts';
 import { useKucukResimler } from '../../../cizimler/disari.ts';
 import { resimliTur, SatirResmi, type KucukResimler } from '../ortak/ResimAlani.tsx';
@@ -9,8 +9,9 @@ import * as K from '../kurallar/index.ts';
 import { useKuralBaglami, type KuralBaglami } from '../kurallar/index.ts';
 import { useOturum } from '../../../../ortak/veri/oturum.ts';
 import type { EkranOzellikleri } from '../sekmeler.ts';
+import type { Siralama } from '../../../../ortak/veri/liste-durumu.ts';
 import { standartAdlari } from '../standart-adlari.ts';
-import { useBirimSistemi } from '../tercihler.ts';
+import { useBirimSistemi, useGizliSutunlar, useKatalogGruplama } from '../tercihler.ts';
 import type { KatalogKarti, KartKaydi } from '../tipler.ts';
 import { kayitHatasi, useKartIptal, useKartKaydet, useKartlar, useKgFiyatlari } from '../veri.ts';
 import { Birlestir } from './Birlestir.tsx';
@@ -27,6 +28,7 @@ import { kimlikOf } from './liste.ts';
 import { OnayRozeti, type OnayIslemi, type TalepIslemi } from './paneller.tsx';
 import { QrPenceresi, SahaGorunumu } from './Saha.tsx';
 import { AktifSuzgecler, Suzgecler } from './Suzgecler.tsx';
+import { formMetni, GRUPLAMALAR, grupSayilari, grupYolu, gruplamaMi, kaliteMetni, KATEGORISIZ, tabloSirasi, turAdi } from './kategori.ts';
 import './katalog.css';
 
 type AcikPencere =
@@ -40,6 +42,8 @@ type AcikPencere =
 const SAYFA_BOYU = 50;
 // Prototip süzgeç kutusunu bu genişliğin altında kapalı açar (kart listesi hemen görünsün).
 const DAR_EKRAN = '(max-width: 980px)';
+// Bu genişliğin altında tablo kartlara döner (ortak Tablo uyarlanır); üstünde yatay kayar, Malzeme sütunu yerinde kalır.
+const TELEFON = '(max-width: 719px)';
 
 function agirlikAlti(x: KartKaydi, b: KuralBaglami): string {
   const g = x.g ?? {};
@@ -52,32 +56,39 @@ function agirlikAlti(x: KartKaydi, b: KuralBaglami): string {
   return K.isGen(x, b) ? TURLER[x.tur as keyof typeof TURLER]?.ad ?? '' : (b.t.FAMS[x.fam ?? 'diger'] ?? b.t.FAMS.diger)?.ad ?? '';
 }
 
+// 3275 a: katalog düz tablodur; kategori grup başlığında, kalite, form ve onay kendi sütununda. Seçim kutusu Malzeme hücresindedir:
+// sütun yatay kayarken onunla yerinde kalır, telefonda kartın içinde görünür.
+export const GIZLENEBILIR_SUTUNLAR: readonly { anahtar: string; baslik: string }[] = [
+  { anahtar: 'kalite', baslik: 'Kalite · sınıf' },
+  { anahtar: 'form', baslik: 'Form · ölçü' },
+  { anahtar: 'agirlik', baslik: 'Birim ağırlık' },
+  { anahtar: 'birim', baslik: 'Stok birimi' },
+  { anahtar: 'onay', baslik: 'Onay' },
+  { anahtar: 'guncelleme', baslik: 'Güncelleme' },
+];
+
 function sutunlar(
   b: KuralBaglami, secili: ReadonlySet<string>, sec: (k: string, acik: boolean) => void, resimler: KucukResimler,
+  turRozeti: boolean, gizli: ReadonlySet<string>,
 ): Sutun<KatalogKarti>[] {
-  return [
+  const hepsi: Sutun<KatalogKarti>[] = [
     {
-      anahtar: 'sec', baslik: '', csv: false,
-      hucre: (k) => (
-        <span onClick={(o) => o.stopPropagation()}>
-          <label className="tc-isaret">
-            <input type="checkbox" checked={secili.has(k.kimlik)} onChange={(o) => sec(k.kimlik, o.target.checked)} />
-            <span className="tc-gizli-etiket">{`${k.kayit.com.kod} seç`}</span>
-          </label>
-        </span>
-      ),
-    },
-    {
-      anahtar: 'malzeme', baslik: 'Malzeme',
+      anahtar: 'malzeme', baslik: 'Malzeme', sabit: 'sol', sirala: true, kartTamSatir: true, csv: (k) => `${k.kayit.com.kod} ${k.kayit.com.ad}`,
       hucre: (k) => {
         const x = k.kayit;
         return (
           <div className="tc-mk-malzeme" data-tur={x.tur ?? 'hammadde'} data-aile={x.fam}>
+            <span onClick={(o) => o.stopPropagation()}>
+              <label className="tc-isaret">
+                <input type="checkbox" checked={secili.has(k.kimlik)} onChange={(o) => sec(k.kimlik, o.target.checked)} />
+                <span className="tc-gizli-etiket">{`${x.com.kod} seç`}</span>
+              </label>
+            </span>
+            <span className="tc-mk-serit" aria-hidden="true" />
             <SatirResmi tur={x.tur} no={k.no} ad={`${x.com.kod} ${x.com.ad}`.trim()} simge={K.kartIkon(x, b)} resimler={resimler} />
             <div>
               <div className="tc-mk-rozetler">
-                <Rozet ton="bilgi" gorunum="cizgi">{TURLER[(x.tur ?? 'hammadde') as keyof typeof TURLER]?.ad}</Rozet>
-                {K.onayDurum(x, b) !== 'aktif' && <OnayRozeti x={x} b={b} />}
+                {turRozeti && <Rozet ton="bilgi" gorunum="cizgi">{TURLER[(x.tur ?? 'hammadde') as keyof typeof TURLER]?.ad}</Rozet>}
                 {K.talepVar(x, b) && <Rozet ton="uyari">Değişiklik talebi</Rozet>}
                 <span className="tc-mk-kod">{x.com.kod}</span>
               </div>
@@ -88,18 +99,34 @@ function sutunlar(
       },
     },
     {
-      anahtar: 'agirlik', baslik: 'Birim ağırlık', hizala: 'sag',
+      anahtar: 'kalite', baslik: 'Kalite · sınıf', sirala: true,
+      hucre: (k) => {
+        const m = kaliteMetni(k.kayit, b);
+        return m ? <span className="tc-mk-deger">{m.kalite}<small className="tc-mk-alt">{m.sinif}</small></span> : YOK;
+      },
+    },
+    {
+      anahtar: 'form', baslik: 'Form · ölçü', sirala: true,
+      hucre: (k) => {
+        const m = formMetni(k.kayit, b);
+        if (!m) return YOK;
+        return m.form ? <span className="tc-mk-deger">{m.form}<small className="tc-mk-alt">{m.olcu}</small></span> : m.olcu;
+      },
+    },
+    {
+      anahtar: 'agirlik', baslik: 'Birim ağırlık', hizala: 'sag', sirala: true,
       hucre: (k) => {
         const w = K.weight(k.kayit, b);
         return <span className="tc-mk-deger">{w ? kgFmt(w.kg, b.birim) : YOK}<small className="tc-mk-alt">{agirlikAlti(k.kayit, b)}</small></span>;
       },
     },
     {
-      anahtar: 'birim', baslik: 'Stok birimi',
+      anahtar: 'birim', baslik: 'Stok birimi', sirala: true,
       hucre: (k) => <span className="tc-mk-deger">{K.finalBirim(k.kayit, b) || YOK}<small className="tc-mk-alt">{k.kayit.com.ted ?? ''}</small></span>,
     },
+    { anahtar: 'onay', baslik: 'Onay', sirala: true, hucre: (k) => <OnayRozeti x={k.kayit} b={b} /> },
     {
-      anahtar: 'guncelleme', baslik: 'Güncelleme', hizala: 'sag', kirilmaz: true,
+      anahtar: 'guncelleme', baslik: 'Güncelleme', hizala: 'sag', kirilmaz: true, sirala: true,
       hucre: (k) => {
         const x = k.kayit;
         return (
@@ -111,6 +138,33 @@ function sutunlar(
       },
     },
   ];
+  return hepsi.filter((s) => !gizli.has(s.anahtar));
+}
+
+function GrupSecimi({ kartlar, secili, sec, etiket }: { kartlar: readonly KatalogKarti[]; secili: ReadonlySet<string>; sec: (l: string[], acik: boolean) => void; etiket: string }) {
+  const n = kartlar.filter((k) => secili.has(k.kimlik)).length;
+  return (
+    <label className="tc-isaret">
+      <input
+        type="checkbox" checked={n > 0 && n === kartlar.length}
+        ref={(el) => { if (el) el.indeterminate = n > 0 && n < kartlar.length; }}
+        onChange={(o) => sec(kartlar.map((k) => k.kimlik), o.target.checked)}
+      />
+      <span className="tc-gizli-etiket">{`${etiket}: hepsini seç`}</span>
+    </label>
+  );
+}
+
+function useGenisEkran(): boolean {
+  const [genis, genisYaz] = useState(() => !(window.matchMedia?.(TELEFON).matches ?? false));
+  useEffect(() => {
+    const m = window.matchMedia?.(TELEFON);
+    if (!m) return undefined;
+    const dinle = () => genisYaz(!m.matches);
+    m.addEventListener('change', dinle);
+    return () => m.removeEventListener('change', dinle);
+  }, []);
+  return genis;
 }
 
 export function Katalog({ ortam, yetki, git }: EkranOzellikleri) {
@@ -127,6 +181,11 @@ export function Katalog({ ortam, yetki, git }: EkranOzellikleri) {
   const [secili, seciliYaz] = useState<ReadonlySet<string>>(new Set());
   const [sayfa, sayfaYaz] = useState(1);
   const [pencere, pencereYaz] = useState<AcikPencere | null>(null);
+  const [gruplama, gruplamaYaz] = useKatalogGruplama();
+  const [gizliListe, gizliYaz] = useGizliSutunlar();
+  const [siralama, siralamaYaz] = useState<Siralama | null>(null);
+  const genis = useGenisEkran();
+  const gizli = useMemo(() => new Set(gizliListe), [gizliListe]);
 
   const kisiId = oturum.data?.id ?? 0;
   const kisiAd = oturum.data?.ad ?? '';
@@ -135,7 +194,8 @@ export function Katalog({ ortam, yetki, git }: EkranOzellikleri) {
   const kayitlar = useMemo(() => kartlar.map((k) => k.kayit), [kartlar]);
   const b = useKuralBaglami({ ortam, kartlar, kisi, birim, yetki });
   const kgFiyatlari = useKgFiyatlari(kartlar, yetki.kgFiyatiOkur);
-  const liste = useMemo(() => suzulmus(kartlar, ara, sec, b), [kartlar, ara, sec, b]);
+  const liste = useMemo(() => tabloSirasi(suzulmus(kartlar, ara, sec, b), b, gruplama, siralama), [kartlar, ara, sec, b, gruplama, siralama]);
+  const sayilar = useMemo(() => grupSayilari(liste, b, gruplama), [liste, b, gruplama]);
   const sayfaSatirlari = useMemo(() => liste.slice((sayfa - 1) * SAYFA_BOYU, sayfa * SAYFA_BOYU), [liste, sayfa]);
   // Küçük resim yalnız görünen sayfanın yarı mamul ve mamul kartları için tek istekle okunur.
   const resimliNolar = useMemo(() => sayfaSatirlari.filter((k) => resimliTur(k.kayit.tur)).map((k) => k.no), [sayfaSatirlari]);
@@ -143,7 +203,7 @@ export function Katalog({ ortam, yetki, git }: EkranOzellikleri) {
   const metinTabani = useMemo(() => metinListesi(kartlar, ara, standartAdlari(ortam.malzemeAyari)).map((k) => k.kayit), [kartlar, ara, ortam.malzemeAyari]);
 
   useEffect(() => { seciliYaz((s) => secimiBuda(s, kartlar)); }, [kartlar]);
-  useEffect(() => { sayfaYaz(1); }, [ara, sec]);
+  useEffect(() => { sayfaYaz(1); }, [ara, sec, gruplama, siralama]);
   // Üst baştaki "QR okut" katalogu `?qr=1` ile açar; pencere açılınca adres temizlenir.
   const qrIstendi = adres.get('qr') !== null;
   useEffect(() => {
@@ -152,6 +212,11 @@ export function Katalog({ ortam, yetki, git }: EkranOzellikleri) {
     adresYaz((a) => { const y = new URLSearchParams(a); y.delete('qr'); return y; }, { replace: true });
   }, [qrIstendi, adresYaz]);
 
+  const secimDegistir = (l: readonly string[], acik: boolean) => seciliYaz((s0) => {
+    const y = new Set(s0);
+    for (const k of l) { if (acik) y.add(k); else y.delete(k); }
+    return y;
+  });
   const bul = (kimlik: string) => kartlar.find((k) => k.kimlik === kimlik);
   const kartKimligi = adres.get('kart');
   const acikKart = kartKimligi ? bul(kartKimligi) : undefined;
@@ -256,6 +321,27 @@ export function Katalog({ ortam, yetki, git }: EkranOzellikleri) {
           placeholder="Kod, ad, ERP kodu, açıklama veya tedarikçi ara" aria-label="Katalogda ara"
         />
         <span className="tc-mk-ara-bosluk" />
+        <label className="tc-mk-grupla">
+          <span>Grupla</span>
+          <select className="tc-alan-kutu" value={gruplama} onChange={(o) => { if (gruplamaMi(o.target.value)) gruplamaYaz(o.target.value); }}>
+            {GRUPLAMALAR.map((g) => <option key={g.deger} value={g.deger}>{g.ad}</option>)}
+          </select>
+        </label>
+        <details className="tc-mk-sutunlar">
+          <summary><Simge ad="grid" boyut="k" />Sütunlar</summary>
+          <fieldset>
+            <legend className="tc-gizli-etiket">Görünen sütunlar</legend>
+            {GIZLENEBILIR_SUTUNLAR.map((s) => (
+              <label key={s.anahtar} className="tc-isaret">
+                <input
+                  type="checkbox" checked={!gizli.has(s.anahtar)}
+                  onChange={(o) => gizliYaz(o.target.checked ? gizliListe.filter((a) => a !== s.anahtar) : [...gizliListe, s.anahtar])}
+                />
+                <span>{s.baslik}</span>
+              </label>
+            ))}
+          </fieldset>
+        </details>
         <div className="tc-mk-aktarma">
           <Dugme tur="birincil" onClick={() => pencereYaz({ tur: 'excel' })}>Excel: şablon, dışa ve içe aktar</Dugme>
           <Dugme disabled={bosKatalog} onClick={() => dosyaIndir('malzeme-katalogu.csv', katalogCsvMetni(gorunenKayitlar, b))}>CSV dışa aktar</Dugme>
@@ -289,7 +375,21 @@ export function Katalog({ ortam, yetki, git }: EkranOzellikleri) {
             )}
             <Tablo
               etiket="Malzeme kataloğu"
-              sutunlar={sutunlar(b, secili, (k, acik) => seciliYaz((s0) => { const y = new Set(s0); if (acik) y.add(k); else y.delete(k); return y; }), resimler)}
+              sutunlar={sutunlar(b, secili, (k, acik) => secimDegistir([k], acik), resimler, gruplama === 'yok', gizli)}
+              kip={genis ? 'kaydir' : 'uyarlanir'}
+              siralama={siralama}
+              siralamaDegistir={siralamaYaz}
+              grup={gruplama === 'yok' ? undefined : {
+                yol: (k) => grupYolu(k.kayit, b, gruplama),
+                baslik: (yol) => (yol.length === 1
+                  ? <span className="tc-mk-grup-tur" data-tur={yol[0]}><Rozet ton="bilgi" gorunum="cizgi">{turAdi(yol[0]!, b)}</Rozet></span>
+                  : <span data-kategorisiz={yol[1] === KATEGORISIZ ? '' : undefined}>{yol[1]}</span>),
+                sayi: sayilar,
+                on: (yol) => {
+                  const grupKartlari = liste.filter((k) => grupYolu(k.kayit, b, gruplama).slice(0, yol.length).join('\u001f') === yol.join('\u001f'));
+                  return <GrupSecimi kartlar={grupKartlari} secili={secili} sec={secimDegistir} etiket={yol.length === 1 ? turAdi(yol[0]!, b) : yol[1]!} />;
+                },
+              }}
               satirlar={sayfaSatirlari}
               satirAnahtari={(k) => k.kimlik}
               satirSec={(k) => kartAc(k.kimlik)}

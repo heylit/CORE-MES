@@ -6,6 +6,7 @@ import { ONAY, PROPS, TURLER } from '../sabitler/index.ts';
 import * as K from '../kurallar/index.ts';
 import type { KuralBaglami } from '../kurallar/index.ts';
 import type { KartKaydi } from '../tipler.ts';
+import { kategoriAdi } from './kategori.ts';
 
 type Hucre = string | number | null | undefined;
 
@@ -35,7 +36,7 @@ export function katalogCsvMetni(kayitlar: readonly KartKaydi[], b: KuralBaglami)
       r[0] = TURLER[x.tur as keyof typeof TURLER]?.ad ?? x.tur;
       r[1] = com.kod;
       r[2] = com.ad;
-      r[3] = (K.sarfKat(x, b) ?? K.dbKat(x, b) ?? {}).ad ?? '';
+      r[3] = kategoriAdi(x, b) ?? '';
       const w = K.weight(x, b);
       if (w && typeof w.kg === 'number') r[yer('Birim ağırlık (kg)')] = sayi(w.kg);
       r[yer('Tedarikçi')] = com.ted ?? '';

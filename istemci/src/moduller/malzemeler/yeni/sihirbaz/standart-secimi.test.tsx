@@ -113,7 +113,8 @@ describe('2117 EN / ASTM adları: Ayarlar', () => {
     fireEvent.change(ara, { target: { value: 'qt-e' } });
     expect(screen.getByText('Islah (+QT)')).toBeTruthy();
     expect(screen.queryByText('Normalize (+N)')).toBeNull();
-  });
+  // Uzun akış (ayar ekranı, kaydet, liste ve arama) tek başına 13-14 s sürer; modülün tam koşusunda 15 s sınırını aşıyordu.
+  }, 30_000);
 
   test('ayar yazamayan eşli adı görür ama düzenleme düğmesi yoktur (reddedilen)', async () => {
     sunucuKur(OKUYAN, SALT_OKUR);
