@@ -38,3 +38,4 @@ Model dosyası `test-ortak.ts` ile üretilen sentetik kutudur (gerçek parça de
 | Kayıt sürümlü ve bütün olarak; yüz modelde olmalı, yinelenmez; rota adımı bugünkü rotada olmalı, kalkan adımın kayıtlı işareti uyarıyla kalır (2140-3) | `GEO-YZ2`, `GEO-YZ-A1`..`GEO-YZ-A3` |
 | Rota bağı kurulmadıysa liste boş ve 'rota-bagli-degil'; malzemenin yürürlükte rotası yoksa 'rota-yok' | `GEO-YZ-A1`, `GEO-YZ-A3` |
 | Yeni revizyon (2140-4 a): önceki işaretli revizyonun işaretleri tür, yön, alan, yarıçap, eksen ve konumu aynı yüzlere öneri olarak gelir; okumada yazılmaz; eşleşmeyen taşınmaz | `GEO-YZ3`, `GEO-YZ-A4` |
+| Talaştan kaba süre (3278): talaş ham - parça; kaba hız güç sınırından (Q = Pc x verim x 60000 / kc), alt 0,3 katı; finiş yüzey alanından; delik çap ve derinlikten, delik hacmi kabadan düşülür; talaş yoksa sonuç yok; yalnız ekranda, kalibresiz | `GEO-SU1`..`GEO-SU10` |

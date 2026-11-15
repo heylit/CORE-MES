@@ -6,7 +6,7 @@ import { sayfaliListe } from '#cekirdek/liste.ts';
 import type { SayfaliListe } from '#paylasilan/liste.ts';
 import type {
   GeometriAnalizCevabi, GeometriDosyaTuru, GeometriDurumu, GeometriHamCevabi, GeometriModelSatiri, GeometriMontajCevabi, GeometriOzellikCevabi, GeometriSaglikCevabi,
-  GeometriYuzeyAdimi, GeometriYuzeyCevabi, GeometriYuzeyKaydetGovdesi,
+  GeometriIsoGrubu, GeometriSureCevabi, GeometriYuzeyAdimi, GeometriYuzeyCevabi, GeometriYuzeyKaydetGovdesi,
 } from '#paylasilan/sozlesme/geometri.ts';
 import type { Kullanici } from '#paylasilan/kullanici.ts';
 import { alinanRevizyonDosyasi, kayitlaraBagliTaslakBelgeler, kayitlaraBagliYayindakiBelgeler, taslagiGorur } from '../belge-merkezi/disari.ts';
@@ -15,7 +15,7 @@ import { kisiAdlari } from '../kisiler/disari.ts';
 import { hammaddeStokOlculeri, malzemeOzetleri } from '../malzemeler/disari.ts';
 import {
   bicimDenetimi, bilesenListesi, DOSYA_EN_BUYUK_BAYT, enAzHam, hataMetniKisalt, hataSonrasiDurum, ILETILER, islemAnahtari, MOTOR, saglikDegerlendir, STOK_FORMLARI,
-  stokEslestir, TUR_BASINA_EN_COK_IS, YUZ_MOTORU, YUZEY_ILETILERI, yuzeyAlanlari, yuzeyKaydiDenetle, yuzleriEslestir,
+  stokEslestir, sureTahmini, TUR_BASINA_EN_COK_IS, YUZ_MOTORU, YUZEY_ILETILERI, yuzeyAlanlari, yuzeyKaydiDenetle, yuzleriEslestir,
 } from './kurallar.ts';
 import type { YuzeyIsaretGirdisi } from './kurallar.ts';
 import * as sorgular from './sorgular.ts';
@@ -201,6 +201,34 @@ export async function hamOnerisi(db: Db, revizyonId: number, sorgu: { payMm?: nu
   const oneriler = stokEslestir(c.analiz.obb, payMm, adaylar);
   const neden = oneriler.length > 0 ? null : adaylar.length === 0 ? 'stok-listesi-yok' : 'sigan-yok';
   return { revizyonId, payMm, payKaynagi, enAz, oneriler, kaliteler, neden };
+}
+
+// Talaştan kaba süre (kart 3278; 1195 c): yalnız ekranda gösterilen kalibresiz aralık; rotaya ve plana yazılmaz. Ham, ham önerisinin
+// ilk (en az talaşlı) stok kartıdır; yoksa döndürülmüş kutu + pay. Parça hacmi ağ hacmidir (kapalı ağda; yaklaşık). Delikler özellik
+// tanımasından; tanıma yoksa delik kalemi yazılmaz ve ozellikOkundu false döner.
+export async function sureTahminiOku(
+  db: Db, revizyonId: number, sorgu: { payMm?: number | undefined; kalite?: string | undefined; iso?: GeometriIsoGrubu | undefined },
+): Promise<GeometriSureCevabi> {
+  const iso = sorgu.iso ?? 'P';
+  const ham = await hamOnerisi(db, revizyonId, sorgu);
+  const bos = {
+    revizyonId, oneri: true as const, kalibre: false as const, iso, isoKaynagi: sorgu.iso === undefined ? 'varsayilan' as const : 'istek' as const,
+    payMm: ham.payMm, payKaynagi: ham.payKaynagi, hamKaynagi: null, hamKodu: null, hamHacimMm3: null, parcaHacimMm3: null, talasMm3: null,
+    kalemler: [], altDk: null, ortaDk: null, ustDk: null, ozellikOkundu: false,
+  };
+  const a = (await analizOku(db, revizyonId)).analiz;
+  if (a === null || ham.enAz === null) return { ...bos, neden: 'analiz-yok' };
+  const stok = ham.oneriler[0];
+  const hamHacimMm3 = stok?.hamHacimMm3 ?? ham.enAz.a * ham.enAz.b * ham.enAz.c;
+  const hamBilgisi = { hamKaynagi: stok === undefined ? 'kutu' as const : 'stok' as const, hamKodu: stok?.kod ?? null, hamHacimMm3 };
+  if (a.hacimMm3 === null) return { ...bos, ...hamBilgisi, neden: 'hacim-yok' };
+  const oz = (await ozellikOku(db, revizyonId)).ozellikler;
+  const delikler = oz === null ? null : oz.flatMap((o) =>
+    o.tur === 'delik' && o.capMm !== null && o.derinlikMm !== null ? [{ capMm: o.capMm, derinlikMm: o.derinlikMm }] : []);
+  const t = sureTahmini({ iso, hamHacimMm3, parcaHacimMm3: a.hacimMm3, alanMm2: a.alanMm2, delikler });
+  const parca = { ...hamBilgisi, parcaHacimMm3: a.hacimMm3, ozellikOkundu: oz !== null };
+  if (t === null) return { ...bos, ...parca, neden: 'talas-yok' };
+  return { ...bos, ...parca, talasMm3: t.talasMm3, kalemler: t.kalemler, altDk: t.altDk, ortaDk: t.ortaDk, ustDk: t.ustDk, neden: null };
 }
 
 // Malzemenin yayındaki 3B modeli, analizi ve ham önerisi: başka modül (CNC Kurulum ham ekranı) `disari.ts` ile okur (1703 a).
