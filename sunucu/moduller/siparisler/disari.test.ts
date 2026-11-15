@@ -25,6 +25,8 @@ describe('siparisler disari (gerçek PostgreSQL)', () => {
     ortam = await testVeritabaniKur('siparisler_disari');
     const id = await o().vt.tx((db) => yoneticiOlustur(db, { ad: 'Deneme Yazan', kullaniciAdi: 'siparis-disari', parola: 'dogru-parola-1' }));
     kisi = { id, ad: 'Deneme Yazan', islemler: [] };
+    // 3272: onayda kendiliğinden proje ve emir açılışı burada ölçülmez (uretim-emirleri/siparis-acilisi.test.ts); ayar kapalıdır.
+    await o().sahip.sorgu("INSERT INTO ayar (anahtar, deger, guncelleyen_kisi_id) VALUES ('uretim-emirleri.siparis-onayinda-ac', 'false', $1)", [id]);
     firmaId = (await o().sahip.tek<{ id: number }>(
       "INSERT INTO musteri_tedarikci_firma (ad, tur, olusturan_id) VALUES ('Deneme Firma', 'musteri', $1) RETURNING id", [id]))!.id;
     await o().sahip.sorgu("INSERT INTO malzeme_katalog_kod_sirasi (onek, son_sira) VALUES ('SDS-DNM-', 0) ON CONFLICT (onek) DO NOTHING");

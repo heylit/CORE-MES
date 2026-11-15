@@ -87,6 +87,8 @@ export const siparisEkleGovdesi = z.object(siparisAlanlari).refine(tarihSirasi, 
 // Güncelleme tam kayıttır: satırlar bütün olarak yeniden yazılır (SIP-03: yalnız taslak).
 export const siparisGuncelleGovdesi = z.object({ ...siparisAlanlari, ...beklenenSurum }).refine(tarihSirasi, TARIH_SIRASI);
 export const durumGovdesi = z.object({ ...beklenenSurum });
+// 3272: onayda kendiliğinden açılan projenin numarası; verilmezse sipariş numarasından türetilir. Biçimi Projeler denetler (PRJ-01).
+export const onayGovdesi = z.object({ ...beklenenSurum, projeKodu: z.string().trim().min(1).max(24).optional() });
 // SIP-19 (3254 a): onay gerekçeyle geri alınır; gerekçe uç denetim kaydına gövdeyle düşer.
 export const onayGeriAlGovdesi = z.object({
   ...beklenenSurum,

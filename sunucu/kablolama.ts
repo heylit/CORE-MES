@@ -27,10 +27,10 @@ import {
   logoAcilisCozucusu, logoAynaOzetiCozucusu, logoBirimSetiCozucusu, logoEslemeYaziciCozucusu, logoKartAynasiCozucusu, logoKodCozucusu, logoTmiKodCozucusu, rotaRevizyonlariCozucusu, kartIzleriCozucusu,
 } from './moduller/malzemeler/disari.ts';
 import { firmaDegistiDinle, logoCariCozuculeriKaydet } from './moduller/musteri-tedarikci/disari.ts';
-import { araHalCozucusuKaydet as rotaAraHalCozucusu, durumRevizyonlari, emreGelenSablonOzetleri, emreGelenSablonaAdimEkle, emirBittiYansit as rotaEmirBittiYansit, adimBittiYansit as rotaAdimBittiYansit, emirRotaHazirliklari, isEmriAparatHazirliklari, isEmriKopyalandiYansit, isEmriOlcuAletiHazirliklari, malzemeKartiIzleri as rotaKartIzleri, talasliAdimSureleri, yuzeyIslemiAdimlari, yururlukteOperasyonlar } from './moduller/rota/disari.ts';
+import { araHalCozucusuKaydet as rotaAraHalCozucusu, emreKopyala as rotaEmreKopyala, siparisAcilisiRotasi as rotaSiparisAcilisiRotasi, durumRevizyonlari, emreGelenSablonOzetleri, emreGelenSablonaAdimEkle, emirBittiYansit as rotaEmirBittiYansit, adimBittiYansit as rotaAdimBittiYansit, emirRotaHazirliklari, isEmriAparatHazirliklari, isEmriKopyalandiYansit, isEmriOlcuAletiHazirliklari, malzemeKartiIzleri as rotaKartIzleri, talasliAdimSureleri, yuzeyIslemiAdimlari, yururlukteOperasyonlar } from './moduller/rota/disari.ts';
 import { talasliAdimCozucusu, yuzeyAdimlariCozucusu } from './moduller/geometri/disari.ts';
 import * as sevkiyat from './moduller/sevkiyat/disari.ts';
-import { bagliEmirCozucusu, kalemEmirCozucusu, malzemeKartiIzleri as siparisKartIzleri, siparisAyrintisi, siparisListesi, siparisOnaylandiDinle, teklifDenemeCozucusu } from './moduller/siparisler/disari.ts';
+import { bagliEmirCozucusu, kalemEmirCozucusu, malzemeKartiIzleri as siparisKartIzleri, siparisAyrintisi, siparisIptalEdildiDinle, siparisListesi, siparisOnayiGeriAlindiDinle, siparisOnaylandiDinle, teklifDenemeCozucusu } from './moduller/siparisler/disari.ts';
 import { siparisListesiSorgusu } from '#paylasilan/sozlesme/siparisler.ts';
 import type { MalzemeKartiAnahtari, MalzemeKartiIzi } from '#paylasilan/malzeme-karti-izi.ts';
 import * as stok from './moduller/stok/disari.ts';
@@ -55,6 +55,13 @@ export function bag<T>(ad: string, kur: ((karsilik: T) => unknown) | undefined, 
     kur: () => { kur!(karsilik!); },
   };
 }
+
+// 3272-3 a: emri siparişe kilitleyen bağ: satın alma siparişi aşamasındaki tedarik (talep kilitlemez) ya da stok fişi.
+const siparisEmirBaglari = async (db: Db, idler: readonly number[]) => {
+  const tedarik = new Set((await emirTedarikDurumlari(db, idler, [])).flatMap((x) => (x.asama === 'siparis' && x.uretimEmriId !== null ? [x.uretimEmriId] : [])));
+  const fisler = await stok.emirMalzemeFisleri(db, idler);
+  return { tedarik, stok: new Set([...fisler].flatMap(([id, f]) => (f.sarf.length + f.giris.length + f.hurda.length > 0 ? [id] : []))) };
+};
 
 // 2118: cari okuması uçta transaction dışında koşar (köprü 60 sn bekleyebilir); logonun ayar okuması aynı bağlantıyı kullanır.
 const cariAra = (db: Db, metin: string) => logo.logodaCariAra({ tx: (f) => f(db) }, metin);
@@ -130,6 +137,15 @@ export function sunucununBaglari(): Bag[] {
     bag('plan payları -> üretim emirleri terminali', uretimEmirleri.planPaylariCozucusu, canliPaylar),
     bag('üretim emri malzeme maliyeti -> plan', malzemeMaliyetiCozucusu, uretimEmriMalzemeMaliyetleri),
     bag('sipariş onaylandı -> plan acil sipariş', siparisOnaylandiDinle, acilSiparisOnaylandi),
+    // 3272: onayda proje ve emirler kendiliğinden açılır (acil siparişin emri açıldıktan sonra: o kalem yeniden açılmaz). Onay geri alınınca
+    // dokunulmamış emir kalemden çözülür, iptalde iptal olur (3272-3 a). Rota, satın alma ve stok uretim-emirlerini ithal eder; çözücüyle gelir.
+    bag('sipariş onaylandı -> proje ve emir açılışı', siparisOnaylandiDinle, uretimEmirleri.siparisOnaylandiAc),
+    bag('sipariş onayı geri alındı -> emirler kalemden çözülür', siparisOnayiGeriAlindiDinle, uretimEmirleri.siparisOnayiGeriAlindiCoz),
+    bag('sipariş iptal edildi -> dokunulmamış emirler iptal', siparisIptalEdildiDinle, uretimEmirleri.siparisIptalEdildiIptal),
+    bag('rota, satın alma ve stok -> sipariş açılışı', (emirBaglari: typeof siparisEmirBaglari) => uretimEmirleri.siparisAcilisiCozuculeriKaydet({
+      turunRotasi: rotaSiparisAcilisiRotasi, emreKopyala: rotaEmreKopyala, emirBaglari,
+    }), [uretimEmirleri.siparisAcilisiCozuculeriKaydet, rotaSiparisAcilisiRotasi, rotaEmreKopyala, emirTedarikDurumlari, stok.emirMalzemeFisleri]
+      .every((f) => typeof f === 'function') ? siparisEmirBaglari : undefined),
     // 3244 b, 3254 a: yeniden onaylanan siparişin termini bağlı proje bitişine ve başlamamış emir teslimine kayar; elle değişen bağsızdır.
     bag('sipariş onaylandı -> proje bitişi', siparisOnaylandiDinle, projeler.projeBitisiniSiparisTermineKaydir),
     bag('sipariş onaylandı -> emir teslimi', siparisOnaylandiDinle, uretimEmirleri.emirTeslimleriniSiparisTermineKaydir),
@@ -144,7 +160,7 @@ export function sunucununBaglari(): Bag[] {
     bag('periyodik bakım -> plan girdisi', planBakimCozucusu, arkon.periyodikBakimlar),
     bag('teklif denemesi -> siparişler (planlama motoru)', teklifDenemeCozucusu, teklifDene),
     // 2103-2 b: satıra bağlı emirlere siparişten açılan projelerin emirleri eklenir (iş emri olmayan emir proje okumasında yoktur).
-    bag('bağlı emirler -> sipariş iptali', bagliEmirCozucusu, uretimEmirleri.siparisSatirlarininEmirleri && projeler.siparisinProjeleri && (async (
+    bag('bağlı emirler -> sipariş iptali', bagliEmirCozucusu, uretimEmirleri.siparisSatirlarininEmirleri && projeler.siparisinProjeleri && uretimEmirleri.dokunulmamisEmirIdleri && (async (
       db: Db, g: { siparisId: number; satirIdleri: readonly number[] },
     ) => {
       const idler = [...(await uretimEmirleri.siparisSatirlarininEmirleri(db, g.satirIdleri)).values()].flat();
@@ -156,7 +172,9 @@ export function sunucununBaglari(): Bag[] {
           if (!emirler.has(ie.uretimEmriId)) emirler.set(ie.uretimEmriId, { emirNo: ie.emirNo, durum: ie.emirDurumu });
         }
       }
-      return [...emirler.values()];
+      // 3272-3 a: siparişten açılmış, dokunulmamış emir iptali kilitlemez; sipariş iptalinde o emir de iptal olur.
+      const dokunulmamis = await uretimEmirleri.dokunulmamisEmirIdleri(db, [...emirler.keys()]);
+      return [...emirler].flatMap(([id, e]) => (dokunulmamis.has(id) ? [] : [e]));
     })),
     // ADR 0018, 627 a: canlıya almada asıl planın son sözü ortak motordadır. Çözücü de plan modülündedir (ADR 0020); kayıt bağı kalkınca
     // plan servisi onu doğrudan çağırır (UYUM-BORCU P-B35).

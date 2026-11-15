@@ -7,21 +7,43 @@ import type { Kullanici } from '#cekirdek/yetki.ts';
 export interface SiparisOnaylandiOlayi {
   siparisId: number;
   kullanici: Kullanici;
+  // 3272: onay penceresinde değiştirilen proje numarası; verilmezse proje sipariş numarasından açılır.
+  projeKodu?: string | undefined;
 }
 
-export type SiparisOnaylandiDinleyicisi = (db: Db, olay: SiparisOnaylandiOlayi) => Promise<void>;
+// 3272-3 a: onayı geri alınan ve iptal edilen sipariş. Üretim emirleri kendiliğinden açılmış, işi başlamamış emri bu olaylarla
+// siparişten çözer ya da iptal eder; kural ve işlem onundur. Olay durum değişikliğiyle aynı işlemde verilir.
+export interface SiparisDurumOlayi {
+  siparisId: number;
+  kullanici: Kullanici;
+}
 
-const dinleyiciler: SiparisOnaylandiDinleyicisi[] = [];
+type Dinleyici<O> = (db: Db, olay: O) => Promise<void>;
+export type SiparisOnaylandiDinleyicisi = Dinleyici<SiparisOnaylandiOlayi>;
+export type SiparisDurumDinleyicisi = Dinleyici<SiparisDurumOlayi>;
 
 // Dönen işlev kaydı kaldırır (testler kendi dinleyicisini bırakır).
-export function siparisOnaylandiDinle(d: SiparisOnaylandiDinleyicisi): () => void {
-  dinleyiciler.push(d);
-  return () => {
-    const i = dinleyiciler.indexOf(d);
-    if (i >= 0) dinleyiciler.splice(i, 1);
+function olay<O>(): { dinle: (d: Dinleyici<O>) => () => void; bildir: (db: Db, o: O) => Promise<void> } {
+  const dinleyiciler: Dinleyici<O>[] = [];
+  return {
+    dinle: (d) => {
+      dinleyiciler.push(d);
+      return () => {
+        const i = dinleyiciler.indexOf(d);
+        if (i >= 0) dinleyiciler.splice(i, 1);
+      };
+    },
+    bildir: async (db, o) => { for (const d of [...dinleyiciler]) await d(db, o); },
   };
 }
 
-export async function siparisOnaylandiBildir(db: Db, olay: SiparisOnaylandiOlayi): Promise<void> {
-  for (const d of [...dinleyiciler]) await d(db, olay);
-}
+const onaylandi = olay<SiparisOnaylandiOlayi>();
+const onayiGeriAlindi = olay<SiparisDurumOlayi>();
+const iptalEdildi = olay<SiparisDurumOlayi>();
+
+export const siparisOnaylandiDinle = onaylandi.dinle;
+export const siparisOnaylandiBildir = onaylandi.bildir;
+export const siparisOnayiGeriAlindiDinle = onayiGeriAlindi.dinle;
+export const siparisOnayiGeriAlindiBildir = onayiGeriAlindi.bildir;
+export const siparisIptalEdildiDinle = iptalEdildi.dinle;
+export const siparisIptalEdildiBildir = iptalEdildi.bildir;

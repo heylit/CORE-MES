@@ -30,7 +30,7 @@ const eskiYetki = (y: Yetki): Yetki => {
   return eski.length === 1 ? ESKI : { biri: eski };
 };
 // Bölünmeden önce bu uçların hepsi eski işlemi isterdi (açılış seçenekleri onu rota.emre-kopyala ile).
-const YAZMA_UCU = 22;
+const YAZMA_UCU = 23;
 const izinli = (y: Yetki, islemler: ReadonlySet<string>): boolean => yetkiListesi(y).some((i) => islemler.has(i));
 
 // Kartın eşlemesi (3165 a, 3207 a; GUVENLIK-DENETIMI.md ilk madde): her yazma ucu ve eylemi. Eylemler arası takas (ör. plana-al
@@ -59,6 +59,8 @@ const YAZMA_ESLEMESI: Readonly<Record<string, readonly string[]>> = {
   'POST /adimli-emirler/:id/adim-sil': [E('adim-yaz')],
   'POST /adimli-emirler/:id/is-emirleri/:isEmriId/rework-adimi': [E('adim-yaz')],
   'POST /adimli-emirler/rotasiz': [E('rotasiz-ac')],
+  // 3272: siparişin eksik proje ve emirleri; rotadan açan da açar (onayla aynı ölçüt, UE-SA-06).
+  'POST /uretim-emirleri/siparis-acilisi/:siparisId/ac': [E('emir-ac'), 'rota.emre-kopyala'],
   // Okuma tarafında yalnız kendi eylemine açılanlar.
   'GET /adimli-emirler/:id/arsiv-onizleme': [E('iptal')],
   'GET /adimli-emirler/fason-firmalari': [E('duzenle'), E('adim-yaz')],

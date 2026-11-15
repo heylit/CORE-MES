@@ -11,7 +11,7 @@ import {
 import { sablonDurumGovdesi, rotaAdiGovdesi, rotaEkleGovdesi, rotaParametresi, rotaTurleriGovdesi, talimatSahneleriCevabi, talimatSahnesiKaydetGovdesi } from '#paylasilan/sozlesme/rota.ts';
 import { sablonDurumuYaz, rotaAdiYaz, rotaEkle, rotaTurleriYaz, talimatSahneleri, talimatSahnesiKaydet } from './servis.ts';
 import {
-  agac, emreKopyala, emreKopyalaToplu, rotaAdimlariToplu, emreUygula, patlatmaGetir, patlatmaOnizlemesi, fark, revizyonKunyeleri, geriGonder, malzemeAra, iptal, kaydet, kopyaIste, kopyala, malzemeKullanimi, onayaGonder, onayla, revizyonAyrintisi as ayrinti, revizyonOzeti, rotaListesi, secenekler,
+  agac, bekleyenEmreUygula, emreKopyala, emreKopyalaToplu, rotaAdimlariToplu, emreUygula, patlatmaGetir, patlatmaOnizlemesi, fark, revizyonKunyeleri, geriGonder, malzemeAra, iptal, kaydet, kopyaIste, kopyala, malzemeKullanimi, onayaGonder, onayla, revizyonAyrintisi as ayrinti, revizyonOzeti, rotaListesi, secenekler,
   adimEkipmaniKaydet, aparatKullanimi, olcuAletiTurleri, adimSartnameleriKaydet, ekAdimSartnameleriSabitle, isEmriSartnameleriCevabi as isEmriSartnameleriOku, revizyonSartnameleri, sartnameAktifYap, sartnameAyrintisi, sartnameEkle, sartnameKopyala,
   sartnameKunyeKaydet, sartnameListesi, sartnameSurumAc, sartnameTaslakKaydet, sartnameTaslakSil, sartnameYayinla, standartEkle,
   karttanTaslaklar, talimatListesi, talimatYaz, adimliTalimatYaz, talimatTaslakKaydet, talimatTaslakSil, talimatYayinla, talimatSablonDurumuYaz, talimatSablonEkle, talimatSablonKaydet, talimatSablonlari, talimatSablonu, talimatSablonKopyalari, talimatMedyasi, taslakAc, urunRevizyonlari, hamOnerisi, opNumaralari, yururlugeAl, gerceklesenKabulEt, gerceklesenSureYaz, sureler, sablonEkle, sablonKaydet, sablonListesi, sablonuSil, sablonuVarsayilanYap,
@@ -480,6 +480,16 @@ export const uclar = [
     parametre: emirParametresi,
     cevap: emreUygulaCevabi,
     isle: ({ db, kullanici, parametre }) => emreUygula(db, kullanici, parametre.id),
+  }),
+  // 3272-2 a: rota bekleyen emre türünün yürürlükteki rotası uygulanır (emir ayrıntısındaki "Rotayı uygula").
+  uc({
+    yontem: 'POST',
+    yol: '/rota/emirler/:id/bekleyen-rotayi-uygula',
+    yetki: 'rota.emre-kopyala',
+    tekrarKorumali: true,
+    parametre: emirParametresi,
+    cevap: emreUygulaCevabi,
+    isle: ({ db, kullanici, parametre }) => bekleyenEmreUygula(db, kullanici, parametre.id),
   }),
   uc({
     yontem: 'GET',

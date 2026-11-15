@@ -25,6 +25,7 @@ export interface EmirSatiri {
   iptal: string | null;
   saglamAdet: number | null;
   surum: number;
+  rotaBekliyor: boolean;
 }
 
 export interface KayitSatiri {
@@ -45,7 +46,7 @@ export interface KayitSatiri {
 const EMIR = `e.id, e.emir_no AS "emirNo", e.parca_no AS "parcaNo", e.parca_ad AS "parcaAd", e.adet,
   e.istasyon_id AS "istasyonId", e.durum, e.acan_id AS "acanId", ${ISO('e.acilma')} AS acilma,
   ${NULLU_ISO('e.baslama')} AS baslama, ${NULLU_ISO('e.bitis')} AS bitis, ${NULLU_ISO('e.iptal')} AS iptal,
-  e.saglam_adet AS "saglamAdet", e.malzeme_no AS "malzemeNo", e.surum`;
+  e.saglam_adet AS "saglamAdet", e.malzeme_no AS "malzemeNo", e.surum, e.rota_bekliyor AS "rotaBekliyor"`;
 
 // Birleşmiş partilerin hedef emri (kart #262); birleşmemiş emir listede yoktur.
 export function birlesmeHedefleri(db: Db, emirIdleri: readonly number[]): Promise<{ id: number; hedefId: number; hedefNo: string }[]> {

@@ -9,6 +9,7 @@ import { aletTurleri } from '../../kalibrasyon/disari.ts';
 import { TASLAK_AC, kaynakAnahtari, ilkAdimiDuzenle, dalDenetle, hazirlikBol, girdiOlabilirMi, onayaHazirlikHatalari, topluHataIletisi, hazirlikCeliskisi, revizyonFarki, revizyonHarfi, rotasizMamuller, sayiyaCevir, taslakDenetle, dortGozEngeli, taslakSureleri } from '../kurallar.ts';
 import type { FarkAdimi } from '../kurallar.ts';
 import * as s from '../sorgular.ts';
+import { bekleyenEmirlereUygula } from './bekleyen-emir.ts';
 import type { AdimKaynagi, RevizyonSatiri } from '../sorgular.ts';
 import {
   ROTA_VAR, TASLAK_ACIK, type TaslakKaynagi, adimlariKur, adimlariYaz, baskaUruneAdimlar, cevap, donguDenetle, gorunumBaglami, icerikYazimlari,
@@ -305,6 +306,7 @@ async function yururlugeGir(db: Db, kullanici: Kullanici, r: RevizyonSatiri): Pr
   await s.yururluktekiniOnayliYap(db, r.rotaId);
   const surum = await s.yururlugeAlYaz(db, r.id, kullanici.id);
   await olcumleriBosalt(db, kullanici.id, r.malzemeId, onceki, r.id);
+  await bekleyenEmirlereUygula(db, kullanici, r.malzemeId);
   return cevap(r.id, 'yururlukte', surum);
 }
 

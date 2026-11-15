@@ -44,3 +44,4 @@
 | Yetki: okuma `siparisler.oku`, taslak `siparisler.yaz`, onay/kapat/iptal `siparisler.onayla`; teklif okuma `oku`, bütün teklif yazmaları `yaz` | `siparisler.test.ts` ve `teklif.test.ts` `yetki: ...` |
 | ARA-01 (1242) genel arama kaynağı (`siparis` türü): sipariş no ya da müşteri sipariş no'sunda geçen kayıt; tam tutan, baştan eşleşen, yeniden eskiye; `%` ve `_` düz metin; fiyat dönmez; yetki liste ucuyla aynı (`siparisler.oku`, kapıyı çekirdek tutar) | `arama.test.ts` |
 | disari.ts sözleşmesi | `disari: ...` |
+| 3272: onay, onay geri alma ve iptal olay verir (`siparisOnaylandi`, `siparisOnayiGeriAlindi`, `siparisIptalEdildi`); dinleyici aynı işlemde koşar, reddi işlemi geri sarar. Onay gövdesi isteğe bağlı proje no taşır | uretim-emirleri `siparis-acilisi.test.ts`; `disari.test.ts` "SIP-17" |

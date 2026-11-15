@@ -690,3 +690,10 @@ export async function isEmriTalimatKunyesi(db: Db, isEmriId: number): Promise<{ 
   const a = await talimatKunyesiOku(db, isEmriId);
   return a === null || a.talimatSurumu === null ? null : { malzemeNo: a.malzemeNo, opNo: a.opNo, surum: a.talimatSurumu };
 }
+
+// 3272: sipariş onayında proje ve emir. Olay dinleyicileri ve çözücü kaydı kablolama.ts'tedir; rota bekleyen emirleri rota modülü okur.
+export {
+  dokunulmamisEmirIdleri, rotaBekleyenEmirler, siparisAcilisiCozuculeriKaydet, siparisIptalEdildiIptal, siparisOnayiGeriAlindiCoz, siparisOnaylandiAc,
+} from './siparis-acilisi.ts';
+export type { SiparisAcilisiCozuculeri, SiparisAcilisiRotasi } from './siparis-acilisi.ts';
+export type { RotaBekleyenEmir } from './sorgular.ts';
