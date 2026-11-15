@@ -60,3 +60,6 @@
 .sa-ol-arti:focus-visible, .sa-ol-firma:focus-visible { outline: 2px solid var(--hazard); outline-offset: 2px; }
 .sa-ol-arac { display: inline-flex; flex-wrap: wrap; align-items: end; gap: var(--b-2); }
 .sa-ol-kalite { align-self: center; margin-inline-end: auto; }
+/* Hücre alt satırındaki bağlantı (Kalite'de aç, firmaya bağla) soluk metin değil bağlantı gibi görünür. */
+.sa-ol-iki > small a, .sa-ol-kalite { color: var(--ink); text-decoration: underline; text-underline-offset: 2px; }
+.sa-ol-iki > small a:focus-visible, .sa-ol-kalite:focus-visible { outline: 2px solid var(--hazard); outline-offset: 2px; }

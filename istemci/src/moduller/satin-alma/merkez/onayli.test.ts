@@ -51,5 +51,14 @@ describe('3279-2 a müşteri onayı birleştirme', () => {
     expect(musteriOnayi(veri, 1, 50, 'ORN-Müşteri Hava', ['hizmet|isil', 'sarf|kesici'])).toEqual({ ad: 'ORN-Müşteri Hava', durum: 'sartli', sartlar: ['ORN kesici şartı'] });
     // Başka müşterinin onayı sayılmaz.
     expect(musteriOnayi(veri, 1, 99, 'ORN-Başka', ['hizmet|isil']).durum).toBe('yok');
+    // Aynı kategoride iki onay: en iyisi geçerli (süresi geçip onaysız düşen eskisi yenisini bastırmaz).
+    const iki = { ...veri, firmalar: veri.firmalar.map((f) => (f.firmaId !== 1 || f.kalite === null ? f : {
+      ...f, kalite: { ...f.kalite, onaylar: [...f.kalite.onaylar, { ...f.kalite.onaylar[0]!, durum: 'onaysiz' as const, suresiGecti: true }] },
+    })) };
+    expect(musteriOnayi(iki, 1, 50, 'ORN-Müşteri Hava', ['hizmet|isil']).durum).toBe('onayli');
+    // Kategorisiz talep: müşterinin bu firmadaki en iyi onayı.
+    expect(musteriOnayi(veri, 1, 50, 'ORN-Müşteri Hava', []).durum).toBe('onayli');
+    expect(musteriOnayi(veri, 2, 50, 'ORN-Müşteri Hava', []).durum).toBe('onaysiz');
+    expect(musteriOnayi(veri, 3, 50, 'ORN-Müşteri Hava', []).durum).toBe('yok');
   });
 });

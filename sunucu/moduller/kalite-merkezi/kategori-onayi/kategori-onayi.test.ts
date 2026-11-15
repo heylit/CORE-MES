@@ -221,6 +221,12 @@ describe('Kategori onayı uçları ve okuma (gerçek PostgreSQL, gerçek giriş)
     return r.json() as KmTedarikciOnaylariCevabi;
   };
 
+  // Belge firmanın tedarikçi kaydına bağlıdır (belge.bagli -> sup kaydı -> firmaId). Her test kendi kimlikleriyle kurar.
+  const belgeKur = async (sup: string, firmaId: number, belge: string) => {
+    await vt().sorgu("INSERT INTO kalite_merkezi_belge (koleksiyon, kimlik, govde, degistiren_id) VALUES ('sup', $1, jsonb_build_object('ad', 'Deneme', 'firmaId', $2::int), $3)", [sup, firmaId, yonId]);
+    await vt().sorgu("INSERT INTO kalite_merkezi_belge (koleksiyon, kimlik, govde, degistiren_id) VALUES ('belge', $1, jsonb_build_object('ad', 'Deneme.pdf', 'bagli', jsonb_build_object('col', 'sup', 'id', $2::text)), $3)", [belge, sup, yonId]);
+  };
+
   test('3279-2 yetki: yalnız onay işlemi okur ve yazar; yazan ve okuyan 403', async () => {
     for (const c of [yazan, okuyan]) {
       assert.equal((await onay(c, {})).statusCode, 403);
@@ -233,13 +239,7 @@ describe('Kategori onayı uçları ve okuma (gerçek PostgreSQL, gerçek giriş)
   });
 
   test('3279-2 müşteri ve diğer onay: kişi sunucudan, kapsam ve geçmiş yazılır; değiştirme sürümle, firma ve tür değişmez', async () => {
-    // Belge firmanın tedarikçi kaydına bağlıdır (belge.bagli -> sup kaydı -> firmaId).
-    const belgeKur = async (sup: string, firmaId: number, belge: string) => {
-      await vt().sorgu("INSERT INTO kalite_merkezi_belge (koleksiyon, kimlik, govde, degistiren_id) VALUES ('sup', $1, jsonb_build_object('ad', 'Deneme', 'firmaId', $2::int), $3)", [sup, firmaId, yonId]);
-      await vt().sorgu("INSERT INTO kalite_merkezi_belge (koleksiyon, kimlik, govde, degistiren_id) VALUES ('belge', $1, jsonb_build_object('ad', 'Deneme.pdf', 'bagli', jsonb_build_object('col', 'sup', 'id', $2::text)), $3)", [belge, sup, yonId]);
-    };
     await belgeKur('sup_onay_belge', f.ted, 'blg_onay');
-    await belgeKur('sup_baska_belge', f.musteri, 'blg_baska');
     const r = await onay(kalite, { belgeKimligi: 'blg_onay', bitis: '2027-12-31' });
     assert.equal(r.statusCode, 200, r.body);
     const { id } = r.json() as { id: number; surum: number };
@@ -274,8 +274,15 @@ describe('Kategori onayı uçları ve okuma (gerçek PostgreSQL, gerçek giriş)
     await red({ musteriFirmaId: f.ted }, 'musteriFirmaId');
     await red({ firmaId: f.musteri, musteriFirmaId: f.musteri }, 'firmaId');
     await red({ belgeKimligi: 'blg_yok' }, 'belgeKimligi');
-    // Başka firmanın tedarikçi kaydına bağlı belge bu firmanın onayına bağlanamaz (Risk N1).
-    await red({ belgeKimligi: 'blg_baska' }, 'belgeKimligi');
+    // Başka firmanın tedarikçi kaydına bağlı belge bu firmanın onayına bağlanamaz (Risk N1); silinmiş belge ve silinmiş tedarikçi kaydının belgesi de.
+    await belgeKur('sup_red_baska', f.musteri, 'blg_red_baska');
+    await red({ belgeKimligi: 'blg_red_baska' }, 'belgeKimligi');
+    await belgeKur('sup_red_silinen_belge', f.ted, 'blg_red_silinen');
+    await vt().sorgu("UPDATE kalite_merkezi_belge SET govde = NULL WHERE koleksiyon = 'belge' AND kimlik = 'blg_red_silinen'");
+    await red({ belgeKimligi: 'blg_red_silinen' }, 'belgeKimligi');
+    await belgeKur('sup_red_silinen_kayit', f.ted, 'blg_red_kayitsiz');
+    await vt().sorgu("UPDATE kalite_merkezi_belge SET govde = NULL WHERE koleksiyon = 'sup' AND kimlik = 'sup_red_silinen_kayit'");
+    await red({ belgeKimligi: 'blg_red_kayitsiz' }, 'belgeKimligi');
     await red({ kapsam: [{ kategoriTuru: 'hizmet', kategoriKodu: 'olmayan' }] }, 'kapsam');
     await red({ kapsam: [] }, 'kapsam');
     await red({ durum: 'sartli' }, 'aciklama');
@@ -283,15 +290,28 @@ describe('Kategori onayı uçları ve okuma (gerçek PostgreSQL, gerçek giriş)
   });
 
   test('3279-2 onaylı liste: şirket dışı onaylar belge yerine yalnız var mı ile; süresi geçen onaysız; Askıda reddi gevşemez (K4)', async () => {
-    await vt().sorgu("UPDATE kalite_merkezi_tedarikci_onayi SET bitis = DATE '2020-01-01' WHERE tur = 'diger' AND firma_id = $1", [f.ted]);
-    const m = (await vt().tx((db) => onayliListe(db))).get(f.ted)!;
+    // Kendi firması ve kayıtlarıyla kurulur; öteki testlerin bıraktığı veriye dayanmaz.
+    const t = await firma('Deneme Liste Onay', 'tedarikci');
+    const sup = await istek(kalite, '/kalite-merkezi/kayitlar/sup/sup_liste_onay/onayla', { govde: { ad: 'Deneme Liste Onay', onay: 'Onaylı', firmaId: t }, surum: null });
+    assert.equal(sup.statusCode, 200, sup.body);
+    assert.equal((await karar(kalite, { firmaId: t, durum: 'onayli' })).statusCode, 200);
+    await belgeKur('sup_liste_onay_belge', t, 'blg_liste_onay');
+    const mu = await onay(kalite, { firmaId: t, durum: 'onaysiz', belgeKimligi: 'blg_liste_onay' });
+    assert.equal(mu.statusCode, 200, mu.body);
+    const di = await onay(kalite, { firmaId: t, tur: 'diger', musteriFirmaId: null, ad: 'Deneme sınıf', kapsamTumu: true, kapsam: [] });
+    assert.equal(di.statusCode, 200, di.body);
+    await vt().sorgu("UPDATE kalite_merkezi_tedarikci_onayi SET bitis = DATE '2020-01-01' WHERE tur = 'diger' AND firma_id = $1", [t]);
+    const m = (await vt().tx((db) => onayliListe(db))).get(t)!;
     assert.deepEqual(m.onaylar.map((o) => [o.tur, o.musteriAd, o.durum, o.suresiGecti, o.belgeVar]), [['musteri', 'Deneme Müşteri', 'onaysiz', false, true], ['diger', null, 'onaysiz', true, false]]);
     assert.ok(!('belgeKimligi' in m.onaylar[0]!));
-    const s = await istek(kalite, '/kalite-merkezi/kayitlar/sup/sup_liste/onayla', { govde: { ad: 'Deneme', onay: 'Askıda', firmaId: f.ted }, surum: (await vt().tek<{ surum: string }>("SELECT surum FROM kalite_merkezi_belge WHERE koleksiyon = 'sup' AND kimlik = 'sup_liste'"))!.surum });
-    assert.equal(s.statusCode, 200, s.body);
-    const askida = (await vt().tx((db) => onayliListe(db))).get(f.ted)!;
+    // K4: müşteri onayı olsa da firma askıdaysa kategori kararları onaysız.
+    assert.equal((await onay(kalite, { id: (mu.json() as { id: number }).id, firmaId: t, durum: 'onayli', belgeKimligi: 'blg_liste_onay', surum: 1 })).statusCode, 200);
+    const s2 = await istek(kalite, '/kalite-merkezi/kayitlar/sup/sup_liste_onay/onayla', { govde: { ad: 'Deneme Liste Onay', onay: 'Askıda', firmaId: t }, surum: (sup.json() as { surum: number }).surum });
+    assert.equal(s2.statusCode, 200, s2.body);
+    const askida = (await vt().tx((db) => onayliListe(db))).get(t)!;
     assert.equal(askida.durum, 'Askıda');
-    assert.ok(askida.kategoriler.every((k) => k.durum === 'onaysiz'));
+    assert.ok(askida.kategoriler.length > 0 && askida.kategoriler.every((k) => k.durum === 'onaysiz'));
+    assert.equal(askida.onaylar[0]!.durum, 'onayli');
   });
 });
 
