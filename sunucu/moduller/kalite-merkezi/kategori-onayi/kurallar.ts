@@ -80,7 +80,7 @@ export const ONAY_ILETILERI = {
   firma: 'Onay yalnız Müşteri-Tedarikçi\'deki aktif tedarikçi firmaya verilir.',
   musteri: 'Müşteri onayında müşteri, Müşteri-Tedarikçi\'deki aktif müşteri firması olmalıdır.',
   kendisi: 'Firma kendi kendisinin müşterisi olamaz.',
-  belge: 'Belge Kalite Merkezi belgelerinde bulunamadı.',
+  belge: 'Belge bu firmanın Kalite Merkezi belgelerinde bulunamadı.',
   onayYok: 'Onay bulunamadı.',
   degismez: 'Onayın firması ve türü değişmez; yeni onay ekleyin.',
 } as const;

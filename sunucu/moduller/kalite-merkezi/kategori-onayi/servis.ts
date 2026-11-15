@@ -122,7 +122,7 @@ export async function digerOnayKaydet(db: Db, kullanici: Kullanici, g: KmTedarik
     const m = await firmaOzeti(db, g.musteriFirmaId);
     if (m === null || !musteriFirmasiMi(m)) throw dogrulama(ONAY_ILETILERI.musteri, 'musteriFirmaId');
   }
-  if (g.belgeKimligi !== null && !(await sorgular.belgeVarMi(db, g.belgeKimligi))) throw dogrulama(ONAY_ILETILERI.belge, 'belgeKimligi');
+  if (g.belgeKimligi !== null && !(await sorgular.firmaBelgesiMi(db, g.belgeKimligi, g.firmaId))) throw dogrulama(ONAY_ILETILERI.belge, 'belgeKimligi');
   const once = g.id === null ? null : await sorgular.digerOnayKilitle(db, g.id);
   if (g.id !== null) {
     if (once === null) throw bulunamadi(ONAY_ILETILERI.onayYok);

@@ -233,7 +233,13 @@ describe('Kategori onayı uçları ve okuma (gerçek PostgreSQL, gerçek giriş)
   });
 
   test('3279-2 müşteri ve diğer onay: kişi sunucudan, kapsam ve geçmiş yazılır; değiştirme sürümle, firma ve tür değişmez', async () => {
-    await vt().sorgu("INSERT INTO kalite_merkezi_belge (koleksiyon, kimlik, govde, degistiren_id) VALUES ('belge', 'blg_onay', '{\"ad\":\"Deneme.pdf\"}', $1)", [yonId]);
+    // Belge firmanın tedarikçi kaydına bağlıdır (belge.bagli -> sup kaydı -> firmaId).
+    const belgeKur = async (sup: string, firmaId: number, belge: string) => {
+      await vt().sorgu("INSERT INTO kalite_merkezi_belge (koleksiyon, kimlik, govde, degistiren_id) VALUES ('sup', $1, jsonb_build_object('ad', 'Deneme', 'firmaId', $2::int), $3)", [sup, firmaId, yonId]);
+      await vt().sorgu("INSERT INTO kalite_merkezi_belge (koleksiyon, kimlik, govde, degistiren_id) VALUES ('belge', $1, jsonb_build_object('ad', 'Deneme.pdf', 'bagli', jsonb_build_object('col', 'sup', 'id', $2::text)), $3)", [belge, sup, yonId]);
+    };
+    await belgeKur('sup_onay_belge', f.ted, 'blg_onay');
+    await belgeKur('sup_baska_belge', f.musteri, 'blg_baska');
     const r = await onay(kalite, { belgeKimligi: 'blg_onay', bitis: '2027-12-31' });
     assert.equal(r.statusCode, 200, r.body);
     const { id } = r.json() as { id: number; surum: number };
@@ -268,6 +274,8 @@ describe('Kategori onayı uçları ve okuma (gerçek PostgreSQL, gerçek giriş)
     await red({ musteriFirmaId: f.ted }, 'musteriFirmaId');
     await red({ firmaId: f.musteri, musteriFirmaId: f.musteri }, 'firmaId');
     await red({ belgeKimligi: 'blg_yok' }, 'belgeKimligi');
+    // Başka firmanın tedarikçi kaydına bağlı belge bu firmanın onayına bağlanamaz (Risk N1).
+    await red({ belgeKimligi: 'blg_baska' }, 'belgeKimligi');
     await red({ kapsam: [{ kategoriTuru: 'hizmet', kategoriKodu: 'olmayan' }] }, 'kapsam');
     await red({ kapsam: [] }, 'kapsam');
     await red({ durum: 'sartli' }, 'aciklama');

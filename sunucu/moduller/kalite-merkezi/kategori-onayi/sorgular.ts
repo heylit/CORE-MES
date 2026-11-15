@@ -149,8 +149,17 @@ export async function digerOnayGecmisiYaz(db: Db, onayId: number, oncekiDurum: K
 }
 
 // Belge Kalite Merkezi'nin belge deposundadır (koleksiyon 'belge'); onay yalnız kimliğiyle bağlanır.
-export async function belgeVarMi(db: Db, kimlik: string): Promise<boolean> {
-  return (await db.tek<{ v: boolean }>("SELECT EXISTS (SELECT 1 FROM kalite_merkezi_belge WHERE koleksiyon = 'belge' AND kimlik = $1 AND govde IS NOT NULL) AS v", [kimlik]))?.v ?? false;
+// 3279-2 a: belge bu firmanın tedarikçi kaydına bağlı olmalı (belge.bagli = sup kaydı, kaydın firmaId'si bu firma). Ad ile eşlenen kaydın
+// belgesi firma kimliği taşımadığından kabul edilmez.
+export async function firmaBelgesiMi(db: Db, kimlik: string, firmaId: number): Promise<boolean> {
+  return (await db.tek<{ v: boolean }>(
+    `SELECT EXISTS (
+       SELECT 1 FROM kalite_merkezi_belge b
+       JOIN kalite_merkezi_belge s ON s.koleksiyon = 'sup' AND s.kimlik = b.govde->'bagli'->>'id' AND s.govde IS NOT NULL
+      WHERE b.koleksiyon = 'belge' AND b.kimlik = $1 AND b.govde IS NOT NULL AND b.govde->'bagli'->>'col' = 'sup'
+        AND s.govde->'firmaId' = to_jsonb($2::int)) AS v`,
+    [kimlik, firmaId],
+  ))?.v ?? false;
 }
 
 export async function digerOnayliFirmalar(db: Db): Promise<number[]> {
