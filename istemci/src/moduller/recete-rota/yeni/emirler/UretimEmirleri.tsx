@@ -261,7 +261,9 @@ export function YeniEmirFormu({ durum: d, yetki, komut, acildi, git, ilkUrun }: 
     const govde = {
       itemId: f.urun, qty: adet.deger, start: f.baslangic, due: f.teslim, priority: Number(f.oncelik), note: f.not.trim(), tur: f.tur, taslak: f.durum === 'taslak',
       ...(rotali ? { rezerve: f.rezerve } : { rotasiz: true }),
-      ...(rotali && rotaSecimi ? { rotaId: Number(rotaSecimi.secili) } : {}),
+      // Rota yalnız elle seçildiyse gider; seçilmediyse sahibi emrin türünün rotasını bulur. Proje penceresinde sipariş partisi seçilince
+      // tür partiden gelir, rota da o türün rotası olur (formun ilk türüne göre seçilmiş rota partiye taşınmaz).
+      ...(rotali && rotaSecimi && f.rota !== '' ? { rotaId: Number(rotaSecimi.secili) } : {}),
       ...(cokOzet ? { cokKatmanli: true, stoktanDugumler: cokOzet.gonderilecek } : {}),
     };
     const c = await komut.calistir('emir-ac', govde);
