@@ -307,6 +307,7 @@ export const ROL_MATRISI = {
       'sayfa.degisiklik-yonetimi', 'sayfa.geometri', 'sayfa.idari-isler', 'sayfa.ik-islemlerim', 'sayfa.kalite-merkezi',
       'sayfa.malzemeler', 'sayfa.mesaj', 'sayfa.ortak-dosyalar', 'sayfa.profil', 'sayfa.proses', 'sayfa.recete-rota', 'sayfa.rota',
       'sayfa.taleplerim', 'sayfa.uretim-emirleri', 'stok.istek',
+      'projeler.gorev-isle', 'projeler.gorev-kontrol', 'sayfa.proje-gorevlerim',
     ],
   },
   satin_alma: {

@@ -299,13 +299,16 @@ describe('rol dağılımı: Arkon rolleri, bakım rolü ve malzeme tanım yetkis
 
   // Yapan ile onaylayan ayrı (kullanıcı kararı 3277-4 a): ayna testi göç, beklenti ve belgenin eşitliğine bakar; üçü birlikte
   // değişirse yeşil kalır. Bu test dağılımın kendisini göçün kurduğu veritabanından ölçer.
-  test('proses mühendisi rota, şartname, CNC kurulum ve değişiklik işini yazar; hiçbir onay, yayın ya da karar işlemini taşımaz', async () => {
+  // Tek istisna (kullanıcı kararı 3269-3 b): proje görevinin kontrolü (projeler.gorev-kontrol). Kişi yalnız kendisine atanan
+  // kontrolü onaylar; rota, şartname ve değişiklik onayları yine taşınmaz.
+  test('proses mühendisi rota, şartname, CNC kurulum, değişiklik ve proje görevi işini yazar; proje görevi kontrolü dışında onay, yayın ya da karar işlemini taşımaz', async () => {
     const islemler = new Set((await vt().sorgu<{ islem: string }>(
       'SELECT ri.islem FROM rol_islemi ri JOIN rol r ON r.id = ri.rol_id WHERE r.kod = $1', ['proses_muhendisi'],
     )).map((r) => r.islem));
     const yazar = [
       'rota.taslak-ac', 'rota.revizyon-yaz', 'rota.onaya-gonder', 'rota.talimat-yaz', 'rota.sartname-yaz', 'rota.sure-kabul',
       'cnc-kurulum.yaz', 'degisiklik-yonetimi.talep-ac', 'degisiklik-yonetimi.revizyon-hazirla',
+      'projeler.gorev-isle', 'projeler.gorev-kontrol', 'sayfa.proje-gorevlerim',
     ];
     const tasimaz = [
       'rota.onayla', 'rota.sartname-yayinla', 'rota.emre-kopyala', 'cnc-kurulum.hazirlik-onayla',
