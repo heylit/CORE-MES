@@ -9,7 +9,7 @@ import { OrtakDosyalar, type Gorunum } from './OrtakDosyalar.tsx';
 
 vi.mock('../belge-merkezi/disari.ts', () => ({ DosyaHatasi: class extends Error {}, dosyaYukle: vi.fn(async () => 'a'.repeat(64)) }));
 
-const klasor = (k: Partial<Klasor> & { id: number; ad: string }): Klasor => ({ ustId: null, ozelYetki: false, duzey: 'gorur', dosyaSayisi: 0, surum: 1, ...k });
+const klasor = (k: Partial<Klasor> & { id: number; ad: string }): Klasor => ({ ustId: null, ozelYetki: false, duzey: 'gorur', dosyaSayisi: 0, surum: 1, kaynak: null, ...k });
 const ORTAK = klasor({ id: 1, ad: 'Ortak', ozelYetki: true });
 const DUYURU = klasor({ id: 2, ustId: 1, ad: 'Duyurular', dosyaSayisi: 1 });
 const DOSYA: OrtakDosya = {

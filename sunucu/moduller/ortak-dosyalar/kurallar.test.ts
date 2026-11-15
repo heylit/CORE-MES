@@ -1,7 +1,9 @@
 import assert from 'node:assert/strict';
-import { test } from 'node:test';
+import { describe, test } from 'node:test';
 import type { VerilenDuzey } from '#paylasilan/sozlesme/ortak-dosyalar.ts';
-import { adAnahtari, duzeyCoz, enAzMi, gorunurMu, yetkiKaynagi } from './kurallar.ts';
+import {
+  adAnahtari, adOneki, arsivdeMi, duzeyCoz, enAzMi, firmaKlasorAdi, gorunurMu, projeKlasorAdi, sablonDenetle, siparisKlasorAdi, sistemAdi, yetkiKaynagi,
+} from './kurallar.ts';
 import type { KlasorDugumu } from './kurallar.ts';
 
 // Ağaç: 1 Ortak (özel) > 2 Duyurular > 3 Eski duyurular; 4 Kalite (özel) > 5 Şikayetler (özel).
@@ -65,4 +67,44 @@ test('OD-6 ad anahtarı tr-TR küçük harf ve birleşik biçimdir', () => {
   assert.notEqual(adAnahtari('I'), adAnahtari('i'));
   assert.equal(adAnahtari('  Rapor.pdf '), 'rapor.pdf');
   assert.equal(adAnahtari('ş'), adAnahtari('ş'));
+});
+
+describe('kayda bağlı klasör kuralları (kart 3288)', () => {
+  test('KK-1 sistem adı: ayırıcı ve denetim karakteri tireye, boşluk teke, 120 karakterde kesilir; boş ad yedeğe düşer', () => {
+    assert.equal(sistemAdi('  ORN A/B\\C\tD  ', 'Y'), 'ORN A-B-C-D');
+    assert.equal([...sistemAdi('Ş'.repeat(200), 'Y')].length, 120);
+    assert.equal(sistemAdi('   ', 'Y'), 'Y');
+    assert.equal(sistemAdi('..', 'Y'), 'Y');
+    assert.equal(firmaKlasorAdi({ id: 7, kod: null, ad: 'ORN Döküm' }), 'M-7 ORN Döküm');
+    assert.equal(firmaKlasorAdi({ id: 7, kod: ' ORN-M7 ', ad: 'ORN Döküm' }), 'ORN-M7 ORN Döküm');
+    assert.equal(siparisKlasorAdi({ id: 1, no: 'SS-2026-0001', musteriSiparisNo: ' ', iptal: false }), 'SS-2026-0001');
+    assert.equal(projeKlasorAdi({ id: 1, kod: 'ORN-P-1', ad: 'Mil' }), 'ORN-P-1 Mil');
+  });
+
+  test('KK-5 ad önerisi en yakın sipariş ya da proje klasöründen; sistem dışı ağaçta yok', () => {
+    const yol = [{ ad: 'Müşteriler', kaynakTur: 'kok' }, { ad: 'ORN-M1 ORN', kaynakTur: 'firma' }, { ad: 'SS-2026-0001 (PO-1)', kaynakTur: 'siparis' }];
+    assert.deepEqual(adOneki(yol), { onek: 'SS-2026-0001', altKlasor: null });
+    assert.deepEqual(adOneki([...yol, { ad: 'Çizim ve model', kaynakTur: null }]), { onek: 'SS-2026-0001', altKlasor: 'Çizim-ve-model' });
+    assert.deepEqual(adOneki([...yol, { ad: 'ORN-P-1 Mil', kaynakTur: 'proje' }, { ad: 'Üretim', kaynakTur: null }]), { onek: 'ORN-P-1', altKlasor: 'Üretim' });
+    assert.equal(adOneki([{ ad: 'Duyurular', kaynakTur: null }]), null);
+  });
+
+  test('KK-7 arşivdeki klasörün kendisi ve altı arşivde sayılır; döngü arşivde sayılır', () => {
+    const k = new Map([
+      [1, { id: 1, ustId: null, ozelYetki: true, arsiv: false }],
+      [2, { id: 2, ustId: 1, ozelYetki: false, arsiv: true }],
+      [3, { id: 3, ustId: 2, ozelYetki: false, arsiv: false }],
+      [4, { id: 4, ustId: 5, ozelYetki: false, arsiv: false }],
+      [5, { id: 5, ustId: 4, ozelYetki: false, arsiv: false }],
+    ]);
+    assert.equal(arsivdeMi(1, k), false);
+    assert.equal(arsivdeMi(2, k), true);
+    assert.equal(arsivdeMi(3, k), true);
+    assert.equal(arsivdeMi(4, k), true);
+  });
+
+  test('KK-6 şablon adı tr-TR harf duyarsız tekil', () => {
+    assert.equal(sablonDenetle(['Kalite', 'Teklif']), null);
+    assert.notEqual(sablonDenetle(['İç', 'iç']), null);
+  });
 });

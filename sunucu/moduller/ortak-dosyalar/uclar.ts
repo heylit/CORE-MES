@@ -1,11 +1,16 @@
 import { ikiliCevap, uc } from '#cekirdek/uc.ts';
 import {
+  ayarlarCevabi, kayitParametresi, kaynakKlasoruCevabi, mevcutAcCevabi, mevcutAcGovdesi, mevcutCevabi, sablonGovdesi, topluGeriAlCevabi,
+  topluIsParametresi,
+} from '#paylasilan/sozlesme/ortak-dosyalar.ts';
+import {
   aramaSorgusu, dosyaListesiCevabi, dosyaParametresi, dosyaSemasi, dosyalarCevabi, gecmisCevabi, klasorAcGovdesi, klasorParametresi, klasorSemasi,
   klasorlerCevabi, surumParametresi, surumlerCevabi, surumluGovde, yetkiCevabi, yetkiGovdesi, yukleGovdesi,
 } from '#paylasilan/sozlesme/ortak-dosyalar.ts';
 import {
   arsiv, arsivDegistir, gecmis, indir, klasorAc, klasorDosyalari, klasorler, sonEklenenler, surumler, yetkiOku, yetkiYazKomutu, yukle,
 } from './servis.ts';
+import { ayarlar, kaynakKlasoruBul, kokAc, mevcutAc, mevcutSayim, sablonKaydet, topluArsiv, yenidenDene } from './kayit-klasorleri.ts';
 
 // İşlem sayfayı açar; klasör düzeyi (ADR 0030) her uçta servis içinde, oturumdaki kişinin rollerinden çözülür. Yetki sekmesi ayrı
 // işlemdir ve yalnız yönetici rolündedir. Yollar klasör kimliğini taşır: denetim kaydı klasöre göre okunabilsin (UYUM-BORCU).
@@ -77,5 +82,43 @@ export const uclar = [
     yontem: 'POST', yol: '/ortak-dosyalar/klasorler/:klasorId/yetki', yetki: YETKI_VER, parametre: klasorParametresi, govde: yetkiGovdesi,
     cevap: yetkiCevabi,
     isle: ({ db, kullanici, parametre, govde }) => yetkiYazKomutu(db, kullanici, parametre.klasorId, govde),
+  }),
+  // Kayda bağlı klasörler (kart 3288). Kayıt ekranındaki "Klasör" bağlantısı; görünmeyen klasörde 404.
+  uc({
+    yontem: 'GET', yol: '/ortak-dosyalar/kayit/:tur/:id', yetki: SAYFA, parametre: kayitParametresi, cevap: kaynakKlasoruCevabi,
+    isle: ({ db, kullanici, parametre }) => kaynakKlasoruBul(db, kullanici, parametre.tur, parametre.id),
+  }),
+  // Ayarlar yalnız yetki işlemiyle (Risk K4 a: yeni işlem açılmaz).
+  uc({
+    yontem: 'GET', yol: '/ortak-dosyalar/ayarlar', yetki: YETKI_VER, cevap: ayarlarCevabi,
+    isle: ({ db }) => ayarlar(db),
+  }),
+  uc({
+    yontem: 'POST', yol: '/ortak-dosyalar/ayarlar/kok-ac', yetki: YETKI_VER, tekrarKorumali: true, cevap: ayarlarCevabi,
+    isle: ({ db, kullanici }) => kokAc(db, kullanici),
+  }),
+  uc({
+    yontem: 'POST', yol: '/ortak-dosyalar/ayarlar/sablon', yetki: YETKI_VER, govde: sablonGovdesi, cevap: ayarlarCevabi,
+    isle: ({ db, govde }) => sablonKaydet(db, govde),
+  }),
+  uc({
+    yontem: 'POST', yol: '/ortak-dosyalar/ayarlar/acilamayan/:tur/:id/yeniden-dene', yetki: YETKI_VER, parametre: kayitParametresi, cevap: ayarlarCevabi,
+    isle: ({ db, kullanici, parametre }) => yenidenDene(db, kullanici, parametre.tur, parametre.id),
+  }),
+  uc({
+    yontem: 'GET', yol: '/ortak-dosyalar/ayarlar/mevcut', yetki: YETKI_VER, cevap: mevcutCevabi,
+    isle: ({ db }) => mevcutSayim(db),
+  }),
+  uc({
+    yontem: 'POST', yol: '/ortak-dosyalar/ayarlar/mevcut/ac', yetki: YETKI_VER, tekrarKorumali: true, govde: mevcutAcGovdesi, cevap: mevcutAcCevabi,
+    isle: ({ db, kullanici, govde }) => mevcutAc(db, kullanici, govde),
+  }),
+  uc({
+    yontem: 'POST', yol: '/ortak-dosyalar/ayarlar/toplu/:topluIs/arsivle', yetki: YETKI_VER, parametre: topluIsParametresi, cevap: topluGeriAlCevabi,
+    isle: ({ db, kullanici, parametre }) => topluArsiv(db, kullanici, parametre.topluIs, true),
+  }),
+  uc({
+    yontem: 'POST', yol: '/ortak-dosyalar/ayarlar/toplu/:topluIs/arsivden-cikar', yetki: YETKI_VER, parametre: topluIsParametresi, cevap: topluGeriAlCevabi,
+    isle: ({ db, kullanici, parametre }) => topluArsiv(db, kullanici, parametre.topluIs, false),
   }),
 ];

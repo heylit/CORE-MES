@@ -21,3 +21,20 @@ ve bütün ağacı veritabanından okuyup düzeyi çözer. Görünmeyen klasör 
 
 ## Yalnız ekranda kalan
 - Düğmelerin gizlenmesi ya da pasifliği (yükle, alt klasör, arşiv, Yetkiler sekmesi). Sunucu her komutta yeniden denetler.
+
+## Kayda bağlı klasörler (kart 3288; ADR 0030 eki)
+YETKI = `ortak-dosyalar.yetki-ver` (yalnız yönetici rolü; Risk K4 a: yeni işlem yok).
+
+| Uç | İşlem | Sunucudaki kurallar | Test |
+|---|---|---|---|
+| `GET /ortak-dosyalar/kayit/:tur/:id` | SAYFA | klasör kişiye görünmüyorsa ya da yoksa 404 | KK-10 |
+| `GET /ortak-dosyalar/ayarlar` | YETKI | açılamayan satırının etiketi kayıttan (veritabanında) | KK-8, KK-9 |
+| `POST /ortak-dosyalar/ayarlar/kok-ac` | YETKI; tekrar korumalı | bir kez; aynı adlı kökte 409; düzeyler 2067-5 a | KK-9 |
+| `POST /ortak-dosyalar/ayarlar/sablon` | YETKI | ad şeması, tekil | KK-6 |
+| `POST /ortak-dosyalar/ayarlar/acilamayan/:tur/:id/yeniden-dene` | YETKI | yalnız listedeki satır; yoksa 404 | KK-8 |
+| `GET /ortak-dosyalar/ayarlar/mevcut` | YETKI | yalnız sayı | KK-11 |
+| `POST /ortak-dosyalar/ayarlar/mevcut/ac` | YETKI; tekrar korumalı | kök şart; onaylanan sayı değişmişse 409; grup 100; toplu iş kimliği | KK-11 |
+| `POST /ortak-dosyalar/ayarlar/toplu/:topluIs/arsivle`, `/arsivden-cikar` | YETKI | yalnız o toplu işin klasörleri; dosyalı klasör atlanır; yoksa 404 | KK-11 |
+
+- Sistem yazması (olay dinleyicisi, dilim 2) klasör düzeyine takılmaz: kaydın kendi ucu yetkiyi denetlemiştir. Olusturan kişi kaydı açandır.
+- Günlüğe kayıt adı yazılmaz; ad yalnız veritabanında (klasör adı, açılamayan satırının zinciri).

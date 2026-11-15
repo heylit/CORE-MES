@@ -24,6 +24,13 @@ export const dosyaParametresi = z.object({ klasorId: id, dosyaId: id });
 export const surumParametresi = z.object({ klasorId: id, dosyaId: id, sira: id });
 export const aramaSorgusu = z.object({ ara: z.string().trim().max(AZAMI_AD).optional() });
 
+// Kayda bağlı (sistem) klasörün kaynağı (kart 3288, ADR 0030 eki): adı kayıttan gelir, kişi adını değiştiremez.
+export const KAYNAK_TURLERI = ['kok', 'firmasiz-projeler', 'firma', 'siparissiz-projeler', 'siparis', 'proje'] as const;
+export type KaynakTuru = (typeof KAYNAK_TURLERI)[number];
+// Klasörü açılan kayıt türleri; kayıt ekranındaki "Klasör" bağlantısı bunlarla sorulur.
+export const KAYIT_TURLERI = ['firma', 'siparis', 'proje'] as const;
+export type KayitTuru = (typeof KAYIT_TURLERI)[number];
+
 export const klasorSemasi = z.object({
   id: z.number().int(),
   ustId: z.number().int().nullable(),
@@ -33,6 +40,7 @@ export const klasorSemasi = z.object({
   duzey: z.enum(KLASOR_DUZEYLERI),
   dosyaSayisi: z.number().int().nonnegative(),
   surum: surumSemasi,
+  kaynak: z.object({ tur: z.enum(KAYNAK_TURLERI), id: z.number().int().nullable() }).nullable(),
 });
 export const klasorlerCevabi = z.object({
   klasorler: z.array(klasorSemasi),
@@ -59,6 +67,8 @@ export const dosyalarCevabi = z.object({
   klasor: klasorSemasi,
   altKlasorler: z.array(klasorSemasi),
   dosyalar: z.array(dosyaSemasi),
+  // Yükleme adı önerisi (zorunlu değil): en yakın sipariş ya da proje klasörünün numarası ve bu klasörün adı.
+  adOnerisi: z.object({ onek: z.string(), altKlasor: z.string().nullable() }).nullable(),
 });
 export const dosyaListesiCevabi = z.object({ dosyalar: z.array(dosyaSemasi) });
 
@@ -105,7 +115,36 @@ export const yetkiGovdesi = z.object({
   satirlar: z.array(yetkiSatiri).max(200),
 }).refine((g) => new Set(g.satirlar.map((s) => s.rolId)).size === g.satirlar.length, { message: 'Bir rol iki kez yazılamaz.', path: ['satirlar'] });
 
+// Ayarlar (yalnız `ortak-dosyalar.yetki-ver`): kök, alt klasör şablonu, açılamayan klasörler, toplu işler.
+const sablonAdi = ad;
+export const sablonGovdesi = z.object({ siparis: z.array(sablonAdi).max(20), proje: z.array(sablonAdi).max(20) });
+export const ayarlarCevabi = z.object({
+  kok: z.object({ id: z.number().int(), ad: z.string() }).nullable(),
+  sablon: z.object({ siparis: z.array(z.string()), proje: z.array(z.string()) }),
+  acilamayan: z.array(z.object({
+    tur: z.enum(KAYIT_TURLERI), id: z.number().int(), etiket: z.string(), neden: z.string(), zaman: zamanSemasi,
+  })),
+  topluIsler: z.array(z.object({ id: z.uuid(), klasorSayisi: z.number().int().nonnegative(), arsivde: z.number().int().nonnegative(), zaman: zamanSemasi })),
+});
+export const kayitParametresi = z.object({ tur: z.enum(KAYIT_TURLERI), id });
+export const topluIsParametresi = z.object({ topluIs: z.uuid() });
+export const kayitSayilari = z.object({ firma: z.number().int().nonnegative(), siparis: z.number().int().nonnegative(), proje: z.number().int().nonnegative() });
+export const mevcutCevabi = z.object({ bagli: z.boolean(), kokVar: z.boolean(), klasorsuz: kayitSayilari });
+// Toplu komut gruplar halinde ilerler (Risk K4 c): her çağrı bir grup açar, kendi transaction'ındadır; istemci kalan bitene dek çağırır.
+// İlk çağrıda gösterilen sayı gönderilir; değişmişse komut durur (K4 e).
+export const mevcutAcGovdesi = z.object({ topluIs: z.uuid(), beklenen: kayitSayilari.nullable() });
+export const mevcutAcCevabi = z.object({ acilan: z.number().int().nonnegative(), acilamayan: z.number().int().nonnegative(), kalan: z.number().int().nonnegative() });
+export const topluGeriAlCevabi = z.object({ arsivlenen: z.number().int().nonnegative(), atlanan: z.number().int().nonnegative() });
+export const kaynakKlasoruCevabi = z.object({ klasorId: z.number().int() });
+
 export type Klasor = z.output<typeof klasorSemasi>;
+export type AyarlarCevabi = z.output<typeof ayarlarCevabi>;
+export type SablonGovdesi = z.input<typeof sablonGovdesi>;
+export type MevcutCevabi = z.output<typeof mevcutCevabi>;
+export type MevcutAcGovdesi = z.input<typeof mevcutAcGovdesi>;
+export type MevcutAcCevabi = z.output<typeof mevcutAcCevabi>;
+export type TopluGeriAlCevabi = z.output<typeof topluGeriAlCevabi>;
+export type KaynakKlasoruCevabi = z.output<typeof kaynakKlasoruCevabi>;
 export type KlasorlerCevabi = z.output<typeof klasorlerCevabi>;
 export type OrtakDosya = z.output<typeof dosyaSemasi>;
 export type DosyalarCevabi = z.output<typeof dosyalarCevabi>;

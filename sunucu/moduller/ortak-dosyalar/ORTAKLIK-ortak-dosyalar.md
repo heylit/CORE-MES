@@ -19,3 +19,12 @@ Modülün tuttuğu ve başka modülde de olabilecek kavramlar. Kaynak: `sunucu/g
 | Dosya içeriği | özet ve boyut | `ortak_dosyalar_surum.ozet`, `boyut` | `dosya` modülü (ADR 0009), `dosyaTutamagi('ortak-dosyalar')` |
 | Belge (onaylı, revizyonlu) | tutmaz | - | Belge Merkezi'nindir (ADR 0026); buraya taşınmaz |
 | Klasör, klasör düzeyi, sürüm, arşiv | sahibi | yukarıdaki tablolar | başka modüle açılmaz |
+
+## Kayda bağlı klasörler (kart 3288)
+| Kavram | Modül ne tutuyor | Yer | Bağ |
+|---|---|---|---|
+| Firma (müşteri) | kimlik; ad klasör adında | `ortak_dosyalar_klasor.kaynak_tur = 'firma'`, `kaynak_id` | musteri-tedarikci (`finans_firma.id`); yabancı anahtar yok, olayla |
+| Satış siparişi | kimlik; no klasör adında | `kaynak_tur = 'siparis'` | siparisler (`siparisler_siparis.id`); olayla |
+| Proje | kimlik; kod ve ad klasör adında | `kaynak_tur = 'proje'` | projeler (`projeler_proje.id`); olayla |
+| Alt klasör şablonu | sahibi | `ortak_dosyalar_sablon` | başka modüle açılmaz |
+| Açılamayan klasör | sahibi; zincir (kayıt adları) | `ortak_dosyalar_acilamayan` | başka modüle açılmaz |

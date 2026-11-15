@@ -23,3 +23,18 @@ Test adları başlığın başıdır.
 | OD-16 Geçmiş ve denetim izi | `OD-16 ...` | - |
 | OD-17 Sayfa bütün rollere (karar 2067-3 b), yetki-ver yalnız yönetici | `OD-17 ...` | göç satırı silinirse kırmızı |
 | OD-18 Dosya adının uzantısı içerikten bulunan türle uyuşur (`.bat` adlı metin, `.exe` adlı PDF reddedilir) | `OD-18 ...` | aynı test: uzantısız ad 400, ret sonrası kayıt kalmaz |
+
+## Kayda bağlı klasörler (kart 3288; ADR 0030 eki)
+`kayit-klasorleri.test.ts` gerçek PostgreSQL ve gerçek giriş; `kurallar.test.ts` saf; `istemci/.../KayitKlasorleri.test.tsx` ekran.
+
+| Kural | İzinli test | Reddedilen test |
+|---|---|---|
+| KK-1 Sistem adı kayıttan; ayırıcı tireye, 120'de kesilir; ad kaydı izler | `KK-1 ...`, `kurallar.test.ts` `KK-1` | aynı test: ad çakışması hata listesine |
+| KK-2/3/4 Firma, sipariş, proje adları ve yerleri; şablon alt klasörleri; eşgüçlü | `KK-2/3/4 ...` | aynı test: ikinci çağrı satır açmaz |
+| KK-5 Yükleme adı önerisi | `KK-5 ...`, `kurallar.test.ts` `KK-5`, ekran "ad önerisi" | - |
+| KK-6 Şablon adları tekil; yalnız sonra açılana | `KK-6 ...` | aynı test: tekrar 400, yetkisiz 403 |
+| KK-7 Arşivdeki klasör ve altı görünmez | `KK-7 ...`, `kurallar.test.ts` `KK-7` | aynı test: 404 |
+| KK-8 Kural reddi kaydı durdurmaz; satır aynı işlemde; iç içe ara nokta | `KK-8 ...` (üç test) | dış ret iç açmayı geri alır |
+| KK-9 Kök yalnız yetki-ver, bir kez; aynı adlı kökte durur; düzeyler 2067-5 a | `KK-9 ...` | aynı test: 403, 409 |
+| KK-10 Kayıt bağlantısı görünürlüğe bağlı | `KK-10 ...` | aynı test: 404 |
+| KK-11 Toplu komut: sayı, grup, eşgüçlü, toplu iş arşivi | `KK-11 ...`, ekran "gruplar halinde" | aynı test: sayı değişince 409, yetkisiz 403 |

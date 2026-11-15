@@ -7,11 +7,11 @@ import type { IkiliCevap } from '#cekirdek/uc.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
 import { SON_EKLENEN_SINIRI } from '#paylasilan/sozlesme/ortak-dosyalar.ts';
 import type {
-  DosyaListesiCevabi, DosyalarCevabi, GecmisCevabi, Klasor, KlasorDuzeyi, KlasorlerCevabi, OrtakDosya, SurumlerCevabi, VerilenDuzey, YetkiCevabi,
+  DosyaListesiCevabi, DosyalarCevabi, GecmisCevabi, KaynakTuru, Klasor, KlasorDuzeyi, KlasorlerCevabi, OrtakDosya, SurumlerCevabi, VerilenDuzey, YetkiCevabi,
 } from '#paylasilan/sozlesme/ortak-dosyalar.ts';
 import { DOSYA_SINIRI, denetimSatiri, dosyaTutamagi } from '../dosya/disari.ts';
 import { kisiAdlari, kisininRolleri, rollerVeBayraklari } from '../kisiler/disari.ts';
-import { ILETILER, ORTAK_DOSYA_TURLERI, adAnahtari, duzeyCoz, enAzMi, gorunurMu, uzantiUyarMi, yetkiKaynagi } from './kurallar.ts';
+import { ILETILER, ORTAK_DOSYA_TURLERI, adAnahtari, adOneki, arsivdeMi, duzeyCoz, enAzMi, gorunurMu, uzantiUyarMi, yetkiKaynagi } from './kurallar.ts';
 import type { KlasorDugumu } from './kurallar.ts';
 import * as s from './sorgular.ts';
 
@@ -21,14 +21,14 @@ const BAG_SINIRI = { turler: ORTAK_DOSYA_TURLERI, azamiBayt: DOSYA_SINIRI.dosyaB
 const GECMIS_SINIRI = 200;
 
 // Bir isteğin yetki resmi: ağaç, satırlar ve kişinin rolleri her istekte veritabanından okunur (ekranda gizlemek yetki değildir).
-interface Gorunum {
+export interface Gorunum {
   klasorler: Map<number, s.KlasorSatiri>;
   yonetici: boolean;
   duzey: (id: number) => KlasorDuzeyi;
   gorunur: (id: number) => boolean;
 }
 
-async function gorunumKur(db: Db, kullanici: Kullanici): Promise<Gorunum> {
+export async function gorunumKur(db: Db, kullanici: Kullanici): Promise<Gorunum> {
   const satirlar = await s.klasorleriOku(db);
   const yetkiSatirlari = await s.yetkileriOku(db);
   const roller = await kisininRolleri(db, kullanici.id);
@@ -47,11 +47,14 @@ async function gorunumKur(db: Db, kullanici: Kullanici): Promise<Gorunum> {
     onbellek.set(id, d);
     return d;
   };
-  return { klasorler, yonetici: roller.some((r) => r.yonetici), duzey, gorunur: (id) => gorunurMu(id, klasorler, duzey) };
+  // Arşivdeki klasör ve altı kimseye görünmez (ADR 0030 eki); toplu işin geri alınması ve sipariş iptali klasörü buraya kaldırır.
+  return {
+    klasorler, yonetici: roller.some((r) => r.yonetici), duzey, gorunur: (id) => !arsivdeMi(id, klasorler) && gorunurMu(id, klasorler, duzey),
+  };
 }
 
 // Görünmeyen klasör yok sayılır (404): varlığı sızdırılmaz. Görünür ama düzeyi yetmeyen klasörde 403.
-function klasorIste(g: Gorunum, id: number, gereken: KlasorDuzeyi): s.KlasorSatiri {
+export function klasorIste(g: Gorunum, id: number, gereken: KlasorDuzeyi): s.KlasorSatiri {
   const k = g.klasorler.get(id);
   if (k === undefined || !g.gorunur(id)) throw bulunamadi(ILETILER.klasorYok);
   if (!enAzMi(g.duzey(id), gereken)) throw yetkiYok(ILETILER.yetkiYok);
@@ -60,19 +63,21 @@ function klasorIste(g: Gorunum, id: number, gereken: KlasorDuzeyi): s.KlasorSati
 
 const klasorCevabi = (g: Gorunum, k: s.KlasorSatiri): Klasor => ({
   id: k.id, ustId: k.ustId, ad: k.ad, ozelYetki: k.ozelYetki, duzey: g.duzey(k.id), dosyaSayisi: k.dosyaSayisi, surum: k.surum,
+  kaynak: k.kaynakTur === null ? null : { tur: k.kaynakTur as KaynakTuru, id: k.kaynakId },
 });
 
-function klasorYolu(g: Gorunum, id: number): string[] {
-  const yol: string[] = [];
+function klasorZinciri(g: Gorunum, id: number): s.KlasorSatiri[] {
+  const yol: s.KlasorSatiri[] = [];
   const gorulen = new Set<number>();
   let k = g.klasorler.get(id);
   while (k !== undefined && !gorulen.has(k.id)) {
-    yol.unshift(k.ad);
+    yol.unshift(k);
     gorulen.add(k.id);
     k = k.ustId === null ? undefined : g.klasorler.get(k.ustId);
   }
   return yol;
 }
+const klasorYolu = (g: Gorunum, id: number): string[] => klasorZinciri(g, id).map((k) => k.ad);
 
 async function dosyalariKur(db: Db, g: Gorunum, satirlar: s.DosyaSatiri[]): Promise<OrtakDosya[]> {
   const adlar = await kisiAdlari(db, satirlar.map((d) => d.yukleyenId));
@@ -103,6 +108,7 @@ export async function klasorDosyalari(db: Db, kullanici: Kullanici, klasorId: nu
     klasor: klasorCevabi(g, k),
     altKlasorler: altlar.map((a) => klasorCevabi(g, a)),
     dosyalar: await dosyalariKur(db, g, await s.klasorDosyalari(db, k.id, aramaAnahtari(ara))),
+    adOnerisi: adOneki(klasorZinciri(g, k.id)),
   };
 }
 

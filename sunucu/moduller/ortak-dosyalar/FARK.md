@@ -18,3 +18,16 @@ Başvuru: onaylı prototip (2067-1 a) ve ADR 0030 (2067-2 a), kodu "2067 teyit".
 - Klasör ad değiştirme, taşıma ve klasör arşivi ADR 0030, 3'te yonetir hakkıdır; prototipte ekranı yoktur, bu teslimde ucu da yoktur (UYUM-BORCU 4).
 - Klasör simgesi ortak sette yok; `layers` kullanıldı (UYUM-BORCU 5).
 - Prototipteki rol düğmeleri ve tema anahtarı prototip denetimidir; ekrana girmez (rol oturumdan, tema kabuktan).
+
+## Kart 3288 dilim 1 (2067-4 a, 2067-5 a; taban main 65e4844)
+- Göç `20261115073335_ortak_dosyalar_kayit_klasorleri.sql`: yalnız ekler. `ortak_dosyalar_klasor`'a boş olabilen `kaynak_tur`, `kaynak_id`,
+  `toplu_is` ve varsayılanlı `arsiv` (+ iz); kaynak başına tekil kısmi dizin. Yeni boş tablolar `ortak_dosyalar_acilamayan` ve sistem
+  sabitiyle dolan `ortak_dosyalar_sablon`. Kurgudaki ayrı `sistem` işareti yerine `kaynak_tur IS NOT NULL` kullanıldı (tek gerçek).
+- `kayit-klasorleri.ts`: kayıt zincirinden klasör açma (ara noktalı), ad izleme, iptalde arşiv, kök açma, şablon, açılamayanlar, toplu komut,
+  kayıt bağlantısı. `disari.ts` dinleyicilerin kullanacağı işlevleri açar; kaynak modüller henüz bağlı değil (UYUM-BORCU 7).
+- Ekran: Ayarlar görünümü (`/ortak-dosyalar/ayarlar`, ikinci menüde yalnız `ortak-dosyalar.yetki-ver` ile), ağaçta arama ve "Kayda bağlı" işareti,
+  kaynak şeridi ve kayda bağlantı, tek dosyada ad önerisi penceresi.
+- Ön izlemeden fark: zincir yerine `pin` simgesi (UYUM-BORCU 9); sistem
+  klasörü menüsündeki pasif "Adı değiştir / Taşı / Arşive kaldır" maddeleri çizilmedi, çünkü klasör için bu uçlar hiç yok (UYUM-BORCU 4).
+- Ayarlar'da ön izlemede çizilmemiş "Müşteriler klasörü" ve "Toplu işler" kartları (onaylı madde 8 ve 7). Bakış sonrası şablon
+  ekleme biçimi ("Alt klasör ekle", hemen kayıt), açılamayanlar tablosu, onay penceresindeki sayı kutuları ve uyarı bandı ön izlemeye uyduruldu.

@@ -15,3 +15,8 @@ Her madde: kural / istisna / nerede / nasıl uyumlanır. İşaretler: DOĞRULAND
 4. Klasör ad değiştirme, taşıma ve klasör arşivi (ADR 0030, 3) uçsuz ve ekransız; prototipte yer yok. İstenirse ayrı kartla.
 5. Ortak simge setinde klasör simgesi yok; ağaçta `layers`, ana menüde (simge tekil olmalı, `sayfa-simgeleri.test.ts`) `more` kullanılıyor. Ortak sete `folder` eklenmesi çekirdek isteği (CEKIRDEK-ISTEKLERI 1).
 6. VARSAYIM: klasör sayısı yüzlerle sınırlı; düzey her istekte bütün ağaçtan çözülür. Binleri geçerse önbellek ya da özyinelemeli sorgu.
+7. Kart 3288 dilim 2 (sıra: kablolama.ts 3249-2 ve 3279'dan, projeler 3269-A'dan sonra): müşteri, sipariş ve proje olaylarının
+   dinleyicileri ve mevcut kayıt kaynağı `sunucu/kablolama.ts`'te bağlanacak; firma, sipariş ve proje ayrıntısına "Klasör" bağlantısı
+   (`GET /ortak-dosyalar/kayit/:tur/:id`). Bağlanana kadar klasörler kendiliğinden açılmaz, Ayarlar "kaynak bağlı değil" der (BASKA-MODUL-ISTEKLERI 3).
+8. KAPANDI (kilit 07:51Z): Ayarlar ikinci menüde, `islem: 'ortak-dosyalar.yetki-ver'`.
+9. Kayda bağlı işaret `pin` simgesiyle; ortak sette bağlantı (zincir) simgesi yok (CEKIRDEK-ISTEKLERI 2).
