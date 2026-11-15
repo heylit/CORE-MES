@@ -15,7 +15,7 @@ import { KURULUYOR, useBekleyenKarari, usePlanKur, type BekleyenKarari } from '.
 import { bitenler, derle, girdiKur, plandanBitenler, yerlesmeyenSiparisler, type OkunanPlan } from '../kurallar.ts';
 import { degisken } from '../ortak.tsx';
 import { MotorKurali } from './MotorKurali.tsx';
-import { acmaOzeti, calismayaAc, calismayiGeriAl, calismayiYolla, canliDegistiMi, canliDegistiOku, GonderHatasi, gonderHataIletisi, gonderIletisi, type GonderHedefi } from './gonder.ts';
+import { acmaOzeti, calismayaAc, calismayiGeriAl, calismayiYolla, canliDegistiMi, canliDegistiOku, GonderHatasi, gonderHataIletisi, gonderIletisi, senaryoHataIletisi, type GonderHedefi } from './gonder.ts';
 import {
   agirlikliGecikme, ayarSaat, calismaEkMesai, ekMesaiFarki, ekMesaiKontrol, farkKur, gecikmeSaat, PA_ADIM, PA_DURUM, PA_NOT, paAdaylar, paAdim, paCalismaKontrol, paEmirFarki, paGecmisler, paKontrol, paOnayda, paPlanKontrol, paRedVar, yerlesmeyenAyrintisi,
   paSecim, planFarki, sunucuEkMesai, saatFarki, sonBitis, tlEksikUyarisi, tlKarsilastirilir, yerlesmeyen, zamanYaz, type CanliFark, type Gostergeler, type KontrolMaddesi, type PlanFarki, type SunucuSenaryosu,
@@ -156,7 +156,7 @@ export function OnaySekmesi({ o, c, p, cf: cfSunucu, sen, senYaz, planSekmesi }:
       else if (k === 'canliya-al' && dortSaatMi(e)) setGerekceSor({ s, ileti: e.govde.mesaj });
       else if (e instanceof ApiHatasi && e.durum === 409) {
         api.get<SenaryolarCevabi>('/plan/senaryolar').then(senYaz, () => undefined);
-        bildir('hata', 'Plan bu arada değişti; liste yenilendi, yeniden deneyin.');
+        bildir('hata', senaryoHataIletisi(e, 'İşlem yapılamadı.'));
       } else bildir('hata', hataIletisi(e, 'İşlem yapılamadı.'));
       return null;
     } finally { setGidiyor(false); }

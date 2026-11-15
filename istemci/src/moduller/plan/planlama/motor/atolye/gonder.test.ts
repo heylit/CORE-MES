@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { api, ApiHatasi } from '../../../../../ortak/veri/api.ts';
 import type { CalismaKomutu } from '../../kayit.ts';
-import { acmaOzeti, calismayaAc, calismayiGeriAl, calismayiGonder, canliDegistiIletisi, GonderHatasi, gonderHataIletisi, gonderOzeti, taslakAdi } from './gonder.ts';
+import { acmaOzeti, calismayaAc, calismayiGeriAl, calismayiGonder, canliDegistiIletisi, GonderHatasi, gonderHataIletisi, gonderOzeti, senaryoHataIletisi, SURUM_ESKIDI, taslakAdi } from './gonder.ts';
 
 afterEach(() => { vi.restoreAllMocks(); });
 
@@ -155,5 +155,14 @@ describe('Çalışmaya aç ve geri al (507 3 a, 508 2 a)', () => {
 
   it('taslağa geçmeyen ek vardiya gönderme özetinde söylenir', () => {
     expect(gonderOzeti({ yazilan: 2, atlanan: 0, yazilamaz: [], ekMesaiAtlanan: 1 })).toBe('2 iş taslağa yazıldı; 1 ek vardiya sunucuda karşılığı olmadığı için taslağa geçmedi.');
+  });
+});
+
+// 3270-1: "plan değişti" yalnız sürüm eskiyince; sunucunun öteki 409 engeli kendi iletisiyle görünür.
+describe('senaryo komutunun hata iletisi', () => {
+  it('eski sürümde yeniden dene der, başka 409 ve öteki hatalarda sunucunun iletisini verir', () => {
+    expect(senaryoHataIletisi(new ApiHatasi(409, { kod: 'CAKISMA', mesaj: 'x', ayrinti: { neden: 'eski-surum' } }), 'yedek')).toBe(SURUM_ESKIDI);
+    expect(senaryoHataIletisi(new ApiHatasi(409, { kod: 'CAKISMA', mesaj: 'Başlamış ya da bitmiş iş emri taşınamaz.' }), 'yedek')).toContain('Başlamış ya da bitmiş iş emri taşınamaz.');
+    expect(senaryoHataIletisi(new Error('ağ'), 'yedek')).not.toBe(SURUM_ESKIDI);
   });
 });
