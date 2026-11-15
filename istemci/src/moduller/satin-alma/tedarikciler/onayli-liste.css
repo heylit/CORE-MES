@@ -40,3 +40,12 @@
   .sa-ol-agac-kap, .sa-ol-secim, .sa-ol-gorunum, .sa-ol-bas button { display: none; }
   .sa-ol-iki-kolon { grid-template-columns: minmax(0, 1fr); }
 }
+.sa-ol-matris-bas { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: var(--b-3); }
+.sa-ol-cipler { display: flex; flex-wrap: wrap; gap: var(--b-2); }
+.sa-ol-cip {
+  min-height: var(--dokunma-yogun); padding-inline: var(--b-3); border: 1px solid var(--edge2); border-radius: var(--yari-tam); background: none; color: var(--ink); cursor: pointer;
+}
+.sa-ol-cip[aria-pressed='true'] { border-color: var(--hazard); background: var(--panel2); font-weight: 700; }
+.sa-ol-cip:focus-visible { outline: 2px solid var(--hazard); outline-offset: 2px; }
+.sa-ol-matris tbody th .sa-ol-iki { font-weight: 400; }
+.tc-tablo-sag .sa-ol-iki { align-items: flex-end; }

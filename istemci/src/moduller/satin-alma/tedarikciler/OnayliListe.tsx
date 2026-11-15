@@ -2,12 +2,12 @@ import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import type { OnayliListeCevabi } from '#paylasilan/sozlesme/satin-alma.ts';
 import { tesisGunu } from '#paylasilan/tesis-zamani.ts';
-import { Dugme, DurumKutusu, Rozet, SayiKarti, Secim, Sekmeler, Tablo, type Sekme, type Sutun } from '../../../ortak/arayuz/index.ts';
+import { Dugme, DurumKutusu, Girdi, Rozet, SayiKarti, Secim, Sekmeler, Tablo, type Sekme, type Sutun } from '../../../ortak/arayuz/index.ts';
 import { csvIndir } from '../../../ortak/veri/csv.ts';
 import { useOturum } from '../../../ortak/veri/oturum.ts';
 import { SURE, cagri } from '../talep/ortak.ts';
 import {
-  CSV_BASLIKLARI, SERTIFIKA_ESIGI_GUN, TUM_FIRMALAR, csvSatirlari, kategoriSecenekleri, matris, ozet, satirlar as satirlariKur, sertifikaMetni, suz,
+  CSV_BASLIKLARI, SERTIFIKA_ESIGI_GUN, TUM_FIRMALAR, csvSatirlari, kategoriSecenekleri, matris, ozet, satirlar as satirlariKur, sertifikaMetni, sonYilNotu, suz,
   type DurumSuzgeci, type KategoriSecenegi, type MatrisHucresi, type Satir,
 } from './onayli-liste.ts';
 import './onayli-liste.css';
@@ -21,7 +21,7 @@ const SUZGECLER: readonly { deger: DurumSuzgeci; baslik: string }[] = [
   { deger: 'hepsi', baslik: 'Hepsi' }, { deger: 'onayli', baslik: 'Onaylı' }, { deger: 'sartli', baslik: 'Şartlı' },
   { deger: 'onaysiz', baslik: 'Onaysız' }, { deger: 'kayitsiz', baslik: 'Kalite kaydı yok' }, { deger: 'sertifika', baslik: `Sertifikası ${SERTIFIKA_ESIGI_GUN} günde biten` },
 ];
-const HUCRE: Record<MatrisHucresi['durum'], { metin: string; ton: 'tamam' | 'uyari' | 'hata' }> = {
+const HUCRE: Record<Exclude<MatrisHucresi['durum'], 'kayitsiz'>, { metin: string; ton: 'tamam' | 'uyari' | 'hata' }> = {
   onayli: { metin: 'Onaylı', ton: 'tamam' }, sartli: { metin: 'Şartlı', ton: 'uyari' }, onaysiz: { metin: 'Onaysız', ton: 'hata' },
 };
 
@@ -46,40 +46,57 @@ function KategoriAgaci({ secenekler, secili, sec }: { secenekler: readonly Kateg
   );
 }
 
-function Matris({ veri, ara }: { veri: OnayliListeCevabi; ara: string }) {
+function Matris({ veri, bugun }: { veri: OnayliListeCevabi; bugun: string }) {
   const [sart, sartYaz] = useState<string | null>(null);
-  const m = matris(veri);
+  const [ara, araYaz] = useState('');
+  const m = matris(veri, bugun);
+  const turler = [...new Set(m.sutunlar.map((x) => x.ust))];
+  const [tur, turYaz] = useState<string>(turler[0] ?? '');
+  const secili = turler.includes(tur) ? tur : turler[0] ?? '';
   const a = ara.trim().toLocaleLowerCase('tr-TR');
   const satirlar = m.satirlar.filter((x) => a === '' || x.ad.toLocaleLowerCase('tr-TR').includes(a));
   if (m.sutunlar.length === 0) return <DurumKutusu durum="bos" mesaj="Kalite henüz hiçbir kategoride karar vermedi. Kararlar Kalite Merkezi'nde tedarikçi kaydından verilir." />;
+  const sutunlar = m.sutunlar.map((x, i) => ({ ...x, i })).filter((x) => x.ust === secili);
   return (
     <div className="sa-ol-matris">
+      <div className="sa-ol-matris-bas">
+        <Girdi etiket="Firma ara" placeholder="Firma adı" value={ara} onChange={(e) => araYaz(e.target.value)} />
+        <div className="sa-ol-cipler" role="group" aria-label="Kategori türü">
+          {turler.map((t) => <button key={t} type="button" className="sa-ol-cip" aria-pressed={t === secili} onClick={() => turYaz(t)}>{t}</button>)}
+        </div>
+      </div>
       <div className="sa-ol-matris-kap">
         <table aria-label="Firma × kategori">
-          <thead><tr><th scope="col">Firma</th>{m.sutunlar.map((s) => <th key={s.deger} scope="col">{s.ad}</th>)}</tr></thead>
+          <thead><tr><th scope="col">Firma</th>{sutunlar.map((s) => <th key={s.deger} scope="col">{s.ad}</th>)}<th scope="col">Sertifika</th></tr></thead>
           <tbody>
-            {satirlar.map((x) => (
-              <tr key={x.firmaId}>
-                <th scope="row">{x.ad}</th>
-                {x.hucreler.map((h, i) => {
-                  const sutun = m.sutunlar[i]!;
-                  if (h === null) return <td key={sutun.deger}><span className="sa-ol-bos" title="Karar yok">–</span></td>;
-                  const d = HUCRE[h.durum];
-                  return (
-                    <td key={sutun.deger}>
-                      {h.durum === 'sartli'
-                        ? <button type="button" className="sa-ol-hucre" aria-label={`${x.ad}, ${sutun.ad}: Şartlı. ${h.aciklama ?? ''}`} onClick={() => sartYaz(`${x.ad} · ${sutun.ad}: ${h.aciklama ?? ''}`)}><Rozet ton={d.ton}>{d.metin}</Rozet></button>
-                        : <Rozet ton={d.ton}>{d.metin}</Rozet>}
-                    </td>
-                  );
-                })}
-              </tr>
-            ))}
+            {satirlar.map((x) => {
+              const g = x.satir.sertifikaGun;
+              const sert = g === null ? null : g < 0 ? { metin: 'geçti', ton: 'hata' as const } : g <= SERTIFIKA_ESIGI_GUN ? { metin: `${g} gün`, ton: 'uyari' as const } : { metin: 'geçerli', ton: 'tamam' as const };
+              return (
+                <tr key={x.firmaId}>
+                  <th scope="row"><span className="sa-ol-iki"><b>{x.ad}</b><small>{x.alt}</small></span></th>
+                  {sutunlar.map((sutun) => {
+                    const h = x.hucreler[sutun.i] ?? null;
+                    if (h === null) return <td key={sutun.deger}><span className="sa-ol-bos" title="Karar yok">–</span></td>;
+                    if (h.durum === 'kayitsiz') return <td key={sutun.deger}><span className="sa-ol-bos" title="Kalite kaydı yok">?</span></td>;
+                    const d = HUCRE[h.durum];
+                    return (
+                      <td key={sutun.deger}>
+                        {h.durum === 'sartli'
+                          ? <button type="button" className="sa-ol-hucre" aria-label={`${x.ad}, ${sutun.ad}: Şartlı. ${h.aciklama ?? ''}`} onClick={() => sartYaz(`${x.ad} · ${sutun.ad}: ${h.aciklama ?? ''}`)}><Rozet ton={d.ton}>{d.metin}</Rozet></button>
+                          : <Rozet ton={d.ton}>{d.metin}</Rozet>}
+                      </td>
+                    );
+                  })}
+                  <td>{sert === null ? <span className="sa-ol-bos">–</span> : <Rozet ton={sert.ton}>{sert.metin}</Rozet>}</td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
       {sart !== null && <p className="sa-ol-sart" role="status">{`Şart: ${sart}`}</p>}
-      <p className="sa-ol-not">– Karar yok (bu kategoride). Şartlı hücreye dokununca şart görünür. Kalite kaydı olmayan firma bu tabloda yoktur.</p>
+      <p className="sa-ol-not">Onaylı, Şartlı (hücreye dokununca şart), Onaysız; – karar yok (bu kategoride); ? Kalite kaydı yok.</p>
     </div>
   );
 }
@@ -142,6 +159,10 @@ export function OnayliListe() {
         </span>
       ),
     },
+    {
+      anahtar: 'sonYil', baslik: 'Son 12 ay', hizala: 'sag',
+      hucre: (x) => <span className="sa-ol-iki"><span>{`${x.sonYil.siparis} sipariş`}</span><small>{sonYilNotu(x)}</small></span>,
+    },
   ];
   const csvAdi = secili === null ? 'onayli-liste' : `onayli-liste-${secili.kisa}`;
   const gorunumler: Sekme<'liste' | 'matris'>[] = [{ anahtar: 'liste', baslik: 'Kategoriye göre liste' }, { anahtar: 'matris', baslik: 'Firma × kategori' }];
@@ -163,7 +184,7 @@ export function OnayliListe() {
       {gorunum === 'matris' ? (
         <>
           <p className="sa-ol-telefon">Firma × kategori tablosu telefonda gösterilmez; "Kategoriye göre liste" görünümünü kullanın.</p>
-          <div className="sa-ol-genis"><Matris veri={veri} ara={ara} /></div>
+          <div className="sa-ol-genis"><Matris veri={veri} bugun={bugun} /></div>
         </>
       ) : (
         <div className="sa-ol-iki-kolon">

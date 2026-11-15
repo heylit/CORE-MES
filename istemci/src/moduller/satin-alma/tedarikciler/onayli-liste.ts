@@ -25,6 +25,7 @@ export interface Satir {
   /** Sertifika bitişine kalan gün (geçtiyse eksi); bitiş yoksa null. */
   sertifikaGun: number | null;
   sonDenetim: string | null;
+  sonYil: Firma['sonYil'];
 }
 
 const gunFarki = (bugun: string, gun: string): number => Math.round((Date.parse(`${gun}T00:00:00Z`) - Date.parse(`${bugun}T00:00:00Z`)) / 86_400_000);
@@ -61,7 +62,7 @@ export function satirlar(c: OnayliListeCevabi, kategori: string, bugun: string):
     const bitis = k?.sertifikaBitisi ?? null;
     sonuc.push({
       firmaId: f.firmaId, ad: f.ad, kritiklik: k?.kritiklik ?? null, adIleEslendi: k?.adIleEslendi ?? false, durum, genel, satinAlmaTedarikcisi: f.satinAlmaTedarikcisi, sart,
-      sertifikalar: k?.sertifikalar ?? [], sertifikaBitisi: bitis, sertifikaGun: bitis === null ? null : gunFarki(bugun, bitis), sonDenetim: k?.sonDenetim ?? null,
+      sertifikalar: k?.sertifikalar ?? [], sertifikaBitisi: bitis, sertifikaGun: bitis === null ? null : gunFarki(bugun, bitis), sonDenetim: k?.sonDenetim ?? null, sonYil: f.sonYil,
     });
   }
   return sonuc;
@@ -77,12 +78,17 @@ export function suz(s: readonly Satir[], durum: DurumSuzgeci, ara: string): Sati
 const k3 = (x: Satir, metin: string): string => (x.adIleEslendi ? `${metin} (ad ile eşlendi, onaylı sayılmaz)` : metin);
 export const csvDurumu = (x: Satir): string => k3(x, x.durum.metin);
 
-export const CSV_BASLIKLARI = ['Firma', 'Kritiklik', 'Kategori', 'Bu kategoride', 'Firma geneli', 'Şart', 'Sertifikalar', 'Sertifika bitişi', 'Son denetim'] as const;
+export const CSV_BASLIKLARI = [
+  'Firma', 'Kritiklik', 'Kategori', 'Bu kategoride', 'Firma geneli', 'Şart', 'Sertifikalar', 'Sertifika bitişi', 'Son denetim', 'Son 12 ay sipariş', 'Zamanında teslim (%)',
+] as const;
+/** "Son 12 ay" alt satırı: zamanında oranı; teslim karnenin en az sayısının altındaysa "veri az". */
+export const sonYilNotu = (x: Pick<Satir, 'sonYil'>): string =>
+  (x.sonYil.yetersizVeri || x.sonYil.zamanindaYuzde === null ? 'veri az' : `%${x.sonYil.zamanindaYuzde.toLocaleString('tr-TR', { maximumFractionDigits: 0 })} zamanında`);
 /** CSV satırları; kategori seçilmediyse kategori ve kategori durumu boş. */
-export function csvSatirlari(s: readonly Satir[], kategoriAdi: string | null): (string | null)[][] {
+export function csvSatirlari(s: readonly Satir[], kategoriAdi: string | null): (string | number | null)[][] {
   return s.map((x) => [
     x.ad, x.kritiklik, kategoriAdi, kategoriAdi === null ? null : csvDurumu(x), k3(x, x.genel.metin), x.sart,
-    x.sertifikalar.join(', '), x.sertifikaBitisi, x.sonDenetim,
+    x.sertifikalar.join(', '), x.sertifikaBitisi, x.sonDenetim, x.sonYil.siparis, x.sonYil.yetersizVeri ? null : x.sonYil.zamanindaYuzde,
   ]);
 }
 
@@ -109,18 +115,25 @@ export function kategoriSecenekleri(c: OnayliListeCevabi): KategoriSecenegi[] {
     .sort((a, b) => Number(b.kararli) - Number(a.kararli) || a.ad.localeCompare(b.ad, 'tr'));
 }
 
-/** Firma x kategori tablosu: sütun kararı olan kategoriler, satır Kalite kaydı ya da kararı olan firmalar. */
-export interface MatrisHucresi { durum: 'onayli' | 'sartli' | 'onaysiz'; aciklama: string | null }
-export function matris(c: OnayliListeCevabi): { sutunlar: { deger: string; ad: string }[]; satirlar: { firmaId: number; ad: string; hucreler: (MatrisHucresi | null)[] }[] } {
-  const sutunlar = kategoriSecenekleri(c).filter((k) => k.kararli).map(({ deger, ad }) => ({ deger, ad }));
-  const satirlar = c.firmalar.filter((f) => f.kalite !== null).map((f) => ({
-    firmaId: f.firmaId, ad: f.ad,
-    hucreler: sutunlar.map((s) => {
-      const k = f.kalite?.kategoriler.find((x) => kategoriAnahtari(x.kategoriTuru, x.kategoriKodu) === s.deger);
-      return k === undefined ? null : { durum: k.durum, aciklama: k.aciklama };
-    }),
-  }));
-  return { sutunlar, satirlar };
+/** Firma x kategori tablosu: sütun kararı olan kategoriler (üst başlıkla), satır Kalite kaydı olan firmalar ve Kalite kaydı olmayan satın alma
+ * tedarikçileri (hücreleri "kayitsiz"). Hücre null: bu kategoride karar yok. */
+export interface MatrisHucresi { durum: 'onayli' | 'sartli' | 'onaysiz' | 'kayitsiz'; aciklama: string | null }
+export interface MatrisSatiri { firmaId: number; ad: string; alt: string; satir: Satir; hucreler: (MatrisHucresi | null)[] }
+export function matris(c: OnayliListeCevabi, bugun: string): { sutunlar: { deger: string; ad: string; ust: string }[]; satirlar: MatrisSatiri[] } {
+  const sutunlar = kategoriSecenekleri(c).filter((k) => k.kararli).map(({ deger, kisa, ust }) => ({ deger, ad: kisa, ust }));
+  const genel = new Map(satirlar(c, TUM_FIRMALAR, bugun).map((x) => [x.firmaId, x]));
+  const sonuc = c.firmalar.filter((f) => f.kalite !== null || f.satinAlmaTedarikcisi).map((f): MatrisSatiri => {
+    const x = genel.get(f.firmaId)!;
+    return {
+      firmaId: f.firmaId, ad: f.ad, alt: [x.genel.metin, x.kritiklik].filter((v) => v !== null).join(' · '), satir: x,
+      hucreler: sutunlar.map((s) => {
+        if (f.kalite === null) return { durum: 'kayitsiz', aciklama: null };
+        const k = f.kalite.kategoriler.find((y) => kategoriAnahtari(y.kategoriTuru, y.kategoriKodu) === s.deger);
+        return k === undefined ? null : { durum: k.durum, aciklama: k.aciklama };
+      }),
+    };
+  });
+  return { sutunlar, satirlar: sonuc };
 }
 
 /** Üstteki özet: firma geneli satırlardan sayılır (kategori seçiminden bağımsız). */

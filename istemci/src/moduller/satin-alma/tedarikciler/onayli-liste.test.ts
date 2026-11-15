@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { BUGUN, ORNEK_LISTE } from './ornek.ts';
-import { TUM_FIRMALAR, csvSatirlari, kategoriSecenekleri, matris, ozet, satirlar, sertifikaMetni, suz } from './onayli-liste.ts';
+import { TUM_FIRMALAR, csvSatirlari, kategoriSecenekleri, matris, ozet, satirlar, sertifikaMetni, sonYilNotu, suz } from './onayli-liste.ts';
 
 describe('3279 a onaylı liste satırları', () => {
   it('firma genelinde Kalite kaydı olmayan "Kalite kaydı yok", askıda Onaysız sınıfında; kimse kendiliğinden onaylı değil', () => {
@@ -30,14 +30,22 @@ describe('3279 a onaylı liste satırları', () => {
     const s = satirlar(ORNEK_LISTE, 'hizmet|isil', BUGUN);
     const csv = csvSatirlari(s, 'Hizmet · Isıl işlem');
     expect(csv[1]).toEqual(['ORN-Demir', null, 'Hizmet · Isıl işlem', 'Şartlı (ad ile eşlendi, onaylı sayılmaz)', 'Şartlı onaylı (ad ile eşlendi, onaylı sayılmaz)',
-      'ORN şart: her partide rapor', 'ISO 9001', '2026-12-02', null]);
+      'ORN şart: her partide rapor', 'ISO 9001', '2026-12-02', null, 1, null]);
+    expect(csvSatirlari(s, null)[0]!.slice(9)).toEqual([23, 96]);
     expect(csv[0]![3]).toBe('Onaylı');
   });
 
-  it('kategori seçenekleri: kararlı önce, pasif yalnız kararı varsa; matris yalnız kararlı sütun ve Kalite kayıtlı firma', () => {
+  it('Son 12 ay: zamanında oranı ya da veri az', () => {
+    const s = satirlar(ORNEK_LISTE, TUM_FIRMALAR, BUGUN);
+    expect(s.map(sonYilNotu)).toEqual(['%96 zamanında', 'veri az', 'veri az', 'veri az']);
+  });
+
+  it('kategori seçenekleri: kararlı önce, pasif yalnız kararı varsa; matris kararlı sütun, Kalite kayıtlı firma ve kaydı olmayan satın alma tedarikçisi', () => {
     expect(kategoriSecenekleri(ORNEK_LISTE).map((k) => [k.deger, k.kararli, k.sayi])).toEqual([['hizmet|isil', true, 2], ['sarf|kesici', false, 0]]);
-    const m = matris(ORNEK_LISTE);
-    expect(m.sutunlar.map((x) => x.deger)).toEqual(['hizmet|isil']);
-    expect(m.satirlar.map((x) => [x.ad, x.hucreler[0]?.durum ?? null])).toEqual([['ORN-Anka', 'onayli'], ['ORN-Demir', 'sartli'], ['ORN-Kuzey', null]]);
+    const m = matris(ORNEK_LISTE, BUGUN);
+    expect(m.sutunlar).toEqual([{ deger: 'hizmet|isil', ad: 'Isıl işlem', ust: 'Hizmet' }]);
+    expect(m.satirlar.map((x) => [x.ad, x.alt, x.hucreler[0]?.durum ?? null])).toEqual([
+      ['ORN-Anka', 'Onaylı · Kritik', 'onayli'], ['ORN-Demir', 'Şartlı onaylı', 'sartli'], ['ORN-Kuzey', 'Askıda', null], ['ORN-Ege', 'Kalite kaydı yok', 'kayitsiz'],
+    ]);
   });
 });

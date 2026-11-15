@@ -1871,3 +1871,17 @@ export function emirTedarikDurumlariOku(db: Db, uretimEmriIdleri: readonly numbe
 export async function coreSiparisiMi(db: Db, no: string, logoKayitNo: string): Promise<boolean> {
   return (await db.tek('SELECT 1 FROM satin_alma_siparis WHERE no = $1 OR logo_kayit_no = $2 LIMIT 1', [no, logoKayitNo])) !== null;
 }
+
+// 3279 a: onaylı listenin "Son 12 ay" sütunu. Firma başına son 12 ayda (tesis günü dahil) verilen sipariş; iptal talep sayılmaz.
+// 12 ay geriye PostgreSQL takvimiyle gidilir (29 Şubat 28 Şubat'a düşer).
+export function sonYilSiparisSayilari(db: Db, bugun: string): Promise<{ firmaId: number; sayi: number }[]> {
+  return db.sorgu(
+    `SELECT q.firma_id AS "firmaId", count(*)::int AS sayi
+       FROM satin_alma_siparis p
+       JOIN satin_alma_teklif q ON q.talep_id = p.talep_id AND q.id = p.teklif_id
+       JOIN satin_alma_talep t ON t.id = p.talep_id AND t.durum <> 'iptal'
+      WHERE q.firma_id IS NOT NULL AND p.siparis_tarihi > ($1::date - interval '12 months')::date AND p.siparis_tarihi <= $1::date
+      GROUP BY q.firma_id`,
+    [bugun],
+  );
+}

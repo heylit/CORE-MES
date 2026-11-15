@@ -1145,6 +1145,9 @@ export const onayliListeCevabi = z.object({
     ad: z.string(),
     satinAlmaTedarikcisi: z.boolean(),
     kalite: kmOnayliListeSatiri.nullable(),
+    // Son 12 ay: satın alma siparişi sayısı ve firma karnesinin zamanında teslim oranı (yüzde; teslim yoksa null). Karnenin en az teslim
+    // sayısının altında `yetersizVeri` (ekranda "veri az").
+    sonYil: z.object({ siparis: z.number().int().nonnegative(), teslim: z.number().int().nonnegative(), zamanindaYuzde: z.number().nullable(), yetersizVeri: z.boolean() }),
   })),
   kategoriler: z.array(z.object({ tur: z.string(), kod: z.string(), ad: z.string(), ustAd: z.string(), aktif: z.boolean() })),
   malzemeKategorileri: z.array(z.object({ malzemeNo: z.number().int().positive(), tur: z.string(), kod: z.string() })),

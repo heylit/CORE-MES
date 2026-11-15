@@ -42,6 +42,19 @@ describe('3279 a Onaylı liste sekmesi', () => {
     expect(within(tablo).getAllByText("Kalite'de aç").length).toBe(3);
   });
 
+  it('Son 12 ay sütunu ve matris: tür çipi, Kalite kaydı yok "?", şartlı hücre şartı gösterir', async () => {
+    ac(ORNEK_LISTE);
+    const tablo = await screen.findByRole('table', { name: 'Onaylı liste' });
+    expect(within(tablo).getByText('23 sipariş')).toBeTruthy();
+    expect(within(tablo).getByText('%96 zamanında')).toBeTruthy();
+    fireEvent.click(screen.getByRole('tab', { name: 'Firma × kategori' }));
+    const m = await screen.findByRole('table', { name: 'Firma × kategori' });
+    expect(screen.getByRole('button', { name: 'Hizmet', pressed: true })).toBeTruthy();
+    expect(within(m).getByTitle('Kalite kaydı yok').textContent).toBe('?');
+    fireEvent.click(within(m).getByRole('button', { name: /ORN-Demir, Isıl işlem: Şartlı/ }));
+    expect(screen.getByRole('status').textContent).toContain('ORN şart: her partide rapor');
+  });
+
   it('istek düşerse hata kutusu', async () => {
     ac(null);
     expect(await screen.findByRole('button', { name: /Yeniden dene/ })).toBeTruthy();

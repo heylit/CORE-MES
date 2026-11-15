@@ -6,6 +6,7 @@ import type { TestVeritabani } from '#cekirdek/test-vt.ts';
 import { uygulamaKur } from '#cekirdek/uygulama.ts';
 import type { KmOnayliListeSatiri } from '#paylasilan/sozlesme/kalite-merkezi-kategori-onayi.ts';
 import type { OnayliListeCevabi } from '#paylasilan/sozlesme/satin-alma.ts';
+import { tesisGunu } from '#paylasilan/zaman.ts';
 import { denetimYaz } from '../denetim/disari.ts';
 import { rolAl, rolAta, yoneticiOlustur } from '../kisiler/disari.ts';
 import { tekrarDeposu } from '../istek-kimligi/disari.ts';
@@ -105,9 +106,35 @@ describe('satin-alma onaylı tedarikçi listesi (3279 a, gerçek PostgreSQL)', (
     onayliListeCozucusu(async () => new Map());
     const l = await liste();
     assert.equal(l.kaliteBagli, true);
-    assert.deepEqual(l.firmalar, [{ firmaId: f.ted, ad: 'Deneme Tedarik', satinAlmaTedarikcisi: true, kalite: null }]);
+    assert.deepEqual(l.firmalar, [{ firmaId: f.ted, ad: 'Deneme Tedarik', satinAlmaTedarikcisi: true, kalite: null, sonYil: { siparis: 0, teslim: 0, zamanindaYuzde: null, yetersizVeri: true } }]);
     assert.deepEqual(l.malzemeKategorileri, [{ malzemeNo, tur: 'hammadde', kod: 'metal' }]);
     assert.ok(l.kategoriler.some((k) => k.tur === 'hammadde' && k.kod === 'metal'));
+  });
+
+  test('Son 12 ay: firmanın son 12 ayda verilen siparişleri sayılır; 12 aydan eski, iptal talepli ve gelecek tarihli sayılmaz', async () => {
+    const s = ortam!.sahip;
+    const bugun = tesisGunu(Date.now());
+    const gun = async (fark: string) => (await s.tek<{ g: string }>(`SELECT to_char(($1::date + $2::interval)::date, 'YYYY-MM-DD') AS g`, [bugun, fark]))!.g;
+    let sira = 9000;
+    const siparis = async (tarih: string, durum = 'siparis_verildi') => {
+      sira += 1;
+      const talep = crypto.randomUUID();
+      const teklif = crypto.randomUUID();
+      await s.sorgu("INSERT INTO satin_alma_talep (id, yil, sira, baslik, talep_eden_kisi_id, acan_kisi_id, durum, iptal_nedeni) VALUES ($1, 2026, $2, 'Deneme talep', $3, $3, $4, $5)",
+        [talep, sira, yoneticiId, durum, durum === 'iptal' ? 'Deneme iptal' : '']);
+      await s.sorgu("INSERT INTO satin_alma_teklif (talep_id, id, firma_id, tedarikci_adi, teklif_tarihi, para_birimi) VALUES ($1, $2, $3, 'Deneme tedarik', $4, 'TRY')", [talep, teklif, f.ted, tarih]);
+      await s.sorgu("INSERT INTO satin_alma_karar (talep_id, mod, teklif_id, karar_tarihi) VALUES ($1, 'tek', $2, $3)", [talep, teklif, tarih]);
+      await s.sorgu("INSERT INTO satin_alma_siparis (talep_id, teklif_id, no, siparis_no, siparis_tarihi) VALUES ($1, $2, $3, $3, $4)", [talep, teklif, `SA-OL-${sira}`, tarih]);
+    };
+    await siparis(bugun);
+    await siparis(await gun('-12 months'));
+    await siparis(await gun('-11 months'));
+    await siparis(await gun('-1 month'), 'iptal');
+    await siparis(await gun('-13 months'));
+    onayliListeCozucusuKaydet(null);
+    const t = (await liste()).firmalar.find((x) => x.firmaId === f.ted)!;
+    assert.equal(t.sonYil.siparis, 2);
+    assert.equal(t.sonYil.yetersizVeri, true);
   });
 
   test('Kalite kaydı olan firma satın alma tedarikçisi olmasa da listede; bilinmeyen firma kimliği atlanır', async () => {

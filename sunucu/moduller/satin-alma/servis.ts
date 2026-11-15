@@ -14,7 +14,7 @@ import type {
 import { STOK_AYRI_GRUPLARI } from '#paylasilan/sozlesme/satin-alma.ts';
 import { randomUUID } from 'node:crypto';
 import type { TakvimKaydi } from '#paylasilan/sozlesme/takvim.ts';
-import { firmaAdlari, karneOlayiKaldir, karneOlayiYaz } from '../musteri-tedarikci/disari.ts';
+import { firmaAdlari, karneOlayiKaldir, karneOlayiYaz, karneOzetleri } from '../musteri-tedarikci/disari.ts';
 import type { KalemBagiCikisi, OnayliListeCevabi, TeslimDurumu } from '#paylasilan/sozlesme/satin-alma.ts';
 import { numaraAl, sistemAyariOku } from '../ayarlar/disari.ts';
 import { kisiAdlari, kisiVarMi, kisininRolleri, rolSecenekleri } from '../kisiler/disari.ts';
@@ -49,6 +49,7 @@ import { alimBildir } from './alim-olayi.ts';
 import { degisenMalzemeler, terminBildir } from './termin-olayi.ts';
 import { ondalikMetinSemasi } from '#paylasilan/ondalik.ts';
 import { tesisGunu } from '#paylasilan/zaman.ts';
+import { KARNE_EN_AZ_TESLIM } from '#paylasilan/sozlesme/musteri-tedarikci.ts';
 
 const ad = (harita: Map<number, string>, id: number | null) => (id === null ? null : harita.get(id) ?? null);
 
@@ -893,8 +894,15 @@ export async function onayliListe(db: Db): Promise<OnayliListeCevabi> {
   const kalite = onayliListeCozucu === null ? null : await onayliListeCozucu(db);
   const idler = [...new Set([...tedarikciler, ...(kalite?.keys() ?? [])])];
   const adlar = await firmaOzetleri(db, idler);
-  const firmalar = idler.filter((id) => adlar.has(id) || tedarikciler.has(id))
-    .map((id) => ({ firmaId: id, ad: adlar.get(id)?.ad ?? `#${id}`, satinAlmaTedarikcisi: tedarikciler.has(id), kalite: kalite?.get(id) ?? null }))
+  const gorunen = idler.filter((id) => adlar.has(id) || tedarikciler.has(id));
+  const siparis = new Map((await s.sonYilSiparisSayilari(db, tesisGunu(Date.now()))).map((x) => [x.firmaId, x.sayi]));
+  const karne = await karneOzetleri(db, gorunen);
+  const sonYil = (id: number) => {
+    const k = karne.get(id);
+    return { siparis: siparis.get(id) ?? 0, teslim: k?.teslim.toplam ?? 0, zamanindaYuzde: k?.teslim.oran ?? null, yetersizVeri: (k?.teslim.toplam ?? 0) < KARNE_EN_AZ_TESLIM };
+  };
+  const firmalar = gorunen
+    .map((id) => ({ firmaId: id, ad: adlar.get(id)?.ad ?? `#${id}`, satinAlmaTedarikcisi: tedarikciler.has(id), kalite: kalite?.get(id) ?? null, sonYil: sonYil(id) }))
     .sort((a, b) => a.ad.localeCompare(b.ad, 'tr-TR'));
   const kartlar = await malzemeKategorileri(db, (await s.katalogOku(db)).map((k) => k.malzemeNo));
   return {
