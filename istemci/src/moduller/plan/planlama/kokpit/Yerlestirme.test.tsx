@@ -128,6 +128,50 @@ describe('Kokpit emirler ve operasyonlar (3297)', () => {
     await waitFor(() => { expect(oz).toHaveBeenLastCalledWith(expect.objectContaining({ emirId: '2' }), 5); });
   });
 
+  it('elle yerleştirmede son adım emri terminden sonraya atıyorsa geç bırakır diye bildirilir (onay sorulur)', async () => {
+    onizlemeKur();
+    const uygula = vi.fn();
+    const gec = { ...M, emirler: [PLANLI, { ...YENI, termin: 20 }] };
+    const k = siraKartlari(gec).find((x) => x.kok === '2');
+    if (!k) throw new Error('kart');
+    render(<EmirAdimlari m={gec} kart={k} zaman={zaman} uygula={uygula} surum={4} adimAc={vi.fn()} />);
+    const torna = await screen.findByRole('group', { name: 'Torna için boş yerler' });
+    await waitFor(() => { expect(torna.querySelectorAll('li')).toHaveLength(2); });
+    fireEvent.click(within(torna.querySelectorAll('li')[0] as HTMLElement).getByRole('button', { name: 'Yerleştir' }));
+    const freze = await screen.findByRole('group', { name: 'Freze için boş yerler' });
+    await waitFor(() => { expect(freze.querySelectorAll('li')).toHaveLength(2); });
+    fireEvent.click(within(freze.querySelectorAll('li')[0] as HTMLElement).getByRole('button', { name: 'Yerleştir' }));
+    // Torna T2'de 8'de, freze F1'de 24'te başlar, 28'de biter; termin 20.
+    expect(uygula).toHaveBeenCalledWith({ isId: '2.10', tezgah: 'T2', baslangic: 8, planaAl: '2', adimlar: [{ isId: '2.30', tezgah: 'F1' }] }, true);
+  });
+
+  it('okunamayan önizleme bellekte tutulmaz: aynı soru yeniden sorulur ve yer gelir', async () => {
+    const oz = vi.spyOn(planaAl, 'planaAlOnizle').mockResolvedValue(null);
+    render(<EmirAdimlari m={M} kart={kart('2')} zaman={zaman} uygula={vi.fn()} surum={4} adimAc={vi.fn()} />);
+    expect(await screen.findByText(/uygun boş yer bulunamadı/)).toBeTruthy();
+    oz.mockRestore();
+    onizlemeKur();
+    const bolum = screen.getByRole('region', { name: 'Emirler ve operasyonlar' });
+    // Adım değiştirip geri dönmek aynı soruları yeniden sordurur.
+    fireEvent.click(bolum.querySelector('[data-adim="2.30"]') as HTMLElement);
+    fireEvent.click(bolum.querySelector('[data-adim="2.10"]') as HTMLElement);
+    const torna = await screen.findByRole('group', { name: 'Torna için boş yerler' });
+    await waitFor(() => { expect(torna.querySelectorAll('li')).toHaveLength(2); });
+  });
+
+  it('bir adım için en çok altı aday tezgâha sorulur', async () => {
+    const oz = onizlemeKur();
+    const cok = ['T1', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'T8'];
+    const e: KokpitEmri = { ...YENI, adimlar: [{ id: '2.10', ad: 'Torna', adaylar: cok }] };
+    const m = { ...M, tezgahlar: cok.map((id) => ({ id, kod: `ORN-${id}`, ad: '', fason: false })), emirler: [PLANLI, e] };
+    const k = siraKartlari(m).find((x) => x.kok === '2');
+    if (!k) throw new Error('kart');
+    render(<EmirAdimlari m={m} kart={k} zaman={zaman} uygula={vi.fn()} surum={4} adimAc={vi.fn()} />);
+    const torna = await screen.findByRole('group', { name: 'Torna için boş yerler' });
+    await waitFor(() => { expect(torna.querySelectorAll('li')).toHaveLength(6); });
+    expect(new Set(oz.mock.calls.map((x) => x[0].tezgah))).toEqual(new Set(cok.slice(0, 6)));
+  });
+
   it('önizleme okunamazsa boş yer bulunamadı yazılır, toplu düğme kapalı kalır', async () => {
     vi.spyOn(planaAl, 'planaAlOnizle').mockResolvedValue(null);
     render(<EmirAdimlari m={M} kart={kart('2')} zaman={zaman} uygula={vi.fn()} surum={4} adimAc={vi.fn()} />);

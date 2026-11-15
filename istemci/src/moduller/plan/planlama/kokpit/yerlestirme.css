@@ -62,6 +62,7 @@
 .tc-pyq-yerler li > :last-child { grid-row: 1 / span 2; grid-column: 2; }
 .tc-pyq-yerler > .tc-pyq-not { display: block; }
 .tc-pyq-yerler-alt { display: flex; flex-wrap: wrap; gap: var(--b-2); }
+.tc-pyq-yerler .tc-dugme { min-height: var(--dokunma); }
 
 @media (max-width: 1099px) {
   .tc-pyq-emir { grid-template-columns: minmax(0, 1fr); }

@@ -67,7 +67,16 @@ function Acilir({ ad, etiket, simge, sinif, etkin, disabled, children }: {
   useEffect(() => {
     if (!acik) return undefined;
     const dis = (ev: PointerEvent): void => { if (!kok.current?.contains(ev.target as Node)) setAcik(false); };
-    const tus = (ev: KeyboardEvent): void => { if (ev.key === 'Escape') { ev.stopPropagation(); setAcik(false); kok.current?.querySelector('button')?.focus(); } };
+    const tus = (ev: KeyboardEvent): void => {
+      if (ev.key === 'Escape') { ev.stopPropagation(); setAcik(false); kok.current?.querySelector('button')?.focus(); return; }
+      if (ev.key !== 'ArrowDown' && ev.key !== 'ArrowUp') return;
+      // Menüde ok tuşları açık seçenekler arasında dolaşır.
+      const l = [...(kok.current?.querySelectorAll<HTMLButtonElement>('[role="menu"] button:not(:disabled)') ?? [])];
+      if (!l.length) return;
+      ev.preventDefault(); ev.stopPropagation();
+      const i = l.indexOf(document.activeElement as HTMLButtonElement);
+      l[(i + (ev.key === 'ArrowDown' ? 1 : l.length - 1) + (i < 0 && ev.key === 'ArrowUp' ? 1 : 0)) % l.length]?.focus();
+    };
     document.addEventListener('pointerdown', dis); document.addEventListener('keydown', tus, true);
     return () => { document.removeEventListener('pointerdown', dis); document.removeEventListener('keydown', tus, true); };
   }, [acik]);
@@ -484,6 +493,9 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
                   yerlestirme={tur ? null : yerHedefi}
                 />
                 <Liste m={m} cx={cx} goz={goz} emirler={gorunen} secEmir={secEmir} secIs={secIs} zaman={zaman} sec={sec} />
+                <ul className="tc-pyq-aciklama" aria-label="Renk açıklaması">
+                  <li><i />Planlı iş</li><li><i data-t="gec" />Geç emrin işi</li><li><i data-t="ilk" />En erken boş yer (basın)</li><li><i data-t="bos" />Boş yer (basın)</li><li><i data-t="kapali" />Kapalı saat, duruş</li>
+                </ul>
               </>
             )}
           </section>

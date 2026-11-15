@@ -29,7 +29,8 @@ export function SiraSeridi({ kartlar, secili, sec, zaman, olay, sag }: SiraSerid
   const liste = useRef<HTMLUListElement | null>(null);
   useEffect(() => {
     const k = liste.current, el = secili === null ? null : k?.querySelector<HTMLElement>('[aria-pressed="true"]');
-    if (k && el && typeof k.scrollTo === 'function') k.scrollTo({ left: Math.max(0, el.offsetLeft - k.offsetLeft - (k.clientWidth - el.offsetWidth) / 2) });
+    // Kart yarım kesilmesin diye seçili kart şeridin başına hizalanır.
+    if (k && el && typeof k.scrollTo === 'function') k.scrollTo({ left: Math.max(0, (el.parentElement?.offsetLeft ?? el.offsetLeft) - (k.firstElementChild as HTMLElement | null ?? el).offsetLeft) });
   }, [secili, kartlar.length]);
   return (
     <section className="tc-pyq-bolum" aria-label="Emirler, sırasıyla">
