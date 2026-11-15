@@ -1,4 +1,6 @@
 import type { KmKategoriDugumu, KmKategoriOnayi, KmKategoriTuru } from '#paylasilan/sozlesme/kalite-merkezi-kategori-onayi.ts';
+import { KM_KRITIKLIKLER } from '#paylasilan/sozlesme/kalite-merkezi-kategori-onayi.ts';
+import type { KmTedarikciDurumu } from '#paylasilan/sozlesme/kalite-merkezi.ts';
 import { TEDARIKCI_ASKIDA, tedarikciOnayDurumlari } from '../kurallar.ts';
 
 export const KATEGORI_ILETILERI = {
@@ -42,4 +44,34 @@ export function askidakiFirmalar(kayitlar: readonly TedarikciKaydi[], firmalar: 
 export function gecerliKararlar(kararlar: readonly KmKategoriOnayi[], askiTarihi: string | null): KmKategoriOnayi[] {
   if (askiTarihi === null) return [...kararlar];
   return kararlar.map((k) => ({ ...k, durum: 'onaysiz', kaynak: 'firma_askida', tarih: askiTarihi }));
+}
+
+type ListeKaydi = {
+  firmaId: number | null; kod: string | null; ad: string; onay: string | null; kritik: string | null; serts: readonly string[]; sertBitis: string | null; sonDenetim: string | null;
+};
+export interface ListeFirmasi {
+  durum: KmTedarikciDurumu | null; adIleEslendi: boolean; kritiklik: (typeof KM_KRITIKLIKLER)[number] | null;
+  sertifikalar: string[]; sertifikaBitisi: string | null; sonDenetim: string | null;
+}
+
+// KMK-4 (3279 a): firmaya bağlanan kayıtların birleşimi. Bağ ve durum 236 a kuralıyla (en kısıtlayıcı); kimlikle bağlı kaydı olmayan ama
+// ad ya da kodla eşlenen firma `adIleEslendi` (Risk K3). Kritiklik en yükseği, sertifikalar birleşimi, sertifika bitişi en yakını, son
+// denetim en sonu. Kaydı olmayan firma haritada yoktur.
+export function listeFirmalari(kayitlar: readonly ListeKaydi[], firmalar: readonly FirmaAdi[]): Map<number, ListeFirmasi> {
+  const durumlar = tedarikciOnayDurumlari(kayitlar, firmalar);
+  const sonuc = new Map<number, ListeFirmasi & { kimlikle: boolean; serts: Set<string> }>();
+  for (const k of kayitlar) {
+    const bagli = k.firmaId !== null ? firmalar.filter((f) => f.id === k.firmaId) : [...tedarikciOnayDurumlari([{ ...k, onay: TEDARIKCI_ASKIDA }], firmalar).keys()].map((id) => ({ id }));
+    for (const f of bagli) {
+      const o = sonuc.get(f.id) ?? { durum: durumlar.get(f.id) ?? null, adIleEslendi: false, kritiklik: null, sertifikalar: [], sertifikaBitisi: null, sonDenetim: null, kimlikle: false, serts: new Set<string>() };
+      if (k.firmaId !== null) o.kimlikle = true;
+      const kr = KM_KRITIKLIKLER.find((x) => x === k.kritik);
+      if (kr !== undefined && (o.kritiklik === null || KM_KRITIKLIKLER.indexOf(kr) < KM_KRITIKLIKLER.indexOf(o.kritiklik))) o.kritiklik = kr;
+      for (const s of k.serts) o.serts.add(s);
+      if (k.sertBitis !== null && (o.sertifikaBitisi === null || k.sertBitis < o.sertifikaBitisi)) o.sertifikaBitisi = k.sertBitis;
+      if (k.sonDenetim !== null && (o.sonDenetim === null || k.sonDenetim > o.sonDenetim)) o.sonDenetim = k.sonDenetim;
+      sonuc.set(f.id, o);
+    }
+  }
+  return new Map([...sonuc].map(([id, { kimlikle, serts, ...o }]) => [id, { ...o, adIleEslendi: !kimlikle, sertifikalar: [...serts].sort((a, b) => a.localeCompare(b, 'tr')) }]));
 }

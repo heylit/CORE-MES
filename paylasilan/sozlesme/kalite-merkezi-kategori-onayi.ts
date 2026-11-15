@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { surumSemasi } from '../surum.ts';
 import { zamanSemasi } from '../zaman.ts';
+import { KM_TEDARIKCI_DURUMLARI } from './kalite-merkezi.ts';
 
 // 2466 (2461-2 a): tedarikçinin kategori başına Kalite kararı. Kategori Malzemeler ağacındaki (tür, kod) anahtarıdır (2461-4 a).
 export const KM_KATEGORI_TURLERI = ['hammadde', 'sarf', 'demirbas', 'hizmet'] as const;
@@ -50,3 +51,25 @@ export const kmKategoriOnaylariCevabi = z.object({
   agac: z.array(kmKategoriDugumu),
 });
 export type KmKategoriOnaylariCevabi = z.output<typeof kmKategoriOnaylariCevabi>;
+
+// 3279 a: onaylı tedarikçi listesinin Kalite parçası (satın alma salt okur). Firma geneli durum 236 a kuralıyla; `adIleEslendi` kaydın firmaya
+// kimlikle değil ad ya da kodla bağlandığını söyler (Risk K3: yazdırma ve CSV'de onaylı sayılmaz). Tarihler YYYY-AA-GG; yoksa null.
+// Kategoriler geçerli kararlardır (askıda firmada hepsi onaysız, 2466-2 a). Denetim bulgusu, dosya ve kişi adı dönmez (Risk K2).
+export const KM_KRITIKLIKLER = ['Kritik', 'Önemli', 'Standart'] as const;
+export const kmOnayliListeKategorisi = z.object({
+  kategoriTuru: z.enum(KM_KATEGORI_TURLERI),
+  kategoriKodu: z.string(),
+  durum: z.enum(KM_KATEGORI_DURUMLARI),
+  aciklama: z.string().nullable(),
+  tarih: zamanSemasi,
+});
+export const kmOnayliListeSatiri = z.object({
+  durum: z.enum(KM_TEDARIKCI_DURUMLARI).nullable(),
+  adIleEslendi: z.boolean(),
+  kritiklik: z.enum(KM_KRITIKLIKLER).nullable(),
+  sertifikalar: z.array(z.string()),
+  sertifikaBitisi: z.string().nullable(),
+  sonDenetim: z.string().nullable(),
+  kategoriler: z.array(kmOnayliListeKategorisi),
+});
+export type KmOnayliListeSatiri = z.output<typeof kmOnayliListeSatiri>;

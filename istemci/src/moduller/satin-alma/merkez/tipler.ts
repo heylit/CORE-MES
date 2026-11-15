@@ -15,7 +15,8 @@ export type RequestStatus = (typeof REQUEST_STATUSES)[number];
 export const PRIORITIES = ["low", "normal", "urgent"] as const;
 export type Priority = (typeof PRIORITIES)[number];
 
-export const SUPPLIER_STATUSES = ["approved", "trial", "suspended"] as const;
+// 3279 a: "unregistered" Kalite Merkezi'nde kaydı olmayan firmadır; onaylı sayılmaz.
+export const SUPPLIER_STATUSES = ["approved", "trial", "suspended", "unregistered"] as const;
 export type SupplierStatus = (typeof SUPPLIER_STATUSES)[number];
 
 export const QUALITIES = ["ok", "partial", "rejected"] as const;

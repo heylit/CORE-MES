@@ -5,7 +5,7 @@ import {
   iptaliGeriAlCevabi, iptaliGeriAlGovdesi, talepAyirGovdesi, talepBirlestirGovdesi, satinAlmaOzetiCevabi, degerlendirmeCevabi, kartAyrintilariCevabi, stokYokIstekleriCevabi, odemePlaniGovdesi, siparisTakibiCevabi, siparisBelgeleriCevabi, siparisBelgesiGovdesi, siparisBelgesiParametresi, siparisSatiriParametresi, siparisFaturalariCevabi, siparisFaturalariSorgusu, siparisFaturasiGovdesi, siparisKalemiDegistirGovdesi, siparisKapatGovdesi, siparisLogoBekletGovdesi, teslimYontemiGovdesi, talepKaydetGovdesi, talepParametresi, talepSemasi, talepSilGovdesi, tamamCevabi, tedarikciKaydetGovdesi, tedarikciSemasi,
   tedarikTerminiKaydetGovdesi, tedarikTerminiKaydetCevabi, tedarikTerminleriCevabi,
   butceKullanimiCevabi, butceKullanimiSorgusu, kgFiyatiEkleGovdesi, kgFiyatiIptalGovdesi, kgFiyatiParametresi, kgFiyatiGecmisiCevabi, kgFiyatiGecmisiSorgusu, kgFiyatlariCevabi, malzemeKgFiyatlariCevabi, malzemeKgFiyatlariSorgusu,
-  faturaEslemesiCevabi, faturaEslemesiKaydetGovdesi, faturaEslemesiParametresi,
+  faturaEslemesiCevabi, faturaEslemesiKaydetGovdesi, faturaEslemesiParametresi, onayliListeCevabi,
 } from '#paylasilan/sozlesme/satin-alma.ts';
 import { satinAlmaAnaliziCevabi } from '#paylasilan/sozlesme/satin-alma-analiz.ts';
 import { z } from 'zod';
@@ -42,6 +42,11 @@ export const uclar = [
   uc({
     yontem: 'GET', yol: '/satin-alma-analiz', yetki: { biri: ['satin-alma.oku', 'satin-alma.yaz'] }, cevap: satinAlmaAnaliziCevabi,
     isle: ({ db }) => satinAlmaAnalizi(db),
+  }),
+  // 3279 a: Tedarikçiler > Onaylı liste ve teklif rehberi; yalnız okur, Satın Alma ekranını gören görür (yeni işlem yok, Risk 3279 V1).
+  uc({
+    yontem: 'GET', yol: '/satin-alma-onayli-liste', yetki: { biri: ['satin-alma.oku', 'satin-alma.yaz', 'satin-alma.onayla', 'satin-alma.ayar'] },
+    cevap: onayliListeCevabi, isle: ({ db }) => servis.onayliListe(db),
   }),
   // Fason süre ve termin grafikleri: dış operasyonlar sayfasıyla aynı yetki.
   uc({

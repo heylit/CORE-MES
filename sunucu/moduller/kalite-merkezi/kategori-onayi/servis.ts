@@ -2,13 +2,13 @@ import type { Db } from '#cekirdek/db.ts';
 import { bulunamadi, cakisma, dogrulama, eskiSurum } from '#cekirdek/hata.ts';
 import type { Kullanici } from '#cekirdek/yetki.ts';
 import type {
-  KmKategoriKarariGovdesi, KmKategoriOnayi, KmKategoriOnaylariCevabi,
+  KmKategoriKarariGovdesi, KmKategoriOnayi, KmKategoriOnaylariCevabi, KmOnayliListeSatiri,
 } from '#paylasilan/sozlesme/kalite-merkezi-kategori-onayi.ts';
 import { kisiAdlari } from '../../kisiler/disari.ts';
 import { kategoriAgaci } from '../../malzemeler/disari.ts';
 import { firmaOzeti, tumFirmalar } from '../../musteri-tedarikci/disari.ts';
 import { tedarikciFirmasiMi } from '../kurallar.ts';
-import { KATEGORI_ILETILERI, askidakiFirmalar, gecerliKararlar, kategoriReddi } from './kurallar.ts';
+import { KATEGORI_ILETILERI, askidakiFirmalar, gecerliKararlar, kategoriReddi, listeFirmalari } from './kurallar.ts';
 import * as sorgular from './sorgular.ts';
 
 async function kararlariOku(db: Db, firmaIdler: readonly number[]): Promise<Map<number, KmKategoriOnayi[]>> {
@@ -75,4 +75,23 @@ export async function kararVer(db: Db, kullanici: Kullanici, g: KmKategoriKarari
   if (s === null) throw bulunamadi(KATEGORI_ILETILERI.kararYok);
   await sorgular.gecmisYaz(db, k, once.durum);
   return s;
+}
+
+// disari.ts (3279 a): onaylı tedarikçi listesinin Kalite parçası. Kaydı ya da kategori kararı olan her firma haritadadır; kararlar
+// geçerli hâliyle (askıda firmada onaysız). Yetkiyi çağıranın ucu denetler.
+export async function onayliListe(db: Db): Promise<Map<number, KmOnayliListeSatiri>> {
+  const firmalar = await tumFirmalar(db);
+  const kayitlar = listeFirmalari(await sorgular.listeKayitlari(db), firmalar);
+  const bilinen = new Set(firmalar.map((f) => f.id));
+  const idler = [...new Set([...kayitlar.keys(), ...(await sorgular.kararliFirmalar(db)).filter((id) => bilinen.has(id))])].sort((a, b) => a - b);
+  if (idler.length === 0) return new Map();
+  const kararlar = await kategoriOnaylari(db, idler);
+  return new Map(idler.map((id) => {
+    const k = kayitlar.get(id);
+    return [id, {
+      durum: k?.durum ?? null, adIleEslendi: k?.adIleEslendi ?? false, kritiklik: k?.kritiklik ?? null, sertifikalar: k?.sertifikalar ?? [],
+      sertifikaBitisi: k?.sertifikaBitisi ?? null, sonDenetim: k?.sonDenetim ?? null,
+      kategoriler: (kararlar.get(id)?.kategoriler ?? []).map((x) => ({ kategoriTuru: x.kategoriTuru, kategoriKodu: x.kategoriKodu, durum: x.durum, aciklama: x.aciklama, tarih: x.tarih })),
+    }];
+  }));
 }

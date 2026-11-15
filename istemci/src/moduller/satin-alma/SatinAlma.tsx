@@ -2,9 +2,11 @@ import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 import { useBildirim } from '../../ortak/arayuz/Bildirim.tsx';
+import { Sekmeler, type Sekme } from '../../ortak/arayuz/index.ts';
 import { useOturum } from '../../ortak/veri/oturum.ts';
 import { OnTalepKarti } from './OnTalepKarti.tsx';
 import { MerkezEkrani } from './ekran/MerkezEkrani.tsx';
+import { OnayliListe } from './tedarikciler/OnayliListe.tsx';
 import { acilisOku, merkezAdresi, merkeziBagla, type MerkezSayfasi } from './merkez/bagla.ts';
 import type { Role } from './merkez/roles.ts';
 
@@ -60,7 +62,19 @@ export function OnaylarSayfasi() {
   return <Merkez rol="approver" sayfa="dash" yol="/satin-alma/onaylar" />;
 }
 export const MalzemelerSayfasi = () => <Merkez rol="buyer" sayfa="materials" yol="/satin-alma/malzemeler" />;
-export const TedarikcilerSayfasi = () => <Merkez rol="buyer" sayfa="suppliers" yol="/satin-alma/tedarikciler" />;
+// 3279 a: Onaylı liste menü maddesi değil, Tedarikçiler'in sekmesidir; seçili sekme adreste durur (geri tuşu ve paylaşılan bağlantı).
+const TEDARIKCI_SEKMELERI: Sekme<'tedarikciler' | 'onayli'>[] = [{ anahtar: 'tedarikciler', baslik: 'Tedarikçiler', simge: 'building' }, { anahtar: 'onayli', baslik: 'Onaylı liste', simge: 'clipboard-check' }];
+export function TedarikcilerSayfasi() {
+  const [adres, adresYaz] = useSearchParams();
+  const sekme = adres.get('sekme') === 'onayli' ? 'onayli' : 'tedarikciler';
+  const sec = (s: 'tedarikciler' | 'onayli') => adresYaz((a) => { const y = new URLSearchParams(a); if (s === 'onayli') y.set('sekme', s); else y.delete('sekme'); return y; });
+  return (
+    <div className="sa-tedarikci-sekmeli">
+      <Sekmeler etiket="Tedarikçiler" sekmeler={TEDARIKCI_SEKMELERI} secili={sekme} sec={sec} />
+      {sekme === 'onayli' ? <OnayliListe /> : <Merkez rol="buyer" sayfa="suppliers" yol="/satin-alma/tedarikciler" />}
+    </div>
+  );
+}
 export const RaporlarSayfasi = () => <Merkez rol="buyer" sayfa="reports" yol="/satin-alma/raporlar" />;
 export { DisOperasyonlar as DisOperasyonlarSayfasi } from './dis-operasyon/DisOperasyonlar.tsx';
 export { KgFiyatlari as KgFiyatlariSayfasi } from './kg-fiyat/KgFiyatlari.tsx';

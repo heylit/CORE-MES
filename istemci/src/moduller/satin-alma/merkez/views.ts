@@ -19,6 +19,7 @@ import { siparisTakibiHTML } from "./takip.ts";
 import { inlineBulkHTML } from "./ui.ts";
 import { kalemAdiParcayla, kalemBagMetinleri, parcaAltSatiri, uygulananSatiri } from "./kalem-bagi.ts";
 import { grupMetni, ikinciAlimUyarisi } from "./guncelleme-grubu.ts";
+import { rehberRozetleri } from "./onayli-ekran.ts";
 import { getRole, onaylayabilir, viewApproval, viewApprovals, viewRequesterHome, viewRequestRequester } from "./roles.ts";
 /* ================= render çekirdeği ================= */
 // Ortak parçalarla çizilen ekranlar (iş kutusu, Talepler, talep ayrıntısı; 2412-2) merkezin durumunu her çizimde yeniden okur.
@@ -546,6 +547,7 @@ function tabQuotes(r: PurchaseRequest): string {
     fl.push(q.compliant === false ? '<span class="flag bad">teknik uygun değil</span>' : c.covered < (r.items || []).length ? `<span class="flag warn">${c.covered}/${(r.items || []).length} kalem</span>` : '<span class="flag good">tüm kalemler</span>');
     if (v !== null) fl.push(v < 0 ? '<span class="flag bad">geçerlilik doldu</span>' : v <= 5 ? `<span class="flag warn">geçerlilik ${v} gün</span>` : `<span class="sub">geçerli ${fmtDate(q.validUntil)}</span>`);
     if (s && s.status === "suspended") fl.push('<span class="flag bad">askıda</span>');
+    fl.push(...rehberRozetleri(r, q.supplierId));
     return `<tr><td class="lead"><b>${supLink(q.supplierId, supName(q))}</b><span class="sub">${fmtDate(q.date)}${q.revisions ? `, ${q.revisions}. revizyon` : ""}${q.note ? ", " + esc(q.note) : ""}</span></td>
     <td class="r num">${money(c.total, q.currency)}${q.currency !== "TRY" ? `<span class="sub">${money(c.totalTRY)}, kur ${nfx.format(c.rate)}</span>` : ""}${neg}</td>
     <td>${payText(q)}<span class="sub">${isNum(parseNum(q.leadDays)) ? parseNum(q.leadDays) + " gün termin" : "termin yok"}${q.deliveryTerm ? ", " + esc(q.deliveryTerm) : ""}</span></td>
@@ -625,6 +627,7 @@ export function rankHTML(r: PurchaseRequest, ev: Evaluation): string {
     if (x.fill > 0) fl.push(`<span class="flag warn">${(r.items || []).length - x.c.covered} kalem eksik, tek başına seçilemez</span>`);
     if (x.late) fl.push(`<span class="flag bad">ihtiyaç tarihini ${x.late} gün kaçırır</span>`);
     if (x.suspended) fl.push('<span class="flag bad">askıdaki tedarikçi</span>');
+    fl.push(...rehberRozetleri(r, x.q.supplierId));
     if (v !== null && v < 0) fl.push('<span class="flag bad">geçerlilik doldu</span>');
     else if (v !== null && v <= 5) fl.push(`<span class="flag warn">geçerlilik ${v} gün</span>`);
     if (awardQ === x.q.id) fl.push('<span class="flag good">seçildi</span>');
@@ -723,6 +726,7 @@ export function tabDecision(r: PurchaseRequest, part: "select" | "split" | "appr
     if (x.fill > 0) fl.push(`<span class="flag warn">${(r.items || []).length - x.c.covered} kalem eksik</span>`);
     if (x.late) fl.push(`<span class="flag bad">ihtiyacı ${x.late} gün kaçırır</span>`);
     if (x.suspended) fl.push('<span class="flag bad">askıdaki tedarikçi</span>');
+    fl.push(...rehberRozetleri(r, x.q.supplierId));
     if (v !== null && v < 0) fl.push('<span class="flag bad">geçerlilik doldu</span>');
     else if (v !== null && v <= 5) fl.push(`<span class="flag warn">geçerlilik ${v} gün</span>`);
     return fl;

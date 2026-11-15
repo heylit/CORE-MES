@@ -59,3 +59,29 @@ export function tedarikciKayitlari(db: Db): Promise<{ firmaId: number | null; ko
      FROM kalite_merkezi_belge WHERE koleksiyon = 'sup' AND govde IS NOT NULL ORDER BY kimlik`,
   );
 }
+
+// 3279 a: onaylı listenin firma geneli kayıt alanları. Tarih yalnız YYYY-AA-GG biçimindeyse, sertifikalar yalnız metin dizisiyse okunur;
+// öteki biçim null ya da boş dizi döner (uydurulmaz). Firma kimliği okuması tedarikciKayitlari ile aynıdır.
+export interface ListeKaydi {
+  firmaId: number | null; kod: string | null; ad: string; onay: string | null; kritik: string | null; serts: string[]; sertBitis: string | null; sonDenetim: string | null;
+}
+const TARIH = (alan: string): string =>
+  `CASE WHEN jsonb_typeof(govde->'${alan}') = 'string' AND (govde->>'${alan}') ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$' THEN govde->>'${alan}' END`;
+export function listeKayitlari(db: Db): Promise<ListeKaydi[]> {
+  return db.sorgu(
+    `SELECT CASE WHEN jsonb_typeof(govde->'firmaId') = 'number' AND (govde->>'firmaId') ~ '^[1-9][0-9]{0,9}$' AND (govde->>'firmaId')::bigint <= 2147483647
+                 THEN (govde->>'firmaId')::int END AS "firmaId",
+            nullif(btrim(govde->>'kod'), '') AS kod, btrim(coalesce(govde->>'ad', '')) AS ad, govde->>'onay' AS onay,
+            CASE WHEN jsonb_typeof(govde->'kritik') = 'string' THEN govde->>'kritik' END AS kritik,
+            CASE WHEN jsonb_typeof(govde->'serts') = 'array'
+                 THEN ARRAY(SELECT btrim(x) FROM jsonb_array_elements(govde->'serts') AS e(v), LATERAL (SELECT e.v #>> '{}' AS x) y
+                            WHERE jsonb_typeof(e.v) = 'string' AND btrim(x) <> '') ELSE ARRAY[]::text[] END AS serts,
+            ${TARIH('sertBitis')} AS "sertBitis", ${TARIH('sonDenetim')} AS "sonDenetim"
+     FROM kalite_merkezi_belge WHERE koleksiyon = 'sup' AND govde IS NOT NULL ORDER BY kimlik`,
+  );
+}
+
+// 3279 a: kategori kararı olan firmalar (kayıtları olmasa da listede görünürler).
+export async function kararliFirmalar(db: Db): Promise<number[]> {
+  return (await db.sorgu<{ firmaId: number }>('SELECT DISTINCT firma_id AS "firmaId" FROM kalite_merkezi_kategori_onayi ORDER BY 1')).map((r) => r.firmaId);
+}

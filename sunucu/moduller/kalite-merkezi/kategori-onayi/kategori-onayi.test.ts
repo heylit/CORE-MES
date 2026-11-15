@@ -9,8 +9,8 @@ import { kmKategoriKarariGovdesi } from '#paylasilan/sozlesme/kalite-merkezi-kat
 import { denetimYaz } from '../../denetim/disari.ts';
 import { rolAl, rolAta, yoneticiOlustur } from '../../kisiler/disari.ts';
 import { kimlikCozucu } from '../../oturum/disari.ts';
-import { kategoriOnaylari } from '../disari.ts';
-import { askidakiFirmalar, gecerliKararlar, kategoriReddi, KATEGORI_ILETILERI } from './kurallar.ts';
+import { kategoriOnaylari, onayliListe } from '../disari.ts';
+import { askidakiFirmalar, gecerliKararlar, kategoriReddi, KATEGORI_ILETILERI, listeFirmalari } from './kurallar.ts';
 
 const PAROLA = 'dogru-parola-1';
 
@@ -181,5 +181,52 @@ describe('Kategori onayı uçları ve okuma (gerçek PostgreSQL, gerçek giriş)
     assert.equal(sonra.firmaAskida, null);
     assert.deepEqual(sonra.kategoriler.map((k) => k.durum), ['sartli', 'onayli']);
     assert.deepEqual([...await vt().tx((db) => kategoriOnaylari(db, []))], []);
+  });
+
+  test('onaylı liste (3279 a): kayıt alanları ve geçerli kararlar; ad ile eşlenen işaretli; kaydı ve kararı olmayan firma yok', async () => {
+    const s = await istek(kalite, '/kalite-merkezi/kayitlar/sup/sup_liste/onayla', {
+      govde: { ad: 'Deneme', onay: 'Onaylı', firmaId: f.ted, kritik: 'Kritik', serts: ['AS9100', 7, ''], sertBitis: '2027-01-31', sonDenetim: 'dün' }, surum: null,
+    });
+    assert.equal(s.statusCode, 200, s.body);
+    const adla = await firma('Deneme Adla', 'tedarikci');
+    const a = await istek(kalite, '/kalite-merkezi/kayitlar/sup/sup_adla/onayla', { govde: { ad: 'deneme adla', onay: 'Şartlı onaylı' }, surum: null });
+    assert.equal(a.statusCode, 200, a.body);
+    const m = await vt().tx((db) => onayliListe(db));
+    assert.deepEqual(m.get(f.ted), {
+      durum: 'Onaylı', adIleEslendi: false, kritiklik: 'Kritik', sertifikalar: ['AS9100'], sertifikaBitisi: '2027-01-31', sonDenetim: null,
+      kategoriler: m.get(f.ted)!.kategoriler,
+    });
+    assert.deepEqual(m.get(f.ted)!.kategoriler.map((k) => [k.kategoriKodu, k.durum, k.aciklama]), [['isil', 'sartli', 'İlk partide tam kontrol'], ['yuzey', 'onayli', null]]);
+    assert.equal(m.get(adla)?.durum, 'Şartlı onaylı');
+    assert.equal(m.get(adla)?.adIleEslendi, true);
+    assert.equal(m.has(f.pasif), false);
+    assert.equal(m.has(f.musteri), false);
+  });
+});
+
+describe('Onaylı liste Kalite parçası (3279 a)', () => {
+  const firmalar = [{ id: 1, kod: 'T-1', ad: 'Bir' }, { id: 2, kod: null, ad: 'İki' }, { id: 3, kod: null, ad: 'Üç' }];
+  const kayit = (k: Partial<Parameters<typeof listeFirmalari>[0][number]>) => ({
+    firmaId: null, kod: null, ad: '', onay: null, kritik: null, serts: [], sertBitis: null, sonDenetim: null, ...k,
+  });
+
+  test('KMK-4: kayıtlar firmada birleşir; kimliksiz eşleşme işaretlenir; kaydı olmayan firma yok', () => {
+    const m = listeFirmalari([
+      kayit({ firmaId: 1, onay: 'Onaylı', kritik: 'Önemli', serts: ['ISO 9001'], sertBitis: '2027-03-01', sonDenetim: '2026-01-10' }),
+      kayit({ kod: 't-1', ad: 'x', onay: 'Şartlı onaylı', kritik: 'Kritik', serts: ['AS9100', 'ISO 9001'], sertBitis: '2026-12-01', sonDenetim: '2025-05-01' }),
+      kayit({ ad: 'iki', onay: 'Onaylı', kritik: 'yanlış', sertBitis: null }),
+    ], firmalar);
+    assert.deepEqual([...m.keys()].sort(), [1, 2]);
+    assert.deepEqual(m.get(1), {
+      durum: 'Şartlı onaylı', adIleEslendi: false, kritiklik: 'Kritik', sertifikalar: ['AS9100', 'ISO 9001'], sertifikaBitisi: '2026-12-01', sonDenetim: '2026-01-10',
+    });
+    assert.deepEqual(m.get(2), { durum: 'Onaylı', adIleEslendi: true, kritiklik: null, sertifikalar: [], sertifikaBitisi: null, sonDenetim: null });
+  });
+
+  test('KMK-4: onayı boş ya da tanımsız kayıt firmaya bağlanır ama durum uydurmaz', () => {
+    const m = listeFirmalari([kayit({ firmaId: 3, onay: null, serts: ['NADCAP'] }), kayit({ firmaId: 99, onay: 'Onaylı' })], firmalar);
+    assert.deepEqual([...m.keys()], [3]);
+    assert.equal(m.get(3)?.durum, null);
+    assert.deepEqual(m.get(3)?.sertifikalar, ['NADCAP']);
   });
 });

@@ -20,6 +20,8 @@ import {
 import { bekletmePenceresiSiparisleri, labelTables, onAfterRender, ozellikAlti, ozellikBasliklari, ozellikHucreleri, PRESETS, rankHTML, readSplitAssign, render, summaryText, UI, updateSplitSum, verdictHTML } from "./views.ts";
 import { basamakYazabilir, reportCSV, unlinkedItems } from "./memory.ts";
 import { partileriUnut } from "./partiler.ts";
+import { kategoriNotu, rehberRozetleri, talepRehberi } from "./onayli-ekran.ts";
+import { rehberSirasi } from "./onayli.ts";
 import { ODEME_SEKLI, siparisTakibi, takibiUnut, takipGuncelle } from "./takip.ts";
 import { approvalFormHTML, poText, printDoc } from "./docs.ts";
 import { onaylayabilir, setRole, type Role } from "./roles.ts";
@@ -301,17 +303,19 @@ function rfqSuggestions(r: PurchaseRequest): Suggestion[] {
     const match = sc.filter(c => cats.has(c));
     if (match.length) { const o = out[s.id] || (out[s.id] = { id: s.id, why: [], score: 0, p: 0 }); o.why.push("kategori: " + match.join(", ")); o.score += 1; }
   });
-  return Object.values(out).filter(o => S.suppliers[o.id] && S.suppliers[o.id]!.status !== "suspended").map(o => Object.assign(o, { p: perfScore(o.id) })).sort((a, b) => b.score - a.score || perfDesc(a.p, b.p));
+  // 3279 a: kalemin kategorisinde Kalite onaylı firma önce, sonra şartlı, sonra öteki; aynı sınıfta hafıza puanı.
+  const sira = (id: string) => rehberSirasi(talepRehberi(r, id));
+  return Object.values(out).filter(o => S.suppliers[o.id] && S.suppliers[o.id]!.status !== "suspended").map(o => Object.assign(o, { p: perfScore(o.id) })).sort((a, b) => sira(a.id) - sira(b.id) || b.score - a.score || perfDesc(a.p, b.p));
 }
 function rfqModal(r: PurchaseRequest): void {
   const sugg = rfqSuggestions(r); const sids = new Set(sugg.map(s => s.id));
   const asked = new Set((r.rfqs || []).map(x => x.supplierId));
-  const others = Object.values(S.suppliers).filter(s => !sids.has(s.id)).sort((a, b) => a.name.localeCompare(b.name, "tr"));
+  const others = Object.values(S.suppliers).filter(s => !sids.has(s.id)).sort((a, b) => rehberSirasi(talepRehberi(r, a.id)) - rehberSirasi(talepRehberi(r, b.id)) || a.name.localeCompare(b.name, "tr"));
   const sst = supplierStats();
-  const line = (s: Supplier, why: string, checked: boolean) => { const st = sst[s.id] || EMPTY_STATS; return `<label><input type="checkbox" data-rfq="${s.id}" ${checked ? "checked" : ""}><span><b>${esc(s.name)}${pasifEki(s)}</b>${s.status === "suspended" ? ' <span class="flag bad">askıda</span>' : ""}${asked.has(s.id) ? ' <span class="flag mute">daha önce istendi</span>' : ""}<span class="why">${esc(why)}</span></span><span class="xs muted num">${st.asked ? "cevap " + pct(st.responseRate) : ""}${st.deliveries ? ", zamanında " + pct(st.onTimeRate) : ""}</span></label>`; };
+  const line = (s: Supplier, why: string, checked: boolean) => { const st = sst[s.id] || EMPTY_STATS; return `<label><input type="checkbox" data-rfq="${s.id}" ${checked ? "checked" : ""}><span><b>${esc(s.name)}${pasifEki(s)}</b>${s.status === "suspended" ? ' <span class="flag bad">askıda</span>' : ""}${asked.has(s.id) ? ' <span class="flag mute">daha önce istendi</span>' : ""}${rehberRozetleri(r, s.id).map(x => " " + x).join("")}<span class="why">${esc(why)}</span></span><span class="xs muted num">${st.asked ? "cevap " + pct(st.responseRate) : ""}${st.deliveries ? ", zamanında " + pct(st.onTimeRate) : ""}</span></label>`; };
   openModal(`<div class="mh"><h2>Teklif iste</h2><span class="spacer"></span><span class="muted small">${esc(r.no)}</span></div>
   <div class="mb">
-    <p class="small muted">Her tedarikçiye aynı soruları sormak cevapları karşılaştırılabilir kılar. Seçtiklerinizi "istendi" olarak kaydederseniz cevap süreleri ve oranları tedarikçi karnesine işlenir.</p>
+    ${kategoriNotu(r)}<p class="small muted">Her tedarikçiye aynı soruları sormak cevapları karşılaştırılabilir kılar. Seçtiklerinizi "istendi" olarak kaydederseniz cevap süreleri ve oranları tedarikçi karnesine işlenir.</p>
     ${sugg.length ? `<div><h4 data-sa-y="30">Hafızanın önerdikleri</h4><div class="sugg">${sugg.map(o => line(S.suppliers[o.id]!, o.why.slice(0, 2).join("; "), !asked.has(o.id))).join("")}</div></div>` : ""}
     ${others.length ? `<details ${sugg.length ? "" : "open"}><summary class="small" data-sa-y="31">Diğer tedarikçiler (${others.length})</summary><div class="sugg">${others.map(s => line(s, (s.categories || []).join(", "), false)).join("")}</div></details>` : ""}
     ${!Object.keys(S.suppliers).length ? '<div class="note small">Henüz tedarikçi kaydı yok. Metni genel olarak kopyalayabilir ya da önce tedarikçi ekleyebilirsiniz.</div>' : ""}
@@ -399,7 +403,7 @@ function firmaAra(metin: string): void {
 }
 function supplierModal(s: Supplier | null | undefined): void {
   const set = settings();
-  draftS = s ? clone(s) : { id: uid(), name: "", categories: [], contact: "", phone: "", email: "", city: "", taxNo: "", status: "approved", rating: null, notes: "", evals: [], createdAt: Date.now() };
+  draftS = s ? clone(s) : { id: uid(), name: "", categories: [], contact: "", phone: "", email: "", city: "", taxNo: "", status: "unregistered", rating: null, notes: "", evals: [], createdAt: Date.now() };
   if (!draftS.categories) draftS.categories = [];
   const cats = [...new Set([...(set.categories || []), ...draftS.categories])];
   firmaSecildi = !!s;
