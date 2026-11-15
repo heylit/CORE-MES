@@ -40,8 +40,9 @@ type AcikPencere =
 
 // 465/3: liste 50 satırlık sayfalarla kalır (eski ekranda tek liste).
 const SAYFA_BOYU = 50;
-// Prototip süzgeç kutusunu bu genişliğin altında kapalı açar (kart listesi hemen görünsün).
-const DAR_EKRAN = '(max-width: 980px)';
+// Süzgeç kutusu bu genişliğin altında kapalı açılır (prototip 980). 3275: tablo sütunları 1440 altında kutu açıkken sığmaz;
+// kutu kapalıyken liste tam genişliktir.
+const DAR_EKRAN = '(max-width: 1439px)';
 // Bu genişliğin altında tablo kartlara döner (ortak Tablo uyarlanır); üstünde yatay kayar, Malzeme sütunu yerinde kalır.
 const TELEFON = '(max-width: 719px)';
 
@@ -110,19 +111,19 @@ function sutunlar(
       hucre: (k) => {
         const m = formMetni(k.kayit, b);
         if (!m) return YOK;
-        return m.form ? <span className="tc-mk-deger">{m.form}<small className="tc-mk-alt">{m.olcu}</small></span> : m.olcu;
+        return m.form ? <span className="tc-mk-deger">{m.form}<small className="tc-mk-alt" title={m.olcu}>{m.olcu}</small></span> : m.olcu;
       },
     },
     {
       anahtar: 'agirlik', baslik: 'Birim ağırlık', hizala: 'sag', sirala: true,
       hucre: (k) => {
         const w = K.weight(k.kayit, b);
-        return <span className="tc-mk-deger">{w ? kgFmt(w.kg, b.birim) : YOK}<small className="tc-mk-alt">{agirlikAlti(k.kayit, b)}</small></span>;
+        return <span className="tc-mk-deger">{w ? kgFmt(w.kg, b.birim) : YOK}<small className="tc-mk-alt" title={agirlikAlti(k.kayit, b)}>{agirlikAlti(k.kayit, b)}</small></span>;
       },
     },
     {
       anahtar: 'birim', baslik: 'Stok birimi', sirala: true,
-      hucre: (k) => <span className="tc-mk-deger">{K.finalBirim(k.kayit, b) || YOK}<small className="tc-mk-alt">{k.kayit.com.ted ?? ''}</small></span>,
+      hucre: (k) => <span className="tc-mk-deger">{K.finalBirim(k.kayit, b) || YOK}<small className="tc-mk-alt" title={k.kayit.com.ted ?? ''}>{k.kayit.com.ted ?? ''}</small></span>,
     },
     { anahtar: 'onay', baslik: 'Onay', sirala: true, hucre: (k) => <OnayRozeti x={k.kayit} b={b} /> },
     {
@@ -182,6 +183,7 @@ export function Katalog({ ortam, yetki, git }: EkranOzellikleri) {
   const [sayfa, sayfaYaz] = useState(1);
   const [pencere, pencereYaz] = useState<AcikPencere | null>(null);
   const [gruplama, gruplamaYaz] = useKatalogGruplama();
+  const [sutunlarAcik, sutunlarAcikYaz] = useState(false);
   const [gizliListe, gizliYaz] = useGizliSutunlar();
   const [siralama, siralamaYaz] = useState<Siralama | null>(null);
   const genis = useGenisEkran();
@@ -327,12 +329,13 @@ export function Katalog({ ortam, yetki, git }: EkranOzellikleri) {
             {GRUPLAMALAR.map((g) => <option key={g.deger} value={g.deger}>{g.ad}</option>)}
           </select>
         </label>
-        <details className="tc-mk-sutunlar">
+        <details className="tc-mk-sutunlar" open={sutunlarAcik} onToggle={(o) => sutunlarAcikYaz(o.currentTarget.open)}>
           <summary><Simge ad="grid" boyut="k" />Sütunlar</summary>
-          <fieldset>
+          {/* Kapalıyken kutular çizilmez: sayfadaki ilk işaret satırı süzgeçlerinki kalır (ortak yoğunluk ölçüsü). */}
+          {sutunlarAcik && <fieldset>
             <legend className="tc-gizli-etiket">Görünen sütunlar</legend>
             {GIZLENEBILIR_SUTUNLAR.map((s) => (
-              <label key={s.anahtar} className="tc-mk-sutun">
+              <label key={s.anahtar} className="tc-isaret tc-mk-sutun">
                 <input
                   type="checkbox" checked={!gizli.has(s.anahtar)}
                   onChange={(o) => gizliYaz(o.target.checked ? gizliListe.filter((a) => a !== s.anahtar) : [...gizliListe, s.anahtar])}
@@ -340,7 +343,7 @@ export function Katalog({ ortam, yetki, git }: EkranOzellikleri) {
                 <span>{s.baslik}</span>
               </label>
             ))}
-          </fieldset>
+          </fieldset>}
         </details>
         <div className="tc-mk-aktarma">
           <Dugme tur="birincil" onClick={() => pencereYaz({ tur: 'excel' })}>Excel: şablon, dışa ve içe aktar</Dugme>
@@ -356,7 +359,7 @@ export function Katalog({ ortam, yetki, git }: EkranOzellikleri) {
         <div className="tc-mk-duzen">
           <details className="tc-mk-yan" open={suzgecAcik} onToggle={(o) => suzgecAcikYaz(o.currentTarget.open)}>
             <summary>Süzgeçler{suzgecSayisi ? ` (${suzgecSayisi})` : ''}</summary>
-            <aside aria-label="Süzgeçler"><Suzgecler liste={metinTabani} sec={sec} degistir={secYaz} b={b} /></aside>
+            {suzgecAcik && <aside aria-label="Süzgeçler"><Suzgecler liste={metinTabani} sec={sec} degistir={secYaz} b={b} /></aside>}
           </details>
           <div className="tc-mk-ana">
             <AktifSuzgecler sec={sec} adet={liste.length} degistir={secYaz} b={b} />

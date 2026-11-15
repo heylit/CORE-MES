@@ -17,6 +17,9 @@
 .tc-mk-yan > summary::before { content: "▸"; transition: transform var(--hareket-sure); }
 .tc-mk-yan[open] > summary::before { transform: rotate(90deg); }
 .tc-mk-yan > aside { padding: 0 var(--b-3) var(--b-3); }
+/* 3275: kapalı süzgeç kutusu sütun tutmaz; liste tam genişlikte, kutu başlığı listenin üstünde (980 altındaki düzen). */
+.tc-mk-duzen:has(> .tc-mk-yan:not([open])) { grid-template-columns: minmax(0, 1fr); }
+.tc-mk-duzen:has(> .tc-mk-yan:not([open])) > .tc-mk-yan { position: static; max-height: none; }
 @media (max-width: 980px) {
   .tc-mk-duzen { grid-template-columns: minmax(0, 1fr); }
   .tc-mk-yan { position: static; max-height: none; }
@@ -50,12 +53,12 @@
 .tc-mk-serit { flex: none; align-self: stretch; width: var(--b-1); min-height: var(--b-5); border-radius: var(--yari-1); background: var(--tur-renk); }
 .tc-mk-grup-tur { --c: var(--tur-renk); }
 .tc-mk-grup-tur .tc-rozet-cizgi { --c: var(--tur-renk); }
-.tc-mk-ana .tc-tablo-kap[data-kaydir] .tc-mk-malzeme { width: calc(var(--menu-genis) + var(--b-6)); }
+.tc-mk-ana .tc-tablo-kap[data-kaydir] .tc-mk-malzeme { width: var(--menu-genis); }
 /* Eski yoğunluk (satır <= 64 px): ad tek satırda kesilir, tamamı ipucunda ve kart penceresinde. */
 .tc-mk-ana .tc-tablo-kap[data-kaydir] .tc-mk-malzeme > div { min-width: 0; }
 .tc-mk-ana .tc-tablo-kap[data-kaydir] .tc-mk-ad { overflow: hidden; text-overflow: ellipsis; }
-/* Sınıf adı uzundur ("Islah, otomat, ..."): alt yazı tek satırda kesilir; satır eski yoğunlukta (64 px) kalır, sütun genişlemez. */
-.tc-mk-ana .tc-tablo-kap[data-kaydir] .tc-mk-alt { max-width: var(--ikinci-sutun); overflow: hidden; text-overflow: ellipsis; }
+/* Alt yazılar (sınıf adı, kategori, tedarikçi) uzundur: tek satırda kesilir, 1280'de tablo yatay kaymadan sığar; satır eski yoğunlukta (64 px) kalır, sütun genişlemez. */
+.tc-mk-ana .tc-tablo-kap[data-kaydir] .tc-mk-alt { max-width: calc(var(--menu-genis) / 2); overflow: hidden; text-overflow: ellipsis; }
 /* Uzun katalog sayfayla kayar: tablo kabı yalnız yatay kayar, tekerlek içerik alanını kaydırır (kendi dikey kaydırması yok). */
 .tc-mk-ana .tc-tablo-kap[data-kaydir] { max-height: none; }
 .tc-mk-grupla { display: inline-flex; align-items: center; gap: var(--b-2); font-size: var(--yazi-s); font-weight: 700; }

@@ -493,10 +493,15 @@ describe('3275 a: katalog gruplu tablo', () => {
     expect(localStorage.getItem('tmi-malzemeler-katalog-gruplama')).toBe('"yok"');
   });
 
-  test('Sütunlar seçimi sütunu gizler', async () => {
+  test('Sütunlar seçimi sütunu gizler; Güncelleme varsayılan gizlidir', async () => {
     kur(OKUYAN, dort());
     yeniEkranAc(KOK);
     await screen.findByText('HM-DNM-00001');
+    expect(screen.queryByRole('checkbox', { name: 'Onay' })).toBeNull();
+    expect(within(screen.getByRole('table', { name: 'Malzeme kataloğu' })).queryByRole('columnheader', { name: /Güncelleme/ })).toBeNull();
+    const pencere = screen.getByText('Sütunlar').closest('details') as HTMLDetailsElement;
+    pencere.open = true;
+    fireEvent(pencere, new Event('toggle'));
     fireEvent.click(screen.getByRole('checkbox', { name: 'Onay' }));
     expect(within(screen.getByRole('table', { name: 'Malzeme kataloğu' })).queryByRole('columnheader', { name: 'Onay' })).toBeNull();
   });

@@ -63,4 +63,5 @@ export const useYarimTaslak = () => useKalici<YarimTaslak | null>(ANAHTAR.taslak
 
 export const useKatalogGruplama = () => useKalici<Gruplama>(ANAHTAR.gruplama, gruplamaMi, 'tur-kategori');
 const metinListesiMi = (v: unknown): v is string[] => Array.isArray(v) && v.every((x) => typeof x === 'string');
-export const useGizliSutunlar = () => useKalici<string[]>(ANAHTAR.sutunlar, metinListesiMi, []);
+// Güncelleme varsayılan gizli: süzgeç kutusu açıkken 1280'de öteki sütunlar yatay kaymadan sığsın (3275, Arayüz bakışı).
+export const useGizliSutunlar = () => useKalici<string[]>(ANAHTAR.sutunlar, metinListesiMi, ['guncelleme']);

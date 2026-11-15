@@ -152,6 +152,10 @@ test.describe('M2 katalog', () => {
     expect(olcu.seritGenislik).toBeGreaterThan(0);
     expect(olcu.seritRenk).not.toBe('rgba(0, 0, 0, 0)');
     expect(olcu.kutu).toBe(true);
+    // 1280'de tablo yatay kaymadan sığar: kaydırma çubuğu uzun listenin altında kalır, fareyle ulaşılmaz.
+    if ((page.viewportSize()?.width ?? 0) >= 1280) {
+      expect(await page.locator('.tc-mk-ana .tc-tablo-kap').evaluate((el) => el.scrollWidth - el.clientWidth), 'tablo yatay taşma').toBeLessThanOrEqual(0);
+    }
     await tasmaz(page);
   });
 
@@ -159,6 +163,9 @@ test.describe('M2 katalog', () => {
   test('fareyle eski yoğunluk: satır <= 64 px, süzgeç satırı <= 30 px, ad kalın, kod soluk', async ({ page, ac }, bilgi) => {
     test.skip(bilgi.project.name !== 'g1280', 'fare ölçüsü masaüstünde sınanır');
     await ac('/malzemeler');
+    // 3275: 1440 altında süzgeç kutusu kapalı açılır; süzgeç satırı ölçüsü için açılır.
+    const kutu = page.locator('details.tc-mk-yan');
+    if (!(await kutu.evaluate((d) => (d as HTMLDetailsElement).open))) await kutu.locator('summary').click();
     const satir = page.locator('.tc-mk-ana .tc-tablo tbody tr[data-satir]').first();
     await expect(satir).toBeVisible();
     const olcu = await page.evaluate(() => {
@@ -311,15 +318,17 @@ test.describe('1937 hiza', () => {
     expect(await ust('JSON dışa aktar'), 'CSV ve JSON aynı satırda').toBe(await ust('CSV dışa aktar'));
     if ((page.viewportSize()?.width ?? 0) >= 720) expect(await ust('JSON dışa aktar'), 'üç düğme aynı satırda').toBe(await ust('Excel: şablon, dışa ve içe aktar'));
     await expect(page.locator('.tc-mk-ana tbody tr[data-satir]').first()).toBeVisible();
-    const olcu = await page.locator('.tc-mk-ana tbody tr[data-satir]').first().evaluate((tr) => [...tr.querySelectorAll('td')].filter((td) => td.querySelector('.tc-mk-deger'))
+    const satir = page.locator('.tc-mk-ana tbody tr[data-satir]').first();
+    // 3275 a: ağırlık ve birim her satırda değer + alt yazıdır, hammaddede kalite ve form da; Güncelleme varsayılan gizlidir.
+    const hammadde = (await satir.locator('.tc-mk-malzeme').getAttribute('data-tur')) === 'hammadde';
+    const olcu = await satir.evaluate((tr) => [...tr.querySelectorAll('td')].filter((td) => td.querySelector('.tc-mk-deger'))
       .map((td) => {
         const d = td.querySelector('.tc-mk-deger')!.getBoundingClientRect();
         const t = td.getBoundingClientRect();
         const s = getComputedStyle(td);
         return { cocuk: td.children.length, sagBosluk: t.right - parseFloat(s.paddingRight) - d.right, kart: td.closest('[data-kip="kart"]') !== null };
       }));
-    // 3275 a: kalite ve form da değer + alt yazı hücresidir; ağırlık, birim ve güncelleme her satırda vardır.
-    expect(olcu.length, 'ağırlık, birim, güncelleme (ve hammaddede kalite, form)').toBeGreaterThanOrEqual(3);
+    expect(olcu.length, hammadde ? 'kalite, form, ağırlık, birim' : 'ağırlık, birim').toBe(hammadde ? 4 : 2);
     for (const h of olcu) {
       expect(h.cocuk, 'hücrede tek parça').toBe(1);
       if (h.kart) expect(Math.abs(h.sagBosluk), 'kart görünümünde değer sağa yaslı').toBeLessThanOrEqual(1);
