@@ -589,6 +589,43 @@ test('kural i (ADR 0031): bildirim modülünde dış istek ve ağ ithali yalnız
   assert.deepEqual(kurallar('sunucu/moduller/bildirim/servis.ts', "import { createHash } from 'node:crypto';"), []);
 });
 
+test('kural j: sunucu dışarıya yalnız istisna ADR\'lerinin dosyasından istek atar', () => {
+  const istekler = [
+    "const c = await fetch(adres);",
+    "const s = new Socket();",
+    "const w = new WebSocket(adres);",
+    "const r = https.request(adres);",
+    "const t = tls.connect({ host, port });",
+    "import { request } from 'node:http';",
+    "import { connect } from 'node:net';",
+    "import { Agent } from 'undici';",
+    "const d = await import('node:dgram');",
+    "const h = await import('node:https');",
+    "import h from 'node:https';",
+    "import * as t from 'node:tls';",
+    "const s = new net.Socket();",
+    "const g = await globalThis.fetch(adres);",
+  ];
+  for (const satir of istekler) {
+    for (const dosya of ['sunucu/moduller/stok/servis.ts', 'sunucu/cekirdek/ayar.ts', 'paylasilan/sozlesme/stok.ts']) {
+      assert.deepEqual(kurallar(dosya, satir), ['j'], `${dosya}: ${satir}`);
+    }
+    for (const dosya of ['sunucu/moduller/logo/kopru.ts', 'sunucu/moduller/smartes/istemci.ts', 'sunucu/moduller/etiket-merkezi/gonderici.ts',
+      'sunucu/moduller/dis-kopru/baglanti.ts', 'sunucu/moduller/stok/servis.test.ts', 'istemci/src/ortak/api.ts']) {
+      assert.deepEqual(kurallar(dosya, satir), [], `${dosya}: ${satir}`);
+    }
+  }
+  for (const satir of [
+    "import { createServer } from 'node:http';",
+    "import { isIP } from 'node:net';",
+    "const istemci = await havuz.connect();",
+    "// fetch(adres) burada yok",
+    "secenek.fetch ?? fetch;",
+    "const is = kuyruk.fetch(5);",
+  ]) assert.deepEqual(kurallar('sunucu/moduller/stok/servis.ts', satir), [], satir);
+  assert.deepEqual(kurallar('sunucu/cekirdek/arayuz.ts', "import { createServer as httpsSunucusu } from 'node:https';"), []);
+});
+
 test('kural i (ADR 0031): push servisi adı uygulama kodunda yalnız push.ts\'de', () => {
   for (const satir of [
     "const a = 'https://fcm.googleapis.com/fcm/send/x';",

@@ -21,7 +21,7 @@ export const KULLANIM = [
   '          npm run teslim-denetle -- --grup <klasör> <klasör> ... [--taban-dal origin/main]',
 ].join('\n');
 
-// Bu yollara dokunan yama sade değildir ve grup turuna girmez (talimat: BIRLESTIRME, Grup birleştirme; TESLIM, Sade yama).
+// Bu yollara dokunan yama sade değildir ve grup turuna girmez (kurulum/birlestirici.md Grup; proje talimatı TESLIM, sade yama).
 export const ORTAK_NOKTALAR: readonly RegExp[] = [
   /^paylasilan\//, /^sunucu\/cekirdek\//, /^sunucu\/gocler\//, /^istemci\/src\/ortak\//, /^kurulum\//, /^araclar\//,
   /^\.claude\//, /^\.github\//, /^CLAUDE\.md$/, /^package(-lock)?\.json$/, /(^|\/)ayarlar\.ts$/, /^belgeler\/adr\//,

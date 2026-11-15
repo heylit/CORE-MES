@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 export interface Ihlal {
   dosya: string;
   satir: number;
-  kural: 'a' | 'b' | 'c' | 'd' | 'e' | 'f' | 'g' | 'h' | 'i';
+  kural: 'a' | 'b' | 'c' | 'd' | 'e' | 'f' | 'g' | 'h' | 'i' | 'j';
   mesaj: string;
 }
 
@@ -34,6 +34,23 @@ const BILDIRIM_SUNUCU = 'sunucu/moduller/bildirim/';
 const DIS_ISTEK_CAGRISI = /\bfetch\s*\(/;
 const AG_ITHALI = /^(?:node:)?(?:https?|http2|net|tls|dgram|undici)$/;
 const PUSH_SERVIS_ADI = /googleapis\.com|push\.services\.mozilla\.com|push\.apple\.com|notify\.windows\.com/;
+
+// Kırmızı çizgi (CLAUDE.md): sunucu dışarıya yalnız istisna ADR'lerinin dosyalarından istek atar. Sezgisel: istemci
+// çağrısı ve istemci ithali aranır; sunucu kurmak (createServer) ve adres çözümlemek (isIP) istek değildir.
+// Bildirim modülü kural i'dedir. Kural metni ve istisnalar: CLAUDE.md "Kırmızı çizgiler". Yakalanmayanlar (denetlenmez):
+// takma adlı fetch, alt süreçle (curl) istek, node:http ya da node:net namespace'inin takma adla çağrılması.
+const DIS_ISTEK_IZINLI: readonly string[] = [
+  'sunucu/moduller/logo/kopru.ts', // ADR 0017
+  'sunucu/moduller/smartes/istemci.ts', // ADR 0013
+  'sunucu/moduller/etiket-merkezi/gonderici.ts', // ADR 0014
+  'sunucu/moduller/dis-kopru/', // ADR 0021
+];
+const DIS_ISTEK_J =
+  /(?:(?<![.\w])|\b(?:globalThis|window|self)\.)fetch\s*\(|\bnew\s+(?:net\.)?(?:Socket|WebSocket)\s*\(|\b(?:https?|net|tls|http2|dgram)\.(?:request|get|connect|createConnection|createSocket)\s*\(|\bcreateConnection\s*\(/;
+// https ve tls ithali her biçimiyle sayılır; tek istisna HTTPS sunucusunu kuran arayuz.ts'tir.
+const AG_ISTEMCI_ITHALI = /^(?:node:)?(?:https|tls|http2|dgram)$|^(?:undici|ws)$/;
+const HTTPS_SUNUCUSU = 'sunucu/cekirdek/arayuz.ts';
+const AG_ISTEMCI_ADI = /\{[^}]*\b(?:request|get|connect|createConnection)\b[^}]*\}\s*from\s*['"](?:node:)?(?:https?|net|tls)['"]/;
 
 const TAKMA_ADLAR: ReadonlyArray<readonly [string, string]> = [
   ['#paylasilan/', 'paylasilan/'],
@@ -144,6 +161,8 @@ export function ihlalleriBul(dosya: string, icerik: string): Ihlal[] {
   const pushDisi = dosya !== PUSH_DOSYASI && !testKenariMi(dosya);
   const disIstekDenetlenir = pushDisi && dosya.startsWith(BILDIRIM_SUNUCU);
   const pushAdiDenetlenir = pushDisi && TARANAN_KLASORLER.some((klasor) => altinda(dosya, klasor));
+  const disIstekJ = !testKenariMi(dosya) && (altinda(dosya, 'sunucu') || altinda(dosya, 'paylasilan')) && !dosya.startsWith(BILDIRIM_SUNUCU) &&
+    !DIS_ISTEK_IZINLI.some((izinli) => (izinli.endsWith('/') ? dosya.startsWith(izinli) : dosya === izinli));
 
   icerik.split(/\r?\n/).forEach((satir, sira) => {
     const satirNo = sira + 1;
@@ -170,6 +189,11 @@ export function ihlalleriBul(dosya: string, icerik: string): Ihlal[] {
 
     if (disIstekDenetlenir && DIS_ISTEK_CAGRISI.test(satir)) {
       ihlaller.push({ dosya, satir: satirNo, kural: 'i', mesaj: `bildirim modülünde dış istek yalnız ${PUSH_DOSYASI} içinde olur (ADR 0031)` });
+    }
+
+    if (disIstekJ && (DIS_ISTEK_J.test(satir) || AG_ISTEMCI_ADI.test(satir) ||
+      (dosya !== HTTPS_SUNUCUSU && ITHAL_DESENLERI.some((desen) => [...satir.matchAll(desen)].some((e) => AG_ISTEMCI_ITHALI.test(e[1] ?? '')))))) {
+      ihlaller.push({ dosya, satir: satirNo, kural: 'j', mesaj: 'dış istek yalnız istisna ADR\'lerinin dosyasında olur (CLAUDE.md kırmızı çizgiler)' });
     }
 
     if (sqlDenetlenir && SQL_CAGRISI.test(satir)) {
