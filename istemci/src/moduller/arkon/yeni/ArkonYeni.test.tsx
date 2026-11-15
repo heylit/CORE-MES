@@ -7,6 +7,7 @@ import { baglantiOzeti } from './ortak/BaglantiDurumu.tsx';
 import { yalnizMalKabul } from './ArkonYeni.tsx';
 import { SAYFALAR, SAYFA_DISI, arkonGirisSayfasi, sekmeMaddeleri } from './sayfalar.ts';
 import { arkonAc, KAPISIZ, OPERATOR, sunucuKur, YONETICI } from './test-ortak.tsx';
+import { vardiyaOzetiAcilabilirMi } from './operator/vardiya-ozeti-istegi.ts';
 
 // İskeletin sözleşmesi: yol, giriş sayfası, bölüm. Bölümlerin içine bakılmaz (parçalar doldurur); bölüm adıyla (aria-label) ve
 // data-sayfa ile bulunur. Sayfalar arası geçiş kabuğun şeridindedir (553 1 a); testte test-ortak'ın yalın bağlantıları.
@@ -105,6 +106,27 @@ describe('Yeni Arkon ekranı (iskelet)', () => {
       window.removeEventListener('tmi-emir-sec', dinle);
       delete w.__tmiEmirSec;
     }
+  }, 20000);
+
+  // 3298: Hesap menüsündeki Vardiya özeti yalnız görünen gerçek terminale bağlanır; gizli kurulu terminal ve önizleme bağlanmaz.
+  it('3298: gizli kurulu terminal Vardiya özeti açıcısını bırakır, dönünce yeniden bağlar', async () => {
+    sunucuKur(OPERATOR);
+    arkonAc('/uretim-terminali', { kabuktaki: true });
+    await bolum('Üretim Terminali');
+    await waitFor(() => { expect(vardiyaOzetiAcilabilirMi()).toBe(true); }, { timeout: 10000 });
+    fireEvent.click(screen.getByRole('link', { name: 'Başka sayfaya git' }));
+    await screen.findByText('Başka sayfa');
+    await waitFor(() => { expect(vardiyaOzetiAcilabilirMi()).toBe(false); }, { timeout: 10000 });
+    fireEvent.click(screen.getByRole('link', { name: 'Terminale dön' }));
+    await waitFor(() => { expect(vardiyaOzetiAcilabilirMi()).toBe(true); }, { timeout: 10000 });
+  }, 20000);
+
+  it('3298: istasyon önizlemesi Vardiya özeti açıcısı kaydetmez (reddedilen)', async () => {
+    sunucuKur(YONETICI);
+    arkonAc('/arkon/onizle/IST-1');
+    expect(await screen.findByText('Önizleme · kayıt yapılmaz', {}, { timeout: 10000 })).toBeTruthy();
+    await new Promise((r) => { setTimeout(r, 100); });
+    expect(vardiyaOzetiAcilabilirMi()).toBe(false);
   }, 20000);
 
   it('Kuyruk ayrı sayfadır: sekme şeridi olmadan açılır', async () => {

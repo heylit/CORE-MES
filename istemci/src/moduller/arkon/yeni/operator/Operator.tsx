@@ -3,7 +3,6 @@ import {
   Dugme, KodOkuyucu, OzetKatmani, Pencere, Rozet, Sekmeler, Simge, TusTakimi, useBildirim, type BildirimTonu,
 } from '../../../../ortak/arayuz/index.ts';
 import type { SimgeAdi } from '../../../../ortak/tasarim/simgeler.ts';
-import { useTema } from '../../../../ortak/veri/tema.ts';
 import { KabukUstYuvasi } from '../../../../ortak/arayuz/Kabuk.tsx';
 import { CAGRI_GERIYE_MS, acikCagri, cagriyiKur, type CagriSatiri } from '../../../../../../arkon/web/src/data/acik-cagri.ts';
 import { baslatmaUyarisi, uyariliBaslatmaIletisi } from '../../../../../../arkon/web/src/data/baslatma-uyarisi.ts';
@@ -30,7 +29,6 @@ import {
   type MakineAyrimlari,
 } from '../../../../../../arkon/web/src/data/makine-secimi.ts';
 import { retGerekcesiMetni, sonNumuneDurumu, yeniNumuneYamasi } from '../../../../../../arkon/web/src/data/numune.ts';
-import { kalanMetni, vardiyaKalanDk, vardiyaUretimi } from '../../../../../../arkon/web/src/data/operator-ozeti.ts';
 import {
   KART_YENILEME_MS, girdiAdaylari, kartDoldu, kartEmirleri, kartOkutmaKarari, refakatIsi, sayimKartAlani, type KartSecimNedeni, type RefakatKarti,
 } from '../../../../../../arkon/web/src/data/refakat-karti.ts';
@@ -43,7 +41,7 @@ import { useOturum } from '../../../../ortak/veri/oturum.ts';
 import { tekrarKorumaliGonder } from '../../../../ortak/veri/istek-kimligi.ts';
 import { operatoreAcik } from '../../../../../../arkon/web/src/data/tmi-plan.ts';
 import { durusNedeni, planliNedenMi } from '../cekirdek/ayarlar.ts';
-import { GUN_ADLARI, basHarfler, iki, sayi } from '../cekirdek/bicim.ts';
+import { GUN_ADLARI, iki, sayi } from '../cekirdek/bicim.ts';
 import { CAGRI_EKIPLERI, YETKI_ADLARI } from '../cekirdek/sabitler.ts';
 import { AnlikDurum, DurumSeridi, durumOzeti } from './DurumGostergesi.tsx';
 import { HazirlikCipi, HazirlikListesi, hazirlikOzeti, hazirlikSatirlari, useHazirlik } from './HazirlikListesi.tsx';
@@ -55,7 +53,7 @@ import { anlikVardiya, durusPencereleri, siradakiDurus, suankiDurus } from '../c
 import { yerel } from '../cekirdek/yerel.ts';
 import { BaglantiDurumu } from '../ortak/BaglantiDurumu.tsx';
 import type { ResimNotu, TeknikResimKontrolu } from '../cizim/index.tsx';
-import type { ArkonEkranOzellikleri, ArkonSayfasi } from '../sayfalar.ts';
+import type { ArkonEkranOzellikleri } from '../sayfalar.ts';
 import { useArkon, useSimdi } from '../veri/baglam.ts';
 import type { Ileti } from '../veri/depo.ts';
 import {
@@ -66,6 +64,7 @@ import { Adimlar } from './Adimlar.tsx';
 import { OlcuListesi } from './OlcuListesi.tsx';
 import { Analiz } from './Analiz.tsx';
 import { useDarEkran, useMerkezUyarilari, useVardiyaKaydi } from './kancalar.ts';
+import { vardiyaOzetiAcicisiKaydet } from './vardiya-ozeti-istegi.ts';
 import { KART_DEGIL_ILETISI, KART_YOK_ILETISI, terminalOkutmasi, useElOkuyucu } from './el-okuyucu.ts';
 import { kartNumarasiGibi } from '../../../../ortak/veri/kart-degistir.ts';
 import {
@@ -118,7 +117,7 @@ const baytli = (l: readonly NonNullable<Is['pkg']>['files'][number][]): TeknikRe
 // Üretim Terminali (operator.ts App) ve "Operatör gözüyle" önizleme. Davranış eski ekranın aynısıdır; farklar DEVIR'dedir.
 // Açılışta kayıt yazılmaz: sonuç ve durum kaydı yalnız operatörün ya da makinenin değiştirdiği işte gider. Önizlemede yazma düğmesi yoktur.
 
-type Pencereler = 'hazirlik' | 'station' | 'numune' | 'scrap' | 'reason' | 'num' | 'call' | 'calltrack' | 'prepnext' | 'shift' | 'ozetim' | 'done' | 'menu' | 'gecis' | 'toplu' | 'isler' | 'bitir' | 'kartsec' | 'bilgi' | 'cark';
+type Pencereler = 'hazirlik' | 'station' | 'numune' | 'scrap' | 'reason' | 'num' | 'call' | 'calltrack' | 'prepnext' | 'shift' | 'ozetim' | 'done' | 'gecis' | 'toplu' | 'isler' | 'bitir' | 'kartsec' | 'bilgi' | 'cark';
 type Gorunum = EkranSekmesi['id'];
 interface UyariGosterimi { list: Uyari[]; title?: string; then?: () => void }
 interface Okutma { baslik: string; ipucu?: string; okundu: (kod: string) => void }
@@ -139,10 +138,9 @@ function IstasyonluEkran({ onizleme }: { onizleme: string | null }) {
 }
 
 function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yenidenKur: () => void }) {
-  const { depo, kisi, ayarlar, yetkiVar, git, acilabilir, tmiRetiniUstlen } = useArkon();
+  const { depo, kisi, ayarlar, yetkiVar, tmiRetiniUstlen } = useArkon();
   // 1339 a, 1354 a (kart #1358): Telefon profilinde sunucu çizim dosyası vermez; dosya indirilmez, resim yerine ölçü listesi açılır.
   const telefon = useOturum().data?.cihazProfili === 'telefon';
-  const { tema, degistir: temaDegistir } = useTema();
   const { bildir, kaldir } = useBildirim();
   const dar = useDarEkran();
   const pv = onizleme !== null;
@@ -1009,6 +1007,7 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
   // açılır; gizlenince kapanır, dönüşte 45 sn yeniden sayılır.
   const gorunur = useEkranGorunur();
   useEffect(() => { lastAct.current = Date.now(); if (!gorunur) awayYaz(false); }, [gorunur]);
+  useEffect(() => (pv || !gorunur ? undefined : vardiyaOzetiAcicisiKaydet(() => ovYaz('shift'))), [pv, gorunur]);
   useEffect(() => { if (gorunur && kendiligindenUzak && !away && !ov && !odakKipi && Date.now() - lastAct.current > 45000) awayYaz(true); }, [simdi]);
 
   const patch = (p: Partial<Is>) => islerYaz((l) => l.map((x, i) => (i === ai ? { ...x, ...p } : x)));
@@ -1270,7 +1269,6 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
   }, [call && call.t0, call && call.stage, call && call.esc]);
 
   /* vardiya özeti */
-  const ustOzet = SL.ok && !SC.sh.tanimsiz ? vardiyaUretimi(SC.good, SC.expected) : null;
   const shiftStats = () => vardiyaOzeti(vardiyaHesabi(SL, Date.now(), ortam), {
     kisi: ME, istasyon: MACHINE, cevrim: o.cycle, olcumUygun: shiftRef.current.mOk, olcumRed: shiftRef.current.mNok,
     cagriSureleri: callLog.map((x) => x.ms), cagriAcik: !!call, nedenAdi: (k) => nedenAdiYaz(k, nedenAdiOku),
@@ -1613,10 +1611,6 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
     </>
   );
 
-  const gecisSatirlari = pv ? [] : GECISLER.filter((g) => acilabilir(g.sayfa)).map((g) => (
-    <MenuSatiri key={g.sayfa} simge={g.simge} baslik={g.baslik} alt={g.alt} tikla={() => { ovYaz(null); git(g.sayfa); }} />
-  ));
-
   if (dar) {
     const MV = mobilGorunumler(o, ozetVar, !!Panel, OT.short, panelSimgesi, D, isler.filter((x) => x.fresh).length, telefon);
     const gor = MV.some((x) => x.id === mv) ? mv : 'prod';
@@ -1646,9 +1640,8 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
           {bkSayi.bekliyor > 0 || bkSayi.karar > 0
             ? <><span hidden><BaglantiDurumu /></span><SayacCipi liste={bekleyen.liste} kopuk={bekleyen.kopuk} ac={() => bkAcikYaz(true)} kisa /></>
             : <BaglantiDurumu />}
-          {!pv ? <button type="button" className="tc-ay1-simge-dugme" onClick={kartiKameraylaOkut} title="Kartı okut" aria-label="Kartı okut"><Simge ad="camera" /></button> : null}
+          {!pv ? <button type="button" className="tc-ay1-simge-dugme" onClick={kartiKameraylaOkut} title={KART_OKUT_IPUCU} aria-label="İş kartı okut"><Simge ad="file" /></button> : null}
           {!call && !pv ? <button type="button" className="tc-ay1-simge-dugme" onClick={() => ovYaz('call')} aria-label="Çağrı"><Simge ad="bell" /></button> : null}
-          <button type="button" className="tc-ay1-simge-dugme" onClick={() => ovYaz('menu')} aria-label="Menü"><Simge ad="list" /></button>
         </header>
         <div className="tc-ay1-gorunum">
           {gor === 'ozet' ? <Ozetim /> : null}
@@ -1683,15 +1676,6 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
             ))}
           </nav>
         </div>
-        {ov === 'menu' ? (
-          <Pencere acik kapat={() => ovYaz(null)} baslik="Menü" tur="yan">
-            <p className="tc-ay1-soluk">{ME} · {MACHINE}</p>
-            <MenuSatiri simge="chart" baslik="Vardiya özeti ve devir" alt="Üretim, kalite, not bırak" tikla={() => ovYaz('shift')} />
-            <MenuSatiri simge="expand" baslik="Uzak mod" alt="Uzaktan okunur dev sayaç" tikla={() => { ovYaz(null); awayYaz(true); }} />
-            <MenuSatiri simge="ruler" baslik={telefon ? 'Ölçüler' : 'Teknik resim · 3B'} alt={telefon ? 'Kontrol planı, çizimsiz' : 'Odak modu resim panelinde'} tikla={() => { ovYaz(null); mvYaz('draw'); }} />
-            {gecisSatirlari}
-          </Pencere>
-        ) : null}
         {pencereler}
         {bkPencere}
       </div>
@@ -1722,17 +1706,10 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
         <button type="button" className="tc-ay1-simge-dugme" onClick={() => awayYaz(true)} title="Uzak mod" aria-label="Uzak mod"><Simge ad="expand" /></button>
         {/* 1999 a: çark görünürken iş listesi çarkın İşler şerididir; düğme tekrar olur. */}
         {carkVar ? null : <span className="tc-ay1-isler-dugme"><Dugme tur="ikincil" simge="list" onClick={() => ovYaz('isler')}>İşler · {isler.filter((x) => !x.empty && x.state !== 'done').length}</Dugme></span>}
-        {!pv ? <Dugme tur="ikincil" simge="camera" aria-label="Kartı okut" title="Kartı okut" onClick={kartiKameraylaOkut}><span className="tc-ay1-cagri-yazi">Kartı okut</span></Dugme> : null}
+        {!pv ? <Dugme tur="ikincil" simge="file" aria-label="İş kartı okut" title={KART_OKUT_IPUCU} onClick={kartiKameraylaOkut}><span className="tc-ay1-cagri-yazi">İş kartı okut</span></Dugme> : null}
         {!pv ? <Dugme tur="ikincil" simge="bell" className="tc-ay1-cagri" aria-label="Çağrı" title="Çağrı" onClick={() => ovYaz('call')}><span className="tc-ay1-cagri-yazi">Çağrı</span></Dugme> : null}
         {/* 2052-1 a (prototip v5): bağlantı durumu saatin altında; vardiya satırı yer varsa yanında. */}
         <span className="tc-ay1-saat"><b>{iki(saat.getHours())}:{iki(saat.getMinutes())}</b><span className="tc-ay1-saat-alt"><BaglantiDurumu /><small>{GUN_ADLARI[saat.getDay()]} {saat.getDate()} {AYLAR[saat.getMonth()]} · {vardiyaMetni}</small></span></span>
-        <button type="button" className="tc-ay1-simge-dugme" onClick={temaDegistir} title="Tema değiştir" aria-label="Tema değiştir"><Simge ad={tema === 'dark' ? 'sun' : 'moon'} /></button>
-        {/* 848 a: genişte Menü yalnız geçiş varsa; öteki satırlar (vardiya özeti, uzak mod, resim) başlıkta zaten var. */}
-        {gecisSatirlari.length > 0 ? <button type="button" className="tc-ay1-simge-dugme" onClick={() => ovYaz('menu')} title="Menü" aria-label="Menü"><Simge ad="list" /></button> : null}
-        <button type="button" className="tc-ay1-kisi" onClick={() => ovYaz('shift')} title="Vardiya özeti ve devir">
-          <span className="tc-ay1-avatar">{basHarfler(ME)}</span>
-          <span><b>{ME}</b><small>{[ustOzet && ustOzet.metin, kalanMetni(vardiyaKalanDk(vardiya, simdi))].filter(Boolean).join(' · ') || 'Vardiya özeti'} ›</small></span>
-        </button>
       </header>,
       )}
       {ustDurum}
@@ -1773,32 +1750,16 @@ function OperatorEkrani({ onizleme, yenidenKur }: { onizleme: string | null; yen
           </div>
         </div>
       </div>
-      {ov === 'menu' ? (
-        <Pencere acik kapat={() => ovYaz(null)} baslik="Menü" tur="yan">
-          <p className="tc-ay1-soluk">{ME} · {MACHINE}</p>
-          {gecisSatirlari}
-        </Pencere>
-      ) : null}
       {pencereler}
       {bkPencere}
     </div>
   );
 }
 
+const KART_OKUT_IPUCU = 'İş kartı okut: refakat kartının karekodunu kamerayla okutup işi açar';
+
 const IS_DURUM_RENGI = (s: string) => ({ queued: 'sirada', setup: 'ayar', running: 'calisiyor', paused: 'durakli', stopped: 'durdu', done: 'bitti' } as const)[s as 'queued'] ?? 'sirada';
 
-// Terminalden öteki Arkon sayfalarına geçiş (820 b); her satır yalnız o sayfayı açabilene görünür, yetki genişlemez. İlk ikisi eski
-// menünün satırlarıdır.
-const GECISLER: readonly { sayfa: ArkonSayfasi; simge: SimgeAdi; baslik: string; alt: string }[] = [
-  { sayfa: 'kalite', simge: 'target', baslik: 'Kalite istasyonu', alt: 'Numune ölçümü' },
-  { sayfa: 'hazirlik', simge: 'layers', baslik: 'Üretim Terminali Hazırlık', alt: 'İş paketi hazırla' },
-  { sayfa: 'cizim', simge: 'lab', baslik: 'Çizim', alt: 'PDF ve 3B okuma ayarları' },
-  { sayfa: 'kuyruk', simge: 'list', baslik: 'Kuyruk', alt: 'Plan kuyruğu, salt okunur' },
-];
-
-function MenuSatiri({ simge, baslik, alt, tikla }: { simge: SimgeAdi; baslik: string; alt: string; tikla: () => void }): ReactNode {
-  return <button type="button" className="tc-ay1-menu-satir" onClick={tikla}><Simge ad={simge} /><span><b>{baslik}</b><small>{alt}</small></span></button>;
-}
 
 
 // 1979 (2003 c): planda bölünmüş adımın payları terminalde. Kişinin kendi payı önde, "Payın N, saydığın M" (aşan "+K fazla"); öteki

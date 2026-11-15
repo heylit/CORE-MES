@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { NumunePenceresi } from './Pencereler.tsx';
-import { YENI_EKRAN_ISLEMI } from '../../../../ortak/rota/yeni-ekran.tsx';
+import { vardiyaOzetiAcilabilirMi, vardiyaOzetiniAc } from './vardiya-ozeti-istegi.ts';
 import { arkonAc, OPERATOR, sunucuKur, YONETICI, type Deneme, type Istek } from '../test-ortak.tsx';
 
 // Üretim Terminali: açılışta yazma yok; üretim yetkisi olan başlatır; yetkisi olmayan yalnız görür; önizleme hiç yazmaz.
@@ -196,22 +196,33 @@ describe('A1 Üretim Terminali', () => {
     expect(yazmalar(istekler)).toEqual([]);
   }, 40000);
 
-  it('820 b, 848 a: genişte Menü düğmesi yalnız geçiş varsa; yönetici Çizim\'e geçer', async () => {
+  // 3298: üst şerit sade; tema kabuğun Hesap menüsünde, öteki Arkon sayfaları ana menüde, Vardiya özeti Hesap menüsündedir.
+  it.each([['geniş ekranda', false], ['telefonda', true]] as const)('3298: %s üst şeritte Tema, Menü ve vardiya kişi düğmesi yok', async (_ad, dar) => {
+    if (dar) {
+      Object.defineProperty(window, 'innerWidth', { value: 360, configurable: true });
+      Object.defineProperty(window, 'innerHeight', { value: 780, configurable: true });
+    }
+    try {
+      sunucuKur({ ...YONETICI, istasyon: 'IST-1' }, sunucu());
+      arkonAc('/uretim-terminali');
+      expect((await screen.findAllByRole('button', { name: 'İş kartı okut' }, { timeout: 10000 })).length).toBeGreaterThan(0);
+      for (const ad of ['Tema değiştir', 'Menü', 'Vardiya özeti ve devir']) expect(screen.queryByRole('button', { name: ad })).toBeNull();
+      expect(screen.queryByRole('button', { name: 'Kartı okut' })).toBeNull();
+    } finally {
+      Reflect.deleteProperty(window, 'innerWidth'); Reflect.deleteProperty(window, 'innerHeight');
+    }
+  }, 40000);
+
+  it('3298: Hesap menüsünün isteği görünür terminalde Vardiya özeti penceresini açar; terminal yokken madde açılamaz', async () => {
+    expect(vardiyaOzetiAcilabilirMi()).toBe(false);
     sunucuKur({ ...YONETICI, istasyon: 'IST-1' }, sunucu());
     arkonAc('/uretim-terminali');
     await ekran();
-    fireEvent.click(screen.getByRole('button', { name: 'Menü' }));
-    const menu = await screen.findByRole('dialog', { name: 'Menü' });
-    expect(within(menu).queryByRole('button', { name: /Vardiya özeti/ })).toBeNull();
-    fireEvent.click(within(menu).getByRole('button', { name: /^Çizim/ }));
-    await waitFor(() => { expect(screen.getByTestId('adres').textContent).toBe('/arkon/cizim'); });
-  }, 40000);
-
-  it('820 b, 848 a: geçişi olmayan operatörde genişte Menü düğmesi yok (reddedilen)', async () => {
-    sunucuKur(ISTASYONLU, sunucu());
-    arkonAc('/uretim-terminali');
-    await ekran();
-    expect(screen.queryByRole('button', { name: 'Menü' })).toBeNull();
+    await waitFor(() => { expect(vardiyaOzetiAcilabilirMi()).toBe(true); });
+    act(() => { vardiyaOzetiniAc(); });
+    expect(await screen.findByRole('dialog', { name: /Vardiya/ }, { timeout: 10000 })).toBeTruthy();
+    cleanup();
+    expect(vardiyaOzetiAcilabilirMi()).toBe(false);
   }, 40000);
 
   // 2001 b: istasyonu belli olmayan operatörde üst şerit listedeki ilk istasyonu seçilmiş gibi göstermiyordu; seçici "atanmış istasyon
@@ -294,45 +305,6 @@ describe('A1 Üretim Terminali telefonda (618, 615-1 b)', () => {
     await screen.findByRole('group', { name: 'İş eylemleri' }, { timeout: 10000 });
     expect(screen.queryByRole('button', { name: /İstasyonlar ·/ })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Bu istasyona geç' })).toBeNull();
-  }, 40000);
-
-  // 820 b: Menü'den öteki Arkon sayfalarına geçiş; satır yalnız sayfayı açabilene görünür (yetki genişlemez).
-  const menuAc = async () => {
-    fireEvent.click(await screen.findByRole('button', { name: 'Menü' }, { timeout: 10000 }));
-    return screen.findByRole('dialog', { name: 'Menü' });
-  };
-  const GECIS_ADLARI = [/Kalite istasyonu/, /Üretim Terminali Hazırlık/, /^Çizim/, /^Kuyruk/];
-
-  it('820 b: yönetici Menü\'den Kalite, Hazırlık, Çizim ve Kuyruk\'a geçer', async () => {
-    telefon();
-    sunucuKur({ ...YONETICI, istasyon: 'IST-1' }, sunucu());
-    arkonAc('/uretim-terminali');
-    const menu = await menuAc();
-    for (const ad of GECIS_ADLARI) expect(within(menu).getByRole('button', { name: ad })).toBeTruthy();
-    fireEvent.click(within(menu).getByRole('button', { name: /Kalite istasyonu/ }));
-    await waitFor(() => { expect(screen.getByTestId('adres').textContent).toBe('/arkon/kalite'); });
-  }, 40000);
-
-  it('820 b: amir yalnız açabildiği Kalite ve Kuyruk\'u görür; Hazırlık ve Çizim yok (reddedilen)', async () => {
-    telefon();
-    sunucuKur({ rol: 'lead', istasyon: 'IST-1', kullanici: { id: 6, ad: 'Deneme Amir', islemler: ['sayfa.arkon', 'sayfa.uretim-terminali', 'sayfa.kuyruk', 'arkon.amir', YENI_EKRAN_ISLEMI] } }, sunucu());
-    arkonAc('/uretim-terminali');
-    const menu = await menuAc();
-    expect(within(menu).getByRole('button', { name: /Kalite istasyonu/ })).toBeTruthy();
-    expect(within(menu).queryByRole('button', { name: /Üretim Terminali Hazırlık/ })).toBeNull();
-    expect(within(menu).queryByRole('button', { name: /^Çizim/ })).toBeNull();
-    fireEvent.click(within(menu).getByRole('button', { name: /^Kuyruk/ }));
-    await waitFor(() => { expect(screen.getByTestId('adres').textContent).toBe('/kuyruk'); });
-  }, 40000);
-
-  it('820 b: operatörde geçiş satırı yok; CORE işlemi olmayan sayfa Arkon yetkisi olsa da gösterilmez (reddedilen)', async () => {
-    telefon();
-    // Arkon yetkisi Kalite'yi açsa da TMI menü işlemi (arkon.kalite) yok: satır çıkmaz.
-    sunucuKur(ISTASYONLU, sunucu([{ kimlik: 'perms', surum: 1, govde: { v: { operator: ['page.op', 'page.quality', 'prod.run'] } } }]));
-    arkonAc('/uretim-terminali');
-    const menu = await menuAc();
-    expect(within(menu).getByRole('button', { name: /Vardiya özeti/ })).toBeTruthy();
-    for (const ad of GECIS_ADLARI) expect(within(menu).queryByRole('button', { name: ad })).toBeNull();
   }, 40000);
 
   it('üretim yetkisi olmayan kişide eylem çubuğu yok (reddedilen)', async () => {
@@ -596,15 +568,15 @@ describe('A1 Üretim Terminali el okuyucu (1337 a)', () => {
     expect(screen.queryByText(/İş emri açıldı/)).toBeNull();
   }, 40000);
 
-  // 3155 (3157 a): el okuyucusu olmayan istasyonda aynı okutma "Kartı okut" düğmesinden, kamera penceresiyle yapılır.
+  // 3155 (3157 a): el okuyucusu olmayan istasyonda aynı okutma "İş kartı okut" düğmesinden, kamera penceresiyle yapılır (3298 adı).
   const pencereyeOkut = async (kod: string) => {
-    fireEvent.click((await screen.findAllByRole('button', { name: 'Kartı okut' }))[0]!);
+    fireEvent.click((await screen.findAllByRole('button', { name: 'İş kartı okut' }))[0]!);
     const kutu = within(await screen.findByRole('dialog', { name: 'Refakat kartını okut' })).getByRole('textbox', { name: 'Kod' });
     fireEvent.change(kutu, { target: { value: kod } });
     fireEvent.submit(kutu.closest('form')!);
   };
 
-  it('"Kartı okut" düğmesiyle okutulan kart işi o kartla açar, başlatmaz; pencere kapanır', async () => {
+  it('"İş kartı okut" düğmesiyle okutulan kart işi o kartla açar, başlatmaz; pencere kapanır', async () => {
     const istekler = kur();
     arkonAc('/uretim-terminali');
     const d = await ekran();
@@ -617,7 +589,7 @@ describe('A1 Üretim Terminali el okuyucu (1337 a)', () => {
     expect(olaylar(istekler).some((e) => e.state === 'running')).toBe(false);
   }, 40000);
 
-  it('"Kartı okut" penceresinde kart dışı kod işi açmaz, sessiz de kalmaz', async () => {
+  it('"İş kartı okut" penceresinde kart dışı kod işi açmaz, sessiz de kalmaz', async () => {
     kur();
     arkonAc('/uretim-terminali');
     await ekran();
@@ -630,7 +602,7 @@ describe('A1 Üretim Terminali el okuyucu (1337 a)', () => {
   }, 40000);
 
   // Düğme iki yerde çizilir (geniş şerit ve dar şerit); ikisi de önizlemede kapalı olmalı.
-  it.each([['geniş ekranda', null], ['telefonda', 360]] as const)('önizleme kipinde "Kartı okut" düğmesi yok (%s; önizleme teslim almaz, iş açmaz)', async (_ad, en) => {
+  it.each([['geniş ekranda', null], ['telefonda', 360]] as const)('önizleme kipinde "İş kartı okut" düğmesi yok (%s; önizleme teslim almaz, iş açmaz)', async (_ad, en) => {
     if (en !== null) {
       Object.defineProperty(window, 'innerWidth', { value: en, configurable: true });
       Object.defineProperty(window, 'innerHeight', { value: 780, configurable: true });
@@ -640,9 +612,10 @@ describe('A1 Üretim Terminali el okuyucu (1337 a)', () => {
       arkonAc('/arkon/onizle/IST-1');
       // Önizleme rozeti yalnız geniş şeritte yazar.
       if (en === null) expect(await screen.findByText('Önizleme · kayıt yapılmaz', {}, { timeout: 10000 })).toBeTruthy();
-      // Şerit çizilmiş olmalı; yoksa "düğme yok" boş ekranda da geçerdi. Menü yalnız dar, Tema değiştir yalnız geniş şeritte.
-      expect((await screen.findAllByRole('button', { name: en === null ? 'Tema değiştir' : 'Menü' }, { timeout: 10000 })).length).toBeGreaterThan(0);
-      expect(screen.queryByRole('button', { name: 'Kartı okut' })).toBeNull();
+      // Şerit çizilmiş olmalı; yoksa "düğme yok" boş ekranda da geçerdi. Uzak mod yalnız geniş, dar şerit kendi başlığıyla.
+      if (en === null) expect((await screen.findAllByRole('button', { name: 'Uzak mod' }, { timeout: 10000 })).length).toBeGreaterThan(0);
+      else await waitFor(() => { expect(document.querySelector('.tc-ay1-mobil-ust')).not.toBeNull(); }, { timeout: 10000 });
+      expect(screen.queryByRole('button', { name: 'İş kartı okut' })).toBeNull();
     } finally {
       Reflect.deleteProperty(window, 'innerWidth'); Reflect.deleteProperty(window, 'innerHeight');
     }
