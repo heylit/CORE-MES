@@ -262,9 +262,12 @@ describe('M1 yeni kart sihirbazı', () => {
     });
     ac('?kart=mym3');
     fireEvent.click(await screen.findByRole('button', { name: /Operasyon/ }));
-    const secim = await screen.findByRole('combobox', { name: 'Reçete ve rotası alınacak ürün' });
+    // 3273 a: rotası boş kartta benzer ürün kartı; "Başka ürün" yalnız rotası yürürlükte olan ürünleri listeler.
+    const benzer = await screen.findByRole('group', { name: 'Benzer ürün' });
+    fireEvent.click(within(benzer).getByRole('button', { name: 'Başka ürün' }));
+    const secim = within(benzer).getByRole('combobox', { name: 'Başka ürün' });
     expect(within(secim).queryByText(/Rotasız ürün/)).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: 'Reçete ve rotayı bu üründen al' }));
+    fireEvent.click(within(benzer).getByRole('button', { name: 'Kopyala' }));
     expect(await screen.findByText(/Reçete ve rota MM-DNM-00007 · Deneme ürün ürününden alınacak/)).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: /Özet/ }));
     fireEvent.click(await screen.findByRole('button', { name: 'Değişiklikleri kaydet' }));

@@ -321,3 +321,38 @@
 .tc-my-mo-tarama { stroke: var(--hold); stroke-width: 1; }
 .tc-my-mo-parca { fill: var(--panel-solid); stroke: var(--done); stroke-width: 1.2; }
 .tc-my-mo-eylem { display: flex; flex-wrap: wrap; gap: var(--b-2); align-items: center; }
+
+/* 3273 a (D): rotası boş kartta tam genişlikte şablon seçici (Reçete ve Rota'daki seçicinin görünüşü). */
+.tc-my-sb { display: grid; gap: var(--b-3); min-width: 0; }
+.tc-my-sb-kutu, .tc-my-sb-icine { min-width: 0; }
+.tc-my-sb-baslik { display: flex; flex-wrap: wrap; gap: var(--b-1) var(--b-3); align-items: baseline; justify-content: space-between; }
+.tc-my-sb-baslik h4 { margin: 0; overflow-wrap: anywhere; }
+.tc-my-sb-kartlar { display: grid; gap: var(--b-3); grid-template-columns: repeat(auto-fill, minmax(min(100%, 16rem), 1fr)); }
+.tc-my-sb-kart {
+  display: grid; gap: var(--b-2); align-content: start; padding: var(--b-3); min-width: 0;
+  border: thin solid var(--edge); border-radius: var(--yari-1); background: var(--panel-solid);
+}
+.tc-my-sb-secili { border-color: var(--ink); outline: var(--pay-ince) solid var(--hazard); }
+.tc-my-sb-ad { display: inline-flex; flex-wrap: wrap; gap: var(--b-1); align-items: center; overflow-wrap: anywhere; }
+.tc-my-opseridi { display: flex; flex-wrap: wrap; gap: var(--b-1); align-items: center; }
+.tc-my-opseridi > span { display: inline-flex; align-items: center; gap: var(--b-1); }
+.tc-my-opseridi > span:not(:last-child)::after { content: "›"; color: var(--muted); font-size: var(--yazi-xs); }
+.tc-my-opcip {
+  display: inline-block; min-width: 2.75em; text-align: center; padding: 0 var(--b-1); border-radius: var(--yari-1);
+  background: var(--renk); color: var(--on-sig); font-family: var(--font-mono); font-size: var(--yazi-xs); font-weight: 700; line-height: 1.6;
+}
+.tc-my-opcip-0 { --renk: var(--done); } .tc-my-opcip-1 { --renk: var(--run); } .tc-my-opcip-2 { --renk: var(--hold); }
+.tc-my-opcip-3 { --renk: var(--stop); } .tc-my-opcip-4 { --renk: var(--bp); } .tc-my-opcip-5 { --renk: var(--idle); }
+.tc-my-opcip-yok { --renk: var(--muted); }
+.tc-my-sb-adimlar { list-style: none; margin: 0; padding: 0; display: grid; }
+.tc-my-sb-adimlar li {
+  display: grid; grid-template-columns: auto auto minmax(0, 1fr); gap: var(--b-2); align-items: center;
+  padding: var(--b-1) 0; border-bottom: thin solid var(--edge);
+}
+.tc-my-sb-adimlar .tc-my-opad { display: grid; }
+.tc-my-sb-liste { display: grid; gap: var(--b-1); }
+.tc-my-sb-satir {
+  display: grid; gap: var(--b-1); text-align: left; font: inherit; color: var(--ink); min-block-size: var(--dokunma); padding: var(--b-1) var(--b-2);
+  cursor: pointer; border: thin solid var(--edge); border-radius: var(--yari-1); background: var(--panel-solid);
+}
+.tc-my-sb-satir[aria-checked='true'] { border-color: var(--ink); outline: var(--pay-ince) solid var(--ink); }

@@ -45,14 +45,37 @@ describe('3273 a: malzeme sihirbazında rota şablonu', () => {
     const grup = await screen.findByRole('group', { name: 'Rota şablonları' }, { timeout: 5000 });
     const kutular = await within(grup).findAllByRole('group', { name: / şablonu$/ });
     expect(kutular.map((k) => k.getAttribute('aria-label'))).toEqual(['Flanş hattı şablonu', 'Çok kullanılan şablonu']);
-    expect(within(kutular[0]!).getByText(/adında "FLANŞ" geçiyor/)).toBeTruthy();
-    const liste = within(grup).getByRole('combobox', { name: 'Bütün şablonlar (3)' });
-    expect(within(liste).queryByRole('option', { name: /Eski flanş/ })).toBeNull();
+    expect(within(kutular[0]!).getByTitle(/adında "FLANŞ" geçiyor/)).toBeTruthy();
+    expect(within(grup).getByRole('heading', { name: 'Bu ürünün rotası yok. Nasıl başlayalım?' })).toBeTruthy();
+    expect(screen.queryByRole('searchbox', { name: 'Operasyon ara' })).toBeNull();
+    fireEvent.click(within(grup).getByRole('button', { name: 'Bütün şablonlar (3)' }));
+    const pencere = await screen.findByRole('dialog', { name: 'Bütün şablonlar' });
+    expect(within(pencere).queryByRole('radio', { name: /Eski flanş/ })).toBeNull();
+    expect(within(pencere).getAllByRole('radio')).toHaveLength(3);
+    fireEvent.click(within(pencere).getByRole('button', { name: 'Vazgeç' }));
     expect(within(grup).getByRole('button', { name: 'Boş başla' })).toBeTruthy();
     fireEvent.click(within(kutular[0]!).getByRole('button', { name: 'İçine bak' }));
-    expect(within(kutular[0]!).getByText('Kesim')).toBeTruthy();
+    const panel = within(grup).getByRole('region', { name: 'İçine bak: Flanş hattı' });
+    expect(within(panel).getByText('Kesim')).toBeTruthy();
+    expect(within(panel).getByText('OP 20')).toBeTruthy();
     fireEvent.click(within(kutular[0]!).getByRole('button', { name: 'Başla' }));
     expect(await screen.findByText(/Flanş hattı: 2 operasyon rotaya yazıldı/)).toBeTruthy();
     expect(screen.getAllByRole('combobox', { name: 'Operasyon kodu' }).map((s) => (s as HTMLSelectElement).value)).toEqual(['KES', 'TOR']);
+  });
+
+  test('Boş başla iki sütunu açar ve operasyon aramasına odaklanır', async () => {
+    sunucuKur(YAZAN, {
+      'GET /malzeme-katalogu-kartlari': () => json(200, kartlar),
+      'GET /malzeme-katalogu-kartlari/mym9/rota': () => json(200, { rotali: false }),
+      'GET /rota/sablonlar': () => json(200, { sablonlar: SABLONLAR }),
+      'GET /rota/urunler': () => json(200, { rotalar: [] }),
+    });
+    yeniEkranAc('/malzemeler/yeni?kart=mym9');
+    fireEvent.click(await screen.findByRole('button', { name: /Operasyon/ }, { timeout: 5000 }));
+    const grup = await screen.findByRole('group', { name: 'Rota şablonları' }, { timeout: 5000 });
+    fireEvent.click(within(grup).getByRole('button', { name: 'Boş başla' }));
+    const ara = await screen.findByRole('searchbox', { name: 'Operasyon ara' });
+    expect(document.activeElement).toBe(ara);
+    expect(screen.getByRole('button', { name: 'Bütün şablonlar (3)' })).toBeTruthy();
   });
 });

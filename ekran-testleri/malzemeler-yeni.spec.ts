@@ -64,9 +64,12 @@ test.describe('M1 yeni kart sihirbazı', () => {
     await page.getByRole('textbox', { name: 'Parça adı *' }).fill('Deneme mil');
     await page.getByRole('radio', { name: 'Talaşlı işlenmiş parça' }).click();
     await page.getByRole('navigation', { name: 'Adımlar' }).getByRole('button', { name: /Operasyon/ }).click();
-    const secim = page.getByRole('combobox', { name: 'Reçete ve rotası alınacak ürün' });
-    await expect(secim).toBeVisible();
-    await page.getByRole('button', { name: 'Reçete ve rotayı bu üründen al' }).click();
+    // 3273 a: rotası boş kartta seçici tam genişliktedir; ürün benzer ürün kartından seçilir.
+    const benzer = page.getByRole('group', { name: 'Benzer ürün' });
+    await benzer.getByRole('button', { name: 'Başka ürün' }).click();
+    await expect(benzer.getByRole('combobox', { name: 'Başka ürün' })).toBeVisible();
+    expect((await tasmaOlc(page)).belge, 'yatay taşma').toBeLessThanOrEqual(0);
+    await benzer.getByRole('button', { name: 'Kopyala' }).click();
     await expect(page.getByText(/ürününden alınacak\./)).toBeVisible();
     expect((await tasmaOlc(page)).belge, 'yatay taşma').toBeLessThanOrEqual(0);
     expect(ag.hatalar).toEqual([]);
