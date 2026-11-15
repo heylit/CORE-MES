@@ -658,10 +658,39 @@ test('Kokpit 3282 1c: plan yönü panelde, emrin yönü ayrıntıda; Geri etkisi
   }
   await expect(panel.getByLabel('Planlama yönü')).toHaveValue('geri');
   await expect(panel.getByLabel(/Geri planlama tamponu/)).toHaveValue('0');
-  await expect(panel.getByText('Planlama yönü: İleri: hemen başla → Geri: teslimden geriye')).toBeVisible();
+  // Üst şeritteki düğme etkiyi sorulmadan hesaplatır (3297-1); telefonda yön panelde seçilir, etki düğmeyle istenir.
+  const yonEtkisi = panel.getByRole('region', { name: 'Ayarın etkisi' });
+  if (bilgi.project.name === 'g360') await expect(panel.getByText('Planlama yönü: İleri: hemen başla → Geri: teslimden geriye')).toBeVisible();
+  else await expect(yonEtkisi.getByRole('button', { name: 'Uygula' })).toBeVisible();
   expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0);
   await page.screenshot({ path: `/tmp/tmiv2-ekran/3282-yon-panel-${bilgi.project.name}.png` });
-  await panel.getByRole('button', { name: 'Sıfırla' }).click();
+  if (bilgi.project.name === 'g360') await panel.getByRole('button', { name: 'Sıfırla' }).click();
+  else {
+    expect(t.s.komutlar).toEqual([{ tur: 'ayar', ayar: { w: { yon: 'geri' }, param: {}, ac: [], kapat: [] }, ayrinti: 'Planlama yönü: İleri: hemen başla → Geri: teslimden geriye' }]);
+    // Etki beklerken ekranda tek birincil Uygula'dır: taslak çubuğundaki Canlıya al kapalıdır.
+    await expect(kokpit.getByRole('region', { name: 'Taslak' }).getByRole('button', { name: 'Canlıya al' })).toBeDisabled();
+    await yonEtkisi.getByRole('button', { name: 'Vazgeç' }).click();
+    await expect(yonEtkisi).toHaveCount(0);
+    expect(t.s.satirlar).toEqual([]);
+    t.s.komutlar.length = 0;
+    // Geçerli yönün düğmesi ölü değildir: paneli açar, plana dokunmaz.
+    await panel.getByRole('button', { name: 'Ayarları kapat' }).click();
+    await ustYon.getByRole('button', { name: 'İleriye planla' }).click();
+    await expect(panel.getByLabel('Planlama yönü')).toHaveValue('ileri');
+    expect(t.s.komutlar).toEqual([]);
+    // Etki beklerken panel X ile kapatılırsa kilit kalkar: komut taslakta kalır, Canlıya al yeniden açılır (Test T1).
+    await panel.getByRole('button', { name: 'Ayarları kapat' }).click();
+    await ustYon.getByRole('button', { name: 'Teslimden geriye' }).click();
+    await expect(yonEtkisi.getByRole('button', { name: 'Uygula' })).toBeVisible();
+    const canli = kokpit.getByRole('region', { name: 'Taslak' }).getByRole('button', { name: 'Canlıya al' });
+    await expect(canli).toBeDisabled();
+    await panel.getByRole('button', { name: 'Ayarları kapat' }).click();
+    await expect(canli).toBeEnabled();
+    await kokpit.getByRole('region', { name: 'Taslak' }).getByRole('button', { name: 'Geri al' }).click();
+    await expect.poll(() => t.s.satirlar.length).toBe(0);
+    t.s.komutlar.length = 0;
+    await ustYon.getByRole('button', { name: 'İleriye planla' }).click();
+  }
   await panel.getByRole('button', { name: 'Ayarları kapat' }).click();
   await kokpit.getByRole('region', { name: 'Gelenler' }).getByRole('button', { name: 'Yerleştir' }).click();
   const s4 = kokpit.getByRole('complementary', { name: /S4 ayrıntısı/ });

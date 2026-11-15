@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import type { MotorAyarlariCevabi } from '#paylasilan/sozlesme/plan.ts';
 import { Dugme, IsaretKutusu, Simge } from '../../../../ortak/arayuz/index.ts';
@@ -8,7 +8,7 @@ import { altEkranAdresi } from '../gorunumler.ts';
 import { kisitBul } from '../ic/veri/kurallar.ts';
 import type { PlanlamaCalismasi } from '../tipler.ts';
 import {
-  AYAR_ALANLARI, PANEL_KISITLARI, YON_ALANLARI, alanDegeri, alanYaz, ayarTaslagi, farklar, kisitYaz, sayiOku,
+  AYAR_ALANLARI, PANEL_KISITLARI, YON_ALANLARI, alanDegeri, alanYaz, ayarTaslagi, farklar, kisitYaz, planYonu, sayiOku,
   type AyarAlani, type AyarTaslagi,
 } from './ayarlar.ts';
 import { EtkiBolumu, useEtki } from './etki.tsx';
@@ -24,11 +24,13 @@ export interface AyarlarOzellikleri {
   yazabilir: boolean;
   kim: string;
   kapat: () => void;
-  // Üst şeritteki yön düğmesinden açılınca taslak o yönle başlar.
+  // Üst şeritteki yön düğmesinden açılınca taslak o yönle başlar ve etkisi sorulmadan hesaplanır.
   yon?: 'ileri' | 'geri' | null;
+  // Etki ekrandayken (Uygula ya da Vazgeç bekliyor) true: sayfa ikinci bir birincil düğmeyi kapatır.
+  etkiBekliyor?: (bekliyor: boolean) => void;
 }
 
-export function Ayarlar({ c, taslak, yazabilir, kapat, yon = null }: AyarlarOzellikleri) {
+export function Ayarlar({ c, taslak, yazabilir, kapat, yon = null, etkiBekliyor }: AyarlarOzellikleri) {
   const [t, setT] = useState<AyarTaslagi>(() => {
     const t0 = ayarTaslagi(c), a = AYAR_ALANLARI.find((x) => x.k === 'yon');
     return yon !== null && a ? alanYaz(t0, a, yon) : t0;
@@ -43,6 +45,8 @@ export function Ayarlar({ c, taslak, yazabilir, kapat, yon = null }: AyarlarOzel
     api.get<MotorAyarlariCevabi>('/plan/motor-ayarlari').then((x) => { if (canli) setMotor(x.guncel); }, (h: unknown) => { if (canli) setMotor({ hata: hataIletisi(h, 'Motor ayarı okunamadı.') }); });
     return () => { canli = false; };
   }, []);
+  const etkide = durum.tur === 'etki';
+  useEffect(() => { etkiBekliyor?.(etkide); return () => { etkiBekliyor?.(false); }; }, [etkide, etkiBekliyor]);
   const degisen = farklar(c, t);
   const kilitli = !yazabilir || taslak === null || durum.tur === 'hesap' || durum.tur === 'etki';
   const hataVar = Object.keys(hatalar).length > 0;
@@ -52,6 +56,13 @@ export function Ayarlar({ c, taslak, yazabilir, kapat, yon = null }: AyarlarOzel
     const k = ayarKomutu(c, t, degisen.join('; '));
     if (k !== null) await dene(k);
   };
+  // Yön düğmesi tek dokunuşta sonucunu gösterir: kişi "Etkisini gör"ü aramaz, Uygula ya da Vazgeç der.
+  const yonDenendi = useRef(false);
+  useEffect(() => {
+    if (yonDenendi.current || yon === null || yon === planYonu(c) || !yazabilir || taslak === null) return;
+    yonDenendi.current = true;
+    void etkisiniGor();
+  });
 
   const alan = (a: AyarAlani) => {
     const v = alanDegeri(t, a); const h = hatalar[`${a.yer}.${a.k}`];
@@ -80,6 +91,24 @@ export function Ayarlar({ c, taslak, yazabilir, kapat, yon = null }: AyarlarOzel
     );
   };
 
+  // Yön düğmesinden açılan panelde etki ve Uygula en üsttedir: uzun ayar listesinin altında aranmaz.
+  const eylem = durum.tur === 'etki' ? (
+    <EtkiBolumu ad="Ayarın etkisi" e={durum.e} uygula={() => { void uygula(durum.e); }} vazgec={() => { void vazgec(); }} />
+  ) : (
+    <section className="tc-pyq-ayar-etki" aria-label="Değişiklik">
+      {degisen.length > 0 && <ul className="tc-pyq-ayar-fark">{degisen.map((d) => <li key={d}>{d}</li>)}</ul>}
+      {durum.tur === 'hata' && <p className="tc-pyq-ayar-hata" role="alert">{durum.ileti}</p>}
+      {yazabilir && (
+        <div className="tc-pyq-ayar-dugmeler">
+          <Dugme tur="ikincil" simge="play" disabled={kilitli || degisen.length === 0 || hataVar} onClick={() => { void etkisiniGor(); }}>
+            {durum.tur === 'hesap' ? 'Hesaplanıyor' : c.plan === null ? 'Kaydet' : 'Etkisini gör'}
+          </Dugme>
+          {degisen.length > 0 && durum.tur !== 'hesap' && <Dugme tur="ikincil" onClick={() => { setT(ayarTaslagi(c)); setHatalar({}); setDurum({ tur: 'duzen' }); }}>Sıfırla</Dugme>}
+        </div>
+      )}
+    </section>
+  );
+
   return (
     <aside className="tc-pyq-ayrinti tc-pyq-ayarlar" aria-label="Plan ayarları">
       <header>
@@ -87,6 +116,7 @@ export function Ayarlar({ c, taslak, yazabilir, kapat, yon = null }: AyarlarOzel
         <button type="button" className="tc-pyq-simge-dugme" aria-label="Ayarları kapat" onClick={kapat}><Simge ad="x" boyut="k" /></button>
       </header>
       {!yazabilir && <p className="tc-pyq-not">Ayarları yalnız planı yazabilen kişi değiştirir.</p>}
+      {yon !== null && eylem}
       <h3>Yön</h3>
       {AYAR_ALANLARI.filter((a) => YON_ALANLARI.has(a.k)).map(alan)}
       <h3>Zaman ve tampon</h3>
@@ -112,22 +142,7 @@ export function Ayarlar({ c, taslak, yazabilir, kapat, yon = null }: AyarlarOzel
       </dl>
       {motor !== null && !('hata' in motor) && <p className="tc-pyq-not">{surumMetni(motor)} Sıralama kuralı ve öteki motor ayarları bütün planlar içindir: <Link to="/plan/motor-ayarlari">Motor ayarları</Link>.</p>}
       <p className="tc-pyq-not">Dört göz (onaylayan gönderenden başkası olsun) <Link to="/ayarlar">Sistem Ayarları</Link> &gt; Plan altındadır.</p>
-      {durum.tur === 'etki' ? (
-        <EtkiBolumu ad="Ayarın etkisi" e={durum.e} uygula={() => { void uygula(durum.e); }} vazgec={() => { void vazgec(); }} />
-      ) : (
-        <section className="tc-pyq-ayar-etki" aria-label="Değişiklik">
-          {degisen.length > 0 && <ul className="tc-pyq-ayar-fark">{degisen.map((d) => <li key={d}>{d}</li>)}</ul>}
-          {durum.tur === 'hata' && <p className="tc-pyq-ayar-hata" role="alert">{durum.ileti}</p>}
-          {yazabilir && (
-            <div className="tc-pyq-ayar-dugmeler">
-              <Dugme tur="ikincil" simge="play" disabled={kilitli || degisen.length === 0 || hataVar} onClick={() => { void etkisiniGor(); }}>
-                {durum.tur === 'hesap' ? 'Hesaplanıyor' : c.plan === null ? 'Kaydet' : 'Etkisini gör'}
-              </Dugme>
-              {degisen.length > 0 && durum.tur !== 'hesap' && <Dugme tur="ikincil" onClick={() => { setT(ayarTaslagi(c)); setHatalar({}); setDurum({ tur: 'duzen' }); }}>Sıfırla</Dugme>}
-            </div>
-          )}
-        </section>
-      )}
+      {yon === null && eylem}
     </aside>
   );
 }

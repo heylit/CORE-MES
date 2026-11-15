@@ -13,11 +13,11 @@ const MOTOR: MotorAyarlari = { amac: 'sirali', eksikStok: 'varsay', kural: 'atcs
 // Çalışma uydurmadır; sunucu yerine taslak sahtedir (3282 1d-2b: değişiklik kişinin taslağına komut olarak yazılır).
 afterEach(() => { cleanup(); vi.restoreAllMocks(); planKurSifirla(); });
 
-function kur(c: PlanlamaCalismasi, yazabilir = true, yon: 'ileri' | 'geri' | null = null) {
+function kur(c: PlanlamaCalismasi, yazabilir = true, yon: 'ileri' | 'geri' | null = null, etkiBekliyor?: (b: boolean) => void) {
   vi.spyOn(api, 'get').mockResolvedValue({ guncel: { surumId: null, degerler: MOTOR, yazan: null, zaman: null }, taslak: null });
   const { t, yazilan } = sahteTaslak(c.dataVer);
   const kapat = vi.fn();
-  render(<MemoryRouter><Ayarlar c={c} taslak={t} yazabilir={yazabilir} kim="ORN-Planlamaci" kapat={kapat} yon={yon} /></MemoryRouter>);
+  render(<MemoryRouter><Ayarlar c={c} taslak={t} yazabilir={yazabilir} kim="ORN-Planlamaci" kapat={kapat} yon={yon} etkiBekliyor={etkiBekliyor} /></MemoryRouter>);
   return { t, kapat, yazilan };
 }
 
@@ -87,9 +87,33 @@ describe('Kokpit Ayarlar paneli (3282 1b)', () => {
     expect(screen.queryByRole('button', { name: /Etkisini gör/ })).toBeNull();
   });
 
-  it('üst şeritteki yön düğmesinden açılınca taslak o yönle başlar, fark görünür (3282 1c)', () => {
-    kur(ornekCalisma(), true, 'geri');
+  it('üst şeritteki yön düğmesinden açılınca taslak o yönle başlar ve etkisi sorulmadan hesaplanır; Vazgeç geri alır', async () => {
+    const bekliyor = vi.fn();
+    const { t, yazilan } = kur(ornekCalisma(), true, 'geri', bekliyor);
     expect((screen.getByLabelText('Planlama yönü') as HTMLSelectElement).value).toBe('geri');
-    expect(screen.getByText('Planlama yönü: İleri: hemen başla → Geri: teslimden geriye')).toBeTruthy();
+    const etki = await screen.findByRole('region', { name: 'Ayarın etkisi' });
+    expect(yazilan).toEqual([{ tur: 'ayar', ayar: { w: { yon: 'geri' }, param: {}, ac: [], kapat: [] }, ayrinti: 'Planlama yönü: İleri: hemen başla → Geri: teslimden geriye' }]);
+    expect(t.yaz).toHaveBeenCalledTimes(1);
+    // Etki ekrandayken sayfaya haber verilir (taslak çubuğundaki birincil kapanır), Vazgeç'ten sonra kalkar.
+    expect(bekliyor).toHaveBeenLastCalledWith(true);
+    fireEvent.click(within(etki).getByRole('button', { name: 'Vazgeç' }));
+    await waitFor(() => { expect(t.geriAl).toHaveBeenCalledWith(false); });
+    await waitFor(() => { expect(bekliyor).toHaveBeenLastCalledWith(false); });
+  });
+
+  it('etki beklerken panel kapanırsa (kaldırılırsa) bekleme bildirimi düşer: Canlıya al kilitli kalmaz', async () => {
+    const bekliyor = vi.fn();
+    kur(ornekCalisma(), true, 'geri', bekliyor);
+    await waitFor(() => { expect(bekliyor).toHaveBeenLastCalledWith(true); });
+    cleanup();
+    expect(bekliyor).toHaveBeenLastCalledWith(false);
+  });
+
+  it('yön planınkiyle aynıysa ya da kişi yazamıyorsa kendiliğinden hesap istenmez', () => {
+    const a = kur(ornekCalisma(), true, 'ileri');
+    expect(a.t.yaz).not.toHaveBeenCalled();
+    cleanup();
+    const b = kur(ornekCalisma(), false, 'geri');
+    expect(b.t.yaz).not.toHaveBeenCalled();
   });
 });

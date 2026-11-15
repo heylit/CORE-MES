@@ -102,8 +102,10 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
   // Duruş ve mesai bölümü (3282 2a-1, 2a-2): üst şeritteki düğmeyle açılır (ayrıntı sütunu boşken yer tutmaz: tahta dar kalmasın); açılınca seçim
   // kalkar, ayar paneli kapanır.
   const [kapasiteAcik, setKapasiteAcik] = useState(false);
-  // Üst şeritteki yön düğmesi paneli o yönle açar (3282 1c); değişiklik panelde etkisiyle uygulanır.
+  // Üst şeritteki yön düğmesi paneli o yönle açar ve etkisini hesaplatır; geçerli yönün düğmesi paneli yön bölümüyle açar (ölü tıklama olmasın).
   const [ayarYon, setAyarYon] = useState<'ileri' | 'geri' | null>(null);
+  // Ayarın etkisi Uygula ya da Vazgeç beklerken taslak çubuğundaki birincil düğme kapanır: ekranda tek birincil kalır.
+  const [ayarEtkisi, setAyarEtkisi] = useState(false);
   useEffect(() => { onayIstegiAl(); }, []);
   const kok = useRef<HTMLDivElement | null>(null);
 
@@ -352,8 +354,8 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
         <button type="button" className="tc-pyq-ok" aria-pressed={onceAcik} title="Onaylı planla karşılaştır (B)" onClick={() => { setOnceAcik(!onceAcik); }}><Simge ad="layers" boyut="k" /><span>Önce / sonra</span></button>
         <span className="tc-pyq-seg tc-pyq-yon" role="group" aria-label="Planın yönü">
           {(['ileri', 'geri'] as const).map((y) => (
-            <button type="button" key={y} aria-pressed={planYonu(c) === y} title={y === 'geri' ? 'Teslimden geriye planla' : 'İleriye planla'} disabled={!yazabilir || tur !== null || onayAcik}
-              onClick={() => { if (planYonu(c) !== y) { sec(null, null); setKapasiteAcik(false); setAyarYon(y); setAyarAcik(true); } }}>
+            <button type="button" key={y} aria-pressed={planYonu(c) === y} title={y === 'geri' ? 'Bütün planı teslimden geriye diz: iş termine yetişecek en geç saatte başlar' : 'Bütün planı ileriye diz: iş ilk boş saatte başlar'} disabled={!yazabilir || tur !== null || onayAcik}
+              onClick={() => { sec(null, null); setKapasiteAcik(false); setAyarYon(planYonu(c) === y ? null : y); setAyarAcik(true); }}>
               <Simge ad={y === 'geri' ? 'flag' : 'chev-right'} boyut="k" /><span>{y === 'geri' ? 'Teslimden geriye' : 'İleriye planla'}</span>
             </button>
           ))}
@@ -371,7 +373,7 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
       </div>
       {taslak && (
         <TaslakCubugu
-          taslak={taslak} canliyaAlir={canliyaAlir} kilit={tur ? 'Tur bitince açılır' : null} yazildi={(ileti) => { bildir('bilgi', ileti); yenile(); }}
+          taslak={taslak} canliyaAlir={canliyaAlir} kilit={tur ? 'Tur bitince açılır' : ayarEtkisi ? 'Önce ayarın etkisini uygulayın ya da vazgeçin.' : null} yazildi={(ileti) => { bildir('bilgi', ileti); yenile(); }}
           onayiAc={() => { sec(null, null); setAyarAcik(false); setOnayTaslaktan(true); setOnayAcik(true); }}
           ozet={DURUMLAR.map((d) => <span key={d} data-d={d}>{DURUM_ADI[d]} {ilk.current[d]} → {say[d]}</span>)}
         />
@@ -410,7 +412,7 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
             atla={() => { turKarar(false); }} onceki={turOnceki} sonraki={turSonraki} bitir={turBitir} vazgec={turVazgec}
           />
         ) : ayarAcik ? (
-          <Ayarlar key={ayarYon ?? ''} c={c} taslak={taslak} yazabilir={yazabilir} kim={o.depo.ben?.kisi.ad ?? ''} yon={ayarYon} kapat={() => { setAyarAcik(false); setAyarYon(null); }} />
+          <Ayarlar key={ayarYon ?? ''} c={c} taslak={taslak} yazabilir={yazabilir} kim={o.depo.ben?.kisi.ad ?? ''} yon={ayarYon} etkiBekliyor={setAyarEtkisi} kapat={() => { setAyarAcik(false); setAyarYon(null); }} />
         ) : secili ? (
           <Ayrinti m={m} e={secili} secIs={secIs} zaman={zaman} uygula={hamleUygula} surum={surum} bekle={mesgul} matris={tahtasiz(goz)} ileti={tahtasiz(goz) ? sonuc : null} yon={{ c, taslak, yazabilir }} adimSec={(id) => { sec(secili.id, id); setGoster(id); }} kapat={() => { sec(null, null); }} />
         ) : kapasiteAcik ? (
