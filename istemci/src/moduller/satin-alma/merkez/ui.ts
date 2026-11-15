@@ -23,7 +23,7 @@ import { partileriUnut } from "./partiler.ts";
 import { kategoriNotu, rehberRozetleri, talepRehberi } from "./onayli-ekran.ts";
 import { rehberSirasi } from "./onayli.ts";
 import { ODEME_SEKLI, siparisTakibi, takibiUnut, takipGuncelle } from "./takip.ts";
-import { approvalFormHTML, poText, printDoc } from "./docs.ts";
+import { approvalFormHTML, printDoc, siparisMetniGovdesi } from "./docs.ts";
 import { onaylayabilir, setRole, type Role } from "./roles.ts";
 import type { OdemePlaniSatiri, SiparisBelgesi } from "#paylasilan/sozlesme/satin-alma.ts";
 import { DosyaHatasi, dosyaYukle } from "../../belge-merkezi/disari.ts";
@@ -1249,9 +1249,9 @@ const ACTIONS: Record<string, Action> = {
     const row = el.closest("tr");
     if (row) { o.poNo = orderRow(row, "poNo") || o.poNo; o.orderDate = orderRow(row, "orderDate") || o.orderDate; o.expectedDate = orderRow(row, "expectedDate") || o.expectedDate; }
     else { o.poNo = $("#o-po")?.value || o.poNo; o.orderDate = $("#o-date")?.value || o.orderDate; o.expectedDate = $("#o-exp")?.value || o.expectedDate; }
-    openModal(`<div class="mh"><h2>Sipariş metni: ${esc(supName(o.q))}</h2></div><div class="mb"><pre class="out" id="po-out">${esc(poText(r, o))}</pre></div><div class="mf"><button class="btn primary" data-act="po-copy">Metni kopyala</button><button class="btn ghost" data-act="close">Kapat</button></div>`);
+    openModal(`<div class="mh"><h2>Sipariş metni: ${esc(supName(o.q))}</h2></div><div class="mb">${siparisMetniGovdesi(r, o)}</div><div class="mf"><button class="btn primary" data-act="po-copy">Metni kopyala</button><button class="btn ghost" data-act="close">Kapat</button></div>`);
   },
-  "po-copy": () => { void copyText($("#po-out").textContent ?? ""); },
+  "po-copy": () => { void copyText($<HTMLTextAreaElement>("#po-out").value); },
   "bulk": (_el, r) => {
     if (!r || !canWrite()) return; if (!(r.items || []).length) { toast("Önce kalem ekleyin."); return; }
     if (!OPEN.includes(r.status)) { bulkModal(r); return; }

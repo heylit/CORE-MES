@@ -179,7 +179,7 @@ export function OnayliListe() {
       </div>
       <div className="sa-ol-ozet">
         <SayiKarti baslik="Onaylı firma" simge="check" sayi={o.onayli} altMetin="en az bir kategoride" />
-        <SayiKarti baslik="Şartlı" simge="flag" sayi={o.sartli} ton={o.sartli > 0 ? 'uyari' : 'bilgi'} altMetin="en az bir kategoride; şart teklifte görünür" />
+        <SayiKarti baslik="Şartlı" simge="flag" sayi={o.sartli} ton={o.sartli > 0 ? 'uyari' : 'bilgi'} altMetin="en az bir kategoride; şart sipariş notuna gider" />
         <SayiKarti baslik={`Sertifikası ${SERTIFIKA_ESIGI_GUN} gün içinde biten`} simge="calendar" sayi={o.sertifika} ton={o.sertifika > 0 ? 'uyari' : 'bilgi'}
           altMetin={o.sertifikaGecmis > 0 ? `${o.sertifikaGecmis} tanesi geçmiş` : 'Geçmiş sertifika yok'} />
         <SayiKarti baslik="Kalite kaydı yok" simge="alert" sayi={o.kayitsiz} ton={o.kayitsiz > 0 ? 'hata' : 'bilgi'} altMetin="Kalite Merkezi'nde kaydı yok" />

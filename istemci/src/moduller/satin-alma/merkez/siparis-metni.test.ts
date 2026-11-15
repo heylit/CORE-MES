@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { poText } from './docs.ts';
+import { poText, siparisMetniGovdesi } from './docs.ts';
+import { ONAYLI } from './onayli.ts';
+import { S } from './store.ts';
+import { ORNEK_LISTE } from '../tedarikciler/ornek.ts';
 import type { OrderInfo } from './calc.ts';
 import type { PurchaseRequest, Quote } from './tipler.ts';
 
@@ -28,5 +31,26 @@ describe('Sipariş metni', () => {
     expect(poText(r, { ...o, poNo: 'LG-9' } as OrderInfo).split('\n')[0]).toBe('Konu: Sipariş SA-1 / LG-9, Deneme talep');
     // Numara oluşmadan talep numarası sipariş numarası gibi yazılmaz (SA-9).
     expect(poText(r, { ...o, orderNo: '' } as OrderInfo).split('\n')[0]).toBe('Konu: Sipariş (talep ST-1), Deneme talep');
+  });
+
+  it('3279 a: şartlı onaylı firmanın Kalite şartı sipariş metnine yazılır; onaylı firmada şart satırı yok', () => {
+    const onceki = ONAYLI.veri;
+    const malzemeler = S.materials;
+    try {
+      ONAYLI.veri = ORNEK_LISTE;
+      S.materials = { m10: { id: 'm10', code: 'm10', name: 'Deneme ısıl', category: '', unit: 'adet', spec: '', notes: '', aliases: [], createdAt: 0, malzemeNo: 10 } };
+      const rk = { ...r, items: [{ id: 'k1', name: 'Deneme ısıl', materialId: 'm10', qty: '2', unit: 'adet' }] } as unknown as PurchaseRequest;
+      expect(poText(rk, { ...o, supplierId: '2' } as OrderInfo)).toContain('Kalite şartı: ORN şart: her partide rapor');
+      expect(poText(rk, { ...o, supplierId: '1' } as OrderInfo)).not.toContain('Kalite şartı');
+      // Arayüz 3279 0003: şart sipariş notuna önceden dolar ve değiştirilebilir (salt okunur metin değil).
+      const kap = document.createElement('div');
+      kap.innerHTML = siparisMetniGovdesi(rk, { ...o, supplierId: '2' } as OrderInfo);
+      const alan = kap.querySelector('textarea')!;
+      expect(alan.readOnly).toBe(false);
+      expect(alan.value).toContain('Kalite şartı: ORN şart: her partide rapor');
+    } finally {
+      ONAYLI.veri = onceki;
+      S.materials = malzemeler;
+    }
   });
 });
