@@ -125,6 +125,24 @@ describe('3248-2 çalışma alanı', () => {
     expect(sira(k.govde)?.map((x) => x[0])).toEqual([20, 10, 30, 40, 50]);
   }, 30000);
 
+  // Test ön bakışı (3295 T1): ileri giden hedefin ardına, ortadaki hedefe geri gelen onun önüne geçer.
+  it('ileri bırakılan adım hedefin ardına, ortadaki hedefe geri bırakılan onun önüne geçer (3295)', async () => {
+    const duz = () => [10, 20, 30, 40].map((n) => adimOrnegi(n === 10 ? {} : { id: `o${String(n)}`, seq: n, opNo: n, ins: [] }));
+    let k = kur(duz());
+    rrAc('/recete-rota/schema');
+    let hat = hatAl(await bolumAc());
+    expect(surukle(kart(hat, 10), kart(hat, 30).parentElement!)).toBe(true);
+    await waitFor(() => { expect(k.govde).not.toBeNull(); }, BEKLE);
+    expect(sira(k.govde)?.map((x) => x[0])).toEqual([20, 30, 10, 40]);
+    cleanup();
+    k = kur(duz());
+    rrAc('/recete-rota/schema');
+    hat = hatAl(await bolumAc());
+    expect(surukle(kart(hat, 40), kart(hat, 20).parentElement!)).toBe(true);
+    await waitFor(() => { expect(k.govde).not.toBeNull(); }, BEKLE);
+    expect(sira(k.govde)?.map((x) => x[0])).toEqual([10, 40, 20, 30]);
+  }, 30000);
+
   it('Öne / Geriye yatay hatta kendi şeridinde yer değiştirir', async () => {
     const k = kur();
     rrAc('/recete-rota/schema');
