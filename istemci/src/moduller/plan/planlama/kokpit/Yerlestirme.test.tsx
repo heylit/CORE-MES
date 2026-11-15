@@ -113,6 +113,21 @@ describe('Kokpit emirler ve operasyonlar (3297)', () => {
     expect(screen.queryByRole('button', { name: 'Hepsini en erken yere yerleştir' })).toBeNull();
   });
 
+  it('aynı soru ikinci kez sunucuya gitmez; ortak sürüm değişince birikmiş seçim düşer ve yeniden sorulur', async () => {
+    const oz = onizlemeKur();
+    const { rerender } = render(<EmirAdimlari m={M} kart={kart('2')} zaman={zaman} uygula={vi.fn()} surum={4} adimAc={vi.fn()} taslakVar />);
+    const torna = await screen.findByRole('group', { name: 'Torna için boş yerler' });
+    await waitFor(() => { expect(torna.querySelectorAll('li')).toHaveLength(2); });
+    // Sistem seçimi ve torna adayları aynı iki soruyu sorar (T1, T2): sunucuya iki kez gidilir, dört kez değil.
+    expect(oz).toHaveBeenCalledTimes(2);
+    expect(torna.querySelector('[data-taslak-notu]')?.textContent).toMatch(/Taslağınızdaki değişiklikler/);
+    fireEvent.click(within(torna.querySelectorAll('li')[1] as HTMLElement).getByRole('button', { name: 'Yerleştir' }));
+    expect(screen.getByRole('region', { name: 'Emirler ve operasyonlar' }).querySelector('[data-adim="2.10"]')?.textContent).toContain('ORN-T1 seçildi');
+    rerender(<EmirAdimlari m={M} kart={kart('2')} zaman={zaman} uygula={vi.fn()} surum={5} adimAc={vi.fn()} taslakVar />);
+    await waitFor(() => { expect(screen.getByRole('region', { name: 'Emirler ve operasyonlar' }).querySelector('[data-adim="2.10"]')?.textContent).toContain('yerleşmedi'); });
+    await waitFor(() => { expect(oz).toHaveBeenLastCalledWith(expect.objectContaining({ emirId: '2' }), 5); });
+  });
+
   it('önizleme okunamazsa boş yer bulunamadı yazılır, toplu düğme kapalı kalır', async () => {
     vi.spyOn(planaAl, 'planaAlOnizle').mockResolvedValue(null);
     render(<EmirAdimlari m={M} kart={kart('2')} zaman={zaman} uygula={vi.fn()} surum={4} adimAc={vi.fn()} />);
