@@ -40,10 +40,10 @@ const json = (r: Route, v: unknown) => r.fulfill({ json: v });
 // Kişinin taslağı uydurmadır (3282 1d-2b): komutlar sırayla tutulur, görünüm her okumada ortak duruma oynatılarak kurulur. Taşı ve plana al
 // işi yerine koyar, ayar ve yön w'ye yazar; dizilmemiş komut planı bekletir (bekleyen), dizme temizler. Uygula (taslak çubuğunda Canlıya al) görünümü ortak yapar.
 type Komut = { tur: string } & Record<string, unknown>;
-interface Durum { ops: Record<string, Is>; locks: Record<string, unknown>; w: Record<string, unknown> }
+interface Durum { ops: Record<string, Is>; locks: Record<string, unknown>; w: Record<string, unknown>; down?: Record<string, unknown>[] }
 const IS = '00000000-0000-4000-8000-0000000000a1';
 function oynat(d: Durum, l: readonly Komut[]): Durum {
-  let { ops, locks, w } = d;
+  let { ops, locks, w } = d, down = d.down ?? [];
   for (const k of l) {
     const S = Number(k['baslangic']), m = String(k['tezgah']);
     if (k.tur === 'tasi') {
@@ -58,12 +58,16 @@ function oynat(d: Durum, l: readonly Komut[]): Durum {
       const y = { ...(w['yonEmir'] as Record<string, unknown> | undefined) }, id = String(k['emirId']);
       if (k['yon'] === 'plan') delete y[id]; else y[id] = k['yon'];
       w = { ...w, yonEmir: y };
+    } else if (k.tur === 'durus') {
+      down = [...down, { m, from: k['bas'], to: k['bit'], neden: k['neden'] }];
+    } else if (k.tur === 'durus-sil') {
+      down = down.filter((x) => !(x['m'] === m && x['from'] === k['bas'] && x['to'] === k['bit']));
     }
   }
-  return { ops, locks, w };
+  return { ops, locks, w, down };
 }
 const ILK_DURUM: Durum = { ops: ILK, locks: {}, w: { dondurma: 4 } };
-const calismaKur = (d: Durum) => ({ ...calisma(d.ops, d.locks), w: d.w });
+const calismaKur = (d: Durum) => ({ ...calisma(d.ops, d.locks), w: d.w, down: d.down ?? [] });
 async function taslakSunucusu(page: Page, kur: (d: Durum) => Record<string, unknown> = calismaKur) {
   const s = { ortak: ILK_DURUM, surum: 1, taslakSurumu: 0, satirlar: [] as { komut: Komut; ne: string; t: number; hata: null }[], komutlar: [] as Komut[], degerlendirme: [] as unknown[], uygulandi: 0 };
   const gorunum = () => oynat(s.ortak, s.satirlar.map((x) => x.komut));
@@ -672,5 +676,43 @@ test('Kokpit 3282 1c: plan yönü panelde, emrin yönü ayrıntıda; Geri etkisi
   await expect(yon.getByRole('button', { name: 'Teslimden geriye' })).toHaveAttribute('aria-pressed', 'true');
   // Etki hesabı bitince plana alma seçenekleri yeniden hesaplanır; "hesaplanıyor" kalmaz.
   await expect(s4.getByText('hesaplanıyor')).toHaveCount(0, { timeout: 10_000 });
+  expect(ag.hatalar).toEqual([]);
+});
+
+test('Kokpit 3282 2a-1: üst şeritteki Duruşlar; tahtada çubuk; arıza taslağa yazılır, etkisi görünür, Uygula; kendiliğinden gelen bakım silinmez; yatay taşma yok', async ({ page, ac, ag }, bilgi) => {
+  const t = await taslakSunucusu(page);
+  t.s.ortak = { ...t.s.ortak, down: [{ m: 'M2', from: 30, to: 34, neden: 'bakım', oto: 1, bakim: 'ORN-b1' }] };
+  await page.clock.setSystemTime(new Date('2026-10-19T07:00:00+03:00'));
+  await ac('/plan');
+  const kokpit = page.locator('.tc-pyq');
+  await expect(kokpit).toBeVisible({ timeout: 20_000 });
+  await kokpit.getByTitle('Tezgâhın arıza ve bakım duruşları').click();
+  const panel = kokpit.getByRole('complementary', { name: 'Duruşlar' });
+  await panel.getByLabel('Tezgâh').selectOption('M2');
+  const oto = panel.getByRole('listitem').filter({ hasText: 'kendiliğinden geldi' });
+  await expect(oto).toBeVisible();
+  await expect(oto.getByRole('button')).toHaveCount(0);
+  await panel.getByLabel('Başlangıç').fill('2026-10-20T08:00');
+  await panel.getByLabel('Bitiş').fill('2026-10-20T16:00');
+  expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0);
+  await page.screenshot({ path: `/tmp/tmiv2-ekran/3282-2a1-kapasite-${bilgi.project.name}.png` });
+  await panel.getByRole('button', { name: 'Duruş ekle, etkisini gör' }).click();
+  const etki = panel.getByRole('region', { name: 'Duruşun etkisi' });
+  await expect(etki).toBeVisible({ timeout: 10_000 });
+  expect(t.s.komutlar).toEqual([{ tur: 'durus', tezgah: 'M2', bas: 32, bit: 40, neden: 'arıza' }]);
+  await etki.getByRole('button', { name: 'Uygula' }).click();
+  await expect(etki).toHaveCount(0);
+  const yeni = panel.getByRole('listitem').filter({ hasText: /^Arıza/ });
+  await expect(yeni).toBeVisible();
+  await expect(yeni).toBeFocused();
+  // Planlı duruşlar tahtada tezgâhın satırında kesik kenarlı çubuktur (arıza ve kendiliğinden gelen bakım).
+  const serit = kokpit.locator('.tc-pyq-satir[data-satir="M2"]');
+  await expect(serit.locator('.tc-pyq-durus[data-plan="arıza"]')).toHaveAttribute('title', 'Arıza · 20.10 Sal 08:00 → 20.10 Sal 16:00');
+  await expect(serit.locator('.tc-pyq-durus[data-plan="bakım"]')).toHaveCount(1);
+  // Telefonda tahta yerine liste durur; çubuk görüntüde tahtalı genişliklerde görünsün.
+  if (bilgi.project.name !== 'g360') await serit.locator('.tc-pyq-durus[data-plan="arıza"]').scrollIntoViewIfNeeded();
+  await expect(kokpit.getByRole('region', { name: 'Taslak' })).toBeVisible();
+  expect((await tasmaOlc(page)).belge).toBeLessThanOrEqual(0);
+  await page.screenshot({ path: `/tmp/tmiv2-ekran/3282-2a1-kapasite-sonra-${bilgi.project.name}.png` });
   expect(ag.hatalar).toEqual([]);
 });

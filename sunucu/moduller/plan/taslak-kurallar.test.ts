@@ -4,7 +4,7 @@ import type { TaslakKomutu } from '#paylasilan/sozlesme/planlama.ts';
 import type { PlanaAlSonucu } from './plana-al-kurallar.ts';
 import { planAni } from './planlama-kurallar.ts';
 import {
-  DIZ_BAYAT, DIZ_ESKI_VERI, ayarUygula, catismalar, dizImzasi, dizUygula, emirOf, imza, komutAnahtarlari, oynat, secimeGore, uygulaKarari, yonUygula,
+  DIZ_BAYAT, DIZ_ESKI_VERI, EKSEN_DEGISTI, ayarUygula, catismalar, dizImzasi, dizUygula, durusSilUygula, durusUygula, emirOf, imza, komutAnahtarlari, komutAdi, oynat, secimeGore, uygulaKarari, yonUygula,
   type DizKomutu, type TaslakHesaplari, type TaslakSatiri,
 } from './taslak-kurallar.ts';
 
@@ -219,5 +219,91 @@ describe('3282 1d-2: dizme', () => {
     // Başkası ortak planı yeniden dizdiyse (yer değişti) ikinci dizme bayattır.
     const baska = ortak({ plan: { dataVer: 3, ops: { 'S1.10': op('S1.10', 'T1', 22) } } });
     assert.deepEqual(oynat(baska, [dusmus, ikinci], KISI, HESAP).hatalar, [null, DIZ_BAYAT]);
+  });
+});
+
+// 3282 2a-1: elle girilen duruş (arıza, bakım). Saatler planın ekseninde; örnek çalışmanın başlangıcı uydurmadır.
+describe('3282 2a-1: duruş komutu', () => {
+  const D = { siparisler: [{ id: 'S1' }], tezgahlar: [{ id: 'T1' }, { id: 'T2' }], meta: { baslangic: '2026-11-16' } };
+  const oto = { m: 'T1', from: 10, to: 18, neden: 'bakım', oto: 1, bakim: 'ORN-b1' };
+  const c = (down: unknown[] = [oto], ek: Record<string, unknown> = {}) => calisma({ D, down, ...ek });
+  const durus = (tezgah: string, bas: number, bit: number): TaslakKomutu => ({ tur: 'durus', tezgah, bas, bit, neden: 'arıza' });
+  const sil = (tezgah: string, bas: number, bit: number): TaslakKomutu => ({ tur: 'durus-sil', tezgah, bas, bit });
+  // Kural saati: kişinin anı başlangıçtan önce (eksen henüz gelmedi), geçmiş denetimini engellemez.
+  const kisi = { ...k, t: Date.UTC(2026, 10, 16, 0) };
+
+  test('ekler; aynı aralık ikinci kez, ters aralık, ufuk dışı, geçmiş ve çalışmada olmayan tezgâh eklenmez; geri yaması önceki listedir', () => {
+    const r = durusUygula(c(), { tezgah: 'T2', bas: 20, bit: 28, neden: 'arıza' }, kisi);
+    assert.ok('deger' in r && r.degisti);
+    const d = r.deger as { down: unknown[]; bekleyen: { geri: unknown[] }[] };
+    assert.deepEqual(d.down, [oto, { m: 'T2', from: 20, to: 28, neden: 'arıza' }]);
+    assert.deepEqual(d.bekleyen.at(-1)?.geri, [{ yol: ['down'], once: [oto] }]);
+    const hata = (x: ReturnType<typeof durusUygula>) => ('hata' in x ? x.hata.ileti : null);
+    assert.equal(hata(durusUygula(r.deger, { tezgah: 'T2', bas: 20, bit: 28, neden: 'bakım' }, kisi)), 'Bu duruş zaten var.');
+    assert.equal(hata(durusUygula(c(), { tezgah: 'T2', bas: 28, bit: 20, neden: 'arıza' }, kisi)), 'Bitiş başlangıçtan sonra olmalı.');
+    assert.equal(hata(durusUygula(c(), { tezgah: 'T2', bas: 20, bit: 120 * 24 + 1, neden: 'arıza' }, kisi)), 'Duruş planın ufkunun dışında bitiyor.');
+    assert.equal(hata(durusUygula(c([], { w: { ufukGun: 182 } }), { tezgah: 'T2', bas: 20, bit: 120 * 24 + 1, neden: 'arıza' }, kisi)), null);
+    assert.equal(hata(durusUygula(c(), { tezgah: 'T2', bas: 0, bit: 4, neden: 'arıza' }, { ...kisi, t: Date.UTC(2026, 10, 16, 9) })), 'Duruş geçmişte bitiyor; planı etkilemez.');
+    assert.equal(hata(durusUygula(c(), { tezgah: 'T9', bas: 20, bit: 28, neden: 'arıza' }, kisi)), 'Tezgâh çalışmada yok.');
+  });
+
+  test('silme tek elle satırı siler; otomatik satır silinmez, olmayan satır uygulanamaz', () => {
+    const iki = c([oto, { m: 'T1', from: 10, to: 18 }, { m: 'T1', from: 10, to: 18 }]);
+    const r = durusSilUygula(iki, { tezgah: 'T1', bas: 10, bit: 18 }, kisi);
+    assert.ok('deger' in r);
+    assert.deepEqual((r.deger as { down: unknown[] }).down, [oto, { m: 'T1', from: 10, to: 18 }]);
+    // Geri alma silmeden önceki listeyi geri koyar (Test 2a-1 T1).
+    assert.deepEqual((r.deger as { bekleyen: { geri: unknown[] }[] }).bekleyen.at(-1)?.geri, [{ yol: ['down'], once: [oto, { m: 'T1', from: 10, to: 18 }, { m: 'T1', from: 10, to: 18 }] }]);
+    const hata = (x: ReturnType<typeof durusSilUygula>) => ('hata' in x ? x.hata.ileti : null);
+    assert.equal(hata(durusSilUygula(c(), { tezgah: 'T1', bas: 10, bit: 18 }, kisi)), 'Otomatik duruş (arıza ya da bakım planından) burada silinmez.');
+    assert.equal(hata(durusSilUygula(c(), { tezgah: 'T2', bas: 10, bit: 18 }, kisi)), 'Duruş artık yok.');
+    assert.equal(komutAdi(sil('T1', 10, 18.5)), 'T1 duruşu silindi: 1. gün 10:00 → 1. gün 18:30');
+    assert.equal(komutAdi(durus('T1', 30, 34)), 'T1 arıza: 2. gün 06:00 → 2. gün 10:00');
+  });
+
+  test('imza: elle duruş tezgâh başına girer, otomatik girmez; başkasının duruşu o tezgâhta çatışır, eksenin kayması bütün planda', () => {
+    const taban = imza(c());
+    assert.deepEqual(taban.kapasite, {});
+    assert.equal(taban.eksen, '2026-11-16');
+    assert.deepEqual(komutAnahtarlari(durus('T2', 20, 28), taban), ['tezgah:T2']);
+    const baskasi = imza(c([oto, { m: 'T2', from: 40, to: 44 }]));
+    assert.deepEqual(catismalar(taban, baskasi, [satir(durus('T2', 20, 28), 'arıza T2'), satir(durus('T1', 20, 28), 'arıza T1'), satir(yon('S1'), 'yön')]).map((x) => x.anahtar), ['tezgah:T2']);
+    // Taşıma da o tezgâhın kapasitesine bağlıdır.
+    assert.deepEqual(catismalar(taban, baskasi, [satir(tasi('S1.10', 'T2'), 'taşı')]).map((x) => x.anahtar), ['tezgah:T2']);
+    // Otomatik satırın değişmesi çatışma değildir (arıza durumu kendiliğinden gelir).
+    assert.deepEqual(catismalar(taban, imza(c([])), [satir(durus('T1', 20, 28), 'arıza T1')]), []);
+    const kaydi = imza(c([oto], { D: { ...D, meta: { baslangic: '2026-11-23' } } }));
+    assert.deepEqual(catismalar(taban, kaydi, [satir(yon('S1'), 'yön')]).map((x) => x.anahtar), ['*']);
+  });
+
+  test('kapasitesiz eski taban sahte çatışma vermez; böyle taslakta duruş komutu o tezgâh için hep sorulur', () => {
+    const { kapasite: _, eksen: __, ...eski } = imza(c([oto, { m: 'T2', from: 40, to: 44 }]));
+    const simdi = imza(c([oto, { m: 'T2', from: 40, to: 44 }]));
+    assert.deepEqual(catismalar(eski, simdi, [satir(tasi('S1.10', 'T2'), 'taşı'), satir(yon('S1'), 'yön')]), []);
+    assert.deepEqual(catismalar(eski, simdi, [satir(durus('T1', 20, 28), 'arıza T1')]).map((x) => x.anahtar), ['tezgah:T1']);
+    assert.equal(secimeGore(eski, simdi, [satir(durus('T1', 20, 28), 'arıza T1')], {}), null);
+  });
+
+  test('dizme imzası elle duruşu görünümden alır, otomatiği almaz', () => {
+    const g = c();
+    assert.equal(dizImzasi(g, g), dizImzasi(c([]), g));
+    assert.notEqual(dizImzasi(c([oto, { m: 'T2', from: 40, to: 44 }]), g), dizImzasi(g, g));
+  });
+
+  test('oynatma: eklenen duruş görünümde, sonra silinmesi geri alır; silinmiş satırın silmesi uygulanamaz', () => {
+    const o = oynat(c(), [{ komut: durus('T2', 20, 28) }, { komut: sil('T2', 20, 28) }, { komut: sil('T2', 20, 28) }], kisi, {} as TaslakHesaplari);
+    assert.deepEqual(o.hatalar, [null, null, 'Duruş artık yok.']);
+    assert.deepEqual((o.deger as { down: unknown[] }).down, [oto]);
+  });
+
+  // Risk 2a-1 K1: eksen kayınca "benim" seçilse de duruş eski göreli saatle yeni eksene yazılmaz.
+  test('girildiği eksenden başka eksene oynatılmaz; Uygula benim seçilse de bozuk döner, ekseni yazılmamış satır denetlenmez', () => {
+    const kaydi = c([oto], { D: { ...D, meta: { baslangic: '2026-11-23' } } });
+    const l: TaslakSatiri[] = [{ komut: durus('T2', 200, 208), ne: 'arıza T2', t: 1, eksen: '2026-11-16' }];
+    assert.deepEqual(oynat(c(), l, kisi, {} as TaslakHesaplari).hatalar, [null]);
+    assert.deepEqual(oynat(kaydi, l, kisi, {} as TaslakHesaplari).hatalar, [EKSEN_DEGISTI]);
+    assert.deepEqual(uygulaKarari(kaydi, imza(c()), l, { '*': 'benim' }, kisi, {} as TaslakHesaplari), { durum: 'bozuk', ileti: `Taslaktaki şu değişiklikler artık uygulanamıyor: arıza T2: ${EKSEN_DEGISTI}` });
+    const { eksen: _, ...eksensiz } = l[0]!;
+    assert.deepEqual(oynat(kaydi, [eksensiz], kisi, {} as TaslakHesaplari).hatalar, [null]);
   });
 });

@@ -27,7 +27,8 @@ export interface KokpitEmri {
 }
 // grup: planın istasyon kimliği; grupAdi istasyonun adı (yoksa kodu), 3B istasyona göre toplarken başlık olur.
 export interface KokpitTezgahi { id: string; kod: string; ad: string; fason: boolean; grup?: string; grupAdi?: string }
-export interface KokpitDurusu { a: number; b: number; ariza: boolean }
+// ariza: olaydan gelen (şu anki) arıza; değilse çalışmanın duruş listesinden planlı duruş, neden'i ile.
+export interface KokpitDurusu { a: number; b: number; ariza: boolean; neden?: 'arıza' | 'bakım' }
 export interface KokpitModeli {
   simdi: number;
   tezgahlar: KokpitTezgahi[];
@@ -78,7 +79,8 @@ export function modelKur(c: PlanlamaCalismasi, p: OkunanPlan | null, cx: Derleme
   const durus: Record<string, KokpitDurusu[]> = {};
   for (const d of cx.g.down) {
     if (d.to <= bas) continue;
-    (durus[d.m] ??= []).push({ a: d.from, b: d.to, ariza: !c.down.some((x) => x.m === d.m && x.from === d.from && x.to === d.to) });
+    const plan = c.down.find((x) => String(x['m']) === d.m && x['from'] === d.from && x['to'] === d.to);
+    (durus[d.m] ??= []).push(plan ? { a: d.from, b: d.to, ariza: false, neden: plan['neden'] === 'bakım' ? 'bakım' : 'arıza' } : { a: d.from, b: d.to, ariza: true });
   }
   return { simdi, tezgahlar, isler, emirler, bas, son: Math.max(bas + 14 * 24, Math.ceil(enSon / 24) * 24 + 24), acik, durus };
 }
@@ -87,6 +89,8 @@ export function modelKur(c: PlanlamaCalismasi, p: OkunanPlan | null, cx: Derleme
 export const suAndakiDurus = (m: Pick<KokpitModeli, 'durus' | 'simdi'>, tezgah: string): KokpitDurusu | null =>
   m.durus[tezgah]?.find((d) => d.ariza && d.a <= m.simdi && m.simdi < d.b) ?? null;
 export const durusYazisi = (d: KokpitDurusu, zaman: (t: number) => string): string => `arızada · ${zaman(d.b).slice(6)}`;
+export const planliDurusYazisi = (d: KokpitDurusu, zaman: (t: number) => string): string =>
+  `${d.neden === 'bakım' ? 'Bakım' : 'Arıza'} · ${zaman(d.a)} → ${zaman(d.b)}`;
 
 // Fason işler tek satırda toplanır (fasoncu kimliği satır değildir).
 export const satirKimligi = (x: Pick<KokpitIsi, 'm' | 'fason'>): string => (x.fason ? FASON_SATIRI : x.m);

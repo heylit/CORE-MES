@@ -14,6 +14,7 @@ import type { PlanlamaCalismasi } from '../tipler.ts';
 import { Ayarlar } from './Ayarlar.tsx';
 import { planYonu } from './ayarlar.ts';
 import { Ayrinti } from './Ayrinti.tsx';
+import { Kapasite } from './Kapasite.tsx';
 import { Gelenler } from './Gelenler.tsx';
 import { gelenler } from './gelenler.ts';
 import { onayIstegiAl, onayIstegiVar } from './istek.ts';
@@ -98,6 +99,9 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
   // Bölüm taslak çubuğundan, taslak ortak plana yazıldıktan sonra açıldıysa Onay ve canlı bunu kalıcı bir satırla söyler.
   const [onayTaslaktan, setOnayTaslaktan] = useState(false);
   const [ayarAcik, setAyarAcik] = useState(false);
+  // Duruşlar bölümü (3282 2a-1): üst şeritteki düğmeyle açılır (ayrıntı sütunu boşken yer tutmaz: tahta dar kalmasın); açılınca seçim
+  // kalkar, ayar paneli kapanır.
+  const [kapasiteAcik, setKapasiteAcik] = useState(false);
   // Üst şeritteki yön düğmesi paneli o yönle açar (3282 1c); değişiklik panelde etkisiyle uygulanır.
   const [ayarYon, setAyarYon] = useState<'ileri' | 'geri' | null>(null);
   useEffect(() => { onayIstegiAl(); }, []);
@@ -349,12 +353,13 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
         <span className="tc-pyq-seg tc-pyq-yon" role="group" aria-label="Planın yönü">
           {(['ileri', 'geri'] as const).map((y) => (
             <button type="button" key={y} aria-pressed={planYonu(c) === y} title={y === 'geri' ? 'Teslimden geriye planla' : 'İleriye planla'} disabled={!yazabilir || tur !== null || onayAcik}
-              onClick={() => { if (planYonu(c) !== y) { sec(null, null); setAyarYon(y); setAyarAcik(true); } }}>
+              onClick={() => { if (planYonu(c) !== y) { sec(null, null); setKapasiteAcik(false); setAyarYon(y); setAyarAcik(true); } }}>
               <Simge ad={y === 'geri' ? 'flag' : 'chev-right'} boyut="k" /><span>{y === 'geri' ? 'Teslimden geriye' : 'İleriye planla'}</span>
             </button>
           ))}
         </span>
-        <button type="button" className="tc-pyq-ok" aria-pressed={ayarAcik} title="Plan ayarları" disabled={tur !== null || onayAcik} onClick={() => { if (!ayarAcik) sec(null, null); setAyarYon(null); setAyarAcik(!ayarAcik); }}><Simge ad="gear" boyut="k" /><span>Ayarlar</span></button>
+        <button type="button" className="tc-pyq-ok" aria-pressed={ayarAcik} title="Plan ayarları" disabled={tur !== null || onayAcik} onClick={() => { if (!ayarAcik) sec(null, null); setKapasiteAcik(false); setAyarYon(null); setAyarAcik(!ayarAcik); }}><Simge ad="gear" boyut="k" /><span>Ayarlar</span></button>
+        <button type="button" className="tc-pyq-ok" aria-pressed={kapasiteAcik} title="Tezgâhın arıza ve bakım duruşları" disabled={tur !== null || onayAcik} onClick={() => { if (!kapasiteAcik) sec(null, null); setAyarAcik(false); setKapasiteAcik(!kapasiteAcik); }}><Simge ad="wrench" boyut="k" /><span>Duruşlar</span></button>
         <Dugme simge="route" className="tc-pyq-tur-dugme" onClick={turBaslat} disabled={tur !== null}>Sorunları sırayla çöz</Dugme>
         {/* Taslak varken canlıya alma taslak çubuğundaki tek düğmeyle yapılır (3282-5 a); burada ikinci aynı adlı düğme durmaz. */}
         {(yazabilir || canliyaAlir) && !taslakVar && (
@@ -406,9 +411,11 @@ function Sayfa(o: PlanlamaEkranOzellikleri & { c: PlanlamaCalismasi; taslak: Tas
           />
         ) : ayarAcik ? (
           <Ayarlar key={ayarYon ?? ''} c={c} taslak={taslak} yazabilir={yazabilir} kim={o.depo.ben?.kisi.ad ?? ''} yon={ayarYon} kapat={() => { setAyarAcik(false); setAyarYon(null); }} />
-        ) : secili && (
+        ) : secili ? (
           <Ayrinti m={m} e={secili} secIs={secIs} zaman={zaman} uygula={hamleUygula} surum={surum} bekle={mesgul} matris={tahtasiz(goz)} ileti={tahtasiz(goz) ? sonuc : null} yon={{ c, taslak, yazabilir }} adimSec={(id) => { sec(secili.id, id); setGoster(id); }} kapat={() => { sec(null, null); }} />
-        )}
+        ) : kapasiteAcik ? (
+          <Kapasite c={c} m={m} taslak={taslak} yazabilir={yazabilir} zaman={zaman} kapat={() => { setKapasiteAcik(false); }} />
+        ) : null}
       </div>
       )}
       <OnayPenceresi

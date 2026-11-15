@@ -3,7 +3,7 @@ import { derle, girdiKur, planOku, plandanBitenler } from '../motor/kurallar.ts'
 import { ornekCalisma } from '../motor/ornek.ts';
 import {
   adimBeklemesi, aralikYuku, aramaUyar, darbogaz, emirGunleri, enCokBekleyen, tezgahGunundeMi, durumYazisi, ilkBosluk, matrisSirasi, modelKur, olcekKomsusu, onizlemeBitisi, satirKimligi, sayim, sorunlular, sureYaz,
-  acigaOtur, durusYazisi, hucreler3B, suAndakiDurus, onayliGecSayisi, yeriDegisti, tasimaSaati, tasinabilir, turAdaylari, yukSinifi, yukYuzdesi, type KokpitEmri, type KokpitIsi, type KokpitModeli,
+  acigaOtur, durusYazisi, planliDurusYazisi, hucreler3B, suAndakiDurus, onayliGecSayisi, yeriDegisti, tasimaSaati, tasinabilir, turAdaylari, yukSinifi, yukYuzdesi, type KokpitEmri, type KokpitIsi, type KokpitModeli,
 } from './kurallar.ts';
 
 // Örnek çalışma uydurmadır: iki emir (biri geç, biri riskli), beş tezgâh, bir fason adım.
@@ -58,7 +58,12 @@ describe('Kokpit modeli', () => {
     const a = suAndakiDurus(m, t), d = suAndakiDurus(m, u);
     expect(a).toMatchObject({ ariza: true, a: m.simdi, b: m.simdi + 6 });
     expect(d).toBeNull();
-    expect(m.durus[u]?.[0]).toMatchObject({ ariza: false });
+    expect(m.durus[u]?.[0]).toMatchObject({ ariza: false, neden: 'arıza' });
+    // 3282 2a-1: planlı duruşun nedeni çalışmanın satırından; tahtada adıyla yazılır.
+    const c3 = { ...c, down: [{ m: u, from: 0, to: 1000, neden: 'bakım' }] };
+    const m3 = modelKur(c3, planOku(c3), derle(girdiKur(c3, plandanBitenler(c3, planOku(c3)))), (id) => id);
+    expect(m3.durus[u]?.[0]).toMatchObject({ ariza: false, neden: 'bakım' });
+    expect(planliDurusYazisi(m3.durus[u]![0]!, (x) => `s${String(x)}`)).toBe('Bakım · s0 → s1000');
     expect(a && durusYazisi(a, () => '13.11 Cum 18:00')).toBe('arızada · Cum 18:00');
     expect(suAndakiDurus(modelKur(c, planOku(c), derle(girdiKur(c, plandanBitenler(c, planOku(c)))), (id) => id), t)).toBeNull();
   });
