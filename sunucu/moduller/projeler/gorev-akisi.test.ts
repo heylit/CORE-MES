@@ -55,6 +55,23 @@ describe('3269 görev akışı ve şablon (gerçek PostgreSQL, gerçek giriş)',
     return { cerez: String(c.headers['set-cookie']).split(';')[0] ?? '', id };
   }
 
+  // Tek işlemli kişi: geçici rol yalnız verilen işlemleri taşır (uç yetkisini rol bileşiminden ayrı ölçmek için).
+  async function islemliKisi(islemler: string[]): Promise<Kisi & { rolId: number }> {
+    const ad = `gak-tek-${(sayac += 1)}`;
+    const gecici = await vt().tek<{ id: number }>('INSERT INTO rol (kod, ad) VALUES ($1, $2) RETURNING id', [`gecici_${ad.replaceAll('-', '_')}`, ad]);
+    if (!gecici) throw new Error('rol kurulamadı');
+    for (const islem of islemler) await vt().sorgu('INSERT INTO rol_islemi (rol_id, islem) VALUES ($1, $2)', [gecici.id, islem]);
+    const id = await vt().tx(async (db) => {
+      const yeni = await yoneticiOlustur(db, { ad: `Deneme ${ad}`, kullaniciAdi: ad, parola: PAROLA });
+      await rolAta(db, yonetici.id, yeni, gecici.id);
+      await rolAl(db, yonetici.id, yeni, rolId('yonetici'));
+      return yeni;
+    });
+    const c = await app.inject({ method: 'POST', url: '/api/oturum/giris', payload: { kullaniciAdi: ad, parola: PAROLA } });
+    assert.equal(c.statusCode, 200, c.body);
+    return { cerez: String(c.headers['set-cookie']).split(';')[0] ?? '', id, rolId: gecici.id };
+  }
+
   const gonder = (k: Kisi, yol: string, govde: unknown): Promise<LightMyRequestResponse> =>
     app.inject({ method: 'POST', url: `/api${yol}`, payload: govde as object, headers: { cookie: k.cerez, 'istek-kimligi': randomUUID() } });
   const oku = (k: Kisi, yol: string): Promise<LightMyRequestResponse> => app.inject({ method: 'GET', url: `/api${yol}`, headers: { cookie: k.cerez } });
@@ -272,5 +289,65 @@ describe('3269 görev akışı ve şablon (gerçek PostgreSQL, gerçek giriş)',
     assert.equal((await vt().tek<{ n: number }>('SELECT count(*)::int AS n FROM projeler_gorev WHERE proje_id = $1', [p]))?.n, 2, 'açık proje değişmez');
     const kapali = await gonder(planlama, `/projeler/${p}/sablondan-ekle`, { sablonId: sablon.id });
     assert.equal(kapali.statusCode, 400, kapali.body);
+  });
+
+  test('uç yetkileri (T1): her yazma ucu kendi işlemini ister; tek işlemli kişiyle red ve kabul', async () => {
+    const isleyen = await islemliKisi(['projeler.gorev-isle']);
+    const kontrolcu = await islemliKisi(['projeler.gorev-kontrol']);
+    const yazar = await islemliKisi(['projeler.gorev-yaz']);
+    const okur = await islemliKisi(['projeler.oku']);
+    const p = await projeAc();
+    const kontroleDusur = async (kontrolKisiId: number): Promise<number> => {
+      const g = await gorevAc(p, { sorumluKisiId: kalite1.id, kontrolKisiId });
+      await basarili(kalite1, g.id, 'basla');
+      await basarili(kalite1, g.id, 'bitir');
+      return g.id;
+    };
+    // Kontrol eden olarak atanmış ama yalnız gorev-isle taşıyan onaylayamaz ve geri gönderemez; gorev-kontrol taşıyan onaylar.
+    const a = await kontroleDusur(isleyen.id);
+    assert.equal((await komut(isleyen, a, 'onayla')).statusCode, 403);
+    assert.equal((await komut(isleyen, a, 'geri-gonder', { gerekce: 'Eksik' })).statusCode, 403);
+    const b = await kontroleDusur(kontrolcu.id);
+    assert.equal((await komut(kontrolcu, b, 'geri-gonder', { gerekce: 'Ölçü eksik' })).statusCode, 200);
+    await basarili(kalite1, b, 'bitir');
+    assert.equal((await komut(kontrolcu, b, 'onayla')).statusCode, 200);
+    // Rolüne atanmış ama yalnız gorev-kontrol taşıyan üstlenemez, başlayamaz, bitiremez; gorev-isle taşıyan üstlenir.
+    const r = await gorevAc(p, { yapanRolId: kontrolcu.rolId });
+    assert.equal((await komut(kontrolcu, r.id, 'ustlen')).statusCode, 403);
+    const s1 = await gorevAc(p, { sorumluKisiId: kontrolcu.id });
+    assert.equal((await komut(kontrolcu, s1.id, 'basla')).statusCode, 403);
+    assert.equal((await komut(kontrolcu, s1.id, 'bitir')).statusCode, 403);
+    const r2 = await gorevAc(p, { yapanRolId: isleyen.rolId });
+    assert.equal((await komut(isleyen, r2.id, 'ustlen')).statusCode, 200);
+    // Şablonu yalnız sablon-yaz yazar ve okur; şablondan ekleme gorev-yaz ister; görevlerim projeler.oku ile açılmaz.
+    const govde = { ad: 'Yetki şablonu', varsayilan: false, etkin: true, kalemler: [{ ad: 'Kalem', dayanak: 'baslangic', gun: 0, sureGun: 1 }] };
+    assert.equal((await gonder(yazar, '/projeler/sablonlar', govde)).statusCode, 403);
+    assert.equal((await oku(yazar, '/projeler/sablonlar/liste')).statusCode, 403);
+    assert.equal((await oku(okur, '/projeler/sablonlar/liste')).statusCode, 403);
+    const c = await gonder(planlama, '/projeler/sablonlar', govde);
+    assert.equal(c.statusCode, 200, c.body);
+    const sablon = c.json<SablonListesiCevabi>().sablonlar.find((x) => x.ad === 'Yetki şablonu');
+    if (!sablon) throw new Error('şablon yok');
+    assert.equal((await gonder(yazar, `/projeler/sablonlar/${sablon.id}/guncelle`, { ...govde, surum: sablon.surum })).statusCode, 403);
+    assert.equal((await gonder(isleyen, `/projeler/${p}/sablondan-ekle`, { sablonId: sablon.id })).statusCode, 403);
+    assert.equal((await gonder(yazar, `/projeler/${p}/sablondan-ekle`, { sablonId: sablon.id })).statusCode, 200);
+    assert.equal((await oku(okur, '/projeler/gorevlerim/liste')).statusCode, 403);
+    assert.equal((await oku(isleyen, '/projeler/gorevlerim/liste')).statusCode, 200);
+  });
+
+  test('kendi işi (T1 not): bitiren, sonradan yapan değişse de onaylayamaz', async () => {
+    const p = await projeAc();
+    const g = await gorevAc(p, { sorumluKisiId: kalite1.id, kontrolRolId: rolId('kalite') });
+    await basarili(kalite1, g.id, 'basla');
+    await basarili(kalite1, g.id, 'bitir');
+    const x = (await ayrinti(planlama, g.id)).gorev;
+    const d = await gonder(planlama, `/projeler/gorevler/${g.id}/guncelle`, {
+      kilometreTasiId: null, ad: x.ad, aciklama: null, sorumluKisiId: kalite2.id, planBaslangic: x.planBaslangic, planBitis: x.planBitis,
+      oncekiGorevId: null, gercekBaslangic: x.gercekBaslangic, gercekBitis: x.gercekBitis, ilerleme: x.ilerleme, durum: x.durum, surum: x.surum,
+      kontrolRolId: x.kontrolRolId,
+    });
+    assert.equal(d.statusCode, 200, d.body);
+    assert.equal((await komut(kalite1, g.id, 'onayla')).statusCode, 403, 'bitiren artık yapan değil ama yine onaylayamaz');
+    assert.equal((await komut(kalite2, g.id, 'onayla')).statusCode, 403, 'yeni yapan da onaylayamaz');
   });
 });
