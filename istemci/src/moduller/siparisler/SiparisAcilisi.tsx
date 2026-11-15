@@ -175,9 +175,11 @@ export function GeriAlmaUyarisi({ siparisId, iptal }: { siparisId: number; iptal
   if (uyarilar.length === 0) return null;
   const emirler = uyarilar.map((u) => `${u.emirNo} (${u.nedenler.map((n) => UYARI_METNI[n]).join(', ')})`).join('; ');
   const talepVar = uyarilar.some((u) => u.nedenler.includes('talep'));
+  const hazirlikVar = uyarilar.some((u) => u.nedenler.includes('hazirlik'));
+  const duran = [talepVar ? 'talep' : null, hazirlikVar ? 'hazırlık' : null].filter(Boolean).join(' ve ');
   const ek = iptal
     ? (talepVar ? ' Malzeme talebi satın almada açık kalır; gerekmiyorsa satın almadan kapatın.' : '')
-    : ` Emir taslak kalır; ${talepVar ? 'talep ve hazırlık' : 'hazırlık'} emirde durur, yeniden onayda emir kaleme döner.${talepVar ? ' Adet değişirse talebi kontrol edin.' : ''}`;
+    : ` Emir taslak kalır; ${duran} emirde durur, yeniden onayda emir kaleme döner.${talepVar ? ' Adet değişirse talebi kontrol edin.' : ''}`;
   return (
     <p className="tc-sp-bildirim tc-sp-bildirim-uyari" role="status">
       <strong>{iptal ? 'Bu emirler iptal olur' : 'Bu emirler kalemden çözülür'}</strong>

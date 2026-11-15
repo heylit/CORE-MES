@@ -1,11 +1,13 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { BildirimSaglayici } from '../../../../ortak/arayuz/index.ts';
 import { api } from '../../../../ortak/veri/api.ts';
 import { PLANLAMA_ISLEMI } from '../../planlama-menusu.ts';
 import { ACILIS_OLCEGI, BOS_SECIM, type PlanlamaEkranOzellikleri } from '../gorunumler.ts';
 import type { CalismaKomutu } from '../kayit.ts';
+import { otomatikUygulaIste, otomatikUygulaSifirla } from '../motor/atolye/gonder.ts';
+import { planKurSifirla } from '../motor/coz.ts';
 import { ornekCalisma } from '../motor/ornek.ts';
 import { saatiSabitle } from '../test-saati.ts';
 import type { PlanlamaDeposu } from '../veri.ts';
@@ -16,7 +18,7 @@ import { onayAcIste } from './istek.ts';
 // Örnek çalışma uydurmadır (iki emir: biri geç, biri riskli). Sunucu çağrısı yapılmaz; taşıma ve tur ekran testindedir
 // (ekran-testleri/planlama-kokpit.spec.ts).
 saatiSabitle(ornekCalisma);
-afterEach(() => { cleanup(); vi.restoreAllMocks(); });
+afterEach(() => { cleanup(); vi.restoreAllMocks(); otomatikUygulaSifirla(); planKurSifirla(); });
 
 const DEPO = { durum: null, planSurumu: null, senaryolar: null, calismaSurumu: 4, receteRotaKaydi: null } as unknown as PlanlamaDeposu;
 function komutKur(adim: number): CalismaKomutu {
@@ -135,17 +137,59 @@ describe('Kokpit', () => {
     expect(document.querySelectorAll('tr[data-yuk-satiri] td[data-iz]').length).toBeGreaterThan(0);
   });
 
-  it('Geri düğmesi geri alınabilir adım sayısını gösterir ve geri alır; adım yokken pasiftir', () => {
-    const komut = komutKur(3);
-    ac({ komut });
-    const geri = within(screen.getByRole('group', { name: 'Geri ve ileri' })).getByRole('button', { name: /Geri/ });
-    expect(geri.querySelector('.tc-pyq-rozet')?.textContent).toBe('3');
-    expect(screen.getByText(/Taslak · 3 değişiklik/)).toBeTruthy();
+  // 3282 1d-2b: Kokpit kişinin taslağıyla çalışır. Sunucu sahtedir; taslağın görünümü örnek çalışmadır.
+  const satir = (komut: Record<string, unknown>, ne: string) => ({ komut, ne, t: 1, hata: null });
+  const AYAR = { tur: 'ayar', ayar: { w: { dondurma: 8 }, param: {}, ac: [], kapat: [] }, ayrinti: '' };
+  const TASI = { tur: 'tasi', isId: '3.10', tezgah: 'T2', baslangic: 40 };
+  // Görünüm sunucunun kayıt biçimindedir: eksik alanı (burada duruşlar) olabilir; sayfa onu ortak çalışma gibi okur.
+  const gorunum = () => { const { down: _, ...c } = { ...ornekCalisma(), bekleyen: [] }; return c; };
+  const taslakCevabi = (l: unknown[]) => ({ taslak: l.length === 0 ? null : { surum: 10 + l.length, tabanSurum: 4, satirlar: l }, calisma: gorunum(), surum: 4 });
+  function taslakSunucusu(l: unknown[]) {
+    let simdi = [...l];
+    vi.spyOn(api, 'get').mockImplementation((yol: string) => Promise.resolve((yol === '/plan/taslagim' ? taslakCevabi(simdi) : null) as never));
+    const post = vi.spyOn(api, 'post').mockImplementation((yol: string) => {
+      if (yol === '/plan/taslagim/geri-al') simdi = simdi.slice(0, -1);
+      return Promise.resolve(taslakCevabi(simdi) as never);
+    });
+    return { post };
+  }
+
+  it('taslak varken Geri taslağın değişiklik sayısını gösterir, son değişikliği dizmesiyle birlikte geri alır; Canlıya al kapalıdır', async () => {
+    const { post } = taslakSunucusu([satir(AYAR, 'Plan ayarı'), satir(TASI, '3.10 → T2'), satir({ tur: 'diz', isler: ['*'] }, 'Plan yeniden dizildi')]);
+    ac({ yetki: yetkiKur([PLANLAMA_ISLEMI, 'plan.yaz', 'plan.canliya-al']) });
+    const cubuk = await screen.findByRole('region', { name: 'Taslak' });
+    expect(within(cubuk).getByText('Taslak · 2 değişiklik')).toBeTruthy();
+    const geri = within(screen.getByRole('group', { name: 'Geri' })).getByRole('button', { name: /Geri/ });
+    expect(geri.querySelector('.tc-pyq-rozet')?.textContent).toBe('2');
+    const canli = screen.getByRole('button', { name: /Canlıya al/ });
+    expect([canli.hasAttribute('disabled'), canli.getAttribute('title')]).toEqual([true, 'Önce taslağı plana yazın ya da vazgeçin.']);
     fireEvent.click(geri);
-    expect(komut.geriAl).toHaveBeenCalledTimes(1);
-    cleanup();
+    await waitFor(() => { expect(within(cubuk).getByText('Taslak · 1 değişiklik')).toBeTruthy(); });
+    // Geri alınca kalan taslak yeniden dizilir: önce iki geri-al, sonra taslağın görünümünde değerlendirme.
+    await waitFor(() => { expect(post.mock.calls.length).toBeGreaterThanOrEqual(3); });
+    expect(post.mock.calls.slice(0, 3).map((c) => [c[0], c[1]])).toEqual([
+      ['/plan/taslagim/geri-al', { taslakSurumu: 13 }], ['/plan/taslagim/geri-al', { taslakSurumu: 12 }],
+      ['/plan/taslagim/degerlendirme', { taslakSurumu: 11, istek: { tur: 'plan-uygula', isler: ['*'] } }],
+    ]);
+  });
+
+  // Komut başka sayfada çalışmayı değiştirdiyse ortak plan kendiliğinden yeniden dizilir; taslak varken dizilmez (örnek çalışmanın planı bayattır).
+  it.each([[true, 0], [false, 1]])('taslak %s iken ortak çalışmanın kendiliğinden dizilmesi %i kez başlar', async (taslakVar, n) => {
+    taslakSunucusu(taslakVar ? [satir(TASI, '3.10 → T2')] : []);
+    const kaydet = vi.fn(() => new Promise<number>(() => undefined));
+    otomatikUygulaIste({ calismaSurumu: 4, oncekiSurum: 3 });
+    ac({ komut: { ...komutKur(0), kaydet } });
+    if (taslakVar) await screen.findByRole('region', { name: 'Taslak' });
+    await waitFor(() => { expect(kaydet).toHaveBeenCalledTimes(n); });
+    expect(kaydet).toHaveBeenCalledTimes(n);
+  });
+
+  it('taslak yokken Geri pasiftir ve taslak çubuğu görünmez', async () => {
+    taslakSunucusu([]);
     ac();
-    expect(within(screen.getByRole('group', { name: 'Geri ve ileri' })).getByRole('button', { name: /Geri/ }).hasAttribute('disabled')).toBe(true);
+    await waitFor(() => { expect(api.get).toHaveBeenCalledWith('/plan/taslagim'); });
+    expect(within(screen.getByRole('group', { name: 'Geri' })).getByRole('button', { name: /Geri/ }).hasAttribute('disabled')).toBe(true);
+    expect(screen.queryByRole('region', { name: 'Taslak' })).toBeNull();
   });
 
   it('yazamayan kişide tutma kapalıdır: sağ tık menü açmaz, Onaya gönder yoktur', () => {

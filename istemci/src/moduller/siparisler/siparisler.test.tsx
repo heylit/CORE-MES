@@ -426,7 +426,29 @@ describe('Satış siparişi ayrıntısı', () => {
     const pencere = await screen.findByRole('dialog', { name: 'Siparişi iptal et' });
     const uyari = (await within(pencere).findByText(/hazırlık maddesi tamamlanmış/)).closest('[role="status"]');
     expect(uyari?.textContent).toMatch(/^Bu emirler iptal olur/);
-    expect(uyari?.textContent).not.toMatch(/talep/i);
+    expect(uyari?.textContent).not.toMatch(/tale[pb]/i);
+  });
+
+  it('3272-3: geri alma uyarısı yalnız emirde olanı söyler (yalnız talep, yalnız hazırlık)', async () => {
+    const cevap = (nedenler: ('talep' | 'hazirlik')[]) => ({
+      ...ACILIS, proje: { id: 9, kod: 'SS_2026_0006', ad: 'Deneme', bitis: null },
+      geriAlmaUyarilari: [{ emirId: 70, emirNo: 'ORN-A-SS_2026_0006-DNM001-26-11-001', nedenler }],
+    } satisfies SiparisAcilisiCevabi);
+    const uyari = async (nedenler: ('talep' | 'hazirlik')[]) => {
+      cleanup();
+      sunucuKur(YONETICI, (yontem, yol) => (yontem === 'GET' && yol === '/uretim-emirleri/siparis-acilisi/5' ? json(200, cevap(nedenler)) : undefined));
+      ac('/siparisler/6');
+      fireEvent.click(await screen.findByRole('button', { name: 'Onayı geri al' }));
+      const pencere = await screen.findByRole('dialog', { name: 'Onayı geri al' });
+      return (await within(pencere).findByText(/Emir taslak kalır/)).textContent ?? '';
+    };
+    const talep = await uyari(['talep']);
+    expect(talep).toMatch(/; talep emirde durur/);
+    expect(talep).not.toMatch(/hazırlık/);
+    const hazirlik = await uyari(['hazirlik']);
+    expect(hazirlik).toMatch(/; hazırlık emirde durur/);
+    expect(hazirlik).not.toMatch(/tale[pb]/i);
+    expect(await uyari(['talep', 'hazirlik'])).toMatch(/; talep ve hazırlık emirde durur/);
   });
 
   it('onayı geri alınmış siparişte emre bağlı kalem işaretlenir ve uyarı görünür', async () => {
