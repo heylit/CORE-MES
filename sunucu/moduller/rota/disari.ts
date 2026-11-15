@@ -16,6 +16,8 @@ export { emirBittiYansit, isEmriKopyalandiYansit } from './servis.ts';
 export { adimBittiYansit } from './servis/sureler.ts';
 // 3D Atölyesi süre kartı (3278 D): yürürlükteki rotanın talaşlı adımları, teorik işlem ve son ölçümler; bağı kablolama.ts kurar.
 export { talasliAdimSureleri } from './servis/sureler.ts';
+// Adım başına teorik ve kabul bekleyen gerçekleşen süre: Proses parça dosyası okur (3290); yetki denetlemez.
+export { sureler } from './servis/sureler.ts';
 // Emre sabitlenen işlem şartnameleri (971 a): kalite, sevkiyat ve satın alma okur; tabloya yazmaz.
 export { isEmriSartnameleri } from './servis.ts';
 export type { IsEmriSartnamesi } from '#paylasilan/sozlesme/rota.ts';

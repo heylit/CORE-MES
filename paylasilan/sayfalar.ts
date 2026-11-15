@@ -36,6 +36,7 @@ import { MUSTERI_TEDARIKCI_IKINCI_MENU, MUSTERI_TEDARIKCI_SAYFALARI } from './sa
 import { NIZAMIYE_IKINCI_MENU, NIZAMIYE_SAYFALARI } from './sayfalar/nizamiye.ts';
 import { ORTAK_DOSYALAR_IKINCI_MENU, ORTAK_DOSYALAR_SAYFALARI } from './sayfalar/ortak-dosyalar.ts';
 import { OEE_IKINCI_MENU, OEE_SAYFALARI } from './sayfalar/oee.ts';
+import { PROSES_IKINCI_MENU, PROSES_SAYFALARI } from './sayfalar/proses.ts';
 import { PROFIL_IKINCI_MENU, PROFIL_SAYFALARI } from './sayfalar/profil.ts';
 import { PROJELER_IKINCI_MENU, PROJELER_SAYFALARI } from './sayfalar/projeler.ts';
 import { ROTA_IKINCI_MENU, ROTA_SAYFALARI } from './sayfalar/rota.ts';
@@ -92,6 +93,7 @@ export const TUM_SAYFALAR = sayfalariSirala([
   ...MESAJ_SAYFALARI,
   ...MUSTERI_TEDARIKCI_SAYFALARI,
   ...OEE_SAYFALARI,
+  ...PROSES_SAYFALARI,
   ...ORTAK_DOSYALAR_SAYFALARI,
   ...PROJELER_SAYFALARI,
   ...ROTA_SAYFALARI,
@@ -152,6 +154,7 @@ export const TUM_IKINCI_MENULER = [
   MALZEME_IZI_IKINCI_MENU,
   KAYNAK_IZI_IKINCI_MENU,
   OEE_IKINCI_MENU,
+  PROSES_IKINCI_MENU,
   GUVENLIK_IKINCI_MENU,
   IDARI_ISLER_IKINCI_MENU,
   PROFIL_IKINCI_MENU,

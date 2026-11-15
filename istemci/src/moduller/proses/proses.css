@@ -1,0 +1,9 @@
+.tc-proses { display: flex; flex-direction: column; gap: var(--b-4); min-width: 0; }
+.tc-proses-secim { max-width: calc(var(--b-6) * 12); }
+.tc-proses-kunye { display: flex; flex-wrap: wrap; align-items: center; gap: var(--b-2); color: var(--muted); font-size: var(--yazi-s); }
+.tc-proses-zincir { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, calc(var(--b-6) * 5)), 1fr)); gap: var(--b-2); margin: 0; padding: 0; list-style: none; }
+.tc-proses-halka { display: flex; flex-direction: column; gap: var(--b-1); padding: var(--b-3); border: 1px solid var(--edge); border-radius: var(--yari-2); background: var(--panel2); min-width: 0; }
+.tc-proses-halka-ad { display: flex; align-items: center; gap: var(--b-2); font-weight: 700; }
+.tc-proses-halka-ozet { font-size: var(--yazi-s); overflow-wrap: anywhere; }
+.tc-proses-halka-sahip { color: var(--muted); font-size: var(--yazi-s); }
+.tc-proses-not { margin: 0; color: var(--muted); font-size: var(--yazi-s); max-width: 80ch; }
